@@ -1,0 +1,12 @@
+[workspace]
+
+members = [
+    "crates/brr",
+]
+
+
+# Local crates
+[workspace.dependencies]
+brr = { path = "./crates/brr", version = "0.0.0" }
+
+
