@@ -29,4 +29,10 @@ impl BrrSample {
     pub fn brr_data(&self) -> &[u8] {
         &self.brr_data
     }
+
+    pub fn brr_with_loop_header(&self) -> Vec<u8> {
+        let lo = self.loop_offset().unwrap_or(0);
+
+        [&lo.to_le_bytes(), self.brr_data.as_slice()].concat()
+    }
 }
