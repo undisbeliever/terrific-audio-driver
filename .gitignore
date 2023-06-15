@@ -1,4 +1,5 @@
 /target
+/vendor
 /Cargo.lock
 crates/*/target
 
