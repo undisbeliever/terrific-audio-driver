@@ -183,13 +183,11 @@ fn encode_block(block: BrrBlock, end_flag: bool, loop_flag: bool) -> [u8; BYTES_
 
     out[0] = header;
 
-    for i in 1..BYTES_PER_BRR_BLOCK {
-        let s = (i - 1) * 2;
+    for (i, o) in out.iter_mut().skip(1).enumerate() {
+        let nibble0 = block.nibbles[i * 2].to_le_bytes()[0];
+        let nibble1 = block.nibbles[i * 2 + 1].to_le_bytes()[0];
 
-        let nibble0 = block.nibbles[s + 0].to_le_bytes()[0];
-        let nibble1 = block.nibbles[s + 1].to_le_bytes()[0];
-
-        out[i] = ((nibble0 & 0xf) << 4) | (nibble1 & 0xf);
+        *o = ((nibble0 & 0xf) << 4) | (nibble1 & 0xf);
     }
 
     out
@@ -200,7 +198,7 @@ pub fn encode_brr(
     loop_point_samples: Option<usize>,
     dupe_block_hack: Option<usize>,
 ) -> Result<BrrSample, EncodeError> {
-    if samples.len() == 0 {
+    if samples.is_empty() {
         return Err(EncodeError::NoSamples);
     }
 

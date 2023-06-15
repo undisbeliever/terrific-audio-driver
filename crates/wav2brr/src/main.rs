@@ -70,7 +70,7 @@ fn main() {
     let brr = brr.brr_with_loop_header();
 
     match fs::write(&args.output, brr) {
+        Ok(()) => (),
         Err(why) => error!("Error writing {}: {}", args.output.display(), why),
-        Ok(()) => {}
     }
 }
