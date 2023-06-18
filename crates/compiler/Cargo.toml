@@ -1,0 +1,9 @@
+[package]
+# ::TODO rename this crate to <something>_compiler::
+name = "compiler"
+
+version = "0.0.0"
+license = "MIT"
+
+edition = "2021"
+

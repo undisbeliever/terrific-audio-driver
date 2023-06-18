@@ -3,12 +3,14 @@
 members = [
     "crates/brr",
     "crates/wav2brr",
+    "crates/compiler/",
 ]
 
 
 [workspace.dependencies]
 # Local crates
 brr = { path = "./crates/brr", version = "0.0.0" }
+compiler = { path = "./crates/compiler", version = "0.0.0" }
 wav2brr = { path = "./crates/wav2brr", version = "0.0.0" }
 
 # External crates
