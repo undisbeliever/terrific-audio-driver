@@ -8,6 +8,8 @@
 
 use crate::errors::NoteError;
 
+use serde::Deserialize;
+
 pub const LAST_OCTAVE: u8 = 7;
 pub const SEMITONS_PER_OCTAVE: u8 = 12;
 pub const LAST_NOTE_ID: u8 = (LAST_OCTAVE + 1) * SEMITONS_PER_OCTAVE - 1;
@@ -118,5 +120,31 @@ impl Note {
 
             Note::from_pitch_stoffset_octave(pitch, semitone_offset, octave)
         }
+    }
+}
+
+#[derive(Deserialize, Clone, Eq, PartialEq, PartialOrd, Ord, Debug)]
+#[serde(try_from = "u32")]
+pub struct Octave(u8);
+
+impl Octave {
+    pub fn try_new(o: u32) -> Result<Self, NoteError> {
+        if o <= LAST_OCTAVE.into() {
+            Ok(Octave(o.try_into().unwrap()))
+        } else {
+            Err(NoteError::InvalidNoteOctave(o))
+        }
+    }
+
+    pub fn as_i32(&self) -> i32 {
+        self.0.into()
+    }
+}
+
+impl TryFrom<u32> for Octave {
+    type Error = NoteError;
+
+    fn try_from(o: u32) -> Result<Self, Self::Error> {
+        Self::try_new(o)
     }
 }

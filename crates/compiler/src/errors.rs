@@ -4,6 +4,17 @@
 //
 // SPDX-License-Identifier: MIT
 
+use std::fmt::Display;
+use std::io;
+use std::path::PathBuf;
+
+#[derive(Debug)]
+pub enum DeserializeError {
+    NoParentPath(String),
+    OpenError(String, io::Error),
+    SerdeError(String, serde_json::error::Error),
+}
+
 #[derive(Debug)]
 pub struct InvalidAdsrError {
     pub valid_a: bool,
@@ -15,6 +26,14 @@ pub struct InvalidAdsrError {
 #[derive(Debug)]
 pub enum InvalidGainError {
     InvalidGain(String),
+}
+
+#[derive(Debug)]
+pub enum ParseError {
+    EmptyName,
+    InvalidName(String),
+    AdsrNotFourValues,
+    InvalidAdsr(InvalidAdsrError),
 }
 
 #[derive(Debug)]
@@ -91,6 +110,56 @@ pub enum BytecodeAssemblerError {
     InvalidTickClock(TickClockError),
 }
 
+pub enum SampleError {
+    IoError(PathBuf, io::Error),
+    UnknownFileType(PathBuf),
+    WaveFileError(PathBuf, brr::Error),
+    BrrEncodeError(PathBuf, brr::EncodeError),
+    BrrParseError(PathBuf, brr::ParseError),
+    FileTooLarge(PathBuf),
+    CannotUseDupeBlockHackOnBrrFiles,
+    LoopingFlagMismatch { brr_looping: bool },
+
+    GainAndAdsr,
+    NoGainOrAdsr,
+}
+
+pub enum OtherSamplesError {
+    TooManyInstruments(usize),
+    TooManyBrrSamples(usize),
+    BrrDataOverflow(usize),
+    PitchTableError(PitchTableError),
+}
+
+pub struct SamplesErrors {
+    pub other_errors: Vec<OtherSamplesError>,
+    // Instrument index, SampleError
+    pub instrument_errors: Vec<(usize, SampleError)>,
+}
+
+// ::TODO Do not use Display for sample errors::
+
+pub enum PitchError {
+    SampleRateTooHigh,
+    SampleRateTooLow,
+    FirstOctaveGreaterThanLastOctave,
+    FirstOctaveTooLow(i32),
+    LastOctaveTooHigh(i32),
+    FirstOctaveTooLowLastOctaveTooHigh(i32, i32),
+}
+
+pub enum PitchTableError {
+    TooManyInstruments,
+    TooManyPitches(usize),
+    InstrumentErrors(Vec<(usize, PitchError)>),
+}
+
+impl From<InvalidAdsrError> for ParseError {
+    fn from(e: InvalidAdsrError) -> Self {
+        Self::InvalidAdsr(e)
+    }
+}
+
 impl From<NoteError> for BytecodeAssemblerError {
     fn from(e: NoteError) -> Self {
         Self::InvalidNote(e)
@@ -115,7 +184,36 @@ impl From<TickClockError> for BytecodeAssemblerError {
     }
 }
 
-impl std::fmt::Display for BytecodeAssemblerError {
+// Display
+// =======
+
+impl Display for DeserializeError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::NoParentPath(filename) => {
+                write!(f, "Cannot load {}: No parent path", filename)
+            }
+            Self::OpenError(filename, e) => write!(f, "Unable to open {}: {}", filename, e),
+            Self::SerdeError(filename, e) => write!(f, "Unable to read {}: {}", filename, e),
+        }
+    }
+}
+
+impl Display for ParseError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // ::TODO human readable error messages::
+        write!(f, "{:?}", self)
+    }
+}
+
+impl Display for NoteError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // ::TODO human readable error messages::
+        write!(f, "{:?}", self)
+    }
+}
+
+impl Display for BytecodeAssemblerError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         // ::TODO human readable error messages::
         write!(f, "{:?}", self)

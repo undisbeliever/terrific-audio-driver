@@ -4,7 +4,9 @@
 //
 // SPDX-License-Identifier: MIT
 
-use crate::errors::{InvalidAdsrError, InvalidGainError};
+use crate::errors::{InvalidAdsrError, InvalidGainError, ParseError};
+
+use serde::Deserialize;
 
 fn value_fits_in_bits(value: u8, bits: u8) -> bool {
     assert!(bits < 8);
@@ -14,7 +16,8 @@ fn value_fits_in_bits(value: u8, bits: u8) -> bool {
     value & mask == value
 }
 
-#[derive(Clone, Debug)]
+#[derive(Deserialize, Clone, Debug)]
+#[serde(try_from = "String")]
 pub struct Adsr {
     adsr1: u8,
     adsr2: u8,
@@ -63,6 +66,22 @@ impl Adsr {
         )
     }
 
+    pub fn from_str(s: &str) -> Result<Adsr, ParseError> {
+        let mut iter = s.split_ascii_whitespace();
+
+        let a = iter.next().ok_or(ParseError::AdsrNotFourValues)?;
+        let d = iter.next().ok_or(ParseError::AdsrNotFourValues)?;
+        let sl = iter.next().ok_or(ParseError::AdsrNotFourValues)?;
+        let sr = iter.next().ok_or(ParseError::AdsrNotFourValues)?;
+
+        if iter.next().is_some() {
+            // Too many values
+            return Err(ParseError::AdsrNotFourValues);
+        }
+
+        Ok(Adsr::from_strs(a, d, sl, sr)?)
+    }
+
     pub fn adsr1(&self) -> u8 {
         self.adsr1
     }
@@ -72,12 +91,25 @@ impl Adsr {
     }
 }
 
-#[derive(Clone, Debug)]
+impl TryFrom<String> for Adsr {
+    type Error = ParseError;
+
+    fn try_from(s: String) -> Result<Self, Self::Error> {
+        Adsr::from_str(&s)
+    }
+}
+
+#[derive(Deserialize, Clone, Debug)]
+#[serde(from = "u8")]
 pub struct Gain {
     value: u8,
 }
 
 impl Gain {
+    pub fn new(value: u8) -> Self {
+        Self { value }
+    }
+
     pub fn from_str(s: &str) -> Result<Gain, InvalidGainError> {
         // ::TODO figure out what the gain bits do and properly parse them::
 
@@ -91,5 +123,11 @@ impl Gain {
 
     pub fn value(&self) -> u8 {
         self.value
+    }
+}
+
+impl From<u8> for Gain {
+    fn from(i: u8) -> Self {
+        Gain::new(i)
     }
 }
