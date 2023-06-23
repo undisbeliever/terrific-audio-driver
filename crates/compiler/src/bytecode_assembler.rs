@@ -378,7 +378,7 @@ impl BytecodeAssembler<'_, '_> {
 }
 
 fn one_argument<'a>(args: &[&'a str]) -> Result<&'a str, BytecodeAssemblerError> {
-    if args.len() != 1 {
+    if args.len() == 1 {
         Ok(args[0])
     } else {
         Err(BytecodeAssemblerError::InvalidNumberOfArguments(1))
