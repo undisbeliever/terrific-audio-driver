@@ -181,9 +181,8 @@ fn process_pitch_vec(inst_pitches: SortedInstrumentPitches, n_instruments: usize
 
         for octave_shift in min_octave_offset..=max_octave_offset {
             for note in 0..SEMITONES_PER_OCTAVE {
-                let mst_to_shift = (octave_shift * MICROSEMITONES_PER_OCTAVE)
-                    + (note * SEMITONES_PER_OCTAVE)
-                    - mst;
+                let mst_to_shift =
+                    octave_shift * MICROSEMITONES_PER_OCTAVE + note * SEMITONE_SCALE - mst;
 
                 let pitch = 2.0_f64.powf(f64::from(mst_to_shift) / F64_MST_PER_OCTAVE);
 
