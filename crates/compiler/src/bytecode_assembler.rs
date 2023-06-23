@@ -5,12 +5,34 @@
 // SPDX-License-Identifier: MIT
 
 use crate::bytecode::{Bytecode, InstrumentId, SubroutineId};
+use crate::data::Instrument;
 use crate::envelope::{Adsr, Gain};
 use crate::errors::{BytecodeAssemblerError, BytecodeError};
 use crate::notes::Note;
 use crate::time::{TickClock, TickCounter};
 
 use std::collections::HashMap;
+
+pub type InstrumentsMap<'a> = HashMap<&'a str, InstrumentId>;
+
+#[allow(clippy::ptr_arg)]
+pub fn build_instruments_map(instruments: &Vec<Instrument>) -> InstrumentsMap {
+    // No bounds checking or duplicate name tests in this function.
+    //
+    // This is OK as Bytecode only uses the id, not instrument data.
+    instruments
+        .iter()
+        .enumerate()
+        .map(|(i, inst)| {
+            (
+                inst.name.as_str(),
+                InstrumentId::new(u8::try_from(i).unwrap_or(0)),
+            )
+        })
+        .collect()
+}
+
+pub type SubroutinesMap<'a> = HashMap<&'a str, SubroutineId>;
 
 // Some `Bytecode` methods do not return a Result.
 // The macro in `BytecodeAssembler::parse_line()` cannot determine the method's value.
@@ -34,19 +56,19 @@ impl BytecodeResultWrapper for Result<(), BytecodeError> {
     }
 }
 
-pub struct BytecodeAssembler<'a> {
+pub struct BytecodeAssembler<'a, 'b> {
     bc: Bytecode,
-    instruments: &'a HashMap<&'a str, InstrumentId>,
-    subroutines: Option<&'a HashMap<&'a str, SubroutineId>>,
+    instruments: &'a InstrumentsMap<'a>,
+    subroutines: Option<&'b SubroutinesMap<'b>>,
 }
 
-impl BytecodeAssembler<'_> {
-    pub fn new<'a>(
-        instruments: &'a HashMap<&'a str, InstrumentId>,
-        subroutines: Option<&'a HashMap<&'a str, SubroutineId>>,
+impl BytecodeAssembler<'_, '_> {
+    pub fn new<'a, 'b>(
+        instruments: &'a InstrumentsMap<'a>,
+        subroutines: Option<&'b SubroutinesMap<'b>>,
         is_subroutine: bool,
         is_sound_effect: bool,
-    ) -> BytecodeAssembler<'a> {
+    ) -> BytecodeAssembler<'a, 'b> {
         BytecodeAssembler {
             bc: Bytecode::new(is_subroutine, is_sound_effect),
             instruments,

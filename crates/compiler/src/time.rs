@@ -25,6 +25,10 @@ impl TickCounter {
     pub fn value(&self) -> u64 {
         self.value
     }
+
+    pub fn is_zero(&self) -> bool {
+        self.value == 0
+    }
 }
 
 impl std::ops::Add for TickCounter {

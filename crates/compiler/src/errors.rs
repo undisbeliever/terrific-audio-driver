@@ -8,6 +8,8 @@ use std::fmt::Display;
 use std::io;
 use std::path::PathBuf;
 
+use crate::data::Name;
+
 #[derive(Debug)]
 pub enum DeserializeError {
     NoParentPath(String),
@@ -108,6 +110,23 @@ pub enum BytecodeAssemblerError {
     InvalidAdsr(InvalidAdsrError),
     InvalidGain(InvalidGainError),
     InvalidTickClock(TickClockError),
+}
+
+pub struct SoundEffectError {
+    pub sfx_name: String,
+    pub sfx_line_no: usize,
+    pub invalid_name: bool,
+    pub no_notes: bool,
+    // Set if the last instruction is not disable_channel
+    pub no_disable_channel: bool,
+    pub errors: Vec<(usize, BytecodeAssemblerError)>,
+}
+
+pub enum SoundEffectsFileError {
+    SoundEffectErrors(Vec<SoundEffectError>),
+    // Line number, Name
+    DuplicateSfxNamesInSfxFile(Vec<(usize, Name)>),
+    MissingSoundEffects(Vec<Name>),
 }
 
 pub enum SampleError {

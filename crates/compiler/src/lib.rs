@@ -13,9 +13,10 @@ mod errors;
 mod notes;
 mod pitch_table;
 mod samples;
+#[allow(dead_code)]
+mod sound_effects;
 mod time;
 
-pub use bytecode_assembler::BytecodeAssembler;
 pub use data::{load_mappings_file, MappingsFile};
 
 pub use pitch_table::build_pitch_table;

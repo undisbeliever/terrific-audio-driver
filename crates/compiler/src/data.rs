@@ -15,7 +15,7 @@ use std::path::PathBuf;
 
 use serde::Deserialize;
 
-#[derive(Deserialize, Clone, Eq, PartialEq, Debug)]
+#[derive(Deserialize, Clone, Hash, Eq, PartialEq, Debug)]
 #[serde(try_from = "String")]
 pub struct Name(String);
 
@@ -45,7 +45,7 @@ impl Name {
         Ok(Name(s))
     }
 
-    pub fn str(&self) -> &str {
+    pub fn as_str(&self) -> &str {
         &self.0
     }
 }
@@ -89,6 +89,7 @@ pub struct Instrument {
     pub comment: Option<String>,
 }
 
+// ::TODO test for duplicate names::
 #[derive(Deserialize)]
 pub struct Mappings {
     pub instruments: Vec<Instrument>,
