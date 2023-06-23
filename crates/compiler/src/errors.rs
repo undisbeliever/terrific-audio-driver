@@ -112,6 +112,7 @@ pub enum BytecodeAssemblerError {
     InvalidTickClock(TickClockError),
 }
 
+#[derive(Debug)]
 pub struct SoundEffectError {
     pub sfx_name: String,
     pub sfx_line_no: usize,
@@ -122,6 +123,7 @@ pub struct SoundEffectError {
     pub errors: Vec<(usize, BytecodeAssemblerError)>,
 }
 
+#[derive(Debug)]
 pub enum SoundEffectsFileError {
     SoundEffectErrors(Vec<SoundEffectError>),
     // Line number, Name
@@ -129,6 +131,7 @@ pub enum SoundEffectsFileError {
     MissingSoundEffects(Vec<Name>),
 }
 
+#[derive(Debug)]
 pub enum SampleError {
     IoError(PathBuf, io::Error),
     UnknownFileType(PathBuf),
@@ -143,6 +146,7 @@ pub enum SampleError {
     NoGainOrAdsr,
 }
 
+#[derive(Debug)]
 pub enum OtherSamplesError {
     TooManyInstruments(usize),
     TooManyBrrSamples(usize),
@@ -150,6 +154,7 @@ pub enum OtherSamplesError {
     PitchTableError(PitchTableError),
 }
 
+#[derive(Debug)]
 pub struct SamplesErrors {
     pub other_errors: Vec<OtherSamplesError>,
     // Instrument index, SampleError
@@ -158,6 +163,19 @@ pub struct SamplesErrors {
 
 // ::TODO Do not use Display for sample errors::
 
+#[derive(Debug)]
+pub enum CommonAudioDataError {
+    TooManyInstruments(usize),
+    TooManySamples(usize),
+    TooManySoundEffects(usize),
+    CommonAudioDataTooLarge(usize),
+    SampleError(SamplesErrors),
+    SoundEffectError(SoundEffectsFileError),
+}
+
+pub type CommonAudioDataErrors = Vec<CommonAudioDataError>;
+
+#[derive(Debug)]
 pub enum PitchError {
     SampleRateTooHigh,
     SampleRateTooLow,
@@ -167,6 +185,7 @@ pub enum PitchError {
     FirstOctaveTooLowLastOctaveTooHigh(i32, i32),
 }
 
+#[derive(Debug)]
 pub enum PitchTableError {
     TooManyInstruments,
     TooManyPitches(usize),
@@ -233,6 +252,13 @@ impl Display for NoteError {
 }
 
 impl Display for BytecodeAssemblerError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // ::TODO human readable error messages::
+        write!(f, "{:?}", self)
+    }
+}
+
+impl Display for CommonAudioDataError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         // ::TODO human readable error messages::
         write!(f, "{:?}", self)

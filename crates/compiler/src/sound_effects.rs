@@ -120,8 +120,8 @@ fn compile_sound_effects(
 }
 
 pub struct CompiledSoundEffects {
-    sfx_data: Vec<u8>,
-    sfx_offsets: Vec<usize>,
+    pub(crate) sfx_data: Vec<u8>,
+    pub(crate) sfx_offsets: Vec<usize>,
 }
 
 fn combine_sound_effects(

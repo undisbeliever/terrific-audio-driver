@@ -8,6 +8,7 @@ use ::std::fmt::Display;
 
 use crate::{BrrSample, BRR_HEADER_END_FLAG, BRR_HEADER_LOOP_FLAG, BYTES_PER_BRR_BLOCK};
 
+#[derive(Debug)]
 pub enum ParseError {
     Empty,
     InvalidFileSize,

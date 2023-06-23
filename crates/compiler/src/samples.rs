@@ -7,6 +7,8 @@
 // ::TODO remove::
 #![allow(dead_code)]
 
+// ::TODO add pub(crate) to more things::
+
 use crate::data::{Instrument, MappingsFile};
 use crate::driver_constants::{MAX_DIR_ITEMS, MAX_INSTRUMENTS};
 use crate::errors::{OtherSamplesError, SampleError, SamplesErrors};
@@ -231,18 +233,18 @@ fn build_brr_directroy(samples: Vec<BrrSample>) -> BrrDirectory {
 }
 
 pub struct SampleAndInstrumentData {
-    n_instruments: usize,
+    pub(crate) n_instruments: usize,
 
-    pitch_table: PitchTable,
+    pub(crate) pitch_table: PitchTable,
 
     // Instruments SoA
     // (pitchOffset is in pitch_table)
-    instruments_scrn: Vec<u8>,
-    instruments_adsr1: Vec<u8>,
-    instruments_adsr2_or_gain: Vec<u8>,
+    pub(crate) instruments_scrn: Vec<u8>,
+    pub(crate) instruments_adsr1: Vec<u8>,
+    pub(crate) instruments_adsr2_or_gain: Vec<u8>,
 
-    brr_data: Vec<u8>,
-    brr_directory_offsets: Vec<BrrDirectoryOffset>,
+    pub(crate) brr_data: Vec<u8>,
+    pub(crate) brr_directory_offsets: Vec<BrrDirectoryOffset>,
 }
 
 pub fn build_sample_and_instrument_data(

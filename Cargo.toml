@@ -2,15 +2,20 @@
 
 members = [
     "crates/brr",
+    "crates/compiler",
+
+    "crates/tad-compiler",
     "crates/wav2brr",
-    "crates/compiler/",
 ]
 
 
 [workspace.dependencies]
-# Local crates
+# Local library crates
 brr = { path = "./crates/brr", version = "0.0.0" }
 compiler = { path = "./crates/compiler", version = "0.0.0" }
+
+# Local binary crates
+tad-compiler = { path = "./crates/tad-compiler", version = "0.0.0" }
 wav2brr = { path = "./crates/wav2brr", version = "0.0.0" }
 
 # External crates

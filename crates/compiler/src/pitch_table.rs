@@ -203,10 +203,10 @@ fn process_pitch_vec(inst_pitches: SortedInstrumentPitches, n_instruments: usize
 }
 
 pub struct PitchTable {
-    pub table_data_l: [u8; PITCH_TABLE_SIZE],
-    pub table_data_h: [u8; PITCH_TABLE_SIZE],
+    pub(crate) table_data_l: [u8; PITCH_TABLE_SIZE],
+    pub(crate) table_data_h: [u8; PITCH_TABLE_SIZE],
 
-    pub instruments_pitch_offset: Vec<u8>,
+    pub(crate) instruments_pitch_offset: Vec<u8>,
 }
 
 pub fn build_pitch_table(instruments: &Vec<Instrument>) -> Result<PitchTable, PitchTableError> {
