@@ -46,6 +46,7 @@ fn read_file_limited(filename: &Path, max_size: u64) -> Result<Vec<u8>, SampleEr
 
 fn encode_wave_file(
     filename: PathBuf,
+    is_looping: bool,
     loop_point: Option<usize>,
     dupe_block_hack: Option<usize>,
 ) -> Result<BrrSample, SampleError> {
@@ -60,6 +61,13 @@ fn encode_wave_file(
             Ok(wav) => wav,
             Err(e) => return Err(SampleError::WaveFileError(filename, e)),
         }
+    };
+
+    let loop_point = if is_looping && loop_point.is_none() {
+        // No loop point set, loop from the start of the file
+        Some(0)
+    } else {
+        loop_point
     };
 
     match encode_brr(&wav.samples, loop_point, dupe_block_hack) {
@@ -86,7 +94,12 @@ fn load_sample_for_instrument(
     let filename = parent_path.join(&inst.source);
 
     let brr_sample = match filename.extension().and_then(OsStr::to_str) {
-        Some("wav") => encode_wave_file(filename, inst.loop_point, inst.dupe_block_back)?,
+        Some("wav") => encode_wave_file(
+            filename,
+            inst.looping,
+            inst.loop_point,
+            inst.dupe_block_back,
+        )?,
         Some("brr") => {
             if inst.dupe_block_back.is_some() {
                 return Err(SampleError::CannotUseDupeBlockHackOnBrrFiles);
