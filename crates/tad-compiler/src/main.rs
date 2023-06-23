@@ -8,6 +8,7 @@ use clap::{Args, Parser, Subcommand};
 use compiler::{MappingsFile, SoundEffectsFile};
 
 use std::fs;
+use std::io::{self, Write};
 use std::path::PathBuf;
 
 macro_rules! error {
@@ -32,13 +33,28 @@ enum Command {
     Common(CompileCommonDataArgs),
 }
 
+#[derive(Args)]
+#[group(required = true, multiple = false)]
+struct OutputArg {
+    #[arg(
+        short = 'o',
+        long = "output",
+        value_name = "FILE",
+        help = "output file"
+    )]
+    path: Option<PathBuf>,
+
+    #[arg(long, help = "Write to stdout")]
+    stdout: bool,
+}
+
 // Compile Common Audio Data
 // =========================
 
 #[derive(Args)]
 struct CompileCommonDataArgs {
-    #[arg(short = 'o', long, value_name = "FILE", help = "output file")]
-    output: PathBuf,
+    #[command(flatten)]
+    output: OutputArg,
 
     #[arg(value_name = "JSON_FILE", help = "instruments and mappings json file")]
     json_file: PathBuf,
@@ -89,9 +105,16 @@ fn load_sfx_file(path: PathBuf) -> SoundEffectsFile {
     compiler::sfx_file_from_string(contents, &path)
 }
 
-fn write_data(path: PathBuf, data: Vec<u8>) {
-    match fs::write(&path, data) {
-        Ok(()) => (),
-        Err(why) => error!("Error writing {}: {}", path.display(), why),
+fn write_data(out: OutputArg, data: Vec<u8>) {
+    if let Some(path) = out.path {
+        match fs::write(&path, data) {
+            Ok(()) => (),
+            Err(e) => error!("Error writing {}: {}", path.display(), e),
+        }
+    } else if out.stdout {
+        match io::stdout().write_all(&data) {
+            Ok(()) => (),
+            Err(e) => error!("Error writing data: {}", e),
+        }
     }
 }
