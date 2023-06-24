@@ -65,8 +65,9 @@ fn encode_wave_file(
         }
     };
 
-    let loop_point = if is_looping && loop_point.is_none() {
-        // No loop point set, loop from the start of the file
+    let loop_point = if is_looping && dupe_block_hack.is_none() && loop_point.is_none() {
+        // No loop point set.
+        // Set loop_point to the start of the file.
         Some(0)
     } else {
         loop_point
@@ -100,10 +101,10 @@ fn load_sample_for_instrument(
             filename,
             inst.looping,
             inst.loop_point,
-            inst.dupe_block_back,
+            inst.dupe_block_hack,
         )?,
         Some("brr") => {
-            if inst.dupe_block_back.is_some() {
+            if inst.dupe_block_hack.is_some() {
                 return Err(SampleError::CannotUseDupeBlockHackOnBrrFiles);
             }
             load_brr_file(filename, inst.loop_point)?

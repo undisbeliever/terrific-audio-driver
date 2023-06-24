@@ -78,7 +78,7 @@ pub struct Instrument {
     // Increases the sample size by `N * 9` bytes.
     // Most samples created by this hack will not loop perfectly which adds low-frequency oscillation to the sample.
     // (Hence the name `duple_block_hack`.)
-    pub dupe_block_back: Option<usize>,
+    pub dupe_block_hack: Option<usize>,
 
     pub first_octave: Octave,
     pub last_octave: Octave,
