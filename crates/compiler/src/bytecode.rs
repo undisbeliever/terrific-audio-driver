@@ -7,7 +7,7 @@
 #![allow(clippy::assertions_on_constants)]
 
 use crate::envelope::{Adsr, Gain};
-use crate::errors::BytecodeError;
+use crate::errors::{BytecodeError, LoopCountError};
 use crate::notes::{Note, LAST_NOTE_ID};
 use crate::time::{TickClock, TickCounter};
 
@@ -91,6 +91,36 @@ impl SubroutineId {
     }
 }
 
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub struct LoopCount(u8);
+
+impl LoopCount {
+    pub fn to_u32(self) -> u32 {
+        if self.0 == 0 {
+            0x100
+        } else {
+            self.0.into()
+        }
+    }
+}
+
+impl TryFrom<u32> for LoopCount {
+    type Error = LoopCountError;
+
+    fn try_from(loop_count: u32) -> Result<Self, Self::Error> {
+        if loop_count == 0x100 {
+            Ok(LoopCount(0))
+        } else if loop_count < 2 {
+            Err(LoopCountError::NotEnoughLoops)
+        } else {
+            match u8::try_from(loop_count) {
+                Ok(i) => Ok(LoopCount(i)),
+                Err(_) => Err(LoopCountError::TooManyLoops),
+            }
+        }
+    }
+}
+
 fn u8_try_from_limit(value: u32, max: u8) -> Result<u8, ()> {
     match u8::try_from(value) {
         Ok(v) => {
@@ -101,32 +131,6 @@ fn u8_try_from_limit(value: u32, max: u8) -> Result<u8, ()> {
             }
         }
         Err(_) => Err(()),
-    }
-}
-
-fn u8_try_from_range(value: u32, min: u8, max: u8) -> Result<u8, ()> {
-    assert!(min <= max);
-
-    match u8::try_from(value) {
-        Ok(v) => {
-            if v >= min && v <= max {
-                Ok(v)
-            } else {
-                Err(())
-            }
-        }
-        Err(_) => Err(()),
-    }
-}
-
-fn loop_count_u8(loop_count: u32) -> Result<u8, BytecodeError> {
-    if loop_count == 0x100 {
-        return Ok(0);
-    }
-
-    match u8_try_from_range(loop_count, 2, u8::MAX) {
-        Ok(i) => Ok(i),
-        Err(_) => Err(BytecodeError::LoopCountOutOfRange(loop_count)),
     }
 }
 
@@ -204,7 +208,10 @@ struct SkipLastLoop {
 }
 
 struct LoopState {
-    loop_count: u32,
+    start_loop_count: Option<LoopCount>,
+    // Location of the `start_loop` instruction inside `Bytecode::bytecode`.
+    start_loop_pos: usize,
+
     tick_counter_at_start_of_loop: TickCounter,
     skip_last_loop: Option<SkipLastLoop>,
 }
@@ -508,9 +515,10 @@ impl Bytecode {
         }
     }
 
-    pub fn start_loop(&mut self, loop_count: u32) -> Result<(), BytecodeError> {
+    pub fn start_loop(&mut self, loop_count: Option<LoopCount>) -> Result<(), BytecodeError> {
         self.loop_stack.push(LoopState {
-            loop_count,
+            start_loop_count: loop_count,
+            start_loop_pos: self.bytecode.len(),
             tick_counter_at_start_of_loop: self.tick_counter,
             skip_last_loop: None,
         });
@@ -523,7 +531,10 @@ impl Bytecode {
             MAX_NESTED_LOOPS.. => panic!("Invalid loop_id"),
         };
 
-        let loop_count = loop_count_u8(loop_count)?;
+        let loop_count = match loop_count {
+            Some(lc) => lc.0,
+            None => 0,
+        };
 
         emit_bytecode!(self, opcode, loop_count);
         Ok(())
@@ -559,7 +570,7 @@ impl Bytecode {
         Ok(())
     }
 
-    pub fn end_loop(&mut self) -> Result<(), BytecodeError> {
+    pub fn end_loop(&mut self, loop_count: Option<LoopCount>) -> Result<(), BytecodeError> {
         let loop_id = match self._loop_id() {
             Ok(i) => i,
             Err(e) => {
@@ -577,6 +588,14 @@ impl Bytecode {
 
         // loop_stack contains at least 1 item
         let loop_state = self.loop_stack.pop().unwrap();
+
+        let loop_count_u32 = match (loop_state.start_loop_count, &loop_count) {
+            (Some(start_lc), None) => start_lc.to_u32(),
+            (None, Some(end_lc)) => end_lc.to_u32(),
+
+            (None, None) => return Err(BytecodeError::MissingLoopCount),
+            (Some(_), Some(_)) => return Err(BytecodeError::CannotHaveLoopCountAtStartAndEndLoop),
+        };
 
         // Increment tick counter
         {
@@ -598,14 +617,22 @@ impl Bytecode {
 
             assert!(ticks_skipped_in_last_loop < ticks_in_loop);
 
-            let loop_count = u64::from(loop_state.loop_count);
+            let loop_count = u64::from(loop_count_u32);
 
             self.tick_counter +=
                 TickCounter::new(ticks_in_loop * loop_count - ticks_skipped_in_last_loop);
         }
 
+        // Write the loop_count parameter for the start_loop instruction (if required)
+        if let Some(loop_count) = loop_count {
+            let start_loop_opcode = Opcode::start_loop_0 as u8 + loop_id * 2;
+            assert!(self.bytecode[loop_state.start_loop_pos] == start_loop_opcode);
+
+            self.bytecode[loop_state.start_loop_pos + 1] = loop_count.0;
+        }
+
+        // Write the parameter for the skip_last_loop instruction (if required)
         if let Some(skip_last_loop) = loop_state.skip_last_loop {
-            // Write the parameter for the skip_last_loop instruction
             let sll_param_pos = skip_last_loop.bc_parameter_position;
 
             let skip_last_loop_opcode = Opcode::skip_last_loop_0 as u8 + loop_id * 2;

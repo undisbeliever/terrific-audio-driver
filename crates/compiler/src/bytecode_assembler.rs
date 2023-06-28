@@ -4,7 +4,7 @@
 //
 // SPDX-License-Identifier: MIT
 
-use crate::bytecode::{Bytecode, InstrumentId, SubroutineId};
+use crate::bytecode::{Bytecode, InstrumentId, LoopCount, SubroutineId};
 use crate::data::Instrument;
 use crate::envelope::{Adsr, Gain};
 use crate::errors::{BytecodeAssemblerError, BytecodeError};
@@ -177,9 +177,9 @@ impl BytecodeAssembler<'_, '_> {
            enable_echo 0 no_arguments,
            disable_echo 0 no_arguments,
 
-           start_loop 1 u32_argument,
+           start_loop 1 optional_loop_count_argument,
            skip_last_loop 0 no_arguments,
-           end_loop 0 no_arguments,
+           end_loop 1 optional_loop_count_argument,
 
            call_subroutine 1 subroutine_argument,
            return_from_subroutine 0 no_arguments,
@@ -356,6 +356,17 @@ impl BytecodeAssembler<'_, '_> {
         let arg = one_argument(args)?;
 
         Ok(TickClock::new_from_str(arg)?)
+    }
+
+    fn optional_loop_count_argument(
+        &self,
+        args: &[&str],
+    ) -> Result<Option<LoopCount>, BytecodeAssemblerError> {
+        match args.len() {
+            0 => Ok(None),
+            1 => Ok(Some(LoopCount::try_from(parse_u32(args[0])?)?)),
+            _ => Err(BytecodeAssemblerError::InvalidNumberOfArgumentsRange(0, 1)),
+        }
     }
 
     fn u32_argument(&self, args: &[&str]) -> Result<u32, BytecodeAssemblerError> {

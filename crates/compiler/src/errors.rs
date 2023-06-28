@@ -53,11 +53,18 @@ pub enum TickClockError {
 }
 
 #[derive(Debug)]
+pub enum LoopCountError {
+    NotEnoughLoops,
+    TooManyLoops,
+}
+
+#[derive(Debug)]
 pub enum BytecodeError {
     OpenLoopStack(usize),
     NotInALoop,
+    MissingLoopCount,
+    CannotHaveLoopCountAtStartAndEndLoop,
     TooManyLoops,
-    LoopCountOutOfRange(u32),
     MultipleSkipLastLoopInstructions,
     NoTicksBeforeSkipLastLoop,
     NoTicksAfterSkipLastLoop,
@@ -106,6 +113,7 @@ pub enum BytecodeAssemblerError {
     InvalidKeyoffArgument(String),
     InvalidPortamentoVelocity(String),
 
+    InvalidLoopCount(LoopCountError),
     InvalidNote(NoteError),
     InvalidAdsr(InvalidAdsrError),
     InvalidGain(InvalidGainError),
@@ -201,6 +209,12 @@ impl From<InvalidAdsrError> for ParseError {
 impl From<NoteError> for BytecodeAssemblerError {
     fn from(e: NoteError) -> Self {
         Self::InvalidNote(e)
+    }
+}
+
+impl From<LoopCountError> for BytecodeAssemblerError {
+    fn from(e: LoopCountError) -> Self {
+        Self::InvalidLoopCount(e)
     }
 }
 
