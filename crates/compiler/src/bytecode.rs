@@ -11,6 +11,8 @@ use crate::errors::{BytecodeError, LoopCountError};
 use crate::notes::{Note, LAST_NOTE_ID};
 use crate::time::{TickClock, TickCounter};
 
+use std::cmp::max;
+
 const KEY_OFF_TICK_DELAY: u64 = 1;
 const MAX_NESTED_LOOPS: u8 = 3;
 
@@ -81,13 +83,18 @@ impl InstrumentId {
 pub struct SubroutineId {
     id: u8,
     tick_counter: TickCounter,
+    max_nested_loops: usize,
 }
 
 impl SubroutineId {
     // ::TODO remove::
     #[allow(dead_code)]
-    pub fn new(id: u8, tick_counter: TickCounter) -> Self {
-        Self { id, tick_counter }
+    pub fn new(id: u8, tick_counter: TickCounter, max_nested_loops: usize) -> Self {
+        Self {
+            id,
+            tick_counter,
+            max_nested_loops,
+        }
     }
 }
 
@@ -224,6 +231,7 @@ pub struct Bytecode {
     tick_counter: TickCounter,
 
     loop_stack: Vec<LoopState>,
+    max_nested_loops: usize,
 }
 
 impl Bytecode {
@@ -234,11 +242,18 @@ impl Bytecode {
             bytecode: Vec::new(),
             tick_counter: TickCounter::new(0),
             loop_stack: Vec::new(),
+            max_nested_loops: 0,
         }
     }
 
     pub fn get_tick_counter(&self) -> TickCounter {
         self.tick_counter
+    }
+
+    // ::TODO remove::
+    #[allow(dead_code)]
+    pub fn get_max_nested_loops(&self) -> usize {
+        self.max_nested_loops
     }
 
     // error enum
@@ -523,6 +538,8 @@ impl Bytecode {
             skip_last_loop: None,
         });
 
+        self.max_nested_loops = max(self.max_nested_loops, self.loop_stack.len());
+
         let loop_id = self._loop_id()?;
         let opcode = match loop_id {
             0 => Opcode::start_loop_0,
@@ -660,6 +677,13 @@ impl Bytecode {
         }
 
         self.tick_counter += subroutine.tick_counter;
+
+        let n_nested_loops = self.loop_stack.len() + subroutine.max_nested_loops;
+        self.max_nested_loops = max(self.max_nested_loops, n_nested_loops);
+
+        if n_nested_loops > MAX_NESTED_LOOPS.into() {
+            return Err(BytecodeError::TooManyLoopsInSubroutineCall);
+        }
 
         emit_bytecode!(self, Opcode::call_subroutine, subroutine.id);
         Ok(())

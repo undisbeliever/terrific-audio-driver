@@ -65,6 +65,7 @@ pub enum BytecodeError {
     MissingLoopCount,
     CannotHaveLoopCountAtStartAndEndLoop,
     TooManyLoops,
+    TooManyLoopsInSubroutineCall,
     MultipleSkipLastLoopInstructions,
     NoTicksBeforeSkipLastLoop,
     NoTicksAfterSkipLastLoop,
