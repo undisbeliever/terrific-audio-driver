@@ -11,6 +11,7 @@ mod data;
 mod driver_constants;
 mod envelope;
 mod errors;
+mod newtype_macros;
 mod notes;
 mod pitch_table;
 mod samples;

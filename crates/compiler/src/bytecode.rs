@@ -7,18 +7,30 @@
 #![allow(clippy::assertions_on_constants)]
 
 use crate::envelope::{Adsr, Gain};
-use crate::errors::{BytecodeError, LoopCountError};
+use crate::errors::{BytecodeError, ValueError};
+use crate::newtype_macros::{i8_newtype, u8_newtype};
 use crate::notes::{Note, LAST_NOTE_ID};
 use crate::time::{TickClock, TickCounter};
 
 use std::cmp::max;
 
-const KEY_OFF_TICK_DELAY: u64 = 1;
+const KEY_OFF_TICK_DELAY: u32 = 1;
 const MAX_NESTED_LOOPS: u8 = 3;
 
-const MAX_PAN: u8 = 128;
-
 const LAST_PLAY_NOTE_OPCODE: u8 = 0xbf;
+
+u8_newtype!(Volume, VolumeOutOfRange);
+u8_newtype!(Pan, PanOutOfRange, 0, 128);
+i8_newtype!(RelativeVolume, RelativeVolumeOutOfRange);
+i8_newtype!(RelativePan, RelativePanOutOfRange);
+
+u8_newtype!(PitchOffsetPerTick, PitchOffsetPerTickOutOfRange);
+u8_newtype!(
+    QuarterWavelengthInTicks,
+    QuarterWavelengthOutOfRange,
+    1,
+    u8::MAX
+);
 
 // Using lower case to match bytecode names in the audio-driver source code.
 #[allow(non_camel_case_types)]
@@ -99,6 +111,136 @@ impl SubroutineId {
 }
 
 #[derive(Debug, Copy, Clone, PartialEq)]
+pub struct BcTicksKeyOff {
+    ticks: u16,
+    bc_argument: u8,
+}
+
+impl BcTicksKeyOff {
+    const MIN: u32 = 1 + KEY_OFF_TICK_DELAY;
+    const MAX: u32 = 0x100 + KEY_OFF_TICK_DELAY;
+
+    #[allow(dead_code)]
+    pub fn ticks(&self) -> u32 {
+        self.ticks.into()
+    }
+
+    pub fn to_tick_count(self) -> TickCounter {
+        TickCounter::new(self.ticks.into())
+    }
+
+    pub fn try_from(ticks: u32) -> Result<Self, ValueError> {
+        if matches!(ticks, Self::MIN..=Self::MAX) {
+            Ok(Self {
+                ticks: ticks.try_into().unwrap(),
+                bc_argument: ((ticks - KEY_OFF_TICK_DELAY) & 0xff).try_into().unwrap(),
+            })
+        } else {
+            Err(ValueError::BcTicksKeyOffOutOfRange)
+        }
+    }
+}
+
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub struct BcTicksNoKeyOff {
+    ticks: u16,
+    bc_argument: u8,
+}
+
+impl BcTicksNoKeyOff {
+    const MIN: u32 = 1;
+    const MAX: u32 = 0x100;
+
+    #[allow(dead_code)]
+    pub fn ticks(self) -> u32 {
+        self.ticks.into()
+    }
+
+    pub fn to_tick_count(self) -> TickCounter {
+        TickCounter::new(self.ticks.into())
+    }
+
+    pub fn try_from(ticks: u32) -> Result<Self, ValueError> {
+        if matches!(ticks, Self::MIN..=Self::MAX) {
+            // A note length of 0 will wait for 256 ticks.
+            let bc_argument = (ticks & 0xff).try_into().unwrap();
+            Ok(Self {
+                ticks: ticks.try_into().unwrap(),
+                bc_argument,
+            })
+        } else {
+            Err(ValueError::BcTicksNoKeyOffOutOfRange)
+        }
+    }
+}
+
+pub enum PlayNoteTicks {
+    KeyOff(BcTicksKeyOff),
+    NoKeyOff(BcTicksNoKeyOff),
+}
+
+impl PlayNoteTicks {
+    pub fn try_from_is_slur(ticks: u32, is_slur: bool) -> Result<Self, ValueError> {
+        if is_slur {
+            Ok(PlayNoteTicks::KeyOff(BcTicksKeyOff::try_from(ticks)?))
+        } else {
+            Ok(PlayNoteTicks::NoKeyOff(BcTicksNoKeyOff::try_from(ticks)?))
+        }
+    }
+
+    #[allow(dead_code)]
+    pub fn ticks(self) -> u32 {
+        match self {
+            Self::KeyOff(l) => l.ticks.into(),
+            Self::NoKeyOff(l) => l.ticks.into(),
+        }
+    }
+
+    fn bc_argument(&self) -> u8 {
+        match self {
+            Self::KeyOff(l) => l.bc_argument,
+            Self::NoKeyOff(l) => l.bc_argument,
+        }
+    }
+
+    fn to_tick_count(&self) -> TickCounter {
+        match self {
+            Self::KeyOff(l) => TickCounter::new(l.ticks.into()),
+            Self::NoKeyOff(l) => TickCounter::new(l.ticks.into()),
+        }
+    }
+}
+
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub struct PortamentoVelocity(i16);
+
+impl PortamentoVelocity {
+    const MIN: i16 = -Self::MAX;
+    const MAX: i16 = u8::MAX as i16;
+
+    pub fn is_negative(&self) -> bool {
+        self.0 < 0
+    }
+    pub fn pitch_offset_per_tick(&self) -> u8 {
+        u8::try_from(self.0.abs()).unwrap()
+    }
+}
+
+impl TryFrom<i32> for PortamentoVelocity {
+    type Error = ValueError;
+
+    fn try_from(velocity: i32) -> Result<Self, Self::Error> {
+        if velocity == 0 {
+            Err(ValueError::PortamentoVelocityZero)
+        } else if velocity >= Self::MIN.into() && velocity <= Self::MAX.into() {
+            Ok(PortamentoVelocity(velocity.try_into().unwrap()))
+        } else {
+            Err(ValueError::PortamentoVelocityOutOfRange)
+        }
+    }
+}
+
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub struct LoopCount(u8);
 
 impl LoopCount {
@@ -112,32 +254,19 @@ impl LoopCount {
 }
 
 impl TryFrom<u32> for LoopCount {
-    type Error = LoopCountError;
+    type Error = ValueError;
 
     fn try_from(loop_count: u32) -> Result<Self, Self::Error> {
         if loop_count == 0x100 {
             Ok(LoopCount(0))
         } else if loop_count < 2 {
-            Err(LoopCountError::NotEnoughLoops)
+            Err(ValueError::NotEnoughLoops)
         } else {
             match u8::try_from(loop_count) {
                 Ok(i) => Ok(LoopCount(i)),
-                Err(_) => Err(LoopCountError::TooManyLoops),
+                Err(_) => Err(ValueError::TooManyLoops),
             }
         }
-    }
-}
-
-fn u8_try_from_limit(value: u32, max: u8) -> Result<u8, ()> {
-    match u8::try_from(value) {
-        Ok(v) => {
-            if v <= max {
-                Ok(v)
-            } else {
-                Err(())
-            }
-        }
-        Err(_) => Err(()),
     }
 }
 
@@ -146,10 +275,14 @@ struct NoteOpcode {
 }
 
 impl NoteOpcode {
-    fn new(note: Note, key_off: bool) -> Self {
+    fn new(note: Note, length: &PlayNoteTicks) -> Self {
         assert!(LAST_NOTE_ID * 2 < LAST_PLAY_NOTE_OPCODE);
 
-        let opcode = (note.note_id() << 1) | (key_off as u8);
+        let key_off_bit = match length {
+            PlayNoteTicks::NoKeyOff(_) => 0,
+            PlayNoteTicks::KeyOff(_) => 1,
+        };
+        let opcode = (note.note_id() << 1) | key_off_bit;
         Self { opcode }
     }
 }
@@ -265,143 +398,70 @@ impl Bytecode {
         Ok(self.bytecode.as_slice())
     }
 
-    fn _length_argument(
-        &mut self,
-        length: TickCounter,
-        key_off: bool,
-    ) -> Result<u8, BytecodeError> {
-        self.tick_counter += length;
+    pub fn rest(&mut self, length: BcTicksNoKeyOff) {
+        self.tick_counter += length.to_tick_count();
 
-        let mut l = length.value();
-
-        if key_off {
-            if l <= KEY_OFF_TICK_DELAY {
-                return Err(BytecodeError::NoteLengthTooShortKeyOffDelay);
-            }
-            l -= KEY_OFF_TICK_DELAY;
-        }
-
-        if l == 0 {
-            return Err(BytecodeError::NoteLengthZero);
-        }
-        if l == 0x100 {
-            // A note length of 0 will wait for 256 ticks.
-            return Ok(0);
-        }
-
-        match u8::try_from(l) {
-            Ok(i) => Ok(i),
-            Err(_) => Err(BytecodeError::NoteLengthTooLarge),
-        }
+        emit_bytecode!(self, Opcode::rest, length.bc_argument);
     }
 
-    pub fn rest(&mut self, length: TickCounter) -> Result<(), BytecodeError> {
-        let length = self._length_argument(length, false)?;
+    pub fn rest_keyoff(&mut self, length: BcTicksKeyOff) {
+        self.tick_counter += length.to_tick_count();
 
-        emit_bytecode!(self, Opcode::rest, length);
-        Ok(())
+        emit_bytecode!(self, Opcode::rest_keyoff, length.bc_argument);
     }
 
-    pub fn rest_keyoff(&mut self, length: TickCounter) -> Result<(), BytecodeError> {
-        let length = self._length_argument(length, false)?;
+    pub fn play_note(&mut self, note: Note, length: PlayNoteTicks) {
+        self.tick_counter += length.to_tick_count();
 
-        emit_bytecode!(self, Opcode::rest_keyoff, length);
-        Ok(())
+        let opcode = NoteOpcode::new(note, &length);
+
+        emit_bytecode!(self, opcode, length.bc_argument());
     }
 
-    pub fn play_note(
-        &mut self,
-        note: Note,
-        key_off: bool,
-        length: TickCounter,
-    ) -> Result<(), BytecodeError> {
-        let opcode = NoteOpcode::new(note, key_off);
-        let length = self._length_argument(length, key_off)?;
+    pub fn portamento(&mut self, note: Note, velocity: PortamentoVelocity, length: PlayNoteTicks) {
+        self.tick_counter += length.to_tick_count();
 
-        emit_bytecode!(self, opcode, length);
-        Ok(())
-    }
+        let speed = velocity.pitch_offset_per_tick();
+        let note_param = NoteOpcode::new(note, &length);
+        let length = length.bc_argument();
 
-    pub fn portamento(
-        &mut self,
-        note: Note,
-        key_off: bool,
-        velocity: i32,
-        length: TickCounter,
-    ) -> Result<(), BytecodeError> {
-        let speed = velocity.abs();
-        if speed == 0 {
-            return Err(BytecodeError::PortamentoVelocityZero);
-        }
-        let speed = match u8::try_from(speed) {
-            Ok(i) => i,
-            Err(_) => return Err(BytecodeError::PortamentoVelocityTooLarge),
-        };
-
-        let note_param = NoteOpcode::new(note, key_off);
-        let length = self._length_argument(length, key_off)?;
-
-        if velocity < 0 {
+        if velocity.is_negative() {
             emit_bytecode!(self, Opcode::portamento_down, speed, length, note_param);
         } else {
             emit_bytecode!(self, Opcode::portamento_up, speed, length, note_param);
         }
-        Ok(())
     }
 
     pub fn set_vibrato_depth_and_play_note(
         &mut self,
-        pitch_offset_per_tick: u32,
+        pitch_offset_per_tick: PitchOffsetPerTick,
         note: Note,
-        key_off: bool,
-        length: TickCounter,
-    ) -> Result<(), BytecodeError> {
-        let pitch_offset_per_tick = match u8::try_from(pitch_offset_per_tick) {
-            Ok(i) => i,
-            Err(_) => return Err(BytecodeError::PitchOffsetOutOfRange),
-        };
-        let play_note_opcode = NoteOpcode::new(note, key_off);
-        let length = self._length_argument(length, key_off)?;
+        length: PlayNoteTicks,
+    ) {
+        self.tick_counter += length.to_tick_count();
+
+        let play_note_opcode = NoteOpcode::new(note, &length);
 
         emit_bytecode!(
             self,
             Opcode::set_vibrato_depth_and_play_note,
-            pitch_offset_per_tick,
+            pitch_offset_per_tick.as_u8(),
             play_note_opcode,
-            length
+            length.bc_argument()
         );
-        Ok(())
     }
 
     pub fn set_vibrato(
         &mut self,
-        pitch_offset_per_tick: u32,
-        quarter_wavelength_ticks: u32,
-    ) -> Result<(), BytecodeError> {
-        if pitch_offset_per_tick == 0 {
-            return Err(BytecodeError::PitchOffsetPerTickZero);
-        }
-        if quarter_wavelength_ticks == 0 {
-            return Err(BytecodeError::QuarterWaveLengthZero);
-        }
-
-        let pitch_offset_per_tick = match u8::try_from(pitch_offset_per_tick) {
-            Ok(i) => i,
-            Err(_) => return Err(BytecodeError::PitchOffsetOutOfRange),
-        };
-
-        let quarter_wavelength_ticks = match u8::try_from(quarter_wavelength_ticks) {
-            Ok(i) => i,
-            Err(_) => return Err(BytecodeError::QuarterWaveLengthOutOfRange),
-        };
-
+        pitch_offset_per_tick: PitchOffsetPerTick,
+        quarter_wavelength_ticks: QuarterWavelengthInTicks,
+    ) {
         emit_bytecode!(
             self,
             Opcode::set_vibrato,
-            pitch_offset_per_tick,
-            quarter_wavelength_ticks
+            pitch_offset_per_tick.as_u8(),
+            quarter_wavelength_ticks.as_u8()
         );
-        Ok(())
     }
 
     pub fn disable_vibrato(&mut self) {
@@ -440,59 +500,29 @@ impl Bytecode {
         emit_bytecode!(self, Opcode::set_gain, gain.value());
     }
 
-    pub fn adjust_volume(&mut self, volume_adjust: i32) -> Result<(), BytecodeError> {
-        let volume_adjust = match i8::try_from(volume_adjust) {
-            Ok(i) => i,
-            Err(_) => return Err(BytecodeError::VolumeAdjustOutOfRange(volume_adjust)),
-        };
-
-        emit_bytecode!(self, Opcode::adjust_volume, volume_adjust);
-        Ok(())
+    pub fn adjust_volume(&mut self, v: RelativeVolume) {
+        emit_bytecode!(self, Opcode::adjust_volume, v.as_i8());
     }
 
-    pub fn set_volume(&mut self, volume: u32) -> Result<(), BytecodeError> {
-        let volume = match u8::try_from(volume) {
-            Ok(i) => i,
-            Err(_) => return Err(BytecodeError::VolumeOutOfRange(volume)),
-        };
-
-        emit_bytecode!(self, Opcode::set_volume, volume);
-        Ok(())
+    pub fn set_volume(&mut self, volume: Volume) {
+        emit_bytecode!(self, Opcode::set_volume, volume.as_u8());
     }
 
-    pub fn adjust_pan(&mut self, pan_adjust: i32) -> Result<(), BytecodeError> {
-        let pan_adjust = match i8::try_from(pan_adjust) {
-            Ok(i) => i,
-            Err(_) => return Err(BytecodeError::PanAdjustOutOfRange(pan_adjust)),
-        };
-
-        emit_bytecode!(self, Opcode::adjust_pan, pan_adjust);
-        Ok(())
+    pub fn adjust_pan(&mut self, p: RelativePan) {
+        emit_bytecode!(self, Opcode::adjust_pan, p.as_i8());
     }
 
-    pub fn set_pan(&mut self, pan: u32) -> Result<(), BytecodeError> {
-        let pan = match u8_try_from_limit(pan, MAX_PAN) {
-            Ok(i) => i,
-            Err(_) => return Err(BytecodeError::PanOutOfRange(pan)),
-        };
-
-        emit_bytecode!(self, Opcode::set_pan, pan);
-        Ok(())
+    pub fn set_pan(&mut self, pan: Pan) {
+        emit_bytecode!(self, Opcode::set_pan, pan.as_u8());
     }
 
-    pub fn set_pan_and_volume(&mut self, volume: u32, pan: u32) -> Result<(), BytecodeError> {
-        let pan = match u8_try_from_limit(pan, MAX_PAN) {
-            Ok(i) => i,
-            Err(_) => return Err(BytecodeError::PanOutOfRange(pan)),
-        };
-
-        let volume = match u8::try_from(volume) {
-            Ok(i) => i,
-            Err(_) => return Err(BytecodeError::VolumeOutOfRange(volume)),
-        };
-
-        emit_bytecode!(self, Opcode::set_pan_and_volume, pan, volume);
-        Ok(())
+    pub fn set_pan_and_volume(&mut self, pan: Pan, volume: Volume) {
+        emit_bytecode!(
+            self,
+            Opcode::set_pan_and_volume,
+            pan.as_u8(),
+            volume.as_u8()
+        );
     }
 
     pub fn enable_echo(&mut self) {

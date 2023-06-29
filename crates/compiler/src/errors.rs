@@ -53,7 +53,25 @@ pub enum TickClockError {
 }
 
 #[derive(Debug)]
-pub enum LoopCountError {
+pub enum ValueError {
+    CannotParseUnsigned(String),
+    CannotParseSigned(String),
+
+    // bytecode tick-count arguments out of range
+    BcTicksKeyOffOutOfRange,
+    BcTicksNoKeyOffOutOfRange,
+
+    PanOutOfRange,
+    VolumeOutOfRange,
+    RelativeVolumeOutOfRange,
+    RelativePanOutOfRange,
+
+    PitchOffsetPerTickOutOfRange,
+    QuarterWavelengthOutOfRange,
+
+    PortamentoVelocityZero,
+    PortamentoVelocityOutOfRange,
+
     NotEnoughLoops,
     TooManyLoops,
 }
@@ -72,23 +90,6 @@ pub enum BytecodeError {
     NoTicksInLoop,
     SkipLastLoopOutOfBounds(usize),
 
-    NoteLengthTooShortKeyOffDelay,
-    NoteLengthZero,
-    NoteLengthTooLarge,
-
-    PortamentoVelocityZero,
-    PortamentoVelocityTooLarge,
-
-    PitchOffsetPerTickZero,
-    PitchOffsetOutOfRange,
-    QuarterWaveLengthZero,
-    QuarterWaveLengthOutOfRange,
-
-    VolumeAdjustOutOfRange(i32),
-    VolumeOutOfRange(u32),
-    PanAdjustOutOfRange(i32),
-    PanOutOfRange(u32),
-
     SubroutineCallInSubroutine,
     ReturnInNonSubroutine,
 
@@ -104,9 +105,7 @@ pub enum BytecodeAssemblerError {
     InvalidNumberOfArguments(u8),
     InvalidNumberOfArgumentsRange(u8, u8),
 
-    CannotParseTickCounter(String),
-    CannotParseUnsigned(String),
-    CannotParseSigned(String),
+    ArgumentError(ValueError),
 
     UnknownInstrument(String),
     UnknownSubroutine(String),
@@ -114,7 +113,6 @@ pub enum BytecodeAssemblerError {
     InvalidKeyoffArgument(String),
     InvalidPortamentoVelocity(String),
 
-    InvalidLoopCount(LoopCountError),
     InvalidNote(NoteError),
     InvalidAdsr(InvalidAdsrError),
     InvalidGain(InvalidGainError),
@@ -213,12 +211,6 @@ impl From<NoteError> for BytecodeAssemblerError {
     }
 }
 
-impl From<LoopCountError> for BytecodeAssemblerError {
-    fn from(e: LoopCountError) -> Self {
-        Self::InvalidLoopCount(e)
-    }
-}
-
 impl From<InvalidAdsrError> for BytecodeAssemblerError {
     fn from(e: InvalidAdsrError) -> Self {
         Self::InvalidAdsr(e)
@@ -234,6 +226,12 @@ impl From<InvalidGainError> for BytecodeAssemblerError {
 impl From<TickClockError> for BytecodeAssemblerError {
     fn from(e: TickClockError) -> Self {
         Self::InvalidTickClock(e)
+    }
+}
+
+impl From<ValueError> for BytecodeAssemblerError {
+    fn from(e: ValueError) -> Self {
+        Self::ArgumentError(e)
     }
 }
 
