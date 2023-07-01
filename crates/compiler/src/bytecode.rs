@@ -720,7 +720,7 @@ impl Bytecode {
     }
 
     pub fn return_from_subroutine(&mut self) -> Result<(), BytecodeError> {
-        if self.is_subroutine {
+        if !self.is_subroutine {
             return Err(BytecodeError::ReturnInNonSubroutine);
         }
 
