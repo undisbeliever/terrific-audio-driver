@@ -4,9 +4,6 @@
 //
 // SPDX-License-Identifier: MIT
 
-// ::TODO remove::
-#![allow(dead_code)]
-
 // ::TODO add pub(crate) to more things::
 
 use crate::data::{Instrument, MappingsFile};

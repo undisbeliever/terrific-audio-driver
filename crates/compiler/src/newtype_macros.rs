@@ -11,10 +11,10 @@ macro_rules! u8_newtype {
 
         #[allow(dead_code)]
         impl $name {
-            const MIN: u8 = u8::MIN;
-            const MAX: u8 = u8::MAX;
+            pub const MIN: u8 = u8::MIN;
+            pub const MAX: u8 = u8::MAX;
 
-            pub fn new(value: u8) -> Self {
+            pub const fn new(value: u8) -> Self {
                 Self(value)
             }
             pub fn as_u8(&self) -> u8 {
@@ -39,8 +39,8 @@ macro_rules! u8_newtype {
 
         #[allow(dead_code)]
         impl $name {
-            const MIN: u8 = $min;
-            const MAX: u8 = $max;
+            pub const MIN: u8 = $min;
+            pub const MAX: u8 = $max;
 
             pub fn as_u8(&self) -> u8 {
                 self.0
@@ -81,10 +81,10 @@ macro_rules! i8_newtype {
 
         #[allow(dead_code)]
         impl $name {
-            const MIN: i8 = i8::MIN;
-            const MAX: i8 = i8::MAX;
+            pub const MIN: i8 = i8::MIN;
+            pub const MAX: i8 = i8::MAX;
 
-            pub fn new(p: i8) -> Self {
+            pub const fn new(p: i8) -> Self {
                 Self(p)
             }
             pub fn as_i8(&self) -> i8 {

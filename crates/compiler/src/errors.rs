@@ -4,11 +4,14 @@
 //
 // SPDX-License-Identifier: MIT
 
+use crate::data::Name;
+use crate::mml;
+use crate::notes::Note;
+use crate::time::TickCounter;
+
 use std::fmt::Display;
 use std::io;
 use std::path::PathBuf;
-
-use crate::data::Name;
 
 #[derive(Debug)]
 pub enum DeserializeError {
@@ -43,6 +46,7 @@ pub enum NoteError {
     CannotParseNote(String),
     UnknownNote(char),
     InvalidNoteOctave(u32),
+    InvalidNoteOctaveStr,
     InvalidNote,
 }
 
@@ -57,14 +61,20 @@ pub enum ValueError {
     CannotParseUnsigned(String),
     CannotParseSigned(String),
 
+    NoteOutOfRange,
+    OctaveOutOfRange,
+
     // bytecode tick-count arguments out of range
     BcTicksKeyOffOutOfRange,
     BcTicksNoKeyOffOutOfRange,
 
     PanOutOfRange,
     VolumeOutOfRange,
-    RelativeVolumeOutOfRange,
+    CoarseVolumeOutOfRange,
+
     RelativePanOutOfRange,
+    RelativeVolumeOutOfRange,
+    RelativeCoarseVolumeOutOfRange,
 
     PitchOffsetPerTickOutOfRange,
     QuarterWavelengthOutOfRange,
@@ -72,8 +82,31 @@ pub enum ValueError {
     PortamentoVelocityZero,
     PortamentoVelocityOutOfRange,
 
+    QuantizeOutOfRange,
+    TransposeOutOfRange,
+    PortamentoSpeedOutOfRange,
+
+    ZenLenOutOfRange,
+    TickClockOutOfRange,
+    BpmOutOfRange,
+
+    InvalidMmlBool,
+
     NotEnoughLoops,
     TooManyLoops,
+
+    MissingTickCount,
+    InvalidNoteLength,
+    DotsNotAllowedAfterClockValue,
+
+    CannotConvertBpmToTickClock,
+
+    EchoEdlOutOfRange,
+    EchoLengthNotMultiple,
+    EchoBufferTooLarge,
+
+    InvalidFirFilterSize,
+    InvalidFirFilter,
 }
 
 #[derive(Debug)]
@@ -199,6 +232,191 @@ pub enum PitchTableError {
     InstrumentErrors(Vec<(usize, PitchError)>),
 }
 
+#[derive(Debug)]
+pub enum IdentifierError {
+    Empty,
+    InvalidName(String),
+    InvalidNumber(String),
+}
+
+// u32 is line number
+// char is the first character in the line
+// String is the erroneous characters/string
+#[derive(Debug)]
+pub enum SplitMmlLinesError {
+    MmlTooLarge(usize),
+    TooManySubroutines(usize),
+
+    NoIdentifier(u32, char),
+    InvalidIdentifier(u32, char, IdentifierError),
+
+    UnknownChannel(u32, String),
+    MissingInstrumentText(u32),
+    MissingSubroutineText(u32),
+    MissingChannelText(u32),
+    CannotParseLine(u32, char),
+}
+
+#[derive(Debug)]
+pub enum MmlHeaderError {
+    NoHeader,
+    NoValue,
+    ValueError(ValueError),
+    DuplicateHeader(String),
+
+    InvalidEchoFeedback,
+    InvalidEchoVolume,
+    CannotSetTempo,
+    CannotSetTimer,
+}
+
+// u32 is line number
+#[derive(Debug)]
+pub enum MmlInstrumentError {
+    NoInstrument(u32),
+    CannotFindInstrument(u32, String),
+    ExpectedFourAdsrArguments(u32),
+    InvalidAdsr(u32, InvalidAdsrError),
+    ExpectedOneGainArgument(u32),
+    InvalidGain(u32, InvalidGainError),
+    UnknownArgument(u32, String),
+}
+
+#[derive(Debug)]
+pub enum MmlParserError {
+    // MmlStreamParser errors
+    NumberTooLarge,
+    NumberTooLargeU8,
+
+    ValueError(ValueError),
+
+    NoBool,
+    NoNumber,
+    NoIncrementOrDecrement,
+    NoVolume,
+    NoPan,
+    NoOctave,
+    NoZenLen,
+    NoTranspose,
+    NoLoopCount,
+    NoQuantize,
+    NoTickClock,
+    NoBpm,
+    NoNoteId,
+    NoPortamentoSpeed,
+    NoMpDepth,
+    NoPitchOffsetPerTick,
+    NoVibratoDepth,
+    NoCommaQuarterWavelength,
+    NoQuarterWavelength,
+
+    // + or - sign
+    TransposeRequiresSign,
+
+    // + or - after a pitch
+    TooManyAccidentals,
+    TooManyDots,
+
+    UnknownCharacters(u32),
+
+    // MmlParser errors
+    InvalidNote,
+
+    NoSubroutine,
+    NoInstrument,
+    CannotCallSubroutineInASubroutine,
+    CannotFindSubroutine(String),
+
+    NoStartBrokenChord,
+    NoStartPortamento,
+
+    MissingEndBrokenChord,
+    MissingEndPortamento,
+
+    PortamentoRequiresTwoPitches,
+    InvalidPortamentoDelay,
+
+    InvalidBrokenChordNoteLength { tie: bool },
+
+    MissingNoteBeforeTie,
+    MissingNoteBeforeSlur,
+    CannotParseComma,
+
+    InvalidPitchListSymbol,
+
+    NoteOutOfRange(Note, Note, Note),
+    NoInstrumentSet,
+}
+
+#[derive(Debug)]
+pub struct MmlParserErrorWithPos(pub mml::FilePos, pub MmlParserError);
+
+#[derive(Debug)]
+pub enum MmlCommandError {
+    BytecodeError(BytecodeError),
+    ValueError(ValueError),
+
+    NoteOutOfRange(Note, Note, Note),
+    CannotPlayNoteBeforeSettingInstrument,
+
+    LoopPointAlreadySet,
+    CannotFindSubroutine,
+    CannotFindInstrument,
+    CannotCallSubroutineTooManyNestedLoops(mml::Identifier, usize),
+    CannotUseMpWithoutInstrument,
+    MpPitchOffsetTooLarge(u32),
+    MpDepthZero,
+
+    PortamentoDelayTooLong,
+    CannotCalculatePortamentoVelocity,
+
+    NoNotesInBrokenChord,
+    TooManyNotesInBrokenChord(usize),
+    BrokenChordTotalLengthTooShort,
+
+    BrokenChordTickCountMismatch(TickCounter, TickCounter),
+
+    NoTicksAfterLoopPoint,
+}
+
+#[derive(Debug)]
+pub struct MmlCommandErrorWithPos(pub mml::FilePos, pub MmlCommandError);
+
+#[derive(Debug)]
+pub struct MmlChannelError {
+    pub identifier: mml::Identifier,
+    pub parse_errors: Vec<MmlParserErrorWithPos>,
+    pub command_errors: Vec<MmlCommandErrorWithPos>,
+}
+
+#[derive(Debug)]
+pub enum MmlError {
+    Lines(Vec<SplitMmlLinesError>),
+    Header(Vec<(u32, MmlHeaderError)>),
+    Instruments(Vec<MmlInstrumentError>),
+    DuplicateInstructuments(Vec<(u32, mml::Identifier)>),
+    SubroutineError(MmlChannelError),
+    ChannelError(MmlChannelError),
+}
+
+#[derive(Debug)]
+pub enum SongError {
+    PitchTableError(String, PitchTableError),
+    MmlError(String, Vec<MmlError>),
+
+    NoMusicChannels,
+    InvalidMmlData,
+    SongIsTooLarge(usize),
+
+    InvalidHeaderSize,
+
+    // This should not happen
+    DataSizeMismatch(usize, usize),
+}
+
+// From Traits
+// ===========
+
 impl From<InvalidAdsrError> for ParseError {
     fn from(e: InvalidAdsrError) -> Self {
         Self::InvalidAdsr(e)
@@ -235,6 +453,30 @@ impl From<ValueError> for BytecodeAssemblerError {
     }
 }
 
+impl From<ValueError> for MmlHeaderError {
+    fn from(e: ValueError) -> Self {
+        Self::ValueError(e)
+    }
+}
+
+impl From<ValueError> for MmlParserError {
+    fn from(e: ValueError) -> Self {
+        Self::ValueError(e)
+    }
+}
+
+impl From<BytecodeError> for MmlCommandError {
+    fn from(e: BytecodeError) -> Self {
+        Self::BytecodeError(e)
+    }
+}
+
+impl From<ValueError> for MmlCommandError {
+    fn from(e: ValueError) -> Self {
+        Self::ValueError(e)
+    }
+}
+
 // Display
 // =======
 
@@ -264,6 +506,13 @@ impl Display for NoteError {
     }
 }
 
+impl Display for ValueError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // ::TODO human readable error messages::
+        write!(f, "{:?}", self)
+    }
+}
+
 impl Display for BytecodeAssemblerError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         // ::TODO human readable error messages::
@@ -272,6 +521,13 @@ impl Display for BytecodeAssemblerError {
 }
 
 impl Display for CommonAudioDataError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // ::TODO human readable error messages::
+        write!(f, "{:?}", self)
+    }
+}
+
+impl Display for SongError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         // ::TODO human readable error messages::
         write!(f, "{:?}", self)

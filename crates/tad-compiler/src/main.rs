@@ -5,11 +5,11 @@
 // SPDX-License-Identifier: MIT
 
 use clap::{Args, Parser, Subcommand};
-use compiler::{MappingsFile, SoundEffectsFile};
+use compiler::{compile_song, MappingsFile, SoundEffectsFile};
 
 use std::fs;
 use std::io::{self, Write};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 macro_rules! error {
     ($($arg:tt)*) => {{
@@ -31,6 +31,9 @@ struct ArgParser {
 enum Command {
     /// Compile common audio data
     Common(CompileCommonDataArgs),
+
+    /// Compile MML song
+    Song(CompileSongDataArgs),
 }
 
 #[derive(Args)]
@@ -81,12 +84,59 @@ fn compile_common_data(args: CompileCommonDataArgs) {
     write_data(args.output, data);
 }
 
+//
+// Compile Songs
+// =============
+
+#[derive(Args)]
+struct CompileSongDataArgs {
+    #[command(flatten)]
+    output: OutputArg,
+
+    #[arg(value_name = "JSON_FILE", help = "instruments and mappings json file")]
+    json_file: PathBuf,
+
+    #[arg(value_name = "MML_FILE", help = "mml song file")]
+    mml_file: PathBuf,
+}
+
+fn compile_song_data(args: CompileSongDataArgs) {
+    let file_name = file_name(&args.mml_file);
+
+    let mml_text = load_mml_file(args.mml_file);
+
+    let mappings = load_mappings_file(args.json_file);
+
+    let data = match compile_song(&mml_text, &file_name, &mappings) {
+        Ok(d) => d,
+        Err(e) => error!("Cannot compile song\n{}", e),
+    };
+
+    write_data(args.output, data);
+}
+
+//
+// Main
+// ====
+
 fn main() {
     let args = ArgParser::parse();
 
     match args.command {
-        Command::Common(c) => compile_common_data(c),
+        Command::Common(args) => compile_common_data(args),
+        Command::Song(args) => compile_song_data(args),
     }
+}
+
+//
+// File functions
+// ==============
+
+fn file_name(path: &Path) -> String {
+    path.file_name()
+        .unwrap_or(path.as_os_str())
+        .to_string_lossy()
+        .to_string()
 }
 
 fn load_mappings_file(path: PathBuf) -> MappingsFile {
@@ -103,6 +153,13 @@ fn load_sfx_file(path: PathBuf) -> SoundEffectsFile {
     };
 
     compiler::sfx_file_from_string(contents, &path)
+}
+
+fn load_mml_file(path: PathBuf) -> String {
+    match fs::read_to_string(path) {
+        Ok(s) => s,
+        Err(e) => error!("Cannot load mml file: {}", e),
+    }
 }
 
 fn write_data(out: OutputArg, data: Vec<u8>) {

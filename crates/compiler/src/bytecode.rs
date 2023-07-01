@@ -14,8 +14,8 @@ use crate::time::{TickClock, TickCounter};
 
 use std::cmp::max;
 
-const KEY_OFF_TICK_DELAY: u32 = 1;
-const MAX_NESTED_LOOPS: u8 = 3;
+pub const KEY_OFF_TICK_DELAY: u32 = 1;
+pub const MAX_NESTED_LOOPS: u8 = 3;
 
 const LAST_PLAY_NOTE_OPCODE: u8 = 0xbf;
 
@@ -79,7 +79,7 @@ pub enum Opcode {
 }
 
 // Added Copy trait to Subroutine to satisfy the borrow checker in `BytecodeAssembler`.
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, PartialEq)]
 pub struct InstrumentId {
     id: u8,
 }
@@ -87,6 +87,10 @@ pub struct InstrumentId {
 impl InstrumentId {
     pub fn new(id: u8) -> Self {
         Self { id }
+    }
+
+    pub fn as_usize(&self) -> usize {
+        self.id.into()
     }
 }
 
@@ -108,6 +112,10 @@ impl SubroutineId {
             max_nested_loops,
         }
     }
+
+    pub fn as_usize(&self) -> usize {
+        self.id.into()
+    }
 }
 
 #[derive(Debug, Copy, Clone, PartialEq)]
@@ -117,8 +125,8 @@ pub struct BcTicksKeyOff {
 }
 
 impl BcTicksKeyOff {
-    const MIN: u32 = 1 + KEY_OFF_TICK_DELAY;
-    const MAX: u32 = 0x100 + KEY_OFF_TICK_DELAY;
+    pub const MIN: u32 = 1 + KEY_OFF_TICK_DELAY;
+    pub const MAX: u32 = 0x100 + KEY_OFF_TICK_DELAY;
 
     #[allow(dead_code)]
     pub fn ticks(&self) -> u32 {
@@ -148,8 +156,8 @@ pub struct BcTicksNoKeyOff {
 }
 
 impl BcTicksNoKeyOff {
-    const MIN: u32 = 1;
-    const MAX: u32 = 0x100;
+    pub const MIN: u32 = 1;
+    pub const MAX: u32 = 0x100;
 
     #[allow(dead_code)]
     pub fn ticks(self) -> u32 {
@@ -174,6 +182,7 @@ impl BcTicksNoKeyOff {
     }
 }
 
+#[derive(Copy, Clone)]
 pub enum PlayNoteTicks {
     KeyOff(BcTicksKeyOff),
     NoKeyOff(BcTicksNoKeyOff),
@@ -188,11 +197,25 @@ impl PlayNoteTicks {
         }
     }
 
-    #[allow(dead_code)]
-    pub fn ticks(self) -> u32 {
+    pub fn min_for_is_slur(is_slur: bool) -> Self {
+        if is_slur {
+            PlayNoteTicks::NoKeyOff(BcTicksNoKeyOff::try_from(BcTicksNoKeyOff::MIN).unwrap())
+        } else {
+            PlayNoteTicks::KeyOff(BcTicksKeyOff::try_from(BcTicksKeyOff::MIN).unwrap())
+        }
+    }
+
+    pub fn ticks(&self) -> u32 {
         match self {
             Self::KeyOff(l) => l.ticks.into(),
             Self::NoKeyOff(l) => l.ticks.into(),
+        }
+    }
+
+    pub fn is_slur(&self) -> bool {
+        match self {
+            Self::KeyOff(_) => false,
+            Self::NoKeyOff(_) => true,
         }
     }
 
@@ -203,7 +226,7 @@ impl PlayNoteTicks {
         }
     }
 
-    fn to_tick_count(&self) -> TickCounter {
+    fn to_tick_count(self) -> TickCounter {
         match self {
             Self::KeyOff(l) => TickCounter::new(l.ticks.into()),
             Self::NoKeyOff(l) => TickCounter::new(l.ticks.into()),
@@ -383,10 +406,12 @@ impl Bytecode {
         self.tick_counter
     }
 
-    // ::TODO remove::
-    #[allow(dead_code)]
     pub fn get_max_nested_loops(&self) -> usize {
         self.max_nested_loops
+    }
+
+    pub fn get_bytecode_len(&self) -> usize {
+        self.bytecode.len()
     }
 
     // error enum
@@ -741,11 +766,7 @@ impl Bytecode {
             return Err(BytecodeError::CannotChangeTickClockInASoundEffect);
         }
 
-        emit_bytecode!(
-            self,
-            Opcode::set_song_tick_clock,
-            tick_clock.register_value()
-        );
+        emit_bytecode!(self, Opcode::set_song_tick_clock, tick_clock.as_u8());
         Ok(())
     }
 }

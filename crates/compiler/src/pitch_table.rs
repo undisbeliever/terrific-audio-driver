@@ -4,10 +4,11 @@
 //
 // SPDX-License-Identifier: MIT
 
+use crate::bytecode::InstrumentId;
 use crate::data::Instrument;
 use crate::driver_constants::{MAX_INSTRUMENTS, PITCH_TABLE_SIZE};
 use crate::errors::{PitchError, PitchTableError};
-use crate::notes;
+use crate::notes::{self, Note};
 
 const SEMITONES_PER_OCTAVE: i32 = notes::SEMITONS_PER_OCTAVE as i32;
 
@@ -238,4 +239,15 @@ pub fn build_pitch_table(instruments: &Vec<Instrument>) -> Result<PitchTable, Pi
     }
 
     Ok(out)
+}
+
+impl PitchTable {
+    pub fn pitch_for_note(&self, inst_id: InstrumentId, note: Note) -> u16 {
+        let offset: u8 = self.instruments_pitch_offset[inst_id.as_usize()];
+        let index: u8 = offset.wrapping_add(note.note_id());
+
+        let i = usize::from(index);
+
+        u16::from_le_bytes([self.table_data_l[i], self.table_data_h[i]])
+    }
 }

@@ -16,7 +16,7 @@ fn value_fits_in_bits(value: u8, bits: u8) -> bool {
     value & mask == value
 }
 
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Deserialize, Copy, Clone, PartialEq, Debug)]
 #[serde(try_from = "String")]
 pub struct Adsr {
     adsr1: u8,
@@ -99,7 +99,7 @@ impl TryFrom<String> for Adsr {
     }
 }
 
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Deserialize, Copy, Clone, PartialEq, Debug)]
 #[serde(from = "u8")]
 pub struct Gain {
     value: u8,

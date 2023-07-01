@@ -8,15 +8,20 @@ mod bytecode;
 mod bytecode_assembler;
 mod common_audio_data;
 mod data;
-mod driver_constants;
+mod echo;
 mod envelope;
-mod errors;
+mod mml;
+mod mml_command_parser;
 mod newtype_macros;
 mod notes;
 mod pitch_table;
 mod samples;
+mod songs;
 mod sound_effects;
 mod time;
+
+pub mod driver_constants;
+pub mod errors;
 
 pub use data::{load_mappings_file, MappingsFile};
 
@@ -24,3 +29,6 @@ pub use pitch_table::build_pitch_table;
 
 pub use common_audio_data::{build_common_audio_data, compile_common_audio_data};
 pub use sound_effects::{sfx_file_from_string, SoundEffectsFile};
+
+pub use mml::{build_data_instruments_map, parse_mml};
+pub use songs::{compile_song, song_data};

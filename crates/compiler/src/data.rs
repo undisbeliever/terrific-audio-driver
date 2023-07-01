@@ -12,6 +12,7 @@ use std::fmt::Display;
 use std::fs::File;
 use std::io::BufReader;
 use std::path::PathBuf;
+use std::str::FromStr;
 
 use serde::Deserialize;
 
@@ -22,27 +23,35 @@ pub struct Name(String);
 // ::TODO confirm serde validates names::
 
 impl Name {
-    pub fn try_new(s: String) -> Result<Self, ParseError> {
+    pub fn is_valid_name(s: &str) -> bool {
         let mut iter = s.bytes();
 
         // first character
         match iter.next() {
             // Empty name
-            None => return Err(ParseError::EmptyName),
+            None => return false,
             Some(b) => match b {
                 b'A'..=b'Z' | b'a'..=b'z' | b'_' => {}
-                _ => return Err(ParseError::InvalidName(s)),
+                _ => return false,
             },
         };
 
         for b in iter {
             match b {
                 b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'_' => {}
-                _ => return Err(ParseError::InvalidName(s)),
+                _ => return false,
             }
         }
 
-        Ok(Name(s))
+        true
+    }
+
+    pub fn try_new(s: String) -> Result<Self, ParseError> {
+        if Self::is_valid_name(&s) {
+            Ok(Self(s))
+        } else {
+            Err(ParseError::InvalidName(s))
+        }
     }
 
     pub fn as_str(&self) -> &str {
@@ -55,6 +64,14 @@ impl TryFrom<String> for Name {
 
     fn try_from(s: String) -> Result<Self, Self::Error> {
         Self::try_new(s)
+    }
+}
+
+impl FromStr for Name {
+    type Err = ParseError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Self::try_new(s.to_owned())
     }
 }
 
