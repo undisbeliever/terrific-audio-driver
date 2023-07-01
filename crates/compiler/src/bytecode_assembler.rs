@@ -221,7 +221,7 @@ impl BytecodeAssembler<'_, '_> {
     ) -> Result<(Note, PlayNoteTicks), BytecodeAssemblerError> {
         let (note, key_off, ticks) = match args.len() {
             2 => (args[0], "", args[1]),
-            3 => (args[1], "", args[2]),
+            3 => (args[0], args[1], args[2]),
             _ => return Err(BytecodeAssemblerError::InvalidNumberOfArgumentsRange(2, 3)),
         };
         let note = Note::parse_bytecode_argument(note)?;

@@ -182,9 +182,9 @@ pub enum PlayNoteTicks {
 impl PlayNoteTicks {
     pub fn try_from_is_slur(ticks: u32, is_slur: bool) -> Result<Self, ValueError> {
         if is_slur {
-            Ok(PlayNoteTicks::KeyOff(BcTicksKeyOff::try_from(ticks)?))
-        } else {
             Ok(PlayNoteTicks::NoKeyOff(BcTicksNoKeyOff::try_from(ticks)?))
+        } else {
+            Ok(PlayNoteTicks::KeyOff(BcTicksKeyOff::try_from(ticks)?))
         }
     }
 
