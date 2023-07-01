@@ -14,15 +14,15 @@ pub const MAX_TICK_TIMER: u8 = u8::MAX;
 // TickCounter can only be incremented
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
 pub struct TickCounter {
-    value: u64,
+    value: u32,
 }
 
 impl TickCounter {
-    pub fn new(value: u64) -> TickCounter {
+    pub fn new(value: u32) -> TickCounter {
         Self { value }
     }
 
-    pub fn value(&self) -> u64 {
+    pub fn value(&self) -> u32 {
         self.value
     }
 
