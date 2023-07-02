@@ -81,7 +81,7 @@ impl Display for Name {
     }
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 pub struct Instrument {
     pub name: Name,
 
@@ -107,7 +107,7 @@ pub struct Instrument {
 }
 
 // ::TODO test for duplicate names::
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 pub struct Mappings {
     pub instruments: Vec<Instrument>,
 

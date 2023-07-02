@@ -5,12 +5,9 @@
 // SPDX-License-Identifier: MIT
 
 mod bytecode;
-mod bytecode_assembler;
 mod common_audio_data;
-mod data;
 mod echo;
 mod envelope;
-mod mml;
 mod mml_command_parser;
 mod newtype_macros;
 mod notes;
@@ -20,15 +17,20 @@ mod songs;
 mod sound_effects;
 mod time;
 
+pub mod bytecode_assembler;
+pub mod data;
 pub mod driver_constants;
 pub mod errors;
+pub mod mml;
 
-pub use data::{load_mappings_file, MappingsFile};
+pub use data::{load_mappings_file, MappingsFile, Name};
+pub use envelope::{Adsr, Gain};
+pub use notes::{Note, Octave, STARTING_OCTAVE};
 
-pub use pitch_table::build_pitch_table;
+pub use pitch_table::{build_pitch_table, PitchTable};
 
 pub use common_audio_data::{build_common_audio_data, compile_common_audio_data};
 pub use sound_effects::{sfx_file_from_string, SoundEffectsFile};
 
-pub use mml::{build_data_instruments_map, parse_mml};
+pub use mml::{build_data_instruments_map, parse_mml, DataInstrumentsMap};
 pub use songs::{compile_song, song_data};

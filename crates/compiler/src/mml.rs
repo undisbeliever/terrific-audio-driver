@@ -95,6 +95,7 @@ pub use identifier::Identifier;
 
 use self::line_splitter::split_lines;
 
+#[derive(Debug, PartialEq)]
 pub struct MetaData {
     pub title: Option<String>,
     pub date: Option<String>,
@@ -110,13 +111,14 @@ pub struct MetaData {
     zenlen: ZenLen,
 }
 
-#[derive(PartialEq)]
+#[derive(Debug, PartialEq)]
 pub enum EnvelopeOverride {
     None,
     Adsr(Adsr),
     Gain(Gain),
 }
 
+#[derive(Debug, PartialEq)]
 pub struct MmlInstrument {
     identifier: Identifier,
 
@@ -130,12 +132,13 @@ pub struct MmlInstrument {
     envelope_override: EnvelopeOverride,
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub struct LoopPoint {
     pub bytecode_offset: usize,
     pub tick_counter: TickCounter,
 }
 
+#[derive(Debug, PartialEq)]
 pub struct ChannelData {
     identifier: Identifier,
 
@@ -150,6 +153,7 @@ pub struct ChannelData {
     // ::TODO add tick counter for line::
 }
 
+#[derive(Debug, PartialEq)]
 pub struct MmlData {
     metadata: MetaData,
     subroutines: Vec<ChannelData>,

@@ -81,7 +81,7 @@ impl std::ops::AddAssign for TickCounter {
     }
 }
 
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub struct TickClock {
     register_value: u8,
 }

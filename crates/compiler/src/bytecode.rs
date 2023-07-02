@@ -79,7 +79,7 @@ pub enum Opcode {
 }
 
 // Added Copy trait to Subroutine to satisfy the borrow checker in `BytecodeAssembler`.
-#[derive(Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub struct InstrumentId {
     id: u8,
 }
@@ -95,7 +95,7 @@ impl InstrumentId {
 }
 
 // Added Copy trait to Subroutine to satisfy the borrow checker in `BytecodeAssembler`.
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub struct SubroutineId {
     id: u8,
     tick_counter: TickCounter,
