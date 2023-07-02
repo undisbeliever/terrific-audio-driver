@@ -627,7 +627,7 @@ impl MmlStreamParser<'_> {
                     (b'}', Some(b'}')) => Some(Symbol::EndBrokenChord),
                     (b'M', Some(b'P')) => Some(Symbol::MpVibrato),
 
-                    (b'_', _) => Some(Symbol::RelativeTranspose),
+                    (b'_', _) => Some(Symbol::Transpose),
                     (b'{', _) => Some(Symbol::StartPortamento),
                     (b'}', _) => Some(Symbol::EndPortamento),
 
