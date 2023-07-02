@@ -17,7 +17,7 @@ fn value_fits_in_bits(value: u8, bits: u8) -> bool {
 }
 
 #[derive(Deserialize, Copy, Clone, PartialEq, Debug)]
-#[serde(try_from = "String")]
+#[serde(try_from = "&str")]
 pub struct Adsr {
     adsr1: u8,
     adsr2: u8,
@@ -50,7 +50,7 @@ impl Adsr {
         }
     }
 
-    pub fn from_strs(
+    pub fn try_from_strs(
         attack: &str,
         decay: &str,
         sustain_level: &str,
@@ -66,7 +66,19 @@ impl Adsr {
         )
     }
 
-    pub fn from_str(s: &str) -> Result<Adsr, ParseError> {
+    pub fn adsr1(&self) -> u8 {
+        self.adsr1
+    }
+
+    pub fn adsr2(&self) -> u8 {
+        self.adsr2
+    }
+}
+
+impl TryFrom<&str> for Adsr {
+    type Error = ParseError;
+
+    fn try_from(s: &str) -> Result<Self, Self::Error> {
         let mut iter = s.split_ascii_whitespace();
 
         let a = iter.next().ok_or(ParseError::AdsrNotFourValues)?;
@@ -79,23 +91,7 @@ impl Adsr {
             return Err(ParseError::AdsrNotFourValues);
         }
 
-        Ok(Adsr::from_strs(a, d, sl, sr)?)
-    }
-
-    pub fn adsr1(&self) -> u8 {
-        self.adsr1
-    }
-
-    pub fn adsr2(&self) -> u8 {
-        self.adsr2
-    }
-}
-
-impl TryFrom<String> for Adsr {
-    type Error = ParseError;
-
-    fn try_from(s: String) -> Result<Self, Self::Error> {
-        Adsr::from_str(&s)
+        Ok(Adsr::try_from_strs(a, d, sl, sr)?)
     }
 }
 
@@ -110,17 +106,6 @@ impl Gain {
         Self { value }
     }
 
-    pub fn from_str(s: &str) -> Result<Gain, InvalidGainError> {
-        // ::TODO figure out what the gain bits do and properly parse them::
-
-        let value = match s.parse() {
-            Ok(i) => i,
-            Err(_) => return Err(InvalidGainError::InvalidGain(s.to_owned())),
-        };
-
-        Ok(Gain { value })
-    }
-
     pub fn value(&self) -> u8 {
         self.value
     }
@@ -129,5 +114,20 @@ impl Gain {
 impl From<u8> for Gain {
     fn from(i: u8) -> Self {
         Gain::new(i)
+    }
+}
+
+impl TryFrom<&str> for Gain {
+    type Error = InvalidGainError;
+
+    fn try_from(s: &str) -> Result<Self, Self::Error> {
+        // ::TODO figure out what the gain bits do and properly parse them::
+
+        let value = match s.parse() {
+            Ok(i) => i,
+            Err(_) => return Err(InvalidGainError::InvalidGain(s.to_owned())),
+        };
+
+        Ok(Gain { value })
     }
 }

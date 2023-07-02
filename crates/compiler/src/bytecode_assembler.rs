@@ -273,13 +273,13 @@ impl BytecodeAssembler<'_, '_> {
     fn adsr_argument(&self, args: &[&str]) -> Result<Adsr, BytecodeAssemblerError> {
         let args = four_arguments(args)?;
 
-        Ok(Adsr::from_strs(args.0, args.1, args.2, args.3)?)
+        Ok(Adsr::try_from_strs(args.0, args.1, args.2, args.3)?)
     }
 
     fn gain_argument(&self, args: &[&str]) -> Result<Gain, BytecodeAssemblerError> {
         let arg = one_argument(args)?;
 
-        let gain = Gain::from_str(arg)?;
+        let gain = Gain::try_from(arg)?;
 
         Ok(gain)
     }
@@ -304,7 +304,7 @@ impl BytecodeAssembler<'_, '_> {
         let (inst, a1, a2, a3, a4) = five_arguments(args)?;
 
         let inst = self._find_instrument(inst)?;
-        let adsr = Adsr::from_strs(a1, a2, a3, a4)?;
+        let adsr = Adsr::try_from_strs(a1, a2, a3, a4)?;
 
         Ok((inst, adsr))
     }
@@ -316,7 +316,7 @@ impl BytecodeAssembler<'_, '_> {
         let (inst, gain) = two_arguments(args)?;
 
         let inst = self._find_instrument(inst)?;
-        let gain = Gain::from_str(gain)?;
+        let gain = Gain::try_from(gain)?;
 
         Ok((inst, gain))
     }

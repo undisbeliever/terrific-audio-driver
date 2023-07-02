@@ -590,7 +590,7 @@ fn parse_instrument(
     match args.next() {
         None => {}
         Some("adsr") => match four_arguments(args) {
-            Some((a, b, c, d)) => match Adsr::from_strs(a, b, c, d) {
+            Some((a, b, c, d)) => match Adsr::try_from_strs(a, b, c, d) {
                 Ok(a) => {
                     envelope_override = EnvelopeOverride::Adsr(a);
                 }
@@ -599,7 +599,7 @@ fn parse_instrument(
             _ => return Err(MmlInstrumentError::ExpectedFourAdsrArguments(line_no)),
         },
         Some("gain") => match one_argument(args) {
-            Some(g) => match Gain::from_str(g) {
+            Some(g) => match Gain::try_from(g) {
                 Ok(g) => {
                     envelope_override = EnvelopeOverride::Gain(g);
                 }
