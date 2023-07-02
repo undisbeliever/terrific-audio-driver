@@ -4,6 +4,8 @@
 //
 // SPDX-License-Identifier: MIT
 
+#![allow(clippy::assertions_on_constants)]
+
 // ::TODO write integration tests::
 
 use crate::bytecode::{
@@ -813,34 +815,37 @@ impl MmlBytecodeGenerator<'_> {
         length: TickCounter,
         is_slur: bool,
     ) -> Result<(PlayNoteTicks, TickCounter), ValueError> {
-        let calc = |min: u32, max: u32| -> (u32, u32) {
-            let length = length.value();
-            if length <= max {
-                (length, 0)
+        let l = length.value();
+
+        if !is_slur && l <= BcTicksKeyOff::MAX {
+            return Ok((
+                PlayNoteTicks::KeyOff(BcTicksKeyOff::try_from(l)?),
+                TickCounter::new(0),
+            ));
+        }
+
+        // The play_note instruction requires keyoff.
+        let last_min = if is_slur {
+            BcTicksNoKeyOff::MIN
+        } else {
+            BcTicksKeyOff::MIN
+        };
+        const MAX: u32 = BcTicksNoKeyOff::MAX;
+
+        let pn = {
+            if l <= MAX {
+                l
+            } else if l >= MAX + last_min {
+                MAX
             } else {
-                let remainder = length - max;
-                if remainder % max >= min {
-                    (max, remainder)
-                } else {
-                    let offset = min - (remainder % max);
-                    (max - offset, remainder + offset)
-                }
+                MAX - 1
             }
         };
 
-        if is_slur {
-            let (pn, r) = calc(BcTicksNoKeyOff::MIN, BcTicksNoKeyOff::MAX);
-            Ok((
-                PlayNoteTicks::NoKeyOff(BcTicksNoKeyOff::try_from(pn)?),
-                TickCounter::new(r),
-            ))
-        } else {
-            let (pn, r) = calc(BcTicksKeyOff::MIN, BcTicksKeyOff::MAX);
-            Ok((
-                PlayNoteTicks::KeyOff(BcTicksKeyOff::try_from(pn)?),
-                TickCounter::new(r),
-            ))
-        }
+        Ok((
+            PlayNoteTicks::NoKeyOff(BcTicksNoKeyOff::try_from(pn)?),
+            TickCounter::new(l - pn),
+        ))
     }
 
     fn play_note_with_mp(
@@ -923,12 +928,19 @@ impl MmlBytecodeGenerator<'_> {
 
         let mut remaining_ticks = length.value();
 
-        let rest_length = BcTicksNoKeyOff::try_from(BcTicksNoKeyOff::MAX).unwrap();
+        const MAX_REST: u32 = BcTicksNoKeyOff::MAX;
         const MAX_FINAL_REST: u32 = BcTicksKeyOff::MAX;
+        const MIN_FINAL_REST: u32 = BcTicksKeyOff::MIN;
+        const _: () = assert!(MIN_FINAL_REST > 1);
 
         while remaining_ticks > MAX_FINAL_REST {
-            self.bc.rest(rest_length);
-            remaining_ticks -= rest_length.ticks();
+            let l = if remaining_ticks >= MAX_REST + MIN_FINAL_REST {
+                MAX_REST
+            } else {
+                MAX_REST - 1
+            };
+            self.bc.rest(BcTicksNoKeyOff::try_from(l).unwrap());
+            remaining_ticks -= l;
         }
 
         self.bc
@@ -941,6 +953,7 @@ impl MmlBytecodeGenerator<'_> {
         let mut remaining_ticks = length.value();
 
         let rest_length = BcTicksNoKeyOff::try_from(BcTicksNoKeyOff::MAX).unwrap();
+        const _: () = assert!(BcTicksNoKeyOff::MIN == 1);
 
         while remaining_ticks > rest_length.ticks() {
             self.bc.rest(rest_length);
