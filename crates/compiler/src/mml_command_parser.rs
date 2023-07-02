@@ -1152,7 +1152,8 @@ impl MmlParser<'_> {
     // Merge multiple rest commands
     fn merge_multiple_rest_symbols(&mut self, rest_length: TickCounter) -> TickCounter {
         // No const symbol concatenate
-        const SYMBOLS: [Symbol; 9] = [
+        const SYMBOLS: [Symbol; 10] = [
+            Symbol::Divider,
             Symbol::SetDefaultLength,
             Symbol::SetOctave,
             Symbol::IncrementOctave,
@@ -1190,7 +1191,8 @@ impl MmlParser<'_> {
     // Assumes the previous token was a note token.
     fn parse_tie_and_slur(&mut self) -> (TickCounter, bool) {
         // No const symbol concatenate
-        const SYMBOLS: [Symbol; 10] = [
+        const SYMBOLS: [Symbol; 11] = [
+            Symbol::Divider,
             Symbol::SetDefaultLength,
             Symbol::SetOctave,
             Symbol::IncrementOctave,
@@ -1242,7 +1244,8 @@ impl MmlParser<'_> {
         volume: Option<VolumeCommand>,
     ) -> Result<MmlCommand, MmlParserErrorWithPos> {
         // No const symbol concatenate
-        const SYMBOLS: [Symbol; 11] = [
+        const SYMBOLS: [Symbol; 12] = [
+            Symbol::Divider,
             Symbol::SetDefaultLength,
             Symbol::SetOctave,
             Symbol::IncrementOctave,
