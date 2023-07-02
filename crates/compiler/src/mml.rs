@@ -1033,12 +1033,13 @@ impl MmlBytecodeGenerator<'_> {
         };
         let velocity = PortamentoVelocity::try_from(velocity)?;
 
-        let (p_length, p_rest) = Self::split_play_note_length(portamento_length, true)?;
+        let (p_length, p_rest) =
+            Self::split_play_note_length(tie_length + portamento_length, is_slur)?;
         self.bc.portamento(note2, velocity, p_length);
 
         self.prev_slurred_note = if is_slur { Some(note2) } else { None };
 
-        self.rest_after_play_note(tie_length + p_rest, is_slur)
+        self.rest_after_play_note(p_rest, is_slur)
     }
 
     fn broken_chord(
