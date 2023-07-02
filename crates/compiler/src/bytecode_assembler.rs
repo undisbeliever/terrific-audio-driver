@@ -235,7 +235,7 @@ impl BytecodeAssembler<'_, '_> {
         args: &[&str],
     ) -> Result<(PitchOffsetPerTick, Note, PlayNoteTicks), BytecodeAssemblerError> {
         let (depth, note, key_off, ticks) = match args.len() {
-            3 => (args[0], "", args[1], args[2]),
+            3 => (args[0], args[1], "", args[2]),
             4 => (args[0], args[1], args[2], args[3]),
             _ => return Err(BytecodeAssemblerError::InvalidNumberOfArgumentsRange(3, 4)),
         };
