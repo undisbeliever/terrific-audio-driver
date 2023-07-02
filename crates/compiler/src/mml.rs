@@ -1073,7 +1073,7 @@ impl MmlBytecodeGenerator<'_> {
             last_note_ticks += note_length.ticks();
         }
 
-        if last_note_ticks < BcTicksKeyOff::MIN {
+        if last_note_ticks != 0 && last_note_ticks < BcTicksKeyOff::MIN {
             last_note_ticks = BcTicksKeyOff::MIN;
         }
         let last_note_ticks = last_note_ticks;
