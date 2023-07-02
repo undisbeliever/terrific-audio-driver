@@ -368,7 +368,7 @@ mod scanner {
                     if index_2 == 0 {
                         None
                     } else {
-                        Some(&str_1_and_2[..index_1])
+                        Some(&str_1_and_2[..index_2])
                     }
                 }
                 Match::None(_pos) => None,
