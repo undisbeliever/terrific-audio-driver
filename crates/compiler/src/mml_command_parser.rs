@@ -10,7 +10,7 @@ use crate::bytecode::{
 };
 use crate::errors::{MmlParserError, MmlParserErrorWithPos, ValueError};
 use crate::newtype_macros::{i8_newtype, u8_newtype};
-use crate::notes::{parse_pitch_char, MmlPitch, Note, Octave, STARTING_OCTAVE};
+use crate::notes::{parse_pitch_char, MidiNote, MmlPitch, Note, Octave, STARTING_OCTAVE};
 use crate::time::{Bpm, MmlLength, TickClock, TickCounter, ZenLen};
 
 use std::cmp::min;
@@ -406,7 +406,7 @@ pub(super) enum Symbol {
     Tie,
     Slur,
     ChangeWholeNoteLength,
-    PlayNoteId,
+    PlayMidiNoteNumber,
     SetDefaultLength,
     Rest,
     SetOctave,
@@ -600,7 +600,7 @@ impl MmlStreamParser<'_> {
             b'^' => Some(Symbol::Tie),
             b'&' => Some(Symbol::Slur),
             b'C' => Some(Symbol::ChangeWholeNoteLength),
-            b'n' => Some(Symbol::PlayNoteId),
+            b'n' => Some(Symbol::PlayMidiNoteNumber),
             b'l' => Some(Symbol::SetDefaultLength),
             b'r' => Some(Symbol::Rest),
             b'o' => Some(Symbol::SetOctave),
@@ -809,7 +809,7 @@ impl MmlStreamParser<'_> {
 
     parse_u8_newtype!(parse_bpm, Bpm, NoBpm);
     parse_u8_newtype!(parse_loop_count, LoopCount, NoLoopCount);
-    parse_u8_newtype!(parse_note_id, Note, NoNoteId);
+    parse_u8_newtype!(parse_midi_note_number, MidiNote, NoMidiNote);
     parse_u8_newtype!(parse_octave, Octave, NoOctave);
     parse_u8_newtype!(parse_portamento_speed, PortamentoSpeed, NoPortamentoSpeed);
     parse_u8_newtype!(parse_quantize, Quantization, NoQuantize);
@@ -1485,10 +1485,10 @@ impl MmlParser<'_> {
             Symbol::SkipLastLoop => Ok(MmlCommand::SkipLastLoop),
             Symbol::EndLoop => Ok(MmlCommand::EndLoop(self.parser.parse_loop_count()?)),
 
-            Symbol::PlayNoteId => {
-                let n = self.parser.parse_note_id()?;
-                self.parse_note(n, self.state.default_length)
-            }
+            Symbol::PlayMidiNoteNumber => match self.parser.parse_midi_note_number()?.try_into() {
+                Ok(n) => self.parse_note(n, self.state.default_length),
+                Err(e) => err(e.into()),
+            },
 
             Symbol::Rest => {
                 let r = self.parse_note_length()?;
@@ -1604,10 +1604,13 @@ impl MmlParser<'_> {
                     Err(e) => self.add_error_before(e),
                 },
                 NewCommandToken::Symbol(s) => {
-                    if s == Symbol::PlayNoteId {
-                        match self.parser.parse_note_id() {
-                            Ok(n) => out.push(n),
+                    if s == Symbol::PlayMidiNoteNumber {
+                        match self.parser.parse_midi_note_number() {
                             Err(e) => self.add_error(e),
+                            Ok(n) => match Note::try_from(n) {
+                                Ok(n) => out.push(n),
+                                Err(e) => self.add_error_before(e.into()),
+                            },
                         }
                     } else if self.try_change_octave_st_offset_symbol(s) {
                         // Change octave or semitone offset symbol

@@ -7,8 +7,11 @@
 #![allow(clippy::assertions_on_constants)]
 
 use crate::errors::{NoteError, ValueError};
+use crate::newtype_macros::u8_newtype;
 
 use serde::Deserialize;
+
+u8_newtype!(MidiNote, MidiNoteNumberOutOfRange, 0, 127);
 
 pub const LAST_OCTAVE: u8 = 7;
 pub const SEMITONS_PER_OCTAVE: u8 = 12;
@@ -35,26 +38,30 @@ pub struct Note {
     note_id: u8,
 }
 
-impl TryFrom<u32> for Note {
+impl TryFrom<MidiNote> for Note {
     type Error = ValueError;
 
-    fn try_from(note_id: u32) -> Result<Self, Self::Error> {
-        if note_id > LAST_NOTE_ID.into() {
-            return Err(ValueError::NoteOutOfRange);
-        }
+    fn try_from(n: MidiNote) -> Result<Self, Self::Error> {
+        const MIDI_C0: u8 = 12;
 
-        Ok(Note {
-            note_id: note_id.try_into().unwrap(),
-        })
+        match n.as_u8().checked_sub(MIDI_C0) {
+            None => Err(ValueError::CannotConvertMidiNote),
+            Some(note_id) => match Note::from_note_id(note_id) {
+                Err(_) => Err(ValueError::CannotConvertMidiNote),
+                Ok(n) => Ok(n),
+            },
+        }
     }
 }
 
 impl Note {
+    /// audio-driver note_id.
+    /// NOT MIDI-note-number and NOT Piano-key-number
     pub fn note_id(&self) -> u8 {
         self.note_id
     }
 
-    pub fn from_note_id(note_id: u8) -> Result<Self, NoteError> {
+    fn from_note_id(note_id: u8) -> Result<Self, NoteError> {
         if note_id > LAST_NOTE_ID {
             return Err(NoteError::InvalidNote);
         }

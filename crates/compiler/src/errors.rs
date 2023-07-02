@@ -90,6 +90,9 @@ pub enum ValueError {
     TickClockOutOfRange,
     BpmOutOfRange,
 
+    MidiNoteNumberOutOfRange,
+    CannotConvertMidiNote,
+
     InvalidMmlBool,
 
     NotEnoughLoops,
@@ -302,7 +305,7 @@ pub enum MmlParserError {
     NoQuantize,
     NoTickClock,
     NoBpm,
-    NoNoteId,
+    NoMidiNote,
     NoPortamentoSpeed,
     NoMpDepth,
     NoPitchOffsetPerTick,
