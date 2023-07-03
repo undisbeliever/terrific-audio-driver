@@ -17,7 +17,7 @@ fn value_fits_in_bits(value: u8, bits: u8) -> bool {
 }
 
 #[derive(Deserialize, Copy, Clone, PartialEq, Debug)]
-#[serde(try_from = "&str")]
+#[serde(try_from = "String")]
 pub struct Adsr {
     adsr1: u8,
     adsr2: u8,
@@ -72,6 +72,15 @@ impl Adsr {
 
     pub fn adsr2(&self) -> u8 {
         self.adsr2
+    }
+}
+
+// Required to prevent a `invalid type: string "[...]", expected a borrowed string` serde error
+impl TryFrom<String> for Adsr {
+    type Error = ParseError;
+
+    fn try_from(s: String) -> Result<Self, Self::Error> {
+        Self::try_from(s.as_str())
     }
 }
 
