@@ -5,15 +5,15 @@
 // SPDX-License-Identifier: MIT
 
 use crate::bytecode::{
-    BcTicksKeyOff, BcTicksNoKeyOff, Bytecode, InstrumentId, LoopCount, Pan, PitchOffsetPerTick,
-    PlayNoteTicks, PortamentoVelocity, QuarterWavelengthInTicks, RelativePan, RelativeVolume,
-    SubroutineId, Volume,
+    BcTicksKeyOff, BcTicksNoKeyOff, Bytecode, InstrumentId, LoopCount, PitchOffsetPerTick,
+    PlayNoteTicks, PortamentoVelocity, SubroutineId,
 };
 use crate::data::Instrument;
 use crate::envelope::{Adsr, Gain};
 use crate::errors::{BytecodeAssemblerError, BytecodeError, ValueError};
 use crate::notes::Note;
-use crate::time::{TickClock, TickCounter};
+use crate::time::TickCounter;
+use crate::value_newtypes::ValueNewType;
 
 use std::collections::HashMap;
 
@@ -162,7 +162,7 @@ impl BytecodeAssembler<'_, '_> {
            portamento 3 portamento_argument,
            set_vibrato_depth_and_play_note 3 vibrato_depth_and_play_note_argument,
 
-           set_vibrato 2 vibrato_arguments,
+           set_vibrato 2 two_vnt_arguments,
            disable_vibrato 0 no_arguments,
 
            set_instrument 1 instrument_argument,
@@ -172,11 +172,11 @@ impl BytecodeAssembler<'_, '_> {
            set_adsr 1 adsr_argument,
            set_gain 1 gain_argument,
 
-           adjust_volume 1 relative_volume_argument,
-           set_volume 1 volume_argument,
-           adjust_pan 1 relative_pan_argument,
-           set_pan 1 pan_argument,
-           set_pan_and_volume 2 pan_and_volume_arguments,
+           adjust_volume 1 one_vnt_argument,
+           set_volume 1 one_vnt_argument,
+           adjust_pan 1 one_vnt_argument,
+           set_pan 1 one_vnt_argument,
+           set_pan_and_volume 2 two_vnt_arguments,
 
            enable_echo 0 no_arguments,
            disable_echo 0 no_arguments,
@@ -191,7 +191,7 @@ impl BytecodeAssembler<'_, '_> {
            end 0 no_arguments,
            disable_channel 0 no_arguments,
 
-           set_song_tick_clock 1 tick_clock_argument,
+           set_song_tick_clock 1 one_vnt_argument,
         )
     }
 
@@ -201,6 +201,24 @@ impl BytecodeAssembler<'_, '_> {
         } else {
             Err(BytecodeAssemblerError::InvalidNumberOfArguments(0))
         }
+    }
+
+    fn one_vnt_argument<T>(&self, args: &[&str]) -> Result<T, BytecodeAssemblerError>
+    where
+        T: ValueNewType,
+    {
+        let arg = one_argument(args)?;
+        Ok(T::try_from_str(arg)?)
+    }
+
+    fn two_vnt_arguments<T, U>(&self, args: &[&str]) -> Result<(T, U), BytecodeAssemblerError>
+    where
+        T: ValueNewType,
+        U: ValueNewType,
+    {
+        let (arg1, arg2) = two_arguments(args)?;
+
+        Ok((T::try_from_str(arg1)?, U::try_from_str(arg2)?))
     }
 
     fn rest_argument(&self, args: &[&str]) -> Result<BcTicksNoKeyOff, BytecodeAssemblerError> {
@@ -240,7 +258,7 @@ impl BytecodeAssembler<'_, '_> {
             _ => return Err(BytecodeAssemblerError::InvalidNumberOfArgumentsRange(3, 4)),
         };
 
-        let depth = parse_u32(depth)?.try_into()?;
+        let depth = PitchOffsetPerTick::try_from_str(depth)?;
         let note = Note::parse_bytecode_argument(note)?;
         let ticks = parse_play_note_ticks(ticks, key_off)?;
 
@@ -265,7 +283,7 @@ impl BytecodeAssembler<'_, '_> {
                 ))
             }
         };
-        let velocity = parse_i32(velocity)?.try_into()?;
+        let velocity = PortamentoVelocity::try_from_str(velocity)?;
 
         Ok((note, velocity, ticks))
     }
@@ -334,60 +352,15 @@ impl BytecodeAssembler<'_, '_> {
         }
     }
 
-    fn tick_clock_argument(&self, args: &[&str]) -> Result<TickClock, BytecodeAssemblerError> {
-        let arg = one_argument(args)?;
-
-        Ok(TickClock::new_from_str(arg)?)
-    }
-
     fn optional_loop_count_argument(
         &self,
         args: &[&str],
     ) -> Result<Option<LoopCount>, BytecodeAssemblerError> {
         match args.len() {
             0 => Ok(None),
-            1 => Ok(Some(LoopCount::try_from(parse_u32(args[0])?)?)),
+            1 => Ok(Some(LoopCount::try_from_str(args[0])?)),
             _ => Err(BytecodeAssemblerError::InvalidNumberOfArgumentsRange(0, 1)),
         }
-    }
-
-    fn volume_argument(&self, args: &[&str]) -> Result<Volume, BytecodeAssemblerError> {
-        let arg = u32_argument(args)?;
-        Ok(arg.try_into()?)
-    }
-
-    fn pan_argument(&self, args: &[&str]) -> Result<Pan, BytecodeAssemblerError> {
-        let arg = u32_argument(args)?;
-        Ok(arg.try_into()?)
-    }
-
-    fn relative_volume_argument(
-        &self,
-        args: &[&str],
-    ) -> Result<RelativeVolume, BytecodeAssemblerError> {
-        let arg = i32_argument(args)?;
-        Ok(arg.try_into()?)
-    }
-
-    fn relative_pan_argument(&self, args: &[&str]) -> Result<RelativePan, BytecodeAssemblerError> {
-        let arg = i32_argument(args)?;
-        Ok(arg.try_into()?)
-    }
-
-    fn pan_and_volume_arguments(
-        &self,
-        args: &[&str],
-    ) -> Result<(Pan, Volume), BytecodeAssemblerError> {
-        let (arg1, arg2) = two_u32_arguments(args)?;
-        Ok((arg1.try_into()?, arg2.try_into()?))
-    }
-
-    fn vibrato_arguments(
-        &self,
-        args: &[&str],
-    ) -> Result<(PitchOffsetPerTick, QuarterWavelengthInTicks), BytecodeAssemblerError> {
-        let (arg1, arg2) = two_u32_arguments(args)?;
-        Ok((arg1.try_into()?, arg2.try_into()?))
     }
 }
 
@@ -468,30 +441,4 @@ fn parse_u32(s: &str) -> Result<u32, ValueError> {
         Ok(i) => Ok(i),
         Err(_) => Err(ValueError::CannotParseUnsigned(s.to_owned())),
     }
-}
-
-// ::TODO clamp to max on error::
-fn parse_i32(s: &str) -> Result<i32, ValueError> {
-    match s.parse() {
-        Ok(i) => Ok(i),
-        Err(_) => Err(ValueError::CannotParseSigned(s.to_owned())),
-    }
-}
-
-fn u32_argument(args: &[&str]) -> Result<u32, BytecodeAssemblerError> {
-    let arg = one_argument(args)?;
-
-    Ok(parse_u32(arg)?)
-}
-
-fn i32_argument(args: &[&str]) -> Result<i32, BytecodeAssemblerError> {
-    let arg = one_argument(args)?;
-
-    Ok(parse_i32(arg)?)
-}
-
-fn two_u32_arguments(args: &[&str]) -> Result<(u32, u32), BytecodeAssemblerError> {
-    let (arg1, arg2) = two_arguments(args)?;
-
-    Ok((parse_u32(arg1)?, parse_u32(arg2)?))
 }

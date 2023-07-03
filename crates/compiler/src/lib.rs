@@ -9,13 +9,13 @@ mod common_audio_data;
 mod echo;
 mod envelope;
 mod mml_command_parser;
-mod newtype_macros;
 mod notes;
 mod pitch_table;
 mod samples;
 mod songs;
 mod sound_effects;
 mod time;
+mod value_newtypes;
 
 pub mod bytecode_assembler;
 pub mod data;

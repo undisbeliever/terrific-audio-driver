@@ -9,9 +9,9 @@ use crate::bytecode::{
     RelativeVolume, SubroutineId, Volume, KEY_OFF_TICK_DELAY,
 };
 use crate::errors::{MmlParserError, MmlParserErrorWithPos, ValueError};
-use crate::newtype_macros::{i8_newtype, u8_newtype};
 use crate::notes::{parse_pitch_char, MidiNote, MmlPitch, Note, Octave, STARTING_OCTAVE};
 use crate::time::{Bpm, MmlLength, TickClock, TickCounter, ZenLen};
+use crate::value_newtypes::{i8_value_newtype, u8_value_newtype, ValueNewType};
 
 use std::cmp::min;
 use std::collections::HashMap;
@@ -22,9 +22,13 @@ pub const MAX_MML_TEXT_LENGTH: usize = 512 * 1024;
 pub const MAX_COARSE_VOLUME: u32 = 16;
 pub const COARSE_VOLUME_MULTIPLIER: u8 = 16;
 
-u8_newtype!(PortamentoSpeed, PortamentoSpeedOutOfRange);
-u8_newtype!(Quantization, QuantizeOutOfRange, 0, 8);
-i8_newtype!(Transpose, TransposeOutOfRange);
+u8_value_newtype!(
+    PortamentoSpeed,
+    PortamentoSpeedOutOfRange,
+    NoPortamentoSpeed
+);
+u8_value_newtype!(Quantization, QuantizeOutOfRange, NoQuantize, 0, 8);
+i8_value_newtype!(Transpose, TransposeOutOfRange, NoTranspose);
 
 #[derive(Debug, Copy, Clone)]
 pub struct FilePos {
@@ -192,7 +196,7 @@ pub enum Match<'a> {
 mod scanner {
     use super::{FilePos, Match};
 
-    pub(super) struct Scanner<'a> {
+    pub(crate) struct Scanner<'a> {
         // The position of the last consumed value
         before_pos: FilePos,
 
@@ -391,6 +395,26 @@ mod scanner {
                 char::is_ascii_digit,
             )
         }
+
+        pub fn match_for<T: MatchValueDigits>(&mut self) -> Match {
+            <T as MatchValueDigits>::match_for(self)
+        }
+    }
+
+    pub(crate) trait MatchValueDigits {
+        fn match_for<'a>(s: &'a mut Scanner) -> Match<'a>;
+    }
+
+    impl MatchValueDigits for u32 {
+        fn match_for<'a>(s: &'a mut Scanner) -> Match<'a> {
+            s.match_ascii_digits()
+        }
+    }
+
+    impl MatchValueDigits for i32 {
+        fn match_for<'a>(s: &'a mut Scanner) -> Match<'a> {
+            s.match_always_signed_ascii_digits()
+        }
     }
 }
 use scanner::Scanner;
@@ -449,13 +473,6 @@ enum ParseResult<T> {
     Error(MmlParserErrorWithPos),
 }
 
-enum SignedNewType<T> {
-    Ok(T),
-    None(FilePos),
-    NoSign(FilePos),
-    Error(MmlParserErrorWithPos),
-}
-
 enum AbsoluteOrRelative {
     Absolute(FilePos, u32),
     Relative(FilePos, i32),
@@ -463,7 +480,7 @@ enum AbsoluteOrRelative {
     Error(MmlParserErrorWithPos),
 }
 
-pub(super) struct MmlStreamParser<'a> {
+pub(crate) struct MmlStreamParser<'a> {
     scanner: scanner::Scanner<'a>,
     remaining_lines: &'a [Line<'a>],
 
@@ -480,37 +497,6 @@ fn value_error(pos: FilePos, e: ValueError) -> MmlParserErrorWithPos {
     MmlParserErrorWithPos(pos, MmlParserError::ValueError(e))
 }
 
-macro_rules! parse_i8_newtype {
-    ($fn_name:ident, $type:ident, $missing_error:ident, $no_sign_error:ident) => {
-        pub fn $fn_name(&mut self) -> Result<$type, MmlParserErrorWithPos> {
-            match self.parse_signed_newtype() {
-                SignedNewType::Ok(v) => Ok(v),
-                SignedNewType::None(pos) => {
-                    Err(MmlParserErrorWithPos(pos, MmlParserError::$missing_error))
-                }
-                SignedNewType::NoSign(pos) => {
-                    Err(MmlParserErrorWithPos(pos, MmlParserError::$no_sign_error))
-                }
-                SignedNewType::Error(e) => Err(e),
-            }
-        }
-    };
-}
-
-macro_rules! parse_u8_newtype {
-    ($fn_name:ident, $type:ident, $missing_error:ident) => {
-        pub fn $fn_name(&mut self) -> Result<$type, MmlParserErrorWithPos> {
-            match self.parse_unsigned_newtype() {
-                ParseResult::Ok(v) => Ok(v),
-                ParseResult::None(pos) => {
-                    Err(MmlParserErrorWithPos(pos, MmlParserError::$missing_error))
-                }
-                ParseResult::Error(e) => Err(e),
-            }
-        }
-    };
-}
-
 macro_rules! parse_absolute_or_relative {
     ($fn_name:ident, $type:ident, $missing_error:ident) => {
         pub fn $fn_name(&mut self) -> Result<$type, MmlParserErrorWithPos> {
@@ -523,9 +509,7 @@ macro_rules! parse_absolute_or_relative {
                     Ok(p) => Ok($type::Relative(p)),
                     Err(e) => Err(value_error(pos, e)),
                 },
-                AbsoluteOrRelative::None(pos) => {
-                    Err(MmlParserErrorWithPos(pos, MmlParserError::$missing_error))
-                }
+                AbsoluteOrRelative::None(pos) => Err(value_error(pos, ValueError::$missing_error)),
                 AbsoluteOrRelative::Error(e) => Err(e),
             }
         }
@@ -719,7 +703,7 @@ impl MmlStreamParser<'_> {
             Match::Some(_pos, "1") => Ok(true),
             Match::Some(_pos, "0") => Ok(false),
             Match::Some(pos, _) => Err(value_error(pos, ValueError::InvalidMmlBool)),
-            Match::None(pos) => Err(parsing_error!(pos, NoBool)),
+            Match::None(pos) => Err(value_error(pos, ValueError::NoBool)),
         }
     }
 
@@ -736,48 +720,17 @@ impl MmlStreamParser<'_> {
         }
     }
 
-    fn parse_unsigned_newtype<T>(&mut self) -> ParseResult<T>
+    pub fn parse_newtype<T>(&mut self) -> Result<T, MmlParserErrorWithPos>
     where
-        T: TryFrom<u32, Error = ValueError>,
+        T: ValueNewType,
+        <T as ValueNewType>::ConvertFrom: scanner::MatchValueDigits,
     {
-        match self.scanner.match_ascii_digits() {
-            Match::None(pos) => ParseResult::None(pos),
-            Match::Some(pos, ascii_digits) => match ascii_digits.parse::<u32>() {
-                Ok(v) => match v.try_into() {
-                    Ok(v) => ParseResult::Ok(v),
-                    Err(e) => ParseResult::Error(value_error(pos, e)),
-                },
-                Err(_) => ParseResult::Error(value_error(
-                    pos,
-                    ValueError::CannotParseUnsigned(ascii_digits.to_owned()),
-                )),
+        match self.scanner.match_for::<T::ConvertFrom>() {
+            Match::None(pos) => Err(value_error(pos, T::MISSING_ERROR)),
+            Match::Some(pos, ascii_digits) => match T::try_from_str(ascii_digits) {
+                Ok(v) => Ok(v),
+                Err(e) => Err(value_error(pos, e)),
             },
-        }
-    }
-
-    fn parse_signed_newtype<T>(&mut self) -> SignedNewType<T>
-    where
-        T: TryFrom<i32, Error = ValueError>,
-    {
-        match self.scanner.match_always_signed_ascii_digits() {
-            Match::None(pos) => SignedNewType::None(pos),
-            Match::Some(pos, ascii_digits) => {
-                let fc = ascii_digits.as_bytes()[0];
-                if fc == b'-' || fc == b'+' {
-                    match ascii_digits.parse::<i32>() {
-                        Ok(v) => match v.try_into() {
-                            Ok(v) => SignedNewType::Ok(v),
-                            Err(e) => SignedNewType::Error(value_error(pos, e)),
-                        },
-                        Err(_) => SignedNewType::Error(value_error(
-                            pos,
-                            ValueError::CannotParseSigned(ascii_digits.to_owned()),
-                        )),
-                    }
-                } else {
-                    SignedNewType::NoSign(pos)
-                }
-            }
         }
     }
 
@@ -807,22 +760,6 @@ impl MmlStreamParser<'_> {
         }
     }
 
-    parse_u8_newtype!(parse_bpm, Bpm, NoBpm);
-    parse_u8_newtype!(parse_loop_count, LoopCount, NoLoopCount);
-    parse_u8_newtype!(parse_midi_note_number, MidiNote, NoMidiNote);
-    parse_u8_newtype!(parse_octave, Octave, NoOctave);
-    parse_u8_newtype!(parse_portamento_speed, PortamentoSpeed, NoPortamentoSpeed);
-    parse_u8_newtype!(parse_quantize, Quantization, NoQuantize);
-    parse_u8_newtype!(parse_tick_clock, TickClock, NoTickClock);
-    parse_u8_newtype!(parse_zenlen, ZenLen, NoZenLen);
-
-    parse_i8_newtype!(
-        parse_transpose,
-        Transpose,
-        NoTranspose,
-        TransposeRequiresSign
-    );
-
     parse_absolute_or_relative!(parse_pan, PanCommand, NoPan);
     parse_absolute_or_relative!(parse_fine_volume, VolumeCommand, NoVolume);
 
@@ -843,7 +780,7 @@ impl MmlStreamParser<'_> {
                     Err(_) => Err(value_error(pos, ValueError::RelativeCoarseVolumeOutOfRange)),
                 }
             }
-            AbsoluteOrRelative::None(pos) => Err(parsing_error!(pos, NoVolume)),
+            AbsoluteOrRelative::None(pos) => Err(value_error(pos, ValueError::NoVolume)),
             AbsoluteOrRelative::Error(e) => Err(e),
         }
     }
@@ -905,7 +842,7 @@ impl MmlStreamParser<'_> {
         let number_of_dots = match dots {
             Some(dots) => match dots.len().try_into() {
                 Ok(n) if n < 16 => n,
-                _ => return Err(parsing_error!(pos, TooManyDots)),
+                _ => return Err(parsing_error!(pos, TooManyDotsInNoteLength)),
             },
             None => 0,
         };
@@ -933,21 +870,20 @@ impl MmlStreamParser<'_> {
         &mut self,
     ) -> Result<QuarterWavelengthInTicks, MmlParserErrorWithPos> {
         if !self.next_symbol_matches(Symbol::Comma) {
-            return Err(parsing_error!(self.before_pos(), NoCommaQuarterWavelength));
+            return Err(value_error(
+                self.before_pos(),
+                ValueError::NoCommaQuarterWavelength,
+            ));
         }
 
-        match self.parse_unsigned_newtype() {
-            ParseResult::Ok(v) => Ok(v),
-            ParseResult::None(pos) => Err(parsing_error!(pos, NoQuarterWavelength)),
-            ParseResult::Error(e) => Err(e),
-        }
+        self.parse_newtype()
     }
 
     // When None is returned, vibrato is disabled.
     pub fn parse_manual_vibrato(&mut self) -> Result<Option<ManualVibrato>, MmlParserErrorWithPos> {
         let value = match self.parse_u32() {
             ParseResult::Ok(v) => v,
-            ParseResult::None(pos) => return Err(parsing_error!(pos, NoVibratoDepth)),
+            ParseResult::None(pos) => return Err(value_error(pos, ValueError::NoVibratoDepth)),
             ParseResult::Error(e) => return Err(e),
         };
 
@@ -970,7 +906,7 @@ impl MmlStreamParser<'_> {
     pub fn parse_mp_vibtato(&mut self) -> Result<Option<MpVibrato>, MmlParserErrorWithPos> {
         let depth_in_cents = match self.parse_u32() {
             ParseResult::Ok(v) => v,
-            ParseResult::None(pos) => return Err(parsing_error!(pos, NoVibratoDepth)),
+            ParseResult::None(pos) => return Err(value_error(pos, ValueError::NoVibratoDepth)),
             ParseResult::Error(e) => return Err(e),
         };
 
@@ -1107,7 +1043,7 @@ impl MmlParser<'_> {
     // Does not create a new MML Command
     fn try_change_octave_st_offset_symbol(&mut self, s: Symbol) -> bool {
         match s {
-            Symbol::SetOctave => match self.parser.parse_octave() {
+            Symbol::SetOctave => match self.parser.parse_newtype() {
                 Ok(o) => self.state.octave = o,
                 Err(e) => self.add_error(e),
             },
@@ -1117,11 +1053,11 @@ impl MmlParser<'_> {
             Symbol::DecrementOctave => {
                 self.state.octave.saturating_decrement();
             }
-            Symbol::Transpose => match self.parser.parse_transpose() {
+            Symbol::Transpose => match self.parser.parse_newtype() {
                 Ok(t) => self.state.transpose(t),
                 Err(e) => self.add_error(e),
             },
-            Symbol::RelativeTranspose => match self.parser.parse_transpose() {
+            Symbol::RelativeTranspose => match self.parser.parse_newtype() {
                 Ok(t) => self.state.relative_transpose(t),
                 Err(e) => self.add_error(e),
             },
@@ -1134,7 +1070,7 @@ impl MmlParser<'_> {
     // Does not create a new MML Command
     fn try_change_state_symbol(&mut self, s: Symbol) {
         match s {
-            Symbol::ChangeWholeNoteLength => match self.parser.parse_zenlen() {
+            Symbol::ChangeWholeNoteLength => match self.parser.parse_newtype() {
                 Ok(z) => self.state.zenlen = z,
                 Err(e) => self.add_error(e),
             },
@@ -1319,7 +1255,7 @@ impl MmlParser<'_> {
                 }
             };
             if self.parser.next_symbol_matches(Symbol::Comma) {
-                speed_override = Some(self.parser.parse_portamento_speed()?);
+                speed_override = Some(self.parser.parse_newtype()?);
             }
         }
 
@@ -1486,9 +1422,10 @@ impl MmlParser<'_> {
 
             Symbol::StartLoop => Ok(MmlCommand::StartLoop),
             Symbol::SkipLastLoop => Ok(MmlCommand::SkipLastLoop),
-            Symbol::EndLoop => Ok(MmlCommand::EndLoop(self.parser.parse_loop_count()?)),
+            Symbol::EndLoop => Ok(MmlCommand::EndLoop(self.parser.parse_newtype()?)),
 
-            Symbol::PlayMidiNoteNumber => match self.parser.parse_midi_note_number()?.try_into() {
+            Symbol::PlayMidiNoteNumber => match self.parser.parse_newtype::<MidiNote>()?.try_into()
+            {
                 Ok(n) => self.parse_note(n, self.state.default_length),
                 Err(e) => err(e.into()),
             },
@@ -1528,11 +1465,11 @@ impl MmlParser<'_> {
                 self.parser.parse_optional_bool()?.unwrap_or(true),
             )),
 
-            Symbol::SetSongTempo => Ok(MmlCommand::SetSongTempo(self.parser.parse_bpm()?)),
+            Symbol::SetSongTempo => Ok(MmlCommand::SetSongTempo(self.parser.parse_newtype()?)),
 
-            Symbol::SetSongTickClock => Ok(MmlCommand::SetSongTickClock(
-                self.parser.parse_tick_clock()?,
-            )),
+            Symbol::SetSongTickClock => {
+                Ok(MmlCommand::SetSongTickClock(self.parser.parse_newtype()?))
+            }
 
             Symbol::SetLoopPoint => Ok(MmlCommand::SetLoopPoint),
 
@@ -1542,7 +1479,7 @@ impl MmlParser<'_> {
 
             // state change commands
             Symbol::ChangeWholeNoteLength => {
-                self.state.set_zenlen(self.parser.parse_zenlen()?);
+                self.state.set_zenlen(self.parser.parse_newtype()?);
                 Ok(MmlCommand::NoCommand)
             }
             Symbol::SetDefaultLength => {
@@ -1551,7 +1488,7 @@ impl MmlParser<'_> {
                 Ok(MmlCommand::NoCommand)
             }
             Symbol::SetOctave => {
-                self.state.set_octave(self.parser.parse_octave()?);
+                self.state.set_octave(self.parser.parse_newtype()?);
                 Ok(MmlCommand::NoCommand)
             }
             Symbol::IncrementOctave => {
@@ -1563,18 +1500,17 @@ impl MmlParser<'_> {
                 Ok(MmlCommand::NoCommand)
             }
             Symbol::Transpose => {
-                self.state.transpose(self.parser.parse_transpose()?);
+                self.state.transpose(self.parser.parse_newtype()?);
                 Ok(MmlCommand::NoCommand)
             }
 
             Symbol::RelativeTranspose => {
-                self.state
-                    .relative_transpose(self.parser.parse_transpose()?);
+                self.state.relative_transpose(self.parser.parse_newtype()?);
                 Ok(MmlCommand::NoCommand)
             }
 
             Symbol::Quantize => {
-                self.state.set_quantize(self.parser.parse_quantize()?);
+                self.state.set_quantize(self.parser.parse_newtype()?);
                 Ok(MmlCommand::NoCommand)
             }
 
@@ -1608,7 +1544,7 @@ impl MmlParser<'_> {
                 },
                 NewCommandToken::Symbol(s) => {
                     if s == Symbol::PlayMidiNoteNumber {
-                        match self.parser.parse_midi_note_number() {
+                        match self.parser.parse_newtype::<MidiNote>() {
                             Err(e) => self.add_error(e),
                             Ok(n) => match Note::try_from(n) {
                                 Ok(n) => out.push(n),

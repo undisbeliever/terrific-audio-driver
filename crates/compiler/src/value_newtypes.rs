@@ -4,8 +4,49 @@
 //
 // SPDX-License-Identifier: MIT
 
-macro_rules! u8_newtype {
-    ($name:ident, $error:ident) => {
+use crate::errors::ValueError;
+
+pub trait ValueNewType
+where
+    Self: TryFrom<<Self as ValueNewType>::ConvertFrom, Error = ValueError>,
+    <Self as ValueNewType>::ConvertFrom: std::str::FromStr,
+    <Self as ValueNewType>::ConvertFrom: VntStrParser,
+{
+    type ConvertFrom;
+    const MISSING_ERROR: ValueError;
+
+    // I have no idea how to turn this into a `FromStr` trait implementation.
+    fn try_from_str(s: &str) -> Result<Self, ValueError> {
+        let v = <Self::ConvertFrom as VntStrParser>::parse_str(s)?;
+        <Self as TryFrom<Self::ConvertFrom>>::try_from(v)
+    }
+}
+
+/// Used to convert a `&str` to `ValueNewType::ConvertFrom`
+pub trait VntStrParser: Sized {
+    fn parse_str(s: &str) -> Result<Self, ValueError>;
+}
+
+impl VntStrParser for u32 {
+    fn parse_str(s: &str) -> Result<Self, ValueError> {
+        match s.parse::<u32>() {
+            Ok(v) => Ok(v),
+            Err(_) => Err(ValueError::CannotParseUnsigned(s.to_owned())),
+        }
+    }
+}
+
+impl VntStrParser for i32 {
+    fn parse_str(s: &str) -> Result<Self, ValueError> {
+        match s.parse::<i32>() {
+            Ok(v) => Ok(v),
+            Err(_) => Err(ValueError::CannotParseUnsigned(s.to_owned())),
+        }
+    }
+}
+
+macro_rules! u8_value_newtype {
+    ($name:ident, $error:ident, $missing_error:ident) => {
         #[derive(Debug, Copy, Clone, PartialEq)]
         pub struct $name(u8);
 
@@ -22,6 +63,11 @@ macro_rules! u8_newtype {
             }
         }
 
+        impl crate::value_newtypes::ValueNewType for $name {
+            type ConvertFrom = u32;
+            const MISSING_ERROR: ValueError = ValueError::$missing_error;
+        }
+
         impl TryFrom<u32> for $name {
             type Error = ValueError;
 
@@ -33,7 +79,7 @@ macro_rules! u8_newtype {
             }
         }
     };
-    ($name:ident, $error:ident, $min: expr, $max:expr) => {
+    ($name:ident, $error:ident, $missing_error:ident, $min: expr, $max:expr) => {
         #[derive(Debug, Copy, Clone, PartialEq)]
         pub struct $name(u8);
 
@@ -45,6 +91,11 @@ macro_rules! u8_newtype {
             pub fn as_u8(&self) -> u8 {
                 self.0
             }
+        }
+
+        impl crate::value_newtypes::ValueNewType for $name {
+            type ConvertFrom = u32;
+            const MISSING_ERROR: ValueError = ValueError::$missing_error;
         }
 
         impl TryFrom<u8> for $name {
@@ -74,8 +125,8 @@ macro_rules! u8_newtype {
     };
 }
 
-macro_rules! i8_newtype {
-    ($name:ident, $error:ident) => {
+macro_rules! i8_value_newtype {
+    ($name:ident, $error:ident, $missing_error:ident) => {
         #[derive(Debug, Copy, Clone, PartialEq)]
         pub struct $name(i8);
 
@@ -92,6 +143,11 @@ macro_rules! i8_newtype {
             }
         }
 
+        impl crate::value_newtypes::ValueNewType for $name {
+            type ConvertFrom = i32;
+            const MISSING_ERROR: ValueError = ValueError::$missing_error;
+        }
+
         impl TryFrom<i32> for $name {
             type Error = ValueError;
 
@@ -105,4 +161,4 @@ macro_rules! i8_newtype {
     };
 }
 
-pub(crate) use {i8_newtype, u8_newtype};
+pub(crate) use {i8_value_newtype, u8_value_newtype};

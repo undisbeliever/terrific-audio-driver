@@ -7,11 +7,11 @@
 #![allow(clippy::assertions_on_constants)]
 
 use crate::errors::{NoteError, ValueError};
-use crate::newtype_macros::u8_newtype;
+use crate::value_newtypes::{u8_value_newtype, ValueNewType};
 
 use serde::Deserialize;
 
-u8_newtype!(MidiNote, MidiNoteNumberOutOfRange, 0, 127);
+u8_value_newtype!(MidiNote, MidiNoteNumberOutOfRange, NoMidiNote, 0, 127);
 
 pub const LAST_OCTAVE: u8 = 7;
 pub const SEMITONS_PER_OCTAVE: u8 = 12;
@@ -208,6 +208,11 @@ impl Octave {
             self.0 -= 1;
         }
     }
+}
+
+impl ValueNewType for Octave {
+    type ConvertFrom = u32;
+    const MISSING_ERROR: ValueError = ValueError::NoOctave;
 }
 
 impl TryFrom<u32> for Octave {

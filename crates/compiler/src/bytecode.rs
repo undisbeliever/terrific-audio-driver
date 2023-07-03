@@ -8,9 +8,9 @@
 
 use crate::envelope::{Adsr, Gain};
 use crate::errors::{BytecodeError, ValueError};
-use crate::newtype_macros::{i8_newtype, u8_newtype};
 use crate::notes::{Note, LAST_NOTE_ID};
 use crate::time::{TickClock, TickCounter};
+use crate::value_newtypes::{i8_value_newtype, u8_value_newtype, ValueNewType};
 
 use std::cmp::max;
 
@@ -19,15 +19,20 @@ pub const MAX_NESTED_LOOPS: u8 = 3;
 
 const LAST_PLAY_NOTE_OPCODE: u8 = 0xbf;
 
-u8_newtype!(Volume, VolumeOutOfRange);
-u8_newtype!(Pan, PanOutOfRange, 0, 128);
-i8_newtype!(RelativeVolume, RelativeVolumeOutOfRange);
-i8_newtype!(RelativePan, RelativePanOutOfRange);
+u8_value_newtype!(Volume, VolumeOutOfRange, NoVolume);
+u8_value_newtype!(Pan, PanOutOfRange, NoPan, 0, 128);
+i8_value_newtype!(RelativeVolume, RelativeVolumeOutOfRange, NoVolume);
+i8_value_newtype!(RelativePan, RelativePanOutOfRange, NoPan);
 
-u8_newtype!(PitchOffsetPerTick, PitchOffsetPerTickOutOfRange);
-u8_newtype!(
+u8_value_newtype!(
+    PitchOffsetPerTick,
+    PitchOffsetPerTickOutOfRange,
+    NoPitchOffsetPerTick
+);
+u8_value_newtype!(
     QuarterWavelengthInTicks,
     QuarterWavelengthOutOfRange,
+    NoQuarterWavelength,
     1,
     u8::MAX
 );
@@ -249,6 +254,11 @@ impl PortamentoVelocity {
     }
 }
 
+impl ValueNewType for PortamentoVelocity {
+    type ConvertFrom = i32;
+    const MISSING_ERROR: ValueError = ValueError::NoPortamentoVelocity;
+}
+
 impl TryFrom<i32> for PortamentoVelocity {
     type Error = ValueError;
 
@@ -274,6 +284,11 @@ impl LoopCount {
             self.0.into()
         }
     }
+}
+
+impl ValueNewType for LoopCount {
+    type ConvertFrom = u32;
+    const MISSING_ERROR: ValueError = ValueError::NoLoopCount;
 }
 
 impl TryFrom<u32> for LoopCount {

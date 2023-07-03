@@ -6,9 +6,15 @@
 
 use crate::driver_constants::{ECHO_BUFFER_EDL_MS, ECHO_BUFFER_MAX_EDL, FIR_FILTER_SIZE};
 use crate::errors::ValueError;
-use crate::newtype_macros::u8_newtype;
+use crate::value_newtypes::u8_value_newtype;
 
-u8_newtype!(EchoEdl, EchoEdlOutOfRange, 0, ECHO_BUFFER_MAX_EDL);
+u8_value_newtype!(
+    EchoEdl,
+    EchoEdlOutOfRange,
+    NoEchoEdl,
+    0,
+    ECHO_BUFFER_MAX_EDL
+);
 
 pub const DEFAULT_EDL: EchoEdl = EchoEdl(0);
 

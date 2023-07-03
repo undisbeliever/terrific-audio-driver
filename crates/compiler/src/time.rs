@@ -4,15 +4,15 @@
 //
 // SPDX-License-Identifier: MIT
 
-use crate::errors::{TickClockError, ValueError};
-use crate::newtype_macros::u8_newtype;
+use crate::errors::ValueError;
+use crate::value_newtypes::u8_value_newtype;
 
 pub const TIMER_HZ: u32 = 8000;
 
 pub const MIN_TICK_TIMER: u8 = 64;
 const STARTING_DEFAULT_NOTE_LENGTH: u8 = 4;
 
-u8_newtype!(ZenLen, ZenLenOutOfRange, 4, u8::MAX);
+u8_value_newtype!(ZenLen, ZenLenOutOfRange, NoZenLen, 4, u8::MAX);
 
 pub const DEFAULT_ZENLEN: ZenLen = ZenLen(96);
 
@@ -26,7 +26,7 @@ const CLOCK_CYCLES_PER_BPM: u32 = 48;
 const MIN_BPM: u8 = ((TIMER_HZ * 60) / (CLOCK_CYCLES_PER_BPM * (u8::MAX as u32)) + 1) as u8;
 const MAX_BPM: u8 = ((TIMER_HZ * 60) / (CLOCK_CYCLES_PER_BPM * (MIN_TICK_TIMER as u32)) + 1) as u8;
 
-u8_newtype!(Bpm, BpmOutOfRange, MIN_BPM, MAX_BPM);
+u8_value_newtype!(Bpm, BpmOutOfRange, NoBpm, MIN_BPM, MAX_BPM);
 
 pub const DEFAULT_BPM: Bpm = Bpm(60);
 
@@ -81,51 +81,13 @@ impl std::ops::AddAssign for TickCounter {
     }
 }
 
-#[derive(Debug, Copy, Clone, PartialEq)]
-pub struct TickClock {
-    register_value: u8,
-}
-
-impl TickClock {
-    fn new(register_value: u8) -> Result<Self, TickClockError> {
-        if register_value >= MIN_TICK_TIMER {
-            Ok(Self { register_value })
-        } else {
-            Err(TickClockError::OutOfBounds(register_value.into()))
-        }
-    }
-
-    pub fn new_from_str(timer: &str) -> Result<Self, TickClockError> {
-        let timer: u32 = match timer.parse() {
-            Ok(i) => i,
-            Err(_) => return Err(TickClockError::CannotParse(timer.to_owned())),
-        };
-        let timer = match u8::try_from(timer) {
-            Ok(i) => i,
-            Err(_) => return Err(TickClockError::OutOfBounds(timer)),
-        };
-
-        Self::new(timer)
-    }
-
-    pub fn as_u8(&self) -> u8 {
-        self.register_value
-    }
-}
-
-impl TryFrom<u32> for TickClock {
-    type Error = ValueError;
-
-    fn try_from(value: u32) -> Result<Self, Self::Error> {
-        if value >= MIN_TICK_TIMER.into() {
-            Ok(Self {
-                register_value: value.try_into().unwrap(),
-            })
-        } else {
-            Err(ValueError::TickClockOutOfRange)
-        }
-    }
-}
+u8_value_newtype!(
+    TickClock,
+    TickClockOutOfRange,
+    NoTickClock,
+    MIN_TICK_TIMER,
+    u8::MAX
+);
 
 #[derive(Debug)]
 pub struct MmlLength {

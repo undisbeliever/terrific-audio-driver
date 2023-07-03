@@ -51,12 +51,6 @@ pub enum NoteError {
 }
 
 #[derive(Debug)]
-pub enum TickClockError {
-    CannotParse(String),
-    OutOfBounds(u32),
-}
-
-#[derive(Debug)]
 pub enum ValueError {
     CannotParseUnsigned(String),
     CannotParseSigned(String),
@@ -110,6 +104,28 @@ pub enum ValueError {
 
     InvalidFirFilterSize,
     InvalidFirFilter,
+
+    NoBool,
+    NoNumber,
+    NoIncrementOrDecrement,
+    NoVolume,
+    NoPan,
+    NoOctave,
+    NoZenLen,
+    NoTranspose,
+    NoLoopCount,
+    NoQuantize,
+    NoTickClock,
+    NoBpm,
+    NoMidiNote,
+    NoPortamentoSpeed,
+    NoPortamentoVelocity,
+    NoMpDepth,
+    NoPitchOffsetPerTick,
+    NoVibratoDepth,
+    NoCommaQuarterWavelength,
+    NoQuarterWavelength,
+    NoEchoEdl,
 }
 
 #[derive(Debug)]
@@ -152,7 +168,6 @@ pub enum BytecodeAssemblerError {
     InvalidNote(NoteError),
     InvalidAdsr(InvalidAdsrError),
     InvalidGain(InvalidGainError),
-    InvalidTickClock(TickClockError),
 }
 
 #[derive(Debug)]
@@ -288,37 +303,11 @@ pub enum MmlInstrumentError {
 #[derive(Debug)]
 pub enum MmlParserError {
     // MmlStreamParser errors
-    NumberTooLarge,
-    NumberTooLargeU8,
-
     ValueError(ValueError),
-
-    NoBool,
-    NoNumber,
-    NoIncrementOrDecrement,
-    NoVolume,
-    NoPan,
-    NoOctave,
-    NoZenLen,
-    NoTranspose,
-    NoLoopCount,
-    NoQuantize,
-    NoTickClock,
-    NoBpm,
-    NoMidiNote,
-    NoPortamentoSpeed,
-    NoMpDepth,
-    NoPitchOffsetPerTick,
-    NoVibratoDepth,
-    NoCommaQuarterWavelength,
-    NoQuarterWavelength,
-
-    // + or - sign
-    TransposeRequiresSign,
 
     // + or - after a pitch
     TooManyAccidentals,
-    TooManyDots,
+    TooManyDotsInNoteLength,
 
     UnknownCharacters(u32),
 
@@ -441,12 +430,6 @@ impl From<InvalidAdsrError> for BytecodeAssemblerError {
 impl From<InvalidGainError> for BytecodeAssemblerError {
     fn from(e: InvalidGainError) -> Self {
         Self::InvalidGain(e)
-    }
-}
-
-impl From<TickClockError> for BytecodeAssemblerError {
-    fn from(e: TickClockError) -> Self {
-        Self::InvalidTickClock(e)
     }
 }
 
