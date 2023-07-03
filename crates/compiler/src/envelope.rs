@@ -4,8 +4,7 @@
 //
 // SPDX-License-Identifier: MIT
 
-use crate::errors::{InvalidAdsrError, InvalidGainError, ParseError};
-
+use crate::errors::{InvalidAdsrError, InvalidGainError, ValueError};
 use serde::Deserialize;
 
 fn value_fits_in_bits(value: u8, bits: u8) -> bool {
@@ -77,7 +76,7 @@ impl Adsr {
 
 // Required to prevent a `invalid type: string "[...]", expected a borrowed string` serde error
 impl TryFrom<String> for Adsr {
-    type Error = ParseError;
+    type Error = ValueError;
 
     fn try_from(s: String) -> Result<Self, Self::Error> {
         Self::try_from(s.as_str())
@@ -85,22 +84,25 @@ impl TryFrom<String> for Adsr {
 }
 
 impl TryFrom<&str> for Adsr {
-    type Error = ParseError;
+    type Error = ValueError;
 
     fn try_from(s: &str) -> Result<Self, Self::Error> {
         let mut iter = s.split_ascii_whitespace();
 
-        let a = iter.next().ok_or(ParseError::AdsrNotFourValues)?;
-        let d = iter.next().ok_or(ParseError::AdsrNotFourValues)?;
-        let sl = iter.next().ok_or(ParseError::AdsrNotFourValues)?;
-        let sr = iter.next().ok_or(ParseError::AdsrNotFourValues)?;
+        let a = iter.next().ok_or(ValueError::AdsrNotFourValues)?;
+        let d = iter.next().ok_or(ValueError::AdsrNotFourValues)?;
+        let sl = iter.next().ok_or(ValueError::AdsrNotFourValues)?;
+        let sr = iter.next().ok_or(ValueError::AdsrNotFourValues)?;
 
         if iter.next().is_some() {
             // Too many values
-            return Err(ParseError::AdsrNotFourValues);
+            return Err(ValueError::AdsrNotFourValues);
         }
 
-        Ok(Adsr::try_from_strs(a, d, sl, sr)?)
+        match Adsr::try_from_strs(a, d, sl, sr) {
+            Ok(adsr) => Ok(adsr),
+            Err(e) => Err(ValueError::InvalidAdsr(e)),
+        }
     }
 }
 

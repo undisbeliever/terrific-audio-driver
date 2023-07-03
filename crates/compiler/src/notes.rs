@@ -6,7 +6,7 @@
 
 #![allow(clippy::assertions_on_constants)]
 
-use crate::errors::{NoteError, ValueError};
+use crate::errors::ValueError;
 use crate::value_newtypes::{u8_value_newtype, ValueNewType};
 
 use serde::Deserialize;
@@ -19,7 +19,7 @@ pub const LAST_NOTE_ID: u8 = (LAST_OCTAVE + 1) * SEMITONS_PER_OCTAVE - 1;
 
 pub struct PitchChar(u8);
 
-pub fn parse_pitch_char(c: char) -> Result<PitchChar, NoteError> {
+pub fn parse_pitch_char(c: char) -> Result<PitchChar, ValueError> {
     match c {
         'c' => Ok(PitchChar(0)),
         'd' => Ok(PitchChar(2)),
@@ -29,7 +29,7 @@ pub fn parse_pitch_char(c: char) -> Result<PitchChar, NoteError> {
         'a' => Ok(PitchChar(9)),
         'b' => Ok(PitchChar(11)),
 
-        n => Err(NoteError::UnknownNote(n)),
+        n => Err(ValueError::UnknownNotePitch(n)),
     }
 }
 
@@ -61,9 +61,9 @@ impl Note {
         self.note_id
     }
 
-    fn from_note_id(note_id: u8) -> Result<Self, NoteError> {
+    fn from_note_id(note_id: u8) -> Result<Self, ValueError> {
         if note_id > LAST_NOTE_ID {
-            return Err(NoteError::InvalidNote);
+            return Err(ValueError::InvalidNote);
         }
         assert!(LAST_NOTE_ID < u8::MAX);
 
@@ -87,9 +87,9 @@ impl Note {
         pitch: PitchChar,
         semitone_offset: i32,
         octave: u32,
-    ) -> Result<Self, NoteError> {
+    ) -> Result<Self, ValueError> {
         if octave > LAST_OCTAVE.into() {
-            return Err(NoteError::InvalidNoteOctave(octave));
+            return Err(ValueError::OctaveOutOfRange);
         }
         assert!((LAST_OCTAVE + 1) * SEMITONS_PER_OCTAVE < u8::MAX);
         let semitones_per_octave = u32::from(SEMITONS_PER_OCTAVE);
@@ -98,47 +98,41 @@ impl Note {
             .checked_add_signed(semitone_offset);
         let note_id = match note_id {
             Some(n) => n,
-            None => return Err(NoteError::InvalidNote),
+            None => return Err(ValueError::InvalidNote),
         };
 
         let note_id = match u8::try_from(note_id) {
             Ok(i) => i,
-            Err(_) => return Err(NoteError::InvalidNote),
+            Err(_) => return Err(ValueError::InvalidNote),
         };
 
         Self::from_note_id(note_id)
     }
 
-    pub fn from_mml_pitch(p: MmlPitch, o: Octave, semitone_offset: i8) -> Result<Self, NoteError> {
+    pub fn from_mml_pitch(p: MmlPitch, o: Octave, semitone_offset: i8) -> Result<Self, ValueError> {
         let note_id = (p.pitch.0 + o.0 * SEMITONS_PER_OCTAVE)
             .checked_add_signed(p.semitone_offset)
             .and_then(|n| n.checked_add_signed(semitone_offset));
 
         let note_id = match note_id {
             Some(n) => n,
-            None => return Err(NoteError::InvalidNote),
+            None => return Err(ValueError::InvalidNote),
         };
 
         Self::from_note_id(note_id)
     }
 
-    pub fn parse_bytecode_argument(arg: &str) -> Result<Note, NoteError> {
+    pub fn parse_bytecode_argument(arg: &str) -> Result<Note, ValueError> {
         if let Ok(i) = arg.parse() {
             // Integer argument
             Note::from_note_id(i)
         } else {
             // Non-integer argument
-            let n_chars = arg.len();
-
-            if n_chars == 0 {
-                return Err(NoteError::CannotParseNote(arg.to_owned()));
-            }
-
             let mut note_chars = arg.chars();
 
             let pitch = match note_chars.next() {
                 Some(c) => parse_pitch_char(c)?,
-                None => return Err(NoteError::CannotParseNote(arg.to_owned())),
+                None => return Err(ValueError::NoNote),
             };
 
             let mut semitone_offset = 0;
@@ -155,18 +149,18 @@ impl Note {
                     '-' => {
                         semitone_offset -= 1;
                     }
-                    _ => return Err(NoteError::CannotParseNote(arg.to_owned())),
+                    c => return Err(ValueError::UnknownNoteCharacter(c)),
                 }
             }
 
             if note_chars.next().is_some() {
                 // Unparsed characters remain in `note_chars`
-                return Err(NoteError::CannotParseNote(arg.to_owned()));
+                return Err(ValueError::InvalidNote);
             }
 
             let octave = match octave {
                 Some(o) => o,
-                None => return Err(NoteError::CannotParseNote(arg.to_owned())),
+                None => return Err(ValueError::NoNoteOctave),
             };
 
             Note::from_pitch_stoffset_octave(pitch, semitone_offset, octave)

@@ -34,26 +34,21 @@ pub enum InvalidGainError {
 }
 
 #[derive(Debug)]
-pub enum ParseError {
-    EmptyName,
-    InvalidName(String),
-    AdsrNotFourValues,
-    InvalidAdsr(InvalidAdsrError),
-}
-
-#[derive(Debug)]
-pub enum NoteError {
-    CannotParseNote(String),
-    UnknownNote(char),
-    InvalidNoteOctave(u32),
-    InvalidNoteOctaveStr,
-    InvalidNote,
-}
-
-#[derive(Debug)]
 pub enum ValueError {
     CannotParseUnsigned(String),
     CannotParseSigned(String),
+
+    InvalidName(String),
+
+    AdsrNotFourValues,
+    InvalidAdsr(InvalidAdsrError),
+
+    InvalidGain(InvalidGainError),
+
+    InvalidNote,
+    NoNoteOctave,
+    UnknownNotePitch(char),
+    UnknownNoteCharacter(char),
 
     NoteOutOfRange,
     OctaveOutOfRange,
@@ -105,8 +100,10 @@ pub enum ValueError {
     InvalidFirFilterSize,
     InvalidFirFilter,
 
+    NoName,
     NoBool,
     NoNumber,
+    NoNote,
     NoIncrementOrDecrement,
     NoVolume,
     NoPan,
@@ -164,10 +161,6 @@ pub enum BytecodeAssemblerError {
 
     InvalidKeyoffArgument(String),
     InvalidPortamentoVelocity(String),
-
-    InvalidNote(NoteError),
-    InvalidAdsr(InvalidAdsrError),
-    InvalidGain(InvalidGainError),
 }
 
 #[derive(Debug)]
@@ -409,33 +402,21 @@ pub enum SongError {
 // From Traits
 // ===========
 
-impl From<InvalidAdsrError> for ParseError {
-    fn from(e: InvalidAdsrError) -> Self {
-        Self::InvalidAdsr(e)
-    }
-}
-
-impl From<NoteError> for BytecodeAssemblerError {
-    fn from(e: NoteError) -> Self {
-        Self::InvalidNote(e)
+impl From<ValueError> for BytecodeAssemblerError {
+    fn from(e: ValueError) -> Self {
+        Self::ArgumentError(e)
     }
 }
 
 impl From<InvalidAdsrError> for BytecodeAssemblerError {
     fn from(e: InvalidAdsrError) -> Self {
-        Self::InvalidAdsr(e)
+        Self::ArgumentError(ValueError::InvalidAdsr(e))
     }
 }
 
 impl From<InvalidGainError> for BytecodeAssemblerError {
     fn from(e: InvalidGainError) -> Self {
-        Self::InvalidGain(e)
-    }
-}
-
-impl From<ValueError> for BytecodeAssemblerError {
-    fn from(e: ValueError) -> Self {
-        Self::ArgumentError(e)
+        Self::ArgumentError(ValueError::InvalidGain(e))
     }
 }
 
@@ -475,20 +456,6 @@ impl Display for DeserializeError {
             Self::OpenError(filename, e) => write!(f, "Unable to open {}: {}", filename, e),
             Self::SerdeError(filename, e) => write!(f, "Unable to read {}: {}", filename, e),
         }
-    }
-}
-
-impl Display for ParseError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        // ::TODO human readable error messages::
-        write!(f, "{:?}", self)
-    }
-}
-
-impl Display for NoteError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        // ::TODO human readable error messages::
-        write!(f, "{:?}", self)
     }
 }
 

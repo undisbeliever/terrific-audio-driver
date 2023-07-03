@@ -5,7 +5,7 @@
 // SPDX-License-Identifier: MIT
 
 use crate::envelope::{Adsr, Gain};
-use crate::errors::{DeserializeError, ParseError};
+use crate::errors::{DeserializeError, ValueError};
 use crate::notes::Octave;
 
 use std::fmt::Display;
@@ -46,11 +46,11 @@ impl Name {
         true
     }
 
-    pub fn try_new(s: String) -> Result<Self, ParseError> {
+    pub fn try_new(s: String) -> Result<Self, ValueError> {
         if Self::is_valid_name(&s) {
             Ok(Self(s))
         } else {
-            Err(ParseError::InvalidName(s))
+            Err(ValueError::InvalidName(s))
         }
     }
 
@@ -60,7 +60,7 @@ impl Name {
 }
 
 impl TryFrom<String> for Name {
-    type Error = ParseError;
+    type Error = ValueError;
 
     fn try_from(s: String) -> Result<Self, Self::Error> {
         Self::try_new(s)
@@ -68,7 +68,7 @@ impl TryFrom<String> for Name {
 }
 
 impl FromStr for Name {
-    type Err = ParseError;
+    type Err = ValueError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Self::try_new(s.to_owned())
