@@ -14,6 +14,12 @@ use std::io;
 use std::path::PathBuf;
 
 #[derive(Debug)]
+pub struct ErrorWithLine<T>(pub u32, pub T);
+
+#[derive(Debug)]
+pub struct ErrorWithPos<T>(pub mml::FilePos, pub T);
+
+#[derive(Debug)]
 pub enum DeserializeError {
     NoParentPath(String),
     OpenError(String, io::Error),
@@ -166,19 +172,19 @@ pub enum BytecodeAssemblerError {
 #[derive(Debug)]
 pub struct SoundEffectError {
     pub sfx_name: String,
-    pub sfx_line_no: usize,
+    pub sfx_line_no: u32,
     pub invalid_name: bool,
     pub no_notes: bool,
     // Set if the last instruction is not disable_channel
     pub no_disable_channel: bool,
-    pub errors: Vec<(usize, BytecodeAssemblerError)>,
+    pub errors: Vec<ErrorWithLine<BytecodeAssemblerError>>,
 }
 
 #[derive(Debug)]
 pub enum SoundEffectsFileError {
     SoundEffectErrors(Vec<SoundEffectError>),
     // Line number, Name
-    DuplicateSfxNamesInSfxFile(Vec<(usize, Name)>),
+    DuplicateSfxNamesInSfxFile(Vec<(u32, Name)>),
     MissingSoundEffects(Vec<Name>),
 }
 
@@ -284,13 +290,13 @@ pub enum MmlHeaderError {
 // u32 is line number
 #[derive(Debug)]
 pub enum MmlInstrumentError {
-    NoInstrument(u32),
-    CannotFindInstrument(u32, String),
-    ExpectedFourAdsrArguments(u32),
-    InvalidAdsr(u32, InvalidAdsrError),
-    ExpectedOneGainArgument(u32),
-    InvalidGain(u32, InvalidGainError),
-    UnknownArgument(u32, String),
+    NoInstrument,
+    CannotFindInstrument(String),
+    ExpectedFourAdsrArguments,
+    InvalidAdsr(InvalidAdsrError),
+    ExpectedOneGainArgument,
+    InvalidGain(InvalidGainError),
+    UnknownArgument(String),
 }
 
 #[derive(Debug)]
@@ -334,9 +340,6 @@ pub enum MmlParserError {
 }
 
 #[derive(Debug)]
-pub struct MmlParserErrorWithPos(pub mml::FilePos, pub MmlParserError);
-
-#[derive(Debug)]
 pub enum MmlCommandError {
     BytecodeError(BytecodeError),
     ValueError(ValueError),
@@ -365,20 +368,17 @@ pub enum MmlCommandError {
 }
 
 #[derive(Debug)]
-pub struct MmlCommandErrorWithPos(pub mml::FilePos, pub MmlCommandError);
-
-#[derive(Debug)]
 pub struct MmlChannelError {
     pub identifier: mml::Identifier,
-    pub parse_errors: Vec<MmlParserErrorWithPos>,
-    pub command_errors: Vec<MmlCommandErrorWithPos>,
+    pub parse_errors: Vec<ErrorWithPos<MmlParserError>>,
+    pub command_errors: Vec<ErrorWithPos<MmlCommandError>>,
 }
 
 #[derive(Debug)]
 pub enum MmlError {
     Lines(Vec<SplitMmlLinesError>),
-    Header(Vec<(u32, MmlHeaderError)>),
-    Instruments(Vec<MmlInstrumentError>),
+    Header(Vec<ErrorWithLine<MmlHeaderError>>),
+    Instruments(Vec<ErrorWithLine<MmlInstrumentError>>),
     DuplicateInstructuments(Vec<(u32, mml::Identifier)>),
     SubroutineError(MmlChannelError),
     ChannelError(MmlChannelError),

@@ -6,7 +6,7 @@
 
 use crate::bytecode_assembler::{build_instruments_map, BytecodeAssembler, InstrumentsMap};
 use crate::data::Name;
-use crate::errors::{SoundEffectError, SoundEffectsFileError};
+use crate::errors::{ErrorWithLine, SoundEffectError, SoundEffectsFileError};
 use crate::MappingsFile;
 
 use std::collections::HashMap;
@@ -24,7 +24,7 @@ const NEW_SFX_TOKEN_END: &str = "===";
 pub fn compile_sound_effect(
     sfx_name: &str,
     sfx: &str,
-    starting_line_number: usize,
+    starting_line_number: u32,
     instruments: &InstrumentsMap,
 ) -> Result<(Name, Vec<u8>), SoundEffectError> {
     let mut errors = Vec::new();
@@ -34,10 +34,10 @@ pub fn compile_sound_effect(
     let mut bc = BytecodeAssembler::new(instruments, None, false, true);
 
     let mut last_line: &str = "";
-    let mut last_line_no: usize = starting_line_number;
+    let mut last_line_no: u32 = starting_line_number;
 
     for (line_no, line) in sfx.lines().enumerate() {
-        let line_no = line_no + starting_line_number;
+        let line_no = u32::try_from(line_no).unwrap() + starting_line_number;
 
         let line = match line.split_once(COMMENT_CHAR) {
             Some((asm, _comment)) => asm,
@@ -52,7 +52,7 @@ pub fn compile_sound_effect(
 
             match bc.parse_line(line) {
                 Ok(()) => (),
-                Err(e) => errors.push((line_no, e)),
+                Err(e) => errors.push(ErrorWithLine(line_no, e)),
             }
         }
     }
@@ -60,7 +60,7 @@ pub fn compile_sound_effect(
     let out = match bc.get_bytecode() {
         Ok(out) => Some(out),
         Err(e) => {
-            errors.push((last_line_no, e));
+            errors.push(ErrorWithLine(last_line_no, e));
             None
         }
     };
@@ -170,7 +170,7 @@ pub fn compile_sound_effects_file(
 #[derive(Debug, PartialEq)]
 pub struct SoundEffectInput {
     pub name: String,
-    pub line_no: usize, // Line number of the name line
+    pub line_no: u32, // Line number of the name line
     pub sfx: String,
 }
 
@@ -231,7 +231,7 @@ pub fn sfx_file_from_string(input: String, path: &Path) -> SoundEffectsFile {
 
         sound_effects.push(SoundEffectInput {
             name: name_line.to_owned(),
-            line_no,
+            line_no: line_no.try_into().unwrap(),
             sfx: sfx_lines.to_owned(),
         });
 

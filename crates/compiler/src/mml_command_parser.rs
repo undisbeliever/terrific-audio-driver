@@ -8,7 +8,7 @@ use crate::bytecode::{
     LoopCount, Pan, PitchOffsetPerTick, PlayNoteTicks, QuarterWavelengthInTicks, RelativePan,
     RelativeVolume, SubroutineId, Volume, KEY_OFF_TICK_DELAY,
 };
-use crate::errors::{MmlParserError, MmlParserErrorWithPos, ValueError};
+use crate::errors::{ErrorWithPos, MmlParserError, ValueError};
 use crate::notes::{parse_pitch_char, MidiNote, MmlPitch, Note, Octave, STARTING_OCTAVE};
 use crate::time::{Bpm, MmlLength, TickClock, TickCounter, ZenLen};
 use crate::value_newtypes::{i8_value_newtype, u8_value_newtype, ValueNewType};
@@ -462,7 +462,7 @@ pub(super) enum NewCommandToken {
     Pitch(MmlPitch),
     // Might not be a valid command token.
     Symbol(Symbol),
-    PitchError(MmlParserErrorWithPos),
+    PitchError(ErrorWithPos<MmlParserError>),
     // u32 = Number of skipped symbols::
     UnknownCharacters(u32),
 }
@@ -470,14 +470,14 @@ pub(super) enum NewCommandToken {
 enum ParseResult<T> {
     Ok(T),
     None(FilePos),
-    Error(MmlParserErrorWithPos),
+    Error(ErrorWithPos<MmlParserError>),
 }
 
 enum AbsoluteOrRelative {
     Absolute(FilePos, u32),
     Relative(FilePos, i32),
     None(FilePos),
-    Error(MmlParserErrorWithPos),
+    Error(ErrorWithPos<MmlParserError>),
 }
 
 pub(crate) struct MmlStreamParser<'a> {
@@ -489,17 +489,17 @@ pub(crate) struct MmlStreamParser<'a> {
 
 macro_rules! parsing_error {
     ($pos:expr, $reason:ident) => {{
-        MmlParserErrorWithPos($pos, MmlParserError::$reason)
+        ErrorWithPos($pos, MmlParserError::$reason)
     }};
 }
 
-fn value_error(pos: FilePos, e: ValueError) -> MmlParserErrorWithPos {
-    MmlParserErrorWithPos(pos, MmlParserError::ValueError(e))
+fn value_error(pos: FilePos, e: ValueError) -> ErrorWithPos<MmlParserError> {
+    ErrorWithPos(pos, MmlParserError::ValueError(e))
 }
 
 macro_rules! parse_absolute_or_relative {
     ($fn_name:ident, $type:ident, $missing_error:ident) => {
-        pub fn $fn_name(&mut self) -> Result<$type, MmlParserErrorWithPos> {
+        pub fn $fn_name(&mut self) -> Result<$type, ErrorWithPos<MmlParserError>> {
             match self.parse_absolute_or_relative() {
                 AbsoluteOrRelative::Absolute(pos, p) => match p.try_into() {
                     Ok(p) => Ok($type::Absolute(p)),
@@ -689,7 +689,7 @@ impl MmlStreamParser<'_> {
         }
     }
 
-    pub fn parse_optional_bool(&mut self) -> Result<Option<bool>, MmlParserErrorWithPos> {
+    pub fn parse_optional_bool(&mut self) -> Result<Option<bool>, ErrorWithPos<MmlParserError>> {
         match self.scanner.match_ascii_digits() {
             Match::None(_pos) => Ok(None),
             Match::Some(_, "1") => Ok(Some(true)),
@@ -698,7 +698,7 @@ impl MmlStreamParser<'_> {
         }
     }
 
-    pub fn parse_bool(&mut self) -> Result<bool, MmlParserErrorWithPos> {
+    pub fn parse_bool(&mut self) -> Result<bool, ErrorWithPos<MmlParserError>> {
         match self.scanner.match_ascii_digits() {
             Match::Some(_pos, "1") => Ok(true),
             Match::Some(_pos, "0") => Ok(false),
@@ -720,7 +720,7 @@ impl MmlStreamParser<'_> {
         }
     }
 
-    pub fn parse_newtype<T>(&mut self) -> Result<T, MmlParserErrorWithPos>
+    pub fn parse_newtype<T>(&mut self) -> Result<T, ErrorWithPos<MmlParserError>>
     where
         T: ValueNewType,
         <T as ValueNewType>::ConvertFrom: scanner::MatchValueDigits,
@@ -763,7 +763,7 @@ impl MmlStreamParser<'_> {
     parse_absolute_or_relative!(parse_pan, PanCommand, NoPan);
     parse_absolute_or_relative!(parse_fine_volume, VolumeCommand, NoVolume);
 
-    pub fn parse_coarse_volume(&mut self) -> Result<VolumeCommand, MmlParserErrorWithPos> {
+    pub fn parse_coarse_volume(&mut self) -> Result<VolumeCommand, ErrorWithPos<MmlParserError>> {
         match self.parse_absolute_or_relative() {
             AbsoluteOrRelative::Absolute(pos, v) => {
                 if v <= MAX_COARSE_VOLUME {
@@ -785,7 +785,9 @@ impl MmlStreamParser<'_> {
         }
     }
 
-    pub fn parse_optional_pitch(&mut self) -> Result<Option<MmlPitch>, MmlParserErrorWithPos> {
+    pub fn parse_optional_pitch(
+        &mut self,
+    ) -> Result<Option<MmlPitch>, ErrorWithPos<MmlParserError>> {
         let (pos, pitch_str) = match self
             .scanner
             .match_char_then_pattern(|&c| matches!(c, 'a'..='g'), |&c| c == '-' || c == '+')
@@ -812,7 +814,9 @@ impl MmlStreamParser<'_> {
         Ok(Some(MmlPitch::new(pitch, semitone_offset)))
     }
 
-    pub fn parse_optional_length(&mut self) -> Result<Option<MmlLength>, MmlParserErrorWithPos> {
+    pub fn parse_optional_length(
+        &mut self,
+    ) -> Result<Option<MmlLength>, ErrorWithPos<MmlParserError>> {
         let is_fc_percent_sign = self.scanner.peek_u8() == Some(b'%');
         if is_fc_percent_sign {
             self.scanner.advance_ascii_char_count(1);
@@ -868,7 +872,7 @@ impl MmlStreamParser<'_> {
 
     fn parse_comma_quarter_wavelength_ticks(
         &mut self,
-    ) -> Result<QuarterWavelengthInTicks, MmlParserErrorWithPos> {
+    ) -> Result<QuarterWavelengthInTicks, ErrorWithPos<MmlParserError>> {
         if !self.next_symbol_matches(Symbol::Comma) {
             return Err(value_error(
                 self.before_pos(),
@@ -880,7 +884,9 @@ impl MmlStreamParser<'_> {
     }
 
     // When None is returned, vibrato is disabled.
-    pub fn parse_manual_vibrato(&mut self) -> Result<Option<ManualVibrato>, MmlParserErrorWithPos> {
+    pub fn parse_manual_vibrato(
+        &mut self,
+    ) -> Result<Option<ManualVibrato>, ErrorWithPos<MmlParserError>> {
         let value = match self.parse_u32() {
             ParseResult::Ok(v) => v,
             ParseResult::None(pos) => return Err(value_error(pos, ValueError::NoVibratoDepth)),
@@ -903,7 +909,7 @@ impl MmlStreamParser<'_> {
     }
 
     // When None is returned, MP vibrato is disabled.
-    pub fn parse_mp_vibtato(&mut self) -> Result<Option<MpVibrato>, MmlParserErrorWithPos> {
+    pub fn parse_mp_vibtato(&mut self) -> Result<Option<MpVibrato>, ErrorWithPos<MmlParserError>> {
         let depth_in_cents = match self.parse_u32() {
             ParseResult::Ok(v) => v,
             ParseResult::None(pos) => return Err(value_error(pos, ValueError::NoVibratoDepth)),
@@ -972,7 +978,7 @@ struct MmlParser<'a> {
 
     parser: MmlStreamParser<'a>,
     state: MmlParserState,
-    error_list: Vec<MmlParserErrorWithPos>,
+    error_list: Vec<ErrorWithPos<MmlParserError>>,
 }
 
 impl MmlParser<'_> {
@@ -998,13 +1004,13 @@ impl MmlParser<'_> {
         }
     }
 
-    fn add_error(&mut self, e: MmlParserErrorWithPos) {
+    fn add_error(&mut self, e: ErrorWithPos<MmlParserError>) {
         self.error_list.push(e)
     }
 
     fn add_error_before(&mut self, e: MmlParserError) {
         self.error_list
-            .push(MmlParserErrorWithPos(self.parser.before_pos(), e))
+            .push(ErrorWithPos(self.parser.before_pos(), e))
     }
 
     fn pitch_to_note(&self, p: MmlPitch) -> Result<Note, MmlParserError> {
@@ -1018,22 +1024,24 @@ impl MmlParser<'_> {
         Ok(l.to_tick_count(self.state.default_length, self.state.zenlen)?)
     }
 
-    fn parse_optional_note_length(&mut self) -> Result<Option<TickCounter>, MmlParserErrorWithPos> {
+    fn parse_optional_note_length(
+        &mut self,
+    ) -> Result<Option<TickCounter>, ErrorWithPos<MmlParserError>> {
         match self.parser.parse_optional_length() {
             Ok(Some(l)) => match self.calculate_note_length(l) {
                 Ok(tc) => Ok(Some(tc)),
-                Err(e) => Err(MmlParserErrorWithPos(self.parser.before_pos(), e)),
+                Err(e) => Err(ErrorWithPos(self.parser.before_pos(), e)),
             },
             Ok(None) => Ok(None),
             Err(e) => Err(e),
         }
     }
 
-    fn parse_note_length(&mut self) -> Result<TickCounter, MmlParserErrorWithPos> {
+    fn parse_note_length(&mut self) -> Result<TickCounter, ErrorWithPos<MmlParserError>> {
         match self.parser.parse_optional_length() {
             Ok(Some(l)) => match self.calculate_note_length(l) {
                 Ok(tc) => Ok(tc),
-                Err(e) => Err(MmlParserErrorWithPos(self.parser.before_pos(), e)),
+                Err(e) => Err(ErrorWithPos(self.parser.before_pos(), e)),
             },
             Ok(None) => Ok(self.state.default_length),
             Err(e) => Err(e),
@@ -1178,7 +1186,7 @@ impl MmlParser<'_> {
         &mut self,
         pan: Option<PanCommand>,
         volume: Option<VolumeCommand>,
-    ) -> Result<MmlCommand, MmlParserErrorWithPos> {
+    ) -> Result<MmlCommand, ErrorWithPos<MmlParserError>> {
         // No const symbol concatenate
         const SYMBOLS: [Symbol; 12] = [
             Symbol::Divider,
@@ -1223,19 +1231,19 @@ impl MmlParser<'_> {
         Ok(MmlCommand::ChangePanAndOrVolume(pan, volume))
     }
 
-    fn parse_portamento(&mut self, pos: FilePos) -> Result<MmlCommand, MmlParserErrorWithPos> {
+    fn parse_portamento(
+        &mut self,
+        pos: FilePos,
+    ) -> Result<MmlCommand, ErrorWithPos<MmlParserError>> {
         let notes = match self.parse_pitch_list(Symbol::EndPortamento) {
             Some(n) => n,
             None => {
-                return Err(MmlParserErrorWithPos(
-                    pos,
-                    MmlParserError::MissingEndPortamento,
-                ));
+                return Err(ErrorWithPos(pos, MmlParserError::MissingEndPortamento));
             }
         };
 
         if notes.len() != 2 {
-            return Err(MmlParserErrorWithPos(
+            return Err(ErrorWithPos(
                 pos,
                 MmlParserError::PortamentoRequiresTwoPitches,
             ));
@@ -1272,14 +1280,14 @@ impl MmlParser<'_> {
         })
     }
 
-    fn parse_broken_chord(&mut self, pos: FilePos) -> Result<MmlCommand, MmlParserErrorWithPos> {
+    fn parse_broken_chord(
+        &mut self,
+        pos: FilePos,
+    ) -> Result<MmlCommand, ErrorWithPos<MmlParserError>> {
         let notes = match self.parse_pitch_list(Symbol::EndBrokenChord) {
             Some(n) => n,
             None => {
-                return Err(MmlParserErrorWithPos(
-                    pos,
-                    MmlParserError::MissingEndBrokenChord,
-                ));
+                return Err(ErrorWithPos(pos, MmlParserError::MissingEndBrokenChord));
             }
         };
 
@@ -1302,13 +1310,13 @@ impl MmlParser<'_> {
                 Ok(ticks) => match PlayNoteTicks::try_from_is_slur(ticks.value(), tie) {
                     Ok(t) => t,
                     Err(_) => {
-                        return Err(MmlParserErrorWithPos(
+                        return Err(ErrorWithPos(
                             note_length_pos,
                             MmlParserError::InvalidBrokenChordNoteLength { tie },
                         ))
                     }
                 },
-                Err(e) => return Err(MmlParserErrorWithPos(note_length_pos, e)),
+                Err(e) => return Err(ErrorWithPos(note_length_pos, e)),
             },
             None => PlayNoteTicks::min_for_is_slur(tie),
         };
@@ -1324,7 +1332,7 @@ impl MmlParser<'_> {
         &mut self,
         note: Note,
         note_length: TickCounter,
-    ) -> Result<MmlCommand, MmlParserErrorWithPos> {
+    ) -> Result<MmlCommand, ErrorWithPos<MmlParserError>> {
         let (tie_length, is_slur) = self.parse_tie_and_slur();
         let length = note_length + tie_length;
 
@@ -1373,10 +1381,10 @@ impl MmlParser<'_> {
         &mut self,
         pitch: MmlPitch,
         pos: FilePos,
-    ) -> Result<MmlCommand, MmlParserErrorWithPos> {
+    ) -> Result<MmlCommand, ErrorWithPos<MmlParserError>> {
         let note = match self.pitch_to_note(pitch) {
             Ok(n) => n,
-            Err(e) => return Err(MmlParserErrorWithPos(pos, e)),
+            Err(e) => return Err(ErrorWithPos(pos, e)),
         };
         let length = self.parse_note_length()?;
 
@@ -1387,10 +1395,10 @@ impl MmlParser<'_> {
         &mut self,
         symbol: Symbol,
         pos: FilePos,
-    ) -> Result<MmlCommand, MmlParserErrorWithPos> {
+    ) -> Result<MmlCommand, ErrorWithPos<MmlParserError>> {
         type Error = MmlParserError;
 
-        let err = |e: Error| Err(MmlParserErrorWithPos(pos, e));
+        let err = |e: Error| Err(ErrorWithPos(pos, e));
 
         match symbol {
             Symbol::CallSubroutine => {
@@ -1563,7 +1571,7 @@ impl MmlParser<'_> {
 
     fn parse_all(
         mut self,
-    ) -> Result<(Vec<MmlCommandWithPos>, FilePos), Vec<MmlParserErrorWithPos>> {
+    ) -> Result<(Vec<MmlCommandWithPos>, FilePos), Vec<ErrorWithPos<MmlParserError>>> {
         let mut out = Vec::new();
 
         // ::TODO detect and panic on infinite loop::
@@ -1620,6 +1628,6 @@ pub(crate) fn parse_mml_lines(
     zenlen: ZenLen,
     instruments_map: &HashMap<IdentifierStr, usize>,
     subroutine_map: Option<&HashMap<IdentifierStr, SubroutineId>>,
-) -> Result<(Vec<MmlCommandWithPos>, FilePos), Vec<MmlParserErrorWithPos>> {
+) -> Result<(Vec<MmlCommandWithPos>, FilePos), Vec<ErrorWithPos<MmlParserError>>> {
     MmlParser::new(lines, zenlen, instruments_map, subroutine_map).parse_all()
 }

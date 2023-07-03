@@ -17,7 +17,7 @@ use crate::driver_constants::{FIR_FILTER_SIZE, IDENTITY_FILTER, N_MUSIC_CHANNELS
 use crate::echo::{parse_fir_filter_string, EchoBuffer, EchoEdl, EchoLength, DEFAULT_EDL};
 use crate::envelope::{Adsr, Gain};
 use crate::errors::{
-    IdentifierError, MmlChannelError, MmlCommandError, MmlCommandErrorWithPos, MmlError,
+    ErrorWithLine, ErrorWithPos, IdentifierError, MmlChannelError, MmlCommandError, MmlError,
     MmlHeaderError, MmlInstrumentError, SplitMmlLinesError, ValueError,
 };
 use crate::mml_command_parser::{
@@ -515,15 +515,18 @@ fn parse_headers(lines: Vec<Line>) -> Result<MetaData, MmlError> {
                 if !map.contains_key(header) {
                     map.insert(header, value);
                 } else {
-                    errors.push((line_no, MmlHeaderError::DuplicateHeader(header.to_string())));
+                    errors.push(ErrorWithLine(
+                        line_no,
+                        MmlHeaderError::DuplicateHeader(header.to_string()),
+                    ));
                 }
                 match header_state.parse_header(header, value) {
                     Ok(()) => (),
-                    Err(e) => errors.push((line_no, e)),
+                    Err(e) => errors.push(ErrorWithLine(line_no, e)),
                 }
             }
             Err(e) => {
-                errors.push((line_no, e));
+                errors.push(ErrorWithLine(line_no, e));
             }
         }
     }
@@ -579,16 +582,14 @@ pub fn build_data_instruments_map(instruments: &Vec<data::Instrument>) -> DataIn
 
 fn parse_instrument(
     id: Identifier,
-    line: Line,
+    line: &Line,
     inst_map: &DataInstrumentsMap,
 ) -> Result<MmlInstrument, MmlInstrumentError> {
-    let line_no = line.position.line_number;
-
     let mut args = line.text.split_whitespace();
 
     let inst_name = match args.next() {
         Some(s) => s,
-        None => return Err(MmlInstrumentError::NoInstrument(line_no)),
+        None => return Err(MmlInstrumentError::NoInstrument),
     };
 
     let mut envelope_override = EnvelopeOverride::None;
@@ -600,32 +601,26 @@ fn parse_instrument(
                 Ok(a) => {
                     envelope_override = EnvelopeOverride::Adsr(a);
                 }
-                Err(e) => return Err(MmlInstrumentError::InvalidAdsr(line_no, e)),
+                Err(e) => return Err(MmlInstrumentError::InvalidAdsr(e)),
             },
-            _ => return Err(MmlInstrumentError::ExpectedFourAdsrArguments(line_no)),
+            _ => return Err(MmlInstrumentError::ExpectedFourAdsrArguments),
         },
         Some("gain") => match one_argument(args) {
             Some(g) => match Gain::try_from(g) {
                 Ok(g) => {
                     envelope_override = EnvelopeOverride::Gain(g);
                 }
-                Err(e) => return Err(MmlInstrumentError::InvalidGain(line_no, e)),
+                Err(e) => return Err(MmlInstrumentError::InvalidGain(e)),
             },
-            None => return Err(MmlInstrumentError::ExpectedOneGainArgument(line_no)),
+            None => return Err(MmlInstrumentError::ExpectedOneGainArgument),
         },
-        Some(unknown) => {
-            return Err(MmlInstrumentError::UnknownArgument(
-                line_no,
-                unknown.to_owned(),
-            ))
-        }
+        Some(unknown) => return Err(MmlInstrumentError::UnknownArgument(unknown.to_owned())),
     }
 
     let (instrument_id, inst) = match inst_map.get(inst_name) {
         Some((inst_id, inst)) => (inst_id, inst),
         None => {
             return Err(MmlInstrumentError::CannotFindInstrument(
-                line_no,
                 inst_name.to_owned(),
             ))
         }
@@ -658,14 +653,14 @@ fn parse_instrument(
 fn parse_instruments(
     instrument_lines: Vec<(Identifier, Line)>,
     inst_map: &DataInstrumentsMap,
-) -> (Vec<MmlInstrument>, Vec<MmlInstrumentError>) {
+) -> (Vec<MmlInstrument>, Vec<ErrorWithLine<MmlInstrumentError>>) {
     let mut out = Vec::with_capacity(instrument_lines.len());
     let mut errors = Vec::new();
 
     for (id, line) in instrument_lines {
-        match parse_instrument(id, line, inst_map) {
+        match parse_instrument(id, &line, inst_map) {
             Ok(i) => out.push(i),
-            Err(e) => errors.push(e),
+            Err(e) => errors.push(ErrorWithLine(line.position.line_number, e)),
         }
     }
 
@@ -1347,7 +1342,7 @@ fn process_mml_commands(
     pitch_table: &PitchTable,
     instruments: &Vec<MmlInstrument>,
     subroutines: Option<&Vec<ChannelData>>,
-) -> Result<ChannelData, Vec<MmlCommandErrorWithPos>> {
+) -> Result<ChannelData, Vec<ErrorWithPos<MmlCommandError>>> {
     let mut errors = Vec::new();
 
     // Cannot have subroutine_index and subroutines list at the same time.
@@ -1368,7 +1363,7 @@ fn process_mml_commands(
     for c in commands {
         match gen.process_command(c.command(), c.pos()) {
             Ok(()) => (),
-            Err(e) => errors.push(MmlCommandErrorWithPos(*c.pos(), e)),
+            Err(e) => errors.push(ErrorWithPos(*c.pos(), e)),
         }
     }
 
@@ -1382,15 +1377,12 @@ fn process_mml_commands(
         (Some(_), None) => match gen.bc.return_from_subroutine() {
             Ok(()) => (),
             Err(e) => {
-                errors.push(MmlCommandErrorWithPos(
-                    last_pos,
-                    MmlCommandError::BytecodeError(e),
-                ));
+                errors.push(ErrorWithPos(last_pos, MmlCommandError::BytecodeError(e)));
             }
         },
         (None, Some(lp)) => {
             if lp.tick_counter == tick_counter {
-                errors.push(MmlCommandErrorWithPos(
+                errors.push(ErrorWithPos(
                     last_pos,
                     MmlCommandError::NoTicksAfterLoopPoint,
                 ));
@@ -1405,10 +1397,7 @@ fn process_mml_commands(
     let bytecode = match gen.bc.get_bytecode() {
         Ok(b) => b,
         Err(e) => {
-            errors.push(MmlCommandErrorWithPos(
-                last_pos,
-                MmlCommandError::BytecodeError(e),
-            ));
+            errors.push(ErrorWithPos(last_pos, MmlCommandError::BytecodeError(e)));
             &[]
         }
     };
