@@ -27,6 +27,22 @@ pub enum DeserializeError {
 }
 
 #[derive(Debug)]
+pub enum MappingListError {
+    Empty,
+    TooManyItems(usize),
+    DuplicateName(usize, String),
+}
+
+#[derive(Debug)]
+pub enum MappingError {
+    Instrument(MappingListError),
+    SoundEffect(MappingListError),
+}
+
+#[derive(Debug)]
+pub struct MappingsFileErrors(pub Vec<MappingError>);
+
+#[derive(Debug)]
 pub struct InvalidAdsrError {
     pub valid_a: bool,
     pub valid_d: bool,
@@ -456,6 +472,13 @@ impl Display for DeserializeError {
             Self::OpenError(filename, e) => write!(f, "Unable to open {}: {}", filename, e),
             Self::SerdeError(filename, e) => write!(f, "Unable to read {}: {}", filename, e),
         }
+    }
+}
+
+impl Display for MappingsFileErrors {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // ::TODO human readable error messages::
+        write!(f, "{:?}", self)
     }
 }
 

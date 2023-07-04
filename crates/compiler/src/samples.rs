@@ -6,7 +6,7 @@
 
 // ::TODO add pub(crate) to more things::
 
-use crate::data::{Instrument, MappingsFile};
+use crate::data::{Instrument, UniqueNamesList, UniqueNamesMappingsFile};
 use crate::driver_constants::{MAX_DIR_ITEMS, MAX_INSTRUMENTS};
 use crate::errors::{OtherSamplesError, SampleError, SamplesErrors};
 use crate::pitch_table::{build_pitch_table, PitchTable};
@@ -119,13 +119,13 @@ fn load_sample_for_instrument(
 }
 
 fn compile_samples(
-    mappings_file: &MappingsFile,
+    mappings: &UniqueNamesMappingsFile,
 ) -> Result<Vec<BrrSample>, Vec<(usize, SampleError)>> {
     let mut out = Vec::new();
     let mut errors = Vec::new();
 
-    for (i, inst) in mappings_file.mappings.instruments.iter().enumerate() {
-        match load_sample_for_instrument(&mappings_file.parent_path, inst) {
+    for (i, inst) in mappings.instruments.list().iter().enumerate() {
+        match load_sample_for_instrument(&mappings.parent_path, inst) {
             Ok(b) => out.push(b),
             Err(e) => errors.push((i, e)),
         }
@@ -143,13 +143,15 @@ struct EnvelopeSoA {
     adsr2_or_gain: Vec<u8>,
 }
 
-fn envelope_soa(instruments: &Vec<Instrument>) -> Result<EnvelopeSoA, Vec<(usize, SampleError)>> {
+fn envelope_soa(
+    instruments: &UniqueNamesList<Instrument>,
+) -> Result<EnvelopeSoA, Vec<(usize, SampleError)>> {
     let mut adsr1 = vec![0; instruments.len()];
     let mut adsr2_or_gain = vec![0; instruments.len()];
 
     let mut errors = Vec::new();
 
-    for (i, inst) in instruments.iter().enumerate() {
+    for (i, inst) in instruments.list().iter().enumerate() {
         match (&inst.adsr, &inst.gain) {
             (Some(adsr), None) => {
                 adsr1[i] = adsr.adsr1();
@@ -246,12 +248,12 @@ pub struct SampleAndInstrumentData {
 }
 
 pub fn build_sample_and_instrument_data(
-    mappings: &MappingsFile,
+    mappings: &UniqueNamesMappingsFile,
 ) -> Result<SampleAndInstrumentData, SamplesErrors> {
     let mut other_errors = Vec::new();
     let mut instrument_errors = Vec::new();
 
-    let instruments = &mappings.mappings.instruments;
+    let instruments = &mappings.instruments;
 
     if instruments.len() > MAX_INSTRUMENTS {
         other_errors.push(OtherSamplesError::TooManyInstruments(instruments.len()));

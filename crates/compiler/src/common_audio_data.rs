@@ -4,6 +4,7 @@
 //
 // SPDX-License-Identifier: MIT
 
+use crate::data::UniqueNamesMappingsFile;
 use crate::driver_constants::{
     COMMON_DATA_BYTES_PER_DIR, COMMON_DATA_BYTES_PER_INSTRUMENTS,
     COMMON_DATA_BYTES_PER_SOUND_EFFECT, COMMON_DATA_HEADER_ADDR, COMMON_DATA_HEADER_SIZE,
@@ -12,7 +13,6 @@ use crate::driver_constants::{
 use crate::errors::{CommonAudioDataError, CommonAudioDataErrors};
 use crate::samples::{build_sample_and_instrument_data, SampleAndInstrumentData};
 use crate::sound_effects::{compile_sound_effects_file, CompiledSoundEffects, SoundEffectsFile};
-use crate::MappingsFile;
 
 pub fn build_common_audio_data(
     samples: &SampleAndInstrumentData,
@@ -110,7 +110,7 @@ pub fn build_common_audio_data(
 }
 
 pub fn compile_common_audio_data(
-    mappings: &MappingsFile,
+    mappings: &UniqueNamesMappingsFile,
     sfx_file: &SoundEffectsFile,
 ) -> Result<Vec<u8>, CommonAudioDataErrors> {
     let samples = build_sample_and_instrument_data(mappings);

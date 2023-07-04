@@ -8,7 +8,7 @@ use crate::bytecode::{
     BcTicksKeyOff, BcTicksNoKeyOff, Bytecode, InstrumentId, LoopCount, PitchOffsetPerTick,
     PlayNoteTicks, PortamentoVelocity, SubroutineId,
 };
-use crate::data::Instrument;
+use crate::data::{Instrument, UniqueNamesList};
 use crate::envelope::{Adsr, Gain};
 use crate::errors::{BytecodeAssemblerError, BytecodeError, ValueError};
 use crate::notes::Note;
@@ -16,25 +16,6 @@ use crate::time::TickCounter;
 use crate::value_newtypes::ValueNewType;
 
 use std::collections::HashMap;
-
-pub type InstrumentsMap<'a> = HashMap<&'a str, InstrumentId>;
-
-#[allow(clippy::ptr_arg)]
-pub fn build_instruments_map(instruments: &Vec<Instrument>) -> InstrumentsMap {
-    // No bounds checking or duplicate name tests in this function.
-    //
-    // This is OK as Bytecode only uses the id, not instrument data.
-    instruments
-        .iter()
-        .enumerate()
-        .map(|(i, inst)| {
-            (
-                inst.name.as_str(),
-                InstrumentId::new(u8::try_from(i).unwrap_or(0)),
-            )
-        })
-        .collect()
-}
 
 pub type SubroutinesMap<'a> = HashMap<&'a str, SubroutineId>;
 
@@ -62,13 +43,13 @@ impl BytecodeResultWrapper for Result<(), BytecodeError> {
 
 pub struct BytecodeAssembler<'a, 'b> {
     bc: Bytecode,
-    instruments: &'a InstrumentsMap<'a>,
+    instruments: &'a UniqueNamesList<Instrument>,
     subroutines: Option<&'b SubroutinesMap<'b>>,
 }
 
 impl BytecodeAssembler<'_, '_> {
     pub fn new<'a, 'b>(
-        instruments: &'a InstrumentsMap<'a>,
+        instruments: &'a UniqueNamesList<Instrument>,
         subroutines: Option<&'b SubroutinesMap<'b>>,
         is_subroutine: bool,
         is_sound_effect: bool,
@@ -304,7 +285,7 @@ impl BytecodeAssembler<'_, '_> {
 
     fn _find_instrument(&self, arg: &str) -> Result<InstrumentId, BytecodeAssemblerError> {
         match self.instruments.get(arg) {
-            Some(i) => Ok(*i),
+            Some((i, _inst)) => Ok(InstrumentId::new(i)),
             None => Err(BytecodeAssemblerError::UnknownInstrument(arg.to_owned())),
         }
     }

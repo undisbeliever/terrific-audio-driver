@@ -5,7 +5,7 @@
 // SPDX-License-Identifier: MIT
 
 use crate::bytecode::InstrumentId;
-use crate::data::Instrument;
+use crate::data::{Instrument, UniqueNamesList};
 use crate::driver_constants::{MAX_INSTRUMENTS, PITCH_TABLE_SIZE};
 use crate::errors::{PitchError, PitchTableError};
 use crate::notes::{self, Note};
@@ -100,12 +100,14 @@ fn instrument_pitch(index: usize, inst: &Instrument) -> Result<InstrumentPitch, 
 // Using sorted vector instead of Map as I need a reproducible pitch table.
 struct SortedInstrumentPitches(Vec<InstrumentPitch>);
 
-fn pitch_vec(instruments: &Vec<Instrument>) -> Result<SortedInstrumentPitches, PitchTableError> {
+fn pitch_vec(
+    instruments: &UniqueNamesList<Instrument>,
+) -> Result<SortedInstrumentPitches, PitchTableError> {
     let mut out = Vec::with_capacity(instruments.len());
 
     let mut errors = Vec::new();
 
-    for (i, inst) in instruments.iter().enumerate() {
+    for (i, inst) in instruments.list().iter().enumerate() {
         match instrument_pitch(i, inst) {
             Ok(ip) => out.push(ip),
             Err(e) => errors.push((i, e)),
@@ -210,7 +212,9 @@ pub struct PitchTable {
     pub(crate) instruments_pitch_offset: Vec<u8>,
 }
 
-pub fn build_pitch_table(instruments: &Vec<Instrument>) -> Result<PitchTable, PitchTableError> {
+pub fn build_pitch_table(
+    instruments: &UniqueNamesList<Instrument>,
+) -> Result<PitchTable, PitchTableError> {
     let pv = pitch_vec(instruments)?;
     let pt = process_pitch_vec(pv, instruments.len());
 

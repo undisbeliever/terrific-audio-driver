@@ -4,7 +4,7 @@
 //
 // SPDX-License-Identifier: MIT
 
-use compiler::*;
+use compiler::{data::UniqueNamesList, *};
 
 use std::path::PathBuf;
 
@@ -692,12 +692,10 @@ fn assert_line_matches_bytecode(mml_line: &str, bc_asm: &[&str]) {
     ]
     .concat();
 
-    let dummy_data = dummy_data();
-    let mml_inst_map = mml::build_data_instruments_map(&dummy_data.instruments);
-    let bc_inst_map = bytecode_assembler::build_instruments_map(&dummy_data.instruments);
+    let dd = dummy_data();
 
-    let mml = mml::parse_mml(&mml, &mml_inst_map, &dummy_data.pitch_table).unwrap();
-    let bc_asm = assemble_channel_bytecode(&bc_asm, &bc_inst_map);
+    let mml = mml::parse_mml(&mml, &dd.instruments, &dd.pitch_table).unwrap();
+    let bc_asm = assemble_channel_bytecode(&bc_asm, &dd.instruments);
 
     assert_eq!(
         mml.channels()[0].bytecode(),
@@ -710,11 +708,10 @@ fn assert_line_matches_line(mml_line1: &str, mml_line2: &str) {
     let mml1 = ["@1 inst_no_envelope\nA @1 o4\nA ", mml_line1].concat();
     let mml2 = ["@1 inst_no_envelope\nA @1 o4\nA ", mml_line2].concat();
 
-    let dummy_data = dummy_data();
-    let mml_inst_map = mml::build_data_instruments_map(&dummy_data.instruments);
+    let dd = dummy_data();
 
-    let mml_data1 = mml::parse_mml(&mml1, &mml_inst_map, &dummy_data.pitch_table).unwrap();
-    let mml_data2 = mml::parse_mml(&mml2, &mml_inst_map, &dummy_data.pitch_table).unwrap();
+    let mml_data1 = mml::parse_mml(&mml1, &dd.instruments, &dd.pitch_table).unwrap();
+    let mml_data2 = mml::parse_mml(&mml2, &dd.instruments, &dd.pitch_table).unwrap();
 
     assert_eq!(
         mml_data1.channels()[0].bytecode(),
@@ -726,21 +723,18 @@ fn assert_line_matches_line(mml_line1: &str, mml_line2: &str) {
 fn assert_mml_channel_a_matches_bytecode(mml: &str, bc_asm: &[&str]) {
     let dummy_data = dummy_data();
 
-    let mml_inst_map = mml::build_data_instruments_map(&dummy_data.instruments);
-    let bc_inst_map = bytecode_assembler::build_instruments_map(&dummy_data.instruments);
+    let mml = mml::parse_mml(mml, &dummy_data.instruments, &dummy_data.pitch_table).unwrap();
 
-    let mml = mml::parse_mml(mml, &mml_inst_map, &dummy_data.pitch_table).unwrap();
-
-    let bc_asm = assemble_channel_bytecode(bc_asm, &bc_inst_map);
+    let bc_asm = assemble_channel_bytecode(bc_asm, &dummy_data.instruments);
 
     assert_eq!(mml.channels()[0].bytecode(), bc_asm);
 }
 
 fn assemble_channel_bytecode(
     bc_asm: &[&str],
-    inst_map: &bytecode_assembler::InstrumentsMap,
+    instruments: &UniqueNamesList<data::Instrument>,
 ) -> Vec<u8> {
-    let mut bc = bytecode_assembler::BytecodeAssembler::new(inst_map, None, false, false);
+    let mut bc = bytecode_assembler::BytecodeAssembler::new(instruments, None, false, false);
 
     for line in bc_asm {
         bc.parse_line(line).unwrap();
@@ -750,7 +744,7 @@ fn assemble_channel_bytecode(
 }
 
 struct DummyData {
-    instruments: Vec<data::Instrument>,
+    instruments: UniqueNamesList<data::Instrument>,
     pitch_table: PitchTable,
 }
 
@@ -758,11 +752,11 @@ fn dummy_data() -> DummyData {
     const SF: f64 = SAMPLE_FREQ;
 
     #[rustfmt::skip]
-    let instruments = vec![
+    let instruments = data::validate_instrument_names(vec![
         dummy_instrument("inst_no_envelope", SF, 2, 6, None, None),
         dummy_instrument("inst_with_adsr",   SF, 2, 6, Some(EXAMPLE_ADSR), None),
         dummy_instrument("inst_with_gain",   SF, 2, 6, None, Some(EXAMPLE_GAIN)),
-    ];
+    ]).unwrap();
 
     let pitch_table = build_pitch_table(&instruments).unwrap();
 

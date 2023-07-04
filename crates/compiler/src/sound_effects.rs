@@ -4,10 +4,9 @@
 //
 // SPDX-License-Identifier: MIT
 
-use crate::bytecode_assembler::{build_instruments_map, BytecodeAssembler, InstrumentsMap};
-use crate::data::Name;
+use crate::bytecode_assembler::BytecodeAssembler;
+use crate::data::{Instrument, Name, UniqueNamesList, UniqueNamesMappingsFile};
 use crate::errors::{ErrorWithLine, SoundEffectError, SoundEffectsFileError};
-use crate::MappingsFile;
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -25,7 +24,7 @@ pub fn compile_sound_effect(
     sfx_name: &str,
     sfx: &str,
     starting_line_number: u32,
-    instruments: &InstrumentsMap,
+    instruments: &UniqueNamesList<Instrument>,
 ) -> Result<(Name, Vec<u8>), SoundEffectError> {
     let mut errors = Vec::new();
 
@@ -89,7 +88,7 @@ pub fn compile_sound_effect(
 
 fn compile_sound_effects(
     sfx_file: &SoundEffectsFile,
-    instruments_map: &InstrumentsMap,
+    instruments: &UniqueNamesList<Instrument>,
 ) -> Result<HashMap<Name, Vec<u8>>, SoundEffectsFileError> {
     let mut sound_effects = HashMap::with_capacity(sfx_file.sound_effects.len());
 
@@ -97,7 +96,7 @@ fn compile_sound_effects(
     let mut duplicates = Vec::new();
 
     for sfx in &sfx_file.sound_effects {
-        match compile_sound_effect(&sfx.name, &sfx.sfx, sfx.line_no + 1, instruments_map) {
+        match compile_sound_effect(&sfx.name, &sfx.sfx, sfx.line_no + 1, instruments) {
             Ok((s_name, s)) => {
                 let duplicate_name = sound_effects.insert(s_name.clone(), s).is_some();
                 if duplicate_name {
@@ -126,14 +125,14 @@ pub struct CompiledSoundEffects {
 
 fn combine_sound_effects(
     sound_effects: HashMap<Name, Vec<u8>>,
-    mapping: &Vec<Name>,
+    mapping: &UniqueNamesList<Name>,
 ) -> Result<CompiledSoundEffects, SoundEffectsFileError> {
     let mut sfx_data = Vec::new();
     let mut sfx_offsets = Vec::with_capacity(mapping.len());
 
     let mut missing = Vec::new();
 
-    for name in mapping {
+    for name in mapping.list() {
         match sound_effects.get(name) {
             Some(s) => {
                 sfx_offsets.push(sfx_data.len());
@@ -155,12 +154,11 @@ fn combine_sound_effects(
 
 pub fn compile_sound_effects_file(
     sfx_file: &SoundEffectsFile,
-    mappings_file: &MappingsFile,
+    mappings_file: &UniqueNamesMappingsFile,
 ) -> Result<CompiledSoundEffects, SoundEffectsFileError> {
-    let instruments_map = build_instruments_map(&mappings_file.mappings.instruments);
-    let sound_effects = compile_sound_effects(sfx_file, &instruments_map)?;
+    let sound_effects = compile_sound_effects(sfx_file, &mappings_file.instruments)?;
 
-    combine_sound_effects(sound_effects, &mappings_file.mappings.sound_effects)
+    combine_sound_effects(sound_effects, &mappings_file.sound_effects)
 }
 
 // Sound effects file

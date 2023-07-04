@@ -6,13 +6,13 @@
 
 #![allow(clippy::assertions_on_constants)]
 
-use crate::data::MappingsFile;
+use crate::data::UniqueNamesMappingsFile;
 use crate::driver_constants::{
     MAX_SONG_DATA_SIZE, MAX_SUBROUTINES, N_MUSIC_CHANNELS, SONG_HEADER_SIZE,
 };
 use crate::errors::SongError;
 use crate::mml::MmlData;
-use crate::{build_data_instruments_map, build_pitch_table, parse_mml};
+use crate::{build_pitch_table, parse_mml};
 
 const NULL_OFFSET: u16 = 0xffff_u16;
 
@@ -120,18 +120,16 @@ pub fn song_data(mml_data: &MmlData) -> Result<Vec<u8>, SongError> {
 pub fn compile_song(
     mml_text: &str,
     file_name: &str,
-    mappings: &MappingsFile,
+    mappings: &UniqueNamesMappingsFile,
 ) -> Result<Vec<u8>, SongError> {
-    let instruments = &mappings.mappings.instruments;
+    let instruments = &mappings.instruments;
 
     let pitch_table = match build_pitch_table(instruments) {
         Ok(pt) => pt,
         Err(e) => return Err(SongError::PitchTableError(mappings.file_name.clone(), e)),
     };
 
-    let inst_map = build_data_instruments_map(instruments);
-
-    let mml = match parse_mml(mml_text, &inst_map, &pitch_table) {
+    let mml = match parse_mml(mml_text, &mappings.instruments, &pitch_table) {
         Ok(mml) => mml,
         Err(e) => return Err(SongError::MmlError(file_name.to_string(), e)),
     };

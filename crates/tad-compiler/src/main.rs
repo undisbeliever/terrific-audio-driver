@@ -5,7 +5,7 @@
 // SPDX-License-Identifier: MIT
 
 use clap::{Args, Parser, Subcommand};
-use compiler::{compile_song, MappingsFile, SoundEffectsFile};
+use compiler::{compile_song, SoundEffectsFile, UniqueNamesMappingsFile};
 
 use std::fs;
 use std::io::{self, Write};
@@ -139,10 +139,13 @@ fn file_name(path: &Path) -> String {
         .to_string()
 }
 
-fn load_mappings_file(path: PathBuf) -> MappingsFile {
+fn load_mappings_file(path: PathBuf) -> UniqueNamesMappingsFile {
     match compiler::load_mappings_file(path) {
-        Ok(m) => m,
-        Err(e) => error!("{}", e),
+        Err(e) => error!("Cannot load mappings file: {}", e),
+        Ok(m) => match compiler::validate_mappings_file_names(m) {
+            Ok(vm) => vm,
+            Err(e) => error!("Invalid mappings File: {}", e),
+        },
     }
 }
 

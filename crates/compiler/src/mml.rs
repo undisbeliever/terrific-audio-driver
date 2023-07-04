@@ -12,7 +12,7 @@ use crate::bytecode::{
     BcTicksKeyOff, BcTicksNoKeyOff, Bytecode, InstrumentId, LoopCount, PitchOffsetPerTick,
     PlayNoteTicks, PortamentoVelocity, SubroutineId,
 };
-use crate::data;
+use crate::data::{self, UniqueNamesList};
 use crate::driver_constants::{FIR_FILTER_SIZE, IDENTITY_FILTER, N_MUSIC_CHANNELS};
 use crate::echo::{parse_fir_filter_string, EchoBuffer, EchoEdl, EchoLength, DEFAULT_EDL};
 use crate::envelope::{Adsr, Gain};
@@ -562,28 +562,10 @@ fn parse_headers(lines: Vec<Line>) -> Result<MetaData, MmlError> {
 // Instruments
 // ===========
 
-pub type DataInstrumentsMap<'a> = HashMap<&'a str, (InstrumentId, &'a data::Instrument)>;
-
-// ::TODO add validated data::Mappings type, pass that type instead::
-#[allow(clippy::ptr_arg)]
-pub fn build_data_instruments_map(instruments: &Vec<data::Instrument>) -> DataInstrumentsMap {
-    // No bounds checking or duplicate name tests in this function.
-    instruments
-        .iter()
-        .enumerate()
-        .map(|(i, inst)| {
-            (
-                inst.name.as_str(),
-                (InstrumentId::new(u8::try_from(i).unwrap_or(0)), inst),
-            )
-        })
-        .collect()
-}
-
 fn parse_instrument(
     id: Identifier,
     line: &Line,
-    inst_map: &DataInstrumentsMap,
+    inst_map: &UniqueNamesList<data::Instrument>,
 ) -> Result<MmlInstrument, MmlInstrumentError> {
     let mut args = line.text.split_whitespace();
 
@@ -643,7 +625,7 @@ fn parse_instrument(
     Ok(MmlInstrument {
         identifier: id,
         line_number: line.position.line_number,
-        instrument_id: *instrument_id,
+        instrument_id: InstrumentId::new(instrument_id),
         first_note: Note::first_note_for_octave(inst.first_octave),
         last_note: Note::last_note_for_octave(inst.last_octave),
         envelope_override,
@@ -652,7 +634,7 @@ fn parse_instrument(
 
 fn parse_instruments(
     instrument_lines: Vec<(Identifier, Line)>,
-    inst_map: &DataInstrumentsMap,
+    inst_map: &UniqueNamesList<data::Instrument>,
 ) -> (Vec<MmlInstrument>, Vec<ErrorWithLine<MmlInstrumentError>>) {
     let mut out = Vec::with_capacity(instrument_lines.len());
     let mut errors = Vec::new();
@@ -1468,7 +1450,7 @@ fn parse_and_compile_mml_channel(
 
 pub fn parse_mml(
     mml_text: &str,
-    inst_map: &DataInstrumentsMap,
+    inst_map: &UniqueNamesList<data::Instrument>,
     pitch_table: &PitchTable,
 ) -> Result<MmlData, Vec<MmlError>> {
     let mut errors = Vec::new();
