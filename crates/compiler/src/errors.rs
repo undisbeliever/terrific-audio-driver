@@ -272,47 +272,44 @@ pub enum IdentifierError {
     InvalidNumber(String),
 }
 
-// u32 is line number
-// char is the first character in the line
-// String is the erroneous characters/string
 #[derive(Debug)]
-pub enum SplitMmlLinesError {
+pub enum MmlLineError {
+    ValueError(ValueError),
+
+    // Split Mml Line errors
     MmlTooLarge(usize),
     TooManySubroutines(usize),
 
-    NoIdentifier(u32, char),
-    InvalidIdentifier(u32, char, IdentifierError),
+    // char is the first character in the line (! or @)
+    NoIdentifier(char),
+    InvalidIdentifier(IdentifierError),
 
-    UnknownChannel(u32, String),
-    MissingInstrumentText(u32),
-    MissingSubroutineText(u32),
-    MissingChannelText(u32),
-    CannotParseLine(u32, char),
-}
+    // String is a list of invalid channels in the line
+    UnknownChannel(String),
+    MissingInstrumentText,
+    MissingSubroutineText,
+    MissingChannelText,
+    CannotParseLine,
 
-#[derive(Debug)]
-pub enum MmlHeaderError {
+    // MML Header errors
     NoHeader,
     NoValue,
-    ValueError(ValueError),
     DuplicateHeader(String),
 
     InvalidEchoFeedback,
     InvalidEchoVolume,
     CannotSetTempo,
     CannotSetTimer,
-}
 
-// u32 is line number
-#[derive(Debug)]
-pub enum MmlInstrumentError {
+    // Instrument errors
     NoInstrument,
     CannotFindInstrument(String),
     ExpectedFourAdsrArguments,
     InvalidAdsr(InvalidAdsrError),
     ExpectedOneGainArgument,
     InvalidGain(InvalidGainError),
-    UnknownArgument(String),
+    UnknownInstrumentArgument(String),
+    DuplicateInstrumentName(String),
 }
 
 #[derive(Debug)]
@@ -391,20 +388,14 @@ pub struct MmlChannelError {
 }
 
 #[derive(Debug)]
-pub enum MmlError {
-    Lines(Vec<SplitMmlLinesError>),
-    Header(Vec<ErrorWithLine<MmlHeaderError>>),
-    Instruments(Vec<ErrorWithLine<MmlInstrumentError>>),
-    DuplicateInstructuments(Vec<(u32, mml::Identifier)>),
-    SubroutineError(MmlChannelError),
-    ChannelError(MmlChannelError),
+pub struct MmlCompileErrors {
+    pub line_errors: Vec<ErrorWithLine<MmlLineError>>,
+    pub subroutine_errors: Vec<MmlChannelError>,
+    pub channel_errors: Vec<MmlChannelError>,
 }
 
 #[derive(Debug)]
 pub enum SongError {
-    PitchTableError(String, PitchTableError),
-    MmlError(String, Vec<MmlError>),
-
     NoMusicChannels,
     InvalidMmlData,
     SongIsTooLarge(usize),
@@ -436,7 +427,7 @@ impl From<InvalidGainError> for BytecodeAssemblerError {
     }
 }
 
-impl From<ValueError> for MmlHeaderError {
+impl From<ValueError> for MmlLineError {
     fn from(e: ValueError) -> Self {
         Self::ValueError(e)
     }

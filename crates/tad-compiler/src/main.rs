@@ -5,7 +5,9 @@
 // SPDX-License-Identifier: MIT
 
 use clap::{Args, Parser, Subcommand};
-use compiler::{compile_song, SoundEffectsFile, UniqueNamesMappingsFile};
+use compiler::{
+    build_pitch_table, parse_mml, song_data, SoundEffectsFile, UniqueNamesMappingsFile,
+};
 
 use std::fs;
 use std::io::{self, Write};
@@ -104,12 +106,21 @@ fn compile_song_data(args: CompileSongDataArgs) {
     let file_name = file_name(&args.mml_file);
 
     let mml_text = load_mml_file(args.mml_file);
-
     let mappings = load_mappings_file(args.json_file);
 
-    let data = match compile_song(&mml_text, &file_name, &mappings) {
+    let pitch_table = match build_pitch_table(&mappings.instruments) {
+        Ok(pt) => pt,
+        Err(e) => error!("Cannot build pitch table\n{:?}", e),
+    };
+
+    let mml = match parse_mml(&mml_text, &mappings.instruments, &pitch_table) {
+        Ok(mml) => mml,
+        Err(e) => error!("Cannot compile {}:\n{:?}", file_name, e),
+    };
+
+    let data = match song_data(&mml) {
         Ok(d) => d,
-        Err(e) => error!("Cannot compile song\n{}", e),
+        Err(e) => error!("{}", e),
     };
 
     write_data(args.output, data);

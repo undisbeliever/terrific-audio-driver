@@ -35,4 +35,4 @@ pub use common_audio_data::{build_common_audio_data, compile_common_audio_data};
 pub use sound_effects::{sfx_file_from_string, SoundEffectsFile};
 
 pub use mml::parse_mml;
-pub use songs::{compile_song, song_data};
+pub use songs::song_data;
