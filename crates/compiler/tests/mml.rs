@@ -554,7 +554,6 @@ A @0 @1 @2
             "set_instrument inst_no_envelope",
             "set_instrument inst_with_adsr",
             "set_instrument inst_with_gain",
-            "disable_channel",
         ],
     );
 }
@@ -581,7 +580,6 @@ A @o @0 @1 @2
             "set_instrument inst_no_envelope",
             "set_instrument inst_with_adsr",
             "set_instrument inst_no_envelope",
-            "disable_channel",
         ],
     );
 }
@@ -631,8 +629,6 @@ A @0 @g1 @g2 @g3
             "set_instrument inst_no_envelope",
             "set_instrument inst_with_gain",
             "set_adsr 3 4 5 6",
-            // End
-            "disable_channel",
         ],
     );
 }
@@ -685,12 +681,7 @@ fn merge_mml_commands_test(mml_line: &str, bc_asm: &[&str]) {
 
 fn assert_line_matches_bytecode(mml_line: &str, bc_asm: &[&str]) {
     let mml = ["@1 inst_no_envelope\nA @1 o4\nA ", mml_line].concat();
-    let bc_asm = [
-        &["set_instrument inst_no_envelope"],
-        bc_asm,
-        &["disable_channel"],
-    ]
-    .concat();
+    let bc_asm = [&["set_instrument inst_no_envelope"], bc_asm].concat();
 
     let dd = dummy_data();
 
@@ -739,6 +730,8 @@ fn assemble_channel_bytecode(
     for line in bc_asm {
         bc.parse_line(line).unwrap();
     }
+
+    bc.disable_channel();
 
     bc.get_bytecode().unwrap().to_owned()
 }

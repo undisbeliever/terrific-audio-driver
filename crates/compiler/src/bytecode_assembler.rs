@@ -72,6 +72,10 @@ impl BytecodeAssembler<'_, '_> {
         }
     }
 
+    pub fn disable_channel(&mut self) {
+        self.bc.disable_channel()
+    }
+
     pub fn parse_line(&mut self, line: &str) -> Result<(), BytecodeAssemblerError> {
         // Strip comments
         let line = match line.split_once(';') {
@@ -167,10 +171,6 @@ impl BytecodeAssembler<'_, '_> {
            end_loop 1 optional_loop_count_argument,
 
            call_subroutine 1 subroutine_argument,
-           return_from_subroutine 0 no_arguments,
-
-           end 0 no_arguments,
-           disable_channel 0 no_arguments,
 
            set_song_tick_clock 1 one_vnt_argument,
         )

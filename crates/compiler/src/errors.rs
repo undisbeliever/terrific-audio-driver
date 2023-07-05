@@ -204,8 +204,6 @@ pub struct SoundEffectError {
     pub sfx_line_no: u32,
     pub invalid_name: bool,
     pub no_notes: bool,
-    // Set if the last instruction is not disable_channel
-    pub no_disable_channel: bool,
     pub errors: Vec<ErrorWithLine<BytecodeAssemblerError>>,
 }
 
@@ -1120,10 +1118,6 @@ fn fmt_indented_sound_effect_error(
         writeln!(f, "  {}:{}: no notes in sound effect", file_name, line_no)?;
     }
 
-    if error.no_disable_channel {
-        writeln!(f, "  {}:{}: no disable_channel instruction", file_name, line_no)?;
-    }
-
     for e in &error.errors {
         writeln!(f, "  {}:{}: {}", file_name, line_no + e.0, e.1)?;
     }
@@ -1196,8 +1190,7 @@ impl Display for CommonAudioDataErrorsMultilineDisplay<'_> {
 
         if errors.len() == 1 {
             writeln!(f, "Cannot compile common audio data: {}", errors[0])?;
-        }
-        else {
+        } else {
             writeln!(f, "Cannot compile common audio data")?;
             for e in errors {
                 writeln!(f, "  {}", e)?;

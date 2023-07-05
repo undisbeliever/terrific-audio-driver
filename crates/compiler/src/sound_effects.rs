@@ -12,7 +12,6 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 const COMMENT_CHAR: char = ';';
-const DISABLE_CHANNEL_STR: &str = "disable_channel";
 
 const NEW_SFX_TOKEN_NO_NEWLINE: &str = "===";
 const NEW_SFX_TOKEN: &str = "\n===";
@@ -32,7 +31,6 @@ pub fn compile_sound_effect(
 
     let mut bc = BytecodeAssembler::new(instruments, None, false, true);
 
-    let mut last_line: &str = "";
     let mut last_line_no: u32 = starting_line_number;
 
     for (line_no, line) in sfx.lines().enumerate() {
@@ -46,7 +44,6 @@ pub fn compile_sound_effect(
         let line = line.trim();
 
         if !line.is_empty() {
-            last_line = line;
             last_line_no = line_no;
 
             match bc.parse_line(line) {
@@ -55,6 +52,8 @@ pub fn compile_sound_effect(
             }
         }
     }
+
+    bc.disable_channel();
 
     let out = match bc.get_bytecode() {
         Ok(out) => Some(out),
@@ -66,11 +65,10 @@ pub fn compile_sound_effect(
 
     // ::TODO move these checks into the Bytecode.get_bytecode()::
     let no_notes = bc.get_tick_counter().is_zero();
-    let no_disable_channel = last_line != DISABLE_CHANNEL_STR;
 
     let invalid_name = name.is_err();
 
-    let no_errors = !no_notes & !no_disable_channel && !invalid_name && errors.is_empty();
+    let no_errors = !no_notes && !invalid_name && errors.is_empty();
 
     if let (Ok(name), Some(out), true) = (name, out, no_errors) {
         Ok((name, out.to_vec()))
@@ -80,7 +78,6 @@ pub fn compile_sound_effect(
             sfx_line_no: starting_line_number,
             invalid_name,
             no_notes,
-            no_disable_channel,
             errors,
         })
     }
