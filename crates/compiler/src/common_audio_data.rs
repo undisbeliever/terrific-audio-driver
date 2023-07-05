@@ -4,15 +4,14 @@
 //
 // SPDX-License-Identifier: MIT
 
-use crate::data::UniqueNamesMappingsFile;
 use crate::driver_constants::{
     COMMON_DATA_BYTES_PER_DIR, COMMON_DATA_BYTES_PER_INSTRUMENTS,
     COMMON_DATA_BYTES_PER_SOUND_EFFECT, COMMON_DATA_HEADER_ADDR, COMMON_DATA_HEADER_SIZE,
     MAX_COMMON_DATA_SIZE, MAX_DIR_ITEMS, MAX_INSTRUMENTS, MAX_SOUND_EFFECTS,
 };
 use crate::errors::{CommonAudioDataError, CommonAudioDataErrors};
-use crate::samples::{build_sample_and_instrument_data, SampleAndInstrumentData};
-use crate::sound_effects::{compile_sound_effects_file, CompiledSoundEffects, SoundEffectsFile};
+use crate::samples::SampleAndInstrumentData;
+use crate::sound_effects::CompiledSoundEffects;
 
 pub fn build_common_audio_data(
     samples: &SampleAndInstrumentData,
@@ -48,7 +47,7 @@ pub fn build_common_audio_data(
     }
 
     if !errors.is_empty() {
-        return Err(errors);
+        return Err(CommonAudioDataErrors { errors });
     }
     let _disable_errors = errors;
 
@@ -107,25 +106,4 @@ pub fn build_common_audio_data(
     assert_eq!(out.len(), common_data_size);
 
     Ok(out)
-}
-
-pub fn compile_common_audio_data(
-    mappings: &UniqueNamesMappingsFile,
-    sfx_file: &SoundEffectsFile,
-) -> Result<Vec<u8>, CommonAudioDataErrors> {
-    let samples = build_sample_and_instrument_data(mappings);
-    let sound_effects = compile_sound_effects_file(sfx_file, mappings);
-
-    if let (Ok(samples), Ok(sound_effects)) = (&samples, &sound_effects) {
-        build_common_audio_data(samples, sound_effects)
-    } else {
-        let mut errors = Vec::new();
-        if let Err(e) = samples {
-            errors.push(CommonAudioDataError::SampleError(e));
-        }
-        if let Err(e) = sound_effects {
-            errors.push(CommonAudioDataError::SoundEffectError(e));
-        }
-        Err(errors)
-    }
 }

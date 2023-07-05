@@ -72,15 +72,20 @@ fn compile_common_data(args: CompileCommonDataArgs) {
     let mappings = load_mappings_file(args.json_file);
     let sfx_file = load_sfx_file(args.sfx_file);
 
-    let data = match compiler::compile_common_audio_data(&mappings, &sfx_file) {
+    let samples = compiler::build_sample_and_instrument_data(&mappings);
+    let sfx = compiler::compile_sound_effects_file(&sfx_file, &mappings);
+
+    let (samples, sfx) = match (samples, sfx) {
+        (Ok(samples), Ok(sfx)) => (samples, sfx),
+
+        (Err(e), Ok(_)) => error!("{:?}", e),
+        (Ok(_), Err(e)) => error!("{:?}", e),
+        (Err(e1), Err(e2)) => error!("{:?}\n\n{:?}", e1, e2),
+    };
+
+    let data = match compiler::build_common_audio_data(&samples, &sfx) {
         Ok(data) => data,
-        Err(errors) => {
-            eprintln!("Cannot compile common audio data");
-            for e in errors {
-                eprintln!("{}", e);
-            }
-            std::process::exit(1);
-        }
+        Err(e) => error!("{:?}", e),
     };
 
     write_data(args.output, data);

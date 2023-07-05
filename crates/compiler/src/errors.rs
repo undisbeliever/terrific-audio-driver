@@ -233,21 +233,15 @@ pub enum SampleError {
 }
 
 #[derive(Debug)]
-pub enum OtherSamplesError {
-    TooManyInstruments(usize),
-    TooManyBrrSamples(usize),
-    BrrDataOverflow(usize),
-    PitchTableError(PitchTableError),
+pub enum TaggedSampleError {
+    Instrument(usize, Name, SampleError),
 }
 
 #[derive(Debug)]
-pub struct SamplesErrors {
-    pub other_errors: Vec<OtherSamplesError>,
-    // Instrument index, SampleError
-    pub instrument_errors: Vec<(usize, SampleError)>,
+pub struct SampleAndInstrumentDataError {
+    pub sample_errors: Vec<TaggedSampleError>,
+    pub pitch_table_error: Option<PitchTableError>,
 }
-
-// ::TODO Do not use Display for sample errors::
 
 #[derive(Debug)]
 pub enum CommonAudioDataError {
@@ -255,11 +249,12 @@ pub enum CommonAudioDataError {
     TooManyBrrSamples(usize),
     TooManySoundEffects(usize),
     CommonAudioDataTooLarge(usize),
-    SampleError(SamplesErrors),
-    SoundEffectError(SoundEffectsFileError),
 }
 
-pub type CommonAudioDataErrors = Vec<CommonAudioDataError>;
+#[derive(Debug)]
+pub struct CommonAudioDataErrors {
+    pub errors: Vec<CommonAudioDataError>,
+}
 
 #[derive(Debug)]
 pub enum PitchError {
@@ -801,12 +796,6 @@ impl Display for SampleError {
     }
 }
 
-impl Display for SamplesErrors {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "error compiling instruments and samples")
-    }
-}
-
 impl Display for CommonAudioDataError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
@@ -826,8 +815,6 @@ impl Display for CommonAudioDataError {
                 "common audio data is too large ({} bytes, max: {})",
                 len, MAX_COMMON_DATA_SIZE
             ),
-            Self::SampleError(e) => e.fmt(f),
-            Self::SoundEffectError(e) => e.fmt(f),
         }
     }
 }

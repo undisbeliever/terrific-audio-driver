@@ -30,9 +30,10 @@ pub use envelope::{Adsr, Gain};
 pub use notes::{Note, Octave, STARTING_OCTAVE};
 
 pub use pitch_table::{build_pitch_table, PitchTable};
+pub use samples::{build_sample_and_instrument_data, SampleAndInstrumentData};
 
-pub use common_audio_data::{build_common_audio_data, compile_common_audio_data};
-pub use sound_effects::{sfx_file_from_string, SoundEffectsFile};
+pub use common_audio_data::build_common_audio_data;
+pub use sound_effects::{compile_sound_effects_file, sfx_file_from_string, SoundEffectsFile};
 
 pub use mml::parse_mml;
 pub use songs::song_data;

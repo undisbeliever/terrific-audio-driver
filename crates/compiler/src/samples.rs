@@ -7,9 +7,8 @@
 // ::TODO add pub(crate) to more things::
 
 use crate::data::{Instrument, UniqueNamesList, UniqueNamesMappingsFile};
-use crate::driver_constants::{MAX_DIR_ITEMS, MAX_INSTRUMENTS};
-use crate::errors::{OtherSamplesError, SampleError, SamplesErrors};
-use crate::pitch_table::{build_pitch_table, PitchTable};
+use crate::errors::{SampleAndInstrumentDataError, SampleError, TaggedSampleError};
+use crate::{build_pitch_table, PitchTable};
 
 use brr::{encode_brr, parse_brr_file, read_16_bit_mono_wave_file, BrrSample};
 
@@ -20,7 +19,6 @@ use std::io::Read;
 use std::path::{Path, PathBuf};
 
 const MAX_BRR_SAMPLE_LOAD: u64 = 16 * 1024;
-const MAX_BRR_SAMPLES: usize = 48 * 1024;
 
 // ::TODO add BRR file cache (for the GUI)::
 fn read_file_limited(filename: &Path, max_size: u64) -> Result<Vec<u8>, SampleError> {
@@ -120,14 +118,14 @@ fn load_sample_for_instrument(
 
 fn compile_samples(
     mappings: &UniqueNamesMappingsFile,
-) -> Result<Vec<BrrSample>, Vec<(usize, SampleError)>> {
+) -> Result<Vec<BrrSample>, Vec<TaggedSampleError>> {
     let mut out = Vec::new();
     let mut errors = Vec::new();
 
     for (i, inst) in mappings.instruments.list().iter().enumerate() {
         match load_sample_for_instrument(&mappings.parent_path, inst) {
             Ok(b) => out.push(b),
-            Err(e) => errors.push((i, e)),
+            Err(e) => errors.push(TaggedSampleError::Instrument(i, inst.name.clone(), e)),
         }
     }
 
@@ -145,7 +143,7 @@ struct EnvelopeSoA {
 
 fn envelope_soa(
     instruments: &UniqueNamesList<Instrument>,
-) -> Result<EnvelopeSoA, Vec<(usize, SampleError)>> {
+) -> Result<EnvelopeSoA, Vec<TaggedSampleError>> {
     let mut adsr1 = vec![0; instruments.len()];
     let mut adsr2_or_gain = vec![0; instruments.len()];
 
@@ -161,8 +159,16 @@ fn envelope_soa(
                 // adsr1 is 0 (no adsr)
                 adsr2_or_gain[i] = gain.value();
             }
-            (Some(_), Some(_)) => errors.push((i, SampleError::GainAndAdsr)),
-            (None, None) => errors.push((i, SampleError::NoGainOrAdsr)),
+            (Some(_), Some(_)) => errors.push(TaggedSampleError::Instrument(
+                i,
+                inst.name.clone(),
+                SampleError::GainAndAdsr,
+            )),
+            (None, None) => errors.push(TaggedSampleError::Instrument(
+                i,
+                inst.name.clone(),
+                SampleError::NoGainOrAdsr,
+            )),
         }
     }
 
@@ -233,9 +239,9 @@ fn build_brr_directroy(samples: Vec<BrrSample>) -> BrrDirectory {
 }
 
 pub struct SampleAndInstrumentData {
-    pub(crate) n_instruments: usize,
-
     pub(crate) pitch_table: PitchTable,
+
+    pub(crate) n_instruments: usize,
 
     // Instruments SoA
     // (pitchOffset is in pitch_table)
@@ -249,61 +255,49 @@ pub struct SampleAndInstrumentData {
 
 pub fn build_sample_and_instrument_data(
     mappings: &UniqueNamesMappingsFile,
-) -> Result<SampleAndInstrumentData, SamplesErrors> {
-    let mut other_errors = Vec::new();
-    let mut instrument_errors = Vec::new();
+) -> Result<SampleAndInstrumentData, SampleAndInstrumentDataError> {
+    let mut error = SampleAndInstrumentDataError {
+        sample_errors: Vec::new(),
+        pitch_table_error: None,
+    };
 
     let instruments = &mappings.instruments;
-
-    if instruments.len() > MAX_INSTRUMENTS {
-        other_errors.push(OtherSamplesError::TooManyInstruments(instruments.len()));
-    }
 
     let envelopes = match envelope_soa(instruments) {
         Ok(o) => Some(o),
         Err(e) => {
-            instrument_errors.extend(e);
-            None
-        }
-    };
-    let pitch_table = match build_pitch_table(instruments) {
-        Ok(o) => Some(o),
-        Err(e) => {
-            other_errors.push(OtherSamplesError::PitchTableError(e));
+            error.sample_errors.extend(e);
             None
         }
     };
     let samples = match compile_samples(mappings) {
         Ok(o) => Some(o),
         Err(e) => {
-            instrument_errors.extend(e);
+            error.sample_errors.extend(e);
+            None
+        }
+    };
+    let pitch_table = match build_pitch_table(instruments) {
+        Ok(o) => Some(o),
+        Err(e) => {
+            error.pitch_table_error = Some(e);
             None
         }
     };
 
-    if !instrument_errors.is_empty() {
-        return Err(SamplesErrors {
-            instrument_errors,
-            other_errors,
-        });
+    if !error.sample_errors.is_empty() {
+        return Err(error);
     }
     let samples = samples.unwrap();
 
     let brr = build_brr_directroy(samples);
 
-    if brr.brr_directory_offsets.len() > MAX_DIR_ITEMS {
-        other_errors.push(OtherSamplesError::TooManyBrrSamples(brr.brr_data.len()));
-    }
-    if brr.brr_data.len() > MAX_BRR_SAMPLES {
-        other_errors.push(OtherSamplesError::BrrDataOverflow(brr.brr_data.len()));
-    }
-
-    if instrument_errors.is_empty() && other_errors.is_empty() {
-        assert!(pitch_table.is_some());
+    if error.sample_errors.is_empty() && error.pitch_table_error.is_none() {
         let envelopes = envelopes.unwrap();
 
         Ok(SampleAndInstrumentData {
             n_instruments: instruments.len(),
+
             pitch_table: pitch_table.unwrap(),
 
             instruments_scrn: brr.instruments_scrn,
@@ -314,9 +308,6 @@ pub fn build_sample_and_instrument_data(
             brr_directory_offsets: brr.brr_directory_offsets,
         })
     } else {
-        Err(SamplesErrors {
-            instrument_errors,
-            other_errors,
-        })
+        Err(error)
     }
 }
