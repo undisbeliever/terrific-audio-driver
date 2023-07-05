@@ -138,7 +138,7 @@ fn combine_sound_effects(
                 sfx_offsets.push(sfx_data.len());
                 sfx_data.extend(s);
             }
-            None => missing.push(name.clone()),
+            None => missing.push(name.as_str().to_owned()),
         }
     }
 

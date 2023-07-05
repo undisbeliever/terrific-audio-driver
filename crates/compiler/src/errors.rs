@@ -214,7 +214,9 @@ pub enum SoundEffectsFileError {
     SoundEffectErrors(Vec<SoundEffectError>),
     // Line number, Name
     DuplicateSfxNamesInSfxFile(Vec<(u32, Name)>),
-    MissingSoundEffects(Vec<Name>),
+
+    // Using String so they can be joined with slice::join
+    MissingSoundEffects(Vec<String>),
 }
 
 #[derive(Debug)]
@@ -1051,6 +1053,114 @@ impl Display for SongError {
 // Indented Multiline Display
 // ==========================
 
+pub struct SoundEffectsFileErrorIndentedDisplay<'a>(&'a SoundEffectsFileError, &'a str);
+
+impl SoundEffectsFileError {
+    pub fn multiline_display<'a>(
+        &'a self,
+        file_name: &'a str,
+    ) -> SoundEffectsFileErrorIndentedDisplay {
+        SoundEffectsFileErrorIndentedDisplay(self, file_name)
+    }
+}
+
+#[rustfmt::skip::macros(writeln)]
+impl Display for SoundEffectsFileErrorIndentedDisplay<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        let error = self.0;
+        let file_name = self.1;
+
+        match error {
+            SoundEffectsFileError::SoundEffectErrors(errors) => {
+                for (i, e) in errors.iter().enumerate() {
+                    if i != 0 {
+                        writeln!(f)?;
+                    }
+                    fmt_indented_sound_effect_error(f, e, file_name)?;
+                }
+            }
+            SoundEffectsFileError::DuplicateSfxNamesInSfxFile(errors) => {
+                writeln!(f, "Error compiling sound effects")?;
+
+                for (line_no, name) in errors {
+                    writeln!(f, "  {}:{} duplicate name: {}", file_name, line_no, name)?;
+                }
+            }
+            SoundEffectsFileError::MissingSoundEffects(names) => {
+                writeln!(f, "Error compiling sound effects")?;
+
+                if names.len() == 1 {
+                    writeln!(f, "  missing 1 sound effect: {}", names[0])?;
+                } else {
+                    writeln!(f, "  missing {} sound effects: {}", names.len(), names.join(", "))?;
+                }
+            }
+        }
+
+        Ok(())
+    }
+}
+
+#[rustfmt::skip::macros(writeln)]
+fn fmt_indented_sound_effect_error(
+    f: &mut std::fmt::Formatter,
+    error: &SoundEffectError,
+    file_name: &str,
+) -> std::fmt::Result {
+    let line_no = error.sfx_line_no;
+
+    if !error.invalid_name {
+        writeln!(f, "Error compiling {} sound effect", error.sfx_name)?;
+    } else {
+        writeln!(f, "Error compiling sound effect")?;
+        writeln!(f, "  {}:{}: invalid name", file_name, line_no)?;
+    }
+
+    if error.no_notes {
+        writeln!(f, "  {}:{}: no notes in sound effect", file_name, line_no)?;
+    }
+
+    if error.no_disable_channel {
+        writeln!(f, "  {}:{}: no disable_channel instruction", file_name, line_no)?;
+    }
+
+    for e in &error.errors {
+        writeln!(f, "  {}:{}: {}", file_name, line_no + e.0, e.1)?;
+    }
+
+    Ok(())
+}
+
+pub struct SampleAndInstrumentDataErrorIndentedDisplay<'a>(&'a SampleAndInstrumentDataError);
+
+impl Display for SampleAndInstrumentDataErrorIndentedDisplay<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        let error = self.0;
+
+        writeln!(f, "Error compiling samples")?;
+
+        for e in &error.sample_errors {
+            match e {
+                TaggedSampleError::Instrument(i, n, e) => {
+                    writeln!(f, "  Instrument {} {}: {}", i, n, e)?
+                }
+            }
+        }
+
+        if let Some(e) = &error.pitch_table_error {
+            e.multiline_display().fmt(f)?;
+        }
+
+        Ok(())
+    }
+}
+
+impl SampleAndInstrumentDataError {
+    pub fn multiline_display(&self) -> SampleAndInstrumentDataErrorIndentedDisplay {
+        SampleAndInstrumentDataErrorIndentedDisplay(self)
+    }
+}
+
 pub struct PitchTableErrorIndentedDisplay<'a>(&'a PitchTableError);
 
 impl Display for PitchTableErrorIndentedDisplay<'_> {
@@ -1075,6 +1185,32 @@ impl Display for PitchTableErrorIndentedDisplay<'_> {
 impl PitchTableError {
     pub fn multiline_display(&self) -> PitchTableErrorIndentedDisplay {
         PitchTableErrorIndentedDisplay(self)
+    }
+}
+
+pub struct CommonAudioDataErrorsMultilineDisplay<'a>(&'a CommonAudioDataErrors);
+
+impl Display for CommonAudioDataErrorsMultilineDisplay<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        let errors = &self.0.errors;
+
+        if errors.len() == 1 {
+            writeln!(f, "Cannot compile common audio data: {}", errors[0])?;
+        }
+        else {
+            writeln!(f, "Cannot compile common audio data")?;
+            for e in errors {
+                writeln!(f, "  {}", e)?;
+            }
+        }
+
+        Ok(())
+    }
+}
+
+impl CommonAudioDataErrors {
+    pub fn multiline_display(&self) -> CommonAudioDataErrorsMultilineDisplay {
+        CommonAudioDataErrorsMultilineDisplay(self)
     }
 }
 

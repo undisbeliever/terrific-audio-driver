@@ -69,6 +69,8 @@ struct CompileCommonDataArgs {
 }
 
 fn compile_common_data(args: CompileCommonDataArgs) {
+    let file_name = file_name(&args.sfx_file);
+
     let mappings = load_mappings_file(args.json_file);
     let sfx_file = load_sfx_file(args.sfx_file);
 
@@ -78,14 +80,17 @@ fn compile_common_data(args: CompileCommonDataArgs) {
     let (samples, sfx) = match (samples, sfx) {
         (Ok(samples), Ok(sfx)) => (samples, sfx),
 
-        (Err(e), Ok(_)) => error!("{:?}", e),
-        (Ok(_), Err(e)) => error!("{:?}", e),
-        (Err(e1), Err(e2)) => error!("{:?}\n\n{:?}", e1, e2),
+        (Err(e), Ok(_)) => error!("{}", e.multiline_display()),
+        (Ok(_), Err(e)) => error!("{}", e.multiline_display(&file_name)),
+        (Err(e1), Err(e2)) => {
+            eprintln!("{}", e1.multiline_display());
+            error!("{}", e2.multiline_display(&file_name));
+        }
     };
 
     let data = match compiler::build_common_audio_data(&samples, &sfx) {
         Ok(data) => data,
-        Err(e) => error!("{:?}", e),
+        Err(e) => error!("{}", e.multiline_display()),
     };
 
     write_data(args.output, data);
