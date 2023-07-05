@@ -43,7 +43,7 @@ const _: () = assert!(
 
 const CHANNEL_NAMES: [&str; N_MUSIC_CHANNELS] = ["A", "B", "C", "D", "E", "F"];
 
-const MAX_BROKEN_CHORD_NOTES: usize = 128;
+pub const MAX_BROKEN_CHORD_NOTES: usize = 128;
 
 mod identifier {
     use super::data::Name;
@@ -1001,7 +1001,7 @@ impl MmlBytecodeGenerator<'_> {
             None => {
                 let inst = match self.instrument {
                     Some(index) => self.instrument_from_index(index)?,
-                    None => return Err(MmlCommandError::CannotCalculatePortamentoVelocity),
+                    None => return Err(MmlCommandError::PortamentoRequiresInstrument),
                 };
                 let p1: i32 = self
                     .pitch_table

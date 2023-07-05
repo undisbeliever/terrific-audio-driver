@@ -175,6 +175,9 @@ pub struct Octave(u8);
 pub const STARTING_OCTAVE: Octave = Octave(4);
 
 impl Octave {
+    pub const MIN: u8 = 0;
+    pub const MAX: u8 = LAST_OCTAVE;
+
     pub fn try_new(o: u32) -> Result<Self, ValueError> {
         if o <= LAST_OCTAVE.into() {
             Ok(Octave(o.try_into().unwrap()))

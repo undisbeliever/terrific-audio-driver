@@ -110,7 +110,7 @@ fn pitch_vec(
     for (i, inst) in instruments.list().iter().enumerate() {
         match instrument_pitch(i, inst) {
             Ok(ip) => out.push(ip),
-            Err(e) => errors.push((i, e)),
+            Err(e) => errors.push((i, inst.name.clone(), e)),
         }
     }
 

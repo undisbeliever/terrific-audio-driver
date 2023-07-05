@@ -258,11 +258,7 @@ impl BytecodeAssembler<'_, '_> {
         match velocity.chars().next() {
             Some('+') => 1,
             Some('-') => -1,
-            _ => {
-                return Err(BytecodeAssemblerError::InvalidPortamentoVelocity(
-                    velocity.to_owned(),
-                ))
-            }
+            _ => return Err(BytecodeAssemblerError::NoDirectionInPortamentoVelocity),
         };
         let velocity = PortamentoVelocity::try_from_str(velocity)?;
 

@@ -110,12 +110,12 @@ fn compile_song_data(args: CompileSongDataArgs) {
 
     let pitch_table = match build_pitch_table(&mappings.instruments) {
         Ok(pt) => pt,
-        Err(e) => error!("Cannot build pitch table\n{:?}", e),
+        Err(e) => error!("{}", e.multiline_display()),
     };
 
     let mml = match parse_mml(&mml_text, &mappings.instruments, &pitch_table) {
         Ok(mml) => mml,
-        Err(e) => error!("Cannot compile {}:\n{:?}", file_name, e),
+        Err(e) => error!("{}", e.multiline_display(&file_name)),
     };
 
     let data = match song_data(&mml) {

@@ -243,8 +243,8 @@ impl PlayNoteTicks {
 pub struct PortamentoVelocity(i16);
 
 impl PortamentoVelocity {
-    const MIN: i16 = -Self::MAX;
-    const MAX: i16 = u8::MAX as i16;
+    pub const MIN: i16 = -Self::MAX;
+    pub const MAX: i16 = u8::MAX as i16;
 
     pub fn is_negative(&self) -> bool {
         self.0 < 0
@@ -277,6 +277,9 @@ impl TryFrom<i32> for PortamentoVelocity {
 pub struct LoopCount(u8);
 
 impl LoopCount {
+    pub const MIN: u32 = 2;
+    pub const MAX: u32 = 0x100;
+
     pub fn to_u32(self) -> u32 {
         if self.0 == 0 {
             0x100
@@ -297,7 +300,7 @@ impl TryFrom<u32> for LoopCount {
     fn try_from(loop_count: u32) -> Result<Self, Self::Error> {
         if loop_count == 0x100 {
             Ok(LoopCount(0))
-        } else if loop_count < 2 {
+        } else if loop_count < Self::MIN {
             Err(ValueError::NotEnoughLoops)
         } else {
             match u8::try_from(loop_count) {

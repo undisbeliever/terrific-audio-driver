@@ -20,16 +20,18 @@ pub const DEFAULT_EDL: EchoEdl = EchoEdl(0);
 
 pub struct EchoLength(u8);
 
+impl EchoLength {
+    pub const MAX: u8 = (ECHO_BUFFER_EDL_MS * ECHO_BUFFER_MAX_EDL as u32) as u8;
+}
+
 impl TryFrom<u32> for EchoLength {
     type Error = ValueError;
 
     fn try_from(length_ms: u32) -> Result<Self, Self::Error> {
-        const MAX: u8 = (ECHO_BUFFER_EDL_MS * ECHO_BUFFER_MAX_EDL as u32) as u8;
-
         if length_ms % ECHO_BUFFER_EDL_MS != 0 {
             return Err(ValueError::EchoLengthNotMultiple);
         }
-        if length_ms > MAX.into() {
+        if length_ms > Self::MAX.into() {
             return Err(ValueError::EchoBufferTooLarge);
         }
 

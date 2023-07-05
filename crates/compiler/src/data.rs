@@ -219,7 +219,7 @@ where
         add_error(MappingListError::Empty);
     }
     if list.len() > max {
-        add_error(MappingListError::TooManyItems(list.len()));
+        add_error(MappingListError::TooManyItems(list.len(), max));
     }
 
     let mut map = HashMap::with_capacity(list.len());

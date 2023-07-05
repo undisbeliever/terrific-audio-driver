@@ -4,10 +4,24 @@
 //
 // SPDX-License-Identifier: MIT
 
+use crate::bytecode::{
+    BcTicksKeyOff, BcTicksNoKeyOff, LoopCount, Pan, PitchOffsetPerTick, PortamentoVelocity,
+    QuarterWavelengthInTicks, RelativePan, RelativeVolume, Volume, MAX_NESTED_LOOPS,
+};
 use crate::data::Name;
-use crate::mml;
-use crate::notes::Note;
-use crate::time::TickCounter;
+use crate::driver_constants::{
+    ECHO_BUFFER_EDL_MS, FIR_FILTER_SIZE, MAX_COMMON_DATA_SIZE, MAX_DIR_ITEMS, MAX_INSTRUMENTS,
+    MAX_SONG_DATA_SIZE, MAX_SOUND_EFFECTS, MAX_SUBROUTINES, PITCH_TABLE_SIZE,
+};
+use crate::echo::{EchoEdl, EchoLength};
+use crate::mml::{MAX_BROKEN_CHORD_NOTES, MAX_MML_TEXT_LENGTH};
+use crate::mml_command_parser::{
+    PortamentoSpeed, Quantization, Transpose, MAX_COARSE_VOLUME, MAX_RELATIVE_COARSE_VOLUME,
+    MIN_RELATIVE_COARSE_VOLUME,
+};
+use crate::notes::{MidiNote, Note};
+use crate::time::{Bpm, TickClock, TickCounter, ZenLen};
+use crate::{mml, Octave};
 
 use std::fmt::Display;
 use std::io;
@@ -29,7 +43,7 @@ pub enum DeserializeError {
 #[derive(Debug)]
 pub enum MappingListError {
     Empty,
-    TooManyItems(usize),
+    TooManyItems(usize, usize),
     DuplicateName(usize, String),
 }
 
@@ -109,7 +123,7 @@ pub enum ValueError {
     NotEnoughLoops,
     TooManyLoops,
 
-    MissingTickCount,
+    MissingNoteLengthTickCount,
     InvalidNoteLength,
     DotsNotAllowedAfterClockValue,
 
@@ -124,7 +138,6 @@ pub enum ValueError {
 
     NoName,
     NoBool,
-    NoNumber,
     NoNote,
     NoIncrementOrDecrement,
     NoVolume,
@@ -182,7 +195,7 @@ pub enum BytecodeAssemblerError {
     UnknownSubroutine(String),
 
     InvalidKeyoffArgument(String),
-    InvalidPortamentoVelocity(String),
+    NoDirectionInPortamentoVelocity,
 }
 
 #[derive(Debug)]
@@ -262,7 +275,7 @@ pub enum PitchError {
 pub enum PitchTableError {
     TooManyInstruments,
     TooManyPitches(usize),
-    InstrumentErrors(Vec<(usize, PitchError)>),
+    InstrumentErrors(Vec<(usize, Name, PitchError)>),
 }
 
 #[derive(Debug)]
@@ -340,16 +353,11 @@ pub enum MmlParserError {
     PortamentoRequiresTwoPitches,
     InvalidPortamentoDelay,
 
-    InvalidBrokenChordNoteLength { tie: bool },
-
     MissingNoteBeforeTie,
     MissingNoteBeforeSlur,
     CannotParseComma,
 
     InvalidPitchListSymbol,
-
-    NoteOutOfRange(Note, Note, Note),
-    NoInstrumentSet,
 }
 
 #[derive(Debug)]
@@ -369,7 +377,7 @@ pub enum MmlCommandError {
     MpDepthZero,
 
     PortamentoDelayTooLong,
-    CannotCalculatePortamentoVelocity,
+    PortamentoRequiresInstrument,
 
     NoNotesInBrokenChord,
     TooManyNotesInBrokenChord(usize),
@@ -387,11 +395,33 @@ pub struct MmlChannelError {
     pub command_errors: Vec<ErrorWithPos<MmlCommandError>>,
 }
 
+impl MmlChannelError {
+    fn n_errors(&self) -> usize {
+        self.parse_errors.len() + self.command_errors.len()
+    }
+}
+
 #[derive(Debug)]
 pub struct MmlCompileErrors {
     pub line_errors: Vec<ErrorWithLine<MmlLineError>>,
     pub subroutine_errors: Vec<MmlChannelError>,
     pub channel_errors: Vec<MmlChannelError>,
+}
+
+impl MmlCompileErrors {
+    fn n_errors(&self) -> usize {
+        self.line_errors.len()
+            + self
+                .subroutine_errors
+                .iter()
+                .map(MmlChannelError::n_errors)
+                .sum::<usize>()
+            + self
+                .channel_errors
+                .iter()
+                .map(MmlChannelError::n_errors)
+                .sum::<usize>()
+    }
 }
 
 #[derive(Debug)]
@@ -455,48 +485,671 @@ impl From<ValueError> for MmlCommandError {
 // =======
 
 impl Display for DeserializeError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
             Self::NoParentPath(filename) => {
-                write!(f, "Cannot load {}: No parent path", filename)
+                write!(f, "cannot load {}: no parent path", filename)
             }
-            Self::OpenError(filename, e) => write!(f, "Unable to open {}: {}", filename, e),
-            Self::SerdeError(filename, e) => write!(f, "Unable to read {}: {}", filename, e),
+            Self::OpenError(filename, e) => write!(f, "unable to open {}: {}", filename, e),
+            Self::SerdeError(filename, e) => write!(f, "unable to read {}: {}", filename, e),
+        }
+    }
+}
+
+fn fmt_mapping_list_error(
+    f: &mut std::fmt::Formatter,
+    e: &MappingListError,
+    list_type: &str,
+) -> std::fmt::Result {
+    match e {
+        MappingListError::Empty => write!(f, "no {}", list_type),
+        MappingListError::TooManyItems(len, max) => {
+            write!(f, "too many {} ({}, max {})", list_type, len, max)
+        }
+        MappingListError::DuplicateName(i, name) => {
+            write!(f, "duplicate {}: {}, {}", list_type, i, name)
+        }
+    }
+}
+
+impl Display for MappingError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            Self::Instrument(e) => fmt_mapping_list_error(f, e, "instrument"),
+            Self::SoundEffect(e) => fmt_mapping_list_error(f, e, "sound effect"),
         }
     }
 }
 
 impl Display for MappingsFileErrors {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        // ::TODO human readable error messages::
-        write!(f, "{:?}", self)
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{} errors in mappings file", self.0.len())
+    }
+}
+
+impl Display for InvalidAdsrError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "invalid adsr")?;
+
+        if self.valid_a {
+            write!(f, " attack")?;
+        }
+        if self.valid_d {
+            write!(f, " decay")?;
+        }
+        if self.valid_sl {
+            write!(f, " sustain-level")?;
+        }
+        if self.valid_sr {
+            write!(f, " sustain-rate")?;
+        }
+
+        write!(f, " values")
+    }
+}
+
+impl Display for InvalidGainError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            Self::InvalidGain(s) => write!(f, "invalid gain value: {}", s),
+        }
     }
 }
 
 impl Display for ValueError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        // ::TODO human readable error messages::
-        write!(f, "{:?}", self)
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        #[rustfmt::skip]
+        macro_rules! out_of_range {
+            ($name:literal, $newtype:ident) => {
+                write!(f, concat!($name, " out of bounds ({} - {})"), $newtype::MIN, $newtype::MAX)
+            };
+        }
+
+        match self {
+            Self::CannotParseUnsigned(s) => write!(f, "cannot parse unsigned number: {}", s),
+            Self::CannotParseSigned(s) => write!(f, "cannot parse signed number: {}", s),
+
+            Self::InvalidName(s) => write!(f, "invalid name: {}", s),
+
+            Self::AdsrNotFourValues => write!(f, "expected 4 adsr values"),
+            Self::InvalidAdsr(e) => e.fmt(f),
+            Self::InvalidGain(e) => e.fmt(f),
+
+            Self::InvalidNote => write!(f, "invalid note"),
+            Self::NoNoteOctave => write!(f, "no octave in note"),
+            Self::UnknownNotePitch(c) => write!(f, "invalid note pitch: {}", c),
+            Self::UnknownNoteCharacter(c) => write!(f, "invalid note character: {}", c),
+
+            Self::NoteOutOfRange => write!(f, "note out of range"),
+            Self::OctaveOutOfRange => out_of_range!("octave", Octave),
+
+            Self::BcTicksKeyOffOutOfRange => write!(
+                f,
+                "invalid tick count (expected {} - {})",
+                BcTicksKeyOff::MIN,
+                BcTicksKeyOff::MAX
+            ),
+            Self::BcTicksNoKeyOffOutOfRange => write!(
+                f,
+                "invalid tick count (expected {} - {})",
+                BcTicksNoKeyOff::MIN,
+                BcTicksNoKeyOff::MAX
+            ),
+
+            Self::PanOutOfRange => out_of_range!("pan", Pan),
+            Self::VolumeOutOfRange => out_of_range!("volume", Volume),
+            Self::CoarseVolumeOutOfRange => {
+                write!(f, "volume out of range ({} - {})", 0, MAX_COARSE_VOLUME)
+            }
+
+            Self::RelativePanOutOfRange => out_of_range!("relative pan", RelativePan),
+            Self::RelativeVolumeOutOfRange => out_of_range!("relative volume", RelativeVolume),
+            Self::RelativeCoarseVolumeOutOfRange => write!(
+                f,
+                "relative volume out of range ({} - {})",
+                MIN_RELATIVE_COARSE_VOLUME, MAX_RELATIVE_COARSE_VOLUME
+            ),
+
+            Self::PitchOffsetPerTickOutOfRange => {
+                out_of_range!("pitch offset per tick", PitchOffsetPerTick)
+            }
+            Self::QuarterWavelengthOutOfRange => {
+                out_of_range!("quarter wavelength", QuarterWavelengthInTicks)
+            }
+
+            Self::PortamentoVelocityZero => write!(f, "portamento velocity cannot be 0"),
+            Self::PortamentoVelocityOutOfRange => {
+                out_of_range!("portamento velocity", PortamentoVelocity)
+            }
+
+            Self::QuantizeOutOfRange => out_of_range!("quantization", Quantization),
+            Self::TransposeOutOfRange => out_of_range!("transpose", Transpose),
+
+            Self::PortamentoSpeedOutOfRange => out_of_range!("portamento speed", PortamentoSpeed),
+
+            Self::ZenLenOutOfRange => out_of_range!("zenlen", ZenLen),
+            Self::TickClockOutOfRange => out_of_range!("tick clock", TickClock),
+            Self::BpmOutOfRange => out_of_range!("bpm", Bpm),
+
+            Self::MidiNoteNumberOutOfRange => out_of_range!("MIDI note number", MidiNote),
+            Self::CannotConvertMidiNote => {
+                write!(f, "cannot convert MIDI note to audio-driver note")
+            }
+
+            Self::InvalidMmlBool => write!(f, "cannot parse bool, expected a 0 or a 1"),
+
+            Self::NotEnoughLoops => write!(f, "not enough loops (min: {})", LoopCount::MIN),
+            Self::TooManyLoops => write!(f, "too many loops (max: {})", LoopCount::MAX),
+
+            Self::MissingNoteLengthTickCount => write!(f, "missing tick count in note length"),
+            Self::InvalidNoteLength => write!(f, "invalid note length"),
+            Self::DotsNotAllowedAfterClockValue => {
+                write!(f, "dots not allowed after a tick count length")
+            }
+            Self::CannotConvertBpmToTickClock => write!(f, "cannot convert bpm to tick clock"),
+
+            Self::EchoEdlOutOfRange => out_of_range!("echo EDL", EchoEdl),
+            Self::EchoLengthNotMultiple => write!(
+                f,
+                "echo length is not a multiple of {}ms",
+                ECHO_BUFFER_EDL_MS
+            ),
+            Self::EchoBufferTooLarge => {
+                write!(f, "echo buffer too large (max {}ms)", EchoLength::MAX)
+            }
+
+            Self::InvalidFirFilterSize => {
+                write!(f, "expected {} FIR filter values", FIR_FILTER_SIZE)
+            }
+            Self::InvalidFirFilter => write!(
+                f,
+                "invalid FIR filter (all {} values must be between {} - {})",
+                FIR_FILTER_SIZE,
+                i8::MIN,
+                i8::MAX
+            ),
+
+            Self::NoName => write!(f, "no name"),
+            Self::NoBool => write!(f, "no bool"),
+            Self::NoNote => write!(f, "no note"),
+            Self::NoIncrementOrDecrement => {
+                write!(f, "cannot parse relative value: expected a + or -")
+            }
+            Self::NoVolume => write!(f, "no volume"),
+            Self::NoPan => write!(f, "no pan"),
+            Self::NoOctave => write!(f, "no octave"),
+            Self::NoZenLen => write!(f, "no zenlen value"),
+            Self::NoTranspose => write!(f, "no transpose value"),
+            Self::NoLoopCount => write!(f, "no loop count"),
+            Self::NoQuantize => write!(f, "no quantization value"),
+            Self::NoTickClock => write!(f, "no tick clock"),
+            Self::NoBpm => write!(f, "no tempo bpm"),
+            Self::NoMidiNote => write!(f, "no MIDI note number"),
+            Self::NoPortamentoSpeed => write!(f, "no portamento speed"),
+            Self::NoPortamentoVelocity => write!(f, "no portamento velocity"),
+            Self::NoMpDepth => write!(f, "no MP depth"),
+            Self::NoPitchOffsetPerTick => write!(f, "no pitch-offset-per-tick"),
+            Self::NoVibratoDepth => write!(f, "no vibrato depth"),
+            Self::NoCommaQuarterWavelength => {
+                write!(f, "cannot parse quarter-wavelength, expected a comma ','")
+            }
+            Self::NoQuarterWavelength => write!(f, "no quarter-wavelength"),
+            Self::NoEchoEdl => write!(f, "no echo EDL"),
+        }
+    }
+}
+
+impl Display for BytecodeError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            Self::OpenLoopStack(len) => write!(f, "loop stack not empty ({} open loops)", len),
+            Self::NotInALoop => write!(f, "not in a loop"),
+            Self::MissingLoopCount => write!(f, "missing loop count"),
+            Self::CannotHaveLoopCountAtStartAndEndLoop => {
+                write!(f, "cannot have a loop count at the start and end of a loop")
+            }
+            Self::TooManyLoops => write!(f, "too many nested loops (max: {})", MAX_NESTED_LOOPS),
+            Self::TooManyLoopsInSubroutineCall => write!(f, "too many loops in subroutine call"),
+            Self::MultipleSkipLastLoopInstructions => {
+                write!(f, "multiple skip_last_loop instructions in a single loop")
+            }
+            Self::NoTicksBeforeSkipLastLoop => {
+                write!(f, "no ticks before skip_last_loop instruction")
+            }
+            Self::NoTicksAfterSkipLastLoop => {
+                write!(f, "no ticks after skip_last_loop instruction")
+            }
+            Self::NoTicksInLoop => write!(f, "no ticks in loop"),
+            Self::SkipLastLoopOutOfBounds(to_skip) => {
+                write!(
+                    f,
+                    "skip_last_loop out of bounds ({}, max: {}",
+                    to_skip,
+                    u8::MAX
+                )
+            }
+
+            Self::SubroutineCallInSubroutine => write!(f, "cannot call subroutine in a subroutine"),
+            Self::ReturnInNonSubroutine => {
+                write!(f, "return_from_subroutine instruction in a non-subroutine")
+            }
+
+            Self::CannotChangeTickClockInASoundEffect => {
+                write!(f, "cannot change tick clock in a sound effect")
+            }
+        }
     }
 }
 
 impl Display for BytecodeAssemblerError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        // ::TODO human readable error messages::
-        write!(f, "{:?}", self)
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            Self::BytecodeError(e) => e.fmt(f),
+            Self::ArgumentError(e) => e.fmt(f),
+
+            Self::UnknownInstruction(s) => write!(f, "unknown instruction {}", s),
+
+            Self::InvalidNumberOfArguments(n) => write!(f, "expected {} arguments", n),
+            Self::InvalidNumberOfArgumentsRange(min, max) => {
+                write!(f, "expected {} - {} arguments", min, max)
+            }
+
+            Self::UnknownInstrument(s) => write!(f, "cannot find instrument: {}", s),
+            Self::UnknownSubroutine(s) => write!(f, "cannot find subroutine: {}", s),
+
+            Self::InvalidKeyoffArgument(s) => write!(f, "invalid keyoff argument: {}", s),
+            Self::NoDirectionInPortamentoVelocity => {
+                write!(f, "missing + or - in portamento velocity")
+            }
+        }
+    }
+}
+
+impl Display for SoundEffectError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "error compiling {}", self.sfx_name)
+    }
+}
+
+impl Display for SoundEffectsFileError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "error compiling sound effects file")
+    }
+}
+
+impl Display for SampleError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            Self::IoError(p, e) => write!(f, "cannot read {}: {}", p.display(), e),
+            Self::UnknownFileType(p) => write!(f, "unknown file type: {}", p.display()),
+            Self::WaveFileError(p, e) => write!(f, "error loading {}: {}", p.display(), e),
+            Self::BrrEncodeError(p, e) => write!(f, "error encoding {}: {}", p.display(), e),
+            Self::BrrParseError(p, e) => write!(f, "error loading {}: {}", p.display(), e),
+            Self::FileTooLarge(p) => write!(f, "file too large: {}", p.display()),
+            Self::CannotUseDupeBlockHackOnBrrFiles => {
+                write!(f, "cannot use dupe_block_hack on .brr files")
+            }
+            Self::LoopingFlagMismatch { brr_looping } => write!(
+                f,
+                "looping flag in BRR ({}) does not match JSON ({})",
+                brr_looping, !brr_looping
+            ),
+
+            Self::GainAndAdsr => write!(f, "cannot use adsr and gain at the same time"),
+            Self::NoGainOrAdsr => write!(f, "no adsr or gain"),
+        }
+    }
+}
+
+impl Display for SamplesErrors {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "error compiling instruments and samples")
     }
 }
 
 impl Display for CommonAudioDataError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        // ::TODO human readable error messages::
-        write!(f, "{:?}", self)
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            Self::TooManyInstruments(len) => {
+                write!(f, "too many instruments ({}, max: {}", len, MAX_INSTRUMENTS)
+            }
+            Self::TooManySamples(len) => {
+                write!(f, "too many samples ({}, max: {})", len, MAX_DIR_ITEMS)
+            }
+            Self::TooManySoundEffects(len) => write!(
+                f,
+                "too many sound effects ({}, max: {})",
+                len, MAX_SOUND_EFFECTS
+            ),
+            Self::CommonAudioDataTooLarge(len) => write!(
+                f,
+                "common audio data is too large ({} bytes, max: {})",
+                len, MAX_COMMON_DATA_SIZE
+            ),
+            Self::SampleError(e) => e.fmt(f),
+            Self::SoundEffectError(e) => e.fmt(f),
+        }
+    }
+}
+
+impl Display for PitchError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            Self::SampleRateTooHigh => write!(f, "sample rate too high"),
+            Self::SampleRateTooLow => write!(f, "sample rate too low"),
+            Self::FirstOctaveGreaterThanLastOctave => {
+                write!(f, "first octave must be <= last octave")
+            }
+            Self::FirstOctaveTooLow(by) => write!(f, "first octave too low (by {} octaves)", by),
+            Self::LastOctaveTooHigh(by) => write!(f, "last octave too high (by {} octaves)", by),
+            Self::FirstOctaveTooLowLastOctaveTooHigh(fo_by, lo_by) => write!(
+                f,
+                "first octave too low (by {}) and last octave too high (by {} octaves)",
+                fo_by, lo_by
+            ),
+        }
+    }
+}
+
+impl Display for PitchTableError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "error building pitch table")
+    }
+}
+
+impl Display for IdentifierError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            Self::Empty => write!(f, "no identifier"),
+            Self::InvalidName(s) => write!(f, "invalid name: {s}"),
+            Self::InvalidNumber(s) => write!(f, "identifier is not a number: {s}"),
+        }
+    }
+}
+
+impl Display for MmlLineError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            Self::ValueError(e) => e.fmt(f),
+
+            Self::MmlTooLarge(len) => writeln!(
+                f,
+                ": MML file too large ({} bytes, max {})",
+                len, MAX_MML_TEXT_LENGTH
+            ),
+            Self::TooManySubroutines(len) => writeln!(
+                f,
+                ": too many subroutines ({}, max {})",
+                len, MAX_SUBROUTINES
+            ),
+
+            Self::NoIdentifier(c) => writeln!(f, "missing identifier after {}", c),
+            Self::InvalidIdentifier(e) => e.fmt(f),
+            Self::UnknownChannel(name) => writeln!(f, "unknown channels {}", name),
+            Self::MissingInstrumentText => writeln!(f, "missing instrument"),
+            Self::MissingSubroutineText => writeln!(f, "missing subroutine"),
+            Self::MissingChannelText => writeln!(f, "no MML"),
+            Self::CannotParseLine => writeln!(f, "cannot parse line"),
+
+            Self::NoHeader => write!(f, "no header name"),
+            Self::NoValue => write!(f, "no header value"),
+            Self::DuplicateHeader(name) => write!(f, "duplicate header: {}", name),
+
+            Self::InvalidEchoFeedback => write!(f, "invalid echo feedback"),
+            Self::InvalidEchoVolume => write!(f, "invalid echo volume"),
+            Self::CannotSetTempo => write!(f, "tick clock already set by #Timer"),
+            Self::CannotSetTimer => write!(f, "tick clock already set by #Tempo"),
+
+            Self::NoInstrument => write!(f, "no instrument"),
+            Self::CannotFindInstrument(name) => write!(f, "cannot find instrument: {}", name),
+            Self::ExpectedFourAdsrArguments => write!(f, "adsr requires 4 arguments"),
+            Self::InvalidAdsr(e) => e.fmt(f),
+            Self::ExpectedOneGainArgument => write!(f, "gain requires 1 argument"),
+            Self::InvalidGain(e) => e.fmt(f),
+            Self::UnknownInstrumentArgument(s) => write!(f, "unknown instrument argument: {}", s),
+            Self::DuplicateInstrumentName(s) => write!(f, "duplicate instrument name: {}", s),
+        }
+    }
+}
+
+impl Display for MmlParserError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            Self::ValueError(e) => e.fmt(f),
+
+            Self::TooManyAccidentals => write!(f, "too many accidentals"),
+            Self::TooManyDotsInNoteLength => write!(f, "too many dots in note length"),
+
+            Self::UnknownCharacters(n) => write!(f, "{} unknown characters", n),
+
+            Self::InvalidNote => write!(f, "invalid note"),
+
+            Self::NoSubroutine => write!(f, "no subroutine"),
+            Self::NoInstrument => write!(f, "no instrument"),
+            Self::CannotCallSubroutineInASubroutine => {
+                write!(f, "cannot call subroutine in a subroutine")
+            }
+
+            Self::CannotFindSubroutine(name) => write!(f, "cannot find subroutine: {}", name),
+
+            Self::NoStartBrokenChord => write!(f, "not in a broken chord (no `{{{{`)"),
+            Self::NoStartPortamento => write!(f, "not in a portamento (no `{{)`"),
+
+            Self::MissingEndBrokenChord => write!(f, "cannot find broken chord end (no `}}}}`)"),
+            Self::MissingEndPortamento => write!(f, "cannot find portamento end (no `}}`)"),
+
+            Self::PortamentoRequiresTwoPitches => write!(f, "portamento requires too pitches"),
+            Self::InvalidPortamentoDelay => {
+                write!(f, "portamento delay must be < portamento length")
+            }
+
+            Self::MissingNoteBeforeTie => write!(f, "missing note before tie"),
+            Self::MissingNoteBeforeSlur => write!(f, "missing note before slur"),
+            Self::CannotParseComma => write!(f, "cannot parse comma"),
+
+            Self::InvalidPitchListSymbol => write!(f, "invalid pitch list symbol"),
+        }
+    }
+}
+
+impl Display for MmlCommandError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            Self::BytecodeError(e) => e.fmt(f),
+            Self::ValueError(e) => e.fmt(f),
+
+            Self::NoteOutOfRange(n, min, max) => {
+                write!(
+                    f,
+                    "note out of range ({}, {} - {})",
+                    n.note_id(),
+                    min.note_id(),
+                    max.note_id()
+                )
+            }
+            Self::CannotPlayNoteBeforeSettingInstrument => {
+                write!(f, "cannot play note before setting an instrument")
+            }
+
+            Self::LoopPointAlreadySet => write!(f, "loop point already set"),
+            Self::CannotFindSubroutine => write!(f, "cannot find subroutine"),
+            Self::CannotFindInstrument => write!(f, "cannot find instrument"),
+            Self::CannotCallSubroutineTooManyNestedLoops(name, loops) => {
+                write!(
+                    f,
+                    "cannot call subroutine {}, too many nested loops ({} required, max {})",
+                    name.as_str(),
+                    loops,
+                    MAX_NESTED_LOOPS
+                )
+            }
+            Self::CannotUseMpWithoutInstrument => {
+                write!(f, "cannot use MP vibrato without setting an instrument")
+            }
+            Self::MpPitchOffsetTooLarge(po) => {
+                write!(
+                    f,
+                    "cannot MP vibrato note.  Pitch offset per tick too large ({}, max: {})",
+                    po,
+                    PitchOffsetPerTick::MAX
+                )
+            }
+            Self::MpDepthZero => write!(f, "MP vibrato depth cannot be 0"),
+
+            Self::PortamentoDelayTooLong => write!(f, "portamento delay too long"),
+            Self::PortamentoRequiresInstrument => {
+                write!(
+                    f,
+                    "cannot calculate portamento velocity without setting instrument"
+                )
+            }
+
+            Self::NoNotesInBrokenChord => write!(f, "no notes in broken chord"),
+            Self::TooManyNotesInBrokenChord(len) => {
+                write!(
+                    f,
+                    "too many notes in broken chord ({}, max {})",
+                    len, MAX_BROKEN_CHORD_NOTES
+                )
+            }
+            Self::BrokenChordTotalLengthTooShort => {
+                write!(
+                    f,
+                    "broken chord total length too short (a minimum of {} loops are required)",
+                    LoopCount::MIN
+                )
+            }
+
+            Self::BrokenChordTickCountMismatch(tc1, tc2) => {
+                write!(
+                    f,
+                    "broken chord tick count mismatch ({} != {})",
+                    tc1.value(),
+                    tc2.value()
+                )
+            }
+
+            Self::NoTicksAfterLoopPoint => write!(f, "no notes or rests after loop point"),
+        }
+    }
+}
+
+impl Display for MmlCompileErrors {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{} errors compiling mml", self.n_errors())
     }
 }
 
 impl Display for SongError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        // ::TODO human readable error messages::
-        write!(f, "{:?}", self)
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            Self::NoMusicChannels => write!(f, "no music channels"),
+            Self::InvalidMmlData => write!(f, "invalid MmlData"),
+            Self::SongIsTooLarge(len) => {
+                write!(
+                    f,
+                    "song is too large ({} bytes, max {})",
+                    len, MAX_SONG_DATA_SIZE
+                )
+            }
+            Self::InvalidHeaderSize => write!(f, "invalid header size"),
+
+            Self::DataSizeMismatch(len1, len2) => {
+                write!(f, "data size mismatch ({} != {})", len1, len2)
+            }
+        }
     }
+}
+
+// Indented Multiline Display
+// ==========================
+
+pub struct PitchTableErrorIndentedDisplay<'a>(&'a PitchTableError);
+
+impl Display for PitchTableErrorIndentedDisplay<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        writeln!(f, "Cannot build pitch table")?;
+
+        match self.0 {
+            PitchTableError::TooManyInstruments => writeln!(f, "  too many instruments"),
+            PitchTableError::TooManyPitches(len) => {
+                writeln!(f, "  too many pitches ({}, max {})", len, PITCH_TABLE_SIZE)
+            }
+            PitchTableError::InstrumentErrors(errors) => {
+                for (i, name, e) in errors {
+                    writeln!(f, "  Instrument {} {}: {}", i, name, e)?;
+                }
+                Ok(())
+            }
+        }
+    }
+}
+
+impl PitchTableError {
+    pub fn multiline_display(&self) -> PitchTableErrorIndentedDisplay {
+        PitchTableErrorIndentedDisplay(self)
+    }
+}
+
+pub struct MmlCompileErrorsIndentedDisplay<'a>(&'a MmlCompileErrors, &'a str);
+
+impl MmlCompileErrors {
+    pub fn multiline_display<'a>(&'a self, file_name: &'a str) -> MmlCompileErrorsIndentedDisplay {
+        MmlCompileErrorsIndentedDisplay(self, file_name)
+    }
+}
+
+impl Display for MmlCompileErrorsIndentedDisplay<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        let error = self.0;
+        let file_name = self.1;
+
+        let n_errors = error.n_errors();
+        if n_errors == 1 {
+            writeln!(f, "1 error compiling {}", file_name)?;
+        } else {
+            writeln!(f, "{} errors compiling {}", n_errors, file_name)?;
+        }
+
+        for e in &error.line_errors {
+            writeln!(f, "  {}:{} {}", file_name, e.0, e.1)?;
+        }
+        for e in &error.subroutine_errors {
+            fmt_indented_channel_errors(f, e, file_name, true)?;
+        }
+        for e in &error.channel_errors {
+            fmt_indented_channel_errors(f, e, file_name, false)?;
+        }
+        Ok(())
+    }
+}
+
+#[rustfmt::skip::macros(writeln)]
+fn fmt_indented_channel_errors(
+    f: &mut std::fmt::Formatter,
+    error: &MmlChannelError,
+    file_name: &str,
+    is_subroutine: bool,
+) -> std::fmt::Result {
+    let n_errors = error.n_errors();
+    if n_errors == 1 {
+        write!(f, "  1 error in ")?;
+    } else {
+        write!(f, "  {} errors in ", n_errors)?;
+    }
+
+    if is_subroutine {
+        writeln!(f, "subroutine !{}", error.identifier.as_str())?;
+    } else {
+        writeln!(f, "channel {}", error.identifier.as_str())?;
+    }
+
+    for e in &error.parse_errors {
+        writeln!(f, "    {}:{}:{}: {}", file_name, e.0.line_number, e.0.line_char, e.1)?;
+    }
+    for e in &error.command_errors {
+        writeln!(f, "    {}:{}:{}: {}", file_name, e.0.line_number, e.0.line_char, e.1)?;
+    }
+
+    Ok(())
 }

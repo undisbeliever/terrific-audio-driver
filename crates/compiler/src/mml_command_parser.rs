@@ -21,6 +21,8 @@ pub const MAX_MML_TEXT_LENGTH: usize = 512 * 1024;
 
 pub const MAX_COARSE_VOLUME: u32 = 16;
 pub const COARSE_VOLUME_MULTIPLIER: u8 = 16;
+pub const MIN_RELATIVE_COARSE_VOLUME: i8 = i8::MIN / COARSE_VOLUME_MULTIPLIER as i8;
+pub const MAX_RELATIVE_COARSE_VOLUME: i8 = i8::MAX / COARSE_VOLUME_MULTIPLIER as i8;
 
 u8_value_newtype!(
     PortamentoSpeed,
@@ -1309,11 +1311,8 @@ impl MmlParser<'_> {
             Some(nl) => match self.calculate_note_length(nl) {
                 Ok(ticks) => match PlayNoteTicks::try_from_is_slur(ticks.value(), tie) {
                     Ok(t) => t,
-                    Err(_) => {
-                        return Err(ErrorWithPos(
-                            note_length_pos,
-                            MmlParserError::InvalidBrokenChordNoteLength { tie },
-                        ))
+                    Err(e) => {
+                        return Err(ErrorWithPos(note_length_pos, MmlParserError::ValueError(e)))
                     }
                 },
                 Err(e) => return Err(ErrorWithPos(note_length_pos, e)),

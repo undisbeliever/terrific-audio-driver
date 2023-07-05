@@ -113,7 +113,7 @@ impl MmlLength {
         let ticks = if self.length_in_ticks {
             let ticks = match self.length {
                 Some(l) => l,
-                None => return Err(ValueError::MissingTickCount),
+                None => return Err(ValueError::MissingNoteLengthTickCount),
             };
             if self.number_of_dots != 0 {
                 return Err(ValueError::DotsNotAllowedAfterClockValue);
