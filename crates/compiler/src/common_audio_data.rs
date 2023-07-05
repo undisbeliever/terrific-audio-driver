@@ -8,7 +8,7 @@ use crate::data::UniqueNamesMappingsFile;
 use crate::driver_constants::{
     COMMON_DATA_BYTES_PER_DIR, COMMON_DATA_BYTES_PER_INSTRUMENTS,
     COMMON_DATA_BYTES_PER_SOUND_EFFECT, COMMON_DATA_HEADER_ADDR, COMMON_DATA_HEADER_SIZE,
-    MAX_COMMON_DATA_SIZE, MAX_INSTRUMENTS, MAX_SOUND_EFFECTS,
+    MAX_COMMON_DATA_SIZE, MAX_DIR_ITEMS, MAX_INSTRUMENTS, MAX_SOUND_EFFECTS,
 };
 use crate::errors::{CommonAudioDataError, CommonAudioDataErrors};
 use crate::samples::{build_sample_and_instrument_data, SampleAndInstrumentData};
@@ -27,8 +27,8 @@ pub fn build_common_audio_data(
     if n_instruments > MAX_INSTRUMENTS {
         errors.push(CommonAudioDataError::TooManyInstruments(n_instruments));
     }
-    if n_dir_items > MAX_INSTRUMENTS {
-        errors.push(CommonAudioDataError::TooManySamples(n_dir_items));
+    if n_dir_items > MAX_DIR_ITEMS {
+        errors.push(CommonAudioDataError::TooManyBrrSamples(n_dir_items));
     }
     if n_sound_effects > MAX_SOUND_EFFECTS {
         errors.push(CommonAudioDataError::TooManySoundEffects(n_sound_effects));

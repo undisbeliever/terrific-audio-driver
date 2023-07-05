@@ -252,7 +252,7 @@ pub struct SamplesErrors {
 #[derive(Debug)]
 pub enum CommonAudioDataError {
     TooManyInstruments(usize),
-    TooManySamples(usize),
+    TooManyBrrSamples(usize),
     TooManySoundEffects(usize),
     CommonAudioDataTooLarge(usize),
     SampleError(SamplesErrors),
@@ -813,8 +813,8 @@ impl Display for CommonAudioDataError {
             Self::TooManyInstruments(len) => {
                 write!(f, "too many instruments ({}, max: {}", len, MAX_INSTRUMENTS)
             }
-            Self::TooManySamples(len) => {
-                write!(f, "too many samples ({}, max: {})", len, MAX_DIR_ITEMS)
+            Self::TooManyBrrSamples(len) => {
+                write!(f, "too many BRR samples ({}, max: {})", len, MAX_DIR_ITEMS)
             }
             Self::TooManySoundEffects(len) => write!(
                 f,
