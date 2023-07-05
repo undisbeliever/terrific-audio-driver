@@ -221,7 +221,7 @@ pub enum SoundEffectsFileError {
 pub enum SampleError {
     IoError(PathBuf, io::Error),
     UnknownFileType(PathBuf),
-    WaveFileError(PathBuf, brr::Error),
+    WaveFileError(PathBuf, brr::WavError),
     BrrEncodeError(PathBuf, brr::EncodeError),
     BrrParseError(PathBuf, brr::ParseError),
     FileTooLarge(PathBuf),

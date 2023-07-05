@@ -14,7 +14,7 @@ pub struct MonoPcm16WaveFile {
 }
 
 #[derive(Debug)]
-pub enum Error {
+pub enum WavError {
     NotAWaveFile,
     WaveFileTooLarge,
     NotAPcmWaveFile,
@@ -27,25 +27,27 @@ pub enum Error {
     IoError(io::Error),
 }
 
-impl Display for Error {
+impl Display for WavError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Error::NotAWaveFile => write!(f, "not a .wav file"),
-            Error::WaveFileTooLarge => write!(f, "wave file is too large"),
-            Error::NotAPcmWaveFile => write!(f, "not a PCM (uncompressed) wave file"),
-            Error::NoSamples => write!(f, "wave file is empty (no samples)"),
+            WavError::NotAWaveFile => write!(f, "not a .wav file"),
+            WavError::WaveFileTooLarge => write!(f, "wave file is too large"),
+            WavError::NotAPcmWaveFile => write!(f, "not a PCM (uncompressed) wave file"),
+            WavError::NoSamples => write!(f, "wave file is empty (no samples)"),
 
-            Error::NotA16BitMonoWav => write!(f, "not a 16-bit mono PCM wave file"),
+            WavError::NotA16BitMonoWav => write!(f, "not a 16-bit mono PCM wave file"),
 
-            Error::InvalidWaveFile => write!(f, "invalid wave file"),
-            Error::InvaidDataChunkSize => write!(f, "invalid wave file: invalid data chunk size"),
+            WavError::InvalidWaveFile => write!(f, "invalid wave file"),
+            WavError::InvaidDataChunkSize => {
+                write!(f, "invalid wave file: invalid data chunk size")
+            }
 
-            Error::IoError(io_error) => io_error.fmt(f),
+            WavError::IoError(io_error) => io_error.fmt(f),
         }
     }
 }
 
-impl From<std::io::Error> for Error {
+impl From<std::io::Error> for WavError {
     fn from(e: io::Error) -> Self {
         Self::IoError(e)
     }
@@ -75,11 +77,11 @@ const WAVE_ID: [u8; 4] = [b'W', b'A', b'V', b'E'];
 const FMT_CHUNK_ID: [u8; 4] = [b'f', b'm', b't', b' '];
 const DATA_CHUNK_ID: [u8; 4] = [b'd', b'a', b't', b'a'];
 
-fn parse_fmt_chunk(data: &[u8]) -> Result<FmtChunk, Error> {
+fn parse_fmt_chunk(data: &[u8]) -> Result<FmtChunk, WavError> {
     // There are different versions of fmt chunk.
     if data.len() < 16 {
         // Invalid fmt chunk
-        return Err(Error::InvalidWaveFile);
+        return Err(WavError::InvalidWaveFile);
     }
 
     let read_u16 = |o: usize| -> u16 { u16::from_le_bytes([data[o], data[o + 1]]) };
@@ -112,15 +114,15 @@ fn read_four_bytes(reader: &mut impl io::Read) -> io::Result<[u8; 4]> {
 fn read_wave_file(
     reader: &mut (impl io::Read + io::Seek),
     max_data_size: usize,
-) -> Result<WaveFile, Error> {
+) -> Result<WaveFile, WavError> {
     if read_four_bytes(reader)? != WAVE_CHUNK_ID {
-        return Err(Error::NotAWaveFile);
+        return Err(WavError::NotAWaveFile);
     }
 
     let _file_size = read_four_bytes(reader)?;
 
     if read_four_bytes(reader)? != WAVE_ID {
-        return Err(Error::NotAWaveFile);
+        return Err(WavError::NotAWaveFile);
     }
 
     // fmt chunk is always after WAVE chunk
@@ -129,12 +131,12 @@ fn read_wave_file(
         let chunk_size = u32::from_le_bytes(read_four_bytes(reader)?);
 
         if chunk_id != FMT_CHUNK_ID {
-            return Err(Error::InvalidWaveFile);
+            return Err(WavError::InvalidWaveFile);
         }
 
         // This should not happen
         if chunk_size >= 100 {
-            return Err(Error::InvalidWaveFile);
+            return Err(WavError::InvalidWaveFile);
         }
 
         let chunk_data = {
@@ -145,7 +147,7 @@ fn read_wave_file(
         let fmt = parse_fmt_chunk(chunk_data.as_slice())?;
 
         if fmt.format_tag != WAV_FORMAT_PCM_FORMAT {
-            return Err(Error::NotAPcmWaveFile);
+            return Err(WavError::NotAPcmWaveFile);
         }
 
         fmt
@@ -163,7 +165,7 @@ fn read_wave_file(
         }
 
         if n != chunk_id.len() {
-            return Err(Error::InvalidWaveFile);
+            return Err(WavError::InvalidWaveFile);
         }
 
         let chunk_size = u32::from_le_bytes(read_four_bytes(reader)?);
@@ -174,7 +176,7 @@ fn read_wave_file(
                 let chunk_size = usize::try_from(chunk_size).unwrap();
 
                 if data.len() + chunk_size > max_data_size {
-                    return Err(Error::WaveFileTooLarge);
+                    return Err(WavError::WaveFileTooLarge);
                 }
 
                 data.resize(data.len() + chunk_size, 0);
@@ -183,7 +185,7 @@ fn read_wave_file(
 
             FMT_CHUNK_ID => {
                 // A wave file has only one fmt chunk
-                return Err(Error::InvalidWaveFile);
+                return Err(WavError::InvalidWaveFile);
             }
 
             _ => {
@@ -194,7 +196,7 @@ fn read_wave_file(
     }
 
     if data.is_empty() {
-        return Err(Error::NoSamples);
+        return Err(WavError::NoSamples);
     }
 
     Ok(WaveFile { format, data })
@@ -210,15 +212,15 @@ fn is_fmt_16_bit_mono_pcm(fmt: &FmtChunk) -> bool {
 pub fn read_16_bit_mono_wave_file(
     reader: &mut (impl io::Read + io::Seek),
     max_samples: usize,
-) -> Result<MonoPcm16WaveFile, Error> {
+) -> Result<MonoPcm16WaveFile, WavError> {
     let wav = read_wave_file(reader, max_samples * 2)?;
 
     if !is_fmt_16_bit_mono_pcm(&wav.format) {
-        return Err(Error::NotA16BitMonoWav);
+        return Err(WavError::NotA16BitMonoWav);
     }
 
     if wav.data.len() % 2 != 0 {
-        return Err(Error::InvaidDataChunkSize);
+        return Err(WavError::InvaidDataChunkSize);
     }
 
     // Convert data to i16 vector
@@ -296,7 +298,7 @@ mod tests {
 
         let r = read_wave_file(&mut io::Cursor::new(clipped_wav), 100);
 
-        assert!(matches!(r, Err(Error::NoSamples)));
+        assert!(matches!(r, Err(WavError::NoSamples)));
     }
 
     #[test]
@@ -310,10 +312,10 @@ mod tests {
         assert!(matches!(r, Ok(_)));
 
         let r = read_wave_file(&mut io::Cursor::new(MONO_32000_16_BIT_PCM), data_size - 1);
-        assert!(matches!(r, Err(Error::WaveFileTooLarge)));
+        assert!(matches!(r, Err(WavError::WaveFileTooLarge)));
 
         let r = read_wave_file(&mut io::Cursor::new(MONO_32000_16_BIT_PCM), 0);
-        assert!(matches!(r, Err(Error::WaveFileTooLarge)));
+        assert!(matches!(r, Err(WavError::WaveFileTooLarge)));
     }
 
     #[test]
@@ -355,7 +357,7 @@ mod tests {
     fn test_not_16_bit_mono_wav() {
         let r = read_16_bit_mono_wave_file(&mut io::Cursor::new(STEREO_96000_32_BIT_PCM), 100);
 
-        assert!(matches!(r, Err(Error::NotA16BitMonoWav)));
+        assert!(matches!(r, Err(WavError::NotA16BitMonoWav)));
     }
 
     #[test]
@@ -383,9 +385,9 @@ mod tests {
 
         let r =
             read_16_bit_mono_wave_file(&mut io::Cursor::new(MONO_32000_16_BIT_PCM), n_samples - 1);
-        assert!(matches!(r, Err(Error::WaveFileTooLarge)));
+        assert!(matches!(r, Err(WavError::WaveFileTooLarge)));
 
         let r = read_16_bit_mono_wave_file(&mut io::Cursor::new(MONO_32000_16_BIT_PCM), 0);
-        assert!(matches!(r, Err(Error::WaveFileTooLarge)));
+        assert!(matches!(r, Err(WavError::WaveFileTooLarge)));
     }
 }

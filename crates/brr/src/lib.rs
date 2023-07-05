@@ -9,7 +9,7 @@ mod mono_pcm_wav;
 mod parse_brr_file;
 
 pub use encoder::{encode_brr, EncodeError};
-pub use mono_pcm_wav::{read_16_bit_mono_wave_file, Error, MonoPcm16WaveFile};
+pub use mono_pcm_wav::{read_16_bit_mono_wave_file, MonoPcm16WaveFile, WavError};
 pub use parse_brr_file::{parse_brr_file, ParseError};
 
 pub const SAMPLES_PER_BLOCK: usize = 16;
