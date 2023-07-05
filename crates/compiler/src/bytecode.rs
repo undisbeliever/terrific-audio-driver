@@ -328,6 +328,13 @@ impl NoteOpcode {
     }
 }
 
+#[derive(PartialEq)]
+pub enum BcTerminator {
+    DisableChannel,
+    LoopChannel,
+    ReturnFromSubroutine,
+}
+
 // Macro to automatically cast Opcode/NoteOpcode/i8 values and append it to `Bytecode::bytecode`.
 macro_rules! emit_bytecode {
     ($self:expr, $opcode:expr) => {
@@ -432,13 +439,23 @@ impl Bytecode {
         self.bytecode.len()
     }
 
-    // error enum
-    pub fn get_bytecode(&self) -> Result<&[u8], BytecodeError> {
+    pub fn bytecode(mut self, terminator: BcTerminator) -> Result<Vec<u8>, BytecodeError> {
         if !self.loop_stack.is_empty() {
             return Err(BytecodeError::OpenLoopStack(self.loop_stack.len()));
         }
 
-        Ok(self.bytecode.as_slice())
+        if !self.is_subroutine && terminator == BcTerminator::ReturnFromSubroutine {
+            return Err(BytecodeError::ReturnInNonSubroutine);
+        }
+
+        let opcode = match terminator {
+            BcTerminator::DisableChannel => Opcode::disable_channel,
+            BcTerminator::LoopChannel => Opcode::end,
+            BcTerminator::ReturnFromSubroutine => Opcode::return_from_subroutine,
+        };
+        emit_bytecode!(self, opcode);
+
+        Ok(self.bytecode)
     }
 
     pub fn rest(&mut self, length: BcTicksNoKeyOff) {
@@ -759,23 +776,6 @@ impl Bytecode {
 
         emit_bytecode!(self, Opcode::call_subroutine, subroutine.id);
         Ok(())
-    }
-
-    pub fn return_from_subroutine(&mut self) -> Result<(), BytecodeError> {
-        if !self.is_subroutine {
-            return Err(BytecodeError::ReturnInNonSubroutine);
-        }
-
-        emit_bytecode!(self, Opcode::return_from_subroutine);
-        Ok(())
-    }
-
-    pub fn end(&mut self) {
-        emit_bytecode!(self, Opcode::end);
-    }
-
-    pub fn disable_channel(&mut self) {
-        emit_bytecode!(self, Opcode::disable_channel);
     }
 
     pub fn set_song_tick_clock(&mut self, tick_clock: TickClock) -> Result<(), BytecodeError> {

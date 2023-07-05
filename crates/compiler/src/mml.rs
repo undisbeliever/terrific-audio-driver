@@ -9,8 +9,8 @@
 // ::TODO write integration tests::
 
 use crate::bytecode::{
-    BcTicksKeyOff, BcTicksNoKeyOff, Bytecode, InstrumentId, LoopCount, PitchOffsetPerTick,
-    PlayNoteTicks, PortamentoVelocity, SubroutineId,
+    BcTerminator, BcTicksKeyOff, BcTicksNoKeyOff, Bytecode, InstrumentId, LoopCount,
+    PitchOffsetPerTick, PlayNoteTicks, PortamentoVelocity, SubroutineId,
 };
 use crate::data::{self, UniqueNamesList};
 use crate::driver_constants::{FIR_FILTER_SIZE, IDENTITY_FILTER, N_MUSIC_CHANNELS};
@@ -1357,16 +1357,12 @@ fn process_mml_commands(
     let tick_counter = gen.bc.get_tick_counter();
     let max_nested_loops = gen.bc.get_max_nested_loops();
 
-    match (subroutine_index, gen.loop_point) {
+    let terminator = match (subroutine_index, gen.loop_point) {
         (Some(_), Some(_)) => {
             panic!("Loop point not allowed in subroutine")
         }
-        (Some(_), None) => match gen.bc.return_from_subroutine() {
-            Ok(()) => (),
-            Err(e) => {
-                errors.push(ErrorWithPos(last_pos, MmlCommandError::BytecodeError(e)));
-            }
-        },
+        (None, None) => BcTerminator::DisableChannel,
+        (Some(_), None) => BcTerminator::ReturnFromSubroutine,
         (None, Some(lp)) => {
             if lp.tick_counter == tick_counter {
                 errors.push(ErrorWithPos(
@@ -1374,18 +1370,15 @@ fn process_mml_commands(
                     MmlCommandError::NoTicksAfterLoopPoint,
                 ));
             }
-            gen.bc.end();
-        }
-        (None, None) => {
-            gen.bc.disable_channel();
+            BcTerminator::LoopChannel
         }
     };
 
-    let bytecode = match gen.bc.get_bytecode() {
+    let bytecode = match gen.bc.bytecode(terminator) {
         Ok(b) => b,
         Err(e) => {
             errors.push(ErrorWithPos(last_pos, MmlCommandError::BytecodeError(e)));
-            &[]
+            Vec::new()
         }
     };
 
@@ -1395,7 +1388,7 @@ fn process_mml_commands(
     if errors.is_empty() {
         Ok(ChannelData {
             identifier,
-            bytecode: bytecode.to_vec(),
+            bytecode,
             loop_point: gen.loop_point,
             tick_counter,
             last_instrument: gen.instrument,

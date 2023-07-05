@@ -731,9 +731,9 @@ fn assemble_channel_bytecode(
         bc.parse_line(line).unwrap();
     }
 
-    bc.disable_channel();
-
-    bc.get_bytecode().unwrap().to_owned()
+    bc.bytecode(bytecode_assembler::BcTerminator::DisableChannel)
+        .unwrap()
+        .to_owned()
 }
 
 struct DummyData {

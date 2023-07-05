@@ -4,6 +4,7 @@
 //
 // SPDX-License-Identifier: MIT
 
+use crate::bytecode::BcTerminator;
 use crate::bytecode_assembler::BytecodeAssembler;
 use crate::data::{Instrument, Name, UniqueNamesList, UniqueNamesMappingsFile};
 use crate::errors::{ErrorWithLine, SoundEffectError, SoundEffectsFileError};
@@ -53,9 +54,9 @@ pub fn compile_sound_effect(
         }
     }
 
-    bc.disable_channel();
+    let tick_counter = bc.get_tick_counter();
 
-    let out = match bc.get_bytecode() {
+    let out = match bc.bytecode(BcTerminator::DisableChannel) {
         Ok(out) => Some(out),
         Err(e) => {
             errors.push(ErrorWithLine(last_line_no, e));
@@ -64,7 +65,7 @@ pub fn compile_sound_effect(
     };
 
     // ::TODO move these checks into the Bytecode.get_bytecode()::
-    let no_notes = bc.get_tick_counter().is_zero();
+    let no_notes = tick_counter.is_zero();
 
     let invalid_name = name.is_err();
 

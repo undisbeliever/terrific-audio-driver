@@ -15,6 +15,8 @@ use crate::notes::Note;
 use crate::time::TickCounter;
 use crate::value_newtypes::ValueNewType;
 
+pub use crate::bytecode::BcTerminator;
+
 use std::collections::HashMap;
 
 pub type SubroutinesMap<'a> = HashMap<&'a str, SubroutineId>;
@@ -65,15 +67,11 @@ impl BytecodeAssembler<'_, '_> {
         self.bc.get_tick_counter()
     }
 
-    pub fn get_bytecode(&self) -> Result<&[u8], BytecodeAssemblerError> {
-        match self.bc.get_bytecode() {
+    pub fn bytecode(self, terminator: BcTerminator) -> Result<Vec<u8>, BytecodeAssemblerError> {
+        match self.bc.bytecode(terminator) {
             Ok(b) => Ok(b),
             Err(e) => Err(BytecodeAssemblerError::BytecodeError(e)),
         }
-    }
-
-    pub fn disable_channel(&mut self) {
-        self.bc.disable_channel()
     }
 
     pub fn parse_line(&mut self, line: &str) -> Result<(), BytecodeAssemblerError> {
