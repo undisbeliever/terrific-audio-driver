@@ -10,8 +10,8 @@
 
 pub const N_MUSIC_CHANNELS: usize = 6;
 
-pub const MAX_DIR_ITEMS: usize = 256;
-pub const MAX_INSTRUMENTS: usize = 256;
+pub const MAX_DIR_ITEMS: usize = u8::MAX as usize;
+pub const MAX_INSTRUMENTS: usize = u8::MAX as usize;
 pub const MAX_SOUND_EFFECTS: usize = 192;
 
 pub const PITCH_TABLE_SIZE: usize = 256;
