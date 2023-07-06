@@ -925,7 +925,7 @@ impl Display for MmlParserError {
             Self::MissingEndBrokenChord => write!(f, "cannot find broken chord end (no `}}}}`)"),
             Self::MissingEndPortamento => write!(f, "cannot find portamento end (no `}}`)"),
 
-            Self::PortamentoRequiresTwoPitches => write!(f, "portamento requires too pitches"),
+            Self::PortamentoRequiresTwoPitches => write!(f, "portamento requires 2 pitches"),
             Self::InvalidPortamentoDelay => {
                 write!(f, "portamento delay must be < portamento length")
             }
