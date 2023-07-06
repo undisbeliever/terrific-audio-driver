@@ -24,7 +24,7 @@ pub mod errors;
 pub mod mml;
 
 pub use data::{
-    load_mappings_file, validate_mappings_file_names, MappingsFile, Name, UniqueNamesMappingsFile,
+    load_project_file, validate_project_file_names, Name, ProjectFile, UniqueNamesProjectFile,
 };
 pub use envelope::{Adsr, Gain};
 pub use notes::{Note, Octave, STARTING_OCTAVE};

@@ -6,7 +6,7 @@
 
 use crate::bytecode::BcTerminator;
 use crate::bytecode_assembler::BytecodeAssembler;
-use crate::data::{Instrument, Name, UniqueNamesList, UniqueNamesMappingsFile};
+use crate::data::{Instrument, Name, UniqueNamesList, UniqueNamesProjectFile};
 use crate::errors::{ErrorWithLine, SoundEffectError, SoundEffectsFileError};
 
 use std::collections::HashMap;
@@ -123,14 +123,14 @@ pub struct CompiledSoundEffects {
 
 fn combine_sound_effects(
     sound_effects: HashMap<Name, Vec<u8>>,
-    mapping: &UniqueNamesList<Name>,
+    export_order: &UniqueNamesList<Name>,
 ) -> Result<CompiledSoundEffects, SoundEffectsFileError> {
     let mut sfx_data = Vec::new();
-    let mut sfx_offsets = Vec::with_capacity(mapping.len());
+    let mut sfx_offsets = Vec::with_capacity(export_order.len());
 
     let mut missing = Vec::new();
 
-    for name in mapping.list() {
+    for name in export_order.list() {
         match sound_effects.get(name) {
             Some(s) => {
                 sfx_offsets.push(sfx_data.len());
@@ -152,11 +152,11 @@ fn combine_sound_effects(
 
 pub fn compile_sound_effects_file(
     sfx_file: &SoundEffectsFile,
-    mappings_file: &UniqueNamesMappingsFile,
+    project: &UniqueNamesProjectFile,
 ) -> Result<CompiledSoundEffects, SoundEffectsFileError> {
-    let sound_effects = compile_sound_effects(sfx_file, &mappings_file.instruments)?;
+    let sound_effects = compile_sound_effects(sfx_file, &project.instruments)?;
 
-    combine_sound_effects(sound_effects, &mappings_file.sound_effects)
+    combine_sound_effects(sound_effects, &project.sound_effects)
 }
 
 // Sound effects file

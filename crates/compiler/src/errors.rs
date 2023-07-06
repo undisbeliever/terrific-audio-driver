@@ -41,20 +41,20 @@ pub enum DeserializeError {
 }
 
 #[derive(Debug)]
-pub enum MappingListError {
+pub enum UniqueNameListError {
     Empty,
     TooManyItems(usize, usize),
     DuplicateName(usize, String),
 }
 
 #[derive(Debug)]
-pub enum MappingError {
-    Instrument(MappingListError),
-    SoundEffect(MappingListError),
+pub enum ProjectFileError {
+    Instrument(UniqueNameListError),
+    SoundEffect(UniqueNameListError),
 }
 
 #[derive(Debug)]
-pub struct MappingsFileErrors(pub Vec<MappingError>);
+pub struct ProjectFileErrors(pub Vec<ProjectFileError>);
 
 #[derive(Debug)]
 pub struct InvalidAdsrError {
@@ -491,34 +491,34 @@ impl Display for DeserializeError {
     }
 }
 
-fn fmt_mapping_list_error(
+fn fmt_unique_name_list_error(
     f: &mut std::fmt::Formatter,
-    e: &MappingListError,
+    e: &UniqueNameListError,
     list_type: &str,
 ) -> std::fmt::Result {
     match e {
-        MappingListError::Empty => write!(f, "no {}", list_type),
-        MappingListError::TooManyItems(len, max) => {
+        UniqueNameListError::Empty => write!(f, "no {}", list_type),
+        UniqueNameListError::TooManyItems(len, max) => {
             write!(f, "too many {} ({}, max {})", list_type, len, max)
         }
-        MappingListError::DuplicateName(i, name) => {
+        UniqueNameListError::DuplicateName(i, name) => {
             write!(f, "duplicate {}: {}, {}", list_type, i, name)
         }
     }
 }
 
-impl Display for MappingError {
+impl Display for ProjectFileError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            Self::Instrument(e) => fmt_mapping_list_error(f, e, "instrument"),
-            Self::SoundEffect(e) => fmt_mapping_list_error(f, e, "sound effect"),
+            Self::Instrument(e) => fmt_unique_name_list_error(f, e, "instrument"),
+            Self::SoundEffect(e) => fmt_unique_name_list_error(f, e, "sound effect"),
         }
     }
 }
 
-impl Display for MappingsFileErrors {
+impl Display for ProjectFileErrors {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "{} errors in mappings file", self.0.len())
+        write!(f, "{} errors in project file", self.0.len())
     }
 }
 

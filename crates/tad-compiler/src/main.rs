@@ -5,9 +5,7 @@
 // SPDX-License-Identifier: MIT
 
 use clap::{Args, Parser, Subcommand};
-use compiler::{
-    build_pitch_table, parse_mml, song_data, SoundEffectsFile, UniqueNamesMappingsFile,
-};
+use compiler::{build_pitch_table, parse_mml, song_data, SoundEffectsFile, UniqueNamesProjectFile};
 
 use std::fs;
 use std::io::{self, Write};
@@ -61,7 +59,7 @@ struct CompileCommonDataArgs {
     #[command(flatten)]
     output: OutputArg,
 
-    #[arg(value_name = "JSON_FILE", help = "instruments and mappings json file")]
+    #[arg(value_name = "JSON_FILE", help = "project json file")]
     json_file: PathBuf,
 
     #[arg(value_name = "TXT_FILE", help = "sound_effects txt file")]
@@ -71,11 +69,11 @@ struct CompileCommonDataArgs {
 fn compile_common_data(args: CompileCommonDataArgs) {
     let file_name = file_name(&args.sfx_file);
 
-    let mappings = load_mappings_file(args.json_file);
+    let pf = load_project_file(args.json_file);
     let sfx_file = load_sfx_file(args.sfx_file);
 
-    let samples = compiler::build_sample_and_instrument_data(&mappings);
-    let sfx = compiler::compile_sound_effects_file(&sfx_file, &mappings);
+    let samples = compiler::build_sample_and_instrument_data(&pf);
+    let sfx = compiler::compile_sound_effects_file(&sfx_file, &pf);
 
     let (samples, sfx) = match (samples, sfx) {
         (Ok(samples), Ok(sfx)) => (samples, sfx),
@@ -105,7 +103,7 @@ struct CompileSongDataArgs {
     #[command(flatten)]
     output: OutputArg,
 
-    #[arg(value_name = "JSON_FILE", help = "instruments and mappings json file")]
+    #[arg(value_name = "JSON_FILE", help = "project json file")]
     json_file: PathBuf,
 
     #[arg(value_name = "MML_FILE", help = "mml song file")]
@@ -116,14 +114,14 @@ fn compile_song_data(args: CompileSongDataArgs) {
     let file_name = file_name(&args.mml_file);
 
     let mml_text = load_mml_file(args.mml_file);
-    let mappings = load_mappings_file(args.json_file);
+    let pf = load_project_file(args.json_file);
 
-    let pitch_table = match build_pitch_table(&mappings.instruments) {
+    let pitch_table = match build_pitch_table(&pf.instruments) {
         Ok(pt) => pt,
         Err(e) => error!("{}", e.multiline_display()),
     };
 
-    let mml = match parse_mml(&mml_text, &mappings.instruments, &pitch_table) {
+    let mml = match parse_mml(&mml_text, &pf.instruments, &pitch_table) {
         Ok(mml) => mml,
         Err(e) => error!("{}", e.multiline_display(&file_name)),
     };
@@ -160,12 +158,12 @@ fn file_name(path: &Path) -> String {
         .to_string()
 }
 
-fn load_mappings_file(path: PathBuf) -> UniqueNamesMappingsFile {
-    match compiler::load_mappings_file(path) {
-        Err(e) => error!("Cannot load mappings file: {}", e),
-        Ok(m) => match compiler::validate_mappings_file_names(m) {
+fn load_project_file(path: PathBuf) -> UniqueNamesProjectFile {
+    match compiler::load_project_file(path) {
+        Err(e) => error!("Cannot load project file: {}", e),
+        Ok(m) => match compiler::validate_project_file_names(m) {
             Ok(vm) => vm,
-            Err(e) => error!("Invalid mappings File: {}", e),
+            Err(e) => error!("Invalid project file: {}", e),
         },
     }
 }

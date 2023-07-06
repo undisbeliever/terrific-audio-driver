@@ -6,7 +6,7 @@
 
 // ::TODO add pub(crate) to more things::
 
-use crate::data::{Instrument, UniqueNamesList, UniqueNamesMappingsFile};
+use crate::data::{Instrument, UniqueNamesList, UniqueNamesProjectFile};
 use crate::errors::{SampleAndInstrumentDataError, SampleError, TaggedSampleError};
 use crate::{build_pitch_table, PitchTable};
 
@@ -117,13 +117,13 @@ fn load_sample_for_instrument(
 }
 
 fn compile_samples(
-    mappings: &UniqueNamesMappingsFile,
+    project: &UniqueNamesProjectFile,
 ) -> Result<Vec<BrrSample>, Vec<TaggedSampleError>> {
     let mut out = Vec::new();
     let mut errors = Vec::new();
 
-    for (i, inst) in mappings.instruments.list().iter().enumerate() {
-        match load_sample_for_instrument(&mappings.parent_path, inst) {
+    for (i, inst) in project.instruments.list().iter().enumerate() {
+        match load_sample_for_instrument(&project.parent_path, inst) {
             Ok(b) => out.push(b),
             Err(e) => errors.push(TaggedSampleError::Instrument(i, inst.name.clone(), e)),
         }
@@ -254,14 +254,14 @@ pub struct SampleAndInstrumentData {
 }
 
 pub fn build_sample_and_instrument_data(
-    mappings: &UniqueNamesMappingsFile,
+    project: &UniqueNamesProjectFile,
 ) -> Result<SampleAndInstrumentData, SampleAndInstrumentDataError> {
     let mut error = SampleAndInstrumentDataError {
         sample_errors: Vec::new(),
         pitch_table_error: None,
     };
 
-    let instruments = &mappings.instruments;
+    let instruments = &project.instruments;
 
     let envelopes = match envelope_soa(instruments) {
         Ok(o) => Some(o),
@@ -270,7 +270,7 @@ pub fn build_sample_and_instrument_data(
             None
         }
     };
-    let samples = match compile_samples(mappings) {
+    let samples = match compile_samples(project) {
         Ok(o) => Some(o),
         Err(e) => {
             error.sample_errors.extend(e);

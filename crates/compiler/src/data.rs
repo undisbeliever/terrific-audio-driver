@@ -7,7 +7,7 @@
 use crate::driver_constants::{MAX_INSTRUMENTS, MAX_SOUND_EFFECTS};
 use crate::envelope::{Adsr, Gain};
 use crate::errors::{
-    DeserializeError, MappingError, MappingListError, MappingsFileErrors, ValueError,
+    DeserializeError, ProjectFileError, ProjectFileErrors, UniqueNameListError, ValueError,
 };
 use crate::notes::Octave;
 
@@ -111,21 +111,21 @@ pub struct Instrument {
 }
 
 #[derive(Deserialize, Debug)]
-pub struct Mappings {
+pub struct Project {
     pub instruments: Vec<Instrument>,
 
     pub sound_effects: Vec<Name>,
 }
 
-pub struct MappingsFile {
+pub struct ProjectFile {
     pub path: PathBuf,
     pub file_name: String,
     pub parent_path: PathBuf,
 
-    pub mappings: Mappings,
+    pub contents: Project,
 }
 
-pub fn load_mappings_file(path: PathBuf) -> Result<MappingsFile, DeserializeError> {
+pub fn load_project_file(path: PathBuf) -> Result<ProjectFile, DeserializeError> {
     let file_name = path
         .file_name()
         .unwrap_or(path.as_os_str())
@@ -143,16 +143,16 @@ pub fn load_mappings_file(path: PathBuf) -> Result<MappingsFile, DeserializeErro
     };
     let reader = BufReader::new(file);
 
-    let mappings = match serde_json::from_reader(reader) {
+    let contents = match serde_json::from_reader(reader) {
         Ok(m) => m,
         Err(e) => return Err(DeserializeError::SerdeError(file_name, e)),
     };
 
-    Ok(MappingsFile {
+    Ok(ProjectFile {
         path,
         file_name,
         parent_path,
-        mappings,
+        contents,
     })
 }
 
@@ -195,7 +195,7 @@ impl<T> UniqueNamesList<T> {
     }
 }
 
-pub struct UniqueNamesMappingsFile {
+pub struct UniqueNamesProjectFile {
     pub path: PathBuf,
     pub file_name: String,
     pub parent_path: PathBuf,
@@ -208,7 +208,7 @@ fn validate_list_names<T>(
     list: Vec<T>,
     check_zero: bool,
     max: usize,
-    mut add_error: impl FnMut(MappingListError),
+    mut add_error: impl FnMut(UniqueNameListError),
 ) -> UniqueNamesList<T>
 where
     T: NameGetter,
@@ -216,10 +216,10 @@ where
     assert!(max <= 256);
 
     if check_zero && list.is_empty() {
-        add_error(MappingListError::Empty);
+        add_error(UniqueNameListError::Empty);
     }
     if list.len() > max {
-        add_error(MappingListError::TooManyItems(list.len(), max));
+        add_error(UniqueNameListError::TooManyItems(list.len(), max));
     }
 
     let mut map = HashMap::with_capacity(list.len());
@@ -229,7 +229,7 @@ where
         let i_u8 = (i & 0xff).try_into().unwrap();
 
         if map.insert(name.to_owned(), i_u8).is_some() {
-            add_error(MappingListError::DuplicateName(i, name.to_owned()));
+            add_error(UniqueNameListError::DuplicateName(i, name.to_owned()));
         }
     }
 
@@ -238,26 +238,26 @@ where
 
 pub fn validate_instrument_names(
     instruments: Vec<Instrument>,
-) -> Result<UniqueNamesList<Instrument>, MappingsFileErrors> {
+) -> Result<UniqueNamesList<Instrument>, ProjectFileErrors> {
     let mut errors = Vec::new();
 
     let out = validate_list_names(instruments, true, MAX_INSTRUMENTS, |e| {
-        errors.push(MappingError::Instrument(e))
+        errors.push(ProjectFileError::Instrument(e))
     });
 
     if errors.is_empty() {
         Ok(out)
     } else {
-        Err(MappingsFileErrors(errors))
+        Err(ProjectFileErrors(errors))
     }
 }
 
-pub fn validate_mappings_file_names(
-    mappings: MappingsFile,
-) -> Result<UniqueNamesMappingsFile, MappingsFileErrors> {
+pub fn validate_project_file_names(
+    pf: ProjectFile,
+) -> Result<UniqueNamesProjectFile, ProjectFileErrors> {
     let mut errors = Vec::new();
 
-    let instruments = match validate_instrument_names(mappings.mappings.instruments) {
+    let instruments = match validate_instrument_names(pf.contents.instruments) {
         Ok(instruments) => Some(instruments),
         Err(e) => {
             errors = e.0;
@@ -265,22 +265,20 @@ pub fn validate_mappings_file_names(
         }
     };
 
-    let sound_effects = validate_list_names(
-        mappings.mappings.sound_effects,
-        false,
-        MAX_SOUND_EFFECTS,
-        |e| errors.push(MappingError::SoundEffect(e)),
-    );
+    let sound_effects =
+        validate_list_names(pf.contents.sound_effects, false, MAX_SOUND_EFFECTS, |e| {
+            errors.push(ProjectFileError::SoundEffect(e))
+        });
 
     if errors.is_empty() {
-        Ok(UniqueNamesMappingsFile {
-            path: mappings.path,
-            file_name: mappings.file_name,
-            parent_path: mappings.parent_path,
+        Ok(UniqueNamesProjectFile {
+            path: pf.path,
+            file_name: pf.file_name,
+            parent_path: pf.parent_path,
             instruments: instruments.unwrap(),
             sound_effects,
         })
     } else {
-        Err(MappingsFileErrors(errors))
+        Err(ProjectFileErrors(errors))
     }
 }
