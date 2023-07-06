@@ -5,6 +5,7 @@
 // SPDX-License-Identifier: MIT
 
 use clap::{Args, Parser, Subcommand};
+use compiler::data::{load_text_file_with_limit, TextFile};
 use compiler::{build_pitch_table, parse_mml, song_data, SoundEffectsFile, UniqueNamesProjectFile};
 
 use std::fs;
@@ -113,8 +114,10 @@ struct CompileSongDataArgs {
 fn compile_song_data(args: CompileSongDataArgs) {
     let file_name = file_name(&args.mml_file);
 
-    let mml_text = load_mml_file(args.mml_file);
+    let mml_file = load_text_file(args.mml_file);
     let pf = load_project_file(args.json_file);
+
+    let mml_text = mml_file.contents;
 
     let pitch_table = match build_pitch_table(&pf.instruments) {
         Ok(pt) => pt,
@@ -159,7 +162,7 @@ fn file_name(path: &Path) -> String {
 }
 
 fn load_project_file(path: PathBuf) -> UniqueNamesProjectFile {
-    match compiler::load_project_file(path) {
+    match compiler::load_project_file(&path) {
         Err(e) => error!("Cannot load project file: {}", e),
         Ok(m) => match compiler::validate_project_file_names(m) {
             Ok(vm) => vm,
@@ -169,18 +172,16 @@ fn load_project_file(path: PathBuf) -> UniqueNamesProjectFile {
 }
 
 fn load_sfx_file(path: PathBuf) -> SoundEffectsFile {
-    let contents = match fs::read_to_string(&path) {
-        Ok(s) => s,
+    match compiler::load_sound_effects_file(&path) {
+        Ok(f) => f,
         Err(e) => error!("Cannot load sound effect file: {}", e),
-    };
-
-    compiler::sfx_file_from_string(contents, &path)
+    }
 }
 
-fn load_mml_file(path: PathBuf) -> String {
-    match fs::read_to_string(path) {
-        Ok(s) => s,
-        Err(e) => error!("Cannot load mml file: {}", e),
+fn load_text_file(path: PathBuf) -> TextFile {
+    match load_text_file_with_limit(&path) {
+        Ok(tf) => tf,
+        Err(e) => error!("{}", e),
     }
 }
 

@@ -34,9 +34,17 @@ pub struct ErrorWithLine<T>(pub u32, pub T);
 pub struct ErrorWithPos<T>(pub mml::FilePos, pub T);
 
 #[derive(Debug)]
-pub enum DeserializeError {
-    NoParentPath(String),
+pub enum FileError {
     OpenError(String, io::Error),
+    ReadError(String, io::Error),
+    FileTooLarge(String),
+    Utf8Error(String),
+}
+
+#[derive(Debug)]
+pub enum DeserializeError {
+    FileError(FileError),
+    NoParentPath(String),
     SerdeError(String, serde_json::error::Error),
 }
 
@@ -479,13 +487,28 @@ impl From<ValueError> for MmlCommandError {
 // Display
 // =======
 
+impl Display for FileError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            Self::OpenError(fname, e) => write!(f, "unable to open {}: {}", fname, e),
+            Self::ReadError(fname, e) => write!(f, "unable to read {}: {}", fname, e),
+            Self::FileTooLarge(fname) => write!(f, "unable to read {}: file too large", fname),
+            Self::Utf8Error(fname) => write!(
+                f,
+                "unable to read {}: file did not contain valid UTF-8",
+                fname
+            ),
+        }
+    }
+}
+
 impl Display for DeserializeError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
+            Self::FileError(e) => e.fmt(f),
             Self::NoParentPath(filename) => {
                 write!(f, "cannot load {}: no parent path", filename)
             }
-            Self::OpenError(filename, e) => write!(f, "unable to open {}: {}", filename, e),
             Self::SerdeError(filename, e) => write!(f, "unable to read {}: {}", filename, e),
         }
     }

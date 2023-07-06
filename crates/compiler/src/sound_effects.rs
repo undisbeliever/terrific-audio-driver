@@ -6,8 +6,10 @@
 
 use crate::bytecode::BcTerminator;
 use crate::bytecode_assembler::BytecodeAssembler;
-use crate::data::{Instrument, Name, UniqueNamesList, UniqueNamesProjectFile};
-use crate::errors::{ErrorWithLine, SoundEffectError, SoundEffectsFileError};
+use crate::data::{
+    load_text_file_with_limit, Instrument, Name, TextFile, UniqueNamesList, UniqueNamesProjectFile,
+};
+use crate::errors::{ErrorWithLine, FileError, SoundEffectError, SoundEffectsFileError};
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -191,12 +193,8 @@ fn count_lines_including_end(s: &str) -> usize {
     s.bytes().filter(|&c| c == b'\n').count() + 1
 }
 
-pub fn sfx_file_from_string(input: String, path: &Path) -> SoundEffectsFile {
-    let file_name = path
-        .file_name()
-        .unwrap_or(path.as_os_str())
-        .to_string_lossy()
-        .to_string();
+fn sfx_file_from_text_file(tf: TextFile) -> SoundEffectsFile {
+    let input = tf.contents;
 
     // Find first sound effect
     let (header, after_header) = match input.strip_prefix(NEW_SFX_TOKEN_NO_NEWLINE) {
@@ -235,11 +233,16 @@ pub fn sfx_file_from_string(input: String, path: &Path) -> SoundEffectsFile {
     }
 
     SoundEffectsFile {
-        path: path.to_owned(),
-        file_name,
+        path: tf.path,
+        file_name: tf.file_name,
         header,
         sound_effects,
     }
+}
+
+pub fn load_sound_effects_file(path: &Path) -> Result<SoundEffectsFile, FileError> {
+    let text_file = load_text_file_with_limit(path)?;
+    Ok(sfx_file_from_text_file(text_file))
 }
 
 #[cfg(test)]
@@ -264,14 +267,20 @@ e
 "##;
 
         let path: PathBuf = "parent/basename.txt".to_owned().into();
+        let file_name = "fn.txt".to_owned();
+        let tf = TextFile {
+            path: path.clone(),
+            file_name: file_name.clone(),
+            contents: INPUT.to_owned(),
+        };
 
-        let sfx_file = sfx_file_from_string(INPUT.to_owned(), &path);
+        let sfx_file = sfx_file_from_text_file(tf);
 
         assert_eq!(
             sfx_file,
             SoundEffectsFile {
                 path,
-                file_name: "basename.txt".to_owned(),
+                file_name,
                 header: "".to_owned(),
                 sound_effects: vec![
                     SoundEffectInput {
@@ -319,15 +328,21 @@ b
 c
 "##;
 
-        let path: PathBuf = "only_basename.txt".to_owned().into();
+        let path: PathBuf = "path.txt".to_owned().into();
+        let file_name = "test.txt".to_owned();
+        let tf = TextFile {
+            path: path.clone(),
+            file_name: file_name.clone(),
+            contents: INPUT.to_owned(),
+        };
 
-        let sfx_file = sfx_file_from_string(INPUT.to_owned(), &path);
+        let sfx_file = sfx_file_from_text_file(tf);
 
         assert_eq!(
             sfx_file,
             SoundEffectsFile {
                 path,
-                file_name: "only_basename.txt".to_owned(),
+                file_name,
                 header: "; This is a header\n; With multiple lines\n".to_owned(),
                 sound_effects: vec![
                     SoundEffectInput {

@@ -33,7 +33,7 @@ pub use pitch_table::{build_pitch_table, PitchTable};
 pub use samples::{build_sample_and_instrument_data, SampleAndInstrumentData};
 
 pub use common_audio_data::build_common_audio_data;
-pub use sound_effects::{compile_sound_effects_file, sfx_file_from_string, SoundEffectsFile};
+pub use sound_effects::{compile_sound_effects_file, load_sound_effects_file, SoundEffectsFile};
 
 pub use mml::parse_mml;
 pub use songs::song_data;

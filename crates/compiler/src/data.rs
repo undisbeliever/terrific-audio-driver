@@ -7,18 +7,21 @@
 use crate::driver_constants::{MAX_INSTRUMENTS, MAX_SOUND_EFFECTS};
 use crate::envelope::{Adsr, Gain};
 use crate::errors::{
-    DeserializeError, ProjectFileError, ProjectFileErrors, UniqueNameListError, ValueError,
+    DeserializeError, FileError, ProjectFileError, ProjectFileErrors, UniqueNameListError,
+    ValueError,
 };
 use crate::notes::Octave;
 
 use std::collections::HashMap;
 use std::fmt::Display;
 use std::fs::File;
-use std::io::BufReader;
-use std::path::PathBuf;
+use std::io::Read;
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
 use serde::Deserialize;
+
+pub const MAX_FILE_SIZE: u32 = 5 * 1024 * 1024;
 
 #[derive(Deserialize, Clone, Hash, Eq, PartialEq, Debug)]
 #[serde(try_from = "String")]
@@ -125,31 +128,25 @@ pub struct ProjectFile {
     pub contents: Project,
 }
 
-pub fn load_project_file(path: PathBuf) -> Result<ProjectFile, DeserializeError> {
-    let file_name = path
-        .file_name()
-        .unwrap_or(path.as_os_str())
-        .to_string_lossy()
-        .to_string();
+pub fn load_project_file(path: &Path) -> Result<ProjectFile, DeserializeError> {
+    let text_file = match load_text_file_with_limit(path) {
+        Ok(tf) => tf,
+        Err(e) => return Err(DeserializeError::FileError(e)),
+    };
+    let file_name = text_file.file_name;
 
     let parent_path = match path.parent() {
         Some(p) => p.to_owned(),
         None => return Err(DeserializeError::NoParentPath(file_name)),
     };
 
-    let file = match File::open(&path) {
-        Ok(file) => file,
-        Err(e) => return Err(DeserializeError::OpenError(file_name, e)),
-    };
-    let reader = BufReader::new(file);
-
-    let contents = match serde_json::from_reader(reader) {
+    let contents = match serde_json::from_str(&text_file.contents) {
         Ok(m) => m,
         Err(e) => return Err(DeserializeError::SerdeError(file_name, e)),
     };
 
     Ok(ProjectFile {
-        path,
+        path: text_file.path,
         file_name,
         parent_path,
         contents,
@@ -280,5 +277,48 @@ pub fn validate_project_file_names(
         })
     } else {
         Err(ProjectFileErrors(errors))
+    }
+}
+
+// TextFile
+// ========
+
+pub struct TextFile {
+    pub path: PathBuf,
+    pub file_name: String,
+    pub contents: String,
+}
+
+pub fn load_text_file_with_limit(path: &Path) -> Result<TextFile, FileError> {
+    let file_name = path
+        .file_name()
+        .unwrap_or(path.as_os_str())
+        .to_string_lossy()
+        .to_string();
+
+    let file = match File::open(path) {
+        Ok(file) => file,
+        Err(e) => return Err(FileError::OpenError(file_name, e)),
+    };
+
+    // Reading into a buffer as reading exactly `MAX_FILE_SIZE` bytes might output a valid UTF-8 string.
+    let mut buffer = Vec::new();
+
+    match file.take(MAX_FILE_SIZE.into()).read_to_end(&mut buffer) {
+        Ok(n_bytes_read) => {
+            if n_bytes_read >= MAX_FILE_SIZE as usize {
+                return Err(FileError::FileTooLarge(file_name));
+            }
+        }
+        Err(e) => return Err(FileError::ReadError(file_name, e)),
+    };
+
+    match String::from_utf8(buffer) {
+        Ok(contents) => Ok(TextFile {
+            path: path.to_owned(),
+            file_name,
+            contents,
+        }),
+        Err(_) => Err(FileError::Utf8Error(file_name)),
     }
 }
