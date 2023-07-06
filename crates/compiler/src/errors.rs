@@ -502,7 +502,7 @@ fn fmt_unique_name_list_error(
             write!(f, "too many {} ({}, max {})", list_type, len, max)
         }
         UniqueNameListError::DuplicateName(i, name) => {
-            write!(f, "duplicate {}: {}, {}", list_type, i, name)
+            write!(f, "duplicate {}: {} {}", list_type, i, name)
         }
     }
 }
@@ -1050,6 +1050,32 @@ impl Display for SongError {
 
 // Indented Multiline Display
 // ==========================
+
+pub struct ProjectFileErrorsIndentedDisplay<'a>(&'a ProjectFileErrors);
+
+impl Display for ProjectFileErrorsIndentedDisplay<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        let errors = &self.0 .0;
+
+        if errors.len() == 1 {
+            writeln!(f, "1 error in project file")?;
+        } else {
+            writeln!(f, "{} errors in project file", errors.len())?;
+        }
+
+        for e in errors {
+            writeln!(f, "  {}", e)?;
+        }
+
+        Ok(())
+    }
+}
+
+impl ProjectFileErrors {
+    pub fn multiline_display(&self) -> ProjectFileErrorsIndentedDisplay {
+        ProjectFileErrorsIndentedDisplay(self)
+    }
+}
 
 pub struct SoundEffectsFileErrorIndentedDisplay<'a>(&'a SoundEffectsFileError, &'a str);
 

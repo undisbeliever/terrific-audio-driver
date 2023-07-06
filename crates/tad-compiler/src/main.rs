@@ -163,7 +163,7 @@ fn load_project_file(path: PathBuf) -> UniqueNamesProjectFile {
         Err(e) => error!("Cannot load project file: {}", e),
         Ok(m) => match compiler::validate_project_file_names(m) {
             Ok(vm) => vm,
-            Err(e) => error!("Invalid project file: {}", e),
+            Err(e) => error!("{}", e.multiline_display()),
         },
     }
 }
