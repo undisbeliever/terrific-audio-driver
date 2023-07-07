@@ -161,6 +161,13 @@ pub fn compile_sound_effects_file(
     combine_sound_effects(sound_effects, &project.sound_effects)
 }
 
+pub fn blank_compiled_sound_effects() -> CompiledSoundEffects {
+    CompiledSoundEffects {
+        sfx_data: Vec::new(),
+        sfx_offsets: Vec::new(),
+    }
+}
+
 // Sound effects file
 // ==================
 

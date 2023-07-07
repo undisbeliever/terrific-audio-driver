@@ -36,6 +36,9 @@ enum Command {
 
     /// Compile MML song
     Song(CompileSongDataArgs),
+
+    /// Export a MML song as a .spc file
+    Song2spc(CompileSongDataArgs),
 }
 
 #[derive(Args)]
@@ -169,6 +172,41 @@ fn compile_song_data(args: CompileSongDataArgs) {
 }
 
 //
+// Export song to .spc file
+// ========================
+
+fn export_song_to_spc_file(args: CompileSongDataArgs) {
+    let pf = load_project_file(&args.json_file);
+    let mml_file = load_mml_file(&args, &pf);
+
+    let mml_text = mml_file.contents;
+    let file_name = mml_file.file_name;
+
+    let samples = match compiler::build_sample_and_instrument_data(&pf) {
+        Ok(s) => s,
+        Err(e) => error!("{}", e.multiline_display()),
+    };
+    let sfx = compiler::blank_compiled_sound_effects();
+
+    let mml = match parse_mml(&mml_text, &pf.instruments, samples.pitch_table()) {
+        Ok(mml) => mml,
+        Err(e) => error!("{}", e.multiline_display(&file_name)),
+    };
+
+    let common_audio_data = match compiler::build_common_audio_data(&samples, &sfx) {
+        Ok(data) => data,
+        Err(e) => error!("{}", e.multiline_display()),
+    };
+
+    let data = match compiler::export_spc_file(&common_audio_data, &mml) {
+        Ok(d) => d,
+        Err(e) => error!("{}", e),
+    };
+
+    write_data(args.output, data);
+}
+
+//
 // Main
 // ====
 
@@ -178,6 +216,7 @@ fn main() {
     match args.command {
         Command::Common(args) => compile_common_data(args),
         Command::Song(args) => compile_song_data(args),
+        Command::Song2spc(args) => export_song_to_spc_file(args),
     }
 }
 

@@ -10,8 +10,8 @@ use crate::bytecode::{
 };
 use crate::data::Name;
 use crate::driver_constants::{
-    ECHO_BUFFER_EDL_MS, FIR_FILTER_SIZE, MAX_COMMON_DATA_SIZE, MAX_DIR_ITEMS, MAX_INSTRUMENTS,
-    MAX_SONG_DATA_SIZE, MAX_SOUND_EFFECTS, MAX_SUBROUTINES, PITCH_TABLE_SIZE,
+    COMMON_DATA_ADDR, ECHO_BUFFER_EDL_MS, FIR_FILTER_SIZE, MAX_COMMON_DATA_SIZE, MAX_DIR_ITEMS,
+    MAX_INSTRUMENTS, MAX_SONG_DATA_SIZE, MAX_SOUND_EFFECTS, MAX_SUBROUTINES, PITCH_TABLE_SIZE,
 };
 use crate::echo::{EchoEdl, EchoLength};
 use crate::mml::{MAX_BROKEN_CHORD_NOTES, MAX_MML_TEXT_LENGTH};
@@ -438,6 +438,16 @@ pub enum SongError {
 
     // This should not happen
     DataSizeMismatch(usize, usize),
+}
+
+#[derive(Debug)]
+pub enum ExportSpcFileError {
+    SongError(SongError),
+    TooMuchData {
+        common: usize,
+        song: usize,
+        echo: usize,
+    },
 }
 
 // From Traits
@@ -1068,6 +1078,17 @@ impl Display for SongError {
 
             Self::DataSizeMismatch(len1, len2) => {
                 write!(f, "data size mismatch ({} != {})", len1, len2)
+            }
+        }
+    }
+}
+
+impl Display for ExportSpcFileError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            Self::SongError(e) => e.fmt(f),
+            Self::TooMuchData { common, song, echo } => {
+                write!(f, "cannot fit data in audio-ram (driver: {} bytes, common_audio_data: {} bytes, song data: {} bytes, echo buffer: {} bytes", COMMON_DATA_ADDR, common, song, echo)
             }
         }
     }

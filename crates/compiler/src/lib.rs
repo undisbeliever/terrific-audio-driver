@@ -14,6 +14,7 @@ mod pitch_table;
 mod samples;
 mod songs;
 mod sound_effects;
+mod spc_file_export;
 mod time;
 mod value_newtypes;
 
@@ -33,10 +34,14 @@ pub use pitch_table::{build_pitch_table, PitchTable};
 pub use samples::{build_sample_and_instrument_data, SampleAndInstrumentData};
 
 pub use common_audio_data::build_common_audio_data;
-pub use sound_effects::{compile_sound_effects_file, load_sound_effects_file, SoundEffectsFile};
+pub use sound_effects::{
+    blank_compiled_sound_effects, compile_sound_effects_file, load_sound_effects_file,
+    SoundEffectsFile,
+};
 
 pub use mml::parse_mml;
 pub use songs::song_data;
+pub use spc_file_export::export_spc_file;
 
 pub mod audio_driver {
     // SPDX-SnippetBegin

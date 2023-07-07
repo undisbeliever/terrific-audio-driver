@@ -253,6 +253,12 @@ pub struct SampleAndInstrumentData {
     pub(crate) brr_directory_offsets: Vec<BrrDirectoryOffset>,
 }
 
+impl SampleAndInstrumentData {
+    pub fn pitch_table(&self) -> &PitchTable {
+        &self.pitch_table
+    }
+}
+
 pub fn build_sample_and_instrument_data(
     project: &UniqueNamesProjectFile,
 ) -> Result<SampleAndInstrumentData, SampleAndInstrumentDataError> {

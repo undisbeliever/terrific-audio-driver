@@ -20,7 +20,9 @@ pub const MAX_SOUND_EFFECTS: usize = 192;
 
 pub const PITCH_TABLE_SIZE: usize = 256;
 
-pub const COMMON_DATA_HEADER_ADDR: u16 = 0x800 - 4;
+pub const COMMON_DATA_ADDR: u16 = 0x800 - 4;
+
+pub const COMMON_DATA_HEADER_ADDR: u16 = COMMON_DATA_ADDR;
 pub const COMMON_DATA_HEADER_SIZE: usize = 4 + (2 * PITCH_TABLE_SIZE);
 
 pub const COMMON_DATA_BYTES_PER_DIR: usize = 4;
@@ -38,6 +40,13 @@ const _: () = assert!(
     "BRR directory is not page aligned"
 );
 
+// Driver constants
+
+// MUST match `audio-driver/src/common_memmap.wiz`
+pub const DRIVER_CODE_ADDR: u16 = 0x200;
+pub const DRIVER_LOADER_ADDR: u16 = 0x160;
+pub const DRIVER_SONG_PTR_ADDR: u16 = 0x00ec;
+
 // S-DSP constants
 
 pub const FIR_FILTER_SIZE: usize = 8;
@@ -45,6 +54,7 @@ pub const IDENTITY_FILTER: [i8; FIR_FILTER_SIZE] = [127, 0, 0, 0, 0, 0, 0, 0];
 
 pub const ECHO_BUFFER_EDL_MS: u32 = 16;
 pub const ECHO_BUFFER_EDL_SIZE: usize = 2048;
+pub const ECHO_BUFFER_MIN_SIZE: usize = 256;
 pub const ECHO_BUFFER_MAX_EDL: u8 = 15;
 
 // Song constants

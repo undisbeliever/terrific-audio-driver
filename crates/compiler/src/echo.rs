@@ -4,7 +4,10 @@
 //
 // SPDX-License-Identifier: MIT
 
-use crate::driver_constants::{ECHO_BUFFER_EDL_MS, ECHO_BUFFER_MAX_EDL, FIR_FILTER_SIZE};
+use crate::driver_constants::{
+    ECHO_BUFFER_EDL_MS, ECHO_BUFFER_EDL_SIZE, ECHO_BUFFER_MAX_EDL, ECHO_BUFFER_MIN_SIZE,
+    FIR_FILTER_SIZE,
+};
 use crate::errors::ValueError;
 use crate::value_newtypes::u8_value_newtype;
 
@@ -17,6 +20,24 @@ u8_value_newtype!(
 );
 
 pub const DEFAULT_EDL: EchoEdl = EchoEdl(0);
+
+impl EchoEdl {
+    pub fn buffer_size(&self) -> usize {
+        if self.as_u8() == 0 {
+            ECHO_BUFFER_MIN_SIZE
+        } else {
+            usize::from(self.as_u8()) * ECHO_BUFFER_EDL_SIZE
+        }
+    }
+
+    pub fn echo_buffer_addr(&self) -> u16 {
+        u16::try_from(0x10000 - self.buffer_size()).unwrap()
+    }
+
+    pub fn esa_register(&self) -> u8 {
+        self.echo_buffer_addr().to_le_bytes()[1]
+    }
+}
 
 pub struct EchoLength(u8);
 
