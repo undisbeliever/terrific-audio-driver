@@ -37,3 +37,16 @@ pub use sound_effects::{compile_sound_effects_file, load_sound_effects_file, Sou
 
 pub use mml::parse_mml;
 pub use songs::song_data;
+
+pub mod audio_driver {
+    // SPDX-SnippetBegin
+
+    // SDPX—SnippetName: SPC700 Audio Driver
+    // SPDX-SnippetCopyrightText: © 2023 Marcus Rowe <undisbeliever@gmail.com>
+    // SPDX-License-Identifier: Zlib
+    pub const LOADER: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/loader.bin"));
+    pub const AUDIO_DRIVER: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/audio-driver.bin"));
+    pub const BLANK_SONG: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/blank-song.bin"));
+
+    // SPDX-SnippetEnd
+}
