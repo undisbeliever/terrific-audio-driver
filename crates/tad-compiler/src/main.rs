@@ -5,9 +5,10 @@
 // SPDX-License-Identifier: MIT
 
 use clap::{Args, Parser, Subcommand};
-use compiler::data::{load_text_file_with_limit, TextFile};
+use compiler::data::{is_name_or_id, load_text_file_with_limit, TextFile};
 use compiler::{build_pitch_table, parse_mml, song_data, SoundEffectsFile, UniqueNamesProjectFile};
 
+use std::ffi::OsString;
 use std::fs;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
@@ -70,7 +71,7 @@ struct CompileCommonDataArgs {
 fn compile_common_data(args: CompileCommonDataArgs) {
     let file_name = file_name(&args.sfx_file);
 
-    let pf = load_project_file(args.json_file);
+    let pf = load_project_file(&args.json_file);
     let sfx_file = load_sfx_file(args.sfx_file);
 
     let samples = compiler::build_sample_and_instrument_data(&pf);
@@ -107,17 +108,47 @@ struct CompileSongDataArgs {
     #[arg(value_name = "JSON_FILE", help = "project json file")]
     json_file: PathBuf,
 
-    #[arg(value_name = "MML_FILE", help = "mml song file")]
-    mml_file: PathBuf,
+    #[arg(value_name = "SONG", help = "song name, song number, or MML file")]
+    song: OsString,
+}
+
+fn load_mml_file(args: &CompileSongDataArgs, pf: &UniqueNamesProjectFile) -> TextFile {
+    let song_name_or_path = &args.song;
+
+    // Safe, the `U+FFFD REPLACEMENT CHARACTER` is not a name character.
+    let sn = song_name_or_path.to_string_lossy();
+
+    let path = if is_name_or_id(&sn) {
+        if pf.songs.is_empty() {
+            error!("No songs in project file");
+        }
+        match sn.parse::<usize>() {
+            Ok(song_id) => match pf.get_song_from_id(song_id) {
+                Some(s) => &s.source,
+                None => error!(
+                    "Song number out of range ({} - {})",
+                    UniqueNamesProjectFile::FIRST_SONG_ID,
+                    pf.last_song_id()
+                ),
+            },
+            Err(_) => match pf.songs.get(&sn) {
+                Some(s) => &s.source,
+                None => error!("Cannot find song: {}", sn),
+            },
+        }
+    } else {
+        Path::new(song_name_or_path)
+    };
+
+    load_text_file(path.to_path_buf())
 }
 
 fn compile_song_data(args: CompileSongDataArgs) {
-    let file_name = file_name(&args.mml_file);
-
-    let mml_file = load_text_file(args.mml_file);
-    let pf = load_project_file(args.json_file);
+    let pf = load_project_file(&args.json_file);
+    let mml_file = load_mml_file(&args, &pf);
 
     let mml_text = mml_file.contents;
+    let file_name = mml_file.file_name;
 
     let pitch_table = match build_pitch_table(&pf.instruments) {
         Ok(pt) => pt,
@@ -161,8 +192,8 @@ fn file_name(path: &Path) -> String {
         .to_string()
 }
 
-fn load_project_file(path: PathBuf) -> UniqueNamesProjectFile {
-    match compiler::load_project_file(&path) {
+fn load_project_file(path: &Path) -> UniqueNamesProjectFile {
+    match compiler::load_project_file(path) {
         Err(e) => error!("Cannot load project file: {}", e),
         Ok(m) => match compiler::validate_project_file_names(m) {
             Ok(vm) => vm,

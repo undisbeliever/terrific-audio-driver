@@ -605,7 +605,7 @@ fn parse_instrument(
         Some(unknown) => return Err(MmlLineError::UnknownInstrumentArgument(unknown.to_owned())),
     }
 
-    let (instrument_id, inst) = match inst_map.get(inst_name) {
+    let (instrument_id, inst) = match inst_map.get_with_index(inst_name) {
         Some((inst_id, inst)) => (inst_id, inst),
         None => return Err(MmlLineError::CannotFindInstrument(inst_name.to_owned())),
     };

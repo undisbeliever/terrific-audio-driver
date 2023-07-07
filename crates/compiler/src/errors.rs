@@ -59,6 +59,7 @@ pub enum UniqueNameListError {
 pub enum ProjectFileError {
     Instrument(UniqueNameListError),
     SoundEffect(UniqueNameListError),
+    Song(UniqueNameListError),
 }
 
 #[derive(Debug)]
@@ -535,6 +536,7 @@ impl Display for ProjectFileError {
         match self {
             Self::Instrument(e) => fmt_unique_name_list_error(f, e, "instrument"),
             Self::SoundEffect(e) => fmt_unique_name_list_error(f, e, "sound effect"),
+            Self::Song(e) => fmt_unique_name_list_error(f, e, "song"),
         }
     }
 }

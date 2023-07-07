@@ -278,7 +278,7 @@ impl BytecodeAssembler<'_, '_> {
     }
 
     fn _find_instrument(&self, arg: &str) -> Result<InstrumentId, BytecodeAssemblerError> {
-        match self.instruments.get(arg) {
+        match self.instruments.get_with_index(arg) {
             Some((i, _inst)) => Ok(InstrumentId::new(i)),
             None => Err(BytecodeAssemblerError::UnknownInstrument(arg.to_owned())),
         }

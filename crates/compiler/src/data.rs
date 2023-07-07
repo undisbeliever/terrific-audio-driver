@@ -4,7 +4,8 @@
 //
 // SPDX-License-Identifier: MIT
 
-use crate::driver_constants::{MAX_INSTRUMENTS, MAX_SOUND_EFFECTS};
+use crate::driver_constants;
+use crate::driver_constants::{MAX_INSTRUMENTS, MAX_N_SONGS, MAX_SOUND_EFFECTS};
 use crate::envelope::{Adsr, Gain};
 use crate::errors::{
     DeserializeError, FileError, ProjectFileError, ProjectFileErrors, UniqueNameListError,
@@ -27,7 +28,10 @@ pub const MAX_FILE_SIZE: u32 = 5 * 1024 * 1024;
 #[serde(try_from = "String")]
 pub struct Name(String);
 
-// ::TODO confirm serde validates names::
+pub fn is_name_or_id(s: &str) -> bool {
+    s.bytes()
+        .all(|b| matches!(b, b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'_'))
+}
 
 impl Name {
     pub fn is_valid_name(s: &str) -> bool {
@@ -114,10 +118,19 @@ pub struct Instrument {
 }
 
 #[derive(Deserialize, Debug)]
+pub struct Song {
+    pub name: Name,
+    pub source: PathBuf,
+}
+
+#[derive(Deserialize, Debug)]
 pub struct Project {
     pub instruments: Vec<Instrument>,
 
     pub sound_effects: Vec<Name>,
+
+    #[serde(default)]
+    pub songs: Vec<Song>,
 }
 
 pub struct ProjectFile {
@@ -169,13 +182,19 @@ impl NameGetter for Instrument {
     }
 }
 
+impl NameGetter for Song {
+    fn name(&self) -> &Name {
+        &self.name
+    }
+}
+
 pub struct UniqueNamesList<T> {
     list: Vec<T>,
     map: HashMap<String, u8>,
 }
 
 impl<T> UniqueNamesList<T> {
-    pub fn list(&self) -> &Vec<T> {
+    pub fn list(&self) -> &[T] {
         &self.list
     }
     pub fn is_empty(&self) -> bool {
@@ -187,7 +206,10 @@ impl<T> UniqueNamesList<T> {
     pub fn map(&self) -> &HashMap<String, u8> {
         &self.map
     }
-    pub fn get(&self, name: &str) -> Option<(u8, &T)> {
+    pub fn get(&self, name: &str) -> Option<&T> {
+        self.map.get(name).map(|&i| (&self.list[usize::from(i)]))
+    }
+    pub fn get_with_index(&self, name: &str) -> Option<(u8, &T)> {
         self.map.get(name).map(|&i| (i, &self.list[usize::from(i)]))
     }
 }
@@ -199,6 +221,22 @@ pub struct UniqueNamesProjectFile {
 
     pub instruments: UniqueNamesList<Instrument>,
     pub sound_effects: UniqueNamesList<Name>,
+    pub songs: UniqueNamesList<Song>,
+}
+
+impl UniqueNamesProjectFile {
+    pub const FIRST_SONG_ID: usize = driver_constants::FIRST_SONG_ID;
+
+    pub fn last_song_id(&self) -> usize {
+        self.songs.len() + Self::FIRST_SONG_ID - 1
+    }
+
+    pub fn get_song_from_id(&self, id: usize) -> Option<&Song> {
+        match id.checked_sub(Self::FIRST_SONG_ID) {
+            Some(i) => self.songs.list().get(i),
+            None => None,
+        }
+    }
 }
 
 fn validate_list_names<T>(
@@ -267,6 +305,10 @@ pub fn validate_project_file_names(
             errors.push(ProjectFileError::SoundEffect(e))
         });
 
+    let songs = validate_list_names(pf.contents.songs, false, MAX_N_SONGS, |e| {
+        errors.push(ProjectFileError::Song(e))
+    });
+
     if errors.is_empty() {
         Ok(UniqueNamesProjectFile {
             path: pf.path,
@@ -274,6 +316,7 @@ pub fn validate_project_file_names(
             parent_path: pf.parent_path,
             instruments: instruments.unwrap(),
             sound_effects,
+            songs,
         })
     } else {
         Err(ProjectFileErrors(errors))
