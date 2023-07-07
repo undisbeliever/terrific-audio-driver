@@ -1,0 +1,235 @@
+// Audio driver bytecode instruction definitions
+//
+// SPDX-FileCopyrightText: © 2023 Marcus Rowe <undisbeliever@gmail.com>
+// SPDX-License-Identifier: Zlib
+//
+// Copyright © 2023 Marcus Rowe <undisbeliever@gmail.com>
+//
+// This software is provided 'as-is', without any express or implied warranty.  In
+// no event will the authors be held liable for any damages arising from the use of
+// this software.
+//
+// Permission is granted to anyone to use this software for any purpose, including
+// commercial applications, and to alter it and redistribute it freely, subject to
+// the following restrictions:
+//
+//      1. The origin of this software must not be misrepresented; you must not
+//         claim that you wrote the original software. If you use this software in
+//         a product, an acknowledgment in the product documentation would be
+//         appreciated but is not required.
+//
+//      2. Altered source versions must be plainly marked as such, and must not be
+//         misrepresented as being the original software.
+//
+//      3. This notice may not be removed or altered from any source distribution.
+
+
+import "audio-driver";
+
+
+let MAX_PAN = 128;
+
+
+namespace bytecode {
+
+let MAX_NESTED_LOOPS = 3;
+
+let N_NOTE_OCTAVES = 8;
+let N_PLAY_NOTE_INSTRUCTIONS = N_NOTE_OCTAVES * 12 * 2;
+
+let FIRST_INSTRUCTION_WITH_ARGUMENT_OPCODE = N_PLAY_NOTE_INSTRUCTIONS;
+let FIRST_NO_ARGUMENT_INSTRUCTION_OPCODE = FIRST_INSTRUCTION_WITH_ARGUMENT_OPCODE + bytecode.INSTRUCTIONS_WITH_ARGUMENTS.len * 2;
+
+// Last instruction is the `disable_channel` instruction
+// `disable_channel` will also send a KEY-OFF event.
+let DISABLE_CHANNEL_BYTECODE = 0xfe;
+
+
+
+// OPCODES < N_PLAY_NOTE_INSTRUCTIONS are a two-byte play note instruction.
+//
+//  nnnnnnnO llllllll
+//      nnnnnnn = note to play (number of semitones above c0)
+//            O = key-off after note ends
+//     llllllll = note length
+//
+//  NOTE: This instruction will wait an extra tick if the `key-off` bit is set.
+
+// The remaining instructions have an opcode of `0xc0 + instruction_index * 2`
+
+
+// Notes about rest/note length:
+//   * A rest/note length of 0 will pause for 256 ticks
+//   * A rest/note instruction will wait for an extra tick if the key-off bit is set.
+
+// These bytecodes do have parameters
+let INSTRUCTIONS_WITH_ARGUMENTS = [
+    // parameters: ssssssss llllllll nnnnnnnO
+    //     ssssssss = u8 speed (PITCH change per tick)
+    //     llllllll = note length
+    //      nnnnnnn = note to target (number of semitones above c0)
+    //            O = key-off after note ends
+    //
+    // NOTE: portamento does not emit a KON event
+    portamento_down,
+
+    // parameters: ssssssss llllllll nnnnnnnO
+    //     ssssssss = u8 speed (PITCH change per tick)
+    //     llllllll = note length
+    //      nnnnnnn = note to target (number of semitones above c0)
+    //            O = key-off after note ends
+    //
+    // NOTE: portamento does not emit a KON event
+    portamento_up,
+
+
+    // parameters: pppppppp 0ttttttt
+    //      pppppppp = pitch offset per tick.
+    //       ttttttt = quarter wavelength ticks.  MUST BE >= 1 and <= 64.
+    //
+    // If pppppppp is 0, vibrato is disabled.
+    //
+    // NOTES:
+    //  * The total wavelength of the vibrato is `ttttttt * 4`.
+    //  * If `ttttttt` is 0, the vibrato is unbalanced and will slowly increment the PITCH.
+    //  * If `ttttttt` is > 64, the vibrato is unbalanced and will slowly decrement the PITCH.
+    //  * Vibrato has no range checking and may overflow or underflow the PITCH register.
+    //  * Portamento overrides vibrato
+    //  * Vibrato is disabled when calling or returning from a subroutine
+    set_vibrato,
+
+
+    // parameters: pppppppp nnnnnnnO llllllll
+    //               pppppppp = pitch offset per tick.
+    //      nnnnnnnO llllllll = note to play (same format as play_note)
+    //
+    // If pppppppp is 0, vibrato is disabled.
+    //
+    // NOTES:
+    //  * No note_id range checking
+    //  * Assumes vibrato quarter wavelength is set by `set_vibrato`.
+    //  * Vibrato quarter wavelength is not initialised on channel reset.
+    //  * Vibrato is disabled when calling or returning from a subroutine
+    set_vibrato_depth_and_play_note,
+
+
+    // parameter = number of ticks to wait.
+    // NOTE: Does not send a keyoff event after resting.
+    rest,
+
+    // parameter = number of ticks to wait.
+    // Sends a keyoff event after resting (NOTE: waits an extra tick after keyoff).
+    rest_keyoff,
+
+
+    // parameter = subroutine ID (MAX: 127)
+    //
+    // NOTE: Only the lower 7 bits of the subroutine id are used.
+    // NOTE: There is no bounds checking
+    // NOTE: Disables vibrato
+    call_subroutine,
+
+
+    // parameter = u8 number of times to loop
+    start_loop_0,
+    start_loop_1,
+    start_loop_2,
+
+
+    // Breaks a loop early if the loop is on the last cycle
+    //  Used to implement the `:` token in a MML loop.
+    //
+    // ie. Allows for `[ abc : de ]3` loops, which will play `abc de abc de abc`.
+    //
+    // parameter = number of bytes in the bytecode to skip if loop counter == 1.
+    skip_last_loop_0,
+    skip_last_loop_1,
+    skip_last_loop_2,
+
+
+    // parameter = u8 instrument_id
+    //
+    // NOTE: There is no bounds-checking on instrument_id
+    set_instrument,
+
+    // parameter = u8 instrument_id, u8 adsr1, u8 adsr2OrGain
+    //
+    // ADSR/Gain is the same format as `InstrumentsSoa`.
+    //
+    // If bit 7 of `adsr1` is set, `adsr2OrGain` is written to the ADSR2 register
+    // If bit 7 of `adsr1` is clear, ADSR is disabled and `adsr2OrGain` is written to the GAIN register.
+    //
+    // NOTE: There is no bounds-checking on instrument_id
+    set_instrument_and_adsr_or_gain,
+
+
+    // parameter = u16 value to send to the ADSR register
+    set_adsr,
+
+    // parameter = u8 value to send to the GAIN register
+    // NOTE: Disables ADSR
+    set_gain,
+
+
+    // parameter = i8 pan adjustment
+    adjust_pan,
+
+    // parameter = pan (0-MAX_PAN, MAX_PAN/2 is centered)
+    set_pan,
+
+    // parameter: pppppppp vvvvvvvv
+    //      pppppppp = pan (0 - MAX_PAN, MAX_PAN/2 is centered)
+    //      vvvvvvvv = volume
+    set_pan_and_volume,
+
+    // parameter = i8 volume adjustment
+    adjust_volume,
+
+    // parameter = u8 volume (0-255)
+    set_volume,
+
+
+    // parameter: u8 new timer0 value
+    //
+    // NOTE: Only sets the song timer (tempo).  The timer for the sound-effect channels is unchanged.
+    set_song_tick_clock,
+];
+
+
+// These bytecodes do not have parameters
+let NO_ARGUMENT_INSTRUCTIONS = [
+    // End of channel bytecode.
+    //
+    // This instruction will either jump to the loop point or stop the channel
+    // (depending `MusicChannelHeader.loop`)
+    //
+    // This instruction is not recommended for sound effects.
+    // NOTE: `disable_channel` is slightly faster then `end`.
+    end,
+
+
+    // Return from a call instruction
+    // NOTE: Disables vibrato
+    return_from_subroutine,
+
+
+    // Jump to `start_loop_*` if `--loop_count != 0`
+    end_loop_0,
+    end_loop_1,
+    end_loop_2,
+
+
+    // Enable echo on this channel
+    enable_echo,
+
+    // Disable echo on this channel
+    disable_echo,
+
+
+    // Padding
+    disable_channel,
+];
+
+}
+
+

@@ -1,0 +1,71 @@
+// Common addresses, sizes and banks used by the loader and the audio driver.
+//
+// SPDX-FileCopyrightText: © 2023 Marcus Rowe <undisbeliever@gmail.com>
+// SPDX-License-Identifier: Zlib
+//
+// Copyright © 2023 Marcus Rowe <undisbeliever@gmail.com>
+//
+// This software is provided 'as-is', without any express or implied warranty.  In
+// no event will the authors be held liable for any damages arising from the use of
+// this software.
+//
+// Permission is granted to anyone to use this software for any purpose, including
+// commercial applications, and to alter it and redistribute it freely, subject to
+// the following restrictions:
+//
+//      1. The origin of this software must not be misrepresented; you must not
+//         claim that you wrote the original software. If you use this software in
+//         a product, an acknowledgment in the product documentation would be
+//         appreciated but is not required.
+//
+//      2. Altered source versions must be plainly marked as such, and must not be
+//         misrepresented as being the original software.
+//
+//      3. This notice may not be removed or altered from any source distribution.
+
+
+// LOADER_ADDR must match `src/audio.wiz`
+let LOADER_ADDR = 0x160;
+let LOADER_SIZE =  0x80;
+
+// Extra `- 0x10` for safety.
+let FIRSTPAGE_SIZE = LOADER_ADDR - 0x100 - 0x10;
+
+// ::TODO confirm stack size is large enough::
+let STACK_SIZE = 0x200 - LOADER_ADDR - LOADER_SIZE;
+let STACK_BOTTOM_ADDR = 0x200 - STACK_SIZE;
+
+// The -4 ensures the pitch-table and BRR directory is page aligned
+// `COMMON_DATA_ADDR` MUST be an even address (The loader only works with even addresses).
+let COMMON_DATA_ADDR = 0x800 - 4;
+
+let CODE_ADDR = 0x200;
+let CODE_SIZE = COMMON_DATA_ADDR - CODE_ADDR;
+
+
+bank zeropage        @ 0x0000 : [vardata;     0x00ec];
+bank loader_zeropage @ 0x00ec : [vardata;     0x0003];
+// addresses 0x00f0 - 0x00ff contains registers
+
+bank firstpage       @ 0x0100 : [vardata; FIRSTPAGE_SIZE];
+
+bank stack           @ STACK_BOTTOM_ADDR : [vardata; STACK_SIZE];
+
+
+in loader_zeropage {
+    // The address of the song data
+    var __loader_songPtr : *const u8;
+
+    // Mono/Stereo flag.
+    //
+    // Set by the loader when a song is loaded:
+    //   Advantages: Simpler and uses less code space (no IoCommand for to set/clear stereoFlag).
+    //   Disadvantages: Stereo flag is not set until a song is loaded.
+    var stereoFlag : u8;
+    let STEREO_FLAG_BIT = 7;
+}
+
+// Provide read-only access to songPtr address and data in `audio-driver.wiz`
+extern const songPtr @ &__loader_songPtr : *const u8;
+
+

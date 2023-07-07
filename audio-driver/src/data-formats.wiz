@@ -1,0 +1,167 @@
+// Data formats used by the audio driver
+//
+// SPDX-FileCopyrightText: © 2023 Marcus Rowe <undisbeliever@gmail.com>
+// SPDX-License-Identifier: Zlib
+//
+// Copyright © 2023 Marcus Rowe <undisbeliever@gmail.com>
+//
+// This software is provided 'as-is', without any express or implied warranty.  In
+// no event will the authors be held liable for any damages arising from the use of
+// this software.
+//
+// Permission is granted to anyone to use this software for any purpose, including
+// commercial applications, and to alter it and redistribute it freely, subject to
+// the following restrictions:
+//
+//      1. The origin of this software must not be misrepresented; you must not
+//         claim that you wrote the original software. If you use this software in
+//         a product, an acknowledgment in the product documentation would be
+//         appreciated but is not required.
+//
+//      2. Altered source versions must be plainly marked as such, and must not be
+//         misrepresented as being the original software.
+//
+//      3. This notice may not be removed or altered from any source distribution.
+
+
+// The minimum timer value required to ensure Key-Off event completely silences the sample before
+// the next note plays.
+let MIN_TICK_CLOCK = 64;
+
+
+// The tempo (timer register value) for the sound effects
+// MUST BE >= MIN_TICK_CLOCK
+let SFX_TICK_CLOCK = 64;
+
+
+let N_CHANNELS = 8;
+let N_MUSIC_CHANNELS = 6;
+let N_SFX_CHANNELS = N_CHANNELS - N_MUSIC_CHANNELS;
+
+let SONG_CHANNEL_MASK = (1 << N_MUSIC_CHANNELS) - 1;
+let SFX_CHANNEL_MASK = SONG_CHANNEL_MASK ^ 0xff;
+
+let STARTING_VOLUME = 96;
+
+let MAX_DIR_ITEMS = 0x100;
+let MAX_INSTRUMENTS = 0x100;
+let MAX_SOUND_EFFECTS = 192;
+
+
+
+// Common Data
+// ===========
+
+struct DirItem {
+    start : *const u8,
+    loop  : *const u8
+};
+
+
+// Assumes `sizeof(CommonDataHeader) + COMMON_DATA_ADDR` is page aligned.
+
+struct CommonDataHeader {
+    nDirItems      : u8,
+
+    nInstruments   : u8,
+
+    // MUST BE <= MAX_SOUND_EFFECTS
+    nSoundEffects  : u8,
+
+    // Padding required to ensure `COMMON_DATA_ADDR` is even
+    // (The loader only works with even starting addresses)
+    _padding: u8,
+
+
+    // These fields will be page-aligned
+    pitchTable_l   : [u8; 256],
+    pitchTable_h   : [u8; 256],
+
+
+    // After the header is common data.
+
+    //  BRR Directory:  [DirItem ; nDirItems]
+
+    //  Instruments SoA
+    //      instrument_scrn        : [u8 ; nInstruments]
+    //
+    //      instrument_pitchOffset : [u8 ; nInstruments]
+    //          This variable is either:
+    //              * ADSR2 if bit 7 of `adsr1` is set
+    //              * GAIN if bit 7 of `adsr1` is clear
+    //
+    //          instrument_adsr1       : [u8 ; nInstruments]
+    //
+    //          instrument_adsr2OrGain ; [u8 ; nInstruments]
+    //              offset between note c0 and `CommonDataHeader.pitchTable[0]`
+    //              (pitchOffset + note is allowed to overflow and underflow)
+
+    //  Sound Effects SoA
+    //      soundEffects_l : [u8 ; nSoundEffects]
+    //      soundEffects_h : [u8 ; nSoundEffects]
+    //          The address of the sound effect bytecode.
+};
+
+
+
+// Song Data
+// =========
+
+struct MusicChannelHeader {
+    // The starting offset of the channel bytecode (relative to the start of the song data).
+    //
+    // If `starting+songPtr` overflows (ie, starting >= 0xff00), then the channel is disabled.
+    starting : u16,
+
+    // The loop point in the channel bytecode (relative to the start of the song data).
+    //
+    // If `loop+songPtr` overflows (ie, loop >= 0xff00), then the channel will not loop.
+    loop: u16,
+};
+
+struct EchoBufferSettings {
+
+    // 4-bit echo buffer size.
+    //
+    // The echo buffer is `2048 * edl` bytes in size and `16ms * edl` in length.
+    //
+    // NOTE: An edl value of 0 allocates 2048 bytes of RAM to the echo buffer.
+    //
+    // NOTE: There is no echo buffer overflow checking.
+    //       The echo buffer may clobber song/sample/sfx data if `edl` is too large.
+    edl : u8,
+
+    // FIR filter.  Written to the `C0`-`C7` S-DSP registers.
+    firFilter : [i8 ; 8],
+
+    // Echo feedback.  Written to the `EFB` S-DSP register.
+    echoFeedback : i8,
+
+    // Echo volume.  Written to the `EVOL_L` and `EVOL_R` S-DSP registers.
+    echoVolume : i8,
+}
+
+// Size MUST match `audio/driver_constants.py`
+struct SongHeader {
+    channels : [MusicChannelHeader ; N_MUSIC_CHANNELS],
+
+
+    echo: EchoBufferSettings,
+
+
+    // Length of a tick in 1/8000 cycles (song tempo).
+    //
+    // MUST BE >= MIN_TICK_CLOCK
+    tickTimer : u8,
+
+    // Number of subroutines
+    // NOTE: This variable has a maximum value of 128.
+    // (This variable must be the last field in the SongHeader).
+    nSubroutines : u8,
+
+    // Immediately after this header is an array, [u16 ; nSubroutines], containing the location of each subroutine
+    // (relative to the start of the song data).
+    // The audio-engine will convert the locations into addresses before starting the event-loop.
+};
+
+

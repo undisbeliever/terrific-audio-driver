@@ -1,0 +1,176 @@
+// Data loader
+//
+// SPDX-FileCopyrightText: © 2023 Marcus Rowe <undisbeliever@gmail.com>
+// SPDX-License-Identifier: Zlib
+//
+// Copyright © 2023 Marcus Rowe <undisbeliever@gmail.com>
+//
+// This software is provided 'as-is', without any express or implied warranty.  In
+// no event will the authors be held liable for any damages arising from the use of
+// this software.
+//
+// Permission is granted to anyone to use this software for any purpose, including
+// commercial applications, and to alter it and redistribute it freely, subject to
+// the following restrictions:
+//
+//      1. The origin of this software must not be misrepresented; you must not
+//         claim that you wrote the original software. If you use this software in
+//         a product, an acknowledgment in the product documentation would be
+//         appreciated but is not required.
+//
+//      2. Altered source versions must be plainly marked as such, and must not be
+//         misrepresented as being the original software.
+//
+//      3. This notice may not be removed or altered from any source distribution.
+
+
+import "registers";
+import "common_memmap.wiz";
+
+config {
+    trim = true
+}
+
+bank loader_code     @ LOADER_ADDR : [varinitdata; LOADER_SIZE];
+
+in loader_zeropage {
+    // Allow the loader to read/write song address and data
+    var _songPtr : *u8 in __loader_songPtr;
+}
+
+
+enum LoaderDataType : u8 {
+    // These values cannot be 0 or negative.
+    CODE             = 'C',
+    COMMON_DATA      = 'D',
+
+    MONO_SONG_DATA   = 'M', // Value MUST BE > CODE & COMMON_DATA
+    STEREO_SONG_DATA = 'S', // Value MUST BE > MONO_SONG_DATA
+};
+
+let MIN_SONG_DATA_LOADER_DATA_TYPE = LoaderDataType.MONO_SONG_DATA as u8;
+
+
+in loader_code {
+
+// MUST be the first thing in the loader_code bank
+#[fallthrough]
+func start_loader() {
+    sp = x = 0xff;
+    direct_page = false;
+
+    // Soft reset the DSP
+    smp.dsp_addr = GlobalDspAddr.FLG as u8;
+    smp.dsp_data = dsp.FLG__SOFT_RESET | dsp.FLG__MUTE_ALL | dsp.FLG__ECHO_DISABLE;
+
+
+    // Clear IO ports
+    smp.control = smp.CONTROL__RESET_PORTS_01 | smp.CONTROL__RESET_PORTS_23;
+    smp.control = 0;
+
+    // Send 'ready' signal
+    a = 'R';
+    y = 'D';
+    smp.io_port_out_23 = ya;
+
+    // Wait for S-CPU to respond to the ready signal
+    do {
+    } while ya != smp.io_port_in_23;
+
+    // retrieve LoaderDataType from port 0
+    x = smp.io_port_in_0;
+
+    push(x);
+
+        // Get the address to store the data
+        // MUST NOT USE X
+        if x == LoaderDataType.CODE as u8 {
+            a = <:CODE_ADDR;
+            y = >:CODE_ADDR;
+        }
+        else if x == LoaderDataType.COMMON_DATA as u8 {
+            a = <:COMMON_DATA_ADDR;
+            y = >:COMMON_DATA_ADDR;
+        }
+        else {
+            // Assumes STEREO_SONG_DATA > MONO_SONG_DATA
+            cmp(x, LoaderDataType.STEREO_SONG_DATA);
+            stereoFlag $ STEREO_FLAG_BIT = carry;
+
+            // Assumes `_songPtr` is even
+            ya = _songPtr as u16;
+        }
+
+        // Write high byte of the address to the two `MOV !abs+Y, A` instructions.
+        (&STA_1 as *u8)[2] = y;
+        (&STA_2 as *u8)[2] = y;
+        y = a;
+
+        // Acknowledge LoaderDataType
+        // And override the `RD` ready signal.
+        smp.io_port_out_2 = 0;
+
+        x = 'D';
+
+        // Have to use a manual loop so the above code has access to the `STA_1` and `STA_2` labels.
+        Loop:
+            // Y = low byte of data address
+            // X = last value written to IO port 3
+
+            // Wait until S-CPU has written the data to the IO ports
+            do {
+            } while x == smp.io_port_in_3;
+
+            // Check if this data is correct, and get the byte to send back to the S-CPU
+            x = smp.io_port_in_3;
+            goto EndLoop if negative;
+
+
+            // Read data from the IO ports
+            a = smp.io_port_in_0;
+        STA_1:
+            (0xFF00 as *u8)[y] = a;
+
+            a = smp.io_port_in_1;
+
+
+            // Acknowledge data (S-CPU will start loading new data)
+            smp.io_port_out_3 = x;
+
+
+            // This code is executed while the S-CPU loads the next data into ports 0 & 1
+            y++;
+        STA_2:
+            (0xFF00 as *u8)[y] = a;
+            y++;
+
+            goto Loop if !zero;
+                (&STA_1 as *u8)[2]++;
+                (&STA_2 as *u8)[2]++;
+                goto Loop;
+EndLoop:
+
+    // Y = low byte of data address
+
+    // Acknowledge end of data
+    // (x is negative)
+    smp.io_port_out_3 = x;
+
+    x = pop();
+
+    if x == LoaderDataType.COMMON_DATA as u8 {
+        // Save current data address in `songPtr`
+        a = y;
+        y = (&STA_1 as *u8)[2];
+
+        _songPtr = ya as *u8;
+    }
+
+    goto start_loader if x < MIN_SONG_DATA_LOADER_DATA_TYPE;
+
+    // If data type was a song.  Execute audio engine.
+    goto (CODE_ADDR as func);
+}
+
+}
+
