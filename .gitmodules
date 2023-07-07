@@ -1,0 +1,3 @@
+[submodule "wiz"]
+	path = wiz
+	url = https://github.com/wiz-lang/wiz.git
