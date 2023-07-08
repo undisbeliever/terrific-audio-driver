@@ -46,6 +46,7 @@ fn encode_wave_file(
     is_looping: bool,
     loop_point: Option<usize>,
     dupe_block_hack: Option<usize>,
+    reset_filter_at_loop_point: bool,
 ) -> Result<BrrSample, SampleError> {
     let wav = {
         // ::TODO add wave file cache (for the GUI)::
@@ -68,7 +69,12 @@ fn encode_wave_file(
         loop_point
     };
 
-    match encode_brr(&wav.samples, loop_point, dupe_block_hack) {
+    match encode_brr(
+        &wav.samples,
+        loop_point,
+        dupe_block_hack,
+        reset_filter_at_loop_point,
+    ) {
         Ok(b) => Ok(b),
         Err(e) => Err(SampleError::BrrEncodeError(filename, e)),
     }
@@ -97,6 +103,7 @@ fn load_sample_for_instrument(
             inst.looping,
             inst.loop_point,
             inst.dupe_block_hack,
+            inst.loop_resets_filter,
         )?,
         Some("brr") => {
             if inst.dupe_block_hack.is_some() {

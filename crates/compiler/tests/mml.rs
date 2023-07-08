@@ -774,6 +774,7 @@ fn dummy_instrument(
         looping: true,
         loop_point: None,
         dupe_block_hack: None,
+        loop_resets_filter: false,
         first_octave: Octave::try_new(first_octave).unwrap(),
         last_octave: Octave::try_new(last_octave).unwrap(),
         adsr: adsr.map(|s| Adsr::try_from(s).unwrap()),

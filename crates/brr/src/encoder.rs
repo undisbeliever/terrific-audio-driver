@@ -20,7 +20,8 @@ pub enum EncodeError {
     TooManySamples,
     InvalidLoopPoint,
     LoopPointTooLarge(usize, usize),
-    DupeBlockHankNotAllowedWithLoopPoint,
+    DupeBlockHackNotAllowedWithLoopPoint,
+    DupeBlockHackNotAllowedWithLoopResetsFilter,
     DupeBlockHackTooLarge,
 }
 
@@ -42,8 +43,14 @@ impl std::fmt::Display for EncodeError {
                 lp,
                 s_len - SAMPLES_PER_BLOCK
             ),
-            EncodeError::DupeBlockHankNotAllowedWithLoopPoint => {
+            EncodeError::DupeBlockHackNotAllowedWithLoopPoint => {
                 write!(f, "dupe_block_hack not allowed when loop_point is set")
+            }
+            EncodeError::DupeBlockHackNotAllowedWithLoopResetsFilter => {
+                write!(
+                    f,
+                    "dupe_block_hack does nothing when loop_resets_filter is set"
+                )
             }
             EncodeError::DupeBlockHackTooLarge => write!(f, "dupe_block_hack value is too large"),
         }
@@ -197,6 +204,7 @@ pub fn encode_brr(
     samples: &[i16],
     loop_point_samples: Option<usize>,
     dupe_block_hack: Option<usize>,
+    loop_resets_filter: bool,
 ) -> Result<BrrSample, EncodeError> {
     if samples.is_empty() {
         return Err(EncodeError::NoSamples);
@@ -230,12 +238,16 @@ pub fn encode_brr(
                 return Err(EncodeError::DupeBlockHackTooLarge);
             }
 
+            if loop_resets_filter {
+                return Err(EncodeError::DupeBlockHackNotAllowedWithLoopResetsFilter);
+            }
+
             let loop_offset = u16::try_from(dbh * BYTES_PER_BRR_BLOCK).unwrap();
 
             (true, Some(loop_offset))
         }
         (Some(_), Some(_)) => {
-            return Err(EncodeError::DupeBlockHankNotAllowedWithLoopPoint);
+            return Err(EncodeError::DupeBlockHackNotAllowedWithLoopPoint);
         }
     };
 
@@ -249,13 +261,18 @@ pub fn encode_brr(
 
     let last_block_index = n_blocks - 1;
 
+    let reset_filter_block = match (loop_resets_filter, loop_point_samples) {
+        (true, Some(lp)) => lp / SAMPLES_PER_BLOCK,
+        _ => 0,
+    };
+
     for (i, samples) in samples
         .chunks_exact(SAMPLES_PER_BLOCK)
         .cycle()
         .take(n_blocks)
         .enumerate()
     {
-        let block = if i == 0 {
+        let block = if i == 0 || i == reset_filter_block {
             // The first block always uses filter 0
             find_best_block(samples.try_into().unwrap(), false, 0, 0)
         } else {

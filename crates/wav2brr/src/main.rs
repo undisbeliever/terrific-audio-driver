@@ -38,6 +38,14 @@ struct Args {
         conflicts_with = "loop_point"
     )]
     dupe_block_hack: Option<usize>,
+
+    #[arg(
+        short = 'r',
+        long,
+        help = "Reset BRR filter at the loop point",
+        conflicts_with = "dupe_block_hack"
+    )]
+    loop_resets_filter: bool,
 }
 
 macro_rules! error {
@@ -62,7 +70,12 @@ fn main() {
         }
     };
 
-    let brr = match encode_brr(&wav.samples, args.loop_point, args.dupe_block_hack) {
+    let brr = match encode_brr(
+        &wav.samples,
+        args.loop_point,
+        args.dupe_block_hack,
+        args.loop_resets_filter,
+    ) {
         Err(why) => error!("Cannot encode BRR: {}", why),
         Ok(brr) => brr,
     };
