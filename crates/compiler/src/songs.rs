@@ -10,7 +10,7 @@ use crate::driver_constants::{
     MAX_SONG_DATA_SIZE, MAX_SUBROUTINES, N_MUSIC_CHANNELS, SONG_HEADER_SIZE,
 };
 use crate::errors::SongError;
-use crate::mml::MmlData;
+use crate::mml::{MetaData, MmlData};
 
 const NULL_OFFSET: u16 = 0xffff_u16;
 
@@ -22,7 +22,21 @@ fn validate_data_size(data: &[u8], expected_size: usize) -> Result<(), SongError
     }
 }
 
-pub fn song_data(mml_data: &MmlData) -> Result<Vec<u8>, SongError> {
+pub struct SongData {
+    metadata: MetaData,
+    data: Vec<u8>,
+}
+
+impl SongData {
+    pub fn metadata(&self) -> &MetaData {
+        &self.metadata
+    }
+    pub fn data(&self) -> &[u8] {
+        &self.data
+    }
+}
+
+pub fn song_data(mml_data: MmlData) -> Result<SongData, SongError> {
     let metadata = mml_data.metadata();
     let channels = mml_data.channels();
     let subroutines = mml_data.subroutines();
@@ -112,5 +126,8 @@ pub fn song_data(mml_data: &MmlData) -> Result<Vec<u8>, SongError> {
 
     validate_data_size(&out, total_size)?;
 
-    Ok(out)
+    Ok(SongData {
+        metadata: mml_data.take_metadata(),
+        data: out,
+    })
 }

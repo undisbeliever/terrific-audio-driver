@@ -187,6 +187,10 @@ impl MmlData {
     pub fn channels(&self) -> &[ChannelData] {
         &self.channels
     }
+
+    pub(crate) fn take_metadata(self) -> MetaData {
+        self.metadata
+    }
 }
 
 // MML Line Splitter

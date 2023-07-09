@@ -13,10 +13,18 @@ use crate::errors::{CommonAudioDataError, CommonAudioDataErrors};
 use crate::samples::SampleAndInstrumentData;
 use crate::sound_effects::CombinedSoundEffectsData;
 
+pub struct CommonAudioData(Vec<u8>);
+
+impl CommonAudioData {
+    pub fn data(&self) -> &[u8] {
+        &self.0
+    }
+}
+
 pub fn build_common_audio_data(
     samples: &SampleAndInstrumentData,
     sound_effects: &CombinedSoundEffectsData,
-) -> Result<Vec<u8>, CommonAudioDataErrors> {
+) -> Result<CommonAudioData, CommonAudioDataErrors> {
     let mut errors = Vec::new();
 
     let n_instruments = samples.n_instruments;
@@ -105,5 +113,5 @@ pub fn build_common_audio_data(
 
     assert_eq!(out.len(), common_data_size);
 
-    Ok(out)
+    Ok(CommonAudioData(out))
 }

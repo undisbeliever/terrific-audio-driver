@@ -33,10 +33,10 @@ pub use notes::{Note, Octave, STARTING_OCTAVE};
 pub use pitch_table::{build_pitch_table, PitchTable};
 pub use samples::{build_sample_and_instrument_data, SampleAndInstrumentData};
 
-pub use common_audio_data::build_common_audio_data;
+pub use common_audio_data::{build_common_audio_data, CommonAudioData};
 
-pub use mml::compile_mml;
-pub use songs::song_data;
+pub use mml::{compile_mml, MmlData};
+pub use songs::{song_data, SongData};
 pub use spc_file_export::export_spc_file;
 
 pub mod audio_driver {

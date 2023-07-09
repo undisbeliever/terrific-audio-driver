@@ -119,12 +119,12 @@ fn compile_common_data(args: CompileCommonDataArgs) {
         _ => error!("Error compiling common audio data"),
     };
 
-    let data = match compiler::build_common_audio_data(&samples, &sfx) {
+    let cad = match compiler::build_common_audio_data(&samples, &sfx) {
         Ok(data) => data,
         Err(e) => error!("{}", e.multiline_display()),
     };
 
-    write_data(args.output, data);
+    write_data(args.output, cad.data());
 }
 
 //
@@ -188,12 +188,12 @@ fn compile_song_data(args: CompileSongDataArgs) {
         Err(e) => error!("{}", e.multiline_display()),
     };
 
-    let data = match song_data(&mml) {
+    let song_data = match song_data(mml) {
         Ok(d) => d,
         Err(e) => error!("{}", e),
     };
 
-    write_data(args.output, data);
+    write_data(args.output, song_data.data());
 }
 
 //
@@ -215,17 +215,22 @@ fn export_song_to_spc_file(args: CompileSongDataArgs) {
         Err(e) => error!("{}", e.multiline_display()),
     };
 
+    let song_data = match song_data(mml) {
+        Ok(mml) => mml,
+        Err(e) => error!("{}", e),
+    };
+
     let common_audio_data = match compiler::build_common_audio_data(&samples, &sfx) {
         Ok(data) => data,
         Err(e) => error!("{}", e.multiline_display()),
     };
 
-    let data = match compiler::export_spc_file(&common_audio_data, &mml) {
+    let data = match compiler::export_spc_file(&common_audio_data, song_data) {
         Ok(d) => d,
         Err(e) => error!("{}", e),
     };
 
-    write_data(args.output, data);
+    write_data(args.output, &data);
 }
 
 //
@@ -263,14 +268,14 @@ fn load_text_file(path: PathBuf) -> TextFile {
     }
 }
 
-fn write_data(out: OutputArg, data: Vec<u8>) {
+fn write_data(out: OutputArg, data: &[u8]) {
     if let Some(path) = out.path {
         match fs::write(&path, data) {
             Ok(()) => (),
             Err(e) => error!("Error writing {}: {}", path.display(), e),
         }
     } else if out.stdout {
-        match io::stdout().write_all(&data) {
+        match io::stdout().write_all(data) {
             Ok(()) => (),
             Err(e) => error!("Error writing data: {}", e),
         }

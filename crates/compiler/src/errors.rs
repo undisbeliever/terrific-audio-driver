@@ -436,7 +436,6 @@ pub enum SongError {
 
 #[derive(Debug)]
 pub enum ExportSpcFileError {
-    SongError(SongError),
     TooMuchData {
         common: usize,
         song: usize,
@@ -1082,7 +1081,6 @@ impl Display for SongError {
 impl Display for ExportSpcFileError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            Self::SongError(e) => e.fmt(f),
             Self::TooMuchData { common, song, echo } => {
                 write!(f, "cannot fit data in audio-ram (driver: {} bytes, common_audio_data: {} bytes, song data: {} bytes, echo buffer: {} bytes", COMMON_DATA_ADDR, common, song, echo)
             }

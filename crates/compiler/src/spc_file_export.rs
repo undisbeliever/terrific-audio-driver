@@ -5,12 +5,12 @@
 // SPDX-License-Identifier: MIT
 
 use crate::audio_driver;
+use crate::common_audio_data::CommonAudioData;
 use crate::driver_constants::{
     COMMON_DATA_ADDR, DRIVER_CODE_ADDR, DRIVER_LOADER_ADDR, DRIVER_SONG_PTR_ADDR,
 };
 use crate::errors::ExportSpcFileError;
-use crate::mml::MmlData;
-use crate::songs::song_data;
+use crate::songs::SongData;
 
 const SPC_FILE_SIZE: usize = 0x10200;
 
@@ -38,15 +38,14 @@ const _: () = assert!(
 );
 
 pub fn export_spc_file(
-    common_audio_data: &[u8],
-    mml_data: &MmlData,
+    common_audio_data: &CommonAudioData,
+    song_data: SongData,
 ) -> Result<Vec<u8>, ExportSpcFileError> {
-    let song_data = match song_data(mml_data) {
-        Ok(sd) => sd,
-        Err(e) => return Err(ExportSpcFileError::SongError(e)),
-    };
+    let common_audio_data = common_audio_data.data();
+    let metadata = song_data.metadata();
+    let song_data = song_data.data();
 
-    let echo_edl = mml_data.metadata().echo_buffer.edl;
+    let echo_edl = metadata.echo_buffer.edl;
 
     let song_data_addr =
         usize::from(COMMON_DATA_ADDR) + common_audio_data.len() + (common_audio_data.len() % 2);
@@ -72,7 +71,6 @@ pub fn export_spc_file(
     // Header
     {
         let header = &mut out[0..0x100];
-        let metadata = mml_data.metadata();
 
         header[0..33].copy_from_slice(b"SNES-SPC700 Sound File Data v0.30");
         header[0x21] = 26;
@@ -109,7 +107,7 @@ pub fn export_spc_file(
         write_spc_ram(DRIVER_SONG_PTR_ADDR, &song_data_addr.to_le_bytes());
         write_spc_ram(DRIVER_CODE_ADDR, audio_driver::AUDIO_DRIVER);
         write_spc_ram(COMMON_DATA_ADDR, common_audio_data);
-        write_spc_ram(song_data_addr, &song_data);
+        write_spc_ram(song_data_addr, song_data);
 
         // Replace loader with a `STOP` instructions
         spc_ram[usize::from(DRIVER_LOADER_ADDR)] = 0xff;
