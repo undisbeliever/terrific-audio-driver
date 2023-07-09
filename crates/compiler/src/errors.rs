@@ -219,7 +219,7 @@ pub struct SoundEffectError {
 
 #[derive(Debug)]
 pub struct SoundEffectsFileError {
-    pub path: PathBuf,
+    pub path: Option<PathBuf>,
     pub file_name: String,
 
     pub errors: Vec<SoundEffectError>,
@@ -414,7 +414,7 @@ impl MmlChannelError {
 
 #[derive(Debug)]
 pub struct MmlCompileErrors {
-    pub path: PathBuf,
+    pub path: Option<PathBuf>,
     pub file_name: String,
 
     pub line_errors: Vec<ErrorWithLine<MmlLineError>>,
@@ -1132,7 +1132,10 @@ impl Display for SoundEffectsFileErrorIndentedDisplay<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         let error = self.0;
 
-        writeln!(f, "Error compiling sound effects file: {}", error.path.display())?;
+        match &error.path {
+            Some(p) => writeln!(f, "Error compiling sound effects file: {}", p.display())?,
+            None => writeln!(f, "Error compiling sound effects file")?,
+        }
 
         for (i, e) in error.errors.iter().enumerate() {
             if i != 0 {
@@ -1268,7 +1271,10 @@ impl Display for MmlCompileErrorsIndentedDisplay<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         let error = self.0;
 
-        writeln!(f, "Error compiling MML file: {}", error.path.display())?;
+        match &error.path {
+            Some(p) => writeln!(f, "Error compiling MML file: {}", p.display())?,
+            None => writeln!(f, "Error compiling MML file")?,
+        }
 
         for e in &error.line_errors {
             writeln!(f, "  {}:{} {}", error.file_name, e.0, e.1)?;

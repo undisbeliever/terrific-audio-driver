@@ -169,7 +169,7 @@ pub fn load_project_file(path: &Path) -> Result<ProjectFile, DeserializeError> {
     };
 
     Ok(ProjectFile {
-        path: text_file.path,
+        path: path.to_path_buf(),
         file_name,
         parent_path,
         contents,
@@ -341,7 +341,7 @@ pub fn validate_project_file_names(
 // ========
 
 pub struct TextFile {
-    pub path: PathBuf,
+    pub path: Option<PathBuf>,
     pub file_name: String,
     pub contents: String,
 }
@@ -372,7 +372,7 @@ pub fn load_text_file_with_limit(path: &Path) -> Result<TextFile, FileError> {
 
     match String::from_utf8(buffer) {
         Ok(contents) => Ok(TextFile {
-            path: path.to_owned(),
+            path: Some(path.to_owned()),
             file_name,
             contents,
         }),

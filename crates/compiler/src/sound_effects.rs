@@ -215,7 +215,7 @@ pub struct SoundEffectInput {
 // NOTE: fields are not validated
 #[derive(Debug, PartialEq)]
 pub struct SoundEffectsFile {
-    pub path: PathBuf,
+    pub path: Option<PathBuf>,
     pub file_name: String,
 
     pub header: String,
@@ -306,10 +306,9 @@ e
 === last_empty ===
 "##;
 
-        let path: PathBuf = "parent/basename.txt".to_owned().into();
         let file_name = "fn.txt".to_owned();
         let tf = TextFile {
-            path: path.clone(),
+            path: None,
             file_name: file_name.clone(),
             contents: INPUT.to_owned(),
         };
@@ -319,7 +318,7 @@ e
         assert_eq!(
             sfx_file,
             SoundEffectsFile {
-                path,
+                path: None,
                 file_name,
                 header: "".to_owned(),
                 sound_effects: vec![
@@ -371,7 +370,7 @@ c
         let path: PathBuf = "path.txt".to_owned().into();
         let file_name = "test.txt".to_owned();
         let tf = TextFile {
-            path: path.clone(),
+            path: Some(path.clone()),
             file_name: file_name.clone(),
             contents: INPUT.to_owned(),
         };
@@ -381,7 +380,7 @@ c
         assert_eq!(
             sfx_file,
             SoundEffectsFile {
-                path,
+                path: Some(path),
                 file_name,
                 header: "; This is a header\n; With multiple lines\n".to_owned(),
                 sound_effects: vec![

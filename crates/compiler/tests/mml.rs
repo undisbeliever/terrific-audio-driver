@@ -4,8 +4,8 @@
 //
 // SPDX-License-Identifier: MIT
 
-use compiler::*;
 use compiler::data::{TextFile, UniqueNamesList};
+use compiler::*;
 
 use std::path::PathBuf;
 
@@ -726,7 +726,7 @@ fn compile_mml(mml: &str, dummy_data: &DummyData) -> mml::MmlData {
     mml::parse_mml(
         &TextFile {
             contents: mml.to_string(),
-            path: "".into(),
+            path: None,
             file_name: "".to_owned(),
         },
         &dummy_data.instruments,
