@@ -7,7 +7,7 @@
 use clap::{Args, Parser, Subcommand};
 use compiler::data::{is_name_or_id, load_text_file_with_limit, TextFile};
 use compiler::sound_effects;
-use compiler::{build_pitch_table, parse_mml, song_data, UniqueNamesProjectFile};
+use compiler::{build_pitch_table, compile_mml, song_data, UniqueNamesProjectFile};
 
 use std::ffi::OsString;
 use std::fs;
@@ -183,7 +183,7 @@ fn compile_song_data(args: CompileSongDataArgs) {
         Err(e) => error!("{}", e.multiline_display()),
     };
 
-    let mml = match parse_mml(&mml_file, &pf.instruments, &pitch_table) {
+    let mml = match compile_mml(&mml_file, &pf.instruments, &pitch_table) {
         Ok(mml) => mml,
         Err(e) => error!("{}", e.multiline_display()),
     };
@@ -210,7 +210,7 @@ fn export_song_to_spc_file(args: CompileSongDataArgs) {
     };
     let sfx = sound_effects::blank_compiled_sound_effects();
 
-    let mml = match parse_mml(&mml_file, &pf.instruments, samples.pitch_table()) {
+    let mml = match compile_mml(&mml_file, &pf.instruments, samples.pitch_table()) {
         Ok(mml) => mml,
         Err(e) => error!("{}", e.multiline_display()),
     };

@@ -1446,7 +1446,7 @@ fn parse_and_compile_mml_channel(
     }
 }
 
-pub fn parse_mml(
+pub fn compile_mml(
     mml_file: &TextFile,
     inst_map: &UniqueNamesList<data::Instrument>,
     pitch_table: &PitchTable,

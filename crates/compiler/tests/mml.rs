@@ -723,7 +723,7 @@ fn assert_mml_channel_a_matches_bytecode(mml: &str, bc_asm: &[&str]) {
 }
 
 fn compile_mml(mml: &str, dummy_data: &DummyData) -> mml::MmlData {
-    mml::parse_mml(
+    mml::compile_mml(
         &TextFile {
             contents: mml.to_string(),
             path: None,

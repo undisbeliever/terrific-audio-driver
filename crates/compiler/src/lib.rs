@@ -35,7 +35,7 @@ pub use samples::{build_sample_and_instrument_data, SampleAndInstrumentData};
 
 pub use common_audio_data::build_common_audio_data;
 
-pub use mml::parse_mml;
+pub use mml::compile_mml;
 pub use songs::song_data;
 pub use spc_file_export::export_spc_file;
 
