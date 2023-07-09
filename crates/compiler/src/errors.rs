@@ -25,7 +25,7 @@ use crate::{mml, Octave};
 
 use std::fmt::Display;
 use std::io;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 #[derive(Debug)]
 pub struct ErrorWithLine<T>(pub u32, pub T);
@@ -417,22 +417,6 @@ pub struct MmlCompileErrors {
     pub channel_errors: Vec<MmlChannelError>,
 }
 
-impl MmlCompileErrors {
-    fn n_errors(&self) -> usize {
-        self.line_errors.len()
-            + self
-                .subroutine_errors
-                .iter()
-                .map(MmlChannelError::n_errors)
-                .sum::<usize>()
-            + self
-                .channel_errors
-                .iter()
-                .map(MmlChannelError::n_errors)
-                .sum::<usize>()
-    }
-}
-
 #[derive(Debug)]
 pub enum SongError {
     NoMusicChannels,
@@ -806,12 +790,6 @@ impl Display for SoundEffectError {
     }
 }
 
-impl Display for SoundEffectsFileError {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "error compiling sound effects file")
-    }
-}
-
 impl Display for CombineSoundEffectsError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
@@ -895,12 +873,6 @@ impl Display for PitchError {
                 fo_by, lo_by
             ),
         }
-    }
-}
-
-impl Display for PitchTableError {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "error building pitch table")
     }
 }
 
@@ -1081,12 +1053,6 @@ impl Display for MmlCommandError {
     }
 }
 
-impl Display for MmlCompileErrors {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "{} errors compiling mml", self.n_errors())
-    }
-}
-
 impl Display for SongError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
@@ -1148,14 +1114,15 @@ impl ProjectFileErrors {
     }
 }
 
-pub struct SoundEffectsFileErrorIndentedDisplay<'a>(&'a SoundEffectsFileError, &'a str);
+pub struct SoundEffectsFileErrorIndentedDisplay<'a>(&'a SoundEffectsFileError, &'a Path, &'a str);
 
 impl SoundEffectsFileError {
     pub fn multiline_display<'a>(
         &'a self,
+        path: &'a Path,
         file_name: &'a str,
     ) -> SoundEffectsFileErrorIndentedDisplay {
-        SoundEffectsFileErrorIndentedDisplay(self, file_name)
+        SoundEffectsFileErrorIndentedDisplay(self, path, file_name)
     }
 }
 
@@ -1163,7 +1130,10 @@ impl SoundEffectsFileError {
 impl Display for SoundEffectsFileErrorIndentedDisplay<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         let error = self.0;
-        let file_name = self.1;
+        let path = self.1;
+        let file_name = self.2;
+
+        writeln!(f, "Error compiling sound effects file: {}", path.display())?;
 
         match error {
             SoundEffectsFileError::SoundEffectErrors(errors) => {
@@ -1175,8 +1145,6 @@ impl Display for SoundEffectsFileErrorIndentedDisplay<'_> {
                 }
             }
             SoundEffectsFileError::DuplicateSfxNamesInSfxFile(errors) => {
-                writeln!(f, "Error compiling sound effects")?;
-
                 for (line_no, name) in errors {
                     writeln!(f, "  {}:{} duplicate name: {}", file_name, line_no, name)?;
                 }
@@ -1196,18 +1164,18 @@ fn fmt_indented_sound_effect_error(
     let line_no = error.sfx_line_no;
 
     if !error.invalid_name {
-        writeln!(f, "Error compiling {} sound effect", error.sfx_name)?;
+        writeln!(f, "  {}:", error.sfx_name)?;
     } else {
-        writeln!(f, "Error compiling sound effect")?;
-        writeln!(f, "  {}:{}: invalid name", file_name, line_no)?;
+        writeln!(f, "  unnamed sound effect:")?;
+        writeln!(f, "    {}:{} invalid name", file_name, line_no)?;
     }
 
     if error.no_notes {
-        writeln!(f, "  {}:{}: no notes in sound effect", file_name, line_no)?;
+        writeln!(f, "    {}:{} no notes in sound effect", file_name, line_no)?;
     }
 
     for e in &error.errors {
-        writeln!(f, "  {}:{}: {}", file_name, line_no + e.0, e.1)?;
+        writeln!(f, "    {}:{} {}", file_name, line_no + e.0, e.1)?;
     }
 
     Ok(())
@@ -1295,25 +1263,25 @@ impl CommonAudioDataErrors {
     }
 }
 
-pub struct MmlCompileErrorsIndentedDisplay<'a>(&'a MmlCompileErrors, &'a str);
+pub struct MmlCompileErrorsIndentedDisplay<'a>(&'a MmlCompileErrors, &'a Path, &'a str);
 
 impl MmlCompileErrors {
-    pub fn multiline_display<'a>(&'a self, file_name: &'a str) -> MmlCompileErrorsIndentedDisplay {
-        MmlCompileErrorsIndentedDisplay(self, file_name)
+    pub fn multiline_display<'a>(
+        &'a self,
+        path: &'a Path,
+        file_name: &'a str,
+    ) -> MmlCompileErrorsIndentedDisplay {
+        MmlCompileErrorsIndentedDisplay(self, path, file_name)
     }
 }
 
 impl Display for MmlCompileErrorsIndentedDisplay<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         let error = self.0;
-        let file_name = self.1;
+        let path = self.1;
+        let file_name = self.2;
 
-        let n_errors = error.n_errors();
-        if n_errors == 1 {
-            writeln!(f, "1 error compiling {}", file_name)?;
-        } else {
-            writeln!(f, "{} errors compiling {}", n_errors, file_name)?;
-        }
+        writeln!(f, "Error compiling MML file: {}", path.display())?;
 
         for e in &error.line_errors {
             writeln!(f, "  {}:{} {}", file_name, e.0, e.1)?;
@@ -1349,10 +1317,10 @@ fn fmt_indented_channel_errors(
     }
 
     for e in &error.parse_errors {
-        writeln!(f, "    {}:{}:{}: {}", file_name, e.0.line_number, e.0.line_char, e.1)?;
+        writeln!(f, "    {}:{}:{} {}", file_name, e.0.line_number, e.0.line_char, e.1)?;
     }
     for e in &error.command_errors {
-        writeln!(f, "    {}:{}:{}: {}", file_name, e.0.line_number, e.0.line_char, e.1)?;
+        writeln!(f, "    {}:{}:{} {}", file_name, e.0.line_number, e.0.line_char, e.1)?;
     }
 
     Ok(())

@@ -75,13 +75,16 @@ fn compile_sound_effects(
     let mut sound_effects = Vec::with_capacity(pf.sound_effect_files.len());
 
     for sfx_file_path in &pf.sound_effect_files {
-        let sfx_file_path = pf.parent_path.join(sfx_file_path);
+        let path = pf.parent_path.join(sfx_file_path);
 
-        match sound_effects::load_sound_effects_file(&sfx_file_path) {
+        match sound_effects::load_sound_effects_file(&path) {
             Err(e) => eprintln!("{}", e),
             Ok(sfx_file) => {
                 match sound_effects::compile_sound_effects_file(&sfx_file, &pf.instruments) {
-                    Err(e) => eprintln!("{}", e.multiline_display(&sfx_file.file_name)),
+                    Err(e) => eprintln!(
+                        "{}",
+                        e.multiline_display(sfx_file_path, &sfx_file.file_name)
+                    ),
                     Ok(sfx) => sound_effects.push(sfx),
                 }
             }
@@ -188,7 +191,7 @@ fn compile_song_data(args: CompileSongDataArgs) {
 
     let mml = match parse_mml(&mml_text, &pf.instruments, &pitch_table) {
         Ok(mml) => mml,
-        Err(e) => error!("{}", e.multiline_display(&file_name)),
+        Err(e) => error!("{}", e.multiline_display(&mml_file.path, &file_name)),
     };
 
     let data = match song_data(&mml) {
@@ -218,7 +221,7 @@ fn export_song_to_spc_file(args: CompileSongDataArgs) {
 
     let mml = match parse_mml(&mml_text, &pf.instruments, samples.pitch_table()) {
         Ok(mml) => mml,
-        Err(e) => error!("{}", e.multiline_display(&file_name)),
+        Err(e) => error!("{}", e.multiline_display(&mml_file.path, &file_name)),
     };
 
     let common_audio_data = match compiler::build_common_audio_data(&samples, &sfx) {
