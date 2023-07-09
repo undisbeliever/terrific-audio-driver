@@ -12,7 +12,7 @@ use crate::errors::{
 };
 use crate::UniqueNamesProjectFile;
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
 const COMMENT_CHAR: char = ';';
@@ -23,13 +23,18 @@ const NEW_SFX_TOKEN_END: &str = "===";
 
 // ::TODO add MML based sound effects::
 
+pub struct CompiledSoundEffect {
+    name: Name,
+    data: Vec<u8>,
+}
+
 pub fn compile_sound_effect(
     sfx_name: &str,
     sfx: &str,
     starting_line_number: u32,
     instruments: &UniqueNamesList<Instrument>,
     duplicate_name: bool,
-) -> Result<Vec<u8>, SoundEffectError> {
+) -> Result<CompiledSoundEffect, SoundEffectError> {
     let mut errors = Vec::new();
 
     let name = Name::try_new(sfx_name.to_string());
@@ -75,8 +80,8 @@ pub fn compile_sound_effect(
 
     let no_errors = !no_notes && !invalid_name && errors.is_empty();
 
-    if let (Ok(_name), Some(data), true) = (name, out, no_errors) {
-        Ok(data)
+    if let (Ok(name), Some(data), true) = (name, out, no_errors) {
+        Ok(CompiledSoundEffect { name, data })
     } else {
         Err(SoundEffectError {
             sfx_name: sfx_name.to_owned(),
@@ -89,20 +94,17 @@ pub fn compile_sound_effect(
     }
 }
 
-pub struct CompiledSoundEffectsFile {
-    sound_effects: HashMap<String, Vec<u8>>,
-}
-
 pub fn compile_sound_effects_file(
     sfx_file: &SoundEffectsFile,
     instruments: &UniqueNamesList<Instrument>,
-) -> Result<CompiledSoundEffectsFile, SoundEffectsFileError> {
-    let mut sound_effects = HashMap::with_capacity(sfx_file.sound_effects.len());
+) -> Result<Vec<CompiledSoundEffect>, SoundEffectsFileError> {
+    let mut sound_effects = Vec::with_capacity(sfx_file.sound_effects.len());
+    let mut names = HashSet::with_capacity(sfx_file.sound_effects.len());
 
     let mut errors = Vec::new();
 
     for sfx in &sfx_file.sound_effects {
-        let duplicate_name = sound_effects.contains_key(&sfx.name);
+        let duplicate_name = names.insert(&sfx.name);
 
         match compile_sound_effect(
             &sfx.name,
@@ -111,17 +113,13 @@ pub fn compile_sound_effects_file(
             instruments,
             duplicate_name,
         ) {
-            Ok(s) => {
-                sound_effects.insert(sfx.name.clone(), s);
-            }
-            Err(e) => {
-                errors.push(e);
-            }
+            Ok(s) => sound_effects.push(s),
+            Err(e) => errors.push(e),
         }
     }
 
     if errors.is_empty() {
-        Ok(CompiledSoundEffectsFile { sound_effects })
+        Ok(sound_effects)
     } else {
         Err(SoundEffectsFileError {
             path: sfx_file.path.clone(),
@@ -131,22 +129,20 @@ pub fn compile_sound_effects_file(
     }
 }
 
-pub struct CompiledSoundEffects {
+pub struct CombinedSoundEffectsData {
     pub(crate) sfx_data: Vec<u8>,
     pub(crate) sfx_offsets: Vec<usize>,
 }
 
-fn merge_sfx_maps(
-    sound_effects: &[CompiledSoundEffectsFile],
-) -> Result<HashMap<&str, &[u8]>, CombineSoundEffectsError> {
+fn build_sfx_map(
+    sound_effects: &[CompiledSoundEffect],
+) -> Result<HashMap<&Name, &[u8]>, CombineSoundEffectsError> {
     let mut out = HashMap::new();
     let mut duplicates = Vec::new();
 
-    for f in sound_effects {
-        for (name, data) in &f.sound_effects {
-            if out.insert(name.as_str(), data.as_slice()).is_some() {
-                duplicates.push(name.to_string())
-            }
+    for sfx in sound_effects {
+        if out.insert(&sfx.name, sfx.data.as_slice()).is_some() {
+            duplicates.push(sfx.name.to_string())
         }
     }
 
@@ -158,14 +154,14 @@ fn merge_sfx_maps(
 }
 
 pub fn combine_sound_effects(
-    sound_effects: &[CompiledSoundEffectsFile],
+    sound_effects: &[CompiledSoundEffect],
     pf: &UniqueNamesProjectFile,
-) -> Result<CompiledSoundEffects, CombineSoundEffectsError> {
+) -> Result<CombinedSoundEffectsData, CombineSoundEffectsError> {
     if sound_effects.is_empty() {
         return Err(CombineSoundEffectsError::NoSoundEffectFiles);
     }
 
-    let sfx_map = merge_sfx_maps(sound_effects)?;
+    let sfx_map = build_sfx_map(sound_effects)?;
 
     let export_order = &pf.sound_effects;
 
@@ -175,7 +171,7 @@ pub fn combine_sound_effects(
     let mut missing = Vec::new();
 
     for name in export_order.list() {
-        match sfx_map.get(name.as_str()) {
+        match sfx_map.get(name) {
             Some(s) => {
                 sfx_offsets.push(sfx_data.len());
                 sfx_data.extend(*s);
@@ -185,7 +181,7 @@ pub fn combine_sound_effects(
     }
 
     if missing.is_empty() {
-        Ok(CompiledSoundEffects {
+        Ok(CombinedSoundEffectsData {
             sfx_data,
             sfx_offsets,
         })
@@ -194,8 +190,8 @@ pub fn combine_sound_effects(
     }
 }
 
-pub fn blank_compiled_sound_effects() -> CompiledSoundEffects {
-    CompiledSoundEffects {
+pub fn blank_compiled_sound_effects() -> CombinedSoundEffectsData {
+    CombinedSoundEffectsData {
         sfx_data: Vec::new(),
         sfx_offsets: Vec::new(),
     }

@@ -11,11 +11,11 @@ use crate::driver_constants::{
 };
 use crate::errors::{CommonAudioDataError, CommonAudioDataErrors};
 use crate::samples::SampleAndInstrumentData;
-use crate::sound_effects::CompiledSoundEffects;
+use crate::sound_effects::CombinedSoundEffectsData;
 
 pub fn build_common_audio_data(
     samples: &SampleAndInstrumentData,
-    sound_effects: &CompiledSoundEffects,
+    sound_effects: &CombinedSoundEffectsData,
 ) -> Result<Vec<u8>, CommonAudioDataErrors> {
     let mut errors = Vec::new();
 

@@ -71,8 +71,8 @@ struct CompileCommonDataArgs {
 
 fn compile_sound_effects(
     pf: &UniqueNamesProjectFile,
-) -> Result<sound_effects::CompiledSoundEffects, ()> {
-    let mut sound_effects = Vec::with_capacity(pf.sound_effect_files.len());
+) -> Result<sound_effects::CombinedSoundEffectsData, ()> {
+    let mut all_sound_effects = Vec::new();
 
     for sfx_file_path in &pf.sound_effect_files {
         let path = pf.parent_path.join(sfx_file_path);
@@ -82,17 +82,17 @@ fn compile_sound_effects(
             Ok(sfx_file) => {
                 match sound_effects::compile_sound_effects_file(&sfx_file, &pf.instruments) {
                     Err(e) => eprintln!("{}", e.multiline_display()),
-                    Ok(sfx) => sound_effects.push(sfx),
+                    Ok(v) => all_sound_effects.extend(v),
                 }
             }
         }
     }
 
-    if sound_effects.len() != pf.sound_effect_files.len() {
+    if all_sound_effects.len() != pf.sound_effect_files.len() {
         return Err(());
     }
 
-    match sound_effects::combine_sound_effects(&sound_effects, pf) {
+    match sound_effects::combine_sound_effects(&all_sound_effects, pf) {
         Ok(sfx) => Ok(sfx),
         Err(e) => {
             eprintln!("Error compiling sound effects: {}", e);
