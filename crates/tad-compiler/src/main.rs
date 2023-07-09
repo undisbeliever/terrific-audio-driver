@@ -81,10 +81,7 @@ fn compile_sound_effects(
             Err(e) => eprintln!("{}", e),
             Ok(sfx_file) => {
                 match sound_effects::compile_sound_effects_file(&sfx_file, &pf.instruments) {
-                    Err(e) => eprintln!(
-                        "{}",
-                        e.multiline_display(sfx_file_path, &sfx_file.file_name)
-                    ),
+                    Err(e) => eprintln!("{}", e.multiline_display()),
                     Ok(sfx) => sound_effects.push(sfx),
                 }
             }
@@ -181,17 +178,14 @@ fn compile_song_data(args: CompileSongDataArgs) {
     let pf = load_project_file(&args.json_file);
     let mml_file = load_mml_file(&args, &pf);
 
-    let mml_text = mml_file.contents;
-    let file_name = mml_file.file_name;
-
     let pitch_table = match build_pitch_table(&pf.instruments) {
         Ok(pt) => pt,
         Err(e) => error!("{}", e.multiline_display()),
     };
 
-    let mml = match parse_mml(&mml_text, &pf.instruments, &pitch_table) {
+    let mml = match parse_mml(&mml_file, &pf.instruments, &pitch_table) {
         Ok(mml) => mml,
-        Err(e) => error!("{}", e.multiline_display(&mml_file.path, &file_name)),
+        Err(e) => error!("{}", e.multiline_display()),
     };
 
     let data = match song_data(&mml) {
@@ -210,18 +204,15 @@ fn export_song_to_spc_file(args: CompileSongDataArgs) {
     let pf = load_project_file(&args.json_file);
     let mml_file = load_mml_file(&args, &pf);
 
-    let mml_text = mml_file.contents;
-    let file_name = mml_file.file_name;
-
     let samples = match compiler::build_sample_and_instrument_data(&pf) {
         Ok(s) => s,
         Err(e) => error!("{}", e.multiline_display()),
     };
     let sfx = sound_effects::blank_compiled_sound_effects();
 
-    let mml = match parse_mml(&mml_text, &pf.instruments, samples.pitch_table()) {
+    let mml = match parse_mml(&mml_file, &pf.instruments, samples.pitch_table()) {
         Ok(mml) => mml,
-        Err(e) => error!("{}", e.multiline_display(&mml_file.path, &file_name)),
+        Err(e) => error!("{}", e.multiline_display()),
     };
 
     let common_audio_data = match compiler::build_common_audio_data(&samples, &sfx) {

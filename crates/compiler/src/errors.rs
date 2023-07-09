@@ -25,7 +25,7 @@ use crate::{mml, Octave};
 
 use std::fmt::Display;
 use std::io;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 #[derive(Debug)]
 pub struct ErrorWithLine<T>(pub u32, pub T);
@@ -212,15 +212,17 @@ pub struct SoundEffectError {
     pub sfx_name: String,
     pub sfx_line_no: u32,
     pub invalid_name: bool,
+    pub duplicate_name: bool,
     pub no_notes: bool,
     pub errors: Vec<ErrorWithLine<BytecodeAssemblerError>>,
 }
 
 #[derive(Debug)]
-pub enum SoundEffectsFileError {
-    SoundEffectErrors(Vec<SoundEffectError>),
-    // Line number, Name
-    DuplicateSfxNamesInSfxFile(Vec<(u32, Name)>),
+pub struct SoundEffectsFileError {
+    pub path: PathBuf,
+    pub file_name: String,
+
+    pub errors: Vec<SoundEffectError>,
 }
 
 #[derive(Debug)]
@@ -412,6 +414,9 @@ impl MmlChannelError {
 
 #[derive(Debug)]
 pub struct MmlCompileErrors {
+    pub path: PathBuf,
+    pub file_name: String,
+
     pub line_errors: Vec<ErrorWithLine<MmlLineError>>,
     pub subroutine_errors: Vec<MmlChannelError>,
     pub channel_errors: Vec<MmlChannelError>,
@@ -1114,15 +1119,11 @@ impl ProjectFileErrors {
     }
 }
 
-pub struct SoundEffectsFileErrorIndentedDisplay<'a>(&'a SoundEffectsFileError, &'a Path, &'a str);
+pub struct SoundEffectsFileErrorIndentedDisplay<'a>(&'a SoundEffectsFileError);
 
 impl SoundEffectsFileError {
-    pub fn multiline_display<'a>(
-        &'a self,
-        path: &'a Path,
-        file_name: &'a str,
-    ) -> SoundEffectsFileErrorIndentedDisplay {
-        SoundEffectsFileErrorIndentedDisplay(self, path, file_name)
+    pub fn multiline_display(&self) -> SoundEffectsFileErrorIndentedDisplay {
+        SoundEffectsFileErrorIndentedDisplay(self)
     }
 }
 
@@ -1130,25 +1131,14 @@ impl SoundEffectsFileError {
 impl Display for SoundEffectsFileErrorIndentedDisplay<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         let error = self.0;
-        let path = self.1;
-        let file_name = self.2;
 
-        writeln!(f, "Error compiling sound effects file: {}", path.display())?;
+        writeln!(f, "Error compiling sound effects file: {}", error.path.display())?;
 
-        match error {
-            SoundEffectsFileError::SoundEffectErrors(errors) => {
-                for (i, e) in errors.iter().enumerate() {
-                    if i != 0 {
-                        writeln!(f)?;
-                    }
-                    fmt_indented_sound_effect_error(f, e, file_name)?;
-                }
+        for (i, e) in error.errors.iter().enumerate() {
+            if i != 0 {
+                writeln!(f)?;
             }
-            SoundEffectsFileError::DuplicateSfxNamesInSfxFile(errors) => {
-                for (line_no, name) in errors {
-                    writeln!(f, "  {}:{} duplicate name: {}", file_name, line_no, name)?;
-                }
-            }
+            fmt_indented_sound_effect_error(f, e, &error.file_name)?;
         }
 
         Ok(())
@@ -1170,6 +1160,9 @@ fn fmt_indented_sound_effect_error(
         writeln!(f, "    {}:{} invalid name", file_name, line_no)?;
     }
 
+    if error.no_notes {
+        writeln!(f, "    {}:{} duplicate name: {}", file_name, line_no, error.sfx_name)?;
+    }
     if error.no_notes {
         writeln!(f, "    {}:{} no notes in sound effect", file_name, line_no)?;
     }
@@ -1263,34 +1256,28 @@ impl CommonAudioDataErrors {
     }
 }
 
-pub struct MmlCompileErrorsIndentedDisplay<'a>(&'a MmlCompileErrors, &'a Path, &'a str);
+pub struct MmlCompileErrorsIndentedDisplay<'a>(&'a MmlCompileErrors);
 
 impl MmlCompileErrors {
-    pub fn multiline_display<'a>(
-        &'a self,
-        path: &'a Path,
-        file_name: &'a str,
-    ) -> MmlCompileErrorsIndentedDisplay {
-        MmlCompileErrorsIndentedDisplay(self, path, file_name)
+    pub fn multiline_display(&self) -> MmlCompileErrorsIndentedDisplay {
+        MmlCompileErrorsIndentedDisplay(self)
     }
 }
 
 impl Display for MmlCompileErrorsIndentedDisplay<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         let error = self.0;
-        let path = self.1;
-        let file_name = self.2;
 
-        writeln!(f, "Error compiling MML file: {}", path.display())?;
+        writeln!(f, "Error compiling MML file: {}", error.path.display())?;
 
         for e in &error.line_errors {
-            writeln!(f, "  {}:{} {}", file_name, e.0, e.1)?;
+            writeln!(f, "  {}:{} {}", error.file_name, e.0, e.1)?;
         }
         for e in &error.subroutine_errors {
-            fmt_indented_channel_errors(f, e, file_name, true)?;
+            fmt_indented_channel_errors(f, e, &error.file_name, true)?;
         }
         for e in &error.channel_errors {
-            fmt_indented_channel_errors(f, e, file_name, false)?;
+            fmt_indented_channel_errors(f, e, &error.file_name, false)?;
         }
         Ok(())
     }

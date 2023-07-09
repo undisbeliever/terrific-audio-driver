@@ -12,7 +12,7 @@ use crate::bytecode::{
     BcTerminator, BcTicksKeyOff, BcTicksNoKeyOff, Bytecode, InstrumentId, LoopCount,
     PitchOffsetPerTick, PlayNoteTicks, PortamentoVelocity, SubroutineId,
 };
-use crate::data::{self, UniqueNamesList};
+use crate::data::{self, TextFile, UniqueNamesList};
 use crate::driver_constants::{FIR_FILTER_SIZE, IDENTITY_FILTER, N_MUSIC_CHANNELS};
 use crate::echo::{parse_fir_filter_string, EchoBuffer, EchoEdl, EchoLength, DEFAULT_EDL};
 use crate::envelope::{Adsr, Gain};
@@ -1447,17 +1447,19 @@ fn parse_and_compile_mml_channel(
 }
 
 pub fn parse_mml(
-    mml_text: &str,
+    mml_file: &TextFile,
     inst_map: &UniqueNamesList<data::Instrument>,
     pitch_table: &PitchTable,
 ) -> Result<MmlData, MmlCompileErrors> {
     let mut errors = MmlCompileErrors {
+        path: mml_file.path.clone(),
+        file_name: mml_file.file_name.clone(),
         line_errors: Vec::new(),
         subroutine_errors: Vec::new(),
         channel_errors: Vec::new(),
     };
 
-    let lines = match split_lines(mml_text) {
+    let lines = match split_lines(&mml_file.contents) {
         Ok(l) => l,
         Err(e) => {
             errors.line_errors.extend(e);

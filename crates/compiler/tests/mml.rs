@@ -4,7 +4,8 @@
 //
 // SPDX-License-Identifier: MIT
 
-use compiler::{data::UniqueNamesList, *};
+use compiler::*;
+use compiler::data::{TextFile, UniqueNamesList};
 
 use std::path::PathBuf;
 
@@ -685,7 +686,7 @@ fn assert_line_matches_bytecode(mml_line: &str, bc_asm: &[&str]) {
 
     let dd = dummy_data();
 
-    let mml = mml::parse_mml(&mml, &dd.instruments, &dd.pitch_table).unwrap();
+    let mml = compile_mml(&mml, &dd);
     let bc_asm = assemble_channel_bytecode(&bc_asm, &dd.instruments);
 
     assert_eq!(
@@ -701,8 +702,8 @@ fn assert_line_matches_line(mml_line1: &str, mml_line2: &str) {
 
     let dd = dummy_data();
 
-    let mml_data1 = mml::parse_mml(&mml1, &dd.instruments, &dd.pitch_table).unwrap();
-    let mml_data2 = mml::parse_mml(&mml2, &dd.instruments, &dd.pitch_table).unwrap();
+    let mml_data1 = compile_mml(&mml1, &dd);
+    let mml_data2 = compile_mml(&mml2, &dd);
 
     assert_eq!(
         mml_data1.channels()[0].bytecode(),
@@ -714,11 +715,24 @@ fn assert_line_matches_line(mml_line1: &str, mml_line2: &str) {
 fn assert_mml_channel_a_matches_bytecode(mml: &str, bc_asm: &[&str]) {
     let dummy_data = dummy_data();
 
-    let mml = mml::parse_mml(mml, &dummy_data.instruments, &dummy_data.pitch_table).unwrap();
+    let mml = compile_mml(mml, &dummy_data);
 
     let bc_asm = assemble_channel_bytecode(bc_asm, &dummy_data.instruments);
 
     assert_eq!(mml.channels()[0].bytecode(), bc_asm);
+}
+
+fn compile_mml(mml: &str, dummy_data: &DummyData) -> mml::MmlData {
+    mml::parse_mml(
+        &TextFile {
+            contents: mml.to_string(),
+            path: "".into(),
+            file_name: "".to_owned(),
+        },
+        &dummy_data.instruments,
+        &dummy_data.pitch_table,
+    )
+    .unwrap()
 }
 
 fn assemble_channel_bytecode(
