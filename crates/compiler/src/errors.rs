@@ -221,9 +221,14 @@ pub enum SoundEffectsFileError {
     SoundEffectErrors(Vec<SoundEffectError>),
     // Line number, Name
     DuplicateSfxNamesInSfxFile(Vec<(u32, Name)>),
+}
 
+#[derive(Debug)]
+pub enum CombineSoundEffectsError {
     // Using String so they can be joined with slice::join
+    NoSoundEffectFiles,
     MissingSoundEffects(Vec<String>),
+    DuplicateSoundEffects(Vec<String>),
 }
 
 #[derive(Debug)]
@@ -807,6 +812,26 @@ impl Display for SoundEffectsFileError {
     }
 }
 
+impl Display for CombineSoundEffectsError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            Self::NoSoundEffectFiles => write!(f, "no sound effect files"),
+            Self::MissingSoundEffects(names) => write!(
+                f,
+                "missing {} sound effects: {}",
+                names.len(),
+                names.join(", ")
+            ),
+            Self::DuplicateSoundEffects(names) => write!(
+                f,
+                "{} duplicate sound effects in multiple sfx files: {}",
+                names.len(),
+                names.join(", ")
+            ),
+        }
+    }
+}
+
 impl Display for SampleError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
@@ -1154,15 +1179,6 @@ impl Display for SoundEffectsFileErrorIndentedDisplay<'_> {
 
                 for (line_no, name) in errors {
                     writeln!(f, "  {}:{} duplicate name: {}", file_name, line_no, name)?;
-                }
-            }
-            SoundEffectsFileError::MissingSoundEffects(names) => {
-                writeln!(f, "Error compiling sound effects")?;
-
-                if names.len() == 1 {
-                    writeln!(f, "  missing 1 sound effect: {}", names[0])?;
-                } else {
-                    writeln!(f, "  missing {} sound effects: {}", names.len(), names.join(", "))?;
                 }
             }
         }

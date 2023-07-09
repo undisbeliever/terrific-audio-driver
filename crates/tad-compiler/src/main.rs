@@ -6,7 +6,8 @@
 
 use clap::{Args, Parser, Subcommand};
 use compiler::data::{is_name_or_id, load_text_file_with_limit, TextFile};
-use compiler::{build_pitch_table, parse_mml, song_data, SoundEffectsFile, UniqueNamesProjectFile};
+use compiler::sound_effects;
+use compiler::{build_pitch_table, parse_mml, song_data, UniqueNamesProjectFile};
 
 use std::ffi::OsString;
 use std::fs;
@@ -66,29 +67,56 @@ struct CompileCommonDataArgs {
 
     #[arg(value_name = "JSON_FILE", help = "project json file")]
     json_file: PathBuf,
+}
 
-    #[arg(value_name = "TXT_FILE", help = "sound_effects txt file")]
-    sfx_file: PathBuf,
+fn compile_sound_effects(
+    pf: &UniqueNamesProjectFile,
+) -> Result<sound_effects::CompiledSoundEffects, ()> {
+    let mut sound_effects = Vec::with_capacity(pf.sound_effect_files.len());
+
+    for sfx_file_path in &pf.sound_effect_files {
+        let sfx_file_path = pf.parent_path.join(sfx_file_path);
+
+        match sound_effects::load_sound_effects_file(&sfx_file_path) {
+            Err(e) => eprintln!("{}", e),
+            Ok(sfx_file) => {
+                match sound_effects::compile_sound_effects_file(&sfx_file, &pf.instruments) {
+                    Err(e) => eprintln!("{}", e.multiline_display(&sfx_file.file_name)),
+                    Ok(sfx) => sound_effects.push(sfx),
+                }
+            }
+        }
+    }
+
+    if sound_effects.len() != pf.sound_effect_files.len() {
+        return Err(());
+    }
+
+    match sound_effects::combine_sound_effects(&sound_effects, pf) {
+        Ok(sfx) => Ok(sfx),
+        Err(e) => {
+            eprintln!("Error compiling sound effects: {}", e);
+            Err(())
+        }
+    }
 }
 
 fn compile_common_data(args: CompileCommonDataArgs) {
-    let file_name = file_name(&args.sfx_file);
-
     let pf = load_project_file(&args.json_file);
-    let sfx_file = load_sfx_file(args.sfx_file);
 
-    let samples = compiler::build_sample_and_instrument_data(&pf);
-    let sfx = compiler::compile_sound_effects_file(&sfx_file, &pf);
+    let samples = match compiler::build_sample_and_instrument_data(&pf) {
+        Ok(samples) => Ok(samples),
+        Err(e) => {
+            eprintln!("{}", e.multiline_display());
+            Err(())
+        }
+    };
+
+    let sfx = compile_sound_effects(&pf);
 
     let (samples, sfx) = match (samples, sfx) {
         (Ok(samples), Ok(sfx)) => (samples, sfx),
-
-        (Err(e), Ok(_)) => error!("{}", e.multiline_display()),
-        (Ok(_), Err(e)) => error!("{}", e.multiline_display(&file_name)),
-        (Err(e1), Err(e2)) => {
-            eprintln!("{}", e1.multiline_display());
-            error!("{}", e2.multiline_display(&file_name));
-        }
+        _ => error!("Error compiling common audio data"),
     };
 
     let data = match compiler::build_common_audio_data(&samples, &sfx) {
@@ -186,7 +214,7 @@ fn export_song_to_spc_file(args: CompileSongDataArgs) {
         Ok(s) => s,
         Err(e) => error!("{}", e.multiline_display()),
     };
-    let sfx = compiler::blank_compiled_sound_effects();
+    let sfx = sound_effects::blank_compiled_sound_effects();
 
     let mml = match parse_mml(&mml_text, &pf.instruments, samples.pitch_table()) {
         Ok(mml) => mml,
@@ -224,13 +252,6 @@ fn main() {
 // File functions
 // ==============
 
-fn file_name(path: &Path) -> String {
-    path.file_name()
-        .unwrap_or(path.as_os_str())
-        .to_string_lossy()
-        .to_string()
-}
-
 fn load_project_file(path: &Path) -> UniqueNamesProjectFile {
     match compiler::load_project_file(path) {
         Err(e) => error!("Cannot load project file: {}", e),
@@ -238,13 +259,6 @@ fn load_project_file(path: &Path) -> UniqueNamesProjectFile {
             Ok(vm) => vm,
             Err(e) => error!("{}", e.multiline_display()),
         },
-    }
-}
-
-fn load_sfx_file(path: PathBuf) -> SoundEffectsFile {
-    match compiler::load_sound_effects_file(&path) {
-        Ok(f) => f,
-        Err(e) => error!("Cannot load sound effect file: {}", e),
     }
 }
 
