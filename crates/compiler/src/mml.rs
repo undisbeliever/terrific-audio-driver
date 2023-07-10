@@ -349,7 +349,7 @@ mod line_splitter {
                     }
                 }
 
-                Some(c) if MUSIC_CHANNEL_RANGE.contains(&c) => {
+                Some(c) if c.is_ascii_alphanumeric() => {
                     // Music channels
                     match split_idstr_and_line(line, line_no) {
                         Some((id, line)) => match validate_music_channels(id, line_no) {
