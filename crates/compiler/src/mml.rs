@@ -32,13 +32,14 @@ pub use crate::mml_command_parser::{FilePos, MAX_MML_TEXT_LENGTH};
 
 use std::cmp::max;
 use std::collections::HashMap;
-use std::ops::Range;
+use std::ops::RangeInclusive;
 
 const FIRST_MUSIC_CHANNEL: char = 'A';
-const MUSIC_CHANNEL_RANGE: Range<char> = 'A'..'F';
+const MUSIC_CHANNEL_RANGE: RangeInclusive<char> = 'A'..='F';
 
 const _: () = assert!(
-    MUSIC_CHANNEL_RANGE.end as usize - MUSIC_CHANNEL_RANGE.start as usize + 1 == N_MUSIC_CHANNELS
+    *MUSIC_CHANNEL_RANGE.end() as usize - *MUSIC_CHANNEL_RANGE.start() as usize + 1
+        == N_MUSIC_CHANNELS
 );
 
 const CHANNEL_NAMES: [&str; N_MUSIC_CHANNELS] = ["A", "B", "C", "D", "E", "F"];
