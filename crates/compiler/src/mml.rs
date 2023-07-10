@@ -266,6 +266,24 @@ mod line_splitter {
         }
     }
 
+    fn validate_music_channels(
+        ids: &str,
+        line_no: u32,
+    ) -> Result<&str, ErrorWithLine<MmlLineError>> {
+        if ids.chars().all(|c| MUSIC_CHANNEL_RANGE.contains(&c)) {
+            Ok(ids)
+        } else {
+            let unknown = ids
+                .chars()
+                .filter(|c| !MUSIC_CHANNEL_RANGE.contains(c))
+                .collect();
+            Err(ErrorWithLine(
+                line_no,
+                MmlLineError::UnknownChannel(unknown),
+            ))
+        }
+    }
+
     pub(super) fn split_lines(
         mml_text: &str,
     ) -> Result<MmlLines, Vec<ErrorWithLine<MmlLineError>>> {
@@ -334,8 +352,8 @@ mod line_splitter {
                 Some(c) if MUSIC_CHANNEL_RANGE.contains(&c) => {
                     // Music channels
                     match split_idstr_and_line(line, line_no) {
-                        Some((id, line)) => {
-                            if id.chars().all(|c| MUSIC_CHANNEL_RANGE.contains(&c)) {
+                        Some((id, line)) => match validate_music_channels(id, line_no) {
+                            Ok(id) => {
                                 // Each channel will only use the line once
                                 let mut used = [true; N_MUSIC_CHANNELS];
 
@@ -351,20 +369,13 @@ mod line_splitter {
                                         used[index] = false;
                                     }
                                 }
-                            } else {
-                                let unknown = id
-                                    .chars()
-                                    .filter(|c| !MUSIC_CHANNEL_RANGE.contains(c))
-                                    .collect();
-                                errors.push(ErrorWithLine(
-                                    line_no,
-                                    MmlLineError::UnknownChannel(unknown),
-                                ))
                             }
-                        }
-                        None => {
-                            errors.push(ErrorWithLine(line_no, MmlLineError::MissingChannelText))
-                        }
+                            Err(e) => errors.push(e),
+                        },
+                        None => match validate_music_channels(line, line_no) {
+                            Ok(_) => (),
+                            Err(e) => errors.push(e),
+                        },
                     }
                 }
                 Some(_) => errors.push(ErrorWithLine(line_no, MmlLineError::CannotParseLine)),

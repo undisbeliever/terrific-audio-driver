@@ -312,7 +312,6 @@ pub enum MmlLineError {
     UnknownChannel(String),
     MissingInstrumentText,
     MissingSubroutineText,
-    MissingChannelText,
     CannotParseLine,
 
     // MML Header errors
@@ -911,7 +910,6 @@ impl Display for MmlLineError {
             Self::UnknownChannel(name) => writeln!(f, "unknown channels {}", name),
             Self::MissingInstrumentText => writeln!(f, "missing instrument"),
             Self::MissingSubroutineText => writeln!(f, "missing subroutine"),
-            Self::MissingChannelText => writeln!(f, "no MML"),
             Self::CannotParseLine => writeln!(f, "cannot parse line"),
 
             Self::NoHeader => write!(f, "no header name"),
