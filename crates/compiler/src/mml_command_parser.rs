@@ -260,6 +260,8 @@ mod scanner {
 
         fn advance(&mut self, index: usize, char_count: u32) -> u32 {
             if index > 0 {
+                self.before_pos = self.pos;
+
                 self.to_parse = &self.to_parse[index..];
                 self.pos.line_char += char_count;
 
@@ -331,7 +333,6 @@ mod scanner {
         pub fn skip_pattern(&mut self, pattern: impl Fn(&char) -> bool) -> u32 {
             let (i, char_count) = self.index_and_char_count_for_pattern(pattern);
             self.advance(i, char_count);
-            self.skip_whitespace();
             char_count
         }
 
