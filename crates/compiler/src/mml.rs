@@ -212,40 +212,47 @@ mod line_splitter {
 
     const COMMENT_CHAR: char = ';';
 
-    fn trim_start_count_chars(s: &str) -> (&str, usize) {
-        let mut char_count = 1;
-        for (index, c) in s.char_indices() {
-            if !c.is_whitespace() {
-                return (&s[index..], char_count);
-            }
-            char_count += 1;
-        }
-
-        // All characters are whitespace
-        ("", char_count)
-    }
-
-    // Assumes `s` has been trimmed.
+    // Assumes `s` starts with a non-whitespace character
     // Assumes `mml_test` length is < i32::MAX
-    fn split_idstr_and_line(s: &str, line_number: u32) -> Option<(&str, Line)> {
-        match s.split_once(|c: char| c.is_ascii_whitespace()) {
-            Some((id, text)) => {
-                let id_chars = id.chars().count() + 1;
-                let (text, n_ws_chars) = trim_start_count_chars(text);
-
-                Some((
-                    id,
-                    Line {
-                        text,
-                        position: FilePos {
-                            line_number,
-                            line_char: (id_chars + n_ws_chars).try_into().unwrap(),
-                        },
-                    },
-                ))
+    fn split_idstr_and_line(s: &str, line_number: u32) -> (&str, Line) {
+        let (id, after_id, id_char_count) = match s
+            .char_indices()
+            .enumerate()
+            .find(|(_, (_, c))| c.is_whitespace())
+        {
+            Some((c_count, (index, _))) => {
+                let (a, b) = s.split_at(index);
+                (a, b, c_count)
             }
-            None => None,
-        }
+            // No whitespace
+            None => (s, "", s.chars().count()),
+        };
+
+        let (text, ws_char_count) = match after_id.chars().next() {
+            None => ("", 0),
+            Some(_) => {
+                match after_id
+                    .char_indices()
+                    .enumerate()
+                    .find(|(_, (_, c))| !c.is_whitespace())
+                {
+                    Some((c_count, (index, _))) => (&after_id[index..], c_count),
+                    // No characters after whitespace
+                    None => ("", after_id.chars().count()),
+                }
+            }
+        };
+
+        (
+            id,
+            Line {
+                text,
+                position: FilePos {
+                    line_number,
+                    line_char: (id_char_count + ws_char_count + 1).try_into().unwrap(),
+                },
+            },
+        )
     }
 
     // Assumes `mml_test` length is < i32::MAX
@@ -254,16 +261,16 @@ mod line_splitter {
         prefix: char,
         line_number: u32,
     ) -> Result<(Identifier, Line), MmlLineError> {
-        match split_idstr_and_line(s, line_number) {
-            Some((id_str, line)) => {
-                let id_str = id_str.trim_start_matches(prefix);
+        let (id_str, line) = split_idstr_and_line(s, line_number);
 
-                match Identifier::try_from_string(id_str.to_owned()) {
-                    Ok(id) => Ok((id, line)),
-                    Err(e) => Err(MmlLineError::InvalidIdentifier(e)),
-                }
+        let id_str = id_str.trim_start_matches(prefix);
+        if !id_str.is_empty() {
+            match Identifier::try_from_string(id_str.to_owned()) {
+                Ok(id) => Ok((id, line)),
+                Err(e) => Err(MmlLineError::InvalidIdentifier(e)),
             }
-            None => Err(MmlLineError::NoIdentifier(prefix)),
+        } else {
+            Err(MmlLineError::NoIdentifier(prefix))
         }
     }
 
@@ -352,31 +359,26 @@ mod line_splitter {
 
                 Some(c) if c.is_ascii_alphanumeric() => {
                     // Music channels
-                    match split_idstr_and_line(line, line_no) {
-                        Some((id, line)) => match validate_music_channels(id, line_no) {
-                            Ok(id) => {
-                                // Each channel will only use the line once
-                                let mut used = [true; N_MUSIC_CHANNELS];
+                    let (id, line) = split_idstr_and_line(line, line_no);
+                    match validate_music_channels(id, line_no) {
+                        Ok(id) => {
+                            // Each channel will only use the line once
+                            let mut used = [true; N_MUSIC_CHANNELS];
 
-                                for c in id.chars() {
-                                    let index = u32::from(c) - u32::from(FIRST_MUSIC_CHANNEL);
-                                    let index = usize::try_from(index).unwrap();
+                            for c in id.chars() {
+                                let index = u32::from(c) - u32::from(FIRST_MUSIC_CHANNEL);
+                                let index = usize::try_from(index).unwrap();
 
-                                    if used[index] {
-                                        channels[index].push(Line {
-                                            text: line.text,
-                                            position: line.position,
-                                        });
-                                        used[index] = false;
-                                    }
+                                if used[index] {
+                                    channels[index].push(Line {
+                                        text: line.text,
+                                        position: line.position,
+                                    });
+                                    used[index] = false;
                                 }
                             }
-                            Err(e) => errors.push(e),
-                        },
-                        None => match validate_music_channels(line, line_no) {
-                            Ok(_) => (),
-                            Err(e) => errors.push(e),
-                        },
+                        }
+                        Err(e) => errors.push(e),
                     }
                 }
                 Some(_) => errors.push(ErrorWithLine(line_no, MmlLineError::CannotParseLine)),
