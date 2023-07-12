@@ -72,27 +72,36 @@ struct CompileCommonDataArgs {
 fn compile_sound_effects(
     pf: &UniqueNamesProjectFile,
 ) -> Result<sound_effects::CombinedSoundEffectsData, ()> {
-    let mut all_sound_effects = Vec::new();
-
-    for sfx_file_path in &pf.sound_effect_files {
-        let path = pf.parent_path.join(sfx_file_path);
-
-        match sound_effects::load_sound_effects_file(&path) {
-            Err(e) => eprintln!("{}", e),
-            Ok(sfx_file) => {
-                match sound_effects::compile_sound_effects_file(&sfx_file, &pf.instruments) {
-                    Err(e) => eprintln!("{}", e.multiline_display()),
-                    Ok(v) => all_sound_effects.extend(v),
+    let sound_effects = match &pf.sound_effect_file {
+        Some(path) => {
+            let path = pf.parent_path.join(path);
+            match sound_effects::load_sound_effects_file(&path) {
+                Err(e) => {
+                    eprintln!("{}", e);
+                    return Err(());
+                }
+                Ok(sfx_file) => {
+                    match sound_effects::compile_sound_effects_file(&sfx_file, &pf.instruments) {
+                        Err(e) => {
+                            eprintln!("{}", e.multiline_display());
+                            return Err(());
+                        }
+                        Ok(v) => v,
+                    }
                 }
             }
         }
-    }
+        None => {
+            if pf.sound_effects.is_empty() {
+                Vec::new()
+            } else {
+                eprintln!("No sound effect file in {}", pf.file_name);
+                return Err(());
+            }
+        }
+    };
 
-    if all_sound_effects.len() != pf.sound_effect_files.len() {
-        return Err(());
-    }
-
-    match sound_effects::combine_sound_effects(&all_sound_effects, pf) {
+    match sound_effects::combine_sound_effects(&sound_effects, pf) {
         Ok(sfx) => Ok(sfx),
         Err(e) => {
             eprintln!("Error compiling sound effects: {}", e);

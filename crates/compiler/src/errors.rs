@@ -805,7 +805,7 @@ impl Display for CombineSoundEffectsError {
             ),
             Self::DuplicateSoundEffects(names) => write!(
                 f,
-                "{} duplicate sound effects in multiple sfx files: {}",
+                "{} duplicate sound effects: {}",
                 names.len(),
                 names.join(", ")
             ),

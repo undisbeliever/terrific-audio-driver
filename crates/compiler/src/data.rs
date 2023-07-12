@@ -137,7 +137,7 @@ pub struct Project {
     pub instruments: Vec<Instrument>,
 
     pub sound_effects: Vec<Name>,
-    pub sound_effect_files: Vec<PathBuf>,
+    pub sound_effect_file: Option<PathBuf>,
 
     #[serde(default)]
     pub songs: Vec<Song>,
@@ -232,7 +232,7 @@ pub struct UniqueNamesProjectFile {
     pub instruments: UniqueNamesList<Instrument>,
 
     pub sound_effects: UniqueNamesList<Name>,
-    pub sound_effect_files: Vec<PathBuf>,
+    pub sound_effect_file: Option<PathBuf>,
 
     pub songs: UniqueNamesList<Song>,
 }
@@ -329,7 +329,7 @@ pub fn validate_project_file_names(
             parent_path: pf.parent_path,
             instruments: instruments.unwrap(),
             sound_effects,
-            sound_effect_files: pf.contents.sound_effect_files,
+            sound_effect_file: pf.contents.sound_effect_file,
             songs,
         })
     } else {
