@@ -1159,7 +1159,7 @@ fn fmt_indented_sound_effect_error(
         writeln!(f, "    {}:{} invalid name", file_name, line_no)?;
     }
 
-    if error.no_notes {
+    if error.duplicate_name {
         writeln!(f, "    {}:{} duplicate name: {}", file_name, line_no, error.sfx_name)?;
     }
     if error.no_notes {

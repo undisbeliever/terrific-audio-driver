@@ -78,7 +78,7 @@ pub fn compile_sound_effect(
 
     let invalid_name = name.is_err();
 
-    let no_errors = !no_notes && !invalid_name && errors.is_empty();
+    let no_errors = !no_notes && !invalid_name && !duplicate_name && errors.is_empty();
 
     if let (Ok(name), Some(data), true) = (name, out, no_errors) {
         Ok(CompiledSoundEffect { name, data })
@@ -104,7 +104,7 @@ pub fn compile_sound_effects_file(
     let mut errors = Vec::new();
 
     for sfx in &sfx_file.sound_effects {
-        let duplicate_name = names.insert(&sfx.name);
+        let duplicate_name = !names.insert(&sfx.name);
 
         match compile_sound_effect(
             &sfx.name,
