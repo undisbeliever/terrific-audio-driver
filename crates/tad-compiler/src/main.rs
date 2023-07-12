@@ -164,7 +164,7 @@ fn load_mml_file(args: &CompileSongDataArgs, pf: &UniqueNamesProjectFile) -> Tex
         }
         match sn.parse::<usize>() {
             Ok(song_id) => match pf.get_song_from_id(song_id) {
-                Some(s) => &s.source,
+                Some(s) => pf.parent_path.join(&s.source),
                 None => error!(
                     "Song number out of range ({} - {})",
                     UniqueNamesProjectFile::FIRST_SONG_ID,
@@ -172,15 +172,15 @@ fn load_mml_file(args: &CompileSongDataArgs, pf: &UniqueNamesProjectFile) -> Tex
                 ),
             },
             Err(_) => match pf.songs.get(&sn) {
-                Some(s) => &s.source,
+                Some(s) => pf.parent_path.join(&s.source),
                 None => error!("Cannot find song: {}", sn),
             },
         }
     } else {
-        Path::new(song_name_or_path)
+        song_name_or_path.into()
     };
 
-    load_text_file(path.to_path_buf())
+    load_text_file(path)
 }
 
 fn compile_song_data(args: CompileSongDataArgs) {
