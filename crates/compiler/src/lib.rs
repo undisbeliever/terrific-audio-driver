@@ -24,6 +24,8 @@ pub mod errors;
 pub mod mml;
 pub mod sound_effects;
 
+pub use value_newtypes::ValueNewType;
+
 pub use data::{
     load_project_file, validate_project_file_names, Name, ProjectFile, UniqueNamesProjectFile,
 };

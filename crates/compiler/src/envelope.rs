@@ -49,6 +49,15 @@ impl Adsr {
         }
     }
 
+    pub fn to_arguments_string(self) -> String {
+        let attack = self.adsr1 & 0b1111;
+        let decay = (self.adsr1 >> 4) & 0b111;
+        let sustain_level = self.adsr2 >> 5;
+        let sustain_rate = self.adsr2 & 0b11111;
+
+        format!("{} {} {} {}", attack, decay, sustain_level, sustain_rate)
+    }
+
     pub fn try_from_strs(
         attack: &str,
         decay: &str,

@@ -92,7 +92,7 @@ impl Display for Name {
     }
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Clone, Debug)]
 pub struct Instrument {
     pub name: Name,
 

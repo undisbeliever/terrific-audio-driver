@@ -1,0 +1,17 @@
+[package]
+# ::TODO either rename the project or change this crate name::
+name = "tad-gui"
+description = "GUI app"
+version = "0.0.0"
+license = "MIT"
+
+edition = "2021"
+
+
+[dependencies]
+# Local crates
+compiler.workspace = true
+
+# External crates
+fltk.workspace = true
+
