@@ -4,6 +4,9 @@
 //
 // SPDX-License-Identifier: MIT
 
+use crate::tables;
+use crate::Message;
+
 use fltk::button::Button;
 use fltk::group::{Pack, PackType};
 use fltk::prelude::{GroupExt, WidgetExt};
@@ -253,6 +256,8 @@ impl ListButtons {
     }
 }
 
+// ::TODO is this macro required?::
+#[allow(unused_macros)]
 macro_rules! create_list_button_callbacks {
     ($lb:expr, $msg:ident, $sender:expr, $new_fn:path) => {
         $lb.add.set_callback({
@@ -291,6 +296,8 @@ macro_rules! create_list_button_callbacks {
         });
     };
 }
+// ::TODO is this macro required?::
+#[allow(unused_imports)]
 pub(crate) use create_list_button_callbacks;
 
 macro_rules! create_list_item_edited_input_handler {
@@ -336,3 +343,128 @@ macro_rules! create_list_item_edited_checkbox_handler {
     };
 }
 pub(crate) use create_list_item_edited_checkbox_handler;
+
+pub trait TableMapping
+where
+    Self: Sized,
+    Self::RowType: tables::TableRow + 'static,
+{
+    type RowType;
+
+    const CAN_CLONE: bool;
+
+    fn headers() -> Vec<String>;
+    fn type_name() -> &'static str;
+
+    fn add_clicked() -> Message;
+    fn to_message(lm: ListMessage<Self>) -> Message;
+
+    fn new_row(i: &Self) -> Self::RowType;
+    fn edit_row(r: &mut Self::RowType, i: &Self) -> bool;
+}
+
+pub struct ListEditorTable<T>
+where
+    T: TableMapping,
+{
+    list_buttons: ListButtons,
+    table: tables::TrTable<T::RowType>,
+}
+
+impl<T> ListEditorTable<T>
+where
+    T: TableMapping,
+{
+    pub fn new(sender: fltk::app::Sender<Message>) -> Self {
+        let mut list_buttons = ListButtons::new(T::type_name(), T::CAN_CLONE);
+        let mut table = tables::TrTable::new(T::headers());
+
+        table.set_selection_changed_callback({
+            let s = sender.clone();
+            move |i| match i {
+                Some(i) => s.send(T::to_message(ListMessage::ItemSelected(i))),
+                None => s.send(T::to_message(ListMessage::ClearSelection)),
+            }
+        });
+
+        list_buttons.add.set_callback({
+            let s = sender.clone();
+            move |_| s.send(T::add_clicked())
+        });
+        if let Some(b) = &mut list_buttons.clone {
+            b.set_callback({
+                let s = sender.clone();
+                move |_| s.send(T::to_message(ListMessage::CloneSelected))
+            });
+        }
+        list_buttons.remove.set_callback({
+            let s = sender.clone();
+            move |_| s.send(T::to_message(ListMessage::RemoveSelected))
+        });
+        list_buttons.move_top.set_callback({
+            let s = sender.clone();
+            move |_| s.send(T::to_message(ListMessage::MoveSelectedToTop))
+        });
+        list_buttons.move_up.set_callback({
+            let s = sender.clone();
+            move |_| s.send(T::to_message(ListMessage::MoveSelectedUp))
+        });
+        list_buttons.move_down.set_callback({
+            let s = sender.clone();
+            move |_| s.send(T::to_message(ListMessage::MoveSelectedDown))
+        });
+        list_buttons.move_bottom.set_callback({
+            let s = sender;
+            move |_| s.send(T::to_message(ListMessage::MoveSelectedToBottom))
+        });
+
+        Self {
+            list_buttons,
+            table,
+        }
+    }
+
+    pub fn button_height(&self) -> i32 {
+        self.list_buttons.add.height()
+    }
+}
+
+impl<T> ListEditor<T> for ListEditorTable<T>
+where
+    T: TableMapping + 'static,
+{
+    fn list_buttons(&mut self) -> &mut ListButtons {
+        &mut self.list_buttons
+    }
+
+    fn list_changed(&mut self, list: &[T]) {
+        self.table.edit_table(|table_vec| {
+            if table_vec.len() > list.len() {
+                table_vec.truncate(list.len());
+            }
+
+            for (ti, i) in table_vec.iter_mut().zip(list) {
+                T::edit_row(ti, i);
+            }
+
+            if table_vec.len() < list.len() {
+                for i in list.iter().skip(table_vec.len()) {
+                    table_vec.push(T::new_row(i));
+                }
+            }
+        });
+    }
+
+    fn item_changed(&mut self, index: usize, item: &T) {
+        self.table
+            .edit_row(index, |d| -> bool { T::edit_row(d, item) })
+    }
+
+    fn clear_selected(&mut self) {
+        self.table.clear_selected();
+    }
+
+    fn set_selected(&mut self, index: usize, _: &T) {
+        self.table.set_selected(index);
+    }
+}

@@ -6,13 +6,14 @@
 
 use crate::helpers::*;
 use crate::list_editor::{
-    create_list_button_callbacks, create_list_item_edited_checkbox_handler,
-    create_list_item_edited_input_handler, ListButtons, ListEditor, ListMessage,
+    create_list_item_edited_checkbox_handler, create_list_item_edited_input_handler, ListButtons,
+    ListEditor, ListEditorTable, ListMessage, TableMapping,
 };
+use crate::tables::SingleColumnRow;
 use crate::Message;
 use crate::Tab;
 
-use compiler::data::Instrument;
+use compiler::data::{self, Instrument};
 use compiler::STARTING_OCTAVE;
 
 use std::cell::RefCell;
@@ -24,16 +25,6 @@ use fltk::button::CheckButton;
 use fltk::group::Flex;
 use fltk::input::{FloatInput, Input, IntInput};
 use fltk::prelude::*;
-use fltk::tree::{Tree, TreeItem};
-
-fn set_user_data(ti: &mut TreeItem, index: usize) {
-    ti.set_user_data(index);
-}
-
-fn get_user_data(ti: &TreeItem) -> Option<usize> {
-    // ti contains `usize` from `set_user_data`
-    unsafe { ti.user_data::<usize>() }
-}
 
 fn blank_instrument() -> Instrument {
     Instrument {
@@ -49,6 +40,41 @@ fn blank_instrument() -> Instrument {
         adsr: None,
         gain: None,
         comment: None,
+    }
+}
+
+impl TableMapping for Instrument {
+    type RowType = SingleColumnRow;
+
+    const CAN_CLONE: bool = true;
+
+    fn type_name() -> &'static str {
+        "instrument"
+    }
+
+    fn headers() -> Vec<String> {
+        vec!["Instruments".to_owned()]
+    }
+
+    fn add_clicked() -> Message {
+        Message::Instrument(ListMessage::Add(blank_instrument()))
+    }
+
+    fn to_message(lm: ListMessage<Self>) -> Message {
+        Message::Instrument(lm)
+    }
+
+    fn new_row(i: &Instrument) -> Self::RowType {
+        SingleColumnRow(i.name.as_str().to_string())
+    }
+
+    fn edit_row(r: &mut Self::RowType, i: &Self) -> bool {
+        if r.0 != i.name.as_str() {
+            r.0 = i.name.as_str().to_string();
+            true
+        } else {
+            false
+        }
     }
 }
 
@@ -185,10 +211,7 @@ impl InstrumentEditor {
 pub struct SamplesTab {
     group: Flex,
 
-    inst_list_buttons: ListButtons,
-
-    tree: Tree,
-    tree_items: Vec<TreeItem>,
+    inst_table: ListEditorTable<data::Instrument>,
 
     instrument_editor: InstrumentEditor,
 }
@@ -207,38 +230,20 @@ impl SamplesTab {
         let mut sidebar = Flex::default().column();
         group.fixed(&sidebar, ch_units_to_width(&sidebar, 30));
 
-        let mut inst_list_buttons = ListButtons::new("instrument", true);
-        sidebar.fixed(&inst_list_buttons.pack, inst_list_buttons.add.height());
+        let mut inst_table = ListEditorTable::<data::Instrument>::new(sender.clone());
 
-        create_list_button_callbacks!(&mut inst_list_buttons, Instrument, sender, blank_instrument);
-
-        let mut tree = Tree::default();
-        tree.set_root_label("Instruments");
+        let button_height = inst_table.button_height();
+        sidebar.fixed(&inst_table.list_buttons().pack, button_height);
 
         sidebar.end();
 
-        let instrument_editor = InstrumentEditor::new(sender.clone());
+        let instrument_editor = InstrumentEditor::new(sender);
 
         group.end();
 
-        tree.set_callback({
-            let s = sender;
-            move |t| {
-                if let Some(ti) = t.first_selected_item() {
-                    if let Some(index) = get_user_data(&ti) {
-                        s.send(Message::Instrument(ListMessage::ItemSelected(index)));
-                    } else {
-                        s.send(Message::Instrument(ListMessage::ClearSelection));
-                    }
-                }
-            }
-        });
-
         Self {
             group,
-            inst_list_buttons,
-            tree,
-            tree_items: Vec::new(),
+            inst_table,
             instrument_editor,
         }
     }
@@ -246,54 +251,25 @@ impl SamplesTab {
 
 impl ListEditor<Instrument> for SamplesTab {
     fn list_buttons(&mut self) -> &mut ListButtons {
-        &mut self.inst_list_buttons
+        self.inst_table.list_buttons()
     }
 
     fn list_changed(&mut self, list: &[Instrument]) {
-        for (ti, i) in self.tree_items.iter_mut().zip(list) {
-            ti.set_label(i.name.as_str());
-        }
-
-        if self.tree_items.len() < list.len() {
-            for (index, inst) in list.iter().enumerate().skip(self.tree_items.len()) {
-                // Path must be unique for each element in the tree
-                if let Some(mut ti) = self.tree.add(&format!("I {index}")) {
-                    set_user_data(&mut ti, index);
-                    ti.set_label(inst.name.as_str());
-                    self.tree_items.push(ti);
-                }
-            }
-        }
-
-        if self.tree_items.len() > list.len() {
-            for ti in self.tree_items.drain(list.len()..) {
-                let _ = self.tree.remove(&ti);
-            }
-        }
+        self.inst_table.list_changed(list);
     }
 
     fn clear_selected(&mut self) {
-        if let Some(r) = self.tree.root() {
-            let _ = self.tree.deselect_all(&r, false);
-        }
+        self.inst_table.clear_selected();
         self.instrument_editor.disable_editor();
     }
 
     fn set_selected(&mut self, index: usize, inst: &Instrument) {
-        match self.tree_items.get(index) {
-            Some(ti) => {
-                let _ = self.tree.select_only(ti, false);
-                self.instrument_editor.set_data(inst);
-            }
-            None => self.clear_selected(),
-        }
+        self.inst_table.set_selected(index, inst);
+
+        self.instrument_editor.set_data(inst);
     }
 
     fn item_changed(&mut self, index: usize, inst: &Instrument) {
-        if let Some(ti) = self.tree_items.get_mut(index) {
-            // ::TODO test if label changed::
-            ti.set_label(inst.name.as_str());
-            self.tree.redraw();
-        }
+        self.inst_table.item_changed(index, inst);
     }
 }

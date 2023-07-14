@@ -7,6 +7,7 @@
 mod helpers;
 mod list_editor;
 mod samples_tab;
+mod tables;
 
 use crate::list_editor::{ListEditor, ListMessage, ListState};
 use crate::samples_tab::SamplesTab;
