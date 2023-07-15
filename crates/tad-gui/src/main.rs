@@ -6,10 +6,13 @@
 
 mod helpers;
 mod list_editor;
-mod samples_tab;
 mod tables;
 
+mod project_tab;
+mod samples_tab;
+
 use crate::list_editor::{ListEditor, ListMessage, ListState};
+use crate::project_tab::ProjectTab;
 use crate::samples_tab::SamplesTab;
 
 use compiler::{data, load_project_file, ProjectFile};
@@ -21,7 +24,11 @@ use std::path::PathBuf;
 
 #[derive(Debug)]
 pub enum Message {
+    EditSfxExportOrder(ListMessage<data::Name>),
+    EditProjectSongs(ListMessage<data::Song>),
     Instrument(ListMessage<data::Instrument>),
+
+    AddSongToProjectDialog,
 }
 
 trait Tab {
@@ -31,8 +38,13 @@ trait Tab {
 struct Project {
     pf: ProjectFile,
 
+    sender: fltk::app::Sender<Message>,
+
+    sfx_export_order_state: ListState,
+    project_songs_state: ListState,
     instrument_state: ListState,
 
+    project_tab: ProjectTab,
     samples_tab: SamplesTab,
 }
 
@@ -40,10 +52,18 @@ impl Project {
     fn new(pf: ProjectFile, sender: fltk::app::Sender<Message>) -> Self {
         let mut p = Self {
             pf,
+            sfx_export_order_state: ListState::default(),
+            project_songs_state: ListState::default(),
             instrument_state: ListState::default(),
-            samples_tab: SamplesTab::new(sender),
+            project_tab: ProjectTab::new(sender.clone()),
+            samples_tab: SamplesTab::new(sender.clone()),
+            sender,
         };
 
+        p.project_tab
+            .sfx_export_order_table
+            .list_changed(&p.pf.contents.sound_effects);
+        p.project_tab.song_table.list_changed(&p.pf.contents.songs);
         p.samples_tab.list_changed(&p.pf.contents.instruments);
 
         p
@@ -51,11 +71,25 @@ impl Project {
 
     fn process(&mut self, m: Message) {
         match m {
+            Message::EditSfxExportOrder(m) => m.process(
+                &mut self.sfx_export_order_state,
+                &mut self.pf.contents.sound_effects,
+                &mut self.project_tab.sfx_export_order_table,
+            ),
+            Message::EditProjectSongs(m) => m.process(
+                &mut self.project_songs_state,
+                &mut self.pf.contents.songs,
+                &mut self.project_tab.song_table,
+            ),
             Message::Instrument(m) => m.process(
                 &mut self.instrument_state,
                 &mut self.pf.contents.instruments,
                 &mut self.samples_tab,
             ),
+
+            Message::AddSongToProjectDialog => {
+                project_tab::add_song_to_pf_dialog(&self.sender, &self.pf)
+            }
         }
     }
 }
@@ -116,6 +150,7 @@ impl MainWindow {
         }
         let mut project = Project::new(pf, sender);
 
+        self.add_tab(&mut project.project_tab);
         self.add_tab(&mut project.samples_tab);
 
         self.project = Some(project);

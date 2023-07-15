@@ -223,3 +223,17 @@ impl TableRow for SingleColumnRow {
         draw::draw_text2(&self.0, x, y, w, h, Align::Left);
     }
 }
+
+pub struct TwoColumnsRow(pub String, pub String);
+
+impl TableRow for TwoColumnsRow {
+    const N_COLUMNS: i32 = 2;
+
+    fn draw_cell(&self, col: i32, x: i32, y: i32, w: i32, h: i32) {
+        match col {
+            0 => draw::draw_text2(&self.0, x, y, w, h, Align::Left),
+            1 => draw::draw_text2(&self.1, x, y, w, h, Align::Left),
+            _ => (),
+        }
+    }
+}

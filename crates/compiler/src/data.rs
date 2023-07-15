@@ -34,6 +34,10 @@ pub fn is_name_or_id(s: &str) -> bool {
 }
 
 impl Name {
+    fn is_name_char(c: char) -> bool {
+        matches!(c, 'A'..='Z' | 'a'..='z' | '0'..='9' | '_')
+    }
+
     pub fn is_valid_name(s: &str) -> bool {
         let mut iter = s.bytes();
 
@@ -62,6 +66,21 @@ impl Name {
             Ok(Self(s))
         } else {
             Err(ValueError::InvalidName(s))
+        }
+    }
+
+    pub fn new_lossy(s: String) -> Self {
+        if s.is_empty() {
+            Self("_".to_owned())
+        } else {
+            let mut s = s.replace(|c| !Self::is_name_char(c), "_");
+            if let Some(c) = s.chars().next() {
+                if c.is_ascii_digit() {
+                    s.replace_range(0..0, "_");
+                }
+            }
+
+            Self(s)
         }
     }
 
@@ -126,7 +145,7 @@ pub struct Instrument {
     pub comment: Option<String>,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Clone, Debug)]
 pub struct Song {
     pub name: Name,
     pub source: PathBuf,
