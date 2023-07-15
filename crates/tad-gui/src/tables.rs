@@ -77,10 +77,12 @@ where
 
         table.resize_callback({
             |table, _x, _y, w, _h| {
-                if T::N_COLUMNS == 1 {
-                    let w = max(30, w) - table.scrollbar().width() - 3;
+                // ::TODO adjustable table columns and user adjustable columns::
+                if T::N_COLUMNS > 0 {
+                    let w = (w - table.scrollbar().width() - 3) / T::N_COLUMNS;
+                    let w = max(30, w);
                     if w != table.col_width(0) {
-                        table.set_col_width(0, w);
+                        table.set_col_width_all(w);
                     }
                 }
             }
@@ -96,16 +98,12 @@ where
         self.table.set_callback(move |table| {
             let (row_top, _, row_bottom, _) = table.get_selection();
 
-            println!("{:?} {:?}", table.get_selection(), fltk::app::event());
-
             f(usize::try_from(row_top).ok());
 
             // ::TODO handle multiple selections::
             if row_bottom != row_top {
                 table.set_selection(row_top, 0, row_top, T::N_COLUMNS);
             }
-
-            println!("{:?}", table.get_selection());
         });
     }
 
@@ -164,8 +162,8 @@ where
                 draw::push_clip(x, y, w, h);
                 draw::draw_box(FrameType::ThinUpBox, x, y, w, h, Color::FrameDefault);
 
-                if let Ok(row_index) = usize::try_from(row) {
-                    if let Some(c) = self.headers.get(row_index) {
+                if let Ok(col_index) = usize::try_from(col) {
+                    if let Some(c) = self.headers.get(col_index) {
                         draw::set_draw_color(Color::Foreground);
                         draw::set_font(self.font, self.font_size);
                         draw::draw_text2(c, x, y, w, h, Align::Center);
