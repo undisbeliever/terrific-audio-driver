@@ -43,7 +43,9 @@ fn blank_instrument() -> Instrument {
     }
 }
 
-impl TableMapping for Instrument {
+struct InstrumentMapping;
+impl TableMapping for InstrumentMapping {
+    type DataType = data::Instrument;
     type RowType = SingleColumnRow;
 
     const CAN_CLONE: bool = true;
@@ -60,15 +62,15 @@ impl TableMapping for Instrument {
         Message::Instrument(ListMessage::Add(blank_instrument()))
     }
 
-    fn to_message(lm: ListMessage<Self>) -> Message {
+    fn to_message(lm: ListMessage<data::Instrument>) -> Message {
         Message::Instrument(lm)
     }
 
-    fn new_row(i: &Instrument) -> Self::RowType {
+    fn new_row(i: &Instrument) -> SingleColumnRow {
         SingleColumnRow(i.name.as_str().to_string())
     }
 
-    fn edit_row(r: &mut Self::RowType, i: &Self) -> bool {
+    fn edit_row(r: &mut SingleColumnRow, i: &Instrument) -> bool {
         if r.0 != i.name.as_str() {
             r.0 = i.name.as_str().to_string();
             true
@@ -211,7 +213,7 @@ impl InstrumentEditor {
 pub struct SamplesTab {
     group: Flex,
 
-    inst_table: ListEditorTable<data::Instrument>,
+    inst_table: ListEditorTable<InstrumentMapping>,
 
     instrument_editor: InstrumentEditor,
 }
@@ -230,7 +232,7 @@ impl SamplesTab {
         let mut sidebar = Flex::default().column();
         group.fixed(&sidebar, ch_units_to_width(&sidebar, 30));
 
-        let mut inst_table = ListEditorTable::<data::Instrument>::new(sender.clone());
+        let mut inst_table = ListEditorTable::new(sender.clone());
 
         let button_height = inst_table.button_height();
         sidebar.fixed(&inst_table.list_buttons().pack, button_height);

@@ -346,9 +346,10 @@ pub(crate) use create_list_item_edited_checkbox_handler;
 
 pub trait TableMapping
 where
-    Self: Sized,
+    Self::DataType: Sized,
     Self::RowType: tables::TableRow + 'static,
 {
+    type DataType;
     type RowType;
 
     const CAN_CLONE: bool;
@@ -357,10 +358,10 @@ where
     fn type_name() -> &'static str;
 
     fn add_clicked() -> Message;
-    fn to_message(lm: ListMessage<Self>) -> Message;
+    fn to_message(lm: ListMessage<Self::DataType>) -> Message;
 
-    fn new_row(i: &Self) -> Self::RowType;
-    fn edit_row(r: &mut Self::RowType, i: &Self) -> bool;
+    fn new_row(d: &Self::DataType) -> Self::RowType;
+    fn edit_row(r: &mut Self::RowType, d: &Self::DataType) -> bool;
 }
 
 pub struct ListEditorTable<T>
@@ -429,7 +430,7 @@ where
     }
 }
 
-impl<T> ListEditor<T> for ListEditorTable<T>
+impl<T> ListEditor<T::DataType> for ListEditorTable<T>
 where
     T: TableMapping + 'static,
 {
@@ -437,7 +438,7 @@ where
         &mut self.list_buttons
     }
 
-    fn list_changed(&mut self, list: &[T]) {
+    fn list_changed(&mut self, list: &[T::DataType]) {
         self.table.edit_table(|table_vec| {
             if table_vec.len() > list.len() {
                 table_vec.truncate(list.len());
@@ -455,7 +456,7 @@ where
         });
     }
 
-    fn item_changed(&mut self, index: usize, item: &T) {
+    fn item_changed(&mut self, index: usize, item: &T::DataType) {
         self.table
             .edit_row(index, |d| -> bool { T::edit_row(d, item) })
     }
@@ -464,7 +465,7 @@ where
         self.table.clear_selected();
     }
 
-    fn set_selected(&mut self, index: usize, _: &T) {
+    fn set_selected(&mut self, index: usize, _: &T::DataType) {
         self.table.set_selected(index);
     }
 }
