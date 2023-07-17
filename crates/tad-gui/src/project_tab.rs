@@ -7,8 +7,8 @@
 use std::path::{Path, PathBuf};
 
 use crate::helpers::*;
-use crate::list_editor::{ListEditor, ListEditorTable, ListMessage, TableMapping};
-use crate::tables::{SingleColumnRow, TwoColumnsRow};
+use crate::list_editor::{ListEditor, ListEditorTable, ListMessage, TableAction, TableMapping};
+use crate::tables::{SingleColumnRow, TableEvent, TwoColumnsRow};
 use crate::Message;
 use crate::Tab;
 
@@ -26,6 +26,7 @@ impl TableMapping for SfxExportOrderMapping {
     type RowType = SingleColumnRow;
 
     const CAN_CLONE: bool = true;
+    const CAN_EDIT: bool = true;
 
     fn type_name() -> &'static str {
         "sound effect"
@@ -55,6 +56,22 @@ impl TableMapping for SfxExportOrderMapping {
             false
         }
     }
+
+    fn table_event(event: TableEvent, _row: usize, _col: i32) -> TableAction {
+        match event {
+            TableEvent::Enter | TableEvent::Spacebar | TableEvent::CellClicked => {
+                TableAction::OpenEditor
+            }
+        }
+    }
+
+    fn commit_edited_value(index: usize, col: i32, value: String) -> Option<Message> {
+        match col {
+            0 => Name::try_new_lossy(value)
+                .map(|name| Message::EditSfxExportOrder(ListMessage::ItemEdited(index, name))),
+            _ => None,
+        }
+    }
 }
 
 pub struct SongMapping;
@@ -63,6 +80,7 @@ impl TableMapping for SongMapping {
     type RowType = TwoColumnsRow;
 
     const CAN_CLONE: bool = false;
+    const CAN_EDIT: bool = true;
 
     fn type_name() -> &'static str {
         "song"
@@ -102,6 +120,26 @@ impl TableMapping for SongMapping {
         }
 
         edited
+    }
+
+    fn table_event(event: TableEvent, _row: usize, col: i32) -> TableAction {
+        match event {
+            TableEvent::Enter | TableEvent::Spacebar | TableEvent::CellClicked => {
+                if col == 0 {
+                    TableAction::OpenEditor
+                } else {
+                    // ::TODO open file dialog?::
+                    TableAction::None
+                }
+            }
+        }
+    }
+
+    fn commit_edited_value(index: usize, col: i32, value: String) -> Option<Message> {
+        match col {
+            0 => Name::try_new_lossy(value).map(|name| Message::SetProjectSongName(index, name)),
+            _ => None,
+        }
     }
 }
 

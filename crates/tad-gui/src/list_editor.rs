@@ -17,6 +17,8 @@ pub enum ListMessage<T> {
     ItemSelected(usize),
     SelectedItemEdited(T),
 
+    ItemEdited(usize, T),
+
     Add(T),
     CloneSelected,
     RemoveSelected,
@@ -82,6 +84,13 @@ where
             }
             ListMessage::ItemSelected(index) => {
                 Self::set_selected(index, state, list, editor);
+            }
+
+            ListMessage::ItemEdited(index, new_value) => {
+                if let Some(item) = list.get_mut(index) {
+                    *item = new_value;
+                    editor.item_changed(index, item);
+                }
             }
 
             ListMessage::SelectedItemEdited(new_value) => {
@@ -344,6 +353,13 @@ macro_rules! create_list_item_edited_checkbox_handler {
 }
 pub(crate) use create_list_item_edited_checkbox_handler;
 
+#[allow(dead_code)]
+pub enum TableAction {
+    None,
+    OpenEditor,
+    Send(Message),
+}
+
 pub trait TableMapping
 where
     Self::DataType: Sized,
@@ -353,6 +369,7 @@ where
     type RowType;
 
     const CAN_CLONE: bool;
+    const CAN_EDIT: bool = false;
 
     fn headers() -> Vec<String>;
     fn type_name() -> &'static str;
@@ -362,6 +379,16 @@ where
 
     fn new_row(d: &Self::DataType) -> Self::RowType;
     fn edit_row(r: &mut Self::RowType, d: &Self::DataType) -> bool;
+
+    fn table_event(event: tables::TableEvent, row: usize, col: i32) -> TableAction {
+        let _ = (event, row, col);
+        TableAction::None
+    }
+
+    fn commit_edited_value(index: usize, col: i32, value: String) -> Option<Message> {
+        let _ = (index, col, value);
+        None
+    }
 }
 
 pub struct ListEditorTable<T>
@@ -385,6 +412,30 @@ where
             move |i| match i {
                 Some(i) => s.send(T::to_message(ListMessage::ItemSelected(i))),
                 None => s.send(T::to_message(ListMessage::ClearSelection)),
+            }
+        });
+
+        if T::CAN_EDIT {
+            table.enable_cell_editing({
+                // Commit edited value
+                let s = sender.clone();
+                move |index, col, value| {
+                    if let Some(m) = T::commit_edited_value(index, col, value) {
+                        s.send(m);
+                    }
+                }
+            });
+        }
+
+        table.set_callback({
+            let s = sender.clone();
+            move |ev, row, col| match T::table_event(ev, row, col) {
+                TableAction::None => false,
+                TableAction::OpenEditor => true,
+                TableAction::Send(m) => {
+                    s.send(m);
+                    false
+                }
             }
         });
 

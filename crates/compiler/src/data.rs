@@ -69,6 +69,14 @@ impl Name {
         }
     }
 
+    pub fn try_new_lossy(s: String) -> Option<Self> {
+        if !s.is_empty() {
+            Some(Self::new_lossy(s))
+        } else {
+            None
+        }
+    }
+
     pub fn new_lossy(s: String) -> Self {
         if s.is_empty() {
             Self("_".to_owned())

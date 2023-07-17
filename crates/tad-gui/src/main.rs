@@ -29,6 +29,7 @@ pub enum Message {
     Instrument(ListMessage<data::Instrument>),
 
     AddSongToProjectDialog,
+    SetProjectSongName(usize, data::Name),
 }
 
 trait Tab {
@@ -89,6 +90,15 @@ impl Project {
 
             Message::AddSongToProjectDialog => {
                 project_tab::add_song_to_pf_dialog(&self.sender, &self.pf)
+            }
+            Message::SetProjectSongName(index, name) => {
+                if let Some(s) = self.pf.contents.songs.get(index) {
+                    self.sender
+                        .send(Message::EditProjectSongs(ListMessage::ItemEdited(
+                            index,
+                            data::Song { name, ..s.clone() },
+                        )))
+                }
             }
         }
     }
