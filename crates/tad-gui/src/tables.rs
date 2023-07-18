@@ -41,18 +41,35 @@ where
 
     data: Vec<T>,
 
+    callback: Box<dyn Fn(TableEvent, usize, i32) -> bool>,
+    row_selected_callback: Box<dyn Fn(Option<usize>)>,
+
     edit_widget: Option<fltk::input::Input>,
+
+    // The currently selected cell.
+    //
+    // Manually tracking the selected cell:
+    //
+    //  * Fixes a desync between the cursor and the last edited cell.
+    //    Opening the editor with the space-bar, pressing tab (to advance to the next cell and open
+    //    a new editor), closing the editor and pressing space-bar again would not edit the
+    //    expected cell (the cell before the selected cell would be edited instead).
+    //
+    //  * Fixes an bug where navigating a two-column table with the arrow keys would get stuck on
+    //    column 1, never selecting column 0 when left is pressed.
+    sel_row: i32,
+    sel_col: i32,
 
     // The position of the currently edited cell (if any)
     // This value will be out-of-bounds if the editor is not active.
-    editing_col: i32,
     editing_row: i32,
+    editing_col: i32,
 }
 
 #[derive(Debug)]
 pub enum TableEvent {
+    EditorRequested,
     CellClicked,
-    Spacebar,
     Enter,
 }
 
@@ -88,9 +105,13 @@ where
             font: table.label_font(),
             font_size: table.label_size(),
             data: Vec::new(),
+            callback: Box::from(blank_callback),
+            row_selected_callback: Box::from(blank_sel_changed_callback),
             edit_widget: None,
-            editing_col: -1,
+            sel_row: -1,
+            sel_col: 0,
             editing_row: -1,
+            editing_col: -1,
         }));
 
         table.draw_cell({
@@ -98,6 +119,21 @@ where
             move |_t, ctx, row, col, x, y, w, h| {
                 if let Ok(mut s) = state.try_borrow_mut() {
                     s.draw_cell(ctx, row, col, x, y, w, h);
+                }
+            }
+        });
+
+        table.handle({
+            let state = state.clone();
+            move |table, ev| TableState::handle_events(table, ev, &state)
+        });
+
+        // This callback occurs when an FLTK event (click or keybaord navigation) has changed the selection.
+        table.set_callback({
+            let state = state.clone();
+            move |_table| {
+                if let Ok(mut s) = state.try_borrow_mut() {
+                    s.fltk_changed_selection();
                 }
             }
         });
@@ -181,8 +217,7 @@ where
                                     s.open_next_editor();
                                 }
                             });
-                            // Propagate tab navigation to the table widget
-                            false
+                            true
                         }
                         _ => false,
                     },
@@ -197,68 +232,25 @@ where
     /// Callback: `f(event, index, col) -> bool`.
     /// If `f` returns true, the cell editor will be opened.
     pub fn set_callback(&mut self, f: impl Fn(TableEvent, usize, i32) -> bool + 'static) {
-        self.table.handle({
-            let state = self.state.clone();
-            move |table, ev| {
-                let f = |te| -> bool {
-                    match usize::try_from(table.callback_row()) {
-                        Ok(index) => f(te, index, table.callback_col()),
-                        Err(_) => false,
-                    }
-                };
-
-                let open_editor = match ev {
-                    Event::Released => {
-                        // Only process events if a cell was clicked
-                        if let Some((TableContext::Cell, _, _, _)) = table.cursor2rowcol() {
-                            f(TableEvent::CellClicked)
-                        } else {
-                            let _ = table.take_focus();
-                            return false;
-                        }
-                    }
-                    Event::KeyDown => match app::event_key() {
-                        Key::Enter => f(TableEvent::Enter),
-                        SPACEBAR_KEY => f(TableEvent::Spacebar),
-                        _ => return false,
-                    },
-                    _ => return false,
-                };
-
-                if open_editor {
-                    if let Ok(mut s) = state.try_borrow_mut() {
-                        s.open_editor(table.callback_row(), table.callback_col());
-                    }
-                }
-                true
-            }
-        });
+        self.state.borrow_mut().callback = Box::from(f);
     }
 
     pub fn set_selection_changed_callback(&mut self, f: impl Fn(Option<usize>) + 'static) {
-        // ::TODO confirm this works correctly::
-        self.table.set_callback(move |table| {
-            let (row_top, _, row_bottom, _) = table.get_selection();
-
-            f(usize::try_from(row_top).ok());
-
-            // ::TODO handle multiple selections::
-            if row_bottom != row_top {
-                table.set_selection(row_top, 0, row_top, T::N_COLUMNS);
-            }
-        });
+        self.state.borrow_mut().row_selected_callback = Box::from(f);
     }
 
     pub fn clear_selected(&mut self) {
-        self.table.unset_selection();
+        if let Ok(mut s) = self.state.try_borrow_mut() {
+            s.unset_selection();
+        }
     }
 
     pub fn set_selected(&mut self, row_index: usize) {
-        match row_index.try_into() {
-            Ok(r) => {
-                self.table.set_selection(r, 0, r, T::N_COLUMNS);
+        if let Ok(mut s) = self.state.try_borrow_mut() {
+            match row_index.try_into() {
+                Ok(r) => s.set_sel_row(r),
+                Err(_) => s.unset_selection(),
             }
-            Err(_) => self.table.unset_selection(),
         }
     }
 
@@ -282,10 +274,92 @@ where
     }
 }
 
+fn blank_callback(_: TableEvent, _: usize, _: i32) -> bool {
+    false
+}
+
+fn blank_sel_changed_callback(_: Option<usize>) {}
+
 impl<T> TableState<T>
 where
     T: TableRow,
 {
+    fn handle_events(
+        table: &mut fltk::table::Table,
+        ev: fltk::enums::Event,
+        state: &Rc<RefCell<TableState<T>>>,
+    ) -> bool {
+        match ev {
+            Event::Push => {
+                if let Ok(mut s) = state.try_borrow_mut() {
+                    if let Some((TableContext::Cell, row, col, _)) = table.cursor2rowcol() {
+                        s.set_selection(row, col);
+                    } else {
+                        s.unset_selection();
+                    }
+                }
+                let _ = table.take_focus();
+                true
+            }
+            Event::Released => {
+                if app::event_is_click() {
+                    // Only process events if a cell was clicked
+                    if let Some((TableContext::Cell, row, col, _)) = table.cursor2rowcol() {
+                        if let Ok(mut s) = state.try_borrow_mut() {
+                            s.set_selection(row, col);
+                            s.do_callback(TableEvent::CellClicked);
+                        }
+                    }
+                }
+                true
+            }
+            Event::Drag => {
+                if let Ok(mut s) = state.try_borrow_mut() {
+                    if let Some((TableContext::Cell, row, col, _)) = table.cursor2rowcol() {
+                        s.set_selection(row, col);
+                    }
+                }
+                true
+            }
+            Event::KeyDown => {
+                if let Ok(mut s) = state.try_borrow_mut() {
+                    match app::event_key() {
+                        Key::Enter => s.do_callback(TableEvent::Enter),
+                        SPACEBAR_KEY => s.do_callback(TableEvent::EditorRequested),
+
+                        // Update the selected column when left or right is pressed.
+                        // I tried to use `Table::callback` to update the column, but `col` got
+                        // stuck on the second column of a two column table.
+                        Key::Left => {
+                            let c = s.sel_col;
+                            s.set_sel_col(c - 1);
+                        }
+                        Key::Right => {
+                            let c = s.sel_col;
+                            s.set_sel_col(c + 1);
+                        }
+                        _ => (),
+                    }
+                }
+                true
+            }
+            _ => false,
+        }
+    }
+
+    fn do_callback(&mut self, e: TableEvent) {
+        self.do_callback_at(e, self.sel_row, self.sel_col);
+    }
+
+    fn do_callback_at(&mut self, e: TableEvent, row: i32, col: i32) {
+        if let Ok(index) = usize::try_from(row) {
+            let open_editor = (self.callback)(e, index, col);
+            if open_editor {
+                self.open_editor(row, col);
+            }
+        }
+    }
+
     #[allow(clippy::too_many_arguments)]
     fn draw_cell(&mut self, ctx: TableContext, row: i32, col: i32, x: i32, y: i32, w: i32, h: i32) {
         match ctx {
@@ -365,33 +439,95 @@ where
         }
     }
 
+    fn fltk_changed_selection(&mut self) {
+        let (row_top, _, row_bottom, _) = self.table.get_selection();
+
+        // Have to test top and bottom as the user might have pressed shift-down
+        // which selects multiple rows and TrTable only supports single row selection.
+        if row_top != self.sel_row {
+            self.set_sel_row(row_top)
+        } else {
+            self.set_sel_row(row_bottom)
+        }
+    }
+
+    fn set_sel_row(&mut self, row: i32) {
+        self.set_selection(row, self.sel_col);
+    }
+
+    fn set_sel_col(&mut self, col: i32) {
+        // No need to modify selection.  Row is unchanged.
+        self.sel_col = col.clamp(0, T::N_COLUMNS - 1);
+    }
+
+    fn set_selection(&mut self, row: i32, col: i32) {
+        let col = col.clamp(0, T::N_COLUMNS - 1);
+
+        if let Ok(index) = usize::try_from(row) {
+            if index < self.data.len() {
+                if self.sel_row != row {
+                    (self.row_selected_callback)(Some(index));
+                }
+
+                self.sel_row = row;
+                self.sel_col = col;
+
+                if self.table.get_selection() != (row, 0, row, T::N_COLUMNS) {
+                    self.table.set_selection(row, 0, row, T::N_COLUMNS);
+                }
+            } else {
+                self.unset_selection();
+            }
+        } else {
+            self.unset_selection();
+        }
+    }
+
+    fn unset_selection(&mut self) {
+        if self.sel_row != -1 {
+            (self.row_selected_callback)(None);
+        }
+
+        self.sel_row = -1;
+
+        self.table.unset_selection();
+    }
+
     fn open_previous_editor(&mut self) {
         if self.editing_col > 0 {
             // ::TODO how do I skip non-editable columns::
-            self.open_editor(self.editing_row, self.editing_col - 1);
+            self.do_callback_at(
+                TableEvent::EditorRequested,
+                self.editing_row,
+                self.editing_col - 1,
+            );
         } else if self.editing_row > 0 {
-            self.open_editor(self.editing_row - 1, 0);
+            self.do_callback_at(TableEvent::EditorRequested, self.editing_row - 1, 0);
         }
     }
 
     fn open_next_editor(&mut self) {
         if self.editing_row >= 0 {
             if self.editing_col == T::N_COLUMNS - 1 {
-                // ::TODO how do I skip non-editable columns::
-                self.open_editor(self.editing_row + 1, 0);
+                self.do_callback_at(TableEvent::EditorRequested, self.editing_row + 1, 0);
             } else {
-                self.open_editor(self.editing_row, self.editing_col + 1);
+                // ::TODO how do I skip non-editable columns::
+                self.do_callback_at(
+                    TableEvent::EditorRequested,
+                    self.editing_row,
+                    self.editing_col + 1,
+                );
             }
         }
     }
 
     fn open_editor(&mut self, row: i32, col: i32) {
+        self.set_selection(row, col);
+
         let widget = match &mut self.edit_widget {
             Some(ew) => ew,
             None => return,
         };
-
-        self.table.set_selection(row, 0, row, T::N_COLUMNS);
 
         if let Ok(index) = usize::try_from(row) {
             if let Some(row_data) = self.data.get(index) {

@@ -59,7 +59,7 @@ impl TableMapping for SfxExportOrderMapping {
 
     fn table_event(event: TableEvent, _row: usize, _col: i32) -> TableAction {
         match event {
-            TableEvent::Enter | TableEvent::Spacebar | TableEvent::CellClicked => {
+            TableEvent::Enter | TableEvent::EditorRequested | TableEvent::CellClicked => {
                 TableAction::OpenEditor
             }
         }
@@ -124,7 +124,7 @@ impl TableMapping for SongMapping {
 
     fn table_event(event: TableEvent, _row: usize, col: i32) -> TableAction {
         match event {
-            TableEvent::Enter | TableEvent::Spacebar | TableEvent::CellClicked => {
+            TableEvent::Enter | TableEvent::EditorRequested | TableEvent::CellClicked => {
                 if col == 0 {
                     TableAction::OpenEditor
                 } else {
