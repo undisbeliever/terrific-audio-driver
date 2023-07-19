@@ -6,8 +6,8 @@
 
 use crate::helpers::*;
 use crate::list_editor::{
-    create_list_item_edited_checkbox_handler, create_list_item_edited_input_handler, ListButtons,
-    ListEditor, ListEditorTable, ListMessage, TableMapping,
+    create_list_item_edited_checkbox_handler, create_list_item_edited_input_handler, IndexAndData,
+    ListButtons, ListEditor, ListEditorTable, ListMessage, TableMapping,
 };
 use crate::tables::SingleColumnRow;
 use crate::Message;
@@ -83,7 +83,7 @@ impl TableMapping for InstrumentMapping {
 pub struct InstrumentEditor {
     group: Flex,
 
-    inst_data: Rc<RefCell<Instrument>>,
+    inst_data: Rc<RefCell<IndexAndData<Instrument>>>,
 
     name: Input,
     source: Input,
@@ -101,7 +101,7 @@ pub struct InstrumentEditor {
 
 impl InstrumentEditor {
     fn new(s: app::Sender<Message>) -> Self {
-        let inst_data = Rc::from(RefCell::from(blank_instrument()));
+        let inst_data = Rc::from(RefCell::from(IndexAndData::new(None, blank_instrument())));
 
         let mut form = InputForm::new(18);
 
@@ -182,9 +182,11 @@ impl InstrumentEditor {
         self.last_octave.set_value("");
         self.adsr.set_value("");
         self.gain.set_value("");
+
+        self.inst_data.borrow_mut().index = None;
     }
 
-    fn set_data(&mut self, data: &Instrument) {
+    fn set_data(&mut self, index: usize, data: &Instrument) {
         macro_rules! set_widget {
             ($name:ident) => {
                 InputHelper::set_widget_value(&mut self.$name, &data.$name);
@@ -204,7 +206,8 @@ impl InstrumentEditor {
         set_widget!(gain);
         set_widget!(comment);
 
-        self.inst_data.replace(data.clone());
+        self.inst_data
+            .replace(IndexAndData::new(Some(index), data.clone()));
 
         self.group.activate();
     }
@@ -268,7 +271,7 @@ impl ListEditor<Instrument> for SamplesTab {
     fn set_selected(&mut self, index: usize, inst: &Instrument) {
         self.inst_table.set_selected(index, inst);
 
-        self.instrument_editor.set_data(inst);
+        self.instrument_editor.set_data(index, inst);
     }
 
     fn item_changed(&mut self, index: usize, inst: &Instrument) {

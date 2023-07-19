@@ -15,8 +15,9 @@ use fltk::prelude::{GroupExt, WidgetExt};
 pub enum ListMessage<T> {
     ClearSelection,
     ItemSelected(usize),
-    SelectedItemEdited(T),
 
+    // The `SelectedItemEdited` message has been removed because clicking on a TrTable list item
+    // will cause the `ItemSelected` message to be sent before the `SelectedItemEdited` event.
     ItemEdited(usize, T),
 
     Add(T),
@@ -93,14 +94,6 @@ where
                 }
             }
 
-            ListMessage::SelectedItemEdited(new_value) => {
-                if let Some(i) = state.selected {
-                    if let Some(item) = list.get_mut(i) {
-                        *item = new_value;
-                        editor.item_changed(i, item);
-                    }
-                }
-            }
             ListMessage::Add(item) => {
                 let i = list.len();
                 list.push(item);
@@ -309,22 +302,38 @@ macro_rules! create_list_button_callbacks {
 #[allow(unused_imports)]
 pub(crate) use create_list_button_callbacks;
 
+pub struct IndexAndData<T> {
+    pub index: Option<usize>,
+    pub data: T,
+}
+
+impl<T> IndexAndData<T> {
+    pub fn new(index: Option<usize>, data: T) -> Self {
+        Self { index, data }
+    }
+}
+
 macro_rules! create_list_item_edited_input_handler {
     ($widget:ident, $struct_name:path, $field:ident, $sender:ident, $msg:ident, $data:ident) => {
         $widget.handle({
             let s: fltk::app::Sender<Message> = $sender.clone();
-            let data_rc: std::rc::Rc<std::cell::RefCell<$struct_name>> = $data.clone();
+            let data_rc: std::rc::Rc<std::cell::RefCell<IndexAndData<$struct_name>>> =
+                $data.clone();
             move |widget, ev| {
                 if is_input_done_event(ev) {
-                    let mut data = data_rc.borrow_mut();
+                    let id = data_rc.borrow();
 
-                    if let Some(v) = InputHelper::parse(widget.value()) {
-                        if v != data.$field {
-                            data.$field = v;
-                            s.send(Message::$msg(ListMessage::SelectedItemEdited(data.clone())));
+                    if let Some(index) = id.index {
+                        if let Some(v) = InputHelper::parse(widget.value()) {
+                            if v != id.data.$field {
+                                let mut d = id.data.clone();
+                                d.$field = v;
+                                s.send(Message::$msg(ListMessage::ItemEdited(index, d)));
+                            }
+                        } else {
+                            InputHelper::set_widget_value(widget, &id.data.$field);
                         }
                     }
-                    InputHelper::set_widget_value(widget, &data.$field);
                 }
 
                 // Always propagate focus/enter events
@@ -339,13 +348,17 @@ macro_rules! create_list_item_edited_checkbox_handler {
     ($widget:ident, $struct_name:path, $field:ident, $sender:ident, $msg:ident, $data:ident) => {
         $widget.set_callback({
             let s: fltk::app::Sender<Message> = $sender.clone();
-            let data_rc: std::rc::Rc<std::cell::RefCell<$struct_name>> = $data.clone();
+            let data_rc: std::rc::Rc<std::cell::RefCell<IndexAndData<$struct_name>>> =
+                $data.clone();
             move |widget: &mut fltk::button::CheckButton| {
-                let mut data = data_rc.borrow_mut();
-                let b: bool = widget.is_checked();
-                if b != data.$field {
-                    data.$field = b;
-                    s.send(Message::$msg(ListMessage::SelectedItemEdited(data.clone())));
+                let id = data_rc.borrow();
+                if let Some(index) = id.index {
+                    let b: bool = widget.is_checked();
+                    if b != id.data.$field {
+                        let mut d = id.data.clone();
+                        d.$field = b;
+                        s.send(Message::$msg(ListMessage::ItemEdited(index, d)));
+                    }
                 }
             }
         });
