@@ -11,7 +11,7 @@ mod tables;
 mod project_tab;
 mod samples_tab;
 
-use crate::list_editor::{ListEditor, ListMessage, ListState};
+use crate::list_editor::{ListMessage, ListState};
 use crate::project_tab::ProjectTab;
 use crate::samples_tab::SamplesTab;
 
@@ -51,45 +51,43 @@ struct Project {
 
 impl Project {
     fn new(pf: ProjectFile, sender: fltk::app::Sender<Message>) -> Self {
-        let mut p = Self {
-            pf,
+        Self {
             sfx_export_order_state: ListState::default(),
             project_songs_state: ListState::default(),
             instrument_state: ListState::default(),
-            project_tab: ProjectTab::new(sender.clone()),
-            samples_tab: SamplesTab::new(sender.clone()),
+            project_tab: ProjectTab::new(&pf.contents, sender.clone()),
+            samples_tab: SamplesTab::new(&pf.contents, sender.clone()),
+            pf,
             sender,
-        };
-
-        p.project_tab
-            .sfx_export_order_table
-            .list_changed(&p.pf.contents.sound_effects);
-        p.project_tab.song_table.list_changed(&p.pf.contents.songs);
-        p.samples_tab.list_changed(&p.pf.contents.instruments);
-
-        p
+        }
     }
 
     fn process(&mut self, m: Message) {
         match m {
-            Message::EditSfxExportOrder(m) => m.process(
-                &mut self.sfx_export_order_state,
-                &mut self.pf.contents.sound_effects,
-                &mut self.project_tab.sfx_export_order_table,
-            ),
-            Message::EditProjectSongs(m) => m.process(
-                &mut self.project_songs_state,
-                &mut self.pf.contents.songs,
-                &mut self.project_tab.song_table,
-            ),
-            Message::Instrument(m) => m.process(
-                &mut self.instrument_state,
-                &mut self.pf.contents.instruments,
-                &mut self.samples_tab,
-            ),
+            Message::EditSfxExportOrder(m) => {
+                m.process(
+                    &mut self.sfx_export_order_state,
+                    &mut self.pf.contents.sound_effects,
+                    &mut self.project_tab.sfx_export_order_table,
+                );
+            }
+            Message::EditProjectSongs(m) => {
+                m.process(
+                    &mut self.project_songs_state,
+                    &mut self.pf.contents.songs,
+                    &mut self.project_tab.song_table,
+                );
+            }
+            Message::Instrument(m) => {
+                m.process(
+                    &mut self.instrument_state,
+                    &mut self.pf.contents.instruments,
+                    &mut self.samples_tab,
+                );
+            }
 
             Message::AddSongToProjectDialog => {
-                project_tab::add_song_to_pf_dialog(&self.sender, &self.pf)
+                project_tab::add_song_to_pf_dialog(&self.sender, &self.pf);
             }
             Message::SetProjectSongName(index, name) => {
                 if let Some(s) = self.pf.contents.songs.get(index) {

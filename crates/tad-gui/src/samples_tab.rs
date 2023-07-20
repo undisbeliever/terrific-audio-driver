@@ -7,7 +7,7 @@
 use crate::helpers::*;
 use crate::list_editor::{
     create_list_item_edited_checkbox_handler, create_list_item_edited_input_handler, IndexAndData,
-    ListButtons, ListEditor, ListEditorTable, ListMessage, TableMapping,
+    ListAction, ListButtons, ListEditor, ListEditorTable, ListMessage, TableMapping,
 };
 use crate::tables::SingleColumnRow;
 use crate::Message;
@@ -228,14 +228,14 @@ impl Tab for SamplesTab {
 }
 
 impl SamplesTab {
-    pub fn new(sender: app::Sender<Message>) -> Self {
+    pub fn new(project: &data::Project, sender: app::Sender<Message>) -> Self {
         let mut group = Flex::default_fill().with_label("Samples").row();
 
         // Sidebar
         let mut sidebar = Flex::default().column();
         group.fixed(&sidebar, ch_units_to_width(&sidebar, 30));
 
-        let mut inst_table = ListEditorTable::new(sender.clone());
+        let mut inst_table = ListEditorTable::new(&project.instruments, sender.clone());
 
         let button_height = inst_table.button_height();
         sidebar.fixed(&inst_table.list_buttons().pack, button_height);
@@ -259,8 +259,8 @@ impl ListEditor<Instrument> for SamplesTab {
         self.inst_table.list_buttons()
     }
 
-    fn list_changed(&mut self, list: &[Instrument]) {
-        self.inst_table.list_changed(list);
+    fn list_edited(&mut self, action: &ListAction<Instrument>) {
+        self.inst_table.list_edited(action);
     }
 
     fn clear_selected(&mut self) {
@@ -272,9 +272,5 @@ impl ListEditor<Instrument> for SamplesTab {
         self.inst_table.set_selected(index, inst);
 
         self.instrument_editor.set_data(index, inst);
-    }
-
-    fn item_changed(&mut self, index: usize, inst: &Instrument) {
-        self.inst_table.item_changed(index, inst);
     }
 }
