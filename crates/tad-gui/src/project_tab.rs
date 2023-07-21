@@ -4,8 +4,6 @@
 //
 // SPDX-License-Identifier: MIT
 
-use std::path::{Path, PathBuf};
-
 use crate::helpers::*;
 use crate::list_editor::{ListEditor, ListEditorTable, ListMessage, TableAction, TableMapping};
 use crate::tables::{SingleColumnRow, TableEvent, TwoColumnsRow};
@@ -16,7 +14,6 @@ use compiler::data;
 use compiler::data::Name;
 
 use fltk::app;
-use fltk::dialog;
 use fltk::group::Flex;
 use fltk::prelude::*;
 
@@ -186,58 +183,6 @@ impl ProjectTab {
             group,
             sfx_export_order_table,
             song_table,
-        }
-    }
-}
-
-pub fn add_song_to_pf_dialog(sender: &app::Sender<Message>, pf: &data::ProjectFile) {
-    let mut dialog = dialog::NativeFileChooser::new(dialog::FileDialogType::BrowseSaveFile);
-    dialog.set_title("Add song");
-    dialog.set_filter("MML Files\t*.mml");
-    dialog.set_option(dialog::FileDialogOptions::UseFilterExt);
-    let _ = dialog.set_directory(&pf.parent_path);
-    dialog.show();
-
-    for path in dialog.filenames() {
-        add_song_to_pf(path, sender, pf);
-    }
-}
-
-fn add_song_to_pf(path: PathBuf, sender: &app::Sender<Message>, pf: &data::ProjectFile) {
-    let file_name = match path.file_name() {
-        Some(f) => Path::new(f),
-        None => return,
-    };
-
-    let mut path = match path.strip_prefix(&pf.parent_path) {
-        Ok(p) => p.to_owned(),
-        Err(_) => {
-            dialog::message_title("Warning");
-            let choice = dialog::choice2_default(
-                    &format!("{} is outside of the project file.\nDo you still want to add it to the project?", file_name.display()),
-                    "No", "Yes", "");
-            if choice != Some(1) {
-                return;
-            }
-            path
-        }
-    };
-
-    if path.extension().is_none() {
-        path.set_extension("mml");
-    }
-
-    match pf.contents.songs.iter().position(|s| s.source == path) {
-        Some(i) => sender.send(Message::EditProjectSongs(ListMessage::ItemSelected(i))),
-        None => {
-            let name = match path.file_stem() {
-                Some(s) => Name::new_lossy(s.to_string_lossy().to_string()),
-                None => Name::try_new("song".to_owned()).unwrap(),
-            };
-            sender.send(Message::EditProjectSongs(ListMessage::Add(data::Song {
-                name,
-                source: path,
-            })))
         }
     }
 }

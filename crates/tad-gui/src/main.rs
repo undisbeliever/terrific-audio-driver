@@ -4,6 +4,7 @@
 //
 // SPDX-License-Identifier: MIT
 
+mod files;
 mod helpers;
 mod list_editor;
 mod tables;
@@ -11,6 +12,7 @@ mod tables;
 mod project_tab;
 mod samples_tab;
 
+use crate::files::add_song_to_pf_dialog;
 use crate::list_editor::{ListMessage, ListState};
 use crate::project_tab::ProjectTab;
 use crate::samples_tab::SamplesTab;
@@ -87,7 +89,7 @@ impl Project {
             }
 
             Message::AddSongToProjectDialog => {
-                project_tab::add_song_to_pf_dialog(&self.sender, &self.pf);
+                add_song_to_pf_dialog(&self.sender, &self.pf);
             }
             Message::SetProjectSongName(index, name) => {
                 if let Some(s) = self.pf.contents.songs.get(index) {
