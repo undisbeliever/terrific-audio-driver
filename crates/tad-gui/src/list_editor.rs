@@ -152,6 +152,7 @@ pub struct ListState {
 impl<T> ListMessage<T>
 where
     T: Clone,
+    T: std::cmp::PartialEq<T>,
 {
     #[allow(clippy::ptr_arg)]
     fn set_selected(
@@ -195,11 +196,15 @@ where
             }
 
             ListMessage::ItemEdited(index, new_value) => {
-                if index < list.len() {
-                    let action = ListAction::Edit(index, new_value);
-                    process_list_action(list, &action);
-                    editor.list_edited(&action);
-                    action
+                if let Some(item) = list.get(index) {
+                    if *item != new_value {
+                        let action = ListAction::Edit(index, new_value);
+                        process_list_action(list, &action);
+                        editor.list_edited(&action);
+                        action
+                    } else {
+                        ListAction::None
+                    }
                 } else {
                     ListAction::None
                 }

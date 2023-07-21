@@ -123,7 +123,7 @@ impl Display for Name {
     }
 }
 
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Deserialize, Clone, PartialEq, Debug)]
 pub struct Instrument {
     pub name: Name,
 
@@ -157,7 +157,7 @@ pub struct Instrument {
     pub comment: Option<String>,
 }
 
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Deserialize, Clone, PartialEq, Debug)]
 pub struct Song {
     pub name: Name,
     pub source: PathBuf,
