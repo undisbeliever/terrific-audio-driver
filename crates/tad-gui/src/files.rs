@@ -8,11 +8,13 @@ use crate::list_editor::ListMessage;
 use crate::Message;
 
 use compiler::data::{Name, ProjectFile, Song};
+use compiler::sound_effects::{load_sound_effects_file, SoundEffectsFile};
 
 extern crate fltk;
 use fltk::dialog;
 
-use std::path::PathBuf;
+use std::io::Write;
+use std::path::{Path, PathBuf};
 
 struct PfFileDialogResult {
     pub path: PathBuf,
@@ -66,6 +68,48 @@ fn pf_file_dialog(
     }
 }
 
+pub fn open_sfx_file_dialog(pf: &ProjectFile) -> Option<(PathBuf, Option<SoundEffectsFile>)> {
+    let p = pf_file_dialog(pf, "Load sound effects file", "TXT Files\t*.txt", "txt");
+
+    match p {
+        Some(p) => match p.path.try_exists() {
+            Ok(true) => Some((p.pf_path, load_sfx_file(&p.path))),
+            Ok(false) => match write_to_new_file(&p.path, &[]) {
+                Ok(()) => Some((p.pf_path, load_sfx_file(&p.path))),
+                Err(e) => {
+                    dialog::message_title("Error writing sound effects file");
+                    dialog::alert_default(&format!("{}", e));
+                    None
+                }
+            },
+            Err(e) => {
+                dialog::message_title("Error loading sound effects file");
+                dialog::alert_default(&format!("{}", e));
+                None
+            }
+        },
+        None => None,
+    }
+}
+
+pub fn load_pf_sfx_file(pf: &ProjectFile) -> Option<SoundEffectsFile> {
+    match &pf.contents.sound_effect_file {
+        Some(path) => load_sfx_file(&pf.parent_path.join(path)),
+        None => None,
+    }
+}
+
+fn load_sfx_file(path: &Path) -> Option<SoundEffectsFile> {
+    match load_sound_effects_file(path) {
+        Ok(sfx_file) => Some(sfx_file),
+        Err(e) => {
+            dialog::message_title("Error loading sound effects file");
+            dialog::alert_default(&format!("{}", e));
+            None
+        }
+    }
+}
+
 pub fn add_song_to_pf_dialog(sender: &fltk::app::Sender<Message>, pf: &ProjectFile) {
     if let Some(p) = pf_file_dialog(pf, "Add song", "MML Files\t*.mml", "mml") {
         match pf.contents.songs.iter().position(|s| s.source == p.pf_path) {
@@ -85,4 +129,15 @@ pub fn add_song_to_pf_dialog(sender: &fltk::app::Sender<Message>, pf: &ProjectFi
             }
         }
     }
+}
+
+/// Writes contents to a new file and errors if the file already exists::
+fn write_to_new_file(path: &Path, contents: &[u8]) -> std::io::Result<()> {
+    let mut file = std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(path)?;
+    file.write_all(contents)?;
+
+    Ok(())
 }

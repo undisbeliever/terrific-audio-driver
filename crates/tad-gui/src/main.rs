@@ -11,12 +11,15 @@ mod tables;
 
 mod project_tab;
 mod samples_tab;
+mod sound_effects_tab;
 
-use crate::files::add_song_to_pf_dialog;
+use crate::files::{add_song_to_pf_dialog, load_pf_sfx_file, open_sfx_file_dialog};
 use crate::list_editor::{ListMessage, ListState};
 use crate::project_tab::ProjectTab;
 use crate::samples_tab::SamplesTab;
+use crate::sound_effects_tab::SoundEffectsTab;
 
+use compiler::sound_effects::{SoundEffectInput, SoundEffectsFile};
 use compiler::{data, load_project_file, ProjectFile};
 
 use fltk::prelude::*;
@@ -30,6 +33,12 @@ pub enum Message {
     EditProjectSongs(ListMessage<data::Song>),
     Instrument(ListMessage<data::Instrument>),
 
+    // ::TODO add menu item for open/load SFX file::
+    OpenSfxFileDialog,
+    LoadSfxFile,
+
+    EditSoundEffectList(ListMessage<SoundEffectInput>),
+
     AddSongToProjectDialog,
     SetProjectSongName(usize, data::Name),
 }
@@ -40,26 +49,36 @@ trait Tab {
 
 struct Project {
     pf: ProjectFile,
+    sfx_file: Option<SoundEffectsFile>,
 
     sender: fltk::app::Sender<Message>,
 
     sfx_export_order_state: ListState,
     project_songs_state: ListState,
     instrument_state: ListState,
+    sound_effect_list_state: ListState,
 
     project_tab: ProjectTab,
     samples_tab: SamplesTab,
+    sound_effects_tab: SoundEffectsTab,
 }
 
 impl Project {
     fn new(pf: ProjectFile, sender: fltk::app::Sender<Message>) -> Self {
+        if pf.contents.sound_effect_file.is_some() {
+            sender.send(Message::LoadSfxFile);
+        }
+
         Self {
             sfx_export_order_state: ListState::default(),
             project_songs_state: ListState::default(),
             instrument_state: ListState::default(),
+            sound_effect_list_state: ListState::default(),
             project_tab: ProjectTab::new(&pf.contents, sender.clone()),
             samples_tab: SamplesTab::new(&pf.contents, sender.clone()),
+            sound_effects_tab: SoundEffectsTab::new(sender.clone()),
             pf,
+            sfx_file: None,
             sender,
         }
     }
@@ -87,6 +106,26 @@ impl Project {
                     &mut self.samples_tab,
                 );
             }
+            Message::EditSoundEffectList(m) => {
+                if let Some(sfx_file) = &mut self.sfx_file {
+                    m.process(
+                        &mut self.sound_effect_list_state,
+                        &mut sfx_file.sound_effects,
+                        &mut self.sound_effects_tab,
+                    );
+                }
+            }
+
+            Message::OpenSfxFileDialog => {
+                if let Some((pf, sfx_file)) = open_sfx_file_dialog(&self.pf) {
+                    // ::TODO mark pf as changed::
+                    self.pf.contents.sound_effect_file = Some(pf);
+                    self.maybe_set_sfx_file(sfx_file);
+                }
+            }
+            Message::LoadSfxFile => {
+                self.maybe_set_sfx_file(load_pf_sfx_file(&self.pf));
+            }
 
             Message::AddSongToProjectDialog => {
                 add_song_to_pf_dialog(&self.sender, &self.pf);
@@ -100,6 +139,13 @@ impl Project {
                         )))
                 }
             }
+        }
+    }
+
+    fn maybe_set_sfx_file(&mut self, sfx_file: Option<SoundEffectsFile>) {
+        if let Some(sfx_file) = sfx_file {
+            self.sound_effects_tab.replace_sfx_file(&sfx_file);
+            self.sfx_file = Some(sfx_file)
         }
     }
 }
@@ -162,6 +208,7 @@ impl MainWindow {
 
         self.add_tab(&mut project.project_tab);
         self.add_tab(&mut project.samples_tab);
+        self.add_tab(&mut project.sound_effects_tab);
 
         self.project = Some(project);
     }

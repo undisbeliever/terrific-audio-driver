@@ -201,7 +201,7 @@ pub fn blank_compiled_sound_effects() -> CombinedSoundEffectsData {
 // ==================
 
 // NOTE: fields are not validated
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct SoundEffectInput {
     pub name: String,
     pub line_no: u32, // Line number of the name line

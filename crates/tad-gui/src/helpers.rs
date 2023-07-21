@@ -194,6 +194,12 @@ pub fn ch_units_to_width(w: &impl WidgetExt, ch_units: i32) -> i32 {
     }
 }
 
+pub fn input_height(w: &impl WidgetExt) -> i32 {
+    fltk::draw::set_font(w.label_font(), w.label_size());
+    let min_line_spacing = fltk::draw::height();
+    min_line_spacing + min_line_spacing / 2
+}
+
 pub struct InputForm {
     group: Flex,
 
@@ -206,9 +212,7 @@ impl InputForm {
         let group = Flex::default().column();
 
         let left_column_width = ch_units_to_width(&group, ch_units);
-        let min_line_spacing = fltk::draw::height();
-
-        let row_height = min_line_spacing + min_line_spacing / 2;
+        let row_height = input_height(&group);
 
         Self {
             group,

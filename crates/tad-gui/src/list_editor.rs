@@ -11,6 +11,8 @@ use fltk::button::Button;
 use fltk::group::{Pack, PackType};
 use fltk::prelude::{GroupExt, WidgetExt};
 
+use std::ops::Deref;
+
 #[derive(Debug)]
 pub enum ListMessage<T> {
     ClearSelection,
@@ -96,6 +98,48 @@ pub fn process_list_action_map<T, U>(
                 }
             }
         }
+    }
+}
+
+/// A `Vec` that can only be resized or reordered by a `ListAction<T>`
+pub struct LaVec<T>(Vec<T>);
+
+#[allow(dead_code)]
+impl<T> LaVec<T> {
+    pub fn new() -> Self {
+        Self(Vec::new())
+    }
+
+    pub fn from_vec(v: Vec<T>) -> Self {
+        Self(v)
+    }
+
+    pub fn get_mut(&mut self, index: usize) -> Option<&mut T> {
+        self.0.get_mut(index)
+    }
+
+    pub fn process(&mut self, action: &ListAction<T>)
+    where
+        T: Clone,
+    {
+        process_list_action(&mut self.0, action);
+    }
+
+    pub fn process_map<U>(
+        &mut self,
+        action: &ListAction<U>,
+        add: impl FnOnce(&U) -> T,
+        edit: impl FnOnce(&mut T, &U),
+    ) {
+        process_list_action_map(&mut self.0, action, add, edit);
+    }
+}
+
+impl<T> Deref for LaVec<T> {
+    type Target = [T];
+
+    fn deref(&self) -> &[T] {
+        &self.0
     }
 }
 
@@ -586,6 +630,15 @@ where
             list_buttons,
             table,
         }
+    }
+
+    #[allow(clippy::ptr_arg)]
+    pub fn replace(&mut self, data: &Vec<T::DataType>) {
+        self.table.clear_selected();
+
+        self.table.edit_table(|v| {
+            *v = data.iter().map(T::new_row).collect();
+        });
     }
 
     pub fn button_height(&self) -> i32 {
