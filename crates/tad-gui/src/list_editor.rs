@@ -4,6 +4,7 @@
 //
 // SPDX-License-Identifier: MIT
 
+use crate::helpers::SetActive;
 use crate::tables;
 use crate::Message;
 
@@ -143,10 +144,18 @@ impl<T> Deref for LaVec<T> {
     }
 }
 
-#[derive(Default)]
 pub struct ListState {
+    max_size: usize,
     selected: Option<usize>,
-    // ::TODO add max list size::
+}
+
+impl ListState {
+    pub fn new(max_size: usize) -> Self {
+        Self {
+            max_size,
+            selected: None,
+        }
+    }
 }
 
 impl<T> ListMessage<T>
@@ -161,22 +170,28 @@ where
         list: &Vec<T>,
         editor: &mut impl ListEditor<T>,
     ) {
+        let can_add = list.len() < state.max_size;
+
         match list.get(index) {
             Some(item) => {
                 state.selected = Some(index);
                 editor.set_selected(index, item);
-                editor.list_buttons().selected_changed(index, list.len());
+                editor
+                    .list_buttons()
+                    .selected_changed(index, list.len(), can_add);
             }
             None => {
-                Self::clear_selection(state, editor);
+                Self::clear_selection(state, list, editor);
             }
         };
     }
 
-    pub fn clear_selection(state: &mut ListState, editor: &mut impl ListEditor<T>) {
+    fn clear_selection(state: &mut ListState, list: &Vec<T>, editor: &mut impl ListEditor<T>) {
+        let can_add = list.len() < state.max_size;
+
         state.selected = None;
         editor.clear_selected();
-        editor.list_buttons().selected_clear();
+        editor.list_buttons().selected_clear(can_add);
     }
 
     pub fn process(
@@ -187,7 +202,7 @@ where
     ) -> ListAction<T> {
         match self {
             ListMessage::ClearSelection => {
-                Self::clear_selection(state, editor);
+                Self::clear_selection(state, list, editor);
                 ListAction::None
             }
             ListMessage::ItemSelected(index) => {
@@ -211,14 +226,18 @@ where
             }
 
             ListMessage::Add(item) => {
-                let i = list.len();
-                let action = ListAction::Add(i, item);
-                process_list_action(list, &action);
-                editor.list_edited(&action);
+                if list.len() < state.max_size {
+                    let i = list.len();
+                    let action = ListAction::Add(i, item);
+                    process_list_action(list, &action);
+                    editor.list_edited(&action);
 
-                Self::set_selected(i, state, list, editor);
+                    Self::set_selected(i, state, list, editor);
 
-                action
+                    action
+                } else {
+                    ListAction::None
+                }
             }
 
             lm => {
@@ -235,20 +254,24 @@ where
                     | ListMessage::Add(_) => ListAction::None,
 
                     ListMessage::CloneSelected => {
-                        let action = ListAction::Add(sel_index, list[sel_index].clone());
-                        process_list_action(list, &action);
-                        editor.list_edited(&action);
+                        if list.len() < state.max_size {
+                            let action = ListAction::Add(sel_index, list[sel_index].clone());
+                            process_list_action(list, &action);
+                            editor.list_edited(&action);
 
-                        Self::set_selected(sel_index + 1, state, list, editor);
+                            Self::set_selected(sel_index + 1, state, list, editor);
 
-                        action
+                            action
+                        } else {
+                            ListAction::None
+                        }
                     }
                     ListMessage::RemoveSelected => {
                         let action = ListAction::Remove(sel_index);
                         process_list_action(list, &action);
                         editor.list_edited(&action);
 
-                        Self::clear_selection(state, editor);
+                        Self::clear_selection(state, list, editor);
 
                         action
                     }
@@ -360,15 +383,15 @@ impl ListButtons {
             move_down,
             move_bottom,
         };
-        out.selected_clear();
+        out.selected_clear(true);
         out
     }
 
-    // ::TODO add max list size::
+    fn selected_changed(&mut self, index: usize, list_len: usize, can_add: bool) {
+        self.add.set_active(can_add);
 
-    fn selected_changed(&mut self, index: usize, list_len: usize) {
         if let Some(c) = &mut self.clone {
-            c.activate();
+            c.set_active(can_add);
         }
         self.remove.activate();
 
@@ -389,7 +412,9 @@ impl ListButtons {
         }
     }
 
-    fn selected_clear(&mut self) {
+    fn selected_clear(&mut self, can_add: bool) {
+        self.add.set_active(can_add);
+
         if let Some(c) = &mut self.clone {
             c.deactivate();
         }

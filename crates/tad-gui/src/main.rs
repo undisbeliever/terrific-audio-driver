@@ -20,7 +20,7 @@ use crate::samples_tab::SamplesTab;
 use crate::sound_effects_tab::SoundEffectsTab;
 
 use compiler::sound_effects::{SoundEffectInput, SoundEffectsFile};
-use compiler::{data, load_project_file, ProjectFile};
+use compiler::{data, driver_constants, load_project_file, ProjectFile};
 
 use fltk::prelude::*;
 
@@ -70,10 +70,10 @@ impl Project {
         }
 
         Self {
-            sfx_export_order_state: ListState::default(),
-            project_songs_state: ListState::default(),
-            instrument_state: ListState::default(),
-            sound_effect_list_state: ListState::default(),
+            sfx_export_order_state: ListState::new(driver_constants::MAX_SOUND_EFFECTS),
+            project_songs_state: ListState::new(driver_constants::MAX_N_SONGS),
+            instrument_state: ListState::new(driver_constants::MAX_INSTRUMENTS),
+            sound_effect_list_state: ListState::new(driver_constants::MAX_SOUND_EFFECTS),
             project_tab: ProjectTab::new(&pf.contents, sender.clone()),
             samples_tab: SamplesTab::new(&pf.contents, sender.clone()),
             sound_effects_tab: SoundEffectsTab::new(sender.clone()),
