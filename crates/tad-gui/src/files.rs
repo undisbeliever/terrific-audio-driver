@@ -5,9 +5,9 @@
 // SPDX-License-Identifier: MIT
 
 use crate::list_editor::ListMessage;
-use crate::Message;
+use crate::{Message, ProjectData};
 
-use compiler::data::{Name, ProjectFile, Song};
+use compiler::data::{Name, Song};
 use compiler::sound_effects::{load_sound_effects_file, SoundEffectsFile};
 
 extern crate fltk;
@@ -22,7 +22,7 @@ struct PfFileDialogResult {
 }
 
 fn pf_file_dialog(
-    pf: &ProjectFile,
+    pd: &ProjectData,
     title: &str,
     filter: &str,
     default_extension: &str,
@@ -31,7 +31,7 @@ fn pf_file_dialog(
     dialog.set_title(title);
     dialog.set_filter(filter);
     dialog.set_option(dialog::FileDialogOptions::UseFilterExt);
-    let _ = dialog.set_directory(&pf.parent_path);
+    let _ = dialog.set_directory(&pd.pf_parent_path);
     dialog.show();
 
     let paths = dialog.filenames();
@@ -46,7 +46,7 @@ fn pf_file_dialog(
         path.set_extension(default_extension);
     }
 
-    match path.strip_prefix(&pf.parent_path) {
+    match path.strip_prefix(&pd.pf_parent_path) {
         Ok(p) => Some(PfFileDialogResult {
             pf_path: p.to_owned(),
             path,
@@ -68,8 +68,8 @@ fn pf_file_dialog(
     }
 }
 
-pub fn open_sfx_file_dialog(pf: &ProjectFile) -> Option<(PathBuf, Option<SoundEffectsFile>)> {
-    let p = pf_file_dialog(pf, "Load sound effects file", "TXT Files\t*.txt", "txt");
+pub fn open_sfx_file_dialog(pd: &ProjectData) -> Option<(PathBuf, Option<SoundEffectsFile>)> {
+    let p = pf_file_dialog(pd, "Load sound effects file", "TXT Files\t*.txt", "txt");
 
     match p {
         Some(p) => match p.path.try_exists() {
@@ -92,9 +92,9 @@ pub fn open_sfx_file_dialog(pf: &ProjectFile) -> Option<(PathBuf, Option<SoundEf
     }
 }
 
-pub fn load_pf_sfx_file(pf: &ProjectFile) -> Option<SoundEffectsFile> {
-    match &pf.contents.sound_effect_file {
-        Some(path) => load_sfx_file(&pf.parent_path.join(path)),
+pub fn load_pf_sfx_file(pd: &ProjectData) -> Option<SoundEffectsFile> {
+    match &pd.sound_effects_file {
+        Some(path) => load_sfx_file(&pd.pf_parent_path.join(path)),
         None => None,
     }
 }
@@ -110,9 +110,14 @@ fn load_sfx_file(path: &Path) -> Option<SoundEffectsFile> {
     }
 }
 
-pub fn add_song_to_pf_dialog(sender: &fltk::app::Sender<Message>, pf: &ProjectFile) {
-    if let Some(p) = pf_file_dialog(pf, "Add song", "MML Files\t*.mml", "mml") {
-        match pf.contents.songs.iter().position(|s| s.source == p.pf_path) {
+pub fn add_song_to_pf_dialog(sender: &fltk::app::Sender<Message>, pd: &ProjectData) {
+    if let Some(p) = pf_file_dialog(pd, "Add song", "MML Files\t*.mml", "mml") {
+        match pd
+            .project_songs
+            .list()
+            .iter()
+            .position(|s| s.source == p.pf_path)
+        {
             Some(i) => sender.send(Message::EditProjectSongs(ListMessage::ItemSelected(i))),
             None => {
                 // ::TODO Create a blank file if it does not exist::

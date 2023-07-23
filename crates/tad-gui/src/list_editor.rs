@@ -144,77 +144,76 @@ impl<T> Deref for LaVec<T> {
     }
 }
 
-pub struct ListState {
+pub struct ListState<T>
+where
+    T: Clone + PartialEq<T>,
+{
     max_size: usize,
+    list: LaVec<T>,
     selected: Option<usize>,
 }
 
-impl ListState {
-    pub fn new(max_size: usize) -> Self {
+impl<T> ListState<T>
+where
+    T: Clone + std::cmp::PartialEq<T>,
+{
+    pub fn new(list: Vec<T>, max_size: usize) -> Self {
         Self {
             max_size,
+            list: LaVec::from_vec(list),
             selected: None,
         }
     }
-}
 
-impl<T> ListMessage<T>
-where
-    T: Clone,
-    T: std::cmp::PartialEq<T>,
-{
-    #[allow(clippy::ptr_arg)]
-    fn set_selected(
-        index: usize,
-        state: &mut ListState,
-        list: &Vec<T>,
-        editor: &mut impl ListEditor<T>,
-    ) {
-        let can_add = list.len() < state.max_size;
+    pub fn list(&self) -> &[T] {
+        &self.list
+    }
 
-        match list.get(index) {
+    pub fn selected(&self) -> Option<usize> {
+        self.selected
+    }
+
+    pub fn can_add(&self) -> bool {
+        self.list.len() < self.max_size
+    }
+
+    fn set_selected(&mut self, index: usize, editor: &mut impl ListEditor<T>) {
+        match self.list.get(index) {
             Some(item) => {
-                state.selected = Some(index);
+                self.selected = Some(index);
                 editor.set_selected(index, item);
                 editor
                     .list_buttons()
-                    .selected_changed(index, list.len(), can_add);
+                    .selected_changed(index, self.list.len(), self.can_add());
             }
             None => {
-                Self::clear_selection(state, list, editor);
+                self.clear_selection(editor);
             }
         };
     }
 
-    fn clear_selection(state: &mut ListState, list: &Vec<T>, editor: &mut impl ListEditor<T>) {
-        let can_add = list.len() < state.max_size;
-
-        state.selected = None;
+    fn clear_selection(&mut self, editor: &mut impl ListEditor<T>) {
+        self.selected = None;
         editor.clear_selected();
-        editor.list_buttons().selected_clear(can_add);
+        editor.list_buttons().selected_clear(self.can_add());
     }
 
-    pub fn process(
-        self,
-        state: &mut ListState,
-        list: &mut Vec<T>,
-        editor: &mut impl ListEditor<T>,
-    ) -> ListAction<T> {
-        match self {
+    pub fn process(&mut self, m: ListMessage<T>, editor: &mut impl ListEditor<T>) -> ListAction<T> {
+        match m {
             ListMessage::ClearSelection => {
-                Self::clear_selection(state, list, editor);
+                self.clear_selection(editor);
                 ListAction::None
             }
             ListMessage::ItemSelected(index) => {
-                Self::set_selected(index, state, list, editor);
+                self.set_selected(index, editor);
                 ListAction::None
             }
 
             ListMessage::ItemEdited(index, new_value) => {
-                if let Some(item) = list.get(index) {
+                if let Some(item) = self.list.get(index) {
                     if *item != new_value {
                         let action = ListAction::Edit(index, new_value);
-                        process_list_action(list, &action);
+                        self.list.process(&action);
                         editor.list_edited(&action);
                         action
                     } else {
@@ -226,13 +225,13 @@ where
             }
 
             ListMessage::Add(item) => {
-                if list.len() < state.max_size {
-                    let i = list.len();
+                if self.can_add() {
+                    let i = self.list.len();
                     let action = ListAction::Add(i, item);
-                    process_list_action(list, &action);
+                    self.list.process(&action);
                     editor.list_edited(&action);
 
-                    Self::set_selected(i, state, list, editor);
+                    self.set_selected(i, editor);
 
                     action
                 } else {
@@ -242,8 +241,8 @@ where
 
             lm => {
                 // These list actions use the currently selected index
-                let sel_index = match state.selected {
-                    Some(i) if i < list.len() => i,
+                let sel_index = match self.selected {
+                    Some(i) if i < self.list.len() => i,
                     _ => return ListAction::None,
                 };
 
@@ -254,12 +253,12 @@ where
                     | ListMessage::Add(_) => ListAction::None,
 
                     ListMessage::CloneSelected => {
-                        if list.len() < state.max_size {
-                            let action = ListAction::Add(sel_index, list[sel_index].clone());
-                            process_list_action(list, &action);
+                        if self.can_add() {
+                            let action = ListAction::Add(sel_index, self.list[sel_index].clone());
+                            self.list.process(&action);
                             editor.list_edited(&action);
 
-                            Self::set_selected(sel_index + 1, state, list, editor);
+                            self.set_selected(sel_index + 1, editor);
 
                             action
                         } else {
@@ -268,20 +267,20 @@ where
                     }
                     ListMessage::RemoveSelected => {
                         let action = ListAction::Remove(sel_index);
-                        process_list_action(list, &action);
+                        self.list.process(&action);
                         editor.list_edited(&action);
 
-                        Self::clear_selection(state, list, editor);
+                        self.clear_selection(editor);
 
                         action
                     }
                     ListMessage::MoveSelectedToTop => {
                         if sel_index > 0 {
                             let action = ListAction::Move(sel_index, 0);
-                            process_list_action(list, &action);
+                            self.list.process(&action);
                             editor.list_edited(&action);
 
-                            Self::set_selected(0, state, list, editor);
+                            self.set_selected(0, editor);
 
                             action
                         } else {
@@ -289,12 +288,12 @@ where
                         }
                     }
                     ListMessage::MoveSelectedUp => {
-                        if sel_index > 0 && sel_index < list.len() {
+                        if sel_index > 0 && sel_index < self.list.len() {
                             let action = ListAction::Move(sel_index, sel_index - 1);
-                            process_list_action(list, &action);
+                            self.list.process(&action);
                             editor.list_edited(&action);
 
-                            Self::set_selected(sel_index - 1, state, list, editor);
+                            self.set_selected(sel_index - 1, editor);
 
                             action
                         } else {
@@ -302,12 +301,12 @@ where
                         }
                     }
                     ListMessage::MoveSelectedDown => {
-                        if sel_index + 1 < list.len() {
+                        if sel_index + 1 < self.list.len() {
                             let action = ListAction::Move(sel_index, sel_index + 1);
-                            process_list_action(list, &action);
+                            self.list.process(&action);
                             editor.list_edited(&action);
 
-                            Self::set_selected(sel_index + 1, state, list, editor);
+                            self.set_selected(sel_index + 1, editor);
 
                             action
                         } else {
@@ -315,12 +314,12 @@ where
                         }
                     }
                     ListMessage::MoveSelectedToBottom => {
-                        if sel_index + 1 < list.len() {
-                            let action = ListAction::Move(sel_index, list.len() - 1);
-                            process_list_action(list, &action);
+                        if sel_index + 1 < self.list.len() {
+                            let action = ListAction::Move(sel_index, self.list.len() - 1);
+                            self.list.process(&action);
                             editor.list_edited(&action);
 
-                            Self::set_selected(list.len() - 1, state, list, editor);
+                            self.set_selected(self.list.len() - 1, editor);
 
                             action
                         } else {
@@ -383,8 +382,18 @@ impl ListButtons {
             move_down,
             move_bottom,
         };
-        out.selected_clear(true);
+        out.selected_clear(false);
         out
+    }
+
+    pub fn update<T>(&mut self, state: &ListState<T>)
+    where
+        T: Clone + PartialEq<T>,
+    {
+        match state.selected() {
+            Some(i) => self.selected_changed(i, state.list.len(), state.can_add()),
+            None => self.selected_clear(state.can_add()),
+        }
     }
 
     fn selected_changed(&mut self, index: usize, list_len: usize, can_add: bool) {
@@ -543,7 +552,7 @@ pub enum TableAction {
 
 pub trait TableMapping
 where
-    Self::DataType: Sized,
+    Self::DataType: Sized + Clone + std::cmp::PartialEq<Self::DataType>,
     Self::RowType: tables::TableRow + 'static,
 {
     type DataType;
@@ -584,14 +593,9 @@ impl<T> ListEditorTable<T>
 where
     T: TableMapping,
 {
-    #[allow(clippy::ptr_arg)]
-    pub fn new(data: &Vec<T::DataType>, sender: fltk::app::Sender<Message>) -> Self {
+    pub fn new(sender: fltk::app::Sender<Message>) -> Self {
         let mut list_buttons = ListButtons::new(T::type_name(), T::CAN_CLONE);
         let mut table = tables::TrTable::new(T::headers());
-
-        table.edit_table(|v| {
-            *v = data.iter().map(T::new_row).collect();
-        });
 
         table.set_selection_changed_callback({
             let s = sender.clone();
@@ -662,13 +666,25 @@ where
         }
     }
 
-    #[allow(clippy::ptr_arg)]
-    pub fn replace(&mut self, data: &Vec<T::DataType>) {
-        self.table.clear_selected();
+    pub fn new_with_data(
+        state: &ListState<T::DataType>,
+        sender: fltk::app::Sender<Message>,
+    ) -> Self {
+        let mut out = Self::new(sender);
+        out.replace(state);
+        out
+    }
 
+    pub fn replace(&mut self, state: &ListState<T::DataType>) {
         self.table.edit_table(|v| {
-            *v = data.iter().map(T::new_row).collect();
+            *v = state.list().iter().map(T::new_row).collect();
         });
+        self.list_buttons.update(state);
+
+        match state.selected() {
+            Some(i) => self.table.set_selected(i),
+            None => self.table.clear_selected(),
+        }
     }
 
     pub fn button_height(&self) -> i32 {

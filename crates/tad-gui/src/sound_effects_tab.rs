@@ -6,13 +6,14 @@
 
 use crate::helpers::*;
 use crate::list_editor::{
-    LaVec, ListAction, ListButtons, ListEditor, ListEditorTable, ListMessage, TableMapping,
+    LaVec, ListAction, ListButtons, ListEditor, ListEditorTable, ListMessage, ListState,
+    TableMapping,
 };
 use crate::tables::SingleColumnRow;
 use crate::Message;
 use crate::Tab;
 
-use compiler::sound_effects::{SoundEffectInput, SoundEffectsFile};
+use compiler::sound_effects::SoundEffectInput;
 use compiler::Name;
 
 use fltk::app;
@@ -106,7 +107,7 @@ impl SoundEffectsTab {
         let mut sidebar = Flex::default().column();
         group.fixed(&sidebar, ch_units_to_width(&sidebar, 30));
 
-        let mut sfx_table = ListEditorTable::new(&Vec::new(), sender.clone());
+        let mut sfx_table = ListEditorTable::new(sender.clone());
 
         let button_height = sfx_table.button_height();
         sidebar.fixed(&sfx_table.list_buttons().pack, button_height);
@@ -187,10 +188,10 @@ impl SoundEffectsTab {
         s
     }
 
-    pub fn replace_sfx_file(&mut self, sfx_file: &SoundEffectsFile) {
+    pub fn replace_sfx_file(&mut self, state: &ListState<SoundEffectInput>) {
         self.clear_selected();
-        self.sfx_buffers = LaVec::from_vec(vec![None; sfx_file.sound_effects.len()]);
-        self.sfx_table.replace(&sfx_file.sound_effects);
+        self.sfx_buffers = LaVec::from_vec(vec![None; state.list().len()]);
+        self.sfx_table.replace(state);
 
         self.sidebar.activate();
     }

@@ -47,16 +47,26 @@ trait Tab {
     fn widget(&mut self) -> &mut fltk::group::Flex;
 }
 
-struct Project {
-    pf: ProjectFile,
-    sfx_file: Option<SoundEffectsFile>,
+// ::TODO remove::
+#[allow(dead_code)]
+pub struct ProjectData {
+    pf_path: PathBuf,
+    pf_file_name: String,
+    pf_parent_path: PathBuf,
+    // `sound_effects_file` is relative to `pf_parent_path`
+    sound_effects_file: Option<PathBuf>,
 
+    sfx_export_orders: ListState<data::Name>,
+    project_songs: ListState<data::Song>,
+    instruments: ListState<data::Instrument>,
+
+    sound_effects: Option<ListState<SoundEffectInput>>,
+}
+
+struct Project {
     sender: fltk::app::Sender<Message>,
 
-    sfx_export_order_state: ListState,
-    project_songs_state: ListState,
-    instrument_state: ListState,
-    sound_effect_list_state: ListState,
+    data: ProjectData,
 
     project_tab: ProjectTab,
     samples_tab: SamplesTab,
@@ -65,20 +75,36 @@ struct Project {
 
 impl Project {
     fn new(pf: ProjectFile, sender: fltk::app::Sender<Message>) -> Self {
-        if pf.contents.sound_effect_file.is_some() {
+        let c = pf.contents;
+
+        let data = ProjectData {
+            pf_path: pf.path,
+            pf_file_name: pf.file_name,
+            pf_parent_path: pf.parent_path,
+
+            sound_effects_file: c.sound_effect_file,
+
+            sfx_export_orders: ListState::new(c.sound_effects, driver_constants::MAX_SOUND_EFFECTS),
+            project_songs: ListState::new(c.songs, driver_constants::MAX_N_SONGS),
+            instruments: ListState::new(c.instruments, driver_constants::MAX_INSTRUMENTS),
+
+            sound_effects: None,
+        };
+
+        if data.sound_effects_file.is_some() {
             sender.send(Message::LoadSfxFile);
         }
 
         Self {
-            sfx_export_order_state: ListState::new(driver_constants::MAX_SOUND_EFFECTS),
-            project_songs_state: ListState::new(driver_constants::MAX_N_SONGS),
-            instrument_state: ListState::new(driver_constants::MAX_INSTRUMENTS),
-            sound_effect_list_state: ListState::new(driver_constants::MAX_SOUND_EFFECTS),
-            project_tab: ProjectTab::new(&pf.contents, sender.clone()),
-            samples_tab: SamplesTab::new(&pf.contents, sender.clone()),
+            project_tab: ProjectTab::new(
+                &data.sfx_export_orders,
+                &data.project_songs,
+                sender.clone(),
+            ),
+            samples_tab: SamplesTab::new(&data.instruments, sender.clone()),
             sound_effects_tab: SoundEffectsTab::new(sender.clone()),
-            pf,
-            sfx_file: None,
+
+            data,
             sender,
         }
     }
@@ -86,52 +112,40 @@ impl Project {
     fn process(&mut self, m: Message) {
         match m {
             Message::EditSfxExportOrder(m) => {
-                m.process(
-                    &mut self.sfx_export_order_state,
-                    &mut self.pf.contents.sound_effects,
-                    &mut self.project_tab.sfx_export_order_table,
-                );
+                self.data
+                    .sfx_export_orders
+                    .process(m, &mut self.project_tab.sfx_export_order_table);
             }
             Message::EditProjectSongs(m) => {
-                m.process(
-                    &mut self.project_songs_state,
-                    &mut self.pf.contents.songs,
-                    &mut self.project_tab.song_table,
-                );
+                self.data
+                    .project_songs
+                    .process(m, &mut self.project_tab.song_table);
             }
             Message::Instrument(m) => {
-                m.process(
-                    &mut self.instrument_state,
-                    &mut self.pf.contents.instruments,
-                    &mut self.samples_tab,
-                );
+                self.data.instruments.process(m, &mut self.samples_tab);
             }
             Message::EditSoundEffectList(m) => {
-                if let Some(sfx_file) = &mut self.sfx_file {
-                    m.process(
-                        &mut self.sound_effect_list_state,
-                        &mut sfx_file.sound_effects,
-                        &mut self.sound_effects_tab,
-                    );
+                if let Some(sound_effects) = &mut self.data.sound_effects {
+                    sound_effects.process(m, &mut self.sound_effects_tab);
                 }
             }
 
             Message::OpenSfxFileDialog => {
-                if let Some((pf, sfx_file)) = open_sfx_file_dialog(&self.pf) {
-                    // ::TODO mark pf as changed::
-                    self.pf.contents.sound_effect_file = Some(pf);
+                if let Some((pf_path, sfx_file)) = open_sfx_file_dialog(&self.data) {
+                    // ::TODO mark project file as changed::
+                    self.data.sound_effects_file = Some(pf_path);
                     self.maybe_set_sfx_file(sfx_file);
                 }
             }
             Message::LoadSfxFile => {
-                self.maybe_set_sfx_file(load_pf_sfx_file(&self.pf));
+                self.maybe_set_sfx_file(load_pf_sfx_file(&self.data));
             }
 
             Message::AddSongToProjectDialog => {
-                add_song_to_pf_dialog(&self.sender, &self.pf);
+                add_song_to_pf_dialog(&self.sender, &self.data);
             }
             Message::SetProjectSongName(index, name) => {
-                if let Some(s) = self.pf.contents.songs.get(index) {
+                if let Some(s) = self.data.project_songs.list().get(index) {
                     self.sender
                         .send(Message::EditProjectSongs(ListMessage::ItemEdited(
                             index,
@@ -144,8 +158,13 @@ impl Project {
 
     fn maybe_set_sfx_file(&mut self, sfx_file: Option<SoundEffectsFile>) {
         if let Some(sfx_file) = sfx_file {
-            self.sound_effects_tab.replace_sfx_file(&sfx_file);
-            self.sfx_file = Some(sfx_file)
+            let state = ListState::new(
+                sfx_file.sound_effects,
+                driver_constants::MAX_SOUND_EFFECTS + 20,
+            );
+
+            self.sound_effects_tab.replace_sfx_file(&state);
+            self.data.sound_effects = Some(state)
         }
     }
 }

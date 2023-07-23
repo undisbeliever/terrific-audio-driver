@@ -5,7 +5,9 @@
 // SPDX-License-Identifier: MIT
 
 use crate::helpers::*;
-use crate::list_editor::{ListEditor, ListEditorTable, ListMessage, TableAction, TableMapping};
+use crate::list_editor::{
+    ListEditor, ListEditorTable, ListMessage, ListState, TableAction, TableMapping,
+};
 use crate::tables::{SingleColumnRow, TableEvent, TwoColumnsRow};
 use crate::Message;
 use crate::Tab;
@@ -154,14 +156,17 @@ impl Tab for ProjectTab {
 }
 
 impl ProjectTab {
-    pub fn new(project: &data::Project, sender: app::Sender<Message>) -> Self {
+    pub fn new(
+        sfx_list: &ListState<Name>,
+        song_list: &ListState<data::Song>,
+        sender: app::Sender<Message>,
+    ) -> Self {
         let mut group = Flex::default_fill().with_label("Project").row();
 
         let mut left = Flex::default().column();
         group.fixed(&left, ch_units_to_width(&left, 30));
 
-        let mut sfx_export_order_table =
-            ListEditorTable::new(&project.sound_effects, sender.clone());
+        let mut sfx_export_order_table = ListEditorTable::new_with_data(sfx_list, sender.clone());
 
         let button_height = sfx_export_order_table.button_height();
         left.fixed(&sfx_export_order_table.list_buttons().pack, button_height);
@@ -170,7 +175,7 @@ impl ProjectTab {
 
         let mut right = Flex::default().column();
 
-        let mut song_table = ListEditorTable::new(&project.songs, sender);
+        let mut song_table = ListEditorTable::new_with_data(song_list, sender);
 
         let button_height = song_table.button_height();
         right.fixed(&song_table.list_buttons().pack, button_height);
