@@ -114,8 +114,7 @@ pub fn add_song_to_pf_dialog(sender: &fltk::app::Sender<Message>, pd: &ProjectDa
     if let Some(p) = pf_file_dialog(pd, "Add song", "MML Files\t*.mml", "mml") {
         match pd
             .project_songs
-            .list()
-            .iter()
+            .item_iter()
             .position(|s| s.source == p.pf_path)
         {
             Some(i) => sender.send(Message::EditProjectSongs(ListMessage::ItemSelected(i))),

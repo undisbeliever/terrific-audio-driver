@@ -4,6 +4,7 @@
 //
 // SPDX-License-Identifier: MIT
 
+mod compiler_thread;
 mod files;
 mod helpers;
 mod list_editor;
@@ -145,7 +146,7 @@ impl Project {
                 add_song_to_pf_dialog(&self.sender, &self.data);
             }
             Message::SetProjectSongName(index, name) => {
-                if let Some(s) = self.data.project_songs.list().get(index) {
+                if let Some(s) = self.data.project_songs.get(index) {
                     self.sender
                         .send(Message::EditProjectSongs(ListMessage::ItemEdited(
                             index,

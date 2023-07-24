@@ -190,7 +190,7 @@ impl SoundEffectsTab {
 
     pub fn replace_sfx_file(&mut self, state: &ListState<SoundEffectInput>) {
         self.clear_selected();
-        self.sfx_buffers = LaVec::from_vec(vec![None; state.list().len()]);
+        self.sfx_buffers = LaVec::from_vec(vec![None; state.len()]);
         self.sfx_table.replace(state);
 
         self.sidebar.activate();
