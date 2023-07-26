@@ -231,7 +231,7 @@ impl NameGetter for Song {
 
 pub struct UniqueNamesList<T> {
     list: Vec<T>,
-    map: HashMap<String, u8>,
+    map: HashMap<String, u32>,
 }
 
 impl<T> UniqueNamesList<T> {
@@ -244,14 +244,23 @@ impl<T> UniqueNamesList<T> {
     pub fn len(&self) -> usize {
         self.list.len()
     }
-    pub fn map(&self) -> &HashMap<String, u8> {
+    pub fn map(&self) -> &HashMap<String, u32> {
         &self.map
     }
     pub fn get(&self, name: &str) -> Option<&T> {
-        self.map.get(name).map(|&i| (&self.list[usize::from(i)]))
+        self.map
+            .get(name)
+            .and_then(|&i| usize::try_from(i).ok())
+            .map(|i| &self.list[i])
     }
-    pub fn get_with_index(&self, name: &str) -> Option<(u8, &T)> {
-        self.map.get(name).map(|&i| (i, &self.list[usize::from(i)]))
+    pub fn get_with_index(&self, name: &str) -> Option<(u32, &T)> {
+        match self.map.get(name) {
+            None => None,
+            Some(&i) => match usize::try_from(i) {
+                Ok(index) => Some((i, &self.list[index])),
+                Err(_) => None,
+            },
+        }
     }
 }
 

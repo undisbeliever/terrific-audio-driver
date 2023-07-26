@@ -645,7 +645,7 @@ fn parse_instrument(
     Ok(MmlInstrument {
         identifier: id,
         line_number: line.position.line_number,
-        instrument_id: InstrumentId::new(instrument_id),
+        instrument_id: InstrumentId::try_from(instrument_id)?,
         first_note: Note::first_note_for_octave(inst.first_octave),
         last_note: Note::last_note_for_octave(inst.last_octave),
         envelope_override,

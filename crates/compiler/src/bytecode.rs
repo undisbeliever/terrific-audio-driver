@@ -6,6 +6,7 @@
 
 #![allow(clippy::assertions_on_constants)]
 
+use crate::driver_constants::MAX_INSTRUMENTS;
 use crate::envelope::{Adsr, Gain};
 use crate::errors::{BytecodeError, ValueError};
 use crate::notes::{Note, LAST_NOTE_ID};
@@ -83,21 +84,13 @@ pub enum Opcode {
     disable_channel = 0xfe,
 }
 
-// Added Copy trait to Subroutine to satisfy the borrow checker in `BytecodeAssembler`.
-#[derive(Debug, Copy, Clone, PartialEq)]
-pub struct InstrumentId {
-    id: u8,
-}
-
-impl InstrumentId {
-    pub fn new(id: u8) -> Self {
-        Self { id }
-    }
-
-    pub fn as_usize(&self) -> usize {
-        self.id.into()
-    }
-}
+u8_value_newtype!(
+    InstrumentId,
+    InstrumentIdOutOfRange,
+    NoInstrumentId,
+    0,
+    (MAX_INSTRUMENTS - 1) as u8
+);
 
 // Added Copy trait to Subroutine to satisfy the borrow checker in `BytecodeAssembler`.
 #[derive(Debug, Copy, Clone, PartialEq)]
@@ -529,14 +522,14 @@ impl Bytecode {
     }
 
     pub fn set_instrument(&mut self, instrument: InstrumentId) {
-        emit_bytecode!(self, Opcode::set_instrument, instrument.id);
+        emit_bytecode!(self, Opcode::set_instrument, instrument.as_u8());
     }
 
     pub fn set_instrument_and_adsr(&mut self, instrument: InstrumentId, adsr: Adsr) {
         emit_bytecode!(
             self,
             Opcode::set_instrument_and_adsr_or_gain,
-            instrument.id,
+            instrument.as_u8(),
             adsr.adsr1(),
             adsr.adsr2()
         );
@@ -546,7 +539,7 @@ impl Bytecode {
         emit_bytecode!(
             self,
             Opcode::set_instrument_and_adsr_or_gain,
-            instrument.id,
+            instrument.as_u8(),
             0u8,
             gain.value()
         );

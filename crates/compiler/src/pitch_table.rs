@@ -247,7 +247,7 @@ pub fn build_pitch_table(
 
 impl PitchTable {
     pub fn pitch_for_note(&self, inst_id: InstrumentId, note: Note) -> u16 {
-        let offset: u8 = self.instruments_pitch_offset[inst_id.as_usize()];
+        let offset: u8 = self.instruments_pitch_offset[usize::from(inst_id.as_u8())];
         let index: u8 = offset.wrapping_add(note.note_id());
 
         let i = usize::from(index);

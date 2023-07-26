@@ -5,8 +5,9 @@
 // SPDX-License-Identifier: MIT
 
 use crate::bytecode::{
-    BcTicksKeyOff, BcTicksNoKeyOff, LoopCount, Pan, PitchOffsetPerTick, PortamentoVelocity,
-    QuarterWavelengthInTicks, RelativePan, RelativeVolume, Volume, MAX_NESTED_LOOPS,
+    BcTicksKeyOff, BcTicksNoKeyOff, InstrumentId, LoopCount, Pan, PitchOffsetPerTick,
+    PortamentoVelocity, QuarterWavelengthInTicks, RelativePan, RelativeVolume, Volume,
+    MAX_NESTED_LOOPS,
 };
 use crate::data::Name;
 use crate::driver_constants::{
@@ -95,6 +96,8 @@ pub enum ValueError {
     UnknownNotePitch(char),
     UnknownNoteCharacter(char),
 
+    InstrumentIdOutOfRange,
+
     NoteOutOfRange,
     OctaveOutOfRange,
 
@@ -167,6 +170,7 @@ pub enum ValueError {
     NoCommaQuarterWavelength,
     NoQuarterWavelength,
     NoEchoEdl,
+    NoInstrumentId,
 }
 
 #[derive(Debug)]
@@ -602,6 +606,8 @@ impl Display for ValueError {
             Self::UnknownNotePitch(c) => write!(f, "invalid note pitch: {}", c),
             Self::UnknownNoteCharacter(c) => write!(f, "invalid note character: {}", c),
 
+            Self::InstrumentIdOutOfRange => out_of_range!("instrument id", InstrumentId),
+
             Self::NoteOutOfRange => write!(f, "note out of range"),
             Self::OctaveOutOfRange => out_of_range!("octave", Octave),
 
@@ -717,6 +723,7 @@ impl Display for ValueError {
             }
             Self::NoQuarterWavelength => write!(f, "no quarter-wavelength"),
             Self::NoEchoEdl => write!(f, "no echo EDL"),
+            Self::NoInstrumentId => write!(f, "no instrument id"),
         }
     }
 }
