@@ -28,16 +28,16 @@ pub struct CompiledSoundEffect {
     data: Vec<u8>,
 }
 
-pub fn compile_sound_effect(
-    sfx_name: &str,
+fn compile_sound_effect(
+    name: &Name,
     sfx: &str,
+    name_string: &str,
     starting_line_number: u32,
     instruments: &UniqueNamesList<Instrument>,
+    name_valid: bool,
     duplicate_name: bool,
 ) -> Result<CompiledSoundEffect, SoundEffectError> {
     let mut errors = Vec::new();
-
-    let name = Name::try_new(sfx_name.to_string());
 
     let mut bc = BytecodeAssembler::new(instruments, None, false, true);
 
@@ -75,16 +75,18 @@ pub fn compile_sound_effect(
 
     // ::TODO move these checks into the Bytecode.get_bytecode()::
     let no_notes = tick_counter.is_zero();
-
-    let invalid_name = name.is_err();
+    let invalid_name = !name_valid;
 
     let no_errors = !no_notes && !invalid_name && !duplicate_name && errors.is_empty();
 
-    if let (Ok(name), Some(data), true) = (name, out, no_errors) {
-        Ok(CompiledSoundEffect { name, data })
+    if let (Some(data), true) = (out, no_errors) {
+        Ok(CompiledSoundEffect {
+            name: name.clone(),
+            data,
+        })
     } else {
         Err(SoundEffectError {
-            sfx_name: sfx_name.to_owned(),
+            sfx_name: name_string.to_owned(),
             sfx_line_no: starting_line_number,
             invalid_name,
             duplicate_name,
@@ -106,11 +108,18 @@ pub fn compile_sound_effects_file(
     for sfx in &sfx_file.sound_effects {
         let duplicate_name = !names.insert(&sfx.name);
 
+        let (name, name_valid) = match sfx.name.parse() {
+            Ok(n) => (n, true),
+            Err(_) => ("sfx".parse().unwrap(), false),
+        };
+
         match compile_sound_effect(
-            &sfx.name,
+            &name,
             &sfx.sfx,
+            &sfx.name,
             sfx.line_no + 1,
             instruments,
+            name_valid,
             duplicate_name,
         ) {
             Ok(s) => sound_effects.push(s),
@@ -197,12 +206,32 @@ pub fn blank_compiled_sound_effects() -> CombinedSoundEffectsData {
     }
 }
 
+// Sound effect input
+// ==================
+// (used by the GUI)
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct SoundEffectInput {
+    pub name: Name,
+    pub sfx: String,
+}
+
+pub fn convert_sfx_inputs_lossy(sound_effects: Vec<SoundEffectFileSfx>) -> Vec<SoundEffectInput> {
+    sound_effects
+        .into_iter()
+        .map(|s| SoundEffectInput {
+            name: Name::new_lossy(s.name),
+            sfx: s.sfx,
+        })
+        .collect()
+}
+
 // Sound effects file
 // ==================
 
 // NOTE: fields are not validated
-#[derive(Clone, Debug, PartialEq)]
-pub struct SoundEffectInput {
+#[derive(Debug, PartialEq)]
+pub struct SoundEffectFileSfx {
     pub name: String,
     pub line_no: u32, // Line number of the name line
     pub sfx: String,
@@ -216,7 +245,7 @@ pub struct SoundEffectsFile {
 
     pub header: String,
 
-    pub sound_effects: Vec<SoundEffectInput>,
+    pub sound_effects: Vec<SoundEffectFileSfx>,
 }
 
 fn count_lines_including_end(s: &str) -> usize {
@@ -259,7 +288,7 @@ fn sfx_file_from_text_file(tf: TextFile) -> SoundEffectsFile {
             .trim_end_matches(NEW_SFX_TOKEN_END)
             .trim_end();
 
-        sound_effects.push(SoundEffectInput {
+        sound_effects.push(SoundEffectFileSfx {
             name: name_line.to_owned(),
             line_no: line_no.try_into().unwrap(),
             sfx: sfx_lines.to_owned(),
@@ -318,27 +347,27 @@ e
                 file_name,
                 header: "".to_owned(),
                 sound_effects: vec![
-                    SoundEffectInput {
+                    SoundEffectFileSfx {
                         name: "test_first".to_owned(),
                         line_no: 1,
                         sfx: "a\nb\n".to_owned(),
                     },
-                    SoundEffectInput {
+                    SoundEffectFileSfx {
                         name: "test_one".to_owned(),
                         line_no: 5,
                         sfx: "c".to_owned(),
                     },
-                    SoundEffectInput {
+                    SoundEffectFileSfx {
                         name: "empty".to_owned(),
                         line_no: 7,
                         sfx: "".to_owned(),
                     },
-                    SoundEffectInput {
+                    SoundEffectFileSfx {
                         name: "test_two".to_owned(),
                         line_no: 8,
                         sfx: "d\ne\n\n".to_owned(),
                     },
-                    SoundEffectInput {
+                    SoundEffectFileSfx {
                         name: "last_empty".to_owned(),
                         line_no: 13,
                         sfx: "".to_owned(),
@@ -380,17 +409,17 @@ c
                 file_name,
                 header: "; This is a header\n; With multiple lines\n".to_owned(),
                 sound_effects: vec![
-                    SoundEffectInput {
+                    SoundEffectFileSfx {
                         name: "test_first".to_owned(),
                         line_no: 4,
                         sfx: "a\n".to_owned(),
                     },
-                    SoundEffectInput {
+                    SoundEffectFileSfx {
                         name: "test_only_newline".to_owned(),
                         line_no: 7,
                         sfx: "".to_owned(),
                     },
-                    SoundEffectInput {
+                    SoundEffectFileSfx {
                         name: "last_not_empty".to_owned(),
                         line_no: 9,
                         sfx: "b\nc\n".to_owned(),

@@ -43,8 +43,7 @@ impl TableMapping for SoundEffectMapping {
 
     fn add_clicked() -> Message {
         Message::EditSoundEffectList(ListMessage::Add(SoundEffectInput {
-            name: "name".to_string(),
-            line_no: 0,
+            name: "name".parse().unwrap(),
             sfx: String::new(),
         }))
     }
@@ -70,7 +69,7 @@ impl TableMapping for SoundEffectMapping {
 pub struct State {
     sender: app::Sender<Message>,
     selected: Option<usize>,
-    old_name: String,
+    old_name: Name,
 
     name: Input,
     editor: TextEditor,
@@ -140,7 +139,7 @@ impl SoundEffectsTab {
         let state = Rc::new(RefCell::from(State {
             sender,
             selected: None,
-            old_name: String::new(),
+            old_name: "sfx".parse().unwrap(),
             name: name.clone(),
             editor: editor.clone(),
         }));
@@ -288,11 +287,10 @@ impl State {
             if let Some(buf) = self.editor.buffer() {
                 if let Some(n) = Name::try_new_lossy(self.name.value()) {
                     self.name.set_value(n.as_str());
-                    self.old_name = n.take_string();
+                    self.old_name = n;
                 };
 
                 let sfx = SoundEffectInput {
-                    line_no: 0,
                     name: self.old_name.clone(),
                     sfx: buf.text(),
                 };

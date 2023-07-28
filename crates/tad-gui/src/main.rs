@@ -20,7 +20,7 @@ use crate::project_tab::ProjectTab;
 use crate::samples_tab::SamplesTab;
 use crate::sound_effects_tab::SoundEffectsTab;
 
-use compiler::sound_effects::{SoundEffectInput, SoundEffectsFile};
+use compiler::sound_effects::{convert_sfx_inputs_lossy, SoundEffectInput, SoundEffectsFile};
 use compiler::{data, driver_constants, load_project_file, ProjectFile};
 
 use fltk::prelude::*;
@@ -160,7 +160,7 @@ impl Project {
     fn maybe_set_sfx_file(&mut self, sfx_file: Option<SoundEffectsFile>) {
         if let Some(sfx_file) = sfx_file {
             let state = ListState::new(
-                sfx_file.sound_effects,
+                convert_sfx_inputs_lossy(sfx_file.sound_effects),
                 driver_constants::MAX_SOUND_EFFECTS + 20,
             );
 
