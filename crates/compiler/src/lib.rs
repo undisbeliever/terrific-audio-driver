@@ -11,7 +11,6 @@ mod envelope;
 mod mml_command_parser;
 mod notes;
 mod pitch_table;
-mod samples;
 mod songs;
 mod spc_file_export;
 mod time;
@@ -22,6 +21,7 @@ pub mod data;
 pub mod driver_constants;
 pub mod errors;
 pub mod mml;
+pub mod samples;
 pub mod sound_effects;
 
 pub use value_newtypes::ValueNewType;

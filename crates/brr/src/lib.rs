@@ -18,7 +18,7 @@ pub const BYTES_PER_BRR_BLOCK: usize = 9;
 pub const BRR_HEADER_END_FLAG: u8 = 0x01;
 pub const BRR_HEADER_LOOP_FLAG: u8 = 0x02;
 
-#[derive(Hash, Eq, PartialEq)]
+#[derive(Clone, Hash, Eq, PartialEq)]
 pub struct BrrSample {
     // Location (within brr_data) for the loop_offset
     loop_offset: Option<u16>,

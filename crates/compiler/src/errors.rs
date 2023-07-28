@@ -238,7 +238,7 @@ pub enum CombineSoundEffectsError {
 }
 
 #[derive(Debug)]
-pub enum SampleError {
+pub enum BrrError {
     IoError(PathBuf, io::Error),
     UnknownFileType(PathBuf),
     WaveFileError(PathBuf, brr::WavError),
@@ -247,9 +247,19 @@ pub enum SampleError {
     FileTooLarge(PathBuf),
     CannotUseDupeBlockHackOnBrrFiles,
     LoopingFlagMismatch { brr_looping: bool },
+}
 
+#[derive(Debug)]
+pub enum EnvelopeError {
     GainAndAdsr,
     NoGainOrAdsr,
+}
+
+#[derive(Debug)]
+pub struct SampleError {
+    pub brr_error: Option<BrrError>,
+    pub pitch_error: Option<PitchError>,
+    pub envelope_error: Option<EnvelopeError>,
 }
 
 #[derive(Debug)]
@@ -820,7 +830,7 @@ impl Display for CombineSoundEffectsError {
     }
 }
 
-impl Display for SampleError {
+impl Display for BrrError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
             Self::IoError(p, e) => write!(f, "cannot read {}: {}", p.display(), e),
@@ -837,7 +847,13 @@ impl Display for SampleError {
                 "looping flag in BRR ({}) does not match JSON ({})",
                 brr_looping, !brr_looping
             ),
+        }
+    }
+}
 
+impl Display for EnvelopeError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
             Self::GainAndAdsr => write!(f, "cannot use adsr and gain at the same time"),
             Self::NoGainOrAdsr => write!(f, "no adsr or gain"),
         }
@@ -1191,7 +1207,15 @@ impl Display for SampleAndInstrumentDataErrorIndentedDisplay<'_> {
         for e in &error.sample_errors {
             match e {
                 TaggedSampleError::Instrument(i, n, e) => {
-                    writeln!(f, "  Instrument {} {}: {}", i, n, e)?
+                    if let Some(e) = &e.brr_error {
+                        writeln!(f, "  Instrument {} {}: {}", i, n, e)?
+                    }
+                    if let Some(e) = &e.pitch_error {
+                        writeln!(f, "  Instrument {} {}: {}", i, n, e)?
+                    }
+                    if let Some(e) = &e.envelope_error {
+                        writeln!(f, "  Instrument {} {}: {}", i, n, e)?
+                    }
                 }
             }
         }

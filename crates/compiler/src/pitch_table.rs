@@ -34,7 +34,8 @@ const MAX_MAX_OCTAVE_OFFSET: i32 = 2;
 const PITCH_REGISTER_FP_SCALE: u32 = 0x1000;
 const PITCH_REGISTER_FLOAT_LIMIT: f64 = 4.0;
 
-struct InstrumentPitch {
+#[derive(Clone)]
+pub struct InstrumentPitch {
     instrument_id: usize,
     microsemitones_above_c: i32,
     octaves_above_c0: i32,
@@ -42,7 +43,7 @@ struct InstrumentPitch {
     max_octave_offset: i32,
 }
 
-fn instrument_pitch(index: usize, inst: &Instrument) -> Result<InstrumentPitch, PitchError> {
+pub fn instrument_pitch(index: usize, inst: &Instrument) -> Result<InstrumentPitch, PitchError> {
     if inst.freq < MIN_SAMPLE_FREQ {
         return Err(PitchError::SampleRateTooLow);
     }
@@ -98,7 +99,13 @@ fn instrument_pitch(index: usize, inst: &Instrument) -> Result<InstrumentPitch, 
 }
 
 // Using sorted vector instead of Map as I need a reproducible pitch table.
-struct SortedInstrumentPitches(Vec<InstrumentPitch>);
+pub struct SortedInstrumentPitches(Vec<InstrumentPitch>);
+
+pub fn sort_pitches(mut pv: Vec<InstrumentPitch>) -> SortedInstrumentPitches {
+    // Using stable sort instead of a hashmap to ensure pitch_table is deterministic
+    pv.sort_by_key(|p| p.microsemitones_above_c);
+    SortedInstrumentPitches(pv)
+}
 
 fn pitch_vec(
     instruments: &UniqueNamesList<Instrument>,
@@ -115,10 +122,7 @@ fn pitch_vec(
     }
 
     if errors.is_empty() {
-        // Using stable sort instead of a hashmap to ensure pitch_table is deterministic
-        out.sort_by_key(|p| p.microsemitones_above_c);
-
-        Ok(SortedInstrumentPitches(out))
+        Ok(sort_pitches(out))
     } else {
         Err(PitchTableError::InstrumentErrors(errors))
     }
@@ -212,11 +216,11 @@ pub struct PitchTable {
     pub(crate) instruments_pitch_offset: Vec<u8>,
 }
 
-pub fn build_pitch_table(
-    instruments: &UniqueNamesList<Instrument>,
+pub fn merge_pitch_vec(
+    pv: SortedInstrumentPitches,
+    n_instruments: usize,
 ) -> Result<PitchTable, PitchTableError> {
-    let pv = pitch_vec(instruments)?;
-    let pt = process_pitch_vec(pv, instruments.len());
+    let pt = process_pitch_vec(pv, n_instruments);
 
     if pt.pitches.len() > PITCH_TABLE_SIZE {
         return Err(PitchTableError::TooManyPitches(pt.pitches.len()));
@@ -243,6 +247,13 @@ pub fn build_pitch_table(
     }
 
     Ok(out)
+}
+
+pub fn build_pitch_table(
+    instruments: &UniqueNamesList<Instrument>,
+) -> Result<PitchTable, PitchTableError> {
+    let pv = pitch_vec(instruments)?;
+    merge_pitch_vec(pv, instruments.len())
 }
 
 impl PitchTable {
