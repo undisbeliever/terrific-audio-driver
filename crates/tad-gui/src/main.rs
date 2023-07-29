@@ -8,6 +8,7 @@ mod compiler_thread;
 mod files;
 mod helpers;
 mod list_editor;
+mod names;
 mod tables;
 
 mod project_tab;
@@ -16,6 +17,7 @@ mod sound_effects_tab;
 
 use crate::files::{add_song_to_pf_dialog, load_pf_sfx_file, open_sfx_file_dialog};
 use crate::list_editor::{ListMessage, ListState};
+use crate::names::deduplicate_names;
 use crate::project_tab::ProjectTab;
 use crate::samples_tab::SamplesTab;
 use crate::sound_effects_tab::SoundEffectsTab;
@@ -23,6 +25,7 @@ use crate::sound_effects_tab::SoundEffectsTab;
 use compiler::sound_effects::{convert_sfx_inputs_lossy, SoundEffectInput, SoundEffectsFile};
 use compiler::{data, driver_constants, load_project_file, ProjectFile};
 
+use fltk::dialog;
 use fltk::prelude::*;
 
 use std::env;
@@ -78,6 +81,16 @@ impl Project {
     fn new(pf: ProjectFile, sender: fltk::app::Sender<Message>) -> Self {
         let c = pf.contents;
 
+        let (sfx_eo, sfx_eo_renamed) = deduplicate_names(c.sound_effects);
+        let (songs, songs_renamed) = deduplicate_names(c.songs);
+        let (instruments, instruments_renamed) = deduplicate_names(c.instruments);
+
+        let total_renamed = sfx_eo_renamed + songs_renamed + instruments_renamed;
+        if total_renamed > 0 {
+            dialog::message_title("Duplicate names found");
+            dialog::alert_default(&format!("{} items have been renamed", total_renamed));
+        }
+
         let data = ProjectData {
             pf_path: pf.path,
             pf_file_name: pf.file_name,
@@ -85,9 +98,9 @@ impl Project {
 
             sound_effects_file: c.sound_effect_file,
 
-            sfx_export_orders: ListState::new(c.sound_effects, driver_constants::MAX_SOUND_EFFECTS),
-            project_songs: ListState::new(c.songs, driver_constants::MAX_N_SONGS),
-            instruments: ListState::new(c.instruments, driver_constants::MAX_INSTRUMENTS),
+            sfx_export_orders: ListState::new(sfx_eo, driver_constants::MAX_SOUND_EFFECTS),
+            project_songs: ListState::new(songs, driver_constants::MAX_N_SONGS),
+            instruments: ListState::new(instruments, driver_constants::MAX_INSTRUMENTS),
 
             sound_effects: None,
         };
@@ -159,10 +172,15 @@ impl Project {
 
     fn maybe_set_sfx_file(&mut self, sfx_file: Option<SoundEffectsFile>) {
         if let Some(sfx_file) = sfx_file {
-            let state = ListState::new(
-                convert_sfx_inputs_lossy(sfx_file.sound_effects),
-                driver_constants::MAX_SOUND_EFFECTS + 20,
-            );
+            let sfx = convert_sfx_inputs_lossy(sfx_file.sound_effects);
+
+            let (sfx, sfx_renamed) = deduplicate_names(sfx);
+            if sfx_renamed > 0 {
+                dialog::message_title("Duplicate names found");
+                dialog::alert_default(&format!("{} sound effects have been renamed", sfx_renamed));
+            }
+
+            let state = ListState::new(sfx, driver_constants::MAX_SOUND_EFFECTS + 20);
 
             self.sound_effects_tab.replace_sfx_file(&state);
             self.data.sound_effects = Some(state)

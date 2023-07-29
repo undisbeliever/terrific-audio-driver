@@ -6,6 +6,7 @@
 
 use crate::compiler_thread::ItemId;
 use crate::helpers::SetActive;
+use crate::names::{DeduplicatedNameVec, NameDeduplicator};
 use crate::tables;
 use crate::Message;
 
@@ -157,11 +158,19 @@ where
 impl<T> ListState<T>
 where
     T: Clone + std::cmp::PartialEq<T>,
+    T: NameDeduplicator,
 {
-    pub fn new(list: Vec<T>, max_size: usize) -> Self {
+    pub fn new(list: DeduplicatedNameVec<T>, max_size: usize) -> Self {
+        let list = LaVec::from_vec(
+            list.into_vec()
+                .into_iter()
+                .map(|i| (ItemId::new(), i))
+                .collect(),
+        );
+
         Self {
             max_size,
-            list: LaVec::from_vec(list.into_iter().map(|i| (ItemId::new(), i)).collect()),
+            list,
             selected: None,
         }
     }
@@ -228,9 +237,13 @@ where
                 ListAction::None
             }
 
-            ListMessage::ItemEdited(index, new_value) => {
+            ListMessage::ItemEdited(index, mut new_value) => {
                 if let Some((_id, item)) = self.list.get(index) {
                     if *item != new_value {
+                        if NameDeduplicator::test_name_changed(item, &new_value) {
+                            NameDeduplicator::dedupe_name(&mut new_value, &self.list, Some(index));
+                        }
+
                         let action = ListAction::Edit(index, new_value);
                         update_list(&mut self.list, &action);
                         editor.list_edited(&action);
@@ -244,8 +257,10 @@ where
                 }
             }
 
-            ListMessage::Add(item) => {
+            ListMessage::Add(mut item) => {
                 if self.can_add() {
+                    NameDeduplicator::dedupe_name(&mut item, &self.list, None);
+
                     let i = self.list.len();
                     let action = ListAction::Add(i, item);
                     update_list(&mut self.list, &action);
@@ -409,7 +424,7 @@ impl ListButtons {
 
     pub fn update<T>(&mut self, state: &ListState<T>)
     where
-        T: Clone + PartialEq<T>,
+        T: Clone + PartialEq<T> + NameDeduplicator,
     {
         match state.selected() {
             Some(i) => self.selected_changed(i, state.list.len(), state.can_add()),
@@ -613,6 +628,7 @@ where
 impl<T> ListEditorTable<T>
 where
     T: TableMapping,
+    T::DataType: NameDeduplicator,
 {
     pub fn new(sender: fltk::app::Sender<Message>) -> Self {
         let mut list_buttons = ListButtons::new(T::type_name(), T::CAN_CLONE);
