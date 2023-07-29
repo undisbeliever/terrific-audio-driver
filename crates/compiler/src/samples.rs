@@ -14,28 +14,33 @@ use crate::pitch_table::{
     instrument_pitch, merge_pitch_vec, sort_pitches, InstrumentPitch, PitchTable,
 };
 
-use brr::{encode_brr, parse_brr_file, read_16_bit_mono_wave_file, BrrSample};
+use brr::{
+    encode_brr, parse_brr_file, read_16_bit_mono_wave_file, BrrSample, MonoPcm16WaveFile,
+    ValidBrrFile, BYTES_PER_BRR_BLOCK, SAMPLES_PER_BLOCK,
+};
 
 use std::collections::HashMap;
 use std::ffi::OsStr;
 use std::fs;
 use std::io::Read;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 const MAX_BRR_SAMPLE_LOAD: u64 = 16 * 1024;
+const MAX_WAV_SAMPLES: usize =
+    (MAX_BRR_SAMPLE_LOAD as usize) / BYTES_PER_BRR_BLOCK * SAMPLES_PER_BLOCK;
 
-// ::TODO add BRR file cache (for the GUI)::
 fn read_file_limited(filename: &Path, max_size: u64) -> Result<Vec<u8>, BrrError> {
     let file = match fs::File::open(filename) {
         Ok(file) => file,
-        Err(e) => return Err(BrrError::IoError(filename.to_path_buf(), e)),
+        Err(e) => return Err(BrrError::IoError(Arc::from((filename.to_path_buf(), e)))),
     };
 
     let mut buffer = Vec::new();
 
     match file.take(max_size + 1).read_to_end(&mut buffer) {
         Ok(_) => (),
-        Err(e) => return Err(BrrError::IoError(filename.to_path_buf(), e)),
+        Err(e) => return Err(BrrError::IoError(Arc::from((filename.to_path_buf(), e)))),
     }
 
     if buffer.len() > max_size as usize {
@@ -45,24 +50,69 @@ fn read_file_limited(filename: &Path, max_size: u64) -> Result<Vec<u8>, BrrError
     Ok(buffer)
 }
 
+pub struct SampleFileCache {
+    parent_path: PathBuf,
+    brr_files: HashMap<PathBuf, Result<ValidBrrFile, BrrError>>,
+    wav_files: HashMap<PathBuf, Result<MonoPcm16WaveFile, BrrError>>,
+}
+
+impl SampleFileCache {
+    pub fn new(parent_path: PathBuf) -> Self {
+        Self {
+            parent_path,
+            brr_files: HashMap::new(),
+            wav_files: HashMap::new(),
+        }
+    }
+
+    pub fn clear_cache(&mut self) {
+        self.brr_files.clear();
+        self.wav_files.clear();
+    }
+
+    pub fn remove_path(&mut self, path: &Path) {
+        self.brr_files.remove(path);
+        self.wav_files.remove(path);
+    }
+
+    fn load_brr_file(&mut self, path: &Path) -> &Result<ValidBrrFile, BrrError> {
+        self.brr_files.entry(path.to_path_buf()).or_insert_with(|| {
+            let p = &self.parent_path.join(path);
+            match read_file_limited(p, MAX_BRR_SAMPLE_LOAD) {
+                Ok(data) => match parse_brr_file(&data) {
+                    Ok(b) => Ok(b),
+                    Err(e) => Err(BrrError::BrrParseError(path.to_path_buf(), e)),
+                },
+                Err(e) => Err(e),
+            }
+        })
+    }
+
+    fn load_wav_file(&mut self, path: &Path) -> &Result<MonoPcm16WaveFile, BrrError> {
+        self.wav_files.entry(path.to_path_buf()).or_insert_with(|| {
+            let p = self.parent_path.join(path);
+            match fs::File::open(p) {
+                Ok(mut file) => match read_16_bit_mono_wave_file(&mut file, MAX_WAV_SAMPLES) {
+                    Ok(w) => Ok(w),
+                    Err(e) => Err(BrrError::WaveFileError(Arc::from((path.to_path_buf(), e)))),
+                },
+                Err(e) => Err(BrrError::IoError(Arc::from((path.to_path_buf(), e)))),
+            }
+        })
+    }
+}
+
 fn encode_wave_file(
-    filename: PathBuf,
+    path: &Path,
+    cache: &mut SampleFileCache,
     is_looping: bool,
     loop_point: Option<usize>,
     dupe_block_hack: Option<usize>,
     reset_filter_at_loop_point: bool,
 ) -> Result<BrrSample, BrrError> {
-    let wav = {
-        // ::TODO add wave file cache (for the GUI)::
-        let mut wave_file = match fs::File::open(&filename) {
-            Ok(file) => file,
-            Err(e) => return Err(BrrError::IoError(filename, e)),
-        };
-
-        match read_16_bit_mono_wave_file(&mut wave_file, u16::MAX.into()) {
-            Ok(wav) => wav,
-            Err(e) => return Err(BrrError::WaveFileError(filename, e)),
-        }
+    let wav = match cache.load_wav_file(path) {
+        Ok(w) => w,
+        Err(e) => return Err(e.clone()),
     };
 
     let loop_point = if is_looping && dupe_block_hack.is_none() && loop_point.is_none() {
@@ -80,16 +130,24 @@ fn encode_wave_file(
         reset_filter_at_loop_point,
     ) {
         Ok(b) => Ok(b),
-        Err(e) => Err(BrrError::BrrEncodeError(filename, e)),
+        Err(e) => Err(BrrError::BrrEncodeError(path.to_path_buf(), e)),
     }
 }
 
-fn load_brr_file(filename: PathBuf, loop_point: Option<usize>) -> Result<BrrSample, BrrError> {
-    let brr_data = read_file_limited(&filename, MAX_BRR_SAMPLE_LOAD)?;
+fn load_brr_file(
+    path: &Path,
+    cache: &mut SampleFileCache,
+    loop_point: Option<usize>,
+) -> Result<BrrSample, BrrError> {
+    let brr = match cache.load_brr_file(path) {
+        Ok(b) => b,
+        Err(e) => return Err(e.clone()),
+    };
 
-    parse_brr_file(&brr_data)
-        .and_then(|b| b.into_brr_sample(loop_point))
-        .map_err(|e| BrrError::BrrParseError(filename, e))
+    match brr.clone().into_brr_sample(loop_point) {
+        Ok(b) => Ok(b),
+        Err(e) => Err(BrrError::BrrParseError(path.to_path_buf(), e)),
+    }
 }
 
 #[derive(Clone)]
@@ -113,15 +171,14 @@ fn instrument_envelope(inst: &Instrument) -> Result<(u8, u8), EnvelopeError> {
 }
 
 pub fn load_sample_for_instrument(
-    parent_path: &Path,
-    index: usize,
     inst: &Instrument,
+    index: usize,
+    cache: &mut SampleFileCache,
 ) -> Result<Sample, SampleError> {
-    let filename = parent_path.join(&inst.source);
-
-    let mut brr_sample = match filename.extension().and_then(OsStr::to_str) {
+    let mut brr_sample = match inst.source.extension().and_then(OsStr::to_str) {
         Some("wav") => encode_wave_file(
-            filename,
+            &inst.source,
+            cache,
             inst.looping,
             inst.loop_point,
             inst.dupe_block_hack,
@@ -129,7 +186,7 @@ pub fn load_sample_for_instrument(
         ),
         Some("brr") => {
             if inst.dupe_block_hack.is_none() {
-                load_brr_file(filename, inst.loop_point)
+                load_brr_file(&inst.source, cache, inst.loop_point)
             } else {
                 Err(BrrError::CannotUseDupeBlockHackOnBrrFiles)
             }
@@ -170,8 +227,10 @@ fn compile_samples(
     let mut out = Vec::new();
     let mut errors = Vec::new();
 
+    let mut cache = SampleFileCache::new(project.parent_path.clone());
+
     for (i, inst) in project.instruments.list().iter().enumerate() {
-        match load_sample_for_instrument(&project.parent_path, i, inst) {
+        match load_sample_for_instrument(inst, i, &mut cache) {
             Ok(b) => out.push(b),
             Err(e) => errors.push(TaggedSampleError::Instrument(i, inst.name.clone(), e)),
         }

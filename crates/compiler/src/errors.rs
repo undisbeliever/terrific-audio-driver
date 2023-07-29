@@ -237,11 +237,14 @@ pub enum CombineSoundEffectsError {
     DuplicateSoundEffects(Vec<String>),
 }
 
-#[derive(Debug)]
+// BrrError is cloneable as the sample file cache caches errors.
+// `io::Error` is not cloneable, requiring to enclose `IoError` and `WaveFileError` inside an Arc.
+#[derive(Debug, Clone)]
 pub enum BrrError {
-    IoError(PathBuf, io::Error),
+    IoError(std::sync::Arc<(PathBuf, io::Error)>),
+    WaveFileError(std::sync::Arc<(PathBuf, brr::WavError)>),
+
     UnknownFileType(PathBuf),
-    WaveFileError(PathBuf, brr::WavError),
     BrrEncodeError(PathBuf, brr::EncodeError),
     BrrParseError(PathBuf, brr::ParseError),
     FileTooLarge(PathBuf),
@@ -833,9 +836,10 @@ impl Display for CombineSoundEffectsError {
 impl Display for BrrError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            Self::IoError(p, e) => write!(f, "cannot read {}: {}", p.display(), e),
+            Self::IoError(arc) => write!(f, "cannot read {}: {}", arc.0.display(), arc.1),
+            Self::WaveFileError(arc) => write!(f, "cannot read {}: {}", arc.0.display(), arc.1),
+
             Self::UnknownFileType(p) => write!(f, "unknown file type: {}", p.display()),
-            Self::WaveFileError(p, e) => write!(f, "error loading {}: {}", p.display(), e),
             Self::BrrEncodeError(p, e) => write!(f, "error encoding {}: {}", p.display(), e),
             Self::BrrParseError(p, e) => write!(f, "error loading {}: {}", p.display(), e),
             Self::FileTooLarge(p) => write!(f, "file too large: {}", p.display()),

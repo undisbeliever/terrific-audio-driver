@@ -10,7 +10,7 @@ use crate::{
     BrrSample, BRR_HEADER_END_FLAG, BRR_HEADER_LOOP_FLAG, BYTES_PER_BRR_BLOCK, SAMPLES_PER_BLOCK,
 };
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum ParseError {
     Empty,
     InvalidFileSize,

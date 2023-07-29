@@ -13,7 +13,7 @@ const MAX_SHIFT: u8 = 12;
 const I4_MIN: i32 = -8;
 const I4_MAX: i32 = 7;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum EncodeError {
     NoSamples,
     InvalidNumberOfSamples,
