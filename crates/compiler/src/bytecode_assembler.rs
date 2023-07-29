@@ -8,7 +8,6 @@ use crate::bytecode::{
     BcTicksKeyOff, BcTicksNoKeyOff, Bytecode, InstrumentId, LoopCount, PitchOffsetPerTick,
     PlayNoteTicks, PortamentoVelocity, SubroutineId,
 };
-use crate::data::{Instrument, UniqueNamesList};
 use crate::envelope::{Adsr, Gain};
 use crate::errors::{BytecodeAssemblerError, BytecodeError, ValueError};
 use crate::notes::Note;
@@ -45,13 +44,13 @@ impl BytecodeResultWrapper for Result<(), BytecodeError> {
 
 pub struct BytecodeAssembler<'a, 'b> {
     bc: Bytecode,
-    instruments: &'a UniqueNamesList<Instrument>,
+    instruments: &'a HashMap<String, u32>,
     subroutines: Option<&'b SubroutinesMap<'b>>,
 }
 
 impl BytecodeAssembler<'_, '_> {
     pub fn new<'a, 'b>(
-        instruments: &'a UniqueNamesList<Instrument>,
+        instruments: &'a HashMap<String, u32>,
         subroutines: Option<&'b SubroutinesMap<'b>>,
         is_subroutine: bool,
         is_sound_effect: bool,
@@ -278,8 +277,8 @@ impl BytecodeAssembler<'_, '_> {
     }
 
     fn _find_instrument(&self, arg: &str) -> Result<InstrumentId, BytecodeAssemblerError> {
-        match self.instruments.get_with_index(arg) {
-            Some((i, _inst)) => Ok(InstrumentId::try_from(i)?),
+        match self.instruments.get(arg) {
+            Some(i) => Ok(InstrumentId::try_from(*i)?),
             None => Err(BytecodeAssemblerError::UnknownInstrument(arg.to_owned())),
         }
     }

@@ -33,7 +33,7 @@ fn compile_sound_effect(
     sfx: &str,
     name_string: &str,
     starting_line_number: u32,
-    instruments: &UniqueNamesList<Instrument>,
+    instruments: &HashMap<String, u32>,
     name_valid: bool,
     duplicate_name: bool,
 ) -> Result<CompiledSoundEffect, SoundEffectError> {
@@ -118,7 +118,7 @@ pub fn compile_sound_effects_file(
             &sfx.sfx,
             &sfx.name,
             sfx.line_no + 1,
-            instruments,
+            instruments.map(),
             name_valid,
             duplicate_name,
         ) {
