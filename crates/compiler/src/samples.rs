@@ -87,12 +87,9 @@ fn encode_wave_file(
 fn load_brr_file(filename: PathBuf, loop_point: Option<usize>) -> Result<BrrSample, BrrError> {
     let brr_data = read_file_limited(&filename, MAX_BRR_SAMPLE_LOAD)?;
 
-    let brr = match parse_brr_file(&brr_data, loop_point) {
-        Ok(b) => b,
-        Err(e) => return Err(BrrError::BrrParseError(filename, e)),
-    };
-
-    Ok(brr)
+    parse_brr_file(&brr_data)
+        .and_then(|b| b.into_brr_sample(loop_point))
+        .map_err(|e| BrrError::BrrParseError(filename, e))
 }
 
 #[derive(Clone)]

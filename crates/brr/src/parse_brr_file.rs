@@ -6,7 +6,9 @@
 
 use ::std::fmt::Display;
 
-use crate::{BrrSample, BRR_HEADER_END_FLAG, BRR_HEADER_LOOP_FLAG, BYTES_PER_BRR_BLOCK};
+use crate::{
+    BrrSample, BRR_HEADER_END_FLAG, BRR_HEADER_LOOP_FLAG, BYTES_PER_BRR_BLOCK, SAMPLES_PER_BLOCK,
+};
 
 #[derive(Debug)]
 pub enum ParseError {
@@ -47,7 +49,43 @@ impl Display for ParseError {
     }
 }
 
-pub fn parse_brr_file(input: &[u8], loop_offset: Option<usize>) -> Result<BrrSample, ParseError> {
+#[derive(Clone)]
+pub struct ValidBrrFile {
+    brr_data: Vec<u8>,
+    loop_flag: bool,
+    loop_offset: Option<u16>,
+}
+
+impl ValidBrrFile {
+    pub fn into_brr_sample(self, loop_point: Option<usize>) -> Result<BrrSample, ParseError> {
+        let loop_offset = match (self.loop_offset, loop_point) {
+            (Some(_), Some(_)) => return Err(ParseError::TwoLoopPoints),
+            (Some(lo), None) => Some(lo),
+            (None, Some(lp)) => Some(loop_point_to_loop_offset(lp, self.brr_data.len())?),
+            (None, None) => None,
+        };
+
+        match self.loop_flag {
+            true => {
+                if loop_offset.is_none() {
+                    return Err(ParseError::MissingLoopPoint);
+                }
+            }
+            false => {
+                if loop_offset.is_some() {
+                    return Err(ParseError::BrrSampleNotLooping);
+                }
+            }
+        }
+
+        Ok(BrrSample {
+            loop_offset,
+            brr_data: self.brr_data,
+        })
+    }
+}
+
+pub fn parse_brr_file(input: &[u8]) -> Result<ValidBrrFile, ParseError> {
     let (lo_in_file, brr_data) = match input.len() % BYTES_PER_BRR_BLOCK {
         0 => {
             // No two-byte header, use loop_offset.
@@ -81,13 +119,14 @@ pub fn parse_brr_file(input: &[u8], loop_offset: Option<usize>) -> Result<BrrSam
 
     let mut rblocks = brr_data.rchunks_exact(BYTES_PER_BRR_BLOCK);
 
-    // safe - brr_data is
+    // safe - rblocks is non-empty
     let last_block_header = rblocks.next().unwrap()[0];
 
     if last_block_header & BRR_HEADER_END_FLAG == 0 {
         return Err(ParseError::EndFlagNotSetInLastBlock);
     }
 
+    // Process remaining blocks
     for block in rblocks {
         let block_header = block[0];
         if block_header & BRR_HEADER_END_FLAG != 0 {
@@ -95,38 +134,41 @@ pub fn parse_brr_file(input: &[u8], loop_offset: Option<usize>) -> Result<BrrSam
         }
     }
 
-    let loop_offset = if last_block_header & BRR_HEADER_LOOP_FLAG != 0 {
-        // Loop flag set
-        let lo = match (loop_offset, lo_in_file) {
-            (Some(lo), None) => lo,
-            (None, Some(lo)) => lo.into(),
-            (Some(_), Some(_)) => return Err(ParseError::TwoLoopPoints),
-            (None, None) => return Err(ParseError::MissingLoopPoint),
-        };
+    let loop_flag = last_block_header & BRR_HEADER_LOOP_FLAG != 0;
 
-        let max_loop_offset = brr_data.len() - BYTES_PER_BRR_BLOCK;
-        if lo % BYTES_PER_BRR_BLOCK != 0 {
-            return Err(ParseError::InvalidLoopPoint);
+    let loop_offset = match (lo_in_file, loop_flag) {
+        (Some(lo), true) => {
+            let max_loop_offset = brr_data.len() - BYTES_PER_BRR_BLOCK;
+            if lo % BYTES_PER_BRR_BLOCK as u16 != 0 {
+                return Err(ParseError::InvalidLoopPoint);
+            }
+            if usize::from(lo) > max_loop_offset {
+                return Err(ParseError::LoopPointOutOfRange(lo.into(), max_loop_offset));
+            }
+
+            Some(lo)
         }
-        if lo > max_loop_offset {
-            return Err(ParseError::LoopPointOutOfRange(lo, max_loop_offset));
-        }
-
-        let lo = u16::try_from(lo).unwrap();
-
-        Some(lo)
-    } else {
-        // Loop flag clear
-        if loop_offset.is_some() {
-            return Err(ParseError::BrrSampleNotLooping);
-        }
-
-        // Ignore loop offset in BRR file (even if it exists)
-        None
+        // Ignore loop offset if the BRR file does not loop
+        _ => None,
     };
 
-    Ok(BrrSample {
+    Ok(ValidBrrFile {
+        loop_flag,
         loop_offset,
         brr_data: brr_data.to_vec(),
     })
+}
+
+fn loop_point_to_loop_offset(lp: usize, brr_data_size: usize) -> Result<u16, ParseError> {
+    if lp % SAMPLES_PER_BLOCK != 0 {
+        return Err(ParseError::InvalidLoopPoint);
+    }
+
+    let max_loop_point = brr_data_size / BYTES_PER_BRR_BLOCK * SAMPLES_PER_BLOCK;
+    if lp >= max_loop_point {
+        return Err(ParseError::LoopPointOutOfRange(lp, max_loop_point));
+    }
+
+    assert!(brr_data_size < u16::MAX.into());
+    Ok(u16::try_from(lp / SAMPLES_PER_BLOCK * BYTES_PER_BRR_BLOCK).unwrap())
 }
