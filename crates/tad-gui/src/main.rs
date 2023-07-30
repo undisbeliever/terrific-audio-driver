@@ -15,6 +15,7 @@ mod project_tab;
 mod samples_tab;
 mod sound_effects_tab;
 
+use crate::compiler_thread::ToCompiler;
 use crate::files::{add_song_to_pf_dialog, load_pf_sfx_file, open_sfx_file_dialog};
 use crate::list_editor::{ListMessage, ListState};
 use crate::names::deduplicate_names;
@@ -30,9 +31,12 @@ use fltk::prelude::*;
 
 use std::env;
 use std::path::PathBuf;
+use std::sync::mpsc;
 
 #[derive(Debug)]
 pub enum Message {
+    SelectedTabChanged(Option<i32>),
+
     EditSfxExportOrder(ListMessage<data::Name>),
     EditProjectSongs(ListMessage<data::Song>),
     Instrument(ListMessage<data::Instrument>),
@@ -41,10 +45,14 @@ pub enum Message {
     OpenSfxFileDialog,
     LoadSfxFile,
 
+    RecompileEverything,
+
     EditSoundEffectList(ListMessage<SoundEffectInput>),
 
     AddSongToProjectDialog,
     SetProjectSongName(usize, data::Name),
+
+    FromCompiler(compiler_thread::CompilerOutput),
 }
 
 trait Tab {
@@ -57,6 +65,7 @@ pub struct ProjectData {
     pf_path: PathBuf,
     pf_file_name: String,
     pf_parent_path: PathBuf,
+
     // `sound_effects_file` is relative to `pf_parent_path`
     sound_effects_file: Option<PathBuf>,
 
@@ -72,10 +81,18 @@ struct Project {
 
     data: ProjectData,
 
+    #[allow(dead_code)]
+    compiler_thread: std::thread::JoinHandle<()>,
+    compiler_sender: mpsc::Sender<ToCompiler>,
+
+    selected_tab: Option<i32>,
+
     project_tab: ProjectTab,
     samples_tab: SamplesTab,
     sound_effects_tab: SoundEffectsTab,
 }
+
+const SAMPLES_TAB_INDEX: i32 = 1;
 
 impl Project {
     fn new(pf: ProjectFile, sender: fltk::app::Sender<Message>) -> Self {
@@ -105,9 +122,14 @@ impl Project {
             sound_effects: None,
         };
 
+        sender.send(Message::RecompileEverything);
         if data.sound_effects_file.is_some() {
             sender.send(Message::LoadSfxFile);
         }
+
+        let (compiler_sender, r) = mpsc::channel();
+        let compiler_thread =
+            compiler_thread::create_bg_thread(data.pf_parent_path.clone(), r, sender.clone());
 
         Self {
             project_tab: ProjectTab::new(
@@ -118,6 +140,11 @@ impl Project {
             samples_tab: SamplesTab::new(&data.instruments, sender.clone()),
             sound_effects_tab: SoundEffectsTab::new(sender.clone()),
 
+            selected_tab: Some(0),
+
+            compiler_thread,
+            compiler_sender,
+
             data,
             sender,
         }
@@ -125,22 +152,53 @@ impl Project {
 
     fn process(&mut self, m: Message) {
         match m {
+            Message::FromCompiler(m) => {
+                // ::TODO process::
+                println!("{m:?}");
+            }
+
+            Message::SelectedTabChanged(tab_index) => {
+                if self.selected_tab == Some(SAMPLES_TAB_INDEX) {
+                    let _ = self
+                        .compiler_sender
+                        .send(ToCompiler::FinishedEditingSamples);
+                }
+                self.selected_tab = tab_index;
+            }
+
             Message::EditSfxExportOrder(m) => {
-                self.data
+                let (_a, c) = self
+                    .data
                     .sfx_export_orders
                     .process(m, &mut self.project_tab.sfx_export_order_table);
+
+                if let Some(c) = c {
+                    let _ = self.compiler_sender.send(ToCompiler::SfxExportOrder(c));
+                }
             }
             Message::EditProjectSongs(m) => {
-                self.data
+                let (_a, c) = self
+                    .data
                     .project_songs
                     .process(m, &mut self.project_tab.song_table);
+
+                if let Some(c) = c {
+                    let _ = self.compiler_sender.send(ToCompiler::ProjectSongs(c));
+                }
             }
             Message::Instrument(m) => {
-                self.data.instruments.process(m, &mut self.samples_tab);
+                let (_a, c) = self.data.instruments.process(m, &mut self.samples_tab);
+
+                if let Some(c) = c {
+                    let _ = self.compiler_sender.send(ToCompiler::Instrument(c));
+                }
             }
             Message::EditSoundEffectList(m) => {
                 if let Some(sound_effects) = &mut self.data.sound_effects {
-                    sound_effects.process(m, &mut self.sound_effects_tab);
+                    let (_a, c) = sound_effects.process(m, &mut self.sound_effects_tab);
+                    if let Some(c) = c {
+                        let _ = self.compiler_sender.send(ToCompiler::SoundEffects(c));
+                    }
                 }
             }
 
@@ -153,6 +211,9 @@ impl Project {
             }
             Message::LoadSfxFile => {
                 self.maybe_set_sfx_file(load_pf_sfx_file(&self.data));
+            }
+            Message::RecompileEverything => {
+                self.recompile_everything();
             }
 
             Message::AddSongToProjectDialog => {
@@ -170,6 +231,29 @@ impl Project {
         }
     }
 
+    fn recompile_everything(&self) {
+        let _ = self.compiler_sender.send(ToCompiler::SfxExportOrder(
+            self.data.sfx_export_orders.replace_all_message(),
+        ));
+        let _ = self.compiler_sender.send(ToCompiler::ProjectSongs(
+            self.data.project_songs.replace_all_message(),
+        ));
+        let _ = self.compiler_sender.send(ToCompiler::Instrument(
+            self.data.instruments.replace_all_message(),
+        ));
+
+        // Combine samples after they have been compiled
+        let _ = self
+            .compiler_sender
+            .send(ToCompiler::FinishedEditingSamples);
+
+        if let Some(sfx) = &self.data.sound_effects {
+            let _ = self
+                .compiler_sender
+                .send(ToCompiler::SoundEffects(sfx.replace_all_message()));
+        }
+    }
+
     fn maybe_set_sfx_file(&mut self, sfx_file: Option<SoundEffectsFile>) {
         if let Some(sfx_file) = sfx_file {
             let sfx = convert_sfx_inputs_lossy(sfx_file.sound_effects);
@@ -183,7 +267,12 @@ impl Project {
             let state = ListState::new(sfx, driver_constants::MAX_SOUND_EFFECTS + 20);
 
             self.sound_effects_tab.replace_sfx_file(&state);
-            self.data.sound_effects = Some(state)
+
+            let _ = self
+                .compiler_sender
+                .send(ToCompiler::SoundEffects(state.replace_all_message()));
+
+            self.data.sound_effects = Some(state);
         }
     }
 }
@@ -191,6 +280,9 @@ impl Project {
 #[allow(dead_code)]
 struct MainWindow {
     app: fltk::app::App,
+
+    sender: fltk::app::Sender<Message>,
+
     window: fltk::window::Window,
     tabs: fltk::group::Tabs,
 
@@ -198,7 +290,7 @@ struct MainWindow {
 }
 
 impl MainWindow {
-    fn new() -> Self {
+    fn new(sender: fltk::app::Sender<Message>) -> Self {
         let app = fltk::app::App::default();
 
         let mut window = fltk::window::Window::default()
@@ -222,8 +314,17 @@ impl MainWindow {
         window.end();
         window.show();
 
+        tabs.set_callback({
+            let sender = sender.clone();
+            move |t| {
+                let selected_index = t.value().map(|w| t.find(&w));
+                sender.send(Message::SelectedTabChanged(selected_index));
+            }
+        });
+
         Self {
             app,
+            sender,
             window,
             tabs,
             project: None,
@@ -268,7 +369,7 @@ fn main() {
 
     let (sender, reciever) = fltk::app::channel::<Message>();
 
-    let mut main_window = MainWindow::new();
+    let mut main_window = MainWindow::new(sender.clone());
     main_window.load_project(pf, sender);
 
     while main_window.app.wait() {

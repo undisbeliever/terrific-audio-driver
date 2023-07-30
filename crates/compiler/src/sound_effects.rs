@@ -28,6 +28,12 @@ pub struct CompiledSoundEffect {
     data: Vec<u8>,
 }
 
+impl CompiledSoundEffect {
+    pub fn data(&self) -> &Vec<u8> {
+        &self.data
+    }
+}
+
 fn compile_sound_effect(
     name: &Name,
     sfx: &str,
@@ -224,6 +230,21 @@ pub fn convert_sfx_inputs_lossy(sound_effects: Vec<SoundEffectFileSfx>) -> Vec<S
             sfx: s.sfx,
         })
         .collect()
+}
+
+pub fn compile_sound_effect_input(
+    input: &SoundEffectInput,
+    instruments: &HashMap<String, u32>,
+) -> Result<CompiledSoundEffect, SoundEffectError> {
+    compile_sound_effect(
+        &input.name,
+        &input.sfx,
+        input.name.as_str(),
+        0,
+        instruments,
+        true,
+        false,
+    )
 }
 
 // Sound effects file

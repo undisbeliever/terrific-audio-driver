@@ -158,6 +158,12 @@ pub struct Sample {
     adsr2_or_gain: u8,
 }
 
+impl Sample {
+    pub fn sample_size(&self) -> usize {
+        self.brr_sample.brr_data().len()
+    }
+}
+
 fn instrument_envelope(inst: &Instrument) -> Result<(u8, u8), EnvelopeError> {
     match (&inst.adsr, &inst.gain) {
         (Some(adsr), None) => Ok((adsr.adsr1(), adsr.adsr2())),
@@ -318,6 +324,10 @@ pub struct SampleAndInstrumentData {
 impl SampleAndInstrumentData {
     pub fn pitch_table(&self) -> &PitchTable {
         &self.pitch_table
+    }
+
+    pub fn take_pitch_table(self) -> PitchTable {
+        self.pitch_table
     }
 }
 

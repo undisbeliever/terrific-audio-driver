@@ -4,7 +4,7 @@
 //
 // SPDX-License-Identifier: MIT
 
-use crate::compiler_thread::ItemId;
+use crate::compiler_thread::{ItemChanged, ItemId};
 use crate::helpers::SetActive;
 use crate::names::{DeduplicatedNameVec, NameDeduplicator};
 use crate::tables;
@@ -216,7 +216,17 @@ where
         editor.list_buttons().selected_clear(self.can_add());
     }
 
-    pub fn process(&mut self, m: ListMessage<T>, editor: &mut impl ListEditor<T>) -> ListAction<T> {
+    #[must_use]
+    pub fn replace_all_message(&self) -> ItemChanged<T> {
+        ItemChanged::ReplaceAll(self.list.to_owned())
+    }
+
+    #[must_use]
+    pub fn process(
+        &mut self,
+        m: ListMessage<T>,
+        editor: &mut impl ListEditor<T>,
+    ) -> (ListAction<T>, Option<ItemChanged<T>>) {
         let update_list = |list: &mut LaVec<(ItemId, T)>, a: &ListAction<T>| {
             list.process_map(
                 a,
@@ -230,30 +240,31 @@ where
         match m {
             ListMessage::ClearSelection => {
                 self.clear_selection(editor);
-                ListAction::None
+                (ListAction::None, None)
             }
             ListMessage::ItemSelected(index) => {
                 self.set_selected(index, editor);
-                ListAction::None
+                (ListAction::None, None)
             }
 
             ListMessage::ItemEdited(index, mut new_value) => {
-                if let Some((_id, item)) = self.list.get(index) {
+                if let Some((id, item)) = self.list.get(index) {
                     if *item != new_value {
                         if NameDeduplicator::test_name_changed(item, &new_value) {
                             NameDeduplicator::dedupe_name(&mut new_value, &self.list, Some(index));
                         }
 
+                        let c_message = ItemChanged::AddedOrEdited(id.clone(), new_value.clone());
+
                         let action = ListAction::Edit(index, new_value);
                         update_list(&mut self.list, &action);
                         editor.list_edited(&action);
-
-                        action
+                        (action, Some(c_message))
                     } else {
-                        ListAction::None
+                        (ListAction::None, None)
                     }
                 } else {
-                    ListAction::None
+                    (ListAction::None, None)
                 }
             }
 
@@ -264,13 +275,17 @@ where
                     let i = self.list.len();
                     let action = ListAction::Add(i, item);
                     update_list(&mut self.list, &action);
+                    let c_message = self
+                        .list
+                        .get(i)
+                        .map(|(id, item)| ItemChanged::AddedOrEdited(id.clone(), item.clone()));
                     editor.list_edited(&action);
 
                     self.set_selected(i, editor);
 
-                    action
+                    (action, c_message)
                 } else {
-                    ListAction::None
+                    (ListAction::None, None)
                 }
             }
 
@@ -278,37 +293,43 @@ where
                 // These list actions use the currently selected index
                 let sel_index = match self.selected {
                     Some(i) if i < self.list.len() => i,
-                    _ => return ListAction::None,
+                    _ => return (ListAction::None, None),
                 };
 
                 match lm {
                     ListMessage::ClearSelection
                     | ListMessage::ItemSelected(_)
                     | ListMessage::ItemEdited(_, _)
-                    | ListMessage::Add(_) => ListAction::None,
+                    | ListMessage::Add(_) => (ListAction::None, None),
 
                     ListMessage::CloneSelected => {
                         if let (Some(item), true) = (self.get(sel_index), self.can_add()) {
                             let i = sel_index + 1;
                             let action = ListAction::Add(i, item.clone());
                             update_list(&mut self.list, &action);
+                            let c_message = self.list.get(i).map(|(id, item)| {
+                                ItemChanged::AddedOrEdited(id.clone(), item.clone())
+                            });
                             editor.list_edited(&action);
 
                             self.set_selected(i, editor);
 
-                            action
+                            (action, c_message)
                         } else {
-                            ListAction::None
+                            (ListAction::None, None)
                         }
                     }
                     ListMessage::RemoveSelected => {
+                        let item_id = self.list[sel_index].0.clone();
+                        let c_message = ItemChanged::Removed(item_id);
+
                         let action = ListAction::Remove(sel_index);
                         update_list(&mut self.list, &action);
                         editor.list_edited(&action);
 
                         self.clear_selection(editor);
 
-                        action
+                        (action, Some(c_message))
                     }
                     ListMessage::MoveSelectedToTop => {
                         if sel_index > 0 {
@@ -318,9 +339,9 @@ where
 
                             self.set_selected(0, editor);
 
-                            action
+                            (action, None)
                         } else {
-                            ListAction::None
+                            (ListAction::None, None)
                         }
                     }
                     ListMessage::MoveSelectedUp => {
@@ -331,9 +352,9 @@ where
 
                             self.set_selected(sel_index - 1, editor);
 
-                            action
+                            (action, None)
                         } else {
-                            ListAction::None
+                            (ListAction::None, None)
                         }
                     }
                     ListMessage::MoveSelectedDown => {
@@ -344,9 +365,9 @@ where
 
                             self.set_selected(sel_index + 1, editor);
 
-                            action
+                            (action, None)
                         } else {
-                            ListAction::None
+                            (ListAction::None, None)
                         }
                     }
                     ListMessage::MoveSelectedToBottom => {
@@ -357,9 +378,9 @@ where
 
                             self.set_selected(self.list.len() - 1, editor);
 
-                            action
+                            (action, None)
                         } else {
-                            ListAction::None
+                            (ListAction::None, None)
                         }
                     }
                 }
