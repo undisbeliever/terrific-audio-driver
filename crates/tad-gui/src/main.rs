@@ -17,7 +17,7 @@ mod sound_effects_tab;
 
 use crate::compiler_thread::ToCompiler;
 use crate::files::{add_song_to_pf_dialog, load_pf_sfx_file, open_sfx_file_dialog};
-use crate::list_editor::{ListMessage, ListState};
+use crate::list_editor::{ListMessage, ListState, ListWithSelection};
 use crate::names::deduplicate_names;
 use crate::project_tab::ProjectTab;
 use crate::samples_tab::SamplesTab;
@@ -69,11 +69,11 @@ pub struct ProjectData {
     // `sound_effects_file` is relative to `pf_parent_path`
     sound_effects_file: Option<PathBuf>,
 
-    sfx_export_orders: ListState<data::Name>,
-    project_songs: ListState<data::Song>,
-    instruments: ListState<data::Instrument>,
+    sfx_export_orders: ListWithSelection<data::Name>,
+    project_songs: ListWithSelection<data::Song>,
+    instruments: ListWithSelection<data::Instrument>,
 
-    sound_effects: Option<ListState<SoundEffectInput>>,
+    sound_effects: Option<ListWithSelection<SoundEffectInput>>,
 }
 
 struct Project {
@@ -115,9 +115,9 @@ impl Project {
 
             sound_effects_file: c.sound_effect_file,
 
-            sfx_export_orders: ListState::new(sfx_eo, driver_constants::MAX_SOUND_EFFECTS),
-            project_songs: ListState::new(songs, driver_constants::MAX_N_SONGS),
-            instruments: ListState::new(instruments, driver_constants::MAX_INSTRUMENTS),
+            sfx_export_orders: ListWithSelection::new(sfx_eo, driver_constants::MAX_SOUND_EFFECTS),
+            project_songs: ListWithSelection::new(songs, driver_constants::MAX_N_SONGS),
+            instruments: ListWithSelection::new(instruments, driver_constants::MAX_INSTRUMENTS),
 
             sound_effects: None,
         };
@@ -220,7 +220,7 @@ impl Project {
                 add_song_to_pf_dialog(&self.sender, &self.data);
             }
             Message::SetProjectSongName(index, name) => {
-                if let Some(s) = self.data.project_songs.get(index) {
+                if let Some(s) = self.data.project_songs.list().get(index) {
                     self.sender
                         .send(Message::EditProjectSongs(ListMessage::ItemEdited(
                             index,
@@ -264,7 +264,7 @@ impl Project {
                 dialog::alert_default(&format!("{} sound effects have been renamed", sfx_renamed));
             }
 
-            let state = ListState::new(sfx, driver_constants::MAX_SOUND_EFFECTS + 20);
+            let state = ListWithSelection::new(sfx, driver_constants::MAX_SOUND_EFFECTS + 20);
 
             self.sound_effects_tab.replace_sfx_file(&state);
 

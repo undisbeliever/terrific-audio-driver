@@ -4,7 +4,7 @@
 //
 // SPDX-License-Identifier: MIT
 
-use crate::list_editor::ListMessage;
+use crate::list_editor::{ListMessage, ListState};
 use crate::{Message, ProjectData};
 
 use compiler::data::{Name, Song};
@@ -114,6 +114,7 @@ pub fn add_song_to_pf_dialog(sender: &fltk::app::Sender<Message>, pd: &ProjectDa
     if let Some(p) = pf_file_dialog(pd, "Add song", "MML Files\t*.mml", "mml") {
         match pd
             .project_songs
+            .list()
             .item_iter()
             .position(|s| s.source == p.pf_path)
         {

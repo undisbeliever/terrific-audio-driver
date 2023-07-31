@@ -157,8 +157,8 @@ impl Tab for ProjectTab {
 
 impl ProjectTab {
     pub fn new(
-        sfx_list: &ListState<Name>,
-        song_list: &ListState<data::Song>,
+        sfx_list: &impl ListState<Item = Name>,
+        song_list: &impl ListState<Item = data::Song>,
         sender: app::Sender<Message>,
     ) -> Self {
         let mut group = Flex::default_fill().with_label("Project").row();

@@ -146,16 +146,15 @@ impl<T> Deref for LaVec<T> {
     }
 }
 
-pub struct ListState<T>
+pub struct ListData<T>
 where
     T: Clone + PartialEq<T>,
 {
     max_size: usize,
     list: LaVec<(ItemId, T)>,
-    selected: Option<usize>,
 }
 
-impl<T> ListState<T>
+impl<T> ListData<T>
 where
     T: Clone + std::cmp::PartialEq<T>,
     T: NameDeduplicator,
@@ -168,11 +167,7 @@ where
                 .collect(),
         );
 
-        Self {
-            max_size,
-            list,
-            selected: None,
-        }
+        Self { max_size, list }
     }
 
     pub fn item_iter(&self) -> impl Iterator<Item = &T> {
@@ -187,45 +182,20 @@ where
         self.list.get(index).map(|(_id, item)| item)
     }
 
-    pub fn selected(&self) -> Option<usize> {
-        self.selected
-    }
-
     pub fn can_add(&self) -> bool {
         self.list.len() < self.max_size
     }
 
-    fn set_selected(&mut self, index: usize, editor: &mut impl ListEditor<T>) {
-        match self.list.get(index) {
-            Some((_id, item)) => {
-                self.selected = Some(index);
-                editor.set_selected(index, item);
-                editor
-                    .list_buttons()
-                    .selected_changed(index, self.list.len(), self.can_add());
-            }
-            None => {
-                self.clear_selection(editor);
-            }
-        };
-    }
-
-    fn clear_selection(&mut self, editor: &mut impl ListEditor<T>) {
-        self.selected = None;
-        editor.clear_selected();
-        editor.list_buttons().selected_clear(self.can_add());
-    }
-
     #[must_use]
-    pub fn replace_all_message(&self) -> ItemChanged<T> {
+    fn replace_all_message(&self) -> ItemChanged<T> {
         ItemChanged::ReplaceAll(self.list.to_owned())
     }
 
     #[must_use]
-    pub fn process(
+    fn process(
         &mut self,
         m: ListMessage<T>,
-        editor: &mut impl ListEditor<T>,
+        selected: Option<usize>,
     ) -> (ListAction<T>, Option<ItemChanged<T>>) {
         let update_list = |list: &mut LaVec<(ItemId, T)>, a: &ListAction<T>| {
             list.process_map(
@@ -238,14 +208,7 @@ where
         };
 
         match m {
-            ListMessage::ClearSelection => {
-                self.clear_selection(editor);
-                (ListAction::None, None)
-            }
-            ListMessage::ItemSelected(index) => {
-                self.set_selected(index, editor);
-                (ListAction::None, None)
-            }
+            ListMessage::ClearSelection | ListMessage::ItemSelected(_) => (ListAction::None, None),
 
             ListMessage::ItemEdited(index, mut new_value) => {
                 if let Some((id, item)) = self.list.get(index) {
@@ -258,7 +221,6 @@ where
 
                         let action = ListAction::Edit(index, new_value);
                         update_list(&mut self.list, &action);
-                        editor.list_edited(&action);
                         (action, Some(c_message))
                     } else {
                         (ListAction::None, None)
@@ -279,9 +241,6 @@ where
                         .list
                         .get(i)
                         .map(|(id, item)| ItemChanged::AddedOrEdited(id.clone(), item.clone()));
-                    editor.list_edited(&action);
-
-                    self.set_selected(i, editor);
 
                     (action, c_message)
                 } else {
@@ -291,7 +250,7 @@ where
 
             lm => {
                 // These list actions use the currently selected index
-                let sel_index = match self.selected {
+                let sel_index = match selected {
                     Some(i) if i < self.list.len() => i,
                     _ => return (ListAction::None, None),
                 };
@@ -310,9 +269,6 @@ where
                             let c_message = self.list.get(i).map(|(id, item)| {
                                 ItemChanged::AddedOrEdited(id.clone(), item.clone())
                             });
-                            editor.list_edited(&action);
-
-                            self.set_selected(i, editor);
 
                             (action, c_message)
                         } else {
@@ -325,9 +281,6 @@ where
 
                         let action = ListAction::Remove(sel_index);
                         update_list(&mut self.list, &action);
-                        editor.list_edited(&action);
-
-                        self.clear_selection(editor);
 
                         (action, Some(c_message))
                     }
@@ -335,9 +288,6 @@ where
                         if sel_index > 0 {
                             let action = ListAction::Move(sel_index, 0);
                             update_list(&mut self.list, &action);
-                            editor.list_edited(&action);
-
-                            self.set_selected(0, editor);
 
                             (action, None)
                         } else {
@@ -348,9 +298,6 @@ where
                         if sel_index > 0 && sel_index < self.list.len() {
                             let action = ListAction::Move(sel_index, sel_index - 1);
                             update_list(&mut self.list, &action);
-                            editor.list_edited(&action);
-
-                            self.set_selected(sel_index - 1, editor);
 
                             (action, None)
                         } else {
@@ -361,9 +308,6 @@ where
                         if sel_index + 1 < self.list.len() {
                             let action = ListAction::Move(sel_index, sel_index + 1);
                             update_list(&mut self.list, &action);
-                            editor.list_edited(&action);
-
-                            self.set_selected(sel_index + 1, editor);
 
                             (action, None)
                         } else {
@@ -374,9 +318,6 @@ where
                         if sel_index + 1 < self.list.len() {
                             let action = ListAction::Move(sel_index, self.list.len() - 1);
                             update_list(&mut self.list, &action);
-                            editor.list_edited(&action);
-
-                            self.set_selected(self.list.len() - 1, editor);
 
                             (action, None)
                         } else {
@@ -386,6 +327,125 @@ where
                 }
             }
         }
+    }
+}
+
+pub trait ListState
+where
+    Self::Item: Clone + PartialEq<Self::Item> + NameDeduplicator,
+{
+    type Item;
+
+    fn selected(&self) -> Option<usize>;
+    fn list(&self) -> &ListData<Self::Item>;
+    fn replace_all_message(&self) -> ItemChanged<Self::Item>;
+}
+
+pub struct ListWithSelection<T>
+where
+    T: Clone + PartialEq<T>,
+{
+    list: ListData<T>,
+    selected: Option<usize>,
+}
+
+impl<T> ListState for ListWithSelection<T>
+where
+    T: Clone + PartialEq<T> + NameDeduplicator,
+{
+    type Item = T;
+
+    fn selected(&self) -> Option<usize> {
+        self.selected
+    }
+
+    fn list(&self) -> &ListData<T> {
+        &self.list
+    }
+
+    fn replace_all_message(&self) -> ItemChanged<T> {
+        self.list.replace_all_message()
+    }
+}
+
+impl<T> ListWithSelection<T>
+where
+    T: Clone + PartialEq<T>,
+    T: NameDeduplicator,
+{
+    pub fn new(list: DeduplicatedNameVec<T>, max_size: usize) -> Self {
+        Self {
+            list: ListData::new(list, max_size),
+            selected: None,
+        }
+    }
+
+    #[must_use]
+    pub fn process(
+        &mut self,
+        m: ListMessage<T>,
+        editor: &mut impl ListEditor<T>,
+    ) -> (ListAction<T>, Option<ItemChanged<T>>) {
+        match m {
+            ListMessage::ClearSelection => {
+                self.clear_selection(editor);
+                (ListAction::None, None)
+            }
+            ListMessage::ItemSelected(index) => {
+                self.set_selected(index, editor);
+                (ListAction::None, None)
+            }
+
+            m => {
+                let (action, c) = self.list.process(m, self.selected);
+                self.process_action(&action, editor);
+                (action, c)
+            }
+        }
+    }
+
+    fn process_action(&mut self, action: &ListAction<T>, editor: &mut impl ListEditor<T>) {
+        editor.list_edited(action);
+        match action {
+            ListAction::Add(index, _) => {
+                self.set_selected(*index, editor);
+            }
+            ListAction::Remove(index) => {
+                if self.selected == Some(*index) {
+                    self.clear_selection(editor);
+                }
+            }
+            ListAction::Move(from, to) => {
+                if self.selected == Some(*from) {
+                    self.set_selected(*to, editor);
+                }
+            }
+            ListAction::None => (),
+            ListAction::Edit(_, _) => (),
+        }
+    }
+
+    fn set_selected(&mut self, index: usize, editor: &mut impl ListEditor<T>) {
+        match self.list.get(index) {
+            Some(item) => {
+                self.selected = Some(index);
+                editor.set_selected(index, item);
+                editor.list_buttons().selected_changed(
+                    index,
+                    self.list.len(),
+                    self.list().can_add(),
+                );
+            }
+            None => {
+                self.clear_selection(editor);
+            }
+        };
+    }
+
+    fn clear_selection(&mut self, editor: &mut impl ListEditor<T>) {
+        self.selected = None;
+        editor.clear_selected();
+        editor.list_buttons().selected_clear(self.list.can_add());
     }
 }
 
@@ -443,13 +503,10 @@ impl ListButtons {
         out
     }
 
-    pub fn update<T>(&mut self, state: &ListState<T>)
-    where
-        T: Clone + PartialEq<T> + NameDeduplicator,
-    {
+    pub fn update(&mut self, state: &impl ListState) {
         match state.selected() {
-            Some(i) => self.selected_changed(i, state.list.len(), state.can_add()),
-            None => self.selected_clear(state.can_add()),
+            Some(i) => self.selected_changed(i, state.list().len(), state.list().can_add()),
+            None => self.selected_clear(state.list().can_add()),
         }
     }
 
@@ -725,7 +782,7 @@ where
     }
 
     pub fn new_with_data(
-        state: &ListState<T::DataType>,
+        state: &impl ListState<Item = T::DataType>,
         sender: fltk::app::Sender<Message>,
     ) -> Self {
         let mut out = Self::new(sender);
@@ -733,9 +790,9 @@ where
         out
     }
 
-    pub fn replace(&mut self, state: &ListState<T::DataType>) {
+    pub fn replace(&mut self, state: &impl ListState<Item = T::DataType>) {
         self.table.edit_table(|v| {
-            *v = state.item_iter().map(T::new_row).collect();
+            *v = state.list().item_iter().map(T::new_row).collect();
         });
         self.list_buttons.update(state);
 

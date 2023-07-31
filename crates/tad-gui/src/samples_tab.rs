@@ -228,7 +228,10 @@ impl Tab for SamplesTab {
 }
 
 impl SamplesTab {
-    pub fn new(instruments: &ListState<data::Instrument>, sender: app::Sender<Message>) -> Self {
+    pub fn new(
+        instruments: &impl ListState<Item = data::Instrument>,
+        sender: app::Sender<Message>,
+    ) -> Self {
         let mut group = Flex::default_fill().with_label("Samples").row();
 
         // Sidebar
