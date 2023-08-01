@@ -23,6 +23,19 @@ const CELL_X_PAD: i32 = 3;
 pub trait TableRow {
     const N_COLUMNS: i32;
 
+    fn default_bg_color() -> Color {
+        Color::Background2
+    }
+
+    // Output: (bg_color, fg_color)
+    fn row_colors(&self, selected: bool) -> (Color, Color) {
+        if !selected {
+            (Color::Background2, Color::Foreground)
+        } else {
+            (Color::Selection, Color::Background2)
+        }
+    }
+
     fn draw_cell(&self, col: i32, x: i32, y: i32, w: i32, h: i32);
 
     fn value(&self, col: i32) -> Option<&str>;
@@ -390,31 +403,23 @@ where
 
                 draw::push_clip(x, y, w, h);
 
-                let selected = self.table.is_selected(row, col);
+                let table_row = usize::try_from(row).ok().and_then(|i| self.data.get(i));
+                if let Some(table_row) = table_row {
+                    let selected = self.table.is_selected(row, col);
 
-                let bg_color = if selected {
-                    Color::Selection
-                } else {
-                    Color::Background2
-                };
-                let fg_color = if selected {
-                    Color::Background2
-                } else {
-                    Color::Foreground
-                };
+                    let (bg_color, fg_color) = table_row.row_colors(selected);
+                    draw::set_draw_color(bg_color);
+                    draw::draw_rectf(x, y, w, h);
 
-                draw::set_draw_color(bg_color);
-                draw::draw_rectf(x, y, w, h);
+                    if w > 2 * CELL_X_PAD {
+                        draw::set_draw_color(fg_color);
+                        draw::set_font(self.font, self.font_size);
 
-                if let Ok(row_index) = usize::try_from(row) {
-                    if let Some(table_row) = self.data.get(row_index) {
-                        if w > 2 * CELL_X_PAD {
-                            draw::set_draw_color(fg_color);
-                            draw::set_font(self.font, self.font_size);
-
-                            table_row.draw_cell(col, x + CELL_X_PAD, y, w - CELL_X_PAD * 2, h);
-                        }
+                        table_row.draw_cell(col, x + CELL_X_PAD, y, w - CELL_X_PAD * 2, h);
                     }
+                } else {
+                    draw::set_draw_color(T::default_bg_color());
+                    draw::draw_rectf(x, y, w, h);
                 }
 
                 draw::pop_clip();
@@ -611,5 +616,95 @@ impl TableRow for TwoColumnsRow {
             1 => Some(&self.1),
             _ => None,
         }
+    }
+}
+
+#[derive(Debug, PartialEq)]
+pub enum RowStatus {
+    Ok,
+    Error,
+    Unchecked,
+}
+
+impl RowStatus {
+    fn colors(&self, selected: bool) -> (Color, Color) {
+        if !selected {
+            match self {
+                RowStatus::Ok => (Color::Background2, Color::Foreground),
+                RowStatus::Error => (Color::BackGround2, Color::Red),
+                RowStatus::Unchecked => (Color::BackGround2, Color::Foreground),
+            }
+        } else {
+            match self {
+                RowStatus::Ok => (Color::Selection, Color::Background2),
+                RowStatus::Error => (Color::Red, Color::Background2),
+                RowStatus::Unchecked => (Color::Selection, Color::Gray0),
+            }
+        }
+    }
+}
+
+pub struct RowWithStatus<TR>
+where
+    TR: TableRow,
+{
+    pub status: RowStatus,
+    pub columns: TR,
+}
+
+impl<TR> RowWithStatus<TR>
+where
+    TR: TableRow,
+{
+    #[allow(dead_code)]
+    pub fn new(status: RowStatus, columns: TR) -> Self {
+        Self { status, columns }
+    }
+
+    pub fn new_unchecked(columns: TR) -> Self {
+        Self {
+            status: RowStatus::Unchecked,
+            columns,
+        }
+    }
+
+    /// Returns true if `self.status` changed.
+    pub fn set_status(&mut self, status: RowStatus) -> bool {
+        if self.status != status {
+            self.status = status;
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Returns true if `self.status` changed.
+    pub fn set_status_optional_result<O, E>(&mut self, co: &Option<Result<O, E>>) -> bool {
+        self.set_status(match co {
+            Some(Ok(_)) => RowStatus::Ok,
+            Some(Err(_)) => RowStatus::Error,
+            None => RowStatus::Unchecked,
+        })
+    }
+}
+
+impl<TR> TableRow for RowWithStatus<TR>
+where
+    TR: TableRow,
+{
+    const N_COLUMNS: i32 = TR::N_COLUMNS;
+
+    #[inline]
+    fn draw_cell(&self, col: i32, x: i32, y: i32, w: i32, h: i32) {
+        self.columns.draw_cell(col, x, y, w, h)
+    }
+
+    #[inline]
+    fn value(&self, col: i32) -> Option<&str> {
+        self.columns.value(col)
+    }
+
+    fn row_colors(&self, selected: bool) -> (Color, Color) {
+        self.status.colors(selected)
     }
 }
