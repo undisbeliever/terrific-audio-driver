@@ -1164,10 +1164,27 @@ impl Display for SoundEffectsFileErrorIndentedDisplay<'_> {
             if i != 0 {
                 writeln!(f)?;
             }
-            fmt_indented_sound_effect_error(f, e, &error.file_name)?;
+            fmt_indented_sound_effect_error(f, e, "  ", &error.file_name)?;
         }
 
         Ok(())
+    }
+}
+
+pub struct SoundEffectErrorIndentedDisplay<'a>(&'a SoundEffectError, &'a str);
+
+impl SoundEffectError {
+    pub fn multiline_display<'a>(
+        &'a self,
+        file_name: &'a str,
+    ) -> SoundEffectErrorIndentedDisplay<'a> {
+        SoundEffectErrorIndentedDisplay(self, file_name)
+    }
+}
+
+impl Display for SoundEffectErrorIndentedDisplay<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        fmt_indented_sound_effect_error(f, self.0, "Error compiling ", self.1)
     }
 }
 
@@ -1175,14 +1192,15 @@ impl Display for SoundEffectsFileErrorIndentedDisplay<'_> {
 fn fmt_indented_sound_effect_error(
     f: &mut std::fmt::Formatter,
     error: &SoundEffectError,
+    name_prefix: &str,
     file_name: &str,
 ) -> std::fmt::Result {
     let line_no = error.sfx_line_no;
 
     if !error.invalid_name {
-        writeln!(f, "  {}:", error.sfx_name)?;
+        writeln!(f, "{}{}:", name_prefix, error.sfx_name)?;
     } else {
-        writeln!(f, "  unnamed sound effect:")?;
+        writeln!(f, "{}unnamed sound effect:", name_prefix)?;
         writeln!(f, "    {}:{} invalid name", file_name, line_no)?;
     }
 

@@ -4,12 +4,14 @@
 //
 // SPDX-License-Identifier: MIT
 
+use crate::compiler_thread::{CombineSamplesError, InstrumentOutput};
 use crate::helpers::*;
 use crate::list_editor::{
-    create_list_item_edited_checkbox_handler, create_list_item_edited_input_handler, IndexAndData,
-    ListAction, ListButtons, ListEditor, ListEditorTable, ListMessage, ListState, TableMapping,
+    create_list_item_edited_checkbox_handler, create_list_item_edited_input_handler,
+    CompilerOutputGui, IndexAndData, ListAction, ListButtons, ListEditor, ListEditorTable,
+    ListMessage, ListState, TableCompilerOutput, TableMapping,
 };
-use crate::tables::SingleColumnRow;
+use crate::tables::{RowWithStatus, SingleColumnRow};
 use crate::Message;
 use crate::Tab;
 
@@ -22,9 +24,11 @@ use std::rc::Rc;
 
 use fltk::app;
 use fltk::button::CheckButton;
+use fltk::enums::Color;
 use fltk::group::Flex;
 use fltk::input::{FloatInput, Input, IntInput};
 use fltk::prelude::*;
+use fltk::text::{TextBuffer, TextDisplay, WrapMode};
 
 fn blank_instrument() -> Instrument {
     Instrument {
@@ -44,9 +48,10 @@ fn blank_instrument() -> Instrument {
 }
 
 struct InstrumentMapping;
+
 impl TableMapping for InstrumentMapping {
     type DataType = data::Instrument;
-    type RowType = SingleColumnRow;
+    type RowType = RowWithStatus<SingleColumnRow>;
 
     const CAN_CLONE: bool = true;
 
@@ -66,17 +71,25 @@ impl TableMapping for InstrumentMapping {
         Message::Instrument(lm)
     }
 
-    fn new_row(i: &Instrument) -> SingleColumnRow {
-        SingleColumnRow(i.name.as_str().to_string())
+    fn new_row(i: &Instrument) -> Self::RowType {
+        RowWithStatus::new_unchecked(SingleColumnRow(i.name.as_str().to_string()))
     }
 
-    fn edit_row(r: &mut SingleColumnRow, i: &Instrument) -> bool {
-        if r.0 != i.name.as_str() {
-            r.0 = i.name.as_str().to_string();
+    fn edit_row(r: &mut Self::RowType, i: &Instrument) -> bool {
+        if r.columns.0 != i.name.as_str() {
+            r.columns.0 = i.name.as_str().to_string();
             true
         } else {
             false
         }
+    }
+}
+
+impl TableCompilerOutput for InstrumentMapping {
+    type CompilerOutputType = InstrumentOutput;
+
+    fn set_row_state(r: &mut Self::RowType, co: &Option<InstrumentOutput>) -> bool {
+        r.set_status_optional_result(co)
     }
 }
 
@@ -219,6 +232,9 @@ pub struct SamplesTab {
     inst_table: ListEditorTable<InstrumentMapping>,
 
     instrument_editor: InstrumentEditor,
+
+    console: TextDisplay,
+    console_buffer: TextBuffer,
 }
 
 impl Tab for SamplesTab {
@@ -245,15 +261,35 @@ impl SamplesTab {
 
         sidebar.end();
 
+        let mut main_group = Flex::default().column();
+
         let instrument_editor = InstrumentEditor::new(sender);
 
+        let mut console = TextDisplay::default();
+        main_group.fixed(&console, button_height * 4);
+
+        main_group.end();
         group.end();
+
+        let console_buffer = TextBuffer::default();
+        console.set_buffer(console_buffer.clone());
+        console.wrap_mode(WrapMode::AtBounds, 0);
 
         Self {
             group,
             inst_table,
             instrument_editor,
+            console,
+            console_buffer,
         }
+    }
+
+    pub fn set_combine_result(&mut self, r: &Result<usize, CombineSamplesError>) {
+        match r {
+            Ok(_) => self.group.set_label_color(Color::Foreground),
+            Err(_) => self.group.set_label_color(Color::Red),
+        }
+        self.group.redraw_label();
     }
 }
 
@@ -275,5 +311,41 @@ impl ListEditor<Instrument> for SamplesTab {
         self.inst_table.set_selected(index, inst);
 
         self.instrument_editor.set_data(index, inst);
+    }
+}
+
+impl CompilerOutputGui<InstrumentOutput> for SamplesTab {
+    fn set_compiler_output(&mut self, index: usize, compiler_output: &Option<InstrumentOutput>) {
+        self.inst_table.set_compiler_output(index, compiler_output);
+    }
+
+    fn set_selected_compiler_output(&mut self, compiler_output: &Option<InstrumentOutput>) {
+        match compiler_output {
+            None => self.console_buffer.set_text(""),
+            Some(Ok(o)) => {
+                self.console_buffer
+                    .set_text(&format!("BRR Sample size: {} bytes", o));
+                self.console.set_text_color(Color::Foreground);
+            }
+            Some(Err(errors)) => {
+                let mut text = "ERROR:".to_owned();
+
+                if let Some(e) = &errors.brr_error {
+                    text += &format!("\n\t{}", e)
+                }
+                if let Some(e) = &errors.pitch_error {
+                    text += &format!("\n\t{}", e)
+                }
+                if let Some(e) = &errors.envelope_error {
+                    text += &format!("\n\t{}", e)
+                }
+
+                self.console_buffer.set_text(&text);
+                self.console.set_text_color(Color::Red);
+                self.console.scroll(0, 0);
+
+                // ::TODO highlight invalid inputs::
+            }
+        }
     }
 }

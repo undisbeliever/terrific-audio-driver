@@ -4,12 +4,13 @@
 //
 // SPDX-License-Identifier: MIT
 
+use crate::compiler_thread::SoundEffectOutput;
 use crate::helpers::*;
 use crate::list_editor::{
-    LaVec, ListAction, ListButtons, ListEditor, ListEditorTable, ListMessage, ListState,
-    TableMapping,
+    CompilerOutputGui, LaVec, ListAction, ListButtons, ListEditor, ListEditorTable, ListMessage,
+    ListState, TableCompilerOutput, TableMapping,
 };
-use crate::tables::SingleColumnRow;
+use crate::tables::{RowWithStatus, SingleColumnRow};
 use crate::Message;
 use crate::Tab;
 
@@ -17,11 +18,11 @@ use compiler::sound_effects::SoundEffectInput;
 use compiler::Name;
 
 use fltk::app;
-use fltk::enums::{Event, Font};
+use fltk::enums::{Color, Event, Font};
 use fltk::group::{Flex, Pack, PackType};
 use fltk::input::Input;
 use fltk::prelude::*;
-use fltk::text::{TextBuffer, TextEditor};
+use fltk::text::{TextBuffer, TextDisplay, TextEditor, WrapMode};
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -29,7 +30,7 @@ use std::rc::Rc;
 struct SoundEffectMapping;
 impl TableMapping for SoundEffectMapping {
     type DataType = SoundEffectInput;
-    type RowType = SingleColumnRow;
+    type RowType = RowWithStatus<SingleColumnRow>;
 
     const CAN_CLONE: bool = true;
 
@@ -52,17 +53,25 @@ impl TableMapping for SoundEffectMapping {
         Message::EditSoundEffectList(lm)
     }
 
-    fn new_row(i: &SoundEffectInput) -> SingleColumnRow {
-        SingleColumnRow(i.name.as_str().to_string())
+    fn new_row(i: &SoundEffectInput) -> Self::RowType {
+        RowWithStatus::new_unchecked(SingleColumnRow(i.name.as_str().to_string()))
     }
 
-    fn edit_row(r: &mut SingleColumnRow, i: &SoundEffectInput) -> bool {
-        if r.0 != i.name.as_str() {
-            r.0 = i.name.as_str().to_string();
+    fn edit_row(r: &mut Self::RowType, i: &SoundEffectInput) -> bool {
+        if r.columns.0 != i.name.as_str() {
+            r.columns.0 = i.name.as_str().to_string();
             true
         } else {
             false
         }
+    }
+}
+
+impl TableCompilerOutput for SoundEffectMapping {
+    type CompilerOutputType = SoundEffectOutput;
+
+    fn set_row_state(r: &mut Self::RowType, co: &Option<Self::CompilerOutputType>) -> bool {
+        r.set_status_optional_result(co)
     }
 }
 
@@ -90,6 +99,9 @@ pub struct SoundEffectsTab {
 
     name: Input,
     editor: TextEditor,
+
+    console: TextDisplay,
+    console_buffer: TextBuffer,
 }
 
 impl Tab for SoundEffectsTab {
@@ -130,11 +142,19 @@ impl SoundEffectsTab {
         editor.set_linenumber_width(ch_units_to_width(&editor, 4));
         editor.set_text_font(Font::Courier);
 
+        let mut console = TextDisplay::default();
+        main_group.fixed(&console, button_height * 5);
+
         main_group.end();
         group.end();
 
         sidebar.deactivate();
         main_group.deactivate();
+
+        let console_buffer = TextBuffer::default();
+        console.set_text_font(Font::Courier);
+        console.set_buffer(console_buffer.clone());
+        console.wrap_mode(WrapMode::AtBounds, 0);
 
         let state = Rc::new(RefCell::from(State {
             sender,
@@ -182,6 +202,9 @@ impl SoundEffectsTab {
             main_group,
             name,
             editor,
+
+            console,
+            console_buffer,
         };
         s.clear_selected();
         s
@@ -301,6 +324,31 @@ impl State {
 
                 self.name.clear_changed();
                 self.editor.clear_changed();
+            }
+        }
+    }
+}
+
+impl CompilerOutputGui<SoundEffectOutput> for SoundEffectsTab {
+    fn set_compiler_output(&mut self, index: usize, compiler_output: &Option<SoundEffectOutput>) {
+        self.sfx_table.set_compiler_output(index, compiler_output);
+    }
+
+    fn set_selected_compiler_output(&mut self, compiler_output: &Option<SoundEffectOutput>) {
+        // ::TODO highlight invalid lines::
+
+        match compiler_output {
+            None => self.console_buffer.set_text(""),
+            Some(Ok(o)) => {
+                self.console_buffer
+                    .set_text(&format!("Sound effect compiled successfully: {} bytes", o));
+                self.console.set_text_color(Color::Foreground);
+            }
+            Some(Err(e)) => {
+                let text = format!("{}", e.multiline_display("line"));
+
+                self.console_buffer.set_text(&text);
+                self.console.set_text_color(Color::Red);
             }
         }
     }

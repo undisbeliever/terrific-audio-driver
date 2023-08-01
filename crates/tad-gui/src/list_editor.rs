@@ -44,6 +44,11 @@ pub trait ListEditor<T> {
     fn set_selected(&mut self, index: usize, value: &T);
 }
 
+pub trait CompilerOutputGui<T> {
+    fn set_compiler_output(&mut self, index: usize, compiler_output: &Option<T>);
+    fn set_selected_compiler_output(&mut self, compiler_output: &Option<T>);
+}
+
 #[derive(Debug)]
 pub enum ListAction<T> {
     None,
@@ -184,6 +189,10 @@ where
 
     pub fn can_add(&self) -> bool {
         self.list.len() < self.max_size
+    }
+
+    fn id_to_index(&self, id: ItemId) -> Option<usize> {
+        self.list.iter().position(|i| i.0 == id)
     }
 
     #[must_use]
@@ -449,6 +458,175 @@ where
     }
 }
 
+pub struct ListWithCompilerOutput<T, O>
+where
+    T: Clone + PartialEq<T> + NameDeduplicator,
+{
+    list: ListData<T>,
+    compiler_output: Vec<Option<O>>,
+    selected: Option<usize>,
+}
+
+impl<T, O> ListState for ListWithCompilerOutput<T, O>
+where
+    T: Clone + PartialEq<T> + NameDeduplicator,
+{
+    type Item = T;
+
+    fn selected(&self) -> Option<usize> {
+        self.selected
+    }
+
+    fn list(&self) -> &ListData<T> {
+        &self.list
+    }
+
+    fn replace_all_message(&self) -> ItemChanged<T> {
+        self.list.replace_all_message()
+    }
+}
+
+impl<T, O> ListWithCompilerOutput<T, O>
+where
+    T: Clone + PartialEq<T> + NameDeduplicator,
+{
+    pub fn new(list: DeduplicatedNameVec<T>, max_size: usize) -> Self {
+        let list = ListData::new(list, max_size);
+
+        // Compiler output is not cloneable
+        let compiler_output = std::iter::repeat_with(|| None).take(list.len()).collect();
+
+        Self {
+            list,
+            compiler_output,
+            selected: None,
+        }
+    }
+
+    pub fn set_compiler_output(
+        &mut self,
+        id: ItemId,
+        co: O,
+        editor: &mut impl CompilerOutputGui<O>,
+    ) {
+        let co = Some(co);
+
+        if let Some(index) = self.list.id_to_index(id) {
+            editor.set_compiler_output(index, &co);
+
+            if self.selected == Some(index) {
+                editor.set_selected_compiler_output(&co);
+            }
+            if let Some(co_item) = self.compiler_output.get_mut(index) {
+                *co_item = co;
+            }
+        }
+    }
+
+    #[must_use]
+    pub fn process<Editor>(
+        &mut self,
+        m: ListMessage<T>,
+        editor: &mut Editor,
+    ) -> (ListAction<T>, Option<ItemChanged<T>>)
+    where
+        Editor: ListEditor<T> + CompilerOutputGui<O>,
+    {
+        match m {
+            ListMessage::ClearSelection => {
+                self.clear_selection(editor);
+                (ListAction::None, None)
+            }
+            ListMessage::ItemSelected(index) => {
+                self.set_selected(index, editor);
+                (ListAction::None, None)
+            }
+
+            m => {
+                let (action, c) = self.list.process(m, self.selected);
+                self.process_action(&action, editor);
+                (action, c)
+            }
+        }
+    }
+
+    fn process_action<Editor>(&mut self, action: &ListAction<T>, editor: &mut Editor)
+    where
+        Editor: ListEditor<T> + CompilerOutputGui<O>,
+    {
+        process_list_action_map(
+            &mut self.compiler_output,
+            action,
+            // new
+            |_| None,
+            // edit
+            |e, _| *e = None,
+        );
+
+        editor.list_edited(action);
+        match action {
+            ListAction::None => (),
+
+            ListAction::Add(index, _) => {
+                self.set_selected(*index, editor);
+            }
+            ListAction::Remove(index) => {
+                if self.selected == Some(*index) {
+                    self.clear_selection(editor);
+                }
+            }
+            ListAction::Move(from, to) => {
+                if self.selected == Some(*from) {
+                    self.set_selected(*to, editor);
+                }
+            }
+            ListAction::Edit(index, _) => {
+                // Clear compiler output in GUI when item is being recompiled.
+                let index = *index;
+                let co = None;
+                editor.set_compiler_output(index, &co);
+                if self.selected == Some(index) {
+                    editor.set_selected_compiler_output(&co);
+                }
+            }
+        }
+    }
+
+    fn set_selected<Editor>(&mut self, index: usize, editor: &mut Editor)
+    where
+        Editor: ListEditor<T> + CompilerOutputGui<O>,
+    {
+        match self.list.get(index) {
+            Some(item) => {
+                self.selected = Some(index);
+                editor.set_selected(index, item);
+
+                let co = self.compiler_output.get(index).unwrap_or(&None);
+                editor.set_selected_compiler_output(co);
+
+                editor.list_buttons().selected_changed(
+                    index,
+                    self.list.len(),
+                    self.list().can_add(),
+                );
+            }
+            None => {
+                self.clear_selection(editor);
+            }
+        };
+    }
+
+    fn clear_selection<Editor>(&mut self, editor: &mut Editor)
+    where
+        Editor: ListEditor<T> + CompilerOutputGui<O>,
+    {
+        self.selected = None;
+        editor.clear_selected();
+        editor.set_selected_compiler_output(&None);
+        editor.list_buttons().selected_clear(self.list.can_add());
+    }
+}
+
 pub struct ListButtons {
     pub pack: Pack,
 
@@ -695,6 +873,15 @@ where
     }
 }
 
+pub trait TableCompilerOutput
+where
+    Self: TableMapping,
+{
+    type CompilerOutputType;
+
+    fn set_row_state(r: &mut Self::RowType, co: &Option<Self::CompilerOutputType>) -> bool;
+}
+
 pub struct ListEditorTable<T>
 where
     T: TableMapping,
@@ -837,5 +1024,22 @@ where
 
     fn set_selected(&mut self, index: usize, _: &T::DataType) {
         self.table.set_selected(index);
+    }
+}
+
+impl<T> CompilerOutputGui<T::CompilerOutputType> for ListEditorTable<T>
+where
+    T: TableMapping + TableCompilerOutput + 'static,
+{
+    fn set_selected_compiler_output(&mut self, _: &Option<T::CompilerOutputType>) {}
+
+    fn set_compiler_output(
+        &mut self,
+        index: usize,
+        compiler_output: &Option<T::CompilerOutputType>,
+    ) {
+        self.table.edit_row(index, |row| -> bool {
+            T::set_row_state(row, compiler_output)
+        });
     }
 }

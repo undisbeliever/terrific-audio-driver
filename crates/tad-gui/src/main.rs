@@ -15,9 +15,9 @@ mod project_tab;
 mod samples_tab;
 mod sound_effects_tab;
 
-use crate::compiler_thread::ToCompiler;
+use crate::compiler_thread::{CompilerOutput, InstrumentOutput, SoundEffectOutput, ToCompiler};
 use crate::files::{add_song_to_pf_dialog, load_pf_sfx_file, open_sfx_file_dialog};
-use crate::list_editor::{ListMessage, ListState, ListWithSelection};
+use crate::list_editor::{ListMessage, ListState, ListWithCompilerOutput, ListWithSelection};
 use crate::names::deduplicate_names;
 use crate::project_tab::ProjectTab;
 use crate::samples_tab::SamplesTab;
@@ -71,9 +71,9 @@ pub struct ProjectData {
 
     sfx_export_orders: ListWithSelection<data::Name>,
     project_songs: ListWithSelection<data::Song>,
-    instruments: ListWithSelection<data::Instrument>,
+    instruments: ListWithCompilerOutput<data::Instrument, InstrumentOutput>,
 
-    sound_effects: Option<ListWithSelection<SoundEffectInput>>,
+    sound_effects: Option<ListWithCompilerOutput<SoundEffectInput, SoundEffectOutput>>,
 }
 
 struct Project {
@@ -85,6 +85,7 @@ struct Project {
     compiler_thread: std::thread::JoinHandle<()>,
     compiler_sender: mpsc::Sender<ToCompiler>,
 
+    tabs: fltk::group::Tabs,
     selected_tab: Option<i32>,
 
     project_tab: ProjectTab,
@@ -95,7 +96,7 @@ struct Project {
 const SAMPLES_TAB_INDEX: i32 = 1;
 
 impl Project {
-    fn new(pf: ProjectFile, sender: fltk::app::Sender<Message>) -> Self {
+    fn new(pf: ProjectFile, tabs: fltk::group::Tabs, sender: fltk::app::Sender<Message>) -> Self {
         let c = pf.contents;
 
         let (sfx_eo, sfx_eo_renamed) = deduplicate_names(c.sound_effects);
@@ -117,7 +118,10 @@ impl Project {
 
             sfx_export_orders: ListWithSelection::new(sfx_eo, driver_constants::MAX_SOUND_EFFECTS),
             project_songs: ListWithSelection::new(songs, driver_constants::MAX_N_SONGS),
-            instruments: ListWithSelection::new(instruments, driver_constants::MAX_INSTRUMENTS),
+            instruments: ListWithCompilerOutput::new(
+                instruments,
+                driver_constants::MAX_INSTRUMENTS,
+            ),
 
             sound_effects: None,
         };
@@ -132,6 +136,9 @@ impl Project {
             compiler_thread::create_bg_thread(data.pf_parent_path.clone(), r, sender.clone());
 
         Self {
+            tabs,
+            selected_tab: Some(0),
+
             project_tab: ProjectTab::new(
                 &data.sfx_export_orders,
                 &data.project_songs,
@@ -139,8 +146,6 @@ impl Project {
             ),
             samples_tab: SamplesTab::new(&data.instruments, sender.clone()),
             sound_effects_tab: SoundEffectsTab::new(sender.clone()),
-
-            selected_tab: Some(0),
 
             compiler_thread,
             compiler_sender,
@@ -153,8 +158,7 @@ impl Project {
     fn process(&mut self, m: Message) {
         match m {
             Message::FromCompiler(m) => {
-                // ::TODO process::
-                println!("{m:?}");
+                self.process_compiler_output(m);
             }
 
             Message::SelectedTabChanged(tab_index) => {
@@ -231,6 +235,38 @@ impl Project {
         }
     }
 
+    fn process_compiler_output(&mut self, m: CompilerOutput) {
+        match m {
+            CompilerOutput::Instrument(id, co) => {
+                self.data
+                    .instruments
+                    .set_compiler_output(id, co, &mut self.samples_tab);
+            }
+            CompilerOutput::SoundEffect(id, co) => {
+                if let Some(sound_effects) = &mut self.data.sound_effects {
+                    sound_effects.set_compiler_output(id, co, &mut self.sound_effects_tab);
+                }
+            }
+
+            CompilerOutput::CombineSamples(o) => {
+                // ::TODO do something with `o`::
+
+                self.samples_tab.set_combine_result(&o);
+
+                if let Err(e) = o {
+                    dialog::message_title("Error combining samples");
+                    dialog::alert_default(&e.to_string());
+
+                    let _ = self.tabs.set_value(self.samples_tab.widget());
+                }
+            }
+
+            // ::TODO do something with these values::
+            CompilerOutput::MissingSoundEffects(_missing) => (),
+            CompilerOutput::SoundEffectsDataSize(_size) => (),
+        }
+    }
+
     fn recompile_everything(&self) {
         let _ = self.compiler_sender.send(ToCompiler::SfxExportOrder(
             self.data.sfx_export_orders.replace_all_message(),
@@ -264,7 +300,7 @@ impl Project {
                 dialog::alert_default(&format!("{} sound effects have been renamed", sfx_renamed));
             }
 
-            let state = ListWithSelection::new(sfx, driver_constants::MAX_SOUND_EFFECTS + 20);
+            let state = ListWithCompilerOutput::new(sfx, driver_constants::MAX_SOUND_EFFECTS + 20);
 
             self.sound_effects_tab.replace_sfx_file(&state);
 
@@ -343,7 +379,7 @@ impl MainWindow {
         if self.project.is_some() {
             return;
         }
-        let mut project = Project::new(pf, sender);
+        let mut project = Project::new(pf, self.tabs.clone(), sender);
 
         self.add_tab(&mut project.project_tab);
         self.add_tab(&mut project.samples_tab);

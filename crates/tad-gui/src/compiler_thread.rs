@@ -71,6 +71,9 @@ pub enum ToCompiler {
     SoundEffects(ItemChanged<SoundEffectInput>),
 }
 
+pub type InstrumentOutput = Result<usize, errors::SampleError>;
+pub type SoundEffectOutput = Result<usize, errors::SoundEffectError>;
+
 #[derive(Debug)]
 pub enum CompilerOutput {
     Instrument(ItemId, Result<usize, errors::SampleError>),
@@ -91,6 +94,26 @@ pub enum CombineSamplesError {
     InstrumentErrors { n_errors: usize },
     CombineError(errors::SampleAndInstrumentDataError),
     CommonAudioData(errors::CommonAudioDataErrors),
+}
+
+impl std::fmt::Display for CombineSamplesError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            CombineSamplesError::InstrumentErrors { n_errors } => {
+                if *n_errors > 1 {
+                    writeln!(f, "{} instruments have errors", n_errors)
+                } else {
+                    writeln!(f, "One instrument has an error")
+                }
+            }
+            CombineSamplesError::CombineError(e) => {
+                writeln!(f, "{}", e.multiline_display())
+            }
+            CombineSamplesError::CommonAudioData(e) => {
+                writeln!(f, "{}", e.multiline_display())
+            }
+        }
+    }
 }
 
 struct IList<ItemT> {
