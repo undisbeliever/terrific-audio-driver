@@ -272,8 +272,12 @@ where
 
                     ListMessage::CloneSelected => {
                         if let (Some(item), true) = (self.get(sel_index), self.can_add()) {
+                            let mut item = item.clone();
+                            NameDeduplicator::dedupe_name(&mut item, &self.list, None);
+
                             let i = sel_index + 1;
-                            let action = ListAction::Add(i, item.clone());
+                            let action = ListAction::Add(i, item);
+
                             update_list(&mut self.list, &action);
                             let c_message = self.list.get(i).map(|(id, item)| {
                                 ItemChanged::AddedOrEdited(id.clone(), item.clone())
