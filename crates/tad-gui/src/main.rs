@@ -237,6 +237,14 @@ impl Project {
 
     fn process_compiler_output(&mut self, m: CompilerOutput) {
         match m {
+            CompilerOutput::Panic(message) => {
+                dialog::message_title("Compiler thread panicked");
+                dialog::alert_default(&format!(
+                    "The compiler thread panicked!\n\n{}\n\nThe compiler thread has been stopped and will not be restarted.",
+                    message
+                ));
+            }
+
             CompilerOutput::Instrument(id, co) => {
                 self.data
                     .instruments

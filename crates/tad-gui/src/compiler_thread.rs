@@ -76,6 +76,8 @@ pub type SoundEffectOutput = Result<usize, errors::SoundEffectError>;
 
 #[derive(Debug)]
 pub enum CompilerOutput {
+    Panic(String),
+
     Instrument(ItemId, Result<usize, errors::SampleError>),
 
     // ::TODO the prevent user from leaving the Samples tab if this error occurs::
@@ -531,10 +533,38 @@ fn bg_thread(
     }
 }
 
+fn monitor_thread(
+    parent_path: PathBuf,
+    reciever: mpsc::Receiver<ToCompiler>,
+    sender: fltk::app::Sender<Message>,
+) {
+    let s = sender.clone();
+
+    let handler = thread::Builder::new()
+        .name("compiler_thread".into())
+        .spawn(move || bg_thread(parent_path, reciever, sender))
+        .unwrap();
+
+    match handler.join() {
+        Ok(()) => (),
+        Err(e) => {
+            // `std::panic::PanicInfo::payload()` mentions panics are commonly `&'static str` or `String`.
+            let msg = match e.downcast_ref::<&str>() {
+                Some(s) => s,
+                None => match e.downcast_ref::<String>() {
+                    Some(s) => s.as_str(),
+                    None => "Unknown panic type",
+                },
+            };
+            s.send(Message::FromCompiler(CompilerOutput::Panic(msg.to_owned())));
+        }
+    }
+}
+
 pub fn create_bg_thread(
     parent_path: PathBuf,
     reciever: mpsc::Receiver<ToCompiler>,
     sender: fltk::app::Sender<Message>,
 ) -> thread::JoinHandle<()> {
-    thread::spawn(move || bg_thread(parent_path, reciever, sender))
+    thread::spawn(move || monitor_thread(parent_path, reciever, sender))
 }
