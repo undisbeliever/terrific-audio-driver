@@ -237,7 +237,7 @@ where
     fn replace(
         &mut self,
         data: Vec<(ItemId, ItemT)>,
-        mut compiler_fn: impl FnMut(ItemId, usize, &ItemT) -> OutT,
+        mut compiler_fn: impl FnMut(ItemId, &ItemT) -> OutT,
     ) {
         self.map = data
             .iter()
@@ -247,8 +247,7 @@ where
 
         self.output = data
             .iter()
-            .enumerate()
-            .map(|(index, (id, item))| compiler_fn(id.clone(), index, item))
+            .map(|(id, item)| compiler_fn(id.clone(), item))
             .collect();
 
         self.name_map = data
@@ -267,11 +266,11 @@ where
         &mut self,
         id: ItemId,
         item: ItemT,
-        mut compiler_fn: impl FnMut(ItemId, usize, &ItemT) -> OutT,
+        mut compiler_fn: impl FnMut(ItemId, &ItemT) -> OutT,
     ) {
         match self.map.get(&id) {
             Some(index) => {
-                let out = compiler_fn(id, *index, &item);
+                let out = compiler_fn(id, &item);
 
                 let old_name = self.items[*index].name();
                 if item.name() != old_name {
@@ -286,7 +285,7 @@ where
             }
             None => {
                 let index = self.items.len();
-                let out = compiler_fn(id.clone(), index, &item);
+                let out = compiler_fn(id.clone(), &item);
 
                 self.name_map
                     .insert(item.name().to_string(), Self::cast_index(index));
@@ -316,7 +315,7 @@ where
     fn process_message(
         &mut self,
         m: ItemChanged<ItemT>,
-        compiler_fn: impl FnMut(ItemId, usize, &ItemT) -> OutT,
+        compiler_fn: impl FnMut(ItemId, &ItemT) -> OutT,
     ) {
         match m {
             ItemChanged::ReplaceAll(v) => self.replace(v, compiler_fn),
@@ -329,9 +328,9 @@ where
         assert_eq!(self.name_map.len(), self.items.len());
     }
 
-    fn recompile_all(&mut self, compiler_fn: impl Fn(ItemId, usize, &ItemT) -> OutT) {
+    fn recompile_all(&mut self, compiler_fn: impl Fn(ItemId, &ItemT) -> OutT) {
         for (id, &index) in &self.map {
-            let out = compiler_fn(id.clone(), index, &self.items[index]);
+            let out = compiler_fn(id.clone(), &self.items[index]);
             self.output[index] = out;
         }
     }
@@ -348,8 +347,8 @@ impl Sender {
 fn create_instrument_compiler<'a>(
     sample_file_cache: &'a mut SampleFileCache,
     sender: &'a Sender,
-) -> impl (FnMut(ItemId, usize, &data::Instrument) -> Option<Sample>) + 'a {
-    |id, idx, inst| match load_sample_for_instrument(inst, idx, sample_file_cache) {
+) -> impl (FnMut(ItemId, &data::Instrument) -> Option<Sample>) + 'a {
+    |id, inst| match load_sample_for_instrument(inst, sample_file_cache) {
         Ok(s) => {
             sender.send(CompilerOutput::Instrument(id, Ok(s.sample_size())));
             Some(s)
@@ -410,8 +409,8 @@ fn combine_sample_data(
 fn create_sfx_compiler<'a>(
     instruments: &'a CList<data::Instrument, Option<Sample>>,
     sender: &'a Sender,
-) -> impl (Fn(ItemId, usize, &SoundEffectInput) -> Option<CompiledSoundEffect>) + 'a {
-    move |id, _index, sfx| match compile_sound_effect_input(sfx, instruments.name_map()) {
+) -> impl (Fn(ItemId, &SoundEffectInput) -> Option<CompiledSoundEffect>) + 'a {
+    move |id, sfx| match compile_sound_effect_input(sfx, instruments.name_map()) {
         Ok(sfx) => {
             sender.send(CompilerOutput::SoundEffect(id, Ok(sfx.data().len())));
             Some(sfx)

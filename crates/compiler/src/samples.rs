@@ -11,7 +11,7 @@ use crate::errors::{
     BrrError, EnvelopeError, SampleAndInstrumentDataError, SampleError, TaggedSampleError,
 };
 use crate::pitch_table::{
-    instrument_pitch, merge_pitch_vec, sort_pitches, InstrumentPitch, PitchTable,
+    instrument_pitch, merge_pitch_vec, sort_pitches_iterator, InstrumentPitch, PitchTable,
 };
 
 use brr::{
@@ -178,7 +178,6 @@ fn instrument_envelope(inst: &Instrument) -> Result<(u8, u8), EnvelopeError> {
 
 pub fn load_sample_for_instrument(
     inst: &Instrument,
-    index: usize,
     cache: &mut SampleFileCache,
 ) -> Result<Sample, SampleError> {
     let mut brr_sample = match inst.source.extension().and_then(OsStr::to_str) {
@@ -208,7 +207,7 @@ pub fn load_sample_for_instrument(
         }
     }
 
-    let pitch = instrument_pitch(index, inst);
+    let pitch = instrument_pitch(inst);
 
     let envelope = instrument_envelope(inst);
 
@@ -236,7 +235,7 @@ fn compile_samples(
     let mut cache = SampleFileCache::new(project.parent_path.clone());
 
     for (i, inst) in project.instruments.list().iter().enumerate() {
-        match load_sample_for_instrument(inst, i, &mut cache) {
+        match load_sample_for_instrument(inst, &mut cache) {
             Ok(b) => out.push(b),
             Err(e) => errors.push(TaggedSampleError::Instrument(i, inst.name.clone(), e)),
         }
@@ -341,7 +340,7 @@ pub fn combine_samples(
 
     let brr = build_brr_directroy(samples);
 
-    let pitches = sort_pitches(samples.iter().map(|s| s.pitch.clone()).collect());
+    let pitches = sort_pitches_iterator(samples.iter().map(|s| s.pitch.clone()));
     let pitch_table = match merge_pitch_vec(pitches, n_samples) {
         Ok(pt) => pt,
         Err(e) => {
@@ -351,6 +350,7 @@ pub fn combine_samples(
             })
         }
     };
+    assert_eq!(pitch_table.instruments_pitch_offset.len(), samples.len());
 
     Ok(SampleAndInstrumentData {
         n_instruments: n_samples,

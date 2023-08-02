@@ -36,14 +36,13 @@ const PITCH_REGISTER_FLOAT_LIMIT: f64 = 4.0;
 
 #[derive(Clone)]
 pub struct InstrumentPitch {
-    instrument_id: usize,
     microsemitones_above_c: i32,
     octaves_above_c0: i32,
     min_octave_offset: i32,
     max_octave_offset: i32,
 }
 
-pub fn instrument_pitch(index: usize, inst: &Instrument) -> Result<InstrumentPitch, PitchError> {
+pub fn instrument_pitch(inst: &Instrument) -> Result<InstrumentPitch, PitchError> {
     if inst.freq < MIN_SAMPLE_FREQ {
         return Err(PitchError::SampleRateTooLow);
     }
@@ -78,7 +77,6 @@ pub fn instrument_pitch(index: usize, inst: &Instrument) -> Result<InstrumentPit
 
     if min_octave_offset >= MIN_MIN_OCTAVE_OFFSET && max_octave_offset <= MAX_MAX_OCTAVE_OFFSET {
         Ok(InstrumentPitch {
-            instrument_id: index,
             microsemitones_above_c,
             octaves_above_c0,
             min_octave_offset,
@@ -99,11 +97,18 @@ pub fn instrument_pitch(index: usize, inst: &Instrument) -> Result<InstrumentPit
 }
 
 // Using sorted vector instead of Map as I need a reproducible pitch table.
-pub struct SortedInstrumentPitches(Vec<InstrumentPitch>);
+pub(crate) struct SortedInstrumentPitches(Vec<(usize, InstrumentPitch)>);
 
-pub fn sort_pitches(mut pv: Vec<InstrumentPitch>) -> SortedInstrumentPitches {
+/// Assumes `pv` iterator outputs all instruments in the correct order.
+pub(crate) fn sort_pitches_iterator(
+    pv: impl Iterator<Item = InstrumentPitch>,
+) -> SortedInstrumentPitches {
+    sort_pitches_vec(pv.enumerate().collect())
+}
+
+fn sort_pitches_vec(mut pv: Vec<(usize, InstrumentPitch)>) -> SortedInstrumentPitches {
     // Using stable sort instead of a hashmap to ensure pitch_table is deterministic
-    pv.sort_by_key(|p| p.microsemitones_above_c);
+    pv.sort_by_key(|(_, p)| p.microsemitones_above_c);
     SortedInstrumentPitches(pv)
 }
 
@@ -115,14 +120,14 @@ fn pitch_vec(
     let mut errors = Vec::new();
 
     for (i, inst) in instruments.list().iter().enumerate() {
-        match instrument_pitch(i, inst) {
-            Ok(ip) => out.push(ip),
+        match instrument_pitch(inst) {
+            Ok(ip) => out.push((i, ip)),
             Err(e) => errors.push((i, inst.name.clone(), e)),
         }
     }
 
     if errors.is_empty() {
-        Ok(sort_pitches(out))
+        Ok(sort_pitches_vec(out))
     } else {
         Err(PitchTableError::InstrumentErrors(errors))
     }
@@ -130,7 +135,7 @@ fn pitch_vec(
 
 struct MstIterator<'a> {
     // assumes `remaining` is sorted by `microsemitones_above_c.
-    remaining: &'a [InstrumentPitch],
+    remaining: &'a [(usize, InstrumentPitch)],
 }
 
 fn group_by_mst(pitches: &SortedInstrumentPitches) -> MstIterator {
@@ -140,7 +145,7 @@ fn group_by_mst(pitches: &SortedInstrumentPitches) -> MstIterator {
 }
 
 impl<'a> Iterator for MstIterator<'a> {
-    type Item = (i32, &'a [InstrumentPitch]);
+    type Item = (i32, &'a [(usize, InstrumentPitch)]);
 
     fn next(&mut self) -> Option<Self::Item> {
         let r = self.remaining;
@@ -149,9 +154,9 @@ impl<'a> Iterator for MstIterator<'a> {
             Some(ip) => ip,
             None => return None,
         };
-        let mst = first.microsemitones_above_c;
+        let mst = first.1.microsemitones_above_c;
 
-        let p = r.partition_point(|ip| ip.microsemitones_above_c == mst);
+        let p = r.partition_point(|(_, ip)| ip.microsemitones_above_c == mst);
 
         let (out, r) = r.split_at(p);
         self.remaining = r;
@@ -174,16 +179,24 @@ fn process_pitch_vec(inst_pitches: SortedInstrumentPitches, n_instruments: usize
         assert!(mst > 0);
         assert!(!slice.is_empty());
 
-        let min_octave_offset = slice.iter().map(|ip| ip.min_octave_offset).min().unwrap();
-        let max_octave_offset = slice.iter().map(|ip| ip.max_octave_offset).max().unwrap();
+        let min_octave_offset = slice
+            .iter()
+            .map(|(_, ip)| ip.min_octave_offset)
+            .min()
+            .unwrap();
+        let max_octave_offset = slice
+            .iter()
+            .map(|(_, ip)| ip.max_octave_offset)
+            .max()
+            .unwrap();
 
         // The mask to prevent an overflow panic.
         // The length of `pitches` is tested after this loop ends
         let pt_offset = i32::try_from(pitches.len() & 0xff).unwrap();
 
-        for inst in slice {
-            let o = pt_offset - (inst.octaves_above_c0 + min_octave_offset) * SEMITONES_PER_OCTAVE;
-            instruments_pitch_offset[inst.instrument_id] = o.to_le_bytes()[0];
+        for (instrument_id, pitch) in slice {
+            let o = pt_offset - (pitch.octaves_above_c0 + min_octave_offset) * SEMITONES_PER_OCTAVE;
+            instruments_pitch_offset[*instrument_id] = o.to_le_bytes()[0];
         }
 
         for octave_shift in min_octave_offset..=max_octave_offset {
@@ -216,7 +229,7 @@ pub struct PitchTable {
     pub(crate) instruments_pitch_offset: Vec<u8>,
 }
 
-pub fn merge_pitch_vec(
+pub(crate) fn merge_pitch_vec(
     pv: SortedInstrumentPitches,
     n_instruments: usize,
 ) -> Result<PitchTable, PitchTableError> {
