@@ -358,6 +358,12 @@ impl MainWindow {
         window.end();
         window.show();
 
+        window.set_callback(|_| {
+            if fltk::app::event() == fltk::enums::Event::Close {
+                fltk::app::quit();
+            }
+        });
+
         tabs.set_callback({
             let sender = sender.clone();
             move |t| {
