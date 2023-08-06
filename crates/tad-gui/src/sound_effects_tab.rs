@@ -345,7 +345,7 @@ impl CompilerOutputGui<SoundEffectOutput> for SoundEffectsTab {
                 self.console.set_text_color(Color::Foreground);
             }
             Some(Err(e)) => {
-                let text = format!("{}", e.multiline_display("line"));
+                let text = format!("{}", e.multiline_display("line "));
 
                 self.console_buffer.set_text(&text);
                 self.console.set_text_color(Color::Red);

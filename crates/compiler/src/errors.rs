@@ -1164,7 +1164,8 @@ impl Display for SoundEffectsFileErrorIndentedDisplay<'_> {
             if i != 0 {
                 writeln!(f)?;
             }
-            fmt_indented_sound_effect_error(f, e, "  ", &error.file_name)?;
+            let line_prefix = [&error.file_name, ":"].concat();
+            fmt_indented_sound_effect_error(f, e, "  ", &line_prefix)?;
         }
 
         Ok(())
@@ -1193,7 +1194,7 @@ fn fmt_indented_sound_effect_error(
     f: &mut std::fmt::Formatter,
     error: &SoundEffectError,
     name_prefix: &str,
-    file_name: &str,
+    line_prefix: &str,
 ) -> std::fmt::Result {
     let line_no = error.sfx_line_no;
 
@@ -1201,18 +1202,18 @@ fn fmt_indented_sound_effect_error(
         writeln!(f, "{}{}:", name_prefix, error.sfx_name)?;
     } else {
         writeln!(f, "{}unnamed sound effect:", name_prefix)?;
-        writeln!(f, "    {}:{} invalid name", file_name, line_no)?;
+        writeln!(f, "    {}{}: invalid name", line_prefix, line_no)?;
     }
 
     if error.duplicate_name {
-        writeln!(f, "    {}:{} duplicate name: {}", file_name, line_no, error.sfx_name)?;
+        writeln!(f, "    {}{}: duplicate name: {}", line_prefix, line_no, error.sfx_name)?;
     }
     if error.no_notes {
-        writeln!(f, "    {}:{} no notes in sound effect", file_name, line_no)?;
+        writeln!(f, "    {}{}: no notes in sound effect", line_prefix, line_no)?;
     }
 
     for e in &error.errors {
-        writeln!(f, "    {}:{} {}", file_name, e.0, e.1)?;
+        writeln!(f, "    {}{}: {}", line_prefix, e.0, e.1)?;
     }
 
     Ok(())
@@ -1326,7 +1327,7 @@ impl Display for MmlCompileErrorsIndentedDisplay<'_> {
         }
 
         for e in &error.line_errors {
-            writeln!(f, "  {}:{} {}", error.file_name, e.0, e.1)?;
+            writeln!(f, "  {}{} {}", error.file_name, e.0, e.1)?;
         }
         for e in &error.subroutine_errors {
             fmt_indented_channel_errors(f, e, &error.file_name, true)?;
