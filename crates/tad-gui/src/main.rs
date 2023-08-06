@@ -364,6 +364,19 @@ impl MainWindow {
             }
         });
 
+        // Defocus inputs/text/tables when the user clicks outside them
+        window.handle(|window, ev| match ev {
+            fltk::enums::Event::Push => {
+                if let Some(w) = fltk::app::belowmouse::<fltk::widget::Widget>() {
+                    if !w.has_focus() && !window.has_focus() {
+                        let _ = window.take_focus();
+                    }
+                }
+                false
+            }
+            _ => false,
+        });
+
         tabs.set_callback({
             let sender = sender.clone();
             move |t| {
