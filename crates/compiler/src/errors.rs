@@ -1219,6 +1219,31 @@ fn fmt_indented_sound_effect_error(
     Ok(())
 }
 
+pub struct SfxErrorLines {
+    pub offset: u32,
+    pub lines: Vec<u32>,
+}
+
+impl SoundEffectError {
+    pub fn error_lines(&self) -> SfxErrorLines {
+        let mut offset = 1;
+        if self.invalid_name {
+            offset += 1
+        }
+        if self.duplicate_name {
+            offset += 1
+        }
+        if self.no_notes {
+            offset += 1
+        }
+
+        SfxErrorLines {
+            offset,
+            lines: self.errors.iter().map(|e| e.0).collect(),
+        }
+    }
+}
+
 pub struct SampleAndInstrumentDataErrorIndentedDisplay<'a>(&'a SampleAndInstrumentDataError);
 
 impl Display for SampleAndInstrumentDataErrorIndentedDisplay<'_> {

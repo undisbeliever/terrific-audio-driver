@@ -14,6 +14,7 @@ use crate::tables::{RowWithStatus, SingleColumnRow};
 use crate::Message;
 use crate::Tab;
 
+use compiler::errors::SfxErrorLines;
 use compiler::sound_effects::SoundEffectInput;
 use compiler::Name;
 
@@ -25,6 +26,7 @@ use fltk::prelude::*;
 use fltk::text::{TextBuffer, TextDisplay, TextEditor, WrapMode};
 
 use std::cell::RefCell;
+use std::cmp::max;
 use std::rc::Rc;
 
 struct SoundEffectMapping;
@@ -82,6 +84,8 @@ pub struct State {
 
     name: Input,
     editor: TextEditor,
+
+    error_lines: Option<SfxErrorLines>,
 }
 
 pub struct SoundEffectsTab {
@@ -142,6 +146,9 @@ impl SoundEffectsTab {
         editor.set_linenumber_width(ch_units_to_width(&editor, 4));
         editor.set_text_font(Font::Courier);
 
+        // `error_line_clicked` only works if there is no wrapping.
+        editor.wrap_mode(WrapMode::None, 0);
+
         let mut console = TextDisplay::default();
         main_group.fixed(&console, button_height * 5);
 
@@ -162,6 +169,7 @@ impl SoundEffectsTab {
             old_name: "sfx".parse().unwrap(),
             name: name.clone(),
             editor: editor.clone(),
+            error_lines: None,
         }));
 
         name.handle({
@@ -187,6 +195,25 @@ impl SoundEffectsTab {
                     false
                 }
                 _ => false,
+            }
+        });
+
+        console.handle({
+            let s = state.clone();
+            let mut editor = editor.clone();
+            move |widget, ev| {
+                if ev == Event::Released && app::event_clicks() {
+                    if let Some(mut buffer) = widget.buffer() {
+                        buffer.unselect();
+
+                        if let Ok(state) = s.try_borrow() {
+                            let line = widget.count_lines(0, widget.insert_position(), false);
+                            let line = line.try_into().unwrap_or(0);
+                            Self::error_line_clicked(line, &state, &mut editor);
+                        }
+                    }
+                }
+                false
             }
         });
 
@@ -216,6 +243,39 @@ impl SoundEffectsTab {
         self.sfx_table.replace(state);
 
         self.sidebar.activate();
+    }
+
+    /// Move the editor cursor and highlight the line that caused the error.
+    fn error_line_clicked(error_line: u32, state: &State, editor: &mut TextEditor) {
+        if error_line < 1 {
+            return;
+        }
+        if let Some(error_lines) = &state.error_lines {
+            let editor_line = error_line
+                .checked_sub(error_lines.offset)
+                .and_then(|i| usize::try_from(i).ok())
+                .and_then(|i| error_lines.lines.get(i))
+                .and_then(|i| i32::try_from(*i).ok())
+                .unwrap_or(1);
+
+            let editor_line = max(1, editor_line);
+
+            if let Some(mut buffer) = editor.buffer() {
+                // Fl_Text_Buffer::skip_lines() is not available in fltk-rs, using `TextEditor::skip_lines()` instead.
+                // `TextEditor::skip_lines()` skips visible (wrapped) lines.
+                // For this function to work as expected word wrapping must be disabled on `editor`.
+                let editor_pos = editor.skip_lines(0, editor_line - 1, true);
+                let line_end = editor.line_end(editor_pos, true);
+
+                editor.set_insert_position(editor_pos);
+                editor.next_word();
+                buffer.select(editor.insert_position(), line_end);
+
+                editor.set_insert_position(line_end - 1);
+                editor.show_insert_position();
+                let _ = editor.take_focus();
+            }
+        }
     }
 }
 
@@ -343,8 +403,11 @@ impl CompilerOutputGui<SoundEffectOutput> for SoundEffectsTab {
                 self.console_buffer
                     .set_text(&format!("Sound effect compiled successfully: {} bytes", o));
                 self.console.set_text_color(Color::Foreground);
+                self.state.borrow_mut().error_lines = None;
             }
             Some(Err(e)) => {
+                self.state.borrow_mut().error_lines = Some(e.error_lines());
+
                 let text = format!("{}", e.multiline_display("line "));
 
                 self.console_buffer.set_text(&text);
