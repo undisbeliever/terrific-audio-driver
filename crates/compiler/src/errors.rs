@@ -1212,7 +1212,7 @@ fn fmt_indented_sound_effect_error(
     }
 
     for e in &error.errors {
-        writeln!(f, "    {}:{} {}", file_name, line_no + e.0, e.1)?;
+        writeln!(f, "    {}:{} {}", file_name, e.0, e.1)?;
     }
 
     Ok(())

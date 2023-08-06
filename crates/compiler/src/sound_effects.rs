@@ -240,7 +240,7 @@ pub fn compile_sound_effect_input(
         &input.name,
         &input.sfx,
         input.name.as_str(),
-        0,
+        1,
         instruments,
         true,
         false,
