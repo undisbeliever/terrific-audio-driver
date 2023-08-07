@@ -23,10 +23,10 @@ use fltk::enums::{Color, Event, Font};
 use fltk::group::{Flex, Pack, PackType};
 use fltk::input::Input;
 use fltk::prelude::*;
-use fltk::text::{TextBuffer, TextDisplay, TextEditor, WrapMode};
+use fltk::text::{StyleTableEntryExt, TextBuffer, TextDisplay, TextEditor, WrapMode};
 
 use std::cell::RefCell;
-use std::cmp::max;
+use std::cmp::{max, min};
 use std::rc::Rc;
 
 struct SoundEffectMapping;
@@ -83,7 +83,7 @@ pub struct State {
     old_name: Name,
 
     name: Input,
-    editor: TextEditor,
+    editor_widget: TextEditor,
 
     error_lines: Option<SfxErrorLines>,
 }
@@ -92,7 +92,7 @@ pub struct SoundEffectsTab {
     state: Rc<RefCell<State>>,
 
     // Each sound effect gets it own buffer so they have their own undo/redo stack.
-    sfx_buffers: LaVec<Option<TextBuffer>>,
+    sfx_buffers: LaVec<Option<EditorBuffer>>,
 
     group: Flex,
 
@@ -102,7 +102,7 @@ pub struct SoundEffectsTab {
     main_group: Flex,
 
     name: Input,
-    editor: TextEditor,
+    editor: SfxEditor,
 
     console: TextDisplay,
     console_buffer: TextBuffer,
@@ -142,12 +142,7 @@ impl SoundEffectsTab {
         name.set_tooltip("Sound effect name");
         main_group.fixed(&name, input_height(&name));
 
-        let mut editor = TextEditor::default();
-        editor.set_linenumber_width(ch_units_to_width(&editor, 4));
-        editor.set_text_font(Font::Courier);
-
-        // `error_line_clicked` only works if there is no wrapping.
-        editor.wrap_mode(WrapMode::None, 0);
+        let mut editor = SfxEditor::new();
 
         let mut console = TextDisplay::default();
         main_group.fixed(&console, button_height * 5);
@@ -168,7 +163,7 @@ impl SoundEffectsTab {
             selected: None,
             old_name: "sfx".parse().unwrap(),
             name: name.clone(),
-            editor: editor.clone(),
+            editor_widget: editor.widget.clone(),
             error_lines: None,
         }));
 
@@ -185,7 +180,7 @@ impl SoundEffectsTab {
             }
         });
 
-        editor.handle({
+        editor.widget.handle({
             let s = state.clone();
             move |_widget, ev| match ev {
                 Event::Unfocus => {
@@ -200,7 +195,7 @@ impl SoundEffectsTab {
 
         console.handle({
             let s = state.clone();
-            let mut editor = editor.clone();
+            let mut editor = editor.widget.clone();
             move |widget, ev| {
                 if ev == Event::Released && app::event_clicks() {
                     if let Some(mut buffer) = widget.buffer() {
@@ -228,6 +223,7 @@ impl SoundEffectsTab {
 
             main_group,
             name,
+
             editor,
 
             console,
@@ -238,8 +234,11 @@ impl SoundEffectsTab {
     }
 
     pub fn replace_sfx_file(&mut self, state: &impl ListState<Item = SoundEffectInput>) {
+        let v: Vec<Option<EditorBuffer>> = (0..state.list().len()).map(|_| None).collect();
+        assert!(v.len() == state.list().len());
+
         self.clear_selected();
-        self.sfx_buffers = LaVec::from_vec(vec![None; state.list().len()]);
+        self.sfx_buffers = LaVec::from_vec(v);
         self.sfx_table.replace(state);
 
         self.sidebar.activate();
@@ -309,7 +308,7 @@ impl ListEditor<SoundEffectInput> for SoundEffectsTab {
         self.sfx_table.clear_selected();
 
         self.name.set_value("");
-        self.editor.set_buffer(None);
+        self.editor.remove_buffer();
 
         self.main_group.deactivate();
     }
@@ -326,16 +325,12 @@ impl ListEditor<SoundEffectInput> for SoundEffectsTab {
                     self.name.set_value(sfx.name.as_str());
                     self.name.clear_changed();
 
-                    if sfx_buffer.is_none() {
-                        let mut buf = TextBuffer::default();
-                        buf.set_text(&sfx.sfx);
-                        buf.can_undo(true);
-                        buf.set_tab_distance(4);
-
-                        *sfx_buffer = Some(buf);
+                    match sfx_buffer {
+                        Some(b) => self.editor.set_buffer(b),
+                        None => {
+                            *sfx_buffer = Some(self.editor.new_buffer(&sfx.sfx));
+                        }
                     }
-                    self.editor.set_buffer(sfx_buffer.clone());
-                    self.editor.clear_changed();
 
                     self.main_group.activate();
 
@@ -360,14 +355,14 @@ impl State {
     }
 
     fn commit_sfx_if_changed(&mut self) {
-        if self.name.changed() || self.editor.changed() {
+        if self.name.changed() || self.editor_widget.changed() {
             self.commit_sfx();
         }
     }
 
     fn commit_sfx(&mut self) {
         if let Some(index) = self.selected {
-            if let Some(buf) = self.editor.buffer() {
+            if let Some(buf) = self.editor_widget.buffer() {
                 if let Some(n) = Name::try_new_lossy(self.name.value()) {
                     self.name.set_value(n.as_str());
                     self.old_name = n;
@@ -383,7 +378,7 @@ impl State {
                     )));
 
                 self.name.clear_changed();
-                self.editor.clear_changed();
+                self.editor_widget.clear_changed();
             }
         }
     }
@@ -395,7 +390,7 @@ impl CompilerOutputGui<SoundEffectOutput> for SoundEffectsTab {
     }
 
     fn set_selected_compiler_output(&mut self, compiler_output: &Option<SoundEffectOutput>) {
-        // ::TODO highlight invalid lines::
+        // ::MAYDO highlight invalid lines::
 
         match compiler_output {
             None => self.console_buffer.set_text(""),
@@ -412,6 +407,197 @@ impl CompilerOutputGui<SoundEffectOutput> for SoundEffectsTab {
 
                 self.console_buffer.set_text(&text);
                 self.console.set_text_color(Color::Red);
+            }
+        }
+    }
+}
+
+#[allow(dead_code)]
+mod style {
+    pub const NORMAL: char = 'A';
+    pub const COMMENT: char = 'B';
+    pub const UNKNOWN: char = 'C';
+
+    pub const UNKNOWN_STR: &str = "C";
+}
+
+fn highlight_data() -> Vec<StyleTableEntryExt> {
+    vec![
+        // 'A'
+        StyleTableEntryExt {
+            font: Font::Courier,
+            ..StyleTableEntryExt::default()
+        },
+        // 'B'
+        StyleTableEntryExt {
+            color: Color::Blue,
+            font: Font::Courier,
+            ..StyleTableEntryExt::default()
+        },
+        // 'C' - unknown, used when the inserted text cannot be read
+        StyleTableEntryExt {
+            color: Color::Green,
+            font: Font::Courier,
+            ..StyleTableEntryExt::default()
+        },
+    ]
+}
+
+pub struct SfxEditor {
+    widget: TextEditor,
+    style_buffer: TextBuffer,
+}
+
+// I cannot remove the `buffer_modified` callback from TextBuffer (`TextBuffer::remove_modify_callback()` takes a `FnMut` argument).
+// Instead I add a new callback to each buffer as it is created.
+// Wrapping `TextBuffer` in `EditorBuffer` ensures the `buffer_modified` callback is set correctly.
+//
+// `EditorBuffer` must only be used in the SfxEditor instance that created it.
+struct EditorBuffer(TextBuffer);
+
+impl SfxEditor {
+    fn new() -> Self {
+        let mut style_buffer = TextBuffer::default();
+        style_buffer.can_undo(false);
+
+        let mut widget = TextEditor::default();
+        widget.set_linenumber_width(ch_units_to_width(&widget, 4));
+        widget.set_text_font(Font::Courier);
+        widget.set_highlight_data_ext(style_buffer.clone(), highlight_data());
+
+        // `error_line_clicked` only works if there is no wrapping.
+        widget.wrap_mode(WrapMode::None, 0);
+
+        Self {
+            widget,
+            style_buffer,
+        }
+    }
+
+    fn new_buffer(&mut self, text: &str) -> EditorBuffer {
+        let mut b = TextBuffer::default();
+        b.can_undo(true);
+        b.set_tab_distance(4);
+        b.set_text(text);
+
+        b.add_modify_callback({
+            let buffer = b.clone();
+            let mut style_buffer = self.style_buffer.clone();
+            move |a, b, c, d, e: &str| {
+                Self::buffer_modified(&buffer, &mut style_buffer, a, b, c, d, e);
+            }
+        });
+
+        let b = EditorBuffer(b);
+        self.set_buffer(&b);
+
+        b
+    }
+
+    fn set_buffer(&mut self, buf: &EditorBuffer) {
+        let buf = &buf.0;
+
+        let (style, _) = Self::style_text(&buf.text(), style::NORMAL);
+        self.style_buffer.set_text(&style);
+
+        self.widget.set_buffer(buf.clone());
+        self.widget.clear_changed();
+    }
+
+    fn remove_buffer(&mut self) {
+        self.style_buffer.set_text("");
+        self.widget.set_buffer(None);
+        self.widget.clear_changed();
+    }
+
+    fn style_text(sfx_text: &str, current_style: char) -> (String, char) {
+        let mut style_char = current_style;
+
+        let mut style = String::with_capacity(sfx_text.len());
+
+        // Must use bytes here, even tho sfx_text is UTF-8
+        for c in sfx_text.bytes() {
+            match c {
+                b';' => style_char = style::COMMENT,
+                b'\n' => style_char = style::NORMAL,
+                _ => (),
+            }
+            style.push(style_char);
+        }
+        (style, style_char)
+    }
+
+    fn buffer_modified(
+        text_buffer: &TextBuffer,
+        style_buffer: &mut TextBuffer,
+        pos: i32,
+        n_inserted: i32,
+        n_deleted: i32,
+        _n_restyled: i32,
+        _deleted_text: &str,
+    ) {
+        if n_inserted < 0 || n_deleted < 0 {
+            return;
+        }
+        if n_inserted == 0 && n_deleted == 0 {
+            return;
+        }
+
+        let style_before_pos = style_buffer
+            .text_range(pos - 1, pos)
+            .and_then(|s| s.chars().next())
+            .unwrap_or(style::NORMAL);
+
+        if n_inserted > 0 {
+            if let Some(inserted_text) = text_buffer.text_range(pos, pos + n_inserted) {
+                let (style, style_char) = Self::style_text(&inserted_text, style_before_pos);
+
+                style_buffer.replace(pos, pos + n_deleted, &style);
+
+                Self::update_style_after(style_buffer, text_buffer, pos + n_inserted, style_char);
+            } else {
+                // Cannot read inserted text, use unknown style instead.
+                let n_inserted = n_inserted.try_into().unwrap_or(0);
+
+                style_buffer.replace(pos, pos + n_deleted, &style::UNKNOWN_STR.repeat(n_inserted));
+            }
+        } else if n_deleted > 0 {
+            style_buffer.remove(pos, pos + n_deleted);
+
+            Self::update_style_after(style_buffer, text_buffer, pos, style_before_pos);
+        }
+    }
+
+    // Updates the style after `pos`
+    fn update_style_after(
+        style_buffer: &mut TextBuffer,
+        text_buffer: &TextBuffer,
+        pos: i32,
+        style_char: char,
+    ) {
+        // Update style on the remainder of the line the insert ended on
+        let style_at_pos = style_buffer
+            .text_range(pos, pos + 1)
+            .and_then(|s| s.chars().next());
+
+        let style_at_pos = match style_at_pos {
+            Some(c) => c,
+            None => return,
+        };
+
+        if style_char != style_at_pos {
+            let line_end = match text_buffer.find_char_forward(pos, '\n') {
+                Some(i) => i,
+                None => text_buffer.length(),
+            };
+            let comment_end = text_buffer.find_char_forward(pos, ';').unwrap_or(line_end);
+            let end = min(line_end, comment_end);
+
+            let n_new_comment_chars = end.wrapping_sub(pos);
+            if n_new_comment_chars > 0 {
+                if let Ok(count) = usize::try_from(n_new_comment_chars) {
+                    style_buffer.replace(pos, end, &style_char.to_string().repeat(count));
+                }
             }
         }
     }
