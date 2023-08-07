@@ -585,13 +585,12 @@ where
                 }
             }
             ListAction::Edit(index, _) => {
-                // Clear compiler output in GUI when item is being recompiled.
-                let index = *index;
-                let co = None;
-                editor.set_compiler_output(index, &co);
-                if self.selected == Some(index) {
-                    editor.set_selected_compiler_output(&co);
+                if let Some(co) = self.compiler_output.get_mut(*index) {
+                    // Clear stored compiler output when an item is edited
+                    *co = None;
                 }
+                // `editor.set_compiler_output` and `editor.set_selected_compiler_output`
+                // are not called here to prevent an annoying flash in tables and the Sound Effect console.
             }
         }
     }
