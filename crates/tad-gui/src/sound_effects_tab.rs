@@ -328,7 +328,8 @@ impl ListEditor<SoundEffectInput> for SoundEffectsTab {
                     match sfx_buffer {
                         Some(b) => self.editor.set_buffer(b),
                         None => {
-                            *sfx_buffer = Some(self.editor.new_buffer(&sfx.sfx));
+                            let b = self.editor.new_buffer(&sfx.sfx, self.state.clone());
+                            *sfx_buffer = Some(b);
                         }
                     }
 
@@ -474,7 +475,7 @@ impl SfxEditor {
         }
     }
 
-    fn new_buffer(&mut self, text: &str) -> EditorBuffer {
+    fn new_buffer(&mut self, text: &str, state: Rc<RefCell<State>>) -> EditorBuffer {
         let mut b = TextBuffer::default();
         b.can_undo(true);
         b.set_tab_distance(4);
@@ -483,8 +484,9 @@ impl SfxEditor {
         b.add_modify_callback({
             let buffer = b.clone();
             let mut style_buffer = self.style_buffer.clone();
+            let state = state;
             move |a, b, c, d, e: &str| {
-                Self::buffer_modified(&buffer, &mut style_buffer, a, b, c, d, e);
+                Self::buffer_modified(&buffer, &mut style_buffer, &state, a, b, c, d, e);
             }
         });
 
@@ -527,14 +529,16 @@ impl SfxEditor {
         (style, style_char)
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn buffer_modified(
         text_buffer: &TextBuffer,
         style_buffer: &mut TextBuffer,
+        state: &Rc<RefCell<State>>,
         pos: i32,
         n_inserted: i32,
         n_deleted: i32,
         _n_restyled: i32,
-        _deleted_text: &str,
+        deleted_text: &str,
     ) {
         if n_inserted < 0 || n_deleted < 0 {
             return;
@@ -555,6 +559,12 @@ impl SfxEditor {
                 style_buffer.replace(pos, pos + n_deleted, &style);
 
                 Self::update_style_after(style_buffer, text_buffer, pos + n_inserted, style_char);
+
+                if inserted_text.contains('\n') || deleted_text.contains('\n') {
+                    if let Ok(mut state) = state.try_borrow_mut() {
+                        state.commit_sfx();
+                    }
+                }
             } else {
                 // Cannot read inserted text, use unknown style instead.
                 let n_inserted = n_inserted.try_into().unwrap_or(0);
@@ -565,6 +575,12 @@ impl SfxEditor {
             style_buffer.remove(pos, pos + n_deleted);
 
             Self::update_style_after(style_buffer, text_buffer, pos, style_before_pos);
+
+            if deleted_text.contains('\n') {
+                if let Ok(mut state) = state.try_borrow_mut() {
+                    state.commit_sfx();
+                }
+            }
         }
     }
 
