@@ -28,6 +28,7 @@ use compiler::{data, driver_constants, load_project_file, ProjectFile};
 
 use fltk::dialog;
 use fltk::prelude::*;
+use list_editor::update_compiler_output;
 
 use std::env;
 use std::path::PathBuf;
@@ -255,6 +256,15 @@ impl Project {
                     sound_effects.set_compiler_output(id, co, &mut self.sound_effects_tab);
                 }
             }
+            CompilerOutput::Song(id, co) => {
+                let co = Some(co);
+                update_compiler_output(
+                    id,
+                    &co,
+                    self.data.project_songs.list(),
+                    &mut self.project_tab.song_table,
+                );
+            }
 
             CompilerOutput::CombineSamples(o) => {
                 // ::TODO do something with `o`::
@@ -279,9 +289,6 @@ impl Project {
         let _ = self.compiler_sender.send(ToCompiler::SfxExportOrder(
             self.data.sfx_export_orders.replace_all_message(),
         ));
-        let _ = self.compiler_sender.send(ToCompiler::ProjectSongs(
-            self.data.project_songs.replace_all_message(),
-        ));
         let _ = self.compiler_sender.send(ToCompiler::Instrument(
             self.data.instruments.replace_all_message(),
         ));
@@ -296,6 +303,11 @@ impl Project {
                 .compiler_sender
                 .send(ToCompiler::SoundEffects(sfx.replace_all_message()));
         }
+
+        // Compile songs after samples have been compiled
+        let _ = self.compiler_sender.send(ToCompiler::ProjectSongs(
+            self.data.project_songs.replace_all_message(),
+        ));
     }
 
     fn maybe_set_sfx_file(&mut self, sfx_file: Option<SoundEffectsFile>) {

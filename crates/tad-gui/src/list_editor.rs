@@ -630,6 +630,19 @@ where
     }
 }
 
+pub fn update_compiler_output<CO, T>(
+    id: ItemId,
+    compiler_output: &Option<CO>,
+    list: &ListData<T>,
+    editor: &mut impl CompilerOutputGui<CO>,
+) where
+    T: Clone + PartialEq<T> + NameDeduplicator,
+{
+    if let Some(index) = list.id_to_index(id) {
+        editor.set_compiler_output(index, compiler_output);
+    }
+}
+
 pub struct ListButtons {
     pub pack: Pack,
 

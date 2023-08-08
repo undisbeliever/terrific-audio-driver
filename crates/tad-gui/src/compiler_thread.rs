@@ -8,19 +8,22 @@ use crate::names::NameGetter;
 use crate::Message;
 
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::fmt::Display;
+use std::path::{Path, PathBuf};
 use std::sync::mpsc;
 use std::thread;
 
 extern crate compiler;
 use compiler::build_common_audio_data;
 use compiler::data;
+use compiler::data::{load_text_file_with_limit, TextFile};
 use compiler::errors;
 use compiler::samples::{combine_samples, load_sample_for_instrument, Sample, SampleFileCache};
 use compiler::sound_effects::blank_compiled_sound_effects;
 use compiler::sound_effects::{compile_sound_effect_input, CompiledSoundEffect, SoundEffectInput};
 use compiler::CommonAudioData;
 use compiler::PitchTable;
+use compiler::SongData;
 
 extern crate fltk;
 
@@ -73,6 +76,7 @@ pub enum ToCompiler {
 
 pub type InstrumentOutput = Result<usize, errors::SampleError>;
 pub type SoundEffectOutput = Result<usize, errors::SoundEffectError>;
+pub type SongOutput = Result<usize, SongError>;
 
 #[derive(Debug)]
 pub enum CompilerOutput {
@@ -84,6 +88,9 @@ pub enum CompilerOutput {
     CombineSamples(Result<usize, CombineSamplesError>),
 
     SoundEffect(ItemId, Result<usize, errors::SoundEffectError>),
+
+    // ::TODO send song length to the GUI::
+    Song(ItemId, SongOutput),
 
     // May return an empty vec
     MissingSoundEffects(Vec<data::Name>),
@@ -114,6 +121,23 @@ impl std::fmt::Display for CombineSamplesError {
             CombineSamplesError::CommonAudioData(e) => {
                 writeln!(f, "{}", e.multiline_display())
             }
+        }
+    }
+}
+
+#[derive(Debug)]
+pub enum SongError {
+    Dependency,
+    Mml(errors::MmlCompileErrors),
+    Song(errors::SongError),
+}
+
+impl Display for SongError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Dependency => writeln!(f, "dependency error"),
+            Self::Mml(_) => writeln!(f, "MML error"),
+            Self::Song(_) => writeln!(f, "song error"),
         }
     }
 }
@@ -452,6 +476,151 @@ fn send_sfx_size(
     sender.send(CompilerOutput::SoundEffectsDataSize(data_size));
 }
 
+struct SongDependencies {
+    instruments: data::UniqueNamesList<data::Instrument>,
+    pitch_table: PitchTable,
+}
+
+fn create_song_dependencies(
+    instruments: &CList<data::Instrument, Option<Sample>>,
+    pitch_table: PitchTable,
+) -> Option<SongDependencies> {
+    match data::validate_instrument_names(instruments.items().to_vec()) {
+        Ok(instruments) => Some(SongDependencies {
+            instruments,
+            pitch_table,
+        }),
+        Err(_) => None,
+    }
+}
+
+struct SongState {
+    file: TextFile,
+    song_data: Option<SongData>,
+}
+struct SongCompiler {
+    parent_path: PathBuf,
+    songs: HashMap<ItemId, SongState>,
+}
+
+fn file_name(p: &Path) -> String {
+    p.file_name()
+        .unwrap_or(p.as_os_str())
+        .to_string_lossy()
+        .to_string()
+}
+
+impl SongCompiler {
+    fn new(parent_path: PathBuf) -> Self {
+        Self {
+            parent_path,
+            songs: HashMap::new(),
+        }
+    }
+
+    fn compile_song(
+        id: ItemId,
+        f: &TextFile,
+        dependencies: &Option<SongDependencies>,
+        sender: &Sender,
+    ) -> Option<SongData> {
+        let dep = match dependencies.as_ref() {
+            Some(d) => d,
+            None => {
+                sender.send(CompilerOutput::Song(id, Err(SongError::Dependency)));
+                return None;
+            }
+        };
+
+        let mml = match compiler::compile_mml(f, &dep.instruments, &dep.pitch_table) {
+            Ok(mml) => mml,
+            Err(e) => {
+                sender.send(CompilerOutput::Song(id, Err(SongError::Mml(e))));
+                return None;
+            }
+        };
+
+        let song_data = match compiler::song_data(mml) {
+            Ok(mml) => mml,
+            Err(e) => {
+                sender.send(CompilerOutput::Song(id, Err(SongError::Song(e))));
+                return None;
+            }
+        };
+
+        let data_size = song_data.data().len();
+        sender.send(CompilerOutput::Song(id, Ok(data_size)));
+
+        Some(song_data)
+    }
+
+    fn load_song(
+        &self,
+        id: ItemId,
+        path: &Path,
+        dependencies: &Option<SongDependencies>,
+        sender: &Sender,
+    ) -> SongState {
+        let path = self.parent_path.join(path);
+
+        let file = match load_text_file_with_limit(&path) {
+            Ok(f) => f,
+            Err(_) => TextFile {
+                file_name: file_name(&path),
+                path: Some(path),
+                contents: String::new(),
+            },
+        };
+
+        SongState {
+            song_data: Self::compile_song(id, &file, dependencies, sender),
+            file,
+        }
+    }
+
+    fn process_pf_song_message(
+        &mut self,
+        m: &ItemChanged<data::Song>,
+        dependencies: &Option<SongDependencies>,
+        sender: &Sender,
+    ) {
+        match m {
+            ItemChanged::ReplaceAll(v) => {
+                self.songs = v
+                    .iter()
+                    .map(|(id, item)| {
+                        (
+                            id.clone(),
+                            self.load_song(id.clone(), &item.source, dependencies, sender),
+                        )
+                    })
+                    .collect();
+            }
+            ItemChanged::AddedOrEdited(id, item) => {
+                // Only add songs, do not modify them
+                // (source is not editable by the GUI)
+
+                #[allow(clippy::map_entry)] // Cannot use HashMap::entry() due to the borrow checker
+                if !self.songs.contains_key(id) {
+                    self.songs.insert(
+                        id.clone(),
+                        self.load_song(id.clone(), &item.source, dependencies, sender),
+                    );
+                }
+            }
+            ItemChanged::Removed(id) => {
+                self.songs.remove(id);
+            }
+        }
+    }
+
+    fn compile_all_songs(&mut self, dependencies: &Option<SongDependencies>, sender: &Sender) {
+        for (id, s) in self.songs.iter_mut() {
+            s.song_data = Self::compile_song(id.clone(), &s.file, dependencies, sender);
+        }
+    }
+}
+
 fn bg_thread(
     parent_path: PathBuf,
     receiever: mpsc::Receiver<ToCompiler>,
@@ -463,15 +632,16 @@ fn bg_thread(
     let mut pf_songs = IList::new();
     let mut instruments = CList::new();
     let mut sound_effects = CList::new();
+    let mut songs = SongCompiler::new(parent_path.clone());
 
     let mut sample_file_cache = SampleFileCache::new(parent_path);
 
-    let mut pitch_table = None;
+    let mut song_dependencies = None;
     let mut common_audio_data_no_sfx = None;
 
     while let Ok(m) = receiever.recv() {
         // ::TODO remove (silences an unused error message)::
-        let _ = &pitch_table;
+        let _ = &song_dependencies;
         let _ = &common_audio_data_no_sfx;
 
         match m {
@@ -484,25 +654,26 @@ fn bg_thread(
                 }
             }
             ToCompiler::ProjectSongs(m) => {
+                songs.process_pf_song_message(&m, &song_dependencies, &sender);
                 pf_songs.process_message(m);
             }
             ToCompiler::Instrument(m) => {
                 let c = create_instrument_compiler(&mut sample_file_cache, &sender);
                 instruments.process_message(m, c);
 
-                pitch_table = None;
+                song_dependencies = None;
             }
             ToCompiler::FinishedEditingSamples => {
                 if instruments.is_changed() {
                     instruments.clear_changed_flag();
 
                     match combine_sample_data(&instruments, &sender) {
-                        Some((pt, common)) => {
-                            pitch_table = Some(pt);
+                        Some((common, pt)) => {
+                            song_dependencies = create_song_dependencies(&instruments, pt);
                             common_audio_data_no_sfx = Some(common);
                         }
                         None => {
-                            pitch_table = None;
+                            song_dependencies = None;
                             common_audio_data_no_sfx = None;
                         }
                     }
@@ -514,6 +685,7 @@ fn bg_thread(
                         let c = create_sfx_compiler(&instruments, &sender);
                         sound_effects.recompile_all(c);
                     }
+                    songs.compile_all_songs(&song_dependencies, &sender);
                 }
             }
             ToCompiler::SoundEffects(m) => {

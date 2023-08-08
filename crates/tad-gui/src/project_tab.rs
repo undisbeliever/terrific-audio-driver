@@ -4,11 +4,13 @@
 //
 // SPDX-License-Identifier: MIT
 
+use crate::compiler_thread::SongOutput;
 use crate::helpers::*;
 use crate::list_editor::{
-    ListEditor, ListEditorTable, ListMessage, ListState, TableAction, TableMapping,
+    ListEditor, ListEditorTable, ListMessage, ListState, TableAction, TableCompilerOutput,
+    TableMapping,
 };
-use crate::tables::{SimpleRow, TableEvent};
+use crate::tables::{RowWithStatus, SimpleRow, TableEvent};
 use crate::Message;
 use crate::Tab;
 
@@ -71,7 +73,7 @@ impl TableMapping for SfxExportOrderMapping {
 pub struct SongMapping;
 impl TableMapping for SongMapping {
     type DataType = data::Song;
-    type RowType = SimpleRow<2>;
+    type RowType = RowWithStatus<SimpleRow<3>>;
 
     const CAN_CLONE: bool = false;
     const CAN_EDIT: bool = true;
@@ -81,7 +83,11 @@ impl TableMapping for SongMapping {
     }
 
     fn headers() -> Vec<String> {
-        vec!["Song Name".to_owned(), "Filename".to_owned()]
+        vec![
+            "Song Name".to_owned(),
+            "Filename".to_owned(),
+            "Data size".to_owned(),
+        ]
     }
 
     fn add_clicked() -> Message {
@@ -93,17 +99,20 @@ impl TableMapping for SongMapping {
     }
 
     fn new_row(song: &data::Song) -> Self::RowType {
-        SimpleRow::new([
+        RowWithStatus::new_unchecked(SimpleRow::new([
             song.name.as_str().to_string(),
             song.source.to_string_lossy().to_string(),
-        ])
+            String::new(),
+        ]))
     }
 
     fn edit_row(r: &mut Self::RowType, song: &data::Song) -> bool {
         let mut edited = false;
 
-        edited |= r.edit_column(0, song.name.as_str());
-        edited |= r.edit_column(1, song.source.to_string_lossy().as_ref());
+        let filename = song.source.to_string_lossy();
+
+        edited |= r.columns.edit_column(0, song.name.as_str());
+        edited |= r.columns.edit_column(1, filename.as_ref());
 
         edited
     }
@@ -126,6 +135,25 @@ impl TableMapping for SongMapping {
             0 => Name::try_new_lossy(value).map(|name| Message::SetProjectSongName(index, name)),
             _ => None,
         }
+    }
+}
+
+impl TableCompilerOutput for SongMapping {
+    type CompilerOutputType = SongOutput;
+
+    fn set_row_state(r: &mut Self::RowType, co: &Option<SongOutput>) -> bool {
+        let s = match co {
+            None => String::new(),
+            Some(Ok(size)) => format!("{} bytes", size),
+            Some(Err(e)) => e.to_string(),
+        };
+
+        let mut edited = false;
+
+        edited |= r.set_status_optional_result(co);
+        edited |= r.columns.edit_column_string(2, s);
+
+        edited
     }
 }
 
