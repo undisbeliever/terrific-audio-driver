@@ -11,7 +11,7 @@ use crate::list_editor::{
     CompilerOutputGui, IndexAndData, ListAction, ListButtons, ListEditor, ListEditorTable,
     ListMessage, ListState, TableCompilerOutput, TableMapping,
 };
-use crate::tables::{RowWithStatus, SingleColumnRow};
+use crate::tables::{RowWithStatus, SimpleRow};
 use crate::Message;
 use crate::Tab;
 
@@ -51,7 +51,7 @@ struct InstrumentMapping;
 
 impl TableMapping for InstrumentMapping {
     type DataType = data::Instrument;
-    type RowType = RowWithStatus<SingleColumnRow>;
+    type RowType = RowWithStatus<SimpleRow<1>>;
 
     const CAN_CLONE: bool = true;
 
@@ -72,16 +72,11 @@ impl TableMapping for InstrumentMapping {
     }
 
     fn new_row(i: &Instrument) -> Self::RowType {
-        RowWithStatus::new_unchecked(SingleColumnRow(i.name.as_str().to_string()))
+        RowWithStatus::new_unchecked(SimpleRow::new([i.name.as_str().to_string()]))
     }
 
     fn edit_row(r: &mut Self::RowType, i: &Instrument) -> bool {
-        if r.columns.0 != i.name.as_str() {
-            r.columns.0 = i.name.as_str().to_string();
-            true
-        } else {
-            false
-        }
+        r.columns.edit_column(0, i.name.as_str())
     }
 }
 

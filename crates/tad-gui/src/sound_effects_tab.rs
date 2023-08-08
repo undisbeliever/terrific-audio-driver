@@ -10,7 +10,7 @@ use crate::list_editor::{
     CompilerOutputGui, LaVec, ListAction, ListButtons, ListEditor, ListEditorTable, ListMessage,
     ListState, TableCompilerOutput, TableMapping,
 };
-use crate::tables::{RowWithStatus, SingleColumnRow};
+use crate::tables::{RowWithStatus, SimpleRow};
 use crate::Message;
 use crate::Tab;
 
@@ -32,7 +32,7 @@ use std::rc::Rc;
 struct SoundEffectMapping;
 impl TableMapping for SoundEffectMapping {
     type DataType = SoundEffectInput;
-    type RowType = RowWithStatus<SingleColumnRow>;
+    type RowType = RowWithStatus<SimpleRow<1>>;
 
     const CAN_CLONE: bool = true;
 
@@ -56,16 +56,11 @@ impl TableMapping for SoundEffectMapping {
     }
 
     fn new_row(i: &SoundEffectInput) -> Self::RowType {
-        RowWithStatus::new_unchecked(SingleColumnRow(i.name.as_str().to_string()))
+        RowWithStatus::new_unchecked(SimpleRow::new([i.name.as_str().to_string()]))
     }
 
     fn edit_row(r: &mut Self::RowType, i: &SoundEffectInput) -> bool {
-        if r.columns.0 != i.name.as_str() {
-            r.columns.0 = i.name.as_str().to_string();
-            true
-        } else {
-            false
-        }
+        r.columns.edit_column(0, i.name.as_str())
     }
 }
 

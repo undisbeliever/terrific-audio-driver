@@ -580,41 +580,46 @@ where
     }
 }
 
-pub struct SingleColumnRow(pub String);
+/// A simple TableRow containing a const generic number of `String`s.
+pub struct SimpleRow<const C: usize> {
+    pub columns: [String; C],
+}
 
-impl TableRow for SingleColumnRow {
-    const N_COLUMNS: i32 = 1;
-
-    fn draw_cell(&self, _col: i32, x: i32, y: i32, w: i32, h: i32) {
-        draw::draw_text2(&self.0, x, y, w, h, Align::Left);
+impl<const C: usize> SimpleRow<C> {
+    pub fn new(columns: [String; C]) -> Self {
+        Self { columns }
     }
 
-    fn value(&self, col: i32) -> Option<&str> {
-        match col {
-            0 => Some(&self.0),
-            _ => None,
+    /// Returns true if the column was changed
+    ///
+    /// Safety: Panics if index is >= N_COLUMNS
+    pub fn edit_column(&mut self, index: usize, s: &str) -> bool {
+        let c = &mut self.columns[index];
+
+        if c != s {
+            *c = s.to_owned();
+            true
+        } else {
+            false
         }
     }
 }
 
-pub struct TwoColumnsRow(pub String, pub String);
-
-impl TableRow for TwoColumnsRow {
-    const N_COLUMNS: i32 = 2;
+impl<const C: usize> TableRow for SimpleRow<C> {
+    const N_COLUMNS: i32 = C as i32;
 
     fn draw_cell(&self, col: i32, x: i32, y: i32, w: i32, h: i32) {
-        match col {
-            0 => draw::draw_text2(&self.0, x, y, w, h, Align::Left),
-            1 => draw::draw_text2(&self.1, x, y, w, h, Align::Left),
-            _ => (),
+        if let Ok(i) = usize::try_from(col) {
+            if let Some(c) = &self.columns.get(i) {
+                draw::draw_text2(c, x, y, w, h, Align::Left);
+            }
         }
     }
 
     fn value(&self, col: i32) -> Option<&str> {
-        match col {
-            0 => Some(&self.0),
-            1 => Some(&self.1),
-            _ => None,
+        match usize::try_from(col) {
+            Ok(i) => self.columns.get(i).map(String::as_str),
+            Err(_) => None,
         }
     }
 }

@@ -8,7 +8,7 @@ use crate::helpers::*;
 use crate::list_editor::{
     ListEditor, ListEditorTable, ListMessage, ListState, TableAction, TableMapping,
 };
-use crate::tables::{SingleColumnRow, TableEvent, TwoColumnsRow};
+use crate::tables::{SimpleRow, TableEvent};
 use crate::Message;
 use crate::Tab;
 
@@ -22,7 +22,7 @@ use fltk::prelude::*;
 pub struct SfxExportOrderMapping;
 impl TableMapping for SfxExportOrderMapping {
     type DataType = data::Name;
-    type RowType = SingleColumnRow;
+    type RowType = SimpleRow<1>;
 
     const CAN_CLONE: bool = true;
     const CAN_EDIT: bool = true;
@@ -43,17 +43,12 @@ impl TableMapping for SfxExportOrderMapping {
         Message::EditSfxExportOrder(lm)
     }
 
-    fn new_row(sfx_name: &data::Name) -> SingleColumnRow {
-        SingleColumnRow(sfx_name.as_str().to_string())
+    fn new_row(sfx_name: &data::Name) -> Self::RowType {
+        SimpleRow::new([sfx_name.as_str().to_string()])
     }
 
-    fn edit_row(r: &mut SingleColumnRow, sfx_name: &data::Name) -> bool {
-        if r.0 != sfx_name.as_str() {
-            r.0 = sfx_name.as_str().to_owned();
-            true
-        } else {
-            false
-        }
+    fn edit_row(r: &mut Self::RowType, sfx_name: &data::Name) -> bool {
+        r.edit_column(0, sfx_name.as_str())
     }
 
     fn table_event(event: TableEvent, _row: usize, _col: i32) -> TableAction {
@@ -76,7 +71,7 @@ impl TableMapping for SfxExportOrderMapping {
 pub struct SongMapping;
 impl TableMapping for SongMapping {
     type DataType = data::Song;
-    type RowType = TwoColumnsRow;
+    type RowType = SimpleRow<2>;
 
     const CAN_CLONE: bool = false;
     const CAN_EDIT: bool = true;
@@ -97,26 +92,18 @@ impl TableMapping for SongMapping {
         Message::EditProjectSongs(lm)
     }
 
-    fn new_row(song: &data::Song) -> TwoColumnsRow {
-        TwoColumnsRow(
+    fn new_row(song: &data::Song) -> Self::RowType {
+        SimpleRow::new([
             song.name.as_str().to_string(),
             song.source.to_string_lossy().to_string(),
-        )
+        ])
     }
 
-    fn edit_row(r: &mut TwoColumnsRow, song: &data::Song) -> bool {
+    fn edit_row(r: &mut Self::RowType, song: &data::Song) -> bool {
         let mut edited = false;
 
-        if r.0 != song.name.as_str() {
-            r.0 = song.name.as_str().to_string();
-            edited = true;
-        }
-
-        let s = song.source.to_string_lossy();
-        if r.1 != s {
-            r.1 = s.to_string();
-            edited = true;
-        }
+        edited |= r.edit_column(0, song.name.as_str());
+        edited |= r.edit_column(1, song.source.to_string_lossy().as_ref());
 
         edited
     }
