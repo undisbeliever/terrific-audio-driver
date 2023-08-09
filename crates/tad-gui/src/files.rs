@@ -7,7 +7,7 @@
 use crate::list_editor::{ListMessage, ListState};
 use crate::{Message, ProjectData};
 
-use compiler::data::{Name, Song};
+use compiler::data::{load_text_file_with_limit, Name, Song, TextFile};
 use compiler::sound_effects::{load_sound_effects_file, SoundEffectsFile};
 
 extern crate fltk;
@@ -104,6 +104,19 @@ fn load_sfx_file(path: &Path) -> Option<SoundEffectsFile> {
         Ok(sfx_file) => Some(sfx_file),
         Err(e) => {
             dialog::message_title("Error loading sound effects file");
+            dialog::alert_default(&format!("{}", e));
+            None
+        }
+    }
+}
+
+pub fn load_mml_file(pd: &ProjectData, path: &Path) -> Option<TextFile> {
+    let path = pd.pf_parent_path.join(path);
+
+    match load_text_file_with_limit(&path) {
+        Ok(f) => Some(f),
+        Err(e) => {
+            dialog::message_title("Error loading MML file");
             dialog::alert_default(&format!("{}", e));
             None
         }

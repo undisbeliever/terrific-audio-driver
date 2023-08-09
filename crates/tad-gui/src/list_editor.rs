@@ -187,6 +187,10 @@ where
         self.list.get(index).map(|(_id, item)| item)
     }
 
+    pub fn get_with_id(&self, index: usize) -> Option<&(ItemId, T)> {
+        self.list.get(index)
+    }
+
     pub fn can_add(&self) -> bool {
         self.list.len() < self.max_size
     }

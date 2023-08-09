@@ -118,17 +118,22 @@ impl TableMapping for SongMapping {
         edited
     }
 
-    fn table_event(event: TableEvent, _row: usize, col: i32) -> TableAction {
+    fn table_event(event: TableEvent, row: usize, col: i32) -> TableAction {
         match event {
             TableEvent::Enter | TableEvent::EditorRequested | TableEvent::CellClicked => {
                 if col == 0 {
                     TableAction::OpenEditor
                 } else {
-                    // ::TODO open file dialog?::
                     TableAction::None
                 }
             }
-            TableEvent::DoubleClick => TableAction::None,
+            TableEvent::DoubleClick => {
+                if col != 0 {
+                    TableAction::Send(Message::OpenSongTab(row))
+                } else {
+                    TableAction::None
+                }
+            }
         }
     }
 

@@ -7,6 +7,7 @@
 use crate::names::NameGetter;
 use crate::Message;
 
+use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::fmt::Display;
 use std::path::{Path, PathBuf};
@@ -72,6 +73,8 @@ pub enum ToCompiler {
     FinishedEditingSamples,
 
     SoundEffects(ItemChanged<SoundEffectInput>),
+
+    SongChanged(ItemId, String),
 }
 
 pub type InstrumentOutput = Result<usize, errors::SampleError>;
@@ -619,6 +622,31 @@ impl SongCompiler {
             s.song_data = Self::compile_song(id.clone(), &s.file, dependencies, sender);
         }
     }
+
+    fn edit_and_compile_song(
+        &mut self,
+        id: ItemId,
+        mml: String,
+        dependencies: &Option<SongDependencies>,
+        sender: &Sender,
+    ) {
+        match self.songs.entry(id.clone()) {
+            Entry::Occupied(mut o) => {
+                let state = o.get_mut();
+                state.file.contents = mml;
+                state.song_data = Self::compile_song(id, &state.file, dependencies, sender)
+            }
+            Entry::Vacant(v) => {
+                let file = TextFile {
+                    contents: mml,
+                    file_name: "MML".to_owned(),
+                    path: None,
+                };
+                let song_data = Self::compile_song(id, &file, dependencies, sender);
+                v.insert(SongState { file, song_data });
+            }
+        }
+    }
 }
 
 fn bg_thread(
@@ -699,6 +727,9 @@ fn bg_thread(
                 }
 
                 send_sfx_size(&sound_effects, &sender);
+            }
+            ToCompiler::SongChanged(id, mml) => {
+                songs.edit_and_compile_song(id, mml, &song_dependencies, &sender);
             }
         }
     }

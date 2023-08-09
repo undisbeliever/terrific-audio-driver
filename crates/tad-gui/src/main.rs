@@ -13,6 +13,7 @@ mod tables;
 
 mod project_tab;
 mod samples_tab;
+mod song_tab;
 mod sound_effects_tab;
 
 use crate::compiler_thread::{CompilerOutput, InstrumentOutput, SoundEffectOutput, ToCompiler};
@@ -21,17 +22,21 @@ use crate::list_editor::{ListMessage, ListState, ListWithCompilerOutput, ListWit
 use crate::names::deduplicate_names;
 use crate::project_tab::ProjectTab;
 use crate::samples_tab::SamplesTab;
+use crate::song_tab::SongTab;
 use crate::sound_effects_tab::SoundEffectsTab;
 
 use compiler::sound_effects::{convert_sfx_inputs_lossy, SoundEffectInput, SoundEffectsFile};
 use compiler::{data, driver_constants, load_project_file, ProjectFile};
 
+use compiler_thread::ItemId;
+use files::load_mml_file;
 use fltk::dialog;
 use fltk::prelude::*;
 use list_editor::update_compiler_output;
 
+use std::collections::HashMap;
 use std::env;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::mpsc;
 
 #[derive(Debug)]
@@ -52,6 +57,10 @@ pub enum Message {
 
     AddSongToProjectDialog,
     SetProjectSongName(usize, data::Name),
+
+    OpenSongTab(usize),
+
+    SongChanged(ItemId, String),
 
     FromCompiler(compiler_thread::CompilerOutput),
 }
@@ -92,6 +101,7 @@ struct Project {
     project_tab: ProjectTab,
     samples_tab: SamplesTab,
     sound_effects_tab: SoundEffectsTab,
+    song_tabs: HashMap<ItemId, SongTab>,
 }
 
 const SAMPLES_TAB_INDEX: i32 = 1;
@@ -147,6 +157,7 @@ impl Project {
             ),
             samples_tab: SamplesTab::new(&data.instruments, sender.clone()),
             sound_effects_tab: SoundEffectsTab::new(sender.clone()),
+            song_tabs: HashMap::new(),
 
             compiler_thread,
             compiler_sender,
@@ -206,6 +217,9 @@ impl Project {
                     }
                 }
             }
+            Message::SongChanged(id, mml) => {
+                let _ = self.compiler_sender.send(ToCompiler::SongChanged(id, mml));
+            }
 
             Message::OpenSfxFileDialog => {
                 if let Some((pf_path, sfx_file)) = open_sfx_file_dialog(&self.data) {
@@ -233,6 +247,7 @@ impl Project {
                         )))
                 }
             }
+            Message::OpenSongTab(index) => self.open_song_tab(index),
         }
     }
 
@@ -259,11 +274,15 @@ impl Project {
             CompilerOutput::Song(id, co) => {
                 let co = Some(co);
                 update_compiler_output(
-                    id,
+                    id.clone(),
                     &co,
                     self.data.project_songs.list(),
                     &mut self.project_tab.song_table,
                 );
+
+                if let Some(song_tab) = self.song_tabs.get_mut(&id) {
+                    song_tab.set_compiler_output(co);
+                }
             }
 
             CompilerOutput::CombineSamples(o) => {
@@ -329,6 +348,35 @@ impl Project {
                 .send(ToCompiler::SoundEffects(state.replace_all_message()));
 
             self.data.sound_effects = Some(state);
+        }
+    }
+
+    fn open_song_tab(&mut self, song_index: usize) {
+        let (id, song) = match self.data.project_songs.list().get_with_id(song_index) {
+            Some(v) => v,
+            None => return,
+        };
+
+        if let Some(song_tab) = self.song_tabs.get_mut(id) {
+            let _ = self.tabs.set_value(song_tab.widget());
+        } else {
+            self.create_new_song_tab(id.clone(), &song.source.clone());
+        }
+    }
+
+    // NOTE: No deduplication. Do not create song tabs for a `song_id` or `path` that already exists
+    fn create_new_song_tab(&mut self, song_id: ItemId, path: &Path) {
+        if let Some(f) = load_mml_file(&self.data, path) {
+            let mut song_tab = SongTab::new(song_id.clone(), &f, self.sender.clone());
+            add_tab(&mut self.tabs, &mut song_tab);
+            let _ = self.tabs.set_value(song_tab.widget());
+
+            self.song_tabs.insert(song_id.clone(), song_tab);
+
+            // Update song in the compiler thread (in case the file changed)
+            let _ = self
+                .compiler_sender
+                .send(ToCompiler::SongChanged(song_id, f.contents));
         }
     }
 }
@@ -407,11 +455,7 @@ impl MainWindow {
     }
 
     fn add_tab(&mut self, tab: &mut impl Tab) {
-        let w = tab.widget();
-        w.set_margins(3, 5, 3, 3);
-        self.tabs.add(w);
-
-        self.tabs.auto_layout();
+        add_tab(&mut self.tabs, tab);
     }
 
     fn load_project(&mut self, pf: ProjectFile, sender: fltk::app::Sender<Message>) {
@@ -426,6 +470,14 @@ impl MainWindow {
 
         self.project = Some(project);
     }
+}
+
+fn add_tab(tabs: &mut fltk::group::Tabs, t: &mut impl Tab) {
+    let w = t.widget();
+    w.set_margins(3, 5, 3, 3);
+    tabs.add(w);
+
+    tabs.auto_layout();
 }
 
 fn get_arg_filename() -> Option<PathBuf> {
