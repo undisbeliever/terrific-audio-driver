@@ -83,6 +83,7 @@ where
 pub enum TableEvent {
     EditorRequested,
     CellClicked,
+    DoubleClick,
     Enter,
 }
 
@@ -320,7 +321,12 @@ where
                     if let Some((TableContext::Cell, row, col, _)) = table.cursor2rowcol() {
                         if let Ok(mut s) = state.try_borrow_mut() {
                             s.set_selection(row, col);
-                            s.do_callback(TableEvent::CellClicked);
+
+                            let e = match fltk::app::event_clicks() {
+                                false => TableEvent::CellClicked,
+                                true => TableEvent::DoubleClick,
+                            };
+                            s.do_callback(e);
                         }
                     }
                 }

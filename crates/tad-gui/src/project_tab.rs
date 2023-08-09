@@ -58,6 +58,7 @@ impl TableMapping for SfxExportOrderMapping {
             TableEvent::Enter | TableEvent::EditorRequested | TableEvent::CellClicked => {
                 TableAction::OpenEditor
             }
+            TableEvent::DoubleClick => TableAction::None,
         }
     }
 
@@ -127,6 +128,7 @@ impl TableMapping for SongMapping {
                     TableAction::None
                 }
             }
+            TableEvent::DoubleClick => TableAction::None,
         }
     }
 
