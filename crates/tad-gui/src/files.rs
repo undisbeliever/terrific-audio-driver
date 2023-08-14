@@ -14,6 +14,7 @@ use compiler::sound_effects::{load_sound_effects_file, SoundEffectsFile};
 extern crate fltk;
 use fltk::dialog;
 
+use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
@@ -70,7 +71,22 @@ fn pf_file_dialog(
 }
 
 pub fn load_project_file_or_show_error_message(path: &Path) -> Option<ProjectFile> {
-    match data::load_project_file(path) {
+    let path = match fs::canonicalize(path) {
+        Ok(p) => p,
+        Err(e) => {
+            dialog::message_title("Error loading project file");
+            dialog::alert_default(&e.to_string());
+            return None;
+        }
+    };
+
+    if !path.is_absolute() {
+        dialog::message_title("Error loading project file");
+        dialog::alert_default("path is not absolute");
+        return None;
+    }
+
+    match data::load_project_file(&path) {
         Ok(pf) => Some(pf),
         Err(e) => {
             dialog::message_title("Error loading project file");

@@ -155,6 +155,7 @@ impl Project {
 
             sound_effects: None,
         };
+        assert!(data.pf_path.is_absolute());
 
         sender.send(Message::SelectedTabChanged);
         sender.send(Message::RecompileEverything);
