@@ -35,7 +35,6 @@ pub struct TabFileState {
     is_unsaved: bool,
 }
 
-#[allow(dead_code)]
 impl TabFileState {
     pub fn new(tab_widget: Flex) -> Self {
         TabFileState {
@@ -101,7 +100,7 @@ pub fn quit_with_unsaved_files_dialog(unsaved: Vec<FileType>, sender: fltk::app:
     );
     match choice {
         Some(0) => sender.send(Message::ForceQuit),
-        Some(1) => (), // ::TODO send SaveMultiple(unsaved) message::
+        Some(1) => sender.send(Message::SaveAllAndQuit(unsaved)),
         _ => (),
     }
 }

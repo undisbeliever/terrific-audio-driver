@@ -22,8 +22,10 @@ use crate::compiler_thread::{
 };
 use crate::files::{
     add_song_to_pf_dialog, load_mml_file, load_pf_sfx_file,
-    load_project_file_or_show_error_message, open_sfx_file_dialog,
+    load_project_file_or_show_error_message, open_sfx_file_dialog, save_project_file,
+    save_sfx_file, save_song,
 };
+use crate::helpers::input_height;
 use crate::list_editor::{
     update_compiler_output, ListAction, ListMessage, ListState, ListWithCompilerOutput,
     ListWithSelection,
@@ -39,6 +41,8 @@ use compiler::sound_effects::{convert_sfx_inputs_lossy, SoundEffectInput, SoundE
 use compiler::{data, driver_constants, ProjectFile};
 
 use fltk::dialog;
+use fltk::enums::Shortcut;
+use fltk::menu;
 use fltk::prelude::*;
 
 use std::collections::HashMap;
@@ -50,8 +54,11 @@ use std::sync::mpsc;
 pub enum Message {
     SelectedTabChanged,
 
+    SaveSelectedTabIfUnsaved,
+    SaveAllUnsaved,
     QuitRequested,
     ForceQuit,
+    SaveAllAndQuit(Vec<FileType>),
 
     EditSfxExportOrder(ListMessage<data::Name>),
     EditProjectSongs(ListMessage<data::Song>),
@@ -90,8 +97,6 @@ pub struct ProjectData {
     instruments: ListWithCompilerOutput<data::Instrument, InstrumentOutput>,
 }
 
-// ::TODO remove::
-#[allow(dead_code)]
 pub struct SoundEffectsData {
     full_path: PathBuf,
     header: String,
@@ -129,6 +134,21 @@ impl Project {
         let song_tabs = self.song_tabs.values().map(|t| -> &dyn Tab { t });
 
         fixed_tabs.into_iter().chain(song_tabs)
+    }
+
+    fn selected_tab(&self) -> Option<&dyn Tab> {
+        match &self.selected_tab_file_type {
+            None => None,
+            Some(FileType::Project) => {
+                if self.samples_tab_selected {
+                    Some(&self.samples_tab as &dyn Tab)
+                } else {
+                    Some(&self.project_tab as &dyn Tab)
+                }
+            }
+            Some(FileType::SoundEffects) => Some(&self.sound_effects_tab as &dyn Tab),
+            Some(FileType::Song(id)) => self.song_tabs.get(id).map(|t| t as &dyn Tab),
+        }
     }
 }
 
@@ -271,6 +291,28 @@ impl Project {
                 fltk::app::quit();
             }
 
+            Message::SaveAllAndQuit(to_save) => {
+                let success = self.save_all(to_save);
+                if success {
+                    // Double check all tabs have been saved
+                    self.sender.send(Message::QuitRequested);
+                }
+            }
+
+            Message::SaveSelectedTabIfUnsaved => {
+                if let Some(t) = self.selected_tab() {
+                    if t.file_state().is_unsaved() {
+                        self.save_file(t.file_type());
+                    }
+                }
+            }
+            Message::SaveAllUnsaved => {
+                let unsaved = unsaved_tabs(self.all_tabs_iter());
+                for u in unsaved {
+                    self.save_file(u);
+                }
+            }
+
             Message::OpenSfxFileDialog => {
                 if let Some((pf_path, sfx_file)) = open_sfx_file_dialog(&self.data) {
                     // ::TODO mark project file as changed::
@@ -400,11 +442,11 @@ impl Project {
         });
         match current_tab {
             Some(tab) => {
-                // ::TODO enable save menu::
+                // ::TODO update save menu item::
                 self.selected_tab_file_type = Some(tab.file_type());
             }
             None => {
-                // ::TODO disable Save menu::
+                // ::TODO update save menu item::
                 self.selected_tab_file_type = None;
             }
         }
@@ -477,6 +519,114 @@ impl Project {
             self.samples_tab.file_state_mut().mark_unsaved();
         }
     }
+
+    fn save_file(&mut self, tab: FileType) -> bool {
+        match tab {
+            FileType::Project => {
+                let success = save_project_file(&self.data);
+                if success {
+                    self.project_tab.file_state_mut().mark_saved();
+                    self.samples_tab.file_state_mut().mark_saved();
+                }
+                success
+            }
+            FileType::SoundEffects => match &self.sfx_data {
+                Some(sfx_data) => {
+                    let success = save_sfx_file(sfx_data);
+                    if success {
+                        self.sound_effects_tab.file_state_mut().mark_saved();
+                    }
+                    success
+                }
+                _ => false,
+            },
+            FileType::Song(id) => match &mut self.song_tabs.get_mut(&id) {
+                Some(song_tab) => {
+                    let success = save_song(song_tab);
+                    if success {
+                        song_tab.file_state_mut().mark_saved();
+                    }
+                    success
+                }
+                None => false,
+            },
+        }
+    }
+
+    fn save_all(&mut self, unsaved: Vec<FileType>) -> bool {
+        let mut success = true;
+        for f in unsaved {
+            success &= self.save_file(f);
+        }
+        success
+    }
+}
+
+impl ProjectData {
+    pub fn project_path(&self) -> &Path {
+        &self.pf_path
+    }
+
+    pub fn to_project(&self) -> compiler::data::Project {
+        compiler::data::Project {
+            instruments: self.instruments.list().item_iter().cloned().collect(),
+            songs: self.project_songs.list().item_iter().cloned().collect(),
+            sound_effects: self.sfx_export_orders.list().item_iter().cloned().collect(),
+
+            sound_effect_file: self.sound_effects_file.clone(),
+        }
+    }
+}
+
+impl SoundEffectsData {
+    pub fn full_path(&self) -> &Path {
+        &self.full_path
+    }
+
+    pub fn header(&self) -> &str {
+        &self.header
+    }
+
+    pub fn sound_effects_iter(&self) -> impl Iterator<Item = &SoundEffectInput> {
+        self.sound_effects.list().item_iter()
+    }
+}
+
+struct Menu {
+    menu: menu::MenuBar,
+}
+
+impl Menu {
+    fn new(sender: fltk::app::Sender<Message>) -> Self {
+        let mut menu = fltk::menu::MenuBar::default();
+        menu.set_frame(fltk::enums::FrameType::FlatBox);
+
+        let cb = |f: fn() -> Message| {
+            let s = sender.clone();
+            move |_: &mut fltk::menu::MenuBar| s.send(f())
+        };
+
+        menu.add(
+            "&File/&Save",
+            Shortcut::Ctrl | 's',
+            fltk::menu::MenuFlag::Normal,
+            cb(|| Message::SaveSelectedTabIfUnsaved),
+        );
+        menu.add(
+            "&File/Save &All",
+            Shortcut::Ctrl | Shortcut::Shift | 's',
+            fltk::menu::MenuFlag::Normal,
+            cb(|| Message::SaveAllUnsaved),
+        );
+        menu.add(
+            "&File/&Quit",
+            Shortcut::None,
+            fltk::menu::MenuFlag::Normal,
+            cb(|| Message::QuitRequested),
+        );
+
+        Menu { menu }
+    }
 }
 
 #[allow(dead_code)]
@@ -502,7 +652,10 @@ impl MainWindow {
 
         window.make_resizable(true);
 
-        let row = fltk::group::Flex::default_fill().row();
+        let mut col = fltk::group::Flex::default_fill().column();
+
+        let menu = Menu::new(sender.clone());
+        col.fixed(&menu.menu, input_height(&menu.menu));
 
         let mut tabs = fltk::group::Tabs::default();
         tabs.set_tab_align(fltk::enums::Align::Right);
@@ -511,7 +664,7 @@ impl MainWindow {
         tabs.end();
         tabs.auto_layout();
 
-        row.end();
+        col.end();
 
         window.end();
         window.show();

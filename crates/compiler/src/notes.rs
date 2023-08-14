@@ -9,7 +9,7 @@
 use crate::errors::ValueError;
 use crate::value_newtypes::{u8_value_newtype, ValueNewType};
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize, Serializer};
 
 u8_value_newtype!(MidiNote, MidiNoteNumberOutOfRange, NoMidiNote, 0, 127);
 
@@ -171,6 +171,15 @@ impl Note {
 #[derive(Deserialize, Copy, Clone, Eq, PartialEq, PartialOrd, Ord, Debug)]
 #[serde(try_from = "u32")]
 pub struct Octave(u8);
+
+impl Serialize for Octave {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_u8(self.as_u8())
+    }
+}
 
 pub const STARTING_OCTAVE: Octave = Octave(4);
 

@@ -20,11 +20,11 @@ use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 pub const MAX_FILE_SIZE: u32 = 5 * 1024 * 1024;
 
-#[derive(Deserialize, Clone, Hash, Eq, PartialEq, Debug)]
+#[derive(Deserialize, Serialize, Clone, Hash, Eq, PartialEq, Debug)]
 #[serde(try_from = "String")]
 pub struct Name(String);
 
@@ -123,7 +123,7 @@ impl Display for Name {
     }
 }
 
-#[derive(Deserialize, Clone, PartialEq, Debug)]
+#[derive(Deserialize, Serialize, Clone, PartialEq, Debug)]
 pub struct Instrument {
     pub name: Name,
 
@@ -157,13 +157,13 @@ pub struct Instrument {
     pub comment: Option<String>,
 }
 
-#[derive(Deserialize, Clone, PartialEq, Debug)]
+#[derive(Deserialize, Serialize, Clone, PartialEq, Debug)]
 pub struct Song {
     pub name: Name,
     pub source: PathBuf,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Serialize, Debug)]
 pub struct Project {
     pub instruments: Vec<Instrument>,
 
@@ -205,6 +205,10 @@ pub fn load_project_file(path: &Path) -> Result<ProjectFile, DeserializeError> {
         parent_path,
         contents,
     })
+}
+
+pub fn serialize_project(project: &Project) -> Result<Vec<u8>, serde_json::error::Error> {
+    serde_json::to_vec_pretty(project)
 }
 
 trait NameGetter {

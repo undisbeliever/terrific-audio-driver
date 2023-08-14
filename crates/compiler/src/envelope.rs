@@ -5,7 +5,8 @@
 // SPDX-License-Identifier: MIT
 
 use crate::errors::{InvalidAdsrError, InvalidGainError, ValueError};
-use serde::Deserialize;
+
+use serde::{Deserialize, Serialize, Serializer};
 
 fn value_fits_in_bits(value: u8, bits: u8) -> bool {
     assert!(bits < 8);
@@ -20,6 +21,15 @@ fn value_fits_in_bits(value: u8, bits: u8) -> bool {
 pub struct Adsr {
     adsr1: u8,
     adsr2: u8,
+}
+
+impl Serialize for Adsr {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(&self.to_arguments_string())
+    }
 }
 
 impl Adsr {
@@ -119,6 +129,15 @@ impl TryFrom<&str> for Adsr {
 #[serde(from = "u8")]
 pub struct Gain {
     value: u8,
+}
+
+impl Serialize for Gain {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_u8(self.value())
+    }
 }
 
 impl Gain {

@@ -331,6 +331,37 @@ pub fn load_sound_effects_file(path: &Path) -> Result<SoundEffectsFile, FileErro
     Ok(sfx_file_from_text_file(text_file))
 }
 
+pub fn build_sound_effects_file<'a>(
+    header: &'a str,
+    sound_effects: impl Iterator<Item = &'a SoundEffectInput>,
+) -> String {
+    let mut sound_effects = sound_effects;
+
+    let mut out = String::with_capacity(32 * 1024);
+
+    out.push_str(header);
+
+    if header.is_empty() {
+        if let Some(sfx) = sound_effects.next() {
+            out.push_str("=== ");
+            out.push_str(sfx.name.as_str());
+            out.push_str(" ===\n");
+            out.push_str(&sfx.sfx);
+        }
+    } else {
+        out.push_str(header);
+    }
+
+    for sfx in sound_effects {
+        out.push_str("\n=== ");
+        out.push_str(sfx.name.as_str());
+        out.push_str(" ===\n");
+        out.push_str(&sfx.sfx);
+    }
+
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
