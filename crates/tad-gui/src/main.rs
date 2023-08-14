@@ -488,7 +488,7 @@ impl MainWindow {
 }
 
 fn add_tab(tabs: &mut fltk::group::Tabs, t: &mut impl Tab) {
-    let w = t.widget();
+    let w = t.widget_mut();
     w.set_margins(3, 5, 3, 3);
     tabs.add(w);
 

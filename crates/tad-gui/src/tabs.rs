@@ -8,7 +8,8 @@ extern crate fltk;
 use fltk::{group::Flex, prelude::WidgetExt};
 
 pub trait Tab {
-    fn widget(&mut self) -> &mut fltk::group::Flex;
+    fn widget(&self) -> &fltk::group::Flex;
+    fn widget_mut(&mut self) -> &mut fltk::group::Flex;
 
     fn file_state(&self) -> &TabFileState;
     fn file_state_mut(&mut self) -> &mut TabFileState;

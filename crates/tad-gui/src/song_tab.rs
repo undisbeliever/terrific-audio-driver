@@ -44,7 +44,11 @@ pub struct SongTab {
 }
 
 impl Tab for SongTab {
-    fn widget(&mut self) -> &mut Flex {
+    fn widget(&self) -> &Flex {
+        &self.group
+    }
+
+    fn widget_mut(&mut self) -> &mut Flex {
         &mut self.group
     }
 
