@@ -82,20 +82,27 @@ pub struct ProjectData {
     pf_file_name: String,
     pf_parent_path: PathBuf,
 
-    // `sound_effects_file` is relative to `pf_parent_path`
+    // This the value stored in `data::Project`, it is relative to `pf_parent_path`
     sound_effects_file: Option<PathBuf>,
 
     sfx_export_orders: ListWithSelection<data::Name>,
     project_songs: ListWithSelection<data::Song>,
     instruments: ListWithCompilerOutput<data::Instrument, InstrumentOutput>,
+}
 
-    sound_effects: Option<ListWithCompilerOutput<SoundEffectInput, SoundEffectOutput>>,
+// ::TODO remove::
+#[allow(dead_code)]
+pub struct SoundEffectsData {
+    full_path: PathBuf,
+    header: String,
+    sound_effects: ListWithCompilerOutput<SoundEffectInput, SoundEffectOutput>,
 }
 
 struct Project {
     sender: fltk::app::Sender<Message>,
 
     data: ProjectData,
+    sfx_data: Option<SoundEffectsData>,
 
     #[allow(dead_code)]
     compiler_thread: std::thread::JoinHandle<()>,
@@ -152,8 +159,6 @@ impl Project {
                 instruments,
                 driver_constants::MAX_INSTRUMENTS,
             ),
-
-            sound_effects: None,
         };
         assert!(data.pf_path.is_absolute());
 
@@ -185,6 +190,8 @@ impl Project {
             compiler_sender,
 
             data,
+            sfx_data: None,
+
             sender,
         }
     }
@@ -232,8 +239,10 @@ impl Project {
                 }
             }
             Message::EditSoundEffectList(m) => {
-                if let Some(sound_effects) = &mut self.data.sound_effects {
-                    let (a, c) = sound_effects.process(m, &mut self.sound_effects_tab);
+                if let Some(sfx_data) = &mut self.sfx_data {
+                    let (a, c) = sfx_data
+                        .sound_effects
+                        .process(m, &mut self.sound_effects_tab);
                     if let Some(c) = c {
                         let _ = self.compiler_sender.send(ToCompiler::SoundEffects(c));
                     }
@@ -308,8 +317,10 @@ impl Project {
                     .set_compiler_output(id, co, &mut self.samples_tab);
             }
             CompilerOutput::SoundEffect(id, co) => {
-                if let Some(sound_effects) = &mut self.data.sound_effects {
-                    sound_effects.set_compiler_output(id, co, &mut self.sound_effects_tab);
+                if let Some(sfx_data) = &mut self.sfx_data {
+                    sfx_data
+                        .sound_effects
+                        .set_compiler_output(id, co, &mut self.sound_effects_tab);
                 }
             }
             CompilerOutput::Song(id, co) => {
@@ -358,10 +369,10 @@ impl Project {
             .compiler_sender
             .send(ToCompiler::FinishedEditingSamples);
 
-        if let Some(sfx) = &self.data.sound_effects {
-            let _ = self
-                .compiler_sender
-                .send(ToCompiler::SoundEffects(sfx.replace_all_message()));
+        if let Some(sfx_data) = &self.sfx_data {
+            let _ = self.compiler_sender.send(ToCompiler::SoundEffects(
+                sfx_data.sound_effects.replace_all_message(),
+            ));
         }
 
         // Compile songs after samples have been compiled
@@ -401,6 +412,11 @@ impl Project {
 
     fn maybe_set_sfx_file(&mut self, sfx_file: Option<SoundEffectsFile>) {
         if let Some(sfx_file) = sfx_file {
+            let full_path = match sfx_file.path {
+                Some(p) => p,
+                None => return,
+            };
+
             let sfx = convert_sfx_inputs_lossy(sfx_file.sound_effects);
 
             let (sfx, sfx_renamed) = deduplicate_names(sfx);
@@ -409,15 +425,20 @@ impl Project {
                 dialog::alert_default(&format!("{} sound effects have been renamed", sfx_renamed));
             }
 
-            let state = ListWithCompilerOutput::new(sfx, driver_constants::MAX_SOUND_EFFECTS + 20);
+            let sound_effects =
+                ListWithCompilerOutput::new(sfx, driver_constants::MAX_SOUND_EFFECTS + 20);
 
-            self.sound_effects_tab.replace_sfx_file(&state);
+            self.sound_effects_tab.replace_sfx_file(&sound_effects);
 
-            let _ = self
-                .compiler_sender
-                .send(ToCompiler::SoundEffects(state.replace_all_message()));
+            let _ = self.compiler_sender.send(ToCompiler::SoundEffects(
+                sound_effects.replace_all_message(),
+            ));
 
-            self.data.sound_effects = Some(state);
+            self.sfx_data = Some(SoundEffectsData {
+                full_path,
+                header: sfx_file.header,
+                sound_effects,
+            });
         }
     }
 

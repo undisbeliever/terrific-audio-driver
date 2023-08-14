@@ -29,6 +29,8 @@ use std::cell::RefCell;
 use std::cmp::{max, min};
 use std::rc::Rc;
 
+// ::TODO read and write sound effects file header in Sound Effects Tab::
+
 struct SoundEffectMapping;
 impl TableMapping for SoundEffectMapping {
     type DataType = SoundEffectInput;
