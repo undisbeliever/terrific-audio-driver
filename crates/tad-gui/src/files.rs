@@ -7,7 +7,8 @@
 use crate::list_editor::{ListMessage, ListState};
 use crate::{Message, ProjectData};
 
-use compiler::data::{load_text_file_with_limit, Name, Song, TextFile};
+use compiler::data;
+use compiler::data::{load_text_file_with_limit, Name, ProjectFile, Song, TextFile};
 use compiler::sound_effects::{load_sound_effects_file, SoundEffectsFile};
 
 extern crate fltk;
@@ -64,6 +65,17 @@ fn pf_file_dialog(
                 }),
                 _ => None,
             }
+        }
+    }
+}
+
+pub fn load_project_file_or_show_error_message(path: &Path) -> Option<ProjectFile> {
+    match data::load_project_file(path) {
+        Ok(pf) => Some(pf),
+        Err(e) => {
+            dialog::message_title("Error loading project file");
+            dialog::alert_default(&e.to_string());
+            None
         }
     }
 }

@@ -20,7 +20,10 @@ mod sound_effects_tab;
 use crate::compiler_thread::{
     CompilerOutput, InstrumentOutput, ItemId, SoundEffectOutput, ToCompiler,
 };
-use crate::files::{add_song_to_pf_dialog, load_mml_file, load_pf_sfx_file, open_sfx_file_dialog};
+use crate::files::{
+    add_song_to_pf_dialog, load_mml_file, load_pf_sfx_file,
+    load_project_file_or_show_error_message, open_sfx_file_dialog,
+};
 use crate::list_editor::{
     update_compiler_output, ListAction, ListMessage, ListState, ListWithCompilerOutput,
     ListWithSelection,
@@ -33,7 +36,7 @@ use crate::sound_effects_tab::SoundEffectsTab;
 use crate::tabs::{quit_with_unsaved_files_dialog, unsaved_tabs, FileType, Tab};
 
 use compiler::sound_effects::{convert_sfx_inputs_lossy, SoundEffectInput, SoundEffectsFile};
-use compiler::{data, driver_constants, load_project_file, ProjectFile};
+use compiler::{data, driver_constants, ProjectFile};
 
 use fltk::dialog;
 use fltk::prelude::*;
@@ -578,13 +581,17 @@ fn get_arg_filename() -> Option<PathBuf> {
 }
 
 fn main() {
-    // ::TODO handle errors::
-    let pf = load_project_file(&get_arg_filename().unwrap()).unwrap();
+    let program_argument = get_arg_filename();
 
     let (sender, reciever) = fltk::app::channel::<Message>();
 
     let mut main_window = MainWindow::new(sender.clone());
-    main_window.load_project(pf, sender);
+
+    if let Some(path) = program_argument {
+        if let Some(pf) = load_project_file_or_show_error_message(&path) {
+            main_window.load_project(pf, sender);
+        }
+    }
 
     while main_window.app.wait() {
         if let Some(msg) = reciever.recv() {
