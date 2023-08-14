@@ -11,7 +11,7 @@ use crate::list_editor::{
     ListState, TableCompilerOutput, TableMapping,
 };
 use crate::tables::{RowWithStatus, SimpleRow};
-use crate::tabs::{Tab, TabFileState};
+use crate::tabs::{FileType, Tab, TabFileState};
 use crate::Message;
 
 use compiler::errors::SfxErrorLines;
@@ -111,6 +111,10 @@ impl Tab for SoundEffectsTab {
 
     fn widget_mut(&mut self) -> &mut Flex {
         &mut self.group
+    }
+
+    fn file_type(&self) -> FileType {
+        FileType::SoundEffects
     }
 
     fn file_state(&self) -> &TabFileState {

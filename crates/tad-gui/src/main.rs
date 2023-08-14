@@ -17,23 +17,26 @@ mod samples_tab;
 mod song_tab;
 mod sound_effects_tab;
 
-use crate::compiler_thread::{CompilerOutput, InstrumentOutput, SoundEffectOutput, ToCompiler};
+use crate::compiler_thread::{
+    CompilerOutput, InstrumentOutput, ItemId, SoundEffectOutput, ToCompiler,
+};
 use crate::files::{add_song_to_pf_dialog, load_mml_file, load_pf_sfx_file, open_sfx_file_dialog};
-use crate::list_editor::{ListMessage, ListState, ListWithCompilerOutput, ListWithSelection};
+use crate::list_editor::{
+    update_compiler_output, ListAction, ListMessage, ListState, ListWithCompilerOutput,
+    ListWithSelection,
+};
 use crate::names::deduplicate_names;
 use crate::project_tab::ProjectTab;
 use crate::samples_tab::SamplesTab;
 use crate::song_tab::SongTab;
 use crate::sound_effects_tab::SoundEffectsTab;
-use crate::tabs::Tab;
+use crate::tabs::{quit_with_unsaved_files_dialog, unsaved_tabs, FileType, Tab};
 
 use compiler::sound_effects::{convert_sfx_inputs_lossy, SoundEffectInput, SoundEffectsFile};
 use compiler::{data, driver_constants, load_project_file, ProjectFile};
 
-use compiler_thread::ItemId;
 use fltk::dialog;
 use fltk::prelude::*;
-use list_editor::{update_compiler_output, ListAction};
 
 use std::collections::HashMap;
 use std::env;
@@ -42,7 +45,10 @@ use std::sync::mpsc;
 
 #[derive(Debug)]
 pub enum Message {
-    SelectedTabChanged(Option<i32>),
+    SelectedTabChanged,
+
+    QuitRequested,
+    ForceQuit,
 
     EditSfxExportOrder(ListMessage<data::Name>),
     EditProjectSongs(ListMessage<data::Song>),
@@ -93,15 +99,28 @@ struct Project {
     compiler_sender: mpsc::Sender<ToCompiler>,
 
     tabs: fltk::group::Tabs,
-    selected_tab: Option<i32>,
+    samples_tab_selected: bool,
+    selected_tab_file_type: Option<FileType>,
 
+    // MUST update `all_tabs_iter()` if a tab is added or removed
     project_tab: ProjectTab,
     samples_tab: SamplesTab,
     sound_effects_tab: SoundEffectsTab,
     song_tabs: HashMap<ItemId, SongTab>,
 }
 
-const SAMPLES_TAB_INDEX: i32 = 1;
+impl Project {
+    fn all_tabs_iter(&self) -> impl Iterator<Item = &dyn Tab> {
+        let fixed_tabs: [&dyn Tab; 3] = [
+            &self.project_tab,
+            &self.samples_tab,
+            &self.sound_effects_tab,
+        ];
+        let song_tabs = self.song_tabs.values().map(|t| -> &dyn Tab { t });
+
+        fixed_tabs.into_iter().chain(song_tabs)
+    }
+}
 
 impl Project {
     fn new(pf: ProjectFile, tabs: fltk::group::Tabs, sender: fltk::app::Sender<Message>) -> Self {
@@ -134,6 +153,7 @@ impl Project {
             sound_effects: None,
         };
 
+        sender.send(Message::SelectedTabChanged);
         sender.send(Message::RecompileEverything);
         if data.sound_effects_file.is_some() {
             sender.send(Message::LoadSfxFile);
@@ -145,7 +165,8 @@ impl Project {
 
         Self {
             tabs,
-            selected_tab: Some(0),
+            samples_tab_selected: false,
+            selected_tab_file_type: None,
 
             project_tab: ProjectTab::new(
                 &data.sfx_export_orders,
@@ -170,13 +191,8 @@ impl Project {
                 self.process_compiler_output(m);
             }
 
-            Message::SelectedTabChanged(tab_index) => {
-                if self.selected_tab == Some(SAMPLES_TAB_INDEX) {
-                    let _ = self
-                        .compiler_sender
-                        .send(ToCompiler::FinishedEditingSamples);
-                }
-                self.selected_tab = tab_index;
+            Message::SelectedTabChanged => {
+                self.selected_tab_changed();
             }
 
             Message::EditSfxExportOrder(m) => {
@@ -227,6 +243,19 @@ impl Project {
                     song_tab.file_state_mut().mark_unsaved();
                 }
                 let _ = self.compiler_sender.send(ToCompiler::SongChanged(id, mml));
+            }
+
+            Message::QuitRequested => {
+                let unsaved = unsaved_tabs(self.all_tabs_iter());
+                if unsaved.is_empty() {
+                    fltk::app::quit();
+                } else {
+                    quit_with_unsaved_files_dialog(unsaved, self.sender.clone());
+                }
+            }
+
+            Message::ForceQuit => {
+                fltk::app::quit();
             }
 
             Message::OpenSfxFileDialog => {
@@ -337,6 +366,35 @@ impl Project {
         ));
     }
 
+    fn selected_tab_changed(&mut self) {
+        if self.samples_tab_selected {
+            let _ = self
+                .compiler_sender
+                .send(ToCompiler::FinishedEditingSamples);
+        }
+
+        let tab_widget = self.tabs.value();
+
+        self.samples_tab_selected = tab_widget
+            .as_ref()
+            .is_some_and(|t| t.is_same(self.samples_tab.widget()));
+
+        let current_tab = tab_widget.and_then(|current_tab| {
+            self.all_tabs_iter()
+                .find(|tab| current_tab.is_same(tab.widget()))
+        });
+        match current_tab {
+            Some(tab) => {
+                // ::TODO enable save menu::
+                self.selected_tab_file_type = Some(tab.file_type());
+            }
+            None => {
+                // ::TODO disable Save menu::
+                self.selected_tab_file_type = None;
+            }
+        }
+    }
+
     fn maybe_set_sfx_file(&mut self, sfx_file: Option<SoundEffectsFile>) {
         if let Some(sfx_file) = sfx_file {
             let sfx = convert_sfx_inputs_lossy(sfx_file.sound_effects);
@@ -433,9 +491,12 @@ impl MainWindow {
         window.end();
         window.show();
 
-        window.set_callback(|_| {
-            if fltk::app::event() == fltk::enums::Event::Close {
-                fltk::app::quit();
+        window.set_callback({
+            let s = sender.clone();
+            move |_| {
+                if fltk::app::event() == fltk::enums::Event::Close {
+                    s.send(Message::QuitRequested);
+                }
             }
         });
 
@@ -454,9 +515,8 @@ impl MainWindow {
 
         tabs.set_callback({
             let sender = sender.clone();
-            move |t| {
-                let selected_index = t.value().map(|w| t.find(&w));
-                sender.send(Message::SelectedTabChanged(selected_index));
+            move |_| {
+                sender.send(Message::SelectedTabChanged);
             }
         });
 
@@ -484,6 +544,18 @@ impl MainWindow {
         self.add_tab(&mut project.sound_effects_tab);
 
         self.project = Some(project);
+    }
+
+    fn process(&mut self, message: Message) {
+        if let Some(p) = &mut self.project {
+            p.process(message);
+        } else {
+            #[allow(clippy::single_match)]
+            match message {
+                Message::QuitRequested => fltk::app::quit(),
+                _ => (),
+            }
+        }
     }
 }
 
@@ -516,9 +588,7 @@ fn main() {
 
     while main_window.app.wait() {
         if let Some(msg) = reciever.recv() {
-            if let Some(p) = &mut main_window.project {
-                p.process(msg);
-            }
+            main_window.process(msg);
         }
     }
 }

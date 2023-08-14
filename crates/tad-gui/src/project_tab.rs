@@ -11,7 +11,7 @@ use crate::list_editor::{
     TableMapping,
 };
 use crate::tables::{RowWithStatus, SimpleRow, TableEvent};
-use crate::tabs::{Tab, TabFileState};
+use crate::tabs::{FileType, Tab, TabFileState};
 use crate::Message;
 
 use compiler::data;
@@ -179,6 +179,10 @@ impl Tab for ProjectTab {
 
     fn widget_mut(&mut self) -> &mut Flex {
         &mut self.group
+    }
+
+    fn file_type(&self) -> FileType {
+        FileType::Project
     }
 
     fn file_state(&self) -> &TabFileState {

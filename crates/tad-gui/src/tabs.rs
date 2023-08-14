@@ -4,15 +4,28 @@
 //
 // SPDX-License-Identifier: MIT
 
+use crate::compiler_thread::ItemId;
+use crate::Message;
+
 extern crate fltk;
-use fltk::{group::Flex, prelude::WidgetExt};
+use fltk::{dialog, group::Flex, prelude::WidgetExt};
 
 pub trait Tab {
     fn widget(&self) -> &fltk::group::Flex;
     fn widget_mut(&mut self) -> &mut fltk::group::Flex;
 
+    fn file_type(&self) -> FileType;
+
     fn file_state(&self) -> &TabFileState;
     fn file_state_mut(&mut self) -> &mut TabFileState;
+}
+
+// Used for the "there are unsaved changes" dialog box
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord)]
+pub enum FileType {
+    Project,
+    SoundEffects,
+    Song(ItemId),
 }
 
 pub struct TabFileState {
@@ -61,5 +74,34 @@ impl TabFileState {
                 w.redraw_label();
             }
         }
+    }
+}
+
+pub fn unsaved_tabs<'a>(tabs: impl Iterator<Item = &'a dyn Tab>) -> Vec<FileType> {
+    let mut v: Vec<FileType> = tabs
+        .filter(|t| t.file_state().is_unsaved())
+        .map(|t| t.file_type())
+        .collect();
+
+    v.sort();
+    v.dedup();
+    v
+}
+
+pub fn quit_with_unsaved_files_dialog(unsaved: Vec<FileType>, sender: fltk::app::Sender<Message>) {
+    dialog::message_title("Unsaved changes");
+    let choice = dialog::choice2_default(
+        &format!(
+            "Save changes to {} unsaved files before closing?",
+            unsaved.len()
+        ),
+        "Quit without saving",
+        "Save",
+        "Cancel",
+    );
+    match choice {
+        Some(0) => sender.send(Message::ForceQuit),
+        Some(1) => (), // ::TODO send SaveMultiple(unsaved) message::
+        _ => (),
     }
 }

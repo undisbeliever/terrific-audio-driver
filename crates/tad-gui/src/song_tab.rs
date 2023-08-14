@@ -6,7 +6,7 @@
 
 use crate::compiler_thread::{ItemId, SongError, SongOutput};
 use crate::helpers::*;
-use crate::tabs::{Tab, TabFileState};
+use crate::tabs::{FileType, Tab, TabFileState};
 use crate::Message;
 
 use compiler::data::TextFile;
@@ -39,6 +39,8 @@ pub struct State {
 pub struct SongTab {
     state: Rc<RefCell<State>>,
 
+    song_id: ItemId,
+
     group: Flex,
     file_state: TabFileState,
 }
@@ -50,6 +52,10 @@ impl Tab for SongTab {
 
     fn widget_mut(&mut self) -> &mut Flex {
         &mut self.group
+    }
+
+    fn file_type(&self) -> FileType {
+        FileType::Song(self.song_id.clone())
     }
 
     fn file_state(&self) -> &TabFileState {
@@ -108,7 +114,7 @@ impl SongTab {
 
         let state = Rc::new(RefCell::from(State {
             sender,
-            song_id,
+            song_id: song_id.clone(),
             editor: editor.clone(),
             buffer: buffer.clone(),
 
@@ -142,6 +148,7 @@ impl SongTab {
 
         Self {
             state,
+            song_id,
             file_state,
             group,
         }
