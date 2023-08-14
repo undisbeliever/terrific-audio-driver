@@ -198,11 +198,12 @@ impl ProjectTab {
     pub fn new(
         sfx_list: &impl ListState<Item = Name>,
         song_list: &impl ListState<Item = data::Song>,
+        file_name: String,
         sender: app::Sender<Message>,
     ) -> Self {
         let mut group = Flex::default_fill().with_label("Project").row();
 
-        let file_state = TabFileState::new(group.clone());
+        let file_state = TabFileState::new(group.clone(), Some(file_name));
 
         let mut left = Flex::default().column();
         group.fixed(&left, ch_units_to_width(&left, 30));

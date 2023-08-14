@@ -258,11 +258,12 @@ impl Tab for SamplesTab {
 impl SamplesTab {
     pub fn new(
         instruments: &impl ListState<Item = data::Instrument>,
+        file_name: String,
         sender: app::Sender<Message>,
     ) -> Self {
         let mut group = Flex::default_fill().with_label("Samples").row();
 
-        let file_state = TabFileState::new(group.clone());
+        let file_state = TabFileState::new(group.clone(), Some(file_name));
 
         // Sidebar
         let mut sidebar = Flex::default().column();

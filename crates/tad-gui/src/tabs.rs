@@ -31,17 +31,29 @@ pub enum FileType {
 pub struct TabFileState {
     tab_widget: Flex,
 
+    file_name: Option<String>,
+
     label: String,
     is_unsaved: bool,
 }
 
 impl TabFileState {
-    pub fn new(tab_widget: Flex) -> Self {
+    pub fn new(tab_widget: Flex, file_name: Option<String>) -> Self {
         TabFileState {
             label: tab_widget.label().trim_start_matches('*').to_string(),
+            file_name,
             is_unsaved: false,
             tab_widget,
         }
+    }
+
+    // Returns `None` if the file has not been saved.
+    pub fn file_name(&self) -> Option<&str> {
+        self.file_name.as_deref()
+    }
+
+    pub fn set_file_name(&mut self, file_name: String) {
+        self.file_name = Some(file_name);
     }
 
     pub fn is_unsaved(&self) -> bool {

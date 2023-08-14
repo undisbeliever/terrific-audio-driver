@@ -75,7 +75,7 @@ impl SongTab {
             .with_label(&mml_file.file_name)
             .column();
 
-        let file_state = TabFileState::new(group.clone());
+        let file_state = TabFileState::new(group.clone(), Some(mml_file.file_name.clone()));
 
         let button_size = ch_units_to_width(&group, 4);
 
@@ -151,7 +151,9 @@ impl SongTab {
         Self {
             state,
             song_id,
+
             file_path: mml_file.path.clone(),
+
             file_state,
             group,
         }

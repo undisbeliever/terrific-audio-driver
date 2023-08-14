@@ -200,9 +200,14 @@ impl Project {
             project_tab: ProjectTab::new(
                 &data.sfx_export_orders,
                 &data.project_songs,
+                data.pf_file_name.clone(),
                 sender.clone(),
             ),
-            samples_tab: SamplesTab::new(&data.instruments, sender.clone()),
+            samples_tab: SamplesTab::new(
+                &data.instruments,
+                data.pf_file_name.clone(),
+                sender.clone(),
+            ),
             sound_effects_tab: SoundEffectsTab::new(sender.clone()),
             song_tabs: HashMap::new(),
 
@@ -222,9 +227,7 @@ impl Project {
                 self.process_compiler_output(m);
             }
 
-            Message::SelectedTabChanged => {
-                self.selected_tab_changed();
-            }
+            Message::SelectedTabChanged => (),
 
             Message::EditSfxExportOrder(m) => {
                 let (a, c) = self
@@ -423,7 +426,7 @@ impl Project {
         ));
     }
 
-    fn selected_tab_changed(&mut self) {
+    fn selected_tab_changed(&mut self, menu: &mut Menu) {
         if self.samples_tab_selected {
             let _ = self
                 .compiler_sender
@@ -442,11 +445,20 @@ impl Project {
         });
         match current_tab {
             Some(tab) => {
-                // ::TODO update save menu item::
+                match tab.file_state().file_name() {
+                    Some(file_name) => {
+                        menu.save.set_label(&format!("&Save {}", file_name));
+                        menu.save.activate();
+                    }
+                    None => {
+                        menu.save.set_label("&Save");
+                        menu.save.deactivate();
+                    }
+                }
                 self.selected_tab_file_type = Some(tab.file_type());
             }
             None => {
-                // ::TODO update save menu item::
+                menu.save.deactivate();
                 self.selected_tab_file_type = None;
             }
         }
@@ -470,7 +482,8 @@ impl Project {
             let sound_effects =
                 ListWithCompilerOutput::new(sfx, driver_constants::MAX_SOUND_EFFECTS + 20);
 
-            self.sound_effects_tab.replace_sfx_file(&sound_effects);
+            self.sound_effects_tab
+                .replace_sfx_file(&sound_effects, sfx_file.file_name);
 
             let _ = self.compiler_sender.send(ToCompiler::SoundEffects(
                 sound_effects.replace_all_message(),
@@ -596,6 +609,9 @@ impl SoundEffectsData {
 
 struct Menu {
     menu: menu::MenuBar,
+
+    save: menu::MenuItem,
+    save_all: menu::MenuItem,
 }
 
 impl Menu {
@@ -603,31 +619,48 @@ impl Menu {
         let mut menu = fltk::menu::MenuBar::default();
         menu.set_frame(fltk::enums::FrameType::FlatBox);
 
-        let cb = |f: fn() -> Message| {
-            let s = sender.clone();
-            move |_: &mut fltk::menu::MenuBar| s.send(f())
+        let mut add = |label, shortcut, flags, f: fn() -> Message| -> menu::MenuItem {
+            let index = menu.add(label, shortcut, flags, {
+                let s = sender.clone();
+                move |_: &mut fltk::menu::MenuBar| s.send(f())
+            });
+
+            menu.at(index).unwrap()
         };
 
-        menu.add(
+        let save = add(
             "&File/&Save",
             Shortcut::Ctrl | 's',
             fltk::menu::MenuFlag::Normal,
-            cb(|| Message::SaveSelectedTabIfUnsaved),
+            || Message::SaveSelectedTabIfUnsaved,
         );
-        menu.add(
+        let save_all = add(
             "&File/Save &All",
             Shortcut::Ctrl | Shortcut::Shift | 's',
             fltk::menu::MenuFlag::Normal,
-            cb(|| Message::SaveAllUnsaved),
+            || Message::SaveAllUnsaved,
         );
-        menu.add(
+        add(
             "&File/&Quit",
             Shortcut::None,
             fltk::menu::MenuFlag::Normal,
-            cb(|| Message::QuitRequested),
+            || Message::QuitRequested,
         );
 
-        Menu { menu }
+        Menu {
+            menu,
+            save,
+            save_all,
+        }
+    }
+
+    fn deactivate(&mut self) {
+        self.save.deactivate();
+        self.save_all.deactivate();
+    }
+
+    fn activate(&mut self) {
+        self.save_all.activate();
     }
 }
 
@@ -638,6 +671,7 @@ struct MainWindow {
     sender: fltk::app::Sender<Message>,
 
     window: fltk::window::Window,
+    menu: Menu,
     tabs: fltk::group::Tabs,
 
     project: Option<Project>,
@@ -656,7 +690,8 @@ impl MainWindow {
 
         let mut col = fltk::group::Flex::default_fill().column();
 
-        let menu = Menu::new(sender.clone());
+        let mut menu = Menu::new(sender.clone());
+        menu.deactivate();
         col.fixed(&menu.menu, input_height(&menu.menu));
 
         let mut tabs = fltk::group::Tabs::default();
@@ -704,6 +739,7 @@ impl MainWindow {
             app,
             sender,
             window,
+            menu,
             tabs,
             project: None,
         }
@@ -723,17 +759,26 @@ impl MainWindow {
         self.add_tab(&mut project.samples_tab);
         self.add_tab(&mut project.sound_effects_tab);
 
+        self.menu.activate();
+
         self.project = Some(project);
     }
 
     fn process(&mut self, message: Message) {
-        if let Some(p) = &mut self.project {
-            p.process(message);
-        } else {
-            #[allow(clippy::single_match)]
-            match message {
-                Message::QuitRequested => fltk::app::quit(),
-                _ => (),
+        match message {
+            Message::SelectedTabChanged => {
+                if let Some(p) = &mut self.project {
+                    p.selected_tab_changed(&mut self.menu);
+                }
+            }
+            Message::QuitRequested => match &mut self.project {
+                Some(p) => p.process(message),
+                None => fltk::app::quit(),
+            },
+            m => {
+                if let Some(p) = &mut self.project {
+                    p.process(m);
+                }
             }
         }
     }
