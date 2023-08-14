@@ -492,6 +492,7 @@ impl Project {
 
         if let Some(song_tab) = self.song_tabs.get_mut(id) {
             let _ = self.tabs.set_value(song_tab.widget());
+            self.sender.send(Message::SelectedTabChanged);
         } else {
             self.create_new_song_tab(id.clone(), &song.source.clone());
         }
@@ -511,6 +512,7 @@ impl Project {
                 .compiler_sender
                 .send(ToCompiler::SongChanged(song_id, f.contents));
         }
+        self.sender.send(Message::SelectedTabChanged);
     }
 
     fn mark_project_file_unsaved<T>(&mut self, a: ListAction<T>) {
