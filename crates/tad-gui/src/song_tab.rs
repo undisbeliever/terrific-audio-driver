@@ -122,7 +122,7 @@ impl SongTab {
             let s = state.clone();
             move |_| {
                 if let Ok(mut s) = s.try_borrow_mut() {
-                    s.commit_song()
+                    s.commit_song_if_changed()
                 }
             }
         });
@@ -157,17 +157,15 @@ impl SongTab {
 impl State {
     fn commit_song_if_changed(&mut self) {
         if self.editor.changed() {
-            self.commit_song();
+            // The SongChanged message will set the unsaved flag.
+            // It must not be sent if the MML text is unchanged.
+            self.sender.send(Message::SongChanged(
+                self.song_id.clone(),
+                self.buffer.text(),
+            ));
+
+            self.editor.clear_changed();
         }
-    }
-
-    fn commit_song(&mut self) {
-        self.sender.send(Message::SongChanged(
-            self.song_id.clone(),
-            self.buffer.text(),
-        ));
-
-        self.editor.clear_changed();
     }
 
     pub fn set_compiler_output(&mut self, co: Option<SongOutput>) {
