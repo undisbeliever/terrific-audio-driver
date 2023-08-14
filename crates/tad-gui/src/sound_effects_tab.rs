@@ -11,8 +11,8 @@ use crate::list_editor::{
     ListState, TableCompilerOutput, TableMapping,
 };
 use crate::tables::{RowWithStatus, SimpleRow};
+use crate::tabs::{Tab, TabFileState};
 use crate::Message;
-use crate::Tab;
 
 use compiler::errors::SfxErrorLines;
 use compiler::sound_effects::SoundEffectInput;
@@ -90,6 +90,7 @@ pub struct SoundEffectsTab {
     sfx_buffers: LaVec<Option<EditorBuffer>>,
 
     group: Flex,
+    file_state: TabFileState,
 
     sidebar: Flex,
     sfx_table: ListEditorTable<SoundEffectMapping>,
@@ -107,11 +108,21 @@ impl Tab for SoundEffectsTab {
     fn widget(&mut self) -> &mut Flex {
         &mut self.group
     }
+
+    fn file_state(&self) -> &TabFileState {
+        &self.file_state
+    }
+
+    fn file_state_mut(&mut self) -> &mut TabFileState {
+        &mut self.file_state
+    }
 }
 
 impl SoundEffectsTab {
     pub fn new(sender: app::Sender<Message>) -> Self {
         let mut group = Flex::default_fill().with_label("Sound Effects").row();
+
+        let file_state = TabFileState::new(group.clone());
 
         // Sidebar
         let mut sidebar = Flex::default().column();
@@ -212,6 +223,7 @@ impl SoundEffectsTab {
             sfx_buffers: LaVec::new(),
 
             group,
+            file_state,
 
             sidebar,
             sfx_table,

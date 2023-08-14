@@ -10,6 +10,7 @@ mod helpers;
 mod list_editor;
 mod names;
 mod tables;
+mod tabs;
 
 mod project_tab;
 mod samples_tab;
@@ -17,22 +18,22 @@ mod song_tab;
 mod sound_effects_tab;
 
 use crate::compiler_thread::{CompilerOutput, InstrumentOutput, SoundEffectOutput, ToCompiler};
-use crate::files::{add_song_to_pf_dialog, load_pf_sfx_file, open_sfx_file_dialog};
+use crate::files::{add_song_to_pf_dialog, load_mml_file, load_pf_sfx_file, open_sfx_file_dialog};
 use crate::list_editor::{ListMessage, ListState, ListWithCompilerOutput, ListWithSelection};
 use crate::names::deduplicate_names;
 use crate::project_tab::ProjectTab;
 use crate::samples_tab::SamplesTab;
 use crate::song_tab::SongTab;
 use crate::sound_effects_tab::SoundEffectsTab;
+use crate::tabs::Tab;
 
 use compiler::sound_effects::{convert_sfx_inputs_lossy, SoundEffectInput, SoundEffectsFile};
 use compiler::{data, driver_constants, load_project_file, ProjectFile};
 
 use compiler_thread::ItemId;
-use files::load_mml_file;
 use fltk::dialog;
 use fltk::prelude::*;
-use list_editor::update_compiler_output;
+use list_editor::{update_compiler_output, ListAction};
 
 use std::collections::HashMap;
 use std::env;
@@ -63,10 +64,6 @@ pub enum Message {
     SongChanged(ItemId, String),
 
     FromCompiler(compiler_thread::CompilerOutput),
-}
-
-trait Tab {
-    fn widget(&mut self) -> &mut fltk::group::Flex;
 }
 
 // ::TODO remove::
@@ -183,27 +180,32 @@ impl Project {
             }
 
             Message::EditSfxExportOrder(m) => {
-                let (_a, c) = self
+                let (a, c) = self
                     .data
                     .sfx_export_orders
                     .process(m, &mut self.project_tab.sfx_export_order_table);
+                self.mark_project_file_unsaved(a);
 
                 if let Some(c) = c {
                     let _ = self.compiler_sender.send(ToCompiler::SfxExportOrder(c));
                 }
             }
             Message::EditProjectSongs(m) => {
-                let (_a, c) = self
+                let (a, c) = self
                     .data
                     .project_songs
                     .process(m, &mut self.project_tab.song_table);
+
+                self.mark_project_file_unsaved(a);
 
                 if let Some(c) = c {
                     let _ = self.compiler_sender.send(ToCompiler::ProjectSongs(c));
                 }
             }
             Message::Instrument(m) => {
-                let (_a, c) = self.data.instruments.process(m, &mut self.samples_tab);
+                let (a, c) = self.data.instruments.process(m, &mut self.samples_tab);
+
+                self.mark_project_file_unsaved(a);
 
                 if let Some(c) = c {
                     let _ = self.compiler_sender.send(ToCompiler::Instrument(c));
@@ -211,13 +213,19 @@ impl Project {
             }
             Message::EditSoundEffectList(m) => {
                 if let Some(sound_effects) = &mut self.data.sound_effects {
-                    let (_a, c) = sound_effects.process(m, &mut self.sound_effects_tab);
+                    let (a, c) = sound_effects.process(m, &mut self.sound_effects_tab);
                     if let Some(c) = c {
                         let _ = self.compiler_sender.send(ToCompiler::SoundEffects(c));
+                    }
+                    if !a.is_none() {
+                        self.sound_effects_tab.file_state_mut().mark_unsaved();
                     }
                 }
             }
             Message::SongChanged(id, mml) => {
+                if let Some(song_tab) = self.song_tabs.get_mut(&id) {
+                    song_tab.file_state_mut().mark_unsaved();
+                }
                 let _ = self.compiler_sender.send(ToCompiler::SongChanged(id, mml));
             }
 
@@ -377,6 +385,13 @@ impl Project {
             let _ = self
                 .compiler_sender
                 .send(ToCompiler::SongChanged(song_id, f.contents));
+        }
+    }
+
+    fn mark_project_file_unsaved<T>(&mut self, a: ListAction<T>) {
+        if !a.is_none() {
+            self.project_tab.file_state_mut().mark_unsaved();
+            self.samples_tab.file_state_mut().mark_unsaved();
         }
     }
 }

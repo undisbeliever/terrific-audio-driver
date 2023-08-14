@@ -11,8 +11,8 @@ use crate::list_editor::{
     TableMapping,
 };
 use crate::tables::{RowWithStatus, SimpleRow, TableEvent};
+use crate::tabs::{Tab, TabFileState};
 use crate::Message;
-use crate::Tab;
 
 use compiler::data;
 use compiler::data::Name;
@@ -166,6 +166,7 @@ impl TableCompilerOutput for SongMapping {
 
 pub struct ProjectTab {
     group: Flex,
+    file_state: TabFileState,
 
     pub sfx_export_order_table: ListEditorTable<SfxExportOrderMapping>,
     pub song_table: ListEditorTable<SongMapping>,
@@ -174,6 +175,14 @@ pub struct ProjectTab {
 impl Tab for ProjectTab {
     fn widget(&mut self) -> &mut Flex {
         &mut self.group
+    }
+
+    fn file_state(&self) -> &TabFileState {
+        &self.file_state
+    }
+
+    fn file_state_mut(&mut self) -> &mut TabFileState {
+        &mut self.file_state
     }
 }
 
@@ -184,6 +193,8 @@ impl ProjectTab {
         sender: app::Sender<Message>,
     ) -> Self {
         let mut group = Flex::default_fill().with_label("Project").row();
+
+        let file_state = TabFileState::new(group.clone());
 
         let mut left = Flex::default().column();
         group.fixed(&left, ch_units_to_width(&left, 30));
@@ -208,6 +219,7 @@ impl ProjectTab {
 
         Self {
             group,
+            file_state,
             sfx_export_order_table,
             song_table,
         }

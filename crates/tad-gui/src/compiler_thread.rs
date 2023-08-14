@@ -38,7 +38,7 @@ mod item_id {
     ///   1. Not worry about the item index if the compiler thread is slow and the index changed
     ///      before the item has finished compiling.
     ///   2. Ignore any list item moved events in the compiler thread.
-    #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+    #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
     pub struct ItemId(u64);
 
     impl ItemId {

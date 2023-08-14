@@ -58,6 +58,12 @@ pub enum ListAction<T> {
     Move(usize, usize),
 }
 
+impl<T> ListAction<T> {
+    pub fn is_none(&self) -> bool {
+        matches!(self, Self::None)
+    }
+}
+
 /// Preforms the ListAction on a list
 ///
 /// #Panics

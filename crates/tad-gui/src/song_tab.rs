@@ -6,8 +6,8 @@
 
 use crate::compiler_thread::{ItemId, SongError, SongOutput};
 use crate::helpers::*;
+use crate::tabs::{Tab, TabFileState};
 use crate::Message;
-use crate::Tab;
 
 use compiler::data::TextFile;
 use compiler::errors::MmlCompileErrors;
@@ -40,11 +40,20 @@ pub struct SongTab {
     state: Rc<RefCell<State>>,
 
     group: Flex,
+    file_state: TabFileState,
 }
 
 impl Tab for SongTab {
     fn widget(&mut self) -> &mut Flex {
         &mut self.group
+    }
+
+    fn file_state(&self) -> &TabFileState {
+        &self.file_state
+    }
+
+    fn file_state_mut(&mut self) -> &mut TabFileState {
+        &mut self.file_state
     }
 }
 
@@ -53,6 +62,8 @@ impl SongTab {
         let mut group = Flex::default_fill()
             .with_label(&mml_file.file_name)
             .column();
+
+        let file_state = TabFileState::new(group.clone());
 
         let button_size = ch_units_to_width(&group, 4);
 
@@ -125,7 +136,11 @@ impl SongTab {
             }
         });
 
-        Self { state, group }
+        Self {
+            state,
+            file_state,
+            group,
+        }
     }
 
     pub fn set_compiler_output(&mut self, co: Option<SongOutput>) {
