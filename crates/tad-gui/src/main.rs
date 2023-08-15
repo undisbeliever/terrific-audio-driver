@@ -168,6 +168,7 @@ impl Project {
             project_tab: ProjectTab::new(
                 &data.sfx_export_orders,
                 &data.project_songs,
+                data.sound_effects_file.as_deref(),
                 sender.clone(),
             ),
 
@@ -540,7 +541,9 @@ impl Project {
     }
 
     fn set_pf_sound_effects_file(&mut self, pf_path: PathBuf) {
+        self.project_tab.sfx_file_changed(&pf_path);
         self.data.sound_effects_file = Some(pf_path);
+
         self.tab_manager.mark_unsaved(FileType::Project);
     }
 }

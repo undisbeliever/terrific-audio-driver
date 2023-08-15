@@ -14,11 +14,16 @@ use crate::tables::{RowWithStatus, SimpleRow, TableEvent};
 use crate::tabs::{FileType, Tab};
 use crate::Message;
 
+use std::path::Path;
+
 use compiler::data;
 use compiler::data::Name;
 
 use fltk::app;
+use fltk::enums::Color;
+use fltk::frame::Frame;
 use fltk::group::Flex;
+use fltk::output::Output;
 use fltk::prelude::*;
 
 pub struct SfxExportOrderMapping;
@@ -169,6 +174,8 @@ pub struct ProjectTab {
 
     pub sfx_export_order_table: ListEditorTable<SfxExportOrderMapping>,
     pub song_table: ListEditorTable<SongMapping>,
+
+    sound_effects_file: Output,
 }
 
 impl Tab for ProjectTab {
@@ -189,12 +196,32 @@ impl ProjectTab {
     pub fn new(
         sfx_list: &impl ListState<Item = Name>,
         song_list: &impl ListState<Item = data::Song>,
+        sfx_pf_path: Option<&Path>,
         sender: app::Sender<Message>,
     ) -> Self {
-        let mut group = Flex::default_fill().with_label("Project").row();
+        let mut group = Flex::default_fill().with_label("Project").column();
+
+        let mut sfx_flex = Flex::default().row();
+        group.fixed(&sfx_flex, input_height(&sfx_flex));
+
+        let sfx_file_label = label("Sound Effects File: ");
+        sfx_flex.fixed(&sfx_file_label, ch_units_to_width(&sfx_file_label, 18));
+
+        let mut sound_effects_file = Output::default();
+        sound_effects_file.set_color(Color::Background);
+        if let Some(p) = sfx_pf_path {
+            sound_effects_file.set_value(&p.display().to_string());
+        }
+
+        sfx_flex.end();
+
+        let sfx_flex_padding = Frame::default();
+        group.fixed(&sfx_flex_padding, 8);
+
+        let mut left_right = Flex::default().row();
 
         let mut left = Flex::default().column();
-        group.fixed(&left, ch_units_to_width(&left, 30));
+        left_right.fixed(&left, ch_units_to_width(&left, 30));
 
         let mut sfx_export_order_table = ListEditorTable::new_with_data(sfx_list, sender.clone());
 
@@ -211,13 +238,19 @@ impl ProjectTab {
         right.fixed(&song_table.list_buttons().pack, button_height);
 
         right.end();
-
+        left_right.end();
         group.end();
 
         Self {
             group,
             sfx_export_order_table,
             song_table,
+            sound_effects_file,
         }
+    }
+
+    pub fn sfx_file_changed(&mut self, pf_path: &Path) {
+        self.sound_effects_file
+            .set_value(&pf_path.display().to_string());
     }
 }
