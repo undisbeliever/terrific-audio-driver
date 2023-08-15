@@ -35,7 +35,7 @@ use crate::project_tab::ProjectTab;
 use crate::samples_tab::SamplesTab;
 use crate::song_tab::SongTab;
 use crate::sound_effects_tab::SoundEffectsTab;
-use crate::tabs::{quit_with_unsaved_files_dialog, unsaved_tabs, FileType, Tab};
+use crate::tabs::{quit_with_unsaved_files_dialog, FileType, Tab, TabManager};
 
 use compiler::sound_effects::{convert_sfx_inputs_lossy, SoundEffectInput, SoundEffectsFile};
 use compiler::{data, driver_constants, ProjectFile};
@@ -114,42 +114,14 @@ struct Project {
     compiler_sender: mpsc::Sender<ToCompiler>,
 
     tabs: fltk::group::Tabs,
+    tab_manager: TabManager,
     samples_tab_selected: bool,
-    selected_tab_file_type: Option<FileType>,
 
     // MUST update `all_tabs_iter()` if a tab is added or removed
     project_tab: ProjectTab,
     samples_tab: SamplesTab,
     sound_effects_tab: SoundEffectsTab,
     song_tabs: HashMap<ItemId, SongTab>,
-}
-
-impl Project {
-    fn all_tabs_iter(&self) -> impl Iterator<Item = &dyn Tab> {
-        let fixed_tabs: [&dyn Tab; 3] = [
-            &self.project_tab,
-            &self.samples_tab,
-            &self.sound_effects_tab,
-        ];
-        let song_tabs = self.song_tabs.values().map(|t| -> &dyn Tab { t });
-
-        fixed_tabs.into_iter().chain(song_tabs)
-    }
-
-    fn selected_tab(&self) -> Option<&dyn Tab> {
-        match &self.selected_tab_file_type {
-            None => None,
-            Some(FileType::Project) => {
-                if self.samples_tab_selected {
-                    Some(&self.samples_tab as &dyn Tab)
-                } else {
-                    Some(&self.project_tab as &dyn Tab)
-                }
-            }
-            Some(FileType::SoundEffects) => Some(&self.sound_effects_tab as &dyn Tab),
-            Some(FileType::Song(id)) => self.song_tabs.get(id).map(|t| t as &dyn Tab),
-        }
-    }
 }
 
 impl Project {
@@ -192,22 +164,18 @@ impl Project {
         let compiler_thread =
             compiler_thread::create_bg_thread(data.pf_parent_path.clone(), r, sender.clone());
 
-        Self {
+        let mut out = Self {
+            tab_manager: TabManager::new(tabs.clone()),
             tabs,
             samples_tab_selected: false,
-            selected_tab_file_type: None,
 
             project_tab: ProjectTab::new(
                 &data.sfx_export_orders,
                 &data.project_songs,
-                data.pf_file_name.clone(),
                 sender.clone(),
             ),
-            samples_tab: SamplesTab::new(
-                &data.instruments,
-                data.pf_file_name.clone(),
-                sender.clone(),
-            ),
+
+            samples_tab: SamplesTab::new(&data.instruments, sender.clone()),
             sound_effects_tab: SoundEffectsTab::new(sender.clone()),
             song_tabs: HashMap::new(),
 
@@ -218,7 +186,15 @@ impl Project {
             sfx_data: None,
 
             sender,
-        }
+        };
+
+        out.tab_manager
+            .add_or_modify(&out.project_tab, Some(out.data.pf_file_name.clone()));
+        out.tab_manager
+            .add_or_modify(&out.samples_tab, Some(out.data.pf_file_name.clone()));
+        out.tab_manager
+            .add_widget(out.sound_effects_tab.widget_mut());
+        out
     }
 
     fn process(&mut self, m: Message) {
@@ -270,19 +246,17 @@ impl Project {
                         let _ = self.compiler_sender.send(ToCompiler::SoundEffects(c));
                     }
                     if !a.is_none() {
-                        self.sound_effects_tab.file_state_mut().mark_unsaved();
+                        self.tab_manager.mark_unsaved(FileType::SoundEffects);
                     }
                 }
             }
             Message::SongChanged(id, mml) => {
-                if let Some(song_tab) = self.song_tabs.get_mut(&id) {
-                    song_tab.file_state_mut().mark_unsaved();
-                }
+                self.tab_manager.mark_unsaved(FileType::Song(id.clone()));
                 let _ = self.compiler_sender.send(ToCompiler::SongChanged(id, mml));
             }
 
             Message::QuitRequested => {
-                let unsaved = unsaved_tabs(self.all_tabs_iter());
+                let unsaved = self.tab_manager.unsaved_tabs();
                 if unsaved.is_empty() {
                     fltk::app::quit();
                 } else {
@@ -303,15 +277,14 @@ impl Project {
             }
 
             Message::SaveSelectedTabIfUnsaved => {
-                if let Some(t) = self.selected_tab() {
-                    if t.file_state().is_unsaved() {
-                        self.save_file(t.file_type());
+                if let Some(ft) = self.tab_manager.selected_file() {
+                    if self.tab_manager.is_unsaved(&ft) {
+                        self.save_file(ft);
                     }
                 }
             }
             Message::SaveAllUnsaved => {
-                let unsaved = unsaved_tabs(self.all_tabs_iter());
-                for u in unsaved {
+                for u in self.tab_manager.unsaved_tabs() {
                     self.save_file(u);
                 }
             }
@@ -433,35 +406,12 @@ impl Project {
                 .send(ToCompiler::FinishedEditingSamples);
         }
 
-        let tab_widget = self.tabs.value();
-
-        self.samples_tab_selected = tab_widget
-            .as_ref()
+        self.samples_tab_selected = self
+            .tabs
+            .value()
             .is_some_and(|t| t.is_same(self.samples_tab.widget()));
 
-        let current_tab = tab_widget.and_then(|current_tab| {
-            self.all_tabs_iter()
-                .find(|tab| current_tab.is_same(tab.widget()))
-        });
-        match current_tab {
-            Some(tab) => {
-                match tab.file_state().file_name() {
-                    Some(file_name) => {
-                        menu.save.set_label(&format!("&Save {}", file_name));
-                        menu.save.activate();
-                    }
-                    None => {
-                        menu.save.set_label("&Save");
-                        menu.save.deactivate();
-                    }
-                }
-                self.selected_tab_file_type = Some(tab.file_type());
-            }
-            None => {
-                menu.save.deactivate();
-                self.selected_tab_file_type = None;
-            }
-        }
+        self.tab_manager.selected_tab_changed(menu);
     }
 
     fn maybe_set_sfx_file(&mut self, sfx_file: Option<SoundEffectsFile>) {
@@ -482,8 +432,9 @@ impl Project {
             let sound_effects =
                 ListWithCompilerOutput::new(sfx, driver_constants::MAX_SOUND_EFFECTS + 20);
 
-            self.sound_effects_tab
-                .replace_sfx_file(&sound_effects, sfx_file.file_name);
+            self.sound_effects_tab.replace_sfx_file(&sound_effects);
+            self.tab_manager
+                .add_or_modify(&self.sound_effects_tab, Some(sfx_file.file_name));
 
             let _ = self.compiler_sender.send(ToCompiler::SoundEffects(
                 sound_effects.replace_all_message(),
@@ -514,8 +465,9 @@ impl Project {
     // NOTE: No deduplication. Do not create song tabs for a `song_id` or `path` that already exists
     fn create_new_song_tab(&mut self, song_id: ItemId, path: &Path) {
         if let Some(f) = load_mml_file(&self.data, path) {
-            let mut song_tab = SongTab::new(song_id.clone(), &f, self.sender.clone());
-            add_tab(&mut self.tabs, &mut song_tab);
+            let song_tab = SongTab::new(song_id.clone(), &f, self.sender.clone());
+
+            self.tab_manager.add_or_modify(&song_tab, Some(f.file_name));
             let _ = self.tabs.set_value(song_tab.widget());
 
             self.song_tabs.insert(song_id.clone(), song_tab);
@@ -530,42 +482,26 @@ impl Project {
 
     fn mark_project_file_unsaved<T>(&mut self, a: ListAction<T>) {
         if !a.is_none() {
-            self.project_tab.file_state_mut().mark_unsaved();
-            self.samples_tab.file_state_mut().mark_unsaved();
+            self.tab_manager.mark_unsaved(FileType::Project);
         }
     }
 
-    fn save_file(&mut self, tab: FileType) -> bool {
-        match tab {
-            FileType::Project => {
-                let success = save_project_file(&self.data);
-                if success {
-                    self.project_tab.file_state_mut().mark_saved();
-                    self.samples_tab.file_state_mut().mark_saved();
-                }
-                success
-            }
+    fn save_file(&mut self, ft: FileType) -> bool {
+        let success = match &ft {
+            FileType::Project => save_project_file(&self.data),
             FileType::SoundEffects => match &self.sfx_data {
-                Some(sfx_data) => {
-                    let success = save_sfx_file(sfx_data);
-                    if success {
-                        self.sound_effects_tab.file_state_mut().mark_saved();
-                    }
-                    success
-                }
-                _ => false,
-            },
-            FileType::Song(id) => match &mut self.song_tabs.get_mut(&id) {
-                Some(song_tab) => {
-                    let success = save_song(song_tab);
-                    if success {
-                        song_tab.file_state_mut().mark_saved();
-                    }
-                    success
-                }
+                Some(sfx_data) => save_sfx_file(sfx_data),
                 None => false,
             },
+            FileType::Song(id) => match &mut self.song_tabs.get_mut(id) {
+                Some(song_tab) => save_song(song_tab),
+                None => false,
+            },
+        };
+        if success {
+            self.tab_manager.mark_saved(ft);
         }
+        success
     }
 
     fn save_all(&mut self, unsaved: Vec<FileType>) -> bool {
@@ -607,7 +543,7 @@ impl SoundEffectsData {
     }
 }
 
-struct Menu {
+pub struct Menu {
     menu: menu::MenuBar,
 
     save: menu::MenuItem,
@@ -745,23 +681,12 @@ impl MainWindow {
         }
     }
 
-    fn add_tab(&mut self, tab: &mut impl Tab) {
-        add_tab(&mut self.tabs, tab);
-    }
-
     fn load_project(&mut self, pf: ProjectFile, sender: fltk::app::Sender<Message>) {
         if self.project.is_some() {
             return;
         }
-        let mut project = Project::new(pf, self.tabs.clone(), sender);
-
-        self.add_tab(&mut project.project_tab);
-        self.add_tab(&mut project.samples_tab);
-        self.add_tab(&mut project.sound_effects_tab);
-
         self.menu.activate();
-
-        self.project = Some(project);
+        self.project = Some(Project::new(pf, self.tabs.clone(), sender));
     }
 
     fn process(&mut self, message: Message) {
@@ -782,14 +707,6 @@ impl MainWindow {
             }
         }
     }
-}
-
-fn add_tab(tabs: &mut fltk::group::Tabs, t: &mut impl Tab) {
-    let w = t.widget_mut();
-    w.set_margins(3, 5, 3, 3);
-    tabs.add(w);
-
-    tabs.auto_layout();
 }
 
 fn get_arg_filename() -> Option<PathBuf> {

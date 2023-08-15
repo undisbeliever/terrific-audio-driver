@@ -6,7 +6,7 @@
 
 use crate::compiler_thread::{ItemId, SongError, SongOutput};
 use crate::helpers::*;
-use crate::tabs::{FileType, Tab, TabFileState};
+use crate::tabs::{FileType, Tab};
 use crate::Message;
 
 use compiler::data::TextFile;
@@ -44,7 +44,6 @@ pub struct SongTab {
     file_path: Option<PathBuf>,
 
     group: Flex,
-    file_state: TabFileState,
 }
 
 impl Tab for SongTab {
@@ -59,14 +58,6 @@ impl Tab for SongTab {
     fn file_type(&self) -> FileType {
         FileType::Song(self.song_id.clone())
     }
-
-    fn file_state(&self) -> &TabFileState {
-        &self.file_state
-    }
-
-    fn file_state_mut(&mut self) -> &mut TabFileState {
-        &mut self.file_state
-    }
 }
 
 impl SongTab {
@@ -74,8 +65,6 @@ impl SongTab {
         let mut group = Flex::default_fill()
             .with_label(&mml_file.file_name)
             .column();
-
-        let file_state = TabFileState::new(group.clone(), Some(mml_file.file_name.clone()));
 
         let button_size = ch_units_to_width(&group, 4);
 
@@ -154,7 +143,6 @@ impl SongTab {
 
             file_path: mml_file.path.clone(),
 
-            file_state,
             group,
         }
     }

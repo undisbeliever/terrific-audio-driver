@@ -12,7 +12,7 @@ use crate::list_editor::{
     ListMessage, ListState, TableCompilerOutput, TableMapping,
 };
 use crate::tables::{RowWithStatus, SimpleRow};
-use crate::tabs::{FileType, Tab, TabFileState};
+use crate::tabs::{FileType, Tab};
 use crate::Message;
 
 use compiler::data::{self, Instrument};
@@ -223,7 +223,6 @@ impl InstrumentEditor {
 
 pub struct SamplesTab {
     group: Flex,
-    file_state: TabFileState,
 
     inst_table: ListEditorTable<InstrumentMapping>,
 
@@ -245,25 +244,14 @@ impl Tab for SamplesTab {
     fn file_type(&self) -> FileType {
         FileType::Project
     }
-
-    fn file_state(&self) -> &TabFileState {
-        &self.file_state
-    }
-
-    fn file_state_mut(&mut self) -> &mut TabFileState {
-        &mut self.file_state
-    }
 }
 
 impl SamplesTab {
     pub fn new(
         instruments: &impl ListState<Item = data::Instrument>,
-        file_name: String,
         sender: app::Sender<Message>,
     ) -> Self {
         let mut group = Flex::default_fill().with_label("Samples").row();
-
-        let file_state = TabFileState::new(group.clone(), Some(file_name));
 
         // Sidebar
         let mut sidebar = Flex::default().column();
@@ -292,7 +280,6 @@ impl SamplesTab {
 
         Self {
             group,
-            file_state,
             inst_table,
             instrument_editor,
             console,

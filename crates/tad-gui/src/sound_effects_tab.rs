@@ -11,7 +11,7 @@ use crate::list_editor::{
     ListState, TableCompilerOutput, TableMapping,
 };
 use crate::tables::{RowWithStatus, SimpleRow};
-use crate::tabs::{FileType, Tab, TabFileState};
+use crate::tabs::{FileType, Tab};
 use crate::Message;
 
 use compiler::errors::SfxErrorLines;
@@ -92,7 +92,6 @@ pub struct SoundEffectsTab {
     sfx_buffers: LaVec<Option<EditorBuffer>>,
 
     group: Flex,
-    file_state: TabFileState,
 
     sidebar: Flex,
     sfx_table: ListEditorTable<SoundEffectMapping>,
@@ -118,21 +117,11 @@ impl Tab for SoundEffectsTab {
     fn file_type(&self) -> FileType {
         FileType::SoundEffects
     }
-
-    fn file_state(&self) -> &TabFileState {
-        &self.file_state
-    }
-
-    fn file_state_mut(&mut self) -> &mut TabFileState {
-        &mut self.file_state
-    }
 }
 
 impl SoundEffectsTab {
     pub fn new(sender: app::Sender<Message>) -> Self {
         let mut group = Flex::default_fill().with_label("Sound Effects").row();
-
-        let file_state = TabFileState::new(group.clone(), None);
 
         // Sidebar
         let mut sidebar = Flex::default().column();
@@ -233,7 +222,6 @@ impl SoundEffectsTab {
             sfx_buffers: LaVec::new(),
 
             group,
-            file_state,
 
             sidebar,
             sfx_table,
@@ -250,19 +238,13 @@ impl SoundEffectsTab {
         s
     }
 
-    pub fn replace_sfx_file(
-        &mut self,
-        state: &impl ListState<Item = SoundEffectInput>,
-        file_name: String,
-    ) {
+    pub fn replace_sfx_file(&mut self, state: &impl ListState<Item = SoundEffectInput>) {
         let v: Vec<Option<EditorBuffer>> = (0..state.list().len()).map(|_| None).collect();
         assert!(v.len() == state.list().len());
 
         self.clear_selected();
         self.sfx_buffers = LaVec::from_vec(v);
         self.sfx_table.replace(state);
-
-        self.file_state.set_file_name(file_name);
 
         self.sidebar.activate();
     }
