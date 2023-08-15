@@ -99,20 +99,6 @@ pub fn load_project_file_or_show_error_message(path: &Path) -> Option<ProjectFil
     }
 }
 
-pub fn save_project_file(pd: &ProjectData) -> bool {
-    let path = pd.project_path();
-    let pf = pd.to_project();
-
-    match compiler::data::serialize_project(&pf) {
-        Ok(data) => write_file_show_dialog_on_error(path, "project file", &data),
-        Err(e) => {
-            dialog::message_title("Error serializing project");
-            dialog::alert_default(&format!("Cannot serialize project into JSON\n\n{}", e));
-            false
-        }
-    }
-}
-
 pub fn open_sfx_file_dialog(pd: &ProjectData) -> Option<(PathBuf, Option<SoundEffectsFile>)> {
     let p = pf_file_dialog(pd, "Load sound effects file", "TXT Files\t*.txt", "txt");
 
@@ -155,13 +141,6 @@ fn load_sfx_file(path: &Path) -> Option<SoundEffectsFile> {
     }
 }
 
-pub fn save_sfx_file(sfx_data: &SoundEffectsData) -> bool {
-    let path = sfx_data.full_path();
-
-    let sfx_file = build_sound_effects_file(sfx_data.header(), sfx_data.sound_effects_iter());
-    write_file_show_dialog_on_error(path, "sound effects file", sfx_file.as_bytes())
-}
-
 pub fn load_mml_file(pd: &ProjectData, path: &Path) -> Option<TextFile> {
     let path = pd.pf_parent_path.join(path);
 
@@ -201,13 +180,49 @@ pub fn add_song_to_pf_dialog(sender: &fltk::app::Sender<Message>, pd: &ProjectDa
     }
 }
 
-pub fn save_song(song_tab: &SongTab) -> bool {
-    // ::TODO show SaveAs dialog if `file_path` is `None` (or remove Option from `file_path()`)::
-    match song_tab.file_path() {
-        Some(path) => {
-            write_file_show_dialog_on_error(path, "MML song", song_tab.contents().as_bytes())
+pub trait Serializer {
+    const FILE_TYPE: &'static str;
+
+    fn serialize(data: &Self) -> Result<Vec<u8>, String>;
+}
+
+impl Serializer for ProjectData {
+    const FILE_TYPE: &'static str = "project";
+
+    fn serialize(pd: &ProjectData) -> Result<Vec<u8>, String> {
+        let project = pd.to_project();
+
+        compiler::data::serialize_project(&project).map_err(|e| e.to_string())
+    }
+}
+
+impl Serializer for SoundEffectsData {
+    const FILE_TYPE: &'static str = "sound effects";
+
+    fn serialize(data: &SoundEffectsData) -> Result<Vec<u8>, String> {
+        Ok(build_sound_effects_file(data.header(), data.sound_effects_iter()).into())
+    }
+}
+
+impl Serializer for SongTab {
+    const FILE_TYPE: &'static str = "MML song";
+
+    fn serialize(song_tab: &SongTab) -> Result<Vec<u8>, String> {
+        Ok(song_tab.contents().into())
+    }
+}
+
+pub fn save_data<S>(data: &S, path: &Path) -> bool
+where
+    S: Serializer,
+{
+    match Serializer::serialize(data) {
+        Ok(contents) => write_file_show_dialog_on_error(path, S::FILE_TYPE, &contents),
+        Err(e) => {
+            dialog::message_title(&format!("Error saving {}", S::FILE_TYPE));
+            dialog::alert_default(&format!("Error serializing {}\n\n{}", path.display(), e));
+            false
         }
-        None => false,
     }
 }
 

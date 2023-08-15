@@ -20,7 +20,6 @@ use fltk::prelude::*;
 use fltk::text::{TextBuffer, TextDisplay, TextEditor, WrapMode};
 
 use std::cell::RefCell;
-use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
 pub struct State {
@@ -41,7 +40,6 @@ pub struct SongTab {
     state: Rc<RefCell<State>>,
 
     song_id: ItemId,
-    file_path: Option<PathBuf>,
 
     group: Flex,
 }
@@ -141,14 +139,8 @@ impl SongTab {
             state,
             song_id,
 
-            file_path: mml_file.path.clone(),
-
             group,
         }
-    }
-
-    pub fn file_path(&self) -> Option<&Path> {
-        self.file_path.as_deref()
     }
 
     pub fn contents(&self) -> String {

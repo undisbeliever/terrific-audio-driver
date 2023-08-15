@@ -5,10 +5,12 @@
 // SPDX-License-Identifier: MIT
 
 use crate::compiler_thread::ItemId;
+use crate::files;
 use crate::Menu;
 use crate::Message;
 
 use std::collections::HashMap;
+use std::path::PathBuf;
 
 extern crate fltk;
 use fltk::dialog;
@@ -31,12 +33,15 @@ pub enum FileType {
 }
 
 mod file_state {
+    use std::path::{Path, PathBuf};
+
     use super::{Flex, Tab};
     use fltk::prelude::WidgetExt;
 
-    pub(crate) struct TabFileState {
+    pub struct TabFileState {
         tabs: Vec<(String, Flex)>,
 
+        path: Option<PathBuf>,
         file_name: Option<String>,
 
         is_unsaved: bool,
@@ -46,6 +51,7 @@ mod file_state {
         pub fn new() -> Self {
             TabFileState {
                 tabs: Vec::new(),
+                path: None,
                 file_name: None,
                 is_unsaved: false,
             }
@@ -61,13 +67,19 @@ mod file_state {
             }
         }
 
-        // Returns `None` if the file has not been saved.
-        pub fn file_name(&self) -> Option<&str> {
-            self.file_name.as_deref()
+        pub fn set_path(&mut self, path: PathBuf) {
+            assert!(path.is_absolute());
+
+            self.file_name = path.file_name().map(|s| s.to_string_lossy().to_string());
+            self.path = Some(path);
         }
 
-        pub fn set_file_name(&mut self, file_name: Option<String>) {
-            self.file_name = file_name;
+        pub fn path(&self) -> Option<&Path> {
+            self.path.as_deref()
+        }
+
+        pub fn file_name(&self) -> Option<&str> {
+            self.file_name.as_deref()
         }
 
         pub fn is_unsaved(&self) -> bool {
@@ -106,7 +118,7 @@ mod file_state {
         }
     }
 }
-use file_state::TabFileState;
+pub use file_state::TabFileState;
 
 pub struct TabManager {
     tabs_widget: fltk::group::Tabs,
@@ -125,12 +137,14 @@ impl TabManager {
         }
     }
 
-    pub fn add_or_modify(&mut self, t: &dyn Tab, file_name: Option<String>) {
+    pub fn add_or_modify(&mut self, t: &dyn Tab, path: Option<PathBuf>) {
         let ft = t.file_type();
 
         let state = self.file_states.entry(ft).or_insert(TabFileState::new());
 
-        state.set_file_name(file_name);
+        if let Some(p) = path {
+            state.set_path(p);
+        }
         state.add_tab(t);
 
         let tab_widget = t.widget();
@@ -201,9 +215,22 @@ impl TabManager {
         }
     }
 
-    pub fn mark_saved(&mut self, ft: FileType) {
-        if let Some(state) = self.file_states.get_mut(&ft) {
-            state.mark_saved();
+    pub fn save_tab(&mut self, ft: FileType, data: &impl files::Serializer) -> bool {
+        match self.file_states.get_mut(&ft) {
+            None => false,
+            Some(state) => {
+                let success = match state.path() {
+                    Some(path) => files::save_data(data, path),
+                    None => {
+                        // ::TODO show save as dialog::
+                        false
+                    }
+                };
+                if success {
+                    state.mark_saved();
+                }
+                success
+            }
         }
     }
 }

@@ -22,8 +22,7 @@ use crate::compiler_thread::{
 };
 use crate::files::{
     add_song_to_pf_dialog, load_mml_file, load_pf_sfx_file,
-    load_project_file_or_show_error_message, open_sfx_file_dialog, save_project_file,
-    save_sfx_file, save_song,
+    load_project_file_or_show_error_message, open_sfx_file_dialog,
 };
 use crate::helpers::input_height;
 use crate::list_editor::{
@@ -85,8 +84,6 @@ pub enum Message {
 // ::TODO remove::
 #[allow(dead_code)]
 pub struct ProjectData {
-    pf_path: PathBuf,
-    pf_file_name: String,
     pf_parent_path: PathBuf,
 
     // This the value stored in `data::Project`, it is relative to `pf_parent_path`
@@ -98,7 +95,6 @@ pub struct ProjectData {
 }
 
 pub struct SoundEffectsData {
-    full_path: PathBuf,
     header: String,
     sound_effects: ListWithCompilerOutput<SoundEffectInput, SoundEffectOutput>,
 }
@@ -139,8 +135,6 @@ impl Project {
         }
 
         let data = ProjectData {
-            pf_path: pf.path,
-            pf_file_name: pf.file_name,
             pf_parent_path: pf.parent_path,
 
             sound_effects_file: c.sound_effect_file,
@@ -152,7 +146,6 @@ impl Project {
                 driver_constants::MAX_INSTRUMENTS,
             ),
         };
-        assert!(data.pf_path.is_absolute());
 
         sender.send(Message::SelectedTabChanged);
         sender.send(Message::RecompileEverything);
@@ -188,10 +181,9 @@ impl Project {
             sender,
         };
 
+        out.tab_manager.add_or_modify(&out.project_tab, None);
         out.tab_manager
-            .add_or_modify(&out.project_tab, Some(out.data.pf_file_name.clone()));
-        out.tab_manager
-            .add_or_modify(&out.samples_tab, Some(out.data.pf_file_name.clone()));
+            .add_or_modify(&out.samples_tab, Some(pf.path));
         out.tab_manager
             .add_widget(out.sound_effects_tab.widget_mut());
         out
@@ -416,11 +408,6 @@ impl Project {
 
     fn maybe_set_sfx_file(&mut self, sfx_file: Option<SoundEffectsFile>) {
         if let Some(sfx_file) = sfx_file {
-            let full_path = match sfx_file.path {
-                Some(p) => p,
-                None => return,
-            };
-
             let sfx = convert_sfx_inputs_lossy(sfx_file.sound_effects);
 
             let (sfx, sfx_renamed) = deduplicate_names(sfx);
@@ -434,14 +421,13 @@ impl Project {
 
             self.sound_effects_tab.replace_sfx_file(&sound_effects);
             self.tab_manager
-                .add_or_modify(&self.sound_effects_tab, Some(sfx_file.file_name));
+                .add_or_modify(&self.sound_effects_tab, sfx_file.path);
 
             let _ = self.compiler_sender.send(ToCompiler::SoundEffects(
                 sound_effects.replace_all_message(),
             ));
 
             self.sfx_data = Some(SoundEffectsData {
-                full_path,
                 header: sfx_file.header,
                 sound_effects,
             });
@@ -467,7 +453,7 @@ impl Project {
         if let Some(f) = load_mml_file(&self.data, path) {
             let song_tab = SongTab::new(song_id.clone(), &f, self.sender.clone());
 
-            self.tab_manager.add_or_modify(&song_tab, Some(f.file_name));
+            self.tab_manager.add_or_modify(&song_tab, f.path);
             let _ = self.tabs.set_value(song_tab.widget());
 
             self.song_tabs.insert(song_id.clone(), song_tab);
@@ -487,21 +473,17 @@ impl Project {
     }
 
     fn save_file(&mut self, ft: FileType) -> bool {
-        let success = match &ft {
-            FileType::Project => save_project_file(&self.data),
+        match &ft {
+            FileType::Project => self.tab_manager.save_tab(ft, &self.data),
             FileType::SoundEffects => match &self.sfx_data {
-                Some(sfx_data) => save_sfx_file(sfx_data),
+                Some(sfx_data) => self.tab_manager.save_tab(ft, sfx_data),
                 None => false,
             },
-            FileType::Song(id) => match &mut self.song_tabs.get_mut(id) {
-                Some(song_tab) => save_song(song_tab),
+            FileType::Song(id) => match self.song_tabs.get(id) {
+                Some(song_tab) => self.tab_manager.save_tab(ft, song_tab),
                 None => false,
             },
-        };
-        if success {
-            self.tab_manager.mark_saved(ft);
         }
-        success
     }
 
     fn save_all(&mut self, unsaved: Vec<FileType>) -> bool {
@@ -514,10 +496,6 @@ impl Project {
 }
 
 impl ProjectData {
-    pub fn project_path(&self) -> &Path {
-        &self.pf_path
-    }
-
     pub fn to_project(&self) -> compiler::data::Project {
         compiler::data::Project {
             instruments: self.instruments.list().item_iter().cloned().collect(),
@@ -530,10 +508,6 @@ impl ProjectData {
 }
 
 impl SoundEffectsData {
-    pub fn full_path(&self) -> &Path {
-        &self.full_path
-    }
-
     pub fn header(&self) -> &str {
         &self.header
     }
