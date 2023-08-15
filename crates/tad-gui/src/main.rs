@@ -287,8 +287,7 @@ impl Project {
 
             Message::OpenSfxFileDialog => {
                 if let Some((pf_path, sfx_file)) = open_sfx_file_dialog(&self.data) {
-                    // ::TODO mark project file as changed::
-                    self.data.sound_effects_file = Some(pf_path);
+                    self.set_pf_sound_effects_file(pf_path);
 
                     self.maybe_set_sfx_file(Some(sfx_file));
                 }
@@ -493,8 +492,7 @@ impl Project {
                     SaveResult::None => false,
                     SaveResult::Saved => true,
                     SaveResult::Renamed { pf_path } => {
-                        self.data.sound_effects_file = Some(pf_path);
-                        self.tab_manager.mark_unsaved(FileType::Project);
+                        self.set_pf_sound_effects_file(pf_path);
                         true
                     }
                 },
@@ -539,6 +537,11 @@ impl Project {
                     },
                 )));
         }
+    }
+
+    fn set_pf_sound_effects_file(&mut self, pf_path: PathBuf) {
+        self.data.sound_effects_file = Some(pf_path);
+        self.tab_manager.mark_unsaved(FileType::Project);
     }
 }
 
