@@ -21,6 +21,9 @@ use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
+const SOUND_EFFECTS_FILTER: &str = "TXT Files\t*.txt";
+const MML_SONG_FILTER: &str = "MML Files\t*.mml";
+
 pub struct PfFileDialogResult {
     pub path: PathBuf,
     pub pf_path: PathBuf,
@@ -29,7 +32,7 @@ pub struct PfFileDialogResult {
 fn validate_pf_file_dialog_output(
     dialog: &dialog::NativeFileChooser,
     pd: &ProjectData,
-    default_extension: &str,
+    add_missing_extension: Option<&str>,
     choice_question: &str,
 ) -> Option<PfFileDialogResult> {
     let paths = dialog.filenames();
@@ -40,8 +43,10 @@ fn validate_pf_file_dialog_output(
 
     let mut path = paths.into_iter().next().unwrap();
 
-    if path.extension().is_none() {
-        path.set_extension(default_extension);
+    if let Some(e) = add_missing_extension {
+        if path.extension().is_none() {
+            path.set_extension(e);
+        }
     }
 
     match path.strip_prefix(&pd.pf_parent_path) {
@@ -73,25 +78,15 @@ fn validate_pf_file_dialog_output(
     }
 }
 
-fn pf_file_dialog(
-    pd: &ProjectData,
-    title: &str,
-    filter: &str,
-    default_extension: &str,
-) -> Option<PfFileDialogResult> {
-    let mut dialog = dialog::NativeFileChooser::new(dialog::FileDialogType::BrowseSaveFile);
+fn pf_open_file_dialog(pd: &ProjectData, title: &str, filter: &str) -> Option<PfFileDialogResult> {
+    let mut dialog = dialog::NativeFileChooser::new(dialog::FileDialogType::BrowseFile);
     dialog.set_title(title);
     dialog.set_filter(filter);
     dialog.set_option(dialog::FileDialogOptions::UseFilterExt);
     let _ = dialog.set_directory(&pd.pf_parent_path);
     dialog.show();
 
-    validate_pf_file_dialog_output(
-        &dialog,
-        pd,
-        default_extension,
-        "Do you still want to add it to the project?",
-    )
+    validate_pf_file_dialog_output(&dialog, pd, None, "Do you still want to open it?")
 }
 
 fn pf_save_file_dialog(
@@ -115,7 +110,7 @@ fn pf_save_file_dialog(
     validate_pf_file_dialog_output(
         &dialog,
         pd,
-        default_extension,
+        Some(default_extension),
         "Do you still want to save to to this location?",
     )
 }
@@ -146,25 +141,13 @@ pub fn load_project_file_or_show_error_message(path: &Path) -> Option<ProjectFil
     }
 }
 
-pub fn open_sfx_file_dialog(pd: &ProjectData) -> Option<(PathBuf, Option<SoundEffectsFile>)> {
-    let p = pf_file_dialog(pd, "Load sound effects file", "TXT Files\t*.txt", "txt");
+pub fn open_sfx_file_dialog(pd: &ProjectData) -> Option<(PathBuf, SoundEffectsFile)> {
+    let p = pf_open_file_dialog(pd, "Load sound effects file", SOUND_EFFECTS_FILTER);
 
     match p {
-        Some(p) => match p.path.try_exists() {
-            Ok(true) => Some((p.pf_path, load_sfx_file(&p.path))),
-            Ok(false) => match write_to_new_file(&p.path, &[]) {
-                Ok(()) => Some((p.pf_path, load_sfx_file(&p.path))),
-                Err(e) => {
-                    dialog::message_title("Error writing sound effects file");
-                    dialog::alert_default(&format!("{}", e));
-                    None
-                }
-            },
-            Err(e) => {
-                dialog::message_title("Error loading sound effects file");
-                dialog::alert_default(&format!("{}", e));
-                None
-            }
+        Some(p) => match load_sfx_file(&p.path) {
+            Some(sfx) => Some((p.pf_path, sfx)),
+            None => None,
         },
         None => None,
     }
@@ -202,7 +185,7 @@ pub fn load_mml_file(pd: &ProjectData, path: &Path) -> Option<TextFile> {
 }
 
 pub fn add_song_to_pf_dialog(sender: &fltk::app::Sender<Message>, pd: &ProjectData) {
-    if let Some(p) = pf_file_dialog(pd, "Add song", "MML Files\t*.mml", "mml") {
+    if let Some(p) = pf_open_file_dialog(pd, "Add song to project", MML_SONG_FILTER) {
         match pd
             .project_songs
             .list()
@@ -250,7 +233,7 @@ impl Serializer for ProjectData {
 impl Serializer for SoundEffectsData {
     const FILE_TYPE: &'static str = "sound effects";
     const FILE_EXTENSION: &'static str = "txt";
-    const DIALOG_FILTER: Option<&'static str> = Some("TXT Files\t*.txt");
+    const DIALOG_FILTER: Option<&'static str> = Some(SOUND_EFFECTS_FILTER);
 
     fn serialize(data: &SoundEffectsData) -> Result<Vec<u8>, String> {
         Ok(build_sound_effects_file(data.header(), data.sound_effects_iter()).into())
@@ -260,7 +243,7 @@ impl Serializer for SoundEffectsData {
 impl Serializer for SongTab {
     const FILE_TYPE: &'static str = "MML song";
     const FILE_EXTENSION: &'static str = "mml";
-    const DIALOG_FILTER: Option<&'static str> = Some("MML Files\t*.mml");
+    const DIALOG_FILTER: Option<&'static str> = Some(MML_SONG_FILTER);
 
     fn serialize(song_tab: &SongTab) -> Result<Vec<u8>, String> {
         Ok(song_tab.contents().into())
@@ -308,6 +291,7 @@ where
 }
 
 /// Writes contents to a new file and errors if the file already exists::
+#[allow(dead_code)]
 fn write_to_new_file(path: &Path, contents: &[u8]) -> std::io::Result<()> {
     assert!(path.is_absolute());
 

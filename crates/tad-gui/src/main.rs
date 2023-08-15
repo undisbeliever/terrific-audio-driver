@@ -289,7 +289,8 @@ impl Project {
                 if let Some((pf_path, sfx_file)) = open_sfx_file_dialog(&self.data) {
                     // ::TODO mark project file as changed::
                     self.data.sound_effects_file = Some(pf_path);
-                    self.maybe_set_sfx_file(sfx_file);
+
+                    self.maybe_set_sfx_file(Some(sfx_file));
                 }
             }
             Message::LoadSfxFile => {
