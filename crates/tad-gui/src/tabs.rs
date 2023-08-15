@@ -6,8 +6,7 @@
 
 use crate::compiler_thread::ItemId;
 use crate::files;
-use crate::Menu;
-use crate::Message;
+use crate::{Menu, Message, ProjectData};
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -30,6 +29,16 @@ pub enum FileType {
     Project,
     SoundEffects,
     Song(ItemId),
+}
+
+impl FileType {
+    fn can_save_as(&self) -> bool {
+        match self {
+            Self::Project => false,
+            Self::SoundEffects => true,
+            Self::Song(_) => true,
+        }
+    }
 }
 
 mod file_state {
@@ -65,6 +74,10 @@ mod file_state {
                 Some((tab_label, _widget)) => *tab_label = label,
                 None => self.tabs.push((label, tab_widget)),
             }
+        }
+
+        pub fn first_widget(&self) -> Option<&fltk::group::Flex> {
+            self.tabs.first().map(|(_, w)| w)
         }
 
         pub fn set_path(&mut self, path: PathBuf) {
@@ -118,7 +131,28 @@ mod file_state {
         }
     }
 }
-pub use file_state::TabFileState;
+use file_state::TabFileState;
+
+pub enum SaveType {
+    Save,
+    SaveAs,
+}
+
+pub enum SaveResult {
+    None,
+    Saved,
+    Renamed { pf_path: PathBuf },
+}
+
+impl SaveResult {
+    pub fn is_saved(&self) -> bool {
+        match self {
+            Self::None => false,
+            Self::Saved => true,
+            Self::Renamed { .. } => true,
+        }
+    }
+}
 
 pub struct TabManager {
     tabs_widget: fltk::group::Tabs,
@@ -186,6 +220,12 @@ impl TabManager {
                 menu.save.deactivate();
             }
         }
+
+        if self.selected_file.as_ref().is_some_and(|s| s.can_save_as()) {
+            menu.save_as.activate();
+        } else {
+            menu.save_as.deactivate();
+        }
     }
 
     pub fn selected_file(&self) -> Option<FileType> {
@@ -215,21 +255,41 @@ impl TabManager {
         }
     }
 
-    pub fn save_tab(&mut self, ft: FileType, data: &impl files::Serializer) -> bool {
-        match self.file_states.get_mut(&ft) {
-            None => false,
-            Some(state) => {
-                let success = match state.path() {
-                    Some(path) => files::save_data(data, path),
-                    None => {
-                        // ::TODO show save as dialog::
-                        false
-                    }
-                };
-                if success {
+    pub fn save_tab(
+        &mut self,
+        ft: FileType,
+        save_type: SaveType,
+        data: &impl files::Serializer,
+        pd: &ProjectData,
+    ) -> SaveResult {
+        let state = match self.file_states.get_mut(&ft) {
+            Some(s) => s,
+            None => return SaveResult::None,
+        };
+
+        match (save_type, state.path()) {
+            (SaveType::Save, Some(path)) => {
+                if files::save_data(data, path) {
                     state.mark_saved();
+                    SaveResult::Saved
+                } else {
+                    SaveResult::None
                 }
-                success
+            }
+            (SaveType::SaveAs, _) | (SaveType::Save, None) => {
+                // Show tab so the user know what is being saved in SaveAllAndQuit
+                if let Some(w) = state.first_widget() {
+                    let _ = self.tabs_widget.set_value(w);
+                }
+
+                match files::save_data_with_save_as_dialog(data, state.path(), pd) {
+                    Some(p) => {
+                        state.set_path(p.path);
+                        state.mark_saved();
+                        SaveResult::Renamed { pf_path: p.pf_path }
+                    }
+                    None => SaveResult::None,
+                }
             }
         }
     }

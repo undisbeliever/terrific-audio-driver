@@ -34,7 +34,9 @@ use crate::project_tab::ProjectTab;
 use crate::samples_tab::SamplesTab;
 use crate::song_tab::SongTab;
 use crate::sound_effects_tab::SoundEffectsTab;
-use crate::tabs::{quit_with_unsaved_files_dialog, FileType, Tab, TabManager};
+use crate::tabs::{
+    quit_with_unsaved_files_dialog, FileType, SaveResult, SaveType, Tab, TabManager,
+};
 
 use compiler::sound_effects::{convert_sfx_inputs_lossy, SoundEffectInput, SoundEffectsFile};
 use compiler::{data, driver_constants, ProjectFile};
@@ -54,6 +56,7 @@ pub enum Message {
     SelectedTabChanged,
 
     SaveSelectedTabIfUnsaved,
+    SaveSelectedTabAs,
     SaveAllUnsaved,
     QuitRequested,
     ForceQuit,
@@ -271,14 +274,17 @@ impl Project {
             Message::SaveSelectedTabIfUnsaved => {
                 if let Some(ft) = self.tab_manager.selected_file() {
                     if self.tab_manager.is_unsaved(&ft) {
-                        self.save_file(ft);
+                        self.save_file(ft, SaveType::Save);
                     }
                 }
             }
-            Message::SaveAllUnsaved => {
-                for u in self.tab_manager.unsaved_tabs() {
-                    self.save_file(u);
+            Message::SaveSelectedTabAs => {
+                if let Some(ft) = self.tab_manager.selected_file() {
+                    self.save_file(ft, SaveType::SaveAs);
                 }
+            }
+            Message::SaveAllUnsaved => {
+                self.save_all(self.tab_manager.unsaved_tabs());
             }
 
             Message::OpenSfxFileDialog => {
@@ -472,26 +478,68 @@ impl Project {
         }
     }
 
-    fn save_file(&mut self, ft: FileType) -> bool {
+    fn save_file(&mut self, ft: FileType, save_type: SaveType) -> bool {
         match &ft {
-            FileType::Project => self.tab_manager.save_tab(ft, &self.data),
+            FileType::Project => {
+                // No match required, cannot save_as a project
+                self.tab_manager
+                    .save_tab(ft, save_type, &self.data, &self.data)
+                    .is_saved()
+            }
             FileType::SoundEffects => match &self.sfx_data {
-                Some(sfx_data) => self.tab_manager.save_tab(ft, sfx_data),
+                Some(sfx_data) => match self
+                    .tab_manager
+                    .save_tab(ft, save_type, sfx_data, &self.data)
+                {
+                    SaveResult::None => false,
+                    SaveResult::Saved => true,
+                    SaveResult::Renamed { pf_path } => {
+                        self.data.sound_effects_file = Some(pf_path);
+                        self.tab_manager.mark_unsaved(FileType::Project);
+                        true
+                    }
+                },
                 None => false,
             },
-            FileType::Song(id) => match self.song_tabs.get(id) {
-                Some(song_tab) => self.tab_manager.save_tab(ft, song_tab),
-                None => false,
-            },
+            FileType::Song(id) => {
+                let id = id.clone();
+                match self.song_tabs.get(&id) {
+                    Some(song_tab) => match self
+                        .tab_manager
+                        .save_tab(ft, save_type, song_tab, &self.data)
+                    {
+                        SaveResult::None => false,
+                        SaveResult::Saved => true,
+                        SaveResult::Renamed { pf_path } => {
+                            self.edit_pf_song_path(id, pf_path);
+                            true
+                        }
+                    },
+                    None => false,
+                }
+            }
         }
     }
 
     fn save_all(&mut self, unsaved: Vec<FileType>) -> bool {
         let mut success = true;
         for f in unsaved {
-            success &= self.save_file(f);
+            success &= self.save_file(f, SaveType::Save);
         }
         success
+    }
+
+    fn edit_pf_song_path(&mut self, id: ItemId, pf_path: PathBuf) {
+        if let Some((index, song)) = self.data.project_songs.list().get_id(id) {
+            self.sender
+                .send(Message::EditProjectSongs(ListMessage::ItemEdited(
+                    index,
+                    data::Song {
+                        source: pf_path,
+                        ..song.clone()
+                    },
+                )));
+        }
     }
 }
 
@@ -521,6 +569,7 @@ pub struct Menu {
     menu: menu::MenuBar,
 
     save: menu::MenuItem,
+    save_as: menu::MenuItem,
     save_all: menu::MenuItem,
 }
 
@@ -544,6 +593,12 @@ impl Menu {
             fltk::menu::MenuFlag::Normal,
             || Message::SaveSelectedTabIfUnsaved,
         );
+        let save_as = add(
+            "&File/Save As",
+            Shortcut::None,
+            fltk::menu::MenuFlag::Normal,
+            || Message::SaveSelectedTabAs,
+        );
         let save_all = add(
             "&File/Save &All",
             Shortcut::Ctrl | Shortcut::Shift | 's',
@@ -560,12 +615,14 @@ impl Menu {
         Menu {
             menu,
             save,
+            save_as,
             save_all,
         }
     }
 
     fn deactivate(&mut self) {
         self.save.deactivate();
+        self.save_as.deactivate();
         self.save_all.deactivate();
     }
 

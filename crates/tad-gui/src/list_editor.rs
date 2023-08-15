@@ -205,6 +205,14 @@ where
         self.list.iter().position(|i| i.0 == id)
     }
 
+    pub fn get_id(&self, id: ItemId) -> Option<(usize, &T)> {
+        self.list
+            .iter()
+            .enumerate()
+            .find(|(_, i)| i.0 == id)
+            .map(|(id, i)| (id, &i.1))
+    }
+
     #[must_use]
     fn replace_all_message(&self) -> ItemChanged<T> {
         ItemChanged::ReplaceAll(self.list.to_owned())

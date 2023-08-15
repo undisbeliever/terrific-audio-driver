@@ -21,24 +21,17 @@ use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
-struct PfFileDialogResult {
+pub struct PfFileDialogResult {
     pub path: PathBuf,
     pub pf_path: PathBuf,
 }
 
-fn pf_file_dialog(
+fn validate_pf_file_dialog_output(
+    dialog: &dialog::NativeFileChooser,
     pd: &ProjectData,
-    title: &str,
-    filter: &str,
     default_extension: &str,
+    choice_question: &str,
 ) -> Option<PfFileDialogResult> {
-    let mut dialog = dialog::NativeFileChooser::new(dialog::FileDialogType::BrowseSaveFile);
-    dialog.set_title(title);
-    dialog.set_filter(filter);
-    dialog.set_option(dialog::FileDialogOptions::UseFilterExt);
-    let _ = dialog.set_directory(&pd.pf_parent_path);
-    dialog.show();
-
     let paths = dialog.filenames();
 
     if paths.len() != 1 {
@@ -59,8 +52,15 @@ fn pf_file_dialog(
         Err(_) => {
             dialog::message_title("Warning");
             let choice = dialog::choice2_default(
-                    &format!("{} is outside of the project file.\nDo you still want to add it to the project?", path.display()),
-                    "No", "Yes", "");
+                &format!(
+                    "{} is outside of the project file.\n{}",
+                    path.display(),
+                    choice_question
+                ),
+                "No",
+                "Yes",
+                "",
+            );
             match choice {
                 // ::TODO make pf_path a relative path (if possible)::
                 Some(1) => Some(PfFileDialogResult {
@@ -71,6 +71,53 @@ fn pf_file_dialog(
             }
         }
     }
+}
+
+fn pf_file_dialog(
+    pd: &ProjectData,
+    title: &str,
+    filter: &str,
+    default_extension: &str,
+) -> Option<PfFileDialogResult> {
+    let mut dialog = dialog::NativeFileChooser::new(dialog::FileDialogType::BrowseSaveFile);
+    dialog.set_title(title);
+    dialog.set_filter(filter);
+    dialog.set_option(dialog::FileDialogOptions::UseFilterExt);
+    let _ = dialog.set_directory(&pd.pf_parent_path);
+    dialog.show();
+
+    validate_pf_file_dialog_output(
+        &dialog,
+        pd,
+        default_extension,
+        "Do you still want to add it to the project?",
+    )
+}
+
+fn pf_save_file_dialog(
+    pd: &ProjectData,
+    path: Option<&Path>,
+    title: &str,
+    filter: &str,
+    default_extension: &str,
+) -> Option<PfFileDialogResult> {
+    let mut dialog = dialog::NativeFileChooser::new(dialog::FileDialogType::BrowseSaveFile);
+    dialog.set_title(title);
+    dialog.set_filter(filter);
+    dialog.set_option(
+        dialog::FileDialogOptions::SaveAsConfirm | dialog::FileDialogOptions::UseFilterExt,
+    );
+
+    let _ = dialog.set_directory(&path.unwrap_or(&pd.pf_parent_path));
+
+    dialog.show();
+
+    validate_pf_file_dialog_output(
+        &dialog,
+        pd,
+        default_extension,
+        "Do you still want to save to to this location?",
+    )
 }
 
 pub fn load_project_file_or_show_error_message(path: &Path) -> Option<ProjectFile> {
@@ -182,12 +229,16 @@ pub fn add_song_to_pf_dialog(sender: &fltk::app::Sender<Message>, pd: &ProjectDa
 
 pub trait Serializer {
     const FILE_TYPE: &'static str;
+    const FILE_EXTENSION: &'static str;
+    const DIALOG_FILTER: Option<&'static str>;
 
     fn serialize(data: &Self) -> Result<Vec<u8>, String>;
 }
 
 impl Serializer for ProjectData {
     const FILE_TYPE: &'static str = "project";
+    const FILE_EXTENSION: &'static str = "json";
+    const DIALOG_FILTER: Option<&'static str> = None;
 
     fn serialize(pd: &ProjectData) -> Result<Vec<u8>, String> {
         let project = pd.to_project();
@@ -198,6 +249,8 @@ impl Serializer for ProjectData {
 
 impl Serializer for SoundEffectsData {
     const FILE_TYPE: &'static str = "sound effects";
+    const FILE_EXTENSION: &'static str = "txt";
+    const DIALOG_FILTER: Option<&'static str> = Some("TXT Files\t*.txt");
 
     fn serialize(data: &SoundEffectsData) -> Result<Vec<u8>, String> {
         Ok(build_sound_effects_file(data.header(), data.sound_effects_iter()).into())
@@ -206,6 +259,8 @@ impl Serializer for SoundEffectsData {
 
 impl Serializer for SongTab {
     const FILE_TYPE: &'static str = "MML song";
+    const FILE_EXTENSION: &'static str = "mml";
+    const DIALOG_FILTER: Option<&'static str> = Some("MML Files\t*.mml");
 
     fn serialize(song_tab: &SongTab) -> Result<Vec<u8>, String> {
         Ok(song_tab.contents().into())
@@ -223,6 +278,32 @@ where
             dialog::alert_default(&format!("Error serializing {}\n\n{}", path.display(), e));
             false
         }
+    }
+}
+
+pub fn save_data_with_save_as_dialog<S>(
+    data: &S,
+    path: Option<&Path>,
+    pd: &ProjectData,
+) -> Option<PfFileDialogResult>
+where
+    S: Serializer,
+{
+    let filter = match S::DIALOG_FILTER {
+        Some(s) => s,
+        None => return None,
+    };
+    let dialog_title = format!("Save {} as", S::FILE_TYPE);
+
+    let p = match pf_save_file_dialog(pd, path, &dialog_title, filter, S::FILE_EXTENSION) {
+        Some(p) => p,
+        None => return None,
+    };
+
+    if save_data(data, &p.path) {
+        Some(p)
+    } else {
+        None
     }
 }
 
