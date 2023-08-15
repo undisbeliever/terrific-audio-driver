@@ -55,7 +55,7 @@ use std::sync::mpsc;
 pub enum Message {
     SelectedTabChanged,
 
-    SaveSelectedTabIfUnsaved,
+    SaveSelectedTab,
     SaveSelectedTabAs,
     SaveAllUnsaved,
     QuitRequested,
@@ -271,11 +271,9 @@ impl Project {
                 }
             }
 
-            Message::SaveSelectedTabIfUnsaved => {
+            Message::SaveSelectedTab => {
                 if let Some(ft) = self.tab_manager.selected_file() {
-                    if self.tab_manager.is_unsaved(&ft) {
-                        self.save_file(ft, SaveType::Save);
-                    }
+                    self.save_file(ft, SaveType::Save);
                 }
             }
             Message::SaveSelectedTabAs => {
@@ -591,7 +589,7 @@ impl Menu {
             "&File/&Save",
             Shortcut::Ctrl | 's',
             fltk::menu::MenuFlag::Normal,
-            || Message::SaveSelectedTabIfUnsaved,
+            || Message::SaveSelectedTab,
         );
         let save_as = add(
             "&File/Save As",

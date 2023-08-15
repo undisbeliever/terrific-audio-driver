@@ -232,10 +232,6 @@ impl TabManager {
         self.selected_file.clone()
     }
 
-    pub fn is_unsaved(&self, ft: &FileType) -> bool {
-        self.file_states.get(ft).is_some_and(|s| s.is_unsaved())
-    }
-
     pub fn unsaved_tabs(&self) -> Vec<FileType> {
         let mut v: Vec<FileType> = self
             .file_states
