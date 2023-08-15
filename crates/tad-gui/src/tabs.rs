@@ -298,13 +298,13 @@ pub fn quit_with_unsaved_files_dialog(unsaved: Vec<FileType>, sender: fltk::app:
             "Save changes to {} unsaved files before closing?",
             unsaved.len()
         ),
-        "Quit without saving",
-        "Save",
         "Cancel",
+        "Save",
+        "Quit without saving",
     );
     match choice {
-        Some(0) => sender.send(Message::ForceQuit),
         Some(1) => sender.send(Message::SaveAllAndQuit(unsaved)),
+        Some(2) => sender.send(Message::ForceQuit),
         _ => (),
     }
 }
