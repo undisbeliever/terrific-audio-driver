@@ -15,11 +15,13 @@ use crate::tabs::{FileType, Tab};
 use crate::Message;
 
 use compiler::errors::SfxErrorLines;
-use compiler::sound_effects::SoundEffectInput;
+use compiler::sound_effects::{SoundEffectInput, SoundEffectsFile};
 use compiler::Name;
 
 use fltk::app;
+use fltk::button::Button;
 use fltk::enums::{Color, Event, Font};
+use fltk::frame::Frame;
 use fltk::group::{Flex, Pack, PackType};
 use fltk::input::Input;
 use fltk::prelude::*;
@@ -30,6 +32,15 @@ use std::cmp::{max, min};
 use std::rc::Rc;
 
 // ::TODO read and write sound effects file header in Sound Effects Tab::
+
+pub fn blank_sfx_file() -> SoundEffectsFile {
+    SoundEffectsFile {
+        path: None,
+        file_name: "new_file.txt".into(),
+        header: String::new(),
+        sound_effects: Vec::new(),
+    }
+}
 
 struct SoundEffectMapping;
 impl TableMapping for SoundEffectMapping {
@@ -93,6 +104,8 @@ pub struct SoundEffectsTab {
 
     group: Flex,
 
+    no_sfx_file_gui: Flex,
+
     sidebar: Flex,
     sfx_table: ListEditorTable<SoundEffectMapping>,
 
@@ -134,7 +147,10 @@ impl SoundEffectsTab {
 
         sidebar.end();
 
+        let no_sfx_file_group = no_sfx_file_gui(sender.clone());
+
         let mut main_group = Flex::default().column();
+        main_group.hide();
 
         let button_size = ch_units_to_width(&main_group, 5);
 
@@ -222,6 +238,7 @@ impl SoundEffectsTab {
             sfx_buffers: LaVec::new(),
 
             group,
+            no_sfx_file_gui: no_sfx_file_group,
 
             sidebar,
             sfx_table,
@@ -245,6 +262,11 @@ impl SoundEffectsTab {
         self.clear_selected();
         self.sfx_buffers = LaVec::from_vec(v);
         self.sfx_table.replace(state);
+
+        self.group.remove(&self.no_sfx_file_gui);
+
+        self.main_group.show();
+        self.group.layout();
 
         self.sidebar.activate();
     }
@@ -416,6 +438,46 @@ impl CompilerOutputGui<SoundEffectOutput> for SoundEffectsTab {
             }
         }
     }
+}
+
+fn no_sfx_file_gui(sender: app::Sender<Message>) -> Flex {
+    let mut group = Flex::default().column();
+
+    let button_width = ch_units_to_width(&group, 15);
+    let line_height = input_height(&group);
+
+    let label_frame = label("No sound effect file");
+    group.fixed(&label_frame, line_height);
+
+    let mut button_pack = Pack::default().with_size(button_width * 3, line_height * 2);
+    group.fixed(&button_pack, line_height);
+    button_pack.set_spacing(5);
+
+    let button = |label: &str, f: fn() -> Message| {
+        let mut b = Button::default()
+            .with_size(button_width, 0)
+            .with_label(label);
+        b.set_callback({
+            let s = sender.clone();
+            move |_| {
+                s.send(f());
+            }
+        });
+        b
+    };
+
+    button("New File", || Message::NewSfxFile);
+    button("Retry File", || Message::LoadSfxFile);
+    button("Open File", || Message::OpenSfxFileDialog);
+
+    button_pack.end();
+    button_pack.set_type(fltk::group::PackType::Horizontal);
+
+    Frame::default();
+
+    group.end();
+
+    group
 }
 
 #[allow(dead_code)]

@@ -33,7 +33,7 @@ use crate::names::deduplicate_names;
 use crate::project_tab::ProjectTab;
 use crate::samples_tab::SamplesTab;
 use crate::song_tab::SongTab;
-use crate::sound_effects_tab::SoundEffectsTab;
+use crate::sound_effects_tab::{blank_sfx_file, SoundEffectsTab};
 use crate::tabs::{
     quit_with_unsaved_files_dialog, FileType, SaveResult, SaveType, Tab, TabManager,
 };
@@ -68,6 +68,7 @@ pub enum Message {
 
     // ::TODO add menu item for open/load SFX file::
     OpenSfxFileDialog,
+    NewSfxFile,
     LoadSfxFile,
 
     RecompileEverything,
@@ -287,14 +288,25 @@ impl Project {
             }
 
             Message::OpenSfxFileDialog => {
-                if let Some((pf_path, sfx_file)) = open_sfx_file_dialog(&self.data) {
-                    self.set_pf_sound_effects_file(pf_path);
-
-                    self.maybe_set_sfx_file(Some(sfx_file));
+                if self.sfx_data.is_none() {
+                    if let Some((pf_path, sfx_file)) = open_sfx_file_dialog(&self.data) {
+                        self.set_pf_sound_effects_file(pf_path);
+                        self.maybe_set_sfx_file(sfx_file);
+                    }
+                }
+            }
+            Message::NewSfxFile => {
+                if self.sfx_data.is_none() {
+                    self.maybe_set_sfx_file(blank_sfx_file());
+                    self.tab_manager.mark_unsaved(FileType::SoundEffects);
                 }
             }
             Message::LoadSfxFile => {
-                self.maybe_set_sfx_file(load_pf_sfx_file(&self.data));
+                if self.sfx_data.is_none() {
+                    if let Some(sfx_data) = load_pf_sfx_file(&self.data) {
+                        self.maybe_set_sfx_file(sfx_data);
+                    }
+                }
             }
             Message::RecompileEverything => {
                 self.recompile_everything();
@@ -411,32 +423,33 @@ impl Project {
         self.tab_manager.selected_tab_changed(menu);
     }
 
-    fn maybe_set_sfx_file(&mut self, sfx_file: Option<SoundEffectsFile>) {
-        if let Some(sfx_file) = sfx_file {
-            let sfx = convert_sfx_inputs_lossy(sfx_file.sound_effects);
+    fn maybe_set_sfx_file(&mut self, sfx_file: SoundEffectsFile) {
+        let sfx = convert_sfx_inputs_lossy(sfx_file.sound_effects);
 
-            let (sfx, sfx_renamed) = deduplicate_names(sfx);
-            if sfx_renamed > 0 {
-                dialog::message_title("Duplicate names found");
-                dialog::alert_default(&format!("{} sound effects have been renamed", sfx_renamed));
-            }
-
-            let sound_effects =
-                ListWithCompilerOutput::new(sfx, driver_constants::MAX_SOUND_EFFECTS + 20);
-
-            self.sound_effects_tab.replace_sfx_file(&sound_effects);
-            self.tab_manager
-                .add_or_modify(&self.sound_effects_tab, sfx_file.path);
-
-            let _ = self.compiler_sender.send(ToCompiler::SoundEffects(
-                sound_effects.replace_all_message(),
-            ));
-
-            self.sfx_data = Some(SoundEffectsData {
-                header: sfx_file.header,
-                sound_effects,
-            });
+        let (sfx, sfx_renamed) = deduplicate_names(sfx);
+        if sfx_renamed > 0 {
+            dialog::message_title("Duplicate names found");
+            dialog::alert_default(&format!("{} sound effects have been renamed", sfx_renamed));
         }
+
+        let sound_effects =
+            ListWithCompilerOutput::new(sfx, driver_constants::MAX_SOUND_EFFECTS + 20);
+
+        self.sound_effects_tab.replace_sfx_file(&sound_effects);
+        self.tab_manager
+            .add_or_modify(&self.sound_effects_tab, sfx_file.path);
+
+        let _ = self.compiler_sender.send(ToCompiler::SoundEffects(
+            sound_effects.replace_all_message(),
+        ));
+
+        self.sfx_data = Some(SoundEffectsData {
+            header: sfx_file.header,
+            sound_effects,
+        });
+
+        // Update Save menu
+        self.sender.send(Message::SelectedTabChanged);
     }
 
     fn open_song_tab(&mut self, song_index: usize) {
