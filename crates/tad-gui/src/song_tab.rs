@@ -22,6 +22,14 @@ use fltk::text::{TextBuffer, TextDisplay, TextEditor, WrapMode};
 use std::cell::RefCell;
 use std::rc::Rc;
 
+pub fn blank_mml_file() -> TextFile {
+    TextFile {
+        path: None,
+        file_name: "new song.mml".to_owned(),
+        contents: String::new(),
+    }
+}
+
 pub struct State {
     sender: app::Sender<Message>,
 

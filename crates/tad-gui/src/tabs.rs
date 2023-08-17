@@ -9,7 +9,7 @@ use crate::files;
 use crate::{Menu, Message, ProjectData};
 
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 extern crate fltk;
 use fltk::dialog;
@@ -230,6 +230,14 @@ impl TabManager {
 
     pub fn selected_file(&self) -> Option<FileType> {
         self.selected_file.clone()
+    }
+
+    pub fn find_file(&self, p: &Path) -> Option<FileType> {
+        let p = Some(p);
+        self.file_states
+            .iter()
+            .find(|i| i.1.path() == p)
+            .map(|i| i.0.clone())
     }
 
     pub fn unsaved_tabs(&self) -> Vec<FileType> {

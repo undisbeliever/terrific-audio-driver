@@ -171,10 +171,8 @@ fn load_sfx_file(path: &Path) -> Option<SoundEffectsFile> {
     }
 }
 
-pub fn load_mml_file(pd: &ProjectData, path: &Path) -> Option<TextFile> {
-    let path = pd.pf_parent_path.join(path);
-
-    match load_text_file_with_limit(&path) {
+pub fn load_mml_file(full_path: &Path) -> Option<TextFile> {
+    match load_text_file_with_limit(full_path) {
         Ok(f) => Some(f),
         Err(e) => {
             dialog::message_title("Error loading MML file");
@@ -184,8 +182,12 @@ pub fn load_mml_file(pd: &ProjectData, path: &Path) -> Option<TextFile> {
     }
 }
 
+pub fn open_mml_file_dialog(pd: &ProjectData) -> Option<PfFileDialogResult> {
+    pf_open_file_dialog(pd, "Add song to project", MML_SONG_FILTER)
+}
+
 pub fn add_song_to_pf_dialog(sender: &fltk::app::Sender<Message>, pd: &ProjectData) {
-    if let Some(p) = pf_open_file_dialog(pd, "Add song to project", MML_SONG_FILTER) {
+    if let Some(p) = open_mml_file_dialog(pd) {
         match pd
             .project_songs
             .list()
@@ -194,9 +196,6 @@ pub fn add_song_to_pf_dialog(sender: &fltk::app::Sender<Message>, pd: &ProjectDa
         {
             Some(i) => sender.send(Message::EditProjectSongs(ListMessage::ItemSelected(i))),
             None => {
-                // ::TODO Create a blank file if it does not exist::
-                // ::TODO Open a new Song tab::
-
                 let name = match p.pf_path.file_stem() {
                     Some(s) => Name::new_lossy(s.to_string_lossy().to_string()),
                     None => Name::try_new("song".to_owned()).unwrap(),

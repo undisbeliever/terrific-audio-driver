@@ -22,7 +22,7 @@ use crate::compiler_thread::{
 };
 use crate::files::{
     add_song_to_pf_dialog, load_mml_file, load_pf_sfx_file,
-    load_project_file_or_show_error_message, open_sfx_file_dialog,
+    load_project_file_or_show_error_message, open_mml_file_dialog, open_sfx_file_dialog,
 };
 use crate::helpers::input_height;
 use crate::list_editor::{
@@ -32,7 +32,7 @@ use crate::list_editor::{
 use crate::names::deduplicate_names;
 use crate::project_tab::ProjectTab;
 use crate::samples_tab::SamplesTab;
-use crate::song_tab::SongTab;
+use crate::song_tab::{blank_mml_file, SongTab};
 use crate::sound_effects_tab::{blank_sfx_file, SoundEffectsTab};
 use crate::tabs::{
     quit_with_unsaved_files_dialog, FileType, SaveResult, SaveType, Tab, TabManager,
@@ -65,6 +65,9 @@ pub enum Message {
     EditSfxExportOrder(ListMessage<data::Name>),
     EditProjectSongs(ListMessage<data::Song>),
     Instrument(ListMessage<data::Instrument>),
+
+    NewMmlFile,
+    OpenMmlFile,
 
     // ::TODO add menu item for open/load SFX file::
     OpenSfxFileDialog,
@@ -324,7 +327,9 @@ impl Project {
                         )))
                 }
             }
-            Message::OpenSongTab(index) => self.open_song_tab(index),
+            Message::NewMmlFile => self.new_blank_song_tab(),
+            Message::OpenMmlFile => self.open_mml_file_dialog(),
+            Message::OpenSongTab(index) => self.open_pf_song_tab(index),
         }
     }
 
@@ -452,7 +457,40 @@ impl Project {
         self.sender.send(Message::SelectedTabChanged);
     }
 
-    fn open_song_tab(&mut self, song_index: usize) {
+    fn new_blank_song_tab(&mut self) {
+        let id = ItemId::new();
+
+        self.new_song_tab(id.clone(), blank_mml_file());
+    }
+
+    fn open_mml_file_dialog(&mut self) {
+        if let Some(p) = open_mml_file_dialog(&self.data) {
+            let pf_song_index = self
+                .data
+                .project_songs
+                .list()
+                .item_iter()
+                .position(|s| s.source == p.pf_path);
+
+            if let Some(index) = pf_song_index {
+                self.open_pf_song_tab(index)
+            } else {
+                match self.tab_manager.find_file(&p.path) {
+                    Some(FileType::Song(id)) => {
+                        if let Some(song_tab) = self.song_tabs.get(&id) {
+                            let _ = self.tabs.set_value(song_tab.widget());
+                            self.sender.send(Message::SelectedTabChanged);
+                        }
+                    }
+                    _ => {
+                        self.load_new_song_tab(ItemId::new(), &p.path);
+                    }
+                }
+            }
+        }
+    }
+
+    fn open_pf_song_tab(&mut self, song_index: usize) {
         let (id, song) = match self.data.project_songs.list().get_with_id(song_index) {
             Some(v) => v,
             None => return,
@@ -462,13 +500,14 @@ impl Project {
             let _ = self.tabs.set_value(song_tab.widget());
             self.sender.send(Message::SelectedTabChanged);
         } else {
-            self.create_new_song_tab(id.clone(), &song.source.clone());
+            let path = self.data.pf_parent_path.join(&song.source);
+            self.load_new_song_tab(id.clone(), &path);
         }
     }
 
     // NOTE: No deduplication. Do not create song tabs for a `song_id` or `path` that already exists
-    fn create_new_song_tab(&mut self, song_id: ItemId, path: &Path) {
-        if let Some(f) = load_mml_file(&self.data, path) {
+    fn load_new_song_tab(&mut self, song_id: ItemId, full_path: &Path) {
+        if let Some(f) = load_mml_file(full_path) {
             let song_tab = SongTab::new(song_id.clone(), &f, self.sender.clone());
 
             self.tab_manager.add_or_modify(&song_tab, f.path);
@@ -482,6 +521,31 @@ impl Project {
                 .send(ToCompiler::SongChanged(song_id, f.contents));
         }
         self.sender.send(Message::SelectedTabChanged);
+    }
+
+    // NOTE: minimal deduplication. You should not create song tabs for a `song_id` or `path` that already exists
+    fn new_song_tab(&mut self, song_id: ItemId, file: data::TextFile) {
+        if !self.song_tabs.contains_key(&song_id) {
+            let new_file = file.path.is_none();
+
+            let song_tab = SongTab::new(song_id.clone(), &file, self.sender.clone());
+            self.tab_manager.add_or_modify(&song_tab, file.path);
+
+            if new_file {
+                self.tab_manager
+                    .mark_unsaved(FileType::Song(song_id.clone()));
+            }
+
+            let _ = self.tabs.set_value(song_tab.widget());
+
+            self.song_tabs.insert(song_id.clone(), song_tab);
+
+            // Update song in the compiler thread (in case the file changed)
+            let _ = self
+                .compiler_sender
+                .send(ToCompiler::SongChanged(song_id, file.contents));
+            self.sender.send(Message::SelectedTabChanged);
+        }
     }
 
     fn mark_project_file_unsaved<T>(&mut self, a: ListAction<T>) {
@@ -586,6 +650,9 @@ impl SoundEffectsData {
 pub struct Menu {
     menu: menu::MenuBar,
 
+    new_mml_file: menu::MenuItem,
+    open_mml_file: menu::MenuItem,
+
     save: menu::MenuItem,
     save_as: menu::MenuItem,
     save_all: menu::MenuItem,
@@ -604,6 +671,20 @@ impl Menu {
 
             menu.at(index).unwrap()
         };
+
+        let new_mml_file = add(
+            "&File/New MML File",
+            Shortcut::None,
+            fltk::menu::MenuFlag::Normal,
+            || Message::NewMmlFile,
+        );
+
+        let open_mml_file = add(
+            "&File/Open MML File",
+            Shortcut::None,
+            fltk::menu::MenuFlag::Normal,
+            || Message::OpenMmlFile,
+        );
 
         let save = add(
             "&File/&Save",
@@ -632,6 +713,8 @@ impl Menu {
 
         Menu {
             menu,
+            new_mml_file,
+            open_mml_file,
             save,
             save_as,
             save_all,
@@ -639,12 +722,18 @@ impl Menu {
     }
 
     fn deactivate(&mut self) {
+        self.new_mml_file.deactivate();
+        self.open_mml_file.deactivate();
+
         self.save.deactivate();
         self.save_as.deactivate();
         self.save_all.deactivate();
     }
 
     fn activate(&mut self) {
+        self.new_mml_file.activate();
+        self.open_mml_file.activate();
+
         self.save_all.activate();
     }
 }
