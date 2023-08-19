@@ -8,6 +8,7 @@ mod compiler_thread;
 mod files;
 mod helpers;
 mod list_editor;
+mod menu;
 mod names;
 mod tables;
 mod tabs;
@@ -29,6 +30,7 @@ use crate::list_editor::{
     update_compiler_output, ListAction, ListMessage, ListState, ListWithCompilerOutput,
     ListWithSelection,
 };
+use crate::menu::Menu;
 use crate::names::deduplicate_names;
 use crate::project_tab::ProjectTab;
 use crate::samples_tab::SamplesTab;
@@ -42,8 +44,6 @@ use compiler::sound_effects::{convert_sfx_inputs_lossy, SoundEffectInput, SoundE
 use compiler::{data, driver_constants, ProjectFile};
 
 use fltk::dialog;
-use fltk::enums::Shortcut;
-use fltk::menu;
 use fltk::prelude::*;
 
 use std::collections::HashMap;
@@ -647,97 +647,6 @@ impl SoundEffectsData {
     }
 }
 
-pub struct Menu {
-    menu: menu::MenuBar,
-
-    new_mml_file: menu::MenuItem,
-    open_mml_file: menu::MenuItem,
-
-    save: menu::MenuItem,
-    save_as: menu::MenuItem,
-    save_all: menu::MenuItem,
-}
-
-impl Menu {
-    fn new(sender: fltk::app::Sender<Message>) -> Self {
-        let mut menu = fltk::menu::MenuBar::default();
-        menu.set_frame(fltk::enums::FrameType::FlatBox);
-
-        let mut add = |label, shortcut, flags, f: fn() -> Message| -> menu::MenuItem {
-            let index = menu.add(label, shortcut, flags, {
-                let s = sender.clone();
-                move |_: &mut fltk::menu::MenuBar| s.send(f())
-            });
-
-            menu.at(index).unwrap()
-        };
-
-        let new_mml_file = add(
-            "&File/New MML File",
-            Shortcut::None,
-            fltk::menu::MenuFlag::Normal,
-            || Message::NewMmlFile,
-        );
-
-        let open_mml_file = add(
-            "&File/Open MML File",
-            Shortcut::None,
-            fltk::menu::MenuFlag::Normal,
-            || Message::OpenMmlFile,
-        );
-
-        let save = add(
-            "&File/&Save",
-            Shortcut::Ctrl | 's',
-            fltk::menu::MenuFlag::Normal,
-            || Message::SaveSelectedTab,
-        );
-        let save_as = add(
-            "&File/Save As",
-            Shortcut::None,
-            fltk::menu::MenuFlag::Normal,
-            || Message::SaveSelectedTabAs,
-        );
-        let save_all = add(
-            "&File/Save &All",
-            Shortcut::Ctrl | Shortcut::Shift | 's',
-            fltk::menu::MenuFlag::Normal,
-            || Message::SaveAllUnsaved,
-        );
-        add(
-            "&File/&Quit",
-            Shortcut::None,
-            fltk::menu::MenuFlag::Normal,
-            || Message::QuitRequested,
-        );
-
-        Menu {
-            menu,
-            new_mml_file,
-            open_mml_file,
-            save,
-            save_as,
-            save_all,
-        }
-    }
-
-    fn deactivate(&mut self) {
-        self.new_mml_file.deactivate();
-        self.open_mml_file.deactivate();
-
-        self.save.deactivate();
-        self.save_as.deactivate();
-        self.save_all.deactivate();
-    }
-
-    fn activate(&mut self) {
-        self.new_mml_file.activate();
-        self.open_mml_file.activate();
-
-        self.save_all.activate();
-    }
-}
-
 #[allow(dead_code)]
 struct MainWindow {
     app: fltk::app::App,
@@ -766,7 +675,7 @@ impl MainWindow {
 
         let mut menu = Menu::new(sender.clone());
         menu.deactivate();
-        col.fixed(&menu.menu, input_height(&menu.menu));
+        col.fixed(menu.menu_bar(), input_height(menu.menu_bar()));
 
         let mut tabs = fltk::group::Tabs::default();
         tabs.set_tab_align(fltk::enums::Align::Right);
@@ -823,7 +732,7 @@ impl MainWindow {
         if self.project.is_some() {
             return;
         }
-        self.menu.activate();
+        self.menu.project_loaded();
         self.project = Some(Project::new(pf, self.tabs.clone(), sender));
     }
 

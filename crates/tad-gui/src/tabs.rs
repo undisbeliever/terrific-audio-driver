@@ -6,7 +6,8 @@
 
 use crate::compiler_thread::ItemId;
 use crate::files;
-use crate::{Menu, Message, ProjectData};
+use crate::menu::Menu;
+use crate::{Message, ProjectData};
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -210,22 +211,10 @@ impl TabManager {
             .as_ref()
             .and_then(|ft| self.file_states.get(ft));
 
-        match state.and_then(TabFileState::file_name) {
-            Some(file_name) => {
-                menu.save.set_label(&format!("&Save {}", file_name));
-                menu.save.activate();
-            }
-            None => {
-                menu.save.set_label("&Save");
-                menu.save.deactivate();
-            }
-        }
+        let save_file_name = state.and_then(TabFileState::file_name);
+        let can_save_as = self.selected_file.as_ref().is_some_and(|s| s.can_save_as());
 
-        if self.selected_file.as_ref().is_some_and(|s| s.can_save_as()) {
-            menu.save_as.activate();
-        } else {
-            menu.save_as.deactivate();
-        }
+        menu.update_save_items(save_file_name, can_save_as);
     }
 
     pub fn selected_file(&self) -> Option<FileType> {
