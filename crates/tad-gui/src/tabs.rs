@@ -181,7 +181,10 @@ impl TabManager {
     pub fn add_or_modify(&mut self, t: &dyn Tab, path: Option<PathBuf>, label: Option<&str>) {
         let ft = t.file_type();
 
-        let state = self.file_states.entry(ft).or_insert(TabFileState::new());
+        let state = self
+            .file_states
+            .entry(ft.clone())
+            .or_insert(TabFileState::new());
 
         if let Some(p) = path {
             state.set_path(p);
@@ -193,6 +196,7 @@ impl TabManager {
         if !tab_exists {
             let mut tab_widget = tab_widget.clone();
             self.add_widget(&mut tab_widget);
+
             self.tabs_list.push((tab_widget, t.file_type()));
         }
     }
@@ -205,13 +209,23 @@ impl TabManager {
         }
     }
 
+    pub fn set_selected_tab(&mut self, t: &dyn Tab) {
+        let _ = self.tabs_widget.set_value(t.widget());
+        self.selected_tab_changed();
+    }
+
     pub fn selected_tab_changed(&mut self) {
         let tab_widget = self.tabs_widget.value();
 
-        self.selected_file = tab_widget
-            .and_then(|widget| self.tabs_list.iter().find(|t| t.0.is_same(&widget)))
-            .map(|t| t.1.clone());
+        self.selected_file_changed(
+            tab_widget
+                .and_then(|widget| self.tabs_list.iter().find(|t| t.0.is_same(&widget)))
+                .map(|t| t.1.clone()),
+        );
+    }
 
+    fn selected_file_changed(&mut self, ft: Option<FileType>) {
+        self.selected_file = ft;
         self.update_save_menu();
     }
 
@@ -225,6 +239,10 @@ impl TabManager {
         let can_save_as = self.selected_file.as_ref().is_some_and(|s| s.can_save_as());
 
         self.save_menu.update(save_file_name, can_save_as);
+    }
+
+    pub fn selected_widget(&self) -> Option<impl GroupExt> {
+        self.tabs_widget.value()
     }
 
     pub fn selected_file(&self) -> Option<FileType> {

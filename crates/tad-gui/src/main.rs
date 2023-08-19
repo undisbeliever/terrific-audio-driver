@@ -116,7 +116,6 @@ struct Project {
     compiler_thread: std::thread::JoinHandle<()>,
     compiler_sender: mpsc::Sender<ToCompiler>,
 
-    tabs: fltk::group::Tabs,
     tab_manager: TabManager,
     samples_tab_selected: bool,
 
@@ -159,7 +158,6 @@ impl Project {
             ),
         };
 
-        sender.send(Message::SelectedTabChanged);
         sender.send(Message::RecompileEverything);
         if data.sound_effects_file.is_some() {
             sender.send(Message::LoadSfxFile);
@@ -170,8 +168,7 @@ impl Project {
             compiler_thread::create_bg_thread(data.pf_parent_path.clone(), r, sender.clone());
 
         let mut out = Self {
-            tab_manager: TabManager::new(tabs.clone(), save_menu),
-            tabs,
+            tab_manager: TabManager::new(tabs, save_menu),
             samples_tab_selected: false,
 
             project_tab: ProjectTab::new(
@@ -200,6 +197,9 @@ impl Project {
             .add_or_modify(&out.samples_tab, Some(pf.path), Some("Samples"));
         out.tab_manager
             .add_widget(out.sound_effects_tab.widget_mut());
+
+        out.tab_manager.set_selected_tab(&out.project_tab);
+
         out
     }
 
@@ -384,7 +384,7 @@ impl Project {
                     dialog::message_title("Error combining samples");
                     dialog::alert_default(&e.to_string());
 
-                    let _ = self.tabs.set_value(self.samples_tab.widget());
+                    self.tab_manager.set_selected_tab(&self.samples_tab);
                 }
             }
 
@@ -427,8 +427,8 @@ impl Project {
         }
 
         self.samples_tab_selected = self
-            .tabs
-            .value()
+            .tab_manager
+            .selected_widget()
             .is_some_and(|t| t.is_same(self.samples_tab.widget()));
 
         self.tab_manager.selected_tab_changed();
@@ -461,9 +461,6 @@ impl Project {
             header: sfx_file.header,
             sound_effects,
         });
-
-        // Update Save menu
-        self.sender.send(Message::SelectedTabChanged);
     }
 
     fn new_blank_song_tab(&mut self) {
@@ -487,8 +484,7 @@ impl Project {
                 match self.tab_manager.find_file(&p.path) {
                     Some(FileType::Song(id)) => {
                         if let Some(song_tab) = self.song_tabs.get(&id) {
-                            let _ = self.tabs.set_value(song_tab.widget());
-                            self.sender.send(Message::SelectedTabChanged);
+                            self.tab_manager.set_selected_tab(song_tab);
                         }
                     }
                     _ => {
@@ -506,8 +502,7 @@ impl Project {
         };
 
         if let Some(song_tab) = self.song_tabs.get_mut(id) {
-            let _ = self.tabs.set_value(song_tab.widget());
-            self.sender.send(Message::SelectedTabChanged);
+            self.tab_manager.set_selected_tab(song_tab);
         } else {
             let path = self.data.pf_parent_path.join(&song.source);
             self.load_new_song_tab(id.clone(), &path);
@@ -520,7 +515,7 @@ impl Project {
             let song_tab = SongTab::new(song_id.clone(), &f, self.sender.clone());
 
             self.tab_manager.add_or_modify(&song_tab, f.path, None);
-            let _ = self.tabs.set_value(song_tab.widget());
+            self.tab_manager.set_selected_tab(&song_tab);
 
             self.song_tabs.insert(song_id.clone(), song_tab);
 
@@ -529,7 +524,6 @@ impl Project {
                 .compiler_sender
                 .send(ToCompiler::SongChanged(song_id, f.contents));
         }
-        self.sender.send(Message::SelectedTabChanged);
     }
 
     // NOTE: minimal deduplication. You should not create song tabs for a `song_id` or `path` that already exists
@@ -544,8 +538,7 @@ impl Project {
                 self.tab_manager
                     .mark_unsaved(FileType::Song(song_id.clone()));
             }
-
-            let _ = self.tabs.set_value(song_tab.widget());
+            self.tab_manager.set_selected_tab(&song_tab);
 
             self.song_tabs.insert(song_id.clone(), song_tab);
 
@@ -553,7 +546,6 @@ impl Project {
             let _ = self
                 .compiler_sender
                 .send(ToCompiler::SongChanged(song_id, file.contents));
-            self.sender.send(Message::SelectedTabChanged);
         }
     }
 
