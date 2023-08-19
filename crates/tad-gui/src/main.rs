@@ -30,7 +30,7 @@ use crate::list_editor::{
     update_compiler_output, ListAction, ListMessage, ListState, ListWithCompilerOutput,
     ListWithSelection,
 };
-use crate::menu::Menu;
+use crate::menu::{Menu, SaveMenu};
 use crate::names::deduplicate_names;
 use crate::project_tab::ProjectTab;
 use crate::samples_tab::SamplesTab;
@@ -128,7 +128,12 @@ struct Project {
 }
 
 impl Project {
-    fn new(pf: ProjectFile, tabs: fltk::group::Tabs, sender: fltk::app::Sender<Message>) -> Self {
+    fn new(
+        pf: ProjectFile,
+        tabs: fltk::group::Tabs,
+        save_menu: SaveMenu,
+        sender: fltk::app::Sender<Message>,
+    ) -> Self {
         let c = pf.contents;
 
         let (sfx_eo, sfx_eo_renamed) = deduplicate_names(c.sound_effects);
@@ -165,7 +170,7 @@ impl Project {
             compiler_thread::create_bg_thread(data.pf_parent_path.clone(), r, sender.clone());
 
         let mut out = Self {
-            tab_manager: TabManager::new(tabs.clone()),
+            tab_manager: TabManager::new(tabs.clone(), save_menu),
             tabs,
             samples_tab_selected: false,
 
@@ -200,11 +205,11 @@ impl Project {
 
     fn process(&mut self, m: Message) {
         match m {
+            Message::SelectedTabChanged => self.selected_tab_changed(),
+
             Message::FromCompiler(m) => {
                 self.process_compiler_output(m);
             }
-
-            Message::SelectedTabChanged => (),
 
             Message::EditSfxExportOrder(m) => {
                 let (a, c) = self
@@ -414,7 +419,7 @@ impl Project {
         ));
     }
 
-    fn selected_tab_changed(&mut self, menu: &mut Menu) {
+    fn selected_tab_changed(&mut self) {
         if self.samples_tab_selected {
             let _ = self
                 .compiler_sender
@@ -426,7 +431,7 @@ impl Project {
             .value()
             .is_some_and(|t| t.is_same(self.samples_tab.widget()));
 
-        self.tab_manager.selected_tab_changed(menu);
+        self.tab_manager.selected_tab_changed();
     }
 
     fn maybe_set_sfx_file(&mut self, sfx_file: SoundEffectsFile) {
@@ -737,16 +742,16 @@ impl MainWindow {
             return;
         }
         self.menu.project_loaded();
-        self.project = Some(Project::new(pf, self.tabs.clone(), sender));
+        self.project = Some(Project::new(
+            pf,
+            self.tabs.clone(),
+            self.menu.save_menu().clone(),
+            sender,
+        ));
     }
 
     fn process(&mut self, message: Message) {
         match message {
-            Message::SelectedTabChanged => {
-                if let Some(p) = &mut self.project {
-                    p.selected_tab_changed(&mut self.menu);
-                }
-            }
             Message::QuitRequested => match &mut self.project {
                 Some(p) => p.process(message),
                 None => fltk::app::quit(),

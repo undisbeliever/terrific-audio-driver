@@ -6,7 +6,7 @@
 
 use crate::compiler_thread::ItemId;
 use crate::files;
-use crate::menu::Menu;
+use crate::menu::SaveMenu;
 use crate::{Message, ProjectData};
 
 use std::collections::HashMap;
@@ -160,15 +160,18 @@ impl SaveResult {
 
 pub struct TabManager {
     tabs_widget: fltk::group::Tabs,
+    save_menu: SaveMenu,
+
     tabs_list: Vec<(fltk::group::Flex, FileType)>,
     selected_file: Option<FileType>,
     file_states: HashMap<FileType, TabFileState>,
 }
 
 impl TabManager {
-    pub fn new(tabs_widget: fltk::group::Tabs) -> Self {
+    pub fn new(tabs_widget: fltk::group::Tabs, save_menu: SaveMenu) -> Self {
         Self {
             tabs_widget,
+            save_menu,
             tabs_list: Vec::new(),
             selected_file: None,
             file_states: HashMap::new(),
@@ -202,13 +205,17 @@ impl TabManager {
         }
     }
 
-    pub fn selected_tab_changed(&mut self, menu: &mut Menu) {
+    pub fn selected_tab_changed(&mut self) {
         let tab_widget = self.tabs_widget.value();
 
         self.selected_file = tab_widget
             .and_then(|widget| self.tabs_list.iter().find(|t| t.0.is_same(&widget)))
             .map(|t| t.1.clone());
 
+        self.update_save_menu();
+    }
+
+    pub fn update_save_menu(&mut self) {
         let state = self
             .selected_file
             .as_ref()
@@ -217,7 +224,7 @@ impl TabManager {
         let save_file_name = state.and_then(TabFileState::file_name);
         let can_save_as = self.selected_file.as_ref().is_some_and(|s| s.can_save_as());
 
-        menu.update_save_items(save_file_name, can_save_as);
+        self.save_menu.update(save_file_name, can_save_as);
     }
 
     pub fn selected_file(&self) -> Option<FileType> {
@@ -272,6 +279,8 @@ impl TabManager {
                     // Must redraw tab_widget as the saved tab is now smaller
                     self.tabs_widget.redraw();
 
+                    self.update_save_menu();
+
                     SaveResult::Saved
                 } else {
                     SaveResult::None
@@ -290,6 +299,8 @@ impl TabManager {
                         self.tabs_widget.auto_layout();
                         // Must redraw tab_widget as the saved tab is now smaller
                         self.tabs_widget.redraw();
+
+                        self.update_save_menu();
 
                         SaveResult::Renamed { pf_path: p.pf_path }
                     }

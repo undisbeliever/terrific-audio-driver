@@ -11,15 +11,20 @@ use fltk::enums::Shortcut;
 use fltk::menu;
 use fltk::prelude::{MenuExt, WidgetExt};
 
+#[derive(Clone)]
+pub struct SaveMenu {
+    save: menu::MenuItem,
+    save_as: menu::MenuItem,
+    save_all: menu::MenuItem,
+}
+
 pub struct Menu {
     menu_bar: fltk::menu::MenuBar,
 
     new_mml_file: menu::MenuItem,
     open_mml_file: menu::MenuItem,
 
-    save: menu::MenuItem,
-    save_as: menu::MenuItem,
-    save_all: menu::MenuItem,
+    save_menu: SaveMenu,
 }
 
 impl Menu {
@@ -77,11 +82,13 @@ impl Menu {
 
         Menu {
             menu_bar,
+            save_menu: SaveMenu {
+                save,
+                save_as,
+                save_all,
+            },
             new_mml_file,
             open_mml_file,
-            save,
-            save_as,
-            save_all,
         }
     }
 
@@ -89,23 +96,29 @@ impl Menu {
         &self.menu_bar
     }
 
+    pub fn save_menu(&self) -> &SaveMenu {
+        &self.save_menu
+    }
+
     pub fn deactivate(&mut self) {
         self.new_mml_file.deactivate();
         self.open_mml_file.deactivate();
 
-        self.save.deactivate();
-        self.save_as.deactivate();
-        self.save_all.deactivate();
+        self.save_menu.save.deactivate();
+        self.save_menu.save_as.deactivate();
+        self.save_menu.save_all.deactivate();
     }
 
     pub fn project_loaded(&mut self) {
         self.new_mml_file.activate();
         self.open_mml_file.activate();
 
-        self.save_all.activate();
+        self.save_menu.save_all.activate();
     }
+}
 
-    pub fn update_save_items(&mut self, save_file_name: Option<&str>, can_save_as: bool) {
+impl SaveMenu {
+    pub fn update(&mut self, save_file_name: Option<&str>, can_save_as: bool) {
         match save_file_name {
             Some(file_name) => {
                 self.save.set_label(&format!("&Save {}", file_name));
