@@ -6,7 +6,7 @@
 
 use crate::compiler_thread::ItemId;
 use crate::files;
-use crate::menu::SaveMenu;
+use crate::menu::Menu;
 use crate::{Message, ProjectData};
 
 use std::collections::HashMap;
@@ -96,10 +96,6 @@ mod file_state {
             self.path.as_deref()
         }
 
-        pub fn file_name(&self) -> Option<&str> {
-            self.file_name.as_deref()
-        }
-
         pub fn is_unsaved(&self) -> bool {
             self.is_unsaved
         }
@@ -160,7 +156,7 @@ impl SaveResult {
 
 pub struct TabManager {
     tabs_widget: fltk::group::Tabs,
-    save_menu: SaveMenu,
+    main_menu: Menu,
 
     tabs_list: Vec<(fltk::group::Flex, FileType)>,
     selected_file: Option<FileType>,
@@ -168,10 +164,10 @@ pub struct TabManager {
 }
 
 impl TabManager {
-    pub fn new(tabs_widget: fltk::group::Tabs, save_menu: SaveMenu) -> Self {
+    pub fn new(tabs_widget: fltk::group::Tabs, main_menu: Menu) -> Self {
         Self {
             tabs_widget,
-            save_menu,
+            main_menu,
             tabs_list: Vec::new(),
             selected_file: None,
             file_states: HashMap::new(),
@@ -235,10 +231,10 @@ impl TabManager {
             .as_ref()
             .and_then(|ft| self.file_states.get(ft));
 
-        let save_file_name = state.and_then(TabFileState::file_name);
+        let can_save = state.is_some();
         let can_save_as = self.selected_file.as_ref().is_some_and(|s| s.can_save_as());
 
-        self.save_menu.update(save_file_name, can_save_as);
+        self.main_menu.update_save_menus(can_save, can_save_as);
     }
 
     pub fn selected_widget(&self) -> Option<impl GroupExt> {

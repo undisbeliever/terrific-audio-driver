@@ -11,20 +11,26 @@ use fltk::enums::Shortcut;
 use fltk::menu;
 use fltk::prelude::{MenuExt, WidgetExt};
 
-#[derive(Clone)]
-pub struct SaveMenu {
-    save: menu::MenuItem,
-    save_as: menu::MenuItem,
-    save_all: menu::MenuItem,
-}
+// I cannot store `menu::MenuItem` entries in `Menu`, whenever I open a file dialog all future
+// updates to the file menu stop working.
+//
+// Looking at the examples in the `fltk-rs` repository they use `find_item()` to edit menus,
+// without saving the `menu::MenuItem`, so that is what I'll do.
+//
+// Unfortunately, changing a menu item's label changes its path, so I cannot include the filename
+// in the Save menu item (ie "Save sound_effects.txt").
 
+const NEW_MML_FILE: &str = "&File/New MML File";
+const OPEN_MML_FILE: &str = "&File/Open MML File";
+const SAVE: &str = "&File/&Save";
+const SAVE_AS: &str = "&File/Save As";
+const SAVE_ALL: &str = "&File/Save &All";
+
+const QUIT: &str = "&File/&Quit";
+
+#[derive(Clone)]
 pub struct Menu {
     menu_bar: fltk::menu::MenuBar,
-
-    new_mml_file: menu::MenuItem,
-    open_mml_file: menu::MenuItem,
-
-    save_menu: SaveMenu,
 }
 
 impl Menu {
@@ -41,99 +47,91 @@ impl Menu {
             menu_bar.at(index).unwrap()
         };
 
-        let new_mml_file = add(
-            "&File/New MML File",
+        add(
+            NEW_MML_FILE,
             Shortcut::None,
             fltk::menu::MenuFlag::Normal,
             || Message::NewMmlFile,
         );
 
-        let open_mml_file = add(
-            "&File/Open MML File",
+        add(
+            OPEN_MML_FILE,
             Shortcut::None,
             fltk::menu::MenuFlag::Normal,
             || Message::OpenMmlFile,
         );
 
-        let save = add(
-            "&File/&Save",
+        add(
+            SAVE,
             Shortcut::Ctrl | 's',
             fltk::menu::MenuFlag::Normal,
             || Message::SaveSelectedTab,
         );
-        let save_as = add(
-            "&File/Save As",
+        add(
+            SAVE_AS,
             Shortcut::None,
             fltk::menu::MenuFlag::Normal,
             || Message::SaveSelectedTabAs,
         );
-        let save_all = add(
-            "&File/Save &All",
+        add(
+            SAVE_ALL,
             Shortcut::Ctrl | Shortcut::Shift | 's',
             fltk::menu::MenuFlag::Normal,
             || Message::SaveAllUnsaved,
         );
-        add(
-            "&File/&Quit",
-            Shortcut::None,
-            fltk::menu::MenuFlag::Normal,
-            || Message::QuitRequested,
-        );
+        add(QUIT, Shortcut::None, fltk::menu::MenuFlag::Normal, || {
+            Message::QuitRequested
+        });
 
-        Menu {
-            menu_bar,
-            save_menu: SaveMenu {
-                save,
-                save_as,
-                save_all,
-            },
-            new_mml_file,
-            open_mml_file,
-        }
+        Menu { menu_bar }
     }
 
     pub fn menu_bar(&self) -> &menu::MenuBar {
         &self.menu_bar
     }
 
-    pub fn save_menu(&self) -> &SaveMenu {
-        &self.save_menu
+    fn activate(&mut self, path: &str) {
+        if let Some(mut m) = self.menu_bar.find_item(path) {
+            m.activate();
+        }
     }
 
-    pub fn deactivate(&mut self) {
-        self.new_mml_file.deactivate();
-        self.open_mml_file.deactivate();
+    fn deactivate(&mut self, path: &str) {
+        if let Some(mut m) = self.menu_bar.find_item(path) {
+            m.activate();
+        }
+    }
 
-        self.save_menu.save.deactivate();
-        self.save_menu.save_as.deactivate();
-        self.save_menu.save_all.deactivate();
+    fn set_active(&mut self, path: &str, active: bool) {
+        if let Some(mut m) = self.menu_bar.find_item(path) {
+            if active {
+                m.activate();
+            } else {
+                m.deactivate();
+            }
+        }
+    }
+
+    pub fn deactivate_project_items(&mut self) {
+        self.deactivate(NEW_MML_FILE);
+        self.deactivate(OPEN_MML_FILE);
+
+        self.deactivate(SAVE);
+        self.deactivate(SAVE_AS);
+        self.deactivate(SAVE_ALL);
     }
 
     pub fn project_loaded(&mut self) {
-        self.new_mml_file.activate();
-        self.open_mml_file.activate();
+        self.activate(NEW_MML_FILE);
+        self.activate(OPEN_MML_FILE);
 
-        self.save_menu.save_all.activate();
+        self.activate(SAVE_ALL);
     }
-}
 
-impl SaveMenu {
-    pub fn update(&mut self, save_file_name: Option<&str>, can_save_as: bool) {
-        match save_file_name {
-            Some(file_name) => {
-                self.save.set_label(&format!("&Save {}", file_name));
-                self.save.activate();
-            }
-            None => {
-                self.save.set_label("&Save");
-                self.save.deactivate();
-            }
-        }
+    pub fn update_save_menus(&mut self, can_save: bool, can_save_as: bool) {
+        // I cannot update the save MenuItem label as that also changes the MenuItem's path
 
-        if can_save_as {
-            self.save_as.activate();
-        } else {
-            self.save_as.deactivate();
-        }
+        self.set_active(SAVE, can_save);
+        self.set_active(SAVE_AS, can_save && can_save_as);
     }
 }

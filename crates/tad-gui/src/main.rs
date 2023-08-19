@@ -30,7 +30,7 @@ use crate::list_editor::{
     update_compiler_output, ListAction, ListMessage, ListState, ListWithCompilerOutput,
     ListWithSelection,
 };
-use crate::menu::{Menu, SaveMenu};
+use crate::menu::Menu;
 use crate::names::deduplicate_names;
 use crate::project_tab::ProjectTab;
 use crate::samples_tab::SamplesTab;
@@ -130,7 +130,7 @@ impl Project {
     fn new(
         pf: ProjectFile,
         tabs: fltk::group::Tabs,
-        save_menu: SaveMenu,
+        menu: Menu,
         sender: fltk::app::Sender<Message>,
     ) -> Self {
         let c = pf.contents;
@@ -168,7 +168,7 @@ impl Project {
             compiler_thread::create_bg_thread(data.pf_parent_path.clone(), r, sender.clone());
 
         let mut out = Self {
-            tab_manager: TabManager::new(tabs, save_menu),
+            tab_manager: TabManager::new(tabs, menu),
             samples_tab_selected: false,
 
             project_tab: ProjectTab::new(
@@ -675,7 +675,7 @@ impl MainWindow {
         let mut col = fltk::group::Flex::default_fill().column();
 
         let mut menu = Menu::new(sender.clone());
-        menu.deactivate();
+        menu.deactivate_project_items();
         col.fixed(menu.menu_bar(), input_height(menu.menu_bar()));
 
         let mut tabs = fltk::group::Tabs::default();
@@ -737,7 +737,7 @@ impl MainWindow {
         self.project = Some(Project::new(
             pf,
             self.tabs.clone(),
-            self.menu.save_menu().clone(),
+            self.menu.clone(),
             sender,
         ));
     }
