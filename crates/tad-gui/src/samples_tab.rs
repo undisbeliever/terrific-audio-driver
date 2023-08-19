@@ -251,7 +251,7 @@ impl SamplesTab {
         instruments: &impl ListState<Item = data::Instrument>,
         sender: app::Sender<Message>,
     ) -> Self {
-        let mut group = Flex::default_fill().with_label("Samples").row();
+        let mut group = Flex::default_fill().row();
 
         // Sidebar
         let mut sidebar = Flex::default().column();

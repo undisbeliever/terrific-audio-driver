@@ -68,9 +68,7 @@ impl Tab for SongTab {
 
 impl SongTab {
     pub fn new(song_id: ItemId, mml_file: &TextFile, sender: app::Sender<Message>) -> Self {
-        let mut group = Flex::default_fill()
-            .with_label(&mml_file.file_name)
-            .column();
+        let mut group = Flex::default_fill().column();
 
         let button_size = ch_units_to_width(&group, 4);
 

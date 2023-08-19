@@ -189,9 +189,10 @@ impl Project {
             sender,
         };
 
-        out.tab_manager.add_or_modify(&out.project_tab, None);
         out.tab_manager
-            .add_or_modify(&out.samples_tab, Some(pf.path));
+            .add_or_modify(&out.project_tab, None, Some("Project"));
+        out.tab_manager
+            .add_or_modify(&out.samples_tab, Some(pf.path), Some("Samples"));
         out.tab_manager
             .add_widget(out.sound_effects_tab.widget_mut());
         out
@@ -441,8 +442,11 @@ impl Project {
             ListWithCompilerOutput::new(sfx, driver_constants::MAX_SOUND_EFFECTS + 20);
 
         self.sound_effects_tab.replace_sfx_file(&sound_effects);
-        self.tab_manager
-            .add_or_modify(&self.sound_effects_tab, sfx_file.path);
+        self.tab_manager.add_or_modify(
+            &self.sound_effects_tab,
+            sfx_file.path,
+            Some("Sound Effects"),
+        );
 
         let _ = self.compiler_sender.send(ToCompiler::SoundEffects(
             sound_effects.replace_all_message(),
@@ -510,7 +514,7 @@ impl Project {
         if let Some(f) = load_mml_file(full_path) {
             let song_tab = SongTab::new(song_id.clone(), &f, self.sender.clone());
 
-            self.tab_manager.add_or_modify(&song_tab, f.path);
+            self.tab_manager.add_or_modify(&song_tab, f.path, None);
             let _ = self.tabs.set_value(song_tab.widget());
 
             self.song_tabs.insert(song_id.clone(), song_tab);
@@ -529,7 +533,7 @@ impl Project {
             let new_file = file.path.is_none();
 
             let song_tab = SongTab::new(song_id.clone(), &file, self.sender.clone());
-            self.tab_manager.add_or_modify(&song_tab, file.path);
+            self.tab_manager.add_or_modify(&song_tab, file.path, None);
 
             if new_file {
                 self.tab_manager

@@ -49,7 +49,7 @@ mod file_state {
     use fltk::prelude::WidgetExt;
 
     pub struct TabFileState {
-        tabs: Vec<(String, Flex)>,
+        tabs: Vec<(Option<String>, Flex)>,
 
         path: Option<PathBuf>,
         file_name: Option<String>,
@@ -67,13 +67,15 @@ mod file_state {
             }
         }
 
-        pub fn add_tab(&mut self, tab: &dyn Tab) {
+        pub fn add_tab(&mut self, tab: &dyn Tab, label: Option<String>) {
             let tab_widget = tab.widget().clone();
-            let label = tab_widget.label().trim_start_matches('*').to_string();
 
             match self.tabs.iter_mut().find(|(_, w)| w.is_same(&tab_widget)) {
                 Some((tab_label, _widget)) => *tab_label = label,
-                None => self.tabs.push((label, tab_widget)),
+                None => {
+                    self.tabs.push((label, tab_widget));
+                    self.update_labels();
+                }
             }
         }
 
@@ -86,6 +88,8 @@ mod file_state {
 
             self.file_name = path.file_name().map(|s| s.to_string_lossy().to_string());
             self.path = Some(path);
+
+            self.update_labels();
         }
 
         pub fn path(&self) -> Option<&Path> {
@@ -104,15 +108,7 @@ mod file_state {
             if !self.is_unsaved {
                 self.is_unsaved = true;
 
-                for (label, tab_widget) in &mut self.tabs {
-                    let new_label = ["*", label].concat();
-                    tab_widget.set_label(&new_label);
-
-                    // Must redraw the Tabs widget otherwise the new label is not visible
-                    if let Some(mut w) = tab_widget.parent() {
-                        w.redraw();
-                    }
-                }
+                self.update_labels();
             }
         }
 
@@ -120,12 +116,19 @@ mod file_state {
             if self.is_unsaved {
                 self.is_unsaved = false;
 
-                for (label, tab_widget) in &mut self.tabs {
-                    tab_widget.set_label(label);
+                self.update_labels();
+            }
+        }
 
-                    // Must redraw the Tabs widget otherwise the new label is not visible
-                    if let Some(mut w) = tab_widget.parent() {
-                        w.redraw_label();
+        pub fn update_labels(&mut self) {
+            for (label, tab_widget) in &mut self.tabs {
+                let label = label.as_deref().or(self.file_name.as_deref());
+                if let Some(label) = label {
+                    if self.is_unsaved {
+                        let new_label = ["*", label].concat();
+                        tab_widget.set_label(&new_label);
+                    } else {
+                        tab_widget.set_label(label);
                     }
                 }
             }
@@ -172,7 +175,7 @@ impl TabManager {
         }
     }
 
-    pub fn add_or_modify(&mut self, t: &dyn Tab, path: Option<PathBuf>) {
+    pub fn add_or_modify(&mut self, t: &dyn Tab, path: Option<PathBuf>, label: Option<&str>) {
         let ft = t.file_type();
 
         let state = self.file_states.entry(ft).or_insert(TabFileState::new());
@@ -180,7 +183,7 @@ impl TabManager {
         if let Some(p) = path {
             state.set_path(p);
         }
-        state.add_tab(t);
+        state.add_tab(t, label.map(String::from));
 
         let tab_widget = t.widget();
         let tab_exists = self.tabs_list.iter().any(|t| t.0.is_same(tab_widget));
@@ -245,6 +248,7 @@ impl TabManager {
     pub fn mark_unsaved(&mut self, ft: FileType) {
         if let Some(state) = self.file_states.get_mut(&ft) {
             state.mark_unsaved();
+            self.tabs_widget.auto_layout();
         }
     }
 
@@ -264,6 +268,10 @@ impl TabManager {
             (SaveType::Save, Some(path)) => {
                 if files::save_data(data, path) {
                     state.mark_saved();
+                    self.tabs_widget.auto_layout();
+                    // Must redraw tab_widget as the saved tab is now smaller
+                    self.tabs_widget.redraw();
+
                     SaveResult::Saved
                 } else {
                     SaveResult::None
@@ -279,6 +287,10 @@ impl TabManager {
                     Some(p) => {
                         state.set_path(p.path);
                         state.mark_saved();
+                        self.tabs_widget.auto_layout();
+                        // Must redraw tab_widget as the saved tab is now smaller
+                        self.tabs_widget.redraw();
+
                         SaveResult::Renamed { pf_path: p.pf_path }
                     }
                     None => SaveResult::None,

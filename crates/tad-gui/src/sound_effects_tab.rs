@@ -134,7 +134,7 @@ impl Tab for SoundEffectsTab {
 
 impl SoundEffectsTab {
     pub fn new(sender: app::Sender<Message>) -> Self {
-        let mut group = Flex::default_fill().with_label("Sound Effects").row();
+        let mut group = Flex::default_fill().row();
 
         // Sidebar
         let mut sidebar = Flex::default().column();

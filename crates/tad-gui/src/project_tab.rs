@@ -199,7 +199,7 @@ impl ProjectTab {
         sfx_pf_path: Option<&Path>,
         sender: app::Sender<Message>,
     ) -> Self {
-        let mut group = Flex::default_fill().with_label("Project").column();
+        let mut group = Flex::default_fill().column();
 
         let mut sfx_flex = Flex::default().row();
         group.fixed(&sfx_flex, input_height(&sfx_flex));
