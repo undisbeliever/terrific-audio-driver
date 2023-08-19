@@ -43,12 +43,13 @@ impl FileType {
 }
 
 mod file_state {
+    use super::{FileType, Flex, Tab};
+    use fltk::prelude::WidgetExt;
     use std::path::{Path, PathBuf};
 
-    use super::{Flex, Tab};
-    use fltk::prelude::WidgetExt;
-
     pub struct TabFileState {
+        file_type: FileType,
+
         tabs: Vec<(Option<String>, Flex)>,
 
         path: Option<PathBuf>,
@@ -57,9 +58,18 @@ mod file_state {
         is_unsaved: bool,
     }
 
+    fn new_tab_label(ft: &FileType) -> &'static str {
+        match ft {
+            FileType::Project => "New Project",
+            FileType::SoundEffects => "New Sound Effect",
+            FileType::Song(_) => "New Song",
+        }
+    }
+
     impl TabFileState {
-        pub fn new() -> Self {
+        pub fn new(file_type: FileType) -> Self {
             TabFileState {
+                file_type,
                 tabs: Vec::new(),
                 path: None,
                 file_name: None,
@@ -118,14 +128,16 @@ mod file_state {
 
         pub fn update_labels(&mut self) {
             for (label, tab_widget) in &mut self.tabs {
-                let label = label.as_deref().or(self.file_name.as_deref());
-                if let Some(label) = label {
-                    if self.is_unsaved {
-                        let new_label = ["*", label].concat();
-                        tab_widget.set_label(&new_label);
-                    } else {
-                        tab_widget.set_label(label);
-                    }
+                let label = label
+                    .as_deref()
+                    .or(self.file_name.as_deref())
+                    .unwrap_or_else(|| new_tab_label(&self.file_type));
+
+                if self.is_unsaved {
+                    let new_label = ["*", label].concat();
+                    tab_widget.set_label(&new_label);
+                } else {
+                    tab_widget.set_label(label);
                 }
             }
         }
@@ -180,7 +192,7 @@ impl TabManager {
         let state = self
             .file_states
             .entry(ft.clone())
-            .or_insert(TabFileState::new());
+            .or_insert(TabFileState::new(ft.clone()));
 
         if let Some(p) = path {
             state.set_path(p);
