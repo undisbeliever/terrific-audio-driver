@@ -9,6 +9,7 @@ mod files;
 mod helpers;
 mod list_editor;
 mod menu;
+mod mml_editor;
 mod names;
 mod tables;
 mod tabs;

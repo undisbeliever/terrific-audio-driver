@@ -34,7 +34,8 @@ use std::cmp::max;
 use std::collections::HashMap;
 use std::ops::RangeInclusive;
 
-const FIRST_MUSIC_CHANNEL: char = 'A';
+pub const FIRST_MUSIC_CHANNEL: char = 'A';
+pub const LAST_MUSIC_CHANNEL: char = 'F';
 const MUSIC_CHANNEL_RANGE: RangeInclusive<char> = 'A'..='F';
 
 const _: () = assert!(

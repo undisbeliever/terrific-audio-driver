@@ -6,6 +6,7 @@
 
 use crate::compiler_thread::{ItemId, SongError, SongOutput};
 use crate::helpers::*;
+use crate::mml_editor::MmlEditor;
 use crate::tabs::{FileType, Tab};
 use crate::Message;
 
@@ -14,10 +15,10 @@ use compiler::errors::MmlCompileErrors;
 
 use fltk::app;
 use fltk::button::Button;
-use fltk::enums::{Color, Event, Font};
+use fltk::enums::{Color, Font};
 use fltk::group::{Flex, Pack, PackType};
 use fltk::prelude::*;
-use fltk::text::{TextBuffer, TextDisplay, TextEditor, WrapMode};
+use fltk::text::{TextBuffer, TextDisplay, WrapMode};
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -35,8 +36,7 @@ pub struct State {
 
     song_id: ItemId,
 
-    editor: TextEditor,
-    buffer: TextBuffer,
+    editor: MmlEditor,
 
     console: TextDisplay,
     console_buffer: TextBuffer,
@@ -87,18 +87,12 @@ impl SongTab {
 
         main_toolbar.end();
 
-        let mut buffer = TextBuffer::default();
-        buffer.can_undo(true);
-        buffer.set_tab_distance(4);
-        buffer.set_text(&mml_file.contents);
-
-        let mut editor = TextEditor::default();
-        editor.set_linenumber_width(ch_units_to_width(&editor, 4));
-        editor.set_text_font(Font::Courier);
-        editor.set_buffer(buffer.clone());
+        let mut editor = MmlEditor::new();
+        editor.set_text_size(editor.widget().text_size() * 12 / 10);
+        editor.set_text(&mml_file.contents);
 
         let mut console = TextDisplay::default();
-        group.fixed(&console, input_height(&console) * 5);
+        group.fixed(&console, input_height(&console) * 4);
 
         group.end();
 
@@ -110,8 +104,7 @@ impl SongTab {
         let state = Rc::new(RefCell::from(State {
             sender,
             song_id: song_id.clone(),
-            editor: editor.clone(),
-            buffer: buffer.clone(),
+            editor,
 
             console,
             console_buffer,
@@ -128,16 +121,12 @@ impl SongTab {
             }
         });
 
-        editor.handle({
+        state.borrow_mut().editor.set_unfocus_callback({
             let s = state.clone();
-            move |_widget, ev| match ev {
-                Event::Unfocus => {
-                    if let Ok(mut s) = s.try_borrow_mut() {
-                        s.commit_song_if_changed();
-                    }
-                    false
+            move || {
+                if let Ok(mut s) = s.try_borrow_mut() {
+                    s.commit_song_if_changed();
                 }
-                _ => false,
             }
         });
 
@@ -150,7 +139,7 @@ impl SongTab {
     }
 
     pub fn contents(&self) -> String {
-        self.state.borrow().buffer.text()
+        self.state.borrow().editor.text()
     }
 
     pub fn set_compiler_output(&mut self, co: Option<SongOutput>) {
@@ -162,13 +151,11 @@ impl SongTab {
 
 impl State {
     fn commit_song_if_changed(&mut self) {
-        if self.editor.changed() {
+        if let Some(text) = self.editor.text_if_changed() {
             // The SongChanged message will set the unsaved flag.
             // It must not be sent if the MML text is unchanged.
-            self.sender.send(Message::SongChanged(
-                self.song_id.clone(),
-                self.buffer.text(),
-            ));
+            self.sender
+                .send(Message::SongChanged(self.song_id.clone(), text));
 
             self.editor.clear_changed();
         }
