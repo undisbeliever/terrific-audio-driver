@@ -49,6 +49,12 @@ fn validate_pf_file_dialog_output(
         }
     }
 
+    if !path.is_absolute() {
+        dialog::message_title("Error");
+        dialog::alert_default("path is not absolute");
+        return None;
+    }
+
     match path.strip_prefix(&pd.pf_parent_path) {
         Ok(p) => Some(PfFileDialogResult {
             pf_path: p.to_owned(),
