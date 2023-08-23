@@ -115,20 +115,24 @@ impl SongTab {
         compile_button.set_callback({
             let s = state.clone();
             move |_| {
-                if let Ok(mut s) = s.try_borrow_mut() {
-                    s.commit_song_if_changed()
+                if let Ok(s) = s.try_borrow() {
+                    s.compile_song();
                 }
             }
         });
 
-        state.borrow_mut().editor.set_unfocus_callback({
-            let s = state.clone();
-            move || {
-                if let Ok(mut s) = s.try_borrow_mut() {
-                    s.commit_song_if_changed();
+        {
+            let mut s = state.borrow_mut();
+
+            s.editor.set_changed_callback({
+                let s = state.clone();
+                move || {
+                    if let Ok(s) = s.try_borrow() {
+                        s.song_changed();
+                    }
                 }
-            }
-        });
+            });
+        }
 
         Self {
             state,
@@ -150,15 +154,18 @@ impl SongTab {
 }
 
 impl State {
-    fn commit_song_if_changed(&mut self) {
-        if let Some(text) = self.editor.text_if_changed() {
-            // The SongChanged message will set the unsaved flag.
-            // It must not be sent if the MML text is unchanged.
-            self.sender
-                .send(Message::SongChanged(self.song_id.clone(), text));
+    fn song_changed(&self) {
+        self.sender.send(Message::SongChanged(
+            self.song_id.clone(),
+            self.editor.text(),
+        ));
+    }
 
-            self.editor.clear_changed();
-        }
+    fn compile_song(&self) {
+        self.sender.send(Message::RecompileSong(
+            self.song_id.clone(),
+            self.editor.text(),
+        ));
     }
 
     pub fn set_compiler_output(&mut self, co: Option<SongOutput>) {

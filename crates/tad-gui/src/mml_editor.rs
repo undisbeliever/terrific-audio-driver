@@ -12,8 +12,8 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 extern crate fltk;
-use fltk::enums::{Color, Event, Font};
-use fltk::prelude::{DisplayExt, WidgetBase, WidgetExt};
+use fltk::enums::{Color, Font};
+use fltk::prelude::DisplayExt;
 use fltk::text::{StyleTableEntryExt, TextBuffer, TextEditor, WrapMode};
 
 pub struct MmlEditorState {
@@ -21,13 +21,14 @@ pub struct MmlEditorState {
     style_buffer: TextBuffer,
 
     style_vec: Vec<u8>,
+
+    changed_callback: Box<dyn Fn() + 'static>,
 }
 
 pub struct MmlEditor {
     widget: TextEditor,
     text_buffer: TextBuffer,
 
-    #[allow(dead_code)]
     state: Rc<RefCell<MmlEditorState>>,
 }
 
@@ -55,6 +56,7 @@ impl MmlEditor {
             text_buffer: text_buffer.clone(),
             style_buffer,
             style_vec: Vec::new(),
+            changed_callback: Box::from(Self::blank_callback),
         }));
 
         text_buffer.add_modify_callback({
@@ -81,16 +83,8 @@ impl MmlEditor {
         );
     }
 
-    pub fn set_unfocus_callback(&mut self, f: impl Fn() + 'static) {
-        self.widget.handle({
-            move |_widget, ev| match ev {
-                Event::Unfocus => {
-                    f();
-                    false
-                }
-                _ => false,
-            }
-        });
+    pub fn set_changed_callback(&mut self, f: impl Fn() + 'static) {
+        self.state.borrow_mut().changed_callback = Box::from(f);
     }
 
     pub fn widget(&self) -> &TextEditor {
@@ -101,21 +95,11 @@ impl MmlEditor {
         self.text_buffer.text()
     }
 
-    pub fn text_if_changed(&self) -> Option<String> {
-        if self.widget.changed() {
-            Some(self.text_buffer.text())
-        } else {
-            None
-        }
-    }
-
-    pub fn clear_changed(&mut self) {
-        self.widget.clear_changed();
-    }
-
     pub fn set_text(&mut self, text: &str) {
         self.text_buffer.set_text(text);
     }
+
+    fn blank_callback() {}
 }
 
 impl MmlEditorState {
@@ -164,6 +148,8 @@ impl MmlEditorState {
             to_style_end + n_deleted - n_inserted,
             changed,
         );
+
+        (self.changed_callback)();
     }
 
     fn resize_style_vec(&mut self, pos: usize, n_inserted: usize, n_deleted: usize) {

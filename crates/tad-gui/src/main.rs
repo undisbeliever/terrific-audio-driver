@@ -85,6 +85,7 @@ pub enum Message {
     OpenSongTab(usize),
 
     SongChanged(ItemId, String),
+    RecompileSong(ItemId, String),
 
     FromCompiler(compiler_thread::CompilerOutput),
 }
@@ -259,6 +260,10 @@ impl Project {
             }
             Message::SongChanged(id, mml) => {
                 self.tab_manager.mark_unsaved(FileType::Song(id.clone()));
+                let _ = self.compiler_sender.send(ToCompiler::SongChanged(id, mml));
+            }
+            Message::RecompileSong(id, mml) => {
+                // RecompileSong should not mark the song as unsaved
                 let _ = self.compiler_sender.send(ToCompiler::SongChanged(id, mml));
             }
 
