@@ -213,9 +213,55 @@ mod line_splitter {
 
     const COMMENT_CHAR: char = ';';
 
+    struct LineFilePosIterator<'a> {
+        remaining: &'a str,
+        line_no: u32,
+        char_index: u32,
+    }
+
+    fn split_lines_with_pos(s: &str) -> LineFilePosIterator {
+        assert!(s.len() < i32::MAX as usize);
+
+        LineFilePosIterator {
+            remaining: s,
+            line_no: 0,
+            char_index: 0,
+        }
+    }
+
+    impl<'a> Iterator for LineFilePosIterator<'a> {
+        type Item = (&'a str, FilePos);
+
+        fn next(&mut self) -> Option<Self::Item> {
+            if !self.remaining.is_empty() {
+                let (line, remaining) = match self.remaining.split_once('\n') {
+                    Some((line, remaining)) => (line, remaining),
+                    None => (self.remaining, ""),
+                };
+                self.line_no += 1;
+
+                let line_len: u32 = line.len().try_into().unwrap();
+                let line = line.trim();
+
+                let pos = FilePos {
+                    line_number: self.line_no,
+                    line_char: line_len - u32::try_from(line.len()).unwrap(),
+                    char_index: self.char_index,
+                };
+
+                self.remaining = remaining;
+                self.char_index += line_len + 1;
+
+                Some((line, pos))
+            } else {
+                None
+            }
+        }
+    }
+
     // Assumes `s` starts with a non-whitespace character
     // Assumes `mml_test` length is < i32::MAX
-    fn split_idstr_and_line(s: &str, line_number: u32) -> (&str, Line) {
+    fn split_idstr_and_line(s: &str, pos: FilePos) -> (&str, Line) {
         let (id, after_id, id_char_count) = match s
             .char_indices()
             .enumerate()
@@ -244,13 +290,17 @@ mod line_splitter {
             }
         };
 
+        let line_char: u32 = (id_char_count + ws_char_count + 1).try_into().unwrap();
+        let char_index: u32 = (id.bytes().len() + 1).try_into().unwrap();
+
         (
             id,
             Line {
                 text,
                 position: FilePos {
-                    line_number,
-                    line_char: (id_char_count + ws_char_count + 1).try_into().unwrap(),
+                    line_number: pos.line_number,
+                    line_char: pos.line_char + line_char,
+                    char_index: pos.char_index + char_index,
                 },
             },
         )
@@ -260,9 +310,9 @@ mod line_splitter {
     fn split_id_and_line(
         s: &str,
         prefix: char,
-        line_number: u32,
+        pos: FilePos,
     ) -> Result<(Identifier, Line), MmlLineError> {
-        let (id_str, line) = split_idstr_and_line(s, line_number);
+        let (id_str, line) = split_idstr_and_line(s, pos);
 
         let id_str = id_str.trim_start_matches(prefix);
         if !id_str.is_empty() {
@@ -275,10 +325,10 @@ mod line_splitter {
         }
     }
 
-    fn validate_music_channels(
-        ids: &str,
-        line_no: u32,
-    ) -> Result<&str, ErrorWithLine<MmlLineError>> {
+    fn validate_music_channels<'a>(
+        ids: &'a str,
+        pos: &FilePos,
+    ) -> Result<&'a str, ErrorWithLine<MmlLineError>> {
         if ids.chars().all(|c| MUSIC_CHANNEL_RANGE.contains(&c)) {
             Ok(ids)
         } else {
@@ -287,7 +337,7 @@ mod line_splitter {
                 .filter(|c| !MUSIC_CHANNEL_RANGE.contains(c))
                 .collect();
             Err(ErrorWithLine(
-                line_no,
+                pos.line_number,
                 MmlLineError::UnknownChannel(unknown),
             ))
         }
@@ -317,10 +367,7 @@ mod line_splitter {
 
         let mut subroutine_map: HashMap<Identifier, usize> = HashMap::new();
 
-        let mut line_no = 0;
-        for line in mml_text.lines() {
-            line_no += 1;
-
+        for (line, pos) in split_lines_with_pos(mml_text) {
             let line = match line.split_once(COMMENT_CHAR) {
                 Some((l, _comment)) => l,
                 None => line,
@@ -330,21 +377,18 @@ mod line_splitter {
             match line.chars().next() {
                 Some('#') => headers.push(Line {
                     text: line,
-                    position: FilePos {
-                        line_number: line_no,
-                        line_char: 0,
-                    },
+                    position: pos,
                 }),
                 Some('@') => {
                     // instruments
-                    match split_id_and_line(line, '@', line_no) {
+                    match split_id_and_line(line, '@', pos) {
                         Ok((id, line)) => instruments.push((id, line)),
-                        Err(e) => errors.push(ErrorWithLine(line_no, e)),
+                        Err(e) => errors.push(ErrorWithLine(pos.line_number, e)),
                     }
                 }
                 Some('!') => {
                     // Subroutines
-                    match split_id_and_line(line, '!', line_no) {
+                    match split_id_and_line(line, '!', pos) {
                         Ok((id, line)) => match subroutine_map.get(&id) {
                             Some(index) => {
                                 subroutines[*index].1.push(line);
@@ -354,14 +398,14 @@ mod line_splitter {
                                 subroutines.push((id, vec![line]));
                             }
                         },
-                        Err(e) => errors.push(ErrorWithLine(line_no, e)),
+                        Err(e) => errors.push(ErrorWithLine(pos.line_number, e)),
                     }
                 }
 
                 Some(c) if c.is_ascii_alphanumeric() => {
                     // Music channels
-                    let (id, line) = split_idstr_and_line(line, line_no);
-                    match validate_music_channels(id, line_no) {
+                    let (id, line) = split_idstr_and_line(line, pos);
+                    match validate_music_channels(id, &pos) {
                         Ok(id) => {
                             // Each channel will only use the line once
                             let mut used = [true; N_MUSIC_CHANNELS];
@@ -382,7 +426,10 @@ mod line_splitter {
                         Err(e) => errors.push(e),
                     }
                 }
-                Some(_) => errors.push(ErrorWithLine(line_no, MmlLineError::CannotParseLine)),
+                Some(_) => errors.push(ErrorWithLine(
+                    pos.line_number,
+                    MmlLineError::CannotParseLine,
+                )),
 
                 None => (),
             }

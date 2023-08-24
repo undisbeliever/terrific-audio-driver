@@ -36,11 +36,18 @@ i8_value_newtype!(Transpose, TransposeOutOfRange, NoTranspose);
 pub struct FilePos {
     pub(crate) line_number: u32,
     pub(crate) line_char: u32,
+    pub(crate) char_index: u32,
 }
 const _: () = assert!(
     MAX_MML_TEXT_LENGTH < i32::MAX as usize,
     "Cannot use u32 in FilePos"
 );
+
+impl FilePos {
+    pub fn char_index(&self) -> u32 {
+        self.char_index
+    }
+}
 
 pub(crate) struct Line<'a> {
     pub text: &'a str,
@@ -238,6 +245,7 @@ mod scanner {
             if index > 0 {
                 self.to_parse = &self.to_parse[index..];
                 self.pos.line_char += char_count;
+                self.pos.char_index += u32::try_from(index).unwrap();
             }
         }
 
@@ -249,6 +257,7 @@ mod scanner {
 
                 self.to_parse = remaining;
                 self.pos.line_char += char_count;
+                self.pos.char_index += u32::try_from(index).unwrap();
 
                 self.skip_whitespace();
 
@@ -264,6 +273,7 @@ mod scanner {
 
                 self.to_parse = &self.to_parse[index..];
                 self.pos.line_char += char_count;
+                self.pos.char_index += u32::try_from(index).unwrap();
 
                 self.skip_whitespace();
             }
@@ -524,6 +534,7 @@ impl MmlStreamParser<'_> {
         let blank_pos = FilePos {
             line_number: 0,
             line_char: 0,
+            char_index: 0,
         };
 
         MmlStreamParser {

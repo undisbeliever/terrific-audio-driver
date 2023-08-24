@@ -195,8 +195,9 @@ impl State {
                     SongError::Dependency => None,
                     SongError::Mml(e) => Some(e),
                     SongError::Song(_) => None,
-                }
+                };
             }
         }
+        self.editor.highlight_errors(self.errors.as_ref());
     }
 }

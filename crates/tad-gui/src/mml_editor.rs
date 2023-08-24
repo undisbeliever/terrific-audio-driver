@@ -6,23 +6,27 @@
 
 use crate::helpers::ch_units_to_width;
 
-use compiler::mml::{FIRST_MUSIC_CHANNEL, LAST_MUSIC_CHANNEL};
+use compiler::errors::{MmlChannelError, MmlCompileErrors};
+use compiler::mml::{FilePos, FIRST_MUSIC_CHANNEL, LAST_MUSIC_CHANNEL};
 
 use std::cell::RefCell;
 use std::rc::Rc;
 
 extern crate fltk;
 use fltk::enums::{Color, Font};
-use fltk::prelude::DisplayExt;
-use fltk::text::{StyleTableEntryExt, TextBuffer, TextEditor, WrapMode};
+use fltk::prelude::{DisplayExt, WidgetExt};
+use fltk::text::{StyleTableEntryExt, TextAttr, TextBuffer, TextEditor, WrapMode};
 
 pub struct MmlEditorState {
+    widget: TextEditor,
     text_buffer: TextBuffer,
     style_buffer: TextBuffer,
 
     style_vec: Vec<u8>,
 
     changed_callback: Box<dyn Fn() + 'static>,
+
+    errors_in_style_buffer: bool,
 }
 
 pub struct MmlEditor {
@@ -53,10 +57,13 @@ impl MmlEditor {
         );
 
         let state = Rc::new(RefCell::from(MmlEditorState {
+            widget: widget.clone(),
             text_buffer: text_buffer.clone(),
             style_buffer,
             style_vec: Vec::new(),
             changed_callback: Box::from(Self::blank_callback),
+
+            errors_in_style_buffer: false,
         }));
 
         text_buffer.add_modify_callback({
@@ -85,6 +92,13 @@ impl MmlEditor {
 
     pub fn set_changed_callback(&mut self, f: impl Fn() + 'static) {
         self.state.borrow_mut().changed_callback = Box::from(f);
+    }
+
+    pub fn highlight_errors(&mut self, errors: Option<&MmlCompileErrors>) {
+        match errors {
+            Some(e) => self.state.borrow_mut().highlight_errors(e),
+            None => self.state.borrow_mut().remove_errors(),
+        }
     }
 
     pub fn widget(&self) -> &TextEditor {
@@ -209,6 +223,69 @@ impl MmlEditorState {
             *s = current.to_u8_char();
         }
     }
+
+    fn highlight_errors(&mut self, errors: &MmlCompileErrors) {
+        let mut style_vec = self.style_vec.clone();
+
+        let mut min_index = usize::MAX;
+        let mut max_index = 0;
+
+        let mut highlight_error = |pos: &FilePos| {
+            if let Ok(i) = usize::try_from(pos.char_index()) {
+                if let Some(c) = style_vec.get_mut(i) {
+                    // ::TODO highlight error range
+                    *c = Style::Error.to_u8_char();
+
+                    if i < min_index {
+                        min_index = i;
+                    }
+                    if i > max_index {
+                        max_index = i
+                    }
+                }
+            }
+        };
+
+        let mut parse_channel_error = |e: &MmlChannelError| {
+            for e in &e.parse_errors {
+                highlight_error(&e.0);
+            }
+            for e in &e.command_errors {
+                highlight_error(&e.0);
+            }
+        };
+
+        for e in &errors.subroutine_errors {
+            parse_channel_error(e);
+        }
+        for e in &errors.channel_errors {
+            parse_channel_error(e);
+        }
+
+        let style = std::str::from_utf8(&style_vec).unwrap();
+
+        self.style_buffer.set_text(style);
+
+        // Redraw the entire widget, required for the new style to be immediately visible.
+        // NOTE: Fl_Text_Display::redisplay_range() is not available.
+        self.widget.redraw();
+
+        self.errors_in_style_buffer = true;
+    }
+
+    fn remove_errors(&mut self) {
+        if self.errors_in_style_buffer {
+            let style = std::str::from_utf8(&self.style_vec).unwrap();
+
+            self.style_buffer.set_text(style);
+
+            // Redraw the entire widget, required for the new style to be immediately visible.
+            // NOTE: Fl_Text_Display::redisplay_range() is not available.
+            self.widget.redraw();
+
+            self.errors_in_style_buffer = false;
+        }
+    }
 }
 
 struct MmlColors {
@@ -221,7 +298,9 @@ struct MmlColors {
     subroutines: Color,
 
     channel_names: Color,
-    errors: Color,
+    invalid: Color,
+
+    error_bg: Color,
 
     unknown: Color,
 }
@@ -236,7 +315,9 @@ const MML_COLORS: MmlColors = MmlColors {
     subroutines: Color::from_rgb(0xcc, 0x55, 0x00), // hsl(25, 100, 40)
 
     channel_names: Color::DarkMagenta,
-    errors: Color::Red,
+
+    invalid: Color::Red,
+    error_bg: Color::Red,
 
     unknown: Color::Green,
 };
@@ -267,6 +348,8 @@ enum Style {
     ChannelName,
     InvalidLine,
 
+    Error,
+
     Unknown,
 }
 
@@ -295,6 +378,8 @@ impl Style {
             b'O' => Style::ChannelName,
             b'P' => Style::InvalidLine,
 
+            b'Q' => Style::Error,
+
             _ => Style::Unknown,
         }
     }
@@ -317,6 +402,13 @@ fn highlight_data(mml_colors: &MmlColors, font_size: i32) -> Vec<StyleTableEntry
         color: c,
         ..StyleTableEntryExt::default()
     };
+    let bg_bold = |bg| StyleTableEntryExt {
+        font: Font::CourierBold,
+        size: font_size,
+        color: mml_colors.normal,
+        bgcolor: bg,
+        attr: TextAttr::BgColor,
+    };
 
     vec![
         courier(mml_colors.normal),
@@ -334,7 +426,8 @@ fn highlight_data(mml_colors: &MmlColors, font_size: i32) -> Vec<StyleTableEntry
         courier(mml_colors.subroutines),
         courier(mml_colors.subroutines),
         courier_bold(mml_colors.channel_names),
-        courier(mml_colors.errors),
+        courier(mml_colors.invalid),
+        bg_bold(mml_colors.error_bg),
         courier(mml_colors.unknown),
     ]
 }
@@ -414,6 +507,8 @@ fn next_style(current: Style, c: u8) -> Style {
             b' ' => Style::Normal,
             _ => Style::SubroutineName,
         },
+
+        Style::Error => Style::Error,
     }
 }
 
