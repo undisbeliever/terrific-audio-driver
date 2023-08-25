@@ -9,7 +9,7 @@ use crate::bytecode::{
     RelativeVolume, SubroutineId, Volume, KEY_OFF_TICK_DELAY,
 };
 use crate::errors::{ErrorWithPos, MmlParserError, ValueError};
-use crate::file_pos::{FilePos, Line};
+use crate::file_pos::{FilePos, FilePosRange, Line};
 use crate::notes::{parse_pitch_char, MidiNote, MmlPitch, Note, Octave, STARTING_OCTAVE};
 use crate::time::{Bpm, MmlLength, TickClock, TickCounter, ZenLen};
 use crate::value_newtypes::{i8_value_newtype, u8_value_newtype, ValueNewType};
@@ -160,30 +160,30 @@ pub enum MmlCommand {
 
 pub struct MmlCommandWithPos {
     command: MmlCommand,
-    pos: FilePos,
+    pos: FilePosRange,
 }
 
 impl MmlCommandWithPos {
     pub fn command(&self) -> &MmlCommand {
         &self.command
     }
-    pub fn pos(&self) -> &FilePos {
+    pub fn pos(&self) -> &FilePosRange {
         &self.pos
     }
 }
 
 pub enum Match<'a> {
-    Some(FilePos, &'a str),
-    None(FilePos),
+    Some(FilePosRange, &'a str),
+    None(FilePosRange),
 }
 
 // ::TODO is this the right name?
 mod scanner {
-    use super::{FilePos, Match};
+    use super::{FilePos, FilePosRange, Match};
 
     pub(crate) struct Scanner<'a> {
         // The position of the last consumed value
-        before_pos: FilePos,
+        before_pos: FilePosRange,
 
         pos: FilePos,
         to_parse: &'a str,
@@ -196,7 +196,7 @@ mod scanner {
                 "str too large, pos will overflow"
             );
             let mut s = Scanner {
-                before_pos: pos,
+                before_pos: pos.to_range(1),
                 pos,
                 to_parse,
             };
@@ -212,8 +212,14 @@ mod scanner {
             self.pos
         }
 
-        pub fn before_pos(&self) -> FilePos {
-            self.before_pos
+        pub fn before_pos(&self) -> FilePosRange {
+            self.before_pos.clone()
+        }
+
+        pub fn file_pos_range_from(&self, p: FilePosRange) -> FilePosRange {
+            let mut p = p;
+            p.index_end = self.before_pos.index_end;
+            p
         }
 
         fn skip_whitespace(&mut self) {
@@ -228,28 +234,31 @@ mod scanner {
         fn extract_str_skip_whitespace(&mut self, index: usize, char_count: u32) -> Match {
             if index != 0 {
                 let (s, remaining) = self.to_parse.split_at(index);
+                let index = u32::try_from(index).unwrap();
 
-                self.before_pos = self.pos;
+                self.before_pos = self.pos.to_range(index);
 
                 self.to_parse = remaining;
                 self.pos.line_char += char_count;
-                self.pos.char_index += u32::try_from(index).unwrap();
+                self.pos.char_index += index;
 
                 self.skip_whitespace();
 
-                Match::Some(self.before_pos, s)
+                Match::Some(self.before_pos.clone(), s)
             } else {
-                Match::None(self.before_pos)
+                Match::None(self.before_pos.clone())
             }
         }
 
         fn advance(&mut self, index: usize, char_count: u32) -> u32 {
             if index > 0 {
-                self.before_pos = self.pos;
+                let index_u32 = u32::try_from(index).unwrap();
+
+                self.before_pos = self.pos.to_range(index_u32);
 
                 self.to_parse = &self.to_parse[index..];
                 self.pos.line_char += char_count;
-                self.pos.char_index += u32::try_from(index).unwrap();
+                self.pos.char_index += index_u32;
 
                 self.skip_whitespace();
             }
@@ -341,7 +350,7 @@ mod scanner {
             &mut self,
             pattern1: impl Fn(&char) -> bool,
             pattern2: impl Fn(&char) -> bool,
-        ) -> (FilePos, Option<&str>, Option<&str>) {
+        ) -> (FilePosRange, Option<&str>, Option<&str>) {
             let start_pos = self.pos;
 
             let (index_1, char_count_1) =
@@ -367,7 +376,9 @@ mod scanner {
                 Match::None(_pos) => None,
             };
 
-            (start_pos, str_1, str_2)
+            let pos = start_pos.to_range(u32::try_from(index_2).unwrap());
+
+            (pos, str_1, str_2)
         }
 
         pub fn match_ascii_digits(&mut self) -> Match {
@@ -458,14 +469,14 @@ pub(super) enum NewCommandToken {
 
 enum ParseResult<T> {
     Ok(T),
-    None(FilePos),
+    None(FilePosRange),
     Error(ErrorWithPos<MmlParserError>),
 }
 
 enum AbsoluteOrRelative {
-    Absolute(FilePos, u32),
-    Relative(FilePos, i32),
-    None(FilePos),
+    Absolute(FilePosRange, u32),
+    Relative(FilePosRange, i32),
+    None(FilePosRange),
     Error(ErrorWithPos<MmlParserError>),
 }
 
@@ -482,7 +493,7 @@ macro_rules! parsing_error {
     }};
 }
 
-fn value_error(pos: FilePos, e: ValueError) -> ErrorWithPos<MmlParserError> {
+fn value_error(pos: FilePosRange, e: ValueError) -> ErrorWithPos<MmlParserError> {
     ErrorWithPos(pos, MmlParserError::ValueError(e))
 }
 
@@ -524,8 +535,12 @@ impl MmlStreamParser<'_> {
         self.scanner.pos()
     }
 
-    pub fn before_pos(&self) -> FilePos {
+    pub fn previous_pos_range(&self) -> FilePosRange {
         self.scanner.before_pos()
+    }
+
+    pub fn file_pos_range_from(&self, from: FilePosRange) -> FilePosRange {
+        self.scanner.file_pos_range_from(from)
     }
 
     /// Advances to the next line (if required)
@@ -865,7 +880,7 @@ impl MmlStreamParser<'_> {
     ) -> Result<QuarterWavelengthInTicks, ErrorWithPos<MmlParserError>> {
         if !self.next_symbol_matches(Symbol::Comma) {
             return Err(value_error(
-                self.before_pos(),
+                self.previous_pos_range(),
                 ValueError::NoCommaQuarterWavelength,
             ));
         }
@@ -888,7 +903,7 @@ impl MmlStreamParser<'_> {
         } else {
             let pitch_offset_per_tick = match value.try_into() {
                 Ok(d) => d,
-                Err(e) => return Err(value_error(self.before_pos(), e)),
+                Err(e) => return Err(value_error(self.previous_pos_range(), e)),
             };
             let quarter_wavelength_ticks = self.parse_comma_quarter_wavelength_ticks()?;
             Ok(Some(ManualVibrato {
@@ -1000,7 +1015,7 @@ impl MmlParser<'_> {
 
     fn add_error_before(&mut self, e: MmlParserError) {
         self.error_list
-            .push(ErrorWithPos(self.parser.before_pos(), e))
+            .push(ErrorWithPos(self.parser.previous_pos_range(), e))
     }
 
     fn pitch_to_note(&self, p: MmlPitch) -> Result<Note, MmlParserError> {
@@ -1020,7 +1035,7 @@ impl MmlParser<'_> {
         match self.parser.parse_optional_length() {
             Ok(Some(l)) => match self.calculate_note_length(l) {
                 Ok(tc) => Ok(Some(tc)),
-                Err(e) => Err(ErrorWithPos(self.parser.before_pos(), e)),
+                Err(e) => Err(ErrorWithPos(self.parser.previous_pos_range(), e)),
             },
             Ok(None) => Ok(None),
             Err(e) => Err(e),
@@ -1031,7 +1046,7 @@ impl MmlParser<'_> {
         match self.parser.parse_optional_length() {
             Ok(Some(l)) => match self.calculate_note_length(l) {
                 Ok(tc) => Ok(tc),
-                Err(e) => Err(ErrorWithPos(self.parser.before_pos(), e)),
+                Err(e) => Err(ErrorWithPos(self.parser.previous_pos_range(), e)),
             },
             Ok(None) => Ok(self.state.default_length),
             Err(e) => Err(e),
@@ -1223,12 +1238,15 @@ impl MmlParser<'_> {
 
     fn parse_portamento(
         &mut self,
-        pos: FilePos,
+        pos: &FilePosRange,
     ) -> Result<MmlCommand, ErrorWithPos<MmlParserError>> {
-        let notes = match self.parse_pitch_list(Symbol::EndPortamento) {
-            Some(n) => n,
+        let (notes, pos) = match self.parse_pitch_list(Symbol::EndPortamento) {
+            Some(np) => np,
             None => {
-                return Err(ErrorWithPos(pos, MmlParserError::MissingEndPortamento));
+                return Err(ErrorWithPos(
+                    pos.clone(),
+                    MmlParserError::MissingEndPortamento,
+                ));
             }
         };
 
@@ -1272,23 +1290,26 @@ impl MmlParser<'_> {
 
     fn parse_broken_chord(
         &mut self,
-        pos: FilePos,
+        pos: &FilePosRange,
     ) -> Result<MmlCommand, ErrorWithPos<MmlParserError>> {
-        let notes = match self.parse_pitch_list(Symbol::EndBrokenChord) {
-            Some(n) => n,
+        let (notes, _pos) = match self.parse_pitch_list(Symbol::EndBrokenChord) {
+            Some(np) => np,
             None => {
-                return Err(ErrorWithPos(pos, MmlParserError::MissingEndBrokenChord));
+                return Err(ErrorWithPos(
+                    pos.clone(),
+                    MmlParserError::MissingEndBrokenChord,
+                ));
             }
         };
 
         let total_length = self.parse_note_length()?;
         let mut tie = true;
         let mut note_length = None;
-        let mut note_length_pos = self.parser.before_pos();
+        let mut note_length_pos = self.parser.previous_pos_range();
 
         if self.parser.next_symbol_matches(Symbol::Comma) {
             note_length = self.parser.parse_optional_length()?;
-            note_length_pos = self.parser.before_pos();
+            note_length_pos = self.parser.previous_pos_range();
 
             if self.parser.next_symbol_matches(Symbol::Comma) {
                 tie = self.parser.parse_bool()?;
@@ -1367,11 +1388,11 @@ impl MmlParser<'_> {
     fn parse_play_pitch(
         &mut self,
         pitch: MmlPitch,
-        pos: FilePos,
+        pos: &FilePosRange,
     ) -> Result<MmlCommand, ErrorWithPos<MmlParserError>> {
         let note = match self.pitch_to_note(pitch) {
             Ok(n) => n,
-            Err(e) => return Err(ErrorWithPos(pos, e)),
+            Err(e) => return Err(ErrorWithPos(pos.clone(), e)),
         };
         let length = self.parse_note_length()?;
 
@@ -1381,11 +1402,11 @@ impl MmlParser<'_> {
     fn parse_symbol(
         &mut self,
         symbol: Symbol,
-        pos: FilePos,
+        pos: &FilePosRange,
     ) -> Result<MmlCommand, ErrorWithPos<MmlParserError>> {
         type Error = MmlParserError;
 
-        let err = |e: Error| Err(ErrorWithPos(pos, e));
+        let err = |e: Error| Err(ErrorWithPos(pos.clone(), e));
 
         match symbol {
             Symbol::CallSubroutine => {
@@ -1395,7 +1416,13 @@ impl MmlParser<'_> {
                     Some(subroutine_map) => match id {
                         Some(id) => match subroutine_map.get(&id) {
                             Some(s) => Ok(MmlCommand::CallSubroutine(*s)),
-                            None => err(Error::CannotFindSubroutine(id.as_str().to_owned())),
+                            None => {
+                                let id = id.as_str().to_owned();
+                                Err(ErrorWithPos(
+                                    self.parser.file_pos_range_from(pos.clone()),
+                                    Error::CannotFindSubroutine(id),
+                                ))
+                            }
                         },
                         None => err(Error::NoSubroutine),
                     },
@@ -1410,7 +1437,13 @@ impl MmlParser<'_> {
             Symbol::SetInstrument => match self.parser.parse_identifier() {
                 Some(id) => match self.instruments_map.get(&id) {
                     Some(index) => Ok(MmlCommand::SetInstrument(*index)),
-                    None => err(Error::CannotFindSubroutine(id.as_str().to_owned())),
+                    None => {
+                        let id = id.as_str().to_owned();
+                        Err(ErrorWithPos(
+                            self.parser.file_pos_range_from(pos.clone()),
+                            Error::CannotFindSubroutine(id),
+                        ))
+                    }
                 },
                 None => err(Error::NoInstrument),
             },
@@ -1514,14 +1547,20 @@ impl MmlParser<'_> {
         }
     }
 
-    fn parse_pitch_list(&mut self, end_symbol: Symbol) -> Option<Vec<Note>> {
+    fn parse_pitch_list(&mut self, end_symbol: Symbol) -> Option<(Vec<Note>, FilePosRange)> {
         let mut out = Vec::new();
+
+        let pos = self.parser.previous_pos_range();
 
         loop {
             // Do not advance to the next line.
             match self.parser.next_new_command_token() {
                 NewCommandToken::Symbol(s) if s == end_symbol => {
-                    return Some(out);
+                    let pos = FilePosRange {
+                        index_end: self.parser.previous_pos_range().index_end,
+                        ..pos
+                    };
+                    return Some((out, pos));
                 }
                 NewCommandToken::EndOfLine | NewCommandToken::EndOfStream => {
                     // Missing EndBrokenChord token
@@ -1573,7 +1612,7 @@ impl MmlParser<'_> {
                     self.parser.parse_newline();
                     out.push(MmlCommandWithPos {
                         command: MmlCommand::NewLine,
-                        pos: self.parser.pos(),
+                        pos: self.parser.pos().to_range(1),
                     });
                 }
                 NewCommandToken::UnknownCharacters(count) => {
@@ -1583,18 +1622,24 @@ impl MmlParser<'_> {
                     self.add_error(e);
                 }
                 NewCommandToken::Pitch(pitch) => {
-                    let pos = self.parser.before_pos();
-                    match self.parse_play_pitch(pitch, pos) {
-                        Ok(command) => out.push(MmlCommandWithPos { command, pos }),
+                    let pos = self.parser.previous_pos_range();
+                    match self.parse_play_pitch(pitch, &pos) {
+                        Ok(command) => {
+                            let pos = self.parser.file_pos_range_from(pos);
+                            out.push(MmlCommandWithPos { command, pos })
+                        }
                         Err(e) => self.add_error(e),
                     }
                 }
                 NewCommandToken::Symbol(symbol) => {
-                    let pos = self.parser.before_pos();
-                    match self.parse_symbol(symbol, pos) {
+                    let pos = self.parser.previous_pos_range();
+                    match self.parse_symbol(symbol, &pos) {
                         Ok(command) => match command {
                             MmlCommand::NoCommand => (),
-                            _ => out.push(MmlCommandWithPos { command, pos }),
+                            _ => {
+                                let pos = self.parser.file_pos_range_from(pos);
+                                out.push(MmlCommandWithPos { command, pos })
+                            }
                         },
                         Err(e) => self.add_error(e),
                     }

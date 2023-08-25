@@ -20,7 +20,7 @@ use crate::errors::{
     ErrorWithLine, ErrorWithPos, IdentifierError, MmlChannelError, MmlCommandError,
     MmlCompileErrors, MmlLineError, ValueError,
 };
-use crate::file_pos::{split_lines, FilePos, Line, MAX_MML_TEXT_LENGTH};
+use crate::file_pos::{split_lines, FilePos, FilePosRange, Line, MAX_MML_TEXT_LENGTH};
 use crate::mml_command_parser::{
     parse_mml_lines, IdentifierStr, ManualVibrato, MmlCommand, MmlCommandWithPos, MpVibrato,
     PanCommand, PortamentoSpeed, VolumeCommand,
@@ -1201,7 +1201,7 @@ impl MmlBytecodeGenerator<'_> {
     fn process_command(
         &mut self,
         command: &MmlCommand,
-        pos: &FilePos,
+        pos: &FilePosRange,
     ) -> Result<(), MmlCommandError> {
         match command {
             MmlCommand::NoCommand => (),
@@ -1367,7 +1367,7 @@ fn process_mml_commands(
     for c in commands {
         match gen.process_command(c.command(), c.pos()) {
             Ok(()) => (),
-            Err(e) => errors.push(ErrorWithPos(*c.pos(), e)),
+            Err(e) => errors.push(ErrorWithPos(c.pos().clone(), e)),
         }
     }
 
@@ -1383,7 +1383,7 @@ fn process_mml_commands(
         (None, Some(lp)) => {
             if lp.tick_counter == tick_counter {
                 errors.push(ErrorWithPos(
-                    last_pos,
+                    last_pos.to_range(1),
                     MmlCommandError::NoTicksAfterLoopPoint,
                 ));
             }
@@ -1394,7 +1394,10 @@ fn process_mml_commands(
     let bytecode = match gen.bc.bytecode(terminator) {
         Ok(b) => b,
         Err(e) => {
-            errors.push(ErrorWithPos(last_pos, MmlCommandError::BytecodeError(e)));
+            errors.push(ErrorWithPos(
+                last_pos.to_range(1),
+                MmlCommandError::BytecodeError(e),
+            ));
             Vec::new()
         }
     };

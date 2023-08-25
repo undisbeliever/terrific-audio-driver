@@ -8,7 +8,7 @@ use crate::helpers::ch_units_to_width;
 
 use compiler::errors::{MmlChannelError, MmlCompileErrors};
 use compiler::mml::{FIRST_MUSIC_CHANNEL, LAST_MUSIC_CHANNEL};
-use compiler::FilePos;
+use compiler::FilePosRange;
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -231,17 +231,17 @@ impl MmlEditorState {
         let mut min_index = usize::MAX;
         let mut max_index = 0;
 
-        let mut highlight_error = |pos: &FilePos| {
-            if let Ok(i) = usize::try_from(pos.char_index()) {
-                if let Some(c) = style_vec.get_mut(i) {
-                    // ::TODO highlight error range
-                    *c = Style::Error.to_u8_char();
-
-                    if i < min_index {
-                        min_index = i;
-                    }
-                    if i > max_index {
-                        max_index = i
+        let mut highlight_error = |pos: &FilePosRange| {
+            if let Ok(start) = usize::try_from(pos.index_start()) {
+                if let Ok(end) = usize::try_from(pos.index_end()) {
+                    if let Some(slice) = style_vec.get_mut(start..end) {
+                        slice.fill(Style::Error.to_u8_char());
+                        if start < min_index {
+                            min_index = start;
+                        }
+                        if end > max_index {
+                            max_index = end
+                        }
                     }
                 }
             }

@@ -25,7 +25,7 @@ pub mod mml;
 pub mod samples;
 pub mod sound_effects;
 
-pub use file_pos::FilePos;
+pub use file_pos::{FilePos, FilePosRange};
 pub use value_newtypes::ValueNewType;
 
 pub use data::{

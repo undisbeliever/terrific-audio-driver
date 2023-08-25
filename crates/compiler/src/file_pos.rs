@@ -23,6 +23,32 @@ impl FilePos {
     pub fn char_index(&self) -> u32 {
         self.char_index
     }
+
+    pub(crate) fn to_range(self, byte_length: u32) -> FilePosRange {
+        FilePosRange {
+            line_number: self.line_number,
+            line_char: self.line_char,
+            index_start: self.char_index,
+            index_end: self.char_index + byte_length,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct FilePosRange {
+    pub(crate) line_number: u32,
+    pub(crate) line_char: u32,
+    pub(crate) index_start: u32,
+    pub(crate) index_end: u32,
+}
+
+impl FilePosRange {
+    pub fn index_start(&self) -> u32 {
+        self.index_start
+    }
+    pub fn index_end(&self) -> u32 {
+        self.index_end
+    }
 }
 
 pub struct Line<'a> {

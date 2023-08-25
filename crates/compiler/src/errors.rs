@@ -15,7 +15,7 @@ use crate::driver_constants::{
     MAX_INSTRUMENTS, MAX_SONG_DATA_SIZE, MAX_SOUND_EFFECTS, MAX_SUBROUTINES, PITCH_TABLE_SIZE,
 };
 use crate::echo::{EchoEdl, EchoLength};
-use crate::file_pos::{FilePos, MAX_MML_TEXT_LENGTH};
+use crate::file_pos::{FilePosRange, MAX_MML_TEXT_LENGTH};
 use crate::mml::MAX_BROKEN_CHORD_NOTES;
 use crate::mml_command_parser::{
     PortamentoSpeed, Quantization, Transpose, MAX_COARSE_VOLUME, MAX_RELATIVE_COARSE_VOLUME,
@@ -33,7 +33,7 @@ use std::path::PathBuf;
 pub struct ErrorWithLine<T>(pub u32, pub T);
 
 #[derive(Debug)]
-pub struct ErrorWithPos<T>(pub FilePos, pub T);
+pub struct ErrorWithPos<T>(pub FilePosRange, pub T);
 
 #[derive(Debug)]
 pub enum FileError {
