@@ -7,7 +7,8 @@
 use crate::helpers::ch_units_to_width;
 
 use compiler::errors::{MmlChannelError, MmlCompileErrors};
-use compiler::mml::{FilePos, FIRST_MUSIC_CHANNEL, LAST_MUSIC_CHANNEL};
+use compiler::mml::{FIRST_MUSIC_CHANNEL, LAST_MUSIC_CHANNEL};
+use compiler::FilePos;
 
 use std::cell::RefCell;
 use std::rc::Rc;

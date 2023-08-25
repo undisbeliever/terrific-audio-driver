@@ -8,6 +8,7 @@ mod bytecode;
 mod common_audio_data;
 mod echo;
 mod envelope;
+mod file_pos;
 mod mml_command_parser;
 mod notes;
 mod pitch_table;
@@ -24,6 +25,7 @@ pub mod mml;
 pub mod samples;
 pub mod sound_effects;
 
+pub use file_pos::FilePos;
 pub use value_newtypes::ValueNewType;
 
 pub use data::{

@@ -9,15 +9,13 @@ use crate::bytecode::{
     RelativeVolume, SubroutineId, Volume, KEY_OFF_TICK_DELAY,
 };
 use crate::errors::{ErrorWithPos, MmlParserError, ValueError};
+use crate::file_pos::{FilePos, Line};
 use crate::notes::{parse_pitch_char, MidiNote, MmlPitch, Note, Octave, STARTING_OCTAVE};
 use crate::time::{Bpm, MmlLength, TickClock, TickCounter, ZenLen};
 use crate::value_newtypes::{i8_value_newtype, u8_value_newtype, ValueNewType};
 
 use std::cmp::min;
 use std::collections::HashMap;
-
-// Having a cap on MML text length ensures all positions can fit inside a u32.
-pub const MAX_MML_TEXT_LENGTH: usize = 512 * 1024;
 
 pub const MAX_COARSE_VOLUME: u32 = 16;
 pub const COARSE_VOLUME_MULTIPLIER: u8 = 16;
@@ -31,28 +29,6 @@ u8_value_newtype!(
 );
 u8_value_newtype!(Quantization, QuantizeOutOfRange, NoQuantize, 0, 8);
 i8_value_newtype!(Transpose, TransposeOutOfRange, NoTranspose);
-
-#[derive(Debug, Copy, Clone)]
-pub struct FilePos {
-    pub(crate) line_number: u32,
-    pub(crate) line_char: u32,
-    pub(crate) char_index: u32,
-}
-const _: () = assert!(
-    MAX_MML_TEXT_LENGTH < i32::MAX as usize,
-    "Cannot use u32 in FilePos"
-);
-
-impl FilePos {
-    pub fn char_index(&self) -> u32 {
-        self.char_index
-    }
-}
-
-pub(crate) struct Line<'a> {
-    pub text: &'a str,
-    pub position: FilePos,
-}
 
 // ::TODO Add tick counter and instrument to MmlParser output (for the GUI)::
 // ::TODO Add `Option<MmlPitch>` to PlayNote (for a GUI tracker)::

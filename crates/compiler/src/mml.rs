@@ -20,15 +20,14 @@ use crate::errors::{
     ErrorWithLine, ErrorWithPos, IdentifierError, MmlChannelError, MmlCommandError,
     MmlCompileErrors, MmlLineError, ValueError,
 };
+use crate::file_pos::{split_lines, FilePos, Line, MAX_MML_TEXT_LENGTH};
 use crate::mml_command_parser::{
-    parse_mml_lines, IdentifierStr, Line, ManualVibrato, MmlCommand, MmlCommandWithPos, MpVibrato,
+    parse_mml_lines, IdentifierStr, ManualVibrato, MmlCommand, MmlCommandWithPos, MpVibrato,
     PanCommand, PortamentoSpeed, VolumeCommand,
 };
 use crate::notes::{Note, SEMITONS_PER_OCTAVE};
 use crate::pitch_table::PitchTable;
 use crate::time::{Bpm, TickClock, TickCounter, ZenLen, DEFAULT_BPM, DEFAULT_ZENLEN};
-
-pub use crate::mml_command_parser::{FilePos, MAX_MML_TEXT_LENGTH};
 
 use std::cmp::max;
 use std::collections::HashMap;
@@ -95,7 +94,7 @@ mod identifier {
 
 pub use identifier::Identifier;
 
-use self::line_splitter::split_lines;
+use self::line_splitter::split_mml_lines;
 
 #[derive(Debug, PartialEq)]
 pub struct MetaData {
@@ -213,55 +212,10 @@ mod line_splitter {
 
     const COMMENT_CHAR: char = ';';
 
-    struct LineFilePosIterator<'a> {
-        remaining: &'a str,
-        line_no: u32,
-        char_index: u32,
-    }
-
-    fn split_lines_with_pos(s: &str) -> LineFilePosIterator {
-        assert!(s.len() < i32::MAX as usize);
-
-        LineFilePosIterator {
-            remaining: s,
-            line_no: 0,
-            char_index: 0,
-        }
-    }
-
-    impl<'a> Iterator for LineFilePosIterator<'a> {
-        type Item = (&'a str, FilePos);
-
-        fn next(&mut self) -> Option<Self::Item> {
-            if !self.remaining.is_empty() {
-                let (line, remaining) = match self.remaining.split_once('\n') {
-                    Some((line, remaining)) => (line, remaining),
-                    None => (self.remaining, ""),
-                };
-                self.line_no += 1;
-
-                let line_len: u32 = line.len().try_into().unwrap();
-                let line = line.trim();
-
-                let pos = FilePos {
-                    line_number: self.line_no,
-                    line_char: line_len - u32::try_from(line.len()).unwrap(),
-                    char_index: self.char_index,
-                };
-
-                self.remaining = remaining;
-                self.char_index += line_len + 1;
-
-                Some((line, pos))
-            } else {
-                None
-            }
-        }
-    }
-
-    // Assumes `s` starts with a non-whitespace character
-    // Assumes `mml_test` length is < i32::MAX
-    fn split_idstr_and_line(s: &str, pos: FilePos) -> (&str, Line) {
+    // Assumes `line` starts with a non-whitespace character
+    // Assumes `mml_text` length is < i32::MAX
+    fn split_idstr_and_line(line: Line) -> (&str, Line) {
+        let s = line.text;
         let (id, after_id, id_char_count) = match s
             .char_indices()
             .enumerate()
@@ -298,21 +252,17 @@ mod line_splitter {
             Line {
                 text,
                 position: FilePos {
-                    line_number: pos.line_number,
-                    line_char: pos.line_char + line_char,
-                    char_index: pos.char_index + char_index,
+                    line_number: line.position.line_number,
+                    line_char: line.position.line_char + line_char,
+                    char_index: line.position.char_index + char_index,
                 },
             },
         )
     }
 
     // Assumes `mml_test` length is < i32::MAX
-    fn split_id_and_line(
-        s: &str,
-        prefix: char,
-        pos: FilePos,
-    ) -> Result<(Identifier, Line), MmlLineError> {
-        let (id_str, line) = split_idstr_and_line(s, pos);
+    fn split_id_and_line(line: Line, prefix: char) -> Result<(Identifier, Line), MmlLineError> {
+        let (id_str, line) = split_idstr_and_line(line);
 
         let id_str = id_str.trim_start_matches(prefix);
         if !id_str.is_empty() {
@@ -343,7 +293,7 @@ mod line_splitter {
         }
     }
 
-    pub(super) fn split_lines(
+    pub(super) fn split_mml_lines(
         mml_text: &str,
     ) -> Result<MmlLines, Vec<ErrorWithLine<MmlLineError>>> {
         let mut errors = Vec::new();
@@ -367,28 +317,29 @@ mod line_splitter {
 
         let mut subroutine_map: HashMap<Identifier, usize> = HashMap::new();
 
-        for (line, pos) in split_lines_with_pos(mml_text) {
-            let line = match line.split_once(COMMENT_CHAR) {
-                Some((l, _comment)) => l,
+        for line in split_lines(mml_text) {
+            let start_pos = line.position;
+
+            let line = match line.text.split_once(COMMENT_CHAR) {
+                Some((l, _comment)) => Line {
+                    text: l.trim_end(),
+                    ..line
+                },
                 None => line,
             };
-            let line = line.trim();
 
-            match line.chars().next() {
-                Some('#') => headers.push(Line {
-                    text: line,
-                    position: pos,
-                }),
+            match line.text.chars().next() {
+                Some('#') => headers.push(line),
                 Some('@') => {
                     // instruments
-                    match split_id_and_line(line, '@', pos) {
+                    match split_id_and_line(line, '@') {
                         Ok((id, line)) => instruments.push((id, line)),
-                        Err(e) => errors.push(ErrorWithLine(pos.line_number, e)),
+                        Err(e) => errors.push(ErrorWithLine(start_pos.line_number, e)),
                     }
                 }
                 Some('!') => {
                     // Subroutines
-                    match split_id_and_line(line, '!', pos) {
+                    match split_id_and_line(line, '!') {
                         Ok((id, line)) => match subroutine_map.get(&id) {
                             Some(index) => {
                                 subroutines[*index].1.push(line);
@@ -398,14 +349,14 @@ mod line_splitter {
                                 subroutines.push((id, vec![line]));
                             }
                         },
-                        Err(e) => errors.push(ErrorWithLine(pos.line_number, e)),
+                        Err(e) => errors.push(ErrorWithLine(start_pos.line_number, e)),
                     }
                 }
 
                 Some(c) if c.is_ascii_alphanumeric() => {
                     // Music channels
-                    let (id, line) = split_idstr_and_line(line, pos);
-                    match validate_music_channels(id, &pos) {
+                    let (id, line) = split_idstr_and_line(line);
+                    match validate_music_channels(id, &start_pos) {
                         Ok(id) => {
                             // Each channel will only use the line once
                             let mut used = [true; N_MUSIC_CHANNELS];
@@ -427,7 +378,7 @@ mod line_splitter {
                     }
                 }
                 Some(_) => errors.push(ErrorWithLine(
-                    pos.line_number,
+                    start_pos.line_number,
                     MmlLineError::CannotParseLine,
                 )),
 
@@ -1525,7 +1476,7 @@ pub fn compile_mml(
         channel_errors: Vec::new(),
     };
 
-    let lines = match split_lines(&mml_file.contents) {
+    let lines = match split_mml_lines(&mml_file.contents) {
         Ok(l) => l,
         Err(e) => {
             errors.line_errors.extend(e);
