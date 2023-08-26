@@ -1353,7 +1353,7 @@ impl Display for MmlCompileErrorsIndentedDisplay<'_> {
         }
 
         for e in &error.line_errors {
-            writeln!(f, "  {}{} {}", error.file_name, e.0.line_number, e.1)?;
+            writeln!(f, "  {}:{} {}", error.file_name, e.0.line_number, e.1)?;
         }
         for e in &error.subroutine_errors {
             fmt_indented_channel_errors(f, e, &error.file_name, true)?;
