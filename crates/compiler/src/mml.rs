@@ -1112,6 +1112,9 @@ impl MmlBytecodeGenerator<'_> {
         }
         let last_note_ticks = last_note_ticks;
 
+        if total_ticks < last_note_ticks {
+            return Err(MmlCommandError::BrokenChordTotalLengthTooShort);
+        }
         let notes_in_loop = (total_ticks - last_note_ticks) / note_length.ticks();
 
         let break_point = usize::try_from(notes_in_loop % n_notes).unwrap();
