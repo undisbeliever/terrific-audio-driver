@@ -17,10 +17,12 @@ use crate::driver_constants::{FIR_FILTER_SIZE, IDENTITY_FILTER, N_MUSIC_CHANNELS
 use crate::echo::{parse_fir_filter_string, EchoBuffer, EchoEdl, EchoLength, DEFAULT_EDL};
 use crate::envelope::{Adsr, Gain};
 use crate::errors::{
-    ErrorWithLine, ErrorWithPos, IdentifierError, MmlChannelError, MmlCommandError,
-    MmlCompileErrors, MmlLineError, ValueError,
+    ErrorWithPos, IdentifierError, MmlChannelError, MmlCommandError, MmlCompileErrors,
+    MmlLineError, ValueError,
 };
-use crate::file_pos::{split_lines, FilePos, FilePosRange, Line, MAX_MML_TEXT_LENGTH};
+use crate::file_pos::{
+    blank_file_range, split_lines, FilePos, FilePosRange, Line, MAX_MML_TEXT_LENGTH,
+};
 use crate::mml_command_parser::{
     parse_mml_lines, IdentifierStr, ManualVibrato, MmlCommand, MmlCommandWithPos, MpVibrato,
     PanCommand, PortamentoSpeed, VolumeCommand,
@@ -119,11 +121,11 @@ pub enum EnvelopeOverride {
     Gain(Gain),
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug)]
 pub struct MmlInstrument {
     identifier: Identifier,
 
-    line_number: u32,
+    file_range: FilePosRange,
 
     instrument_id: InstrumentId,
 
@@ -261,24 +263,34 @@ mod line_splitter {
     }
 
     // Assumes `mml_test` length is < i32::MAX
-    fn split_id_and_line(line: Line, prefix: char) -> Result<(Identifier, Line), MmlLineError> {
+    fn split_id_and_line(
+        line: Line,
+        prefix: char,
+    ) -> Result<(Identifier, Line), ErrorWithPos<MmlLineError>> {
+        let start_pos = line.position;
         let (id_str, line) = split_idstr_and_line(line);
 
         let id_str = id_str.trim_start_matches(prefix);
         if !id_str.is_empty() {
             match Identifier::try_from_string(id_str.to_owned()) {
                 Ok(id) => Ok((id, line)),
-                Err(e) => Err(MmlLineError::InvalidIdentifier(e)),
+                Err(e) => Err(ErrorWithPos(
+                    line.position.to_range(1),
+                    MmlLineError::InvalidIdentifier(e),
+                )),
             }
         } else {
-            Err(MmlLineError::NoIdentifier(prefix))
+            Err(ErrorWithPos(
+                start_pos.to_range(1),
+                MmlLineError::NoIdentifier(prefix),
+            ))
         }
     }
 
     fn validate_music_channels<'a>(
         ids: &'a str,
         pos: &FilePos,
-    ) -> Result<&'a str, ErrorWithLine<MmlLineError>> {
+    ) -> Result<&'a str, ErrorWithPos<MmlLineError>> {
         if ids.chars().all(|c| MUSIC_CHANNEL_RANGE.contains(&c)) {
             Ok(ids)
         } else {
@@ -286,8 +298,8 @@ mod line_splitter {
                 .chars()
                 .filter(|c| !MUSIC_CHANNEL_RANGE.contains(c))
                 .collect();
-            Err(ErrorWithLine(
-                pos.line_number,
+            Err(ErrorWithPos(
+                pos.to_range_str_len(ids),
                 MmlLineError::UnknownChannel(unknown),
             ))
         }
@@ -295,11 +307,14 @@ mod line_splitter {
 
     pub(super) fn split_mml_lines(
         mml_text: &str,
-    ) -> Result<MmlLines, Vec<ErrorWithLine<MmlLineError>>> {
+    ) -> Result<MmlLines, Vec<ErrorWithPos<MmlLineError>>> {
         let mut errors = Vec::new();
 
         if mml_text.len() > MAX_MML_TEXT_LENGTH {
-            errors.push(ErrorWithLine(0, MmlLineError::MmlTooLarge(mml_text.len())));
+            errors.push(ErrorWithPos(
+                blank_file_range(),
+                MmlLineError::MmlTooLarge(mml_text.len()),
+            ));
             return Err(errors);
         }
 
@@ -334,7 +349,7 @@ mod line_splitter {
                     // instruments
                     match split_id_and_line(line, '@') {
                         Ok((id, line)) => instruments.push((id, line)),
-                        Err(e) => errors.push(ErrorWithLine(start_pos.line_number, e)),
+                        Err(e) => errors.push(e),
                     }
                 }
                 Some('!') => {
@@ -349,7 +364,7 @@ mod line_splitter {
                                 subroutines.push((id, vec![line]));
                             }
                         },
-                        Err(e) => errors.push(ErrorWithLine(start_pos.line_number, e)),
+                        Err(e) => errors.push(e),
                     }
                 }
 
@@ -377,10 +392,7 @@ mod line_splitter {
                         Err(e) => errors.push(e),
                     }
                 }
-                Some(_) => errors.push(ErrorWithLine(
-                    start_pos.line_number,
-                    MmlLineError::CannotParseLine,
-                )),
+                Some(_) => errors.push(ErrorWithPos(line.range(), MmlLineError::CannotParseLine)),
 
                 None => (),
             }
@@ -389,7 +401,10 @@ mod line_splitter {
         if subroutines.len() > MAX_SUBROUTINES {
             errors.insert(
                 0,
-                ErrorWithLine(0, MmlLineError::TooManySubroutines(subroutines.len())),
+                ErrorWithPos(
+                    blank_file_range(),
+                    MmlLineError::TooManySubroutines(subroutines.len()),
+                ),
             );
         }
 
@@ -437,20 +452,18 @@ fn four_arguments(iter: std::str::SplitWhitespace) -> Option<(&str, &str, &str, 
 // Header
 // ======
 
-fn split_header_line(line: &str) -> Result<(&str, &str), MmlLineError> {
-    let (header, value) = match line.split_once(char::is_whitespace) {
+fn split_header_line<'a>(line: &'a Line<'a>) -> Result<(&'a str, Line<'a>), MmlLineError> {
+    let (header, value) = match line.split_once() {
         Some(s) => s,
         None => {
             return Err(MmlLineError::NoHeader);
         }
     };
 
-    let value = value.trim();
-
     if header.is_empty() {
         return Err(MmlLineError::NoHeader);
     }
-    if value.is_empty() {
+    if value.text.is_empty() {
         return Err(MmlLineError::NoValue);
     }
 
@@ -516,7 +529,7 @@ impl HeaderState {
     }
 }
 
-fn parse_headers(lines: Vec<Line>) -> Result<MetaData, Vec<ErrorWithLine<MmlLineError>>> {
+fn parse_headers(lines: Vec<Line>) -> Result<MetaData, Vec<ErrorWithPos<MmlLineError>>> {
     let mut errors = Vec::new();
 
     let mut map: HashMap<&str, &str> = HashMap::with_capacity(lines.len());
@@ -530,26 +543,24 @@ fn parse_headers(lines: Vec<Line>) -> Result<MetaData, Vec<ErrorWithLine<MmlLine
         echo_volume: None,
     };
 
-    for line in lines {
-        let line_no = line.position.line_number;
-
-        match split_header_line(line.text) {
+    for line in &lines {
+        match split_header_line(line) {
             Ok((header, value)) => {
                 if !map.contains_key(header) {
-                    map.insert(header, value);
+                    map.insert(header, value.text);
                 } else {
-                    errors.push(ErrorWithLine(
-                        line_no,
+                    errors.push(ErrorWithPos(
+                        line.position.to_range_str_len(header),
                         MmlLineError::DuplicateHeader(header.to_string()),
                     ));
                 }
-                match header_state.parse_header(header, value) {
+                match header_state.parse_header(header, value.text) {
                     Ok(()) => (),
-                    Err(e) => errors.push(ErrorWithLine(line_no, e)),
+                    Err(e) => errors.push(ErrorWithPos(value.range(), e)),
                 }
             }
             Err(e) => {
-                errors.push(ErrorWithLine(line_no, e));
+                errors.push(ErrorWithPos(line.range(), e));
             }
         }
     }
@@ -589,42 +600,56 @@ fn parse_instrument(
     id: Identifier,
     line: &Line,
     inst_map: &UniqueNamesList<data::Instrument>,
-) -> Result<MmlInstrument, MmlLineError> {
-    let mut args = line.text.split_whitespace();
+) -> Result<MmlInstrument, ErrorWithPos<MmlLineError>> {
+    if line.text.is_empty() {
+        return Err(ErrorWithPos(line.range(), MmlLineError::NoInstrument));
+    }
 
-    let inst_name = match args.next() {
-        Some(s) => s,
-        None => return Err(MmlLineError::NoInstrument),
+    let (inst_name, args) = match line.split_once() {
+        Some((n, a)) => (n, Some(a)),
+        None => (line.text, None),
     };
+
+    let inst_name_err = |e| Err(ErrorWithPos(line.position.to_range_str_len(inst_name), e));
 
     let mut envelope_override = EnvelopeOverride::None;
 
-    match args.next() {
-        None => {}
-        Some("adsr") => match four_arguments(args) {
-            Some((a, b, c, d)) => match Adsr::try_from_strs(a, b, c, d) {
-                Ok(a) => {
-                    envelope_override = EnvelopeOverride::Adsr(a);
-                }
-                Err(e) => return Err(MmlLineError::InvalidAdsr(e)),
+    if let Some(args) = args {
+        let arg_range = args.range();
+        let arg_err = |e| Err(ErrorWithPos(arg_range, e));
+
+        let mut args = args.text.split_whitespace();
+        match args.next() {
+            None => {}
+            Some("adsr") => match four_arguments(args) {
+                Some((a, b, c, d)) => match Adsr::try_from_strs(a, b, c, d) {
+                    Ok(a) => {
+                        envelope_override = EnvelopeOverride::Adsr(a);
+                    }
+                    Err(e) => return arg_err(MmlLineError::InvalidAdsr(e)),
+                },
+                _ => return arg_err(MmlLineError::ExpectedFourAdsrArguments),
             },
-            _ => return Err(MmlLineError::ExpectedFourAdsrArguments),
-        },
-        Some("gain") => match one_argument(args) {
-            Some(g) => match Gain::try_from(g) {
-                Ok(g) => {
-                    envelope_override = EnvelopeOverride::Gain(g);
-                }
-                Err(e) => return Err(MmlLineError::InvalidGain(e)),
+            Some("gain") => match one_argument(args) {
+                Some(g) => match Gain::try_from(g) {
+                    Ok(g) => {
+                        envelope_override = EnvelopeOverride::Gain(g);
+                    }
+                    Err(e) => return arg_err(MmlLineError::InvalidGain(e)),
+                },
+                None => return arg_err(MmlLineError::ExpectedOneGainArgument),
             },
-            None => return Err(MmlLineError::ExpectedOneGainArgument),
-        },
-        Some(unknown) => return Err(MmlLineError::UnknownInstrumentArgument(unknown.to_owned())),
+            Some(unknown) => {
+                return arg_err(MmlLineError::UnknownInstrumentArgument(unknown.to_owned()))
+            }
+        }
     }
 
     let (instrument_id, inst) = match inst_map.get_with_index(inst_name) {
         Some((inst_id, inst)) => (inst_id, inst),
-        None => return Err(MmlLineError::CannotFindInstrument(inst_name.to_owned())),
+        None => {
+            return inst_name_err(MmlLineError::CannotFindInstrument(inst_name.to_owned()));
+        }
     };
 
     match envelope_override {
@@ -641,10 +666,15 @@ fn parse_instrument(
         }
     }
 
+    let instrument_id = match InstrumentId::try_from(instrument_id) {
+        Ok(i) => i,
+        Err(e) => return inst_name_err(e.into()),
+    };
+
     Ok(MmlInstrument {
         identifier: id,
-        line_number: line.position.line_number,
-        instrument_id: InstrumentId::try_from(instrument_id)?,
+        file_range: line.range(),
+        instrument_id,
         first_note: Note::first_note_for_octave(inst.first_octave),
         last_note: Note::last_note_for_octave(inst.last_octave),
         envelope_override,
@@ -654,14 +684,14 @@ fn parse_instrument(
 fn parse_instruments(
     instrument_lines: Vec<(Identifier, Line)>,
     inst_map: &UniqueNamesList<data::Instrument>,
-) -> (Vec<MmlInstrument>, Vec<ErrorWithLine<MmlLineError>>) {
+) -> (Vec<MmlInstrument>, Vec<ErrorWithPos<MmlLineError>>) {
     let mut out = Vec::with_capacity(instrument_lines.len());
     let mut errors = Vec::new();
 
     for (id, line) in instrument_lines {
         match parse_instrument(id, &line, inst_map) {
             Ok(i) => out.push(i),
-            Err(e) => errors.push(ErrorWithLine(line.position.line_number, e)),
+            Err(e) => errors.push(e),
         }
     }
 
@@ -670,14 +700,14 @@ fn parse_instruments(
 
 fn build_instrument_map(
     instruments: &Vec<MmlInstrument>,
-) -> Result<HashMap<IdentifierStr, usize>, Vec<ErrorWithLine<MmlLineError>>> {
+) -> Result<HashMap<IdentifierStr, usize>, Vec<ErrorWithPos<MmlLineError>>> {
     let mut out = HashMap::with_capacity(instruments.len());
     let mut errors = Vec::new();
 
     for (i, inst) in instruments.iter().enumerate() {
         if out.insert(inst.identifier.as_ref(), i).is_some() {
-            errors.push(ErrorWithLine(
-                inst.line_number,
+            errors.push(ErrorWithPos(
+                inst.file_range.clone(),
                 MmlLineError::DuplicateInstrumentName(inst.identifier.as_str().to_owned()),
             ));
         }

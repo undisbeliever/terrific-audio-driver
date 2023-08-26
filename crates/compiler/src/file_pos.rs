@@ -32,6 +32,20 @@ impl FilePos {
             index_end: self.char_index + byte_length,
         }
     }
+
+    // ASSUMES: `s` is the prefix at this file position
+    pub(crate) fn to_range_str_len(self, s: &str) -> FilePosRange {
+        let s_len = s.bytes().len().try_into().unwrap();
+        self.to_range(s_len)
+    }
+
+    fn advance(&self, char_count: u32, byte_length: usize) -> FilePos {
+        FilePos {
+            line_number: self.line_number,
+            line_char: self.line_char + char_count,
+            char_index: self.char_index + u32::try_from(byte_length).unwrap(),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -51,9 +65,74 @@ impl FilePosRange {
     }
 }
 
+pub fn blank_file_range() -> FilePosRange {
+    FilePosRange {
+        line_number: 0,
+        line_char: 0,
+        index_start: 0,
+        index_end: 0,
+    }
+}
+
 pub struct Line<'a> {
     pub text: &'a str,
     pub position: FilePos,
+}
+
+impl Line<'_> {
+    pub fn range(&self) -> FilePosRange {
+        let line_length = self.text.bytes().len().try_into().unwrap();
+        self.position.to_range(line_length)
+    }
+
+    fn trim_start(self) -> Self {
+        let pos = self.position;
+
+        let mut char_count = 0;
+        for (index, c) in self.text.char_indices() {
+            if !c.is_whitespace() {
+                let text = &self.text[index..];
+
+                return Line {
+                    text,
+                    position: pos.advance(char_count, index),
+                };
+            }
+            char_count += 1;
+        }
+
+        Line {
+            text: "",
+            position: FilePos {
+                line_number: pos.line_number,
+                line_char: pos.line_char + char_count,
+                char_index: pos.char_index + u32::try_from(self.text.bytes().len()).unwrap(),
+            },
+        }
+    }
+
+    pub fn split_once(&self) -> Option<(&str, Line)> {
+        match self
+            .text
+            .char_indices()
+            .enumerate()
+            .find(|(_, (_, c))| c.is_ascii_whitespace())
+        {
+            Some((char_count, (index, _))) => {
+                let char_count: u32 = char_count.try_into().unwrap();
+                let (first, rem) = self.text.split_at(index);
+
+                let l = Line {
+                    text: rem,
+                    position: self.position.advance(char_count, index),
+                };
+                let l = l.trim_start();
+
+                Some((first, l))
+            }
+            None => None,
+        }
+    }
 }
 
 pub struct LineSplitter<'a> {

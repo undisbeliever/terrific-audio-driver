@@ -434,7 +434,7 @@ pub struct MmlCompileErrors {
     pub path: Option<PathBuf>,
     pub file_name: String,
 
-    pub line_errors: Vec<ErrorWithLine<MmlLineError>>,
+    pub line_errors: Vec<ErrorWithPos<MmlLineError>>,
     pub subroutine_errors: Vec<MmlChannelError>,
     pub channel_errors: Vec<MmlChannelError>,
 }
@@ -1353,7 +1353,7 @@ impl Display for MmlCompileErrorsIndentedDisplay<'_> {
         }
 
         for e in &error.line_errors {
-            writeln!(f, "  {}{} {}", error.file_name, e.0, e.1)?;
+            writeln!(f, "  {}{} {}", error.file_name, e.0.line_number, e.1)?;
         }
         for e in &error.subroutine_errors {
             fmt_indented_channel_errors(f, e, &error.file_name, true)?;
