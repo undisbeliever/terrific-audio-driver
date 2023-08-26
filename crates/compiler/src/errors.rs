@@ -431,7 +431,7 @@ impl MmlChannelError {
 
 #[derive(Debug)]
 pub struct MmlCompileErrors {
-    pub path: Option<PathBuf>,
+    pub song_name: Option<Name>,
     pub file_name: String,
 
     pub line_errors: Vec<ErrorWithPos<MmlLineError>>,
@@ -1347,9 +1347,9 @@ impl Display for MmlCompileErrorsIndentedDisplay<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         let error = self.0;
 
-        match &error.path {
-            Some(p) => writeln!(f, "Error compiling MML file: {}", p.display())?,
-            None => writeln!(f, "Error compiling MML file")?,
+        match &error.song_name {
+            Some(s) => writeln!(f, "Error compiling {}:", s)?,
+            None => writeln!(f, "Error compiling {}:", error.file_name)?,
         }
 
         for e in &error.line_errors {

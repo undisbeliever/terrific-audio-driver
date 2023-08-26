@@ -6,8 +6,8 @@
 
 use clap::{Args, Parser, Subcommand};
 use compiler::data::{is_name_or_id, load_text_file_with_limit, TextFile};
-use compiler::sound_effects;
 use compiler::{build_pitch_table, compile_mml, song_data, UniqueNamesProjectFile};
+use compiler::{sound_effects, Name};
 
 use std::ffi::OsString;
 use std::fs;
@@ -152,19 +152,22 @@ struct CompileSongDataArgs {
     song: OsString,
 }
 
-fn load_mml_file(args: &CompileSongDataArgs, pf: &UniqueNamesProjectFile) -> TextFile {
+fn load_mml_file(
+    args: &CompileSongDataArgs,
+    pf: &UniqueNamesProjectFile,
+) -> (TextFile, Option<Name>) {
     let song_name_or_path = &args.song;
 
     // Safe, the `U+FFFD REPLACEMENT CHARACTER` is not a name character.
     let sn = song_name_or_path.to_string_lossy();
 
-    let path = if is_name_or_id(&sn) {
+    let (path, song_name) = if is_name_or_id(&sn) {
         if pf.songs.is_empty() {
             error!("No songs in project file");
         }
         match sn.parse::<usize>() {
             Ok(song_id) => match pf.get_song_from_id(song_id) {
-                Some(s) => pf.parent_path.join(&s.source),
+                Some(s) => (pf.parent_path.join(&s.source), Some(s.name.clone())),
                 None => error!(
                     "Song number out of range ({} - {})",
                     UniqueNamesProjectFile::FIRST_SONG_ID,
@@ -172,27 +175,29 @@ fn load_mml_file(args: &CompileSongDataArgs, pf: &UniqueNamesProjectFile) -> Tex
                 ),
             },
             Err(_) => match pf.songs.get(&sn) {
-                Some(s) => pf.parent_path.join(&s.source),
+                Some(s) => (pf.parent_path.join(&s.source), Some(s.name.clone())),
                 None => error!("Cannot find song: {}", sn),
             },
         }
     } else {
-        song_name_or_path.into()
+        (song_name_or_path.into(), None)
     };
 
-    load_text_file(path)
+    let text_file = load_text_file(path);
+
+    (text_file, song_name)
 }
 
 fn compile_song_data(args: CompileSongDataArgs) {
     let pf = load_project_file(&args.json_file);
-    let mml_file = load_mml_file(&args, &pf);
+    let (mml_file, song_name) = load_mml_file(&args, &pf);
 
     let pitch_table = match build_pitch_table(&pf.instruments) {
         Ok(pt) => pt,
         Err(e) => error!("{}", e.multiline_display()),
     };
 
-    let mml = match compile_mml(&mml_file, &pf.instruments, &pitch_table) {
+    let mml = match compile_mml(&mml_file, song_name, &pf.instruments, &pitch_table) {
         Ok(mml) => mml,
         Err(e) => error!("{}", e.multiline_display()),
     };
@@ -211,7 +216,7 @@ fn compile_song_data(args: CompileSongDataArgs) {
 
 fn export_song_to_spc_file(args: CompileSongDataArgs) {
     let pf = load_project_file(&args.json_file);
-    let mml_file = load_mml_file(&args, &pf);
+    let (mml_file, song_name) = load_mml_file(&args, &pf);
 
     let samples = match compiler::build_sample_and_instrument_data(&pf) {
         Ok(s) => s,
@@ -219,7 +224,7 @@ fn export_song_to_spc_file(args: CompileSongDataArgs) {
     };
     let sfx = sound_effects::blank_compiled_sound_effects();
 
-    let mml = match compile_mml(&mml_file, &pf.instruments, samples.pitch_table()) {
+    let mml = match compile_mml(&mml_file, song_name, &pf.instruments, samples.pitch_table()) {
         Ok(mml) => mml,
         Err(e) => error!("{}", e.multiline_display()),
     };

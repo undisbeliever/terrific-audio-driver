@@ -1498,11 +1498,12 @@ fn parse_and_compile_mml_channel(
 
 pub fn compile_mml(
     mml_file: &TextFile,
+    song_name: Option<data::Name>,
     inst_map: &UniqueNamesList<data::Instrument>,
     pitch_table: &PitchTable,
 ) -> Result<MmlData, MmlCompileErrors> {
     let mut errors = MmlCompileErrors {
-        path: mml_file.path.clone(),
+        song_name,
         file_name: mml_file.file_name.clone(),
         line_errors: Vec::new(),
         subroutine_errors: Vec::new(),

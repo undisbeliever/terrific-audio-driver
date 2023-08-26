@@ -162,6 +162,10 @@ impl<ItemT> IList<ItemT> {
         &self.items
     }
 
+    fn get(&self, id: &ItemId) -> Option<&ItemT> {
+        self.map.get(id).and_then(|i| self.items.get(*i))
+    }
+
     fn replace(&mut self, data: Vec<(ItemId, ItemT)>) {
         self.map = data
             .iter()
@@ -523,6 +527,7 @@ impl SongCompiler {
 
     fn compile_song(
         id: ItemId,
+        name: Option<&data::Name>,
         f: &TextFile,
         dependencies: &Option<SongDependencies>,
         sender: &Sender,
@@ -535,7 +540,8 @@ impl SongCompiler {
             }
         };
 
-        let mml = match compiler::compile_mml(f, &dep.instruments, &dep.pitch_table) {
+        let mml = match compiler::compile_mml(f, name.cloned(), &dep.instruments, &dep.pitch_table)
+        {
             Ok(mml) => mml,
             Err(e) => {
                 sender.send(CompilerOutput::Song(id, Err(SongError::Mml(e))));
@@ -561,10 +567,12 @@ impl SongCompiler {
         &self,
         id: ItemId,
         path: &Path,
+        pf_songs: &IList<data::Song>,
         dependencies: &Option<SongDependencies>,
         sender: &Sender,
     ) -> SongState {
         let path = self.parent_path.join(path);
+        let song_name = pf_songs.get(&id).map(|s| &s.name);
 
         let file = match load_text_file_with_limit(&path) {
             Ok(f) => f,
@@ -576,7 +584,7 @@ impl SongCompiler {
         };
 
         SongState {
-            song_data: Self::compile_song(id, &file, dependencies, sender),
+            song_data: Self::compile_song(id, song_name, &file, dependencies, sender),
             file,
         }
     }
@@ -584,6 +592,7 @@ impl SongCompiler {
     fn process_pf_song_message(
         &mut self,
         m: &ItemChanged<data::Song>,
+        pf_songs: &IList<data::Song>,
         dependencies: &Option<SongDependencies>,
         sender: &Sender,
     ) {
@@ -594,7 +603,13 @@ impl SongCompiler {
                     .map(|(id, item)| {
                         (
                             id.clone(),
-                            self.load_song(id.clone(), &item.source, dependencies, sender),
+                            self.load_song(
+                                id.clone(),
+                                &item.source,
+                                pf_songs,
+                                dependencies,
+                                sender,
+                            ),
                         )
                     })
                     .collect();
@@ -607,7 +622,7 @@ impl SongCompiler {
                 if !self.songs.contains_key(id) {
                     self.songs.insert(
                         id.clone(),
-                        self.load_song(id.clone(), &item.source, dependencies, sender),
+                        self.load_song(id.clone(), &item.source, pf_songs, dependencies, sender),
                     );
                 }
             }
@@ -617,9 +632,16 @@ impl SongCompiler {
         }
     }
 
-    fn compile_all_songs(&mut self, dependencies: &Option<SongDependencies>, sender: &Sender) {
+    fn compile_all_songs(
+        &mut self,
+        pf_songs: &IList<data::Song>,
+        dependencies: &Option<SongDependencies>,
+        sender: &Sender,
+    ) {
         for (id, s) in self.songs.iter_mut() {
-            s.song_data = Self::compile_song(id.clone(), &s.file, dependencies, sender);
+            let song_name = pf_songs.get(id).map(|s| &s.name);
+
+            s.song_data = Self::compile_song(id.clone(), song_name, &s.file, dependencies, sender);
         }
     }
 
@@ -627,14 +649,18 @@ impl SongCompiler {
         &mut self,
         id: ItemId,
         mml: String,
+        pf_songs: &IList<data::Song>,
         dependencies: &Option<SongDependencies>,
         sender: &Sender,
     ) {
+        let song_name = pf_songs.get(&id).map(|s| &s.name);
+
         match self.songs.entry(id.clone()) {
             Entry::Occupied(mut o) => {
                 let state = o.get_mut();
                 state.file.contents = mml;
-                state.song_data = Self::compile_song(id, &state.file, dependencies, sender)
+                state.song_data =
+                    Self::compile_song(id, song_name, &state.file, dependencies, sender)
             }
             Entry::Vacant(v) => {
                 let file = TextFile {
@@ -642,7 +668,7 @@ impl SongCompiler {
                     file_name: "MML".to_owned(),
                     path: None,
                 };
-                let song_data = Self::compile_song(id, &file, dependencies, sender);
+                let song_data = Self::compile_song(id, song_name, &file, dependencies, sender);
                 v.insert(SongState { file, song_data });
             }
         }
@@ -682,7 +708,7 @@ fn bg_thread(
                 }
             }
             ToCompiler::ProjectSongs(m) => {
-                songs.process_pf_song_message(&m, &song_dependencies, &sender);
+                songs.process_pf_song_message(&m, &pf_songs, &song_dependencies, &sender);
                 pf_songs.process_message(m);
             }
             ToCompiler::Instrument(m) => {
@@ -713,7 +739,7 @@ fn bg_thread(
                         let c = create_sfx_compiler(&instruments, &sender);
                         sound_effects.recompile_all(c);
                     }
-                    songs.compile_all_songs(&song_dependencies, &sender);
+                    songs.compile_all_songs(&pf_songs, &song_dependencies, &sender);
                 }
             }
             ToCompiler::SoundEffects(m) => {
@@ -729,7 +755,7 @@ fn bg_thread(
                 send_sfx_size(&sound_effects, &sender);
             }
             ToCompiler::SongChanged(id, mml) => {
-                songs.edit_and_compile_song(id, mml, &song_dependencies, &sender);
+                songs.edit_and_compile_song(id, mml, &pf_songs, &song_dependencies, &sender);
             }
         }
     }
