@@ -1441,7 +1441,7 @@ impl MmlParser<'_> {
                         let id = id.as_str().to_owned();
                         Err(ErrorWithPos(
                             self.parser.file_pos_range_from(pos.clone()),
-                            Error::CannotFindSubroutine(id),
+                            Error::CannotFindInstrument(id),
                         ))
                     }
                 },

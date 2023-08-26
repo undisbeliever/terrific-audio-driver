@@ -371,6 +371,7 @@ pub enum MmlParserError {
     NoInstrument,
     CannotCallSubroutineInASubroutine,
     CannotFindSubroutine(String),
+    CannotFindInstrument(String),
 
     NoStartBrokenChord,
     NoStartPortamento,
@@ -980,6 +981,7 @@ impl Display for MmlParserError {
             }
 
             Self::CannotFindSubroutine(name) => write!(f, "cannot find subroutine: {}", name),
+            Self::CannotFindInstrument(name) => write!(f, "cannot find instrument: {}", name),
 
             Self::NoStartBrokenChord => write!(f, "not in a broken chord (no `{{{{`)"),
             Self::NoStartPortamento => write!(f, "not in a portamento (no `{{)`"),
