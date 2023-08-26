@@ -134,10 +134,11 @@ mod file_state {
                     .unwrap_or_else(|| new_tab_label(&self.file_type));
 
                 if self.is_unsaved {
-                    let new_label = ["*", label].concat();
+                    let new_label = ["*", label, "  "].concat();
                     tab_widget.set_label(&new_label);
                 } else {
-                    tab_widget.set_label(label);
+                    let new_label = [label, "  "].concat();
+                    tab_widget.set_label(&new_label);
                 }
             }
         }
