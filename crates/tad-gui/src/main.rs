@@ -25,6 +25,7 @@ use crate::compiler_thread::{
 use crate::files::{
     add_song_to_pf_dialog, load_mml_file, load_pf_sfx_file,
     load_project_file_or_show_error_message, open_mml_file_dialog, open_sfx_file_dialog,
+    save_spc_file_dialog,
 };
 use crate::helpers::input_height;
 use crate::list_editor::{
@@ -69,6 +70,8 @@ pub enum Message {
 
     NewMmlFile,
     OpenMmlFile,
+
+    ExportCurrentTabToSpcFile,
 
     // ::TODO add menu item for open/load SFX file::
     OpenSfxFileDialog,
@@ -342,6 +345,14 @@ impl Project {
             Message::NewMmlFile => self.new_blank_song_tab(),
             Message::OpenMmlFile => self.open_mml_file_dialog(),
             Message::OpenSongTab(index) => self.open_pf_song_tab(index),
+
+            Message::ExportCurrentTabToSpcFile => {
+                if let Some(FileType::Song(id)) = self.tab_manager.selected_file() {
+                    let _ = self
+                        .compiler_sender
+                        .send(ToCompiler::ExportSongToSpcFile(id));
+                }
+            }
         }
     }
 
@@ -397,6 +408,14 @@ impl Project {
             // ::TODO do something with these values::
             CompilerOutput::MissingSoundEffects(_missing) => (),
             CompilerOutput::SoundEffectsDataSize(_size) => (),
+
+            CompilerOutput::SpcFileResult(r) => match r {
+                Ok((name, data)) => save_spc_file_dialog(name, data),
+                Err(e) => {
+                    dialog::message_title("Error exporting song to SPC file");
+                    dialog::alert_default(&e.to_string());
+                }
+            },
         }
     }
 

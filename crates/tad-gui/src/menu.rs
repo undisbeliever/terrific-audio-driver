@@ -4,6 +4,7 @@
 //
 // SPDX-License-Identifier: MIT
 
+use crate::tabs::FileType;
 use crate::Message;
 
 extern crate fltk;
@@ -25,6 +26,8 @@ const OPEN_MML_FILE: &str = "&File/Open MML File";
 const SAVE: &str = "&File/&Save";
 const SAVE_AS: &str = "&File/Save As";
 const SAVE_ALL: &str = "&File/Save &All";
+
+const EXPORT_SPC: &str = "&File/&Export song to .spc";
 
 const QUIT: &str = "&File/&Quit";
 
@@ -78,6 +81,12 @@ impl Menu {
             Shortcut::Ctrl | Shortcut::Shift | 's',
             fltk::menu::MenuFlag::Normal,
             || Message::SaveAllUnsaved,
+        );
+        add(
+            EXPORT_SPC,
+            Shortcut::None,
+            fltk::menu::MenuFlag::Normal,
+            || Message::ExportCurrentTabToSpcFile,
         );
         add(QUIT, Shortcut::None, fltk::menu::MenuFlag::Normal, || {
             Message::QuitRequested
@@ -133,5 +142,11 @@ impl Menu {
 
         self.set_active(SAVE, can_save);
         self.set_active(SAVE_AS, can_save && can_save_as);
+    }
+
+    pub fn tab_changed(&mut self, tab: &Option<FileType>) {
+        let is_song = matches!(&tab, Some(FileType::Song(_)));
+
+        self.set_active(EXPORT_SPC, is_song);
     }
 }

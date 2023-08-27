@@ -23,6 +23,37 @@ use std::path::{Path, PathBuf};
 
 const SOUND_EFFECTS_FILTER: &str = "TXT Files\t*.txt";
 const MML_SONG_FILTER: &str = "MML Files\t*.mml";
+const SPC_FILTER: &str = "SPC Files\t*.spc";
+
+fn save_file_dialog(title: &str, filter: &str, default_extension: &str) -> Option<PathBuf> {
+    let mut dialog = dialog::NativeFileChooser::new(dialog::FileDialogType::BrowseSaveFile);
+    dialog.set_title(title);
+    dialog.set_filter(filter);
+    dialog.set_option(
+        dialog::FileDialogOptions::SaveAsConfirm | dialog::FileDialogOptions::UseFilterExt,
+    );
+
+    dialog.show();
+
+    let paths = dialog.filenames();
+    if paths.len() != 1 {
+        return None;
+    }
+
+    let mut path = paths.into_iter().next().unwrap();
+
+    if path.extension().is_none() {
+        path.set_extension(default_extension);
+    }
+
+    if path.is_absolute() {
+        Some(path)
+    } else {
+        dialog::message_title("Error");
+        dialog::alert_default("path is not absolute");
+        None
+    }
+}
 
 pub struct PfFileDialogResult {
     pub path: PathBuf,
@@ -212,6 +243,18 @@ pub fn add_song_to_pf_dialog(sender: &fltk::app::Sender<Message>, pd: &ProjectDa
                 })))
             }
         }
+    }
+}
+
+pub fn save_spc_file_dialog(name: String, data: Vec<u8>) {
+    let path = save_file_dialog(
+        &format!("Export {} to an .spc file", name),
+        SPC_FILTER,
+        "spc",
+    );
+
+    if let Some(path) = path {
+        write_file_show_dialog_on_error(&path, "SPC file", &data);
     }
 }
 

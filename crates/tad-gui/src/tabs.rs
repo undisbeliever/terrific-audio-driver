@@ -236,6 +236,7 @@ impl TabManager {
     fn selected_file_changed(&mut self, ft: Option<FileType>) {
         self.selected_file = ft;
         self.update_save_menu();
+        self.main_menu.tab_changed(&self.selected_file);
     }
 
     pub fn update_save_menu(&mut self) {

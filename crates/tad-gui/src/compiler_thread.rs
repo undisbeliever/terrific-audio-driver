@@ -18,7 +18,7 @@ extern crate compiler;
 use compiler::build_common_audio_data;
 use compiler::data;
 use compiler::data::{load_text_file_with_limit, TextFile};
-use compiler::errors;
+use compiler::errors::{self, ExportSpcFileError};
 use compiler::samples::{combine_samples, load_sample_for_instrument, Sample, SampleFileCache};
 use compiler::sound_effects::blank_compiled_sound_effects;
 use compiler::sound_effects::{compile_sound_effect_input, CompiledSoundEffect, SoundEffectInput};
@@ -75,6 +75,8 @@ pub enum ToCompiler {
     SoundEffects(ItemChanged<SoundEffectInput>),
 
     SongChanged(ItemId, String),
+
+    ExportSongToSpcFile(ItemId),
 }
 
 pub type InstrumentOutput = Result<usize, errors::SampleError>;
@@ -99,6 +101,9 @@ pub enum CompilerOutput {
     MissingSoundEffects(Vec<data::Name>),
 
     SoundEffectsDataSize(usize),
+
+    // The result of the last `ToCompiler::ExportSongToSpcFile` operation
+    SpcFileResult(Result<(String, Vec<u8>), SpcFileError>),
 }
 
 #[derive(Debug)]
@@ -141,6 +146,25 @@ impl Display for SongError {
             Self::Dependency => writeln!(f, "dependency error"),
             Self::Mml(_) => writeln!(f, "MML error"),
             Self::Song(_) => writeln!(f, "song error"),
+        }
+    }
+}
+
+#[derive(Debug)]
+pub enum SpcFileError {
+    NoSong,
+    InvalidSong,
+    NoCommonAudioData,
+    Spc(ExportSpcFileError),
+}
+
+impl std::fmt::Display for SpcFileError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::NoSong => writeln!(f, "No song to export"),
+            Self::InvalidSong => writeln!(f, "Error compiling song"),
+            Self::NoCommonAudioData => writeln!(f, "Error in common audio data"),
+            Self::Spc(e) => e.fmt(f),
         }
     }
 }
@@ -673,6 +697,40 @@ impl SongCompiler {
             }
         }
     }
+
+    fn export_to_spc_file(
+        &self,
+        id: ItemId,
+        pf_songs: &IList<data::Song>,
+        common_audio_data: Option<&CommonAudioData>,
+    ) -> Result<(String, Vec<u8>), SpcFileError> {
+        let common_audio_data = match common_audio_data {
+            None => return Err(SpcFileError::NoCommonAudioData),
+            Some(c) => c,
+        };
+
+        let (title, song_data) = match self.songs.get(&id) {
+            None => return Err(SpcFileError::NoSong),
+            Some(s) => match &s.song_data {
+                None => return Err(SpcFileError::InvalidSong),
+                Some(song_data) => {
+                    let title = song_data.metadata().title.as_deref();
+                    (title, song_data)
+                }
+            },
+        };
+
+        match compiler::export_spc_file(common_audio_data, song_data) {
+            Err(e) => Err(SpcFileError::Spc(e)),
+            Ok(spc_data) => {
+                let name = title
+                    .or_else(|| pf_songs.get(&id).map(|s| s.name.as_str()))
+                    .unwrap_or("Song");
+
+                Ok((name.to_owned(), spc_data))
+            }
+        }
+    }
 }
 
 fn bg_thread(
@@ -756,6 +814,10 @@ fn bg_thread(
             }
             ToCompiler::SongChanged(id, mml) => {
                 songs.edit_and_compile_song(id, mml, &pf_songs, &song_dependencies, &sender);
+            }
+            ToCompiler::ExportSongToSpcFile(id) => {
+                let r = songs.export_to_spc_file(id, &pf_songs, common_audio_data_no_sfx.as_ref());
+                sender.send(CompilerOutput::SpcFileResult(r));
             }
         }
     }
