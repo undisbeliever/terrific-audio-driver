@@ -47,8 +47,8 @@ pub fn song_data(mml_data: MmlData) -> Result<SongData, SongError> {
         return Err(SongError::NoMusicChannels);
     }
 
-    assert!(channels.len() < N_MUSIC_CHANNELS);
-    assert!(subroutines.len() < MAX_SUBROUTINES);
+    assert!(channels.len() <= N_MUSIC_CHANNELS);
+    assert!(subroutines.len() <= MAX_SUBROUTINES);
 
     let channel_data_size: usize = channels.iter().map(|c| c.bytecode().len()).sum();
     let subroutine_data_size: usize = subroutines.iter().map(|s| s.bytecode().len()).sum();
