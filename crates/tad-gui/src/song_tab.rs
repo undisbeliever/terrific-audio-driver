@@ -92,7 +92,7 @@ impl SongTab {
         editor.set_text(&mml_file.contents);
 
         let mut console = TextDisplay::default();
-        group.fixed(&console, input_height(&console) * 4);
+        group.fixed(&console, input_height(&console) * 5);
 
         group.end();
 
@@ -174,9 +174,11 @@ impl State {
                 self.console_buffer.set_text("");
                 self.errors = None;
             }
-            Some(Ok(size)) => {
-                // ::TODO add more information::
-                let text = format!("MML compiled successfully: {} bytes", size);
+            Some(Ok(o)) => {
+                let text = format!(
+                    "MML compiled successfully: {} bytes\n\n{}",
+                    o.data_size, o.tick_count_table
+                );
                 self.console_buffer.set_text(&text);
                 self.console.set_text_color(Color::Foreground);
                 self.errors = None;

@@ -6,7 +6,10 @@
 
 use clap::{Args, Parser, Subcommand};
 use compiler::data::{is_name_or_id, load_text_file_with_limit, TextFile};
-use compiler::{build_pitch_table, compile_mml, song_data, UniqueNamesProjectFile};
+use compiler::mml_tick_count::build_tick_count_table;
+use compiler::{
+    build_pitch_table, compile_mml, song_data, PitchTable, SongData, UniqueNamesProjectFile,
+};
 use compiler::{sound_effects, Name};
 
 use std::ffi::OsString;
@@ -150,6 +153,14 @@ struct CompileSongDataArgs {
 
     #[arg(value_name = "SONG", help = "song name, song number, or MML file")]
     song: OsString,
+
+    #[arg(
+        short = 't',
+        long = "tick-count",
+        help = "print tick count table",
+        conflicts_with = "stdout"
+    )]
+    print_tick_counts: bool,
 }
 
 fn load_mml_file(
@@ -188,6 +199,30 @@ fn load_mml_file(
     (text_file, song_name)
 }
 
+fn compile_song(
+    mml_file: TextFile,
+    song_name: Option<Name>,
+    args: &CompileSongDataArgs,
+    pf: &UniqueNamesProjectFile,
+    pitch_table: &PitchTable,
+) -> SongData {
+    let mml = match compile_mml(&mml_file, song_name, &pf.instruments, pitch_table) {
+        Ok(mml) => mml,
+        Err(e) => error!("{}", e.multiline_display()),
+    };
+
+    if args.print_tick_counts {
+        let tick_counter_table = build_tick_count_table(&mml);
+        println!("Tick Counts:");
+        println!("{}", tick_counter_table);
+    }
+
+    match song_data(mml) {
+        Ok(d) => d,
+        Err(e) => error!("{}", e),
+    }
+}
+
 fn compile_song_data(args: CompileSongDataArgs) {
     let pf = load_project_file(&args.json_file);
     let (mml_file, song_name) = load_mml_file(&args, &pf);
@@ -196,16 +231,7 @@ fn compile_song_data(args: CompileSongDataArgs) {
         Ok(pt) => pt,
         Err(e) => error!("{}", e.multiline_display()),
     };
-
-    let mml = match compile_mml(&mml_file, song_name, &pf.instruments, &pitch_table) {
-        Ok(mml) => mml,
-        Err(e) => error!("{}", e.multiline_display()),
-    };
-
-    let song_data = match song_data(mml) {
-        Ok(d) => d,
-        Err(e) => error!("{}", e),
-    };
+    let song_data = compile_song(mml_file, song_name, &args, &pf, &pitch_table);
 
     write_data(args.output, song_data.data());
 }
@@ -224,15 +250,7 @@ fn export_song_to_spc_file(args: CompileSongDataArgs) {
     };
     let sfx = sound_effects::blank_compiled_sound_effects();
 
-    let mml = match compile_mml(&mml_file, song_name, &pf.instruments, samples.pitch_table()) {
-        Ok(mml) => mml,
-        Err(e) => error!("{}", e.multiline_display()),
-    };
-
-    let song_data = match song_data(mml) {
-        Ok(mml) => mml,
-        Err(e) => error!("{}", e),
-    };
+    let song_data = compile_song(mml_file, song_name, &args, &pf, samples.pitch_table());
 
     let common_audio_data = match compiler::build_common_audio_data(&samples, &sfx) {
         Ok(data) => data,

@@ -424,6 +424,10 @@ impl Bytecode {
         self.tick_counter
     }
 
+    pub fn is_in_loop(&self) -> bool {
+        !self.loop_stack.is_empty()
+    }
+
     pub fn get_max_nested_loops(&self) -> usize {
         self.max_nested_loops
     }

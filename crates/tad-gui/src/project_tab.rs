@@ -156,7 +156,7 @@ impl TableCompilerOutput for SongMapping {
     fn set_row_state(r: &mut Self::RowType, co: &Option<SongOutput>) -> bool {
         let s = match co {
             None => String::new(),
-            Some(Ok(size)) => format!("{} bytes", size),
+            Some(Ok(o)) => format!("{} bytes", o.data_size),
             Some(Err(e)) => e.to_string(),
         };
 

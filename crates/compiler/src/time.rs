@@ -46,7 +46,7 @@ impl Bpm {
 }
 
 // TickCounter can only be incremented
-#[derive(Copy, Clone, Eq, PartialEq, PartialOrd, Ord, Debug)]
+#[derive(Copy, Clone, Default, Eq, PartialEq, PartialOrd, Ord, Debug)]
 pub struct TickCounter {
     value: u32,
 }

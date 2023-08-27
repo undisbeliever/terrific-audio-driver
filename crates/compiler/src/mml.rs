@@ -141,6 +141,13 @@ pub struct LoopPoint {
     pub tick_counter: TickCounter,
 }
 
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub struct LineTickCounter {
+    pub line_number: u32,
+    pub ticks: TickCounter,
+    pub in_loop: bool,
+}
+
 #[derive(Debug, PartialEq)]
 pub struct ChannelData {
     identifier: Identifier,
@@ -153,7 +160,14 @@ pub struct ChannelData {
 
     // Some if this channel is a subroutine
     bc_subroutine: Option<SubroutineId>,
-    // ::TODO add tick counter for line::
+
+    line_tick_counters: Vec<LineTickCounter>,
+}
+
+#[derive(Debug, PartialEq)]
+pub struct Section {
+    name: String,
+    line_number: u32,
 }
 
 #[derive(Debug, PartialEq)]
@@ -161,6 +175,7 @@ pub struct MmlData {
     metadata: MetaData,
     subroutines: Vec<ChannelData>,
     channels: Vec<ChannelData>,
+    sections: Vec<Section>,
 }
 
 // ::TODO add list of subroutines and instruments for the GUI (separate from MmlData)::
@@ -178,6 +193,9 @@ impl ChannelData {
     pub fn tick_counter(&self) -> TickCounter {
         self.tick_counter
     }
+    pub fn line_tick_counters(&self) -> &[LineTickCounter] {
+        &self.line_tick_counters
+    }
 }
 
 impl MmlData {
@@ -190,9 +208,21 @@ impl MmlData {
     pub fn channels(&self) -> &[ChannelData] {
         &self.channels
     }
+    pub fn sections(&self) -> &[Section] {
+        &self.sections
+    }
 
     pub(crate) fn take_metadata(self) -> MetaData {
         self.metadata
+    }
+}
+
+impl Section {
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+    pub fn line_number(&self) -> u32 {
+        self.line_number
     }
 }
 
@@ -204,6 +234,7 @@ struct MmlLines<'a> {
     instruments: Vec<(Identifier, Line<'a>)>,
     subroutines: Vec<(Identifier, Vec<Line<'a>>)>,
     channels: [Vec<Line<'a>>; N_MUSIC_CHANNELS],
+    sections: Vec<Section>,
 }
 
 /// MML line splitter
@@ -213,6 +244,7 @@ mod line_splitter {
     use super::*;
 
     const COMMENT_CHAR: char = ';';
+    const SECTION_PREFIX: &str = ";;";
 
     // Assumes `line` starts with a non-whitespace character
     // Assumes `mml_text` length is < i32::MAX
@@ -329,11 +361,26 @@ mod line_splitter {
             Vec::new(),
             Vec::new(),
         ];
+        let mut sections = Vec::new();
 
         let mut subroutine_map: HashMap<Identifier, usize> = HashMap::new();
 
         for line in split_lines(mml_text) {
             let start_pos = line.position;
+
+            if let Some(section_name) = line.text.strip_prefix(SECTION_PREFIX) {
+                if section_name.starts_with(char::is_whitespace) {
+                    let section_name = section_name.trim();
+                    if !section_name.is_empty() {
+                        sections.push(Section {
+                            name: section_name.to_owned(),
+                            line_number: line.position.line_number,
+                        });
+                    }
+                }
+
+                continue;
+            }
 
             let line = match line.text.split_once(COMMENT_CHAR) {
                 Some((l, _comment)) => Line {
@@ -414,6 +461,7 @@ mod line_splitter {
                 instruments,
                 subroutines,
                 channels,
+                sections,
             })
         } else {
             Err(errors)
@@ -737,7 +785,7 @@ struct MmlBytecodeGenerator<'a> {
 
     bc: Bytecode,
 
-    line_tick_counts: Vec<(u32, TickCounter)>,
+    line_tick_counters: Vec<LineTickCounter>,
 
     instrument: Option<usize>,
     prev_slurred_note: Option<Note>,
@@ -762,7 +810,7 @@ impl MmlBytecodeGenerator<'_> {
             instruments,
             subroutines,
             bc: Bytecode::new(is_subroutine, false),
-            line_tick_counts: Vec::new(),
+            line_tick_counters: Vec::new(),
             instrument: None,
             prev_slurred_note: None,
             mp: MpState::Disabled,
@@ -1240,8 +1288,11 @@ impl MmlBytecodeGenerator<'_> {
             MmlCommand::NoCommand => (),
 
             MmlCommand::NewLine => {
-                self.line_tick_counts
-                    .push((pos.line_number, self.bc.get_tick_counter()));
+                self.line_tick_counters.push(LineTickCounter {
+                    line_number: pos.line_number,
+                    ticks: self.bc.get_tick_counter(),
+                    in_loop: self.bc.is_in_loop(),
+                });
             }
 
             &MmlCommand::SetLoopPoint => {
@@ -1446,6 +1497,7 @@ fn process_mml_commands(
             tick_counter,
             last_instrument: gen.instrument,
             bc_subroutine,
+            line_tick_counters: gen.line_tick_counters,
         })
     } else {
         Err(errors)
@@ -1600,6 +1652,7 @@ pub fn compile_mml(
             metadata,
             subroutines,
             channels,
+            sections: lines.sections,
         })
     } else {
         Err(errors)

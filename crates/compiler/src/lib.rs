@@ -22,6 +22,7 @@ pub mod data;
 pub mod driver_constants;
 pub mod errors;
 pub mod mml;
+pub mod mml_tick_count;
 pub mod samples;
 pub mod sound_effects;
 

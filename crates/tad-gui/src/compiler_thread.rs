@@ -19,6 +19,7 @@ use compiler::build_common_audio_data;
 use compiler::data;
 use compiler::data::{load_text_file_with_limit, TextFile};
 use compiler::errors::{self, ExportSpcFileError};
+use compiler::mml_tick_count::{build_tick_count_table, MmlTickCountTable};
 use compiler::samples::{combine_samples, load_sample_for_instrument, Sample, SampleFileCache};
 use compiler::sound_effects::blank_compiled_sound_effects;
 use compiler::sound_effects::{compile_sound_effect_input, CompiledSoundEffect, SoundEffectInput};
@@ -81,7 +82,7 @@ pub enum ToCompiler {
 
 pub type InstrumentOutput = Result<usize, errors::SampleError>;
 pub type SoundEffectOutput = Result<usize, errors::SoundEffectError>;
-pub type SongOutput = Result<usize, SongError>;
+pub type SongOutput = Result<SongOutputData, SongError>;
 
 #[derive(Debug)]
 pub enum CompilerOutput {
@@ -104,6 +105,12 @@ pub enum CompilerOutput {
 
     // The result of the last `ToCompiler::ExportSongToSpcFile` operation
     SpcFileResult(Result<(String, Vec<u8>), SpcFileError>),
+}
+
+#[derive(Debug)]
+pub struct SongOutputData {
+    pub data_size: usize,
+    pub tick_count_table: MmlTickCountTable,
 }
 
 #[derive(Debug)]
@@ -572,6 +579,7 @@ impl SongCompiler {
                 return None;
             }
         };
+        let tick_count_table = build_tick_count_table(&mml);
 
         let song_data = match compiler::song_data(mml) {
             Ok(mml) => mml,
@@ -581,8 +589,11 @@ impl SongCompiler {
             }
         };
 
-        let data_size = song_data.data().len();
-        sender.send(CompilerOutput::Song(id, Ok(data_size)));
+        let to_gui = SongOutputData {
+            data_size: song_data.data().len(),
+            tick_count_table,
+        };
+        sender.send(CompilerOutput::Song(id, Ok(to_gui)));
 
         Some(song_data)
     }
