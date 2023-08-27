@@ -39,7 +39,7 @@ const _: () = assert!(
 
 pub fn export_spc_file(
     common_audio_data: &CommonAudioData,
-    song_data: SongData,
+    song_data: &SongData,
 ) -> Result<Vec<u8>, ExportSpcFileError> {
     let common_audio_data = common_audio_data.data();
     let metadata = song_data.metadata();

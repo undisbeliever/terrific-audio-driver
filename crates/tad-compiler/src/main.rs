@@ -239,7 +239,7 @@ fn export_song_to_spc_file(args: CompileSongDataArgs) {
         Err(e) => error!("{}", e.multiline_display()),
     };
 
-    let data = match compiler::export_spc_file(&common_audio_data, song_data) {
+    let data = match compiler::export_spc_file(&common_audio_data, &song_data) {
         Ok(d) => d,
         Err(e) => error!("{}", e),
     };
