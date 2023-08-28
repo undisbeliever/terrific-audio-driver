@@ -32,7 +32,7 @@ pub use value_newtypes::ValueNewType;
 pub use data::{
     load_project_file, validate_project_file_names, Name, ProjectFile, UniqueNamesProjectFile,
 };
-pub use envelope::{Adsr, Gain};
+pub use envelope::{Adsr, Envelope, Gain};
 pub use notes::{Note, Octave, STARTING_OCTAVE};
 
 pub use pitch_table::{build_pitch_table, PitchTable};

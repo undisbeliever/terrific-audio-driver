@@ -6,7 +6,7 @@
 
 use crate::driver_constants;
 use crate::driver_constants::{MAX_INSTRUMENTS, MAX_N_SONGS, MAX_SOUND_EFFECTS};
-use crate::envelope::{Adsr, Gain};
+use crate::envelope::Envelope;
 use crate::errors::{
     DeserializeError, FileError, ProjectFileError, ProjectFileErrors, UniqueNameListError,
     ValueError,
@@ -151,8 +151,7 @@ pub struct Instrument {
     pub first_octave: Octave,
     pub last_octave: Octave,
 
-    pub adsr: Option<Adsr>,
-    pub gain: Option<Gain>,
+    pub envelope: Envelope,
 
     pub comment: Option<String>,
 }

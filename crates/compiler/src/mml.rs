@@ -15,7 +15,7 @@ use crate::bytecode::{
 use crate::data::{self, TextFile, UniqueNamesList};
 use crate::driver_constants::{FIR_FILTER_SIZE, IDENTITY_FILTER, N_MUSIC_CHANNELS};
 use crate::echo::{parse_fir_filter_string, EchoBuffer, EchoEdl, EchoLength, DEFAULT_EDL};
-use crate::envelope::{Adsr, Gain};
+use crate::envelope::{Adsr, Envelope, Gain};
 use crate::errors::{
     ErrorWithPos, IdentifierError, MmlChannelError, MmlCommandError, MmlCompileErrors,
     MmlLineError, ValueError,
@@ -469,33 +469,6 @@ mod line_splitter {
     }
 }
 
-fn one_argument(iter: std::str::SplitWhitespace) -> Option<&str> {
-    let mut iter = iter;
-
-    let a = iter.next();
-    let after_a = iter.next();
-
-    match (a, after_a) {
-        (Some(a), None) => Some(a),
-        _ => None,
-    }
-}
-
-fn four_arguments(iter: std::str::SplitWhitespace) -> Option<(&str, &str, &str, &str)> {
-    let mut iter = iter;
-
-    let a = iter.next();
-    let b = iter.next();
-    let c = iter.next();
-    let d = iter.next();
-    let after = iter.next();
-
-    match (a, b, c, d, after) {
-        (Some(a), Some(b), Some(c), Some(d), None) => Some((a, b, c, d)),
-        _ => None,
-    }
-}
-
 //
 // Header
 // ======
@@ -663,32 +636,19 @@ fn parse_instrument(
     let mut envelope_override = EnvelopeOverride::None;
 
     if let Some(args) = args {
+        let arg = args.text;
         let arg_range = args.range();
         let arg_err = |e| Err(ErrorWithPos(arg_range, e));
 
-        let mut args = args.text.split_whitespace();
-        match args.next() {
-            None => {}
-            Some("adsr") => match four_arguments(args) {
-                Some((a, b, c, d)) => match Adsr::try_from_strs(a, b, c, d) {
-                    Ok(a) => {
-                        envelope_override = EnvelopeOverride::Adsr(a);
-                    }
-                    Err(e) => return arg_err(MmlLineError::InvalidAdsr(e)),
-                },
-                _ => return arg_err(MmlLineError::ExpectedFourAdsrArguments),
-            },
-            Some("gain") => match one_argument(args) {
-                Some(g) => match Gain::try_from(g) {
-                    Ok(g) => {
-                        envelope_override = EnvelopeOverride::Gain(g);
-                    }
-                    Err(e) => return arg_err(MmlLineError::InvalidGain(e)),
-                },
-                None => return arg_err(MmlLineError::ExpectedOneGainArgument),
-            },
-            Some(unknown) => {
-                return arg_err(MmlLineError::UnknownInstrumentArgument(unknown.to_owned()))
+        match Envelope::try_from_envelope_str(arg) {
+            Ok(Envelope::Adsr(a)) => {
+                envelope_override = EnvelopeOverride::Adsr(a);
+            }
+            Ok(Envelope::Gain(g)) => {
+                envelope_override = EnvelopeOverride::Gain(g);
+            }
+            Err(e) => {
+                return arg_err(MmlLineError::ValueError(e));
             }
         }
     }
@@ -703,12 +663,12 @@ fn parse_instrument(
     match envelope_override {
         EnvelopeOverride::None => {}
         EnvelopeOverride::Adsr(adsr) => {
-            if inst.adsr == Some(adsr) {
+            if inst.envelope == Envelope::Adsr(adsr) {
                 envelope_override = EnvelopeOverride::None;
             }
         }
         EnvelopeOverride::Gain(gain) => {
-            if inst.gain == Some(gain) {
+            if inst.envelope == Envelope::Gain(gain) {
                 envelope_override = EnvelopeOverride::None;
             }
         }

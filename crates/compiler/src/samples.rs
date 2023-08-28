@@ -7,9 +7,7 @@
 // ::TODO add pub(crate) to more things::
 
 use crate::data::{Instrument, UniqueNamesProjectFile};
-use crate::errors::{
-    BrrError, EnvelopeError, SampleAndInstrumentDataError, SampleError, TaggedSampleError,
-};
+use crate::errors::{BrrError, SampleAndInstrumentDataError, SampleError, TaggedSampleError};
 use crate::pitch_table::{
     instrument_pitch, merge_pitch_vec, sort_pitches_iterator, InstrumentPitch, PitchTable,
 };
@@ -164,18 +162,6 @@ impl Sample {
     }
 }
 
-fn instrument_envelope(inst: &Instrument) -> Result<(u8, u8), EnvelopeError> {
-    match (&inst.adsr, &inst.gain) {
-        (Some(adsr), None) => Ok((adsr.adsr1(), adsr.adsr2())),
-        (None, Some(gain)) => {
-            // adsr1 is 0 (no adsr)
-            Ok((0, gain.value()))
-        }
-        (Some(_), Some(_)) => Err(EnvelopeError::GainAndAdsr),
-        (None, None) => Err(EnvelopeError::NoGainOrAdsr),
-    }
-}
-
 pub fn load_sample_for_instrument(
     inst: &Instrument,
     cache: &mut SampleFileCache,
@@ -209,19 +195,18 @@ pub fn load_sample_for_instrument(
 
     let pitch = instrument_pitch(inst);
 
-    let envelope = instrument_envelope(inst);
+    let envelope = inst.envelope.engine_value();
 
-    match (brr_sample, pitch, envelope) {
-        (Ok(brr_sample), Ok(pitch), Ok(envelope)) => Ok(Sample {
+    match (brr_sample, pitch) {
+        (Ok(brr_sample), Ok(pitch)) => Ok(Sample {
             brr_sample,
             pitch,
             adsr1: envelope.0,
             adsr2_or_gain: envelope.1,
         }),
-        (b, p, e) => Err(SampleError {
+        (b, p) => Err(SampleError {
             brr_error: b.err(),
             pitch_error: p.err(),
-            envelope_error: e.err(),
         }),
     }
 }

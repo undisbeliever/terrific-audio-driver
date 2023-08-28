@@ -15,7 +15,7 @@ use crate::tabs::{FileType, Tab};
 use crate::Message;
 
 use compiler::data::{self, Instrument};
-use compiler::STARTING_OCTAVE;
+use compiler::{Adsr, Envelope, Gain, STARTING_OCTAVE};
 
 use std::cell::RefCell;
 use std::path::PathBuf;
@@ -26,8 +26,36 @@ use fltk::button::CheckButton;
 use fltk::enums::{Color, Event};
 use fltk::group::Flex;
 use fltk::input::{FloatInput, Input, IntInput};
+use fltk::menu::Choice;
 use fltk::prelude::*;
 use fltk::text::{TextBuffer, TextDisplay, WrapMode};
+
+#[derive(Clone, Copy)]
+enum EnvelopeChoice {
+    Adsr = 0,
+    Gain = 1,
+}
+impl EnvelopeChoice {
+    const CHOICES: &str = "ADSR|GAIN";
+
+    fn read_widget(c: &Choice) -> Option<EnvelopeChoice> {
+        match c.value() {
+            0 => Some(EnvelopeChoice::Adsr),
+            1 => Some(EnvelopeChoice::Gain),
+            _ => None,
+        }
+    }
+
+    fn to_i32(self) -> i32 {
+        self as i32
+    }
+}
+
+const DEFAULT_ADSR: Adsr = match Adsr::try_new(12, 2, 2, 15) {
+    Ok(a) => a,
+    Err(_) => panic!("Invalid ADSR"),
+};
+const DEFAULT_GAIN: Gain = Gain::new(127);
 
 fn blank_instrument() -> Instrument {
     Instrument {
@@ -40,8 +68,7 @@ fn blank_instrument() -> Instrument {
         loop_resets_filter: false,
         first_octave: STARTING_OCTAVE,
         last_octave: STARTING_OCTAVE,
-        adsr: None,
-        gain: None,
+        envelope: Envelope::Adsr(DEFAULT_ADSR),
         comment: None,
     }
 }
@@ -104,9 +131,12 @@ pub struct InstrumentEditor {
     loop_resets_filter: CheckButton,
     first_octave: IntInput,
     last_octave: IntInput,
-    adsr: Input,
-    gain: Input,
+    envelope_choice: Choice,
+    envelope_value: Input,
     comment: Input,
+
+    prev_adsr: String,
+    prev_gain: String,
 }
 
 impl InstrumentEditor {
@@ -122,11 +152,12 @@ impl InstrumentEditor {
         let loop_resets_filter = form.add_checkbox_right("Loop resets filter");
         let first_octave = form.add_input::<IntInput>("First octave:");
         let last_octave = form.add_input::<IntInput>("Last octave:");
-        let adsr = form.add_input::<Input>("Adsr:");
-        let gain = form.add_input::<Input>("Gain:");
+        let envelope = form.add_two_inputs::<Choice, Input>("Envelope:", 12);
         let comment = form.add_input::<Input>("Comment:");
 
         let group = form.take_group_end();
+
+        let (envelope_choice, envelope_value) = envelope;
 
         let out = Rc::from(RefCell::new(Self {
             group,
@@ -142,13 +173,17 @@ impl InstrumentEditor {
             loop_resets_filter,
             first_octave,
             last_octave,
-            adsr,
-            gain,
+            envelope_choice,
+            envelope_value,
             comment,
+            prev_adsr: DEFAULT_ADSR.to_gui_string(),
+            prev_gain: DEFAULT_GAIN.to_gui_string(),
         }));
 
         {
             let mut editor = out.borrow_mut();
+
+            editor.envelope_choice.add_choice(EnvelopeChoice::CHOICES);
 
             editor.disable_editor();
 
@@ -168,9 +203,13 @@ impl InstrumentEditor {
             add_callbacks!(dupe_block_hack);
             add_callbacks!(first_octave);
             add_callbacks!(last_octave);
-            add_callbacks!(adsr);
-            add_callbacks!(gain);
+            add_callbacks!(envelope_value);
             add_callbacks!(comment);
+
+            editor.envelope_choice.set_callback({
+                let s = out.clone();
+                move |_widget| s.borrow_mut().envelope_choice_changed()
+            });
 
             let add_cb_callback = |w: &mut CheckButton| {
                 w.set_callback({
@@ -224,9 +263,9 @@ impl InstrumentEditor {
         read_or_reset!(dupe_block_hack);
         read_or_reset!(first_octave);
         read_or_reset!(last_octave);
-        read_or_reset!(adsr);
-        read_or_reset!(gain);
         read_or_reset!(comment);
+
+        let envelope = self.read_or_reset_envelope();
 
         let looping = self.looping.value();
         let loop_resets_filter = self.loop_resets_filter.value();
@@ -242,10 +281,55 @@ impl InstrumentEditor {
             loop_resets_filter,
             first_octave: first_octave?,
             last_octave: last_octave?,
-            adsr: adsr?,
-            gain: gain?,
+            envelope: envelope?,
             comment: comment?,
         })
+    }
+
+    fn envelope_choice_changed(&mut self) {
+        let new_value = match EnvelopeChoice::read_widget(&self.envelope_choice) {
+            Some(EnvelopeChoice::Adsr) => &self.prev_adsr,
+            Some(EnvelopeChoice::Gain) => &self.prev_adsr,
+            None => "",
+        };
+
+        let w = &mut self.envelope_value;
+
+        w.set_value(new_value);
+
+        // Select all
+        let _ = w.set_position(0);
+        let _ = w.set_mark(i32::MAX);
+
+        let _ = w.take_focus();
+    }
+
+    fn read_or_reset_envelope(&mut self) -> Option<Envelope> {
+        let value = self.envelope_value.value();
+
+        match EnvelopeChoice::read_widget(&self.envelope_choice) {
+            Some(EnvelopeChoice::Adsr) => match InputHelper::parse(value.clone()) {
+                Some(adsr) => {
+                    self.prev_adsr = value;
+                    Some(Envelope::Adsr(adsr))
+                }
+                None => {
+                    self.envelope_value.set_value(&self.prev_adsr);
+                    None
+                }
+            },
+            Some(EnvelopeChoice::Gain) => match InputHelper::parse(value.clone()) {
+                Some(gain) => {
+                    self.prev_gain = value;
+                    Some(Envelope::Gain(gain))
+                }
+                None => {
+                    self.envelope_value.set_value(&self.prev_gain);
+                    None
+                }
+            },
+            None => None,
+        }
     }
 
     fn disable_editor(&mut self) {
@@ -260,8 +344,9 @@ impl InstrumentEditor {
         self.loop_resets_filter.clear();
         self.first_octave.set_value("");
         self.last_octave.set_value("");
-        self.adsr.set_value("");
-        self.gain.set_value("");
+
+        self.envelope_choice.set_value(-1);
+        self.envelope_value.set_value("");
 
         self.selected_index = None;
     }
@@ -282,9 +367,24 @@ impl InstrumentEditor {
         self.loop_resets_filter.set(data.loop_resets_filter);
         set_widget!(first_octave);
         set_widget!(last_octave);
-        set_widget!(adsr);
-        set_widget!(gain);
         set_widget!(comment);
+
+        match data.envelope {
+            Envelope::Adsr(adsr) => {
+                self.envelope_choice
+                    .set_value(EnvelopeChoice::Adsr.to_i32());
+
+                InputHelper::set_widget_value(&mut self.envelope_value, &adsr);
+                self.prev_adsr = self.envelope_value.value();
+            }
+            Envelope::Gain(gain) => {
+                self.envelope_choice
+                    .set_value(EnvelopeChoice::Gain.to_i32());
+
+                InputHelper::set_widget_value(&mut self.envelope_value, &gain);
+                self.prev_gain = self.envelope_value.value();
+            }
+        }
 
         self.selected_index = Some(index);
         self.data = data.clone();
@@ -420,9 +520,6 @@ impl CompilerOutputGui<InstrumentOutput> for SamplesTab {
                     text += &format!("\n\t{}", e)
                 }
                 if let Some(e) = &errors.pitch_error {
-                    text += &format!("\n\t{}", e)
-                }
-                if let Some(e) = &errors.envelope_error {
                     text += &format!("\n\t{}", e)
                 }
 

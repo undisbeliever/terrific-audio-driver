@@ -87,6 +87,8 @@ pub enum ValueError {
 
     InvalidName(String),
 
+    NoEnvelope,
+    UnknownEnvelopeType(String),
     AdsrNotFourValues,
     InvalidAdsr(InvalidAdsrError),
 
@@ -254,16 +256,9 @@ pub enum BrrError {
 }
 
 #[derive(Debug)]
-pub enum EnvelopeError {
-    GainAndAdsr,
-    NoGainOrAdsr,
-}
-
-#[derive(Debug)]
 pub struct SampleError {
     pub brr_error: Option<BrrError>,
     pub pitch_error: Option<PitchError>,
-    pub envelope_error: Option<EnvelopeError>,
 }
 
 #[derive(Debug)]
@@ -346,10 +341,6 @@ pub enum MmlLineError {
     NoInstrument,
     CannotFindInstrument(String),
     ExpectedFourAdsrArguments,
-    InvalidAdsr(InvalidAdsrError),
-    ExpectedOneGainArgument,
-    InvalidGain(InvalidGainError),
-    UnknownInstrumentArgument(String),
     DuplicateInstrumentName(String),
 }
 
@@ -612,6 +603,8 @@ impl Display for ValueError {
 
             Self::InvalidName(s) => write!(f, "invalid name: {}", s),
 
+            Self::NoEnvelope => write!(f, "no envelope"),
+            Self::UnknownEnvelopeType(s) => write!(f, "unknown envelope type: {}", s),
             Self::AdsrNotFourValues => write!(f, "expected 4 adsr values"),
             Self::InvalidAdsr(e) => e.fmt(f),
             Self::InvalidGain(e) => e.fmt(f),
@@ -857,15 +850,6 @@ impl Display for BrrError {
     }
 }
 
-impl Display for EnvelopeError {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        match self {
-            Self::GainAndAdsr => write!(f, "cannot use adsr and gain at the same time"),
-            Self::NoGainOrAdsr => write!(f, "no adsr or gain"),
-        }
-    }
-}
-
 impl Display for CommonAudioDataError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
@@ -953,10 +937,6 @@ impl Display for MmlLineError {
             Self::NoInstrument => write!(f, "no instrument"),
             Self::CannotFindInstrument(name) => write!(f, "cannot find instrument: {}", name),
             Self::ExpectedFourAdsrArguments => write!(f, "adsr requires 4 arguments"),
-            Self::InvalidAdsr(e) => e.fmt(f),
-            Self::ExpectedOneGainArgument => write!(f, "gain requires 1 argument"),
-            Self::InvalidGain(e) => e.fmt(f),
-            Self::UnknownInstrumentArgument(s) => write!(f, "unknown instrument argument: {}", s),
             Self::DuplicateInstrumentName(s) => write!(f, "duplicate instrument name: {}", s),
         }
     }
@@ -1262,9 +1242,6 @@ impl Display for SampleAndInstrumentDataErrorIndentedDisplay<'_> {
                         writeln!(f, "  Instrument {} {}: {}", i, n, e)?
                     }
                     if let Some(e) = &e.pitch_error {
-                        writeln!(f, "  Instrument {} {}: {}", i, n, e)?
-                    }
-                    if let Some(e) = &e.envelope_error {
                         writeln!(f, "  Instrument {} {}: {}", i, n, e)?
                     }
                 }
