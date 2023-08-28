@@ -73,7 +73,7 @@ impl InputHelper for Name {
     type Widget = Input;
 
     fn parse(s: String) -> Option<Self> {
-        Name::try_from(s).ok()
+        Name::try_new_lossy(s)
     }
 
     fn set_widget_value(w: &mut Self::Widget, value: &Self) {
