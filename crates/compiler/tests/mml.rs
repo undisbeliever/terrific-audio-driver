@@ -11,8 +11,14 @@ use std::path::PathBuf;
 
 const SAMPLE_FREQ: f64 = 500.0;
 
-const EXAMPLE_ADSR: &str = "12 1 1 16";
-const EXAMPLE_GAIN: &str = "127";
+const EXAMPLE_ADSR_STR: &str = "12 1 1 16";
+const EXAMPLE_ADSR: Adsr = match Adsr::try_new(12, 1, 1, 16) {
+    Ok(v) => v,
+    Err(_) => panic!("Invalid Adsr"),
+};
+
+const EXAMPLE_GAIN_STR: &str = "127";
+const EXAMPLE_GAIN: Gain = Gain::new(127);
 
 #[test]
 fn test_c_major_scale() {
@@ -541,7 +547,7 @@ fn test_merge_pan_and_volume() {
 fn test_set_instrument() {
     let mml = format!(
         r##"
-@0 inst_no_envelope
+@0 dummy_instrument
 @1 inst_with_adsr
 @2 inst_with_gain
 
@@ -552,7 +558,7 @@ A @0 @1 @2
     assert_mml_channel_a_matches_bytecode(
         &mml,
         &[
-            "set_instrument inst_no_envelope",
+            "set_instrument dummy_instrument",
             "set_instrument inst_with_adsr",
             "set_instrument inst_with_gain",
         ],
@@ -564,9 +570,9 @@ A @0 @1 @2
 fn test_set_instrument_merge_instrument_ids() {
     let mml = format!(
         r##"
-@0 inst_no_envelope
-@1 inst_no_envelope
-@2 inst_no_envelope
+@0 dummy_instrument
+@1 dummy_instrument
+@2 dummy_instrument
 @o inst_with_adsr
 
 A @0 @0 @0
@@ -578,9 +584,9 @@ A @o @0 @1 @2
     assert_mml_channel_a_matches_bytecode(
         &mml,
         &[
-            "set_instrument inst_no_envelope",
+            "set_instrument dummy_instrument",
             "set_instrument inst_with_adsr",
-            "set_instrument inst_no_envelope",
+            "set_instrument dummy_instrument",
         ],
     );
 }
@@ -589,15 +595,15 @@ A @o @0 @1 @2
 fn test_set_instrument_and_envelope() {
     let mml = format!(
         r##"
-@0 inst_no_envelope
-@1 inst_no_envelope adsr 1 2 3 4
+@0 dummy_instrument
+@1 dummy_instrument adsr 1 2 3 4
 @a inst_with_adsr
-@aa inst_with_adsr adsr {EXAMPLE_ADSR}
+@aa inst_with_adsr adsr {EXAMPLE_ADSR_STR}
 @ab inst_with_adsr adsr 1 2 3 4
 @ag inst_with_adsr gain 24
 
 @g1 inst_with_gain
-@g2 inst_with_gain gain {EXAMPLE_GAIN}
+@g2 inst_with_gain gain {EXAMPLE_GAIN_STR}
 @g3 inst_with_gain adsr 3 4 5 6
 
 A @0 @1
@@ -612,22 +618,22 @@ A @0 @g1 @g2 @g3
         &mml,
         &[
             // Line 1
-            "set_instrument inst_no_envelope",
+            "set_instrument dummy_instrument",
             "set_adsr 1 2 3 4",
             // Line 2
             "set_instrument inst_with_adsr",
             "set_adsr 1 2 3 4",
             "set_gain 24",
             // Line 3
-            "set_instrument inst_no_envelope",
+            "set_instrument dummy_instrument",
             "set_instrument_and_adsr inst_with_adsr 1 2 3 4",
             "set_instrument inst_with_adsr",
             // Line 4
-            "set_instrument inst_no_envelope",
+            "set_instrument dummy_instrument",
             "set_instrument_and_gain inst_with_adsr 24",
             "set_adsr 1 2 3 4",
             // Line 5
-            "set_instrument inst_no_envelope",
+            "set_instrument dummy_instrument",
             "set_instrument inst_with_gain",
             "set_adsr 3 4 5 6",
         ],
@@ -681,8 +687,8 @@ fn merge_mml_commands_test(mml_line: &str, bc_asm: &[&str]) {
 // ----------------------------------------------------------------------------------------------
 
 fn assert_line_matches_bytecode(mml_line: &str, bc_asm: &[&str]) {
-    let mml = ["@1 inst_no_envelope\nA @1 o4\nA ", mml_line].concat();
-    let bc_asm = [&["set_instrument inst_no_envelope"], bc_asm].concat();
+    let mml = ["@1 dummy_instrument\nA @1 o4\nA ", mml_line].concat();
+    let bc_asm = [&["set_instrument dummy_instrument"], bc_asm].concat();
 
     let dd = dummy_data();
 
@@ -697,8 +703,8 @@ fn assert_line_matches_bytecode(mml_line: &str, bc_asm: &[&str]) {
 }
 
 fn assert_line_matches_line(mml_line1: &str, mml_line2: &str) {
-    let mml1 = ["@1 inst_no_envelope\nA @1 o4\nA ", mml_line1].concat();
-    let mml2 = ["@1 inst_no_envelope\nA @1 o4\nA ", mml_line2].concat();
+    let mml1 = ["@1 dummy_instrument\nA @1 o4\nA ", mml_line1].concat();
+    let mml2 = ["@1 dummy_instrument\nA @1 o4\nA ", mml_line2].concat();
 
     let dd = dummy_data();
 
@@ -729,6 +735,7 @@ fn compile_mml(mml: &str, dummy_data: &DummyData) -> mml::MmlData {
             path: None,
             file_name: "".to_owned(),
         },
+        None,
         &dummy_data.instruments,
         &dummy_data.pitch_table,
     )
@@ -760,9 +767,9 @@ fn dummy_data() -> DummyData {
 
     #[rustfmt::skip]
     let instruments = data::validate_instrument_names(vec![
-        dummy_instrument("inst_no_envelope", SF, 2, 6, None, None),
-        dummy_instrument("inst_with_adsr",   SF, 2, 6, Some(EXAMPLE_ADSR), None),
-        dummy_instrument("inst_with_gain",   SF, 2, 6, None, Some(EXAMPLE_GAIN)),
+        dummy_instrument("dummy_instrument", SF, 2, 6, Envelope::Gain(Gain::new(0))),
+        dummy_instrument("inst_with_adsr",   SF, 2, 6, Envelope::Adsr(EXAMPLE_ADSR)),
+        dummy_instrument("inst_with_gain",   SF, 2, 6, Envelope::Gain(EXAMPLE_GAIN)),
     ]).unwrap();
 
     let pitch_table = build_pitch_table(&instruments).unwrap();
@@ -778,8 +785,7 @@ fn dummy_instrument(
     freq: f64,
     first_octave: u32,
     last_octave: u32,
-    adsr: Option<&str>,
-    gain: Option<&str>,
+    envelope: Envelope,
 ) -> data::Instrument {
     data::Instrument {
         name: Name::try_from(name.to_owned()).unwrap(),
@@ -791,8 +797,7 @@ fn dummy_instrument(
         loop_resets_filter: false,
         first_octave: Octave::try_new(first_octave).unwrap(),
         last_octave: Octave::try_new(last_octave).unwrap(),
-        adsr: adsr.map(|s| Adsr::try_from(s).unwrap()),
-        gain: gain.map(|s| Gain::try_from(s).unwrap()),
+        envelope,
         comment: None,
     }
 }
