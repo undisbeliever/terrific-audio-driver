@@ -55,6 +55,16 @@ where
 
     fn parse(s: String) -> Option<Self>;
     fn set_widget_value(w: &mut Self::Widget, value: &Self);
+
+    fn read_or_reset(w: &mut Self::Widget, old_value: &Self) -> Option<Self> {
+        match Self::parse(w.value()) {
+            Some(v) => Some(v),
+            None => {
+                Self::set_widget_value(w, old_value);
+                None
+            }
+        }
+    }
 }
 
 impl InputHelper for String {
@@ -66,6 +76,11 @@ impl InputHelper for String {
 
     fn set_widget_value(w: &mut Self::Widget, value: &Self) {
         w.set_value(value);
+    }
+
+    fn read_or_reset(w: &mut Self::Widget, old_value: &Self) -> Option<Self> {
+        let _ = old_value;
+        Some(w.value())
     }
 }
 

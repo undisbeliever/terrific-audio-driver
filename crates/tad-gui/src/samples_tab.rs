@@ -7,9 +7,8 @@
 use crate::compiler_thread::{CombineSamplesError, InstrumentOutput};
 use crate::helpers::*;
 use crate::list_editor::{
-    create_list_item_edited_checkbox_handler, create_list_item_edited_input_handler,
-    CompilerOutputGui, IndexAndData, ListAction, ListButtons, ListEditor, ListEditorTable,
-    ListMessage, ListState, TableCompilerOutput, TableMapping,
+    CompilerOutputGui, ListAction, ListButtons, ListEditor, ListEditorTable, ListMessage,
+    ListState, TableCompilerOutput, TableMapping,
 };
 use crate::tables::{RowWithStatus, SimpleRow};
 use crate::tabs::{FileType, Tab};
@@ -24,7 +23,7 @@ use std::rc::Rc;
 
 use fltk::app;
 use fltk::button::CheckButton;
-use fltk::enums::Color;
+use fltk::enums::{Color, Event};
 use fltk::group::Flex;
 use fltk::input::{FloatInput, Input, IntInput};
 use fltk::prelude::*;
@@ -91,7 +90,10 @@ impl TableCompilerOutput for InstrumentMapping {
 pub struct InstrumentEditor {
     group: Flex,
 
-    inst_data: Rc<RefCell<IndexAndData<Instrument>>>,
+    sender: app::Sender<Message>,
+
+    selected_index: Option<usize>,
+    data: Instrument,
 
     name: Input,
     source: Input,
@@ -108,57 +110,29 @@ pub struct InstrumentEditor {
 }
 
 impl InstrumentEditor {
-    fn new(s: app::Sender<Message>) -> Self {
-        let inst_data = Rc::from(RefCell::from(IndexAndData::new(None, blank_instrument())));
-
+    fn new(sender: app::Sender<Message>) -> Rc<RefCell<InstrumentEditor>> {
         let mut form = InputForm::new(18);
 
-        let mut name = form.add_input::<Input>("Name:");
-        let mut source = form.add_input::<Input>("Source:");
-        let mut freq = form.add_input::<FloatInput>("Frequency:");
-        let mut looping = form.add_checkbox_left("Looping");
-        let mut loop_point = form.add_input::<IntInput>("Loop Point:");
-        let mut dupe_block_hack = form.add_input::<IntInput>("Dupe block hack:");
-        let mut loop_resets_filter = form.add_checkbox_right("Loop resets filter");
-        let mut first_octave = form.add_input::<IntInput>("First octave:");
-        let mut last_octave = form.add_input::<IntInput>("Last octave:");
-        let mut adsr = form.add_input::<Input>("Adsr:");
-        let mut gain = form.add_input::<Input>("Gain:");
-        let mut comment = form.add_input::<Input>("Comment:");
+        let name = form.add_input::<Input>("Name:");
+        let source = form.add_input::<Input>("Source:");
+        let freq = form.add_input::<FloatInput>("Frequency:");
+        let looping = form.add_checkbox_left("Looping");
+        let loop_point = form.add_input::<IntInput>("Loop Point:");
+        let dupe_block_hack = form.add_input::<IntInput>("Dupe block hack:");
+        let loop_resets_filter = form.add_checkbox_right("Loop resets filter");
+        let first_octave = form.add_input::<IntInput>("First octave:");
+        let last_octave = form.add_input::<IntInput>("Last octave:");
+        let adsr = form.add_input::<Input>("Adsr:");
+        let gain = form.add_input::<Input>("Gain:");
+        let comment = form.add_input::<Input>("Comment:");
 
         let group = form.take_group_end();
 
-        macro_rules! ih {
-            ($field:ident) => {
-                create_list_item_edited_input_handler!(
-                    $field, Instrument, $field, s, Instrument, inst_data
-                );
-            };
-        }
-        macro_rules! ch {
-            ($field:ident) => {
-                create_list_item_edited_checkbox_handler!(
-                    $field, Instrument, $field, s, Instrument, inst_data
-                );
-            };
-        }
-
-        ih!(name);
-        ih!(source);
-        ih!(freq);
-        ch!(looping);
-        ih!(loop_point);
-        ih!(dupe_block_hack);
-        ch!(loop_resets_filter);
-        ih!(first_octave);
-        ih!(last_octave);
-        ih!(adsr);
-        ih!(gain);
-        ih!(comment);
-
-        let mut out = Self {
+        let out = Rc::from(RefCell::new(Self {
             group,
-            inst_data,
+            sender,
+            selected_index: None,
+            data: blank_instrument(),
             name,
             source,
             freq,
@@ -171,9 +145,107 @@ impl InstrumentEditor {
             adsr,
             gain,
             comment,
-        };
-        out.disable_editor();
+        }));
+
+        {
+            let mut editor = out.borrow_mut();
+
+            editor.disable_editor();
+
+            macro_rules! add_callbacks {
+                ($name:ident) => {
+                    let _: &dyn InputExt = &editor.$name;
+                    editor.$name.handle({
+                        let s = out.clone();
+                        move |_widget, ev| Self::widget_event_handler(&s, ev)
+                    });
+                };
+            }
+            add_callbacks!(name);
+            add_callbacks!(source);
+            add_callbacks!(freq);
+            add_callbacks!(loop_point);
+            add_callbacks!(dupe_block_hack);
+            add_callbacks!(first_octave);
+            add_callbacks!(last_octave);
+            add_callbacks!(adsr);
+            add_callbacks!(gain);
+            add_callbacks!(comment);
+
+            let add_cb_callback = |w: &mut CheckButton| {
+                w.set_callback({
+                    let s = out.clone();
+                    move |_widget| s.borrow_mut().on_finished_editing()
+                });
+            };
+            add_cb_callback(&mut editor.looping);
+            add_cb_callback(&mut editor.loop_resets_filter);
+        }
         out
+    }
+
+    fn widget_event_handler(s: &Rc<RefCell<InstrumentEditor>>, ev: Event) -> bool {
+        if is_input_done_event(ev) {
+            s.borrow_mut().on_finished_editing();
+        }
+        false
+    }
+
+    fn on_finished_editing(&mut self) {
+        if let Some(new_data) = self.read_or_reset() {
+            self.send_edit_message(new_data);
+        }
+    }
+
+    fn send_edit_message(&self, data: Instrument) {
+        if let Some(index) = self.selected_index {
+            self.sender
+                .send(Message::Instrument(ListMessage::ItemEdited(index, data)));
+        }
+    }
+
+    fn read_or_reset(&mut self) -> Option<Instrument> {
+        #[allow(clippy::question_mark)]
+        if self.selected_index.is_none() {
+            return None;
+        }
+
+        let old = &self.data;
+
+        macro_rules! read_or_reset {
+            ($field:ident) => {
+                let $field = InputHelper::read_or_reset(&mut self.$field, &old.$field);
+            };
+        }
+        read_or_reset!(name);
+        read_or_reset!(source);
+        read_or_reset!(freq);
+        read_or_reset!(loop_point);
+        read_or_reset!(dupe_block_hack);
+        read_or_reset!(first_octave);
+        read_or_reset!(last_octave);
+        read_or_reset!(adsr);
+        read_or_reset!(gain);
+        read_or_reset!(comment);
+
+        let looping = self.looping.value();
+        let loop_resets_filter = self.loop_resets_filter.value();
+
+        Some(Instrument {
+            name: name?,
+            source: source?,
+
+            freq: freq?,
+            looping,
+            loop_point: loop_point?,
+            dupe_block_hack: dupe_block_hack?,
+            loop_resets_filter,
+            first_octave: first_octave?,
+            last_octave: last_octave?,
+            adsr: adsr?,
+            gain: gain?,
+            comment: comment?,
+        })
     }
 
     fn disable_editor(&mut self) {
@@ -191,7 +263,7 @@ impl InstrumentEditor {
         self.adsr.set_value("");
         self.gain.set_value("");
 
-        self.inst_data.borrow_mut().index = None;
+        self.selected_index = None;
     }
 
     fn set_data(&mut self, index: usize, data: &Instrument) {
@@ -214,10 +286,20 @@ impl InstrumentEditor {
         set_widget!(gain);
         set_widget!(comment);
 
-        self.inst_data
-            .replace(IndexAndData::new(Some(index), data.clone()));
+        self.selected_index = Some(index);
+        self.data = data.clone();
 
         self.group.activate();
+    }
+
+    fn list_edited(&mut self, action: &ListAction<Instrument>) {
+        // Update name as the name deduplicator may have changed it.
+        if let ListAction::Edit(index, data) = action {
+            if self.selected_index == Some(*index) && self.data.name != data.name {
+                self.data.name = data.name.clone();
+                InputHelper::set_widget_value(&mut self.name, &self.data.name);
+            }
+        }
     }
 }
 
@@ -226,7 +308,7 @@ pub struct SamplesTab {
 
     inst_table: ListEditorTable<InstrumentMapping>,
 
-    instrument_editor: InstrumentEditor,
+    instrument_editor: Rc<RefCell<InstrumentEditor>>,
 
     console: TextDisplay,
     console_buffer: TextBuffer,
@@ -303,17 +385,18 @@ impl ListEditor<Instrument> for SamplesTab {
 
     fn list_edited(&mut self, action: &ListAction<Instrument>) {
         self.inst_table.list_edited(action);
+        self.instrument_editor.borrow_mut().list_edited(action);
     }
 
     fn clear_selected(&mut self) {
         self.inst_table.clear_selected();
-        self.instrument_editor.disable_editor();
+        self.instrument_editor.borrow_mut().disable_editor();
     }
 
     fn set_selected(&mut self, index: usize, inst: &Instrument) {
         self.inst_table.set_selected(index, inst);
 
-        self.instrument_editor.set_data(index, inst);
+        self.instrument_editor.borrow_mut().set_data(index, inst);
     }
 }
 
