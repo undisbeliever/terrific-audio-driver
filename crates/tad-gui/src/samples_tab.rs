@@ -17,6 +17,7 @@ use crate::Message;
 use compiler::data::{self, Instrument, LoopSetting};
 use compiler::samples::{BRR_EXTENSION, WAV_EXTENSION};
 use compiler::{Adsr, Envelope, Gain, STARTING_OCTAVE};
+use fltk::button::Button;
 
 use std::cell::RefCell;
 use std::ffi::OsStr;
@@ -28,6 +29,7 @@ use fltk::enums::{Color, Event};
 use fltk::group::Flex;
 use fltk::input::{FloatInput, Input, IntInput};
 use fltk::menu::Choice;
+use fltk::output::Output;
 use fltk::prelude::*;
 use fltk::text::{TextBuffer, TextDisplay, WrapMode};
 
@@ -164,7 +166,7 @@ pub struct InstrumentEditor {
     source_file_type: SourceFileType,
 
     name: Input,
-    source: Input,
+    source: Output,
     freq: FloatInput,
     loop_choice: Choice,
     loop_setting: IntInput,
@@ -183,7 +185,7 @@ impl InstrumentEditor {
         let mut form = InputForm::new(15);
 
         let name = form.add_input::<Input>("Name:");
-        let source = form.add_input::<Input>("Source:");
+        let source = form.add_two_inputs_right::<Output, Button>("Source:", 5);
         let freq = form.add_input::<FloatInput>("Frequency:");
         let loop_settings = form.add_two_inputs::<Choice, IntInput>("Loop:", 25);
         let first_octave = form.add_input::<IntInput>("First octave:");
@@ -193,6 +195,7 @@ impl InstrumentEditor {
 
         let group = form.take_group_end();
 
+        let (source, mut source_button) = source;
         let (loop_choice, loop_setting) = loop_settings;
         let (envelope_choice, envelope_value) = envelope;
 
@@ -251,6 +254,12 @@ impl InstrumentEditor {
                 let s = out.clone();
                 move |_widget| s.borrow_mut().envelope_choice_changed()
             });
+
+            source_button.set_label("...");
+            source_button.set_callback({
+                let s = out.clone();
+                move |_widget| s.borrow_mut().source_button_clicked()
+            });
         }
         out
     }
@@ -260,6 +269,12 @@ impl InstrumentEditor {
             s.borrow_mut().on_finished_editing();
         }
         false
+    }
+
+    fn source_button_clicked(&mut self) {
+        if let Some(index) = self.selected_index {
+            self.sender.send(Message::OpenInstrumentSampleDialog(index));
+        }
     }
 
     fn on_finished_editing(&mut self) {
@@ -289,7 +304,6 @@ impl InstrumentEditor {
             };
         }
         read_or_reset!(name);
-        read_or_reset!(source);
         read_or_reset!(freq);
         read_or_reset!(first_octave);
         read_or_reset!(last_octave);
@@ -300,14 +314,15 @@ impl InstrumentEditor {
 
         Some(Instrument {
             name: name?,
-            source: source?,
-
             freq: freq?,
             loop_setting: loop_setting?,
             first_octave: first_octave?,
             last_octave: last_octave?,
             envelope: envelope?,
             comment: comment?,
+
+            // must be last (after the ?'s)
+            source: self.data.source.clone(),
         })
     }
 
@@ -434,11 +449,12 @@ impl InstrumentEditor {
         }
 
         set_widget!(name);
-        set_widget!(source);
         set_widget!(freq);
         set_widget!(first_octave);
         set_widget!(last_octave);
         set_widget!(comment);
+
+        self.source.set_value(&data.source.to_string_lossy());
 
         let (lc, lv) = match data.loop_setting {
             LoopSetting::None => (LoopChoice::None, None),
@@ -534,8 +550,12 @@ impl InstrumentEditor {
                     InputHelper::set_widget_value(&mut self.name, &self.data.name);
                 }
 
-                // Update loop choices as the source file extension may have changed
-                self.update_source_file_type(&data.source);
+                // Update source as it may have been changed by `open_instrument_sample_dialog()`
+                if self.data.source != data.source {
+                    self.data.source = data.source.clone();
+                    self.source.set_value(&data.source.to_string_lossy());
+                    self.update_source_file_type(&data.source);
+                }
             }
         }
     }

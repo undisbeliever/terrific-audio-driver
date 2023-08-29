@@ -24,6 +24,11 @@ use std::path::{Path, PathBuf};
 const SOUND_EFFECTS_FILTER: &str = "TXT Files\t*.txt";
 const MML_SONG_FILTER: &str = "MML Files\t*.mml";
 const SPC_FILTER: &str = "SPC Files\t*.spc";
+const SAMPLE_FILTERS: &str = concat![
+    "WAV and BRR samples\t*.{wav,brr}\n",
+    "WAV samples\t*.wav\n",
+    "BRR samples\t*.brr",
+];
 
 fn save_file_dialog(title: &str, filter: &str, default_extension: &str) -> Option<PathBuf> {
     let mut dialog = dialog::NativeFileChooser::new(dialog::FileDialogType::BrowseSaveFile);
@@ -115,12 +120,27 @@ fn validate_pf_file_dialog_output(
     }
 }
 
-fn pf_open_file_dialog(pd: &ProjectData, title: &str, filter: &str) -> Option<PfFileDialogResult> {
+fn pf_open_file_dialog(
+    pd: &ProjectData,
+    title: &str,
+    filter: &str,
+    old_pf_path: Option<&Path>,
+) -> Option<PfFileDialogResult> {
     let mut dialog = dialog::NativeFileChooser::new(dialog::FileDialogType::BrowseFile);
     dialog.set_title(title);
     dialog.set_filter(filter);
     dialog.set_option(dialog::FileDialogOptions::UseFilterExt);
-    let _ = dialog.set_directory(&pd.pf_parent_path);
+
+    match old_pf_path {
+        Some(p) => {
+            let p = pd.pf_parent_path.join(p);
+            let _ = dialog.set_directory(&p);
+        }
+        None => {
+            let _ = dialog.set_directory(&pd.pf_parent_path);
+        }
+    };
+
     dialog.show();
 
     validate_pf_file_dialog_output(&dialog, pd, None, "Do you still want to open it?")
@@ -179,7 +199,7 @@ pub fn load_project_file_or_show_error_message(path: &Path) -> Option<ProjectFil
 }
 
 pub fn open_sfx_file_dialog(pd: &ProjectData) -> Option<(PathBuf, SoundEffectsFile)> {
-    let p = pf_open_file_dialog(pd, "Load sound effects file", SOUND_EFFECTS_FILTER);
+    let p = pf_open_file_dialog(pd, "Load sound effects file", SOUND_EFFECTS_FILTER, None);
 
     match p {
         Some(p) => match load_sfx_file(&p.path) {
@@ -220,7 +240,7 @@ pub fn load_mml_file(full_path: &Path) -> Option<TextFile> {
 }
 
 pub fn open_mml_file_dialog(pd: &ProjectData) -> Option<PfFileDialogResult> {
-    pf_open_file_dialog(pd, "Add song to project", MML_SONG_FILTER)
+    pf_open_file_dialog(pd, "Add song to project", MML_SONG_FILTER, None)
 }
 
 pub fn add_song_to_pf_dialog(sender: &fltk::app::Sender<Message>, pd: &ProjectData) {
@@ -243,6 +263,27 @@ pub fn add_song_to_pf_dialog(sender: &fltk::app::Sender<Message>, pd: &ProjectDa
                 })))
             }
         }
+    }
+}
+
+pub fn open_instrument_sample_dialog(
+    sender: &fltk::app::Sender<Message>,
+    pd: &ProjectData,
+    index: usize,
+) {
+    let inst = match pd.instruments.list().get(index) {
+        Some(inst) => inst,
+        None => return,
+    };
+
+    if let Some(p) = pf_open_file_dialog(pd, "Select sample", SAMPLE_FILTERS, Some(&inst.source)) {
+        let new_inst = data::Instrument {
+            source: p.pf_path,
+            ..inst.clone()
+        };
+        sender.send(Message::Instrument(ListMessage::ItemEdited(
+            index, new_inst,
+        )));
     }
 }
 

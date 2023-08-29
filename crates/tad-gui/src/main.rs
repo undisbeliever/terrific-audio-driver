@@ -45,6 +45,7 @@ use crate::tabs::{
 use compiler::sound_effects::{convert_sfx_inputs_lossy, SoundEffectInput, SoundEffectsFile};
 use compiler::{data, driver_constants, ProjectFile};
 
+use files::open_instrument_sample_dialog;
 use fltk::dialog;
 use fltk::prelude::*;
 
@@ -84,6 +85,8 @@ pub enum Message {
 
     AddSongToProjectDialog,
     SetProjectSongName(usize, data::Name),
+
+    OpenInstrumentSampleDialog(usize),
 
     OpenSongTab(usize),
 
@@ -333,6 +336,10 @@ impl Project {
             Message::AddSongToProjectDialog => {
                 add_song_to_pf_dialog(&self.sender, &self.data);
             }
+            Message::OpenInstrumentSampleDialog(index) => {
+                open_instrument_sample_dialog(&self.sender, &self.data, index);
+            }
+
             Message::SetProjectSongName(index, name) => {
                 if let Some(s) = self.data.project_songs.list().get(index) {
                     self.sender
