@@ -78,6 +78,9 @@ pub enum ToCompiler {
     SongChanged(ItemId, String),
 
     ExportSongToSpcFile(ItemId),
+
+    RemoveFileFromSampleCache(PathBuf),
+    RecompileInstrumentsUsingSample(PathBuf),
 }
 
 pub type InstrumentOutput = Result<usize, errors::SampleError>;
@@ -394,6 +397,20 @@ where
         for (id, &index) in &self.map {
             let out = compiler_fn(id.clone(), &self.items[index]);
             self.output[index] = out;
+        }
+    }
+
+    fn recompile_all_if(
+        &mut self,
+        mut compiler_fn: impl FnMut(ItemId, &ItemT) -> OutT,
+        filter_fn: impl Fn(&ItemT) -> bool,
+    ) {
+        for (id, &index) in &self.map {
+            let item = &self.items[index];
+            if filter_fn(item) {
+                let out = compiler_fn(id.clone(), item);
+                self.output[index] = out;
+            }
         }
     }
 }
@@ -786,6 +803,13 @@ fn bg_thread(
 
                 song_dependencies = None;
             }
+            ToCompiler::RecompileInstrumentsUsingSample(pf_path) => {
+                let c = create_instrument_compiler(&mut sample_file_cache, &sender);
+                instruments.recompile_all_if(c, |inst| inst.source == pf_path);
+
+                song_dependencies = None;
+            }
+
             ToCompiler::FinishedEditingSamples => {
                 if instruments.is_changed() {
                     instruments.clear_changed_flag();
@@ -829,6 +853,10 @@ fn bg_thread(
             ToCompiler::ExportSongToSpcFile(id) => {
                 let r = songs.export_to_spc_file(id, &pf_songs, common_audio_data_no_sfx.as_ref());
                 sender.send(CompilerOutput::SpcFileResult(r));
+            }
+
+            ToCompiler::RemoveFileFromSampleCache(pf_path) => {
+                sample_file_cache.remove_path(&pf_path);
             }
         }
     }

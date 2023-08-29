@@ -4,6 +4,7 @@
 //
 // SPDX-License-Identifier: MIT
 
+use crate::compiler_thread::ToCompiler;
 use crate::list_editor::{ListMessage, ListState};
 use crate::song_tab::SongTab;
 use crate::{Message, ProjectData, SoundEffectsData};
@@ -20,6 +21,7 @@ use fltk::dialog;
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
+use std::sync::mpsc;
 
 const SOUND_EFFECTS_FILTER: &str = "TXT Files\t*.txt";
 const MML_SONG_FILTER: &str = "MML Files\t*.mml";
@@ -268,6 +270,7 @@ pub fn add_song_to_pf_dialog(sender: &fltk::app::Sender<Message>, pd: &ProjectDa
 
 pub fn open_instrument_sample_dialog(
     sender: &fltk::app::Sender<Message>,
+    compiler_sender: &mpsc::Sender<ToCompiler>,
     pd: &ProjectData,
     index: usize,
 ) {
@@ -277,13 +280,26 @@ pub fn open_instrument_sample_dialog(
     };
 
     if let Some(p) = pf_open_file_dialog(pd, "Select sample", SAMPLE_FILTERS, Some(&inst.source)) {
-        let new_inst = data::Instrument {
-            source: p.pf_path,
-            ..inst.clone()
-        };
-        sender.send(Message::Instrument(ListMessage::ItemEdited(
-            index, new_inst,
-        )));
+        let new_source = p.pf_path;
+
+        // Remove the previous and new files from sample cache to ensure any file changes are loaded
+        let _ = compiler_sender.send(ToCompiler::RemoveFileFromSampleCache(inst.source.clone()));
+        let _ = compiler_sender.send(ToCompiler::RemoveFileFromSampleCache(new_source.clone()));
+
+        if inst.source != new_source {
+            let new_inst = data::Instrument {
+                source: new_source.clone(),
+                ..inst.clone()
+            };
+            sender.send(Message::Instrument(ListMessage::ItemEdited(
+                index, new_inst,
+            )));
+        }
+
+        // The sample might be used by more than one instrument.
+        // Recompile all instruments that use the sample file.
+        // Will also recompile this instrument if `source` was unchanged.
+        let _ = compiler_sender.send(ToCompiler::RecompileInstrumentsUsingSample(new_source));
     }
 }
 

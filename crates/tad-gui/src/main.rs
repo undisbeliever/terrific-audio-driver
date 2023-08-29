@@ -337,7 +337,12 @@ impl Project {
                 add_song_to_pf_dialog(&self.sender, &self.data);
             }
             Message::OpenInstrumentSampleDialog(index) => {
-                open_instrument_sample_dialog(&self.sender, &self.data, index);
+                open_instrument_sample_dialog(
+                    &self.sender,
+                    &self.compiler_sender,
+                    &self.data,
+                    index,
+                );
             }
 
             Message::SetProjectSongName(index, name) => {
