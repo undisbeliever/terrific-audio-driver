@@ -17,7 +17,6 @@ pub enum ParseError {
     FileTooLarge,
     EndFlagNotSetInLastBlock,
     SampleEndsEarly,
-    TwoLoopPoints,
     MissingLoopPoint,
     BrrSampleNotLooping,
     InvalidLoopPoint,
@@ -34,7 +33,6 @@ impl Display for ParseError {
                 write!(f, "End flag not set in the last BRR block")
             }
             ParseError::SampleEndsEarly => write!(f, "Sample ends too early"),
-            ParseError::TwoLoopPoints => write!(f, "BRR file has a loop point header"),
             ParseError::MissingLoopPoint => write!(f, "Missing loop point"),
             ParseError::BrrSampleNotLooping => write!(f, "BRR sample not looping"),
             ParseError::InvalidLoopPoint => write!(
@@ -57,11 +55,12 @@ pub struct ValidBrrFile {
 }
 
 impl ValidBrrFile {
+    /// If loop_point is Some and the BRR File contains a loop header, loop_point will override
+    /// the BRR loop header.
     pub fn into_brr_sample(self, loop_point: Option<usize>) -> Result<BrrSample, ParseError> {
         let loop_offset = match (self.loop_offset, loop_point) {
-            (Some(_), Some(_)) => return Err(ParseError::TwoLoopPoints),
+            (_, Some(lp)) => Some(loop_point_to_loop_offset(lp, self.brr_data.len())?),
             (Some(lo), None) => Some(lo),
-            (None, Some(lp)) => Some(loop_point_to_loop_offset(lp, self.brr_data.len())?),
             (None, None) => None,
         };
 
