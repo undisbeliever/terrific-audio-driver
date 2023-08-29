@@ -14,21 +14,56 @@ use crate::tables::{RowWithStatus, SimpleRow};
 use crate::tabs::{FileType, Tab};
 use crate::Message;
 
-use compiler::data::{self, Instrument};
+use compiler::data::{self, Instrument, LoopSetting};
+use compiler::samples::{BRR_EXTENSION, WAV_EXTENSION};
 use compiler::{Adsr, Envelope, Gain, STARTING_OCTAVE};
 
 use std::cell::RefCell;
-use std::path::PathBuf;
+use std::ffi::OsStr;
+use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
 use fltk::app;
-use fltk::button::CheckButton;
 use fltk::enums::{Color, Event};
 use fltk::group::Flex;
 use fltk::input::{FloatInput, Input, IntInput};
 use fltk::menu::Choice;
 use fltk::prelude::*;
 use fltk::text::{TextBuffer, TextDisplay, WrapMode};
+
+#[derive(Clone, Copy)]
+enum LoopChoice {
+    None = 0,
+    OverrideBrrLoopPoint = 1,
+    LoopWithFilter = 2,
+    LoopResetFilter = 3,
+    DupeBlockHack = 4,
+}
+impl LoopChoice {
+    const CHOICES: &str = concat![
+        "&None",
+        "|&Override BRR Loop Point",
+        "|&Loop With Filter",
+        "|Loop &Resets Filter",
+        "|&Dupe Block Hack"
+    ];
+
+    fn read_widget(c: &Choice) -> Self {
+        match c.value() {
+            0 => Self::None,
+            1 => Self::OverrideBrrLoopPoint,
+            2 => Self::LoopWithFilter,
+            3 => Self::LoopResetFilter,
+            4 => Self::DupeBlockHack,
+
+            _ => Self::None,
+        }
+    }
+
+    fn to_i32(self) -> i32 {
+        self as i32
+    }
+}
 
 #[derive(Clone, Copy)]
 enum EnvelopeChoice {
@@ -62,10 +97,7 @@ fn blank_instrument() -> Instrument {
         name: "name".parse().unwrap(),
         source: PathBuf::new(),
         freq: 500.0,
-        looping: true,
-        loop_point: None,
-        dupe_block_hack: None,
-        loop_resets_filter: false,
+        loop_setting: LoopSetting::None,
         first_octave: STARTING_OCTAVE,
         last_octave: STARTING_OCTAVE,
         envelope: Envelope::Adsr(DEFAULT_ADSR),
@@ -114,6 +146,13 @@ impl TableCompilerOutput for InstrumentMapping {
     }
 }
 
+#[derive(Debug, Eq, PartialEq)]
+enum SourceFileType {
+    Unknown,
+    Wav,
+    Brr,
+}
+
 pub struct InstrumentEditor {
     group: Flex,
 
@@ -122,13 +161,13 @@ pub struct InstrumentEditor {
     selected_index: Option<usize>,
     data: Instrument,
 
+    source_file_type: SourceFileType,
+
     name: Input,
     source: Input,
     freq: FloatInput,
-    looping: CheckButton,
-    loop_point: IntInput,
-    dupe_block_hack: IntInput,
-    loop_resets_filter: CheckButton,
+    loop_choice: Choice,
+    loop_setting: IntInput,
     first_octave: IntInput,
     last_octave: IntInput,
     envelope_choice: Choice,
@@ -141,15 +180,12 @@ pub struct InstrumentEditor {
 
 impl InstrumentEditor {
     fn new(sender: app::Sender<Message>) -> Rc<RefCell<InstrumentEditor>> {
-        let mut form = InputForm::new(18);
+        let mut form = InputForm::new(15);
 
         let name = form.add_input::<Input>("Name:");
         let source = form.add_input::<Input>("Source:");
         let freq = form.add_input::<FloatInput>("Frequency:");
-        let looping = form.add_checkbox_left("Looping");
-        let loop_point = form.add_input::<IntInput>("Loop Point:");
-        let dupe_block_hack = form.add_input::<IntInput>("Dupe block hack:");
-        let loop_resets_filter = form.add_checkbox_right("Loop resets filter");
+        let loop_settings = form.add_two_inputs::<Choice, IntInput>("Loop:", 25);
         let first_octave = form.add_input::<IntInput>("First octave:");
         let last_octave = form.add_input::<IntInput>("Last octave:");
         let envelope = form.add_two_inputs::<Choice, Input>("Envelope:", 12);
@@ -157,6 +193,7 @@ impl InstrumentEditor {
 
         let group = form.take_group_end();
 
+        let (loop_choice, loop_setting) = loop_settings;
         let (envelope_choice, envelope_value) = envelope;
 
         let out = Rc::from(RefCell::new(Self {
@@ -164,13 +201,12 @@ impl InstrumentEditor {
             sender,
             selected_index: None,
             data: blank_instrument(),
+            source_file_type: SourceFileType::Unknown,
             name,
             source,
             freq,
-            looping,
-            loop_point,
-            dupe_block_hack,
-            loop_resets_filter,
+            loop_choice,
+            loop_setting,
             first_octave,
             last_octave,
             envelope_choice,
@@ -183,6 +219,7 @@ impl InstrumentEditor {
         {
             let mut editor = out.borrow_mut();
 
+            editor.loop_choice.add_choice(LoopChoice::CHOICES);
             editor.envelope_choice.add_choice(EnvelopeChoice::CHOICES);
 
             editor.disable_editor();
@@ -199,26 +236,21 @@ impl InstrumentEditor {
             add_callbacks!(name);
             add_callbacks!(source);
             add_callbacks!(freq);
-            add_callbacks!(loop_point);
-            add_callbacks!(dupe_block_hack);
+            add_callbacks!(loop_setting);
             add_callbacks!(first_octave);
             add_callbacks!(last_octave);
             add_callbacks!(envelope_value);
             add_callbacks!(comment);
 
+            editor.loop_choice.set_callback({
+                let s = out.clone();
+                move |_widget| s.borrow_mut().loop_choice_changed()
+            });
+
             editor.envelope_choice.set_callback({
                 let s = out.clone();
                 move |_widget| s.borrow_mut().envelope_choice_changed()
             });
-
-            let add_cb_callback = |w: &mut CheckButton| {
-                w.set_callback({
-                    let s = out.clone();
-                    move |_widget| s.borrow_mut().on_finished_editing()
-                });
-            };
-            add_cb_callback(&mut editor.looping);
-            add_cb_callback(&mut editor.loop_resets_filter);
         }
         out
     }
@@ -259,31 +291,75 @@ impl InstrumentEditor {
         read_or_reset!(name);
         read_or_reset!(source);
         read_or_reset!(freq);
-        read_or_reset!(loop_point);
-        read_or_reset!(dupe_block_hack);
         read_or_reset!(first_octave);
         read_or_reset!(last_octave);
         read_or_reset!(comment);
 
+        let loop_setting = self.read_or_reset_loop_setting();
         let envelope = self.read_or_reset_envelope();
-
-        let looping = self.looping.value();
-        let loop_resets_filter = self.loop_resets_filter.value();
 
         Some(Instrument {
             name: name?,
             source: source?,
 
             freq: freq?,
-            looping,
-            loop_point: loop_point?,
-            dupe_block_hack: dupe_block_hack?,
-            loop_resets_filter,
+            loop_setting: loop_setting?,
             first_octave: first_octave?,
             last_octave: last_octave?,
             envelope: envelope?,
             comment: comment?,
         })
+    }
+
+    fn reset_loop_setting_widget(&mut self, choice: LoopChoice) {
+        let w = &mut self.loop_setting;
+
+        match choice {
+            LoopChoice::None => {
+                w.set_value("");
+                w.deactivate();
+            }
+
+            LoopChoice::OverrideBrrLoopPoint
+            | LoopChoice::LoopWithFilter
+            | LoopChoice::LoopResetFilter => {
+                let lp = loop_setting_to_loop_point(&self.data.loop_setting);
+                w.set_value(&lp.to_string());
+                w.activate();
+            }
+
+            LoopChoice::DupeBlockHack => {
+                let bc = loop_setting_to_block_count(&self.data.loop_setting);
+                w.set_value(&bc.to_string());
+                w.activate();
+            }
+        }
+    }
+
+    fn loop_choice_changed(&mut self) {
+        let choice = LoopChoice::read_widget(&self.loop_choice);
+
+        self.reset_loop_setting_widget(choice);
+
+        self.on_finished_editing();
+    }
+
+    fn read_or_reset_loop_setting(&mut self) -> Option<LoopSetting> {
+        let choice = LoopChoice::read_widget(&self.loop_choice);
+        let value = self.loop_setting.value().parse().ok();
+
+        let value = match choice {
+            LoopChoice::None => Some(LoopSetting::None),
+            LoopChoice::OverrideBrrLoopPoint => value.map(LoopSetting::OverrideBrrLoopPoint),
+            LoopChoice::LoopWithFilter => value.map(LoopSetting::LoopWithFilter),
+            LoopChoice::LoopResetFilter => value.map(LoopSetting::LoopResetFilter),
+            LoopChoice::DupeBlockHack => value.map(LoopSetting::DupeBlockHack),
+        };
+
+        if value.is_none() {
+            self.reset_loop_setting_widget(choice);
+        }
+        value
     }
 
     fn envelope_choice_changed(&mut self) {
@@ -338,12 +414,11 @@ impl InstrumentEditor {
         self.name.set_value("");
         self.source.set_value("");
         self.freq.set_value("");
-        self.looping.clear();
-        self.loop_point.set_value("");
-        self.dupe_block_hack.set_value("");
-        self.loop_resets_filter.clear();
         self.first_octave.set_value("");
         self.last_octave.set_value("");
+
+        self.loop_choice.set_value(-1);
+        self.loop_setting.set_value("");
 
         self.envelope_choice.set_value(-1);
         self.envelope_value.set_value("");
@@ -361,13 +436,31 @@ impl InstrumentEditor {
         set_widget!(name);
         set_widget!(source);
         set_widget!(freq);
-        self.looping.set(data.looping);
-        set_widget!(loop_point);
-        set_widget!(dupe_block_hack);
-        self.loop_resets_filter.set(data.loop_resets_filter);
         set_widget!(first_octave);
         set_widget!(last_octave);
         set_widget!(comment);
+
+        let (lc, lv) = match data.loop_setting {
+            LoopSetting::None => (LoopChoice::None, None),
+            LoopSetting::OverrideBrrLoopPoint(lp) => (LoopChoice::OverrideBrrLoopPoint, Some(lp)),
+            LoopSetting::LoopWithFilter(lp) => (LoopChoice::LoopWithFilter, Some(lp)),
+            LoopSetting::LoopResetFilter(lp) => (LoopChoice::LoopResetFilter, Some(lp)),
+            LoopSetting::DupeBlockHack(dbh) => (LoopChoice::DupeBlockHack, Some(dbh)),
+        };
+        self.loop_choice.set_value(lc.to_i32());
+
+        match lv {
+            Some(v) => {
+                self.loop_setting.set_value(&v.to_string());
+                self.loop_setting.activate();
+            }
+            None => {
+                self.loop_setting.set_value("");
+                self.loop_setting.deactivate();
+            }
+        }
+
+        self.update_source_file_type(&data.source);
 
         match data.envelope {
             Envelope::Adsr(adsr) => {
@@ -392,12 +485,57 @@ impl InstrumentEditor {
         self.group.activate();
     }
 
+    fn update_source_file_type(&mut self, source: &Path) {
+        let sft = match source.extension().and_then(OsStr::to_str) {
+            Some(WAV_EXTENSION) => SourceFileType::Wav,
+            Some(BRR_EXTENSION) => SourceFileType::Brr,
+            _ => SourceFileType::Unknown,
+        };
+
+        if self.source_file_type != sft {
+            self.source_file_type = sft;
+            self.update_loop_choices();
+        }
+    }
+
+    fn update_loop_choices(&mut self) {
+        macro_rules! update_choices {
+            ($($choice:ident),*) => {
+                $(
+                    let can_use = can_use_loop_setting(LoopChoice::$choice, &self.source_file_type);
+
+                    if let Some(mut m) = self.loop_choice.at(LoopChoice::$choice.to_i32()) {
+                        if can_use {
+                            m.activate();
+                        }
+                        else {
+                            m.deactivate()
+                        }
+                    }
+                )*
+            };
+        }
+
+        update_choices!(
+            None,
+            OverrideBrrLoopPoint,
+            LoopWithFilter,
+            LoopResetFilter,
+            DupeBlockHack
+        );
+    }
+
     fn list_edited(&mut self, action: &ListAction<Instrument>) {
-        // Update name as the name deduplicator may have changed it.
         if let ListAction::Edit(index, data) = action {
-            if self.selected_index == Some(*index) && self.data.name != data.name {
-                self.data.name = data.name.clone();
-                InputHelper::set_widget_value(&mut self.name, &self.data.name);
+            if self.selected_index == Some(*index) {
+                // Update name as the name deduplicator may have changed it.
+                if self.data.name != data.name {
+                    self.data.name = data.name.clone();
+                    InputHelper::set_widget_value(&mut self.name, &self.data.name);
+                }
+
+                // Update loop choices as the source file extension may have changed
+                self.update_source_file_type(&data.source);
             }
         }
     }
@@ -530,5 +668,37 @@ impl CompilerOutputGui<InstrumentOutput> for SamplesTab {
                 // ::TODO highlight invalid inputs::
             }
         }
+    }
+}
+
+fn loop_setting_to_loop_point(l: &LoopSetting) -> usize {
+    match *l {
+        LoopSetting::None => 0,
+        LoopSetting::OverrideBrrLoopPoint(lp) => lp,
+        LoopSetting::LoopWithFilter(lp) => lp,
+        LoopSetting::LoopResetFilter(lp) => lp,
+        LoopSetting::DupeBlockHack(dbh) => dbh.checked_mul(16).unwrap_or(0),
+    }
+}
+
+fn loop_setting_to_block_count(l: &LoopSetting) -> usize {
+    match *l {
+        LoopSetting::None => 0,
+
+        LoopSetting::OverrideBrrLoopPoint(lp)
+        | LoopSetting::LoopWithFilter(lp)
+        | LoopSetting::LoopResetFilter(lp) => lp.checked_div(16).unwrap_or(0),
+
+        LoopSetting::DupeBlockHack(dbh) => dbh,
+    }
+}
+
+const fn can_use_loop_setting(l: LoopChoice, sft: &SourceFileType) -> bool {
+    match l {
+        LoopChoice::None => !matches!(sft, SourceFileType::Unknown),
+        LoopChoice::OverrideBrrLoopPoint => matches!(sft, SourceFileType::Brr),
+        LoopChoice::LoopWithFilter => matches!(sft, SourceFileType::Wav),
+        LoopChoice::LoopResetFilter => matches!(sft, SourceFileType::Wav),
+        LoopChoice::DupeBlockHack => matches!(sft, SourceFileType::Wav),
     }
 }

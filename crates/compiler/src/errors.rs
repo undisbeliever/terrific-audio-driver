@@ -9,7 +9,7 @@ use crate::bytecode::{
     PortamentoVelocity, QuarterWavelengthInTicks, RelativePan, RelativeVolume, Volume,
     MAX_NESTED_LOOPS,
 };
-use crate::data::Name;
+use crate::data::{LoopSetting, Name};
 use crate::driver_constants::{
     COMMON_DATA_ADDR, ECHO_BUFFER_EDL_MS, FIR_FILTER_SIZE, MAX_COMMON_DATA_SIZE, MAX_DIR_ITEMS,
     MAX_INSTRUMENTS, MAX_SONG_DATA_SIZE, MAX_SOUND_EFFECTS, MAX_SUBROUTINES, PITCH_TABLE_SIZE,
@@ -251,8 +251,9 @@ pub enum BrrError {
     BrrEncodeError(PathBuf, brr::EncodeError),
     BrrParseError(PathBuf, brr::ParseError),
     FileTooLarge(PathBuf),
-    CannotUseDupeBlockHackOnBrrFiles,
-    LoopingFlagMismatch { brr_looping: bool },
+
+    InvalidLoopSettingWav(LoopSetting),
+    InvalidLoopSettingBrr(LoopSetting),
 }
 
 #[derive(Debug)]
@@ -828,6 +829,16 @@ impl Display for CombineSoundEffectsError {
     }
 }
 
+fn loop_setting_str(ls: &LoopSetting) -> &'static str {
+    match ls {
+        LoopSetting::None => "none",
+        LoopSetting::OverrideBrrLoopPoint(_) => "override_brr_loop_point",
+        LoopSetting::LoopWithFilter(_) => "loop_with_filter",
+        LoopSetting::LoopResetFilter(_) => "loop_reset_filter",
+        LoopSetting::DupeBlockHack(_) => "dupe_block_hack",
+    }
+}
+
 impl Display for BrrError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
@@ -838,14 +849,13 @@ impl Display for BrrError {
             Self::BrrEncodeError(p, e) => write!(f, "error encoding {}: {}", p.display(), e),
             Self::BrrParseError(p, e) => write!(f, "error loading {}: {}", p.display(), e),
             Self::FileTooLarge(p) => write!(f, "file too large: {}", p.display()),
-            Self::CannotUseDupeBlockHackOnBrrFiles => {
-                write!(f, "cannot use dupe_block_hack on .brr files")
+
+            Self::InvalidLoopSettingWav(ls) => {
+                write!(f, "cannot use {} on wav files", loop_setting_str(ls))
             }
-            Self::LoopingFlagMismatch { brr_looping } => write!(
-                f,
-                "looping flag in BRR ({}) does not match JSON ({})",
-                brr_looping, !brr_looping
-            ),
+            Self::InvalidLoopSettingBrr(ls) => {
+                write!(f, "cannot use {} on brr files", loop_setting_str(ls))
+            }
         }
     }
 }

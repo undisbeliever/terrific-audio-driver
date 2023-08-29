@@ -6,7 +6,7 @@
 
 // ::TODO add pub(crate) to more things::
 
-use crate::data::{Instrument, UniqueNamesProjectFile};
+use crate::data::{Instrument, LoopSetting, UniqueNamesProjectFile};
 use crate::errors::{BrrError, SampleAndInstrumentDataError, SampleError, TaggedSampleError};
 use crate::pitch_table::{
     instrument_pitch, merge_pitch_vec, sort_pitches_iterator, InstrumentPitch, PitchTable,
@@ -27,6 +27,9 @@ use std::sync::Arc;
 const MAX_BRR_SAMPLE_LOAD: u64 = 16 * 1024;
 const MAX_WAV_SAMPLES: usize =
     (MAX_BRR_SAMPLE_LOAD as usize) / BYTES_PER_BRR_BLOCK * SAMPLES_PER_BLOCK;
+
+pub const WAV_EXTENSION: &str = "wav";
+pub const BRR_EXTENSION: &str = "brr";
 
 fn read_file_limited(filename: &Path, max_size: u64) -> Result<Vec<u8>, BrrError> {
     let file = match fs::File::open(filename) {
@@ -103,29 +106,28 @@ impl SampleFileCache {
 fn encode_wave_file(
     path: &Path,
     cache: &mut SampleFileCache,
-    is_looping: bool,
-    loop_point: Option<usize>,
-    dupe_block_hack: Option<usize>,
-    reset_filter_at_loop_point: bool,
+    loop_setting: &LoopSetting,
 ) -> Result<BrrSample, BrrError> {
     let wav = match cache.load_wav_file(path) {
         Ok(w) => w,
         Err(e) => return Err(e.clone()),
     };
 
-    let loop_point = if is_looping && dupe_block_hack.is_none() && loop_point.is_none() {
-        // No loop point set.
-        // Set loop_point to the start of the file.
-        Some(0)
-    } else {
-        loop_point
+    let (loop_point, dupe_block_hack, loop_resets_filter) = match loop_setting {
+        LoopSetting::None => (None, None, false),
+        LoopSetting::OverrideBrrLoopPoint(_) => {
+            return Err(BrrError::InvalidLoopSettingWav(loop_setting.clone()))
+        }
+        LoopSetting::LoopWithFilter(lp) => (Some(*lp), None, false),
+        LoopSetting::LoopResetFilter(lp) => (Some(*lp), None, true),
+        LoopSetting::DupeBlockHack(dbh) => (None, Some(*dbh), false),
     };
 
     match encode_brr(
         &wav.samples,
         loop_point,
         dupe_block_hack,
-        reset_filter_at_loop_point,
+        loop_resets_filter,
     ) {
         Ok(b) => Ok(b),
         Err(e) => Err(BrrError::BrrEncodeError(path.to_path_buf(), e)),
@@ -135,8 +137,15 @@ fn encode_wave_file(
 fn load_brr_file(
     path: &Path,
     cache: &mut SampleFileCache,
-    loop_point: Option<usize>,
+    loop_setting: &LoopSetting,
 ) -> Result<BrrSample, BrrError> {
+    let loop_point = match loop_setting {
+        LoopSetting::None => None,
+        LoopSetting::OverrideBrrLoopPoint(lp) => Some(*lp),
+
+        ls => return Err(BrrError::InvalidLoopSettingBrr(ls.clone())),
+    };
+
     let brr = match cache.load_brr_file(path) {
         Ok(b) => b,
         Err(e) => return Err(e.clone()),
@@ -166,32 +175,11 @@ pub fn load_sample_for_instrument(
     inst: &Instrument,
     cache: &mut SampleFileCache,
 ) -> Result<Sample, SampleError> {
-    let mut brr_sample = match inst.source.extension().and_then(OsStr::to_str) {
-        Some("wav") => encode_wave_file(
-            &inst.source,
-            cache,
-            inst.looping,
-            inst.loop_point,
-            inst.dupe_block_hack,
-            inst.loop_resets_filter,
-        ),
-        Some("brr") => {
-            if inst.dupe_block_hack.is_none() {
-                load_brr_file(&inst.source, cache, inst.loop_point)
-            } else {
-                Err(BrrError::CannotUseDupeBlockHackOnBrrFiles)
-            }
-        }
+    let brr_sample = match inst.source.extension().and_then(OsStr::to_str) {
+        Some(WAV_EXTENSION) => encode_wave_file(&inst.source, cache, &inst.loop_setting),
+        Some(BRR_EXTENSION) => load_brr_file(&inst.source, cache, &inst.loop_setting),
         _ => Err(BrrError::UnknownFileType(inst.source.clone())),
     };
-
-    if let Ok(b) = &brr_sample {
-        if inst.looping != b.is_looping() {
-            brr_sample = Err(BrrError::LoopingFlagMismatch {
-                brr_looping: b.is_looping(),
-            });
-        }
-    }
 
     let pitch = instrument_pitch(inst);
 

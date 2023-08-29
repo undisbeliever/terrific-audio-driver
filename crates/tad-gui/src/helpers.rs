@@ -241,6 +241,7 @@ impl InputForm {
         self.group
     }
 
+    #[allow(dead_code)]
     pub fn add_checkbox_left(&mut self, text: &str) -> CheckButton {
         let w = CheckButton::default().with_label(text);
         self.group.fixed(&w, self.row_height);
@@ -248,6 +249,7 @@ impl InputForm {
         w
     }
 
+    #[allow(dead_code)]
     pub fn add_checkbox_right(&mut self, text: &str) -> CheckButton {
         let mut r = Flex::default().row();
         self.group.fixed(&r, self.row_height);

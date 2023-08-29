@@ -123,30 +123,52 @@ impl Display for Name {
     }
 }
 
+#[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
+#[serde(tag = "loop", content = "loop_setting")]
+pub enum LoopSetting {
+    /// This setting depends on the source file:
+    ///     * wav files - The sample does not loop
+    ///     * brr files - The sample loops if the brr file has a 2 byte loop header and the loop flag is set.
+    #[serde(rename = "none")]
+    None,
+
+    /// The sample is a looping BRR file
+    #[serde(rename = "override_brr_loop_point")]
+    OverrideBrrLoopPoint(usize),
+
+    /// Loop point in samples.
+    ///
+    /// This mode will not reset the BRR filter at the loop point.  It can create better sounding
+    /// sample, however most samples will not loop perfectly, which can add low-frequency
+    /// oscillation or glitches to the sample.
+    #[serde(rename = "loop_with_filter")]
+    LoopWithFilter(usize),
+
+    /// Resets the BRR filter at the loop point.
+    ///
+    /// The BRR block after the loop point will always use BRR filter 0, which ensures
+    /// perfect looping at the cost of reduced quality for the BRR block after the loop point.
+    #[serde(rename = "loop_reset_filter")]
+    LoopResetFilter(usize),
+
+    /// Duplicates `N` blocks to the end of the sample in an attempt to improve the sample quality of the first-looping BRR block.
+    ///  * Increases the sample size by `N * 9` bytes.
+    ///  * This mode will not reset the filter at the loop point.
+    ///  * Most samples created by this hack will not loop perfectly, which adds low-frequency oscillation to the sample.
+    ///  * dupe_block_hack may create create a glitched sample, hence the name `dupe_block_hack`.
+    #[serde(rename = "dupe_block_hack")]
+    DupeBlockHack(usize),
+}
+
 #[derive(Deserialize, Serialize, Clone, PartialEq, Debug)]
 pub struct Instrument {
     pub name: Name,
 
     pub source: PathBuf,
     pub freq: f64,
-    pub looping: bool,
 
-    pub loop_point: Option<usize>,
-
-    /// Duplicates `N` blocks to the end of the sample in an attempt to improve the sample quality of the first-looping BRR block.
-    ///  * Increases the sample size by `N * 9` bytes.
-    ///  * Most samples created by this hack will not loop perfectly which adds low-frequency oscillation to the sample.
-    ///  * dupe_block_hack may create create a glitched sample, hence the name `dupe_block_hack`.
-    pub dupe_block_hack: Option<usize>,
-
-    /// Reset the BRR filter at the loop point.
-    ///
-    /// If true, the BRR block after the loop point will always use BRR filter 0, which ensures
-    /// perfect looping at the cost of reduced quality for the BRR block after the loop point.
-    ///
-    /// This setting is incompatible with `dupe_block_hack`.
-    #[serde(default)]
-    pub loop_resets_filter: bool,
+    #[serde(flatten)]
+    pub loop_setting: LoopSetting,
 
     pub first_octave: Octave,
     pub last_octave: Octave,
