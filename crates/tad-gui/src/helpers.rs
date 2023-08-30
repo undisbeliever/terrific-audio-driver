@@ -21,6 +21,18 @@ pub fn label(s: &str) -> Frame {
         .with_align(Align::Inside | Align::Left)
 }
 
+pub fn label_center(s: &str) -> Frame {
+    Frame::default()
+        .with_label(s)
+        .with_align(Align::Inside | Align::Center)
+}
+
+pub fn label_top_center(s: &str) -> Frame {
+    Frame::default()
+        .with_label(s)
+        .with_align(Align::Inside | Align::Top | Align::Center)
+}
+
 pub fn is_input_done_event(e: Event) -> bool {
     match e {
         Event::KeyDown => fltk::app::event_key() == Key::Enter,

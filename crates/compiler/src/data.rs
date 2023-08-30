@@ -184,7 +184,7 @@ pub struct Song {
     pub source: PathBuf,
 }
 
-#[derive(Deserialize, Serialize, Debug)]
+#[derive(Deserialize, Serialize, Default, Debug)]
 pub struct Project {
     pub instruments: Vec<Instrument>,
 

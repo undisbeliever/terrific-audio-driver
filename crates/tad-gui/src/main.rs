@@ -14,11 +14,13 @@ mod names;
 mod tables;
 mod tabs;
 
+mod about_tab;
 mod project_tab;
 mod samples_tab;
 mod song_tab;
 mod sound_effects_tab;
 
+use crate::about_tab::AboutTab;
 use crate::compiler_thread::{
     CompilerOutput, InstrumentOutput, ItemId, SoundEffectOutput, ToCompiler,
 };
@@ -45,7 +47,7 @@ use crate::tabs::{
 use compiler::sound_effects::{convert_sfx_inputs_lossy, SoundEffectInput, SoundEffectsFile};
 use compiler::{data, driver_constants, ProjectFile};
 
-use files::open_instrument_sample_dialog;
+use files::{new_project_dialog, open_instrument_sample_dialog, open_project_dialog};
 use fltk::dialog;
 use fltk::prelude::*;
 
@@ -94,6 +96,10 @@ pub enum Message {
     RecompileSong(ItemId, String),
 
     FromCompiler(compiler_thread::CompilerOutput),
+
+    ShowAboutTab,
+    NewProject,
+    OpenProject,
 }
 
 // ::TODO remove::
@@ -365,6 +371,11 @@ impl Project {
                         .send(ToCompiler::ExportSongToSpcFile(id));
                 }
             }
+
+            // Ignore these messages, they are handled by MainWindow
+            Message::ShowAboutTab => (),
+            Message::OpenProject => (),
+            Message::NewProject => (),
         }
     }
 
@@ -695,6 +706,8 @@ struct MainWindow {
     menu: Menu,
     tabs: fltk::group::Tabs,
 
+    about_tab: AboutTab,
+
     project: Option<Project>,
 }
 
@@ -720,11 +733,13 @@ impl MainWindow {
         tabs.handle_overflow(fltk::group::TabsOverflow::Compress);
 
         tabs.end();
-        tabs.auto_layout();
 
         col.end();
 
         window.end();
+
+        let about_tab = AboutTab::new(tabs.clone(), sender.clone());
+
         window.show();
 
         window.set_callback({
@@ -762,20 +777,22 @@ impl MainWindow {
             window,
             menu,
             tabs,
+            about_tab,
             project: None,
         }
     }
 
-    fn load_project(&mut self, pf: ProjectFile, sender: fltk::app::Sender<Message>) {
+    fn load_project(&mut self, pf: ProjectFile) {
         if self.project.is_some() {
             return;
         }
         self.menu.project_loaded();
+        self.about_tab.project_loaded();
         self.project = Some(Project::new(
             pf,
             self.tabs.clone(),
             self.menu.clone(),
-            sender,
+            self.sender.clone(),
         ));
     }
 
@@ -785,6 +802,26 @@ impl MainWindow {
                 Some(p) => p.process(message),
                 None => fltk::app::quit(),
             },
+            Message::ShowAboutTab => {
+                self.about_tab.show();
+                if let Some(p) = &mut self.project {
+                    p.selected_tab_changed();
+                }
+            }
+            Message::OpenProject => {
+                if self.project.is_none() {
+                    if let Some(pf) = open_project_dialog() {
+                        self.load_project(pf);
+                    }
+                }
+            }
+            Message::NewProject => {
+                if self.project.is_none() {
+                    if let Some(pf) = new_project_dialog() {
+                        self.load_project(pf);
+                    }
+                }
+            }
             m => {
                 if let Some(p) = &mut self.project {
                     p.process(m);
@@ -809,11 +846,11 @@ fn main() {
 
     let (sender, reciever) = fltk::app::channel::<Message>();
 
-    let mut main_window = MainWindow::new(sender.clone());
+    let mut main_window = MainWindow::new(sender);
 
     if let Some(path) = program_argument {
         if let Some(pf) = load_project_file_or_show_error_message(&path) {
-            main_window.load_project(pf, sender);
+            main_window.load_project(pf);
         }
     }
 

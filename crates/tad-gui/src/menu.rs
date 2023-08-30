@@ -29,6 +29,8 @@ const SAVE_ALL: &str = "&File/Save &All";
 
 const EXPORT_SPC: &str = "&File/&Export song to .spc";
 
+const SHOW_ABOUT_TAB: &str = "&Help/&About";
+
 const QUIT: &str = "&File/&Quit";
 
 #[derive(Clone)]
@@ -91,6 +93,13 @@ impl Menu {
         add(QUIT, Shortcut::None, fltk::menu::MenuFlag::Normal, || {
             Message::QuitRequested
         });
+
+        add(
+            SHOW_ABOUT_TAB,
+            Shortcut::None,
+            fltk::menu::MenuFlag::Normal,
+            || Message::ShowAboutTab,
+        );
 
         Menu { menu_bar }
     }

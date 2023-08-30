@@ -23,6 +23,7 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc;
 
+const PROJECT_FILTER: &str = "JSON Files\t*.json";
 const SOUND_EFFECTS_FILTER: &str = "TXT Files\t*.txt";
 const MML_SONG_FILTER: &str = "MML Files\t*.mml";
 const SPC_FILTER: &str = "SPC Files\t*.spc";
@@ -172,6 +173,70 @@ fn pf_save_file_dialog(
         Some(default_extension),
         "Do you still want to save to to this location?",
     )
+}
+
+fn open_file_dialog(title: &str, filter: &str) -> Option<PathBuf> {
+    let mut dialog = dialog::NativeFileChooser::new(dialog::FileDialogType::BrowseFile);
+    dialog.set_title(title);
+    dialog.set_filter(filter);
+    dialog.set_option(dialog::FileDialogOptions::UseFilterExt);
+
+    dialog.show();
+
+    let paths = dialog.filenames();
+
+    if paths.len() != 1 {
+        return None;
+    }
+
+    let path = paths.into_iter().next().unwrap();
+
+    if !path.is_absolute() {
+        dialog::message_title("Error");
+        dialog::alert_default("path is not absolute");
+        return None;
+    }
+
+    Some(path)
+}
+
+pub fn open_project_dialog() -> Option<ProjectFile> {
+    match open_file_dialog("Load Project", PROJECT_FILTER) {
+        Some(path) => load_project_file_or_show_error_message(&path),
+        None => None,
+    }
+}
+
+pub fn new_project_dialog() -> Option<ProjectFile> {
+    let path = match save_file_dialog("New Project", PROJECT_FILTER, "json") {
+        Some(p) => p,
+        None => return None,
+    };
+
+    if path.try_exists().ok() == Some(true) {
+        dialog::message_title("Cannot create a new project");
+        dialog::alert_default("The project file already exists");
+        return load_project_file_or_show_error_message(&path);
+    }
+
+    let project = data::Project::default();
+    let contents = match data::serialize_project(&project) {
+        Ok(c) => c,
+        Err(e) => {
+            dialog::message_title("Cannot serialize new project");
+            dialog::alert_default(&e.to_string());
+            return None;
+        }
+    };
+
+    match write_to_new_file(&path, &contents.to_vec()) {
+        Ok(()) => load_project_file_or_show_error_message(&path),
+        Err(e) => {
+            dialog::message_title("Cannot save new project");
+            dialog::alert_default(&e.to_string());
+            None
+        }
+    }
 }
 
 pub fn load_project_file_or_show_error_message(path: &Path) -> Option<ProjectFile> {
@@ -396,7 +461,6 @@ where
 }
 
 /// Writes contents to a new file and errors if the file already exists::
-#[allow(dead_code)]
 fn write_to_new_file(path: &Path, contents: &[u8]) -> std::io::Result<()> {
     assert!(path.is_absolute());
 
