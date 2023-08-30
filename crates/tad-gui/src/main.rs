@@ -210,7 +210,7 @@ impl Project {
         out.tab_manager
             .add_or_modify(&out.samples_tab, Some(pf.path), Some("Samples"));
         out.tab_manager
-            .add_widget(out.sound_effects_tab.widget_mut());
+            .add_widget(out.sound_effects_tab.widget_mut(), Some("Sound Effects"));
 
         out.tab_manager.set_selected_tab(&out.project_tab);
 

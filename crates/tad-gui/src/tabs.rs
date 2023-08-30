@@ -204,17 +204,22 @@ impl TabManager {
         let tab_exists = self.tabs_list.iter().any(|t| t.0.is_same(tab_widget));
         if !tab_exists {
             let mut tab_widget = tab_widget.clone();
-            self.add_widget(&mut tab_widget);
+            self.add_widget(&mut tab_widget, label);
 
             self.tabs_list.push((tab_widget, t.file_type()));
         }
     }
 
-    pub fn add_widget(&mut self, w: &mut fltk::group::Flex) {
+    pub fn add_widget(&mut self, w: &mut fltk::group::Flex, label: Option<&str>) {
         if self.tabs_widget.find(w) >= self.tabs_widget.children() {
             w.set_margins(3, 5, 3, 3);
             self.tabs_widget.add(w);
             self.tabs_widget.auto_layout();
+
+            if let Some(label) = label {
+                let new_label = [label, " "].concat();
+                w.set_label(&new_label);
+            }
         }
     }
 
