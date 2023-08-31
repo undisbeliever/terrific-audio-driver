@@ -116,7 +116,7 @@ impl Menu {
 
     fn deactivate(&mut self, path: &str) {
         if let Some(mut m) = self.menu_bar.find_item(path) {
-            m.activate();
+            m.deactivate();
         }
     }
 
@@ -137,6 +137,8 @@ impl Menu {
         self.deactivate(SAVE);
         self.deactivate(SAVE_AS);
         self.deactivate(SAVE_ALL);
+
+        self.deactivate(EXPORT_SPC);
     }
 
     pub fn project_loaded(&mut self) {
