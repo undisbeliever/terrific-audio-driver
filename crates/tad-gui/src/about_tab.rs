@@ -26,14 +26,10 @@ pub struct AboutTab {
     no_project_group: Flex,
 }
 
-fn no_project_button_group(parent: &mut Flex, sender: app::Sender<Message>) -> Flex {
+fn no_project_button_group(sender: app::Sender<Message>) -> Flex {
     let mut flex = Flex::default().row();
 
-    let button_height = ch_units_to_width(&flex, 4);
     let button_width = ch_units_to_width(&flex, 15);
-
-    parent.add(&flex);
-    parent.fixed(&flex, button_height);
 
     Frame::default();
 
@@ -71,8 +67,8 @@ impl AboutTab {
         let copyright = label_top_center(COPYRIGHT_TEXT);
         group.fixed(&copyright, input_height(&copyright));
 
-        // No project group
-        let no_project_group = no_project_button_group(&mut group, sender);
+        let no_project_group = no_project_button_group(sender);
+        group.fixed(&no_project_group, input_height(&no_project_group));
 
         let padding = Frame::default();
         group.fixed(&padding, 12);
