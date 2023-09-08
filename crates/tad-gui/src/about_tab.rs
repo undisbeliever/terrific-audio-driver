@@ -14,7 +14,7 @@ use fltk::enums::{CallbackReason, CallbackTrigger, Font};
 use fltk::frame::Frame;
 use fltk::group::{Flex, Tabs};
 use fltk::misc::HelpView;
-use fltk::prelude::{GroupExt, WidgetBase, WidgetExt};
+use fltk::prelude::{GroupExt, WidgetExt};
 
 const COPYRIGHT_TEXT: &str = "Copyright © 2023 Marcus Rowe";
 
@@ -59,9 +59,7 @@ fn no_project_button_group(parent: &mut Flex, sender: app::Sender<Message>) -> F
 
 impl AboutTab {
     pub fn new(parent: Tabs, sender: app::Sender<Message>) -> Self {
-        let mut parent = parent;
-
-        let mut group = Flex::default_fill().column();
+        let mut group = Flex::default().column();
         group.set_label("About ");
 
         // ::TODO show a logo::
@@ -84,9 +82,6 @@ impl AboutTab {
         licences.set_value("::TODO add licence text (including third party libraries)::");
 
         group.end();
-
-        parent.add(&group);
-        parent.auto_layout();
 
         // Remove about_tab from parent if the user closed the tab.
         group.set_callback({

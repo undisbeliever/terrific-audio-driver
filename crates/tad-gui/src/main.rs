@@ -732,13 +732,14 @@ impl MainWindow {
         tabs.set_tab_align(fltk::enums::Align::Right);
         tabs.handle_overflow(fltk::group::TabsOverflow::Compress);
 
+        let about_tab = AboutTab::new(tabs.clone(), sender.clone());
+
         tabs.end();
+        tabs.auto_layout();
 
         col.end();
 
         window.end();
-
-        let about_tab = AboutTab::new(tabs.clone(), sender.clone());
 
         window.show();
 
