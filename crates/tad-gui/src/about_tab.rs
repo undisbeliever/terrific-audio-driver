@@ -109,5 +109,8 @@ impl AboutTab {
     pub fn show(&mut self) {
         self.parent.add(&self.group);
         let _ = self.parent.set_value(&self.group);
+
+        // Fixes a blank window when opening the about tab
+        self.parent.auto_layout();
     }
 }
