@@ -85,7 +85,7 @@ impl AboutTab {
             move |w| {
                 if app::callback_reason() == CallbackReason::Closed {
                     tabs.remove(w);
-                    // Update selected tab after the about tab has been removed
+                    // Update selected tab and main after the about tab is closed
                     tabs.do_callback();
                 }
             }
