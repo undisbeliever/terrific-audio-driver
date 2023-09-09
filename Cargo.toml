@@ -24,5 +24,8 @@ wav2brr = { path = "./crates/wav2brr", version = "0.0.0" }
 clap = { version="4.3.3", features=[ "derive" ] }
 serde = { version="1.0.164", features=[ "derive" ] }
 serde_json = { version="1.0.97" }
-fltk = { version="^1.4" }
+
+# Using git version to fix a segfault and panic involving non-parented widgets
+# ::TODO switch to a non-git dependency when the next version of fltk-rs is released::
+fltk = { git = "https://github.com/fltk-rs/fltk-rs" }
 
