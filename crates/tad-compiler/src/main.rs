@@ -5,10 +5,11 @@
 // SPDX-License-Identifier: MIT
 
 use clap::{Args, Parser, Subcommand};
-use compiler::data::{is_name_or_id, load_text_file_with_limit, TextFile};
+use compiler::data::{is_name_or_id, load_text_file_with_limit, Song, TextFile};
 use compiler::mml_tick_count::build_tick_count_table;
 use compiler::{
-    build_pitch_table, compile_mml, song_data, PitchTable, SongData, UniqueNamesProjectFile,
+    build_pitch_table, compile_mml, song_data, validate_song_size, CommonAudioData, PitchTable,
+    SongData, UniqueNamesProjectFile,
 };
 use compiler::{sound_effects, Name};
 
@@ -43,6 +44,9 @@ enum Command {
 
     /// Export a MML song as a .spc file
     Song2spc(CompileSongDataArgs),
+
+    /// Check the project will compile successfully and all songs fit in audio-RAM
+    Check(CheckProjectArgs),
 }
 
 #[derive(Args)]
@@ -266,6 +270,95 @@ fn export_song_to_spc_file(args: CompileSongDataArgs) {
 }
 
 //
+// Check project
+// ==============
+
+#[derive(Args)]
+struct CheckProjectArgs {
+    #[arg(value_name = "JSON_FILE", help = "project json file")]
+    json_file: PathBuf,
+}
+
+fn check_song(
+    song: &Song,
+    pf: &UniqueNamesProjectFile,
+    pitch_table: &PitchTable,
+    common_data: &CommonAudioData,
+) -> Result<(), String> {
+    let path = pf.parent_path.join(&song.source);
+
+    let mml_file = match load_text_file_with_limit(&path) {
+        Ok(tf) => tf,
+        Err(e) => return Err(format!("Error compiling {}: {}", song.name, e)),
+    };
+
+    let mml = match compile_mml(
+        &mml_file,
+        Some(song.name.clone()),
+        &pf.instruments,
+        pitch_table,
+    ) {
+        Ok(mml) => mml,
+        Err(e) => return Err(e.multiline_display().to_string()),
+    };
+
+    let song_data = match song_data(mml) {
+        Ok(sd) => sd,
+        Err(e) => return Err(e.to_string()),
+    };
+
+    match validate_song_size(&song_data, common_data.data().len()) {
+        Ok(()) => Ok(()),
+        Err(e) => Err(format!(
+            "Error compiling {}: {}",
+            song.name,
+            e.multiline_display()
+        )),
+    }
+}
+
+fn check_project(args: CheckProjectArgs) {
+    let pf = load_project_file(&args.json_file);
+
+    let samples = compiler::build_sample_and_instrument_data(&pf);
+    if let Err(e) = samples {
+        error!("{}", e.multiline_display())
+    };
+
+    let sfx = compile_sound_effects(&pf);
+
+    let (samples, sfx) = match (samples, sfx) {
+        (Ok(samples), Ok(sfx)) => (samples, sfx),
+        _ => error!("Error compiling common audio data"),
+    };
+
+    let common_audio_data = match compiler::build_common_audio_data(&samples, &sfx) {
+        Ok(data) => data,
+        Err(e) => error!("{}", e.multiline_display()),
+    };
+
+    let mut n_song_errors = 0;
+
+    for song in pf.songs.list().iter() {
+        match check_song(song, &pf, samples.pitch_table(), &common_audio_data) {
+            Ok(()) => (),
+            Err(e) => {
+                n_song_errors += 1;
+                eprintln!("{}\n", e);
+            }
+        }
+    }
+
+    if n_song_errors == 0 {
+        println!("Project is valid and will fit in audio-RAM");
+    } else if n_song_errors == 1 {
+        error!("{} song has an error", n_song_errors);
+    } else {
+        error!("{} songs have errors", n_song_errors);
+    }
+}
+
+//
 // Main
 // ====
 
@@ -276,6 +369,7 @@ fn main() {
         Command::Common(args) => compile_common_data(args),
         Command::Song(args) => compile_song_data(args),
         Command::Song2spc(args) => export_song_to_spc_file(args),
+        Command::Check(args) => check_project(args),
     }
 }
 
