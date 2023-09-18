@@ -6,7 +6,6 @@
 
 mod bytecode;
 mod common_audio_data;
-mod echo;
 mod envelope;
 mod file_pos;
 mod mml_command_parser;
@@ -20,6 +19,7 @@ mod value_newtypes;
 pub mod bytecode_assembler;
 pub mod data;
 pub mod driver_constants;
+pub mod echo;
 pub mod errors;
 pub mod mml;
 pub mod mml_tick_count;
@@ -41,7 +41,7 @@ pub use samples::{build_sample_and_instrument_data, SampleAndInstrumentData};
 pub use common_audio_data::{build_common_audio_data, CommonAudioData};
 
 pub use mml::{compile_mml, MmlData};
-pub use songs::{song_data, SongData};
+pub use songs::{song_data, validate_song_size, SongData};
 pub use spc_file_export::export_spc_file;
 
 pub mod audio_driver {

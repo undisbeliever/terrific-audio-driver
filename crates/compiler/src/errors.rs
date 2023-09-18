@@ -445,6 +445,14 @@ pub enum SongError {
 }
 
 #[derive(Debug)]
+pub struct SongTooLargeError {
+    pub too_large_by: usize,
+    pub common_data_size: usize,
+    pub song_data_size: usize,
+    pub echo_buffer_size: usize,
+}
+
+#[derive(Debug)]
 pub enum ExportSpcFileError {
     TooMuchData {
         common: usize,
@@ -1096,6 +1104,12 @@ impl Display for SongError {
     }
 }
 
+impl Display for SongTooLargeError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "song too large by {} bytes", self.too_large_by)
+    }
+}
+
 impl Display for ExportSpcFileError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
@@ -1382,4 +1396,28 @@ fn fmt_indented_channel_errors(
     }
 
     Ok(())
+}
+
+pub struct SongTooLargeErrorIndentedDisplay<'a>(&'a SongTooLargeError);
+
+impl Display for SongTooLargeErrorIndentedDisplay<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        let e = &self.0;
+        write!(
+            f,
+            concat![
+                "Song is too large by {} bytes!",
+                "\n  common data (samples + sfx): {:>6} bytes",
+                "\n  song_data: {:>24} bytes",
+                "\n  echo buffer: {:>22} bytes"
+            ],
+            e.too_large_by, e.common_data_size, e.song_data_size, e.echo_buffer_size
+        )
+    }
+}
+
+impl SongTooLargeError {
+    pub fn multiline_display(&self) -> SongTooLargeErrorIndentedDisplay {
+        SongTooLargeErrorIndentedDisplay(self)
+    }
 }

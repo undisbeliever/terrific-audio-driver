@@ -132,6 +132,7 @@ struct Project {
 
     tab_manager: TabManager,
     samples_tab_selected: bool,
+    sfx_tab_selected: bool,
 
     // MUST update `all_tabs_iter()` if a tab is added or removed
     project_tab: ProjectTab,
@@ -184,6 +185,7 @@ impl Project {
         let mut out = Self {
             tab_manager: TabManager::new(tabs, menu),
             samples_tab_selected: false,
+            sfx_tab_selected: false,
 
             project_tab: ProjectTab::new(
                 &data.sfx_export_orders,
@@ -474,10 +476,21 @@ impl Project {
                 .send(ToCompiler::FinishedEditingSamples);
         }
 
-        self.samples_tab_selected = self
-            .tab_manager
-            .selected_widget()
+        if self.sfx_tab_selected {
+            let _ = self
+                .compiler_sender
+                .send(ToCompiler::FinishedEditingSoundEffects);
+        }
+
+        let selected_widget = self.tab_manager.selected_widget();
+
+        self.samples_tab_selected = selected_widget
+            .as_ref()
             .is_some_and(|t| t.is_same(self.samples_tab.widget()));
+
+        self.sfx_tab_selected = selected_widget
+            .as_ref()
+            .is_some_and(|t| t.is_same(self.sound_effects_tab.widget()));
 
         self.tab_manager.selected_tab_changed();
     }

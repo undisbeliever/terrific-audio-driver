@@ -176,8 +176,10 @@ impl State {
             }
             Some(Ok(o)) => {
                 let text = format!(
-                    "MML compiled successfully: {} bytes\n\n{}",
-                    o.data_size, o.tick_count_table
+                    "MML compiled successfully: {} bytes (+{} echo buffer bytes)\n\n{}",
+                    o.data_size,
+                    o.echo_buffer.buffer_size(),
+                    o.tick_count_table
                 );
                 self.console_buffer.set_text(&text);
                 self.console.set_text_color(Color::Foreground);
@@ -188,6 +190,7 @@ impl State {
                     SongError::Dependency => e.to_string(),
                     SongError::Mml(e) => e.multiline_display().to_string(),
                     SongError::Song(e) => e.to_string(),
+                    SongError::TooLarge(e) => e.multiline_display().to_string(),
                 };
 
                 self.console_buffer.set_text(&text);
@@ -197,6 +200,7 @@ impl State {
                     SongError::Dependency => None,
                     SongError::Mml(e) => Some(e),
                     SongError::Song(_) => None,
+                    SongError::TooLarge { .. } => None,
                 };
             }
         }

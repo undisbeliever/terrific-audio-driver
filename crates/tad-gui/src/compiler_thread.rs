@@ -19,7 +19,8 @@ use compiler::build_common_audio_data;
 use compiler::data;
 use compiler::data::{load_text_file_with_limit, TextFile};
 use compiler::driver_constants::COMMON_DATA_BYTES_PER_SOUND_EFFECT;
-use compiler::errors::{self, ExportSpcFileError};
+use compiler::echo::EchoEdl;
+use compiler::errors::{self, ExportSpcFileError, SongTooLargeError};
 use compiler::mml_tick_count::{build_tick_count_table, MmlTickCountTable};
 use compiler::samples::{combine_samples, load_sample_for_instrument, Sample, SampleFileCache};
 use compiler::sound_effects::blank_compiled_sound_effects;
@@ -74,6 +75,10 @@ pub enum ToCompiler {
     // (sent when the user deselects the samples tab in the GUI)
     FinishedEditingSamples,
 
+    // Updates sfx_data_size and rechecks song sizes.
+    // (sent when the user deselects the sound effects tab in the GUI)
+    FinishedEditingSoundEffects,
+
     SoundEffects(ItemChanged<SoundEffectInput>),
 
     SongChanged(ItemId, String),
@@ -114,6 +119,7 @@ pub enum CompilerOutput {
 #[derive(Debug)]
 pub struct SongOutputData {
     pub data_size: usize,
+    pub echo_buffer: EchoEdl,
     pub tick_count_table: MmlTickCountTable,
 }
 
@@ -149,6 +155,7 @@ pub enum SongError {
     Dependency,
     Mml(errors::MmlCompileErrors),
     Song(errors::SongError),
+    TooLarge(SongTooLargeError),
 }
 
 impl Display for SongError {
@@ -157,6 +164,7 @@ impl Display for SongError {
             Self::Dependency => writeln!(f, "dependency error"),
             Self::Mml(_) => writeln!(f, "MML error"),
             Self::Song(_) => writeln!(f, "song error"),
+            Self::TooLarge(_) => writeln!(f, "song too large"),
         }
     }
 }
@@ -524,11 +532,10 @@ fn find_missing_sfx(
     sender.send(CompilerOutput::MissingSoundEffects(missing));
 }
 
-fn send_sfx_size(
+fn calc_sfx_data_size(
     sfx_export_order: &IList<data::Name>,
     sound_effects: &CList<SoundEffectInput, Option<CompiledSoundEffect>>,
-    sender: &Sender,
-) {
+) -> usize {
     let sfx_size: usize = sfx_export_order
         .items()
         .iter()
@@ -539,24 +546,35 @@ fn send_sfx_size(
 
     let table_size = sfx_export_order.items().len() * COMMON_DATA_BYTES_PER_SOUND_EFFECT;
 
-    let data_size = table_size + sfx_size;
-
-    sender.send(CompilerOutput::SoundEffectsDataSize(data_size));
+    table_size + sfx_size
 }
 
 struct SongDependencies {
     instruments: data::UniqueNamesList<data::Instrument>,
     pitch_table: PitchTable,
+    common_data_no_sfx_size: usize,
+    sfx_data_size: usize,
+}
+
+impl SongDependencies {
+    fn common_data_size(&self) -> usize {
+        self.common_data_no_sfx_size + self.sfx_data_size
+    }
 }
 
 fn create_song_dependencies(
     instruments: &CList<data::Instrument, Option<Sample>>,
     pitch_table: PitchTable,
+    common_audio_data_no_sfx: &CommonAudioData,
+    sfx_export_order: &IList<data::Name>,
+    sound_effects: &CList<SoundEffectInput, Option<CompiledSoundEffect>>,
 ) -> Option<SongDependencies> {
     match data::validate_instrument_names(instruments.items().to_vec()) {
         Ok(instruments) => Some(SongDependencies {
             instruments,
             pitch_table,
+            common_data_no_sfx_size: common_audio_data_no_sfx.data().len(),
+            sfx_data_size: calc_sfx_data_size(sfx_export_order, sound_effects),
         }),
         Err(_) => None,
     }
@@ -586,6 +604,8 @@ impl SongCompiler {
         }
     }
 
+    // Will return a SongData if the song is too large
+    // (so the size can be retested when the sound effects are changed)
     fn compile_song(
         id: ItemId,
         name: Option<&data::Name>,
@@ -619,11 +639,22 @@ impl SongCompiler {
             }
         };
 
-        let to_gui = SongOutputData {
-            data_size: song_data.data().len(),
-            tick_count_table,
-        };
-        sender.send(CompilerOutput::Song(id, Ok(to_gui)));
+        match compiler::validate_song_size(&song_data, dep.common_data_size()) {
+            Ok(()) => {
+                let to_gui = SongOutputData {
+                    data_size: song_data.data().len(),
+                    echo_buffer: song_data.metadata().echo_buffer.edl,
+                    tick_count_table,
+                };
+                sender.send(CompilerOutput::Song(id, Ok(to_gui)));
+            }
+            Err(e) => {
+                sender.send(CompilerOutput::Song(
+                    id.clone(),
+                    Err(SongError::TooLarge(e)),
+                ));
+            }
+        }
 
         Some(song_data)
     }
@@ -710,6 +741,24 @@ impl SongCompiler {
         }
     }
 
+    fn recheck_song_sizes(&mut self, dependencies: &SongDependencies, sender: &Sender) {
+        let common_data_size = dependencies.common_data_size();
+
+        for (id, s) in self.songs.iter() {
+            if let Some(song_data) = &s.song_data {
+                match compiler::validate_song_size(song_data, common_data_size) {
+                    Ok(()) => {}
+                    Err(e) => {
+                        sender.send(CompilerOutput::Song(
+                            id.clone(),
+                            Err(SongError::TooLarge(e)),
+                        ));
+                    }
+                }
+            }
+        }
+    }
+
     fn edit_and_compile_song(
         &mut self,
         id: ItemId,
@@ -774,6 +823,22 @@ impl SongCompiler {
     }
 }
 
+fn update_sfx_data_size_and_recheck_all_songs(
+    song_dependencies: &mut Option<SongDependencies>,
+    songs: &mut SongCompiler,
+    sfx_export_order: &IList<data::Name>,
+    sound_effects: &CList<SoundEffectInput, Option<CompiledSoundEffect>>,
+    sender: &Sender,
+) {
+    let sfx_data_size = calc_sfx_data_size(sfx_export_order, sound_effects);
+    sender.send(CompilerOutput::SoundEffectsDataSize(sfx_data_size));
+
+    if let Some(dep) = song_dependencies {
+        dep.sfx_data_size = sfx_data_size;
+        songs.recheck_song_sizes(dep, sender);
+    }
+}
+
 fn bg_thread(
     parent_path: PathBuf,
     receiever: mpsc::Receiver<ToCompiler>,
@@ -827,9 +892,23 @@ fn bg_thread(
                 if instruments.is_changed() {
                     instruments.clear_changed_flag();
 
+                    // Sound Effects only require the name map to compile them
+                    if instruments.is_name_map_changed() {
+                        instruments.clear_name_map_changed_flag();
+
+                        let c = create_sfx_compiler(&instruments, &sender);
+                        sound_effects.recompile_all(c);
+                    }
+
                     match combine_sample_data(&instruments, &sender) {
                         Some((common, pt)) => {
-                            song_dependencies = create_song_dependencies(&instruments, pt);
+                            song_dependencies = create_song_dependencies(
+                                &instruments,
+                                pt,
+                                &common,
+                                &sfx_export_order,
+                                &sound_effects,
+                            );
                             common_audio_data_no_sfx = Some(common);
                         }
                         None => {
@@ -838,17 +917,23 @@ fn bg_thread(
                         }
                     }
 
-                    // Sound Effects only require the name map to compile them
-                    if instruments.is_name_map_changed() {
-                        instruments.clear_name_map_changed_flag();
-
-                        let c = create_sfx_compiler(&instruments, &sender);
-                        sound_effects.recompile_all(c);
-                    }
                     songs.compile_all_songs(&pf_songs, &song_dependencies, &sender);
                 }
             }
+
+            ToCompiler::FinishedEditingSoundEffects => {
+                update_sfx_data_size_and_recheck_all_songs(
+                    &mut song_dependencies,
+                    &mut songs,
+                    &sfx_export_order,
+                    &sound_effects,
+                    &sender,
+                );
+            }
+
             ToCompiler::SoundEffects(m) => {
+                let replace_all_message = matches!(m, ItemChanged::ReplaceAll(_));
+
                 let c = create_sfx_compiler(&instruments, &sender);
                 sound_effects.process_message(m, c);
 
@@ -858,7 +943,15 @@ fn bg_thread(
                     find_missing_sfx(&sfx_export_order, &sound_effects, &sender);
                 }
 
-                send_sfx_size(&sfx_export_order, &sound_effects, &sender);
+                if replace_all_message {
+                    update_sfx_data_size_and_recheck_all_songs(
+                        &mut song_dependencies,
+                        &mut songs,
+                        &sfx_export_order,
+                        &sound_effects,
+                        &sender,
+                    );
+                }
             }
             ToCompiler::SongChanged(id, mml) => {
                 songs.edit_and_compile_song(id, mml, &pf_songs, &song_dependencies, &sender);

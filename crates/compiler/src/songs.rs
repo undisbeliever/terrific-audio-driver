@@ -7,9 +7,9 @@
 #![allow(clippy::assertions_on_constants)]
 
 use crate::driver_constants::{
-    MAX_SONG_DATA_SIZE, MAX_SUBROUTINES, N_MUSIC_CHANNELS, SONG_HEADER_SIZE,
+    COMMON_DATA_ADDR, MAX_SONG_DATA_SIZE, MAX_SUBROUTINES, N_MUSIC_CHANNELS, SONG_HEADER_SIZE,
 };
-use crate::errors::SongError;
+use crate::errors::{SongError, SongTooLargeError};
 use crate::mml::{MetaData, MmlData};
 
 const NULL_OFFSET: u16 = 0xffff_u16;
@@ -130,4 +130,32 @@ pub fn song_data(mml_data: MmlData) -> Result<SongData, SongError> {
         metadata: mml_data.take_metadata(),
         data: out,
     })
+}
+
+pub fn validate_song_size(
+    song: &SongData,
+    common_data_size: usize,
+) -> Result<(), SongTooLargeError> {
+    let song_data_size = song.data().len();
+    let echo_buffer_size = song.metadata().echo_buffer.edl.buffer_size();
+
+    // Loader can only transfer data that is a multiple of 2 bytes
+    let common_data_size = common_data_size + (common_data_size % 2);
+    let song_data_size = song_data_size + (song_data_size % 2);
+
+    let total_size = common_data_size + song_data_size + echo_buffer_size;
+
+    let end_addr = usize::from(COMMON_DATA_ADDR) + total_size;
+
+    if end_addr <= u16::MAX.into() {
+        Ok(())
+    } else {
+        let too_large_by = end_addr - usize::from(u16::MAX) - 1;
+        Err(SongTooLargeError {
+            too_large_by,
+            common_data_size,
+            song_data_size,
+            echo_buffer_size,
+        })
+    }
 }
