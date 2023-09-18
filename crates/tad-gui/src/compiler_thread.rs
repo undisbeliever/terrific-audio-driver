@@ -18,6 +18,7 @@ extern crate compiler;
 use compiler::build_common_audio_data;
 use compiler::data;
 use compiler::data::{load_text_file_with_limit, TextFile};
+use compiler::driver_constants::COMMON_DATA_BYTES_PER_SOUND_EFFECT;
 use compiler::errors::{self, ExportSpcFileError};
 use compiler::mml_tick_count::{build_tick_count_table, MmlTickCountTable};
 use compiler::samples::{combine_samples, load_sample_for_instrument, Sample, SampleFileCache};
@@ -291,6 +292,13 @@ where
         &self.output
     }
 
+    fn get_output_for_name(&self, name: &data::Name) -> Option<&OutT> {
+        self.name_map
+            .get(name.as_str())
+            .and_then(|i: &u32| usize::try_from(*i).ok())
+            .and_then(|i: usize| self.output.get(i))
+    }
+
     fn name_map(&self) -> &HashMap<String, u32> {
         &self.name_map
     }
@@ -517,15 +525,20 @@ fn find_missing_sfx(
 }
 
 fn send_sfx_size(
+    sfx_export_order: &IList<data::Name>,
     sound_effects: &CList<SoundEffectInput, Option<CompiledSoundEffect>>,
     sender: &Sender,
 ) {
-    let sfx_size: usize = sound_effects
-        .output()
+    let sfx_size: usize = sfx_export_order
+        .items()
         .iter()
-        .filter_map(|o| o.as_ref().map(|d| d.data().len()))
+        .filter_map(|name| sound_effects.get_output_for_name(name))
+        .filter_map(Option::as_ref)
+        .map(|o| o.data().len())
         .sum();
-    let table_size = sound_effects.output().len() * 2;
+
+    let table_size = sfx_export_order.items().len() * COMMON_DATA_BYTES_PER_SOUND_EFFECT;
+
     let data_size = table_size + sfx_size;
 
     sender.send(CompilerOutput::SoundEffectsDataSize(data_size));
@@ -845,7 +858,7 @@ fn bg_thread(
                     find_missing_sfx(&sfx_export_order, &sound_effects, &sender);
                 }
 
-                send_sfx_size(&sound_effects, &sender);
+                send_sfx_size(&sfx_export_order, &sound_effects, &sender);
             }
             ToCompiler::SongChanged(id, mml) => {
                 songs.edit_and_compile_song(id, mml, &pf_songs, &song_dependencies, &sender);
