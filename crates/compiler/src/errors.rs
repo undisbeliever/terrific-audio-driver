@@ -1123,6 +1123,21 @@ impl Display for ExportSpcFileError {
 // Indented Multiline Display
 // ==========================
 
+const SFX_MML_ERROR_LIMIT: usize = 30;
+
+fn plus_more_errors_line(f: &mut std::fmt::Formatter, prefix: &str, n: usize) -> std::fmt::Result {
+    if n > SFX_MML_ERROR_LIMIT {
+        let n = n - SFX_MML_ERROR_LIMIT;
+        if n > 1 {
+            writeln!(f, "{}+ {} more errors", prefix, n)
+        } else {
+            writeln!(f, "{}+ {} more error", prefix, n)
+        }
+    } else {
+        Ok(())
+    }
+}
+
 pub struct ProjectFileErrorsIndentedDisplay<'a>(&'a ProjectFileErrors);
 
 impl Display for ProjectFileErrorsIndentedDisplay<'_> {
@@ -1219,9 +1234,10 @@ fn fmt_indented_sound_effect_error(
         writeln!(f, "    {}{}: no notes in sound effect", line_prefix, line_no)?;
     }
 
-    for e in &error.errors {
+    for e in error.errors.iter().take(SFX_MML_ERROR_LIMIT) {
         writeln!(f, "    {}{}: {}", line_prefix, e.0, e.1)?;
     }
+    plus_more_errors_line(f, "    ", error.errors.len())?;
 
     Ok(())
 }
@@ -1355,9 +1371,11 @@ impl Display for MmlCompileErrorsIndentedDisplay<'_> {
             None => writeln!(f, "Error compiling {}:", error.file_name)?,
         }
 
-        for e in &error.line_errors {
+        for e in error.line_errors.iter().take(SFX_MML_ERROR_LIMIT) {
             writeln!(f, "  {}:{} {}", error.file_name, e.0.line_number, e.1)?;
         }
+        plus_more_errors_line(f, "  ", error.line_errors.len())?;
+
         for e in &error.subroutine_errors {
             fmt_indented_channel_errors(f, e, &error.file_name, true)?;
         }
@@ -1388,12 +1406,21 @@ fn fmt_indented_channel_errors(
         writeln!(f, "channel {}", error.identifier.as_str())?;
     }
 
-    for e in &error.parse_errors {
+    let n_parse_errors = error.parse_errors.len();
+    for e in error.parse_errors.iter().take(SFX_MML_ERROR_LIMIT) {
         writeln!(f, "    {}:{}:{} {}", file_name, e.0.line_number, e.0.line_char, e.1)?;
     }
-    for e in &error.command_errors {
-        writeln!(f, "    {}:{}:{} {}", file_name, e.0.line_number, e.0.line_char, e.1)?;
+
+    if n_parse_errors < SFX_MML_ERROR_LIMIT {
+        for e in error
+            .command_errors
+            .iter()
+            .take(SFX_MML_ERROR_LIMIT - n_parse_errors)
+        {
+            writeln!(f, "    {}:{}:{} {}", file_name, e.0.line_number, e.0.line_char, e.1)?;
+        }
     }
+    plus_more_errors_line(f, "    ", n_errors)?;
 
     Ok(())
 }
