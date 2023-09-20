@@ -925,23 +925,23 @@ impl Display for MmlLineError {
         match self {
             Self::ValueError(e) => e.fmt(f),
 
-            Self::MmlTooLarge(len) => writeln!(
+            Self::MmlTooLarge(len) => write!(
                 f,
                 ": MML file too large ({} bytes, max {})",
                 len, MAX_MML_TEXT_LENGTH
             ),
-            Self::TooManySubroutines(len) => writeln!(
+            Self::TooManySubroutines(len) => write!(
                 f,
                 ": too many subroutines ({}, max {})",
                 len, MAX_SUBROUTINES
             ),
 
-            Self::NoIdentifier(c) => writeln!(f, "missing identifier after {}", c),
+            Self::NoIdentifier(c) => write!(f, "missing identifier after {}", c),
             Self::InvalidIdentifier(e) => e.fmt(f),
-            Self::UnknownChannel(name) => writeln!(f, "unknown channels {}", name),
-            Self::MissingInstrumentText => writeln!(f, "missing instrument"),
-            Self::MissingSubroutineText => writeln!(f, "missing subroutine"),
-            Self::CannotParseLine => writeln!(f, "cannot parse line"),
+            Self::UnknownChannel(name) => write!(f, "unknown channels {}", name),
+            Self::MissingInstrumentText => write!(f, "missing instrument"),
+            Self::MissingSubroutineText => write!(f, "missing subroutine"),
+            Self::CannotParseLine => write!(f, "cannot parse line"),
 
             Self::NoHeader => write!(f, "no header name"),
             Self::NoValue => write!(f, "no header value"),
