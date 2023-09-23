@@ -29,6 +29,7 @@ use crate::mml_command_parser::{
 };
 use crate::notes::{Note, SEMITONS_PER_OCTAVE};
 use crate::pitch_table::PitchTable;
+use crate::spc_file_export;
 use crate::time::{Bpm, TickClock, TickCounter, ZenLen, DEFAULT_BPM, DEFAULT_ZENLEN, TIMER_HZ};
 
 use std::cmp::max;
@@ -113,6 +114,13 @@ pub struct MetaData {
     pub tick_clock: TickClock,
 
     zenlen: ZenLen,
+
+    /// SPC export song length in seconds before fading out
+    /// (override calculated song duration)
+    pub spc_song_length: Option<u32>,
+
+    /// SPC export fadeout length in milliseconds
+    pub spc_fadeout_millis: Option<u32>,
 }
 
 #[derive(Debug, PartialEq)]
@@ -507,6 +515,9 @@ struct HeaderState {
     echo_fir: Option<[i8; FIR_FILTER_SIZE]>,
     echo_feedback: Option<i8>,
     echo_volume: Option<i8>,
+
+    spc_song_length: Option<u32>,
+    spc_fadeout_millis: Option<u32>,
 }
 
 impl HeaderState {
@@ -544,6 +555,24 @@ impl HeaderState {
                 }
                 self.tick_clock = Some(parse_u32(value)?.try_into()?);
             }
+            "#SpcSongLength" => match value.parse() {
+                Ok(i) => {
+                    if i > spc_file_export::MAX_SONG_LENGTH {
+                        return Err(MmlLineError::InvalidSpcSongLength);
+                    }
+                    self.spc_song_length = Some(i)
+                }
+                Err(_) => return Err(MmlLineError::InvalidSpcSongLength),
+            },
+            "#SpcFadeout" => match value.parse() {
+                Ok(i) => {
+                    if i > spc_file_export::MAX_FADEOUT_MILLIS {
+                        return Err(MmlLineError::InvalidSpcFadeout);
+                    }
+                    self.spc_fadeout_millis = Some(i)
+                }
+                Err(_) => return Err(MmlLineError::InvalidSpcSongLength),
+            },
 
             _ => (),
         }
@@ -564,6 +593,8 @@ fn parse_headers(lines: Vec<Line>) -> Result<MetaData, Vec<ErrorWithPos<MmlLineE
         echo_fir: None,
         echo_feedback: None,
         echo_volume: None,
+        spc_song_length: None,
+        spc_fadeout_millis: None,
     };
 
     for line in &lines {
@@ -609,6 +640,9 @@ fn parse_headers(lines: Vec<Line>) -> Result<MetaData, Vec<ErrorWithPos<MmlLineE
                 .tick_clock
                 .unwrap_or(DEFAULT_BPM.to_tick_clock().unwrap()),
             zenlen: header_state.zenlen.unwrap_or(DEFAULT_ZENLEN),
+
+            spc_song_length: header_state.spc_song_length,
+            spc_fadeout_millis: header_state.spc_fadeout_millis,
         })
     } else {
         Err(errors)

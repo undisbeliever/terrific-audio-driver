@@ -11,13 +11,18 @@ use crate::common_audio_data::CommonAudioData;
 use crate::driver_constants::{
     COMMON_DATA_ADDR, DRIVER_CODE_ADDR, DRIVER_LOADER_ADDR, DRIVER_SONG_PTR_ADDR,
 };
-use crate::echo::EchoEdl;
 use crate::errors::ExportSpcFileError;
+use crate::mml::MetaData;
 use crate::songs::SongData;
 
 const SPC_FILE_SIZE: usize = 0x10200;
 
 const AUDIO_RAM_SIZE: usize = 1 << 16;
+
+pub const MAX_SONG_LENGTH: u32 = 999;
+pub const MAX_FADEOUT_MILLIS: u32 = 99999;
+
+pub const DEFAULT_FADEOUT: u32 = 0;
 
 pub const S_DSP_ESA_REGISTER: usize = 0x6D;
 pub const S_DSP_EDL_REGISTER: usize = 0x7D;
@@ -48,9 +53,14 @@ fn write_id666_number_safe(out: &mut [u8], addr: usize, size: usize, value: u64)
     out[addr..addr + size].copy_from_slice(s.as_bytes());
 }
 
-fn song_length(duration: Option<Duration>, echo_edl: EchoEdl) -> u64 {
+fn song_length(duration: Option<Duration>, metadata: &MetaData) -> u64 {
+    if let Some(sl) = metadata.spc_song_length {
+        return sl.into();
+    }
+
     match duration {
         Some(d) => {
+            let echo_edl = metadata.echo_buffer.edl;
             let rounded_up = d + echo_edl.to_duration() + Duration::from_millis(999);
             rounded_up.as_secs()
         }
@@ -121,9 +131,12 @@ pub fn export_spc_file(
         write_id666_tag(header, 0xb1, 0x20, metadata.author.as_deref());
 
         // Song length in seconds
-        // ::TODO override song length in MML metadata::
-        let song_length = song_length(song_duration, echo_edl);
+        let song_length = song_length(song_duration, metadata);
         write_id666_number_safe(header, 0xa9, 3, song_length);
+
+        // Fadeout length in milliseconds
+        let fadeout_length = metadata.spc_fadeout_millis.unwrap_or(DEFAULT_FADEOUT).into();
+        write_id666_number_safe(header, 0xac, 5, fadeout_length);
     }
 
     // Audio-RAM contents

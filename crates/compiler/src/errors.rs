@@ -23,7 +23,7 @@ use crate::mml_command_parser::{
 };
 use crate::notes::{MidiNote, Note};
 use crate::time::{Bpm, TickClock, TickCounter, ZenLen};
-use crate::{mml, Octave};
+use crate::{mml, spc_file_export, Octave};
 
 use std::fmt::Display;
 use std::io;
@@ -337,6 +337,8 @@ pub enum MmlLineError {
     InvalidEchoVolume,
     CannotSetTempo,
     CannotSetTimer,
+    InvalidSpcSongLength,
+    InvalidSpcFadeout,
 
     // Instrument errors
     NoInstrument,
@@ -951,6 +953,16 @@ impl Display for MmlLineError {
             Self::InvalidEchoVolume => write!(f, "invalid echo volume"),
             Self::CannotSetTempo => write!(f, "tick clock already set by #Timer"),
             Self::CannotSetTimer => write!(f, "tick clock already set by #Tempo"),
+            Self::InvalidSpcSongLength => write!(
+                f,
+                "invalid spc export song length (expected 0 - {})",
+                spc_file_export::MAX_SONG_LENGTH
+            ),
+            Self::InvalidSpcFadeout => write!(
+                f,
+                "invalid spc export fadeout (expected 0 - {})",
+                spc_file_export::MAX_FADEOUT_MILLIS
+            ),
 
             Self::NoInstrument => write!(f, "no instrument"),
             Self::CannotFindInstrument(name) => write!(f, "cannot find instrument: {}", name),
