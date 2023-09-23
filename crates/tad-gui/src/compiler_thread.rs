@@ -111,6 +111,7 @@ pub enum CompilerOutput {
     MissingSoundEffects(Vec<data::Name>),
 
     SoundEffectsDataSize(usize),
+    LargestSongSize(usize),
 
     // The result of the last `ToCompiler::ExportSongToSpcFile` operation
     SpcFileResult(Result<(String, Vec<u8>), SpcFileError>),
@@ -726,6 +727,8 @@ impl SongCompiler {
                 self.songs.remove(id);
             }
         }
+
+        self.output_largest_song_size(sender);
     }
 
     fn compile_all_songs(
@@ -739,6 +742,8 @@ impl SongCompiler {
 
             s.song_data = Self::compile_song(id.clone(), song_name, &s.file, dependencies, sender);
         }
+
+        self.output_largest_song_size(sender);
     }
 
     fn recheck_song_sizes(&mut self, dependencies: &SongDependencies, sender: &Sender) {
@@ -786,6 +791,20 @@ impl SongCompiler {
                 v.insert(SongState { file, song_data });
             }
         }
+
+        self.output_largest_song_size(sender);
+    }
+
+    fn output_largest_song_size(&self, sender: &Sender) {
+        let max_total_size = self
+            .songs
+            .iter()
+            .filter_map(|(_k, v)| v.song_data.as_ref())
+            .map(|s| s.data_and_echo_size())
+            .max()
+            .unwrap_or(0);
+
+        sender.send(CompilerOutput::LargestSongSize(max_total_size));
     }
 
     fn export_to_spc_file(

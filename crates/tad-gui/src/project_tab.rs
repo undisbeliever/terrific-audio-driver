@@ -4,7 +4,7 @@
 //
 // SPDX-License-Identifier: MIT
 
-use crate::compiler_thread::SongOutput;
+use crate::compiler_thread::{CombineSamplesError, SongOutput};
 use crate::helpers::*;
 use crate::list_editor::{
     ListEditor, ListEditorTable, ListMessage, ListState, TableAction, TableCompilerOutput,
@@ -176,6 +176,8 @@ pub struct ProjectTab {
     pub song_table: ListEditorTable<SongMapping>,
 
     sound_effects_file: Output,
+
+    pub memory_stats: MemoryStats,
 }
 
 impl Tab for ProjectTab {
@@ -239,6 +241,9 @@ impl ProjectTab {
 
         right.end();
         left_right.end();
+
+        let memory_stats = MemoryStats::new(&mut group, 18);
+
         group.end();
 
         Self {
@@ -246,11 +251,118 @@ impl ProjectTab {
             sfx_export_order_table,
             song_table,
             sound_effects_file,
+            memory_stats,
         }
     }
 
     pub fn sfx_file_changed(&mut self, pf_path: &Path) {
         self.sound_effects_file
             .set_value(&pf_path.display().to_string());
+    }
+}
+
+pub struct MemoryStats {
+    samples_out: Output,
+    sfx_out: Output,
+    largest_song_out: Output,
+    free_space_out: Output,
+
+    samples_size: usize,
+    sfx_data_size: usize,
+
+    largest_song_size: usize,
+}
+
+impl MemoryStats {
+    const DRIVER_SIZE: usize = compiler::driver_constants::COMMON_DATA_ADDR as usize;
+    const AUDIO_RAM_SIZE: usize = compiler::driver_constants::AUDIO_RAM_SIZE;
+
+    fn new(parent: &mut Flex, width_ch_units: i32) -> Self {
+        let mut form = InputForm::new(width_ch_units);
+
+        let mut driver_out = form.add_input::<Output>("Audio Driver:");
+        Self::output_bytes(&mut driver_out, Self::DRIVER_SIZE);
+        driver_out.set_color(Color::Background);
+
+        let mut samples_out = form.add_input::<Output>("Samples:");
+        samples_out.set_color(Color::Background);
+
+        let mut sfx_out = form.add_input::<Output>("Sound effects:");
+        sfx_out.set_color(Color::Background);
+
+        let mut largest_song_out = form.add_input::<Output>("Largest song:");
+        largest_song_out.set_color(Color::Background);
+
+        let mut free_space_out = form.add_input::<Output>("Free space:");
+        free_space_out.set_color(Color::Background);
+
+        let group = form.take_group_end();
+        parent.fixed(&group, (input_height(&group) + group.pad()) * 5);
+
+        Self {
+            samples_out,
+            sfx_out,
+            largest_song_out,
+            free_space_out,
+
+            samples_size: 0,
+            sfx_data_size: 0,
+            largest_song_size: 0,
+        }
+    }
+
+    fn output_bytes(o: &mut Output, size: usize) {
+        o.set_value(&format!("{} bytes", size));
+        o.set_text_color(Color::Foreground);
+    }
+
+    fn update_free_space(&mut self) {
+        let common_data = self.samples_size + self.sfx_data_size;
+        // Add 1 if odd (loader can only transfer a multiple of 2 bytes)
+        let common_data = common_data + (common_data % 2);
+
+        let aram_used = Self::DRIVER_SIZE + common_data + self.largest_song_size;
+
+        if aram_used <= Self::AUDIO_RAM_SIZE {
+            Self::output_bytes(&mut self.free_space_out, Self::AUDIO_RAM_SIZE - aram_used);
+        } else {
+            if aram_used - self.largest_song_size < Self::AUDIO_RAM_SIZE {
+                self.free_space_out
+                    .set_value("ERROR: Largest song cannot fit in Audio-RAM");
+            } else {
+                self.free_space_out
+                    .set_value("ERROR: Common audio data cannot fit in Audio-RAM");
+            }
+            self.free_space_out.set_text_color(Color::Red);
+        }
+    }
+
+    pub fn samples_compiled(&mut self, r: &Result<usize, CombineSamplesError>) {
+        match r {
+            Ok(size) => {
+                self.samples_size = *size;
+                Self::output_bytes(&mut self.samples_out, *size);
+            }
+            Err(_) => {
+                self.samples_size = 0;
+                self.samples_out.set_value("ERROR");
+                self.samples_out.set_text_color(Color::Red);
+            }
+        }
+        self.update_free_space();
+    }
+
+    pub fn set_sfx_data_size(&mut self, s: usize) {
+        self.sfx_data_size = s;
+        Self::output_bytes(&mut self.sfx_out, s);
+        self.update_free_space();
+    }
+
+    pub fn set_largest_song(&mut self, s: usize) {
+        if s != self.largest_song_size {
+            self.largest_song_size = s;
+            Self::output_bytes(&mut self.largest_song_out, s);
+            self.update_free_space();
+        }
     }
 }

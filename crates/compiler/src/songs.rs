@@ -35,6 +35,14 @@ impl SongData {
     pub fn data(&self) -> &[u8] {
         &self.data
     }
+
+    pub fn data_and_echo_size(&self) -> usize {
+        let song_data_size = self.data().len();
+        // Loader can only a multiple of 2 bytes
+        let song_data_size = song_data_size + (song_data_size % 2);
+
+        song_data_size + self.metadata.echo_buffer.edl.buffer_size()
+    }
 }
 
 pub fn song_data(mml_data: MmlData) -> Result<SongData, SongError> {

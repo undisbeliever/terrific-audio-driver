@@ -418,9 +418,8 @@ impl Project {
             }
 
             CompilerOutput::CombineSamples(o) => {
-                // ::TODO do something with `o`::
-
                 self.samples_tab.set_combine_result(&o);
+                self.project_tab.memory_stats.samples_compiled(&o);
 
                 if let Err(e) = o {
                     dialog::message_title("Error combining samples");
@@ -432,7 +431,13 @@ impl Project {
 
             // ::TODO do something with these values::
             CompilerOutput::MissingSoundEffects(_missing) => (),
-            CompilerOutput::SoundEffectsDataSize(_size) => (),
+
+            CompilerOutput::SoundEffectsDataSize(size) => {
+                self.project_tab.memory_stats.set_sfx_data_size(size);
+            }
+            CompilerOutput::LargestSongSize(size) => {
+                self.project_tab.memory_stats.set_largest_song(size);
+            }
 
             CompilerOutput::SpcFileResult(r) => match r {
                 Ok((name, data)) => save_spc_file_dialog(name, data),
