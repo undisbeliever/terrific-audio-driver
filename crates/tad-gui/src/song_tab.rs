@@ -13,6 +13,7 @@ use crate::Message;
 use compiler::data::TextFile;
 use compiler::errors::MmlCompileErrors;
 
+use compiler::song_duration_string;
 use fltk::app;
 use fltk::button::Button;
 use fltk::enums::{Color, Font};
@@ -176,9 +177,10 @@ impl State {
             }
             Some(Ok(o)) => {
                 let text = format!(
-                    "MML compiled successfully: {} bytes (+{} echo buffer bytes)\n\n{}",
+                    "MML compiled successfully: {} bytes (+{} echo buffer bytes)\n\nDuration: {}\n{}",
                     o.data_size,
                     o.echo_buffer.buffer_size(),
+                    song_duration_string(o.duration),
                     o.tick_count_table
                 );
                 self.console_buffer.set_text(&text);

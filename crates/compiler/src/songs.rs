@@ -11,7 +11,9 @@ use crate::driver_constants::{
     SONG_HEADER_SIZE,
 };
 use crate::errors::{SongError, SongTooLargeError};
-use crate::mml::{MetaData, MmlData};
+use crate::mml::{calc_song_duration, MetaData, MmlData};
+
+use std::time::Duration;
 
 const NULL_OFFSET: u16 = 0xffff_u16;
 
@@ -26,6 +28,7 @@ fn validate_data_size(data: &[u8], expected_size: usize) -> Result<(), SongError
 pub struct SongData {
     metadata: MetaData,
     data: Vec<u8>,
+    duration: Option<Duration>,
 }
 
 impl SongData {
@@ -34,6 +37,9 @@ impl SongData {
     }
     pub fn data(&self) -> &[u8] {
         &self.data
+    }
+    pub fn duration(&self) -> Option<Duration> {
+        self.duration
     }
 
     pub fn data_and_echo_size(&self) -> usize {
@@ -136,9 +142,24 @@ pub fn song_data(mml_data: MmlData) -> Result<SongData, SongError> {
     validate_data_size(&out, total_size)?;
 
     Ok(SongData {
-        metadata: mml_data.take_metadata(),
+        duration: calc_song_duration(&mml_data),
         data: out,
+        metadata: mml_data.take_metadata(),
     })
+}
+
+pub fn song_duration_string(duration: Option<Duration>) -> String {
+    match duration {
+        Some(d) => {
+            // always round up
+            let ms = d.as_millis() + 999;
+            let minutes = ms / 60_000;
+            let seconds = (ms / 1_000) % 60;
+
+            format!("{}:{}", minutes, seconds)
+        }
+        None => "unknown".to_owned(),
+    }
 }
 
 pub fn validate_song_size(

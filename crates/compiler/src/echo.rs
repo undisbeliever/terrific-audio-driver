@@ -4,6 +4,8 @@
 //
 // SPDX-License-Identifier: MIT
 
+use std::time::Duration;
+
 use crate::driver_constants::{
     ECHO_BUFFER_EDL_MS, ECHO_BUFFER_EDL_SIZE, ECHO_BUFFER_MAX_EDL, ECHO_BUFFER_MIN_SIZE,
     FIR_FILTER_SIZE,
@@ -36,6 +38,10 @@ impl EchoEdl {
 
     pub fn esa_register(&self) -> u8 {
         self.echo_buffer_addr().to_le_bytes()[1]
+    }
+
+    pub fn to_duration(&self) -> Duration {
+        Duration::from_millis(u64::from(self.as_u8()) * u64::from(ECHO_BUFFER_EDL_MS))
     }
 }
 

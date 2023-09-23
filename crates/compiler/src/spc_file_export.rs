@@ -4,11 +4,14 @@
 //
 // SPDX-License-Identifier: MIT
 
+use std::time::Duration;
+
 use crate::audio_driver;
 use crate::common_audio_data::CommonAudioData;
 use crate::driver_constants::{
     COMMON_DATA_ADDR, DRIVER_CODE_ADDR, DRIVER_LOADER_ADDR, DRIVER_SONG_PTR_ADDR,
 };
+use crate::echo::EchoEdl;
 use crate::errors::ExportSpcFileError;
 use crate::songs::SongData;
 
@@ -33,6 +36,28 @@ fn write_id666_tag(out: &mut [u8], addr: usize, size: usize, s: Option<&str>) {
     }
 }
 
+// Will write 0 if `value` cannot fit in `size`
+fn write_id666_number_safe(out: &mut [u8], addr: usize, size: usize, value: u64) {
+    let value = if value < 10_u64.saturating_pow(size.try_into().unwrap()) {
+        value
+    } else {
+        0
+    };
+
+    let s = format!("{:>0width$}", value, width = size);
+    out[addr..addr + size].copy_from_slice(s.as_bytes());
+}
+
+fn song_length(duration: Option<Duration>, echo_edl: EchoEdl) -> u64 {
+    match duration {
+        Some(d) => {
+            let rounded_up = d + echo_edl.to_duration() + Duration::from_millis(999);
+            rounded_up.as_secs()
+        }
+        None => 0,
+    }
+}
+
 const _: () = assert!(
     audio_driver::AUDIO_DRIVER.len() + (DRIVER_CODE_ADDR as usize) <= (COMMON_DATA_ADDR as usize)
 );
@@ -43,6 +68,7 @@ pub fn export_spc_file(
 ) -> Result<Vec<u8>, ExportSpcFileError> {
     let common_audio_data = common_audio_data.data();
     let metadata = song_data.metadata();
+    let song_duration = song_data.duration();
     let song_data = song_data.data();
 
     let echo_edl = metadata.echo_buffer.edl;
@@ -87,13 +113,17 @@ pub fn export_spc_file(
 
         // ID666 tags
         // ::TODO add more ID666 tags::
-        // ::TODO add song length in seconds::
         // ::TODO parse date from `metadata`::
 
         // Title of song
         write_id666_tag(header, 0x2e, 0x20, metadata.title.as_deref());
         // Artist of song
         write_id666_tag(header, 0xb1, 0x20, metadata.author.as_deref());
+
+        // Song length in seconds
+        // ::TODO override song length in MML metadata::
+        let song_length = song_length(song_duration, echo_edl);
+        write_id666_number_safe(header, 0xa9, 3, song_length);
     }
 
     // Audio-RAM contents

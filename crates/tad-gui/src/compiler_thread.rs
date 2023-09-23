@@ -120,6 +120,7 @@ pub enum CompilerOutput {
 #[derive(Debug)]
 pub struct SongOutputData {
     pub data_size: usize,
+    pub duration: Option<std::time::Duration>,
     pub echo_buffer: EchoEdl,
     pub tick_count_table: MmlTickCountTable,
 }
@@ -644,6 +645,7 @@ impl SongCompiler {
             Ok(()) => {
                 let to_gui = SongOutputData {
                     data_size: song_data.data().len(),
+                    duration: song_data.duration(),
                     echo_buffer: song_data.metadata().echo_buffer.edl,
                     tick_count_table,
                 };

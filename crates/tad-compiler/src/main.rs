@@ -8,8 +8,8 @@ use clap::{Args, Parser, Subcommand};
 use compiler::data::{is_name_or_id, load_text_file_with_limit, Song, TextFile};
 use compiler::mml_tick_count::build_tick_count_table;
 use compiler::{
-    build_pitch_table, compile_mml, song_data, validate_song_size, CommonAudioData, PitchTable,
-    SongData, UniqueNamesProjectFile,
+    build_pitch_table, compile_mml, song_data, song_duration_string, validate_song_size,
+    CommonAudioData, PitchTable, SongData, UniqueNamesProjectFile,
 };
 use compiler::{sound_effects, Name};
 
@@ -215,16 +215,22 @@ fn compile_song(
         Err(e) => error!("{}", e.multiline_display()),
     };
 
-    if args.print_tick_counts {
-        let tick_counter_table = build_tick_count_table(&mml);
-        println!("Tick Counts:");
-        println!("{}", tick_counter_table);
-    }
+    let tick_count_table = match args.print_tick_counts {
+        true => Some(build_tick_count_table(&mml)),
+        false => None,
+    };
 
-    match song_data(mml) {
+    let song_data = match song_data(mml) {
         Ok(d) => d,
         Err(e) => error!("{}", e),
+    };
+
+    if let Some(tct) = tick_count_table {
+        println!("Duration: {}", song_duration_string(song_data.duration()));
+        println!("{}", tct);
     }
+
+    song_data
 }
 
 fn compile_song_data(args: CompileSongDataArgs) {

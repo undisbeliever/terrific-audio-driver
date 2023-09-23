@@ -29,11 +29,12 @@ use crate::mml_command_parser::{
 };
 use crate::notes::{Note, SEMITONS_PER_OCTAVE};
 use crate::pitch_table::PitchTable;
-use crate::time::{Bpm, TickClock, TickCounter, ZenLen, DEFAULT_BPM, DEFAULT_ZENLEN};
+use crate::time::{Bpm, TickClock, TickCounter, ZenLen, DEFAULT_BPM, DEFAULT_ZENLEN, TIMER_HZ};
 
 use std::cmp::max;
 use std::collections::HashMap;
 use std::ops::RangeInclusive;
+use std::time::Duration;
 
 pub const FIRST_MUSIC_CHANNEL: char = 'A';
 pub const LAST_MUSIC_CHANNEL: char = 'F';
@@ -162,6 +163,7 @@ pub struct ChannelData {
     bc_subroutine: Option<SubroutineId>,
 
     line_tick_counters: Vec<LineTickCounter>,
+    tempo_changes: Vec<(TickCounter, TickClock)>,
 }
 
 #[derive(Debug, PartialEq)]
@@ -746,6 +748,7 @@ struct MmlBytecodeGenerator<'a> {
     bc: Bytecode,
 
     line_tick_counters: Vec<LineTickCounter>,
+    tempo_changes: Vec<(TickCounter, TickClock)>,
 
     instrument: Option<usize>,
     prev_slurred_note: Option<Note>,
@@ -771,6 +774,7 @@ impl MmlBytecodeGenerator<'_> {
             subroutines,
             bc: Bytecode::new(is_subroutine, false),
             line_tick_counters: Vec::new(),
+            tempo_changes: Vec::new(),
             instrument: None,
             prev_slurred_note: None,
             mp: MpState::Disabled,
@@ -1239,6 +1243,14 @@ impl MmlBytecodeGenerator<'_> {
         }
     }
 
+    fn set_song_tick_clock(&mut self, tick_clock: TickClock) -> Result<(), MmlCommandError> {
+        let tc = (self.bc.get_tick_counter(), tick_clock);
+        self.tempo_changes.push(tc);
+
+        self.bc.set_song_tick_clock(tick_clock)?;
+        Ok(())
+    }
+
     fn process_command(
         &mut self,
         command: &MmlCommand,
@@ -1371,10 +1383,10 @@ impl MmlBytecodeGenerator<'_> {
             }
 
             &MmlCommand::SetSongTempo(bpm) => {
-                self.bc.set_song_tick_clock(bpm.to_tick_clock()?)?;
+                self.set_song_tick_clock(bpm.to_tick_clock()?)?;
             }
             &MmlCommand::SetSongTickClock(tick_clock) => {
-                self.bc.set_song_tick_clock(tick_clock)?;
+                self.set_song_tick_clock(tick_clock)?;
             }
         }
 
@@ -1458,6 +1470,7 @@ fn process_mml_commands(
             last_instrument: gen.instrument,
             bc_subroutine,
             line_tick_counters: gen.line_tick_counters,
+            tempo_changes: gen.tempo_changes,
         })
     } else {
         Err(errors)
@@ -1617,4 +1630,52 @@ pub fn compile_mml(
     } else {
         Err(errors)
     }
+}
+
+pub fn calc_song_duration(mml_data: &MmlData) -> Option<Duration> {
+    let set_song_tick_in_subroutine = mml_data
+        .subroutines
+        .iter()
+        .any(|c| !c.tempo_changes.is_empty());
+
+    if set_song_tick_in_subroutine {
+        return None;
+    }
+
+    let total_ticks: u32 = mml_data
+        .channels()
+        .iter()
+        .map(|c| c.tick_counter.value())
+        .max()
+        .unwrap_or(0);
+
+    let mut tempo_changes: Vec<(TickCounter, TickClock)> = mml_data
+        .channels
+        .iter()
+        .flat_map(|c| &c.tempo_changes)
+        .cloned()
+        .collect();
+    tempo_changes.sort_by_key(|(tc, _tempo)| tc.value());
+
+    let mut out: u64 = 0;
+    let mut prev_ticks = 0;
+    let mut prev_clock = mml_data.metadata.tick_clock;
+
+    for (ticks, clock) in tempo_changes {
+        let ticks = ticks.value();
+
+        let section_ticks = ticks - prev_ticks;
+        out += u64::from(section_ticks) * u64::from(prev_clock.as_u8());
+
+        prev_ticks = ticks;
+        prev_clock = clock;
+    }
+
+    let remaining_ticks = total_ticks - prev_ticks;
+    out += u64::from(remaining_ticks) * u64::from(prev_clock.as_u8());
+
+    const _: () = assert!(1_000_000 % TIMER_HZ == 0);
+    const MICRO_MUL: u64 = 1_000_000 / TIMER_HZ as u64;
+
+    Some(Duration::from_micros(out * MICRO_MUL))
 }

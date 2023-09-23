@@ -16,8 +16,8 @@ use crate::Message;
 
 use std::path::Path;
 
-use compiler::data;
 use compiler::data::Name;
+use compiler::{data, song_duration_string};
 
 use fltk::app;
 use fltk::enums::Color;
@@ -79,7 +79,7 @@ impl TableMapping for SfxExportOrderMapping {
 pub struct SongMapping;
 impl TableMapping for SongMapping {
     type DataType = data::Song;
-    type RowType = RowWithStatus<SimpleRow<3>>;
+    type RowType = RowWithStatus<SimpleRow<4>>;
 
     const CAN_CLONE: bool = false;
     const CAN_EDIT: bool = true;
@@ -92,6 +92,7 @@ impl TableMapping for SongMapping {
         vec![
             "Song Name".to_owned(),
             "Filename".to_owned(),
+            "Duration".to_owned(),
             "Data size".to_owned(),
         ]
     }
@@ -108,6 +109,7 @@ impl TableMapping for SongMapping {
         RowWithStatus::new_unchecked(SimpleRow::new([
             song.name.as_str().to_string(),
             song.source.to_string_lossy().to_string(),
+            String::new(),
             String::new(),
         ]))
     }
@@ -154,16 +156,22 @@ impl TableCompilerOutput for SongMapping {
     type CompilerOutputType = SongOutput;
 
     fn set_row_state(r: &mut Self::RowType, co: &Option<SongOutput>) -> bool {
-        let s = match co {
-            None => String::new(),
-            Some(Ok(o)) => format!("{} bytes", o.data_size),
-            Some(Err(e)) => e.to_string(),
+        let (duration, data_size) = match co {
+            None => (String::new(), String::new()),
+            Some(Ok(o)) => {
+                let dur = song_duration_string(o.duration);
+                let ds = format!("{} bytes", o.data_size);
+                (dur, ds)
+            }
+            Some(Err(e)) => (String::new(), e.to_string()),
         };
 
         let mut edited = false;
 
         edited |= r.set_status_optional_result(co);
-        edited |= r.columns.edit_column_string(2, s);
+        edited |= r.columns.edit_column_string(2, duration);
+
+        edited |= r.columns.edit_column_string(3, data_size);
 
         edited
     }
