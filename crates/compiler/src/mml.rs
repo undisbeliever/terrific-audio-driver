@@ -764,11 +764,17 @@ fn build_instrument_map(
 // MML Bytecode Generator
 // ======================
 
-#[derive(PartialEq)]
+#[derive(Clone, PartialEq)]
 enum MpState {
     Disabled,
     Manual,
     Mp(MpVibrato),
+}
+
+struct SkipLastLoopState {
+    instrument: Option<usize>,
+    prev_slurred_note: Option<Note>,
+    vibrato: Option<ManualVibrato>,
 }
 
 struct MmlBytecodeGenerator<'a> {
@@ -786,6 +792,8 @@ struct MmlBytecodeGenerator<'a> {
 
     mp: MpState,
     vibrato: Option<ManualVibrato>,
+
+    skip_last_loop_state: Option<SkipLastLoopState>,
 
     loop_point: Option<LoopPoint>,
 
@@ -810,6 +818,7 @@ impl MmlBytecodeGenerator<'_> {
             prev_slurred_note: None,
             mp: MpState::Disabled,
             vibrato: None,
+            skip_last_loop_state: None,
             loop_point: None,
             show_missing_set_instrument_error: !is_subroutine,
         }
@@ -1381,10 +1390,23 @@ impl MmlBytecodeGenerator<'_> {
 
             MmlCommand::SkipLastLoop => {
                 self.bc.skip_last_loop()?;
+
+                self.skip_last_loop_state = Some(SkipLastLoopState {
+                    instrument: self.instrument,
+                    prev_slurred_note: self.prev_slurred_note,
+                    vibrato: self.vibrato,
+                });
             }
 
             &MmlCommand::EndLoop(loop_count) => {
                 self.bc.end_loop(Some(loop_count))?;
+
+                if let Some(s) = &self.skip_last_loop_state {
+                    self.instrument = s.instrument;
+                    self.prev_slurred_note = s.prev_slurred_note;
+                    self.vibrato = s.vibrato;
+                }
+                self.skip_last_loop_state = None;
             }
 
             &MmlCommand::ChangePanAndOrVolume(pan, volume) => match (pan, volume) {

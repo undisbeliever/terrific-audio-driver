@@ -662,6 +662,97 @@ fn test_set_song_tick_clock() {
     assert_line_matches_bytecode("T90", &["set_song_tick_clock 90"]);
 }
 
+/// Test instrument is is correctly tracked after a *skip last loop* command.
+/// Assumes `test_set_instrument_merge_instrument_ids()` passes
+#[test]
+fn test_skip_last_loop_set_instrument_merge_1() {
+    let mml = format!(
+        r##"
+@d dummy_instrument
+@a inst_with_adsr
+
+A [ @a a : @d b ]2 @d
+"##
+    );
+
+    assert_mml_channel_a_matches_bytecode(
+        &mml,
+        &[
+            "start_loop",
+            "set_instrument inst_with_adsr",
+            "play_note a4 24",
+            "skip_last_loop",
+            "set_instrument dummy_instrument",
+            "play_note b4 24",
+            "end_loop 2",
+            "set_instrument dummy_instrument",
+        ],
+    );
+}
+
+/// Test instrument is is correctly tracked after a *skip last loop* command.
+/// Assumes `test_set_instrument_merge_instrument_ids()` passes
+#[test]
+fn test_skip_last_loop_set_instrument_merge_2() {
+    let mml = format!(
+        r##"
+@d dummy_instrument
+@a inst_with_adsr
+
+A [ @a a : @d b ]2 @a
+"##
+    );
+
+    assert_mml_channel_a_matches_bytecode(
+        &mml,
+        &[
+            "start_loop",
+            "set_instrument inst_with_adsr",
+            "play_note a4 24",
+            "skip_last_loop",
+            "set_instrument dummy_instrument",
+            "play_note b4 24",
+            "end_loop 2",
+        ],
+    );
+}
+
+/// Test that the vibrato state is correctly tracked after a *skip last loop* command.
+#[test]
+fn test_skip_last_loop_vibrato() {
+    assert_line_matches_bytecode(
+        "[MP2,4 a b : MP0 c]4 d",
+        &[
+            "start_loop",
+            "set_vibrato 1 4",
+            "play_note a4 24",
+            "play_note b4 24",
+            "skip_last_loop",
+            "set_vibrato_depth_and_play_note 0 c4 24",
+            "end_loop 4",
+            "set_vibrato_depth_and_play_note 0 d4 24",
+        ],
+    );
+}
+
+/// Test if `last_slurred_note` is correctly tracked after a *skip last loop* command.
+/// Assumes `test_portamento()` passes
+#[test]
+fn test_skip_last_loop_prev_slurred_note() {
+    assert_line_matches_bytecode(
+        "[d& : b]4 {df},,10",
+        &[
+            "start_loop",
+            "play_note d4 no_keyoff 24",
+            "skip_last_loop",
+            "play_note b4 24",
+            "end_loop 4",
+            // Previous slurred note is d4
+            "portamento f4 keyoff +10 24",
+        ],
+    );
+}
+
 // ----------------------------------------------------------------------------------------------
 
 /// Tests MML commands will still be merged if there are a change MML state command in between
