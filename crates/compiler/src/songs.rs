@@ -7,7 +7,8 @@
 #![allow(clippy::assertions_on_constants)]
 
 use crate::driver_constants::{
-    COMMON_DATA_ADDR, MAX_SONG_DATA_SIZE, MAX_SUBROUTINES, N_MUSIC_CHANNELS, SONG_HEADER_SIZE,
+    AUDIO_RAM_SIZE, COMMON_DATA_ADDR, MAX_SONG_DATA_SIZE, MAX_SUBROUTINES, N_MUSIC_CHANNELS,
+    SONG_HEADER_SIZE,
 };
 use crate::errors::{SongError, SongTooLargeError};
 use crate::mml::{MetaData, MmlData};
@@ -147,10 +148,10 @@ pub fn validate_song_size(
 
     let end_addr = usize::from(COMMON_DATA_ADDR) + total_size;
 
-    if end_addr <= u16::MAX.into() {
+    if end_addr <= AUDIO_RAM_SIZE {
         Ok(())
     } else {
-        let too_large_by = end_addr - usize::from(u16::MAX) - 1;
+        let too_large_by = end_addr - AUDIO_RAM_SIZE;
         Err(SongTooLargeError {
             too_large_by,
             common_data_size,

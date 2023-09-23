@@ -8,6 +8,8 @@
 
 #![allow(clippy::assertions_on_constants)]
 
+pub const AUDIO_RAM_SIZE: usize = 0x10000;
+
 pub const N_MUSIC_CHANNELS: usize = 6;
 
 // Song ID 0 is silence
