@@ -13,8 +13,8 @@ use crate::bytecode::{
     PitchOffsetPerTick, PlayNoteTicks, PortamentoVelocity, SubroutineId,
 };
 use crate::data::{self, TextFile, UniqueNamesList};
-use crate::driver_constants::{FIR_FILTER_SIZE, IDENTITY_FILTER, N_MUSIC_CHANNELS};
-use crate::echo::{parse_fir_filter_string, EchoBuffer, EchoEdl, EchoLength, DEFAULT_EDL};
+use crate::driver_constants::{IDENTITY_FILTER, N_MUSIC_CHANNELS};
+use crate::echo::{parse_fir_filter_string, EchoBuffer, EchoLength, DEFAULT_EDL};
 use crate::envelope::{Adsr, Envelope, Gain};
 use crate::errors::{
     ErrorWithPos, IdentifierError, MmlChannelError, MmlCommandError, MmlCompileErrors,
@@ -509,58 +509,86 @@ fn parse_u32(s: &str) -> Result<u32, ValueError> {
 }
 
 struct HeaderState {
-    zenlen: Option<ZenLen>,
-    tick_clock: Option<TickClock>,
-    echo_edl: Option<EchoEdl>,
-    echo_fir: Option<[i8; FIR_FILTER_SIZE]>,
-    echo_feedback: Option<i8>,
-    echo_volume: Option<i8>,
-
-    spc_song_length: Option<u32>,
-    spc_fadeout_millis: Option<u32>,
+    metadata: MetaData,
+    tempo_set: bool,
 }
 
 impl HeaderState {
+    fn new() -> Self {
+        Self {
+            tempo_set: false,
+            metadata: MetaData {
+                title: None,
+                date: None,
+                composer: None,
+                author: None,
+                copyright: None,
+                license: None,
+                echo_buffer: EchoBuffer {
+                    edl: DEFAULT_EDL,
+                    fir: IDENTITY_FILTER,
+                    feedback: 0,
+                    echo_volume: 0,
+                },
+                tick_clock: DEFAULT_BPM.to_tick_clock().unwrap(),
+                zenlen: DEFAULT_ZENLEN,
+
+                spc_song_length: None,
+                spc_fadeout_millis: None,
+            },
+        }
+    }
+
     fn parse_header(&mut self, header: &str, value: &str) -> Result<(), MmlLineError> {
         match header {
-            "#ZenLen" => self.zenlen = Some(parse_u32(value)?.try_into()?),
+            "#Title" => self.metadata.title = Some(value.to_owned()),
+            "#Date" => self.metadata.date = Some(value.to_owned()),
+            "#Composer" => self.metadata.composer = Some(value.to_owned()),
+            "#Author" => self.metadata.author = Some(value.to_owned()),
+            "#Copyright" => self.metadata.copyright = Some(value.to_owned()),
+            "#License" => self.metadata.license = Some(value.to_owned()),
+
+            "#ZenLen" => self.metadata.zenlen = parse_u32(value)?.try_into()?,
 
             "#EchoLength" => {
                 let echo_length = EchoLength::try_from(parse_u32(value)?)?;
-                self.echo_edl = Some(echo_length.to_edl());
+                self.metadata.echo_buffer.edl = echo_length.to_edl();
             }
 
-            "#FirFilter" => self.echo_fir = Some(parse_fir_filter_string(value)?),
+            "#FirFilter" => self.metadata.echo_buffer.fir = parse_fir_filter_string(value)?,
 
             "#EchoFeedback" => match value.parse() {
-                Ok(i) => self.echo_feedback = Some(i),
+                Ok(i) => self.metadata.echo_buffer.feedback = i,
                 Err(_) => return Err(MmlLineError::InvalidEchoFeedback),
             },
 
             "#EchoVolume" => match value.parse() {
-                Ok(i) => self.echo_volume = Some(i),
+                Ok(i) => self.metadata.echo_buffer.echo_volume = i,
                 Err(_) => return Err(MmlLineError::InvalidEchoVolume),
             },
 
             "#Tempo" => {
-                if self.tick_clock.is_some() {
+                if self.tempo_set {
                     return Err(MmlLineError::CannotSetTempo);
                 }
+                self.tempo_set = true;
+
                 let bpm = Bpm::try_from(parse_u32(value)?)?;
-                self.tick_clock = Some(bpm.to_tick_clock()?);
+                self.metadata.tick_clock = bpm.to_tick_clock()?;
             }
             "#Timer" => {
-                if self.tick_clock.is_some() {
+                if self.tempo_set {
                     return Err(MmlLineError::CannotSetTimer);
                 }
-                self.tick_clock = Some(parse_u32(value)?.try_into()?);
+                self.tempo_set = true;
+                self.metadata.tick_clock = parse_u32(value)?.try_into()?;
             }
             "#SpcSongLength" => match value.parse() {
                 Ok(i) => {
                     if i > spc_file_export::MAX_SONG_LENGTH {
                         return Err(MmlLineError::InvalidSpcSongLength);
                     }
-                    self.spc_song_length = Some(i)
+                    self.metadata.spc_song_length = Some(i)
                 }
                 Err(_) => return Err(MmlLineError::InvalidSpcSongLength),
             },
@@ -569,12 +597,12 @@ impl HeaderState {
                     if i > spc_file_export::MAX_FADEOUT_MILLIS {
                         return Err(MmlLineError::InvalidSpcFadeout);
                     }
-                    self.spc_fadeout_millis = Some(i)
+                    self.metadata.spc_fadeout_millis = Some(i)
                 }
                 Err(_) => return Err(MmlLineError::InvalidSpcSongLength),
             },
 
-            _ => (),
+            h => return Err(MmlLineError::UnknownHeader(h.to_owned())),
         }
 
         Ok(())
@@ -586,31 +614,23 @@ fn parse_headers(lines: Vec<Line>) -> Result<MetaData, Vec<ErrorWithPos<MmlLineE
 
     let mut map: HashMap<&str, &str> = HashMap::with_capacity(lines.len());
 
-    let mut header_state = HeaderState {
-        zenlen: None,
-        tick_clock: None,
-        echo_edl: None,
-        echo_fir: None,
-        echo_feedback: None,
-        echo_volume: None,
-        spc_song_length: None,
-        spc_fadeout_millis: None,
-    };
+    let mut header_state = HeaderState::new();
 
     for line in &lines {
         match split_header_line(line) {
             Ok((header, value)) => {
                 if !map.contains_key(header) {
                     map.insert(header, value.text);
+
+                    match header_state.parse_header(header, value.text) {
+                        Ok(()) => (),
+                        Err(e) => errors.push(ErrorWithPos(value.range(), e)),
+                    }
                 } else {
                     errors.push(ErrorWithPos(
                         line.position.to_range_str_len(header),
                         MmlLineError::DuplicateHeader(header.to_string()),
                     ));
-                }
-                match header_state.parse_header(header, value.text) {
-                    Ok(()) => (),
-                    Err(e) => errors.push(ErrorWithPos(value.range(), e)),
                 }
             }
             Err(e) => {
@@ -618,32 +638,9 @@ fn parse_headers(lines: Vec<Line>) -> Result<MetaData, Vec<ErrorWithPos<MmlLineE
             }
         }
     }
-    let map = map;
-
-    let get = |name: &str| -> Option<String> { map.get(name).copied().map(str::to_owned) };
 
     if errors.is_empty() {
-        Ok(MetaData {
-            title: get("#Title"),
-            date: get("#Date"),
-            composer: get("#Composer"),
-            author: get("#Author"),
-            copyright: get("#Copyright"),
-            license: get("#License"),
-            echo_buffer: EchoBuffer {
-                edl: header_state.echo_edl.unwrap_or(DEFAULT_EDL),
-                fir: header_state.echo_fir.unwrap_or(IDENTITY_FILTER),
-                feedback: header_state.echo_feedback.unwrap_or(0),
-                echo_volume: header_state.echo_volume.unwrap_or(0),
-            },
-            tick_clock: header_state
-                .tick_clock
-                .unwrap_or(DEFAULT_BPM.to_tick_clock().unwrap()),
-            zenlen: header_state.zenlen.unwrap_or(DEFAULT_ZENLEN),
-
-            spc_song_length: header_state.spc_song_length,
-            spc_fadeout_millis: header_state.spc_fadeout_millis,
-        })
+        Ok(header_state.metadata)
     } else {
         Err(errors)
     }

@@ -135,7 +135,10 @@ pub fn export_spc_file(
         write_id666_number_safe(header, 0xa9, 3, song_length);
 
         // Fadeout length in milliseconds
-        let fadeout_length = metadata.spc_fadeout_millis.unwrap_or(DEFAULT_FADEOUT).into();
+        let fadeout_length = metadata
+            .spc_fadeout_millis
+            .unwrap_or(DEFAULT_FADEOUT)
+            .into();
         write_id666_number_safe(header, 0xac, 5, fadeout_length);
     }
 
