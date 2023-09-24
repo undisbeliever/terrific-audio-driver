@@ -52,6 +52,14 @@ Echo values:
       Headphone users should turn down their volume when playing with echo filters/feedback.
  * `#EchoVolume` - Echo volume (-128 to 127) (`EVOL` S-DSP registers)
 
+<br/>
+
+The following will only affect exported .spc files:
+ * `#SpcSongLength` - Override the .spc file song length (in seconds)
+    * The maximum value is 999 seconds
+ * `#SpcFadeout` - The fadeout length in milliseconds
+    * The maximum value is 99999 milliseconds
+    * The default fadeout is 0 (no fadeout)
 
 
 Instruments
