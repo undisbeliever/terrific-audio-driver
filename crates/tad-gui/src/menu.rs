@@ -8,7 +8,7 @@ use crate::tabs::FileType;
 use crate::Message;
 
 extern crate fltk;
-use fltk::enums::Shortcut;
+use fltk::enums::{Key, Shortcut};
 use fltk::menu;
 use fltk::prelude::{MenuExt, WidgetExt};
 
@@ -29,6 +29,7 @@ const SAVE_ALL: &str = "&File/Save &All";
 
 const EXPORT_SPC: &str = "&File/&Export song to .spc";
 
+const SHOW_HELP_SYNTAX: &str = "&Help/&Syntax";
 const SHOW_ABOUT_TAB: &str = "&Help/&About";
 
 const QUIT: &str = "&File/&Quit";
@@ -95,6 +96,13 @@ impl Menu {
         });
 
         add(
+            SHOW_HELP_SYNTAX,
+            Shortcut::from_key(Key::F1),
+            fltk::menu::MenuFlag::Toggle,
+            || Message::ShowOrHideHelpSyntax,
+        );
+
+        add(
             SHOW_ABOUT_TAB,
             Shortcut::None,
             fltk::menu::MenuFlag::Normal,
@@ -139,6 +147,13 @@ impl Menu {
         self.deactivate(SAVE_ALL);
 
         self.deactivate(EXPORT_SPC);
+    }
+
+    pub fn is_help_syntax_checked(&self) -> bool {
+        self.menu_bar
+            .find_item(SHOW_HELP_SYNTAX)
+            .map(|m| m.value())
+            .unwrap_or(false)
     }
 
     pub fn project_loaded(&mut self) {

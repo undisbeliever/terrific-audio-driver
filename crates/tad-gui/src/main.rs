@@ -6,6 +6,7 @@
 
 mod compiler_thread;
 mod files;
+mod help;
 mod helpers;
 mod list_editor;
 mod menu;
@@ -29,6 +30,7 @@ use crate::files::{
     load_project_file_or_show_error_message, open_mml_file_dialog, open_sfx_file_dialog,
     save_spc_file_dialog,
 };
+use crate::help::HelpWidget;
 use crate::helpers::input_height;
 use crate::list_editor::{
     update_compiler_output, ListAction, ListMessage, ListState, ListWithCompilerOutput,
@@ -50,6 +52,8 @@ use compiler::{data, driver_constants, ProjectFile};
 use files::{new_project_dialog, open_instrument_sample_dialog, open_project_dialog};
 use fltk::dialog;
 use fltk::prelude::*;
+use help::HelpSection;
+use helpers::ch_units_to_width;
 
 use std::collections::HashMap;
 use std::env;
@@ -98,6 +102,7 @@ pub enum Message {
     FromCompiler(compiler_thread::CompilerOutput),
 
     ShowAboutTab,
+    ShowOrHideHelpSyntax,
     NewProject,
     OpenProject,
 }
@@ -376,6 +381,7 @@ impl Project {
 
             // Ignore these messages, they are handled by MainWindow
             Message::ShowAboutTab => (),
+            Message::ShowOrHideHelpSyntax => (),
             Message::OpenProject => (),
             Message::NewProject => (),
         }
@@ -722,9 +728,12 @@ struct MainWindow {
 
     window: fltk::window::Window,
     menu: Menu,
-    tabs: fltk::group::Tabs,
 
+    row: fltk::group::Flex,
+    tabs: fltk::group::Tabs,
     about_tab: AboutTab,
+
+    help_widget: HelpWidget,
 
     project: Option<Project>,
 }
@@ -746,18 +755,24 @@ impl MainWindow {
         menu.deactivate_project_items();
         col.fixed(menu.menu_bar(), input_height(menu.menu_bar()));
 
+        let mut row = fltk::group::Flex::default().row();
+
         let mut tabs = fltk::group::Tabs::default();
         tabs.set_tab_align(fltk::enums::Align::Right);
         tabs.handle_overflow(fltk::group::TabsOverflow::Compress);
-
-        let about_tab = AboutTab::new(tabs.clone(), sender.clone());
-
         tabs.end();
-        tabs.auto_layout();
 
+        let mut help = HelpWidget::new();
+        row.fixed(help.widget(), ch_units_to_width(&row, 60));
+        help.hide();
+
+        row.end();
         col.end();
 
         window.end();
+
+        let about_tab = AboutTab::new(tabs.clone(), sender.clone());
+        tabs.auto_layout();
 
         window.show();
 
@@ -795,8 +810,10 @@ impl MainWindow {
             sender,
             window,
             menu,
+            row,
             tabs,
             about_tab,
+            help_widget: help,
             project: None,
         }
     }
@@ -815,6 +832,23 @@ impl MainWindow {
         ));
     }
 
+    fn show_or_hide_help_syntax(&mut self) {
+        if self.menu.is_help_syntax_checked() {
+            let to_show = match &self.project {
+                Some(p) => match p.tab_manager.selected_file() {
+                    Some(FileType::SoundEffects) => Some(HelpSection::Bytecode),
+                    Some(FileType::Song(_)) => Some(HelpSection::Mml),
+                    _ => None,
+                },
+                None => None,
+            };
+            self.help_widget.show(to_show);
+        } else {
+            self.help_widget.hide();
+        }
+        self.row.layout();
+    }
+
     fn process(&mut self, message: Message) {
         match message {
             Message::QuitRequested => match &mut self.project {
@@ -826,6 +860,9 @@ impl MainWindow {
                 if let Some(p) = &mut self.project {
                     p.selected_tab_changed();
                 }
+            }
+            Message::ShowOrHideHelpSyntax => {
+                self.show_or_hide_help_syntax();
             }
             Message::OpenProject => {
                 if self.project.is_none() {

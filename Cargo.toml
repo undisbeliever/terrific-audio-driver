@@ -26,3 +26,10 @@ serde = { version="1.0.164", features=[ "derive" ] }
 serde_json = { version="1.0.97" }
 fltk = { version="1.4.12" }
 
+
+# External build dependencies
+#
+# Chose markdown as it has a security section in its readme file
+# NOTE: Must use the alpha build.  This is a new crate that reuses an old name.
+markdown = { version="1.0.0-alpha.14" }
+
