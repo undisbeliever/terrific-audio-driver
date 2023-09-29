@@ -21,7 +21,6 @@ use compiler::{Adsr, Envelope, Gain, STARTING_OCTAVE};
 use fltk::button::Button;
 
 use std::cell::RefCell;
-use std::ffi::OsStr;
 use std::rc::Rc;
 
 use fltk::app;
@@ -502,7 +501,7 @@ impl InstrumentEditor {
     }
 
     fn update_source_file_type(&mut self, source: &SourcePathBuf) {
-        let sft = match source.extension().and_then(OsStr::to_str) {
+        let sft = match source.extension() {
             Some(WAV_EXTENSION) => SourceFileType::Wav,
             Some(BRR_EXTENSION) => SourceFileType::Brr,
             _ => SourceFileType::Unknown,

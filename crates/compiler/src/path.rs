@@ -4,9 +4,11 @@
 //
 // SPDX-License-Identifier: MIT
 
+extern crate relative_path;
+use relative_path::{PathExt, RelativePathBuf, RelativeToError};
+
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-use std::ffi::OsStr;
 use std::fmt::Display;
 use std::path::{Path, PathBuf};
 
@@ -33,9 +35,15 @@ impl ParentPathBuf {
     }
 
     pub fn create_source_path(&self, path: &Path) -> SourcePathResult {
-        match path.strip_prefix(&self.0) {
-            Ok(p) => SourcePathResult::InsideProject(SourcePathBuf::new(p)),
-            Err(_) => SourcePathResult::OutsideProject(SourcePathBuf::new(path)),
+        match path.relative_to(&self.0) {
+            Ok(p) => {
+                if !p.starts_with("..") {
+                    SourcePathResult::InsideProject(SourcePathBuf::new(p))
+                } else {
+                    SourcePathResult::OutsideProject(SourcePathBuf::new(p))
+                }
+            }
+            Err(e) => SourcePathResult::Err(e),
         }
     }
 }
@@ -43,53 +51,50 @@ impl ParentPathBuf {
 pub enum SourcePathResult {
     InsideProject(SourcePathBuf),
     OutsideProject(SourcePathBuf),
+    Err(RelativeToError),
 }
 
 // The source path within the project JSON file, relative to ParentPathBuf.
 #[derive(Default, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct SourcePathBuf {
-    path: PathBuf,
+    relative_path: RelativePathBuf,
 }
 
 impl SourcePathBuf {
-    fn new(p: &Path) -> Self {
-        Self { path: p.to_owned() }
+    fn new(path: RelativePathBuf) -> Self {
+        Self {
+            relative_path: path,
+        }
     }
 
     pub fn as_str(&self) -> &str {
-        self.path.to_str().unwrap_or_default()
+        self.relative_path.as_str()
     }
 
-    pub fn file_stem_string(&self) -> Option<String> {
-        self.path
-            .file_stem()
-            .map(|s| s.to_string_lossy().to_string())
+    pub fn file_stem_string(&self) -> Option<&str> {
+        self.relative_path.file_stem()
     }
 
-    pub fn extension(&self) -> Option<&OsStr> {
-        self.path.extension()
+    pub fn extension(&self) -> Option<&str> {
+        self.relative_path.extension()
     }
 
     pub fn to_path(&self, parent_path: &ParentPathBuf) -> PathBuf {
-        parent_path.0.join(&self.path)
+        self.relative_path.to_logical_path(&parent_path.0)
     }
 
-    pub fn file_name_string(&self) -> String {
-        self.path
-            .file_name()
-            .unwrap_or(self.path.as_os_str())
-            .to_string_lossy()
-            .to_string()
+    pub fn file_name(&self) -> &str {
+        self.relative_path.file_name().unwrap_or("")
     }
 
     pub fn to_path_string(&self) -> PathString {
-        PathString(self.path.to_string_lossy().to_string())
+        PathString(self.as_str().to_owned())
     }
 }
 
 impl Display for SourcePathBuf {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.path.display().fmt(f)
+        self.relative_path.fmt(f)
     }
 }
 
@@ -98,7 +103,7 @@ impl Serialize for SourcePathBuf {
     where
         S: Serializer,
     {
-        self.path.serialize(serializer)
+        self.relative_path.serialize(serializer)
     }
 }
 
@@ -107,7 +112,7 @@ impl<'de> Deserialize<'de> for SourcePathBuf {
     where
         D: Deserializer<'de>,
     {
-        let p: &Path = Deserialize::deserialize(deserializer)?;
+        let p = Deserialize::deserialize(deserializer)?;
 
         Ok(Self::new(p))
     }

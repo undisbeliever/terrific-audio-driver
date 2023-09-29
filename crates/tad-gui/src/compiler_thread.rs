@@ -668,7 +668,7 @@ impl SongCompiler {
         let file = match load_text_file_with_limit(source_path, &self.parent_path) {
             Ok(f) => f,
             Err(_) => TextFile {
-                file_name: source_path.file_name_string(),
+                file_name: source_path.file_name().to_owned(),
                 path: None,
                 contents: String::new(),
             },

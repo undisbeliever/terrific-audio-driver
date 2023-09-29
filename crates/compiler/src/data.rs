@@ -416,7 +416,7 @@ pub fn load_text_file_with_limit(
     source: &SourcePathBuf,
     parent_path: &ParentPathBuf,
 ) -> Result<TextFile, FileError> {
-    _load_text_file_with_limit(&source.to_path(parent_path), source.file_name_string())
+    _load_text_file_with_limit(&source.to_path(parent_path), source.file_name().to_owned())
 }
 
 pub fn load_text_file_with_limit_path(path: &Path) -> Result<TextFile, FileError> {

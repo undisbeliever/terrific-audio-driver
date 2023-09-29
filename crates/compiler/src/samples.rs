@@ -19,7 +19,6 @@ use brr::{
 };
 
 use std::collections::HashMap;
-use std::ffi::OsStr;
 use std::fs;
 use std::io::Read;
 use std::sync::Arc;
@@ -181,7 +180,7 @@ pub fn load_sample_for_instrument(
     inst: &Instrument,
     cache: &mut SampleFileCache,
 ) -> Result<Sample, SampleError> {
-    let brr_sample = match inst.source.extension().and_then(OsStr::to_str) {
+    let brr_sample = match inst.source.extension() {
         Some(WAV_EXTENSION) => encode_wave_file(&inst.source, cache, &inst.loop_setting),
         Some(BRR_EXTENSION) => load_brr_file(&inst.source, cache, &inst.loop_setting),
         _ => Err(BrrError::UnknownFileType(inst.source.to_path_string())),

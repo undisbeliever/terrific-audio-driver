@@ -113,13 +113,17 @@ fn validate_pf_file_dialog_output(
                 "",
             );
             match choice {
-                // ::TODO make source_path a relative path (if possible)::
                 Some(1) => Some(PfFileDialogResult {
                     source_path,
                     full_path: path,
                 }),
                 _ => None,
             }
+        }
+        SourcePathResult::Err(e) => {
+            dialog::message_title("Error loading file");
+            dialog::alert_default(&e.to_string());
+            None
         }
     }
 }
@@ -325,7 +329,7 @@ pub fn add_song_to_pf_dialog(sender: &fltk::app::Sender<Message>, pd: &ProjectDa
             Some(i) => sender.send(Message::EditProjectSongs(ListMessage::ItemSelected(i))),
             None => {
                 let name = match p.source_path.file_stem_string() {
-                    Some(s) => Name::new_lossy(s),
+                    Some(s) => Name::new_lossy(s.to_owned()),
                     None => Name::try_new("song".to_owned()).unwrap(),
                 };
                 sender.send(Message::EditProjectSongs(ListMessage::Add(Song {

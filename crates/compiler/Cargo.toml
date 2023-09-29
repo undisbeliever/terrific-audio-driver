@@ -14,4 +14,5 @@ brr.workspace = true
 # External crates
 serde.workspace = true
 serde_json.workspace = true
+relative-path.workspace = true
 
