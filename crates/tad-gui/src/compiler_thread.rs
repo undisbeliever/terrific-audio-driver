@@ -10,7 +10,6 @@ use crate::Message;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::fmt::Display;
-use std::path::{Path, PathBuf};
 use std::sync::mpsc;
 use std::thread;
 
@@ -22,6 +21,7 @@ use compiler::driver_constants::COMMON_DATA_BYTES_PER_SOUND_EFFECT;
 use compiler::echo::EchoEdl;
 use compiler::errors::{self, ExportSpcFileError, SongTooLargeError};
 use compiler::mml_tick_count::{build_tick_count_table, MmlTickCountTable};
+use compiler::path::{ParentPathBuf, SourcePathBuf};
 use compiler::samples::{combine_samples, load_sample_for_instrument, Sample, SampleFileCache};
 use compiler::sound_effects::blank_compiled_sound_effects;
 use compiler::sound_effects::{compile_sound_effect_input, CompiledSoundEffect, SoundEffectInput};
@@ -85,8 +85,8 @@ pub enum ToCompiler {
 
     ExportSongToSpcFile(ItemId),
 
-    RemoveFileFromSampleCache(PathBuf),
-    RecompileInstrumentsUsingSample(PathBuf),
+    RemoveFileFromSampleCache(SourcePathBuf),
+    RecompileInstrumentsUsingSample(SourcePathBuf),
 }
 
 pub type InstrumentOutput = Result<usize, errors::SampleError>;
@@ -587,19 +587,12 @@ struct SongState {
     song_data: Option<SongData>,
 }
 struct SongCompiler {
-    parent_path: PathBuf,
+    parent_path: ParentPathBuf,
     songs: HashMap<ItemId, SongState>,
 }
 
-fn file_name(p: &Path) -> String {
-    p.file_name()
-        .unwrap_or(p.as_os_str())
-        .to_string_lossy()
-        .to_string()
-}
-
 impl SongCompiler {
-    fn new(parent_path: PathBuf) -> Self {
+    fn new(parent_path: ParentPathBuf) -> Self {
         Self {
             parent_path,
             songs: HashMap::new(),
@@ -665,19 +658,18 @@ impl SongCompiler {
     fn load_song(
         &self,
         id: ItemId,
-        path: &Path,
+        source_path: &SourcePathBuf,
         pf_songs: &IList<data::Song>,
         dependencies: &Option<SongDependencies>,
         sender: &Sender,
     ) -> SongState {
-        let path = self.parent_path.join(path);
         let song_name = pf_songs.get(&id).map(|s| &s.name);
 
-        let file = match load_text_file_with_limit(&path) {
+        let file = match load_text_file_with_limit(source_path, &self.parent_path) {
             Ok(f) => f,
             Err(_) => TextFile {
-                file_name: file_name(&path),
-                path: Some(path),
+                file_name: source_path.file_name_string(),
+                path: None,
                 contents: String::new(),
             },
         };
@@ -861,7 +853,7 @@ fn update_sfx_data_size_and_recheck_all_songs(
 }
 
 fn bg_thread(
-    parent_path: PathBuf,
+    parent_path: ParentPathBuf,
     receiever: mpsc::Receiver<ToCompiler>,
     sender: fltk::app::Sender<Message>,
 ) {
@@ -902,9 +894,9 @@ fn bg_thread(
 
                 song_dependencies = None;
             }
-            ToCompiler::RecompileInstrumentsUsingSample(pf_path) => {
+            ToCompiler::RecompileInstrumentsUsingSample(source_path) => {
                 let c = create_instrument_compiler(&mut sample_file_cache, &sender);
-                instruments.recompile_all_if(c, |inst| inst.source == pf_path);
+                instruments.recompile_all_if(c, |inst| inst.source == source_path);
 
                 song_dependencies = None;
             }
@@ -982,15 +974,15 @@ fn bg_thread(
                 sender.send(CompilerOutput::SpcFileResult(r));
             }
 
-            ToCompiler::RemoveFileFromSampleCache(pf_path) => {
-                sample_file_cache.remove_path(&pf_path);
+            ToCompiler::RemoveFileFromSampleCache(source_path) => {
+                sample_file_cache.remove_path(&source_path);
             }
         }
     }
 }
 
 fn monitor_thread(
-    parent_path: PathBuf,
+    parent_path: ParentPathBuf,
     reciever: mpsc::Receiver<ToCompiler>,
     sender: fltk::app::Sender<Message>,
 ) {
@@ -1018,7 +1010,7 @@ fn monitor_thread(
 }
 
 pub fn create_bg_thread(
-    parent_path: PathBuf,
+    parent_path: ParentPathBuf,
     reciever: mpsc::Receiver<ToCompiler>,
     sender: fltk::app::Sender<Message>,
 ) -> thread::JoinHandle<()> {

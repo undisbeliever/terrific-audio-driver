@@ -23,6 +23,7 @@ pub mod echo;
 pub mod errors;
 pub mod mml;
 pub mod mml_tick_count;
+pub mod path;
 pub mod samples;
 pub mod sound_effects;
 

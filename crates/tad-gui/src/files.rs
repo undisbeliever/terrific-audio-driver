@@ -11,6 +11,7 @@ use crate::{Message, ProjectData, SoundEffectsData};
 
 use compiler::data;
 use compiler::data::{load_text_file_with_limit, Name, ProjectFile, Song, TextFile};
+use compiler::path::{ParentPathBuf, SourcePathBuf, SourcePathResult};
 use compiler::sound_effects::{
     build_sound_effects_file, load_sound_effects_file, SoundEffectsFile,
 };
@@ -64,8 +65,8 @@ fn save_file_dialog(title: &str, filter: &str, default_extension: &str) -> Optio
 }
 
 pub struct PfFileDialogResult {
-    pub path: PathBuf,
-    pub pf_path: PathBuf,
+    pub full_path: PathBuf,
+    pub source_path: SourcePathBuf,
 }
 
 fn validate_pf_file_dialog_output(
@@ -94,12 +95,12 @@ fn validate_pf_file_dialog_output(
         return None;
     }
 
-    match path.strip_prefix(&pd.pf_parent_path) {
-        Ok(p) => Some(PfFileDialogResult {
-            pf_path: p.to_owned(),
-            path,
+    match pd.pf_parent_path.create_source_path(&path) {
+        SourcePathResult::InsideProject(source_path) => Some(PfFileDialogResult {
+            source_path,
+            full_path: path,
         }),
-        Err(_) => {
+        SourcePathResult::OutsideProject(source_path) => {
             dialog::message_title("Warning");
             let choice = dialog::choice2_default(
                 &format!(
@@ -112,10 +113,10 @@ fn validate_pf_file_dialog_output(
                 "",
             );
             match choice {
-                // ::TODO make pf_path a relative path (if possible)::
+                // ::TODO make source_path a relative path (if possible)::
                 Some(1) => Some(PfFileDialogResult {
-                    pf_path: path.clone(),
-                    path,
+                    source_path,
+                    full_path: path,
                 }),
                 _ => None,
             }
@@ -127,20 +128,20 @@ fn pf_open_file_dialog(
     pd: &ProjectData,
     title: &str,
     filter: &str,
-    old_pf_path: Option<&Path>,
+    old_source_path: Option<&SourcePathBuf>,
 ) -> Option<PfFileDialogResult> {
     let mut dialog = dialog::NativeFileChooser::new(dialog::FileDialogType::BrowseFile);
     dialog.set_title(title);
     dialog.set_filter(filter);
     dialog.set_option(dialog::FileDialogOptions::UseFilterExt);
 
-    match old_pf_path {
+    match old_source_path {
         Some(p) => {
-            let p = pd.pf_parent_path.join(p);
+            let p = p.to_path(&pd.pf_parent_path);
             let _ = dialog.set_directory(&p);
         }
         None => {
-            let _ = dialog.set_directory(&pd.pf_parent_path);
+            let _ = dialog.set_directory(pd.pf_parent_path.as_path());
         }
     };
 
@@ -163,7 +164,7 @@ fn pf_save_file_dialog(
         dialog::FileDialogOptions::SaveAsConfirm | dialog::FileDialogOptions::UseFilterExt,
     );
 
-    let _ = dialog.set_directory(&path.unwrap_or(&pd.pf_parent_path));
+    let _ = dialog.set_directory(&path.unwrap_or(pd.pf_parent_path.as_path()));
 
     dialog.show();
 
@@ -265,12 +266,12 @@ pub fn load_project_file_or_show_error_message(path: &Path) -> Option<ProjectFil
     }
 }
 
-pub fn open_sfx_file_dialog(pd: &ProjectData) -> Option<(PathBuf, SoundEffectsFile)> {
+pub fn open_sfx_file_dialog(pd: &ProjectData) -> Option<(SourcePathBuf, SoundEffectsFile)> {
     let p = pf_open_file_dialog(pd, "Load sound effects file", SOUND_EFFECTS_FILTER, None);
 
     match p {
-        Some(p) => match load_sfx_file(&p.path) {
-            Some(sfx) => Some((p.pf_path, sfx)),
+        Some(p) => match load_sfx_file(&p.source_path, &pd.pf_parent_path) {
+            Some(sfx) => Some((p.source_path, sfx)),
             None => None,
         },
         None => None,
@@ -279,13 +280,16 @@ pub fn open_sfx_file_dialog(pd: &ProjectData) -> Option<(PathBuf, SoundEffectsFi
 
 pub fn load_pf_sfx_file(pd: &ProjectData) -> Option<SoundEffectsFile> {
     match &pd.sound_effects_file {
-        Some(path) => load_sfx_file(&pd.pf_parent_path.join(path)),
+        Some(source) => load_sfx_file(source, &pd.pf_parent_path),
         None => None,
     }
 }
 
-fn load_sfx_file(path: &Path) -> Option<SoundEffectsFile> {
-    match load_sound_effects_file(path) {
+fn load_sfx_file(
+    source_path: &SourcePathBuf,
+    parent_path: &ParentPathBuf,
+) -> Option<SoundEffectsFile> {
+    match load_sound_effects_file(source_path, parent_path) {
         Ok(sfx_file) => Some(sfx_file),
         Err(e) => {
             dialog::message_title("Error loading sound effects file");
@@ -295,8 +299,8 @@ fn load_sfx_file(path: &Path) -> Option<SoundEffectsFile> {
     }
 }
 
-pub fn load_mml_file(full_path: &Path) -> Option<TextFile> {
-    match load_text_file_with_limit(full_path) {
+pub fn load_mml_file(source: &SourcePathBuf, parent_path: &ParentPathBuf) -> Option<TextFile> {
+    match load_text_file_with_limit(source, parent_path) {
         Ok(f) => Some(f),
         Err(e) => {
             dialog::message_title("Error loading MML file");
@@ -316,17 +320,17 @@ pub fn add_song_to_pf_dialog(sender: &fltk::app::Sender<Message>, pd: &ProjectDa
             .project_songs
             .list()
             .item_iter()
-            .position(|s| s.source == p.pf_path)
+            .position(|s| s.source == p.source_path)
         {
             Some(i) => sender.send(Message::EditProjectSongs(ListMessage::ItemSelected(i))),
             None => {
-                let name = match p.pf_path.file_stem() {
-                    Some(s) => Name::new_lossy(s.to_string_lossy().to_string()),
+                let name = match p.source_path.file_stem_string() {
+                    Some(s) => Name::new_lossy(s),
                     None => Name::try_new("song".to_owned()).unwrap(),
                 };
                 sender.send(Message::EditProjectSongs(ListMessage::Add(Song {
                     name,
-                    source: p.pf_path,
+                    source: p.source_path,
                 })))
             }
         }
@@ -345,7 +349,7 @@ pub fn open_instrument_sample_dialog(
     };
 
     if let Some(p) = pf_open_file_dialog(pd, "Select sample", SAMPLE_FILTERS, Some(&inst.source)) {
-        let new_source = p.pf_path;
+        let new_source = p.source_path;
 
         // Remove the previous and new files from sample cache to ensure any file changes are loaded
         let _ = compiler_sender.send(ToCompiler::RemoveFileFromSampleCache(inst.source.clone()));
@@ -453,7 +457,7 @@ where
         None => return None,
     };
 
-    if save_data(data, &p.path) {
+    if save_data(data, &p.full_path) {
         Some(p)
     } else {
         None

@@ -8,6 +8,7 @@
 
 use crate::data::{Instrument, LoopSetting, UniqueNamesProjectFile};
 use crate::errors::{BrrError, SampleAndInstrumentDataError, SampleError, TaggedSampleError};
+use crate::path::{ParentPathBuf, SourcePathBuf};
 use crate::pitch_table::{
     instrument_pitch, merge_pitch_vec, sort_pitches_iterator, InstrumentPitch, PitchTable,
 };
@@ -21,7 +22,6 @@ use std::collections::HashMap;
 use std::ffi::OsStr;
 use std::fs;
 use std::io::Read;
-use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 const MAX_BRR_SAMPLE_LOAD: u64 = 16 * 1024;
@@ -31,34 +31,38 @@ const MAX_WAV_SAMPLES: usize =
 pub const WAV_EXTENSION: &str = "wav";
 pub const BRR_EXTENSION: &str = "brr";
 
-fn read_file_limited(filename: &Path, max_size: u64) -> Result<Vec<u8>, BrrError> {
-    let file = match fs::File::open(filename) {
+fn read_file_limited(
+    source: &SourcePathBuf,
+    parent: &ParentPathBuf,
+    max_size: u64,
+) -> Result<Vec<u8>, BrrError> {
+    let file = match fs::File::open(source.to_path(parent)) {
         Ok(file) => file,
-        Err(e) => return Err(BrrError::IoError(Arc::from((filename.to_path_buf(), e)))),
+        Err(e) => return Err(BrrError::IoError(Arc::from((source.to_path_string(), e)))),
     };
 
     let mut buffer = Vec::new();
 
     match file.take(max_size + 1).read_to_end(&mut buffer) {
         Ok(_) => (),
-        Err(e) => return Err(BrrError::IoError(Arc::from((filename.to_path_buf(), e)))),
+        Err(e) => return Err(BrrError::IoError(Arc::from((source.to_path_string(), e)))),
     }
 
     if buffer.len() > max_size as usize {
-        return Err(BrrError::FileTooLarge(filename.to_path_buf()));
+        return Err(BrrError::FileTooLarge(source.to_path_string()));
     }
 
     Ok(buffer)
 }
 
 pub struct SampleFileCache {
-    parent_path: PathBuf,
-    brr_files: HashMap<PathBuf, Result<ValidBrrFile, BrrError>>,
-    wav_files: HashMap<PathBuf, Result<MonoPcm16WaveFile, BrrError>>,
+    parent_path: ParentPathBuf,
+    brr_files: HashMap<SourcePathBuf, Result<ValidBrrFile, BrrError>>,
+    wav_files: HashMap<SourcePathBuf, Result<MonoPcm16WaveFile, BrrError>>,
 }
 
 impl SampleFileCache {
-    pub fn new(parent_path: PathBuf) -> Self {
+    pub fn new(parent_path: ParentPathBuf) -> Self {
         Self {
             parent_path,
             brr_files: HashMap::new(),
@@ -71,44 +75,46 @@ impl SampleFileCache {
         self.wav_files.clear();
     }
 
-    pub fn remove_path(&mut self, path: &Path) {
-        self.brr_files.remove(path);
-        self.wav_files.remove(path);
+    pub fn remove_path(&mut self, source: &SourcePathBuf) {
+        self.brr_files.remove(source);
+        self.wav_files.remove(source);
     }
 
-    fn load_brr_file(&mut self, path: &Path) -> &Result<ValidBrrFile, BrrError> {
-        self.brr_files.entry(path.to_path_buf()).or_insert_with(|| {
-            let p = &self.parent_path.join(path);
-            match read_file_limited(p, MAX_BRR_SAMPLE_LOAD) {
+    fn load_brr_file(&mut self, source: &SourcePathBuf) -> &Result<ValidBrrFile, BrrError> {
+        self.brr_files.entry(source.to_owned()).or_insert_with(|| {
+            match read_file_limited(source, &self.parent_path, MAX_BRR_SAMPLE_LOAD) {
                 Ok(data) => match parse_brr_file(&data) {
                     Ok(b) => Ok(b),
-                    Err(e) => Err(BrrError::BrrParseError(path.to_path_buf(), e)),
+                    Err(e) => Err(BrrError::BrrParseError(source.to_path_string(), e)),
                 },
                 Err(e) => Err(e),
             }
         })
     }
 
-    fn load_wav_file(&mut self, path: &Path) -> &Result<MonoPcm16WaveFile, BrrError> {
-        self.wav_files.entry(path.to_path_buf()).or_insert_with(|| {
-            let p = self.parent_path.join(path);
+    fn load_wav_file(&mut self, source: &SourcePathBuf) -> &Result<MonoPcm16WaveFile, BrrError> {
+        self.wav_files.entry(source.to_owned()).or_insert_with(|| {
+            let p = &source.to_path(&self.parent_path);
             match fs::File::open(p) {
                 Ok(mut file) => match read_16_bit_mono_wave_file(&mut file, MAX_WAV_SAMPLES) {
                     Ok(w) => Ok(w),
-                    Err(e) => Err(BrrError::WaveFileError(Arc::from((path.to_path_buf(), e)))),
+                    Err(e) => Err(BrrError::WaveFileError(Arc::from((
+                        source.to_path_string(),
+                        e,
+                    )))),
                 },
-                Err(e) => Err(BrrError::IoError(Arc::from((path.to_path_buf(), e)))),
+                Err(e) => Err(BrrError::IoError(Arc::from((source.to_path_string(), e)))),
             }
         })
     }
 }
 
 fn encode_wave_file(
-    path: &Path,
+    source: &SourcePathBuf,
     cache: &mut SampleFileCache,
     loop_setting: &LoopSetting,
 ) -> Result<BrrSample, BrrError> {
-    let wav = match cache.load_wav_file(path) {
+    let wav = match cache.load_wav_file(source) {
         Ok(w) => w,
         Err(e) => return Err(e.clone()),
     };
@@ -130,12 +136,12 @@ fn encode_wave_file(
         loop_resets_filter,
     ) {
         Ok(b) => Ok(b),
-        Err(e) => Err(BrrError::BrrEncodeError(path.to_path_buf(), e)),
+        Err(e) => Err(BrrError::BrrEncodeError(source.to_path_string(), e)),
     }
 }
 
 fn load_brr_file(
-    path: &Path,
+    source: &SourcePathBuf,
     cache: &mut SampleFileCache,
     loop_setting: &LoopSetting,
 ) -> Result<BrrSample, BrrError> {
@@ -146,14 +152,14 @@ fn load_brr_file(
         ls => return Err(BrrError::InvalidLoopSettingBrr(ls.clone())),
     };
 
-    let brr = match cache.load_brr_file(path) {
+    let brr = match cache.load_brr_file(source) {
         Ok(b) => b,
         Err(e) => return Err(e.clone()),
     };
 
     match brr.clone().into_brr_sample(loop_point) {
         Ok(b) => Ok(b),
-        Err(e) => Err(BrrError::BrrParseError(path.to_path_buf(), e)),
+        Err(e) => Err(BrrError::BrrParseError(source.to_path_string(), e)),
     }
 }
 
@@ -178,7 +184,7 @@ pub fn load_sample_for_instrument(
     let brr_sample = match inst.source.extension().and_then(OsStr::to_str) {
         Some(WAV_EXTENSION) => encode_wave_file(&inst.source, cache, &inst.loop_setting),
         Some(BRR_EXTENSION) => load_brr_file(&inst.source, cache, &inst.loop_setting),
-        _ => Err(BrrError::UnknownFileType(inst.source.clone())),
+        _ => Err(BrrError::UnknownFileType(inst.source.to_path_string())),
     };
 
     let pitch = instrument_pitch(inst);

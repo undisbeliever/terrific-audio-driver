@@ -14,9 +14,8 @@ use crate::tables::{RowWithStatus, SimpleRow, TableEvent};
 use crate::tabs::{FileType, Tab};
 use crate::Message;
 
-use std::path::Path;
-
 use compiler::data::Name;
+use compiler::path::SourcePathBuf;
 use compiler::{data, song_duration_string};
 
 use fltk::app;
@@ -108,7 +107,7 @@ impl TableMapping for SongMapping {
     fn new_row(song: &data::Song) -> Self::RowType {
         RowWithStatus::new_unchecked(SimpleRow::new([
             song.name.as_str().to_string(),
-            song.source.to_string_lossy().to_string(),
+            song.source.as_str().to_string(),
             String::new(),
             String::new(),
         ]))
@@ -117,7 +116,7 @@ impl TableMapping for SongMapping {
     fn edit_row(r: &mut Self::RowType, song: &data::Song) -> bool {
         let mut edited = false;
 
-        let filename = song.source.to_string_lossy();
+        let filename = song.source.as_str().to_string();
 
         edited |= r.columns.edit_column(0, song.name.as_str());
         edited |= r.columns.edit_column(1, filename.as_ref());
@@ -206,7 +205,7 @@ impl ProjectTab {
     pub fn new(
         sfx_list: &impl ListState<Item = Name>,
         song_list: &impl ListState<Item = data::Song>,
-        sfx_pf_path: Option<&Path>,
+        sfx_source_path: Option<&SourcePathBuf>,
         sender: app::Sender<Message>,
     ) -> Self {
         let mut group = Flex::default_fill().column();
@@ -219,8 +218,8 @@ impl ProjectTab {
 
         let mut sound_effects_file = Output::default();
         sound_effects_file.set_color(Color::Background);
-        if let Some(p) = sfx_pf_path {
-            sound_effects_file.set_value(&p.display().to_string());
+        if let Some(p) = sfx_source_path {
+            sound_effects_file.set_value(p.as_str());
         }
 
         sfx_flex.end();
@@ -263,9 +262,8 @@ impl ProjectTab {
         }
     }
 
-    pub fn sfx_file_changed(&mut self, pf_path: &Path) {
-        self.sound_effects_file
-            .set_value(&pf_path.display().to_string());
+    pub fn sfx_file_changed(&mut self, source: &SourcePathBuf) {
+        self.sound_effects_file.set_value(source.as_str());
     }
 }
 

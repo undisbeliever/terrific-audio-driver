@@ -15,13 +15,13 @@ use crate::tabs::{FileType, Tab};
 use crate::Message;
 
 use compiler::data::{self, Instrument, LoopSetting};
+use compiler::path::SourcePathBuf;
 use compiler::samples::{BRR_EXTENSION, WAV_EXTENSION};
 use compiler::{Adsr, Envelope, Gain, STARTING_OCTAVE};
 use fltk::button::Button;
 
 use std::cell::RefCell;
 use std::ffi::OsStr;
-use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
 use fltk::app;
@@ -97,7 +97,7 @@ const DEFAULT_GAIN: Gain = Gain::new(127);
 fn blank_instrument() -> Instrument {
     Instrument {
         name: "name".parse().unwrap(),
-        source: PathBuf::new(),
+        source: SourcePathBuf::default(),
         freq: 500.0,
         loop_setting: LoopSetting::None,
         first_octave: STARTING_OCTAVE,
@@ -454,7 +454,7 @@ impl InstrumentEditor {
         set_widget!(last_octave);
         set_widget!(comment);
 
-        self.source.set_value(&data.source.to_string_lossy());
+        self.source.set_value(data.source.as_str());
 
         let (lc, lv) = match data.loop_setting {
             LoopSetting::None => (LoopChoice::None, None),
@@ -501,7 +501,7 @@ impl InstrumentEditor {
         self.group.activate();
     }
 
-    fn update_source_file_type(&mut self, source: &Path) {
+    fn update_source_file_type(&mut self, source: &SourcePathBuf) {
         let sft = match source.extension().and_then(OsStr::to_str) {
             Some(WAV_EXTENSION) => SourceFileType::Wav,
             Some(BRR_EXTENSION) => SourceFileType::Brr,
@@ -553,7 +553,7 @@ impl InstrumentEditor {
                 // Update source as it may have been changed by `open_instrument_sample_dialog()`
                 if self.data.source != data.source {
                     self.data.source = data.source.clone();
-                    self.source.set_value(&data.source.to_string_lossy());
+                    self.source.set_value(data.source.as_str());
                     self.update_source_file_type(&data.source);
                 }
             }

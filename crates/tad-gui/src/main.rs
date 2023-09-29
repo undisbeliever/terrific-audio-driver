@@ -46,6 +46,7 @@ use crate::tabs::{
     quit_with_unsaved_files_dialog, FileType, SaveResult, SaveType, Tab, TabManager,
 };
 
+use compiler::path::{ParentPathBuf, SourcePathBuf};
 use compiler::sound_effects::{convert_sfx_inputs_lossy, SoundEffectInput, SoundEffectsFile};
 use compiler::{data, driver_constants, ProjectFile};
 
@@ -57,7 +58,7 @@ use helpers::ch_units_to_width;
 
 use std::collections::HashMap;
 use std::env;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::mpsc;
 
 #[derive(Debug)]
@@ -110,10 +111,10 @@ pub enum Message {
 // ::TODO remove::
 #[allow(dead_code)]
 pub struct ProjectData {
-    pf_parent_path: PathBuf,
+    pf_parent_path: ParentPathBuf,
 
     // This the value stored in `data::Project`, it is relative to `pf_parent_path`
-    sound_effects_file: Option<PathBuf>,
+    sound_effects_file: Option<SourcePathBuf>,
 
     sfx_export_orders: ListWithSelection<data::Name>,
     project_songs: ListWithSelection<data::Song>,
@@ -195,7 +196,7 @@ impl Project {
             project_tab: ProjectTab::new(
                 &data.sfx_export_orders,
                 &data.project_songs,
-                data.sound_effects_file.as_deref(),
+                data.sound_effects_file.as_ref(),
                 sender.clone(),
             ),
 
@@ -323,8 +324,8 @@ impl Project {
 
             Message::OpenSfxFileDialog => {
                 if self.sfx_data.is_none() {
-                    if let Some((pf_path, sfx_file)) = open_sfx_file_dialog(&self.data) {
-                        self.set_pf_sound_effects_file(pf_path);
+                    if let Some((source_path, sfx_file)) = open_sfx_file_dialog(&self.data) {
+                        self.set_sound_effects_file(source_path);
                         self.maybe_set_sfx_file(sfx_file);
                     }
                 }
@@ -548,19 +549,19 @@ impl Project {
                 .project_songs
                 .list()
                 .item_iter()
-                .position(|s| s.source == p.pf_path);
+                .position(|s| s.source == p.source_path);
 
             if let Some(index) = pf_song_index {
                 self.open_pf_song_tab(index)
             } else {
-                match self.tab_manager.find_file(&p.path) {
+                match self.tab_manager.find_file(&p.full_path) {
                     Some(FileType::Song(id)) => {
                         if let Some(song_tab) = self.song_tabs.get(&id) {
                             self.tab_manager.set_selected_tab(song_tab);
                         }
                     }
                     _ => {
-                        self.load_new_song_tab(ItemId::new(), &p.path);
+                        self.load_new_song_tab(ItemId::new(), &p.source_path);
                     }
                 }
             }
@@ -576,14 +577,13 @@ impl Project {
         if let Some(song_tab) = self.song_tabs.get_mut(id) {
             self.tab_manager.set_selected_tab(song_tab);
         } else {
-            let path = self.data.pf_parent_path.join(&song.source);
-            self.load_new_song_tab(id.clone(), &path);
+            self.load_new_song_tab(id.clone(), &song.source.clone());
         }
     }
 
     // NOTE: No deduplication. Do not create song tabs for a `song_id` or `path` that already exists
-    fn load_new_song_tab(&mut self, song_id: ItemId, full_path: &Path) {
-        if let Some(f) = load_mml_file(full_path) {
+    fn load_new_song_tab(&mut self, song_id: ItemId, source: &SourcePathBuf) {
+        if let Some(f) = load_mml_file(source, &self.data.pf_parent_path) {
             let song_tab = SongTab::new(song_id.clone(), &f, self.sender.clone());
 
             self.tab_manager.add_or_modify(&song_tab, f.path, None);
@@ -642,8 +642,8 @@ impl Project {
                 {
                     SaveResult::None => false,
                     SaveResult::Saved => true,
-                    SaveResult::Renamed { pf_path } => {
-                        self.set_pf_sound_effects_file(pf_path);
+                    SaveResult::Renamed(source_path) => {
+                        self.set_sound_effects_file(source_path);
                         true
                     }
                 },
@@ -658,8 +658,8 @@ impl Project {
                     {
                         SaveResult::None => false,
                         SaveResult::Saved => true,
-                        SaveResult::Renamed { pf_path } => {
-                            self.edit_pf_song_path(id, pf_path);
+                        SaveResult::Renamed(source_path) => {
+                            self.edit_pf_song_source(id, source_path);
                             true
                         }
                     },
@@ -677,22 +677,22 @@ impl Project {
         success
     }
 
-    fn edit_pf_song_path(&mut self, id: ItemId, pf_path: PathBuf) {
+    fn edit_pf_song_source(&mut self, id: ItemId, source: SourcePathBuf) {
         if let Some((index, song)) = self.data.project_songs.list().get_id(id) {
             self.sender
                 .send(Message::EditProjectSongs(ListMessage::ItemEdited(
                     index,
                     data::Song {
-                        source: pf_path,
+                        source,
                         ..song.clone()
                     },
                 )));
         }
     }
 
-    fn set_pf_sound_effects_file(&mut self, pf_path: PathBuf) {
-        self.project_tab.sfx_file_changed(&pf_path);
-        self.data.sound_effects_file = Some(pf_path);
+    fn set_sound_effects_file(&mut self, source: SourcePathBuf) {
+        self.project_tab.sfx_file_changed(&source);
+        self.data.sound_effects_file = Some(source);
 
         self.tab_manager.mark_unsaved(FileType::Project);
     }

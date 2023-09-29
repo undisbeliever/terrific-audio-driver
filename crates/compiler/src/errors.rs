@@ -22,6 +22,7 @@ use crate::mml_command_parser::{
     MIN_RELATIVE_COARSE_VOLUME,
 };
 use crate::notes::{MidiNote, Note};
+use crate::path::PathString;
 use crate::time::{Bpm, TickClock, TickCounter, ZenLen};
 use crate::{mml, spc_file_export, Octave};
 
@@ -244,13 +245,13 @@ pub enum CombineSoundEffectsError {
 // `io::Error` is not cloneable, requiring to enclose `IoError` and `WaveFileError` inside an Arc.
 #[derive(Debug, Clone)]
 pub enum BrrError {
-    IoError(std::sync::Arc<(PathBuf, io::Error)>),
-    WaveFileError(std::sync::Arc<(PathBuf, brr::WavError)>),
+    IoError(std::sync::Arc<(PathString, io::Error)>),
+    WaveFileError(std::sync::Arc<(PathString, brr::WavError)>),
 
-    UnknownFileType(PathBuf),
-    BrrEncodeError(PathBuf, brr::EncodeError),
-    BrrParseError(PathBuf, brr::ParseError),
-    FileTooLarge(PathBuf),
+    UnknownFileType(PathString),
+    BrrEncodeError(PathString, brr::EncodeError),
+    BrrParseError(PathString, brr::ParseError),
+    FileTooLarge(PathString),
 
     InvalidLoopSettingWav(LoopSetting),
     InvalidLoopSettingBrr(LoopSetting),
@@ -853,13 +854,13 @@ fn loop_setting_str(ls: &LoopSetting) -> &'static str {
 impl Display for BrrError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            Self::IoError(arc) => write!(f, "cannot read {}: {}", arc.0.display(), arc.1),
-            Self::WaveFileError(arc) => write!(f, "cannot read {}: {}", arc.0.display(), arc.1),
+            Self::IoError(arc) => write!(f, "cannot read {}: {}", arc.0, arc.1),
+            Self::WaveFileError(arc) => write!(f, "cannot read {}: {}", arc.0, arc.1),
 
-            Self::UnknownFileType(p) => write!(f, "unknown file type: {}", p.display()),
-            Self::BrrEncodeError(p, e) => write!(f, "error encoding {}: {}", p.display(), e),
-            Self::BrrParseError(p, e) => write!(f, "error loading {}: {}", p.display(), e),
-            Self::FileTooLarge(p) => write!(f, "file too large: {}", p.display()),
+            Self::UnknownFileType(p) => write!(f, "unknown file type: {}", p),
+            Self::BrrEncodeError(p, e) => write!(f, "error encoding {}: {}", p, e),
+            Self::BrrParseError(p, e) => write!(f, "error loading {}: {}", p, e),
+            Self::FileTooLarge(p) => write!(f, "file too large: {}", p),
 
             Self::InvalidLoopSettingWav(ls) => {
                 write!(f, "cannot use {} on wav files", loop_setting_str(ls))

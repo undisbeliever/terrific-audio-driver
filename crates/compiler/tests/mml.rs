@@ -7,8 +7,6 @@
 use compiler::data::{TextFile, UniqueNamesList};
 use compiler::*;
 
-use std::path::PathBuf;
-
 const SAMPLE_FREQ: f64 = 500.0;
 
 const EXAMPLE_ADSR_STR: &str = "12 1 1 16";
@@ -880,7 +878,7 @@ fn dummy_instrument(
 ) -> data::Instrument {
     data::Instrument {
         name: Name::try_from(name.to_owned()).unwrap(),
-        source: PathBuf::new(),
+        source: Default::default(),
         freq,
         loop_setting: data::LoopSetting::LoopWithFilter(0),
         first_octave: Octave::try_new(first_octave).unwrap(),

@@ -5,7 +5,9 @@
 // SPDX-License-Identifier: MIT
 
 use clap::{Args, Parser, Subcommand};
-use compiler::data::{is_name_or_id, load_text_file_with_limit, Song, TextFile};
+use compiler::data::{
+    is_name_or_id, load_text_file_with_limit, load_text_file_with_limit_path, Song, TextFile,
+};
 use compiler::mml_tick_count::build_tick_count_table;
 use compiler::{
     build_pitch_table, compile_mml, song_data, song_duration_string, validate_song_size,
@@ -80,9 +82,8 @@ fn compile_sound_effects(
     pf: &UniqueNamesProjectFile,
 ) -> Result<sound_effects::CombinedSoundEffectsData, ()> {
     let sound_effects = match &pf.sound_effect_file {
-        Some(path) => {
-            let path = pf.parent_path.join(path);
-            match sound_effects::load_sound_effects_file(&path) {
+        Some(sfx_file_source) => {
+            match sound_effects::load_sound_effects_file(sfx_file_source, &pf.parent_path) {
                 Err(e) => {
                     eprintln!("{}", e);
                     return Err(());
@@ -176,13 +177,13 @@ fn load_mml_file(
     // Safe, the `U+FFFD REPLACEMENT CHARACTER` is not a name character.
     let sn = song_name_or_path.to_string_lossy();
 
-    let (path, song_name) = if is_name_or_id(&sn) {
+    if is_name_or_id(&sn) {
         if pf.songs.is_empty() {
             error!("No songs in project file");
         }
-        match sn.parse::<usize>() {
+        let (source, song_name) = match sn.parse::<usize>() {
             Ok(song_id) => match pf.get_song_from_id(song_id) {
-                Some(s) => (pf.parent_path.join(&s.source), Some(s.name.clone())),
+                Some(s) => (s.source.clone(), Some(s.name.clone())),
                 None => error!(
                     "Song number out of range ({} - {})",
                     UniqueNamesProjectFile::FIRST_SONG_ID,
@@ -190,17 +191,23 @@ fn load_mml_file(
                 ),
             },
             Err(_) => match pf.songs.get(&sn) {
-                Some(s) => (pf.parent_path.join(&s.source), Some(s.name.clone())),
+                Some(s) => (s.source.clone(), Some(s.name.clone())),
                 None => error!("Cannot find song: {}", sn),
             },
-        }
+        };
+        let text_file = match load_text_file_with_limit(&source, &pf.parent_path) {
+            Ok(tf) => tf,
+            Err(e) => error!("{}", e),
+        };
+        (text_file, song_name)
     } else {
-        (song_name_or_path.into(), None)
-    };
-
-    let text_file = load_text_file(path);
-
-    (text_file, song_name)
+        let path = PathBuf::from(song_name_or_path);
+        let text_file = match load_text_file_with_limit_path(&path) {
+            Ok(tf) => tf,
+            Err(e) => error!("{}", e),
+        };
+        (text_file, None)
+    }
 }
 
 fn compile_song(
@@ -291,9 +298,7 @@ fn check_song(
     pitch_table: &PitchTable,
     common_data: &CommonAudioData,
 ) -> Result<(), String> {
-    let path = pf.parent_path.join(&song.source);
-
-    let mml_file = match load_text_file_with_limit(&path) {
+    let mml_file = match load_text_file_with_limit(&song.source, &pf.parent_path) {
         Ok(tf) => tf,
         Err(e) => return Err(format!("Error compiling {}: {}", song.name, e)),
     };
@@ -390,13 +395,6 @@ fn load_project_file(path: &Path) -> UniqueNamesProjectFile {
             Ok(vm) => vm,
             Err(e) => error!("{}", e.multiline_display()),
         },
-    }
-}
-
-fn load_text_file(path: PathBuf) -> TextFile {
-    match load_text_file_with_limit(&path) {
-        Ok(tf) => tf,
-        Err(e) => error!("{}", e),
     }
 }
 

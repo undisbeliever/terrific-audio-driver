@@ -10,10 +10,11 @@ use crate::data::{load_text_file_with_limit, Instrument, Name, TextFile, UniqueN
 use crate::errors::{
     CombineSoundEffectsError, ErrorWithLine, FileError, SoundEffectError, SoundEffectsFileError,
 };
+use crate::path::{ParentPathBuf, SourcePathBuf};
 use crate::UniqueNamesProjectFile;
 
 use std::collections::{HashMap, HashSet};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 const COMMENT_CHAR: char = ';';
 
@@ -326,8 +327,11 @@ fn sfx_file_from_text_file(tf: TextFile) -> SoundEffectsFile {
     }
 }
 
-pub fn load_sound_effects_file(path: &Path) -> Result<SoundEffectsFile, FileError> {
-    let text_file = load_text_file_with_limit(path)?;
+pub fn load_sound_effects_file(
+    source: &SourcePathBuf,
+    parent_path: &ParentPathBuf,
+) -> Result<SoundEffectsFile, FileError> {
+    let text_file = load_text_file_with_limit(source, parent_path)?;
     Ok(sfx_file_from_text_file(text_file))
 }
 

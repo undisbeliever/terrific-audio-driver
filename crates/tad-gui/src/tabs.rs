@@ -9,6 +9,8 @@ use crate::files;
 use crate::menu::Menu;
 use crate::{Message, ProjectData};
 
+use compiler::path::SourcePathBuf;
+
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
@@ -52,6 +54,7 @@ mod file_state {
 
         tabs: Vec<(Option<String>, Flex)>,
 
+        // absolute file path
         path: Option<PathBuf>,
         file_name: Option<String>,
 
@@ -154,7 +157,7 @@ pub enum SaveType {
 pub enum SaveResult {
     None,
     Saved,
-    Renamed { pf_path: PathBuf },
+    Renamed(SourcePathBuf),
 }
 
 impl SaveResult {
@@ -162,7 +165,7 @@ impl SaveResult {
         match self {
             Self::None => false,
             Self::Saved => true,
-            Self::Renamed { .. } => true,
+            Self::Renamed(_) => true,
         }
     }
 }
@@ -327,7 +330,7 @@ impl TabManager {
 
                 match files::save_data_with_save_as_dialog(data, state.path(), pd) {
                     Some(p) => {
-                        state.set_path(p.path);
+                        state.set_path(p.full_path);
                         state.mark_saved();
                         self.tabs_widget.auto_layout();
                         // Must redraw tab_widget as the saved tab is now smaller
@@ -335,7 +338,7 @@ impl TabManager {
 
                         self.update_save_menu();
 
-                        SaveResult::Renamed { pf_path: p.pf_path }
+                        SaveResult::Renamed(p.source_path)
                     }
                     None => SaveResult::None,
                 }

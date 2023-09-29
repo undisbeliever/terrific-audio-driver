@@ -12,6 +12,7 @@ use crate::errors::{
     ValueError,
 };
 use crate::notes::Octave;
+use crate::path::{ParentPathBuf, SourcePathBuf};
 
 use std::collections::HashMap;
 use std::fmt::Display;
@@ -164,7 +165,7 @@ pub enum LoopSetting {
 pub struct Instrument {
     pub name: Name,
 
-    pub source: PathBuf,
+    pub source: SourcePathBuf,
     pub freq: f64,
 
     #[serde(flatten)]
@@ -181,7 +182,7 @@ pub struct Instrument {
 #[derive(Deserialize, Serialize, Clone, PartialEq, Debug)]
 pub struct Song {
     pub name: Name,
-    pub source: PathBuf,
+    pub source: SourcePathBuf,
 }
 
 #[derive(Deserialize, Serialize, Default, Debug)]
@@ -189,7 +190,7 @@ pub struct Project {
     pub instruments: Vec<Instrument>,
 
     pub sound_effects: Vec<Name>,
-    pub sound_effect_file: Option<PathBuf>,
+    pub sound_effect_file: Option<SourcePathBuf>,
 
     #[serde(default)]
     pub songs: Vec<Song>,
@@ -198,20 +199,20 @@ pub struct Project {
 pub struct ProjectFile {
     pub path: PathBuf,
     pub file_name: String,
-    pub parent_path: PathBuf,
+    pub parent_path: ParentPathBuf,
 
     pub contents: Project,
 }
 
 pub fn load_project_file(path: &Path) -> Result<ProjectFile, DeserializeError> {
-    let text_file = match load_text_file_with_limit(path) {
+    let text_file = match load_text_file_with_limit_path(path) {
         Ok(tf) => tf,
         Err(e) => return Err(DeserializeError::FileError(e)),
     };
     let file_name = text_file.file_name;
 
     let parent_path = match path.parent() {
-        Some(p) => p.to_owned(),
+        Some(p) => ParentPathBuf::new(p.to_owned()),
         None => return Err(DeserializeError::NoParentPath(file_name)),
     };
 
@@ -292,12 +293,12 @@ impl<T> UniqueNamesList<T> {
 pub struct UniqueNamesProjectFile {
     pub path: PathBuf,
     pub file_name: String,
-    pub parent_path: PathBuf,
+    pub parent_path: ParentPathBuf,
 
     pub instruments: UniqueNamesList<Instrument>,
 
     pub sound_effects: UniqueNamesList<Name>,
-    pub sound_effect_file: Option<PathBuf>,
+    pub sound_effect_file: Option<SourcePathBuf>,
 
     pub songs: UniqueNamesList<Song>,
 }
@@ -411,13 +412,24 @@ pub struct TextFile {
     pub contents: String,
 }
 
-pub fn load_text_file_with_limit(path: &Path) -> Result<TextFile, FileError> {
+pub fn load_text_file_with_limit(
+    source: &SourcePathBuf,
+    parent_path: &ParentPathBuf,
+) -> Result<TextFile, FileError> {
+    _load_text_file_with_limit(&source.to_path(parent_path), source.file_name_string())
+}
+
+pub fn load_text_file_with_limit_path(path: &Path) -> Result<TextFile, FileError> {
     let file_name = path
         .file_name()
         .unwrap_or(path.as_os_str())
         .to_string_lossy()
         .to_string();
 
+    _load_text_file_with_limit(path, file_name)
+}
+
+pub fn _load_text_file_with_limit(path: &Path, file_name: String) -> Result<TextFile, FileError> {
     let file = match File::open(path) {
         Ok(file) => file,
         Err(e) => return Err(FileError::OpenError(file_name, e)),
