@@ -4,6 +4,8 @@ struct DSP {
   n8 apuram[64_KiB];
   n8 registers[128];
 
+  SampleBuffer sampleBuffer;
+
   auto mute() const -> bool { return mainvol.mute; }
 
   auto power(bool reset) -> void;

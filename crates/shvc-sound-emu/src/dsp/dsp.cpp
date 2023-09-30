@@ -209,7 +209,7 @@ auto DSP::main(u32 phase) -> void {
 }
 
 auto DSP::sample(i16 left, i16 right) -> void {
-  stream->frame(left / 32768.0, right / 32768.0);
+  sampleBuffer.write(left, right);
 }
 
 auto DSP::power(bool reset) -> void {
@@ -217,6 +217,8 @@ auto DSP::power(bool reset) -> void {
     random.array({apuram, sizeof(apuram)});
     random.array({registers, sizeof(registers)});
   }
+
+  sampleBuffer.reset();
 
   timing = {};
 
