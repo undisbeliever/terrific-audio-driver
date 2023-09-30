@@ -1,6 +1,6 @@
 #pragma once
 
-namespace ares {
+namespace shvc_sound_emu {
 
 struct SPC700 {
   virtual auto idle() -> void = 0;

@@ -1,6 +1,6 @@
 #include <sfc/sfc.hpp>
 
-namespace ares::SuperFamicom {
+namespace shvc_sound_emu {
 
 SMP smp;
 #include "memory.cpp"

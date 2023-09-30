@@ -1,7 +1,7 @@
 #include <ares/ares.hpp>
 #include "spc700.hpp"
 
-namespace ares {
+namespace shvc_sound_emu {
 
 #define PC r.pc.w
 #define YA r.ya.w
