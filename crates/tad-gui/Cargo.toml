@@ -11,9 +11,11 @@ edition = "2021"
 [dependencies]
 # Local crates
 compiler.workspace = true
+shvc-sound-emu.workspace = true
 
 # External crates
 fltk.workspace = true
+sdl2.workspace = true
 
 [build-dependencies]
 markdown.workspace = true
