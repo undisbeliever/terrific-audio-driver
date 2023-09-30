@@ -1,0 +1,17 @@
+[package]
+name = "shvc-sound-emu"
+
+license = "ISC"
+
+edition = "2021"
+
+publish = false
+version = "0.0.0"
+
+[dependencies]
+# External crates
+cxx.workspace = true
+
+[build-dependencies]
+cxx-build.workspace = true
+

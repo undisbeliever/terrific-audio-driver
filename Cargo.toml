@@ -4,6 +4,7 @@ resolver = "2"
 members = [
     "crates/brr",
     "crates/compiler",
+    "crates/shvc-sound-emu",
 
     "crates/tad-compiler",
     "crates/tad-gui",
@@ -27,10 +28,14 @@ serde_json = { version="1.0.97" }
 relative-path = { version="1.9.0", features=[ "serde" ] }
 fltk = { version="1.4.12" }
 
+cxx = { version="1.0.107" }
 
 # External build dependencies
 #
 # Chose markdown as it has a security section in its readme file
 # NOTE: Must use the alpha build.  This is a new crate that reuses an old name.
 markdown = { version="1.0.0-alpha.14" }
+
+cxx-build = { version="1.0.107" }
+
 
