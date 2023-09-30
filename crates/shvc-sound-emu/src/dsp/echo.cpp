@@ -126,3 +126,11 @@ auto DSP::echo30() -> void {
   //write right echo
   echoWrite(1);
 }
+
+auto DSP::resetEchoBuffer() -> void {
+  // ::TODO confirm this is correct::
+  echo._page = echo.page;
+  echo._address = 0;
+  echo._offset = 0;
+  echo._length = echo.delay << 11;
+}

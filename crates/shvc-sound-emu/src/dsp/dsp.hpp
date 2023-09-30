@@ -16,6 +16,9 @@ struct DSP {
   auto read(n7 address) -> n8;
   auto write(n7 address, n8 data) -> void;
 
+  //echo.cpp
+  auto resetEchoBuffer() -> void;
+
 private:
   struct Timing {
     i32 pendingSmpClocks;
