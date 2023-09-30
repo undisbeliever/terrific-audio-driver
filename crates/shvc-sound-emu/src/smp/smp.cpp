@@ -1,5 +1,3 @@
-#include <sfc/sfc.hpp>
-
 namespace shvc_sound_emu {
 
 #include "memory.cpp"
