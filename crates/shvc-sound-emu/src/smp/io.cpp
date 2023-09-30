@@ -31,19 +31,19 @@ inline auto SMP::readIO(n16 address) -> n8 {
     return dsp.read(io.dspAddress);
 
   case 0xf4:  //CPUIO0
-    synchronize(cpu);
+    // no S-CPU to synchronize with
     return io.apu0;
 
   case 0xf5:  //CPUIO1
-    synchronize(cpu);
+    // no S-CPU to synchronize with
     return io.apu1;
 
   case 0xf6:  //CPUIO2
-    synchronize(cpu);
+    // no S-CPU to synchronize with
     return io.apu2;
 
   case 0xf7:  //CPUIO3
-    synchronize(cpu);
+    // no S-CPU to synchronize with
     return io.apu3;
 
   case 0xf8:  //AUXIO4
@@ -111,13 +111,13 @@ inline auto SMP::writeIO(n16 address, n8 data) -> void {
     }
 
     if(data.bit(4)) {
-      synchronize(cpu);
+      // no S-CPU to synchronize with
       io.apu0 = 0x00;
       io.apu1 = 0x00;
     }
 
     if(data.bit(5)) {
-      synchronize(cpu);
+      // no S-CPU to synchronize with
       io.apu2 = 0x00;
       io.apu3 = 0x00;
     }
@@ -135,22 +135,22 @@ inline auto SMP::writeIO(n16 address, n8 data) -> void {
     break;
 
   case 0xf4:  //CPUIO0
-    synchronize(cpu);
+    // no S-CPU to synchronize with
     io.cpu0 = data;
     break;
 
   case 0xf5:  //CPUIO1
-    synchronize(cpu);
+    // no S-CPU to synchronize with
     io.cpu1 = data;
     break;
 
   case 0xf6:  //CPUIO2
-    synchronize(cpu);
+    // no S-CPU to synchronize with
     io.cpu2 = data;
     break;
 
   case 0xf7:  //CPUIO3
-    synchronize(cpu);
+    // no S-CPU to synchronize with
     io.cpu3 = data;
     break;
 

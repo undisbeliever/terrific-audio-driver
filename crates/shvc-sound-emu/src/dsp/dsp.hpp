@@ -1,19 +1,25 @@
 //Sony CXD1222Q-1
 
-struct DSP : Thread {
+struct DSP {
   n8 apuram[64_KiB];
   n8 registers[128];
 
   auto mute() const -> bool { return mainvol.mute; }
 
-  auto main() -> void;
   auto power(bool reset) -> void;
+
+  auto smpStepped(u32 clocks) -> void;
 
   //memory.cpp
   auto read(n7 address) -> n8;
   auto write(n7 address, n8 data) -> void;
 
 private:
+  struct Timing {
+    i32 pendingSmpClocks;
+    u64 clock;
+  } timing;
+
   struct Envelope { enum : u32 {
     Release,
     Attack,
@@ -168,7 +174,7 @@ private:
   auto echo30() -> void;
 
   //dsp.cpp
-  auto tick() -> void;
+  auto main(u32 phase) -> void;
   auto sample(i16 left, i16 right) -> void;
 };
 

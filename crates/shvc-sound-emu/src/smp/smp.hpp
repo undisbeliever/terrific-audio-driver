@@ -1,7 +1,8 @@
 //Sony CXP1100Q-1
 
-struct SMP : SPC700, Thread {
-  auto synchronizing() const -> bool override { return scheduler.synchronizing(); }
+struct SMP : SPC700 {
+  // ::TODO find out what this does::
+  auto synchronizing() const -> bool override { return false; }
 
   auto main() -> void;
   auto power(bool reset) -> void;

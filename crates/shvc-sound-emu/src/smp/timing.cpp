@@ -20,9 +20,7 @@ inline auto SMP::wait(bool halve, maybe<n16> address) -> void {
 }
 
 inline auto SMP::step(u32 clocks) -> void {
-  Thread::step(clocks);
-  Thread::synchronize(cpu);
-  Thread::synchronize(dsp);
+  dsp.smpStepped(clocks);
 }
 
 inline auto SMP::stepTimers(u32 clocks) -> void {

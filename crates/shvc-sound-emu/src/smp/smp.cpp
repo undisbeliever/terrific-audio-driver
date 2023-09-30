@@ -8,6 +8,7 @@ SMP smp;
 #include "timing.cpp"
 
 auto SMP::main() -> void {
+  // ::TODO verify Wait and Stop will advance the DSP::
   if(r.wait) return instructionWait();
   if(r.stop) return instructionStop();
 
@@ -20,7 +21,6 @@ auto SMP::power(bool reset) -> void {
   }
 
   SPC700::power();
-  create(system.apuFrequency() / 12.0, {&SMP::main, this});
 
   r.pc.byte.l = iplrom[62];
   r.pc.byte.h = iplrom[63];
