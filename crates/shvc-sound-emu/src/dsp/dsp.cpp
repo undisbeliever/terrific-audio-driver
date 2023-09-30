@@ -12,20 +12,6 @@ DSP dsp;
 #include "voice.cpp"
 #include "echo.cpp"
 
-auto DSP::load(Node::Object parent) -> void {
-  node = parent->append<Node::Object>("DSP");
-
-  stream = node->append<Node::Audio::Stream>("DSP");
-  stream->setChannels(2);
-  stream->setFrequency(system.apuFrequency() / 768.0);
-}
-
-auto DSP::unload() -> void {
-  node->remove(stream);
-  stream.reset();
-  node.reset();
-}
-
 auto DSP::main() -> void {
   voice5(voice[0]);
   voice2(voice[1]);

@@ -1,13 +1,7 @@
 //Sony CXP1100Q-1
 
 struct SMP : SPC700, Thread {
-  Node::Object node;
-
   auto synchronizing() const -> bool override { return scheduler.synchronizing(); }
-
-  //smp.cpp
-  auto load(Node::Object) -> void;
-  auto unload() -> void;
 
   auto main() -> void;
   auto power(bool reset) -> void;

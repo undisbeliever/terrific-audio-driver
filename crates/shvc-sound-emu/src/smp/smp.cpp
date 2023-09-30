@@ -7,14 +7,6 @@ SMP smp;
 #include "io.cpp"
 #include "timing.cpp"
 
-auto SMP::load(Node::Object parent) -> void {
-  node = parent->append<Node::Object>("SMP");
-}
-
-auto SMP::unload() -> void {
-  node = {};
-}
-
 auto SMP::main() -> void {
   if(r.wait) return instructionWait();
   if(r.stop) return instructionStop();

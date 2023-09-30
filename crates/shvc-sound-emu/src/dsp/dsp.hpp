@@ -1,17 +1,10 @@
 //Sony CXD1222Q-1
 
 struct DSP : Thread {
-  Node::Object node;
-  Node::Audio::Stream stream;
-
   n8 apuram[64_KiB];
   n8 registers[128];
 
   auto mute() const -> bool { return mainvol.mute; }
-
-  //dsp.cpp
-  auto load(Node::Object) -> void;
-  auto unload() -> void;
 
   auto main() -> void;
   auto power(bool reset) -> void;
