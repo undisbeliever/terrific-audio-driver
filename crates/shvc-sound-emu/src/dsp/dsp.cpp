@@ -214,8 +214,8 @@ auto DSP::sample(i16 left, i16 right) -> void {
 
 auto DSP::power(bool reset) -> void {
   if(!reset) {
-    memory::fill(apuram, sizeof(apuram));
-    memory::fill(registers, sizeof(registers));
+    apuram.fill(0);
+    registers.fill(0);
   }
 
   sampleBuffer.reset();

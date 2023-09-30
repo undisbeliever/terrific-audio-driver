@@ -152,7 +152,10 @@ auto DSP::voice6(Voice& v) -> void {
 }
 
 auto DSP::voice7(Voice& v) -> void {
-  for(u32 n : range(8)) registers[0x7c].bit(n) = voice[n]._end;
+  n8 r7c = registers[0x7c];
+  for(u32 n : range(8)) r7c.bit(n) = voice[n]._end;
+  registers[0x7c] = r7c;
+
   latch.envx = v.envx;
 }
 

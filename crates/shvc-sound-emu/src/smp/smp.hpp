@@ -12,7 +12,7 @@ struct SMP : SPC700 {
   auto portWrite(n2 port, n8 data) -> void;
 
   DSP dsp;
-  n8 iplrom[64];
+  std::array<uint8_t, 64> iplrom;
 
 private:
   struct IO {

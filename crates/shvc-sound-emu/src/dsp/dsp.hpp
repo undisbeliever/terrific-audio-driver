@@ -1,8 +1,8 @@
 //Sony CXD1222Q-1
 
 struct DSP {
-  n8 apuram[64_KiB];
-  n8 registers[128];
+  std::array<uint8_t, 64_KiB> apuram;
+  std::array<uint8_t, 128> registers;
 
   SampleBuffer sampleBuffer;
 
