@@ -157,6 +157,16 @@ impl SoundEffectsTab {
         let main_toolbar = Pack::default().with_type(PackType::Horizontal);
         main_group.fixed(&main_toolbar, button_size);
 
+        let button = |label: &str, tooltip: &str| {
+            let mut b = Button::default()
+                .with_size(button_size, button_size)
+                .with_label(label);
+            b.set_tooltip(tooltip);
+            b
+        };
+
+        let mut play_button = button("@>", "Play sound effect");
+
         main_toolbar.end();
 
         let mut name = Input::default();
@@ -187,6 +197,15 @@ impl SoundEffectsTab {
             editor_widget: editor.widget.clone(),
             error_lines: None,
         }));
+
+        play_button.set_callback({
+            let s = state.clone();
+            move |_| {
+                if let Ok(mut s) = s.try_borrow_mut() {
+                    s.play_sound_effect();
+                }
+            }
+        });
 
         name.handle({
             let s = state.clone();
@@ -379,6 +398,13 @@ impl State {
             if self.selected == Some(*from) {
                 self.selected = Some(*to);
             }
+        }
+    }
+
+    fn play_sound_effect(&mut self) {
+        self.commit_sfx_if_changed();
+        if let Some(index) = self.selected {
+            self.sender.send(Message::PlaySoundEffect(index));
         }
     }
 

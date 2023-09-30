@@ -8,10 +8,11 @@
 
 use crate::driver_constants::{
     AUDIO_RAM_SIZE, COMMON_DATA_ADDR, MAX_SONG_DATA_SIZE, MAX_SUBROUTINES, N_MUSIC_CHANNELS,
-    SONG_HEADER_SIZE,
+    SFX_TICK_CLOCK, SONG_HEADER_CHANNELS_SIZE, SONG_HEADER_SIZE, SONG_HEADER_TICK_TIMER_OFFSET,
 };
 use crate::errors::{SongError, SongTooLargeError};
 use crate::mml::{calc_song_duration, MetaData, MmlData};
+use crate::sound_effects::CompiledSoundEffect;
 
 use std::time::Duration;
 
@@ -49,6 +50,32 @@ impl SongData {
         let song_data_size = song_data_size + (song_data_size % 2);
 
         song_data_size + self.metadata.echo_buffer.edl.buffer_size()
+    }
+}
+
+pub fn sound_effect_to_song(sfx: &CompiledSoundEffect) -> SongData {
+    const SONG_DATA_OFFSET: u16 = SONG_HEADER_SIZE as u16;
+
+    let sfx_data = sfx.data();
+
+    assert!(!sfx_data.is_empty());
+
+    let header_size = SONG_HEADER_SIZE;
+    let total_size = header_size + sfx_data.len();
+
+    assert!(total_size < MAX_SONG_DATA_SIZE);
+
+    let mut header = [0; SONG_HEADER_SIZE];
+    let channels = &mut header[0..SONG_HEADER_CHANNELS_SIZE];
+    channels.fill(0xff); // Disable all channels
+    channels[0..2].copy_from_slice(&SONG_DATA_OFFSET.to_le_bytes());
+
+    header[SONG_HEADER_TICK_TIMER_OFFSET] = SFX_TICK_CLOCK;
+
+    SongData {
+        data: [header.as_slice(), sfx_data].concat(),
+        metadata: MetaData::blank_sfx_metadata(),
+        duration: None,
     }
 }
 

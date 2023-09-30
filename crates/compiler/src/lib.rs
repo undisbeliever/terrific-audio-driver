@@ -42,7 +42,9 @@ pub use samples::{build_sample_and_instrument_data, SampleAndInstrumentData};
 pub use common_audio_data::{build_common_audio_data, CommonAudioData};
 
 pub use mml::{compile_mml, MmlData};
-pub use songs::{song_data, song_duration_string, validate_song_size, SongData};
+pub use songs::{
+    song_data, song_duration_string, sound_effect_to_song, validate_song_size, SongData,
+};
 pub use spc_file_export::export_spc_file;
 
 pub mod audio_driver {

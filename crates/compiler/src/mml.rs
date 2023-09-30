@@ -13,7 +13,7 @@ use crate::bytecode::{
     PitchOffsetPerTick, PlayNoteTicks, PortamentoVelocity, SubroutineId,
 };
 use crate::data::{self, TextFile, UniqueNamesList};
-use crate::driver_constants::{IDENTITY_FILTER, N_MUSIC_CHANNELS};
+use crate::driver_constants::{IDENTITY_FILTER, N_MUSIC_CHANNELS, SFX_TICK_CLOCK};
 use crate::echo::{parse_fir_filter_string, EchoBuffer, EchoLength, DEFAULT_EDL};
 use crate::envelope::{Adsr, Envelope, Gain};
 use crate::errors::{
@@ -508,6 +508,36 @@ fn parse_u32(s: &str) -> Result<u32, ValueError> {
     }
 }
 
+impl MetaData {
+    fn new() -> Self {
+        Self {
+            title: None,
+            date: None,
+            composer: None,
+            author: None,
+            copyright: None,
+            license: None,
+            echo_buffer: EchoBuffer {
+                edl: DEFAULT_EDL,
+                fir: IDENTITY_FILTER,
+                feedback: 0,
+                echo_volume: 0,
+            },
+            tick_clock: DEFAULT_BPM.to_tick_clock().unwrap(),
+            zenlen: DEFAULT_ZENLEN,
+            spc_song_length: None,
+            spc_fadeout_millis: None,
+        }
+    }
+
+    pub fn blank_sfx_metadata() -> Self {
+        Self {
+            tick_clock: SFX_TICK_CLOCK.try_into().unwrap(),
+            ..Self::new()
+        }
+    }
+}
+
 struct HeaderState {
     metadata: MetaData,
     tempo_set: bool,
@@ -517,25 +547,7 @@ impl HeaderState {
     fn new() -> Self {
         Self {
             tempo_set: false,
-            metadata: MetaData {
-                title: None,
-                date: None,
-                composer: None,
-                author: None,
-                copyright: None,
-                license: None,
-                echo_buffer: EchoBuffer {
-                    edl: DEFAULT_EDL,
-                    fir: IDENTITY_FILTER,
-                    feedback: 0,
-                    echo_volume: 0,
-                },
-                tick_clock: DEFAULT_BPM.to_tick_clock().unwrap(),
-                zenlen: DEFAULT_ZENLEN,
-
-                spc_song_length: None,
-                spc_fadeout_millis: None,
-            },
+            metadata: MetaData::new(),
         }
     }
 

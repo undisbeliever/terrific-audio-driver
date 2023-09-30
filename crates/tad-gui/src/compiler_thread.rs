@@ -16,7 +16,6 @@ use std::sync::mpsc;
 use std::thread;
 
 extern crate compiler;
-use compiler::build_common_audio_data;
 use compiler::data;
 use compiler::data::{load_text_file_with_limit, TextFile};
 use compiler::driver_constants::COMMON_DATA_BYTES_PER_SOUND_EFFECT;
@@ -30,6 +29,7 @@ use compiler::sound_effects::{compile_sound_effect_input, CompiledSoundEffect, S
 use compiler::CommonAudioData;
 use compiler::PitchTable;
 use compiler::SongData;
+use compiler::{build_common_audio_data, sound_effect_to_song};
 
 extern crate fltk;
 
@@ -82,6 +82,7 @@ pub enum ToCompiler {
     FinishedEditingSoundEffects,
 
     SoundEffects(ItemChanged<SoundEffectInput>),
+    PlaySoundEffect(ItemId),
 
     SongChanged(ItemId, String),
     CompileAndPlaySong(ItemId, String),
@@ -310,6 +311,10 @@ where
             .get(name.as_str())
             .and_then(|i: &u32| usize::try_from(*i).ok())
             .and_then(|i: usize| self.output.get(i))
+    }
+
+    fn get_output_for_id(&self, id: &ItemId) -> Option<&OutT> {
+        self.map.get(id).and_then(|i: &usize| self.output.get(*i))
     }
 
     fn name_map(&self) -> &HashMap<String, u32> {
@@ -992,6 +997,12 @@ fn bg_thread(
                         &sound_effects,
                         &sender,
                     );
+                }
+            }
+            ToCompiler::PlaySoundEffect(id) => {
+                if let Some(Some(sfx_data)) = sound_effects.get_output_for_id(&id) {
+                    let song_data = sound_effect_to_song(sfx_data);
+                    sender.send_audio(AudioMessage::PlaySong(id, song_data));
                 }
             }
 

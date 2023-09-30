@@ -63,5 +63,10 @@ pub const ECHO_BUFFER_MAX_EDL: u8 = 15;
 pub const MAX_SUBROUTINES: usize = 256;
 
 pub const SONG_HEADER_SIZE: usize = N_MUSIC_CHANNELS * 4 + 13;
+pub const SONG_HEADER_CHANNELS_SIZE: usize = N_MUSIC_CHANNELS * 4;
+pub const SONG_HEADER_TICK_TIMER_OFFSET: usize = SONG_HEADER_SIZE - 2;
 
 pub const MAX_SONG_DATA_SIZE: usize = 0xD000;
+
+// Sound effect constants
+pub const SFX_TICK_CLOCK: u8 = 64;

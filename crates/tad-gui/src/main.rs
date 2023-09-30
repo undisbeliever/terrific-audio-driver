@@ -103,6 +103,7 @@ pub enum Message {
     RecompileSong(ItemId, String),
 
     PlaySong(ItemId, String),
+    PlaySoundEffect(usize),
     PauseResumeAudio(ItemId),
 
     FromCompiler(compiler_thread::CompilerOutput),
@@ -309,6 +310,15 @@ impl Project {
                 let _ = self
                     .compiler_sender
                     .send(ToCompiler::CompileAndPlaySong(id, mml));
+            }
+            Message::PlaySoundEffect(index) => {
+                if let Some(sfx_data) = &self.sfx_data {
+                    if let Some((id, _)) = sfx_data.sound_effects.list().get_with_id(index) {
+                        let _ = self
+                            .compiler_sender
+                            .send(ToCompiler::PlaySoundEffect(id.clone()));
+                    }
+                }
             }
             Message::PauseResumeAudio(id) => {
                 let _ = self.audio_sender.send(AudioMessage::PauseResume(id));
