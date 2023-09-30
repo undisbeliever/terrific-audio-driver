@@ -1,5 +1,7 @@
 //Sony CXP1100Q-1
 
+namespace shvc_sound_emu {
+
 struct SMP : SPC700 {
   // ::TODO find out what this does::
   auto synchronizing() const -> bool override { return false; }
@@ -89,3 +91,5 @@ private:
   auto step(u32 clocks) -> void;
   auto stepTimers(u32 clocks) -> void;
 };
+
+}

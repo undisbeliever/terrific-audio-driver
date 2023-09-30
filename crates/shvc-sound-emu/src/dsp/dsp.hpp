@@ -1,5 +1,7 @@
 //Sony CXD1222Q-1
 
+namespace shvc_sound_emu {
+
 struct DSP {
   std::array<uint8_t, 64_KiB> apuram;
   std::array<uint8_t, 128> registers;
@@ -182,3 +184,5 @@ private:
   auto main(u32 phase) -> void;
   auto sample(i16 left, i16 right) -> void;
 };
+
+}
