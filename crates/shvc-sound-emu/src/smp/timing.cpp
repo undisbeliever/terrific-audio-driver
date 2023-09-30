@@ -24,12 +24,12 @@ inline auto SMP::step(u32 clocks) -> void {
 }
 
 inline auto SMP::stepTimers(u32 clocks) -> void {
-  timer0.step(clocks);
-  timer1.step(clocks);
-  timer2.step(clocks);
+  timer0.step(*this, clocks);
+  timer1.step(*this, clocks);
+  timer2.step(*this, clocks);
 }
 
-template<u32 Frequency> auto SMP::Timer<Frequency>::step(u32 clocks) -> void {
+template<u32 Frequency> auto SMP::Timer<Frequency>::step(const SMP& smp, u32 clocks) -> void {
   //stage 0 increment
   stage0 += clocks;
   if(stage0 < Frequency) return;
@@ -37,10 +37,10 @@ template<u32 Frequency> auto SMP::Timer<Frequency>::step(u32 clocks) -> void {
 
   //stage 1 increment
   stage1 ^= 1;
-  synchronizeStage1();
+  synchronizeStage1(smp);
 }
 
-template<u32 Frequency> auto SMP::Timer<Frequency>::synchronizeStage1() -> void {
+template<u32 Frequency> auto SMP::Timer<Frequency>::synchronizeStage1(const SMP& smp) -> void {
   bool level = stage1;
   if(!smp.io.timersEnable) level = false;
   if(smp.io.timersDisable) level = false;

@@ -177,5 +177,3 @@ private:
   auto main(u32 phase) -> void;
   auto sample(i16 left, i16 right) -> void;
 };
-
-extern DSP dsp;

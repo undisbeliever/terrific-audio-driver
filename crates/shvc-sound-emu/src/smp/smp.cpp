@@ -2,7 +2,6 @@
 
 namespace shvc_sound_emu {
 
-SMP smp;
 #include "memory.cpp"
 #include "io.cpp"
 #include "timing.cpp"
@@ -21,6 +20,8 @@ auto SMP::power(bool reset) -> void {
   }
 
   SPC700::power();
+
+  dsp.power(reset);
 
   r.pc.byte.l = iplrom[62];
   r.pc.byte.h = iplrom[63];

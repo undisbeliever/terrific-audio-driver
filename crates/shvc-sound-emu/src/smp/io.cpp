@@ -88,9 +88,9 @@ inline auto SMP::writeIO(n16 address, n8 data) -> void {
     io.externalWaitStates = data.bit(4,5);
     io.internalWaitStates = data.bit(6,7);
 
-    timer0.synchronizeStage1();
-    timer1.synchronizeStage1();
-    timer2.synchronizeStage1();
+    timer0.synchronizeStage1(*this);
+    timer1.synchronizeStage1(*this);
+    timer2.synchronizeStage1(*this);
     break;
 
   case 0xf1:  //CONTROL

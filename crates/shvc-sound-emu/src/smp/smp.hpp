@@ -11,6 +11,7 @@ struct SMP : SPC700 {
   auto portRead(n2 port) const -> n8;
   auto portWrite(n2 port, n8 data) -> void;
 
+  DSP dsp;
   n8 iplrom[64];
 
 private:
@@ -75,8 +76,8 @@ private:
     n8 target;
 
     //timing.cpp
-    auto step(u32 clocks) -> void;
-    auto synchronizeStage1() -> void;
+    auto step(const SMP& smp, u32 clocks) -> void;
+    auto synchronizeStage1(const SMP& smp) -> void;
   };
 
   Timer<128> timer0;
@@ -88,5 +89,3 @@ private:
   auto step(u32 clocks) -> void;
   auto stepTimers(u32 clocks) -> void;
 };
-
-extern SMP smp;

@@ -2,7 +2,6 @@
 
 namespace shvc_sound_emu {
 
-DSP dsp;
 #include "memory.cpp"
 #include "gaussian.cpp"
 #include "counter.cpp"
