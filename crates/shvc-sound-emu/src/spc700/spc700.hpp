@@ -113,14 +113,6 @@ struct SPC700 {
   auto instructionTransfer(n8&, n8&) -> void;
   auto instructionWait() -> void;
 
-  //serialization.cpp
-  auto serialize(serializer&) -> void;
-
-  //disassembler.cpp
-  noinline auto disassembleInstruction(n16 address, n1 p) -> string;
-  noinline auto disassembleInstruction() -> string;
-  noinline auto disassembleContext() -> string;
-
   struct Flags {
     bool c;  //carry
     bool z;  //zero

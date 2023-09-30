@@ -26,8 +26,6 @@ namespace shvc_sound_emu {
 #include "algorithms.cpp"
 #include "instructions.cpp"
 #include "instruction.cpp"
-#include "serialization.cpp"
-#include "disassembler.cpp"
 
 auto SPC700::power() -> void {
   PC = 0x0000;

@@ -3,16 +3,6 @@
 struct SMP : SPC700, Thread {
   Node::Object node;
 
-  struct Debugger {
-    //debugger.cpp
-    auto load(Node::Object) -> void;
-    auto instruction() -> void;
-
-    struct Tracer {
-      Node::Debugger::Tracer::Instruction instruction;
-    } tracer;
-  } debugger;
-
   auto synchronizing() const -> bool override { return scheduler.synchronizing(); }
 
   //smp.cpp
@@ -25,9 +15,6 @@ struct SMP : SPC700, Thread {
   //io.cpp
   auto portRead(n2 port) const -> n8;
   auto portWrite(n2 port, n8 data) -> void;
-
-  //serialization.cpp
-  auto serialize(serializer&) -> void;
 
   n8 iplrom[64];
 
@@ -95,9 +82,6 @@ private:
     //timing.cpp
     auto step(u32 clocks) -> void;
     auto synchronizeStage1() -> void;
-
-    //serialization.cpp
-    auto serialize(serializer&) -> void;
   };
 
   Timer<128> timer0;

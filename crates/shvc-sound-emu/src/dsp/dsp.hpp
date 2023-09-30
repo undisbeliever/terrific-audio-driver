@@ -4,15 +4,6 @@ struct DSP : Thread {
   Node::Object node;
   Node::Audio::Stream stream;
 
-  struct Debugger {
-    //debugger.cpp
-    auto load(Node::Object) -> void;
-
-    struct Memory {
-      Node::Debugger::Memory ram;
-    } memory;
-  } debugger;
-
   n8 apuram[64_KiB];
   n8 registers[128];
 
@@ -28,9 +19,6 @@ struct DSP : Thread {
   //memory.cpp
   auto read(n7 address) -> n8;
   auto write(n7 address, n8 data) -> void;
-
-  //serialization.cpp
-  auto serialize(serializer&) -> void;
 
 private:
   struct Envelope { enum : u32 {
@@ -96,9 +84,6 @@ private:
   } latch;
 
   struct Voice {
-    //serialization.cpp
-    auto serialize(serializer&) -> void;
-
     n7  index;  //voice channel register index: 0x00 for voice 0, 0x10 for voice 1, etc
 
     i8  volume[2];

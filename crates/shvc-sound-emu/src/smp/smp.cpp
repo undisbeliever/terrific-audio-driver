@@ -6,17 +6,12 @@ SMP smp;
 #include "memory.cpp"
 #include "io.cpp"
 #include "timing.cpp"
-#include "debugger.cpp"
-#include "serialization.cpp"
 
 auto SMP::load(Node::Object parent) -> void {
   node = parent->append<Node::Object>("SMP");
-
-  debugger.load(node);
 }
 
 auto SMP::unload() -> void {
-  debugger = {};
   node = {};
 }
 
@@ -24,7 +19,6 @@ auto SMP::main() -> void {
   if(r.wait) return instructionWait();
   if(r.stop) return instructionStop();
 
-  debugger.instruction();
   instruction();
 }
 

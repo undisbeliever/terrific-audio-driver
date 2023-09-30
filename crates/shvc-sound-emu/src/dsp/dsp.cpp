@@ -11,8 +11,6 @@ DSP dsp;
 #include "misc.cpp"
 #include "voice.cpp"
 #include "echo.cpp"
-#include "debugger.cpp"
-#include "serialization.cpp"
 
 auto DSP::load(Node::Object parent) -> void {
   node = parent->append<Node::Object>("DSP");
@@ -20,12 +18,9 @@ auto DSP::load(Node::Object parent) -> void {
   stream = node->append<Node::Audio::Stream>("DSP");
   stream->setChannels(2);
   stream->setFrequency(system.apuFrequency() / 768.0);
-
-  debugger.load(node);
 }
 
 auto DSP::unload() -> void {
-  debugger = {};
   node->remove(stream);
   stream.reset();
   node.reset();
