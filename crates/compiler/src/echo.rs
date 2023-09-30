@@ -72,7 +72,7 @@ impl EchoLength {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct EchoBuffer {
     pub edl: EchoEdl,
     pub fir: [i8; FIR_FILTER_SIZE],

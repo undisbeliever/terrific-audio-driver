@@ -84,7 +84,9 @@ impl SongTab {
             b
         };
 
-        let mut compile_button = button("C", "compile song");
+        let mut compile_button = button("C", "Compile song");
+        let mut play_button = button("@>", "Play song");
+        let mut pause_resume_button = button("@||", "Pause/Resume song");
 
         main_toolbar.end();
 
@@ -118,6 +120,23 @@ impl SongTab {
             move |_| {
                 if let Ok(s) = s.try_borrow() {
                     s.compile_song();
+                }
+            }
+        });
+
+        play_button.set_callback({
+            let s = state.clone();
+            move |_| {
+                if let Ok(s) = s.try_borrow() {
+                    s.play_song();
+                }
+            }
+        });
+        pause_resume_button.set_callback({
+            let s = state.clone();
+            move |_| {
+                if let Ok(s) = s.try_borrow() {
+                    s.pause_resume();
                 }
             }
         });
@@ -167,6 +186,16 @@ impl State {
             self.song_id.clone(),
             self.editor.text(),
         ));
+    }
+
+    fn play_song(&self) {
+        self.sender
+            .send(Message::PlaySong(self.song_id.clone(), self.editor.text()));
+    }
+
+    fn pause_resume(&self) {
+        self.sender
+            .send(Message::PauseResumeAudio(self.song_id.clone()));
     }
 
     pub fn set_compiler_output(&mut self, co: Option<SongOutput>) {

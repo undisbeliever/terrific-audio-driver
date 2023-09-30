@@ -4,6 +4,7 @@
 //
 // SPDX-License-Identifier: MIT
 
+mod audio_thread;
 mod compiler_thread;
 mod files;
 mod help;
@@ -46,6 +47,7 @@ use crate::tabs::{
     quit_with_unsaved_files_dialog, FileType, SaveResult, SaveType, Tab, TabManager,
 };
 
+use audio_thread::AudioMessage;
 use compiler::path::{ParentPathBuf, SourcePathBuf};
 use compiler::sound_effects::{convert_sfx_inputs_lossy, SoundEffectInput, SoundEffectsFile};
 use compiler::{data, driver_constants, ProjectFile};
@@ -100,6 +102,9 @@ pub enum Message {
     SongChanged(ItemId, String),
     RecompileSong(ItemId, String),
 
+    PlaySong(ItemId, String),
+    PauseResumeAudio(ItemId),
+
     FromCompiler(compiler_thread::CompilerOutput),
 
     ShowAboutTab,
@@ -135,6 +140,10 @@ struct Project {
     #[allow(dead_code)]
     compiler_thread: std::thread::JoinHandle<()>,
     compiler_sender: mpsc::Sender<ToCompiler>,
+
+    #[allow(dead_code)]
+    audio_thread: std::thread::JoinHandle<()>,
+    audio_sender: mpsc::Sender<AudioMessage>,
 
     tab_manager: TabManager,
     samples_tab_selected: bool,
@@ -184,9 +193,15 @@ impl Project {
             sender.send(Message::LoadSfxFile);
         }
 
-        let (compiler_sender, r) = mpsc::channel();
-        let compiler_thread =
-            compiler_thread::create_bg_thread(data.pf_parent_path.clone(), r, sender.clone());
+        let (audio_thread, audio_sender) = audio_thread::create_audio_thread();
+
+        let (compiler_sender, compiler_reciever) = mpsc::channel();
+        let compiler_thread = compiler_thread::create_bg_thread(
+            data.pf_parent_path.clone(),
+            compiler_reciever,
+            sender.clone(),
+            audio_sender.clone(),
+        );
 
         let mut out = Self {
             tab_manager: TabManager::new(tabs, menu),
@@ -203,6 +218,9 @@ impl Project {
             samples_tab: SamplesTab::new(&data.instruments, sender.clone()),
             sound_effects_tab: SoundEffectsTab::new(sender.clone()),
             song_tabs: HashMap::new(),
+
+            audio_thread,
+            audio_sender,
 
             compiler_thread,
             compiler_sender,
@@ -285,6 +303,15 @@ impl Project {
             Message::RecompileSong(id, mml) => {
                 // RecompileSong should not mark the song as unsaved
                 let _ = self.compiler_sender.send(ToCompiler::SongChanged(id, mml));
+            }
+            Message::PlaySong(id, mml) => {
+                // RecompileSong should not mark the song as unsaved
+                let _ = self
+                    .compiler_sender
+                    .send(ToCompiler::CompileAndPlaySong(id, mml));
+            }
+            Message::PauseResumeAudio(id) => {
+                let _ = self.audio_sender.send(AudioMessage::PauseResume(id));
             }
 
             Message::QuitRequested => {

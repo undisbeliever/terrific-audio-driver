@@ -7,6 +7,8 @@
 use crate::names::NameGetter;
 use crate::Message;
 
+use crate::audio_thread::AudioMessage;
+
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::fmt::Display;
@@ -82,6 +84,7 @@ pub enum ToCompiler {
     SoundEffects(ItemChanged<SoundEffectInput>),
 
     SongChanged(ItemId, String),
+    CompileAndPlaySong(ItemId, String),
 
     ExportSongToSpcFile(ItemId),
 
@@ -433,11 +436,21 @@ where
     }
 }
 
-struct Sender(fltk::app::Sender<Message>);
+struct Sender {
+    sender: fltk::app::Sender<Message>,
+    audio_sender: mpsc::Sender<AudioMessage>,
+}
 
 impl Sender {
     fn send(&self, m: CompilerOutput) {
-        self.0.send(Message::FromCompiler(m))
+        self.sender.send(Message::FromCompiler(m))
+    }
+
+    fn send_audio(&self, m: AudioMessage) {
+        match self.audio_sender.send(m) {
+            Ok(()) => (),
+            Err(_) => panic!("Cannot send message to audio thread"),
+        }
     }
 }
 
@@ -596,6 +609,13 @@ impl SongCompiler {
         Self {
             parent_path,
             songs: HashMap::new(),
+        }
+    }
+
+    fn get_song_data(&self, id: &ItemId) -> Option<&SongData> {
+        match self.songs.get(id) {
+            Some(s) => s.song_data.as_ref(),
+            None => None,
         }
     }
 
@@ -856,8 +876,12 @@ fn bg_thread(
     parent_path: ParentPathBuf,
     receiever: mpsc::Receiver<ToCompiler>,
     sender: fltk::app::Sender<Message>,
+    audio_sender: mpsc::Sender<AudioMessage>,
 ) {
-    let sender = Sender(sender);
+    let sender = Sender {
+        sender,
+        audio_sender,
+    };
 
     let mut sfx_export_order = IList::new();
     let mut pf_songs = IList::new();
@@ -930,6 +954,10 @@ fn bg_thread(
                         }
                     }
 
+                    sender.send_audio(AudioMessage::CommonAudioDataChanged(
+                        common_audio_data_no_sfx.clone(),
+                    ));
+
                     songs.compile_all_songs(&pf_songs, &song_dependencies, &sender);
                 }
             }
@@ -966,8 +994,18 @@ fn bg_thread(
                     );
                 }
             }
+
             ToCompiler::SongChanged(id, mml) => {
                 songs.edit_and_compile_song(id, mml, &pf_songs, &song_dependencies, &sender);
+            }
+            ToCompiler::CompileAndPlaySong(id, mml) => {
+                let id2 = id.clone();
+
+                sender.send_audio(AudioMessage::Stop);
+                songs.edit_and_compile_song(id2, mml, &pf_songs, &song_dependencies, &sender);
+                if let Some(song) = songs.get_song_data(&id) {
+                    sender.send_audio(AudioMessage::PlaySong(id, song.clone()));
+                }
             }
             ToCompiler::ExportSongToSpcFile(id) => {
                 let r = songs.export_to_spc_file(id, &pf_songs, common_audio_data_no_sfx.as_ref());
@@ -985,12 +1023,13 @@ fn monitor_thread(
     parent_path: ParentPathBuf,
     reciever: mpsc::Receiver<ToCompiler>,
     sender: fltk::app::Sender<Message>,
+    audio_sender: mpsc::Sender<AudioMessage>,
 ) {
     let s = sender.clone();
 
     let handler = thread::Builder::new()
         .name("compiler_thread".into())
-        .spawn(move || bg_thread(parent_path, reciever, sender))
+        .spawn(move || bg_thread(parent_path, reciever, sender, audio_sender))
         .unwrap();
 
     match handler.join() {
@@ -1013,6 +1052,7 @@ pub fn create_bg_thread(
     parent_path: ParentPathBuf,
     reciever: mpsc::Receiver<ToCompiler>,
     sender: fltk::app::Sender<Message>,
+    audio_sender: mpsc::Sender<AudioMessage>,
 ) -> thread::JoinHandle<()> {
-    thread::spawn(move || monitor_thread(parent_path, reciever, sender))
+    thread::spawn(move || monitor_thread(parent_path, reciever, sender, audio_sender))
 }

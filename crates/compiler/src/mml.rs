@@ -100,7 +100,7 @@ pub use identifier::Identifier;
 
 use self::line_splitter::split_mml_lines;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct MetaData {
     pub title: Option<String>,
     pub date: Option<String>,

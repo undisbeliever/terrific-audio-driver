@@ -25,6 +25,7 @@ fn validate_data_size(data: &[u8], expected_size: usize) -> Result<(), SongError
     }
 }
 
+#[derive(Clone)]
 pub struct SongData {
     metadata: MetaData,
     data: Vec<u8>,

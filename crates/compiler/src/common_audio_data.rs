@@ -13,6 +13,7 @@ use crate::errors::{CommonAudioDataError, CommonAudioDataErrors};
 use crate::samples::SampleAndInstrumentData;
 use crate::sound_effects::CombinedSoundEffectsData;
 
+#[derive(Clone)]
 pub struct CommonAudioData(Vec<u8>);
 
 impl CommonAudioData {
