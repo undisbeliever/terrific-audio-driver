@@ -58,6 +58,7 @@ use fltk::prelude::*;
 use help::HelpSection;
 use helpers::ch_units_to_width;
 
+use std::collections::hash_map;
 use std::collections::HashMap;
 use std::env;
 use std::path::PathBuf;
@@ -631,7 +632,7 @@ impl Project {
 
     // NOTE: minimal deduplication. You should not create song tabs for a `song_id` or `path` that already exists
     fn new_song_tab(&mut self, song_id: ItemId, file: data::TextFile) {
-        if !self.song_tabs.contains_key(&song_id) {
+        if let hash_map::Entry::Vacant(e) = self.song_tabs.entry(song_id.clone()) {
             let new_file = file.path.is_none();
 
             let song_tab = SongTab::new(song_id.clone(), &file, self.sender.clone());
@@ -643,7 +644,7 @@ impl Project {
             }
             self.tab_manager.set_selected_tab(&song_tab);
 
-            self.song_tabs.insert(song_id.clone(), song_tab);
+            e.insert(song_tab);
 
             // Update song in the compiler thread (in case the file changed)
             let _ = self
