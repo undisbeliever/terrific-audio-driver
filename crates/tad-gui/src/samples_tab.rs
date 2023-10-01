@@ -4,7 +4,7 @@
 //
 // SPDX-License-Identifier: MIT
 
-use crate::compiler_thread::{CombineSamplesError, InstrumentOutput};
+use crate::compiler_thread::{CombineSamplesError, InstrumentOutput, ItemId};
 use crate::helpers::*;
 use crate::list_editor::{
     CompilerOutputGui, ListAction, ListButtons, ListEditor, ListEditorTable, ListMessage,
@@ -650,8 +650,8 @@ impl ListEditor<Instrument> for SamplesTab {
         self.instrument_editor.borrow_mut().disable_editor();
     }
 
-    fn set_selected(&mut self, index: usize, inst: &Instrument) {
-        self.inst_table.set_selected(index, inst);
+    fn set_selected(&mut self, index: usize, id: ItemId, inst: &Instrument) {
+        self.inst_table.set_selected(index, id, inst);
 
         self.instrument_editor.borrow_mut().set_data(index, inst);
     }

@@ -41,7 +41,7 @@ pub trait ListEditor<T> {
     fn list_edited(&mut self, action: &ListAction<T>);
 
     fn clear_selected(&mut self);
-    fn set_selected(&mut self, index: usize, value: &T);
+    fn set_selected(&mut self, index: usize, id: ItemId, value: &T);
 }
 
 pub trait CompilerOutputGui<T> {
@@ -457,10 +457,10 @@ where
     }
 
     fn set_selected(&mut self, index: usize, editor: &mut impl ListEditor<T>) {
-        match self.list.get(index) {
-            Some(item) => {
+        match self.list.get_with_id(index) {
+            Some((id, item)) => {
                 self.selected = Some(index);
-                editor.set_selected(index, item);
+                editor.set_selected(index, id.clone(), item);
                 editor.list_buttons().selected_changed(
                     index,
                     self.list.len(),
@@ -617,10 +617,10 @@ where
     where
         Editor: ListEditor<T> + CompilerOutputGui<O>,
     {
-        match self.list.get(index) {
-            Some(item) => {
+        match self.list.get_with_id(index) {
+            Some((id, item)) => {
                 self.selected = Some(index);
-                editor.set_selected(index, item);
+                editor.set_selected(index, id.clone(), item);
 
                 let co = self.compiler_output.get(index).unwrap_or(&None);
                 editor.set_selected_compiler_output(co);
@@ -992,7 +992,7 @@ where
         self.table.clear_selected();
     }
 
-    fn set_selected(&mut self, index: usize, _: &T::DataType) {
+    fn set_selected(&mut self, index: usize, _: ItemId, _: &T::DataType) {
         self.table.set_selected(index);
     }
 }

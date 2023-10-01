@@ -4,7 +4,7 @@
 //
 // SPDX-License-Identifier: MIT
 
-use crate::compiler_thread::SoundEffectOutput;
+use crate::compiler_thread::{ItemId, SoundEffectOutput};
 use crate::helpers::*;
 use crate::list_editor::{
     CompilerOutputGui, LaVec, ListAction, ListButtons, ListEditor, ListEditorTable, ListMessage,
@@ -88,6 +88,7 @@ impl TableCompilerOutput for SoundEffectMapping {
 pub struct State {
     sender: app::Sender<Message>,
     selected: Option<usize>,
+    selected_id: Option<ItemId>,
     old_name: Name,
 
     name: Input,
@@ -192,6 +193,7 @@ impl SoundEffectsTab {
         let state = Rc::new(RefCell::from(State {
             sender,
             selected: None,
+            selected_id: None,
             old_name: "sfx".parse().unwrap(),
             name: name.clone(),
             editor_widget: editor.widget.clone(),
@@ -359,13 +361,14 @@ impl ListEditor<SoundEffectInput> for SoundEffectsTab {
         self.main_group.deactivate();
     }
 
-    fn set_selected(&mut self, index: usize, sfx: &SoundEffectInput) {
+    fn set_selected(&mut self, index: usize, id: ItemId, sfx: &SoundEffectInput) {
         if let Some(sfx_buffer) = self.sfx_buffers.get_mut(index) {
             match self.state.try_borrow_mut() {
                 Ok(mut state) => {
                     state.commit_sfx();
 
                     state.selected = Some(index);
+                    state.selected_id = Some(id.clone());
                     state.old_name = sfx.name.clone();
 
                     self.name.set_value(sfx.name.as_str());
@@ -381,7 +384,7 @@ impl ListEditor<SoundEffectInput> for SoundEffectsTab {
 
                     self.main_group.activate();
 
-                    self.sfx_table.set_selected(index, sfx);
+                    self.sfx_table.set_selected(index, id, sfx);
                 }
                 // This should not happen
                 Err(_) => self.main_group.deactivate(),
@@ -403,8 +406,8 @@ impl State {
 
     fn play_sound_effect(&mut self) {
         self.commit_sfx_if_changed();
-        if let Some(index) = self.selected {
-            self.sender.send(Message::PlaySoundEffect(index));
+        if let Some(id) = &self.selected_id {
+            self.sender.send(Message::PlaySoundEffect(id.clone()));
         }
     }
 
