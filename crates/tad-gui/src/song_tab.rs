@@ -63,7 +63,7 @@ impl Tab for SongTab {
     }
 
     fn file_type(&self) -> FileType {
-        FileType::Song(self.song_id.clone())
+        FileType::Song(self.song_id)
     }
 }
 
@@ -106,7 +106,7 @@ impl SongTab {
 
         let state = Rc::new(RefCell::from(State {
             sender,
-            song_id: song_id.clone(),
+            song_id,
             editor,
 
             console,
@@ -175,27 +175,22 @@ impl SongTab {
 
 impl State {
     fn song_changed(&self) {
-        self.sender.send(Message::SongChanged(
-            self.song_id.clone(),
-            self.editor.text(),
-        ));
+        self.sender
+            .send(Message::SongChanged(self.song_id, self.editor.text()));
     }
 
     fn compile_song(&self) {
-        self.sender.send(Message::RecompileSong(
-            self.song_id.clone(),
-            self.editor.text(),
-        ));
+        self.sender
+            .send(Message::RecompileSong(self.song_id, self.editor.text()));
     }
 
     fn play_song(&self) {
         self.sender
-            .send(Message::PlaySong(self.song_id.clone(), self.editor.text()));
+            .send(Message::PlaySong(self.song_id, self.editor.text()));
     }
 
     fn pause_resume(&self) {
-        self.sender
-            .send(Message::PauseResumeAudio(self.song_id.clone()));
+        self.sender.send(Message::PauseResumeAudio(self.song_id));
     }
 
     pub fn set_compiler_output(&mut self, co: Option<SongOutput>) {

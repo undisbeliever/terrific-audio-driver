@@ -299,7 +299,7 @@ impl Project {
                 }
             }
             Message::SongChanged(id, mml) => {
-                self.tab_manager.mark_unsaved(FileType::Song(id.clone()));
+                self.tab_manager.mark_unsaved(FileType::Song(id));
                 let _ = self.compiler_sender.send(ToCompiler::SongChanged(id, mml));
             }
             Message::RecompileSong(id, mml) => {
@@ -445,7 +445,7 @@ impl Project {
             CompilerOutput::Song(id, co) => {
                 let co = Some(co);
                 update_compiler_output(
-                    id.clone(),
+                    id,
                     &co,
                     self.data.project_songs.list(),
                     &mut self.project_tab.song_table,
@@ -571,7 +571,7 @@ impl Project {
     fn new_blank_song_tab(&mut self) {
         let id = ItemId::new();
 
-        self.new_song_tab(id.clone(), blank_mml_file());
+        self.new_song_tab(id, blank_mml_file());
     }
 
     fn open_mml_file_dialog(&mut self) {
@@ -606,22 +606,22 @@ impl Project {
             None => return,
         };
 
-        if let Some(song_tab) = self.song_tabs.get_mut(id) {
+        if let Some(song_tab) = self.song_tabs.get_mut(&id) {
             self.tab_manager.set_selected_tab(song_tab);
         } else {
-            self.load_new_song_tab(id.clone(), &song.source.clone());
+            self.load_new_song_tab(id, &song.source.clone());
         }
     }
 
     // NOTE: No deduplication. Do not create song tabs for a `song_id` or `path` that already exists
     fn load_new_song_tab(&mut self, song_id: ItemId, source: &SourcePathBuf) {
         if let Some(f) = load_mml_file(source, &self.data.pf_parent_path) {
-            let song_tab = SongTab::new(song_id.clone(), &f, self.sender.clone());
+            let song_tab = SongTab::new(song_id, &f, self.sender.clone());
 
             self.tab_manager.add_or_modify(&song_tab, f.path, None);
             self.tab_manager.set_selected_tab(&song_tab);
 
-            self.song_tabs.insert(song_id.clone(), song_tab);
+            self.song_tabs.insert(song_id, song_tab);
 
             // Update song in the compiler thread (in case the file changed)
             let _ = self
@@ -632,15 +632,14 @@ impl Project {
 
     // NOTE: minimal deduplication. You should not create song tabs for a `song_id` or `path` that already exists
     fn new_song_tab(&mut self, song_id: ItemId, file: data::TextFile) {
-        if let hash_map::Entry::Vacant(e) = self.song_tabs.entry(song_id.clone()) {
+        if let hash_map::Entry::Vacant(e) = self.song_tabs.entry(song_id) {
             let new_file = file.path.is_none();
 
-            let song_tab = SongTab::new(song_id.clone(), &file, self.sender.clone());
+            let song_tab = SongTab::new(song_id, &file, self.sender.clone());
             self.tab_manager.add_or_modify(&song_tab, file.path, None);
 
             if new_file {
-                self.tab_manager
-                    .mark_unsaved(FileType::Song(song_id.clone()));
+                self.tab_manager.mark_unsaved(FileType::Song(song_id));
             }
             self.tab_manager.set_selected_tab(&song_tab);
 
@@ -682,7 +681,7 @@ impl Project {
                 None => false,
             },
             FileType::Song(id) => {
-                let id = id.clone();
+                let id = *id;
                 match self.song_tabs.get(&id) {
                     Some(song_tab) => match self
                         .tab_manager

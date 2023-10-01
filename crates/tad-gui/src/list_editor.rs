@@ -193,8 +193,8 @@ where
         self.list.get(index).map(|(_id, item)| item)
     }
 
-    pub fn get_with_id(&self, index: usize) -> Option<&(ItemId, T)> {
-        self.list.get(index)
+    pub fn get_with_id(&self, index: usize) -> Option<(ItemId, &T)> {
+        self.list.get(index).map(|(id, item)| (*id, item))
     }
 
     pub fn can_add(&self) -> bool {
@@ -244,7 +244,7 @@ where
                             NameDeduplicator::dedupe_name(&mut new_value, &self.list, Some(index));
                         }
 
-                        let c_message = ItemChanged::AddedOrEdited(id.clone(), new_value.clone());
+                        let c_message = ItemChanged::AddedOrEdited(*id, new_value.clone());
 
                         let action = ListAction::Edit(index, new_value);
                         update_list(&mut self.list, &action);
@@ -267,7 +267,7 @@ where
                     let c_message = self
                         .list
                         .get(i)
-                        .map(|(id, item)| ItemChanged::AddedOrEdited(id.clone(), item.clone()));
+                        .map(|(id, item)| ItemChanged::AddedOrEdited(*id, item.clone()));
 
                     (action, c_message)
                 } else {
@@ -297,9 +297,10 @@ where
                             let action = ListAction::Add(i, item);
 
                             update_list(&mut self.list, &action);
-                            let c_message = self.list.get(i).map(|(id, item)| {
-                                ItemChanged::AddedOrEdited(id.clone(), item.clone())
-                            });
+                            let c_message = self
+                                .list
+                                .get(i)
+                                .map(|(id, item)| ItemChanged::AddedOrEdited(*id, item.clone()));
 
                             (action, c_message)
                         } else {
@@ -307,7 +308,7 @@ where
                         }
                     }
                     ListMessage::RemoveSelected => {
-                        let item_id = self.list[sel_index].0.clone();
+                        let item_id = self.list[sel_index].0;
                         let c_message = ItemChanged::Removed(item_id);
 
                         let action = ListAction::Remove(sel_index);
@@ -460,7 +461,7 @@ where
         match self.list.get_with_id(index) {
             Some((id, item)) => {
                 self.selected = Some(index);
-                editor.set_selected(index, id.clone(), item);
+                editor.set_selected(index, id, item);
                 editor.list_buttons().selected_changed(
                     index,
                     self.list.len(),
@@ -620,7 +621,7 @@ where
         match self.list.get_with_id(index) {
             Some((id, item)) => {
                 self.selected = Some(index);
-                editor.set_selected(index, id.clone(), item);
+                editor.set_selected(index, id, item);
 
                 let co = self.compiler_output.get(index).unwrap_or(&None);
                 editor.set_selected_compiler_output(co);

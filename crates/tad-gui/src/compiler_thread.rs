@@ -43,7 +43,7 @@ mod item_id {
     ///   1. Not worry about the item index if the compiler thread is slow and the index changed
     ///      before the item has finished compiling.
     ///   2. Ignore any list item moved events in the compiler thread.
-    #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
     pub struct ItemId(u64);
 
     impl ItemId {
@@ -219,7 +219,7 @@ impl<ItemT> IList<ItemT> {
         self.map = data
             .iter()
             .enumerate()
-            .map(|(index, (id, _item))| (id.clone(), index))
+            .map(|(index, (id, _item))| (*id, index))
             .collect();
 
         self.items = data.into_iter().map(|(_id, item)| item).collect();
@@ -333,12 +333,12 @@ where
         self.map = data
             .iter()
             .enumerate()
-            .map(|(index, (id, _item))| (id.clone(), index))
+            .map(|(index, (id, _item))| (*id, index))
             .collect();
 
         self.output = data
             .iter()
-            .map(|(id, item)| compiler_fn(id.clone(), item))
+            .map(|(id, item)| compiler_fn(*id, item))
             .collect();
 
         self.name_map = data
@@ -376,7 +376,7 @@ where
             }
             None => {
                 let index = self.items.len();
-                let out = compiler_fn(id.clone(), &item);
+                let out = compiler_fn(id, &item);
 
                 self.name_map
                     .insert(item.name().to_string(), Self::cast_index(index));
@@ -420,8 +420,8 @@ where
     }
 
     fn recompile_all(&mut self, compiler_fn: impl Fn(ItemId, &ItemT) -> OutT) {
-        for (id, &index) in &self.map {
-            let out = compiler_fn(id.clone(), &self.items[index]);
+        for (&id, &index) in &self.map {
+            let out = compiler_fn(id, &self.items[index]);
             self.output[index] = out;
         }
     }
@@ -431,10 +431,10 @@ where
         mut compiler_fn: impl FnMut(ItemId, &ItemT) -> OutT,
         filter_fn: impl Fn(&ItemT) -> bool,
     ) {
-        for (id, &index) in &self.map {
+        for (&id, &index) in &self.map {
             let item = &self.items[index];
             if filter_fn(item) {
-                let out = compiler_fn(id.clone(), item);
+                let out = compiler_fn(id, item);
                 self.output[index] = out;
             }
         }
@@ -670,10 +670,7 @@ impl SongCompiler {
                 sender.send(CompilerOutput::Song(id, Ok(to_gui)));
             }
             Err(e) => {
-                sender.send(CompilerOutput::Song(
-                    id.clone(),
-                    Err(SongError::TooLarge(e)),
-                ));
+                sender.send(CompilerOutput::Song(id, Err(SongError::TooLarge(e))));
             }
         }
 
@@ -718,14 +715,8 @@ impl SongCompiler {
                     .iter()
                     .map(|(id, item)| {
                         (
-                            id.clone(),
-                            self.load_song(
-                                id.clone(),
-                                &item.source,
-                                pf_songs,
-                                dependencies,
-                                sender,
-                            ),
+                            *id,
+                            self.load_song(*id, &item.source, pf_songs, dependencies, sender),
                         )
                     })
                     .collect();
@@ -737,8 +728,8 @@ impl SongCompiler {
                 #[allow(clippy::map_entry)] // Cannot use HashMap::entry() due to the borrow checker
                 if !self.songs.contains_key(id) {
                     self.songs.insert(
-                        id.clone(),
-                        self.load_song(id.clone(), &item.source, pf_songs, dependencies, sender),
+                        *id,
+                        self.load_song(*id, &item.source, pf_songs, dependencies, sender),
                     );
                 }
             }
@@ -759,7 +750,7 @@ impl SongCompiler {
         for (id, s) in self.songs.iter_mut() {
             let song_name = pf_songs.get(id).map(|s| &s.name);
 
-            s.song_data = Self::compile_song(id.clone(), song_name, &s.file, dependencies, sender);
+            s.song_data = Self::compile_song(*id, song_name, &s.file, dependencies, sender);
         }
 
         self.output_largest_song_size(sender);
@@ -773,10 +764,7 @@ impl SongCompiler {
                 match compiler::validate_song_size(song_data, common_data_size) {
                     Ok(()) => {}
                     Err(e) => {
-                        sender.send(CompilerOutput::Song(
-                            id.clone(),
-                            Err(SongError::TooLarge(e)),
-                        ));
+                        sender.send(CompilerOutput::Song(*id, Err(SongError::TooLarge(e))));
                     }
                 }
             }
@@ -793,7 +781,7 @@ impl SongCompiler {
     ) {
         let song_name = pf_songs.get(&id).map(|s| &s.name);
 
-        match self.songs.entry(id.clone()) {
+        match self.songs.entry(id) {
             Entry::Occupied(mut o) => {
                 let state = o.get_mut();
                 state.file.contents = mml;
@@ -1010,10 +998,8 @@ fn bg_thread(
                 songs.edit_and_compile_song(id, mml, &pf_songs, &song_dependencies, &sender);
             }
             ToCompiler::CompileAndPlaySong(id, mml) => {
-                let id2 = id.clone();
-
                 sender.send_audio(AudioMessage::Stop);
-                songs.edit_and_compile_song(id2, mml, &pf_songs, &song_dependencies, &sender);
+                songs.edit_and_compile_song(id, mml, &pf_songs, &song_dependencies, &sender);
                 if let Some(song) = songs.get_song_data(&id) {
                     sender.send_audio(AudioMessage::PlaySong(id, song.clone()));
                 }

@@ -368,7 +368,7 @@ impl ListEditor<SoundEffectInput> for SoundEffectsTab {
                     state.commit_sfx();
 
                     state.selected = Some(index);
-                    state.selected_id = Some(id.clone());
+                    state.selected_id = Some(id);
                     state.old_name = sfx.name.clone();
 
                     self.name.set_value(sfx.name.as_str());
@@ -406,8 +406,8 @@ impl State {
 
     fn play_sound_effect(&mut self) {
         self.commit_sfx_if_changed();
-        if let Some(id) = &self.selected_id {
-            self.sender.send(Message::PlaySoundEffect(id.clone()));
+        if let Some(id) = self.selected_id {
+            self.sender.send(Message::PlaySoundEffect(id));
         }
     }
 
