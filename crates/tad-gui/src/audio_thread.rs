@@ -298,8 +298,6 @@ fn audio_thread(rx: mpsc::Receiver<AudioMessage>, sender: mpsc::Sender<AudioMess
 
             AudioMessage::PlaySong(id, song) => {
                 if let Some(common_data) = &common_audio_data {
-                    playback.lock();
-
                     match load_song(&mut emu, common_data, &song) {
                         Ok(()) => {
                             state = State::Running;
