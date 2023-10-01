@@ -10,7 +10,7 @@ use crate::driver_constants::{MAX_INSTRUMENTS, PITCH_TABLE_SIZE};
 use crate::errors::{PitchError, PitchTableError};
 use crate::notes::{self, Note};
 
-const SEMITONES_PER_OCTAVE: i32 = notes::SEMITONS_PER_OCTAVE as i32;
+const SEMITONES_PER_OCTAVE: i32 = notes::SEMITONES_PER_OCTAVE as i32;
 
 // Using micro-semitones to remove floating point equality comparisons.
 const SEMITONE_SCALE: i32 = 1_000_000;

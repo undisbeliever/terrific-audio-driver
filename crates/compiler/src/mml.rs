@@ -27,7 +27,7 @@ use crate::mml_command_parser::{
     parse_mml_lines, IdentifierStr, ManualVibrato, MmlCommand, MmlCommandWithPos, MpVibrato,
     PanCommand, PortamentoSpeed, VolumeCommand,
 };
-use crate::notes::{Note, SEMITONS_PER_OCTAVE};
+use crate::notes::{Note, SEMITONES_PER_OCTAVE};
 use crate::pitch_table::PitchTable;
 use crate::spc_file_export;
 use crate::time::{Bpm, TickClock, TickCounter, ZenLen, DEFAULT_BPM, DEFAULT_ZENLEN, TIMER_HZ};
@@ -885,7 +885,7 @@ impl MmlBytecodeGenerator<'_> {
 
         // Calculate the minimum and maximum pitches of the vibrato.
         // This produces more accurate results when cents is very large (ie, 400)
-        let pow = f64::from(mp.depth_in_cents) / f64::from(SEMITONS_PER_OCTAVE as u32 * 100);
+        let pow = f64::from(mp.depth_in_cents) / f64::from(SEMITONES_PER_OCTAVE as u32 * 100);
         let p1 = f64::from(pitch) * 2.0_f64.powf(-pow);
         let p2 = f64::from(pitch) * 2.0_f64.powf(pow);
 

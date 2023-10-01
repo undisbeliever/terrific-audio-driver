@@ -14,8 +14,8 @@ use serde::{Deserialize, Serialize, Serializer};
 u8_value_newtype!(MidiNote, MidiNoteNumberOutOfRange, NoMidiNote, 0, 127);
 
 pub const LAST_OCTAVE: u8 = 7;
-pub const SEMITONS_PER_OCTAVE: u8 = 12;
-pub const LAST_NOTE_ID: u8 = (LAST_OCTAVE + 1) * SEMITONS_PER_OCTAVE - 1;
+pub const SEMITONES_PER_OCTAVE: u8 = 12;
+pub const LAST_NOTE_ID: u8 = (LAST_OCTAVE + 1) * SEMITONES_PER_OCTAVE - 1;
 
 #[derive(Clone)]
 pub struct PitchChar(u8);
@@ -38,7 +38,7 @@ impl TryFrom<u8> for PitchChar {
     type Error = ValueError;
 
     fn try_from(i: u8) -> Result<Self, Self::Error> {
-        if i < SEMITONS_PER_OCTAVE {
+        if i < SEMITONES_PER_OCTAVE {
             Ok(PitchChar(i))
         } else {
             Err(ValueError::InvalidPitch)
@@ -84,19 +84,19 @@ impl Note {
     }
 
     pub fn from_pitch_and_octave(p: PitchChar, o: Octave) -> Result<Self, ValueError> {
-        Self::from_note_id(p.0 + o.as_u8() * SEMITONS_PER_OCTAVE)
+        Self::from_note_id(p.0 + o.as_u8() * SEMITONES_PER_OCTAVE)
     }
 
     pub fn first_note_for_octave(o: Octave) -> Self {
-        const _: () = assert!(LAST_OCTAVE * SEMITONS_PER_OCTAVE <= LAST_NOTE_ID);
+        const _: () = assert!(LAST_OCTAVE * SEMITONES_PER_OCTAVE <= LAST_NOTE_ID);
 
-        Self::from_note_id(o.as_u8() * SEMITONS_PER_OCTAVE).unwrap()
+        Self::from_note_id(o.as_u8() * SEMITONES_PER_OCTAVE).unwrap()
     }
 
     pub fn last_note_for_octave(o: Octave) -> Self {
-        const _: () = assert!((LAST_OCTAVE + 1) * SEMITONS_PER_OCTAVE - 1 == LAST_NOTE_ID);
+        const _: () = assert!((LAST_OCTAVE + 1) * SEMITONES_PER_OCTAVE - 1 == LAST_NOTE_ID);
 
-        let note_id = (o.as_u8() + 1) * SEMITONS_PER_OCTAVE - 1;
+        let note_id = (o.as_u8() + 1) * SEMITONES_PER_OCTAVE - 1;
         Self::from_note_id(note_id).unwrap()
     }
 
@@ -108,8 +108,8 @@ impl Note {
         if octave > LAST_OCTAVE.into() {
             return Err(ValueError::OctaveOutOfRange);
         }
-        assert!((LAST_OCTAVE + 1) * SEMITONS_PER_OCTAVE < u8::MAX);
-        let semitones_per_octave = u32::from(SEMITONS_PER_OCTAVE);
+        assert!((LAST_OCTAVE + 1) * SEMITONES_PER_OCTAVE < u8::MAX);
+        let semitones_per_octave = u32::from(SEMITONES_PER_OCTAVE);
 
         let note_id = (u32::from(pitch.0) + octave * semitones_per_octave)
             .checked_add_signed(semitone_offset);
@@ -127,7 +127,7 @@ impl Note {
     }
 
     pub fn from_mml_pitch(p: MmlPitch, o: Octave, semitone_offset: i8) -> Result<Self, ValueError> {
-        let note_id = (p.pitch.0 + o.0 * SEMITONS_PER_OCTAVE)
+        let note_id = (p.pitch.0 + o.0 * SEMITONES_PER_OCTAVE)
             .checked_add_signed(p.semitone_offset)
             .and_then(|n| n.checked_add_signed(semitone_offset));
 
