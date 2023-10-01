@@ -6,14 +6,20 @@
 
 #![allow(clippy::assertions_on_constants)]
 
+use crate::bytecode::{
+    BcTerminator, BcTicksKeyOff, BcTicksNoKeyOff, Bytecode, InstrumentId, PlayNoteTicks, Volume,
+};
 use crate::driver_constants::{
     AUDIO_RAM_SIZE, COMMON_DATA_ADDR, MAX_SONG_DATA_SIZE, MAX_SUBROUTINES, N_MUSIC_CHANNELS,
     SFX_TICK_CLOCK, SONG_HEADER_CHANNELS_SIZE, SONG_HEADER_SIZE, SONG_HEADER_TICK_TIMER_OFFSET,
 };
-use crate::errors::{SongError, SongTooLargeError};
+use crate::envelope::Envelope;
+use crate::errors::{SongError, SongTooLargeError, ValueError};
 use crate::mml::{calc_song_duration, MetaData, MmlData};
+use crate::notes::Note;
 use crate::sound_effects::CompiledSoundEffect;
 
+use std::cmp::min;
 use std::time::Duration;
 
 const NULL_OFFSET: u16 = 0xffff_u16;
@@ -53,15 +59,52 @@ impl SongData {
     }
 }
 
+pub fn test_sample_song(
+    instrument: u8,
+    note: Note,
+    note_length: u32,
+    envelope: Option<Envelope>,
+) -> Result<SongData, ValueError> {
+    let mut bc = Bytecode::new(false, true);
+
+    let inst = InstrumentId::try_from(instrument)?;
+
+    bc.set_volume(Volume::new(255));
+
+    match envelope {
+        None => bc.set_instrument(inst),
+        Some(Envelope::Adsr(adsr)) => bc.set_instrument_and_adsr(inst, adsr),
+        Some(Envelope::Gain(gain)) => bc.set_instrument_and_gain(inst, gain),
+    };
+
+    let mut remaining_length = min(2000, note_length);
+    while remaining_length > BcTicksKeyOff::MAX {
+        let nl = min(remaining_length, BcTicksNoKeyOff::MAX);
+        remaining_length -= nl;
+
+        let nl = BcTicksNoKeyOff::try_from(nl)?;
+        bc.play_note(note, PlayNoteTicks::NoKeyOff(nl));
+    }
+
+    let nl = BcTicksKeyOff::try_from(remaining_length)?;
+    bc.play_note(note, PlayNoteTicks::KeyOff(nl));
+
+    let bytecode = bc.bytecode(BcTerminator::DisableChannel).unwrap();
+
+    Ok(sfx_bytecode_to_song(&bytecode))
+}
+
 pub fn sound_effect_to_song(sfx: &CompiledSoundEffect) -> SongData {
+    sfx_bytecode_to_song(sfx.data())
+}
+
+fn sfx_bytecode_to_song(bytecode: &[u8]) -> SongData {
     const SONG_DATA_OFFSET: u16 = SONG_HEADER_SIZE as u16;
 
-    let sfx_data = sfx.data();
-
-    assert!(!sfx_data.is_empty());
+    assert!(!bytecode.is_empty());
 
     let header_size = SONG_HEADER_SIZE;
-    let total_size = header_size + sfx_data.len();
+    let total_size = header_size + bytecode.len();
 
     assert!(total_size < MAX_SONG_DATA_SIZE);
 
@@ -73,7 +116,7 @@ pub fn sound_effect_to_song(sfx: &CompiledSoundEffect) -> SongData {
     header[SONG_HEADER_TICK_TIMER_OFFSET] = SFX_TICK_CLOCK;
 
     SongData {
-        data: [header.as_slice(), sfx_data].concat(),
+        data: [header.as_slice(), bytecode].concat(),
         metadata: MetaData::blank_sfx_metadata(),
         duration: None,
     }

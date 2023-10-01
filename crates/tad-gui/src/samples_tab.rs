@@ -4,7 +4,7 @@
 //
 // SPDX-License-Identifier: MIT
 
-use crate::compiler_thread::{CombineSamplesError, InstrumentOutput, ItemId};
+use crate::compiler_thread::{CombineSamplesError, InstrumentOutput, ItemId, PlaySampleArgs};
 use crate::helpers::*;
 use crate::list_editor::{
     CompilerOutputGui, ListAction, ListButtons, ListEditor, ListEditorTable, ListMessage,
@@ -15,17 +15,20 @@ use crate::tabs::{FileType, Tab};
 use crate::Message;
 
 use compiler::data::{self, Instrument, LoopSetting};
+use compiler::errors::ValueError;
 use compiler::path::SourcePathBuf;
 use compiler::samples::{BRR_EXTENSION, WAV_EXTENSION};
-use compiler::{Adsr, Envelope, Gain, STARTING_OCTAVE};
-use fltk::button::Button;
+use compiler::{Adsr, Envelope, Gain, Note, Octave, PitchChar, STARTING_OCTAVE};
+use fltk::button::{Button, RadioRoundButton};
+use fltk::frame::Frame;
+use fltk::misc::Spinner;
 
 use std::cell::RefCell;
 use std::rc::Rc;
 
 use fltk::app;
-use fltk::enums::{Color, Event};
-use fltk::group::Flex;
+use fltk::enums::{Align, Color, Event};
+use fltk::group::{Flex, Group};
 use fltk::input::{FloatInput, Input, IntInput};
 use fltk::menu::Choice;
 use fltk::output::Output;
@@ -180,7 +183,7 @@ pub struct InstrumentEditor {
 }
 
 impl InstrumentEditor {
-    fn new(sender: app::Sender<Message>) -> Rc<RefCell<InstrumentEditor>> {
+    fn new(sender: app::Sender<Message>) -> (Rc<RefCell<InstrumentEditor>>, i32) {
         let mut form = InputForm::new(15);
 
         let name = form.add_input::<Input>("Name:");
@@ -192,6 +195,7 @@ impl InstrumentEditor {
         let envelope = form.add_two_inputs::<Choice, Input>("Envelope:", 12);
         let comment = form.add_input::<Input>("Comment:");
 
+        let form_height = 9 * form.row_height();
         let group = form.take_group_end();
 
         let (source, mut source_button) = source;
@@ -260,7 +264,7 @@ impl InstrumentEditor {
                 move |_widget| s.borrow_mut().source_button_clicked()
             });
         }
-        out
+        (out, form_height)
     }
 
     fn widget_event_handler(s: &Rc<RefCell<InstrumentEditor>>, ev: Event) -> bool {
@@ -560,12 +564,299 @@ impl InstrumentEditor {
     }
 }
 
+pub struct TestSampleWidget {
+    selected_index: Option<usize>,
+    selected_id: Option<ItemId>,
+
+    sender: app::Sender<Message>,
+
+    group: Group,
+
+    octave: Spinner,
+    note_length: Spinner,
+
+    default_envelope: RadioRoundButton,
+    adsr_envelope: RadioRoundButton,
+    gain_envelope: RadioRoundButton,
+
+    adsr_a: Spinner,
+    adsr_d: Spinner,
+    adsr_sl: Spinner,
+    adsr_sr: Spinner,
+
+    gain: Spinner,
+}
+
+impl TestSampleWidget {
+    const KEYS: [(i32, &str); 12] = [
+        (0, "C"),
+        (1, ""),
+        (2, "D"),
+        (3, ""),
+        (4, "E"),
+        (6, "F"),
+        (7, ""),
+        (8, "G"),
+        (9, ""),
+        (10, "A"),
+        (11, ""),
+        (12, "B"),
+    ];
+
+    fn new(sender: app::Sender<Message>) -> Rc<RefCell<Self>> {
+        let mut group = Group::default();
+        group.make_resizable(false);
+
+        let line_height = ch_units_to_width(&group, 3);
+
+        let widget_width = ch_units_to_width(&group, 66);
+        let widget_height = line_height * 6;
+
+        group.set_size(widget_width, widget_height);
+
+        let key_width = ch_units_to_width(&group, 5);
+        let key_height = line_height * 3;
+        let key_group_width = key_width * 7;
+
+        let key_group = Group::new(0, 0, key_group_width, key_height * 2, None);
+
+        let mut key_buttons: Vec<Button> = Vec::with_capacity(Self::KEYS.len());
+
+        for (x, label) in Self::KEYS {
+            let x = x * key_width / 2;
+            let y = i32::from(!label.is_empty()) * key_height;
+
+            let mut b = Button::new(x, y, key_width, key_height, None);
+            if !label.is_empty() {
+                b.set_color(Color::BackGround2);
+                b.set_label_color(Color::Foreground);
+                b.set_label(label);
+            } else {
+                b.set_color(Color::Foreground);
+            }
+            key_buttons.push(b);
+        }
+
+        key_group.end();
+
+        let options_width = ch_units_to_width(&group, 30);
+        let options_x = widget_width - options_width;
+        let options_group = Group::new(options_x, 0, options_width, line_height * 7, None);
+
+        let pos = |row, n_cols, col| -> (i32, i32, i32, i32) {
+            assert!(col < n_cols);
+
+            let spacing = (options_width - 2) / n_cols;
+            let w = spacing - 2;
+            let h = line_height;
+            let x = options_x + spacing * col + 2;
+            let y = row * h;
+
+            (x, y, w, h)
+        };
+
+        let radio = |row, n_cols, col, label: &'static str| {
+            let (x, y, w, h) = pos(row, n_cols, col);
+            RadioRoundButton::new(x, y, w, h, Some(label))
+        };
+
+        let spinner =
+            |row, n_cols, col, label: &'static str, tooltip: &str, min: u8, max: u8, value: u8| {
+                let (x, y, w, h) = pos(row, n_cols, col);
+                let mut c = Spinner::new(x, y, w, h, Some(label));
+                if !tooltip.is_empty() {
+                    c.set_tooltip(tooltip);
+                }
+                c.set_align(Align::Top);
+                c.set_range(min.into(), max.into());
+                c.set_value(value.into());
+                c.set_step(1.0);
+                c
+            };
+
+        let octave = spinner(1, 2, 0, "Octave", "", Octave::MIN, Octave::MAX, 4);
+        let mut note_length = spinner(1, 2, 1, "Note Length", "", 2, 255, u8::MAX);
+        note_length.set_maximum(1000.0);
+
+        let default_envelope = radio(3, 3, 0, "Default");
+        let adsr_envelope = radio(3, 3, 1, "ADSR");
+        let gain_envelope = radio(3, 3, 2, "GAIN");
+
+        let adsr_a = spinner(5, 4, 0, "A", "Attack", 0, Adsr::ATTACK_MAX, 12);
+        let adsr_d = spinner(5, 4, 1, "D", "Decay", 0, Adsr::DECAY_MAX, 2);
+        #[rustfmt::skip]
+        let adsr_sl = spinner(5, 4, 2, "SL", "Sustain Level", 0, Adsr::SUSTAIN_LEVEL_MAX, 2);
+        let adsr_sr = spinner(5, 4, 3, "SR", "Sustain Rate", 0, Adsr::SUSTAIN_RATE_MAX, 16);
+
+        let gain = spinner(5, 2, 0, "GAIN", "", 0, u8::MAX, 127);
+
+        options_group.end();
+
+        group.end();
+
+        let out = Rc::from(RefCell::new(Self {
+            selected_index: None,
+            selected_id: None,
+            sender,
+            group,
+
+            octave,
+            note_length,
+
+            default_envelope,
+            adsr_envelope,
+            gain_envelope,
+
+            adsr_a,
+            adsr_d,
+            adsr_sl,
+            adsr_sr,
+
+            gain,
+        }));
+
+        {
+            let mut widget = out.borrow_mut();
+
+            let set_envelope_callback = |w: &mut RadioRoundButton| {
+                w.set_callback({
+                    let state = out.clone();
+                    move |_w| {
+                        if let Ok(mut s) = state.try_borrow_mut() {
+                            s.on_envelope_changed();
+                        }
+                    }
+                });
+            };
+            set_envelope_callback(&mut widget.default_envelope);
+            set_envelope_callback(&mut widget.adsr_envelope);
+            set_envelope_callback(&mut widget.gain_envelope);
+
+            widget.clear_selected();
+            widget.on_envelope_changed();
+        }
+
+        for (i, button) in key_buttons.iter_mut().enumerate() {
+            button.set_callback({
+                let state = out.clone();
+                let i = u8::try_from(i).unwrap();
+                let pitch = PitchChar::try_from(i).unwrap();
+                move |_w| {
+                    if let Ok(s) = state.try_borrow() {
+                        let _ = s.on_key_pressed(pitch.clone());
+                    }
+                }
+            });
+        }
+
+        out
+    }
+
+    fn clear_selected(&mut self) {
+        self.selected_index = None;
+        self.selected_id = None;
+        self.group.deactivate();
+    }
+
+    fn set_selected(&mut self, index: usize, id: ItemId, inst: &Instrument) {
+        self.selected_index = Some(index);
+        self.selected_id = Some(id);
+        self.group.activate();
+        self.update_octave_range(inst);
+    }
+
+    fn instrument_changed(&mut self, index: usize, inst: &Instrument) {
+        if self.selected_index == Some(index) {
+            self.update_octave_range(inst);
+        }
+    }
+
+    fn set_active(&mut self, active: bool) {
+        self.group.set_active(active && self.selected_id.is_some());
+    }
+
+    fn update_octave_range(&mut self, inst: &Instrument) {
+        let first = inst.first_octave.as_u8();
+        let last = inst.last_octave.as_u8();
+
+        let min = std::cmp::min(first, last);
+        let max = std::cmp::max(first, last);
+
+        self.octave.set_range(min.into(), max.into());
+
+        let v = self.octave.value() as u8;
+        self.octave.set_value(v.clamp(min, max).into());
+    }
+
+    fn hide_adsr(&mut self) {
+        self.adsr_a.hide();
+        self.adsr_d.hide();
+        self.adsr_sl.hide();
+        self.adsr_sr.hide();
+    }
+
+    fn on_envelope_changed(&mut self) {
+        if self.adsr_envelope.is_toggled() {
+            self.adsr_a.show();
+            self.adsr_d.show();
+            self.adsr_sl.show();
+            self.adsr_sr.show();
+
+            self.gain.hide();
+        } else if self.gain_envelope.is_toggled() {
+            self.hide_adsr();
+            self.gain.show();
+        } else {
+            self.default_envelope.set_value(true);
+            self.hide_adsr();
+            self.gain.hide();
+        }
+    }
+
+    fn get_envelope(&self) -> Result<Option<Envelope>, ValueError> {
+        if self.adsr_envelope.is_toggled() {
+            let adsr = Adsr::try_new(
+                self.adsr_a.value() as u8,
+                self.adsr_d.value() as u8,
+                self.adsr_sl.value() as u8,
+                self.adsr_sr.value() as u8,
+            )?;
+            Ok(Some(Envelope::Adsr(adsr)))
+        } else if self.gain_envelope.is_toggled() {
+            let gain = Gain::new(self.gain.value() as u8);
+            Ok(Some(Envelope::Gain(gain)))
+        } else {
+            Ok(None)
+        }
+    }
+
+    fn on_key_pressed(&self, pitch: PitchChar) -> Result<(), ValueError> {
+        if let Some(id) = self.selected_id {
+            let envelope = self.get_envelope()?;
+            let octave = Octave::try_from(self.octave.value() as u32)?;
+            let note = Note::from_pitch_and_octave(pitch, octave)?;
+
+            self.sender.send(Message::PlaySample(
+                id,
+                PlaySampleArgs {
+                    note,
+                    note_length: self.note_length.value() as u32,
+                    envelope,
+                },
+            ));
+        }
+
+        Ok(())
+    }
+}
+
 pub struct SamplesTab {
     group: Flex,
 
     inst_table: ListEditorTable<InstrumentMapping>,
 
     instrument_editor: Rc<RefCell<InstrumentEditor>>,
+    test_sample_widget: Rc<RefCell<TestSampleWidget>>,
 
     console: TextDisplay,
     console_buffer: TextBuffer,
@@ -605,7 +896,24 @@ impl SamplesTab {
 
         let mut main_group = Flex::default().column();
 
-        let instrument_editor = InstrumentEditor::new(sender);
+        let (instrument_editor, ie_height) = InstrumentEditor::new(sender.clone());
+        main_group.fixed(&instrument_editor.borrow().group, ie_height + group.pad());
+
+        let test_sample_widget = {
+            let mut ts_flex = Flex::default().row();
+            Frame::default();
+            let test_sample_widget = TestSampleWidget::new(sender);
+            Frame::default();
+            ts_flex.end();
+
+            {
+                let ts_group = &test_sample_widget.borrow().group;
+                ts_flex.fixed(ts_group, ts_group.width());
+                main_group.fixed(&ts_flex, ts_group.height());
+            }
+
+            test_sample_widget
+        };
 
         let mut console = TextDisplay::default();
         main_group.fixed(&console, button_height * 4);
@@ -621,6 +929,7 @@ impl SamplesTab {
             group,
             inst_table,
             instrument_editor,
+            test_sample_widget,
             console,
             console_buffer,
         }
@@ -643,17 +952,26 @@ impl ListEditor<Instrument> for SamplesTab {
     fn list_edited(&mut self, action: &ListAction<Instrument>) {
         self.inst_table.list_edited(action);
         self.instrument_editor.borrow_mut().list_edited(action);
+
+        if let ListAction::Edit(index, inst) = action {
+            self.test_sample_widget
+                .borrow_mut()
+                .instrument_changed(*index, inst);
+        }
     }
 
     fn clear_selected(&mut self) {
         self.inst_table.clear_selected();
         self.instrument_editor.borrow_mut().disable_editor();
+        self.test_sample_widget.borrow_mut().clear_selected();
     }
 
     fn set_selected(&mut self, index: usize, id: ItemId, inst: &Instrument) {
         self.inst_table.set_selected(index, id, inst);
-
         self.instrument_editor.borrow_mut().set_data(index, inst);
+        self.test_sample_widget
+            .borrow_mut()
+            .set_selected(index, id, inst);
     }
 }
 
@@ -663,6 +981,10 @@ impl CompilerOutputGui<InstrumentOutput> for SamplesTab {
     }
 
     fn set_selected_compiler_output(&mut self, compiler_output: &Option<InstrumentOutput>) {
+        self.test_sample_widget
+            .borrow_mut()
+            .set_active(matches!(compiler_output, Some(Ok(_))));
+
         match compiler_output {
             None => self.console_buffer.set_text(""),
             Some(Ok(o)) => {

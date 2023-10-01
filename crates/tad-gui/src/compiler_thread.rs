@@ -28,8 +28,8 @@ use compiler::sound_effects::blank_compiled_sound_effects;
 use compiler::sound_effects::{compile_sound_effect_input, CompiledSoundEffect, SoundEffectInput};
 use compiler::CommonAudioData;
 use compiler::PitchTable;
-use compiler::SongData;
-use compiler::{build_common_audio_data, sound_effect_to_song};
+use compiler::{build_common_audio_data, sound_effect_to_song, test_sample_song};
+use compiler::{Envelope, Note, SongData};
 
 extern crate fltk;
 
@@ -59,6 +59,13 @@ mod item_id {
 pub use item_id::ItemId;
 
 #[derive(Debug)]
+pub struct PlaySampleArgs {
+    pub note: Note,
+    pub note_length: u32,
+    pub envelope: Option<Envelope>,
+}
+
+#[derive(Debug)]
 pub enum ItemChanged<T> {
     ReplaceAll(Vec<(ItemId, T)>),
     AddedOrEdited(ItemId, T),
@@ -86,6 +93,7 @@ pub enum ToCompiler {
 
     SongChanged(ItemId, String),
     CompileAndPlaySong(ItemId, String),
+    PlaySample(ItemId, PlaySampleArgs),
 
     ExportSongToSpcFile(ItemId),
 
@@ -317,6 +325,10 @@ where
         self.map.get(id).and_then(|i: &usize| self.output.get(*i))
     }
 
+    fn get_id(&self, id: ItemId) -> Option<&ItemT> {
+        self.map.get(&id).and_then(|i: &usize| self.items.get(*i))
+    }
+
     fn name_map(&self) -> &HashMap<String, u32> {
         &self.name_map
     }
@@ -519,6 +531,47 @@ fn combine_sample_data(
             None
         }
     }
+}
+
+fn build_play_sample_data(
+    instruments: &CList<data::Instrument, Option<Sample>>,
+    id: ItemId,
+    args: PlaySampleArgs,
+) -> Option<(CommonAudioData, SongData)> {
+    match instruments.get_id(id) {
+        None => return None,
+        Some(inst) => {
+            // Test octave is in range.
+            if args.note < Note::first_note_for_octave(inst.first_octave)
+                || args.note > Note::last_note_for_octave(inst.last_octave)
+            {
+                return None;
+            }
+        }
+    }
+
+    let sample = match instruments.get_output_for_id(&id) {
+        Some(Some(s)) => s,
+        _ => return None,
+    };
+
+    let sample_data = match combine_samples(&[sample.clone()]) {
+        Ok(sd) => sd,
+        Err(_) => return None,
+    };
+
+    let blank_sfx = blank_compiled_sound_effects();
+    let common_audio_data = match build_common_audio_data(&sample_data, &blank_sfx) {
+        Ok(common) => common,
+        Err(_) => return None,
+    };
+
+    let song_data = match test_sample_song(0, args.note, args.note_length, args.envelope) {
+        Ok(sd) => sd,
+        Err(_) => return None,
+    };
+
+    Some((common_audio_data, song_data))
 }
 
 fn create_sfx_compiler<'a>(
@@ -1004,6 +1057,12 @@ fn bg_thread(
                     sender.send_audio(AudioMessage::PlaySong(id, song.clone()));
                 }
             }
+            ToCompiler::PlaySample(id, args) => {
+                if let Some((c_data, s_data)) = build_play_sample_data(&instruments, id, args) {
+                    sender.send_audio(AudioMessage::PlaySample(id, c_data, s_data));
+                }
+            }
+
             ToCompiler::ExportSongToSpcFile(id) => {
                 let r = songs.export_to_spc_file(id, &pf_songs, common_audio_data_no_sfx.as_ref());
                 sender.send(CompilerOutput::SpcFileResult(r));

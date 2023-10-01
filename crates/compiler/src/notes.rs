@@ -17,6 +17,7 @@ pub const LAST_OCTAVE: u8 = 7;
 pub const SEMITONS_PER_OCTAVE: u8 = 12;
 pub const LAST_NOTE_ID: u8 = (LAST_OCTAVE + 1) * SEMITONS_PER_OCTAVE - 1;
 
+#[derive(Clone)]
 pub struct PitchChar(u8);
 
 pub fn parse_pitch_char(c: char) -> Result<PitchChar, ValueError> {
@@ -30,6 +31,18 @@ pub fn parse_pitch_char(c: char) -> Result<PitchChar, ValueError> {
         'b' => Ok(PitchChar(11)),
 
         n => Err(ValueError::UnknownNotePitch(n)),
+    }
+}
+
+impl TryFrom<u8> for PitchChar {
+    type Error = ValueError;
+
+    fn try_from(i: u8) -> Result<Self, Self::Error> {
+        if i < SEMITONS_PER_OCTAVE {
+            Ok(PitchChar(i))
+        } else {
+            Err(ValueError::InvalidPitch)
+        }
     }
 }
 
@@ -68,6 +81,10 @@ impl Note {
         assert!(LAST_NOTE_ID < u8::MAX);
 
         Ok(Note { note_id })
+    }
+
+    pub fn from_pitch_and_octave(p: PitchChar, o: Octave) -> Result<Self, ValueError> {
+        Self::from_note_id(p.0 + o.as_u8() * SEMITONS_PER_OCTAVE)
     }
 
     pub fn first_note_for_octave(o: Octave) -> Self {

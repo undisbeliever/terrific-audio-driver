@@ -52,6 +52,7 @@ use compiler::path::{ParentPathBuf, SourcePathBuf};
 use compiler::sound_effects::{convert_sfx_inputs_lossy, SoundEffectInput, SoundEffectsFile};
 use compiler::{data, driver_constants, ProjectFile};
 
+use compiler_thread::PlaySampleArgs;
 use files::{new_project_dialog, open_instrument_sample_dialog, open_project_dialog};
 use fltk::dialog;
 use fltk::prelude::*;
@@ -105,6 +106,7 @@ pub enum Message {
 
     PlaySong(ItemId, String),
     PlaySoundEffect(ItemId),
+    PlaySample(ItemId, PlaySampleArgs),
     PauseResumeAudio(ItemId),
 
     FromCompiler(compiler_thread::CompilerOutput),
@@ -314,6 +316,9 @@ impl Project {
             }
             Message::PlaySoundEffect(id) => {
                 let _ = self.compiler_sender.send(ToCompiler::PlaySoundEffect(id));
+            }
+            Message::PlaySample(id, args) => {
+                let _ = self.compiler_sender.send(ToCompiler::PlaySample(id, args));
             }
             Message::PauseResumeAudio(id) => {
                 let _ = self.audio_sender.send(AudioMessage::PauseResume(id));

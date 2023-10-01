@@ -31,6 +31,7 @@ pub enum AudioMessage {
 
     CommonAudioDataChanged(Option<CommonAudioData>),
     PlaySong(ItemId, SongData),
+    PlaySample(ItemId, CommonAudioData, SongData),
 }
 
 /// A private token to ensure `AudioMessage::RingBufferConsumed` is only created by this module.
@@ -233,6 +234,14 @@ fn wait_for_play_song_message(
                     }
                 }
             }
+            AudioMessage::PlaySample(id, common_data, song_data) => {
+                let mut emu = ShvcSoundEmu::new();
+                emu.power(false);
+
+                if load_song(&mut emu, &common_data, &song_data).is_ok() {
+                    return (emu, None, Some(id));
+                }
+            }
             _ => (),
         }
     }
@@ -307,6 +316,21 @@ fn audio_thread(rx: mpsc::Receiver<AudioMessage>, sender: mpsc::Sender<AudioMess
                     // Stop playback
                     state = State::PauseRequested;
                     item_id = None
+                }
+            }
+
+            AudioMessage::PlaySample(id, common_data, song_data) => {
+                match load_song(&mut emu, &common_data, &song_data) {
+                    Ok(()) => {
+                        state = State::Running;
+                        item_id = Some(id);
+                        playback.resume();
+                    }
+                    Err(()) => {
+                        // Stop playback
+                        state = State::PauseRequested;
+                        item_id = None
+                    }
                 }
             }
 

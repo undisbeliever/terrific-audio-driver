@@ -26,6 +26,11 @@ pub struct Adsr {
 }
 
 impl Adsr {
+    pub const ATTACK_MAX: u8 = (1 << 4) - 1;
+    pub const DECAY_MAX: u8 = (1 << 3) - 1;
+    pub const SUSTAIN_LEVEL_MAX: u8 = (1 << 3) - 1;
+    pub const SUSTAIN_RATE_MAX: u8 = (1 << 5) - 1;
+
     pub const fn try_new(
         attack: u8,
         decay: u8,

@@ -98,6 +98,7 @@ pub enum ValueError {
     InvalidNote,
     NoNoteOctave,
     UnknownNotePitch(char),
+    InvalidPitch,
     UnknownNoteCharacter(char),
 
     InstrumentIdOutOfRange,
@@ -468,6 +469,12 @@ pub enum ExportSpcFileError {
 // From Traits
 // ===========
 
+impl From<InvalidAdsrError> for ValueError {
+    fn from(e: InvalidAdsrError) -> Self {
+        Self::InvalidAdsr(e)
+    }
+}
+
 impl From<ValueError> for BytecodeAssemblerError {
     fn from(e: ValueError) -> Self {
         Self::ArgumentError(e)
@@ -625,6 +632,7 @@ impl Display for ValueError {
             Self::InvalidNote => write!(f, "invalid note"),
             Self::NoNoteOctave => write!(f, "no octave in note"),
             Self::UnknownNotePitch(c) => write!(f, "invalid note pitch: {}", c),
+            Self::InvalidPitch => write!(f, "invalid note pitch"),
             Self::UnknownNoteCharacter(c) => write!(f, "invalid note character: {}", c),
 
             Self::InstrumentIdOutOfRange => out_of_range!("instrument id", InstrumentId),

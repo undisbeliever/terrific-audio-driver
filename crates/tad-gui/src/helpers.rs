@@ -248,6 +248,10 @@ impl InputForm {
         }
     }
 
+    pub fn row_height(&self) -> i32 {
+        self.row_height
+    }
+
     pub fn take_group_end(self) -> Flex {
         self.group.end();
         self.group

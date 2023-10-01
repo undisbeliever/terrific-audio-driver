@@ -34,7 +34,7 @@ pub use data::{
     load_project_file, validate_project_file_names, Name, ProjectFile, UniqueNamesProjectFile,
 };
 pub use envelope::{Adsr, Envelope, Gain};
-pub use notes::{Note, Octave, STARTING_OCTAVE};
+pub use notes::{Note, Octave, PitchChar, STARTING_OCTAVE};
 
 pub use pitch_table::{build_pitch_table, PitchTable};
 pub use samples::{build_sample_and_instrument_data, SampleAndInstrumentData};
@@ -43,7 +43,8 @@ pub use common_audio_data::{build_common_audio_data, CommonAudioData};
 
 pub use mml::{compile_mml, MmlData};
 pub use songs::{
-    song_data, song_duration_string, sound_effect_to_song, validate_song_size, SongData,
+    song_data, song_duration_string, sound_effect_to_song, test_sample_song, validate_song_size,
+    SongData,
 };
 pub use spc_file_export::export_spc_file;
 
