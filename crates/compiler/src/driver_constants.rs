@@ -55,6 +55,11 @@ pub const DRIVER_LOADER_DATA_TYPE_ADDR: u16 = DRIVER_SONG_PTR_ADDR + 2;
 pub enum LoaderDataType {
     MonoSongData = 0x02,
     StereoSongData = 0x82,
+
+    // NOTE: `SkipEchoBufferReset` can corrupt memory if the internal S-DSP echo buffer state
+    // does not match the song's echo EDL/ESA register values.
+    MonoSongDataSkipEchoBufferReset = LoaderDataType::MonoSongData as isize | 0x20,
+    StereoSongDataSkipEchoBufferReset = LoaderDataType::StereoSongData as isize | 0x20,
 }
 
 // S-DSP constants

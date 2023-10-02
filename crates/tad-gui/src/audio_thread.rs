@@ -202,12 +202,11 @@ fn load_song(
     let eb_end = eb_start + edl.buffer_size();
     apuram[eb_start..eb_end].fill(0);
 
-    // Set stereo flag
-    apuram[LOADER_DATA_TYPE_ADDR] = LoaderDataType::StereoSongData as u8;
+    // Set stereo flag and skip the echo buffer reset delay
+    apuram[LOADER_DATA_TYPE_ADDR] = LoaderDataType::StereoSongDataSkipEchoBufferReset as u8;
 
     emu.set_echo_buffer_size(edl.esa_register(), edl.as_u8());
 
-    // ::TODO reset echo buffer position::
     emu.set_spc_registers(DRIVER_CODE_ADDR, 0, 0, 0, 0, 0xff);
 
     Ok(())

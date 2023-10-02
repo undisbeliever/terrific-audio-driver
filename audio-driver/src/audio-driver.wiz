@@ -318,9 +318,7 @@ var _loopEnd : u8 in zpTmp;
         smp.dsp_data = a;
 
         // Save EDA for later.
-        x = a;
-
-        // MUST NOT USE X
+        push(x);
 
 
         // `EDL` does not take affect immediately.
@@ -370,11 +368,9 @@ var _loopEnd : u8 in zpTmp;
         // Assumes GlobalDspAddr.EVOL_R = GlobalDspAddr.EVOL_L | 0x10
         smp.dsp_addr $ 4 = true;
         smp.dsp_data = a;
-
-
-        // X = EDA
-        __clear_echo_buffer__inline(x);
     }
+
+    // A copy of `EDA` is on the stack.
 
 
     y = 0;
@@ -484,21 +480,35 @@ var _loopEnd : u8 in zpTmp;
     } while !negative;
 
 
-    init_io_ports__inline();
+    // Pop EDA from the stack
+    x = pop();
 
 
-    // Wait until the echo buffer can be safely written to.
-    // (wait until `EDL_SLEEP_COUNT` ticks of TIMER_0)
+    // Skip echo buffer clear and `EDL` sleep if the SKIP_ECHO_BUFFER_RESET_BIT bit is set
+    //
+    // WARNING: Skipping the `EDL` sleep can corrupt memory when echo writes are enabled.
+    //
+    // (cannot use `bbs` instructions in wiz, using `mov1 c, addr, bit` instead)
+    carry = loaderDataType $ LoaderDataType.SKIP_ECHO_BUFFER_RESET_BIT;
+    if !carry {
+        // Clear the echo buffer
+        // X = EDA
+        __clear_echo_buffer__inline(x);
 
-    a = EDL_SLEEP_COUNT - 1;
-    do {
-        a -= smp.counter_0;
-    } while carry;
 
+        // Wait until the echo buffer can be safely written to.
+        // (wait until `EDL_SLEEP_COUNT` ticks of TIMER_0)
+        a = EDL_SLEEP_COUNT - 1;
+        do {
+            a -= smp.counter_0;
+        } while carry;
+    }
 
     // Enable echo write and unmute the DSP
     write_dsp(GlobalDspAddr.FLG, 0);
 
+
+    init_io_ports__inline();
 
 
     // Setup and enable the timers

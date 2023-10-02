@@ -54,6 +54,17 @@ namespace LoaderDataType {
     //
     // MUST NOT be set when loading code or common-audio-data.
     let STEREO_FLAG_BIT = 7;
+
+
+    // If this bit is set, the echo buffer clear and `EDL` sleep will be skipped.
+    //
+    // NOT RECOMMENDED.
+    // Enabling this flag can corrupt memory.
+    // Only use this flag if the S-DSP internal echo buffer state is already set to the correct values.
+    // Ie, the echo buffer was setup in a previous song AND the song's `edl` value is unchanged.
+    //
+    // This flag is used to reduce startup lag in exported .SPC files and the audio-driver GUI.
+    let SKIP_ECHO_BUFFER_RESET_BIT = 5;
 }
 
 
