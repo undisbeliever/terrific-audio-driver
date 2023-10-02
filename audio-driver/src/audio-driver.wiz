@@ -1471,17 +1471,6 @@ func set_gain(channelIndex: u8 in x, gain : u8 in a) {
 
 
 // KEEP: X
-func inc_pan(channelIndex : u8 in x, to_add : u8 in a) {
-    a += channelSoA.pan[x];
-    if carry || a >= MAX_PAN + 1 {
-        a = MAX_PAN;
-    }
-
-    ^return set_pan(x, a);
-}
-
-
-// KEEP: X
 #[fallthrough]
 func adjust_pan(channelIndex : u8 in x, detla : i8 in a) {
     carry = false;
