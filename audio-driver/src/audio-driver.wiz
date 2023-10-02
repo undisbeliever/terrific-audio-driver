@@ -1567,23 +1567,27 @@ func __update_voll_and_volr(channelIndex : u8 in x, vol_or_pan : u8 in a, pan_or
     if carry {
         // Stereo
 
-        // Calculate left volume
+        // Calculate right volume
+        // A pan value of `MAX_PAN` is 100% to the right.
         // (MUST NOT USE CARRY)
 
         ya = mul(a, y);
 
-        // ASSUMES VoiceDspAddr.VOL_L == 0
-        smp.dsp_addr = a = ChannelVoiceOffset[x];
-        smp.dsp_data = y;
+        // ASSUMES VoiceDspAddr.VOL_L == 0 && VoiceDspAddr.VOL_R == 1
+        a = ChannelVoiceOffset[x];
+        a++;                            // VOL_R
+        smp.dsp_addr_and_data = ya;
 
-        // Calculate right volume
+
+        // Calculate left volume
+        // A pan value of `0` is 100% to the left.
 
         // Carry set (MUL does not set carry)
         a = MAX_PAN -# channelSoA.pan[x];
         y = channelSoA.volume[x];
         ya = mul(a, y);
 
-        smp.dsp_addr++;
+        smp.dsp_addr--;                 // VOL_L
         smp.dsp_data = y;
 
         ^return process_next_bytecode(x);
