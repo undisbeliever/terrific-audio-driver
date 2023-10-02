@@ -56,16 +56,18 @@ in loader_zeropage {
     // The address of the song data
     var __loader_songPtr : *const u8;
 
-    // Mono/Stereo flag.
+    // The `LoaderDataType` value sent to the loader.
     //
-    // Set by the loader when a song is loaded:
+    // Used as a Mono/Stereo flag.
+    //
+    // Set by the loader:
     //   Advantages: Simpler and uses less code space (no IoCommand for to set/clear stereoFlag).
     //   Disadvantages: Stereo flag is not set until a song is loaded.
-    var stereoFlag : u8;
-    let STEREO_FLAG_BIT = 7;
+    var __loader_dataType : u8;
 }
 
-// Provide read-only access to songPtr address and data in `audio-driver.wiz`
+// Provide read-only access to loader variables `audio-driver.wiz`
 extern const songPtr @ &__loader_songPtr : *const u8;
+extern const loaderDataType @ &__loader_dataType : u8;
 
 

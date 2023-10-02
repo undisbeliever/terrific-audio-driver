@@ -27,6 +27,36 @@
 import "registers";
 
 
+// Loader Commands
+// ===============
+
+namespace LoaderDataType {
+    // The `audio-driver.bin` file.
+    // MUST be loaded first.
+    let CODE        = 0;
+
+    // Common audio data.
+    // Contains samples, pitch table and sound effects.
+    // MUST be loaded after `LoaderDataType.CODE` and before song data.
+    let COMMON_DATA = 1;
+
+    // Any value over `MIN_SONG_VALUE` will load song data
+    // Song data MUST be loaded after `LoaderDataType.COMMON_DATA`.
+    let MIN_SONG_VALUE = 2;
+
+    // The stereo flag is set by the loader when the song is loaded into memory.
+    let MONO_SONG_DATA   = MIN_SONG_VALUE;
+    let STEREO_SONG_DATA = MIN_SONG_VALUE | 0x80;
+
+
+    // If this bit is set, the song will be played in stereo.
+    // If this bit is clear, the song will be played in mono.
+    //
+    // MUST NOT be set when loading code or common-audio-data.
+    let STEREO_FLAG_BIT = 7;
+}
+
+
 // IO Commands
 // ===========
 

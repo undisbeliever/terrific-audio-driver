@@ -393,7 +393,7 @@ var _loopEnd : u8 in zpTmp;
 
 
     // Clear all zero-page variables before `songPtr`.
-    // Assumes `songPtr` is AFTER `zeropage` bank.
+    // Assumes `songPtr` and `loaderDataType` is AFTER `zeropage` bank.
     a = 0;
     x = &songPtr as u8;
     do {
@@ -1564,7 +1564,7 @@ func set_volume(channelIndex : u8 in x, volume : u8 in a) {
 func __update_voll_and_volr(channelIndex : u8 in x, vol_or_pan : u8 in a, pan_or_vol : u8 in y) {
 
     // Reading carry here saves a `SEC` instruction when calculating VOL_R
-    carry = stereoFlag $ STEREO_FLAG_BIT;
+    carry = loaderDataType $ LoaderDataType.STEREO_FLAG_BIT;
     if carry {
         // Stereo
 
