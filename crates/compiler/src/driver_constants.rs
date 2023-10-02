@@ -48,6 +48,14 @@ const _: () = assert!(
 pub const DRIVER_CODE_ADDR: u16 = 0x200;
 pub const DRIVER_LOADER_ADDR: u16 = 0x160;
 pub const DRIVER_SONG_PTR_ADDR: u16 = 0x00ec;
+pub const DRIVER_LOADER_DATA_TYPE_ADDR: u16 = DRIVER_SONG_PTR_ADDR + 2;
+
+// Loader constants
+// MUST match `audio-driver/src/io-commands.wiz`
+pub enum LoaderDataType {
+    MonoSongData = 0x02,
+    StereoSongData = 0x82,
+}
 
 // S-DSP constants
 

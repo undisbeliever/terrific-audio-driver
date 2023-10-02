@@ -9,7 +9,8 @@ use std::time::Duration;
 use crate::audio_driver;
 use crate::common_audio_data::CommonAudioData;
 use crate::driver_constants::{
-    COMMON_DATA_ADDR, DRIVER_CODE_ADDR, DRIVER_LOADER_ADDR, DRIVER_SONG_PTR_ADDR,
+    LoaderDataType, COMMON_DATA_ADDR, DRIVER_CODE_ADDR, DRIVER_LOADER_ADDR,
+    DRIVER_LOADER_DATA_TYPE_ADDR, DRIVER_SONG_PTR_ADDR,
 };
 use crate::errors::ExportSpcFileError;
 use crate::mml::MetaData;
@@ -144,16 +145,23 @@ pub fn export_spc_file(
 
     // Audio-RAM contents
     {
+        const LOADER_DATA_TYPE_ADDR: usize = DRIVER_LOADER_DATA_TYPE_ADDR as usize;
+
         let spc_ram = &mut out[0x100..0x10100];
         let mut write_spc_ram = |addr: u16, data: &[u8]| {
             let addr = usize::from(addr);
             spc_ram[addr..addr + data.len()].copy_from_slice(data);
         };
 
-        write_spc_ram(DRIVER_SONG_PTR_ADDR, &song_data_addr.to_le_bytes());
         write_spc_ram(DRIVER_CODE_ADDR, audio_driver::AUDIO_DRIVER);
         write_spc_ram(COMMON_DATA_ADDR, common_audio_data);
+
         write_spc_ram(song_data_addr, song_data);
+
+        write_spc_ram(DRIVER_SONG_PTR_ADDR, &song_data_addr.to_le_bytes());
+
+        // Set stereo flag
+        spc_ram[LOADER_DATA_TYPE_ADDR] = LoaderDataType::StereoSongData as u8;
 
         // Replace loader with a `STOP` instructions
         spc_ram[usize::from(DRIVER_LOADER_ADDR)] = 0xff;

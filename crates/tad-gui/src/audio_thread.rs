@@ -8,7 +8,8 @@
 
 use compiler::audio_driver;
 use compiler::driver_constants::{
-    COMMON_DATA_ADDR, DRIVER_CODE_ADDR, DRIVER_LOADER_ADDR, DRIVER_SONG_PTR_ADDR,
+    LoaderDataType, COMMON_DATA_ADDR, DRIVER_CODE_ADDR, DRIVER_LOADER_ADDR,
+    DRIVER_LOADER_DATA_TYPE_ADDR, DRIVER_SONG_PTR_ADDR,
 };
 use compiler::{CommonAudioData, SongData};
 use shvc_sound_emu::ShvcSoundEmu;
@@ -167,6 +168,8 @@ fn load_song(
     common_data: &CommonAudioData,
     song: &SongData,
 ) -> Result<(), ()> {
+    const LOADER_DATA_TYPE_ADDR: usize = DRIVER_LOADER_DATA_TYPE_ADDR as usize;
+
     let song_data = song.data();
     let common_data = common_data.data();
     let edl = &song.metadata().echo_buffer.edl;
@@ -198,6 +201,9 @@ fn load_song(
     let eb_start = usize::from(song.metadata().echo_buffer.edl.echo_buffer_addr());
     let eb_end = eb_start + edl.buffer_size();
     apuram[eb_start..eb_end].fill(0);
+
+    // Set stereo flag
+    apuram[LOADER_DATA_TYPE_ADDR] = LoaderDataType::StereoSongData as u8;
 
     emu.set_echo_buffer_size(edl.esa_register(), edl.as_u8());
 
