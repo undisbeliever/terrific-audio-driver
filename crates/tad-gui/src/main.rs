@@ -807,7 +807,8 @@ impl MainWindow {
 
         window.end();
 
-        let about_tab = AboutTab::new(tabs.clone(), sender.clone());
+        let mut about_tab = AboutTab::new(tabs.clone(), sender.clone());
+        about_tab.show();
         tabs.auto_layout();
 
         window.show();
