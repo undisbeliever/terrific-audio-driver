@@ -2,10 +2,12 @@
 # ::TODO either rename the project or change this crate name::
 name = "tad-gui"
 description = "GUI app"
-version = "0.0.0"
 license = "MIT"
 
 edition = "2021"
+
+version = "0.0.0"
+publish = false
 
 
 [dependencies]

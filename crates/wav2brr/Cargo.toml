@@ -1,10 +1,13 @@
 [package]
 name = "wav2brr"
 description = "A mono PCM wav to SNES brr encoder"
-version = "0.0.0"
 license = "MIT"
 
 edition = "2021"
+
+version = "0.0.0"
+publish = false
+
 
 [dependencies]
 # Local crates
