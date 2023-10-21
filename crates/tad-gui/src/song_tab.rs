@@ -12,8 +12,8 @@ use crate::Message;
 
 use compiler::data::TextFile;
 use compiler::errors::MmlCompileErrors;
+use compiler::songs::song_duration_string;
 
-use compiler::song_duration_string;
 use fltk::app;
 use fltk::button::Button;
 use fltk::enums::{Color, Font};

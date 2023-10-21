@@ -14,9 +14,10 @@ use crate::tables::{RowWithStatus, SimpleRow, TableEvent};
 use crate::tabs::{FileType, Tab};
 use crate::Message;
 
+use compiler::data;
 use compiler::data::Name;
 use compiler::path::SourcePathBuf;
-use compiler::{data, song_duration_string};
+use compiler::songs::song_duration_string;
 
 use fltk::app;
 use fltk::enums::Color;

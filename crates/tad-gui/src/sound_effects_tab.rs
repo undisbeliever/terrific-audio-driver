@@ -14,9 +14,9 @@ use crate::tables::{RowWithStatus, SimpleRow};
 use crate::tabs::{FileType, Tab};
 use crate::Message;
 
+use compiler::data::Name;
 use compiler::errors::SfxErrorLines;
 use compiler::sound_effects::{SoundEffectInput, SoundEffectsFile};
-use compiler::Name;
 
 use fltk::app;
 use fltk::button::Button;

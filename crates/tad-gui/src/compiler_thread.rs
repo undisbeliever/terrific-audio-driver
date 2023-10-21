@@ -16,20 +16,22 @@ use std::sync::mpsc;
 use std::thread;
 
 extern crate compiler;
+use compiler::common_audio_data::{build_common_audio_data, CommonAudioData};
 use compiler::data;
 use compiler::data::{load_text_file_with_limit, TextFile};
 use compiler::driver_constants::COMMON_DATA_BYTES_PER_SOUND_EFFECT;
 use compiler::echo::EchoEdl;
+use compiler::envelope::Envelope;
 use compiler::errors::{self, ExportSpcFileError, SongTooLargeError};
 use compiler::mml_tick_count::{build_tick_count_table, MmlTickCountTable};
+use compiler::notes::Note;
 use compiler::path::{ParentPathBuf, SourcePathBuf};
+use compiler::pitch_table::PitchTable;
 use compiler::samples::{combine_samples, load_sample_for_instrument, Sample, SampleFileCache};
+use compiler::songs::{sound_effect_to_song, test_sample_song, SongData};
 use compiler::sound_effects::blank_compiled_sound_effects;
 use compiler::sound_effects::{compile_sound_effect_input, CompiledSoundEffect, SoundEffectInput};
-use compiler::CommonAudioData;
-use compiler::PitchTable;
-use compiler::{build_common_audio_data, sound_effect_to_song, test_sample_song};
-use compiler::{Envelope, Note, SongData};
+use compiler::spc_file_export::export_spc_file;
 
 extern crate fltk;
 
@@ -693,8 +695,8 @@ impl SongCompiler {
             }
         };
 
-        let mml = match compiler::compile_mml(f, name.cloned(), &dep.instruments, &dep.pitch_table)
-        {
+        let name = name.cloned();
+        let mml = match compiler::mml::compile_mml(f, name, &dep.instruments, &dep.pitch_table) {
             Ok(mml) => mml,
             Err(e) => {
                 sender.send(CompilerOutput::Song(id, Err(SongError::Mml(e))));
@@ -703,7 +705,7 @@ impl SongCompiler {
         };
         let tick_count_table = build_tick_count_table(&mml);
 
-        let song_data = match compiler::song_data(mml) {
+        let song_data = match compiler::songs::song_data(mml) {
             Ok(mml) => mml,
             Err(e) => {
                 sender.send(CompilerOutput::Song(id, Err(SongError::Song(e))));
@@ -711,7 +713,7 @@ impl SongCompiler {
             }
         };
 
-        match compiler::validate_song_size(&song_data, dep.common_data_size()) {
+        match compiler::songs::validate_song_size(&song_data, dep.common_data_size()) {
             Ok(()) => {
                 let to_gui = SongOutputData {
                     data_size: song_data.data().len(),
@@ -813,7 +815,7 @@ impl SongCompiler {
 
         for (id, s) in self.songs.iter() {
             if let Some(song_data) = &s.song_data {
-                match compiler::validate_song_size(song_data, common_data_size) {
+                match compiler::songs::validate_song_size(song_data, common_data_size) {
                     Ok(()) => {}
                     Err(e) => {
                         sender.send(CompilerOutput::Song(*id, Err(SongError::TooLarge(e))));
@@ -888,7 +890,7 @@ impl SongCompiler {
             },
         };
 
-        match compiler::export_spc_file(common_audio_data, song_data) {
+        match export_spc_file(common_audio_data, song_data) {
             Err(e) => Err(SpcFileError::Spc(e)),
             Ok(spc_data) => {
                 let name = title

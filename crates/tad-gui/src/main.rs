@@ -48,9 +48,12 @@ use crate::tabs::{
 };
 
 use audio_thread::AudioMessage;
+
+use compiler::data;
+use compiler::data::ProjectFile;
+use compiler::driver_constants;
 use compiler::path::{ParentPathBuf, SourcePathBuf};
 use compiler::sound_effects::{convert_sfx_inputs_lossy, SoundEffectInput, SoundEffectsFile};
-use compiler::{data, driver_constants, ProjectFile};
 
 use compiler_thread::PlaySampleArgs;
 use files::{new_project_dialog, open_instrument_sample_dialog, open_project_dialog};

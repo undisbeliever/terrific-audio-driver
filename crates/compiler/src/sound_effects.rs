@@ -6,12 +6,13 @@
 
 use crate::bytecode::BcTerminator;
 use crate::bytecode_assembler::BytecodeAssembler;
-use crate::data::{load_text_file_with_limit, Instrument, Name, TextFile, UniqueNamesList};
+use crate::data::{
+    load_text_file_with_limit, Instrument, Name, TextFile, UniqueNamesList, UniqueNamesProjectFile,
+};
 use crate::errors::{
     CombineSoundEffectsError, ErrorWithLine, FileError, SoundEffectError, SoundEffectsFileError,
 };
 use crate::path::{ParentPathBuf, SourcePathBuf};
-use crate::UniqueNamesProjectFile;
 
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;

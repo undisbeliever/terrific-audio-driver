@@ -15,10 +15,12 @@ use crate::tabs::{FileType, Tab};
 use crate::Message;
 
 use compiler::data::{self, Instrument, LoopSetting};
+use compiler::envelope::{Adsr, Envelope, Gain};
 use compiler::errors::ValueError;
+use compiler::notes::{Note, Octave, PitchChar, STARTING_OCTAVE};
 use compiler::path::SourcePathBuf;
 use compiler::samples::{BRR_EXTENSION, WAV_EXTENSION};
-use compiler::{Adsr, Envelope, Gain, Note, Octave, PitchChar, STARTING_OCTAVE};
+
 use fltk::button::{Button, RadioRoundButton};
 use fltk::frame::Frame;
 use fltk::misc::Spinner;

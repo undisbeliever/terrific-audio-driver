@@ -7,11 +7,13 @@
 #![allow(clippy::assertions_on_constants)]
 
 use compiler::audio_driver;
+use compiler::common_audio_data::CommonAudioData;
 use compiler::driver_constants::{
     LoaderDataType, COMMON_DATA_ADDR, DRIVER_CODE_ADDR, DRIVER_LOADER_ADDR,
     DRIVER_LOADER_DATA_TYPE_ADDR, DRIVER_SONG_PTR_ADDR,
 };
-use compiler::{CommonAudioData, SongData};
+use compiler::songs::SongData;
+
 use shvc_sound_emu::ShvcSoundEmu;
 
 extern crate sdl2;

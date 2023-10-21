@@ -9,8 +9,8 @@ use crate::list_editor::LaVec;
 
 extern crate compiler;
 use compiler::data;
+use compiler::data::Name;
 use compiler::sound_effects::SoundEffectInput;
-use compiler::Name;
 
 pub trait NameGetter {
     fn name(&self) -> &Name;

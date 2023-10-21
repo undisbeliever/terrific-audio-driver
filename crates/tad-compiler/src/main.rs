@@ -5,15 +5,22 @@
 // SPDX-License-Identifier: MIT
 
 use clap::{Args, Parser, Subcommand};
-use compiler::data::{
-    is_name_or_id, load_text_file_with_limit, load_text_file_with_limit_path, Song, TextFile,
-};
-use compiler::mml_tick_count::build_tick_count_table;
+
 use compiler::{
-    build_pitch_table, compile_mml, song_data, song_duration_string, validate_song_size,
-    CommonAudioData, PitchTable, SongData, UniqueNamesProjectFile,
+    common_audio_data::{build_common_audio_data, CommonAudioData},
+    data::{
+        is_name_or_id, load_text_file_with_limit, load_text_file_with_limit_path, Name, Song,
+        TextFile, UniqueNamesProjectFile,
+    },
+    mml::compile_mml,
+    mml_tick_count::build_tick_count_table,
+    pitch_table::build_pitch_table,
+    pitch_table::PitchTable,
+    samples::build_sample_and_instrument_data,
+    songs::{song_data, song_duration_string, validate_song_size, SongData},
+    sound_effects,
+    spc_file_export::export_spc_file,
 };
-use compiler::{sound_effects, Name};
 
 use std::ffi::OsString;
 use std::fs;
@@ -121,7 +128,7 @@ fn compile_sound_effects(
 fn compile_common_data(args: CompileCommonDataArgs) {
     let pf = load_project_file(&args.json_file);
 
-    let samples = match compiler::build_sample_and_instrument_data(&pf) {
+    let samples = match build_sample_and_instrument_data(&pf) {
         Ok(samples) => Ok(samples),
         Err(e) => {
             eprintln!("{}", e.multiline_display());
@@ -136,7 +143,7 @@ fn compile_common_data(args: CompileCommonDataArgs) {
         _ => error!("Error compiling common audio data"),
     };
 
-    let cad = match compiler::build_common_audio_data(&samples, &sfx) {
+    let cad = match build_common_audio_data(&samples, &sfx) {
         Ok(data) => data,
         Err(e) => error!("{}", e.multiline_display()),
     };
@@ -261,7 +268,7 @@ fn export_song_to_spc_file(args: CompileSongDataArgs) {
     let pf = load_project_file(&args.json_file);
     let (mml_file, song_name) = load_mml_file(&args, &pf);
 
-    let samples = match compiler::build_sample_and_instrument_data(&pf) {
+    let samples = match build_sample_and_instrument_data(&pf) {
         Ok(s) => s,
         Err(e) => error!("{}", e.multiline_display()),
     };
@@ -269,12 +276,12 @@ fn export_song_to_spc_file(args: CompileSongDataArgs) {
 
     let song_data = compile_song(mml_file, song_name, &args, &pf, samples.pitch_table());
 
-    let common_audio_data = match compiler::build_common_audio_data(&samples, &sfx) {
+    let common_audio_data = match build_common_audio_data(&samples, &sfx) {
         Ok(data) => data,
         Err(e) => error!("{}", e.multiline_display()),
     };
 
-    let data = match compiler::export_spc_file(&common_audio_data, &song_data) {
+    let data = match export_spc_file(&common_audio_data, &song_data) {
         Ok(d) => d,
         Err(e) => error!("{}", e),
     };
@@ -331,7 +338,7 @@ fn check_song(
 fn check_project(args: CheckProjectArgs) {
     let pf = load_project_file(&args.json_file);
 
-    let samples = compiler::build_sample_and_instrument_data(&pf);
+    let samples = build_sample_and_instrument_data(&pf);
     if let Err(e) = samples {
         error!("{}", e.multiline_display())
     };
@@ -343,7 +350,7 @@ fn check_project(args: CheckProjectArgs) {
         _ => error!("Error compiling common audio data"),
     };
 
-    let common_audio_data = match compiler::build_common_audio_data(&samples, &sfx) {
+    let common_audio_data = match build_common_audio_data(&samples, &sfx) {
         Ok(data) => data,
         Err(e) => error!("{}", e.multiline_display()),
     };
@@ -389,9 +396,9 @@ fn main() {
 // ==============
 
 fn load_project_file(path: &Path) -> UniqueNamesProjectFile {
-    match compiler::load_project_file(path) {
+    match compiler::data::load_project_file(path) {
         Err(e) => error!("Cannot load project file: {}", e),
-        Ok(m) => match compiler::validate_project_file_names(m) {
+        Ok(m) => match compiler::data::validate_project_file_names(m) {
             Ok(vm) => vm,
             Err(e) => error!("{}", e.multiline_display()),
         },

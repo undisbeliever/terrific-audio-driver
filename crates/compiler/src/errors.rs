@@ -21,10 +21,10 @@ use crate::mml_command_parser::{
     PortamentoSpeed, Quantization, Transpose, MAX_COARSE_VOLUME, MAX_RELATIVE_COARSE_VOLUME,
     MIN_RELATIVE_COARSE_VOLUME,
 };
-use crate::notes::{MidiNote, Note};
+use crate::notes::{MidiNote, Note, Octave};
 use crate::path::PathString;
 use crate::time::{Bpm, TickClock, TickCounter, ZenLen};
-use crate::{mml, spc_file_export, Octave};
+use crate::{mml, spc_file_export};
 
 use std::fmt::Display;
 use std::io;
