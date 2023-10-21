@@ -1005,8 +1005,6 @@ impl CompilerOutputGui<InstrumentOutput> for SamplesTab {
                 self.console_buffer.set_text(&text);
                 self.console.set_text_color(Color::Red);
                 self.console.scroll(0, 0);
-
-                // ::TODO highlight invalid inputs::
             }
         }
     }

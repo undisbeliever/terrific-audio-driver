@@ -6,8 +6,6 @@
 
 #![allow(clippy::assertions_on_constants)]
 
-// ::TODO write integration tests::
-
 use crate::bytecode::{
     BcTerminator, BcTicksKeyOff, BcTicksNoKeyOff, Bytecode, InstrumentId, LoopCount,
     PitchOffsetPerTick, PlayNoteTicks, PortamentoVelocity, SubroutineId,

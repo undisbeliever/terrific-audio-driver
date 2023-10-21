@@ -116,7 +116,6 @@ pub enum CompilerOutput {
 
     SoundEffect(ItemId, Result<usize, errors::SoundEffectError>),
 
-    // ::TODO send song length to the GUI::
     Song(ItemId, SongOutput),
 
     // May return an empty vec

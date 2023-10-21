@@ -85,7 +85,6 @@ pub enum Message {
 
     ExportCurrentTabToSpcFile,
 
-    // ::TODO add menu item for open/load SFX file::
     OpenSfxFileDialog,
     NewSfxFile,
     LoadSfxFile,

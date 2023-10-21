@@ -30,9 +30,6 @@ u8_value_newtype!(
 u8_value_newtype!(Quantization, QuantizeOutOfRange, NoQuantize, 0, 8);
 i8_value_newtype!(Transpose, TransposeOutOfRange, NoTranspose);
 
-// ::TODO Add tick counter and instrument to MmlParser output (for the GUI)::
-// ::TODO Add `Option<MmlPitch>` to PlayNote (for a GUI tracker)::
-
 // An identifier str.
 // Using `&str` to avoid a string copy.
 // The contents of this variable might not be a valid Identifier
@@ -177,7 +174,6 @@ pub enum Match<'a> {
     None(FilePosRange),
 }
 
-// ::TODO is this the right name?
 mod scanner {
     use super::{FilePos, FilePosRange, Match};
 
@@ -1211,7 +1207,6 @@ impl MmlParser<'_> {
         let mut pan = pan;
         let mut volume = volume;
 
-        // ::TODO throughly test merging::
         while let Some(s) = self.parser.next_symbol_one_of(&SYMBOLS) {
             match s {
                 Symbol::CoarseVolume => match self.parser.parse_coarse_volume() {
