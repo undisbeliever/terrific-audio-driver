@@ -10,7 +10,7 @@ use crate::Message;
 extern crate fltk;
 use fltk::enums::{Key, Shortcut};
 use fltk::menu;
-use fltk::prelude::{MenuExt, WidgetExt};
+use fltk::prelude::MenuExt;
 
 // I cannot store `menu::MenuItem` entries in `Menu`, whenever I open a file dialog all future
 // updates to the file menu stop working.
@@ -42,7 +42,6 @@ pub struct Menu {
 impl Menu {
     pub fn new(sender: fltk::app::Sender<Message>) -> Self {
         let mut menu_bar = fltk::menu::MenuBar::default();
-        menu_bar.set_frame(fltk::enums::FrameType::FlatBox);
 
         let mut add = |label, shortcut, flags, f: fn() -> Message| -> menu::MenuItem {
             let index = menu_bar.add(label, shortcut, flags, {
