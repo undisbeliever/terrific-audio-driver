@@ -940,10 +940,6 @@ fn bg_thread(
     let mut common_audio_data_no_sfx = None;
 
     while let Ok(m) = receiever.recv() {
-        // ::TODO remove (silences an unused error message)::
-        let _ = &song_dependencies;
-        let _ = &common_audio_data_no_sfx;
-
         match m {
             ToCompiler::SfxExportOrder(m) => {
                 sfx_export_order.process_message(m);

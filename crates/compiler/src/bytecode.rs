@@ -101,8 +101,6 @@ pub struct SubroutineId {
 }
 
 impl SubroutineId {
-    // ::TODO remove::
-    #[allow(dead_code)]
     pub fn new(id: u8, tick_counter: TickCounter, max_nested_loops: usize) -> Self {
         Self {
             id,

@@ -509,10 +509,11 @@ fn no_sfx_file_gui(sender: app::Sender<Message>) -> Flex {
     group
 }
 
-#[allow(dead_code)]
 mod style {
     pub const NORMAL: char = 'A';
     pub const COMMENT: char = 'B';
+
+    #[allow(dead_code)]
     pub const UNKNOWN: char = 'C';
 
     pub const UNKNOWN_STR: &str = "C";

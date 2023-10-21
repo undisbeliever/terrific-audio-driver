@@ -116,8 +116,6 @@ pub enum Message {
     OpenProject,
 }
 
-// ::TODO remove::
-#[allow(dead_code)]
 pub struct ProjectData {
     pf_parent_path: ParentPathBuf,
 

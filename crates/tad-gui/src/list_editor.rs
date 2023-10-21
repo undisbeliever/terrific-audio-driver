@@ -118,7 +118,6 @@ pub fn process_list_action_map<T, U>(
 /// A `Vec` that can only be resized or reordered by a `ListAction<T>`
 pub struct LaVec<T>(Vec<T>);
 
-#[allow(dead_code)]
 impl<T> LaVec<T> {
     pub fn new() -> Self {
         Self(Vec::new())
@@ -132,6 +131,7 @@ impl<T> LaVec<T> {
         self.0.get_mut(index)
     }
 
+    #[allow(dead_code)]
     pub fn process(&mut self, action: &ListAction<T>)
     where
         T: Clone,
@@ -762,51 +762,6 @@ impl ListButtons {
     }
 }
 
-// ::TODO is this macro required?::
-#[allow(unused_macros)]
-macro_rules! create_list_button_callbacks {
-    ($lb:expr, $msg:ident, $sender:expr, $new_fn:path) => {
-        $lb.add.set_callback({
-            let s: fltk::app::Sender<Message> = $sender.clone();
-            move |_| s.send(Message::$msg(ListMessage::Add($new_fn())))
-        });
-
-        create_list_button_callbacks!($lb, $msg, $sender);
-    };
-    ($lb:expr, $msg:ident, $sender:expr) => {
-        if let Some(b) = &mut $lb.clone {
-            b.set_callback({
-                let s: fltk::app::Sender<Message> = $sender.clone();
-                move |_| s.send(Message::$msg(ListMessage::CloneSelected))
-            });
-        }
-        $lb.remove.set_callback({
-            let s = $sender.clone();
-            move |_| s.send(Message::$msg(ListMessage::RemoveSelected))
-        });
-        $lb.move_top.set_callback({
-            let s = $sender.clone();
-            move |_| s.send(Message::$msg(ListMessage::MoveSelectedToTop))
-        });
-        $lb.move_up.set_callback({
-            let s = $sender.clone();
-            move |_| s.send(Message::$msg(ListMessage::MoveSelectedUp))
-        });
-        $lb.move_down.set_callback({
-            let s = $sender.clone();
-            move |_| s.send(Message::$msg(ListMessage::MoveSelectedDown))
-        });
-        $lb.move_bottom.set_callback({
-            let s = $sender.clone();
-            move |_| s.send(Message::$msg(ListMessage::MoveSelectedToBottom))
-        });
-    };
-}
-// ::TODO is this macro required?::
-#[allow(unused_imports)]
-pub(crate) use create_list_button_callbacks;
-
-#[allow(dead_code)]
 pub enum TableAction {
     None,
     OpenEditor,
