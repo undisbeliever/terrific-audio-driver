@@ -29,7 +29,7 @@ macro_rules! error {
 
 #[derive(Parser)]
 #[command(author, version)]
-#[command(about = "toname audio driver compiler")] // ::TODO rename this project or change this value::
+#[command(about = "terrific audio driver compiler")]
 #[command(arg_required_else_help = true)]
 struct ArgParser {
     #[command(subcommand)]

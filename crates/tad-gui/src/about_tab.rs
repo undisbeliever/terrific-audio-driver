@@ -59,7 +59,7 @@ impl AboutTab {
         group.set_label("About ");
 
         // ::TODO show a logo::
-        let mut title = label_center("toname audio driver");
+        let mut title = label_center("terrific audio driver");
         title.set_label_font(Font::CourierBold);
         title.set_label_size(group.label_size() * 4);
         group.fixed(&title, input_height(&title));

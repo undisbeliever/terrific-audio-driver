@@ -1,5 +1,4 @@
 [package]
-# ::TODO rename this crate to <something>_compiler::
 name = "compiler"
 
 license = "MIT"

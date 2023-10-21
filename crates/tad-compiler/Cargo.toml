@@ -1,5 +1,4 @@
 [package]
-# ::TODO either rename the project or change this crate name::
 name = "tad-compiler"
 description = "CLI app"
 license = "MIT"
