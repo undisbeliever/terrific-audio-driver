@@ -1,0 +1,122 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="svg" width="160mm" height="100mm" version="1.1" viewBox="0 0 160 100" xmlns="http://www.w3.org/2000/svg" xmlns:cc="http://creativecommons.org/ns#" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+ <title>S-DSP envelope</title>
+ <metadata>
+  <rdf:RDF>
+   <cc:Work rdf:about="">
+    <dc:title>S-DSP envelope</dc:title>
+    <cc:license rdf:resource="http://creativecommons.org/publicdomain/zero/1.0/"/>
+   </cc:Work>
+   <cc:License rdf:about="http://creativecommons.org/publicdomain/zero/1.0/">
+    <cc:permits rdf:resource="http://creativecommons.org/ns#Reproduction"/>
+    <cc:permits rdf:resource="http://creativecommons.org/ns#Distribution"/>
+    <cc:permits rdf:resource="http://creativecommons.org/ns#DerivativeWorks"/>
+   </cc:License>
+  </rdf:RDF>
+ </metadata>
+ <style xml:space="preserve">
+text {
+  fill: #000000;
+  stroke: none;
+
+  font-weight: normal;
+  font-size: 4.5px;
+  line-height: 1;
+  font-family: 'Noto Sans', 'Liberation Sans', 'Arial', 'Helvetica', sans-serif;
+  text-align: center;
+  letter-spacing: 0px;
+  word-spacing: 0px;
+  text-anchor: middle;
+}
+#fields text {
+  font-size: 5.5px;
+  font-weight: bold;
+}
+#events text {
+  text-align: start;
+  text-anchor: start;
+}
+text.smaller {
+  font-size: 3.5px;
+}
+text.right {
+  text-align: end;
+  text-anchor: end;
+}
+
+path {
+  stroke: #000000;
+  fill: none;
+  stroke-width: 0.25;
+}
+#lines path {
+  stroke: #444444;
+  stroke-linejoin: bevel;
+}
+#envelope path {
+  stroke-width: 0.75;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+#lines .dashed {
+  stroke-dasharray: 0.5, 0.5;
+  stroke-dashoffset: 0;
+}
+
+@media (prefers-color-scheme: dark) {
+  svg { background: #000000; }
+  text { fill: #ffffff; }
+  path { stroke: #ffffff; }
+  #lines path { stroke: #cccccc }
+}
+</style>
+ <g id="lines">
+  <g class="dashed" transform="translate(5,5)">
+   <path d="m15 10v80"/>
+   <path d="m117 10v47.5"/>
+  </g>
+  <path d="m0 95h160"/>
+  <g transform="translate(68,24.4)">
+   <path d="m0 0v70.6"/>
+   <path d="m-1.5 1.5 1.5-1.5 1.5 1.5"/>
+   <path d="m-1.5 69.1 1.5 1.5 1.5-1.5"/>
+   <path d="m-4 0h8"/>
+  </g>
+  <g transform="translate(40.8,15.5)">
+   <path d="m0 0h12"/>
+   <path d="m10 0a10 10 0 0 1-0.3407417 2.5881905"/>
+  </g>
+  <g transform="translate(72,24.4)">
+   <path d="m0 0h12"/>
+   <path d="m10 0a10 10 0 0 1-2.9289322 7.0710678"/>
+  </g>
+  <path d="m22.588191 85.340742a10 10 0 0 1 7.411809 9.659258"/>
+ </g>
+ <g>
+  <g id="events" transform="translate(0,33)">
+   <text transform="rotate(-90)" y="18">Key On</text>
+   <text transform="rotate(-90)" y="120">Key Off</text>
+  </g>
+  <g transform="translate(0,8)">
+   <text x="30.4">Attack</text>
+   <text x="56.400002">Decay</text>
+   <text x="97">Sustain</text>
+   <text x="134.5">Release</text>
+   <text class="smaller" x="134.5" y="4.5">(fixed rate)</text>
+  </g>
+  <g id="fields">
+   <text x="25" y="93">A</text>
+   <text x="46.799999" y="14.75">D</text>
+   <text class="right" x="66.5" y="48">SL</text>
+   <text x="78" y="23.65">SR</text>
+  </g>
+  <g class="smaller" transform="translate(75.5,48)">
+   <text y="-0.75">SL+1</text>
+   <path d="m-6 0h12"/>
+   <text y="4">8</text>
+  </g>
+ </g>
+ <g id="envelope">
+  <path d="m20 95 20.8-79.5 31.2 8.9c16.263454 15.823902 30.35338 27.844081 49.96598 38.034298l2.8816 32.565702"/>
+ </g>
+</svg>
