@@ -42,6 +42,7 @@ pub enum FileError {
     ReadError(String, io::Error),
     FileTooLarge(String),
     Utf8Error(String),
+    InvalidAsciiControlCharacter(String),
 }
 
 #[derive(Debug)]
@@ -529,6 +530,11 @@ impl Display for FileError {
             Self::Utf8Error(fname) => write!(
                 f,
                 "unable to read {}: file did not contain valid UTF-8",
+                fname
+            ),
+            Self::InvalidAsciiControlCharacter(fname) => write!(
+                f,
+                "unable to read {}: file contains invalid ASCII control characters",
                 fname
             ),
         }

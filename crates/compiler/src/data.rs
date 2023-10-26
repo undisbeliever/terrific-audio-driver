@@ -447,6 +447,14 @@ pub fn _load_text_file_with_limit(path: &Path, file_name: String) -> Result<Text
         Err(e) => return Err(FileError::ReadError(file_name, e)),
     };
 
+    // Forbid ASCII control characters that are not whitespace
+    if buffer
+        .iter()
+        .any(|&c| c.is_ascii_control() && !c.is_ascii_whitespace())
+    {
+        return Err(FileError::InvalidAsciiControlCharacter(file_name));
+    }
+
     match String::from_utf8(buffer) {
         Ok(contents) => Ok(TextFile {
             path: Some(path.to_owned()),
