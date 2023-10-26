@@ -275,6 +275,7 @@ pub struct MemoryStats {
     free_space_out: Output,
 
     samples_size: usize,
+    n_missing_sfx: usize,
     sfx_data_size: usize,
 
     largest_song_size: usize,
@@ -313,6 +314,7 @@ impl MemoryStats {
             free_space_out,
 
             samples_size: 0,
+            n_missing_sfx: 0,
             sfx_data_size: 0,
             largest_song_size: 0,
         }
@@ -344,6 +346,18 @@ impl MemoryStats {
         }
     }
 
+    fn update_sfx_out(&mut self) {
+        if self.n_missing_sfx == 0 {
+            Self::output_bytes(&mut self.sfx_out, self.sfx_data_size);
+        } else {
+            self.sfx_out.set_value(&format!(
+                "ERROR: missing {} sound effects",
+                self.n_missing_sfx
+            ));
+            self.sfx_out.set_text_color(Color::Red);
+        }
+    }
+
     pub fn samples_compiled(&mut self, r: &Result<usize, CombineSamplesError>) {
         match r {
             Ok(size) => {
@@ -359,9 +373,14 @@ impl MemoryStats {
         self.update_free_space();
     }
 
+    pub fn set_n_missing_sfx(&mut self, s: usize) {
+        self.n_missing_sfx = s;
+        self.update_sfx_out();
+    }
+
     pub fn set_sfx_data_size(&mut self, s: usize) {
         self.sfx_data_size = s;
-        Self::output_bytes(&mut self.sfx_out, s);
+        self.update_sfx_out();
         self.update_free_space();
     }
 

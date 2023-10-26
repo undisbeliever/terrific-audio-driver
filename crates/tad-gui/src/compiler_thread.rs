@@ -73,7 +73,6 @@ pub enum ItemChanged<T> {
     AddedOrEdited(ItemId, T),
     MultipleAddedOrEdited(Vec<(ItemId, T)>),
     Removed(ItemId),
-    // ::TODO add AddOrEditMultiple (for adding missing sfx)::
 }
 
 #[derive(Debug)]
@@ -121,8 +120,7 @@ pub enum CompilerOutput {
 
     Song(ItemId, SongOutput),
 
-    // May return an empty vec
-    MissingSoundEffects(Vec<data::Name>),
+    NumberOfMissingSoundEffects(usize),
 
     SoundEffectsDataSize(usize),
     LargestSongSize(usize),
@@ -606,19 +604,24 @@ fn create_sfx_compiler<'a>(
     }
 }
 
-fn find_missing_sfx(
+fn count_missing_sfx(
     sfx_export_order: &IList<data::Name>,
     sound_effects: &CList<SoundEffectInput, Option<CompiledSoundEffect>>,
     sender: &Sender,
 ) {
-    let missing = sfx_export_order
+    if sound_effects.items().is_empty() {
+        let n_missing = sfx_export_order.items().len();
+        sender.send(CompilerOutput::NumberOfMissingSoundEffects(n_missing));
+        return;
+    }
+
+    let n_missing = sfx_export_order
         .items()
         .iter()
         .filter(|name| !sound_effects.name_map().contains_key(name.as_str()))
-        .cloned()
-        .collect();
+        .count();
 
-    sender.send(CompilerOutput::MissingSoundEffects(missing));
+    sender.send(CompilerOutput::NumberOfMissingSoundEffects(n_missing));
 }
 
 fn calc_sfx_data_size(
@@ -968,11 +971,7 @@ fn bg_thread(
         match m {
             ToCompiler::SfxExportOrder(m) => {
                 sfx_export_order.process_message(m);
-
-                // Only look for missing sfx if the sfx file exists
-                if !sound_effects.items().is_empty() {
-                    find_missing_sfx(&sfx_export_order, &sound_effects, &sender);
-                }
+                count_missing_sfx(&sfx_export_order, &sound_effects, &sender);
             }
             ToCompiler::ProjectSongs(m) => {
                 songs.process_pf_song_message(&m, &pf_songs, &song_dependencies, &sender);
@@ -1047,7 +1046,7 @@ fn bg_thread(
                 if sound_effects.is_name_map_changed() {
                     sound_effects.clear_name_map_changed_flag();
 
-                    find_missing_sfx(&sfx_export_order, &sound_effects, &sender);
+                    count_missing_sfx(&sfx_export_order, &sound_effects, &sender);
                 }
 
                 if replace_all_message {

@@ -479,8 +479,9 @@ impl Project {
                 }
             }
 
-            // ::TODO do something with these values::
-            CompilerOutput::MissingSoundEffects(_missing) => (),
+            CompilerOutput::NumberOfMissingSoundEffects(n_missing) => {
+                self.project_tab.memory_stats.set_n_missing_sfx(n_missing);
+            }
 
             CompilerOutput::SoundEffectsDataSize(size) => {
                 self.project_tab.memory_stats.set_sfx_data_size(size);
