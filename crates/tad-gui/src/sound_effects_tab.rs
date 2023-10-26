@@ -12,7 +12,7 @@ use crate::list_editor::{
 };
 use crate::tables::{RowWithStatus, SimpleRow};
 use crate::tabs::{FileType, Tab};
-use crate::Message;
+use crate::{Message, ProjectData, SoundEffectsData};
 
 use compiler::data::Name;
 use compiler::errors::SfxErrorLines;
@@ -29,6 +29,7 @@ use fltk::text::{StyleTableEntryExt, TextBuffer, TextDisplay, TextEditor, WrapMo
 
 use std::cell::RefCell;
 use std::cmp::{max, min};
+use std::collections::HashSet;
 use std::rc::Rc;
 
 // ::TODO read and write sound effects file header in Sound Effects Tab::
@@ -146,6 +147,9 @@ impl SoundEffectsTab {
         let button_height = sfx_table.button_height();
         sidebar.fixed(&sfx_table.list_buttons().pack, button_height);
 
+        let mut add_missing_button = Button::default().with_label("Add missing sound effects");
+        sidebar.fixed(&add_missing_button, input_height(&add_missing_button));
+
         sidebar.end();
 
         let no_sfx_file_group = no_sfx_file_gui(sender.clone());
@@ -189,6 +193,11 @@ impl SoundEffectsTab {
         console.set_text_font(Font::Courier);
         console.set_buffer(console_buffer.clone());
         console.wrap_mode(WrapMode::AtBounds, 0);
+
+        add_missing_button.set_callback({
+            let s = sender.clone();
+            move |_| s.send(Message::AddMissingSoundEffects)
+        });
 
         let state = Rc::new(RefCell::from(State {
             sender,
@@ -713,5 +722,36 @@ impl SfxEditor {
                 }
             }
         }
+    }
+}
+
+pub fn add_missing_sfx(
+    data: &ProjectData,
+    sfx_data: &SoundEffectsData,
+    sender: &fltk::app::Sender<Message>,
+) {
+    let sfx_list = sfx_data.sound_effects.list();
+    let sfx_set: HashSet<&Name> = sfx_list.item_iter().map(|s| &s.name).collect();
+
+    let to_add: Vec<SoundEffectInput> = data
+        .sfx_export_orders
+        .list()
+        .item_iter()
+        .filter_map(|sfx_name| {
+            if !sfx_set.contains(sfx_name) {
+                Some(SoundEffectInput {
+                    name: sfx_name.clone(),
+                    sfx: String::new(),
+                })
+            } else {
+                None
+            }
+        })
+        .collect();
+
+    if !to_add.is_empty() {
+        sender.send(Message::EditSoundEffectList(ListMessage::AddMultiple(
+            to_add,
+        )));
     }
 }

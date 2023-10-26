@@ -95,6 +95,7 @@ pub enum Message {
     RecompileEverything,
 
     EditSoundEffectList(ListMessage<SoundEffectInput>),
+    AddMissingSoundEffects,
 
     AddSongToProjectDialog,
     SetProjectSongName(usize, data::Name),
@@ -298,6 +299,11 @@ impl Project {
                     if !a.is_none() {
                         self.tab_manager.mark_unsaved(FileType::SoundEffects);
                     }
+                }
+            }
+            Message::AddMissingSoundEffects => {
+                if let Some(sfx_data) = &self.sfx_data {
+                    sound_effects_tab::add_missing_sfx(&self.data, sfx_data, &self.sender);
                 }
             }
             Message::SongChanged(id, mml) => {
