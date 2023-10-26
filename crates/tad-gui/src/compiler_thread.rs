@@ -71,6 +71,7 @@ pub struct PlaySampleArgs {
 pub enum ItemChanged<T> {
     ReplaceAll(Vec<(ItemId, T)>),
     AddedOrEdited(ItemId, T),
+    MultipleAddedOrEdited(Vec<(ItemId, T)>),
     Removed(ItemId),
     // ::TODO add AddOrEditMultiple (for adding missing sfx)::
 }
@@ -257,7 +258,14 @@ impl<ItemT> IList<ItemT> {
     fn process_message(&mut self, m: ItemChanged<ItemT>) {
         match m {
             ItemChanged::ReplaceAll(v) => self.replace(v),
-            ItemChanged::AddedOrEdited(id, item) => self.add_or_edit(id, item),
+            ItemChanged::AddedOrEdited(id, item) => {
+                self.add_or_edit(id, item);
+            }
+            ItemChanged::MultipleAddedOrEdited(vec) => {
+                for (id, item) in vec {
+                    self.add_or_edit(id, item);
+                }
+            }
             ItemChanged::Removed(id) => self.remove(id),
         }
 
@@ -370,7 +378,7 @@ where
         &mut self,
         id: ItemId,
         item: ItemT,
-        mut compiler_fn: impl FnMut(ItemId, &ItemT) -> OutT,
+        compiler_fn: &mut impl FnMut(ItemId, &ItemT) -> OutT,
     ) {
         match self.map.get(&id) {
             Some(index) => {
@@ -419,11 +427,18 @@ where
     fn process_message(
         &mut self,
         m: ItemChanged<ItemT>,
-        compiler_fn: impl FnMut(ItemId, &ItemT) -> OutT,
+        mut compiler_fn: impl FnMut(ItemId, &ItemT) -> OutT,
     ) {
         match m {
             ItemChanged::ReplaceAll(v) => self.replace(v, compiler_fn),
-            ItemChanged::AddedOrEdited(id, item) => self.add_or_edit(id, item, compiler_fn),
+            ItemChanged::AddedOrEdited(id, item) => {
+                self.add_or_edit(id, item, &mut compiler_fn);
+            }
+            ItemChanged::MultipleAddedOrEdited(vec) => {
+                for (id, item) in vec {
+                    self.add_or_edit(id, item, &mut compiler_fn);
+                }
+            }
             ItemChanged::Removed(id) => self.remove(id),
         }
 
@@ -763,6 +778,18 @@ impl SongCompiler {
         dependencies: &Option<SongDependencies>,
         sender: &Sender,
     ) {
+        let mut add_or_edit = |id: &ItemId, item: &data::Song| {
+            // Only add songs, do not modify them
+            // (source is not editable by the GUI)
+            #[allow(clippy::map_entry)] // Cannot use HashMap::entry() due to the borrow checker
+            if !self.songs.contains_key(id) {
+                self.songs.insert(
+                    *id,
+                    self.load_song(*id, &item.source, pf_songs, dependencies, sender),
+                );
+            }
+        };
+
         match m {
             ItemChanged::ReplaceAll(v) => {
                 self.songs = v
@@ -776,15 +803,11 @@ impl SongCompiler {
                     .collect();
             }
             ItemChanged::AddedOrEdited(id, item) => {
-                // Only add songs, do not modify them
-                // (source is not editable by the GUI)
-
-                #[allow(clippy::map_entry)] // Cannot use HashMap::entry() due to the borrow checker
-                if !self.songs.contains_key(id) {
-                    self.songs.insert(
-                        *id,
-                        self.load_song(*id, &item.source, pf_songs, dependencies, sender),
-                    );
+                add_or_edit(id, item);
+            }
+            ItemChanged::MultipleAddedOrEdited(vec) => {
+                for (id, item) in vec {
+                    add_or_edit(id, item)
                 }
             }
             ItemChanged::Removed(id) => {

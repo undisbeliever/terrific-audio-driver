@@ -16,6 +16,8 @@ use fltk::prelude::{GroupExt, WidgetExt};
 
 use std::ops::Deref;
 
+// A ListMessage MUST ONLY be called once per frame
+// (to prevent a potential infinite `ListMessage::ItemSelected` loop)
 #[derive(Debug)]
 pub enum ListMessage<T> {
     ClearSelection,
@@ -26,6 +28,7 @@ pub enum ListMessage<T> {
     ItemEdited(usize, T),
 
     Add(T),
+    AddMultiple(Vec<T>),
     CloneSelected,
     RemoveSelected,
     MoveSelectedToTop,
@@ -53,6 +56,7 @@ pub trait CompilerOutputGui<T> {
 pub enum ListAction<T> {
     None,
     Add(usize, T),
+    AddMultiple(usize, Vec<T>),
     Remove(usize),
     Edit(usize, T),
     Move(usize, usize),
@@ -89,12 +93,15 @@ where
 pub fn process_list_action_map<T, U>(
     list: &mut Vec<U>,
     action: &ListAction<T>,
-    add: impl FnOnce(&T) -> U,
+    add: impl Fn(&T) -> U,
     edit: impl FnOnce(&mut U, &T),
 ) {
     match action {
         ListAction::None => (),
         ListAction::Add(i, item) => list.insert(*i, add(item)),
+        ListAction::AddMultiple(i, items) => {
+            list.splice(i..i, items.iter().map(add));
+        }
         ListAction::Remove(i) => {
             list.remove(*i);
         }
@@ -142,7 +149,7 @@ impl<T> LaVec<T> {
     pub fn process_map<U>(
         &mut self,
         action: &ListAction<U>,
-        add: impl FnOnce(&U) -> T,
+        add: impl Fn(&U) -> T,
         edit: impl FnOnce(&mut T, &U),
     ) {
         process_list_action_map(&mut self.0, action, add, edit);
@@ -199,6 +206,10 @@ where
 
     pub fn can_add(&self) -> bool {
         self.list.len() < self.max_size
+    }
+
+    pub fn can_add_multiple(&self, count: usize) -> bool {
+        self.list.len() + count <= self.max_size
     }
 
     fn id_to_index(&self, id: ItemId) -> Option<usize> {
@@ -275,6 +286,34 @@ where
                 }
             }
 
+            ListMessage::AddMultiple(mut items) => {
+                if self.can_add_multiple(items.len()) {
+                    let old_size = self.list.len();
+
+                    let mut new_items_with_id = Vec::with_capacity(items.len());
+
+                    // Must add and deduplicate items one at a time to ensure names are unique.
+                    for item in &mut items {
+                        NameDeduplicator::dedupe_name(item, &self.list, None);
+
+                        let i = self.list.len();
+                        let action = ListAction::Add(i, item.clone());
+                        update_list(&mut self.list, &action);
+
+                        if let Some(c) = self.list.get(i) {
+                            new_items_with_id.push(c.clone());
+                        }
+                    }
+
+                    let action = ListAction::AddMultiple(old_size, items);
+                    let c_message = Some(ItemChanged::MultipleAddedOrEdited(new_items_with_id));
+
+                    (action, c_message)
+                } else {
+                    (ListAction::None, None)
+                }
+            }
+
             lm => {
                 // These list actions use the currently selected index
                 let sel_index = match selected {
@@ -286,7 +325,8 @@ where
                     ListMessage::ClearSelection
                     | ListMessage::ItemSelected(_)
                     | ListMessage::ItemEdited(_, _)
-                    | ListMessage::Add(_) => (ListAction::None, None),
+                    | ListMessage::Add(_)
+                    | ListMessage::AddMultiple(_) => (ListAction::None, None),
 
                     ListMessage::CloneSelected => {
                         if let (Some(item), true) = (self.get(sel_index), self.can_add()) {
@@ -442,6 +482,9 @@ where
             ListAction::Add(index, _) => {
                 self.set_selected(*index, editor);
             }
+            ListAction::AddMultiple(index, _) => {
+                self.set_selected(*index, editor);
+            }
             ListAction::Remove(index) => {
                 if self.selected == Some(*index) {
                     self.clear_selection(editor);
@@ -591,6 +634,9 @@ where
             ListAction::None => (),
 
             ListAction::Add(index, _) => {
+                self.set_selected(*index, editor);
+            }
+            ListAction::AddMultiple(index, _) => {
                 self.set_selected(*index, editor);
             }
             ListAction::Remove(index) => {
