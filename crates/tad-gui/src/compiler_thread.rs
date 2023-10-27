@@ -217,6 +217,16 @@ impl std::fmt::Display for SpcFileError {
     }
 }
 
+// Decrement all values greater then index.
+// (Assumes index is not in map).
+fn decrement_index_from_map<T>(map: &mut HashMap<T, usize>, index: usize) {
+    for map_index in map.values_mut() {
+        if *map_index > index {
+            *map_index -= 1;
+        }
+    }
+}
+
 struct IList<ItemT> {
     items: Vec<ItemT>,
     map: HashMap<ItemId, usize>,
@@ -264,6 +274,8 @@ impl<ItemT> IList<ItemT> {
 
     fn remove(&mut self, id: ItemId) {
         if let Some(index) = self.map.remove(&id) {
+            decrement_index_from_map(&mut self.map, index);
+
             self.items.remove(index);
         }
     }
@@ -418,7 +430,12 @@ where
 
     fn remove(&mut self, id: ItemId) {
         if let Some(index) = self.map.remove(&id) {
-            self.name_map.remove(self.items[index].name());
+            decrement_index_from_map(&mut self.map, index);
+
+            let name_map_index = self.name_map.remove(self.items[index].name());
+            decrement_index_from_map(&mut self.name_map, index);
+            assert_eq!(name_map_index, Some(index));
+
             self.name_map_changed = true;
 
             self.output.remove(index);
