@@ -41,7 +41,7 @@ fn compile_sound_effect(
     sfx: &str,
     name_string: &str,
     starting_line_number: u32,
-    instruments: &HashMap<String, u32>,
+    instruments: &UniqueNamesList<Instrument>,
     name_valid: bool,
     duplicate_name: bool,
 ) -> Result<CompiledSoundEffect, SoundEffectError> {
@@ -126,7 +126,7 @@ pub fn compile_sound_effects_file(
             &sfx.sfx,
             &sfx.name,
             sfx.line_no + 1,
-            instruments.map(),
+            instruments,
             name_valid,
             duplicate_name,
         ) {
@@ -236,7 +236,7 @@ pub fn convert_sfx_inputs_lossy(sound_effects: Vec<SoundEffectFileSfx>) -> Vec<S
 
 pub fn compile_sound_effect_input(
     input: &SoundEffectInput,
-    instruments: &HashMap<String, u32>,
+    instruments: &UniqueNamesList<Instrument>,
 ) -> Result<CompiledSoundEffect, SoundEffectError> {
     compile_sound_effect(
         &input.name,

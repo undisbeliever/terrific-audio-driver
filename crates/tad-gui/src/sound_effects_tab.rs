@@ -4,7 +4,7 @@
 //
 // SPDX-License-Identifier: MIT
 
-use crate::compiler_thread::{ItemId, SoundEffectOutput};
+use crate::compiler_thread::{ItemId, SfxError, SoundEffectOutput};
 use crate::helpers::*;
 use crate::list_editor::{
     CompilerOutputGui, LaVec, ListAction, ListButtons, ListEditor, ListEditorTable, ListMessage,
@@ -467,9 +467,14 @@ impl CompilerOutputGui<SoundEffectOutput> for SoundEffectsTab {
                 self.state.borrow_mut().error_lines = None;
             }
             Some(Err(e)) => {
-                self.state.borrow_mut().error_lines = Some(e.error_lines());
-
-                let text = format!("{}", e.multiline_display("line "));
+                let (error_lines, text) = match e {
+                    SfxError::Error(e) => (
+                        Some(e.error_lines()),
+                        format!("{}", e.multiline_display("line ")),
+                    ),
+                    SfxError::Dependency => (None, e.to_string()),
+                };
+                self.state.borrow_mut().error_lines = error_lines;
 
                 self.console_buffer.set_text(&text);
                 self.console.set_text_color(Color::Red);

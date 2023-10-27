@@ -104,7 +104,7 @@ pub enum ToCompiler {
 }
 
 pub type InstrumentOutput = Result<usize, errors::SampleError>;
-pub type SoundEffectOutput = Result<usize, errors::SoundEffectError>;
+pub type SoundEffectOutput = Result<usize, SfxError>;
 pub type SongOutput = Result<SongOutputData, SongError>;
 
 #[derive(Debug)]
@@ -116,7 +116,7 @@ pub enum CompilerOutput {
     // ::TODO the prevent user from leaving the Samples tab if this error occurs::
     CombineSamples(Result<usize, CombineSamplesError>),
 
-    SoundEffect(ItemId, Result<usize, errors::SoundEffectError>),
+    SoundEffect(ItemId, SoundEffectOutput),
 
     Song(ItemId, SongOutput),
 
@@ -160,6 +160,21 @@ impl std::fmt::Display for CombineSamplesError {
             CombineSamplesError::CommonAudioData(e) => {
                 writeln!(f, "{}", e.multiline_display())
             }
+        }
+    }
+}
+
+#[derive(Debug)]
+pub enum SfxError {
+    Dependency,
+    Error(errors::SoundEffectError),
+}
+
+impl Display for SfxError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Dependency => writeln!(f, "dependency error"),
+            Self::Error(e) => e.fmt(f),
         }
     }
 }
@@ -589,17 +604,26 @@ fn build_play_sample_data(
 }
 
 fn create_sfx_compiler<'a>(
-    instruments: &'a CList<data::Instrument, Option<Sample>>,
+    dependencies: &'a Option<SongDependencies>,
     sender: &'a Sender,
 ) -> impl (Fn(ItemId, &SoundEffectInput) -> Option<CompiledSoundEffect>) + 'a {
-    move |id, sfx| match compile_sound_effect_input(sfx, instruments.name_map()) {
-        Ok(sfx) => {
-            sender.send(CompilerOutput::SoundEffect(id, Ok(sfx.data().len())));
-            Some(sfx)
-        }
-        Err(e) => {
-            sender.send(CompilerOutput::SoundEffect(id, Err(e)));
-            None
+    move |id, sfx| {
+        let dep = match dependencies.as_ref() {
+            Some(d) => d,
+            None => {
+                sender.send(CompilerOutput::SoundEffect(id, Err(SfxError::Dependency)));
+                return None;
+            }
+        };
+        match compile_sound_effect_input(sfx, &dep.instruments) {
+            Ok(sfx) => {
+                sender.send(CompilerOutput::SoundEffect(id, Ok(sfx.data().len())));
+                Some(sfx)
+            }
+            Err(e) => {
+                sender.send(CompilerOutput::SoundEffect(id, Err(SfxError::Error(e))));
+                None
+            }
         }
     }
 }
@@ -994,14 +1018,6 @@ fn bg_thread(
                 if instruments.is_changed() {
                     instruments.clear_changed_flag();
 
-                    // Sound Effects only require the name map to compile them
-                    if instruments.is_name_map_changed() {
-                        instruments.clear_name_map_changed_flag();
-
-                        let c = create_sfx_compiler(&instruments, &sender);
-                        sound_effects.recompile_all(c);
-                    }
-
                     match combine_sample_data(&instruments, &sender) {
                         Some((common, pt)) => {
                             song_dependencies = create_song_dependencies(
@@ -1023,6 +1039,9 @@ fn bg_thread(
                         common_audio_data_no_sfx.clone(),
                     ));
 
+                    let c = create_sfx_compiler(&song_dependencies, &sender);
+                    sound_effects.recompile_all(c);
+
                     songs.compile_all_songs(&pf_songs, &song_dependencies, &sender);
                 }
             }
@@ -1040,7 +1059,7 @@ fn bg_thread(
             ToCompiler::SoundEffects(m) => {
                 let replace_all_message = matches!(m, ItemChanged::ReplaceAll(_));
 
-                let c = create_sfx_compiler(&instruments, &sender);
+                let c = create_sfx_compiler(&song_dependencies, &sender);
                 sound_effects.process_message(m, c);
 
                 if sound_effects.is_name_map_changed() {
