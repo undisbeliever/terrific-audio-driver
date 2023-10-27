@@ -110,6 +110,7 @@ pub struct SoundEffectsTab {
 
     sidebar: Flex,
     sfx_table: ListEditorTable<SoundEffectMapping>,
+    add_missing_sfx_button: Button,
 
     main_group: Flex,
 
@@ -147,8 +148,11 @@ impl SoundEffectsTab {
         let button_height = sfx_table.button_height();
         sidebar.fixed(&sfx_table.list_buttons().pack, button_height);
 
-        let mut add_missing_button = Button::default().with_label("Add missing sound effects");
-        sidebar.fixed(&add_missing_button, input_height(&add_missing_button));
+        let mut add_missing_sfx_button = Button::default().with_label("Add missing sound effects");
+        sidebar.fixed(
+            &add_missing_sfx_button,
+            input_height(&add_missing_sfx_button),
+        );
 
         sidebar.end();
 
@@ -194,7 +198,7 @@ impl SoundEffectsTab {
         console.set_buffer(console_buffer.clone());
         console.wrap_mode(WrapMode::AtBounds, 0);
 
-        add_missing_button.set_callback({
+        add_missing_sfx_button.set_callback({
             let s = sender.clone();
             move |_| s.send(Message::AddMissingSoundEffects)
         });
@@ -272,6 +276,7 @@ impl SoundEffectsTab {
 
             sidebar,
             sfx_table,
+            add_missing_sfx_button,
 
             main_group,
             name,
@@ -332,6 +337,10 @@ impl SoundEffectsTab {
                 let _ = editor.take_focus();
             }
         }
+    }
+
+    pub fn n_missing_sfx_changed(&mut self, n_missing: usize) {
+        self.add_missing_sfx_button.set_active(n_missing != 0);
     }
 }
 

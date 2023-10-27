@@ -493,6 +493,7 @@ impl Project {
 
             CompilerOutput::NumberOfMissingSoundEffects(n_missing) => {
                 self.project_tab.memory_stats.set_n_missing_sfx(n_missing);
+                self.sound_effects_tab.n_missing_sfx_changed(n_missing);
             }
 
             CompilerOutput::SoundEffectsDataSize(size) => {
