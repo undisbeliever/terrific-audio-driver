@@ -294,7 +294,7 @@ struct CList<ItemT, OutT> {
     map: HashMap<ItemId, usize>,
 
     // Instrument compiler requires a String map
-    name_map: HashMap<String, u32>,
+    name_map: HashMap<data::Name, usize>,
 }
 
 impl<ItemT, OutT> CList<ItemT, OutT>
@@ -337,10 +337,7 @@ where
     }
 
     fn get_output_for_name(&self, name: &data::Name) -> Option<&OutT> {
-        self.name_map
-            .get(name.as_str())
-            .and_then(|i: &u32| usize::try_from(*i).ok())
-            .and_then(|i: usize| self.output.get(i))
+        self.name_map.get(name).and_then(|i| self.output.get(*i))
     }
 
     fn get_output_for_id(&self, id: &ItemId) -> Option<&OutT> {
@@ -351,12 +348,8 @@ where
         self.map.get(&id).and_then(|i: &usize| self.items.get(*i))
     }
 
-    fn name_map(&self) -> &HashMap<String, u32> {
+    fn name_map(&self) -> &HashMap<data::Name, usize> {
         &self.name_map
-    }
-
-    fn cast_index(index: usize) -> u32 {
-        u32::try_from(index).unwrap_or(u32::MAX)
     }
 
     fn replace(
@@ -378,7 +371,7 @@ where
         self.name_map = data
             .iter()
             .enumerate()
-            .map(|(index, (_id, item))| (item.name().to_string(), Self::cast_index(index)))
+            .map(|(index, (_id, item))| (item.name().clone(), index))
             .collect();
         self.name_map_changed = true;
 
@@ -399,9 +392,8 @@ where
 
                 let old_name = self.items[*index].name();
                 if item.name() != old_name {
-                    self.name_map.remove(old_name.as_str());
-                    self.name_map
-                        .insert(item.name().to_string(), Self::cast_index(*index));
+                    self.name_map.remove(old_name);
+                    self.name_map.insert(item.name().clone(), *index);
                     self.name_map_changed = true;
                 }
 
@@ -412,8 +404,7 @@ where
                 let index = self.items.len();
                 let out = compiler_fn(id, &item);
 
-                self.name_map
-                    .insert(item.name().to_string(), Self::cast_index(index));
+                self.name_map.insert(item.name().clone(), index);
                 self.name_map_changed = true;
 
                 self.map.insert(id, index);
@@ -427,7 +418,7 @@ where
 
     fn remove(&mut self, id: ItemId) {
         if let Some(index) = self.map.remove(&id) {
-            self.name_map.remove(self.items[index].name().as_str());
+            self.name_map.remove(self.items[index].name());
             self.name_map_changed = true;
 
             self.output.remove(index);
@@ -642,7 +633,7 @@ fn count_missing_sfx(
     let n_missing = sfx_export_order
         .items()
         .iter()
-        .filter(|name| !sound_effects.name_map().contains_key(name.as_str()))
+        .filter(|name| !sound_effects.name_map().contains_key(name))
         .count();
 
     sender.send(CompilerOutput::NumberOfMissingSoundEffects(n_missing));
