@@ -14,6 +14,7 @@ use fltk::button::Button;
 use fltk::group::{Pack, PackType};
 use fltk::prelude::{GroupExt, WidgetExt};
 
+use std::collections::HashSet;
 use std::ops::Deref;
 
 // A ListMessage MUST ONLY be called once per frame
@@ -524,18 +525,31 @@ where
     }
 }
 
+pub trait CompilerOutput {
+    fn is_valid(&self) -> bool;
+}
+
+impl<T, E> CompilerOutput for Result<T, E> {
+    fn is_valid(&self) -> bool {
+        self.is_ok()
+    }
+}
+
 pub struct ListWithCompilerOutput<T, O>
 where
     T: Clone + PartialEq<T> + NameDeduplicator,
+    O: CompilerOutput,
 {
     list: ListData<T>,
     compiler_output: Vec<Option<O>>,
+    error_set: HashSet<ItemId>,
     selected: Option<usize>,
 }
 
 impl<T, O> ListState for ListWithCompilerOutput<T, O>
 where
     T: Clone + PartialEq<T> + NameDeduplicator,
+    O: CompilerOutput,
 {
     type Item = T;
 
@@ -555,6 +569,7 @@ where
 impl<T, O> ListWithCompilerOutput<T, O>
 where
     T: Clone + PartialEq<T> + NameDeduplicator,
+    O: CompilerOutput,
 {
     pub fn new(list: DeduplicatedNameVec<T>, max_size: usize) -> Self {
         let list = ListData::new(list, max_size);
@@ -565,8 +580,13 @@ where
         Self {
             list,
             compiler_output,
+            error_set: HashSet::new(),
             selected: None,
         }
+    }
+
+    pub fn all_valid(&self) -> bool {
+        self.error_set.is_empty()
     }
 
     pub fn set_compiler_output(
@@ -575,6 +595,11 @@ where
         co: O,
         editor: &mut impl CompilerOutputGui<O>,
     ) {
+        match co.is_valid() {
+            true => self.error_set.remove(&id),
+            false => self.error_set.insert(id),
+        };
+
         let co = Some(co);
 
         if let Some(index) = self.list.id_to_index(id) {

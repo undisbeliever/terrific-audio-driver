@@ -16,6 +16,7 @@ use std::path::{Path, PathBuf};
 
 extern crate fltk;
 use fltk::dialog;
+use fltk::enums::Color;
 use fltk::group::Flex;
 use fltk::prelude::{GroupExt, WidgetExt};
 
@@ -226,6 +227,22 @@ impl TabManager {
         }
     }
 
+    pub fn set_tab_label_color(&mut self, t: &mut dyn Tab, valid: bool) {
+        let w = t.widget_mut();
+        let c = match valid {
+            true => Color::Foreground,
+            false => Color::Red,
+        };
+
+        if w.label_color() != c {
+            w.set_label_color(c);
+            if self.tabs_widget.value().is_some_and(|v| v.is_same(w)) {
+                self.tabs_widget.set_label_color(c);
+            }
+            self.tabs_widget.redraw();
+        }
+    }
+
     pub fn set_selected_tab(&mut self, t: &dyn Tab) {
         let _ = self.tabs_widget.set_value(t.widget());
         self.selected_tab_changed();
@@ -233,6 +250,10 @@ impl TabManager {
 
     pub fn selected_tab_changed(&mut self) {
         let tab_widget = self.tabs_widget.value();
+
+        if let Some(tw) = &tab_widget {
+            self.tabs_widget.set_label_color(tw.label_color());
+        }
 
         self.selected_file_changed(
             tab_widget

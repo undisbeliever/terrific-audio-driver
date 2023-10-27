@@ -445,12 +445,22 @@ impl Project {
                 self.data
                     .instruments
                     .set_compiler_output(id, co, &mut self.samples_tab);
+
+                self.tab_manager.set_tab_label_color(
+                    &mut self.sound_effects_tab,
+                    self.data.instruments.all_valid(),
+                );
             }
             CompilerOutput::SoundEffect(id, co) => {
                 if let Some(sfx_data) = &mut self.sfx_data {
                     sfx_data
                         .sound_effects
                         .set_compiler_output(id, co, &mut self.sound_effects_tab);
+
+                    self.tab_manager.set_tab_label_color(
+                        &mut self.sound_effects_tab,
+                        sfx_data.sound_effects.all_valid(),
+                    );
                 }
             }
             CompilerOutput::Song(id, co) => {
@@ -463,6 +473,8 @@ impl Project {
                 );
 
                 if let Some(song_tab) = self.song_tabs.get_mut(&id) {
+                    self.tab_manager
+                        .set_tab_label_color(song_tab, co.as_ref().is_some_and(|c| c.is_ok()));
                     song_tab.set_compiler_output(co);
                 }
             }
