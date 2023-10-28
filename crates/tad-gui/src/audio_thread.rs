@@ -67,12 +67,16 @@ impl RingBuffer {
 
     fn new(sender: mpsc::Sender<AudioMessage>) -> Self {
         const _: () = assert!(RingBuffer::SDL_BUFFER_SAMPLES % RingBuffer::EMU_BUFFER_SAMPLES == 0);
+        const _: () = assert!(
+            RingBuffer::SDL_BUFFER_SAMPLES + RingBuffer::EMU_BUFFER_SAMPLES
+                < RingBuffer::BUFFER_SAMPLES
+        );
 
         Self {
             sender,
             buffer: [0; Self::BUFFER_SIZE],
             read_cursor: 0,
-            write_cursor: Self::SDL_BUFFER_SAMPLES,
+            write_cursor: Self::EMU_BUFFER_SIZE,
         }
     }
 
