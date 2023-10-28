@@ -31,7 +31,7 @@ pub enum AudioMessage {
 
     SetStereoFlag(StereoFlag),
 
-    Stop,
+    Pause,
     PauseResume(ItemId),
 
     CommonAudioDataChanged(Option<CommonAudioData>),
@@ -295,7 +295,7 @@ impl AudioThread {
                     }
                 }
 
-                AudioMessage::Stop
+                AudioMessage::Pause
                 | AudioMessage::PauseResume(_)
                 | AudioMessage::RingBufferConsumed(_) => (),
             }
@@ -388,7 +388,7 @@ impl AudioThread {
                     }
                 }
 
-                AudioMessage::Stop => {
+                AudioMessage::Pause => {
                     state = PlayState::PauseRequested;
                     self.item_id = None;
                 }

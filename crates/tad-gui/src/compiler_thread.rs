@@ -1097,7 +1097,7 @@ fn bg_thread(
                 songs.edit_and_compile_song(id, mml, &pf_songs, &song_dependencies, &sender);
             }
             ToCompiler::CompileAndPlaySong(id, mml) => {
-                sender.send_audio(AudioMessage::Stop);
+                sender.send_audio(AudioMessage::Pause);
                 songs.edit_and_compile_song(id, mml, &pf_songs, &song_dependencies, &sender);
                 if let Some(song) = songs.get_song_data(&id) {
                     sender.send_audio(AudioMessage::PlaySong(id, song.clone()));
