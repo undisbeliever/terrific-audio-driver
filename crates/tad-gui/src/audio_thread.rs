@@ -277,6 +277,8 @@ fn audio_thread(rx: mpsc::Receiver<AudioMessage>, sender: mpsc::Sender<AudioMess
         })
         .unwrap();
 
+    fill_ring_buffer(&mut emu, &mut playback);
+
     let mut state = State::Running;
     playback.resume();
 
