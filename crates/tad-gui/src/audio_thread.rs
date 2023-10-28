@@ -31,6 +31,9 @@ pub enum AudioMessage {
 
     SetStereoFlag(StereoFlag),
 
+    // Stop audio and close the audio device
+    StopAndClose,
+
     Pause,
     PauseResume(ItemId),
 
@@ -265,8 +268,10 @@ impl AudioThread {
     }
 
     fn run(&mut self) {
-        self.wait_for_play_song_message();
-        self.play();
+        loop {
+            self.wait_for_play_song_message();
+            self.play();
+        }
     }
 
     fn wait_for_play_song_message(&mut self) {
@@ -295,7 +300,8 @@ impl AudioThread {
                     }
                 }
 
-                AudioMessage::Pause
+                AudioMessage::StopAndClose
+                | AudioMessage::Pause
                 | AudioMessage::PauseResume(_)
                 | AudioMessage::RingBufferConsumed(_) => (),
             }
@@ -327,6 +333,8 @@ impl AudioThread {
 
         while let Ok(msg) = self.rx.recv() {
             match msg {
+                AudioMessage::StopAndClose => break,
+
                 AudioMessage::RingBufferConsumed(_) => {
                     match state {
                         PlayState::Paused => (),

@@ -32,6 +32,8 @@ const SAVE_ALL: &str = "&File/Save &All";
 
 const EXPORT_SPC: &str = "&File/&Export song to .spc";
 
+const AUDIO_STOP: &str = "&Audio/&Stop Audio";
+
 const AUDIO_MONO: &str = "&Audio/&Mono";
 const AUDIO_STEREO: &str = "&Audio/&Stereo";
 
@@ -113,6 +115,12 @@ impl Menu {
             Message::QuitRequested
         });
 
+        add_audio(
+            AUDIO_STOP,
+            Shortcut::None,
+            fltk::menu::MenuFlag::Normal,
+            || AudioMessage::StopAndClose,
+        );
         add_audio(
             AUDIO_MONO,
             Shortcut::None,
