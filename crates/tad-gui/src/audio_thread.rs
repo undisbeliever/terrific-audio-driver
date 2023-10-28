@@ -165,6 +165,16 @@ fn fill_ring_buffer(emu: &mut ShvcSoundEmu, playback: &mut AudioDevice<RingBuffe
     }
 }
 
+fn new_emulator(common_data: &CommonAudioData, song: &SongData) -> Result<ShvcSoundEmu, ()> {
+    // No IPL ROM
+    let iplrom = [0; 64];
+
+    let mut emu = ShvcSoundEmu::new(&iplrom);
+    load_song(&mut emu, common_data, song)?;
+
+    Ok(emu)
+}
+
 fn load_song(
     emu: &mut ShvcSoundEmu,
     common_data: &CommonAudioData,
@@ -233,19 +243,13 @@ fn wait_for_play_song_message(
             }
             AudioMessage::PlaySong(song_id, song) => {
                 if let Some(common) = &common_audio_data {
-                    let mut emu = ShvcSoundEmu::new();
-                    emu.power(false);
-
-                    if load_song(&mut emu, common, &song).is_ok() {
+                    if let Ok(emu) = new_emulator(common, &song) {
                         return (emu, common_audio_data, Some(song_id));
                     }
                 }
             }
             AudioMessage::PlaySample(id, common_data, song_data) => {
-                let mut emu = ShvcSoundEmu::new();
-                emu.power(false);
-
-                if load_song(&mut emu, &common_data, &song_data).is_ok() {
+                if let Ok(emu) = new_emulator(&common_data, &song_data) {
                     return (emu, None, Some(id));
                 }
             }

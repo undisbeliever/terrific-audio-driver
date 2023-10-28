@@ -27,7 +27,7 @@ struct ShvcSoundEmu {
   constexpr static uint32_t AUDIO_BUFFER_SAMPLES = 256;
   constexpr static uint32_t AUDIO_BUFFER_SIZE = AUDIO_BUFFER_SAMPLES * 2;
 
-  ShvcSoundEmu();
+  ShvcSoundEmu(const std::array<uint8_t, 64>& iplrom);
   ~ShvcSoundEmu();
 
   auto power(bool reset) -> void;
@@ -50,6 +50,6 @@ private:
   SMP smp;
 };
 
-auto new_emulator() -> std::unique_ptr<ShvcSoundEmu>;
+auto new_emulator(const std::array<uint8_t, 64>& iplrom) -> std::unique_ptr<ShvcSoundEmu>;
 
 }

@@ -6,14 +6,15 @@
 
 namespace shvc_sound_emu {
 
-auto new_emulator() -> std::unique_ptr<ShvcSoundEmu>
+auto new_emulator(const std::array<uint8_t, 64>& iplrom) -> std::unique_ptr<ShvcSoundEmu>
 {
-    return std::make_unique<ShvcSoundEmu>();
+    return std::make_unique<ShvcSoundEmu>(iplrom);
 }
 
-ShvcSoundEmu::ShvcSoundEmu()
+ShvcSoundEmu::ShvcSoundEmu(const std::array<uint8_t, 64>& iplrom)
   : smp()
 {
+  smp.iplrom = iplrom;
   smp.power(false);
 }
 

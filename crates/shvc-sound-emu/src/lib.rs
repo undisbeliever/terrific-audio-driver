@@ -10,7 +10,7 @@ mod ffi {
 
         type ShvcSoundEmu;
 
-        fn new_emulator() -> UniquePtr<ShvcSoundEmu>;
+        fn new_emulator(iplrom: &[u8; 64]) -> UniquePtr<ShvcSoundEmu>;
 
         fn power(self: Pin<&mut ShvcSoundEmu>, reset: bool);
 
@@ -47,8 +47,8 @@ impl ShvcSoundEmu {
     pub const AUDIO_BUFFER_SIZE: usize = Self::AUDIO_BUFFER_SAMPLES * 2;
 
     #[allow(clippy::new_without_default)]
-    pub fn new() -> Self {
-        let emu = ffi::new_emulator();
+    pub fn new(iplrom: &[u8; 64]) -> Self {
+        let emu = ffi::new_emulator(iplrom);
         if emu.is_null() {
             panic!("new_emulator() returned null");
         }
