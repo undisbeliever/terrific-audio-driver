@@ -4,12 +4,15 @@
 //
 // SPDX-License-Identifier: MIT
 
+use crate::audio_thread::{AudioMessage, StereoFlag};
 use crate::tabs::FileType;
 use crate::Message;
 
+use std::sync::mpsc;
+
 extern crate fltk;
 use fltk::enums::{Key, Shortcut};
-use fltk::menu;
+use fltk::menu::{self, MenuFlag};
 use fltk::prelude::MenuExt;
 
 // I cannot store `menu::MenuItem` entries in `Menu`, whenever I open a file dialog all future
@@ -29,6 +32,9 @@ const SAVE_ALL: &str = "&File/Save &All";
 
 const EXPORT_SPC: &str = "&File/&Export song to .spc";
 
+const AUDIO_MONO: &str = "&Audio/&Mono";
+const AUDIO_STEREO: &str = "&Audio/&Stereo";
+
 const SHOW_HELP_SYNTAX: &str = "&Help/&Syntax";
 const SHOW_ABOUT_TAB: &str = "&Help/&About";
 
@@ -40,8 +46,12 @@ pub struct Menu {
 }
 
 impl Menu {
-    pub fn new(sender: fltk::app::Sender<Message>) -> Self {
+    pub fn new(
+        sender: fltk::app::Sender<Message>,
+        audio_sender: mpsc::Sender<AudioMessage>,
+    ) -> Self {
         let mut menu_bar = fltk::menu::MenuBar::default();
+        let mut menu_bar2 = menu_bar.clone();
 
         let mut add = |label, shortcut, flags, f: fn() -> Message| -> menu::MenuItem {
             let index = menu_bar.add(label, shortcut, flags, {
@@ -50,6 +60,15 @@ impl Menu {
             });
 
             menu_bar.at(index).unwrap()
+        };
+
+        let mut add_audio = |label, shortcut, flags, f: fn() -> AudioMessage| {
+            menu_bar2.add(label, shortcut, flags, {
+                let s = audio_sender.clone();
+                move |_: &mut fltk::menu::MenuBar| {
+                    s.send(f()).ok();
+                }
+            });
         };
 
         add(
@@ -93,6 +112,19 @@ impl Menu {
         add(QUIT, Shortcut::None, fltk::menu::MenuFlag::Normal, || {
             Message::QuitRequested
         });
+
+        add_audio(
+            AUDIO_MONO,
+            Shortcut::None,
+            fltk::menu::MenuFlag::Radio,
+            || AudioMessage::SetStereoFlag(StereoFlag::Mono),
+        );
+        add_audio(
+            AUDIO_STEREO,
+            Shortcut::None,
+            fltk::menu::MenuFlag::Radio | MenuFlag::Value,
+            || AudioMessage::SetStereoFlag(StereoFlag::Stereo),
+        );
 
         add(
             SHOW_HELP_SYNTAX,

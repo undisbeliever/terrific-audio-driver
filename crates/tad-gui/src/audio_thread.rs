@@ -29,12 +29,20 @@ const APU_SAMPLE_RATE: i32 = 32040;
 pub enum AudioMessage {
     RingBufferConsumed(PrivateToken),
 
+    SetStereoFlag(StereoFlag),
+
     Stop,
     PauseResume(ItemId),
 
     CommonAudioDataChanged(Option<CommonAudioData>),
     PlaySong(ItemId, SongData),
     PlaySample(ItemId, CommonAudioData, SongData),
+}
+
+#[derive(Debug, Copy, Clone)]
+pub enum StereoFlag {
+    Mono,
+    Stereo,
 }
 
 /// A private token to ensure `AudioMessage::RingBufferConsumed` is only created by this module.
@@ -169,12 +177,16 @@ fn fill_ring_buffer(emu: &mut ShvcSoundEmu, playback: &mut AudioDevice<RingBuffe
     }
 }
 
-fn new_emulator(common_data: &CommonAudioData, song: &SongData) -> Result<ShvcSoundEmu, ()> {
+fn new_emulator(
+    common_data: &CommonAudioData,
+    song: &SongData,
+    stereo_flag: StereoFlag,
+) -> Result<ShvcSoundEmu, ()> {
     // No IPL ROM
     let iplrom = [0; 64];
 
     let mut emu = ShvcSoundEmu::new(&iplrom);
-    load_song(&mut emu, common_data, song)?;
+    load_song(&mut emu, common_data, song, stereo_flag)?;
 
     Ok(emu)
 }
@@ -183,6 +195,7 @@ fn load_song(
     emu: &mut ShvcSoundEmu,
     common_data: &CommonAudioData,
     song: &SongData,
+    stereo_flag: StereoFlag,
 ) -> Result<(), ()> {
     const LOADER_DATA_TYPE_ADDR: usize = DRIVER_LOADER_DATA_TYPE_ADDR as usize;
 
@@ -219,7 +232,10 @@ fn load_song(
     apuram[eb_start..eb_end].fill(0);
 
     // Set stereo flag and skip the echo buffer reset delay
-    apuram[LOADER_DATA_TYPE_ADDR] = LoaderDataType::StereoSongDataSkipEchoBufferReset as u8;
+    apuram[LOADER_DATA_TYPE_ADDR] = match stereo_flag {
+        StereoFlag::Stereo => LoaderDataType::StereoSongDataSkipEchoBufferReset as u8,
+        StereoFlag::Mono => LoaderDataType::MonoSongDataSkipEchoBufferReset as u8,
+    };
 
     emu.set_echo_buffer_size(edl.esa_register(), edl.as_u8());
 
@@ -237,7 +253,13 @@ enum State {
 
 fn wait_for_play_song_message(
     rx: &mpsc::Receiver<AudioMessage>,
-) -> (ShvcSoundEmu, Option<CommonAudioData>, Option<ItemId>) {
+) -> (
+    ShvcSoundEmu,
+    StereoFlag,
+    Option<CommonAudioData>,
+    Option<ItemId>,
+) {
+    let mut stereo_flag = StereoFlag::Stereo;
     let mut common_audio_data: Option<CommonAudioData> = None;
 
     while let Ok(msg) = rx.recv() {
@@ -247,15 +269,18 @@ fn wait_for_play_song_message(
             }
             AudioMessage::PlaySong(song_id, song) => {
                 if let Some(common) = &common_audio_data {
-                    if let Ok(emu) = new_emulator(common, &song) {
-                        return (emu, common_audio_data, Some(song_id));
+                    if let Ok(emu) = new_emulator(common, &song, stereo_flag) {
+                        return (emu, stereo_flag, common_audio_data, Some(song_id));
                     }
                 }
             }
             AudioMessage::PlaySample(id, common_data, song_data) => {
-                if let Ok(emu) = new_emulator(&common_data, &song_data) {
-                    return (emu, None, Some(id));
+                if let Ok(emu) = new_emulator(&common_data, &song_data, stereo_flag) {
+                    return (emu, stereo_flag, None, Some(id));
                 }
+            }
+            AudioMessage::SetStereoFlag(sf) => {
+                stereo_flag = sf;
             }
             _ => (),
         }
@@ -264,7 +289,9 @@ fn wait_for_play_song_message(
 }
 
 fn audio_thread(rx: mpsc::Receiver<AudioMessage>, sender: mpsc::Sender<AudioMessage>) {
-    let (mut emu, mut common_audio_data, mut item_id) = wait_for_play_song_message(&rx);
+    let w = wait_for_play_song_message(&rx);
+
+    let (mut emu, mut stereo_flag, mut common_audio_data, mut item_id) = w;
 
     let sdl_context = sdl2::init().unwrap();
     let audio_subsystem = sdl_context.audio().unwrap();
@@ -315,7 +342,7 @@ fn audio_thread(rx: mpsc::Receiver<AudioMessage>, sender: mpsc::Sender<AudioMess
 
             AudioMessage::PlaySong(id, song) => {
                 if let Some(common_data) = &common_audio_data {
-                    match load_song(&mut emu, common_data, &song) {
+                    match load_song(&mut emu, common_data, &song, stereo_flag) {
                         Ok(()) => {
                             state = State::Running;
                             item_id = Some(id);
@@ -335,7 +362,7 @@ fn audio_thread(rx: mpsc::Receiver<AudioMessage>, sender: mpsc::Sender<AudioMess
             }
 
             AudioMessage::PlaySample(id, common_data, song_data) => {
-                match load_song(&mut emu, &common_data, &song_data) {
+                match load_song(&mut emu, &common_data, &song_data, stereo_flag) {
                     Ok(()) => {
                         state = State::Running;
                         item_id = Some(id);
@@ -370,6 +397,10 @@ fn audio_thread(rx: mpsc::Receiver<AudioMessage>, sender: mpsc::Sender<AudioMess
                         // Do not do anything
                     }
                 }
+            }
+
+            AudioMessage::SetStereoFlag(sf) => {
+                stereo_flag = sf;
             }
         }
     }

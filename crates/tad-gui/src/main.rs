@@ -146,8 +146,6 @@ struct Project {
     compiler_thread: std::thread::JoinHandle<()>,
     compiler_sender: mpsc::Sender<ToCompiler>,
 
-    #[allow(dead_code)]
-    audio_thread: std::thread::JoinHandle<()>,
     audio_sender: mpsc::Sender<AudioMessage>,
 
     tab_manager: TabManager,
@@ -167,6 +165,7 @@ impl Project {
         tabs: fltk::group::Tabs,
         menu: Menu,
         sender: fltk::app::Sender<Message>,
+        audio_sender: mpsc::Sender<AudioMessage>,
     ) -> Self {
         let c = pf.contents;
 
@@ -198,8 +197,6 @@ impl Project {
             sender.send(Message::LoadSfxFile);
         }
 
-        let (audio_thread, audio_sender) = audio_thread::create_audio_thread();
-
         let (compiler_sender, compiler_reciever) = mpsc::channel();
         let compiler_thread = compiler_thread::create_bg_thread(
             data.pf_parent_path.clone(),
@@ -224,7 +221,6 @@ impl Project {
             sound_effects_tab: SoundEffectsTab::new(sender.clone()),
             song_tabs: HashMap::new(),
 
-            audio_thread,
             audio_sender,
 
             compiler_thread,
@@ -782,6 +778,10 @@ struct MainWindow {
 
     sender: fltk::app::Sender<Message>,
 
+    #[allow(dead_code)]
+    audio_thread: std::thread::JoinHandle<()>,
+    audio_sender: mpsc::Sender<AudioMessage>,
+
     window: fltk::window::Window,
     menu: Menu,
 
@@ -807,7 +807,9 @@ impl MainWindow {
 
         let mut col = fltk::group::Flex::default_fill().column();
 
-        let mut menu = Menu::new(sender.clone());
+        let (audio_thread, audio_sender) = audio_thread::create_audio_thread();
+
+        let mut menu = Menu::new(sender.clone(), audio_sender.clone());
         menu.deactivate_project_items();
         col.fixed(menu.menu_bar(), input_height(menu.menu_bar()));
 
@@ -865,6 +867,8 @@ impl MainWindow {
         Self {
             app,
             sender,
+            audio_thread,
+            audio_sender,
             window,
             menu,
             row,
@@ -886,6 +890,7 @@ impl MainWindow {
             self.tabs.clone(),
             self.menu.clone(),
             self.sender.clone(),
+            self.audio_sender.clone(),
         ));
     }
 
