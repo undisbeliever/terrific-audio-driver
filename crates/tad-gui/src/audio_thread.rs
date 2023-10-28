@@ -268,13 +268,13 @@ impl AudioThread {
     }
 
     fn run(&mut self) {
-        loop {
-            self.wait_for_play_song_message();
+        while self.wait_for_play_song_message() {
             self.play();
         }
     }
 
-    fn wait_for_play_song_message(&mut self) {
+    // Returns true if a song was loaded into the emulator
+    fn wait_for_play_song_message(&mut self) -> bool {
         while let Ok(msg) = self.rx.recv() {
             match msg {
                 AudioMessage::CommonAudioDataChanged(data) => {
@@ -288,7 +288,7 @@ impl AudioThread {
                     if let Some(common) = &self.common_audio_data {
                         if load_song(&mut self.emu, common, &song, self.stereo_flag).is_ok() {
                             self.item_id = Some(song_id);
-                            return;
+                            return true;
                         }
                     }
                 }
@@ -296,7 +296,7 @@ impl AudioThread {
                     if load_song(&mut self.emu, &common_data, &song_data, self.stereo_flag).is_ok()
                     {
                         self.item_id = Some(id);
-                        return;
+                        return true;
                     }
                 }
 
@@ -306,7 +306,8 @@ impl AudioThread {
                 | AudioMessage::RingBufferConsumed(_) => (),
             }
         }
-        panic!("mpsc::Reciever::recv() returned None");
+
+        false
     }
 
     fn play(&mut self) {
