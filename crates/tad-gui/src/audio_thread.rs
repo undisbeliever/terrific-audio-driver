@@ -177,20 +177,6 @@ fn fill_ring_buffer(emu: &mut ShvcSoundEmu, playback: &mut AudioDevice<RingBuffe
     }
 }
 
-fn new_emulator(
-    common_data: &CommonAudioData,
-    song: &SongData,
-    stereo_flag: StereoFlag,
-) -> Result<ShvcSoundEmu, ()> {
-    // No IPL ROM
-    let iplrom = [0; 64];
-
-    let mut emu = ShvcSoundEmu::new(&iplrom);
-    load_song(&mut emu, common_data, song, stereo_flag)?;
-
-    Ok(emu)
-}
-
 fn load_song(
     emu: &mut ShvcSoundEmu,
     common_data: &CommonAudioData,
@@ -244,168 +230,195 @@ fn load_song(
     Ok(())
 }
 
-enum State {
+enum PlayState {
     Paused,
     Running,
     PauseRequested,
     Pausing,
 }
 
-fn wait_for_play_song_message(
-    rx: &mpsc::Receiver<AudioMessage>,
-) -> (
-    ShvcSoundEmu,
-    StereoFlag,
-    Option<CommonAudioData>,
-    Option<ItemId>,
-) {
-    let mut stereo_flag = StereoFlag::Stereo;
-    let mut common_audio_data: Option<CommonAudioData> = None;
+struct AudioThread {
+    sender: mpsc::Sender<AudioMessage>,
+    rx: mpsc::Receiver<AudioMessage>,
 
-    while let Ok(msg) = rx.recv() {
-        match msg {
-            AudioMessage::CommonAudioDataChanged(data) => {
-                common_audio_data = data;
-            }
-            AudioMessage::PlaySong(song_id, song) => {
-                if let Some(common) = &common_audio_data {
-                    if let Ok(emu) = new_emulator(common, &song, stereo_flag) {
-                        return (emu, stereo_flag, common_audio_data, Some(song_id));
-                    }
-                }
-            }
-            AudioMessage::PlaySample(id, common_data, song_data) => {
-                if let Ok(emu) = new_emulator(&common_data, &song_data, stereo_flag) {
-                    return (emu, stereo_flag, None, Some(id));
-                }
-            }
-            AudioMessage::SetStereoFlag(sf) => {
-                stereo_flag = sf;
-            }
-            _ => (),
-        }
-    }
-    panic!("mpsc::Reciever::recv() returned None");
+    emu: ShvcSoundEmu,
+
+    stereo_flag: StereoFlag,
+    common_audio_data: Option<CommonAudioData>,
+    item_id: Option<ItemId>,
 }
 
-fn audio_thread(rx: mpsc::Receiver<AudioMessage>, sender: mpsc::Sender<AudioMessage>) {
-    let w = wait_for_play_song_message(&rx);
+impl AudioThread {
+    fn new(sender: mpsc::Sender<AudioMessage>, rx: mpsc::Receiver<AudioMessage>) -> Self {
+        // No IPL ROM
+        let iplrom = [0; 64];
 
-    let (mut emu, mut stereo_flag, mut common_audio_data, mut item_id) = w;
+        Self {
+            sender,
+            rx,
+            emu: ShvcSoundEmu::new(&iplrom),
 
-    let sdl_context = sdl2::init().unwrap();
-    let audio_subsystem = sdl_context.audio().unwrap();
-    let desired_spec = AudioSpecDesired {
-        freq: Some(APU_SAMPLE_RATE),
-        channels: Some(2),
-        samples: Some(RingBuffer::SDL_BUFFER_SAMPLES.try_into().unwrap()),
-    };
+            stereo_flag: StereoFlag::Stereo,
+            common_audio_data: None,
+            item_id: None,
+        }
+    }
 
-    let mut playback = audio_subsystem
-        .open_playback(None, &desired_spec, {
-            let s = sender;
-            move |_spec| RingBuffer::new(s)
-        })
-        .unwrap();
+    fn run(&mut self) {
+        self.wait_for_play_song_message();
+        self.play();
+    }
 
-    fill_ring_buffer(&mut emu, &mut playback);
+    fn wait_for_play_song_message(&mut self) {
+        while let Ok(msg) = self.rx.recv() {
+            match msg {
+                AudioMessage::CommonAudioDataChanged(data) => {
+                    self.common_audio_data = data;
+                }
+                AudioMessage::SetStereoFlag(sf) => {
+                    self.stereo_flag = sf;
+                }
 
-    let mut state = State::Running;
-    playback.resume();
-
-    while let Ok(msg) = rx.recv() {
-        match msg {
-            AudioMessage::RingBufferConsumed(_) => {
-                match state {
-                    State::Paused => (),
-                    State::Running => {
-                        fill_ring_buffer(&mut emu, &mut playback);
-
-                        // ::TODO detect when the song has finished::
-                    }
-                    State::PauseRequested => {
-                        playback.lock().fill_with_silence();
-                        state = State::Pausing;
-                    }
-                    State::Pausing => {
-                        // Fill the ring buffer with silence
-                        playback.lock().fill_with_silence();
-                        state = State::Paused;
-                        playback.pause();
+                AudioMessage::PlaySong(song_id, song) => {
+                    if let Some(common) = &self.common_audio_data {
+                        if load_song(&mut self.emu, common, &song, self.stereo_flag).is_ok() {
+                            self.item_id = Some(song_id);
+                            return;
+                        }
                     }
                 }
-            }
+                AudioMessage::PlaySample(id, common_data, song_data) => {
+                    if load_song(&mut self.emu, &common_data, &song_data, self.stereo_flag).is_ok()
+                    {
+                        self.item_id = Some(id);
+                        return;
+                    }
+                }
 
-            AudioMessage::CommonAudioDataChanged(data) => {
-                common_audio_data = data;
+                AudioMessage::Stop
+                | AudioMessage::PauseResume(_)
+                | AudioMessage::RingBufferConsumed(_) => (),
             }
+        }
+        panic!("mpsc::Reciever::recv() returned None");
+    }
 
-            AudioMessage::PlaySong(id, song) => {
-                if let Some(common_data) = &common_audio_data {
-                    match load_song(&mut emu, common_data, &song, stereo_flag) {
+    fn play(&mut self) {
+        assert!(self.item_id.is_some());
+
+        let sdl_context = sdl2::init().unwrap();
+        let audio_subsystem = sdl_context.audio().unwrap();
+        let desired_spec = AudioSpecDesired {
+            freq: Some(APU_SAMPLE_RATE),
+            channels: Some(2),
+            samples: Some(RingBuffer::SDL_BUFFER_SAMPLES.try_into().unwrap()),
+        };
+
+        let mut playback = audio_subsystem
+            .open_playback(None, &desired_spec, {
+                |_spec| RingBuffer::new(self.sender.clone())
+            })
+            .unwrap();
+
+        fill_ring_buffer(&mut self.emu, &mut playback);
+
+        let mut state = PlayState::Running;
+        playback.resume();
+
+        while let Ok(msg) = self.rx.recv() {
+            match msg {
+                AudioMessage::RingBufferConsumed(_) => {
+                    match state {
+                        PlayState::Paused => (),
+                        PlayState::Running => {
+                            fill_ring_buffer(&mut self.emu, &mut playback);
+
+                            // ::TODO detect when the song has finished::
+                        }
+                        PlayState::PauseRequested => {
+                            playback.lock().fill_with_silence();
+                            state = PlayState::Pausing;
+                        }
+                        PlayState::Pausing => {
+                            // Fill the ring buffer with silence
+                            playback.lock().fill_with_silence();
+                            state = PlayState::Paused;
+                            playback.pause();
+                        }
+                    }
+                }
+
+                AudioMessage::CommonAudioDataChanged(data) => {
+                    self.common_audio_data = data;
+                }
+
+                AudioMessage::PlaySong(id, song) => {
+                    if let Some(common_data) = &self.common_audio_data {
+                        match load_song(&mut self.emu, common_data, &song, self.stereo_flag) {
+                            Ok(()) => {
+                                state = PlayState::Running;
+                                self.item_id = Some(id);
+                                playback.resume();
+                            }
+                            Err(()) => {
+                                // Stop playback
+                                state = PlayState::PauseRequested;
+                                self.item_id = None
+                            }
+                        }
+                    } else {
+                        // Stop playback
+                        state = PlayState::PauseRequested;
+                        self.item_id = None
+                    }
+                }
+
+                AudioMessage::PlaySample(id, common_data, song_data) => {
+                    match load_song(&mut self.emu, &common_data, &song_data, self.stereo_flag) {
                         Ok(()) => {
-                            state = State::Running;
-                            item_id = Some(id);
+                            state = PlayState::Running;
+                            self.item_id = Some(id);
                             playback.resume();
                         }
                         Err(()) => {
                             // Stop playback
-                            state = State::PauseRequested;
-                            item_id = None
+                            state = PlayState::PauseRequested;
+                            self.item_id = None
                         }
                     }
-                } else {
-                    // Stop playback
-                    state = State::PauseRequested;
-                    item_id = None
                 }
-            }
 
-            AudioMessage::PlaySample(id, common_data, song_data) => {
-                match load_song(&mut emu, &common_data, &song_data, stereo_flag) {
-                    Ok(()) => {
-                        state = State::Running;
-                        item_id = Some(id);
-                        playback.resume();
-                    }
-                    Err(()) => {
-                        // Stop playback
-                        state = State::PauseRequested;
-                        item_id = None
-                    }
+                AudioMessage::Stop => {
+                    state = PlayState::PauseRequested;
+                    self.item_id = None;
                 }
-            }
 
-            AudioMessage::Stop => {
-                state = State::PauseRequested;
-                item_id = None;
-            }
-
-            AudioMessage::PauseResume(id) => {
-                match state {
-                    State::Running => {
-                        state = State::PauseRequested;
-                    }
-                    State::Paused => {
-                        // Resume playback if item_id is unchanged
-                        if item_id == Some(id) {
-                            state = State::Running;
-                            playback.resume();
+                AudioMessage::PauseResume(id) => {
+                    match state {
+                        PlayState::Running => {
+                            state = PlayState::PauseRequested;
+                        }
+                        PlayState::Paused => {
+                            // Resume playback if item_id is unchanged
+                            if self.item_id == Some(id) {
+                                state = PlayState::Running;
+                                playback.resume();
+                            }
+                        }
+                        PlayState::PauseRequested | PlayState::Pausing => {
+                            // Do not do anything
                         }
                     }
-                    State::PauseRequested | State::Pausing => {
-                        // Do not do anything
-                    }
                 }
-            }
 
-            AudioMessage::SetStereoFlag(sf) => {
-                stereo_flag = sf;
+                AudioMessage::SetStereoFlag(sf) => {
+                    self.stereo_flag = sf;
+                }
             }
         }
-    }
 
-    playback.pause();
+        playback.pause();
+    }
 }
 
 pub fn create_audio_thread() -> (thread::JoinHandle<()>, mpsc::Sender<AudioMessage>) {
@@ -415,7 +428,7 @@ pub fn create_audio_thread() -> (thread::JoinHandle<()>, mpsc::Sender<AudioMessa
         .name("audio_thread".into())
         .spawn({
             let s = sender.clone();
-            move || audio_thread(rx, s)
+            move || AudioThread::new(s, rx).run()
         })
         .unwrap();
 
