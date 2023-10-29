@@ -20,6 +20,9 @@ pub mod addresses {
     pub const SONG_PTR: u16 = _symbols::SONG_PTR;
     pub const LOADER_DATA_TYPE: u16 = _symbols::LOADER_DATA_TYPE;
 
+    pub const CHANNEL_INSTRUCTION_PTR_L: u16 = _symbols::CHANNEL_INSTRUCTION_PTR_L;
+    pub const CHANNEL_INSTRUCTION_PTR_H: u16 = _symbols::CHANNEL_INSTRUCTION_PTR_H;
+
     // MUST match `audio-driver/src/common_memmap.wiz`
     pub const COMMON_DATA: u16 = 0x800 - 4;
 

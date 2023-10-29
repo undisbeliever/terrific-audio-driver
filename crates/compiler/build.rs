@@ -23,6 +23,8 @@ const AUDIO_DRIVER_SYMBOLS: &[(&str, &str)] = &[
     ("main", "DRIVER_MAIN"),
     ("__loader_songPtr", "SONG_PTR"),
     ("__loader_dataType", "LOADER_DATA_TYPE"),
+    ("channelSoA.instructionPtr_l", "CHANNEL_INSTRUCTION_PTR_L"),
+    ("channelSoA.instructionPtr_h", "CHANNEL_INSTRUCTION_PTR_H"),
 ];
 
 fn find_wiz_binary() -> PathBuf {

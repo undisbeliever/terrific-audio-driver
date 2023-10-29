@@ -23,6 +23,8 @@ use crate::compiler_thread::ItemId;
 
 const APU_SAMPLE_RATE: i32 = 32040;
 
+const N_VOICES: usize = 8;
+
 pub enum AudioMessage {
     RingBufferConsumed(PrivateToken),
 
@@ -166,15 +168,22 @@ impl AudioCallback for RingBuffer {
     }
 }
 
-fn fill_ring_buffer(emu: &mut ShvcSoundEmu, playback: &mut AudioDevice<RingBuffer>) {
-    loop {
-        let buffer = emu.emulate();
+// Returns true if any sound is output by the emulator
+fn fill_ring_buffer(emu: &mut ShvcSoundEmu, playback: &mut AudioDevice<RingBuffer>) -> bool {
+    let mut silence = true;
 
-        let full = playback.lock().add_chunk(buffer);
+    loop {
+        let emu_buffer = emu.emulate();
+        if silence {
+            silence &= emu_buffer.iter().all(|&b| b == 0);
+        }
+        let full = playback.lock().add_chunk(emu_buffer);
         if full {
             break;
         }
     }
+
+    !silence
 }
 
 fn load_song(
@@ -230,11 +239,36 @@ fn load_song(
     Ok(())
 }
 
+fn read_channel_positions(emu: &ShvcSoundEmu) -> [Option<u16>; N_VOICES] {
+    let apuram = emu.apuram();
+
+    let mut out = [None; N_VOICES];
+
+    let song_addr = u16::from_le_bytes([
+        apuram[usize::from(addresses::SONG_PTR)],
+        apuram[usize::from(addresses::SONG_PTR) + 1],
+    ]);
+
+    for (i, o) in out.iter_mut().enumerate() {
+        let addr = u16::from_le_bytes([
+            apuram[usize::from(addresses::CHANNEL_INSTRUCTION_PTR_L) + i],
+            apuram[usize::from(addresses::CHANNEL_INSTRUCTION_PTR_H) + i],
+        ]);
+
+        if addr > song_addr {
+            *o = Some(addr - song_addr);
+        }
+    }
+
+    out
+}
+
 enum PlayState {
     Paused,
     Running,
     PauseRequested,
     Pausing,
+    SongFinished,
 }
 
 struct AudioThread {
@@ -335,11 +369,20 @@ impl AudioThread {
 
                 AudioMessage::RingBufferConsumed(_) => {
                     match state {
-                        PlayState::Paused => (),
+                        PlayState::Paused | PlayState::SongFinished => (),
                         PlayState::Running => {
-                            fill_ring_buffer(&mut self.emu, &mut playback);
+                            let sound = fill_ring_buffer(&mut self.emu, &mut playback);
 
-                            // ::TODO detect when the song has finished::
+                            // Detect when the song has finished playing.
+                            //
+                            // Must test if the emulator is outputting audio as the echo buffer
+                            // feedback can output sound long after the song has finished.
+                            let channels = read_channel_positions(&self.emu);
+                            if !sound && channels.iter().all(Option::is_none) {
+                                self.item_id = None;
+                                state = PlayState::SongFinished;
+                                playback.pause();
+                            }
                         }
                         PlayState::PauseRequested => {
                             playback.lock().fill_with_silence();
@@ -411,7 +454,9 @@ impl AudioThread {
                                 playback.resume();
                             }
                         }
-                        PlayState::PauseRequested | PlayState::Pausing => {
+                        PlayState::PauseRequested
+                        | PlayState::Pausing
+                        | PlayState::SongFinished => {
                             // Do not do anything
                         }
                     }
