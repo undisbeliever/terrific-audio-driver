@@ -11,7 +11,7 @@ use crate::bytecode::{
 };
 use crate::data::{LoopSetting, Name};
 use crate::driver_constants::{
-    COMMON_DATA_ADDR, ECHO_BUFFER_EDL_MS, FIR_FILTER_SIZE, MAX_COMMON_DATA_SIZE, MAX_DIR_ITEMS,
+    addresses, ECHO_BUFFER_EDL_MS, FIR_FILTER_SIZE, MAX_COMMON_DATA_SIZE, MAX_DIR_ITEMS,
     MAX_INSTRUMENTS, MAX_SONG_DATA_SIZE, MAX_SOUND_EFFECTS, MAX_SUBROUTINES, PITCH_TABLE_SIZE,
 };
 use crate::echo::{EchoEdl, EchoLength};
@@ -1143,7 +1143,7 @@ impl Display for ExportSpcFileError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
             Self::TooMuchData { common, song, echo } => {
-                write!(f, "cannot fit data in audio-ram (driver: {} bytes, common_audio_data: {} bytes, song data: {} bytes, echo buffer: {} bytes", COMMON_DATA_ADDR, common, song, echo)
+                write!(f, "cannot fit data in audio-ram (driver: {} bytes, common_audio_data: {} bytes, song data: {} bytes, echo buffer: {} bytes", addresses::COMMON_DATA, common, song, echo)
             }
         }
     }

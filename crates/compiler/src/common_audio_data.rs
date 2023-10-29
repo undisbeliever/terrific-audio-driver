@@ -5,9 +5,9 @@
 // SPDX-License-Identifier: MIT
 
 use crate::driver_constants::{
-    COMMON_DATA_BYTES_PER_DIR, COMMON_DATA_BYTES_PER_INSTRUMENTS,
-    COMMON_DATA_BYTES_PER_SOUND_EFFECT, COMMON_DATA_HEADER_ADDR, COMMON_DATA_HEADER_SIZE,
-    MAX_COMMON_DATA_SIZE, MAX_DIR_ITEMS, MAX_INSTRUMENTS, MAX_SOUND_EFFECTS,
+    addresses, COMMON_DATA_BYTES_PER_DIR, COMMON_DATA_BYTES_PER_INSTRUMENTS,
+    COMMON_DATA_BYTES_PER_SOUND_EFFECT, COMMON_DATA_HEADER_SIZE, MAX_COMMON_DATA_SIZE,
+    MAX_DIR_ITEMS, MAX_INSTRUMENTS, MAX_SOUND_EFFECTS,
 };
 use crate::errors::{CommonAudioDataError, CommonAudioDataErrors};
 use crate::samples::SampleAndInstrumentData;
@@ -61,14 +61,14 @@ pub fn build_common_audio_data(
     let _disable_errors = errors;
 
     const _: () = assert!(MAX_COMMON_DATA_SIZE < u16::MAX as usize);
-    assert!(usize::from(COMMON_DATA_HEADER_ADDR) + common_data_size < u16::MAX.into());
+    assert!(usize::from(addresses::COMMON_DATA) + common_data_size < u16::MAX.into());
 
     assert!(samples.instruments_scrn.len() == n_instruments);
     assert!(samples.pitch_table.instruments_pitch_offset.len() == n_instruments);
     assert!(samples.instruments_adsr1.len() == n_instruments);
     assert!(samples.instruments_adsr2_or_gain.len() == n_instruments);
 
-    let brr_data_addr: u16 = COMMON_DATA_HEADER_ADDR + u16::try_from(header_size).unwrap();
+    let brr_data_addr: u16 = addresses::COMMON_DATA + u16::try_from(header_size).unwrap();
     let sfx_data_addr: u16 = brr_data_addr + u16::try_from(samples.brr_data.len()).unwrap();
 
     let mut out = Vec::with_capacity(common_data_size);

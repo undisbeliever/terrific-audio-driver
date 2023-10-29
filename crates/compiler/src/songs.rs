@@ -10,7 +10,7 @@ use crate::bytecode::{
     BcTerminator, BcTicksKeyOff, BcTicksNoKeyOff, Bytecode, InstrumentId, PlayNoteTicks, Volume,
 };
 use crate::driver_constants::{
-    AUDIO_RAM_SIZE, COMMON_DATA_ADDR, MAX_SONG_DATA_SIZE, MAX_SUBROUTINES, N_MUSIC_CHANNELS,
+    addresses, AUDIO_RAM_SIZE, MAX_SONG_DATA_SIZE, MAX_SUBROUTINES, N_MUSIC_CHANNELS,
     SFX_TICK_CLOCK, SONG_HEADER_CHANNELS_SIZE, SONG_HEADER_SIZE, SONG_HEADER_TICK_TIMER_OFFSET,
 };
 use crate::envelope::Envelope;
@@ -246,7 +246,7 @@ pub fn validate_song_size(
 
     let total_size = common_data_size + song_data_size + echo_buffer_size;
 
-    let end_addr = usize::from(COMMON_DATA_ADDR) + total_size;
+    let end_addr = usize::from(addresses::COMMON_DATA) + total_size;
 
     if end_addr <= AUDIO_RAM_SIZE {
         Ok(())

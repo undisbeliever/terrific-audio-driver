@@ -10,6 +10,43 @@
 
 pub const AUDIO_RAM_SIZE: usize = 0x10000;
 
+pub mod addresses {
+    mod _symbols {
+        include!(concat!(env!("OUT_DIR"), "/symbols.rs"));
+    }
+
+    pub const DRIVER_CODE: u16 = _symbols::DRIVER_MAIN;
+    pub const LOADER: u16 = _symbols::START_LOADER;
+    pub const SONG_PTR: u16 = _symbols::SONG_PTR;
+    pub const LOADER_DATA_TYPE: u16 = _symbols::LOADER_DATA_TYPE;
+
+    // MUST match `audio-driver/src/common_memmap.wiz`
+    pub const COMMON_DATA: u16 = 0x800 - 4;
+
+    const _: () = assert!(
+        _symbols::_LAST_LOADER_SYMBOL < DRIVER_CODE,
+        "Loader contains a symbol inside the driver code"
+    );
+
+    const _: () = assert!(
+        COMMON_DATA > _symbols::_LAST_DRIVER_SYMBOL && COMMON_DATA > _symbols::_LAST_LOADER_SYMBOL,
+        "Invalid COMMON_DATA address"
+    );
+
+    const _: () = assert!(
+        DRIVER_CODE % 2 == 0,
+        "Loader requires an even DRIVER_CODE address"
+    );
+    const _: () = assert!(
+        COMMON_DATA % 2 == 0,
+        "Loader requires an even COMMON_DATA address"
+    );
+    const _: () = assert!(
+        (COMMON_DATA as usize + super::COMMON_DATA_HEADER_SIZE) & 0xff == 0,
+        "BRR directory is not page aligned"
+    );
+}
+
 pub const N_MUSIC_CHANNELS: usize = 6;
 
 // Song ID 0 is silence
@@ -22,9 +59,6 @@ pub const MAX_SOUND_EFFECTS: usize = 192;
 
 pub const PITCH_TABLE_SIZE: usize = 256;
 
-pub const COMMON_DATA_ADDR: u16 = 0x800 - 4;
-
-pub const COMMON_DATA_HEADER_ADDR: u16 = COMMON_DATA_ADDR;
 pub const COMMON_DATA_HEADER_SIZE: usize = 4 + (2 * PITCH_TABLE_SIZE);
 
 pub const COMMON_DATA_BYTES_PER_DIR: usize = 4;
@@ -32,23 +66,6 @@ pub const COMMON_DATA_BYTES_PER_INSTRUMENTS: usize = 4;
 pub const COMMON_DATA_BYTES_PER_SOUND_EFFECT: usize = 2;
 
 pub const MAX_COMMON_DATA_SIZE: usize = 0xD000;
-
-const _: () = assert!(
-    COMMON_DATA_HEADER_ADDR % 2 == 0,
-    "Loader requires an even common data address"
-);
-const _: () = assert!(
-    (COMMON_DATA_HEADER_ADDR as usize + COMMON_DATA_HEADER_SIZE) & 0xff == 0,
-    "BRR directory is not page aligned"
-);
-
-// Driver constants
-
-// MUST match `audio-driver/src/common_memmap.wiz`
-pub const DRIVER_CODE_ADDR: u16 = 0x200;
-pub const DRIVER_LOADER_ADDR: u16 = 0x160;
-pub const DRIVER_SONG_PTR_ADDR: u16 = 0x00ec;
-pub const DRIVER_LOADER_DATA_TYPE_ADDR: u16 = DRIVER_SONG_PTR_ADDR + 2;
 
 // Loader constants
 // MUST match `audio-driver/src/io-commands.wiz`

@@ -8,10 +8,7 @@ use std::time::Duration;
 
 use crate::audio_driver;
 use crate::common_audio_data::CommonAudioData;
-use crate::driver_constants::{
-    LoaderDataType, COMMON_DATA_ADDR, DRIVER_CODE_ADDR, DRIVER_LOADER_ADDR,
-    DRIVER_LOADER_DATA_TYPE_ADDR, DRIVER_SONG_PTR_ADDR,
-};
+use crate::driver_constants::{addresses, LoaderDataType};
 use crate::errors::ExportSpcFileError;
 use crate::mml::MetaData;
 use crate::songs::SongData;
@@ -70,7 +67,8 @@ fn song_length(duration: Option<Duration>, metadata: &MetaData) -> u64 {
 }
 
 const _: () = assert!(
-    audio_driver::AUDIO_DRIVER.len() + (DRIVER_CODE_ADDR as usize) <= (COMMON_DATA_ADDR as usize)
+    audio_driver::AUDIO_DRIVER.len() + (addresses::DRIVER_CODE as usize)
+        <= (addresses::COMMON_DATA as usize)
 );
 
 pub fn export_spc_file(
@@ -84,8 +82,9 @@ pub fn export_spc_file(
 
     let echo_edl = metadata.echo_buffer.edl;
 
-    let song_data_addr =
-        usize::from(COMMON_DATA_ADDR) + common_audio_data.len() + (common_audio_data.len() % 2);
+    let song_data_addr = usize::from(addresses::COMMON_DATA)
+        + common_audio_data.len()
+        + (common_audio_data.len() % 2);
     let song_end_addr = song_data_addr + song_data.len();
     let echo_buffer_size = echo_edl.buffer_size();
 
@@ -117,7 +116,7 @@ pub fn export_spc_file(
 
         // SPC700 Registers
         // PC
-        header[0x25..0x27].copy_from_slice(&DRIVER_CODE_ADDR.to_le_bytes());
+        header[0x25..0x27].copy_from_slice(&addresses::DRIVER_CODE.to_le_bytes());
         // SP
         header[0x2b] = 0xff;
         // Ignoring remaining registers
@@ -145,7 +144,7 @@ pub fn export_spc_file(
 
     // Audio-RAM contents
     {
-        const LOADER_DATA_TYPE_ADDR: usize = DRIVER_LOADER_DATA_TYPE_ADDR as usize;
+        const LOADER_DATA_TYPE_ADDR: usize = addresses::LOADER_DATA_TYPE as usize;
 
         let spc_ram = &mut out[0x100..0x10100];
         let mut write_spc_ram = |addr: u16, data: &[u8]| {
@@ -153,18 +152,18 @@ pub fn export_spc_file(
             spc_ram[addr..addr + data.len()].copy_from_slice(data);
         };
 
-        write_spc_ram(DRIVER_CODE_ADDR, audio_driver::AUDIO_DRIVER);
-        write_spc_ram(COMMON_DATA_ADDR, common_audio_data);
+        write_spc_ram(addresses::DRIVER_CODE, audio_driver::AUDIO_DRIVER);
+        write_spc_ram(addresses::COMMON_DATA, common_audio_data);
 
         write_spc_ram(song_data_addr, song_data);
 
-        write_spc_ram(DRIVER_SONG_PTR_ADDR, &song_data_addr.to_le_bytes());
+        write_spc_ram(addresses::SONG_PTR, &song_data_addr.to_le_bytes());
 
         // Set stereo flag and skip echo buffer reset delay
         spc_ram[LOADER_DATA_TYPE_ADDR] = LoaderDataType::StereoSongDataSkipEchoBufferReset as u8;
 
         // Replace loader with a `STOP` instructions
-        spc_ram[usize::from(DRIVER_LOADER_ADDR)] = 0xff;
+        spc_ram[usize::from(addresses::LOADER)] = 0xff;
     }
 
     // S-DSP registers

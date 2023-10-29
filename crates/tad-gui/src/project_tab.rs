@@ -282,7 +282,7 @@ pub struct MemoryStats {
 }
 
 impl MemoryStats {
-    const DRIVER_SIZE: usize = compiler::driver_constants::COMMON_DATA_ADDR as usize;
+    const DRIVER_SIZE: usize = compiler::driver_constants::addresses::COMMON_DATA as usize;
     const AUDIO_RAM_SIZE: usize = compiler::driver_constants::AUDIO_RAM_SIZE;
 
     fn new(parent: &mut Flex, width_ch_units: i32) -> Self {

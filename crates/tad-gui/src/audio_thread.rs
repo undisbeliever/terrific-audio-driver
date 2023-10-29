@@ -8,10 +8,7 @@
 
 use compiler::audio_driver;
 use compiler::common_audio_data::CommonAudioData;
-use compiler::driver_constants::{
-    LoaderDataType, COMMON_DATA_ADDR, DRIVER_CODE_ADDR, DRIVER_LOADER_ADDR,
-    DRIVER_LOADER_DATA_TYPE_ADDR, DRIVER_SONG_PTR_ADDR,
-};
+use compiler::driver_constants::{addresses, LoaderDataType};
 use compiler::songs::SongData;
 
 use shvc_sound_emu::ShvcSoundEmu;
@@ -186,14 +183,14 @@ fn load_song(
     song: &SongData,
     stereo_flag: StereoFlag,
 ) -> Result<(), ()> {
-    const LOADER_DATA_TYPE_ADDR: usize = DRIVER_LOADER_DATA_TYPE_ADDR as usize;
+    const LOADER_DATA_TYPE_ADDR: usize = addresses::LOADER as usize;
 
     let song_data = song.data();
     let common_data = common_data.data();
     let edl = &song.metadata().echo_buffer.edl;
 
     let song_data_addr =
-        usize::from(COMMON_DATA_ADDR) + common_data.len() + (common_data.len() % 2);
+        usize::from(addresses::COMMON_DATA) + common_data.len() + (common_data.len() % 2);
 
     let song_data_addr = match u16::try_from(song_data_addr) {
         Ok(a) => a,
@@ -208,11 +205,11 @@ fn load_song(
     };
 
     // Load driver
-    write_spc_ram(DRIVER_LOADER_ADDR, audio_driver::LOADER);
-    write_spc_ram(DRIVER_CODE_ADDR, audio_driver::AUDIO_DRIVER);
+    write_spc_ram(addresses::LOADER, audio_driver::LOADER);
+    write_spc_ram(addresses::DRIVER_CODE, audio_driver::AUDIO_DRIVER);
 
-    write_spc_ram(COMMON_DATA_ADDR, common_data);
-    write_spc_ram(DRIVER_SONG_PTR_ADDR, &song_data_addr.to_le_bytes());
+    write_spc_ram(addresses::COMMON_DATA, common_data);
+    write_spc_ram(addresses::SONG_PTR, &song_data_addr.to_le_bytes());
     write_spc_ram(song_data_addr, song_data);
 
     // Reset echo buffer
@@ -228,7 +225,7 @@ fn load_song(
 
     emu.set_echo_buffer_size(edl.esa_register(), edl.as_u8());
 
-    emu.set_spc_registers(DRIVER_CODE_ADDR, 0, 0, 0, 0, 0xff);
+    emu.set_spc_registers(addresses::DRIVER_CODE, 0, 0, 0, 0, 0xff);
 
     Ok(())
 }
