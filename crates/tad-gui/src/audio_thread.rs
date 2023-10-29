@@ -18,6 +18,7 @@ use sdl2::audio::{AudioCallback, AudioDevice, AudioSpecDesired};
 
 use std::sync::mpsc;
 use std::thread;
+use std::time::Duration;
 
 use crate::compiler_thread::ItemId;
 
@@ -271,6 +272,15 @@ enum PlayState {
     SongFinished,
 }
 
+impl PlayState {
+    fn timeout_until_close(&self) -> Duration {
+        match self {
+            Self::Paused => Duration::from_secs(2 * 60),
+            _ => Duration::from_secs(5),
+        }
+    }
+}
+
 struct AudioThread {
     sender: mpsc::Sender<AudioMessage>,
     rx: mpsc::Receiver<AudioMessage>,
@@ -331,9 +341,14 @@ impl AudioThread {
                     }
                 }
 
+                AudioMessage::PauseResume(id) => {
+                    if Some(id) == self.item_id {
+                        return true;
+                    }
+                }
+
                 AudioMessage::StopAndClose
                 | AudioMessage::Pause
-                | AudioMessage::PauseResume(_)
                 | AudioMessage::RingBufferConsumed(_) => (),
             }
         }
@@ -342,7 +357,9 @@ impl AudioThread {
     }
 
     fn play(&mut self) {
-        assert!(self.item_id.is_some());
+        if self.item_id.is_none() {
+            return;
+        }
 
         let sdl_context = sdl2::init().unwrap();
         let audio_subsystem = sdl_context.audio().unwrap();
@@ -363,7 +380,8 @@ impl AudioThread {
         let mut state = PlayState::Running;
         playback.resume();
 
-        while let Ok(msg) = self.rx.recv() {
+        // Will exit the loop and close the audio device on timeout or channel disconnect.
+        while let Ok(msg) = self.rx.recv_timeout(state.timeout_until_close()) {
             match msg {
                 AudioMessage::StopAndClose => break,
 
@@ -467,8 +485,6 @@ impl AudioThread {
                 }
             }
         }
-
-        playback.pause();
     }
 }
 
