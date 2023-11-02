@@ -155,6 +155,15 @@ pub struct LineTickCounter {
     pub in_loop: bool,
 }
 
+#[cfg(feature = "mml_tracking")]
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub struct BytecodePos {
+    // Bytecode position (within the channel NOT the song)
+    pub bc_pos: u16,
+    // Character index within the input file
+    pub char_index: u32,
+}
+
 #[derive(Debug, PartialEq)]
 pub struct ChannelData {
     identifier: Identifier,
@@ -170,6 +179,9 @@ pub struct ChannelData {
 
     line_tick_counters: Vec<LineTickCounter>,
     tempo_changes: Vec<(TickCounter, TickClock)>,
+
+    #[cfg(feature = "mml_tracking")]
+    pub(crate) bc_tracking: Vec<BytecodePos>,
 }
 
 #[derive(Debug, PartialEq)]
@@ -808,6 +820,9 @@ struct MmlBytecodeGenerator<'a> {
     loop_point: Option<LoopPoint>,
 
     show_missing_set_instrument_error: bool,
+
+    #[cfg(feature = "mml_tracking")]
+    bc_tracking: Vec<BytecodePos>,
 }
 
 impl MmlBytecodeGenerator<'_> {
@@ -816,7 +831,10 @@ impl MmlBytecodeGenerator<'_> {
         instruments: &'a Vec<MmlInstrument>,
         subroutines: Option<&'a Vec<ChannelData>>,
         is_subroutine: bool,
+        n_commands: usize,
     ) -> MmlBytecodeGenerator<'a> {
+        let _ = n_commands;
+
         MmlBytecodeGenerator {
             pitch_table,
             instruments,
@@ -831,6 +849,9 @@ impl MmlBytecodeGenerator<'_> {
             skip_last_loop_state: None,
             loop_point: None,
             show_missing_set_instrument_error: !is_subroutine,
+
+            #[cfg(feature = "mml_tracking")]
+            bc_tracking: Vec::with_capacity(n_commands),
         }
     }
 
@@ -1306,6 +1327,12 @@ impl MmlBytecodeGenerator<'_> {
         command: &MmlCommand,
         pos: &FilePosRange,
     ) -> Result<(), MmlCommandError> {
+        #[cfg(feature = "mml_tracking")]
+        self.bc_tracking.push(BytecodePos {
+            bc_pos: self.bc.get_bytecode_len().try_into().unwrap_or(0xffff),
+            char_index: pos.index_start,
+        });
+
         match command {
             MmlCommand::NoCommand => (),
 
@@ -1481,6 +1508,7 @@ fn process_mml_commands(
         instruments,
         subroutines,
         subroutine_index.is_some(),
+        commands.len(),
     );
 
     for c in commands {
@@ -1534,6 +1562,9 @@ fn process_mml_commands(
             bc_subroutine,
             line_tick_counters: gen.line_tick_counters,
             tempo_changes: gen.tempo_changes,
+
+            #[cfg(feature = "mml_tracking")]
+            bc_tracking: gen.bc_tracking,
         })
     } else {
         Err(errors)

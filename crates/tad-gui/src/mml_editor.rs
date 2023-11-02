@@ -4,10 +4,13 @@
 //
 // SPDX-License-Identifier: MIT
 
+use crate::audio_thread::AudioMonitorData;
 use crate::helpers::ch_units_to_width;
 
+use compiler::driver_constants::N_MUSIC_CHANNELS;
 use compiler::errors::{MmlChannelError, MmlCompileErrors};
 use compiler::mml::{FIRST_MUSIC_CHANNEL, LAST_MUSIC_CHANNEL};
+use compiler::songs::{ChannelBcTracking, SongBcTracking};
 use compiler::FilePosRange;
 
 use std::cell::RefCell;
@@ -26,6 +29,9 @@ pub struct MmlEditorState {
     style_vec: Vec<u8>,
 
     changed_callback: Box<dyn Fn() + 'static>,
+
+    note_tracking_data: Option<SongBcTracking>,
+    note_tracking_state: [NoteTrackingState; N_MUSIC_CHANNELS],
 
     errors_in_style_buffer: bool,
 }
@@ -62,6 +68,10 @@ impl MmlEditor {
             text_buffer: text_buffer.clone(),
             style_buffer,
             style_vec: Vec::new(),
+
+            note_tracking_state: Default::default(),
+            note_tracking_data: None,
+
             changed_callback: Box::from(Self::blank_callback),
 
             errors_in_style_buffer: false,
@@ -115,6 +125,16 @@ impl MmlEditor {
     }
 
     fn blank_callback() {}
+
+    pub fn set_note_tracking_data(&mut self, note_tracking: Option<SongBcTracking>) {
+        self.state
+            .borrow_mut()
+            .set_note_tracking_data(note_tracking);
+    }
+
+    pub fn update_note_tracking(&mut self, mon: AudioMonitorData) {
+        self.state.borrow_mut().update_note_tracking(mon);
+    }
 }
 
 impl MmlEditorState {
@@ -158,11 +178,15 @@ impl MmlEditorState {
             &self.text_buffer,
         );
 
-        self.style_buffer.replace(
-            to_style_start,
-            to_style_end + n_deleted - n_inserted,
-            changed,
-        );
+        if self.note_tracking_data.is_none() {
+            self.style_buffer.replace(
+                to_style_start,
+                to_style_end + n_deleted - n_inserted,
+                changed,
+            );
+        } else {
+            self.set_note_tracking_data(None);
+        }
 
         (self.changed_callback)();
     }
@@ -291,6 +315,122 @@ impl MmlEditorState {
             self.errors_in_style_buffer = false;
         }
     }
+
+    fn set_note_tracking_data(&mut self, note_tracking: Option<SongBcTracking>) {
+        self.note_tracking_data = note_tracking;
+        self.note_tracking_state = Default::default();
+
+        let style = std::str::from_utf8(&self.style_vec).unwrap();
+        self.style_buffer.set_text(style);
+    }
+
+    fn update_note_tracking(&mut self, mon: AudioMonitorData) {
+        let mut changed = false;
+        if let Some(ntd) = &self.note_tracking_data {
+            for i in 0..self.note_tracking_state.len() {
+                let nts = &mut self.note_tracking_state[i];
+                let voice_pos = mon.voice_instruction_ptrs[i];
+
+                changed |= nts.update(&mut self.style_buffer, ntd, i, voice_pos, &self.style_vec);
+            }
+        }
+
+        // Redraw the entire widget, required for the new style to be immediately visible.
+        // NOTE: Fl_Text_Display::redisplay_range() is not available.
+        if changed {
+            self.widget.redraw();
+        }
+    }
+}
+
+#[derive(Default)]
+pub struct NoteTrackingState {
+    song_ptr: Option<u16>,
+    buffer_pos: i32,
+}
+
+impl NoteTrackingState {
+    fn update(
+        &mut self,
+        style_buffer: &mut TextBuffer,
+        tracking_data: &SongBcTracking,
+        channel_index: usize,
+        voice_pos: Option<u16>,
+        style_vec: &Vec<u8>,
+    ) -> bool {
+        if voice_pos == self.song_ptr {
+            return false;
+        }
+        self.song_ptr = voice_pos;
+
+        let vc = match &tracking_data.channels[channel_index] {
+            Some(vc) => vc,
+            None => return false,
+        };
+
+        match voice_pos {
+            Some(vp) => {
+                if let Some(p) = Self::search_channel(vc, vp) {
+                    self.update_style(style_buffer, style_vec, p);
+                } else {
+                    for s in &tracking_data.subroutines {
+                        if let Some(p) = Self::search_channel(s, vp) {
+                            self.update_style(style_buffer, style_vec, p);
+                            break;
+                        }
+                    }
+                }
+            }
+            None => {
+                self.remove_old_style(style_buffer, style_vec);
+            }
+        }
+
+        true
+    }
+
+    fn search_channel(c: &ChannelBcTracking, voice_pos: u16) -> Option<u32> {
+        if c.range.contains(&voice_pos) {
+            let channel_pos = voice_pos.saturating_sub(c.range.start).saturating_sub(2);
+            let i = match c.bytecodes.binary_search_by_key(&channel_pos, |b| b.bc_pos) {
+                Ok(i) => i,
+                Err(i) => i,
+            };
+            c.bytecodes.get(i).map(|b| b.char_index)
+        } else {
+            None
+        }
+    }
+
+    fn update_style(
+        &mut self,
+        style_buffer: &mut TextBuffer,
+        style_vec: &Vec<u8>,
+        buffer_pos: u32,
+    ) {
+        self.remove_old_style(style_buffer, style_vec);
+
+        if let Ok(i) = i32::try_from(buffer_pos) {
+            if i < style_buffer.length() {
+                style_buffer.replace(i, i + 1, Style::NOTE_TRACKER_STR);
+
+                self.buffer_pos = i;
+            }
+        }
+    }
+
+    #[allow(clippy::ptr_arg)]
+    fn remove_old_style(&mut self, style_buffer: &mut TextBuffer, style_vec: &Vec<u8>) {
+        if let Ok(i) = usize::try_from(self.buffer_pos) {
+            if let Some(&s) = style_vec.get(i) {
+                if let Ok(s) = std::str::from_utf8(&[s]) {
+                    style_buffer.replace(self.buffer_pos, self.buffer_pos + 1, s);
+                }
+            }
+        }
+
+        self.buffer_pos = -1;
+    }
 }
 
 struct MmlColors {
@@ -308,6 +448,8 @@ struct MmlColors {
     error_bg: Color,
 
     unknown: Color,
+
+    tracker_bg: Color,
 }
 
 const MML_COLORS: MmlColors = MmlColors {
@@ -325,6 +467,8 @@ const MML_COLORS: MmlColors = MmlColors {
     error_bg: Color::Red,
 
     unknown: Color::Green,
+
+    tracker_bg: Color::from_rgb(0xbb, 0x98, 0xcd), // hsl(280, 35, 70)
 };
 
 #[derive(Copy, Clone, Eq, PartialEq)]
@@ -354,6 +498,8 @@ enum Style {
     InvalidLine,
 
     Error,
+
+    NoteTracking,
 
     Unknown,
 }
@@ -385,9 +531,13 @@ impl Style {
 
             b'Q' => Style::Error,
 
+            b'R' => Style::NoteTracking,
+
             _ => Style::Unknown,
         }
     }
+
+    const NOTE_TRACKER_STR: &str = "R";
 
     const fn to_u8_char(self) -> u8 {
         b'A' + (self as u8)
@@ -433,6 +583,7 @@ fn highlight_data(mml_colors: &MmlColors, font_size: i32) -> Vec<StyleTableEntry
         courier_bold(mml_colors.channel_names),
         courier(mml_colors.invalid),
         bg_bold(mml_colors.error_bg),
+        bg_bold(mml_colors.tracker_bg),
         courier(mml_colors.unknown),
     ]
 }
@@ -514,6 +665,7 @@ fn next_style(current: Style, c: u8) -> Style {
         },
 
         Style::Error => Style::Error,
+        Style::NoteTracking => Style::Error,
     }
 }
 

@@ -16,15 +16,17 @@ use shvc_sound_emu::ShvcSoundEmu;
 extern crate sdl2;
 use sdl2::audio::{AudioCallback, AudioDevice, AudioSpecDesired};
 
-use std::sync::mpsc;
+use std::sync::{mpsc, Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 
 use crate::compiler_thread::ItemId;
 
+type GuiMessage = crate::Message;
+
 const APU_SAMPLE_RATE: i32 = 32040;
 
-const N_VOICES: usize = 8;
+pub const N_VOICES: usize = 8;
 
 pub enum AudioMessage {
     RingBufferConsumed(PrivateToken),
@@ -57,6 +59,36 @@ pub struct PrivateToken {
 impl PrivateToken {
     pub(self) fn new() -> Self {
         Self { private: () }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct AudioMonitorData {
+    pub item_id: Option<ItemId>,
+    pub voice_instruction_ptrs: [Option<u16>; N_VOICES],
+}
+
+#[derive(Clone)]
+pub struct AudioMonitor {
+    data: Arc<Mutex<Option<AudioMonitorData>>>,
+}
+
+impl AudioMonitor {
+    fn new() -> Self {
+        Self {
+            data: Arc::new(Mutex::default()),
+        }
+    }
+
+    fn set(&mut self, data: Option<AudioMonitorData>) {
+        *self.data.lock().unwrap() = data;
+    }
+
+    pub fn get(&self) -> Option<AudioMonitorData> {
+        match self.data.lock() {
+            Ok(d) => d.clone(),
+            Err(_) => None,
+        }
     }
 }
 
@@ -240,7 +272,7 @@ fn load_song(
     Ok(())
 }
 
-fn read_channel_positions(emu: &ShvcSoundEmu) -> [Option<u16>; N_VOICES] {
+fn read_voice_positions(emu: &ShvcSoundEmu) -> [Option<u16>; N_VOICES] {
     let apuram = emu.apuram();
 
     let mut out = [None; N_VOICES];
@@ -285,6 +317,9 @@ struct AudioThread {
     sender: mpsc::Sender<AudioMessage>,
     rx: mpsc::Receiver<AudioMessage>,
 
+    gui_sender: fltk::app::Sender<GuiMessage>,
+    monitor: AudioMonitor,
+
     emu: ShvcSoundEmu,
 
     stereo_flag: StereoFlag,
@@ -293,13 +328,21 @@ struct AudioThread {
 }
 
 impl AudioThread {
-    fn new(sender: mpsc::Sender<AudioMessage>, rx: mpsc::Receiver<AudioMessage>) -> Self {
+    fn new(
+        sender: mpsc::Sender<AudioMessage>,
+        rx: mpsc::Receiver<AudioMessage>,
+        gui_sender: fltk::app::Sender<GuiMessage>,
+        monitor: AudioMonitor,
+    ) -> Self {
         // No IPL ROM
         let iplrom = [0; 64];
 
         Self {
             sender,
             rx,
+            gui_sender,
+            monitor,
+
             emu: ShvcSoundEmu::new(&iplrom),
 
             stereo_flag: StereoFlag::Stereo,
@@ -314,8 +357,31 @@ impl AudioThread {
         }
     }
 
+    fn send_started_song_message(&mut self, id: ItemId, song_data: SongData) {
+        // Must set the monitor data, audio timer stops when monitor data is None
+        self.monitor.set(Some(AudioMonitorData {
+            item_id: Some(id),
+            voice_instruction_ptrs: Default::default(),
+        }));
+
+        self.gui_sender
+            .send(GuiMessage::AudioThreadStartedSong(id, Box::new(song_data)));
+    }
+
+    fn send_resume_song_message(&mut self, id: ItemId) {
+        // Must set the monitor data, audio timer stops when monitor data is None
+        self.monitor.set(Some(AudioMonitorData {
+            item_id: Some(id),
+            voice_instruction_ptrs: Default::default(),
+        }));
+
+        self.gui_sender.send(GuiMessage::AudioThreadResumedSong(id));
+    }
+
     // Returns true if a song was loaded into the emulator
     fn wait_for_play_song_message(&mut self) -> bool {
+        self.monitor.set(None);
+
         while let Ok(msg) = self.rx.recv() {
             match msg {
                 AudioMessage::CommonAudioDataChanged(data) => {
@@ -328,6 +394,7 @@ impl AudioThread {
                 AudioMessage::PlaySong(song_id, song) => {
                     if let Some(common) = &self.common_audio_data {
                         if load_song(&mut self.emu, common, &song, self.stereo_flag).is_ok() {
+                            self.send_started_song_message(song_id, song);
                             self.item_id = Some(song_id);
                             return true;
                         }
@@ -395,11 +462,19 @@ impl AudioThread {
                             //
                             // Must test if the emulator is outputting audio as the echo buffer
                             // feedback can output sound long after the song has finished.
-                            let channels = read_channel_positions(&self.emu);
-                            if !sound && channels.iter().all(Option::is_none) {
+                            let voices = read_voice_positions(&self.emu);
+                            if sound || voices.iter().any(Option::is_some) {
+                                self.monitor.set(Some(AudioMonitorData {
+                                    item_id: self.item_id,
+                                    voice_instruction_ptrs: voices,
+                                }));
+                            } else {
+                                // The song has finished
                                 self.item_id = None;
                                 state = PlayState::SongFinished;
                                 playback.pause();
+
+                                self.monitor.set(None);
                             }
                         }
                         PlayState::PauseRequested => {
@@ -411,6 +486,8 @@ impl AudioThread {
                             playback.lock().fill_with_silence();
                             state = PlayState::Paused;
                             playback.pause();
+
+                            self.monitor.set(None);
                         }
                     }
                 }
@@ -423,6 +500,8 @@ impl AudioThread {
                     if let Some(common_data) = &self.common_audio_data {
                         match load_song(&mut self.emu, common_data, &song, self.stereo_flag) {
                             Ok(()) => {
+                                self.send_started_song_message(id, song);
+
                                 state = PlayState::Running;
                                 self.item_id = Some(id);
                                 playback.resume();
@@ -470,6 +549,8 @@ impl AudioThread {
                             if self.item_id == Some(id) {
                                 state = PlayState::Running;
                                 playback.resume();
+
+                                self.send_resume_song_message(id);
                             }
                         }
                         PlayState::PauseRequested
@@ -488,16 +569,24 @@ impl AudioThread {
     }
 }
 
-pub fn create_audio_thread() -> (thread::JoinHandle<()>, mpsc::Sender<AudioMessage>) {
+pub fn create_audio_thread(
+    gui_sender: fltk::app::Sender<GuiMessage>,
+) -> (
+    thread::JoinHandle<()>,
+    mpsc::Sender<AudioMessage>,
+    AudioMonitor,
+) {
     let (sender, rx) = mpsc::channel();
+    let monitor = AudioMonitor::new();
 
     let handler = thread::Builder::new()
         .name("audio_thread".into())
         .spawn({
             let s = sender.clone();
-            move || AudioThread::new(s, rx).run()
+            let m = monitor.clone();
+            move || AudioThread::new(s, rx, gui_sender, m).run()
         })
         .unwrap();
 
-    (handler, sender)
+    (handler, sender, monitor)
 }

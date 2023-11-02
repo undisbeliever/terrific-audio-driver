@@ -4,6 +4,7 @@
 //
 // SPDX-License-Identifier: MIT
 
+use crate::audio_thread::AudioMonitorData;
 use crate::compiler_thread::{ItemId, SongError, SongOutput};
 use crate::helpers::*;
 use crate::mml_editor::MmlEditor;
@@ -12,7 +13,7 @@ use crate::Message;
 
 use compiler::data::TextFile;
 use compiler::errors::MmlCompileErrors;
-use compiler::songs::song_duration_string;
+use compiler::songs::{song_duration_string, SongData};
 
 use fltk::app;
 use fltk::button::Button;
@@ -170,6 +171,17 @@ impl SongTab {
         if let Ok(mut s) = self.state.try_borrow_mut() {
             s.set_compiler_output(co);
         }
+    }
+
+    pub fn audio_thread_started_song(&mut self, song_data: Box<SongData>) {
+        self.state
+            .borrow_mut()
+            .editor
+            .set_note_tracking_data(song_data.take_tracking());
+    }
+
+    pub fn monitor_timer_elapsed(&mut self, mon: AudioMonitorData) {
+        self.state.borrow_mut().editor.update_note_tracking(mon);
     }
 }
 

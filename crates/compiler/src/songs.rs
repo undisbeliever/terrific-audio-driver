@@ -19,7 +19,11 @@ use crate::mml::{calc_song_duration, MetaData, MmlData};
 use crate::notes::Note;
 use crate::sound_effects::CompiledSoundEffect;
 
+#[cfg(feature = "mml_tracking")]
+use crate::mml;
+
 use std::cmp::min;
+use std::fmt::Debug;
 use std::time::Duration;
 
 const NULL_OFFSET: u16 = 0xffff_u16;
@@ -32,11 +36,47 @@ fn validate_data_size(data: &[u8], expected_size: usize) -> Result<(), SongError
     }
 }
 
+#[cfg(feature = "mml_tracking")]
+#[derive(Clone)]
+pub struct ChannelBcTracking {
+    pub range: std::ops::Range<u16>,
+    pub bytecodes: Vec<mml::BytecodePos>,
+}
+
+#[cfg(feature = "mml_tracking")]
+impl ChannelBcTracking {
+    fn new(start: usize, end: usize, bytecodes: Vec<mml::BytecodePos>) -> Self {
+        Self {
+            range: std::ops::Range {
+                start: start.try_into().unwrap(),
+                end: end.try_into().unwrap(),
+            },
+            bytecodes,
+        }
+    }
+}
+
+#[cfg(feature = "mml_tracking")]
+#[derive(Clone)]
+pub struct SongBcTracking {
+    pub subroutines: Vec<ChannelBcTracking>,
+    pub channels: [Option<ChannelBcTracking>; N_MUSIC_CHANNELS],
+}
+
 #[derive(Clone)]
 pub struct SongData {
     metadata: MetaData,
     data: Vec<u8>,
     duration: Option<Duration>,
+
+    #[cfg(feature = "mml_tracking")]
+    tracking: Option<SongBcTracking>,
+}
+
+impl Debug for SongData {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "SongData")
+    }
 }
 
 impl SongData {
@@ -56,6 +96,16 @@ impl SongData {
         let song_data_size = song_data_size + (song_data_size % 2);
 
         song_data_size + self.metadata.echo_buffer.edl.buffer_size()
+    }
+
+    #[cfg(feature = "mml_tracking")]
+    pub fn tracking(&self) -> Option<&SongBcTracking> {
+        self.tracking.as_ref()
+    }
+
+    #[cfg(feature = "mml_tracking")]
+    pub fn take_tracking(self) -> Option<SongBcTracking> {
+        self.tracking
     }
 }
 
@@ -119,6 +169,9 @@ fn sfx_bytecode_to_song(bytecode: &[u8]) -> SongData {
         data: [header.as_slice(), bytecode].concat(),
         metadata: MetaData::blank_sfx_metadata(),
         duration: None,
+
+        #[cfg(feature = "mml_tracking")]
+        tracking: None,
     }
 }
 
@@ -203,11 +256,36 @@ pub fn song_data(mml_data: MmlData) -> Result<SongData, SongError> {
         validate_data_size(&out, header_size)?;
     }
 
-    for c in channels {
+    #[cfg(feature = "mml_tracking")]
+    let mut channel_tracking: [Option<ChannelBcTracking>; N_MUSIC_CHANNELS] = Default::default();
+
+    for (_i, c) in channels.iter().enumerate() {
+        #[cfg(feature = "mml_tracking")]
+        let start = out.len();
+
         out.extend(c.bytecode());
+
+        #[cfg(feature = "mml_tracking")]
+        {
+            let end = out.len();
+            channel_tracking[_i] = Some(ChannelBcTracking::new(start, end, c.bc_tracking.clone()));
+        }
     }
+
+    #[cfg(feature = "mml_tracking")]
+    let mut subroutine_tracking = Vec::with_capacity(subroutines.len());
+
     for s in subroutines {
+        #[cfg(feature = "mml_tracking")]
+        let start = out.len();
+
         out.extend(s.bytecode());
+
+        #[cfg(feature = "mml_tracking")]
+        {
+            let end = out.len();
+            subroutine_tracking.push(ChannelBcTracking::new(start, end, s.bc_tracking.clone()));
+        }
     }
 
     validate_data_size(&out, total_size)?;
@@ -216,6 +294,12 @@ pub fn song_data(mml_data: MmlData) -> Result<SongData, SongError> {
         duration: calc_song_duration(&mml_data),
         data: out,
         metadata: mml_data.take_metadata(),
+
+        #[cfg(feature = "mml_tracking")]
+        tracking: Some(SongBcTracking {
+            subroutines: subroutine_tracking,
+            channels: channel_tracking,
+        }),
     })
 }
 

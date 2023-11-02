@@ -12,6 +12,7 @@ mod helpers;
 mod list_editor;
 mod menu;
 mod mml_editor;
+mod monitor_timer;
 mod names;
 mod tables;
 mod tabs;
@@ -47,12 +48,13 @@ use crate::tabs::{
     quit_with_unsaved_files_dialog, FileType, SaveResult, SaveType, Tab, TabManager,
 };
 
-use audio_thread::AudioMessage;
+use audio_thread::{AudioMessage, AudioMonitor};
 
 use compiler::data;
 use compiler::data::ProjectFile;
 use compiler::driver_constants;
 use compiler::path::{ParentPathBuf, SourcePathBuf};
+use compiler::songs::SongData;
 use compiler::sound_effects::{convert_sfx_inputs_lossy, SoundEffectInput, SoundEffectsFile};
 
 use compiler_thread::PlaySampleArgs;
@@ -61,6 +63,7 @@ use fltk::dialog;
 use fltk::prelude::*;
 use help::HelpSection;
 use helpers::ch_units_to_width;
+use monitor_timer::MonitorTimer;
 
 use std::collections::hash_map;
 use std::collections::HashMap;
@@ -112,6 +115,11 @@ pub enum Message {
     PlaySample(ItemId, PlaySampleArgs),
     PauseResumeAudio(ItemId),
 
+    // ::TODO replace with Arc::Box<SongData>::
+    AudioThreadStartedSong(ItemId, Box<SongData>),
+    AudioThreadResumedSong(ItemId),
+    SongMonitorTimeout,
+
     FromCompiler(compiler_thread::CompilerOutput),
 
     ShowAboutTab,
@@ -147,6 +155,8 @@ struct Project {
     compiler_sender: mpsc::Sender<ToCompiler>,
 
     audio_sender: mpsc::Sender<AudioMessage>,
+    audio_monitor: AudioMonitor,
+    audio_monitor_timer: MonitorTimer,
 
     tab_manager: TabManager,
     samples_tab_selected: bool,
@@ -165,6 +175,7 @@ impl Project {
         menu: Menu,
         sender: fltk::app::Sender<Message>,
         audio_sender: mpsc::Sender<AudioMessage>,
+        audio_monitor: AudioMonitor,
     ) -> Self {
         let c = pf.contents;
 
@@ -221,6 +232,8 @@ impl Project {
             song_tabs: HashMap::new(),
 
             audio_sender,
+            audio_monitor,
+            audio_monitor_timer: MonitorTimer::new(sender.clone()),
 
             compiler_thread,
             compiler_sender,
@@ -324,6 +337,28 @@ impl Project {
             Message::PauseResumeAudio(id) => {
                 let _ = self.audio_sender.send(AudioMessage::PauseResume(id));
             }
+
+            Message::AudioThreadStartedSong(item_id, song_data) => {
+                if let Some(tab) = self.song_tabs.get_mut(&item_id) {
+                    tab.audio_thread_started_song(song_data);
+                    self.audio_monitor_timer.start();
+                }
+            }
+            Message::AudioThreadResumedSong(item_id) => {
+                if self.song_tabs.contains_key(&item_id) {
+                    self.audio_monitor_timer.start();
+                }
+            }
+            Message::SongMonitorTimeout => match self.audio_monitor.get() {
+                Some(mon) => match mon.item_id {
+                    Some(id) => match self.song_tabs.get_mut(&id) {
+                        Some(tab) => tab.monitor_timer_elapsed(mon),
+                        None => self.audio_monitor_timer.stop(),
+                    },
+                    None => self.audio_monitor_timer.stop(),
+                },
+                None => self.audio_monitor_timer.stop(),
+            },
 
             Message::QuitRequested => {
                 let unsaved = self.tab_manager.unsaved_tabs();
@@ -780,6 +815,7 @@ struct MainWindow {
     #[allow(dead_code)]
     audio_thread: std::thread::JoinHandle<()>,
     audio_sender: mpsc::Sender<AudioMessage>,
+    audio_monitor: AudioMonitor,
 
     window: fltk::window::Window,
     menu: Menu,
@@ -806,7 +842,8 @@ impl MainWindow {
 
         let mut col = fltk::group::Flex::default_fill().column();
 
-        let (audio_thread, audio_sender) = audio_thread::create_audio_thread();
+        let (audio_thread, audio_sender, audio_monitor) =
+            audio_thread::create_audio_thread(sender.clone());
 
         let mut menu = Menu::new(sender.clone(), audio_sender.clone());
         menu.deactivate_project_items();
@@ -868,6 +905,7 @@ impl MainWindow {
             sender,
             audio_thread,
             audio_sender,
+            audio_monitor,
             window,
             menu,
             row,
@@ -890,6 +928,7 @@ impl MainWindow {
             self.menu.clone(),
             self.sender.clone(),
             self.audio_sender.clone(),
+            self.audio_monitor.clone(),
         ));
     }
 

@@ -11,7 +11,7 @@ publish = false
 
 [dependencies]
 # Local crates
-compiler.workspace = true
+compiler = { workspace = true, features = ["mml_tracking"] }
 shvc-sound-emu.workspace = true
 
 # External crates
