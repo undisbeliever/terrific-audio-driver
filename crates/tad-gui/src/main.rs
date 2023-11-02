@@ -152,7 +152,6 @@ struct Project {
     samples_tab_selected: bool,
     sfx_tab_selected: bool,
 
-    // MUST update `all_tabs_iter()` if a tab is added or removed
     project_tab: ProjectTab,
     samples_tab: SamplesTab,
     sound_effects_tab: SoundEffectsTab,
