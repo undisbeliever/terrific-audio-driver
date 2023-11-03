@@ -8,6 +8,7 @@
 
 use std::env;
 use std::fs;
+use std::path::Path;
 use std::path::PathBuf;
 
 extern crate markdown;
@@ -17,7 +18,7 @@ const MARKDOWN_FILES: &[&str] = &[
     "../../docs/mml-syntax.md",
 ];
 
-fn convert_markdown(input: &str) -> String {
+fn convert_markdown(input: &str, name: &str) -> String {
     let html = markdown::to_html_with_options(
         input,
         &markdown::Options {
@@ -46,8 +47,33 @@ fn convert_markdown(input: &str) -> String {
         .replace("<code>", "<font face=\"courier\" color=\"#080\">")
         .replace("</code>", "</font>");
 
-    #[allow(clippy::let_and_return)]
+    validate_no_links_in_html(&html, name);
+
     html
+}
+
+// Confirms there are no <img> and <a> links in the HTML.
+//
+// fltk Fl_Help_View will do network requests for <img> or <a> tags and I do not want the GUI to
+// access the Internet.
+fn validate_no_links_in_html(html: &str, name: &str) {
+    let html = html.to_ascii_lowercase();
+
+    if html.contains("<img") {
+        panic!("{name} cannot contain <img> tags");
+    }
+    if html.contains("<a") {
+        panic!("{name} cannot contain <a> tags");
+    }
+
+    // Double check there are no `src/href` attributes, just to be safe
+    // (may cause a false positive)
+    if html.contains("src=\"") {
+        panic!("{name} cannot contain src attributes");
+    }
+    if html.contains("href=\"") {
+        panic!("{name} cannot contain href attributes");
+    }
 }
 
 fn main() {
@@ -58,13 +84,13 @@ fn main() {
 
     for f in MARKDOWN_FILES {
         let path: PathBuf = f.into();
-        let out_path = out_dir
-            .join(path.file_stem().unwrap())
-            .with_extension("html");
+        let html_filename = Path::new(path.file_stem().unwrap()).with_extension("html");
+        let html_filename = html_filename.to_str().unwrap();
+
+        let out_path = out_dir.join(html_filename);
 
         let input = fs::read_to_string(path).unwrap();
-        let html = convert_markdown(&input);
-
+        let html = convert_markdown(&input, html_filename);
         fs::write(&out_path, html).unwrap();
     }
 
