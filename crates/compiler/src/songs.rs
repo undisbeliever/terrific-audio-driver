@@ -176,9 +176,11 @@ fn sfx_bytecode_to_song(bytecode: &[u8]) -> SongData {
 }
 
 pub fn song_data(mml_data: MmlData) -> Result<SongData, SongError> {
-    let metadata = mml_data.metadata();
-    let channels = mml_data.channels();
-    let subroutines = mml_data.subroutines();
+    let duration = calc_song_duration(&mml_data);
+
+    let metadata = mml_data.metadata;
+    let channels = mml_data.channels;
+    let subroutines = mml_data.subroutines;
 
     let echo_buffer = &metadata.echo_buffer;
 
@@ -246,7 +248,7 @@ pub fn song_data(mml_data: MmlData) -> Result<SongData, SongError> {
         // Subroutine table
         out.push(subroutines.len().try_into().unwrap());
 
-        for s in subroutines {
+        for s in &subroutines {
             out.extend(data_offset.to_le_bytes());
 
             let s_size: u16 = s.bytecode().len().try_into().unwrap();
@@ -259,7 +261,7 @@ pub fn song_data(mml_data: MmlData) -> Result<SongData, SongError> {
     #[cfg(feature = "mml_tracking")]
     let mut channel_tracking: [Option<ChannelBcTracking>; N_MUSIC_CHANNELS] = Default::default();
 
-    for (_i, c) in channels.iter().enumerate() {
+    for (_i, c) in channels.into_iter().enumerate() {
         #[cfg(feature = "mml_tracking")]
         let start = out.len();
 
@@ -268,7 +270,7 @@ pub fn song_data(mml_data: MmlData) -> Result<SongData, SongError> {
         #[cfg(feature = "mml_tracking")]
         {
             let end = out.len();
-            channel_tracking[_i] = Some(ChannelBcTracking::new(start, end, c.bc_tracking.clone()));
+            channel_tracking[_i] = Some(ChannelBcTracking::new(start, end, c.bc_tracking));
         }
     }
 
@@ -284,16 +286,16 @@ pub fn song_data(mml_data: MmlData) -> Result<SongData, SongError> {
         #[cfg(feature = "mml_tracking")]
         {
             let end = out.len();
-            subroutine_tracking.push(ChannelBcTracking::new(start, end, s.bc_tracking.clone()));
+            subroutine_tracking.push(ChannelBcTracking::new(start, end, s.bc_tracking));
         }
     }
 
     validate_data_size(&out, total_size)?;
 
     Ok(SongData {
-        duration: calc_song_duration(&mml_data),
+        duration,
         data: out,
-        metadata: mml_data.take_metadata(),
+        metadata,
 
         #[cfg(feature = "mml_tracking")]
         tracking: Some(SongBcTracking {

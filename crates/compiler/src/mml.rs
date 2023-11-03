@@ -192,10 +192,10 @@ pub struct Section {
 
 #[derive(Debug, PartialEq)]
 pub struct MmlData {
-    metadata: MetaData,
-    subroutines: Vec<ChannelData>,
-    channels: Vec<ChannelData>,
-    sections: Vec<Section>,
+    pub(crate) metadata: MetaData,
+    pub(crate) subroutines: Vec<ChannelData>,
+    pub(crate) channels: Vec<ChannelData>,
+    pub(crate) sections: Vec<Section>,
 }
 
 // ::TODO add list of subroutines and instruments for the GUI (separate from MmlData)::
@@ -230,10 +230,6 @@ impl MmlData {
     }
     pub fn sections(&self) -> &[Section] {
         &self.sections
-    }
-
-    pub(crate) fn take_metadata(self) -> MetaData {
-        self.metadata
     }
 }
 
