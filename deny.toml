@@ -1,0 +1,46 @@
+# cargo-deny configuration
+
+[licenses]
+default = "deny"
+copyleft = "deny"
+unlicensed = "deny"
+allow-osi-fsf-free = "neither"
+
+confidence-threshold = 0.93
+
+allow = [
+    "MIT",
+    "ISC",
+    "Apache-2.0",
+    "Unicode-DFS-2016",
+]
+
+
+[bans]
+multiple-versions = "deny"
+wildcards = "deny"
+
+deny = []
+
+skip = [
+    # used by sdl2
+    { name="bitflags", version = "1.3" },
+
+    # used by fltk
+    { name="bitflags", version = "2.4" },
+]
+
+
+[advisories]
+vulnerability = "warn"
+unmaintained = "warn"
+yanked = "warn"
+notice = "warn"
+unsound = "deny"
+
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+
+
