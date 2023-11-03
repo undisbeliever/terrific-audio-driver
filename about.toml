@@ -1,0 +1,60 @@
+# cargo-about configuration
+#
+# Used to generate the `docs/licences.md` file.
+
+accepted = [
+    # In order of priority (if a project is multi-licensed)
+    "MIT",
+    "Apache-2.0",
+    "Unicode-DFS-2016",
+]
+
+# Do not show private crates
+private = { ignore = true }
+
+ignore-dev-dependencies = true
+ignore-build-dependencies = false
+
+# Show dependencies of dependencies
+ignore-transitive-dependencies = false
+
+
+# I have to manually specify the license file location for the windows-* crates
+
+[windows-sys.clarify]
+license = "MIT"
+files = [ {path = "license-mit", checksum = "c2cfccb812fe482101a8f04597dfc5a9991a6b2748266c47ac91b6a5aae15383" } ]
+
+[windows-targets.clarify]
+license = "MIT"
+files = [ {path = "license-mit", checksum = "c2cfccb812fe482101a8f04597dfc5a9991a6b2748266c47ac91b6a5aae15383" } ]
+
+[windows_aarch64_gnullvm.clarify]
+license = "MIT"
+files = [ {path = "license-mit", checksum = "c2cfccb812fe482101a8f04597dfc5a9991a6b2748266c47ac91b6a5aae15383" } ]
+
+[windows_aarch64_msvc.clarify]
+license = "MIT"
+files = [ {path = "license-mit", checksum = "c2cfccb812fe482101a8f04597dfc5a9991a6b2748266c47ac91b6a5aae15383" } ]
+
+[windows_i686_gnu.clarify]
+license = "MIT"
+files = [ {path = "license-mit", checksum = "c2cfccb812fe482101a8f04597dfc5a9991a6b2748266c47ac91b6a5aae15383" } ]
+
+[windows_i686_msvc.clarify]
+license = "MIT"
+files = [ {path = "license-mit", checksum = "c2cfccb812fe482101a8f04597dfc5a9991a6b2748266c47ac91b6a5aae15383" } ]
+
+[windows_x86_64_gnu.clarify]
+license = "MIT"
+files = [ {path = "license-mit", checksum = "c2cfccb812fe482101a8f04597dfc5a9991a6b2748266c47ac91b6a5aae15383" } ]
+
+[windows_x86_64_gnullvm.clarify]
+license = "MIT"
+files = [ {path = "license-mit", checksum = "c2cfccb812fe482101a8f04597dfc5a9991a6b2748266c47ac91b6a5aae15383" } ]
+
+[windows_x86_64_msvc.clarify]
+license = "MIT"
+files = [ {path = "license-mit", checksum = "c2cfccb812fe482101a8f04597dfc5a9991a6b2748266c47ac91b6a5aae15383" } ]
+
+
