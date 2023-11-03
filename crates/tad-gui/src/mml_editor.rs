@@ -14,6 +14,7 @@ use compiler::songs::{ChannelBcTracking, SongBcTracking, SongData};
 use compiler::FilePosRange;
 
 use std::cell::RefCell;
+use std::cmp::min;
 use std::rc::Rc;
 use std::sync::Arc;
 
@@ -345,10 +346,16 @@ impl MmlEditorState {
     }
 }
 
+pub struct NotePos {
+    buffer_pos: i32,
+    subroutine: Option<usize>,
+    index: usize,
+}
+
 #[derive(Default)]
 pub struct NoteTrackingState {
     song_ptr: Option<u16>,
-    buffer_pos: i32,
+    prev_pos: Option<NotePos>,
 }
 
 impl NoteTrackingState {
@@ -370,68 +377,141 @@ impl NoteTrackingState {
             None => return false,
         };
 
-        match voice_pos {
-            Some(vp) => {
-                if let Some(p) = Self::search_channel(vc, vp) {
-                    self.update_style(style_buffer, style_vec, p);
-                } else {
-                    for s in &tracking_data.subroutines {
-                        if let Some(p) = Self::search_channel(s, vp) {
-                            self.update_style(style_buffer, style_vec, p);
-                            break;
-                        }
-                    }
-                }
-            }
-            None => {
-                self.remove_old_style(style_buffer, style_vec);
-            }
-        }
+        let new_pos = match voice_pos {
+            Some(vp) => self
+                .prev_pos
+                .as_ref()
+                .and_then(|prev| Self::search_prev_pos(vc, &tracking_data.subroutines, prev, vp))
+                .or_else(|| Self::search_all(vc, &tracking_data.subroutines, vp)),
+            None => None,
+        };
 
-        true
+        let old_buffer_pos = self.prev_pos.as_ref().map(|p| p.buffer_pos);
+        let new_buffer_pos = new_pos.as_ref().map(|p| p.buffer_pos);
+
+        self.prev_pos = new_pos;
+
+        if new_buffer_pos != old_buffer_pos {
+            if let Some(old_bp) = old_buffer_pos {
+                Self::remove_note_lighlight(style_buffer, style_vec, old_bp);
+            }
+            if let Some(new_bp) = new_buffer_pos {
+                Self::highlight_note(style_buffer, new_bp);
+            }
+            true
+        } else {
+            false
+        }
     }
 
-    fn search_channel(c: &ChannelBcTracking, voice_pos: u16) -> Option<u32> {
+    fn search_prev_pos(
+        channel_tracking: &ChannelBcTracking,
+        subroutines: &[ChannelBcTracking],
+        prev_pos: &NotePos,
+        voice_pos: u16,
+    ) -> Option<NotePos> {
+        let c = match prev_pos.subroutine {
+            Some(i) => match subroutines.get(i) {
+                Some(t) => t,
+                None => return None,
+            },
+            None => channel_tracking,
+        };
+
+        Self::search_next_few_items(prev_pos.subroutine, c, prev_pos.index, voice_pos)
+            .or_else(|| Self::binary_search_channel(prev_pos.subroutine, c, voice_pos))
+    }
+
+    fn search_all(
+        channel_tracking: &ChannelBcTracking,
+        subroutines: &[ChannelBcTracking],
+        voice_pos: u16,
+    ) -> Option<NotePos> {
+        if let Some(nts) = Self::binary_search_channel(None, channel_tracking, voice_pos) {
+            Some(nts)
+        } else {
+            subroutines
+                .iter()
+                .enumerate()
+                .find_map(|(i, s)| Self::binary_search_channel(Some(i), s, voice_pos))
+        }
+    }
+
+    fn binary_search_channel(
+        subroutine_index: Option<usize>,
+        c: &ChannelBcTracking,
+        voice_pos: u16,
+    ) -> Option<NotePos> {
         if c.range.contains(&voice_pos) {
             let channel_pos = voice_pos.saturating_sub(c.range.start).saturating_sub(2);
-            let i = match c.bytecodes.binary_search_by_key(&channel_pos, |b| b.bc_pos) {
+            let index = match c.bytecodes.binary_search_by_key(&channel_pos, |b| b.bc_pos) {
                 Ok(i) => i,
                 Err(i) => i,
             };
-            c.bytecodes.get(i).map(|b| b.char_index)
+            let buffer_pos = c
+                .bytecodes
+                .get(index)
+                .and_then(|b| b.char_index.try_into().ok());
+
+            buffer_pos.map(|buffer_pos| NotePos {
+                subroutine: subroutine_index,
+                index,
+                buffer_pos,
+            })
         } else {
             None
         }
     }
 
-    fn update_style(
-        &mut self,
-        style_buffer: &mut TextBuffer,
-        style_vec: &Vec<u8>,
-        buffer_pos: u32,
-    ) {
-        self.remove_old_style(style_buffer, style_vec);
+    // Search the next few items in ChannelBcTracking for the voice_pos.
+    fn search_next_few_items(
+        subroutine_index: Option<usize>,
+        c: &ChannelBcTracking,
+        starting_index: usize,
+        voice_pos: u16,
+    ) -> Option<NotePos> {
+        const TO_SEARCH: usize = 6;
 
-        if let Ok(i) = i32::try_from(buffer_pos) {
-            if i < style_buffer.length() {
-                style_buffer.replace(i, i + 1, Style::NOTE_TRACKER_STR);
+        let to_find_range = starting_index..min(starting_index + TO_SEARCH, c.bytecodes.len());
+        let to_find = match c.bytecodes.get(to_find_range) {
+            Some(s) => s,
+            None => return None,
+        };
 
-                self.buffer_pos = i;
+        let channel_pos = voice_pos.saturating_sub(c.range.start).saturating_sub(2);
+
+        if channel_pos < to_find.first().unwrap().bc_pos
+            || channel_pos > to_find.last().unwrap().bc_pos
+        {
+            return None;
+        }
+
+        to_find
+            .iter()
+            .enumerate()
+            .find(|(_i, b)| b.bc_pos >= channel_pos)
+            .map(|(i, b)| NotePos {
+                subroutine: subroutine_index,
+                index: starting_index + i,
+                buffer_pos: b.char_index.try_into().unwrap_or(0),
+            })
+    }
+
+    #[allow(clippy::ptr_arg)]
+    fn remove_note_lighlight(style_buffer: &mut TextBuffer, style_vec: &Vec<u8>, buffer_pos: i32) {
+        if let Ok(i) = usize::try_from(buffer_pos) {
+            if let Some(&s) = style_vec.get(i) {
+                if let Ok(s) = std::str::from_utf8(&[s]) {
+                    style_buffer.replace(buffer_pos, buffer_pos + 1, s);
+                }
             }
         }
     }
 
-    #[allow(clippy::ptr_arg)]
-    fn remove_old_style(&mut self, style_buffer: &mut TextBuffer, style_vec: &Vec<u8>) {
-        if let Ok(i) = usize::try_from(self.buffer_pos) {
-            if let Some(&s) = style_vec.get(i) {
-                if let Ok(s) = std::str::from_utf8(&[s]) {
-                    style_buffer.replace(self.buffer_pos, self.buffer_pos + 1, s);
-                }
-            }
+    fn highlight_note(style_buffer: &mut TextBuffer, buffer_pos: i32) {
+        if buffer_pos >= 0 && buffer_pos < style_buffer.length() {
+            style_buffer.replace(buffer_pos, buffer_pos + 1, Style::NOTE_TRACKER_STR);
         }
-
-        self.buffer_pos = -1;
     }
 }
 
