@@ -7,7 +7,7 @@
 use crate::compiler_thread::ToCompiler;
 use crate::list_editor::{ListMessage, ListState};
 use crate::song_tab::SongTab;
-use crate::{Message, ProjectData, SoundEffectsData};
+use crate::{GuiMessage, ProjectData, SoundEffectsData};
 
 use compiler::data;
 use compiler::data::{load_text_file_with_limit, Name, ProjectFile, Song, TextFile};
@@ -318,7 +318,7 @@ pub fn open_mml_file_dialog(pd: &ProjectData) -> Option<PfFileDialogResult> {
     pf_open_file_dialog(pd, "Add song to project", MML_SONG_FILTER, None)
 }
 
-pub fn add_song_to_pf_dialog(sender: &fltk::app::Sender<Message>, pd: &ProjectData) {
+pub fn add_song_to_pf_dialog(sender: &fltk::app::Sender<GuiMessage>, pd: &ProjectData) {
     if let Some(p) = open_mml_file_dialog(pd) {
         match pd
             .project_songs
@@ -326,13 +326,13 @@ pub fn add_song_to_pf_dialog(sender: &fltk::app::Sender<Message>, pd: &ProjectDa
             .item_iter()
             .position(|s| s.source == p.source_path)
         {
-            Some(i) => sender.send(Message::EditProjectSongs(ListMessage::ItemSelected(i))),
+            Some(i) => sender.send(GuiMessage::EditProjectSongs(ListMessage::ItemSelected(i))),
             None => {
                 let name = match p.source_path.file_stem_string() {
                     Some(s) => Name::new_lossy(s.to_owned()),
                     None => Name::try_new("song".to_owned()).unwrap(),
                 };
-                sender.send(Message::EditProjectSongs(ListMessage::Add(Song {
+                sender.send(GuiMessage::EditProjectSongs(ListMessage::Add(Song {
                     name,
                     source: p.source_path,
                 })))
@@ -342,7 +342,7 @@ pub fn add_song_to_pf_dialog(sender: &fltk::app::Sender<Message>, pd: &ProjectDa
 }
 
 pub fn open_instrument_sample_dialog(
-    sender: &fltk::app::Sender<Message>,
+    sender: &fltk::app::Sender<GuiMessage>,
     compiler_sender: &mpsc::Sender<ToCompiler>,
     pd: &ProjectData,
     index: usize,
@@ -364,7 +364,7 @@ pub fn open_instrument_sample_dialog(
                 source: new_source.clone(),
                 ..inst.clone()
             };
-            sender.send(Message::Instrument(ListMessage::ItemEdited(
+            sender.send(GuiMessage::Instrument(ListMessage::ItemEdited(
                 index, new_inst,
             )));
         }

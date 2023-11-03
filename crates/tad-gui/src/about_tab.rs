@@ -5,7 +5,7 @@
 // SPDX-License-Identifier: MIT
 
 use crate::helpers::{ch_units_to_width, input_height, label_center, label_top_center};
-use crate::Message;
+use crate::GuiMessage;
 
 extern crate fltk;
 use fltk::app;
@@ -26,14 +26,14 @@ pub struct AboutTab {
     no_project_group: Flex,
 }
 
-fn no_project_button_group(sender: app::Sender<Message>) -> Flex {
+fn no_project_button_group(sender: app::Sender<GuiMessage>) -> Flex {
     let mut flex = Flex::default().row();
 
     let button_width = ch_units_to_width(&flex, 15);
 
     Frame::default();
 
-    let mut button = |label: &str, f: fn() -> Message| {
+    let mut button = |label: &str, f: fn() -> GuiMessage| {
         let mut b = Button::default().with_label(label);
         b.set_callback({
             let s = sender.clone();
@@ -43,8 +43,8 @@ fn no_project_button_group(sender: app::Sender<Message>) -> Flex {
         b
     };
 
-    button("New Project", || Message::NewProject);
-    button("Open Project", || Message::OpenProject);
+    button("New Project", || GuiMessage::NewProject);
+    button("Open Project", || GuiMessage::OpenProject);
 
     Frame::default();
 
@@ -54,7 +54,7 @@ fn no_project_button_group(sender: app::Sender<Message>) -> Flex {
 }
 
 impl AboutTab {
-    pub fn new(parent: Tabs, sender: app::Sender<Message>) -> Self {
+    pub fn new(parent: Tabs, sender: app::Sender<GuiMessage>) -> Self {
         let mut group = Flex::default().column();
         group.set_label("About ");
 

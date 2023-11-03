@@ -5,7 +5,7 @@
 // SPDX-License-Identifier: MIT
 
 use crate::names::NameGetter;
-use crate::Message;
+use crate::GuiMessage;
 
 use crate::audio_thread::AudioMessage;
 
@@ -491,13 +491,13 @@ where
 }
 
 struct Sender {
-    sender: fltk::app::Sender<Message>,
+    sender: fltk::app::Sender<GuiMessage>,
     audio_sender: mpsc::Sender<AudioMessage>,
 }
 
 impl Sender {
     fn send(&self, m: CompilerOutput) {
-        self.sender.send(Message::FromCompiler(m))
+        self.sender.send(GuiMessage::FromCompiler(m))
     }
 
     fn send_audio(&self, m: AudioMessage) {
@@ -980,7 +980,7 @@ fn update_sfx_data_size_and_recheck_all_songs(
 fn bg_thread(
     parent_path: ParentPathBuf,
     receiever: mpsc::Receiver<ToCompiler>,
-    sender: fltk::app::Sender<Message>,
+    sender: fltk::app::Sender<GuiMessage>,
     audio_sender: mpsc::Sender<AudioMessage>,
 ) {
     let sender = Sender {
@@ -1124,7 +1124,7 @@ fn bg_thread(
 fn monitor_thread(
     parent_path: ParentPathBuf,
     reciever: mpsc::Receiver<ToCompiler>,
-    sender: fltk::app::Sender<Message>,
+    sender: fltk::app::Sender<GuiMessage>,
     audio_sender: mpsc::Sender<AudioMessage>,
 ) {
     let s = sender.clone();
@@ -1145,7 +1145,9 @@ fn monitor_thread(
                     None => "Unknown panic type",
                 },
             };
-            s.send(Message::FromCompiler(CompilerOutput::Panic(msg.to_owned())));
+            s.send(GuiMessage::FromCompiler(CompilerOutput::Panic(
+                msg.to_owned(),
+            )));
         }
     }
 }
@@ -1153,7 +1155,7 @@ fn monitor_thread(
 pub fn create_bg_thread(
     parent_path: ParentPathBuf,
     reciever: mpsc::Receiver<ToCompiler>,
-    sender: fltk::app::Sender<Message>,
+    sender: fltk::app::Sender<GuiMessage>,
     audio_sender: mpsc::Sender<AudioMessage>,
 ) -> thread::JoinHandle<()> {
     thread::spawn(move || monitor_thread(parent_path, reciever, sender, audio_sender))

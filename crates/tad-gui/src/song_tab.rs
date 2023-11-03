@@ -9,7 +9,7 @@ use crate::compiler_thread::{ItemId, SongError, SongOutput};
 use crate::helpers::*;
 use crate::mml_editor::MmlEditor;
 use crate::tabs::{FileType, Tab};
-use crate::Message;
+use crate::GuiMessage;
 
 use compiler::data::TextFile;
 use compiler::errors::MmlCompileErrors;
@@ -34,7 +34,7 @@ pub fn blank_mml_file() -> TextFile {
 }
 
 pub struct State {
-    sender: app::Sender<Message>,
+    sender: app::Sender<GuiMessage>,
 
     song_id: ItemId,
 
@@ -69,7 +69,7 @@ impl Tab for SongTab {
 }
 
 impl SongTab {
-    pub fn new(song_id: ItemId, mml_file: &TextFile, sender: app::Sender<Message>) -> Self {
+    pub fn new(song_id: ItemId, mml_file: &TextFile, sender: app::Sender<GuiMessage>) -> Self {
         let mut group = Flex::default_fill().column();
 
         let button_size = ch_units_to_width(&group, 4);
@@ -188,21 +188,21 @@ impl SongTab {
 impl State {
     fn song_changed(&self) {
         self.sender
-            .send(Message::SongChanged(self.song_id, self.editor.text()));
+            .send(GuiMessage::SongChanged(self.song_id, self.editor.text()));
     }
 
     fn compile_song(&self) {
         self.sender
-            .send(Message::RecompileSong(self.song_id, self.editor.text()));
+            .send(GuiMessage::RecompileSong(self.song_id, self.editor.text()));
     }
 
     fn play_song(&self) {
         self.sender
-            .send(Message::PlaySong(self.song_id, self.editor.text()));
+            .send(GuiMessage::PlaySong(self.song_id, self.editor.text()));
     }
 
     fn pause_resume(&self) {
-        self.sender.send(Message::PauseResumeAudio(self.song_id));
+        self.sender.send(GuiMessage::PauseResumeAudio(self.song_id));
     }
 
     pub fn set_compiler_output(&mut self, co: Option<SongOutput>) {

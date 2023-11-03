@@ -7,7 +7,7 @@
 use crate::compiler_thread::ItemId;
 use crate::files;
 use crate::menu::Menu;
-use crate::{Message, ProjectData};
+use crate::{GuiMessage, ProjectData};
 
 use compiler::path::SourcePathBuf;
 
@@ -368,7 +368,10 @@ impl TabManager {
     }
 }
 
-pub fn quit_with_unsaved_files_dialog(unsaved: Vec<FileType>, sender: fltk::app::Sender<Message>) {
+pub fn quit_with_unsaved_files_dialog(
+    unsaved: Vec<FileType>,
+    sender: fltk::app::Sender<GuiMessage>,
+) {
     dialog::message_title("Unsaved changes");
     let choice = dialog::choice2_default(
         &format!(
@@ -380,8 +383,8 @@ pub fn quit_with_unsaved_files_dialog(unsaved: Vec<FileType>, sender: fltk::app:
         "Quit without saving",
     );
     match choice {
-        Some(1) => sender.send(Message::SaveAllAndQuit(unsaved)),
-        Some(2) => sender.send(Message::ForceQuit),
+        Some(1) => sender.send(GuiMessage::SaveAllAndQuit(unsaved)),
+        Some(2) => sender.send(GuiMessage::ForceQuit),
         _ => (),
     }
 }

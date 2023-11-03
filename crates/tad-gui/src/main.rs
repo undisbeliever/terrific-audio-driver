@@ -72,7 +72,7 @@ use std::path::PathBuf;
 use std::sync::mpsc;
 
 #[derive(Debug)]
-pub enum Message {
+pub enum GuiMessage {
     SelectedTabChanged,
 
     SaveSelectedTab,
@@ -145,7 +145,7 @@ pub struct SoundEffectsData {
 }
 
 struct Project {
-    sender: fltk::app::Sender<Message>,
+    sender: fltk::app::Sender<GuiMessage>,
 
     data: ProjectData,
     sfx_data: Option<SoundEffectsData>,
@@ -173,7 +173,7 @@ impl Project {
         pf: ProjectFile,
         tabs: fltk::group::Tabs,
         menu: Menu,
-        sender: fltk::app::Sender<Message>,
+        sender: fltk::app::Sender<GuiMessage>,
         audio_sender: mpsc::Sender<AudioMessage>,
         audio_monitor: AudioMonitor,
     ) -> Self {
@@ -202,9 +202,9 @@ impl Project {
             ),
         };
 
-        sender.send(Message::RecompileEverything);
+        sender.send(GuiMessage::RecompileEverything);
         if data.sound_effects_file.is_some() {
-            sender.send(Message::LoadSfxFile);
+            sender.send(GuiMessage::LoadSfxFile);
         }
 
         let (compiler_sender, compiler_reciever) = mpsc::channel();
@@ -256,15 +256,15 @@ impl Project {
         out
     }
 
-    fn process(&mut self, m: Message) {
+    fn process(&mut self, m: GuiMessage) {
         match m {
-            Message::SelectedTabChanged => self.selected_tab_changed(),
+            GuiMessage::SelectedTabChanged => self.selected_tab_changed(),
 
-            Message::FromCompiler(m) => {
+            GuiMessage::FromCompiler(m) => {
                 self.process_compiler_output(m);
             }
 
-            Message::EditSfxExportOrder(m) => {
+            GuiMessage::EditSfxExportOrder(m) => {
                 let (a, c) = self
                     .data
                     .sfx_export_orders
@@ -275,7 +275,7 @@ impl Project {
                     let _ = self.compiler_sender.send(ToCompiler::SfxExportOrder(c));
                 }
             }
-            Message::EditProjectSongs(m) => {
+            GuiMessage::EditProjectSongs(m) => {
                 let (a, c) = self
                     .data
                     .project_songs
@@ -287,7 +287,7 @@ impl Project {
                     let _ = self.compiler_sender.send(ToCompiler::ProjectSongs(c));
                 }
             }
-            Message::Instrument(m) => {
+            GuiMessage::Instrument(m) => {
                 let (a, c) = self.data.instruments.process(m, &mut self.samples_tab);
 
                 self.mark_project_file_unsaved(a);
@@ -296,7 +296,7 @@ impl Project {
                     let _ = self.compiler_sender.send(ToCompiler::Instrument(c));
                 }
             }
-            Message::EditSoundEffectList(m) => {
+            GuiMessage::EditSoundEffectList(m) => {
                 if let Some(sfx_data) = &mut self.sfx_data {
                     let (a, c) = sfx_data
                         .sound_effects
@@ -309,47 +309,47 @@ impl Project {
                     }
                 }
             }
-            Message::AddMissingSoundEffects => {
+            GuiMessage::AddMissingSoundEffects => {
                 if let Some(sfx_data) = &self.sfx_data {
                     sound_effects_tab::add_missing_sfx(&self.data, sfx_data, &self.sender);
                 }
             }
-            Message::SongChanged(id, mml) => {
+            GuiMessage::SongChanged(id, mml) => {
                 self.tab_manager.mark_unsaved(FileType::Song(id));
                 let _ = self.compiler_sender.send(ToCompiler::SongChanged(id, mml));
             }
-            Message::RecompileSong(id, mml) => {
+            GuiMessage::RecompileSong(id, mml) => {
                 // RecompileSong should not mark the song as unsaved
                 let _ = self.compiler_sender.send(ToCompiler::SongChanged(id, mml));
             }
-            Message::PlaySong(id, mml) => {
+            GuiMessage::PlaySong(id, mml) => {
                 // RecompileSong should not mark the song as unsaved
                 let _ = self
                     .compiler_sender
                     .send(ToCompiler::CompileAndPlaySong(id, mml));
             }
-            Message::PlaySoundEffect(id) => {
+            GuiMessage::PlaySoundEffect(id) => {
                 let _ = self.compiler_sender.send(ToCompiler::PlaySoundEffect(id));
             }
-            Message::PlaySample(id, args) => {
+            GuiMessage::PlaySample(id, args) => {
                 let _ = self.compiler_sender.send(ToCompiler::PlaySample(id, args));
             }
-            Message::PauseResumeAudio(id) => {
+            GuiMessage::PauseResumeAudio(id) => {
                 let _ = self.audio_sender.send(AudioMessage::PauseResume(id));
             }
 
-            Message::AudioThreadStartedSong(item_id, song_data) => {
+            GuiMessage::AudioThreadStartedSong(item_id, song_data) => {
                 if let Some(tab) = self.song_tabs.get_mut(&item_id) {
                     tab.audio_thread_started_song(song_data);
                     self.audio_monitor_timer.start();
                 }
             }
-            Message::AudioThreadResumedSong(item_id) => {
+            GuiMessage::AudioThreadResumedSong(item_id) => {
                 if self.song_tabs.contains_key(&item_id) {
                     self.audio_monitor_timer.start();
                 }
             }
-            Message::SongMonitorTimeout => match self.audio_monitor.get() {
+            GuiMessage::SongMonitorTimeout => match self.audio_monitor.get() {
                 Some(mon) => match mon.item_id {
                     Some(id) => match self.song_tabs.get_mut(&id) {
                         Some(tab) => tab.monitor_timer_elapsed(mon),
@@ -360,7 +360,7 @@ impl Project {
                 None => self.audio_monitor_timer.stop(),
             },
 
-            Message::QuitRequested => {
+            GuiMessage::QuitRequested => {
                 let unsaved = self.tab_manager.unsaved_tabs();
                 if unsaved.is_empty() {
                     fltk::app::quit();
@@ -369,33 +369,33 @@ impl Project {
                 }
             }
 
-            Message::ForceQuit => {
+            GuiMessage::ForceQuit => {
                 fltk::app::quit();
             }
 
-            Message::SaveAllAndQuit(to_save) => {
+            GuiMessage::SaveAllAndQuit(to_save) => {
                 let success = self.save_all(to_save);
                 if success {
                     // Double check all tabs have been saved
-                    self.sender.send(Message::QuitRequested);
+                    self.sender.send(GuiMessage::QuitRequested);
                 }
             }
 
-            Message::SaveSelectedTab => {
+            GuiMessage::SaveSelectedTab => {
                 if let Some(ft) = self.tab_manager.selected_file() {
                     self.save_file(ft, SaveType::Save);
                 }
             }
-            Message::SaveSelectedTabAs => {
+            GuiMessage::SaveSelectedTabAs => {
                 if let Some(ft) = self.tab_manager.selected_file() {
                     self.save_file(ft, SaveType::SaveAs);
                 }
             }
-            Message::SaveAllUnsaved => {
+            GuiMessage::SaveAllUnsaved => {
                 self.save_all(self.tab_manager.unsaved_tabs());
             }
 
-            Message::OpenSfxFileDialog => {
+            GuiMessage::OpenSfxFileDialog => {
                 if self.sfx_data.is_none() {
                     if let Some((source_path, sfx_file)) = open_sfx_file_dialog(&self.data) {
                         self.set_sound_effects_file(source_path);
@@ -403,27 +403,27 @@ impl Project {
                     }
                 }
             }
-            Message::NewSfxFile => {
+            GuiMessage::NewSfxFile => {
                 if self.sfx_data.is_none() {
                     self.maybe_set_sfx_file(blank_sfx_file());
                     self.tab_manager.mark_unsaved(FileType::SoundEffects);
                 }
             }
-            Message::LoadSfxFile => {
+            GuiMessage::LoadSfxFile => {
                 if self.sfx_data.is_none() {
                     if let Some(sfx_data) = load_pf_sfx_file(&self.data) {
                         self.maybe_set_sfx_file(sfx_data);
                     }
                 }
             }
-            Message::RecompileEverything => {
+            GuiMessage::RecompileEverything => {
                 self.recompile_everything();
             }
 
-            Message::AddSongToProjectDialog => {
+            GuiMessage::AddSongToProjectDialog => {
                 add_song_to_pf_dialog(&self.sender, &self.data);
             }
-            Message::OpenInstrumentSampleDialog(index) => {
+            GuiMessage::OpenInstrumentSampleDialog(index) => {
                 open_instrument_sample_dialog(
                     &self.sender,
                     &self.compiler_sender,
@@ -432,20 +432,20 @@ impl Project {
                 );
             }
 
-            Message::SetProjectSongName(index, name) => {
+            GuiMessage::SetProjectSongName(index, name) => {
                 if let Some(s) = self.data.project_songs.list().get(index) {
                     self.sender
-                        .send(Message::EditProjectSongs(ListMessage::ItemEdited(
+                        .send(GuiMessage::EditProjectSongs(ListMessage::ItemEdited(
                             index,
                             data::Song { name, ..s.clone() },
                         )))
                 }
             }
-            Message::NewMmlFile => self.new_blank_song_tab(),
-            Message::OpenMmlFile => self.open_mml_file_dialog(),
-            Message::OpenSongTab(index) => self.open_pf_song_tab(index),
+            GuiMessage::NewMmlFile => self.new_blank_song_tab(),
+            GuiMessage::OpenMmlFile => self.open_mml_file_dialog(),
+            GuiMessage::OpenSongTab(index) => self.open_pf_song_tab(index),
 
-            Message::ExportCurrentTabToSpcFile => {
+            GuiMessage::ExportCurrentTabToSpcFile => {
                 if let Some(FileType::Song(id)) = self.tab_manager.selected_file() {
                     let _ = self
                         .compiler_sender
@@ -454,10 +454,10 @@ impl Project {
             }
 
             // Ignore these messages, they are handled by MainWindow
-            Message::ShowAboutTab => (),
-            Message::ShowOrHideHelpSyntax => (),
-            Message::OpenProject => (),
-            Message::NewProject => (),
+            GuiMessage::ShowAboutTab => (),
+            GuiMessage::ShowOrHideHelpSyntax => (),
+            GuiMessage::OpenProject => (),
+            GuiMessage::NewProject => (),
         }
     }
 
@@ -766,7 +766,7 @@ impl Project {
     fn edit_pf_song_source(&mut self, id: ItemId, source: SourcePathBuf) {
         if let Some((index, song)) = self.data.project_songs.list().get_id(id) {
             self.sender
-                .send(Message::EditProjectSongs(ListMessage::ItemEdited(
+                .send(GuiMessage::EditProjectSongs(ListMessage::ItemEdited(
                     index,
                     data::Song {
                         source,
@@ -810,7 +810,7 @@ impl SoundEffectsData {
 struct MainWindow {
     app: fltk::app::App,
 
-    sender: fltk::app::Sender<Message>,
+    sender: fltk::app::Sender<GuiMessage>,
 
     #[allow(dead_code)]
     audio_thread: std::thread::JoinHandle<()>,
@@ -830,7 +830,7 @@ struct MainWindow {
 }
 
 impl MainWindow {
-    fn new(sender: fltk::app::Sender<Message>) -> Self {
+    fn new(sender: fltk::app::Sender<GuiMessage>) -> Self {
         let app = fltk::app::App::default();
 
         let mut window = fltk::window::Window::default()
@@ -875,7 +875,7 @@ impl MainWindow {
             let s = sender.clone();
             move |_| {
                 if fltk::app::event() == fltk::enums::Event::Close {
-                    s.send(Message::QuitRequested);
+                    s.send(GuiMessage::QuitRequested);
                 }
             }
         });
@@ -896,7 +896,7 @@ impl MainWindow {
         tabs.set_callback({
             let sender = sender.clone();
             move |_| {
-                sender.send(Message::SelectedTabChanged);
+                sender.send(GuiMessage::SelectedTabChanged);
             }
         });
 
@@ -949,29 +949,29 @@ impl MainWindow {
         self.row.layout();
     }
 
-    fn process(&mut self, message: Message) {
+    fn process(&mut self, message: GuiMessage) {
         match message {
-            Message::QuitRequested => match &mut self.project {
+            GuiMessage::QuitRequested => match &mut self.project {
                 Some(p) => p.process(message),
                 None => fltk::app::quit(),
             },
-            Message::ShowAboutTab => {
+            GuiMessage::ShowAboutTab => {
                 self.about_tab.show();
                 if let Some(p) = &mut self.project {
                     p.selected_tab_changed();
                 }
             }
-            Message::ShowOrHideHelpSyntax => {
+            GuiMessage::ShowOrHideHelpSyntax => {
                 self.show_or_hide_help_syntax();
             }
-            Message::OpenProject => {
+            GuiMessage::OpenProject => {
                 if self.project.is_none() {
                     if let Some(pf) = open_project_dialog() {
                         self.load_project(pf);
                     }
                 }
             }
-            Message::NewProject => {
+            GuiMessage::NewProject => {
                 if self.project.is_none() {
                     if let Some(pf) = new_project_dialog() {
                         self.load_project(pf);
@@ -1000,7 +1000,7 @@ fn get_arg_filename() -> Option<PathBuf> {
 fn main() {
     let program_argument = get_arg_filename();
 
-    let (sender, reciever) = fltk::app::channel::<Message>();
+    let (sender, reciever) = fltk::app::channel::<GuiMessage>();
 
     let mut main_window = MainWindow::new(sender);
 

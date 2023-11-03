@@ -6,7 +6,7 @@
 
 use crate::audio_thread::{AudioMessage, StereoFlag};
 use crate::tabs::FileType;
-use crate::Message;
+use crate::GuiMessage;
 
 use std::sync::mpsc;
 
@@ -49,13 +49,13 @@ pub struct Menu {
 
 impl Menu {
     pub fn new(
-        sender: fltk::app::Sender<Message>,
+        sender: fltk::app::Sender<GuiMessage>,
         audio_sender: mpsc::Sender<AudioMessage>,
     ) -> Self {
         let mut menu_bar = fltk::menu::MenuBar::default();
         let mut menu_bar2 = menu_bar.clone();
 
-        let mut add = |label, shortcut, flags, f: fn() -> Message| -> menu::MenuItem {
+        let mut add = |label, shortcut, flags, f: fn() -> GuiMessage| -> menu::MenuItem {
             let index = menu_bar.add(label, shortcut, flags, {
                 let s = sender.clone();
                 move |_: &mut fltk::menu::MenuBar| s.send(f())
@@ -77,42 +77,42 @@ impl Menu {
             NEW_MML_FILE,
             Shortcut::None,
             fltk::menu::MenuFlag::Normal,
-            || Message::NewMmlFile,
+            || GuiMessage::NewMmlFile,
         );
 
         add(
             OPEN_MML_FILE,
             Shortcut::None,
             fltk::menu::MenuFlag::Normal,
-            || Message::OpenMmlFile,
+            || GuiMessage::OpenMmlFile,
         );
 
         add(
             SAVE,
             Shortcut::Ctrl | 's',
             fltk::menu::MenuFlag::Normal,
-            || Message::SaveSelectedTab,
+            || GuiMessage::SaveSelectedTab,
         );
         add(
             SAVE_AS,
             Shortcut::None,
             fltk::menu::MenuFlag::Normal,
-            || Message::SaveSelectedTabAs,
+            || GuiMessage::SaveSelectedTabAs,
         );
         add(
             SAVE_ALL,
             Shortcut::Ctrl | Shortcut::Shift | 's',
             fltk::menu::MenuFlag::Normal,
-            || Message::SaveAllUnsaved,
+            || GuiMessage::SaveAllUnsaved,
         );
         add(
             EXPORT_SPC,
             Shortcut::None,
             fltk::menu::MenuFlag::Normal,
-            || Message::ExportCurrentTabToSpcFile,
+            || GuiMessage::ExportCurrentTabToSpcFile,
         );
         add(QUIT, Shortcut::None, fltk::menu::MenuFlag::Normal, || {
-            Message::QuitRequested
+            GuiMessage::QuitRequested
         });
 
         add_audio(
@@ -138,14 +138,14 @@ impl Menu {
             SHOW_HELP_SYNTAX,
             Shortcut::from_key(Key::F1),
             fltk::menu::MenuFlag::Toggle,
-            || Message::ShowOrHideHelpSyntax,
+            || GuiMessage::ShowOrHideHelpSyntax,
         );
 
         add(
             SHOW_ABOUT_TAB,
             Shortcut::None,
             fltk::menu::MenuFlag::Normal,
-            || Message::ShowAboutTab,
+            || GuiMessage::ShowAboutTab,
         );
 
         Menu { menu_bar }

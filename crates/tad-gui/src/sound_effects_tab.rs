@@ -12,7 +12,7 @@ use crate::list_editor::{
 };
 use crate::tables::{RowWithStatus, SimpleRow};
 use crate::tabs::{FileType, Tab};
-use crate::{Message, ProjectData, SoundEffectsData};
+use crate::{GuiMessage, ProjectData, SoundEffectsData};
 
 use compiler::data::Name;
 use compiler::errors::SfxErrorLines;
@@ -58,15 +58,15 @@ impl TableMapping for SoundEffectMapping {
         vec!["Sound effects".to_owned()]
     }
 
-    fn add_clicked() -> Message {
-        Message::EditSoundEffectList(ListMessage::Add(SoundEffectInput {
+    fn add_clicked() -> GuiMessage {
+        GuiMessage::EditSoundEffectList(ListMessage::Add(SoundEffectInput {
             name: "name".parse().unwrap(),
             sfx: String::new(),
         }))
     }
 
-    fn to_message(lm: ListMessage<SoundEffectInput>) -> Message {
-        Message::EditSoundEffectList(lm)
+    fn to_message(lm: ListMessage<SoundEffectInput>) -> GuiMessage {
+        GuiMessage::EditSoundEffectList(lm)
     }
 
     fn new_row(i: &SoundEffectInput) -> Self::RowType {
@@ -87,7 +87,7 @@ impl TableCompilerOutput for SoundEffectMapping {
 }
 
 pub struct State {
-    sender: app::Sender<Message>,
+    sender: app::Sender<GuiMessage>,
     selected: Option<usize>,
     selected_id: Option<ItemId>,
     old_name: Name,
@@ -136,7 +136,7 @@ impl Tab for SoundEffectsTab {
 }
 
 impl SoundEffectsTab {
-    pub fn new(sender: app::Sender<Message>) -> Self {
+    pub fn new(sender: app::Sender<GuiMessage>) -> Self {
         let mut group = Flex::default_fill().row();
 
         // Sidebar
@@ -200,7 +200,7 @@ impl SoundEffectsTab {
 
         add_missing_sfx_button.set_callback({
             let s = sender.clone();
-            move |_| s.send(Message::AddMissingSoundEffects)
+            move |_| s.send(GuiMessage::AddMissingSoundEffects)
         });
 
         let state = Rc::new(RefCell::from(State {
@@ -425,7 +425,7 @@ impl State {
     fn play_sound_effect(&mut self) {
         self.commit_sfx_if_changed();
         if let Some(id) = self.selected_id {
-            self.sender.send(Message::PlaySoundEffect(id));
+            self.sender.send(GuiMessage::PlaySoundEffect(id));
         }
     }
 
@@ -448,7 +448,7 @@ impl State {
                     sfx: buf.text(),
                 };
                 self.sender
-                    .send(Message::EditSoundEffectList(ListMessage::ItemEdited(
+                    .send(GuiMessage::EditSoundEffectList(ListMessage::ItemEdited(
                         index, sfx,
                     )));
 
@@ -492,7 +492,7 @@ impl CompilerOutputGui<SoundEffectOutput> for SoundEffectsTab {
     }
 }
 
-fn no_sfx_file_gui(sender: app::Sender<Message>) -> Flex {
+fn no_sfx_file_gui(sender: app::Sender<GuiMessage>) -> Flex {
     let mut group = Flex::default().column();
 
     let button_width = ch_units_to_width(&group, 15);
@@ -505,7 +505,7 @@ fn no_sfx_file_gui(sender: app::Sender<Message>) -> Flex {
     group.fixed(&button_pack, line_height);
     button_pack.set_spacing(5);
 
-    let button = |label: &str, f: fn() -> Message| {
+    let button = |label: &str, f: fn() -> GuiMessage| {
         let mut b = Button::default()
             .with_size(button_width, 0)
             .with_label(label);
@@ -518,9 +518,9 @@ fn no_sfx_file_gui(sender: app::Sender<Message>) -> Flex {
         b
     };
 
-    button("New File", || Message::NewSfxFile);
-    button("Retry File", || Message::LoadSfxFile);
-    button("Open File", || Message::OpenSfxFileDialog);
+    button("New File", || GuiMessage::NewSfxFile);
+    button("Retry File", || GuiMessage::LoadSfxFile);
+    button("Open File", || GuiMessage::OpenSfxFileDialog);
 
     button_pack.end();
     button_pack.set_type(fltk::group::PackType::Horizontal);
@@ -742,7 +742,7 @@ impl SfxEditor {
 pub fn add_missing_sfx(
     data: &ProjectData,
     sfx_data: &SoundEffectsData,
-    sender: &fltk::app::Sender<Message>,
+    sender: &fltk::app::Sender<GuiMessage>,
 ) {
     let sfx_list = sfx_data.sound_effects.list();
     let sfx_set: HashSet<&Name> = sfx_list.item_iter().map(|s| &s.name).collect();
@@ -764,7 +764,7 @@ pub fn add_missing_sfx(
         .collect();
 
     if !to_add.is_empty() {
-        sender.send(Message::EditSoundEffectList(ListMessage::AddMultiple(
+        sender.send(GuiMessage::EditSoundEffectList(ListMessage::AddMultiple(
             to_add,
         )));
     }

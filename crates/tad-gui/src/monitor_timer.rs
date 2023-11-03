@@ -4,7 +4,7 @@
 //
 // SPDX-License-Identifier: MIT
 
-use crate::Message;
+use crate::GuiMessage;
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -19,13 +19,13 @@ pub struct MonitorTimer {
 }
 
 pub struct TimerState {
-    sender: app::Sender<Message>,
+    sender: app::Sender<GuiMessage>,
     timeout: f64,
     active: bool,
 }
 
 impl MonitorTimer {
-    pub fn new(sender: app::Sender<Message>) -> Self {
+    pub fn new(sender: app::Sender<GuiMessage>) -> Self {
         Self {
             state: Rc::new(RefCell::new(TimerState {
                 sender,
@@ -50,7 +50,7 @@ impl MonitorTimer {
                             false => app::remove_timeout3(handle),
                         }
 
-                        s.sender.send(Message::SongMonitorTimeout);
+                        s.sender.send(GuiMessage::SongMonitorTimeout);
                     }
                 }
             });

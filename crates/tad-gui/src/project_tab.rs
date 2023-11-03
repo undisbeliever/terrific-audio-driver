@@ -12,7 +12,7 @@ use crate::list_editor::{
 };
 use crate::tables::{RowWithStatus, SimpleRow, TableEvent};
 use crate::tabs::{FileType, Tab};
-use crate::Message;
+use crate::GuiMessage;
 
 use compiler::data;
 use compiler::data::Name;
@@ -42,12 +42,12 @@ impl TableMapping for SfxExportOrderMapping {
         vec!["Sound Effect Export Order".to_owned()]
     }
 
-    fn add_clicked() -> Message {
-        Message::EditSfxExportOrder(ListMessage::Add("name".to_owned().try_into().unwrap()))
+    fn add_clicked() -> GuiMessage {
+        GuiMessage::EditSfxExportOrder(ListMessage::Add("name".to_owned().try_into().unwrap()))
     }
 
-    fn to_message(lm: ListMessage<data::Name>) -> Message {
-        Message::EditSfxExportOrder(lm)
+    fn to_message(lm: ListMessage<data::Name>) -> GuiMessage {
+        GuiMessage::EditSfxExportOrder(lm)
     }
 
     fn new_row(sfx_name: &data::Name) -> Self::RowType {
@@ -67,10 +67,10 @@ impl TableMapping for SfxExportOrderMapping {
         }
     }
 
-    fn commit_edited_value(index: usize, col: i32, value: String) -> Option<Message> {
+    fn commit_edited_value(index: usize, col: i32, value: String) -> Option<GuiMessage> {
         match col {
             0 => Name::try_new_lossy(value)
-                .map(|name| Message::EditSfxExportOrder(ListMessage::ItemEdited(index, name))),
+                .map(|name| GuiMessage::EditSfxExportOrder(ListMessage::ItemEdited(index, name))),
             _ => None,
         }
     }
@@ -97,12 +97,12 @@ impl TableMapping for SongMapping {
         ]
     }
 
-    fn add_clicked() -> Message {
-        Message::AddSongToProjectDialog
+    fn add_clicked() -> GuiMessage {
+        GuiMessage::AddSongToProjectDialog
     }
 
-    fn to_message(lm: ListMessage<data::Song>) -> Message {
-        Message::EditProjectSongs(lm)
+    fn to_message(lm: ListMessage<data::Song>) -> GuiMessage {
+        GuiMessage::EditProjectSongs(lm)
     }
 
     fn new_row(song: &data::Song) -> Self::RowType {
@@ -136,7 +136,7 @@ impl TableMapping for SongMapping {
             }
             TableEvent::DoubleClick => {
                 if col != 0 {
-                    TableAction::Send(Message::OpenSongTab(row))
+                    TableAction::Send(GuiMessage::OpenSongTab(row))
                 } else {
                     TableAction::None
                 }
@@ -144,9 +144,9 @@ impl TableMapping for SongMapping {
         }
     }
 
-    fn commit_edited_value(index: usize, col: i32, value: String) -> Option<Message> {
+    fn commit_edited_value(index: usize, col: i32, value: String) -> Option<GuiMessage> {
         match col {
-            0 => Name::try_new_lossy(value).map(|name| Message::SetProjectSongName(index, name)),
+            0 => Name::try_new_lossy(value).map(|name| GuiMessage::SetProjectSongName(index, name)),
             _ => None,
         }
     }
@@ -207,7 +207,7 @@ impl ProjectTab {
         sfx_list: &impl ListState<Item = Name>,
         song_list: &impl ListState<Item = data::Song>,
         sfx_source_path: Option<&SourcePathBuf>,
-        sender: app::Sender<Message>,
+        sender: app::Sender<GuiMessage>,
     ) -> Self {
         let mut group = Flex::default_fill().column();
 

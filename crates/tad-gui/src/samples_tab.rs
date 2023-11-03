@@ -12,7 +12,7 @@ use crate::list_editor::{
 };
 use crate::tables::{RowWithStatus, SimpleRow};
 use crate::tabs::{FileType, Tab};
-use crate::Message;
+use crate::GuiMessage;
 
 use compiler::data::{self, Instrument, LoopSetting};
 use compiler::envelope::{Adsr, Envelope, Gain};
@@ -127,12 +127,12 @@ impl TableMapping for InstrumentMapping {
         vec!["Instruments".to_owned()]
     }
 
-    fn add_clicked() -> Message {
-        Message::Instrument(ListMessage::Add(blank_instrument()))
+    fn add_clicked() -> GuiMessage {
+        GuiMessage::Instrument(ListMessage::Add(blank_instrument()))
     }
 
-    fn to_message(lm: ListMessage<data::Instrument>) -> Message {
-        Message::Instrument(lm)
+    fn to_message(lm: ListMessage<data::Instrument>) -> GuiMessage {
+        GuiMessage::Instrument(lm)
     }
 
     fn new_row(i: &Instrument) -> Self::RowType {
@@ -162,7 +162,7 @@ enum SourceFileType {
 pub struct InstrumentEditor {
     group: Flex,
 
-    sender: app::Sender<Message>,
+    sender: app::Sender<GuiMessage>,
 
     selected_index: Option<usize>,
     data: Instrument,
@@ -185,7 +185,7 @@ pub struct InstrumentEditor {
 }
 
 impl InstrumentEditor {
-    fn new(sender: app::Sender<Message>) -> (Rc<RefCell<InstrumentEditor>>, i32) {
+    fn new(sender: app::Sender<GuiMessage>) -> (Rc<RefCell<InstrumentEditor>>, i32) {
         let mut form = InputForm::new(15);
 
         let name = form.add_input::<Input>("Name:");
@@ -278,7 +278,8 @@ impl InstrumentEditor {
 
     fn source_button_clicked(&mut self) {
         if let Some(index) = self.selected_index {
-            self.sender.send(Message::OpenInstrumentSampleDialog(index));
+            self.sender
+                .send(GuiMessage::OpenInstrumentSampleDialog(index));
         }
     }
 
@@ -291,7 +292,7 @@ impl InstrumentEditor {
     fn send_edit_message(&self, data: Instrument) {
         if let Some(index) = self.selected_index {
             self.sender
-                .send(Message::Instrument(ListMessage::ItemEdited(index, data)));
+                .send(GuiMessage::Instrument(ListMessage::ItemEdited(index, data)));
         }
     }
 
@@ -570,7 +571,7 @@ pub struct TestSampleWidget {
     selected_index: Option<usize>,
     selected_id: Option<ItemId>,
 
-    sender: app::Sender<Message>,
+    sender: app::Sender<GuiMessage>,
 
     group: Group,
 
@@ -605,7 +606,7 @@ impl TestSampleWidget {
         (12, "B"),
     ];
 
-    fn new(sender: app::Sender<Message>) -> Rc<RefCell<Self>> {
+    fn new(sender: app::Sender<GuiMessage>) -> Rc<RefCell<Self>> {
         let mut group = Group::default();
         group.make_resizable(false);
 
@@ -838,7 +839,7 @@ impl TestSampleWidget {
             let octave = Octave::try_from(self.octave.value() as u32)?;
             let note = Note::from_pitch_and_octave(pitch, octave)?;
 
-            self.sender.send(Message::PlaySample(
+            self.sender.send(GuiMessage::PlaySample(
                 id,
                 PlaySampleArgs {
                     note,
@@ -881,7 +882,7 @@ impl Tab for SamplesTab {
 impl SamplesTab {
     pub fn new(
         instruments: &impl ListState<Item = data::Instrument>,
-        sender: app::Sender<Message>,
+        sender: app::Sender<GuiMessage>,
     ) -> Self {
         let mut group = Flex::default_fill().row();
 

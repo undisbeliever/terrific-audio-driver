@@ -8,7 +8,7 @@ use crate::compiler_thread::{ItemChanged, ItemId};
 use crate::helpers::SetActive;
 use crate::names::{DeduplicatedNameVec, NameDeduplicator};
 use crate::tables;
-use crate::Message;
+use crate::GuiMessage;
 
 use fltk::button::Button;
 use fltk::group::{Pack, PackType};
@@ -836,7 +836,7 @@ impl ListButtons {
 pub enum TableAction {
     None,
     OpenEditor,
-    Send(Message),
+    Send(GuiMessage),
 }
 
 pub trait TableMapping
@@ -853,8 +853,8 @@ where
     fn headers() -> Vec<String>;
     fn type_name() -> &'static str;
 
-    fn add_clicked() -> Message;
-    fn to_message(lm: ListMessage<Self::DataType>) -> Message;
+    fn add_clicked() -> GuiMessage;
+    fn to_message(lm: ListMessage<Self::DataType>) -> GuiMessage;
 
     fn new_row(d: &Self::DataType) -> Self::RowType;
     fn edit_row(r: &mut Self::RowType, d: &Self::DataType) -> bool;
@@ -864,7 +864,7 @@ where
         TableAction::None
     }
 
-    fn commit_edited_value(index: usize, col: i32, value: String) -> Option<Message> {
+    fn commit_edited_value(index: usize, col: i32, value: String) -> Option<GuiMessage> {
         let _ = (index, col, value);
         None
     }
@@ -892,7 +892,7 @@ where
     T: TableMapping,
     T::DataType: NameDeduplicator,
 {
-    pub fn new(sender: fltk::app::Sender<Message>) -> Self {
+    pub fn new(sender: fltk::app::Sender<GuiMessage>) -> Self {
         let mut list_buttons = ListButtons::new(T::type_name(), T::CAN_CLONE);
         let mut table = tables::TrTable::new(T::headers());
 
@@ -967,7 +967,7 @@ where
 
     pub fn new_with_data(
         state: &impl ListState<Item = T::DataType>,
-        sender: fltk::app::Sender<Message>,
+        sender: fltk::app::Sender<GuiMessage>,
     ) -> Self {
         let mut out = Self::new(sender);
         out.replace(state);

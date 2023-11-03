@@ -21,8 +21,7 @@ use std::thread;
 use std::time::Duration;
 
 use crate::compiler_thread::ItemId;
-
-type GuiMessage = crate::Message;
+use crate::GuiMessage;
 
 const APU_SAMPLE_RATE: i32 = 32040;
 
