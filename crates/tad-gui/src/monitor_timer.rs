@@ -12,7 +12,8 @@ use std::rc::Rc;
 extern crate fltk;
 use fltk::app;
 
-const DEFAULT_TIMEOUT: f64 = 1.0 / 20.0;
+// The Audio Driver updates the AudioMonitorData 15.6 times per second (32040 / 2048)
+const DEFAULT_TIMEOUT: f64 = 1.0 / 30.0;
 
 pub struct MonitorTimer {
     state: Rc<RefCell<TimerState>>,
