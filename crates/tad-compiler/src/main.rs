@@ -81,8 +81,8 @@ struct CompileCommonDataArgs {
     #[command(flatten)]
     output: OutputArg,
 
-    #[arg(value_name = "JSON_FILE", help = "project json file")]
-    json_file: PathBuf,
+    #[arg(value_name = "PROJECT_FILE", help = "project file")]
+    project_file: PathBuf,
 }
 
 fn compile_sound_effects(
@@ -126,7 +126,7 @@ fn compile_sound_effects(
 }
 
 fn compile_common_data(args: CompileCommonDataArgs) {
-    let pf = load_project_file(&args.json_file);
+    let pf = load_project_file(&args.project_file);
 
     let samples = match build_sample_and_instrument_data(&pf) {
         Ok(samples) => Ok(samples),
@@ -160,8 +160,8 @@ struct CompileSongDataArgs {
     #[command(flatten)]
     output: OutputArg,
 
-    #[arg(value_name = "JSON_FILE", help = "project json file")]
-    json_file: PathBuf,
+    #[arg(value_name = "PROJECT_FILE", help = "project file")]
+    project_file: PathBuf,
 
     #[arg(value_name = "SONG", help = "song name, song number, or MML file")]
     song: OsString,
@@ -248,7 +248,7 @@ fn compile_song(
 }
 
 fn compile_song_data(args: CompileSongDataArgs) {
-    let pf = load_project_file(&args.json_file);
+    let pf = load_project_file(&args.project_file);
     let (mml_file, song_name) = load_mml_file(&args, &pf);
 
     let pitch_table = match build_pitch_table(&pf.instruments) {
@@ -265,7 +265,7 @@ fn compile_song_data(args: CompileSongDataArgs) {
 // ========================
 
 fn export_song_to_spc_file(args: CompileSongDataArgs) {
-    let pf = load_project_file(&args.json_file);
+    let pf = load_project_file(&args.project_file);
     let (mml_file, song_name) = load_mml_file(&args, &pf);
 
     let samples = match build_sample_and_instrument_data(&pf) {
@@ -295,8 +295,8 @@ fn export_song_to_spc_file(args: CompileSongDataArgs) {
 
 #[derive(Args)]
 struct CheckProjectArgs {
-    #[arg(value_name = "JSON_FILE", help = "project json file")]
-    json_file: PathBuf,
+    #[arg(value_name = "PROJECT_FILE", help = "project file")]
+    project_file: PathBuf,
 }
 
 fn check_song(
@@ -336,7 +336,7 @@ fn check_song(
 }
 
 fn check_project(args: CheckProjectArgs) {
-    let pf = load_project_file(&args.json_file);
+    let pf = load_project_file(&args.project_file);
 
     let samples = build_sample_and_instrument_data(&pf);
     if let Err(e) = samples {
