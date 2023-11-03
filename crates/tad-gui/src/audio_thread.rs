@@ -39,8 +39,8 @@ pub enum AudioMessage {
     PauseResume(ItemId),
 
     CommonAudioDataChanged(Option<CommonAudioData>),
-    PlaySong(ItemId, SongData),
-    PlaySample(ItemId, CommonAudioData, SongData),
+    PlaySong(ItemId, Arc<SongData>),
+    PlaySample(ItemId, CommonAudioData, Arc<SongData>),
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -356,7 +356,7 @@ impl AudioThread {
         }
     }
 
-    fn send_started_song_message(&mut self, id: ItemId, song_data: SongData) {
+    fn send_started_song_message(&mut self, id: ItemId, song_data: Arc<SongData>) {
         // Must set the monitor data, audio timer stops when monitor data is None
         self.monitor.set(Some(AudioMonitorData {
             item_id: Some(id),
@@ -364,7 +364,7 @@ impl AudioThread {
         }));
 
         self.gui_sender
-            .send(GuiMessage::AudioThreadStartedSong(id, Box::new(song_data)));
+            .send(GuiMessage::AudioThreadStartedSong(id, song_data));
     }
 
     fn send_resume_song_message(&mut self, id: ItemId) {

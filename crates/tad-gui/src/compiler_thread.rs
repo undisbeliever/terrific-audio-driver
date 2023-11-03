@@ -12,7 +12,7 @@ use crate::audio_thread::AudioMessage;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::fmt::Display;
-use std::sync::mpsc;
+use std::sync::{mpsc, Arc};
 use std::thread;
 
 extern crate compiler;
@@ -574,7 +574,7 @@ fn build_play_sample_data(
     instruments: &CList<data::Instrument, Option<Sample>>,
     id: ItemId,
     args: PlaySampleArgs,
-) -> Option<(CommonAudioData, SongData)> {
+) -> Option<(CommonAudioData, Arc<SongData>)> {
     match instruments.get_id(id) {
         None => return None,
         Some(inst) => {
@@ -604,7 +604,7 @@ fn build_play_sample_data(
     };
 
     let song_data = match test_sample_song(0, args.note, args.note_length, args.envelope) {
-        Ok(sd) => sd,
+        Ok(sd) => Arc::new(sd),
         Err(_) => return None,
     };
 
@@ -706,7 +706,7 @@ fn create_song_dependencies(
 
 struct SongState {
     file: TextFile,
-    song_data: Option<SongData>,
+    song_data: Option<Arc<SongData>>,
 }
 struct SongCompiler {
     parent_path: ParentPathBuf,
@@ -721,7 +721,7 @@ impl SongCompiler {
         }
     }
 
-    fn get_song_data(&self, id: &ItemId) -> Option<&SongData> {
+    fn get_song_data(&self, id: &ItemId) -> Option<&Arc<SongData>> {
         match self.songs.get(id) {
             Some(s) => s.song_data.as_ref(),
             None => None,
@@ -736,7 +736,7 @@ impl SongCompiler {
         f: &TextFile,
         dependencies: &Option<SongDependencies>,
         sender: &Sender,
-    ) -> Option<SongData> {
+    ) -> Option<Arc<SongData>> {
         let dep = match dependencies.as_ref() {
             Some(d) => d,
             None => {
@@ -756,7 +756,7 @@ impl SongCompiler {
         let tick_count_table = build_tick_count_table(&mml);
 
         let song_data = match compiler::songs::song_data(mml) {
-            Ok(mml) => mml,
+            Ok(sd) => Arc::new(sd),
             Err(e) => {
                 sender.send(CompilerOutput::Song(id, Err(SongError::Song(e))));
                 return None;
@@ -1088,7 +1088,7 @@ fn bg_thread(
             }
             ToCompiler::PlaySoundEffect(id) => {
                 if let Some(Some(sfx_data)) = sound_effects.get_output_for_id(&id) {
-                    let song_data = sound_effect_to_song(sfx_data);
+                    let song_data = Arc::new(sound_effect_to_song(sfx_data));
                     sender.send_audio(AudioMessage::PlaySong(id, song_data));
                 }
             }

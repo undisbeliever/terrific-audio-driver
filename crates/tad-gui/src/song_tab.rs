@@ -24,6 +24,7 @@ use fltk::text::{TextBuffer, TextDisplay, WrapMode};
 
 use std::cell::RefCell;
 use std::rc::Rc;
+use std::sync::Arc;
 
 pub fn blank_mml_file() -> TextFile {
     TextFile {
@@ -173,11 +174,8 @@ impl SongTab {
         }
     }
 
-    pub fn audio_thread_started_song(&mut self, song_data: Box<SongData>) {
-        self.state
-            .borrow_mut()
-            .editor
-            .set_note_tracking_data(song_data.take_tracking());
+    pub fn audio_thread_started_song(&mut self, song_data: Arc<SongData>) {
+        self.state.borrow_mut().editor.set_song_data(song_data);
     }
 
     pub fn monitor_timer_elapsed(&mut self, mon: AudioMonitorData) {

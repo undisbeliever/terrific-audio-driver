@@ -69,7 +69,7 @@ use std::collections::hash_map;
 use std::collections::HashMap;
 use std::env;
 use std::path::PathBuf;
-use std::sync::mpsc;
+use std::sync::{mpsc, Arc};
 
 #[derive(Debug)]
 pub enum GuiMessage {
@@ -115,8 +115,7 @@ pub enum GuiMessage {
     PlaySample(ItemId, PlaySampleArgs),
     PauseResumeAudio(ItemId),
 
-    // ::TODO replace with Arc::Box<SongData>::
-    AudioThreadStartedSong(ItemId, Box<SongData>),
+    AudioThreadStartedSong(ItemId, Arc<SongData>),
     AudioThreadResumedSong(ItemId),
     SongMonitorTimeout,
 

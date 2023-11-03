@@ -10,11 +10,12 @@ use crate::helpers::ch_units_to_width;
 use compiler::driver_constants::N_MUSIC_CHANNELS;
 use compiler::errors::{MmlChannelError, MmlCompileErrors};
 use compiler::mml::{FIRST_MUSIC_CHANNEL, LAST_MUSIC_CHANNEL};
-use compiler::songs::{ChannelBcTracking, SongBcTracking};
+use compiler::songs::{ChannelBcTracking, SongBcTracking, SongData};
 use compiler::FilePosRange;
 
 use std::cell::RefCell;
 use std::rc::Rc;
+use std::sync::Arc;
 
 extern crate fltk;
 use fltk::enums::{Color, Font};
@@ -30,7 +31,7 @@ pub struct MmlEditorState {
 
     changed_callback: Box<dyn Fn() + 'static>,
 
-    note_tracking_data: Option<SongBcTracking>,
+    song_data: Option<Arc<SongData>>,
     note_tracking_state: [NoteTrackingState; N_MUSIC_CHANNELS],
 
     errors_in_style_buffer: bool,
@@ -70,7 +71,7 @@ impl MmlEditor {
             style_vec: Vec::new(),
 
             note_tracking_state: Default::default(),
-            note_tracking_data: None,
+            song_data: None,
 
             changed_callback: Box::from(Self::blank_callback),
 
@@ -126,10 +127,8 @@ impl MmlEditor {
 
     fn blank_callback() {}
 
-    pub fn set_note_tracking_data(&mut self, note_tracking: Option<SongBcTracking>) {
-        self.state
-            .borrow_mut()
-            .set_note_tracking_data(note_tracking);
+    pub fn set_song_data(&mut self, song_data: Arc<SongData>) {
+        self.state.borrow_mut().set_song_data(Some(song_data));
     }
 
     pub fn update_note_tracking(&mut self, mon: AudioMonitorData) {
@@ -178,14 +177,14 @@ impl MmlEditorState {
             &self.text_buffer,
         );
 
-        if self.note_tracking_data.is_none() {
+        if self.song_data.is_none() {
             self.style_buffer.replace(
                 to_style_start,
                 to_style_end + n_deleted - n_inserted,
                 changed,
             );
         } else {
-            self.set_note_tracking_data(None);
+            self.set_song_data(None);
         }
 
         (self.changed_callback)();
@@ -316,8 +315,8 @@ impl MmlEditorState {
         }
     }
 
-    fn set_note_tracking_data(&mut self, note_tracking: Option<SongBcTracking>) {
-        self.note_tracking_data = note_tracking;
+    fn set_song_data(&mut self, song_data: Option<Arc<SongData>>) {
+        self.song_data = song_data;
         self.note_tracking_state = Default::default();
 
         let style = std::str::from_utf8(&self.style_vec).unwrap();
@@ -326,12 +325,15 @@ impl MmlEditorState {
 
     fn update_note_tracking(&mut self, mon: AudioMonitorData) {
         let mut changed = false;
-        if let Some(ntd) = &self.note_tracking_data {
-            for i in 0..self.note_tracking_state.len() {
-                let nts = &mut self.note_tracking_state[i];
-                let voice_pos = mon.voice_instruction_ptrs[i];
+        if let Some(song_data) = &self.song_data {
+            if let Some(ntd) = &song_data.tracking() {
+                for i in 0..self.note_tracking_state.len() {
+                    let nts = &mut self.note_tracking_state[i];
+                    let voice_pos = mon.voice_instruction_ptrs[i];
 
-                changed |= nts.update(&mut self.style_buffer, ntd, i, voice_pos, &self.style_vec);
+                    changed |=
+                        nts.update(&mut self.style_buffer, ntd, i, voice_pos, &self.style_vec);
+                }
             }
         }
 
