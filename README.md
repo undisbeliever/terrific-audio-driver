@@ -77,6 +77,16 @@ Build Requirements
     * Linux/BSD: X11 and OpenGL development headers
 
 
+Build Scripts
+=============
+
+This project uses two build scripts:
+ * [crates/compiler/build.rs](crates/compiler/build.rs): Compiles the audio driver using wiz and
+   extracts audio-driver addresses from a symbol file.
+ * [crates/tad-gui/build.rs](crates/tad-gui/build.rs): Converts markdown files to HTML files so they
+   can be embedded into the GUI application.
+
+
 Build Instructions
 ==================
 
