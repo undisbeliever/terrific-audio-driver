@@ -38,6 +38,7 @@ const AUDIO_MONO: &str = "&Audio/&Mono";
 const AUDIO_STEREO: &str = "&Audio/&Stereo";
 
 const SHOW_HELP_SYNTAX: &str = "&Help/&Syntax";
+const SHOW_LICENSES: &str = "&Help/&Licencing Information";
 const SHOW_ABOUT_TAB: &str = "&Help/&About";
 
 const QUIT: &str = "&File/&Quit";
@@ -140,7 +141,12 @@ impl Menu {
             fltk::menu::MenuFlag::Toggle,
             || GuiMessage::ShowOrHideHelpSyntax,
         );
-
+        add(
+            SHOW_LICENSES,
+            Shortcut::None,
+            fltk::menu::MenuFlag::Normal,
+            || GuiMessage::ShowLicensesDialog,
+        );
         add(
             SHOW_ABOUT_TAB,
             Shortcut::None,

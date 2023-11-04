@@ -1,0 +1,124 @@
+Licenses
+========
+{{! This is a handlebars template file to be used with cargo-about }}
+{{! To update the licenses.md file: run `cargo about generate --workspace -o docs/licenses-short.md docs/licenses-short-md.hbs` }}
+{{! The licenses file MUST be updated whenever the dependencies are updated }}
+{{! This file exists because the full license text is too large for a FLTK Fl_Help_View and causes unwanted lag}}
+{{! The br tags are added to improve spacing when the HTML is display using an Fl_Help_View }}
+
+
+TLDR
+====
+
+The terrific audio driver is copyright (c) 2023, Marcus Rowe.
+
+ * The audio driver (S-SMP and `.spc` code) is licensed under the zlib License.
+ * The compiler and GUI are licensed under the MIT License.
+ * The audio emulator used by the GUI is licensed under the ISC License.
+
+ * The compiler and GUI make use of multiple third party open source projects.
+ * The GUI is based in part on the work of the FLTK project (https://www.fltk.org).
+
+
+Terrific Audio Driver
+=====================
+
+The terrific audio driver is copyright (c) 2023, Marcus Rowe.
+
+
+Audio Driver
+------------
+The audio driver (S-SMP and `.spc` file export code in the `audio-driver` directory) is released under the zlib License:
+
+<br/>
+
+```
+zlib License
+
+This software is provided 'as-is', without any express or implied warranty.  In no event will the authors be held liable for any damages arising from the use of this software.
+
+Permission is granted to anyone to use this software for any purpose, including commercial applications, and to alter it and redistribute it freely, subject to the following restrictions:
+
+     1. The origin of this software must not be misrepresented; you must not claim that you wrote the original software. If you use this software in a product, an acknowledgment in the product documentation would be appreciated but is not required.
+
+     2. Altered source versions must be plainly marked as such, and must not be misrepresented as being the original software.
+
+     3. This notice may not be removed or altered from any source distribution.
+```
+
+
+Compiler and GUI
+----------------
+
+The compiler and GUI executables are released under the MIT License:
+
+```
+The MIT License (MIT)
+
+Copyright (c) 2023, Marcus Rowe <undisbeliever@gmail.com>
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
+
+Audio emulator
+--------------
+
+The following crates are released under the ISC license:
+ * shvc-sound-emu
+
+
+```
+Copyright (c) 2004-2021 ares team, Near et al
+With modifications and rust bindings Copyright (c) 2023, Marcus Rowe <undisbeliever@gmail.com>
+
+Permission to use, copy, modify, and/or distribute this software for any
+purpose with or without fee is hereby granted, provided that the above
+copyright notice and this permission notice appear in all copies.
+
+THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+```
+
+
+Third Party Licenses
+====================
+This section lists the third-party projects used by the Terrific Audio Driver.
+It is generated using [cargo-about](https://embarkstudios.github.io/cargo-about/).
+
+Please see the included [licenses file](licenses.md) for the full third party license text.
+
+{{#each licenses}}
+{{#each used_by}}
+ {{~#if crate.repository}}
+  * [{{crate.name}} {{crate.version}}]({{crate.repository}}), {{../name}}
+ {{else}}
+  * {{crate.name}} {{crate.version}}, {{../name}}
+ {{~/if~}}
+{{/each}}
+{{/each}}
+  * [FLTK](https://www.fltk.org/), [FLTK license](https://www.fltk.org/doc-1.4/license.html)
+  * [SDL2](https://libsdl.org/), [zlib license](https://www.libsdl.org/license.php)
+
+

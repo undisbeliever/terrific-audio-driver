@@ -20,6 +20,7 @@ use regex::Regex;
 const MARKDOWN_FILES: &[&str] = &[
     "../../docs/bytecode-assembly-syntax.md",
     "../../docs/mml-syntax.md",
+    "../../docs/licenses-short.md",
 ];
 
 fn convert_markdown(input: &str, name: &str) -> String {
@@ -50,6 +51,11 @@ fn convert_markdown(input: &str, name: &str) -> String {
     let html = html
         .replace("<code>", "<font face=\"courier\" color=\"#080\">")
         .replace("</code>", "</font>");
+
+    // Add padding before and after <pre> tags
+    let html = html
+        .replace("<pre>", "<p></p>\n<pre>")
+        .replace("</pre>", "</pre><p></p>");
 
     // Extract URLs from <a> links
     let html = Regex::new(r#"<a href="([^"]+)">([^<]+)</a>"#)

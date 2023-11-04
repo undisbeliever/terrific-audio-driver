@@ -9,6 +9,7 @@ mod compiler_thread;
 mod files;
 mod help;
 mod helpers;
+mod licenses_dialog;
 mod list_editor;
 mod menu;
 mod mml_editor;
@@ -63,6 +64,7 @@ use fltk::dialog;
 use fltk::prelude::*;
 use help::HelpSection;
 use helpers::ch_units_to_width;
+use licenses_dialog::LicensesDialog;
 use monitor_timer::MonitorTimer;
 
 use std::collections::hash_map;
@@ -123,6 +125,8 @@ pub enum GuiMessage {
 
     ShowAboutTab,
     ShowOrHideHelpSyntax,
+    ShowLicensesDialog,
+
     NewProject,
     OpenProject,
 }
@@ -455,6 +459,7 @@ impl Project {
             // Ignore these messages, they are handled by MainWindow
             GuiMessage::ShowAboutTab => (),
             GuiMessage::ShowOrHideHelpSyntax => (),
+            GuiMessage::ShowLicensesDialog => (),
             GuiMessage::OpenProject => (),
             GuiMessage::NewProject => (),
         }
@@ -824,6 +829,7 @@ struct MainWindow {
     about_tab: AboutTab,
 
     help_widget: HelpWidget,
+    licenses_dialog: LicensesDialog,
 
     project: Option<Project>,
 }
@@ -911,6 +917,7 @@ impl MainWindow {
             tabs,
             about_tab,
             help_widget: help,
+            licenses_dialog: LicensesDialog::new(),
             project: None,
         }
     }
@@ -962,6 +969,9 @@ impl MainWindow {
             }
             GuiMessage::ShowOrHideHelpSyntax => {
                 self.show_or_hide_help_syntax();
+            }
+            GuiMessage::ShowLicensesDialog => {
+                self.licenses_dialog.show();
             }
             GuiMessage::OpenProject => {
                 if self.project.is_none() {
