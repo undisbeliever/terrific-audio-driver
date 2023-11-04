@@ -38,6 +38,8 @@ cxx = { version="1.0.107" }
 # NOTE: Must use the alpha build.  This is a new crate that reuses an old name.
 markdown = { version="1.0.0-alpha.14" }
 
+regex = { version="1.10.2" }
+
 cxx-build = { version="1.0.107" }
 
 

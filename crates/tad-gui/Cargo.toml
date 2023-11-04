@@ -20,4 +20,5 @@ sdl2.workspace = true
 
 [build-dependencies]
 markdown.workspace = true
+regex.workspace = true
 

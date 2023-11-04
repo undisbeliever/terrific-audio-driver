@@ -12,6 +12,10 @@ use std::path::Path;
 use std::path::PathBuf;
 
 extern crate markdown;
+extern crate regex;
+
+use regex::Captures;
+use regex::Regex;
 
 const MARKDOWN_FILES: &[&str] = &[
     "../../docs/bytecode-assembly-syntax.md",
@@ -46,6 +50,27 @@ fn convert_markdown(input: &str, name: &str) -> String {
     let html = html
         .replace("<code>", "<font face=\"courier\" color=\"#080\">")
         .replace("</code>", "</font>");
+
+    // Extract URLs from <a> links
+    let html = Regex::new(r#"<a href="([^"]+)">([^<]+)</a>"#)
+        .unwrap()
+        .replace_all(&html, |caps: &Captures| {
+            const INVALID_CHARS: [char; 3] = ['<', '>', '"'];
+
+            let link = &caps[1];
+            let label = &caps[2];
+
+            if link.contains(INVALID_CHARS) || label.contains(INVALID_CHARS) {
+                panic!("{name}: has invalid characters in <a> tag {:?}", caps);
+            }
+
+            if link != label {
+                format!(r##"{} <font color="#c60">{}</font>"##, label, link)
+            } else {
+                format!(r##"<font color="#c60">{}</font>"##, link)
+            }
+        })
+        .to_string();
 
     validate_no_links_in_html(&html, name);
 

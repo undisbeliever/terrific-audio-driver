@@ -548,6 +548,9 @@ DEALINGS IN THE SOFTWARE.
 Used by:
   * [bitflags 1.3.2](https://github.com/bitflags/bitflags)
   * [bitflags 2.4.1](https://github.com/bitflags/bitflags)
+  * [regex 1.10.2](https://github.com/rust-lang/regex)
+  * [regex-automata 0.4.3](https://github.com/rust-lang/regex/tree/master/regex-automata)
+  * [regex-syntax 0.8.2](https://github.com/rust-lang/regex/tree/master/regex-syntax)
   * [relative-path 1.9.0](https://github.com/udoprog/relative-path)
 
 ```
@@ -1055,6 +1058,8 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ## MIT License
 
 Used by:
+  * [aho-corasick 1.1.2](https://github.com/BurntSushi/aho-corasick)
+  * [memchr 2.6.4](https://github.com/BurntSushi/memchr)
   * [termcolor 1.3.0](https://github.com/BurntSushi/termcolor)
 
 ```
@@ -1221,6 +1226,8 @@ DEALINGS IN THE SOFTWARE.
 ## MIT License
 
 Used by:
+  * [aho-corasick 1.1.2](https://github.com/BurntSushi/aho-corasick)
+  * [memchr 2.6.4](https://github.com/BurntSushi/memchr)
   * [termcolor 1.3.0](https://github.com/BurntSushi/termcolor)
   * [winapi-util 0.1.6](https://github.com/BurntSushi/winapi-util)
 
