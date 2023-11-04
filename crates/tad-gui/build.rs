@@ -49,7 +49,7 @@ fn convert_markdown(input: &str, name: &str) -> String {
     // Change code to green monospace text
     // (make it easier to see)
     let html = html
-        .replace("<code>", "<font face=\"courier\" color=\"#080\">")
+        .replace("<code>", "<font face=\"courier\" color=\"#060\">")
         .replace("</code>", "</font>");
 
     // Add padding before and after <pre> tags
