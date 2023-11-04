@@ -4,8 +4,13 @@
 //
 // SPDX-License-Identifier: MIT
 
-use compiler::data::{TextFile, UniqueNamesList};
-use compiler::*;
+use compiler::bytecode_assembler;
+use compiler::data;
+use compiler::data::{Name, TextFile, UniqueNamesList};
+use compiler::envelope::{Adsr, Envelope, Gain};
+use compiler::mml;
+use compiler::notes::Octave;
+use compiler::pitch_table::{build_pitch_table, PitchTable};
 
 const SAMPLE_FREQ: f64 = 500.0;
 
