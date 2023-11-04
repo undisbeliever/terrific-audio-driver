@@ -21,7 +21,8 @@ use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
-use serde::{Deserialize, Serialize};
+use serde::ser::SerializeStruct;
+use serde::{Deserialize, Serialize, Serializer};
 
 pub const MAX_FILE_SIZE: u32 = 5 * 1024 * 1024;
 
@@ -185,8 +186,30 @@ pub struct Song {
     pub source: SourcePathBuf,
 }
 
+/// A small struct that documents (in the JSON file) what the project file is and the tad-gui
+/// version used to create the project file.
+#[derive(Debug, Default, Deserialize)]
+pub struct About {
+    pub version: String,
+}
+
+impl Serialize for About {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut s = serializer.serialize_struct("About", 2)?;
+        s.serialize_field("file_type", "Terrific Audio Driver project file")?;
+        s.serialize_field("version", &self.version)?;
+        s.end()
+    }
+}
+
 #[derive(Deserialize, Serialize, Default, Debug)]
 pub struct Project {
+    #[serde(default, rename = "_about")]
+    pub about: About,
+
     pub instruments: Vec<Instrument>,
 
     pub sound_effects: Vec<Name>,

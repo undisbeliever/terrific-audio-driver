@@ -73,6 +73,8 @@ use std::env;
 use std::path::PathBuf;
 use std::sync::{mpsc, Arc};
 
+const CARGO_PKG_VERSION: &str = env!("CARGO_PKG_VERSION");
+
 #[derive(Debug)]
 pub enum GuiMessage {
     SelectedTabChanged,
@@ -791,6 +793,11 @@ impl Project {
 impl ProjectData {
     pub fn to_project(&self) -> compiler::data::Project {
         compiler::data::Project {
+            // Always update the About version
+            about: data::About {
+                version: CARGO_PKG_VERSION.to_owned(),
+            },
+
             instruments: self.instruments.list().item_iter().cloned().collect(),
             songs: self.project_songs.list().item_iter().cloned().collect(),
             sound_effects: self.sfx_export_orders.list().item_iter().cloned().collect(),
