@@ -10,15 +10,20 @@ use crate::GuiMessage;
 extern crate fltk;
 use fltk::app;
 use fltk::button::Button;
-use fltk::enums::{CallbackReason, CallbackTrigger, Font};
+use fltk::enums::{CallbackReason, CallbackTrigger, Color, Font};
 use fltk::frame::Frame;
 use fltk::group::{Flex, Tabs};
-use fltk::misc::HelpView;
 use fltk::prelude::{GroupExt, WidgetExt};
 
 const VERSION_STR: &str = concat!["Version ", env!("CARGO_PKG_VERSION")];
 
 const COPYRIGHT_TEXT: &str = "Copyright © 2023 Marcus Rowe";
+
+const WARNING_TEXT: &str = concat![
+    "WARNING: This audio driver is still in development.\n",
+    "The samples, MML syntax and bytecodes\n",
+    "are subject to change without notice."
+];
 
 pub struct AboutTab {
     parent: Tabs,
@@ -78,9 +83,10 @@ impl AboutTab {
         let padding = Frame::default();
         group.fixed(&padding, 12);
 
-        let mut licences = HelpView::default();
-        licences.set_text_size(group.label_size());
-        licences.set_value("::TODO add licence text (including third party libraries)::");
+        let mut warning = label_top_center(WARNING_TEXT);
+        warning.set_label_font(Font::ScreenBold);
+        warning.set_label_color(Color::Red);
+        warning.set_label_size(group.label_size() + 4);
 
         group.end();
 

@@ -3,6 +3,9 @@ Terrific Audio Driver
 
 A homebrew audio driver for the Super Nintendo.
 
+**NOTICE:** This audio driver is still in development.
+The samples, MML syntax and bytecodes are subject to change without notice
+
 
 Features
 ========
