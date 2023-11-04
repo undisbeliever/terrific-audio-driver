@@ -16,6 +16,8 @@ use fltk::group::{Flex, Tabs};
 use fltk::misc::HelpView;
 use fltk::prelude::{GroupExt, WidgetExt};
 
+const VERSION_STR: &str = concat!["Version ", env!("CARGO_PKG_VERSION")];
+
 const COPYRIGHT_TEXT: &str = "Copyright © 2023 Marcus Rowe";
 
 pub struct AboutTab {
@@ -63,6 +65,9 @@ impl AboutTab {
         title.set_label_font(Font::CourierBold);
         title.set_label_size(group.label_size() * 4);
         group.fixed(&title, input_height(&title));
+
+        let version = label_center(VERSION_STR);
+        group.fixed(&version, input_height(&version));
 
         let copyright = label_top_center(COPYRIGHT_TEXT);
         group.fixed(&copyright, input_height(&copyright));
