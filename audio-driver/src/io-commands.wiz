@@ -142,6 +142,29 @@ namespace IO {
         //  * parameter0: sound effect id (not bounds checked)
         //  * parameter1: pan (0-128) (not bounds checked)
         PLAY_SOUND_EFFECT   = 4,
+
+        // reserved
+
+        // Set the main volume
+        //  * parameter0: signed i8 volume
+        //
+        // NOTE: The main volume is reset whenever a new song is loaded.
+        SET_MAIN_VOLUME = 10,
+
+        // Enables or disable channels.
+        //  * parameter0: A bitmask of the 8 channels that can send key-on events
+        //
+        // Useful for disabling channels in a song.
+        //
+        // NOTE: The enabled channels bitmask is reset whenever a new song is loaded.
+        SET_ENABLED_CHANNELS = 12,
+
+        // Set the song tempo.
+        //  * parameter0: The new S-DSP TIMER_0 register value
+        //    (MUST be >= MIN_TICK_CLOCK 64, is bounds checked)
+        //
+        // NOTE: The song can still change the tempo.
+        SET_SONG_TEMPO = 14,
     };
 }
 

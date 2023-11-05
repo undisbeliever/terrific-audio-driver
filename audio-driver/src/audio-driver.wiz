@@ -80,6 +80,12 @@ in zeropage {
     var pausedIfZero : u8;
 
 
+    // A bitmask of the channels that can send key-on events.
+    //
+    // This bitmask is set the IO comamnds, it is not `keyOnMask`.
+    var enabledChannelsMask : u8;
+
+
     // The previous IO port command
     var previousCommand : u8;
 
@@ -400,6 +406,9 @@ func main() {
     } while !zero;
 
 
+    enabledChannelsMask = 0xff;
+
+
     // Calculate common audio data addresses
     {
         // Reuse these two variables for temporary word space
@@ -659,6 +668,7 @@ inline func __update_kon_koff__inline(let MASK : u8) {
     test_and_clear(a, keyOnMask);
 
     // Send KON events
+    a &= enabledChannelsMask;
     y = a;
     write_dsp(GlobalDspAddr.KON, y);
 
@@ -740,9 +750,9 @@ const CommandFunctionTable : [func ; IO.ToDriver.N_COMMANDS] = [
     play_sound_effect,
     null_command,
     null_command,
-    null_command,
-    null_command,
-    null_command,
+    set_main_volume,
+    set_enabled_channels,
+    set_song_tempo,
 ];
 
 
@@ -762,6 +772,27 @@ func unpause() {
     smp.control = smp.CONTROL__ENABLE_TIMER_0 | smp.CONTROL__ENABLE_TIMER_1;
 
     pausedIfZero = 1;
+}
+
+
+func set_main_volume() {
+    y = IO.ToDriver.parameter0;
+    write_dsp(GlobalDspAddr.MVOL_L, y);
+    write_dsp(GlobalDspAddr.MVOL_R, y);
+}
+
+
+func set_enabled_channels() {
+    enabledChannelsMask = IO.ToDriver.parameter0;
+}
+
+
+func set_song_tempo() {
+    a = IO.ToDriver.parameter0;
+    if a < MIN_TICK_CLOCK {
+        a = MIN_TICK_CLOCK;
+    }
+    smp.timer_0 = a;
 }
 
 
