@@ -55,6 +55,12 @@ namespace LoaderDataType {
     // MUST NOT be set when loading code or common-audio-data.
     let STEREO_FLAG_BIT = 7;
 
+    // If this bit is set, the song will play after the echo buffer has been cleared.
+    // If this bit is clear, the audio driver will start in a paused state.
+    //
+    // MUST NOT be set when loading code or common-audio-data.
+    let PLAY_SONG_BIT = 6;
+
 
     // If this bit is set, the echo buffer clear and `EDL` sleep will be skipped.
     //
@@ -121,6 +127,17 @@ namespace IO {
 
     // MUST match CommandFunctionTable in `audio-driver.wiz`.
     enum Command : u8 {
+        // Stop song and sound effect execution.
+        // * Commands will still be executed when the audio-driver is paused
+        // * The audio driver starts paused unless the `LoaderDataType.PLAY_SONG_BIT` is set.
+        PAUSE               = 0,
+
+        // Unpauses the audio driver.
+        //
+        // * Resets the S-SMP timer counters,
+        //   can cause issues if the S-CPU spams `UNPAUSE` commands.
+        UNPAUSE             = 2,
+
         // Play a sound effect
         //  * parameter0: sound effect id (not bounds checked)
         PLAY_SOUND_EFFECT   = 4,

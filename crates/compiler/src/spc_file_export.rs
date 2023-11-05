@@ -159,8 +159,13 @@ pub fn export_spc_file(
 
         write_spc_ram(addresses::SONG_PTR, &song_data_addr.to_le_bytes());
 
-        // Set stereo flag and skip echo buffer reset delay
-        spc_ram[LOADER_DATA_TYPE_ADDR] = LoaderDataType::StereoSongDataSkipEchoBufferReset as u8;
+        // Set the loader flags
+        spc_ram[LOADER_DATA_TYPE_ADDR] = LoaderDataType {
+            stereo_flag: true,
+            play_song: true,
+            skip_echo_buffer_reset: true,
+        }
+        .driver_value();
 
         // Replace loader with a `STOP` instructions
         spc_ram[usize::from(addresses::LOADER)] = 0xff;

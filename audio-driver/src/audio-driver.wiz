@@ -75,6 +75,11 @@ in zeropage {
     }
 
 
+    // If this variable is zero, the audio driver is paused.
+    // (using zero so the audio driver starts paused)
+    var pausedIfZero : u8;
+
+
     // The previous IO port command
     var previousCommand : u8;
 
@@ -514,16 +519,23 @@ var _loopEnd : u8 in zpTmp;
 
     smp.timer_1 = SFX_TICK_CLOCK;
 
-    // Reset counters to ensure `maxTimerCounter` is accurate
-    // Timers and counters reset when the timer control bits transition from 0 to 1
-    smp.control = 0;
-    smp.control = smp.CONTROL__ENABLE_TIMER_0 | smp.CONTROL__ENABLE_TIMER_1;
+    // Timers are enabled and reset in `io_commands.unpause()`
 
 
     io_commands.init__inline();
 
+    // (cannot use `bbs` instructions in wiz, using `mov1 c, addr, bit` instead)
+    carry = loaderDataType $ LoaderDataType.PLAY_SONG_BIT;
+    if carry {
+        io_commands.unpause();
+    }
+
     ^while true {
-        io_commands.process_io_ports__inline();
+        do {
+            io_commands.process_io_ports__inline();
+
+            a = pausedIfZero;
+        } while zero;
 
         process_event_loop__inline();
     }
@@ -664,9 +676,11 @@ inline func __update_kon_koff__inline(let MASK : u8) {
 namespace io_commands {
 
 inline func init__inline() {
+    // Assumes audio driver starts paused.
+    // Assumes IO.Command.PAUSE is 0
     // Assumes `IO.ToDriver.command` is non-zero from the loader.
 
-    a = 0;
+    a = IO.Command.PAUSE as u8;
     IO.ToScpu.command_ack = a;
     previousCommand = a;
 }
@@ -722,8 +736,8 @@ func __call_command(command : u8 in a) {
 
 // MUST match `Command` enum in `io-commands.wiz`
 const CommandFunctionTable : [func ; IO.ToDriver.N_COMMANDS] = [
-    null_command,
-    null_command,
+    pause,
+    unpause,
     play_sound_effect,
     null_command,
     null_command,
@@ -734,6 +748,21 @@ const CommandFunctionTable : [func ; IO.ToDriver.N_COMMANDS] = [
 
 
 func null_command() {
+}
+
+
+func pause() {
+    pausedIfZero = 0;
+}
+
+
+func unpause() {
+    // Reset counters to ensure `maxTimerCounter` is accurate
+    // Timers and counters reset when the timer control bits transition from 0 to 1
+    smp.control = 0;
+    smp.control = smp.CONTROL__ENABLE_TIMER_0 | smp.CONTROL__ENABLE_TIMER_1;
+
+    pausedIfZero = 1;
 }
 
 

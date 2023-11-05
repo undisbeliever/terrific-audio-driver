@@ -258,11 +258,16 @@ fn load_song(
     let eb_end = eb_start + edl.buffer_size();
     apuram[eb_start..eb_end].fill(0);
 
-    // Set stereo flag and skip the echo buffer reset delay
-    apuram[LOADER_DATA_TYPE_ADDR] = match stereo_flag {
-        StereoFlag::Stereo => LoaderDataType::StereoSongDataSkipEchoBufferReset as u8,
-        StereoFlag::Mono => LoaderDataType::MonoSongDataSkipEchoBufferReset as u8,
-    };
+    // Set loader flags
+    apuram[LOADER_DATA_TYPE_ADDR] = LoaderDataType {
+        stereo_flag: match stereo_flag {
+            StereoFlag::Stereo => true,
+            StereoFlag::Mono => false,
+        },
+        play_song: true,
+        skip_echo_buffer_reset: true,
+    }
+    .driver_value();
 
     emu.set_echo_buffer_size(edl.esa_register(), edl.as_u8());
 

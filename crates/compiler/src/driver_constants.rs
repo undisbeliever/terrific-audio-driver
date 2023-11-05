@@ -72,14 +72,33 @@ pub const MAX_COMMON_DATA_SIZE: usize = 0xD000;
 
 // Loader constants
 // MUST match `audio-driver/src/io-commands.wiz`
-pub enum LoaderDataType {
-    MonoSongData = 0x02,
-    StereoSongData = 0x82,
+pub struct LoaderDataType {
+    pub stereo_flag: bool,
+
+    pub play_song: bool,
 
     // NOTE: `SkipEchoBufferReset` can corrupt memory if the internal S-DSP echo buffer state
     // does not match the song's echo EDL/ESA register values.
-    MonoSongDataSkipEchoBufferReset = LoaderDataType::MonoSongData as isize | 0x20,
-    StereoSongDataSkipEchoBufferReset = LoaderDataType::StereoSongData as isize | 0x20,
+    pub skip_echo_buffer_reset: bool,
+}
+
+impl LoaderDataType {
+    pub fn driver_value(&self) -> u8 {
+        // LoaderDataType.MIN_SONG_VALUE
+        let mut o = 2;
+
+        if self.stereo_flag {
+            o |= 1 << 7;
+        }
+        if self.play_song {
+            o |= 1 << 6;
+        }
+        if self.skip_echo_buffer_reset {
+            o |= 1 << 5;
+        }
+
+        o
+    }
 }
 
 // S-DSP constants
