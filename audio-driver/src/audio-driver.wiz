@@ -716,7 +716,8 @@ inline func process_io_ports__inline() {
             // (`pause()` changes previousCommand)
             previousCommand = a;
 
-            __call_command(a);
+            y = IO.ToDriver.parameter0;
+            __call_command(a, y);
 
             // Acknowledge command
             IO.ToScpu.command_ack = previousCommand;
@@ -737,16 +738,16 @@ inline func process_io_ports__inline() {
 
 
 // NOTE: Does not acknowledge command
-func __call_command(command : u8 in a) {
+func __call_command(command : u8 in a, parameter : u8 in y) {
     x = a = a & IO.ToDriver.COMMAND_MASK;
     goto CommandFunctionTable[unaligned x];
 }
 
 
 // MUST match `Command` enum in `io-commands.wiz`
-const CommandFunctionTable : [func ; IO.ToDriver.N_COMMANDS] = [
-    pause,
-    unpause,
+const CommandFunctionTable : [func(parameter0: u8 in y) ; IO.ToDriver.N_COMMANDS] = [
+    pause as func(u8 in y),
+    unpause as func(u8 in y),
     play_sound_effect,
     null_command,
     stop_sound_effects,
@@ -756,7 +757,7 @@ const CommandFunctionTable : [func ; IO.ToDriver.N_COMMANDS] = [
 ];
 
 
-func null_command() {
+func null_command(unused : u8 in y) {
 }
 
 
@@ -775,49 +776,46 @@ func unpause() {
 }
 
 
-func set_main_volume() {
-    y = IO.ToDriver.parameter0;
+func set_main_volume(volume : u8 in y) {
     write_dsp(GlobalDspAddr.MVOL_L, y);
     write_dsp(GlobalDspAddr.MVOL_R, y);
 }
 
 
-func set_enabled_channels() {
-    enabledChannelsMask = IO.ToDriver.parameter0;
+func set_enabled_channels(mask : u8 in y) {
+    enabledChannelsMask = y;
 }
 
 
-func set_song_tempo() {
-    a = IO.ToDriver.parameter0;
-    if a < MIN_TICK_CLOCK {
-        a = MIN_TICK_CLOCK;
+func set_song_tempo(tempo : u8 in y) {
+    if y < MIN_TICK_CLOCK {
+        y = MIN_TICK_CLOCK;
     }
-    smp.timer_0 = a;
+    smp.timer_0 = y;
 }
 
 
-func stop_sound_effects() {
+func stop_sound_effects(unused : u8 in y) {
     x = N_MUSIC_CHANNELS;
     do {
         channelSoA.instructionPtr_l[x] = a = <:&ChannelDisabledBytecode;
         channelSoA.instructionPtr_h[x] = y = >:&ChannelDisabledBytecode;
 
-        // Immediately process the next event and send a key-off event
+        // Immediately process the next event
         channelSoA.countdownTimer[x] = a = 1;
-        channelSoA.nextEventIsKeyOff[x] = a;
 
         x++;
     } while x < N_CHANNELS;
 }
 
 
-func play_sound_effect() {
+func play_sound_effect(sfx_id : u8 in y) {
     a = activeChannels;
     inline for let i in 0..(N_SFX_CHANNELS - 1) {
         a <<<= 1;
         if !carry {
             x = 7 - i;
-            return __play_sfx_on_channel(x);
+            return __play_sfx_on_channel(x, y);
         }
     }
 }
@@ -826,9 +824,7 @@ func play_sound_effect() {
 // ASSUMES: sfx_id < commonData.nSoundEffects
 // KEEP: X
 #[fallthrough]
-func __play_sfx_on_channel(channelIndex : u8 in x) {
-    // y = sfx_id
-    y = IO.ToDriver.parameter0;
+func __play_sfx_on_channel(channelIndex : u8 in x, sfx_id : u8 in y) {
     // pan
     zpTmp = IO.ToDriver.parameter1;
 
