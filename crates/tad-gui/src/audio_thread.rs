@@ -224,7 +224,7 @@ fn load_song(
     song: &SongData,
     stereo_flag: StereoFlag,
 ) -> Result<(), ()> {
-    const LOADER_DATA_TYPE_ADDR: usize = addresses::LOADER as usize;
+    const LOADER_DATA_TYPE_ADDR: usize = addresses::LOADER_DATA_TYPE as usize;
 
     let song_data = song.data();
     let common_data = common_data.data();
