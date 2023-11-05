@@ -94,7 +94,7 @@ impl LoaderDataType {
             o |= 1 << 6;
         }
         if self.skip_echo_buffer_reset {
-            o |= 1 << 5;
+            o |= 1 << 3;
         }
 
         o

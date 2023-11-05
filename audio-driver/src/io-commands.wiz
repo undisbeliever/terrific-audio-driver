@@ -70,7 +70,7 @@ namespace LoaderDataType {
     // Ie, the echo buffer was setup in a previous song AND the song's `edl` value is unchanged.
     //
     // This flag is used to reduce startup lag in exported .SPC files and the audio-driver GUI.
-    let SKIP_ECHO_BUFFER_RESET_BIT = 5;
+    let SKIP_ECHO_BUFFER_RESET_BIT = 3;
 }
 
 
