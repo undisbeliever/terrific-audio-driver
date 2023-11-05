@@ -270,9 +270,6 @@ in code {
 
 // MUST be the first thing in the `code` bank (so the starting address is consistent across builds).
 func main() {
-var _loopEnd : u8 in zpTmp;
-
-
     sp = x = 0xff;
 
     // Reset the DSP
@@ -453,9 +450,11 @@ var _loopEnd : u8 in zpTmp;
 
 
     // Reset all music channels
+    zpTmp = MAX_PAN / 2;
+
     x = N_MUSIC_CHANNELS - 1;
     do {
-        __reset_channel(x);
+        __reset_channel(x, zpTmp);
 
         // ASSUMES offsetof(SongHeader, channels) == 0
         // ASSUMES sizeof(MusicChannelHeader) == 4
@@ -784,6 +783,8 @@ func play_sound_effect() {
 func __play_sfx_on_channel(channelIndex : u8 in x) {
     // y = sfx_id
     y = IO.ToDriver.parameter0;
+    // pan
+    zpTmp = IO.ToDriver.parameter1;
 
     channelSoA.instructionPtr_l[x] = a = commonData.soundEffects_l[y];
     channelSoA.instructionPtr_h[x] = a = commonData.soundEffects_h[y];
@@ -799,7 +800,8 @@ func __play_sfx_on_channel(channelIndex : u8 in x) {
 // NOTE: Also disables `end` looping (instructionPtrAfterEnd).
 //
 // KEEP: X
-func __reset_channel(channelIndex : u8 in x) {
+#[fallthrough]
+func __reset_channel(channelIndex : u8 in x, pan: u8 in zpTmp) {
     // Immediately process the next event
     channelSoA.countdownTimer[x] = a = 1;
 
@@ -830,18 +832,64 @@ func __reset_channel(channelIndex : u8 in x) {
     test_and_clear(a, smp.dsp_data);
 
 
-    // Reset channel volume
-    channelSoA.volume[x] = a = STARTING_VOLUME;
-    channelSoA.pan[x] = a = MAX_PAN / 2;
+    // Set channel volume
+    channelSoA.volume[x] = y = STARTING_VOLUME;
+    channelSoA.pan[x] = a = pan;
 
-    y = (STARTING_VOLUME * (MAX_PAN / 2)) >> 8;
+// Fallthrough
+}
 
-    // ASSUMES VoiceDspAddr.VOL_L == 0
-    smp.dsp_addr = a = ChannelVoiceOffset[x];
-    smp.dsp_data = y;
 
-    smp.dsp_addr++;
-    smp.dsp_data = y;
+// KEEP: x
+// volume and pan must be set in channelSoA.
+func _update_voll_and_volr(channelIndex : u8 in x, vol_or_pan : u8 in a, pan_or_vol : u8 in y) {
+
+    // Reading carry here saves a `SEC` instruction when calculating VOL_R
+    carry = loaderDataType $ LoaderDataType.STEREO_FLAG_BIT;
+    if carry {
+        // Stereo
+
+        // Calculate right volume
+        // A pan value of `MAX_PAN` is 100% to the right.
+        // (MUST NOT USE CARRY)
+
+        ya = mul(a, y);
+
+        // ASSUMES VoiceDspAddr.VOL_L == 0 && VoiceDspAddr.VOL_R == 1
+        a = ChannelVoiceOffset[x];
+        a++;                            // VOL_R
+        smp.dsp_addr_and_data = ya;
+
+
+        // Calculate left volume
+        // A pan value of `0` is 100% to the left.
+
+        // Carry set (MUL does not set carry)
+        a = MAX_PAN -# channelSoA.pan[x];
+        y = channelSoA.volume[x];
+        ya = mul(a, y);
+
+        smp.dsp_addr--;                 // VOL_L
+        smp.dsp_data = y;
+
+        return;
+    }
+    else {
+        // Mono
+
+        // ASSUMES VoiceDspAddr.VOL_L == 0
+        smp.dsp_addr = a = ChannelVoiceOffset[x];
+
+        // First shift converts 8-bit volume to 7-bit VOL
+        // Second shift ensure mono vol has same combined amplitude as stereo vol
+        a = channelSoA.volume[x] >>> 2;
+
+        smp.dsp_data = a;
+        smp.dsp_addr++;
+        smp.dsp_data = a;
+
+        return;
+    }
 }
 
 
@@ -1561,7 +1609,9 @@ func set_pan(channelIndex : u8 in x, pan : u8 in a) {
 
     y = channelSoA.volume[x];
 
-    ^return __update_voll_and_volr(x, a, y);
+    _update_voll_and_volr(x, a, y);
+
+    ^return process_next_bytecode(x);
 }
 
 
@@ -1613,59 +1663,9 @@ func set_volume(channelIndex : u8 in x, volume : u8 in a) {
 
     y = channelSoA.pan[x];
 
-// Fallthrough
-}
+    _update_voll_and_volr(x, a, y);
 
-
-// KEEP: x
-func __update_voll_and_volr(channelIndex : u8 in x, vol_or_pan : u8 in a, pan_or_vol : u8 in y) {
-
-    // Reading carry here saves a `SEC` instruction when calculating VOL_R
-    carry = loaderDataType $ LoaderDataType.STEREO_FLAG_BIT;
-    if carry {
-        // Stereo
-
-        // Calculate right volume
-        // A pan value of `MAX_PAN` is 100% to the right.
-        // (MUST NOT USE CARRY)
-
-        ya = mul(a, y);
-
-        // ASSUMES VoiceDspAddr.VOL_L == 0 && VoiceDspAddr.VOL_R == 1
-        a = ChannelVoiceOffset[x];
-        a++;                            // VOL_R
-        smp.dsp_addr_and_data = ya;
-
-
-        // Calculate left volume
-        // A pan value of `0` is 100% to the left.
-
-        // Carry set (MUL does not set carry)
-        a = MAX_PAN -# channelSoA.pan[x];
-        y = channelSoA.volume[x];
-        ya = mul(a, y);
-
-        smp.dsp_addr--;                 // VOL_L
-        smp.dsp_data = y;
-
-        ^return process_next_bytecode(x);
-    }
-    else {
-        // Mono
-
-        // ASSUMES VoiceDspAddr.VOL_L == 0
-        smp.dsp_addr = a = ChannelVoiceOffset[x];
-
-        // First shift converts 8-bit volume to 7-bit VOL
-        // Second shift ensure mono vol has same combined amplitude as stereo vol
-        a = channelSoA.volume[x] >>> 2;
-
-        smp.dsp_data = a;
-        smp.dsp_addr++;
-        smp.dsp_data = a;
-
-        ^return process_next_bytecode(x);
-    }
+    ^return process_next_bytecode(x);
 }
 
 

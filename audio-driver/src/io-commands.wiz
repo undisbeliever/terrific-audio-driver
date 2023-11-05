@@ -140,6 +140,7 @@ namespace IO {
 
         // Play a sound effect
         //  * parameter0: sound effect id (not bounds checked)
+        //  * parameter1: pan (0-128) (not bounds checked)
         PLAY_SOUND_EFFECT   = 4,
     };
 }
