@@ -749,7 +749,7 @@ const CommandFunctionTable : [func ; IO.ToDriver.N_COMMANDS] = [
     unpause,
     play_sound_effect,
     null_command,
-    null_command,
+    stop_sound_effects,
     set_main_volume,
     set_enabled_channels,
     set_song_tempo,
@@ -793,6 +793,21 @@ func set_song_tempo() {
         a = MIN_TICK_CLOCK;
     }
     smp.timer_0 = a;
+}
+
+
+func stop_sound_effects() {
+    x = N_MUSIC_CHANNELS;
+    do {
+        channelSoA.instructionPtr_l[x] = a = <:&ChannelDisabledBytecode;
+        channelSoA.instructionPtr_h[x] = y = >:&ChannelDisabledBytecode;
+
+        // Immediately process the next event and send a key-off event
+        channelSoA.countdownTimer[x] = a = 1;
+        channelSoA.nextEventIsKeyOff[x] = a;
+
+        x++;
+    } while x < N_CHANNELS;
 }
 
 

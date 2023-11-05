@@ -145,6 +145,9 @@ namespace IO {
 
         // reserved
 
+        // Stop all active sound effects
+        STOP_SOUND_EFFECTS = 8,
+
         // Set the main volume
         //  * parameter0: signed i8 volume
         //
