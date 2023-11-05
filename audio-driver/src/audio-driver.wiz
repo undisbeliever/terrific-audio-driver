@@ -75,8 +75,8 @@ in zeropage {
     }
 
 
-    // The previous IO port command_id
-    var previousCommandId : u8;
+    // The previous IO port command
+    var previousCommand : u8;
 
 
     // The table of subroutine offsets
@@ -508,9 +508,6 @@ var _loopEnd : u8 in zpTmp;
     write_dsp(GlobalDspAddr.FLG, 0);
 
 
-    init_io_ports__inline();
-
-
     // Setup and enable the timers
     y = offsetof(SongHeader, tickTimer);
     smp.timer_0 = a = songPtr[y];
@@ -523,7 +520,11 @@ var _loopEnd : u8 in zpTmp;
     smp.control = smp.CONTROL__ENABLE_TIMER_0 | smp.CONTROL__ENABLE_TIMER_1;
 
 
+    io_commands.init__inline();
+
     ^while true {
+        io_commands.process_io_ports__inline();
+
         process_event_loop__inline();
     }
 }
@@ -614,9 +615,6 @@ inline func process_event_loop__inline() {
         process_channel__inline(x);
         x++;
     } while x < channelIndexEndLoop;
-
-
-    process_io_ports__inline();
 }
 
 
@@ -663,77 +661,108 @@ inline func __update_kon_koff__inline(let MASK : u8) {
 // IO Ports
 // ========
 
-inline func init_io_ports__inline() {
-    // Wait until CPU ready
-    do {
-        a = IO.command_id;
-    } while !zero;
+namespace io_commands {
 
-    IO.command_id_ack = a;
-    previousCommandId = a;
+inline func init__inline() {
+    // Assumes `IO.ToDriver.command` is non-zero from the loader.
+
+    a = 0;
+    IO.ToScpu.command_ack = a;
+    previousCommand = a;
 }
 
 
 inline func process_io_ports__inline() {
+    // If the S-CPU writes to an IO port at the same time S-SMP reads from the
+    // same IO port, the S-SMP will read invalid data.
+    //
+    // To detect this bug the IO-Port is read twice and the command is only
+    // processed if both reads are the same.
+    //
+    // Once the command byte has been read successfully, the two parameter bytes
+    // do not need to be double-read because:
+    //  * The S-CPU will wait until the command has been acknowledged before
+    //    writing a new command
+    //  * The parameter bytes are written before the command byte is written.
+
     // Test if `IO.command_id` has changed.
-    // If S-CPU writes to `command_id` at the same time S-SMP reads `command_id`, `command_id` will contain invalid data.
-    // We do not care about the value of `command_id` at this point in time, we only care if it has changed.
-    x = IO.command_id;
-    if x != previousCommandId {
-        // There is a new command from the S-CPU
+    a = IO.ToDriver.command;
+    if a != previousCommand {
+        if a == IO.ToDriver.command {
+            // MUST set previousCommand before executing command
+            // (`pause()` changes previousCommand)
+            previousCommand = a;
 
-        // Get command from S-CPU
-        a = IO.command;
+            __call_command(a);
 
-        // Acknowledge command
-        // Read `IO.command_id` a second time to ensure the correct value is read.
-        // This should be safe.  The S-CPU will not write to `IO.command_id` until it has been acknowledged.
-        // ::TODO stress test `command_id`::
-        x = IO.command_id;
-        IO.command_id_ack = x;
-        previousCommandId = x;
-
-        // Assumes nSoundEffects <= MAX_SOUND_EFFECTS
-        if a >= commonDataHeader.nSoundEffects {
-            if a == IoCommand.EXECUTE_LOADER as u8 {
-                ^goto (LOADER_ADDR as func);
-            }
+            // Acknowledge command
+            IO.ToScpu.command_ack = previousCommand;
         }
-        else {
-            // Play sound effect command
-            play_sound_effect__inline(a);
-        }
+    }
+
+
+    // Execute the loader if the SWITCH_TO_LOADER_BIT is set.
+    //
+    // (cannot use `bbs` instructions in wiz, using two `and dp` instructions instead)
+    a = IO.ToDriver.SWITCH_TO_LOADER_MASK;
+    a &= IO.ToDriver.switch_to_loader;
+    a &= IO.ToDriver.switch_to_loader;
+    if !zero {
+        ^goto (LOADER_ADDR as func);
     }
 }
 
 
-// ASSUMES: sfx_id < commonData.nSoundEffects
-inline func play_sound_effect__inline(sfx_id : u8 in y) {
-    // ::TODO add panning to play sound effect commands::
+// NOTE: Does not acknowledge command
+func __call_command(command : u8 in a) {
+    x = a = a & IO.ToDriver.COMMAND_MASK;
+    goto CommandFunctionTable[unaligned x];
+}
 
+
+// MUST match `Command` enum in `io-commands.wiz`
+const CommandFunctionTable : [func ; IO.ToDriver.N_COMMANDS] = [
+    null_command,
+    null_command,
+    play_sound_effect,
+    null_command,
+    null_command,
+    null_command,
+    null_command,
+    null_command,
+];
+
+
+func null_command() {
+}
+
+
+func play_sound_effect() {
     a = activeChannels;
     inline for let i in 0..(N_SFX_CHANNELS - 1) {
         a <<<= 1;
         if !carry {
             x = 7 - i;
-            __play_sfx_on_channel(x, y);
-            return;
+            return __play_sfx_on_channel(x);
         }
     }
 }
 
 
-
 // ASSUMES: sfx_id < commonData.nSoundEffects
 // KEEP: X
 #[fallthrough]
-func __play_sfx_on_channel(channelIndex : u8 in x, sfx_id : u8 in y) {
+func __play_sfx_on_channel(channelIndex : u8 in x) {
+    // y = sfx_id
+    y = IO.ToDriver.parameter0;
+
     channelSoA.instructionPtr_l[x] = a = commonData.soundEffects_l[y];
     channelSoA.instructionPtr_h[x] = a = commonData.soundEffects_h[y];
 
-// Fallthrough
+// Fallthrough into __reset_channel()
 }
 
+}
 
 // NOTE: Does not set:
 //  * channelSoA.instructionPtr

@@ -72,24 +72,59 @@ namespace LoaderDataType {
 // ===========
 
 
-// MUST match `src/audio.wiz`
 namespace IO {
-    // The audio-driver MUST NOT use IO port 3 (without rewriting the loader).
-    //
-    // Port 3 is used by the loader to signal to the S-CPU that the loader is running.
+    namespace ToDriver {
+        // The command to execute.
+        //
+        //      iii0ccci
+        //          ccc = command
+        //            0 = reserved for future expansion
+        //            i = command id, MUST be different on every command.
+        //                Used to detect when a new command has been sent to the driver.
+        //
+        // NOTES:
+        //  * The command will only be execute if the `command` byte has changed.
+        //  * This value MUST be written last.
+        //  * The command and parameter bytes MUST NOT change unless the previous command
+        //    has been acknowledged.
+        extern const command @ &smp.io_port_in_0 : u8;
 
-    extern const command_id  @ &smp.io_port_in_0 : u8;
-    extern writeonly command_id_ack @ &smp.io_port_out_0 : u8;
+        let N_COMMANDS = 8;
+        let COMMAND_MASK   = 0b00001110;
+        let COMMAND_I_MASK = 0b11100001;
 
-    extern const command @ &smp.io_port_in_1 : u8;
+        // The two command parameter bytes
+        extern const parameter0 @ &smp.io_port_in_1 : u8;
+        extern const parameter1 @ &smp.io_port_in_2 : u8;
+
+
+        // When the `SWITCH_TO_LOADER_BIT` bit of this IO Port is set, the audio
+        // driver will stop and then execute the loader.
+        extern const switch_to_loader @ &smp.io_port_in_3 : u8;
+
+        let SWITCH_TO_LOADER_BIT = 5;
+        let SWITCH_TO_LOADER_MASK = 1 << (SWITCH_TO_LOADER_BIT);
+    }
+
+    namespace ToScpu {
+        // Command acknowledgment
+        //
+        // Acknowledgment of the command.
+        //
+        // After the command has been executed, the `IO.ToDriver.command` w
+        extern writeonly command_ack @ &smp.io_port_out_0 : u8;
+
+        // The audio-driver MUST NOT use IO port 3 (without rewriting the loader).
+        //
+        // Port 3 is used by the loader to signal to the S-CPU that the loader is running.
+    }
+
+    // MUST match CommandFunctionTable in `audio-driver.wiz`.
+    enum Command : u8 {
+        // Play a sound effect
+        //  * parameter0: sound effect id (not bounds checked)
+        PLAY_SOUND_EFFECT   = 4,
+    };
 }
 
 
-// MUST match `audio/src/audio-driver.wiz`
-enum IoCommand : u8 {
-    // commands 0-127: Play sound effect.
-
-    // ::TODO add a few 'EXECUTE_LOADER' checks in the bytecode::
-    // ::: Prevent an infinite loop in the bytecode from deadlocking the S-CPU code::
-    EXECUTE_LOADER = 0x80 | 'L',
-};
