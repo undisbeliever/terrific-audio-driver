@@ -66,8 +66,8 @@ func start_loader() {
     do {
     } while ya != smp.io_port_in_23;
 
-    // retrieve LoaderDataType from port 0
-    _dataType = y = smp.io_port_in_0;
+    // retrieve LoaderDataType from port 1
+    _dataType = y = smp.io_port_in_1;
 
     // Get the address to store the data
     if zero {
@@ -90,7 +90,7 @@ func start_loader() {
 
     // Acknowledge LoaderDataType
     // And override the `RD` ready signal.
-    smp.io_port_out_2 = 0;
+    smp.io_port_out_3 = 0;
 
     x = 'D';
 
@@ -109,11 +109,11 @@ func start_loader() {
 
 
         // Read data from the IO ports
-        a = smp.io_port_in_0;
+        a = smp.io_port_in_1;
     STA_1:
         (0xFF00 as *u8)[y] = a;
 
-        a = smp.io_port_in_1;
+        a = smp.io_port_in_2;
 
 
         // Acknowledge data (S-CPU will start loading new data)
