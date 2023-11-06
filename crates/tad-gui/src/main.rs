@@ -4,6 +4,9 @@
 //
 // SPDX-License-Identifier: MIT
 
+// Do not open a console window on Windows
+#![windows_subsystem = "windows"]
+
 mod audio_thread;
 mod compiler_thread;
 mod files;
