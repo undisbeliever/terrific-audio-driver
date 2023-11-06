@@ -70,11 +70,14 @@ Build Requirements
  * Git
  * GNU Make
  * A C++17 compiler, compatible with the [cxx](https://cxx.rs/) crate.
+ * CMake
  * Rust (version > 1.55), CMake (version > 3.11), Git and a C++17 compiler to compile fltk-rs.
-   (See [fltk-rs build dependencies](https://github.com/fltk-rs/fltk-rs#build-dependencies) for more
-   details.)
+   (See [fltk-rs build dependencies](https://github.com/fltk-rs/fltk-rs/blob/master/README.md#build-dependencies) for more details.)
     * MSVC: Windows SDK
     * Linux/BSD: X11 and OpenGL development headers
+ * SDL 2 to compile the [rust-sdl2](https://github.com/Rust-SDL2/rust-sdl2) crate
+    * Windows (MSVC):  Follow the instructions on the [rust-sdl2 README](https://github.com/Rust-SDL2/rust-sdl2/blob/master/README.md#windows-msvc) to install and setup SDL2.
+    * Linux/BSD: Install the SDL2 development headers
 
 
 Build Scripts
