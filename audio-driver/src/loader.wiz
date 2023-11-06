@@ -56,7 +56,6 @@ func start_loader() {
 
     // Clear IO ports
     smp.control = smp.CONTROL__RESET_PORTS_01 | smp.CONTROL__RESET_PORTS_23;
-    smp.control = 0;
 
     // Send 'ready' signal
     a = 'R';
