@@ -79,6 +79,89 @@ namespace LoaderDataType {
 
 
 namespace IO {
+    namespace Loader {
+        // Port 0 is MUST be unused.
+        // MUST only be used for `ToDriver.command` and `ToScpu.command_ack`.
+
+        // The loader ready signal.
+        //
+        // To prevent conflicts with `Transfer_ToLoader.spinlock` or `ToDriver.switch_to_loader`:
+        //   * bit 7 must be clear (end of transfer bit)
+        //   * bit 6 should be set (so `Transfer_ToLoader.spinlock is never LOADER_READY if the counter MASK is used)
+        //   * bit 5 must be clear (`ToDriver.SWITCH_TO_LOADER_BIT`)
+        let LOADER_READY_L = 0b01010010;    // 'R'
+        let LOADER_READY_H = 0b01000100;    // 'D'
+
+        // Step 1: S-CPU waits until ready signal is set by the loader
+        namespace Init_ToScpu {
+            // Signal to the S-CPU that the loader is ready to receive data.
+            // MUST wait until `ready` matches `LOADER_READY` before writing `InitToDriver` data.
+            extern writeonly ready_l        @ &smp.io_port_out_2 : u8;
+            extern writeonly ready_h        @ &smp.io_port_out_3 : u8;
+
+            extern writeonly ready_hl       @ &smp.io_port_out_23 : u16;
+        }
+
+        // Step 2: S-CPU writes the following to the IO ports
+        namespace Init_ToLoader {
+            // The LoaderDataType to transfer to audio-RAM.
+            // MUST be written first
+            extern const loader_data_type   @ &smp.io_port_in_1 : u8;
+
+            // Signal to the loader that the S-CPU is ready to receive data.
+            extern const ready_l            @ &smp.io_port_in_2 : u8;
+            extern const ready_h            @ &smp.io_port_in_3 : u8;
+
+            extern const ready_hl           @ &smp.io_port_out_23 : u16;
+        }
+
+        // Step 3: S-CPU waits until `Init_ToDriver` data is acknowledged
+        //         by waiting until `data_type_ack` is zero.
+        namespace InitAck_ToScpu {
+            let ACK_VALUE = 0;
+            extern writeonly data_type_ack  @ &smp.io_port_out_3 : u8;
+        }
+
+        // Step 4: S-CPU writes the next word to transfer to Audio-RAM to the following IO ports:
+        namespace Transfer_ToLoader {
+            // Should be written one byte at a time
+            extern const data_l             @ &smp.io_port_in_1 : u8;
+            extern const data_h             @ &smp.io_port_in_2 : u8;
+
+            // Write a different value to this port to signal the data is ready.
+            //
+            // MUST be written last.
+            //
+            // Data format:
+            //      e000cccc
+            //          e    = end of transfer.
+            //          cccc = incrementing 4 bit counter.
+            //
+            // If the MSB is set, no data is written to the Audio-RAM and the transfer is complete.
+            //
+            // MUST not have `SWITCH_TO_LOADER_BIT` set.
+            extern const spinlock           @ &smp.io_port_in_3 : u8;
+
+            let SPINLOCK_MASK = 0x0f;
+            let SPINLOCK_COMPLETE = 0x80;
+        }
+
+        // Step 5: S-CPU waits until `Transfer_ToLoader` is acknowledged
+        //         by waiting until `spinlock_ack` == `spinlock`.
+        namespace Transfer_ToScpu {
+            extern writeonly spinlock_ack   @ &smp.io_port_out_3 : u8;
+        }
+
+        // Step 6: If there is more data to transfer, goto step 4
+
+        // Step 7: The S-CPU writes `Transfer_ToLoader.SPINLOCK_COMPLETE` to `Transfer_ToLoader.spinlock`.
+
+        // Step 8: The S-CPU waits until `Transfer_ToScpu.spinlock_ack == Transfer_ToScpu.SPINLOCK_COMPLETE`
+
+        // Step 9: If `LoaderDataType` is not song goto Step 1.
+        //         If `LoaderDataType` is a song, the audio driver is executed..
+    }
+
     namespace ToDriver {
         // The command to execute.
         //
@@ -113,16 +196,12 @@ namespace IO {
     }
 
     namespace ToScpu {
-        // Command acknowledgment
+        // Audio driver command acknowledgment
         //
-        // Acknowledgment of the command.
+        // Acknowledgment of the `ToDriver.command` byte.
         //
-        // After the command has been executed, the `IO.ToDriver.command` w
+        // After the command has been processed, the `IO.ToDriver.command` value will be written to this port.
         extern writeonly command_ack @ &smp.io_port_out_0 : u8;
-
-        // The audio-driver MUST NOT use IO port 3 (without rewriting the loader).
-        //
-        // Port 3 is used by the loader to signal to the S-CPU that the loader is running.
     }
 
     // MUST match CommandFunctionTable in `audio-driver.wiz`.

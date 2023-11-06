@@ -58,16 +58,16 @@ func start_loader() {
     smp.control = smp.CONTROL__RESET_PORTS_01 | smp.CONTROL__RESET_PORTS_23;
 
     // Send 'ready' signal
-    a = 'R';
-    y = 'D';
-    smp.io_port_out_23 = ya;
+    a = IO.Loader.LOADER_READY_L;
+    y = IO.Loader.LOADER_READY_H;
+    IO.Loader.Init_ToScpu.ready_hl = ya;
 
     // Wait for S-CPU to respond to the ready signal
     do {
-    } while ya != smp.io_port_in_23;
+    } while ya != IO.Loader.Init_ToLoader.ready_hl;
 
-    // retrieve LoaderDataType from port 1
-    _dataType = y = smp.io_port_in_1;
+    // retrieve LoaderDataType from S-CPU
+    _dataType = y = IO.Loader.Init_ToLoader.loader_data_type;
 
     // Get the address to store the data
     if zero {
@@ -90,9 +90,9 @@ func start_loader() {
 
     // Acknowledge LoaderDataType
     // And override the `RD` ready signal.
-    smp.io_port_out_3 = 0;
+    IO.Loader.InitAck_ToScpu.data_type_ack = IO.Loader.InitAck_ToScpu.ACK_VALUE;
 
-    x = 'D';
+    x = IO.Loader.LOADER_READY_H;
 
     // Have to use a manual loop so the above code has access to the `STA_1` and `STA_2` labels.
     Loop:
@@ -101,23 +101,24 @@ func start_loader() {
 
         // Wait until S-CPU has written the data to the IO ports
         do {
-        } while x == smp.io_port_in_3;
+        } while x == IO.Loader.Transfer_ToLoader.spinlock;
 
         // Check if this data is correct, and get the byte to send back to the S-CPU
-        x = smp.io_port_in_3;
+        x = IO.Loader.Transfer_ToLoader.spinlock;
+        // Transfer is complete when spinlock is negative.
         goto EndLoop if negative;
 
 
         // Read data from the IO ports
-        a = smp.io_port_in_1;
+        a = IO.Loader.Transfer_ToLoader.data_l;
     STA_1:
         (0xFF00 as *u8)[y] = a;
 
-        a = smp.io_port_in_2;
+        a = IO.Loader.Transfer_ToLoader.data_h;
 
 
         // Acknowledge data (S-CPU will start loading new data)
-        smp.io_port_out_3 = x;
+        IO.Loader.Transfer_ToScpu.spinlock_ack = x;
 
 
         // This code is executed while the S-CPU loads the next data into ports 0 & 1
@@ -136,7 +137,7 @@ EndLoop:
 
     // Acknowledge end of data
     // (x is negative)
-    smp.io_port_out_3 = x;
+    IO.Loader.Transfer_ToScpu.spinlock_ack = x;
 
 
     x = _dataType;
