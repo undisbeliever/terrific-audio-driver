@@ -29,11 +29,20 @@ const AUDIO_DRIVER_SYMBOLS: &[(&str, &str)] = &[
 
 fn find_wiz_binary() -> PathBuf {
     // Using join to ensure directory separators are correct
-    let wiz_dir = Path::new("..").join("..").join("wiz");
-    let wiz_bin = wiz_dir.join("bin").join("wiz");
+    let wiz_exe = Path::new("wiz").join("bin").join("wiz");
+
+    #[cfg(windows)]
+    let wiz_exe = wiz_exe.with_extension("exe");
+
+    let workspace_dir = Path::new("..").join("..");
+    let wiz_bin = workspace_dir.join(&wiz_exe);
 
     if !wiz_bin.is_file() {
-        panic!("Cannot find wiz binary.  Please import the wiz git submodule and compile wiz.");
+        panic!(
+            r##"Cannot find wiz binary.  Please import the wiz git submodule and compile wiz.
+This build script is looking for an executable at "{}"."##,
+            wiz_exe.display()
+        );
     }
 
     wiz_bin
