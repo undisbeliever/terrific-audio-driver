@@ -133,17 +133,19 @@ namespace IO {
             // MUST be written last.
             //
             // Data format:
-            //      e000cccc
+            //      e0l0cccc
             //          e    = end of transfer.
+            //          l    = switch to loader bit
             //          cccc = incrementing 4 bit counter.
             //
             // If the MSB is set, no data is written to the Audio-RAM and the transfer is complete.
             //
-            // MUST not have `SWITCH_TO_LOADER_BIT` set.
+            // If the *switch-to-loader* and *end-of-transfer* bits are set, the loader will restart.
             extern const spinlock           @ &smp.io_port_in_3 : u8;
 
             let SPINLOCK_MASK = 0x0f;
             let SPINLOCK_COMPLETE = 0x80;
+            let SPINLOCK__SWITCH_TO_LOADER_BIT = IO.ToDriver._SWITCH_TO_LOADER_BIT;
         }
 
         // Step 5: S-CPU waits until `Transfer_ToLoader` is acknowledged
@@ -187,12 +189,17 @@ namespace IO {
         extern const parameter1 @ &smp.io_port_in_2 : u8;
 
 
-        // When the `SWITCH_TO_LOADER_BIT` bit of this IO Port is set, the audio
-        // driver will stop and then execute the loader.
+        // Writing `SWITCH_TO_LOADER` to this port should stop execution and start the loader.
+        //
+        // If the audio-driver is running; if the `_SWITCH_TO_LOADER_BIT` is set,
+        // the audio driver will stop and execute the loader.
+        //
+        // If the loader is in the middle of a transfer and both the `_SWITCH_TO_LOADER_BIT`
+        // and MSB (bit 7) bits are set, the loader will restart.
         extern const switch_to_loader @ &smp.io_port_in_3 : u8;
 
-        let SWITCH_TO_LOADER_BIT = 5;
-        let SWITCH_TO_LOADER_MASK = 1 << (SWITCH_TO_LOADER_BIT);
+        let _SWITCH_TO_LOADER_BIT = 5;
+        let SWITCH_TO_LOADER = 0x80 | (1 << _SWITCH_TO_LOADER_BIT);
     }
 
     namespace ToScpu {

@@ -725,10 +725,10 @@ inline func process_io_ports__inline() {
     }
 
 
-    // Execute the loader if the SWITCH_TO_LOADER_BIT is set.
+    // Execute the loader if the _SWITCH_TO_LOADER_BIT is set.
     //
     // (cannot use `bbs` instructions in wiz, using two `and dp` instructions instead)
-    a = IO.ToDriver.SWITCH_TO_LOADER_MASK;
+    a = (1 << IO.ToDriver._SWITCH_TO_LOADER_BIT);
     a &= IO.ToDriver.switch_to_loader;
     a &= IO.ToDriver.switch_to_loader;
     if !zero {
@@ -1114,6 +1114,43 @@ inline func process_channel__inline(channelIndex : u8 in x) {
 // ================
 
 
+// See `process_bytecode_with_loader_test()`.
+func __bbs_loader_bit_set(channelIndex : u8 in x, addr : u16 in ya) {
+    // Test the SWITCH_TO_LOADER_BIT a second time (just to be safe) before switching to the loader
+
+    let _MASK = 1 << IO.ToDriver._SWITCH_TO_LOADER_BIT;
+
+    a = IO.ToDriver.switch_to_loader & _MASK;
+    goto process_bytecode if zero;
+
+    ^goto (LOADER_ADDR as func);
+}
+
+
+// Set the bytecode `instructionPtr` and execute the next bytecode instruction while also
+// testing the if `_SWITCH_TO_LOADER_BIT` bit is set.
+//
+// If the `_SWITCH_TO_LOADER_BIT` bit is set, the audio driver stops execution and the loader is
+// started.  This should hopefully ensure the loader will be executed if the bytecode goes off the
+// rails and never sleeps.
+//
+// KEEP: X
+//
+#[fallthrough]
+func process_bytecode_with_loader_test(channelIndex : u8 in x, addr : u16 in ya) {
+}
+
+// HACK: wiz does not support bbs instructions.
+// Manually writing a `bbs` instruction that branches to `__bbs_loader_bit_set` if the
+// _SWITCH_TO_LOADER_BIT is set. Otherwise, falls through into the `process_bytecode` instruction.
+const __process_bytecode_with_loader_test : [u8 ; 3] = [
+    0x3 | (IO.ToDriver._SWITCH_TO_LOADER_BIT << 5) as u8,                                   // bbs
+    &IO.ToDriver.switch_to_loader as u8,                                                    // addr
+    (&__bbs_loader_bit_set as i16 - &__process_bytecode_with_loader_test as i16 - 3) as u8  // rel
+];
+
+
+
 // Set the bytecode `instructionPtr` and execute the next bytecode instruction.
 // KEEP: X
 #[fallthrough]
@@ -1172,6 +1209,7 @@ func process_next_bytecode(channelIndex : u8 in x) {
 //    * Return after setting `channelSoA.nextEvent_*` (to start sleeping)
 //    * Jump to `process_next_bytecode` to execute the next bytecode instruction
 //    * Jump to `process_bytecode` to change the bytecode instruction pointer and execute it.
+//    * Jump to `process_bytecode_with_loader_test`.
 //
 namespace bytecode {
 
@@ -1368,7 +1406,7 @@ func end(channelIndex : u8 in x) {
     y = a;
     a = channelSoA.instructionPtrAfterEnd_l[x];
 
-    ^return process_bytecode(x, ya);
+    ^return process_bytecode_with_loader_test(x, ya);
 }
 
 
@@ -1411,7 +1449,7 @@ func return_from_subroutine(channelIndex : u8 in x) {
     a = channelSoA.returnInstPtr_l[x];
     y = channelSoA.returnInstPtr_h[x];
 
-    ^return process_bytecode(x, ya);
+    ^return process_bytecode_with_loader_test(x, ya);
 }
 
 
@@ -1451,7 +1489,7 @@ inline func __end_loop(channelIndex : u8 in x, let LOOP_ID : u8) {
         a = channelSoA.loopState[LOOP_ID].loopPoint_l[x];
         y = channelSoA.loopState[LOOP_ID].loopPoint_h[x];
 
-        ^return process_bytecode(x, ya);
+        ^return process_bytecode_with_loader_test(x, ya);
     }
     ^return process_next_bytecode(x);
 }

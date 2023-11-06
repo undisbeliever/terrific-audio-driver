@@ -139,6 +139,10 @@ EndLoop:
     // (x is negative)
     IO.Loader.Transfer_ToScpu.spinlock_ack = x;
 
+    // Restart loader if the SWITCH_TO_LOADER_BIT is set
+    a = x & (1 << IO.ToDriver._SWITCH_TO_LOADER_BIT);
+    goto start_loader if !zero;
+
 
     x = _dataType;
     if x == LoaderDataType.COMMON_DATA {
