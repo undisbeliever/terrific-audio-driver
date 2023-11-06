@@ -89,7 +89,7 @@ namespace IO {
         //   * bit 7 must be clear (end of transfer bit)
         //   * bit 6 should be set (so `Transfer_ToLoader.spinlock is never LOADER_READY if the counter MASK is used)
         //   * bit 5 must be clear (`ToDriver.SWITCH_TO_LOADER_BIT`)
-        let LOADER_READY_L = 0b01010010;    // 'R'
+        let LOADER_READY_L = 0b01001100;    // 'L'
         let LOADER_READY_H = 0b01000100;    // 'D'
 
         // Step 1: S-CPU waits until ready signal is set by the loader
@@ -203,12 +203,32 @@ namespace IO {
     }
 
     namespace ToScpu {
-        // Audio driver command acknowledgment
+        // Audio driver command acknowledgment.
         //
-        // Acknowledgment of the `ToDriver.command` byte.
+        // Acknowledgment of the `ToDriver.command` byte.  Not used in the loader.
         //
         // After the command has been processed, the `IO.ToDriver.command` value will be written to this port.
         extern writeonly command_ack @ &smp.io_port_out_0 : u8;
+
+
+        // The mode the S-SMP is currently executing.
+        //
+        // Used by both the loader and the audio-driver.
+        //
+        // NOTE: The IPL sets this value after at has cleared the zero-page.
+        //       Do not read this value immediately after reset.
+        //       Make sure enough time has passed for the IPL to set IO Port 1
+        //       to 0xbb before reading this port.
+        extern writeonly mode @ &smp.io_port_out_1 : u8;
+
+        // The S-SMP is at the start of the IPL, waiting for the ready signal.
+        let MODE_IPL = 0xbb;
+
+        // The S-SMP is running the loader.
+        let MODE_LOADER = 0x4c;         // 'L', Loader.LOADER_READY_L
+
+        // The S-SMP is running the audio-driver.
+        let MODE_AUDIO_DRIVER = 0x61 ;  // 'a'
     }
 
     // MUST match CommandFunctionTable in `audio-driver.wiz`.

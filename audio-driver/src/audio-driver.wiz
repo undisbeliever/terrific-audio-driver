@@ -277,6 +277,10 @@ in code {
 // MUST be the first thing in the `code` bank (so the starting address is consistent across builds).
 func main() {
     sp = x = 0xff;
+    direct_page = false;
+
+    // Tell the S-CPU the S-SMP is running the audio driver
+    IO.ToScpu.mode = IO.ToScpu.MODE_AUDIO_DRIVER;
 
     // Reset the DSP
     write_dsp(GlobalDspAddr.FLG,    dsp.FLG__SOFT_RESET | dsp.FLG__MUTE_ALL | dsp.FLG__ECHO_DISABLE);

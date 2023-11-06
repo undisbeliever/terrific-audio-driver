@@ -57,8 +57,12 @@ func start_loader() {
     // Clear IO ports
     smp.control = smp.CONTROL__RESET_PORTS_01 | smp.CONTROL__RESET_PORTS_23;
 
-    // Send 'ready' signal
+    // Tell the S-CPU the S-SMP is running the loader.
     a = IO.Loader.LOADER_READY_L;
+    IO.ToScpu.mode = a;
+
+    // Send 'ready' signal
+    // a is LOADER_READY_L;
     y = IO.Loader.LOADER_READY_H;
     IO.Loader.Init_ToScpu.ready_hl = ya;
 
