@@ -586,7 +586,7 @@ DEALINGS IN THE SOFTWARE.
 ## MIT License
 
 Used by:
-  * [libc 0.2.149](https://github.com/rust-lang/libc)
+  * [libc 0.2.150](https://github.com/rust-lang/libc)
 
 ```
 Copyright (c) 2014-2020 The Rust Project Developers
@@ -991,10 +991,10 @@ Used by:
   * [proc-macro2 1.0.69](https://github.com/dtolnay/proc-macro2)
   * [quote 1.0.33](https://github.com/dtolnay/quote)
   * [scratch 1.0.7](https://github.com/dtolnay/scratch)
-  * [serde 1.0.190](https://github.com/serde-rs/serde)
-  * [serde_derive 1.0.190](https://github.com/serde-rs/serde)
+  * [serde 1.0.192](https://github.com/serde-rs/serde)
+  * [serde_derive 1.0.192](https://github.com/serde-rs/serde)
   * [serde_json 1.0.108](https://github.com/serde-rs/json)
-  * [syn 2.0.38](https://github.com/dtolnay/syn)
+  * [syn 2.0.39](https://github.com/dtolnay/syn)
   * [unicode-ident 1.0.12](https://github.com/dtolnay/unicode-ident)
 
 ```

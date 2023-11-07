@@ -127,7 +127,7 @@ Please see the included [licenses file](licenses.md) for the full third party li
   * [regex-automata 0.4.3](https://github.com/rust-lang/regex/tree/master/regex-automata), MIT License
   * [regex-syntax 0.8.2](https://github.com/rust-lang/regex/tree/master/regex-syntax), MIT License
   * [relative-path 1.9.0](https://github.com/udoprog/relative-path), MIT License
-  * [libc 0.2.149](https://github.com/rust-lang/libc), MIT License
+  * [libc 0.2.150](https://github.com/rust-lang/libc), MIT License
   * [anstyle-wincon 3.0.1](https://github.com/rust-cli/anstyle.git), MIT License
   * [heck 0.4.1](https://github.com/withoutboats/heck), MIT License
   * [unicode-id 0.3.4](https://github.com/Boshen/unicode-id), MIT License
@@ -160,10 +160,10 @@ Please see the included [licenses file](licenses.md) for the full third party li
   * [proc-macro2 1.0.69](https://github.com/dtolnay/proc-macro2), MIT License
   * [quote 1.0.33](https://github.com/dtolnay/quote), MIT License
   * [scratch 1.0.7](https://github.com/dtolnay/scratch), MIT License
-  * [serde 1.0.190](https://github.com/serde-rs/serde), MIT License
-  * [serde_derive 1.0.190](https://github.com/serde-rs/serde), MIT License
+  * [serde 1.0.192](https://github.com/serde-rs/serde), MIT License
+  * [serde_derive 1.0.192](https://github.com/serde-rs/serde), MIT License
   * [serde_json 1.0.108](https://github.com/serde-rs/json), MIT License
-  * [syn 2.0.38](https://github.com/dtolnay/syn), MIT License
+  * [syn 2.0.39](https://github.com/dtolnay/syn), MIT License
   * [unicode-ident 1.0.12](https://github.com/dtolnay/unicode-ident), MIT License
   * [sdl2 0.35.2](https://github.com/Rust-SDL2/rust-sdl2), MIT License
   * [aho-corasick 1.1.2](https://github.com/BurntSushi/aho-corasick), MIT License
