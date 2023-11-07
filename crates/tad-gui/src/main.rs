@@ -431,7 +431,7 @@ impl Project {
             }
 
             GuiMessage::AddSongToProjectDialog => {
-                add_song_to_pf_dialog(&self.sender, &self.data);
+                add_song_to_pf_dialog(&self.sender, &self.data, &self.tab_manager);
             }
             GuiMessage::OpenInstrumentSampleDialog(index) => {
                 open_instrument_sample_dialog(

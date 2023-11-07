@@ -7,6 +7,7 @@
 use crate::compiler_thread::ToCompiler;
 use crate::list_editor::{ListMessage, ListState};
 use crate::song_tab::SongTab;
+use crate::tabs::{FileType, TabManager};
 use crate::{GuiMessage, ProjectData, SoundEffectsData};
 
 use compiler::data;
@@ -357,7 +358,11 @@ pub fn song_name_from_path(source_path: &SourcePathBuf) -> Name {
     }
 }
 
-pub fn add_song_to_pf_dialog(sender: &fltk::app::Sender<GuiMessage>, pd: &ProjectData) {
+pub fn add_song_to_pf_dialog(
+    sender: &fltk::app::Sender<GuiMessage>,
+    pd: &ProjectData,
+    tab_manager: &TabManager,
+) {
     if let Some(p) = open_mml_file_dialog(pd) {
         match pd
             .project_songs
@@ -366,10 +371,22 @@ pub fn add_song_to_pf_dialog(sender: &fltk::app::Sender<GuiMessage>, pd: &Projec
             .position(|s| s.source == p.source_path)
         {
             Some(i) => sender.send(GuiMessage::EditProjectSongs(ListMessage::ItemSelected(i))),
-            None => sender.send(GuiMessage::EditProjectSongs(ListMessage::Add(Song {
-                name: song_name_from_path(&p.source_path),
-                source: p.source_path,
-            }))),
+            None => match tab_manager.find_file(&p.full_path) {
+                Some(FileType::Song(id)) => {
+                    // The MML file is already open
+                    sender.send(GuiMessage::EditProjectSongs(ListMessage::AddWithItemId(
+                        id,
+                        data::Song {
+                            name: song_name_from_path(&p.source_path),
+                            source: p.source_path,
+                        },
+                    )));
+                }
+                _ => sender.send(GuiMessage::EditProjectSongs(ListMessage::Add(Song {
+                    name: song_name_from_path(&p.source_path),
+                    source: p.source_path,
+                }))),
+            },
         }
     }
 }
