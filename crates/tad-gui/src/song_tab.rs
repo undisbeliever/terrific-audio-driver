@@ -53,6 +53,8 @@ pub struct SongTab {
     song_id: ItemId,
 
     group: Flex,
+
+    new_file: bool,
 }
 
 impl Tab for SongTab {
@@ -72,6 +74,8 @@ impl Tab for SongTab {
 impl SongTab {
     pub fn new(song_id: ItemId, mml_file: &TextFile, sender: app::Sender<GuiMessage>) -> Self {
         let mut group = Flex::default_fill().column();
+
+        let new_file = mml_file.path.is_none();
 
         let button_size = ch_units_to_width(&group, 4);
 
@@ -161,6 +165,8 @@ impl SongTab {
             song_id,
 
             group,
+
+            new_file,
         }
     }
 
@@ -172,6 +178,14 @@ impl SongTab {
         if let Ok(mut s) = self.state.try_borrow_mut() {
             s.set_compiler_output(co);
         }
+    }
+
+    pub fn is_new_file(&self) -> bool {
+        self.new_file
+    }
+
+    pub fn clear_new_file_flag(&mut self) {
+        self.new_file = false;
     }
 
     pub fn audio_thread_started_song(&mut self, song_data: Arc<SongData>) {

@@ -36,6 +36,9 @@ pub enum ListMessage<T> {
     MoveSelectedUp,
     MoveSelectedDown,
     MoveSelectedToBottom,
+
+    // Only adds the item if the list does not contain ItemId.
+    AddWithItemId(ItemId, T),
 }
 
 pub trait ListEditor<T> {
@@ -217,6 +220,10 @@ where
         self.list.iter().position(|i| i.0 == id)
     }
 
+    fn contains_id(&self, id: ItemId) -> bool {
+        self.list.iter().any(|i| i.0 == id)
+    }
+
     pub fn get_id(&self, id: ItemId) -> Option<(usize, &T)> {
         self.list
             .iter()
@@ -287,6 +294,34 @@ where
                 }
             }
 
+            ListMessage::AddWithItemId(id, mut item) => {
+                if self.can_add() && !self.contains_id(id) {
+                    NameDeduplicator::dedupe_name(&mut item, &self.list, None);
+
+                    let i = self.list.len();
+                    let action = ListAction::Add(i, item);
+
+                    self.list.process_map(
+                        &action,
+                        // new
+                        |v: &T| (id, v.clone()),
+                        // edit
+                        |_, _| (),
+                    );
+
+                    let c_message = self
+                        .list
+                        .get(i)
+                        .map(|(id, item)| ItemChanged::AddedOrEdited(*id, item.clone()));
+
+                    assert!(self.contains_id(id));
+
+                    (action, c_message)
+                } else {
+                    (ListAction::None, None)
+                }
+            }
+
             ListMessage::AddMultiple(mut items) => {
                 if self.can_add_multiple(items.len()) {
                     let old_size = self.list.len();
@@ -327,6 +362,7 @@ where
                     | ListMessage::ItemSelected(_)
                     | ListMessage::ItemEdited(_, _)
                     | ListMessage::Add(_)
+                    | ListMessage::AddWithItemId(_, _)
                     | ListMessage::AddMultiple(_) => (ListAction::None, None),
 
                     ListMessage::CloneSelected => {

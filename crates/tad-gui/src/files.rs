@@ -350,6 +350,13 @@ pub fn open_mml_file_dialog(pd: &ProjectData) -> Option<PfFileDialogResult> {
     pf_open_file_dialog(pd, "Add song to project", MML_SONG_FILTER, None)
 }
 
+pub fn song_name_from_path(source_path: &SourcePathBuf) -> Name {
+    match source_path.file_stem_string() {
+        Some(s) => Name::new_lossy(s.to_owned()),
+        None => Name::try_new("song".to_owned()).unwrap(),
+    }
+}
+
 pub fn add_song_to_pf_dialog(sender: &fltk::app::Sender<GuiMessage>, pd: &ProjectData) {
     if let Some(p) = open_mml_file_dialog(pd) {
         match pd
@@ -359,16 +366,10 @@ pub fn add_song_to_pf_dialog(sender: &fltk::app::Sender<GuiMessage>, pd: &Projec
             .position(|s| s.source == p.source_path)
         {
             Some(i) => sender.send(GuiMessage::EditProjectSongs(ListMessage::ItemSelected(i))),
-            None => {
-                let name = match p.source_path.file_stem_string() {
-                    Some(s) => Name::new_lossy(s.to_owned()),
-                    None => Name::try_new("song".to_owned()).unwrap(),
-                };
-                sender.send(GuiMessage::EditProjectSongs(ListMessage::Add(Song {
-                    name,
-                    source: p.source_path,
-                })))
-            }
+            None => sender.send(GuiMessage::EditProjectSongs(ListMessage::Add(Song {
+                name: song_name_from_path(&p.source_path),
+                source: p.source_path,
+            }))),
         }
     }
 }

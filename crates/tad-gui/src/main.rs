@@ -62,7 +62,9 @@ use compiler::songs::SongData;
 use compiler::sound_effects::{convert_sfx_inputs_lossy, SoundEffectInput, SoundEffectsFile};
 
 use compiler_thread::PlaySampleArgs;
-use files::{new_project_dialog, open_instrument_sample_dialog, open_project_dialog};
+use files::{
+    new_project_dialog, open_instrument_sample_dialog, open_project_dialog, song_name_from_path,
+};
 use fltk::dialog;
 use fltk::prelude::*;
 use help::HelpSection;
@@ -697,12 +699,10 @@ impl Project {
     // NOTE: minimal deduplication. You should not create song tabs for a `song_id` or `path` that already exists
     fn new_song_tab(&mut self, song_id: ItemId, file: data::TextFile) {
         if let hash_map::Entry::Vacant(e) = self.song_tabs.entry(song_id) {
-            let new_file = file.path.is_none();
-
             let song_tab = SongTab::new(song_id, &file, self.sender.clone());
             self.tab_manager.add_or_modify(&song_tab, file.path, None);
 
-            if new_file {
+            if song_tab.is_new_file() {
                 self.tab_manager.mark_unsaved(FileType::Song(song_id));
             }
             self.tab_manager.set_selected_tab(&song_tab);
@@ -773,7 +773,10 @@ impl Project {
     }
 
     fn edit_pf_song_source(&mut self, id: ItemId, source: SourcePathBuf) {
-        if let Some((index, song)) = self.data.project_songs.list().get_id(id) {
+        let pf_songs = self.data.project_songs.list();
+
+        if let Some((index, song)) = pf_songs.get_id(id) {
+            // Update song source
             self.sender
                 .send(GuiMessage::EditProjectSongs(ListMessage::ItemEdited(
                     index,
@@ -782,6 +785,33 @@ impl Project {
                         ..song.clone()
                     },
                 )));
+        } else if let Some(song_tab) = self.song_tabs.get_mut(&id) {
+            // If this the first time a song is saved, ask the user if they want to add the new
+            // song to the project.
+            if song_tab.is_new_file() && pf_songs.item_iter().all(|s| s.source != source) {
+                dialog::message_title("New MML Song");
+                let choice =
+                    dialog::choice2_default("Add the song to the project?", "No", "Yes", "");
+                if choice == Some(1) {
+                    self.sender
+                        .send(GuiMessage::EditProjectSongs(ListMessage::AddWithItemId(
+                            id,
+                            data::Song {
+                                name: song_name_from_path(&source),
+                                source,
+                            },
+                        )));
+
+                    // Recompile the song to update the song table
+                    let _ = self
+                        .compiler_sender
+                        .send(ToCompiler::SongChanged(id, song_tab.contents()));
+                }
+            }
+        }
+
+        if let Some(t) = self.song_tabs.get_mut(&id) {
+            t.clear_new_file_flag();
         }
     }
 
