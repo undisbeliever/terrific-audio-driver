@@ -16,7 +16,10 @@ members = [
 [profile.release]
 strip = true
 opt-level = "z"
-lto = true
+# Must use false here.
+# Enabling lto crashes on Windows when opening a Save As dialog.
+# (exit code: 0xc000001d, STATUS_ILLEGAL_INSTRUCTION)
+lto = false
 
 
 [workspace.dependencies]
