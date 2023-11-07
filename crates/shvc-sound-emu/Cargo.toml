@@ -6,7 +6,11 @@ license = "ISC"
 edition = "2021"
 
 publish = false
+
+# This is a private internal crate.
+# Using version "0.0.0" as I do not care about breaking changes.
 version = "0.0.0"
+
 
 [dependencies]
 # External crates

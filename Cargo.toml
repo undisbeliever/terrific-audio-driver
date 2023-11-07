@@ -22,6 +22,12 @@ opt-level = "z"
 lto = false
 
 
+[workspace.package]
+version = "0.0.1"
+
+publish = false
+
+
 [workspace.dependencies]
 # Local library crates
 brr = { path = "./crates/brr", version = "0.0.0" }
