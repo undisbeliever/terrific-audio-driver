@@ -95,6 +95,38 @@ fn validate_pf_file_dialog_output(
         return None;
     }
 
+    #[cfg(windows)]
+    {
+        // Must canonicalize path (to match `pd.pf_parent_path`) on Windows to prevent a
+        // "paths contain different absolute prefixes" SourcePathResult::Err.
+        //
+        // This error is caused by the canonicalized `pf_parent_path` using the `\\?\C:\` prefix,
+        // while the path returned by the fltk dialog uses the `C:\` prefix.
+        //
+        // Not canonicalizing on non-windows systems.
+
+        // I cannot canonicalize the path as it may not exist.
+        // Canonicalizing the parent directory instead.
+        let (parent, file_name) = match (path.parent(), path.file_name()) {
+            (Some(p), Some(f)) => (p, f),
+            _ => {
+                dialog::message_title("Error");
+                dialog::alert_default(
+                    "Cannot canonicalize path: cannot extract filename from path",
+                );
+                return None;
+            }
+        };
+        path = match parent.canonicalize() {
+            Ok(p) => p.join(file_name),
+            Err(e) => {
+                dialog::message_title("Error");
+                dialog::alert_default(&format!("Cannot canonicalize path: {}", e));
+                return None;
+            }
+        };
+    }
+
     match pd.pf_parent_path.create_source_path(&path) {
         SourcePathResult::InsideProject(source_path) => Some(PfFileDialogResult {
             source_path,
