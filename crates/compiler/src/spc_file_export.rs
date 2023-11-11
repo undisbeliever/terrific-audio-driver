@@ -22,8 +22,12 @@ pub const MAX_FADEOUT_MILLIS: u32 = 99999;
 
 pub const DEFAULT_FADEOUT: u32 = 0;
 
+pub const S_DSP_FLG_REGISTER: usize = 0x6C;
 pub const S_DSP_ESA_REGISTER: usize = 0x6D;
 pub const S_DSP_EDL_REGISTER: usize = 0x7D;
+
+// Reset: soft reset, disable echo writes, mute all channels.
+pub const S_DSP_FLG_RESET: u8 = 0b11100000;
 
 fn write_id666_tag(out: &mut [u8], addr: usize, size: usize, s: Option<&str>) {
     // ::TODO check if .spc audio programs can read UTF-8 ::
@@ -174,6 +178,9 @@ pub fn export_spc_file(
     // S-DSP registers
     {
         let dsp_registers = &mut out[0x10100..0x10180];
+
+        // Disable echo writes
+        dsp_registers[S_DSP_FLG_REGISTER] = S_DSP_FLG_RESET;
 
         // Setup the echo buffer
         dsp_registers[S_DSP_ESA_REGISTER] = echo_edl.esa_register();
