@@ -23,8 +23,6 @@ use compiler::{
 };
 
 use std::ffi::{OsStr, OsString};
-use std::fs;
-use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
 macro_rules! error {
@@ -60,7 +58,7 @@ enum Command {
 
 #[derive(Args)]
 #[group(required = true, multiple = false)]
-struct OutputArg {
+pub struct OutputArg {
     #[arg(
         short = 'o',
         long = "output",
@@ -126,6 +124,8 @@ fn compile_sound_effects(
 }
 
 fn compile_common_data(args: CompileCommonDataArgs) {
+    let output_arg = args.output.validate();
+
     let pf = load_project_file(&args.project_file);
 
     let samples = match build_sample_and_instrument_data(&pf) {
@@ -148,7 +148,7 @@ fn compile_common_data(args: CompileCommonDataArgs) {
         Err(e) => error!("{}", e.multiline_display()),
     };
 
-    write_data(args.output, cad.data());
+    write_data(output_arg, cad.data());
 }
 
 //
@@ -253,6 +253,8 @@ fn compile_song(
 }
 
 fn compile_song_data(args: CompileSongDataArgs) {
+    let output_arg = args.output.validate();
+
     let pf = load_project_file(&args.project_file);
     let (mml_file, song_name) = load_mml_file(&args.song, &pf);
 
@@ -262,7 +264,7 @@ fn compile_song_data(args: CompileSongDataArgs) {
     };
     let song_data = compile_song(mml_file, song_name, &args.options, &pf, &pitch_table);
 
-    write_data(args.output, song_data.data());
+    write_data(output_arg, song_data.data());
 }
 
 //
@@ -270,6 +272,8 @@ fn compile_song_data(args: CompileSongDataArgs) {
 // ========================
 
 fn export_song_to_spc_file(args: CompileSongDataArgs) {
+    let output_arg = args.output.validate();
+
     let pf = load_project_file(&args.project_file);
     let (mml_file, song_name) = load_mml_file(&args.song, &pf);
 
@@ -297,7 +301,7 @@ fn export_song_to_spc_file(args: CompileSongDataArgs) {
         Err(e) => error!("{}", e),
     };
 
-    write_data(args.output, &data);
+    write_data(output_arg, &data);
 }
 
 //
@@ -416,16 +420,55 @@ fn load_project_file(path: &Path) -> UniqueNamesProjectFile {
     }
 }
 
-fn write_data(out: OutputArg, data: &[u8]) {
-    if let Some(path) = out.path {
-        match fs::write(&path, data) {
-            Ok(()) => (),
-            Err(e) => error!("Error writing {}: {}", path.display(), e),
+// Output
+// ======
+
+mod output {
+    use crate::OutputArg;
+
+    use std::fs;
+    use std::io::{IsTerminal, Write};
+
+    pub struct ValidatedOutputArg(OutputArg);
+
+    pub fn validate_output_arg(out: OutputArg) -> ValidatedOutputArg {
+        match (&out.path, out.stdout) {
+            (Some(_), false) => ValidatedOutputArg(out),
+            (None, true) => match std::io::stdout().is_terminal() {
+                false => ValidatedOutputArg(out),
+                true => error!("Error: --stdout will not write to a terminal."),
+            },
+            // This should not happen
+            _ => panic!("Invalid output arguments"),
         }
-    } else if out.stdout {
-        match io::stdout().write_all(data) {
-            Ok(()) => (),
-            Err(e) => error!("Error writing data: {}", e),
+    }
+
+    pub fn write_data(out: ValidatedOutputArg, data: &[u8]) {
+        if let Some(path) = &out.0.path {
+            match fs::write(path, data) {
+                Ok(()) => (),
+                Err(e) => error!("Error writing {}: {}", path.display(), e),
+            }
+        } else if out.0.stdout {
+            let mut stdout = std::io::stdout();
+
+            if stdout.is_terminal() {
+                error!("Cannot write binary data to stdout, stdout is a terminal");
+            }
+
+            match stdout.write_all(data) {
+                Ok(()) => (),
+                Err(e) => error!("Error writing data: {}", e),
+            }
+        } else {
+            error!("Error writing data: No output");
         }
+    }
+}
+use output::write_data;
+
+impl OutputArg {
+    fn validate(self) -> output::ValidatedOutputArg {
+        output::validate_output_arg(self)
     }
 }
