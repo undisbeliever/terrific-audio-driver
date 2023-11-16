@@ -1083,7 +1083,7 @@ impl MmlParser<'_> {
     // Merge multiple rest commands
     fn merge_multiple_rest_symbols(&mut self, rest_length: TickCounter) -> TickCounter {
         // No const symbol concatenate
-        const SYMBOLS: [Symbol; 10] = [
+        const SYMBOLS: [Symbol; 11] = [
             Symbol::Divider,
             Symbol::SetDefaultLength,
             Symbol::SetOctave,
@@ -1094,6 +1094,7 @@ impl MmlParser<'_> {
             Symbol::ChangeWholeNoteLength,
             Symbol::SetDefaultLength,
             Symbol::Rest,
+            Symbol::Tie,
         ];
 
         let mut rest_length = rest_length;
@@ -1101,7 +1102,13 @@ impl MmlParser<'_> {
         while let Some(s) = self.parser.next_symbol_one_of(&SYMBOLS) {
             match s {
                 Symbol::Rest => {
-                    // Extend tick_length on ties
+                    match self.parse_note_length() {
+                        Ok(l) => rest_length += l,
+                        Err(e) => self.add_error(e),
+                    }
+                }
+
+                Symbol::Tie => {
                     match self.parse_note_length() {
                         Ok(l) => rest_length += l,
                         Err(e) => self.add_error(e),

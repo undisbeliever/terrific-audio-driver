@@ -183,7 +183,7 @@ Optional parameters are enclosed in `[]`.
     * Multiple `+` and `-` can be used to increase/decrease the pitch by a semitone.
     * A optional *length* can be added after the note.  If there is no length, the default length (`l`) will be used.
  * `n<number>` - Play the integer note id at the default length
- * `^[length]` - Tie, extends the duration of the previous note
+ * `^[length]` - Tie, extends the duration of the previous note or rest
  * `&` - Slur.  Used to tie two notes together without a key-off event
  * `&<length>` - Alternative Tie syntax
  * `r[length]` - Rest

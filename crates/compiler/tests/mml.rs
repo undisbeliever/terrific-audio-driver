@@ -284,6 +284,23 @@ fn test_rests() {
 }
 
 #[test]
+fn test_rest_tie() {
+    // used by midi2smw.
+
+    assert_line_matches_bytecode("r^^^", &["rest 96"]);
+
+    assert_line_matches_bytecode("r^8", &["rest 36"]);
+    assert_line_matches_bytecode("r8^", &["rest 36"]);
+    assert_line_matches_bytecode("r8^16", &["rest 18"]);
+
+    assert_line_matches_bytecode("r2^4^8", &["rest 84"]);
+
+    assert_line_matches_bytecode("r%5^%7", &["rest 12"]);
+
+    merge_mml_commands_test("r || ^ 8", &["rest 36"]);
+}
+
+#[test]
 fn test_loops() {
     assert_line_matches_bytecode("[a]4", &["start_loop 4", "play_note a4 24", "end_loop"]);
     assert_line_matches_bytecode(
