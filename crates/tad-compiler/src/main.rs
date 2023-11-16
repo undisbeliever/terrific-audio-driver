@@ -22,7 +22,7 @@ use compiler::{
     spc_file_export::export_spc_file,
 };
 
-use std::ffi::OsString;
+use std::ffi::{OsStr, OsString};
 use std::fs;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
@@ -156,6 +156,18 @@ fn compile_common_data(args: CompileCommonDataArgs) {
 // =============
 
 #[derive(Args)]
+#[group(required = false)]
+struct SongOptions {
+    #[arg(
+        short = 't',
+        long = "tick-count",
+        help = "print tick count table",
+        conflicts_with = "stdout"
+    )]
+    print_tick_counts: bool,
+}
+
+#[derive(Args)]
 struct CompileSongDataArgs {
     #[command(flatten)]
     output: OutputArg,
@@ -166,21 +178,14 @@ struct CompileSongDataArgs {
     #[arg(value_name = "SONG", help = "song name, song number, or MML file")]
     song: OsString,
 
-    #[arg(
-        short = 't',
-        long = "tick-count",
-        help = "print tick count table",
-        conflicts_with = "stdout"
-    )]
-    print_tick_counts: bool,
+    #[command(flatten)]
+    options: SongOptions,
 }
 
 fn load_mml_file(
-    args: &CompileSongDataArgs,
+    song_name_or_path: &OsStr,
     pf: &UniqueNamesProjectFile,
 ) -> (TextFile, Option<Name>) {
-    let song_name_or_path = &args.song;
-
     // Safe, the `U+FFFD REPLACEMENT CHARACTER` is not a name character.
     let sn = song_name_or_path.to_string_lossy();
 
@@ -220,7 +225,7 @@ fn load_mml_file(
 fn compile_song(
     mml_file: TextFile,
     song_name: Option<Name>,
-    args: &CompileSongDataArgs,
+    options: &SongOptions,
     pf: &UniqueNamesProjectFile,
     pitch_table: &PitchTable,
 ) -> SongData {
@@ -229,7 +234,7 @@ fn compile_song(
         Err(e) => error!("{}", e.multiline_display()),
     };
 
-    let tick_count_table = match args.print_tick_counts {
+    let tick_count_table = match options.print_tick_counts {
         true => Some(build_tick_count_table(&mml)),
         false => None,
     };
@@ -249,13 +254,13 @@ fn compile_song(
 
 fn compile_song_data(args: CompileSongDataArgs) {
     let pf = load_project_file(&args.project_file);
-    let (mml_file, song_name) = load_mml_file(&args, &pf);
+    let (mml_file, song_name) = load_mml_file(&args.song, &pf);
 
     let pitch_table = match build_pitch_table(&pf.instruments) {
         Ok(pt) => pt,
         Err(e) => error!("{}", e.multiline_display()),
     };
-    let song_data = compile_song(mml_file, song_name, &args, &pf, &pitch_table);
+    let song_data = compile_song(mml_file, song_name, &args.options, &pf, &pitch_table);
 
     write_data(args.output, song_data.data());
 }
@@ -266,7 +271,7 @@ fn compile_song_data(args: CompileSongDataArgs) {
 
 fn export_song_to_spc_file(args: CompileSongDataArgs) {
     let pf = load_project_file(&args.project_file);
-    let (mml_file, song_name) = load_mml_file(&args, &pf);
+    let (mml_file, song_name) = load_mml_file(&args.song, &pf);
 
     let samples = match build_sample_and_instrument_data(&pf) {
         Ok(s) => s,
@@ -274,7 +279,13 @@ fn export_song_to_spc_file(args: CompileSongDataArgs) {
     };
     let sfx = sound_effects::blank_compiled_sound_effects();
 
-    let song_data = compile_song(mml_file, song_name, &args, &pf, samples.pitch_table());
+    let song_data = compile_song(
+        mml_file,
+        song_name,
+        &args.options,
+        &pf,
+        samples.pitch_table(),
+    );
 
     let common_audio_data = match build_common_audio_data(&samples, &sfx) {
         Ok(data) => data,
