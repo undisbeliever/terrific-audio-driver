@@ -1,11 +1,12 @@
-//! Audio Driver compiler
+//! MML tick count table
 
 // SPDX-FileCopyrightText: © 2023 Marcus Rowe <undisbeliever@gmail.com>
 //
 // SPDX-License-Identifier: MIT
 
+use super::{ChannelData, MmlData};
+
 use crate::driver_constants::N_MUSIC_CHANNELS;
-use crate::mml::{ChannelData, LineTickCounter, MmlData};
 use crate::time::TickCounter;
 
 use std::cmp::{max, min};
@@ -43,6 +44,13 @@ impl SectionTickCount {
     pub fn start_line(&self) -> u32 {
         self.start_line
     }
+}
+
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub struct LineTickCounter {
+    pub line_number: u32,
+    pub ticks: TickCounter,
+    pub in_loop: bool,
 }
 
 impl From<LineTickCounter> for ChannelTickCount {

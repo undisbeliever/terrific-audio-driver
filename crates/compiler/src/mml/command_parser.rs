@@ -4,6 +4,8 @@
 //
 // SPDX-License-Identifier: MIT
 
+use super::identifier::IdentifierStr;
+
 use crate::bytecode::{
     LoopCount, Pan, PitchOffsetPerTick, PlayNoteTicks, QuarterWavelengthInTicks, RelativePan,
     RelativeVolume, SubroutineId, Volume, KEY_OFF_TICK_DELAY,
@@ -29,22 +31,6 @@ u8_value_newtype!(
 );
 u8_value_newtype!(Quantization, QuantizeOutOfRange, NoQuantize, 0, 8);
 i8_value_newtype!(Transpose, TransposeOutOfRange, NoTranspose);
-
-// An identifier str.
-// Using `&str` to avoid a string copy.
-// The contents of this variable might not be a valid Identifier
-#[derive(Debug, Clone, Hash, Eq, PartialEq)]
-pub(crate) struct IdentifierStr<'a>(&'a str);
-
-impl IdentifierStr<'_> {
-    pub fn from_str(s: &str) -> IdentifierStr {
-        IdentifierStr(s)
-    }
-
-    pub fn as_str(&self) -> &str {
-        self.0
-    }
-}
 
 #[derive(Debug, Copy, Clone)]
 pub enum VolumeCommand {
@@ -866,7 +852,7 @@ impl MmlStreamParser<'_> {
             _ => self.scanner.match_pattern(|&c| !c.is_whitespace()),
         };
         match s {
-            Match::Some(_pos, s) => Some(IdentifierStr(s)),
+            Match::Some(_pos, s) => Some(IdentifierStr::from_str(s)),
             Match::None(_pos) => None,
         }
     }
