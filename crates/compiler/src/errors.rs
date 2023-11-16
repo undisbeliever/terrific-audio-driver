@@ -16,11 +16,11 @@ use crate::driver_constants::{
 };
 use crate::echo::{EchoEdl, EchoLength};
 use crate::file_pos::{FilePosRange, MAX_MML_TEXT_LENGTH};
-use crate::mml::MAX_BROKEN_CHORD_NOTES;
-use crate::mml_command_parser::{
+use crate::mml::command_parser::{
     PortamentoSpeed, Quantization, Transpose, MAX_COARSE_VOLUME, MAX_RELATIVE_COARSE_VOLUME,
     MIN_RELATIVE_COARSE_VOLUME,
 };
+use crate::mml::MAX_BROKEN_CHORD_NOTES;
 use crate::notes::{MidiNote, Note, Octave};
 use crate::path::PathString;
 use crate::time::{Bpm, TickClock, TickCounter, ZenLen};

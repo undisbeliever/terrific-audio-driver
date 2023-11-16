@@ -23,7 +23,7 @@ use compiler::driver_constants::COMMON_DATA_BYTES_PER_SOUND_EFFECT;
 use compiler::echo::EchoEdl;
 use compiler::envelope::Envelope;
 use compiler::errors::{self, ExportSpcFileError, SongTooLargeError};
-use compiler::mml_tick_count::{build_tick_count_table, MmlTickCountTable};
+use compiler::mml::tick_count_table::{build_tick_count_table, MmlTickCountTable};
 use compiler::notes::Note;
 use compiler::path::{ParentPathBuf, SourcePathBuf};
 use compiler::pitch_table::PitchTable;

@@ -417,7 +417,7 @@ use scanner::Scanner;
 
 // List of peekable tokens
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
-pub(super) enum Symbol {
+pub(crate) enum Symbol {
     CallSubroutine,
     SetInstrument,
     StartLoop,
@@ -452,7 +452,7 @@ pub(super) enum Symbol {
     Divider,
 }
 
-pub(super) enum NewCommandToken {
+pub(crate) enum NewCommandToken {
     EndOfStream,
     EndOfLine,
     Pitch(MmlPitch),

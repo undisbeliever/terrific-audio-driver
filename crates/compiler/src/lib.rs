@@ -6,7 +6,6 @@
 
 mod bytecode;
 mod file_pos;
-mod mml_command_parser;
 mod time;
 mod value_newtypes;
 
@@ -18,7 +17,6 @@ pub mod echo;
 pub mod envelope;
 pub mod errors;
 pub mod mml;
-pub mod mml_tick_count;
 pub mod notes;
 pub mod path;
 pub mod pitch_table;

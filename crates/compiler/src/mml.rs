@@ -6,6 +6,14 @@
 
 #![allow(clippy::assertions_on_constants)]
 
+pub mod command_parser;
+pub mod tick_count_table;
+
+use command_parser::{
+    parse_mml_lines, IdentifierStr, ManualVibrato, MmlCommand, MmlCommandWithPos, MpVibrato,
+    PanCommand, PortamentoSpeed, VolumeCommand,
+};
+
 use crate::bytecode::{
     BcTerminator, BcTicksKeyOff, BcTicksNoKeyOff, Bytecode, InstrumentId, LoopCount,
     PitchOffsetPerTick, PlayNoteTicks, PortamentoVelocity, SubroutineId,
@@ -20,10 +28,6 @@ use crate::errors::{
 };
 use crate::file_pos::{
     blank_file_range, split_lines, FilePos, FilePosRange, Line, MAX_MML_TEXT_LENGTH,
-};
-use crate::mml_command_parser::{
-    parse_mml_lines, IdentifierStr, ManualVibrato, MmlCommand, MmlCommandWithPos, MpVibrato,
-    PanCommand, PortamentoSpeed, VolumeCommand,
 };
 use crate::notes::{Note, SEMITONES_PER_OCTAVE};
 use crate::pitch_table::PitchTable;

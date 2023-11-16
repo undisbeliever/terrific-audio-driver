@@ -13,7 +13,7 @@ use compiler::{
         TextFile, UniqueNamesProjectFile,
     },
     mml::compile_mml,
-    mml_tick_count::build_tick_count_table,
+    mml::tick_count_table::build_tick_count_table,
     pitch_table::build_pitch_table,
     pitch_table::PitchTable,
     samples::build_sample_and_instrument_data,
