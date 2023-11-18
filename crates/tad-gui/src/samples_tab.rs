@@ -746,7 +746,7 @@ impl TestSampleWidget {
                 let pitch = PitchChar::try_from(i).unwrap();
                 move |_w| {
                     if let Ok(s) = state.try_borrow() {
-                        let _ = s.on_key_pressed(pitch.clone());
+                        let _ = s.on_key_pressed(pitch);
                     }
                 }
             });
