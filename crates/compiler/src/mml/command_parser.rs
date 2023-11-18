@@ -4,7 +4,8 @@
 //
 // SPDX-License-Identifier: MIT
 
-use super::identifier::IdentifierStr;
+use super::tokenizer::{PeekingTokenizer, Token};
+use super::IdentifierStr;
 
 use crate::bytecode::{
     LoopCount, Pan, PitchOffsetPerTick, PlayNoteTicks, QuarterWavelengthInTicks, RelativePan,
@@ -12,9 +13,10 @@ use crate::bytecode::{
 };
 use crate::errors::{ErrorWithPos, MmlParserError, ValueError};
 use crate::file_pos::{FilePos, FilePosRange, Line};
-use crate::notes::{parse_pitch_char, MidiNote, MmlPitch, Note, Octave, STARTING_OCTAVE};
+use crate::notes::{MidiNote, MmlPitch, Note, Octave, STARTING_OCTAVE};
 use crate::time::{Bpm, MmlLength, TickClock, TickCounter, ZenLen};
-use crate::value_newtypes::{i8_value_newtype, u8_value_newtype, ValueNewType};
+use crate::value_newtypes::{i8_value_newtype, u8_value_newtype};
+use crate::ValueNewType;
 
 use std::cmp::min;
 use std::collections::HashMap;
@@ -44,7 +46,7 @@ pub enum PanCommand {
     Relative(RelativePan),
 }
 
-fn merge_volumes(v1: Option<VolumeCommand>, v2: VolumeCommand) -> VolumeCommand {
+fn merge_volumes_commands(v1: Option<VolumeCommand>, v2: VolumeCommand) -> VolumeCommand {
     match (v1, v2) {
         (Some(VolumeCommand::Absolute(v1)), VolumeCommand::Relative(v2)) => {
             let v = v1.as_u8().saturating_add_signed(v2.as_i8());
@@ -59,7 +61,7 @@ fn merge_volumes(v1: Option<VolumeCommand>, v2: VolumeCommand) -> VolumeCommand 
     }
 }
 
-fn merge_pans(p1: Option<PanCommand>, p2: PanCommand) -> PanCommand {
+fn merge_pan_commands(p1: Option<PanCommand>, p2: PanCommand) -> PanCommand {
     match (p1, p2) {
         (Some(PanCommand::Absolute(p1)), PanCommand::Relative(p2)) => {
             let p = min(p1.as_u8().saturating_add_signed(p2.as_i8()), Pan::MAX);
@@ -155,1117 +157,685 @@ impl MmlCommandWithPos {
     }
 }
 
-pub enum Match<'a> {
-    Some(FilePosRange, &'a str),
-    None(FilePosRange),
+#[derive(Clone)]
+pub struct State {
+    pub zenlen: ZenLen,
+    pub default_length: TickCounter,
+    pub octave: Octave,
+    pub semitone_offset: i8,
+    pub quantize: Quantization,
 }
 
-mod scanner {
-    use super::{FilePos, FilePosRange, Match};
+mod parser {
+    use super::*;
 
-    pub(crate) struct Scanner<'a> {
-        // The position of the last consumed value
-        before_pos: FilePosRange,
-
-        pos: FilePos,
-        to_parse: &'a str,
+    pub(super) struct Parser<'a> {
+        tokenizer: PeekingTokenizer<'a>,
+        errors: Vec<ErrorWithPos<MmlParserError>>,
+        state: State,
     }
 
-    impl Scanner<'_> {
-        pub fn new(pos: FilePos, to_parse: &str) -> Scanner {
-            assert!(
-                to_parse.len() < i32::MAX as usize,
-                "str too large, pos will overflow"
-            );
-            let mut s = Scanner {
-                before_pos: pos.to_range(1),
-                pos,
-                to_parse,
-            };
-            s.skip_whitespace();
-            s
-        }
-
-        pub fn is_line_empty(&self) -> bool {
-            self.to_parse.is_empty()
-        }
-
-        pub fn pos(&self) -> FilePos {
-            self.pos
-        }
-
-        pub fn before_pos(&self) -> FilePosRange {
-            self.before_pos.clone()
-        }
-
-        pub fn file_pos_range_from(&self, p: FilePosRange) -> FilePosRange {
-            let mut p = p;
-            p.index_end = self.before_pos.index_end;
-            p
-        }
-
-        fn skip_whitespace(&mut self) {
-            let (index, char_count) = self.index_and_char_count_for_pattern(|&c| c.is_whitespace());
-            if index > 0 {
-                self.to_parse = &self.to_parse[index..];
-                self.pos.line_char += char_count;
-                self.pos.char_index += u32::try_from(index).unwrap();
-            }
-        }
-
-        fn extract_str_skip_whitespace(&mut self, index: usize, char_count: u32) -> Match {
-            if index != 0 {
-                let (s, remaining) = self.to_parse.split_at(index);
-                let index = u32::try_from(index).unwrap();
-
-                self.before_pos = self.pos.to_range(index);
-
-                self.to_parse = remaining;
-                self.pos.line_char += char_count;
-                self.pos.char_index += index;
-
-                self.skip_whitespace();
-
-                Match::Some(self.before_pos.clone(), s)
-            } else {
-                Match::None(self.before_pos.clone())
-            }
-        }
-
-        fn advance(&mut self, index: usize, char_count: u32) -> u32 {
-            if index > 0 {
-                let index_u32 = u32::try_from(index).unwrap();
-
-                self.before_pos = self.pos.to_range(index_u32);
-
-                self.to_parse = &self.to_parse[index..];
-                self.pos.line_char += char_count;
-                self.pos.char_index += index_u32;
-
-                self.skip_whitespace();
-            }
-            char_count
-        }
-
-        // MUST only be used to advance ASCII characters.
-        pub(super) fn advance_ascii_char_count(&mut self, n_ascii_chars: u8) -> u32 {
-            self.advance(n_ascii_chars.into(), n_ascii_chars.into())
-        }
-
-        // All methods below this line must not modify fields
-
-        pub fn peek_u8(&self) -> Option<u8> {
-            self.to_parse.as_bytes().first().copied()
-        }
-
-        pub fn peek_second_u8(&self) -> Option<u8> {
-            self.to_parse.as_bytes().get(1).copied()
-        }
-
-        fn index_and_char_count_pattern_str(
-            s: &str,
-            pattern: impl Fn(&char) -> bool,
-        ) -> (usize, u32) {
-            let mut char_count = 0;
-            for (index, c) in s.char_indices() {
-                if !pattern(&c) {
-                    return (index, char_count);
-                }
-                char_count += 1;
-            }
-
-            (s.len(), char_count)
-        }
-
-        fn index_and_char_count_for_pattern(
-            &self,
-            pattern: impl Fn(&char) -> bool,
-        ) -> (usize, u32) {
-            Self::index_and_char_count_pattern_str(self.to_parse, pattern)
-        }
-
-        fn index_for_char_then_pattern(
-            &self,
-            first_char_pattern: impl Fn(&char) -> bool,
-            pattern: impl Fn(&char) -> bool,
-        ) -> (usize, u32) {
-            let mut iter = self.to_parse.char_indices();
-            let first = iter.next();
-
-            match first {
-                Some((_, c)) if first_char_pattern(&c) => (),
-                Some(_) => return (0, 0),
-                None => return (0, 0),
-            };
-            let mut char_count = 1;
-            for (index, c) in iter {
-                if !pattern(&c) {
-                    return (index, char_count);
-                }
-                char_count += 1;
-            }
-            (self.to_parse.len(), char_count)
-        }
-
-        pub fn skip_pattern(&mut self, pattern: impl Fn(&char) -> bool) -> u32 {
-            let (i, char_count) = self.index_and_char_count_for_pattern(pattern);
-            self.advance(i, char_count);
-            char_count
-        }
-
-        pub fn match_pattern(&mut self, pattern: impl Fn(&char) -> bool) -> Match {
-            let (i, char_count) = self.index_and_char_count_for_pattern(pattern);
-            self.extract_str_skip_whitespace(i, char_count)
-        }
-
-        pub fn match_char_then_pattern(
-            &mut self,
-            first_char_pattern: impl Fn(&char) -> bool,
-            pattern: impl Fn(&char) -> bool,
-        ) -> Match {
-            let (i, char_count) = self.index_for_char_then_pattern(first_char_pattern, pattern);
-            self.extract_str_skip_whitespace(i, char_count)
-        }
-
-        // No whitespace between patterns
-        pub fn match_two_patterns(
-            &mut self,
-            pattern1: impl Fn(&char) -> bool,
-            pattern2: impl Fn(&char) -> bool,
-        ) -> (FilePosRange, Option<&str>, Option<&str>) {
-            let start_pos = self.pos;
-
-            let (index_1, char_count_1) =
-                Self::index_and_char_count_pattern_str(self.to_parse, pattern1);
-
-            let (str_1, remaining) = self.to_parse.split_at(index_1);
-
-            let (index_2, char_count_2) =
-                Self::index_and_char_count_pattern_str(remaining, pattern2);
-
-            let str_1 = if !str_1.is_empty() { Some(str_1) } else { None };
-
-            let str_2 = match self
-                .extract_str_skip_whitespace(index_1 + index_2, char_count_1 + char_count_2)
-            {
-                Match::Some(_, str_1_and_2) => {
-                    if index_2 == 0 {
-                        None
-                    } else {
-                        Some(&str_1_and_2[..index_2])
-                    }
-                }
-                Match::None(_pos) => None,
-            };
-
-            let pos = start_pos.to_range(u32::try_from(index_2).unwrap());
-
-            (pos, str_1, str_2)
-        }
-
-        pub fn match_ascii_digits(&mut self) -> Match {
-            self.match_pattern(char::is_ascii_digit)
-        }
-
-        pub fn match_always_signed_ascii_digits(&mut self) -> Match {
-            self.match_char_then_pattern(|&c| c == '-' || c == '+', char::is_ascii_digit)
-        }
-
-        pub fn match_maybe_signed_ascii_digits(&mut self) -> Match {
-            self.match_char_then_pattern(
-                |&c| c == '-' || c == '+' || c.is_ascii_digit(),
-                char::is_ascii_digit,
-            )
-        }
-
-        pub fn match_for<T: MatchValueDigits>(&mut self) -> Match {
-            <T as MatchValueDigits>::match_for(self)
-        }
-    }
-
-    pub(crate) trait MatchValueDigits {
-        fn match_for<'a>(s: &'a mut Scanner) -> Match<'a>;
-    }
-
-    impl MatchValueDigits for u32 {
-        fn match_for<'a>(s: &'a mut Scanner) -> Match<'a> {
-            s.match_ascii_digits()
-        }
-    }
-
-    impl MatchValueDigits for i32 {
-        fn match_for<'a>(s: &'a mut Scanner) -> Match<'a> {
-            s.match_always_signed_ascii_digits()
-        }
-    }
-}
-use scanner::Scanner;
-
-// List of peekable tokens
-#[derive(Debug, Copy, Clone, Eq, PartialEq)]
-pub(crate) enum Symbol {
-    CallSubroutine,
-    SetInstrument,
-    StartLoop,
-    SkipLastLoop,
-    EndLoop,
-    Tie,
-    Slur,
-    ChangeWholeNoteLength,
-    PlayMidiNoteNumber,
-    SetDefaultLength,
-    Rest,
-    SetOctave,
-    IncrementOctave,
-    DecrementOctave,
-    CoarseVolume,
-    FineVolume,
-    Pan,
-    Quantize,
-    Transpose,
-    RelativeTranspose,
-    StartBrokenChord,
-    EndBrokenChord,
-    StartPortamento,
-    EndPortamento,
-    ManualVibrato,
-    MpVibrato,
-    Echo,
-    SetSongTempo,
-    SetSongTickClock,
-    SetLoopPoint,
-    Comma,
-    Divider,
-}
-
-pub(crate) enum NewCommandToken {
-    EndOfStream,
-    EndOfLine,
-    Pitch(MmlPitch),
-    // Might not be a valid command token.
-    Symbol(Symbol),
-    PitchError(ErrorWithPos<MmlParserError>),
-    // u32 = Number of skipped symbols::
-    UnknownCharacters(u32),
-}
-
-enum ParseResult<T> {
-    Ok(T),
-    None(FilePosRange),
-    Error(ErrorWithPos<MmlParserError>),
-}
-
-enum AbsoluteOrRelative {
-    Absolute(FilePosRange, u32),
-    Relative(FilePosRange, i32),
-    None(FilePosRange),
-    Error(ErrorWithPos<MmlParserError>),
-}
-
-pub(crate) struct MmlStreamParser<'a> {
-    scanner: scanner::Scanner<'a>,
-    remaining_lines: &'a [Line<'a>],
-
-    at_end: bool,
-}
-
-macro_rules! parsing_error {
-    ($pos:expr, $reason:ident) => {{
-        ErrorWithPos($pos, MmlParserError::$reason)
-    }};
-}
-
-fn value_error(pos: FilePosRange, e: ValueError) -> ErrorWithPos<MmlParserError> {
-    ErrorWithPos(pos, MmlParserError::ValueError(e))
-}
-
-macro_rules! parse_absolute_or_relative {
-    ($fn_name:ident, $type:ident, $missing_error:ident) => {
-        pub fn $fn_name(&mut self) -> Result<$type, ErrorWithPos<MmlParserError>> {
-            match self.parse_absolute_or_relative() {
-                AbsoluteOrRelative::Absolute(pos, p) => match p.try_into() {
-                    Ok(p) => Ok($type::Absolute(p)),
-                    Err(e) => Err(value_error(pos, e)),
+    impl Parser<'_> {
+        pub fn new<'a>(
+            lines: &'a [Line],
+            instruments_map: &'a HashMap<IdentifierStr, usize>,
+            subroutine_map: Option<&'a HashMap<IdentifierStr, SubroutineId>>,
+            zenlen: ZenLen,
+        ) -> Parser<'a> {
+            Parser {
+                tokenizer: PeekingTokenizer::new(lines, instruments_map, subroutine_map),
+                errors: Vec::new(),
+                state: State {
+                    zenlen,
+                    default_length: zenlen.starting_length(),
+                    octave: STARTING_OCTAVE,
+                    semitone_offset: 0,
+                    quantize: Quantization(8),
                 },
-                AbsoluteOrRelative::Relative(pos, p) => match p.try_into() {
-                    Ok(p) => Ok($type::Relative(p)),
-                    Err(e) => Err(value_error(pos, e)),
-                },
-                AbsoluteOrRelative::None(pos) => Err(value_error(pos, ValueError::$missing_error)),
-                AbsoluteOrRelative::Error(e) => Err(e),
             }
+        }
+
+        pub(super) fn state(&self) -> &State {
+            &self.state
+        }
+
+        pub(super) fn set_state(&mut self, new_state: State) {
+            self.state = new_state
+        }
+
+        // Must ONLY be called by the parsing macros in this module.
+        pub(super) fn __peek(&self) -> &Token {
+            self.tokenizer.peek()
+        }
+
+        // Must ONLY be called by the parsing macros in this module.
+        pub(super) fn __next_token(&mut self) {
+            self.tokenizer.next();
+        }
+
+        pub(super) fn peek_pos(&self) -> &FilePos {
+            self.tokenizer.peek_pos()
+        }
+
+        pub(super) fn file_pos_range_from(&self, pos: FilePos) -> FilePosRange {
+            pos.to_range_pos(self.tokenizer.prev_end_pos())
+        }
+
+        pub(super) fn peek_and_next(&mut self) -> (FilePos, Token) {
+            self.tokenizer.peek_and_next()
+        }
+
+        pub(super) fn add_error(&mut self, pos: FilePos, e: MmlParserError) {
+            self.errors
+                .push(ErrorWithPos(self.file_pos_range_from(pos), e))
+        }
+
+        pub(super) fn take_errors(self) -> Vec<ErrorWithPos<MmlParserError>> {
+            self.errors
+        }
+    }
+}
+use parser::Parser;
+
+// PARSING MACROS
+// ==============
+//
+// These are the only things allowed to call `Parser::__peek()` and `Parser::__next_token()`.
+
+// Builds a match statement for the tokenizer.
+//
+// Will consume the token and advance the tokenizer if there is a match
+macro_rules! match_next_token {
+    // Using `#` to separate patterns from the fallthrough no-matches case.
+    ($parser:ident, $($pattern:pat => $expression:expr,)+ #_ => $no_matches:expr) => {
+        match $parser.__peek() {
+        $(
+            $pattern => {
+                $parser.__next_token();
+                $expression
+            }
+        )+
+
+            _ => { $no_matches }
         }
     };
 }
 
-impl MmlStreamParser<'_> {
-    pub fn new<'a>(lines: &'a [Line<'a>]) -> MmlStreamParser<'a> {
-        let blank_pos = FilePos {
-            line_number: 0,
-            line_char: 0,
-            char_index: 0,
-        };
-
-        MmlStreamParser {
-            remaining_lines: lines,
-            scanner: Scanner::new(blank_pos, ""),
-            at_end: false,
+// Will consume the token and advance the tokenizer if there is a match
+macro_rules! next_token_matches {
+    ($parser:ident, $pattern:pat) => {
+        match $parser.__peek() {
+            $pattern => {
+                $parser.__next_token();
+                true
+            }
+            _ => false,
         }
-    }
+    };
+}
 
-    pub fn pos(&self) -> FilePos {
-        self.scanner.pos()
-    }
+fn parse_unsigned_newtype<T>(pos: FilePos, p: &mut Parser) -> Option<T>
+where
+    T: ValueNewType + TryFrom<u32, Error = ValueError>,
+{
+    match_next_token!(
+        p,
 
-    pub fn previous_pos_range(&self) -> FilePosRange {
-        self.scanner.before_pos()
-    }
-
-    pub fn file_pos_range_from(&self, from: FilePosRange) -> FilePosRange {
-        self.scanner.file_pos_range_from(from)
-    }
-
-    /// Advances to the next line (if required)
-    pub fn parse_newline(&mut self) {
-        if self.scanner.is_line_empty() {
-            match self.remaining_lines.split_first() {
-                Some((first, remaining)) => {
-                    self.scanner = Scanner::new(first.position, first.text);
-                    self.remaining_lines = remaining;
-                }
-                None => {
-                    self.at_end = true;
+        &Token::Number(n) => {
+            match n.try_into() {
+                Ok(o) => Some(o),
+                Err(e) => {
+                    p.add_error(pos, e.into());
+                    None
                 }
             }
+        },
+        #_ => {
+            p.add_error(pos, T::MISSING_ERROR.into());
+            None
         }
-    }
+    )
+}
 
-    fn is_unknown_starting_char(c: &char) -> bool {
-        if c.is_ascii() {
-            match u8::try_from(*c).unwrap_or(0) {
-                b'a'..=b'g' => false,
-                // This list must match `peek_symbol`.
-                b'!' | b'@' | b'[' | b':' | b']' | b'^' | b'&' | b'C' | b'n' | b'l' | b'r'
-                | b'o' | b'>' | b'<' | b'v' | b'V' | b'p' | b'Q' | b'~' | b'E' | b't' | b'T'
-                | b'L' | b',' | b'|' | b'_' | b'{' | b'}' | b'M' => false,
-                _ => true,
+fn parse_signed_newtype<T>(pos: FilePos, p: &mut Parser) -> Option<T>
+where
+    T: ValueNewType + TryFrom<i32, Error = ValueError>,
+{
+    match_next_token!(
+        p,
+
+        &Token::RelativeNumber(n) => {
+            match n.try_into() {
+                Ok(o) => Some(o),
+                Err(e) => {
+                    p.add_error(pos, e.into());
+                    None
+                }
             }
-        } else {
+        },
+        #_ => {
+            p.add_error(pos, T::MISSING_ERROR.into());
+            None
+        }
+    )
+}
+
+fn parse_set_default_length(p: &mut Parser) {
+    let tc = parse_length(p);
+    p.set_state(State {
+        default_length: tc,
+        ..p.state().clone()
+    })
+}
+
+fn parse_set_octave(pos: FilePos, p: &mut Parser) {
+    if let Some(o) = parse_unsigned_newtype(pos, p) {
+        p.set_state(State {
+            octave: o,
+            ..p.state().clone()
+        });
+    }
+}
+
+fn parse_increment_octave(p: &mut Parser) {
+    let mut o = p.state().octave;
+    o.saturating_increment();
+
+    if o != p.state().octave {
+        p.set_state(State {
+            octave: o,
+            ..p.state().clone()
+        })
+    }
+}
+
+fn parse_decrement_octave(p: &mut Parser) {
+    let mut o = p.state().octave;
+    o.saturating_decrement();
+
+    if o != p.state().octave {
+        p.set_state(State {
+            octave: o,
+            ..p.state().clone()
+        })
+    }
+}
+
+fn parse_transpose(pos: FilePos, p: &mut Parser) {
+    if let Some(t) = parse_signed_newtype(pos, p) {
+        let t: Transpose = t;
+        p.set_state(State {
+            semitone_offset: t.as_i8(),
+            ..p.state().clone()
+        });
+    }
+}
+
+fn parse_relative_transpose(pos: FilePos, p: &mut Parser) {
+    if let Some(rt) = parse_signed_newtype(pos, p) {
+        let rt: Transpose = rt;
+
+        let state = p.state().clone();
+        p.set_state(State {
+            semitone_offset: state.semitone_offset.saturating_add(rt.as_i8()),
+            ..state
+        });
+    }
+}
+
+fn parse_change_whole_note_length(pos: FilePos, p: &mut Parser) {
+    if let Some(z) = parse_unsigned_newtype(pos, p) {
+        p.set_state(State {
+            zenlen: z,
+            ..p.state().clone()
+        });
+    }
+}
+
+fn parse_quantize(pos: FilePos, p: &mut Parser) {
+    if let Some(q) = parse_unsigned_newtype(pos, p) {
+        p.set_state(State {
+            quantize: q,
+            ..p.state().clone()
+        });
+    }
+}
+
+// Returns true if the token was recognised and processed
+fn merge_state_change(p: &mut Parser) -> bool {
+    let pos = *p.peek_pos();
+
+    match_next_token!(
+        p,
+
+        Token::SetOctave => {
+            parse_set_octave(pos, p);
             true
-        }
-    }
-
-    pub fn peek_symbol(&self) -> Option<Symbol> {
-        let c1 = match self.scanner.peek_u8() {
-            Some(c) => c,
-            None => return None,
-        };
-
-        match c1 {
-            // Symbols MUST be ASCII characters.
-            b'!' => Some(Symbol::CallSubroutine),
-            b'@' => Some(Symbol::SetInstrument),
-            b'[' => Some(Symbol::StartLoop),
-            b':' => Some(Symbol::SkipLastLoop),
-            b']' => Some(Symbol::EndLoop),
-            b'^' => Some(Symbol::Tie),
-            b'&' => Some(Symbol::Slur),
-            b'C' => Some(Symbol::ChangeWholeNoteLength),
-            b'n' => Some(Symbol::PlayMidiNoteNumber),
-            b'l' => Some(Symbol::SetDefaultLength),
-            b'r' => Some(Symbol::Rest),
-            b'o' => Some(Symbol::SetOctave),
-            b'>' => Some(Symbol::IncrementOctave),
-            b'<' => Some(Symbol::DecrementOctave),
-            b'v' => Some(Symbol::CoarseVolume),
-            b'V' => Some(Symbol::FineVolume),
-            b'p' => Some(Symbol::Pan),
-            b'Q' => Some(Symbol::Quantize),
-            b'~' => Some(Symbol::ManualVibrato),
-            b'E' => Some(Symbol::Echo),
-            b't' => Some(Symbol::SetSongTempo),
-            b'T' => Some(Symbol::SetSongTickClock),
-            b'L' => Some(Symbol::SetLoopPoint),
-            b',' => Some(Symbol::Comma),
-            b'|' => Some(Symbol::Divider),
-
-            // Possibly multiple character tokens
-            b'_' | b'{' | b'}' | b'M' => {
-                let c2 = self.scanner.peek_second_u8();
-                match (c1, c2) {
-                    (b'_', Some(b'_')) => Some(Symbol::RelativeTranspose),
-                    (b'{', Some(b'{')) => Some(Symbol::StartBrokenChord),
-                    (b'}', Some(b'}')) => Some(Symbol::EndBrokenChord),
-                    (b'M', Some(b'P')) => Some(Symbol::MpVibrato),
-
-                    (b'_', _) => Some(Symbol::Transpose),
-                    (b'{', _) => Some(Symbol::StartPortamento),
-                    (b'}', _) => Some(Symbol::EndPortamento),
-
-                    (_, _) => None,
-                }
-            }
-
-            _ => None,
-        }
-    }
-
-    fn n_ascii_chars_in_symbol(s: Symbol) -> u8 {
-        // ASSUMES symbol is ASCII characters only
-        match s {
-            Symbol::RelativeTranspose => 2,
-            Symbol::StartBrokenChord => 2,
-            Symbol::EndBrokenChord => 2,
-            Symbol::MpVibrato => 2,
-            _ => 1,
-        }
-    }
-
-    pub fn next_symbol(&mut self) -> Option<Symbol> {
-        let symbol = self.peek_symbol();
-
-        if let Some(s) = &symbol {
-            self.scanner
-                .advance_ascii_char_count(Self::n_ascii_chars_in_symbol(*s));
-        }
-
-        symbol
-    }
-
-    // Does not advance to the next line
-    pub fn next_new_command_token(&mut self) -> NewCommandToken {
-        if self.scanner.is_line_empty() {
-            if self.at_end {
-                return NewCommandToken::EndOfStream;
-            } else {
-                return NewCommandToken::EndOfLine;
-            }
-        }
-
-        match self.parse_optional_pitch() {
-            Err(e) => NewCommandToken::PitchError(e),
-            Ok(Some(p)) => NewCommandToken::Pitch(p),
-            Ok(None) => match self.next_symbol() {
-                Some(s) => NewCommandToken::Symbol(s),
-                None => {
-                    let n_chars = self.scanner.skip_pattern(Self::is_unknown_starting_char);
-                    NewCommandToken::UnknownCharacters(n_chars)
-                }
-            },
-        }
-    }
-
-    pub fn next_symbol_matches(&mut self, s: Symbol) -> bool {
-        if self.peek_symbol() == Some(s) {
-            self.scanner
-                .advance_ascii_char_count(Self::n_ascii_chars_in_symbol(s));
+        },
+        Token::IncrementOctave => {
+            parse_increment_octave(p);
             true
-        } else {
-            false
-        }
+        },
+        Token::DecrementOctave => {
+            parse_decrement_octave(p);
+            true
+        },
+        Token::Transpose => {
+            parse_transpose(pos, p);
+            true
+        },
+        Token::RelativeTranspose => {
+            parse_relative_transpose(pos, p);
+            true
+        },
+
+        Token::SetDefaultLength => {
+            parse_set_default_length(p);
+            true
+        },
+        Token::ChangeWholeNoteLength => {
+            parse_change_whole_note_length(pos, p);
+            true
+        },
+        Token::Divider => {
+            true
+        },
+        #_ => false
+    )
+}
+
+fn parse_length(p: &mut Parser) -> TickCounter {
+    let pos = *p.peek_pos();
+
+    let length_in_ticks = next_token_matches!(p, Token::PercentSign);
+
+    let length = match_next_token!(
+        p,
+        &Token::Number(n) => Some(n),
+        #_ => None
+    );
+
+    let mut number_of_dots = 0;
+    while next_token_matches!(p, Token::Dot) {
+        number_of_dots += 1;
     }
 
-    pub fn next_symbol_one_of(&mut self, to_match: &[Symbol]) -> Option<Symbol> {
-        match self.peek_symbol() {
-            Some(s) if to_match.contains(&s) => {
-                self.scanner
-                    .advance_ascii_char_count(Self::n_ascii_chars_in_symbol(s));
-                Some(s)
+    let note_length = MmlLength::new(length, length_in_ticks, number_of_dots);
+
+    match note_length.to_tick_count(p.state().default_length, p.state().zenlen) {
+        Ok(tc) => tc,
+        Err(e) => {
+            p.add_error(pos, e.into());
+            p.state().default_length
+        }
+    }
+}
+
+fn parse_optional_length(p: &mut Parser) -> Option<TickCounter> {
+    let pos = *p.peek_pos();
+
+    let length_in_ticks = next_token_matches!(p, Token::PercentSign);
+
+    let length = match_next_token!(
+        p,
+        &Token::Number(n) => Some(n),
+        #_ => None
+    );
+
+    let mut number_of_dots = 0;
+    while next_token_matches!(p, Token::Dot) {
+        number_of_dots += 1;
+    }
+
+    if length_in_ticks || length.is_some() || number_of_dots > 0 {
+        let note_length = MmlLength::new(length, length_in_ticks, number_of_dots);
+
+        let tc = match note_length.to_tick_count(p.state().default_length, p.state().zenlen) {
+            Ok(tc) => tc,
+            Err(e) => {
+                p.add_error(pos, e.into());
+                p.state().default_length
             }
-            _ => None,
-        }
-    }
-
-    pub fn parse_optional_bool(&mut self) -> Result<Option<bool>, ErrorWithPos<MmlParserError>> {
-        match self.scanner.match_ascii_digits() {
-            Match::None(_pos) => Ok(None),
-            Match::Some(_, "1") => Ok(Some(true)),
-            Match::Some(_, "0") => Ok(Some(false)),
-            Match::Some(pos, _) => Err(value_error(pos, ValueError::InvalidMmlBool)),
-        }
-    }
-
-    pub fn parse_bool(&mut self) -> Result<bool, ErrorWithPos<MmlParserError>> {
-        match self.scanner.match_ascii_digits() {
-            Match::Some(_pos, "1") => Ok(true),
-            Match::Some(_pos, "0") => Ok(false),
-            Match::Some(pos, _) => Err(value_error(pos, ValueError::InvalidMmlBool)),
-            Match::None(pos) => Err(value_error(pos, ValueError::NoBool)),
-        }
-    }
-
-    fn parse_u32(&mut self) -> ParseResult<u32> {
-        match self.scanner.match_ascii_digits() {
-            Match::None(pos) => ParseResult::None(pos),
-            Match::Some(pos, ascii_digits) => match ascii_digits.parse() {
-                Ok(v) => ParseResult::Ok(v),
-                Err(_) => ParseResult::Error(value_error(
-                    pos,
-                    ValueError::CannotParseUnsigned(ascii_digits.to_owned()),
-                )),
-            },
-        }
-    }
-
-    pub fn parse_newtype<T>(&mut self) -> Result<T, ErrorWithPos<MmlParserError>>
-    where
-        T: ValueNewType,
-        <T as ValueNewType>::ConvertFrom: scanner::MatchValueDigits,
-    {
-        match self.scanner.match_for::<T::ConvertFrom>() {
-            Match::None(pos) => Err(value_error(pos, T::MISSING_ERROR)),
-            Match::Some(pos, ascii_digits) => match T::try_from_str(ascii_digits) {
-                Ok(v) => Ok(v),
-                Err(e) => Err(value_error(pos, e)),
-            },
-        }
-    }
-
-    fn parse_absolute_or_relative(&mut self) -> AbsoluteOrRelative {
-        match self.scanner.match_maybe_signed_ascii_digits() {
-            Match::None(pos) => AbsoluteOrRelative::None(pos),
-            Match::Some(pos, ascii_digits) => {
-                let fc = ascii_digits.as_bytes()[0];
-                if fc == b'-' || fc == b'+' {
-                    match ascii_digits.parse::<i32>() {
-                        Ok(v) => AbsoluteOrRelative::Relative(pos, v),
-                        Err(_) => AbsoluteOrRelative::Error(value_error(
-                            pos,
-                            ValueError::CannotParseSigned(ascii_digits.to_owned()),
-                        )),
-                    }
-                } else {
-                    match ascii_digits.parse::<u32>() {
-                        Ok(v) => AbsoluteOrRelative::Absolute(pos, v),
-                        Err(_) => AbsoluteOrRelative::Error(value_error(
-                            pos,
-                            ValueError::CannotParseUnsigned(ascii_digits.to_owned()),
-                        )),
-                    }
-                }
-            }
-        }
-    }
-
-    parse_absolute_or_relative!(parse_pan, PanCommand, NoPan);
-    parse_absolute_or_relative!(parse_fine_volume, VolumeCommand, NoVolume);
-
-    pub fn parse_coarse_volume(&mut self) -> Result<VolumeCommand, ErrorWithPos<MmlParserError>> {
-        match self.parse_absolute_or_relative() {
-            AbsoluteOrRelative::Absolute(pos, v) => {
-                if v <= MAX_COARSE_VOLUME {
-                    let v = u8::try_from(v).unwrap();
-                    let v = v.saturating_mul(COARSE_VOLUME_MULTIPLIER);
-                    Ok(VolumeCommand::Absolute(Volume::new(v)))
-                } else {
-                    Err(value_error(pos, ValueError::CoarseVolumeOutOfRange))
-                }
-            }
-            AbsoluteOrRelative::Relative(pos, v) => {
-                match v.saturating_mul(COARSE_VOLUME_MULTIPLIER.into()).try_into() {
-                    Ok(v) => Ok(VolumeCommand::Relative(v)),
-                    Err(_) => Err(value_error(pos, ValueError::RelativeCoarseVolumeOutOfRange)),
-                }
-            }
-            AbsoluteOrRelative::None(pos) => Err(value_error(pos, ValueError::NoVolume)),
-            AbsoluteOrRelative::Error(e) => Err(e),
-        }
-    }
-
-    pub fn parse_optional_pitch(
-        &mut self,
-    ) -> Result<Option<MmlPitch>, ErrorWithPos<MmlParserError>> {
-        let (pos, pitch_str) = match self
-            .scanner
-            .match_char_then_pattern(|&c| matches!(c, 'a'..='g'), |&c| c == '-' || c == '+')
-        {
-            Match::Some(pos, s) => (pos, s),
-            Match::None(_pos) => return Ok(None),
         };
-
-        let pitch_char = pitch_str.chars().next().unwrap();
-        let pitch = parse_pitch_char(pitch_char).unwrap();
-
-        let semitone_offset = if !pitch_str.len() > 1 {
-            if pitch_str.len() > 32 {
-                return Err(parsing_error!(pos, TooManyAccidentals));
-            }
-            let n_minuses = i8::try_from(pitch_str.bytes().filter(|&c| c == b'-').count()).unwrap();
-            let n_plusses = i8::try_from(pitch_str.len() - 1).unwrap() - n_minuses;
-
-            n_plusses - n_minuses
-        } else {
-            0
-        };
-
-        Ok(Some(MmlPitch::new(pitch, semitone_offset)))
+        Some(tc)
+    } else {
+        None
     }
+}
 
-    pub fn parse_optional_length(
-        &mut self,
-    ) -> Result<Option<MmlLength>, ErrorWithPos<MmlParserError>> {
-        let is_fc_percent_sign = self.scanner.peek_u8() == Some(b'%');
-        if is_fc_percent_sign {
-            self.scanner.advance_ascii_char_count(1);
+fn parse_pitch_list(p: &mut Parser) -> (Vec<Note>, FilePos, Token) {
+    let mut out = Vec::new();
+
+    loop {
+        let (pos, token) = p.peek_and_next();
+
+        match token {
+            Token::EndPortamento | Token::EndBrokenChord => {
+                return (out, pos, token);
+            }
+            Token::EndOfLine | Token::End => {
+                return (out, pos, token);
+            }
+
+            Token::Pitch(pitch) => {
+                match Note::from_mml_pitch(pitch, p.state().octave, p.state().semitone_offset) {
+                    Ok(note) => out.push(note),
+                    Err(e) => p.add_error(pos, e.into()),
+                }
+            }
+
+            Token::SetOctave => parse_set_octave(pos, p),
+            Token::IncrementOctave => parse_increment_octave(p),
+            Token::DecrementOctave => parse_decrement_octave(p),
+            Token::Transpose => parse_transpose(pos, p),
+            Token::RelativeTranspose => parse_relative_transpose(pos, p),
+
+            _ => p.add_error(pos, MmlParserError::InvalidPitchListSymbol),
         }
+    }
+}
 
-        let (pos, ascii_digits, dots) = self
-            .scanner
-            .match_two_patterns(char::is_ascii_digit, |&c| c == '.');
+fn parse_pan_value(pos: FilePos, p: &mut Parser) -> Option<PanCommand> {
+    match_next_token!(
+        p,
 
-        if ascii_digits.is_none() && dots.is_none() {
-            return Ok(None);
-        }
+        &Token::Number(n) => {
+            match n.try_into() {
+                Ok(v) => Some(PanCommand::Absolute(v)),
+                Err(e) => {
+                    p.add_error(pos, e.into());
+                    None
+                }
+            }
+        },
+        &Token::RelativeNumber(n) => {
+            match n.try_into() {
+                Ok(v) => Some(PanCommand::Relative(v)),
+                Err(e) => {
+                    p.add_error(pos, e.into());
+                    None
+                }
+            }
+        },
+        #_ => None
+    )
+}
 
-        let length = match ascii_digits {
-            Some(ascii_digits) => match ascii_digits.parse() {
-                Ok(v) => Some(v),
+fn parse_fine_volume_value(pos: FilePos, p: &mut Parser) -> Option<VolumeCommand> {
+    match_next_token!(
+        p,
+
+        &Token::Number(n) => {
+            match n.try_into() {
+                Ok(v) => Some(VolumeCommand::Absolute(v)),
+                Err(e) => {
+                    p.add_error(pos, e.into());
+                    None
+                }
+            }
+        },
+        &Token::RelativeNumber(n) => {
+            match n.try_into() {
+                Ok(v) => Some(VolumeCommand::Relative(v)),
+                Err(e) => {
+                    p.add_error(pos, e.into());
+                    None
+                }
+            }
+        },
+        #_ => None
+    )
+}
+
+fn parse_coarse_volume_value(pos: FilePos, p: &mut Parser) -> Option<VolumeCommand> {
+    match_next_token!(
+        p,
+
+        &Token::Number(v) => {
+            if v <= MAX_COARSE_VOLUME {
+                let v = u8::try_from(v).unwrap();
+                let v = v.saturating_mul(COARSE_VOLUME_MULTIPLIER);
+                Some(VolumeCommand::Absolute(Volume::new(v)))
+            }
+            else {
+                p.add_error(pos, ValueError::CoarseVolumeOutOfRange.into());
+                None
+            }
+        },
+        &Token::RelativeNumber(n) => {
+            match n.saturating_mul(COARSE_VOLUME_MULTIPLIER.into()).try_into() {
+                Ok(v) => Some(VolumeCommand::Relative(v)),
                 Err(_) => {
-                    return Err(value_error(
-                        pos,
-                        ValueError::CannotParseUnsigned(ascii_digits.to_owned()),
-                    ))
+                    p.add_error(pos, ValueError::RelativeCoarseVolumeOutOfRange.into());
+                    None
+                }
+            }
+        },
+        #_ => None
+    )
+}
+
+fn merge_pan_or_volume(
+    pan: Option<PanCommand>,
+    volume: Option<VolumeCommand>,
+    p: &mut Parser,
+) -> MmlCommand {
+    let mut pan = pan;
+    let mut volume = volume;
+
+    loop {
+        let pos = *p.peek_pos();
+
+        match_next_token!(
+            p,
+
+            Token::CoarseVolume => {
+                if let Some(v) = parse_coarse_volume_value(pos, p) {
+                    volume = Some(merge_volumes_commands(volume, v));
                 }
             },
-            None => None,
-        };
-
-        let number_of_dots = match dots {
-            Some(dots) => match dots.len().try_into() {
-                Ok(n) if n < 16 => n,
-                _ => return Err(parsing_error!(pos, TooManyDotsInNoteLength)),
+            Token::FineVolume => {
+                if let Some(v) = parse_fine_volume_value(pos, p) {
+                    volume = Some(merge_volumes_commands(volume, v));
+                }
             },
-            None => 0,
-        };
+            Token::Pan => {
+                if let Some(new_pan) = parse_pan_value(pos, p) {
+                    pan = Some(merge_pan_commands(pan, new_pan));
+                }
+            },
 
-        Ok(Some(MmlLength::new(
-            length,
-            is_fc_percent_sign,
-            number_of_dots,
-        )))
-    }
-
-    // Returns Option so the appropriate error message can be generated by `MmlParser`
-    pub fn parse_identifier(&mut self) -> Option<IdentifierStr> {
-        let s = match self.scanner.peek_u8() {
-            Some(c) if c.is_ascii_digit() => self.scanner.match_ascii_digits(),
-            _ => self.scanner.match_pattern(|&c| !c.is_whitespace()),
-        };
-        match s {
-            Match::Some(_pos, s) => Some(IdentifierStr::from_str(s)),
-            Match::None(_pos) => None,
-        }
-    }
-
-    fn parse_comma_quarter_wavelength_ticks(
-        &mut self,
-    ) -> Result<QuarterWavelengthInTicks, ErrorWithPos<MmlParserError>> {
-        if !self.next_symbol_matches(Symbol::Comma) {
-            return Err(value_error(
-                self.previous_pos_range(),
-                ValueError::NoCommaQuarterWavelength,
-            ));
-        }
-
-        self.parse_newtype()
-    }
-
-    // When None is returned, vibrato is disabled.
-    pub fn parse_manual_vibrato(
-        &mut self,
-    ) -> Result<Option<ManualVibrato>, ErrorWithPos<MmlParserError>> {
-        let value = match self.parse_u32() {
-            ParseResult::Ok(v) => v,
-            ParseResult::None(pos) => return Err(value_error(pos, ValueError::NoVibratoDepth)),
-            ParseResult::Error(e) => return Err(e),
-        };
-
-        if value == 0 {
-            Ok(None)
-        } else {
-            let pitch_offset_per_tick = match value.try_into() {
-                Ok(d) => d,
-                Err(e) => return Err(value_error(self.previous_pos_range(), e)),
-            };
-            let quarter_wavelength_ticks = self.parse_comma_quarter_wavelength_ticks()?;
-            Ok(Some(ManualVibrato {
-                pitch_offset_per_tick,
-                quarter_wavelength_ticks,
-            }))
-        }
-    }
-
-    // When None is returned, MP vibrato is disabled.
-    pub fn parse_mp_vibtato(&mut self) -> Result<Option<MpVibrato>, ErrorWithPos<MmlParserError>> {
-        let depth_in_cents = match self.parse_u32() {
-            ParseResult::Ok(v) => v,
-            ParseResult::None(pos) => return Err(value_error(pos, ValueError::NoVibratoDepth)),
-            ParseResult::Error(e) => return Err(e),
-        };
-
-        if depth_in_cents == 0 {
-            Ok(None)
-        } else {
-            let quarter_wavelength_ticks = self.parse_comma_quarter_wavelength_ticks()?;
-            Ok(Some(MpVibrato {
-                depth_in_cents,
-                quarter_wavelength_ticks,
-            }))
-        }
+            #_ => {
+                if !merge_state_change(p) {
+                    return MmlCommand::ChangePanAndOrVolume(pan, volume);
+                }
+            }
+        )
     }
 }
 
-// The MML parser keeps track of note lengths and octaves.
-//
-// This allows me to merge slurs, ties and rests while parsing.
-// It also allows me to include octave/transpose commands inside pitch lists.
-struct MmlParserState {
-    zenlen: ZenLen,
-    default_length: TickCounter,
-    octave: Octave,
-    semitone_offset: i8,
-    quantize: Quantization,
-}
+// Assumes the current command has a rest.
+fn merge_rest_tokens(p: &mut Parser, rest_tc: TickCounter) -> TickCounter {
+    let mut rest_tc = rest_tc;
 
-impl MmlParserState {
-    fn set_zenlen(&mut self, z: ZenLen) {
-        self.zenlen = z;
-    }
-    fn set_defualt_length(&mut self, tc: Option<TickCounter>) {
-        if let Some(tc) = tc {
-            self.default_length = tc;
-        }
-    }
-    fn set_octave(&mut self, o: Octave) {
-        self.octave = o;
-    }
-    fn increment_octave(&mut self) {
-        self.octave.saturating_increment();
-    }
-    fn decrement_octave(&mut self) {
-        self.octave.saturating_decrement();
-    }
-    fn transpose(&mut self, t: Transpose) {
-        self.semitone_offset = t.0;
-    }
-    fn relative_transpose(&mut self, t: Transpose) {
-        self.semitone_offset = self.semitone_offset.saturating_add(t.0);
-    }
-    fn set_quantize(&mut self, q: Quantization) {
-        self.quantize = q;
+    loop {
+        match_next_token!(
+            p,
+
+            Token::Rest => {
+                rest_tc += parse_length(p);
+            },
+            Token::Tie => {
+                rest_tc += parse_length(p);
+            },
+            #_ => {
+                if !merge_state_change(p) {
+                    return rest_tc;
+                }
+            }
+        )
     }
 }
 
-// This parser also calculates specific notes and total lengths
-//
-// This allows me to merge slurs, ties and rests while parsing.
-struct MmlParser<'a> {
-    instruments_map: &'a HashMap<IdentifierStr<'a>, usize>,
-    subroutine_map: Option<&'a HashMap<IdentifierStr<'a>, SubroutineId>>,
+fn parse_ties_and_slur(p: &mut Parser) -> (TickCounter, bool) {
+    let mut tie_length = TickCounter::new(0);
 
-    parser: MmlStreamParser<'a>,
-    state: MmlParserState,
-    error_list: Vec<ErrorWithPos<MmlParserError>>,
-}
+    loop {
+        match_next_token!(
+            p,
 
-impl MmlParser<'_> {
-    fn new<'a>(
-        lines: &'a [Line<'a>],
-        zenlen: ZenLen,
-        instruments_map: &'a HashMap<IdentifierStr<'a>, usize>,
-        subroutine_map: Option<&'a HashMap<IdentifierStr<'a>, SubroutineId>>,
-    ) -> MmlParser<'a> {
-        MmlParser {
-            instruments_map,
-            subroutine_map,
-
-            parser: MmlStreamParser::new(lines),
-            state: MmlParserState {
-                zenlen,
-                default_length: zenlen.starting_length(),
-                octave: STARTING_OCTAVE,
-                semitone_offset: 0,
-                quantize: Quantization(8),
+            Token::Tie => {
+                tie_length += parse_length(p);
             },
-            error_list: Vec::new(),
-        }
-    }
-
-    fn add_error(&mut self, e: ErrorWithPos<MmlParserError>) {
-        self.error_list.push(e)
-    }
-
-    fn add_error_before(&mut self, e: MmlParserError) {
-        self.error_list
-            .push(ErrorWithPos(self.parser.previous_pos_range(), e))
-    }
-
-    fn pitch_to_note(&self, p: MmlPitch) -> Result<Note, MmlParserError> {
-        match Note::from_mml_pitch(p, self.state.octave, self.state.semitone_offset) {
-            Ok(n) => Ok(n),
-            Err(_) => Err(MmlParserError::InvalidNote),
-        }
-    }
-
-    fn calculate_note_length(&self, l: MmlLength) -> Result<TickCounter, MmlParserError> {
-        Ok(l.to_tick_count(self.state.default_length, self.state.zenlen)?)
-    }
-
-    fn parse_optional_note_length(
-        &mut self,
-    ) -> Result<Option<TickCounter>, ErrorWithPos<MmlParserError>> {
-        match self.parser.parse_optional_length() {
-            Ok(Some(l)) => match self.calculate_note_length(l) {
-                Ok(tc) => Ok(Some(tc)),
-                Err(e) => Err(ErrorWithPos(self.parser.previous_pos_range(), e)),
-            },
-            Ok(None) => Ok(None),
-            Err(e) => Err(e),
-        }
-    }
-
-    fn parse_note_length(&mut self) -> Result<TickCounter, ErrorWithPos<MmlParserError>> {
-        match self.parser.parse_optional_length() {
-            Ok(Some(l)) => match self.calculate_note_length(l) {
-                Ok(tc) => Ok(tc),
-                Err(e) => Err(ErrorWithPos(self.parser.previous_pos_range(), e)),
-            },
-            Ok(None) => Ok(self.state.default_length),
-            Err(e) => Err(e),
-        }
-    }
-
-    // Does not create a new MML Command
-    fn try_change_octave_st_offset_symbol(&mut self, s: Symbol) -> bool {
-        match s {
-            Symbol::SetOctave => match self.parser.parse_newtype() {
-                Ok(o) => self.state.octave = o,
-                Err(e) => self.add_error(e),
-            },
-            Symbol::IncrementOctave => {
-                self.state.octave.saturating_increment();
-            }
-            Symbol::DecrementOctave => {
-                self.state.octave.saturating_decrement();
-            }
-            Symbol::Transpose => match self.parser.parse_newtype() {
-                Ok(t) => self.state.transpose(t),
-                Err(e) => self.add_error(e),
-            },
-            Symbol::RelativeTranspose => match self.parser.parse_newtype() {
-                Ok(t) => self.state.relative_transpose(t),
-                Err(e) => self.add_error(e),
-            },
-            _ => return false,
-        }
-
-        true
-    }
-
-    // Does not create a new MML Command
-    fn try_change_state_symbol(&mut self, s: Symbol) {
-        match s {
-            Symbol::ChangeWholeNoteLength => match self.parser.parse_newtype() {
-                Ok(z) => self.state.zenlen = z,
-                Err(e) => self.add_error(e),
-            },
-            Symbol::SetDefaultLength => match self.parse_optional_note_length() {
-                Ok(Some(tc)) => self.state.default_length = tc,
-                Ok(None) => (),
-                Err(e) => self.add_error(e),
-            },
-            _ => {
-                self.try_change_octave_st_offset_symbol(s);
-            }
-        }
-    }
-
-    // Merge multiple rest commands
-    fn merge_multiple_rest_symbols(&mut self, rest_length: TickCounter) -> TickCounter {
-        // No const symbol concatenate
-        const SYMBOLS: [Symbol; 11] = [
-            Symbol::Divider,
-            Symbol::SetDefaultLength,
-            Symbol::SetOctave,
-            Symbol::IncrementOctave,
-            Symbol::DecrementOctave,
-            Symbol::Transpose,
-            Symbol::RelativeTranspose,
-            Symbol::ChangeWholeNoteLength,
-            Symbol::SetDefaultLength,
-            Symbol::Rest,
-            Symbol::Tie,
-        ];
-
-        let mut rest_length = rest_length;
-
-        while let Some(s) = self.parser.next_symbol_one_of(&SYMBOLS) {
-            match s {
-                Symbol::Rest => {
-                    match self.parse_note_length() {
-                        Ok(l) => rest_length += l,
-                        Err(e) => self.add_error(e),
-                    }
-                }
-
-                Symbol::Tie => {
-                    match self.parse_note_length() {
-                        Ok(l) => rest_length += l,
-                        Err(e) => self.add_error(e),
-                    }
-                }
-
-                // Allow note/pitch changes
-                _ => {
-                    self.try_change_state_symbol(s);
-                }
-            }
-        }
-
-        rest_length
-    }
-
-    // Merges tie and slur commands
-    // Assumes the previous token was a note token.
-    fn parse_tie_and_slur(&mut self) -> (TickCounter, bool) {
-        // No const symbol concatenate
-        const SYMBOLS: [Symbol; 11] = [
-            Symbol::Divider,
-            Symbol::SetDefaultLength,
-            Symbol::SetOctave,
-            Symbol::IncrementOctave,
-            Symbol::DecrementOctave,
-            Symbol::Transpose,
-            Symbol::RelativeTranspose,
-            Symbol::ChangeWholeNoteLength,
-            Symbol::SetDefaultLength,
-            Symbol::Tie,
-            Symbol::Slur,
-        ];
-
-        let mut tie_length = TickCounter::new(0);
-        let mut slur_note = false;
-
-        while let Some(s) = self.parser.next_symbol_one_of(&SYMBOLS) {
-            match s {
-                // Allow note length and octave to change before tie/slur
-                Symbol::Tie => {
-                    // Extend tick_length on ties
-                    match self.parse_note_length() {
-                        Ok(l) => tie_length += l,
-                        Err(e) => self.add_error(e),
-                    }
-                }
-                Symbol::Slur => {
-                    // Slur or tie
-                    match self.parse_optional_note_length() {
-                        Ok(Some(l)) => tie_length += l,
-                        Ok(None) => slur_note = true,
-                        Err(e) => self.add_error(e),
-                    }
-                }
-
-                // Allow note/pitch changes
-                _ => {
-                    self.try_change_state_symbol(s);
-                }
-            }
-        }
-
-        (tie_length, slur_note)
-    }
-
-    // Merges multiple pan and volume commands
-    fn parse_pan_or_volume(
-        &mut self,
-        pan: Option<PanCommand>,
-        volume: Option<VolumeCommand>,
-    ) -> Result<MmlCommand, ErrorWithPos<MmlParserError>> {
-        // No const symbol concatenate
-        const SYMBOLS: [Symbol; 12] = [
-            Symbol::Divider,
-            Symbol::SetDefaultLength,
-            Symbol::SetOctave,
-            Symbol::IncrementOctave,
-            Symbol::DecrementOctave,
-            Symbol::Transpose,
-            Symbol::RelativeTranspose,
-            Symbol::ChangeWholeNoteLength,
-            Symbol::SetDefaultLength,
-            Symbol::FineVolume,
-            Symbol::CoarseVolume,
-            Symbol::Pan,
-        ];
-
-        let mut pan = pan;
-        let mut volume = volume;
-
-        while let Some(s) = self.parser.next_symbol_one_of(&SYMBOLS) {
-            match s {
-                Symbol::CoarseVolume => match self.parser.parse_coarse_volume() {
-                    Ok(v) => volume = Some(merge_volumes(volume, v)),
-                    Err(e) => self.add_error(e),
-                },
-                Symbol::FineVolume => match self.parser.parse_fine_volume() {
-                    Ok(v) => volume = Some(merge_volumes(volume, v)),
-                    Err(e) => self.add_error(e),
-                },
-                Symbol::Pan => match self.parser.parse_pan() {
-                    Ok(p) => pan = Some(merge_pans(pan, p)),
-                    Err(e) => self.add_error(e),
-                },
-                // Allow note/pitch changes
-                _ => {
-                    self.try_change_state_symbol(s);
-                }
-            }
-        }
-
-        Ok(MmlCommand::ChangePanAndOrVolume(pan, volume))
-    }
-
-    fn parse_portamento(
-        &mut self,
-        pos: &FilePosRange,
-    ) -> Result<MmlCommand, ErrorWithPos<MmlParserError>> {
-        let (notes, pos) = match self.parse_pitch_list(Symbol::EndPortamento) {
-            Some(np) => np,
-            None => {
-                return Err(ErrorWithPos(
-                    pos.clone(),
-                    MmlParserError::MissingEndPortamento,
-                ));
-            }
-        };
-
-        if notes.len() != 2 {
-            return Err(ErrorWithPos(
-                pos,
-                MmlParserError::PortamentoRequiresTwoPitches,
-            ));
-        }
-
-        let total_length = self.parse_note_length()?;
-
-        let mut delay_length = TickCounter::new(0);
-        let mut speed_override = None;
-
-        if self.parser.next_symbol_matches(Symbol::Comma) {
-            if let Some(dt) = self.parse_optional_note_length()? {
-                if dt < total_length {
-                    delay_length = dt;
+            Token::Slur => {
+                // Slur or tie
+                if let Some(tc) = parse_optional_length(p) {
+                    tie_length += tc;
                 } else {
-                    self.add_error_before(MmlParserError::InvalidPortamentoDelay);
+                    // slur
+                    return (tie_length, true);
                 }
-            };
-            if self.parser.next_symbol_matches(Symbol::Comma) {
-                speed_override = Some(self.parser.parse_newtype()?);
+            },
+
+            #_ => {
+                if !merge_state_change(p) {
+                    return (tie_length, false);
+                }
+            }
+        )
+    }
+}
+
+fn parse_rest(p: &mut Parser) -> MmlCommand {
+    let tc = parse_length(p);
+    let tc = merge_rest_tokens(p, tc);
+
+    MmlCommand::Rest(tc)
+}
+
+fn play_note(note: Note, length: TickCounter, p: &mut Parser) -> MmlCommand {
+    let (tie_length, is_slur) = parse_ties_and_slur(p);
+    let length = length + tie_length;
+
+    let q = p.state().quantize.as_u8();
+    const MAX_Q: u8 = Quantization::MAX;
+
+    if q >= MAX_Q || is_slur {
+        MmlCommand::PlayNote {
+            note,
+            length,
+            is_slur,
+        }
+    } else {
+        // Note is quantized
+        let q = u32::from(q);
+        let l = length.value();
+        let key_on_length = (l * q) / u32::from(MAX_Q) + KEY_OFF_TICK_DELAY;
+        let key_off_length = l - key_on_length;
+
+        if key_on_length > KEY_OFF_TICK_DELAY && key_off_length > KEY_OFF_TICK_DELAY {
+            let key_on_length = TickCounter::new(key_on_length);
+            let rest = TickCounter::new(key_off_length);
+
+            let rest = merge_rest_tokens(p, rest);
+
+            MmlCommand::PlayQuantizedNote {
+                note,
+                length,
+                key_on_length,
+                rest,
+            }
+        } else {
+            // Note is too short to be quantized
+            MmlCommand::PlayNote {
+                note,
+                length,
+                is_slur,
             }
         }
+    }
+}
 
-        let (tie_length, is_slur) = self.parse_tie_and_slur();
+fn parse_pitch(pos: FilePos, pitch: MmlPitch, p: &mut Parser) -> MmlCommand {
+    match Note::from_mml_pitch(pitch, p.state().octave, p.state().semitone_offset) {
+        Ok(note) => {
+            let length = parse_length(p);
+            play_note(note, length, p)
+        }
+        Err(e) => {
+            p.add_error(pos, e.into());
 
-        Ok(MmlCommand::Portamento {
+            // Output a rest (so tick-counter is correct)
+            let length = parse_length(p);
+            let (tie_length, _) = parse_ties_and_slur(p);
+            let length = length + tie_length;
+            MmlCommand::Rest(length)
+        }
+    }
+}
+
+fn parse_play_midi_note_number(pos: FilePos, p: &mut Parser) -> MmlCommand {
+    let note = match parse_unsigned_newtype::<MidiNote>(pos, p) {
+        Some(n) => match n.try_into() {
+            Ok(n) => Some(n),
+            Err(e) => {
+                let e: ValueError = e;
+                p.add_error(pos, e.into());
+                None
+            }
+        },
+        None => None,
+    };
+
+    match note {
+        Some(note) => {
+            let length = parse_length(p);
+            play_note(note, length, p)
+        }
+        None => {
+            // Output a rest (so tick-counter is correct)
+            let length = parse_length(p);
+            let (tie_length, _) = parse_ties_and_slur(p);
+            let length = length + tie_length;
+            MmlCommand::Rest(length)
+        }
+    }
+}
+
+fn parse_portamento(pos: FilePos, p: &mut Parser) -> MmlCommand {
+    let (notes, end_pos, end_token) = parse_pitch_list(p);
+
+    if !matches!(end_token, Token::EndPortamento) {
+        return invalid_token_error(p, end_pos, MmlParserError::MissingEndPortamento);
+    }
+
+    if notes.len() != 2 {
+        p.add_error(pos, MmlParserError::PortamentoRequiresTwoPitches);
+    }
+
+    let total_length = parse_length(p);
+
+    let mut delay_length = TickCounter::new(0);
+    let mut speed_override = None;
+
+    if next_token_matches!(p, Token::Comma) {
+        let dt_pos = *p.peek_pos();
+        if let Some(dt) = parse_optional_length(p) {
+            if dt < total_length {
+                delay_length = dt;
+            } else {
+                p.add_error(dt_pos, MmlParserError::InvalidPortamentoDelay);
+            }
+        }
+        if next_token_matches!(p, Token::Comma) {
+            speed_override = parse_unsigned_newtype(*p.peek_pos(), p);
+        }
+    }
+
+    let (tie_length, is_slur) = parse_ties_and_slur(p);
+
+    if notes.len() == 2 {
+        MmlCommand::Portamento {
             note1: notes[0],
             note2: notes[1],
             is_slur,
@@ -1273,372 +843,233 @@ impl MmlParser<'_> {
             total_length,
             delay_length,
             tie_length,
-        })
-    }
-
-    fn parse_broken_chord(
-        &mut self,
-        pos: &FilePosRange,
-    ) -> Result<MmlCommand, ErrorWithPos<MmlParserError>> {
-        let (notes, _pos) = match self.parse_pitch_list(Symbol::EndBrokenChord) {
-            Some(np) => np,
-            None => {
-                return Err(ErrorWithPos(
-                    pos.clone(),
-                    MmlParserError::MissingEndBrokenChord,
-                ));
-            }
-        };
-
-        let total_length = self.parse_note_length()?;
-        let mut tie = true;
-        let mut note_length = None;
-        let mut note_length_pos = self.parser.previous_pos_range();
-
-        if self.parser.next_symbol_matches(Symbol::Comma) {
-            note_length = self.parser.parse_optional_length()?;
-            note_length_pos = self.parser.previous_pos_range();
-
-            if self.parser.next_symbol_matches(Symbol::Comma) {
-                tie = self.parser.parse_bool()?;
-            }
         }
+    } else {
+        MmlCommand::NoCommand
+    }
+}
 
-        let note_length = match note_length {
-            Some(nl) => match self.calculate_note_length(nl) {
-                Ok(ticks) => match PlayNoteTicks::try_from_is_slur(ticks.value(), tie) {
-                    Ok(t) => t,
-                    Err(e) => {
-                        return Err(ErrorWithPos(note_length_pos, MmlParserError::ValueError(e)))
-                    }
-                },
-                Err(e) => return Err(ErrorWithPos(note_length_pos, e)),
-            },
-            None => PlayNoteTicks::min_for_is_slur(tie),
-        };
+fn parse_broken_chord(p: &mut Parser) -> MmlCommand {
+    let (notes, end_pos, end_token) = parse_pitch_list(p);
 
-        Ok(MmlCommand::BrokenChord {
-            notes,
-            total_length,
-            note_length,
-        })
+    if !matches!(end_token, Token::EndBrokenChord) {
+        return invalid_token_error(p, end_pos, MmlParserError::MissingEndBrokenChord);
     }
 
-    fn parse_note(
-        &mut self,
-        note: Note,
-        note_length: TickCounter,
-    ) -> Result<MmlCommand, ErrorWithPos<MmlParserError>> {
-        let (tie_length, is_slur) = self.parse_tie_and_slur();
-        let length = note_length + tie_length;
+    let mut note_length_pos = end_pos;
 
-        let q = self.state.quantize.0;
-        const MAX_Q: u8 = Quantization::MAX;
+    let total_length = parse_length(p);
+    let mut tie = true;
+    let mut note_length = None;
 
-        if q >= MAX_Q || is_slur {
-            Ok(MmlCommand::PlayNote {
-                note,
-                length,
-                is_slur,
-            })
-        } else {
-            // Note is quantized
+    if next_token_matches!(p, Token::Comma) {
+        note_length_pos = *p.peek_pos();
+        note_length = parse_optional_length(p);
 
-            // ::TODO write a test to confirm the tick count is unchanged by quantization::
-            let q = u32::from(q);
-            let l = length.value();
-            let key_on_length = (l * q) / u32::from(MAX_Q) + KEY_OFF_TICK_DELAY;
-            let key_off_length = l - key_on_length;
+        if next_token_matches!(p, Token::Comma) {
+            let tie_pos = *p.peek_pos();
+            match_next_token!(
+                p,
+                Token::Number(0) => tie = false,
+                Token::Number(1) => tie = true,
+                #_ => p.add_error(tie_pos, ValueError::NoBool.into())
+            )
+        }
+    }
 
-            if key_on_length > KEY_OFF_TICK_DELAY && key_off_length > KEY_OFF_TICK_DELAY {
-                let key_on_length = TickCounter::new(key_on_length);
-                let rest = TickCounter::new(key_off_length);
+    let note_length = match note_length {
+        Some(nl) => match PlayNoteTicks::try_from_is_slur(nl.value(), tie) {
+            Ok(t) => t,
+            Err(e) => {
+                p.add_error(note_length_pos, e.into());
+                PlayNoteTicks::min_for_is_slur(tie)
+            }
+        },
+        None => PlayNoteTicks::min_for_is_slur(tie),
+    };
 
-                let rest = self.merge_multiple_rest_symbols(rest);
+    MmlCommand::BrokenChord {
+        notes,
+        total_length,
+        note_length,
+    }
+}
 
-                Ok(MmlCommand::PlayQuantizedNote {
-                    note,
-                    length,
-                    key_on_length,
-                    rest,
+fn parse_mp_vibrato(pos: FilePos, p: &mut Parser) -> Option<MpVibrato> {
+    match_next_token!(
+        p,
+
+        &Token::Number(0) => {
+            // Disable MP Vibrato
+            None
+        },
+        &Token::Number(depth_in_cents) => {
+            if next_token_matches!(p, Token::Comma) {
+                parse_unsigned_newtype(pos, p).map(|qwt| MpVibrato {
+                    depth_in_cents,
+                    quarter_wavelength_ticks: qwt,
                 })
             } else {
-                // Note is too short to be quantized
-                Ok(MmlCommand::PlayNote {
-                    note,
-                    length,
-                    is_slur,
-                })
+                p.add_error(pos, ValueError::NoCommaQuarterWavelength.into());
+                None
             }
+        },
+        #_ => {
+            p.add_error(pos, ValueError::NoMpDepth.into());
+            None
         }
+    )
+}
+
+fn parse_manual_vibrato(pos: FilePos, p: &mut Parser) -> Option<ManualVibrato> {
+    let pitch_offset_per_tick: PitchOffsetPerTick = match parse_unsigned_newtype(pos, p) {
+        Some(v) => v,
+        None => return None,
+    };
+
+    if pitch_offset_per_tick.as_u8() == 0 {
+        // Disable MP Vibrato
+        None
+    } else if next_token_matches!(p, Token::Comma) {
+        parse_unsigned_newtype(pos, p).map(|qwt| ManualVibrato {
+            pitch_offset_per_tick,
+            quarter_wavelength_ticks: qwt,
+        })
+    } else {
+        p.add_error(pos, ValueError::NoCommaQuarterWavelength.into());
+        None
     }
+}
 
-    fn parse_play_pitch(
-        &mut self,
-        pitch: MmlPitch,
-        pos: &FilePosRange,
-    ) -> Result<MmlCommand, ErrorWithPos<MmlParserError>> {
-        let note = match self.pitch_to_note(pitch) {
-            Ok(n) => n,
-            Err(e) => return Err(ErrorWithPos(pos.clone(), e)),
-        };
-        let length = self.parse_note_length()?;
+fn parse_echo(pos: FilePos, p: &mut Parser) -> MmlCommand {
+    match_next_token!(p,
+        Token::Number(0) => MmlCommand::SetEcho(false),
+        Token::Number(1) => MmlCommand::SetEcho(true),
+        Token::Number(_) => invalid_token_error(p, pos, ValueError::NoBool.into()),
+        #_ => MmlCommand::SetEcho(true)
+    )
+}
 
-        self.parse_note(note, length)
-    }
+fn invalid_token_error(p: &mut Parser, pos: FilePos, e: MmlParserError) -> MmlCommand {
+    p.add_error(pos, e);
+    MmlCommand::NoCommand
+}
 
-    fn parse_symbol(
-        &mut self,
-        symbol: Symbol,
-        pos: &FilePosRange,
-    ) -> Result<MmlCommand, ErrorWithPos<MmlParserError>> {
-        type Error = MmlParserError;
+fn parse_token(pos: FilePos, token: Token, p: &mut Parser) -> MmlCommand {
+    match token {
+        Token::End => MmlCommand::NoCommand,
 
-        let err = |e: Error| Err(ErrorWithPos(pos.clone(), e));
+        Token::EndOfLine => MmlCommand::NewLine,
 
-        match symbol {
-            Symbol::CallSubroutine => {
-                let id = self.parser.parse_identifier();
+        Token::Pitch(pitch) => parse_pitch(pos, pitch, p),
+        Token::PlayMidiNoteNumber => parse_play_midi_note_number(pos, p),
+        Token::Rest => parse_rest(p),
+        Token::StartPortamento => parse_portamento(pos, p),
+        Token::StartBrokenChord => parse_broken_chord(p),
 
-                match self.subroutine_map {
-                    Some(subroutine_map) => match id {
-                        Some(id) => match subroutine_map.get(&id) {
-                            Some(s) => Ok(MmlCommand::CallSubroutine(*s)),
-                            None => {
-                                let id = id.as_str().to_owned();
-                                Err(ErrorWithPos(
-                                    self.parser.file_pos_range_from(pos.clone()),
-                                    Error::CannotFindSubroutine(id),
-                                ))
-                            }
-                        },
-                        None => err(Error::NoSubroutine),
-                    },
-                    None => {
-                        // Subroutine calls are disabled.
-                        // ignore identifier
-                        err(Error::CannotCallSubroutineInASubroutine)
-                    }
-                }
-            }
+        Token::MpVibrato => MmlCommand::SetMpVibrato(parse_mp_vibrato(pos, p)),
+        Token::ManualVibrato => MmlCommand::SetManualVibrato(parse_manual_vibrato(pos, p)),
 
-            Symbol::SetInstrument => match self.parser.parse_identifier() {
-                Some(id) => match self.instruments_map.get(&id) {
-                    Some(index) => Ok(MmlCommand::SetInstrument(*index)),
-                    None => {
-                        let id = id.as_str().to_owned();
-                        Err(ErrorWithPos(
-                            self.parser.file_pos_range_from(pos.clone()),
-                            Error::CannotFindInstrument(id),
-                        ))
-                    }
-                },
-                None => err(Error::NoInstrument),
-            },
+        Token::SetInstrument(inst) => MmlCommand::SetInstrument(inst),
+        Token::CallSubroutine(id) => MmlCommand::CallSubroutine(id),
 
-            Symbol::StartLoop => Ok(MmlCommand::StartLoop),
-            Symbol::SkipLastLoop => Ok(MmlCommand::SkipLastLoop),
-            Symbol::EndLoop => Ok(MmlCommand::EndLoop(self.parser.parse_newtype()?)),
-
-            Symbol::PlayMidiNoteNumber => match self.parser.parse_newtype::<MidiNote>()?.try_into()
-            {
-                Ok(n) => self.parse_note(n, self.state.default_length),
-                Err(e) => err(e.into()),
-            },
-
-            Symbol::Rest => {
-                let r = self.parse_note_length()?;
-                let r = self.merge_multiple_rest_symbols(r);
-                Ok(MmlCommand::Rest(r))
-            }
-
-            Symbol::CoarseVolume => {
-                let v = self.parser.parse_coarse_volume()?;
-                self.parse_pan_or_volume(None, Some(v))
-            }
-            Symbol::FineVolume => {
-                let v = self.parser.parse_fine_volume()?;
-                self.parse_pan_or_volume(None, Some(v))
-            }
-            Symbol::Pan => {
-                let p = self.parser.parse_pan()?;
-                self.parse_pan_or_volume(Some(p), None)
-            }
-
-            Symbol::StartBrokenChord => self.parse_broken_chord(pos),
-            Symbol::EndBrokenChord => err(Error::NoStartBrokenChord),
-
-            Symbol::StartPortamento => self.parse_portamento(pos),
-            Symbol::EndPortamento => err(Error::NoStartPortamento),
-
-            Symbol::ManualVibrato => Ok(MmlCommand::SetManualVibrato(
-                self.parser.parse_manual_vibrato()?,
-            )),
-
-            Symbol::MpVibrato => Ok(MmlCommand::SetMpVibrato(self.parser.parse_mp_vibtato()?)),
-
-            Symbol::Echo => Ok(MmlCommand::SetEcho(
-                self.parser.parse_optional_bool()?.unwrap_or(true),
-            )),
-
-            Symbol::SetSongTempo => Ok(MmlCommand::SetSongTempo(self.parser.parse_newtype()?)),
-
-            Symbol::SetSongTickClock => {
-                Ok(MmlCommand::SetSongTickClock(self.parser.parse_newtype()?))
-            }
-
-            Symbol::SetLoopPoint => Ok(MmlCommand::SetLoopPoint),
-
-            Symbol::Tie => err(Error::MissingNoteBeforeTie),
-            Symbol::Slur => err(Error::MissingNoteBeforeSlur),
-            Symbol::Comma => err(Error::CannotParseComma),
-
-            // state change commands
-            Symbol::ChangeWholeNoteLength => {
-                self.state.set_zenlen(self.parser.parse_newtype()?);
-                Ok(MmlCommand::NoCommand)
-            }
-            Symbol::SetDefaultLength => {
-                let tc = self.parse_optional_note_length()?;
-                self.state.set_defualt_length(tc);
-                Ok(MmlCommand::NoCommand)
-            }
-            Symbol::SetOctave => {
-                self.state.set_octave(self.parser.parse_newtype()?);
-                Ok(MmlCommand::NoCommand)
-            }
-            Symbol::IncrementOctave => {
-                self.state.increment_octave();
-                Ok(MmlCommand::NoCommand)
-            }
-            Symbol::DecrementOctave => {
-                self.state.decrement_octave();
-                Ok(MmlCommand::NoCommand)
-            }
-            Symbol::Transpose => {
-                self.state.transpose(self.parser.parse_newtype()?);
-                Ok(MmlCommand::NoCommand)
-            }
-
-            Symbol::RelativeTranspose => {
-                self.state.relative_transpose(self.parser.parse_newtype()?);
-                Ok(MmlCommand::NoCommand)
-            }
-
-            Symbol::Quantize => {
-                self.state.set_quantize(self.parser.parse_newtype()?);
-                Ok(MmlCommand::NoCommand)
-            }
-
-            // Formatting symbols
-            Symbol::Divider => Ok(MmlCommand::NoCommand),
-        }
-    }
-
-    fn parse_pitch_list(&mut self, end_symbol: Symbol) -> Option<(Vec<Note>, FilePosRange)> {
-        let mut out = Vec::new();
-
-        let pos = self.parser.previous_pos_range();
-
-        loop {
-            // Do not advance to the next line.
-            match self.parser.next_new_command_token() {
-                NewCommandToken::Symbol(s) if s == end_symbol => {
-                    let pos = FilePosRange {
-                        index_end: self.parser.previous_pos_range().index_end,
-                        ..pos
-                    };
-                    return Some((out, pos));
-                }
-                NewCommandToken::EndOfLine | NewCommandToken::EndOfStream => {
-                    // Missing EndBrokenChord token
-                    return None;
-                }
-                NewCommandToken::UnknownCharacters(count) => {
-                    self.add_error_before(MmlParserError::UnknownCharacters(count));
-                }
-                NewCommandToken::PitchError(e) => {
-                    self.add_error(e);
-                }
-                NewCommandToken::Pitch(p) => match self.pitch_to_note(p) {
-                    Ok(n) => out.push(n),
-                    Err(e) => self.add_error_before(e),
-                },
-                NewCommandToken::Symbol(s) => {
-                    if s == Symbol::PlayMidiNoteNumber {
-                        match self.parser.parse_newtype::<MidiNote>() {
-                            Err(e) => self.add_error(e),
-                            Ok(n) => match Note::try_from(n) {
-                                Ok(n) => out.push(n),
-                                Err(e) => self.add_error_before(e.into()),
-                            },
-                        }
-                    } else if self.try_change_octave_st_offset_symbol(s) {
-                        // Change octave or semitone offset symbol
-                    } else {
-                        self.add_error_before(MmlParserError::InvalidPitchListSymbol)
-                    }
-                }
-            }
-        }
-    }
-
-    fn parse_all(
-        mut self,
-    ) -> Result<(Vec<MmlCommandWithPos>, FilePos), Vec<ErrorWithPos<MmlParserError>>> {
-        let mut out = Vec::new();
-
-        // ::TODO detect and panic on infinite loop::
-
-        loop {
-            // Do not advance to the next line.
-            match self.parser.next_new_command_token() {
-                NewCommandToken::EndOfStream => {
-                    break;
-                }
-                NewCommandToken::EndOfLine => {
-                    self.parser.parse_newline();
-                    out.push(MmlCommandWithPos {
-                        command: MmlCommand::NewLine,
-                        pos: self.parser.pos().to_range(1),
-                    });
-                }
-                NewCommandToken::UnknownCharacters(count) => {
-                    self.add_error_before(MmlParserError::UnknownCharacters(count));
-                }
-                NewCommandToken::PitchError(e) => {
-                    self.add_error(e);
-                }
-                NewCommandToken::Pitch(pitch) => {
-                    let pos = self.parser.previous_pos_range();
-                    match self.parse_play_pitch(pitch, &pos) {
-                        Ok(command) => {
-                            let pos = self.parser.file_pos_range_from(pos);
-                            out.push(MmlCommandWithPos { command, pos })
-                        }
-                        Err(e) => self.add_error(e),
-                    }
-                }
-                NewCommandToken::Symbol(symbol) => {
-                    let pos = self.parser.previous_pos_range();
-                    match self.parse_symbol(symbol, &pos) {
-                        Ok(command) => match command {
-                            MmlCommand::NoCommand => (),
-                            _ => {
-                                let pos = self.parser.file_pos_range_from(pos);
-                                out.push(MmlCommandWithPos { command, pos })
-                            }
-                        },
-                        Err(e) => self.add_error(e),
-                    }
-                }
-            }
+        Token::StartLoop => MmlCommand::StartLoop,
+        Token::SkipLastLoop => MmlCommand::SkipLastLoop,
+        Token::EndLoop => {
+            let lc = parse_unsigned_newtype(pos, p).unwrap_or(LoopCount::MIN_LOOPCOUNT);
+            MmlCommand::EndLoop(lc)
         }
 
-        if self.error_list.is_empty() {
-            Ok((out, self.parser.pos()))
-        } else {
-            Err(self.error_list)
+        Token::SetLoopPoint => MmlCommand::SetLoopPoint,
+
+        Token::Echo => parse_echo(pos, p),
+
+        Token::SetSongTempo => match parse_unsigned_newtype(pos, p) {
+            Some(t) => MmlCommand::SetSongTempo(t),
+            None => MmlCommand::NoCommand,
+        },
+        Token::SetSongTickClock => match parse_unsigned_newtype(pos, p) {
+            Some(t) => MmlCommand::SetSongTickClock(t),
+            None => MmlCommand::NoCommand,
+        },
+
+        Token::CoarseVolume => {
+            let v = parse_coarse_volume_value(pos, p);
+            merge_pan_or_volume(None, v, p)
+        }
+        Token::FineVolume => {
+            let v = parse_fine_volume_value(pos, p);
+            merge_pan_or_volume(None, v, p)
+        }
+        Token::Pan => {
+            let pan = parse_pan_value(pos, p);
+            merge_pan_or_volume(pan, None, p)
+        }
+
+        Token::Quantize => {
+            parse_quantize(pos, p);
+            MmlCommand::NoCommand
+        }
+        Token::SetDefaultLength => {
+            parse_set_default_length(p);
+            MmlCommand::NoCommand
+        }
+        Token::SetOctave => {
+            parse_set_octave(pos, p);
+            MmlCommand::NoCommand
+        }
+        Token::IncrementOctave => {
+            parse_increment_octave(p);
+            MmlCommand::NoCommand
+        }
+        Token::DecrementOctave => {
+            parse_decrement_octave(p);
+            MmlCommand::NoCommand
+        }
+        Token::Transpose => {
+            parse_transpose(pos, p);
+            MmlCommand::NoCommand
+        }
+        Token::RelativeTranspose => {
+            parse_relative_transpose(pos, p);
+            MmlCommand::NoCommand
+        }
+        Token::ChangeWholeNoteLength => {
+            parse_change_whole_note_length(pos, p);
+            MmlCommand::NoCommand
+        }
+        Token::Divider => MmlCommand::NoCommand,
+
+        Token::EndPortamento => invalid_token_error(p, pos, MmlParserError::NoStartPortamento),
+        Token::EndBrokenChord => invalid_token_error(p, pos, MmlParserError::NoStartBrokenChord),
+
+        Token::Tie => invalid_token_error(p, pos, MmlParserError::MissingNoteBeforeTie),
+        Token::Slur => invalid_token_error(p, pos, MmlParserError::MissingNoteBeforeTie),
+        Token::Comma => invalid_token_error(p, pos, MmlParserError::CannotParseComma),
+        Token::Dot => invalid_token_error(p, pos, MmlParserError::CannotParseDot),
+        Token::PercentSign => invalid_token_error(p, pos, MmlParserError::CannotParsePercentSign),
+        Token::Number(_) => invalid_token_error(p, pos, MmlParserError::UnexpectedNumber),
+        Token::RelativeNumber(_) => invalid_token_error(p, pos, MmlParserError::UnexpectedNumber),
+
+        Token::Error(e) => invalid_token_error(p, pos, e),
+    }
+}
+
+struct ParserIterator<'a>(Parser<'a>);
+
+impl Iterator for ParserIterator<'_> {
+    type Item = MmlCommandWithPos;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let p = &mut self.0;
+        let (pos, token) = p.peek_and_next();
+
+        match token {
+            Token::End => None,
+            t => Some(MmlCommandWithPos {
+                command: parse_token(pos, t, p),
+                pos: p.file_pos_range_from(pos),
+            }),
         }
     }
 }
@@ -1649,5 +1080,15 @@ pub(crate) fn parse_mml_lines(
     instruments_map: &HashMap<IdentifierStr, usize>,
     subroutine_map: Option<&HashMap<IdentifierStr, SubroutineId>>,
 ) -> Result<(Vec<MmlCommandWithPos>, FilePos), Vec<ErrorWithPos<MmlParserError>>> {
-    MmlParser::new(lines, zenlen, instruments_map, subroutine_map).parse_all()
+    let mut p = ParserIterator(Parser::new(lines, instruments_map, subroutine_map, zenlen));
+
+    let out = p.by_ref().collect();
+    let pos = *p.0.peek_pos();
+    let errors = p.0.take_errors();
+
+    if errors.is_empty() {
+        Ok((out, pos))
+    } else {
+        Err(errors)
+    }
 }

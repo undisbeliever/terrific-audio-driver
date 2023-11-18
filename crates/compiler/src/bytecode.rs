@@ -271,6 +271,8 @@ impl LoopCount {
     pub const MIN: u32 = 2;
     pub const MAX: u32 = 0x100;
 
+    pub const MIN_LOOPCOUNT: LoopCount = LoopCount(Self::MIN as u8);
+
     pub fn to_u32(self) -> u32 {
         if self.0 == 0 {
             0x100

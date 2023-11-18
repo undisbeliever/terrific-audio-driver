@@ -10,6 +10,7 @@ mod bc_generator;
 mod instruments;
 mod line_splitter;
 mod metadata;
+mod tokenizer;
 
 pub mod command_parser;
 pub mod identifier;

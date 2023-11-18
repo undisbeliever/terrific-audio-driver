@@ -383,6 +383,9 @@ pub enum MmlParserError {
     MissingNoteBeforeTie,
     MissingNoteBeforeSlur,
     CannotParseComma,
+    CannotParseDot,
+    CannotParsePercentSign,
+    UnexpectedNumber,
 
     InvalidPitchListSymbol,
 }
@@ -1024,6 +1027,9 @@ impl Display for MmlParserError {
             Self::MissingNoteBeforeTie => write!(f, "missing note before tie"),
             Self::MissingNoteBeforeSlur => write!(f, "missing note before slur"),
             Self::CannotParseComma => write!(f, "cannot parse comma"),
+            Self::CannotParseDot => write!(f, "cannot parse dot"),
+            Self::CannotParsePercentSign => write!(f, "cannot parse %"),
+            Self::UnexpectedNumber => write!(f, "unexpected number"),
 
             Self::InvalidPitchListSymbol => write!(f, "invalid pitch list symbol"),
         }

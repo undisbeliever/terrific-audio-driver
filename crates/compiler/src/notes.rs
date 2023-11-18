@@ -17,7 +17,7 @@ pub const LAST_OCTAVE: u8 = 7;
 pub const SEMITONES_PER_OCTAVE: u8 = 12;
 pub const LAST_NOTE_ID: u8 = (LAST_OCTAVE + 1) * SEMITONES_PER_OCTAVE - 1;
 
-#[derive(Clone)]
+#[derive(Debug, Clone, Copy)]
 pub struct PitchChar(u8);
 
 pub fn parse_pitch_char(c: char) -> Result<PitchChar, ValueError> {
@@ -246,6 +246,7 @@ impl TryFrom<u32> for Octave {
     }
 }
 
+#[derive(Debug, Clone, Copy)]
 pub struct MmlPitch {
     pitch: PitchChar,
     semitone_offset: i8,

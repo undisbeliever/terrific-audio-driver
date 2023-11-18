@@ -33,6 +33,19 @@ impl FilePos {
         }
     }
 
+    pub(crate) fn to_range_pos(self, p: &FilePos) -> FilePosRange {
+        if p.char_index > self.char_index && p.line_number == self.line_number {
+            FilePosRange {
+                line_number: self.line_number,
+                line_char: self.line_char,
+                index_start: self.char_index,
+                index_end: p.char_index,
+            }
+        } else {
+            self.to_range(1)
+        }
+    }
+
     // ASSUMES: `s` is the prefix at this file position
     pub(crate) fn to_range_str_len(self, s: &str) -> FilePosRange {
         let s_len = s.bytes().len().try_into().unwrap();
