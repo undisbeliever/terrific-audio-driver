@@ -5,8 +5,7 @@
 // SPDX-License-Identifier: MIT
 
 use super::command_parser::{
-    ManualVibrato, MmlCommand, MmlCommandWithPos, MpVibrato, PanCommand, PortamentoSpeed,
-    VolumeCommand,
+    ManualVibrato, MmlCommand, MpVibrato, PanCommand, Parser, PortamentoSpeed, VolumeCommand,
 };
 use super::identifier::Identifier;
 use super::instruments::{EnvelopeOverride, MmlInstrument};
@@ -16,8 +15,9 @@ use crate::bytecode::{
     BcTerminator, BcTicksKeyOff, BcTicksNoKeyOff, Bytecode, LoopCount, PitchOffsetPerTick,
     PlayNoteTicks, PortamentoVelocity, SubroutineId,
 };
-use crate::errors::{ErrorWithPos, MmlCommandError, ValueError};
-use crate::file_pos::{FilePos, FilePosRange};
+use crate::errors::{ErrorWithPos, MmlChannelError, MmlCommandError, ValueError};
+use crate::file_pos::{FilePosRange, Line};
+use crate::mml::SharedChannelInput;
 use crate::notes::{Note, SEMITONES_PER_OCTAVE};
 use crate::pitch_table::PitchTable;
 use crate::time::{TickClock, TickCounter};
@@ -124,10 +124,7 @@ impl MmlBytecodeGenerator<'_> {
         instruments: &'a Vec<MmlInstrument>,
         subroutines: Option<&'a Vec<ChannelData>>,
         is_subroutine: bool,
-        n_commands: usize,
     ) -> MmlBytecodeGenerator<'a> {
-        let _ = n_commands;
-
         MmlBytecodeGenerator {
             pitch_table,
             instruments,
@@ -144,7 +141,7 @@ impl MmlBytecodeGenerator<'_> {
             show_missing_set_instrument_error: !is_subroutine,
 
             #[cfg(feature = "mml_tracking")]
-            bc_tracking: Vec::with_capacity(n_commands),
+            bc_tracking: Vec::new(),
         }
     }
 
@@ -777,39 +774,44 @@ impl MmlBytecodeGenerator<'_> {
     }
 }
 
-pub fn process_mml_commands(
-    commands: &Vec<MmlCommandWithPos>,
-    last_pos: FilePos,
+pub fn parse_and_compile_mml_channel(
+    lines: &[Line],
     identifier: Identifier,
     subroutine_index: Option<u8>,
-    pitch_table: &PitchTable,
-    instruments: &Vec<MmlInstrument>,
-    subroutines: Option<&Vec<ChannelData>>,
-) -> Result<ChannelData, Vec<ErrorWithPos<MmlCommandError>>> {
-    let mut errors = Vec::new();
+    sci: &SharedChannelInput,
+) -> Result<ChannelData, MmlChannelError> {
+    let mut parser = Parser::new(
+        lines,
+        &sci.instrument_map,
+        sci.subroutine_map.as_ref(),
+        sci.zenlen,
+    );
+
+    let mut command_errors = Vec::new();
 
     // Cannot have subroutine_index and subroutines list at the same time.
     if subroutine_index.is_some() {
         assert!(
-            subroutines.is_none(),
+            sci.subroutines.is_none(),
             "Cannot set `subroutine_index` and `subroutines` vec at the same time"
         );
     }
 
     let mut gen = MmlBytecodeGenerator::new(
-        pitch_table,
-        instruments,
-        subroutines,
+        sci.pitch_table,
+        sci.instruments,
+        sci.subroutines,
         subroutine_index.is_some(),
-        commands.len(),
     );
 
-    for c in commands {
+    for c in parser.by_ref() {
         match gen.process_command(c.command(), c.pos()) {
             Ok(()) => (),
-            Err(e) => errors.push(ErrorWithPos(c.pos().clone(), e)),
+            Err(e) => command_errors.push(ErrorWithPos(c.pos().clone(), e)),
         }
     }
+
+    let last_pos = parser.peek_pos();
 
     let tick_counter = gen.bc.get_tick_counter();
     let max_nested_loops = gen.bc.get_max_nested_loops();
@@ -822,7 +824,7 @@ pub fn process_mml_commands(
         (Some(_), None) => BcTerminator::ReturnFromSubroutine,
         (None, Some(lp)) => {
             if lp.tick_counter == tick_counter {
-                errors.push(ErrorWithPos(
+                command_errors.push(ErrorWithPos(
                     last_pos.to_range(1),
                     MmlCommandError::NoTicksAfterLoopPoint,
                 ));
@@ -834,7 +836,7 @@ pub fn process_mml_commands(
     let bytecode = match gen.bc.bytecode(terminator) {
         Ok(b) => b,
         Err(e) => {
-            errors.push(ErrorWithPos(
+            command_errors.push(ErrorWithPos(
                 last_pos.to_range(1),
                 MmlCommandError::BytecodeError(e),
             ));
@@ -845,7 +847,9 @@ pub fn process_mml_commands(
     let bc_subroutine =
         subroutine_index.map(|si| SubroutineId::new(si, tick_counter, max_nested_loops));
 
-    if errors.is_empty() {
+    let parse_errors = parser.take_errors();
+
+    if parse_errors.is_empty() && command_errors.is_empty() {
         Ok(ChannelData {
             identifier,
             bytecode,
@@ -860,6 +864,10 @@ pub fn process_mml_commands(
             bc_tracking: gen.bc_tracking,
         })
     } else {
-        Err(errors)
+        Err(MmlChannelError {
+            identifier,
+            parse_errors,
+            command_errors,
+        })
     }
 }

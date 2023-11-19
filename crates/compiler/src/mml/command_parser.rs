@@ -169,7 +169,7 @@ pub struct State {
 mod parser {
     use super::*;
 
-    pub(super) struct Parser<'a> {
+    pub(crate) struct Parser<'a> {
         tokenizer: PeekingTokenizer<'a>,
         errors: Vec<ErrorWithPos<MmlParserError>>,
         state: State,
@@ -213,7 +213,7 @@ mod parser {
             self.tokenizer.next();
         }
 
-        pub(super) fn peek_pos(&self) -> &FilePos {
+        pub fn peek_pos(&self) -> &FilePos {
             self.tokenizer.peek_pos()
         }
 
@@ -225,17 +225,33 @@ mod parser {
             self.tokenizer.peek_and_next()
         }
 
-        pub(super) fn add_error(&mut self, pos: FilePos, e: MmlParserError) {
+        pub fn add_error(&mut self, pos: FilePos, e: MmlParserError) {
             self.errors
                 .push(ErrorWithPos(self.file_pos_range_from(pos), e))
         }
 
-        pub(super) fn take_errors(self) -> Vec<ErrorWithPos<MmlParserError>> {
+        pub fn take_errors(self) -> Vec<ErrorWithPos<MmlParserError>> {
             self.errors
         }
     }
+
+    impl Iterator for Parser<'_> {
+        type Item = MmlCommandWithPos;
+
+        fn next(&mut self) -> Option<Self::Item> {
+            let (pos, token) = self.peek_and_next();
+
+            match token {
+                Token::End => None,
+                t => Some(MmlCommandWithPos {
+                    command: parse_token(pos, t, self),
+                    pos: self.file_pos_range_from(pos),
+                }),
+            }
+        }
+    }
 }
-use parser::Parser;
+pub(crate) use parser::Parser;
 
 // PARSING MACROS
 // ==============
@@ -1052,43 +1068,5 @@ fn parse_token(pos: FilePos, token: Token, p: &mut Parser) -> MmlCommand {
         Token::RelativeNumber(_) => invalid_token_error(p, pos, MmlParserError::UnexpectedNumber),
 
         Token::Error(e) => invalid_token_error(p, pos, e),
-    }
-}
-
-struct ParserIterator<'a>(Parser<'a>);
-
-impl Iterator for ParserIterator<'_> {
-    type Item = MmlCommandWithPos;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        let p = &mut self.0;
-        let (pos, token) = p.peek_and_next();
-
-        match token {
-            Token::End => None,
-            t => Some(MmlCommandWithPos {
-                command: parse_token(pos, t, p),
-                pos: p.file_pos_range_from(pos),
-            }),
-        }
-    }
-}
-
-pub(crate) fn parse_mml_lines(
-    lines: &[Line],
-    zenlen: ZenLen,
-    instruments_map: &HashMap<IdentifierStr, usize>,
-    subroutine_map: Option<&HashMap<IdentifierStr, SubroutineId>>,
-) -> Result<(Vec<MmlCommandWithPos>, FilePos), Vec<ErrorWithPos<MmlParserError>>> {
-    let mut p = ParserIterator(Parser::new(lines, instruments_map, subroutine_map, zenlen));
-
-    let out = p.by_ref().collect();
-    let pos = *p.0.peek_pos();
-    let errors = p.0.take_errors();
-
-    if errors.is_empty() {
-        Ok((out, pos))
-    } else {
-        Err(errors)
     }
 }

@@ -16,8 +16,7 @@ pub mod command_parser;
 pub mod identifier;
 pub mod tick_count_table;
 
-use self::bc_generator::process_mml_commands;
-use self::command_parser::parse_mml_lines;
+use self::bc_generator::parse_and_compile_mml_channel;
 use self::instruments::{build_instrument_map, parse_instruments, MmlInstrument};
 use self::line_splitter::split_mml_lines;
 use self::metadata::parse_headers;
@@ -26,8 +25,7 @@ pub(crate) use identifier::{Identifier, IdentifierStr};
 use crate::bytecode::SubroutineId;
 use crate::data::{self, TextFile, UniqueNamesList};
 use crate::driver_constants::N_MUSIC_CHANNELS;
-use crate::errors::{MmlChannelError, MmlCompileErrors};
-use crate::file_pos::Line;
+use crate::errors::MmlCompileErrors;
 use crate::pitch_table::PitchTable;
 use crate::time::{TickClock, TickCounter, ZenLen, TIMER_HZ};
 
@@ -92,51 +90,13 @@ impl Section {
     }
 }
 
-struct SharedChannelInput<'a> {
+pub struct SharedChannelInput<'a> {
     zenlen: ZenLen,
     pitch_table: &'a PitchTable,
     instruments: &'a Vec<MmlInstrument>,
     instrument_map: HashMap<IdentifierStr<'a>, usize>,
     subroutines: Option<&'a Vec<ChannelData>>,
     subroutine_map: Option<HashMap<IdentifierStr<'a>, SubroutineId>>,
-}
-
-fn parse_and_compile_mml_channel(
-    lines: &[Line],
-    identifier: Identifier,
-    subroutine_index: Option<u8>,
-    sci: &SharedChannelInput,
-) -> Result<ChannelData, MmlChannelError> {
-    match parse_mml_lines(
-        lines,
-        sci.zenlen,
-        &sci.instrument_map,
-        sci.subroutine_map.as_ref(),
-    ) {
-        Err(e) => Err(MmlChannelError {
-            identifier,
-            parse_errors: e,
-            command_errors: Vec::new(),
-        }),
-        Ok((commands, last_pos)) => {
-            match process_mml_commands(
-                &commands,
-                last_pos,
-                identifier.clone(),
-                subroutine_index,
-                sci.pitch_table,
-                sci.instruments,
-                sci.subroutines,
-            ) {
-                Ok(data) => Ok(data),
-                Err(e) => Err(MmlChannelError {
-                    identifier,
-                    parse_errors: Vec::new(),
-                    command_errors: e,
-                }),
-            }
-        }
-    }
 }
 
 pub fn compile_mml(
