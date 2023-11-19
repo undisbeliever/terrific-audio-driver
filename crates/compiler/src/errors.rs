@@ -399,8 +399,6 @@ pub enum MmlCommandError {
     CannotPlayNoteBeforeSettingInstrument,
 
     LoopPointAlreadySet,
-    CannotFindSubroutine,
-    CannotFindInstrument,
     CannotCallSubroutineTooManyNestedLoops(mml::Identifier, usize),
     CannotUseMpWithoutInstrument,
     MpPitchOffsetTooLarge(u32),
@@ -1056,8 +1054,6 @@ impl Display for MmlCommandError {
             }
 
             Self::LoopPointAlreadySet => write!(f, "loop point already set"),
-            Self::CannotFindSubroutine => write!(f, "cannot find subroutine"),
-            Self::CannotFindInstrument => write!(f, "cannot find instrument"),
             Self::CannotCallSubroutineTooManyNestedLoops(name, loops) => {
                 write!(
                     f,

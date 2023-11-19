@@ -145,17 +145,18 @@ impl MmlBytecodeGenerator<'_> {
         }
     }
 
-    fn instrument_from_index(&self, i: usize) -> Result<&MmlInstrument, MmlCommandError> {
+    fn instrument_from_index(&self, i: usize) -> &MmlInstrument {
+        // `i` should always be valid
         match self.instruments.get(i) {
-            Some(inst) => Ok(inst),
-            None => Err(MmlCommandError::CannotFindInstrument),
+            Some(inst) => inst,
+            None => panic!("invalid instrument index"),
         }
     }
 
     fn test_note(&mut self, note: Note) -> Result<(), MmlCommandError> {
         match self.instrument {
             Some(i) => {
-                let inst = self.instrument_from_index(i)?;
+                let inst = self.instrument_from_index(i);
                 if note >= inst.first_note && note <= inst.last_note {
                     Ok(())
                 } else {
@@ -186,7 +187,7 @@ impl MmlBytecodeGenerator<'_> {
             return Err(MmlCommandError::MpDepthZero);
         }
         let inst = match self.instrument {
-            Some(index) => self.instrument_from_index(index)?,
+            Some(index) => self.instrument_from_index(index),
             None => return Err(MmlCommandError::CannotUseMpWithoutInstrument),
         };
 
@@ -420,7 +421,7 @@ impl MmlBytecodeGenerator<'_> {
             }
             None => {
                 let inst = match self.instrument {
-                    Some(index) => self.instrument_from_index(index)?,
+                    Some(index) => self.instrument_from_index(index),
                     None => return Err(MmlCommandError::PortamentoRequiresInstrument),
                 };
                 let p1: i32 = self
@@ -534,11 +535,8 @@ impl MmlBytecodeGenerator<'_> {
         if self.instrument == Some(inst_index) {
             return Ok(());
         }
-        let inst = self.instrument_from_index(inst_index)?;
-        let old_inst = match self.instrument {
-            Some(i) => Some(self.instrument_from_index(i)?),
-            None => None,
-        };
+        let inst = self.instrument_from_index(inst_index);
+        let old_inst = self.instrument.map(|i| self.instrument_from_index(i));
 
         let i_id = inst.instrument_id;
 
@@ -566,12 +564,14 @@ impl MmlBytecodeGenerator<'_> {
     }
 
     fn call_subroutine(&mut self, s_id: SubroutineId) -> Result<(), MmlCommandError> {
+        // CallSubroutine commands should only be created if the channel can call a subroutine.
+        // `s_id` should always be valid
         let sub: &ChannelData = match self.subroutines {
             Some(s) => match s.get(s_id.as_usize()) {
                 Some(s) => s,
-                None => return Err(MmlCommandError::CannotFindSubroutine),
+                None => panic!("invalid SubroutineId"),
             },
-            None => return Err(MmlCommandError::CannotFindSubroutine),
+            None => panic!("subroutines is None"),
         };
 
         // Calling a subroutine disables manual vibrato
