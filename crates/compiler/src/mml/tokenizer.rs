@@ -7,7 +7,7 @@
 use std::collections::HashMap;
 
 use crate::bytecode::SubroutineId;
-use crate::errors::{MmlParserError, ValueError};
+use crate::errors::{MmlError, ValueError};
 use crate::file_pos::{FilePos, Line};
 use crate::notes::{parse_pitch_char, MmlPitch};
 
@@ -18,7 +18,7 @@ pub enum Token {
     End,
     EndOfLine,
 
-    Error(MmlParserError),
+    Error(MmlError),
 
     Pitch(MmlPitch),
 
@@ -268,7 +268,7 @@ impl<'a> Tokenizer<'a> {
             }
         }
 
-        Token::Error(MmlParserError::UnknownCharacters(n_chars))
+        Token::Error(MmlError::UnknownCharacters(n_chars))
     }
 
     pub fn pos(&self) -> FilePos {
@@ -318,9 +318,9 @@ impl<'a> Tokenizer<'a> {
                 let num = self.scanner.read_while(|c| c.is_ascii_digit());
                 match num.parse() {
                     Ok(i) => Token::Number(i),
-                    Err(_) => Token::Error(MmlParserError::ValueError(
-                        ValueError::CannotParseUnsigned(num.to_owned()),
-                    )),
+                    Err(_) => Token::Error(MmlError::ValueError(ValueError::CannotParseUnsigned(
+                        num.to_owned(),
+                    ))),
                 }
             }
             b'a'..=b'g' => {
@@ -347,23 +347,21 @@ impl<'a> Tokenizer<'a> {
                 Some(id) => match self.subroutine_map {
                     Some(sm) => match sm.get(&id) {
                         Some(i) => Token::CallSubroutine(*i),
-                        None => Token::Error(MmlParserError::CannotFindSubroutine(
-                            id.as_str().to_owned(),
-                        )),
+                        None => {
+                            Token::Error(MmlError::CannotFindSubroutine(id.as_str().to_owned()))
+                        }
                     },
-                    None => Token::Error(MmlParserError::CannotCallSubroutineInASubroutine),
+                    None => Token::Error(MmlError::CannotCallSubroutineInASubroutine),
                 },
-                None => Token::Error(MmlParserError::NoSubroutine),
+                None => Token::Error(MmlError::NoSubroutine),
             },
 
             b'@' => match self.scanner.identifier_token() {
                 Some(id) => match self.instruments_map.get(&id) {
                     Some(i) => Token::SetInstrument(*i),
-                    None => {
-                        Token::Error(MmlParserError::CannotFindInstrument(id.as_str().to_owned()))
-                    }
+                    None => Token::Error(MmlError::CannotFindInstrument(id.as_str().to_owned())),
                 },
-                None => Token::Error(MmlParserError::NoInstrument),
+                None => Token::Error(MmlError::NoInstrument),
             },
 
             b'+' => {
@@ -372,9 +370,9 @@ impl<'a> Tokenizer<'a> {
                 let num = self.scanner.read_while(|c| c.is_ascii_digit());
                 match num.parse() {
                     Ok(i) => Token::RelativeNumber(i),
-                    Err(_) => Token::Error(MmlParserError::ValueError(
-                        ValueError::CannotParseSigned(num.to_owned()),
-                    )),
+                    Err(_) => Token::Error(MmlError::ValueError(ValueError::CannotParseSigned(
+                        num.to_owned(),
+                    ))),
                 }
             }
 
@@ -382,9 +380,9 @@ impl<'a> Tokenizer<'a> {
                 let num = self.scanner.read_while(|c| c == b'-' || c.is_ascii_digit());
                 match num.parse() {
                     Ok(i) => Token::RelativeNumber(i),
-                    Err(_) => Token::Error(MmlParserError::ValueError(
-                        ValueError::CannotParseSigned(num.to_owned()),
-                    )),
+                    Err(_) => Token::Error(MmlError::ValueError(ValueError::CannotParseSigned(
+                        num.to_owned(),
+                    ))),
                 }
             }
 
@@ -516,8 +514,7 @@ mod tests {
 
             let mut tokeninzer = Tokenizer::new(&lines, &blank_instruments, None);
             let token = tokeninzer.next().1;
-            let is_unknown_token =
-                matches!(token, Token::Error(MmlParserError::UnknownCharacters(_)));
+            let is_unknown_token = matches!(token, Token::Error(MmlError::UnknownCharacters(_)));
 
             if SPECIAL_CHARS.contains(&c) {
                 // Confirm a single SPECIAL_CHARS character is not a token according to `next()`

@@ -15,7 +15,7 @@ use crate::bytecode::{
     BcTerminator, BcTicksKeyOff, BcTicksNoKeyOff, Bytecode, LoopCount, PitchOffsetPerTick,
     PlayNoteTicks, PortamentoVelocity, SubroutineId,
 };
-use crate::errors::{ErrorWithPos, MmlChannelError, MmlCommandError, ValueError};
+use crate::errors::{MmlChannelError, MmlError, ValueError};
 use crate::file_pos::{FilePosRange, Line};
 use crate::mml::SharedChannelInput;
 use crate::notes::{Note, SEMITONES_PER_OCTAVE};
@@ -153,14 +153,14 @@ impl MmlBytecodeGenerator<'_> {
         }
     }
 
-    fn test_note(&mut self, note: Note) -> Result<(), MmlCommandError> {
+    fn test_note(&mut self, note: Note) -> Result<(), MmlError> {
         match self.instrument {
             Some(i) => {
                 let inst = self.instrument_from_index(i);
                 if note >= inst.first_note && note <= inst.last_note {
                     Ok(())
                 } else {
-                    Err(MmlCommandError::NoteOutOfRange(
+                    Err(MmlError::NoteOutOfRange(
                         note,
                         inst.first_note,
                         inst.last_note,
@@ -170,7 +170,7 @@ impl MmlBytecodeGenerator<'_> {
             None => {
                 if self.show_missing_set_instrument_error {
                     self.show_missing_set_instrument_error = false;
-                    Err(MmlCommandError::CannotPlayNoteBeforeSettingInstrument)
+                    Err(MmlError::CannotPlayNoteBeforeSettingInstrument)
                 } else {
                     Ok(())
                 }
@@ -182,13 +182,13 @@ impl MmlBytecodeGenerator<'_> {
         &self,
         mp: &MpVibrato,
         note: Note,
-    ) -> Result<ManualVibrato, MmlCommandError> {
+    ) -> Result<ManualVibrato, MmlError> {
         if mp.depth_in_cents == 0 {
-            return Err(MmlCommandError::MpDepthZero);
+            return Err(MmlError::MpDepthZero);
         }
         let inst = match self.instrument {
             Some(index) => self.instrument_from_index(index),
-            None => return Err(MmlCommandError::CannotUseMpWithoutInstrument),
+            None => return Err(MmlError::CannotUseMpWithoutInstrument),
         };
 
         let pitch = self.pitch_table.pitch_for_note(inst.instrument_id, note);
@@ -205,7 +205,7 @@ impl MmlBytecodeGenerator<'_> {
         let po_per_tick = if po_per_tick > 1.0 { po_per_tick } else { 1.0 };
 
         if po_per_tick > u32::MAX.into() {
-            return Err(MmlCommandError::MpPitchOffsetTooLarge(u32::MAX));
+            return Err(MmlError::MpPitchOffsetTooLarge(u32::MAX));
         }
         let po_per_tick = po_per_tick as u32;
 
@@ -214,7 +214,7 @@ impl MmlBytecodeGenerator<'_> {
                 quarter_wavelength_ticks: mp.quarter_wavelength_ticks,
                 pitch_offset_per_tick: po,
             }),
-            Err(_) => Err(MmlCommandError::MpPitchOffsetTooLarge(po_per_tick)),
+            Err(_) => Err(MmlError::MpPitchOffsetTooLarge(po_per_tick)),
         }
     }
 
@@ -260,7 +260,7 @@ impl MmlBytecodeGenerator<'_> {
         note: Note,
         length: TickCounter,
         is_slur: bool,
-    ) -> Result<(), MmlCommandError> {
+    ) -> Result<(), MmlError> {
         let (pn_length, rest) = Self::split_play_note_length(length, is_slur)?;
 
         self.test_note(note)?;
@@ -319,11 +319,7 @@ impl MmlBytecodeGenerator<'_> {
         self.rest_after_play_note(rest, is_slur)
     }
 
-    fn rest_after_play_note(
-        &mut self,
-        length: TickCounter,
-        is_slur: bool,
-    ) -> Result<(), MmlCommandError> {
+    fn rest_after_play_note(&mut self, length: TickCounter, is_slur: bool) -> Result<(), MmlError> {
         if length.is_zero() {
             return Ok(());
         }
@@ -356,7 +352,7 @@ impl MmlBytecodeGenerator<'_> {
         Ok(())
     }
 
-    fn rest(&mut self, length: TickCounter) -> Result<(), MmlCommandError> {
+    fn rest(&mut self, length: TickCounter) -> Result<(), MmlError> {
         let mut remaining_ticks = length.value();
 
         let rest_length = BcTicksNoKeyOff::try_from(BcTicksNoKeyOff::MAX).unwrap();
@@ -382,7 +378,7 @@ impl MmlBytecodeGenerator<'_> {
         total_length: TickCounter,
         delay_length: TickCounter,
         tie_length: TickCounter,
-    ) -> Result<(), MmlCommandError> {
+    ) -> Result<(), MmlError> {
         assert!(delay_length < total_length);
 
         self.test_note(note1)?;
@@ -408,7 +404,7 @@ impl MmlBytecodeGenerator<'_> {
         let portamento_length =
             TickCounter::new(total_length.value().wrapping_sub(note1_length.value()));
         if portamento_length.is_zero() {
-            return Err(MmlCommandError::PortamentoDelayTooLong);
+            return Err(MmlError::PortamentoDelayTooLong);
         }
 
         let velocity = match speed_override {
@@ -422,7 +418,7 @@ impl MmlBytecodeGenerator<'_> {
             None => {
                 let inst = match self.instrument {
                     Some(index) => self.instrument_from_index(index),
-                    None => return Err(MmlCommandError::PortamentoRequiresInstrument),
+                    None => return Err(MmlError::PortamentoRequiresInstrument),
                 };
                 let p1: i32 = self
                     .pitch_table
@@ -454,14 +450,14 @@ impl MmlBytecodeGenerator<'_> {
         notes: &[Note],
         total_length: TickCounter,
         note_length: PlayNoteTicks,
-    ) -> Result<(), MmlCommandError> {
+    ) -> Result<(), MmlError> {
         self.prev_slurred_note = None;
 
         if notes.is_empty() {
-            return Err(MmlCommandError::NoNotesInBrokenChord);
+            return Err(MmlError::NoNotesInBrokenChord);
         }
         if notes.len() > MAX_BROKEN_CHORD_NOTES {
-            return Err(MmlCommandError::TooManyNotesInBrokenChord(notes.len()));
+            return Err(MmlError::TooManyNotesInBrokenChord(notes.len()));
         }
         let n_notes: u32 = notes.len().try_into().unwrap();
 
@@ -487,7 +483,7 @@ impl MmlBytecodeGenerator<'_> {
         let last_note_ticks = last_note_ticks;
 
         if total_ticks < last_note_ticks {
-            return Err(MmlCommandError::BrokenChordTotalLengthTooShort);
+            return Err(MmlError::BrokenChordTotalLengthTooShort);
         }
         let notes_in_loop = (total_ticks - last_note_ticks) / note_length.ticks();
 
@@ -497,7 +493,7 @@ impl MmlBytecodeGenerator<'_> {
         let n_loops = (notes_in_loop / n_notes) + u32::from(has_break_point);
 
         if n_loops < 2 {
-            return Err(MmlCommandError::BrokenChordTotalLengthTooShort);
+            return Err(MmlError::BrokenChordTotalLengthTooShort);
         }
 
         let n_loops = LoopCount::try_from(n_loops)?;
@@ -522,7 +518,7 @@ impl MmlBytecodeGenerator<'_> {
         }
 
         if self.bc.get_tick_counter() != expected_tick_counter {
-            return Err(MmlCommandError::BrokenChordTickCountMismatch(
+            return Err(MmlError::BrokenChordTickCountMismatch(
                 expected_tick_counter,
                 self.bc.get_tick_counter(),
             ));
@@ -531,7 +527,7 @@ impl MmlBytecodeGenerator<'_> {
         Ok(())
     }
 
-    fn set_instrument(&mut self, inst_index: usize) -> Result<(), MmlCommandError> {
+    fn set_instrument(&mut self, inst_index: usize) -> Result<(), MmlError> {
         if self.instrument == Some(inst_index) {
             return Ok(());
         }
@@ -563,7 +559,7 @@ impl MmlBytecodeGenerator<'_> {
         Ok(())
     }
 
-    fn call_subroutine(&mut self, s_id: SubroutineId) -> Result<(), MmlCommandError> {
+    fn call_subroutine(&mut self, s_id: SubroutineId) -> Result<(), MmlError> {
         // CallSubroutine commands should only be created if the channel can call a subroutine.
         // `s_id` should always be valid
         let sub: &ChannelData = match self.subroutines {
@@ -604,7 +600,7 @@ impl MmlBytecodeGenerator<'_> {
         }
     }
 
-    fn set_song_tick_clock(&mut self, tick_clock: TickClock) -> Result<(), MmlCommandError> {
+    fn set_song_tick_clock(&mut self, tick_clock: TickClock) -> Result<(), MmlError> {
         let tc = (self.bc.get_tick_counter(), tick_clock);
         self.tempo_changes.push(tc);
 
@@ -616,7 +612,7 @@ impl MmlBytecodeGenerator<'_> {
         &mut self,
         command: &MmlCommand,
         pos: &FilePosRange,
-    ) -> Result<(), MmlCommandError> {
+    ) -> Result<(), MmlError> {
         #[cfg(feature = "mml_tracking")]
         self.bc_tracking.push(BytecodePos {
             bc_pos: self.bc.get_bytecode_len().try_into().unwrap_or(0xffff),
@@ -636,7 +632,7 @@ impl MmlBytecodeGenerator<'_> {
 
             &MmlCommand::SetLoopPoint => {
                 if self.loop_point.is_some() {
-                    return Err(MmlCommandError::LoopPointAlreadySet);
+                    return Err(MmlError::LoopPointAlreadySet);
                 }
                 self.loop_point = Some(LoopPoint {
                     bytecode_offset: self.bc.get_bytecode_len(),
@@ -787,8 +783,6 @@ pub fn parse_and_compile_mml_channel(
         sci.zenlen,
     );
 
-    let mut command_errors = Vec::new();
-
     // Cannot have subroutine_index and subroutines list at the same time.
     if subroutine_index.is_some() {
         assert!(
@@ -804,14 +798,14 @@ pub fn parse_and_compile_mml_channel(
         subroutine_index.is_some(),
     );
 
-    for c in parser.by_ref() {
+    while let Some(c) = parser.next() {
         match gen.process_command(c.command(), c.pos()) {
             Ok(()) => (),
-            Err(e) => command_errors.push(ErrorWithPos(c.pos().clone(), e)),
+            Err(e) => parser.add_error_range(c.pos().clone(), e),
         }
     }
 
-    let last_pos = parser.peek_pos();
+    let last_pos = *parser.peek_pos();
 
     let tick_counter = gen.bc.get_tick_counter();
     let max_nested_loops = gen.bc.get_max_nested_loops();
@@ -824,10 +818,7 @@ pub fn parse_and_compile_mml_channel(
         (Some(_), None) => BcTerminator::ReturnFromSubroutine,
         (None, Some(lp)) => {
             if lp.tick_counter == tick_counter {
-                command_errors.push(ErrorWithPos(
-                    last_pos.to_range(1),
-                    MmlCommandError::NoTicksAfterLoopPoint,
-                ));
+                parser.add_error_range(last_pos.to_range(1), MmlError::NoTicksAfterLoopPoint);
             }
             BcTerminator::LoopChannel
         }
@@ -836,10 +827,7 @@ pub fn parse_and_compile_mml_channel(
     let bytecode = match gen.bc.bytecode(terminator) {
         Ok(b) => b,
         Err(e) => {
-            command_errors.push(ErrorWithPos(
-                last_pos.to_range(1),
-                MmlCommandError::BytecodeError(e),
-            ));
+            parser.add_error_range(last_pos.to_range(1), MmlError::BytecodeError(e));
             Vec::new()
         }
     };
@@ -847,9 +835,9 @@ pub fn parse_and_compile_mml_channel(
     let bc_subroutine =
         subroutine_index.map(|si| SubroutineId::new(si, tick_counter, max_nested_loops));
 
-    let parse_errors = parser.take_errors();
+    let errors = parser.take_errors();
 
-    if parse_errors.is_empty() && command_errors.is_empty() {
+    if errors.is_empty() {
         Ok(ChannelData {
             identifier,
             bytecode,
@@ -864,10 +852,6 @@ pub fn parse_and_compile_mml_channel(
             bc_tracking: gen.bc_tracking,
         })
     } else {
-        Err(MmlChannelError {
-            identifier,
-            parse_errors,
-            command_errors,
-        })
+        Err(MmlChannelError { identifier, errors })
     }
 }

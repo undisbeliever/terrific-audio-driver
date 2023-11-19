@@ -352,17 +352,19 @@ pub enum MmlLineError {
 }
 
 #[derive(Debug)]
-pub enum MmlParserError {
+pub enum MmlError {
     // MmlStreamParser errors
     ValueError(ValueError),
+
+    BytecodeError(BytecodeError),
 
     // + or - after a pitch
     TooManyAccidentals,
     TooManyDotsInNoteLength,
 
+    // Number of unknown characters
     UnknownCharacters(u32),
 
-    // MmlParser errors
     InvalidNote,
 
     NoSubroutine,
@@ -388,12 +390,6 @@ pub enum MmlParserError {
     UnexpectedNumber,
 
     InvalidPitchListSymbol,
-}
-
-#[derive(Debug)]
-pub enum MmlCommandError {
-    BytecodeError(BytecodeError),
-    ValueError(ValueError),
 
     NoteOutOfRange(Note, Note, Note),
     CannotPlayNoteBeforeSettingInstrument,
@@ -419,14 +415,7 @@ pub enum MmlCommandError {
 #[derive(Debug)]
 pub struct MmlChannelError {
     pub identifier: mml::Identifier,
-    pub parse_errors: Vec<ErrorWithPos<MmlParserError>>,
-    pub command_errors: Vec<ErrorWithPos<MmlCommandError>>,
-}
-
-impl MmlChannelError {
-    fn n_errors(&self) -> usize {
-        self.parse_errors.len() + self.command_errors.len()
-    }
+    pub errors: Vec<ErrorWithPos<MmlError>>,
 }
 
 #[derive(Debug)]
@@ -501,21 +490,15 @@ impl From<ValueError> for MmlLineError {
     }
 }
 
-impl From<ValueError> for MmlParserError {
+impl From<ValueError> for MmlError {
     fn from(e: ValueError) -> Self {
         Self::ValueError(e)
     }
 }
 
-impl From<BytecodeError> for MmlCommandError {
+impl From<BytecodeError> for MmlError {
     fn from(e: BytecodeError) -> Self {
         Self::BytecodeError(e)
-    }
-}
-
-impl From<ValueError> for MmlCommandError {
-    fn from(e: ValueError) -> Self {
-        Self::ValueError(e)
     }
 }
 
@@ -990,10 +973,11 @@ impl Display for MmlLineError {
     }
 }
 
-impl Display for MmlParserError {
+impl Display for MmlError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
             Self::ValueError(e) => e.fmt(f),
+            Self::BytecodeError(e) => e.fmt(f),
 
             Self::TooManyAccidentals => write!(f, "too many accidentals"),
             Self::TooManyDotsInNoteLength => write!(f, "too many dots in note length"),
@@ -1030,15 +1014,6 @@ impl Display for MmlParserError {
             Self::UnexpectedNumber => write!(f, "unexpected number"),
 
             Self::InvalidPitchListSymbol => write!(f, "invalid pitch list symbol"),
-        }
-    }
-}
-
-impl Display for MmlCommandError {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        match self {
-            Self::BytecodeError(e) => e.fmt(f),
-            Self::ValueError(e) => e.fmt(f),
 
             Self::NoteOutOfRange(n, min, max) => {
                 write!(
@@ -1424,7 +1399,7 @@ fn fmt_indented_channel_errors(
     file_name: &str,
     is_subroutine: bool,
 ) -> std::fmt::Result {
-    let n_errors = error.n_errors();
+    let n_errors = error.errors.len();
     if n_errors == 1 {
         write!(f, "  1 error in ")?;
     } else {
@@ -1437,19 +1412,8 @@ fn fmt_indented_channel_errors(
         writeln!(f, "channel {}", error.identifier.as_str())?;
     }
 
-    let n_parse_errors = error.parse_errors.len();
-    for e in error.parse_errors.iter().take(SFX_MML_ERROR_LIMIT) {
+    for e in error.errors.iter().take(SFX_MML_ERROR_LIMIT) {
         writeln!(f, "    {}:{}:{} {}", file_name, e.0.line_number, e.0.line_char, e.1)?;
-    }
-
-    if n_parse_errors < SFX_MML_ERROR_LIMIT {
-        for e in error
-            .command_errors
-            .iter()
-            .take(SFX_MML_ERROR_LIMIT - n_parse_errors)
-        {
-            writeln!(f, "    {}:{}:{} {}", file_name, e.0.line_number, e.0.line_char, e.1)?;
-        }
     }
     plus_more_errors_line(f, "    ", n_errors)?;
 

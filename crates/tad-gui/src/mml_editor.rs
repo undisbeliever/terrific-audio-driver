@@ -276,10 +276,7 @@ impl MmlEditorState {
         }
 
         let mut parse_channel_error = |e: &MmlChannelError| {
-            for e in &e.parse_errors {
-                highlight_error(&e.0);
-            }
-            for e in &e.command_errors {
+            for e in &e.errors {
                 highlight_error(&e.0);
             }
         };
