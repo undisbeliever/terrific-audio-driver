@@ -35,8 +35,8 @@ pub struct LoopPoint {
 #[cfg(feature = "mml_tracking")]
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub struct BytecodePos {
-    // Bytecode position (within the channel NOT the song)
-    pub bc_pos: u16,
+    // Position (within the channel/subroutine) at the end of the bytecode instruction.
+    pub bc_end_pos: u16,
     // Character index within the input file
     pub char_index: u32,
 }
@@ -113,9 +113,6 @@ struct MmlBytecodeGenerator<'a> {
     loop_point: Option<LoopPoint>,
 
     show_missing_set_instrument_error: bool,
-
-    #[cfg(feature = "mml_tracking")]
-    bc_tracking: Vec<BytecodePos>,
 }
 
 impl MmlBytecodeGenerator<'_> {
@@ -139,9 +136,6 @@ impl MmlBytecodeGenerator<'_> {
             skip_last_loop_state: None,
             loop_point: None,
             show_missing_set_instrument_error: !is_subroutine,
-
-            #[cfg(feature = "mml_tracking")]
-            bc_tracking: Vec::new(),
         }
     }
 
@@ -613,12 +607,6 @@ impl MmlBytecodeGenerator<'_> {
         command: &MmlCommand,
         pos: &FilePosRange,
     ) -> Result<(), MmlError> {
-        #[cfg(feature = "mml_tracking")]
-        self.bc_tracking.push(BytecodePos {
-            bc_pos: self.bc.get_bytecode_len().try_into().unwrap_or(0xffff),
-            char_index: pos.index_start,
-        });
-
         match command {
             MmlCommand::NoCommand => (),
 
@@ -783,6 +771,9 @@ pub fn parse_and_compile_mml_channel(
         sci.zenlen,
     );
 
+    #[cfg(feature = "mml_tracking")]
+    let mut bc_tracking = Vec::new();
+
     // Cannot have subroutine_index and subroutines list at the same time.
     if subroutine_index.is_some() {
         assert!(
@@ -803,6 +794,12 @@ pub fn parse_and_compile_mml_channel(
             Ok(()) => (),
             Err(e) => parser.add_error_range(c.pos().clone(), e),
         }
+
+        #[cfg(feature = "mml_tracking")]
+        bc_tracking.push(BytecodePos {
+            bc_end_pos: gen.bc.get_bytecode_len().try_into().unwrap_or(0xffff),
+            char_index: c.pos().index_start,
+        });
     }
 
     let last_pos = *parser.peek_pos();
@@ -849,7 +846,7 @@ pub fn parse_and_compile_mml_channel(
             tempo_changes: gen.tempo_changes,
 
             #[cfg(feature = "mml_tracking")]
-            bc_tracking: gen.bc_tracking,
+            bc_tracking,
         })
     } else {
         Err(MmlChannelError { identifier, errors })

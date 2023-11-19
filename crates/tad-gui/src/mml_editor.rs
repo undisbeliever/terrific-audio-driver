@@ -440,8 +440,8 @@ impl NoteTrackingState {
         voice_pos: u16,
     ) -> Option<NotePos> {
         if c.range.contains(&voice_pos) {
-            let channel_pos = voice_pos.saturating_sub(c.range.start).saturating_sub(2);
-            let index = match c.bytecodes.binary_search_by_key(&channel_pos, |b| b.bc_pos) {
+            let channel_pos = voice_pos.saturating_sub(c.range.start);
+            let index = match c.bytecodes.binary_search_by_key(&channel_pos, |b| b.bc_end_pos) {
                 Ok(i) => i,
                 Err(i) => i,
             };
@@ -475,10 +475,10 @@ impl NoteTrackingState {
             None => return None,
         };
 
-        let channel_pos = voice_pos.saturating_sub(c.range.start).saturating_sub(2);
+        let channel_pos = voice_pos.saturating_sub(c.range.start);
 
-        if channel_pos < to_find.first().unwrap().bc_pos
-            || channel_pos > to_find.last().unwrap().bc_pos
+        if channel_pos < to_find.first().unwrap().bc_end_pos
+            || channel_pos > to_find.last().unwrap().bc_end_pos
         {
             return None;
         }
@@ -486,7 +486,7 @@ impl NoteTrackingState {
         to_find
             .iter()
             .enumerate()
-            .find(|(_i, b)| b.bc_pos >= channel_pos)
+            .find(|(_i, b)| b.bc_end_pos >= channel_pos)
             .map(|(i, b)| NotePos {
                 subroutine: subroutine_index,
                 index: starting_index + i,
