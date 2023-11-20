@@ -112,6 +112,10 @@ impl SubroutineId {
     pub fn as_usize(&self) -> usize {
         self.id.into()
     }
+
+    pub fn tick_counter(&self) -> TickCounter {
+        self.tick_counter
+    }
 }
 
 #[derive(Debug, Copy, Clone, PartialEq)]

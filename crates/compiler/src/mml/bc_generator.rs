@@ -831,7 +831,9 @@ impl<'a, 'b> MmlBytecodeGenerator<'a, 'b> {
                 Err(e) => parser.add_error_range(c.pos().clone(), e),
             }
 
-            parser.set_tick_counter(gen.bc.get_tick_counter_with_loop_flag());
+            if matches!(c.command(), MmlCommand::EndLoop(_)) {
+                parser.set_tick_counter(gen.bc.get_tick_counter_with_loop_flag());
+            }
 
             #[cfg(feature = "mml_tracking")]
             bc_tracking.push(BytecodePos {

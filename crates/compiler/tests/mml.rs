@@ -773,6 +773,21 @@ fn test_skip_last_loop_prev_slurred_note() {
     );
 }
 
+#[test]
+fn test_merge_rests_newlines() {
+    let mml = format!(
+        r##"
+@0 dummy_instrument
+
+A @0 r4
+A r4
+A r4
+"##
+    );
+
+    assert_mml_channel_a_matches_bytecode(&mml, &["set_instrument dummy_instrument", "rest 72"]);
+}
+
 // ----------------------------------------------------------------------------------------------
 
 /// Tests MML commands will still be merged if there are a change MML state command in between
@@ -780,8 +795,10 @@ fn test_skip_last_loop_prev_slurred_note() {
 fn merge_mml_commands_test(mml_line: &str, bc_asm: &[&str]) {
     // The inc/dec octave commands must return to the original octave
     // The transpose commands must return to a transpose of 0
-    const MML_TO_INSERT: [&str; 10] = [
+    const MML_TO_INSERT: [&str; 11] = [
         "", "l", "l4", "o4", "> <", "> <", "_+2 __-2", "_-4 __+4", "|", "| | | |",
+        // Newline
+        "\nA ",
     ];
     const MATCH_SYMBOL: &str = "||";
 

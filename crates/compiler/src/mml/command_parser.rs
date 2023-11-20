@@ -256,6 +256,14 @@ mod parser {
             self.tick_counter = tc;
         }
 
+        pub(super) fn increment_tick_counter(&mut self, t: TickCounter) {
+            self.tick_counter.ticks += t;
+        }
+
+        pub(super) fn set_loop_flag(&mut self) {
+            self.tick_counter.in_loop = true;
+        }
+
         pub(super) fn process_new_line(&mut self) {
             if let Some(pending_sections) = self.pending_sections.as_mut() {
                 while pending_sections
@@ -381,11 +389,12 @@ where
 }
 
 fn parse_set_default_length(p: &mut Parser) {
-    let tc = parse_length(p);
-    p.set_state(State {
-        default_length: tc,
-        ..p.state().clone()
-    })
+    if let Some(tc) = parse_untracked_optional_length(p) {
+        p.set_state(State {
+            default_length: tc,
+            ..p.state().clone()
+        })
+    }
 }
 
 fn parse_set_octave(pos: FilePos, p: &mut Parser) {
@@ -468,6 +477,11 @@ fn merge_state_change(p: &mut Parser) -> bool {
     match_next_token!(
         p,
 
+        Token::EndOfLine => {
+            p.process_new_line();
+            true
+        },
+
         Token::SetOctave => {
             parse_set_octave(pos, p);
             true
@@ -504,7 +518,7 @@ fn merge_state_change(p: &mut Parser) -> bool {
     )
 }
 
-fn parse_length(p: &mut Parser) -> TickCounter {
+fn parse_tracked_length(p: &mut Parser) -> TickCounter {
     let pos = *p.peek_pos();
 
     let length_in_ticks = next_token_matches!(p, Token::PercentSign);
@@ -522,16 +536,28 @@ fn parse_length(p: &mut Parser) -> TickCounter {
 
     let note_length = MmlLength::new(length, length_in_ticks, number_of_dots);
 
-    match note_length.to_tick_count(p.state().default_length, p.state().zenlen) {
+    let length = match note_length.to_tick_count(p.state().default_length, p.state().zenlen) {
         Ok(tc) => tc,
         Err(e) => {
             p.add_error(pos, e.into());
             p.state().default_length
         }
-    }
+    };
+
+    p.increment_tick_counter(length);
+
+    length
 }
 
-fn parse_optional_length(p: &mut Parser) -> Option<TickCounter> {
+fn parse_tracked_optional_length(p: &mut Parser) -> Option<TickCounter> {
+    let length = parse_untracked_optional_length(p);
+    if let Some(tc) = length {
+        p.increment_tick_counter(tc)
+    }
+    length
+}
+
+fn parse_untracked_optional_length(p: &mut Parser) -> Option<TickCounter> {
     let pos = *p.peek_pos();
 
     let length_in_ticks = next_token_matches!(p, Token::PercentSign);
@@ -727,10 +753,10 @@ fn merge_rest_tokens(p: &mut Parser, rest_tc: TickCounter) -> TickCounter {
             p,
 
             Token::Rest => {
-                rest_tc += parse_length(p);
+                rest_tc += parse_tracked_length(p);
             },
             Token::Tie => {
-                rest_tc += parse_length(p);
+                rest_tc += parse_tracked_length(p);
             },
             #_ => {
                 if !merge_state_change(p) {
@@ -749,11 +775,11 @@ fn parse_ties_and_slur(p: &mut Parser) -> (TickCounter, bool) {
             p,
 
             Token::Tie => {
-                tie_length += parse_length(p);
+                tie_length += parse_tracked_length(p);
             },
             Token::Slur => {
                 // Slur or tie
-                if let Some(tc) = parse_optional_length(p) {
+                if let Some(tc) = parse_tracked_optional_length(p) {
                     tie_length += tc;
                 } else {
                     // slur
@@ -771,7 +797,7 @@ fn parse_ties_and_slur(p: &mut Parser) -> (TickCounter, bool) {
 }
 
 fn parse_rest(p: &mut Parser) -> MmlCommand {
-    let tc = parse_length(p);
+    let tc = parse_tracked_length(p);
     let tc = merge_rest_tokens(p, tc);
 
     MmlCommand::Rest(tc)
@@ -823,14 +849,14 @@ fn play_note(note: Note, length: TickCounter, p: &mut Parser) -> MmlCommand {
 fn parse_pitch(pos: FilePos, pitch: MmlPitch, p: &mut Parser) -> MmlCommand {
     match Note::from_mml_pitch(pitch, p.state().octave, p.state().semitone_offset) {
         Ok(note) => {
-            let length = parse_length(p);
+            let length = parse_tracked_length(p);
             play_note(note, length, p)
         }
         Err(e) => {
             p.add_error(pos, e.into());
 
             // Output a rest (so tick-counter is correct)
-            let length = parse_length(p);
+            let length = parse_tracked_length(p);
             let (tie_length, _) = parse_ties_and_slur(p);
             let length = length + tie_length;
             MmlCommand::Rest(length)
@@ -853,12 +879,12 @@ fn parse_play_midi_note_number(pos: FilePos, p: &mut Parser) -> MmlCommand {
 
     match note {
         Some(note) => {
-            let length = parse_length(p);
+            let length = parse_tracked_length(p);
             play_note(note, length, p)
         }
         None => {
             // Output a rest (so tick-counter is correct)
-            let length = parse_length(p);
+            let length = parse_tracked_length(p);
             let (tie_length, _) = parse_ties_and_slur(p);
             let length = length + tie_length;
             MmlCommand::Rest(length)
@@ -877,14 +903,14 @@ fn parse_portamento(pos: FilePos, p: &mut Parser) -> MmlCommand {
         p.add_error(pos, MmlError::PortamentoRequiresTwoPitches);
     }
 
-    let total_length = parse_length(p);
+    let total_length = parse_tracked_length(p);
 
     let mut delay_length = TickCounter::new(0);
     let mut speed_override = None;
 
     if next_token_matches!(p, Token::Comma) {
         let dt_pos = *p.peek_pos();
-        if let Some(dt) = parse_optional_length(p) {
+        if let Some(dt) = parse_untracked_optional_length(p) {
             if dt < total_length {
                 delay_length = dt;
             } else {
@@ -922,13 +948,13 @@ fn parse_broken_chord(p: &mut Parser) -> MmlCommand {
 
     let mut note_length_pos = end_pos;
 
-    let total_length = parse_length(p);
+    let total_length = parse_tracked_length(p);
     let mut tie = true;
     let mut note_length = None;
 
     if next_token_matches!(p, Token::Comma) {
         note_length_pos = *p.peek_pos();
-        note_length = parse_optional_length(p);
+        note_length = parse_untracked_optional_length(p);
 
         if next_token_matches!(p, Token::Comma) {
             let tie_pos = *p.peek_pos();
@@ -1038,9 +1064,16 @@ fn parse_token(pos: FilePos, token: Token, p: &mut Parser) -> MmlCommand {
         Token::ManualVibrato => MmlCommand::SetManualVibrato(parse_manual_vibrato(pos, p)),
 
         Token::SetInstrument(inst) => MmlCommand::SetInstrument(inst),
-        Token::CallSubroutine(id) => MmlCommand::CallSubroutine(id),
 
-        Token::StartLoop => MmlCommand::StartLoop,
+        Token::CallSubroutine(id) => {
+            p.increment_tick_counter(id.tick_counter());
+            MmlCommand::CallSubroutine(id)
+        }
+
+        Token::StartLoop => {
+            p.set_loop_flag();
+            MmlCommand::StartLoop
+        }
         Token::SkipLastLoop => MmlCommand::SkipLastLoop,
         Token::EndLoop => {
             let lc = parse_unsigned_newtype(pos, p).unwrap_or(LoopCount::MIN_LOOPCOUNT);
