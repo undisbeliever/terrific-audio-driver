@@ -81,6 +81,12 @@ impl std::ops::AddAssign for TickCounter {
     }
 }
 
+#[derive(Debug, Default, Clone, Copy, PartialEq)]
+pub struct TickCounterWithLoopFlag {
+    pub ticks: TickCounter,
+    pub in_loop: bool,
+}
+
 u8_value_newtype!(
     TickClock,
     TickClockOutOfRange,

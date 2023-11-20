@@ -10,7 +10,7 @@ use crate::driver_constants::MAX_INSTRUMENTS;
 use crate::envelope::{Adsr, Gain};
 use crate::errors::{BytecodeError, ValueError};
 use crate::notes::{Note, LAST_NOTE_ID};
-use crate::time::{TickClock, TickCounter};
+use crate::time::{TickClock, TickCounter, TickCounterWithLoopFlag};
 use crate::value_newtypes::{i8_value_newtype, u8_value_newtype, ValueNewType};
 
 use std::cmp::max;
@@ -422,6 +422,13 @@ impl Bytecode {
 
     pub fn get_tick_counter(&self) -> TickCounter {
         self.tick_counter
+    }
+
+    pub fn get_tick_counter_with_loop_flag(&self) -> TickCounterWithLoopFlag {
+        TickCounterWithLoopFlag {
+            ticks: self.tick_counter,
+            in_loop: self.is_in_loop(),
+        }
     }
 
     pub fn is_in_loop(&self) -> bool {

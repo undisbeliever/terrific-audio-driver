@@ -4,76 +4,32 @@
 //
 // SPDX-License-Identifier: MIT
 
-use super::{ChannelData, MmlData};
+use super::bc_generator::LoopPoint;
+use super::{Identifier, MmlData};
 
-use crate::driver_constants::N_MUSIC_CHANNELS;
 use crate::time::TickCounter;
+use crate::{driver_constants::N_MUSIC_CHANNELS, time::TickCounterWithLoopFlag};
 
 use std::cmp::{max, min};
 
 const MIN_NAME_COLUMN_WIDTH: usize = 15;
 const MAX_NAME_COLUMN_WIDTH: usize = 100;
 
-#[derive(Default, Clone, Debug)]
-pub struct ChannelTickCount {
-    ticks: TickCounter,
-    in_loop: bool,
-}
-
+// ::TODO move into SongData::
 #[derive(Debug)]
-pub struct SectionTickCount {
-    name: String,
-    start_line: u32,
-    end_line: u32,
-    channels: [ChannelTickCount; N_MUSIC_CHANNELS],
+pub struct MmlTickCountTableChannel {
+    name: Identifier,
+    sections: Vec<TickCounterWithLoopFlag>,
+    ticks: TickCounter,
+    loop_point: Option<LoopPoint>,
 }
 
+// ::TODO move into SongData::
 #[derive(Debug)]
 pub struct MmlTickCountTable {
-    channel_names: Vec<String>,
+    section_names: Vec<String>,
     name_column_width: usize,
-    sections: Vec<SectionTickCount>,
-
-    loop_points: Option<[Option<TickCounter>; N_MUSIC_CHANNELS]>,
-}
-
-impl SectionTickCount {
-    pub fn name(&self) -> &str {
-        &self.name
-    }
-    pub fn start_line(&self) -> u32 {
-        self.start_line
-    }
-}
-
-#[derive(Debug, Copy, Clone, PartialEq)]
-pub struct LineTickCounter {
-    pub line_number: u32,
-    pub ticks: TickCounter,
-    pub in_loop: bool,
-}
-
-impl From<LineTickCounter> for ChannelTickCount {
-    fn from(v: LineTickCounter) -> Self {
-        Self {
-            ticks: v.ticks,
-            in_loop: v.in_loop,
-        }
-    }
-}
-
-fn loop_points(mml_channels: &[ChannelData]) -> Option<[Option<TickCounter>; N_MUSIC_CHANNELS]> {
-    let mut loop_points: [Option<TickCounter>; N_MUSIC_CHANNELS] = Default::default();
-
-    for (lp, c) in loop_points.iter_mut().zip(mml_channels) {
-        *lp = c.loop_point().map(|l| l.tick_counter);
-    }
-
-    if loop_points.iter().any(|l| l.is_some()) {
-        Some(loop_points)
-    } else {
-        None
-    }
+    channels: [Option<MmlTickCountTableChannel>; N_MUSIC_CHANNELS],
 }
 
 pub fn build_tick_count_table(mml_data: &MmlData) -> MmlTickCountTable {
@@ -82,104 +38,77 @@ pub fn build_tick_count_table(mml_data: &MmlData) -> MmlTickCountTable {
     let mml_channels = mml_data.channels();
     let mml_sections = mml_data.sections();
 
-    let channel_names = mml_channels
-        .iter()
-        .map(|c| c.identifier().as_str().to_owned())
-        .collect();
-
-    let mut channels_end: [ChannelTickCount; N_MUSIC_CHANNELS] = Default::default();
+    let mut channels: [Option<MmlTickCountTableChannel>; N_MUSIC_CHANNELS] = Default::default();
     for (ci, channel) in mml_channels.iter().enumerate() {
-        channels_end[ci] = ChannelTickCount {
+        channels[ci] = Some(MmlTickCountTableChannel {
+            name: channel.identifier().clone(),
+            sections: channel.section_tick_counters().to_vec(),
             ticks: channel.tick_counter(),
-            in_loop: channel.loop_point().is_some(),
-        };
+            loop_point: channel.loop_point(),
+        });
     }
-    let channels_end = channels_end;
 
-    let mut sections: Vec<SectionTickCount> = mml_sections
+    let mut section_names: Vec<String> = mml_sections.iter().map(|s| s.name.clone()).collect();
+    if section_names.is_empty() {
+        section_names = vec!["MML".to_string()];
+    }
+
+    let name_column_width = section_names
         .iter()
-        .enumerate()
-        .map(|(i, s)| SectionTickCount {
-            name: s.name().to_owned(),
-            start_line: s.line_number(),
-            end_line: match mml_sections.get(i + 1) {
-                Some(next_section) => next_section.line_number() - 1,
-                None => u32::MAX,
-            },
-            channels: Default::default(),
-        })
-        .collect();
-
-    for (ci, channel) in mml_channels.iter().enumerate() {
-        // Assumes lines is sorted by line_number.
-        let mut lines = channel.line_tick_counters();
-
-        for s in sections.iter_mut() {
-            let pp = lines.partition_point(|l| l.line_number <= s.end_line);
-
-            if pp < lines.len() {
-                s.channels[ci] = lines[pp].into();
-                lines = &lines[pp..];
-            } else {
-                s.channels[ci] = channels_end[ci].clone();
-                lines = &[];
-            }
-        }
-    }
-
-    if sections.is_empty() {
-        sections.push(SectionTickCount {
-            name: "MML".to_owned(),
-            start_line: 0,
-            end_line: u32::MAX,
-            channels: channels_end,
-        })
-    }
-    let sections = sections;
-
-    let name_column_width = sections
-        .iter()
-        .map(|s| s.name.chars().count())
+        .map(|s| s.chars().count())
         .max()
         .unwrap_or(0);
 
     MmlTickCountTable {
-        channel_names,
+        section_names,
         name_column_width: max(MIN_NAME_COLUMN_WIDTH, name_column_width),
-        sections,
-        loop_points: loop_points(mml_channels),
+        channels,
     }
 }
 
 impl std::fmt::Display for MmlTickCountTable {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let n_channels = self.channel_names.len();
+        let n_channels = self.channels.iter().filter(|c| c.is_some()).count();
+
+        let has_loop_point = self
+            .channels
+            .iter()
+            .any(|c| c.as_ref().is_some_and(|c| c.loop_point.is_some()));
+
         assert!(n_channels <= N_MUSIC_CHANNELS);
 
         let name_width = min(MAX_NAME_COLUMN_WIDTH, self.name_column_width);
         const TC_WIDTH: usize = 9;
 
         write!(f, "{:width$} |", "", width = name_width)?;
-        for c_name in self.channel_names.iter().take(n_channels) {
+        for c in self.channels.iter().filter_map(|c| c.as_ref()) {
+            let c_name = c.name.as_str();
             write!(f, " Channel {:<width$}|", c_name, width = TC_WIDTH - 7)?;
         }
         writeln!(f)?;
 
-        for s in &self.sections {
-            write!(f, "{:width$} |", s.name, width = name_width)?;
-            for c in s.channels.iter().take(n_channels) {
-                let lc = if c.in_loop { '+' } else { ' ' };
-
-                write!(f, " {:>width$}{}|", c.ticks.value(), lc, width = TC_WIDTH)?;
+        for (i, s_name) in self.section_names.iter().enumerate() {
+            write!(f, "{:width$} |", s_name, width = name_width)?;
+            for c in self.channels.iter().take(n_channels) {
+                if let Some(c) = c.as_ref() {
+                    let (lc, ticks) = if let Some(s) = c.sections.get(i) {
+                        let lc = if s.in_loop { '+' } else { ' ' };
+                        (lc, &s.ticks)
+                    } else {
+                        (' ', &c.ticks)
+                    };
+                    write!(f, " {:>width$}{}|", ticks.value(), lc, width = TC_WIDTH)?;
+                }
             }
             writeln!(f)?;
         }
 
-        if let Some(loop_points) = self.loop_points {
+        if has_loop_point {
             write!(f, "{:width$} |", "Loop Point", width = name_width)?;
-            for lp in loop_points.iter().take(n_channels) {
-                if let Some(lp) = lp {
-                    write!(f, " {:>width$} |", lp.value(), width = TC_WIDTH)?;
+            for c in self.channels.iter().take(n_channels) {
+                if let Some(lp) = c.as_ref().and_then(|c| c.loop_point) {
+                    let tc = lp.tick_counter;
+                    write!(f, " {:>width$} |", tc.value(), width = TC_WIDTH)?;
                 } else {
                     write!(f, " {:width$} |", "", width = TC_WIDTH)?;
                 }

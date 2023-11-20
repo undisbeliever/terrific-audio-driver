@@ -5,7 +5,7 @@
 // SPDX-License-Identifier: MIT
 
 use super::tokenizer::{PeekingTokenizer, Token};
-use super::IdentifierStr;
+use super::{IdentifierStr, Section};
 
 use crate::bytecode::{
     LoopCount, Pan, PitchOffsetPerTick, PlayNoteTicks, QuarterWavelengthInTicks, RelativePan,
@@ -14,7 +14,7 @@ use crate::bytecode::{
 use crate::errors::{ErrorWithPos, MmlError, ValueError};
 use crate::file_pos::{FilePos, FilePosRange, Line};
 use crate::notes::{MidiNote, MmlPitch, Note, Octave, STARTING_OCTAVE};
-use crate::time::{Bpm, MmlLength, TickClock, TickCounter, ZenLen};
+use crate::time::{Bpm, MmlLength, TickClock, TickCounter, TickCounterWithLoopFlag, ZenLen};
 use crate::value_newtypes::{i8_value_newtype, u8_value_newtype};
 use crate::ValueNewType;
 
@@ -90,9 +90,6 @@ pub struct ManualVibrato {
 
 pub enum MmlCommand {
     NoCommand,
-
-    // Used for tick counter tracking.
-    NewLine,
 
     SetLoopPoint,
 
@@ -173,6 +170,11 @@ mod parser {
         tokenizer: PeekingTokenizer<'a>,
         errors: Vec<ErrorWithPos<MmlError>>,
         state: State,
+
+        tick_counter: TickCounterWithLoopFlag,
+        sections_tick_counters: Vec<TickCounterWithLoopFlag>,
+
+        pending_sections: Option<&'a [Section]>,
     }
 
     impl Parser<'_> {
@@ -181,8 +183,18 @@ mod parser {
             instruments_map: &'a HashMap<IdentifierStr, usize>,
             subroutine_map: Option<&'a HashMap<IdentifierStr, SubroutineId>>,
             zenlen: ZenLen,
+            sections: Option<&'a [Section]>,
         ) -> Parser<'a> {
-            Parser {
+            // Remove the first section to prevent an off-by-one error
+            let (n_sections, pending_sections) = match sections {
+                Some(sections) => match sections.split_first() {
+                    Some((_, r)) => (r.len(), Some(r)),
+                    None => (0, None),
+                },
+                None => (0, None),
+            };
+
+            let mut p = Parser {
                 tokenizer: PeekingTokenizer::new(lines, instruments_map, subroutine_map),
                 errors: Vec::new(),
                 state: State {
@@ -192,7 +204,13 @@ mod parser {
                     semitone_offset: 0,
                     quantize: Quantization(8),
                 },
-            }
+
+                tick_counter: TickCounterWithLoopFlag::default(),
+                sections_tick_counters: Vec::with_capacity(n_sections),
+                pending_sections,
+            };
+            p.process_new_line();
+            p
         }
 
         pub(super) fn state(&self) -> &State {
@@ -234,8 +252,30 @@ mod parser {
             self.errors.push(ErrorWithPos(pos, e))
         }
 
-        pub fn take_errors(self) -> Vec<ErrorWithPos<MmlError>> {
-            self.errors
+        pub fn set_tick_counter(&mut self, tc: TickCounterWithLoopFlag) {
+            self.tick_counter = tc;
+        }
+
+        pub(super) fn process_new_line(&mut self) {
+            if let Some(pending_sections) = self.pending_sections.as_mut() {
+                while pending_sections
+                    .first()
+                    .is_some_and(|s| self.tokenizer.peek_pos().line_number >= s.line_number)
+                {
+                    *pending_sections = &pending_sections[1..];
+                    self.sections_tick_counters.push(self.tick_counter);
+                }
+            }
+        }
+
+        pub fn finalize(mut self) -> (Vec<TickCounterWithLoopFlag>, Vec<ErrorWithPos<MmlError>>) {
+            if let Some(pending_sections) = self.pending_sections {
+                for _ in pending_sections {
+                    self.sections_tick_counters.push(self.tick_counter);
+                }
+            }
+
+            (self.sections_tick_counters, self.errors)
         }
     }
 
@@ -533,7 +573,11 @@ fn parse_pitch_list(p: &mut Parser) -> (Vec<Note>, FilePos, Token) {
             Token::EndPortamento | Token::EndBrokenChord => {
                 return (out, pos, token);
             }
-            Token::EndOfLine | Token::End => {
+            Token::EndOfLine => {
+                p.process_new_line();
+                return (out, pos, token);
+            }
+            Token::End => {
                 return (out, pos, token);
             }
 
@@ -979,7 +1023,10 @@ fn parse_token(pos: FilePos, token: Token, p: &mut Parser) -> MmlCommand {
     match token {
         Token::End => MmlCommand::NoCommand,
 
-        Token::EndOfLine => MmlCommand::NewLine,
+        Token::EndOfLine => {
+            p.process_new_line();
+            MmlCommand::NoCommand
+        }
 
         Token::Pitch(pitch) => parse_pitch(pos, pitch, p),
         Token::PlayMidiNoteNumber => parse_play_midi_note_number(pos, p),

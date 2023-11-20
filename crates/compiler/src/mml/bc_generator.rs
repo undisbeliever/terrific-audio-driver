@@ -9,18 +9,17 @@ use super::command_parser::{
 };
 use super::identifier::Identifier;
 use super::instruments::{EnvelopeOverride, MmlInstrument};
-use super::tick_count_table::LineTickCounter;
-use super::IdentifierStr;
+use super::{IdentifierStr, Section};
 
 use crate::bytecode::{
     BcTerminator, BcTicksKeyOff, BcTicksNoKeyOff, Bytecode, LoopCount, PitchOffsetPerTick,
     PlayNoteTicks, PortamentoVelocity, SubroutineId,
 };
 use crate::errors::{MmlChannelError, MmlError, ValueError};
-use crate::file_pos::{FilePosRange, Line};
+use crate::file_pos::Line;
 use crate::notes::{Note, SEMITONES_PER_OCTAVE};
 use crate::pitch_table::PitchTable;
-use crate::time::{TickClock, TickCounter, ZenLen};
+use crate::time::{TickClock, TickCounter, TickCounterWithLoopFlag, ZenLen};
 
 use std::cmp::max;
 use std::collections::HashMap;
@@ -55,7 +54,7 @@ pub struct ChannelData {
     // Some if this channel is a subroutine
     pub(super) bc_subroutine: Option<SubroutineId>,
 
-    line_tick_counters: Vec<LineTickCounter>,
+    section_tick_counters: Vec<TickCounterWithLoopFlag>,
     pub(super) tempo_changes: Vec<(TickCounter, TickClock)>,
 
     #[cfg(feature = "mml_tracking")]
@@ -75,8 +74,8 @@ impl ChannelData {
     pub fn tick_counter(&self) -> TickCounter {
         self.tick_counter
     }
-    pub fn line_tick_counters(&self) -> &[LineTickCounter] {
-        &self.line_tick_counters
+    pub fn section_tick_counters(&self) -> &[TickCounterWithLoopFlag] {
+        &self.section_tick_counters
     }
 }
 
@@ -100,7 +99,6 @@ struct ChannelBcGenerator<'a> {
 
     bc: Bytecode,
 
-    line_tick_counters: Vec<LineTickCounter>,
     tempo_changes: Vec<(TickCounter, TickClock)>,
 
     instrument: Option<usize>,
@@ -128,7 +126,6 @@ impl ChannelBcGenerator<'_> {
             instruments,
             subroutines,
             bc: Bytecode::new(is_subroutine, false),
-            line_tick_counters: Vec::new(),
             tempo_changes: Vec::new(),
             instrument: None,
             prev_slurred_note: None,
@@ -603,21 +600,9 @@ impl ChannelBcGenerator<'_> {
         Ok(())
     }
 
-    fn process_command(
-        &mut self,
-        command: &MmlCommand,
-        pos: &FilePosRange,
-    ) -> Result<(), MmlError> {
+    fn process_command(&mut self, command: &MmlCommand) -> Result<(), MmlError> {
         match command {
             MmlCommand::NoCommand => (),
-
-            MmlCommand::NewLine => {
-                self.line_tick_counters.push(LineTickCounter {
-                    line_number: pos.line_number,
-                    ticks: self.bc.get_tick_counter(),
-                    in_loop: self.bc.is_in_loop(),
-                });
-            }
 
             &MmlCommand::SetLoopPoint => {
                 if self.loop_point.is_some() {
@@ -762,6 +747,7 @@ impl ChannelBcGenerator<'_> {
 pub struct MmlBytecodeGenerator<'a, 'b> {
     default_zenlen: ZenLen,
     pitch_table: &'a PitchTable,
+    sections: &'a [Section],
     instruments: &'a Vec<MmlInstrument>,
     instrument_map: HashMap<IdentifierStr<'a>, usize>,
 
@@ -773,12 +759,14 @@ impl<'a, 'b> MmlBytecodeGenerator<'a, 'b> {
     pub fn new(
         default_zenlen: ZenLen,
         pitch_table: &'a PitchTable,
+        sections: &'a [Section],
         instruments: &'a Vec<MmlInstrument>,
         instrument_map: HashMap<IdentifierStr<'a>, usize>,
     ) -> Self {
         Self {
             default_zenlen,
             pitch_table,
+            sections,
             instruments,
             instrument_map,
             subroutines: None,
@@ -803,11 +791,20 @@ impl<'a, 'b> MmlBytecodeGenerator<'a, 'b> {
         identifier: Identifier,
         subroutine_index: Option<u8>,
     ) -> Result<ChannelData, MmlChannelError> {
+        let sections = if subroutine_index.is_none() {
+            // channel
+            Some(self.sections)
+        } else {
+            // subroutine (no section tracking)
+            None
+        };
+
         let mut parser = Parser::new(
             lines,
             &self.instrument_map,
             self.subroutine_map.as_ref(),
             self.default_zenlen,
+            sections,
         );
 
         #[cfg(feature = "mml_tracking")]
@@ -829,10 +826,12 @@ impl<'a, 'b> MmlBytecodeGenerator<'a, 'b> {
         );
 
         while let Some(c) = parser.next() {
-            match gen.process_command(c.command(), c.pos()) {
+            match gen.process_command(c.command()) {
                 Ok(()) => (),
                 Err(e) => parser.add_error_range(c.pos().clone(), e),
             }
+
+            parser.set_tick_counter(gen.bc.get_tick_counter_with_loop_flag());
 
             #[cfg(feature = "mml_tracking")]
             bc_tracking.push(BytecodePos {
@@ -871,7 +870,7 @@ impl<'a, 'b> MmlBytecodeGenerator<'a, 'b> {
         let bc_subroutine =
             subroutine_index.map(|si| SubroutineId::new(si, tick_counter, max_nested_loops));
 
-        let errors = parser.take_errors();
+        let (section_tick_counters, errors) = parser.finalize();
 
         if errors.is_empty() {
             Ok(ChannelData {
@@ -881,7 +880,7 @@ impl<'a, 'b> MmlBytecodeGenerator<'a, 'b> {
                 tick_counter,
                 last_instrument: gen.instrument,
                 bc_subroutine,
-                line_tick_counters: gen.line_tick_counters,
+                section_tick_counters,
                 tempo_changes: gen.tempo_changes,
 
                 #[cfg(feature = "mml_tracking")]

@@ -136,8 +136,13 @@ pub fn compile_mml(
     }
     let metadata = metadata.unwrap();
 
-    let mut bc_gen =
-        MmlBytecodeGenerator::new(metadata.zenlen, pitch_table, &instruments, instrument_map);
+    let mut bc_gen = MmlBytecodeGenerator::new(
+        metadata.zenlen,
+        pitch_table,
+        &lines.sections,
+        &instruments,
+        instrument_map,
+    );
 
     assert!(lines.subroutines.len() <= u8::MAX.into());
     let mut subroutines = Vec::with_capacity(lines.subroutines.len());
