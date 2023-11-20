@@ -16,18 +16,17 @@ pub mod command_parser;
 pub mod identifier;
 pub mod tick_count_table;
 
-use self::bc_generator::parse_and_compile_mml_channel;
-use self::instruments::{build_instrument_map, parse_instruments, MmlInstrument};
+use self::bc_generator::MmlBytecodeGenerator;
+use self::instruments::{build_instrument_map, parse_instruments};
 use self::line_splitter::split_mml_lines;
 use self::metadata::parse_headers;
 pub(crate) use identifier::{Identifier, IdentifierStr};
 
-use crate::bytecode::SubroutineId;
 use crate::data::{self, TextFile, UniqueNamesList};
 use crate::driver_constants::N_MUSIC_CHANNELS;
 use crate::errors::MmlCompileErrors;
 use crate::pitch_table::PitchTable;
-use crate::time::{TickClock, TickCounter, ZenLen, TIMER_HZ};
+use crate::time::{TickClock, TickCounter, TIMER_HZ};
 
 use std::collections::HashMap;
 use std::ops::RangeInclusive;
@@ -90,15 +89,6 @@ impl Section {
     }
 }
 
-pub struct SharedChannelInput<'a> {
-    zenlen: ZenLen,
-    pitch_table: &'a PitchTable,
-    instruments: &'a Vec<MmlInstrument>,
-    instrument_map: HashMap<IdentifierStr<'a>, usize>,
-    subroutines: Option<&'a Vec<ChannelData>>,
-    subroutine_map: Option<HashMap<IdentifierStr<'a>, SubroutineId>>,
-}
-
 pub fn compile_mml(
     mml_file: &TextFile,
     song_name: Option<data::Name>,
@@ -146,21 +136,15 @@ pub fn compile_mml(
     }
     let metadata = metadata.unwrap();
 
-    let sci = SharedChannelInput {
-        zenlen: metadata.zenlen,
-        pitch_table,
-        instruments: &instruments,
-        instrument_map,
-        subroutines: None,
-        subroutine_map: None,
-    };
+    let mut bc_gen =
+        MmlBytecodeGenerator::new(metadata.zenlen, pitch_table, &instruments, instrument_map);
 
     assert!(lines.subroutines.len() <= u8::MAX.into());
     let mut subroutines = Vec::with_capacity(lines.subroutines.len());
     for (s_index, (s_id, s_lines)) in lines.subroutines.iter().enumerate() {
         let s_index = s_index.try_into().unwrap();
 
-        match parse_and_compile_mml_channel(s_lines, s_id.clone(), Some(s_index), &sci) {
+        match bc_gen.parse_and_compile_mml_channel(s_lines, s_id.clone(), Some(s_index)) {
             Ok(data) => subroutines.push(data),
             Err(e) => errors.subroutine_errors.push(e),
         }
@@ -171,23 +155,14 @@ pub fn compile_mml(
         return Err(errors);
     }
 
-    let sci = SharedChannelInput {
-        subroutines: Some(&subroutines),
-        subroutine_map: Some(
-            subroutines
-                .iter()
-                .map(|s| (s.identifier().as_ref(), s.bc_subroutine.unwrap()))
-                .collect(),
-        ),
-        ..sci
-    };
+    bc_gen.set_subroutines(&subroutines);
 
     let mut channels = Vec::with_capacity(lines.channels.len());
     for (c_index, c_lines) in lines.channels.iter().enumerate() {
         if !c_lines.is_empty() {
             let c_id = Identifier::try_from_name(CHANNEL_NAMES[c_index].to_owned()).unwrap();
 
-            match parse_and_compile_mml_channel(c_lines, c_id.clone(), None, &sci) {
+            match bc_gen.parse_and_compile_mml_channel(c_lines, c_id.clone(), None) {
                 Ok(data) => channels.push(data),
                 Err(e) => errors.channel_errors.push(e),
             }

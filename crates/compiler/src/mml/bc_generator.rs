@@ -10,6 +10,7 @@ use super::command_parser::{
 use super::identifier::Identifier;
 use super::instruments::{EnvelopeOverride, MmlInstrument};
 use super::tick_count_table::LineTickCounter;
+use super::IdentifierStr;
 
 use crate::bytecode::{
     BcTerminator, BcTicksKeyOff, BcTicksNoKeyOff, Bytecode, LoopCount, PitchOffsetPerTick,
@@ -17,12 +18,12 @@ use crate::bytecode::{
 };
 use crate::errors::{MmlChannelError, MmlError, ValueError};
 use crate::file_pos::{FilePosRange, Line};
-use crate::mml::SharedChannelInput;
 use crate::notes::{Note, SEMITONES_PER_OCTAVE};
 use crate::pitch_table::PitchTable;
-use crate::time::{TickClock, TickCounter};
+use crate::time::{TickClock, TickCounter, ZenLen};
 
 use std::cmp::max;
+use std::collections::HashMap;
 
 pub const MAX_BROKEN_CHORD_NOTES: usize = 128;
 
@@ -92,7 +93,7 @@ struct SkipLastLoopState {
     vibrato: Option<ManualVibrato>,
 }
 
-struct MmlBytecodeGenerator<'a> {
+struct ChannelBcGenerator<'a> {
     pitch_table: &'a PitchTable,
     instruments: &'a Vec<MmlInstrument>,
     subroutines: Option<&'a Vec<ChannelData>>,
@@ -115,14 +116,14 @@ struct MmlBytecodeGenerator<'a> {
     show_missing_set_instrument_error: bool,
 }
 
-impl MmlBytecodeGenerator<'_> {
+impl ChannelBcGenerator<'_> {
     fn new<'a>(
         pitch_table: &'a PitchTable,
         instruments: &'a Vec<MmlInstrument>,
         subroutines: Option<&'a Vec<ChannelData>>,
         is_subroutine: bool,
-    ) -> MmlBytecodeGenerator<'a> {
-        MmlBytecodeGenerator {
+    ) -> ChannelBcGenerator<'a> {
+        ChannelBcGenerator {
             pitch_table,
             instruments,
             subroutines,
@@ -758,97 +759,136 @@ impl MmlBytecodeGenerator<'_> {
     }
 }
 
-pub fn parse_and_compile_mml_channel(
-    lines: &[Line],
-    identifier: Identifier,
-    subroutine_index: Option<u8>,
-    sci: &SharedChannelInput,
-) -> Result<ChannelData, MmlChannelError> {
-    let mut parser = Parser::new(
-        lines,
-        &sci.instrument_map,
-        sci.subroutine_map.as_ref(),
-        sci.zenlen,
-    );
+pub struct MmlBytecodeGenerator<'a, 'b> {
+    default_zenlen: ZenLen,
+    pitch_table: &'a PitchTable,
+    instruments: &'a Vec<MmlInstrument>,
+    instrument_map: HashMap<IdentifierStr<'a>, usize>,
 
-    #[cfg(feature = "mml_tracking")]
-    let mut bc_tracking = Vec::new();
+    subroutines: Option<&'b Vec<ChannelData>>,
+    subroutine_map: Option<HashMap<IdentifierStr<'b>, SubroutineId>>,
+}
 
-    // Cannot have subroutine_index and subroutines list at the same time.
-    if subroutine_index.is_some() {
-        assert!(
-            sci.subroutines.is_none(),
-            "Cannot set `subroutine_index` and `subroutines` vec at the same time"
-        );
+impl<'a, 'b> MmlBytecodeGenerator<'a, 'b> {
+    pub fn new(
+        default_zenlen: ZenLen,
+        pitch_table: &'a PitchTable,
+        instruments: &'a Vec<MmlInstrument>,
+        instrument_map: HashMap<IdentifierStr<'a>, usize>,
+    ) -> Self {
+        Self {
+            default_zenlen,
+            pitch_table,
+            instruments,
+            instrument_map,
+            subroutines: None,
+            subroutine_map: None,
+        }
     }
 
-    let mut gen = MmlBytecodeGenerator::new(
-        sci.pitch_table,
-        sci.instruments,
-        sci.subroutines,
-        subroutine_index.is_some(),
-    );
+    // Should only be called when all subroutines have been compiled.
+    pub fn set_subroutines(&mut self, subroutines: &'b Vec<ChannelData>) {
+        let subroutine_map = subroutines
+            .iter()
+            .map(|s| (s.identifier().as_ref(), s.bc_subroutine.unwrap()))
+            .collect();
 
-    while let Some(c) = parser.next() {
-        match gen.process_command(c.command(), c.pos()) {
-            Ok(()) => (),
-            Err(e) => parser.add_error_range(c.pos().clone(), e),
-        }
+        self.subroutines = Some(subroutines);
+        self.subroutine_map = Some(subroutine_map);
+    }
+
+    pub fn parse_and_compile_mml_channel(
+        &self,
+        lines: &[Line],
+        identifier: Identifier,
+        subroutine_index: Option<u8>,
+    ) -> Result<ChannelData, MmlChannelError> {
+        let mut parser = Parser::new(
+            lines,
+            &self.instrument_map,
+            self.subroutine_map.as_ref(),
+            self.default_zenlen,
+        );
 
         #[cfg(feature = "mml_tracking")]
-        bc_tracking.push(BytecodePos {
-            bc_end_pos: gen.bc.get_bytecode_len().try_into().unwrap_or(0xffff),
-            char_index: c.pos().index_start,
-        });
-    }
+        let mut bc_tracking = Vec::new();
 
-    let last_pos = *parser.peek_pos();
-
-    let tick_counter = gen.bc.get_tick_counter();
-    let max_nested_loops = gen.bc.get_max_nested_loops();
-
-    let terminator = match (subroutine_index, gen.loop_point) {
-        (Some(_), Some(_)) => {
-            panic!("Loop point not allowed in subroutine")
+        // Cannot have subroutine_index and subroutines list at the same time.
+        if subroutine_index.is_some() {
+            assert!(
+                self.subroutines.is_none(),
+                "Cannot set `subroutine_index` and `subroutines` vec at the same time"
+            );
         }
-        (None, None) => BcTerminator::DisableChannel,
-        (Some(_), None) => BcTerminator::ReturnFromSubroutine,
-        (None, Some(lp)) => {
-            if lp.tick_counter == tick_counter {
-                parser.add_error_range(last_pos.to_range(1), MmlError::NoTicksAfterLoopPoint);
+
+        let mut gen = ChannelBcGenerator::new(
+            self.pitch_table,
+            self.instruments,
+            self.subroutines,
+            subroutine_index.is_some(),
+        );
+
+        while let Some(c) = parser.next() {
+            match gen.process_command(c.command(), c.pos()) {
+                Ok(()) => (),
+                Err(e) => parser.add_error_range(c.pos().clone(), e),
             }
-            BcTerminator::LoopChannel
-        }
-    };
-
-    let bytecode = match gen.bc.bytecode(terminator) {
-        Ok(b) => b,
-        Err(e) => {
-            parser.add_error_range(last_pos.to_range(1), MmlError::BytecodeError(e));
-            Vec::new()
-        }
-    };
-
-    let bc_subroutine =
-        subroutine_index.map(|si| SubroutineId::new(si, tick_counter, max_nested_loops));
-
-    let errors = parser.take_errors();
-
-    if errors.is_empty() {
-        Ok(ChannelData {
-            identifier,
-            bytecode,
-            loop_point: gen.loop_point,
-            tick_counter,
-            last_instrument: gen.instrument,
-            bc_subroutine,
-            line_tick_counters: gen.line_tick_counters,
-            tempo_changes: gen.tempo_changes,
 
             #[cfg(feature = "mml_tracking")]
-            bc_tracking,
-        })
-    } else {
-        Err(MmlChannelError { identifier, errors })
+            bc_tracking.push(BytecodePos {
+                bc_end_pos: gen.bc.get_bytecode_len().try_into().unwrap_or(0xffff),
+                char_index: c.pos().index_start,
+            });
+        }
+
+        let last_pos = *parser.peek_pos();
+
+        let tick_counter = gen.bc.get_tick_counter();
+        let max_nested_loops = gen.bc.get_max_nested_loops();
+
+        let terminator = match (subroutine_index, gen.loop_point) {
+            (Some(_), Some(_)) => {
+                panic!("Loop point not allowed in subroutine")
+            }
+            (None, None) => BcTerminator::DisableChannel,
+            (Some(_), None) => BcTerminator::ReturnFromSubroutine,
+            (None, Some(lp)) => {
+                if lp.tick_counter == tick_counter {
+                    parser.add_error_range(last_pos.to_range(1), MmlError::NoTicksAfterLoopPoint);
+                }
+                BcTerminator::LoopChannel
+            }
+        };
+
+        let bytecode = match gen.bc.bytecode(terminator) {
+            Ok(b) => b,
+            Err(e) => {
+                parser.add_error_range(last_pos.to_range(1), MmlError::BytecodeError(e));
+                Vec::new()
+            }
+        };
+
+        let bc_subroutine =
+            subroutine_index.map(|si| SubroutineId::new(si, tick_counter, max_nested_loops));
+
+        let errors = parser.take_errors();
+
+        if errors.is_empty() {
+            Ok(ChannelData {
+                identifier,
+                bytecode,
+                loop_point: gen.loop_point,
+                tick_counter,
+                last_instrument: gen.instrument,
+                bc_subroutine,
+                line_tick_counters: gen.line_tick_counters,
+                tempo_changes: gen.tempo_changes,
+
+                #[cfg(feature = "mml_tracking")]
+                bc_tracking,
+            })
+        } else {
+            Err(MmlChannelError { identifier, errors })
+        }
     }
 }

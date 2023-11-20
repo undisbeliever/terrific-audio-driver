@@ -441,7 +441,10 @@ impl NoteTrackingState {
     ) -> Option<NotePos> {
         if c.range.contains(&voice_pos) {
             let channel_pos = voice_pos.saturating_sub(c.range.start);
-            let index = match c.bytecodes.binary_search_by_key(&channel_pos, |b| b.bc_end_pos) {
+            let index = match c
+                .bytecodes
+                .binary_search_by_key(&channel_pos, |b| b.bc_end_pos)
+            {
                 Ok(i) => i,
                 Err(i) => i,
             };
