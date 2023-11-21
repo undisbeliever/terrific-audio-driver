@@ -176,7 +176,6 @@ impl<'a> Iterator for LineSplitter<'a> {
             self.line_no += 1;
 
             let line_len: u32 = line.len().try_into().unwrap();
-            let line = line.trim();
 
             let pos = FilePos {
                 line_number: self.line_no,

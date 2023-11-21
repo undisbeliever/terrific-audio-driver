@@ -162,10 +162,7 @@ pub(super) fn split_mml_lines(mml_text: &str) -> Result<MmlLines, Vec<ErrorWithP
         }
 
         let line = match line.text.split_once(COMMENT_CHAR) {
-            Some((l, _comment)) => Line {
-                text: l.trim_end(),
-                ..line
-            },
+            Some((l, _comment)) => Line { text: l, ..line },
             None => line,
         };
 
