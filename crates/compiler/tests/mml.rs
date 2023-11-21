@@ -788,6 +788,19 @@ A r4
     assert_mml_channel_a_matches_bytecode(&mml, &["set_instrument dummy_instrument", "rest 72"]);
 }
 
+#[test]
+fn test_change_whole_note_length_command() {
+    assert_line_matches_bytecode(
+        "c d16 C192 c d16",
+        &[
+            "play_note c4 24",
+            "play_note d4  6",
+            "play_note c4 48",
+            "play_note d4 12",
+        ],
+    );
+}
+
 // ----------------------------------------------------------------------------------------------
 
 /// Tests MML commands will still be merged if there are a change MML state command in between

@@ -15,6 +15,11 @@ const STARTING_DEFAULT_NOTE_LENGTH: u8 = 4;
 u8_value_newtype!(ZenLen, ZenLenOutOfRange, NoZenLen, 4, u8::MAX);
 
 pub const DEFAULT_ZENLEN: ZenLen = ZenLen(96);
+pub const STARTING_MML_LENGTH: MmlLength = MmlLength {
+    length: Some(STARTING_DEFAULT_NOTE_LENGTH as u32),
+    length_in_ticks: false,
+    number_of_dots: 0,
+};
 
 impl ZenLen {
     pub fn starting_length(&self) -> TickCounter {
@@ -95,7 +100,7 @@ u8_value_newtype!(
     u8::MAX
 );
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct MmlLength {
     length: Option<u32>,
     length_in_ticks: bool,

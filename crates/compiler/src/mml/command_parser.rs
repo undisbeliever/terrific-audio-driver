@@ -14,7 +14,9 @@ use crate::bytecode::{
 use crate::errors::{ErrorWithPos, MmlError, ValueError};
 use crate::file_pos::{FilePos, FilePosRange, Line};
 use crate::notes::{MidiNote, MmlPitch, Note, Octave, STARTING_OCTAVE};
-use crate::time::{Bpm, MmlLength, TickClock, TickCounter, TickCounterWithLoopFlag, ZenLen};
+use crate::time::{
+    Bpm, MmlLength, TickClock, TickCounter, TickCounterWithLoopFlag, ZenLen, STARTING_MML_LENGTH,
+};
 use crate::value_newtypes::{i8_value_newtype, u8_value_newtype};
 use crate::ValueNewType;
 
@@ -157,7 +159,8 @@ impl MmlCommandWithPos {
 #[derive(Clone)]
 pub struct State {
     pub zenlen: ZenLen,
-    pub default_length: TickCounter,
+    pub default_length: MmlLength,
+    pub default_length_tc: TickCounter,
     pub octave: Octave,
     pub semitone_offset: i8,
     pub quantize: Quantization,
@@ -199,7 +202,8 @@ mod parser {
                 errors: Vec::new(),
                 state: State {
                     zenlen,
-                    default_length: zenlen.starting_length(),
+                    default_length: STARTING_MML_LENGTH,
+                    default_length_tc: zenlen.starting_length(),
                     octave: STARTING_OCTAVE,
                     semitone_offset: 0,
                     quantize: Quantization(8),
@@ -389,11 +393,42 @@ where
 }
 
 fn parse_set_default_length(p: &mut Parser) {
-    if let Some(tc) = parse_untracked_optional_length(p) {
+    let pos = *p.peek_pos();
+
+    if let Some(nl) = parse_untracked_optional_mml_length(p) {
+        match nl.to_tick_count(p.state().default_length_tc, p.state().zenlen) {
+            Ok(tc) => p.set_state(State {
+                default_length: nl,
+                default_length_tc: tc,
+                ..p.state().clone()
+            }),
+            Err(e) => {
+                p.add_error(pos, e.into());
+            }
+        }
+    }
+}
+
+fn parse_change_whole_note_length(pos: FilePos, p: &mut Parser) {
+    if let Some(new_zenlen) = parse_unsigned_newtype(pos, p) {
+        let state = p.state().clone();
+
+        let tc = match state
+            .default_length
+            .to_tick_count(state.default_length_tc, new_zenlen)
+        {
+            Ok(tc) => tc,
+            Err(e) => {
+                p.add_error(pos, e.into());
+                p.state().default_length_tc
+            }
+        };
+
         p.set_state(State {
-            default_length: tc,
+            zenlen: new_zenlen,
+            default_length_tc: tc,
             ..p.state().clone()
-        })
+        });
     }
 }
 
@@ -448,15 +483,6 @@ fn parse_relative_transpose(pos: FilePos, p: &mut Parser) {
         p.set_state(State {
             semitone_offset: state.semitone_offset.saturating_add(rt.as_i8()),
             ..state
-        });
-    }
-}
-
-fn parse_change_whole_note_length(pos: FilePos, p: &mut Parser) {
-    if let Some(z) = parse_unsigned_newtype(pos, p) {
-        p.set_state(State {
-            zenlen: z,
-            ..p.state().clone()
         });
     }
 }
@@ -536,11 +562,11 @@ fn parse_tracked_length(p: &mut Parser) -> TickCounter {
 
     let note_length = MmlLength::new(length, length_in_ticks, number_of_dots);
 
-    let length = match note_length.to_tick_count(p.state().default_length, p.state().zenlen) {
+    let length = match note_length.to_tick_count(p.state().default_length_tc, p.state().zenlen) {
         Ok(tc) => tc,
         Err(e) => {
             p.add_error(pos, e.into());
-            p.state().default_length
+            p.state().default_length_tc
         }
     };
 
@@ -557,9 +583,7 @@ fn parse_tracked_optional_length(p: &mut Parser) -> Option<TickCounter> {
     length
 }
 
-fn parse_untracked_optional_length(p: &mut Parser) -> Option<TickCounter> {
-    let pos = *p.peek_pos();
-
+fn parse_untracked_optional_mml_length(p: &mut Parser) -> Option<MmlLength> {
     let length_in_ticks = next_token_matches!(p, Token::PercentSign);
 
     let length = match_next_token!(
@@ -574,19 +598,24 @@ fn parse_untracked_optional_length(p: &mut Parser) -> Option<TickCounter> {
     }
 
     if length_in_ticks || length.is_some() || number_of_dots > 0 {
-        let note_length = MmlLength::new(length, length_in_ticks, number_of_dots);
-
-        let tc = match note_length.to_tick_count(p.state().default_length, p.state().zenlen) {
-            Ok(tc) => tc,
-            Err(e) => {
-                p.add_error(pos, e.into());
-                p.state().default_length
-            }
-        };
-        Some(tc)
+        Some(MmlLength::new(length, length_in_ticks, number_of_dots))
     } else {
         None
     }
+}
+
+fn parse_untracked_optional_length(p: &mut Parser) -> Option<TickCounter> {
+    let pos = *p.peek_pos();
+
+    let note_length = parse_untracked_optional_mml_length(p)?;
+    let tc = match note_length.to_tick_count(p.state().default_length_tc, p.state().zenlen) {
+        Ok(tc) => tc,
+        Err(e) => {
+            p.add_error(pos, e.into());
+            p.state().default_length_tc
+        }
+    };
+    Some(tc)
 }
 
 fn parse_pitch_list(p: &mut Parser) -> (Vec<Note>, FilePos, Token) {
