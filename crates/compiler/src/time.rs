@@ -100,7 +100,7 @@ u8_value_newtype!(
     u8::MAX
 );
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct MmlLength {
     length: Option<u32>,
     length_in_ticks: bool,
@@ -114,6 +114,18 @@ impl MmlLength {
             length_in_ticks,
             number_of_dots,
         }
+    }
+
+    pub fn length(&self) -> Option<u32> {
+        self.length
+    }
+
+    pub fn length_in_ticks(&self) -> bool {
+        self.length_in_ticks
+    }
+
+    pub fn number_of_dots(&self) -> u8 {
+        self.number_of_dots
     }
 
     pub fn to_tick_count(

@@ -11,6 +11,9 @@ use super::identifier::Identifier;
 use super::instruments::{EnvelopeOverride, MmlInstrument};
 use super::{IdentifierStr, Section};
 
+#[cfg(feature = "mml_tracking")]
+use super::note_tracking::CursorTracker;
+
 use crate::bytecode::{
     BcTerminator, BcTicksKeyOff, BcTicksNoKeyOff, Bytecode, LoopCount, PitchOffsetPerTick,
     PlayNoteTicks, PortamentoVelocity, SubroutineId,
@@ -753,6 +756,9 @@ pub struct MmlBytecodeGenerator<'a, 'b> {
 
     subroutines: Option<&'b Vec<ChannelData>>,
     subroutine_map: Option<HashMap<IdentifierStr<'b>, SubroutineId>>,
+
+    #[cfg(feature = "mml_tracking")]
+    cursor_tracker: CursorTracker,
 }
 
 impl<'a, 'b> MmlBytecodeGenerator<'a, 'b> {
@@ -771,7 +777,15 @@ impl<'a, 'b> MmlBytecodeGenerator<'a, 'b> {
             instrument_map,
             subroutines: None,
             subroutine_map: None,
+
+            #[cfg(feature = "mml_tracking")]
+            cursor_tracker: CursorTracker::new(),
         }
+    }
+
+    #[cfg(feature = "mml_tracking")]
+    pub(crate) fn take_cursor_tracker(self) -> CursorTracker {
+        self.cursor_tracker
     }
 
     // Should only be called when all subroutines have been compiled.
@@ -786,7 +800,7 @@ impl<'a, 'b> MmlBytecodeGenerator<'a, 'b> {
     }
 
     pub fn parse_and_compile_mml_channel(
-        &self,
+        &mut self,
         lines: &[Line],
         identifier: Identifier,
         subroutine_index: Option<u8>,
@@ -805,6 +819,8 @@ impl<'a, 'b> MmlBytecodeGenerator<'a, 'b> {
             self.subroutine_map.as_ref(),
             self.default_zenlen,
             sections,
+            #[cfg(feature = "mml_tracking")]
+            &mut self.cursor_tracker,
         );
 
         #[cfg(feature = "mml_tracking")]

@@ -61,6 +61,8 @@ impl ChannelBcTracking {
 pub struct SongBcTracking {
     pub subroutines: Vec<ChannelBcTracking>,
     pub channels: [Option<ChannelBcTracking>; N_MUSIC_CHANNELS],
+
+    pub cursor_tracker: mml::note_tracking::CursorTracker,
 }
 
 #[derive(Clone)]
@@ -301,6 +303,7 @@ pub fn song_data(mml_data: MmlData) -> Result<SongData, SongError> {
         tracking: Some(SongBcTracking {
             subroutines: subroutine_tracking,
             channels: channel_tracking,
+            cursor_tracker: mml_data.cursor_tracker,
         }),
     })
 }

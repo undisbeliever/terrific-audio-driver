@@ -16,6 +16,9 @@ pub mod command_parser;
 pub mod identifier;
 pub mod tick_count_table;
 
+#[cfg(feature = "mml_tracking")]
+pub mod note_tracking;
+
 use self::bc_generator::MmlBytecodeGenerator;
 use self::instruments::{build_instrument_map, parse_instruments};
 use self::line_splitter::split_mml_lines;
@@ -61,6 +64,9 @@ pub struct MmlData {
     pub(crate) subroutines: Vec<ChannelData>,
     pub(crate) channels: Vec<ChannelData>,
     pub(crate) sections: Vec<Section>,
+
+    #[cfg(feature = "mml_tracking")]
+    pub(crate) cursor_tracker: note_tracking::CursorTracker,
 }
 
 // ::TODO add list of subroutines and instruments for the GUI (separate from MmlData)::
@@ -177,6 +183,9 @@ pub fn compile_mml(
 
     if errors.channel_errors.is_empty() {
         Ok(MmlData {
+            #[cfg(feature = "mml_tracking")]
+            cursor_tracker: bc_gen.take_cursor_tracker(),
+
             metadata,
             subroutines,
             channels,

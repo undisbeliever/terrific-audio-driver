@@ -135,6 +135,8 @@ pub struct SongOutputData {
     pub duration: Option<std::time::Duration>,
     pub echo_buffer: EchoEdl,
     pub tick_count_table: MmlTickCountTable,
+
+    pub song_data: Arc<SongData>,
 }
 
 #[derive(Debug)]
@@ -770,6 +772,7 @@ impl SongCompiler {
                     duration: song_data.duration(),
                     echo_buffer: song_data.metadata().echo_buffer.edl,
                     tick_count_table,
+                    song_data: song_data.clone(),
                 };
                 sender.send(CompilerOutput::Song(id, Ok(to_gui)));
             }

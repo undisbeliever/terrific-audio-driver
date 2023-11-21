@@ -7,6 +7,9 @@
 use super::tokenizer::{PeekingTokenizer, Token};
 use super::{IdentifierStr, Section};
 
+#[cfg(feature = "mml_tracking")]
+use super::note_tracking::CursorTracker;
+
 use crate::bytecode::{
     LoopCount, Pan, PitchOffsetPerTick, PlayNoteTicks, QuarterWavelengthInTicks, RelativePan,
     RelativeVolume, SubroutineId, Volume, KEY_OFF_TICK_DELAY,
@@ -156,8 +159,8 @@ impl MmlCommandWithPos {
     }
 }
 
-// Parser state that is accessed by the GUI
-#[derive(Clone)]
+// Parser state that is saved in CursorTracker accessed by the GUI
+#[derive(Debug, Clone, PartialEq)]
 pub struct State {
     pub zenlen: ZenLen,
     pub default_length: MmlLength,
@@ -167,6 +170,8 @@ pub struct State {
 }
 
 mod parser {
+    use crate::file_pos::LineIndexRange;
+
     use super::*;
 
     pub(crate) struct Parser<'a> {
@@ -180,6 +185,9 @@ mod parser {
         sections_tick_counters: Vec<TickCounterWithLoopFlag>,
 
         pending_sections: Option<&'a [Section]>,
+
+        #[cfg(feature = "mml_tracking")]
+        cursor_tracker: &'a mut CursorTracker,
     }
 
     impl Parser<'_> {
@@ -189,6 +197,8 @@ mod parser {
             subroutine_map: Option<&'a HashMap<IdentifierStr, SubroutineId>>,
             zenlen: ZenLen,
             sections: Option<&'a [Section]>,
+
+            #[cfg(feature = "mml_tracking")] cursor_tracking: &'a mut CursorTracker,
         ) -> Parser<'a> {
             // Remove the first section to prevent an off-by-one error
             let (n_sections, pending_sections) = match sections {
@@ -215,8 +225,13 @@ mod parser {
                 tick_counter: TickCounterWithLoopFlag::default(),
                 sections_tick_counters: Vec::with_capacity(n_sections),
                 pending_sections,
+
+                #[cfg(feature = "mml_tracking")]
+                cursor_tracker: cursor_tracking,
             };
-            p.process_new_line();
+            if let Some(line) = lines.first() {
+                p.process_new_line(line.index_range());
+            }
             p
         }
 
@@ -225,7 +240,10 @@ mod parser {
         }
 
         pub(super) fn set_state(&mut self, new_state: State) {
-            self.state = new_state
+            self.state = new_state;
+
+            #[cfg(feature = "mml_tracking")]
+            self.add_to_cursor_tracker();
         }
 
         // Must ONLY be called by the parsing macros in this module.
@@ -261,14 +279,23 @@ mod parser {
 
         pub fn set_tick_counter(&mut self, tc: TickCounterWithLoopFlag) {
             self.tick_counter = tc;
+
+            #[cfg(feature = "mml_tracking")]
+            self.add_to_cursor_tracker();
         }
 
         pub(super) fn increment_tick_counter(&mut self, t: TickCounter) {
             self.tick_counter.ticks += t;
+
+            #[cfg(feature = "mml_tracking")]
+            self.add_to_cursor_tracker();
         }
 
         pub(super) fn set_loop_flag(&mut self) {
             self.tick_counter.in_loop = true;
+
+            #[cfg(feature = "mml_tracking")]
+            self.add_to_cursor_tracker();
         }
 
         pub(super) fn set_default_length(&mut self, ticks: TickCounter) {
@@ -279,7 +306,9 @@ mod parser {
             self.default_length
         }
 
-        pub(super) fn process_new_line(&mut self) {
+        pub(super) fn process_new_line(&mut self, r: LineIndexRange) {
+            let _ = r;
+
             if let Some(pending_sections) = self.pending_sections.as_mut() {
                 while pending_sections
                     .first()
@@ -289,6 +318,19 @@ mod parser {
                     self.sections_tick_counters.push(self.tick_counter);
                 }
             }
+
+            #[cfg(feature = "mml_tracking")]
+            self.cursor_tracker
+                .new_line(r, self.tick_counter, self.state.clone());
+        }
+
+        #[cfg(feature = "mml_tracking")]
+        fn add_to_cursor_tracker(&mut self) {
+            self.cursor_tracker.add(
+                self.tokenizer.prev_end_pos(),
+                self.tick_counter,
+                self.state.clone(),
+            );
         }
 
         pub fn finalize(mut self) -> (Vec<TickCounterWithLoopFlag>, Vec<ErrorWithPos<MmlError>>) {
@@ -297,6 +339,9 @@ mod parser {
                     self.sections_tick_counters.push(self.tick_counter);
                 }
             }
+
+            #[cfg(feature = "mml_tracking")]
+            self.cursor_tracker.end_channel();
 
             (self.sections_tick_counters, self.errors)
         }
@@ -515,8 +560,8 @@ fn merge_state_change(p: &mut Parser) -> bool {
     match_next_token!(
         p,
 
-        Token::EndOfLine => {
-            p.process_new_line();
+        &Token::NewLine(r) => {
+            p.process_new_line(r);
             true
         },
 
@@ -640,8 +685,8 @@ fn parse_pitch_list(p: &mut Parser) -> (Vec<Note>, FilePos, Token) {
             Token::EndPortamento | Token::EndBrokenChord => {
                 return (out, pos, token);
             }
-            Token::EndOfLine => {
-                p.process_new_line();
+            Token::NewLine(r) => {
+                p.process_new_line(r);
                 return (out, pos, token);
             }
             Token::End => {
@@ -1090,8 +1135,8 @@ fn parse_token(pos: FilePos, token: Token, p: &mut Parser) -> MmlCommand {
     match token {
         Token::End => MmlCommand::NoCommand,
 
-        Token::EndOfLine => {
-            p.process_new_line();
+        Token::NewLine(r) => {
+            p.process_new_line(r);
             MmlCommand::NoCommand
         }
 

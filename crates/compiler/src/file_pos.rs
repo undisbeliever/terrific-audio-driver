@@ -92,10 +92,27 @@ pub struct Line<'a> {
     pub position: FilePos,
 }
 
+// Cannot `Copy` a `std::ops::Range<u32>`.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct LineIndexRange {
+    pub start: u32,
+    pub end: u32,
+}
+
 impl Line<'_> {
     pub fn range(&self) -> FilePosRange {
         let line_length = self.text.bytes().len().try_into().unwrap();
         self.position.to_range(line_length)
+    }
+
+    pub fn index_range(&self) -> LineIndexRange {
+        let line_length: u32 = self.text.bytes().len().try_into().unwrap();
+        let start = self.position.char_index;
+
+        LineIndexRange {
+            start,
+            end: start + line_length,
+        }
     }
 
     fn trim_start(self) -> Self {

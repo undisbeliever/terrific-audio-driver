@@ -8,7 +8,7 @@ use std::collections::HashMap;
 
 use crate::bytecode::SubroutineId;
 use crate::errors::{MmlError, ValueError};
-use crate::file_pos::{FilePos, Line};
+use crate::file_pos::{FilePos, Line, LineIndexRange};
 use crate::notes::{parse_pitch_char, MmlPitch};
 
 use super::IdentifierStr;
@@ -16,7 +16,8 @@ use super::IdentifierStr;
 #[derive(Debug)]
 pub enum Token {
     End,
-    EndOfLine,
+
+    NewLine(LineIndexRange),
 
     Error(MmlError),
 
@@ -306,7 +307,7 @@ impl<'a> Tokenizer<'a> {
                         self.scanner = Scanner::new(first);
                         self.remaining_lines = remaining;
 
-                        (pos, Token::EndOfLine)
+                        (pos, Token::NewLine(first.index_range()))
                     }
                     None => (pos, Token::End),
                 };

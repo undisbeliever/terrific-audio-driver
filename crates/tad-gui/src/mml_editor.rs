@@ -9,22 +9,26 @@ use crate::helpers::ch_units_to_width;
 
 use compiler::driver_constants::N_MUSIC_CHANNELS;
 use compiler::errors::{MmlChannelError, MmlCompileErrors};
+use compiler::mml::command_parser::Quantization;
 use compiler::mml::{FIRST_MUSIC_CHANNEL, LAST_MUSIC_CHANNEL};
 use compiler::songs::{ChannelBcTracking, SongBcTracking, SongData};
 use compiler::FilePosRange;
 
 use std::cell::RefCell;
-use std::cmp::min;
+use std::cmp::{min, Ordering};
+use std::fmt::Write;
 use std::rc::Rc;
 use std::sync::Arc;
 
 extern crate fltk;
-use fltk::enums::{Color, Font};
-use fltk::prelude::{DisplayExt, WidgetExt};
+use fltk::enums::{Align, Color, Event, Font, FrameType};
+use fltk::frame::Frame;
+use fltk::prelude::{DisplayExt, WidgetBase, WidgetExt};
 use fltk::text::{StyleTableEntryExt, TextAttr, TextBuffer, TextEditor, WrapMode};
 
 pub struct MmlEditorState {
     widget: TextEditor,
+    status_bar: Frame,
     text_buffer: TextBuffer,
     style_buffer: TextBuffer,
 
@@ -33,13 +37,17 @@ pub struct MmlEditorState {
     changed_callback: Box<dyn Fn() + 'static>,
 
     song_data: Option<Arc<SongData>>,
+    playing_song_notes_valid: bool,
     note_tracking_state: [NoteTrackingState; N_MUSIC_CHANNELS],
+
+    prev_cursor_index: Option<u32>,
 
     errors_in_style_buffer: bool,
 }
 
 pub struct MmlEditor {
     widget: TextEditor,
+    status_bar: Frame,
     text_buffer: TextBuffer,
 
     state: Rc<RefCell<MmlEditorState>>,
@@ -65,19 +73,44 @@ impl MmlEditor {
             highlight_data(&MML_COLORS, widget.text_size()),
         );
 
+        let mut status_bar = Frame::default();
+        status_bar.set_frame(FrameType::DownBox);
+        status_bar.set_align(Align::Inside | Align::Left);
+
         let state = Rc::new(RefCell::from(MmlEditorState {
             widget: widget.clone(),
+            status_bar: status_bar.clone(),
+
             text_buffer: text_buffer.clone(),
             style_buffer,
             style_vec: Vec::new(),
 
+            playing_song_notes_valid: false,
             note_tracking_state: Default::default(),
+
+            prev_cursor_index: None,
             song_data: None,
 
             changed_callback: Box::from(Self::blank_callback),
 
             errors_in_style_buffer: false,
         }));
+
+        widget.handle({
+            let s = state.clone();
+            move |_, ev| match ev {
+                // The `TextEditor::insert_position()` does not point to the new position when `ev` is `KeyDown`.
+                // This adds lag to the status-bar when the user holds down an arrow-key.
+                // Not updating the status bar when an arrow key is held down is worse then a laggy status bar.
+                Event::KeyDown | Event::KeyUp | Event::Released => {
+                    if let Ok(mut state) = s.try_borrow_mut() {
+                        state.update_statusbar_if_cursor_moved();
+                    }
+                    false
+                }
+                _ => false,
+            }
+        });
 
         text_buffer.add_modify_callback({
             let s = state.clone();
@@ -90,6 +123,7 @@ impl MmlEditor {
             state,
             text_buffer,
             widget,
+            status_bar,
         }
     }
 
@@ -118,6 +152,10 @@ impl MmlEditor {
         &self.widget
     }
 
+    pub fn status_bar(&self) -> &Frame {
+        &self.status_bar
+    }
+
     pub fn text(&self) -> String {
         self.text_buffer.text()
     }
@@ -128,8 +166,20 @@ impl MmlEditor {
 
     fn blank_callback() {}
 
+    pub fn audio_thread_started_song(&mut self, song_data: Arc<SongData>) {
+        self.state.borrow_mut().song_started(song_data);
+    }
+
     pub fn set_song_data(&mut self, song_data: Arc<SongData>) {
-        self.state.borrow_mut().set_song_data(Some(song_data));
+        let mut s = self.state.borrow_mut();
+        s.set_song_data(Some(song_data));
+        s.update_statusbar();
+    }
+
+    pub fn clear_song_data(&mut self) {
+        let mut s = self.state.borrow_mut();
+        s.set_song_data(None);
+        s.update_statusbar();
     }
 
     pub fn update_note_tracking(&mut self, mon: AudioMonitorData) {
@@ -178,14 +228,17 @@ impl MmlEditorState {
             &self.text_buffer,
         );
 
-        if self.song_data.is_none() {
+        if self.playing_song_notes_valid {
+            self.playing_song_notes_valid = false;
+
+            let style = std::str::from_utf8(&self.style_vec).unwrap();
+            self.style_buffer.set_text(style);
+        } else {
             self.style_buffer.replace(
                 to_style_start,
                 to_style_end + n_deleted - n_inserted,
                 changed,
             );
-        } else {
-            self.set_song_data(None);
         }
 
         (self.changed_callback)();
@@ -319,9 +372,20 @@ impl MmlEditorState {
 
         let style = std::str::from_utf8(&self.style_vec).unwrap();
         self.style_buffer.set_text(style);
+
+        self.prev_cursor_index = None;
+    }
+
+    fn song_started(&mut self, song_data: Arc<SongData>) {
+        self.set_song_data(Some(song_data));
+        self.playing_song_notes_valid = true;
     }
 
     fn update_note_tracking(&mut self, mon: AudioMonitorData) {
+        if !self.playing_song_notes_valid {
+            return;
+        }
+
         let mut changed = false;
         if let Some(song_data) = &self.song_data {
             if let Some(ntd) = &song_data.tracking() {
@@ -339,6 +403,93 @@ impl MmlEditorState {
         // NOTE: Fl_Text_Display::redisplay_range() is not available.
         if changed {
             self.widget.redraw();
+        }
+    }
+
+    fn cursor_index(&self) -> Option<u32> {
+        self.widget.insert_position().try_into().ok()
+    }
+
+    fn update_statusbar_if_cursor_moved(&mut self) {
+        let ci = self.cursor_index();
+        if self.prev_cursor_index != ci && ci.is_some() {
+            self._update_statusbar(ci);
+        }
+    }
+
+    fn update_statusbar(&mut self) {
+        let ci = self.cursor_index();
+        self._update_statusbar(ci);
+    }
+
+    fn _update_statusbar(&mut self, cursor_index: Option<u32>) {
+        self.prev_cursor_index = cursor_index;
+
+        let (cursor_index, song_data) = match (cursor_index, &self.song_data) {
+            (Some(ci), Some(sd)) => (ci, sd),
+            _ => {
+                self.status_bar.set_label("");
+                return;
+            }
+        };
+
+        match song_data
+            .tracking()
+            .and_then(|t| t.cursor_tracker.find(cursor_index))
+        {
+            Some(c) => {
+                let mut s = String::with_capacity(64);
+
+                let ticks = c.ticks.ticks.value();
+                let in_loop = if c.ticks.in_loop { "+" } else { "" };
+
+                let octave = c.state.octave.as_u8();
+
+                let _ = write!(s, "{ticks}{in_loop} ticks  o{octave}");
+
+                {
+                    let dl = &c.state.default_length;
+                    match (dl.length(), dl.length_in_ticks()) {
+                        (Some(l), false) => {
+                            let _ = write!(s, "  l{l}");
+                            for _ in 0..dl.number_of_dots() {
+                                s.push('.');
+                            }
+                        }
+                        (Some(l), true) => {
+                            let _ = write!(s, "  l%{l}");
+                            for _ in 0..dl.number_of_dots() {
+                                s.push('.');
+                            }
+                        }
+                        _ => (),
+                    }
+                }
+
+                let so = c.state.semitone_offset;
+                match so.cmp(&0) {
+                    Ordering::Greater => {
+                        let _ = write!(s, "  _+{}", c.state.semitone_offset);
+                    }
+                    Ordering::Less => {
+                        let _ = write!(s, "  _{}", c.state.semitone_offset);
+                    }
+                    Ordering::Equal => {}
+                }
+
+                if c.state.quantize.as_u8() != Quantization::MAX {
+                    let _ = write!(s, "  Q{}", c.state.quantize.as_u8());
+                }
+
+                if c.state.zenlen != song_data.metadata().zenlen {
+                    let _ = write!(s, "  ZenLen: {}", c.state.zenlen.as_u8());
+                }
+
+                self.status_bar.set_label(&s);
+            }
+            None => {
+                self.status_bar.set_label("");
+            }
         }
     }
 }

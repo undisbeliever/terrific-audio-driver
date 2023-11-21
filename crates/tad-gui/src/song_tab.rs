@@ -97,11 +97,15 @@ impl SongTab {
         main_toolbar.end();
 
         let mut editor = MmlEditor::new();
+
         editor.set_text_size(editor.widget().text_size() * 12 / 10);
         editor.set_text(&mml_file.contents);
 
         let mut console = TextDisplay::default();
         group.fixed(&console, input_height(&console) * 5);
+
+        group.add(editor.status_bar());
+        group.fixed(editor.status_bar(), input_height(editor.status_bar()));
 
         group.end();
 
@@ -189,7 +193,10 @@ impl SongTab {
     }
 
     pub fn audio_thread_started_song(&mut self, song_data: Arc<SongData>) {
-        self.state.borrow_mut().editor.set_song_data(song_data);
+        self.state
+            .borrow_mut()
+            .editor
+            .audio_thread_started_song(song_data);
     }
 
     pub fn monitor_timer_elapsed(&mut self, mon: AudioMonitorData) {
@@ -220,10 +227,14 @@ impl State {
     pub fn set_compiler_output(&mut self, co: Option<SongOutput>) {
         match co {
             None => {
+                self.editor.clear_song_data();
+
                 self.console_buffer.set_text("");
                 self.errors = None;
             }
             Some(Ok(o)) => {
+                self.editor.set_song_data(o.song_data);
+
                 let text = format!(
                     "MML compiled successfully: {} bytes (+{} echo buffer bytes)\n\nDuration: {}\n{}",
                     o.data_size,
@@ -236,6 +247,8 @@ impl State {
                 self.errors = None;
             }
             Some(Err(e)) => {
+                self.editor.clear_song_data();
+
                 let text = match &e {
                     SongError::Dependency => e.to_string(),
                     SongError::Mml(e) => e.multiline_display().to_string(),
