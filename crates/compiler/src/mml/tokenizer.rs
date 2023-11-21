@@ -519,10 +519,10 @@ mod tests {
 
             if SPECIAL_CHARS.contains(&c) {
                 // Confirm a single SPECIAL_CHARS character is not a token according to `next()`
-                assert!(is_unknown_token == true);
+                assert!(is_unknown_token);
                 // Confirm a single SPECIAL_CHARS character is a token according to `is_unknown_u8()`
                 assert!(
-                    Tokenizer::is_unknown_u8(c) == false,
+                    !Tokenizer::is_unknown_u8(c),
                     "is_unknown_u8() mismatch for char: {c}"
                 );
             } else {

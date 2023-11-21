@@ -305,10 +305,10 @@ mod tests {
         let data_size = MONO_32000_16_BIT_SAMPLES.len() * 2;
 
         let r = read_wave_file(&mut io::Cursor::new(MONO_32000_16_BIT_PCM), 1000);
-        assert!(matches!(r, Ok(_)));
+        assert!(r.is_ok());
 
         let r = read_wave_file(&mut io::Cursor::new(MONO_32000_16_BIT_PCM), data_size);
-        assert!(matches!(r, Ok(_)));
+        assert!(r.is_ok());
 
         let r = read_wave_file(&mut io::Cursor::new(MONO_32000_16_BIT_PCM), data_size - 1);
         assert!(matches!(r, Err(WavError::WaveFileTooLarge)));
@@ -377,10 +377,10 @@ mod tests {
         let n_samples = MONO_32000_16_BIT_SAMPLES.len();
 
         let r = read_16_bit_mono_wave_file(&mut io::Cursor::new(MONO_32000_16_BIT_PCM), 1000);
-        assert!(matches!(r, Ok(_)));
+        assert!(r.is_ok());
 
         let r = read_16_bit_mono_wave_file(&mut io::Cursor::new(MONO_32000_16_BIT_PCM), n_samples);
-        assert!(matches!(r, Ok(_)));
+        assert!(r.is_ok());
 
         let r =
             read_16_bit_mono_wave_file(&mut io::Cursor::new(MONO_32000_16_BIT_PCM), n_samples - 1);

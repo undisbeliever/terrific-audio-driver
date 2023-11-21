@@ -565,15 +565,14 @@ fn test_merge_pan_and_volume() {
 
 #[test]
 fn test_set_instrument() {
-    let mml = format!(
-        r##"
+    let mml = r##"
 @0 dummy_instrument
 @1 inst_with_adsr
 @2 inst_with_gain
 
 A @0 @1 @2
 "##
-    );
+    .to_string();
 
     assert_mml_channel_a_matches_bytecode(
         &mml,
@@ -588,8 +587,7 @@ A @0 @1 @2
 /// Test instruments with the same InstrumentId do not emit a set_instrument instruction
 #[test]
 fn test_set_instrument_merge_instrument_ids() {
-    let mml = format!(
-        r##"
+    let mml = r##"
 @0 dummy_instrument
 @1 dummy_instrument
 @2 dummy_instrument
@@ -599,7 +597,7 @@ A @0 @0 @0
 A @1 @2
 A @o @0 @1 @2
 "##
-    );
+    .to_string();
 
     assert_mml_channel_a_matches_bytecode(
         &mml,
@@ -669,7 +667,7 @@ fn test_echo() {
 
 #[test]
 fn test_set_song_tempo() {
-    let tc = f64::round(f64::from(8000.0 * 60.0) / f64::from(48 * 80)) as u32;
+    let tc = f64::round(8000.0 * 60.0 / f64::from(48 * 80)) as u32;
     let bc = format!("set_song_tick_clock {tc}");
 
     assert_line_matches_bytecode("t80", &[&bc]);
@@ -686,14 +684,13 @@ fn test_set_song_tick_clock() {
 /// Assumes `test_set_instrument_merge_instrument_ids()` passes
 #[test]
 fn test_skip_last_loop_set_instrument_merge_1() {
-    let mml = format!(
-        r##"
+    let mml = r##"
 @d dummy_instrument
 @a inst_with_adsr
 
 A [ @a a : @d b ]2 @d
 "##
-    );
+    .to_string();
 
     assert_mml_channel_a_matches_bytecode(
         &mml,
@@ -714,14 +711,13 @@ A [ @a a : @d b ]2 @d
 /// Assumes `test_set_instrument_merge_instrument_ids()` passes
 #[test]
 fn test_skip_last_loop_set_instrument_merge_2() {
-    let mml = format!(
-        r##"
+    let mml = r##"
 @d dummy_instrument
 @a inst_with_adsr
 
 A [ @a a : @d b ]2 @a
 "##
-    );
+    .to_string();
 
     assert_mml_channel_a_matches_bytecode(
         &mml,
@@ -775,15 +771,14 @@ fn test_skip_last_loop_prev_slurred_note() {
 
 #[test]
 fn test_merge_rests_newlines() {
-    let mml = format!(
-        r##"
+    let mml = r##"
 @0 dummy_instrument
 
 A @0 r4
 A r4
 A r4
 "##
-    );
+    .to_string();
 
     assert_mml_channel_a_matches_bytecode(&mml, &["set_instrument dummy_instrument", "rest 72"]);
 }
