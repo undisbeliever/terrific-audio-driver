@@ -770,7 +770,7 @@ impl Style {
         }
     }
 
-    const NOTE_TRACKER_STR: &str = "R";
+    const NOTE_TRACKER_STR: &'static str = "R";
 
     const fn to_u8_char(self) -> u8 {
         b'A' + (self as u8)

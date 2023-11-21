@@ -46,7 +46,7 @@ enum LoopChoice {
     DupeBlockHack = 4,
 }
 impl LoopChoice {
-    const CHOICES: &str = concat![
+    const CHOICES: &'static str = concat![
         "&None",
         "|&Override BRR Loop Point",
         "|&Loop With Filter",
@@ -77,7 +77,7 @@ enum EnvelopeChoice {
     Gain = 1,
 }
 impl EnvelopeChoice {
-    const CHOICES: &str = "ADSR|GAIN";
+    const CHOICES: &'static str = "ADSR|GAIN";
 
     fn read_widget(c: &Choice) -> Option<EnvelopeChoice> {
         match c.value() {
@@ -591,7 +591,7 @@ pub struct TestSampleWidget {
 }
 
 impl TestSampleWidget {
-    const KEYS: [(i32, &str); 12] = [
+    const KEYS: [(i32, &'static str); 12] = [
         (0, "C"),
         (1, ""),
         (2, "D"),
