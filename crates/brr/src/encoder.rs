@@ -253,8 +253,7 @@ pub fn encode_brr(
 
     let n_blocks = samples.len() / SAMPLES_PER_BLOCK + dupe_block_hack.unwrap_or(0);
 
-    let mut brr_data = Vec::new();
-    brr_data.reserve(n_blocks * BYTES_PER_BRR_BLOCK);
+    let mut brr_data = Vec::with_capacity(n_blocks * BYTES_PER_BRR_BLOCK);
 
     let mut prev1 = 0;
     let mut prev2 = 0;

@@ -224,8 +224,7 @@ pub fn read_16_bit_mono_wave_file(
     }
 
     // Convert data to i16 vector
-    let mut samples = Vec::new();
-    samples.reserve(wav.data.len() / 2);
+    let mut samples = Vec::with_capacity(wav.data.len() / 2);
 
     samples.extend(
         wav.data
