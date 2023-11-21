@@ -44,23 +44,23 @@ fn split_idstr_and_line(line: Line) -> (&str, Line) {
         None => (s, "", s.chars().count()),
     };
 
-    let (text, ws_char_count) = match after_id.chars().next() {
-        None => ("", 0),
+    let (text, ws_char_count, ws_len) = match after_id.chars().next() {
+        None => ("", 0, 0),
         Some(_) => {
             match after_id
                 .char_indices()
                 .enumerate()
                 .find(|(_, (_, c))| !c.is_whitespace())
             {
-                Some((c_count, (index, _))) => (&after_id[index..], c_count),
+                Some((c_count, (index, _))) => (&after_id[index..], c_count, index),
                 // No characters after whitespace
-                None => ("", after_id.chars().count()),
+                None => ("", after_id.chars().count(), after_id.len()),
             }
         }
     };
 
     let line_char: u32 = (id_char_count + ws_char_count + 1).try_into().unwrap();
-    let char_index: u32 = (id.bytes().len() + 1).try_into().unwrap();
+    let char_index: u32 = (id.bytes().len() + ws_len).try_into().unwrap();
 
     (
         id,
