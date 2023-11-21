@@ -156,11 +156,11 @@ impl MmlCommandWithPos {
     }
 }
 
+// Parser state that is accessed by the GUI
 #[derive(Clone)]
 pub struct State {
     pub zenlen: ZenLen,
     pub default_length: MmlLength,
-    pub default_length_tc: TickCounter,
     pub octave: Octave,
     pub semitone_offset: i8,
     pub quantize: Quantization,
@@ -173,6 +173,8 @@ mod parser {
         tokenizer: PeekingTokenizer<'a>,
         errors: Vec<ErrorWithPos<MmlError>>,
         state: State,
+
+        default_length: TickCounter,
 
         tick_counter: TickCounterWithLoopFlag,
         sections_tick_counters: Vec<TickCounterWithLoopFlag>,
@@ -203,11 +205,12 @@ mod parser {
                 state: State {
                     zenlen,
                     default_length: STARTING_MML_LENGTH,
-                    default_length_tc: zenlen.starting_length(),
                     octave: STARTING_OCTAVE,
                     semitone_offset: 0,
                     quantize: Quantization(8),
                 },
+
+                default_length: zenlen.starting_length(),
 
                 tick_counter: TickCounterWithLoopFlag::default(),
                 sections_tick_counters: Vec::with_capacity(n_sections),
@@ -266,6 +269,14 @@ mod parser {
 
         pub(super) fn set_loop_flag(&mut self) {
             self.tick_counter.in_loop = true;
+        }
+
+        pub(super) fn set_default_length(&mut self, ticks: TickCounter) {
+            self.default_length = ticks;
+        }
+
+        pub(super) fn default_length(&self) -> TickCounter {
+            self.default_length
         }
 
         pub(super) fn process_new_line(&mut self) {
@@ -396,12 +407,14 @@ fn parse_set_default_length(p: &mut Parser) {
     let pos = *p.peek_pos();
 
     if let Some(nl) = parse_untracked_optional_mml_length(p) {
-        match nl.to_tick_count(p.state().default_length_tc, p.state().zenlen) {
-            Ok(tc) => p.set_state(State {
-                default_length: nl,
-                default_length_tc: tc,
-                ..p.state().clone()
-            }),
+        match nl.to_tick_count(p.default_length(), p.state().zenlen) {
+            Ok(tc) => {
+                p.set_default_length(tc);
+                p.set_state(State {
+                    default_length: nl,
+                    ..p.state().clone()
+                });
+            }
             Err(e) => {
                 p.add_error(pos, e.into());
             }
@@ -415,18 +428,17 @@ fn parse_change_whole_note_length(pos: FilePos, p: &mut Parser) {
 
         let tc = match state
             .default_length
-            .to_tick_count(state.default_length_tc, new_zenlen)
+            .to_tick_count(p.default_length(), new_zenlen)
         {
             Ok(tc) => tc,
             Err(e) => {
                 p.add_error(pos, e.into());
-                p.state().default_length_tc
+                p.default_length()
             }
         };
-
+        p.set_default_length(tc);
         p.set_state(State {
             zenlen: new_zenlen,
-            default_length_tc: tc,
             ..p.state().clone()
         });
     }
@@ -562,11 +574,11 @@ fn parse_tracked_length(p: &mut Parser) -> TickCounter {
 
     let note_length = MmlLength::new(length, length_in_ticks, number_of_dots);
 
-    let length = match note_length.to_tick_count(p.state().default_length_tc, p.state().zenlen) {
+    let length = match note_length.to_tick_count(p.default_length(), p.state().zenlen) {
         Ok(tc) => tc,
         Err(e) => {
             p.add_error(pos, e.into());
-            p.state().default_length_tc
+            p.default_length()
         }
     };
 
@@ -608,11 +620,11 @@ fn parse_untracked_optional_length(p: &mut Parser) -> Option<TickCounter> {
     let pos = *p.peek_pos();
 
     let note_length = parse_untracked_optional_mml_length(p)?;
-    let tc = match note_length.to_tick_count(p.state().default_length_tc, p.state().zenlen) {
+    let tc = match note_length.to_tick_count(p.default_length(), p.state().zenlen) {
         Ok(tc) => tc,
         Err(e) => {
             p.add_error(pos, e.into());
-            p.state().default_length_tc
+            p.default_length()
         }
     };
     Some(tc)
