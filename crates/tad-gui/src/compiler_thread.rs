@@ -134,7 +134,9 @@ pub struct SongOutputData {
     pub data_size: usize,
     pub duration: Option<std::time::Duration>,
     pub echo_buffer: EchoEdl,
-    pub tick_count_table: MmlTickCountTable,
+
+    // ::TODO move into SongData::
+    pub tick_count_table: Box<MmlTickCountTable>,
 
     pub song_data: Arc<SongData>,
 }
@@ -755,7 +757,7 @@ impl SongCompiler {
                 return None;
             }
         };
-        let tick_count_table = build_tick_count_table(&mml);
+        let tick_count_table = Box::new(build_tick_count_table(&mml));
 
         let song_data = match compiler::songs::song_data(mml) {
             Ok(sd) => Arc::new(sd),
