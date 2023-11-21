@@ -46,7 +46,9 @@ const _: () = assert!(
 
 const CHANNEL_NAMES: [&str; N_MUSIC_CHANNELS] = ["A", "B", "C", "D", "E", "F"];
 
+#[cfg(feature = "mml_tracking")]
 pub use self::bc_generator::BytecodePos;
+
 pub use self::bc_generator::ChannelData;
 pub use self::bc_generator::MAX_BROKEN_CHORD_NOTES;
 
