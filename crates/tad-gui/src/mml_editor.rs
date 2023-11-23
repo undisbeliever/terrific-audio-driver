@@ -63,10 +63,11 @@ impl MmlEditor {
         style_buffer.can_undo(false);
 
         let mut widget = TextEditor::default();
+        widget.set_buffer(text_buffer.clone());
+
         widget.wrap_mode(WrapMode::AtBounds, 0);
         widget.set_linenumber_width(ch_units_to_width(&widget, 4));
         widget.set_text_font(Font::Courier);
-        widget.set_buffer(text_buffer.clone());
 
         widget.set_highlight_data_ext(
             style_buffer.clone(),
