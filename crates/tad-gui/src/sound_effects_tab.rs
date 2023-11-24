@@ -566,6 +566,10 @@ fn highlight_data() -> Vec<StyleTableEntryExt> {
 
 pub struct SfxEditor {
     widget: TextEditor,
+
+    // An empty text buffer for when no sound effect is selected.
+    no_selection_buffer: TextBuffer,
+
     style_buffer: TextBuffer,
 }
 
@@ -581,7 +585,12 @@ impl SfxEditor {
         let mut style_buffer = TextBuffer::default();
         style_buffer.can_undo(false);
 
+        let mut no_selection_buffer = TextBuffer::default();
+        no_selection_buffer.can_undo(false);
+
         let mut widget = TextEditor::default();
+        widget.set_buffer(no_selection_buffer.clone());
+
         widget.set_linenumber_width(ch_units_to_width(&widget, 4));
         widget.set_text_font(Font::Courier);
         widget.set_highlight_data_ext(style_buffer.clone(), highlight_data());
@@ -591,6 +600,7 @@ impl SfxEditor {
 
         Self {
             widget,
+            no_selection_buffer,
             style_buffer,
         }
     }
@@ -623,13 +633,18 @@ impl SfxEditor {
         self.style_buffer.set_text(&style);
 
         self.widget.set_buffer(buf.clone());
+
         self.widget.clear_changed();
+        self.widget.activate();
     }
 
     fn remove_buffer(&mut self) {
         self.style_buffer.set_text("");
-        self.widget.set_buffer(None);
+        // Using `no_selection_buffer` so the Fl_Text_Editor always has a buffer attached to it.
+        self.widget.set_buffer(self.no_selection_buffer.clone());
+
         self.widget.clear_changed();
+        self.widget.deactivate();
     }
 
     fn style_text(sfx_text: &str, current_style: char) -> (String, char) {
