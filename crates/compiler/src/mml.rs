@@ -29,6 +29,7 @@ use crate::data::{self, TextFile, UniqueNamesList};
 use crate::driver_constants::N_MUSIC_CHANNELS;
 use crate::errors::MmlCompileErrors;
 use crate::pitch_table::PitchTable;
+use crate::songs::song_header_size;
 use crate::time::{TickClock, TickCounter, TIMER_HZ};
 
 use std::collections::HashMap;
@@ -67,8 +68,13 @@ pub struct MmlData {
     pub(crate) channels: Vec<ChannelData>,
     pub(crate) sections: Vec<Section>,
 
+    pub(crate) song_data: Vec<u8>,
+
     #[cfg(feature = "mml_tracking")]
     pub(crate) cursor_tracker: note_tracking::CursorTracker,
+
+    #[cfg(feature = "mml_tracking")]
+    pub(crate) bc_tracker: Vec<BytecodePos>,
 }
 
 // ::TODO add list of subroutines and instruments for the GUI (separate from MmlData)::
@@ -85,6 +91,9 @@ impl MmlData {
     }
     pub fn sections(&self) -> &[Section] {
         &self.sections
+    }
+    pub fn song_data(&self) -> &[u8] {
+        &self.song_data
     }
 }
 
@@ -144,15 +153,16 @@ pub fn compile_mml(
     }
     let metadata = metadata.unwrap();
 
+    assert!(lines.subroutines.len() <= u8::MAX.into());
     let mut bc_gen = MmlBytecodeGenerator::new(
         metadata.zenlen,
         pitch_table,
         &lines.sections,
         &instruments,
         instrument_map,
+        song_header_size(lines.subroutines.len()),
     );
 
-    assert!(lines.subroutines.len() <= u8::MAX.into());
     let mut subroutines = Vec::with_capacity(lines.subroutines.len());
     for (s_index, (s_id, s_lines)) in lines.subroutines.iter().enumerate() {
         let s_index = s_index.try_into().unwrap();
@@ -184,10 +194,19 @@ pub fn compile_mml(
     let channels = channels;
 
     if errors.channel_errors.is_empty() {
+        #[cfg(feature = "mml_tracking")]
+        let (song_data, cursor_tracker, bc_tracker) = bc_gen.take_data();
+
+        #[cfg(not(feature = "mml_tracking"))]
+        let song_data = bc_gen.take_data();
+
         Ok(MmlData {
             #[cfg(feature = "mml_tracking")]
-            cursor_tracker: bc_gen.take_cursor_tracker(),
+            cursor_tracker,
+            #[cfg(feature = "mml_tracking")]
+            bc_tracker,
 
+            song_data,
             metadata,
             subroutines,
             channels,

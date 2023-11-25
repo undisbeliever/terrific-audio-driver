@@ -94,6 +94,7 @@ pub struct Line<'a> {
 
 // Cannot `Copy` a `std::ops::Range<u32>`.
 #[derive(Debug, Clone, Copy)]
+#[allow(dead_code)]
 pub(crate) struct LineIndexRange {
     pub start: u32,
     pub end: u32,

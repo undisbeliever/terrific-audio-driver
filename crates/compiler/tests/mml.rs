@@ -822,6 +822,20 @@ fn merge_mml_commands_test(mml_line: &str, bc_asm: &[&str]) {
 
 // ----------------------------------------------------------------------------------------------
 
+fn mml_bytecode(mml: &mml::MmlData) -> &[u8] {
+    let song_data = mml.song_data();
+
+    let start = mml.channels()[0].bytecode_offset().into();
+
+    let end = if mml.channels().len() == 1 {
+        song_data.len()
+    } else {
+        mml.channels()[1].bytecode_offset().into()
+    };
+
+    &song_data[start..end]
+}
+
 fn assert_line_matches_bytecode(mml_line: &str, bc_asm: &[&str]) {
     let mml = ["@1 dummy_instrument\nA @1 o4\nA ", mml_line].concat();
     let bc_asm = [&["set_instrument dummy_instrument"], bc_asm].concat();
@@ -832,7 +846,7 @@ fn assert_line_matches_bytecode(mml_line: &str, bc_asm: &[&str]) {
     let bc_asm = assemble_channel_bytecode(&bc_asm, &dd.instruments);
 
     assert_eq!(
-        mml.channels()[0].bytecode(),
+        mml_bytecode(&mml),
         bc_asm,
         "Testing {mml_line:?} against bytecode"
     );
@@ -848,8 +862,8 @@ fn assert_line_matches_line(mml_line1: &str, mml_line2: &str) {
     let mml_data2 = compile_mml(&mml2, &dd);
 
     assert_eq!(
-        mml_data1.channels()[0].bytecode(),
-        mml_data2.channels()[0].bytecode(),
+        mml_bytecode(&mml_data1),
+        mml_bytecode(&mml_data2),
         "Testing {mml_line1:?} against MML"
     );
 }
@@ -861,7 +875,7 @@ fn assert_mml_channel_a_matches_bytecode(mml: &str, bc_asm: &[&str]) {
 
     let bc_asm = assemble_channel_bytecode(bc_asm, &dummy_data.instruments);
 
-    assert_eq!(mml.channels()[0].bytecode(), bc_asm);
+    assert_eq!(mml_bytecode(&mml), bc_asm);
 }
 
 fn compile_mml(mml: &str, dummy_data: &DummyData) -> mml::MmlData {

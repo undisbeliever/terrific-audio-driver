@@ -15,7 +15,7 @@ use crate::driver_constants::{
 };
 use crate::envelope::Envelope;
 use crate::errors::{SongError, SongTooLargeError, ValueError};
-use crate::mml::{calc_song_duration, MetaData, MmlData};
+use crate::mml::{calc_song_duration, ChannelData, MetaData, MmlData};
 use crate::notes::Note;
 use crate::sound_effects::CompiledSoundEffect;
 
@@ -24,17 +24,10 @@ use crate::mml;
 
 use std::cmp::min;
 use std::fmt::Debug;
+use std::ops::Range;
 use std::time::Duration;
 
 const NULL_OFFSET: u16 = 0xffff_u16;
-
-fn validate_data_size(data: &[u8], expected_size: usize) -> Result<(), SongError> {
-    if data.len() == expected_size {
-        Ok(())
-    } else {
-        Err(SongError::DataSizeMismatch(data.len(), expected_size))
-    }
-}
 
 #[cfg(feature = "mml_tracking")]
 #[derive(Clone)]
@@ -44,24 +37,9 @@ pub struct ChannelBcTracking {
 }
 
 #[cfg(feature = "mml_tracking")]
-impl ChannelBcTracking {
-    fn new(start: usize, end: usize, bytecodes: Vec<mml::BytecodePos>) -> Self {
-        Self {
-            range: std::ops::Range {
-                start: start.try_into().unwrap(),
-                end: end.try_into().unwrap(),
-            },
-            bytecodes,
-        }
-    }
-}
-
-#[cfg(feature = "mml_tracking")]
 #[derive(Clone)]
 pub struct SongBcTracking {
-    pub subroutines: Vec<ChannelBcTracking>,
-    pub channels: [Option<ChannelBcTracking>; N_MUSIC_CHANNELS],
-
+    pub bytecode: Vec<mml::BytecodePos>,
     pub cursor_tracker: mml::note_tracking::CursorTracker,
 }
 
@@ -109,6 +87,10 @@ impl SongData {
     pub fn take_tracking(self) -> Option<SongBcTracking> {
         self.tracking
     }
+}
+
+pub fn song_header_size(n_subroutines: usize) -> usize {
+    SONG_HEADER_SIZE + n_subroutines * 2
 }
 
 pub fn test_sample_song(
@@ -177,132 +159,119 @@ fn sfx_bytecode_to_song(bytecode: &[u8]) -> SongData {
     }
 }
 
-pub fn song_data(mml_data: MmlData) -> Result<SongData, SongError> {
-    let duration = calc_song_duration(&mml_data);
-
-    let metadata = mml_data.metadata;
-    let channels = mml_data.channels;
-    let subroutines = mml_data.subroutines;
-
-    let echo_buffer = &metadata.echo_buffer;
-
-    if channels.is_empty() {
-        return Err(SongError::NoMusicChannels);
+pub(crate) fn write_song_header(
+    buf: &mut [u8],
+    channels: &[ChannelData],
+    subroutines: &[ChannelData],
+    metadata: &MetaData,
+) -> Result<(), SongError> {
+    if buf.len() > MAX_SONG_DATA_SIZE {
+        return Err(SongError::SongIsTooLarge(buf.len()));
     }
 
     assert!(channels.len() <= N_MUSIC_CHANNELS);
     assert!(subroutines.len() <= MAX_SUBROUTINES);
 
-    let channel_data_size: usize = channels.iter().map(|c| c.bytecode().len()).sum();
-    let subroutine_data_size: usize = subroutines.iter().map(|s| s.bytecode().len()).sum();
+    let header_size = song_header_size(subroutines.len());
 
-    let header_size = SONG_HEADER_SIZE + subroutines.len() * 2;
-    let total_size = header_size + channel_data_size + subroutine_data_size;
-
-    if total_size > MAX_SONG_DATA_SIZE {
-        return Err(SongError::SongIsTooLarge(total_size));
-    }
     const _: () = assert!(MAX_SONG_DATA_SIZE < u16::MAX as usize);
+    let valid_offsets = Range {
+        start: u16::try_from(header_size).unwrap(),
+        end: u16::try_from(buf.len()).unwrap(),
+    };
 
-    let mut out = Vec::with_capacity(header_size);
+    let header = &mut buf[0..header_size];
+    debug_assert!(header.iter().all(|&i| i == 0));
+
+    // Channel data
     {
-        let mut data_offset: u16 = header_size.try_into().unwrap();
+        let channel_header = &mut header[0..SONG_HEADER_CHANNELS_SIZE];
 
-        // Channel data
         for i in 0..N_MUSIC_CHANNELS {
             let (start_offset, loop_offset) = match channels.get(i) {
                 Some(c) => {
-                    let c_size: u16 = c.bytecode().len().try_into().unwrap();
+                    let offset = c.bytecode_offset();
+                    assert!(valid_offsets.contains(&offset));
 
                     let loop_offset: u16 = match c.loop_point() {
                         Some(lp) => {
-                            if lp.bytecode_offset >= c_size.into() {
+                            if lp.bytecode_offset >= valid_offsets.end.into() {
                                 return Err(SongError::InvalidMmlData);
                             }
-                            u16::try_from(lp.bytecode_offset).unwrap()
+                            let lp = u16::try_from(lp.bytecode_offset).unwrap();
+                            assert!(valid_offsets.contains(&lp));
+                            lp
                         }
                         None => NULL_OFFSET,
                     };
-
-                    let offset = data_offset;
-                    data_offset += c_size;
 
                     (offset, loop_offset)
                 }
                 None => (NULL_OFFSET, NULL_OFFSET),
             };
 
-            out.extend(start_offset.to_le_bytes());
-            out.extend(loop_offset.to_le_bytes());
-        }
-
-        // Echo buffer settings
-        out.push(echo_buffer.edl.as_u8());
-        for f in echo_buffer.fir {
-            out.extend(f.to_le_bytes());
-        }
-        out.extend(echo_buffer.feedback.to_le_bytes());
-        out.extend(echo_buffer.echo_volume.to_le_bytes());
-
-        // Tick timer
-        out.push(metadata.tick_clock.as_u8());
-
-        // Subroutine table
-        out.push(subroutines.len().try_into().unwrap());
-
-        for s in &subroutines {
-            out.extend(data_offset.to_le_bytes());
-
-            let s_size: u16 = s.bytecode().len().try_into().unwrap();
-            data_offset += s_size;
-        }
-
-        validate_data_size(&out, header_size)?;
-    }
-
-    #[cfg(feature = "mml_tracking")]
-    let mut channel_tracking: [Option<ChannelBcTracking>; N_MUSIC_CHANNELS] = Default::default();
-
-    for (_i, c) in channels.into_iter().enumerate() {
-        #[cfg(feature = "mml_tracking")]
-        let start = out.len();
-
-        out.extend(c.bytecode());
-
-        #[cfg(feature = "mml_tracking")]
-        {
-            let end = out.len();
-            channel_tracking[_i] = Some(ChannelBcTracking::new(start, end, c.bc_tracking));
+            let o = i * 4;
+            channel_header[o..o + 2].copy_from_slice(&start_offset.to_le_bytes());
+            channel_header[o + 2..o + 4].copy_from_slice(&loop_offset.to_le_bytes());
         }
     }
 
-    #[cfg(feature = "mml_tracking")]
-    let mut subroutine_tracking = Vec::with_capacity(subroutines.len());
+    // Echo buffer settings
+    const EBS: usize = SONG_HEADER_CHANNELS_SIZE;
+    let echo_buffer = &metadata.echo_buffer;
 
-    for s in subroutines {
-        #[cfg(feature = "mml_tracking")]
-        let start = out.len();
+    header[EBS] = echo_buffer.edl.as_u8();
+    for (i, f) in echo_buffer.fir.iter().enumerate() {
+        header[EBS + 1 + i] = f.to_le_bytes()[0];
+    }
+    header[EBS + 9] = echo_buffer.feedback.to_le_bytes()[0];
+    header[EBS + 10] = echo_buffer.echo_volume.to_le_bytes()[0];
 
-        out.extend(s.bytecode());
+    const _: () = assert!(EBS + 11 == SONG_HEADER_TICK_TIMER_OFFSET);
 
-        #[cfg(feature = "mml_tracking")]
-        {
-            let end = out.len();
-            subroutine_tracking.push(ChannelBcTracking::new(start, end, s.bc_tracking));
+    // Tick timer
+    header[SONG_HEADER_TICK_TIMER_OFFSET] = metadata.tick_clock.as_u8();
+
+    // Subroutine table
+    {
+        header[SONG_HEADER_SIZE - 1] = subroutines.len().try_into().unwrap();
+        let subroutine_table = &mut header[SONG_HEADER_SIZE..];
+
+        assert_eq!(subroutine_table.len(), subroutines.len() * 2);
+        for (i, s) in subroutines.iter().enumerate() {
+            let offset = s.bytecode_offset();
+            assert!(valid_offsets.contains(&offset));
+
+            let si = i * 2;
+            subroutine_table[si..si + 2].copy_from_slice(&offset.to_le_bytes());
         }
     }
 
-    validate_data_size(&out, total_size)?;
+    Ok(())
+}
+
+pub fn song_data(mml_data: MmlData) -> Result<SongData, SongError> {
+    let duration = calc_song_duration(&mml_data);
+
+    let mut song_data = mml_data.song_data;
+    let metadata = mml_data.metadata;
+    let channels = mml_data.channels;
+    let subroutines = mml_data.subroutines;
+
+    if channels.is_empty() {
+        return Err(SongError::NoMusicChannels);
+    }
+
+    write_song_header(&mut song_data, &channels, &subroutines, &metadata)?;
 
     Ok(SongData {
         duration,
-        data: out,
+        data: song_data,
         metadata,
 
         #[cfg(feature = "mml_tracking")]
         tracking: Some(SongBcTracking {
-            subroutines: subroutine_tracking,
-            channels: channel_tracking,
+            bytecode: mml_data.bc_tracker,
             cursor_tracker: mml_data.cursor_tracker,
         }),
     })

@@ -38,7 +38,7 @@ pub struct LoopPoint {
 #[cfg(feature = "mml_tracking")]
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub struct BytecodePos {
-    // Position (within the channel/subroutine) at the end of the bytecode instruction.
+    // Position (within song data) at the end of the bytecode instruction.
     pub bc_end_pos: u16,
     // Character index within the input file
     pub char_index: u32,
@@ -48,7 +48,7 @@ pub struct BytecodePos {
 pub struct ChannelData {
     identifier: Identifier,
 
-    bytecode: Vec<u8>,
+    bytecode_offset: u16,
     loop_point: Option<LoopPoint>,
 
     tick_counter: TickCounter,
@@ -59,17 +59,14 @@ pub struct ChannelData {
 
     section_tick_counters: Vec<TickCounterWithLoopFlag>,
     pub(super) tempo_changes: Vec<(TickCounter, TickClock)>,
-
-    #[cfg(feature = "mml_tracking")]
-    pub(crate) bc_tracking: Vec<BytecodePos>,
 }
 
 impl ChannelData {
     pub fn identifier(&self) -> &Identifier {
         &self.identifier
     }
-    pub fn bytecode(&self) -> &[u8] {
-        &self.bytecode
+    pub fn bytecode_offset(&self) -> u16 {
+        self.bytecode_offset
     }
     pub fn loop_point(&self) -> Option<LoopPoint> {
         self.loop_point
@@ -119,6 +116,7 @@ struct ChannelBcGenerator<'a> {
 
 impl ChannelBcGenerator<'_> {
     fn new<'a>(
+        bytecode: Vec<u8>,
         pitch_table: &'a PitchTable,
         instruments: &'a Vec<MmlInstrument>,
         subroutines: Option<&'a Vec<ChannelData>>,
@@ -128,7 +126,7 @@ impl ChannelBcGenerator<'_> {
             pitch_table,
             instruments,
             subroutines,
-            bc: Bytecode::new(is_subroutine, false),
+            bc: Bytecode::new_append_to_vec(bytecode, is_subroutine, false),
             tempo_changes: Vec::new(),
             instrument: None,
             prev_slurred_note: None,
@@ -748,6 +746,8 @@ impl ChannelBcGenerator<'_> {
 }
 
 pub struct MmlBytecodeGenerator<'a, 'b> {
+    bytecode: Vec<u8>,
+
     default_zenlen: ZenLen,
     pitch_table: &'a PitchTable,
     sections: &'a [Section],
@@ -759,6 +759,9 @@ pub struct MmlBytecodeGenerator<'a, 'b> {
 
     #[cfg(feature = "mml_tracking")]
     cursor_tracker: CursorTracker,
+
+    #[cfg(feature = "mml_tracking")]
+    bytecode_tracker: Vec<BytecodePos>,
 }
 
 impl<'a, 'b> MmlBytecodeGenerator<'a, 'b> {
@@ -768,8 +771,10 @@ impl<'a, 'b> MmlBytecodeGenerator<'a, 'b> {
         sections: &'a [Section],
         instruments: &'a Vec<MmlInstrument>,
         instrument_map: HashMap<IdentifierStr<'a>, usize>,
+        header_size: usize,
     ) -> Self {
         Self {
+            bytecode: vec![0; header_size],
             default_zenlen,
             pitch_table,
             sections,
@@ -780,12 +785,19 @@ impl<'a, 'b> MmlBytecodeGenerator<'a, 'b> {
 
             #[cfg(feature = "mml_tracking")]
             cursor_tracker: CursorTracker::new(),
+            #[cfg(feature = "mml_tracking")]
+            bytecode_tracker: Vec::new(),
         }
     }
 
     #[cfg(feature = "mml_tracking")]
-    pub(crate) fn take_cursor_tracker(self) -> CursorTracker {
-        self.cursor_tracker
+    pub(crate) fn take_data(self) -> (Vec<u8>, CursorTracker, Vec<BytecodePos>) {
+        (self.bytecode, self.cursor_tracker, self.bytecode_tracker)
+    }
+
+    #[cfg(not(feature = "mml_tracking"))]
+    pub(crate) fn take_data(self) -> Vec<u8> {
+        self.bytecode
     }
 
     // Should only be called when all subroutines have been compiled.
@@ -823,9 +835,6 @@ impl<'a, 'b> MmlBytecodeGenerator<'a, 'b> {
             &mut self.cursor_tracker,
         );
 
-        #[cfg(feature = "mml_tracking")]
-        let mut bc_tracking = Vec::new();
-
         // Cannot have subroutine_index and subroutines list at the same time.
         if subroutine_index.is_some() {
             assert!(
@@ -834,7 +843,11 @@ impl<'a, 'b> MmlBytecodeGenerator<'a, 'b> {
             );
         }
 
+        let out = std::mem::take(&mut self.bytecode);
+        let bc_start_index = out.len();
+
         let mut gen = ChannelBcGenerator::new(
+            out,
             self.pitch_table,
             self.instruments,
             self.subroutines,
@@ -852,7 +865,7 @@ impl<'a, 'b> MmlBytecodeGenerator<'a, 'b> {
             }
 
             #[cfg(feature = "mml_tracking")]
-            bc_tracking.push(BytecodePos {
+            self.bytecode_tracker.push(BytecodePos {
                 bc_end_pos: gen.bc.get_bytecode_len().try_into().unwrap_or(0xffff),
                 char_index: c.pos().index_start,
             });
@@ -877,11 +890,11 @@ impl<'a, 'b> MmlBytecodeGenerator<'a, 'b> {
             }
         };
 
-        let bytecode = match gen.bc.bytecode(terminator) {
+        self.bytecode = match gen.bc.bytecode(terminator) {
             Ok(b) => b,
-            Err(e) => {
+            Err((e, b)) => {
                 parser.add_error_range(last_pos.to_range(1), MmlError::BytecodeError(e));
-                Vec::new()
+                b
             }
         };
 
@@ -893,16 +906,13 @@ impl<'a, 'b> MmlBytecodeGenerator<'a, 'b> {
         if errors.is_empty() {
             Ok(ChannelData {
                 identifier,
-                bytecode,
+                bytecode_offset: bc_start_index.try_into().unwrap_or(u16::MAX),
                 loop_point: gen.loop_point,
                 tick_counter,
                 last_instrument: gen.instrument,
                 bc_subroutine,
                 section_tick_counters,
                 tempo_changes: gen.tempo_changes,
-
-                #[cfg(feature = "mml_tracking")]
-                bc_tracking,
             })
         } else {
             Err(MmlChannelError { identifier, errors })

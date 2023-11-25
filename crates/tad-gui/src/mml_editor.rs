@@ -10,8 +10,8 @@ use crate::helpers::ch_units_to_width;
 use compiler::driver_constants::N_MUSIC_CHANNELS;
 use compiler::errors::{MmlChannelError, MmlCompileErrors};
 use compiler::mml::command_parser::Quantization;
-use compiler::mml::{FIRST_MUSIC_CHANNEL, LAST_MUSIC_CHANNEL};
-use compiler::songs::{ChannelBcTracking, SongBcTracking, SongData};
+use compiler::mml::{BytecodePos, FIRST_MUSIC_CHANNEL, LAST_MUSIC_CHANNEL};
+use compiler::songs::{SongBcTracking, SongData};
 use compiler::FilePosRange;
 
 use std::cell::RefCell;
@@ -394,8 +394,7 @@ impl MmlEditorState {
                     let nts = &mut self.note_tracking_state[i];
                     let voice_pos = mon.voice_instruction_ptrs[i];
 
-                    changed |=
-                        nts.update(&mut self.style_buffer, ntd, i, voice_pos, &self.style_vec);
+                    changed |= nts.update(&mut self.style_buffer, ntd, voice_pos, &self.style_vec);
                 }
             }
         }
@@ -497,7 +496,6 @@ impl MmlEditorState {
 
 pub struct NotePos {
     buffer_pos: i32,
-    subroutine: Option<usize>,
     index: usize,
 }
 
@@ -512,7 +510,6 @@ impl NoteTrackingState {
         &mut self,
         style_buffer: &mut TextBuffer,
         tracking_data: &SongBcTracking,
-        channel_index: usize,
         voice_pos: Option<u16>,
         style_vec: &Vec<u8>,
     ) -> bool {
@@ -521,17 +518,12 @@ impl NoteTrackingState {
         }
         self.song_ptr = voice_pos;
 
-        let vc = match &tracking_data.channels[channel_index] {
-            Some(vc) => vc,
-            None => return false,
-        };
-
         let new_pos = match voice_pos {
             Some(vp) => self
                 .prev_pos
                 .as_ref()
-                .and_then(|prev| Self::search_prev_pos(vc, &tracking_data.subroutines, prev, vp))
-                .or_else(|| Self::search_all(vc, &tracking_data.subroutines, vp)),
+                .and_then(|prev| Self::search_next_few_items(&tracking_data.bytecode, prev, vp))
+                .or_else(|| Self::binary_search(&tracking_data.bytecode, vp)),
             None => None,
         };
 
@@ -553,87 +545,35 @@ impl NoteTrackingState {
         }
     }
 
-    fn search_prev_pos(
-        channel_tracking: &ChannelBcTracking,
-        subroutines: &[ChannelBcTracking],
-        prev_pos: &NotePos,
-        voice_pos: u16,
-    ) -> Option<NotePos> {
-        let c = match prev_pos.subroutine {
-            Some(i) => match subroutines.get(i) {
-                Some(t) => t,
-                None => return None,
-            },
-            None => channel_tracking,
+    fn binary_search(bc_tracking: &[BytecodePos], voice_pos: u16) -> Option<NotePos> {
+        let index = match bc_tracking.binary_search_by_key(&voice_pos, |b| b.bc_end_pos) {
+            Ok(i) => i,
+            Err(i) => i,
         };
+        let buffer_pos = bc_tracking
+            .get(index)
+            .and_then(|b| b.char_index.try_into().ok());
 
-        Self::search_next_few_items(prev_pos.subroutine, c, prev_pos.index, voice_pos)
-            .or_else(|| Self::binary_search_channel(prev_pos.subroutine, c, voice_pos))
-    }
-
-    fn search_all(
-        channel_tracking: &ChannelBcTracking,
-        subroutines: &[ChannelBcTracking],
-        voice_pos: u16,
-    ) -> Option<NotePos> {
-        if let Some(nts) = Self::binary_search_channel(None, channel_tracking, voice_pos) {
-            Some(nts)
-        } else {
-            subroutines
-                .iter()
-                .enumerate()
-                .find_map(|(i, s)| Self::binary_search_channel(Some(i), s, voice_pos))
-        }
-    }
-
-    fn binary_search_channel(
-        subroutine_index: Option<usize>,
-        c: &ChannelBcTracking,
-        voice_pos: u16,
-    ) -> Option<NotePos> {
-        if c.range.contains(&voice_pos) {
-            let channel_pos = voice_pos.saturating_sub(c.range.start);
-            let index = match c
-                .bytecodes
-                .binary_search_by_key(&channel_pos, |b| b.bc_end_pos)
-            {
-                Ok(i) => i,
-                Err(i) => i,
-            };
-            let buffer_pos = c
-                .bytecodes
-                .get(index)
-                .and_then(|b| b.char_index.try_into().ok());
-
-            buffer_pos.map(|buffer_pos| NotePos {
-                subroutine: subroutine_index,
-                index,
-                buffer_pos,
-            })
-        } else {
-            None
-        }
+        buffer_pos.map(|buffer_pos| NotePos { index, buffer_pos })
     }
 
     // Search the next few items in ChannelBcTracking for the voice_pos.
     fn search_next_few_items(
-        subroutine_index: Option<usize>,
-        c: &ChannelBcTracking,
-        starting_index: usize,
+        bc_tracking: &[BytecodePos],
+        prev_pos: &NotePos,
         voice_pos: u16,
     ) -> Option<NotePos> {
         const TO_SEARCH: usize = 6;
 
-        let to_find_range = starting_index..min(starting_index + TO_SEARCH, c.bytecodes.len());
-        let to_find = match c.bytecodes.get(to_find_range) {
+        let starting_index = prev_pos.index;
+        let to_find_range = starting_index..min(starting_index + TO_SEARCH, bc_tracking.len());
+        let to_find = match bc_tracking.get(to_find_range) {
             Some(s) => s,
             None => return None,
         };
 
-        let channel_pos = voice_pos.saturating_sub(c.range.start);
-
-        if channel_pos < to_find.first().unwrap().bc_end_pos
-            || channel_pos > to_find.last().unwrap().bc_end_pos
+        if voice_pos < to_find.first().unwrap().bc_end_pos
+            || voice_pos > to_find.last().unwrap().bc_end_pos
         {
             return None;
         }
@@ -641,9 +581,8 @@ impl NoteTrackingState {
         to_find
             .iter()
             .enumerate()
-            .find(|(_i, b)| b.bc_end_pos >= channel_pos)
+            .find(|(_i, b)| b.bc_end_pos >= voice_pos)
             .map(|(i, b)| NotePos {
-                subroutine: subroutine_index,
                 index: starting_index + i,
                 buffer_pos: b.char_index.try_into().unwrap_or(0),
             })

@@ -414,10 +414,17 @@ pub struct Bytecode {
 
 impl Bytecode {
     pub fn new(is_subroutine: bool, is_sound_effect: bool) -> Bytecode {
+        Self::new_append_to_vec(Vec::new(), is_subroutine, is_sound_effect)
+    }
+
+    // Instead of creating a new `Vec<u8>` to hold the bytecode, write the data to the end of `vec`.
+    // Takes ownership of the `Vec<u8>`.
+    // The `Vec<u8>` can be taken out of `Bytecode` with `Self::bytecode()`.
+    pub fn new_append_to_vec(vec: Vec<u8>, is_subroutine: bool, is_sound_effect: bool) -> Bytecode {
         Bytecode {
             is_subroutine,
             is_sound_effect,
-            bytecode: Vec::new(),
+            bytecode: vec,
             tick_counter: TickCounter::new(0),
             loop_stack: Vec::new(),
             max_nested_loops: 0,
@@ -447,13 +454,19 @@ impl Bytecode {
         self.bytecode.len()
     }
 
-    pub fn bytecode(mut self, terminator: BcTerminator) -> Result<Vec<u8>, BytecodeError> {
+    pub fn bytecode(
+        mut self,
+        terminator: BcTerminator,
+    ) -> Result<Vec<u8>, (BytecodeError, Vec<u8>)> {
         if !self.loop_stack.is_empty() {
-            return Err(BytecodeError::OpenLoopStack(self.loop_stack.len()));
+            return Err((
+                BytecodeError::OpenLoopStack(self.loop_stack.len()),
+                self.bytecode,
+            ));
         }
 
         if !self.is_subroutine && terminator == BcTerminator::ReturnFromSubroutine {
-            return Err(BytecodeError::ReturnInNonSubroutine);
+            return Err((BytecodeError::ReturnInNonSubroutine, self.bytecode));
         }
 
         let opcode = match terminator {

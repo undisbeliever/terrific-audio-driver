@@ -70,7 +70,7 @@ impl BytecodeAssembler<'_, '_> {
     pub fn bytecode(self, terminator: BcTerminator) -> Result<Vec<u8>, BytecodeAssemblerError> {
         match self.bc.bytecode(terminator) {
             Ok(b) => Ok(b),
-            Err(e) => Err(BytecodeAssemblerError::BytecodeError(e)),
+            Err((e, _)) => Err(BytecodeAssemblerError::BytecodeError(e)),
         }
     }
 
