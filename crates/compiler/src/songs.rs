@@ -93,28 +93,6 @@ impl Debug for SongData {
 }
 
 impl SongData {
-    pub(crate) fn new(
-        metadata: MetaData,
-        data: Vec<u8>,
-        duration: Option<Duration>,
-        sections: Vec<Section>,
-        channels: Vec<Channel>,
-        subroutines: Vec<Subroutine>,
-
-        #[cfg(feature = "mml_tracking")] tracking: Option<SongBcTracking>,
-    ) -> Self {
-        Self {
-            metadata,
-            data,
-            duration,
-            sections,
-            channels,
-            subroutines,
-            #[cfg(feature = "mml_tracking")]
-            tracking,
-        }
-    }
-
     pub fn metadata(&self) -> &MetaData {
         &self.metadata
     }
@@ -229,7 +207,7 @@ fn sfx_bytecode_to_song(bytecode: &[u8]) -> SongData {
     }
 }
 
-pub(crate) fn write_song_header(
+fn write_song_header(
     buf: &mut [u8],
     channels: &[Channel],
     subroutines: &[Subroutine],
@@ -318,6 +296,32 @@ pub(crate) fn write_song_header(
     }
 
     Ok(())
+}
+
+pub(crate) fn mml_to_song(
+    metadata: MetaData,
+    data: Vec<u8>,
+    duration: Option<Duration>,
+    sections: Vec<Section>,
+    channels: Vec<Channel>,
+    subroutines: Vec<Subroutine>,
+    #[cfg(feature = "mml_tracking")] tracking: SongBcTracking,
+) -> Result<SongData, SongError> {
+    let mut data = data;
+
+    match write_song_header(&mut data, &channels, &subroutines, &metadata) {
+        Ok(()) => Ok(SongData {
+            metadata,
+            data,
+            duration,
+            sections,
+            channels,
+            subroutines,
+            #[cfg(feature = "mml_tracking")]
+            tracking: Some(tracking),
+        }),
+        Err(e) => Err(e),
+    }
 }
 
 pub fn song_duration_string(duration: Option<Duration>) -> String {

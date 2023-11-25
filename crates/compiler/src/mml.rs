@@ -31,7 +31,7 @@ use crate::driver_constants::N_MUSIC_CHANNELS;
 use crate::errors::{MmlCompileErrors, SongError};
 use crate::mml::song_duration::calc_song_duration;
 use crate::pitch_table::PitchTable;
-use crate::songs::{song_header_size, write_song_header, SongData};
+use crate::songs::{mml_to_song, song_header_size, SongData};
 
 use std::collections::HashMap;
 use std::ops::RangeInclusive;
@@ -160,15 +160,13 @@ pub fn compile_mml(
     drop(errors);
 
     #[cfg(feature = "mml_tracking")]
-    let (mut song_data, tracking) = compiler.take_data();
+    let (song_data, tracking) = compiler.take_data();
     #[cfg(not(feature = "mml_tracking"))]
-    let mut song_data = compiler.take_data();
+    let song_data = compiler.take_data();
 
     let duration = calc_song_duration(&metadata, &channels, &subroutines);
 
-    write_song_header(&mut song_data, &channels, &subroutines, &metadata)?;
-
-    Ok(SongData::new(
+    mml_to_song(
         metadata,
         song_data,
         duration,
@@ -176,6 +174,6 @@ pub fn compile_mml(
         channels,
         subroutines,
         #[cfg(feature = "mml_tracking")]
-        Some(tracking),
-    ))
+        tracking,
+    )
 }
