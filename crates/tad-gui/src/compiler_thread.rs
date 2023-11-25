@@ -22,7 +22,6 @@ use compiler::data::{load_text_file_with_limit, TextFile};
 use compiler::driver_constants::COMMON_DATA_BYTES_PER_SOUND_EFFECT;
 use compiler::envelope::Envelope;
 use compiler::errors::{self, ExportSpcFileError, SongTooLargeError};
-use compiler::mml::tick_count_table::{build_tick_count_table, MmlTickCountTable};
 use compiler::notes::Note;
 use compiler::path::{ParentPathBuf, SourcePathBuf};
 use compiler::pitch_table::PitchTable;
@@ -104,7 +103,7 @@ pub enum ToCompiler {
 
 pub type InstrumentOutput = Result<usize, errors::SampleError>;
 pub type SoundEffectOutput = Result<usize, SfxError>;
-pub type SongOutput = Result<SongOutputData, SongError>;
+pub type SongOutput = Result<Arc<SongData>, SongError>;
 
 #[derive(Debug)]
 pub enum CompilerOutput {
@@ -126,14 +125,6 @@ pub enum CompilerOutput {
 
     // The result of the last `ToCompiler::ExportSongToSpcFile` operation
     SpcFileResult(Result<(String, Vec<u8>), SpcFileError>),
-}
-
-#[derive(Debug)]
-pub struct SongOutputData {
-    // ::TODO move into SongData::
-    pub tick_count_table: Box<MmlTickCountTable>,
-
-    pub song_data: Arc<SongData>,
 }
 
 #[derive(Debug)]
@@ -751,15 +742,10 @@ impl SongCompiler {
                     return None;
                 }
             };
-        let tick_count_table = Box::new(build_tick_count_table(&song_data));
 
         match compiler::songs::validate_song_size(&song_data, dep.common_data_size()) {
             Ok(()) => {
-                let to_gui = SongOutputData {
-                    tick_count_table,
-                    song_data: song_data.clone(),
-                };
-                sender.send(CompilerOutput::Song(id, Ok(to_gui)));
+                sender.send(CompilerOutput::Song(id, Ok(song_data.clone())));
             }
             Err(e) => {
                 sender.send(CompilerOutput::Song(id, Err(SongError::TooLarge(e))));

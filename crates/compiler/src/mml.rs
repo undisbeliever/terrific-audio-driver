@@ -12,10 +12,10 @@ mod instruments;
 mod line_splitter;
 mod metadata;
 mod song_duration;
+mod tick_count_table;
 mod tokenizer;
 
 pub mod command_parser;
-pub mod tick_count_table;
 
 #[cfg(feature = "mml_tracking")]
 pub(crate) mod note_tracking;
@@ -49,6 +49,7 @@ const CHANNEL_NAMES: [&str; N_MUSIC_CHANNELS] = ["A", "B", "C", "D", "E", "F"];
 pub use self::bc_generator::ChannelData;
 pub use self::bc_generator::MAX_BROKEN_CHORD_NOTES;
 pub use self::song_duration::calc_song_duration;
+pub use self::tick_count_table::MmlTickCountTable;
 
 pub use self::metadata::MetaData;
 

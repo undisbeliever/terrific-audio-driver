@@ -51,7 +51,7 @@ pub struct ChannelData {
     // Some if this channel is a subroutine
     pub(super) bc_subroutine: Option<SubroutineId>,
 
-    section_tick_counters: Vec<TickCounterWithLoopFlag>,
+    pub(super) section_tick_counters: Vec<TickCounterWithLoopFlag>,
     pub(super) tempo_changes: Vec<(TickCounter, TickClock)>,
 }
 
@@ -67,9 +67,6 @@ impl ChannelData {
     }
     pub fn tick_counter(&self) -> TickCounter {
         self.tick_counter
-    }
-    pub fn section_tick_counters(&self) -> &[TickCounterWithLoopFlag] {
-        &self.section_tick_counters
     }
 }
 

@@ -13,7 +13,7 @@ use compiler::{
         TextFile, UniqueNamesProjectFile,
     },
     mml::compile_mml,
-    mml::tick_count_table::build_tick_count_table,
+    mml::MmlTickCountTable,
     pitch_table::build_pitch_table,
     pitch_table::PitchTable,
     samples::build_sample_and_instrument_data,
@@ -234,14 +234,9 @@ fn compile_song(
         Err(e) => error!("{}", e.multiline_display()),
     };
 
-    let tick_count_table = match options.print_tick_counts {
-        true => Some(build_tick_count_table(&song_data)),
-        false => None,
-    };
-
-    if let Some(tct) = tick_count_table {
+    if options.print_tick_counts {
         println!("Duration: {}", song_duration_string(song_data.duration()));
-        println!("{}", tct);
+        println!("{}", MmlTickCountTable(&song_data));
     }
 
     song_data

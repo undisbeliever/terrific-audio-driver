@@ -13,6 +13,7 @@ use crate::GuiMessage;
 
 use compiler::data::TextFile;
 use compiler::errors::MmlCompileErrors;
+use compiler::mml::MmlTickCountTable;
 use compiler::songs::{song_duration_string, SongData};
 
 use fltk::app;
@@ -232,15 +233,13 @@ impl State {
                 self.console_buffer.set_text("");
                 self.errors = None;
             }
-            Some(Ok(o)) => {
-                let sd = o.song_data;
-
+            Some(Ok(sd)) => {
                 let text = format!(
                     "MML compiled successfully: {} bytes (+{} echo buffer bytes)\n\nDuration: {}\n{}",
                     sd.data().len(),
                     sd.metadata().echo_buffer.edl.buffer_size(),
                     song_duration_string(sd.duration()),
-                    o.tick_count_table
+                    MmlTickCountTable(&sd),
                 );
                 self.console_buffer.set_text(&text);
                 self.console.set_text_color(Color::Foreground);

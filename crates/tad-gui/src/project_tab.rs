@@ -158,9 +158,9 @@ impl TableCompilerOutput for SongMapping {
     fn set_row_state(r: &mut Self::RowType, co: &Option<SongOutput>) -> bool {
         let (duration, data_size) = match co {
             None => (String::new(), String::new()),
-            Some(Ok(o)) => {
-                let dur = song_duration_string(o.song_data.duration());
-                let ds = format!("{} bytes", o.song_data.data().len());
+            Some(Ok(song_data)) => {
+                let dur = song_duration_string(song_data.duration());
+                let ds = format!("{} bytes", song_data.data().len());
                 (dur, ds)
             }
             Some(Err(e)) => (String::new(), e.to_string()),
