@@ -10,6 +10,7 @@ mod bc_generator;
 mod instruments;
 mod line_splitter;
 mod metadata;
+mod song_duration;
 mod tokenizer;
 
 pub mod command_parser;
@@ -30,11 +31,9 @@ use crate::driver_constants::N_MUSIC_CHANNELS;
 use crate::errors::MmlCompileErrors;
 use crate::pitch_table::PitchTable;
 use crate::songs::song_header_size;
-use crate::time::{TickClock, TickCounter, TIMER_HZ};
 
 use std::collections::HashMap;
 use std::ops::RangeInclusive;
-use std::time::Duration;
 
 pub const FIRST_MUSIC_CHANNEL: char = 'A';
 pub const LAST_MUSIC_CHANNEL: char = 'F';
@@ -52,6 +51,7 @@ pub use self::bc_generator::BytecodePos;
 
 pub use self::bc_generator::ChannelData;
 pub use self::bc_generator::MAX_BROKEN_CHORD_NOTES;
+pub use self::song_duration::calc_song_duration;
 
 pub use self::metadata::MetaData;
 
@@ -215,52 +215,4 @@ pub fn compile_mml(
     } else {
         Err(errors)
     }
-}
-
-pub fn calc_song_duration(mml_data: &MmlData) -> Option<Duration> {
-    let set_song_tick_in_subroutine = mml_data
-        .subroutines
-        .iter()
-        .any(|c| !c.tempo_changes.is_empty());
-
-    if set_song_tick_in_subroutine {
-        return None;
-    }
-
-    let total_ticks: u32 = mml_data
-        .channels()
-        .iter()
-        .map(|c| c.tick_counter().value())
-        .max()
-        .unwrap_or(0);
-
-    let mut tempo_changes: Vec<(TickCounter, TickClock)> = mml_data
-        .channels
-        .iter()
-        .flat_map(|c| &c.tempo_changes)
-        .cloned()
-        .collect();
-    tempo_changes.sort_by_key(|(tc, _tempo)| tc.value());
-
-    let mut out: u64 = 0;
-    let mut prev_ticks = 0;
-    let mut prev_clock = mml_data.metadata.tick_clock;
-
-    for (ticks, clock) in tempo_changes {
-        let ticks = ticks.value();
-
-        let section_ticks = ticks - prev_ticks;
-        out += u64::from(section_ticks) * u64::from(prev_clock.as_u8());
-
-        prev_ticks = ticks;
-        prev_clock = clock;
-    }
-
-    let remaining_ticks = total_ticks - prev_ticks;
-    out += u64::from(remaining_ticks) * u64::from(prev_clock.as_u8());
-
-    const _: () = assert!(1_000_000 % TIMER_HZ == 0);
-    const MICRO_MUL: u64 = 1_000_000 / TIMER_HZ as u64;
-
-    Some(Duration::from_micros(out * MICRO_MUL))
 }
