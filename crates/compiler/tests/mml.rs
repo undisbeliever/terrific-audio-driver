@@ -826,12 +826,12 @@ fn merge_mml_commands_test(mml_line: &str, bc_asm: &[&str]) {
 fn mml_bytecode(mml: &SongData) -> &[u8] {
     let song_data = mml.data();
 
-    let start = mml.channels()[0].bytecode_offset().into();
+    let start = mml.channels()[0].bytecode_offset.into();
 
     let end = if mml.channels().len() == 1 {
         song_data.len()
     } else {
-        mml.channels()[1].bytecode_offset().into()
+        mml.channels()[1].bytecode_offset.into()
     };
 
     &song_data[start..end]

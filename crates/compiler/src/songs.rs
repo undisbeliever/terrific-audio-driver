@@ -7,7 +7,8 @@
 #![allow(clippy::assertions_on_constants)]
 
 use crate::bytecode::{
-    BcTerminator, BcTicksKeyOff, BcTicksNoKeyOff, Bytecode, InstrumentId, PlayNoteTicks, Volume,
+    BcTerminator, BcTicksKeyOff, BcTicksNoKeyOff, Bytecode, InstrumentId, PlayNoteTicks,
+    SubroutineId, Volume,
 };
 use crate::driver_constants::{
     addresses, AUDIO_RAM_SIZE, MAX_SONG_DATA_SIZE, MAX_SUBROUTINES, N_MUSIC_CHANNELS,
@@ -15,12 +16,11 @@ use crate::driver_constants::{
 };
 use crate::envelope::Envelope;
 use crate::errors::{SongError, SongTooLargeError, ValueError};
-use crate::mml::{ChannelData, MetaData, Section};
+use crate::mml;
+use crate::mml::{MetaData, Section};
 use crate::notes::Note;
 use crate::sound_effects::CompiledSoundEffect;
-
-#[cfg(feature = "mml_tracking")]
-use crate::mml;
+use crate::time::{TickClock, TickCounter, TickCounterWithLoopFlag};
 
 use std::cmp::min;
 use std::fmt::Debug;
@@ -45,6 +45,33 @@ pub struct SongBcTracking {
     pub cursor_tracker: mml::note_tracking::CursorTracker,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct Subroutine {
+    pub identifier: mml::Identifier,
+    pub subroutine_id: SubroutineId,
+    pub bytecode_offset: u16,
+    pub last_instrument: Option<usize>,
+    pub changes_song_tempo: bool,
+}
+
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub struct LoopPoint {
+    pub bytecode_offset: usize,
+    pub tick_counter: TickCounter,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Channel {
+    pub name: char,
+
+    pub bytecode_offset: u16,
+    pub loop_point: Option<LoopPoint>,
+    pub tick_counter: TickCounter,
+
+    pub section_tick_counters: Vec<TickCounterWithLoopFlag>,
+    pub tempo_changes: Vec<(TickCounter, TickClock)>,
+}
+
 #[derive(Clone)]
 pub struct SongData {
     metadata: MetaData,
@@ -52,7 +79,8 @@ pub struct SongData {
     duration: Option<Duration>,
 
     sections: Vec<Section>,
-    channels: Vec<ChannelData>,
+    channels: Vec<Channel>,
+    subroutines: Vec<Subroutine>,
 
     #[cfg(feature = "mml_tracking")]
     tracking: Option<SongBcTracking>,
@@ -70,7 +98,8 @@ impl SongData {
         data: Vec<u8>,
         duration: Option<Duration>,
         sections: Vec<Section>,
-        channels: Vec<ChannelData>,
+        channels: Vec<Channel>,
+        subroutines: Vec<Subroutine>,
 
         #[cfg(feature = "mml_tracking")] tracking: Option<SongBcTracking>,
     ) -> Self {
@@ -80,6 +109,7 @@ impl SongData {
             duration,
             sections,
             channels,
+            subroutines,
             #[cfg(feature = "mml_tracking")]
             tracking,
         }
@@ -99,8 +129,12 @@ impl SongData {
         &self.sections
     }
 
-    pub fn channels(&self) -> &[ChannelData] {
+    pub fn channels(&self) -> &[Channel] {
         &self.channels
+    }
+
+    pub fn subroutines(&self) -> &[Subroutine] {
+        &self.subroutines
     }
 
     pub fn data_and_echo_size(&self) -> usize {
@@ -188,6 +222,7 @@ fn sfx_bytecode_to_song(bytecode: &[u8]) -> SongData {
         duration: None,
         sections: Vec::new(),
         channels: Vec::new(),
+        subroutines: Vec::new(),
 
         #[cfg(feature = "mml_tracking")]
         tracking: None,
@@ -196,8 +231,8 @@ fn sfx_bytecode_to_song(bytecode: &[u8]) -> SongData {
 
 pub(crate) fn write_song_header(
     buf: &mut [u8],
-    channels: &[ChannelData],
-    subroutines: &[ChannelData],
+    channels: &[Channel],
+    subroutines: &[Subroutine],
     metadata: &MetaData,
 ) -> Result<(), SongError> {
     if buf.len() > MAX_SONG_DATA_SIZE {
@@ -225,10 +260,10 @@ pub(crate) fn write_song_header(
         for i in 0..N_MUSIC_CHANNELS {
             let (start_offset, loop_offset) = match channels.get(i) {
                 Some(c) => {
-                    let offset = c.bytecode_offset();
+                    let offset = c.bytecode_offset;
                     assert!(valid_offsets.contains(&offset));
 
-                    let loop_offset: u16 = match c.loop_point() {
+                    let loop_offset: u16 = match c.loop_point {
                         Some(lp) => {
                             if lp.bytecode_offset >= valid_offsets.end.into() {
                                 return Err(SongError::InvalidMmlData);
@@ -274,7 +309,7 @@ pub(crate) fn write_song_header(
 
         assert_eq!(subroutine_table.len(), subroutines.len() * 2);
         for (i, s) in subroutines.iter().enumerate() {
-            let offset = s.bytecode_offset();
+            let offset = s.bytecode_offset;
             assert!(valid_offsets.contains(&offset));
 
             let si = i * 2;

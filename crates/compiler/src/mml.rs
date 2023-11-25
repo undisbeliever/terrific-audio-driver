@@ -29,6 +29,7 @@ pub(crate) use identifier::{Identifier, IdentifierStr};
 use crate::data::{self, TextFile, UniqueNamesList};
 use crate::driver_constants::N_MUSIC_CHANNELS;
 use crate::errors::{MmlCompileErrors, SongError};
+use crate::mml::song_duration::calc_song_duration;
 use crate::pitch_table::PitchTable;
 use crate::songs::{song_header_size, write_song_header, SongData};
 
@@ -46,9 +47,7 @@ const _: () = assert!(
 
 const CHANNEL_NAMES: [&str; N_MUSIC_CHANNELS] = ["A", "B", "C", "D", "E", "F"];
 
-pub use self::bc_generator::ChannelData;
 pub use self::bc_generator::MAX_BROKEN_CHORD_NOTES;
-pub use self::song_duration::calc_song_duration;
 pub use self::tick_count_table::MmlTickCountTable;
 
 pub use self::metadata::MetaData;
@@ -129,7 +128,7 @@ pub fn compile_mml(
     for (s_index, (s_id, s_lines)) in lines.subroutines.iter().enumerate() {
         let s_index = s_index.try_into().unwrap();
 
-        match bc_gen.parse_and_compile_mml_channel(s_lines, s_id.clone(), Some(s_index)) {
+        match bc_gen.parse_and_compile_song_subroutione(s_lines, s_id.clone(), s_index) {
             Ok(data) => subroutines.push(data),
             Err(e) => errors.subroutine_errors.push(e),
         }
@@ -147,7 +146,7 @@ pub fn compile_mml(
         if !c_lines.is_empty() {
             let c_id = Identifier::try_from_name(CHANNEL_NAMES[c_index].to_owned()).unwrap();
 
-            match bc_gen.parse_and_compile_mml_channel(c_lines, c_id.clone(), None) {
+            match bc_gen.parse_and_compile_song_channel(c_lines, c_id.clone()) {
                 Ok(data) => channels.push(data),
                 Err(e) => errors.channel_errors.push(e),
             }
@@ -165,7 +164,7 @@ pub fn compile_mml(
     #[cfg(not(feature = "mml_tracking"))]
     let mut song_data = bc_gen.take_data();
 
-    let duration = calc_song_duration(&metadata, &subroutines, &channels);
+    let duration = calc_song_duration(&metadata, &channels, &subroutines);
 
     write_song_header(&mut song_data, &channels, &subroutines, &metadata)?;
 
@@ -175,6 +174,7 @@ pub fn compile_mml(
         duration,
         lines.sections,
         channels,
+        subroutines,
         #[cfg(feature = "mml_tracking")]
         Some(tracking),
     ))

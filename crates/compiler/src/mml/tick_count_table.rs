@@ -26,13 +26,13 @@ impl std::fmt::Display for MmlTickCountTable<'_> {
             .unwrap_or(0)
             .clamp(MIN_NAME_COLUMN_WIDTH, MAX_NAME_COLUMN_WIDTH);
 
-        let has_loop_point = channels.iter().any(|c| c.loop_point().is_some());
+        let has_loop_point = channels.iter().any(|c| c.loop_point.is_some());
 
         const TC_WIDTH: usize = 9;
 
         write!(f, "{:width$} |", "", width = name_width)?;
         for c in channels {
-            let c_name = c.identifier().as_str();
+            let c_name = c.name;
             write!(f, " Channel {:<width$}|", c_name, width = TC_WIDTH - 7)?;
         }
         writeln!(f)?;
@@ -41,7 +41,7 @@ impl std::fmt::Display for MmlTickCountTable<'_> {
             write!(f, "{:width$} |", "MML", width = name_width)?;
 
             for c in channels {
-                let tc = c.tick_counter();
+                let tc = c.tick_counter;
                 write!(f, " {:>width$} |", tc.value(), width = TC_WIDTH)?;
             }
             writeln!(f)?;
@@ -55,7 +55,7 @@ impl std::fmt::Display for MmlTickCountTable<'_> {
                             let lc = if s.in_loop { '+' } else { ' ' };
                             (lc, s.ticks)
                         }
-                        None => (' ', c.tick_counter()),
+                        None => (' ', c.tick_counter),
                     };
                     write!(f, " {:>width$}{}|", ticks.value(), lc, width = TC_WIDTH)?;
                 }
@@ -66,7 +66,7 @@ impl std::fmt::Display for MmlTickCountTable<'_> {
         if has_loop_point {
             write!(f, "{:width$} |", "Loop Point", width = name_width)?;
             for c in channels {
-                if let Some(lp) = c.loop_point() {
+                if let Some(lp) = c.loop_point {
                     let tc = lp.tick_counter;
                     write!(f, " {:>width$} |", tc.value(), width = TC_WIDTH)?;
                 } else {

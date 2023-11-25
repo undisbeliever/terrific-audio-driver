@@ -4,19 +4,19 @@
 //
 // SPDX-License-Identifier: MIT
 
-use super::bc_generator::ChannelData;
 use super::MetaData;
 
+use crate::songs::{Channel, Subroutine};
 use crate::time::{TickClock, TickCounter, TIMER_HZ};
 
 use std::time::Duration;
 
 pub fn calc_song_duration(
     metadata: &MetaData,
-    subroutines: &[ChannelData],
-    channels: &[ChannelData],
+    channels: &[Channel],
+    subroutines: &[Subroutine],
 ) -> Option<Duration> {
-    let set_song_tick_in_subroutine = subroutines.iter().any(|c| !c.tempo_changes.is_empty());
+    let set_song_tick_in_subroutine = subroutines.iter().any(|s| s.changes_song_tempo);
 
     if set_song_tick_in_subroutine {
         return None;
@@ -24,7 +24,7 @@ pub fn calc_song_duration(
 
     let total_ticks: u32 = channels
         .iter()
-        .map(|c| c.tick_counter().value())
+        .map(|c| c.tick_counter.value())
         .max()
         .unwrap_or(0);
 
