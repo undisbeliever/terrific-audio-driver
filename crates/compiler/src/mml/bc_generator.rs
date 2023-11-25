@@ -70,7 +70,7 @@ struct ChannelBcGenerator<'a> {
 
 impl ChannelBcGenerator<'_> {
     fn new<'a>(
-        bytecode: Vec<u8>,
+        bc_data: Vec<u8>,
         pitch_table: &'a PitchTable,
         instruments: &'a Vec<MmlInstrument>,
         subroutines: Option<&'a Vec<Subroutine>>,
@@ -80,7 +80,7 @@ impl ChannelBcGenerator<'_> {
             pitch_table,
             instruments,
             subroutines,
-            bc: Bytecode::new_append_to_vec(bytecode, is_subroutine, false),
+            bc: Bytecode::new_append_to_vec(bc_data, is_subroutine, false),
             tempo_changes: Vec::new(),
             instrument: None,
             prev_slurred_note: None,
@@ -699,8 +699,8 @@ impl ChannelBcGenerator<'_> {
     }
 }
 
-pub struct MmlBytecodeGenerator<'a, 'b> {
-    bytecode: Vec<u8>,
+pub struct MmlSongBytecodeGenerator<'a, 'b> {
+    song_data: Vec<u8>,
 
     default_zenlen: ZenLen,
     pitch_table: &'a PitchTable,
@@ -718,7 +718,7 @@ pub struct MmlBytecodeGenerator<'a, 'b> {
     bytecode_tracker: Vec<BytecodePos>,
 }
 
-impl<'a, 'b> MmlBytecodeGenerator<'a, 'b> {
+impl<'a, 'b> MmlSongBytecodeGenerator<'a, 'b> {
     pub fn new(
         default_zenlen: ZenLen,
         pitch_table: &'a PitchTable,
@@ -728,7 +728,7 @@ impl<'a, 'b> MmlBytecodeGenerator<'a, 'b> {
         header_size: usize,
     ) -> Self {
         Self {
-            bytecode: vec![0; header_size],
+            song_data: vec![0; header_size],
             default_zenlen,
             pitch_table,
             sections,
@@ -747,7 +747,7 @@ impl<'a, 'b> MmlBytecodeGenerator<'a, 'b> {
     #[cfg(feature = "mml_tracking")]
     pub(crate) fn take_data(self) -> (Vec<u8>, SongBcTracking) {
         (
-            self.bytecode,
+            self.song_data,
             SongBcTracking {
                 bytecode: self.bytecode_tracker,
                 cursor_tracker: self.cursor_tracker,
@@ -757,7 +757,7 @@ impl<'a, 'b> MmlBytecodeGenerator<'a, 'b> {
 
     #[cfg(not(feature = "mml_tracking"))]
     pub(crate) fn take_data(self) -> Vec<u8> {
-        self.bytecode
+        self.song_data
     }
 
     // Should only be called when all subroutines have been compiled.
@@ -802,8 +802,8 @@ impl<'a, 'b> MmlBytecodeGenerator<'a, 'b> {
     ) -> Result<Subroutine, MmlChannelError> {
         assert!(self.subroutine_map.is_none());
 
-        let bytecode = std::mem::take(&mut self.bytecode);
-        let bc_start_index = bytecode.len();
+        let song_data = std::mem::take(&mut self.song_data);
+        let sd_start_index = song_data.len();
 
         let mut parser = Parser::new(
             lines,
@@ -816,7 +816,7 @@ impl<'a, 'b> MmlBytecodeGenerator<'a, 'b> {
         );
 
         let mut gen =
-            ChannelBcGenerator::new(bytecode, self.pitch_table, self.instruments, None, true);
+            ChannelBcGenerator::new(song_data, self.pitch_table, self.instruments, None, true);
 
         Self::parse_and_compile(
             &mut parser,
@@ -831,7 +831,7 @@ impl<'a, 'b> MmlBytecodeGenerator<'a, 'b> {
 
         assert!(gen.loop_point.is_none());
 
-        self.bytecode = match gen.bc.bytecode(BcTerminator::ReturnFromSubroutine) {
+        self.song_data = match gen.bc.bytecode(BcTerminator::ReturnFromSubroutine) {
             Ok(b) => b,
             Err((e, b)) => {
                 parser.add_error_range(last_pos.to_range(1), MmlError::BytecodeError(e));
@@ -844,7 +844,7 @@ impl<'a, 'b> MmlBytecodeGenerator<'a, 'b> {
         if errors.is_empty() {
             Ok(Subroutine {
                 identifier,
-                bytecode_offset: bc_start_index.try_into().unwrap_or(u16::MAX),
+                bytecode_offset: sd_start_index.try_into().unwrap_or(u16::MAX),
                 subroutine_id: SubroutineId::new(subroutine_index, tick_counter, max_nested_loops),
                 last_instrument: gen.instrument,
                 changes_song_tempo: !gen.tempo_changes.is_empty(),
@@ -861,8 +861,8 @@ impl<'a, 'b> MmlBytecodeGenerator<'a, 'b> {
     ) -> Result<Channel, MmlChannelError> {
         assert!(self.subroutine_map.is_some());
 
-        let bytecode = std::mem::take(&mut self.bytecode);
-        let bc_start_index = bytecode.len();
+        let song_data = std::mem::take(&mut self.song_data);
+        let sd_start_index = song_data.len();
 
         let mut parser = Parser::new(
             lines,
@@ -875,7 +875,7 @@ impl<'a, 'b> MmlBytecodeGenerator<'a, 'b> {
         );
 
         let mut gen = ChannelBcGenerator::new(
-            bytecode,
+            song_data,
             self.pitch_table,
             self.instruments,
             self.subroutines,
@@ -902,7 +902,7 @@ impl<'a, 'b> MmlBytecodeGenerator<'a, 'b> {
             }
         };
 
-        self.bytecode = match gen.bc.bytecode(terminator) {
+        self.song_data = match gen.bc.bytecode(terminator) {
             Ok(b) => b,
             Err((e, b)) => {
                 parser.add_error_range(last_pos.to_range(1), MmlError::BytecodeError(e));
@@ -915,7 +915,7 @@ impl<'a, 'b> MmlBytecodeGenerator<'a, 'b> {
         if errors.is_empty() {
             Ok(Channel {
                 name: identifier.as_str().chars().next().unwrap(),
-                bytecode_offset: bc_start_index.try_into().unwrap_or(u16::MAX),
+                bytecode_offset: sd_start_index.try_into().unwrap_or(u16::MAX),
                 loop_point: gen.loop_point,
                 tick_counter,
                 section_tick_counters,

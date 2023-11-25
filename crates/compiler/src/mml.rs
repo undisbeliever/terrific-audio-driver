@@ -20,7 +20,7 @@ pub mod command_parser;
 #[cfg(feature = "mml_tracking")]
 pub(crate) mod note_tracking;
 
-use self::bc_generator::MmlBytecodeGenerator;
+use self::bc_generator::MmlSongBytecodeGenerator;
 use self::instruments::{build_instrument_map, parse_instruments};
 use self::line_splitter::split_mml_lines;
 use self::metadata::parse_headers;
@@ -115,7 +115,7 @@ pub fn compile_mml(
     let metadata = metadata.unwrap();
 
     assert!(lines.subroutines.len() <= u8::MAX.into());
-    let mut bc_gen = MmlBytecodeGenerator::new(
+    let mut compiler = MmlSongBytecodeGenerator::new(
         metadata.zenlen,
         pitch_table,
         &lines.sections,
@@ -128,7 +128,7 @@ pub fn compile_mml(
     for (s_index, (s_id, s_lines)) in lines.subroutines.iter().enumerate() {
         let s_index = s_index.try_into().unwrap();
 
-        match bc_gen.parse_and_compile_song_subroutione(s_lines, s_id.clone(), s_index) {
+        match compiler.parse_and_compile_song_subroutione(s_lines, s_id.clone(), s_index) {
             Ok(data) => subroutines.push(data),
             Err(e) => errors.subroutine_errors.push(e),
         }
@@ -139,14 +139,14 @@ pub fn compile_mml(
         return Err(SongError::MmlError(errors));
     }
 
-    bc_gen.set_subroutines(&subroutines);
+    compiler.set_subroutines(&subroutines);
 
     let mut channels = Vec::with_capacity(lines.channels.len());
     for (c_index, c_lines) in lines.channels.iter().enumerate() {
         if !c_lines.is_empty() {
             let c_id = Identifier::try_from_name(CHANNEL_NAMES[c_index].to_owned()).unwrap();
 
-            match bc_gen.parse_and_compile_song_channel(c_lines, c_id.clone()) {
+            match compiler.parse_and_compile_song_channel(c_lines, c_id.clone()) {
                 Ok(data) => channels.push(data),
                 Err(e) => errors.channel_errors.push(e),
             }
@@ -160,9 +160,9 @@ pub fn compile_mml(
     drop(errors);
 
     #[cfg(feature = "mml_tracking")]
-    let (mut song_data, tracking) = bc_gen.take_data();
+    let (mut song_data, tracking) = compiler.take_data();
     #[cfg(not(feature = "mml_tracking"))]
-    let mut song_data = bc_gen.take_data();
+    let mut song_data = compiler.take_data();
 
     let duration = calc_song_duration(&metadata, &channels, &subroutines);
 
