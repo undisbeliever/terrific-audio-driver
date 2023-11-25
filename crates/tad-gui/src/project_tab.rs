@@ -159,8 +159,8 @@ impl TableCompilerOutput for SongMapping {
         let (duration, data_size) = match co {
             None => (String::new(), String::new()),
             Some(Ok(o)) => {
-                let dur = song_duration_string(o.duration);
-                let ds = format!("{} bytes", o.data_size);
+                let dur = song_duration_string(o.song_data.duration());
+                let ds = format!("{} bytes", o.song_data.data().len());
                 (dur, ds)
             }
             Some(Err(e)) => (String::new(), e.to_string()),

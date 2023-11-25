@@ -7,6 +7,7 @@
 #![allow(clippy::assertions_on_constants)]
 
 mod bc_generator;
+mod identifier;
 mod instruments;
 mod line_splitter;
 mod metadata;
@@ -14,11 +15,10 @@ mod song_duration;
 mod tokenizer;
 
 pub mod command_parser;
-pub mod identifier;
 pub mod tick_count_table;
 
 #[cfg(feature = "mml_tracking")]
-pub mod note_tracking;
+pub(crate) mod note_tracking;
 
 use self::bc_generator::MmlBytecodeGenerator;
 use self::instruments::{build_instrument_map, parse_instruments};
@@ -28,9 +28,9 @@ pub(crate) use identifier::{Identifier, IdentifierStr};
 
 use crate::data::{self, TextFile, UniqueNamesList};
 use crate::driver_constants::N_MUSIC_CHANNELS;
-use crate::errors::MmlCompileErrors;
+use crate::errors::{MmlCompileErrors, SongError};
 use crate::pitch_table::PitchTable;
-use crate::songs::song_header_size;
+use crate::songs::{song_header_size, write_song_header, SongData};
 
 use std::collections::HashMap;
 use std::ops::RangeInclusive;
@@ -46,55 +46,16 @@ const _: () = assert!(
 
 const CHANNEL_NAMES: [&str; N_MUSIC_CHANNELS] = ["A", "B", "C", "D", "E", "F"];
 
-#[cfg(feature = "mml_tracking")]
-pub use self::bc_generator::BytecodePos;
-
 pub use self::bc_generator::ChannelData;
 pub use self::bc_generator::MAX_BROKEN_CHORD_NOTES;
 pub use self::song_duration::calc_song_duration;
 
 pub use self::metadata::MetaData;
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Section {
     name: String,
     line_number: u32,
-}
-
-#[derive(Debug, PartialEq)]
-pub struct MmlData {
-    pub(crate) metadata: MetaData,
-    pub(crate) subroutines: Vec<ChannelData>,
-    pub(crate) channels: Vec<ChannelData>,
-    pub(crate) sections: Vec<Section>,
-
-    pub(crate) song_data: Vec<u8>,
-
-    #[cfg(feature = "mml_tracking")]
-    pub(crate) cursor_tracker: note_tracking::CursorTracker,
-
-    #[cfg(feature = "mml_tracking")]
-    pub(crate) bc_tracker: Vec<BytecodePos>,
-}
-
-// ::TODO add list of subroutines and instruments for the GUI (separate from MmlData)::
-
-impl MmlData {
-    pub fn metadata(&self) -> &MetaData {
-        &self.metadata
-    }
-    pub fn subroutines(&self) -> &[ChannelData] {
-        &self.subroutines
-    }
-    pub fn channels(&self) -> &[ChannelData] {
-        &self.channels
-    }
-    pub fn sections(&self) -> &[Section] {
-        &self.sections
-    }
-    pub fn song_data(&self) -> &[u8] {
-        &self.song_data
-    }
 }
 
 impl Section {
@@ -111,7 +72,7 @@ pub fn compile_mml(
     song_name: Option<data::Name>,
     inst_map: &UniqueNamesList<data::Instrument>,
     pitch_table: &PitchTable,
-) -> Result<MmlData, MmlCompileErrors> {
+) -> Result<SongData, SongError> {
     let mut errors = MmlCompileErrors {
         song_name,
         file_name: mml_file.file_name.clone(),
@@ -124,7 +85,7 @@ pub fn compile_mml(
         Ok(l) => l,
         Err(e) => {
             errors.line_errors.extend(e);
-            return Err(errors);
+            return Err(SongError::MmlError(errors));
         }
     };
 
@@ -149,7 +110,7 @@ pub fn compile_mml(
     };
 
     if !errors.line_errors.is_empty() {
-        return Err(errors);
+        return Err(SongError::MmlError(errors));
     }
     let metadata = metadata.unwrap();
 
@@ -175,7 +136,7 @@ pub fn compile_mml(
     let subroutines = subroutines;
 
     if !errors.subroutine_errors.is_empty() {
-        return Err(errors);
+        return Err(SongError::MmlError(errors));
     }
 
     bc_gen.set_subroutines(&subroutines);
@@ -193,26 +154,27 @@ pub fn compile_mml(
     }
     let channels = channels;
 
-    if errors.channel_errors.is_empty() {
-        #[cfg(feature = "mml_tracking")]
-        let (song_data, cursor_tracker, bc_tracker) = bc_gen.take_data();
-
-        #[cfg(not(feature = "mml_tracking"))]
-        let song_data = bc_gen.take_data();
-
-        Ok(MmlData {
-            #[cfg(feature = "mml_tracking")]
-            cursor_tracker,
-            #[cfg(feature = "mml_tracking")]
-            bc_tracker,
-
-            song_data,
-            metadata,
-            subroutines,
-            channels,
-            sections: lines.sections,
-        })
-    } else {
-        Err(errors)
+    if !errors.channel_errors.is_empty() {
+        return Err(SongError::MmlError(errors));
     }
+    drop(errors);
+
+    #[cfg(feature = "mml_tracking")]
+    let (mut song_data, tracking) = bc_gen.take_data();
+    #[cfg(not(feature = "mml_tracking"))]
+    let mut song_data = bc_gen.take_data();
+
+    let duration = calc_song_duration(&metadata, &subroutines, &channels);
+
+    write_song_header(&mut song_data, &channels, &subroutines, &metadata)?;
+
+    Ok(SongData::new(
+        metadata,
+        song_data,
+        duration,
+        lines.sections,
+        channels,
+        #[cfg(feature = "mml_tracking")]
+        Some(tracking),
+    ))
 }

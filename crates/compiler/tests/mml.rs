@@ -11,6 +11,7 @@ use compiler::envelope::{Adsr, Envelope, Gain};
 use compiler::mml;
 use compiler::notes::Octave;
 use compiler::pitch_table::{build_pitch_table, PitchTable};
+use compiler::songs::SongData;
 
 const SAMPLE_FREQ: f64 = 500.0;
 
@@ -822,8 +823,8 @@ fn merge_mml_commands_test(mml_line: &str, bc_asm: &[&str]) {
 
 // ----------------------------------------------------------------------------------------------
 
-fn mml_bytecode(mml: &mml::MmlData) -> &[u8] {
-    let song_data = mml.song_data();
+fn mml_bytecode(mml: &SongData) -> &[u8] {
+    let song_data = mml.data();
 
     let start = mml.channels()[0].bytecode_offset().into();
 
@@ -878,7 +879,7 @@ fn assert_mml_channel_a_matches_bytecode(mml: &str, bc_asm: &[&str]) {
     assert_eq!(mml_bytecode(&mml), bc_asm);
 }
 
-fn compile_mml(mml: &str, dummy_data: &DummyData) -> mml::MmlData {
+fn compile_mml(mml: &str, dummy_data: &DummyData) -> SongData {
     mml::compile_mml(
         &TextFile {
             contents: mml.to_string(),

@@ -14,6 +14,9 @@ use super::{IdentifierStr, Section};
 #[cfg(feature = "mml_tracking")]
 use super::note_tracking::CursorTracker;
 
+#[cfg(feature = "mml_tracking")]
+use crate::songs::{BytecodePos, SongBcTracking};
+
 use crate::bytecode::{
     BcTerminator, BcTicksKeyOff, BcTicksNoKeyOff, Bytecode, LoopCount, PitchOffsetPerTick,
     PlayNoteTicks, PortamentoVelocity, SubroutineId,
@@ -35,16 +38,7 @@ pub struct LoopPoint {
     pub tick_counter: TickCounter,
 }
 
-#[cfg(feature = "mml_tracking")]
-#[derive(Debug, Copy, Clone, PartialEq)]
-pub struct BytecodePos {
-    // Position (within song data) at the end of the bytecode instruction.
-    pub bc_end_pos: u16,
-    // Character index within the input file
-    pub char_index: u32,
-}
-
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ChannelData {
     identifier: Identifier,
 
@@ -791,8 +785,14 @@ impl<'a, 'b> MmlBytecodeGenerator<'a, 'b> {
     }
 
     #[cfg(feature = "mml_tracking")]
-    pub(crate) fn take_data(self) -> (Vec<u8>, CursorTracker, Vec<BytecodePos>) {
-        (self.bytecode, self.cursor_tracker, self.bytecode_tracker)
+    pub(crate) fn take_data(self) -> (Vec<u8>, SongBcTracking) {
+        (
+            self.bytecode,
+            SongBcTracking {
+                bytecode: self.bytecode_tracker,
+                cursor_tracker: self.cursor_tracker,
+            },
+        )
     }
 
     #[cfg(not(feature = "mml_tracking"))]

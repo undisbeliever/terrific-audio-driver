@@ -430,6 +430,8 @@ pub struct MmlCompileErrors {
 
 #[derive(Debug)]
 pub enum SongError {
+    MmlError(MmlCompileErrors),
+
     NoMusicChannels,
     InvalidMmlData,
     SongIsTooLarge(usize),
@@ -1092,6 +1094,7 @@ impl Display for MmlError {
 impl Display for SongError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
+            Self::MmlError(_) => write!(f, "mml error"),
             Self::NoMusicChannels => write!(f, "no music channels"),
             Self::InvalidMmlData => write!(f, "invalid MmlData"),
             Self::SongIsTooLarge(len) => {
@@ -1438,8 +1441,24 @@ impl Display for SongTooLargeErrorIndentedDisplay<'_> {
     }
 }
 
+impl SongError {
+    pub fn multiline_display(&self) -> SongErrorIndentedDisplay {
+        SongErrorIndentedDisplay(self)
+    }
+}
+
+impl Display for SongErrorIndentedDisplay<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self.0 {
+            SongError::MmlError(e) => MmlCompileErrorsIndentedDisplay(e).fmt(f),
+            e => e.fmt(f),
+        }
+    }
+}
+
 impl SongTooLargeError {
     pub fn multiline_display(&self) -> SongTooLargeErrorIndentedDisplay {
         SongTooLargeErrorIndentedDisplay(self)
     }
 }
+pub struct SongErrorIndentedDisplay<'a>(&'a SongError);

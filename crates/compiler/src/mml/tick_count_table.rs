@@ -5,8 +5,9 @@
 // SPDX-License-Identifier: MIT
 
 use super::bc_generator::LoopPoint;
-use super::{Identifier, MmlData};
+use super::Identifier;
 
+use crate::songs::SongData;
 use crate::time::TickCounter;
 use crate::{driver_constants::N_MUSIC_CHANNELS, time::TickCounterWithLoopFlag};
 
@@ -32,11 +33,11 @@ pub struct MmlTickCountTable {
     channels: [Option<MmlTickCountTableChannel>; N_MUSIC_CHANNELS],
 }
 
-pub fn build_tick_count_table(mml_data: &MmlData) -> MmlTickCountTable {
-    assert!(mml_data.channels().len() <= N_MUSIC_CHANNELS);
+pub fn build_tick_count_table(song_data: &SongData) -> MmlTickCountTable {
+    assert!(song_data.channels().len() <= N_MUSIC_CHANNELS);
 
-    let mml_channels = mml_data.channels();
-    let mml_sections = mml_data.sections();
+    let mml_channels = song_data.channels();
+    let mml_sections = song_data.sections();
 
     let mut channels: [Option<MmlTickCountTableChannel>; N_MUSIC_CHANNELS] = Default::default();
     for (ci, channel) in mml_channels.iter().enumerate() {

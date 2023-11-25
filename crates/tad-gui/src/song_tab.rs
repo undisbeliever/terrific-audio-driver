@@ -233,26 +233,27 @@ impl State {
                 self.errors = None;
             }
             Some(Ok(o)) => {
-                self.editor.set_song_data(o.song_data);
+                let sd = o.song_data;
 
                 let text = format!(
                     "MML compiled successfully: {} bytes (+{} echo buffer bytes)\n\nDuration: {}\n{}",
-                    o.data_size,
-                    o.echo_buffer.buffer_size(),
-                    song_duration_string(o.duration),
+                    sd.data().len(),
+                    sd.metadata().echo_buffer.edl.buffer_size(),
+                    song_duration_string(sd.duration()),
                     o.tick_count_table
                 );
                 self.console_buffer.set_text(&text);
                 self.console.set_text_color(Color::Foreground);
                 self.errors = None;
+
+                self.editor.set_song_data(sd);
             }
             Some(Err(e)) => {
                 self.editor.clear_song_data();
 
                 let text = match &e {
                     SongError::Dependency => e.to_string(),
-                    SongError::Mml(e) => e.multiline_display().to_string(),
-                    SongError::Song(e) => e.to_string(),
+                    SongError::Song(e) => e.multiline_display().to_string(),
                     SongError::TooLarge(e) => e.multiline_display().to_string(),
                 };
 
@@ -261,7 +262,7 @@ impl State {
 
                 self.errors = match e {
                     SongError::Dependency => None,
-                    SongError::Mml(e) => Some(e),
+                    SongError::Song(compiler::errors::SongError::MmlError(e)) => Some(e),
                     SongError::Song(_) => None,
                     SongError::TooLarge { .. } => None,
                 };

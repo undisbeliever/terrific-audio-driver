@@ -15,7 +15,7 @@ use crate::driver_constants::{
 };
 use crate::envelope::Envelope;
 use crate::errors::{SongError, SongTooLargeError, ValueError};
-use crate::mml::{calc_song_duration, ChannelData, MetaData, MmlData};
+use crate::mml::{ChannelData, MetaData, Section};
 use crate::notes::Note;
 use crate::sound_effects::CompiledSoundEffect;
 
@@ -30,16 +30,18 @@ use std::time::Duration;
 const NULL_OFFSET: u16 = 0xffff_u16;
 
 #[cfg(feature = "mml_tracking")]
-#[derive(Clone)]
-pub struct ChannelBcTracking {
-    pub range: std::ops::Range<u16>,
-    pub bytecodes: Vec<mml::BytecodePos>,
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub struct BytecodePos {
+    // Position (within song data) at the end of the bytecode instruction.
+    pub bc_end_pos: u16,
+    // Character index within the input file
+    pub char_index: u32,
 }
 
 #[cfg(feature = "mml_tracking")]
 #[derive(Clone)]
 pub struct SongBcTracking {
-    pub bytecode: Vec<mml::BytecodePos>,
+    pub bytecode: Vec<BytecodePos>,
     pub cursor_tracker: mml::note_tracking::CursorTracker,
 }
 
@@ -48,6 +50,9 @@ pub struct SongData {
     metadata: MetaData,
     data: Vec<u8>,
     duration: Option<Duration>,
+
+    sections: Vec<Section>,
+    channels: Vec<ChannelData>,
 
     #[cfg(feature = "mml_tracking")]
     tracking: Option<SongBcTracking>,
@@ -60,6 +65,26 @@ impl Debug for SongData {
 }
 
 impl SongData {
+    pub(crate) fn new(
+        metadata: MetaData,
+        data: Vec<u8>,
+        duration: Option<Duration>,
+        sections: Vec<Section>,
+        channels: Vec<ChannelData>,
+
+        #[cfg(feature = "mml_tracking")] tracking: Option<SongBcTracking>,
+    ) -> Self {
+        Self {
+            metadata,
+            data,
+            duration,
+            sections,
+            channels,
+            #[cfg(feature = "mml_tracking")]
+            tracking,
+        }
+    }
+
     pub fn metadata(&self) -> &MetaData {
         &self.metadata
     }
@@ -68,6 +93,14 @@ impl SongData {
     }
     pub fn duration(&self) -> Option<Duration> {
         self.duration
+    }
+
+    pub fn sections(&self) -> &[Section] {
+        &self.sections
+    }
+
+    pub fn channels(&self) -> &[ChannelData] {
+        &self.channels
     }
 
     pub fn data_and_echo_size(&self) -> usize {
@@ -153,6 +186,8 @@ fn sfx_bytecode_to_song(bytecode: &[u8]) -> SongData {
         data: [header.as_slice(), bytecode].concat(),
         metadata: MetaData::blank_sfx_metadata(),
         duration: None,
+        sections: Vec::new(),
+        channels: Vec::new(),
 
         #[cfg(feature = "mml_tracking")]
         tracking: None,
@@ -248,33 +283,6 @@ pub(crate) fn write_song_header(
     }
 
     Ok(())
-}
-
-pub fn song_data(mml_data: MmlData) -> Result<SongData, SongError> {
-    let duration = calc_song_duration(&mml_data);
-
-    let mut song_data = mml_data.song_data;
-    let metadata = mml_data.metadata;
-    let channels = mml_data.channels;
-    let subroutines = mml_data.subroutines;
-
-    if channels.is_empty() {
-        return Err(SongError::NoMusicChannels);
-    }
-
-    write_song_header(&mut song_data, &channels, &subroutines, &metadata)?;
-
-    Ok(SongData {
-        duration,
-        data: song_data,
-        metadata,
-
-        #[cfg(feature = "mml_tracking")]
-        tracking: Some(SongBcTracking {
-            bytecode: mml_data.bc_tracker,
-            cursor_tracker: mml_data.cursor_tracker,
-        }),
-    })
 }
 
 pub fn song_duration_string(duration: Option<Duration>) -> String {

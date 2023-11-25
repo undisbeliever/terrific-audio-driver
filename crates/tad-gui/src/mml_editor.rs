@@ -10,8 +10,8 @@ use crate::helpers::ch_units_to_width;
 use compiler::driver_constants::N_MUSIC_CHANNELS;
 use compiler::errors::{MmlChannelError, MmlCompileErrors};
 use compiler::mml::command_parser::Quantization;
-use compiler::mml::{BytecodePos, FIRST_MUSIC_CHANNEL, LAST_MUSIC_CHANNEL};
-use compiler::songs::{SongBcTracking, SongData};
+use compiler::mml::{FIRST_MUSIC_CHANNEL, LAST_MUSIC_CHANNEL};
+use compiler::songs::{BytecodePos, SongBcTracking, SongData};
 use compiler::FilePosRange;
 
 use std::cell::RefCell;

@@ -17,7 +17,7 @@ use compiler::{
     pitch_table::build_pitch_table,
     pitch_table::PitchTable,
     samples::build_sample_and_instrument_data,
-    songs::{song_data, song_duration_string, validate_song_size, SongData},
+    songs::{song_duration_string, validate_song_size, SongData},
     sound_effects,
     spc_file_export::export_spc_file,
 };
@@ -229,19 +229,14 @@ fn compile_song(
     pf: &UniqueNamesProjectFile,
     pitch_table: &PitchTable,
 ) -> SongData {
-    let mml = match compile_mml(&mml_file, song_name, &pf.instruments, pitch_table) {
+    let song_data = match compile_mml(&mml_file, song_name, &pf.instruments, pitch_table) {
         Ok(mml) => mml,
         Err(e) => error!("{}", e.multiline_display()),
     };
 
     let tick_count_table = match options.print_tick_counts {
-        true => Some(build_tick_count_table(&mml)),
+        true => Some(build_tick_count_table(&song_data)),
         false => None,
-    };
-
-    let song_data = match song_data(mml) {
-        Ok(d) => d,
-        Err(e) => error!("{}", e),
     };
 
     if let Some(tct) = tick_count_table {
@@ -325,7 +320,7 @@ fn check_song(
         Err(e) => return Err(format!("Error compiling {}: {}", song.name, e)),
     };
 
-    let mml = match compile_mml(
+    let song_data = match compile_mml(
         &mml_file,
         Some(song.name.clone()),
         &pf.instruments,
@@ -333,11 +328,6 @@ fn check_song(
     ) {
         Ok(mml) => mml,
         Err(e) => return Err(e.multiline_display().to_string()),
-    };
-
-    let song_data = match song_data(mml) {
-        Ok(sd) => sd,
-        Err(e) => return Err(e.to_string()),
     };
 
     match validate_song_size(&song_data, common_data.data().len()) {

@@ -20,7 +20,6 @@ use compiler::common_audio_data::{build_common_audio_data, CommonAudioData};
 use compiler::data;
 use compiler::data::{load_text_file_with_limit, TextFile};
 use compiler::driver_constants::COMMON_DATA_BYTES_PER_SOUND_EFFECT;
-use compiler::echo::EchoEdl;
 use compiler::envelope::Envelope;
 use compiler::errors::{self, ExportSpcFileError, SongTooLargeError};
 use compiler::mml::tick_count_table::{build_tick_count_table, MmlTickCountTable};
@@ -131,10 +130,6 @@ pub enum CompilerOutput {
 
 #[derive(Debug)]
 pub struct SongOutputData {
-    pub data_size: usize,
-    pub duration: Option<std::time::Duration>,
-    pub echo_buffer: EchoEdl,
-
     // ::TODO move into SongData::
     pub tick_count_table: Box<MmlTickCountTable>,
 
@@ -186,7 +181,6 @@ impl Display for SfxError {
 #[derive(Debug)]
 pub enum SongError {
     Dependency,
-    Mml(errors::MmlCompileErrors),
     Song(errors::SongError),
     TooLarge(SongTooLargeError),
 }
@@ -195,7 +189,6 @@ impl Display for SongError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Dependency => writeln!(f, "dependency error"),
-            Self::Mml(_) => writeln!(f, "MML error"),
             Self::Song(_) => writeln!(f, "song error"),
             Self::TooLarge(_) => writeln!(f, "song too large"),
         }
@@ -750,29 +743,19 @@ impl SongCompiler {
         };
 
         let name = name.cloned();
-        let mml = match compiler::mml::compile_mml(f, name, &dep.instruments, &dep.pitch_table) {
-            Ok(mml) => mml,
-            Err(e) => {
-                sender.send(CompilerOutput::Song(id, Err(SongError::Mml(e))));
-                return None;
-            }
-        };
-        let tick_count_table = Box::new(build_tick_count_table(&mml));
-
-        let song_data = match compiler::songs::song_data(mml) {
-            Ok(sd) => Arc::new(sd),
-            Err(e) => {
-                sender.send(CompilerOutput::Song(id, Err(SongError::Song(e))));
-                return None;
-            }
-        };
+        let song_data =
+            match compiler::mml::compile_mml(f, name, &dep.instruments, &dep.pitch_table) {
+                Ok(sd) => Arc::from(sd),
+                Err(e) => {
+                    sender.send(CompilerOutput::Song(id, Err(SongError::Song(e))));
+                    return None;
+                }
+            };
+        let tick_count_table = Box::new(build_tick_count_table(&song_data));
 
         match compiler::songs::validate_song_size(&song_data, dep.common_data_size()) {
             Ok(()) => {
                 let to_gui = SongOutputData {
-                    data_size: song_data.data().len(),
-                    duration: song_data.duration(),
-                    echo_buffer: song_data.metadata().echo_buffer.edl,
                     tick_count_table,
                     song_data: song_data.clone(),
                 };
