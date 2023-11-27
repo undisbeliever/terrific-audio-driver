@@ -39,49 +39,49 @@ u8_value_newtype!(
 );
 
 // Using lower case to match bytecode names in the audio-driver source code.
-#[allow(non_camel_case_types)]
-pub enum Opcode {
+pub mod opcodes {
     // opcodes 0x00 - 0xbf are play_note opcodes
-    portamento_down = 0xc0,
-    portamento_up = 0xc2,
 
-    set_vibrato = 0xc4,
-    set_vibrato_depth_and_play_note = 0xc6,
+    pub const PORTAMENTO_DOWN: u8 = 0xc0;
+    pub const PORTAMENTO_UP: u8 = 0xc2;
 
-    rest = 0xc8,
-    rest_keyoff = 0xca,
-    call_subroutine = 0xcc,
+    pub const SET_VIBRATO: u8 = 0xc4;
+    pub const SET_VIBRATO_DEPTH_AND_PLAY_NOTE: u8 = 0xc6;
 
-    start_loop_0 = 0xce,
-    start_loop_1 = 0xd0,
-    start_loop_2 = 0xd2,
-    skip_last_loop_0 = 0xd4,
-    skip_last_loop_1 = 0xd6,
-    skip_last_loop_2 = 0xd8,
+    pub const REST: u8 = 0xc8;
+    pub const REST_KEYOFF: u8 = 0xca;
+    pub const CALL_SUBROUTINE: u8 = 0xcc;
 
-    set_instrument = 0xda,
-    set_instrument_and_adsr_or_gain = 0xdc,
-    set_adsr = 0xde,
-    set_gain = 0xe0,
+    pub const START_LOOP_0: u8 = 0xce;
+    pub const START_LOOP_1: u8 = 0xd0;
+    pub const START_LOOP_2: u8 = 0xd2;
+    pub const SKIP_LAST_LOOP_0: u8 = 0xd4;
+    pub const SKIP_LAST_LOOP_1: u8 = 0xd6;
+    pub const SKIP_LAST_LOOP_2: u8 = 0xd8;
 
-    adjust_pan = 0xe2,
-    set_pan = 0xe4,
-    set_pan_and_volume = 0xe6,
-    adjust_volume = 0xe8,
-    set_volume = 0xea,
+    pub const SET_INSTRUMENT: u8 = 0xda;
+    pub const SET_INSTRUMENT_AND_ADSR_OR_GAIN: u8 = 0xdc;
+    pub const SET_ADSR: u8 = 0xde;
+    pub const SET_GAIN: u8 = 0xe0;
 
-    set_song_tick_clock = 0xec,
+    pub const ADJUST_PAN: u8 = 0xe2;
+    pub const SET_PAN: u8 = 0xe4;
+    pub const SET_PAN_AND_VOLUME: u8 = 0xe6;
+    pub const ADJUST_VOLUME: u8 = 0xe8;
+    pub const SET_VOLUME: u8 = 0xea;
 
-    end = 0xee,
-    return_from_subroutine = 0xf0,
-    end_loop_0 = 0xf2,
-    end_loop_1 = 0xf4,
-    end_loop_2 = 0xf6,
+    pub const SET_SONG_TICK_CLOCK: u8 = 0xec;
 
-    enable_echo = 0xf8,
-    disable_echo = 0xfa,
+    pub const END: u8 = 0xee;
+    pub const RETURN_FROM_SUBROUTINE: u8 = 0xf0;
+    pub const END_LOOP_0: u8 = 0xf2;
+    pub const END_LOOP_1: u8 = 0xf4;
+    pub const END_LOOP_2: u8 = 0xf6;
 
-    disable_channel = 0xfe,
+    pub const ENABLE_ECHO: u8 = 0xf8;
+    pub const DISABLE_ECHO: u8 = 0xfa;
+
+    pub const DISABLE_CHANNEL: u8 = 0xfe;
 }
 
 u8_value_newtype!(
@@ -335,32 +335,16 @@ pub enum BcTerminator {
 // Macro to automatically cast Opcode/NoteOpcode/i8 values and append it to `Bytecode::bytecode`.
 macro_rules! emit_bytecode {
     ($self:expr, $opcode:expr) => {
-        $self.bytecode.push(emit_bytecode::OpcodeByte::cast($opcode));
+        $self.bytecode.push($opcode);
     };
 
     ($self:expr, $opcode:expr $(, $param:expr)+) => {
-        $self.bytecode.extend([emit_bytecode::OpcodeByte::cast($opcode), $(emit_bytecode::Parameter::cast($param)),*])
+        $self.bytecode.extend([$opcode, $(emit_bytecode::Parameter::cast($param)),*])
     }
 }
 
 mod emit_bytecode {
-    use super::{NoteOpcode, Opcode, LAST_PLAY_NOTE_OPCODE};
-
-    pub trait OpcodeByte {
-        fn cast(self) -> u8;
-    }
-
-    impl OpcodeByte for Opcode {
-        fn cast(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl OpcodeByte for NoteOpcode {
-        fn cast(self) -> u8 {
-            self.opcode
-        }
-    }
+    use super::{NoteOpcode, LAST_PLAY_NOTE_OPCODE};
 
     pub trait Parameter {
         fn cast(self) -> u8;
@@ -470,9 +454,9 @@ impl Bytecode {
         }
 
         let opcode = match terminator {
-            BcTerminator::DisableChannel => Opcode::disable_channel,
-            BcTerminator::LoopChannel => Opcode::end,
-            BcTerminator::ReturnFromSubroutine => Opcode::return_from_subroutine,
+            BcTerminator::DisableChannel => opcodes::DISABLE_CHANNEL,
+            BcTerminator::LoopChannel => opcodes::END,
+            BcTerminator::ReturnFromSubroutine => opcodes::RETURN_FROM_SUBROUTINE,
         };
         emit_bytecode!(self, opcode);
 
@@ -482,13 +466,13 @@ impl Bytecode {
     pub fn rest(&mut self, length: BcTicksNoKeyOff) {
         self.tick_counter += length.to_tick_count();
 
-        emit_bytecode!(self, Opcode::rest, length.bc_argument);
+        emit_bytecode!(self, opcodes::REST, length.bc_argument);
     }
 
     pub fn rest_keyoff(&mut self, length: BcTicksKeyOff) {
         self.tick_counter += length.to_tick_count();
 
-        emit_bytecode!(self, Opcode::rest_keyoff, length.bc_argument);
+        emit_bytecode!(self, opcodes::REST_KEYOFF, length.bc_argument);
     }
 
     pub fn play_note(&mut self, note: Note, length: PlayNoteTicks) {
@@ -496,7 +480,7 @@ impl Bytecode {
 
         let opcode = NoteOpcode::new(note, &length);
 
-        emit_bytecode!(self, opcode, length.bc_argument());
+        emit_bytecode!(self, opcode.opcode, length.bc_argument());
     }
 
     pub fn portamento(&mut self, note: Note, velocity: PortamentoVelocity, length: PlayNoteTicks) {
@@ -507,9 +491,9 @@ impl Bytecode {
         let length = length.bc_argument();
 
         if velocity.is_negative() {
-            emit_bytecode!(self, Opcode::portamento_down, speed, length, note_param);
+            emit_bytecode!(self, opcodes::PORTAMENTO_DOWN, speed, length, note_param);
         } else {
-            emit_bytecode!(self, Opcode::portamento_up, speed, length, note_param);
+            emit_bytecode!(self, opcodes::PORTAMENTO_UP, speed, length, note_param);
         }
     }
 
@@ -525,7 +509,7 @@ impl Bytecode {
 
         emit_bytecode!(
             self,
-            Opcode::set_vibrato_depth_and_play_note,
+            opcodes::SET_VIBRATO_DEPTH_AND_PLAY_NOTE,
             pitch_offset_per_tick.as_u8(),
             play_note_opcode,
             length.bc_argument()
@@ -539,24 +523,24 @@ impl Bytecode {
     ) {
         emit_bytecode!(
             self,
-            Opcode::set_vibrato,
+            opcodes::SET_VIBRATO,
             pitch_offset_per_tick.as_u8(),
             quarter_wavelength_ticks.as_u8()
         );
     }
 
     pub fn disable_vibrato(&mut self) {
-        emit_bytecode!(self, Opcode::set_vibrato, 0u8, 0u8);
+        emit_bytecode!(self, opcodes::SET_VIBRATO, 0u8, 0u8);
     }
 
     pub fn set_instrument(&mut self, instrument: InstrumentId) {
-        emit_bytecode!(self, Opcode::set_instrument, instrument.as_u8());
+        emit_bytecode!(self, opcodes::SET_INSTRUMENT, instrument.as_u8());
     }
 
     pub fn set_instrument_and_adsr(&mut self, instrument: InstrumentId, adsr: Adsr) {
         emit_bytecode!(
             self,
-            Opcode::set_instrument_and_adsr_or_gain,
+            opcodes::SET_INSTRUMENT_AND_ADSR_OR_GAIN,
             instrument.as_u8(),
             adsr.adsr1(),
             adsr.adsr2()
@@ -566,7 +550,7 @@ impl Bytecode {
     pub fn set_instrument_and_gain(&mut self, instrument: InstrumentId, gain: Gain) {
         emit_bytecode!(
             self,
-            Opcode::set_instrument_and_adsr_or_gain,
+            opcodes::SET_INSTRUMENT_AND_ADSR_OR_GAIN,
             instrument.as_u8(),
             0u8,
             gain.value()
@@ -574,44 +558,44 @@ impl Bytecode {
     }
 
     pub fn set_adsr(&mut self, adsr: Adsr) {
-        emit_bytecode!(self, Opcode::set_adsr, adsr.adsr1(), adsr.adsr2());
+        emit_bytecode!(self, opcodes::SET_ADSR, adsr.adsr1(), adsr.adsr2());
     }
 
     pub fn set_gain(&mut self, gain: Gain) {
-        emit_bytecode!(self, Opcode::set_gain, gain.value());
+        emit_bytecode!(self, opcodes::SET_GAIN, gain.value());
     }
 
     pub fn adjust_volume(&mut self, v: RelativeVolume) {
-        emit_bytecode!(self, Opcode::adjust_volume, v.as_i8());
+        emit_bytecode!(self, opcodes::ADJUST_VOLUME, v.as_i8());
     }
 
     pub fn set_volume(&mut self, volume: Volume) {
-        emit_bytecode!(self, Opcode::set_volume, volume.as_u8());
+        emit_bytecode!(self, opcodes::SET_VOLUME, volume.as_u8());
     }
 
     pub fn adjust_pan(&mut self, p: RelativePan) {
-        emit_bytecode!(self, Opcode::adjust_pan, p.as_i8());
+        emit_bytecode!(self, opcodes::ADJUST_PAN, p.as_i8());
     }
 
     pub fn set_pan(&mut self, pan: Pan) {
-        emit_bytecode!(self, Opcode::set_pan, pan.as_u8());
+        emit_bytecode!(self, opcodes::SET_PAN, pan.as_u8());
     }
 
     pub fn set_pan_and_volume(&mut self, pan: Pan, volume: Volume) {
         emit_bytecode!(
             self,
-            Opcode::set_pan_and_volume,
+            opcodes::SET_PAN_AND_VOLUME,
             pan.as_u8(),
             volume.as_u8()
         );
     }
 
     pub fn enable_echo(&mut self) {
-        emit_bytecode!(self, Opcode::enable_echo);
+        emit_bytecode!(self, opcodes::ENABLE_ECHO);
     }
 
     pub fn disable_echo(&mut self) {
-        emit_bytecode!(self, Opcode::disable_echo);
+        emit_bytecode!(self, opcodes::DISABLE_ECHO);
     }
 
     // Returns the current loops id.
@@ -653,9 +637,9 @@ impl Bytecode {
 
         let loop_id = self._loop_id()?;
         let opcode = match loop_id {
-            0 => Opcode::start_loop_0,
-            1 => Opcode::start_loop_1,
-            2 => Opcode::start_loop_2,
+            0 => opcodes::START_LOOP_0,
+            1 => opcodes::START_LOOP_1,
+            2 => opcodes::START_LOOP_2,
             MAX_NESTED_LOOPS.. => panic!("Invalid loop_id"),
         };
 
@@ -671,9 +655,9 @@ impl Bytecode {
     pub fn skip_last_loop(&mut self) -> Result<(), BytecodeError> {
         let loop_id = self._loop_id()?;
         let opcode = match loop_id {
-            0 => Opcode::skip_last_loop_0,
-            1 => Opcode::skip_last_loop_1,
-            2 => Opcode::skip_last_loop_2,
+            0 => opcodes::SKIP_LAST_LOOP_0,
+            1 => opcodes::SKIP_LAST_LOOP_1,
+            2 => opcodes::SKIP_LAST_LOOP_2,
             MAX_NESTED_LOOPS.. => panic!("Invalid loop_id"),
         };
 
@@ -708,9 +692,9 @@ impl Bytecode {
             }
         };
         let opcode = match loop_id {
-            0 => Opcode::end_loop_0,
-            1 => Opcode::end_loop_1,
-            2 => Opcode::end_loop_2,
+            0 => opcodes::END_LOOP_0,
+            1 => opcodes::END_LOOP_1,
+            2 => opcodes::END_LOOP_2,
             MAX_NESTED_LOOPS.. => panic!("Invalid loop_id"),
         };
 
@@ -752,7 +736,7 @@ impl Bytecode {
 
         // Write the loop_count parameter for the start_loop instruction (if required)
         if let Some(loop_count) = loop_count {
-            let start_loop_opcode = Opcode::start_loop_0 as u8 + loop_id * 2;
+            let start_loop_opcode = opcodes::START_LOOP_0 + loop_id * 2;
             assert!(self.bytecode[loop_state.start_loop_pos] == start_loop_opcode);
 
             self.bytecode[loop_state.start_loop_pos + 1] = loop_count.0;
@@ -762,7 +746,7 @@ impl Bytecode {
         if let Some(skip_last_loop) = loop_state.skip_last_loop {
             let sll_param_pos = skip_last_loop.bc_parameter_position;
 
-            let skip_last_loop_opcode = Opcode::skip_last_loop_0 as u8 + loop_id * 2;
+            let skip_last_loop_opcode = opcodes::SKIP_LAST_LOOP_0 + loop_id * 2;
             assert!(self.bytecode[sll_param_pos - 1] == skip_last_loop_opcode);
 
             let to_skip = self.bytecode.len() - sll_param_pos;
@@ -795,7 +779,7 @@ impl Bytecode {
             return Err(BytecodeError::TooManyLoopsInSubroutineCall);
         }
 
-        emit_bytecode!(self, Opcode::call_subroutine, subroutine.id);
+        emit_bytecode!(self, opcodes::CALL_SUBROUTINE, subroutine.id);
         Ok(())
     }
 
@@ -804,7 +788,7 @@ impl Bytecode {
             return Err(BytecodeError::CannotChangeTickClockInASoundEffect);
         }
 
-        emit_bytecode!(self, Opcode::set_song_tick_clock, tick_clock.as_u8());
+        emit_bytecode!(self, opcodes::SET_SONG_TICK_CLOCK, tick_clock.as_u8());
         Ok(())
     }
 }
