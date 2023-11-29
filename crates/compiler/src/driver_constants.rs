@@ -112,7 +112,7 @@ pub const ECHO_BUFFER_MIN_SIZE: usize = 256;
 pub const ECHO_BUFFER_MAX_EDL: u8 = 15;
 
 // Song constants
-pub const MAX_SUBROUTINES: usize = 256;
+pub const MAX_SUBROUTINES: usize = 128;
 
 pub const SONG_HEADER_SIZE: usize = N_MUSIC_CHANNELS * 4 + 13;
 pub const SONG_HEADER_CHANNELS_SIZE: usize = N_MUSIC_CHANNELS * 4;
