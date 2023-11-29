@@ -8,7 +8,7 @@
 
 use compiler::audio_driver;
 use compiler::common_audio_data::CommonAudioData;
-use compiler::driver_constants::{addresses, LoaderDataType};
+use compiler::driver_constants::{addresses, io_commands, LoaderDataType};
 use compiler::songs::SongData;
 
 use shvc_sound_emu::ShvcSoundEmu;
@@ -264,7 +264,7 @@ fn load_song(
             StereoFlag::Stereo => true,
             StereoFlag::Mono => false,
         },
-        play_song: true,
+        play_song: false,
         skip_echo_buffer_reset: true,
     }
     .driver_value();
@@ -272,6 +272,12 @@ fn load_song(
     emu.set_echo_buffer_size(edl.esa_register(), edl.as_u8());
 
     emu.set_spc_registers(addresses::DRIVER_CODE, 0, 0, 0, 0, 0xff);
+
+    // Wait for the audio-driver to finish initialization
+    emu.emulate();
+
+    // Unpause the audio driver
+    emu.write_io_ports([io_commands::UNPAUSE, 0, 0, 0]);
 
     Ok(())
 }

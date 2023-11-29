@@ -42,6 +42,8 @@ struct ShvcSoundEmu {
 
   auto set_echo_buffer_size(uint8_t esa, uint8_t edl) -> void;
 
+  auto write_io_ports(std::array<uint8_t, 4> ports) -> void;
+
   auto set_spc_registers(uint16_t pc, uint8_t a, uint8_t x, uint8_t y, uint8_t psw, uint8_t sp) -> void;
 
   auto emulate() -> const std::array<int16_t, AUDIO_BUFFER_SIZE>&;

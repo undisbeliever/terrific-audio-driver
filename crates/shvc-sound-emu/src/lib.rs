@@ -24,6 +24,8 @@ mod ffi {
 
         fn set_echo_buffer_size(self: Pin<&mut ShvcSoundEmu>, esa: u8, edl: u8);
 
+        fn write_io_ports(self: Pin<&mut ShvcSoundEmu>, ports: [u8; 4]);
+
         fn set_spc_registers(
             self: Pin<&mut ShvcSoundEmu>,
             pc: u16,
@@ -79,6 +81,10 @@ impl ShvcSoundEmu {
 
     pub fn set_echo_buffer_size(&mut self, esa: u8, edl: u8) {
         self.emu.pin_mut().set_echo_buffer_size(esa, edl)
+    }
+
+    pub fn write_io_ports(&mut self, ports: [u8; 4]) {
+        self.emu.pin_mut().write_io_ports(ports)
     }
 
     pub fn set_spc_registers(&mut self, pc: u16, a: u8, x: u8, y: u8, psw: u8, sp: u8) {

@@ -122,3 +122,9 @@ pub const MAX_SONG_DATA_SIZE: usize = 0xD000;
 
 // Sound effect constants
 pub const SFX_TICK_CLOCK: u8 = 64;
+
+// IO Commands
+pub mod io_commands {
+    pub const PAUSE: u8 = 0;
+    pub const UNPAUSE: u8 = 2;
+}
