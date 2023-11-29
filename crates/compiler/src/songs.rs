@@ -12,7 +12,8 @@ use crate::bytecode::{
 };
 use crate::driver_constants::{
     addresses, AUDIO_RAM_SIZE, MAX_SONG_DATA_SIZE, MAX_SUBROUTINES, N_MUSIC_CHANNELS,
-    SFX_TICK_CLOCK, SONG_HEADER_CHANNELS_SIZE, SONG_HEADER_SIZE, SONG_HEADER_TICK_TIMER_OFFSET,
+    SFX_TICK_CLOCK, SONG_HEADER_CHANNELS_SIZE, SONG_HEADER_N_SUBROUTINES_OFFSET, SONG_HEADER_SIZE,
+    SONG_HEADER_TICK_TIMER_OFFSET,
 };
 use crate::envelope::Envelope;
 use crate::errors::{SongError, SongTooLargeError, ValueError};
@@ -282,16 +283,20 @@ fn write_song_header(
 
     // Subroutine table
     {
-        header[SONG_HEADER_SIZE - 1] = subroutines.len().try_into().unwrap();
+        let n_subroutines = subroutines.len();
+        assert!(n_subroutines <= u8::MAX.into());
+
+        header[SONG_HEADER_N_SUBROUTINES_OFFSET] = n_subroutines.try_into().unwrap();
         let subroutine_table = &mut header[SONG_HEADER_SIZE..];
 
-        assert_eq!(subroutine_table.len(), subroutines.len() * 2);
+        assert_eq!(subroutine_table.len(), n_subroutines * 2);
         for (i, s) in subroutines.iter().enumerate() {
             let offset = s.bytecode_offset;
             assert!(valid_offsets.contains(&offset));
 
-            let si = i * 2;
-            subroutine_table[si..si + 2].copy_from_slice(&offset.to_le_bytes());
+            let offset = offset.to_le_bytes();
+            subroutine_table[i] = offset[0];
+            subroutine_table[i + n_subroutines] = offset[1];
         }
     }
 

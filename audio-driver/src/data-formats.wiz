@@ -155,13 +155,13 @@ struct SongHeader {
     tickTimer : u8,
 
     // Number of subroutines
-    // NOTE: This variable has a maximum value of 128.
-    // (This variable must be the last field in the SongHeader).
     nSubroutines : u8,
 
-    // Immediately after this header is an array, [u16 ; nSubroutines], containing the location of each subroutine
+    // Immediately after this header is split-word-array containing the location of each subroutine
     // (relative to the start of the song data).
-    // The audio-engine will convert the locations into addresses before starting the event-loop.
+    //
+    // subroutineTable_l[nSubroutines]
+    // subroutineTable_h[nSubroutines]
 };
 
 

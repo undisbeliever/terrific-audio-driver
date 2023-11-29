@@ -91,8 +91,8 @@ in zeropage {
 
 
     // The table of subroutine offsets
-    // (equal to `songPtr + sizeof(SongHeader)`)
-    var subroutineTable : **const u16;
+    var subroutineTable_l : *const u8;
+    var subroutineTable_h : *const u8;
 
     // Maximum value of the timer counter_0 or counter_1 register.
     var maxTimerCounter : u8;
@@ -411,7 +411,7 @@ func main() {
     {
         // Reuse these two variables for temporary word space
         var _nInstruments  : u16 in instructionPtr;
-        var _nSoundEffects : u16 in subroutineTable;
+        var _nSoundEffects : u16 in subroutineTable_l;
 
         a = commonDataHeader.nInstruments;
         y = 0;
@@ -449,11 +449,19 @@ func main() {
     }
 
 
-    // Calculate `subroutineTable` address.
+    // Calculate `subroutineTable` addresses.
+    // subroutineTable_l = songPtr + sizeof(SongHeader)
     a = sizeof(SongHeader);
     y = 0;
     ya += songPtr as u16;
-    subroutineTable = ya as **const u16;
+    subroutineTable_l = ya as *const u8;
+
+    // subroutineTable_h = subroutineTable_l + nSubroutines
+    y = offsetof(SongHeader, nSubroutines);
+    a = songPtr[y];
+    y = 0;
+    ya += subroutineTable_l as u16;
+    subroutineTable_h = ya as *const u8;
 
 
     // Reset all music channels
@@ -1416,20 +1424,15 @@ var _subroutineId : u8 in zpTmp;
     // Y = 0
     channelSoA.vibrato_pitchOffsetPerTick[x] = y;
 
-    _subroutineId = a;
+    y = a;
 
     // Save return address
-    ya = instructionPtr as u16;
-    channelSoA.returnInstPtr_l[x] = a;
-    channelSoA.returnInstPtr_h[x] = y;
-
-    y = a = _subroutineId <<< 1;
+    channelSoA.returnInstPtr_l[x] = a = <:instructionPtr;
+    channelSoA.returnInstPtr_h[x] = a = >:instructionPtr;
 
     // Add songPtr to subroutineTable[y] to get the subroutine address
-
-    <:instructionPtr = a = (subroutineTable as *u8)[y] + <:songPtr;
-    y++;
-    >:instructionPtr = a = (subroutineTable as *u8)[y] +# >:songPtr;
+    <:instructionPtr = a = (subroutineTable_l as *u8)[y] + <:songPtr;
+    >:instructionPtr = a = (subroutineTable_h as *u8)[y] +# >:songPtr;
 
     ^return process_next_bytecode(x);
 }
