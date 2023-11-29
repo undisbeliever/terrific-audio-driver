@@ -127,12 +127,6 @@ in zeropage {
     // Only valid inside bytecode instructions
     var instructionPtr : *const u8;
 
-    // Index into channelSoA for the current channel.
-    // Used to restore X index inside bytecode instructions.
-    // Only valid inside bytecode instructions
-    // MUST ONLY be set by `process_bytecode__inline()`.
-    var currentChannelIndex : u8;
-
 
     // The one-past-the-end index when looping through the channels.
     //
@@ -886,8 +880,9 @@ func __reset_channel(channelIndex : u8 in x, pan: u8 in zpTmp) {
 }
 
 
-// KEEP: x
 // volume and pan must be set in channelSoA.
+//
+// KEEP: x
 func _update_voll_and_volr(channelIndex : u8 in x, vol_or_pan : u8 in a, pan_or_vol : u8 in y) {
 
     // Reading carry here saves a `SEC` instruction when calculating VOL_R
@@ -1097,14 +1092,10 @@ inline func process_channel__inline(channelIndex : u8 in x) {
             channelSoA.countdownTimer[x]++;
         }
         else {
-            currentChannelIndex = x;
-
             a = channelSoA.instructionPtr_l[x];
             y = channelSoA.instructionPtr_h[x];
 
             process_bytecode(x, ya);
-
-            x = currentChannelIndex;
 
             ya = instructionPtr as u16;
             channelSoA.instructionPtr_l[x] = a;
@@ -1116,6 +1107,8 @@ inline func process_channel__inline(channelIndex : u8 in x) {
 
 // Process Bytecode
 // ================
+//
+// bytecode functions MUST NOT modify X.
 
 
 // See `process_bytecode_with_loader_test()`.
@@ -1546,6 +1539,7 @@ func end_loop_2(channelIndex : u8 in x) {
 
 
 
+// KEEP: X
 func enable_echo(channelIndex : u8 in x) {
     a = ChannelVoiceBit[x];
 
@@ -1557,6 +1551,7 @@ func enable_echo(channelIndex : u8 in x) {
 
 
 
+// KEEP: X
 func disable_echo(channelIndex : u8 in x) {
     a = ChannelVoiceBit[x];
 
@@ -1568,6 +1563,7 @@ func disable_echo(channelIndex : u8 in x) {
 
 
 
+// KEEP: X
 func set_instrument(channelIndex : u8 in x, instrumentId : u8 in a) {
     y = a;
 
@@ -1593,6 +1589,7 @@ func set_instrument(channelIndex : u8 in x, instrumentId : u8 in a) {
 
 
 
+// KEEP: X
 func set_instrument_and_adsr_or_gain(channelIndex : u8 in x, instrumentId : u8 in a) {
     y = a;
 
