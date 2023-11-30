@@ -9,11 +9,10 @@ use super::command_parser::{
 };
 use super::identifier::Identifier;
 use super::instruments::{EnvelopeOverride, MmlInstrument};
-use super::{IdentifierStr, Section};
+use super::{ChannelId, IdentifierStr, Section};
 
 #[cfg(feature = "mml_tracking")]
 use super::note_tracking::CursorTracker;
-
 #[cfg(feature = "mml_tracking")]
 use crate::songs::{BytecodePos, SongBcTracking};
 
@@ -806,6 +805,7 @@ impl<'a, 'b> MmlSongBytecodeGenerator<'a, 'b> {
         let sd_start_index = song_data.len();
 
         let mut parser = Parser::new(
+            ChannelId::Subroutine(subroutine_index),
             lines,
             &self.instrument_map,
             None,
@@ -861,10 +861,14 @@ impl<'a, 'b> MmlSongBytecodeGenerator<'a, 'b> {
     ) -> Result<Channel, MmlChannelError> {
         assert!(self.subroutine_map.is_some());
 
+        assert!(identifier.as_str().len() == 1);
+        let channel_char = identifier.as_str().chars().next().unwrap();
+
         let song_data = std::mem::take(&mut self.song_data);
         let sd_start_index = song_data.len();
 
         let mut parser = Parser::new(
+            ChannelId::Channel(channel_char),
             lines,
             &self.instrument_map,
             self.subroutine_map.as_ref(),

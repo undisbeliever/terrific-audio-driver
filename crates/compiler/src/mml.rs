@@ -52,6 +52,12 @@ pub use self::tick_count_table::MmlTickCountTable;
 
 pub use self::metadata::MetaData;
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum ChannelId {
+    Channel(char),
+    Subroutine(u8),
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct Section {
     name: String,

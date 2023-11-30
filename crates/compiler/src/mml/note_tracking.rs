@@ -9,6 +9,7 @@
 const _: () = assert!(cfg!(feature = "mml_tracking"));
 
 use super::command_parser::State;
+use super::ChannelId;
 
 use crate::file_pos::{FilePos, LineIndexRange};
 use crate::time::TickCounterWithLoopFlag;
@@ -24,6 +25,7 @@ pub struct Cursor {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct TrackingLine {
+    channel: ChannelId,
     char_indexes: RangeInclusive<u32>,
     data_range: Range<usize>,
 }
@@ -44,6 +46,7 @@ impl CursorTracker {
 
     pub(crate) fn new_line(
         &mut self,
+        channel: ChannelId,
         line_range: LineIndexRange,
         ticks: TickCounterWithLoopFlag,
         state: State,
@@ -52,6 +55,7 @@ impl CursorTracker {
             l.data_range.end = self.data.len();
         }
         self.lines.push(TrackingLine {
+            channel,
             char_indexes: line_range.start..=line_range.end,
             data_range: self.data.len()..self.data.len(),
         });
@@ -77,7 +81,7 @@ impl CursorTracker {
         }
     }
 
-    pub fn find(&self, char_index: u32) -> Option<&Cursor> {
+    pub fn find(&self, char_index: u32) -> Option<(ChannelId, &Cursor)> {
         let line = self
             .lines
             .iter()
@@ -89,6 +93,8 @@ impl CursorTracker {
             Ok(i) => i,
             Err(i) => i,
         };
-        data.get(i.saturating_sub(1))
+        let cursor = data.get(i.saturating_sub(1))?;
+
+        Some((line.channel, cursor))
     }
 }

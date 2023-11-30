@@ -10,7 +10,7 @@ use crate::helpers::ch_units_to_width;
 use compiler::driver_constants::N_MUSIC_CHANNELS;
 use compiler::errors::{MmlChannelError, MmlCompileErrors};
 use compiler::mml::command_parser::Quantization;
-use compiler::mml::{FIRST_MUSIC_CHANNEL, LAST_MUSIC_CHANNEL};
+use compiler::mml::{ChannelId, FIRST_MUSIC_CHANNEL, LAST_MUSIC_CHANNEL};
 use compiler::songs::{BytecodePos, SongBcTracking, SongData};
 use compiler::FilePosRange;
 
@@ -437,8 +437,19 @@ impl MmlEditorState {
             .tracking()
             .and_then(|t| t.cursor_tracker.find(cursor_index))
         {
-            Some(c) => {
+            Some((channel_id, c)) => {
                 let mut s = String::with_capacity(64);
+
+                match channel_id {
+                    ChannelId::Channel(c) => {
+                        let _ = write!(s, "{} ", c);
+                    }
+                    ChannelId::Subroutine(si) => {
+                        if let Some(subroutine) = song_data.subroutines().get(usize::from(si)) {
+                            let _ = write!(s, "!{} ", subroutine.identifier.as_str());
+                        }
+                    }
+                };
 
                 let ticks = c.ticks.ticks.value();
                 let in_loop = if c.ticks.in_loop { "+" } else { "" };

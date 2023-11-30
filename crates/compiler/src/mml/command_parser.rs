@@ -170,11 +170,14 @@ pub struct State {
 }
 
 mod parser {
-    use crate::file_pos::LineIndexRange;
+    use crate::{file_pos::LineIndexRange, mml::ChannelId};
 
     use super::*;
 
     pub(crate) struct Parser<'a> {
+        #[allow(dead_code)]
+        channel: ChannelId,
+
         tokenizer: PeekingTokenizer<'a>,
         errors: Vec<ErrorWithPos<MmlError>>,
         state: State,
@@ -192,6 +195,7 @@ mod parser {
 
     impl Parser<'_> {
         pub fn new<'a>(
+            channel: ChannelId,
             lines: &'a [Line],
             instruments_map: &'a HashMap<IdentifierStr, usize>,
             subroutine_map: Option<&'a HashMap<IdentifierStr, SubroutineId>>,
@@ -210,6 +214,7 @@ mod parser {
             };
 
             let mut p = Parser {
+                channel,
                 tokenizer: PeekingTokenizer::new(lines, instruments_map, subroutine_map),
                 errors: Vec::new(),
                 state: State {
@@ -321,7 +326,7 @@ mod parser {
 
             #[cfg(feature = "mml_tracking")]
             self.cursor_tracker
-                .new_line(r, self.tick_counter, self.state.clone());
+                .new_line(self.channel, r, self.tick_counter, self.state.clone());
         }
 
         #[cfg(feature = "mml_tracking")]
