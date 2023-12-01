@@ -202,7 +202,6 @@ in zeropage {
         // (pitch change/tick)
         var vibrato_pitchOffsetPerTick : [u8 ; N_CHANNELS];
 
-
         // Used to determine the vibrato pitch shift direction for the current vibrato tick counter.
         //
         // This variable is equal to `vibrato_waveLengthInTicks / 2`
@@ -221,13 +220,6 @@ in zeropage {
         //
         // Offsetting the start of the vibrato allows me to save a comparison in `process_pitch_effects__inline()`.
         var vibrato_tickCounterStart : [u8 ; N_CHANNELS];
-
-        // The length of the vibrato wavelength in ticks.
-        //
-        // If this value is 0. The wavelength is 256 ticks.
-        //
-        // This variable is equal to `4 * vibrato_tickCounterStart`
-        var vibrato_waveLengthInTicks : [u8 ; N_CHANNELS];
     }
 }
 
@@ -235,6 +227,14 @@ in zeropage {
 in firstpage {
     // Channel variables that do not fit in zeropage
     namespace channelSoA {
+        // The length of the vibrato wavelength in ticks.
+        //
+        // If this value is 0. The wavelength is 256 ticks.
+        //
+        // This variable is equal to `4 * vibrato_tickCounterStart`
+        var vibrato_waveLengthInTicks : [u8 ; N_CHANNELS];
+
+
         // Bytecode address to loop to when the channel encounters and `end` instruction.
         // If `instructionPtrAfterEnd_h` is 0, the channel does not loop and will instead stop.
         var instructionPtrAfterEnd_l : [u8 ; N_CHANNELS];
