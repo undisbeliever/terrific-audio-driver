@@ -74,6 +74,8 @@ in zeropage {
         var soundEffects_h : *u8;
     }
 
+    // Increases once every song tick
+    var songTickCounter : u16;
 
     // If this variable is zero, the audio driver is paused.
     // (using zero so the audio driver starts paused)
@@ -605,6 +607,8 @@ inline func process_event_loop__inline() {
             if a >= maxTimerCounter {
                 maxTimerCounter = a;
             }
+
+            songTickCounter++;
 
             __update_kon_koff__inline(SONG_CHANNEL_MASK);
 
