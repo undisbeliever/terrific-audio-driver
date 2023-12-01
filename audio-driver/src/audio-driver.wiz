@@ -403,7 +403,7 @@ func main() {
     x = &songPtr as u8;
     do {
         x--;
-        (0 as *u8)[x] = a;
+        *(x as *u8) = a;
     } while !zero;
 
 
