@@ -15,13 +15,40 @@ pub mod addresses {
         include!(concat!(env!("OUT_DIR"), "/symbols.rs"));
     }
 
-    pub const DRIVER_CODE: u16 = _symbols::DRIVER_MAIN;
-    pub const LOADER: u16 = _symbols::START_LOADER;
-    pub const SONG_PTR: u16 = _symbols::SONG_PTR;
-    pub const LOADER_DATA_TYPE: u16 = _symbols::LOADER_DATA_TYPE;
+    macro_rules! declare_symbols {
+        ($($name:ident,)*) => {
+            $(
+                pub const $name: u16 = _symbols::$name;
+            )*
+        };
+    }
 
-    pub const CHANNEL_INSTRUCTION_PTR_L: u16 = _symbols::CHANNEL_INSTRUCTION_PTR_L;
-    pub const CHANNEL_INSTRUCTION_PTR_H: u16 = _symbols::CHANNEL_INSTRUCTION_PTR_H;
+    declare_symbols!(
+        DRIVER_CODE,
+        LOADER,
+        SONG_PTR,
+        LOADER_DATA_TYPE,
+        PAUSED_IF_ZERO,
+        ACTIVE_CHANNELS,
+        SONG_TICK_COUNTER,
+        CHANNEL_DISABLED_BYTECODE,
+        CHANNEL_COUNTDOWN_TIMER,
+        CHANNEL_INST_PITCH_OFFSET,
+        CHANNEL_INSTRUCTION_PTR_L,
+        CHANNEL_INSTRUCTION_PTR_H,
+        CHANNEL_LOOP_STATE,
+        CHANNEL_NEXT_EVENT_IS_KEY_OFF,
+        CHANNEL_PAN,
+        CHANNEL_DIRECTION,
+        CHANNEL_RETURN_INST_PTR_L,
+        CHANNEL_RETURN_INST_PTR_H,
+        CHANNEL_VIBRATO_PITCH_OFFSET_PER_TICK,
+        CHANNEL_VIBRATO_DIRECTION_COMPARATOR,
+        CHANNEL_VIBRATO_TICK_COUNTER,
+        CHANNEL_VIBRATO_TICK_COUNTER_START,
+        CHANNEL_VIBRATO_WAVELENGTH_IN_TICKS,
+        CHANNEL_VOLUME,
+    );
 
     // MUST match `audio-driver/src/common_memmap.wiz`
     pub const COMMON_DATA: u16 = 0x800 - 4;
@@ -51,6 +78,9 @@ pub mod addresses {
 }
 
 pub const N_MUSIC_CHANNELS: usize = 6;
+pub const N_VOICES: usize = 8;
+
+pub const N_NESTED_LOOPS: usize = 3;
 
 // Song ID 0 is silence
 pub const FIRST_SONG_ID: usize = 1;
@@ -62,7 +92,10 @@ pub const MAX_SOUND_EFFECTS: usize = 192;
 
 pub const PITCH_TABLE_SIZE: usize = 256;
 
+pub const COMMON_DATA_N_DIR_ITEMS_OFFSET: usize = 0;
+pub const COMMON_DATA_N_INSTRUMENTS_OFFSET: usize = 1;
 pub const COMMON_DATA_HEADER_SIZE: usize = 4 + (2 * PITCH_TABLE_SIZE);
+pub const COMMON_DATA_PITCH_TABLE_OFFSET: usize = 4;
 
 pub const COMMON_DATA_BYTES_PER_DIR: usize = 4;
 pub const COMMON_DATA_BYTES_PER_INSTRUMENTS: usize = 4;
@@ -101,7 +134,12 @@ impl LoaderDataType {
     }
 }
 
+// S-SMP registers
+pub const S_SMP_TIMER_0_REGISTER: u8 = 0xfa;
+
 // S-DSP constants
+
+pub const S_DSP_EON_REGISTER: u8 = 0x4d;
 
 pub const FIR_FILTER_SIZE: usize = 8;
 pub const IDENTITY_FILTER: [i8; FIR_FILTER_SIZE] = [127, 0, 0, 0, 0, 0, 0, 0];
@@ -120,6 +158,8 @@ pub const SONG_HEADER_TICK_TIMER_OFFSET: usize = SONG_HEADER_SIZE - 2;
 pub const SONG_HEADER_N_SUBROUTINES_OFFSET: usize = SONG_HEADER_SIZE - 1;
 
 pub const MAX_SONG_DATA_SIZE: usize = 0xD000;
+
+pub const STARTING_VOLUME: u8 = 96;
 
 // Sound effect constants
 pub const SFX_TICK_CLOCK: u8 = 64;

@@ -163,6 +163,7 @@ dependencies = [
  "relative-path",
  "serde",
  "serde_json",
+ "shvc-sound-emu",
 ]
 
 [[package]]

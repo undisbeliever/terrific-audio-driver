@@ -12,6 +12,7 @@ use compiler::errors::{MmlChannelError, MmlCompileErrors};
 use compiler::mml::command_parser::Quantization;
 use compiler::mml::{ChannelId, FIRST_MUSIC_CHANNEL, LAST_MUSIC_CHANNEL};
 use compiler::songs::{BytecodePos, SongBcTracking, SongData};
+use compiler::time::TickCounter;
 use compiler::FilePosRange;
 
 use std::cell::RefCell;
@@ -163,6 +164,14 @@ impl MmlEditor {
 
     pub fn set_text(&mut self, text: &str) {
         self.text_buffer.set_text(text);
+    }
+
+    pub fn cursor_tick_counter(&self) -> Option<(ChannelId, TickCounter)> {
+        self.state.borrow().cursor_tick_counter()
+    }
+
+    pub fn cursor_tick_counter_line_start(&self) -> Option<(ChannelId, TickCounter)> {
+        self.state.borrow().cursor_tick_counter_line_start()
     }
 
     fn blank_callback() {}
@@ -408,6 +417,24 @@ impl MmlEditorState {
 
     fn cursor_index(&self) -> Option<u32> {
         self.widget.insert_position().try_into().ok()
+    }
+
+    fn cursor_tick_counter(&self) -> Option<(ChannelId, TickCounter)> {
+        self.song_data
+            .as_deref()?
+            .tracking()?
+            .cursor_tracker
+            .find(self.cursor_index()?)
+            .map(|(channel_id, c)| (channel_id, c.ticks.ticks))
+    }
+
+    fn cursor_tick_counter_line_start(&self) -> Option<(ChannelId, TickCounter)> {
+        self.song_data
+            .as_deref()?
+            .tracking()?
+            .cursor_tracker
+            .find_line_start(self.cursor_index()?)
+            .map(|(channel_id, c)| (channel_id, c.ticks.ticks))
     }
 
     fn update_statusbar_if_cursor_moved(&mut self) {

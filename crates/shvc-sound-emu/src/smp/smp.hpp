@@ -9,6 +9,9 @@ struct SMP : SPC700 {
   auto main() -> void;
   auto power(bool reset) -> void;
 
+  //memory.cpp
+  auto write(n16 address, n8 data) -> void override;
+
   //io.cpp
   auto portRead(n2 port) const -> n8;
   auto portWrite(n2 port, n8 data) -> void;
@@ -59,7 +62,6 @@ private:
 
   auto idle() -> void override;
   auto read(n16 address) -> n8 override;
-  auto write(n16 address, n8 data) -> void override;
 
   auto readDisassembler(n16 address) -> n8 override;
 

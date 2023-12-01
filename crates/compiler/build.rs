@@ -17,14 +17,34 @@ const BLANK_SONG: &str = "blank-song";
 
 const COMMON_SYMBOLS: &[&str] = &["__loader_dataType", "__loader_songPtr"];
 
-const LOADER_SYMBOLS: &[(&str, &str)] = &[("start_loader", "START_LOADER")];
+const LOADER_SYMBOLS: &[(&str, &str)] = &[("start_loader", "LOADER")];
 
+#[rustfmt::skip]
 const AUDIO_DRIVER_SYMBOLS: &[(&str, &str)] = &[
-    ("main", "DRIVER_MAIN"),
+    ("main", "DRIVER_CODE"),
     ("__loader_songPtr", "SONG_PTR"),
     ("__loader_dataType", "LOADER_DATA_TYPE"),
+    ("ChannelDisabledBytecode", "CHANNEL_DISABLED_BYTECODE"),
+    ("pausedIfZero", "PAUSED_IF_ZERO"),
+    ("activeChannels", "ACTIVE_CHANNELS"),
+    ("songTickCounter", "SONG_TICK_COUNTER"),
+
+    ("channelSoA.countdownTimer", "CHANNEL_COUNTDOWN_TIMER"),
+    ("channelSoA.instPitchOffset", "CHANNEL_INST_PITCH_OFFSET"),
     ("channelSoA.instructionPtr_l", "CHANNEL_INSTRUCTION_PTR_L"),
     ("channelSoA.instructionPtr_h", "CHANNEL_INSTRUCTION_PTR_H"),
+    ("channelSoA.loopState", "CHANNEL_LOOP_STATE"),
+    ("channelSoA.nextEventIsKeyOff", "CHANNEL_NEXT_EVENT_IS_KEY_OFF"),
+    ("channelSoA.pan", "CHANNEL_PAN"),
+    ("channelSoA.portamento_direction", "CHANNEL_DIRECTION"),
+    ("channelSoA.returnInstPtr_l", "CHANNEL_RETURN_INST_PTR_L"),
+    ("channelSoA.returnInstPtr_h", "CHANNEL_RETURN_INST_PTR_H"),
+    ("channelSoA.vibrato_pitchOffsetPerTick", "CHANNEL_VIBRATO_PITCH_OFFSET_PER_TICK"),
+    ("channelSoA.vibrato_directionComparator", "CHANNEL_VIBRATO_DIRECTION_COMPARATOR"),
+    ("channelSoA.vibrato_tickCounter", "CHANNEL_VIBRATO_TICK_COUNTER"),
+    ("channelSoA.vibrato_tickCounterStart", "CHANNEL_VIBRATO_TICK_COUNTER_START"),
+    ("channelSoA.vibrato_waveLengthInTicks", "CHANNEL_VIBRATO_WAVELENGTH_IN_TICKS"),
+    ("channelSoA.volume", "CHANNEL_VOLUME"),
 ];
 
 fn find_wiz_binary() -> PathBuf {

@@ -26,3 +26,6 @@ serde.workspace = true
 serde_json.workspace = true
 relative-path.workspace = true
 
+
+[dev-dependencies]
+shvc-sound-emu.workspace = true

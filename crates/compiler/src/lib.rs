@@ -6,10 +6,10 @@
 
 mod bytecode;
 mod file_pos;
-mod time;
 mod value_newtypes;
 
 pub mod bytecode_assembler;
+pub mod bytecode_interpreter;
 pub mod common_audio_data;
 pub mod data;
 pub mod driver_constants;
@@ -24,6 +24,7 @@ pub mod samples;
 pub mod songs;
 pub mod sound_effects;
 pub mod spc_file_export;
+pub mod time;
 
 pub use file_pos::{FilePos, FilePosRange};
 pub use value_newtypes::ValueNewType;

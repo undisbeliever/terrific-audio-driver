@@ -55,6 +55,18 @@ auto ShvcSoundEmu::dsp_registers() const -> const std::array<uint8_t, 128>& {
   return smp.dsp.registers;
 }
 
+auto ShvcSoundEmu::write_dsp_register(uint8_t addr, uint8_t value) -> void {
+  if(addr < smp.dsp.registers.size()) {
+    smp.dsp.write(addr, value);
+  }
+}
+
+auto ShvcSoundEmu::write_smp_register(uint8_t addr, uint8_t value) -> void {
+  if(addr > 0xf0 && addr < 0x100) {
+    smp.write(addr, value);
+  }
+}
+
 auto ShvcSoundEmu::write_io_ports(std::array<uint8_t, 4> ports) -> void {
   for(auto i : range(4)) {
     smp.portWrite(i, ports[i]);

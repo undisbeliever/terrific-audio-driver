@@ -97,4 +97,14 @@ impl CursorTracker {
 
         Some((line.channel, cursor))
     }
+
+    pub fn find_line_start(&self, char_index: u32) -> Option<(ChannelId, &Cursor)> {
+        let line = self
+            .lines
+            .iter()
+            .find(|l| l.char_indexes.contains(&char_index))?;
+        let first = self.data.get(line.data_range.start)?;
+
+        Some((line.channel, first))
+    }
 }

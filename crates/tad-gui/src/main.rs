@@ -60,6 +60,7 @@ use compiler::driver_constants;
 use compiler::path::{ParentPathBuf, SourcePathBuf};
 use compiler::songs::SongData;
 use compiler::sound_effects::{convert_sfx_inputs_lossy, SoundEffectInput, SoundEffectsFile};
+use compiler::time::TickCounter;
 
 use compiler_thread::PlaySampleArgs;
 use files::{
@@ -119,7 +120,7 @@ pub enum GuiMessage {
     SongChanged(ItemId, String),
     RecompileSong(ItemId, String),
 
-    PlaySong(ItemId, String),
+    PlaySong(ItemId, String, Option<TickCounter>),
     PlaySoundEffect(ItemId),
     PlaySample(ItemId, PlaySampleArgs),
     PauseResumeAudio(ItemId),
@@ -332,11 +333,13 @@ impl Project {
                 // RecompileSong should not mark the song as unsaved
                 let _ = self.compiler_sender.send(ToCompiler::SongChanged(id, mml));
             }
-            GuiMessage::PlaySong(id, mml) => {
+            GuiMessage::PlaySong(id, mml, ticks_to_skip) => {
                 // RecompileSong should not mark the song as unsaved
-                let _ = self
-                    .compiler_sender
-                    .send(ToCompiler::CompileAndPlaySong(id, mml));
+                let _ = self.compiler_sender.send(ToCompiler::CompileAndPlaySong(
+                    id,
+                    mml,
+                    ticks_to_skip,
+                ));
             }
             GuiMessage::PlaySoundEffect(id) => {
                 let _ = self.compiler_sender.send(ToCompiler::PlaySoundEffect(id));

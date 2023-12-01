@@ -24,6 +24,8 @@ mod ffi {
 
         fn set_echo_buffer_size(self: Pin<&mut ShvcSoundEmu>, esa: u8, edl: u8);
 
+        fn write_dsp_register(self: Pin<&mut ShvcSoundEmu>, addr: u8, value: u8);
+        fn write_smp_register(self: Pin<&mut ShvcSoundEmu>, addr: u8, value: u8);
         fn write_io_ports(self: Pin<&mut ShvcSoundEmu>, ports: [u8; 4]);
 
         fn set_spc_registers(
@@ -81,6 +83,16 @@ impl ShvcSoundEmu {
 
     pub fn set_echo_buffer_size(&mut self, esa: u8, edl: u8) {
         self.emu.pin_mut().set_echo_buffer_size(esa, edl)
+    }
+
+    /// This method is not reccomended to the `ESA` and `EDL` registers.
+    /// Use `set_echo_buffer_size()` instead.
+    pub fn write_dsp_register(self: &mut ShvcSoundEmu, addr: u8, value: u8) {
+        self.emu.pin_mut().write_dsp_register(addr, value)
+    }
+
+    pub fn write_smp_register(self: &mut ShvcSoundEmu, addr: u8, value: u8) {
+        self.emu.pin_mut().write_smp_register(addr, value)
     }
 
     pub fn write_io_ports(&mut self, ports: [u8; 4]) {

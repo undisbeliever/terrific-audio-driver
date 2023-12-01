@@ -56,6 +56,7 @@ mod item_id {
         }
     }
 }
+use compiler::time::TickCounter;
 pub use item_id::ItemId;
 
 #[derive(Debug)]
@@ -92,7 +93,7 @@ pub enum ToCompiler {
     PlaySoundEffect(ItemId),
 
     SongChanged(ItemId, String),
-    CompileAndPlaySong(ItemId, String),
+    CompileAndPlaySong(ItemId, String, Option<TickCounter>),
     PlaySample(ItemId, PlaySampleArgs),
 
     ExportSongToSpcFile(ItemId),
@@ -1063,18 +1064,18 @@ fn bg_thread(
             ToCompiler::PlaySoundEffect(id) => {
                 if let Some(Some(sfx_data)) = sound_effects.get_output_for_id(&id) {
                     let song_data = Arc::new(sound_effect_to_song(sfx_data));
-                    sender.send_audio(AudioMessage::PlaySong(id, song_data));
+                    sender.send_audio(AudioMessage::PlaySong(id, song_data, None));
                 }
             }
 
             ToCompiler::SongChanged(id, mml) => {
                 songs.edit_and_compile_song(id, mml, &pf_songs, &song_dependencies, &sender);
             }
-            ToCompiler::CompileAndPlaySong(id, mml) => {
+            ToCompiler::CompileAndPlaySong(id, mml, ticks_to_skip) => {
                 sender.send_audio(AudioMessage::Pause);
                 songs.edit_and_compile_song(id, mml, &pf_songs, &song_dependencies, &sender);
                 if let Some(song) = songs.get_song_data(&id) {
-                    sender.send_audio(AudioMessage::PlaySong(id, song.clone()));
+                    sender.send_audio(AudioMessage::PlaySong(id, song.clone(), ticks_to_skip));
                 }
             }
             ToCompiler::PlaySample(id, args) => {

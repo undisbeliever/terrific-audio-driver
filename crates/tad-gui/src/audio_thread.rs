@@ -7,9 +7,11 @@
 #![allow(clippy::assertions_on_constants)]
 
 use compiler::audio_driver;
+use compiler::bytecode_interpreter;
 use compiler::common_audio_data::CommonAudioData;
 use compiler::driver_constants::{addresses, io_commands, LoaderDataType};
 use compiler::songs::SongData;
+use compiler::time::TickCounter;
 
 use shvc_sound_emu::ShvcSoundEmu;
 
@@ -39,7 +41,7 @@ pub enum AudioMessage {
     PauseResume(ItemId),
 
     CommonAudioDataChanged(Option<CommonAudioData>),
-    PlaySong(ItemId, Arc<SongData>),
+    PlaySong(ItemId, Arc<SongData>, Option<TickCounter>),
     PlaySample(ItemId, CommonAudioData, Arc<SongData>),
 }
 
@@ -120,6 +122,14 @@ impl RingBuffer {
             read_cursor: 0,
             write_cursor: Self::EMU_BUFFER_SIZE,
         }
+    }
+
+    /// Clears the buffer and reset the cursors.
+    fn reset(&mut self) {
+        self.buffer.fill(0);
+
+        self.read_cursor = 0;
+        self.write_cursor = Self::EMU_BUFFER_SIZE;
     }
 
     fn is_buffer_full(&self) -> bool {
@@ -217,18 +227,40 @@ fn fill_ring_buffer(emu: &mut ShvcSoundEmu, playback: &mut AudioDevice<RingBuffe
 
     !silence
 }
+struct EmulatorWrapper<'a>(&'a mut ShvcSoundEmu);
+impl bytecode_interpreter::Emulator for EmulatorWrapper<'_> {
+    fn apuram_mut(&mut self) -> &mut [u8; 0x10000] {
+        self.0.apuram_mut()
+    }
+
+    fn write_dsp_register(&mut self, addr: u8, value: u8) {
+        self.0.write_dsp_register(addr, value);
+    }
+
+    fn write_smp_register(&mut self, addr: u8, value: u8) {
+        self.0.write_smp_register(addr, value);
+    }
+}
 
 fn load_song(
     emu: &mut ShvcSoundEmu,
-    common_data: &CommonAudioData,
+    common_audio_data: &CommonAudioData,
     song: &SongData,
     stereo_flag: StereoFlag,
+    ticks_to_skip: Option<TickCounter>,
 ) -> Result<(), ()> {
     const LOADER_DATA_TYPE_ADDR: usize = addresses::LOADER_DATA_TYPE as usize;
 
+    emu.power(true);
+
     let song_data = song.data();
-    let common_data = common_data.data();
+    let common_data = common_audio_data.data();
     let edl = &song.metadata().echo_buffer.edl;
+
+    let stereo_flag = match stereo_flag {
+        StereoFlag::Stereo => true,
+        StereoFlag::Mono => false,
+    };
 
     let song_data_addr =
         usize::from(addresses::COMMON_DATA) + common_data.len() + (common_data.len() % 2);
@@ -260,10 +292,7 @@ fn load_song(
 
     // Set loader flags
     apuram[LOADER_DATA_TYPE_ADDR] = LoaderDataType {
-        stereo_flag: match stereo_flag {
-            StereoFlag::Stereo => true,
-            StereoFlag::Mono => false,
-        },
+        stereo_flag,
         play_song: false,
         skip_echo_buffer_reset: true,
     }
@@ -275,6 +304,22 @@ fn load_song(
 
     // Wait for the audio-driver to finish initialization
     emu.emulate();
+
+    if let Some(ticks_to_skip) = ticks_to_skip {
+        if ticks_to_skip.value() > 0 {
+            // Cannot intrepret song in the compiler thread, the `stereo_flag` is unknown.
+            let o = bytecode_interpreter::interpret_song(
+                song,
+                common_audio_data,
+                stereo_flag,
+                song_data_addr,
+                ticks_to_skip,
+            );
+            if let Some(o) = o {
+                o.write_to_emulator(&mut EmulatorWrapper(emu));
+            }
+        }
+    }
 
     // Unpause the audio driver
     emu.write_io_ports([io_commands::UNPAUSE, 0, 0, 0]);
@@ -401,9 +446,17 @@ impl AudioThread {
                     self.stereo_flag = sf;
                 }
 
-                AudioMessage::PlaySong(song_id, song) => {
+                AudioMessage::PlaySong(song_id, song, ticks_to_skip) => {
                     if let Some(common) = &self.common_audio_data {
-                        if load_song(&mut self.emu, common, &song, self.stereo_flag).is_ok() {
+                        if load_song(
+                            &mut self.emu,
+                            common,
+                            &song,
+                            self.stereo_flag,
+                            ticks_to_skip,
+                        )
+                        .is_ok()
+                        {
                             self.send_started_song_message(song_id, song);
                             self.item_id = Some(song_id);
                             return true;
@@ -411,7 +464,14 @@ impl AudioThread {
                     }
                 }
                 AudioMessage::PlaySample(id, common_data, song_data) => {
-                    if load_song(&mut self.emu, &common_data, &song_data, self.stereo_flag).is_ok()
+                    if load_song(
+                        &mut self.emu,
+                        &common_data,
+                        &song_data,
+                        self.stereo_flag,
+                        None,
+                    )
+                    .is_ok()
                     {
                         self.item_id = Some(id);
                         return true;
@@ -506,9 +566,18 @@ impl AudioThread {
                     self.common_audio_data = data;
                 }
 
-                AudioMessage::PlaySong(id, song) => {
+                AudioMessage::PlaySong(id, song, ticks_to_skip) => {
                     if let Some(common_data) = &self.common_audio_data {
-                        match load_song(&mut self.emu, common_data, &song, self.stereo_flag) {
+                        // Pause playback to prevent buffer overrun when tick_to_skip is large.
+                        playback.pause();
+                        playback.lock().reset();
+                        match load_song(
+                            &mut self.emu,
+                            common_data,
+                            &song,
+                            self.stereo_flag,
+                            ticks_to_skip,
+                        ) {
                             Ok(()) => {
                                 self.send_started_song_message(id, song);
 
@@ -530,7 +599,13 @@ impl AudioThread {
                 }
 
                 AudioMessage::PlaySample(id, common_data, song_data) => {
-                    match load_song(&mut self.emu, &common_data, &song_data, self.stereo_flag) {
+                    match load_song(
+                        &mut self.emu,
+                        &common_data,
+                        &song_data,
+                        self.stereo_flag,
+                        None,
+                    ) {
                         Ok(()) => {
                             state = PlayState::Running;
                             self.item_id = Some(id);

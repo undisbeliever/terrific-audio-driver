@@ -18,7 +18,7 @@ use std::cmp::max;
 pub const KEY_OFF_TICK_DELAY: u32 = 1;
 pub const MAX_NESTED_LOOPS: u8 = 3;
 
-const LAST_PLAY_NOTE_OPCODE: u8 = 0xbf;
+pub const LAST_PLAY_NOTE_OPCODE: u8 = 0xbf;
 
 u8_value_newtype!(Volume, VolumeOutOfRange, NoVolume);
 u8_value_newtype!(Pan, PanOutOfRange, NoPan, 0, 128);

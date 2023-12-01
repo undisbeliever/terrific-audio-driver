@@ -16,6 +16,7 @@ Changes from ares:
  * Uses `std::array<uint8_t>` for memory arrays.
  * Added `DSP::resetEchoBuffer()`.
  * Added rust bindings using the [cxx](https://cxx.rs/) crate.
+ * Added methods to set the S-DSP and S-SMP registers.
 
 
 Build Requirements

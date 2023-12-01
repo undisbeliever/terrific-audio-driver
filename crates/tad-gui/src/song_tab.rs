@@ -13,9 +13,10 @@ use crate::GuiMessage;
 
 use compiler::data::TextFile;
 use compiler::errors::MmlCompileErrors;
-use compiler::mml::MmlTickCountTable;
+use compiler::mml::{ChannelId, MmlTickCountTable};
 use compiler::songs::{song_duration_string, SongData};
 
+use compiler::time::TickCounter;
 use fltk::app;
 use fltk::button::Button;
 use fltk::enums::{Color, Font};
@@ -91,8 +92,11 @@ impl SongTab {
             b
         };
 
+        // ::TODO add custom icons::
         let mut compile_button = button("C", "Compile song");
-        let mut play_button = button("@>", "Play song");
+        let mut play_button = button("@>", "Play song from the beginning");
+        let mut play_at_line_start_button = button("@>|", "Play from line start");
+        let mut play_at_cursor_button = button("@>[]", "Play from cursor");
         let mut pause_resume_button = button("@||", "Pause/Resume song");
 
         main_toolbar.end();
@@ -140,6 +144,22 @@ impl SongTab {
             move |_| {
                 if let Ok(s) = s.try_borrow() {
                     s.play_song();
+                }
+            }
+        });
+        play_at_cursor_button.set_callback({
+            let s = state.clone();
+            move |_| {
+                if let Ok(s) = s.try_borrow() {
+                    s.play_song_at_cursor();
+                }
+            }
+        });
+        play_at_line_start_button.set_callback({
+            let s = state.clone();
+            move |_| {
+                if let Ok(s) = s.try_borrow() {
+                    s.play_song_at_line_start();
                 }
             }
         });
@@ -218,7 +238,25 @@ impl State {
 
     fn play_song(&self) {
         self.sender
-            .send(GuiMessage::PlaySong(self.song_id, self.editor.text()));
+            .send(GuiMessage::PlaySong(self.song_id, self.editor.text(), None));
+    }
+
+    fn play_song_tick_counter(&self, cursor: Option<(ChannelId, TickCounter)>) {
+        if let Some((ChannelId::Channel(_), tc)) = cursor {
+            self.sender.send(GuiMessage::PlaySong(
+                self.song_id,
+                self.editor.text(),
+                Some(tc),
+            ));
+        }
+    }
+
+    fn play_song_at_cursor(&self) {
+        self.play_song_tick_counter(self.editor.cursor_tick_counter());
+    }
+
+    fn play_song_at_line_start(&self) {
+        self.play_song_tick_counter(self.editor.cursor_tick_counter_line_start());
     }
 
     fn pause_resume(&self) {
