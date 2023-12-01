@@ -994,7 +994,7 @@ var _target_h : u8 in zpTmp;
             channelSoA.portamento_direction[x] = a as i8;
 
             a = channelSoA.portamento_target_l[x];
-            y = channelSoA.portamento_target_h[x];
+            y = _target_h;
         }
         else {
             // portamento up
@@ -1029,7 +1029,7 @@ var _target_h : u8 in zpTmp;
                 channelSoA.portamento_direction[x] = a as i8;
 
                 a = channelSoA.portamento_target_l[x];
-                y = channelSoA.portamento_target_h[x];
+                y = _target_h;
             }
         }
 
