@@ -9,7 +9,7 @@ use super::command_parser::{
 };
 use super::identifier::Identifier;
 use super::instruments::{EnvelopeOverride, MmlInstrument};
-use super::{ChannelId, IdentifierStr, Section};
+use super::{ChannelId, IdentifierStr, MmlSoundEffect, Section};
 
 #[cfg(feature = "mml_tracking")]
 use super::note_tracking::CursorTracker;
@@ -20,12 +20,12 @@ use crate::bytecode::{
     BcTerminator, BcTicksKeyOff, BcTicksNoKeyOff, Bytecode, BytecodeContext, LoopCount,
     PitchOffsetPerTick, PlayNoteTicks, PortamentoVelocity, SubroutineId,
 };
-use crate::errors::{MmlChannelError, MmlError, ValueError};
+use crate::errors::{ErrorWithPos, MmlChannelError, MmlError, ValueError};
 use crate::file_pos::Line;
 use crate::notes::{Note, SEMITONES_PER_OCTAVE};
 use crate::pitch_table::PitchTable;
 use crate::songs::{Channel, LoopPoint, Subroutine};
-use crate::time::{TickClock, TickCounter, ZenLen};
+use crate::time::{TickClock, TickCounter, ZenLen, DEFAULT_ZENLEN};
 
 use std::cmp::max;
 use std::collections::HashMap;
@@ -939,5 +939,71 @@ impl<'a, 'b> MmlSongBytecodeGenerator<'a, 'b> {
         } else {
             Err(MmlChannelError { identifier, errors })
         }
+    }
+}
+
+pub fn parse_and_compile_sound_effect(
+    lines: &[Line],
+    pitch_table: &PitchTable,
+    instruments: &Vec<MmlInstrument>,
+    instruments_map: &HashMap<IdentifierStr, usize>,
+) -> Result<MmlSoundEffect, Vec<ErrorWithPos<MmlError>>> {
+    #[cfg(feature = "mml_tracking")]
+    let mut cursor_tracker = CursorTracker::new();
+
+    let mut parser = Parser::new(
+        ChannelId::SoundEffect,
+        lines,
+        instruments_map,
+        None,
+        DEFAULT_ZENLEN,
+        None, // No sections in sound effect
+        #[cfg(feature = "mml_tracking")]
+        &mut cursor_tracker,
+    );
+
+    let mut gen = ChannelBcGenerator::new(
+        Vec::new(),
+        pitch_table,
+        instruments,
+        None,
+        BytecodeContext::SoundEffect,
+    );
+
+    while let Some(c) = parser.next() {
+        match gen.process_command(c.command()) {
+            Ok(()) => (),
+            Err(e) => parser.add_error_range(c.pos().clone(), e),
+        }
+        if matches!(c.command(), MmlCommand::EndLoop(_)) {
+            parser.set_tick_counter(gen.bc.get_tick_counter_with_loop_flag());
+        }
+    }
+
+    let last_pos = *parser.peek_pos();
+    let tick_counter = gen.bc.get_tick_counter();
+
+    assert!(gen.loop_point.is_none());
+
+    let bytecode = match gen.bc.bytecode(BcTerminator::DisableChannel) {
+        Ok(b) => b,
+        Err((e, b)) => {
+            parser.add_error_range(last_pos.to_range(1), MmlError::BytecodeError(e));
+            b
+        }
+    };
+
+    let (_, errors) = parser.finalize();
+
+    if errors.is_empty() {
+        Ok(MmlSoundEffect {
+            bytecode,
+            tick_counter,
+
+            #[cfg(feature = "mml_tracking")]
+            cursor_tracker,
+        })
+    } else {
+        Err(errors)
     }
 }

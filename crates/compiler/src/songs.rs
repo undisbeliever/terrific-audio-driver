@@ -175,7 +175,7 @@ pub fn test_sample_song(
 }
 
 pub fn sound_effect_to_song(sfx: &CompiledSoundEffect) -> SongData {
-    sfx_bytecode_to_song(sfx.data())
+    sfx_bytecode_to_song(sfx.bytecode())
 }
 
 fn sfx_bytecode_to_song(bytecode: &[u8]) -> SongData {

@@ -221,12 +221,19 @@ pub enum BytecodeAssemblerError {
 }
 
 #[derive(Debug)]
+pub enum SoundEffectErrorList {
+    BytecodeErrors(Vec<ErrorWithLine<BytecodeAssemblerError>>),
+    MmlLineErrors(Vec<ErrorWithPos<MmlLineError>>),
+    MmlErrors(Vec<ErrorWithPos<MmlError>>),
+}
+
+#[derive(Debug)]
 pub struct SoundEffectError {
     pub sfx_name: String,
     pub sfx_line_no: u32,
     pub invalid_name: bool,
     pub duplicate_name: bool,
-    pub errors: Vec<ErrorWithLine<BytecodeAssemblerError>>,
+    pub errors: SoundEffectErrorList,
 }
 
 #[derive(Debug)]
@@ -351,6 +358,11 @@ pub enum MmlLineError {
     CannotFindInstrument(String),
     ExpectedFourAdsrArguments,
     DuplicateInstrumentName(String),
+
+    // Sound effect errors
+    HeaderInSoundEffect,
+    SubroutineInSoundEffect,
+    InvalidSoundEffectChannel,
 }
 
 #[derive(Debug)]
@@ -979,6 +991,13 @@ impl Display for MmlLineError {
             Self::CannotFindInstrument(name) => write!(f, "cannot find instrument: {}", name),
             Self::ExpectedFourAdsrArguments => write!(f, "adsr requires 4 arguments"),
             Self::DuplicateInstrumentName(s) => write!(f, "duplicate instrument name: {}", s),
+
+            Self::HeaderInSoundEffect => write!(f, "# headers not allowed in sound effects"),
+            Self::SubroutineInSoundEffect => write!(f, "subroutines not allowed in sound effects"),
+            Self::InvalidSoundEffectChannel => write!(
+                f,
+                "invalid channel (sound effects have only 1 single channel)"
+            ),
         }
     }
 }
@@ -1249,10 +1268,26 @@ fn fmt_indented_sound_effect_error(
         writeln!(f, "    {}{}: duplicate name: {}", line_prefix, line_no, error.sfx_name)?;
     }
 
-    for e in error.errors.iter().take(SFX_MML_ERROR_LIMIT) {
-        writeln!(f, "    {}{}: {}", line_prefix, e.0, e.1)?;
+    match &error.errors {
+        SoundEffectErrorList::BytecodeErrors(errors) => {
+            for e in errors.iter().take(SFX_MML_ERROR_LIMIT) {
+                writeln!(f, "    {}{}: {}", line_prefix, e.0, e.1)?;
+            }
+            plus_more_errors_line(f, "    ", errors.len())?;
+        }
+        SoundEffectErrorList::MmlLineErrors(errors) => {
+            for e in errors.iter().take(SFX_MML_ERROR_LIMIT) {
+                writeln!(f, "    {}{}:{} {}", line_prefix, e.0.line_number + line_no, e.0.line_char, e.1)?;
+            }
+            plus_more_errors_line(f, "    ", errors.len())?;
+        }
+        SoundEffectErrorList::MmlErrors(errors) => {
+            for e in errors.iter().take(SFX_MML_ERROR_LIMIT) {
+                writeln!(f, "    {}{}:{} {}", line_prefix, e.0.line_number + line_no, e.0.line_char, e.1)?;
+            }
+            plus_more_errors_line(f, "    ", errors.len())?;
+        }
     }
-    plus_more_errors_line(f, "    ", error.errors.len())?;
 
     Ok(())
 }
@@ -1274,7 +1309,17 @@ impl SoundEffectError {
 
         SfxErrorLines {
             offset,
-            lines: self.errors.iter().map(|e| e.0).collect(),
+            lines: match &self.errors {
+                SoundEffectErrorList::BytecodeErrors(errors) => {
+                    errors.iter().map(|e| e.0).collect()
+                }
+                SoundEffectErrorList::MmlLineErrors(errors) => {
+                    errors.iter().map(|e| e.0.line_number).collect()
+                }
+                SoundEffectErrorList::MmlErrors(errors) => {
+                    errors.iter().map(|e| e.0.line_number).collect()
+                }
+            },
         }
     }
 }

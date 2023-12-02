@@ -476,6 +476,7 @@ impl MmlEditorState {
                             let _ = write!(s, "!{} ", subroutine.identifier.as_str());
                         }
                     }
+                    ChannelId::SoundEffect => {}
                 };
 
                 let ticks = c.ticks.ticks.value();

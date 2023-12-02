@@ -25,6 +25,11 @@ pub(crate) struct MmlLines<'a> {
     pub sections: Vec<Section>,
 }
 
+pub(crate) struct MmlSfxLines<'a> {
+    pub instruments: Vec<(Identifier, Line<'a>)>,
+    pub mml: Vec<Line<'a>>,
+}
+
 /// MML line splitter
 
 // Assumes `line` starts with a non-whitespace character
@@ -118,7 +123,9 @@ fn validate_music_channels<'a>(
     }
 }
 
-pub(super) fn split_mml_lines(mml_text: &str) -> Result<MmlLines, Vec<ErrorWithPos<MmlLineError>>> {
+pub(super) fn split_mml_song_lines(
+    mml_text: &str,
+) -> Result<MmlLines, Vec<ErrorWithPos<MmlLineError>>> {
     let mut errors = Vec::new();
 
     if mml_text.len() > MAX_MML_TEXT_LENGTH {
@@ -239,6 +246,74 @@ pub(super) fn split_mml_lines(mml_text: &str) -> Result<MmlLines, Vec<ErrorWithP
             channels,
             sections,
         })
+    } else {
+        Err(errors)
+    }
+}
+
+pub(super) fn split_mml_sound_effect_lines(
+    mml_text: &str,
+) -> Result<MmlSfxLines, Vec<ErrorWithPos<MmlLineError>>> {
+    let mut errors = Vec::new();
+
+    if mml_text.len() > MAX_MML_TEXT_LENGTH {
+        errors.push(ErrorWithPos(
+            blank_file_range(),
+            MmlLineError::MmlTooLarge(mml_text.len()),
+        ));
+        return Err(errors);
+    }
+
+    let mut instruments = Vec::new();
+    let mut mml = Vec::new();
+
+    for line in split_lines(mml_text) {
+        let start_pos = line.position;
+
+        let line = match line.text.split_once(COMMENT_CHAR) {
+            Some((l, _comment)) => Line { text: l, ..line },
+            None => line,
+        };
+
+        match line.text.chars().next() {
+            Some('#') => errors.push(ErrorWithPos(
+                line.range(),
+                MmlLineError::HeaderInSoundEffect,
+            )),
+            Some('!') => errors.push(ErrorWithPos(
+                line.range(),
+                MmlLineError::SubroutineInSoundEffect,
+            )),
+            Some('@') => {
+                // instruments
+                match split_id_and_line(line, '@') {
+                    Ok((id, line)) => instruments.push((id, line)),
+                    Err(e) => errors.push(e),
+                }
+            }
+            Some(c) if c.is_ascii_alphanumeric() => {
+                // MML channel
+                let (id, line) = split_idstr_and_line(line);
+                if id == "A" {
+                    mml.push(Line {
+                        text: line.text,
+                        position: line.position,
+                    });
+                } else {
+                    errors.push(ErrorWithPos(
+                        start_pos.to_range(1),
+                        MmlLineError::InvalidSoundEffectChannel,
+                    ));
+                }
+            }
+            Some(_) => errors.push(ErrorWithPos(line.range(), MmlLineError::CannotParseLine)),
+
+            None => (),
+        }
+    }
+
+    if errors.is_empty() {
+        Ok(MmlSfxLines { instruments, mml })
     } else {
         Err(errors)
     }

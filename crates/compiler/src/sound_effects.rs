@@ -11,9 +11,11 @@ use crate::data::{
 };
 use crate::errors::{
     BytecodeAssemblerError, CombineSoundEffectsError, ErrorWithLine, FileError, SoundEffectError,
-    SoundEffectsFileError,
+    SoundEffectErrorList, SoundEffectsFileError,
 };
+use crate::mml;
 use crate::path::{ParentPathBuf, SourcePathBuf};
+use crate::pitch_table::PitchTable;
 
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
@@ -23,21 +25,70 @@ const COMMENT_CHAR: char = ';';
 const NEW_SFX_TOKEN_NO_NEWLINE: &str = "===";
 const NEW_SFX_TOKEN: &str = "\n===";
 const NEW_SFX_TOKEN_END: &str = "===";
+const MML_SFX_IDENTIFIER: &str = "MML\n";
+const MML_SFX_IDENTIFIER_NO_NEWLINE: &str = "MML";
 
 // ::TODO add MML based sound effects::
+pub enum SoundEffectData {
+    Mml(mml::MmlSoundEffect),
+    BytecodeAssembly(Vec<u8>),
+}
 
 pub struct CompiledSoundEffect {
     name: Name,
-    data: Vec<u8>,
+    data: SoundEffectData,
 }
 
 impl CompiledSoundEffect {
-    pub fn data(&self) -> &Vec<u8> {
-        &self.data
+    pub fn bytecode(&self) -> &[u8] {
+        match &self.data {
+            SoundEffectData::BytecodeAssembly(d) => d,
+            SoundEffectData::Mml(d) => d.bytecode(),
+        }
     }
 }
 
-fn compile_sound_effect(
+#[allow(clippy::too_many_arguments)]
+fn compile_mml_sound_effect(
+    name: &Name,
+    sfx: &str,
+    name_string: &str,
+    starting_line_number: u32,
+    instruments: &UniqueNamesList<Instrument>,
+    pitch_table: &PitchTable,
+    name_valid: bool,
+    duplicate_name: bool,
+) -> Result<CompiledSoundEffect, SoundEffectError> {
+    let invalid_name = !name_valid;
+
+    match mml::compile_sound_effect(sfx, instruments, pitch_table) {
+        Ok(o) => {
+            if !invalid_name && !duplicate_name {
+                Ok(CompiledSoundEffect {
+                    name: name.clone(),
+                    data: SoundEffectData::Mml(o),
+                })
+            } else {
+                Err(SoundEffectError {
+                    sfx_name: name_string.to_owned(),
+                    sfx_line_no: starting_line_number,
+                    invalid_name,
+                    duplicate_name,
+                    errors: SoundEffectErrorList::MmlErrors(Vec::new()),
+                })
+            }
+        }
+        Err(errors) => Err(SoundEffectError {
+            sfx_name: name_string.to_owned(),
+            sfx_line_no: starting_line_number,
+            invalid_name,
+            duplicate_name,
+            errors,
+        }),
+    }
+}
+
+fn compile_bytecode_sound_effect(
     name: &Name,
     sfx: &str,
     name_string: &str,
@@ -90,13 +141,12 @@ fn compile_sound_effect(
     }
 
     let invalid_name = !name_valid;
-
     let no_errors = !invalid_name && !duplicate_name && errors.is_empty();
 
     if let (Some(data), true) = (out, no_errors) {
         Ok(CompiledSoundEffect {
             name: name.clone(),
-            data,
+            data: SoundEffectData::BytecodeAssembly(data),
         })
     } else {
         Err(SoundEffectError {
@@ -104,7 +154,7 @@ fn compile_sound_effect(
             sfx_line_no: starting_line_number,
             invalid_name,
             duplicate_name,
-            errors,
+            errors: SoundEffectErrorList::BytecodeErrors(errors),
         })
     }
 }
@@ -112,6 +162,7 @@ fn compile_sound_effect(
 pub fn compile_sound_effects_file(
     sfx_file: &SoundEffectsFile,
     instruments: &UniqueNamesList<Instrument>,
+    pitch_table: &PitchTable,
 ) -> Result<Vec<CompiledSoundEffect>, SoundEffectsFileError> {
     let mut sound_effects = Vec::with_capacity(sfx_file.sound_effects.len());
     let mut names = HashSet::with_capacity(sfx_file.sound_effects.len());
@@ -126,15 +177,28 @@ pub fn compile_sound_effects_file(
             Err(_) => ("sfx".parse().unwrap(), false),
         };
 
-        match compile_sound_effect(
-            &name,
-            &sfx.sfx,
-            &sfx.name,
-            sfx.line_no + 1,
-            instruments,
-            name_valid,
-            duplicate_name,
-        ) {
+        let r = match &sfx.sfx {
+            SoundEffectText::BytecodeAssembly(text) => compile_bytecode_sound_effect(
+                &name,
+                text,
+                &sfx.name,
+                sfx.line_no + 1,
+                instruments,
+                name_valid,
+                duplicate_name,
+            ),
+            SoundEffectText::Mml(text) => compile_mml_sound_effect(
+                &name,
+                text,
+                &sfx.name,
+                sfx.line_no + 1,
+                instruments,
+                pitch_table,
+                name_valid,
+                duplicate_name,
+            ),
+        };
+        match r {
             Ok(s) => sound_effects.push(s),
             Err(e) => errors.push(e),
         }
@@ -163,7 +227,7 @@ fn build_sfx_map(
     let mut duplicates = Vec::new();
 
     for sfx in sound_effects {
-        if out.insert(&sfx.name, sfx.data.as_slice()).is_some() {
+        if out.insert(&sfx.name, sfx.bytecode()).is_some() {
             duplicates.push(sfx.name.to_string())
         }
     }
@@ -226,7 +290,7 @@ pub fn blank_compiled_sound_effects() -> CombinedSoundEffectsData {
 #[derive(Clone, Debug, PartialEq)]
 pub struct SoundEffectInput {
     pub name: Name,
-    pub sfx: String,
+    pub sfx: SoundEffectText,
 }
 
 pub fn convert_sfx_inputs_lossy(sound_effects: Vec<SoundEffectFileSfx>) -> Vec<SoundEffectInput> {
@@ -242,27 +306,46 @@ pub fn convert_sfx_inputs_lossy(sound_effects: Vec<SoundEffectFileSfx>) -> Vec<S
 pub fn compile_sound_effect_input(
     input: &SoundEffectInput,
     instruments: &UniqueNamesList<Instrument>,
+    pitch_table: &PitchTable,
 ) -> Result<CompiledSoundEffect, SoundEffectError> {
-    compile_sound_effect(
-        &input.name,
-        &input.sfx,
-        input.name.as_str(),
-        1,
-        instruments,
-        true,
-        false,
-    )
+    match &input.sfx {
+        SoundEffectText::BytecodeAssembly(text) => compile_bytecode_sound_effect(
+            &input.name,
+            text,
+            input.name.as_str(),
+            1,
+            instruments,
+            true,
+            false,
+        ),
+        SoundEffectText::Mml(text) => compile_mml_sound_effect(
+            &input.name,
+            text,
+            input.name.as_str(),
+            1,
+            instruments,
+            pitch_table,
+            true,
+            false,
+        ),
+    }
 }
 
 // Sound effects file
 // ==================
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum SoundEffectText {
+    BytecodeAssembly(String),
+    Mml(String),
+}
 
 // NOTE: fields are not validated
 #[derive(Debug, PartialEq)]
 pub struct SoundEffectFileSfx {
     pub name: String,
     pub line_no: u32, // Line number of the name line
-    pub sfx: String,
+    pub sfx: SoundEffectText,
 }
 
 // NOTE: fields are not validated
@@ -316,10 +399,21 @@ fn sfx_file_from_text_file(tf: TextFile) -> SoundEffectsFile {
             .trim_end_matches(NEW_SFX_TOKEN_END)
             .trim_end();
 
+        let sfx = match sfx_lines.strip_prefix(MML_SFX_IDENTIFIER) {
+            Some(s) => SoundEffectText::Mml(s.to_owned()),
+            None => {
+                if sfx_lines == MML_SFX_IDENTIFIER_NO_NEWLINE {
+                    SoundEffectText::Mml(String::new())
+                } else {
+                    SoundEffectText::BytecodeAssembly(sfx_lines.to_owned())
+                }
+            }
+        };
+
         sound_effects.push(SoundEffectFileSfx {
             name: name_line.to_owned(),
             line_no: line_no.try_into().unwrap(),
-            sfx: sfx_lines.to_owned(),
+            sfx,
         });
 
         line_no += count_lines_including_end(sfx_block);
@@ -356,7 +450,13 @@ pub fn build_sound_effects_file<'a>(
             out.push_str("=== ");
             out.push_str(sfx.name.as_str());
             out.push_str(" ===\n");
-            out.push_str(&sfx.sfx);
+            match &sfx.sfx {
+                SoundEffectText::BytecodeAssembly(s) => out.push_str(s),
+                SoundEffectText::Mml(s) => {
+                    out.push_str(MML_SFX_IDENTIFIER);
+                    out.push_str(s);
+                }
+            }
         }
     } else {
         out.push_str(header);
@@ -366,7 +466,13 @@ pub fn build_sound_effects_file<'a>(
         out.push_str("\n=== ");
         out.push_str(sfx.name.as_str());
         out.push_str(" ===\n");
-        out.push_str(&sfx.sfx);
+        match &sfx.sfx {
+            SoundEffectText::BytecodeAssembly(s) => out.push_str(s),
+            SoundEffectText::Mml(s) => {
+                out.push_str(MML_SFX_IDENTIFIER);
+                out.push_str(s);
+            }
+        }
     }
 
     out
@@ -390,6 +496,8 @@ d
 e
 
 
+=== empty_MML ===
+MML
 === last_empty ===
 "##;
 
@@ -412,27 +520,32 @@ e
                     SoundEffectFileSfx {
                         name: "test_first".to_owned(),
                         line_no: 1,
-                        sfx: "a\nb\n".to_owned(),
+                        sfx: SoundEffectText::BytecodeAssembly("a\nb\n".to_owned()),
                     },
                     SoundEffectFileSfx {
                         name: "test_one".to_owned(),
                         line_no: 5,
-                        sfx: "c".to_owned(),
+                        sfx: SoundEffectText::BytecodeAssembly("c".to_owned()),
                     },
                     SoundEffectFileSfx {
                         name: "empty".to_owned(),
                         line_no: 7,
-                        sfx: "".to_owned(),
+                        sfx: SoundEffectText::BytecodeAssembly("".to_owned()),
                     },
                     SoundEffectFileSfx {
                         name: "test_two".to_owned(),
                         line_no: 8,
-                        sfx: "d\ne\n\n".to_owned(),
+                        sfx: SoundEffectText::BytecodeAssembly("d\ne\n\n".to_owned()),
+                    },
+                    SoundEffectFileSfx {
+                        name: "empty_MML".to_owned(),
+                        line_no: 13,
+                        sfx: SoundEffectText::Mml("".to_owned()),
                     },
                     SoundEffectFileSfx {
                         name: "last_empty".to_owned(),
-                        line_no: 13,
-                        sfx: "".to_owned(),
+                        line_no: 15,
+                        sfx: SoundEffectText::BytecodeAssembly("".to_owned()),
                     }
                 ]
             }
@@ -446,6 +559,10 @@ e
 
 === test_first
 a
+
+=== test_MML ===
+MML
+@1 mml
 
 === test_only_newline ===
 
@@ -474,17 +591,22 @@ c
                     SoundEffectFileSfx {
                         name: "test_first".to_owned(),
                         line_no: 4,
-                        sfx: "a\n".to_owned(),
+                        sfx: SoundEffectText::BytecodeAssembly("a\n".to_owned()),
+                    },
+                    SoundEffectFileSfx {
+                        name: "test_MML".to_owned(),
+                        line_no: 7,
+                        sfx: SoundEffectText::Mml("@1 mml\n".to_owned()),
                     },
                     SoundEffectFileSfx {
                         name: "test_only_newline".to_owned(),
-                        line_no: 7,
-                        sfx: "".to_owned(),
+                        line_no: 11,
+                        sfx: SoundEffectText::BytecodeAssembly("".to_owned()),
                     },
                     SoundEffectFileSfx {
                         name: "last_not_empty".to_owned(),
-                        line_no: 9,
-                        sfx: "b\nc\n".to_owned(),
+                        line_no: 13,
+                        sfx: SoundEffectText::BytecodeAssembly("b\nc\n".to_owned()),
                     }
                 ]
             }

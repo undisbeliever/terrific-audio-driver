@@ -14,8 +14,7 @@ use compiler::{
     },
     mml::compile_mml,
     mml::MmlTickCountTable,
-    pitch_table::build_pitch_table,
-    pitch_table::PitchTable,
+    pitch_table::{build_pitch_table, PitchTable},
     samples::build_sample_and_instrument_data,
     songs::{song_duration_string, validate_song_size, SongData},
     sound_effects,
@@ -85,6 +84,7 @@ struct CompileCommonDataArgs {
 
 fn compile_sound_effects(
     pf: &UniqueNamesProjectFile,
+    pitch_table: &PitchTable,
 ) -> Result<sound_effects::CombinedSoundEffectsData, ()> {
     let sound_effects = match &pf.sound_effect_file {
         Some(sfx_file_source) => {
@@ -94,7 +94,11 @@ fn compile_sound_effects(
                     return Err(());
                 }
                 Ok(sfx_file) => {
-                    match sound_effects::compile_sound_effects_file(&sfx_file, &pf.instruments) {
+                    match sound_effects::compile_sound_effects_file(
+                        &sfx_file,
+                        &pf.instruments,
+                        pitch_table,
+                    ) {
                         Err(e) => {
                             eprintln!("{}", e.multiline_display());
                             return Err(());
@@ -129,18 +133,15 @@ fn compile_common_data(args: CompileCommonDataArgs) {
     let pf = load_project_file(&args.project_file);
 
     let samples = match build_sample_and_instrument_data(&pf) {
-        Ok(samples) => Ok(samples),
+        Ok(samples) => samples,
         Err(e) => {
-            eprintln!("{}", e.multiline_display());
-            Err(())
+            error!("{}", e.multiline_display());
         }
     };
 
-    let sfx = compile_sound_effects(&pf);
-
-    let (samples, sfx) = match (samples, sfx) {
-        (Ok(samples), Ok(sfx)) => (samples, sfx),
-        _ => error!("Error compiling common audio data"),
+    let sfx = match compile_sound_effects(&pf, samples.pitch_table()) {
+        Ok(sfx) => sfx,
+        Err(()) => error!("Error compiling sound effects"),
     };
 
     let cad = match build_common_audio_data(&samples, &sfx) {
@@ -343,7 +344,11 @@ fn check_project(args: CheckProjectArgs) {
         error!("{}", e.multiline_display())
     };
 
-    let sfx = compile_sound_effects(&pf);
+    let sfx = if let Ok(s) = &samples {
+        compile_sound_effects(&pf, s.pitch_table())
+    } else {
+        Err(())
+    };
 
     let (samples, sfx) = match (samples, sfx) {
         (Ok(samples), Ok(sfx)) => (samples, sfx),

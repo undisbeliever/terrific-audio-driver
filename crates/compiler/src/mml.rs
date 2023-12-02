@@ -20,18 +20,19 @@ pub mod command_parser;
 #[cfg(feature = "mml_tracking")]
 pub(crate) mod note_tracking;
 
-use self::bc_generator::MmlSongBytecodeGenerator;
+use self::bc_generator::{parse_and_compile_sound_effect, MmlSongBytecodeGenerator};
 use self::instruments::{build_instrument_map, parse_instruments};
-use self::line_splitter::split_mml_lines;
+use self::line_splitter::{split_mml_song_lines, split_mml_sound_effect_lines};
 use self::metadata::parse_headers;
 pub(crate) use identifier::{Identifier, IdentifierStr};
 
 use crate::data::{self, TextFile, UniqueNamesList};
 use crate::driver_constants::N_MUSIC_CHANNELS;
-use crate::errors::{MmlCompileErrors, SongError};
+use crate::errors::{MmlCompileErrors, SongError, SoundEffectErrorList};
 use crate::mml::song_duration::calc_song_duration;
 use crate::pitch_table::PitchTable;
 use crate::songs::{mml_to_song, song_header_size, SongData};
+use crate::time::TickCounter;
 
 use std::collections::HashMap;
 use std::ops::RangeInclusive;
@@ -56,6 +57,7 @@ pub use self::metadata::MetaData;
 pub enum ChannelId {
     Channel(char),
     Subroutine(u8),
+    SoundEffect,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -73,6 +75,28 @@ impl Section {
     }
 }
 
+pub struct MmlSoundEffect {
+    bytecode: Vec<u8>,
+    tick_counter: TickCounter,
+
+    #[cfg(feature = "mml_tracking")]
+    cursor_tracker: note_tracking::CursorTracker,
+}
+
+impl MmlSoundEffect {
+    pub fn bytecode(&self) -> &[u8] {
+        &self.bytecode
+    }
+    pub fn tick_counter(&self) -> TickCounter {
+        self.tick_counter
+    }
+
+    #[cfg(feature = "mml_tracking")]
+    pub fn cursor_tracker(&self) -> &note_tracking::CursorTracker {
+        &self.cursor_tracker
+    }
+}
+
 pub fn compile_mml(
     mml_file: &TextFile,
     song_name: Option<data::Name>,
@@ -87,7 +111,7 @@ pub fn compile_mml(
         channel_errors: Vec::new(),
     };
 
-    let lines = match split_mml_lines(&mml_file.contents) {
+    let lines = match split_mml_song_lines(&mml_file.contents) {
         Ok(l) => l,
         Err(e) => {
             errors.line_errors.extend(e);
@@ -182,4 +206,36 @@ pub fn compile_mml(
         #[cfg(feature = "mml_tracking")]
         tracking,
     )
+}
+
+pub fn compile_sound_effect(
+    sfx: &str,
+    inst_map: &UniqueNamesList<data::Instrument>,
+    pitch_table: &PitchTable,
+) -> Result<MmlSoundEffect, SoundEffectErrorList> {
+    let lines = match split_mml_sound_effect_lines(sfx) {
+        Ok(l) => l,
+        Err(e) => return Err(SoundEffectErrorList::MmlLineErrors(e)),
+    };
+
+    let (instruments, inst_errors) = parse_instruments(lines.instruments, inst_map);
+    let mut line_errors = inst_errors;
+
+    let instruments_map = match build_instrument_map(&instruments) {
+        Ok(map) => map,
+        Err(e) => {
+            line_errors.extend(e);
+            HashMap::new()
+        }
+    };
+
+    if !line_errors.is_empty() {
+        return Err(SoundEffectErrorList::MmlLineErrors(line_errors));
+    }
+    drop(line_errors);
+
+    match parse_and_compile_sound_effect(&lines.mml, pitch_table, &instruments, &instruments_map) {
+        Ok(o) => Ok(o),
+        Err(e) => Err(SoundEffectErrorList::MmlErrors(e)),
+    }
 }

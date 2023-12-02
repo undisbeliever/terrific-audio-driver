@@ -612,9 +612,9 @@ fn create_sfx_compiler<'a>(
                 return None;
             }
         };
-        match compile_sound_effect_input(sfx, &dep.instruments) {
+        match compile_sound_effect_input(sfx, &dep.instruments, &dep.pitch_table) {
             Ok(sfx) => {
-                sender.send(CompilerOutput::SoundEffect(id, Ok(sfx.data().len())));
+                sender.send(CompilerOutput::SoundEffect(id, Ok(sfx.bytecode().len())));
                 Some(sfx)
             }
             Err(e) => {
@@ -654,7 +654,7 @@ fn calc_sfx_data_size(
         .iter()
         .filter_map(|name| sound_effects.get_output_for_name(name))
         .filter_map(Option::as_ref)
-        .map(|o| o.data().len())
+        .map(|o| o.bytecode().len())
         .sum();
 
     let table_size = sfx_export_order.items().len() * COMMON_DATA_BYTES_PER_SOUND_EFFECT;
