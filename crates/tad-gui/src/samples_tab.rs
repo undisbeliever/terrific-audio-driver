@@ -344,13 +344,22 @@ impl InstrumentEditor {
             LoopChoice::OverrideBrrLoopPoint
             | LoopChoice::LoopWithFilter
             | LoopChoice::LoopResetFilter => {
-                let lp = loop_setting_to_loop_point(&self.data.loop_setting);
+                let lp = match self.data.loop_setting {
+                    LoopSetting::OverrideBrrLoopPoint(lp) => lp,
+                    LoopSetting::LoopWithFilter(lp) => lp,
+                    LoopSetting::LoopResetFilter(lp) => lp,
+                    LoopSetting::DupeBlockHack(_) => 0,
+                    LoopSetting::None => 0,
+                };
                 w.set_value(&lp.to_string());
                 w.activate();
             }
 
             LoopChoice::DupeBlockHack => {
-                let bc = loop_setting_to_block_count(&self.data.loop_setting);
+                let bc = match self.data.loop_setting {
+                    LoopSetting::DupeBlockHack(dbh) => dbh,
+                    _ => 2,
+                };
                 w.set_value(&bc.to_string());
                 w.activate();
             }
@@ -1010,28 +1019,6 @@ impl CompilerOutputGui<InstrumentOutput> for SamplesTab {
                 self.console.scroll(0, 0);
             }
         }
-    }
-}
-
-fn loop_setting_to_loop_point(l: &LoopSetting) -> usize {
-    match *l {
-        LoopSetting::None => 0,
-        LoopSetting::OverrideBrrLoopPoint(lp) => lp,
-        LoopSetting::LoopWithFilter(lp) => lp,
-        LoopSetting::LoopResetFilter(lp) => lp,
-        LoopSetting::DupeBlockHack(dbh) => dbh.checked_mul(16).unwrap_or(0),
-    }
-}
-
-fn loop_setting_to_block_count(l: &LoopSetting) -> usize {
-    match *l {
-        LoopSetting::None => 0,
-
-        LoopSetting::OverrideBrrLoopPoint(lp)
-        | LoopSetting::LoopWithFilter(lp)
-        | LoopSetting::LoopResetFilter(lp) => lp.checked_div(16).unwrap_or(0),
-
-        LoopSetting::DupeBlockHack(dbh) => dbh,
     }
 }
 
