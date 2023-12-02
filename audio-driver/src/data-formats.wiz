@@ -45,7 +45,10 @@ let STARTING_VOLUME = 96;
 
 let MAX_DIR_ITEMS = 0x100;
 let MAX_INSTRUMENTS = 0x100;
-let MAX_SOUND_EFFECTS = 192;
+
+// Must be < 0xff.
+// In S-CPU code, `0xff` is NULL (no sound effect in queue).
+let MAX_SOUND_EFFECTS = 254;
 
 
 
