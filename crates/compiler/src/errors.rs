@@ -215,6 +215,8 @@ pub enum BytecodeAssemblerError {
 
     InvalidKeyoffArgument(String),
     NoDirectionInPortamentoVelocity,
+
+    NoTicksInSoundEffect,
 }
 
 #[derive(Debug)]
@@ -223,7 +225,6 @@ pub struct SoundEffectError {
     pub sfx_line_no: u32,
     pub invalid_name: bool,
     pub duplicate_name: bool,
-    pub no_notes: bool,
     pub errors: Vec<ErrorWithLine<BytecodeAssemblerError>>,
 }
 
@@ -811,6 +812,8 @@ impl Display for BytecodeAssemblerError {
             Self::NoDirectionInPortamentoVelocity => {
                 write!(f, "missing + or - in portamento velocity")
             }
+
+            Self::NoTicksInSoundEffect => write!(f, "No notes in sound effect"),
         }
     }
 }
@@ -1239,9 +1242,6 @@ fn fmt_indented_sound_effect_error(
     if error.duplicate_name {
         writeln!(f, "    {}{}: duplicate name: {}", line_prefix, line_no, error.sfx_name)?;
     }
-    if error.no_notes {
-        writeln!(f, "    {}{}: no notes in sound effect", line_prefix, line_no)?;
-    }
 
     for e in error.errors.iter().take(SFX_MML_ERROR_LIMIT) {
         writeln!(f, "    {}{}: {}", line_prefix, e.0, e.1)?;
@@ -1263,9 +1263,6 @@ impl SoundEffectError {
             offset += 1
         }
         if self.duplicate_name {
-            offset += 1
-        }
-        if self.no_notes {
             offset += 1
         }
 

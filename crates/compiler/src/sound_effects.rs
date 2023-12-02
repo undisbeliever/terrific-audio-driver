@@ -10,7 +10,8 @@ use crate::data::{
     load_text_file_with_limit, Instrument, Name, TextFile, UniqueNamesList, UniqueNamesProjectFile,
 };
 use crate::errors::{
-    CombineSoundEffectsError, ErrorWithLine, FileError, SoundEffectError, SoundEffectsFileError,
+    BytecodeAssemblerError, CombineSoundEffectsError, ErrorWithLine, FileError, SoundEffectError,
+    SoundEffectsFileError,
 };
 use crate::path::{ParentPathBuf, SourcePathBuf};
 
@@ -81,11 +82,16 @@ fn compile_sound_effect(
         }
     };
 
-    // ::TODO move these checks into the Bytecode.get_bytecode()::
-    let no_notes = tick_counter.is_zero();
+    if tick_counter.is_zero() {
+        errors.push(ErrorWithLine(
+            last_line_no,
+            BytecodeAssemblerError::NoTicksInSoundEffect,
+        ));
+    }
+
     let invalid_name = !name_valid;
 
-    let no_errors = !no_notes && !invalid_name && !duplicate_name && errors.is_empty();
+    let no_errors = !invalid_name && !duplicate_name && errors.is_empty();
 
     if let (Some(data), true) = (out, no_errors) {
         Ok(CompiledSoundEffect {
@@ -98,7 +104,6 @@ fn compile_sound_effect(
             sfx_line_no: starting_line_number,
             invalid_name,
             duplicate_name,
-            no_notes,
             errors,
         })
     }
