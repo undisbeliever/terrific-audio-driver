@@ -560,15 +560,19 @@ impl ChannelBcGenerator<'_> {
         match command {
             MmlCommand::NoCommand => (),
 
-            &MmlCommand::SetLoopPoint => {
-                if self.loop_point.is_some() {
-                    return Err(MmlError::LoopPointAlreadySet);
+            &MmlCommand::SetLoopPoint => match self.bc.get_context() {
+                BytecodeContext::SongChannel => {
+                    if self.loop_point.is_some() {
+                        return Err(MmlError::LoopPointAlreadySet);
+                    }
+                    self.loop_point = Some(LoopPoint {
+                        bytecode_offset: self.bc.get_bytecode_len(),
+                        tick_counter: self.bc.get_tick_counter(),
+                    })
                 }
-                self.loop_point = Some(LoopPoint {
-                    bytecode_offset: self.bc.get_bytecode_len(),
-                    tick_counter: self.bc.get_tick_counter(),
-                })
-            }
+                BytecodeContext::SongSubroutine => return Err(MmlError::CannotSetLoopPoint),
+                &BytecodeContext::SoundEffect => return Err(MmlError::CannotSetLoopPoint),
+            },
 
             &MmlCommand::SetInstrument(inst_index) => {
                 self.set_instrument(inst_index)?;

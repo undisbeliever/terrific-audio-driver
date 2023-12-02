@@ -419,6 +419,10 @@ impl Bytecode {
         }
     }
 
+    pub fn get_context(&self) -> &BytecodeContext {
+        &self.context
+    }
+
     pub fn get_tick_counter(&self) -> TickCounter {
         self.tick_counter
     }
