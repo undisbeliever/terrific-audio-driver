@@ -4,7 +4,7 @@
 //
 // SPDX-License-Identifier: MIT
 
-use crate::bytecode::BcTerminator;
+use crate::bytecode::{BcTerminator, BytecodeContext};
 use crate::bytecode_assembler::BytecodeAssembler;
 use crate::data::{
     load_text_file_with_limit, Instrument, Name, TextFile, UniqueNamesList, UniqueNamesProjectFile,
@@ -48,7 +48,7 @@ fn compile_sound_effect(
 ) -> Result<CompiledSoundEffect, SoundEffectError> {
     let mut errors = Vec::new();
 
-    let mut bc = BytecodeAssembler::new(instruments, None, false, true);
+    let mut bc = BytecodeAssembler::new(instruments, None, BytecodeContext::SoundEffect);
 
     let mut last_line_no: u32 = starting_line_number;
 

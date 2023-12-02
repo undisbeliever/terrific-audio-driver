@@ -17,8 +17,8 @@ use super::note_tracking::CursorTracker;
 use crate::songs::{BytecodePos, SongBcTracking};
 
 use crate::bytecode::{
-    BcTerminator, BcTicksKeyOff, BcTicksNoKeyOff, Bytecode, LoopCount, PitchOffsetPerTick,
-    PlayNoteTicks, PortamentoVelocity, SubroutineId,
+    BcTerminator, BcTicksKeyOff, BcTicksNoKeyOff, Bytecode, BytecodeContext, LoopCount,
+    PitchOffsetPerTick, PlayNoteTicks, PortamentoVelocity, SubroutineId,
 };
 use crate::errors::{MmlChannelError, MmlError, ValueError};
 use crate::file_pos::Line;
@@ -73,13 +73,15 @@ impl ChannelBcGenerator<'_> {
         pitch_table: &'a PitchTable,
         instruments: &'a Vec<MmlInstrument>,
         subroutines: Option<&'a Vec<Subroutine>>,
-        is_subroutine: bool,
+        context: BytecodeContext,
     ) -> ChannelBcGenerator<'a> {
+        let is_subroutine = matches!(context, BytecodeContext::SongSubroutine);
+
         ChannelBcGenerator {
             pitch_table,
             instruments,
             subroutines,
-            bc: Bytecode::new_append_to_vec(bc_data, is_subroutine, false),
+            bc: Bytecode::new_append_to_vec(bc_data, context),
             tempo_changes: Vec::new(),
             instrument: None,
             prev_slurred_note: None,
@@ -815,8 +817,13 @@ impl<'a, 'b> MmlSongBytecodeGenerator<'a, 'b> {
             &mut self.cursor_tracker,
         );
 
-        let mut gen =
-            ChannelBcGenerator::new(song_data, self.pitch_table, self.instruments, None, true);
+        let mut gen = ChannelBcGenerator::new(
+            song_data,
+            self.pitch_table,
+            self.instruments,
+            None,
+            BytecodeContext::SongSubroutine,
+        );
 
         Self::parse_and_compile(
             &mut parser,
@@ -883,7 +890,7 @@ impl<'a, 'b> MmlSongBytecodeGenerator<'a, 'b> {
             self.pitch_table,
             self.instruments,
             self.subroutines,
-            false,
+            BytecodeContext::SongChannel,
         );
 
         Self::parse_and_compile(

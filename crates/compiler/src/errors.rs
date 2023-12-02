@@ -194,6 +194,7 @@ pub enum BytecodeError {
     SkipLastLoopOutOfBounds(usize),
 
     SubroutineCallInSubroutine,
+    SubroutineCallInSoundEffect,
     ReturnInNonSubroutine,
 
     CannotChangeTickClockInASoundEffect,
@@ -781,6 +782,9 @@ impl Display for BytecodeError {
             }
 
             Self::SubroutineCallInSubroutine => write!(f, "cannot call subroutine in a subroutine"),
+            Self::SubroutineCallInSoundEffect => {
+                write!(f, "cannot call subroutine in a sound effect")
+            }
             Self::ReturnInNonSubroutine => {
                 write!(f, "return_from_subroutine instruction in a non-subroutine")
             }

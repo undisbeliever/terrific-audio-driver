@@ -897,7 +897,11 @@ fn assemble_channel_bytecode(
     bc_asm: &[&str],
     instruments: &UniqueNamesList<data::Instrument>,
 ) -> Vec<u8> {
-    let mut bc = bytecode_assembler::BytecodeAssembler::new(instruments, None, false, false);
+    let mut bc = bytecode_assembler::BytecodeAssembler::new(
+        instruments,
+        None,
+        bytecode_assembler::BytecodeContext::SongChannel,
+    );
 
     for line in bc_asm {
         bc.parse_line(line).unwrap();

@@ -38,6 +38,12 @@ u8_value_newtype!(
     u8::MAX
 );
 
+pub enum BytecodeContext {
+    SongSubroutine,
+    SongChannel,
+    SoundEffect,
+}
+
 // Using lower case to match bytecode names in the audio-driver source code.
 pub mod opcodes {
     // opcodes 0x00 - 0xbf are play_note opcodes
@@ -386,8 +392,7 @@ struct LoopState {
 }
 
 pub struct Bytecode {
-    is_subroutine: bool,
-    is_sound_effect: bool,
+    context: BytecodeContext,
     bytecode: Vec<u8>,
 
     tick_counter: TickCounter,
@@ -397,17 +402,16 @@ pub struct Bytecode {
 }
 
 impl Bytecode {
-    pub fn new(is_subroutine: bool, is_sound_effect: bool) -> Bytecode {
-        Self::new_append_to_vec(Vec::new(), is_subroutine, is_sound_effect)
+    pub fn new(context: BytecodeContext) -> Bytecode {
+        Self::new_append_to_vec(Vec::new(), context)
     }
 
     // Instead of creating a new `Vec<u8>` to hold the bytecode, write the data to the end of `vec`.
     // Takes ownership of the `Vec<u8>`.
     // The `Vec<u8>` can be taken out of `Bytecode` with `Self::bytecode()`.
-    pub fn new_append_to_vec(vec: Vec<u8>, is_subroutine: bool, is_sound_effect: bool) -> Bytecode {
+    pub fn new_append_to_vec(vec: Vec<u8>, context: BytecodeContext) -> Bytecode {
         Bytecode {
-            is_subroutine,
-            is_sound_effect,
+            context,
             bytecode: vec,
             tick_counter: TickCounter::new(0),
             loop_stack: Vec::new(),
@@ -449,7 +453,9 @@ impl Bytecode {
             ));
         }
 
-        if !self.is_subroutine && terminator == BcTerminator::ReturnFromSubroutine {
+        if terminator == BcTerminator::ReturnFromSubroutine
+            && !matches!(self.context, BytecodeContext::SongSubroutine)
+        {
             return Err((BytecodeError::ReturnInNonSubroutine, self.bytecode));
         }
 
@@ -618,10 +624,10 @@ impl Bytecode {
             return Err(BytecodeError::TooManyLoops);
         }
 
-        if self.is_subroutine {
-            Ok(MAX_NESTED_LOOPS - n_loops)
-        } else {
-            Ok(n_loops - 1)
+        match self.context {
+            BytecodeContext::SongSubroutine => Ok(MAX_NESTED_LOOPS - n_loops),
+            BytecodeContext::SongChannel => Ok(n_loops - 1),
+            BytecodeContext::SoundEffect => Ok(n_loops - 1),
         }
     }
 
@@ -766,8 +772,12 @@ impl Bytecode {
     }
 
     pub fn call_subroutine(&mut self, subroutine: SubroutineId) -> Result<(), BytecodeError> {
-        if self.is_subroutine {
-            return Err(BytecodeError::SubroutineCallInSubroutine);
+        match self.context {
+            BytecodeContext::SongSubroutine => {
+                return Err(BytecodeError::SubroutineCallInSubroutine)
+            }
+            BytecodeContext::SongChannel => (),
+            BytecodeContext::SoundEffect => return Err(BytecodeError::SubroutineCallInSoundEffect),
         }
 
         self.tick_counter += subroutine.tick_counter;
@@ -784,8 +794,11 @@ impl Bytecode {
     }
 
     pub fn set_song_tick_clock(&mut self, tick_clock: TickClock) -> Result<(), BytecodeError> {
-        if self.is_sound_effect {
-            return Err(BytecodeError::CannotChangeTickClockInASoundEffect);
+        match self.context {
+            BytecodeContext::SoundEffect => {
+                return Err(BytecodeError::CannotChangeTickClockInASoundEffect)
+            }
+            BytecodeContext::SongChannel | BytecodeContext::SongSubroutine => (),
         }
 
         emit_bytecode!(self, opcodes::SET_SONG_TICK_CLOCK, tick_clock.as_u8());

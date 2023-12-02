@@ -15,7 +15,7 @@ use crate::notes::Note;
 use crate::time::TickCounter;
 use crate::value_newtypes::ValueNewType;
 
-pub use crate::bytecode::BcTerminator;
+pub use crate::bytecode::{BcTerminator, BytecodeContext};
 
 use std::collections::HashMap;
 
@@ -53,11 +53,10 @@ impl BytecodeAssembler<'_, '_> {
     pub fn new<'a, 'b>(
         instruments: &'a UniqueNamesList<Instrument>,
         subroutines: Option<&'b SubroutinesMap<'b>>,
-        is_subroutine: bool,
-        is_sound_effect: bool,
+        context: BytecodeContext,
     ) -> BytecodeAssembler<'a, 'b> {
         BytecodeAssembler {
-            bc: Bytecode::new(is_subroutine, is_sound_effect),
+            bc: Bytecode::new(context),
             instruments,
             subroutines,
         }

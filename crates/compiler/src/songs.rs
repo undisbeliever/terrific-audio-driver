@@ -145,7 +145,7 @@ pub fn test_sample_song(
     note_length: u32,
     envelope: Option<Envelope>,
 ) -> Result<SongData, ValueError> {
-    let mut bc = Bytecode::new(false, true);
+    let mut bc = Bytecode::new(crate::bytecode::BytecodeContext::SongChannel);
 
     let inst = InstrumentId::try_from(instrument)?;
 
