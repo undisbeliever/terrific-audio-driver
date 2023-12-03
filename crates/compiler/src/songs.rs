@@ -337,7 +337,7 @@ pub fn song_duration_string(duration: Option<Duration>) -> String {
             let minutes = ms / 60_000;
             let seconds = (ms / 1_000) % 60;
 
-            format!("{}:{}", minutes, seconds)
+            format!("{}:{:02}", minutes, seconds)
         }
         None => "unknown".to_owned(),
     }
