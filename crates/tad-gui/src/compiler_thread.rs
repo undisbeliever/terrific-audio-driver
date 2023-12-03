@@ -103,7 +103,7 @@ pub enum ToCompiler {
 }
 
 pub type InstrumentOutput = Result<usize, errors::SampleError>;
-pub type SoundEffectOutput = Result<usize, SfxError>;
+pub type SoundEffectOutput = Result<Arc<CompiledSoundEffect>, SfxError>;
 pub type SongOutput = Result<Arc<SongData>, SongError>;
 
 #[derive(Debug)]
@@ -603,7 +603,7 @@ fn build_play_sample_data(
 fn create_sfx_compiler<'a>(
     dependencies: &'a Option<SongDependencies>,
     sender: &'a Sender,
-) -> impl (Fn(ItemId, &SoundEffectInput) -> Option<CompiledSoundEffect>) + 'a {
+) -> impl (Fn(ItemId, &SoundEffectInput) -> Option<Arc<CompiledSoundEffect>>) + 'a {
     move |id, sfx| {
         let dep = match dependencies.as_ref() {
             Some(d) => d,
@@ -614,7 +614,8 @@ fn create_sfx_compiler<'a>(
         };
         match compile_sound_effect_input(sfx, &dep.instruments, &dep.pitch_table) {
             Ok(sfx) => {
-                sender.send(CompilerOutput::SoundEffect(id, Ok(sfx.bytecode().len())));
+                let sfx = Arc::from(sfx);
+                sender.send(CompilerOutput::SoundEffect(id, Ok(sfx.clone())));
                 Some(sfx)
             }
             Err(e) => {
@@ -627,7 +628,7 @@ fn create_sfx_compiler<'a>(
 
 fn count_missing_sfx(
     sfx_export_order: &IList<data::Name>,
-    sound_effects: &CList<SoundEffectInput, Option<CompiledSoundEffect>>,
+    sound_effects: &CList<SoundEffectInput, Option<Arc<CompiledSoundEffect>>>,
     sender: &Sender,
 ) {
     if sound_effects.items().is_empty() {
@@ -647,7 +648,7 @@ fn count_missing_sfx(
 
 fn calc_sfx_data_size(
     sfx_export_order: &IList<data::Name>,
-    sound_effects: &CList<SoundEffectInput, Option<CompiledSoundEffect>>,
+    sound_effects: &CList<SoundEffectInput, Option<Arc<CompiledSoundEffect>>>,
 ) -> usize {
     let sfx_size: usize = sfx_export_order
         .items()
@@ -680,7 +681,7 @@ fn create_song_dependencies(
     pitch_table: PitchTable,
     common_audio_data_no_sfx: &CommonAudioData,
     sfx_export_order: &IList<data::Name>,
-    sound_effects: &CList<SoundEffectInput, Option<CompiledSoundEffect>>,
+    sound_effects: &CList<SoundEffectInput, Option<Arc<CompiledSoundEffect>>>,
 ) -> Option<SongDependencies> {
     match data::validate_instrument_names(instruments.items().to_vec()) {
         Ok(instruments) => Some(SongDependencies {
@@ -940,7 +941,7 @@ fn update_sfx_data_size_and_recheck_all_songs(
     song_dependencies: &mut Option<SongDependencies>,
     songs: &mut SongCompiler,
     sfx_export_order: &IList<data::Name>,
-    sound_effects: &CList<SoundEffectInput, Option<CompiledSoundEffect>>,
+    sound_effects: &CList<SoundEffectInput, Option<Arc<CompiledSoundEffect>>>,
     sender: &Sender,
 ) {
     let sfx_data_size = calc_sfx_data_size(sfx_export_order, sound_effects);

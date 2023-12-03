@@ -28,12 +28,13 @@ const NEW_SFX_TOKEN_END: &str = "===";
 const MML_SFX_IDENTIFIER: &str = "MML\n";
 const MML_SFX_IDENTIFIER_NO_NEWLINE: &str = "MML";
 
-// ::TODO add MML based sound effects::
+#[derive(Debug)]
 pub enum SoundEffectData {
     Mml(mml::MmlSoundEffect),
     BytecodeAssembly(Vec<u8>),
 }
 
+#[derive(Debug)]
 pub struct CompiledSoundEffect {
     name: Name,
     data: SoundEffectData,

@@ -75,6 +75,7 @@ impl Section {
     }
 }
 
+#[derive(Debug)]
 pub struct MmlSoundEffect {
     bytecode: Vec<u8>,
     tick_counter: TickCounter,

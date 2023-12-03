@@ -528,8 +528,10 @@ impl CompilerOutputGui<SoundEffectOutput> for SoundEffectsTab {
         match compiler_output {
             None => self.console_buffer.set_text(""),
             Some(Ok(o)) => {
-                self.console_buffer
-                    .set_text(&format!("Sound effect compiled successfully: {} bytes", o));
+                self.console_buffer.set_text(&format!(
+                    "Sound effect compiled successfully: {} bytes",
+                    o.bytecode().len()
+                ));
                 self.console.set_text_color(Color::Foreground);
                 self.state.borrow_mut().error_lines = None;
             }
