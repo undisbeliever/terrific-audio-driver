@@ -884,7 +884,7 @@ where
     type RowType;
 
     const CAN_CLONE: bool;
-    const CAN_EDIT: bool = false;
+    const CAN_EDIT: bool;
 
     fn headers() -> Vec<String>;
     fn type_name() -> &'static str;

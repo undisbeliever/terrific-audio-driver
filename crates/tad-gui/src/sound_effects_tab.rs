@@ -72,6 +72,7 @@ impl TableMapping for SoundEffectMapping {
     type RowType = RowWithStatus<SimpleRow<1>>;
 
     const CAN_CLONE: bool = true;
+    const CAN_EDIT: bool = false;
 
     fn type_name() -> &'static str {
         "sound effect"
