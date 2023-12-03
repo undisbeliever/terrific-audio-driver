@@ -528,9 +528,16 @@ impl CompilerOutputGui<SoundEffectOutput> for SoundEffectsTab {
         match compiler_output {
             None => self.console_buffer.set_text(""),
             Some(Ok(o)) => {
+                let bc_len = o.bytecode().len();
+                let tc = o.tick_counter();
+                let duration_ms = o.duration().as_millis();
+
                 self.console_buffer.set_text(&format!(
-                    "Sound effect compiled successfully: {} bytes",
-                    o.bytecode().len()
+                    "Sound effect compiled successfully: {} bytes\n{} ticks {}.{:03} seconds",
+                    bc_len,
+                    tc.value(),
+                    duration_ms / 1000,
+                    duration_ms % 1000,
                 ));
                 self.console.set_text_color(Color::Foreground);
                 self.state.borrow_mut().error_lines = None;

@@ -9,6 +9,7 @@ use crate::bytecode_assembler::BytecodeAssembler;
 use crate::data::{
     load_text_file_with_limit, Instrument, Name, TextFile, UniqueNamesList, UniqueNamesProjectFile,
 };
+use crate::driver_constants::SFX_TICK_CLOCK;
 use crate::errors::{
     BytecodeAssemblerError, CombineSoundEffectsError, ErrorWithLine, FileError, SoundEffectError,
     SoundEffectErrorList, SoundEffectsFileError,
@@ -16,9 +17,11 @@ use crate::errors::{
 use crate::mml;
 use crate::path::{ParentPathBuf, SourcePathBuf};
 use crate::pitch_table::PitchTable;
+use crate::time::{TickClock, TickCounter};
 
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
+use std::time::Duration;
 
 const COMMENT_CHAR: char = ';';
 
@@ -31,7 +34,7 @@ const MML_SFX_IDENTIFIER_NO_NEWLINE: &str = "MML";
 #[derive(Debug)]
 pub enum SoundEffectData {
     Mml(mml::MmlSoundEffect),
-    BytecodeAssembly(Vec<u8>),
+    BytecodeAssembly(Vec<u8>, TickCounter),
 }
 
 #[derive(Debug)]
@@ -43,9 +46,21 @@ pub struct CompiledSoundEffect {
 impl CompiledSoundEffect {
     pub fn bytecode(&self) -> &[u8] {
         match &self.data {
-            SoundEffectData::BytecodeAssembly(d) => d,
+            SoundEffectData::BytecodeAssembly(d, _) => d,
             SoundEffectData::Mml(d) => d.bytecode(),
         }
+    }
+
+    pub fn tick_counter(&self) -> TickCounter {
+        match &self.data {
+            SoundEffectData::BytecodeAssembly(_, tc) => *tc,
+            SoundEffectData::Mml(d) => d.tick_counter(),
+        }
+    }
+
+    pub fn duration(&self) -> Duration {
+        self.tick_counter()
+            .to_duration(TickClock::try_from(SFX_TICK_CLOCK).unwrap())
     }
 }
 
@@ -147,7 +162,7 @@ fn compile_bytecode_sound_effect(
     if let (Some(data), true) = (out, no_errors) {
         Ok(CompiledSoundEffect {
             name: name.clone(),
-            data: SoundEffectData::BytecodeAssembly(data),
+            data: SoundEffectData::BytecodeAssembly(data, tick_counter),
         })
     } else {
         Err(SoundEffectError {

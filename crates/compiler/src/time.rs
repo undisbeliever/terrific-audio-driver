@@ -4,6 +4,10 @@
 //
 // SPDX-License-Identifier: MIT
 
+#![allow(clippy::assertions_on_constants)]
+
+use std::time::Duration;
+
 use crate::errors::ValueError;
 use crate::value_newtypes::u8_value_newtype;
 
@@ -67,6 +71,16 @@ impl TickCounter {
 
     pub fn is_zero(&self) -> bool {
         self.value == 0
+    }
+
+    pub fn to_duration(&self, clock: TickClock) -> Duration {
+        const _: () = assert!(1_000_000 % TIMER_HZ == 0);
+        const MICRO_MUL: u64 = 1_000_000 / TIMER_HZ as u64;
+
+        let ticks = u64::from(self.value());
+        let clock = u64::from(clock.as_u8());
+
+        Duration::from_micros(ticks * clock * MICRO_MUL)
     }
 }
 
