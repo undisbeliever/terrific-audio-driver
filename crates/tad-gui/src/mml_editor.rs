@@ -8,11 +8,12 @@ use crate::audio_thread::AudioMonitorData;
 use crate::helpers::ch_units_to_width;
 
 use compiler::driver_constants::N_MUSIC_CHANNELS;
-use compiler::errors::{MmlChannelError, MmlCompileErrors};
+use compiler::errors::{MmlChannelError, MmlCompileErrors, SoundEffectError, SoundEffectErrorList};
 use compiler::mml::command_parser::Quantization;
-use compiler::mml::{ChannelId, FIRST_MUSIC_CHANNEL, LAST_MUSIC_CHANNEL};
+use compiler::mml::{ChannelId, CursorTracker, FIRST_MUSIC_CHANNEL, LAST_MUSIC_CHANNEL};
 use compiler::songs::{BytecodePos, SongBcTracking, SongData};
-use compiler::time::TickCounter;
+use compiler::sound_effects::CompiledSoundEffect;
+use compiler::time::{TickCounter, ZenLen, DEFAULT_ZENLEN};
 use compiler::FilePosRange;
 
 use std::cell::RefCell;
@@ -27,17 +28,65 @@ use fltk::frame::Frame;
 use fltk::prelude::{DisplayExt, WidgetBase, WidgetExt};
 use fltk::text::{StyleTableEntryExt, TextAttr, TextBuffer, TextEditor, WrapMode};
 
+pub enum TextErrorRef<'a> {
+    Song(&'a MmlCompileErrors),
+    SoundEffect(&'a SoundEffectError),
+}
+
+#[derive(Clone, Copy)]
+pub enum TextFormat {
+    Mml,
+    Bytecode,
+}
+
+pub enum CompiledEditorData {
+    Song(Arc<SongData>),
+    SoundEffect(Arc<CompiledSoundEffect>),
+}
+
+impl CompiledEditorData {
+    fn cursor_tracker(&self) -> Option<&CursorTracker> {
+        match self {
+            Self::Song(d) => d.tracking().map(|t| &t.cursor_tracker),
+            Self::SoundEffect(d) => d.cursor_tracker(),
+        }
+    }
+
+    fn zenlen(&self) -> ZenLen {
+        match self {
+            Self::Song(sd) => sd.metadata().zenlen,
+            Self::SoundEffect(_) => DEFAULT_ZENLEN,
+        }
+    }
+}
+
+// I cannot remove the `buffer_modified` callback from TextBuffer (`TextBuffer::remove_modify_callback()` takes a `FnMut` argument).
+// Instead I add a new callback to each buffer as it is created.
+// Wrapping `TextBuffer` in `EditorBuffer` ensures the `buffer_modified` callback is set correctly.
+//
+// `EditorBuffer` must only be used in the MmlEditor instance that created it.
+pub struct EditorBuffer {
+    text_buffer: TextBuffer,
+    format: TextFormat,
+}
+
+impl EditorBuffer {
+    pub fn text(&self) -> String {
+        self.text_buffer.text()
+    }
+}
+
 pub struct MmlEditorState {
     widget: TextEditor,
     status_bar: Frame,
-    text_buffer: TextBuffer,
+    buffer: Rc<RefCell<EditorBuffer>>,
     style_buffer: TextBuffer,
 
     style_vec: Vec<u8>,
 
-    changed_callback: Box<dyn Fn() + 'static>,
+    changed_callback: Box<dyn Fn(&EditorBuffer) + 'static>,
 
-    song_data: Option<Arc<SongData>>,
+    compiled_data: Option<CompiledEditorData>,
     playing_song_notes_valid: bool,
     note_tracking_state: [NoteTrackingState; N_MUSIC_CHANNELS],
 
@@ -49,14 +98,14 @@ pub struct MmlEditorState {
 pub struct MmlEditor {
     widget: TextEditor,
     status_bar: Frame,
-    text_buffer: TextBuffer,
 
     state: Rc<RefCell<MmlEditorState>>,
 }
 
 impl MmlEditor {
-    pub fn new() -> Self {
+    pub fn new(text: &str, format: TextFormat) -> Self {
         let mut text_buffer = TextBuffer::default();
+        text_buffer.set_text(text);
         text_buffer.set_tab_distance(4);
         text_buffer.can_undo(true);
 
@@ -83,7 +132,10 @@ impl MmlEditor {
             widget: widget.clone(),
             status_bar: status_bar.clone(),
 
-            text_buffer: text_buffer.clone(),
+            buffer: Rc::new(RefCell::from(EditorBuffer {
+                format,
+                text_buffer: text_buffer.clone(),
+            })),
             style_buffer,
             style_vec: Vec::new(),
 
@@ -91,12 +143,14 @@ impl MmlEditor {
             note_tracking_state: Default::default(),
 
             prev_cursor_index: None,
-            song_data: None,
+            compiled_data: None,
 
             changed_callback: Box::from(Self::blank_callback),
 
             errors_in_style_buffer: false,
         }));
+
+        state.borrow_mut().redraw_style();
 
         widget.handle({
             let s = state.clone();
@@ -123,10 +177,50 @@ impl MmlEditor {
 
         Self {
             state,
-            text_buffer,
             widget,
             status_bar,
         }
+    }
+
+    pub fn new_buffer(&mut self, text: &str, format: TextFormat) -> Rc<RefCell<EditorBuffer>> {
+        let mut text_buffer = TextBuffer::default();
+        text_buffer.set_text(text);
+        text_buffer.set_tab_distance(4);
+        text_buffer.can_undo(true);
+
+        text_buffer.add_modify_callback({
+            let s = self.state.clone();
+            move |a, b, c, d, e| {
+                s.borrow_mut().buffer_modified(a, b, c, d, e);
+            }
+        });
+
+        let buf = Rc::new(RefCell::from(EditorBuffer {
+            text_buffer,
+            format,
+        }));
+
+        self.state.borrow_mut().set_buffer(buf.clone());
+
+        buf
+    }
+
+    pub fn set_format(&mut self, format: TextFormat) {
+        let mut s = self.state.borrow_mut();
+        s.buffer.borrow_mut().format = format;
+        s.redraw_style();
+    }
+
+    pub fn set_buffer(&mut self, buf: Rc<RefCell<EditorBuffer>>) {
+        self.state.borrow_mut().set_buffer(buf);
+    }
+
+    pub fn buffer(&self) -> Rc<RefCell<EditorBuffer>> {
+        self.state.borrow().buffer.clone()
+    }
+
+    pub fn text(&self) -> String {
+        self.state.borrow().buffer.borrow().text()
     }
 
     pub fn set_text_size(&mut self, text_size: i32) {
@@ -139,11 +233,16 @@ impl MmlEditor {
         );
     }
 
-    pub fn set_changed_callback(&mut self, f: impl Fn() + 'static) {
+    // Safety: editing `self` in the callback will cause a `BorrowMutError` panic.
+    pub fn set_changed_callback(&mut self, f: impl Fn(&EditorBuffer) + 'static) {
         self.state.borrow_mut().changed_callback = Box::from(f);
     }
 
-    pub fn highlight_errors(&mut self, errors: Option<&MmlCompileErrors>) {
+    pub fn move_cursor_to_line_end(&mut self, line_no: u32) {
+        self.state.borrow_mut().move_cursor_to_line_end(line_no);
+    }
+
+    pub fn highlight_errors(&mut self, errors: Option<TextErrorRef>) {
         match errors {
             Some(e) => self.state.borrow_mut().highlight_errors(e),
             None => self.state.borrow_mut().remove_errors(),
@@ -158,14 +257,6 @@ impl MmlEditor {
         &self.status_bar
     }
 
-    pub fn text(&self) -> String {
-        self.text_buffer.text()
-    }
-
-    pub fn set_text(&mut self, text: &str) {
-        self.text_buffer.set_text(text);
-    }
-
     pub fn cursor_tick_counter(&self) -> Option<(ChannelId, TickCounter)> {
         self.state.borrow().cursor_tick_counter()
     }
@@ -174,21 +265,21 @@ impl MmlEditor {
         self.state.borrow().cursor_tick_counter_line_start()
     }
 
-    fn blank_callback() {}
+    fn blank_callback(_: &EditorBuffer) {}
 
     pub fn audio_thread_started_song(&mut self, song_data: Arc<SongData>) {
         self.state.borrow_mut().song_started(song_data);
     }
 
-    pub fn set_song_data(&mut self, song_data: Arc<SongData>) {
+    pub fn set_compiled_data(&mut self, data: CompiledEditorData) {
         let mut s = self.state.borrow_mut();
-        s.set_song_data(Some(song_data));
+        s.set_compiled_data(Some(data));
         s.update_statusbar();
     }
 
-    pub fn clear_song_data(&mut self) {
+    pub fn clear_compiled_data(&mut self) {
         let mut s = self.state.borrow_mut();
-        s.set_song_data(None);
+        s.set_compiled_data(None);
         s.update_statusbar();
     }
 
@@ -198,6 +289,63 @@ impl MmlEditor {
 }
 
 impl MmlEditorState {
+    fn set_buffer(&mut self, buf: Rc<RefCell<EditorBuffer>>) {
+        self.buffer = buf;
+
+        self.widget
+            .set_buffer(self.buffer.borrow().text_buffer.clone());
+
+        self.redraw_style();
+        self.update_statusbar();
+    }
+
+    fn move_cursor_to_line_end(&mut self, line_no: u32) {
+        let nth_newline = match line_no.saturating_sub(1).try_into() {
+            Ok(i) => i,
+            Err(_) => return,
+        };
+
+        let text_buffer = &mut self.buffer.borrow_mut().text_buffer;
+
+        // Fl_Text_Buffer::skip_lines() is not available in fltk-rs, manually skipping lines instead.
+        let text = text_buffer.text();
+
+        let i = text
+            .bytes()
+            .enumerate()
+            .filter(|(_, c)| *c == b'\n')
+            .nth(nth_newline)
+            .map(|(i, _)| i)
+            .unwrap_or(text.len() - 1);
+
+        if let Ok(i) = i.try_into() {
+            text_buffer.remove_selection();
+
+            self.widget.set_insert_position(i);
+            self.widget.show_insert_position();
+            let _ = self.widget.take_focus();
+        }
+    }
+
+    fn redraw_style(&mut self) {
+        let editor_buffer = &self.buffer.borrow();
+
+        let len = editor_buffer.text_buffer.length().max(0);
+
+        self.style_vec
+            .resize(len.try_into().unwrap(), Style::Unknown.to_u8_char());
+
+        let changed = Self::update_style_vec(
+            &mut self.style_vec,
+            0,
+            len,
+            &editor_buffer.text_buffer,
+            editor_buffer.format,
+        );
+
+        self.style_buffer.set_text(changed);
+    }
+
     fn buffer_modified(
         &mut self,
         pos: i32,
@@ -225,17 +373,21 @@ impl MmlEditorState {
 
         self.resize_style_vec(pos_usize, n_inserted_usize, n_deleted_usize);
 
+        let editor_buffer = &self.buffer.borrow();
+        let text_buffer = &editor_buffer.text_buffer;
+
         let to_style_start = pos;
-        let to_style_end = match self.text_buffer.find_char_forward(pos + n_inserted, '\n') {
+        let to_style_end = match text_buffer.find_char_forward(pos + n_inserted, '\n') {
             Some(i) => i + 1,
-            None => self.text_buffer.length(),
+            None => text_buffer.length(),
         };
 
         let changed = Self::update_style_vec(
             &mut self.style_vec,
             to_style_start,
             to_style_end,
-            &self.text_buffer,
+            text_buffer,
+            editor_buffer.format,
         );
 
         if self.playing_song_notes_valid {
@@ -251,7 +403,7 @@ impl MmlEditorState {
             );
         }
 
-        (self.changed_callback)();
+        (self.changed_callback)(editor_buffer);
     }
 
     fn resize_style_vec(&mut self, pos: usize, n_inserted: usize, n_deleted: usize) {
@@ -278,6 +430,7 @@ impl MmlEditorState {
         start: i32,
         end: i32,
         text_buffer: &TextBuffer,
+        format: TextFormat,
     ) -> &'a str {
         let start_usize = usize::try_from(start).unwrap();
         let end_usize = usize::try_from(end).unwrap();
@@ -288,9 +441,10 @@ impl MmlEditorState {
         let to_style = &mut style_vec[range];
 
         match text_buffer.text_range(start, end) {
-            Some(s) => {
-                Self::populate_style(to_style, &s, prev_style_char);
-            }
+            Some(s) => match format {
+                TextFormat::Mml => Self::populate_mml_style(to_style, &s, prev_style_char),
+                TextFormat::Bytecode => Self::populate_bc_style(to_style, &s, prev_style_char),
+            },
             None => {
                 to_style.fill(Style::Unknown.to_u8_char());
             }
@@ -299,7 +453,7 @@ impl MmlEditorState {
         std::str::from_utf8(to_style).unwrap()
     }
 
-    fn populate_style(style_vec: &mut [u8], text: &str, prev_style: Option<u8>) {
+    fn populate_mml_style(style_vec: &mut [u8], text: &str, prev_style: Option<u8>) {
         assert_eq!(style_vec.len(), text.bytes().len());
 
         let mut current = prev_style
@@ -307,12 +461,25 @@ impl MmlEditorState {
             .unwrap_or(Style::NewLine);
 
         for (c, s) in std::iter::zip(text.bytes(), style_vec.iter_mut()) {
-            current = next_style(current, c);
+            current = next_style_mml(current, c);
             *s = current.to_u8_char();
         }
     }
 
-    fn highlight_errors(&mut self, errors: &MmlCompileErrors) {
+    fn populate_bc_style(style_vec: &mut [u8], text: &str, prev_style: Option<u8>) {
+        assert_eq!(style_vec.len(), text.bytes().len());
+
+        let mut current = prev_style
+            .map(Style::from_u8_char)
+            .unwrap_or(Style::NewLine);
+
+        for (c, s) in std::iter::zip(text.bytes(), style_vec.iter_mut()) {
+            current = next_style_bc(current, c);
+            *s = current.to_u8_char();
+        }
+    }
+
+    fn highlight_errors(&mut self, errors: TextErrorRef) {
         let mut style_vec = self.style_vec.clone();
 
         let mut min_index = usize::MAX;
@@ -334,21 +501,42 @@ impl MmlEditorState {
             }
         };
 
-        for e in &errors.line_errors {
-            highlight_error(&e.0);
-        }
+        match errors {
+            TextErrorRef::Song(errors) => {
+                for e in &errors.line_errors {
+                    highlight_error(&e.0);
+                }
 
-        let mut parse_channel_error = |e: &MmlChannelError| {
-            for e in &e.errors {
-                highlight_error(&e.0);
+                let mut parse_channel_error = |e: &MmlChannelError| {
+                    for e in &e.errors {
+                        highlight_error(&e.0);
+                    }
+                };
+
+                for e in &errors.subroutine_errors {
+                    parse_channel_error(e);
+                }
+                for e in &errors.channel_errors {
+                    parse_channel_error(e);
+                }
             }
-        };
-
-        for e in &errors.subroutine_errors {
-            parse_channel_error(e);
-        }
-        for e in &errors.channel_errors {
-            parse_channel_error(e);
+            TextErrorRef::SoundEffect(errors) => {
+                match &errors.errors {
+                    SoundEffectErrorList::BytecodeErrors(_errors) => {
+                        // ::TODO implement::
+                    }
+                    SoundEffectErrorList::MmlLineErrors(errors) => {
+                        for e in errors {
+                            highlight_error(&e.0);
+                        }
+                    }
+                    SoundEffectErrorList::MmlErrors(errors) => {
+                        for e in errors {
+                            highlight_error(&e.0);
+                        }
+                    }
+                }
+            }
         }
 
         let style = std::str::from_utf8(&style_vec).unwrap();
@@ -376,8 +564,8 @@ impl MmlEditorState {
         }
     }
 
-    fn set_song_data(&mut self, song_data: Option<Arc<SongData>>) {
-        self.song_data = song_data;
+    fn set_compiled_data(&mut self, data: Option<CompiledEditorData>) {
+        self.compiled_data = data;
         self.note_tracking_state = Default::default();
 
         let style = std::str::from_utf8(&self.style_vec).unwrap();
@@ -387,7 +575,7 @@ impl MmlEditorState {
     }
 
     fn song_started(&mut self, song_data: Arc<SongData>) {
-        self.set_song_data(Some(song_data));
+        self.set_compiled_data(Some(CompiledEditorData::Song(song_data)));
         self.playing_song_notes_valid = true;
     }
 
@@ -397,8 +585,8 @@ impl MmlEditorState {
         }
 
         let mut changed = false;
-        if let Some(song_data) = &self.song_data {
-            if let Some(ntd) = &song_data.tracking() {
+        if let Some(CompiledEditorData::Song(song_data)) = &self.compiled_data {
+            if let Some(ntd) = song_data.tracking() {
                 for i in 0..self.note_tracking_state.len() {
                     let nts = &mut self.note_tracking_state[i];
                     let voice_pos = mon.voice_instruction_ptrs[i];
@@ -420,19 +608,17 @@ impl MmlEditorState {
     }
 
     fn cursor_tick_counter(&self) -> Option<(ChannelId, TickCounter)> {
-        self.song_data
-            .as_deref()?
-            .tracking()?
-            .cursor_tracker
+        self.compiled_data
+            .as_ref()?
+            .cursor_tracker()?
             .find(self.cursor_index()?)
             .map(|(channel_id, c)| (channel_id, c.ticks.ticks))
     }
 
     fn cursor_tick_counter_line_start(&self) -> Option<(ChannelId, TickCounter)> {
-        self.song_data
-            .as_deref()?
-            .tracking()?
-            .cursor_tracker
+        self.compiled_data
+            .as_ref()?
+            .cursor_tracker()?
             .find_line_start(self.cursor_index()?)
             .map(|(channel_id, c)| (channel_id, c.ticks.ticks))
     }
@@ -452,7 +638,7 @@ impl MmlEditorState {
     fn _update_statusbar(&mut self, cursor_index: Option<u32>) {
         self.prev_cursor_index = cursor_index;
 
-        let (cursor_index, song_data) = match (cursor_index, &self.song_data) {
+        let (cursor_index, compiled_data) = match (cursor_index, &self.compiled_data) {
             (Some(ci), Some(sd)) => (ci, sd),
             _ => {
                 self.status_bar.set_label("");
@@ -460,9 +646,9 @@ impl MmlEditorState {
             }
         };
 
-        match song_data
-            .tracking()
-            .and_then(|t| t.cursor_tracker.find(cursor_index))
+        match compiled_data
+            .cursor_tracker()
+            .and_then(|t| t.find(cursor_index))
         {
             Some((channel_id, c)) => {
                 let mut s = String::with_capacity(64);
@@ -472,8 +658,10 @@ impl MmlEditorState {
                         let _ = write!(s, "{} ", c);
                     }
                     ChannelId::Subroutine(si) => {
-                        if let Some(subroutine) = song_data.subroutines().get(usize::from(si)) {
-                            let _ = write!(s, "!{} ", subroutine.identifier.as_str());
+                        if let CompiledEditorData::Song(sd) = &compiled_data {
+                            if let Some(subroutine) = sd.subroutines().get(usize::from(si)) {
+                                let _ = write!(s, "!{} ", subroutine.identifier.as_str());
+                            }
                         }
                     }
                     ChannelId::SoundEffect => {}
@@ -520,7 +708,7 @@ impl MmlEditorState {
                     let _ = write!(s, "  Q{}", c.state.quantize.as_u8());
                 }
 
-                if c.state.zenlen != song_data.metadata().zenlen {
+                if c.state.zenlen != compiled_data.zenlen() {
                     let _ = write!(s, "  ZenLen: {}", c.state.zenlen.as_u8());
                 }
 
@@ -800,7 +988,7 @@ fn highlight_data(mml_colors: &MmlColors, font_size: i32) -> Vec<StyleTableEntry
     ]
 }
 
-fn next_style(current: Style, c: u8) -> Style {
+fn next_style_mml(current: Style, c: u8) -> Style {
     const FIRST_CHANNEL: u8 = FIRST_MUSIC_CHANNEL as u8;
     const LAST_CHANNEL: u8 = LAST_MUSIC_CHANNEL as u8;
 
@@ -886,5 +1074,16 @@ fn channel_or_subroutine_style(c: u8) -> Style {
         b'@' => Style::Instrument,
         b'!' => Style::Subroutine,
         _ => Style::Normal,
+    }
+}
+
+fn next_style_bc(current: Style, c: u8) -> Style {
+    match c {
+        b'\n' => Style::NewLine,
+        b';' => Style::Comment,
+        _ => match current {
+            Style::NewLine => Style::Normal,
+            _ => current,
+        },
     }
 }

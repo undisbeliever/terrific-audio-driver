@@ -62,6 +62,14 @@ impl CompiledSoundEffect {
         self.tick_counter()
             .to_duration(TickClock::try_from(SFX_TICK_CLOCK).unwrap())
     }
+
+    #[cfg(feature = "mml_tracking")]
+    pub fn cursor_tracker(&self) -> Option<&mml::CursorTracker> {
+        match &self.data {
+            SoundEffectData::BytecodeAssembly(_, _) => None,
+            SoundEffectData::Mml(d) => Some(d.cursor_tracker()),
+        }
+    }
 }
 
 #[allow(clippy::too_many_arguments)]

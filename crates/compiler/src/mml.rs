@@ -53,6 +53,9 @@ pub use self::tick_count_table::MmlTickCountTable;
 
 pub use self::metadata::MetaData;
 
+#[cfg(feature = "mml_tracking")]
+pub use self::note_tracking::CursorTracker;
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum ChannelId {
     Channel(char),

@@ -7,7 +7,7 @@
 use crate::audio_thread::AudioMonitorData;
 use crate::compiler_thread::{ItemId, SongError, SongOutput};
 use crate::helpers::*;
-use crate::mml_editor::MmlEditor;
+use crate::mml_editor::{CompiledEditorData, MmlEditor, TextErrorRef, TextFormat};
 use crate::tabs::{FileType, Tab};
 use crate::GuiMessage;
 
@@ -101,10 +101,9 @@ impl SongTab {
 
         main_toolbar.end();
 
-        let mut editor = MmlEditor::new();
+        let mut editor = MmlEditor::new(&mml_file.contents, TextFormat::Mml);
 
         editor.set_text_size(editor.widget().text_size() * 12 / 10);
-        editor.set_text(&mml_file.contents);
 
         let mut console = TextDisplay::default();
         group.fixed(&console, input_height(&console) * 5);
@@ -177,9 +176,9 @@ impl SongTab {
 
             s.editor.set_changed_callback({
                 let s = state.clone();
-                move || {
+                move |buffer| {
                     if let Ok(s) = s.try_borrow() {
-                        s.song_changed();
+                        s.song_changed(buffer.text());
                     }
                 }
             });
@@ -226,9 +225,9 @@ impl SongTab {
 }
 
 impl State {
-    fn song_changed(&self) {
+    fn song_changed(&self, text: String) {
         self.sender
-            .send(GuiMessage::SongChanged(self.song_id, self.editor.text()));
+            .send(GuiMessage::SongChanged(self.song_id, text));
     }
 
     fn compile_song(&self) {
@@ -266,7 +265,7 @@ impl State {
     pub fn set_compiler_output(&mut self, co: Option<SongOutput>) {
         match co {
             None => {
-                self.editor.clear_song_data();
+                self.editor.clear_compiled_data();
 
                 self.console_buffer.set_text("");
                 self.errors = None;
@@ -283,10 +282,10 @@ impl State {
                 self.console.set_text_color(Color::Foreground);
                 self.errors = None;
 
-                self.editor.set_song_data(sd);
+                self.editor.set_compiled_data(CompiledEditorData::Song(sd));
             }
             Some(Err(e)) => {
-                self.editor.clear_song_data();
+                self.editor.clear_compiled_data();
 
                 let text = match &e {
                     SongError::Dependency => e.to_string(),
@@ -305,6 +304,8 @@ impl State {
                 };
             }
         }
-        self.editor.highlight_errors(self.errors.as_ref());
+
+        self.editor
+            .highlight_errors(self.errors.as_ref().map(TextErrorRef::Song));
     }
 }

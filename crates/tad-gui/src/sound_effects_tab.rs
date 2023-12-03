@@ -10,6 +10,7 @@ use crate::list_editor::{
     CompilerOutputGui, LaVec, ListAction, ListButtons, ListEditor, ListEditorTable, ListMessage,
     ListState, TableCompilerOutput, TableMapping,
 };
+use crate::mml_editor::{CompiledEditorData, EditorBuffer, MmlEditor, TextErrorRef, TextFormat};
 use crate::tables::{RowWithStatus, SimpleRow};
 use crate::tabs::{FileType, Tab};
 use crate::{GuiMessage, ProjectData, SoundEffectsData};
@@ -26,10 +27,9 @@ use fltk::group::{Flex, Pack, PackType};
 use fltk::input::Input;
 use fltk::menu::Choice;
 use fltk::prelude::*;
-use fltk::text::{StyleTableEntryExt, TextBuffer, TextDisplay, TextEditor, WrapMode};
+use fltk::text::{TextBuffer, TextDisplay, WrapMode};
 
 use std::cell::RefCell;
-use std::cmp::{max, min};
 use std::collections::HashSet;
 use std::rc::Rc;
 
@@ -117,7 +117,7 @@ pub struct State {
 
     name: Input,
     sound_effect_type: Choice,
-    editor_widget: TextEditor,
+    editor: MmlEditor,
 
     error_lines: Option<SfxErrorLines>,
 }
@@ -125,8 +125,11 @@ pub struct State {
 pub struct SoundEffectsTab {
     state: Rc<RefCell<State>>,
 
+    // An empty text buffer for when no sound effect is selected.
+    no_selection_buffer: Rc<RefCell<EditorBuffer>>,
+
     // Each sound effect gets it own buffer so they have their own undo/redo stack.
-    sfx_buffers: LaVec<Option<EditorBuffer>>,
+    sfx_buffers: LaVec<Option<Rc<RefCell<EditorBuffer>>>>,
 
     group: Flex,
 
@@ -139,7 +142,6 @@ pub struct SoundEffectsTab {
     main_group: Flex,
 
     name: Input,
-    editor: SfxEditor,
 
     console: TextDisplay,
     console_buffer: TextBuffer,
@@ -214,10 +216,14 @@ impl SoundEffectsTab {
         main_group.fixed(&name_flex, input_height(&name));
         name_flex.end();
 
-        let mut editor = SfxEditor::new();
+        let mut editor = MmlEditor::new("", TextFormat::Bytecode);
+        editor.set_text_size(editor.widget().text_size() * 12 / 10);
 
         let mut console = TextDisplay::default();
         main_group.fixed(&console, button_height * 5);
+
+        main_group.add(editor.status_bar());
+        main_group.fixed(editor.status_bar(), input_height(editor.status_bar()));
 
         main_group.end();
         group.end();
@@ -239,10 +245,11 @@ impl SoundEffectsTab {
             sender,
             selected: None,
             selected_id: None,
+
             old_name: "sfx".parse().unwrap(),
             name: name.clone(),
             sound_effect_type,
-            editor_widget: editor.widget.clone(),
+            editor,
             error_lines: None,
         }));
 
@@ -260,7 +267,7 @@ impl SoundEffectsTab {
             move |_widget, ev| {
                 if is_input_done_event(ev) {
                     if let Ok(mut s) = s.try_borrow_mut() {
-                        s.commit_sfx_if_changed();
+                        s.commit_sfx();
                     }
                 }
                 // Always propagate focus/enter events
@@ -268,40 +275,41 @@ impl SoundEffectsTab {
             }
         });
 
-        state.borrow_mut().sound_effect_type.set_callback({
-            let s = state.clone();
-            move |_widget| {
-                if let Ok(mut s) = s.try_borrow_mut() {
-                    s.commit_sfx();
-                }
-            }
-        });
+        let no_selection_buffer = state.borrow().editor.buffer();
 
-        editor.widget.handle({
-            let s = state.clone();
-            move |_widget, ev| match ev {
-                Event::Unfocus => {
+        {
+            let mut s = state.borrow_mut();
+
+            s.sound_effect_type.set_callback({
+                let s = state.clone();
+                move |_widget| {
                     if let Ok(mut s) = s.try_borrow_mut() {
-                        s.commit_sfx_if_changed();
+                        s.sound_effect_type_changed();
                     }
-                    false
                 }
-                _ => false,
-            }
-        });
+            });
+
+            s.editor.set_changed_callback({
+                let s = state.clone();
+                move |buffer| {
+                    if let Ok(s) = s.try_borrow() {
+                        s.text_changed(buffer)
+                    }
+                }
+            });
+        }
 
         console.handle({
             let s = state.clone();
-            let mut editor = editor.widget.clone();
             move |widget, ev| {
                 if ev == Event::Released && app::event_clicks() {
                     if let Some(mut buffer) = widget.buffer() {
                         buffer.unselect();
 
-                        if let Ok(state) = s.try_borrow() {
+                        if let Ok(mut state) = s.try_borrow_mut() {
                             let line = widget.count_lines(0, widget.insert_position(), false);
                             let line = line.try_into().unwrap_or(0);
-                            Self::error_line_clicked(line, &state, &mut editor);
+                            state.error_line_clicked(line);
                         }
                     }
                 }
@@ -311,6 +319,8 @@ impl SoundEffectsTab {
 
         let mut s = Self {
             state,
+
+            no_selection_buffer,
             sfx_buffers: LaVec::new(),
 
             group,
@@ -323,8 +333,6 @@ impl SoundEffectsTab {
             main_group,
             name,
 
-            editor,
-
             console,
             console_buffer,
         };
@@ -333,7 +341,7 @@ impl SoundEffectsTab {
     }
 
     pub fn replace_sfx_file(&mut self, state: &impl ListState<Item = SoundEffectInput>) {
-        let v: Vec<Option<EditorBuffer>> = (0..state.list().len()).map(|_| None).collect();
+        let v: Vec<_> = (0..state.list().len()).map(|_| None).collect();
         assert!(v.len() == state.list().len());
 
         self.clear_selected();
@@ -346,39 +354,6 @@ impl SoundEffectsTab {
         self.group.layout();
 
         self.sidebar.activate();
-    }
-
-    /// Move the editor cursor and highlight the line that caused the error.
-    fn error_line_clicked(error_line: u32, state: &State, editor: &mut TextEditor) {
-        if error_line < 1 {
-            return;
-        }
-        if let Some(error_lines) = &state.error_lines {
-            let editor_line = error_line
-                .checked_sub(error_lines.offset)
-                .and_then(|i| usize::try_from(i).ok())
-                .and_then(|i| error_lines.lines.get(i))
-                .and_then(|i| i32::try_from(*i).ok())
-                .unwrap_or(1);
-
-            let editor_line = max(1, editor_line);
-
-            if let Some(mut buffer) = editor.buffer() {
-                // Fl_Text_Buffer::skip_lines() is not available in fltk-rs, using `TextEditor::skip_lines()` instead.
-                // `TextEditor::skip_lines()` skips visible (wrapped) lines.
-                // For this function to work as expected word wrapping must be disabled on `editor`.
-                let editor_pos = editor.skip_lines(0, editor_line - 1, true);
-                let line_end = editor.line_end(editor_pos, true);
-
-                editor.set_insert_position(editor_pos);
-                editor.next_word();
-                buffer.select(editor.insert_position(), line_end);
-
-                editor.set_insert_position(line_end - 1);
-                editor.show_insert_position();
-                let _ = editor.take_focus();
-            }
-        }
     }
 
     pub fn n_missing_sfx_changed(&mut self, n_missing: usize) {
@@ -413,12 +388,13 @@ impl ListEditor<SoundEffectInput> for SoundEffectsTab {
             state.selected = None;
 
             state.sound_effect_type.set_value(-1);
+
+            state.editor.set_buffer(self.no_selection_buffer.clone());
         }
 
         self.sfx_table.clear_selected();
 
         self.name.set_value("");
-        self.editor.remove_buffer();
 
         self.main_group.deactivate();
     }
@@ -436,19 +412,24 @@ impl ListEditor<SoundEffectInput> for SoundEffectsTab {
                     self.name.set_value(sfx.name.as_str());
                     self.name.clear_changed();
 
-                    let (type_choice, text) = match &sfx.sfx {
-                        SoundEffectText::BytecodeAssembly(s) => {
-                            (SoundEffectTypeChoice::BytecodeAssembly, s)
+                    let type_choice = match &sfx.sfx {
+                        SoundEffectText::BytecodeAssembly(_) => {
+                            SoundEffectTypeChoice::BytecodeAssembly
                         }
-                        SoundEffectText::Mml(s) => (SoundEffectTypeChoice::Mml, s),
+                        SoundEffectText::Mml(_) => SoundEffectTypeChoice::Mml,
                     };
 
                     state.sound_effect_type.set_value(type_choice.to_i32());
 
                     match sfx_buffer {
-                        Some(b) => self.editor.set_buffer(b),
+                        Some(b) => state.editor.set_buffer(b.clone()),
                         None => {
-                            let b = self.editor.new_buffer(text, self.state.clone());
+                            let (text, format) = match &sfx.sfx {
+                                SoundEffectText::BytecodeAssembly(s) => (s, TextFormat::Bytecode),
+                                SoundEffectText::Mml(s) => (s, TextFormat::Mml),
+                            };
+
+                            let b = state.editor.new_buffer(text, format);
                             *sfx_buffer = Some(b);
                         }
                     }
@@ -476,43 +457,78 @@ impl State {
     }
 
     fn play_sound_effect(&mut self) {
-        self.commit_sfx_if_changed();
+        self.commit_sfx();
         if let Some(id) = self.selected_id {
             self.sender.send(GuiMessage::PlaySoundEffect(id));
         }
     }
 
-    fn commit_sfx_if_changed(&mut self) {
-        if self.name.changed() || self.editor_widget.changed() {
-            self.commit_sfx();
+    fn sound_effect_type_changed(&mut self) {
+        let f = match SoundEffectTypeChoice::read_widget(&self.sound_effect_type) {
+            SoundEffectTypeChoice::BytecodeAssembly => TextFormat::Bytecode,
+            SoundEffectTypeChoice::Mml => TextFormat::Mml,
+        };
+        self.editor.set_format(f);
+        self.commit_sfx();
+    }
+
+    fn text_changed(&self, buffer: &EditorBuffer) {
+        if let Some(index) = self.selected {
+            let sfx = SoundEffectInput {
+                name: self.old_name.clone(),
+                sfx: match SoundEffectTypeChoice::read_widget(&self.sound_effect_type) {
+                    SoundEffectTypeChoice::BytecodeAssembly => {
+                        SoundEffectText::BytecodeAssembly(buffer.text())
+                    }
+                    SoundEffectTypeChoice::Mml => SoundEffectText::Mml(buffer.text()),
+                },
+            };
+            self.sender
+                .send(GuiMessage::EditSoundEffectList(ListMessage::ItemEdited(
+                    index, sfx,
+                )));
         }
     }
 
     fn commit_sfx(&mut self) {
         if let Some(index) = self.selected {
-            if let Some(buf) = self.editor_widget.buffer() {
-                if let Some(n) = Name::try_new_lossy(self.name.value()) {
-                    self.name.set_value(n.as_str());
-                    self.old_name = n;
-                };
+            let text = self.editor.text();
 
-                let sfx = SoundEffectInput {
-                    name: self.old_name.clone(),
-                    sfx: match SoundEffectTypeChoice::read_widget(&self.sound_effect_type) {
-                        SoundEffectTypeChoice::BytecodeAssembly => {
-                            SoundEffectText::BytecodeAssembly(buf.text())
-                        }
-                        SoundEffectTypeChoice::Mml => SoundEffectText::Mml(buf.text()),
-                    },
-                };
-                self.sender
-                    .send(GuiMessage::EditSoundEffectList(ListMessage::ItemEdited(
-                        index, sfx,
-                    )));
+            if let Some(n) = Name::try_new_lossy(self.name.value()) {
+                self.name.set_value(n.as_str());
+                self.old_name = n;
+            };
 
-                self.name.clear_changed();
-                self.editor_widget.clear_changed();
-            }
+            let sfx = SoundEffectInput {
+                name: self.old_name.clone(),
+                sfx: match SoundEffectTypeChoice::read_widget(&self.sound_effect_type) {
+                    SoundEffectTypeChoice::BytecodeAssembly => {
+                        SoundEffectText::BytecodeAssembly(text)
+                    }
+                    SoundEffectTypeChoice::Mml => SoundEffectText::Mml(text),
+                },
+            };
+            self.sender
+                .send(GuiMessage::EditSoundEffectList(ListMessage::ItemEdited(
+                    index, sfx,
+                )));
+        }
+    }
+
+    /// Move the editor cursor and highlight the line that caused the error.
+    fn error_line_clicked(&mut self, error_line: u32) {
+        if error_line < 1 {
+            return;
+        }
+        if let Some(error_lines) = &self.error_lines {
+            let editor_line = error_line
+                .checked_sub(error_lines.offset)
+                .and_then(|i| usize::try_from(i).ok())
+                .and_then(|i| error_lines.lines.get(i))
+                .copied()
+                .unwrap_or(1);
+
+            self.editor.move_cursor_to_line_end(editor_line);
         }
     }
 }
@@ -523,7 +539,7 @@ impl CompilerOutputGui<SoundEffectOutput> for SoundEffectsTab {
     }
 
     fn set_selected_compiler_output(&mut self, compiler_output: &Option<SoundEffectOutput>) {
-        // ::MAYDO highlight invalid lines::
+        let mut state = self.state.borrow_mut();
 
         match compiler_output {
             None => self.console_buffer.set_text(""),
@@ -540,9 +556,15 @@ impl CompilerOutputGui<SoundEffectOutput> for SoundEffectsTab {
                     duration_ms % 1000,
                 ));
                 self.console.set_text_color(Color::Foreground);
-                self.state.borrow_mut().error_lines = None;
+                state.error_lines = None;
+
+                state
+                    .editor
+                    .set_compiled_data(CompiledEditorData::SoundEffect(o.clone()));
             }
             Some(Err(e)) => {
+                state.editor.clear_compiled_data();
+
                 let (error_lines, text) = match e {
                     SfxError::Error(e) => (
                         Some(e.error_lines()),
@@ -550,12 +572,18 @@ impl CompilerOutputGui<SoundEffectOutput> for SoundEffectsTab {
                     ),
                     SfxError::Dependency => (None, e.to_string()),
                 };
-                self.state.borrow_mut().error_lines = error_lines;
+                state.error_lines = error_lines;
 
                 self.console_buffer.set_text(&text);
                 self.console.set_text_color(Color::Red);
             }
         }
+
+        let e = match compiler_output {
+            Some(Err(SfxError::Error(e))) => Some(TextErrorRef::SoundEffect(e)),
+            _ => None,
+        };
+        state.editor.highlight_errors(e);
     }
 }
 
@@ -597,228 +625,6 @@ fn no_sfx_file_gui(sender: app::Sender<GuiMessage>) -> Flex {
     group.end();
 
     group
-}
-
-mod style {
-    pub const NORMAL: char = 'A';
-    pub const COMMENT: char = 'B';
-
-    #[allow(dead_code)]
-    pub const UNKNOWN: char = 'C';
-
-    pub const UNKNOWN_STR: &str = "C";
-}
-
-fn highlight_data() -> Vec<StyleTableEntryExt> {
-    vec![
-        // 'A'
-        StyleTableEntryExt {
-            font: Font::Courier,
-            ..StyleTableEntryExt::default()
-        },
-        // 'B'
-        StyleTableEntryExt {
-            color: Color::Blue,
-            font: Font::Courier,
-            ..StyleTableEntryExt::default()
-        },
-        // 'C' - unknown, used when the inserted text cannot be read
-        StyleTableEntryExt {
-            color: Color::Green,
-            font: Font::Courier,
-            ..StyleTableEntryExt::default()
-        },
-    ]
-}
-
-pub struct SfxEditor {
-    widget: TextEditor,
-
-    // An empty text buffer for when no sound effect is selected.
-    no_selection_buffer: TextBuffer,
-
-    style_buffer: TextBuffer,
-}
-
-// I cannot remove the `buffer_modified` callback from TextBuffer (`TextBuffer::remove_modify_callback()` takes a `FnMut` argument).
-// Instead I add a new callback to each buffer as it is created.
-// Wrapping `TextBuffer` in `EditorBuffer` ensures the `buffer_modified` callback is set correctly.
-//
-// `EditorBuffer` must only be used in the SfxEditor instance that created it.
-struct EditorBuffer(TextBuffer);
-
-impl SfxEditor {
-    fn new() -> Self {
-        let mut style_buffer = TextBuffer::default();
-        style_buffer.can_undo(false);
-
-        let mut no_selection_buffer = TextBuffer::default();
-        no_selection_buffer.can_undo(false);
-
-        let mut widget = TextEditor::default();
-        widget.set_buffer(no_selection_buffer.clone());
-
-        widget.set_linenumber_width(ch_units_to_width(&widget, 4));
-        widget.set_text_font(Font::Courier);
-        widget.set_highlight_data_ext(style_buffer.clone(), highlight_data());
-
-        // `error_line_clicked` only works if there is no wrapping.
-        widget.wrap_mode(WrapMode::None, 0);
-
-        Self {
-            widget,
-            no_selection_buffer,
-            style_buffer,
-        }
-    }
-
-    fn new_buffer(&mut self, text: &str, state: Rc<RefCell<State>>) -> EditorBuffer {
-        let mut b = TextBuffer::default();
-        b.can_undo(true);
-        b.set_tab_distance(4);
-        b.set_text(text);
-
-        b.add_modify_callback({
-            let buffer = b.clone();
-            let mut style_buffer = self.style_buffer.clone();
-            let state = state;
-            move |a, b, c, d, e: &str| {
-                Self::buffer_modified(&buffer, &mut style_buffer, &state, a, b, c, d, e);
-            }
-        });
-
-        let b = EditorBuffer(b);
-        self.set_buffer(&b);
-
-        b
-    }
-
-    fn set_buffer(&mut self, buf: &EditorBuffer) {
-        let buf = &buf.0;
-
-        let (style, _) = Self::style_text(&buf.text(), style::NORMAL);
-        self.style_buffer.set_text(&style);
-
-        self.widget.set_buffer(buf.clone());
-
-        self.widget.clear_changed();
-        self.widget.activate();
-    }
-
-    fn remove_buffer(&mut self) {
-        self.style_buffer.set_text("");
-        // Using `no_selection_buffer` so the Fl_Text_Editor always has a buffer attached to it.
-        self.widget.set_buffer(self.no_selection_buffer.clone());
-
-        self.widget.clear_changed();
-        self.widget.deactivate();
-    }
-
-    fn style_text(sfx_text: &str, current_style: char) -> (String, char) {
-        let mut style_char = current_style;
-
-        let mut style = String::with_capacity(sfx_text.len());
-
-        // Must use bytes here, even tho sfx_text is UTF-8
-        for c in sfx_text.bytes() {
-            match c {
-                b';' => style_char = style::COMMENT,
-                b'\n' => style_char = style::NORMAL,
-                _ => (),
-            }
-            style.push(style_char);
-        }
-        (style, style_char)
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    fn buffer_modified(
-        text_buffer: &TextBuffer,
-        style_buffer: &mut TextBuffer,
-        state: &Rc<RefCell<State>>,
-        pos: i32,
-        n_inserted: i32,
-        n_deleted: i32,
-        _n_restyled: i32,
-        deleted_text: &str,
-    ) {
-        if n_inserted < 0 || n_deleted < 0 {
-            return;
-        }
-        if n_inserted == 0 && n_deleted == 0 {
-            return;
-        }
-
-        let style_before_pos = style_buffer
-            .text_range(pos - 1, pos)
-            .and_then(|s| s.chars().next())
-            .unwrap_or(style::NORMAL);
-
-        if n_inserted > 0 {
-            if let Some(inserted_text) = text_buffer.text_range(pos, pos + n_inserted) {
-                let (style, style_char) = Self::style_text(&inserted_text, style_before_pos);
-
-                style_buffer.replace(pos, pos + n_deleted, &style);
-
-                Self::update_style_after(style_buffer, text_buffer, pos + n_inserted, style_char);
-
-                if inserted_text.contains('\n') || deleted_text.contains('\n') {
-                    if let Ok(mut state) = state.try_borrow_mut() {
-                        state.commit_sfx();
-                    }
-                }
-            } else {
-                // Cannot read inserted text, use unknown style instead.
-                let n_inserted = n_inserted.try_into().unwrap_or(0);
-
-                style_buffer.replace(pos, pos + n_deleted, &style::UNKNOWN_STR.repeat(n_inserted));
-            }
-        } else if n_deleted > 0 {
-            style_buffer.remove(pos, pos + n_deleted);
-
-            Self::update_style_after(style_buffer, text_buffer, pos, style_before_pos);
-
-            if deleted_text.contains('\n') {
-                if let Ok(mut state) = state.try_borrow_mut() {
-                    state.commit_sfx();
-                }
-            }
-        }
-    }
-
-    // Updates the style after `pos`
-    fn update_style_after(
-        style_buffer: &mut TextBuffer,
-        text_buffer: &TextBuffer,
-        pos: i32,
-        style_char: char,
-    ) {
-        // Update style on the remainder of the line the insert ended on
-        let style_at_pos = style_buffer
-            .text_range(pos, pos + 1)
-            .and_then(|s| s.chars().next());
-
-        let style_at_pos = match style_at_pos {
-            Some(c) => c,
-            None => return,
-        };
-
-        if style_char != style_at_pos {
-            let line_end = match text_buffer.find_char_forward(pos, '\n') {
-                Some(i) => i,
-                None => text_buffer.length(),
-            };
-            let comment_end = text_buffer.find_char_forward(pos, ';').unwrap_or(line_end);
-            let end = min(line_end, comment_end);
-
-            let n_new_comment_chars = end.wrapping_sub(pos);
-            if n_new_comment_chars > 0 {
-                if let Ok(count) = usize::try_from(n_new_comment_chars) {
-                    style_buffer.replace(pos, end, &style_char.to_string().repeat(count));
-                }
-            }
-        }
-    }
 }
 
 pub fn add_missing_sfx(
