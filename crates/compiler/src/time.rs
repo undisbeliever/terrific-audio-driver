@@ -19,8 +19,8 @@ const STARTING_DEFAULT_NOTE_LENGTH: u8 = 4;
 u8_value_newtype!(ZenLen, ZenLenOutOfRange, NoZenLen, 4, u8::MAX);
 
 pub const DEFAULT_ZENLEN: ZenLen = ZenLen(96);
-pub const STARTING_MML_LENGTH: MmlLength = MmlLength {
-    length: Some(STARTING_DEFAULT_NOTE_LENGTH as u32),
+pub const STARTING_MML_LENGTH: MmlDefaultLength = MmlDefaultLength {
+    length: STARTING_DEFAULT_NOTE_LENGTH,
     length_in_ticks: false,
     number_of_dots: 0,
 };
@@ -115,6 +115,55 @@ u8_value_newtype!(
 );
 
 #[derive(Debug, Clone, PartialEq)]
+pub struct MmlDefaultLength {
+    length: u8,
+    length_in_ticks: bool,
+    number_of_dots: u8,
+}
+
+impl MmlDefaultLength {
+    pub fn new(length: u8, length_in_ticks: bool, number_of_dots: u8) -> Self {
+        Self {
+            length,
+            length_in_ticks,
+            number_of_dots,
+        }
+    }
+
+    pub fn length(&self) -> u8 {
+        self.length
+    }
+
+    pub fn length_in_ticks(&self) -> bool {
+        self.length_in_ticks
+    }
+
+    pub fn number_of_dots(&self) -> u8 {
+        self.number_of_dots
+    }
+
+    pub fn to_tick_count(&self, zenlen: ZenLen) -> Result<TickCounter, ValueError> {
+        if self.length_in_ticks {
+            if self.number_of_dots != 0 {
+                return Err(ValueError::DotsNotAllowedAfterClockValue);
+            }
+            Ok(TickCounter::new(self.length.into()))
+        } else {
+            let l = self.length;
+            let zenlen = zenlen.as_u8();
+
+            if l == 0 || l > zenlen {
+                return Err(ValueError::InvalidNoteLength);
+            }
+
+            let ticks = u32::from(zenlen / l);
+            let ticks = add_dots_to_length(ticks, self.number_of_dots);
+            Ok(TickCounter::new(ticks))
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct MmlLength {
     length: Option<u32>,
     length_in_ticks: bool,
@@ -158,7 +207,7 @@ impl MmlLength {
             ticks
         } else {
             // Whole note length divisor
-            let mut ticks = match self.length {
+            let ticks = match self.length {
                 Some(l) => {
                     let zenlen = zenlen.0.into();
 
@@ -169,16 +218,22 @@ impl MmlLength {
                 }
                 None => default_len.value(),
             };
-
-            if self.number_of_dots > 0 {
-                let mut half_t = ticks / 2;
-                for _ in 0..self.number_of_dots {
-                    ticks += half_t;
-                    half_t /= 2;
-                }
-            }
-            ticks
+            add_dots_to_length(ticks, self.number_of_dots)
         };
         Ok(TickCounter::new(ticks))
     }
+}
+
+fn add_dots_to_length(ticks: u32, n_dots: u8) -> u32 {
+    let mut ticks = ticks;
+
+    if n_dots > 0 {
+        let mut half_t = ticks / 2;
+        for _ in 0..n_dots {
+            ticks += half_t;
+            half_t /= 2;
+        }
+    }
+
+    ticks
 }

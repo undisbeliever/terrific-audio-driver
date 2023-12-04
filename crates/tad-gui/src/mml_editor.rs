@@ -684,20 +684,16 @@ impl MmlEditorState {
 
                 {
                     let dl = &c.state.default_length;
-                    match (dl.length(), dl.length_in_ticks()) {
-                        (Some(l), false) => {
-                            let _ = write!(s, "  l{l}");
-                            for _ in 0..dl.number_of_dots() {
-                                s.push('.');
-                            }
+                    if !dl.length_in_ticks() {
+                        let _ = write!(s, "  l{}", dl.length());
+                        for _ in 0..dl.number_of_dots() {
+                            s.push('.');
                         }
-                        (Some(l), true) => {
-                            let _ = write!(s, "  l%{l}");
-                            for _ in 0..dl.number_of_dots() {
-                                s.push('.');
-                            }
+                    } else {
+                        let _ = write!(s, "  l%{}", dl.length());
+                        for _ in 0..dl.number_of_dots() {
+                            s.push('.');
                         }
-                        _ => (),
                     }
                 }
 

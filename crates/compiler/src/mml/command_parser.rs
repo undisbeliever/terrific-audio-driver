@@ -18,7 +18,8 @@ use crate::errors::{ErrorWithPos, MmlError, ValueError};
 use crate::file_pos::{FilePos, FilePosRange, Line};
 use crate::notes::{MidiNote, MmlPitch, Note, Octave, STARTING_OCTAVE};
 use crate::time::{
-    Bpm, MmlLength, TickClock, TickCounter, TickCounterWithLoopFlag, ZenLen, STARTING_MML_LENGTH,
+    Bpm, MmlDefaultLength, MmlLength, TickClock, TickCounter, TickCounterWithLoopFlag, ZenLen,
+    STARTING_MML_LENGTH,
 };
 use crate::value_newtypes::{i8_value_newtype, u8_value_newtype};
 use crate::ValueNewType;
@@ -163,7 +164,7 @@ impl MmlCommandWithPos {
 #[derive(Debug, Clone, PartialEq)]
 pub struct State {
     pub zenlen: ZenLen,
-    pub default_length: MmlLength,
+    pub default_length: MmlDefaultLength,
     pub octave: Octave,
     pub semitone_offset: i8,
     pub quantize: Quantization,
@@ -457,7 +458,13 @@ fn parse_set_default_length(pos: FilePos, p: &mut Parser) {
     let length_in_ticks = next_token_matches!(p, Token::PercentSign);
     let length = match_next_token!(
         p,
-        &Token::Number(n) => n,
+        &Token::Number(n) => match n.try_into() {
+            Ok(n) => n,
+            Err(_) => {
+                p.add_error(pos, ValueError::InvalidDefaultLength.into());
+                return;
+            }
+        },
         #_ => {
             p.add_error(pos, ValueError::MissingDefaultLength.into());
             return;
@@ -468,9 +475,9 @@ fn parse_set_default_length(pos: FilePos, p: &mut Parser) {
         number_of_dots += 1;
     }
 
-    let default_length = MmlLength::new(Some(length), length_in_ticks, number_of_dots);
+    let default_length = MmlDefaultLength::new(length, length_in_ticks, number_of_dots);
 
-    match default_length.to_tick_count(p.default_length(), p.state().zenlen) {
+    match default_length.to_tick_count(p.state().zenlen) {
         Ok(tc) => {
             p.set_default_length(tc);
             p.set_state(State {
@@ -488,10 +495,7 @@ fn parse_change_whole_note_length(pos: FilePos, p: &mut Parser) {
     if let Some(new_zenlen) = parse_unsigned_newtype(pos, p) {
         let state = p.state().clone();
 
-        let tc = match state
-            .default_length
-            .to_tick_count(p.default_length(), new_zenlen)
-        {
+        let tc = match state.default_length.to_tick_count(new_zenlen) {
             Ok(tc) => tc,
             Err(e) => {
                 p.add_error(pos, e.into());
