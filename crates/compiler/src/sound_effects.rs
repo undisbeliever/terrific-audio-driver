@@ -461,8 +461,6 @@ pub fn build_sound_effects_file<'a>(
 
     let mut out = String::with_capacity(32 * 1024);
 
-    out.push_str(header);
-
     if header.is_empty() {
         if let Some(sfx) = sound_effects.next() {
             out.push_str("=== ");
