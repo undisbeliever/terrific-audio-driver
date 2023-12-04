@@ -14,7 +14,7 @@ use crate::driver_constants::{
     addresses, ECHO_BUFFER_EDL_MS, FIR_FILTER_SIZE, MAX_COMMON_DATA_SIZE, MAX_DIR_ITEMS,
     MAX_INSTRUMENTS, MAX_SONG_DATA_SIZE, MAX_SOUND_EFFECTS, MAX_SUBROUTINES, PITCH_TABLE_SIZE,
 };
-use crate::echo::{EchoEdl, EchoLength};
+use crate::echo::{EchoEdl, EchoLength, MAX_FIR_ABS_SUM};
 use crate::file_pos::{FilePosRange, MAX_MML_TEXT_LENGTH};
 use crate::mml::command_parser::{
     PortamentoSpeed, Quantization, Transpose, MAX_COARSE_VOLUME, MAX_RELATIVE_COARSE_VOLUME,
@@ -150,6 +150,7 @@ pub enum ValueError {
 
     InvalidFirFilterSize,
     InvalidFirFilter,
+    InvalidFirFilterGain { abs_sum: i32 },
 
     NoName,
     NoBool,
@@ -728,6 +729,11 @@ impl Display for ValueError {
                 FIR_FILTER_SIZE,
                 i8::MIN,
                 i8::MAX
+            ),
+            Self::InvalidFirFilterGain { abs_sum } => write!(
+                f,
+                "invalid FIR filter gain (absolute sum is {}, max; {})",
+                abs_sum, MAX_FIR_ABS_SUM,
             ),
 
             Self::NoName => write!(f, "no name"),

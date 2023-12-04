@@ -9,9 +9,9 @@ use std::collections::HashMap;
 use crate::driver_constants::{IDENTITY_FILTER, SFX_TICK_CLOCK};
 use crate::echo::{parse_fir_filter_string, EchoBuffer, EchoLength, DEFAULT_EDL};
 use crate::errors::{ErrorWithPos, MmlLineError, ValueError};
-use crate::file_pos::Line;
-use crate::spc_file_export;
+use crate::file_pos::{blank_file_range, Line};
 use crate::time::{Bpm, TickClock, ZenLen, DEFAULT_BPM, DEFAULT_ZENLEN};
+use crate::{spc_file_export, FilePosRange};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct MetaData {
@@ -98,17 +98,22 @@ impl MetaData {
 struct HeaderState {
     metadata: MetaData,
     tempo_set: bool,
+    disable_fir_filter_limit: bool,
+    fir_pos: FilePosRange,
 }
 
 impl HeaderState {
     fn new() -> Self {
         Self {
             tempo_set: false,
+            disable_fir_filter_limit: false,
+            fir_pos: blank_file_range(),
             metadata: MetaData::new(),
         }
     }
 
-    fn parse_header(&mut self, header: &str, value: &str) -> Result<(), MmlLineError> {
+    fn parse_header(&mut self, header: &str, line: &Line) -> Result<(), MmlLineError> {
+        let value = line.text;
         match header {
             "#Title" => self.metadata.title = Some(value.to_owned()),
             "#Date" => self.metadata.date = Some(value.to_owned()),
@@ -124,7 +129,11 @@ impl HeaderState {
                 self.metadata.echo_buffer.edl = echo_length.to_edl();
             }
 
-            "#FirFilter" => self.metadata.echo_buffer.fir = parse_fir_filter_string(value)?,
+            "#FirFilter" => {
+                self.metadata.echo_buffer.fir = parse_fir_filter_string(value)?;
+                self.fir_pos = line.range();
+            }
+            "#DisableFirFilterLimit" => self.disable_fir_filter_limit = true,
 
             "#EchoFeedback" => match value.parse() {
                 Ok(i) => self.metadata.echo_buffer.feedback = i,
@@ -191,7 +200,7 @@ pub fn parse_headers(lines: Vec<Line>) -> Result<MetaData, Vec<ErrorWithPos<MmlL
                 if !map.contains_key(header) {
                     map.insert(header, value.text);
 
-                    match header_state.parse_header(header, value.text) {
+                    match header_state.parse_header(header, &value) {
                         Ok(()) => (),
                         Err(e) => errors.push(ErrorWithPos(value.range(), e)),
                     }
@@ -205,6 +214,12 @@ pub fn parse_headers(lines: Vec<Line>) -> Result<MetaData, Vec<ErrorWithPos<MmlL
             Err(e) => {
                 errors.push(ErrorWithPos(line.range(), e));
             }
+        }
+    }
+
+    if !header_state.disable_fir_filter_limit {
+        if let Err(e) = header_state.metadata.echo_buffer.test_fir_gain() {
+            errors.push(ErrorWithPos(header_state.fir_pos, e.into()));
         }
     }
 

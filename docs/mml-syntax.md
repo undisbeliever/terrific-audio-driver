@@ -46,6 +46,8 @@ Echo values:
     * **WARNING:** These values are copied to the `C0` - `C7` S-DSP registers without any overflow checks.<br/>
       An overflowing FIR filter can pop.  Excessive filter feedback will continue to get louder and louder, exploding your song.<br/>
       Headphone users should turn down their volume when playing with echo filters/feedback.
+    * The compiler will reject an FIR filter whose absolute sum is > 128 (unless this limit is disabled).
+ * `#DisableFirFilterLimit` - Disables the FIR filter absolute sum limit.
  * `#EchoFeedback` - Echo feedback setting (-128 to 127) (`EFB` S-DSP register)
     * **WARNING:** This value is copied to the `EFB` S-DSP register without any overflow checks.<br/>
       Excessive echo feedback will continue to get louder and louder, exploding your song.<br/>

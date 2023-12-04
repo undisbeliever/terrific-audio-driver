@@ -21,6 +21,9 @@ u8_value_newtype!(
     ECHO_BUFFER_MAX_EDL
 );
 
+// Source: SnesLab https://sneslab.net/wiki/FIR_Filter
+pub const MAX_FIR_ABS_SUM: i32 = 128;
+
 pub const DEFAULT_EDL: EchoEdl = EchoEdl(0);
 
 impl EchoEdl {
@@ -80,6 +83,12 @@ pub struct EchoBuffer {
     pub echo_volume: i8,
 }
 
+impl EchoBuffer {
+    pub fn test_fir_gain(&self) -> Result<(), ValueError> {
+        test_fir_filter_gain(&self.fir)
+    }
+}
+
 pub fn parse_fir_filter_string(s: &str) -> Result<[i8; FIR_FILTER_SIZE], ValueError> {
     let input: Vec<&str> = s.split_whitespace().collect();
 
@@ -105,4 +114,13 @@ pub fn parse_fir_filter_string(s: &str) -> Result<[i8; FIR_FILTER_SIZE], ValueEr
     }
 
     Ok(out)
+}
+
+pub fn test_fir_filter_gain(fir: &[i8; FIR_FILTER_SIZE]) -> Result<(), ValueError> {
+    let abs_sum = fir.iter().map(|&i| i32::from(i).abs()).sum();
+    if abs_sum <= MAX_FIR_ABS_SUM {
+        Ok(())
+    } else {
+        Err(ValueError::InvalidFirFilterGain { abs_sum })
+    }
 }
