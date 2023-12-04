@@ -37,6 +37,7 @@ pub enum TextErrorRef<'a> {
 pub enum TextFormat {
     Mml,
     Bytecode,
+    SoundEffectHeader,
 }
 
 pub enum CompiledEditorData {
@@ -221,6 +222,12 @@ impl MmlEditor {
 
     pub fn text(&self) -> String {
         self.state.borrow().buffer.borrow().text()
+    }
+
+    pub fn set_text(&mut self, txt: &str) {
+        // Make a copy of the TextBuffer to prevent a `BorrowError` panic in `MmlEditorState::buffer_modified()`.
+        let mut tb = self.state.borrow().buffer.borrow().text_buffer.clone();
+        tb.set_text(txt)
     }
 
     pub fn set_text_size(&mut self, text_size: i32) {
@@ -444,6 +451,7 @@ impl MmlEditorState {
             Some(s) => match format {
                 TextFormat::Mml => Self::populate_mml_style(to_style, &s, prev_style_char),
                 TextFormat::Bytecode => Self::populate_bc_style(to_style, &s, prev_style_char),
+                TextFormat::SoundEffectHeader => to_style.fill(Style::Comment.to_u8_char()),
             },
             None => {
                 to_style.fill(Style::Unknown.to_u8_char());

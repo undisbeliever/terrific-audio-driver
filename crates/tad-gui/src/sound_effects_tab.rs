@@ -126,8 +126,7 @@ pub struct State {
 pub struct SoundEffectsTab {
     state: Rc<RefCell<State>>,
 
-    // An empty text buffer for when no sound effect is selected.
-    no_selection_buffer: Rc<RefCell<EditorBuffer>>,
+    header_buffer: Rc<RefCell<EditorBuffer>>,
 
     // Each sound effect gets it own buffer so they have their own undo/redo stack.
     sfx_buffers: LaVec<Option<Rc<RefCell<EditorBuffer>>>>,
@@ -141,6 +140,7 @@ pub struct SoundEffectsTab {
     add_missing_sfx_button: Button,
 
     main_group: Flex,
+    main_toolbar: Pack,
 
     name: Input,
 
@@ -217,7 +217,7 @@ impl SoundEffectsTab {
         main_group.fixed(&name_flex, input_height(&name));
         name_flex.end();
 
-        let mut editor = MmlEditor::new("", TextFormat::Bytecode);
+        let mut editor = MmlEditor::new("", TextFormat::SoundEffectHeader);
         editor.set_text_size(editor.widget().text_size() * 12 / 10);
 
         let mut console = TextDisplay::default();
@@ -276,7 +276,7 @@ impl SoundEffectsTab {
             }
         });
 
-        let no_selection_buffer = state.borrow().editor.buffer();
+        let header_buffer = state.borrow().editor.buffer();
 
         {
             let mut s = state.borrow_mut();
@@ -321,7 +321,7 @@ impl SoundEffectsTab {
         let mut s = Self {
             state,
 
-            no_selection_buffer,
+            header_buffer,
             sfx_buffers: LaVec::new(),
 
             group,
@@ -332,6 +332,7 @@ impl SoundEffectsTab {
             add_missing_sfx_button,
 
             main_group,
+            main_toolbar,
             name,
 
             console,
@@ -341,11 +342,17 @@ impl SoundEffectsTab {
         s
     }
 
-    pub fn replace_sfx_file(&mut self, state: &impl ListState<Item = SoundEffectInput>) {
+    pub fn replace_sfx_file(
+        &mut self,
+        header: &str,
+        state: &impl ListState<Item = SoundEffectInput>,
+    ) {
         let v: Vec<_> = (0..state.list().len()).map(|_| None).collect();
         assert!(v.len() == state.list().len());
 
         self.clear_selected();
+        self.state.borrow_mut().editor.set_text(header);
+
         self.sfx_buffers = LaVec::from_vec(v);
         self.sfx_table.replace(state);
 
@@ -355,6 +362,11 @@ impl SoundEffectsTab {
         self.group.layout();
 
         self.sidebar.activate();
+        self.main_group.activate();
+    }
+
+    pub fn header_text(&self) -> String {
+        self.header_buffer.borrow().text()
     }
 
     pub fn n_missing_sfx_changed(&mut self, n_missing: usize) {
@@ -388,16 +400,18 @@ impl ListEditor<SoundEffectInput> for SoundEffectsTab {
             state.commit_sfx();
             state.selected = None;
 
-            state.sound_effect_type.set_value(-1);
+            state.name.set_value("Header (not a sound effect)");
+            state.name.deactivate();
 
-            state.editor.set_buffer(self.no_selection_buffer.clone());
+            state.sound_effect_type.set_value(-1);
+            state.sound_effect_type.deactivate();
+
+            state.editor.set_buffer(self.header_buffer.clone());
         }
 
         self.sfx_table.clear_selected();
 
-        self.name.set_value("");
-
-        self.main_group.deactivate();
+        self.main_toolbar.deactivate();
     }
 
     fn set_selected(&mut self, index: usize, id: ItemId, sfx: &SoundEffectInput) {
@@ -435,9 +449,10 @@ impl ListEditor<SoundEffectInput> for SoundEffectsTab {
                         }
                     }
 
-                    self.main_group.activate();
-
                     self.sfx_table.set_selected(index, id, sfx);
+
+                    self.main_toolbar.activate();
+                    self.main_group.activate();
                 }
                 // This should not happen
                 Err(_) => self.main_group.deactivate(),
@@ -488,6 +503,9 @@ impl State {
                 .send(GuiMessage::EditSoundEffectList(ListMessage::ItemEdited(
                     index, sfx,
                 )));
+        } else {
+            // Header
+            self.sender.send(GuiMessage::SfxFileHeaderChanged);
         }
     }
 

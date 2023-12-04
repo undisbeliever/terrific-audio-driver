@@ -108,6 +108,7 @@ pub enum GuiMessage {
     RecompileEverything,
 
     EditSoundEffectList(ListMessage<SoundEffectInput>),
+    SfxFileHeaderChanged,
     AddMissingSoundEffects,
 
     AddSongToProjectDialog,
@@ -319,6 +320,9 @@ impl Project {
                         self.tab_manager.mark_unsaved(FileType::SoundEffects);
                     }
                 }
+            }
+            GuiMessage::SfxFileHeaderChanged => {
+                self.tab_manager.mark_unsaved(FileType::SoundEffects);
             }
             GuiMessage::AddMissingSoundEffects => {
                 if let Some(sfx_data) = &self.sfx_data {
@@ -620,7 +624,8 @@ impl Project {
         let sound_effects =
             ListWithCompilerOutput::new(sfx, driver_constants::MAX_SOUND_EFFECTS + 20);
 
-        self.sound_effects_tab.replace_sfx_file(&sound_effects);
+        self.sound_effects_tab
+            .replace_sfx_file(&sfx_file.header, &sound_effects);
         self.tab_manager.add_or_modify(
             &self.sound_effects_tab,
             sfx_file.path,
@@ -733,18 +738,22 @@ impl Project {
                     .save_tab(ft, save_type, &self.data, &self.data)
                     .is_saved()
             }
-            FileType::SoundEffects => match &self.sfx_data {
-                Some(sfx_data) => match self
-                    .tab_manager
-                    .save_tab(ft, save_type, sfx_data, &self.data)
-                {
-                    SaveResult::None => false,
-                    SaveResult::Saved => true,
-                    SaveResult::Renamed(source_path) => {
-                        self.set_sound_effects_file(source_path);
-                        true
+            FileType::SoundEffects => match &mut self.sfx_data {
+                Some(sfx_data) => {
+                    sfx_data.header = self.sound_effects_tab.header_text();
+
+                    match self
+                        .tab_manager
+                        .save_tab(ft, save_type, sfx_data, &self.data)
+                    {
+                        SaveResult::None => false,
+                        SaveResult::Saved => true,
+                        SaveResult::Renamed(source_path) => {
+                            self.set_sound_effects_file(source_path);
+                            true
+                        }
                     }
-                },
+                }
                 None => false,
             },
             FileType::Song(id) => {
