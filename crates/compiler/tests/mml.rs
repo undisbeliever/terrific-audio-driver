@@ -73,10 +73,6 @@ fn test_note_length() {
         &["play_note a4 12", "play_note b4 6", "play_note c4 12", "play_note d4 3", "play_note e4 18"],
     );
     assert_line_matches_bytecode(
-        "l l l a",
-        &["play_note a4 24"]
-    );
-    assert_line_matches_bytecode(
         "a. b.. c...",
         &["play_note a4 36", "play_note b4 42", "play_note c4 45"],
     );
@@ -85,7 +81,7 @@ fn test_note_length() {
         &["play_note a4 144", "play_note b4 36", "play_note c4 18", "play_note d4 21"],
     );
     assert_line_matches_bytecode(
-        "l. a",
+        "l4. a",
         &["play_note a4 36"]
     );
     assert_line_matches_bytecode("a%9  b%21", &["play_note a4 9", "play_note b4 21"]);
@@ -804,8 +800,8 @@ fn test_change_whole_note_length_command() {
 fn merge_mml_commands_test(mml_line: &str, bc_asm: &[&str]) {
     // The inc/dec octave commands must return to the original octave
     // The transpose commands must return to a transpose of 0
-    const MML_TO_INSERT: [&str; 11] = [
-        "", "l", "l4", "o4", "> <", "> <", "_+2 __-2", "_-4 __+4", "|", "| | | |",
+    const MML_TO_INSERT: [&str; 10] = [
+        "", "l4", "o4", "> <", "> <", "_+2 __-2", "_-4 __+4", "|", "| | | |",
         // Newline
         "\nA ",
     ];

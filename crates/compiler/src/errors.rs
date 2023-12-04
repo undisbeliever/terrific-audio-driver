@@ -141,6 +141,7 @@ pub enum ValueError {
     MissingNoteLengthTickCount,
     InvalidNoteLength,
     DotsNotAllowedAfterClockValue,
+    MissingDefaultLength,
 
     CannotConvertBpmToTickClock,
 
@@ -708,6 +709,8 @@ impl Display for ValueError {
             Self::DotsNotAllowedAfterClockValue => {
                 write!(f, "dots not allowed after a tick count length")
             }
+            Self::MissingDefaultLength => write!(f, "missing length"),
+
             Self::CannotConvertBpmToTickClock => write!(f, "cannot convert bpm to tick clock"),
 
             Self::EchoEdlOutOfRange => out_of_range!("echo EDL", EchoEdl),

@@ -453,21 +453,33 @@ where
     )
 }
 
-fn parse_set_default_length(p: &mut Parser) {
-    let pos = *p.peek_pos();
+fn parse_set_default_length(pos: FilePos, p: &mut Parser) {
+    let length_in_ticks = next_token_matches!(p, Token::PercentSign);
+    let length = match_next_token!(
+        p,
+        &Token::Number(n) => n,
+        #_ => {
+            p.add_error(pos, ValueError::MissingDefaultLength.into());
+            return;
+        }
+    );
+    let mut number_of_dots = 0;
+    while next_token_matches!(p, Token::Dot) {
+        number_of_dots += 1;
+    }
 
-    if let Some(nl) = parse_untracked_optional_mml_length(p) {
-        match nl.to_tick_count(p.default_length(), p.state().zenlen) {
-            Ok(tc) => {
-                p.set_default_length(tc);
-                p.set_state(State {
-                    default_length: nl,
-                    ..p.state().clone()
-                });
-            }
-            Err(e) => {
-                p.add_error(pos, e.into());
-            }
+    let default_length = MmlLength::new(Some(length), length_in_ticks, number_of_dots);
+
+    match default_length.to_tick_count(p.default_length(), p.state().zenlen) {
+        Ok(tc) => {
+            p.set_default_length(tc);
+            p.set_state(State {
+                default_length,
+                ..p.state().clone()
+            });
+        }
+        Err(e) => {
+            p.add_error(pos, e.into());
         }
     }
 }
@@ -592,7 +604,7 @@ fn merge_state_change(p: &mut Parser) -> bool {
         },
 
         Token::SetDefaultLength => {
-            parse_set_default_length(p);
+            parse_set_default_length(pos, p);
             true
         },
         Token::ChangeWholeNoteLength => {
@@ -1202,7 +1214,7 @@ fn parse_token(pos: FilePos, token: Token, p: &mut Parser) -> MmlCommand {
             MmlCommand::NoCommand
         }
         Token::SetDefaultLength => {
-            parse_set_default_length(p);
+            parse_set_default_length(pos, p);
             MmlCommand::NoCommand
         }
         Token::SetOctave => {
