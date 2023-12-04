@@ -116,7 +116,7 @@ impl Line<'_> {
         }
     }
 
-    fn trim_start(self) -> Self {
+    pub fn trim_start(self) -> Self {
         let pos = self.position;
 
         let mut char_count = 0;
@@ -139,6 +139,16 @@ impl Line<'_> {
                 line_char: pos.line_char + char_count,
                 char_index: pos.char_index + u32::try_from(self.text.bytes().len()).unwrap(),
             },
+        }
+    }
+
+    pub fn trim_comments(self, comment_char: char) -> Self {
+        match self.text.split_once(comment_char) {
+            Some((text, _comment)) => Self {
+                text: text.trim_end(),
+                ..self
+            },
+            None => self,
         }
     }
 

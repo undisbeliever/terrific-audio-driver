@@ -31,9 +31,6 @@ use std::io;
 use std::path::PathBuf;
 
 #[derive(Debug)]
-pub struct ErrorWithLine<T>(pub u32, pub T);
-
-#[derive(Debug)]
 pub struct ErrorWithPos<T>(pub FilePosRange, pub T);
 
 #[derive(Debug)]
@@ -222,7 +219,7 @@ pub enum BytecodeAssemblerError {
 
 #[derive(Debug)]
 pub enum SoundEffectErrorList {
-    BytecodeErrors(Vec<ErrorWithLine<BytecodeAssemblerError>>),
+    BytecodeErrors(Vec<ErrorWithPos<BytecodeAssemblerError>>),
     MmlLineErrors(Vec<ErrorWithPos<MmlLineError>>),
     MmlErrors(Vec<ErrorWithPos<MmlError>>),
 }
@@ -1271,7 +1268,7 @@ fn fmt_indented_sound_effect_error(
     match &error.errors {
         SoundEffectErrorList::BytecodeErrors(errors) => {
             for e in errors.iter().take(SFX_MML_ERROR_LIMIT) {
-                writeln!(f, "    {}{}: {}", line_prefix, e.0, e.1)?;
+                writeln!(f, "    {}{}: {}", line_prefix, e.0.line_number + line_no, e.1)?;
             }
             plus_more_errors_line(f, "    ", errors.len())?;
         }
@@ -1311,7 +1308,7 @@ impl SoundEffectError {
             offset,
             lines: match &self.errors {
                 SoundEffectErrorList::BytecodeErrors(errors) => {
-                    errors.iter().map(|e| e.0).collect()
+                    errors.iter().map(|e| e.0.line_number).collect()
                 }
                 SoundEffectErrorList::MmlLineErrors(errors) => {
                     errors.iter().map(|e| e.0.line_number).collect()

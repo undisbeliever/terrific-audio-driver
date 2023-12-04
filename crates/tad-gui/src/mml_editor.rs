@@ -485,11 +485,11 @@ impl MmlEditorState {
         let mut min_index = usize::MAX;
         let mut max_index = 0;
 
-        let mut highlight_error = |pos: &FilePosRange| {
+        let mut highlight_error = |pos: &FilePosRange, s: Style| {
             if let Ok(start) = usize::try_from(pos.index_start()) {
                 if let Ok(end) = usize::try_from(pos.index_end()) {
                     if let Some(slice) = style_vec.get_mut(start..end) {
-                        slice.fill(Style::Error.to_u8_char());
+                        slice.fill(s.to_u8_char());
                         if start < min_index {
                             min_index = start;
                         }
@@ -504,12 +504,12 @@ impl MmlEditorState {
         match errors {
             TextErrorRef::Song(errors) => {
                 for e in &errors.line_errors {
-                    highlight_error(&e.0);
+                    highlight_error(&e.0, Style::Error);
                 }
 
                 let mut parse_channel_error = |e: &MmlChannelError| {
                     for e in &e.errors {
-                        highlight_error(&e.0);
+                        highlight_error(&e.0, Style::Error);
                     }
                 };
 
@@ -520,23 +520,23 @@ impl MmlEditorState {
                     parse_channel_error(e);
                 }
             }
-            TextErrorRef::SoundEffect(errors) => {
-                match &errors.errors {
-                    SoundEffectErrorList::BytecodeErrors(_errors) => {
-                        // ::TODO implement::
-                    }
-                    SoundEffectErrorList::MmlLineErrors(errors) => {
-                        for e in errors {
-                            highlight_error(&e.0);
-                        }
-                    }
-                    SoundEffectErrorList::MmlErrors(errors) => {
-                        for e in errors {
-                            highlight_error(&e.0);
-                        }
+            TextErrorRef::SoundEffect(errors) => match &errors.errors {
+                SoundEffectErrorList::BytecodeErrors(errors) => {
+                    for e in errors {
+                        highlight_error(&e.0, Style::BytecodeError);
                     }
                 }
-            }
+                SoundEffectErrorList::MmlLineErrors(errors) => {
+                    for e in errors {
+                        highlight_error(&e.0, Style::Error);
+                    }
+                }
+                SoundEffectErrorList::MmlErrors(errors) => {
+                    for e in errors {
+                        highlight_error(&e.0, Style::Error);
+                    }
+                }
+            },
         }
 
         let style = std::str::from_utf8(&style_vec).unwrap();
@@ -846,6 +846,7 @@ struct MmlColors {
     invalid: Color,
 
     error_bg: Color,
+    bytecode_error: Color,
 
     unknown: Color,
 
@@ -865,6 +866,7 @@ const MML_COLORS: MmlColors = MmlColors {
 
     invalid: Color::Red,
     error_bg: Color::Red,
+    bytecode_error: Color::Red,
 
     unknown: Color::Green,
 
@@ -898,6 +900,7 @@ enum Style {
     InvalidLine,
 
     Error,
+    BytecodeError,
 
     NoteTracking,
 
@@ -930,14 +933,16 @@ impl Style {
             b'P' => Style::InvalidLine,
 
             b'Q' => Style::Error,
+            b'R' => Style::BytecodeError,
 
-            b'R' => Style::NoteTracking,
+            // MUST edit `NOTE_TRACKER_STR` when this character changes
+            b'S' => Style::NoteTracking,
 
             _ => Style::Unknown,
         }
     }
 
-    const NOTE_TRACKER_STR: &'static str = "R";
+    const NOTE_TRACKER_STR: &'static str = "S";
 
     const fn to_u8_char(self) -> u8 {
         b'A' + (self as u8)
@@ -983,6 +988,7 @@ fn highlight_data(mml_colors: &MmlColors, font_size: i32) -> Vec<StyleTableEntry
         courier_bold(mml_colors.channel_names),
         courier(mml_colors.invalid),
         bg_bold(mml_colors.error_bg),
+        courier_bold(mml_colors.bytecode_error),
         bg_bold(mml_colors.tracker_bg),
         courier(mml_colors.unknown),
     ]
@@ -1065,6 +1071,7 @@ fn next_style_mml(current: Style, c: u8) -> Style {
         },
 
         Style::Error => Style::Error,
+        Style::BytecodeError => Style::Error,
         Style::NoteTracking => Style::Error,
     }
 }

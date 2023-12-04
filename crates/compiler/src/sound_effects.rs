@@ -11,9 +11,10 @@ use crate::data::{
 };
 use crate::driver_constants::SFX_TICK_CLOCK;
 use crate::errors::{
-    BytecodeAssemblerError, CombineSoundEffectsError, ErrorWithLine, FileError, SoundEffectError,
+    BytecodeAssemblerError, CombineSoundEffectsError, ErrorWithPos, FileError, SoundEffectError,
     SoundEffectErrorList, SoundEffectsFileError,
 };
+use crate::file_pos::{blank_file_range, split_lines};
 use crate::mml;
 use crate::path::{ParentPathBuf, SourcePathBuf};
 use crate::pitch_table::PitchTable;
@@ -125,24 +126,17 @@ fn compile_bytecode_sound_effect(
 
     let mut bc = BytecodeAssembler::new(instruments, None, BytecodeContext::SoundEffect);
 
-    let mut last_line_no: u32 = starting_line_number;
+    let mut last_line_range = blank_file_range();
 
-    for (line_no, line) in sfx.lines().enumerate() {
-        let line_no = u32::try_from(line_no).unwrap() + starting_line_number;
+    for line in split_lines(sfx) {
+        let line = line.trim_start().trim_comments(COMMENT_CHAR);
 
-        let line = match line.split_once(COMMENT_CHAR) {
-            Some((asm, _comment)) => asm,
-            None => line,
-        };
+        if !line.text.is_empty() {
+            last_line_range = line.range();
 
-        let line = line.trim();
-
-        if !line.is_empty() {
-            last_line_no = line_no;
-
-            match bc.parse_line(line) {
+            match bc.parse_line(line.text) {
                 Ok(()) => (),
-                Err(e) => errors.push(ErrorWithLine(line_no, e)),
+                Err(e) => errors.push(ErrorWithPos(line.range(), e)),
             }
         }
     }
@@ -152,14 +146,14 @@ fn compile_bytecode_sound_effect(
     let out = match bc.bytecode(BcTerminator::DisableChannel) {
         Ok(out) => Some(out),
         Err(e) => {
-            errors.push(ErrorWithLine(last_line_no, e));
+            errors.push(ErrorWithPos(last_line_range.clone(), e));
             None
         }
     };
 
     if tick_counter.is_zero() {
-        errors.push(ErrorWithLine(
-            last_line_no,
+        errors.push(ErrorWithPos(
+            last_line_range,
             BytecodeAssemblerError::NoTicksInSoundEffect,
         ));
     }
