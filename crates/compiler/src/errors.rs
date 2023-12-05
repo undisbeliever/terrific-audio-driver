@@ -343,6 +343,7 @@ pub enum MmlLineError {
     // MML Header errors
     NoHeader,
     NoValue,
+    UnexpectedHeaderValue,
     UnknownHeader(String),
     DuplicateHeader(String),
 
@@ -977,6 +978,7 @@ impl Display for MmlLineError {
 
             Self::NoHeader => write!(f, "no header name"),
             Self::NoValue => write!(f, "no header value"),
+            Self::UnexpectedHeaderValue => write!(f, "unexpected header value"),
             Self::UnknownHeader(name) => write!(f, "unknown header: {}", name),
             Self::DuplicateHeader(name) => write!(f, "duplicate header: {}", name),
 

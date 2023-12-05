@@ -40,22 +40,21 @@ pub struct MetaData {
 // Header
 // ======
 
-fn split_header_line<'a>(line: &'a Line<'a>) -> Result<(&'a str, Line<'a>), MmlLineError> {
-    let (header, value) = match line.split_once() {
-        Some(s) => s,
-        None => {
-            return Err(MmlLineError::NoHeader);
+fn split_header_line<'a>(
+    line: &'a Line<'a>,
+) -> Result<(&'a str, &'a str, FilePosRange), MmlLineError> {
+    match line.split_once() {
+        Some((header, value)) => {
+            if header.is_empty() {
+                Err(MmlLineError::NoHeader)
+            } else if value.text.is_empty() {
+                Ok((header, "", line.range()))
+            } else {
+                Ok((header, value.text, value.range()))
+            }
         }
-    };
-
-    if header.is_empty() {
-        return Err(MmlLineError::NoHeader);
+        None => Ok((line.text, "", line.range())),
     }
-    if value.text.is_empty() {
-        return Err(MmlLineError::NoValue);
-    }
-
-    Ok((header, value))
 }
 
 fn parse_u32(s: &str) -> Result<u32, ValueError> {
@@ -112,15 +111,26 @@ impl HeaderState {
         }
     }
 
-    fn parse_header(&mut self, header: &str, line: &Line) -> Result<(), MmlLineError> {
-        let value = line.text;
+    fn parse_header(
+        &mut self,
+        header: &str,
+        value: &str,
+        pos: &FilePosRange,
+    ) -> Result<(), MmlLineError> {
+        let to_option_string = || {
+            if !value.is_empty() {
+                Ok(Some(value.to_owned()))
+            } else {
+                Err(MmlLineError::NoValue)
+            }
+        };
         match header {
-            "#Title" => self.metadata.title = Some(value.to_owned()),
-            "#Date" => self.metadata.date = Some(value.to_owned()),
-            "#Composer" => self.metadata.composer = Some(value.to_owned()),
-            "#Author" => self.metadata.author = Some(value.to_owned()),
-            "#Copyright" => self.metadata.copyright = Some(value.to_owned()),
-            "#License" => self.metadata.license = Some(value.to_owned()),
+            "#Title" => self.metadata.title = to_option_string()?,
+            "#Date" => self.metadata.date = to_option_string()?,
+            "#Composer" => self.metadata.composer = to_option_string()?,
+            "#Author" => self.metadata.author = to_option_string()?,
+            "#Copyright" => self.metadata.copyright = to_option_string()?,
+            "#License" => self.metadata.license = to_option_string()?,
 
             "#ZenLen" => self.metadata.zenlen = parse_u32(value)?.try_into()?,
 
@@ -131,9 +141,12 @@ impl HeaderState {
 
             "#FirFilter" => {
                 self.metadata.echo_buffer.fir = parse_fir_filter_string(value)?;
-                self.fir_pos = line.range();
+                self.fir_pos = pos.clone();
             }
-            "#DisableFirFilterLimit" => self.disable_fir_filter_limit = true,
+            "#DisableFirFilterLimit" => match value.is_empty() {
+                true => self.disable_fir_filter_limit = true,
+                false => return Err(MmlLineError::UnexpectedHeaderValue),
+            },
 
             "#EchoFeedback" => match value.parse() {
                 Ok(i) => self.metadata.echo_buffer.feedback = i,
@@ -196,13 +209,13 @@ pub fn parse_headers(lines: Vec<Line>) -> Result<MetaData, Vec<ErrorWithPos<MmlL
 
     for line in &lines {
         match split_header_line(line) {
-            Ok((header, value)) => {
+            Ok((header, value, pos)) => {
                 if !map.contains_key(header) {
-                    map.insert(header, value.text);
+                    map.insert(header, value);
 
-                    match header_state.parse_header(header, &value) {
+                    match header_state.parse_header(header, value, &pos) {
                         Ok(()) => (),
-                        Err(e) => errors.push(ErrorWithPos(value.range(), e)),
+                        Err(e) => errors.push(ErrorWithPos(pos, e)),
                     }
                 } else {
                     errors.push(ErrorWithPos(
