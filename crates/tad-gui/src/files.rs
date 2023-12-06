@@ -25,7 +25,7 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc;
 
-const PROJECT_FILTER: &str = "JSON Files\t*.json";
+const PROJECT_FILTER: &str = "Project Files\t*.terrificaudio";
 const SOUND_EFFECTS_FILTER: &str = "TXT Files\t*.txt";
 const MML_SONG_FILTER: &str = "MML Files\t*.mml";
 const SPC_FILTER: &str = "SPC Files\t*.spc";
@@ -246,7 +246,7 @@ pub fn open_project_dialog() -> Option<ProjectFile> {
 }
 
 pub fn new_project_dialog() -> Option<ProjectFile> {
-    let path = match save_file_dialog("New Project", PROJECT_FILTER, "json") {
+    let path = match save_file_dialog("New Project", PROJECT_FILTER, data::PROJECT_FILE_EXTENSION) {
         Some(p) => p,
         None => return None,
     };
@@ -448,7 +448,7 @@ pub trait Serializer {
 
 impl Serializer for ProjectData {
     const FILE_TYPE: &'static str = "project";
-    const FILE_EXTENSION: &'static str = "json";
+    const FILE_EXTENSION: &'static str = data::PROJECT_FILE_EXTENSION;
     const DIALOG_FILTER: Option<&'static str> = None;
 
     fn serialize(pd: &ProjectData) -> Result<Vec<u8>, String> {

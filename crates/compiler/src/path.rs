@@ -21,7 +21,7 @@ impl Display for PathString {
     }
 }
 
-// The directory that contains the project JSON file.
+// The directory that contains the project file.
 #[derive(Clone)]
 pub struct ParentPathBuf(PathBuf);
 
@@ -54,7 +54,7 @@ pub enum SourcePathResult {
     Err(RelativeToError),
 }
 
-// The source path within the project JSON file, relative to ParentPathBuf.
+// The source path within the project file, relative to ParentPathBuf.
 #[derive(Default, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct SourcePathBuf {
     relative_path: RelativePathBuf,

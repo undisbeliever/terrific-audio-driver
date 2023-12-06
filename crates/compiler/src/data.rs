@@ -1,4 +1,4 @@
-//! JSON Data
+//! Project Data
 
 // SPDX-FileCopyrightText: © 2023 Marcus Rowe <undisbeliever@gmail.com>
 //
@@ -25,6 +25,8 @@ use serde::ser::SerializeStruct;
 use serde::{Deserialize, Serialize, Serializer};
 
 pub const MAX_FILE_SIZE: u32 = 5 * 1024 * 1024;
+
+pub const PROJECT_FILE_EXTENSION: &str = "terrificaudio";
 
 #[derive(Deserialize, Serialize, Clone, Hash, Eq, PartialEq, Debug)]
 #[serde(try_from = "String")]
@@ -186,7 +188,7 @@ pub struct Song {
     pub source: SourcePathBuf,
 }
 
-/// A small struct that documents (in the JSON file) what the project file is and the tad-gui
+/// A small struct that documents (in the project file) what the project file is and the tad-gui
 /// version used to create the project file.
 #[derive(Debug, Default, Deserialize)]
 pub struct About {
