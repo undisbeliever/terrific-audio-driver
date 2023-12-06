@@ -17,9 +17,9 @@ use compiler::mml::{ChannelId, MmlTickCountTable};
 use compiler::songs::{song_duration_string, SongData};
 
 use compiler::time::TickCounter;
-use fltk::app;
+use fltk::app::{self, event_key};
 use fltk::button::Button;
-use fltk::enums::{Color, Font};
+use fltk::enums::{Color, Event, Font, Key};
 use fltk::group::{Flex, Pack, PackType};
 use fltk::prelude::*;
 use fltk::text::{TextBuffer, TextDisplay, WrapMode};
@@ -93,11 +93,13 @@ impl SongTab {
         };
 
         // ::TODO add custom icons::
+
+        // NOTE: toolbar shortcuts are handled by the `group.handle()` callback below
         let mut compile_button = button("C", "Compile song");
-        let mut play_button = button("@>", "Play song from the beginning");
-        let mut play_at_line_start_button = button("@>|", "Play from line start");
-        let mut play_at_cursor_button = button("@>[]", "Play from cursor");
-        let mut pause_resume_button = button("@||", "Pause/Resume song");
+        let mut play_button = button("@>", "Play song from the beginning (F5)");
+        let mut play_at_line_start_button = button("@>|", "Play from line start (F6)");
+        let mut play_at_cursor_button = button("@>[]", "Play from cursor (F7)");
+        let mut pause_resume_button = button("@||", "Pause/Resume song (F8)");
 
         main_toolbar.end();
 
@@ -128,6 +130,34 @@ impl SongTab {
 
             errors: None,
         }));
+
+        // Handle toolbar shortcut keys
+        // This is done here so focus is not stolen from the editor.
+        group.handle({
+            let s = state.clone();
+            move |_widget, ev| match ev {
+                Event::KeyDown => match event_key() {
+                    Key::F5 => {
+                        s.borrow_mut().play_song();
+                        true
+                    }
+                    Key::F6 => {
+                        s.borrow_mut().play_song_at_line_start();
+                        true
+                    }
+                    Key::F7 => {
+                        s.borrow_mut().play_song_at_cursor();
+                        true
+                    }
+                    Key::F8 => {
+                        s.borrow_mut().pause_resume();
+                        true
+                    }
+                    _ => false,
+                },
+                _ => false,
+            }
+        });
 
         compile_button.set_callback({
             let s = state.clone();

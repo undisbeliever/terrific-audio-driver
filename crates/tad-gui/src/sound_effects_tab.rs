@@ -19,9 +19,9 @@ use compiler::data::Name;
 use compiler::errors::SfxErrorLines;
 use compiler::sound_effects::{SoundEffectInput, SoundEffectText, SoundEffectsFile};
 
-use fltk::app;
+use fltk::app::{self, event_key};
 use fltk::button::Button;
-use fltk::enums::{Color, Event, Font};
+use fltk::enums::{Color, Event, Font, Key};
 use fltk::frame::Frame;
 use fltk::group::{Flex, Pack, PackType};
 use fltk::input::Input;
@@ -201,7 +201,8 @@ impl SoundEffectsTab {
             b
         };
 
-        let mut play_button = button("@>", "Play sound effect");
+        // NOTE: toolbar shortcuts are handled by the `group.handle()` callback below
+        let mut play_button = button("@>", "Play sound effect (F5)");
 
         main_toolbar.end();
 
@@ -253,6 +254,22 @@ impl SoundEffectsTab {
             editor,
             error_lines: None,
         }));
+
+        // Handle toolbar shortcut keys.
+        // This is done here so focus is not stolen from the editor.
+        group.handle({
+            let s = state.clone();
+            move |_widget, ev| match ev {
+                Event::KeyDown => match event_key() {
+                    Key::F5 => {
+                        s.borrow_mut().play_sound_effect();
+                        true
+                    }
+                    _ => false,
+                },
+                _ => false,
+            }
+        });
 
         play_button.set_callback({
             let s = state.clone();
