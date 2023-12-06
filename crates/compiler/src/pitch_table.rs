@@ -29,7 +29,6 @@ const MIN_SAMPLE_FREQ: f64 = 27.5; // a0
 const MAX_SAMPLE_FREQ: f64 = (SPC_SAMPLE_RATE / 2) as f64;
 
 const MIN_MIN_OCTAVE_OFFSET: i32 = -6;
-const MAX_MAX_OCTAVE_OFFSET: i32 = 2;
 
 const PITCH_REGISTER_FP_SCALE: u32 = 0x1000;
 const PITCH_REGISTER_FLOAT_LIMIT: f64 = 4.0;
@@ -40,6 +39,20 @@ pub struct InstrumentPitch {
     octaves_above_c0: i32,
     min_octave_offset: i32,
     max_octave_offset: i32,
+}
+
+// Calculates the maximum number of octaves a sample can be incremented by.
+//
+// Samples whose frequency is > b and < c can be increased by two octaves.
+// All other sample frequencies can only be increased a single octave.
+fn maximum_octave_increment(microsemitones_above_c: i32) -> i32 {
+    assert!((0..MICROSEMITONES_PER_OCTAVE).contains(&microsemitones_above_c));
+
+    if microsemitones_above_c <= (SEMITONES_PER_OCTAVE - 1) * SEMITONE_SCALE {
+        1
+    } else {
+        2
+    }
 }
 
 pub fn instrument_pitch(inst: &Instrument) -> Result<InstrumentPitch, PitchError> {
@@ -69,11 +82,13 @@ pub fn instrument_pitch(inst: &Instrument) -> Result<InstrumentPitch, PitchError
     let octaves_above_c0: i32 = mst_above_c0 / MICROSEMITONES_PER_OCTAVE;
     let microsemitones_above_c: i32 = mst_above_c0 % MICROSEMITONES_PER_OCTAVE;
 
+    let maximum_octave_increment = maximum_octave_increment(microsemitones_above_c);
+
     let min_octave_offset = inst.first_octave.as_i32() - octaves_above_c0;
     let max_octave_offset = inst.last_octave.as_i32() - octaves_above_c0;
 
     let first_octave_valid = min_octave_offset >= MIN_MIN_OCTAVE_OFFSET;
-    let last_octave_valid = max_octave_offset <= MAX_MAX_OCTAVE_OFFSET;
+    let last_octave_valid = max_octave_offset <= maximum_octave_increment;
 
     if first_octave_valid && last_octave_valid {
         Ok(InstrumentPitch {
@@ -84,7 +99,7 @@ pub fn instrument_pitch(inst: &Instrument) -> Result<InstrumentPitch, PitchError
         })
     } else {
         let min_off_by = MIN_MIN_OCTAVE_OFFSET - min_octave_offset;
-        let max_off_by = max_octave_offset - MAX_MAX_OCTAVE_OFFSET;
+        let max_off_by = max_octave_offset - maximum_octave_increment;
 
         match (first_octave_valid, last_octave_valid) {
             (false, true) => Err(PitchError::FirstOctaveTooLow(min_off_by)),
@@ -102,13 +117,14 @@ pub fn instrument_pitch(inst: &Instrument) -> Result<InstrumentPitch, PitchError
 ///
 /// Returns: a new `InstrumentPitch` and the maximum octave used by the pitch.
 pub(crate) fn maximize_pitch_range(pitch: &InstrumentPitch) -> (InstrumentPitch, Octave) {
-    let max_octave = (pitch.octaves_above_c0 + MAX_MAX_OCTAVE_OFFSET)
+    let maximum_octave_increment = maximum_octave_increment(pitch.microsemitones_above_c);
+
+    let max_octave = (pitch.octaves_above_c0 + maximum_octave_increment)
         .clamp(Octave::MIN.into(), Octave::MAX.into());
     let max_octave = Octave::try_new(max_octave.try_into().unwrap()).unwrap();
 
     let min_octave_offset = i32::from(Octave::MIN) - pitch.octaves_above_c0;
     let max_octave_offset = max_octave.as_i32() - pitch.octaves_above_c0;
-    assert!((0..=MAX_MAX_OCTAVE_OFFSET).contains(&max_octave_offset));
 
     let new_pitch = InstrumentPitch {
         microsemitones_above_c: pitch.microsemitones_above_c,
@@ -200,7 +216,7 @@ fn process_pitch_vec(inst_pitches: SortedInstrumentPitches, n_instruments: usize
 
     for (mst, slice) in group_by_mst(&inst_pitches) {
         // mst = microsemitones_above_c
-        assert!(mst > 0);
+        assert!(mst >= 0);
         assert!(!slice.is_empty());
 
         let min_octave_offset = slice
