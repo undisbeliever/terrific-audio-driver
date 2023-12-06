@@ -8,7 +8,7 @@ use crate::bytecode::InstrumentId;
 use crate::data::{Instrument, UniqueNamesList};
 use crate::driver_constants::{MAX_INSTRUMENTS, PITCH_TABLE_SIZE};
 use crate::errors::{PitchError, PitchTableError};
-use crate::notes::{self, Note};
+use crate::notes::{self, Note, Octave};
 
 const SEMITONES_PER_OCTAVE: i32 = notes::SEMITONES_PER_OCTAVE as i32;
 
@@ -94,6 +94,30 @@ pub fn instrument_pitch(inst: &Instrument) -> Result<InstrumentPitch, PitchError
             )),
         }
     }
+}
+
+/// Build a new `InstrumentPitch` that contains all octaves that can be played by the sample.
+///
+/// Used by the play-sample feature of the GUI.
+///
+/// Returns: a new `InstrumentPitch` and the maximum octave used by the pitch.
+pub(crate) fn maximize_pitch_range(pitch: &InstrumentPitch) -> (InstrumentPitch, Octave) {
+    let max_octave = (pitch.octaves_above_c0 + MAX_MAX_OCTAVE_OFFSET)
+        .clamp(Octave::MIN.into(), Octave::MAX.into());
+    let max_octave = Octave::try_new(max_octave.try_into().unwrap()).unwrap();
+
+    let min_octave_offset = i32::from(Octave::MIN) - pitch.octaves_above_c0;
+    let max_octave_offset = max_octave.as_i32() - pitch.octaves_above_c0;
+    assert!((0..=MAX_MAX_OCTAVE_OFFSET).contains(&max_octave_offset));
+
+    let new_pitch = InstrumentPitch {
+        microsemitones_above_c: pitch.microsemitones_above_c,
+        octaves_above_c0: pitch.octaves_above_c0,
+        min_octave_offset,
+        max_octave_offset,
+    };
+
+    (new_pitch, max_octave)
 }
 
 // Using sorted vector instead of Map as I need a reproducible pitch table.

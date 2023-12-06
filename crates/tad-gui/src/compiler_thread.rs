@@ -25,7 +25,9 @@ use compiler::errors::{self, ExportSpcFileError, SongTooLargeError};
 use compiler::notes::Note;
 use compiler::path::{ParentPathBuf, SourcePathBuf};
 use compiler::pitch_table::PitchTable;
-use compiler::samples::{combine_samples, load_sample_for_instrument, Sample, SampleFileCache};
+use compiler::samples::{
+    combine_samples, create_test_sample_data, load_sample_for_instrument, Sample, SampleFileCache,
+};
 use compiler::songs::{sound_effect_to_song, test_sample_song, SongData};
 use compiler::sound_effects::blank_compiled_sound_effects;
 use compiler::sound_effects::{compile_sound_effect_input, CompiledSoundEffect, SoundEffectInput};
@@ -345,10 +347,6 @@ where
         self.map.get(id).and_then(|i: &usize| self.output.get(*i))
     }
 
-    fn get_id(&self, id: ItemId) -> Option<&ItemT> {
-        self.map.get(&id).and_then(|i: &usize| self.items.get(*i))
-    }
-
     fn name_map(&self) -> &HashMap<data::Name, usize> {
         &self.name_map
     }
@@ -564,33 +562,19 @@ fn build_play_sample_data(
     id: ItemId,
     args: PlaySampleArgs,
 ) -> Option<(CommonAudioData, Arc<SongData>)> {
-    match instruments.get_id(id) {
-        None => return None,
-        Some(inst) => {
-            // Test octave is in range.
-            if args.note < Note::first_note_for_octave(inst.first_octave)
-                || args.note > Note::last_note_for_octave(inst.last_octave)
-            {
-                return None;
-            }
-        }
-    }
-
     let sample = match instruments.get_output_for_id(&id) {
         Some(Some(s)) => s,
         _ => return None,
     };
 
-    let sample_data = match combine_samples(&[sample.clone()]) {
-        Ok(sd) => sd,
-        Err(_) => return None,
-    };
+    let (sample_data, max_octave) = create_test_sample_data(sample).ok()?;
+
+    if args.note > Note::last_note_for_octave(max_octave) {
+        return None;
+    }
 
     let blank_sfx = blank_compiled_sound_effects();
-    let common_audio_data = match build_common_audio_data(&sample_data, &blank_sfx) {
-        Ok(common) => common,
-        Err(_) => return None,
-    };
+    let common_audio_data = build_common_audio_data(&sample_data, &blank_sfx).ok()?;
 
     let song_data = match test_sample_song(0, args.note, args.note_length, args.envelope) {
         Ok(sd) => Arc::new(sd),

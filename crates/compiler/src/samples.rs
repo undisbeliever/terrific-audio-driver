@@ -8,9 +8,11 @@
 
 use crate::data::{Instrument, LoopSetting, UniqueNamesProjectFile};
 use crate::errors::{BrrError, SampleAndInstrumentDataError, SampleError, TaggedSampleError};
+use crate::notes::Octave;
 use crate::path::{ParentPathBuf, SourcePathBuf};
 use crate::pitch_table::{
-    instrument_pitch, merge_pitch_vec, sort_pitches_iterator, InstrumentPitch, PitchTable,
+    instrument_pitch, maximize_pitch_range, merge_pitch_vec, sort_pitches_iterator,
+    InstrumentPitch, PitchTable,
 };
 
 use brr::{
@@ -306,6 +308,23 @@ impl SampleAndInstrumentData {
     pub fn take_pitch_table(self) -> PitchTable {
         self.pitch_table
     }
+}
+
+/// Creates SampleAndInstrumentData without the first/last octave limits.
+///
+/// Returns: sample data and the maximum octave that can be played by the sample
+pub fn create_test_sample_data(
+    sample: &Sample,
+) -> Result<(SampleAndInstrumentData, Octave), SampleAndInstrumentDataError> {
+    let (pitch, max_octave) = maximize_pitch_range(&sample.pitch);
+
+    let samples = [Sample {
+        pitch,
+        ..sample.clone()
+    }];
+    let data = combine_samples(&samples)?;
+
+    Ok((data, max_octave))
 }
 
 pub fn combine_samples(

@@ -578,7 +578,6 @@ impl InstrumentEditor {
 }
 
 pub struct TestSampleWidget {
-    selected_index: Option<usize>,
     selected_id: Option<ItemId>,
 
     sender: app::Sender<GuiMessage>,
@@ -708,7 +707,6 @@ impl TestSampleWidget {
         group.end();
 
         let out = Rc::from(RefCell::new(Self {
-            selected_index: None,
             selected_id: None,
             sender,
             group,
@@ -766,39 +764,17 @@ impl TestSampleWidget {
     }
 
     fn clear_selected(&mut self) {
-        self.selected_index = None;
         self.selected_id = None;
         self.group.deactivate();
     }
 
-    fn set_selected(&mut self, index: usize, id: ItemId, inst: &Instrument) {
-        self.selected_index = Some(index);
+    fn set_selected(&mut self, id: ItemId) {
         self.selected_id = Some(id);
         self.group.activate();
-        self.update_octave_range(inst);
-    }
-
-    fn instrument_changed(&mut self, index: usize, inst: &Instrument) {
-        if self.selected_index == Some(index) {
-            self.update_octave_range(inst);
-        }
     }
 
     fn set_active(&mut self, active: bool) {
         self.group.set_active(active && self.selected_id.is_some());
-    }
-
-    fn update_octave_range(&mut self, inst: &Instrument) {
-        let first = inst.first_octave.as_u8();
-        let last = inst.last_octave.as_u8();
-
-        let min = std::cmp::min(first, last);
-        let max = std::cmp::max(first, last);
-
-        self.octave.set_range(min.into(), max.into());
-
-        let v = self.octave.value() as u8;
-        self.octave.set_value(v.clamp(min, max).into());
     }
 
     fn hide_adsr(&mut self) {
@@ -965,12 +941,6 @@ impl ListEditor<Instrument> for SamplesTab {
     fn list_edited(&mut self, action: &ListAction<Instrument>) {
         self.inst_table.list_edited(action);
         self.instrument_editor.borrow_mut().list_edited(action);
-
-        if let ListAction::Edit(index, inst) = action {
-            self.test_sample_widget
-                .borrow_mut()
-                .instrument_changed(*index, inst);
-        }
     }
 
     fn clear_selected(&mut self) {
@@ -982,9 +952,7 @@ impl ListEditor<Instrument> for SamplesTab {
     fn set_selected(&mut self, index: usize, id: ItemId, inst: &Instrument) {
         self.inst_table.set_selected(index, id, inst);
         self.instrument_editor.borrow_mut().set_data(index, inst);
-        self.test_sample_widget
-            .borrow_mut()
-            .set_selected(index, id, inst);
+        self.test_sample_widget.borrow_mut().set_selected(id);
     }
 }
 
