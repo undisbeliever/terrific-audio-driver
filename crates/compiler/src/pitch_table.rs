@@ -72,10 +72,10 @@ pub fn instrument_pitch(inst: &Instrument) -> Result<InstrumentPitch, PitchError
     let min_octave_offset = inst.first_octave.as_i32() - octaves_above_c0;
     let max_octave_offset = inst.last_octave.as_i32() - octaves_above_c0;
 
-    let first_octave_valid = min_octave_offset >= -MIN_MIN_OCTAVE_OFFSET;
+    let first_octave_valid = min_octave_offset >= MIN_MIN_OCTAVE_OFFSET;
     let last_octave_valid = max_octave_offset <= MAX_MAX_OCTAVE_OFFSET;
 
-    if min_octave_offset >= MIN_MIN_OCTAVE_OFFSET && max_octave_offset <= MAX_MAX_OCTAVE_OFFSET {
+    if first_octave_valid && last_octave_valid {
         Ok(InstrumentPitch {
             microsemitones_above_c,
             octaves_above_c0,
