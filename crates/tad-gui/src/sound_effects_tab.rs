@@ -443,6 +443,7 @@ impl ListEditor<SoundEffectInput> for SoundEffectsTab {
 
                     self.name.set_value(sfx.name.as_str());
                     self.name.clear_changed();
+                    self.name.activate();
 
                     let type_choice = match &sfx.sfx {
                         SoundEffectText::BytecodeAssembly(_) => {
@@ -452,6 +453,7 @@ impl ListEditor<SoundEffectInput> for SoundEffectsTab {
                     };
 
                     state.sound_effect_type.set_value(type_choice.to_i32());
+                    state.sound_effect_type.activate();
 
                     match sfx_buffer {
                         Some(b) => state.editor.set_buffer(b.clone()),
