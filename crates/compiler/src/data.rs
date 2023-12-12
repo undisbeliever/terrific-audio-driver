@@ -481,11 +481,18 @@ pub fn _load_text_file_with_limit(path: &Path, file_name: String) -> Result<Text
     }
 
     match String::from_utf8(buffer) {
-        Ok(contents) => Ok(TextFile {
-            path: Some(path.to_owned()),
-            file_name,
-            contents,
-        }),
+        Ok(contents) => {
+            // Normalize line endings
+            // Fixes compiler errors
+            // Prevents FLTK TextEditor glitches in Linux
+            let contents = contents.replace("\r\n", "\n");
+
+            Ok(TextFile {
+                path: Some(path.to_owned()),
+                file_name,
+                contents,
+            })
+        }
         Err(_) => Err(FileError::Utf8Error(file_name)),
     }
 }
