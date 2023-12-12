@@ -104,7 +104,7 @@ It is generated using [cargo-about](https://embarkstudios.github.io/cargo-about/
 
 Please see the included [licenses file](licenses.md) for the full third party license text.
 
-  * [ryu 1.0.15](https://github.com/dtolnay/ryu), Apache License 2.0
+  * [ryu 1.0.16](https://github.com/dtolnay/ryu), Apache License 2.0
   * [codespan-reporting 0.11.1](https://github.com/brendanzab/codespan), Apache License 2.0
   * [windows-sys 0.52.0](https://github.com/microsoft/windows-rs), MIT License
   * [windows-targets 0.52.0](https://github.com/microsoft/windows-rs), MIT License
@@ -127,7 +127,7 @@ Please see the included [licenses file](licenses.md) for the full third party li
   * [regex-automata 0.4.3](https://github.com/rust-lang/regex/tree/master/regex-automata), MIT License
   * [regex-syntax 0.8.2](https://github.com/rust-lang/regex/tree/master/regex-syntax), MIT License
   * [relative-path 1.9.0](https://github.com/udoprog/relative-path), MIT License
-  * [libc 0.2.150](https://github.com/rust-lang/libc), MIT License
+  * [libc 0.2.151](https://github.com/rust-lang/libc), MIT License
   * [anstyle-wincon 3.0.2](https://github.com/rust-cli/anstyle.git), MIT License
   * [heck 0.4.1](https://github.com/withoutboats/heck), MIT License
   * [unicode-id 0.3.4](https://github.com/Boshen/unicode-id), MIT License
@@ -138,8 +138,8 @@ Please see the included [licenses file](licenses.md) for the full third party li
   * [version-compare 0.1.1](https://gitlab.com/timvisee/version-compare), MIT License
   * [ttf-parser 0.20.0](https://github.com/RazrFalcon/ttf-parser), MIT License
   * [anstyle 1.0.4](https://github.com/rust-cli/anstyle.git), MIT License
-  * [anstream 0.6.4](https://github.com/rust-cli/anstyle.git), MIT License
-  * [anstyle-query 1.0.1](https://github.com/rust-cli/anstyle), MIT License
+  * [anstream 0.6.5](https://github.com/rust-cli/anstyle.git), MIT License
+  * [anstyle-query 1.0.2](https://github.com/rust-cli/anstyle), MIT License
   * [clap 4.4.11](https://github.com/clap-rs/clap), MIT License
   * [colorchoice 1.0.0](https://github.com/rust-cli/anstyle), MIT License
   * [unicode-id 0.3.4](https://github.com/Boshen/unicode-id), MIT License
@@ -153,9 +153,9 @@ Please see the included [licenses file](licenses.md) for the full third party li
   * [cxx-build 1.0.110](https://github.com/dtolnay/cxx), MIT License
   * [cxxbridge-flags 1.0.110](https://github.com/dtolnay/cxx), MIT License
   * [cxxbridge-macro 1.0.110](https://github.com/dtolnay/cxx), MIT License
-  * [itoa 1.0.9](https://github.com/dtolnay/itoa), MIT License
+  * [itoa 1.0.10](https://github.com/dtolnay/itoa), MIT License
   * [link-cplusplus 1.0.9](https://github.com/dtolnay/link-cplusplus), MIT License
-  * [once_cell 1.18.0](https://github.com/matklad/once_cell), MIT License
+  * [once_cell 1.19.0](https://github.com/matklad/once_cell), MIT License
   * [paste 1.0.14](https://github.com/dtolnay/paste), MIT License
   * [proc-macro2 1.0.70](https://github.com/dtolnay/proc-macro2), MIT License
   * [quote 1.0.33](https://github.com/dtolnay/quote), MIT License
@@ -163,7 +163,7 @@ Please see the included [licenses file](licenses.md) for the full third party li
   * [serde 1.0.193](https://github.com/serde-rs/serde), MIT License
   * [serde_derive 1.0.193](https://github.com/serde-rs/serde), MIT License
   * [serde_json 1.0.108](https://github.com/serde-rs/json), MIT License
-  * [syn 2.0.39](https://github.com/dtolnay/syn), MIT License
+  * [syn 2.0.40](https://github.com/dtolnay/syn), MIT License
   * [unicode-ident 1.0.12](https://github.com/dtolnay/unicode-ident), MIT License
   * [sdl2 0.35.2](https://github.com/Rust-SDL2/rust-sdl2), MIT License
   * [aho-corasick 1.1.2](https://github.com/BurntSushi/aho-corasick), MIT License

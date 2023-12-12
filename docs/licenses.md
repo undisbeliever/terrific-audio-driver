@@ -117,7 +117,7 @@ Terrific Audio Driver makes use of the following open source projects:
 ## Apache License 2.0
 
 Used by:
-  * [ryu 1.0.15](https://github.com/dtolnay/ryu)
+  * [ryu 1.0.16](https://github.com/dtolnay/ryu)
 
 ```
                               Apache License
@@ -586,7 +586,7 @@ DEALINGS IN THE SOFTWARE.
 ## MIT License
 
 Used by:
-  * [libc 0.2.150](https://github.com/rust-lang/libc)
+  * [libc 0.2.151](https://github.com/rust-lang/libc)
 
 ```
 Copyright (c) 2014-2020 The Rust Project Developers
@@ -875,8 +875,8 @@ SOFTWARE.
 ## MIT License
 
 Used by:
-  * [anstream 0.6.4](https://github.com/rust-cli/anstyle.git)
-  * [anstyle-query 1.0.1](https://github.com/rust-cli/anstyle)
+  * [anstream 0.6.5](https://github.com/rust-cli/anstyle.git)
+  * [anstyle-query 1.0.2](https://github.com/rust-cli/anstyle)
   * [clap 4.4.11](https://github.com/clap-rs/clap)
   * [colorchoice 1.0.0](https://github.com/rust-cli/anstyle)
 
@@ -1012,9 +1012,9 @@ Used by:
   * [cxx-build 1.0.110](https://github.com/dtolnay/cxx)
   * [cxxbridge-flags 1.0.110](https://github.com/dtolnay/cxx)
   * [cxxbridge-macro 1.0.110](https://github.com/dtolnay/cxx)
-  * [itoa 1.0.9](https://github.com/dtolnay/itoa)
+  * [itoa 1.0.10](https://github.com/dtolnay/itoa)
   * [link-cplusplus 1.0.9](https://github.com/dtolnay/link-cplusplus)
-  * [once_cell 1.18.0](https://github.com/matklad/once_cell)
+  * [once_cell 1.19.0](https://github.com/matklad/once_cell)
   * [paste 1.0.14](https://github.com/dtolnay/paste)
   * [proc-macro2 1.0.70](https://github.com/dtolnay/proc-macro2)
   * [quote 1.0.33](https://github.com/dtolnay/quote)
@@ -1022,7 +1022,7 @@ Used by:
   * [serde 1.0.193](https://github.com/serde-rs/serde)
   * [serde_derive 1.0.193](https://github.com/serde-rs/serde)
   * [serde_json 1.0.108](https://github.com/serde-rs/json)
-  * [syn 2.0.39](https://github.com/dtolnay/syn)
+  * [syn 2.0.40](https://github.com/dtolnay/syn)
   * [unicode-ident 1.0.12](https://github.com/dtolnay/unicode-ident)
 
 ```
