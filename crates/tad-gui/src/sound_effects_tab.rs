@@ -484,10 +484,22 @@ impl ListEditor<SoundEffectInput> for SoundEffectsTab {
 
 impl State {
     fn list_edited(&mut self, action: &ListAction<SoundEffectInput>) {
-        if let ListAction::Move(from, to) = action {
-            if self.selected == Some(*from) {
-                self.selected = Some(*to);
+        match action {
+            ListAction::Move(from, to) => {
+                if self.selected == Some(*from) {
+                    self.selected = Some(*to);
+                }
             }
+            ListAction::Remove(_) => {
+                // Prevent `commit_sfx()` from sending a `ListMessage::ItemEdited` message for the old
+                // index and overriding the next item in the list with the deleted value.
+                self.selected = None;
+                self.selected_id = None;
+            }
+            ListAction::None
+            | ListAction::Add(..)
+            | ListAction::AddMultiple(..)
+            | ListAction::Edit(..) => (),
         }
     }
 
