@@ -1,0 +1,18 @@
+; bc_interpreter echo test
+
+#EchoLength   240
+#EchoFeedback  80
+#EchoVolume   100
+
+@1 square
+
+A @1 v16 l8 o4
+
+A E1
+A cdefg r1
+
+A E0
+A cdefg r1
+
+A E1
+A cdefg r1

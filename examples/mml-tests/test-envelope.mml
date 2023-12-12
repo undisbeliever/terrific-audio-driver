@@ -1,0 +1,17 @@
+; bc_interpreter envelope test
+
+@0 square
+@1 square gain 30
+@2 square gain 60
+@3 square gain 80
+@4 square adsr 14 4 6 28
+@5 square adsr  2 4 5 31
+@6 square adsr 10 2 3 12
+
+A @0 c2 r
+A @1 c2 r
+A @2 c2 r
+A @3 c2 r
+A @4 c2 r
+A @5 c2 r
+A @6 c2 r

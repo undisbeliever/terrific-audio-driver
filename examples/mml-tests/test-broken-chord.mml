@@ -1,0 +1,16 @@
+; bc_interpreter broken-chord test
+
+#Tempo 120
+#ZenLen 192
+
+@1 square
+
+A @1 v14 l4
+
+; Examples from docs/mml-syntax.md
+A {{ceg}} r
+A {{ce-g}}2,32 r
+A {{c}}4,,0 r
+A {{de}}4,,0 r
+A {{fg}}4,%3,0 r
+A {{ab}}4,16,0 r

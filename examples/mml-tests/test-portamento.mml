@@ -1,0 +1,18 @@
+; bc_interpreter portamento test
+
+@1 square gain 127
+
+A @1 v12 l4
+
+A {cg}1 r
+
+A {df}4,8  r  d8 & {df}8 r
+
+A {df}4 ^2 r
+
+A {df}4,,100 r
+
+A {a > c}2 r
+
+A {o3 c o4 c}2 r
+

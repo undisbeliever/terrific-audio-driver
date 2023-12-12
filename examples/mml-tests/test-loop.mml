@@ -1,0 +1,15 @@
+; bc_interpreter loop test
+
+#Tempo 140
+
+@1 triangle
+
+A @1 v16 l16
+A [ [ [c d e f g]2 r32 : b4 b4]2 : a4 a4]2 b4 a4
+
+; Used to test the "Play Song from cursor" button
+B @1 l32 v0
+B aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+B aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+B aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+B aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa

@@ -1,0 +1,23 @@
+; bc_interpreter subroutine test
+
+#Tempo 140
+
+@1 square
+
+!1 l8 cdef
+!2 l8 gab
+!3 l8 bag
+!4 l8 fedc
+
+A @1 l8 v16
+A !1 !2 r !3 !4 r !1 !2 r !3 !4 r !1 !2 r !3 !4 r
+
+; Used to test the "Play Song from cursor" button
+B @1 l32 v0
+B aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+B aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+B aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+B aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+B aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+B aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+

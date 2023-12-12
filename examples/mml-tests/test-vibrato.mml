@@ -1,0 +1,15 @@
+; bc_interpreter vibrato test
+
+#Tempo 120
+#ZenLen 192
+
+@1 triangle adsr 14 7 7 15
+
+A @1 v16 l4
+
+A MP150,3 c d e f g r
+
+A ~50,6   c d e f g r
+
+A MP 0    c d e f g r
+

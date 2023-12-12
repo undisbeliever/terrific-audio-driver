@@ -1,0 +1,13 @@
+; bc_interpreter song loop test
+; Tests `L` commands at different tick counts
+
+#Tempo 140
+
+@1 square
+@2 triangle
+
+A @1 v6 o3
+A e r e r  L  c r
+
+B @2 v12
+B L d e f g | d e f f | d e f g | d e f r
