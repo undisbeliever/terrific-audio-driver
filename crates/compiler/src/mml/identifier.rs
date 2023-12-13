@@ -52,7 +52,7 @@ impl Identifier {
 // Using `&str` to avoid a string copy.
 // The contents of this variable might not be a valid Identifier
 #[derive(Debug, Clone, Hash, Eq, PartialEq)]
-pub(crate) struct IdentifierStr<'a>(&'a str);
+pub struct IdentifierStr<'a>(&'a str);
 
 impl IdentifierStr<'_> {
     pub fn from_str(s: &str) -> IdentifierStr {
