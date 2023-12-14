@@ -104,6 +104,9 @@ pub enum MmlCommand {
 
     Rest(TickCounter),
 
+    // wait with no keyoff
+    Wait(TickCounter),
+
     PlayNote {
         note: Note,
         length: TickCounter,
@@ -906,6 +909,29 @@ fn parse_ties_and_slur(p: &mut Parser) -> (TickCounter, bool) {
     }
 }
 
+fn parse_wait(p: &mut Parser) -> MmlCommand {
+    let mut ticks = parse_tracked_length(p);
+
+    // Merge `w` wait and `^` tie commands
+    loop {
+        match_next_token!(
+            p,
+
+            Token::Wait => {
+                ticks += parse_tracked_length(p);
+            },
+            Token::Tie => {
+                ticks += parse_tracked_length(p);
+            },
+            #_ => {
+                if !merge_state_change(p) {
+                    return MmlCommand::Wait(ticks);
+                }
+            }
+        )
+    }
+}
+
 fn parse_rest(p: &mut Parser) -> MmlCommand {
     let tc = parse_tracked_length(p);
     let tc = merge_rest_tokens(p, tc);
@@ -1167,6 +1193,7 @@ fn parse_token(pos: FilePos, token: Token, p: &mut Parser) -> MmlCommand {
         Token::Pitch(pitch) => parse_pitch(pos, pitch, p),
         Token::PlayMidiNoteNumber => parse_play_midi_note_number(pos, p),
         Token::Rest => parse_rest(p),
+        Token::Wait => parse_wait(p),
         Token::StartPortamento => parse_portamento(pos, p),
         Token::StartBrokenChord => parse_broken_chord(p),
 

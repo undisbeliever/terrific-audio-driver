@@ -316,6 +316,22 @@ impl ChannelBcGenerator<'_> {
         Ok(())
     }
 
+    fn wait(&mut self, length: TickCounter) -> Result<(), MmlError> {
+        let mut remaining_ticks = length.value();
+
+        let rest_length = BcTicksNoKeyOff::try_from(BcTicksNoKeyOff::MAX).unwrap();
+        const _: () = assert!(BcTicksNoKeyOff::MIN == 1);
+
+        while remaining_ticks > rest_length.ticks() {
+            self.bc.rest(rest_length);
+            remaining_ticks -= rest_length.ticks();
+        }
+
+        self.bc.rest(BcTicksNoKeyOff::try_from(remaining_ticks)?);
+
+        Ok(())
+    }
+
     #[allow(clippy::too_many_arguments)]
     fn portamento(
         &mut self,
@@ -593,6 +609,10 @@ impl ChannelBcGenerator<'_> {
 
             &MmlCommand::Rest(length) => {
                 self.rest(length)?;
+            }
+
+            &MmlCommand::Wait(length) => {
+                self.wait(length)?;
             }
 
             &MmlCommand::PlayNote {

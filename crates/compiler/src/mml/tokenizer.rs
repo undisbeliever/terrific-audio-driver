@@ -48,6 +48,7 @@ pub enum Token {
     PlayMidiNoteNumber,
     SetDefaultLength,
     Rest,
+    Wait,
     SetOctave,
     IncrementOctave,
     DecrementOctave,
@@ -246,8 +247,8 @@ impl<'a> Tokenizer<'a> {
             b'0'..=b'9' => false,
             b'a'..=b'g' => false,
             b'!' | b'@' | b'+' | b'-' | b'[' | b':' | b']' | b'^' | b'&' | b'C' | b'n' | b'l'
-            | b'r' | b'o' | b'>' | b'<' | b'v' | b'V' | b'p' | b'Q' | b'~' | b'E' | b't' | b'T'
-            | b'L' | b'%' | b'.' | b',' | b'|' | b'_' | b'{' | b'}' | b'M' => false,
+            | b'r' | b'w' | b'o' | b'>' | b'<' | b'v' | b'V' | b'p' | b'Q' | b'~' | b'E' | b't'
+            | b'T' | b'L' | b'%' | b'.' | b',' | b'|' | b'_' | b'{' | b'}' | b'M' => false,
             c if c.is_ascii_whitespace() => false,
             _ => true,
         }
@@ -397,6 +398,7 @@ impl<'a> Tokenizer<'a> {
             b'n' => one_ascii_token!(Token::PlayMidiNoteNumber),
             b'l' => one_ascii_token!(Token::SetDefaultLength),
             b'r' => one_ascii_token!(Token::Rest),
+            b'w' => one_ascii_token!(Token::Wait),
             b'o' => one_ascii_token!(Token::SetOctave),
             b'>' => one_ascii_token!(Token::IncrementOctave),
             b'<' => one_ascii_token!(Token::DecrementOctave),

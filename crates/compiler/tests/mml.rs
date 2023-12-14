@@ -301,6 +301,43 @@ fn test_rest_tie() {
 }
 
 #[test]
+fn test_waits() {
+    assert_line_matches_bytecode("w", &["rest 24"]);
+    assert_line_matches_bytecode("w.", &["rest 36"]);
+    assert_line_matches_bytecode("w8", &["rest 12"]);
+    assert_line_matches_bytecode("w8.", &["rest 18"]);
+
+    assert_line_matches_bytecode("w%30", &["rest 30"]);
+
+    assert_line_matches_bytecode("w%256", &["rest 256"]);
+    assert_line_matches_bytecode("w%257", &["rest 256", "rest 1"]);
+    assert_line_matches_bytecode("w%512", &["rest 256", "rest 256"]);
+    assert_line_matches_bytecode("w%600", &["rest 256", "rest 256", "rest 88"]);
+
+    merge_mml_commands_test("w || w", &["rest 48"]);
+    merge_mml_commands_test("w || w8", &["rest 36"]);
+    merge_mml_commands_test("w%30||w%20", &["rest 50"]);
+
+    // From `mml-syntax.md`
+    assert_line_matches_line("w4 w8 w8", "w2");
+}
+
+#[test]
+fn test_wait_tie() {
+    assert_line_matches_bytecode("w^^^", &["rest 96"]);
+
+    assert_line_matches_bytecode("w^8", &["rest 36"]);
+    assert_line_matches_bytecode("w8^", &["rest 36"]);
+    assert_line_matches_bytecode("w8^16", &["rest 18"]);
+
+    assert_line_matches_bytecode("w2^4^8", &["rest 84"]);
+
+    assert_line_matches_bytecode("w%5^%7", &["rest 12"]);
+
+    merge_mml_commands_test("w || ^ 8", &["rest 36"]);
+}
+
+#[test]
 fn test_loops() {
     assert_line_matches_bytecode("[a]4", &["start_loop 4", "play_note a4 24", "end_loop"]);
     assert_line_matches_bytecode(

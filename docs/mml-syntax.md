@@ -191,6 +191,11 @@ Optional parameters are enclosed in `[]`.
  * `r[length]` - Rest
     * `r` rest commands can be tied, ie `r2 ^8`.
     * Multiple `r` rest commands will be merged by the MML parser. For example, `r4 r8 r8` will be merged into a single `r2` command.
+ * `w[length]` - Wait
+    * A `w` wait will not send a key-off event.  Useful for changing pan or volume in the middle of a slurred note.
+    * `w` wait commands can be tied, ie `w2 ^8`.
+    * Multiple `w` rest commands will be merged by the MML parser. For example, `w4 w8 w8` will be merged into a single `w2` command.
+
 
 <br/>
 
