@@ -63,10 +63,22 @@ impl PrivateToken {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Default, Clone)]
 pub struct AudioMonitorData {
     pub item_id: Option<ItemId>,
     pub voice_instruction_ptrs: [Option<u16>; N_VOICES],
+    /// May not be valid.
+    pub voice_return_inst_ptrs: [Option<u16>; N_VOICES],
+}
+
+impl AudioMonitorData {
+    fn new(item_id: Option<ItemId>) -> Self {
+        Self {
+            item_id,
+            voice_instruction_ptrs: Default::default(),
+            voice_return_inst_ptrs: Default::default(),
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -327,28 +339,42 @@ fn load_song(
     Ok(())
 }
 
-fn read_voice_positions(emu: &ShvcSoundEmu) -> [Option<u16>; N_VOICES] {
+fn read_voice_positions(emu: &ShvcSoundEmu, item_id: Option<ItemId>) -> Option<AudioMonitorData> {
     let apuram = emu.apuram();
-
-    let mut out = [None; N_VOICES];
 
     let song_addr = u16::from_le_bytes([
         apuram[usize::from(addresses::SONG_PTR)],
         apuram[usize::from(addresses::SONG_PTR) + 1],
     ]);
 
-    for (i, o) in out.iter_mut().enumerate() {
-        let addr = u16::from_le_bytes([
-            apuram[usize::from(addresses::CHANNEL_INSTRUCTION_PTR_L) + i],
-            apuram[usize::from(addresses::CHANNEL_INSTRUCTION_PTR_H) + i],
-        ]);
+    let read_offsets = |addr_l: u16, addr_h: u16| -> [Option<u16>; N_VOICES] {
+        std::array::from_fn(|i| {
+            let word = u16::from_le_bytes([
+                apuram[usize::from(addr_l) + i],
+                apuram[usize::from(addr_h) + i],
+            ]);
+            word.checked_sub(song_addr)
+        })
+    };
+    let voice_instruction_ptrs = read_offsets(
+        addresses::CHANNEL_INSTRUCTION_PTR_L,
+        addresses::CHANNEL_INSTRUCTION_PTR_H,
+    );
 
-        if addr > song_addr {
-            *o = Some(addr - song_addr);
-        }
+    if voice_instruction_ptrs.iter().any(Option::is_some) {
+        let voice_return_inst_ptrs = read_offsets(
+            addresses::CHANNEL_RETURN_INST_PTR_L,
+            addresses::CHANNEL_RETURN_INST_PTR_H,
+        );
+
+        Some(AudioMonitorData {
+            item_id,
+            voice_instruction_ptrs,
+            voice_return_inst_ptrs,
+        })
+    } else {
+        None
     }
-
-    out
 }
 
 enum PlayState {
@@ -414,10 +440,7 @@ impl AudioThread {
 
     fn send_started_song_message(&mut self, id: ItemId, song_data: Arc<SongData>) {
         // Must set the monitor data, audio timer stops when monitor data is None
-        self.monitor.set(Some(AudioMonitorData {
-            item_id: Some(id),
-            voice_instruction_ptrs: Default::default(),
-        }));
+        self.monitor.set(Some(AudioMonitorData::new(Some(id))));
 
         self.gui_sender
             .send(GuiMessage::AudioThreadStartedSong(id, song_data));
@@ -425,10 +448,7 @@ impl AudioThread {
 
     fn send_resume_song_message(&mut self, id: ItemId) {
         // Must set the monitor data, audio timer stops when monitor data is None
-        self.monitor.set(Some(AudioMonitorData {
-            item_id: Some(id),
-            voice_instruction_ptrs: Default::default(),
-        }));
+        self.monitor.set(Some(AudioMonitorData::new(Some(id))));
 
         self.gui_sender.send(GuiMessage::AudioThreadResumedSong(id));
     }
@@ -532,12 +552,11 @@ impl AudioThread {
                             //
                             // Must test if the emulator is outputting audio as the echo buffer
                             // feedback can output sound long after the song has finished.
-                            let voices = read_voice_positions(&self.emu);
-                            if sound || voices.iter().any(Option::is_some) {
-                                self.monitor.set(Some(AudioMonitorData {
-                                    item_id: self.item_id,
-                                    voice_instruction_ptrs: voices,
-                                }));
+                            let voices = read_voice_positions(&self.emu, self.item_id);
+                            if voices.is_some() {
+                                self.monitor.set(voices);
+                            } else if sound {
+                                self.monitor.set(Some(AudioMonitorData::new(self.item_id)));
                             } else {
                                 // The song has finished
                                 self.item_id = None;

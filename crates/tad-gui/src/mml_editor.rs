@@ -90,6 +90,7 @@ pub struct MmlEditorState {
     compiled_data: Option<CompiledEditorData>,
     playing_song_notes_valid: bool,
     note_tracking_state: [NoteTrackingState; N_MUSIC_CHANNELS],
+    subroutine_tracking_state: [NoteTrackingState; N_MUSIC_CHANNELS],
 
     prev_cursor_index: Option<u32>,
 
@@ -142,6 +143,7 @@ impl MmlEditor {
 
             playing_song_notes_valid: false,
             note_tracking_state: Default::default(),
+            subroutine_tracking_state: Default::default(),
 
             prev_cursor_index: None,
             compiled_data: None,
@@ -595,11 +597,29 @@ impl MmlEditorState {
         let mut changed = false;
         if let Some(CompiledEditorData::Song(song_data)) = &self.compiled_data {
             if let Some(ntd) = song_data.tracking() {
-                for i in 0..self.note_tracking_state.len() {
-                    let nts = &mut self.note_tracking_state[i];
+                for (i, nts) in self.note_tracking_state.iter_mut().enumerate() {
                     let voice_pos = mon.voice_instruction_ptrs[i];
 
                     changed |= nts.update(&mut self.style_buffer, ntd, voice_pos, &self.style_vec);
+                }
+
+                for (i, sts) in self.subroutine_tracking_state.iter_mut().enumerate() {
+                    let voice_pos = mon.voice_instruction_ptrs[i];
+                    let return_pos = mon.voice_return_inst_ptrs[i];
+
+                    // Only show return_pos if voice_pos is in a subroutine
+                    let return_pos = match (voice_pos, return_pos) {
+                        (Some(vp), Some(sp)) => {
+                            if vp < ntd.first_channel_bc_offset {
+                                Some(sp)
+                            } else {
+                                None
+                            }
+                        }
+                        _ => None,
+                    };
+
+                    changed |= sts.update(&mut self.style_buffer, ntd, return_pos, &self.style_vec);
                 }
             }
         }

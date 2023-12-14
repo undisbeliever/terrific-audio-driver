@@ -717,8 +717,9 @@ pub struct MmlSongBytecodeGenerator<'a, 'b> {
     subroutine_map: Option<HashMap<IdentifierStr<'b>, SubroutineId>>,
 
     #[cfg(feature = "mml_tracking")]
+    first_channel_bc_offset: Option<u16>,
+    #[cfg(feature = "mml_tracking")]
     cursor_tracker: CursorTracker,
-
     #[cfg(feature = "mml_tracking")]
     bytecode_tracker: Vec<BytecodePos>,
 }
@@ -743,6 +744,8 @@ impl<'a, 'b> MmlSongBytecodeGenerator<'a, 'b> {
             subroutine_map: None,
 
             #[cfg(feature = "mml_tracking")]
+            first_channel_bc_offset: None,
+            #[cfg(feature = "mml_tracking")]
             cursor_tracker: CursorTracker::new(),
             #[cfg(feature = "mml_tracking")]
             bytecode_tracker: Vec::new(),
@@ -756,6 +759,7 @@ impl<'a, 'b> MmlSongBytecodeGenerator<'a, 'b> {
             SongBcTracking {
                 bytecode: self.bytecode_tracker,
                 cursor_tracker: self.cursor_tracker,
+                first_channel_bc_offset: self.first_channel_bc_offset.unwrap_or(u16::MAX),
             },
         )
     }
@@ -877,6 +881,11 @@ impl<'a, 'b> MmlSongBytecodeGenerator<'a, 'b> {
 
         let song_data = std::mem::take(&mut self.song_data);
         let sd_start_index = song_data.len();
+
+        #[cfg(feature = "mml_tracking")]
+        if self.first_channel_bc_offset.is_none() {
+            self.first_channel_bc_offset = sd_start_index.try_into().ok();
+        }
 
         let mut parser = Parser::new(
             ChannelId::Channel(channel_char),

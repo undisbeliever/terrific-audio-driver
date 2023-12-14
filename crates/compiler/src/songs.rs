@@ -44,6 +44,10 @@ pub struct BytecodePos {
 pub struct SongBcTracking {
     pub bytecode: Vec<BytecodePos>,
     pub cursor_tracker: mml::note_tracking::CursorTracker,
+
+    /// Used to determine if a bytecode offset is in a subroutine or not.
+    /// `bc_offset` is in a subroutine if `bc_offset < firt_channel_bc_offset`.
+    pub first_channel_bc_offset: u16,
 }
 
 #[derive(Debug, Clone, PartialEq)]
