@@ -300,6 +300,38 @@ impl ChannelBcGenerator<'_> {
         Ok(())
     }
 
+    // Rest that can send multiple `rest_keyoff` instructions
+    // The `rest_keyoff` instruction can wait for more ticks than the `rest` instruction.
+    fn rest_many_keyoffs(&mut self, length: TickCounter) -> Result<(), MmlError> {
+        if length.is_zero() {
+            return Ok(());
+        }
+
+        self.prev_slurred_note = None;
+
+        const _: () = assert!(BcTicksKeyOff::MAX > BcTicksNoKeyOff::MAX);
+        const MAX_REST: u32 = BcTicksKeyOff::MAX;
+        const MIN_REST: u32 = BcTicksKeyOff::MIN;
+        const _: () = assert!(MIN_REST > 1);
+
+        let mut remaining_ticks = length.value();
+
+        while remaining_ticks > MAX_REST {
+            let l = if remaining_ticks >= MAX_REST + MIN_REST {
+                MAX_REST
+            } else {
+                MAX_REST - 1
+            };
+            self.bc.rest_keyoff(BcTicksKeyOff::try_from(l).unwrap());
+            remaining_ticks -= l;
+        }
+
+        self.bc
+            .rest_keyoff(BcTicksKeyOff::try_from(remaining_ticks)?);
+
+        Ok(())
+    }
+
     fn rest(&mut self, length: TickCounter) -> Result<(), MmlError> {
         let mut remaining_ticks = length.value();
 
@@ -630,7 +662,7 @@ impl ChannelBcGenerator<'_> {
                 rest,
             } => {
                 self.play_note_with_mp(note, key_on_length, false)?;
-                self.rest(rest)?;
+                self.rest_many_keyoffs(rest)?;
             }
 
             &MmlCommand::Portamento {

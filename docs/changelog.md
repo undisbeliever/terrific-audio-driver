@@ -5,6 +5,7 @@ Version 0.0.3
 =============
 
  * Added MML `w` wait command.
+ * Quantized MML notes emit `rest_keyoff` bytecode instructions.
  * Fixed play from line-start/cursor buttons not working when the cursor is at the start of a line or in a comment.
  * Highlight subroutine calls in MML note tracking.
 

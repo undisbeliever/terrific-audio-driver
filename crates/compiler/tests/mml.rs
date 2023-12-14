@@ -174,42 +174,62 @@ fn test_tie() {
 fn test_quantization() {
     // Cannot use `assert_mml_matches_mml`.
     // There is a single rest tick at the end of a play_note instruction
-    assert_line_matches_bytecode("Q1 c%80", &["play_note c4 11", "rest 69"]);
-    assert_line_matches_bytecode("Q2 c%80", &["play_note c4 21", "rest 59"]);
-    assert_line_matches_bytecode("Q3 c%80", &["play_note c4 31", "rest 49"]);
-    assert_line_matches_bytecode("Q4 c%80", &["play_note c4 41", "rest 39"]);
-    assert_line_matches_bytecode("Q5 c%80", &["play_note c4 51", "rest 29"]);
-    assert_line_matches_bytecode("Q6 c%80", &["play_note c4 61", "rest 19"]);
-    assert_line_matches_bytecode("Q7 c%80", &["play_note c4 71", "rest  9"]);
+    assert_line_matches_bytecode("Q1 c%80", &["play_note c4 11", "rest_keyoff 69"]);
+    assert_line_matches_bytecode("Q2 c%80", &["play_note c4 21", "rest_keyoff 59"]);
+    assert_line_matches_bytecode("Q3 c%80", &["play_note c4 31", "rest_keyoff 49"]);
+    assert_line_matches_bytecode("Q4 c%80", &["play_note c4 41", "rest_keyoff 39"]);
+    assert_line_matches_bytecode("Q5 c%80", &["play_note c4 51", "rest_keyoff 29"]);
+    assert_line_matches_bytecode("Q6 c%80", &["play_note c4 61", "rest_keyoff 19"]);
+    assert_line_matches_bytecode("Q7 c%80", &["play_note c4 71", "rest_keyoff  9"]);
     assert_line_matches_bytecode("Q8 c%80", &["play_note c4 80"]);
 
-    assert_line_matches_bytecode("Q4 c", &["play_note c4 13", "rest 11"]);
+    assert_line_matches_bytecode("Q4 c", &["play_note c4 13", "rest_keyoff 11"]);
 
-    merge_mml_commands_test("Q4 || c%100 r%100", &["play_note c4 51", "rest 149"]);
-    merge_mml_commands_test("Q4 c%100 || r%100", &["play_note c4 51", "rest 149"]);
+    merge_mml_commands_test("Q4 || c%100 r%100", &["play_note c4 51", "rest_keyoff 149"]);
+    merge_mml_commands_test("Q4 c%100 || r%100", &["play_note c4 51", "rest_keyoff 149"]);
 
     // Test with tie
-    merge_mml_commands_test("Q4 c%100 || ^ %100", &["play_note c4 101", "rest 99"]);
-    merge_mml_commands_test("Q4 c%100 || & %100", &["play_note c4 101", "rest 99"]);
+    merge_mml_commands_test(
+        "Q4 c%100 || ^ %100",
+        &["play_note c4 101", "rest_keyoff 99"],
+    );
+    merge_mml_commands_test(
+        "Q4 c%100 || & %100",
+        &["play_note c4 101", "rest_keyoff 99"],
+    );
 
     // Test with tie and rest
     merge_mml_commands_test(
         "Q2 c%50 ^%50 || r%50 r%50",
-        &["play_note c4 26", "rest 174"],
+        &["play_note c4 26", "rest_keyoff 174"],
     );
     merge_mml_commands_test(
         "Q6 c%70 & %30 || r%50 r%50",
-        &["play_note c4 76", "rest 124"],
+        &["play_note c4 76", "rest_keyoff 124"],
+    );
+    merge_mml_commands_test(
+        "Q6 c%70 & %30 || r%50 r%50 r%257",
+        &["play_note c4 76", "rest_keyoff 257", "rest_keyoff 124"],
+    );
+
+    assert_line_matches_bytecode(
+        "Q4 c%70 r%600",
+        &[
+            "play_note c4 36",
+            "rest_keyoff 257",
+            "rest_keyoff 257",
+            "rest_keyoff 120",
+        ],
     );
 
     assert_line_matches_bytecode(
         "Q4 c Q8 d Q6 e",
         &[
             "play_note c4 13",
-            "rest 11",
+            "rest_keyoff 11",
             "play_note d4 24",
             "play_note e4 19",
-            "rest 5",
+            "rest_keyoff 5",
         ],
     );
 }
