@@ -1757,7 +1757,12 @@ func set_volume(channelIndex : u8 in x, volume : u8 in a) {
     ^return process_next_bytecode(x);
 }
 
-
+// KEEP: x
+#[fallthrough]
+func rest_keyoff(channelIndex : u8 in x, length: u8 in a) {
+    channelSoA.nextEventIsKeyOff[x] = y = 1;
+// Fallthrough
+}
 
 // KEEP: x
 func rest(channelIndex : u8 in x, length: u8 in a) {
@@ -1766,18 +1771,6 @@ func rest(channelIndex : u8 in x, length: u8 in a) {
     // return (do not execute the next bytecode and sleep)
     return;
 }
-
-
-// KEEP: x
-func rest_keyoff(channelIndex : u8 in x, length: u8 in a) {
-    channelSoA.nextEventIsKeyOff[x] = y = 1;
-
-    channelSoA.countdownTimer[x] = a;
-
-    // return (do not execute the next bytecode and sleep)
-    return;
-}
-
 
 // Sets the timer for the music channels
 //
