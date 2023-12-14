@@ -87,6 +87,7 @@ pub fn blank_file_range() -> FilePosRange {
     }
 }
 
+#[derive(Clone)]
 pub struct Line<'a> {
     pub text: &'a str,
     pub position: FilePos,

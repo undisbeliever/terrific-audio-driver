@@ -15,7 +15,7 @@ use crate::bytecode::{
     RelativeVolume, SubroutineId, Volume, KEY_OFF_TICK_DELAY,
 };
 use crate::errors::{ErrorWithPos, MmlError, ValueError};
-use crate::file_pos::{FilePos, FilePosRange, Line};
+use crate::file_pos::{FilePos, FilePosRange};
 use crate::notes::{MidiNote, MmlPitch, Note, Octave, STARTING_OCTAVE};
 use crate::time::{
     Bpm, MmlDefaultLength, MmlLength, TickClock, TickCounter, TickCounterWithLoopFlag, ZenLen,
@@ -171,7 +171,10 @@ pub struct State {
 }
 
 mod parser {
-    use crate::{file_pos::LineIndexRange, mml::ChannelId};
+    use crate::{
+        file_pos::LineIndexRange,
+        mml::{line_splitter::MmlLine, ChannelId},
+    };
 
     use super::*;
 
@@ -197,7 +200,7 @@ mod parser {
     impl Parser<'_> {
         pub fn new<'a>(
             channel: ChannelId,
-            lines: &'a [Line],
+            lines: &'a [MmlLine],
             instruments_map: &'a HashMap<IdentifierStr, usize>,
             subroutine_map: Option<&'a HashMap<IdentifierStr, SubroutineId>>,
             zenlen: ZenLen,
@@ -236,7 +239,7 @@ mod parser {
                 cursor_tracker: cursor_tracking,
             };
             if let Some(line) = lines.first() {
-                p.process_new_line(line.index_range());
+                p.process_new_line(line.entire_line_range);
             }
             p
         }

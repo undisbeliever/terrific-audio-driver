@@ -9,6 +9,7 @@ use super::command_parser::{
 };
 use super::identifier::Identifier;
 use super::instruments::{EnvelopeOverride, MmlInstrument};
+use super::line_splitter::MmlLine;
 use super::{ChannelId, IdentifierStr, MmlSoundEffect, Section};
 
 #[cfg(feature = "mml_tracking")]
@@ -21,7 +22,6 @@ use crate::bytecode::{
     PitchOffsetPerTick, PlayNoteTicks, PortamentoVelocity, SubroutineId,
 };
 use crate::errors::{ErrorWithPos, MmlChannelError, MmlError, ValueError};
-use crate::file_pos::Line;
 use crate::notes::{Note, SEMITONES_PER_OCTAVE};
 use crate::pitch_table::PitchTable;
 use crate::songs::{Channel, LoopPoint, Subroutine};
@@ -801,7 +801,7 @@ impl<'a, 'b> MmlSongBytecodeGenerator<'a, 'b> {
 
     pub fn parse_and_compile_song_subroutione(
         &mut self,
-        lines: &[Line],
+        lines: &[MmlLine],
         identifier: Identifier,
         subroutine_index: u8,
     ) -> Result<Subroutine, MmlChannelError> {
@@ -867,7 +867,7 @@ impl<'a, 'b> MmlSongBytecodeGenerator<'a, 'b> {
 
     pub fn parse_and_compile_song_channel(
         &mut self,
-        lines: &[Line],
+        lines: &[MmlLine],
         identifier: Identifier,
     ) -> Result<Channel, MmlChannelError> {
         assert!(self.subroutine_map.is_some());
@@ -943,7 +943,7 @@ impl<'a, 'b> MmlSongBytecodeGenerator<'a, 'b> {
 }
 
 pub fn parse_and_compile_sound_effect(
-    lines: &[Line],
+    lines: &[MmlLine],
     pitch_table: &PitchTable,
     instruments: &Vec<MmlInstrument>,
     instruments_map: &HashMap<IdentifierStr, usize>,

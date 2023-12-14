@@ -8,9 +8,10 @@ use std::collections::HashMap;
 
 use crate::bytecode::SubroutineId;
 use crate::errors::{MmlError, ValueError};
-use crate::file_pos::{FilePos, Line, LineIndexRange};
+use crate::file_pos::{FilePos, LineIndexRange};
 use crate::notes::{parse_pitch_char, MmlPitch};
 
+use super::line_splitter::MmlLine;
 use super::IdentifierStr;
 
 #[derive(Debug)]
@@ -78,7 +79,7 @@ pub(crate) struct Scanner<'a> {
 }
 
 impl<'a> Scanner<'a> {
-    fn new(line: &Line<'a>) -> Self {
+    fn new(line: &MmlLine<'a>) -> Self {
         Self {
             to_process: line.text,
             pos: line.position,
@@ -213,7 +214,7 @@ impl<'a> Scanner<'a> {
 }
 
 pub(crate) struct Tokenizer<'a> {
-    remaining_lines: &'a [Line<'a>],
+    remaining_lines: &'a [MmlLine<'a>],
     scanner: Scanner<'a>,
 
     instruments_map: &'a HashMap<IdentifierStr<'a>, usize>,
@@ -222,7 +223,7 @@ pub(crate) struct Tokenizer<'a> {
 
 impl<'a> Tokenizer<'a> {
     pub fn new(
-        lines: &'a [Line<'a>],
+        lines: &'a [MmlLine<'a>],
         instruments_map: &'a HashMap<IdentifierStr<'a>, usize>,
         subroutine_map: Option<&'a HashMap<IdentifierStr<'a>, SubroutineId>>,
     ) -> Self {
@@ -307,7 +308,7 @@ impl<'a> Tokenizer<'a> {
                         self.scanner = Scanner::new(first);
                         self.remaining_lines = remaining;
 
-                        (pos, Token::NewLine(first.index_range()))
+                        (pos, Token::NewLine(first.entire_line_range))
                     }
                     None => (pos, Token::End),
                 };
@@ -445,7 +446,7 @@ pub(crate) struct PeekingTokenizer<'a> {
 
 impl PeekingTokenizer<'_> {
     pub fn new<'a>(
-        lines: &'a [Line],
+        lines: &'a [MmlLine],
         instruments_map: &'a HashMap<IdentifierStr<'a>, usize>,
         subroutine_map: Option<&'a HashMap<IdentifierStr<'a>, SubroutineId>>,
     ) -> PeekingTokenizer<'a> {
@@ -508,9 +509,13 @@ mod tests {
 
         for c in 0..127_u8 {
             let s = [c];
-            let lines = [Line {
+            let lines = [MmlLine {
                 text: std::str::from_utf8(&s).unwrap(),
                 position: blank_pos(),
+                entire_line_range: LineIndexRange {
+                    start: 0,
+                    end: s.len().try_into().unwrap(),
+                },
             }];
 
             let mut tokeninzer = Tokenizer::new(&lines, &blank_instruments, None);
