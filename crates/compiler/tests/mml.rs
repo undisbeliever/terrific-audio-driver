@@ -278,6 +278,9 @@ fn test_rests() {
     merge_mml_commands_test("r || r", &["rest 48"]);
     merge_mml_commands_test("r || r8", &["rest 36"]);
     merge_mml_commands_test("r%30||r%20", &["rest 50"]);
+
+    // From `mml-syntax.md`
+    assert_line_matches_line("r4 r8 r8", "r2");
 }
 
 #[test]

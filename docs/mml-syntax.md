@@ -189,6 +189,8 @@ Optional parameters are enclosed in `[]`.
  * `&` - Slur.  Used to tie two notes together without a key-off event
  * `&<length>` - Alternative Tie syntax
  * `r[length]` - Rest
+    * `r` rest commands can be tied, ie `r2 ^8`.
+    * Multiple `r` rest commands will be merged by the MML parser. For example, `r4 r8 r8` will be merged into a single `r2` command.
 
 <br/>
 
