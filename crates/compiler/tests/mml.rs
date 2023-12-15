@@ -283,41 +283,74 @@ fn play_long_slurred_note() {
 
 #[test]
 fn test_rests() {
-    assert_line_matches_bytecode("r", &["rest 24"]);
-    assert_line_matches_bytecode("r.", &["rest 36"]);
-    assert_line_matches_bytecode("r8", &["rest 12"]);
-    assert_line_matches_bytecode("r8.", &["rest 18"]);
+    assert_line_matches_bytecode("r", &["rest_keyoff 24"]);
+    assert_line_matches_bytecode("r.", &["rest_keyoff 36"]);
+    assert_line_matches_bytecode("r8", &["rest_keyoff 12"]);
+    assert_line_matches_bytecode("r8.", &["rest_keyoff 18"]);
 
-    assert_line_matches_bytecode("r%30", &["rest 30"]);
+    assert_line_matches_bytecode("r%30", &["rest_keyoff 30"]);
 
-    assert_line_matches_bytecode("r%256", &["rest 256"]);
-    assert_line_matches_bytecode("r%257", &["rest 256", "rest 1"]);
-    assert_line_matches_bytecode("r%512", &["rest 256", "rest 256"]);
-    assert_line_matches_bytecode("r%600", &["rest 256", "rest 256", "rest 88"]);
+    assert_line_matches_bytecode("r%256", &["rest_keyoff 256"]);
+    assert_line_matches_bytecode("r%257", &["rest_keyoff 257"]);
+    assert_line_matches_bytecode("r%258", &["rest 256", "rest_keyoff 2"]);
+    assert_line_matches_bytecode("r%512", &["rest 256", "rest_keyoff 256"]);
+    assert_line_matches_bytecode("r%513", &["rest 256", "rest_keyoff 257"]);
+    assert_line_matches_bytecode("r%514", &["rest 256", "rest 256", "rest_keyoff 2"]);
+    assert_line_matches_bytecode("r%600", &["rest 256", "rest 256", "rest_keyoff 88"]);
 
-    merge_mml_commands_test("r || r", &["rest 48"]);
-    merge_mml_commands_test("r || r8", &["rest 36"]);
-    merge_mml_commands_test("r%30||r%20", &["rest 50"]);
+    // User expects a keyoff after the first rest command
+    merge_mml_commands_test("r || r", &["rest_keyoff 24", "rest_keyoff 24"]);
+    merge_mml_commands_test("r || r8", &["rest_keyoff 24", "rest_keyoff 12"]);
+    merge_mml_commands_test("r%30||r%20", &["rest_keyoff 30", "rest_keyoff 20"]);
+
+    merge_mml_commands_test("r r || r", &["rest_keyoff 24", "rest_keyoff 48"]);
+    merge_mml_commands_test("r r || r8", &["rest_keyoff 24", "rest_keyoff 36"]);
+    merge_mml_commands_test("r%30 r%30||r%20", &["rest_keyoff 30", "rest_keyoff 50"]);
+
+    assert_line_matches_bytecode(
+        "r%300 r%256",
+        &["rest 256", "rest_keyoff 44", "rest_keyoff 256"],
+    );
+
+    // It does not matter if subsequent rests send keyoff events or not, no note is playing
+    merge_mml_commands_test(
+        "r%300 || r%300",
+        &[
+            "rest 256",
+            "rest_keyoff 44",
+            "rest_keyoff 257",
+            "rest_keyoff 43",
+        ],
+    );
+    assert_line_matches_bytecode(
+        "r%300 r%100 r%100 r%100",
+        &[
+            "rest 256",
+            "rest_keyoff 44",
+            "rest_keyoff 257",
+            "rest_keyoff 43",
+        ],
+    );
 
     // From `mml-syntax.md`
-    assert_line_matches_line("r4 r8 r8", "r2");
+    assert_line_matches_line("r4 r8 r8", "r4 r4");
 }
 
 #[test]
 fn test_rest_tie() {
     // used by midi2smw.
 
-    assert_line_matches_bytecode("r^^^", &["rest 96"]);
+    assert_line_matches_bytecode("r^^^", &["rest_keyoff 96"]);
 
-    assert_line_matches_bytecode("r^8", &["rest 36"]);
-    assert_line_matches_bytecode("r8^", &["rest 36"]);
-    assert_line_matches_bytecode("r8^16", &["rest 18"]);
+    assert_line_matches_bytecode("r^8", &["rest_keyoff 36"]);
+    assert_line_matches_bytecode("r8^", &["rest_keyoff 36"]);
+    assert_line_matches_bytecode("r8^16", &["rest_keyoff 18"]);
 
-    assert_line_matches_bytecode("r2^4^8", &["rest 84"]);
+    assert_line_matches_bytecode("r2^4^8", &["rest_keyoff 84"]);
 
-    assert_line_matches_bytecode("r%5^%7", &["rest 12"]);
+    assert_line_matches_bytecode("r%5^%7", &["rest_keyoff 12"]);
 
-    merge_mml_commands_test("r || ^ 8", &["rest 36"]);
+    merge_mml_commands_test("r || ^ 8", &["rest_keyoff 36"]);
 }
 
 #[test]
@@ -834,10 +867,18 @@ fn test_merge_rests_newlines() {
 A @0 r4
 A r4
 A r4
+A r4
 "##
     .to_string();
 
-    assert_mml_channel_a_matches_bytecode(&mml, &["set_instrument dummy_instrument", "rest 72"]);
+    assert_mml_channel_a_matches_bytecode(
+        &mml,
+        &[
+            "set_instrument dummy_instrument",
+            "rest_keyoff 24",
+            "rest_keyoff 72",
+        ],
+    );
 }
 
 #[test]

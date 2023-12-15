@@ -269,12 +269,17 @@ impl ChannelBcGenerator<'_> {
 
     fn rest_after_play_note(&mut self, length: TickCounter, is_slur: bool) -> Result<(), MmlError> {
         if length.is_zero() {
-            return Ok(());
+            Ok(())
+        } else if is_slur {
+            // no keyoff event
+            self.wait(length)
+        } else {
+            self.rest_one_keyoff(length)
         }
-        if is_slur {
-            return self.rest(length);
-        }
+    }
 
+    // A rest that sends a single keyoff event
+    fn rest_one_keyoff(&mut self, length: TickCounter) -> Result<(), MmlError> {
         self.prev_slurred_note = None;
 
         let mut remaining_ticks = length.value();
@@ -332,22 +337,7 @@ impl ChannelBcGenerator<'_> {
         Ok(())
     }
 
-    fn rest(&mut self, length: TickCounter) -> Result<(), MmlError> {
-        let mut remaining_ticks = length.value();
-
-        let rest_length = BcTicksNoKeyOff::try_from(BcTicksNoKeyOff::MAX).unwrap();
-        const _: () = assert!(BcTicksNoKeyOff::MIN == 1);
-
-        while remaining_ticks > rest_length.ticks() {
-            self.bc.rest(rest_length);
-            remaining_ticks -= rest_length.ticks();
-        }
-
-        self.bc.rest(BcTicksNoKeyOff::try_from(remaining_ticks)?);
-
-        Ok(())
-    }
-
+    // rest with no keyoff
     fn wait(&mut self, length: TickCounter) -> Result<(), MmlError> {
         let mut remaining_ticks = length.value();
 
@@ -390,7 +380,7 @@ impl ChannelBcGenerator<'_> {
                 self.rest_after_play_note(rest, true)?;
                 note_1_length
             } else if !delay_length.is_zero() {
-                self.rest(delay_length)?;
+                self.wait(delay_length)?;
                 delay_length
             } else {
                 TickCounter::new(0)
@@ -639,8 +629,12 @@ impl ChannelBcGenerator<'_> {
                 None => self.mp = MpState::Disabled,
             },
 
-            &MmlCommand::Rest(length) => {
-                self.rest(length)?;
+            &MmlCommand::Rest {
+                ticks_until_keyoff,
+                ticks_after_keyoff,
+            } => {
+                self.rest_one_keyoff(ticks_until_keyoff)?;
+                self.rest_many_keyoffs(ticks_after_keyoff)?;
             }
 
             &MmlCommand::Wait(length) => {

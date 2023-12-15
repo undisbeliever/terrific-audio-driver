@@ -189,8 +189,9 @@ Optional parameters are enclosed in `[]`.
  * `&` - Slur.  Used to tie two notes together without a key-off event
  * `&<length>` - Alternative Tie syntax
  * `r[length]` - Rest
+    * `r` rest commands send a key-off event.
     * `r` rest commands can be tied, ie `r2 ^8`.
-    * Multiple `r` rest commands will be merged by the MML parser. For example, `r4 r8 r8` will be merged into a single `r2` command.
+    * Three or more consecutive `r` rest commands will be merged by the MML parser.  For example, `r4 r8 r8` will be merged into a two `r4 r4` commands.
  * `w[length]` - Wait
     * A `w` wait will not send a key-off event.  Useful for changing pan or volume in the middle of a slurred note.
     * `w` wait commands can be tied, ie `w2 ^8`.

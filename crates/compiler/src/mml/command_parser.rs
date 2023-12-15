@@ -102,7 +102,14 @@ pub enum MmlCommand {
     SetManualVibrato(Option<ManualVibrato>),
     SetMpVibrato(Option<MpVibrato>),
 
-    Rest(TickCounter),
+    Rest {
+        /// Length of the first rest
+        /// (The user expects a keyoff after the first rest command)
+        ticks_until_keyoff: TickCounter,
+        /// Combined length of all rests after the first rest
+        /// (keyoff already sent, it does not matter if these rests keyoff or not)
+        ticks_after_keyoff: TickCounter,
+    },
 
     // wait with no keyoff
     Wait(TickCounter),
@@ -857,23 +864,49 @@ fn merge_pan_or_volume(
     }
 }
 
-// Assumes the current command has a rest.
-fn merge_rest_tokens(p: &mut Parser, rest_tc: TickCounter) -> TickCounter {
-    let mut rest_tc = rest_tc;
+// Assumes all ties have already been parsed.
+// Requires the previously parsed token send a key-off event.
+fn parse_rests_after_rest(p: &mut Parser) -> TickCounter {
+    let mut ticks = TickCounter::default();
+
+    if next_token_matches!(p, Token::Rest) {
+        ticks += parse_tracked_length(p);
+
+        loop {
+            match_next_token!(
+                p,
+
+                Token::Rest => {
+                    ticks += parse_tracked_length(p);
+                },
+                Token::Tie => {
+                    ticks += parse_tracked_length(p);
+                },
+                #_ => {
+                    if !merge_state_change(p) {
+                        break;
+                    }
+                }
+            )
+        }
+    }
+
+    ticks
+}
+
+fn parse_ties(p: &mut Parser) -> TickCounter {
+    let mut ticks = TickCounter::default();
 
     loop {
         match_next_token!(
             p,
 
-            Token::Rest => {
-                rest_tc += parse_tracked_length(p);
-            },
             Token::Tie => {
-                rest_tc += parse_tracked_length(p);
+                ticks += parse_tracked_length(p);
             },
             #_ => {
                 if !merge_state_change(p) {
-                    return rest_tc;
+                    return ticks;
                 }
             }
         )
@@ -933,10 +966,15 @@ fn parse_wait(p: &mut Parser) -> MmlCommand {
 }
 
 fn parse_rest(p: &mut Parser) -> MmlCommand {
-    let tc = parse_tracked_length(p);
-    let tc = merge_rest_tokens(p, tc);
+    let ticks_until_keyoff = parse_tracked_length(p);
+    let ticks_until_keyoff = ticks_until_keyoff + parse_ties(p);
 
-    MmlCommand::Rest(tc)
+    let ticks_after_keyoff = parse_rests_after_rest(p);
+
+    MmlCommand::Rest {
+        ticks_until_keyoff,
+        ticks_after_keyoff,
+    }
 }
 
 fn play_note(note: Note, length: TickCounter, p: &mut Parser) -> MmlCommand {
@@ -961,9 +999,9 @@ fn play_note(note: Note, length: TickCounter, p: &mut Parser) -> MmlCommand {
 
         if key_on_length > KEY_OFF_TICK_DELAY && key_off_length > KEY_OFF_TICK_DELAY {
             let key_on_length = TickCounter::new(key_on_length);
-            let rest = TickCounter::new(key_off_length);
 
-            let rest = merge_rest_tokens(p, rest);
+            let rest = TickCounter::new(key_off_length);
+            let rest = rest + parse_rests_after_rest(p);
 
             MmlCommand::PlayQuantizedNote {
                 note,
@@ -995,7 +1033,10 @@ fn parse_pitch(pos: FilePos, pitch: MmlPitch, p: &mut Parser) -> MmlCommand {
             let length = parse_tracked_length(p);
             let (tie_length, _) = parse_ties_and_slur(p);
             let length = length + tie_length;
-            MmlCommand::Rest(length)
+            MmlCommand::Rest {
+                ticks_until_keyoff: length,
+                ticks_after_keyoff: TickCounter::default(),
+            }
         }
     }
 }
@@ -1023,7 +1064,10 @@ fn parse_play_midi_note_number(pos: FilePos, p: &mut Parser) -> MmlCommand {
             let length = parse_tracked_length(p);
             let (tie_length, _) = parse_ties_and_slur(p);
             let length = length + tie_length;
-            MmlCommand::Rest(length)
+            MmlCommand::Rest {
+                ticks_until_keyoff: length,
+                ticks_after_keyoff: TickCounter::default(),
+            }
         }
     }
 }
