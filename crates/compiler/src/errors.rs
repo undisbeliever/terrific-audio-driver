@@ -5,7 +5,7 @@
 // SPDX-License-Identifier: MIT
 
 use crate::bytecode::{
-    BcTicksKeyOff, BcTicksNoKeyOff, InstrumentId, LoopCount, Pan, PitchOffsetPerTick,
+    BcTicks, BcTicksKeyOff, BcTicksNoKeyOff, InstrumentId, LoopCount, Pan, PitchOffsetPerTick,
     PortamentoVelocity, QuarterWavelengthInTicks, RelativePan, RelativeVolume, Volume,
     MAX_NESTED_LOOPS,
 };

@@ -18,8 +18,8 @@ use super::note_tracking::CursorTracker;
 use crate::songs::{BytecodePos, SongBcTracking};
 
 use crate::bytecode::{
-    BcTerminator, BcTicksKeyOff, BcTicksNoKeyOff, Bytecode, BytecodeContext, LoopCount,
-    PitchOffsetPerTick, PlayNoteTicks, PortamentoVelocity, SubroutineId,
+    BcTerminator, BcTicks, BcTicksKeyOff, BcTicksNoKeyOff, Bytecode, BytecodeContext, LoopCount,
+    PitchOffsetPerTick, PlayNoteTicks, PortamentoVelocity, SubroutineId, MAX_NESTED_LOOPS,
 };
 use crate::errors::{ErrorWithPos, MmlChannelError, MmlError, ValueError};
 use crate::notes::{Note, SEMITONES_PER_OCTAVE};
@@ -31,6 +31,54 @@ use std::cmp::max;
 use std::collections::HashMap;
 
 pub const MAX_BROKEN_CHORD_NOTES: usize = 128;
+
+// Number of rest instructions before a loop uses less space
+pub const REST_LOOP_INSTRUCTION_THREASHOLD: u32 = 3;
+
+struct RestLoop {
+    ticks_in_loop: u32,
+    n_loops: u32,
+
+    // May be 0
+    remainder: u32,
+
+    n_rest_instructions: u32,
+}
+
+const fn div_ceiling(a: u32, b: u32) -> u32 {
+    (a + b - 1) / b
+}
+
+#[inline]
+fn build_rest_loop<Loop, Rem, const ALLOW_ZERO_REM: bool>(ticks: TickCounter) -> RestLoop
+where
+    Loop: BcTicks,
+    Rem: BcTicks,
+{
+    let ticks = ticks.value();
+
+    assert!(ticks > Loop::MAX * 3);
+
+    (LoopCount::MIN..=LoopCount::MAX)
+        .filter_map(|l| {
+            let div = ticks / l;
+            let rem = ticks % l;
+
+            if div >= Loop::MIN && ((ALLOW_ZERO_REM && rem == 0) || rem >= Rem::MIN) {
+                Some(RestLoop {
+                    ticks_in_loop: div,
+                    n_loops: l,
+                    remainder: rem,
+
+                    n_rest_instructions: div_ceiling(div, Loop::MAX) + div_ceiling(rem, Rem::MAX),
+                })
+            } else {
+                None
+            }
+        })
+        .min_by_key(|rl| rl.n_rest_instructions)
+        .unwrap()
+}
 
 #[derive(Clone, PartialEq)]
 enum MpState {
@@ -91,6 +139,10 @@ impl ChannelBcGenerator<'_> {
             loop_point: None,
             show_missing_set_instrument_error: !is_subroutine,
         }
+    }
+
+    fn can_loop(&self) -> bool {
+        self.bc.get_loop_stack_len() < MAX_NESTED_LOOPS.into()
     }
 
     fn instrument_from_index(&self, i: usize) -> &MmlInstrument {
@@ -279,15 +331,13 @@ impl ChannelBcGenerator<'_> {
     }
 
     // A rest that sends a single keyoff event
-    fn rest_one_keyoff(&mut self, length: TickCounter) -> Result<(), MmlError> {
-        self.prev_slurred_note = None;
-
-        let mut remaining_ticks = length.value();
-
+    fn rest_one_keyoff_no_loop(&mut self, length: TickCounter) -> Result<(), MmlError> {
         const MAX_REST: u32 = BcTicksNoKeyOff::MAX;
         const MAX_FINAL_REST: u32 = BcTicksKeyOff::MAX;
         const MIN_FINAL_REST: u32 = BcTicksKeyOff::MIN;
         const _: () = assert!(MIN_FINAL_REST > 1);
+
+        let mut remaining_ticks = length.value();
 
         while remaining_ticks > MAX_FINAL_REST {
             let l = if remaining_ticks >= MAX_REST + MIN_FINAL_REST {
@@ -307,13 +357,7 @@ impl ChannelBcGenerator<'_> {
 
     // Rest that can send multiple `rest_keyoff` instructions
     // The `rest_keyoff` instruction can wait for more ticks than the `rest` instruction.
-    fn rest_many_keyoffs(&mut self, length: TickCounter) -> Result<(), MmlError> {
-        if length.is_zero() {
-            return Ok(());
-        }
-
-        self.prev_slurred_note = None;
-
+    fn rest_many_keyoffs_no_loop(&mut self, length: TickCounter) -> Result<(), MmlError> {
         const _: () = assert!(BcTicksKeyOff::MAX > BcTicksNoKeyOff::MAX);
         const MAX_REST: u32 = BcTicksKeyOff::MAX;
         const MIN_REST: u32 = BcTicksKeyOff::MIN;
@@ -338,7 +382,7 @@ impl ChannelBcGenerator<'_> {
     }
 
     // rest with no keyoff
-    fn wait(&mut self, length: TickCounter) -> Result<(), MmlError> {
+    fn wait_no_loop(&mut self, length: TickCounter) -> Result<(), MmlError> {
         let mut remaining_ticks = length.value();
 
         let rest_length = BcTicksNoKeyOff::try_from(BcTicksNoKeyOff::MAX).unwrap();
@@ -352,6 +396,85 @@ impl ChannelBcGenerator<'_> {
         self.bc.rest(BcTicksNoKeyOff::try_from(remaining_ticks)?);
 
         Ok(())
+    }
+
+    // A rest that sends a single keyoff event
+    fn rest_one_keyoff(&mut self, length: TickCounter) -> Result<(), MmlError> {
+        const MIN_LOOP_REST: u32 =
+            BcTicksNoKeyOff::MAX * (REST_LOOP_INSTRUCTION_THREASHOLD - 1) + BcTicksKeyOff::MAX + 1;
+
+        if length.is_zero() {
+            return Ok(());
+        }
+        self.prev_slurred_note = None;
+
+        if length.value() < MIN_LOOP_REST || !self.can_loop() {
+            self.rest_one_keyoff_no_loop(length)
+        } else {
+            // Convert a long rest to a rest loop.
+
+            let rl = build_rest_loop::<BcTicksNoKeyOff, BcTicksKeyOff, false>(length);
+
+            self.bc.start_loop(Some(LoopCount::try_from(rl.n_loops)?))?;
+            self.wait_no_loop(TickCounter::new(rl.ticks_in_loop))?;
+            self.bc.end_loop(None)?;
+
+            self.bc.rest_keyoff(rl.remainder.try_into()?);
+
+            Ok(())
+        }
+    }
+
+    // Rest that can send multiple `rest_keyoff` instructions
+    // The `rest_keyoff` instruction can wait for more ticks than the `rest` instruction.
+    fn rest_many_keyoffs(&mut self, length: TickCounter) -> Result<(), MmlError> {
+        const MIN_LOOP_REST: u32 = BcTicksKeyOff::MAX * REST_LOOP_INSTRUCTION_THREASHOLD + 1;
+
+        if length.is_zero() {
+            return Ok(());
+        }
+        self.prev_slurred_note = None;
+
+        if length.value() < MIN_LOOP_REST || !self.can_loop() {
+            self.rest_many_keyoffs_no_loop(length)
+        } else {
+            // Convert a long rest to a rest loop.
+
+            let rl = build_rest_loop::<BcTicksKeyOff, BcTicksKeyOff, true>(length);
+
+            self.bc.start_loop(Some(LoopCount::try_from(rl.n_loops)?))?;
+            self.rest_many_keyoffs_no_loop(TickCounter::new(rl.ticks_in_loop))?;
+            self.bc.end_loop(None)?;
+
+            if rl.remainder > 0 {
+                self.bc.rest_keyoff(rl.remainder.try_into()?);
+            }
+
+            Ok(())
+        }
+    }
+
+    // rest with no keyoff
+    fn wait(&mut self, length: TickCounter) -> Result<(), MmlError> {
+        const MIN_LOOP_REST: u32 = BcTicksNoKeyOff::MAX * REST_LOOP_INSTRUCTION_THREASHOLD + 1;
+
+        if length.value() < MIN_LOOP_REST || !self.can_loop() {
+            self.wait_no_loop(length)
+        } else {
+            // Convert a long rest to a rest loop.
+
+            let rl = build_rest_loop::<BcTicksNoKeyOff, BcTicksNoKeyOff, true>(length);
+
+            self.bc.start_loop(Some(LoopCount::try_from(rl.n_loops)?))?;
+            self.wait_no_loop(TickCounter::new(rl.ticks_in_loop))?;
+            self.bc.end_loop(None)?;
+
+            if rl.remainder > 0 {
+                self.bc.rest(rl.remainder.try_into()?);
+            }
+
+            Ok(())
+        }
     }
 
     #[allow(clippy::too_many_arguments)]

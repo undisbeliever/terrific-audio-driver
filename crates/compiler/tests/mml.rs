@@ -4,6 +4,8 @@
 //
 // SPDX-License-Identifier: MIT
 
+#![allow(clippy::assertions_on_constants)]
+
 use compiler::bytecode_assembler;
 use compiler::data;
 use compiler::data::{Name, TextFile, UniqueNamesList};
@@ -391,8 +393,326 @@ fn test_wait_tie() {
 }
 
 #[test]
+fn test_wait_loop() {
+    // Test wait tick-counter threashold
+    assert_line_matches_bytecode("w%768", &["rest 256", "rest 256", "rest 256"]);
+
+    assert_line_matches_line_and_bytecode(
+        "w%769",
+        "[w%256]3 w%1",
+        &["start_loop 3", "rest 256", "end_loop", "rest 1"],
+    );
+
+    assert_line_matches_line_and_bytecode(
+        "w%25600",
+        "[w%256]100",
+        &["start_loop 100", "rest 256", "end_loop"],
+    );
+
+    assert_line_matches_line_and_bytecode(
+        "w%25601",
+        "[w%256]100 w%1",
+        &["start_loop 100", "rest 256", "end_loop", "rest 1"],
+    );
+
+    assert!(512 * 195 + 159 == 99999);
+    assert_line_matches_line_and_bytecode(
+        "w%99999",
+        "[w%512]195 w%159",
+        &[
+            "start_loop 195",
+            "rest 256",
+            "rest 256",
+            "end_loop",
+            "rest 159",
+        ],
+    );
+
+    // A random prime number
+    assert!(251 * 28 + 11 == 7039);
+    assert_line_matches_line_and_bytecode(
+        "w%7039",
+        "[w%251]28 w%11",
+        &["start_loop 28", "rest 251", "end_loop", "rest 11"],
+    );
+
+    // Test no compile errors when loop stack is full
+    assert_line_matches_bytecode(
+        "[ [ [ w%1024 ]2 ]3 ]4",
+        &[
+            "start_loop",
+            "start_loop",
+            "start_loop",
+            "rest 256",
+            "rest 256",
+            "rest 256",
+            "rest 256",
+            "end_loop 2",
+            "end_loop 3",
+            "end_loop 4",
+        ],
+    );
+
+    // From `mml-syntax.md`
+    assert_line_matches_line("w1 w1 w1 w1 w1 w1 w1 w1 w1 w1", "[w%240]4");
+}
+
+#[test]
+fn test_rest_loop() {
+    // Test rest tick-counter threashold
+    assert_line_matches_bytecode("r%768", &["rest 256", "rest 256", "rest_keyoff 256"]);
+    assert_line_matches_bytecode("r%769", &["rest 256", "rest 256", "rest_keyoff 257"]);
+
+    assert_line_matches_line_and_bytecode(
+        "r%770",
+        "[w%256]3 r%2",
+        &["start_loop 3", "rest 256", "end_loop", "rest_keyoff 2"],
+    );
+
+    // Test that RestLoop remainder of 0 is skipped
+    assert!(1024 % 256 == 0);
+    assert!(204 * 5 + 4 == 1024);
+    assert_line_matches_line_and_bytecode(
+        "r%1024",
+        "[w%204]5 r%4",
+        &["start_loop 5", "rest 204", "end_loop", "rest_keyoff 4"],
+    );
+
+    // Test that RestLoop remainder of 1 is skipped
+    assert!(1025 % 256 == 1);
+    assert!(170 * 6 + 5 == 1025);
+    assert_line_matches_line_and_bytecode(
+        "r%1025",
+        "[w%170]6 r%5",
+        &["start_loop 6", "rest 170", "end_loop", "rest_keyoff 5"],
+    );
+
+    assert!(25600 % 256 == 0);
+    assert!(253 * 101 + 47 == 25600);
+    assert_line_matches_line_and_bytecode(
+        "r%25600",
+        "[w%253]101 r%47",
+        &["start_loop 101", "rest 253", "end_loop", "rest_keyoff 47"],
+    );
+
+    assert!(25601 % 256 == 1);
+    assert!(253 * 101 + 48 == 25601);
+    assert_line_matches_line_and_bytecode(
+        "r%25601",
+        "[w%253]101 r%48",
+        &["start_loop 101", "rest 253", "end_loop", "rest_keyoff 48"],
+    );
+
+    assert_line_matches_line_and_bytecode(
+        "r%25602",
+        "[w%256]100 r%2",
+        &["start_loop 100", "rest 256", "end_loop", "rest_keyoff 2"],
+    );
+
+    assert!(512 * 195 + 159 == 99999);
+    assert_line_matches_line_and_bytecode(
+        "r%99999",
+        "[w%512]195 r%159",
+        &[
+            "start_loop 195",
+            "rest 256",
+            "rest 256",
+            "end_loop",
+            "rest_keyoff 159",
+        ],
+    );
+
+    // A random prime number
+    assert!(249 * 21 + 8 == 5237);
+    assert_line_matches_line_and_bytecode(
+        "r%5237",
+        "[w%249]21 r%8",
+        &["start_loop 21", "rest 249", "end_loop", "rest_keyoff 8"],
+    );
+
+    // Test no compile errors when loop stack is full
+    assert_line_matches_bytecode(
+        "[ [ [ r%1024 ]2 ]3 ]4",
+        &[
+            "start_loop",
+            "start_loop",
+            "start_loop",
+            "rest 256",
+            "rest 256",
+            "rest 256",
+            "rest_keyoff 256",
+            "end_loop 2",
+            "end_loop 3",
+            "end_loop 4",
+        ],
+    );
+}
+
+#[test]
+fn test_merged_rest_loop() {
+    // Test rest tick-counter threashold
+    assert_line_matches_bytecode(
+        "r%2 r%771",
+        &[
+            "rest_keyoff 2",
+            // second rest
+            "rest_keyoff 257",
+            "rest_keyoff 257",
+            "rest_keyoff 257",
+        ],
+    );
+
+    assert_line_matches_line_and_bytecode(
+        "r%2 r%772",
+        "r%2 [r%193]4",
+        &[
+            "rest_keyoff 2",
+            "start_loop 4",
+            "rest_keyoff 193",
+            "end_loop",
+        ],
+    );
+
+    // Test that RestLoop remainder of 0 works
+    assert!(1028 % 257 == 0);
+    assert_line_matches_line_and_bytecode(
+        "r%2 r%1028",
+        "r%2 [r%257]4",
+        &[
+            "rest_keyoff 2",
+            "start_loop 4",
+            "rest_keyoff 257",
+            "end_loop",
+        ],
+    );
+
+    // Test that RestLoop remainder of 1 is skipped
+    assert!(1286 % 257 == 1);
+    assert!(214 * 6 + 2 == 1286);
+    assert_line_matches_line_and_bytecode(
+        "r%2 r%1286",
+        "r%2 [r%214]6 r%2",
+        &[
+            "rest_keyoff 2",
+            "start_loop 6",
+            "rest_keyoff 214",
+            "end_loop",
+            "rest_keyoff 2",
+        ],
+    );
+
+    assert!(25700 % 257 == 0);
+    assert!(257 * 100 == 25700);
+    assert_line_matches_line_and_bytecode(
+        "r%2 r%25700",
+        "r%2 [r%257]100",
+        &[
+            "rest_keyoff 2",
+            "start_loop 100",
+            "rest_keyoff 257",
+            "end_loop",
+        ],
+    );
+
+    assert!(25701 % 257 == 1);
+    assert!(254 * 101 + 47 == 25701);
+    assert_line_matches_line_and_bytecode(
+        "r%2 r%25701",
+        "r%2 [r%254]101 r%47",
+        &[
+            "rest_keyoff 2",
+            "start_loop 101",
+            "rest_keyoff 254",
+            "end_loop",
+            "rest_keyoff 47",
+        ],
+    );
+
+    assert!(25702 % 257 == 2);
+    assert!(181 * 142 == 25702);
+    assert_line_matches_line_and_bytecode(
+        "r%2 r%25702",
+        "r%2 [r%181]142",
+        &[
+            "rest_keyoff 2",
+            "start_loop 142",
+            "rest_keyoff 181",
+            "end_loop",
+        ],
+    );
+
+    assert!(512 * 195 + 159 == 99999);
+    assert_line_matches_line_and_bytecode(
+        "r%2 r%99999",
+        "r%2 [r%257 r%255]195 r%159",
+        &[
+            "rest_keyoff 2",
+            "start_loop 195",
+            "rest_keyoff 257",
+            "rest_keyoff 255",
+            "end_loop",
+            "rest_keyoff 159",
+        ],
+    );
+
+    // A random prime number
+    assert!(242 * 27 + 19 == 6553);
+    assert_line_matches_line_and_bytecode(
+        "r%2 r%6553",
+        "r%2 [r%242]27 r%19",
+        &[
+            "rest_keyoff 2",
+            "start_loop 27",
+            "rest_keyoff 242",
+            "end_loop",
+            "rest_keyoff 19",
+        ],
+    );
+
+    // Test no compile errors when loop stack is full
+    assert_line_matches_bytecode(
+        "[ [ [ r%2 r%1028 ]2 ]3 ]4",
+        &[
+            "start_loop",
+            "start_loop",
+            "start_loop",
+            "rest_keyoff 2",
+            // second rest
+            "rest_keyoff 257",
+            "rest_keyoff 257",
+            "rest_keyoff 257",
+            "rest_keyoff 257",
+            "end_loop 2",
+            "end_loop 3",
+            "end_loop 4",
+        ],
+    );
+
+    // Test both rests are converted to loops
+    assert!(166 * 6 + 4 == 1000);
+    assert!(250 * 4 == 1000);
+    assert_line_matches_line_and_bytecode(
+        "r%1000 r%1000",
+        "[w%166]6 r%4 [r%250]4",
+        &[
+            "start_loop 6",
+            "rest 166",
+            "end_loop",
+            "rest_keyoff 4",
+            "start_loop 4",
+            "rest_keyoff 250",
+            "end_loop",
+        ],
+    );
+
+    // From `mml_syntax.md`
+    assert_line_matches_line("r1 r1 r1 r1 r1 r1 r1 r1 r1 r1", "r1 [r%216]4")
+}
+
+#[test]
 fn test_loops() {
     assert_line_matches_bytecode("[a]4", &["start_loop 4", "play_note a4 24", "end_loop"]);
+
     assert_line_matches_bytecode(
         "[ab:c]256",
         &[
@@ -964,6 +1284,29 @@ fn assert_line_matches_line(mml_line1: &str, mml_line2: &str) {
         mml_bytecode(&mml_data2),
         "Testing {mml_line1:?} against MML"
     );
+}
+
+fn assert_line_matches_line_and_bytecode(mml_line1: &str, mml_line2: &str, bc_asm: &[&str]) {
+    let mml1 = ["@1 dummy_instrument\nA @1 o4\nA ", mml_line1].concat();
+    let mml2 = ["@1 dummy_instrument\nA @1 o4\nA ", mml_line2].concat();
+    let bc_asm = [&["set_instrument dummy_instrument"], bc_asm].concat();
+
+    let dd = dummy_data();
+
+    let mml_data1 = compile_mml(&mml1, &dd);
+    let mml_data2 = compile_mml(&mml2, &dd);
+
+    let mml1_bc = mml_bytecode(&mml_data1);
+
+    assert_eq!(
+        mml1_bc,
+        mml_bytecode(&mml_data2),
+        "Testing {mml_line1:?} against MML"
+    );
+
+    let bc_asm = assemble_channel_bytecode(&bc_asm, &dd.instruments);
+
+    assert_eq!(mml1_bc, bc_asm, "Testing {mml_line1:?} against bytecode");
 }
 
 fn assert_mml_channel_a_matches_bytecode(mml: &str, bc_asm: &[&str]) {

@@ -124,26 +124,40 @@ impl SubroutineId {
     }
 }
 
+pub trait BcTicks
+where
+    Self: TryFrom<u32>,
+{
+    const MIN: u32;
+    const MAX: u32;
+
+    fn ticks(self) -> u32;
+    fn to_tick_count(self) -> TickCounter;
+}
+
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub struct BcTicksKeyOff {
     ticks: u16,
     bc_argument: u8,
 }
 
-impl BcTicksKeyOff {
-    pub const MIN: u32 = 1 + KEY_OFF_TICK_DELAY;
-    pub const MAX: u32 = 0x100 + KEY_OFF_TICK_DELAY;
+impl BcTicks for BcTicksKeyOff {
+    const MIN: u32 = 1 + KEY_OFF_TICK_DELAY;
+    const MAX: u32 = 0x100 + KEY_OFF_TICK_DELAY;
 
-    #[allow(dead_code)]
-    pub fn ticks(&self) -> u32 {
+    fn ticks(self) -> u32 {
         self.ticks.into()
     }
 
-    pub fn to_tick_count(self) -> TickCounter {
+    fn to_tick_count(self) -> TickCounter {
         TickCounter::new(self.ticks.into())
     }
+}
 
-    pub fn try_from(ticks: u32) -> Result<Self, ValueError> {
+impl TryFrom<u32> for BcTicksKeyOff {
+    type Error = ValueError;
+
+    fn try_from(ticks: u32) -> Result<Self, ValueError> {
         if matches!(ticks, Self::MIN..=Self::MAX) {
             Ok(Self {
                 ticks: ticks.try_into().unwrap(),
@@ -161,20 +175,24 @@ pub struct BcTicksNoKeyOff {
     bc_argument: u8,
 }
 
-impl BcTicksNoKeyOff {
-    pub const MIN: u32 = 1;
-    pub const MAX: u32 = 0x100;
+impl BcTicks for BcTicksNoKeyOff {
+    const MIN: u32 = 1;
+    const MAX: u32 = 0x100;
 
     #[allow(dead_code)]
-    pub fn ticks(self) -> u32 {
+    fn ticks(self) -> u32 {
         self.ticks.into()
     }
 
-    pub fn to_tick_count(self) -> TickCounter {
+    fn to_tick_count(self) -> TickCounter {
         TickCounter::new(self.ticks.into())
     }
+}
 
-    pub fn try_from(ticks: u32) -> Result<Self, ValueError> {
+impl TryFrom<u32> for BcTicksNoKeyOff {
+    type Error = ValueError;
+
+    fn try_from(ticks: u32) -> Result<Self, ValueError> {
         if matches!(ticks, Self::MIN..=Self::MAX) {
             // A note length of 0 will wait for 256 ticks.
             let bc_argument = (ticks & 0xff).try_into().unwrap();
@@ -436,6 +454,10 @@ impl Bytecode {
 
     pub fn is_in_loop(&self) -> bool {
         !self.loop_stack.is_empty()
+    }
+
+    pub fn get_loop_stack_len(&self) -> usize {
+        self.loop_stack.len()
     }
 
     pub fn get_max_nested_loops(&self) -> usize {

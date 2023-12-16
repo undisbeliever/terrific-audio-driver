@@ -7,7 +7,7 @@
 #![allow(clippy::assertions_on_constants)]
 
 use crate::bytecode::{
-    BcTerminator, BcTicksKeyOff, BcTicksNoKeyOff, Bytecode, InstrumentId, PlayNoteTicks,
+    BcTerminator, BcTicks, BcTicksKeyOff, BcTicksNoKeyOff, Bytecode, InstrumentId, PlayNoteTicks,
     SubroutineId, Volume,
 };
 use crate::driver_constants::{
