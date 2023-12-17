@@ -583,16 +583,16 @@ impl Display for InvalidAdsrError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "invalid adsr")?;
 
-        if self.valid_a {
+        if !self.valid_a {
             write!(f, " attack")?;
         }
-        if self.valid_d {
+        if !self.valid_d {
             write!(f, " decay")?;
         }
-        if self.valid_sl {
+        if !self.valid_sl {
             write!(f, " sustain-level")?;
         }
-        if self.valid_sr {
+        if !self.valid_sr {
             write!(f, " sustain-rate")?;
         }
 
