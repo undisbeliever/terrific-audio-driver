@@ -64,6 +64,8 @@ pub enum Token {
     EndPortamento,
     ManualVibrato,
     MpVibrato,
+    SetAdsr,
+    SetGain,
     Echo,
     SetSongTempo,
     SetSongTickClock,
@@ -247,8 +249,10 @@ impl<'a> Tokenizer<'a> {
             b'0'..=b'9' => false,
             b'a'..=b'g' => false,
             b'!' | b'@' | b'+' | b'-' | b'[' | b':' | b']' | b'^' | b'&' | b'C' | b'n' | b'l'
-            | b'r' | b'w' | b'o' | b'>' | b'<' | b'v' | b'V' | b'p' | b'Q' | b'~' | b'E' | b't'
-            | b'T' | b'L' | b'%' | b'.' | b',' | b'|' | b'_' | b'{' | b'}' | b'M' => false,
+            | b'r' | b'w' | b'o' | b'>' | b'<' | b'v' | b'V' | b'p' | b'Q' | b'~' | b'A' | b'G'
+            | b'E' | b't' | b'T' | b'L' | b'%' | b'.' | b',' | b'|' | b'_' | b'{' | b'}' | b'M' => {
+                false
+            }
             c if c.is_ascii_whitespace() => false,
             _ => true,
         }
@@ -407,6 +411,8 @@ impl<'a> Tokenizer<'a> {
             b'p' => one_ascii_token!(Token::Pan),
             b'Q' => one_ascii_token!(Token::Quantize),
             b'~' => one_ascii_token!(Token::ManualVibrato),
+            b'A' => one_ascii_token!(Token::SetAdsr),
+            b'G' => one_ascii_token!(Token::SetGain),
             b'E' => one_ascii_token!(Token::Echo),
             b't' => one_ascii_token!(Token::SetSongTempo),
             b'T' => one_ascii_token!(Token::SetSongTickClock),

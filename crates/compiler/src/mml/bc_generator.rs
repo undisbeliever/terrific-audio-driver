@@ -14,7 +14,7 @@ use super::{ChannelId, IdentifierStr, MmlSoundEffect, Section};
 
 #[cfg(feature = "mml_tracking")]
 use super::note_tracking::CursorTracker;
-use crate::envelope::Envelope;
+use crate::envelope::{Adsr, Envelope, Gain};
 #[cfg(feature = "mml_tracking")]
 use crate::songs::{BytecodePos, SongBcTracking};
 
@@ -684,6 +684,20 @@ impl ChannelBcGenerator<'_> {
         Ok(())
     }
 
+    fn set_adsr(&mut self, adsr: Adsr) {
+        if self.envelope != Some(Envelope::Adsr(adsr)) {
+            self.bc.set_adsr(adsr);
+            self.envelope = Some(Envelope::Adsr(adsr));
+        }
+    }
+
+    fn set_gain(&mut self, gain: Gain) {
+        if self.envelope != Some(Envelope::Gain(gain)) {
+            self.bc.set_gain(gain);
+            self.envelope = Some(Envelope::Gain(gain));
+        }
+    }
+
     fn call_subroutine(&mut self, s_id: SubroutineId) -> Result<(), MmlError> {
         // CallSubroutine commands should only be created if the channel can call a subroutine.
         // `s_id` should always be valid
@@ -757,6 +771,8 @@ impl ChannelBcGenerator<'_> {
             &MmlCommand::SetInstrument(inst_index) => {
                 self.set_instrument(inst_index)?;
             }
+            &MmlCommand::SetAdsr(adsr) => self.set_adsr(adsr),
+            &MmlCommand::SetGain(gain) => self.set_gain(gain),
 
             &MmlCommand::CallSubroutine(s_id) => {
                 self.call_subroutine(s_id)?;

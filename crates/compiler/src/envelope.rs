@@ -129,6 +129,21 @@ impl TryFrom<&str> for Adsr {
     }
 }
 
+impl TryFrom<[u32; 4]> for Adsr {
+    type Error = ValueError;
+
+    fn try_from(value: [u32; 4]) -> Result<Self, Self::Error> {
+        // All fields in Adsr require fewer then 8 bits of space.
+        // Converting u8 try_into errors to u8::MAX will always output an error for that value.
+        Ok(Adsr::try_new(
+            value[0].try_into().unwrap_or(u8::MAX),
+            value[1].try_into().unwrap_or(u8::MAX),
+            value[2].try_into().unwrap_or(u8::MAX),
+            value[3].try_into().unwrap_or(u8::MAX),
+        )?)
+    }
+}
+
 u8_value_newtype!(Gain, GainOutOfRange, NoGain);
 
 impl Gain {

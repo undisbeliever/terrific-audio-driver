@@ -2,16 +2,20 @@
 
 @0 square
 @1 square gain 30
-@2 square gain 60
-@3 square gain 80
 @4 square adsr 14 4 6 28
 @5 square adsr  2 4 5 31
-@6 square adsr 10 2 3 12
 
-A @0 c2 r
-A @1 c2 r
-A @2 c2 r
-A @3 c2 r
-A @4 c2 r
-A @5 c2 r
-A @6 c2 r
+; Default
+A @0  c2 r
+
+; GAIN
+A @1  c2 r
+A G60 c2 r
+A G80 c2 r
+
+; ADSR
+A @4  c2 r
+A @5  c2 r
+A A10,2,3,12 c2 r
+A A5,3,2,0   c2 r
+

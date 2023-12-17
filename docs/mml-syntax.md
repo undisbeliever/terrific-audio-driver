@@ -204,6 +204,11 @@ Optional parameters are enclosed in `[]`.
 
  * `@<id>` - Set instrument
     * The instrument should not be changed in the middle of a slur.
+ * `A <attack>,<decay>,<sustain_level>,<sustain_rate>` - Set the channel's ADSR register
+ * `G <gain>` - Set the channel's GAIN register (disables ADSR)
+
+<br/>
+
  * `o<0..7>` - Set octave
  * `>` - Increase octave
  * `<` - Decrease octave

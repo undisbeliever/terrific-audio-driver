@@ -18,6 +18,7 @@ use compiler::songs::SongData;
 const SAMPLE_FREQ: f64 = 500.0;
 
 const EXAMPLE_ADSR_STR: &str = "12 1 1 16";
+const EXAMPLE_ADSR_COMMENTS_STR: &str = "12,1,1,16";
 const EXAMPLE_ADSR: Adsr = match Adsr::try_new(12, 1, 1, 16) {
     Ok(v) => v,
     Err(_) => panic!("Invalid Adsr"),
@@ -1070,6 +1071,53 @@ A @0 @g1 @g2 @g3 @g1
 }
 
 #[test]
+fn test_set_adsr_and_set_gain() {
+    assert_mml_channel_a_matches_bytecode(
+        &format!(
+            r##"
+@a inst_with_adsr
+@aa inst_with_adsr adsr 1 2 3 4
+@ag inst_with_adsr gain 24
+
+@g inst_with_gain
+@ga inst_with_gain adsr 5 6 7 8
+@gg inst_with_gain gain 48
+
+A @a  A{EXAMPLE_ADSR_COMMENTS_STR} A{EXAMPLE_ADSR_COMMENTS_STR}
+A @aa A1,2,3,4
+A @ag G24 G100 A1,2,3,4 A1,2,3,4 A5,6,7,8 A5,6,7,8
+
+A @g  G{EXAMPLE_GAIN_STR} G{EXAMPLE_GAIN_STR}
+A @ga G10 G10 A5,6,7,8 G20
+A @gg G48 G48 A5,6,7,8 G30
+"##
+        ),
+        &[
+            // Line 1
+            "set_instrument inst_with_adsr",
+            // Line 2
+            "set_adsr 1 2 3 4",
+            // Line 3
+            "set_gain 24",
+            "set_gain 100",
+            "set_adsr 1 2 3 4",
+            "set_adsr 5 6 7 8",
+            // Line 4
+            "set_instrument inst_with_gain",
+            // Line 5
+            "set_adsr 5 6 7 8",
+            "set_gain 10",
+            "set_adsr 5 6 7 8",
+            "set_gain 20",
+            // Line 6
+            "set_gain 48",
+            "set_adsr 5 6 7 8",
+            "set_gain 30",
+        ],
+    );
+}
+
+#[test]
 fn test_echo() {
     assert_line_matches_bytecode("E", &["enable_echo"]);
     assert_line_matches_bytecode("E1", &["enable_echo"]);
@@ -1185,6 +1233,106 @@ A [ @a a : [ @d b : c ]2 ] 3 @a
             "play_note c4 24",
             "end_loop 2",
             "end_loop 3",
+        ],
+    );
+}
+
+/// Test ADSR envelope is correctly tracked across loops
+#[test]
+fn test_skip_last_loop_set_adsr() {
+    assert_mml_channel_a_matches_bytecode(
+        r##"
+@i inst_with_adsr
+
+A [ @i a A 5,6,7,8 b : A 15,7,7,31 c ]2 A 5,6,7,8 d
+"##,
+        &[
+            "start_loop",
+            "set_instrument inst_with_adsr",
+            "play_note a4 24",
+            "set_adsr 5 6 7 8",
+            "play_note b4 24",
+            "skip_last_loop",
+            "set_adsr 15 7 7 31",
+            "play_note c4 24",
+            "end_loop 2",
+            // No set_adsr instruction
+            "play_note d4 24",
+        ],
+    );
+
+    assert_mml_channel_a_matches_bytecode(
+        r##"
+@i inst_with_adsr
+
+A [ @i a A 5,6,7,8 b : [ A 15,7,7,31 c : d]2 ]3 A 5,6,7,8 e
+"##,
+        &[
+            "start_loop",
+            "set_instrument inst_with_adsr",
+            "play_note a4 24",
+            "set_adsr 5 6 7 8",
+            "play_note b4 24",
+            "skip_last_loop",
+            "start_loop",
+            "set_adsr 15 7 7 31",
+            "play_note c4 24",
+            "skip_last_loop",
+            "play_note d4 24",
+            "end_loop 2",
+            "end_loop 3",
+            // No set_adsr instruction
+            "play_note e4 24",
+        ],
+    );
+}
+
+/// Test GAIN envelope is correctly tracked across loops
+#[test]
+fn test_skip_last_loop_set_gain() {
+    assert_mml_channel_a_matches_bytecode(
+        r##"
+@i inst_with_adsr
+
+A [ @i a G10 b : G20 c ]2 G10 d
+"##,
+        &[
+            "start_loop",
+            "set_instrument inst_with_adsr",
+            "play_note a4 24",
+            "set_gain 10",
+            "play_note b4 24",
+            "skip_last_loop",
+            "set_gain 20",
+            "play_note c4 24",
+            "end_loop 2",
+            // No set_gain instruction
+            "play_note d4 24",
+        ],
+    );
+
+    assert_mml_channel_a_matches_bytecode(
+        r##"
+@i inst_with_adsr
+
+A [ @i a G10 b : [ G20 c : d ]2 ]3 G10 e
+"##,
+        &[
+            "start_loop",
+            "set_instrument inst_with_adsr",
+            "play_note a4 24",
+            "set_gain 10",
+            "play_note b4 24",
+            "skip_last_loop",
+            "start_loop",
+            "set_gain 20",
+            "play_note c4 24",
+            "skip_last_loop",
+            "play_note d4 24",
+            "end_loop 2",
+            "end_loop 3",
+            // No set_gain instruction
+            "play_note e4 24",
         ],
     );
 }
