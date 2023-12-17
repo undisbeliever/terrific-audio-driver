@@ -149,10 +149,10 @@ Please see the included [licenses file](licenses.md) for the full third party li
   * [winapi-x86_64-pc-windows-gnu 0.4.0](https://github.com/retep998/winapi-rs), MIT License
   * [fltk 1.4.19](https://github.com/fltk-rs/fltk-rs), MIT License
   * [fltk-sys 1.4.19](https://github.com/fltk-rs/fltk-rs), MIT License
-  * [cxx 1.0.110](https://github.com/dtolnay/cxx), MIT License
-  * [cxx-build 1.0.110](https://github.com/dtolnay/cxx), MIT License
-  * [cxxbridge-flags 1.0.110](https://github.com/dtolnay/cxx), MIT License
-  * [cxxbridge-macro 1.0.110](https://github.com/dtolnay/cxx), MIT License
+  * [cxx 1.0.111](https://github.com/dtolnay/cxx), MIT License
+  * [cxx-build 1.0.111](https://github.com/dtolnay/cxx), MIT License
+  * [cxxbridge-flags 1.0.111](https://github.com/dtolnay/cxx), MIT License
+  * [cxxbridge-macro 1.0.111](https://github.com/dtolnay/cxx), MIT License
   * [itoa 1.0.10](https://github.com/dtolnay/itoa), MIT License
   * [link-cplusplus 1.0.9](https://github.com/dtolnay/link-cplusplus), MIT License
   * [once_cell 1.19.0](https://github.com/matklad/once_cell), MIT License
@@ -163,7 +163,7 @@ Please see the included [licenses file](licenses.md) for the full third party li
   * [serde 1.0.193](https://github.com/serde-rs/serde), MIT License
   * [serde_derive 1.0.193](https://github.com/serde-rs/serde), MIT License
   * [serde_json 1.0.108](https://github.com/serde-rs/json), MIT License
-  * [syn 2.0.40](https://github.com/dtolnay/syn), MIT License
+  * [syn 2.0.41](https://github.com/dtolnay/syn), MIT License
   * [unicode-ident 1.0.12](https://github.com/dtolnay/unicode-ident), MIT License
   * [sdl2 0.35.2](https://github.com/Rust-SDL2/rust-sdl2), MIT License
   * [aho-corasick 1.1.2](https://github.com/BurntSushi/aho-corasick), MIT License
@@ -174,8 +174,8 @@ Please see the included [licenses file](licenses.md) for the full third party li
   * [clap_derive 4.4.7](https://github.com/clap-rs/clap/tree/master/clap_derive), MIT License
   * [clap_lex 0.6.0](https://github.com/clap-rs/clap/tree/master/clap_lex), MIT License
   * [winapi-util 0.1.6](https://github.com/BurntSushi/winapi-util), MIT License
-  * [crossbeam-channel 0.5.8](https://github.com/crossbeam-rs/crossbeam), MIT License
-  * [crossbeam-utils 0.8.16](https://github.com/crossbeam-rs/crossbeam), MIT License
+  * [crossbeam-channel 0.5.9](https://github.com/crossbeam-rs/crossbeam), MIT License
+  * [crossbeam-utils 0.8.17](https://github.com/crossbeam-rs/crossbeam), MIT License
   * [aho-corasick 1.1.2](https://github.com/BurntSushi/aho-corasick), MIT License
   * [memchr 2.6.4](https://github.com/BurntSushi/memchr), MIT License
   * [termcolor 1.4.0](https://github.com/BurntSushi/termcolor), MIT License

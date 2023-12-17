@@ -107,7 +107,7 @@ Licenses marked "synthesized" did not have a license file in their crate.
 
 
 Terrific Audio Driver makes use of the following open source projects:
-  * MIT License (28)
+  * MIT License (74)
   * Apache License 2.0 (2)
   * Unicode License Agreement - Data Files and Software (2016) (1)
   * FLTK License (1)
@@ -1008,10 +1008,10 @@ SOFTWARE.
 ## MIT License
 
 Used by:
-  * [cxx 1.0.110](https://github.com/dtolnay/cxx)
-  * [cxx-build 1.0.110](https://github.com/dtolnay/cxx)
-  * [cxxbridge-flags 1.0.110](https://github.com/dtolnay/cxx)
-  * [cxxbridge-macro 1.0.110](https://github.com/dtolnay/cxx)
+  * [cxx 1.0.111](https://github.com/dtolnay/cxx)
+  * [cxx-build 1.0.111](https://github.com/dtolnay/cxx)
+  * [cxxbridge-flags 1.0.111](https://github.com/dtolnay/cxx)
+  * [cxxbridge-macro 1.0.111](https://github.com/dtolnay/cxx)
   * [itoa 1.0.10](https://github.com/dtolnay/itoa)
   * [link-cplusplus 1.0.9](https://github.com/dtolnay/link-cplusplus)
   * [once_cell 1.19.0](https://github.com/matklad/once_cell)
@@ -1022,7 +1022,7 @@ Used by:
   * [serde 1.0.193](https://github.com/serde-rs/serde)
   * [serde_derive 1.0.193](https://github.com/serde-rs/serde)
   * [serde_json 1.0.108](https://github.com/serde-rs/json)
-  * [syn 2.0.40](https://github.com/dtolnay/syn)
+  * [syn 2.0.41](https://github.com/dtolnay/syn)
   * [unicode-ident 1.0.12](https://github.com/dtolnay/unicode-ident)
 
 ```
@@ -1216,8 +1216,8 @@ THE SOFTWARE.
 ## MIT License
 
 Used by:
-  * [crossbeam-channel 0.5.8](https://github.com/crossbeam-rs/crossbeam)
-  * [crossbeam-utils 0.8.16](https://github.com/crossbeam-rs/crossbeam)
+  * [crossbeam-channel 0.5.9](https://github.com/crossbeam-rs/crossbeam)
+  * [crossbeam-utils 0.8.17](https://github.com/crossbeam-rs/crossbeam)
 
 ```
 The MIT License (MIT)
