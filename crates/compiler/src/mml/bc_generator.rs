@@ -112,7 +112,7 @@ struct ChannelBcGenerator<'a> {
     mp: MpState,
     vibrato: Option<ManualVibrato>,
 
-    skip_last_loop_state: Option<SkipLastLoopState>,
+    skip_last_loop_state: Vec<Option<SkipLastLoopState>>,
 
     loop_point: Option<LoopPoint>,
 
@@ -140,7 +140,7 @@ impl ChannelBcGenerator<'_> {
             prev_slurred_note: None,
             mp: MpState::Disabled,
             vibrato: None,
-            skip_last_loop_state: None,
+            skip_last_loop_state: Vec::new(),
             loop_point: None,
             show_missing_set_instrument_error: !is_subroutine,
         }
@@ -831,29 +831,31 @@ impl ChannelBcGenerator<'_> {
 
             MmlCommand::StartLoop => {
                 self.bc.start_loop(None)?;
+                self.skip_last_loop_state.push(None);
             }
 
             MmlCommand::SkipLastLoop => {
                 self.bc.skip_last_loop()?;
 
-                self.skip_last_loop_state = Some(SkipLastLoopState {
-                    instrument: self.instrument,
-                    envelope: self.envelope.clone(),
-                    prev_slurred_note: self.prev_slurred_note,
-                    vibrato: self.vibrato,
-                });
+                if let Some(s) = self.skip_last_loop_state.last_mut() {
+                    *s = Some(SkipLastLoopState {
+                        instrument: self.instrument,
+                        envelope: self.envelope.clone(),
+                        prev_slurred_note: self.prev_slurred_note,
+                        vibrato: self.vibrato,
+                    });
+                }
             }
 
             &MmlCommand::EndLoop(loop_count) => {
                 self.bc.end_loop(Some(loop_count))?;
 
-                if let Some(s) = &self.skip_last_loop_state {
+                if let Some(Some(s)) = &self.skip_last_loop_state.pop() {
                     self.instrument = s.instrument;
                     self.envelope = s.envelope.clone();
                     self.prev_slurred_note = s.prev_slurred_note;
                     self.vibrato = s.vibrato;
                 }
-                self.skip_last_loop_state = None;
             }
 
             &MmlCommand::ChangePanAndOrVolume(pan, volume) => match (pan, volume) {

@@ -1116,6 +1116,29 @@ A [ @a a : @d b ]2 @d
             "set_instrument dummy_instrument",
         ],
     );
+
+    assert_mml_channel_a_matches_bytecode(
+        r##"
+@d dummy_instrument
+@a inst_with_adsr
+
+A [ @a a : [ @d b : c]2 ]3 @d
+"##,
+        &[
+            "start_loop",
+            "set_instrument inst_with_adsr",
+            "play_note a4 24",
+            "skip_last_loop",
+            "start_loop",
+            "set_instrument dummy_instrument",
+            "play_note b4 24",
+            "skip_last_loop",
+            "play_note c4 24",
+            "end_loop 2",
+            "end_loop 3",
+            "set_instrument dummy_instrument",
+        ],
+    );
 }
 
 /// Test instrument is is correctly tracked after a *skip last loop* command.
@@ -1142,6 +1165,28 @@ A [ @a a : @d b ]2 @a
             "end_loop 2",
         ],
     );
+
+    assert_mml_channel_a_matches_bytecode(
+        r##"
+@d dummy_instrument
+@a inst_with_adsr
+
+A [ @a a : [ @d b : c ]2 ] 3 @a
+"##,
+        &[
+            "start_loop",
+            "set_instrument inst_with_adsr",
+            "play_note a4 24",
+            "skip_last_loop",
+            "start_loop",
+            "set_instrument dummy_instrument",
+            "play_note b4 24",
+            "skip_last_loop",
+            "play_note c4 24",
+            "end_loop 2",
+            "end_loop 3",
+        ],
+    );
 }
 
 /// Test that the vibrato state is correctly tracked after a *skip last loop* command.
@@ -1160,6 +1205,24 @@ fn test_skip_last_loop_vibrato() {
             "set_vibrato_depth_and_play_note 0 d4 24",
         ],
     );
+
+    assert_line_matches_bytecode(
+        "[MP2,4 a b : [ MP0 c : d ]2 ]3 d",
+        &[
+            "start_loop",
+            "set_vibrato 1 4",
+            "play_note a4 24",
+            "play_note b4 24",
+            "skip_last_loop",
+            "start_loop",
+            "set_vibrato_depth_and_play_note 0 c4 24",
+            "skip_last_loop",
+            "play_note d4 24",
+            "end_loop 2",
+            "end_loop 3",
+            "set_vibrato_depth_and_play_note 0 d4 24",
+        ],
+    );
 }
 
 /// Test if `last_slurred_note` is correctly tracked after a *skip last loop* command.
@@ -1174,6 +1237,23 @@ fn test_skip_last_loop_prev_slurred_note() {
             "skip_last_loop",
             "play_note b4 24",
             "end_loop 4",
+            // Previous slurred note is d4
+            "portamento f4 keyoff +10 24",
+        ],
+    );
+
+    assert_line_matches_bytecode(
+        "[d& : [b : c]2 ]3 {df},,10",
+        &[
+            "start_loop",
+            "play_note d4 no_keyoff 24",
+            "skip_last_loop",
+            "start_loop",
+            "play_note b4 24",
+            "skip_last_loop",
+            "play_note c4 24",
+            "end_loop 2",
+            "end_loop 3",
             // Previous slurred note is d4
             "portamento f4 keyoff +10 24",
         ],
