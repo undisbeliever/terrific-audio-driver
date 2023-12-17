@@ -4,7 +4,10 @@
 //
 // SPDX-License-Identifier: MIT
 
-use crate::errors::{InvalidAdsrError, InvalidGainError, ValueError};
+use crate::{
+    errors::{InvalidAdsrError, ValueError},
+    value_newtypes::u8_value_newtype,
+};
 
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
@@ -126,26 +129,19 @@ impl TryFrom<&str> for Adsr {
     }
 }
 
-#[derive(Copy, Clone, PartialEq, Debug)]
-pub struct Gain {
-    value: u8,
-}
+u8_value_newtype!(Gain, GainOutOfRange, NoGain);
 
 impl Gain {
-    pub const fn new(value: u8) -> Self {
-        Self { value }
-    }
-
     pub fn value(&self) -> u8 {
-        self.value
+        self.as_u8()
     }
 
     pub fn to_envelope_string(self) -> String {
-        format!("{} {}", GAIN_STR, self.value)
+        format!("{} {}", GAIN_STR, self.as_u8())
     }
 
     pub fn to_gui_string(self) -> String {
-        self.value.to_string()
+        self.as_u8().to_string()
     }
 }
 
@@ -163,14 +159,10 @@ impl TryFrom<&str> for Gain {
 
         let value = match s.parse() {
             Ok(i) => i,
-            Err(_) => {
-                return Err(ValueError::InvalidGain(InvalidGainError::InvalidGain(
-                    s.to_owned(),
-                )))
-            }
+            Err(_) => return Err(ValueError::InvalidGainString(s.to_owned())),
         };
 
-        Ok(Gain { value })
+        Ok(Gain::new(value))
     }
 }
 

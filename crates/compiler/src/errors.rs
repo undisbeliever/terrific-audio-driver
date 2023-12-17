@@ -15,6 +15,7 @@ use crate::driver_constants::{
     MAX_INSTRUMENTS, MAX_SONG_DATA_SIZE, MAX_SOUND_EFFECTS, MAX_SUBROUTINES, PITCH_TABLE_SIZE,
 };
 use crate::echo::{EchoEdl, EchoLength, MAX_FIR_ABS_SUM};
+use crate::envelope::Gain;
 use crate::file_pos::{FilePosRange, MAX_MML_TEXT_LENGTH};
 use crate::mml::command_parser::{
     PortamentoSpeed, Quantization, Transpose, MAX_COARSE_VOLUME, MAX_RELATIVE_COARSE_VOLUME,
@@ -75,11 +76,6 @@ pub struct InvalidAdsrError {
 }
 
 #[derive(Debug)]
-pub enum InvalidGainError {
-    InvalidGain(String),
-}
-
-#[derive(Debug)]
 pub enum ValueError {
     CannotParseUnsigned(String),
     CannotParseSigned(String),
@@ -91,7 +87,8 @@ pub enum ValueError {
     AdsrNotFourValues,
     InvalidAdsr(InvalidAdsrError),
 
-    InvalidGain(InvalidGainError),
+    InvalidGainString(String),
+    GainOutOfRange,
 
     InvalidNote,
     NoNoteOctave,
@@ -177,6 +174,7 @@ pub enum ValueError {
     NoQuarterWavelength,
     NoEchoEdl,
     NoInstrumentId,
+    NoGain,
 }
 
 #[derive(Debug)]
@@ -496,12 +494,6 @@ impl From<InvalidAdsrError> for BytecodeAssemblerError {
     }
 }
 
-impl From<InvalidGainError> for BytecodeAssemblerError {
-    fn from(e: InvalidGainError) -> Self {
-        Self::ArgumentError(ValueError::InvalidGain(e))
-    }
-}
-
 impl From<ValueError> for MmlLineError {
     fn from(e: ValueError) -> Self {
         Self::ValueError(e)
@@ -608,14 +600,6 @@ impl Display for InvalidAdsrError {
     }
 }
 
-impl Display for InvalidGainError {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        match self {
-            Self::InvalidGain(s) => write!(f, "invalid gain value: {}", s),
-        }
-    }
-}
-
 impl Display for ValueError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         #[rustfmt::skip]
@@ -635,7 +619,11 @@ impl Display for ValueError {
             Self::UnknownEnvelopeType(s) => write!(f, "unknown envelope type: {}", s),
             Self::AdsrNotFourValues => write!(f, "expected 4 adsr values"),
             Self::InvalidAdsr(e) => e.fmt(f),
-            Self::InvalidGain(e) => e.fmt(f),
+
+            Self::InvalidGainString(e) => e.fmt(f),
+            Self::GainOutOfRange => {
+                write!(f, "invalid gain (expected {} - {})", Gain::MIN, Gain::MAX)
+            }
 
             Self::InvalidNote => write!(f, "invalid note"),
             Self::NoNoteOctave => write!(f, "no octave in note"),
@@ -769,6 +757,7 @@ impl Display for ValueError {
             Self::NoQuarterWavelength => write!(f, "no quarter-wavelength"),
             Self::NoEchoEdl => write!(f, "no echo EDL"),
             Self::NoInstrumentId => write!(f, "no instrument id"),
+            Self::NoGain => write!(f, "no gain"),
         }
     }
 }
