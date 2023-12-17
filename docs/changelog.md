@@ -7,7 +7,8 @@ Version 0.0.3
  * **Breaking change**: MML `r` rest commands now sends key-off events.
  * Added MML `w` wait command.
  * Quantized MML notes emit `rest_keyoff` bytecode instructions.
- * Long MML `r` rests and `w` waits are optimised into loops, ie `r1 r1 r1 r1 r1 r1 r1 r1 r1 r1` will be converted to `r1 [r%216]4`.
+ * Long MML `r` rests and `w` waits are optimised into loops.
+   For example, when Whole Note Length is 96, `r1 r1 r1 r1 r1 r1 r1 r1 r1 r1` will be converted to `r1 [r%216]4`.
  * Added `A` set ADSR MML command
  * Added `G` set GAIN MML command
  * Fixed MML `:` SkipLastLoopState tracking with nested loops.
