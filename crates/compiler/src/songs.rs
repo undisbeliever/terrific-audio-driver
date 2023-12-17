@@ -56,6 +56,7 @@ pub struct Subroutine {
     pub subroutine_id: SubroutineId,
     pub bytecode_offset: u16,
     pub last_instrument: Option<usize>,
+    pub last_envelope: Option<Envelope>,
     pub changes_song_tempo: bool,
 }
 

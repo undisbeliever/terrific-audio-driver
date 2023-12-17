@@ -8,12 +8,13 @@ use super::command_parser::{
     ManualVibrato, MmlCommand, MpVibrato, PanCommand, Parser, PortamentoSpeed, VolumeCommand,
 };
 use super::identifier::Identifier;
-use super::instruments::{EnvelopeOverride, MmlInstrument};
+use super::instruments::MmlInstrument;
 use super::line_splitter::MmlLine;
 use super::{ChannelId, IdentifierStr, MmlSoundEffect, Section};
 
 #[cfg(feature = "mml_tracking")]
 use super::note_tracking::CursorTracker;
+use crate::envelope::Envelope;
 #[cfg(feature = "mml_tracking")]
 use crate::songs::{BytecodePos, SongBcTracking};
 
@@ -89,6 +90,7 @@ enum MpState {
 
 struct SkipLastLoopState {
     instrument: Option<usize>,
+    envelope: Option<Envelope>,
     prev_slurred_note: Option<Note>,
     vibrato: Option<ManualVibrato>,
 }
@@ -103,6 +105,8 @@ struct ChannelBcGenerator<'a> {
     tempo_changes: Vec<(TickCounter, TickClock)>,
 
     instrument: Option<usize>,
+    envelope: Option<Envelope>,
+
     prev_slurred_note: Option<Note>,
 
     mp: MpState,
@@ -132,6 +136,7 @@ impl ChannelBcGenerator<'_> {
             bc: Bytecode::new_append_to_vec(bc_data, context),
             tempo_changes: Vec::new(),
             instrument: None,
+            envelope: None,
             prev_slurred_note: None,
             mp: MpState::Disabled,
             vibrato: None,
@@ -644,26 +649,37 @@ impl ChannelBcGenerator<'_> {
         let old_inst = self.instrument.map(|i| self.instrument_from_index(i));
 
         let i_id = inst.instrument_id;
+        let envelope = inst.envelope.clone();
 
         match old_inst {
             Some(old) if old.instrument_id == i_id => {
-                // Instrument_id unchanged
-                if inst.envelope_override != old.envelope_override {
-                    match inst.envelope_override {
-                        EnvelopeOverride::None => self.bc.set_instrument(i_id),
-                        EnvelopeOverride::Adsr(adsr) => self.bc.set_adsr(adsr),
-                        EnvelopeOverride::Gain(gain) => self.bc.set_gain(gain),
+                // InstrumentId unchanged, check envelope
+                if Some(&inst.envelope) != self.envelope.as_ref() {
+                    if inst.envelope_unchanged {
+                        // Outputs fewer bytes then a `set_adsr` instruction.
+                        self.bc.set_instrument(i_id);
+                    } else {
+                        match inst.envelope {
+                            Envelope::Adsr(adsr) => self.bc.set_adsr(adsr),
+                            Envelope::Gain(gain) => self.bc.set_gain(gain),
+                        }
                     }
                 }
             }
-            _ => match inst.envelope_override {
-                EnvelopeOverride::None => self.bc.set_instrument(i_id),
-                EnvelopeOverride::Adsr(adsr) => self.bc.set_instrument_and_adsr(i_id, adsr),
-                EnvelopeOverride::Gain(gain) => self.bc.set_instrument_and_gain(i_id, gain),
-            },
+            _ => {
+                if inst.envelope_unchanged {
+                    self.bc.set_instrument(i_id);
+                } else {
+                    match inst.envelope {
+                        Envelope::Adsr(adsr) => self.bc.set_instrument_and_adsr(i_id, adsr),
+                        Envelope::Gain(gain) => self.bc.set_instrument_and_gain(i_id, gain),
+                    }
+                }
+            }
         }
 
         self.instrument = Some(inst_index);
+        self.envelope = Some(envelope);
 
         Ok(())
     }
@@ -687,6 +703,9 @@ impl ChannelBcGenerator<'_> {
 
         if let Some(inst) = sub.last_instrument {
             self.instrument = Some(inst);
+        }
+        if let Some(e) = &sub.last_envelope {
+            self.envelope = Some(e.clone());
         }
 
         self.bc.call_subroutine(s_id)?;
@@ -819,6 +838,7 @@ impl ChannelBcGenerator<'_> {
 
                 self.skip_last_loop_state = Some(SkipLastLoopState {
                     instrument: self.instrument,
+                    envelope: self.envelope.clone(),
                     prev_slurred_note: self.prev_slurred_note,
                     vibrato: self.vibrato,
                 });
@@ -829,6 +849,7 @@ impl ChannelBcGenerator<'_> {
 
                 if let Some(s) = &self.skip_last_loop_state {
                     self.instrument = s.instrument;
+                    self.envelope = s.envelope.clone();
                     self.prev_slurred_note = s.prev_slurred_note;
                     self.vibrato = s.vibrato;
                 }
@@ -1031,6 +1052,7 @@ impl<'a, 'b> MmlSongBytecodeGenerator<'a, 'b> {
                 bytecode_offset: sd_start_index.try_into().unwrap_or(u16::MAX),
                 subroutine_id: SubroutineId::new(subroutine_index, tick_counter, max_nested_loops),
                 last_instrument: gen.instrument,
+                last_envelope: gen.envelope,
                 changes_song_tempo: !gen.tempo_changes.is_empty(),
             })
         } else {

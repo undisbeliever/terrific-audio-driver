@@ -1038,7 +1038,7 @@ A @0 @1
 A @a @aa @ab @ag
 A @0 @ab @a
 A @0 @ag @ab
-A @0 @g1 @g2 @g3
+A @0 @g1 @g2 @g3 @g1
 "##
     );
 
@@ -1064,6 +1064,7 @@ A @0 @g1 @g2 @g3
             "set_instrument dummy_instrument",
             "set_instrument inst_with_gain",
             "set_adsr 3 4 5 6",
+            "set_instrument inst_with_gain",
         ],
     );
 }

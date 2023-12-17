@@ -9,19 +9,12 @@ use super::{Identifier, IdentifierStr};
 use crate::bytecode::InstrumentId;
 use crate::data;
 use crate::data::UniqueNamesList;
-use crate::envelope::{Adsr, Envelope, Gain};
+use crate::envelope::Envelope;
 use crate::errors::{ErrorWithPos, MmlLineError};
 use crate::file_pos::{FilePosRange, Line};
 use crate::notes::Note;
 
 use std::collections::HashMap;
-
-#[derive(Debug, PartialEq)]
-pub enum EnvelopeOverride {
-    None,
-    Adsr(Adsr),
-    Gain(Gain),
-}
 
 #[derive(Debug)]
 pub struct MmlInstrument {
@@ -34,7 +27,9 @@ pub struct MmlInstrument {
     pub(crate) first_note: Note,
     pub(crate) last_note: Note,
 
-    pub(crate) envelope_override: EnvelopeOverride,
+    // No envelope override or envelope override matches instrument
+    pub(crate) envelope_unchanged: bool,
+    pub(crate) envelope: Envelope,
 }
 
 fn parse_instrument(
@@ -53,7 +48,19 @@ fn parse_instrument(
 
     let inst_name_err = |e| Err(ErrorWithPos(line.position.to_range_str_len(inst_name), e));
 
-    let mut envelope_override = EnvelopeOverride::None;
+    let (instrument_id, inst) = match inst_map.get_with_index(inst_name) {
+        Some((inst_id, inst)) => (inst_id, inst),
+        None => {
+            return inst_name_err(MmlLineError::CannotFindInstrument(inst_name.to_owned()));
+        }
+    };
+
+    let instrument_id = match InstrumentId::try_from(instrument_id) {
+        Ok(i) => i,
+        Err(e) => return inst_name_err(e.into()),
+    };
+
+    let mut envelope = inst.envelope.clone();
 
     if let Some(args) = args {
         let arg = args.text;
@@ -62,10 +69,10 @@ fn parse_instrument(
 
         match Envelope::try_from_envelope_str(arg) {
             Ok(Envelope::Adsr(a)) => {
-                envelope_override = EnvelopeOverride::Adsr(a);
+                envelope = Envelope::Adsr(a);
             }
             Ok(Envelope::Gain(g)) => {
-                envelope_override = EnvelopeOverride::Gain(g);
+                envelope = Envelope::Gain(g);
             }
             Err(e) => {
                 return arg_err(MmlLineError::ValueError(e));
@@ -73,39 +80,14 @@ fn parse_instrument(
         }
     }
 
-    let (instrument_id, inst) = match inst_map.get_with_index(inst_name) {
-        Some((inst_id, inst)) => (inst_id, inst),
-        None => {
-            return inst_name_err(MmlLineError::CannotFindInstrument(inst_name.to_owned()));
-        }
-    };
-
-    match envelope_override {
-        EnvelopeOverride::None => {}
-        EnvelopeOverride::Adsr(adsr) => {
-            if inst.envelope == Envelope::Adsr(adsr) {
-                envelope_override = EnvelopeOverride::None;
-            }
-        }
-        EnvelopeOverride::Gain(gain) => {
-            if inst.envelope == Envelope::Gain(gain) {
-                envelope_override = EnvelopeOverride::None;
-            }
-        }
-    }
-
-    let instrument_id = match InstrumentId::try_from(instrument_id) {
-        Ok(i) => i,
-        Err(e) => return inst_name_err(e.into()),
-    };
-
     Ok(MmlInstrument {
         identifier: id,
         file_range: line.range(),
         instrument_id,
         first_note: Note::first_note_for_octave(inst.first_octave),
         last_note: Note::last_note_for_octave(inst.last_octave),
-        envelope_override,
+        envelope_unchanged: envelope == inst.envelope,
+        envelope,
     })
 }
 
