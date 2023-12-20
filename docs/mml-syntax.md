@@ -11,6 +11,7 @@ Lines starting with `#` define metadata.
 
 Song metadata:
  * `#Title`
+ * `#Game`
  * `#Composer`
  * `#Author`
  * `#Copyright`

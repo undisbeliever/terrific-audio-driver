@@ -131,6 +131,8 @@ pub fn export_spc_file(
 
         // Title of song
         write_id666_tag(header, 0x2e, 0x20, metadata.title.as_deref());
+        // Game title
+        write_id666_tag(header, 0x4e, 0x20, metadata.game.as_deref());
         // Artist of song
         write_id666_tag(header, 0xb1, 0x20, metadata.author.as_deref());
 

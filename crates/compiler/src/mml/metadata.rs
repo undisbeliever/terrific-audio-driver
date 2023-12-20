@@ -16,6 +16,7 @@ use crate::{spc_file_export, FilePosRange};
 #[derive(Debug, Clone, PartialEq)]
 pub struct MetaData {
     pub title: Option<String>,
+    pub game: Option<String>,
     pub date: Option<String>,
     pub composer: Option<String>,
     pub author: Option<String>,
@@ -68,6 +69,7 @@ impl MetaData {
     fn new() -> Self {
         Self {
             title: None,
+            game: None,
             date: None,
             composer: None,
             author: None,
@@ -126,6 +128,7 @@ impl HeaderState {
         };
         match header {
             "#Title" => self.metadata.title = to_option_string()?,
+            "#Game" => self.metadata.game = to_option_string()?,
             "#Date" => self.metadata.date = to_option_string()?,
             "#Composer" => self.metadata.composer = to_option_string()?,
             "#Author" => self.metadata.author = to_option_string()?,

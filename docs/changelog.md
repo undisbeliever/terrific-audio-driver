@@ -1,6 +1,11 @@
 Terrific Audio Driver Changelog
 ===============================
 
+Version 0.0.4
+=============
+ * Added `#Game` to song metadata.
+
+
 Version 0.0.3
 =============
 
