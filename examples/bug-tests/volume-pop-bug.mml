@@ -1,0 +1,8 @@
+; Changing the volume immediately after key-off causes a pop
+;
+; Reported by KungFuFurby
+
+@1 sine adsr 14 2 7 0
+
+A @1 v2 c v16 c r
+

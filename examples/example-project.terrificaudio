@@ -1,7 +1,7 @@
 {
   "_about": {
     "file_type": "Terrific Audio Driver project file",
-    "version": "0.0.2"
+    "version": "0.0.3"
   },
   "instruments": [
     {
@@ -135,6 +135,14 @@
     {
       "name": "test_vibrato",
       "source": "mml-tests/test-vibrato.mml"
+    },
+    {
+      "name": "volume_pop_bug",
+      "source": "bug-tests/volume-pop-bug.mml"
+    },
+    {
+      "name": "keyoff_scrn_bug",
+      "source": "bug-tests/keyoff-scrn-bug.mml"
     }
   ]
 }
