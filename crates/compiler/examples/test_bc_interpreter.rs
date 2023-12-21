@@ -109,26 +109,8 @@ fn assert_bc_intrepreter_matches_emu(
         dummy
     };
 
-    for i in 0..N_VOICES {
-        let voice_offset = i * 0x10;
-
-        let int_dsp: [u8; 8] = intrepreter_memory.dsp_registers[voice_offset..voice_offset + 8]
-            .try_into()
-            .unwrap();
-        let emu_dsp: [u8; 8] = emu.dsp_registers()[voice_offset..voice_offset + 8]
-            .try_into()
-            .unwrap();
-
-        // Not testing PITCH, bytecode_interpreter does not implement pitches.
-
-        let vol_match = int_dsp[0] == emu_dsp[0] && int_dsp[1] == emu_dsp[1];
-        let scrn_match = int_dsp[4] == emu_dsp[4];
-
-        let envelope_match = envelope_from_dsp(&emu_dsp) == envelope_from_dsp(&int_dsp);
-
-        assert!(vol_match && scrn_match && envelope_match,
-                "voice DSP mismatch: tick_count: {tick_count}, voice: {i}\n  bc_int:{int_dsp:?}\n  ad_emu:{emu_dsp:?}");
-    }
+    // Not testing voice S-DSP registers.
+    // (The S-DSP registers lag begind virtual registers by 1 tick)
 
     assert_eq!(
         intrepreter_memory.dsp_registers[usize::from(S_DSP_EON_REGISTER)],
@@ -163,6 +145,16 @@ fn assert_bc_intrepreter_matches_emu(
             "channelsSoA.{name} mismatch (tick_count: {tick_count})"
         );
     };
+
+    test_channel_soa(addresses::CHANNEL_VC_VOL_L, "virtualChannels.vol_l");
+    test_channel_soa(addresses::CHANNEL_VC_VOL_R, "virtualChannels.vol_r");
+    // Not testing PITCH, bytecode_interpreter does not implement pitches.
+    test_channel_soa(addresses::CHANNEL_VC_SCRN, "virtualChannels.scrn");
+    test_channel_soa(addresses::CHANNEL_VC_ADSR1, "virtualChannels.adsr1");
+    test_channel_soa(
+        addresses::CHANNEL_VC_ADSR2_OR_GAIN,
+        "virtualChannels.adsr2OrGain",
+    );
 
     test_channel_soa(addresses::CHANNEL_INSTRUCTION_PTR_L, "instructionPtr_l");
     test_channel_soa(addresses::CHANNEL_INSTRUCTION_PTR_H, "instructionPtr_h");
@@ -214,25 +206,6 @@ fn assert_bc_intrepreter_matches_emu(
             read_ticks_until_next_bytecode(emu_apuram, v),
             "ticks until next bytecode mismatch (tick_count: {tick_count}, voice: {v})"
         );
-    }
-}
-
-#[derive(PartialEq, Eq)]
-enum Envelope {
-    Adsr(u8, u8),
-    Gain(u8),
-}
-
-// bytecode_interpreter does not store and manipulate the ADSR1 register
-// Therefore I have to test `ADSR1.b7` to see if it is an ADSR or GAIN envelope
-fn envelope_from_dsp(voice_dsp: &[u8; 8]) -> Envelope {
-    let adsr1 = voice_dsp[5];
-    let adsr2 = voice_dsp[6];
-    let gain = voice_dsp[7];
-
-    match adsr1 & 0x80 != 0 {
-        true => Envelope::Adsr(adsr1, adsr2),
-        false => Envelope::Gain(gain),
     }
 }
 

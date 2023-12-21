@@ -19,14 +19,13 @@ use crate::time::TickCounter;
 
 use std::ops::Range;
 
-pub struct ChannelDsp {
+pub struct VirtualChannel {
     vol_l: u8,
     vol_r: u8,
     // Not emulating pitch (all key-on bytecode instructions set the pitch)
     scrn: u8,
     adsr1: u8,
-    adsr2: u8,
-    gain: u8,
+    adsr2_or_gain: u8,
 
     echo: bool,
 }
@@ -63,7 +62,7 @@ pub struct ChannelSoA {
 
 pub struct Channel {
     soa: ChannelSoA,
-    dsp: ChannelDsp,
+    dsp: VirtualChannel,
 }
 
 pub struct InterpreterOutput {
@@ -507,7 +506,7 @@ fn build_channel(
             vibrato_direction_comparator: c.vibrato_quarter_wavelength_in_ticks << 1,
             vibrato_wavelength_in_ticks: c.vibrato_quarter_wavelength_in_ticks << 2,
         },
-        dsp: ChannelDsp {
+        dsp: VirtualChannel {
             vol_l: match common.stereo_flag {
                 true => (u16::from(volume) * u16::from(Pan::MAX - pan)).to_le_bytes()[1],
                 false => volume >> 2,
@@ -518,8 +517,7 @@ fn build_channel(
             },
             scrn,
             adsr1,
-            adsr2: adsr2_or_gain,
-            gain: adsr2_or_gain,
+            adsr2_or_gain,
             echo: c.echo,
         },
     }
@@ -583,6 +581,13 @@ pub trait Emulator {
 /// SAFETY: panics if the audio driver is not the paused state
 impl InterpreterOutput {
     pub fn write_to_emulator(&self, emu: &mut impl Emulator) {
+        let eon_shadow: u8 = self
+            .channels
+            .iter()
+            .enumerate()
+            .map(|(i, c)| u8::from(c.dsp.echo) << i)
+            .sum();
+
         // write to apuram
         {
             let apuram: &mut [u8; 0x10000] = emu.apuram_mut();
@@ -607,6 +612,17 @@ impl InterpreterOutput {
                 "Audio driver is not initialized"
             );
 
+            // Test the `channelSoA.virtualChannels.updateOnZero` flags are zero
+            {
+                let r = usize::from(addresses::CHANNEL_VC_UPDATE_ON_ZERO)
+                    ..usize::from(addresses::CHANNEL_VC_UPDATE_ON_ZERO) + N_MUSIC_CHANNELS;
+
+                assert!(
+                    apuram[r].iter().all(|&i| i == 0),
+                    "Audio driver is not initialized"
+                );
+            }
+
             let mut apu_write = |addr: u16, value: u8| {
                 apuram[usize::from(addr)] = value;
             };
@@ -621,8 +637,11 @@ impl InterpreterOutput {
                 .driver_value(),
             );
 
+            apu_write(addresses::EON_SHADOW, eon_shadow);
+
             for (channel_index, c) in self.channels.iter().enumerate() {
                 let i = u16::try_from(channel_index).unwrap();
+                let vc = &c.dsp;
                 let c = &c.soa;
 
                 let mut soa_write_u8 = |addr, value| {
@@ -695,31 +714,23 @@ impl InterpreterOutput {
                         loop_state.loop_point.to_le_bytes()[1],
                     );
                 }
+
+                // Virtual channels
+                soa_write_u8(addresses::CHANNEL_VC_VOL_L, vc.vol_l);
+                soa_write_u8(addresses::CHANNEL_VC_VOL_R, vc.vol_r);
+                // Not intrepreting pitch
+                soa_write_u8(addresses::CHANNEL_VC_SCRN, vc.scrn);
+                soa_write_u8(addresses::CHANNEL_VC_ADSR1, vc.adsr1);
+                soa_write_u8(addresses::CHANNEL_VC_ADSR2_OR_GAIN, vc.adsr2_or_gain);
             }
         }
 
         // write dsp registers
         {
-            for (channel_index, c) in self.channels.iter().enumerate() {
-                let c = &c.dsp;
+            // Not writing voice S-DSP registers
+            // The audio driver's virtual channels will write to the DSP for me.
 
-                let voice_registers: [u8; 8] =
-                    [c.vol_l, c.vol_r, 0, 0, c.scrn, c.adsr1, c.adsr2, c.gain];
-
-                let dsp_addr = u8::try_from(0x10 * channel_index).unwrap();
-                for (i, r) in voice_registers.into_iter().enumerate() {
-                    let i = u8::try_from(i).unwrap();
-                    emu.write_dsp_register(dsp_addr + i, r);
-                }
-            }
-
-            let echo = self
-                .channels
-                .iter()
-                .enumerate()
-                .map(|(i, c)| u8::from(c.dsp.echo) << i)
-                .sum();
-            emu.write_dsp_register(S_DSP_EON_REGISTER, echo);
+            emu.write_dsp_register(S_DSP_EON_REGISTER, eon_shadow);
         }
 
         emu.write_smp_register(S_SMP_TIMER_0_REGISTER, self.tick_clock);

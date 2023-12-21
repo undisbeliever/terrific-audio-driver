@@ -28,6 +28,16 @@ const AUDIO_DRIVER_SYMBOLS: &[(&str, &str)] = &[
     ("pausedIfZero", "PAUSED_IF_ZERO"),
     ("activeChannels", "ACTIVE_CHANNELS"),
     ("songTickCounter", "SONG_TICK_COUNTER"),
+    ("eonShadow", "EON_SHADOW"),
+
+    ("channelSoA.virtualChannels.updateOnZero", "CHANNEL_VC_UPDATE_ON_ZERO"),
+    ("channelSoA.virtualChannels.vol_l", "CHANNEL_VC_VOL_L"),
+    ("channelSoA.virtualChannels.vol_r", "CHANNEL_VC_VOL_R"),
+    ("channelSoA.virtualChannels.pitch_l", "CHANNEL_VC_PITCH_L"),
+    ("channelSoA.virtualChannels.pitch_h", "CHANNEL_VC_PITCH_H"),
+    ("channelSoA.virtualChannels.scrn", "CHANNEL_VC_SCRN"),
+    ("channelSoA.virtualChannels.adsr1", "CHANNEL_VC_ADSR1"),
+    ("channelSoA.virtualChannels.adsr2OrGain", "CHANNEL_VC_ADSR2_OR_GAIN"),
 
     ("channelSoA.countdownTimer", "CHANNEL_COUNTDOWN_TIMER"),
     ("channelSoA.instPitchOffset", "CHANNEL_INST_PITCH_OFFSET"),
@@ -115,7 +125,10 @@ impl Symbols<'_> {
 }
 
 fn assert_valid_const_name(name: &str) {
-    if !name.chars().all(|c| c.is_ascii_uppercase() || c == '_') {
+    if !name
+        .chars()
+        .all(|c| c.is_ascii_uppercase() || c.is_ascii_digit() || c == '_')
+    {
         panic!("Invalid const name: {name}");
     }
 }

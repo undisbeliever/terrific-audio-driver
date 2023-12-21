@@ -60,6 +60,7 @@ let EDL_SLEEP_COUNT   = smp.TIMER_0_HZ / 1000;
 in zeropage {
     // Temporary variables
     var zpTmp : u8;
+    var zpTmp2 : u8;
 
 
     // Common audio data addresses
@@ -112,6 +113,9 @@ in zeropage {
     var keyOffShadow : u8;
     var keyOnShadow : u8;
 
+    // Shadow variable for the EON S-DSP register
+    var eonShadow : u8;
+
 
     // `keyOnShadow` mask.
     //
@@ -145,6 +149,23 @@ in zeropage {
         // If non-zero, the next event is a key-off event
         // If zero, the next event will process bytecode
         var nextEventIsKeyOff : [u8 ; N_CHANNELS];
+
+
+        // S-DSP voice register shadows (AKA Virtual Channels)
+        namespace virtualChannels {
+            // This this variable is 0, then the S-DSP registers will be updated.
+            var updateOnZero : [u8 ; N_CHANNELS];
+
+            var vol_l       : [u8 ; N_CHANNELS];
+            var vol_r       : [u8 ; N_CHANNELS];
+            var pitch_l     : [u8 ; N_CHANNELS];
+            var pitch_h     : [u8 ; N_CHANNELS];
+            var scrn        : [u8 ; N_CHANNELS];
+            var adsr1       : [u8 ; N_CHANNELS];
+            // If the MSB of adsr1 is set, this value is written to the ADSR2 register.
+            // If the MSB of adsr1 is clear, this value is written to the GAIN register.
+            var adsr2OrGain : [u8 ; N_CHANNELS];
+        }
 
 
         // The address of the next bytecode to execute
@@ -597,6 +618,8 @@ inline func __clear_echo_buffer__inline(eda : u8 in x) {
 
 
 inline func process_event_loop__inline() {
+var _startLoop : u8 in zpTmp;
+
     // Loop until a timer has ticked
     ^while true {
         // Song tick timer
@@ -608,8 +631,7 @@ inline func process_event_loop__inline() {
 
             songTickCounter++;
 
-            __update_kon_koff__inline(SONG_CHANNEL_MASK);
-
+            a = SONG_CHANNEL_MASK;
             x = 0;
             y = N_MUSIC_CHANNELS;
 
@@ -623,20 +645,24 @@ inline func process_event_loop__inline() {
                 maxTimerCounter = a;
             }
 
-            __update_kon_koff__inline(SFX_CHANNEL_MASK);
-
+            a = SFX_CHANNEL_MASK;
             x = N_MUSIC_CHANNELS;
             y = N_CHANNELS;
 
             break;
         }
     }
-
-
+    // A = voice bit mask
     // X = starting channelIndex
     // Y = channelIndex end (starting channelIndex + number of channels)
 
+    _startLoop = x;
     channelIndexEndLoop = y;
+
+    __update_dsp_registers__inline(a, x, channelIndexEndLoop);
+
+
+    x = _startLoop;
     ^do {
         process_pitch_effects__inline(x);
 
@@ -647,12 +673,15 @@ inline func process_event_loop__inline() {
 
 
 
+// Set the DSP registers.
+//
 // Set the KON/KOFF/keyOnMask bits for the music or sound effects (depending on MASK value).
 //
 // This code is a bit messy, but it satisfies all of my requirements:
 //
-//  * KON/KOFF set immediately after timer has ticked (NOT after process_channel loop)
-//    to reduce jitter in the KON/KOFF timings
+//  * KON/KOFF set after timer has ticked (NOT after process_channel loop) to reduce jitter in the KON/KOFF timings
+//
+//  * KON is sent after all voice registers have been updated.
 //
 //  * Music and Sound effects send KON and KOFF according to two different timer clocks.
 //
@@ -661,8 +690,15 @@ inline func process_event_loop__inline() {
 //
 //  * Separates music and sfx channel bits without adding a music/sfc conditional to the end of
 //    the process_channel loop or bytecode instructions.
-inline func __update_kon_koff__inline(let MASK : u8) {
-    a = keyOffShadow & MASK;
+inline func __update_dsp_registers__inline(voiceMask : u8 in a,
+                                           firstChannelIndex: u8 in x,
+                                           endIndex : u8 in channelIndexEndLoop) {
+var _voiceMask : u8 in zpTmp2;
+    _voiceMask = a;
+
+    // Process Key-off events
+
+    a = a & keyOffShadow;
     // Enable KON in play-note instructions
     test_and_set(a, keyOnMask);
 
@@ -671,19 +707,73 @@ inline func __update_kon_koff__inline(let MASK : u8) {
     write_dsp(GlobalDspAddr.KOFF, y);
 
 
-    a = keyOnShadow & MASK;
+    // Write voice registers
+    // X = firstChannelIndex
+    do {
+        a = channelSoA.virtualChannels.updateOnZero[x];
+        if zero {
+            // ASSUMES VoiceDspAddr.VOL_L == 0
+            a = ChannelVoiceOffset[x];
+            y = channelSoA.virtualChannels.vol_l[x];
+            smp.dsp_addr_and_data = ya;
+
+            a++;
+            y = channelSoA.virtualChannels.vol_r[x];
+            smp.dsp_addr_and_data = ya;
+
+            a++;
+            y = channelSoA.virtualChannels.pitch_l[x];
+            smp.dsp_addr_and_data = ya;
+
+            a++;
+            y = channelSoA.virtualChannels.pitch_h[x];
+            smp.dsp_addr_and_data = ya;
+
+            a++;
+            y = channelSoA.virtualChannels.scrn[x];
+            smp.dsp_addr_and_data = ya;
+
+            a++;
+            y = channelSoA.virtualChannels.adsr1[x];
+            smp.dsp_addr_and_data = ya;
+
+            // Increment dsp_addr by 1 (ADSR2) if bit7 of `adsr1` is set
+            // Increment dsp_addr by 2 (GAIN)  if bit7 of `adsr1` is clear
+            if !negative {
+                a++;
+            }
+            a++;
+            y = channelSoA.virtualChannels.adsr2OrGain[x];
+            smp.dsp_addr_and_data = ya;
+
+
+            // a is non zero
+            channelSoA.virtualChannels.updateOnZero[x] = a;
+        }
+
+        x++;
+    } while x < channelIndexEndLoop;
+
+
+    // Process Key-On events
+
+    // Send KON events
+    a = keyOnShadow & _voiceMask;
     // Disable KON in play-note instructions (slur the note)
     test_and_clear(a, keyOnMask);
 
-    // Send KON events
-    a &= enabledChannelsMask;
     y = a;
     write_dsp(GlobalDspAddr.KON, y);
 
 
     // Clear keyOnShadow and keyOffShadow
-    keyOnShadow &= (0xff ^ MASK);
-    keyOffShadow &= (0xff ^ MASK);
+    a = _voiceMask;
+    test_and_clear(a, keyOnShadow);
+    test_and_clear(a, keyOffShadow);
+
+
+    // ::TODO figure out how mask eonShadow::
+    write_dsp(GlobalDspAddr.EON, eonShadow);
 }
 
 
@@ -857,6 +947,8 @@ func __reset_channel(channelIndex : u8 in x, pan: u8 in zpTmp) {
 
     // A = 0
     a = 0;
+    channelSoA.virtualChannels.updateOnZero[x] = a;
+
     channelSoA.instructionPtrAfterEnd_h[x] = a;     // don't loop SFX
 
     channelSoA.nextEventIsKeyOff[x] = a;
@@ -878,8 +970,7 @@ func __reset_channel(channelIndex : u8 in x, pan: u8 in zpTmp) {
 
     // Disable echo
     // A = voice bit
-    smp.dsp_addr = GlobalDspAddr.EON as u8;
-    test_and_clear(a, smp.dsp_data);
+    test_and_clear(a, eonShadow);
 
 
     // Set channel volume
@@ -892,6 +983,8 @@ func __reset_channel(channelIndex : u8 in x, pan: u8 in zpTmp) {
 
 // volume and pan must be set in channelSoA.
 //
+// NOTE: Does not set `channelSoA.virtualChannels.updateOnZero[x]`.
+//
 // KEEP: x
 func _update_voll_and_volr(channelIndex : u8 in x, vol_or_pan : u8 in a, pan_or_vol : u8 in y) {
 
@@ -903,13 +996,8 @@ func _update_voll_and_volr(channelIndex : u8 in x, vol_or_pan : u8 in a, pan_or_
         // Calculate right volume
         // A pan value of `MAX_PAN` is 100% to the right.
         // (MUST NOT USE CARRY)
-
         ya = mul(a, y);
-
-        // ASSUMES VoiceDspAddr.VOL_L == 0 && VoiceDspAddr.VOL_R == 1
-        a = ChannelVoiceOffset[x];
-        a++;                            // VOL_R
-        smp.dsp_addr_and_data = ya;
+        channelSoA.virtualChannels.vol_r[x] = y;
 
 
         // Calculate left volume
@@ -919,9 +1007,7 @@ func _update_voll_and_volr(channelIndex : u8 in x, vol_or_pan : u8 in a, pan_or_
         a = MAX_PAN -# channelSoA.pan[x];
         y = channelSoA.volume[x];
         ya = mul(a, y);
-
-        smp.dsp_addr--;                 // VOL_L
-        smp.dsp_data = y;
+        channelSoA.virtualChannels.vol_l[x] = y;
 
         return;
     }
@@ -935,9 +1021,8 @@ func _update_voll_and_volr(channelIndex : u8 in x, vol_or_pan : u8 in a, pan_or_
         // Second shift ensure mono vol has same combined amplitude as stereo vol
         a = channelSoA.volume[x] >>> 2;
 
-        smp.dsp_data = a;
-        smp.dsp_addr++;
-        smp.dsp_data = a;
+        channelSoA.virtualChannels.vol_l[x] = a;
+        channelSoA.virtualChannels.vol_r[x] = a;
 
         return;
     }
@@ -963,11 +1048,9 @@ var _target_h : u8 in zpTmp;
             // Save target_h for later (no `cpy dp,x` instruction)
             _target_h = a = channelSoA.portamento_target_h[x];
 
-            // Read pitch from DSP
-            smp.dsp_addr = a = ChannelVoiceOffset[x] | VoiceDspAddr.PITCH_H as u8;
-            y = smp.dsp_data;
-            smp.dsp_addr--;
-            a = smp.dsp_data;
+            // Update pitch
+            a = channelSoA.virtualChannels.pitch_l[x];
+            y = channelSoA.virtualChannels.pitch_h[x];
 
             // Subtract speed from pitch
             a -= channelSoA.portamento_speed[x];
@@ -999,11 +1082,8 @@ var _target_h : u8 in zpTmp;
             // Save target_h for later (no `cpy dp,x` instruction)
             _target_h = a = channelSoA.portamento_target_h[x];
 
-            // Read pitch from DSP
-            smp.dsp_addr = a = ChannelVoiceOffset[x] | VoiceDspAddr.PITCH_H as u8;
-            y = smp.dsp_data;
-            smp.dsp_addr--;
-            a = smp.dsp_data;
+            a = channelSoA.virtualChannels.pitch_l[x];
+            y = channelSoA.virtualChannels.pitch_h[x];
 
             // Add speed to pitch
             a += channelSoA.portamento_speed[x] as u8;
@@ -1033,11 +1113,10 @@ var _target_h : u8 in zpTmp;
 
     WritePitchRegisters:
         // ya = new pitch
+        channelSoA.virtualChannels.pitch_l[x] = a;
+        channelSoA.virtualChannels.pitch_h[x] = y;
 
-        // dsp_addr is PITCH_L
-        smp.dsp_data = a;
-        smp.dsp_addr++;
-        smp.dsp_data = y;
+        channelSoA.virtualChannels.updateOnZero[x] = a = 0;
     }
     else {
         // Vibrato
@@ -1045,8 +1124,6 @@ var _target_h : u8 in zpTmp;
 
         y = channelSoA.vibrato_pitchOffsetPerTick[x];
         if !zero {
-            smp.dsp_addr = a = ChannelVoiceOffset[x] | VoiceDspAddr.PITCH_L as u8;
-
             // Determine the vibrato direction
             a = channelSoA.vibrato_directionComparator[x];
             cmp(a, channelSoA.vibrato_tickCounter[x]);
@@ -1054,24 +1131,21 @@ var _target_h : u8 in zpTmp;
             if !carry {
                 // Add Y to PITCH_L
                 // carry clear
-                smp.dsp_data = a = y +# smp.dsp_data;
+                channelSoA.virtualChannels.pitch_l[x] = a = y +# channelSoA.virtualChannels.pitch_l[x];
 
                 if carry {
-                    // Increment PITCH_H
-                    smp.dsp_addr++;
-                    smp.dsp_data++;
+                    channelSoA.virtualChannels.pitch_h[x]++;
                 }
             }
             else {
                 // Subtract pitchOffsetPerTick from PITCH_L
                 // (uses 1 less byte than reverse subtract Y, with the same CPU cycle count)
                 // carry set
-                smp.dsp_data = a = smp.dsp_data -# channelSoA.vibrato_pitchOffsetPerTick[x];
+                a = channelSoA.virtualChannels.pitch_l[x] -# channelSoA.vibrato_pitchOffsetPerTick[x];
+                channelSoA.virtualChannels.pitch_l[x] = a;
 
                 if !carry {
-                    // Decrement PITCH_H
-                    smp.dsp_addr++;
-                    smp.dsp_data--;
+                    channelSoA.virtualChannels.pitch_h[x]--;
                 }
             }
 
@@ -1079,6 +1153,8 @@ var _target_h : u8 in zpTmp;
             if zero {
                 channelSoA.vibrato_tickCounter[x] = a = channelSoA.vibrato_waveLengthInTicks[x];
             }
+
+            channelSoA.virtualChannels.updateOnZero[x] = a = 0;
         }
     }
 }
@@ -1102,6 +1178,15 @@ inline func process_channel__inline(channelIndex : u8 in x) {
             channelSoA.countdownTimer[x]++;
         }
         else {
+            // Update S-DSP registers on the start of the next tick.
+            // The bytecode instruction will most likely change the virtual channel.
+            //
+            // The flag is set here (and once) instead of every instruction that changes
+            // `channelSoA.virtualChannels` to save a lot of code space.
+            //
+            // A = 0
+            channelSoA.virtualChannels.updateOnZero[x] = a;
+
             a = channelSoA.instructionPtr_l[x];
             y = channelSoA.instructionPtr_h[x];
 
@@ -1119,6 +1204,8 @@ inline func process_channel__inline(channelIndex : u8 in x) {
 // ================
 //
 // bytecode functions MUST NOT modify X.
+//
+// bytecode functions MUST NOT modify S-DSP registers.
 
 
 // See `process_bytecode_with_loader_test()`.
@@ -1256,11 +1343,8 @@ func _play_note(channelIndex : u8 in x, noteAndKeyOffBit : u8 in a) {
     y = a = a + channelSoA.instPitchOffset[x];
 
     // Set voice pitch
-    smp.dsp_addr = a = ChannelVoiceOffset[x] | VoiceDspAddr.PITCH_L as u8;
-    smp.dsp_data = a = commonDataHeader.pitchTable_l[y];
-
-    smp.dsp_addr++;
-    smp.dsp_data = a = commonDataHeader.pitchTable_h[y];
+    channelSoA.virtualChannels.pitch_l[x] = a = commonDataHeader.pitchTable_l[y];
+    channelSoA.virtualChannels.pitch_h[x] = a = commonDataHeader.pitchTable_h[y];
 
 
     // queue KON if the previous note has been KOFFed
@@ -1559,9 +1643,7 @@ func end_loop_2(channelIndex : u8 in x) {
 // KEEP: X
 func enable_echo(channelIndex : u8 in x) {
     a = ChannelVoiceBit[x];
-
-    smp.dsp_addr = GlobalDspAddr.EON as u8;
-    test_and_set(a, smp.dsp_data);
+    test_and_set(a, eonShadow);
 
     ^return process_next_bytecode(x);
 }
@@ -1571,9 +1653,7 @@ func enable_echo(channelIndex : u8 in x) {
 // KEEP: X
 func disable_echo(channelIndex : u8 in x) {
     a = ChannelVoiceBit[x];
-
-    smp.dsp_addr = GlobalDspAddr.EON as u8;
-    test_and_clear(a, smp.dsp_data);
+    test_and_clear(a, eonShadow);
 
     ^return process_next_bytecode(x);
 }
@@ -1586,20 +1666,9 @@ func set_instrument(channelIndex : u8 in x, instrumentId : u8 in a) {
 
     channelSoA.instPitchOffset[x] = a = commonData.instruments_pitchOffset[y];
 
-    smp.dsp_addr = a = ChannelVoiceOffset[x] | VoiceDspAddr.SCRN as u8;
-    smp.dsp_data = a = commonData.instruments_scrn[y];
-
-    smp.dsp_addr++;
-    smp.dsp_data = a = commonData.instruments_adsr1[y];
-
-    // Increment dsp_addr by 1 (ADSR2) if bit7 of `adsr1` is set
-    // Increment dsp_addr by 2 (GAIN)  if bit7 of `adsr1` is clear
-    if !negative {
-        smp.dsp_addr++;
-    }
-    smp.dsp_addr++;
-
-    smp.dsp_data = a = commonData.instruments_adsr2OrGain[y];
+    channelSoA.virtualChannels.scrn[x] = a = commonData.instruments_scrn[y];
+    channelSoA.virtualChannels.adsr1[x] = a = commonData.instruments_adsr1[y];
+    channelSoA.virtualChannels.adsr2OrGain[x] = a = commonData.instruments_adsr2OrGain[y];
 
     ^return process_next_bytecode(x);
 }
@@ -1612,24 +1681,14 @@ func set_instrument_and_adsr_or_gain(channelIndex : u8 in x, instrumentId : u8 i
 
     channelSoA.instPitchOffset[x] = a = commonData.instruments_pitchOffset[y];
 
-    smp.dsp_addr = a = ChannelVoiceOffset[x] | VoiceDspAddr.SCRN as u8;
-    smp.dsp_data = a = commonData.instruments_scrn[y];
+    channelSoA.virtualChannels.scrn[x] = a = commonData.instruments_scrn[y];
 
     // Read ADSR/GAIN from `instructionPtr`.
     y = 0;
-    smp.dsp_addr++;
-    smp.dsp_data = a = instructionPtr[y];
-
-    // Increment dsp_addr by 1 (ADSR2) if bit7 of `adsr1` is set
-    // Increment dsp_addr by 2 (GAIN)  if bit7 of `adsr1` is clear
-    if !negative {
-        smp.dsp_addr++;
-    }
-    smp.dsp_addr++;
-
-    // Must increment instructionPtr after negative test
+    channelSoA.virtualChannels.adsr1[x] = a = instructionPtr[y];
     instructionPtr++;
-    smp.dsp_data = a = instructionPtr[y];
+
+    channelSoA.virtualChannels.adsr2OrGain[x] = a = instructionPtr[y];
     instructionPtr++;
 
     ^return process_next_bytecode(x);
@@ -1637,20 +1696,13 @@ func set_instrument_and_adsr_or_gain(channelIndex : u8 in x, instrumentId : u8 i
 
 
 
+// IN: Y = 0
 // KEEP: X
 func set_adsr(channelIndex: u8 in x, adsr1 : u8 in a) {
-    y = a;
+    channelSoA.virtualChannels.adsr1[x] = a;
 
-    smp.dsp_addr = a = ChannelVoiceOffset[x] | VoiceDspAddr.ADSR1 as u8;
-    smp.dsp_data = y;
-
-    y = 0;
-    a = instructionPtr[y];
-
-    // Set ADSR2
-    smp.dsp_addr++;
-    smp.dsp_data = a;
-
+    // Y = 0
+    channelSoA.virtualChannels.adsr2OrGain[x] = a = instructionPtr[y];
     instructionPtr++;
 
     ^return process_next_bytecode(x);
@@ -1658,17 +1710,13 @@ func set_adsr(channelIndex: u8 in x, adsr1 : u8 in a) {
 
 
 
+// IN: Y = 0
 // KEEP: X
 func set_gain(channelIndex: u8 in x, gain : u8 in a) {
-    y = a;
+    // Y = 0
+    channelSoA.virtualChannels.adsr1[x] = y;
 
-    smp.dsp_addr = a = ChannelVoiceOffset[x] | VoiceDspAddr.GAIN as u8;
-    smp.dsp_data = y;
-
-    // clear ADSR1 enable bit
-    // ASSUMES: VoiceDspAddr.GAIN - VoiceDspAddr.ADSR1 == 1 << 1
-    smp.dsp_addr $ 1 = false;
-    smp.dsp_data $ dsp.ADSR1_ENABLE_BIT = false;
+    channelSoA.virtualChannels.adsr2OrGain[x] = a;
 
     ^return process_next_bytecode(x);
 }
@@ -1766,12 +1814,14 @@ func set_volume(channelIndex : u8 in x, volume : u8 in a) {
     ^return process_next_bytecode(x);
 }
 
+
 // KEEP: x
 #[fallthrough]
 func rest_keyoff(channelIndex : u8 in x, length: u8 in a) {
     channelSoA.nextEventIsKeyOff[x] = y = 1;
 // Fallthrough
 }
+
 
 // KEEP: x
 func rest(channelIndex : u8 in x, length: u8 in a) {
