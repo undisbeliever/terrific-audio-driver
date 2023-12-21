@@ -157,15 +157,8 @@ in zeropage {
         var returnInstPtr_h : [u8 ; N_CHANNELS];
 
 
-        struct LoopState {
-            // Number of remaining loops
-            counter : [u8 ; N_CHANNELS],
-
-            // Instruction pointer at the start of the loop.
-            loopPoint_l : [u8 ; N_CHANNELS],
-            loopPoint_h : [u8 ; N_CHANNELS],
-        };
-        var loopState : [LoopState ; 3];
+        // Number of remaining loops
+        var loopState_counter : [[u8 ; N_CHANNELS] ; bytecode.MAX_NESTED_LOOPS];
 
 
         // Offset between the note to play and the pitch table.
@@ -240,6 +233,11 @@ in firstpage {
         // Address to return to in a `return_from_subroutine` bytecode
         // (The high-byte of returnInstPtr is in zeropage)
         var returnInstPtr_l : [u8 ; N_CHANNELS];
+
+
+        // Instruction pointer at the start of the loop.
+        var loopState_loopPoint_l : [[u8 ; N_CHANNELS] ; bytecode.MAX_NESTED_LOOPS];
+        var loopState_loopPoint_h : [[u8 ; N_CHANNELS] ; bytecode.MAX_NESTED_LOOPS];
 
 
         // Bytecode address to loop to when the channel encounters and `end` instruction.
@@ -1460,12 +1458,16 @@ func return_from_subroutine(channelIndex : u8 in x) {
 
 // KEEP: X
 inline func __start_loop(channelIndex : u8 in x, loopCount : u8 in a, let LOOP_ID : u8) {
-    channelSoA.loopState[LOOP_ID].counter[x] = a;
+    let _loopState_counter     = &channelSoA.loopState_counter[LOOP_ID] as *u8;
+    let _loopState_loopPoint_l = &channelSoA.loopState_loopPoint_l[LOOP_ID] as *u8;
+    let _loopState_loopPoint_h = &channelSoA.loopState_loopPoint_h[LOOP_ID] as *u8;
+
+    _loopState_counter[x] = a;
 
     ya = instructionPtr as u16;
 
-    channelSoA.loopState[LOOP_ID].loopPoint_l[x] = a;
-    channelSoA.loopState[LOOP_ID].loopPoint_h[x] = y;
+    _loopState_loopPoint_l[x] = a;
+    _loopState_loopPoint_h[x] = a = y;
 
     ^return process_next_bytecode(x);
 }
@@ -1473,8 +1475,12 @@ inline func __start_loop(channelIndex : u8 in x, loopCount : u8 in a, let LOOP_I
 
 // KEEP: X
 inline func __skip_last_loop(channelIndex : u8 in x, bytesToSkip : u8 in a, let LOOP_ID : u8) {
+    let _loopState_counter     = &channelSoA.loopState_counter[LOOP_ID] as *u8;
+    let _loopState_loopPoint_l = &channelSoA.loopState_loopPoint_l[LOOP_ID] as *u8;
+    let _loopState_loopPoint_h = &channelSoA.loopState_loopPoint_h[LOOP_ID] as *u8;
+
     // Add `bytesToSkip` to `instructionPtr` if counter == 1
-    y = channelSoA.loopState[LOOP_ID].counter[x];
+    y = _loopState_counter[x];
     y--;
     if zero {
         <:instructionPtr = a = a + <:instructionPtr;
@@ -1489,10 +1495,14 @@ inline func __skip_last_loop(channelIndex : u8 in x, bytesToSkip : u8 in a, let 
 
 // KEEP: X
 inline func __end_loop(channelIndex : u8 in x, let LOOP_ID : u8) {
-    channelSoA.loopState[LOOP_ID].counter[x]--;
+    let _loopState_counter     = &channelSoA.loopState_counter[LOOP_ID] as *u8;
+    let _loopState_loopPoint_l = &channelSoA.loopState_loopPoint_l[LOOP_ID] as *u8;
+    let _loopState_loopPoint_h = &channelSoA.loopState_loopPoint_h[LOOP_ID] as *u8;
+
+    _loopState_counter[x]--;
     if !zero {
-        a = channelSoA.loopState[LOOP_ID].loopPoint_l[x];
-        y = channelSoA.loopState[LOOP_ID].loopPoint_h[x];
+        y = a = _loopState_loopPoint_h[x];
+        a = _loopState_loopPoint_l[x];
 
         ^return process_bytecode_with_loader_test(x, ya);
     }

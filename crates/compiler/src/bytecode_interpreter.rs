@@ -681,16 +681,19 @@ impl InterpreterOutput {
 
                 for (li, loop_state) in c.loop_state.iter().enumerate() {
                     let li = u16::try_from(li).unwrap();
-                    let mut write_ls = |array_id: u16, value: u8| {
+                    let mut write_ls = |addr: u16, value: u8| {
                         const SOA_ARRAY_SIZE: u16 = 8;
-                        soa_write_u8(
-                            addresses::CHANNEL_LOOP_STATE + (li * 3 + array_id) * SOA_ARRAY_SIZE,
-                            value,
-                        );
+                        soa_write_u8(addr + li * SOA_ARRAY_SIZE, value);
                     };
-                    write_ls(0, loop_state.counter);
-                    write_ls(1, loop_state.loop_point.to_le_bytes()[0]);
-                    write_ls(2, loop_state.loop_point.to_le_bytes()[1]);
+                    write_ls(addresses::CHANNEL_LOOP_STATE_COUNTER, loop_state.counter);
+                    write_ls(
+                        addresses::CHANNEL_LOOP_STATE_LOOP_POINT_L,
+                        loop_state.loop_point.to_le_bytes()[0],
+                    );
+                    write_ls(
+                        addresses::CHANNEL_LOOP_STATE_LOOP_POINT_H,
+                        loop_state.loop_point.to_le_bytes()[1],
+                    );
                 }
             }
         }

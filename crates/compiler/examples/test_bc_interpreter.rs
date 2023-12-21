@@ -154,6 +154,15 @@ fn assert_bc_intrepreter_matches_emu(
             "channelsSoA.{name} mismatch (tick_count: {tick_count})"
         );
     };
+    let test_loop_state_soa = |addr: u16, name: &'static str| {
+        let addr = usize::from(addr);
+        let range = addr..addr + N_VOICES * N_NESTED_LOOPS;
+        assert_eq!(
+            int_apuram[range.clone()],
+            emu_apuram[range],
+            "channelsSoA.{name} mismatch (tick_count: {tick_count})"
+        );
+    };
 
     test_channel_soa(addresses::CHANNEL_INSTRUCTION_PTR_L, "instructionPtr_l");
     test_channel_soa(addresses::CHANNEL_INSTRUCTION_PTR_H, "instructionPtr_h");
@@ -186,17 +195,18 @@ fn assert_bc_intrepreter_matches_emu(
         "vibrato_waveLengthInTicks",
     );
 
-    for loop_id in 0..N_NESTED_LOOPS {
-        let loop_state_size = N_VOICES * 3;
-        let addr = usize::from(addresses::CHANNEL_LOOP_STATE) + loop_id * loop_state_size;
-        let end = addr + loop_state_size;
-
-        assert_eq!(
-            int_apuram[addr..end],
-            emu_apuram[addr..end],
-            "channelsSoA.LoopState[{loop_id}] mismatch (tick_count: {tick_count})"
-        );
-    }
+    test_loop_state_soa(
+        addresses::CHANNEL_LOOP_STATE_COUNTER,
+        "channel_loopState_counter",
+    );
+    test_loop_state_soa(
+        addresses::CHANNEL_LOOP_STATE_LOOP_POINT_L,
+        "channel_loopState_loopPoint_l",
+    );
+    test_loop_state_soa(
+        addresses::CHANNEL_LOOP_STATE_LOOP_POINT_H,
+        "channel_loopState_loopPoint_h",
+    );
 
     for v in 0..N_VOICES {
         assert_eq!(
