@@ -637,7 +637,9 @@ var _startLoop : u8 in zpTmp;
 
             write_dsp(GlobalDspAddr.KOFF, keyOffShadow_music);
             __update_dsp_voice_registers(0, channelIndexEndLoop);
-            write_dsp(GlobalDspAddr.KON, keyOnShadow_music);
+
+            y = a = keyOnShadow_music & enabledChannelsMask;
+            write_dsp(GlobalDspAddr.KON, y);
 
             x = 0;
             keyOnShadow_music = x;
@@ -657,7 +659,9 @@ var _startLoop : u8 in zpTmp;
 
             write_dsp(GlobalDspAddr.KOFF, keyOffShadow_sfx);
             __update_dsp_voice_registers(FIRST_SFX_CHANNEL, channelIndexEndLoop);
-            write_dsp(GlobalDspAddr.KON, keyOnShadow_sfx);
+
+            y = a = keyOnShadow_sfx & enabledChannelsMask;
+            write_dsp(GlobalDspAddr.KON, y);
 
             a = 0;
             keyOnShadow_sfx = a;
