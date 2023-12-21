@@ -127,6 +127,12 @@ fn assert_bc_intrepreter_matches_emu(
         "S-SMP TIMER0 register mismatch (tick_count: {tick_count})"
     );
 
+    assert_eq!(
+        int_apuram[usize::from(addresses::EON_SHADOW_MUSIC)],
+        emu_apuram[usize::from(addresses::EON_SHADOW_MUSIC)],
+        "eonShadow_music (tick_count: {tick_count})"
+    );
+
     let test_channel_soa = |addr: u16, name: &'static str| {
         let addr = usize::from(addr);
         let range = addr..addr + N_VOICES;

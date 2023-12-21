@@ -28,7 +28,8 @@ const AUDIO_DRIVER_SYMBOLS: &[(&str, &str)] = &[
     ("pausedIfZero", "PAUSED_IF_ZERO"),
     ("activeChannels", "ACTIVE_CHANNELS"),
     ("songTickCounter", "SONG_TICK_COUNTER"),
-    ("eonShadow", "EON_SHADOW"),
+    ("eonShadow_music", "EON_SHADOW_MUSIC"),
+    ("eonShadow_sfx", "EON_SHADOW_SFX"),
 
     ("channelSoA.virtualChannels.updateOnZero", "CHANNEL_VC_UPDATE_ON_ZERO"),
     ("channelSoA.virtualChannels.vol_l", "CHANNEL_VC_VOL_L"),

@@ -56,11 +56,11 @@ let EDL_SLEEP_COUNT   = smp.TIMER_0_HZ / 1000;
 // Variables
 // =========
 
+let FIRST_SFX_CHANNEL = N_MUSIC_CHANNELS;
 
 in zeropage {
     // Temporary variables
     var zpTmp : u8;
-    var zpTmp2 : u8;
 
 
     // Common audio data addresses
@@ -109,12 +109,17 @@ in zeropage {
     var activeChannels : u8;
 
 
-    // Shadow variables for KON and KOFF DSP registers
-    var keyOffShadow : u8;
-    var keyOnShadow : u8;
+    // Shadow variables for KOFF DSP register
+    var keyOffShadow_music : u8;
+    var keyOffShadow_sfx : u8;
+
+    // Shadow variables for KON DSP register
+    var keyOnShadow_music : u8;
+    var keyOnShadow_sfx : u8;
 
     // Shadow variable for the EON S-DSP register
-    var eonShadow : u8;
+    var eonShadow_music : u8;
+    var eonShadow_sfx : u8;
 
 
     // `keyOnShadow` mask.
@@ -124,7 +129,8 @@ in zeropage {
     //  * If clear - the channel is playing something and the play note instruction will
     //               leave `keyOnShadow` unchanged (slurring the note).
     // (8x bitfield)
-    var keyOnMask : u8;
+    var keyOnMask_music : u8;
+    var keyOnMask_sfx : u8;
 
 
     // Only valid inside bytecode instructions
@@ -628,9 +634,15 @@ var _startLoop : u8 in zpTmp;
 
             songTickCounter++;
 
-            a = SONG_CHANNEL_MASK;
+            channelIndexEndLoop = x = N_MUSIC_CHANNELS;
+
+            write_dsp(GlobalDspAddr.KOFF, keyOffShadow_music);
+            __update_dsp_voice_registers(0, channelIndexEndLoop);
+            write_dsp(GlobalDspAddr.KON, keyOnShadow_music);
+
             x = 0;
-            y = N_MUSIC_CHANNELS;
+            keyOnShadow_music = x;
+            keyOffShadow_music = x;
 
             break;
         }
@@ -642,24 +654,22 @@ var _startLoop : u8 in zpTmp;
                 maxTimerCounter = a;
             }
 
-            a = SFX_CHANNEL_MASK;
-            x = N_MUSIC_CHANNELS;
-            y = N_CHANNELS;
+            channelIndexEndLoop = x = N_CHANNELS;
 
+            write_dsp(GlobalDspAddr.KOFF, keyOffShadow_sfx);
+            __update_dsp_voice_registers(FIRST_SFX_CHANNEL, channelIndexEndLoop);
+            write_dsp(GlobalDspAddr.KON, keyOnShadow_sfx);
+
+            a = 0;
+            keyOnShadow_sfx = a;
+            keyOffShadow_sfx = a;
+
+            x = FIRST_SFX_CHANNEL;
             break;
         }
     }
-    // A = voice bit mask
     // X = starting channelIndex
-    // Y = channelIndex end (starting channelIndex + number of channels)
 
-    _startLoop = x;
-    channelIndexEndLoop = y;
-
-    __update_dsp_registers__inline(a, x, channelIndexEndLoop);
-
-
-    x = _startLoop;
     ^do {
         process_pitch_effects__inline(x);
 
@@ -670,38 +680,11 @@ var _startLoop : u8 in zpTmp;
 
 
 
-// Set the DSP registers.
+// Set the DSP voice registers.
 //
-// Set the KON/KOFF bits for the music or sound effects (depending on MASK value).
-//
-// This code is a bit messy, but it satisfies all of my requirements:
-//
-//  * KON/KOFF set after timer has ticked (NOT after process_channel loop) to reduce jitter in the KON/KOFF timings
-//
-//  * KON is sent after all voice registers have been updated.
-//
-//  * Music and Sound effects send KON and KOFF according to two different timer clocks.
-//
-//  * Separates the music and sfx channel bits in `keyOnShadow` and `keyOffShadow` while still
-//    still reusing the process_channel loop and bytecode instruction code for music and sfx.
-//
-//  * Separates music and sfx channel bits without adding a music/sfc conditional to the end of
-//    the process_channel loop or bytecode instructions.
-inline func __update_dsp_registers__inline(voiceMask : u8 in a,
-                                           firstChannelIndex: u8 in x,
-                                           endIndex : u8 in channelIndexEndLoop) {
-var _voiceMask : u8 in zpTmp2;
-    _voiceMask = a;
-
-    // Process Key-off events
-
-    a = a & keyOffShadow;
-
-    // Send KOFF events
-    y = a;
-    write_dsp(GlobalDspAddr.KOFF, y);
-
-
+// This function should be called after the `KOFF` write and before the `KON` write.
+func __update_dsp_voice_registers(firstChannelIndex: u8 in x,
+                                         endIndex : u8 in channelIndexEndLoop) {
     // Write voice registers
     // X = firstChannelIndex
     do {
@@ -750,23 +733,8 @@ var _voiceMask : u8 in zpTmp2;
     } while x < channelIndexEndLoop;
 
 
-    // Process Key-On events
-
-    // Send KON events
-    a = keyOnShadow & _voiceMask;
-
-    y = a;
-    write_dsp(GlobalDspAddr.KON, y);
-
-
-    // Clear keyOnShadow and keyOffShadow
-    a = _voiceMask;
-    test_and_clear(a, keyOnShadow);
-    test_and_clear(a, keyOffShadow);
-
-
-    // ::TODO figure out how mask eonShadow::
-    write_dsp(GlobalDspAddr.EON, eonShadow);
+    y = a = eonShadow_music | eonShadow_sfx;
+    write_dsp(GlobalDspAddr.EON, y);
 }
 
 
@@ -956,14 +924,17 @@ func __reset_channel(channelIndex : u8 in x, pan: u8 in zpTmp) {
 
     // Set keyOnMask.  The next play-note instruction will queue a KON event.
     a = ChannelVoiceBit[x];
-    test_and_set(a, keyOnMask);
+    if x >= FIRST_SFX_CHANNEL {
+        test_and_set(a, keyOnMask_sfx);
+        test_and_clear(a, eonShadow_sfx);
+    }
+    else {
+        test_and_set(a, keyOnMask_music);
+        test_and_clear(a, eonShadow_music);
+    }
 
     // Mark channel as active
     test_and_set(a, activeChannels);
-
-    // Disable echo
-    // A = voice bit
-    test_and_clear(a, eonShadow);
 
 
     // Set channel volume
@@ -1162,9 +1133,14 @@ inline func process_channel__inline(channelIndex : u8 in x) {
         a = channelSoA.nextEventIsKeyOff[x];
         if !zero {
             a = ChannelVoiceBit[x];
-            test_and_set(a, keyOffShadow);
-            // Re-enable key-on in `play_note` instructions
-            test_and_set(a, keyOnMask);
+            if x >= FIRST_SFX_CHANNEL {
+                test_and_set(a, keyOffShadow_sfx);
+                test_and_set(a, keyOnMask_sfx);
+            }
+            else {
+                test_and_set(a, keyOffShadow_music);
+                test_and_set(a, keyOnMask_music);
+            }
 
             // schedule a bytecode event
             channelSoA.nextEventIsKeyOff[x] = a = 0;
@@ -1343,11 +1319,21 @@ func _play_note(channelIndex : u8 in x, noteAndKeyOffBit : u8 in a) {
 
 
     // queue KON if the previous note has been KOFFed
-    a = ChannelVoiceBit[x] & keyOnMask;
-    test_and_set(a, keyOnShadow);
+    a = ChannelVoiceBit[x];
+    if x >= FIRST_SFX_CHANNEL {
+        a &= keyOnMask_sfx;
+        test_and_set(a, keyOnShadow_sfx);
 
-    // Disable KON the next time the note is played (slur the note)
-    test_and_clear(a, keyOnMask);
+        // Disable KON the next time the note is played (slur the note)
+        test_and_clear(a, keyOnMask_sfx);
+    }
+    else {
+        a &= keyOnMask_music;
+        test_and_set(a, keyOnShadow_music);
+
+        // Disable KON the next time the note is played (slur the note)
+        test_and_clear(a, keyOnMask_music);
+    }
 
 
     // Get note length from the next byte in the instructionPtr
@@ -1472,7 +1458,12 @@ func disable_channel(channelIndex : u8 in x) {
 
     // Send key-off event
     a = ChannelVoiceBit[x];
-    test_and_set(a, keyOffShadow);
+    if x >= FIRST_SFX_CHANNEL {
+        test_and_set(a, keyOffShadow_sfx);
+    }
+    else {
+        test_and_set(a, keyOffShadow_music);
+    }
 
     // Mark channel as not active
     test_and_clear(a, activeChannels);
@@ -1641,9 +1632,14 @@ func end_loop_2(channelIndex : u8 in x) {
 // KEEP: X
 func enable_echo(channelIndex : u8 in x) {
     a = ChannelVoiceBit[x];
-    test_and_set(a, eonShadow);
-
-    ^return process_next_bytecode(x);
+    if x >= FIRST_SFX_CHANNEL {
+        test_and_set(a, eonShadow_sfx);
+        ^return process_next_bytecode(x);
+    }
+    else {
+        test_and_set(a, eonShadow_music);
+        ^return process_next_bytecode(x);
+    }
 }
 
 
@@ -1651,7 +1647,14 @@ func enable_echo(channelIndex : u8 in x) {
 // KEEP: X
 func disable_echo(channelIndex : u8 in x) {
     a = ChannelVoiceBit[x];
-    test_and_clear(a, eonShadow);
+    if x >= FIRST_SFX_CHANNEL {
+        test_and_clear(a, eonShadow_sfx);
+        ^return process_next_bytecode(x);
+    }
+    else {
+        test_and_clear(a, eonShadow_music);
+        ^return process_next_bytecode(x);
+    }
 
     ^return process_next_bytecode(x);
 }

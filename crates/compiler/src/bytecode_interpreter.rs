@@ -637,7 +637,7 @@ impl InterpreterOutput {
                 .driver_value(),
             );
 
-            apu_write(addresses::EON_SHADOW, eon_shadow);
+            apu_write(addresses::EON_SHADOW_MUSIC, eon_shadow);
 
             for (channel_index, c) in self.channels.iter().enumerate() {
                 let i = u16::try_from(channel_index).unwrap();
