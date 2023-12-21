@@ -231,14 +231,16 @@ fn read_ticks_until_next_bytecode(apuram: &[u8; 0x10000], v: usize) -> u32 {
     assert!(v < N_VOICES);
     let read = |addr: u16| apuram[usize::from(addr) + v];
 
-    if read(addresses::CHANNEL_INSTRUCTION_PTR_H) < addresses::COMMON_DATA.to_le_bytes()[1] {
+    if read(addresses::CHANNEL_INSTRUCTION_PTR_H) > addresses::COMMON_DATA.to_le_bytes()[1] {
         // Channel is not disabled.
 
-        let countdown_timer: u8 = read(addresses::CHANNEL_COUNTDOWN_TIMER);
-        let next_event_is_key_off: bool =
-            read(addresses::CHANNEL_NEXT_EVENT_IS_KEY_OFF) & 0x80 != 0;
+        let countdown_timer: u32 = match read(addresses::CHANNEL_COUNTDOWN_TIMER) {
+            0 => 0x100,
+            c => u32::from(c),
+        };
+        let next_event_is_key_off: bool = read(addresses::CHANNEL_NEXT_EVENT_IS_KEY_OFF) != 0;
 
-        u32::from(countdown_timer) + u32::from(next_event_is_key_off)
+        countdown_timer + u32::from(next_event_is_key_off)
     } else {
         u32::MAX
     }
