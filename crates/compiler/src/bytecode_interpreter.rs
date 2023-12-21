@@ -605,13 +605,6 @@ impl InterpreterOutput {
                 "Audio driver is not at the start of the song"
             );
 
-            // Test all music channels are active.
-            assert_eq!(
-                apuram[usize::from(addresses::ACTIVE_CHANNELS)],
-                (1 << N_MUSIC_CHANNELS) - 1,
-                "Audio driver is not initialized"
-            );
-
             // Test the `channelSoA.virtualChannels.updateOnZero` flags are zero
             {
                 let r = usize::from(addresses::CHANNEL_VC_UPDATE_ON_ZERO)

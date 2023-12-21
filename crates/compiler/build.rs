@@ -26,7 +26,6 @@ const AUDIO_DRIVER_SYMBOLS: &[(&str, &str)] = &[
     ("__loader_dataType", "LOADER_DATA_TYPE"),
     ("ChannelDisabledBytecode", "CHANNEL_DISABLED_BYTECODE"),
     ("pausedIfZero", "PAUSED_IF_ZERO"),
-    ("activeChannels", "ACTIVE_CHANNELS"),
     ("songTickCounter", "SONG_TICK_COUNTER"),
     ("eonShadow_music", "EON_SHADOW_MUSIC"),
     ("eonShadow_sfx", "EON_SHADOW_SFX"),

@@ -29,7 +29,6 @@ pub mod addresses {
         SONG_PTR,
         LOADER_DATA_TYPE,
         PAUSED_IF_ZERO,
-        ACTIVE_CHANNELS,
         EON_SHADOW_MUSIC,
         EON_SHADOW_SFX,
         SONG_TICK_COUNTER,

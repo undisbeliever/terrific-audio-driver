@@ -101,12 +101,11 @@ in zeropage {
     var maxTimerCounter : u8;
 
 
-    // For each bit: set if the channel is active.
+    // Used to determine the next available sound effect channel.
     //  * Set in `__reset_channel()`
     //  * Cleared in `disable_channel()`
-    // Used to determine the next available sound effect channel.
-    // (8x bitfield)
-    var activeChannels : u8;
+    // (bitfield)
+    var activeSoundEffects : u8;
 
 
     // Shadow variables for KOFF DSP register
@@ -869,7 +868,7 @@ func stop_sound_effects(unused : u8 in y) {
 
 
 func play_sound_effect(sfx_id : u8 in y) {
-    a = activeChannels;
+    a = activeSoundEffects;
     inline for let i in 0..(N_SFX_CHANNELS - 1) {
         a <<<= 1;
         if !carry {
@@ -927,14 +926,14 @@ func __reset_channel(channelIndex : u8 in x, pan: u8 in zpTmp) {
     if x >= FIRST_SFX_CHANNEL {
         test_and_set(a, keyOnMask_sfx);
         test_and_clear(a, eonShadow_sfx);
+
+        // Mark as active
+        test_and_set(a, activeSoundEffects);
     }
     else {
         test_and_set(a, keyOnMask_music);
         test_and_clear(a, eonShadow_music);
     }
-
-    // Mark channel as active
-    test_and_set(a, activeChannels);
 
 
     // Set channel volume
@@ -1460,14 +1459,12 @@ func disable_channel(channelIndex : u8 in x) {
     a = ChannelVoiceBit[x];
     if x >= FIRST_SFX_CHANNEL {
         test_and_set(a, keyOffShadow_sfx);
+        // Also mark SFX as not active
+        test_and_clear(a, activeSoundEffects);
     }
     else {
         test_and_set(a, keyOffShadow_music);
     }
-
-    // Mark channel as not active
-    test_and_clear(a, activeChannels);
-
 
     a = <:&ChannelDisabledBytecode;
     y = >:&ChannelDisabledBytecode;
