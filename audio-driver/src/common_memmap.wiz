@@ -28,8 +28,7 @@
 let LOADER_ADDR = 0x160;
 let LOADER_SIZE =  0x80;
 
-// Extra `- 0x10` for safety.
-let FIRSTPAGE_SIZE = LOADER_ADDR - 0x100 - 0x10;
+let FIRSTPAGE_SIZE = LOADER_ADDR - 0x100;
 
 // ::TODO confirm stack size is large enough::
 let STACK_SIZE = 0x200 - LOADER_ADDR - LOADER_SIZE;

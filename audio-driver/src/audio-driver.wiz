@@ -148,13 +148,8 @@ in zeropage {
 
 
         // The address of the next bytecode to execute
-        var instructionPtr_l : [u8 ; N_CHANNELS];
+        // (The low-byte of instructionPtr is in firstpage)
         var instructionPtr_h : [u8 ; N_CHANNELS];
-
-
-        // Address to return to in a `return_from_subroutine` bytecode
-        // (The low-byte of returnInstPtr is in firstpage)
-        var returnInstPtr_h : [u8 ; N_CHANNELS];
 
 
         // Number of remaining loops
@@ -230,9 +225,13 @@ in firstpage {
         var vibrato_waveLengthInTicks : [u8 ; N_CHANNELS];
 
 
+        // The address of the next bytecode to execute
+        // (The high-byte of instructionPtr is in firstpage)
+        var instructionPtr_l : [u8 ; N_CHANNELS];
+
         // Address to return to in a `return_from_subroutine` bytecode
-        // (The high-byte of returnInstPtr is in zeropage)
         var returnInstPtr_l : [u8 ; N_CHANNELS];
+        var returnInstPtr_h : [u8 ; N_CHANNELS];
 
 
         // Instruction pointer at the start of the loop.
@@ -1449,8 +1448,8 @@ func return_from_subroutine(channelIndex : u8 in x) {
     // (no stz instruction)
     channelSoA.vibrato_pitchOffsetPerTick[x] = a = 0;
 
+    y = a = channelSoA.returnInstPtr_h[x];
     a = channelSoA.returnInstPtr_l[x];
-    y = channelSoA.returnInstPtr_h[x];
 
     ^return process_bytecode_with_loader_test(x, ya);
 }
