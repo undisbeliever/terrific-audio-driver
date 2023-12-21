@@ -119,13 +119,10 @@ in zeropage {
 
     // `keyOnShadow` mask.
     //
-    // Each bit determines the KON/KOFF state of each channel.
+    // Each bit determines the channel bytecode should emit a key-on event.
     //  * If set - the next play note instruction will set `keyOnShadow`.
     //  * If clear - the channel is playing something and the play note instruction will
     //               leave `keyOnShadow` unchanged (slurring the note).
-    //
-    // The bits are set on `KON` and cleared on `KOFF`, at the start of `process_event_loop()`.
-    //
     // (8x bitfield)
     var keyOnMask : u8;
 
@@ -675,7 +672,7 @@ var _startLoop : u8 in zpTmp;
 
 // Set the DSP registers.
 //
-// Set the KON/KOFF/keyOnMask bits for the music or sound effects (depending on MASK value).
+// Set the KON/KOFF bits for the music or sound effects (depending on MASK value).
 //
 // This code is a bit messy, but it satisfies all of my requirements:
 //
@@ -699,8 +696,6 @@ var _voiceMask : u8 in zpTmp2;
     // Process Key-off events
 
     a = a & keyOffShadow;
-    // Enable KON in play-note instructions
-    test_and_set(a, keyOnMask);
 
     // Send KOFF events
     y = a;
@@ -759,8 +754,6 @@ var _voiceMask : u8 in zpTmp2;
 
     // Send KON events
     a = keyOnShadow & _voiceMask;
-    // Disable KON in play-note instructions (slur the note)
-    test_and_clear(a, keyOnMask);
 
     y = a;
     write_dsp(GlobalDspAddr.KON, y);
@@ -1170,6 +1163,8 @@ inline func process_channel__inline(channelIndex : u8 in x) {
         if !zero {
             a = ChannelVoiceBit[x];
             test_and_set(a, keyOffShadow);
+            // Re-enable key-on in `play_note` instructions
+            test_and_set(a, keyOnMask);
 
             // schedule a bytecode event
             channelSoA.nextEventIsKeyOff[x] = a = 0;
@@ -1350,6 +1345,9 @@ func _play_note(channelIndex : u8 in x, noteAndKeyOffBit : u8 in a) {
     // queue KON if the previous note has been KOFFed
     a = ChannelVoiceBit[x] & keyOnMask;
     test_and_set(a, keyOnShadow);
+
+    // Disable KON the next time the note is played (slur the note)
+    test_and_clear(a, keyOnMask);
 
 
     // Get note length from the next byte in the instructionPtr
