@@ -155,8 +155,20 @@ in zeropage {
 
         // S-DSP voice register shadows (AKA Virtual Channels)
         namespace virtualChannels {
-            // This this variable is 0, then the S-DSP registers will be updated.
-            var updateOnZero : [u8 ; N_CHANNELS];
+            // This variable tracks two things:
+            //  1. If the S-DSP voice registers need to be updated
+            //  2. If the channel is disabled and the S-DSP voice registers must not be changed.
+            //
+            // Values:
+            //  * 0  = update registers
+            //  * 1  = enabled, no pending updates
+            //  * 2+ = channel is disabled
+            //
+            // To disable a channel, write `0xff` to this variable.
+            // To request a register update, do `lsr updateState+X`.
+            //
+            // NOTE: A maximum of 6 update requests can occur before the next `__update_dsp_voice_registers()` call.
+            var updateState : [u8 ; N_CHANNELS];
 
             var vol_l       : [u8 ; N_CHANNELS];
             var vol_r       : [u8 ; N_CHANNELS];
@@ -637,9 +649,7 @@ var _startLoop : u8 in zpTmp;
 
             write_dsp(GlobalDspAddr.KOFF, keyOffShadow_music);
             __update_dsp_voice_registers(0, channelIndexEndLoop);
-
-            y = a = keyOnShadow_music & enabledChannelsMask;
-            write_dsp(GlobalDspAddr.KON, y);
+            write_dsp(GlobalDspAddr.KON, keyOnShadow_music);
 
             x = 0;
             keyOnShadow_music = x;
@@ -659,9 +669,7 @@ var _startLoop : u8 in zpTmp;
 
             write_dsp(GlobalDspAddr.KOFF, keyOffShadow_sfx);
             __update_dsp_voice_registers(FIRST_SFX_CHANNEL, channelIndexEndLoop);
-
-            y = a = keyOnShadow_sfx & enabledChannelsMask;
-            write_dsp(GlobalDspAddr.KON, y);
+            write_dsp(GlobalDspAddr.KON, keyOnShadow_sfx);
 
             a = 0;
             keyOnShadow_sfx = a;
@@ -686,13 +694,19 @@ var _startLoop : u8 in zpTmp;
 // Set the DSP voice registers.
 //
 // This function should be called after the `KOFF` write and before the `KON` write.
-func __update_dsp_voice_registers(firstChannelIndex: u8 in x,
-                                         endIndex : u8 in channelIndexEndLoop) {
-    // Write voice registers
-    // X = firstChannelIndex
+func __update_dsp_voice_registers(firstChannelIndex: u8 in x, endIndex : u8 in channelIndexEndLoop) {
     do {
-        a = channelSoA.virtualChannels.updateOnZero[x];
-        if zero {
+        a = channelSoA.virtualChannels.updateState[x];
+        if !zero {
+            // Do not write to voice registers.
+            if a != 1 {
+                // No Writes requested because channel is disabled.
+
+                // Reset the high bits of updateState to ensure `lsr updateState+X` does not re-enable the channel.
+                a = 0xff;
+            }
+        }
+        else {
             // ASSUMES VoiceDspAddr.VOL_L == 0
             a = ChannelVoiceOffset[x];
             y = channelSoA.virtualChannels.vol_l[x];
@@ -728,9 +742,10 @@ func __update_dsp_voice_registers(firstChannelIndex: u8 in x,
             smp.dsp_addr_and_data = ya;
 
 
-            // a is non zero
-            channelSoA.virtualChannels.updateOnZero[x] = a;
+            // channel enabled, no pending register writes
+            a = 1;
         }
+        channelSoA.virtualChannels.updateState[x] = a;
 
         x++;
     } while x < channelIndexEndLoop;
@@ -909,9 +924,11 @@ func __reset_channel(channelIndex : u8 in x, pan: u8 in zpTmp) {
     // Immediately process the next event
     channelSoA.countdownTimer[x] = a = 1;
 
-    // A = 0
     a = 0;
-    channelSoA.virtualChannels.updateOnZero[x] = a;
+
+    // Enable S-DSP voice register writes
+    // and update S-DSP voice register writes on the start of the next tick
+    channelSoA.virtualChannels.updateState[x] = a;  // 0
 
     channelSoA.instructionPtrAfterEnd_h[x] = a;     // don't loop SFX
 
@@ -950,7 +967,7 @@ func __reset_channel(channelIndex : u8 in x, pan: u8 in zpTmp) {
 
 // volume and pan must be set in channelSoA.
 //
-// NOTE: Does not set `channelSoA.virtualChannels.updateOnZero[x]`.
+// NOTE: Does not change `channelSoA.virtualChannels.updateState[x]`.
 //
 // KEEP: x
 func _update_voll_and_volr(channelIndex : u8 in x, vol_or_pan : u8 in a, pan_or_vol : u8 in y) {
@@ -1083,7 +1100,8 @@ var _target_h : u8 in zpTmp;
         channelSoA.virtualChannels.pitch_l[x] = a;
         channelSoA.virtualChannels.pitch_h[x] = y;
 
-        channelSoA.virtualChannels.updateOnZero[x] = a = 0;
+        // Request S-DSP voice register update
+        channelSoA.virtualChannels.updateState[x] >>>= 1;
     }
     else {
         // Vibrato
@@ -1121,7 +1139,8 @@ var _target_h : u8 in zpTmp;
                 channelSoA.vibrato_tickCounter[x] = a = channelSoA.vibrato_waveLengthInTicks[x];
             }
 
-            channelSoA.virtualChannels.updateOnZero[x] = a = 0;
+            // Request S-DSP voice register update
+            channelSoA.virtualChannels.updateState[x] >>>= 1;
         }
     }
 }
@@ -1152,14 +1171,13 @@ inline func process_channel__inline(channelIndex : u8 in x) {
             channelSoA.countdownTimer[x]++;
         }
         else {
-            // Update S-DSP registers on the start of the next tick.
+            // Request S-DSP voice register update.
             // The bytecode instruction will most likely change the virtual channel.
             //
             // The flag is set here (and once) instead of every instruction that changes
             // `channelSoA.virtualChannels` to save a lot of code space.
             //
-            // A = 0
-            channelSoA.virtualChannels.updateOnZero[x] = a;
+            channelSoA.virtualChannels.updateState[x] >>>= 1;
 
             a = channelSoA.instructionPtr_l[x];
             y = channelSoA.instructionPtr_h[x];
@@ -1457,6 +1475,9 @@ func disable_channel(channelIndex : u8 in x) {
 
     // Disable vibrato
     channelSoA.vibrato_pitchOffsetPerTick[x] = a;
+
+    // Mark channel as disabled
+    channelSoA.virtualChannels.updateState[x] = a = 0xff;
 
 
     // Send key-off event

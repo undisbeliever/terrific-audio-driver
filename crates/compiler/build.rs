@@ -30,7 +30,7 @@ const AUDIO_DRIVER_SYMBOLS: &[(&str, &str)] = &[
     ("eonShadow_music", "EON_SHADOW_MUSIC"),
     ("eonShadow_sfx", "EON_SHADOW_SFX"),
 
-    ("channelSoA.virtualChannels.updateOnZero", "CHANNEL_VC_UPDATE_ON_ZERO"),
+    ("channelSoA.virtualChannels.updateState", "CHANNEL_VC_UPDATE_STATE"),
     ("channelSoA.virtualChannels.vol_l", "CHANNEL_VC_VOL_L"),
     ("channelSoA.virtualChannels.vol_r", "CHANNEL_VC_VOL_R"),
     ("channelSoA.virtualChannels.pitch_l", "CHANNEL_VC_PITCH_L"),

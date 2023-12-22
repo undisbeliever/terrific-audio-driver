@@ -607,8 +607,8 @@ impl InterpreterOutput {
 
             // Test the `channelSoA.virtualChannels.updateOnZero` flags are zero
             {
-                let r = usize::from(addresses::CHANNEL_VC_UPDATE_ON_ZERO)
-                    ..usize::from(addresses::CHANNEL_VC_UPDATE_ON_ZERO) + N_MUSIC_CHANNELS;
+                let r = usize::from(addresses::CHANNEL_VC_UPDATE_STATE)
+                    ..usize::from(addresses::CHANNEL_VC_UPDATE_STATE) + N_MUSIC_CHANNELS;
 
                 assert!(
                     apuram[r].iter().all(|&i| i == 0),
