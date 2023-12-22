@@ -20,8 +20,10 @@ Features
 
 Engine Limitations and Deliberate Design Decisions
 ==================================================
- * There are no virtual channels.  2 channels are dedicated to sound effects.  Up to 6 channels can
-   be used for music.
+ * 6 channels are dedicated to music, 2 channels are dedicated to sound effects.
+    * This will change.  I am planning to enable music that can be played using all 8 channels.
+      Virtual channels are only partially implemented at the moment and will be fully implemented in
+      early 2024.
  * There is no sample swapping.
     * Samples and sound effect data are combined to form the *common audio data* and transferred to
       audio-RAM in a single block.
