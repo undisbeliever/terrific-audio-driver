@@ -12,6 +12,7 @@ mod compiler_thread;
 mod files;
 mod help;
 mod helpers;
+mod instrument_editor;
 mod licenses_dialog;
 mod list_editor;
 mod menu;
