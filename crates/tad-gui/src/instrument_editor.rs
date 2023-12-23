@@ -506,7 +506,7 @@ impl InstrumentEditor {
     }
 }
 
-pub struct TestSampleWidget {
+pub struct TestInstrumentWidget {
     selected_id: Option<ItemId>,
 
     sender: app::Sender<GuiMessage>,
@@ -518,7 +518,7 @@ pub struct TestSampleWidget {
     envelope: EnvelopeWidget,
 }
 
-impl TestSampleWidget {
+impl TestInstrumentWidget {
     const KEYS: [(i32, &'static str); 12] = [
         (0, "C"),
         (1, ""),

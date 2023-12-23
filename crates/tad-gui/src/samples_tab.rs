@@ -12,7 +12,7 @@ use crate::list_editor::{
 use crate::tabs::{FileType, Tab};
 use crate::GuiMessage;
 
-use crate::instrument_editor::{InstrumentEditor, InstrumentMapping, TestSampleWidget};
+use crate::instrument_editor::{InstrumentEditor, InstrumentMapping, TestInstrumentWidget};
 
 use compiler::data::{self, Instrument};
 use compiler::envelope::{Adsr, Gain};
@@ -124,7 +124,7 @@ pub struct SamplesTab {
     inst_table: ListEditorTable<InstrumentMapping>,
 
     instrument_editor: Rc<RefCell<InstrumentEditor>>,
-    test_sample_widget: Rc<RefCell<TestSampleWidget>>,
+    test_instrument_widget: Rc<RefCell<TestInstrumentWidget>>,
 
     console: TextDisplay,
     console_buffer: TextBuffer,
@@ -167,21 +167,21 @@ impl SamplesTab {
         let (instrument_editor, ie_height) = InstrumentEditor::new(sender.clone());
         main_group.fixed(instrument_editor.borrow().widget(), ie_height + group.pad());
 
-        let test_sample_widget = {
+        let test_instrument_widget = {
             let mut ts_flex = Flex::default().row();
             Frame::default();
-            let test_sample_widget = TestSampleWidget::new(sender);
+            let test_instrument_widget = TestInstrumentWidget::new(sender);
             Frame::default();
             ts_flex.end();
 
             {
-                let tsw = test_sample_widget.borrow();
+                let tsw = test_instrument_widget.borrow();
                 let ts_group = tsw.widget();
                 ts_flex.fixed(ts_group, ts_group.width());
                 main_group.fixed(&ts_flex, ts_group.height());
             }
 
-            test_sample_widget
+            test_instrument_widget
         };
 
         let mut console = TextDisplay::default();
@@ -198,7 +198,7 @@ impl SamplesTab {
             group,
             inst_table,
             instrument_editor,
-            test_sample_widget,
+            test_instrument_widget,
             console,
             console_buffer,
         }
@@ -226,13 +226,13 @@ impl ListEditor<Instrument> for SamplesTab {
     fn clear_selected(&mut self) {
         self.inst_table.clear_selected();
         self.instrument_editor.borrow_mut().disable_editor();
-        self.test_sample_widget.borrow_mut().clear_selected();
+        self.test_instrument_widget.borrow_mut().clear_selected();
     }
 
     fn set_selected(&mut self, index: usize, id: ItemId, inst: &Instrument) {
         self.inst_table.set_selected(index, id, inst);
         self.instrument_editor.borrow_mut().set_data(index, inst);
-        self.test_sample_widget.borrow_mut().set_selected(id);
+        self.test_instrument_widget.borrow_mut().set_selected(id);
     }
 }
 
@@ -242,7 +242,7 @@ impl CompilerOutputGui<InstrumentOutput> for SamplesTab {
     }
 
     fn set_selected_compiler_output(&mut self, compiler_output: &Option<InstrumentOutput>) {
-        self.test_sample_widget
+        self.test_instrument_widget
             .borrow_mut()
             .set_active(matches!(compiler_output, Some(Ok(_))));
 
