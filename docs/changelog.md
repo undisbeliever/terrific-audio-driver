@@ -7,6 +7,7 @@ Version 0.0.4
  * Fixed a volume popping bug by delaying all S-DSP register writes to the start of the next tick.
  * Started implementing virtual channels.
  * Added Samples
+ * Added `s` play sample MML command
 
 
 Version 0.0.3

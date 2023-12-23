@@ -83,6 +83,13 @@ impl Note {
         Ok(Note { note_id })
     }
 
+    pub fn from_note_id_u32(note_id: u32) -> Result<Self, ValueError> {
+        match note_id.try_into() {
+            Ok(i) => Self::from_note_id(i),
+            Err(_) => Err(ValueError::InvalidNote),
+        }
+    }
+
     pub fn from_note_id_usize(note_id: usize) -> Result<Self, ValueError> {
         match note_id.try_into() {
             Ok(i) => Self::from_note_id(i),

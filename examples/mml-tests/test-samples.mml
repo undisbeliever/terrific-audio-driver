@@ -5,5 +5,7 @@
 @conga   conga
 @cowbell cowbell
 
-; ::TODO add play sample MML command::
-A [ @conga l4 n12 n13 @cowbell l2 n12 ]8
+A l4 [ @conga s0     s1     @cowbell s r   ]2
+A l4 [ @conga s0     s1     @cowbell l2 s  ]2
+A l4 [ @conga s0,4   s1,4   @cowbell s,2   ]2
+A l1 [ @conga s0,%24 s1,%24 @cowbell s,%48 ]2

@@ -1054,6 +1054,31 @@ fn parse_pitch(pos: FilePos, pitch: MmlPitch, p: &mut Parser) -> MmlCommand {
     }
 }
 
+fn parse_play_sample(pos: FilePos, p: &mut Parser) -> MmlCommand {
+    let index = next_token_number(p).unwrap_or(0);
+
+    let length = if next_token_matches!(p, Token::Comma) {
+        parse_tracked_length(p)
+    } else {
+        p.increment_tick_counter(p.default_length());
+        p.default_length()
+    };
+
+    match Note::from_note_id_u32(index) {
+        Ok(note) => play_note(note, length, p),
+        Err(e) => {
+            p.add_error(pos, e.into());
+
+            // Output a rest (so tick-counter is correct)
+            let (tie_length, _) = parse_ties_and_slur(p);
+            MmlCommand::Rest {
+                ticks_until_keyoff: length + tie_length,
+                ticks_after_keyoff: TickCounter::new(0),
+            }
+        }
+    }
+}
+
 fn parse_play_midi_note_number(pos: FilePos, p: &mut Parser) -> MmlCommand {
     let note = match parse_unsigned_newtype::<MidiNote>(pos, p) {
         Some(n) => match n.try_into() {
@@ -1290,6 +1315,7 @@ fn parse_token(pos: FilePos, token: Token, p: &mut Parser) -> MmlCommand {
         }
 
         Token::Pitch(pitch) => parse_pitch(pos, pitch, p),
+        Token::PlaySample => parse_play_sample(pos, p),
         Token::PlayMidiNoteNumber => parse_play_midi_note_number(pos, p),
         Token::Rest => parse_rest(p),
         Token::Wait => parse_wait(p),

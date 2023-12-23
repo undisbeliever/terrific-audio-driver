@@ -49,6 +49,50 @@ fn test_play_midi_note_number() {
 }
 
 #[test]
+fn test_play_sample() {
+    assert_mml_channel_a_matches_bytecode(
+        r##"
+@sample sample
+
+A @sample
+
+A s s0 s1 s2
+A s,8 s1,2 s2,4
+A s,%2 s1,%4 s2,%6
+
+A s^8 s&
+A s1^8 s1&
+A s2,16^8 s2,16 &
+"##,
+        &[
+            "set_instrument sample",
+            // line 1
+            "play_note 0 24",
+            "play_note 0 24",
+            "play_note 1 24",
+            "play_note 2 24",
+            // line 2
+            "play_note 0 12",
+            "play_note 1 48",
+            "play_note 2 24",
+            // line 3
+            "play_note 0 2",
+            "play_note 1 4",
+            "play_note 2 6",
+            // line 4
+            "play_note 0 36",
+            "play_note 0 slur_next 24",
+            // line 5
+            "play_note 1 36",
+            "play_note 1 slur_next 24",
+            // line 6
+            "play_note 2 18",
+            "play_note 2 slur_next 6",
+        ],
+    );
+}
+
+#[test]
 #[rustfmt::skip]
 fn test_octave() {
     assert_line_matches_bytecode("a",             &["play_note a4 24"]);
@@ -1595,7 +1639,16 @@ fn dummy_data() -> DummyData {
         dummy_instrument("inst_with_adsr",   SF, 2, 6, Envelope::Adsr(EXAMPLE_ADSR)),
         dummy_instrument("inst_with_gain",   SF, 2, 6, Envelope::Gain(EXAMPLE_GAIN)),
     ].iter(),
-        [].iter(),
+        [
+            data::Sample{
+                name: "sample".parse().unwrap(),
+                source: Default::default(),
+                loop_setting: data::LoopSetting::None,
+                sample_rates: vec![32000, 16000, 18000],
+                envelope: Envelope::Gain(EXAMPLE_GAIN),
+                comment: None,
+            },
+        ].iter(),
     ).unwrap();
 
     let pitch_table = build_pitch_table(&instruments_and_samples).unwrap();
