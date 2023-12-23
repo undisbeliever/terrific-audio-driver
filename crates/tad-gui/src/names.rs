@@ -43,6 +43,12 @@ impl NameGetter for data::Instrument {
     }
 }
 
+impl NameGetter for data::Sample {
+    fn name(&self) -> &Name {
+        &self.name
+    }
+}
+
 impl NameGetter for SoundEffectInput {
     fn name(&self) -> &Name {
         &self.name
@@ -66,6 +72,12 @@ impl NameSetter for data::Song {
 }
 
 impl NameSetter for data::Instrument {
+    fn set_name(&mut self, name: Name) {
+        self.name = name;
+    }
+}
+
+impl NameSetter for data::Sample {
     fn set_name(&mut self, name: Name) {
         self.name = name;
     }

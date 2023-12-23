@@ -12,7 +12,8 @@ use crate::bytecode::{
 use crate::data::{LoopSetting, Name};
 use crate::driver_constants::{
     addresses, ECHO_BUFFER_EDL_MS, FIR_FILTER_SIZE, MAX_COMMON_DATA_SIZE, MAX_DIR_ITEMS,
-    MAX_INSTRUMENTS, MAX_SONG_DATA_SIZE, MAX_SOUND_EFFECTS, MAX_SUBROUTINES, PITCH_TABLE_SIZE,
+    MAX_INSTRUMENTS_AND_SAMPLES, MAX_SONG_DATA_SIZE, MAX_SOUND_EFFECTS, MAX_SUBROUTINES,
+    PITCH_TABLE_SIZE,
 };
 use crate::echo::{EchoEdl, EchoLength, MAX_FIR_ABS_SUM};
 use crate::envelope::Gain;
@@ -60,8 +61,10 @@ pub enum UniqueNameListError {
 #[derive(Debug)]
 pub enum ProjectFileError {
     Instrument(UniqueNameListError),
+    Sample(UniqueNameListError),
     SoundEffect(UniqueNameListError),
     Song(UniqueNameListError),
+    InstrumentOrSample(UniqueNameListError),
 }
 
 #[derive(Debug)]
@@ -275,6 +278,7 @@ pub struct SampleError {
 #[derive(Debug)]
 pub enum TaggedSampleError {
     Instrument(usize, Name, SampleError),
+    Sample(usize, Name, SampleError),
 }
 
 #[derive(Debug)]
@@ -285,7 +289,7 @@ pub struct SampleAndInstrumentDataError {
 
 #[derive(Debug)]
 pub enum CommonAudioDataError {
-    TooManyInstruments(usize),
+    TooManyInstrumentsAndSamples(usize),
     TooManyBrrSamples(usize),
     TooManySoundEffects(usize),
     CommonAudioDataTooLarge(usize),
@@ -304,6 +308,9 @@ pub enum PitchError {
     FirstOctaveTooLow(i32),
     LastOctaveTooHigh(i32),
     FirstOctaveTooLowLastOctaveTooHigh(i32, i32),
+
+    NoSampleRatesInSample,
+    InvalidSampleRates(Vec<u32>),
 }
 
 #[derive(Debug)]
@@ -567,6 +574,8 @@ impl Display for ProjectFileError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
             Self::Instrument(e) => fmt_unique_name_list_error(f, e, "instrument"),
+            Self::Sample(e) => fmt_unique_name_list_error(f, e, "sample"),
+            Self::InstrumentOrSample(e) => fmt_unique_name_list_error(f, e, "instrument or sample"),
             Self::SoundEffect(e) => fmt_unique_name_list_error(f, e, "sound effect"),
             Self::Song(e) => fmt_unique_name_list_error(f, e, "song"),
         }
@@ -893,8 +902,12 @@ impl Display for BrrError {
 impl Display for CommonAudioDataError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            Self::TooManyInstruments(len) => {
-                write!(f, "too many instruments ({}, max: {}", len, MAX_INSTRUMENTS)
+            Self::TooManyInstrumentsAndSamples(len) => {
+                write!(
+                    f,
+                    "too many instruments and samples ({}, max: {}",
+                    len, MAX_INSTRUMENTS_AND_SAMPLES
+                )
             }
             Self::TooManyBrrSamples(len) => {
                 write!(f, "too many BRR samples ({}, max: {})", len, MAX_DIR_ITEMS)
@@ -928,6 +941,8 @@ impl Display for PitchError {
                 "first octave too low (by {}) and last octave too high (by {} octaves)",
                 fo_by, lo_by
             ),
+            Self::NoSampleRatesInSample => write!(f, "no sample rates in sample"),
+            Self::InvalidSampleRates(e) => write!(f, "invalid sample rates: {:?}", &e),
         }
     }
 }
@@ -1339,6 +1354,14 @@ impl Display for SampleAndInstrumentDataErrorIndentedDisplay<'_> {
                     }
                     if let Some(e) = &e.pitch_error {
                         writeln!(f, "  Instrument {} {}: {}", i, n, e)?
+                    }
+                }
+                TaggedSampleError::Sample(i, n, e) => {
+                    if let Some(e) = &e.brr_error {
+                        writeln!(f, "  Sample {} {}: {}", i, n, e)?
+                    }
+                    if let Some(e) = &e.pitch_error {
+                        writeln!(f, "  Sample {} {}: {}", i, n, e)?
                     }
                 }
             }

@@ -5,7 +5,7 @@
 // SPDX-License-Identifier: MIT
 
 use crate::driver_constants;
-use crate::driver_constants::{MAX_INSTRUMENTS, MAX_N_SONGS, MAX_SOUND_EFFECTS};
+use crate::driver_constants::{MAX_INSTRUMENTS_AND_SAMPLES, MAX_N_SONGS, MAX_SOUND_EFFECTS};
 use crate::envelope::Envelope;
 use crate::errors::{
     DeserializeError, FileError, ProjectFileError, ProjectFileErrors, UniqueNameListError,
@@ -183,6 +183,22 @@ pub struct Instrument {
 }
 
 #[derive(Deserialize, Serialize, Clone, PartialEq, Debug)]
+pub struct Sample {
+    pub name: Name,
+
+    pub source: SourcePathBuf,
+
+    #[serde(flatten)]
+    pub loop_setting: LoopSetting,
+
+    pub sample_rates: Vec<u32>,
+
+    pub envelope: Envelope,
+
+    pub comment: Option<String>,
+}
+
+#[derive(Deserialize, Serialize, Clone, PartialEq, Debug)]
 pub struct Song {
     pub name: Name,
     pub source: SourcePathBuf,
@@ -213,6 +229,9 @@ pub struct Project {
     pub about: About,
 
     pub instruments: Vec<Instrument>,
+
+    #[serde(default)]
+    pub samples: Vec<Sample>,
 
     pub sound_effects: Vec<Name>,
     pub sound_effect_file: Option<SourcePathBuf>,
@@ -274,6 +293,21 @@ impl NameGetter for Instrument {
     }
 }
 
+impl NameGetter for Sample {
+    fn name(&self) -> &Name {
+        &self.name
+    }
+}
+
+impl NameGetter for InstrumentOrSample {
+    fn name(&self) -> &Name {
+        match self {
+            Self::Instrument(i) => &i.name,
+            Self::Sample(s) => &s.name,
+        }
+    }
+}
+
 impl NameGetter for Song {
     fn name(&self) -> &Name {
         &self.name
@@ -315,12 +349,20 @@ impl<T> UniqueNamesList<T> {
     }
 }
 
+pub enum InstrumentOrSample {
+    Instrument(Instrument),
+    Sample(Sample),
+}
+
 pub struct UniqueNamesProjectFile {
     pub path: PathBuf,
     pub file_name: String,
     pub parent_path: ParentPathBuf,
 
     pub instruments: UniqueNamesList<Instrument>,
+    pub samples: UniqueNamesList<Sample>,
+
+    pub instruments_and_samples: UniqueNamesList<InstrumentOrSample>,
 
     pub sound_effects: UniqueNamesList<Name>,
     pub sound_effect_file: Option<SourcePathBuf>,
@@ -375,13 +417,19 @@ where
     UniqueNamesList { list, map }
 }
 
-pub fn validate_instrument_names(
-    instruments: Vec<Instrument>,
-) -> Result<UniqueNamesList<Instrument>, ProjectFileErrors> {
+pub fn validate_instrument_and_sample_names<'a>(
+    instruments: impl Iterator<Item = &'a Instrument>,
+    samples: impl Iterator<Item = &'a Sample>,
+) -> Result<UniqueNamesList<InstrumentOrSample>, ProjectFileErrors> {
     let mut errors = Vec::new();
 
-    let out = validate_list_names(instruments, true, MAX_INSTRUMENTS, |e| {
-        errors.push(ProjectFileError::Instrument(e))
+    let instruments = instruments.cloned().map(InstrumentOrSample::Instrument);
+    let samples = samples.cloned().map(InstrumentOrSample::Sample);
+
+    let list = instruments.chain(samples).collect();
+
+    let out = validate_list_names(list, true, MAX_INSTRUMENTS_AND_SAMPLES, |e| {
+        errors.push(ProjectFileError::InstrumentOrSample(e))
     });
 
     if errors.is_empty() {
@@ -396,13 +444,19 @@ pub fn validate_project_file_names(
 ) -> Result<UniqueNamesProjectFile, ProjectFileErrors> {
     let mut errors = Vec::new();
 
-    let instruments = match validate_instrument_names(pf.contents.instruments) {
-        Ok(instruments) => Some(instruments),
-        Err(e) => {
-            errors = e.0;
-            None
-        }
-    };
+    let instruments = validate_list_names(
+        pf.contents.instruments,
+        false,
+        MAX_INSTRUMENTS_AND_SAMPLES,
+        |e| errors.push(ProjectFileError::Instrument(e)),
+    );
+
+    let samples = validate_list_names(
+        pf.contents.samples,
+        false,
+        MAX_INSTRUMENTS_AND_SAMPLES,
+        |e| errors.push(ProjectFileError::Sample(e)),
+    );
 
     let sound_effects =
         validate_list_names(pf.contents.sound_effects, false, MAX_SOUND_EFFECTS, |e| {
@@ -413,12 +467,27 @@ pub fn validate_project_file_names(
         errors.push(ProjectFileError::Song(e))
     });
 
+    let instruments_and_samples = if errors.is_empty() {
+        match validate_instrument_and_sample_names(instruments.list().iter(), samples.list().iter())
+        {
+            Ok(instruments) => Some(instruments),
+            Err(e) => {
+                errors.extend(e.0);
+                None
+            }
+        }
+    } else {
+        None
+    };
+
     if errors.is_empty() {
         Ok(UniqueNamesProjectFile {
             path: pf.path,
             file_name: pf.file_name,
             parent_path: pf.parent_path,
-            instruments: instruments.unwrap(),
+            instruments,
+            samples,
+            instruments_and_samples: instruments_and_samples.unwrap(),
             sound_effects,
             sound_effect_file: pf.contents.sound_effect_file,
             songs,

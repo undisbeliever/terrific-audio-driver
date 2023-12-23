@@ -5,8 +5,8 @@
 // SPDX-License-Identifier: MIT
 
 use crate::bytecode::InstrumentId;
-use crate::data::{Instrument, UniqueNamesList};
-use crate::driver_constants::{MAX_INSTRUMENTS, PITCH_TABLE_SIZE};
+use crate::data::{Instrument, InstrumentOrSample, Sample, UniqueNamesList};
+use crate::driver_constants::{MAX_INSTRUMENTS_AND_SAMPLES, PITCH_TABLE_SIZE};
 use crate::errors::{PitchError, PitchTableError};
 use crate::notes::{self, Note, Octave};
 
@@ -31,6 +31,7 @@ const MAX_SAMPLE_FREQ: f64 = (SPC_SAMPLE_RATE / 2) as f64;
 const MIN_MIN_OCTAVE_OFFSET: i32 = -6;
 
 const PITCH_REGISTER_FP_SCALE: u32 = 0x1000;
+const PITCH_REGISTER_MAX: u16 = 0x3fff;
 const PITCH_REGISTER_FLOAT_LIMIT: f64 = 4.0;
 
 #[derive(Clone)]
@@ -39,6 +40,11 @@ pub struct InstrumentPitch {
     octaves_above_c0: i32,
     min_octave_offset: i32,
     max_octave_offset: i32,
+}
+
+#[derive(Clone)]
+pub struct SamplePitches {
+    pitches: Vec<u16>,
 }
 
 // Calculates the maximum number of octaves a sample can be incremented by.
@@ -137,37 +143,88 @@ pub(crate) fn maximize_pitch_range(pitch: &InstrumentPitch) -> (InstrumentPitch,
 }
 
 // Using sorted vector instead of Map as I need a reproducible pitch table.
-pub(crate) struct SortedInstrumentPitches(Vec<(usize, InstrumentPitch)>);
+pub(crate) struct SortedPitches {
+    instruments: Vec<(usize, InstrumentPitch)>,
+    samples: Vec<(usize, SamplePitches)>,
+}
 
 /// Assumes `pv` iterator outputs all instruments in the correct order.
 pub(crate) fn sort_pitches_iterator(
-    pv: impl Iterator<Item = InstrumentPitch>,
-) -> SortedInstrumentPitches {
-    sort_pitches_vec(pv.enumerate().collect())
+    instruments: impl Iterator<Item = InstrumentPitch>,
+    samples: impl Iterator<Item = SamplePitches>,
+) -> SortedPitches {
+    let instruments: Vec<(usize, InstrumentPitch)> = instruments.enumerate().collect();
+
+    let samples = samples
+        .enumerate()
+        .map(|(i, p)| (i + instruments.len(), p))
+        .collect();
+
+    sort_pitches_vec(instruments, samples)
 }
 
-fn sort_pitches_vec(mut pv: Vec<(usize, InstrumentPitch)>) -> SortedInstrumentPitches {
+fn sort_pitches_vec(
+    mut instruments: Vec<(usize, InstrumentPitch)>,
+    samples: Vec<(usize, SamplePitches)>,
+) -> SortedPitches {
     // Using stable sort instead of a hashmap to ensure pitch_table is deterministic
-    pv.sort_by_key(|(_, p)| p.microsemitones_above_c);
-    SortedInstrumentPitches(pv)
+    instruments.sort_by_key(|(_, p)| p.microsemitones_above_c);
+    SortedPitches {
+        instruments,
+        samples,
+    }
 }
 
-fn pitch_vec(
-    instruments: &UniqueNamesList<Instrument>,
-) -> Result<SortedInstrumentPitches, PitchTableError> {
-    let mut out = Vec::with_capacity(instruments.len());
+pub fn sample_pitch(sample: &Sample) -> Result<SamplePitches, PitchError> {
+    if sample.sample_rates.is_empty() {
+        return Err(PitchError::NoSampleRatesInSample);
+    }
+
+    let mut invalid_sample_rates = Vec::new();
+    let mut pitches = Vec::with_capacity(sample.sample_rates.len());
+
+    for sample_rate in &sample.sample_rates {
+        let sample_rate = *sample_rate;
+
+        let pitch = u64::from(sample_rate) * u64::from(PITCH_REGISTER_FP_SCALE)
+            / u64::from(SPC_SAMPLE_RATE);
+
+        if pitch > u64::from(PITCH_REGISTER_MAX) {
+            invalid_sample_rates.push(sample_rate);
+        }
+        pitches.push(pitch.try_into().unwrap());
+    }
+
+    if invalid_sample_rates.is_empty() {
+        Ok(SamplePitches { pitches })
+    } else {
+        Err(PitchError::InvalidSampleRates(invalid_sample_rates))
+    }
+}
+
+fn inst_pitch_vec(
+    instruments_and_samples: &UniqueNamesList<InstrumentOrSample>,
+) -> Result<SortedPitches, PitchTableError> {
+    let mut instruments = Vec::with_capacity(instruments_and_samples.len());
+    let mut samples = Vec::with_capacity(instruments_and_samples.len());
 
     let mut errors = Vec::new();
 
-    for (i, inst) in instruments.list().iter().enumerate() {
-        match instrument_pitch(inst) {
-            Ok(ip) => out.push((i, ip)),
-            Err(e) => errors.push((i, inst.name.clone(), e)),
+    for (i, inst) in instruments_and_samples.list().iter().enumerate() {
+        match inst {
+            InstrumentOrSample::Instrument(inst) => match instrument_pitch(inst) {
+                Ok(ip) => instruments.push((i, ip)),
+                Err(e) => errors.push((i, inst.name.clone(), e)),
+            },
+            InstrumentOrSample::Sample(sample) => match sample_pitch(sample) {
+                Ok(sp) => samples.push((i, sp)),
+                Err(e) => errors.push((i, sample.name.clone(), e)),
+            },
         }
     }
 
     if errors.is_empty() {
-        Ok(sort_pitches_vec(out))
+        Ok(sort_pitches_vec(instruments, samples))
     } else {
         Err(PitchTableError::InstrumentErrors(errors))
     }
@@ -178,9 +235,9 @@ struct MstIterator<'a> {
     remaining: &'a [(usize, InstrumentPitch)],
 }
 
-fn group_by_mst(pitches: &SortedInstrumentPitches) -> MstIterator {
+fn group_by_mst(pitches: &SortedPitches) -> MstIterator {
     MstIterator {
-        remaining: pitches.0.as_slice(),
+        remaining: pitches.instruments.as_slice(),
     }
 }
 
@@ -210,11 +267,12 @@ struct Pt {
     instruments_pitch_offset: Vec<u8>,
 }
 
-fn process_pitch_vec(inst_pitches: SortedInstrumentPitches, n_instruments: usize) -> Pt {
+fn process_pitch_vecs(sorted_pitches: SortedPitches, n_instruments_and_samples: usize) -> Pt {
     let mut pitches = Vec::with_capacity(256);
-    let mut instruments_pitch_offset = vec![0; n_instruments];
+    let mut instruments_pitch_offset = vec![0; n_instruments_and_samples];
 
-    for (mst, slice) in group_by_mst(&inst_pitches) {
+    // Instruments
+    for (mst, slice) in group_by_mst(&sorted_pitches) {
         // mst = microsemitones_above_c
         assert!(mst >= 0);
         assert!(!slice.is_empty());
@@ -256,6 +314,22 @@ fn process_pitch_vec(inst_pitches: SortedInstrumentPitches, n_instruments: usize
         }
     }
 
+    // Samples
+    for (inst_id, sp) in &sorted_pitches.samples {
+        match pitches
+            .windows(sp.pitches.len())
+            .position(|s| s == sp.pitches)
+        {
+            Some(i) => {
+                instruments_pitch_offset[*inst_id] = i.try_into().unwrap_or(0);
+            }
+            None => {
+                instruments_pitch_offset[*inst_id] = pitches.len().try_into().unwrap_or(0);
+                pitches.extend(&sp.pitches);
+            }
+        }
+    }
+
     Pt {
         pitches,
         instruments_pitch_offset,
@@ -270,15 +344,15 @@ pub struct PitchTable {
 }
 
 pub(crate) fn merge_pitch_vec(
-    pv: SortedInstrumentPitches,
-    n_instruments: usize,
+    sorted_pitches: SortedPitches,
+    n_instruments_and_samples: usize,
 ) -> Result<PitchTable, PitchTableError> {
-    let pt = process_pitch_vec(pv, n_instruments);
+    let pt = process_pitch_vecs(sorted_pitches, n_instruments_and_samples);
 
     if pt.pitches.len() > PITCH_TABLE_SIZE {
         return Err(PitchTableError::TooManyPitches(pt.pitches.len()));
     }
-    if pt.instruments_pitch_offset.len() > MAX_INSTRUMENTS {
+    if pt.instruments_pitch_offset.len() > MAX_INSTRUMENTS_AND_SAMPLES {
         return Err(PitchTableError::TooManyInstruments);
     }
 
@@ -303,10 +377,10 @@ pub(crate) fn merge_pitch_vec(
 }
 
 pub fn build_pitch_table(
-    instruments: &UniqueNamesList<Instrument>,
+    instruments_and_samples: &UniqueNamesList<InstrumentOrSample>,
 ) -> Result<PitchTable, PitchTableError> {
-    let pv = pitch_vec(instruments)?;
-    merge_pitch_vec(pv, instruments.len())
+    let sorted_pitches = inst_pitch_vec(instruments_and_samples)?;
+    merge_pitch_vec(sorted_pitches, instruments_and_samples.len())
 }
 
 impl PitchTable {

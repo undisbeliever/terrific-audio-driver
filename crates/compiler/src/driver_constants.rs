@@ -98,7 +98,7 @@ pub const FIRST_SONG_ID: usize = 1;
 pub const MAX_N_SONGS: usize = 0x100 - FIRST_SONG_ID;
 
 pub const MAX_DIR_ITEMS: usize = u8::MAX as usize;
-pub const MAX_INSTRUMENTS: usize = u8::MAX as usize;
+pub const MAX_INSTRUMENTS_AND_SAMPLES: usize = u8::MAX as usize;
 pub const MAX_SOUND_EFFECTS: usize = 254;
 
 pub const PITCH_TABLE_SIZE: usize = 256;

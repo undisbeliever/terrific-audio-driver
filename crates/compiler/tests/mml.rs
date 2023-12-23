@@ -1490,7 +1490,7 @@ fn assert_line_matches_bytecode(mml_line: &str, bc_asm: &[&str]) {
     let dd = dummy_data();
 
     let mml = compile_mml(&mml, &dd);
-    let bc_asm = assemble_channel_bytecode(&bc_asm, &dd.instruments);
+    let bc_asm = assemble_channel_bytecode(&bc_asm, &dd.instruments_and_samples);
 
     assert_eq!(
         mml_bytecode(&mml),
@@ -1533,7 +1533,7 @@ fn assert_line_matches_line_and_bytecode(mml_line1: &str, mml_line2: &str, bc_as
         "Testing {mml_line1:?} against MML"
     );
 
-    let bc_asm = assemble_channel_bytecode(&bc_asm, &dd.instruments);
+    let bc_asm = assemble_channel_bytecode(&bc_asm, &dd.instruments_and_samples);
 
     assert_eq!(mml1_bc, bc_asm, "Testing {mml_line1:?} against bytecode");
 }
@@ -1543,7 +1543,7 @@ fn assert_mml_channel_a_matches_bytecode(mml: &str, bc_asm: &[&str]) {
 
     let mml = compile_mml(mml, &dummy_data);
 
-    let bc_asm = assemble_channel_bytecode(bc_asm, &dummy_data.instruments);
+    let bc_asm = assemble_channel_bytecode(bc_asm, &dummy_data.instruments_and_samples);
 
     assert_eq!(mml_bytecode(&mml), bc_asm);
 }
@@ -1556,7 +1556,7 @@ fn compile_mml(mml: &str, dummy_data: &DummyData) -> SongData {
             file_name: "".to_owned(),
         },
         None,
-        &dummy_data.instruments,
+        &dummy_data.instruments_and_samples,
         &dummy_data.pitch_table,
     )
     .unwrap()
@@ -1564,10 +1564,10 @@ fn compile_mml(mml: &str, dummy_data: &DummyData) -> SongData {
 
 fn assemble_channel_bytecode(
     bc_asm: &[&str],
-    instruments: &UniqueNamesList<data::Instrument>,
+    inst_map: &UniqueNamesList<data::InstrumentOrSample>,
 ) -> Vec<u8> {
     let mut bc = bytecode_assembler::BytecodeAssembler::new(
-        instruments,
+        inst_map,
         None,
         bytecode_assembler::BytecodeContext::SongChannel,
     );
@@ -1582,7 +1582,7 @@ fn assemble_channel_bytecode(
 }
 
 struct DummyData {
-    instruments: UniqueNamesList<data::Instrument>,
+    instruments_and_samples: UniqueNamesList<data::InstrumentOrSample>,
     pitch_table: PitchTable,
 }
 
@@ -1590,16 +1590,18 @@ fn dummy_data() -> DummyData {
     const SF: f64 = SAMPLE_FREQ;
 
     #[rustfmt::skip]
-    let instruments = data::validate_instrument_names(vec![
+    let instruments_and_samples = data::validate_instrument_and_sample_names([
         dummy_instrument("dummy_instrument", SF, 2, 6, Envelope::Gain(Gain::new(0))),
         dummy_instrument("inst_with_adsr",   SF, 2, 6, Envelope::Adsr(EXAMPLE_ADSR)),
         dummy_instrument("inst_with_gain",   SF, 2, 6, Envelope::Gain(EXAMPLE_GAIN)),
-    ]).unwrap();
+    ].iter(),
+        [].iter(),
+    ).unwrap();
 
-    let pitch_table = build_pitch_table(&instruments).unwrap();
+    let pitch_table = build_pitch_table(&instruments_and_samples).unwrap();
 
     DummyData {
-        instruments,
+        instruments_and_samples,
         pitch_table,
     }
 }

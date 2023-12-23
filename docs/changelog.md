@@ -6,6 +6,7 @@ Version 0.0.4
  * Added `#Game` to song metadata.
  * Fixed a volume popping bug by delaying all S-DSP register writes to the start of the next tick.
  * Started implementing virtual channels.
+ * Added Samples
 
 
 Version 0.0.3

@@ -391,38 +391,76 @@ pub fn add_song_to_pf_dialog(
     }
 }
 
+fn open_sample_dialog(
+    compiler_sender: &mpsc::Sender<ToCompiler>,
+    pd: &ProjectData,
+    source: &SourcePathBuf,
+) -> Option<SourcePathBuf> {
+    if let Some(p) = pf_open_file_dialog(pd, "Select sample", SAMPLE_FILTERS, Some(source)) {
+        let new_source = p.source_path;
+
+        // Remove the previous and new files from sample cache to ensure any file changes are loaded
+        let _ = compiler_sender.send(ToCompiler::RemoveFileFromSampleCache(source.clone()));
+        let _ = compiler_sender.send(ToCompiler::RemoveFileFromSampleCache(new_source.clone()));
+
+        // The sample might be used by more than one instrument.
+        // Recompile all instruments that use the sample file.
+        // Will also recompile this instrument/sample if `source` was unchanged.
+        let _ = compiler_sender.send(ToCompiler::RecompileInstrumentsUsingSample(
+            new_source.clone(),
+        ));
+
+        if source != &new_source {
+            Some(new_source)
+        } else {
+            None
+        }
+    } else {
+        None
+    }
+}
+
 pub fn open_instrument_sample_dialog(
     sender: &fltk::app::Sender<GuiMessage>,
     compiler_sender: &mpsc::Sender<ToCompiler>,
     pd: &ProjectData,
     index: usize,
 ) {
-    let inst = match pd.instruments.list().get(index) {
+    let inst = match pd.instruments().list().get(index) {
         Some(inst) => inst,
         None => return,
     };
 
-    if let Some(p) = pf_open_file_dialog(pd, "Select sample", SAMPLE_FILTERS, Some(&inst.source)) {
-        let new_source = p.source_path;
+    if let Some(new_source) = open_sample_dialog(compiler_sender, pd, &inst.source) {
+        let new_inst = data::Instrument {
+            source: new_source,
+            ..inst.clone()
+        };
+        sender.send(GuiMessage::Instrument(ListMessage::ItemEdited(
+            index, new_inst,
+        )));
+    }
+}
 
-        // Remove the previous and new files from sample cache to ensure any file changes are loaded
-        let _ = compiler_sender.send(ToCompiler::RemoveFileFromSampleCache(inst.source.clone()));
-        let _ = compiler_sender.send(ToCompiler::RemoveFileFromSampleCache(new_source.clone()));
+pub fn open_sample_sample_dialog(
+    sender: &fltk::app::Sender<GuiMessage>,
+    compiler_sender: &mpsc::Sender<ToCompiler>,
+    pd: &ProjectData,
+    index: usize,
+) {
+    let sample = match pd.samples().list().get(index) {
+        Some(s) => s,
+        None => return,
+    };
 
-        if inst.source != new_source {
-            let new_inst = data::Instrument {
-                source: new_source.clone(),
-                ..inst.clone()
-            };
-            sender.send(GuiMessage::Instrument(ListMessage::ItemEdited(
-                index, new_inst,
-            )));
-        }
-
-        // The sample might be used by more than one instrument.
-        // Recompile all instruments that use the sample file.
-        // Will also recompile this instrument if `source` was unchanged.
-        let _ = compiler_sender.send(ToCompiler::RecompileInstrumentsUsingSample(new_source));
+    if let Some(new_source) = open_sample_dialog(compiler_sender, pd, &sample.source) {
+        let new_sample = data::Sample {
+            source: new_source,
+            ..sample.clone()
+        };
+        sender.send(GuiMessage::Sample(ListMessage::ItemEdited(
+            index, new_sample,
+        )));
     }
 }
 

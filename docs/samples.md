@@ -6,13 +6,28 @@ Instruments
  * **First octave**: The first octave (0-7) that can be played with the instrument
  * **Last octave**: The last octave (0-7) that can be played with the instrument
  * **Envelope**: The default envelope for the sample (see *Envelopes* section below)
+ * **Comment**: A small comment you can add to the instrument
+
+
+Samples
+=======
+Samples do not play notes or octaves.
+Instead, the user supplies a list of sample rates that the sample can be played at.
+
+Samples are treated exactly the same as instruments in MML and bytecode assembly.
+The first sample-rate is Note 0, the second sample-rate is Note 1, etc.
+
+ * **Source**: A `.wav` or `.brr` file
+ * **Loop**: Determines how the sample is looped (see *Loop Options* below)
+ * **Sample Rates**: A list of sample rates that the sample source can be played at
+ * **Envelope**: The default envelope for the sample (see *Envelopes* section below)
  * **Comment**: A small comment you can add to the sample
 
 
 Source
 ======
 
-The terrific audio driver can load samples from either `.brr` files of 16-bit mono `.wav` files.
+The terrific audio driver can load instruments and samples from either `.brr` files of 16-bit mono `.wav` files.
 
 
 BRR Files
@@ -67,8 +82,8 @@ sample files is beyond the scope of the program.
 Sample Frequency
 ================
 
-This is the frequency of the sample when played back at 32000Hz.  It is used to build a pitch table
-containing the sample-rate for every note and instrument that can be played.
+This is the frequency of the instrument when played back at 32000Hz.  It is used to build a pitch
+table containing the sample-rate for every note and instrument that can be played.
 
 The pitch table is limited a maximum 256 entries.  To reduce the size of the pitch table, try to
 reduce the number of unique *Sample Frequencies* used in a project.
@@ -79,8 +94,8 @@ Octaves
 
 These fields will place limits on the octaves an instrument can be played at.
 
-Samples played at an excessively high octave can have aliasing effects, while samples played at an
-excessively low octave can loose detail and precision.
+Instruments played at an excessively high octave can have aliasing effects, while instruments played
+at an excessively low octave can loose detail and precision.
 
 Limiting an instrument's octave range can also reduce the size of the pitch table.
 

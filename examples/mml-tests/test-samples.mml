@@ -1,0 +1,9 @@
+; Demonstration showing how to play samples in MML
+
+#Tempo 120
+
+@conga   conga
+@cowbell cowbell
+
+; ::TODO add play sample MML command::
+A [ @conga l4 n12 n13 @cowbell l2 n12 ]8

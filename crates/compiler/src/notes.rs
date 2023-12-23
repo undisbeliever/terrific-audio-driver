@@ -83,6 +83,13 @@ impl Note {
         Ok(Note { note_id })
     }
 
+    pub fn from_note_id_usize(note_id: usize) -> Result<Self, ValueError> {
+        match note_id.try_into() {
+            Ok(i) => Self::from_note_id(i),
+            Err(_) => Err(ValueError::InvalidNote),
+        }
+    }
+
     pub fn from_pitch_and_octave(p: PitchChar, o: Octave) -> Result<Self, ValueError> {
         Self::from_note_id(p.0 + o.as_u8() * SEMITONES_PER_OCTAVE)
     }

@@ -7,12 +7,13 @@
 use super::{Identifier, IdentifierStr};
 
 use crate::bytecode::InstrumentId;
-use crate::data;
 use crate::data::UniqueNamesList;
+use crate::data::{self, InstrumentOrSample};
 use crate::envelope::Envelope;
 use crate::errors::{ErrorWithPos, MmlLineError};
 use crate::file_pos::{FilePosRange, Line};
 use crate::notes::Note;
+use crate::samples::note_range;
 
 use std::collections::HashMap;
 
@@ -35,7 +36,7 @@ pub struct MmlInstrument {
 fn parse_instrument(
     id: Identifier,
     line: &Line,
-    inst_map: &UniqueNamesList<data::Instrument>,
+    inst_map: &UniqueNamesList<data::InstrumentOrSample>,
 ) -> Result<MmlInstrument, ErrorWithPos<MmlLineError>> {
     if line.text.is_empty() {
         return Err(ErrorWithPos(line.range(), MmlLineError::NoInstrument));
@@ -60,7 +61,11 @@ fn parse_instrument(
         Err(e) => return inst_name_err(e.into()),
     };
 
-    let mut envelope = inst.envelope.clone();
+    let source_envelope = match inst {
+        InstrumentOrSample::Instrument(inst) => &inst.envelope,
+        InstrumentOrSample::Sample(sample) => &sample.envelope,
+    };
+    let mut envelope = source_envelope.clone();
 
     if let Some(args) = args {
         let arg = args.text;
@@ -80,20 +85,25 @@ fn parse_instrument(
         }
     }
 
+    let (first_note, last_note) = match note_range(inst) {
+        Ok(o) => o,
+        Err(e) => return Err(ErrorWithPos(line.range(), e.into())),
+    };
+
     Ok(MmlInstrument {
         identifier: id,
         file_range: line.range(),
         instrument_id,
-        first_note: Note::first_note_for_octave(inst.first_octave),
-        last_note: Note::last_note_for_octave(inst.last_octave),
-        envelope_unchanged: envelope == inst.envelope,
+        first_note,
+        last_note,
+        envelope_unchanged: &envelope == source_envelope,
         envelope,
     })
 }
 
 pub fn parse_instruments(
     instrument_lines: Vec<(Identifier, Line)>,
-    inst_map: &UniqueNamesList<data::Instrument>,
+    inst_map: &UniqueNamesList<data::InstrumentOrSample>,
 ) -> (Vec<MmlInstrument>, Vec<ErrorWithPos<MmlLineError>>) {
     let mut out = Vec::with_capacity(instrument_lines.len());
     let mut errors = Vec::new();

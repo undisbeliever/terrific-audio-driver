@@ -20,6 +20,7 @@ mod menu;
 mod mml_editor;
 mod monitor_timer;
 mod names;
+mod sample_editor;
 mod tables;
 mod tabs;
 
@@ -64,15 +65,17 @@ use compiler::songs::SongData;
 use compiler::sound_effects::{convert_sfx_inputs_lossy, SoundEffectInput, SoundEffectsFile};
 use compiler::time::TickCounter;
 
-use compiler_thread::PlaySampleArgs;
+use compiler_thread::{PlaySampleArgs, SampleOutput};
 use files::{
-    new_project_dialog, open_instrument_sample_dialog, open_project_dialog, song_name_from_path,
+    new_project_dialog, open_instrument_sample_dialog, open_project_dialog,
+    open_sample_sample_dialog, song_name_from_path,
 };
 use fltk::dialog;
 use fltk::prelude::*;
 use help::HelpSection;
 use helpers::ch_units_to_width;
 use licenses_dialog::LicensesDialog;
+use list_editor::ListPairWithCompilerOutputs;
 use monitor_timer::MonitorTimer;
 
 use std::collections::hash_map;
@@ -97,6 +100,7 @@ pub enum GuiMessage {
     EditSfxExportOrder(ListMessage<data::Name>),
     EditProjectSongs(ListMessage<data::Song>),
     Instrument(ListMessage<data::Instrument>),
+    Sample(ListMessage<data::Sample>),
 
     NewMmlFile,
     OpenMmlFile,
@@ -117,6 +121,7 @@ pub enum GuiMessage {
     SetProjectSongName(usize, data::Name),
 
     OpenInstrumentSampleDialog(usize),
+    OpenSampleSampleDialog(usize),
 
     OpenSongTab(usize),
 
@@ -125,6 +130,7 @@ pub enum GuiMessage {
 
     PlaySong(ItemId, String, Option<TickCounter>),
     PlaySoundEffect(ItemId),
+    PlayInstrument(ItemId, PlaySampleArgs),
     PlaySample(ItemId, PlaySampleArgs),
     PauseResumeAudio(ItemId),
 
@@ -150,7 +156,19 @@ pub struct ProjectData {
 
     sfx_export_orders: ListWithSelection<data::Name>,
     project_songs: ListWithSelection<data::Song>,
-    instruments: ListWithCompilerOutput<data::Instrument, InstrumentOutput>,
+
+    instruments_and_samples:
+        ListPairWithCompilerOutputs<data::Instrument, InstrumentOutput, data::Sample, SampleOutput>,
+}
+
+impl ProjectData {
+    pub fn instruments(&self) -> &ListWithCompilerOutput<data::Instrument, InstrumentOutput> {
+        self.instruments_and_samples.list1()
+    }
+
+    pub fn samples(&self) -> &ListWithCompilerOutput<data::Sample, SampleOutput> {
+        self.instruments_and_samples.list2()
+    }
 }
 
 pub struct SoundEffectsData {
@@ -196,8 +214,9 @@ impl Project {
         let (sfx_eo, sfx_eo_renamed) = deduplicate_names(c.sound_effects);
         let (songs, songs_renamed) = deduplicate_names(c.songs);
         let (instruments, instruments_renamed) = deduplicate_names(c.instruments);
+        let (samples, samples_renamed) = deduplicate_names(c.samples);
 
-        let total_renamed = sfx_eo_renamed + songs_renamed + instruments_renamed;
+        let total_renamed = sfx_eo_renamed + songs_renamed + instruments_renamed + samples_renamed;
         if total_renamed > 0 {
             dialog::message_title("Duplicate names found");
             dialog::alert_default(&format!("{} items have been renamed", total_renamed));
@@ -210,9 +229,10 @@ impl Project {
 
             sfx_export_orders: ListWithSelection::new(sfx_eo, driver_constants::MAX_SOUND_EFFECTS),
             project_songs: ListWithSelection::new(songs, driver_constants::MAX_N_SONGS),
-            instruments: ListWithCompilerOutput::new(
+            instruments_and_samples: ListPairWithCompilerOutputs::new(
                 instruments,
-                driver_constants::MAX_INSTRUMENTS,
+                samples,
+                driver_constants::MAX_INSTRUMENTS_AND_SAMPLES,
             ),
         };
 
@@ -241,7 +261,7 @@ impl Project {
                 sender.clone(),
             ),
 
-            samples_tab: SamplesTab::new(&data.instruments, sender.clone()),
+            samples_tab: SamplesTab::new(data.instruments(), data.samples(), sender.clone()),
             sound_effects_tab: SoundEffectsTab::new(sender.clone()),
             song_tabs: HashMap::new(),
 
@@ -302,12 +322,27 @@ impl Project {
                 }
             }
             GuiMessage::Instrument(m) => {
-                let (a, c) = self.data.instruments.process(m, &mut self.samples_tab);
+                let (a, c) = self
+                    .data
+                    .instruments_and_samples
+                    .process1(m, &mut self.samples_tab);
 
                 self.mark_project_file_unsaved(a);
 
                 if let Some(c) = c {
                     let _ = self.compiler_sender.send(ToCompiler::Instrument(c));
+                }
+            }
+            GuiMessage::Sample(m) => {
+                let (a, c) = self
+                    .data
+                    .instruments_and_samples
+                    .process2(m, &mut self.samples_tab);
+
+                self.mark_project_file_unsaved(a);
+
+                if let Some(c) = c {
+                    let _ = self.compiler_sender.send(ToCompiler::Sample(c));
                 }
             }
             GuiMessage::EditSoundEffectList(m) => {
@@ -349,6 +384,11 @@ impl Project {
             }
             GuiMessage::PlaySoundEffect(id) => {
                 let _ = self.compiler_sender.send(ToCompiler::PlaySoundEffect(id));
+            }
+            GuiMessage::PlayInstrument(id, args) => {
+                let _ = self
+                    .compiler_sender
+                    .send(ToCompiler::PlayInstrument(id, args));
             }
             GuiMessage::PlaySample(id, args) => {
                 let _ = self.compiler_sender.send(ToCompiler::PlaySample(id, args));
@@ -450,6 +490,9 @@ impl Project {
                     index,
                 );
             }
+            GuiMessage::OpenSampleSampleDialog(index) => {
+                open_sample_sample_dialog(&self.sender, &self.compiler_sender, &self.data, index);
+            }
 
             GuiMessage::SetProjectSongName(index, name) => {
                 if let Some(s) = self.data.project_songs.list().get(index) {
@@ -492,13 +535,27 @@ impl Project {
             }
 
             CompilerOutput::Instrument(id, co) => {
-                self.data
-                    .instruments
-                    .set_compiler_output(id, co, &mut self.samples_tab);
+                self.data.instruments_and_samples.set_compiler_output1(
+                    id,
+                    co,
+                    &mut self.samples_tab,
+                );
 
                 self.tab_manager.set_tab_label_color(
-                    &mut self.sound_effects_tab,
-                    self.data.instruments.all_valid(),
+                    &mut self.samples_tab,
+                    self.data.instruments_and_samples.all_valid(),
+                );
+            }
+            CompilerOutput::Sample(id, co) => {
+                self.data.instruments_and_samples.set_compiler_output2(
+                    id,
+                    co,
+                    &mut self.samples_tab,
+                );
+
+                self.tab_manager.set_tab_label_color(
+                    &mut self.samples_tab,
+                    self.data.instruments_and_samples.all_valid(),
                 );
             }
             CompilerOutput::SoundEffect(id, co) => {
@@ -568,7 +625,10 @@ impl Project {
             self.data.sfx_export_orders.replace_all_message(),
         ));
         let _ = self.compiler_sender.send(ToCompiler::Instrument(
-            self.data.instruments.replace_all_message(),
+            self.data.instruments().replace_all_message(),
+        ));
+        let _ = self.compiler_sender.send(ToCompiler::Sample(
+            self.data.samples().replace_all_message(),
         ));
 
         // Combine samples after they have been compiled
@@ -845,7 +905,8 @@ impl ProjectData {
                 version: CARGO_PKG_VERSION.to_owned(),
             },
 
-            instruments: self.instruments.list().item_iter().cloned().collect(),
+            instruments: self.instruments().list().item_iter().cloned().collect(),
+            samples: self.samples().list().item_iter().cloned().collect(),
             songs: self.project_songs.list().item_iter().cloned().collect(),
             sound_effects: self.sfx_export_orders.list().item_iter().cloned().collect(),
 

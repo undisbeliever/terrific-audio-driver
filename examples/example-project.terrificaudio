@@ -79,6 +79,29 @@
       "comment": "Sample by Doug Fraker. public domain, source: https://github.com/nesdoug/SNES_13/blob/master/MUSIC/More_Samples"
     }
   ],
+  "samples": [
+    {
+      "name": "conga",
+      "source": "samples/nesdoug/Conga.brr",
+      "loop": "none",
+      "sample_rates": [
+        16000,
+        18000
+      ],
+      "envelope": "gain 127",
+      "comment": "Sample by Doug Fraker. public domain, source: https://github.com/nesdoug/SNES_13/blob/master/MUSIC/More_Samples"
+    },
+    {
+      "name": "cowbell",
+      "source": "samples/nesdoug/Cowbell.brr",
+      "loop": "none",
+      "sample_rates": [
+        32000
+      ],
+      "envelope": "gain 127",
+      "comment": "Sample by Doug Fraker. public domain, source: https://github.com/nesdoug/SNES_13/blob/master/MUSIC/More_Samples"
+    }
+  ],
   "sound_effects": [
     "menu_cursor",
     "menu_select",
@@ -123,6 +146,10 @@
     {
       "name": "test_portamento",
       "source": "mml-tests/test-portamento.mml"
+    },
+    {
+      "name": "test_samples",
+      "source": "mml-tests/test-samples.mml"
     },
     {
       "name": "test_song_loop",

@@ -127,6 +127,7 @@ pub fn process_list_action_map<T, U>(
 }
 
 /// A `Vec` that can only be resized or reordered by a `ListAction<T>`
+#[derive(Default)]
 pub struct LaVec<T>(Vec<T>);
 
 impl<T> LaVec<T> {
@@ -753,6 +754,137 @@ where
         editor.clear_selected();
         editor.set_selected_compiler_output(&None);
         editor.list_buttons().selected_clear(self.list.can_add());
+    }
+}
+
+pub struct ListPairWithCompilerOutputs<T1, O1, T2, O2>
+where
+    T1: Clone + PartialEq<T1> + NameDeduplicator,
+    O1: CompilerOutput,
+    T2: Clone + PartialEq<T2> + NameDeduplicator,
+    O2: CompilerOutput,
+{
+    list1: ListWithCompilerOutput<T1, O1>,
+    list2: ListWithCompilerOutput<T2, O2>,
+}
+
+impl<T1, O1, T2, O2> ListPairWithCompilerOutputs<T1, O1, T2, O2>
+where
+    T1: Clone + PartialEq<T1> + NameDeduplicator + std::fmt::Debug,
+    O1: CompilerOutput,
+    T2: Clone + PartialEq<T2> + NameDeduplicator + std::fmt::Debug,
+    O2: CompilerOutput,
+{
+    pub fn new(
+        list1: DeduplicatedNameVec<T1>,
+        list2: DeduplicatedNameVec<T2>,
+        max_size: usize,
+    ) -> Self {
+        let list1 = ListWithCompilerOutput::new(list1, max_size);
+        let list2 = ListWithCompilerOutput::new(list2, max_size);
+
+        Self { list1, list2 }
+    }
+
+    pub fn list1(&self) -> &ListWithCompilerOutput<T1, O1> {
+        &self.list1
+    }
+    pub fn list2(&self) -> &ListWithCompilerOutput<T2, O2> {
+        &self.list2
+    }
+
+    fn can_do_message<T>(&self, m: &ListMessage<T>) -> bool {
+        match m {
+            ListMessage::Add(..) => self.can_add(1),
+            ListMessage::AddWithItemId(..) => self.can_add(1),
+            ListMessage::AddMultiple(vec) => self.can_add(vec.len()),
+            ListMessage::CloneSelected => self.can_add(1),
+
+            ListMessage::ClearSelection
+            | ListMessage::ItemSelected(_)
+            | ListMessage::ItemEdited(..)
+            | ListMessage::RemoveSelected
+            | ListMessage::MoveSelectedToTop
+            | ListMessage::MoveSelectedUp
+            | ListMessage::MoveSelectedDown
+            | ListMessage::MoveSelectedToBottom => true,
+        }
+    }
+
+    #[must_use]
+    pub fn process1<Editor>(
+        &mut self,
+        m: ListMessage<T1>,
+        editor: &mut Editor,
+    ) -> (ListAction<T1>, Option<ItemChanged<T1>>)
+    where
+        Editor: ListEditor<T1> + CompilerOutputGui<O1> + ListEditor<T2> + CompilerOutputGui<O2>,
+    {
+        if !self.can_do_message(&m) {
+            return (ListAction::None, None);
+        }
+
+        // ::TODO deduplicate name::
+
+        if !matches!(m, ListMessage::ClearSelection) {
+            self.list2.clear_selection(editor);
+        }
+        self.list1.process(m, editor)
+    }
+
+    #[must_use]
+    pub fn process2<Editor>(
+        &mut self,
+        m: ListMessage<T2>,
+        editor: &mut Editor,
+    ) -> (ListAction<T2>, Option<ItemChanged<T2>>)
+    where
+        Editor: ListEditor<T1> + CompilerOutputGui<O1> + ListEditor<T2> + CompilerOutputGui<O2>,
+    {
+        if !self.can_do_message(&m) {
+            return (ListAction::None, None);
+        }
+
+        // ::TODO deduplicate name::
+
+        if !matches!(m, ListMessage::ClearSelection) {
+            self.list1.clear_selection(editor);
+        }
+        self.list2.process(m, editor)
+    }
+
+    pub fn set_compiler_output1(
+        &mut self,
+        id: ItemId,
+        co: O1,
+        editor: &mut impl CompilerOutputGui<O1>,
+    ) {
+        self.list1.set_compiler_output(id, co, editor)
+    }
+
+    pub fn set_compiler_output2(
+        &mut self,
+        id: ItemId,
+        co: O2,
+        editor: &mut impl CompilerOutputGui<O2>,
+    ) {
+        self.list2.set_compiler_output(id, co, editor)
+    }
+
+    pub fn all_valid(&self) -> bool {
+        self.list1.all_valid() && self.list2.all_valid()
+    }
+
+    pub fn len(&self) -> usize {
+        self.list1.list().len() + self.list2.list().len()
+    }
+
+    pub fn max_size(&self) -> usize {
+        self.list1.list().max_size
+    }
+
+    fn can_add(&self, to_add: usize) -> bool {
+        self.len() + to_add <= self.max_size()
     }
 }
 

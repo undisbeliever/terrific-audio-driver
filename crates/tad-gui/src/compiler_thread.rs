@@ -21,12 +21,13 @@ use compiler::data;
 use compiler::data::{load_text_file_with_limit, TextFile};
 use compiler::driver_constants::COMMON_DATA_BYTES_PER_SOUND_EFFECT;
 use compiler::envelope::Envelope;
-use compiler::errors::{self, ExportSpcFileError, SongTooLargeError};
+use compiler::errors::{self, ExportSpcFileError, ProjectFileErrors, SongTooLargeError};
 use compiler::notes::Note;
 use compiler::path::{ParentPathBuf, SourcePathBuf};
 use compiler::pitch_table::PitchTable;
 use compiler::samples::{
-    combine_samples, create_test_sample_data, load_sample_for_instrument, Sample, SampleFileCache,
+    combine_samples, create_test_instrument_data, load_sample_for_instrument,
+    load_sample_for_sample, InstrumentSampleData, SampleFileCache, SampleSampleData,
 };
 use compiler::songs::{sound_effect_to_song, test_sample_song, SongData};
 use compiler::sound_effects::blank_compiled_sound_effects;
@@ -82,6 +83,7 @@ pub enum ToCompiler {
     ProjectSongs(ItemChanged<data::Song>),
 
     Instrument(ItemChanged<data::Instrument>),
+    Sample(ItemChanged<data::Sample>),
 
     // Merges Instruments into SampleAndInstrumentData
     // (sent when the user deselects the samples tab in the GUI)
@@ -96,6 +98,7 @@ pub enum ToCompiler {
 
     SongChanged(ItemId, String),
     CompileAndPlaySong(ItemId, String, Option<TickCounter>),
+    PlayInstrument(ItemId, PlaySampleArgs),
     PlaySample(ItemId, PlaySampleArgs),
 
     ExportSongToSpcFile(ItemId),
@@ -104,7 +107,14 @@ pub enum ToCompiler {
     RecompileInstrumentsUsingSample(SourcePathBuf),
 }
 
-pub type InstrumentOutput = Result<usize, errors::SampleError>;
+#[derive(Debug)]
+pub struct InstrumentSize(pub usize);
+
+#[derive(Debug)]
+pub struct SampleSize(pub usize);
+
+pub type InstrumentOutput = Result<InstrumentSize, errors::SampleError>;
+pub type SampleOutput = Result<SampleSize, errors::SampleError>;
 pub type SoundEffectOutput = Result<Arc<CompiledSoundEffect>, SfxError>;
 pub type SongOutput = Result<Arc<SongData>, SongError>;
 
@@ -112,7 +122,8 @@ pub type SongOutput = Result<Arc<SongData>, SongError>;
 pub enum CompilerOutput {
     Panic(String),
 
-    Instrument(ItemId, Result<usize, errors::SampleError>),
+    Instrument(ItemId, InstrumentOutput),
+    Sample(ItemId, SampleOutput),
 
     // ::TODO the prevent user from leaving the Samples tab if this error occurs::
     CombineSamples(Result<usize, CombineSamplesError>),
@@ -132,27 +143,35 @@ pub enum CompilerOutput {
 
 #[derive(Debug)]
 pub enum CombineSamplesError {
-    InstrumentErrors { n_errors: usize },
+    IndividualErrors {
+        n_instrument_errors: usize,
+        n_sample_errors: usize,
+    },
     CombineError(errors::SampleAndInstrumentDataError),
     CommonAudioData(errors::CommonAudioDataErrors),
+    UniqueNamesError(ProjectFileErrors),
 }
 
 impl std::fmt::Display for CombineSamplesError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            CombineSamplesError::InstrumentErrors { n_errors } => {
-                if *n_errors > 1 {
-                    writeln!(f, "{} instruments have errors", n_errors)
-                } else {
-                    writeln!(f, "One instrument has an error")
-                }
-            }
+            CombineSamplesError::IndividualErrors {
+                n_instrument_errors,
+                n_sample_errors,
+            } => match (*n_instrument_errors, *n_sample_errors) {
+                (1, 0) => writeln!(f, "1 instrument has an error"),
+                (0, 1) => writeln!(f, "1 sample has an error"),
+                (i, 0) => writeln!(f, "{i} instruments have errors"),
+                (0, s) => writeln!(f, "{s} samples have errors"),
+                (i, s) => writeln!(f, "{i} instruments and {s} samples have errors"),
+            },
             CombineSamplesError::CombineError(e) => {
                 writeln!(f, "{}", e.multiline_display())
             }
             CombineSamplesError::CommonAudioData(e) => {
                 writeln!(f, "{}", e.multiline_display())
             }
+            CombineSamplesError::UniqueNamesError(e) => e.multiline_display().fmt(f),
         }
     }
 }
@@ -498,10 +517,13 @@ impl Sender {
 fn create_instrument_compiler<'a>(
     sample_file_cache: &'a mut SampleFileCache,
     sender: &'a Sender,
-) -> impl (FnMut(ItemId, &data::Instrument) -> Option<Sample>) + 'a {
+) -> impl (FnMut(ItemId, &data::Instrument) -> Option<InstrumentSampleData>) + 'a {
     |id, inst| match load_sample_for_instrument(inst, sample_file_cache) {
         Ok(s) => {
-            sender.send(CompilerOutput::Instrument(id, Ok(s.sample_size())));
+            sender.send(CompilerOutput::Instrument(
+                id,
+                Ok(InstrumentSize(s.sample_size())),
+            ));
             Some(s)
         }
         Err(e) => {
@@ -511,54 +533,68 @@ fn create_instrument_compiler<'a>(
     }
 }
 
+fn create_sample_compiler<'a>(
+    sample_file_cache: &'a mut SampleFileCache,
+    sender: &'a Sender,
+) -> impl (FnMut(ItemId, &data::Sample) -> Option<SampleSampleData>) + 'a {
+    |id, sample| match load_sample_for_sample(sample, sample_file_cache) {
+        Ok(s) => {
+            sender.send(CompilerOutput::Sample(id, Ok(SampleSize(s.sample_size()))));
+            Some(s)
+        }
+        Err(e) => {
+            sender.send(CompilerOutput::Sample(id, Err(e)));
+            None
+        }
+    }
+}
+
 fn combine_sample_data(
-    instruments: &CList<data::Instrument, Option<Sample>>,
-    sender: &Sender,
-) -> Option<(CommonAudioData, PitchTable)> {
-    let samples: Vec<Sample> = instruments
+    instruments: &CList<data::Instrument, Option<InstrumentSampleData>>,
+    samples: &CList<data::Sample, Option<SampleSampleData>>,
+) -> Result<(CommonAudioData, PitchTable), CombineSamplesError> {
+    let expected_instruments_len = instruments.items().len();
+    let expected_samples_len = samples.items().len();
+
+    let instruments: Vec<_> = instruments
         .output()
         .iter()
         .filter_map(|s| s.as_ref().cloned())
         .collect();
 
-    // Test all instruments are compiled
-    if samples.len() != instruments.items().len() {
-        let n_errors = instruments.items().len() - samples.len();
-        sender.send(CompilerOutput::CombineSamples(Err(
-            CombineSamplesError::InstrumentErrors { n_errors },
-        )));
-        return None;
+    let samples: Vec<_> = samples
+        .output()
+        .iter()
+        .filter_map(|s| s.as_ref().cloned())
+        .collect();
+
+    // Test all instruments and samples are compiled
+    let n_instrument_errors = expected_instruments_len - instruments.len();
+    let n_sample_errors = expected_samples_len - samples.len();
+    if n_instrument_errors + n_sample_errors > 0 {
+        return Err(CombineSamplesError::IndividualErrors {
+            n_instrument_errors,
+            n_sample_errors,
+        });
     }
 
-    let samples = match combine_samples(&samples) {
+    let samples = match combine_samples(&instruments, &samples) {
         Ok(s) => s,
         Err(e) => {
-            sender.send(CompilerOutput::CombineSamples(Err(
-                CombineSamplesError::CombineError(e),
-            )));
-            return None;
+            return Err(CombineSamplesError::CombineError(e));
         }
     };
 
     let blank_sfx = blank_compiled_sound_effects();
 
     match build_common_audio_data(&samples, &blank_sfx) {
-        Ok(common) => {
-            sender.send(CompilerOutput::CombineSamples(Ok(common.data().len())));
-
-            Some((common, samples.take_pitch_table()))
-        }
-        Err(e) => {
-            sender.send(CompilerOutput::CombineSamples(Err(
-                CombineSamplesError::CommonAudioData(e),
-            )));
-            None
-        }
+        Ok(common) => Ok((common, samples.take_pitch_table())),
+        Err(e) => Err(CombineSamplesError::CommonAudioData(e)),
     }
 }
 
-fn build_play_sample_data(
-    instruments: &CList<data::Instrument, Option<Sample>>,
+fn build_play_instrument_data(
+    instruments: &CList<data::Instrument, Option<InstrumentSampleData>>,
     id: ItemId,
     args: PlaySampleArgs,
 ) -> Option<(CommonAudioData, Arc<SongData>)> {
@@ -567,11 +603,34 @@ fn build_play_sample_data(
         _ => return None,
     };
 
-    let (sample_data, max_octave) = create_test_sample_data(sample).ok()?;
+    let (sample_data, max_octave) = create_test_instrument_data(sample)?;
 
     if args.note > Note::last_note_for_octave(max_octave) {
         return None;
     }
+
+    let blank_sfx = blank_compiled_sound_effects();
+    let common_audio_data = build_common_audio_data(&sample_data, &blank_sfx).ok()?;
+
+    let song_data = match test_sample_song(0, args.note, args.note_length, args.envelope) {
+        Ok(sd) => Arc::new(sd),
+        Err(_) => return None,
+    };
+
+    Some((common_audio_data, song_data))
+}
+
+fn build_play_sample_data(
+    samples: &CList<data::Sample, Option<SampleSampleData>>,
+    id: ItemId,
+    args: PlaySampleArgs,
+) -> Option<(CommonAudioData, Arc<SongData>)> {
+    let sample = match samples.get_output_for_id(&id) {
+        Some(Some(s)) => s.clone(),
+        _ => return None,
+    };
+
+    let sample_data = combine_samples(&[], &[sample]).ok()?;
 
     let blank_sfx = blank_compiled_sound_effects();
     let common_audio_data = build_common_audio_data(&sample_data, &blank_sfx).ok()?;
@@ -596,7 +655,7 @@ fn create_sfx_compiler<'a>(
                 return None;
             }
         };
-        match compile_sound_effect_input(sfx, &dep.instruments, &dep.pitch_table) {
+        match compile_sound_effect_input(sfx, &dep.inst_map, &dep.pitch_table) {
             Ok(sfx) => {
                 let sfx = Arc::from(sfx);
                 sender.send(CompilerOutput::SoundEffect(id, Ok(sfx.clone())));
@@ -648,7 +707,7 @@ fn calc_sfx_data_size(
 }
 
 struct SongDependencies {
-    instruments: data::UniqueNamesList<data::Instrument>,
+    inst_map: data::UniqueNamesList<data::InstrumentOrSample>,
     pitch_table: PitchTable,
     common_data_no_sfx_size: usize,
     sfx_data_size: usize,
@@ -660,21 +719,28 @@ impl SongDependencies {
     }
 }
 
-fn create_song_dependencies(
-    instruments: &CList<data::Instrument, Option<Sample>>,
-    pitch_table: PitchTable,
-    common_audio_data_no_sfx: &CommonAudioData,
+fn build_common_data_no_sfx_and_song_dependencies(
+    instruments: &CList<data::Instrument, Option<InstrumentSampleData>>,
+    samples: &CList<data::Sample, Option<SampleSampleData>>,
     sfx_export_order: &IList<data::Name>,
     sound_effects: &CList<SoundEffectInput, Option<Arc<CompiledSoundEffect>>>,
-) -> Option<SongDependencies> {
-    match data::validate_instrument_names(instruments.items().to_vec()) {
-        Ok(instruments) => Some(SongDependencies {
-            instruments,
-            pitch_table,
-            common_data_no_sfx_size: common_audio_data_no_sfx.data().len(),
-            sfx_data_size: calc_sfx_data_size(sfx_export_order, sound_effects),
-        }),
-        Err(_) => None,
+) -> Result<(CommonAudioData, SongDependencies), CombineSamplesError> {
+    let (common_data, pitch_table) = combine_sample_data(instruments, samples)?;
+
+    match data::validate_instrument_and_sample_names(
+        instruments.items().iter(),
+        samples.items().iter(),
+    ) {
+        Ok(instruments) => {
+            let sd = SongDependencies {
+                inst_map: instruments,
+                pitch_table,
+                common_data_no_sfx_size: common_data.data().len(),
+                sfx_data_size: calc_sfx_data_size(sfx_export_order, sound_effects),
+            };
+            Ok((common_data, sd))
+        }
+        Err(e) => Err(CombineSamplesError::UniqueNamesError(e)),
     }
 }
 
@@ -720,14 +786,13 @@ impl SongCompiler {
         };
 
         let name = name.cloned();
-        let song_data =
-            match compiler::mml::compile_mml(f, name, &dep.instruments, &dep.pitch_table) {
-                Ok(sd) => Arc::from(sd),
-                Err(e) => {
-                    sender.send(CompilerOutput::Song(id, Err(SongError::Song(e))));
-                    return None;
-                }
-            };
+        let song_data = match compiler::mml::compile_mml(f, name, &dep.inst_map, &dep.pitch_table) {
+            Ok(sd) => Arc::from(sd),
+            Err(e) => {
+                sender.send(CompilerOutput::Song(id, Err(SongError::Song(e))));
+                return None;
+            }
+        };
 
         match compiler::songs::validate_song_size(&song_data, dep.common_data_size()) {
             Ok(()) => {
@@ -951,6 +1016,7 @@ fn bg_thread(
     let mut sfx_export_order = IList::new();
     let mut pf_songs = IList::new();
     let mut instruments = CList::new();
+    let mut samples = CList::new();
     let mut sound_effects = CList::new();
     let mut songs = SongCompiler::new(parent_path.clone());
 
@@ -975,31 +1041,44 @@ fn bg_thread(
 
                 song_dependencies = None;
             }
+            ToCompiler::Sample(m) => {
+                let c = create_sample_compiler(&mut sample_file_cache, &sender);
+                samples.process_message(m, c);
+
+                song_dependencies = None;
+            }
             ToCompiler::RecompileInstrumentsUsingSample(source_path) => {
                 let c = create_instrument_compiler(&mut sample_file_cache, &sender);
                 instruments.recompile_all_if(c, |inst| inst.source == source_path);
+
+                let c = create_sample_compiler(&mut sample_file_cache, &sender);
+                samples.recompile_all_if(c, |inst| inst.source == source_path);
 
                 song_dependencies = None;
             }
 
             ToCompiler::FinishedEditingSamples => {
-                if instruments.is_changed() {
+                if instruments.is_changed() || samples.is_changed() {
                     instruments.clear_changed_flag();
+                    samples.clear_changed_flag();
 
-                    match combine_sample_data(&instruments, &sender) {
-                        Some((common, pt)) => {
-                            song_dependencies = create_song_dependencies(
-                                &instruments,
-                                pt,
-                                &common,
-                                &sfx_export_order,
-                                &sound_effects,
-                            );
-                            common_audio_data_no_sfx = Some(common);
+                    match build_common_data_no_sfx_and_song_dependencies(
+                        &instruments,
+                        &samples,
+                        &sfx_export_order,
+                        &sound_effects,
+                    ) {
+                        Ok((cd, sd)) => {
+                            let data_size = cd.data().len();
+                            sender.send(CompilerOutput::CombineSamples(Ok(data_size)));
+
+                            common_audio_data_no_sfx = Some(cd);
+                            song_dependencies = Some(sd);
                         }
-                        None => {
-                            song_dependencies = None;
+                        Err(e) => {
+                            sender.send(CompilerOutput::CombineSamples(Err(e)));
                             common_audio_data_no_sfx = None;
+                            song_dependencies = None;
                         }
                     }
 
@@ -1063,8 +1142,13 @@ fn bg_thread(
                     sender.send_audio(AudioMessage::PlaySong(id, song.clone(), ticks_to_skip));
                 }
             }
+            ToCompiler::PlayInstrument(id, args) => {
+                if let Some((c_data, s_data)) = build_play_instrument_data(&instruments, id, args) {
+                    sender.send_audio(AudioMessage::PlaySample(id, c_data, s_data));
+                }
+            }
             ToCompiler::PlaySample(id, args) => {
-                if let Some((c_data, s_data)) = build_play_sample_data(&instruments, id, args) {
+                if let Some((c_data, s_data)) = build_play_sample_data(&samples, id, args) {
                     sender.send_audio(AudioMessage::PlaySample(id, c_data, s_data));
                 }
             }

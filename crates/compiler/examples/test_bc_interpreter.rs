@@ -327,7 +327,7 @@ fn main() {
         let song_data = compile_mml(
             &mml_file,
             Some(song.name.clone()),
-            &project.instruments,
+            &project.instruments_and_samples,
             samples.pitch_table(),
         )
         .unwrap();

@@ -104,7 +104,7 @@ impl MmlSoundEffect {
 pub fn compile_mml(
     mml_file: &TextFile,
     song_name: Option<data::Name>,
-    inst_map: &UniqueNamesList<data::Instrument>,
+    inst_map: &UniqueNamesList<data::InstrumentOrSample>,
     pitch_table: &PitchTable,
 ) -> Result<SongData, SongError> {
     let mut errors = MmlCompileErrors {
@@ -214,7 +214,7 @@ pub fn compile_mml(
 
 pub fn compile_sound_effect(
     sfx: &str,
-    inst_map: &UniqueNamesList<data::Instrument>,
+    inst_map: &UniqueNamesList<data::InstrumentOrSample>,
     pitch_table: &PitchTable,
 ) -> Result<MmlSoundEffect, SoundEffectErrorList> {
     let lines = match split_mml_sound_effect_lines(sfx) {

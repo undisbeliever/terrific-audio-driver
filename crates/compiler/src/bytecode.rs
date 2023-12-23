@@ -6,7 +6,7 @@
 
 #![allow(clippy::assertions_on_constants)]
 
-use crate::driver_constants::MAX_INSTRUMENTS;
+use crate::driver_constants::MAX_INSTRUMENTS_AND_SAMPLES;
 use crate::envelope::{Adsr, Gain};
 use crate::errors::{BytecodeError, ValueError};
 use crate::notes::{Note, LAST_NOTE_ID};
@@ -95,7 +95,7 @@ u8_value_newtype!(
     InstrumentIdOutOfRange,
     NoInstrumentId,
     0,
-    (MAX_INSTRUMENTS - 1) as u8
+    (MAX_INSTRUMENTS_AND_SAMPLES - 1) as u8
 );
 
 // Added Copy trait to Subroutine to satisfy the borrow checker in `BytecodeAssembler`.

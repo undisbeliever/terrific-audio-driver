@@ -7,7 +7,8 @@
 use crate::bytecode::{BcTerminator, BytecodeContext};
 use crate::bytecode_assembler::BytecodeAssembler;
 use crate::data::{
-    load_text_file_with_limit, Instrument, Name, TextFile, UniqueNamesList, UniqueNamesProjectFile,
+    load_text_file_with_limit, InstrumentOrSample, Name, TextFile, UniqueNamesList,
+    UniqueNamesProjectFile,
 };
 use crate::driver_constants::SFX_TICK_CLOCK;
 use crate::errors::{
@@ -79,14 +80,14 @@ fn compile_mml_sound_effect(
     sfx: &str,
     name_string: &str,
     starting_line_number: u32,
-    instruments: &UniqueNamesList<Instrument>,
+    inst_map: &UniqueNamesList<InstrumentOrSample>,
     pitch_table: &PitchTable,
     name_valid: bool,
     duplicate_name: bool,
 ) -> Result<CompiledSoundEffect, SoundEffectError> {
     let invalid_name = !name_valid;
 
-    match mml::compile_sound_effect(sfx, instruments, pitch_table) {
+    match mml::compile_sound_effect(sfx, inst_map, pitch_table) {
         Ok(o) => {
             if !invalid_name && !duplicate_name {
                 Ok(CompiledSoundEffect {
@@ -118,7 +119,7 @@ fn compile_bytecode_sound_effect(
     sfx: &str,
     name_string: &str,
     starting_line_number: u32,
-    instruments: &UniqueNamesList<Instrument>,
+    instruments: &UniqueNamesList<InstrumentOrSample>,
     name_valid: bool,
     duplicate_name: bool,
 ) -> Result<CompiledSoundEffect, SoundEffectError> {
@@ -179,7 +180,7 @@ fn compile_bytecode_sound_effect(
 
 pub fn compile_sound_effects_file(
     sfx_file: &SoundEffectsFile,
-    instruments: &UniqueNamesList<Instrument>,
+    inst_map: &UniqueNamesList<InstrumentOrSample>,
     pitch_table: &PitchTable,
 ) -> Result<Vec<CompiledSoundEffect>, SoundEffectsFileError> {
     let mut sound_effects = Vec::with_capacity(sfx_file.sound_effects.len());
@@ -201,7 +202,7 @@ pub fn compile_sound_effects_file(
                 text,
                 &sfx.name,
                 sfx.line_no + 1,
-                instruments,
+                inst_map,
                 name_valid,
                 duplicate_name,
             ),
@@ -210,7 +211,7 @@ pub fn compile_sound_effects_file(
                 text,
                 &sfx.name,
                 sfx.line_no + 1,
-                instruments,
+                inst_map,
                 pitch_table,
                 name_valid,
                 duplicate_name,
@@ -323,7 +324,7 @@ pub fn convert_sfx_inputs_lossy(sound_effects: Vec<SoundEffectFileSfx>) -> Vec<S
 
 pub fn compile_sound_effect_input(
     input: &SoundEffectInput,
-    instruments: &UniqueNamesList<Instrument>,
+    inst_map: &UniqueNamesList<InstrumentOrSample>,
     pitch_table: &PitchTable,
 ) -> Result<CompiledSoundEffect, SoundEffectError> {
     match &input.sfx {
@@ -332,7 +333,7 @@ pub fn compile_sound_effect_input(
             text,
             input.name.as_str(),
             1,
-            instruments,
+            inst_map,
             true,
             false,
         ),
@@ -341,7 +342,7 @@ pub fn compile_sound_effect_input(
             text,
             input.name.as_str(),
             1,
-            instruments,
+            inst_map,
             pitch_table,
             true,
             false,

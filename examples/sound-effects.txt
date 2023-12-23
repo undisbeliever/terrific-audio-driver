@@ -55,6 +55,20 @@
     portamento c3 no_keyoff -30 8
     portamento g3 keyoff +20 20
 
+=== play_samples_bytecode ===
+
+    set_volume 255
+
+    start_loop 4
+        set_instrument conga
+        play_note 0, 30
+        play_note 1, 30
+
+        set_instrument cowbell
+        play_note 0, 30
+        rest         30
+    end_loop
+
 === spawn_item ===
 MML
 @1 triangle adsr 10 6 3 12
