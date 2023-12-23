@@ -1080,6 +1080,9 @@ fn parse_play_sample(pos: FilePos, p: &mut Parser) -> MmlCommand {
 }
 
 fn parse_play_midi_note_number(pos: FilePos, p: &mut Parser) -> MmlCommand {
+    let length = p.default_length();
+    p.increment_tick_counter(length);
+
     let note = match parse_unsigned_newtype::<MidiNote>(pos, p) {
         Some(n) => match n.try_into() {
             Ok(n) => Some(n),
@@ -1093,18 +1096,13 @@ fn parse_play_midi_note_number(pos: FilePos, p: &mut Parser) -> MmlCommand {
     };
 
     match note {
-        Some(note) => {
-            let length = parse_tracked_length(p);
-            play_note(note, length, p)
-        }
+        Some(note) => play_note(note, length, p),
         None => {
             // Output a rest (so tick-counter is correct)
-            let length = parse_tracked_length(p);
             let (tie_length, _) = parse_ties_and_slur(p);
-            let length = length + tie_length;
             MmlCommand::Rest {
-                ticks_until_keyoff: length,
-                ticks_after_keyoff: TickCounter::default(),
+                ticks_until_keyoff: length + tie_length,
+                ticks_after_keyoff: TickCounter::new(0),
             }
         }
     }

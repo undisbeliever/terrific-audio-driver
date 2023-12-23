@@ -188,7 +188,7 @@ Optional parameters are enclosed in `[]`.
  * `s[number][,length]` - Play sample
     * If this command is used with a sample, `number` is the sample-rate list index (default is 0).
     * If this command is used with an instrument, `number` is the note-id.
- * `n<number>` - Play the integer note id at the default length
+ * `n<number>` - Play the integer MIDI note at the default length
  * `^[length]` - Tie, extends the duration of the previous note or rest
  * `&` - Slur.  Used to tie two notes together without a key-off event
  * `&<length>` - Alternative Tie syntax

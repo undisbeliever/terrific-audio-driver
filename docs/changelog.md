@@ -8,6 +8,7 @@ Version 0.0.4
  * Started implementing virtual channels.
  * Added Samples
  * Added `s` play sample MML command
+ * Fixed `n` play MIDI note MML command erroneously parsing note length
 
 
 Version 0.0.3
