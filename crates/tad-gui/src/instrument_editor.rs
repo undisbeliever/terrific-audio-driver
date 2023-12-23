@@ -5,6 +5,7 @@
 // SPDX-License-Identifier: MIT
 
 use crate::compiler_thread::{InstrumentOutput, ItemId, PlaySampleArgs};
+use crate::envelope_widget::EnvelopeWidget;
 use crate::helpers::*;
 use crate::list_editor::{ListAction, ListMessage, TableCompilerOutput, TableMapping};
 use crate::tables::{RowWithStatus, SimpleRow};
@@ -15,7 +16,7 @@ use crate::samples_tab::{
 };
 
 use compiler::data::{self, Instrument, LoopSetting};
-use compiler::envelope::{Adsr, Envelope, Gain};
+use compiler::envelope::Envelope;
 use compiler::errors::ValueError;
 use compiler::notes::{Note, Octave, PitchChar, STARTING_OCTAVE};
 use compiler::path::SourcePathBuf;
@@ -24,7 +25,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use fltk::app;
-use fltk::button::{Button, RadioRoundButton};
+use fltk::button::Button;
 use fltk::enums::{Align, Color, Event};
 use fltk::group::{Flex, Group};
 use fltk::input::{FloatInput, Input, IntInput};
@@ -514,17 +515,7 @@ pub struct TestSampleWidget {
 
     octave: Spinner,
     note_length: Spinner,
-
-    default_envelope: RadioRoundButton,
-    adsr_envelope: RadioRoundButton,
-    gain_envelope: RadioRoundButton,
-
-    adsr_a: Spinner,
-    adsr_d: Spinner,
-    adsr_sl: Spinner,
-    adsr_sr: Spinner,
-
-    gain: Spinner,
+    envelope: EnvelopeWidget,
 }
 
 impl TestSampleWidget {
@@ -595,11 +586,6 @@ impl TestSampleWidget {
             (x, y, w, h)
         };
 
-        let radio = |row, n_cols, col, label: &'static str| {
-            let (x, y, w, h) = pos(row, n_cols, col);
-            RadioRoundButton::new(x, y, w, h, Some(label))
-        };
-
         let spinner =
             |row, n_cols, col, label: &'static str, tooltip: &str, min: u8, max: u8, value: u8| {
                 let (x, y, w, h) = pos(row, n_cols, col);
@@ -618,17 +604,7 @@ impl TestSampleWidget {
         let mut note_length = spinner(1, 2, 1, "Note Length", "", 2, 255, u8::MAX);
         note_length.set_maximum(1000.0);
 
-        let default_envelope = radio(3, 3, 0, "Default");
-        let adsr_envelope = radio(3, 3, 1, "ADSR");
-        let gain_envelope = radio(3, 3, 2, "GAIN");
-
-        let adsr_a = spinner(5, 4, 0, "A", "Attack", 0, Adsr::ATTACK_MAX, 12);
-        let adsr_d = spinner(5, 4, 1, "D", "Decay", 0, Adsr::DECAY_MAX, 2);
-        #[rustfmt::skip]
-        let adsr_sl = spinner(5, 4, 2, "SL", "Sustain Level", 0, Adsr::SUSTAIN_LEVEL_MAX, 2);
-        let adsr_sr = spinner(5, 4, 3, "SR", "Sustain Rate", 0, Adsr::SUSTAIN_RATE_MAX, 16);
-
-        let gain = spinner(5, 2, 0, "GAIN", "", 0, u8::MAX, 127);
+        let envelope = EnvelopeWidget::new(options_x, line_height * 3, options_width);
 
         options_group.end();
 
@@ -641,38 +617,13 @@ impl TestSampleWidget {
 
             octave,
             note_length,
-
-            default_envelope,
-            adsr_envelope,
-            gain_envelope,
-
-            adsr_a,
-            adsr_d,
-            adsr_sl,
-            adsr_sr,
-
-            gain,
+            envelope,
         }));
 
         {
             let mut widget = out.borrow_mut();
 
-            let set_envelope_callback = |w: &mut RadioRoundButton| {
-                w.set_callback({
-                    let state = out.clone();
-                    move |_w| {
-                        if let Ok(mut s) = state.try_borrow_mut() {
-                            s.on_envelope_changed();
-                        }
-                    }
-                });
-            };
-            set_envelope_callback(&mut widget.default_envelope);
-            set_envelope_callback(&mut widget.adsr_envelope);
-            set_envelope_callback(&mut widget.gain_envelope);
-
             widget.clear_selected();
-            widget.on_envelope_changed();
         }
 
         for (i, button) in key_buttons.iter_mut().enumerate() {
@@ -709,51 +660,9 @@ impl TestSampleWidget {
         self.group.set_active(active && self.selected_id.is_some());
     }
 
-    fn hide_adsr(&mut self) {
-        self.adsr_a.hide();
-        self.adsr_d.hide();
-        self.adsr_sl.hide();
-        self.adsr_sr.hide();
-    }
-
-    fn on_envelope_changed(&mut self) {
-        if self.adsr_envelope.is_toggled() {
-            self.adsr_a.show();
-            self.adsr_d.show();
-            self.adsr_sl.show();
-            self.adsr_sr.show();
-
-            self.gain.hide();
-        } else if self.gain_envelope.is_toggled() {
-            self.hide_adsr();
-            self.gain.show();
-        } else {
-            self.default_envelope.set_value(true);
-            self.hide_adsr();
-            self.gain.hide();
-        }
-    }
-
-    fn get_envelope(&self) -> Result<Option<Envelope>, ValueError> {
-        if self.adsr_envelope.is_toggled() {
-            let adsr = Adsr::try_new(
-                self.adsr_a.value() as u8,
-                self.adsr_d.value() as u8,
-                self.adsr_sl.value() as u8,
-                self.adsr_sr.value() as u8,
-            )?;
-            Ok(Some(Envelope::Adsr(adsr)))
-        } else if self.gain_envelope.is_toggled() {
-            let gain = Gain::new(self.gain.value() as u8);
-            Ok(Some(Envelope::Gain(gain)))
-        } else {
-            Ok(None)
-        }
-    }
-
     fn on_key_pressed(&self, pitch: PitchChar) -> Result<(), ValueError> {
         if let Some(id) = self.selected_id {
-            let envelope = self.get_envelope()?;
+            let envelope = self.envelope.get_envelope()?;
             let octave = Octave::try_from(self.octave.value() as u32)?;
             let note = Note::from_pitch_and_octave(pitch, octave)?;
 

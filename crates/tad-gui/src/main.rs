@@ -9,6 +9,7 @@
 
 mod audio_thread;
 mod compiler_thread;
+mod envelope_widget;
 mod files;
 mod help;
 mod helpers;
