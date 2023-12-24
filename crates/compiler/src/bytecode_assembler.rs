@@ -411,8 +411,14 @@ fn parse_play_note_ticks(
 
 // ::TODO clamp to max on error::
 fn parse_u32(s: &str) -> Result<u32, ValueError> {
-    match s.parse() {
-        Ok(i) => Ok(i),
-        Err(_) => Err(ValueError::CannotParseUnsigned(s.to_owned())),
+    match s.bytes().next() {
+        Some(b'$') => match u32::from_str_radix(&s[1..], 16) {
+            Ok(i) => Ok(i),
+            Err(_) => Err(ValueError::CannotParseHex(s.to_owned())),
+        },
+        _ => match s.parse() {
+            Ok(i) => Ok(i),
+            Err(_) => Err(ValueError::CannotParseUnsigned(s.to_owned())),
+        },
     }
 }

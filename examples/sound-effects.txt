@@ -7,8 +7,8 @@
 === menu_select ===
     set_instrument  sawtooth
 
-    play_note       c+4  16
-    play_note       b-4  96
+    play_note       c+4  $10
+    play_note       b-4  $60
 
 === menu_incorrect ===
     set_instrument  sawtooth
