@@ -88,12 +88,20 @@ impl Adsr {
         sustain_rate: &str,
     ) -> Result<Adsr, InvalidAdsrError> {
         // All fields in Adsr require fewer then 8 bits of space.
-        // Converting u8 parsing errors to u8::MAX will always output an error for that value.
+        // Converting parsing errors to u8::MAX will always output an error for that value.
+        let parse = |s: &str| -> u8 {
+            match s.as_bytes().first() {
+                Some(b'$') => u8::from_str_radix(&s[1..], 16).unwrap_or(u8::MAX),
+                Some(_) => s.parse().unwrap_or(u8::MAX),
+                None => u8::MAX,
+            }
+        };
+
         Adsr::try_new(
-            attack.parse().unwrap_or(u8::MAX),
-            decay.parse().unwrap_or(u8::MAX),
-            sustain_level.parse().unwrap_or(u8::MAX),
-            sustain_rate.parse().unwrap_or(u8::MAX),
+            parse(attack),
+            parse(decay),
+            parse(sustain_level),
+            parse(sustain_rate),
         )
     }
 
@@ -172,12 +180,17 @@ impl TryFrom<&str> for Gain {
     fn try_from(s: &str) -> Result<Self, Self::Error> {
         // ::TODO figure out what the gain bits do and properly parse them::
 
-        let value = match s.parse() {
-            Ok(i) => i,
-            Err(_) => return Err(ValueError::InvalidGainString(s.to_owned())),
-        };
-
-        Ok(Gain::new(value))
+        match s.as_bytes().first() {
+            Some(b'$') => match u8::from_str_radix(&s[1..], 16) {
+                Ok(i) => Ok(Gain::new(i)),
+                Err(_) => Err(ValueError::InvalidGainString(s.to_owned())),
+            },
+            Some(_) => match s.parse() {
+                Ok(i) => Ok(Gain::new(i)),
+                Err(_) => Err(ValueError::InvalidGainString(s.to_owned())),
+            },
+            None => Err(ValueError::NoGain),
+        }
     }
 }
 

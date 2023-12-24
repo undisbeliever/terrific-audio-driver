@@ -1162,6 +1162,31 @@ A @gg G48 G48 A5,6,7,8 G30
 }
 
 #[test]
+fn test_instrument_envelope_hex() {
+    assert_mml_channel_a_matches_bytecode(
+        r##"
+@a1 dummy_instrument adsr $f $7 $7 $1f
+@a2 dummy_instrument adsr $d 5 2 $b
+@a3 dummy_instrument adsr 12 4 5 21
+
+@g1 dummy_instrument gain $2b
+@g2 dummy_instrument gain $e4
+@g3 dummy_instrument gain 42
+
+A @a1 @a2 @a3 @g1 @g2 @g3
+"##,
+        &[
+            "set_instrument_and_adsr dummy_instrument 15 7 7 31",
+            "set_adsr $d 5 2 $b",
+            "set_adsr $c $4 $5 $15",
+            "set_gain 43",
+            "set_gain $e4",
+            "set_gain $2a",
+        ],
+    );
+}
+
+#[test]
 fn test_echo() {
     assert_line_matches_bytecode("E", &["enable_echo"]);
     assert_line_matches_bytecode("E1", &["enable_echo"]);
