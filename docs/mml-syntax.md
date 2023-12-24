@@ -178,7 +178,8 @@ An MML command cannot span multiple lines.  Loops can span multiple lines.
 <br/>
 
 Required parameters are enclosed in `<>`.<br/>
-Optional parameters are enclosed in `[]`.
+Optional parameters are enclosed in `[]`.<br/>
+Numbers can be decimal, or hexadecimal when prefixed with `$` (ie, `$ff`)
 
  * `c` `d` `e` `f` `g` `a` `b` - Play note
     * `+` adds a sharp.

@@ -10,6 +10,7 @@ Version 0.0.4
  * Added `s` play sample MML command
  * Fixed `n` play MIDI note MML command erroneously parsing note length
  * Added `$` hexadecimal number parsing to ADSR and GAIN envelopes
+ * Added `$` hexadecimal numbers to the MML syntax
 
 
 Version 0.0.3

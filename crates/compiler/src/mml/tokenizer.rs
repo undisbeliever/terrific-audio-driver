@@ -249,6 +249,7 @@ impl<'a> Tokenizer<'a> {
             // This list must match `next()`.
             b'0'..=b'9' => false,
             b'a'..=b'g' => false,
+            b'$' => false,
             b'!' | b'@' | b'+' | b'-' | b'[' | b':' | b']' | b'^' | b'&' | b'C' | b's' | b'n'
             | b'l' | b'r' | b'w' | b'o' | b'>' | b'<' | b'v' | b'V' | b'p' | b'Q' | b'~' | b'A'
             | b'G' | b'E' | b't' | b'T' | b'L' | b'%' | b'.' | b',' | b'|' | b'_' | b'{' | b'}'
@@ -325,9 +326,21 @@ impl<'a> Tokenizer<'a> {
                 let num = self.scanner.read_while(|c| c.is_ascii_digit());
                 match num.parse() {
                     Ok(i) => Token::Number(i),
-                    Err(_) => Token::Error(MmlError::ValueError(ValueError::CannotParseUnsigned(
-                        num.to_owned(),
-                    ))),
+                    Err(_) => Token::Error(ValueError::CannotParseUnsigned(num.to_owned()).into()),
+                }
+            }
+            b'$' => {
+                // Skip '$'
+                self.scanner.advance_one();
+
+                let num = self.scanner.read_while(|c| c.is_ascii_hexdigit());
+                if !num.is_empty() {
+                    match u32::from_str_radix(num, 16) {
+                        Ok(i) => Token::Number(i),
+                        Err(_) => Token::Error(ValueError::CannotParseHex(num.to_owned()).into()),
+                    }
+                } else {
+                    Token::Error(ValueError::NoHexDigits.into())
                 }
             }
             b'a'..=b'g' => {

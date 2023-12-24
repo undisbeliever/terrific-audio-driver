@@ -82,6 +82,7 @@ pub struct InvalidAdsrError {
 pub enum ValueError {
     CannotParseUnsigned(String),
     CannotParseSigned(String),
+    CannotParseHex(String),
 
     InvalidName(String),
 
@@ -154,6 +155,7 @@ pub enum ValueError {
     InvalidFirFilter,
     InvalidFirFilterGain { abs_sum: i32 },
 
+    NoHexDigits,
     NoName,
     NoBool,
     NoNote,
@@ -621,6 +623,7 @@ impl Display for ValueError {
         match self {
             Self::CannotParseUnsigned(s) => write!(f, "cannot parse unsigned number: {}", s),
             Self::CannotParseSigned(s) => write!(f, "cannot parse signed number: {}", s),
+            Self::CannotParseHex(s) => write!(f, "cannot parse hexidecimal number: {}", s),
 
             Self::InvalidName(s) => write!(f, "invalid name: {}", s),
 
@@ -739,6 +742,7 @@ impl Display for ValueError {
                 abs_sum, MAX_FIR_ABS_SUM,
             ),
 
+            Self::NoHexDigits => write!(f, "no hexidecimal digits"),
             Self::NoName => write!(f, "no name"),
             Self::NoBool => write!(f, "no bool"),
             Self::NoNote => write!(f, "no note"),

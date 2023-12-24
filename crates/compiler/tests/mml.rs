@@ -1187,6 +1187,16 @@ A @a1 @a2 @a3 @g1 @g2 @g3
 }
 
 #[test]
+fn test_parse_hex() {
+    assert!(96 / 0xc == 8);
+    assert_line_matches_bytecode("c$c", &["play_note c4 8"]);
+    assert_line_matches_bytecode("c$c.", &["play_note c4 12"]);
+    assert_line_matches_bytecode("c%$ba", &["play_note c4 186"]);
+    assert_line_matches_bytecode("A $f,$7,$7,$1f", &["set_adsr 15 7 7 31"]);
+    assert_line_matches_bytecode("G $7f", &["set_gain 127"]);
+}
+
+#[test]
 fn test_echo() {
     assert_line_matches_bytecode("E", &["enable_echo"]);
     assert_line_matches_bytecode("E1", &["enable_echo"]);
