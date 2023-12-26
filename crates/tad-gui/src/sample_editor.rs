@@ -8,12 +8,11 @@ use crate::compiler_thread::{ItemId, PlaySampleArgs, SampleOutput};
 use crate::envelope_widget::EnvelopeWidget;
 use crate::helpers::*;
 use crate::list_editor::{ListAction, ListMessage, TableCompilerOutput, TableMapping};
+use crate::sample_widgets::{SampleWidgetEditor, LoopSettingWidget, SourceFileType};
 use crate::tables::{RowWithStatus, SimpleRow};
 use crate::GuiMessage;
 
-use crate::samples_tab::{
-    can_use_loop_setting, EnvelopeChoice, LoopChoice, SourceFileType, DEFAULT_ADSR, DEFAULT_GAIN,
-};
+use crate::samples_tab::{EnvelopeChoice, DEFAULT_ADSR, DEFAULT_GAIN};
 
 use compiler::data::{self, LoopSetting, Sample};
 use compiler::envelope::Envelope;
@@ -29,7 +28,7 @@ use std::rc::Rc;
 use fltk::app;
 use fltk::button::Button;
 use fltk::enums::Event;
-use fltk::input::{Input, IntInput};
+use fltk::input::Input;
 use fltk::menu::Choice;
 use fltk::output::Output;
 use fltk::prelude::*;
@@ -95,12 +94,9 @@ pub struct SampleEditor {
     selected_index: Option<usize>,
     data: Sample,
 
-    source_file_type: SourceFileType,
-
     name: Input,
     source: Output,
-    loop_choice: Choice,
-    loop_setting: IntInput,
+    loop_setting: LoopSettingWidget,
     sample_rates: Input,
     envelope_choice: Choice,
     envelope_value: Input,
@@ -116,7 +112,7 @@ impl SampleEditor {
 
         let name = form.add_input::<Input>("Name:");
         let source = form.add_two_inputs_right::<Output, Button>("Source:", 5);
-        let loop_settings = form.add_two_inputs::<Choice, IntInput>("Loop:", 25);
+        let loop_setting = LoopSettingWidget::new(&mut form);
         let sample_rates = form.add_input::<Input>("Sample Rates:");
         let envelope = form.add_two_inputs::<Choice, Input>("Envelope:", 12);
         let comment = form.add_input::<Input>("Comment:");
@@ -125,7 +121,6 @@ impl SampleEditor {
         let group = form.take_group_end();
 
         let (source, mut source_button) = source;
-        let (loop_choice, loop_setting) = loop_settings;
         let (envelope_choice, envelope_value) = envelope;
 
         let out = Rc::from(RefCell::new(Self {
@@ -133,11 +128,9 @@ impl SampleEditor {
             sender,
             selected_index: None,
             data: blank_sample(),
-            source_file_type: SourceFileType::Unknown,
             name,
             source,
             loop_setting,
-            loop_choice,
             sample_rates,
             envelope_choice,
             envelope_value,
@@ -149,7 +142,6 @@ impl SampleEditor {
         {
             let mut editor = out.borrow_mut();
 
-            editor.loop_choice.add_choice(LoopChoice::CHOICES);
             editor.envelope_choice.add_choice(EnvelopeChoice::CHOICES);
 
             editor.disable_editor();
@@ -165,15 +157,11 @@ impl SampleEditor {
             }
             add_callbacks!(name);
             add_callbacks!(source);
-            add_callbacks!(loop_setting);
             add_callbacks!(sample_rates);
             add_callbacks!(envelope_value);
             add_callbacks!(comment);
 
-            editor.loop_choice.set_callback({
-                let s = out.clone();
-                move |_widget| s.borrow_mut().loop_choice_changed()
-            });
+            editor.loop_setting.set_editor(out.clone());
 
             editor.envelope_choice.set_callback({
                 let s = out.clone();
@@ -206,12 +194,6 @@ impl SampleEditor {
         }
     }
 
-    fn on_finished_editing(&mut self) {
-        if let Some(new_data) = self.read_or_reset() {
-            self.send_edit_message(new_data);
-        }
-    }
-
     fn send_edit_message(&self, data: Sample) {
         if let Some(index) = self.selected_index {
             self.sender
@@ -235,7 +217,7 @@ impl SampleEditor {
         read_or_reset!(name);
         read_or_reset!(comment);
 
-        let loop_setting = self.read_or_reset_loop_setting();
+        let loop_setting = self.loop_setting.read_or_reset(&self.data.loop_setting);
         let envelope = self.read_or_reset_envelope();
         let sample_rates = self.read_or_reset_sample_rates();
 
@@ -249,66 +231,6 @@ impl SampleEditor {
             // must be last (after the ?'s)
             source: self.data.source.clone(),
         })
-    }
-
-    fn reset_loop_setting_widget(&mut self, choice: LoopChoice) {
-        let w = &mut self.loop_setting;
-
-        match choice {
-            LoopChoice::None => {
-                w.set_value("");
-                w.deactivate();
-            }
-
-            LoopChoice::OverrideBrrLoopPoint
-            | LoopChoice::LoopWithFilter
-            | LoopChoice::LoopResetFilter => {
-                let lp = match self.data.loop_setting {
-                    LoopSetting::OverrideBrrLoopPoint(lp) => lp,
-                    LoopSetting::LoopWithFilter(lp) => lp,
-                    LoopSetting::LoopResetFilter(lp) => lp,
-                    LoopSetting::DupeBlockHack(_) => 0,
-                    LoopSetting::None => 0,
-                };
-                w.set_value(&lp.to_string());
-                w.activate();
-            }
-
-            LoopChoice::DupeBlockHack => {
-                let bc = match self.data.loop_setting {
-                    LoopSetting::DupeBlockHack(dbh) => dbh,
-                    _ => 2,
-                };
-                w.set_value(&bc.to_string());
-                w.activate();
-            }
-        }
-    }
-
-    fn loop_choice_changed(&mut self) {
-        let choice = LoopChoice::read_widget(&self.loop_choice);
-
-        self.reset_loop_setting_widget(choice);
-
-        self.on_finished_editing();
-    }
-
-    fn read_or_reset_loop_setting(&mut self) -> Option<LoopSetting> {
-        let choice = LoopChoice::read_widget(&self.loop_choice);
-        let value = self.loop_setting.value().parse().ok();
-
-        let value = match choice {
-            LoopChoice::None => Some(LoopSetting::None),
-            LoopChoice::OverrideBrrLoopPoint => value.map(LoopSetting::OverrideBrrLoopPoint),
-            LoopChoice::LoopWithFilter => value.map(LoopSetting::LoopWithFilter),
-            LoopChoice::LoopResetFilter => value.map(LoopSetting::LoopResetFilter),
-            LoopChoice::DupeBlockHack => value.map(LoopSetting::DupeBlockHack),
-        };
-
-        if value.is_none() {
-            self.reset_loop_setting_widget(choice);
-        }
-        value
     }
 
     fn read_or_reset_sample_rates(&mut self) -> Option<Vec<u32>> {
@@ -393,10 +315,7 @@ impl SampleEditor {
 
         self.name.set_value("");
         self.source.set_value("");
-
-        self.loop_choice.set_value(-1);
-        self.loop_setting.set_value("");
-
+        self.loop_setting.clear_value();
         self.sample_rates.set_value("");
 
         self.envelope_choice.set_value(-1);
@@ -417,27 +336,9 @@ impl SampleEditor {
 
         self.source.set_value(data.source.as_str());
 
-        let (lc, lv) = match data.loop_setting {
-            LoopSetting::None => (LoopChoice::None, None),
-            LoopSetting::OverrideBrrLoopPoint(lp) => (LoopChoice::OverrideBrrLoopPoint, Some(lp)),
-            LoopSetting::LoopWithFilter(lp) => (LoopChoice::LoopWithFilter, Some(lp)),
-            LoopSetting::LoopResetFilter(lp) => (LoopChoice::LoopResetFilter, Some(lp)),
-            LoopSetting::DupeBlockHack(dbh) => (LoopChoice::DupeBlockHack, Some(dbh)),
-        };
-        self.loop_choice.set_value(lc.to_i32());
-
-        match lv {
-            Some(v) => {
-                self.loop_setting.set_value(&v.to_string());
-                self.loop_setting.activate();
-            }
-            None => {
-                self.loop_setting.set_value("");
-                self.loop_setting.deactivate();
-            }
-        }
-
-        self.update_source_file_type(&data.source);
+        self.loop_setting.set_value(&data.loop_setting);
+        self.loop_setting
+            .update_loop_choices(SourceFileType::from_source(&data.source));
 
         self.sample_rates
             .set_value(&Self::sample_rates_string(&data.sample_rates));
@@ -465,42 +366,6 @@ impl SampleEditor {
         self.group.activate();
     }
 
-    fn update_source_file_type(&mut self, source: &SourcePathBuf) {
-        let sft = SourceFileType::from_source(source);
-
-        if self.source_file_type != sft {
-            self.source_file_type = sft;
-            self.update_loop_choices();
-        }
-    }
-
-    fn update_loop_choices(&mut self) {
-        macro_rules! update_choices {
-            ($($choice:ident),*) => {
-                $(
-                    let can_use = can_use_loop_setting(LoopChoice::$choice, &self.source_file_type);
-
-                    if let Some(mut m) = self.loop_choice.at(LoopChoice::$choice.to_i32()) {
-                        if can_use {
-                            m.activate();
-                        }
-                        else {
-                            m.deactivate()
-                        }
-                    }
-                )*
-            };
-        }
-
-        update_choices!(
-            None,
-            OverrideBrrLoopPoint,
-            LoopWithFilter,
-            LoopResetFilter,
-            DupeBlockHack
-        );
-    }
-
     pub fn list_edited(&mut self, action: &ListAction<Sample>) {
         if let ListAction::Edit(index, data) = action {
             if self.selected_index == Some(*index) {
@@ -514,10 +379,24 @@ impl SampleEditor {
                 if self.data.source != data.source {
                     self.data.source = data.source.clone();
                     self.source.set_value(data.source.as_str());
-                    self.update_source_file_type(&data.source);
+                    self.loop_setting
+                        .update_loop_choices(SourceFileType::from_source(&data.source));
                 }
             }
         }
+    }
+}
+
+impl SampleWidgetEditor for SampleEditor {
+    fn on_finished_editing(&mut self) {
+        if let Some(new_data) = self.read_or_reset() {
+            self.data = new_data.clone();
+            self.send_edit_message(new_data);
+        }
+    }
+
+    fn loop_settings(&self) -> &LoopSetting {
+        &self.data.loop_setting
     }
 }
 

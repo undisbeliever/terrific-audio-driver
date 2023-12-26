@@ -21,6 +21,7 @@ mod mml_editor;
 mod monitor_timer;
 mod names;
 mod sample_editor;
+mod sample_widgets;
 mod tables;
 mod tabs;
 

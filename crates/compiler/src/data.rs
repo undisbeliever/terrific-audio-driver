@@ -164,6 +164,29 @@ pub enum LoopSetting {
     DupeBlockHack(usize),
 }
 
+impl LoopSetting {
+    pub fn samples_argument(&self) -> bool {
+        match self {
+            Self::OverrideBrrLoopPoint(_) | Self::LoopWithFilter(_) | Self::LoopResetFilter(_) => {
+                true
+            }
+
+            Self::None | Self::DupeBlockHack(_) => false,
+        }
+    }
+
+    pub fn is_dupe_block_hack(&self) -> bool {
+        match self {
+            Self::None
+            | Self::OverrideBrrLoopPoint(_)
+            | Self::LoopWithFilter(_)
+            | Self::LoopResetFilter(_) => false,
+
+            Self::DupeBlockHack(_) => true,
+        }
+    }
+}
+
 #[derive(Deserialize, Serialize, Clone, PartialEq, Debug)]
 pub struct Instrument {
     pub name: Name,

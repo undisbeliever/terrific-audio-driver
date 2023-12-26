@@ -17,8 +17,6 @@ use crate::sample_editor::{SampleEditor, SampleMapping, TestSampleWidget};
 
 use compiler::data::{self, Instrument};
 use compiler::envelope::{Adsr, Gain};
-use compiler::path::SourcePathBuf;
-use compiler::samples::{BRR_EXTENSION, WAV_EXTENSION};
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -30,40 +28,6 @@ use fltk::group::{Flex, Wizard};
 use fltk::menu::Choice;
 use fltk::prelude::*;
 use fltk::text::{TextBuffer, TextDisplay, WrapMode};
-
-#[derive(Clone, Copy)]
-pub enum LoopChoice {
-    None = 0,
-    OverrideBrrLoopPoint = 1,
-    LoopWithFilter = 2,
-    LoopResetFilter = 3,
-    DupeBlockHack = 4,
-}
-impl LoopChoice {
-    pub const CHOICES: &'static str = concat![
-        "&None",
-        "|&Override BRR Loop Point",
-        "|&Loop With Filter",
-        "|Loop &Resets Filter",
-        "|&Dupe Block Hack"
-    ];
-
-    pub fn read_widget(c: &Choice) -> Self {
-        match c.value() {
-            0 => Self::None,
-            1 => Self::OverrideBrrLoopPoint,
-            2 => Self::LoopWithFilter,
-            3 => Self::LoopResetFilter,
-            4 => Self::DupeBlockHack,
-
-            _ => Self::None,
-        }
-    }
-
-    pub fn to_i32(self) -> i32 {
-        self as i32
-    }
-}
 
 #[derive(Clone, Copy)]
 pub enum EnvelopeChoice {
@@ -83,33 +47,6 @@ impl EnvelopeChoice {
 
     pub fn to_i32(self) -> i32 {
         self as i32
-    }
-}
-
-#[derive(Debug, Eq, PartialEq)]
-pub enum SourceFileType {
-    Unknown,
-    Wav,
-    Brr,
-}
-
-impl SourceFileType {
-    pub fn from_source(source: &SourcePathBuf) -> Self {
-        match source.extension() {
-            Some(WAV_EXTENSION) => SourceFileType::Wav,
-            Some(BRR_EXTENSION) => SourceFileType::Brr,
-            _ => SourceFileType::Unknown,
-        }
-    }
-}
-
-pub const fn can_use_loop_setting(l: LoopChoice, sft: &SourceFileType) -> bool {
-    match l {
-        LoopChoice::None => !matches!(sft, SourceFileType::Unknown),
-        LoopChoice::OverrideBrrLoopPoint => matches!(sft, SourceFileType::Brr),
-        LoopChoice::LoopWithFilter => matches!(sft, SourceFileType::Wav),
-        LoopChoice::LoopResetFilter => matches!(sft, SourceFileType::Wav),
-        LoopChoice::DupeBlockHack => matches!(sft, SourceFileType::Wav),
     }
 }
 
