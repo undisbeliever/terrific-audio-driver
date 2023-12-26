@@ -4,16 +4,17 @@
 //
 // SPDX-License-Identifier: MIT
 
-use crate::helpers::{is_input_done_event, InputForm};
+use crate::helpers::{is_input_done_event, InputForm, InputHelper};
 
 use compiler::data::LoopSetting;
+use compiler::envelope::{Adsr, Envelope, Gain};
 use compiler::path::SourcePathBuf;
 use compiler::samples::{BRR_EXTENSION, WAV_EXTENSION};
 
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use fltk::input::IntInput;
+use fltk::input::{Input, IntInput};
 use fltk::menu::Choice;
 use fltk::prelude::*;
 
@@ -78,8 +79,38 @@ const fn can_use_loop_setting(l: LoopChoice, sft: &SourceFileType) -> bool {
     }
 }
 
+#[derive(Clone, Copy)]
+enum EnvelopeChoice {
+    Adsr = 0,
+    Gain = 1,
+}
+impl EnvelopeChoice {
+    pub const CHOICES: &'static str = "ADSR|GAIN";
+
+    pub fn read_widget(c: &Choice) -> Option<EnvelopeChoice> {
+        match c.value() {
+            0 => Some(EnvelopeChoice::Adsr),
+            1 => Some(EnvelopeChoice::Gain),
+            _ => None,
+        }
+    }
+
+    pub fn to_i32(self) -> i32 {
+        self as i32
+    }
+}
+
+pub const DEFAULT_ADSR: Adsr = match Adsr::try_new(12, 2, 2, 15) {
+    Ok(a) => a,
+    Err(_) => panic!("Invalid ADSR"),
+};
+pub const DEFAULT_GAIN: Gain = Gain::new(127);
+
+pub const DEFAULT_ENVELOPE: Envelope = Envelope::Adsr(DEFAULT_ADSR);
+
 pub trait SampleWidgetEditor {
     fn loop_settings(&self) -> &LoopSetting;
+
     fn on_finished_editing(&mut self);
 }
 
@@ -222,5 +253,121 @@ impl LoopSettingWidget {
 
             self.source_file_type = sft;
         }
+    }
+}
+
+struct SampleEnvelopeWidgetState {
+    prev_adsr: String,
+    prev_gain: String,
+}
+pub struct SampleEnvelopeWidget {
+    choice: Choice,
+    argument: Input,
+
+    state: Rc<RefCell<SampleEnvelopeWidgetState>>,
+}
+
+impl SampleEnvelopeWidget {
+    pub fn new(form: &mut InputForm) -> Self {
+        let (mut choice, argument) = form.add_two_inputs::<Choice, Input>("Envelope:", 12);
+
+        choice.add_choice(EnvelopeChoice::CHOICES);
+
+        Self {
+            choice,
+            argument,
+            state: Rc::new(RefCell::new(SampleEnvelopeWidgetState {
+                prev_adsr: DEFAULT_ADSR.to_gui_string(),
+                prev_gain: DEFAULT_GAIN.to_gui_string(),
+            })),
+        }
+    }
+
+    pub fn set_editor<E: SampleWidgetEditor + 'static>(&mut self, editor: Rc<RefCell<E>>) {
+        self.choice.set_callback({
+            let mut argument = self.argument.clone();
+            let state = self.state.clone();
+            let editor = editor.clone();
+            move |choice| {
+                let mut e = editor.borrow_mut();
+                Self::on_choice_changed(choice, &mut argument, &state.borrow());
+                e.on_finished_editing();
+            }
+        });
+
+        self.argument.handle({
+            move |_, ev| {
+                if is_input_done_event(ev) {
+                    editor.borrow_mut().on_finished_editing();
+                }
+                false
+            }
+        });
+    }
+
+    pub fn read_or_reset(&mut self) -> Option<Envelope> {
+        let value = self.argument.value();
+
+        match EnvelopeChoice::read_widget(&self.choice) {
+            Some(EnvelopeChoice::Adsr) => match InputHelper::parse(value.clone()) {
+                Some(adsr) => {
+                    self.state.borrow_mut().prev_adsr = value;
+                    Some(Envelope::Adsr(adsr))
+                }
+                None => {
+                    self.argument.set_value(&self.state.borrow().prev_adsr);
+                    None
+                }
+            },
+            Some(EnvelopeChoice::Gain) => match InputHelper::parse(value.clone()) {
+                Some(gain) => {
+                    self.state.borrow_mut().prev_gain = value;
+                    Some(Envelope::Gain(gain))
+                }
+                None => {
+                    self.argument.set_value(&self.state.borrow().prev_gain);
+                    None
+                }
+            },
+            None => None,
+        }
+    }
+
+    pub fn clear_value(&mut self) {
+        self.choice.set_value(-1);
+        self.argument.set_value("");
+    }
+
+    pub fn set_value(&mut self, envelope: &Envelope) {
+        match envelope {
+            Envelope::Adsr(adsr) => {
+                self.choice.set_value(EnvelopeChoice::Adsr.to_i32());
+                InputHelper::set_widget_value(&mut self.argument, adsr);
+
+                self.state.borrow_mut().prev_adsr = self.argument.value();
+            }
+            Envelope::Gain(gain) => {
+                self.choice.set_value(EnvelopeChoice::Gain.to_i32());
+                InputHelper::set_widget_value(&mut self.argument, gain);
+
+                self.state.borrow_mut().prev_gain = self.argument.value();
+            }
+        }
+    }
+
+    fn on_choice_changed(choice: &Choice, argument: &mut Input, state: &SampleEnvelopeWidgetState) {
+        let new_value = match EnvelopeChoice::read_widget(choice) {
+            Some(EnvelopeChoice::Adsr) => &state.prev_adsr,
+            Some(EnvelopeChoice::Gain) => &state.prev_adsr,
+            None => "",
+        };
+
+        argument.set_value(new_value);
+
+        // Select all
+        let _ = argument.set_position(0);
+        let _ = argument.set_mark(i32::MAX);
+
+        let _ = argument.take_focus();
     }
 }

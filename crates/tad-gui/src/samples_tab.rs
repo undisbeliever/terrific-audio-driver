@@ -16,7 +16,6 @@ use crate::instrument_editor::{InstrumentEditor, InstrumentMapping, TestInstrume
 use crate::sample_editor::{SampleEditor, SampleMapping, TestSampleWidget};
 
 use compiler::data::{self, Instrument};
-use compiler::envelope::{Adsr, Gain};
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -25,36 +24,8 @@ use fltk::app;
 use fltk::enums::Color;
 use fltk::frame::Frame;
 use fltk::group::{Flex, Wizard};
-use fltk::menu::Choice;
 use fltk::prelude::*;
 use fltk::text::{TextBuffer, TextDisplay, WrapMode};
-
-#[derive(Clone, Copy)]
-pub enum EnvelopeChoice {
-    Adsr = 0,
-    Gain = 1,
-}
-impl EnvelopeChoice {
-    pub const CHOICES: &'static str = "ADSR|GAIN";
-
-    pub fn read_widget(c: &Choice) -> Option<EnvelopeChoice> {
-        match c.value() {
-            0 => Some(EnvelopeChoice::Adsr),
-            1 => Some(EnvelopeChoice::Gain),
-            _ => None,
-        }
-    }
-
-    pub fn to_i32(self) -> i32 {
-        self as i32
-    }
-}
-
-pub const DEFAULT_ADSR: Adsr = match Adsr::try_new(12, 2, 2, 15) {
-    Ok(a) => a,
-    Err(_) => panic!("Invalid ADSR"),
-};
-pub const DEFAULT_GAIN: Gain = Gain::new(127);
 
 pub struct SamplesTab {
     group: Flex,
