@@ -86,7 +86,12 @@ Parameters
     * `<sustain_rate>`: 0-31
 
  * GAIN settings:
-    * `<gain>` - the 8 bit value to write to the GAIN register
+    * `<u8>` (no prefix) - the raw 8 bit value to write to the GAIN register
+    * `F<value>` - fixed GAIN envelope (0-128)
+    * `D<rate>` - linear decrease (0-31)
+    * `E<rate>` - exponential decrease (0-31)
+    * `I<rate>` - linear increase (0-31)
+    * `B<rate>` - bent increase (0-31)
 
  * `<loop_count>` - loop count (2 - 256)
 

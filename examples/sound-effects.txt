@@ -1,6 +1,6 @@
 === menu_cursor ===
-    set_instrument      square
-    set_volume          20
+    set_instrument_and_gain square F127
+    set_volume          25
 
     play_note           d4 8
 

@@ -180,7 +180,7 @@ impl InputHelper for Gain {
     }
 
     fn set_widget_value(w: &mut Self::Widget, value: &Self) {
-        w.set_value(&value.value().to_string())
+        w.set_value(&value.to_gui_string())
     }
 }
 

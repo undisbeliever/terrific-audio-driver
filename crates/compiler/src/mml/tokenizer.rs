@@ -7,6 +7,7 @@
 use std::collections::HashMap;
 
 use crate::bytecode::SubroutineId;
+use crate::envelope::GainMode;
 use crate::errors::{MmlError, ValueError};
 use crate::file_pos::{FilePos, LineIndexRange};
 use crate::notes::{parse_pitch_char, MmlPitch};
@@ -66,7 +67,7 @@ pub enum Token {
     ManualVibrato,
     MpVibrato,
     SetAdsr,
-    SetGain,
+    SetGain(GainMode),
     Echo,
     SetSongTempo,
     SetSongTickClock,
@@ -426,7 +427,6 @@ impl<'a> Tokenizer<'a> {
             b'Q' => one_ascii_token!(Token::Quantize),
             b'~' => one_ascii_token!(Token::ManualVibrato),
             b'A' => one_ascii_token!(Token::SetAdsr),
-            b'G' => one_ascii_token!(Token::SetGain),
             b'E' => one_ascii_token!(Token::Echo),
             b't' => one_ascii_token!(Token::SetSongTempo),
             b'T' => one_ascii_token!(Token::SetSongTickClock),
@@ -435,6 +435,16 @@ impl<'a> Tokenizer<'a> {
             b'.' => one_ascii_token!(Token::Dot),
             b',' => one_ascii_token!(Token::Comma),
             b'|' => one_ascii_token!(Token::Divider),
+
+            // Gain might use 2 chacters
+            b'G' => {
+                let c2 = self.scanner.second_byte();
+
+                match c2.and_then(GainMode::from_u8_char) {
+                    Some(m) => two_ascii_token!(Token::SetGain(m)),
+                    None => one_ascii_token!(Token::SetGain(GainMode::Raw)),
+                }
+            }
 
             // Possibly multiple character tokens
             b'_' | b'{' | b'}' | b'M' => {

@@ -1162,6 +1162,39 @@ A @gg G48 G48 A5,6,7,8 G30
 }
 
 #[test]
+fn test_set_gain() {
+    assert_mml_channel_a_matches_bytecode(
+        r##"
+@g inst_with_gain
+@gf inst_with_gain gain F 1
+@gd inst_with_gain gain D 2
+@ge inst_with_gain gain E 3
+@gi inst_with_gain gain I 4
+@gb inst_with_gain gain B 5
+
+A @g   @gf @gd @ge @gi @gb
+A G$20 GF6 GD7 GE8 GI9 GB10
+"##,
+        &[
+            // Line 1
+            "set_instrument inst_with_gain",
+            "set_gain $01",
+            "set_gain $82",
+            "set_gain $a3",
+            "set_gain $c4",
+            "set_gain $e5",
+            // Line 2
+            "set_gain $20",
+            "set_gain $06",
+            "set_gain $87",
+            "set_gain $a8",
+            "set_gain $c9",
+            "set_gain $ea",
+        ],
+    );
+}
+
+#[test]
 fn test_instrument_envelope_hex() {
     assert_mml_channel_a_matches_bytecode(
         r##"

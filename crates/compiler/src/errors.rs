@@ -93,6 +93,8 @@ pub enum ValueError {
 
     InvalidGainString(String),
     GainOutOfRange,
+    FixedGainOutOfRange,
+    GainRateOutOfRange,
 
     InvalidNote,
     NoNoteOctave,
@@ -635,6 +637,22 @@ impl Display for ValueError {
             Self::InvalidGainString(e) => e.fmt(f),
             Self::GainOutOfRange => {
                 write!(f, "invalid gain (expected {} - {})", Gain::MIN, Gain::MAX)
+            }
+            Self::FixedGainOutOfRange => {
+                write!(
+                    f,
+                    "invalid fixed gain value (expected {} - {})",
+                    0,
+                    Gain::FIXED_GAIN_MASK
+                )
+            }
+            Self::GainRateOutOfRange => {
+                write!(
+                    f,
+                    "invalid gain rate (expected {} - {})",
+                    0,
+                    Gain::RATE_MASK
+                )
             }
 
             Self::InvalidNote => write!(f, "invalid note"),

@@ -210,7 +210,14 @@ Numbers can be decimal, or hexadecimal when prefixed with `$` (ie, `$ff`)
  * `@<id>` - Set instrument
     * The instrument should not be changed in the middle of a slur.
  * `A<attack>,<decay>,<sustain_level>,<sustain_rate>` - Set the channel's ADSR register
- * `G<gain>` - Set the channel's GAIN register (disables ADSR)
+ * `G` - Set the channel's GAIN register (disables ADSR)
+     * `G<gain>` - write the raw 8 bit value to the GAIN register
+     * `GF<value>` - fixed envelope (0-128)
+     * `GD<rate>` - linear decrease envelope (0-31)
+     * `GE<rate>` - exponential decrease envelope (0-31)
+     * `GI<rate>` - linear increase envelope (0-31)
+     * `GB<rate>` - bent increase envelope (0-31)
+
 
 <br/>
 

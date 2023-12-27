@@ -14,7 +14,7 @@ use crate::bytecode::{
     LoopCount, Pan, PitchOffsetPerTick, PlayNoteTicks, QuarterWavelengthInTicks, RelativePan,
     RelativeVolume, SubroutineId, Volume, KEY_OFF_TICK_DELAY,
 };
-use crate::envelope::{Adsr, Gain};
+use crate::envelope::{Adsr, Gain, GainMode};
 use crate::errors::{ErrorWithPos, MmlError, ValueError};
 use crate::file_pos::{FilePos, FilePosRange};
 use crate::notes::{MidiNote, MmlPitch, Note, Octave, STARTING_OCTAVE};
@@ -1282,10 +1282,13 @@ fn parse_set_adsr(pos: FilePos, p: &mut Parser) -> MmlCommand {
     }
 }
 
-fn parse_set_gain(pos: FilePos, p: &mut Parser) -> MmlCommand {
-    match parse_unsigned_newtype(pos, p) {
-        Some(g) => MmlCommand::SetGain(g),
-        None => MmlCommand::NoCommand,
+fn parse_set_gain(pos: FilePos, mode: GainMode, p: &mut Parser) -> MmlCommand {
+    match next_token_number(p) {
+        Some(v) => match Gain::from_mode_and_value(mode, v) {
+            Ok(gain) => MmlCommand::SetGain(gain),
+            Err(e) => invalid_token_error(p, pos, e.into()),
+        },
+        None => invalid_token_error(p, pos, ValueError::NoGain.into()),
     }
 }
 
@@ -1325,7 +1328,7 @@ fn parse_token(pos: FilePos, token: Token, p: &mut Parser) -> MmlCommand {
 
         Token::SetInstrument(inst) => MmlCommand::SetInstrument(inst),
         Token::SetAdsr => parse_set_adsr(pos, p),
-        Token::SetGain => parse_set_gain(pos, p),
+        Token::SetGain(mode) => parse_set_gain(pos, mode, p),
 
         Token::CallSubroutine(id) => {
             p.increment_tick_counter(id.tick_counter());

@@ -154,19 +154,117 @@ impl TryFrom<[u32; 4]> for Adsr {
     }
 }
 
+#[derive(Debug)]
+pub enum GainMode {
+    Raw,
+    Fixed,
+    LinearDecrease,
+    ExponentialDecrease,
+    LinearIncrease,
+    BentIncrease,
+}
+
+impl GainMode {
+    pub fn from_u8_char(c: u8) -> Option<GainMode> {
+        match c {
+            b'F' => Some(GainMode::Fixed),
+            b'D' => Some(GainMode::LinearDecrease),
+            b'E' => Some(GainMode::ExponentialDecrease),
+            b'I' => Some(GainMode::LinearIncrease),
+            b'B' => Some(GainMode::BentIncrease),
+            _ => None,
+        }
+    }
+
+    pub fn to_prefix_str(self) -> &'static str {
+        match self {
+            Self::Raw => "",
+            Self::Fixed => "F",
+            Self::LinearDecrease => "D",
+            Self::ExponentialDecrease => "E",
+            Self::LinearIncrease => "I",
+            Self::BentIncrease => "B",
+        }
+    }
+}
+
 u8_value_newtype!(Gain, GainOutOfRange, NoGain);
 
 impl Gain {
+    pub const FIXED_GAIN_MASK: u8 = 127;
+    pub const RATE_MASK: u8 = 0b000_11111;
+
+    const LINEAR_DECREASE_PREFIX: u8 = 0b100_00000;
+    const EXPONENTIAL_DECREASE_PREFIX: u8 = 0b101_00000;
+    const LINEAR_INCREASE_PREFIX: u8 = 0b110_00000;
+    const BENT_INCREASE_PREFIX: u8 = 0b111_00000;
+
+    pub fn from_mode_and_value(mode: GainMode, value: u32) -> Result<Gain, ValueError> {
+        let to_fixed_gain = || match u8::try_from(value) {
+            Ok(v) => {
+                if v <= Self::FIXED_GAIN_MASK {
+                    Ok(Gain::new(v))
+                } else {
+                    Err(ValueError::FixedGainOutOfRange)
+                }
+            }
+            Err(_) => Err(ValueError::FixedGainOutOfRange),
+        };
+        let to_rate_gain = |prefix: u8| match u8::try_from(value) {
+            Ok(v) => {
+                if v <= Self::RATE_MASK {
+                    Ok(Gain::new(prefix | v))
+                } else {
+                    Err(ValueError::GainRateOutOfRange)
+                }
+            }
+            Err(_) => Err(ValueError::GainRateOutOfRange),
+        };
+
+        match mode {
+            GainMode::Raw => Gain::try_from(value),
+            GainMode::Fixed => to_fixed_gain(),
+            GainMode::LinearDecrease => to_rate_gain(Self::LINEAR_DECREASE_PREFIX),
+            GainMode::ExponentialDecrease => to_rate_gain(Self::EXPONENTIAL_DECREASE_PREFIX),
+            GainMode::LinearIncrease => to_rate_gain(Self::LINEAR_INCREASE_PREFIX),
+            GainMode::BentIncrease => to_rate_gain(Self::BENT_INCREASE_PREFIX),
+        }
+    }
+
+    pub fn to_mode_and_value(&self) -> (GainMode, u8) {
+        const RATE_BIT: u8 = Gain::FIXED_GAIN_MASK ^ u8::MAX;
+
+        let raw = self.0;
+
+        if (raw & RATE_BIT) == 0 {
+            (GainMode::Fixed, raw & Self::FIXED_GAIN_MASK)
+        } else {
+            let rate = raw & Self::RATE_MASK;
+            let mode = raw & (Self::RATE_MASK ^ u8::MAX);
+
+            let mode = match mode {
+                Self::LINEAR_DECREASE_PREFIX => GainMode::LinearDecrease,
+                Self::EXPONENTIAL_DECREASE_PREFIX => GainMode::ExponentialDecrease,
+                Self::LINEAR_INCREASE_PREFIX => GainMode::LinearIncrease,
+                Self::BENT_INCREASE_PREFIX => GainMode::BentIncrease,
+                _ => panic!(), // This should not happen
+            };
+            (mode, rate)
+        }
+    }
+
     pub fn value(&self) -> u8 {
         self.as_u8()
     }
 
     pub fn to_envelope_string(self) -> String {
-        format!("{} {}", GAIN_STR, self.as_u8())
+        let (mode, value) = self.to_mode_and_value();
+        format!("{} {}{}", GAIN_STR, mode.to_prefix_str(), value)
     }
 
     pub fn to_gui_string(self) -> String {
-        self.as_u8().to_string()
+        let (mode, value) = self.to_mode_and_value();
+        format!("{}{}", mode.to_prefix_str(), value)
     }
 }
 
@@ -180,19 +278,29 @@ impl FromStr for Gain {
     type Err = ValueError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        // ::TODO figure out what the gain bits do and properly parse them::
+        let first = match s.as_bytes().first() {
+            Some(f) => *f,
+            None => return Err(ValueError::NoGain),
+        };
 
-        match s.as_bytes().first() {
-            Some(b'$') => match u8::from_str_radix(&s[1..], 16) {
-                Ok(i) => Ok(Gain::new(i)),
-                Err(_) => Err(ValueError::InvalidGainString(s.to_owned())),
+        let (mode, value_str) = match GainMode::from_u8_char(first) {
+            Some(mode) => (mode, s[1..].trim_start()),
+            None => (GainMode::Raw, s),
+        };
+
+        let value = match value_str.as_bytes().first() {
+            Some(b'$') => match u32::from_str_radix(&value_str[1..], 16) {
+                Ok(i) => i,
+                Err(_) => return Err(ValueError::InvalidGainString(value_str.to_owned())),
             },
-            Some(_) => match s.parse() {
-                Ok(i) => Ok(Gain::new(i)),
-                Err(_) => Err(ValueError::InvalidGainString(s.to_owned())),
+            Some(_) => match value_str.parse() {
+                Ok(i) => i,
+                Err(_) => return Err(ValueError::InvalidGainString(value_str.to_owned())),
             },
-            None => Err(ValueError::NoGain),
-        }
+            None => return Err(ValueError::NoGain),
+        };
+
+        Gain::from_mode_and_value(mode, value)
     }
 }
 

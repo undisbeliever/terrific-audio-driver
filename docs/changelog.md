@@ -11,6 +11,7 @@ Version 0.0.4
  * Fixed `n` play MIDI note MML command erroneously parsing note length
  * Added `$` hexadecimal number parsing
  * Added loop point filter overrides to the BRR encoder
+ * Added GAIN register modes to MML, bytecode assembly and envelopes.
 
 
 Version 0.0.3

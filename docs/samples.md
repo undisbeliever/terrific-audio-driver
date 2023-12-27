@@ -137,7 +137,11 @@ Gain
 
 The GAIN envelope disables ADSR and writes a 8-bit value to the S-DSP `GAIN` register.
 
-This feature is incomplete and currently unimplemented.  To play a sample without an ADSR envelope
-at a fixed envelope volume, use a GAIN value <= 127.
+ * `<u8>` (no prefix) - the raw 8 bit value to write to the GAIN register
+ * `F<value>` - fixed envelope (0-128)
+ * `D<rate>` - linear decrease envelope (0-31)
+ * `E<rate>` - exponential decrease envelope (0-31)
+ * `I<rate>` - linear increase envelope (0-31)
+ * `B<rate>` - bent increase envelope (0-31)
 
 
