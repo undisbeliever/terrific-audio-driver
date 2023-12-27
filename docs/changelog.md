@@ -12,6 +12,8 @@ Version 0.0.4
  * Added `$` hexadecimal number parsing
  * Added loop point filter overrides to the BRR encoder
  * Added GAIN register modes to MML, bytecode assembly and envelopes.
+ * Fixed a race condition that can cause an audible glitch when changing envelope from ADSR to GAIN
+   (or vice versa).
 
 
 Version 0.0.3
