@@ -998,9 +998,6 @@ func _update_voll_and_volr(channelIndex : u8 in x, vol_or_pan : u8 in a, pan_or_
     else {
         // Mono
 
-        // ASSUMES VoiceDspAddr.VOL_L == 0
-        smp.dsp_addr = a = ChannelVoiceOffset[x];
-
         // First shift converts 8-bit volume to 7-bit VOL
         // Second shift ensure mono vol has same combined amplitude as stereo vol
         a = channelSoA.volume[x] >>> 2;
