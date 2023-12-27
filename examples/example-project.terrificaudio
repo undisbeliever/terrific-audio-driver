@@ -170,6 +170,10 @@
     {
       "name": "keyoff_scrn_bug",
       "source": "bug-tests/keyoff-scrn-bug.mml"
+    },
+    {
+      "name": "envelope_race_condition",
+      "source": "bug-tests/envelope-race-condition.mml"
     }
   ]
 }

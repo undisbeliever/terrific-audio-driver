@@ -1,0 +1,27 @@
+; There was race condition when changing the envelope from ADSR to GAIN in the
+; middle of a note (or vice versa).
+;
+; This race condition occurred because the audio-driver wrote to the ADSR1 DSP
+; voice register before the ADSR2 or GAIN voice registers.
+;
+; This can produce audible glitched output when:
+;   * A voice is playing a note
+;   * The previous GAIN was fixed
+;   * The current envelope is ADSR
+;	* The envelope is changed to GAIN decrement
+;
+; In this case the DSP could erroneously read the previous GAIN value for a
+; single sample, changing the envelope to a fixed value and glitching the
+; entire envelope.
+;
+
+#Timer 64
+
+@0 sine
+
+; This is an annoying sounding test, play it at a reduced volume
+A v4
+
+A @0
+A [ GF127 c16 r16 A1,7,7,20 c4 & GD10 r4 ]16
+

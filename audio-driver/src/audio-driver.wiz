@@ -707,38 +707,52 @@ func __update_dsp_voice_registers(firstChannelIndex: u8 in x, endIndex : u8 in c
             }
         }
         else {
-            // ASSUMES VoiceDspAddr.VOL_L == 0
-            a = ChannelVoiceOffset[x];
-            y = channelSoA.virtualChannels.vol_l[x];
+            a = LastVoiceRegister[x];
+
+            // Voice registers are written in reverse order so the ADSR2/GAIN voice register is
+            // written BEFORE the ADSR1 voice register.
+            //
+            // This prevents a race-condition that can occur when changing the envelope from ADSR to
+            // GAIN (or vice versa).  If the race-condition occurs, the previous ADSR2/GAIN value is
+            // erroneously used for a single sample.
+            //
+            // This race condition can affect multiple samples if the previous GAIN was a fixed
+            // value and thus audible to the listener.
+
+            // Need to test which register (ADSR2 or GAIN) to write to.
+            y = channelSoA.virtualChannels.adsr1[x];
+            if negative {
+                a--;
+            }
+            y = channelSoA.virtualChannels.adsr2OrGain[x];
             smp.dsp_addr_and_data = ya;
 
-            a++;
-            y = channelSoA.virtualChannels.vol_r[x];
-            smp.dsp_addr_and_data = ya;
-
-            a++;
-            y = channelSoA.virtualChannels.pitch_l[x];
-            smp.dsp_addr_and_data = ya;
-
-            a++;
-            y = channelSoA.virtualChannels.pitch_h[x];
-            smp.dsp_addr_and_data = ya;
-
-            a++;
-            y = channelSoA.virtualChannels.scrn[x];
-            smp.dsp_addr_and_data = ya;
-
-            a++;
+            // A = GAIN (0x?7) or ADSR2 (0x?6)
+            a &= 0b1111_0110;
+            // A = 0x?6
+            a--;
+            // A = ADSR1 (0x?5)
             y = channelSoA.virtualChannels.adsr1[x];
             smp.dsp_addr_and_data = ya;
 
-            // Increment dsp_addr by 1 (ADSR2) if bit7 of `adsr1` is set
-            // Increment dsp_addr by 2 (GAIN)  if bit7 of `adsr1` is clear
-            if !negative {
-                a++;
-            }
-            a++;
-            y = channelSoA.virtualChannels.adsr2OrGain[x];
+            a--;
+            y = channelSoA.virtualChannels.scrn[x];
+            smp.dsp_addr_and_data = ya;
+
+            a--;
+            y = channelSoA.virtualChannels.pitch_h[x];
+            smp.dsp_addr_and_data = ya;
+
+            a--;
+            y = channelSoA.virtualChannels.pitch_l[x];
+            smp.dsp_addr_and_data = ya;
+
+            a--;
+            y = channelSoA.virtualChannels.vol_r[x];
+            smp.dsp_addr_and_data = ya;
+
+            a--;
+            y = channelSoA.virtualChannels.vol_l[x];
             smp.dsp_addr_and_data = ya;
 
 
@@ -1878,8 +1892,8 @@ in code {
     // The bit used for global DSP registers (KON, KOFF, NON, EON, etc)
     const ChannelVoiceBit : [u8; 8] = [1 << i for let i in 0..7];
 
-    // The offset into the Voice DSP registers
-    const ChannelVoiceOffset : [u8; 8] = [i * 0x10 for let i in 0..7];
+    // The address of the last writeable voice DSP register for each channel
+    const LastVoiceRegister : [u8; 8] = [i * 0x10 | 0x07 for let i in 0..7];
 
 
     // This is the bytecode used by a disabled channel.
