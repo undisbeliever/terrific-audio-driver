@@ -63,13 +63,13 @@ sample files is beyond the scope of the program.
      * 250 Hz (128 wavelength)
 
 ### Loop Options
+
+The first Combo-Box is the loop type:
+
  * None:  The sample will not loop.
- * Loop With Filter:  The sample at the given sample point (multiple of 16).  The BRR filter
-   is not reset at the loop point.  The sample might not loop perfectly, causing either
+ * Loop:  The sample at the given sample point (multiple of 16).
+   The BRR filter is not reset at the loop point.  The sample might not loop perfectly, causing either
    low-frequency noise or glitches.
- * Loop Resets Filter:  The sample loops at the given sample point (multiple of 16).  The BRR filter
-   is reset at the loop point.  The sample will loop perfectly, but the block after the loop point
-   might have noise.
  * Dupe Block Hack:  Duplicates `N` blocks to the end of the sample in an attempt to increase the
    quality of the first-looping BRR block.
     * This increases the sample size by 9 bytes per block.
@@ -77,6 +77,17 @@ sample files is beyond the scope of the program.
     * Most samples created with this hack will not loop perfectly, which can add low-frequency
       oscillation or noise to the sample.
     * This option may create a glitched sample, hence the name dupe block hack.
+
+
+The second Combo-Box is the BRR filter at the loop point:
+
+  * Reset:  The BRR filter is reset to 0 at the loop point.  This will ensure the sample loops perfectly.
+  * Auto:  The best BRR filter at the loop point is used.
+    * The last BRR block is not tested when determining the loop point BRR filter.
+    * The sample might not loop perfectly, causing either low-frequency noise or glitches.
+  * BRR Filter 1/2/3:  Force the BRR filter at the loop point.
+    * This allows the user to override the BRR filter at the loop point, which might create a better sounding sample.
+    * The sample might not loop perfectly, causing either low-frequency noise or glitches.
 
 
 Sample Frequency

@@ -277,7 +277,7 @@ impl SampleEditor {
             .set_value(&Self::sample_rates_string(&data.sample_rates));
 
         self.loop_setting
-            .update_loop_choices(SourceFileType::from_source(&data.source));
+            .update_loop_type_choice(SourceFileType::from_source(&data.source));
 
         self.selected_index = Some(index);
         self.data = data.clone();
@@ -299,7 +299,7 @@ impl SampleEditor {
                     self.data.source = data.source.clone();
                     self.source.set_value(data.source.as_str());
                     self.loop_setting
-                        .update_loop_choices(SourceFileType::from_source(&data.source));
+                        .update_loop_type_choice(SourceFileType::from_source(&data.source));
                 }
             }
         }

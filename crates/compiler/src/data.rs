@@ -127,6 +127,10 @@ impl Display for Name {
     }
 }
 
+// I am including the filter as part of the enum item name for 3 reasons:
+//   1. DupeBlockHack cannot be used with loop_point_filter=BrrFilter::Filter0.
+//   2. Simpler JSON format (only 1 fields in `loop_setting`)
+//   3. Backwards compatible with the v0.0.3 LoopSetting serde JSON
 #[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
 #[serde(tag = "loop", content = "loop_setting")]
 pub enum LoopSetting {
@@ -155,6 +159,21 @@ pub enum LoopSetting {
     #[serde(rename = "loop_reset_filter")]
     LoopResetFilter(usize),
 
+    /// Loop the sample and use BRR filter 1 at the loop-point.
+    /// Argument is loop point in samples.
+    #[serde(rename = "loop_filter_1")]
+    LoopFilter1(usize),
+
+    /// Loop the sample and use BRR filter 2 at the loop-point.
+    /// Argument is loop point in samples.
+    #[serde(rename = "loop_filter_2")]
+    LoopFilter2(usize),
+
+    /// Loop the sample and use BRR filter 3 at the loop-point.
+    /// Argument is loop point in samples.
+    #[serde(rename = "loop_filter_3")]
+    LoopFilter3(usize),
+
     /// Duplicates `N` blocks to the end of the sample in an attempt to improve the sample quality of the first-looping BRR block.
     ///  * Increases the sample size by `N * 9` bytes.
     ///  * This mode will not reset the filter at the loop point.
@@ -162,27 +181,75 @@ pub enum LoopSetting {
     ///  * dupe_block_hack may create create a glitched sample, hence the name `dupe_block_hack`.
     #[serde(rename = "dupe_block_hack")]
     DupeBlockHack(usize),
+
+    // DupeBlockHack that uses loop-point BRR filter 1.
+    // (See `DupeBlockHack`)
+    #[serde(rename = "dupe_block_hack_filter_1")]
+    DupeBlockHackFilter1(usize),
+
+    // DupeBlockHack that uses loop-point BRR filter 2.
+    // (See `DupeBlockHack`)
+    #[serde(rename = "dupe_block_hack_filter_2")]
+    DupeBlockHackFilter2(usize),
+
+    // DupeBlockHack that uses loop-point BRR filter 3.
+    // (See `DupeBlockHack`)
+    #[serde(rename = "dupe_block_hack_filter_3")]
+    DupeBlockHackFilter3(usize),
 }
 
 impl LoopSetting {
+    pub fn serialier_value(&self) -> &'static str {
+        match self {
+            Self::None => "none",
+            Self::OverrideBrrLoopPoint(_) => "override_brr_loop_point",
+            Self::LoopWithFilter(_) => "loop_with_filter",
+            Self::LoopResetFilter(_) => "loop_reset_filter",
+            Self::LoopFilter1(_) => "loop_filter_1",
+            Self::LoopFilter2(_) => "loop_filter_2",
+            Self::LoopFilter3(_) => "loop_filter_3",
+            Self::DupeBlockHack(_) => "dupe_block_hack",
+            Self::DupeBlockHackFilter1(_) => "dupe_block_hack_filter_1)",
+            Self::DupeBlockHackFilter2(_) => "dupe_block_hack_filter_2)",
+            Self::DupeBlockHackFilter3(_) => "dupe_block_hack_filter_3)",
+        }
+    }
+}
+
+impl LoopSetting {
+    /// Returns true if the argument is loop point in samples
     pub fn samples_argument(&self) -> bool {
         match self {
-            Self::OverrideBrrLoopPoint(_) | Self::LoopWithFilter(_) | Self::LoopResetFilter(_) => {
-                true
-            }
+            Self::OverrideBrrLoopPoint(_)
+            | Self::LoopWithFilter(_)
+            | Self::LoopResetFilter(_)
+            | Self::LoopFilter1(_)
+            | Self::LoopFilter2(_)
+            | Self::LoopFilter3(_) => true,
 
-            Self::None | Self::DupeBlockHack(_) => false,
+            Self::None
+            | Self::DupeBlockHack(_)
+            | Self::DupeBlockHackFilter1(_)
+            | Self::DupeBlockHackFilter2(_)
+            | Self::DupeBlockHackFilter3(_) => false,
         }
     }
 
+    /// Returns true if LoopSetting is dupe block hack and the argument is number of blocks.
     pub fn is_dupe_block_hack(&self) -> bool {
         match self {
+            Self::DupeBlockHack(_)
+            | Self::DupeBlockHackFilter1(_)
+            | Self::DupeBlockHackFilter2(_)
+            | Self::DupeBlockHackFilter3(_) => true,
+
             Self::None
             | Self::OverrideBrrLoopPoint(_)
             | Self::LoopWithFilter(_)
-            | Self::LoopResetFilter(_) => false,
-
-            Self::DupeBlockHack(_) => true,
+            | Self::LoopResetFilter(_)
+            | Self::LoopFilter1(_)
+            | Self::LoopFilter2(_)
+            | Self::LoopFilter3(_) => false,
         }
     }
 }

@@ -4,7 +4,7 @@
 //
 // SPDX-License-Identifier: MIT
 
-use brr::{encode_brr, read_16_bit_mono_wave_file};
+use brr::{encode_brr, read_16_bit_mono_wave_file, BrrFilter};
 
 use clap::Parser;
 
@@ -43,9 +43,18 @@ struct Args {
         short = 'r',
         long,
         help = "Reset BRR filter at the loop point",
-        conflicts_with = "dupe_block_hack"
+        conflicts_with = "dupe_block_hack",
+        conflicts_with = "loop_filter"
     )]
     loop_resets_filter: bool,
+
+    #[arg(
+        long,
+        value_name = "FILTER",
+        help = "Override BRR filter at the loop point",
+        conflicts_with = "loop_resets_filter"
+    )]
+    loop_filter: Option<BrrFilter>,
 }
 
 macro_rules! error {
@@ -57,6 +66,14 @@ macro_rules! error {
 
 fn main() {
     let args = Args::parse();
+
+    let loop_filter = match (args.loop_resets_filter, args.loop_filter) {
+        (false, f) => f,
+        (true, None) => Some(BrrFilter::Filter0),
+        (true, Some(_)) => {
+            error!("Cannot use --loop-resets-filter and --loop-filter at the same time")
+        }
+    };
 
     let wav = {
         let mut wave_file = match fs::File::open(&args.input) {
@@ -74,7 +91,7 @@ fn main() {
         &wav.samples,
         args.loop_point,
         args.dupe_block_hack,
-        args.loop_resets_filter,
+        loop_filter,
     ) {
         Err(why) => error!("Cannot encode BRR: {}", why),
         Ok(brr) => brr,

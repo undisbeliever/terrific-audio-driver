@@ -5,7 +5,8 @@
 // SPDX-License-Identifier: MIT
 
 use crate::{
-    BrrSample, BRR_HEADER_END_FLAG, BRR_HEADER_LOOP_FLAG, BYTES_PER_BRR_BLOCK, SAMPLES_PER_BLOCK,
+    BrrFilter, BrrSample, BRR_HEADER_END_FLAG, BRR_HEADER_LOOP_FLAG, BYTES_PER_BRR_BLOCK,
+    SAMPLES_PER_BLOCK,
 };
 
 const MAX_SHIFT: u8 = 12;
@@ -58,7 +59,7 @@ impl std::fmt::Display for EncodeError {
 }
 
 struct BrrBlock {
-    filter: u8,
+    filter: BrrFilter,
     shift: u8,
     // signed 4-bit values
     nibbles: [i8; 16],
@@ -68,13 +69,12 @@ struct BrrBlock {
 fn build_block(
     samples: &[i16; SAMPLES_PER_BLOCK],
     shift: u8,
-    filter_int: u8,
-    filter: fn(i32, i32) -> i32,
+    filter: BrrFilter,
+    filter_fn: fn(i32, i32) -> i32,
     prev1: i16,
     prev2: i16,
 ) -> BrrBlock {
     assert!(shift <= MAX_SHIFT);
-    assert!(filter_int <= 3);
 
     let mut nibbles = [0; SAMPLES_PER_BLOCK];
     let mut decoded_samples = [0; SAMPLES_PER_BLOCK];
@@ -87,7 +87,7 @@ fn build_block(
     for (i, s) in samples.iter().enumerate() {
         let s: i32 = (*s).into();
 
-        let offset = filter(p1, p2);
+        let offset = filter_fn(p1, p2);
 
         let n = ((s - offset) / div).clamp(I4_MIN, I4_MAX);
         let s = n * div + offset;
@@ -106,7 +106,7 @@ fn build_block(
     }
 
     BrrBlock {
-        filter: filter_int,
+        filter,
         shift,
         nibbles,
         decoded_samples,
@@ -140,18 +140,13 @@ fn calc_squared_error(block: &BrrBlock, samples: &[i16; SAMPLES_PER_BLOCK]) -> i
     square_error
 }
 
-fn find_best_block(
-    samples: &[i16; SAMPLES_PER_BLOCK],
-    use_filters: bool,
-    prev1: i16,
-    prev2: i16,
-) -> BrrBlock {
+fn find_best_block(samples: &[i16; SAMPLES_PER_BLOCK], prev1: i16, prev2: i16) -> BrrBlock {
     let mut best_block = None;
     let mut best_block_score = i64::MAX;
 
-    let mut test_filter = |filter_int, filter| {
+    let mut test_filter = |filter, filter_fn| {
         for shift in 0..=MAX_SHIFT {
-            let block = build_block(samples, shift, filter_int, filter, prev1, prev2);
+            let block = build_block(samples, shift, filter, filter_fn, prev1, prev2);
 
             let score = calc_squared_error(&block, samples);
             if score < best_block_score {
@@ -161,15 +156,33 @@ fn find_best_block(
         }
     };
 
-    test_filter(0, filter0);
-
-    if use_filters {
-        test_filter(1, filter1);
-        test_filter(2, filter2);
-        test_filter(3, filter3);
-    }
+    test_filter(BrrFilter::Filter0, filter0);
+    test_filter(BrrFilter::Filter1, filter1);
+    test_filter(BrrFilter::Filter2, filter2);
+    test_filter(BrrFilter::Filter3, filter3);
 
     best_block.unwrap()
+}
+
+fn find_best_block_filter(
+    samples: &[i16; SAMPLES_PER_BLOCK],
+    filter: BrrFilter,
+    prev1: i16,
+    prev2: i16,
+) -> BrrBlock {
+    let test_filter = |filter, filter_fn| {
+        (0..=MAX_SHIFT)
+            .map(|shift| build_block(samples, shift, filter, filter_fn, prev1, prev2))
+            .min_by_key(|block| calc_squared_error(block, samples))
+            .unwrap()
+    };
+
+    match filter {
+        BrrFilter::Filter0 => test_filter(BrrFilter::Filter0, filter0),
+        BrrFilter::Filter1 => test_filter(BrrFilter::Filter1, filter1),
+        BrrFilter::Filter2 => test_filter(BrrFilter::Filter2, filter2),
+        BrrFilter::Filter3 => test_filter(BrrFilter::Filter3, filter3),
+    }
 }
 
 // Loop flag only set if end_flag is set.
@@ -179,7 +192,7 @@ fn encode_block(block: BrrBlock, end_flag: bool, loop_flag: bool) -> [u8; BYTES_
     let mut out = [0; BYTES_PER_BRR_BLOCK];
 
     // Header
-    let mut header = ((block.shift & 0xf) << 4) | ((block.filter & 0x3) << 2);
+    let mut header = ((block.shift & 0xf) << 4) | ((block.filter.as_u8()) << 2);
     if end_flag {
         header |= BRR_HEADER_END_FLAG;
 
@@ -202,9 +215,9 @@ fn encode_block(block: BrrBlock, end_flag: bool, loop_flag: bool) -> [u8; BYTES_
 
 pub fn encode_brr(
     samples: &[i16],
-    loop_point_samples: Option<usize>,
+    loop_offset: Option<usize>,
     dupe_block_hack: Option<usize>,
-    loop_resets_filter: bool,
+    loop_filter: Option<BrrFilter>,
 ) -> Result<BrrSample, EncodeError> {
     if samples.is_empty() {
         return Err(EncodeError::NoSamples);
@@ -218,8 +231,8 @@ pub fn encode_brr(
         return Err(EncodeError::TooManySamples);
     }
 
-    let (loop_flag, loop_offset) = match (loop_point_samples, dupe_block_hack) {
-        (None, None) => (false, None),
+    let (loop_flag, loop_block, loop_offset) = match (loop_offset, dupe_block_hack) {
+        (None, None) => (false, usize::MAX, None),
         (Some(lp), None) => {
             if lp % SAMPLES_PER_BLOCK != 0 {
                 return Err(EncodeError::InvalidLoopPoint);
@@ -228,23 +241,26 @@ pub fn encode_brr(
                 return Err(EncodeError::LoopPointTooLarge(lp, samples.len()));
             }
 
-            // safe, `samples.len() is <= u16::MAX`
-            let loop_offset = u16::try_from(lp / SAMPLES_PER_BLOCK * BYTES_PER_BRR_BLOCK).unwrap();
+            let loop_block = lp / SAMPLES_PER_BLOCK;
 
-            (true, Some(loop_offset))
+            // safe, `samples.len() is <= u16::MAX`
+            let loop_offset = u16::try_from(loop_block * BYTES_PER_BRR_BLOCK).unwrap();
+
+            (true, loop_block, Some(loop_offset))
         }
         (None, Some(dbh)) => {
             if dbh > 64 {
                 return Err(EncodeError::DupeBlockHackTooLarge);
             }
 
-            if loop_resets_filter {
+            if loop_filter == Some(BrrFilter::Filter0) {
                 return Err(EncodeError::DupeBlockHackNotAllowedWithLoopResetsFilter);
             }
 
+            let loop_block = dbh;
             let loop_offset = u16::try_from(dbh * BYTES_PER_BRR_BLOCK).unwrap();
 
-            (true, Some(loop_offset))
+            (true, loop_block, Some(loop_offset))
         }
         (Some(_), Some(_)) => {
             return Err(EncodeError::DupeBlockHackNotAllowedWithLoopPoint);
@@ -252,18 +268,12 @@ pub fn encode_brr(
     };
 
     let n_blocks = samples.len() / SAMPLES_PER_BLOCK + dupe_block_hack.unwrap_or(0);
+    let last_block_index = n_blocks - 1;
 
     let mut brr_data = Vec::with_capacity(n_blocks * BYTES_PER_BRR_BLOCK);
 
     let mut prev1 = 0;
     let mut prev2 = 0;
-
-    let last_block_index = n_blocks - 1;
-
-    let reset_filter_block = match (loop_resets_filter, loop_point_samples) {
-        (true, Some(lp)) => lp / SAMPLES_PER_BLOCK,
-        _ => 0,
-    };
 
     for (i, samples) in samples
         .chunks_exact(SAMPLES_PER_BLOCK)
@@ -271,11 +281,18 @@ pub fn encode_brr(
         .take(n_blocks)
         .enumerate()
     {
-        let block = if i == 0 || i == reset_filter_block {
+        let block = if i == 0 {
             // The first block always uses filter 0
-            find_best_block(samples.try_into().unwrap(), false, 0, 0)
+            find_best_block_filter(samples.try_into().unwrap(), BrrFilter::Filter0, 0, 0)
+        } else if i == loop_block {
+            match loop_filter {
+                None => find_best_block(samples.try_into().unwrap(), prev1, prev2),
+                Some(loop_filter) => {
+                    find_best_block_filter(samples.try_into().unwrap(), loop_filter, prev1, prev2)
+                }
+            }
         } else {
-            find_best_block(samples.try_into().unwrap(), true, prev1, prev2)
+            find_best_block(samples.try_into().unwrap(), prev1, prev2)
         };
 
         prev1 = block.decoded_samples[SAMPLES_PER_BLOCK - 1];

@@ -36,19 +36,17 @@ impl SourceFileType {
 }
 
 #[derive(Clone, Copy, PartialEq)]
-pub enum LoopChoice {
+pub enum LoopTypeChoice {
     None = 0,
     OverrideBrrLoopPoint = 1,
-    LoopWithFilter = 2,
-    LoopResetFilter = 3,
-    DupeBlockHack = 4,
+    Loop = 2,
+    DupeBlockHack = 3,
 }
-impl LoopChoice {
+impl LoopTypeChoice {
     pub const CHOICES: &'static str = concat![
         "&None",
         "|&Override BRR Loop Point",
-        "|&Loop With Filter",
-        "|Loop &Resets Filter",
+        "|&Loop",
         "|&Dupe Block Hack"
     ];
 
@@ -56,26 +54,58 @@ impl LoopChoice {
         match c.value() {
             0 => Self::None,
             1 => Self::OverrideBrrLoopPoint,
-            2 => Self::LoopWithFilter,
-            3 => Self::LoopResetFilter,
-            4 => Self::DupeBlockHack,
+            2 => Self::Loop,
+            3 => Self::DupeBlockHack,
 
             _ => Self::None,
         }
     }
 
-    pub fn to_i32(self) -> i32 {
+    pub const fn to_i32(self) -> i32 {
         self as i32
     }
 }
 
-const fn can_use_loop_setting(l: LoopChoice, sft: &SourceFileType) -> bool {
+const fn can_use_loop_setting(l: LoopTypeChoice, sft: &SourceFileType) -> bool {
     match l {
-        LoopChoice::None => !matches!(sft, SourceFileType::Unknown),
-        LoopChoice::OverrideBrrLoopPoint => matches!(sft, SourceFileType::Brr),
-        LoopChoice::LoopWithFilter => matches!(sft, SourceFileType::Wav),
-        LoopChoice::LoopResetFilter => matches!(sft, SourceFileType::Wav),
-        LoopChoice::DupeBlockHack => matches!(sft, SourceFileType::Wav),
+        LoopTypeChoice::None => !matches!(sft, SourceFileType::Unknown),
+        LoopTypeChoice::OverrideBrrLoopPoint => matches!(sft, SourceFileType::Brr),
+        LoopTypeChoice::Loop => matches!(sft, SourceFileType::Wav),
+        LoopTypeChoice::DupeBlockHack => matches!(sft, SourceFileType::Wav),
+    }
+}
+
+#[derive(Clone, Copy, PartialEq)]
+pub enum LoopFilterChoice {
+    ResetFilter = 0,
+    Auto = 1,
+    Filter1 = 2,
+    Filter2 = 3,
+    Filter3 = 4,
+}
+impl LoopFilterChoice {
+    pub const CHOICES: &'static str = concat![
+        "&Reset filter",
+        "|&Auto",
+        "|&BRR Filter &1",
+        "|&BRR Filter &2",
+        "|&BRR Filter &3",
+    ];
+
+    pub fn read_widget(c: &Choice) -> Self {
+        match c.value() {
+            0 => Self::ResetFilter,
+            1 => Self::Auto,
+            2 => Self::Filter1,
+            3 => Self::Filter2,
+            4 => Self::Filter3,
+
+            _ => Self::Auto,
+        }
+    }
+
+    pub const fn to_i32(self) -> i32 {
+        self as i32
     }
 }
 
@@ -116,32 +146,46 @@ pub trait SampleWidgetEditor {
 
 pub struct LoopSettingWidget {
     source_file_type: SourceFileType,
-    choice: Choice,
+    loop_type: Choice,
+    loop_filter: Choice,
     argument: IntInput,
 }
 
 impl LoopSettingWidget {
     pub fn new(form: &mut InputForm) -> Self {
-        let loop_settings = form.add_two_inputs::<Choice, IntInput>("Loop:", 25);
-        let (mut loop_choice, loop_setting) = loop_settings;
+        let loop_settings = form.add_three_inputs::<Choice, Choice, IntInput>("Loop:", 25, 15);
+        let (mut loop_type, mut loop_filter, argument) = loop_settings;
 
-        loop_choice.add_choice(LoopChoice::CHOICES);
+        loop_type.set_tooltip("Loop type");
+        loop_type.add_choice(LoopTypeChoice::CHOICES);
+
+        loop_filter.set_tooltip("BRR Filter at loop point");
+        loop_filter.add_choice(LoopFilterChoice::CHOICES);
 
         Self {
             source_file_type: SourceFileType::Unknown,
-            choice: loop_choice,
-            argument: loop_setting,
+            loop_type,
+            loop_filter,
+            argument,
         }
     }
 
     pub fn set_editor<E: SampleWidgetEditor + 'static>(&mut self, editor: Rc<RefCell<E>>) {
-        self.choice.set_callback({
+        self.loop_type.set_callback({
+            let mut filter = self.loop_filter.clone();
             let mut argument = self.argument.clone();
             let editor = editor.clone();
             move |choice| {
                 let mut e = editor.borrow_mut();
-                Self::on_loop_choice_changed(choice, &mut argument, e.loop_settings());
+                Self::on_loop_type_changed(choice, &mut filter, &mut argument, e.loop_settings());
                 e.on_finished_editing();
+            }
+        });
+
+        self.loop_filter.set_callback({
+            let editor = editor.clone();
+            move |_| {
+                editor.borrow_mut().on_finished_editing();
             }
         });
 
@@ -156,15 +200,28 @@ impl LoopSettingWidget {
     }
 
     pub fn read_or_reset(&mut self, ls: &LoopSetting) -> Option<LoopSetting> {
-        let choice = LoopChoice::read_widget(&self.choice);
-        let value = self.argument.value().parse().ok();
+        type LT = LoopTypeChoice;
+        type LF = LoopFilterChoice;
 
-        let value = match choice {
-            LoopChoice::None => Some(LoopSetting::None),
-            LoopChoice::OverrideBrrLoopPoint => value.map(LoopSetting::OverrideBrrLoopPoint),
-            LoopChoice::LoopWithFilter => value.map(LoopSetting::LoopWithFilter),
-            LoopChoice::LoopResetFilter => value.map(LoopSetting::LoopResetFilter),
-            LoopChoice::DupeBlockHack => value.map(LoopSetting::DupeBlockHack),
+        let loop_type = LoopTypeChoice::read_widget(&self.loop_type);
+        let loop_filter = LoopFilterChoice::read_widget(&self.loop_filter);
+        let arg = self.argument.value().parse().ok();
+
+        let value = match (loop_type, loop_filter) {
+            (LT::None, _) => Some(LoopSetting::None),
+            (LT::OverrideBrrLoopPoint, _) => arg.map(LoopSetting::OverrideBrrLoopPoint),
+
+            (LT::Loop, LF::ResetFilter) => arg.map(LoopSetting::LoopResetFilter),
+            (LT::Loop, LF::Auto) => arg.map(LoopSetting::LoopWithFilter),
+            (LT::Loop, LF::Filter1) => arg.map(LoopSetting::LoopFilter1),
+            (LT::Loop, LF::Filter2) => arg.map(LoopSetting::LoopFilter2),
+            (LT::Loop, LF::Filter3) => arg.map(LoopSetting::LoopFilter3),
+
+            (LT::DupeBlockHack, LF::ResetFilter) => None,
+            (LT::DupeBlockHack, LF::Auto) => arg.map(LoopSetting::DupeBlockHack),
+            (LT::DupeBlockHack, LF::Filter1) => arg.map(LoopSetting::DupeBlockHackFilter1),
+            (LT::DupeBlockHack, LF::Filter2) => arg.map(LoopSetting::DupeBlockHackFilter2),
+            (LT::DupeBlockHack, LF::Filter3) => arg.map(LoopSetting::DupeBlockHackFilter3),
         };
 
         if value.is_none() {
@@ -173,46 +230,107 @@ impl LoopSettingWidget {
         value
     }
 
-    fn on_loop_choice_changed(choice: &Choice, w: &mut IntInput, ls: &LoopSetting) {
-        let choice = LoopChoice::read_widget(choice);
+    fn on_loop_type_changed(
+        choice: &Choice,
+        filter: &mut Choice,
+        argument: &mut IntInput,
+        ls: &LoopSetting,
+    ) {
+        let choice = LoopTypeChoice::read_widget(choice);
         match choice {
-            LoopChoice::None => {
-                w.set_value("");
-                w.deactivate();
+            LoopTypeChoice::None => {
+                argument.set_value("");
+                argument.deactivate();
             }
-            LoopChoice::OverrideBrrLoopPoint
-            | LoopChoice::LoopWithFilter
-            | LoopChoice::LoopResetFilter => {
+            LoopTypeChoice::OverrideBrrLoopPoint | LoopTypeChoice::Loop => {
                 if !ls.samples_argument() {
-                    w.set_value("0");
-                    w.activate();
+                    argument.set_value("0");
+                    argument.activate();
                 }
             }
-            LoopChoice::DupeBlockHack => {
+            LoopTypeChoice::DupeBlockHack => {
                 if !ls.is_dupe_block_hack() {
-                    w.set_value("2");
-                    w.activate();
+                    argument.set_value("2");
+                    argument.activate();
                 }
+                if ls == &LoopSetting::None {
+                    filter.set_value(LoopFilterChoice::Auto.to_i32());
+                }
+            }
+        }
+        Self::update_loop_filter_choice(choice, filter);
+    }
+
+    fn update_loop_filter_choice(choice: LoopTypeChoice, loop_filter: &mut Choice) {
+        match choice {
+            LoopTypeChoice::None | LoopTypeChoice::OverrideBrrLoopPoint => {
+                loop_filter.set_value(-1);
+                loop_filter.deactivate();
+            }
+            LoopTypeChoice::Loop => {
+                loop_filter
+                    .at(LoopFilterChoice::ResetFilter.to_i32())
+                    .unwrap()
+                    .activate();
+                if loop_filter.value() < 0 {
+                    loop_filter.set_value(LoopFilterChoice::ResetFilter.to_i32());
+                }
+                loop_filter.activate();
+            }
+            LoopTypeChoice::DupeBlockHack => {
+                loop_filter
+                    .at(LoopFilterChoice::ResetFilter.to_i32())
+                    .unwrap()
+                    .deactivate();
+
+                let lfc = loop_filter.value();
+                if lfc < 0 || lfc <= LoopFilterChoice::ResetFilter.to_i32() {
+                    loop_filter.set_value(LoopFilterChoice::Auto.to_i32());
+                }
+                loop_filter.activate();
             }
         }
     }
 
     pub fn clear_value(&mut self) {
-        self.choice.set_value(-1);
+        self.loop_type.set_value(-1);
         self.argument.set_value("");
     }
 
     pub fn set_value(&mut self, ls: &LoopSetting) {
-        let (lc, lv) = match ls {
-            LoopSetting::None => (LoopChoice::None, None),
-            LoopSetting::OverrideBrrLoopPoint(lp) => (LoopChoice::OverrideBrrLoopPoint, Some(lp)),
-            LoopSetting::LoopWithFilter(lp) => (LoopChoice::LoopWithFilter, Some(lp)),
-            LoopSetting::LoopResetFilter(lp) => (LoopChoice::LoopResetFilter, Some(lp)),
-            LoopSetting::DupeBlockHack(dbh) => (LoopChoice::DupeBlockHack, Some(dbh)),
-        };
-        self.choice.set_value(lc.to_i32());
+        type LS = LoopSetting;
+        type LT = LoopTypeChoice;
+        type LF = LoopFilterChoice;
 
-        match lv {
+        let (lc, lf, arg) = match ls {
+            LS::None => (LT::None, None, None),
+            LS::OverrideBrrLoopPoint(lp) => (LT::OverrideBrrLoopPoint, None, Some(lp)),
+            LS::LoopResetFilter(lp) => (LT::Loop, Some(LF::ResetFilter), Some(lp)),
+            LS::LoopWithFilter(lp) => (LT::Loop, Some(LF::Auto), Some(lp)),
+            LS::LoopFilter1(lp) => (LT::Loop, Some(LF::Filter1), Some(lp)),
+            LS::LoopFilter2(lp) => (LT::Loop, Some(LF::Filter2), Some(lp)),
+            LS::LoopFilter3(lp) => (LT::Loop, Some(LF::Filter3), Some(lp)),
+            LS::DupeBlockHack(dbh) => (LT::DupeBlockHack, Some(LF::Auto), Some(dbh)),
+            LS::DupeBlockHackFilter1(dbh) => (LT::DupeBlockHack, Some(LF::Filter1), Some(dbh)),
+            LS::DupeBlockHackFilter2(dbh) => (LT::DupeBlockHack, Some(LF::Filter2), Some(dbh)),
+            LS::DupeBlockHackFilter3(dbh) => (LT::DupeBlockHack, Some(LF::Filter3), Some(dbh)),
+        };
+        self.loop_type.set_value(lc.to_i32());
+
+        Self::update_loop_filter_choice(lc, &mut self.loop_filter);
+
+        match lf {
+            Some(fc) => {
+                self.loop_filter.set_value(fc.to_i32());
+                self.loop_filter.activate();
+            }
+            None => {
+                self.loop_filter.set_value(-1);
+                self.loop_filter.deactivate();
+            }
+        }
+
+        match arg {
             Some(v) => {
                 self.argument.set_value(&v.to_string());
                 self.argument.activate();
@@ -224,13 +342,13 @@ impl LoopSettingWidget {
         }
     }
 
-    pub fn update_loop_choices(&mut self, sft: SourceFileType) {
+    pub fn update_loop_type_choice(&mut self, sft: SourceFileType) {
         macro_rules! update_choices {
             ($($choice:ident),*) => {
                 $(
-                    let can_use = can_use_loop_setting(LoopChoice::$choice, &sft);
+                    let can_use = can_use_loop_setting(LoopTypeChoice::$choice, &sft);
 
-                    if let Some(mut m) = self.choice.at(LoopChoice::$choice.to_i32()) {
+                    if let Some(mut m) = self.loop_type.at(LoopTypeChoice::$choice.to_i32()) {
                         if can_use {
                             m.activate();
                         }
@@ -243,13 +361,7 @@ impl LoopSettingWidget {
         }
 
         if self.source_file_type != sft {
-            update_choices!(
-                None,
-                OverrideBrrLoopPoint,
-                LoopWithFilter,
-                LoopResetFilter,
-                DupeBlockHack
-            );
+            update_choices!(None, OverrideBrrLoopPoint, Loop, DupeBlockHack);
 
             self.source_file_type = sft;
         }

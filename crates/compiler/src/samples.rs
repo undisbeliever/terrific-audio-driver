@@ -18,8 +18,8 @@ use crate::pitch_table::{
 };
 
 use brr::{
-    encode_brr, parse_brr_file, read_16_bit_mono_wave_file, BrrSample, MonoPcm16WaveFile,
-    ValidBrrFile, BYTES_PER_BRR_BLOCK, SAMPLES_PER_BLOCK,
+    encode_brr, parse_brr_file, read_16_bit_mono_wave_file, BrrFilter, BrrSample,
+    MonoPcm16WaveFile, ValidBrrFile, BYTES_PER_BRR_BLOCK, SAMPLES_PER_BLOCK,
 };
 
 use std::collections::HashMap;
@@ -122,22 +122,23 @@ fn encode_wave_file(
         Err(e) => return Err(e.clone()),
     };
 
-    let (loop_point, dupe_block_hack, loop_resets_filter) = match loop_setting {
-        LoopSetting::None => (None, None, false),
+    let (loop_point, dupe_block_hack, loop_filter) = match loop_setting {
+        LoopSetting::None => (None, None, None),
         LoopSetting::OverrideBrrLoopPoint(_) => {
             return Err(BrrError::InvalidLoopSettingWav(loop_setting.clone()))
         }
-        LoopSetting::LoopWithFilter(lp) => (Some(*lp), None, false),
-        LoopSetting::LoopResetFilter(lp) => (Some(*lp), None, true),
-        LoopSetting::DupeBlockHack(dbh) => (None, Some(*dbh), false),
+        LoopSetting::LoopWithFilter(lp) => (Some(*lp), None, None),
+        LoopSetting::LoopResetFilter(lp) => (Some(*lp), None, Some(BrrFilter::Filter0)),
+        LoopSetting::LoopFilter1(lp) => (Some(*lp), None, Some(BrrFilter::Filter1)),
+        LoopSetting::LoopFilter2(lp) => (Some(*lp), None, Some(BrrFilter::Filter2)),
+        LoopSetting::LoopFilter3(lp) => (Some(*lp), None, Some(BrrFilter::Filter3)),
+        LoopSetting::DupeBlockHack(dbh) => (None, Some(*dbh), None),
+        LoopSetting::DupeBlockHackFilter1(dbh) => (None, Some(*dbh), Some(BrrFilter::Filter1)),
+        LoopSetting::DupeBlockHackFilter2(dbh) => (None, Some(*dbh), Some(BrrFilter::Filter2)),
+        LoopSetting::DupeBlockHackFilter3(dbh) => (None, Some(*dbh), Some(BrrFilter::Filter3)),
     };
 
-    match encode_brr(
-        &wav.samples,
-        loop_point,
-        dupe_block_hack,
-        loop_resets_filter,
-    ) {
+    match encode_brr(&wav.samples, loop_point, dupe_block_hack, loop_filter) {
         Ok(b) => Ok(b),
         Err(e) => Err(BrrError::BrrEncodeError(source.to_path_string(), e)),
     }

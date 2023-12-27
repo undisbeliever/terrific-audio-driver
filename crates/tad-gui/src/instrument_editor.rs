@@ -268,7 +268,7 @@ impl InstrumentEditor {
         self.envelope.set_value(&data.envelope);
 
         self.loop_setting
-            .update_loop_choices(SourceFileType::from_source(&data.source));
+            .update_loop_type_choice(SourceFileType::from_source(&data.source));
 
         self.selected_index = Some(index);
         self.data = data.clone();
@@ -290,7 +290,7 @@ impl InstrumentEditor {
                     self.data.source = data.source.clone();
                     self.source.set_value(data.source.as_str());
                     self.loop_setting
-                        .update_loop_choices(SourceFileType::from_source(&data.source));
+                        .update_loop_type_choice(SourceFileType::from_source(&data.source));
                 }
             }
         }

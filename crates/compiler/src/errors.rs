@@ -872,16 +872,6 @@ impl Display for CombineSoundEffectsError {
     }
 }
 
-fn loop_setting_str(ls: &LoopSetting) -> &'static str {
-    match ls {
-        LoopSetting::None => "none",
-        LoopSetting::OverrideBrrLoopPoint(_) => "override_brr_loop_point",
-        LoopSetting::LoopWithFilter(_) => "loop_with_filter",
-        LoopSetting::LoopResetFilter(_) => "loop_reset_filter",
-        LoopSetting::DupeBlockHack(_) => "dupe_block_hack",
-    }
-}
-
 impl Display for BrrError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
@@ -894,10 +884,10 @@ impl Display for BrrError {
             Self::FileTooLarge(p) => write!(f, "file too large: {}", p),
 
             Self::InvalidLoopSettingWav(ls) => {
-                write!(f, "cannot use {} on wav files", loop_setting_str(ls))
+                write!(f, "cannot use {} on wav files", ls.serialier_value())
             }
             Self::InvalidLoopSettingBrr(ls) => {
-                write!(f, "cannot use {} on brr files", loop_setting_str(ls))
+                write!(f, "cannot use {} on brr files", ls.serialier_value())
             }
         }
     }
