@@ -55,7 +55,11 @@ where
     data: Vec<T>,
 
     callback: Box<dyn Fn(TableEvent, usize, i32) -> bool>,
-    row_selected_callback: Box<dyn Fn(Option<usize>)>,
+    /// The bool argument is:
+    ///  * true if the user caused the change in selection
+    ///    (ie, by clicking with the cursor or opening the editor)
+    ///  * false if the change is selction was caused by `set_selected()` or `clear_selected()`.
+    row_selected_callback: Box<dyn Fn(Option<usize>, bool)>,
 
     edit_widget: Option<fltk::input::Input>,
 
@@ -249,21 +253,22 @@ where
         self.state.borrow_mut().callback = Box::from(f);
     }
 
-    pub fn set_selection_changed_callback(&mut self, f: impl Fn(Option<usize>) + 'static) {
+    /// Callback `f(index, user_selection);`
+    pub fn set_selection_changed_callback(&mut self, f: impl Fn(Option<usize>, bool) + 'static) {
         self.state.borrow_mut().row_selected_callback = Box::from(f);
     }
 
     pub fn clear_selected(&mut self) {
         if let Ok(mut s) = self.state.try_borrow_mut() {
-            s.unset_selection();
+            s.unset_selection(false);
         }
     }
 
     pub fn set_selected(&mut self, row_index: usize) {
         if let Ok(mut s) = self.state.try_borrow_mut() {
             match row_index.try_into() {
-                Ok(r) => s.set_sel_row(r),
-                Err(_) => s.unset_selection(),
+                Ok(r) => s.set_sel_row(r, false),
+                Err(_) => s.unset_selection(false),
             }
         }
     }
@@ -292,7 +297,7 @@ fn blank_callback(_: TableEvent, _: usize, _: i32) -> bool {
     false
 }
 
-fn blank_sel_changed_callback(_: Option<usize>) {}
+fn blank_sel_changed_callback(_: Option<usize>, _: bool) {}
 
 impl<T> TableState<T>
 where
@@ -307,9 +312,9 @@ where
             Event::Push => {
                 if let Ok(mut s) = state.try_borrow_mut() {
                     if let Some((TableContext::Cell, row, col, _)) = table.cursor2rowcol() {
-                        s.set_selection(row, col);
+                        s.set_selection(row, col, true);
                     } else {
-                        s.unset_selection();
+                        s.unset_selection(true);
                     }
                 }
                 let _ = table.take_focus();
@@ -320,7 +325,7 @@ where
                     // Only process events if a cell was clicked
                     if let Some((TableContext::Cell, row, col, _)) = table.cursor2rowcol() {
                         if let Ok(mut s) = state.try_borrow_mut() {
-                            s.set_selection(row, col);
+                            s.set_selection(row, col, true);
 
                             let e = match fltk::app::event_clicks() {
                                 false => TableEvent::CellClicked,
@@ -335,7 +340,7 @@ where
             Event::Drag => {
                 if let Ok(mut s) = state.try_borrow_mut() {
                     if let Some((TableContext::Cell, row, col, _)) = table.cursor2rowcol() {
-                        s.set_selection(row, col);
+                        s.set_selection(row, col, true);
                     }
                 }
                 true
@@ -456,14 +461,14 @@ where
         // Have to test top and bottom as the user might have pressed shift-down
         // which selects multiple rows and TrTable only supports single row selection.
         if row_top != self.sel_row {
-            self.set_sel_row(row_top)
+            self.set_sel_row(row_top, true)
         } else {
-            self.set_sel_row(row_bottom)
+            self.set_sel_row(row_bottom, true)
         }
     }
 
-    fn set_sel_row(&mut self, row: i32) {
-        self.set_selection(row, self.sel_col);
+    fn set_sel_row(&mut self, row: i32, user_selection: bool) {
+        self.set_selection(row, self.sel_col, user_selection);
     }
 
     fn set_sel_col(&mut self, col: i32) {
@@ -471,13 +476,13 @@ where
         self.sel_col = col.clamp(0, T::N_COLUMNS - 1);
     }
 
-    fn set_selection(&mut self, row: i32, col: i32) {
+    fn set_selection(&mut self, row: i32, col: i32, user_selection: bool) {
         let col = col.clamp(0, T::N_COLUMNS - 1);
 
         if let Ok(index) = usize::try_from(row) {
             if index < self.data.len() {
                 if self.sel_row != row {
-                    (self.row_selected_callback)(Some(index));
+                    (self.row_selected_callback)(Some(index), user_selection);
                 }
 
                 self.sel_row = row;
@@ -487,16 +492,16 @@ where
                     self.table.set_selection(row, 0, row, T::N_COLUMNS);
                 }
             } else {
-                self.unset_selection();
+                self.unset_selection(user_selection);
             }
         } else {
-            self.unset_selection();
+            self.unset_selection(user_selection);
         }
     }
 
-    fn unset_selection(&mut self) {
+    fn unset_selection(&mut self, user_selection: bool) {
         if self.sel_row != -1 {
-            (self.row_selected_callback)(None);
+            (self.row_selected_callback)(None, user_selection);
         }
 
         self.sel_row = -1;
@@ -533,7 +538,7 @@ where
     }
 
     fn open_editor(&mut self, row: i32, col: i32) {
-        self.set_selection(row, col);
+        self.set_selection(row, col, true);
 
         let widget = match &mut self.edit_widget {
             Some(ew) => ew,

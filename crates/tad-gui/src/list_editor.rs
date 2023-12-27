@@ -1066,9 +1066,13 @@ where
 
         table.set_selection_changed_callback({
             let s = sender.clone();
-            move |i| match i {
-                Some(i) => s.send(T::to_message(ListMessage::ItemSelected(i))),
-                None => s.send(T::to_message(ListMessage::ClearSelection)),
+            move |i, user_selection| {
+                if user_selection {
+                    match i {
+                        Some(i) => s.send(T::to_message(ListMessage::ItemSelected(i))),
+                        None => s.send(T::to_message(ListMessage::ClearSelection)),
+                    }
+                }
             }
         });
 
