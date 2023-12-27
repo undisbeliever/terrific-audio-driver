@@ -4,6 +4,8 @@
 //
 // SPDX-License-Identifier: MIT
 
+use std::str::FromStr;
+
 use crate::{
     errors::{InvalidAdsrError, ValueError},
     value_newtypes::u8_value_newtype,
@@ -114,10 +116,10 @@ impl Adsr {
     }
 }
 
-impl TryFrom<&str> for Adsr {
-    type Error = ValueError;
+impl FromStr for Adsr {
+    type Err = ValueError;
 
-    fn try_from(s: &str) -> Result<Self, Self::Error> {
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut iter = s.split_ascii_whitespace();
 
         let a = iter.next().ok_or(ValueError::AdsrNotFourValues)?;
@@ -174,10 +176,10 @@ impl From<u8> for Gain {
     }
 }
 
-impl TryFrom<&str> for Gain {
-    type Error = ValueError;
+impl FromStr for Gain {
+    type Err = ValueError;
 
-    fn try_from(s: &str) -> Result<Self, Self::Error> {
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
         // ::TODO figure out what the gain bits do and properly parse them::
 
         match s.as_bytes().first() {
@@ -217,11 +219,11 @@ impl Envelope {
     pub fn try_from_strs(envelope_type: &str, value: &str) -> Result<Self, ValueError> {
         match envelope_type {
             t if t == ADSR_STR => {
-                let adsr = Adsr::try_from(value)?;
+                let adsr = value.parse()?;
                 Ok(Envelope::Adsr(adsr))
             }
             t if t == GAIN_STR => {
-                let gain = Gain::try_from(value)?;
+                let gain = value.parse()?;
                 Ok(Envelope::Gain(gain))
             }
             u => Err(ValueError::UnknownEnvelopeType(u.to_owned())),

@@ -164,7 +164,7 @@ impl InputHelper for Adsr {
     type Widget = Input;
 
     fn parse(s: String) -> Option<Self> {
-        s.as_str().try_into().ok()
+        s.parse().ok()
     }
 
     fn set_widget_value(w: &mut Self::Widget, value: &Self) {
@@ -176,10 +176,7 @@ impl InputHelper for Gain {
     type Widget = Input;
 
     fn parse(s: String) -> Option<Self> {
-        match s.as_str().try_into() {
-            Ok(i) => Some(i),
-            Err(_) => None,
-        }
+        s.parse().ok()
     }
 
     fn set_widget_value(w: &mut Self::Widget, value: &Self) {

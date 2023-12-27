@@ -271,9 +271,7 @@ impl BytecodeAssembler<'_, '_> {
     fn gain_argument(&self, args: &[&str]) -> Result<Gain, BytecodeAssemblerError> {
         let arg = one_argument(args)?;
 
-        let gain = Gain::try_from(arg)?;
-
-        Ok(gain)
+        Ok(arg.parse()?)
     }
 
     fn _find_instrument(&self, arg: &str) -> Result<InstrumentId, BytecodeAssemblerError> {
@@ -308,7 +306,7 @@ impl BytecodeAssembler<'_, '_> {
         let (inst, gain) = two_arguments(args)?;
 
         let inst = self._find_instrument(inst)?;
-        let gain = Gain::try_from(gain)?;
+        let gain = gain.parse()?;
 
         Ok((inst, gain))
     }
