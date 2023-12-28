@@ -768,6 +768,79 @@ where
     list2: ListWithCompilerOutput<T2, O2>,
 }
 
+#[inline]
+fn list_pair_process<T1, O1, T2, O2, Editor>(
+    m: ListMessage<T1>,
+    list1: &mut ListWithCompilerOutput<T1, O1>,
+    list2: &mut ListWithCompilerOutput<T2, O2>,
+    editor: &mut Editor,
+) -> (ListAction<T1>, Option<ItemChanged<T1>>)
+where
+    T1: Clone + PartialEq<T1> + NameDeduplicator + std::fmt::Debug,
+    O1: CompilerOutput,
+    T2: Clone + PartialEq<T2> + NameDeduplicator + std::fmt::Debug,
+    O2: CompilerOutput,
+    Editor: ListEditor<T1> + CompilerOutputGui<O1> + ListEditor<T2> + CompilerOutputGui<O2>,
+{
+    let can_add = |count: usize| -> bool {
+        debug_assert!(list1.list().len() == list2.list().len());
+
+        let max_size = list1.list().max_size;
+        let len = list1.list().len() + list2.list().len();
+
+        len + count <= max_size
+    };
+    let can_do_message = match &m {
+        ListMessage::Add(..) => can_add(1),
+        ListMessage::AddWithItemId(..) => can_add(1),
+        ListMessage::AddMultiple(vec) => can_add(vec.len()),
+        ListMessage::CloneSelected => can_add(1),
+
+        ListMessage::ClearSelection
+        | ListMessage::ItemSelected(_)
+        | ListMessage::ItemEdited(..)
+        | ListMessage::RemoveSelected
+        | ListMessage::MoveSelectedToTop
+        | ListMessage::MoveSelectedUp
+        | ListMessage::MoveSelectedDown
+        | ListMessage::MoveSelectedToBottom => true,
+    };
+    if !can_do_message {
+        return (ListAction::None, None);
+    }
+
+    let clear_list2_selection = match &m {
+        // Not changing list2 selection when a list1 item is unselected
+        ListMessage::ClearSelection => false,
+
+        // Not changing list2 selection for ItemEdited as it could have been
+        // sent because the user selected a list2 item.
+        ListMessage::ItemEdited(..) => false,
+
+        ListMessage::Add(..)
+        | ListMessage::AddWithItemId(..)
+        | ListMessage::AddMultiple(_)
+        | ListMessage::CloneSelected
+        | ListMessage::ItemSelected(_)
+        | ListMessage::RemoveSelected
+        | ListMessage::MoveSelectedToTop
+        | ListMessage::MoveSelectedUp
+        | ListMessage::MoveSelectedDown
+        | ListMessage::MoveSelectedToBottom => true,
+    };
+
+    // ::TODO deduplicate name::
+
+    let out = list1.process(m, editor);
+
+    // Must clear list2 **after** list1 is processed to prevent a flash in the Samples Tab.
+    // (The flash was caused by the GUI disabling the widgets, then switching editors on the next frame)
+    if clear_list2_selection {
+        list2.clear_selection(editor);
+    }
+    out
+}
+
 impl<T1, O1, T2, O2> ListPairWithCompilerOutputs<T1, O1, T2, O2>
 where
     T1: Clone + PartialEq<T1> + NameDeduplicator + std::fmt::Debug,
@@ -793,24 +866,6 @@ where
         &self.list2
     }
 
-    fn can_do_message<T>(&self, m: &ListMessage<T>) -> bool {
-        match m {
-            ListMessage::Add(..) => self.can_add(1),
-            ListMessage::AddWithItemId(..) => self.can_add(1),
-            ListMessage::AddMultiple(vec) => self.can_add(vec.len()),
-            ListMessage::CloneSelected => self.can_add(1),
-
-            ListMessage::ClearSelection
-            | ListMessage::ItemSelected(_)
-            | ListMessage::ItemEdited(..)
-            | ListMessage::RemoveSelected
-            | ListMessage::MoveSelectedToTop
-            | ListMessage::MoveSelectedUp
-            | ListMessage::MoveSelectedDown
-            | ListMessage::MoveSelectedToBottom => true,
-        }
-    }
-
     #[must_use]
     pub fn process1<Editor>(
         &mut self,
@@ -820,20 +875,7 @@ where
     where
         Editor: ListEditor<T1> + CompilerOutputGui<O1> + ListEditor<T2> + CompilerOutputGui<O2>,
     {
-        if !self.can_do_message(&m) {
-            return (ListAction::None, None);
-        }
-        let may_change_selection =
-            !matches!(m, ListMessage::ClearSelection | ListMessage::ItemEdited(..));
-
-        // ::TODO deduplicate name::
-
-        let out = self.list1.process(m, editor);
-
-        if may_change_selection {
-            self.list2.clear_selection(editor);
-        }
-        out
+        list_pair_process(m, &mut self.list1, &mut self.list2, editor)
     }
 
     #[must_use]
@@ -845,20 +887,7 @@ where
     where
         Editor: ListEditor<T1> + CompilerOutputGui<O1> + ListEditor<T2> + CompilerOutputGui<O2>,
     {
-        if !self.can_do_message(&m) {
-            return (ListAction::None, None);
-        }
-        let may_change_selection =
-            !matches!(m, ListMessage::ClearSelection | ListMessage::ItemEdited(..));
-
-        // ::TODO deduplicate name::
-
-        let out = self.list2.process(m, editor);
-
-        if may_change_selection {
-            self.list1.clear_selection(editor);
-        }
-        out
+        list_pair_process(m, &mut self.list2, &mut self.list1, editor)
     }
 
     pub fn set_compiler_output1(
@@ -881,18 +910,6 @@ where
 
     pub fn all_valid(&self) -> bool {
         self.list1.all_valid() && self.list2.all_valid()
-    }
-
-    pub fn len(&self) -> usize {
-        self.list1.list().len() + self.list2.list().len()
-    }
-
-    pub fn max_size(&self) -> usize {
-        self.list1.list().max_size
-    }
-
-    fn can_add(&self, to_add: usize) -> bool {
-        self.len() + to_add <= self.max_size()
     }
 }
 
