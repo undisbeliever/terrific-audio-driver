@@ -1,0 +1,19 @@
+@1 piano
+
+ABC @1
+
+;; Major triad
+A o4  c  d  e   f  g   a  b  r
+B o4  e  f+ g+  a  b  >c+ d+ r
+C o4  g  a  b  >c  d   e  f+ r
+
+;; Minor triad
+A o4  c  d  e   f  g   a  b  r
+B o4  e- f  g   a- b- >c  d  r
+C o4  g  a  b  >c  d   e  f+ r
+
+;; Augmented triad
+A o4  c  d   e  f  g   a  b  r
+B o4  e  f+  g+ a  b  >c+ d+ r
+C o4  g+ a+ >c  c+ d+  f  g  r
+

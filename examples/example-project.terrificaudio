@@ -65,7 +65,7 @@
       "loop": "none",
       "first_octave": 1,
       "last_octave": 5,
-      "envelope": "gain 127",
+      "envelope": "gain F127",
       "comment": "Sample by Doug Fraker. public domain, source: https://github.com/nesdoug/SNES_13/blob/master/MUSIC/More_Samples"
     },
     {
@@ -75,7 +75,7 @@
       "loop": "none",
       "first_octave": 1,
       "last_octave": 5,
-      "envelope": "gain 127",
+      "envelope": "gain F127",
       "comment": "Sample by Doug Fraker. public domain, source: https://github.com/nesdoug/SNES_13/blob/master/MUSIC/More_Samples"
     }
   ],
@@ -88,7 +88,7 @@
         16000,
         18000
       ],
-      "envelope": "gain 127",
+      "envelope": "gain F127",
       "comment": "Sample by Doug Fraker. public domain, source: https://github.com/nesdoug/SNES_13/blob/master/MUSIC/More_Samples"
     },
     {
@@ -98,7 +98,7 @@
       "sample_rates": [
         32000
       ],
-      "envelope": "gain 127",
+      "envelope": "gain F127",
       "comment": "Sample by Doug Fraker. public domain, source: https://github.com/nesdoug/SNES_13/blob/master/MUSIC/More_Samples"
     }
   ],
@@ -122,6 +122,14 @@
     {
       "name": "ode_to_joy",
       "source": "songs/ode-to-joy.mml"
+    },
+    {
+      "name": "chords",
+      "source": "mml-tests/chords.mml"
+    },
+    {
+      "name": "chords_transpose",
+      "source": "mml-tests/chords-transpose.mml"
     },
     {
       "name": "test_broken_chord",

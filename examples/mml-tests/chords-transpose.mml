@@ -1,0 +1,29 @@
+; Example that uses the `_` transpose command to simplify chords.
+;
+; This example produces identical output to `chords.mml`.
+
+@1 piano
+
+ABC @1
+
+;; Major triad
+A _+0
+B _+4
+C _+7
+ABC o4 c d e f g a b r
+
+;; Minor triad
+A _+0
+B _+3
+C _+7
+ABC o4 c d e f g a b r
+
+;; Augmented triad
+A _+0
+B _+4
+C _+8
+ABC o4 c d e f g a b r
+
+; Reset transpose
+ABC _+0
+
