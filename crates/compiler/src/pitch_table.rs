@@ -189,10 +189,11 @@ pub fn sample_pitch(sample: &Sample) -> Result<SamplePitches, PitchError> {
         let pitch = u64::from(sample_rate) * u64::from(PITCH_REGISTER_FP_SCALE)
             / u64::from(SPC_SAMPLE_RATE);
 
-        if pitch > u64::from(PITCH_REGISTER_MAX) {
+        if pitch <= u64::from(PITCH_REGISTER_MAX) {
+            pitches.push(pitch.try_into().unwrap());
+        } else {
             invalid_sample_rates.push(sample_rate);
         }
-        pitches.push(pitch.try_into().unwrap());
     }
 
     if invalid_sample_rates.is_empty() {
