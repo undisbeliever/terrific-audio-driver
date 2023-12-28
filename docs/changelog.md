@@ -14,6 +14,7 @@ Version 0.0.4
  * Added GAIN register modes to MML, bytecode assembly and envelopes.
  * Fixed a race condition that can cause an audible glitch when changing envelope from ADSR to GAIN
    (or vice versa).
+ * Removed RingBuffer is full panic from the GUI.
 
 
 Version 0.0.3

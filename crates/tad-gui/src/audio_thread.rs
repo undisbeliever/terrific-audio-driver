@@ -149,15 +149,10 @@ impl RingBuffer {
             == self.read_cursor / RingBuffer::EMU_BUFFER_SIZE
     }
 
-    /// Safety: Panics if the ring buffer is full
-    ///
     /// Returns true if the buffer is full
     fn add_chunk(&mut self, samples: &[i16; Self::EMU_BUFFER_SIZE]) -> bool {
         const _: () = assert!(RingBuffer::BUFFER_SIZE % RingBuffer::EMU_BUFFER_SIZE == 0);
 
-        if self.is_buffer_full() {
-            panic!("RingBuffer is full");
-        }
         assert!(self.write_cursor % RingBuffer::EMU_BUFFER_SIZE == 0);
 
         let wc = self.write_cursor;
@@ -174,14 +169,8 @@ impl RingBuffer {
         self.is_buffer_full()
     }
 
-    /// Safety: Panics if the ring buffer is full
-    ///
     /// Fills the ring buffer with silence
     fn fill_with_silence(&mut self) {
-        if self.is_buffer_full() {
-            panic!("RingBuffer is full");
-        }
-
         self.buffer.fill(0);
 
         // write_cursor must be aligned by EMU_BUFFER_SIZE.
@@ -224,6 +213,14 @@ impl AudioCallback for RingBuffer {
 
 // Returns true if any sound is output by the emulator
 fn fill_ring_buffer(emu: &mut ShvcSoundEmu, playback: &mut AudioDevice<RingBuffer>) -> bool {
+    // Do not emulate the next audio chunk if the ring buffer is full,
+    // which can happen if an SDL audio callback occurs in the middle of the last `fill_ring_buffer()` call.
+    //
+    // In my opinion, the stuttering caused by this early return sounds better then skipping audio.
+    if playback.lock().is_buffer_full() {
+        return true;
+    }
+
     let mut silence = true;
 
     loop {
