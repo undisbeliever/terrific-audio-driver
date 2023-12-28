@@ -823,13 +823,17 @@ where
         if !self.can_do_message(&m) {
             return (ListAction::None, None);
         }
+        let may_change_selection =
+            !matches!(m, ListMessage::ClearSelection | ListMessage::ItemEdited(..));
 
         // ::TODO deduplicate name::
 
-        if !matches!(m, ListMessage::ClearSelection) {
+        let out = self.list1.process(m, editor);
+
+        if may_change_selection {
             self.list2.clear_selection(editor);
         }
-        self.list1.process(m, editor)
+        out
     }
 
     #[must_use]
@@ -844,13 +848,17 @@ where
         if !self.can_do_message(&m) {
             return (ListAction::None, None);
         }
+        let may_change_selection =
+            !matches!(m, ListMessage::ClearSelection | ListMessage::ItemEdited(..));
 
         // ::TODO deduplicate name::
 
-        if !matches!(m, ListMessage::ClearSelection) {
+        let out = self.list2.process(m, editor);
+
+        if may_change_selection {
             self.list1.clear_selection(editor);
         }
-        self.list2.process(m, editor)
+        out
     }
 
     pub fn set_compiler_output1(
