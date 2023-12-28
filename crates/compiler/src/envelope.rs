@@ -186,6 +186,17 @@ impl GainMode {
             Self::BentIncrease => "B",
         }
     }
+
+    pub fn max_value(self) -> u8 {
+        match self {
+            Self::Raw => u8::MAX,
+            Self::Fixed => Gain::FIXED_GAIN_MASK,
+            Self::LinearDecrease
+            | Self::ExponentialDecrease
+            | Self::LinearIncrease
+            | Self::BentIncrease => Gain::RATE_MASK,
+        }
+    }
 }
 
 u8_value_newtype!(Gain, GainOutOfRange, NoGain);
