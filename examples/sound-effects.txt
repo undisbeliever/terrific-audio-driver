@@ -55,6 +55,13 @@
     portamento c3 no_keyoff -30 8
     portamento g3 keyoff +20 20
 
+=== vibrato_alarm ===
+    set_volume 196
+    set_instrument_and_gain square I24
+
+    set_vibrato 60 12
+    play_note a4 240
+
 === play_samples_bytecode ===
 
     set_volume 255
