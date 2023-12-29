@@ -109,9 +109,14 @@
     "player_hurt",
     "player_hurt_low_health",
     "jump",
+    "vibrato_alarm",
+    "play_samples_bytecode",
     "spawn_item",
     "collect_coin",
-    "robot_fires_laser"
+    "robot_notices_player",
+    "robot_ascend",
+    "robot_fires_laser",
+    "fire_arrow"
   ],
   "sound_effect_file": "sound-effects.txt",
   "songs": [
