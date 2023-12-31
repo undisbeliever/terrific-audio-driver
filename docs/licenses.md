@@ -107,7 +107,7 @@ Licenses marked "synthesized" did not have a license file in their crate.
 
 
 Terrific Audio Driver makes use of the following open source projects:
-  * MIT License (75)
+  * MIT License (73)
   * Apache License 2.0 (2)
   * Unicode License Agreement - Data Files and Software (2016) (1)
   * FLTK License (1)
@@ -924,7 +924,7 @@ according to those terms.
 ## MIT License
 
 Used by:
-  * [fltk-sys 1.4.19](https://github.com/fltk-rs/fltk-rs)
+  * [fltk-sys 1.4.21](https://github.com/fltk-rs/fltk-rs)
 
 ```
 MIT License
@@ -979,42 +979,12 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 ## MIT License
 
 Used by:
-  * [fltk 1.4.19](https://github.com/fltk-rs/fltk-rs)
-  * [fltk-sys 1.4.19](https://github.com/fltk-rs/fltk-rs)
+  * [fltk 1.4.21](https://github.com/fltk-rs/fltk-rs)
 
 ```
 MIT License
 
 Copyright © 2021 The fltk-rs Authors.
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-
-```
-
-
-## MIT License
-
-Used by:
-  * [fltk-sys 1.4.19](https://github.com/fltk-rs/fltk-rs)
-
-```
-MIT License
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -1048,7 +1018,7 @@ Used by:
   * [link-cplusplus 1.0.9](https://github.com/dtolnay/link-cplusplus)
   * [once_cell 1.19.0](https://github.com/matklad/once_cell)
   * [paste 1.0.14](https://github.com/dtolnay/paste)
-  * [proc-macro2 1.0.71](https://github.com/dtolnay/proc-macro2)
+  * [proc-macro2 1.0.72](https://github.com/dtolnay/proc-macro2)
   * [quote 1.0.33](https://github.com/dtolnay/quote)
   * [scratch 1.0.7](https://github.com/dtolnay/scratch)
   * [serde 1.0.193](https://github.com/serde-rs/serde)

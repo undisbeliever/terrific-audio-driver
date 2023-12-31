@@ -46,8 +46,8 @@ relative-path = { version="1.9.0", features=[ "serde" ] }
 
 sdl2 = { version="0.35.2", features=[] }
 
-# fltk 1.4.20 has a bug where the group::Tab tab height is way too tall and the contents are not visible
-fltk = { version="= 1.4.19" }
+# fltk-rs 1.4.20 has a bug where the group::Tabs tab height is way too tall and the contents are not visible
+fltk = { version="1.4.21" }
 
 cxx = { version="1.0.107" }
 

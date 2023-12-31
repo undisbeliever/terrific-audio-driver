@@ -231,9 +231,9 @@ dependencies = [
 
 [[package]]
 name = "fltk"
-version = "1.4.19"
+version = "1.4.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "66085dfcddc4fe7d72bbc46575d9918924ac4ee9a5ede18b70fff48ca17ea58d"
+checksum = "ec10f6f85572396e927c007f53ef00b05dc0671774356fb2f267bbf7a62a4795"
 dependencies = [
  "bitflags 2.4.1",
  "crossbeam-channel",
@@ -244,9 +244,9 @@ dependencies = [
 
 [[package]]
 name = "fltk-sys"
-version = "1.4.19"
+version = "1.4.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4381407b1e9001ba18c8039af5e05287e9962161b064441f256a0cc74fb839df"
+checksum = "5728b9e06ea6aa5aa3d22c0d719c08330b0716203601bea6f9d8552a9d153e38"
 dependencies = [
  "cmake",
 ]
@@ -313,9 +313,9 @@ checksum = "de3145af08024dea9fa9914f381a17b8fc6034dfb00f3a84013f7ff43f29ed4c"
 
 [[package]]
 name = "proc-macro2"
-version = "1.0.71"
+version = "1.0.72"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "75cb1540fadbd5b8fbccc4dddad2734eba435053f725621c070711a14bb5f4b8"
+checksum = "a293318316cf6478ec1ad2a21c49390a8d5b5eae9fab736467d93fbc0edc29c5"
 dependencies = [
  "unicode-ident",
 ]

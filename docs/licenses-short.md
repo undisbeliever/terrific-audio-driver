@@ -143,14 +143,12 @@ Please see the included [licenses file](licenses.md) for the full third party li
   * [colorchoice 1.0.0](https://github.com/rust-cli/anstyle), MIT License
   * [unicode-id 0.3.4](https://github.com/Boshen/unicode-id), MIT License
   * [unicode-width 0.1.11](https://github.com/unicode-rs/unicode-width), MIT License
-  * [fltk-sys 1.4.19](https://github.com/fltk-rs/fltk-rs), MIT License
+  * [fltk-sys 1.4.21](https://github.com/fltk-rs/fltk-rs), MIT License
   * [relative-path 1.9.2](https://github.com/udoprog/relative-path), MIT License
   * [sdl2-sys 0.35.2](https://github.com/rust-sdl2/rust-sdl2), MIT License
   * [winapi-i686-pc-windows-gnu 0.4.0](https://github.com/retep998/winapi-rs), MIT License
   * [winapi-x86_64-pc-windows-gnu 0.4.0](https://github.com/retep998/winapi-rs), MIT License
-  * [fltk 1.4.19](https://github.com/fltk-rs/fltk-rs), MIT License
-  * [fltk-sys 1.4.19](https://github.com/fltk-rs/fltk-rs), MIT License
-  * [fltk-sys 1.4.19](https://github.com/fltk-rs/fltk-rs), MIT License
+  * [fltk 1.4.21](https://github.com/fltk-rs/fltk-rs), MIT License
   * [cxx 1.0.111](https://github.com/dtolnay/cxx), MIT License
   * [cxx-build 1.0.111](https://github.com/dtolnay/cxx), MIT License
   * [cxxbridge-flags 1.0.111](https://github.com/dtolnay/cxx), MIT License
@@ -159,7 +157,7 @@ Please see the included [licenses file](licenses.md) for the full third party li
   * [link-cplusplus 1.0.9](https://github.com/dtolnay/link-cplusplus), MIT License
   * [once_cell 1.19.0](https://github.com/matklad/once_cell), MIT License
   * [paste 1.0.14](https://github.com/dtolnay/paste), MIT License
-  * [proc-macro2 1.0.71](https://github.com/dtolnay/proc-macro2), MIT License
+  * [proc-macro2 1.0.72](https://github.com/dtolnay/proc-macro2), MIT License
   * [quote 1.0.33](https://github.com/dtolnay/quote), MIT License
   * [scratch 1.0.7](https://github.com/dtolnay/scratch), MIT License
   * [serde 1.0.193](https://github.com/serde-rs/serde), MIT License
