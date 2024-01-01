@@ -107,7 +107,7 @@ Licenses marked "synthesized" did not have a license file in their crate.
 
 
 Terrific Audio Driver makes use of the following open source projects:
-  * MIT License (73)
+  * MIT License (74)
   * Apache License 2.0 (2)
   * Unicode License Agreement - Data Files and Software (2016) (1)
   * FLTK License (1)
@@ -1010,21 +1010,21 @@ SOFTWARE.
 ## MIT License
 
 Used by:
-  * [cxx 1.0.111](https://github.com/dtolnay/cxx)
-  * [cxx-build 1.0.111](https://github.com/dtolnay/cxx)
-  * [cxxbridge-flags 1.0.111](https://github.com/dtolnay/cxx)
-  * [cxxbridge-macro 1.0.111](https://github.com/dtolnay/cxx)
+  * [cxx 1.0.112](https://github.com/dtolnay/cxx)
+  * [cxx-build 1.0.112](https://github.com/dtolnay/cxx)
+  * [cxxbridge-flags 1.0.112](https://github.com/dtolnay/cxx)
+  * [cxxbridge-macro 1.0.112](https://github.com/dtolnay/cxx)
   * [itoa 1.0.10](https://github.com/dtolnay/itoa)
   * [link-cplusplus 1.0.9](https://github.com/dtolnay/link-cplusplus)
   * [once_cell 1.19.0](https://github.com/matklad/once_cell)
   * [paste 1.0.14](https://github.com/dtolnay/paste)
-  * [proc-macro2 1.0.72](https://github.com/dtolnay/proc-macro2)
-  * [quote 1.0.33](https://github.com/dtolnay/quote)
+  * [proc-macro2 1.0.73](https://github.com/dtolnay/proc-macro2)
+  * [quote 1.0.34](https://github.com/dtolnay/quote)
   * [scratch 1.0.7](https://github.com/dtolnay/scratch)
   * [serde 1.0.193](https://github.com/serde-rs/serde)
   * [serde_derive 1.0.193](https://github.com/serde-rs/serde)
-  * [serde_json 1.0.108](https://github.com/serde-rs/json)
-  * [syn 2.0.43](https://github.com/dtolnay/syn)
+  * [serde_json 1.0.109](https://github.com/serde-rs/json)
+  * [syn 2.0.44](https://github.com/dtolnay/syn)
   * [unicode-ident 1.0.12](https://github.com/dtolnay/unicode-ident)
 
 ```
@@ -1257,6 +1257,7 @@ DEALINGS IN THE SOFTWARE.
 
 Used by:
   * [aho-corasick 1.1.2](https://github.com/BurntSushi/aho-corasick)
+  * [memchr 2.7.1](https://github.com/BurntSushi/memchr)
   * [termcolor 1.4.0](https://github.com/BurntSushi/termcolor)
   * [winapi-util 0.1.6](https://github.com/BurntSushi/winapi-util)
 

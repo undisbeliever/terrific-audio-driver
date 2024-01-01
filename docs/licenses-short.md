@@ -149,21 +149,21 @@ Please see the included [licenses file](licenses.md) for the full third party li
   * [winapi-i686-pc-windows-gnu 0.4.0](https://github.com/retep998/winapi-rs), MIT License
   * [winapi-x86_64-pc-windows-gnu 0.4.0](https://github.com/retep998/winapi-rs), MIT License
   * [fltk 1.4.21](https://github.com/fltk-rs/fltk-rs), MIT License
-  * [cxx 1.0.111](https://github.com/dtolnay/cxx), MIT License
-  * [cxx-build 1.0.111](https://github.com/dtolnay/cxx), MIT License
-  * [cxxbridge-flags 1.0.111](https://github.com/dtolnay/cxx), MIT License
-  * [cxxbridge-macro 1.0.111](https://github.com/dtolnay/cxx), MIT License
+  * [cxx 1.0.112](https://github.com/dtolnay/cxx), MIT License
+  * [cxx-build 1.0.112](https://github.com/dtolnay/cxx), MIT License
+  * [cxxbridge-flags 1.0.112](https://github.com/dtolnay/cxx), MIT License
+  * [cxxbridge-macro 1.0.112](https://github.com/dtolnay/cxx), MIT License
   * [itoa 1.0.10](https://github.com/dtolnay/itoa), MIT License
   * [link-cplusplus 1.0.9](https://github.com/dtolnay/link-cplusplus), MIT License
   * [once_cell 1.19.0](https://github.com/matklad/once_cell), MIT License
   * [paste 1.0.14](https://github.com/dtolnay/paste), MIT License
-  * [proc-macro2 1.0.72](https://github.com/dtolnay/proc-macro2), MIT License
-  * [quote 1.0.33](https://github.com/dtolnay/quote), MIT License
+  * [proc-macro2 1.0.73](https://github.com/dtolnay/proc-macro2), MIT License
+  * [quote 1.0.34](https://github.com/dtolnay/quote), MIT License
   * [scratch 1.0.7](https://github.com/dtolnay/scratch), MIT License
   * [serde 1.0.193](https://github.com/serde-rs/serde), MIT License
   * [serde_derive 1.0.193](https://github.com/serde-rs/serde), MIT License
-  * [serde_json 1.0.108](https://github.com/serde-rs/json), MIT License
-  * [syn 2.0.43](https://github.com/dtolnay/syn), MIT License
+  * [serde_json 1.0.109](https://github.com/serde-rs/json), MIT License
+  * [syn 2.0.44](https://github.com/dtolnay/syn), MIT License
   * [unicode-ident 1.0.12](https://github.com/dtolnay/unicode-ident), MIT License
   * [sdl2 0.35.2](https://github.com/Rust-SDL2/rust-sdl2), MIT License
   * [aho-corasick 1.1.2](https://github.com/BurntSushi/aho-corasick), MIT License
@@ -177,6 +177,7 @@ Please see the included [licenses file](licenses.md) for the full third party li
   * [crossbeam-channel 0.5.10](https://github.com/crossbeam-rs/crossbeam), MIT License
   * [crossbeam-utils 0.8.18](https://github.com/crossbeam-rs/crossbeam), MIT License
   * [aho-corasick 1.1.2](https://github.com/BurntSushi/aho-corasick), MIT License
+  * [memchr 2.7.1](https://github.com/BurntSushi/memchr), MIT License
   * [termcolor 1.4.0](https://github.com/BurntSushi/termcolor), MIT License
   * [winapi-util 0.1.6](https://github.com/BurntSushi/winapi-util), MIT License
   * [unicode-ident 1.0.12](https://github.com/dtolnay/unicode-ident), Unicode License Agreement - Data Files and Software (2016)
