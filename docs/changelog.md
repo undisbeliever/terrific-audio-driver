@@ -1,6 +1,11 @@
 Terrific Audio Driver Changelog
 ===============================
 
+Version 0.0.5
+=============
+ * Fixed a crash when creating a new project or opening the Save As dialog (Windows).
+
+
 Version 0.0.4
 =============
  * Added `#Game` to song metadata.
