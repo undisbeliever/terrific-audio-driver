@@ -12,10 +12,12 @@ members = [
 ]
 
 
-# Reduce the size of the release binaries
 [profile.release]
 strip = true
-opt-level = "z"
+# Cannot use `z` here.
+# Compiling with opt-level "z" crashes on Windows when opening a Save As dialog.
+# (exit code: 0xc000001d, STATUS_ILLEGAL_INSTRUCTION)
+opt-level = 3
 # Must use false here.
 # Enabling lto crashes on Windows when opening a Save As dialog.
 # (exit code: 0xc000001d, STATUS_ILLEGAL_INSTRUCTION)
