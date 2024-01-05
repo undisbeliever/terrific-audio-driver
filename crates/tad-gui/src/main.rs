@@ -4,6 +4,7 @@
 //
 // SPDX-License-Identifier: MIT
 
+#![forbid(unsafe_code)]
 // Do not open a console window on Windows
 #![windows_subsystem = "windows"]
 

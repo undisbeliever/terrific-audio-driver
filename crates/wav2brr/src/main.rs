@@ -4,6 +4,8 @@
 //
 // SPDX-License-Identifier: MIT
 
+#![forbid(unsafe_code)]
+
 use brr::{encode_brr, read_16_bit_mono_wave_file, BrrFilter};
 
 use clap::Parser;

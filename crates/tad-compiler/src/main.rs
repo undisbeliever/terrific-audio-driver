@@ -4,6 +4,8 @@
 //
 // SPDX-License-Identifier: MIT
 
+#![forbid(unsafe_code)]
+
 use clap::{Args, Parser, Subcommand};
 
 use compiler::{

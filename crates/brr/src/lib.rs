@@ -4,6 +4,8 @@
 //
 // SPDX-License-Identifier: MIT
 
+#![forbid(unsafe_code)]
+
 mod encoder;
 mod mono_pcm_wav;
 mod parse_brr_file;

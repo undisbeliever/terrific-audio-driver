@@ -4,6 +4,8 @@
 //
 // SPDX-License-Identifier: MIT
 
+#![forbid(unsafe_code)]
+
 mod bytecode;
 mod file_pos;
 mod value_newtypes;
