@@ -345,7 +345,7 @@ impl<'a> Tokenizer<'a> {
                 }
             }
             b'a'..=b'g' => {
-                let pitch = c1.try_into().unwrap();
+                let pitch = c1.into();
                 let pitch = parse_pitch_char(pitch).unwrap();
 
                 // skip pitch character

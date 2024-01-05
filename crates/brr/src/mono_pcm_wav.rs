@@ -190,7 +190,7 @@ fn read_wave_file(
 
             _ => {
                 // Ignore unknown chunks
-                reader.seek(io::SeekFrom::Current(chunk_size.try_into().unwrap()))?;
+                reader.seek(io::SeekFrom::Current(chunk_size.into()))?;
             }
         }
     }
