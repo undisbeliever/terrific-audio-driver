@@ -1,4 +1,7 @@
 /target
 /vendor
 crates/*/target
+/.cargo
+/.vscode
+SDL2.dll
 
