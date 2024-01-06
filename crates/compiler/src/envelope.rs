@@ -315,7 +315,7 @@ impl FromStr for Gain {
     }
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Copy, PartialEq, Debug)]
 pub enum Envelope {
     Adsr(Adsr),
     Gain(Gain),

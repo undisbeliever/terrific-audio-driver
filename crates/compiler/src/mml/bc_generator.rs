@@ -36,6 +36,43 @@ pub const MAX_BROKEN_CHORD_NOTES: usize = 128;
 // Number of rest instructions before a loop uses less space
 pub const REST_LOOP_INSTRUCTION_THREASHOLD: u32 = 3;
 
+// Instrument or envelope state
+#[derive(Clone)]
+enum IeState<T> {
+    Known(T),
+    Maybe(T),
+    Unknown,
+}
+
+impl<T> IeState<T>
+where
+    T: Copy + PartialEq,
+{
+    fn is_known_and_eq(&self, o: &T) -> bool {
+        match self {
+            Self::Known(v) => o == v,
+            Self::Maybe(_) => false,
+            Self::Unknown => false,
+        }
+    }
+
+    fn promote_to_known(&self) -> Self {
+        match self {
+            Self::Known(v) => Self::Known(*v),
+            Self::Maybe(v) => Self::Known(*v),
+            Self::Unknown => Self::Unknown,
+        }
+    }
+
+    fn demote_to_maybe(&self) -> Self {
+        match self {
+            Self::Known(v) => Self::Maybe(*v),
+            Self::Maybe(v) => Self::Maybe(*v),
+            Self::Unknown => Self::Unknown,
+        }
+    }
+}
+
 struct RestLoop {
     ticks_in_loop: u32,
     n_loops: u32,
@@ -89,8 +126,8 @@ enum MpState {
 }
 
 struct SkipLastLoopState {
-    instrument: Option<usize>,
-    envelope: Option<Envelope>,
+    instrument: IeState<usize>,
+    envelope: IeState<Envelope>,
     prev_slurred_note: Option<Note>,
     vibrato: Option<ManualVibrato>,
 }
@@ -104,13 +141,8 @@ struct ChannelBcGenerator<'a> {
 
     tempo_changes: Vec<(TickCounter, TickClock)>,
 
-    instrument: Option<usize>,
-    envelope: Option<Envelope>,
-
-    // If these bools are false, no instruement/envelope deduplication is preformed.
-    // This fixes a missing set_instrument, set_adsr, set_gain, etc instruction at the start of a loop
-    instrument_known: bool,
-    envelope_known: bool,
+    instrument: IeState<usize>,
+    envelope: IeState<Envelope>,
 
     prev_slurred_note: Option<Note>,
 
@@ -140,10 +172,8 @@ impl ChannelBcGenerator<'_> {
             subroutines,
             bc: Bytecode::new_append_to_vec(bc_data, context),
             tempo_changes: Vec::new(),
-            instrument: None,
-            envelope: None,
-            instrument_known: false,
-            envelope_known: false,
+            instrument: IeState::Unknown,
+            envelope: IeState::Unknown,
             prev_slurred_note: None,
             mp: MpState::Disabled,
             vibrato: None,
@@ -167,7 +197,7 @@ impl ChannelBcGenerator<'_> {
 
     fn test_note(&mut self, note: Note) -> Result<(), MmlError> {
         match self.instrument {
-            Some(i) => {
+            IeState::Known(i) | IeState::Maybe(i) => {
                 let inst = self.instrument_from_index(i);
                 if note >= inst.first_note && note <= inst.last_note {
                     Ok(())
@@ -179,7 +209,7 @@ impl ChannelBcGenerator<'_> {
                     ))
                 }
             }
-            None => {
+            IeState::Unknown => {
                 if self.show_missing_set_instrument_error {
                     self.show_missing_set_instrument_error = false;
                     Err(MmlError::CannotPlayNoteBeforeSettingInstrument)
@@ -199,8 +229,8 @@ impl ChannelBcGenerator<'_> {
             return Err(MmlError::MpDepthZero);
         }
         let inst = match self.instrument {
-            Some(index) => self.instrument_from_index(index),
-            None => return Err(MmlError::CannotUseMpWithoutInstrument),
+            IeState::Known(i) | IeState::Maybe(i) => self.instrument_from_index(i),
+            IeState::Unknown => return Err(MmlError::CannotUseMpWithoutInstrument),
         };
 
         let pitch = self.pitch_table.pitch_for_note(inst.instrument_id, note);
@@ -538,8 +568,8 @@ impl ChannelBcGenerator<'_> {
             }
             None => {
                 let inst = match self.instrument {
-                    Some(index) => self.instrument_from_index(index),
-                    None => return Err(MmlError::PortamentoRequiresInstrument),
+                    IeState::Known(i) | IeState::Maybe(i) => self.instrument_from_index(i),
+                    IeState::Unknown => return Err(MmlError::PortamentoRequiresInstrument),
                 };
                 let p1: i32 = self
                     .pitch_table
@@ -650,18 +680,19 @@ impl ChannelBcGenerator<'_> {
 
     fn set_instrument(&mut self, inst_index: usize) -> Result<(), MmlError> {
         let inst = self.instrument_from_index(inst_index);
-        let old_inst = match self.instrument_known {
-            true => self.instrument.map(|i| self.instrument_from_index(i)),
-            false => None,
+        let old_inst = match self.instrument {
+            IeState::Known(i) => Some(self.instrument_from_index(i)),
+            IeState::Maybe(_) => None,
+            IeState::Unknown => None,
         };
 
         let i_id = inst.instrument_id;
-        let envelope = inst.envelope.clone();
+        let envelope = inst.envelope;
 
         match old_inst {
             Some(old) if old.instrument_id == i_id => {
                 // InstrumentId unchanged, check envelope
-                if Some(&inst.envelope) != self.envelope.as_ref() {
+                if !self.envelope.is_known_and_eq(&inst.envelope) {
                     if inst.envelope_unchanged {
                         // Outputs fewer bytes then a `set_adsr` instruction.
                         self.bc.set_instrument(i_id);
@@ -685,28 +716,23 @@ impl ChannelBcGenerator<'_> {
             }
         }
 
-        self.instrument = Some(inst_index);
-        self.envelope = Some(envelope);
-
-        self.instrument_known = true;
-        self.envelope_known = true;
+        self.instrument = IeState::Known(inst_index);
+        self.envelope = IeState::Known(envelope);
 
         Ok(())
     }
 
     fn set_adsr(&mut self, adsr: Adsr) {
-        if !self.envelope_known || self.envelope != Some(Envelope::Adsr(adsr)) {
+        if !self.envelope.is_known_and_eq(&Envelope::Adsr(adsr)) {
             self.bc.set_adsr(adsr);
-            self.envelope = Some(Envelope::Adsr(adsr));
-            self.envelope_known = true;
+            self.envelope = IeState::Known(Envelope::Adsr(adsr));
         }
     }
 
     fn set_gain(&mut self, gain: Gain) {
-        if !self.envelope_known || self.envelope != Some(Envelope::Gain(gain)) {
+        if !self.envelope.is_known_and_eq(&Envelope::Gain(gain)) {
             self.bc.set_gain(gain);
-            self.envelope = Some(Envelope::Gain(gain));
-            self.envelope_known = true;
+            self.envelope = IeState::Known(Envelope::Gain(gain));
         }
     }
 
@@ -728,10 +754,10 @@ impl ChannelBcGenerator<'_> {
         }
 
         if let Some(inst) = sub.last_instrument {
-            self.instrument = Some(inst);
+            self.instrument = IeState::Known(inst);
         }
-        if let Some(e) = &sub.last_envelope {
-            self.envelope = Some(e.clone());
+        if let Some(e) = sub.last_envelope {
+            self.envelope = IeState::Known(e);
         }
 
         self.bc.call_subroutine(s_id)?;
@@ -863,8 +889,8 @@ impl ChannelBcGenerator<'_> {
 
                 // The loop might change the instrument and evelope.
                 // When the loop loops, the instrument/envelope might have changed.
-                self.instrument_known = false;
-                self.envelope_known = false;
+                self.instrument = self.instrument.demote_to_maybe();
+                self.envelope = self.envelope.demote_to_maybe();
             }
 
             MmlCommand::SkipLastLoop => {
@@ -872,7 +898,7 @@ impl ChannelBcGenerator<'_> {
 
                 if let Some(s) = self.skip_last_loop_state.last_mut() {
                     *s = Some(SkipLastLoopState {
-                        instrument: self.instrument,
+                        instrument: self.instrument.clone(),
                         envelope: self.envelope.clone(),
                         prev_slurred_note: self.prev_slurred_note,
                         vibrato: self.vibrato,
@@ -883,16 +909,16 @@ impl ChannelBcGenerator<'_> {
             &MmlCommand::EndLoop(loop_count) => {
                 self.bc.end_loop(Some(loop_count))?;
 
-                if let Some(Some(s)) = &self.skip_last_loop_state.pop() {
+                if let Some(Some(s)) = self.skip_last_loop_state.pop() {
                     self.instrument = s.instrument;
-                    self.envelope = s.envelope.clone();
+                    self.envelope = s.envelope;
                     self.prev_slurred_note = s.prev_slurred_note;
                     self.vibrato = s.vibrato;
                 }
 
                 if self.skip_last_loop_state.is_empty() {
-                    self.instrument_known = true;
-                    self.envelope_known = true;
+                    self.instrument = self.instrument.promote_to_known();
+                    self.envelope = self.envelope.promote_to_known();
                 }
             }
 
@@ -1091,8 +1117,16 @@ impl<'a, 'b> MmlSongBytecodeGenerator<'a, 'b> {
                 identifier,
                 bytecode_offset: sd_start_index.try_into().unwrap_or(u16::MAX),
                 subroutine_id: SubroutineId::new(subroutine_index, tick_counter, max_nested_loops),
-                last_instrument: gen.instrument,
-                last_envelope: gen.envelope,
+                last_instrument: match gen.instrument {
+                    IeState::Known(i) => Some(i),
+                    IeState::Maybe(_) => panic!("unexpected maybe instrument"),
+                    IeState::Unknown => None,
+                },
+                last_envelope: match gen.envelope {
+                    IeState::Known(e) => Some(e),
+                    IeState::Maybe(_) => panic!("unexpected maybe envelope"),
+                    IeState::Unknown => None,
+                },
                 changes_song_tempo: !gen.tempo_changes.is_empty(),
             })
         } else {

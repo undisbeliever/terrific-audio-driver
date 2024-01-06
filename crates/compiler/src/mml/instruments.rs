@@ -65,7 +65,7 @@ fn parse_instrument(
         InstrumentOrSample::Instrument(inst) => &inst.envelope,
         InstrumentOrSample::Sample(sample) => &sample.envelope,
     };
-    let mut envelope = source_envelope.clone();
+    let mut envelope = *source_envelope;
 
     if let Some(args) = args {
         let arg = args.text;
