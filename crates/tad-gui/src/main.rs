@@ -87,6 +87,8 @@ use std::path::PathBuf;
 use std::sync::{mpsc, Arc};
 
 const CARGO_PKG_VERSION: &str = env!("CARGO_PKG_VERSION");
+const DEFAULT_WINDOW_TITLE: &str = "Terrific Audio Driver";
+const WINDOW_TITLE_SUFFIX: &str = " - Terrific Audio Driver";
 
 #[derive(Debug)]
 pub enum GuiMessage {
@@ -294,8 +296,6 @@ impl Project {
 
     fn process(&mut self, m: GuiMessage) {
         match m {
-            GuiMessage::SelectedTabChanged => self.selected_tab_changed(),
-
             GuiMessage::FromCompiler(m) => {
                 self.process_compiler_output(m);
             }
@@ -523,6 +523,7 @@ impl Project {
             GuiMessage::ShowLicensesDialog => (),
             GuiMessage::OpenProject => (),
             GuiMessage::NewProject => (),
+            GuiMessage::SelectedTabChanged => (),
         }
     }
 
@@ -650,7 +651,7 @@ impl Project {
         ));
     }
 
-    fn selected_tab_changed(&mut self) {
+    fn selected_tab_changed(&mut self, window: &mut fltk::window::Window) {
         if self.samples_tab_selected {
             let _ = self
                 .compiler_sender
@@ -674,6 +675,17 @@ impl Project {
             .is_some_and(|t| t.is_same(self.sound_effects_tab.widget()));
 
         self.tab_manager.selected_tab_changed();
+
+        match self
+            .tab_manager
+            .selected_file_name()
+            .or_else(|| self.tab_manager.project_file_name())
+        {
+            Some(file_name) => {
+                window.set_label(&[file_name, WINDOW_TITLE_SUFFIX].concat());
+            }
+            None => window.set_label(DEFAULT_WINDOW_TITLE),
+        }
     }
 
     fn maybe_set_sfx_file(&mut self, sfx_file: SoundEffectsFile) {
@@ -765,6 +777,8 @@ impl Project {
             let _ = self
                 .compiler_sender
                 .send(ToCompiler::SongChanged(song_id, f.contents));
+
+            self.sender.send(GuiMessage::SelectedTabChanged);
         }
     }
 
@@ -785,6 +799,8 @@ impl Project {
             let _ = self
                 .compiler_sender
                 .send(ToCompiler::SongChanged(song_id, file.contents));
+
+            self.sender.send(GuiMessage::SelectedTabChanged);
         }
     }
 
@@ -958,7 +974,7 @@ impl MainWindow {
         let mut window = fltk::window::Window::default()
             .with_size(800, 600)
             .center_screen()
-            .with_label("Audio Driver GUI");
+            .with_label(DEFAULT_WINDOW_TITLE);
 
         window.make_resizable(true);
 
@@ -1053,6 +1069,13 @@ impl MainWindow {
             self.audio_sender.clone(),
             self.audio_monitor.clone(),
         ));
+        self.selected_tab_changed();
+    }
+
+    pub fn selected_tab_changed(&mut self) {
+        if let Some(p) = &mut self.project {
+            p.selected_tab_changed(&mut self.window);
+        }
     }
 
     fn show_or_hide_help_syntax(&mut self) {
@@ -1080,9 +1103,10 @@ impl MainWindow {
             },
             GuiMessage::ShowAboutTab => {
                 self.about_tab.show();
-                if let Some(p) = &mut self.project {
-                    p.selected_tab_changed();
-                }
+                self.selected_tab_changed();
+            }
+            GuiMessage::SelectedTabChanged => {
+                self.selected_tab_changed();
             }
             GuiMessage::ShowOrHideHelpSyntax => {
                 self.show_or_hide_help_syntax();

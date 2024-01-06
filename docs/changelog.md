@@ -13,6 +13,10 @@ MML Changes:
    (ie, `@1 a [@1 b @2 c]10`).
 
 
+GUI Changes:
+ * Show filename in the window title
+
+
 Version 0.0.5
 =============
  * Fixed a crash when creating a new project or opening the Save As dialog (Windows).

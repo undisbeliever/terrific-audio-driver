@@ -110,6 +110,10 @@ mod file_state {
             self.path.as_deref()
         }
 
+        pub fn file_name(&self) -> Option<&str> {
+            self.file_name.as_deref()
+        }
+
         pub fn is_unsaved(&self) -> bool {
             self.is_unsaved
         }
@@ -286,6 +290,19 @@ impl TabManager {
 
     pub fn selected_file(&self) -> Option<FileType> {
         self.selected_file.clone()
+    }
+
+    pub fn selected_file_name(&self) -> Option<&str> {
+        self.selected_file
+            .as_ref()
+            .and_then(|ft| self.file_states.get(ft))
+            .and_then(|s| s.file_name())
+    }
+
+    pub fn project_file_name(&self) -> Option<&str> {
+        self.file_states
+            .get(&FileType::Project)
+            .and_then(|s| s.file_name())
     }
 
     pub fn find_file(&self, p: &Path) -> Option<FileType> {
