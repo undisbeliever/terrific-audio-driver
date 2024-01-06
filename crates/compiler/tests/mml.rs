@@ -1553,6 +1553,210 @@ fn test_skip_last_loop_prev_slurred_note() {
 }
 
 #[test]
+fn test_set_instrument_start_of_loop() {
+    assert_mml_channel_a_matches_bytecode(
+        r##"
+@1 dummy_instrument
+@2 inst_with_adsr
+
+A @1 [@1 a]3 @1 b
+"##,
+        &[
+            "set_instrument dummy_instrument",
+            "start_loop",
+            "set_instrument dummy_instrument",
+            "play_note a4 24",
+            "end_loop 3",
+            "play_note b4 24",
+        ],
+    );
+
+    assert_mml_channel_a_matches_bytecode(
+        r##"
+@1 dummy_instrument
+@2 inst_with_adsr
+
+A @1 a [@1 b @2 c]3
+"##,
+        &[
+            "set_instrument dummy_instrument",
+            "play_note a4 24",
+            "start_loop",
+            "set_instrument dummy_instrument",
+            "play_note b4 24",
+            "set_instrument inst_with_adsr",
+            "play_note c4 24",
+            "end_loop 3",
+        ],
+    );
+
+    assert_mml_channel_a_matches_bytecode(
+        r##"
+@1 dummy_instrument
+@2 inst_with_adsr
+
+A @1 [[a]2 @1 b @2 c]3
+"##,
+        &[
+            "set_instrument dummy_instrument",
+            "start_loop",
+            "start_loop",
+            "play_note a4 24",
+            "end_loop 2",
+            "set_instrument dummy_instrument",
+            "play_note b4 24",
+            "set_instrument inst_with_adsr",
+            "play_note c4 24",
+            "end_loop 3",
+        ],
+    );
+
+    assert_mml_channel_a_matches_bytecode(
+        r##"
+@1 dummy_instrument
+@2 inst_with_adsr
+
+A @1 [[@1 a]2 @1 b @2 c]3
+"##,
+        &[
+            "set_instrument dummy_instrument",
+            "start_loop",
+            "start_loop",
+            "set_instrument dummy_instrument",
+            "play_note a4 24",
+            "end_loop 2",
+            // no set_instrument instruction
+            "play_note b4 24",
+            "set_instrument inst_with_adsr",
+            "play_note c4 24",
+            "end_loop 3",
+        ],
+    );
+}
+
+#[test]
+fn test_set_adsr_start_of_loop() {
+    assert_line_matches_bytecode(
+        "A1,2,3,4 [A1,2,3,4 a]3 b",
+        &[
+            "set_adsr 1 2 3 4",
+            "start_loop",
+            "set_adsr 1 2 3 4",
+            "play_note a4 24",
+            "end_loop 3",
+            "play_note b4 24",
+        ],
+    );
+
+    assert_line_matches_bytecode(
+        "A1,2,3,4 [A1,2,3,4 a A5,6,7,8 b]3",
+        &[
+            "set_adsr 1 2 3 4",
+            "start_loop",
+            "set_adsr 1 2 3 4",
+            "play_note a4 24",
+            "set_adsr 5 6 7 8",
+            "play_note b4 24",
+            "end_loop 3",
+        ],
+    );
+
+    assert_line_matches_bytecode(
+        "A1,2,3,4 [[a]2 A1,2,3,4 b A5,6,7,8 c]3",
+        &[
+            "set_adsr 1 2 3 4",
+            "start_loop",
+            "start_loop",
+            "play_note a4 24",
+            "end_loop 2",
+            "set_adsr 1 2 3 4",
+            "play_note b4 24",
+            "set_adsr 5 6 7 8",
+            "play_note c4 24",
+            "end_loop 3",
+        ],
+    );
+
+    assert_line_matches_bytecode(
+        "A1,2,3,4 [[A1,2,3,4 a]2 A1,2,3,4 b A5,6,7,8 c]3",
+        &[
+            "set_adsr 1 2 3 4",
+            "start_loop",
+            "start_loop",
+            "set_adsr 1 2 3 4",
+            "play_note a4 24",
+            "end_loop 2",
+            // no set_adsr instruction
+            "play_note b4 24",
+            "set_adsr 5 6 7 8",
+            "play_note c4 24",
+            "end_loop 3",
+        ],
+    );
+}
+
+#[test]
+fn test_set_gain_start_of_loop() {
+    assert_line_matches_bytecode(
+        "G10 [G10 a]3 b",
+        &[
+            "set_gain 10",
+            "start_loop",
+            "set_gain 10",
+            "play_note a4 24",
+            "end_loop 3",
+            "play_note b4 24",
+        ],
+    );
+
+    assert_line_matches_bytecode(
+        "G10 [G10 a G20 b]3",
+        &[
+            "set_gain 10",
+            "start_loop",
+            "set_gain 10",
+            "play_note a4 24",
+            "set_gain 20",
+            "play_note b4 24",
+            "end_loop 3",
+        ],
+    );
+
+    assert_line_matches_bytecode(
+        "G10 [[a]2 G10 b G20 c]3",
+        &[
+            "set_gain 10",
+            "start_loop",
+            "start_loop",
+            "play_note a4 24",
+            "end_loop 2",
+            "set_gain 10",
+            "play_note b4 24",
+            "set_gain 20",
+            "play_note c4 24",
+            "end_loop 3",
+        ],
+    );
+
+    assert_line_matches_bytecode(
+        "G10 [[G10 a]2 G10 b G20 c]3",
+        &[
+            "set_gain 10",
+            "start_loop",
+            "start_loop",
+            "set_gain 10",
+            "play_note a4 24",
+            "end_loop 2",
+            // no set_gain instruction
+            "play_note b4 24",
+            "set_gain 20",
+            "play_note c4 24",
+            "end_loop 3",
+        ],
+    );
+}
+
+#[test]
 fn test_merge_rests_newlines() {
     let mml = r##"
 @0 dummy_instrument

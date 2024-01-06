@@ -5,6 +5,8 @@
 @conga   conga
 @cowbell cowbell
 
+A @conga
+
 A l4 [ @conga s0     s1     @cowbell s r   ]2
 A l4 [ @conga s0     s1     @cowbell l2 s  ]2
 A l4 [ @conga s0,4   s1,4   @cowbell s,2   ]2

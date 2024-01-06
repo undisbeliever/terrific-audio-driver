@@ -107,6 +107,11 @@ struct ChannelBcGenerator<'a> {
     instrument: Option<usize>,
     envelope: Option<Envelope>,
 
+    // If these bools are false, no instruement/envelope deduplication is preformed.
+    // This fixes a missing set_instrument, set_adsr, set_gain, etc instruction at the start of a loop
+    instrument_known: bool,
+    envelope_known: bool,
+
     prev_slurred_note: Option<Note>,
 
     mp: MpState,
@@ -137,6 +142,8 @@ impl ChannelBcGenerator<'_> {
             tempo_changes: Vec::new(),
             instrument: None,
             envelope: None,
+            instrument_known: false,
+            envelope_known: false,
             prev_slurred_note: None,
             mp: MpState::Disabled,
             vibrato: None,
@@ -643,7 +650,10 @@ impl ChannelBcGenerator<'_> {
 
     fn set_instrument(&mut self, inst_index: usize) -> Result<(), MmlError> {
         let inst = self.instrument_from_index(inst_index);
-        let old_inst = self.instrument.map(|i| self.instrument_from_index(i));
+        let old_inst = match self.instrument_known {
+            true => self.instrument.map(|i| self.instrument_from_index(i)),
+            false => None,
+        };
 
         let i_id = inst.instrument_id;
         let envelope = inst.envelope.clone();
@@ -678,20 +688,25 @@ impl ChannelBcGenerator<'_> {
         self.instrument = Some(inst_index);
         self.envelope = Some(envelope);
 
+        self.instrument_known = true;
+        self.envelope_known = true;
+
         Ok(())
     }
 
     fn set_adsr(&mut self, adsr: Adsr) {
-        if self.envelope != Some(Envelope::Adsr(adsr)) {
+        if !self.envelope_known || self.envelope != Some(Envelope::Adsr(adsr)) {
             self.bc.set_adsr(adsr);
             self.envelope = Some(Envelope::Adsr(adsr));
+            self.envelope_known = true;
         }
     }
 
     fn set_gain(&mut self, gain: Gain) {
-        if self.envelope != Some(Envelope::Gain(gain)) {
+        if !self.envelope_known || self.envelope != Some(Envelope::Gain(gain)) {
             self.bc.set_gain(gain);
             self.envelope = Some(Envelope::Gain(gain));
+            self.envelope_known = true;
         }
     }
 
@@ -845,6 +860,11 @@ impl ChannelBcGenerator<'_> {
             MmlCommand::StartLoop => {
                 self.bc.start_loop(None)?;
                 self.skip_last_loop_state.push(None);
+
+                // The loop might change the instrument and evelope.
+                // When the loop loops, the instrument/envelope might have changed.
+                self.instrument_known = false;
+                self.envelope_known = false;
             }
 
             MmlCommand::SkipLastLoop => {
@@ -868,6 +888,11 @@ impl ChannelBcGenerator<'_> {
                     self.envelope = s.envelope.clone();
                     self.prev_slurred_note = s.prev_slurred_note;
                     self.vibrato = s.vibrato;
+                }
+
+                if self.skip_last_loop_state.is_empty() {
+                    self.instrument_known = true;
+                    self.envelope_known = true;
                 }
             }
 
