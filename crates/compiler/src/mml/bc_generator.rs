@@ -642,9 +642,6 @@ impl ChannelBcGenerator<'_> {
     }
 
     fn set_instrument(&mut self, inst_index: usize) -> Result<(), MmlError> {
-        if self.instrument == Some(inst_index) {
-            return Ok(());
-        }
         let inst = self.instrument_from_index(inst_index);
         let old_inst = self.instrument.map(|i| self.instrument_from_index(i));
 

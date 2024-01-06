@@ -1230,6 +1230,38 @@ fn test_parse_hex() {
 }
 
 #[test]
+fn test_set_instrument_after_set_adsr() {
+    assert_mml_channel_a_matches_bytecode(
+        r##"
+@1 inst_with_adsr
+
+A @1 A1,2,3,4 @1
+"##,
+        &[
+            "set_instrument inst_with_adsr",
+            "set_adsr 1 2 3 4",
+            "set_instrument inst_with_adsr",
+        ],
+    );
+}
+
+#[test]
+fn test_set_instrument_after_set_gain() {
+    assert_mml_channel_a_matches_bytecode(
+        r##"
+@1 inst_with_gain
+
+A @1 GI5 @1
+"##,
+        &[
+            "set_instrument inst_with_gain",
+            "set_gain I5",
+            "set_instrument inst_with_gain",
+        ],
+    );
+}
+
+#[test]
 fn test_echo() {
     assert_line_matches_bytecode("E", &["enable_echo"]);
     assert_line_matches_bytecode("E1", &["enable_echo"]);
