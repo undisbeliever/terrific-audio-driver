@@ -4,6 +4,8 @@
 //
 // SPDX-License-Identifier: MIT
 
+use std::ops::BitAnd;
+
 use crate::{
     BrrFilter, BrrSample, BRR_HEADER_END_FLAG, BRR_HEADER_LOOP_FLAG, BYTES_PER_BRR_BLOCK,
     SAMPLES_PER_BLOCK,
@@ -92,11 +94,16 @@ fn build_block(
         let n = ((s - offset) / div).clamp(I4_MIN, I4_MAX);
         let s = n * div + offset;
 
-        // clamp to an i16
-        let s: i16 = s
-            .clamp(i16::MIN.into(), i16::MAX.into())
-            .try_into()
-            .unwrap();
+        // Sample is clamped to 16 bit and then clipped to 15 bit.
+        // (source: Anomie's S-DSP Doc)
+        //
+        // The clamp/clip values are left-shifted by 1 as `build_block()` encodes 16 bit samples.
+
+        // clamp to 16 bit
+        let s = s.clamp(i32::from(i16::MIN) << 1, i32::from(i16::MAX) << 1);
+        // clip to 15 bit
+        let s = s.bitand(0x7fff_i32 << 1);
+        let s = s as i16; // truncate
 
         p2 = p1;
         p1 = s as i32;
