@@ -55,6 +55,10 @@ pub struct ValidBrrFile {
 }
 
 impl ValidBrrFile {
+    pub fn brr_data(&self) -> &[u8] {
+        &self.brr_data
+    }
+
     /// If loop_point is Some and the BRR File contains a loop header, loop_point will override
     /// the BRR loop header.
     pub fn into_brr_sample(self, loop_point: Option<usize>) -> Result<BrrSample, ParseError> {
