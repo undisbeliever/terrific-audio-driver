@@ -18,8 +18,8 @@ use crate::pitch_table::{
 };
 
 use brr::{
-    encode_brr, parse_brr_file, read_16_bit_mono_wave_file, BrrFilter, BrrSample,
-    MonoPcm16WaveFile, ValidBrrFile, BYTES_PER_BRR_BLOCK, SAMPLES_PER_BLOCK,
+    encode_brr, parse_brr_file, read_mono_pcm_wave_file, BrrFilter, BrrSample, MonoPcm16WaveFile,
+    ValidBrrFile, BYTES_PER_BRR_BLOCK, SAMPLES_PER_BLOCK,
 };
 
 use std::collections::HashMap;
@@ -99,7 +99,7 @@ impl SampleFileCache {
         self.wav_files.entry(source.to_owned()).or_insert_with(|| {
             let p = &source.to_path(&self.parent_path);
             match fs::File::open(p) {
-                Ok(mut file) => match read_16_bit_mono_wave_file(&mut file, MAX_WAV_SAMPLES) {
+                Ok(mut file) => match read_mono_pcm_wave_file(&mut file, MAX_WAV_SAMPLES) {
                     Ok(w) => Ok(w),
                     Err(e) => Err(BrrError::WaveFileError(Arc::from((
                         source.to_path_string(),

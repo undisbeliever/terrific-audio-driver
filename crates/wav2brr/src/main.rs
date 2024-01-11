@@ -6,7 +6,7 @@
 
 #![forbid(unsafe_code)]
 
-use brr::{encode_brr, read_16_bit_mono_wave_file, BrrFilter};
+use brr::{encode_brr, read_mono_pcm_wave_file, BrrFilter};
 
 use clap::Parser;
 
@@ -83,7 +83,7 @@ fn main() {
             Ok(file) => file,
         };
 
-        match read_16_bit_mono_wave_file(&mut wave_file, u16::MAX.into()) {
+        match read_mono_pcm_wave_file(&mut wave_file, u16::MAX.into()) {
             Err(why) => error!("Error reading {}: {}", args.input.display(), why),
             Ok(wav) => wav,
         }

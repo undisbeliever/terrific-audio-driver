@@ -19,7 +19,7 @@ pub enum WavError {
     WaveFileTooLarge,
     NotAPcmWaveFile,
     NoSamples,
-    NotA16BitMonoWav,
+    Not8Or16BitMonoWav,
 
     InvalidWaveFile,
     InvaidDataChunkSize,
@@ -35,7 +35,7 @@ impl Display for WavError {
             WavError::NotAPcmWaveFile => write!(f, "not a PCM (uncompressed) wave file"),
             WavError::NoSamples => write!(f, "wave file is empty (no samples)"),
 
-            WavError::NotA16BitMonoWav => write!(f, "not a 16-bit mono PCM wave file"),
+            WavError::Not8Or16BitMonoWav => write!(f, "not an 8-bit or 16-bit mono PCM wave file"),
 
             WavError::InvalidWaveFile => write!(f, "invalid wave file"),
             WavError::InvaidDataChunkSize => {
@@ -209,16 +209,14 @@ fn is_fmt_16_bit_mono_pcm(fmt: &FmtChunk) -> bool {
         && fmt.bits_per_sample == 16
 }
 
-pub fn read_16_bit_mono_wave_file(
-    reader: &mut (impl io::Read + io::Seek),
-    max_samples: usize,
-) -> Result<MonoPcm16WaveFile, WavError> {
-    let wav = read_wave_file(reader, max_samples * 2)?;
+fn is_fmt_8_bit_mono_pcm(fmt: &FmtChunk) -> bool {
+    fmt.format_tag == WAV_FORMAT_PCM_FORMAT
+        && fmt.n_channels == 1
+        && fmt.block_align == 1
+        && fmt.bits_per_sample == 8
+}
 
-    if !is_fmt_16_bit_mono_pcm(&wav.format) {
-        return Err(WavError::NotA16BitMonoWav);
-    }
-
+fn decode_16_bit(wav: WaveFile) -> Result<MonoPcm16WaveFile, WavError> {
     if wav.data.len() % 2 != 0 {
         return Err(WavError::InvaidDataChunkSize);
     }
@@ -236,6 +234,36 @@ pub fn read_16_bit_mono_wave_file(
         sample_rate: wav.format.samples_per_second,
         samples,
     })
+}
+
+fn decode_8_bit(wav: WaveFile) -> Result<MonoPcm16WaveFile, WavError> {
+    // Convert data to i16 vector
+
+    let samples = wav
+        .data
+        .iter()
+        .map(|s| (i16::from(*s) - 128) << 8)
+        .collect();
+
+    Ok(MonoPcm16WaveFile {
+        sample_rate: wav.format.samples_per_second,
+        samples,
+    })
+}
+
+pub fn read_mono_pcm_wave_file(
+    reader: &mut (impl io::Read + io::Seek),
+    max_samples: usize,
+) -> Result<MonoPcm16WaveFile, WavError> {
+    let wav = read_wave_file(reader, max_samples * 2)?;
+
+    if is_fmt_16_bit_mono_pcm(&wav.format) {
+        decode_16_bit(wav)
+    } else if is_fmt_8_bit_mono_pcm(&wav.format) {
+        decode_8_bit(wav)
+    } else {
+        return Err(WavError::Not8Or16BitMonoWav);
+    }
 }
 
 #[cfg(test)]
@@ -265,6 +293,20 @@ mod tests {
     // Samples read using python `wave` and `struct` modules.
     const MONO_32000_16_BIT_SAMPLES: [i16; 10] = [
         0, 15408, 24933, 24929, 15410, 0, -15410, -24929, -24934, -15406,
+    ];
+
+    // Created using audacity's Tone Generator
+    //  Mono, 8-bit PCM
+    //  Waveform: Sine, Frequency: 3200, Amplitude: 0.8, Duration: 10 samples
+    const MONO_32000_8_BIT_PCM: [u8; 54] = [
+        0x52, 0x49, 0x46, 0x46, 0x2e, 0x00, 0x00, 0x00, 0x57, 0x41, 0x56, 0x45, 0x66, 0x6d, 0x74,
+        0x20, 0x10, 0x00, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00, 0x7d, 0x00, 0x00, 0x00, 0x7d,
+        0x00, 0x00, 0x01, 0x00, 0x08, 0x00, 0x64, 0x61, 0x74, 0x61, 0x0a, 0x00, 0x00, 0x00, 0x80,
+        0xbc, 0xe1, 0xe1, 0xbc, 0x80, 0x43, 0x1e, 0x1e, 0x43,
+    ];
+    // Samples created by loading the 8 bit PCM in audacity and exporting it as a 16 bit PCM wave file
+    const MONO_32000_8_BIT_SAMPLES: [i16; 10] = [
+        0, 15360, 24832, 24832, 15360, 0, -15616, -25088, -25088, -15616,
     ];
 
     #[test]
@@ -354,15 +396,15 @@ mod tests {
 
     #[test]
     fn test_not_16_bit_mono_wav() {
-        let r = read_16_bit_mono_wave_file(&mut io::Cursor::new(STEREO_96000_32_BIT_PCM), 100);
+        let r = read_mono_pcm_wave_file(&mut io::Cursor::new(STEREO_96000_32_BIT_PCM), 100);
 
-        assert!(matches!(r, Err(WavError::NotA16BitMonoWav)));
+        assert!(matches!(r, Err(WavError::Not8Or16BitMonoWav)));
     }
 
     #[test]
     fn test_read_16_bit_mono_wave_file() {
         let wav =
-            read_16_bit_mono_wave_file(&mut io::Cursor::new(MONO_32000_16_BIT_PCM), 100).unwrap();
+            read_mono_pcm_wave_file(&mut io::Cursor::new(MONO_32000_16_BIT_PCM), 100).unwrap();
 
         assert!(
             wav == MonoPcm16WaveFile {
@@ -376,17 +418,28 @@ mod tests {
     fn test_read_16_bit_mono_wave_file_max_data_size() {
         let n_samples = MONO_32000_16_BIT_SAMPLES.len();
 
-        let r = read_16_bit_mono_wave_file(&mut io::Cursor::new(MONO_32000_16_BIT_PCM), 1000);
+        let r = read_mono_pcm_wave_file(&mut io::Cursor::new(MONO_32000_16_BIT_PCM), 1000);
         assert!(r.is_ok());
 
-        let r = read_16_bit_mono_wave_file(&mut io::Cursor::new(MONO_32000_16_BIT_PCM), n_samples);
+        let r = read_mono_pcm_wave_file(&mut io::Cursor::new(MONO_32000_16_BIT_PCM), n_samples);
         assert!(r.is_ok());
 
-        let r =
-            read_16_bit_mono_wave_file(&mut io::Cursor::new(MONO_32000_16_BIT_PCM), n_samples - 1);
+        let r = read_mono_pcm_wave_file(&mut io::Cursor::new(MONO_32000_16_BIT_PCM), n_samples - 1);
         assert!(matches!(r, Err(WavError::WaveFileTooLarge)));
 
-        let r = read_16_bit_mono_wave_file(&mut io::Cursor::new(MONO_32000_16_BIT_PCM), 0);
+        let r = read_mono_pcm_wave_file(&mut io::Cursor::new(MONO_32000_16_BIT_PCM), 0);
         assert!(matches!(r, Err(WavError::WaveFileTooLarge)));
+    }
+
+    #[test]
+    fn test_read_8_bit_mono_wave_file() {
+        let wav = read_mono_pcm_wave_file(&mut io::Cursor::new(MONO_32000_8_BIT_PCM), 100).unwrap();
+
+        assert!(
+            wav == MonoPcm16WaveFile {
+                sample_rate: 32000,
+                samples: MONO_32000_8_BIT_SAMPLES.to_vec(),
+            }
+        );
     }
 }

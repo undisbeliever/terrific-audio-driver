@@ -15,7 +15,7 @@ use std::str::FromStr;
 
 pub use decoder::decode_brr_data;
 pub use encoder::{encode_brr, EncodeError};
-pub use mono_pcm_wav::{read_16_bit_mono_wave_file, MonoPcm16WaveFile, WavError};
+pub use mono_pcm_wav::{read_mono_pcm_wave_file, MonoPcm16WaveFile, WavError};
 pub use parse_brr_file::{parse_brr_file, ParseError, ValidBrrFile};
 
 pub const SAMPLES_PER_BLOCK: usize = 16;
