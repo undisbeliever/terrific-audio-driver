@@ -4,8 +4,7 @@
 //
 // SPDX-License-Identifier: MIT
 
-use std::ops::BitAnd;
-
+use crate::decoder::{filter0, filter1, filter2, filter3, I15Sample};
 use crate::{
     BrrFilter, BrrSample, BRR_HEADER_END_FLAG, BRR_HEADER_LOOP_FLAG, BYTES_PER_BRR_BLOCK,
     SAMPLES_PER_BLOCK,
@@ -65,51 +64,41 @@ struct BrrBlock {
     shift: u8,
     // signed 4-bit values
     nibbles: [i8; 16],
-    decoded_samples: [i16; SAMPLES_PER_BLOCK],
+    decoded_samples: [I15Sample; SAMPLES_PER_BLOCK],
 }
 
 fn build_block(
-    samples: &[i16; SAMPLES_PER_BLOCK],
+    samples: &[I15Sample; SAMPLES_PER_BLOCK],
     shift: u8,
     filter: BrrFilter,
-    filter_fn: fn(i32, i32) -> i32,
-    prev1: i16,
-    prev2: i16,
+    filter_fn: fn(I15Sample, I15Sample) -> i32,
+    prev1: I15Sample,
+    prev2: I15Sample,
 ) -> BrrBlock {
     assert!(shift <= MAX_SHIFT);
 
     let mut nibbles = [0; SAMPLES_PER_BLOCK];
-    let mut decoded_samples = [0; SAMPLES_PER_BLOCK];
+    let mut decoded_samples: [I15Sample; SAMPLES_PER_BLOCK] = Default::default();
 
     let div: i32 = 1 << shift;
 
-    let mut p1 = prev1 as i32;
-    let mut p2 = prev2 as i32;
+    let mut prev1 = prev1;
+    let mut prev2 = prev2;
 
     for (i, s) in samples.iter().enumerate() {
-        let s: i32 = (*s).into();
+        let offset = filter_fn(prev1, prev2);
 
-        let offset = filter_fn(p1, p2);
+        // Using division instead of `>> shift` to round towards 0 when s is negative
+        let n = (((s.value() - offset) << 1) / div).clamp(I4_MIN, I4_MAX);
 
-        let n = ((s - offset) / div).clamp(I4_MIN, I4_MAX);
-        let s = n * div + offset;
+        // Decode nibble (no shift out-of-range test required)
+        let d = I15Sample::clamp_and_clip(((n << shift) >> 1) + offset);
 
-        // Sample is clamped to 16 bit and then clipped to 15 bit.
-        // (source: Anomie's S-DSP Doc)
-        //
-        // The clamp/clip values are left-shifted by 1 as `build_block()` encodes 16 bit samples.
-
-        // clamp to 16 bit
-        let s = s.clamp(i32::from(i16::MIN) << 1, i32::from(i16::MAX) << 1);
-        // clip to 15 bit
-        let s = s.bitand(0x7fff_i32 << 1);
-        let s = s as i16; // truncate
-
-        p2 = p1;
-        p1 = s as i32;
+        prev2 = prev1;
+        prev1 = d;
 
         nibbles[i] = n.try_into().unwrap();
-        decoded_samples[i] = s;
+        decoded_samples[i] = d;
     }
 
     BrrBlock {
@@ -120,26 +109,13 @@ fn build_block(
     }
 }
 
-fn filter0(_p1: i32, _p2: i32) -> i32 {
-    0
-}
-fn filter1(p1: i32, _p2: i32) -> i32 {
-    p1 * 15 / 16
-}
-fn filter2(p1: i32, p2: i32) -> i32 {
-    (p1 * 61 / 32) - (p2 * 15 / 16)
-}
-fn filter3(p1: i32, p2: i32) -> i32 {
-    (p1 * 115 / 64) - (p2 * 13 / 16)
-}
-
-fn calc_squared_error(block: &BrrBlock, samples: &[i16; SAMPLES_PER_BLOCK]) -> i64 {
+fn calc_squared_error(block: &BrrBlock, samples: &[I15Sample; SAMPLES_PER_BLOCK]) -> i64 {
     assert!(block.decoded_samples.len() == samples.len());
 
     let mut square_error = 0;
 
     for (b, s) in block.decoded_samples.iter().zip(samples) {
-        let delta = i64::from(*b) - i64::from(*s);
+        let delta = i64::from(b.value()) - i64::from(s.value());
 
         square_error += delta * delta;
     }
@@ -147,7 +123,11 @@ fn calc_squared_error(block: &BrrBlock, samples: &[i16; SAMPLES_PER_BLOCK]) -> i
     square_error
 }
 
-fn find_best_block(samples: &[i16; SAMPLES_PER_BLOCK], prev1: i16, prev2: i16) -> BrrBlock {
+fn find_best_block(
+    samples: &[I15Sample; SAMPLES_PER_BLOCK],
+    prev1: I15Sample,
+    prev2: I15Sample,
+) -> BrrBlock {
     let mut best_block = None;
     let mut best_block_score = i64::MAX;
 
@@ -172,10 +152,10 @@ fn find_best_block(samples: &[i16; SAMPLES_PER_BLOCK], prev1: i16, prev2: i16) -
 }
 
 fn find_best_block_filter(
-    samples: &[i16; SAMPLES_PER_BLOCK],
+    samples: &[I15Sample; SAMPLES_PER_BLOCK],
     filter: BrrFilter,
-    prev1: i16,
-    prev2: i16,
+    prev1: I15Sample,
+    prev2: I15Sample,
 ) -> BrrBlock {
     let test_filter = |filter, filter_fn| {
         (0..=MAX_SHIFT)
@@ -279,8 +259,8 @@ pub fn encode_brr(
 
     let mut brr_data = Vec::with_capacity(n_blocks * BYTES_PER_BRR_BLOCK);
 
-    let mut prev1 = 0;
-    let mut prev2 = 0;
+    let mut prev1 = I15Sample::default();
+    let mut prev2 = I15Sample::default();
 
     for (i, samples) in samples
         .chunks_exact(SAMPLES_PER_BLOCK)
@@ -288,18 +268,19 @@ pub fn encode_brr(
         .take(n_blocks)
         .enumerate()
     {
+        let samples: [i16; SAMPLES_PER_BLOCK] = samples.try_into().unwrap();
+        let samples = samples.map(I15Sample::from_sample);
+
         let block = if i == 0 {
             // The first block always uses filter 0
-            find_best_block_filter(samples.try_into().unwrap(), BrrFilter::Filter0, 0, 0)
+            find_best_block_filter(&samples, BrrFilter::Filter0, prev1, prev2)
         } else if i == loop_block {
             match loop_filter {
-                None => find_best_block(samples.try_into().unwrap(), prev1, prev2),
-                Some(loop_filter) => {
-                    find_best_block_filter(samples.try_into().unwrap(), loop_filter, prev1, prev2)
-                }
+                None => find_best_block(&samples, prev1, prev2),
+                Some(loop_filter) => find_best_block_filter(&samples, loop_filter, prev1, prev2),
             }
         } else {
-            find_best_block(samples.try_into().unwrap(), prev1, prev2)
+            find_best_block(&samples, prev1, prev2)
         };
 
         prev1 = block.decoded_samples[SAMPLES_PER_BLOCK - 1];
@@ -316,4 +297,71 @@ pub fn encode_brr(
         loop_offset,
         brr_data,
     })
+}
+
+#[cfg(test)]
+mod test_decoded_samples {
+    use crate::decoder::decode_brr_block;
+
+    use super::*;
+
+    /// Encodes a block of samples using all 4 filters and tests if `BrrBlock::decoded_samples` matches `decode_brr_block()`
+    fn _test(p2: i16, p1: i16, input: [i16; 16]) {
+        const ALL_FILTERS: [BrrFilter; 4] = [
+            BrrFilter::Filter0,
+            BrrFilter::Filter1,
+            BrrFilter::Filter2,
+            BrrFilter::Filter3,
+        ];
+
+        let i15_input = input.map(I15Sample::from_sample);
+        let i15_p1 = I15Sample::from_sample(p1);
+        let i15_p2 = I15Sample::from_sample(p2);
+
+        for filter in ALL_FILTERS {
+            let best_block = find_best_block_filter(&i15_input, filter, i15_p1, i15_p2);
+            let brr_block_samples = best_block.decoded_samples.map(I15Sample::to_sample);
+
+            let brr_block = encode_block(best_block, false, false);
+            let decoded_samples = decode_brr_block(&brr_block, p1, p2);
+
+            assert_eq!(brr_block_samples, decoded_samples, "ERROR: {:?}", input);
+        }
+    }
+
+    #[test]
+    fn linear() {
+        // (i - 6) / 10 * 0.8 * i16::MAX
+        #[rustfmt::skip]
+        _test(
+            -20970,
+            -18349,
+            [-15728, -13106, -10485, -7864, -5242, -2621, 0, 2621, 5242, 7864, 10485, 13106, 15728, 18349, 20970, 23592]
+        );
+    }
+
+    #[test]
+    fn sine() {
+        // sin(tau * i / 16) * 0.95 * i16::MAX
+        #[rustfmt::skip]
+        _test(
+            -22011,
+            -11912,
+            [0, 11912, 22011, 28759, 31128, 28759, 22011, 11912, 0, -11912, -22011, -28759, -31128, -28759, -22011, -11912],
+        );
+    }
+
+    /// Tests a sample that glitches if there is no 15-bit wrapping
+    #[test]
+    fn wrapping_test() {
+        #[rustfmt::skip]
+        _test(
+            -820,
+            -800,
+            [
+                -450, -450,  800,  6000,  30000,  32000,  400,  200,
+                 400,  450, -800, -6000, -30000, -32000, -400, -200,
+            ],
+        );
+    }
 }

@@ -6,11 +6,15 @@ Version 0.0.6
 =============
 
 MML Changes:
-
  * Fixed missing `set_instrument` instruction with the `@` set-instrument MML command
    when the envelope has been changed and the `@` id is unchanged (ie, `@1 A1,2,3,4 @1`).
  * Fixed missing set-instrument and/or set-envelope instructions at the start of a loop
    (ie, `@1 a [@1 b @2 c]10`).
+
+
+BRR Encoder changes:
+ * Fixed BRR encoder outputting glitched BRR blocks
+ * Improved the accuracy of the BRR encoder by using the filter and shift formulas from Anomie's S-DSP Doc
 
 
 GUI Changes:

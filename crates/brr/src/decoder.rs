@@ -6,12 +6,18 @@
 
 use crate::{BRR_HEADER_END_FLAG, BYTES_PER_BRR_BLOCK, SAMPLES_PER_BLOCK};
 
-#[derive(Clone, Copy)]
+#[derive(Default, Clone, Copy, PartialEq, Eq)]
 pub struct I15Sample {
     value: i16,
 }
 
 impl I15Sample {
+    pub fn value(self) -> i32 {
+        self.value.into()
+    }
+
+    // Sample is clamped to 16 bit, then cliped to 15 bit.
+    // (source: Anomie's S-DSP Doc)
     pub fn clamp_and_clip(value: i32) -> Self {
         let value = value.clamp(i16::MIN.into(), i16::MAX.into());
         let value = i16::try_from(value).unwrap();
@@ -108,7 +114,7 @@ fn decode_brr_block_data(
     })
 }
 
-fn decode_brr_block(
+pub fn decode_brr_block(
     brr_block: &[u8; BYTES_PER_BRR_BLOCK],
     previous_sample_1: i16,
     previous_sample_2: i16,
