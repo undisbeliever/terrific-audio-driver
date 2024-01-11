@@ -15,6 +15,7 @@ MML Changes:
 BRR Encoder changes:
  * Fixed BRR encoder outputting glitched BRR blocks
  * Improved the accuracy of the BRR encoder by using the filter and shift formulas from Anomie's S-DSP Doc
+ * Improved the BRR encoder by testing 3 nibbles for each sample
 
 
 GUI Changes:

@@ -91,8 +91,17 @@ fn build_block(
         // Using division instead of `>> shift` to round towards 0 when s is negative
         let n = (((s.value() - offset) << 1) / div).clamp(I4_MIN, I4_MAX);
 
-        // Decode nibble (no shift out-of-range test required)
-        let d = I15Sample::clamp_and_clip(((n << shift) >> 1) + offset);
+        // `n` might not be the best value for `s`.
+        // Use squared-error to determine if `n`, `n-1` or `n+1` is the better value to use
+        let (n, d) = (n - 1..=n + 1)
+            .filter(|n| (I4_MIN..=I4_MAX).contains(n))
+            .map(|n| {
+                // Decode nibble (no shift out-of-range test required)
+                let d = I15Sample::clamp_and_clip(((n << shift) >> 1) + offset);
+                (n, d)
+            })
+            .min_by_key(|(_, d)| sample_squared_error(*d, *s))
+            .unwrap();
 
         prev2 = prev1;
         prev1 = d;
@@ -109,15 +118,18 @@ fn build_block(
     }
 }
 
+fn sample_squared_error(s1: I15Sample, s2: I15Sample) -> i32 {
+    let delta = s1.value() - s2.value();
+    delta * delta
+}
+
 fn calc_squared_error(block: &BrrBlock, samples: &[I15Sample; SAMPLES_PER_BLOCK]) -> i64 {
     assert!(block.decoded_samples.len() == samples.len());
 
     let mut square_error = 0;
 
     for (b, s) in block.decoded_samples.iter().zip(samples) {
-        let delta = i64::from(b.value()) - i64::from(s.value());
-
-        square_error += delta * delta;
+        square_error += i64::from(sample_squared_error(*b, *s));
     }
 
     square_error
