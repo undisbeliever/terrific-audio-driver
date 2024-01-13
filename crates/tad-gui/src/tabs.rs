@@ -231,6 +231,27 @@ impl TabManager {
         }
     }
 
+    pub fn remove_tab(&mut self, t: &dyn Tab) {
+        let ft = t.file_type();
+        let widget = t.widget();
+
+        // Remove widget from tabs_list
+        self.tabs_list
+            .retain(|(tl_flex, _)| !tl_flex.is_same(widget));
+
+        // Only remove file_state if FileType no-longer exists
+        let ft_exists = self.tabs_list.iter().any(|t| t.1 == ft);
+        if !ft_exists {
+            self.file_states.remove(&ft);
+        }
+        self.tabs_widget.remove(widget);
+
+        self.selected_tab_changed();
+
+        self.tabs_widget.redraw();
+        self.tabs_widget.redraw_label();
+    }
+
     pub fn set_tab_label_color(&mut self, t: &mut dyn Tab, valid: bool) {
         let w = t.widget_mut();
         let c = match valid {
@@ -292,17 +313,18 @@ impl TabManager {
         self.selected_file.clone()
     }
 
+    pub fn get_file_name(&self, ft: &FileType) -> Option<&str> {
+        self.file_states.get(ft).and_then(|s| s.file_name())
+    }
+
     pub fn selected_file_name(&self) -> Option<&str> {
         self.selected_file
             .as_ref()
-            .and_then(|ft| self.file_states.get(ft))
-            .and_then(|s| s.file_name())
+            .and_then(|ft| self.get_file_name(ft))
     }
 
     pub fn project_file_name(&self) -> Option<&str> {
-        self.file_states
-            .get(&FileType::Project)
-            .and_then(|s| s.file_name())
+        self.get_file_name(&FileType::Project)
     }
 
     pub fn find_file(&self, p: &Path) -> Option<FileType> {
@@ -311,6 +333,13 @@ impl TabManager {
             .iter()
             .find(|i| i.1.path() == p)
             .map(|i| i.0.clone())
+    }
+
+    pub fn is_unsaved(&self, ft: &FileType) -> bool {
+        self.file_states
+            .get(ft)
+            .map(|s| s.is_unsaved())
+            .unwrap_or(false)
     }
 
     pub fn unsaved_tabs(&self) -> Vec<FileType> {
@@ -382,6 +411,34 @@ impl TabManager {
                 }
             }
         }
+    }
+}
+
+pub fn close_unsaved_song_tab_dialog(
+    song_id: ItemId,
+    file_name: Option<&str>,
+    sender: &fltk::app::Sender<GuiMessage>,
+) {
+    const OPTION_0: &str = "Cancel";
+    const OPTION_1: &str = "Save";
+    const OPTION_2: &str = "Close tab without saving";
+
+    dialog::message_title("Unsaved changes");
+    let choice = match file_name {
+        Some(f) => dialog::choice2_default(
+            &format!("Save changes to {} before closing?", f),
+            OPTION_0,
+            OPTION_1,
+            OPTION_2,
+        ),
+        None => {
+            dialog::choice2_default("Save changes before closing?", OPTION_0, OPTION_1, OPTION_2)
+        }
+    };
+    match choice {
+        Some(1) => sender.send(GuiMessage::SaveAndCloseSongTab(song_id)),
+        Some(2) => sender.send(GuiMessage::ForceCloseSongTab(song_id)),
+        _ => (),
     }
 }
 

@@ -54,7 +54,8 @@ use crate::samples_tab::SamplesTab;
 use crate::song_tab::{blank_mml_file, SongTab};
 use crate::sound_effects_tab::{blank_sfx_file, SoundEffectsTab};
 use crate::tabs::{
-    quit_with_unsaved_files_dialog, FileType, SaveResult, SaveType, Tab, TabManager,
+    close_unsaved_song_tab_dialog, quit_with_unsaved_files_dialog, FileType, SaveResult, SaveType,
+    Tab, TabManager,
 };
 
 use audio_thread::{AudioMessage, AudioMonitor};
@@ -93,6 +94,10 @@ const WINDOW_TITLE_SUFFIX: &str = " - Terrific Audio Driver";
 #[derive(Debug)]
 pub enum GuiMessage {
     SelectedTabChanged,
+
+    RequestCloseSongTab(ItemId),
+    SaveAndCloseSongTab(ItemId),
+    ForceCloseSongTab(ItemId),
 
     SaveSelectedTab,
     SaveSelectedTabAs,
@@ -420,6 +425,28 @@ impl Project {
                 },
                 None => self.audio_monitor_timer.stop(),
             },
+
+            GuiMessage::RequestCloseSongTab(song_id) => {
+                let ft = FileType::Song(song_id);
+                if self.tab_manager.is_unsaved(&ft) {
+                    let file_name = self.tab_manager.get_file_name(&ft);
+                    close_unsaved_song_tab_dialog(song_id, file_name, &self.sender);
+                } else {
+                    self.close_song_tab(song_id)
+                }
+            }
+
+            GuiMessage::SaveAndCloseSongTab(song_id) => {
+                let ft = FileType::Song(song_id);
+                let success = self.save_file(ft, SaveType::Save);
+                if success {
+                    self.close_song_tab(song_id);
+                }
+            }
+
+            GuiMessage::ForceCloseSongTab(song_id) => {
+                self.close_song_tab(song_id);
+            }
 
             GuiMessage::QuitRequested => {
                 let unsaved = self.tab_manager.unsaved_tabs();
@@ -801,6 +828,18 @@ impl Project {
                 .send(ToCompiler::SongChanged(song_id, file.contents));
 
             self.sender.send(GuiMessage::SelectedTabChanged);
+        }
+    }
+
+    // NOTE: Does not test if the song is unsaved before closing
+    fn close_song_tab(&mut self, song_id: ItemId) {
+        if let Some(song_tab) = self.song_tabs.remove(&song_id) {
+            self.tab_manager.remove_tab(&song_tab);
+            let _ = self
+                .compiler_sender
+                .send(ToCompiler::SongTabClosed(song_id));
+
+            self.process(GuiMessage::SelectedTabChanged);
         }
     }
 

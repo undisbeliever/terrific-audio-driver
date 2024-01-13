@@ -21,6 +21,7 @@ BRR Encoder changes:
 
 GUI Changes:
  * Show filename in the window title
+ * Added close to song tabs
 
 
 Version 0.0.5

@@ -19,7 +19,7 @@ use compiler::songs::{song_duration_string, SongData};
 use compiler::time::TickCounter;
 use fltk::app::{self, event_key};
 use fltk::button::Button;
-use fltk::enums::{Color, Event, Font, Key};
+use fltk::enums::{CallbackReason, CallbackTrigger, Color, Event, Font, Key};
 use fltk::group::{Flex, Pack, PackType};
 use fltk::prelude::*;
 use fltk::text::{TextBuffer, TextDisplay, WrapMode};
@@ -119,6 +119,18 @@ impl SongTab {
         console.set_text_font(Font::Courier);
         console.set_buffer(console_buffer.clone());
         console.wrap_mode(WrapMode::AtBounds, 0);
+
+        group.set_trigger(CallbackTrigger::Closed);
+        group.set_callback({
+            #[allow(clippy::clone_on_copy)]
+            let song_id = song_id.clone();
+            let sender = sender.clone();
+            move |_| {
+                if app::callback_reason() == CallbackReason::Closed {
+                    sender.send(GuiMessage::RequestCloseSongTab(song_id))
+                }
+            }
+        });
 
         let state = Rc::new(RefCell::from(State {
             sender,

@@ -96,6 +96,7 @@ pub enum ToCompiler {
     SoundEffects(ItemChanged<SoundEffectInput>),
     PlaySoundEffect(ItemId),
 
+    SongTabClosed(ItemId),
     SongChanged(ItemId, String),
     CompileAndPlaySong(ItemId, String, Option<TickCounter>),
     PlayInstrument(ItemId, PlaySampleArgs),
@@ -878,6 +879,29 @@ impl SongCompiler {
         self.output_largest_song_size(sender);
     }
 
+    fn song_tab_closed(
+        &mut self,
+        id: ItemId,
+        pf_songs: &IList<data::Song>,
+        dependencies: &Option<SongDependencies>,
+        sender: &Sender,
+    ) {
+        match pf_songs.get(&id) {
+            Some(pf_song) => {
+                // The song-tab may have been closed without saving it, reload the song file.
+                self.songs.insert(
+                    id,
+                    self.load_song(id, &pf_song.source, pf_songs, dependencies, sender),
+                );
+            }
+            None => {
+                self.songs.remove(&id);
+            }
+        }
+
+        self.output_largest_song_size(sender);
+    }
+
     fn compile_all_songs(
         &mut self,
         pf_songs: &IList<data::Song>,
@@ -1132,6 +1156,9 @@ fn bg_thread(
                 }
             }
 
+            ToCompiler::SongTabClosed(id) => {
+                songs.song_tab_closed(id, &pf_songs, &song_dependencies, &sender);
+            }
             ToCompiler::SongChanged(id, mml) => {
                 songs.edit_and_compile_song(id, mml, &pf_songs, &song_dependencies, &sender);
             }
