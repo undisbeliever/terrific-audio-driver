@@ -81,7 +81,6 @@ use licenses_dialog::LicensesDialog;
 use list_editor::ListPairWithCompilerOutputs;
 use monitor_timer::MonitorTimer;
 
-use std::collections::hash_map;
 use std::collections::HashMap;
 use std::env;
 use std::path::PathBuf;
@@ -206,7 +205,17 @@ struct Project {
     project_tab: ProjectTab,
     samples_tab: SamplesTab,
     sound_effects_tab: SoundEffectsTab,
+
     song_tabs: HashMap<ItemId, SongTab>,
+
+    /// Stores closed song tabs so they can be reused when opening a new song tab.
+    ///
+    /// This minimises the impact of a memory leak when closing a song tab.
+    ///
+    /// The leak occurs for two reasons:
+    ///  1. `DisplayExt::set_buffer()` extends the lifetime of a `TextBuffer` to the lifetime of the program.
+    ///  2. There might be an circular reference in the callbacks.
+    closed_song_tabs: Vec<SongTab>,
 }
 
 impl Project {
@@ -272,6 +281,7 @@ impl Project {
 
             samples_tab: SamplesTab::new(data.instruments(), data.samples(), sender.clone()),
             sound_effects_tab: SoundEffectsTab::new(sender.clone()),
+            closed_song_tabs: Vec::new(),
             song_tabs: HashMap::new(),
 
             audio_sender,
@@ -793,7 +803,7 @@ impl Project {
     // NOTE: No deduplication. Do not create song tabs for a `song_id` or `path` that already exists
     fn load_new_song_tab(&mut self, song_id: ItemId, source: &SourcePathBuf) {
         if let Some(f) = load_mml_file(source, &self.data.pf_parent_path) {
-            let song_tab = SongTab::new(song_id, &f, self.sender.clone());
+            let song_tab = self.reuse_or_new_song_tab(song_id, &f);
 
             self.tab_manager.add_or_modify(&song_tab, f.path, None);
             self.tab_manager.set_selected_tab(&song_tab);
@@ -809,10 +819,13 @@ impl Project {
         }
     }
 
-    // NOTE: minimal deduplication. You should not create song tabs for a `song_id` or `path` that already exists
+    // NOTE: minimal deduplication. Do not create song tabs for a `song_id` or `path` that already exists
     fn new_song_tab(&mut self, song_id: ItemId, file: data::TextFile) {
-        if let hash_map::Entry::Vacant(e) = self.song_tabs.entry(song_id) {
-            let song_tab = SongTab::new(song_id, &file, self.sender.clone());
+        // Cannot use `hash_map::Entry` here because of the reuse_or_new_song_tab call.
+        #[allow(clippy::map_entry)]
+        if !self.song_tabs.contains_key(&song_id) {
+            let song_tab = self.reuse_or_new_song_tab(song_id, &file);
+
             self.tab_manager.add_or_modify(&song_tab, file.path, None);
 
             if song_tab.is_new_file() {
@@ -820,7 +833,7 @@ impl Project {
             }
             self.tab_manager.set_selected_tab(&song_tab);
 
-            e.insert(song_tab);
+            self.song_tabs.insert(song_id, song_tab);
 
             // Update song in the compiler thread (in case the file changed)
             let _ = self
@@ -831,6 +844,17 @@ impl Project {
         }
     }
 
+    /// Returns a previously closed or new SongTab with the given `song_id` and `mml_text`.
+    fn reuse_or_new_song_tab(&mut self, song_id: ItemId, mml_text: &data::TextFile) -> SongTab {
+        match self.closed_song_tabs.pop() {
+            Some(mut song_tab) => {
+                song_tab.reuse_tab(song_id, mml_text);
+                song_tab
+            }
+            None => SongTab::new(song_id, mml_text, self.sender.clone()),
+        }
+    }
+
     // NOTE: Does not test if the song is unsaved before closing
     fn close_song_tab(&mut self, song_id: ItemId) {
         if let Some(song_tab) = self.song_tabs.remove(&song_id) {
@@ -838,6 +862,8 @@ impl Project {
             let _ = self
                 .compiler_sender
                 .send(ToCompiler::SongTabClosed(song_id));
+
+            self.closed_song_tabs.push(song_tab);
 
             self.process(GuiMessage::SelectedTabChanged);
         }

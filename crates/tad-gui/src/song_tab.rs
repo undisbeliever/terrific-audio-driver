@@ -120,18 +120,6 @@ impl SongTab {
         console.set_buffer(console_buffer.clone());
         console.wrap_mode(WrapMode::AtBounds, 0);
 
-        group.set_trigger(CallbackTrigger::Closed);
-        group.set_callback({
-            #[allow(clippy::clone_on_copy)]
-            let song_id = song_id.clone();
-            let sender = sender.clone();
-            move |_| {
-                if app::callback_reason() == CallbackReason::Closed {
-                    sender.send(GuiMessage::RequestCloseSongTab(song_id))
-                }
-            }
-        });
-
         let state = Rc::new(RefCell::from(State {
             sender,
             song_id,
@@ -142,6 +130,18 @@ impl SongTab {
 
             errors: None,
         }));
+
+        group.set_trigger(CallbackTrigger::Closed);
+        group.set_callback({
+            let s = state.clone();
+            move |_| {
+                if app::callback_reason() == CallbackReason::Closed {
+                    if let Ok(s) = s.try_borrow() {
+                        s.sender.send(GuiMessage::RequestCloseSongTab(s.song_id))
+                    }
+                }
+            }
+        });
 
         // Handle toolbar shortcut keys
         // This is done here so focus is not stolen from the editor.
@@ -234,6 +234,17 @@ impl SongTab {
 
             new_file,
         }
+    }
+
+    pub fn reuse_tab(&mut self, new_id: ItemId, mml_file: &TextFile) {
+        let mut s = self.state.borrow_mut();
+
+        self.song_id = new_id;
+        self.new_file = mml_file.path.is_none();
+
+        s.song_id = new_id;
+        s.set_compiler_output(None);
+        s.editor.set_text(&mml_file.contents);
     }
 
     pub fn contents(&self) -> String {
