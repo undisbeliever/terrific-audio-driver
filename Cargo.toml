@@ -19,7 +19,7 @@ lto = true
 
 
 [workspace.package]
-version = "0.0.5" # DO NOT create a new release until the next version of fltk-rs is released.
+version = "0.0.5"
 
 publish = false
 
@@ -43,8 +43,8 @@ relative-path = { version="1.9.0", features=[ "serde" ] }
 sdl2 = { version="0.35.2", features=[] }
 
 # fltk-rs 1.4.20 has a bug where the group::Tabs tab height is way too tall and the contents are not visible
-# Using the git version to fix an illegal instruction crash when creating a native save-as dialog
-fltk = { version="1.4.21", git = "https://github.com/fltk-rs/fltk-rs" }
+# fltk-rs 1.4.21 has an illegal instruction crash when creating a native save-as dialog
+fltk = { version="1.4.22" }
 
 cxx = { version="1.0.107" }
 

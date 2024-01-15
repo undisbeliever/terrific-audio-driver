@@ -126,7 +126,7 @@ Please see the included [licenses file](licenses.md) for the full third party li
   * [regex 1.10.2](https://github.com/rust-lang/regex), MIT License
   * [regex-automata 0.4.3](https://github.com/rust-lang/regex/tree/master/regex-automata), MIT License
   * [regex-syntax 0.8.2](https://github.com/rust-lang/regex/tree/master/regex-syntax), MIT License
-  * [libc 0.2.151](https://github.com/rust-lang/libc), MIT License
+  * [libc 0.2.152](https://github.com/rust-lang/libc), MIT License
   * [anstyle-wincon 3.0.2](https://github.com/rust-cli/anstyle.git), MIT License
   * [heck 0.4.1](https://github.com/withoutboats/heck), MIT License
   * [unicode-id 0.3.4](https://github.com/Boshen/unicode-id), MIT License
@@ -137,48 +137,47 @@ Please see the included [licenses file](licenses.md) for the full third party li
   * [version-compare 0.1.1](https://gitlab.com/timvisee/version-compare), MIT License
   * [ttf-parser 0.20.0](https://github.com/RazrFalcon/ttf-parser), MIT License
   * [anstyle 1.0.4](https://github.com/rust-cli/anstyle.git), MIT License
-  * [anstream 0.6.5](https://github.com/rust-cli/anstyle.git), MIT License
+  * [anstream 0.6.7](https://github.com/rust-cli/anstyle.git), MIT License
   * [anstyle-query 1.0.2](https://github.com/rust-cli/anstyle), MIT License
-  * [clap 4.4.12](https://github.com/clap-rs/clap), MIT License
+  * [clap 4.4.16](https://github.com/clap-rs/clap), MIT License
   * [colorchoice 1.0.0](https://github.com/rust-cli/anstyle), MIT License
   * [unicode-id 0.3.4](https://github.com/Boshen/unicode-id), MIT License
   * [unicode-width 0.1.11](https://github.com/unicode-rs/unicode-width), MIT License
-  * [fltk-sys 1.4.21](https://github.com/fltk-rs/fltk-rs), MIT License
   * [relative-path 1.9.2](https://github.com/udoprog/relative-path), MIT License
   * [sdl2-sys 0.35.2](https://github.com/rust-sdl2/rust-sdl2), MIT License
   * [winapi-i686-pc-windows-gnu 0.4.0](https://github.com/retep998/winapi-rs), MIT License
   * [winapi-x86_64-pc-windows-gnu 0.4.0](https://github.com/retep998/winapi-rs), MIT License
-  * [fltk 1.4.21](https://github.com/fltk-rs/fltk-rs), MIT License
-  * [cxx 1.0.112](https://github.com/dtolnay/cxx), MIT License
-  * [cxx-build 1.0.112](https://github.com/dtolnay/cxx), MIT License
-  * [cxxbridge-flags 1.0.112](https://github.com/dtolnay/cxx), MIT License
-  * [cxxbridge-macro 1.0.112](https://github.com/dtolnay/cxx), MIT License
+  * [fltk 1.4.22](https://github.com/fltk-rs/fltk-rs), MIT License
+  * [fltk-sys 1.4.22](https://github.com/fltk-rs/fltk-rs), MIT License
+  * [cxx 1.0.115](https://github.com/dtolnay/cxx), MIT License
+  * [cxx-build 1.0.115](https://github.com/dtolnay/cxx), MIT License
+  * [cxxbridge-flags 1.0.115](https://github.com/dtolnay/cxx), MIT License
+  * [cxxbridge-macro 1.0.115](https://github.com/dtolnay/cxx), MIT License
   * [itoa 1.0.10](https://github.com/dtolnay/itoa), MIT License
   * [link-cplusplus 1.0.9](https://github.com/dtolnay/link-cplusplus), MIT License
   * [once_cell 1.19.0](https://github.com/matklad/once_cell), MIT License
   * [paste 1.0.14](https://github.com/dtolnay/paste), MIT License
-  * [proc-macro2 1.0.73](https://github.com/dtolnay/proc-macro2), MIT License
-  * [quote 1.0.34](https://github.com/dtolnay/quote), MIT License
+  * [proc-macro2 1.0.76](https://github.com/dtolnay/proc-macro2), MIT License
+  * [quote 1.0.35](https://github.com/dtolnay/quote), MIT License
   * [scratch 1.0.7](https://github.com/dtolnay/scratch), MIT License
-  * [serde 1.0.193](https://github.com/serde-rs/serde), MIT License
-  * [serde_derive 1.0.193](https://github.com/serde-rs/serde), MIT License
-  * [serde_json 1.0.109](https://github.com/serde-rs/json), MIT License
-  * [syn 2.0.44](https://github.com/dtolnay/syn), MIT License
+  * [serde 1.0.195](https://github.com/serde-rs/serde), MIT License
+  * [serde_derive 1.0.195](https://github.com/serde-rs/serde), MIT License
+  * [serde_json 1.0.111](https://github.com/serde-rs/json), MIT License
+  * [syn 2.0.48](https://github.com/dtolnay/syn), MIT License
   * [unicode-ident 1.0.12](https://github.com/dtolnay/unicode-ident), MIT License
   * [sdl2 0.35.2](https://github.com/Rust-SDL2/rust-sdl2), MIT License
   * [aho-corasick 1.1.2](https://github.com/BurntSushi/aho-corasick), MIT License
   * [memchr 2.7.1](https://github.com/BurntSushi/memchr), MIT License
-  * [termcolor 1.4.0](https://github.com/BurntSushi/termcolor), MIT License
+  * [termcolor 1.4.1](https://github.com/BurntSushi/termcolor), MIT License
   * [strsim 0.10.0](https://github.com/dguo/strsim-rs), MIT License
-  * [clap_builder 4.4.12](https://github.com/clap-rs/clap), MIT License
+  * [clap_builder 4.4.16](https://github.com/clap-rs/clap), MIT License
   * [clap_derive 4.4.7](https://github.com/clap-rs/clap/tree/master/clap_derive), MIT License
   * [clap_lex 0.6.0](https://github.com/clap-rs/clap/tree/master/clap_lex), MIT License
   * [winapi-util 0.1.6](https://github.com/BurntSushi/winapi-util), MIT License
-  * [crossbeam-channel 0.5.10](https://github.com/crossbeam-rs/crossbeam), MIT License
-  * [crossbeam-utils 0.8.18](https://github.com/crossbeam-rs/crossbeam), MIT License
+  * [crossbeam-channel 0.5.11](https://github.com/crossbeam-rs/crossbeam), MIT License
+  * [crossbeam-utils 0.8.19](https://github.com/crossbeam-rs/crossbeam), MIT License
   * [aho-corasick 1.1.2](https://github.com/BurntSushi/aho-corasick), MIT License
   * [memchr 2.7.1](https://github.com/BurntSushi/memchr), MIT License
-  * [termcolor 1.4.0](https://github.com/BurntSushi/termcolor), MIT License
   * [winapi-util 0.1.6](https://github.com/BurntSushi/winapi-util), MIT License
   * [unicode-ident 1.0.12](https://github.com/dtolnay/unicode-ident), Unicode License Agreement - Data Files and Software (2016)
   * [FLTK](https://www.fltk.org/), [FLTK license](https://www.fltk.org/doc-1.4/license.html)

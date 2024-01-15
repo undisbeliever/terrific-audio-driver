@@ -107,7 +107,7 @@ Licenses marked "synthesized" did not have a license file in their crate.
 
 
 Terrific Audio Driver makes use of the following open source projects:
-  * MIT License (74)
+  * MIT License (73)
   * Apache License 2.0 (2)
   * Unicode License Agreement - Data Files and Software (2016) (1)
   * FLTK License (1)
@@ -585,7 +585,7 @@ DEALINGS IN THE SOFTWARE.
 ## MIT License
 
 Used by:
-  * [libc 0.2.151](https://github.com/rust-lang/libc)
+  * [libc 0.2.152](https://github.com/rust-lang/libc)
 
 ```
 Copyright (c) 2014-2020 The Rust Project Developers
@@ -874,9 +874,9 @@ SOFTWARE.
 ## MIT License
 
 Used by:
-  * [anstream 0.6.5](https://github.com/rust-cli/anstyle.git)
+  * [anstream 0.6.7](https://github.com/rust-cli/anstyle.git)
   * [anstyle-query 1.0.2](https://github.com/rust-cli/anstyle)
-  * [clap 4.4.12](https://github.com/clap-rs/clap)
+  * [clap 4.4.16](https://github.com/clap-rs/clap)
   * [colorchoice 1.0.0](https://github.com/rust-cli/anstyle)
 
 ```
@@ -922,37 +922,6 @@ according to those terms.
 
 
 ## MIT License
-
-Used by:
-  * [fltk-sys 1.4.21](https://github.com/fltk-rs/fltk-rs)
-
-```
-MIT License
-
-Copyright (c) 2019 Mohammed Alyousef
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-
-```
-
-
-## MIT License
   
   (synthesized by cargo-about)
 
@@ -979,7 +948,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 ## MIT License
 
 Used by:
-  * [fltk 1.4.21](https://github.com/fltk-rs/fltk-rs)
+  * [fltk 1.4.22](https://github.com/fltk-rs/fltk-rs)
+  * [fltk-sys 1.4.22](https://github.com/fltk-rs/fltk-rs)
 
 ```
 MIT License
@@ -1010,21 +980,21 @@ SOFTWARE.
 ## MIT License
 
 Used by:
-  * [cxx 1.0.112](https://github.com/dtolnay/cxx)
-  * [cxx-build 1.0.112](https://github.com/dtolnay/cxx)
-  * [cxxbridge-flags 1.0.112](https://github.com/dtolnay/cxx)
-  * [cxxbridge-macro 1.0.112](https://github.com/dtolnay/cxx)
+  * [cxx 1.0.115](https://github.com/dtolnay/cxx)
+  * [cxx-build 1.0.115](https://github.com/dtolnay/cxx)
+  * [cxxbridge-flags 1.0.115](https://github.com/dtolnay/cxx)
+  * [cxxbridge-macro 1.0.115](https://github.com/dtolnay/cxx)
   * [itoa 1.0.10](https://github.com/dtolnay/itoa)
   * [link-cplusplus 1.0.9](https://github.com/dtolnay/link-cplusplus)
   * [once_cell 1.19.0](https://github.com/matklad/once_cell)
   * [paste 1.0.14](https://github.com/dtolnay/paste)
-  * [proc-macro2 1.0.73](https://github.com/dtolnay/proc-macro2)
-  * [quote 1.0.34](https://github.com/dtolnay/quote)
+  * [proc-macro2 1.0.76](https://github.com/dtolnay/proc-macro2)
+  * [quote 1.0.35](https://github.com/dtolnay/quote)
   * [scratch 1.0.7](https://github.com/dtolnay/scratch)
-  * [serde 1.0.193](https://github.com/serde-rs/serde)
-  * [serde_derive 1.0.193](https://github.com/serde-rs/serde)
-  * [serde_json 1.0.109](https://github.com/serde-rs/json)
-  * [syn 2.0.44](https://github.com/dtolnay/syn)
+  * [serde 1.0.195](https://github.com/serde-rs/serde)
+  * [serde_derive 1.0.195](https://github.com/serde-rs/serde)
+  * [serde_json 1.0.111](https://github.com/serde-rs/json)
+  * [syn 2.0.48](https://github.com/dtolnay/syn)
   * [unicode-ident 1.0.12](https://github.com/dtolnay/unicode-ident)
 
 ```
@@ -1090,7 +1060,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 Used by:
   * [aho-corasick 1.1.2](https://github.com/BurntSushi/aho-corasick)
   * [memchr 2.7.1](https://github.com/BurntSushi/memchr)
-  * [termcolor 1.4.0](https://github.com/BurntSushi/termcolor)
+  * [termcolor 1.4.1](https://github.com/BurntSushi/termcolor)
 
 ```
 The MIT License (MIT)
@@ -1154,7 +1124,7 @@ SOFTWARE.
 ## MIT License
 
 Used by:
-  * [clap_builder 4.4.12](https://github.com/clap-rs/clap)
+  * [clap_builder 4.4.16](https://github.com/clap-rs/clap)
   * [clap_derive 4.4.7](https://github.com/clap-rs/clap/tree/master/clap_derive)
   * [clap_lex 0.6.0](https://github.com/clap-rs/clap/tree/master/clap_lex)
 
@@ -1218,8 +1188,8 @@ THE SOFTWARE.
 ## MIT License
 
 Used by:
-  * [crossbeam-channel 0.5.10](https://github.com/crossbeam-rs/crossbeam)
-  * [crossbeam-utils 0.8.18](https://github.com/crossbeam-rs/crossbeam)
+  * [crossbeam-channel 0.5.11](https://github.com/crossbeam-rs/crossbeam)
+  * [crossbeam-utils 0.8.19](https://github.com/crossbeam-rs/crossbeam)
 
 ```
 The MIT License (MIT)
@@ -1258,7 +1228,6 @@ DEALINGS IN THE SOFTWARE.
 Used by:
   * [aho-corasick 1.1.2](https://github.com/BurntSushi/aho-corasick)
   * [memchr 2.7.1](https://github.com/BurntSushi/memchr)
-  * [termcolor 1.4.0](https://github.com/BurntSushi/termcolor)
   * [winapi-util 0.1.6](https://github.com/BurntSushi/winapi-util)
 
 ```
