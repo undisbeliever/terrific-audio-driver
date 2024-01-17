@@ -122,10 +122,13 @@ Please see the included [licenses file](licenses.md) for the full third party li
   * [cfg-if 1.0.0](https://github.com/alexcrichton/cfg-if), MIT License
   * [cmake 0.1.50](https://github.com/rust-lang/cmake-rs), MIT License
   * [bitflags 1.3.2](https://github.com/bitflags/bitflags), MIT License
-  * [bitflags 2.4.1](https://github.com/bitflags/bitflags), MIT License
+  * [bitflags 2.4.2](https://github.com/bitflags/bitflags), MIT License
+  * [num-complex 0.4.4](https://github.com/rust-num/num-complex), MIT License
+  * [num-traits 0.2.17](https://github.com/rust-num/num-traits), MIT License
   * [regex 1.10.2](https://github.com/rust-lang/regex), MIT License
   * [regex-automata 0.4.3](https://github.com/rust-lang/regex/tree/master/regex-automata), MIT License
   * [regex-syntax 0.8.2](https://github.com/rust-lang/regex/tree/master/regex-syntax), MIT License
+  * [float-cmp 0.9.0](https://github.com/mikedilger/float-cmp), MIT License
   * [libc 0.2.152](https://github.com/rust-lang/libc), MIT License
   * [anstyle-wincon 3.0.2](https://github.com/rust-cli/anstyle.git), MIT License
   * [heck 0.4.1](https://github.com/withoutboats/heck), MIT License
@@ -135,14 +138,19 @@ Please see the included [licenses file](licenses.md) for the full third party li
   * [utf8parse 0.2.1](https://github.com/alacritty/vte), MIT License
   * [anstyle-parse 0.2.3](https://github.com/rust-cli/anstyle.git), MIT License
   * [version-compare 0.1.1](https://gitlab.com/timvisee/version-compare), MIT License
+  * [libm 0.2.8](https://github.com/rust-lang/libm), MIT License
+  * [autocfg 1.1.0](https://github.com/cuviper/autocfg), MIT License
   * [ttf-parser 0.20.0](https://github.com/RazrFalcon/ttf-parser), MIT License
   * [anstyle 1.0.4](https://github.com/rust-cli/anstyle.git), MIT License
-  * [anstream 0.6.7](https://github.com/rust-cli/anstyle.git), MIT License
+  * [anstream 0.6.8](https://github.com/rust-cli/anstyle.git), MIT License
   * [anstyle-query 1.0.2](https://github.com/rust-cli/anstyle), MIT License
-  * [clap 4.4.16](https://github.com/clap-rs/clap), MIT License
+  * [clap 4.4.18](https://github.com/clap-rs/clap), MIT License
   * [colorchoice 1.0.0](https://github.com/rust-cli/anstyle), MIT License
   * [unicode-id 0.3.4](https://github.com/Boshen/unicode-id), MIT License
   * [unicode-width 0.1.11](https://github.com/unicode-rs/unicode-width), MIT License
+  * [static_assertions 1.1.0](https://github.com/nvzqz/static-assertions-rs), MIT License
+  * [microfft 0.5.1](https://gitlab.com/teskje/microfft-rs), MIT License
+  * [spectrum-analyzer 1.5.0](https://github.com/phip1611/spectrum-analyzer), MIT License
   * [relative-path 1.9.2](https://github.com/udoprog/relative-path), MIT License
   * [sdl2-sys 0.35.2](https://github.com/rust-sdl2/rust-sdl2), MIT License
   * [winapi-i686-pc-windows-gnu 0.4.0](https://github.com/retep998/winapi-rs), MIT License
@@ -170,7 +178,7 @@ Please see the included [licenses file](licenses.md) for the full third party li
   * [memchr 2.7.1](https://github.com/BurntSushi/memchr), MIT License
   * [termcolor 1.4.1](https://github.com/BurntSushi/termcolor), MIT License
   * [strsim 0.10.0](https://github.com/dguo/strsim-rs), MIT License
-  * [clap_builder 4.4.16](https://github.com/clap-rs/clap), MIT License
+  * [clap_builder 4.4.18](https://github.com/clap-rs/clap), MIT License
   * [clap_derive 4.4.7](https://github.com/clap-rs/clap/tree/master/clap_derive), MIT License
   * [clap_lex 0.6.0](https://github.com/clap-rs/clap/tree/master/clap_lex), MIT License
   * [winapi-util 0.1.6](https://github.com/BurntSushi/winapi-util), MIT License
