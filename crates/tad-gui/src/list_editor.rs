@@ -783,7 +783,7 @@ where
     Editor: ListEditor<T1> + CompilerOutputGui<O1> + ListEditor<T2> + CompilerOutputGui<O2>,
 {
     let can_add = |count: usize| -> bool {
-        debug_assert!(list1.list().len() == list2.list().len());
+        debug_assert!(list1.list().max_size == list2.list().max_size);
 
         let max_size = list1.list().max_size;
         let len = list1.list().len() + list2.list().len();
