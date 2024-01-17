@@ -110,7 +110,7 @@ impl InstrumentEditor {
 
         let name = form.add_input::<Input>("Name:");
         let source = form.add_two_inputs_right::<Output, Button>("Source:", 5);
-        let freq = form.add_input::<FloatInput>("Frequency:");
+        let freq = form.add_two_inputs_right::<FloatInput, Button>("Frequency:", 5);
         let loop_setting = LoopSettingWidget::new(&mut form);
         let first_octave = form.add_input::<IntInput>("First octave:");
         let last_octave = form.add_input::<IntInput>("Last octave:");
@@ -121,6 +121,7 @@ impl InstrumentEditor {
         let group = form.take_group_end();
 
         let (source, mut source_button) = source;
+        let (freq, mut analyse_button) = freq;
 
         let out = Rc::from(RefCell::new(Self {
             group,
@@ -166,6 +167,13 @@ impl InstrumentEditor {
                 let s = out.clone();
                 move |_widget| s.borrow_mut().source_button_clicked()
             });
+
+            analyse_button.set_label("...");
+            analyse_button.set_tooltip("Analyse Sample");
+            analyse_button.set_callback({
+                let s = out.clone();
+                move |_widget| s.borrow_mut().analyse_button_clicked()
+            })
         }
         (out, form_height)
     }
@@ -185,6 +193,13 @@ impl InstrumentEditor {
         if let Some(index) = self.selected_index {
             self.sender
                 .send(GuiMessage::OpenInstrumentSampleDialog(index));
+        }
+    }
+
+    fn analyse_button_clicked(&mut self) {
+        if let Some(index) = self.selected_index {
+            self.sender
+                .send(GuiMessage::OpenAnalyseInstrumentDialog(index));
         }
     }
 
@@ -279,19 +294,7 @@ impl InstrumentEditor {
     pub fn list_edited(&mut self, action: &ListAction<Instrument>) {
         if let ListAction::Edit(index, data) = action {
             if self.selected_index == Some(*index) {
-                // Update name as the name deduplicator may have changed it.
-                if self.data.name != data.name {
-                    self.data.name = data.name.clone();
-                    InputHelper::set_widget_value(&mut self.name, &self.data.name);
-                }
-
-                // Update source as it may have been changed by `open_instrument_sample_dialog()`
-                if self.data.source != data.source {
-                    self.data.source = data.source.clone();
-                    self.source.set_value(data.source.as_str());
-                    self.loop_setting
-                        .update_loop_type_choice(SourceFileType::from_source(&data.source));
-                }
+                self.set_data(*index, data);
             }
         }
     }

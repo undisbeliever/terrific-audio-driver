@@ -21,6 +21,7 @@ mod menu;
 mod mml_editor;
 mod monitor_timer;
 mod names;
+mod sample_analyser;
 mod sample_editor;
 mod sample_widgets;
 mod tables;
@@ -80,6 +81,7 @@ use helpers::ch_units_to_width;
 use licenses_dialog::LicensesDialog;
 use list_editor::ListPairWithCompilerOutputs;
 use monitor_timer::MonitorTimer;
+use sample_analyser::SampleAnalyserDialog;
 
 use std::collections::HashMap;
 use std::env;
@@ -127,6 +129,13 @@ pub enum GuiMessage {
 
     AddSongToProjectDialog,
     SetProjectSongName(usize, data::Name),
+
+    OpenAnalyseInstrumentDialog(usize),
+    CommitSampleAnalyserChanges {
+        id: ItemId,
+        freq: f64,
+        loop_setting: data::LoopSetting,
+    },
 
     OpenInstrumentSampleDialog(usize),
     OpenSampleSampleDialog(usize),
@@ -197,6 +206,8 @@ struct Project {
     audio_sender: mpsc::Sender<AudioMessage>,
     audio_monitor: AudioMonitor,
     audio_monitor_timer: MonitorTimer,
+
+    sample_analyser_dialog: SampleAnalyserDialog,
 
     tab_manager: TabManager,
     samples_tab_selected: bool,
@@ -271,6 +282,11 @@ impl Project {
             tab_manager: TabManager::new(tabs, menu),
             samples_tab_selected: false,
             sfx_tab_selected: false,
+
+            sample_analyser_dialog: SampleAnalyserDialog::new(
+                sender.clone(),
+                compiler_sender.clone(),
+            ),
 
             project_tab: ProjectTab::new(
                 &data.sfx_export_orders,
@@ -383,6 +399,7 @@ impl Project {
                     sound_effects_tab::add_missing_sfx(&self.data, sfx_data, &self.sender);
                 }
             }
+
             GuiMessage::SongChanged(id, mml) => {
                 self.tab_manager.mark_unsaved(FileType::Song(id));
                 let _ = self.compiler_sender.send(ToCompiler::SongChanged(id, mml));
@@ -533,6 +550,29 @@ impl Project {
                 open_sample_sample_dialog(&self.sender, &self.compiler_sender, &self.data, index);
             }
 
+            GuiMessage::OpenAnalyseInstrumentDialog(instrument_id) => {
+                if let Some((id, inst)) = self.data.instruments().list().get_with_id(instrument_id)
+                {
+                    self.sample_analyser_dialog.show_for_instrument(id, inst);
+                }
+            }
+            GuiMessage::CommitSampleAnalyserChanges {
+                id,
+                freq,
+                loop_setting,
+            } => {
+                if let Some((index, inst)) = self.data.instruments().list().get_id(id) {
+                    self.process(GuiMessage::Instrument(ListMessage::ItemEdited(
+                        index,
+                        data::Instrument {
+                            freq,
+                            loop_setting,
+                            ..inst.clone()
+                        },
+                    )));
+                }
+            }
+
             GuiMessage::SetProjectSongName(index, name) => {
                 if let Some(s) = self.data.project_songs.list().get(index) {
                     self.sender
@@ -657,6 +697,10 @@ impl Project {
                     dialog::alert_default(&e.to_string());
                 }
             },
+
+            CompilerOutput::SampleAnalysis(r) => {
+                self.sample_analyser_dialog.analysis_from_compiler_thread(r)
+            }
         }
     }
 

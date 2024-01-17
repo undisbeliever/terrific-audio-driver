@@ -5,6 +5,7 @@
 // SPDX-License-Identifier: MIT
 
 use crate::names::NameGetter;
+use crate::sample_analyser::{self, SampleAnalysis};
 use crate::GuiMessage;
 
 use crate::audio_thread::AudioMessage;
@@ -15,19 +16,19 @@ use std::fmt::Display;
 use std::sync::{mpsc, Arc};
 use std::thread;
 
-extern crate compiler;
 use compiler::common_audio_data::{build_common_audio_data, CommonAudioData};
-use compiler::data;
+use compiler::data::{self, LoopSetting};
 use compiler::data::{load_text_file_with_limit, TextFile};
 use compiler::driver_constants::COMMON_DATA_BYTES_PER_SOUND_EFFECT;
 use compiler::envelope::Envelope;
-use compiler::errors::{self, ExportSpcFileError, ProjectFileErrors, SongTooLargeError};
+use compiler::errors::{self, BrrError, ExportSpcFileError, ProjectFileErrors, SongTooLargeError};
 use compiler::notes::Note;
 use compiler::path::{ParentPathBuf, SourcePathBuf};
 use compiler::pitch_table::PitchTable;
 use compiler::samples::{
-    combine_samples, create_test_instrument_data, load_sample_for_instrument,
-    load_sample_for_sample, InstrumentSampleData, SampleFileCache, SampleSampleData,
+    combine_samples, create_test_instrument_data, encode_or_load_brr_file,
+    load_sample_for_instrument, load_sample_for_sample, InstrumentSampleData, SampleFileCache,
+    SampleSampleData, WAV_EXTENSION,
 };
 use compiler::songs::{sound_effect_to_song, test_sample_song, SongData};
 use compiler::sound_effects::blank_compiled_sound_effects;
@@ -85,6 +86,8 @@ pub enum ToCompiler {
     Instrument(ItemChanged<data::Instrument>),
     Sample(ItemChanged<data::Sample>),
 
+    AnalyseSample(SourcePathBuf, LoopSetting),
+
     // Merges Instruments into SampleAndInstrumentData
     // (sent when the user deselects the samples tab in the GUI)
     FinishedEditingSamples,
@@ -140,6 +143,8 @@ pub enum CompilerOutput {
 
     // The result of the last `ToCompiler::ExportSongToSpcFile` operation
     SpcFileResult(Result<(String, Vec<u8>), SpcFileError>),
+
+    SampleAnalysis(Result<SampleAnalysis, BrrError>),
 }
 
 #[derive(Debug)]
@@ -1026,6 +1031,24 @@ fn update_sfx_data_size_and_recheck_all_songs(
     }
 }
 
+fn analyse_sample(
+    cache: &mut SampleFileCache,
+    source: SourcePathBuf,
+    loop_setting: LoopSetting,
+) -> Result<SampleAnalysis, BrrError> {
+    let brr_sample = Arc::new(encode_or_load_brr_file(&source, cache, &loop_setting)?);
+
+    let wav_sample = match source.extension() {
+        Some(WAV_EXTENSION) => match cache.load_wav_file(&source) {
+            Ok(w) => Some(w),
+            Err(e) => return Err(e.clone()),
+        },
+        _ => None,
+    };
+
+    Ok(sample_analyser::analyse_sample(brr_sample, wav_sample))
+}
+
 fn bg_thread(
     parent_path: ParentPathBuf,
     receiever: mpsc::Receiver<ToCompiler>,
@@ -1187,6 +1210,11 @@ fn bg_thread(
 
             ToCompiler::RemoveFileFromSampleCache(source_path) => {
                 sample_file_cache.remove_path(&source_path);
+            }
+
+            ToCompiler::AnalyseSample(source_path, loop_setting) => {
+                let r = analyse_sample(&mut sample_file_cache, source_path, loop_setting);
+                sender.send(CompilerOutput::SampleAnalysis(r));
             }
         }
     }

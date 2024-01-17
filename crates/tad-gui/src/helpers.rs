@@ -21,6 +21,25 @@ pub fn label(s: &str) -> Frame {
         .with_align(Align::Inside | Align::Left)
 }
 
+pub fn label_packed(s: &str) -> Frame {
+    let mut l = label(s);
+
+    fltk::draw::set_font(l.label_font(), l.label_size());
+
+    let draw_width = fltk::draw::width(s);
+    let draw_height = fltk::draw::height();
+
+    let draw_width = if !draw_width.is_nan() {
+        draw_width as i32
+    } else {
+        100
+    };
+
+    l.set_size(draw_width, draw_height + draw_height / 2);
+
+    l
+}
+
 pub fn label_center(s: &str) -> Frame {
     Frame::default()
         .with_label(s)

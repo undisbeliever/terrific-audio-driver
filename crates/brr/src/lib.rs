@@ -67,6 +67,15 @@ impl BrrSample {
         &self.brr_data
     }
 
+    pub fn n_samples(&self) -> usize {
+        self.brr_data.len() / BYTES_PER_BRR_BLOCK * SAMPLES_PER_BLOCK
+    }
+
+    pub fn loop_point_samples(&self) -> Option<usize> {
+        self.loop_offset
+            .map(|lo| usize::from(lo) / BYTES_PER_BRR_BLOCK * SAMPLES_PER_BLOCK)
+    }
+
     pub fn is_looping(&self) -> bool {
         self.loop_offset.is_some()
     }
@@ -75,5 +84,49 @@ impl BrrSample {
         let lo = self.loop_offset().unwrap_or(0);
 
         [&lo.to_le_bytes(), self.brr_data.as_slice()].concat()
+    }
+
+    /// Decodes the sample into a buffer, starting at index.
+    ///
+    /// Returns: the `brr_data()` index at the end of the buffer.
+    ///
+    /// Safety:
+    ///  * Panics if `buf` is not a multiple of `SAMPLES_PER_BLOCK`
+    ///  * Panics if `index` is not a multiple of `BYTES_PER_BRR_BLOCK`
+    pub fn decode_into_buffer(
+        &self,
+        buf: &mut [i16],
+        index: usize,
+        prev1: i16,
+        prev2: i16,
+    ) -> usize {
+        assert!(buf.len() % SAMPLES_PER_BLOCK == 0);
+        assert!(index % BYTES_PER_BRR_BLOCK == 0);
+
+        let mut index = index;
+        let mut prev1 = prev1;
+        let mut prev2 = prev2;
+        for out in buf.chunks_exact_mut(SAMPLES_PER_BLOCK) {
+            if index < self.brr_data.len() {
+                let block = self.brr_data[index..index + BYTES_PER_BRR_BLOCK]
+                    .try_into()
+                    .unwrap();
+                let decoded = decoder::decode_brr_block(&block, prev1, prev2);
+                out.copy_from_slice(&decoded);
+
+                prev1 = decoded[SAMPLES_PER_BLOCK - 1];
+                prev2 = decoded[SAMPLES_PER_BLOCK - 2];
+
+                index += BYTES_PER_BRR_BLOCK;
+                if index >= self.brr_data.len() {
+                    if let Some(lo) = self.loop_offset {
+                        index = lo.into()
+                    }
+                }
+            } else {
+                out.fill(0)
+            }
+        }
+        index
     }
 }

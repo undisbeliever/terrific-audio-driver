@@ -95,7 +95,10 @@ impl SampleFileCache {
         })
     }
 
-    fn load_wav_file(&mut self, source: &SourcePathBuf) -> &Result<MonoPcm16WaveFile, BrrError> {
+    pub fn load_wav_file(
+        &mut self,
+        source: &SourcePathBuf,
+    ) -> &Result<MonoPcm16WaveFile, BrrError> {
         self.wav_files.entry(source.to_owned()).or_insert_with(|| {
             let p = &source.to_path(&self.parent_path);
             match fs::File::open(p) {
@@ -167,6 +170,18 @@ fn load_brr_file(
     }
 }
 
+pub fn encode_or_load_brr_file(
+    source: &SourcePathBuf,
+    cache: &mut SampleFileCache,
+    loop_setting: &LoopSetting,
+) -> Result<BrrSample, BrrError> {
+    match source.extension() {
+        Some(WAV_EXTENSION) => encode_wave_file(source, cache, loop_setting),
+        Some(BRR_EXTENSION) => load_brr_file(source, cache, loop_setting),
+        _ => Err(BrrError::UnknownFileType(source.to_path_string())),
+    }
+}
+
 #[derive(Clone)]
 pub struct SampleData<PitchT> {
     brr_sample: BrrSample,
@@ -188,11 +203,7 @@ pub fn load_sample_for_instrument(
     inst: &Instrument,
     cache: &mut SampleFileCache,
 ) -> Result<InstrumentSampleData, SampleError> {
-    let brr_sample = match inst.source.extension() {
-        Some(WAV_EXTENSION) => encode_wave_file(&inst.source, cache, &inst.loop_setting),
-        Some(BRR_EXTENSION) => load_brr_file(&inst.source, cache, &inst.loop_setting),
-        _ => Err(BrrError::UnknownFileType(inst.source.to_path_string())),
-    };
+    let brr_sample = encode_or_load_brr_file(&inst.source, cache, &inst.loop_setting);
 
     let pitch = instrument_pitch(inst);
 
@@ -216,11 +227,7 @@ pub fn load_sample_for_sample(
     sample: &Sample,
     cache: &mut SampleFileCache,
 ) -> Result<SampleSampleData, SampleError> {
-    let brr_sample = match sample.source.extension() {
-        Some(WAV_EXTENSION) => encode_wave_file(&sample.source, cache, &sample.loop_setting),
-        Some(BRR_EXTENSION) => load_brr_file(&sample.source, cache, &sample.loop_setting),
-        _ => Err(BrrError::UnknownFileType(sample.source.to_path_string())),
-    };
+    let brr_sample = encode_or_load_brr_file(&sample.source, cache, &sample.loop_setting);
 
     let pitch = sample_pitch(sample);
 

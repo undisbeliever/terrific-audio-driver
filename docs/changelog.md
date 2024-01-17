@@ -22,6 +22,7 @@ BRR Encoder changes:
 GUI Changes:
  * Show filename in the window title
  * Added close to song tabs
+ * Added sample analyser (click on the `...` button on the Frequency field of the Instrument editor)
 
 
 Version 0.0.5
