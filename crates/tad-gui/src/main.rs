@@ -286,6 +286,7 @@ impl Project {
             sample_analyser_dialog: SampleAnalyserDialog::new(
                 sender.clone(),
                 compiler_sender.clone(),
+                audio_sender.clone(),
             ),
 
             project_tab: ProjectTab::new(

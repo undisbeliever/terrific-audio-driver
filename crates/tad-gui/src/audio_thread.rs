@@ -6,6 +6,7 @@
 
 #![allow(clippy::assertions_on_constants)]
 
+use brr::{BrrSample, SAMPLES_PER_BLOCK};
 use compiler::audio_driver;
 use compiler::bytecode_interpreter;
 use compiler::common_audio_data::CommonAudioData;
@@ -25,7 +26,14 @@ use std::time::Duration;
 use crate::compiler_thread::ItemId;
 use crate::GuiMessage;
 
+/// Sample rate to run the audio driver at
 const APU_SAMPLE_RATE: i32 = 32040;
+
+/// Sample rate to run BRR samples at
+const BRR_SAMPLE_RATE: i32 = 32000;
+
+/// Approximate number of samples to play a looping BRR sample for
+const LOOPING_BRR_SAMPLE_SAMPLES: usize = 24000;
 
 pub const N_VOICES: usize = 8;
 
@@ -43,6 +51,8 @@ pub enum AudioMessage {
     CommonAudioDataChanged(Option<CommonAudioData>),
     PlaySong(ItemId, Arc<SongData>, Option<TickCounter>),
     PlaySample(ItemId, CommonAudioData, Arc<SongData>),
+
+    PlayBrrSampleAt32Khz(Arc<BrrSample>),
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -220,7 +230,7 @@ impl AudioCallback for RingBuffer {
 }
 
 // Returns true if any sound is output by the emulator
-fn fill_ring_buffer(emu: &mut ShvcSoundEmu, playback: &mut AudioDevice<RingBuffer>) -> bool {
+fn fill_ring_buffer_emu(emu: &mut ShvcSoundEmu, playback: &mut AudioDevice<RingBuffer>) -> bool {
     // Do not emulate the next audio chunk if the ring buffer is full,
     // which can happen if an SDL audio callback occurs in the middle of the last `fill_ring_buffer()` call.
     //
@@ -244,6 +254,79 @@ fn fill_ring_buffer(emu: &mut ShvcSoundEmu, playback: &mut AudioDevice<RingBuffe
 
     !silence
 }
+
+struct BrrSampleDecoder<'a> {
+    sample: &'a BrrSample,
+    sample_pos: usize,
+    blocks_decoded: usize,
+    blocks_to_decode: usize,
+    prev1: i16,
+    prev2: i16,
+}
+
+impl<'a> BrrSampleDecoder<'a> {
+    fn new(sample: &'a BrrSample) -> Self {
+        let blocks_to_decode = match sample.is_looping() {
+            true => LOOPING_BRR_SAMPLE_SAMPLES / SAMPLES_PER_BLOCK,
+            false => sample.n_brr_blocks(),
+        };
+
+        Self {
+            sample,
+            sample_pos: 0,
+            blocks_to_decode,
+            blocks_decoded: 0,
+            prev1: 0,
+            prev2: 0,
+        }
+    }
+
+    fn is_finished(&self) -> bool {
+        self.blocks_decoded > self.blocks_to_decode
+    }
+
+    fn fill_ring_buffer(&mut self, playback: &mut AudioDevice<RingBuffer>) {
+        const BUF_LEN: usize = RingBuffer::EMU_BUFFER_SIZE;
+
+        if playback.lock().is_buffer_full() {
+            return;
+        }
+
+        let mut buf = [0; BUF_LEN];
+        let mut is_done = self.is_finished();
+
+        loop {
+            if !is_done {
+                self.sample_pos = self.sample.decode_into_buffer(
+                    &mut buf,
+                    self.sample_pos,
+                    self.prev1,
+                    self.prev2,
+                );
+                self.prev1 = buf[buf.len() - 1];
+                self.prev2 = buf[buf.len() - 2];
+
+                self.blocks_decoded += buf.len() / SAMPLES_PER_BLOCK;
+                if self.blocks_decoded > self.blocks_to_decode {
+                    // Fade out the audio
+                    buf.iter_mut().enumerate().for_each(|(i, s)| {
+                        let p = (BUF_LEN - i) as i32;
+                        *s = i16::try_from(i32::from(*s) * p / (BUF_LEN as i32)).unwrap_or(0);
+                    });
+                    is_done = true;
+                }
+                let full = playback.lock().add_chunk(&buf);
+                if full {
+                    break;
+                }
+            } else {
+                playback.lock().fill_remaining_with_silence();
+                break;
+            }
+        }
+    }
+}
+
 struct EmulatorWrapper<'a>(&'a mut ShvcSoundEmu);
 impl bytecode_interpreter::Emulator for EmulatorWrapper<'_> {
     fn apuram_mut(&mut self) -> &mut [u8; 0x10000] {
@@ -438,8 +521,13 @@ impl AudioThread {
     }
 
     fn run(&mut self) {
-        while self.wait_for_play_song_message() {
-            self.play();
+        self.monitor.set(None);
+
+        while let Ok(msg) = self.rx.recv() {
+            let mut msg = Some(msg);
+            while let Some(m) = msg {
+                msg = self.process_message_no_audio(m);
+            }
         }
     }
 
@@ -458,70 +546,75 @@ impl AudioThread {
         self.gui_sender.send(GuiMessage::AudioThreadResumedSong(id));
     }
 
-    // Returns true if a song was loaded into the emulator
-    fn wait_for_play_song_message(&mut self) -> bool {
+    // Process message while audio is not playing
+    //
+    // Returns Some if an AudioMessage could not be processed when playing a song or brr sample.
+    #[must_use]
+    fn process_message_no_audio(&mut self, msg: AudioMessage) -> Option<AudioMessage> {
         self.monitor.set(None);
 
-        while let Ok(msg) = self.rx.recv() {
-            match msg {
-                AudioMessage::CommonAudioDataChanged(data) => {
-                    self.common_audio_data = data;
-                }
-                AudioMessage::SetStereoFlag(sf) => {
-                    self.stereo_flag = sf;
-                }
+        match msg {
+            AudioMessage::CommonAudioDataChanged(data) => {
+                self.common_audio_data = data;
+            }
+            AudioMessage::SetStereoFlag(sf) => {
+                self.stereo_flag = sf;
+            }
 
-                AudioMessage::PlaySong(song_id, song, ticks_to_skip) => {
-                    if let Some(common) = &self.common_audio_data {
-                        if load_song(
-                            &mut self.emu,
-                            common,
-                            &song,
-                            self.stereo_flag,
-                            ticks_to_skip,
-                        )
-                        .is_ok()
-                        {
-                            self.send_started_song_message(song_id, song);
-                            self.item_id = Some(song_id);
-                            return true;
-                        }
-                    }
-                }
-                AudioMessage::PlaySample(id, common_data, song_data) => {
+            AudioMessage::PlaySong(song_id, song, ticks_to_skip) => {
+                if let Some(common) = &self.common_audio_data {
                     if load_song(
                         &mut self.emu,
-                        &common_data,
-                        &song_data,
+                        common,
+                        &song,
                         self.stereo_flag,
-                        None,
+                        ticks_to_skip,
                     )
                     .is_ok()
                     {
-                        self.item_id = Some(id);
-                        return true;
+                        self.send_started_song_message(song_id, song);
+                        self.item_id = Some(song_id);
+                        return self.play_song();
                     }
                 }
-
-                AudioMessage::PauseResume(id) => {
-                    if Some(id) == self.item_id {
-                        return true;
-                    }
-                }
-
-                AudioMessage::StopAndClose
-                | AudioMessage::Pause
-                | AudioMessage::RingBufferConsumed(_) => (),
             }
+            AudioMessage::PlaySample(id, common_data, song_data) => {
+                if load_song(
+                    &mut self.emu,
+                    &common_data,
+                    &song_data,
+                    self.stereo_flag,
+                    None,
+                )
+                .is_ok()
+                {
+                    self.item_id = Some(id);
+                    return self.play_song();
+                }
+            }
+
+            AudioMessage::PlayBrrSampleAt32Khz(brr_sample) => {
+                return self.play_brr_sample(&brr_sample);
+            }
+
+            AudioMessage::PauseResume(id) => {
+                if Some(id) == self.item_id {
+                    return self.play_song();
+                }
+            }
+
+            AudioMessage::StopAndClose
+            | AudioMessage::Pause
+            | AudioMessage::RingBufferConsumed(_) => (),
         }
 
-        false
+        None
     }
 
-    fn play(&mut self) {
-        if self.item_id.is_none() {
-            return;
-        }
+    // Returns Some if the AudioMessage could not be processed
+    #[must_use]
+    fn play_song(&mut self) -> Option<AudioMessage> {
+        self.item_id?;
 
         let sdl_context = sdl2::init().unwrap();
         let audio_subsystem = sdl_context.audio().unwrap();
@@ -537,7 +630,7 @@ impl AudioThread {
             })
             .unwrap();
 
-        fill_ring_buffer(&mut self.emu, &mut playback);
+        fill_ring_buffer_emu(&mut self.emu, &mut playback);
 
         let mut state = PlayState::Running;
         playback.resume();
@@ -551,7 +644,7 @@ impl AudioThread {
                     match state {
                         PlayState::Paused | PlayState::SongFinished => (),
                         PlayState::Running => {
-                            let sound = fill_ring_buffer(&mut self.emu, &mut playback);
+                            let sound = fill_ring_buffer_emu(&mut self.emu, &mut playback);
 
                             // Detect when the song has finished playing.
                             //
@@ -674,8 +767,60 @@ impl AudioThread {
                 AudioMessage::SetStereoFlag(sf) => {
                     self.stereo_flag = sf;
                 }
+
+                AudioMessage::PlayBrrSampleAt32Khz(sample) => {
+                    return Some(AudioMessage::PlayBrrSampleAt32Khz(sample));
+                }
             }
         }
+
+        None
+    }
+
+    // Returns Some if the AudioMessage could not be processed
+    #[must_use]
+    fn play_brr_sample(&self, sample: &BrrSample) -> Option<AudioMessage> {
+        const TIMEOUT: Duration = Duration::from_secs(1);
+
+        let sdl_context = sdl2::init().unwrap();
+        let audio_subsystem = sdl_context.audio().unwrap();
+        let desired_spec = AudioSpecDesired {
+            freq: Some(BRR_SAMPLE_RATE),
+            channels: Some(1),
+            samples: Some((RingBuffer::SDL_BUFFER_SAMPLES * 2).try_into().unwrap()),
+        };
+
+        let mut playback = audio_subsystem
+            .open_playback(None, &desired_spec, {
+                |_spec| RingBuffer::new(self.sender.clone())
+            })
+            .unwrap();
+
+        let mut decoder = BrrSampleDecoder::new(sample);
+        let mut remaining_after_finished: i32 = 1;
+
+        decoder.fill_ring_buffer(&mut playback);
+
+        playback.resume();
+
+        while let Ok(msg) = self.rx.recv_timeout(TIMEOUT) {
+            match msg {
+                AudioMessage::RingBufferConsumed(_) => {
+                    if decoder.is_finished() {
+                        // Must wait one more `RingBufferConsumed` message
+                        remaining_after_finished -= 1;
+                        if remaining_after_finished < 0 {
+                            return None;
+                        }
+                    }
+                    decoder.fill_ring_buffer(&mut playback);
+                }
+                m => {
+                    return Some(m);
+                }
+            }
+        }
+        None
     }
 }
 

@@ -4,6 +4,7 @@
 //
 // SPDX-License-Identifier: MIT
 
+use crate::audio_thread::AudioMessage;
 use crate::compiler_thread::{ItemId, ToCompiler};
 use crate::helpers::{ch_units_to_width, input_height, label_packed, InputForm};
 use crate::sample_widgets::{LoopSettingWidget, SampleWidgetEditor, SourceFileType};
@@ -90,6 +91,7 @@ pub struct SampleAnalyserDialog {
 struct State {
     sender: app::Sender<GuiMessage>,
     compiler_sender: mpsc::Sender<ToCompiler>,
+    audio_sender: mpsc::Sender<AudioMessage>,
 
     instrument_id: Option<ItemId>,
     source: SourcePathBuf,
@@ -122,10 +124,15 @@ struct State {
     ls_widget: LoopSettingWidget,
 
     ok_button: Button,
+    play_button: Button,
 }
 
 impl SampleAnalyserDialog {
-    pub fn new(sender: app::Sender<GuiMessage>, compiler_sender: mpsc::Sender<ToCompiler>) -> Self {
+    pub fn new(
+        sender: app::Sender<GuiMessage>,
+        compiler_sender: mpsc::Sender<ToCompiler>,
+        audio_sender: mpsc::Sender<AudioMessage>,
+    ) -> Self {
         let mut window = Window::default();
 
         window.set_label("Sample Analyser");
@@ -197,7 +204,7 @@ impl SampleAnalyserDialog {
 
         let _empty_space = Widget::default();
 
-        let (ok_button, mut cancel_button) = {
+        let (ok_button, mut cancel_button, play_button) = {
             let bw = ch(10);
             let bh = form_row_height;
 
@@ -208,10 +215,8 @@ impl SampleAnalyserDialog {
             b_group.set_size(bw * 2 + margin, form_height);
             b_group.make_resizable(false);
 
-            let mut play_brr_button = Button::new(last_x, 0, bw, bh, "@>");
-            play_brr_button.set_tooltip("Play BRR sample at 32000Hz");
-            // ::TODO implement play_brr_button::
-            play_brr_button.deactivate();
+            let mut play_button = Button::new(last_x, 0, bw, bh, "@>");
+            play_button.set_tooltip("Play BRR sample at 32000Hz");
 
             let ok_button = Button::new(0, last_y, bw, bh, "Ok");
             let cancel_button = Button::new(last_x, last_y, bw, bh, "Cancel");
@@ -219,7 +224,7 @@ impl SampleAnalyserDialog {
             b_group.end();
             bottom_column.fixed(&b_group, b_group.w());
 
-            (ok_button, cancel_button)
+            (ok_button, cancel_button, play_button)
         };
 
         group.fixed(&bottom_column, form_height);
@@ -231,6 +236,7 @@ impl SampleAnalyserDialog {
         let state = Rc::new(RefCell::from(State {
             sender,
             compiler_sender,
+            audio_sender,
 
             instrument_id: None,
             source: Default::default(),
@@ -262,6 +268,7 @@ impl SampleAnalyserDialog {
             ls_widget: loop_setting,
 
             ok_button,
+            play_button,
         }));
 
         {
@@ -289,6 +296,12 @@ impl SampleAnalyserDialog {
                 move |_, ev| Self::handle_waveform_event(ev, &state)
             });
 
+            s.play_button.set_callback({
+                let state = state.clone();
+                move |_| {
+                    state.borrow().play_button_clicked();
+                }
+            });
             s.ok_button.set_callback({
                 let state = state.clone();
                 move |_| {
@@ -444,6 +457,7 @@ impl State {
 
         self.clear_spectrum_values();
 
+        self.play_button.deactivate();
         self.ok_button.deactivate();
         let _ = self.ok_button.take_focus();
 
@@ -469,6 +483,7 @@ impl State {
                 self.analysis = Some(a);
                 self.analysis_error = None;
 
+                self.play_button.activate();
                 self.ok_button.activate();
             }
             Err(e) => {
@@ -477,6 +492,7 @@ impl State {
                 self.analysis = None;
                 self.analysis_error = Some(e.to_string());
 
+                self.play_button.deactivate();
                 self.ok_button.deactivate();
             }
         }
@@ -795,6 +811,14 @@ impl State {
 
             self.waveform.redraw();
             self.window.redraw();
+        }
+    }
+
+    fn play_button_clicked(&self) {
+        if let Some(a) = &self.analysis {
+            let _ = self
+                .audio_sender
+                .send(AudioMessage::PlayBrrSampleAt32Khz(a.brr_sample.clone()));
         }
     }
 

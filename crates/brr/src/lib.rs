@@ -67,6 +67,10 @@ impl BrrSample {
         &self.brr_data
     }
 
+    pub fn n_brr_blocks(&self) -> usize {
+        self.brr_data.len() / BYTES_PER_BRR_BLOCK
+    }
+
     pub fn n_samples(&self) -> usize {
         self.brr_data.len() / BYTES_PER_BRR_BLOCK * SAMPLES_PER_BLOCK
     }
