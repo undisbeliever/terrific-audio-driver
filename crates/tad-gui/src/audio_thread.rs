@@ -14,6 +14,7 @@ use compiler::driver_constants::{addresses, io_commands, LoaderDataType};
 use compiler::songs::SongData;
 use compiler::time::TickCounter;
 
+use sdl2::Sdl;
 use shvc_sound_emu::ShvcSoundEmu;
 
 extern crate sdl2;
@@ -489,6 +490,8 @@ struct AudioThread {
     gui_sender: fltk::app::Sender<GuiMessage>,
     monitor: AudioMonitor,
 
+    sdl_context: Sdl,
+
     emu: ShvcSoundEmu,
 
     stereo_flag: StereoFlag,
@@ -511,6 +514,7 @@ impl AudioThread {
             rx,
             gui_sender,
             monitor,
+            sdl_context: sdl2::init().unwrap(),
 
             emu: ShvcSoundEmu::new(&iplrom),
 
@@ -616,8 +620,7 @@ impl AudioThread {
     fn play_song(&mut self) -> Option<AudioMessage> {
         self.item_id?;
 
-        let sdl_context = sdl2::init().unwrap();
-        let audio_subsystem = sdl_context.audio().unwrap();
+        let audio_subsystem = self.sdl_context.audio().unwrap();
         let desired_spec = AudioSpecDesired {
             freq: Some(APU_SAMPLE_RATE),
             channels: Some(2),
@@ -782,8 +785,7 @@ impl AudioThread {
     fn play_brr_sample(&self, sample: &BrrSample) -> Option<AudioMessage> {
         const TIMEOUT: Duration = Duration::from_secs(1);
 
-        let sdl_context = sdl2::init().unwrap();
-        let audio_subsystem = sdl_context.audio().unwrap();
+        let audio_subsystem = self.sdl_context.audio().unwrap();
         let desired_spec = AudioSpecDesired {
             freq: Some(BRR_SAMPLE_RATE),
             channels: Some(1),
