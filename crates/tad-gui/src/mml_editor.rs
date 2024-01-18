@@ -242,6 +242,11 @@ impl MmlEditor {
         );
     }
 
+    pub fn scroll_to_top(&mut self) {
+        self.widget.set_insert_position(0);
+        self.widget.scroll(0, 0);
+    }
+
     // Safety: editing `self` in the callback will cause a `BorrowMutError` panic.
     pub fn set_changed_callback(&mut self, f: impl Fn(&EditorBuffer) + 'static) {
         self.state.borrow_mut().changed_callback = Box::from(f);

@@ -245,6 +245,9 @@ impl SongTab {
         s.song_id = new_id;
         s.set_compiler_output(None);
         s.editor.set_text(&mml_file.contents);
+
+        s.editor.scroll_to_top();
+        s.console.scroll(0, 0);
     }
 
     pub fn contents(&self) -> String {
