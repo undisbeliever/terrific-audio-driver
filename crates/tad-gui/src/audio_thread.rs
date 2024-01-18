@@ -563,6 +563,9 @@ impl AudioThread {
             }
             AudioMessage::SetStereoFlag(sf) => {
                 self.stereo_flag = sf;
+
+                // Disable unpause
+                self.item_id = None;
             }
 
             AudioMessage::PlaySong(song_id, song, ticks_to_skip) => {
@@ -767,12 +770,11 @@ impl AudioThread {
                     }
                 }
 
-                AudioMessage::SetStereoFlag(sf) => {
-                    self.stereo_flag = sf;
-                }
-
-                AudioMessage::PlayBrrSampleAt32Khz(sample) => {
-                    return Some(AudioMessage::PlayBrrSampleAt32Khz(sample));
+                // Cannot process these messages here.
+                // Must reload the song when the stereo flag changes.
+                // Must close `AudioDevice` to change the sample rate.
+                m @ (AudioMessage::SetStereoFlag(_) | AudioMessage::PlayBrrSampleAt32Khz(_)) => {
+                    return Some(m);
                 }
             }
         }
