@@ -6,9 +6,9 @@
 
 use crate::audio_thread::AudioMessage;
 use crate::compiler_thread::{ItemId, ToCompiler};
-use crate::helpers::{ch_units_to_width, input_height, label_packed, InputForm};
+use crate::helpers::{ch_units_to_width, input_height, label_packed, InputForm, SetActive};
 use crate::sample_widgets::{LoopSettingWidget, SampleWidgetEditor, SourceFileType};
-use crate::GuiMessage;
+use crate::{GuiMessage, InstrumentOrSampleId};
 
 use brr::{BrrSample, MonoPcm16WaveFile};
 use compiler::data::{self, LoopSetting};
@@ -93,7 +93,7 @@ struct State {
     compiler_sender: mpsc::Sender<ToCompiler>,
     audio_sender: mpsc::Sender<AudioMessage>,
 
-    instrument_id: Option<ItemId>,
+    item_id: Option<InstrumentOrSampleId>,
     source: SourcePathBuf,
     freq: f64,
     loop_setting: data::LoopSetting,
@@ -118,6 +118,10 @@ struct State {
     peak_freq: Output,
     cursor_freq: Output,
     cursor_peak_freq: Output,
+
+    use_peak: Button,
+    use_cursor: Button,
+    use_cursor_peak: Button,
 
     source_out: Output,
     freq_widget: Spinner,
@@ -170,19 +174,19 @@ impl SampleAnalyserDialog {
 
         label_packed("Peak:");
         let peak_freq = Output::default().with_size(stats_width, line_height);
-        let mut use_peak_button = Button::default()
+        let use_peak = Button::default()
             .with_label("Use")
             .with_size(use_width, line_height);
 
         label_packed(" Cursor:");
         let cursor_freq = Output::default().with_size(stats_width, line_height);
-        let mut use_cursor_button = Button::default()
+        let use_cursor = Button::default()
             .with_label("Use")
             .with_size(use_width, line_height);
 
         label_packed(" Cursor (peak):");
         let cursor_peak_freq = Output::default().with_size(stats_width, line_height);
-        let mut use_cursor_peak_button = Button::default()
+        let use_cursor_peak = Button::default()
             .with_label("Use")
             .with_size(use_width, line_height);
 
@@ -238,7 +242,7 @@ impl SampleAnalyserDialog {
             compiler_sender,
             audio_sender,
 
-            instrument_id: None,
+            item_id: None,
             source: Default::default(),
             freq: 500.0,
             loop_setting: LoopSetting::None,
@@ -262,6 +266,10 @@ impl SampleAnalyserDialog {
             peak_freq,
             cursor_freq,
             cursor_peak_freq,
+
+            use_peak,
+            use_cursor,
+            use_cursor_peak,
 
             source_out,
             freq_widget: freq,
@@ -337,19 +345,19 @@ impl SampleAnalyserDialog {
                 }
             });
 
-            use_peak_button.set_callback({
+            s.use_peak.set_callback({
                 let state = state.clone();
                 move |_| {
                     state.borrow_mut().use_peak_clicked();
                 }
             });
-            use_cursor_button.set_callback({
+            s.use_cursor.set_callback({
                 let state = state.clone();
                 move |_| {
                     state.borrow_mut().use_cursor_clicked();
                 }
             });
-            use_cursor_peak_button.set_callback({
+            s.use_cursor_peak.set_callback({
                 let state = state.clone();
                 move |_| {
                     state.borrow_mut().use_cursor_peak_clicked();
@@ -363,7 +371,21 @@ impl SampleAnalyserDialog {
     }
 
     pub fn show_for_instrument(&mut self, id: ItemId, inst: &data::Instrument) {
-        self.state.borrow_mut().show_for_instrument(id, inst);
+        self.state.borrow_mut().show(
+            InstrumentOrSampleId::Instrument(id),
+            inst.source.clone(),
+            inst.freq,
+            inst.loop_setting.clone(),
+        );
+    }
+
+    pub fn show_for_sample(&mut self, id: ItemId, s: &data::Sample) {
+        self.state.borrow_mut().show(
+            InstrumentOrSampleId::Sample(id),
+            s.source.clone(),
+            0.0,
+            s.loop_setting.clone(),
+        );
     }
 
     pub fn analysis_from_compiler_thread(&mut self, r: Result<SampleAnalysis, BrrError>) {
@@ -438,19 +460,25 @@ impl State {
         self.window.redraw();
     }
 
-    fn show_for_instrument(&mut self, id: ItemId, inst: &data::Instrument) {
-        self.instrument_id = Some(id);
+    fn show(
+        &mut self,
+        id: InstrumentOrSampleId,
+        source: SourcePathBuf,
+        freq: f64,
+        loop_setting: LoopSetting,
+    ) {
+        self.item_id = Some(id);
 
-        self.source = inst.source.clone();
-        self.freq = inst.freq;
-        self.loop_setting = inst.loop_setting.clone();
+        self.source = source;
+        self.freq = freq;
+        self.loop_setting = loop_setting;
 
-        self.source_out.set_value(inst.source.as_str());
-        self.freq_widget.set_value(inst.freq);
-        self.ls_widget.set_value(&inst.loop_setting);
+        self.source_out.set_value(self.source.as_str());
+        self.freq_widget.set_value(freq);
+        self.ls_widget.set_value(&self.loop_setting);
 
         self.ls_widget
-            .update_loop_type_choice(SourceFileType::from_source(&inst.source));
+            .update_loop_type_choice(SourceFileType::from_source(&self.source));
 
         self.analysis = None;
         self.analysis_error = None;
@@ -460,6 +488,12 @@ impl State {
         self.play_button.deactivate();
         self.ok_button.deactivate();
         let _ = self.ok_button.take_focus();
+
+        let is_instrument = matches!(id, InstrumentOrSampleId::Instrument(_));
+        self.freq_widget.set_active(is_instrument);
+        self.use_peak.set_active(is_instrument);
+        self.use_cursor.set_active(is_instrument);
+        self.use_cursor_peak.set_active(is_instrument);
 
         self.window.show();
 
@@ -671,7 +705,7 @@ impl State {
         let x_scale = self.spectrum_x_scale;
         let y_scale = f64::from(-h) / f64::from(s.max().1.val());
 
-        if self.instrument_id.is_some() {
+        if self.item_id.is_some() {
             let freq_x = (self.freq * x_scale) as i32;
 
             draw::set_draw_color(SPECTRUM_INST_FREQ_COLOR);
@@ -823,7 +857,7 @@ impl State {
     }
 
     fn ok_button_clicked(&mut self) {
-        if let Some(id) = &mut self.instrument_id {
+        if let Some(id) = &mut self.item_id {
             self.sender.send(GuiMessage::CommitSampleAnalyserChanges {
                 id: *id,
                 freq: self.freq,

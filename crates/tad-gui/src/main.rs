@@ -92,6 +92,12 @@ const CARGO_PKG_VERSION: &str = env!("CARGO_PKG_VERSION");
 const DEFAULT_WINDOW_TITLE: &str = "Terrific Audio Driver";
 const WINDOW_TITLE_SUFFIX: &str = " - Terrific Audio Driver";
 
+#[derive(Debug, Clone, Copy)]
+pub enum InstrumentOrSampleId {
+    Instrument(ItemId),
+    Sample(ItemId),
+}
+
 #[derive(Debug)]
 pub enum GuiMessage {
     SelectedTabChanged,
@@ -131,8 +137,10 @@ pub enum GuiMessage {
     SetProjectSongName(usize, data::Name),
 
     OpenAnalyseInstrumentDialog(usize),
+    OpenAnalyseSampleDialog(usize),
+
     CommitSampleAnalyserChanges {
-        id: ItemId,
+        id: InstrumentOrSampleId,
         freq: f64,
         loop_setting: data::LoopSetting,
     },
@@ -557,22 +565,40 @@ impl Project {
                     self.sample_analyser_dialog.show_for_instrument(id, inst);
                 }
             }
+            GuiMessage::OpenAnalyseSampleDialog(sample_id) => {
+                if let Some((id, s)) = self.data.samples().list().get_with_id(sample_id) {
+                    self.sample_analyser_dialog.show_for_sample(id, s);
+                }
+            }
             GuiMessage::CommitSampleAnalyserChanges {
                 id,
                 freq,
                 loop_setting,
-            } => {
-                if let Some((index, inst)) = self.data.instruments().list().get_id(id) {
-                    self.process(GuiMessage::Instrument(ListMessage::ItemEdited(
-                        index,
-                        data::Instrument {
-                            freq,
-                            loop_setting,
-                            ..inst.clone()
-                        },
-                    )));
+            } => match id {
+                InstrumentOrSampleId::Instrument(id) => {
+                    if let Some((index, inst)) = self.data.instruments().list().get_id(id) {
+                        self.process(GuiMessage::Instrument(ListMessage::ItemEdited(
+                            index,
+                            data::Instrument {
+                                freq,
+                                loop_setting,
+                                ..inst.clone()
+                            },
+                        )));
+                    }
                 }
-            }
+                InstrumentOrSampleId::Sample(id) => {
+                    if let Some((index, sample)) = self.data.samples().list().get_id(id) {
+                        self.process(GuiMessage::Sample(ListMessage::ItemEdited(
+                            index,
+                            data::Sample {
+                                loop_setting,
+                                ..sample.clone()
+                            },
+                        )));
+                    }
+                }
+            },
 
             GuiMessage::SetProjectSongName(index, name) => {
                 if let Some(s) = self.data.project_songs.list().get(index) {
