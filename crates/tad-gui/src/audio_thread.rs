@@ -169,13 +169,21 @@ impl RingBuffer {
         self.is_buffer_full()
     }
 
-    /// Fills the ring buffer with silence
-    fn fill_with_silence(&mut self) {
-        self.buffer.fill(0);
+    fn fill_remaining_with_silence(&mut self) {
+        while !self.is_buffer_full() {
+            assert!(self.write_cursor % RingBuffer::EMU_BUFFER_SIZE == 0);
 
-        // write_cursor must be aligned by EMU_BUFFER_SIZE.
-        let read_chunk_id = self.read_cursor / RingBuffer::EMU_BUFFER_SIZE;
-        self.write_cursor = read_chunk_id * RingBuffer::EMU_BUFFER_SIZE;
+            let wc = self.write_cursor;
+            let wc_end = wc + Self::EMU_BUFFER_SIZE;
+
+            self.buffer[wc..wc_end].fill(0);
+
+            self.write_cursor = if wc_end < self.buffer.len() {
+                wc_end
+            } else {
+                0
+            };
+        }
     }
 }
 
@@ -564,14 +572,15 @@ impl AudioThread {
                             }
                         }
                         PlayState::PauseRequested => {
-                            playback.lock().fill_with_silence();
+                            playback.lock().fill_remaining_with_silence();
                             state = PlayState::Pausing;
                         }
                         PlayState::Pausing => {
-                            // Fill the ring buffer with silence
-                            playback.lock().fill_with_silence();
                             state = PlayState::Paused;
                             playback.pause();
+
+                            // Reset ring buffer to the beginning when playback is resumed.
+                            playback.lock().reset();
 
                             self.monitor.set(None);
                         }
