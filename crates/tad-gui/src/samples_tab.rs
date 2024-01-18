@@ -27,8 +27,16 @@ use fltk::group::{Flex, Wizard};
 use fltk::prelude::*;
 use fltk::text::{TextBuffer, TextDisplay, WrapMode};
 
+#[derive(PartialEq)]
+enum EditorType {
+    Instrument,
+    Sample,
+}
+
 pub struct SamplesTab {
     group: Flex,
+
+    selected_editor: EditorType,
 
     inst_table: ListEditorTable<InstrumentMapping>,
     sample_table: ListEditorTable<SampleMapping>,
@@ -134,6 +142,7 @@ impl SamplesTab {
 
         Self {
             group,
+            selected_editor: EditorType::Instrument,
             inst_table,
             sample_table,
             editor_wizard,
@@ -177,6 +186,8 @@ impl ListEditor<Instrument> for SamplesTab {
         self.editor_wizard
             .set_current_widget(&self.instrument_group);
 
+        self.selected_editor = EditorType::Instrument;
+
         self.inst_table.set_selected(index, id, inst);
         self.instrument_editor.borrow_mut().set_data(index, inst);
         self.test_instrument_widget.borrow_mut().set_selected(id);
@@ -194,7 +205,11 @@ impl CompilerOutputGui<InstrumentOutput> for SamplesTab {
             .set_active(matches!(compiler_output, Some(Ok(_))));
 
         match compiler_output {
-            None => self.console_buffer.set_text(""),
+            None => {
+                if self.selected_editor == EditorType::Instrument {
+                    self.console_buffer.set_text("")
+                }
+            }
             Some(Ok(o)) => {
                 self.console_buffer
                     .set_text(&format!("BRR Sample size: {} bytes", o.0));
@@ -239,6 +254,8 @@ impl ListEditor<data::Sample> for SamplesTab {
     fn set_selected(&mut self, index: usize, id: ItemId, sample: &data::Sample) {
         self.editor_wizard.set_current_widget(&self.sample_group);
 
+        self.selected_editor = EditorType::Sample;
+
         self.sample_table.set_selected(index, id, sample);
         self.sample_editor.borrow_mut().set_data(index, sample);
         self.test_sample_widget
@@ -259,7 +276,11 @@ impl CompilerOutputGui<SampleOutput> for SamplesTab {
             .set_active(matches!(compiler_output, Some(Ok(_))));
 
         match compiler_output {
-            None => self.console_buffer.set_text(""),
+            None => {
+                if self.selected_editor == EditorType::Sample {
+                    self.console_buffer.set_text("")
+                }
+            }
             Some(Ok(o)) => {
                 self.console_buffer
                     .set_text(&format!("BRR Sample size: {} bytes", o.0));
