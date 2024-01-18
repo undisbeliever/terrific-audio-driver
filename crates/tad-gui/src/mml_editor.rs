@@ -247,6 +247,10 @@ impl MmlEditor {
         self.widget.scroll(0, 0);
     }
 
+    pub fn take_focus(&mut self) {
+        let _ = self.widget.take_focus();
+    }
+
     // Safety: editing `self` in the callback will cause a `BorrowMutError` panic.
     pub fn set_changed_callback(&mut self, f: impl Fn(&EditorBuffer) + 'static) {
         self.state.borrow_mut().changed_callback = Box::from(f);

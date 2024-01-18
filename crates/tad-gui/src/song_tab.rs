@@ -120,6 +120,8 @@ impl SongTab {
         console.set_buffer(console_buffer.clone());
         console.wrap_mode(WrapMode::AtBounds, 0);
 
+        editor.take_focus();
+
         let state = Rc::new(RefCell::from(State {
             sender,
             song_id,
@@ -247,6 +249,8 @@ impl SongTab {
         s.editor.set_text(&mml_file.contents);
 
         s.editor.scroll_to_top();
+        s.editor.take_focus();
+
         s.console.scroll(0, 0);
     }
 
