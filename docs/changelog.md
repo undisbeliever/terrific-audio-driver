@@ -25,6 +25,10 @@ GUI Changes:
  * Added sample analyser (click on the `...` button on the Frequency field of the Instrument editor)
 
 
+Audio Driver Changes:
+ * Fixed `set_enabled_channels` IO command
+
+
 Version 0.0.5
 =============
  * Fixed a crash when creating a new project or opening the Save As dialog (Windows).
