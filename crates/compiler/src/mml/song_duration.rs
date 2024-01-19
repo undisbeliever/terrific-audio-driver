@@ -6,6 +6,7 @@
 
 use super::MetaData;
 
+use crate::driver_constants::N_MUSIC_CHANNELS;
 use crate::songs::{Channel, Subroutine};
 use crate::time::{TickClock, TickCounter, TIMER_HZ};
 
@@ -13,7 +14,7 @@ use std::time::Duration;
 
 pub fn calc_song_duration(
     metadata: &MetaData,
-    channels: &[Channel],
+    channels: &[Option<Channel>; N_MUSIC_CHANNELS],
     subroutines: &[Subroutine],
 ) -> Option<Duration> {
     let set_song_tick_in_subroutine = subroutines.iter().any(|s| s.changes_song_tempo);
@@ -24,12 +25,14 @@ pub fn calc_song_duration(
 
     let total_ticks: u32 = channels
         .iter()
+        .filter_map(|c| c.as_ref())
         .map(|c| c.tick_counter.value())
         .max()
         .unwrap_or(0);
 
     let mut tempo_changes: Vec<(TickCounter, TickClock)> = channels
         .iter()
+        .filter_map(|c| c.as_ref())
         .flat_map(|c| &c.tempo_changes)
         .cloned()
         .collect();

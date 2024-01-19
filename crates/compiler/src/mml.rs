@@ -175,18 +175,23 @@ pub fn compile_mml(
 
     compiler.set_subroutines(&subroutines);
 
-    let mut channels = Vec::with_capacity(lines.channels.len());
-    for (c_index, c_lines) in lines.channels.iter().enumerate() {
+    let channels = std::array::from_fn(|c_index| {
+        let c_lines = &lines.channels[c_index];
         if !c_lines.is_empty() {
             let c_id = Identifier::try_from_name(CHANNEL_NAMES[c_index].to_owned()).unwrap();
 
             match compiler.parse_and_compile_song_channel(c_lines, c_id.clone()) {
-                Ok(data) => channels.push(data),
-                Err(e) => errors.channel_errors.push(e),
+                Ok(data) => Some(data),
+                Err(e) => {
+                    errors.channel_errors.push(e);
+                    None
+                }
             }
+        } else {
+            None
         }
-    }
-    let channels = channels;
+    });
+    assert_eq!(channels.len(), lines.channels.len());
 
     if !errors.channel_errors.is_empty() {
         return Err(SongError::MmlError(errors));

@@ -238,6 +238,7 @@ fn read_ticks_until_next_bytecode(apuram: &[u8; 0x10000], v: usize) -> u32 {
 fn song_ticks(song: &SongData) -> TickCounter {
     song.channels()
         .iter()
+        .filter_map(|c| c.as_ref())
         .map(|c| c.tick_counter)
         .max()
         .unwrap_or_default()

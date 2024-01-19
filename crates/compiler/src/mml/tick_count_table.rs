@@ -5,7 +5,7 @@
 // SPDX-License-Identifier: MIT
 
 use crate::driver_constants::N_MUSIC_CHANNELS;
-use crate::songs::SongData;
+use crate::songs::{Channel, SongData};
 
 const MIN_NAME_COLUMN_WIDTH: usize = 15;
 const MAX_NAME_COLUMN_WIDTH: usize = 100;
@@ -14,7 +14,12 @@ pub struct MmlTickCountTable<'a>(pub &'a SongData);
 
 impl std::fmt::Display for MmlTickCountTable<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let channels = self.0.channels();
+        let channels: Vec<&Channel> = self
+            .0
+            .channels()
+            .iter()
+            .filter_map(|c| c.as_ref())
+            .collect();
         let sections = self.0.sections();
 
         assert!(channels.len() <= N_MUSIC_CHANNELS);
@@ -31,7 +36,7 @@ impl std::fmt::Display for MmlTickCountTable<'_> {
         const TC_WIDTH: usize = 9;
 
         write!(f, "{:width$} |", "", width = name_width)?;
-        for c in channels {
+        for c in &channels {
             let c_name = c.name;
             write!(f, " Channel {:<width$}|", c_name, width = TC_WIDTH - 7)?;
         }
@@ -40,7 +45,7 @@ impl std::fmt::Display for MmlTickCountTable<'_> {
         if sections.is_empty() {
             write!(f, "{:width$} |", "MML", width = name_width)?;
 
-            for c in channels {
+            for c in &channels {
                 let tc = c.tick_counter;
                 write!(f, " {:>width$} |", tc.value(), width = TC_WIDTH)?;
             }
@@ -49,7 +54,7 @@ impl std::fmt::Display for MmlTickCountTable<'_> {
             for (i, s) in sections.iter().enumerate() {
                 write!(f, "{:width$} |", s.name, width = name_width)?;
 
-                for c in channels {
+                for c in &channels {
                     let (lc, ticks) = match c.section_tick_counters.get(i) {
                         Some(s) => {
                             let lc = if s.in_loop { '+' } else { ' ' };
@@ -65,7 +70,7 @@ impl std::fmt::Display for MmlTickCountTable<'_> {
 
         if has_loop_point {
             write!(f, "{:width$} |", "Loop Point", width = name_width)?;
-            for c in channels {
+            for c in &channels {
                 if let Some(lp) = c.loop_point {
                     let tc = lp.tick_counter;
                     write!(f, " {:>width$} |", tc.value(), width = TC_WIDTH)?;

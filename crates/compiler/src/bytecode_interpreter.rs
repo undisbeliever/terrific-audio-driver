@@ -121,17 +121,13 @@ struct ChannelState {
 
 impl ChannelState {
     fn new(song: &SongData, channel_id: usize) -> Self {
+        let channel = song.channels()[channel_id].as_ref();
+
         Self {
             ticks: TickCounter::new(0),
             disabled: false,
-            instruction_ptr: song
-                .channels()
-                .get(channel_id)
-                .map(|c| c.bytecode_offset)
-                .unwrap_or(u16::MAX),
-            instruction_ptr_after_end: song
-                .channels()
-                .get(channel_id)
+            instruction_ptr: channel.map(|c| c.bytecode_offset).unwrap_or(u16::MAX),
+            instruction_ptr_after_end: channel
                 .and_then(|c| c.loop_point)
                 .and_then(|lp| u16::try_from(lp.bytecode_offset).ok())
                 .unwrap_or(u16::MAX),

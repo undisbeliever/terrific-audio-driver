@@ -85,7 +85,7 @@ pub struct SongData {
     duration: Option<Duration>,
 
     sections: Vec<Section>,
-    channels: Vec<Channel>,
+    channels: [Option<Channel>; N_MUSIC_CHANNELS],
     subroutines: Vec<Subroutine>,
 
     #[cfg(feature = "mml_tracking")]
@@ -113,7 +113,7 @@ impl SongData {
         &self.sections
     }
 
-    pub fn channels(&self) -> &[Channel] {
+    pub fn channels(&self) -> &[Option<Channel>; N_MUSIC_CHANNELS] {
         &self.channels
     }
 
@@ -205,7 +205,7 @@ fn sfx_bytecode_to_song(bytecode: &[u8]) -> SongData {
         metadata: MetaData::blank_sfx_metadata(),
         duration: None,
         sections: Vec::new(),
-        channels: Vec::new(),
+        channels: Default::default(),
         subroutines: Vec::new(),
 
         #[cfg(feature = "mml_tracking")]
@@ -215,7 +215,7 @@ fn sfx_bytecode_to_song(bytecode: &[u8]) -> SongData {
 
 fn write_song_header(
     buf: &mut [u8],
-    channels: &[Channel],
+    channels: &[Option<Channel>; N_MUSIC_CHANNELS],
     subroutines: &[Subroutine],
     metadata: &MetaData,
 ) -> Result<(), SongError> {
@@ -241,8 +241,8 @@ fn write_song_header(
     {
         let channel_header = &mut header[0..SONG_HEADER_CHANNELS_SIZE];
 
-        for i in 0..N_MUSIC_CHANNELS {
-            let (start_offset, loop_offset) = match channels.get(i) {
+        for (i, c) in channels.iter().enumerate() {
+            let (start_offset, loop_offset) = match c {
                 Some(c) => {
                     let offset = c.bytecode_offset;
                     assert!(valid_offsets.contains(&offset));
@@ -313,7 +313,7 @@ pub(crate) fn mml_to_song(
     data: Vec<u8>,
     duration: Option<Duration>,
     sections: Vec<Section>,
-    channels: Vec<Channel>,
+    channels: [Option<Channel>; N_MUSIC_CHANNELS],
     subroutines: Vec<Subroutine>,
     #[cfg(feature = "mml_tracking")] tracking: SongBcTracking,
 ) -> Result<SongData, SongError> {
