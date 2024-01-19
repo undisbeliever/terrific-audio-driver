@@ -32,6 +32,7 @@ pub mod addresses {
         EON_SHADOW_MUSIC,
         EON_SHADOW_SFX,
         SONG_TICK_COUNTER,
+        ENABLED_CHANNELS_MASK,
         CHANNEL_VC_UPDATE_STATE,
         CHANNEL_VC_VOL_L,
         CHANNEL_VC_VOL_R,

@@ -24,6 +24,8 @@ GUI Changes:
  * Show filename in the window title
  * Added close to song tabs
  * Added sample analyser (click on the `...` button on the Frequency field of the Instrument editor)
+ * Added play channel from line start button to the song tab.
+ * Added play channel from cursor button to the song tab.
 
 
 Audio Driver Changes:

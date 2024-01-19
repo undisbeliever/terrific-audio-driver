@@ -38,6 +38,27 @@ const LOOPING_BRR_SAMPLE_SAMPLES: usize = 24000;
 
 pub const N_VOICES: usize = 8;
 
+#[derive(Debug, Clone, Copy)]
+pub struct ChannelsMask(pub u8);
+
+impl ChannelsMask {
+    pub const ALL: ChannelsMask = ChannelsMask(0xff);
+
+    pub fn only_one_channel(channel_name: char) -> Self {
+        const FIRST: u32 = 'A' as u32;
+        const LAST: u32 = 'A' as u32 + N_VOICES as u32 - 1;
+
+        let c = u32::from(channel_name);
+        match c {
+            FIRST..=LAST => {
+                let shift = c - FIRST;
+                ChannelsMask(1 << shift)
+            }
+            _ => ChannelsMask(0),
+        }
+    }
+}
+
 pub enum AudioMessage {
     RingBufferConsumed(PrivateToken),
 
@@ -50,7 +71,7 @@ pub enum AudioMessage {
     PauseResume(ItemId),
 
     CommonAudioDataChanged(Option<CommonAudioData>),
-    PlaySong(ItemId, Arc<SongData>, Option<TickCounter>),
+    PlaySong(ItemId, Arc<SongData>, Option<TickCounter>, ChannelsMask),
     PlaySample(ItemId, CommonAudioData, Arc<SongData>),
 
     PlayBrrSampleAt32Khz(Arc<BrrSample>),
@@ -349,6 +370,7 @@ fn load_song(
     song: &SongData,
     stereo_flag: StereoFlag,
     ticks_to_skip: Option<TickCounter>,
+    enabled_channels_mask: ChannelsMask,
 ) -> Result<(), ()> {
     const LOADER_DATA_TYPE_ADDR: usize = addresses::LOADER_DATA_TYPE as usize;
 
@@ -422,10 +444,18 @@ fn load_song(
         }
     }
 
+    set_enabled_channels_mask(emu, enabled_channels_mask);
+
     // Unpause the audio driver
     emu.write_io_ports([io_commands::UNPAUSE, 0, 0, 0]);
 
     Ok(())
+}
+
+fn set_enabled_channels_mask(emu: &mut ShvcSoundEmu, mask: ChannelsMask) {
+    let apuram = emu.apuram_mut();
+
+    apuram[addresses::ENABLED_CHANNELS_MASK as usize] = mask.0;
 }
 
 fn read_voice_positions(emu: &ShvcSoundEmu, item_id: Option<ItemId>) -> Option<AudioMonitorData> {
@@ -436,13 +466,21 @@ fn read_voice_positions(emu: &ShvcSoundEmu, item_id: Option<ItemId>) -> Option<A
         apuram[usize::from(addresses::SONG_PTR) + 1],
     ]);
 
+    let enabled_channels_mask = apuram[addresses::ENABLED_CHANNELS_MASK as usize];
+
     let read_offsets = |addr_l: u16, addr_h: u16| -> [Option<u16>; N_VOICES] {
         std::array::from_fn(|i| {
-            let word = u16::from_le_bytes([
-                apuram[usize::from(addr_l) + i],
-                apuram[usize::from(addr_h) + i],
-            ]);
-            word.checked_sub(song_addr)
+            const _: () = assert!(N_VOICES <= 8);
+
+            if enabled_channels_mask & (1 << i) != 0 {
+                let word = u16::from_le_bytes([
+                    apuram[usize::from(addr_l) + i],
+                    apuram[usize::from(addr_h) + i],
+                ]);
+                word.checked_sub(song_addr)
+            } else {
+                None
+            }
         })
     };
     let voice_instruction_ptrs = read_offsets(
@@ -568,7 +606,7 @@ impl AudioThread {
                 self.item_id = None;
             }
 
-            AudioMessage::PlaySong(song_id, song, ticks_to_skip) => {
+            AudioMessage::PlaySong(song_id, song, ticks_to_skip, channels_mask) => {
                 if let Some(common) = &self.common_audio_data {
                     if load_song(
                         &mut self.emu,
@@ -576,6 +614,7 @@ impl AudioThread {
                         &song,
                         self.stereo_flag,
                         ticks_to_skip,
+                        channels_mask,
                     )
                     .is_ok()
                     {
@@ -592,6 +631,7 @@ impl AudioThread {
                     &song_data,
                     self.stereo_flag,
                     None,
+                    ChannelsMask::ALL,
                 )
                 .is_ok()
                 {
@@ -690,7 +730,7 @@ impl AudioThread {
                     self.common_audio_data = data;
                 }
 
-                AudioMessage::PlaySong(id, song, ticks_to_skip) => {
+                AudioMessage::PlaySong(id, song, ticks_to_skip, channels_mask) => {
                     if let Some(common_data) = &self.common_audio_data {
                         // Pause playback to prevent buffer overrun when tick_to_skip is large.
                         playback.pause();
@@ -701,6 +741,7 @@ impl AudioThread {
                             &song,
                             self.stereo_flag,
                             ticks_to_skip,
+                            channels_mask,
                         ) {
                             Ok(()) => {
                                 self.send_started_song_message(id, song);
@@ -729,6 +770,7 @@ impl AudioThread {
                         &song_data,
                         self.stereo_flag,
                         None,
+                        ChannelsMask::ALL,
                     ) {
                         Ok(()) => {
                             state = PlayState::Running;

@@ -59,7 +59,7 @@ use crate::tabs::{
     Tab, TabManager,
 };
 
-use audio_thread::{AudioMessage, AudioMonitor};
+use audio_thread::{AudioMessage, AudioMonitor, ChannelsMask};
 
 use compiler::data;
 use compiler::data::ProjectFile;
@@ -153,7 +153,7 @@ pub enum GuiMessage {
     SongChanged(ItemId, String),
     RecompileSong(ItemId, String),
 
-    PlaySong(ItemId, String, Option<TickCounter>),
+    PlaySong(ItemId, String, Option<TickCounter>, ChannelsMask),
     PlaySoundEffect(ItemId),
     PlayInstrument(ItemId, PlaySampleArgs),
     PlaySample(ItemId, PlaySampleArgs),
@@ -417,12 +417,13 @@ impl Project {
                 // RecompileSong should not mark the song as unsaved
                 let _ = self.compiler_sender.send(ToCompiler::SongChanged(id, mml));
             }
-            GuiMessage::PlaySong(id, mml, ticks_to_skip) => {
+            GuiMessage::PlaySong(id, mml, ticks_to_skip, channels_mask) => {
                 // RecompileSong should not mark the song as unsaved
                 let _ = self.compiler_sender.send(ToCompiler::CompileAndPlaySong(
                     id,
                     mml,
                     ticks_to_skip,
+                    channels_mask,
                 ));
             }
             GuiMessage::PlaySoundEffect(id) => {

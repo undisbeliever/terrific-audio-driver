@@ -4,7 +4,7 @@
 //
 // SPDX-License-Identifier: MIT
 
-use crate::audio_thread::AudioMonitorData;
+use crate::audio_thread::{AudioMonitorData, ChannelsMask};
 use crate::compiler_thread::{ItemId, SongError, SongOutput};
 use crate::helpers::*;
 use crate::mml_editor::{CompiledEditorData, MmlEditor, TextErrorRef, TextFormat};
@@ -99,6 +99,9 @@ impl SongTab {
         let mut play_button = button("@>", "Play song from the beginning (F5)");
         let mut play_at_line_start_button = button("@>|", "Play from line start (F6)");
         let mut play_at_cursor_button = button("@>[]", "Play from cursor (F7)");
+        let mut play_channel_line_start_button =
+            button("@>|", "Play channel from line start (Shift F6)");
+        let mut play_channel_cursor_button = button("@>[]", "Play channel from cursor (Shift F7)");
         let mut pause_resume_button = button("@||", "Pause/Resume song (F8)");
 
         main_toolbar.end();
@@ -156,11 +159,12 @@ impl SongTab {
                         true
                     }
                     Key::F6 => {
-                        s.borrow_mut().play_song_at_line_start();
+                        s.borrow_mut()
+                            .play_song_at_line_start(app::is_event_shift());
                         true
                     }
                     Key::F7 => {
-                        s.borrow_mut().play_song_at_cursor();
+                        s.borrow_mut().play_song_at_cursor(app::is_event_shift());
                         true
                     }
                     Key::F8 => {
@@ -194,7 +198,7 @@ impl SongTab {
             let s = state.clone();
             move |_| {
                 if let Ok(s) = s.try_borrow() {
-                    s.play_song_at_cursor();
+                    s.play_song_at_cursor(false);
                 }
             }
         });
@@ -202,7 +206,23 @@ impl SongTab {
             let s = state.clone();
             move |_| {
                 if let Ok(s) = s.try_borrow() {
-                    s.play_song_at_line_start();
+                    s.play_song_at_line_start(false);
+                }
+            }
+        });
+        play_channel_cursor_button.set_callback({
+            let s = state.clone();
+            move |_| {
+                if let Ok(s) = s.try_borrow() {
+                    s.play_song_at_cursor(true);
+                }
+            }
+        });
+        play_channel_line_start_button.set_callback({
+            let s = state.clone();
+            move |_| {
+                if let Ok(s) = s.try_borrow() {
+                    s.play_song_at_line_start(true);
                 }
             }
         });
@@ -296,26 +316,43 @@ impl State {
     }
 
     fn play_song(&self) {
-        self.sender
-            .send(GuiMessage::PlaySong(self.song_id, self.editor.text(), None));
+        self.sender.send(GuiMessage::PlaySong(
+            self.song_id,
+            self.editor.text(),
+            None,
+            ChannelsMask::ALL,
+        ));
     }
 
-    fn play_song_tick_counter(&self, cursor: Option<(ChannelId, TickCounter)>) {
-        if let Some((ChannelId::Channel(_), tc)) = cursor {
+    fn play_song_tick_counter(
+        &self,
+        cursor: Option<(ChannelId, TickCounter)>,
+        mute_other_channels: bool,
+    ) {
+        if let Some((ChannelId::Channel(c), tc)) = cursor {
+            let channels_mask = match mute_other_channels {
+                true => ChannelsMask::only_one_channel(c),
+                false => ChannelsMask::ALL,
+            };
+
             self.sender.send(GuiMessage::PlaySong(
                 self.song_id,
                 self.editor.text(),
                 Some(tc),
+                channels_mask,
             ));
         }
     }
 
-    fn play_song_at_cursor(&self) {
-        self.play_song_tick_counter(self.editor.cursor_tick_counter());
+    fn play_song_at_cursor(&self, mute_other_channels: bool) {
+        self.play_song_tick_counter(self.editor.cursor_tick_counter(), mute_other_channels);
     }
 
-    fn play_song_at_line_start(&self) {
-        self.play_song_tick_counter(self.editor.cursor_tick_counter_line_start());
+    fn play_song_at_line_start(&self, mute_other_channels: bool) {
+        self.play_song_tick_counter(
+            self.editor.cursor_tick_counter_line_start(),
+            mute_other_channels,
+        );
     }
 
     fn pause_resume(&self) {
