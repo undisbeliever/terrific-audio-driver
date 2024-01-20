@@ -1113,12 +1113,17 @@ impl MainWindow {
     fn new(sender: fltk::app::Sender<GuiMessage>) -> Self {
         let app = fltk::app::App::default();
 
-        let mut window = fltk::window::Window::default()
-            .with_size(800, 600)
-            .center_screen()
-            .with_label(DEFAULT_WINDOW_TITLE);
+        let mut window = fltk::window::Window::default().with_label(DEFAULT_WINDOW_TITLE);
 
         window.make_resizable(true);
+
+        let window_size = (
+            ch_units_to_width(&window, 100),
+            ch_units_to_width(&window, 75),
+        );
+        window.set_size(window_size.0, window_size.1);
+        window.size_range(window_size.0, window_size.1, 0, 0);
+        let mut window = window.center_screen();
 
         let mut col = fltk::group::Flex::default_fill().column();
 
