@@ -26,6 +26,7 @@ GUI Changes:
  * Added sample analyser (click on the `...` button on the Frequency field of the Instrument editor)
  * Added play channel from line start button to the song tab.
  * Added play channel from cursor button to the song tab.
+ * Added toggle buttons to enable and disable channels in the song tab.
 
 
 Audio Driver Changes:

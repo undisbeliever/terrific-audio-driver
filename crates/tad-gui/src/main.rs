@@ -158,6 +158,7 @@ pub enum GuiMessage {
     PlayInstrument(ItemId, PlaySampleArgs),
     PlaySample(ItemId, PlaySampleArgs),
     PauseResumeAudio(ItemId),
+    SetEnabledChannels(ItemId, ChannelsMask),
 
     AudioThreadStartedSong(ItemId, Arc<SongData>),
     AudioThreadResumedSong(ItemId),
@@ -439,6 +440,11 @@ impl Project {
             }
             GuiMessage::PauseResumeAudio(id) => {
                 let _ = self.audio_sender.send(AudioMessage::PauseResume(id));
+            }
+            GuiMessage::SetEnabledChannels(id, channel_mask) => {
+                let _ = self
+                    .audio_sender
+                    .send(AudioMessage::SetEnabledChannels(id, channel_mask));
             }
 
             GuiMessage::AudioThreadStartedSong(item_id, song_data) => {

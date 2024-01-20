@@ -12,17 +12,19 @@ use crate::tabs::{FileType, Tab};
 use crate::GuiMessage;
 
 use compiler::data::TextFile;
+use compiler::driver_constants::N_MUSIC_CHANNELS;
 use compiler::errors::MmlCompileErrors;
 use compiler::mml::{ChannelId, MmlTickCountTable};
 use compiler::songs::{song_duration_string, SongData};
 
 use compiler::time::TickCounter;
-use fltk::app::{self, event_key};
-use fltk::button::Button;
+use fltk::app;
+use fltk::button::{Button, ToggleButton};
 use fltk::enums::{CallbackReason, CallbackTrigger, Color, Event, Font, Key};
 use fltk::group::{Flex, Pack, PackType};
 use fltk::prelude::*;
 use fltk::text::{TextBuffer, TextDisplay, WrapMode};
+use fltk::widget::Widget;
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -40,6 +42,9 @@ pub struct State {
     sender: app::Sender<GuiMessage>,
 
     song_id: ItemId,
+
+    prev_channel_mask: ChannelsMask,
+    channel_buttons: [ToggleButton; N_MUSIC_CHANNELS],
 
     editor: MmlEditor,
 
@@ -79,10 +84,15 @@ impl SongTab {
 
         let new_file = mml_file.path.is_none();
 
+        let spacing = ch_units_to_width(&group, 1);
         let button_size = ch_units_to_width(&group, 4);
 
         let main_toolbar = Pack::default().with_type(PackType::Horizontal);
         group.fixed(&main_toolbar, button_size);
+
+        let spacer = |width: i32| {
+            Widget::default().with_size(width, button_size);
+        };
 
         let button = |label: &str, tooltip: &str| {
             let mut b = Button::default()
@@ -96,6 +106,7 @@ impl SongTab {
 
         // NOTE: toolbar shortcuts are handled by the `group.handle()` callback below
         let mut compile_button = button("C", "Compile song");
+        spacer(spacing);
         let mut play_button = button("@>", "Play song from the beginning (F5)");
         let mut play_at_line_start_button = button("@>|", "Play from line start (F6)");
         let mut play_at_cursor_button = button("@>[]", "Play from cursor (F7)");
@@ -103,6 +114,19 @@ impl SongTab {
             button("@>|", "Play channel from line start (Shift F6)");
         let mut play_channel_cursor_button = button("@>[]", "Play channel from cursor (Shift F7)");
         let mut pause_resume_button = button("@||", "Pause/Resume song (F8)");
+        spacer(spacing * 2);
+        let mut enable_all_button = button("All", "Enable all channels (Ctrl `)");
+        spacer(spacing);
+
+        let channel_buttons = std::array::from_fn(|i| {
+            let channel = char::from(b'A' + i as u8);
+
+            let mut b = ToggleButton::default()
+                .with_size(button_size, button_size)
+                .with_label(&channel.to_string());
+            b.set_tooltip(&format!("Toggle channel {} (Ctrl {})", channel, i + 1));
+            b
+        });
 
         main_toolbar.end();
 
@@ -128,11 +152,11 @@ impl SongTab {
         let state = Rc::new(RefCell::from(State {
             sender,
             song_id,
+            prev_channel_mask: ChannelsMask::ALL,
+            channel_buttons,
             editor,
-
             console,
             console_buffer,
-
             errors: None,
         }));
 
@@ -153,7 +177,7 @@ impl SongTab {
         group.handle({
             let s = state.clone();
             move |_widget, ev| match ev {
-                Event::KeyDown => match event_key() {
+                Event::KeyDown => match app::event_key() {
                     Key::F5 => {
                         s.borrow_mut().play_song();
                         true
@@ -171,7 +195,28 @@ impl SongTab {
                         s.borrow_mut().pause_resume();
                         true
                     }
-                    _ => false,
+                    k => {
+                        if app::is_event_ctrl() {
+                            const BACKTICK: i32 = b'`' as i32;
+                            const FIRST_CHANNEL: i32 = b'1' as i32;
+                            const LAST_CHANNEL: i32 = FIRST_CHANNEL + N_MUSIC_CHANNELS as i32 - 1;
+
+                            match k.bits() {
+                                BACKTICK => {
+                                    s.borrow_mut().enable_all_channels();
+                                    true
+                                }
+                                k @ FIRST_CHANNEL..=LAST_CHANNEL => {
+                                    let c = usize::try_from(k - FIRST_CHANNEL).unwrap();
+                                    s.borrow_mut().toggle_channel(c);
+                                    true
+                                }
+                                _ => false,
+                            }
+                        } else {
+                            false
+                        }
+                    }
                 },
                 _ => false,
             }
@@ -189,7 +234,7 @@ impl SongTab {
         play_button.set_callback({
             let s = state.clone();
             move |_| {
-                if let Ok(s) = s.try_borrow() {
+                if let Ok(mut s) = s.try_borrow_mut() {
                     s.play_song();
                 }
             }
@@ -197,7 +242,7 @@ impl SongTab {
         play_at_cursor_button.set_callback({
             let s = state.clone();
             move |_| {
-                if let Ok(s) = s.try_borrow() {
+                if let Ok(mut s) = s.try_borrow_mut() {
                     s.play_song_at_cursor(false);
                 }
             }
@@ -205,7 +250,7 @@ impl SongTab {
         play_at_line_start_button.set_callback({
             let s = state.clone();
             move |_| {
-                if let Ok(s) = s.try_borrow() {
+                if let Ok(mut s) = s.try_borrow_mut() {
                     s.play_song_at_line_start(false);
                 }
             }
@@ -213,7 +258,7 @@ impl SongTab {
         play_channel_cursor_button.set_callback({
             let s = state.clone();
             move |_| {
-                if let Ok(s) = s.try_borrow() {
+                if let Ok(mut s) = s.try_borrow_mut() {
                     s.play_song_at_cursor(true);
                 }
             }
@@ -221,7 +266,7 @@ impl SongTab {
         play_channel_line_start_button.set_callback({
             let s = state.clone();
             move |_| {
-                if let Ok(s) = s.try_borrow() {
+                if let Ok(mut s) = s.try_borrow_mut() {
                     s.play_song_at_line_start(true);
                 }
             }
@@ -231,6 +276,15 @@ impl SongTab {
             move |_| {
                 if let Ok(s) = s.try_borrow() {
                     s.pause_resume();
+                }
+            }
+        });
+
+        enable_all_button.set_callback({
+            let s = state.clone();
+            move |_| {
+                if let Ok(mut s) = s.try_borrow_mut() {
+                    s.enable_all_channels();
                 }
             }
         });
@@ -246,6 +300,19 @@ impl SongTab {
                     }
                 }
             });
+
+            for b in &mut s.channel_buttons {
+                b.set_value(true);
+
+                b.set_callback({
+                    let s = state.clone();
+                    move |_| {
+                        if let Ok(mut s) = s.try_borrow_mut() {
+                            s.channel_button_clicked();
+                        }
+                    }
+                });
+            }
         }
 
         Self {
@@ -315,25 +382,29 @@ impl State {
             .send(GuiMessage::RecompileSong(self.song_id, self.editor.text()));
     }
 
-    fn play_song(&self) {
+    fn play_song(&mut self) {
+        self.update_channel_buttons(self.prev_channel_mask);
+
         self.sender.send(GuiMessage::PlaySong(
             self.song_id,
             self.editor.text(),
             None,
-            ChannelsMask::ALL,
+            self.prev_channel_mask,
         ));
     }
 
     fn play_song_tick_counter(
-        &self,
+        &mut self,
         cursor: Option<(ChannelId, TickCounter)>,
         mute_other_channels: bool,
     ) {
         if let Some((ChannelId::Channel(c), tc)) = cursor {
             let channels_mask = match mute_other_channels {
                 true => ChannelsMask::only_one_channel(c),
-                false => ChannelsMask::ALL,
+                false => self.prev_channel_mask,
             };
+
+            self.update_channel_buttons(channels_mask);
 
             self.sender.send(GuiMessage::PlaySong(
                 self.song_id,
@@ -344,11 +415,11 @@ impl State {
         }
     }
 
-    fn play_song_at_cursor(&self, mute_other_channels: bool) {
+    fn play_song_at_cursor(&mut self, mute_other_channels: bool) {
         self.play_song_tick_counter(self.editor.cursor_tick_counter(), mute_other_channels);
     }
 
-    fn play_song_at_line_start(&self, mute_other_channels: bool) {
+    fn play_song_at_line_start(&mut self, mute_other_channels: bool) {
         self.play_song_tick_counter(
             self.editor.cursor_tick_counter_line_start(),
             mute_other_channels,
@@ -357,6 +428,46 @@ impl State {
 
     fn pause_resume(&self) {
         self.sender.send(GuiMessage::PauseResumeAudio(self.song_id));
+    }
+
+    /// NOTE: will not modify `self.prev_channel_mask`
+    fn update_channel_buttons(&mut self, mask: ChannelsMask) {
+        for (i, b) in self.channel_buttons.iter_mut().enumerate() {
+            b.set_value(mask.0 & (1u8 << i) != 0);
+        }
+    }
+
+    fn enable_all_channels(&mut self) {
+        self.prev_channel_mask = ChannelsMask::ALL;
+        for b in &mut self.channel_buttons {
+            b.set_value(true);
+        }
+        self.sender.send(GuiMessage::SetEnabledChannels(
+            self.song_id,
+            ChannelsMask::ALL,
+        ));
+    }
+
+    fn toggle_channel(&mut self, channel_index: usize) {
+        let b = &mut self.channel_buttons[channel_index];
+
+        b.toggle(!b.is_toggled());
+        self.channel_button_clicked();
+    }
+
+    fn channel_button_clicked(&mut self) {
+        let mut channel_mask = 0x00;
+        for (i, b) in self.channel_buttons.iter().enumerate() {
+            if b.is_set() {
+                channel_mask |= 1u8 << i;
+            }
+        }
+        let channel_mask = ChannelsMask(channel_mask);
+
+        self.sender
+            .send(GuiMessage::SetEnabledChannels(self.song_id, channel_mask));
+
+        self.prev_channel_mask = channel_mask;
     }
 
     pub fn set_compiler_output(&mut self, co: Option<SongOutput>) {

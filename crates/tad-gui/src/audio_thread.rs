@@ -69,6 +69,7 @@ pub enum AudioMessage {
 
     Pause,
     PauseResume(ItemId),
+    SetEnabledChannels(ItemId, ChannelsMask),
 
     CommonAudioDataChanged(Option<CommonAudioData>),
     PlaySong(ItemId, Arc<SongData>, Option<TickCounter>, ChannelsMask),
@@ -649,6 +650,11 @@ impl AudioThread {
                     return self.play_song();
                 }
             }
+            AudioMessage::SetEnabledChannels(id, mask) => {
+                if Some(id) == self.item_id {
+                    set_enabled_channels_mask(&mut self.emu, mask);
+                }
+            }
 
             AudioMessage::StopAndClose
             | AudioMessage::Pause
@@ -809,6 +815,12 @@ impl AudioThread {
                         | PlayState::SongFinished => {
                             // Do not do anything
                         }
+                    }
+                }
+
+                AudioMessage::SetEnabledChannels(id, mask) => {
+                    if Some(id) == self.item_id {
+                        set_enabled_channels_mask(&mut self.emu, mask);
                     }
                 }
 
