@@ -134,7 +134,7 @@ impl SamplesTab {
         editor_wizard.end();
 
         let mut console = TextDisplay::default();
-        main_group.fixed(&console, button_height * 4);
+        main_group.fixed(&console, button_height * 3);
 
         main_group.end();
         group.end();
