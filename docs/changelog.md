@@ -27,6 +27,8 @@ GUI Changes:
  * Added play channel from line start button to the song tab.
  * Added play channel from cursor button to the song tab.
  * Added toggle buttons to enable and disable channels in the song tab.
+ * The play from cursor buttons can now play subroutines.<br/>
+   (The first instrument in the MML file will be used when playing a subroutine.)
 
 
 Audio Driver Changes:

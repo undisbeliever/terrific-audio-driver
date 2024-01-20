@@ -18,7 +18,7 @@ use crate::driver_constants::{
 use crate::envelope::Envelope;
 use crate::errors::{SongError, SongTooLargeError, ValueError};
 use crate::mml;
-use crate::mml::{MetaData, Section};
+use crate::mml::{MetaData, MmlInstrument, Section};
 use crate::notes::Note;
 use crate::sound_effects::CompiledSoundEffect;
 use crate::time::{TickClock, TickCounter, TickCounterWithLoopFlag};
@@ -85,6 +85,7 @@ pub struct SongData {
     duration: Option<Duration>,
 
     sections: Vec<Section>,
+    instruments: Vec<MmlInstrument>,
     channels: [Option<Channel>; N_MUSIC_CHANNELS],
     subroutines: Vec<Subroutine>,
 
@@ -111,6 +112,10 @@ impl SongData {
 
     pub fn sections(&self) -> &[Section] {
         &self.sections
+    }
+
+    pub fn instruments(&self) -> &[MmlInstrument] {
+        &self.instruments
     }
 
     pub fn channels(&self) -> &[Option<Channel>; N_MUSIC_CHANNELS] {
@@ -205,6 +210,7 @@ fn sfx_bytecode_to_song(bytecode: &[u8]) -> SongData {
         metadata: MetaData::blank_sfx_metadata(),
         duration: None,
         sections: Vec::new(),
+        instruments: Vec::new(),
         channels: Default::default(),
         subroutines: Vec::new(),
 
@@ -308,11 +314,13 @@ fn write_song_header(
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn mml_to_song(
     metadata: MetaData,
     data: Vec<u8>,
     duration: Option<Duration>,
     sections: Vec<Section>,
+    instruments: Vec<MmlInstrument>,
     channels: [Option<Channel>; N_MUSIC_CHANNELS],
     subroutines: Vec<Subroutine>,
     #[cfg(feature = "mml_tracking")] tracking: SongBcTracking,
@@ -325,6 +333,7 @@ pub(crate) fn mml_to_song(
             data,
             duration,
             sections,
+            instruments,
             channels,
             subroutines,
             #[cfg(feature = "mml_tracking")]

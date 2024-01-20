@@ -4,7 +4,7 @@
 //
 // SPDX-License-Identifier: MIT
 
-use crate::audio_thread::{AudioMonitorData, ChannelsMask};
+use crate::audio_thread::{AudioMonitorData, ChannelsMask, SongSkip};
 use crate::compiler_thread::{ItemId, SongError, SongOutput};
 use crate::helpers::*;
 use crate::mml_editor::{CompiledEditorData, MmlEditor, TextErrorRef, TextFormat};
@@ -398,20 +398,39 @@ impl State {
         cursor: Option<(ChannelId, TickCounter)>,
         mute_other_channels: bool,
     ) {
-        if let Some((ChannelId::Channel(c), tc)) = cursor {
-            let channels_mask = match mute_other_channels {
-                true => ChannelsMask::only_one_channel(c),
-                false => self.prev_channel_mask,
-            };
+        match cursor {
+            Some((ChannelId::Channel(c), tc)) => {
+                let channels_mask = match mute_other_channels {
+                    true => ChannelsMask::only_one_channel(c),
+                    false => self.prev_channel_mask,
+                };
+                self.update_channel_buttons(channels_mask);
 
-            self.update_channel_buttons(channels_mask);
+                self.sender.send(GuiMessage::PlaySong(
+                    self.song_id,
+                    self.editor.text(),
+                    Some(SongSkip {
+                        subroutine_index: None,
+                        target_ticks: tc,
+                    }),
+                    channels_mask,
+                ));
+            }
+            Some((ChannelId::Subroutine(si), tc)) => {
+                let channels_mask = ChannelsMask(1);
+                self.update_channel_buttons(channels_mask);
 
-            self.sender.send(GuiMessage::PlaySong(
-                self.song_id,
-                self.editor.text(),
-                Some(tc),
-                channels_mask,
-            ));
+                self.sender.send(GuiMessage::PlaySong(
+                    self.song_id,
+                    self.editor.text(),
+                    Some(SongSkip {
+                        subroutine_index: Some(si),
+                        target_ticks: tc,
+                    }),
+                    channels_mask,
+                ));
+            }
+            _ => (),
         }
     }
 

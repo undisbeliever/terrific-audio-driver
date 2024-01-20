@@ -19,6 +19,7 @@ use crate::time::TickCounter;
 
 use std::ops::Range;
 
+#[derive(Clone)]
 pub struct VirtualChannel {
     vol_l: u8,
     vol_r: u8,
@@ -30,11 +31,13 @@ pub struct VirtualChannel {
     echo: bool,
 }
 
+#[derive(Clone)]
 struct LoopStateSoA {
     counter: u8,
     loop_point: u16,
 }
 
+#[derive(Clone)]
 pub struct ChannelSoA {
     countdown_timer: u8,
     next_event_is_key_off: u8,
@@ -60,6 +63,7 @@ pub struct ChannelSoA {
     vibrato_wavelength_in_ticks: u8,
 }
 
+#[derive(Clone)]
 pub struct Channel {
     soa: ChannelSoA,
     dsp: VirtualChannel,
@@ -158,6 +162,28 @@ impl ChannelInterpreter<'_> {
             target_ticks,
             s: ChannelState::new(song, channel_id),
         }
+    }
+
+    fn new_subroutine_intrepreter(
+        song: &SongData,
+        channel_id: usize,
+        subroutine_index: u8,
+        target_ticks: TickCounter,
+    ) -> ChannelInterpreter {
+        let mut ci = ChannelInterpreter::new(song, channel_id, target_ticks);
+
+        ci.s.instruction_ptr = ci.read_subroutine_instruction_ptr(subroutine_index);
+        ci.s.return_ptr = u16::MAX;
+
+        // Subroutine might not set an instruemnt before the play_note instructions.
+        //
+        // Use the first instrument defined in the MML file.
+        if let Some(i) = song.instruments().first() {
+            ci.s.instrument = Some(i.instrument_id.as_u8());
+            ci.s.adsr_or_gain_override = Some(i.envelope.engine_value());
+        }
+
+        ci
     }
 
     fn to_tick_count(length: u8, key_off: bool) -> TickCounter {
@@ -519,6 +545,47 @@ fn build_channel(
     }
 }
 
+// Used by `interpret_song_subroutine()` to populate the unused channels
+const UNUSED_CHANNEL: Channel = Channel {
+    soa: ChannelSoA {
+        countdown_timer: 0,
+        next_event_is_key_off: 0,
+
+        instruction_ptr: addresses::CHANNEL_DISABLED_BYTECODE,
+        return_ptr: addresses::CHANNEL_DISABLED_BYTECODE,
+        loop_state: [
+            LoopStateSoA {
+                counter: 0,
+                loop_point: 0,
+            },
+            LoopStateSoA {
+                counter: 0,
+                loop_point: 0,
+            },
+            LoopStateSoA {
+                counter: 0,
+                loop_point: 0,
+            },
+        ],
+        inst_pitch_offset: 0,
+        volume: 0,
+        pan: 0,
+        vibrato_pitch_offset_per_tick: 0,
+        vibrato_tick_counter_start: 0,
+        vibrato_tick_counter: 0,
+        vibrato_direction_comparator: 0,
+        vibrato_wavelength_in_ticks: 0,
+    },
+    dsp: VirtualChannel {
+        vol_l: 0,
+        vol_r: 0,
+        scrn: 0,
+        adsr1: 0,
+        adsr2_or_gain: 0,
+        echo: false,
+    },
+};
+
 /// returns None if there is a timeout
 pub fn interpret_song(
     song: &SongData,
@@ -554,6 +621,50 @@ pub fn interpret_song(
         Some(InterpreterOutput {
             channels,
             tick_clock: tick_clock_override.timer_register,
+            stereo_flag,
+        })
+    } else {
+        None
+    }
+}
+
+/// Intrepret a single subroutine within the song.
+///
+/// Returns None if `subroutine_index` is invalid or there is a timeout.
+pub fn interpret_song_subroutine(
+    song: &SongData,
+    common_audio_data: &CommonAudioData,
+    stereo_flag: bool,
+    song_data_addr: u16,
+    subroutine_index: u8,
+    ticks: TickCounter,
+) -> Option<InterpreterOutput> {
+    if usize::from(subroutine_index) >= song.subroutines().len() {
+        return None;
+    }
+
+    let common = CommonAudioDataSoA::new(common_audio_data, stereo_flag, song_data_addr);
+
+    let mut ci = ChannelInterpreter::new_subroutine_intrepreter(song, 0, subroutine_index, ticks);
+    let valid = ci.process_until_target();
+
+    if valid {
+        Some(InterpreterOutput {
+            channels: std::array::from_fn(|i| {
+                if i == 0 {
+                    let mut c = build_channel(&ci.s, ticks, &common);
+                    // Override `return_ptr` to ensure audio-driver stops at the first `return_from_subroutine` instruction.
+                    // (build_channel uses `return_ptr: 0` to match the audio driver)
+                    c.soa.return_ptr = addresses::CHANNEL_DISABLED_BYTECODE;
+                    c
+                } else {
+                    UNUSED_CHANNEL.clone()
+                }
+            }),
+            tick_clock: match &ci.s.tick_clock_override {
+                Some(tco) => tco.timer_register,
+                None => song.metadata().tick_clock.as_u8(),
+            },
             stereo_flag,
         })
     } else {

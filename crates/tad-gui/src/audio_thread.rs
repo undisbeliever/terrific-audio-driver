@@ -60,6 +60,12 @@ impl ChannelsMask {
     }
 }
 
+#[derive(Debug)]
+pub struct SongSkip {
+    pub subroutine_index: Option<u8>,
+    pub target_ticks: TickCounter,
+}
+
 pub enum AudioMessage {
     RingBufferConsumed(PrivateToken),
 
@@ -73,7 +79,7 @@ pub enum AudioMessage {
     SetEnabledChannels(ItemId, ChannelsMask),
 
     CommonAudioDataChanged(Option<CommonAudioData>),
-    PlaySong(ItemId, Arc<SongData>, Option<TickCounter>, ChannelsMask),
+    PlaySong(ItemId, Arc<SongData>, Option<SongSkip>, ChannelsMask),
     PlaySample(ItemId, CommonAudioData, Arc<SongData>),
 
     PlayBrrSampleAt32Khz(Arc<BrrSample>),
@@ -371,7 +377,7 @@ fn load_song(
     common_audio_data: &CommonAudioData,
     song: &SongData,
     stereo_flag: StereoFlag,
-    ticks_to_skip: Option<TickCounter>,
+    song_skip: Option<SongSkip>,
     enabled_channels_mask: ChannelsMask,
 ) -> Result<(), ()> {
     const LOADER_DATA_TYPE_ADDR: usize = addresses::LOADER_DATA_TYPE as usize;
@@ -430,19 +436,27 @@ fn load_song(
     // Wait for the audio-driver to finish initialization
     emu.emulate();
 
-    if let Some(ticks_to_skip) = ticks_to_skip {
-        if ticks_to_skip.value() > 0 {
-            // Cannot intrepret song in the compiler thread, the `stereo_flag` is unknown.
-            let o = bytecode_interpreter::interpret_song(
+    if let Some(s) = song_skip {
+        // Intrepreting song in the compiler thread, the `stereo_flag` is unknown.
+        let o = match s.subroutine_index {
+            None => bytecode_interpreter::interpret_song(
                 song,
                 common_audio_data,
                 stereo_flag,
                 song_data_addr,
-                ticks_to_skip,
-            );
-            if let Some(o) = o {
-                o.write_to_emulator(&mut EmulatorWrapper(emu));
-            }
+                s.target_ticks,
+            ),
+            Some(subroutine_index) => bytecode_interpreter::interpret_song_subroutine(
+                song,
+                common_audio_data,
+                stereo_flag,
+                song_data_addr,
+                subroutine_index,
+                s.target_ticks,
+            ),
+        };
+        if let Some(o) = o {
+            o.write_to_emulator(&mut EmulatorWrapper(emu));
         }
     }
 

@@ -8,7 +8,7 @@ use crate::names::NameGetter;
 use crate::sample_analyser::{self, SampleAnalysis};
 use crate::GuiMessage;
 
-use crate::audio_thread::{AudioMessage, ChannelsMask};
+use crate::audio_thread::{AudioMessage, ChannelsMask, SongSkip};
 
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
@@ -60,7 +60,6 @@ mod item_id {
         }
     }
 }
-use compiler::time::TickCounter;
 pub use item_id::ItemId;
 
 #[derive(Debug)]
@@ -101,7 +100,7 @@ pub enum ToCompiler {
 
     SongTabClosed(ItemId),
     SongChanged(ItemId, String),
-    CompileAndPlaySong(ItemId, String, Option<TickCounter>, ChannelsMask),
+    CompileAndPlaySong(ItemId, String, Option<SongSkip>, ChannelsMask),
     PlayInstrument(ItemId, PlaySampleArgs),
     PlaySample(ItemId, PlaySampleArgs),
 
@@ -1190,14 +1189,14 @@ fn bg_thread(
             ToCompiler::SongChanged(id, mml) => {
                 songs.edit_and_compile_song(id, mml, &pf_songs, &song_dependencies, &sender);
             }
-            ToCompiler::CompileAndPlaySong(id, mml, ticks_to_skip, channels_mask) => {
+            ToCompiler::CompileAndPlaySong(id, mml, song_skip, channels_mask) => {
                 sender.send_audio(AudioMessage::Pause);
                 songs.edit_and_compile_song(id, mml, &pf_songs, &song_dependencies, &sender);
                 if let Some(song) = songs.get_song_data(&id) {
                     sender.send_audio(AudioMessage::PlaySong(
                         id,
                         song.clone(),
-                        ticks_to_skip,
+                        song_skip,
                         channels_mask,
                     ));
                 }

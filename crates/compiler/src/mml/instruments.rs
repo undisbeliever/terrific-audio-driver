@@ -17,7 +17,7 @@ use crate::samples::note_range;
 
 use std::collections::HashMap;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct MmlInstrument {
     pub(crate) identifier: Identifier,
 
