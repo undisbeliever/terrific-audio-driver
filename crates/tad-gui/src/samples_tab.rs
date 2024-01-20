@@ -76,6 +76,7 @@ impl SamplesTab {
         sender: app::Sender<GuiMessage>,
     ) -> Self {
         let mut group = Flex::default_fill().row();
+        let margin = ch_units_to_width(&group, 1) / 2;
 
         // Sidebar
         let mut sidebar = Flex::default().column();
@@ -96,6 +97,7 @@ impl SamplesTab {
         let editor_wizard = Wizard::default().with_size(400, 400);
 
         let mut instrument_group = Flex::default().column().size_of_parent();
+        instrument_group.set_margin(margin);
 
         let (instrument_editor, se_height) = InstrumentEditor::new(sender.clone());
         instrument_group.fixed(instrument_editor.borrow().widget(), se_height + group.pad());
@@ -120,6 +122,7 @@ impl SamplesTab {
         instrument_group.end();
 
         let mut sample_group = Flex::default().column().size_of_parent();
+        sample_group.set_margin(margin);
 
         let (sample_editor, se_height) = SampleEditor::new(sender.clone());
         sample_group.fixed(sample_editor.borrow().widget(), se_height + group.pad());
