@@ -20,6 +20,7 @@ use shvc_sound_emu::ShvcSoundEmu;
 extern crate sdl2;
 use sdl2::audio::{AudioCallback, AudioDevice, AudioSpecDesired};
 
+use std::ops::Range;
 use std::sync::{mpsc, Arc, Mutex};
 use std::thread;
 use std::time::Duration;
@@ -459,7 +460,14 @@ fn set_enabled_channels_mask(emu: &mut ShvcSoundEmu, mask: ChannelsMask) {
     apuram[addresses::ENABLED_CHANNELS_MASK as usize] = mask.0;
 }
 
+/// Returns None if the song has finished
 fn read_voice_positions(emu: &ShvcSoundEmu, item_id: Option<ItemId>) -> Option<AudioMonitorData> {
+    const CHANNEL_INSTRUCTION_PTR_H_RANGE: Range<usize> = Range {
+        start: addresses::CHANNEL_INSTRUCTION_PTR_H as usize,
+        end: addresses::CHANNEL_INSTRUCTION_PTR_H as usize + N_VOICES,
+    };
+    const COMMON_DATA_ADDR_H: u8 = (addresses::COMMON_DATA >> 8) as u8;
+
     let apuram = emu.apuram();
 
     let song_addr = u16::from_le_bytes([
@@ -484,21 +492,22 @@ fn read_voice_positions(emu: &ShvcSoundEmu, item_id: Option<ItemId>) -> Option<A
             }
         })
     };
-    let voice_instruction_ptrs = read_offsets(
-        addresses::CHANNEL_INSTRUCTION_PTR_L,
-        addresses::CHANNEL_INSTRUCTION_PTR_H,
-    );
 
-    if voice_instruction_ptrs.iter().any(Option::is_some) {
-        let voice_return_inst_ptrs = read_offsets(
-            addresses::CHANNEL_RETURN_INST_PTR_L,
-            addresses::CHANNEL_RETURN_INST_PTR_H,
-        );
+    let any_channels_active = apuram[CHANNEL_INSTRUCTION_PTR_H_RANGE]
+        .iter()
+        .any(|&inst_ptr_h| inst_ptr_h > COMMON_DATA_ADDR_H);
 
+    if any_channels_active {
         Some(AudioMonitorData {
             item_id,
-            voice_instruction_ptrs,
-            voice_return_inst_ptrs,
+            voice_instruction_ptrs: read_offsets(
+                addresses::CHANNEL_INSTRUCTION_PTR_L,
+                addresses::CHANNEL_INSTRUCTION_PTR_H,
+            ),
+            voice_return_inst_ptrs: read_offsets(
+                addresses::CHANNEL_RETURN_INST_PTR_L,
+                addresses::CHANNEL_RETURN_INST_PTR_H,
+            ),
         })
     } else {
         None
