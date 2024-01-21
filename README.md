@@ -11,10 +11,12 @@ Features
 ========
  * A custom loader to speed-up data loading.
  * A bytecode-based song and sound effect data format and interpreter.
- * Sound effects.
  * Songs written in Music Macro Language (MML). ([mml syntax](docs/mml-syntax.md))
+ * Sequenced sound effects, written in either bytecode assembly
+   ([syntax](docs/bytecode-assembly-syntax.md)) or MML.
  * Vibrato.
  * Portamento.
+ * Custom ADSR and GAIN envelopes in songs and sound effects.
  * A GUI for editing and previewing samples, sound effects and songs.
 
 
