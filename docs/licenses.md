@@ -107,7 +107,7 @@ Licenses marked "synthesized" did not have a license file in their crate.
 
 
 Terrific Audio Driver makes use of the following open source projects:
-  * MIT License (81)
+  * MIT License (82)
   * Apache License 2.0 (2)
   * Unicode License Agreement - Data Files and Software (2016) (1)
   * FLTK License (1)
@@ -550,8 +550,8 @@ Used by:
   * [bitflags 2.4.2](https://github.com/bitflags/bitflags)
   * [num-complex 0.4.4](https://github.com/rust-num/num-complex)
   * [num-traits 0.2.17](https://github.com/rust-num/num-traits)
-  * [regex 1.10.2](https://github.com/rust-lang/regex)
-  * [regex-automata 0.4.3](https://github.com/rust-lang/regex/tree/master/regex-automata)
+  * [regex 1.10.3](https://github.com/rust-lang/regex)
+  * [regex-automata 0.4.4](https://github.com/rust-lang/regex/tree/master/regex-automata)
   * [regex-syntax 0.8.2](https://github.com/rust-lang/regex/tree/master/regex-syntax)
 
 ```
@@ -975,7 +975,7 @@ SOFTWARE.
 ## MIT License
 
 Used by:
-  * [anstream 0.6.8](https://github.com/rust-cli/anstyle.git)
+  * [anstream 0.6.11](https://github.com/rust-cli/anstyle.git)
   * [anstyle-query 1.0.2](https://github.com/rust-cli/anstyle)
   * [clap 4.4.18](https://github.com/clap-rs/clap)
   * [colorchoice 1.0.0](https://github.com/rust-cli/anstyle)
@@ -1182,7 +1182,7 @@ Used by:
   * [link-cplusplus 1.0.9](https://github.com/dtolnay/link-cplusplus)
   * [once_cell 1.19.0](https://github.com/matklad/once_cell)
   * [paste 1.0.14](https://github.com/dtolnay/paste)
-  * [proc-macro2 1.0.76](https://github.com/dtolnay/proc-macro2)
+  * [proc-macro2 1.0.78](https://github.com/dtolnay/proc-macro2)
   * [quote 1.0.35](https://github.com/dtolnay/quote)
   * [scratch 1.0.7](https://github.com/dtolnay/scratch)
   * [serde 1.0.195](https://github.com/serde-rs/serde)
@@ -1422,6 +1422,7 @@ DEALINGS IN THE SOFTWARE.
 Used by:
   * [aho-corasick 1.1.2](https://github.com/BurntSushi/aho-corasick)
   * [memchr 2.7.1](https://github.com/BurntSushi/memchr)
+  * [termcolor 1.4.1](https://github.com/BurntSushi/termcolor)
   * [winapi-util 0.1.6](https://github.com/BurntSushi/winapi-util)
 
 ```

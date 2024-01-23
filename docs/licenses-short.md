@@ -125,8 +125,8 @@ Please see the included [licenses file](licenses.md) for the full third party li
   * [bitflags 2.4.2](https://github.com/bitflags/bitflags), MIT License
   * [num-complex 0.4.4](https://github.com/rust-num/num-complex), MIT License
   * [num-traits 0.2.17](https://github.com/rust-num/num-traits), MIT License
-  * [regex 1.10.2](https://github.com/rust-lang/regex), MIT License
-  * [regex-automata 0.4.3](https://github.com/rust-lang/regex/tree/master/regex-automata), MIT License
+  * [regex 1.10.3](https://github.com/rust-lang/regex), MIT License
+  * [regex-automata 0.4.4](https://github.com/rust-lang/regex/tree/master/regex-automata), MIT License
   * [regex-syntax 0.8.2](https://github.com/rust-lang/regex/tree/master/regex-syntax), MIT License
   * [float-cmp 0.9.0](https://github.com/mikedilger/float-cmp), MIT License
   * [libc 0.2.152](https://github.com/rust-lang/libc), MIT License
@@ -142,7 +142,7 @@ Please see the included [licenses file](licenses.md) for the full third party li
   * [autocfg 1.1.0](https://github.com/cuviper/autocfg), MIT License
   * [ttf-parser 0.20.0](https://github.com/RazrFalcon/ttf-parser), MIT License
   * [anstyle 1.0.4](https://github.com/rust-cli/anstyle.git), MIT License
-  * [anstream 0.6.8](https://github.com/rust-cli/anstyle.git), MIT License
+  * [anstream 0.6.11](https://github.com/rust-cli/anstyle.git), MIT License
   * [anstyle-query 1.0.2](https://github.com/rust-cli/anstyle), MIT License
   * [clap 4.4.18](https://github.com/clap-rs/clap), MIT License
   * [colorchoice 1.0.0](https://github.com/rust-cli/anstyle), MIT License
@@ -165,7 +165,7 @@ Please see the included [licenses file](licenses.md) for the full third party li
   * [link-cplusplus 1.0.9](https://github.com/dtolnay/link-cplusplus), MIT License
   * [once_cell 1.19.0](https://github.com/matklad/once_cell), MIT License
   * [paste 1.0.14](https://github.com/dtolnay/paste), MIT License
-  * [proc-macro2 1.0.76](https://github.com/dtolnay/proc-macro2), MIT License
+  * [proc-macro2 1.0.78](https://github.com/dtolnay/proc-macro2), MIT License
   * [quote 1.0.35](https://github.com/dtolnay/quote), MIT License
   * [scratch 1.0.7](https://github.com/dtolnay/scratch), MIT License
   * [serde 1.0.195](https://github.com/serde-rs/serde), MIT License
@@ -186,6 +186,7 @@ Please see the included [licenses file](licenses.md) for the full third party li
   * [crossbeam-utils 0.8.19](https://github.com/crossbeam-rs/crossbeam), MIT License
   * [aho-corasick 1.1.2](https://github.com/BurntSushi/aho-corasick), MIT License
   * [memchr 2.7.1](https://github.com/BurntSushi/memchr), MIT License
+  * [termcolor 1.4.1](https://github.com/BurntSushi/termcolor), MIT License
   * [winapi-util 0.1.6](https://github.com/BurntSushi/winapi-util), MIT License
   * [unicode-ident 1.0.12](https://github.com/dtolnay/unicode-ident), Unicode License Agreement - Data Files and Software (2016)
   * [FLTK](https://www.fltk.org/), [FLTK license](https://www.fltk.org/doc-1.4/license.html)
