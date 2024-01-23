@@ -339,6 +339,9 @@ impl SongTab {
         s.editor.take_focus();
 
         s.console.scroll(0, 0);
+
+        s.prev_channel_mask = ChannelsMask::ALL;
+        s.update_channel_buttons(ChannelsMask::ALL);
     }
 
     pub fn contents(&self) -> String {
