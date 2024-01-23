@@ -11,7 +11,7 @@ use crate::tabs::{FileType, TabManager};
 use crate::{GuiMessage, ProjectData, SoundEffectsData};
 
 use compiler::data;
-use compiler::data::{load_text_file_with_limit, Name, ProjectFile, Song, TextFile};
+use compiler::data::{load_text_file_with_limit, Name, ProjectFile, Song, TextFile, MAX_FILE_SIZE};
 use compiler::path::{ParentPathBuf, SourcePathBuf, SourcePathResult};
 use compiler::sound_effects::{
     build_sound_effects_file, load_sound_effects_file, SoundEffectsFile,
@@ -65,21 +65,23 @@ fn save_file_dialog(title: &str, filter: &str, default_extension: &str) -> Optio
     }
 }
 
-pub struct PfFileDialogResult {
-    pub full_path: PathBuf,
-    pub source_path: SourcePathBuf,
+enum PfFileDialogState {
+    None,
+    Error(String),
+    InsideProject(PathBuf, SourcePathBuf),
+    OutsideProject(PathBuf, SourcePathBuf),
+    RelativePathErr(PathBuf, String),
 }
 
 fn validate_pf_file_dialog_output(
     dialog: &dialog::NativeFileChooser,
     pd: &ProjectData,
     add_missing_extension: Option<&str>,
-    choice_question: &str,
-) -> Option<PfFileDialogResult> {
+) -> PfFileDialogState {
     let paths = dialog.filenames();
 
     if paths.len() != 1 {
-        return None;
+        return PfFileDialogState::None;
     }
 
     let mut path = paths.into_iter().next().unwrap();
@@ -91,9 +93,7 @@ fn validate_pf_file_dialog_output(
     }
 
     if !path.is_absolute() {
-        dialog::message_title("Error");
-        dialog::alert_default("path is not absolute");
-        return None;
+        return PfFileDialogState::Error("path is not absolute".to_owned());
     }
 
     #[cfg(windows)]
@@ -111,54 +111,33 @@ fn validate_pf_file_dialog_output(
         let (parent, file_name) = match (path.parent(), path.file_name()) {
             (Some(p), Some(f)) => (p, f),
             _ => {
-                dialog::message_title("Error");
-                dialog::alert_default(
-                    "Cannot canonicalize path: cannot extract filename from path",
+                return PfFileDialogState::Error(
+                    "Cannot canonicalize path: cannot extract filename from path".to_owned(),
                 );
-                return None;
             }
         };
         path = match parent.canonicalize() {
             Ok(p) => p.join(file_name),
             Err(e) => {
-                dialog::message_title("Error");
-                dialog::alert_default(&format!("Cannot canonicalize path: {}", e));
-                return None;
+                return PfFileDialogState::Error(format!("Cannot canonicalize path: {}", e));
             }
         };
     }
 
     match pd.pf_parent_path.create_source_path(&path) {
-        SourcePathResult::InsideProject(source_path) => Some(PfFileDialogResult {
-            source_path,
-            full_path: path,
-        }),
+        SourcePathResult::InsideProject(source_path) => {
+            PfFileDialogState::InsideProject(path, source_path)
+        }
         SourcePathResult::OutsideProject(source_path) => {
-            dialog::message_title("Warning");
-            let choice = dialog::choice2_default(
-                &format!(
-                    "{} is outside of the project file.\n{}",
-                    path.display(),
-                    choice_question
-                ),
-                "No",
-                "Yes",
-                "",
-            );
-            match choice {
-                Some(1) => Some(PfFileDialogResult {
-                    source_path,
-                    full_path: path,
-                }),
-                _ => None,
-            }
+            PfFileDialogState::OutsideProject(path, source_path)
         }
-        SourcePathResult::Err(e) => {
-            dialog::message_title("Error loading file");
-            dialog::alert_default(&e.to_string());
-            None
-        }
+        SourcePathResult::Err(e) => PfFileDialogState::RelativePathErr(path, e.to_string()),
     }
+}
+
+pub struct PfFileDialogResult {
+    pub full_path: PathBuf,
+    pub source_path: SourcePathBuf,
 }
 
 fn pf_open_file_dialog(
@@ -184,7 +163,139 @@ fn pf_open_file_dialog(
 
     dialog.show();
 
-    validate_pf_file_dialog_output(&dialog, pd, None, "Do you still want to open it?")
+    match validate_pf_file_dialog_output(&dialog, pd, None) {
+        PfFileDialogState::None => None,
+        PfFileDialogState::Error(msg) => {
+            dialog::message_title("Error");
+            dialog::alert_default(&msg);
+            None
+        }
+        PfFileDialogState::InsideProject(full_path, source_path) => Some(PfFileDialogResult {
+            full_path,
+            source_path,
+        }),
+        PfFileDialogState::OutsideProject(full_path, source_path) => {
+            let file_contents = load_binary_file_with_limit_show_dialog_on_error(&full_path)?;
+
+            dialog::message_title("Warning");
+            let choice = dialog::choice2_default(
+                &format!(
+                    concat![
+                        "{} is outside of the project directory.\n",
+                        "Do you still want to open it?",
+                    ],
+                    full_path.display(),
+                ),
+                "Copy file to project",
+                "No", // default
+                "Yes",
+            );
+            match choice {
+                Some(0) => copy_file_to_project_dialog(pd, file_contents, &full_path, filter),
+                Some(1) => None,
+                Some(2) => Some(PfFileDialogResult {
+                    source_path,
+                    full_path,
+                }),
+                _ => None,
+            }
+        }
+        PfFileDialogState::RelativePathErr(full_path, error_message) => {
+            // `full_path` might be on a different drive to the project file.
+            // This will still allow the file to be copied to the project directory.
+
+            let file_contents = load_binary_file_with_limit_show_dialog_on_error(&full_path)?;
+
+            dialog::message_title("Warning");
+            let choice = dialog::choice2_default(
+                &format!(
+                    concat![
+                        "{} is outside of the project directory.\n",
+                        "The file cannot be converted to a relative path: {}\n",
+                        "\n",
+                        "Do you want to copy the file into the project directory?"
+                    ],
+                    full_path.display(),
+                    error_message,
+                ),
+                // Same order as `PfFileDialogState::OutsideProject` dialog
+                "Copy file to project",
+                "No", // default
+                "",
+            );
+            match choice {
+                Some(0) => copy_file_to_project_dialog(pd, file_contents, &full_path, filter),
+                _ => None,
+            }
+        }
+    }
+}
+
+/// Opens a Save-As dialog that allows the user to copy the file to the project directory.
+///
+/// To prevent accidental overrides, this dialog will forbid overriding existing files.
+///
+/// NOTE: This function takes a `file_contents` parameter to ensure the "Cannot load file"
+/// error message occurs before the "file is outsode of the project directory" dialog choice.
+fn copy_file_to_project_dialog(
+    pd: &ProjectData,
+    file_contents: Vec<u8>,
+    copied_file_path: &Path,
+    filter: &str,
+) -> Option<PfFileDialogResult> {
+    debug_assert!(file_contents.len() <= MAX_FILE_SIZE as usize);
+
+    let mut dialog = dialog::NativeFileChooser::new(dialog::FileDialogType::BrowseSaveFile);
+    dialog.set_title("Copy file to project");
+    dialog.set_filter(filter);
+    dialog.set_option(
+        dialog::FileDialogOptions::SaveAsConfirm | dialog::FileDialogOptions::UseFilterExt,
+    );
+
+    let extension: Option<String> = copied_file_path
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(|s| s.to_owned());
+
+    let _ = dialog.set_directory(pd.pf_parent_path.as_path());
+    if let Some(f) = copied_file_path.file_name() {
+        if let Some(f) = f.to_str() {
+            dialog.set_preset_file(f);
+        }
+    }
+    dialog.show();
+
+    match validate_pf_file_dialog_output(&dialog, pd, extension.as_deref()) {
+        PfFileDialogState::None => None,
+        PfFileDialogState::Error(msg) | PfFileDialogState::RelativePathErr(_, msg) => {
+            dialog::message_title("Error");
+            dialog::alert_default(&msg);
+            None
+        }
+        PfFileDialogState::OutsideProject(_, _) => {
+            dialog::message_title("Error");
+            dialog::alert_default("Path is outside of the project");
+            None
+        }
+        PfFileDialogState::InsideProject(full_path, source_path) => {
+            // I am delibratly forbiding writing to existing files.
+            match write_to_new_file(&full_path, &file_contents) {
+                Ok(()) => Some(PfFileDialogResult {
+                    full_path,
+                    source_path,
+                }),
+                Err(e) => {
+                    dialog::message_title("Error copying file");
+                    dialog::alert_default(&format!(
+                        "Error writing to {}\n\n{}",
+                        full_path.display(),
+                        e
+                    ));
+                    None
+                }
+            }
+        }
+    }
 }
 
 fn pf_save_file_dialog(
@@ -205,12 +316,45 @@ fn pf_save_file_dialog(
 
     dialog.show();
 
-    validate_pf_file_dialog_output(
-        &dialog,
-        pd,
-        Some(default_extension),
-        "Do you still want to save to to this location?",
-    )
+    match validate_pf_file_dialog_output(&dialog, pd, Some(default_extension)) {
+        PfFileDialogState::None => None,
+        PfFileDialogState::Error(msg) => {
+            dialog::message_title("Error");
+            dialog::alert_default(&msg);
+            None
+        }
+        PfFileDialogState::RelativePathErr(_full_path, error_message) => {
+            dialog::message_title("Error");
+            dialog::alert_default(&error_message);
+            None
+        }
+        PfFileDialogState::InsideProject(full_path, source_path) => Some(PfFileDialogResult {
+            full_path,
+            source_path,
+        }),
+        PfFileDialogState::OutsideProject(full_path, source_path) => {
+            dialog::message_title("Warning");
+            let choice = dialog::choice2_default(
+                &format!(
+                    concat![
+                        "{} is outside of the project directory.\n",
+                        "Do you still want to save to to this location?"
+                    ],
+                    full_path.display(),
+                ),
+                "Yes",
+                "No", // default
+                "",
+            );
+            match choice {
+                Some(0) => Some(PfFileDialogResult {
+                    source_path,
+                    full_path,
+                }),
+                _ => None,
+            }
+        }
+    }
 }
 
 fn open_file_dialog(title: &str, filter: &str) -> Option<PathBuf> {
@@ -579,6 +723,40 @@ fn write_file_show_dialog_on_error(path: &Path, file_type: &str, contents: &[u8]
             dialog::message_title(&format!("Error saving {}", file_type));
             dialog::alert_default(&format!("Error writing to {}\n\n{}", path.display(), e));
             false
+        }
+    }
+}
+
+fn load_binary_file_with_limit_show_dialog_on_error(path: &Path) -> Option<Vec<u8>> {
+    use std::io::Read;
+
+    assert!(path.is_absolute());
+
+    let file = match std::fs::File::open(path) {
+        Ok(file) => file,
+        Err(e) => {
+            dialog::message_title("Error opening file");
+            dialog::alert_default(&format!("Error opening {}\n\n{}", path.display(), e));
+            return None;
+        }
+    };
+
+    let mut buffer = Vec::new();
+
+    match file.take(MAX_FILE_SIZE.into()).read_to_end(&mut buffer) {
+        Ok(n_bytes_read) => {
+            if n_bytes_read < MAX_FILE_SIZE as usize {
+                Some(buffer)
+            } else {
+                dialog::message_title("Error opening file");
+                dialog::alert_default("File is too large");
+                None
+            }
+        }
+        Err(e) => {
+            dialog::message_title("Error opening file");
+            dialog::alert_default(&format!("Error opening {}\n\n{}", path.display(), e));
+            None
         }
     }
 }

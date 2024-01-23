@@ -29,6 +29,8 @@ GUI Changes:
  * Added toggle buttons to enable and disable channels in the song tab.
  * The play from cursor buttons can now play subroutines.<br/>
    (The first instrument in the MML file will be used when playing a subroutine.)
+ * When opening a file that is outside of the project directory, the user is given the option to copy the file into the project directory.<br/>
+   (The *copy file to project* feature will not override existing files.)
 
 
 Audio Driver Changes:
