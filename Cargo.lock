@@ -524,7 +524,7 @@ dependencies = [
 
 [[package]]
 name = "tad-compiler"
-version = "0.0.5"
+version = "0.0.6"
 dependencies = [
  "clap",
  "compiler",
@@ -532,7 +532,7 @@ dependencies = [
 
 [[package]]
 name = "tad-gui"
-version = "0.0.5"
+version = "0.0.6"
 dependencies = [
  "brr",
  "compiler",
@@ -591,7 +591,7 @@ checksum = "579a42fc0b8e0c63b76519a339be31bed574929511fa53c1a3acae26eb258f29"
 
 [[package]]
 name = "wav2brr"
-version = "0.0.5"
+version = "0.0.6"
 dependencies = [
  "brr",
  "clap",
