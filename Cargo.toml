@@ -17,6 +17,15 @@ strip = true
 opt-level = "z"
 lto = true
 
+[profile.release.package.brr]
+opt-level = 3
+
+[profile.release.package.compiler]
+opt-level = 3
+
+[profile.release.package.shvc-sound-emu]
+opt-level = 3
+
 
 [workspace.package]
 version = "0.0.5"
