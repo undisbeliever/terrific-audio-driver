@@ -126,10 +126,10 @@ Please see the included [licenses file](licenses.md) for the full third party li
   * [num-complex 0.4.4](https://github.com/rust-num/num-complex), MIT License
   * [num-traits 0.2.17](https://github.com/rust-num/num-traits), MIT License
   * [regex 1.10.3](https://github.com/rust-lang/regex), MIT License
-  * [regex-automata 0.4.4](https://github.com/rust-lang/regex/tree/master/regex-automata), MIT License
+  * [regex-automata 0.4.5](https://github.com/rust-lang/regex/tree/master/regex-automata), MIT License
   * [regex-syntax 0.8.2](https://github.com/rust-lang/regex/tree/master/regex-syntax), MIT License
   * [float-cmp 0.9.0](https://github.com/mikedilger/float-cmp), MIT License
-  * [libc 0.2.152](https://github.com/rust-lang/libc), MIT License
+  * [libc 0.2.153](https://github.com/rust-lang/libc), MIT License
   * [anstyle-wincon 3.0.2](https://github.com/rust-cli/anstyle.git), MIT License
   * [heck 0.4.1](https://github.com/withoutboats/heck), MIT License
   * [unicode-id 0.3.4](https://github.com/Boshen/unicode-id), MIT License
@@ -141,7 +141,7 @@ Please see the included [licenses file](licenses.md) for the full third party li
   * [libm 0.2.8](https://github.com/rust-lang/libm), MIT License
   * [autocfg 1.1.0](https://github.com/cuviper/autocfg), MIT License
   * [ttf-parser 0.20.0](https://github.com/RazrFalcon/ttf-parser), MIT License
-  * [anstyle 1.0.4](https://github.com/rust-cli/anstyle.git), MIT License
+  * [anstyle 1.0.5](https://github.com/rust-cli/anstyle.git), MIT License
   * [anstream 0.6.11](https://github.com/rust-cli/anstyle.git), MIT License
   * [anstyle-query 1.0.2](https://github.com/rust-cli/anstyle), MIT License
   * [clap 4.4.18](https://github.com/clap-rs/clap), MIT License
@@ -155,8 +155,8 @@ Please see the included [licenses file](licenses.md) for the full third party li
   * [sdl2-sys 0.35.2](https://github.com/rust-sdl2/rust-sdl2), MIT License
   * [winapi-i686-pc-windows-gnu 0.4.0](https://github.com/retep998/winapi-rs), MIT License
   * [winapi-x86_64-pc-windows-gnu 0.4.0](https://github.com/retep998/winapi-rs), MIT License
-  * [fltk 1.4.22](https://github.com/fltk-rs/fltk-rs), MIT License
-  * [fltk-sys 1.4.22](https://github.com/fltk-rs/fltk-rs), MIT License
+  * [fltk 1.4.24](https://github.com/fltk-rs/fltk-rs), MIT License
+  * [fltk-sys 1.4.23](https://github.com/fltk-rs/fltk-rs), MIT License
   * [cxx 1.0.115](https://github.com/dtolnay/cxx), MIT License
   * [cxx-build 1.0.115](https://github.com/dtolnay/cxx), MIT License
   * [cxxbridge-flags 1.0.115](https://github.com/dtolnay/cxx), MIT License
@@ -168,9 +168,9 @@ Please see the included [licenses file](licenses.md) for the full third party li
   * [proc-macro2 1.0.78](https://github.com/dtolnay/proc-macro2), MIT License
   * [quote 1.0.35](https://github.com/dtolnay/quote), MIT License
   * [scratch 1.0.7](https://github.com/dtolnay/scratch), MIT License
-  * [serde 1.0.195](https://github.com/serde-rs/serde), MIT License
-  * [serde_derive 1.0.195](https://github.com/serde-rs/serde), MIT License
-  * [serde_json 1.0.111](https://github.com/serde-rs/json), MIT License
+  * [serde 1.0.196](https://github.com/serde-rs/serde), MIT License
+  * [serde_derive 1.0.196](https://github.com/serde-rs/serde), MIT License
+  * [serde_json 1.0.113](https://github.com/serde-rs/json), MIT License
   * [syn 2.0.48](https://github.com/dtolnay/syn), MIT License
   * [unicode-ident 1.0.12](https://github.com/dtolnay/unicode-ident), MIT License
   * [sdl2 0.35.2](https://github.com/Rust-SDL2/rust-sdl2), MIT License

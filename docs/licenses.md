@@ -551,7 +551,7 @@ Used by:
   * [num-complex 0.4.4](https://github.com/rust-num/num-complex)
   * [num-traits 0.2.17](https://github.com/rust-num/num-traits)
   * [regex 1.10.3](https://github.com/rust-lang/regex)
-  * [regex-automata 0.4.4](https://github.com/rust-lang/regex/tree/master/regex-automata)
+  * [regex-automata 0.4.5](https://github.com/rust-lang/regex/tree/master/regex-automata)
   * [regex-syntax 0.8.2](https://github.com/rust-lang/regex/tree/master/regex-syntax)
 
 ```
@@ -616,7 +616,7 @@ IN THE SOFTWARE.
 ## MIT License
 
 Used by:
-  * [libc 0.2.152](https://github.com/rust-lang/libc)
+  * [libc 0.2.153](https://github.com/rust-lang/libc)
 
 ```
 Copyright (c) 2014-2020 The Rust Project Developers
@@ -946,7 +946,7 @@ THE SOFTWARE.
 ## MIT License
 
 Used by:
-  * [anstyle 1.0.4](https://github.com/rust-cli/anstyle.git)
+  * [anstyle 1.0.5](https://github.com/rust-cli/anstyle.git)
 
 ```
 Copyright (c) 2022 The rust-cli Developers
@@ -1142,8 +1142,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 ## MIT License
 
 Used by:
-  * [fltk 1.4.22](https://github.com/fltk-rs/fltk-rs)
-  * [fltk-sys 1.4.22](https://github.com/fltk-rs/fltk-rs)
+  * [fltk 1.4.24](https://github.com/fltk-rs/fltk-rs)
+  * [fltk-sys 1.4.23](https://github.com/fltk-rs/fltk-rs)
 
 ```
 MIT License
@@ -1185,9 +1185,9 @@ Used by:
   * [proc-macro2 1.0.78](https://github.com/dtolnay/proc-macro2)
   * [quote 1.0.35](https://github.com/dtolnay/quote)
   * [scratch 1.0.7](https://github.com/dtolnay/scratch)
-  * [serde 1.0.195](https://github.com/serde-rs/serde)
-  * [serde_derive 1.0.195](https://github.com/serde-rs/serde)
-  * [serde_json 1.0.111](https://github.com/serde-rs/json)
+  * [serde 1.0.196](https://github.com/serde-rs/serde)
+  * [serde_derive 1.0.196](https://github.com/serde-rs/serde)
+  * [serde_json 1.0.113](https://github.com/serde-rs/json)
   * [syn 2.0.48](https://github.com/dtolnay/syn)
   * [unicode-ident 1.0.12](https://github.com/dtolnay/unicode-ident)
 
