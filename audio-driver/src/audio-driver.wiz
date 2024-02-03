@@ -857,6 +857,8 @@ func null_command(unused : u8 in y) {
 
 
 func pause() {
+    write_dsp(GlobalDspAddr.KOFF, 0xff);  // all keys off
+
     pausedIfZero = 0;
 }
 
