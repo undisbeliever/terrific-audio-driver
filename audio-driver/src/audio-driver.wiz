@@ -907,12 +907,14 @@ func stop_sound_effects(unused : u8 in y) {
 
 
 func play_sound_effect(sfx_id : u8 in y) {
-    a = activeSoundEffects;
-    inline for let i in 0..(N_SFX_CHANNELS - 1) {
-        a <<<= 1;
-        if !carry {
-            x = 7 - i;
-            return __play_sfx_on_channel(x, y);
+    if y < commonDataHeader.nSoundEffects {
+        a = activeSoundEffects;
+        inline for let i in 0..(N_SFX_CHANNELS - 1) {
+            a <<<= 1;
+            if !carry {
+                x = 7 - i;
+                return __play_sfx_on_channel(x, y);
+            }
         }
     }
 }

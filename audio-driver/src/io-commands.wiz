@@ -245,7 +245,7 @@ namespace IO {
         UNPAUSE             = 2,
 
         // Play a sound effect
-        //  * parameter0: sound effect id (not bounds checked)
+        //  * parameter0: sound effect id
         //  * parameter1: pan (0-128) (not bounds checked)
         PLAY_SOUND_EFFECT   = 4,
 
