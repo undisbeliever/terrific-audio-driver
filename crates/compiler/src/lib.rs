@@ -18,6 +18,7 @@ pub mod driver_constants;
 pub mod echo;
 pub mod envelope;
 pub mod errors;
+pub mod export;
 pub mod mml;
 pub mod notes;
 pub mod path;

@@ -14,8 +14,11 @@ use compiler::{
         is_name_or_id, load_text_file_with_limit, load_text_file_with_limit_path, Name, Song,
         TextFile, UniqueNamesProjectFile,
     },
-    mml::compile_mml,
-    mml::MmlTickCountTable,
+    export::{
+        bin_include_path, export_bin_file, Ca65Exporter, ExportedBinFile, Exporter, MemoryMap,
+        MemoryMapMode,
+    },
+    mml::{compile_mml, MmlTickCountTable},
     pitch_table::{build_pitch_table, PitchTable},
     samples::build_sample_and_instrument_data,
     songs::{song_duration_string, validate_song_size, SongData},
@@ -55,6 +58,12 @@ enum Command {
 
     /// Check the project will compile successfully and all songs fit in audio-RAM
     Check(CheckProjectArgs),
+
+    /// Generate an ca65 include file containing songs and sound effect enums
+    Ca65Enums(EnumArgs),
+
+    /// Compile the project and output a ca65 assembly file containing LoadSongData and .incbin statements
+    Ca65Export(ExportWithAsmArgs),
 }
 
 #[derive(Args)]
@@ -312,12 +321,164 @@ struct CheckProjectArgs {
     project_file: PathBuf,
 }
 
-fn check_song(
+fn check_project_command(args: CheckProjectArgs) {
+    let pf = load_project_file(&args.project_file);
+    compile_project(&pf);
+
+    println!("Project is valid and will fit in audio-RAM");
+}
+
+//
+// Enum Generators
+// ===============
+
+#[derive(Args)]
+struct EnumArgs {
+    #[command(flatten)]
+    output: OutputArg,
+
+    #[arg(value_name = "PROJECT_FILE", help = "project file")]
+    project_file: PathBuf,
+}
+
+fn generate_enums_command<E: Exporter>(args: EnumArgs) {
+    let output_arg = args.output.validate();
+
+    let pf = load_project_file(&args.project_file);
+
+    let inc_file = match E::generate_include_file(pf) {
+        Ok(o) => o,
+        Err(e) => error!("Error creating enum file: {}", e),
+    };
+
+    write_data(output_arg, inc_file.as_bytes());
+}
+
+//
+// Export with assembly output
+// ===========================
+
+#[derive(Args)]
+struct ExportWithAsmArgs {
+    #[arg(
+        long,
+        conflicts_with = "hirom",
+        group = "mm_mode",
+        help = "LOROM mapping"
+    )]
+    lorom: bool,
+
+    #[arg(
+        long,
+        conflicts_with = "lorom",
+        group = "mm_mode",
+        help = "HIROM mapping"
+    )]
+    hirom: bool,
+
+    #[arg(
+        long = "segment",
+        short = 's',
+        value_name = "SEGMENT_NAME",
+        requires = "mm_mode",
+        help = "First segment to store the binary data in.\nMust be suffixed with a number (eg, RODATA2, AUDIO_DATA_0)\nIf data does not fit in a single bank, the next segment will be used (ie, RODATA3, AUDIO_DATA_1)"
+    )]
+    first_segment: String,
+
+    #[arg(
+        long,
+        short = 'a',
+        value_name = "ASM_FILE",
+        help = "Assembly file output\n(contains LoadAudioData callback, .incbin statement and .assert statements)"
+    )]
+    output_asm: PathBuf,
+
+    #[arg(
+        long,
+        short = 'b',
+        value_name = "BIN_FILE",
+        help = "Binary file output\n(contains the audio-driver, loader, blank-song, common-audio-data and songs)"
+    )]
+    output_bin: PathBuf,
+
+    #[arg(
+        long,
+        short = 'i',
+        value_name = "INC_FILE",
+        help = "Output an include file containing song and sound effect enums (optional)"
+    )]
+    output_inc: Option<PathBuf>,
+
+    #[arg(value_name = "PROJECT_FILE", help = "project file")]
+    project_file: PathBuf,
+}
+
+fn parse_memory_map(args: &ExportWithAsmArgs) -> MemoryMap {
+    let mode = match (args.lorom, args.hirom) {
+        (true, false) => MemoryMapMode::LoRom,
+        (false, true) => MemoryMapMode::HiRom,
+        (false, false) => error!("Missing --lorom or --hirom argument"),
+        (true, true) => error!("Cannot use --lorom and --hirom arguments at the same time"),
+    };
+
+    match MemoryMap::try_new(mode, &args.first_segment) {
+        Ok(mm) => mm,
+        Err(e) => error!("Invalid memory map: {}", e),
+    }
+}
+
+fn export_with_asm_command<E: Exporter>(args: ExportWithAsmArgs) {
+    let memory_map = parse_memory_map(&args);
+
+    let relative_bin_path = match bin_include_path(&args.output_asm, &args.output_bin) {
+        Ok(p) => p,
+        Err(e) => error!("Error:  {}", e),
+    };
+
+    let (pf, bin_file) = load_and_export_project(&args);
+
+    let asm_file = match E::generate_asm_file(&bin_file, &memory_map, &relative_bin_path) {
+        Ok(o) => o,
+        Err(e) => error!("Error creating assembly file: {}", e),
+    };
+
+    let inc_file = match &args.output_inc {
+        Some(path) => {
+            let inc_file = match E::generate_include_file(pf) {
+                Ok(o) => o,
+                Err(e) => error!("Error creating enum include file: {}", e),
+            };
+            Some((path, inc_file))
+        }
+        None => None,
+    };
+
+    write_to_file(&args.output_bin, bin_file.data());
+    write_to_file(&args.output_asm, asm_file.as_bytes());
+
+    if let Some((inc_path, inc_str)) = inc_file {
+        write_to_file(inc_path, inc_str.as_bytes());
+    }
+}
+
+fn load_and_export_project(args: &ExportWithAsmArgs) -> (UniqueNamesProjectFile, ExportedBinFile) {
+    let pf = load_project_file(&args.project_file);
+    let (common_audio_data, songs) = compile_project(&pf);
+
+    let bin_file = match export_bin_file(&common_audio_data, &songs) {
+        Ok(b) => b,
+        Err(e) => error!("Error: {}", e),
+    };
+
+    (pf, bin_file)
+}
+
+fn compile_and_check_song(
     song: &Song,
     pf: &UniqueNamesProjectFile,
     pitch_table: &PitchTable,
     common_data: &CommonAudioData,
-) -> Result<(), String> {
+) -> Result<SongData, String> {
     let mml_file = match load_text_file_with_limit(&song.source, &pf.parent_path) {
         Ok(tf) => tf,
         Err(e) => return Err(format!("Error compiling {}: {}", song.name, e)),
@@ -334,7 +495,7 @@ fn check_song(
     };
 
     match validate_song_size(&song_data, common_data.data().len()) {
-        Ok(()) => Ok(()),
+        Ok(()) => Ok(song_data),
         Err(e) => Err(format!(
             "Error compiling {}: {}",
             song.name,
@@ -343,16 +504,14 @@ fn check_song(
     }
 }
 
-fn check_project(args: CheckProjectArgs) {
-    let pf = load_project_file(&args.project_file);
-
-    let samples = build_sample_and_instrument_data(&pf);
+fn compile_project(pf: &UniqueNamesProjectFile) -> (CommonAudioData, Vec<SongData>) {
+    let samples = build_sample_and_instrument_data(pf);
     if let Err(e) = samples {
         error!("{}", e.multiline_display())
     };
 
     let sfx = if let Ok(s) = &samples {
-        compile_sound_effects(&pf, s.pitch_table())
+        compile_sound_effects(pf, s.pitch_table())
     } else {
         Err(())
     };
@@ -367,11 +526,12 @@ fn check_project(args: CheckProjectArgs) {
         Err(e) => error!("{}", e.multiline_display()),
     };
 
+    let mut compiled_songs = Vec::with_capacity(pf.songs.len());
     let mut n_song_errors = 0;
 
     for song in pf.songs.list().iter() {
-        match check_song(song, &pf, samples.pitch_table(), &common_audio_data) {
-            Ok(()) => (),
+        match compile_and_check_song(song, pf, samples.pitch_table(), &common_audio_data) {
+            Ok(sd) => compiled_songs.push(sd),
             Err(e) => {
                 n_song_errors += 1;
                 eprintln!("{}\n", e);
@@ -379,13 +539,17 @@ fn check_project(args: CheckProjectArgs) {
         }
     }
 
-    if n_song_errors == 0 {
-        println!("Project is valid and will fit in audio-RAM");
-    } else if n_song_errors == 1 {
-        error!("{} song has an error", n_song_errors);
-    } else {
-        error!("{} songs have errors", n_song_errors);
+    if n_song_errors > 0 {
+        if n_song_errors == 1 {
+            error!("{} song has an error", n_song_errors);
+        } else {
+            error!("{} songs have errors", n_song_errors);
+        }
     }
+
+    assert!(compiled_songs.len() == pf.songs.len());
+
+    (common_audio_data, compiled_songs)
 }
 
 //
@@ -399,7 +563,9 @@ fn main() {
         Command::Common(args) => compile_common_data(args),
         Command::Song(args) => compile_song_data(args),
         Command::Song2spc(args) => export_song_to_spc_file(args),
-        Command::Check(args) => check_project(args),
+        Command::Check(args) => check_project_command(args),
+        Command::Ca65Enums(args) => generate_enums_command::<Ca65Exporter>(args),
+        Command::Ca65Export(args) => export_with_asm_command::<Ca65Exporter>(args),
     }
 }
 
@@ -420,10 +586,16 @@ fn load_project_file(path: &Path) -> UniqueNamesProjectFile {
 // Output
 // ======
 
-mod output {
-    use crate::OutputArg;
+fn write_to_file(path: &Path, contents: &[u8]) {
+    match std::fs::write(path, contents) {
+        Ok(()) => (),
+        Err(e) => error!("Error writing {}: {}", path.display(), e),
+    }
+}
 
-    use std::fs;
+mod output {
+    use super::{write_to_file, OutputArg};
+
     use std::io::{IsTerminal, Write};
 
     pub struct ValidatedOutputArg(OutputArg);
@@ -442,10 +614,7 @@ mod output {
 
     pub fn write_data(out: ValidatedOutputArg, data: &[u8]) {
         if let Some(path) = &out.0.path {
-            match fs::write(path, data) {
-                Ok(()) => (),
-                Err(e) => error!("Error writing {}: {}", path.display(), e),
-            }
+            write_to_file(path, data);
         } else if out.0.stdout {
             let mut stdout = std::io::stdout();
 

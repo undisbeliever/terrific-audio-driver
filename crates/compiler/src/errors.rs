@@ -4,6 +4,8 @@
 //
 // SPDX-License-Identifier: MIT
 
+use relative_path::RelativeToError;
+
 use crate::bytecode::{
     BcTicks, BcTicksKeyOff, BcTicksNoKeyOff, InstrumentId, LoopCount, Pan, PitchOffsetPerTick,
     PortamentoVelocity, QuarterWavelengthInTicks, RelativePan, RelativeVolume, Volume,
@@ -12,8 +14,8 @@ use crate::bytecode::{
 use crate::data::{LoopSetting, Name};
 use crate::driver_constants::{
     addresses, ECHO_BUFFER_EDL_MS, FIR_FILTER_SIZE, MAX_COMMON_DATA_SIZE, MAX_DIR_ITEMS,
-    MAX_INSTRUMENTS_AND_SAMPLES, MAX_SONG_DATA_SIZE, MAX_SOUND_EFFECTS, MAX_SUBROUTINES,
-    PITCH_TABLE_SIZE,
+    MAX_INSTRUMENTS_AND_SAMPLES, MAX_N_SONGS, MAX_SONG_DATA_SIZE, MAX_SOUND_EFFECTS,
+    MAX_SUBROUTINES, PITCH_TABLE_SIZE,
 };
 use crate::echo::{EchoEdl, EchoLength, MAX_FIR_ABS_SUM};
 use crate::envelope::Gain;
@@ -26,7 +28,7 @@ use crate::mml::MAX_BROKEN_CHORD_NOTES;
 use crate::notes::{MidiNote, Note, Octave};
 use crate::path::PathString;
 use crate::time::{Bpm, TickClock, TickCounter, ZenLen};
-use crate::{mml, spc_file_export};
+use crate::{export, mml, spc_file_export};
 
 use std::fmt::Display;
 use std::io;
@@ -482,6 +484,18 @@ pub enum ExportSpcFileError {
         song: usize,
         echo: usize,
     },
+}
+
+#[derive(Debug)]
+pub enum ExportError {
+    InvalidSegmentName(String),
+    NoSegmentNumberSuffix(String),
+    BinPathNotUtf8,
+    BinPathContainsQuotes,
+    BinPathRelativeToError(RelativeToError),
+    NoBinPathParent,
+    TooManySongs(usize),
+    BinFileTooLarge(usize),
 }
 
 // From Traits
@@ -1179,6 +1193,32 @@ impl Display for ExportSpcFileError {
             Self::TooMuchData { common, song, echo } => {
                 write!(f, "cannot fit data in audio-ram (driver: {} bytes, common_audio_data: {} bytes, song data: {} bytes, echo buffer: {} bytes", addresses::COMMON_DATA, common, song, echo)
             }
+        }
+    }
+}
+
+impl Display for ExportError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::InvalidSegmentName(name) => write!(f, "invalid segment name: {}", name),
+            Self::NoSegmentNumberSuffix(name) => {
+                write!(f, "segment name must end with a number: {}", name)
+            }
+            Self::BinPathNotUtf8 => write!(f, "invalid binary path: not a valid utf-8 string"),
+            Self::BinPathContainsQuotes => {
+                write!(f, "invalid binary path, it cannot contain \" or \'.")
+            }
+            Self::BinPathRelativeToError(e) => {
+                write!(f, "cannot determine binary include path: {}", e)
+            }
+            Self::NoBinPathParent => write!(f, "cannot determine the parent of the binary path"),
+            Self::TooManySongs(c) => write!(f, "too many songs ({}, max: {})", c, MAX_N_SONGS),
+            Self::BinFileTooLarge(c) => write!(
+                f,
+                "binary file is too large ({} bytes, max: {}",
+                c,
+                export::MAX_BIN_FILE
+            ),
         }
     }
 }
