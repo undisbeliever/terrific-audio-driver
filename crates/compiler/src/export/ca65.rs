@@ -219,7 +219,7 @@ const LOAD_AUDIO_DATA_LOROM: &str = r##"
 ;; OUT: Y = size
 .a8
 .i16
-;; DB access registers
+;; DB unknown
 .proc LoadAudioData
     .assert .not .defined(HIROM), error, "HIROM is defined in code designed for LOROM"
 
@@ -285,7 +285,7 @@ const LOAD_AUDIO_DATA_HIROM: &str = r##"
 ;; OUT: Y = size
 .a8
 .i16
-;; DB access registers
+;; DB unknown
 .proc LoadAudioData
     .assert .not .defined(LOROM), error, "LOROM is defined in code designed for HIROM"
 
