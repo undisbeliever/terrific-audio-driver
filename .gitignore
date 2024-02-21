@@ -1,5 +1,8 @@
 *.bin
 *.sym
+*.dbg
+*.sfc
+*-map.txt
 
 /target
 /vendor
