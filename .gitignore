@@ -1,3 +1,6 @@
+*.bin
+*.sym
+
 /target
 /vendor
 crates/*/target
