@@ -32,6 +32,10 @@ impl Exporter for Ca65Exporter {
             pf.file_name
         )?;
 
+        writeln!(out, "LAST_SONG_ID = {}", pf.last_song_id())?;
+        writeln!(out, "N_SOUND_EFFECTS = {}", pf.sound_effects.len())?;
+        writeln!(out)?;
+
         writeln!(out, ";; Song enum.")?;
         writeln!(out, ";; Input argument for `Tad_LoadSong`")?;
         writeln!(out, ".enum Song")?;
