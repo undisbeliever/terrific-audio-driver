@@ -27,13 +27,16 @@ AS65	?= ca65
 LD65	?= ld65
 AFLAGS	?= -g
 
+PYTHON3      ?= python3 -bb
+FIX_CHECKSUM := $(PYTHON3) ../_tools/write-sfc-checksum.py
+
 
 ifeq ($(MAPPING), LOROM)
-  MAPPING_CFG   := ../_common/lorom256k.cfg
-  TAD_MAPPING := lorom
+  MAPPING_CFG := ../_common/lorom256k.cfg
+  MAPPING_ARG := --lorom
 else ifeq ($(MAPPING), HIROM)
-  MAPPING_CFG   := ../_common/hirom256k.cfg
-  TAD_MAPPING := hirom
+  MAPPING_CFG := ../_common/hirom256k.cfg
+  MAPPING_ARG := --hirom
 else
   $(error Unknown MAPPING value)
 endif
@@ -59,7 +62,7 @@ clean:
 
 $(ROM_PREFIX).sfc $(ROM_PREFIX).dbg $(ROM_PREFIX)-map.txt &: $(MAPPING_CFG) $(OBJECTS)
 	$(LD65) -o $(ROM_PREFIX).sfc --dbgfile $(ROM_PREFIX).dbg -m $(ROM_PREFIX)-map.txt -C $(MAPPING_CFG) $(OBJECTS)
-	# ::TODO fix checksum::
+	$(FIX_CHECKSUM) $(MAPPING_ARG) $(ROM_PREFIX).sfc
 
 
 obj/%.o: src/%.s $(DEPS)
@@ -76,7 +79,7 @@ obj/audio-data.o: gen/audio-data.s gen/audio-data.bin
 
 
 gen/audio-data.s gen/audio-data.bin &: $(TAD_PROJECT) $(TAD_PROJECT_FILES)
-	$(TAD_COMPILER) ca65-export '--$(TAD_MAPPING)' --segment '$(TAD_DATA_SEGMENT)' --output-asm gen/audio-data.s --output-bin gen/audio-data.bin $(TAD_PROJECT)
+	$(TAD_COMPILER) ca65-export $(MAPPING_ARG) --segment '$(TAD_DATA_SEGMENT)' --output-asm gen/audio-data.s --output-bin gen/audio-data.bin $(TAD_PROJECT)
 
 gen/audio.inc : $(TAD_PROJECT)
 	$(TAD_COMPILER) ca65-enums -o $@ $(TAD_PROJECT)

@@ -25,6 +25,9 @@ ROM_FILES  := $(addsuffix .sfc, $(ROMS_)) $(addsuffix .dbg, $(ROMS_)) $(addsuffi
 LOROM_OBJECTS := $(patsubst %,obj/%-lorom.o, $(MODULES))
 HIROM_OBJECTS := $(patsubst %,obj/%-hirom.o, $(MODULES))
 
+PYTHON3      ?= python3 -bb
+FIX_CHECKSUM := $(PYTHON3) ../_tools/write-sfc-checksum.py
+
 
 .PHONY: all clean
 
@@ -37,12 +40,12 @@ clean:
 
 $(ROM_PREFIX)-lorom.sfc $(ROM_PREFIX)-lorom.dbg $(ROM_PREFIX)-lorom-map.txt &: $(LOROM_CFG) $(LOROM_OBJECTS)
 	$(LD65) -o $(ROM_PREFIX)-lorom.sfc --dbgfile $(ROM_PREFIX)-lorom.dbg -m $(ROM_PREFIX)-lorom-map.txt -C $(LOROM_CFG) $(LOROM_OBJECTS)
-	# ::TODO fix checksum::
+	$(FIX_CHECKSUM) --lorom $(ROM_PREFIX)-lorom.sfc
 
 
 $(ROM_PREFIX)-hirom.sfc $(ROM_PREFIX)-hirom.dbg $(ROM_PREFIX)-hirom-map.txt &: $(HIROM_CFG) $(HIROM_OBJECTS)
 	$(LD65) -o $(ROM_PREFIX)-hirom.sfc --dbgfile $(ROM_PREFIX)-hirom.dbg -m $(ROM_PREFIX)-hirom-map.txt -C $(HIROM_CFG) $(HIROM_OBJECTS)
-	# ::TODO fix checksum::
+	$(FIX_CHECKSUM) --hirom $(ROM_PREFIX)-hirom.sfc
 
 
 obj/%-lorom.o: src/%.s $(DEPS)
