@@ -105,7 +105,7 @@
 ;; Address to store the loader (in Audio-RAM).
 ;; Address (in Audio-RAM) to execute after loading the Loader.
 ;; MUST match LOADER_ADDR in `audio-driver/src/common_memmap.wiz`.
-LOADER_ARAM_ADDR = $0160 ; ::TODO change to $200::
+LOADER_ARAM_ADDR = $0200
 
 
 ;; Minimum transfer size accepted by `Tad_SetTransferSize`
@@ -134,7 +134,7 @@ DEFAULT_TRANSFER_PER_FRAME = 256
 ;; Used by `tad-compiler ca65-export` to verify the IO protocol in `tad-audio.s` matches the audio-driver.
 ;;
 ;; This constant MUST be increased if `LOADER_ADDR` or the IO Communication protocol changes.
-.export TAD_IO_VERSION = 13
+.export TAD_IO_VERSION = 14
 
 
 ; MUST match `audio-driver/src/io-commands.wiz`

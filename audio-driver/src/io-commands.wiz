@@ -28,7 +28,7 @@ import "registers";
 
 
 // This constant MUST be increased if `LOADER_ADDR` or the IO Communication protocol changes.
-let TAD_IO_VERSION = 13;
+let TAD_IO_VERSION = 14;
 
 
 // Loader Commands
