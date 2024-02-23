@@ -27,5 +27,10 @@ serde_json.workspace = true
 relative-path.workspace = true
 
 
+[build-dependencies]
+regex.workspace = true
+
+
 [dev-dependencies]
 shvc-sound-emu.workspace = true
+

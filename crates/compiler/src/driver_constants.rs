@@ -10,10 +10,12 @@
 
 pub const AUDIO_RAM_SIZE: usize = 0x10000;
 
+mod _symbols {
+    include!(concat!(env!("OUT_DIR"), "/symbols.rs"));
+}
+
 pub mod addresses {
-    mod _symbols {
-        include!(concat!(env!("OUT_DIR"), "/symbols.rs"));
-    }
+    use super::_symbols;
 
     macro_rules! declare_symbols {
         ($($name:ident,)*) => {
@@ -88,6 +90,8 @@ pub mod addresses {
         "BRR directory is not page aligned"
     );
 }
+
+pub const TAD_IO_VERSION: usize = _symbols::TAD_IO_VERSION;
 
 pub const N_MUSIC_CHANNELS: usize = 6;
 pub const N_VOICES: usize = 8;

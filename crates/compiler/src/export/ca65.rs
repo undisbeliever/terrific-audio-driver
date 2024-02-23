@@ -7,6 +7,7 @@
 use super::{BinIncludePath, ExportedBinFile, Exporter, MemoryMap, MemoryMapMode, BLANK_SONG_NAME};
 
 use crate::data::UniqueNamesProjectFile;
+use crate::driver_constants::TAD_IO_VERSION;
 
 use std::fmt::Write;
 
@@ -102,7 +103,10 @@ impl Exporter for Ca65Exporter {
         writeln!(out, "AUDIO_DATA_BANK = .bankbyte({FIRST_BLOCK})")?;
         writeln!(out)?;
 
-        // ::TODO export a version id to ensure `tad-audio.s` matches the AudioDriver::
+        // Add an assert to ensure TAD_IO_VERSION in the audio driver matches the one is `tad-audio.s`
+        writeln!(out, ".import TAD_IO_VERSION")?;
+        writeln!(out, ".assert TAD_IO_VERSION = {}, lderror, \"TAD_IO_VERSION in audio driver does not match TAD_IO_VERSION in tad-audio.s\"", TAD_IO_VERSION)?;
+        writeln!(out)?;
 
         for block_number in 0..n_banks {
             writeln!(out, "\n.segment \"{}{}\"", memory_map.segment_prefix, memory_map.first_segment_number + block_number)?;
