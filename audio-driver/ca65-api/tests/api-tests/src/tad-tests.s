@@ -27,6 +27,7 @@
 .include "../../../tad-audio.inc"
 
 .p816
+.smart
 
 .export RunTests
 
@@ -158,7 +159,7 @@ TestTable_SIZE = * - TestTable
 
     jsr     _WaitForLoader
 
-    jsr     Tad_FinishLoadingData
+    jsl     Tad_FinishLoadingData
 
     assert_carry  Tad_IsLoaderActive, false
     assert_carry  Tad_IsSongLoaded,  true
@@ -179,7 +180,7 @@ TestTable_SIZE = * - TestTable
 
     jsr     _WaitForLoader
 
-    jsr     Tad_FinishLoadingData
+    jsl     Tad_FinishLoadingData
 
     ; Common audio data loaded
     ; State = WAITING_FOR_LOADER
@@ -188,7 +189,7 @@ TestTable_SIZE = * - TestTable
 
     jsr     _WaitForLoader
 
-    jsr     Tad_FinishLoadingData
+    jsl     Tad_FinishLoadingData
 
     assert_carry  Tad_IsLoaderActive, false
     assert_carry  Tad_IsSongLoaded,  true
@@ -211,7 +212,7 @@ TestTable_SIZE = * - TestTable
     jsr     _WaitForLoader
 
     ; Loading blank song, it should only require Tad_Process call to load it
-    jsr     Tad_Process
+    jsl     Tad_Process
     assert_carry  Tad_IsSongLoaded,   true
     assert_carry  Tad_IsLoaderActive, false
 
@@ -231,9 +232,9 @@ TestTable_SIZE = * - TestTable
     assert_carry  Tad_IsSongLoaded,  false
 
     jsr     _WaitForLoader
-    jsr     Tad_Process
-    jsr     Tad_Process
-    jsr     Tad_Process
+    jsl     Tad_Process
+    jsl     Tad_Process
+    jsl     Tad_Process
 
     assert_carry  Tad_IsLoaderActive, true
 
@@ -267,9 +268,9 @@ TestTable_SIZE = * - TestTable
     assert_carry  Tad_IsLoaderActive, false
 
     jsr     _WaitForLoader
-    jsr     Tad_Process
-    jsr     Tad_Process
-    jsr     Tad_Process
+    jsl     Tad_Process
+    jsl     Tad_Process
+    jsl     Tad_Process
 
     assert_carry  Tad_IsLoaderActive, true
 
@@ -296,7 +297,7 @@ TestTable_SIZE = * - TestTable
     assert_carry    Tad_QueueCommand, true
 
     jsr     _Wait
-    jsr     Tad_Process
+    jsl     Tad_Process
 
     ; Assert PAUSE command changed state
     assert_carry    Tad_IsSongPlaying, false
@@ -322,7 +323,7 @@ TestTable_SIZE = * - TestTable
 
     ; Process command
     jsr     _Wait
-    jsr     Tad_Process
+    jsl     Tad_Process
 
     ; Assert UNPAUSE command changed state
     assert_carry    Tad_IsSongPlaying, true
@@ -350,7 +351,7 @@ TestTable_SIZE = * - TestTable
 
     ; Process command
     jsr     _Wait
-    jsr     Tad_Process
+    jsl     Tad_Process
 
     ; Command was SET_MAIN_VOLUME
     ; Confirm playing state unchanged
@@ -372,7 +373,7 @@ TestTable_SIZE = * - TestTable
     jsr     Tad_QueueCommandOverride
 
     jsr     _Wait
-    jsr     Tad_Process
+    jsl     Tad_Process
 
     ; Assert PAUSE command changed state
     assert_carry    Tad_IsSongPlaying, false
@@ -394,7 +395,7 @@ TestTable_SIZE = * - TestTable
 
     ; Command queue contains an UNPAUSE command
     jsr     _Wait
-    jsr     Tad_Process
+    jsl     Tad_Process
 
     ; Assert UNPAUSE command changed state
     assert_carry    Tad_IsSongPlaying, true
@@ -420,7 +421,7 @@ TestTable_SIZE = * - TestTable
 
     ; Process command
     jsr     _Wait
-    jsr     Tad_Process
+    jsl     Tad_Process
 
     ; Command was STOP_SOUND_EFFECTS
     ; Confirm playing state unchanged
@@ -449,7 +450,7 @@ TestTable_SIZE = * - TestTable
     jsr     _QueueSoundEffect_AssertSuccess
 
     jsr     _Wait
-    jsr     Tad_Process
+    jsl     Tad_Process
     ; play_sound_effect command sent to the audio driver
 
     lda     #0
@@ -459,7 +460,7 @@ TestTable_SIZE = * - TestTable
     assert_carry    Tad_QueueCommand, true
 
     jsr     _Wait
-    jsr     Tad_Process
+    jsl     Tad_Process
     ; STOP_SOUND_EFFECTS command sent to the audio driver
 
     ; Sound effect queue is unchanged
@@ -469,7 +470,7 @@ TestTable_SIZE = * - TestTable
     jsr     _QueueSoundEffect_AssertFail
 
     jsr     _Wait
-    jsr     Tad_Process
+    jsl     Tad_Process
     ; play_sound_effect command sent to the audio driver
 
     ; Test sfx can be added to the queue
@@ -478,7 +479,7 @@ TestTable_SIZE = * - TestTable
 
     ; Clear SFX queue so it doesn't interfere with the next test
     jsr     _Wait
-    jsr     Tad_Process
+    jsl     Tad_Process
 
     rts
 .endproc
@@ -502,8 +503,8 @@ TestTable_SIZE = * - TestTable
 
     jsr     _WaitForLoader
 
-    jsr     Tad_Process
-    jsr     Tad_Process
+    jsl     Tad_Process
+    jsl     Tad_Process
 
     ; Test SFX queue is unchanged while the loader is active
     lda     #0
@@ -528,10 +529,10 @@ TestTable_SIZE = * - TestTable
 
     ; Clear the two queues so they don't interfere with the next test
     jsr     _Wait
-    jsr     Tad_Process
+    jsl     Tad_Process
 
     jsr     _Wait
-    jsr     Tad_Process
+    jsl     Tad_Process
 
     rts
 .endproc
@@ -658,7 +659,7 @@ TestTable_SIZE = * - TestTable
         stz     counter
 
         @Loop:
-            jsr     Tad_Process
+            jsl     Tad_Process
             inc     counter
 
             jsr     Tad_IsSongLoaded
@@ -698,7 +699,7 @@ TestTable_SIZE = * - TestTable
     @Loop:
         jsr     Tad_IsSongLoaded
         bcs     @Return
-            jsr     Tad_Process
+            jsl     Tad_Process
             bra     @Loop
 @Return:
 
@@ -721,7 +722,7 @@ TestTable_SIZE = * - TestTable
     assert_carry  Tad_IsLoaderActive, false
 
     @Loop:
-        jsr     Tad_Process
+        jsl     Tad_Process
 
         jsr     Tad_IsLoaderActive
         bcc     @Loop

@@ -109,7 +109,7 @@ CopHandler             = BreakHandler
     pha
     plb
 ; DB = $7f
-    jsr     Tad_Init
+    jsl     Tad_Init
 
     phk
     plb

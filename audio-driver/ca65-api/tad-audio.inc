@@ -24,6 +24,10 @@
 ;      3. This notice may not be removed or altered from any source distribution.
 
 
+; Required to import symbols with far addressing
+.p816
+
+
 ;; ===
 ;; ABI
 ;; ===
@@ -172,10 +176,11 @@ MIN_TICK_CLOCK = 64
 ;;  * MUST be called after the `LoadAudioData` callback is setup (if necessary)
 ;;  * `Tad_Init` MUST be called before any other TAD subroutine.
 ;;
+;; Called with JSL long addressing (returns with RTL).
 ;; A8
 ;; I16
 ;; DB unknown
-.import Tad_Init
+.import Tad_Init : far
 
 
 ;; Processes the next queue.
@@ -193,10 +198,11 @@ MIN_TICK_CLOCK = 64
 ;;  * Should be called once per frame.
 ;;  * MUST NOT be called in an interrupt ISR.
 ;;
+;; Called with JSL long addressing (returns with RTL).
 ;; A8
 ;; I16
 ;; DB access lowram
-.import Tad_Process
+.import Tad_Process : far
 
 
 ;; Finish loading the data into audio-RAM.
@@ -205,10 +211,11 @@ MIN_TICK_CLOCK = 64
 ;;
 ;; This function may require multiple frames of execution time.
 ;;
+;; Called with JSL long addressing (returns with RTL).
 ;; A8
 ;; I16
 ;; DB access lowram
-.import Tad_FinishLoadingData
+.import Tad_FinishLoadingData : far
 
 
 ;; Adds a command to the queue if the queue is empty.
@@ -399,7 +406,9 @@ MIN_TICK_CLOCK = 64
 ;; by the bank byte and memory map).
 ;;
 ;;
-;; Called with JSL long addressing (return with RTL).
+;; This callback is called with JSL long addressing, it MUST RETURN using the RTL
+;; instruction.
+;;
 ;;
 ;; The `DB` Data Bank Register does NOT point to low-RAM.
 ;;
@@ -425,6 +434,8 @@ MIN_TICK_CLOCK = 64
 ;; This function MUST NOT call `Tad_Process` or `Tad_LoadSong`.
 ;; It is allowed to call `Tad_FinishLoadingData`.
 ;;
+;;
+;; Called with JSL long addressing (returns with RTL).
 ;; A8
 ;; I16
 ;; DB access registers

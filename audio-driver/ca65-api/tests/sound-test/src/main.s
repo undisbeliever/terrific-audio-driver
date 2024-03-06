@@ -923,7 +923,7 @@ END_INDEX = TextBuffer_PosToIndex(CHANNEL_MASK_XPOS + 8, CHANNEL_MASK_YPOS)
 .i16
 ;; DB = $80
 .proc Main
-    jsr     Tad_Init
+    jsl     Tad_Init
 
 
     ; Reset TextBuffer and copy tiles/map to VRAM
@@ -968,7 +968,7 @@ END_INDEX = TextBuffer_PosToIndex(CHANNEL_MASK_XPOS + 8, CHANNEL_MASK_YPOS)
     MainLoop:
         jsr     WaitFrame
 
-        jsr     Tad_Process
+        jsl     Tad_Process
         jsr     SoundTest_Process
 
         bra     MainLoop

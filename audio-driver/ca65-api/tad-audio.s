@@ -33,11 +33,13 @@
 .autoimport -
 
 
-.export Tad_Init, Tad_Process, Tad_FinishLoadingData, Tad_QueueCommand
-.export Tad_QueueCommandOverride, Tad_QueuePannedSoundEffect, Tad_QueueSoundEffect
-.export Tad_LoadSong, Tad_ReloadCommonAudioData, Tad_SetMono, Tad_SetStereo
-.export Tad_GetStereoFlag, Tad_SongsStartImmediately, Tad_SongsStartPaused
-.export Tad_SetTransferSize, Tad_IsLoaderActive, Tad_IsSongLoaded, Tad_IsSongPlaying
+.export Tad_Init : far, Tad_Process : far, Tad_FinishLoadingData : far
+.export Tad_QueueCommand, Tad_QueueCommandOverride
+.export Tad_QueuePannedSoundEffect, Tad_QueueSoundEffect
+.export Tad_LoadSong, Tad_ReloadCommonAudioData
+.export Tad_SetMono, Tad_SetStereo, Tad_GetStereoFlag
+.export Tad_SongsStartImmediately, Tad_SongsStartPaused, Tad_SetTransferSize
+.export Tad_IsLoaderActive, Tad_IsSongLoaded, Tad_IsSongPlaying
 
 
 ;; =======
@@ -96,13 +98,13 @@
 
 ;; LoadAudioData callback
 ;;
-;; Called using JSL (return with RTL)
-;;
 ;; IN: A = 0 - Common audio data (MUST return carry set)
 ;; IN: A >= 1 - Song data (might be invalid)
 ;; OUT: Carry set if input (`A`) was valid
 ;; OUT: A:X = far address
 ;; OUT: Y = size
+;;
+;; Called with JSL long addressing (returns with RTL).
 .a8
 .i16
 ;; DB access registers
@@ -785,10 +787,11 @@ ReturnFalse:
 ;; ==========
 .code
 
+; JSL/RTL subroutine
 .a8
 .i16
 ; DB unknown
-.proc Tad_Init
+.proc Tad_Init : far
     phb
 
     lda     #$80
@@ -829,7 +832,7 @@ ReturnFalse:
 
     plb
 ; DB restored
-    rts
+    rtl
 .endproc
 
 
@@ -919,10 +922,11 @@ ReturnFalse:
 
 
 
+; JSL/RTL subroutine
 .a8
 .i16
 ; DB access lowram
-.proc Tad_Process
+.proc Tad_Process : far
     .assert State::PAUSED = $80, error
     .assert State::PLAYING > $80, error
     lda     Tad_state
@@ -954,7 +958,7 @@ ReturnFalse:
         @Return_I8:
             rep     #$10
         .i16
-            rts
+            rtl
 
         .a8
         .i8
@@ -962,7 +966,7 @@ ReturnFalse:
             __Tad_Process_SendCommand
             rep     #$10
         .i16
-            rts
+            rtl
 
     @NotLoaded:
         ; Song is not loaded into Audio-RAM
@@ -974,16 +978,18 @@ ReturnFalse:
         bcs     __Tad_Process_Loading
 
     ; State is null
-    rts
+    rtl
 .endproc
 
 
 
 ;; Process the WAITING_FOR_LOADER state
+;;
+;; return using RTL
 .a8
 .i16
 ;; DB access lowram
-.proc __Tad_Process_WaitingForLoader
+.proc __Tad_Process_WaitingForLoader ; RTL
     phb
 
     ; Setting DB to access registers as it:
@@ -1061,17 +1067,18 @@ ReturnFalse:
 @Return:
     plb
 ; DB restored
-    rts
+    rtl
 .endproc
 
 
 
 ;; Process the LOADING_* states
 ;;
+;; return using RTL
 .a8
 .i16
 ;; DB access lowram
-.proc __Tad_Process_Loading
+.proc __Tad_Process_Loading ; RTL
     jsr     _Tad_Loader_TransferData
     bcc     @Return
         ; Data loaded successfully
@@ -1108,23 +1115,24 @@ ReturnFalse:
         sta     Tad_state
 
 @Return:
-    rts
+    rtl
 .endproc
 
 
 
+; JSL/RTL subroutine
 .a8
 .i16
 ; DB access lowram
-.proc Tad_FinishLoadingData
+.proc Tad_FinishLoadingData : far
     @Loop:
         jsr     Tad_IsLoaderActive
         bcc     @EndLoop
-            jsr     __Tad_Process_Loading
+            jsl     __Tad_Process_Loading
         bra     @Loop
     @EndLoop:
 
-    rts
+    rtl
 .endproc
 
 
