@@ -40,8 +40,20 @@
 .export Tad_SetTransferSize, Tad_IsLoaderActive, Tad_IsSongLoaded, Tad_IsSongPlaying
 
 
+;; =======
+;; DEFINES
+;; =======
+
+;; Memory Map
+;; ----------
+;;
+;; `tad-audio.s` requires either a `LOROM` or `HIROM` define to determine the memory map used by the ROM.
+
 .if .defined(LOROM) && .defined(HIROM)
     .error "Cannot use HIROM and LOROM at the same time"
+.endif
+.if ! (.defined(LOROM) || .defined(HIROM))
+    .error "Unknown memory map: Missing LOROM or HIROM define"
 .endif
 
 
@@ -760,7 +772,7 @@ ReturnFalse:
             ldy     #$8000
         :
     .else
-        .error "Unknown memory map: Missing LOROM or HIROM define"
+        .error "Unknown memory map"
     .endif
 
     ; Y = 0 or $8000
