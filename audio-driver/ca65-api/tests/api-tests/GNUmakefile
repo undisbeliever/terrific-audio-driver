@@ -60,10 +60,3 @@ obj/%-hirom.o: ../_common/%.s $(DEPS)
 obj/%-lorom.o: ../_common/%.s $(DEPS)
 	$(AS65) $(AFLAGS) -DLOROM $< -o $@
 
-obj/tad-audio-lorom.o: ../../tad-audio.s
-	$(AS65) $(AFLAGS) -DLOROM $< -o $@
-
-obj/tad-audio-hirom.o: ../../tad-audio.s
-	$(AS65) $(AFLAGS) -DHIROM $< -o $@
-
-

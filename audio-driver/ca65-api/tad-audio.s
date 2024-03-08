@@ -49,7 +49,7 @@
 ;; Memory Map
 ;; ----------
 ;;
-;; `tad-audio.s` requires either a `LOROM` or `HIROM` define to determine the memory map used by the ROM.
+;; `tad-audio.s` requires either a `LOROM` or `HIROM` symbol to determine the memory map used by the ROM.
 
 .if .defined(LOROM) && .defined(HIROM)
     .error "Cannot use HIROM and LOROM at the same time"
@@ -57,6 +57,42 @@
 .if ! (.defined(LOROM) || .defined(HIROM))
     .error "Unknown memory map: Missing LOROM or HIROM define"
 .endif
+
+;; Segments
+;; --------
+;;
+;; The following optional defines are used to determine the segment to place the code in.
+;;
+;;  * `TAD_PROCESS_SEGMENT` defines the segment to store the subroutines that processes the queues
+;;     and loads data into Audio-RAM (`Tad_Init`, `Tad_Process`, `Tad_FinishLoadingData`).
+;;      * The exported subroutines in this segment are called using `JSL` long addressing.
+;;      * If `TAD_PROCESS_SEGMENT` is undefined, `TAD_CODE_SEGMENT` is used.
+;;
+;;  * `TAD_CODE_SEGMENT` defines the segment to store the remaining subroutines.
+;;      * The subroutines in this segment are called using `JSR` absolute addressing.
+;;      * If `TAD_CODE_SEGMENT` is undefined, "CODE" will be used.
+;;
+;;
+;; NOTE: Because ca65 only allows numbers in `-D name=value` command line arguments, the only
+;; way to set these defines is to create a new source file that defines `TAD_CODE_SEGMENT`
+;; and/or `TAD_PROCESS_SEGMENT` and then includes `tad-audio.s`.
+;;
+;; For example:
+;;
+;;      .define TAD_CODE_SEGMENT "CODE1"
+;;      .define TAD_PROCESS_SEGMENT "CODE3"
+;;
+;;      .include "../terrific-audio-driver/audio-driver/ca65-api/tad-audio.s"
+;;
+
+.if .not .match({TAD_CODE_SEGMENT}, {""})
+    .define TAD_CODE_SEGMENT "CODE"
+.endif
+
+.if .not .match({TAD_PROCESS_SEGMENT}, {""})
+    .define TAD_PROCESS_SEGMENT TAD_CODE_SEGMENT
+.endif
+
 
 
 
@@ -439,8 +475,7 @@ __FIRST_LOADING_SONG_STATE = State::LOADING_SONG_DATA_PAUSED
 ;; Loader subroutines
 ;; ==================
 
-; ::TODO add defines for setting code banks (use separate banks for init/process, commands, etc::
-.code
+.segment TAD_PROCESS_SEGMENT
 
 
 ;; Transfer and execute Loader using the IPL
@@ -782,10 +817,32 @@ ReturnFalse:
 .endproc
 
 
+;; OUT: carry set if state is LOADING_*
+;; A8
+.macro __Tad_IsLoaderActive
+    .assert .asize = 8, error
+
+    .assert State::NULL < __FIRST_LOADING_STATE, error
+    .assert State::WAITING_FOR_LOADER < __FIRST_LOADING_STATE, error
+    .assert (State::PAUSED & $7f) < __FIRST_LOADING_STATE, error
+    .assert (State::PLAYING & $7f) < __FIRST_LOADING_STATE, error
+
+    lda     Tad_state
+    and     #$7f
+    cmp     #__FIRST_LOADING_STATE
+.endmacro
+
+
 ;; ==========
 ;; Public API
 ;; ==========
-.code
+
+;; -------------------------------
+;; TAD_PROCESS_SEGMENT subroutines
+;; -------------------------------
+
+.segment TAD_PROCESS_SEGMENT
+
 
 ; JSL/RTL subroutine
 .a8
@@ -1126,7 +1183,7 @@ ReturnFalse:
 ; DB access lowram
 .proc Tad_FinishLoadingData : far
     @Loop:
-        jsr     Tad_IsLoaderActive
+        __Tad_IsLoaderActive
         bcc     @EndLoop
             jsl     __Tad_Process_Loading
         bra     @Loop
@@ -1135,6 +1192,12 @@ ReturnFalse:
     rtl
 .endproc
 
+
+;; ----------------------------
+;; TAD_CODE_SEGMENT subroutines
+;; ----------------------------
+
+.segment TAD_CODE_SEGMENT
 
 
 ; IN: A = command
@@ -1326,14 +1389,7 @@ Tad_QueueCommandOverride := Tad_QueueCommand::WriteCommand
 ; I unknown
 ; DB access lowram
 .proc Tad_IsLoaderActive
-    .assert State::NULL < __FIRST_LOADING_STATE, error
-    .assert State::WAITING_FOR_LOADER < __FIRST_LOADING_STATE, error
-    .assert (State::PAUSED & $7f) < __FIRST_LOADING_STATE, error
-    .assert (State::PLAYING & $7f) < __FIRST_LOADING_STATE, error
-
-    lda     Tad_state
-    and     #$7f
-    cmp     #__FIRST_LOADING_STATE
+    __Tad_IsLoaderActive
     rts
 .endproc
 
