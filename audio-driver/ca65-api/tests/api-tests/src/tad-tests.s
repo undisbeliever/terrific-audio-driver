@@ -114,6 +114,10 @@ TestTable:
     .addr   TestQueueCommandOverride
     .addr   TestCommandAndSfxQueuePriority
     .addr   TestCommandAndSfxQueueEmptyAfterSongLoad
+    .addr   TestQueuePannedSoundEffectKeepsXY16
+    .addr   TestQueuePannedSoundEffectKeepsXY8
+    .addr   TestQueueSoundEffectKeepsXY16
+    .addr   TestQueueSoundEffectKeepsXY8
     .addr   TestSongStartsImmediately
     .addr   TestSongStartPaused
     .addr   TestMonoStereo
@@ -124,6 +128,24 @@ TestTable_SIZE = * - TestTable
 .macro assert_a value
     .local @Pass
         cmp     #value
+        beq     @Pass
+            brk     0
+    @Pass:
+.endmacro
+
+
+.macro assert_x_eq value
+    .local @Pass
+        cpx     #value
+        beq     @Pass
+            brk     0
+    @Pass:
+.endmacro
+
+
+.macro assert_y_eq value
+    .local @Pass
+        cpy     #value
         beq     @Pass
             brk     0
     @Pass:
@@ -539,6 +561,135 @@ TestTable_SIZE = * - TestTable
 
 
 
+;; Tests that `Tad_QueuePannedSoundEffect` does not modify the X/Y registers
+;; and can be called with a 16 bit index
+.a8
+.i16
+;; DB access lowram
+.proc TestQueuePannedSoundEffectKeepsXY16
+    assert_carry    Tad_IsSongPlaying, true
+
+    lda     #10
+    ldx     #1234
+    ldy     #5678
+    jsr     _QueuePannedSoundEffect_AssertSuccess
+
+    assert_x_eq     1234
+    assert_y_eq     5678
+
+
+    lda     #20
+    ldx     #$fedc
+    ldy     #$ba98
+    jsr     _QueuePannedSoundEffect_AssertFail
+
+    assert_x_eq     $fedc
+    assert_y_eq     $ba98
+
+    rts
+.endproc
+
+
+
+;; Tests that `Tad_QueuePannedSoundEffect` does not modify the X/Y registers
+;; and can be called with a 8 bit index
+.a8
+.i16
+;; DB access lowram
+.proc TestQueuePannedSoundEffectKeepsXY8
+    sep     #$10
+.i8
+
+    assert_carry    Tad_IsSongPlaying, true
+
+    lda     #100
+    ldx     #12
+    ldy     #34
+    jsr     _QueuePannedSoundEffect_AssertSuccess
+
+    assert_x_eq     12
+    assert_y_eq     34
+
+
+    lda     #200
+    ldx     #$fe
+    ldy     #$dc
+    jsr     _QueuePannedSoundEffect_AssertFail
+
+    assert_x_eq     $fe
+    assert_y_eq     $dc
+
+    rep     #$10
+.i16
+    rts
+.endproc
+
+
+
+;; Tests that `Tad_QueueSoundEffect` does not modify the X/Y registers
+;; and can be called with a 16 bit index
+.a8
+.i16
+;; DB access lowram
+.proc TestQueueSoundEffectKeepsXY16
+    assert_carry    Tad_IsSongPlaying, true
+
+    lda     #10
+    ldx     #1234
+    ldy     #5678
+    jsr     _QueueSoundEffect_AssertSuccess
+
+    assert_x_eq     1234
+    assert_y_eq     5678
+
+
+    lda     #20
+    ldx     #$fedc
+    ldy     #$ba98
+    jsr     _QueueSoundEffect_AssertFail
+
+    assert_x_eq     $fedc
+    assert_y_eq     $ba98
+
+    rts
+.endproc
+
+
+
+;; Tests that `Tad_QueueSoundEffect` does not modify the X/Y registers
+;; and can be called with a 8 bit index
+.a8
+.i16
+;; DB access lowram
+.proc TestQueueSoundEffectKeepsXY8
+    sep     #$10
+.i8
+
+    assert_carry    Tad_IsSongPlaying, true
+
+    lda     #100
+    ldx     #12
+    ldy     #34
+    jsr     _QueueSoundEffect_AssertSuccess
+
+    assert_x_eq     12
+    assert_y_eq     34
+
+
+    lda     #200
+    ldx     #$fe
+    ldy     #$dc
+    jsr     _QueueSoundEffect_AssertFail
+
+    assert_x_eq     $fe
+    assert_y_eq     $dc
+
+    rep     #$10
+.i16
+    rts
+.endproc
+
+
 ;; Does NOT test if the stereo flag was sent to the audio driver.
 .a8
 .i16
@@ -731,6 +882,30 @@ TestTable_SIZE = * - TestTable
     assert_carry  Tad_IsLoaderActive, true
     assert_carry  Tad_IsSongLoaded,  false
 
+    rts
+.endproc
+
+
+;; IN: A = sfx id
+.a8
+;; I unknown
+;; DB access lowram
+.proc _QueuePannedSoundEffect_AssertSuccess
+    ; Assumes `Tad_QueuePannedSoundEffect` is false (from the cmp) if `sfx_id` was added to the queue
+    ; NOTE: This is undocumented behaviour
+    assert_carry    Tad_QueuePannedSoundEffect, false
+    rts
+.endproc
+
+
+;; IN: A = sfx id
+.a8
+;; I unknown
+;; DB access lowram
+.proc _QueuePannedSoundEffect_AssertFail
+    ; Assumes `Tad_QueuePannedSoundEffect` is false (from the cmp) if `sfx_id` was added to the queue
+    ; NOTE: This is undocumented behaviour
+    assert_carry    Tad_QueuePannedSoundEffect, true
     rts
 .endproc
 
