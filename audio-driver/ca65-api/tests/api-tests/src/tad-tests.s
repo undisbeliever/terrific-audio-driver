@@ -125,7 +125,7 @@ TestTable:
 TestTable_SIZE = * - TestTable
 
 
-.macro assert_a value
+.macro assert_a_eq value
     .local @Pass
         cmp     #value
         beq     @Pass
@@ -773,14 +773,14 @@ TestTable_SIZE = * - TestTable
     jsr     Tad_SetTransferSize
 
     jsr     __CountTransfers
-    assert_a    20
+    assert_a_eq     20
 
 
     ldx     #250
     jsr     Tad_SetTransferSize
 
     jsr     __CountTransfers
-    assert_a    8
+    assert_a_eq     8
 
 
     ; Test `Tad_SetTransferSize` enforces minimum value
@@ -788,7 +788,7 @@ TestTable_SIZE = * - TestTable
     jsr     Tad_SetTransferSize
 
     jsr     __CountTransfers
-    assert_a    (DATA_SIZE + MIN_TRANSFER - 1) / MIN_TRANSFER
+    assert_a_eq     (DATA_SIZE + MIN_TRANSFER - 1) / MIN_TRANSFER
 
 
     ; Test `Tad_SetTransferSize` enforces maximum value
@@ -796,7 +796,7 @@ TestTable_SIZE = * - TestTable
     jsr     Tad_SetTransferSize
 
     jsr     __CountTransfers
-    assert_a    (DATA_SIZE + MAX_TRANSFER - 1) / MAX_TRANSFER
+    assert_a_eq     (DATA_SIZE + MAX_TRANSFER - 1) / MAX_TRANSFER
 
     rts
 
