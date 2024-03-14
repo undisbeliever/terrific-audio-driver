@@ -41,6 +41,12 @@ else
   $(error Unknown MAPPING value)
 endif
 
+
+ifneq (1,$(words [$(TAD_PROJECT)]))
+  $(error TAD_PROJECT variable cannot contain whitespace)
+endif
+
+
 ROM_FILES  := $(addsuffix .sfc, $(ROM_PREFIX)) $(addsuffix .dbg, $(ROM_PREFIX)) $(addsuffix -map.txt, $(ROM_PREFIX))
 
 OBJECTS := $(patsubst %,obj/%.o, $(MODULES))
