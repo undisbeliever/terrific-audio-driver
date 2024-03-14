@@ -10,9 +10,6 @@ TAD_PROJECT ?= ../../../../examples/example-project.terrificaudio
 # Must be HIROM or LOROM
 MAPPING	    ?= LOROM
 
-# Location of the tad-compiler binary
-TAD_COMPILER ?= ../../../../target/release/tad-compiler
-
 # First segment to store audio data in (must end in a decimal number)
 TAD_DATA_SEGMENT ?= RODATA2
 
@@ -21,6 +18,16 @@ MODULES    := reset break-isr main dma-forceblank text-buffer tad-audio audio-da
 GEN_FILES  := gen/audio.inc gen/audio-data.s gen/audio-data.bin
 
 DEPS       := $(wildcard src/*.inc) ../../tad-audio.inc gen/audio.inc
+
+
+# Location of the tad-compiler binary
+ifndef TAD_COMPILER
+  TAD_COMPILER := $(firstword $(wildcard ../../../../tad-compiler.exe ../../../../target/release/tad-compiler.exe ../../../../target/release/tad-compiler))
+
+  ifeq ($(TAD_COMPILER), )
+    $(error "Cannot find tad-compiler binary.  Please compile a release build of tad-compiler.")
+  endif
+endif
 
 
 AS65	?= ca65
