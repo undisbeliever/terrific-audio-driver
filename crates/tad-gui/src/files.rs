@@ -35,6 +35,27 @@ const SAMPLE_FILTERS: &str = concat![
     "BRR samples\t*.brr",
 ];
 
+fn try_show_native_dialog(mut dialog: dialog::NativeFileChooser) -> Option<PathBuf> {
+    match dialog.try_show() {
+        Ok(a) => match a {
+            dialog::NativeFileChooserAction::Success => {
+                let paths = dialog.filenames();
+                if paths.len() == 1 {
+                    paths.into_iter().next()
+                } else {
+                    None
+                }
+            }
+            dialog::FileDialogAction::Cancelled => None,
+        },
+        Err(e) => {
+            dialog::message_title("Error");
+            dialog::alert_default(&format!("Unable to create a file dialog.\n{e}"));
+            None
+        }
+    }
+}
+
 fn save_file_dialog(title: &str, filter: &str, default_extension: &str) -> Option<PathBuf> {
     let mut dialog = dialog::NativeFileChooser::new(dialog::FileDialogType::BrowseSaveFile);
     dialog.set_title(title);
@@ -43,14 +64,7 @@ fn save_file_dialog(title: &str, filter: &str, default_extension: &str) -> Optio
         dialog::FileDialogOptions::SaveAsConfirm | dialog::FileDialogOptions::UseFilterExt,
     );
 
-    dialog.show();
-
-    let paths = dialog.filenames();
-    if paths.len() != 1 {
-        return None;
-    }
-
-    let mut path = paths.into_iter().next().unwrap();
+    let mut path = try_show_native_dialog(dialog)?;
 
     if path.extension().is_none() {
         path.set_extension(default_extension);
@@ -73,18 +87,15 @@ enum PfFileDialogState {
     RelativePathErr(PathBuf, String),
 }
 
-fn validate_pf_file_dialog_output(
-    dialog: &dialog::NativeFileChooser,
+fn show_and_validate_pf_file_dialog_output(
+    dialog: dialog::NativeFileChooser,
     pd: &ProjectData,
     add_missing_extension: Option<&str>,
 ) -> PfFileDialogState {
-    let paths = dialog.filenames();
-
-    if paths.len() != 1 {
-        return PfFileDialogState::None;
-    }
-
-    let mut path = paths.into_iter().next().unwrap();
+    let mut path = match try_show_native_dialog(dialog) {
+        Some(p) => p,
+        None => return PfFileDialogState::None,
+    };
 
     if let Some(e) = add_missing_extension {
         if path.extension().is_none() {
@@ -161,9 +172,7 @@ fn pf_open_file_dialog(
         }
     };
 
-    dialog.show();
-
-    match validate_pf_file_dialog_output(&dialog, pd, None) {
+    match show_and_validate_pf_file_dialog_output(dialog, pd, None) {
         PfFileDialogState::None => None,
         PfFileDialogState::Error(msg) => {
             dialog::message_title("Error");
@@ -263,9 +272,8 @@ fn copy_file_to_project_dialog(
             dialog.set_preset_file(f);
         }
     }
-    dialog.show();
 
-    match validate_pf_file_dialog_output(&dialog, pd, extension.as_deref()) {
+    match show_and_validate_pf_file_dialog_output(dialog, pd, extension.as_deref()) {
         PfFileDialogState::None => None,
         PfFileDialogState::Error(msg) | PfFileDialogState::RelativePathErr(_, msg) => {
             dialog::message_title("Error");
@@ -314,9 +322,7 @@ fn pf_save_file_dialog(
 
     let _ = dialog.set_directory(&path.unwrap_or(pd.pf_parent_path.as_path()));
 
-    dialog.show();
-
-    match validate_pf_file_dialog_output(&dialog, pd, Some(default_extension)) {
+    match show_and_validate_pf_file_dialog_output(dialog, pd, Some(default_extension)) {
         PfFileDialogState::None => None,
         PfFileDialogState::Error(msg) => {
             dialog::message_title("Error");
@@ -363,15 +369,7 @@ fn open_file_dialog(title: &str, filter: &str) -> Option<PathBuf> {
     dialog.set_filter(filter);
     dialog.set_option(dialog::FileDialogOptions::UseFilterExt);
 
-    dialog.show();
-
-    let paths = dialog.filenames();
-
-    if paths.len() != 1 {
-        return None;
-    }
-
-    let path = paths.into_iter().next().unwrap();
+    let path = try_show_native_dialog(dialog)?;
 
     if !path.is_absolute() {
         dialog::message_title("Error");
