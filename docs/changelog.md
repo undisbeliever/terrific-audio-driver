@@ -1,6 +1,18 @@
 Terrific Audio Driver Changelog
 ===============================
 
+Version 0.0.7
+=============
+ * Added ca65 integration code
+ * Added `tad-compiler ca65-export` command
+ * Added `tad-compiler ca65-enums` command
+ * Fixed missing key-off in the pause IO command
+ * Added bounds checking to the play_sound_effect IO command
+
+
+**Breaking changes**:
+ * Moved Loader to audio-RAM address $200
+
 
 Version 0.0.6
 =============
