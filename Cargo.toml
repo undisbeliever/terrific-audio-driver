@@ -28,7 +28,7 @@ opt-level = 3
 
 
 [workspace.package]
-version = "0.0.6"
+version = "0.0.7"
 
 publish = false
 
