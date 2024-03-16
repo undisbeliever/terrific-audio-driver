@@ -4,6 +4,9 @@
 *.sfc
 *-map.txt
 
+/*.sh
+/*.py
+
 /target
 /vendor
 crates/*/target
