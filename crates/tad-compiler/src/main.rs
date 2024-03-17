@@ -54,7 +54,7 @@ enum Command {
     Song(CompileSongDataArgs),
 
     /// Export a MML song as a .spc file
-    Song2spc(CompileSongDataArgs),
+    Song2spc(Song2SpcArgs),
 
     /// Check the project will compile successfully and all songs fit in audio-RAM
     Check(CheckProjectArgs),
@@ -278,22 +278,43 @@ fn compile_song_data(args: CompileSongDataArgs) {
 // Export song to .spc file
 // ========================
 
-fn export_song_to_spc_file(args: CompileSongDataArgs) {
-    let output_arg = args.output.validate();
+#[derive(Args)]
+struct Song2SpcArgs {
+    #[command(flatten)]
+    song: CompileSongDataArgs,
 
-    let pf = load_project_file(&args.project_file);
-    let (mml_file, song_name) = load_mml_file(&args.song, &pf);
+    #[arg(
+        short = 's',
+        long = "sound-effects",
+        help = "include sound effects in the .spc file"
+    )]
+    sound_effects: bool,
+}
+
+fn export_song_to_spc_file(args: Song2SpcArgs) {
+    let output_arg = args.song.output.validate();
+
+    let pf = load_project_file(&args.song.project_file);
+    let (mml_file, song_name) = load_mml_file(&args.song.song, &pf);
 
     let samples = match build_sample_and_instrument_data(&pf) {
         Ok(s) => s,
         Err(e) => error!("{}", e.multiline_display()),
     };
-    let sfx = sound_effects::blank_compiled_sound_effects();
+
+    let sfx = if args.sound_effects {
+        match compile_sound_effects(&pf, samples.pitch_table()) {
+            Ok(sfx) => sfx,
+            Err(()) => error!("Error compiling sound effects"),
+        }
+    } else {
+        sound_effects::blank_compiled_sound_effects()
+    };
 
     let song_data = compile_song(
         mml_file,
         song_name,
-        &args.options,
+        &args.song.options,
         &pf,
         samples.pitch_table(),
     );

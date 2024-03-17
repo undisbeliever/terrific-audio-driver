@@ -1,6 +1,11 @@
 Terrific Audio Driver Changelog
 ===============================
 
+Version 0.0.8
+=============
+ * Added include sound effects argument to `tad-compiler song2spc` (`-s` or `--sound-effects`)
+
+
 Version 0.0.7
 =============
  * Added ca65 integration code
