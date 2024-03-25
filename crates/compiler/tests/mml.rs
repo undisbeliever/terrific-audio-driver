@@ -7,6 +7,7 @@
 #![allow(clippy::assertions_on_constants)]
 
 use compiler::bytecode_assembler;
+use compiler::bytecode_assembler::BcTerminator;
 use compiler::data;
 use compiler::data::{Name, TextFile, UniqueNamesList};
 use compiler::envelope::{Adsr, Envelope, Gain};
@@ -1791,6 +1792,224 @@ fn test_change_whole_note_length_command() {
     );
 }
 
+/// Tests the merge instrument/envelope optimisation is disabled after a `L` set-loop-point command
+#[test]
+fn test_set_instrument_after_set_loop_point() {
+    assert_mml_channel_a_matches_looping_bytecode(
+        r###"
+@0 dummy_instrument
+@1 dummy_instrument_2
+
+A @0 a @0 b L @0 c @0 d @1 e
+"###,
+        &[
+            "set_instrument dummy_instrument",
+            "play_note a4 24",
+            // @0 optimised out
+            "play_note b4 24",
+            // Loop
+            "set_instrument dummy_instrument",
+            "play_note c4 24",
+            // @0 optimised out
+            "play_note d4 24",
+            "set_instrument dummy_instrument_2",
+            "play_note e4 24",
+        ],
+    );
+
+    assert_mml_channel_a_matches_looping_bytecode(
+        r###"
+@0 dummy_instrument    adsr 1 2 3 4
+@1 dummy_instrument_2  adsr 5 6 7 8
+
+A @0 a @0 b L @0 c @0 d @1 e
+"###,
+        &[
+            "set_instrument_and_adsr dummy_instrument 1 2 3 4",
+            "play_note a4 24",
+            // @0 optimised out
+            "play_note b4 24",
+            // Loop
+            "set_instrument_and_adsr dummy_instrument 1 2 3 4",
+            "play_note c4 24",
+            // @0 optimised out
+            "play_note d4 24",
+            "set_instrument_and_adsr dummy_instrument_2 5 6 7 8",
+            "play_note e4 24",
+        ],
+    );
+
+    assert_mml_channel_a_matches_looping_bytecode(
+        r###"
+@0 dummy_instrument    gain I10
+@1 dummy_instrument_2  gain E20
+
+A @0 a @0 b L @0 c @0 d @1 e
+"###,
+        &[
+            "set_instrument_and_gain dummy_instrument I10",
+            "play_note a4 24",
+            // @0 optimised out
+            "play_note b4 24",
+            // Loop
+            "set_instrument_and_gain dummy_instrument I10",
+            "play_note c4 24",
+            // @0 optimised out
+            "play_note d4 24",
+            "set_instrument_and_gain dummy_instrument_2 E20",
+            "play_note e4 24",
+        ],
+    );
+
+    assert_mml_channel_a_matches_looping_bytecode(
+        r###"
+@0 dummy_instrument  adsr 1 2 3 4
+@1 dummy_instrument  adsr 5 6 7 8
+@2 dummy_instrument_2
+
+A @0 a @0 b L @1 c @1 d @2 e
+"###,
+        &[
+            "set_instrument_and_adsr dummy_instrument 1 2 3 4",
+            "play_note a4 24",
+            // @0 optimised out
+            "play_note b4 24",
+            // Loop (must set instrument AND adsr after loop)
+            "set_instrument_and_adsr dummy_instrument 5 6 7 8",
+            "play_note c4 24",
+            // @1 optimised out
+            "play_note d4 24",
+            "set_instrument dummy_instrument_2",
+            "play_note e4 24",
+        ],
+    );
+
+    assert_mml_channel_a_matches_looping_bytecode(
+        r###"
+@0 dummy_instrument  adsr 1 2 3 4
+@1 dummy_instrument  adsr 5 6 7 8
+@2 dummy_instrument_2
+
+A @0 a @0 b L A 5,6,7,8 c @1 d @1 e @2 f
+"###,
+        &[
+            "set_instrument_and_adsr dummy_instrument 1 2 3 4",
+            "play_note a4 24",
+            // @0 optimised out
+            "play_note b4 24",
+            // Loop (must set instrument AND adsr after loop)
+            "set_adsr 5 6 7 8",
+            "play_note c4 24",
+            // Instrument is unknown after loop
+            "set_instrument_and_adsr dummy_instrument 5 6 7 8",
+            "play_note d4 24",
+            // @1 optimised out
+            "play_note e4 24",
+            "set_instrument dummy_instrument_2",
+            "play_note f4 24",
+        ],
+    );
+
+    assert_mml_channel_a_matches_looping_bytecode(
+        r###"
+@0 dummy_instrument  gain I10
+@1 dummy_instrument  gain E20
+@2 dummy_instrument_2
+
+A @0 a @0 b L @1 c @1 d @2 e
+"###,
+        &[
+            "set_instrument_and_gain dummy_instrument I10",
+            "play_note a4 24",
+            // @0 optimised out
+            "play_note b4 24",
+            // Loop (must set instrument AND gain after loop)
+            "set_instrument_and_gain dummy_instrument E20",
+            "play_note c4 24",
+            // @1 optimised out
+            "play_note d4 24",
+            "set_instrument dummy_instrument_2",
+            "play_note e4 24",
+        ],
+    );
+
+    assert_mml_channel_a_matches_looping_bytecode(
+        r###"
+@0 dummy_instrument  gain I10
+@1 dummy_instrument  gain E20
+@2 dummy_instrument_2
+
+A @0 a @0 b L GI10 c @1 d @1 e @2 f
+"###,
+        &[
+            "set_instrument_and_gain dummy_instrument I10",
+            "play_note a4 24",
+            // @0 optimised out
+            "play_note b4 24",
+            // Loop (must set instrument AND gain after loop)
+            "set_gain I10",
+            "play_note c4 24",
+            // Instrument unknwon after loop
+            "set_instrument_and_gain dummy_instrument E20",
+            "play_note d4 24",
+            // @1 optimised out
+            "play_note e4 24",
+            "set_instrument dummy_instrument_2",
+            "play_note f4 24",
+        ],
+    );
+}
+
+/// Tests the merge ADSR envelope optimisation is disabled after a `L` set-loop-point command
+#[test]
+fn test_set_adsr_after_set_loop_point() {
+    assert_mml_channel_a_matches_looping_bytecode(
+        r###"
+@0 dummy_instrument adsr 1 2 3 4
+
+A @0 a A1,2,3,4 b L A1,2,3,4 c A1,2,3,4 d A5,6,7,8 e
+"###,
+        &[
+            "set_instrument_and_adsr dummy_instrument 1 2 3 4",
+            "play_note a4 24",
+            // A1,2,3,4 optimised out
+            "play_note b4 24",
+            // Loop
+            "set_adsr 1 2 3 4",
+            "play_note c4 24",
+            // A1,2,3,4 optimised out
+            "play_note d4 24",
+            "set_adsr 5 6 7 8",
+            "play_note e4 24",
+        ],
+    );
+}
+
+/// Tests the merge GAIN envelope optimisation is disabled after a `L` set-loop-point command
+#[test]
+fn test_set_gain_after_set_loop_point() {
+    assert_mml_channel_a_matches_looping_bytecode(
+        r###"
+@0 dummy_instrument gain E24
+
+A @0 a GE24 b L GE24 c GE24 d GF127 e
+"###,
+        &[
+            "set_instrument_and_gain dummy_instrument E24",
+            "play_note a4 24",
+            // GE24 optimised out
+            "play_note b4 24",
+            // Loop
+            "set_gain E24",
+            "play_note c4 24",
+            // GE24 optimised out
+            "play_note d4 24",
+            "set_gain F127",
+            "play_note e4 24",
+        ],
+    );
+}
+
 // ----------------------------------------------------------------------------------------------
 
 /// Tests MML commands will still be merged if there are a change MML state command in between
@@ -1837,7 +2056,11 @@ fn assert_line_matches_bytecode(mml_line: &str, bc_asm: &[&str]) {
     let dd = dummy_data();
 
     let mml = compile_mml(&mml, &dd);
-    let bc_asm = assemble_channel_bytecode(&bc_asm, &dd.instruments_and_samples);
+    let bc_asm = assemble_channel_bytecode(
+        &bc_asm,
+        &dd.instruments_and_samples,
+        BcTerminator::DisableChannel,
+    );
 
     assert_eq!(
         mml_bytecode(&mml),
@@ -1880,7 +2103,11 @@ fn assert_line_matches_line_and_bytecode(mml_line1: &str, mml_line2: &str, bc_as
         "Testing {mml_line1:?} against MML"
     );
 
-    let bc_asm = assemble_channel_bytecode(&bc_asm, &dd.instruments_and_samples);
+    let bc_asm = assemble_channel_bytecode(
+        &bc_asm,
+        &dd.instruments_and_samples,
+        BcTerminator::DisableChannel,
+    );
 
     assert_eq!(mml1_bc, bc_asm, "Testing {mml_line1:?} against bytecode");
 }
@@ -1890,7 +2117,25 @@ fn assert_mml_channel_a_matches_bytecode(mml: &str, bc_asm: &[&str]) {
 
     let mml = compile_mml(mml, &dummy_data);
 
-    let bc_asm = assemble_channel_bytecode(bc_asm, &dummy_data.instruments_and_samples);
+    let bc_asm = assemble_channel_bytecode(
+        bc_asm,
+        &dummy_data.instruments_and_samples,
+        BcTerminator::DisableChannel,
+    );
+
+    assert_eq!(mml_bytecode(&mml), bc_asm);
+}
+
+fn assert_mml_channel_a_matches_looping_bytecode(mml: &str, bc_asm: &[&str]) {
+    let dummy_data = dummy_data();
+
+    let mml = compile_mml(mml, &dummy_data);
+
+    let bc_asm = assemble_channel_bytecode(
+        bc_asm,
+        &dummy_data.instruments_and_samples,
+        BcTerminator::LoopChannel,
+    );
 
     assert_eq!(mml_bytecode(&mml), bc_asm);
 }
@@ -1912,6 +2157,7 @@ fn compile_mml(mml: &str, dummy_data: &DummyData) -> SongData {
 fn assemble_channel_bytecode(
     bc_asm: &[&str],
     inst_map: &UniqueNamesList<data::InstrumentOrSample>,
+    terminator: BcTerminator,
 ) -> Vec<u8> {
     let mut bc = bytecode_assembler::BytecodeAssembler::new(
         inst_map,
@@ -1923,9 +2169,7 @@ fn assemble_channel_bytecode(
         bc.parse_line(line).unwrap();
     }
 
-    bc.bytecode(bytecode_assembler::BcTerminator::DisableChannel)
-        .unwrap()
-        .to_owned()
+    bc.bytecode(terminator).unwrap().to_owned()
 }
 
 struct DummyData {
@@ -1939,6 +2183,7 @@ fn dummy_data() -> DummyData {
     #[rustfmt::skip]
     let instruments_and_samples = data::validate_instrument_and_sample_names([
         dummy_instrument("dummy_instrument", SF, 2, 6, Envelope::Gain(Gain::new(0))),
+        dummy_instrument("dummy_instrument_2", SF, 2, 6, Envelope::Gain(Gain::new(0))),
         dummy_instrument("inst_with_adsr",   SF, 2, 6, Envelope::Adsr(EXAMPLE_ADSR)),
         dummy_instrument("inst_with_gain",   SF, 2, 6, Envelope::Gain(EXAMPLE_GAIN)),
     ].iter(),

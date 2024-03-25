@@ -800,7 +800,10 @@ impl ChannelBcGenerator<'_> {
                     self.loop_point = Some(LoopPoint {
                         bytecode_offset: self.bc.get_bytecode_len(),
                         tick_counter: self.bc.get_tick_counter(),
-                    })
+                    });
+                    // The instrument or envelope may have changed when the song loops.
+                    self.instrument = self.instrument.demote_to_maybe();
+                    self.envelope = self.envelope.demote_to_maybe();
                 }
                 BytecodeContext::SongSubroutine => return Err(MmlError::CannotSetLoopPoint),
                 &BytecodeContext::SoundEffect => return Err(MmlError::CannotSetLoopPoint),

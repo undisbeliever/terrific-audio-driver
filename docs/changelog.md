@@ -5,6 +5,10 @@ Version 0.0.8
 =============
  * Added include sound effects argument to `tad-compiler song2spc` (`-s` or `--sound-effects`)
 
+MML Changes:
+ * Fixed `@` set instrument, `A` set ADSR and/or `G` set gain MML commands not emitting a
+   set instrument/ADSR/gain instruction after a `L` set loop point MML command.
+
 
 Version 0.0.7
 =============
