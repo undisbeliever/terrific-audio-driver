@@ -797,6 +797,9 @@ impl ChannelBcGenerator<'_> {
                     if self.loop_point.is_some() {
                         return Err(MmlError::LoopPointAlreadySet);
                     }
+                    if self.bc.is_in_loop() {
+                        return Err(MmlError::CannotSetLoopPointInALoop);
+                    }
                     self.loop_point = Some(LoopPoint {
                         bytecode_offset: self.bc.get_bytecode_len(),
                         tick_counter: self.bc.get_tick_counter(),

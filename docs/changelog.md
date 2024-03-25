@@ -8,6 +8,7 @@ Version 0.0.8
 MML Changes:
  * Fixed `@` set instrument, `A` set ADSR and/or `G` set gain MML commands not emitting a
    set instrument/ADSR/gain instruction after a `L` set loop point MML command.
+ * Forbid the `L` set loop point MML command inside a `[ ]` MML loop.
 
 
 Version 0.0.7

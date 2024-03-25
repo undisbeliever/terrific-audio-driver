@@ -72,7 +72,7 @@ pub enum ProjectFileError {
 #[derive(Debug)]
 pub struct ProjectFileErrors(pub Vec<ProjectFileError>);
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct InvalidAdsrError {
     pub valid_a: bool,
     pub valid_d: bool,
@@ -80,7 +80,7 @@ pub struct InvalidAdsrError {
     pub valid_sr: bool,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum ValueError {
     CannotParseUnsigned(String),
     CannotParseSigned(String),
@@ -186,7 +186,7 @@ pub enum ValueError {
     NoGain,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum BytecodeError {
     OpenLoopStack(usize),
     NotInALoop,
@@ -377,7 +377,7 @@ pub enum MmlLineError {
     InvalidSoundEffectChannel,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum MmlError {
     // MmlStreamParser errors
     ValueError(ValueError),
@@ -422,6 +422,7 @@ pub enum MmlError {
 
     LoopPointAlreadySet,
     CannotSetLoopPoint,
+    CannotSetLoopPointInALoop,
     CannotCallSubroutineTooManyNestedLoops(mml::Identifier, usize),
     CannotUseMpWithoutInstrument,
     MpPitchOffsetTooLarge(u32),
@@ -1099,6 +1100,7 @@ impl Display for MmlError {
 
             Self::LoopPointAlreadySet => write!(f, "loop point already set"),
             Self::CannotSetLoopPoint => write!(f, "cannot set loop point"),
+            Self::CannotSetLoopPointInALoop => write!(f, "cannot set loop point in a loop"),
             Self::CannotCallSubroutineTooManyNestedLoops(name, loops) => {
                 write!(
                     f,

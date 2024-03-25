@@ -11,6 +11,7 @@ use compiler::bytecode_assembler::BcTerminator;
 use compiler::data;
 use compiler::data::{Name, TextFile, UniqueNamesList};
 use compiler::envelope::{Adsr, Envelope, Gain};
+use compiler::errors::{MmlError, SongError};
 use compiler::mml;
 use compiler::notes::Octave;
 use compiler::pitch_table::{build_pitch_table, PitchTable};
@@ -2010,6 +2011,11 @@ A @0 a GE24 b L GE24 c GE24 d GF127 e
     );
 }
 
+#[test]
+fn test_set_loop_point_in_loop_is_err() {
+    assert_error_in_mml_line("[a b L c]5", 6, MmlError::CannotSetLoopPointInALoop);
+}
+
 // ----------------------------------------------------------------------------------------------
 
 /// Tests MML commands will still be merged if there are a change MML state command in between
@@ -2138,6 +2144,51 @@ fn assert_mml_channel_a_matches_looping_bytecode(mml: &str, bc_asm: &[&str]) {
     );
 
     assert_eq!(mml_bytecode(&mml), bc_asm);
+}
+
+fn assert_error_in_mml_line(mml_line: &str, line_char: u32, expected_error: MmlError) {
+    let mml = ["@1 dummy_instrument\nA @1 o4\nA ", mml_line].concat();
+    assert_err_in_channel_a_mml(&mml, line_char + 2, expected_error);
+}
+
+fn assert_err_in_channel_a_mml(mml: &str, line_char: u32, expected_error: MmlError) {
+    let dummy_data = dummy_data();
+
+    let r = mml::compile_mml(
+        &TextFile {
+            contents: mml.to_string(),
+            path: None,
+            file_name: "".to_owned(),
+        },
+        None,
+        &dummy_data.instruments_and_samples,
+        &dummy_data.pitch_table,
+    );
+
+    let valid = match &r {
+        Err(SongError::MmlError(e)) => {
+            if e.channel_errors.len() == 1
+                && e.line_errors.is_empty()
+                && e.subroutine_errors.is_empty()
+            {
+                let c = e.channel_errors.first().unwrap();
+                match c.errors.len() {
+                    1 => {
+                        let e = c.errors.first().unwrap();
+                        e.0.line_char() == line_char && e.1 == expected_error
+                    }
+                    _ => false,
+                }
+            } else {
+                false
+            }
+        }
+        _ => false,
+    };
+
+    if !valid {
+        panic!("expected a single {expected_error:?} error on line_char {line_char}\nInput: {mml:?}\nResult: {r:?}")
+    }
 }
 
 fn compile_mml(mml: &str, dummy_data: &DummyData) -> SongData {
