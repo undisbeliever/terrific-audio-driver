@@ -159,17 +159,17 @@ LOADER_ARAM_ADDR = $0200
 
 
 ;; Minimum transfer size accepted by `Tad_SetTransferSize`
-;
+;;
 ;; MUST BE > 0
 MIN_TRANSFER_PER_FRAME = 32
 
 ;; Maximum transfer size accepted by `Tad_SetTransferSize`
-;
+;;
 ;; The loader can transfer ~849 bytes per 60Hz frame SlowROM or FastROM
 MAX_TRANSFER_PER_FRAME = 800
 
 ;; Default number of bytes to transfer to Audio-RAM per `Tad_Process` call.
-;
+;;
 ;; MUST BE > 0
 DEFAULT_TRANSFER_PER_FRAME = 256
 
