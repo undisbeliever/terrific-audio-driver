@@ -1267,7 +1267,7 @@ Tad_QueueCommandOverride := Tad_QueueCommand::WriteCommand
     bcs     @EndIf
         sta     Tad_sfxQueue
 
-        lda     #MAX_PAN / 2
+        lda     #CENTER_PAN
         sta     Tad_sfxQueue_pan
 @EndIf:
     rts
