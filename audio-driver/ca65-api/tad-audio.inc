@@ -207,6 +207,10 @@ MIN_TICK_CLOCK = 64
 
 ;; Finish loading the data into audio-RAM.
 ;;
+;; `Tad_FinishLoadingData` will not transfer data if the state is `WAITING_FOR_LOADER`.
+;; It will only transfer data if the loader is in the middle of transferring data
+;; (when `Tad_IsLoaderActive` returns true).
+;;
 ;; This function can be safely called by `LoadAudioData`.
 ;;
 ;; This function may require multiple frames of execution time.
@@ -284,6 +288,11 @@ MIN_TICK_CLOCK = 64
 ;; This function will not restart the loader if the loader is loading common audio data.
 ;;
 ;; CAUTION: The audio driver starts in the paused state if the `PlaySongImmediately` flag is false.
+;;
+;; CAUTION: `Tad_LoadSong` will switch the state to `WAITING_FOR_LOADER`.  `LoadSongData` will
+;; not be called until `Tad_Process` is called **and** the audio-driver has switched to the loader.
+;; While the state remains `WAITING_FOR_LOADER`, no audio data will be transferred and calling
+;; `Tad_FinishLoadingData` will not transfer any audio data.
 ;;
 ;; IN: A = 0 - play a blank (silent song)
 ;; IN: A >= 1 - Play song number `A`
