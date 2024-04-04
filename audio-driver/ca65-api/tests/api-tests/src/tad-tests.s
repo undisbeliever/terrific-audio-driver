@@ -121,6 +121,8 @@ TestTable:
     .addr   TestLoadSongWhileLoadingCommonAudioData
     .addr   TestQueueCommand
     .addr   TestQueueCommandOverride
+    .addr   TestQueuePannedSoundEffect
+    .addr   TestQueueSoundEffect
     .addr   TestCommandAndSfxQueuePriority
     .addr   TestCommandAndSfxQueueEmptyAfterSongLoad
     .addr   TestQueuePannedSoundEffectKeepsXY16
@@ -472,6 +474,99 @@ TestTable_SIZE = * - TestTable
     ; Command was STOP_SOUND_EFFECTS
     ; Confirm playing state unchanged
     assert_carry    Tad_IsSongPlaying, true
+
+    rts
+.endproc
+
+
+
+;; Test Tad_QueuePannedSoundEffect
+.a8
+.i16
+;; DB access lowram
+.proc TestQueuePannedSoundEffect
+    assert_carry    Tad_IsSongPlaying, true
+
+    lda     #$fe
+    ldx     #1
+    jsr     _QueuePannedSoundEffect_AssertSuccess
+
+    lda     #10
+    ldx     #2
+    jsr     _QueuePannedSoundEffect_AssertSuccess
+
+    lda     #11
+    ldx     #3
+    jsr     _QueuePannedSoundEffect_AssertFail
+
+    lda     #9
+    ldx     #4
+    jsr     _QueuePannedSoundEffect_AssertSuccess
+
+    lda     #10
+    ldx     #5
+    jsr     _QueuePannedSoundEffect_AssertFail
+
+
+    lda     #$fe
+    ldx     #6
+    jsr     _QueuePannedSoundEffect_AssertFail
+
+    jsr     _Wait
+    jsr     Tad_Process
+
+    ; PLAY_SOUND_EFFECT command sent to the audio driver
+
+    lda     #$fe
+    ldx     #7
+    jsr     _QueuePannedSoundEffect_AssertSuccess
+
+    ; Clear SFX queue so it doesn't interfere with the next test
+    jsr     _Wait
+    jsr     Tad_Process
+
+    rts
+.endproc
+
+
+
+;; Test Tad_QueueSoundEffect
+.a8
+.i16
+;; DB access lowram
+.proc TestQueueSoundEffect
+    assert_carry    Tad_IsSongPlaying, true
+
+    lda     #$fe
+    jsr     _QueueSoundEffect_AssertSuccess
+
+    lda     #10
+    jsr     _QueueSoundEffect_AssertSuccess
+
+    lda     #11
+    jsr     _QueueSoundEffect_AssertFail
+
+    lda     #9
+    jsr     _QueueSoundEffect_AssertSuccess
+
+    lda     #10
+    jsr     _QueueSoundEffect_AssertFail
+
+
+    lda     #$fe
+    jsr     _QueueSoundEffect_AssertFail
+
+    jsr     _Wait
+    jsr     Tad_Process
+
+    ; PLAY_SOUND_EFFECT command sent to the audio driver
+
+    lda     #$fe
+    jsr     _QueueSoundEffect_AssertSuccess
+
+    ; Clear SFX queue so it doesn't interfere with the next test
+    jsr     _Wait
+    jsr     Tad_Process
 
     rts
 .endproc
