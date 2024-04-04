@@ -259,7 +259,7 @@ TestTable_SIZE = * - TestTable
 
     jsr     _WaitForLoader
 
-    ; Loading blank song, it should only require Tad_Process call to load it
+    ; Loading blank song, it should only require 1 Tad_Process call to load it
     jsl     Tad_Process
     assert_carry  Tad_IsSongLoaded,   true
     assert_carry  Tad_IsLoaderActive, false
@@ -880,7 +880,7 @@ TestTable_SIZE = * - TestTable
     assert_carry    Tad_IsSongLoaded, true
 
 
-    ; Also tests `loader` sounds up transfer size to 100
+    ; Also tests `loader` rounds up transfer size to 100
     ldx     #99
     jsr     Tad_SetTransferSize
 
