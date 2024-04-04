@@ -129,9 +129,9 @@ TestTable:
     .addr   TestQueuePannedSoundEffectKeepsXY8
     .addr   TestQueueSoundEffectKeepsXY16
     .addr   TestQueueSoundEffectKeepsXY8
+    .addr   TestMonoStereo
     .addr   TestSongStartsImmediately
     .addr   TestSongStartPaused
-    .addr   TestMonoStereo
     .addr   TestSetTransferSize
 TestTable_SIZE = * - TestTable
 
