@@ -580,13 +580,6 @@ TestTable_SIZE = * - TestTable
 .proc TestCommandAndSfxQueuePriority
     assert_carry    Tad_IsSongPlaying, true
 
-    lda     #10
-    jsr     _QueueSoundEffect_AssertSuccess
-
-    ; This test assumes `Tad_QueueSoundEffect` returns carry false if the sfx was added to the queue
-    lda     #20
-    jsr     _QueueSoundEffect_AssertFail
-
     lda     #0
     jsr     _QueueSoundEffect_AssertSuccess
 
@@ -594,7 +587,7 @@ TestTable_SIZE = * - TestTable
     jsl     Tad_Process
     ; play_sound_effect command sent to the audio driver
 
-    lda     #0
+    lda     #10
     jsr     _QueueSoundEffect_AssertSuccess
 
     lda     #TadCommand::STOP_SOUND_EFFECTS
@@ -607,7 +600,7 @@ TestTable_SIZE = * - TestTable
     ; Sound effect queue is unchanged
 
     ; Test sfx cannot be added to the queue
-    lda     #0
+    lda     #20
     jsr     _QueueSoundEffect_AssertFail
 
     jsr     _Wait
@@ -615,7 +608,7 @@ TestTable_SIZE = * - TestTable
     ; play_sound_effect command sent to the audio driver
 
     ; Test sfx can be added to the queue
-    lda     #0
+    lda     #100
     jsr     _QueueSoundEffect_AssertSuccess
 
     ; Clear SFX queue so it doesn't interfere with the next test
@@ -648,7 +641,7 @@ TestTable_SIZE = * - TestTable
     jsl     Tad_Process
 
     ; Test SFX queue is unchanged while the loader is active
-    lda     #0
+    lda     #100
     jsr     _QueueSoundEffect_AssertFail
 
     ; Test command queue is unchanged while the loader is active
