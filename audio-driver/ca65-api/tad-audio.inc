@@ -63,7 +63,7 @@
 ;;
 ;;  * `loader.bin` - the custom spc700 loader.  Imported as `Tad_Loader_Bin`, `Tad_Loader_SIZE`.
 ;;  * `audio-driver.bin` - the spc700 audio driver.  Imported as `Tad_AudioDriver_Bin`, `Tad_AudioDriver_SIZE`.
-;;  * `blank-song.bin` - a blank (silent) song.  Imported as `Tad_BlankSong_Bin`, `Tad_BlankSong_Bin`.
+;;  * `blank-song.bin` - a blank (silent) song.  Imported as `Tad_BlankSong_Bin`, `Tad_BlankSong_SIZE`.
 ;;
 ;; Audio data is loaded using the external callback `LoadAudioData`.  `LoadAudioData` is
 ;; called when *Common Audio Data* or *Song Data* need to be loaded into Audio-RAM.
