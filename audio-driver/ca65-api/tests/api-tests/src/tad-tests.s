@@ -31,10 +31,19 @@
 
 .export RunTests
 
+
+; ::HACK import SFX queue so the SFX queue can be tested (the queue is normally private to `tad-audio.s`)::
+.importzp Tad_sfxQueue
+.import   Tad_sfxQueue_pan
+
+
 .bss
     testIndex:  .res 2
     counter:    .res 2
 
+
+    _queueSfxTest_id:   .res 1
+    _queueSfxTest_pan:  .res 2
 
 .code
 
@@ -123,6 +132,21 @@ TestTable:
     .addr   TestMonoStereo
     .addr   TestSetTransferSize
 TestTable_SIZE = * - TestTable
+
+
+.macro assert_u8_var_eq var1, var2
+    .assert .asize = 8, error
+
+    .local @Pass
+        pha
+
+        lda     var1
+        cmp     var2
+        beq     @Pass
+            brk     0
+    @Pass:
+        pla
+.endmacro
 
 
 .macro assert_a_eq value
@@ -891,9 +915,22 @@ TestTable_SIZE = * - TestTable
 ;; I unknown
 ;; DB access lowram
 .proc _QueuePannedSoundEffect_AssertSuccess
+    ; save function arguments
+    pha
+        sta     _queueSfxTest_id
+
+        txa
+        sta     _queueSfxTest_pan
+    pla
+
     ; Assumes `Tad_QueuePannedSoundEffect` is false (from the cmp) if `sfx_id` was added to the queue
     ; NOTE: This is undocumented behaviour
     assert_carry    Tad_QueuePannedSoundEffect, false
+
+    ; test SFX queue matches function arguments
+    assert_u8_var_eq   Tad_sfxQueue,     _queueSfxTest_id
+    assert_u8_var_eq   Tad_sfxQueue_pan, _queueSfxTest_pan
+
     rts
 .endproc
 
@@ -903,9 +940,23 @@ TestTable_SIZE = * - TestTable
 ;; I unknown
 ;; DB access lowram
 .proc _QueuePannedSoundEffect_AssertFail
+    ; save SFX queue
+    pha
+        lda     Tad_sfxQueue
+        sta     _queueSfxTest_id
+
+        lda     Tad_sfxQueue_pan
+        sta     _queueSfxTest_pan
+    pla
+
     ; Assumes `Tad_QueuePannedSoundEffect` is false (from the cmp) if `sfx_id` was added to the queue
     ; NOTE: This is undocumented behaviour
     assert_carry    Tad_QueuePannedSoundEffect, true
+
+    ; test SFX queue unchanged
+    assert_u8_var_eq   Tad_sfxQueue,     _queueSfxTest_id
+    assert_u8_var_eq   Tad_sfxQueue_pan, _queueSfxTest_pan
+
     rts
 .endproc
 
@@ -915,9 +966,17 @@ TestTable_SIZE = * - TestTable
 ;; I unknown
 ;; DB access lowram
 .proc _QueueSoundEffect_AssertSuccess
+    ; save subroutine argument
+    sta     _queueSfxTest_id
+
     ; Assumes `Tad_QueueSoundEffect` is false (from the cmp) if `sfx_id` was added to the queue
     ; NOTE: This is undocumented behaviour
     assert_carry    Tad_QueueSoundEffect, false
+
+    ; test SFX queue matches input
+    assert_u8_var_eq   Tad_sfxQueue,     _queueSfxTest_id
+    assert_u8_var_eq   Tad_sfxQueue_pan, #CENTER_PAN
+
     rts
 .endproc
 
@@ -927,9 +986,23 @@ TestTable_SIZE = * - TestTable
 ;; I unknown
 ;; DB access lowram
 .proc _QueueSoundEffect_AssertFail
+    ; save SFX queue
+    pha
+        lda     Tad_sfxQueue
+        sta     _queueSfxTest_id
+
+        lda     Tad_sfxQueue_pan
+        sta     _queueSfxTest_pan
+    pla
+
     ; Assumes `Tad_QueueSoundEffect` is false (from the cmp) if `sfx_id` was added to the queue
     ; NOTE: This is undocumented behaviour
     assert_carry    Tad_QueueSoundEffect, true
+
+    ; test SFX queue unchanged
+    assert_u8_var_eq   Tad_sfxQueue,     _queueSfxTest_id
+    assert_u8_var_eq   Tad_sfxQueue_pan, _queueSfxTest_pan
+
     rts
 .endproc
 
