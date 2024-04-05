@@ -4,17 +4,51 @@
 //
 // SPDX-License-Identifier: MIT
 
-use super::{BinIncludePath, ExportedBinFile, Exporter, MemoryMap, MemoryMapMode, BLANK_SONG_NAME};
+use super::{BinIncludePath, ExportedBinFile, Exporter, MemoryMapMode, BLANK_SONG_NAME};
 
 use crate::data::UniqueNamesProjectFile;
 use crate::driver_constants::TAD_IO_VERSION;
+use crate::errors::ExportError;
 
 use std::fmt::Write;
 
-pub struct Ca65Exporter {}
+pub struct Ca65MemoryMap {
+    mode: MemoryMapMode,
+    segment_prefix: String,
+    first_segment_number: usize,
+}
+
+impl Ca65MemoryMap {
+    fn valid_segment_char(c: char) -> bool {
+        c.is_ascii_alphanumeric() || c == '_' || c == '.'
+    }
+
+    pub fn try_new(mode: MemoryMapMode, first_segment: &str) -> Result<Ca65MemoryMap, ExportError> {
+        if first_segment.contains(|c| !Self::valid_segment_char(c)) {
+            return Err(ExportError::InvalidSegmentName(first_segment.to_owned()));
+        }
+
+        let prefix = first_segment.trim_end_matches(|c: char| c.is_ascii_digit());
+        if prefix.len() == first_segment.len() {
+            return Err(ExportError::NoSegmentNumberSuffix(first_segment.to_owned()));
+        }
+
+        let first_segment_number = first_segment[prefix.len()..].parse().unwrap();
+
+        Ok(Ca65MemoryMap {
+            mode,
+            segment_prefix: prefix.to_owned(),
+            first_segment_number,
+        })
+    }
+}
+
+pub struct Ca65Exporter;
 
 #[rustfmt::skip::macros(writeln)]
 impl Exporter for Ca65Exporter {
+    type MemoryMap = Ca65MemoryMap;
+
     fn generate_include_file(pf: UniqueNamesProjectFile) -> Result<String, std::fmt::Error> {
         let mut out = String::with_capacity(4096);
 
@@ -65,7 +99,7 @@ impl Exporter for Ca65Exporter {
 
     fn generate_asm_file(
         bin_data: &ExportedBinFile,
-        memory_map: &MemoryMap,
+        memory_map: &Ca65MemoryMap,
         bin_include_path: &BinIncludePath,
     ) -> Result<String, std::fmt::Error> {
         let incbin_path = &bin_include_path.0;

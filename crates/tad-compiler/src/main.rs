@@ -15,7 +15,7 @@ use compiler::{
         TextFile, UniqueNamesProjectFile,
     },
     export::{
-        bin_include_path, export_bin_file, Ca65Exporter, ExportedBinFile, Exporter, MemoryMap,
+        bin_include_path, export_bin_file, Ca65Exporter, Ca65MemoryMap, ExportedBinFile, Exporter,
         MemoryMapMode,
     },
     mml::{compile_mml, MmlTickCountTable},
@@ -63,7 +63,7 @@ enum Command {
     Ca65Enums(EnumArgs),
 
     /// Compile the project and output a ca65 assembly file containing LoadSongData and .incbin statements
-    Ca65Export(ExportWithAsmArgs),
+    Ca65Export(Ca65ExportArgs),
 }
 
 #[derive(Args)]
@@ -380,7 +380,7 @@ fn generate_enums_command<E: Exporter>(args: EnumArgs) {
 // ===========================
 
 #[derive(Args)]
-struct ExportWithAsmArgs {
+struct MemoryMapModeArgument {
     #[arg(
         long,
         conflicts_with = "hirom",
@@ -396,16 +396,21 @@ struct ExportWithAsmArgs {
         help = "HIROM mapping"
     )]
     hirom: bool,
+}
 
-    #[arg(
-        long = "segment",
-        short = 's',
-        value_name = "SEGMENT_NAME",
-        requires = "mm_mode",
-        help = "First segment to store the binary data in.\nMust be suffixed with a number (eg, RODATA2, AUDIO_DATA_0)\nIf data does not fit in a single bank, the next segment will be used (ie, RODATA3, AUDIO_DATA_1)"
-    )]
-    first_segment: String,
+impl MemoryMapModeArgument {
+    fn mode(&self) -> MemoryMapMode {
+        match (self.lorom, self.hirom) {
+            (true, false) => MemoryMapMode::LoRom,
+            (false, true) => MemoryMapMode::HiRom,
+            (false, false) => error!("Missing --lorom or --hirom argument"),
+            (true, true) => error!("Cannot use --lorom and --hirom arguments at the same time"),
+        }
+    }
+}
 
+#[derive(Args)]
+struct ExportWithAsmArgs {
     #[arg(
         long,
         short = 'a',
@@ -434,23 +439,7 @@ struct ExportWithAsmArgs {
     project_file: PathBuf,
 }
 
-fn parse_memory_map(args: &ExportWithAsmArgs) -> MemoryMap {
-    let mode = match (args.lorom, args.hirom) {
-        (true, false) => MemoryMapMode::LoRom,
-        (false, true) => MemoryMapMode::HiRom,
-        (false, false) => error!("Missing --lorom or --hirom argument"),
-        (true, true) => error!("Cannot use --lorom and --hirom arguments at the same time"),
-    };
-
-    match MemoryMap::try_new(mode, &args.first_segment) {
-        Ok(mm) => mm,
-        Err(e) => error!("Invalid memory map: {}", e),
-    }
-}
-
-fn export_with_asm_command<E: Exporter>(args: ExportWithAsmArgs) {
-    let memory_map = parse_memory_map(&args);
-
+fn export_with_asm_command<E: Exporter>(memory_map: &E::MemoryMap, args: ExportWithAsmArgs) {
     let relative_bin_path = match bin_include_path(&args.output_asm, &args.output_bin) {
         Ok(p) => p,
         Err(e) => error!("Error:  {}", e),
@@ -458,7 +447,7 @@ fn export_with_asm_command<E: Exporter>(args: ExportWithAsmArgs) {
 
     let (pf, bin_file) = load_and_export_project(&args);
 
-    let asm_file = match E::generate_asm_file(&bin_file, &memory_map, &relative_bin_path) {
+    let asm_file = match E::generate_asm_file(&bin_file, memory_map, &relative_bin_path) {
         Ok(o) => o,
         Err(e) => error!("Error creating assembly file: {}", e),
     };
@@ -574,6 +563,35 @@ fn compile_project(pf: &UniqueNamesProjectFile) -> (CommonAudioData, Vec<SongDat
 }
 
 //
+// ca65-export
+// ===========
+
+#[derive(Args)]
+struct Ca65ExportArgs {
+    #[command(flatten)]
+    base: ExportWithAsmArgs,
+
+    #[command(flatten)]
+    memory_map: MemoryMapModeArgument,
+
+    #[arg(
+        long = "segment",
+        short = 's',
+        value_name = "SEGMENT_NAME",
+        requires = "mm_mode",
+        help = "First segment to store the binary data in.\nMust be suffixed with a number (eg, RODATA2, AUDIO_DATA_0)\nIf data does not fit in a single bank, the next segment will be used (ie, RODATA3, AUDIO_DATA_1)"
+    )]
+    first_segment: String,
+}
+
+fn parse_ca65_memory_map(args: &Ca65ExportArgs) -> Ca65MemoryMap {
+    match Ca65MemoryMap::try_new(args.memory_map.mode(), &args.first_segment) {
+        Ok(mm) => mm,
+        Err(e) => error!("Invalid memory map: {}", e),
+    }
+}
+
+//
 // Main
 // ====
 
@@ -586,7 +604,9 @@ fn main() {
         Command::Song2spc(args) => export_song_to_spc_file(args),
         Command::Check(args) => check_project_command(args),
         Command::Ca65Enums(args) => generate_enums_command::<Ca65Exporter>(args),
-        Command::Ca65Export(args) => export_with_asm_command::<Ca65Exporter>(args),
+        Command::Ca65Export(args) => {
+            export_with_asm_command::<Ca65Exporter>(&parse_ca65_memory_map(&args), args.base)
+        }
     }
 }
 

@@ -5,7 +5,7 @@
 // SPDX-License-Identifier: MIT
 
 mod ca65;
-pub use self::ca65::Ca65Exporter;
+pub use self::ca65::{Ca65Exporter, Ca65MemoryMap};
 
 use crate::audio_driver;
 use crate::common_audio_data::CommonAudioData;
@@ -49,38 +49,6 @@ impl MemoryMapMode {
             Self::LoRom => "LoRom",
             Self::HiRom => "HiRom",
         }
-    }
-}
-
-pub struct MemoryMap {
-    pub(crate) mode: MemoryMapMode,
-    pub(crate) segment_prefix: String,
-    pub(crate) first_segment_number: usize,
-}
-
-impl MemoryMap {
-    fn valid_segment_char(c: char) -> bool {
-        // PVSnesLib examples contains sections starting with a dot
-        c.is_ascii_alphanumeric() || c == '_' || c == '.'
-    }
-
-    pub fn try_new(mode: MemoryMapMode, first_segment: &str) -> Result<MemoryMap, ExportError> {
-        if first_segment.contains(|c| !Self::valid_segment_char(c)) {
-            return Err(ExportError::InvalidSegmentName(first_segment.to_owned()));
-        }
-
-        let prefix = first_segment.trim_end_matches(|c: char| c.is_ascii_digit());
-        if prefix.len() == first_segment.len() {
-            return Err(ExportError::NoSegmentNumberSuffix(first_segment.to_owned()));
-        }
-
-        let first_segment_number = first_segment[prefix.len()..].parse().unwrap();
-
-        Ok(MemoryMap {
-            mode,
-            segment_prefix: prefix.to_owned(),
-            first_segment_number,
-        })
     }
 }
 
@@ -211,11 +179,13 @@ pub fn bin_include_path(
 }
 
 pub trait Exporter {
+    type MemoryMap;
+
     fn generate_include_file(pf: UniqueNamesProjectFile) -> Result<String, std::fmt::Error>;
 
     fn generate_asm_file(
         bin_data: &ExportedBinFile,
-        memory_map: &MemoryMap,
+        memory_map: &Self::MemoryMap,
         bin_include_path: &BinIncludePath,
     ) -> Result<String, std::fmt::Error>;
 }
