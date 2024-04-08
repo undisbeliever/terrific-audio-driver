@@ -40,7 +40,7 @@ extern const commonDataHeader @ COMMON_DATA_ADDR : CommonDataHeader;
 let COMMON_DATA_HEADER_END_ADDR = COMMON_DATA_ADDR + sizeof(CommonDataHeader);
 
 
-// Must wait a minimum of 240ms after setting `EDL` and `EDA` before reading/writing the echo buffer.
+// Must wait a minimum of 240ms after setting `EDL` and `ESA` before reading/writing the echo buffer.
 //
 // Added a little extra to be safe.
 let EDL_SLEEP_MS = 250;
@@ -358,8 +358,8 @@ func main() {
         smp.dsp_addr $ 4 = false;
         smp.dsp_data = a;
 
-        // Save EDA for later.
-        push(x);
+        // Save S-DSP ESA for later.
+        push(a);
 
 
         // `EDL` does not take affect immediately.
@@ -411,7 +411,7 @@ func main() {
         smp.dsp_data = a;
     }
 
-    // A copy of `EDA` is on the stack.
+    // A copy of S-DSP `ESA` is on the stack.
 
 
     y = 0;
@@ -534,7 +534,7 @@ func main() {
     } while !negative;
 
 
-    // Pop EDA from the stack
+    // Pop ESA from the stack
     x = pop();
 
 
@@ -546,7 +546,7 @@ func main() {
     carry = loaderDataType $ LoaderDataType.SKIP_ECHO_BUFFER_RESET_BIT;
     if !carry {
         // Clear the echo buffer
-        // X = EDA
+        // X = S-DSP ESA
         __clear_echo_buffer__inline(x);
 
 
@@ -595,12 +595,12 @@ func main() {
 // Clears the echo buffer.
 //
 // ASSUMES: IPL is disabled
-// ASSUMES: X matches the `EDA` S-DSP register
+// ASSUMES: X matches the `ESA` S-DSP register
 //
-// WARNING: Can clobber the entirely of Audio-RAM if `eda` is invalid.
+// WARNING: Can clobber the entirely of Audio-RAM if `esa` is invalid.
 //
 // WARNING: self modifying code
-inline func __clear_echo_buffer__inline(eda : u8 in x) {
+inline func __clear_echo_buffer__inline(esa : u8 in x) {
     // X = page address of the start of the echo buffer
     // Echo buffer ends at the end of memory.
 

@@ -12,6 +12,9 @@ MML Changes:
    set instrument/ADSR/gain instruction after a `L` set loop point MML command.
  * Forbid the `L` set loop point MML command inside a `[ ]` MML loop.
 
+Audio Driver Changes:
+ * Fixed audio driver not clearing the echo buffer.
+
 
 Version 0.0.7
 =============
