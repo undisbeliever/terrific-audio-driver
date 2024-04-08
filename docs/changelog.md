@@ -3,6 +3,7 @@ Terrific Audio Driver Changelog
 
 Version 0.0.8
 =============
+ * Added PVSnesLib integration code
  * Added `tad-compiler pv-export` command
  * Added `tad-compiler pv-enums` command
  * Added include sound effects argument to `tad-compiler song2spc` (`-s` or `--sound-effects`)

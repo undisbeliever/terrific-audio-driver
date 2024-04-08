@@ -3,6 +3,11 @@
 *.dbg
 *.sfc
 *-map.txt
+*.obj
+
+*.pic
+*.pal
+linkfile
 
 /*.sh
 /*.py
