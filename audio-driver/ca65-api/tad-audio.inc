@@ -106,8 +106,8 @@ MIN_TICK_CLOCK = 64
 ; MUST match `audio-driver/src/io-commands.wiz`
 .enum TadCommand
     ;; Stop song and sound effect execution.
-    ;; * Commands will still be executed when the audio-driver is paused
-    ;; * The audio driver starts paused unless the `LoaderDataType.PLAY_SONG_BIT` is set.
+    ;; * Commands will still be executed when the audio-driver is paused.
+    ;; * The audio driver starts paused unless the `PlaySongImmediately` flag is set.
     PAUSE = 0
 
     ;; Unpauses the audio driver.
@@ -187,11 +187,11 @@ MIN_TICK_CLOCK = 64
 ;;
 ;; This function will do one of the following, depending on the state:
 ;;  * Transfer data to the Audio-RAM
-;;  * Wait for the loader and call `load_song_data()` when the loader is ready to receive new data
+;;  * Wait for the loader and call the `LoadAudioData` callback when the loader is ready to receive new data
 ;;  * Send a command to the audio driver
 ;;  * Send a play-sound effect command to the audio driver
 ;;
-;; NOTES: The command and sound-effect queues will be reset after a new song is loaded into Audio-RAM.
+;; NOTE: The command and sound-effect queues will be reset after a new song is loaded into Audio-RAM.
 ;;
 ;; TIMING:
 ;;  * MUST be called after `Tad_Init`.
@@ -289,7 +289,7 @@ MIN_TICK_CLOCK = 64
 ;;
 ;; CAUTION: The audio driver starts in the paused state if the `PlaySongImmediately` flag is false.
 ;;
-;; CAUTION: `Tad_LoadSong` will switch the state to `WAITING_FOR_LOADER`.  `LoadSongData` will
+;; CAUTION: `Tad_LoadSong` will switch the state to `WAITING_FOR_LOADER`.  `LoadAudioData` will
 ;; not be called until `Tad_Process` is called **and** the audio-driver has switched to the loader.
 ;; While the state remains `WAITING_FOR_LOADER`, no audio data will be transferred and calling
 ;; `Tad_FinishLoadingData` will not transfer any audio data.
