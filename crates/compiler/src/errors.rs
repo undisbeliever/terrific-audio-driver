@@ -491,6 +491,7 @@ pub enum ExportSpcFileError {
 pub enum ExportError {
     InvalidSegmentName(String),
     NoSegmentNumberSuffix(String),
+    PvSnesLibInvalidFirstBank,
     BinPathNotUtf8,
     BinPathContainsQuotes,
     BinPathRelativeToError(RelativeToError),
@@ -1206,6 +1207,11 @@ impl Display for ExportError {
             Self::NoSegmentNumberSuffix(name) => {
                 write!(f, "segment name must end with a number: {}", name)
             }
+            Self::PvSnesLibInvalidFirstBank => write!(
+                f,
+                "the first BANK to store the audio data in must be >= {}",
+                export::pvsneslib::FIRST_VALID_BANK
+            ),
             Self::BinPathNotUtf8 => write!(f, "invalid binary path: not a valid utf-8 string"),
             Self::BinPathContainsQuotes => {
                 write!(f, "invalid binary path, it cannot contain \" or \'.")

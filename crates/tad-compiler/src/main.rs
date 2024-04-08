@@ -16,7 +16,7 @@ use compiler::{
     },
     export::{
         bin_include_path, export_bin_file, Ca65Exporter, Ca65MemoryMap, ExportedBinFile, Exporter,
-        MemoryMapMode,
+        MemoryMapMode, PvExporter, PvMemoryMap,
     },
     mml::{compile_mml, MmlTickCountTable},
     pitch_table::{build_pitch_table, PitchTable},
@@ -64,6 +64,12 @@ enum Command {
 
     /// Compile the project and output a ca65 assembly file containing LoadSongData and .incbin statements
     Ca65Export(Ca65ExportArgs),
+
+    /// Generate an PVSnesLib include file containing songs and sound effect enums
+    PvEnums(EnumArgs),
+
+    /// Compile the project and output a PVSnesLib assembly file containing loadSongData() and .incbin statements
+    PvExport(PvExportArgs),
 }
 
 #[derive(Args)]
@@ -592,6 +598,36 @@ fn parse_ca65_memory_map(args: &Ca65ExportArgs) -> Ca65MemoryMap {
 }
 
 //
+// pv-export
+// =========
+
+#[derive(Args)]
+struct PvExportArgs {
+    #[command(flatten)]
+    base: ExportWithAsmArgs,
+
+    #[command(flatten)]
+    memory_map: MemoryMapModeArgument,
+
+    #[arg(
+        long = "bank",
+        short = 'b',
+        value_name = "BANK",
+        requires = "mm_mode",
+        default_value = "2",
+        help = "The first wla-dx bank to store the binary data in.  Cannot be 1 or 0."
+    )]
+    first_bank: u8,
+}
+
+fn parse_pv_memory_map(args: &PvExportArgs) -> PvMemoryMap {
+    match PvMemoryMap::try_new(args.memory_map.mode(), args.first_bank) {
+        Ok(mm) => mm,
+        Err(e) => error!("Invalid memory map: {}", e),
+    }
+}
+
+//
 // Main
 // ====
 
@@ -606,6 +642,10 @@ fn main() {
         Command::Ca65Enums(args) => generate_enums_command::<Ca65Exporter>(args),
         Command::Ca65Export(args) => {
             export_with_asm_command::<Ca65Exporter>(&parse_ca65_memory_map(&args), args.base)
+        }
+        Command::PvEnums(args) => generate_enums_command::<PvExporter>(args),
+        Command::PvExport(args) => {
+            export_with_asm_command::<PvExporter>(&parse_pv_memory_map(&args), args.base)
         }
     }
 }

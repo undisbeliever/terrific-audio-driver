@@ -4,8 +4,11 @@
 //
 // SPDX-License-Identifier: MIT
 
-mod ca65;
+pub mod ca65;
+pub mod pvsneslib;
+
 pub use self::ca65::{Ca65Exporter, Ca65MemoryMap};
+pub use self::pvsneslib::{PvExporter, PvMemoryMap};
 
 use crate::audio_driver;
 use crate::common_audio_data::CommonAudioData;
@@ -23,7 +26,7 @@ use relative_path::{PathExt, RelativePathBuf};
 pub const MAX_BIN_FILE: usize = 4 * 1024 * 1024;
 pub const BLANK_SONG_NAME: &str = "BLANK";
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq)]
 pub enum MemoryMapMode {
     LoRom,
     HiRom,
