@@ -17,7 +17,7 @@ MODULES    := reset break-isr main dma-forceblank text-buffer tad-audio audio-da
 
 GEN_FILES  := gen/audio.inc gen/audio-data.s gen/audio-data.bin
 
-DEPS       := $(wildcard src/*.inc) ../../tad-audio.inc gen/audio.inc
+DEPS       := $(wildcard src/*.inc) ../../tad-audio.inc ../../tad-audio.s gen/audio.inc
 
 
 # Location of the tad-compiler binary
