@@ -417,6 +417,17 @@ TAD_Flags__LOADER_MASK = TAD_Flags__STEREO | TAD_Flags__PLAY_SONG_IMMEDIATELY
     __PopReturn_noX_noY
 .endm
 
+;; Convert a u16 to a PVSnesLib return value, restore the stack and return the u16 value.
+;;
+;; MUST ONLY be used on functions that invoke `__Push__A8_noX_noY` or `__Push__A16_noX_noY`.
+;; MUST ONLY be called when .accu size is 16
+;; MUST ONLY be invoked once per function
+.macro __PopReturn_A16_noX_noY__u16_in_a
+    sta.b   tcc__r0
+
+    __PopReturn_noX_noY
+.endm
+
 ;; Convert the carry flag to a PVSnesLib bool, restore the stack and return the bool value.
 ;;
 ;; MUST ONLY be used on functions that invoke `__Push__A8_noX_noY` or `__Push__A16_noX_noY`.
@@ -1388,6 +1399,21 @@ tad_loadSongIfChanged:
     ++
 
     __PopReturn_A8_noX_noY__u8_in_a
+.ends
+
+
+
+.section "tad_getSong" SUPERFREE
+
+; u8 tad_getSong(void)
+tad_getSong:
+    __Push__A16_noX_noY
+.accu 16
+
+    lda.l   tad_nextSong__
+    and     #$00ff
+
+    __PopReturn_A16_noX_noY__u16_in_a
 .ends
 
 

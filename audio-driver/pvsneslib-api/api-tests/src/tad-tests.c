@@ -201,6 +201,17 @@ void test_loadSongIfChanged(void) {
     ASSERT_EQ(tad_isSongPlaying(), true);
 }
 
+void test_getSong(void) {
+    tad_loadSong(0x22);
+    ASSERT_EQ(tad_getSong(), 0x22);
+
+    tad_loadSongIfChanged(0x44);
+    ASSERT_EQ(tad_getSong(), 0x44);
+
+    finishLoading();
+    ASSERT_EQ(tad_getSong(), 0x44);
+}
+
 void test_queueCommand(void) {
     bool r;
 
@@ -495,6 +506,7 @@ static const VoidFn TAD_TESTS[] = {
     test_loadSongWhileLoaderActive,
     test_loadSongWhileLoadingCommonAudioData,
     test_loadSongIfChanged,
+    test_getSong,
     test_queueCommand,
     test_queueCommandOverride,
     test_queuePannedSoundEffect,

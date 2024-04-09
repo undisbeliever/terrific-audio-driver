@@ -318,6 +318,16 @@ MIN_TICK_CLOCK = 64
 .import Tad_LoadSongIfChanged
 
 
+;; Returns the current song id in the A register.
+;;
+;; OUT: A = The song_id used in the last `Tad_LoadSong` call.
+;;
+;; A8
+;; I unknown
+;; DB access lowram
+.import Tad_GetSong
+
+
 ;; If this subroutine is called, the *common audio data* will be reloaded into Audio-RAM.
 ;; This will not take effect until the next song is loaded into Audio-RAM.
 ;;

@@ -36,7 +36,7 @@
 .export Tad_Init : far, Tad_Process : far, Tad_FinishLoadingData : far
 .export Tad_QueueCommand, Tad_QueueCommandOverride
 .export Tad_QueuePannedSoundEffect, Tad_QueueSoundEffect
-.export Tad_LoadSong, Tad_LoadSongIfChanged, Tad_ReloadCommonAudioData
+.export Tad_LoadSong, Tad_LoadSongIfChanged, Tad_GetSong, Tad_ReloadCommonAudioData
 .export Tad_SetMono, Tad_SetStereo, Tad_GetStereoFlag
 .export Tad_SongsStartImmediately, Tad_SongsStartPaused, Tad_SetTransferSize
 .export Tad_IsLoaderActive, Tad_IsSongLoaded, Tad_IsSongPlaying
@@ -1315,6 +1315,17 @@ Tad_QueueCommandOverride := Tad_QueueCommand::WriteCommand
         rts
     :
     clc
+    rts
+.endproc
+
+
+;; OUT: A = The song_id used in the last `Tad_LoadSong` call.
+.a8
+; I unknown
+; DB access lowram
+.proc Tad_GetSong
+    ; `Tad_nextSong` is only written to in `Tad_Init` and `Tad_LoadSong`.
+    lda     Tad_nextSong
     rts
 .endproc
 

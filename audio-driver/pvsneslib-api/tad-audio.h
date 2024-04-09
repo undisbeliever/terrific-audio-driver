@@ -384,6 +384,14 @@ bool tad_loadSongIfChanged(u8 song_id);
 
 
 /*!
+ * Returns the current song id.
+ *
+ * @return the song_id used in the last tad_loadSong() call.
+ */
+u8 tad_getSong();
+
+
+/*!
  * @name Flags and setting functions
  *
  * @{

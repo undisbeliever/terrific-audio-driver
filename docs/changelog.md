@@ -18,6 +18,7 @@ Audio Driver Changes:
 
 ca65 API Changes:
  * Added `Tad_LoadSongIfChanged` subroutine
+ * Added `Tad_GetSong` subroutine
 
 
 Version 0.0.7

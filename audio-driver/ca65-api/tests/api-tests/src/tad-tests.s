@@ -120,6 +120,7 @@ TestTable:
     .addr   TestLoadSongWhileLoaderActive
     .addr   TestLoadSongWhileLoadingCommonAudioData
     .addr   TestLoadSongIfChanged
+    .addr   TestGetSong
     .addr   TestQueueCommand
     .addr   TestQueueCommandOverride
     .addr   TestQueuePannedSoundEffect
@@ -380,6 +381,28 @@ TestTable_SIZE = * - TestTable
     assert_carry    Tad_IsLoaderActive, false
     assert_carry    Tad_IsSongLoaded, true
     assert_carry    Tad_IsSongPlaying, true
+
+    rts
+.endproc
+
+
+.a8
+.i16
+;; DB access lowram
+.proc TestGetSong
+    lda     #$22
+    jsr     Tad_LoadSong
+
+    jsr     Tad_GetSong
+    assert_a_eq($22)
+
+    lda     #$44
+    jsr     Tad_LoadSongIfChanged
+
+    jsr     _FinishLoading
+
+    jsr     Tad_GetSong
+    assert_a_eq($44)
 
     rts
 .endproc
