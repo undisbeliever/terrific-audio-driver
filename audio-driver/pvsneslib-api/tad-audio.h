@@ -373,6 +373,17 @@ void tad_loadSong(u8 song_id);
 
 
 /*!
+ * Calls tad_loadSong() if `song_id` != the `song_id` used in the last tad_loadSong() call.
+ *
+ * @param song_id the song id to play (0 = silence, first song starts at 1)
+ * @return true if the song_id changed and tad_loadSong() was called.
+ *
+ * @see tad_loadSong() for details about how songs are loaded into the audio driver.
+ */
+bool tad_loadSongIfChanged(u8 song_id);
+
+
+/*!
  * @name Flags and setting functions
  *
  * @{

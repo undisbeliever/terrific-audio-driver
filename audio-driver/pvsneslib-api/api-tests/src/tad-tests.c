@@ -153,6 +153,54 @@ void test_loadSongWhileLoadingCommonAudioData(void) {
     ASSERT_EQ(tad_isLoaderActive(), true)
 }
 
+void test_loadSongIfChanged(void) {
+    bool r;
+
+    // Test harness loads song 0 before starting this test
+    ASSERT_EQ(tad_isSongLoaded(), true);
+
+    r = tad_loadSongIfChanged(0);
+    ASSERT_EQ(r, false);
+
+    // song_id has not changed, song is still playing
+    ASSERT_EQ(tad_isSongLoaded(), true);
+    ASSERT_EQ(tad_isSongPlaying(), true);
+
+
+    // Using song_id $22 as it is invalid and not 0.
+    // (A blank song will be loaded, but the last song_id will be $22)
+    r = tad_loadSongIfChanged(0x22);
+    ASSERT_EQ(r, true);
+
+    // song_id changed, Song has stopped
+    ASSERT_EQ(tad_isSongPlaying(), false);
+    ASSERT_EQ(tad_isSongLoaded(), false);
+
+    // TAD is waiting for the drive to switch to the loader
+    ASSERT_EQ(tad_isLoaderActive(), false);
+
+
+    // Testing if `tad_loadSongIfChanged()` while a song is loading
+    r = tad_loadSongIfChanged(0x22);
+    ASSERT_EQ(r, false);
+
+    r = tad_loadSongIfChanged(0x44);
+    ASSERT_EQ(r, true);
+
+
+    finishLoading();
+    ASSERT_EQ(tad_isSongPlaying(), true);
+
+
+    r = tad_loadSongIfChanged(0x44);
+    ASSERT_EQ(r, false);
+
+    // song_id has not changed, song is still playing
+    ASSERT_EQ(tad_isLoaderActive(), false);
+    ASSERT_EQ(tad_isSongLoaded(), true);
+    ASSERT_EQ(tad_isSongPlaying(), true);
+}
+
 void test_queueCommand(void) {
     bool r;
 
@@ -446,6 +494,7 @@ static const VoidFn TAD_TESTS[] = {
     test_loadSong,
     test_loadSongWhileLoaderActive,
     test_loadSongWhileLoadingCommonAudioData,
+    test_loadSongIfChanged,
     test_queueCommand,
     test_queueCommandOverride,
     test_queuePannedSoundEffect,

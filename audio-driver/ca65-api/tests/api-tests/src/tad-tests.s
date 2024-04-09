@@ -119,6 +119,7 @@ TestTable:
     .addr   TestLoadSong
     .addr   TestLoadSongWhileLoaderActive
     .addr   TestLoadSongWhileLoadingCommonAudioData
+    .addr   TestLoadSongIfChanged
     .addr   TestQueueCommand
     .addr   TestQueueCommandOverride
     .addr   TestQueuePannedSoundEffect
@@ -327,6 +328,58 @@ TestTable_SIZE = * - TestTable
 
     ; Test `Tad_LoadSong` did not switch to `WAITING_FOR_LOADER` state
     assert_carry  Tad_IsLoaderActive, true
+
+    rts
+.endproc
+
+
+.a8
+.i16
+;; DB access lowram
+.proc TestLoadSongIfChanged
+    ; Test harness loads song 0 before starting this test
+    assert_carry    Tad_IsSongPlaying, true
+
+    lda     #0
+    assert_carry    Tad_LoadSongIfChanged, false
+
+    ; song_id has not changed, song is still playing
+    assert_carry    Tad_IsSongLoaded, true
+    assert_carry    Tad_IsSongPlaying, true
+
+
+    ; Using song_id $22 as it is invalid and not 0.
+    ; (A blank song will be loaded, but the last song_id will be $22)
+    lda     #$22
+    assert_carry    Tad_LoadSongIfChanged, true
+
+    ; song_id changed, Song has stopped
+    assert_carry    Tad_IsSongPlaying, false
+    assert_carry    Tad_IsSongLoaded, false
+
+    ; TAD is waiting for the drive to switch to the loader
+    assert_carry    Tad_IsLoaderActive, false
+
+
+    ; Testing if `Tad_LoadSongIfChanged` while a song is loading
+    lda     #$22
+    assert_carry    Tad_LoadSongIfChanged, false
+
+    lda     #$44
+    assert_carry    Tad_LoadSongIfChanged, true
+
+
+    jsr     _FinishLoading
+    assert_carry    Tad_IsSongPlaying, true
+
+
+    lda     #$44
+    assert_carry    Tad_LoadSongIfChanged, false
+
+    ; song_id has not changed, song is still playing
+    assert_carry    Tad_IsLoaderActive, false
+    assert_carry    Tad_IsSongLoaded, true
+    assert_carry    Tad_IsSongPlaying, true
 
     rts
 .endproc

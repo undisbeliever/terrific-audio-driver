@@ -303,6 +303,21 @@ MIN_TICK_CLOCK = 64
 .import Tad_LoadSong
 
 
+;; Calls `Tad_LoadSong` if `A` != the song_id used in the last `Tad_LoadSong` call.
+;;
+;; See `Tad_LoadSong` for details about how songs are loaded into the audio driver.
+;;
+;; IN: A = 0 - play a blank (silent song)
+;; IN: A >= 1 - Play song number `A`
+;;
+;; OUT: Carry set if the song_id changed and `Tad_LoadSong` was called.
+;;
+;; A8
+;; I unknown
+;; DB access lowram
+.import Tad_LoadSongIfChanged
+
+
 ;; If this subroutine is called, the *common audio data* will be reloaded into Audio-RAM.
 ;; This will not take effect until the next song is loaded into Audio-RAM.
 ;;

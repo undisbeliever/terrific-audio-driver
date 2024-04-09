@@ -16,6 +16,9 @@ MML Changes:
 Audio Driver Changes:
  * Fixed audio driver not clearing the echo buffer.
 
+ca65 API Changes:
+ * Added `Tad_LoadSongIfChanged` subroutine
+
 
 Version 0.0.7
 =============

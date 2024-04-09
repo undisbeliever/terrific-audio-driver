@@ -36,7 +36,7 @@
 .export Tad_Init : far, Tad_Process : far, Tad_FinishLoadingData : far
 .export Tad_QueueCommand, Tad_QueueCommandOverride
 .export Tad_QueuePannedSoundEffect, Tad_QueueSoundEffect
-.export Tad_LoadSong, Tad_ReloadCommonAudioData
+.export Tad_LoadSong, Tad_LoadSongIfChanged, Tad_ReloadCommonAudioData
 .export Tad_SetMono, Tad_SetStereo, Tad_GetStereoFlag
 .export Tad_SongsStartImmediately, Tad_SongsStartPaused, Tad_SetTransferSize
 .export Tad_IsLoaderActive, Tad_IsSongLoaded, Tad_IsSongPlaying
@@ -1298,6 +1298,23 @@ Tad_QueueCommandOverride := Tad_QueueCommand::WriteCommand
         lda     #State::WAITING_FOR_LOADER
         sta     Tad_state
     :
+    rts
+.endproc
+
+
+; IN: A = song_id
+; OUT: carry set if `Tad_LoadSong` was called
+.a8
+; I unknown
+; DB access lowram
+.proc Tad_LoadSongIfChanged
+    cmp     Tad_nextSong
+    beq     :+
+        jsr     Tad_LoadSong
+        sec
+        rts
+    :
+    clc
     rts
 .endproc
 
