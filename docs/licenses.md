@@ -107,7 +107,7 @@ Licenses marked "synthesized" did not have a license file in their crate.
 
 
 Terrific Audio Driver makes use of the following open source projects:
-  * MIT License (82)
+  * MIT License (83)
   * Apache License 2.0 (2)
   * Unicode License Agreement - Data Files and Software (2016) (1)
   * FLTK License (1)
@@ -389,14 +389,15 @@ limitations under the License.
 
 Used by:
   * [windows-sys 0.52.0](https://github.com/microsoft/windows-rs)
-  * [windows-targets 0.52.4](https://github.com/microsoft/windows-rs)
-  * [windows_aarch64_gnullvm 0.52.4](https://github.com/microsoft/windows-rs)
-  * [windows_aarch64_msvc 0.52.4](https://github.com/microsoft/windows-rs)
-  * [windows_i686_gnu 0.52.4](https://github.com/microsoft/windows-rs)
-  * [windows_i686_msvc 0.52.4](https://github.com/microsoft/windows-rs)
-  * [windows_x86_64_gnu 0.52.4](https://github.com/microsoft/windows-rs)
-  * [windows_x86_64_gnullvm 0.52.4](https://github.com/microsoft/windows-rs)
-  * [windows_x86_64_msvc 0.52.4](https://github.com/microsoft/windows-rs)
+  * [windows-targets 0.52.5](https://github.com/microsoft/windows-rs)
+  * [windows_aarch64_gnullvm 0.52.5](https://github.com/microsoft/windows-rs)
+  * [windows_aarch64_msvc 0.52.5](https://github.com/microsoft/windows-rs)
+  * [windows_i686_gnu 0.52.5](https://github.com/microsoft/windows-rs)
+  * [windows_i686_gnullvm 0.52.5](https://github.com/microsoft/windows-rs)
+  * [windows_i686_msvc 0.52.5](https://github.com/microsoft/windows-rs)
+  * [windows_x86_64_gnu 0.52.5](https://github.com/microsoft/windows-rs)
+  * [windows_x86_64_gnullvm 0.52.5](https://github.com/microsoft/windows-rs)
+  * [windows_x86_64_msvc 0.52.5](https://github.com/microsoft/windows-rs)
 
 ```
     MIT License
@@ -509,7 +510,7 @@ DEALINGS IN THE SOFTWARE.
 ## MIT License
 
 Used by:
-  * [cc 1.0.90](https://github.com/rust-lang/cc-rs)
+  * [cc 1.0.94](https://github.com/rust-lang/cc-rs)
   * [cfg-if 1.0.0](https://github.com/alexcrichton/cfg-if)
   * [cmake 0.1.50](https://github.com/rust-lang/cmake-rs)
 
@@ -547,12 +548,12 @@ DEALINGS IN THE SOFTWARE.
 
 Used by:
   * [bitflags 1.3.2](https://github.com/bitflags/bitflags)
-  * [bitflags 2.4.2](https://github.com/bitflags/bitflags)
+  * [bitflags 2.5.0](https://github.com/bitflags/bitflags)
   * [num-complex 0.4.5](https://github.com/rust-num/num-complex)
   * [num-traits 0.2.18](https://github.com/rust-num/num-traits)
-  * [regex 1.10.3](https://github.com/rust-lang/regex)
   * [regex-automata 0.4.6](https://github.com/rust-lang/regex/tree/master/regex-automata)
-  * [regex-syntax 0.8.2](https://github.com/rust-lang/regex/tree/master/regex-syntax)
+  * [regex-syntax 0.8.3](https://github.com/rust-lang/regex/tree/master/regex-syntax)
+  * [regex 1.10.4](https://github.com/rust-lang/regex)
 
 ```
 Copyright (c) 2014 The Rust Project Developers
@@ -680,7 +681,7 @@ SOFTWARE.
 ## MIT License
 
 Used by:
-  * [heck 0.4.1](https://github.com/withoutboats/heck)
+  * [heck 0.5.0](https://github.com/withoutboats/heck)
   * [unicode-id 0.3.4](https://github.com/Boshen/unicode-id)
   * [unicode-width 0.1.11](https://github.com/unicode-rs/unicode-width)
 
@@ -881,7 +882,7 @@ DEALINGS IN THE SOFTWARE.
 ## MIT License
 
 Used by:
-  * [autocfg 1.1.0](https://github.com/cuviper/autocfg)
+  * [autocfg 1.2.0](https://github.com/cuviper/autocfg)
 
 ```
 Copyright (c) 2018 Josh Stone
@@ -977,7 +978,7 @@ SOFTWARE.
 Used by:
   * [anstream 0.6.13](https://github.com/rust-cli/anstyle.git)
   * [anstyle-query 1.0.2](https://github.com/rust-cli/anstyle)
-  * [clap 4.5.2](https://github.com/clap-rs/clap)
+  * [clap 4.5.4](https://github.com/clap-rs/clap)
   * [colorchoice 1.0.0](https://github.com/rust-cli/anstyle)
 
 ```
@@ -1031,6 +1032,37 @@ Used by:
 MIT License
 
 Copyright (c) 2017 Nikolai Vazquez
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+```
+
+
+## MIT License
+
+Used by:
+  * [fltk-sys 1.4.28](https://github.com/fltk-rs/fltk-rs)
+
+```
+MIT License
+
+Copyright (c) 2019 Mohammed Alyousef
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -1142,8 +1174,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 ## MIT License
 
 Used by:
-  * [fltk 1.4.26](https://github.com/fltk-rs/fltk-rs)
-  * [fltk-sys 1.4.26](https://github.com/fltk-rs/fltk-rs)
+  * [fltk 1.4.28](https://github.com/fltk-rs/fltk-rs)
 
 ```
 MIT License
@@ -1174,21 +1205,21 @@ SOFTWARE.
 ## MIT License
 
 Used by:
-  * [cxx 1.0.119](https://github.com/dtolnay/cxx)
-  * [cxx-build 1.0.119](https://github.com/dtolnay/cxx)
-  * [cxxbridge-flags 1.0.119](https://github.com/dtolnay/cxx)
-  * [cxxbridge-macro 1.0.119](https://github.com/dtolnay/cxx)
-  * [itoa 1.0.10](https://github.com/dtolnay/itoa)
+  * [cxx-build 1.0.121](https://github.com/dtolnay/cxx)
+  * [cxx 1.0.121](https://github.com/dtolnay/cxx)
+  * [cxxbridge-flags 1.0.121](https://github.com/dtolnay/cxx)
+  * [cxxbridge-macro 1.0.121](https://github.com/dtolnay/cxx)
+  * [itoa 1.0.11](https://github.com/dtolnay/itoa)
   * [link-cplusplus 1.0.9](https://github.com/dtolnay/link-cplusplus)
   * [once_cell 1.19.0](https://github.com/matklad/once_cell)
   * [paste 1.0.14](https://github.com/dtolnay/paste)
-  * [proc-macro2 1.0.79](https://github.com/dtolnay/proc-macro2)
-  * [quote 1.0.35](https://github.com/dtolnay/quote)
+  * [proc-macro2 1.0.81](https://github.com/dtolnay/proc-macro2)
+  * [quote 1.0.36](https://github.com/dtolnay/quote)
   * [scratch 1.0.7](https://github.com/dtolnay/scratch)
-  * [serde 1.0.197](https://github.com/serde-rs/serde)
-  * [serde_derive 1.0.197](https://github.com/serde-rs/serde)
-  * [serde_json 1.0.114](https://github.com/serde-rs/json)
-  * [syn 2.0.52](https://github.com/dtolnay/syn)
+  * [serde 1.0.198](https://github.com/serde-rs/serde)
+  * [serde_derive 1.0.198](https://github.com/serde-rs/serde)
+  * [serde_json 1.0.116](https://github.com/serde-rs/json)
+  * [syn 2.0.60](https://github.com/dtolnay/syn)
   * [unicode-ident 1.0.12](https://github.com/dtolnay/unicode-ident)
 
 ```
@@ -1252,8 +1283,8 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ## MIT License
 
 Used by:
-  * [aho-corasick 1.1.2](https://github.com/BurntSushi/aho-corasick)
-  * [memchr 2.7.1](https://github.com/BurntSushi/memchr)
+  * [aho-corasick 1.1.3](https://github.com/BurntSushi/aho-corasick)
+  * [memchr 2.7.2](https://github.com/BurntSushi/memchr)
   * [termcolor 1.4.1](https://github.com/BurntSushi/termcolor)
 
 ```
@@ -1285,7 +1316,7 @@ THE SOFTWARE.
 ## MIT License
 
 Used by:
-  * [strsim 0.11.0](https://github.com/rapidfuzz/strsim-rs)
+  * [strsim 0.11.1](https://github.com/rapidfuzz/strsim-rs)
 
 ```
 The MIT License (MIT)
@@ -1319,7 +1350,7 @@ SOFTWARE.
 
 Used by:
   * [clap_builder 4.5.2](https://github.com/clap-rs/clap)
-  * [clap_derive 4.5.0](https://github.com/clap-rs/clap/tree/master/clap_derive)
+  * [clap_derive 4.5.4](https://github.com/clap-rs/clap/tree/master/clap_derive)
   * [clap_lex 0.7.0](https://github.com/clap-rs/clap/tree/master/clap_lex)
 
 ```
@@ -1420,8 +1451,8 @@ DEALINGS IN THE SOFTWARE.
 ## MIT License
 
 Used by:
-  * [aho-corasick 1.1.2](https://github.com/BurntSushi/aho-corasick)
-  * [memchr 2.7.1](https://github.com/BurntSushi/memchr)
+  * [aho-corasick 1.1.3](https://github.com/BurntSushi/aho-corasick)
+  * [memchr 2.7.2](https://github.com/BurntSushi/memchr)
   * [termcolor 1.4.1](https://github.com/BurntSushi/termcolor)
   * [winapi-util 0.1.6](https://github.com/BurntSushi/winapi-util)
 
