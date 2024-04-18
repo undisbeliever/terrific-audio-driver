@@ -589,7 +589,7 @@ TestTable_SIZE = * - TestTable
     jsr     _QueuePannedSoundEffect_AssertFail
 
     jsr     _Wait
-    jsr     Tad_Process
+    jsl     Tad_Process
 
     ; PLAY_SOUND_EFFECT command sent to the audio driver
 
@@ -599,7 +599,7 @@ TestTable_SIZE = * - TestTable
 
     ; Clear SFX queue so it doesn't interfere with the next test
     jsr     _Wait
-    jsr     Tad_Process
+    jsl     Tad_Process
 
     rts
 .endproc
@@ -633,7 +633,7 @@ TestTable_SIZE = * - TestTable
     jsr     _QueueSoundEffect_AssertFail
 
     jsr     _Wait
-    jsr     Tad_Process
+    jsl     Tad_Process
 
     ; PLAY_SOUND_EFFECT command sent to the audio driver
 
@@ -642,7 +642,7 @@ TestTable_SIZE = * - TestTable
 
     ; Clear SFX queue so it doesn't interfere with the next test
     jsr     _Wait
-    jsr     Tad_Process
+    jsl     Tad_Process
 
     rts
 .endproc
