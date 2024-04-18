@@ -34,7 +34,13 @@ clean: cleanBuildRes cleanRom cleanTadAudio cleanResources
 RESOURCES := tiles/font-2bpp.pic tiles/font-2bpp.pal
 
 tiles/%-2bpp.pic tiles/%-2bpp.pal &: tiles/%-2bpp.png
+  ifeq ($(notdir $(GFXCONV)),gfx4snes)
 	$(GFXCONV) -R -s 8 -u 4 -p -t png -i '$<'
+  else ifeq ($(notdir $(GFXCONV)),gfx2snes)
+	$(GFXCONV) -n -gs8 -pc4 -mR! -m! -fpng '$<'
+  else
+	$(error "Unknown GFXCONV: $(GFXCONV)")
+  endif
 
 
 # dependencies
