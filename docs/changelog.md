@@ -19,6 +19,9 @@ Audio Driver Changes:
 ca65 API Changes:
  * Added `Tad_LoadSongIfChanged` subroutine
  * Added `Tad_GetSong` subroutine
+ * Fixed ca65 API tests not rebuilding when `tad-audio.s` changes
+ * Fixed Illegal addressing mode error when compiling with ca65 v2.19
+ * Fixed typos in ca65 API documentation
 
 
 Version 0.0.7
