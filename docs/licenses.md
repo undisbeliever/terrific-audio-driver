@@ -107,7 +107,7 @@ Licenses marked "synthesized" did not have a license file in their crate.
 
 
 Terrific Audio Driver makes use of the following open source projects:
-  * MIT License (83)
+  * MIT License (79)
   * Apache License 2.0 (2)
   * Unicode License Agreement - Data Files and Software (2016) (1)
   * FLTK License (1)
@@ -428,7 +428,7 @@ Used by:
 ## MIT License
 
 Used by:
-  * [markdown 1.0.0-alpha.16](https://github.com/wooorm/markdown-rs)
+  * [markdown 1.0.0-alpha.17](https://github.com/wooorm/markdown-rs)
 
 ```
 (The MIT License)
@@ -453,21 +453,6 @@ IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
 CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
 TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-
-```
-
-
-## MIT License
-
-Used by:
-  * [winapi 0.3.9](https://github.com/retep998/winapi-rs)
-
-```
-// Licensed under the Apache License, Version 2.0
-// <LICENSE-APACHE or http://www.apache.org/licenses/LICENSE-2.0> or the MIT license
-// <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your option.
-// All files in the project carrying such notice may not be copied, modified, or distributed
-// except according to those terms.
 
 ```
 
@@ -510,7 +495,7 @@ DEALINGS IN THE SOFTWARE.
 ## MIT License
 
 Used by:
-  * [cc 1.0.94](https://github.com/rust-lang/cc-rs)
+  * [cc 1.0.96](https://github.com/rust-lang/cc-rs)
   * [cfg-if 1.0.0](https://github.com/alexcrichton/cfg-if)
   * [cmake 0.1.50](https://github.com/rust-lang/cmake-rs)
 
@@ -550,7 +535,7 @@ Used by:
   * [bitflags 1.3.2](https://github.com/bitflags/bitflags)
   * [bitflags 2.5.0](https://github.com/bitflags/bitflags)
   * [num-complex 0.4.5](https://github.com/rust-num/num-complex)
-  * [num-traits 0.2.18](https://github.com/rust-num/num-traits)
+  * [num-traits 0.2.19](https://github.com/rust-num/num-traits)
   * [regex-automata 0.4.6](https://github.com/rust-lang/regex/tree/master/regex-automata)
   * [regex-syntax 0.8.3](https://github.com/rust-lang/regex/tree/master/regex-syntax)
   * [regex 1.10.4](https://github.com/rust-lang/regex)
@@ -617,7 +602,7 @@ IN THE SOFTWARE.
 ## MIT License
 
 Used by:
-  * [libc 0.2.153](https://github.com/rust-lang/libc)
+  * [libc 0.2.154](https://github.com/rust-lang/libc)
 
 ```
 Copyright (c) 2014-2020 The Rust Project Developers
@@ -652,7 +637,7 @@ DEALINGS IN THE SOFTWARE.
 ## MIT License
 
 Used by:
-  * [anstyle-wincon 3.0.2](https://github.com/rust-cli/anstyle.git)
+  * [anstyle-wincon 3.0.3](https://github.com/rust-cli/anstyle.git)
 
 ```
 Copyright (c) 2015 Josh Triplett, 2022 The rust-cli Developers
@@ -683,7 +668,7 @@ SOFTWARE.
 Used by:
   * [heck 0.5.0](https://github.com/withoutboats/heck)
   * [unicode-id 0.3.4](https://github.com/Boshen/unicode-id)
-  * [unicode-width 0.1.11](https://github.com/unicode-rs/unicode-width)
+  * [unicode-width 0.1.12](https://github.com/unicode-rs/unicode-width)
 
 ```
 Copyright (c) 2015 The Rust Project Developers
@@ -711,35 +696,6 @@ CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
 OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
 IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
-
-```
-
-
-## MIT License
-
-Used by:
-  * [winapi 0.3.9](https://github.com/retep998/winapi-rs)
-
-```
-Copyright (c) 2015-2018 The winapi-rs Developers
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
 
 ```
 
@@ -782,7 +738,7 @@ DEALINGS IN THE SOFTWARE.
 ## MIT License
 
 Used by:
-  * [anstyle-parse 0.2.3](https://github.com/rust-cli/anstyle.git)
+  * [anstyle-parse 0.2.4](https://github.com/rust-cli/anstyle.git)
 
 ```
 Copyright (c) 2016 Joe Wilm and individual contributors
@@ -882,7 +838,7 @@ DEALINGS IN THE SOFTWARE.
 ## MIT License
 
 Used by:
-  * [autocfg 1.2.0](https://github.com/cuviper/autocfg)
+  * [autocfg 1.3.0](https://github.com/cuviper/autocfg)
 
 ```
 Copyright (c) 2018 Josh Stone
@@ -947,7 +903,7 @@ THE SOFTWARE.
 ## MIT License
 
 Used by:
-  * [anstyle 1.0.6](https://github.com/rust-cli/anstyle.git)
+  * [anstyle 1.0.7](https://github.com/rust-cli/anstyle.git)
 
 ```
 Copyright (c) 2022 The rust-cli Developers
@@ -976,10 +932,11 @@ SOFTWARE.
 ## MIT License
 
 Used by:
-  * [anstream 0.6.13](https://github.com/rust-cli/anstyle.git)
-  * [anstyle-query 1.0.2](https://github.com/rust-cli/anstyle)
+  * [anstream 0.6.14](https://github.com/rust-cli/anstyle.git)
+  * [anstyle-query 1.0.3](https://github.com/rust-cli/anstyle)
   * [clap 4.5.4](https://github.com/clap-rs/clap)
-  * [colorchoice 1.0.0](https://github.com/rust-cli/anstyle)
+  * [colorchoice 1.0.1](https://github.com/rust-cli/anstyle)
+  * [is_terminal_polyfill 1.70.0](https://github.com/polyfill-rs/is_terminal_polyfill)
 
 ```
 Copyright (c) Individual contributors
@@ -1009,7 +966,6 @@ SOFTWARE.
 
 Used by:
   * [unicode-id 0.3.4](https://github.com/Boshen/unicode-id)
-  * [unicode-width 0.1.11](https://github.com/unicode-rs/unicode-width)
 
 ```
 Licensed under the Apache License, Version 2.0
@@ -1032,37 +988,6 @@ Used by:
 MIT License
 
 Copyright (c) 2017 Nikolai Vazquez
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-
-```
-
-
-## MIT License
-
-Used by:
-  * [fltk-sys 1.4.28](https://github.com/fltk-rs/fltk-rs)
-
-```
-MIT License
-
-Copyright (c) 2019 Mohammed Alyousef
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -1152,10 +1077,8 @@ SOFTWARE.
   (synthesized by cargo-about)
 
 Used by:
-  * [relative-path 1.9.2](https://github.com/udoprog/relative-path)
+  * [relative-path 1.9.3](https://github.com/udoprog/relative-path)
   * [sdl2-sys 0.35.2](https://github.com/rust-sdl2/rust-sdl2)
-  * [winapi-i686-pc-windows-gnu 0.4.0](https://github.com/retep998/winapi-rs)
-  * [winapi-x86_64-pc-windows-gnu 0.4.0](https://github.com/retep998/winapi-rs)
 
 ```
 MIT License
@@ -1174,12 +1097,41 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 ## MIT License
 
 Used by:
-  * [fltk 1.4.28](https://github.com/fltk-rs/fltk-rs)
+  * [fltk 1.4.29](https://github.com/fltk-rs/fltk-rs)
 
 ```
 MIT License
 
 Copyright © 2021 The fltk-rs Authors.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+```
+
+
+## MIT License
+
+Used by:
+  * [fltk-sys 1.4.29](https://github.com/fltk-rs/fltk-rs)
+
+```
+MIT License
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -1216,8 +1168,8 @@ Used by:
   * [proc-macro2 1.0.81](https://github.com/dtolnay/proc-macro2)
   * [quote 1.0.36](https://github.com/dtolnay/quote)
   * [scratch 1.0.7](https://github.com/dtolnay/scratch)
-  * [serde 1.0.198](https://github.com/serde-rs/serde)
-  * [serde_derive 1.0.198](https://github.com/serde-rs/serde)
+  * [serde 1.0.200](https://github.com/serde-rs/serde)
+  * [serde_derive 1.0.200](https://github.com/serde-rs/serde)
   * [serde_json 1.0.116](https://github.com/serde-rs/json)
   * [syn 2.0.60](https://github.com/dtolnay/syn)
   * [unicode-ident 1.0.12](https://github.com/dtolnay/unicode-ident)
@@ -1382,7 +1334,7 @@ SOFTWARE.
 ## MIT License
 
 Used by:
-  * [winapi-util 0.1.6](https://github.com/BurntSushi/winapi-util)
+  * [winapi-util 0.1.8](https://github.com/BurntSushi/winapi-util)
 
 ```
 The MIT License (MIT)
@@ -1454,7 +1406,7 @@ Used by:
   * [aho-corasick 1.1.3](https://github.com/BurntSushi/aho-corasick)
   * [memchr 2.7.2](https://github.com/BurntSushi/memchr)
   * [termcolor 1.4.1](https://github.com/BurntSushi/termcolor)
-  * [winapi-util 0.1.6](https://github.com/BurntSushi/winapi-util)
+  * [winapi-util 0.1.8](https://github.com/BurntSushi/winapi-util)
 
 ```
 This project is dual-licensed under the Unlicense and MIT licenses.
