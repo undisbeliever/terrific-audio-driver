@@ -1,10 +1,7 @@
 # cargo-deny configuration
 
 [licenses]
-default = "deny"
-copyleft = "deny"
-unlicensed = "deny"
-allow-osi-fsf-free = "neither"
+version = 2
 
 confidence-threshold = 0.93
 
@@ -32,11 +29,8 @@ skip = [
 
 
 [advisories]
-vulnerability = "warn"
-unmaintained = "warn"
-yanked = "warn"
-notice = "warn"
-unsound = "deny"
+version = 2
+yanked = "deny"
 
 
 [sources]
