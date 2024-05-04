@@ -75,6 +75,6 @@ NOTE: The tests requires ~10 seconds to run.
 
 
 If the loader is modified, the memory accesses must also be verified.  The procedure is the same as
-the ca65 API tests.  Check the [ca65-api README](ca65-api/README.md#api-tests) for details.
+the ca65 API tests.  Check the [ca65-api README](../ca65-api/README.md#api-tests) for details.
 
 
