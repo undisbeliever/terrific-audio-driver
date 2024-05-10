@@ -14,7 +14,7 @@
    </cc:License>
   </rdf:RDF>
  </metadata>
- <style xml:space="preserve">
+ <style type="text/css" xml:space="preserve">
 text {
   fill: #000000;
   stroke: none;
