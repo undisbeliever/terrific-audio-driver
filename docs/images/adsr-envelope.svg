@@ -4,7 +4,7 @@
  <metadata>
   <rdf:RDF>
    <cc:Work rdf:about="">
-    <dc:title>S-DSP envelope</dc:title>
+    <dc:title>S-DSP ADSR envelope</dc:title>
     <cc:license rdf:resource="http://creativecommons.org/publicdomain/zero/1.0/"/>
    </cc:Work>
    <cc:License rdf:about="http://creativecommons.org/publicdomain/zero/1.0/">
