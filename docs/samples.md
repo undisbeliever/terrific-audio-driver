@@ -122,7 +122,7 @@ The ADSR envelope consists of 4 values, which match the S-DSP `ADSR1` and `ADSR2
  * Attack Rate (A): The rate of attack phase (0-15)
  * Decay Rate (D): The rate of the decay phase (0-7)
  * Sustain Level (SL): The decay-sustain transition point (0-7)
-    * The DSP will advance to the sustain phase when the decay phase reaches the Sustain Level (`SL+1/8`).
+    * The DSP will advance to the sustain phase when the decay phase reaches the Sustain Level (`(SL+1)/8`).
     * If Sustain Level (SL) is 7, the decay phase is skipped
  * Sustain Rate (SR): The rate the sustain phase decays (0-31)
     * If Sustain Rate (SR) is 0, the sustain phase will not decay and the note will play infinitely until keyoff.
