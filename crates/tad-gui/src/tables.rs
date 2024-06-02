@@ -608,7 +608,7 @@ impl<const C: usize> SimpleRow<C> {
         let c = &mut self.columns[index];
 
         if c != s {
-            *c = s.to_owned();
+            s.clone_into(c);
             true
         } else {
             false
