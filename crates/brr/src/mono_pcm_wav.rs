@@ -17,9 +17,12 @@ pub struct MonoPcm16WaveFile {
 pub enum WavError {
     NotAWaveFile,
     WaveFileTooLarge,
-    NotAPcmWaveFile,
     NoSamples,
-    Not8Or16BitMonoWav,
+
+    NotAPcmWaveFile,
+    InvalidBlockAlign,
+    Not8Or16BitPcmWav,
+    NotAMonoWavFile,
 
     InvalidWaveFile,
     InvaidDataChunkSize,
@@ -32,10 +35,12 @@ impl Display for WavError {
         match self {
             WavError::NotAWaveFile => write!(f, "not a .wav file"),
             WavError::WaveFileTooLarge => write!(f, "wave file is too large"),
-            WavError::NotAPcmWaveFile => write!(f, "not a PCM (uncompressed) wave file"),
             WavError::NoSamples => write!(f, "wave file is empty (no samples)"),
 
-            WavError::Not8Or16BitMonoWav => write!(f, "not an 8-bit or 16-bit mono PCM wave file"),
+            WavError::NotAPcmWaveFile => write!(f, "not a PCM (uncompressed) wave file"),
+            WavError::InvalidBlockAlign => write!(f, "invalid wave file header (block align)"),
+            WavError::Not8Or16BitPcmWav => write!(f, "not an 8-bit or 16-bit mono PCM wave file"),
+            WavError::NotAMonoWavFile => write!(f, "not a mono wave file"),
 
             WavError::InvalidWaveFile => write!(f, "invalid wave file"),
             WavError::InvaidDataChunkSize => {
@@ -144,13 +149,7 @@ fn read_wave_file(
             reader.read_exact(&mut v)?;
             v
         };
-        let fmt = parse_fmt_chunk(chunk_data.as_slice())?;
-
-        if fmt.format_tag != WAV_FORMAT_PCM_FORMAT {
-            return Err(WavError::NotAPcmWaveFile);
-        }
-
-        fmt
+        parse_fmt_chunk(chunk_data.as_slice())?
     };
 
     let mut data = Vec::new();
@@ -202,20 +201,6 @@ fn read_wave_file(
     Ok(WaveFile { format, data })
 }
 
-fn is_fmt_16_bit_mono_pcm(fmt: &FmtChunk) -> bool {
-    fmt.format_tag == WAV_FORMAT_PCM_FORMAT
-        && fmt.n_channels == 1
-        && fmt.block_align == 2
-        && fmt.bits_per_sample == 16
-}
-
-fn is_fmt_8_bit_mono_pcm(fmt: &FmtChunk) -> bool {
-    fmt.format_tag == WAV_FORMAT_PCM_FORMAT
-        && fmt.n_channels == 1
-        && fmt.block_align == 1
-        && fmt.bits_per_sample == 8
-}
-
 fn decode_16_bit(wav: WaveFile) -> Result<MonoPcm16WaveFile, WavError> {
     if wav.data.len() % 2 != 0 {
         return Err(WavError::InvaidDataChunkSize);
@@ -257,12 +242,20 @@ pub fn read_mono_pcm_wave_file(
 ) -> Result<MonoPcm16WaveFile, WavError> {
     let wav = read_wave_file(reader, max_samples * 2)?;
 
-    if is_fmt_16_bit_mono_pcm(&wav.format) {
-        decode_16_bit(wav)
-    } else if is_fmt_8_bit_mono_pcm(&wav.format) {
-        decode_8_bit(wav)
+    let fmt = &wav.format;
+
+    if fmt.format_tag != WAV_FORMAT_PCM_FORMAT {
+        Err(WavError::NotAPcmWaveFile)
+    } else if fmt.block_align != fmt.n_channels * fmt.bits_per_sample / 8 {
+        Err(WavError::InvalidBlockAlign)
     } else {
-        return Err(WavError::Not8Or16BitMonoWav);
+        match (fmt.bits_per_sample, fmt.n_channels) {
+            (16, 1) => decode_16_bit(wav),
+            (8, 1) => decode_8_bit(wav),
+            (16, _) => Err(WavError::NotAMonoWavFile),
+            (8, _) => Err(WavError::NotAMonoWavFile),
+            (_, _) => Err(WavError::Not8Or16BitPcmWav),
+        }
     }
 }
 
@@ -395,10 +388,10 @@ mod tests {
     }
 
     #[test]
-    fn test_not_16_bit_mono_wav() {
+    fn test_not_16_bit_wav() {
         let r = read_mono_pcm_wave_file(&mut io::Cursor::new(STEREO_96000_32_BIT_PCM), 100);
 
-        assert!(matches!(r, Err(WavError::Not8Or16BitMonoWav)));
+        assert!(matches!(r, Err(WavError::Not8Or16BitPcmWav)));
     }
 
     #[test]
@@ -441,5 +434,68 @@ mod tests {
                 samples: MONO_32000_8_BIT_SAMPLES.to_vec(),
             }
         );
+    }
+
+    #[test]
+    fn test_stereo_16_bit_pcm() {
+        // 16-bit PCM stereo 32000 Hz wav file
+        // Created with audacity
+        const STEREO_16_BIT_PCM_WAVE_FILE: [u8; 84] = [
+            0x52, 0x49, 0x46, 0x46, 0x4c, 0x00, 0x00, 0x00, 0x57, 0x41, 0x56, 0x45, 0x66, 0x6d,
+            0x74, 0x20, 0x10, 0x00, 0x00, 0x00, 0x01, 0x00, 0x02, 0x00, 0x00, 0x7d, 0x00, 0x00,
+            0x00, 0xf4, 0x01, 0x00, 0x04, 0x00, 0x10, 0x00, 0x64, 0x61, 0x74, 0x61, 0x28, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x30, 0x3c, 0x30, 0x3c, 0x65, 0x61, 0x65, 0x61,
+            0x61, 0x61, 0x62, 0x61, 0x32, 0x3c, 0x30, 0x3c, 0x00, 0x00, 0x02, 0x00, 0xcf, 0xc3,
+            0xcd, 0xc3, 0x9d, 0x9e, 0x9f, 0x9e, 0x9c, 0x9e, 0x9b, 0x9e, 0xd0, 0xc3, 0xd0, 0xc3,
+        ];
+
+        let r = read_mono_pcm_wave_file(&mut io::Cursor::new(STEREO_16_BIT_PCM_WAVE_FILE), 100);
+        assert!(matches!(r, Err(WavError::NotAMonoWavFile)));
+    }
+
+    #[test]
+    fn test_stereo_8_bit_pcm() {
+        // 8-bit PCM stereo 32000 Hz wav file
+        // Created with audacity
+        const STEREO_8_BIT_PCM_WAVE_FILE: [u8; 64] = [
+            0x52, 0x49, 0x46, 0x46, 0x38, 0x00, 0x00, 0x00, 0x57, 0x41, 0x56, 0x45, 0x66, 0x6d,
+            0x74, 0x20, 0x10, 0x00, 0x00, 0x00, 0x01, 0x00, 0x02, 0x00, 0x00, 0x7d, 0x00, 0x00,
+            0x00, 0xfa, 0x00, 0x00, 0x02, 0x00, 0x08, 0x00, 0x64, 0x61, 0x74, 0x61, 0x14, 0x00,
+            0x00, 0x00, 0x80, 0x80, 0xbc, 0xbc, 0xe1, 0xe1, 0xe1, 0xe1, 0xbc, 0xbc, 0x80, 0x7f,
+            0x43, 0x43, 0x1e, 0x1e, 0x1e, 0x1e, 0x43, 0x43,
+        ];
+
+        let r = read_mono_pcm_wave_file(&mut io::Cursor::new(STEREO_8_BIT_PCM_WAVE_FILE), 100);
+        assert!(matches!(r, Err(WavError::NotAMonoWavFile)));
+    }
+
+    #[test]
+    fn test_not_pcm_wave() {
+        // A-law mono 32000 Hz wav file
+        // Created with audacity
+        const MONO_A_LAW_WAVE_FILE: [u8; 68] = [
+            0x52, 0x49, 0x46, 0x46, 0x3c, 0x00, 0x00, 0x00, 0x57, 0x41, 0x56, 0x45, 0x66, 0x6d,
+            0x74, 0x20, 0x12, 0x00, 0x00, 0x00, 0x06, 0x00, 0x01, 0x00, 0x00, 0x7d, 0x00, 0x00,
+            0x00, 0x7d, 0x00, 0x00, 0x01, 0x00, 0x08, 0x00, 0x00, 0x00, 0x66, 0x61, 0x63, 0x74,
+            0x04, 0x00, 0x00, 0x00, 0x0a, 0x00, 0x00, 0x00, 0x64, 0x61, 0x74, 0x61, 0x0a, 0x00,
+            0x00, 0x00, 0xd5, 0xbb, 0xad, 0xad, 0xbb, 0xd5, 0x3b, 0x2d, 0x2d, 0x3b,
+        ];
+
+        let r = read_mono_pcm_wave_file(&mut io::Cursor::new(MONO_A_LAW_WAVE_FILE), 100);
+        assert!(matches!(r, Err(WavError::NotAPcmWaveFile)));
+    }
+
+    #[test]
+    fn test_invalid_block_align() {
+        const BLOCK_ALIGN_POS: usize = 32;
+
+        let mut wave = MONO_32000_16_BIT_PCM;
+
+        // Change the `nBlockAlign` value
+        assert_eq!(&wave[BLOCK_ALIGN_POS..BLOCK_ALIGN_POS + 2], [2, 0]);
+        wave[BLOCK_ALIGN_POS] = 128;
+
+        let r = read_mono_pcm_wave_file(&mut io::Cursor::new(wave), 100);
+        assert!(matches!(r, Err(WavError::InvalidBlockAlign)));
     }
 }
