@@ -107,7 +107,7 @@ Licenses marked "synthesized" did not have a license file in their crate.
 
 
 Terrific Audio Driver makes use of the following open source projects:
-  * MIT License (79)
+  * MIT License (80)
   * Apache License 2.0 (2)
   * Unicode License Agreement - Data Files and Software (2016) (1)
   * FLTK License (1)
@@ -117,7 +117,7 @@ Terrific Audio Driver makes use of the following open source projects:
 ## Apache License 2.0
 
 Used by:
-  * [ryu 1.0.17](https://github.com/dtolnay/ryu)
+  * [ryu 1.0.18](https://github.com/dtolnay/ryu)
 
 ```
                               Apache License
@@ -495,7 +495,7 @@ DEALINGS IN THE SOFTWARE.
 ## MIT License
 
 Used by:
-  * [cc 1.0.96](https://github.com/rust-lang/cc-rs)
+  * [cc 1.0.98](https://github.com/rust-lang/cc-rs)
   * [cfg-if 1.0.0](https://github.com/alexcrichton/cfg-if)
   * [cmake 0.1.50](https://github.com/rust-lang/cmake-rs)
 
@@ -534,7 +534,7 @@ DEALINGS IN THE SOFTWARE.
 Used by:
   * [bitflags 1.3.2](https://github.com/bitflags/bitflags)
   * [bitflags 2.5.0](https://github.com/bitflags/bitflags)
-  * [num-complex 0.4.5](https://github.com/rust-num/num-complex)
+  * [num-complex 0.4.6](https://github.com/rust-num/num-complex)
   * [num-traits 0.2.19](https://github.com/rust-num/num-traits)
   * [regex-automata 0.4.6](https://github.com/rust-lang/regex/tree/master/regex-automata)
   * [regex-syntax 0.8.3](https://github.com/rust-lang/regex/tree/master/regex-syntax)
@@ -602,7 +602,7 @@ IN THE SOFTWARE.
 ## MIT License
 
 Used by:
-  * [libc 0.2.154](https://github.com/rust-lang/libc)
+  * [libc 0.2.155](https://github.com/rust-lang/libc)
 
 ```
 Copyright (c) 2014-2020 The Rust Project Developers
@@ -966,6 +966,7 @@ SOFTWARE.
 
 Used by:
   * [unicode-id 0.3.4](https://github.com/Boshen/unicode-id)
+  * [unicode-width 0.1.12](https://github.com/unicode-rs/unicode-width)
 
 ```
 Licensed under the Apache License, Version 2.0
@@ -988,6 +989,37 @@ Used by:
 MIT License
 
 Copyright (c) 2017 Nikolai Vazquez
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+```
+
+
+## MIT License
+
+Used by:
+  * [fltk-sys 1.4.30](https://github.com/fltk-rs/fltk-rs)
+
+```
+MIT License
+
+Copyright (c) 2019 Mohammed Alyousef
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -1097,7 +1129,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 ## MIT License
 
 Used by:
-  * [fltk 1.4.29](https://github.com/fltk-rs/fltk-rs)
+  * [fltk 1.4.30](https://github.com/fltk-rs/fltk-rs)
 
 ```
 MIT License
@@ -1128,50 +1160,21 @@ SOFTWARE.
 ## MIT License
 
 Used by:
-  * [fltk-sys 1.4.29](https://github.com/fltk-rs/fltk-rs)
-
-```
-MIT License
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-
-```
-
-
-## MIT License
-
-Used by:
-  * [cxx-build 1.0.121](https://github.com/dtolnay/cxx)
-  * [cxx 1.0.121](https://github.com/dtolnay/cxx)
-  * [cxxbridge-flags 1.0.121](https://github.com/dtolnay/cxx)
-  * [cxxbridge-macro 1.0.121](https://github.com/dtolnay/cxx)
+  * [cxx-build 1.0.122](https://github.com/dtolnay/cxx)
+  * [cxx 1.0.122](https://github.com/dtolnay/cxx)
+  * [cxxbridge-flags 1.0.122](https://github.com/dtolnay/cxx)
+  * [cxxbridge-macro 1.0.122](https://github.com/dtolnay/cxx)
   * [itoa 1.0.11](https://github.com/dtolnay/itoa)
   * [link-cplusplus 1.0.9](https://github.com/dtolnay/link-cplusplus)
   * [once_cell 1.19.0](https://github.com/matklad/once_cell)
-  * [paste 1.0.14](https://github.com/dtolnay/paste)
-  * [proc-macro2 1.0.81](https://github.com/dtolnay/proc-macro2)
+  * [paste 1.0.15](https://github.com/dtolnay/paste)
+  * [proc-macro2 1.0.84](https://github.com/dtolnay/proc-macro2)
   * [quote 1.0.36](https://github.com/dtolnay/quote)
   * [scratch 1.0.7](https://github.com/dtolnay/scratch)
-  * [serde 1.0.200](https://github.com/serde-rs/serde)
-  * [serde_derive 1.0.200](https://github.com/serde-rs/serde)
-  * [serde_json 1.0.116](https://github.com/serde-rs/json)
-  * [syn 2.0.60](https://github.com/dtolnay/syn)
+  * [serde 1.0.203](https://github.com/serde-rs/serde)
+  * [serde_derive 1.0.203](https://github.com/serde-rs/serde)
+  * [serde_json 1.0.117](https://github.com/serde-rs/json)
+  * [syn 2.0.66](https://github.com/dtolnay/syn)
   * [unicode-ident 1.0.12](https://github.com/dtolnay/unicode-ident)
 
 ```
@@ -1365,8 +1368,8 @@ THE SOFTWARE.
 ## MIT License
 
 Used by:
-  * [crossbeam-channel 0.5.12](https://github.com/crossbeam-rs/crossbeam)
-  * [crossbeam-utils 0.8.19](https://github.com/crossbeam-rs/crossbeam)
+  * [crossbeam-channel 0.5.13](https://github.com/crossbeam-rs/crossbeam)
+  * [crossbeam-utils 0.8.20](https://github.com/crossbeam-rs/crossbeam)
 
 ```
 The MIT License (MIT)
