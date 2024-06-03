@@ -260,7 +260,7 @@ impl AudioCallback for RingBuffer {
 }
 
 // Returns true if any sound is output by the emulator
-fn fill_ring_buffer_emu(emu: &mut ShvcSoundEmu, playback: &mut AudioDevice<RingBuffer>) -> bool {
+fn fill_ring_buffer_emu(emu: &mut TadEmu, playback: &mut AudioDevice<RingBuffer>) -> bool {
     // Do not emulate the next audio chunk if the ring buffer is full,
     // which can happen if an SDL audio callback occurs in the middle of the last `fill_ring_buffer()` call.
     //
@@ -372,159 +372,256 @@ impl bytecode_interpreter::Emulator for EmulatorWrapper<'_> {
     }
 }
 
-fn load_song(
-    emu: &mut ShvcSoundEmu,
-    common_audio_data: &CommonAudioData,
-    song: &SongData,
+struct TadEmu {
+    emu: ShvcSoundEmu,
+
     stereo_flag: StereoFlag,
-    song_skip: Option<SongSkip>,
-    enabled_channels_mask: ChannelsMask,
-) -> Result<(), ()> {
-    const LOADER_DATA_TYPE_ADDR: usize = addresses::LOADER_DATA_TYPE as usize;
+    common_audio_data: Option<CommonAudioData>,
 
-    emu.power(true);
+    song_loaded: bool,
 
-    let song_data = song.data();
-    let common_data = common_audio_data.data();
-    let edl = &song.metadata().echo_buffer.edl;
+    song_id: Option<ItemId>,
+}
 
-    let stereo_flag = match stereo_flag {
-        StereoFlag::Stereo => true,
-        StereoFlag::Mono => false,
-    };
+impl TadEmu {
+    fn new() -> Self {
+        // No IPL ROM
+        let iplrom = [0; 64];
 
-    let song_data_addr =
-        usize::from(addresses::COMMON_DATA) + common_data.len() + (common_data.len() % 2);
-
-    let song_data_addr = match u16::try_from(song_data_addr) {
-        Ok(a) => a,
-        Err(_) => return Err(()),
-    };
-
-    let apuram = emu.apuram_mut();
-
-    let mut write_spc_ram = |addr: u16, data: &[u8]| {
-        let addr = usize::from(addr);
-        apuram[addr..addr + data.len()].copy_from_slice(data);
-    };
-
-    // Load driver
-    write_spc_ram(addresses::LOADER, audio_driver::LOADER);
-    write_spc_ram(addresses::DRIVER_CODE, audio_driver::AUDIO_DRIVER);
-
-    write_spc_ram(addresses::COMMON_DATA, common_data);
-    write_spc_ram(addresses::SONG_PTR, &song_data_addr.to_le_bytes());
-    write_spc_ram(song_data_addr, song_data);
-
-    // Reset echo buffer
-    let eb_start = usize::from(song.metadata().echo_buffer.edl.echo_buffer_addr());
-    let eb_end = eb_start + edl.buffer_size();
-    apuram[eb_start..eb_end].fill(0);
-
-    // Set loader flags
-    apuram[LOADER_DATA_TYPE_ADDR] = LoaderDataType {
-        stereo_flag,
-        play_song: false,
-        skip_echo_buffer_reset: true,
-    }
-    .driver_value();
-
-    emu.set_echo_buffer_size(edl.esa_register(), edl.as_u8());
-
-    emu.set_spc_registers(addresses::DRIVER_CODE, 0, 0, 0, 0, 0xff);
-
-    // Wait for the audio-driver to finish initialization
-    emu.emulate();
-
-    if let Some(s) = song_skip {
-        // Intrepreting song in the compiler thread, the `stereo_flag` is unknown.
-        let o = match s.subroutine_index {
-            None => bytecode_interpreter::interpret_song(
-                song,
-                common_audio_data,
-                stereo_flag,
-                song_data_addr,
-                s.target_ticks,
-            ),
-            Some(subroutine_index) => bytecode_interpreter::interpret_song_subroutine(
-                song,
-                common_audio_data,
-                stereo_flag,
-                song_data_addr,
-                subroutine_index,
-                s.target_ticks,
-            ),
-        };
-        if let Some(o) = o {
-            o.write_to_emulator(&mut EmulatorWrapper(emu));
+        Self {
+            emu: ShvcSoundEmu::new(&iplrom),
+            stereo_flag: StereoFlag::Stereo,
+            common_audio_data: None,
+            song_loaded: false,
+            song_id: None,
         }
     }
 
-    set_enabled_channels_mask(emu, enabled_channels_mask);
+    fn song_id(&self) -> Option<ItemId> {
+        self.song_id
+    }
 
-    // Unpause the audio driver
-    emu.write_io_ports([io_commands::UNPAUSE, 0, 0, 0]);
+    fn set_stereo_flag(&mut self, stereo_flag: StereoFlag) {
+        self.stereo_flag = stereo_flag;
+    }
 
-    Ok(())
-}
+    fn load_common_audio_data(&mut self, common_audio_data: Option<CommonAudioData>) {
+        self.common_audio_data = common_audio_data;
+    }
 
-fn set_enabled_channels_mask(emu: &mut ShvcSoundEmu, mask: ChannelsMask) {
-    let apuram = emu.apuram_mut();
+    fn stop_song(&mut self) {
+        self.song_loaded = false;
+        self.song_id = None;
+    }
 
-    apuram[addresses::ENABLED_CHANNELS_MASK as usize] = mask.0;
-}
+    fn load_song(
+        &mut self,
+        song_id: ItemId,
+        song: &SongData,
+        song_skip: Option<SongSkip>,
+        enabled_channels_mask: ChannelsMask,
+    ) -> Result<(), ()> {
+        self._load_song_into_memory(song_id, song, None, song_skip, enabled_channels_mask)
+    }
 
-/// Returns None if the song has finished
-fn read_voice_positions(emu: &ShvcSoundEmu, item_id: Option<ItemId>) -> Option<AudioMonitorData> {
-    const CHANNEL_INSTRUCTION_PTR_H_RANGE: Range<usize> = Range {
-        start: addresses::CHANNEL_INSTRUCTION_PTR_H as usize,
-        end: addresses::CHANNEL_INSTRUCTION_PTR_H as usize + N_VOICES,
-    };
-    const COMMON_DATA_ADDR_H: u8 = (addresses::COMMON_DATA >> 8) as u8;
+    fn play_sample(
+        &mut self,
+        sample_id: ItemId,
+        common_audio_data: &CommonAudioData,
+        song_data: &SongData,
+    ) -> Result<(), ()> {
+        // Do not modify `self.common_audio_data`.
+        self._load_song_into_memory(
+            sample_id,
+            song_data,
+            Some(common_audio_data),
+            None,
+            ChannelsMask::ALL,
+        )
+    }
 
-    let apuram = emu.apuram();
+    fn _load_song_into_memory(
+        &mut self,
+        song_id: ItemId,
+        song: &SongData,
+        override_cad: Option<&CommonAudioData>,
+        song_skip: Option<SongSkip>,
+        enabled_channels_mask: ChannelsMask,
+    ) -> Result<(), ()> {
+        const LOADER_DATA_TYPE_ADDR: usize = addresses::LOADER_DATA_TYPE as usize;
 
-    let song_addr = u16::from_le_bytes([
-        apuram[usize::from(addresses::SONG_PTR)],
-        apuram[usize::from(addresses::SONG_PTR) + 1],
-    ]);
+        self.song_loaded = false;
+        self.song_id = None;
 
-    let enabled_channels_mask = apuram[addresses::ENABLED_CHANNELS_MASK as usize];
+        let common_audio_data = match (override_cad, &self.common_audio_data) {
+            (Some(d), _) => d,
+            (None, Some(d)) => d,
+            (None, None) => return Err(()),
+        };
 
-    let read_offsets = |addr_l: u16, addr_h: u16| -> [Option<u16>; N_VOICES] {
-        std::array::from_fn(|i| {
-            const _: () = assert!(N_VOICES <= 8);
+        self.emu.power(true);
 
-            if enabled_channels_mask & (1 << i) != 0 {
-                let word = u16::from_le_bytes([
-                    apuram[usize::from(addr_l) + i],
-                    apuram[usize::from(addr_h) + i],
-                ]);
-                word.checked_sub(song_addr)
-            } else {
-                None
+        let song_data = song.data();
+        let common_data = common_audio_data.data();
+        let edl = &song.metadata().echo_buffer.edl;
+
+        let stereo_flag = match self.stereo_flag {
+            StereoFlag::Stereo => true,
+            StereoFlag::Mono => false,
+        };
+
+        let song_data_addr =
+            usize::from(addresses::COMMON_DATA) + common_data.len() + (common_data.len() % 2);
+
+        let song_data_addr = match u16::try_from(song_data_addr) {
+            Ok(a) => a,
+            Err(_) => return Err(()),
+        };
+
+        let apuram = self.emu.apuram_mut();
+
+        let mut write_spc_ram = |addr: u16, data: &[u8]| {
+            let addr = usize::from(addr);
+            apuram[addr..addr + data.len()].copy_from_slice(data);
+        };
+
+        // Load driver
+        write_spc_ram(addresses::LOADER, audio_driver::LOADER);
+        write_spc_ram(addresses::DRIVER_CODE, audio_driver::AUDIO_DRIVER);
+
+        write_spc_ram(addresses::COMMON_DATA, common_data);
+        write_spc_ram(addresses::SONG_PTR, &song_data_addr.to_le_bytes());
+        write_spc_ram(song_data_addr, song_data);
+
+        // Reset echo buffer
+        let eb_start = usize::from(song.metadata().echo_buffer.edl.echo_buffer_addr());
+        let eb_end = eb_start + edl.buffer_size();
+        apuram[eb_start..eb_end].fill(0);
+
+        // Set loader flags
+        apuram[LOADER_DATA_TYPE_ADDR] = LoaderDataType {
+            stereo_flag,
+            play_song: false,
+            skip_echo_buffer_reset: true,
+        }
+        .driver_value();
+
+        self.emu
+            .set_echo_buffer_size(edl.esa_register(), edl.as_u8());
+
+        self.emu
+            .set_spc_registers(addresses::DRIVER_CODE, 0, 0, 0, 0, 0xff);
+
+        // Wait for the audio-driver to finish initialization
+        self.emu.emulate();
+
+        if let Some(s) = song_skip {
+            // Intrepreting song in the compiler thread, the `stereo_flag` is unknown.
+            let o = match s.subroutine_index {
+                None => bytecode_interpreter::interpret_song(
+                    song,
+                    common_audio_data,
+                    stereo_flag,
+                    song_data_addr,
+                    s.target_ticks,
+                ),
+                Some(subroutine_index) => bytecode_interpreter::interpret_song_subroutine(
+                    song,
+                    common_audio_data,
+                    stereo_flag,
+                    song_data_addr,
+                    subroutine_index,
+                    s.target_ticks,
+                ),
+            };
+            if let Some(o) = o {
+                o.write_to_emulator(&mut EmulatorWrapper(&mut self.emu));
             }
-        })
-    };
+        }
 
-    let any_channels_active = apuram[CHANNEL_INSTRUCTION_PTR_H_RANGE]
-        .iter()
-        .any(|&inst_ptr_h| inst_ptr_h > COMMON_DATA_ADDR_H);
+        self.set_enabled_channels_mask(enabled_channels_mask);
 
-    if any_channels_active {
-        Some(AudioMonitorData {
-            item_id,
-            voice_instruction_ptrs: read_offsets(
-                addresses::CHANNEL_INSTRUCTION_PTR_L,
-                addresses::CHANNEL_INSTRUCTION_PTR_H,
-            ),
-            voice_return_inst_ptrs: read_offsets(
-                addresses::CHANNEL_RETURN_INST_PTR_L,
-                addresses::CHANNEL_RETURN_INST_PTR_H,
-            ),
-        })
-    } else {
-        None
+        // Unpause the audio driver
+        self.emu.write_io_ports([io_commands::UNPAUSE, 0, 0, 0]);
+
+        self.song_id = Some(song_id);
+        self.song_loaded = true;
+
+        Ok(())
+    }
+
+    fn set_enabled_channels_mask(&mut self, mask: ChannelsMask) {
+        let apuram = self.emu.apuram_mut();
+
+        apuram[addresses::ENABLED_CHANNELS_MASK as usize] = mask.0;
+    }
+
+    fn emulate(&mut self) -> &[i16; RingBuffer::EMU_BUFFER_SIZE] {
+        const EMPTY_BUFFER: [i16; RingBuffer::EMU_BUFFER_SIZE] = [0; RingBuffer::EMU_BUFFER_SIZE];
+
+        if !self.song_loaded {
+            return &EMPTY_BUFFER;
+        }
+
+        self.emu.emulate()
+    }
+
+    /// Returns None if the song has finished
+    fn read_voice_positions(&self) -> Option<AudioMonitorData> {
+        const CHANNEL_INSTRUCTION_PTR_H_RANGE: Range<usize> = Range {
+            start: addresses::CHANNEL_INSTRUCTION_PTR_H as usize,
+            end: addresses::CHANNEL_INSTRUCTION_PTR_H as usize + N_VOICES,
+        };
+        const COMMON_DATA_ADDR_H: u8 = (addresses::COMMON_DATA >> 8) as u8;
+
+        if !self.song_loaded {
+            return None;
+        }
+
+        let apuram = self.emu.apuram();
+
+        let song_addr = u16::from_le_bytes([
+            apuram[usize::from(addresses::SONG_PTR)],
+            apuram[usize::from(addresses::SONG_PTR) + 1],
+        ]);
+
+        let enabled_channels_mask = apuram[addresses::ENABLED_CHANNELS_MASK as usize];
+
+        let read_offsets = |addr_l: u16, addr_h: u16| -> [Option<u16>; N_VOICES] {
+            std::array::from_fn(|i| {
+                const _: () = assert!(N_VOICES <= 8);
+
+                if enabled_channels_mask & (1 << i) != 0 {
+                    let word = u16::from_le_bytes([
+                        apuram[usize::from(addr_l) + i],
+                        apuram[usize::from(addr_h) + i],
+                    ]);
+                    word.checked_sub(song_addr)
+                } else {
+                    None
+                }
+            })
+        };
+
+        let any_channels_active = apuram[CHANNEL_INSTRUCTION_PTR_H_RANGE]
+            .iter()
+            .any(|&inst_ptr_h| inst_ptr_h > COMMON_DATA_ADDR_H);
+
+        if any_channels_active {
+            Some(AudioMonitorData {
+                item_id: self.song_id,
+                voice_instruction_ptrs: read_offsets(
+                    addresses::CHANNEL_INSTRUCTION_PTR_L,
+                    addresses::CHANNEL_INSTRUCTION_PTR_H,
+                ),
+                voice_return_inst_ptrs: read_offsets(
+                    addresses::CHANNEL_RETURN_INST_PTR_L,
+                    addresses::CHANNEL_RETURN_INST_PTR_H,
+                ),
+            })
+        } else {
+            None
+        }
     }
 }
 
@@ -554,11 +651,7 @@ struct AudioThread {
 
     sdl_context: Sdl,
 
-    emu: ShvcSoundEmu,
-
-    stereo_flag: StereoFlag,
-    common_audio_data: Option<CommonAudioData>,
-    item_id: Option<ItemId>,
+    tad: TadEmu,
 }
 
 impl AudioThread {
@@ -568,9 +661,6 @@ impl AudioThread {
         gui_sender: fltk::app::Sender<GuiMessage>,
         monitor: AudioMonitor,
     ) -> Self {
-        // No IPL ROM
-        let iplrom = [0; 64];
-
         Self {
             sender,
             rx,
@@ -578,11 +668,7 @@ impl AudioThread {
             monitor,
             sdl_context: sdl2::init().unwrap(),
 
-            emu: ShvcSoundEmu::new(&iplrom),
-
-            stereo_flag: StereoFlag::Stereo,
-            common_audio_data: None,
-            item_id: None,
+            tad: TadEmu::new(),
         }
     }
 
@@ -621,45 +707,27 @@ impl AudioThread {
 
         match msg {
             AudioMessage::CommonAudioDataChanged(data) => {
-                self.common_audio_data = data;
+                self.tad.load_common_audio_data(data);
             }
             AudioMessage::SetStereoFlag(sf) => {
-                self.stereo_flag = sf;
+                self.tad.set_stereo_flag(sf);
 
                 // Disable unpause
-                self.item_id = None;
+                self.tad.stop_song();
             }
 
             AudioMessage::PlaySong(song_id, song, ticks_to_skip, channels_mask) => {
-                if let Some(common) = &self.common_audio_data {
-                    if load_song(
-                        &mut self.emu,
-                        common,
-                        &song,
-                        self.stereo_flag,
-                        ticks_to_skip,
-                        channels_mask,
-                    )
+                if self
+                    .tad
+                    .load_song(song_id, &song, ticks_to_skip, channels_mask)
                     .is_ok()
-                    {
-                        self.send_started_song_message(song_id, song);
-                        self.item_id = Some(song_id);
-                        return self.play_song();
-                    }
+                {
+                    self.send_started_song_message(song_id, song);
+                    return self.play_song();
                 }
             }
             AudioMessage::PlaySample(id, common_data, song_data) => {
-                if load_song(
-                    &mut self.emu,
-                    &common_data,
-                    &song_data,
-                    self.stereo_flag,
-                    None,
-                    ChannelsMask::ALL,
-                )
-                .is_ok()
-                {
-                    self.item_id = Some(id);
+                if self.tad.play_sample(id, &common_data, &song_data).is_ok() {
                     return self.play_song();
                 }
             }
@@ -669,13 +737,13 @@ impl AudioThread {
             }
 
             AudioMessage::PauseResume(id) => {
-                if Some(id) == self.item_id {
+                if Some(id) == self.tad.song_id() {
                     return self.play_song();
                 }
             }
             AudioMessage::SetEnabledChannels(id, mask) => {
-                if Some(id) == self.item_id {
-                    set_enabled_channels_mask(&mut self.emu, mask);
+                if Some(id) == self.tad.song_id() {
+                    self.tad.set_enabled_channels_mask(mask);
                 }
             }
 
@@ -690,7 +758,7 @@ impl AudioThread {
     // Returns Some if the AudioMessage could not be processed
     #[must_use]
     fn play_song(&mut self) -> Option<AudioMessage> {
-        self.item_id?;
+        self.tad.song_id()?;
 
         let audio_subsystem = self.sdl_context.audio().unwrap();
         let desired_spec = AudioSpecDesired {
@@ -705,7 +773,7 @@ impl AudioThread {
             })
             .unwrap();
 
-        fill_ring_buffer_emu(&mut self.emu, &mut playback);
+        fill_ring_buffer_emu(&mut self.tad, &mut playback);
 
         let mut state = PlayState::Running;
         playback.resume();
@@ -719,20 +787,21 @@ impl AudioThread {
                     match state {
                         PlayState::Paused | PlayState::SongFinished => (),
                         PlayState::Running => {
-                            let sound = fill_ring_buffer_emu(&mut self.emu, &mut playback);
+                            let sound = fill_ring_buffer_emu(&mut self.tad, &mut playback);
 
                             // Detect when the song has finished playing.
                             //
                             // Must test if the emulator is outputting audio as the echo buffer
                             // feedback can output sound long after the song has finished.
-                            let voices = read_voice_positions(&self.emu, self.item_id);
+                            let voices = self.tad.read_voice_positions();
                             if voices.is_some() {
                                 self.monitor.set(voices);
                             } else if sound {
-                                self.monitor.set(Some(AudioMonitorData::new(self.item_id)));
+                                self.monitor
+                                    .set(Some(AudioMonitorData::new(self.tad.song_id())));
                             } else {
                                 // The song has finished
-                                self.item_id = None;
+                                self.tad.stop_song();
                                 state = PlayState::SongFinished;
                                 playback.pause();
 
@@ -755,68 +824,44 @@ impl AudioThread {
                     }
                 }
 
-                AudioMessage::CommonAudioDataChanged(data) => {
-                    self.common_audio_data = data;
-                }
+                AudioMessage::CommonAudioDataChanged(data) => self.tad.load_common_audio_data(data),
 
                 AudioMessage::PlaySong(id, song, ticks_to_skip, channels_mask) => {
-                    if let Some(common_data) = &self.common_audio_data {
-                        // Pause playback to prevent buffer overrun when tick_to_skip is large.
-                        playback.pause();
-                        playback.lock().reset();
-                        match load_song(
-                            &mut self.emu,
-                            common_data,
-                            &song,
-                            self.stereo_flag,
-                            ticks_to_skip,
-                            channels_mask,
-                        ) {
-                            Ok(()) => {
-                                self.send_started_song_message(id, song);
-
-                                state = PlayState::Running;
-                                self.item_id = Some(id);
-                                playback.resume();
-                            }
-                            Err(()) => {
-                                // Stop playback
-                                state = PlayState::PauseRequested;
-                                self.item_id = None
-                            }
-                        }
-                    } else {
-                        // Stop playback
-                        state = PlayState::PauseRequested;
-                        self.item_id = None
-                    }
-                }
-
-                AudioMessage::PlaySample(id, common_data, song_data) => {
-                    match load_song(
-                        &mut self.emu,
-                        &common_data,
-                        &song_data,
-                        self.stereo_flag,
-                        None,
-                        ChannelsMask::ALL,
-                    ) {
+                    // Pause playback to prevent buffer overrun when tick_to_skip is large.
+                    playback.pause();
+                    playback.lock().reset();
+                    match self.tad.load_song(id, &song, ticks_to_skip, channels_mask) {
                         Ok(()) => {
+                            self.send_started_song_message(id, song);
+
                             state = PlayState::Running;
-                            self.item_id = Some(id);
                             playback.resume();
                         }
                         Err(()) => {
                             // Stop playback
                             state = PlayState::PauseRequested;
-                            self.item_id = None
+                        }
+                    }
+                }
+
+                AudioMessage::PlaySample(id, common_data, song_data) => {
+                    playback.pause();
+                    playback.lock().reset();
+
+                    match self.tad.play_sample(id, &common_data, &song_data) {
+                        Ok(()) => {
+                            state = PlayState::Running;
+                            playback.resume();
+                        }
+                        Err(()) => {
+                            // Stop playback
+                            state = PlayState::PauseRequested;
                         }
                     }
                 }
 
                 AudioMessage::Pause => {
                     state = PlayState::PauseRequested;
-                    self.item_id = None;
                 }
 
                 AudioMessage::PauseResume(id) => {
@@ -826,7 +871,7 @@ impl AudioThread {
                         }
                         PlayState::Paused => {
                             // Resume playback if item_id is unchanged
-                            if self.item_id == Some(id) {
+                            if self.tad.song_id() == Some(id) {
                                 state = PlayState::Running;
                                 playback.resume();
 
@@ -842,8 +887,8 @@ impl AudioThread {
                 }
 
                 AudioMessage::SetEnabledChannels(id, mask) => {
-                    if Some(id) == self.item_id {
-                        set_enabled_channels_mask(&mut self.emu, mask);
+                    if Some(id) == self.tad.song_id() {
+                        self.tad.set_enabled_channels_mask(mask);
                     }
                 }
 
