@@ -10,8 +10,12 @@ use brr::{BrrSample, SAMPLES_PER_BLOCK};
 use compiler::audio_driver;
 use compiler::bytecode_interpreter;
 use compiler::common_audio_data::CommonAudioData;
-use compiler::driver_constants::{addresses, io_commands, LoaderDataType};
-use compiler::songs::SongData;
+use compiler::driver_constants::{
+    addresses, io_commands, LoaderDataType, CENTER_PAN, FIRST_SFX_CHANNEL, IO_COMMAND_I_MASK,
+    IO_COMMAND_MASK, N_SFX_CHANNELS,
+};
+use compiler::songs::{blank_song, SongData};
+use compiler::sound_effects::CompiledSoundEffect;
 use compiler::time::TickCounter;
 
 use sdl2::Sdl;
@@ -21,6 +25,7 @@ extern crate sdl2;
 use sdl2::audio::{AudioCallback, AudioDevice, AudioSpecDesired};
 
 use std::ops::Range;
+use std::rc::Rc;
 use std::sync::{mpsc, Arc, Mutex};
 use std::thread;
 use std::time::Duration;
@@ -38,6 +43,9 @@ const BRR_SAMPLE_RATE: i32 = 32000;
 const LOOPING_BRR_SAMPLE_SAMPLES: usize = 24000;
 
 pub const N_VOICES: usize = 8;
+
+// Amount of Audio-RAM (in common-audio-data) to allocate to sound effects
+pub const SFX_BUFFER_SIZE: usize = 128;
 
 #[derive(Debug, Clone, Copy)]
 pub struct ChannelsMask(pub u8);
@@ -80,6 +88,7 @@ pub enum AudioMessage {
 
     CommonAudioDataChanged(Option<CommonAudioData>),
     PlaySong(ItemId, Arc<SongData>, Option<SongSkip>, ChannelsMask),
+    PlaySoundEffect(Arc<CompiledSoundEffect>),
     PlaySample(ItemId, CommonAudioData, Arc<SongData>),
 
     PlayBrrSampleAt32Khz(Arc<BrrSample>),
@@ -375,12 +384,19 @@ impl bytecode_interpreter::Emulator for EmulatorWrapper<'_> {
 struct TadEmu {
     emu: ShvcSoundEmu,
 
+    // Using Rc to satisfy the borrow checker
+    blank_song: Rc<SongData>,
+
     stereo_flag: StereoFlag,
     common_audio_data: Option<CommonAudioData>,
 
     song_loaded: bool,
+    common_audio_data_loaded: bool,
 
     song_id: Option<ItemId>,
+
+    previous_command: u8,
+    sfx_queue: Option<Arc<CompiledSoundEffect>>,
 }
 
 impl TadEmu {
@@ -390,11 +406,19 @@ impl TadEmu {
 
         Self {
             emu: ShvcSoundEmu::new(&iplrom),
+            blank_song: Rc::new(blank_song()),
             stereo_flag: StereoFlag::Stereo,
             common_audio_data: None,
             song_loaded: false,
+            common_audio_data_loaded: false,
             song_id: None,
+            previous_command: 0,
+            sfx_queue: None,
         }
+    }
+
+    fn song_loaded(&self) -> bool {
+        self.song_loaded
     }
 
     fn song_id(&self) -> Option<ItemId> {
@@ -407,6 +431,7 @@ impl TadEmu {
 
     fn load_common_audio_data(&mut self, common_audio_data: Option<CommonAudioData>) {
         self.common_audio_data = common_audio_data;
+        self.common_audio_data_loaded = false;
     }
 
     fn stop_song(&mut self) {
@@ -421,7 +446,17 @@ impl TadEmu {
         song_skip: Option<SongSkip>,
         enabled_channels_mask: ChannelsMask,
     ) -> Result<(), ()> {
-        self._load_song_into_memory(song_id, song, None, song_skip, enabled_channels_mask)
+        self._load_song_into_memory(Some(song_id), song, None, song_skip, enabled_channels_mask)
+    }
+
+    fn load_blank_song(&mut self) -> Result<(), ()> {
+        self._load_song_into_memory(
+            None,
+            &self.blank_song.clone(),
+            None,
+            None,
+            ChannelsMask::ALL,
+        )
     }
 
     fn play_sample(
@@ -432,7 +467,7 @@ impl TadEmu {
     ) -> Result<(), ()> {
         // Do not modify `self.common_audio_data`.
         self._load_song_into_memory(
-            sample_id,
+            Some(sample_id),
             song_data,
             Some(common_audio_data),
             None,
@@ -442,7 +477,7 @@ impl TadEmu {
 
     fn _load_song_into_memory(
         &mut self,
-        song_id: ItemId,
+        song_id: Option<ItemId>,
         song: &SongData,
         override_cad: Option<&CommonAudioData>,
         song_skip: Option<SongSkip>,
@@ -451,7 +486,10 @@ impl TadEmu {
         const LOADER_DATA_TYPE_ADDR: usize = addresses::LOADER_DATA_TYPE as usize;
 
         self.song_loaded = false;
+        self.common_audio_data_loaded = false;
         self.song_id = None;
+
+        self.sfx_queue = None;
 
         let common_audio_data = match (override_cad, &self.common_audio_data) {
             (Some(d), _) => d,
@@ -544,10 +582,27 @@ impl TadEmu {
         // Unpause the audio driver
         self.emu.write_io_ports([io_commands::UNPAUSE, 0, 0, 0]);
 
-        self.song_id = Some(song_id);
+        self.previous_command = io_commands::UNPAUSE;
+
+        self.song_id = song_id;
         self.song_loaded = true;
+        self.common_audio_data_loaded = override_cad.is_none();
 
         Ok(())
+    }
+
+    fn is_io_command_acknowledged(&self) -> bool {
+        self.emu.read_io_ports()[0] == self.previous_command
+    }
+
+    fn try_send_io_command(&mut self, command: u8, param1: u8, param2: u8) {
+        if self.is_io_command_acknowledged() {
+            let command = ((self.previous_command ^ u8::MAX) & IO_COMMAND_I_MASK)
+                | (command & IO_COMMAND_MASK);
+
+            self.emu.write_io_ports([command, param1, param2, 0]);
+            self.previous_command = command;
+        }
     }
 
     fn set_enabled_channels_mask(&mut self, mask: ChannelsMask) {
@@ -556,12 +611,72 @@ impl TadEmu {
         apuram[addresses::ENABLED_CHANNELS_MASK as usize] = mask.0;
     }
 
+    fn queue_sound_effect(&mut self, data: Arc<CompiledSoundEffect>) {
+        if self.common_audio_data_loaded && self.song_loaded {
+            self.sfx_queue = Some(data);
+        } else {
+            let r = self.load_blank_song().is_ok();
+            if r {
+                self.sfx_queue = Some(data);
+            }
+        }
+    }
+
+    fn process_sfx_queue(&mut self) {
+        const COMMON_DATA_ADDR_H: u8 = (addresses::COMMON_DATA >> 8) as u8;
+        const SFX_SOA_INSTRUCTION_PTR_H: Range<usize> = Range {
+            start: addresses::CHANNEL_INSTRUCTION_PTR_H as usize + FIRST_SFX_CHANNEL,
+            end: addresses::CHANNEL_INSTRUCTION_PTR_H as usize + FIRST_SFX_CHANNEL + N_SFX_CHANNELS,
+        };
+
+        if self.sfx_queue.is_none()
+            || !self.common_audio_data_loaded
+            || !self.is_io_command_acknowledged()
+        {
+            return;
+        }
+
+        let common_data = match &self.common_audio_data {
+            Some(c) => c,
+            None => return,
+        };
+
+        let sfx = match &self.sfx_queue {
+            Some(sfx) => sfx,
+            None => return,
+        };
+
+        if sfx.bytecode().len() >= SFX_BUFFER_SIZE {
+            self.sfx_queue = None;
+            return;
+        }
+
+        let apuram = self.emu.apuram_mut();
+
+        let active_sfx_channels = apuram[SFX_SOA_INSTRUCTION_PTR_H]
+            .iter()
+            .any(|&pc_h| pc_h > COMMON_DATA_ADDR_H);
+
+        if active_sfx_channels {
+            self.try_send_io_command(io_commands::STOP_SOUND_EFFECTS, 0, 0);
+        } else {
+            let bc = sfx.bytecode();
+            let sfx_buffer = &mut apuram[common_data.sfx_data_aram_range()];
+            sfx_buffer[..bc.len()].copy_from_slice(bc);
+
+            self.try_send_io_command(io_commands::PLAY_SOUND_EFFECT, 0, CENTER_PAN);
+            self.sfx_queue = None;
+        }
+    }
+
     fn emulate(&mut self) -> &[i16; RingBuffer::EMU_BUFFER_SIZE] {
         const EMPTY_BUFFER: [i16; RingBuffer::EMU_BUFFER_SIZE] = [0; RingBuffer::EMU_BUFFER_SIZE];
 
         if !self.song_loaded {
             return &EMPTY_BUFFER;
         }
+
+        self.process_sfx_queue();
 
         self.emu.emulate()
     }
@@ -726,6 +841,12 @@ impl AudioThread {
                     return self.play_song();
                 }
             }
+            AudioMessage::PlaySoundEffect(sfx_data) => {
+                if self.tad.load_blank_song().is_ok() {
+                    self.tad.queue_sound_effect(sfx_data);
+                    return self.play_song();
+                }
+            }
             AudioMessage::PlaySample(id, common_data, song_data) => {
                 if self.tad.play_sample(id, &common_data, &song_data).is_ok() {
                     return self.play_song();
@@ -758,7 +879,9 @@ impl AudioThread {
     // Returns Some if the AudioMessage could not be processed
     #[must_use]
     fn play_song(&mut self) -> Option<AudioMessage> {
-        self.tad.song_id()?;
+        if !self.tad.song_loaded() {
+            return None;
+        }
 
         let audio_subsystem = self.sdl_context.audio().unwrap();
         let desired_spec = AudioSpecDesired {
@@ -825,6 +948,22 @@ impl AudioThread {
                 }
 
                 AudioMessage::CommonAudioDataChanged(data) => self.tad.load_common_audio_data(data),
+
+                AudioMessage::PlaySoundEffect(sfx_data) => match state {
+                    PlayState::Running => {
+                        self.tad.queue_sound_effect(sfx_data);
+                    }
+                    PlayState::Paused
+                    | PlayState::PauseRequested
+                    | PlayState::Pausing
+                    | PlayState::SongFinished => {
+                        if self.tad.load_blank_song().is_ok() {
+                            self.tad.queue_sound_effect(sfx_data);
+                            state = PlayState::Running;
+                            playback.resume();
+                        }
+                    }
+                },
 
                 AudioMessage::PlaySong(id, song, ticks_to_skip, channels_mask) => {
                     // Pause playback to prevent buffer overrun when tick_to_skip is large.

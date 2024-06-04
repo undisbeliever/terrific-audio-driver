@@ -13,12 +13,21 @@ use crate::errors::{CommonAudioDataError, CommonAudioDataErrors};
 use crate::samples::SampleAndInstrumentData;
 use crate::sound_effects::CombinedSoundEffectsData;
 
+use std::ops::Range;
+
 #[derive(Clone)]
-pub struct CommonAudioData(Vec<u8>);
+pub struct CommonAudioData {
+    data: Vec<u8>,
+    sfx_data_aram_range: Range<usize>,
+}
 
 impl CommonAudioData {
     pub fn data(&self) -> &[u8] {
-        &self.0
+        &self.data
+    }
+
+    pub fn sfx_data_aram_range(&self) -> Range<usize> {
+        self.sfx_data_aram_range.clone()
     }
 }
 
@@ -124,5 +133,11 @@ pub fn build_common_audio_data(
 
     assert_eq!(out.len(), common_data_size);
 
-    Ok(CommonAudioData(out))
+    Ok(CommonAudioData {
+        data: out,
+        sfx_data_aram_range: Range {
+            start: usize::from(sfx_data_addr),
+            end: usize::from(sfx_data_addr) + sound_effects.sfx_data.len(),
+        },
+    })
 }

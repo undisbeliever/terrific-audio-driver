@@ -94,9 +94,15 @@ pub mod addresses {
 pub const TAD_IO_VERSION: usize = _symbols::TAD_IO_VERSION;
 
 pub const N_MUSIC_CHANNELS: usize = 6;
+pub const N_SFX_CHANNELS: usize = 2;
+pub const FIRST_SFX_CHANNEL: usize = N_MUSIC_CHANNELS;
+
 pub const N_VOICES: usize = 8;
 
 pub const N_NESTED_LOOPS: usize = 3;
+
+pub const MAX_PAN: u8 = 128;
+pub const CENTER_PAN: u8 = MAX_PAN / 2;
 
 // Song ID 0 is silence
 pub const FIRST_SONG_ID: usize = 1;
@@ -184,4 +190,9 @@ pub const SFX_TICK_CLOCK: u8 = 64;
 pub mod io_commands {
     pub const PAUSE: u8 = 0;
     pub const UNPAUSE: u8 = 2;
+    pub const PLAY_SOUND_EFFECT: u8 = 4;
+    pub const STOP_SOUND_EFFECTS: u8 = 8;
 }
+
+pub const IO_COMMAND_MASK: u8 = 0b00001110;
+pub const IO_COMMAND_I_MASK: u8 = 0b11100001;

@@ -4,7 +4,7 @@
 //
 // SPDX-License-Identifier: MIT
 
-use crate::bytecode::{BcTerminator, BytecodeContext};
+use crate::bytecode::{opcodes, BcTerminator, BytecodeContext};
 use crate::bytecode_assembler::BytecodeAssembler;
 use crate::data::{
     load_text_file_with_limit, InstrumentOrSample, Name, TextFile, UniqueNamesList,
@@ -299,6 +299,15 @@ pub fn blank_compiled_sound_effects() -> CombinedSoundEffectsData {
     CombinedSoundEffectsData {
         sfx_data: Vec::new(),
         sfx_offsets: Vec::new(),
+    }
+}
+
+/// Create a `CombinedSoundEffectsData` that contains a single blank sound-effect.
+/// Used by the GUI to allocate a block of Audio-RAM that the audio-thread can write sound-effect bytecode to.
+pub fn tad_gui_sfx_data(buffer_size: usize) -> CombinedSoundEffectsData {
+    CombinedSoundEffectsData {
+        sfx_data: vec![opcodes::DISABLE_CHANNEL; buffer_size],
+        sfx_offsets: vec![0; 1],
     }
 }
 

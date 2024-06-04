@@ -8,7 +8,7 @@ use crate::names::NameGetter;
 use crate::sample_analyser::{self, SampleAnalysis};
 use crate::GuiMessage;
 
-use crate::audio_thread::{AudioMessage, ChannelsMask, SongSkip};
+use crate::audio_thread::{AudioMessage, ChannelsMask, SongSkip, SFX_BUFFER_SIZE};
 
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
@@ -31,7 +31,9 @@ use compiler::samples::{
     SampleSampleData, WAV_EXTENSION,
 };
 use compiler::songs::{sound_effect_to_song, test_sample_song, SongData};
-use compiler::sound_effects::blank_compiled_sound_effects;
+use compiler::sound_effects::{
+    blank_compiled_sound_effects, tad_gui_sfx_data, CombinedSoundEffectsData,
+};
 use compiler::sound_effects::{compile_sound_effect_input, CompiledSoundEffect, SoundEffectInput};
 use compiler::spc_file_export::export_spc_file;
 
@@ -557,6 +559,7 @@ fn create_sample_compiler<'a>(
 fn combine_sample_data(
     instruments: &CList<data::Instrument, Option<InstrumentSampleData>>,
     samples: &CList<data::Sample, Option<SampleSampleData>>,
+    blank_sfx_data: &CombinedSoundEffectsData,
 ) -> Result<(CommonAudioData, PitchTable), CombineSamplesError> {
     let expected_instruments_len = instruments.items().len();
     let expected_samples_len = samples.items().len();
@@ -590,9 +593,7 @@ fn combine_sample_data(
         }
     };
 
-    let blank_sfx = blank_compiled_sound_effects();
-
-    match build_common_audio_data(&samples, &blank_sfx) {
+    match build_common_audio_data(&samples, blank_sfx_data) {
         Ok(common) => Ok((common, samples.take_pitch_table())),
         Err(e) => Err(CombineSamplesError::CommonAudioData(e)),
     }
@@ -729,8 +730,9 @@ fn build_common_data_no_sfx_and_song_dependencies(
     samples: &CList<data::Sample, Option<SampleSampleData>>,
     sfx_export_order: &IList<data::Name>,
     sound_effects: &CList<SoundEffectInput, Option<Arc<CompiledSoundEffect>>>,
+    blank_sfx_data: &CombinedSoundEffectsData,
 ) -> Result<(CommonAudioData, SongDependencies), CombineSamplesError> {
-    let (common_data, pitch_table) = combine_sample_data(instruments, samples)?;
+    let (common_data, pitch_table) = combine_sample_data(instruments, samples, blank_sfx_data)?;
 
     match data::validate_instrument_and_sample_names(
         instruments.items().iter(),
@@ -1059,6 +1061,8 @@ fn bg_thread(
         audio_sender,
     };
 
+    let blank_sfx_data = tad_gui_sfx_data(SFX_BUFFER_SIZE);
+
     let mut sfx_export_order = IList::new();
     let mut pf_songs = IList::new();
     let mut instruments = CList::new();
@@ -1113,6 +1117,7 @@ fn bg_thread(
                         &samples,
                         &sfx_export_order,
                         &sound_effects,
+                        &blank_sfx_data,
                     ) {
                         Ok((cd, sd)) => {
                             let data_size = cd.data().len();
@@ -1173,13 +1178,12 @@ fn bg_thread(
             }
             ToCompiler::PlaySoundEffect(id) => {
                 if let Some(Some(sfx_data)) = sound_effects.get_output_for_id(&id) {
-                    let song_data = Arc::new(sound_effect_to_song(sfx_data));
-                    sender.send_audio(AudioMessage::PlaySong(
-                        id,
-                        song_data,
-                        None,
-                        ChannelsMask::ALL,
-                    ));
+                    if sfx_data.bytecode().len() <= SFX_BUFFER_SIZE {
+                        sender.send_audio(AudioMessage::PlaySoundEffect(sfx_data.clone()));
+                    } else {
+                        let s = Arc::new(sound_effect_to_song(sfx_data));
+                        sender.send_audio(AudioMessage::PlaySong(id, s, None, ChannelsMask::ALL));
+                    }
                 }
             }
 

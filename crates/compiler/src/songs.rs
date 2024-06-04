@@ -184,6 +184,25 @@ pub fn test_sample_song(
     Ok(sfx_bytecode_to_song(&bytecode))
 }
 
+pub fn blank_song() -> SongData {
+    let mut data = vec![0; SONG_HEADER_SIZE];
+    let channels = &mut data[0..SONG_HEADER_CHANNELS_SIZE];
+    channels.fill(0xff); // Disable all channels
+
+    SongData {
+        data,
+        metadata: MetaData::blank_sfx_metadata(),
+        duration: None,
+        sections: Vec::new(),
+        instruments: Vec::new(),
+        channels: Default::default(),
+        subroutines: Vec::new(),
+
+        #[cfg(feature = "mml_tracking")]
+        tracking: None,
+    }
+}
+
 pub fn sound_effect_to_song(sfx: &CompiledSoundEffect) -> SongData {
     sfx_bytecode_to_song(sfx.bytecode())
 }
