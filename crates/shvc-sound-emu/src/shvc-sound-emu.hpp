@@ -44,6 +44,8 @@ struct ShvcSoundEmu {
 
   auto write_dsp_register(uint8_t addr, uint8_t value) -> void;
   auto write_smp_register(uint8_t addr, uint8_t value) -> void;
+
+  auto read_io_ports() const -> std::array<uint8_t, 4>;
   auto write_io_ports(std::array<uint8_t, 4> ports) -> void;
 
   auto set_spc_registers(uint16_t pc, uint8_t a, uint8_t x, uint8_t y, uint8_t psw, uint8_t sp) -> void;

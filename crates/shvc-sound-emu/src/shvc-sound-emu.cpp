@@ -67,6 +67,14 @@ auto ShvcSoundEmu::write_smp_register(uint8_t addr, uint8_t value) -> void {
   }
 }
 
+auto ShvcSoundEmu::read_io_ports() const -> std::array<uint8_t, 4> {
+  std::array<uint8_t, 4> out;
+  for(auto i : range(4)) {
+    out[i] = smp.portRead(i);
+  }
+  return out;
+}
+
 auto ShvcSoundEmu::write_io_ports(std::array<uint8_t, 4> ports) -> void {
   for(auto i : range(4)) {
     smp.portWrite(i, ports[i]);

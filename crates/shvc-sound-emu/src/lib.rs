@@ -26,6 +26,8 @@ mod ffi {
 
         fn write_dsp_register(self: Pin<&mut ShvcSoundEmu>, addr: u8, value: u8);
         fn write_smp_register(self: Pin<&mut ShvcSoundEmu>, addr: u8, value: u8);
+
+        fn read_io_ports(self: &ShvcSoundEmu) -> [u8; 4];
         fn write_io_ports(self: Pin<&mut ShvcSoundEmu>, ports: [u8; 4]);
 
         fn set_spc_registers(
@@ -93,6 +95,10 @@ impl ShvcSoundEmu {
 
     pub fn write_smp_register(self: &mut ShvcSoundEmu, addr: u8, value: u8) {
         self.emu.pin_mut().write_smp_register(addr, value)
+    }
+
+    pub fn read_io_ports(&self) -> [u8; 4] {
+        self.emu.read_io_ports()
     }
 
     pub fn write_io_ports(&mut self, ports: [u8; 4]) {
