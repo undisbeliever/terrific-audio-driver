@@ -62,6 +62,7 @@ mod item_id {
         }
     }
 }
+use compiler::time::TickCounter;
 pub use item_id::ItemId;
 
 #[derive(Debug)]
@@ -98,6 +99,7 @@ pub enum ToCompiler {
     FinishedEditingSoundEffects,
 
     SoundEffects(ItemChanged<SoundEffectInput>),
+    PlaySongForSfxTab(ItemId, TickCounter),
     PlaySoundEffect(ItemId, Pan),
 
     SongTabClosed(ItemId),
@@ -1174,6 +1176,28 @@ fn bg_thread(
                         &sound_effects,
                         &sender,
                     );
+                }
+            }
+            ToCompiler::PlaySongForSfxTab(id, ticks) => {
+                if let Some(song) = songs.get_song_data(&id) {
+                    let song_ticks = song.max_tick_count();
+
+                    // Ensure at least some of the song is audible when the user presses play
+                    let max_ticks = match song.is_looping() {
+                        true => song_ticks.value() * 2 / 3,
+                        false => song_ticks.value() / 10 * 9,
+                    };
+                    let ticks = ticks.value().clamp(0, max_ticks);
+
+                    sender.send_audio(AudioMessage::PlaySong(
+                        id,
+                        song.clone(),
+                        Some(SongSkip {
+                            subroutine_index: None,
+                            target_ticks: TickCounter::new(ticks),
+                        }),
+                        ChannelsMask::ALL,
+                    ));
                 }
             }
             ToCompiler::PlaySoundEffect(id, pan) => {

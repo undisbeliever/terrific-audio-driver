@@ -68,6 +68,7 @@ use compiler::path::{ParentPathBuf, SourcePathBuf};
 use compiler::songs::SongData;
 use compiler::sound_effects::{convert_sfx_inputs_lossy, SoundEffectInput, SoundEffectsFile};
 
+use compiler::time::TickCounter;
 use compiler_thread::{PlaySampleArgs, SampleOutput};
 use files::{
     new_project_dialog, open_instrument_sample_dialog, open_project_dialog,
@@ -153,6 +154,7 @@ pub enum GuiMessage {
     RecompileSong(ItemId, String),
 
     PlaySong(ItemId, String, Option<SongSkip>, ChannelsMask),
+    PlaySongForSfxTab(ItemId, TickCounter),
     PlaySoundEffect(ItemId, Pan),
     PlayInstrument(ItemId, PlaySampleArgs),
     PlaySample(ItemId, PlaySampleArgs),
@@ -360,6 +362,8 @@ impl Project {
                 self.mark_project_file_unsaved(a);
 
                 if let Some(c) = c {
+                    self.sound_effects_tab.pf_songs_changed();
+
                     let _ = self.compiler_sender.send(ToCompiler::ProjectSongs(c));
                 }
             }
@@ -425,6 +429,11 @@ impl Project {
                     ticks_to_skip,
                     channels_mask,
                 ));
+            }
+            GuiMessage::PlaySongForSfxTab(id, ticks) => {
+                let _ = self
+                    .compiler_sender
+                    .send(ToCompiler::PlaySongForSfxTab(id, ticks));
             }
             GuiMessage::PlaySoundEffect(id, pan) => {
                 let _ = self
@@ -802,6 +811,11 @@ impl Project {
             }
             None => window.set_label(DEFAULT_WINDOW_TITLE),
         }
+
+        self.sound_effects_tab.selected_tab_changed(
+            self.tab_manager.selected_file(),
+            self.data.project_songs.list(),
+        );
     }
 
     fn maybe_set_sfx_file(&mut self, sfx_file: SoundEffectsFile) {

@@ -110,6 +110,22 @@ impl SongData {
         self.duration
     }
 
+    pub fn max_tick_count(&self) -> TickCounter {
+        self.channels
+            .iter()
+            .flatten()
+            .map(|c| c.tick_counter)
+            .max()
+            .unwrap_or(TickCounter::new(0))
+    }
+
+    pub fn is_looping(&self) -> bool {
+        self.channels
+            .iter()
+            .flatten()
+            .any(|c| c.loop_point.is_some())
+    }
+
     pub fn sections(&self) -> &[Section] {
         &self.sections
     }

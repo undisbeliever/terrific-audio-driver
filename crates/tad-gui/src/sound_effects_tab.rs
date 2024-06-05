@@ -8,29 +8,32 @@ use crate::audio_thread::Pan;
 use crate::compiler_thread::{ItemId, SfxError, SoundEffectOutput};
 use crate::helpers::*;
 use crate::list_editor::{
-    CompilerOutputGui, LaVec, ListAction, ListButtons, ListEditor, ListEditorTable, ListMessage,
-    ListState, TableCompilerOutput, TableMapping,
+    CompilerOutputGui, LaVec, ListAction, ListButtons, ListData, ListEditor, ListEditorTable,
+    ListMessage, ListState, TableCompilerOutput, TableMapping,
 };
 use crate::mml_editor::{CompiledEditorData, EditorBuffer, MmlEditor, TextErrorRef, TextFormat};
 use crate::tables::{RowWithStatus, SimpleRow};
 use crate::tabs::{FileType, Tab};
 use crate::{GuiMessage, ProjectData, SoundEffectsData};
 
+use compiler::data;
 use compiler::data::Name;
 use compiler::driver_constants::{CENTER_PAN, MAX_PAN};
 use compiler::errors::SfxErrorLines;
 use compiler::sound_effects::{SoundEffectInput, SoundEffectText, SoundEffectsFile};
 
+use compiler::time::TickCounter;
 use fltk::app::{self, event_key};
 use fltk::button::Button;
 use fltk::enums::{Color, Event, Font, Key};
 use fltk::frame::Frame;
 use fltk::group::{Flex, Pack, PackType};
-use fltk::input::Input;
+use fltk::input::{Input, IntInput};
 use fltk::menu::Choice;
 use fltk::prelude::*;
 use fltk::text::{TextBuffer, TextDisplay, WrapMode};
 use fltk::valuator::HorNiceSlider;
+use fltk::widget::Widget;
 
 use std::cell::RefCell;
 use std::collections::HashSet;
@@ -113,6 +116,14 @@ impl TableCompilerOutput for SoundEffectMapping {
     }
 }
 
+struct SongChoice {
+    choice: Choice,
+    song_ids: Vec<ItemId>,
+
+    song_choice_out_of_date: bool,
+    pending_song_change: Option<ItemId>,
+}
+
 pub struct State {
     sender: app::Sender<GuiMessage>,
     selected: Option<usize>,
@@ -120,6 +131,8 @@ pub struct State {
     old_name: Name,
 
     pan: HorNiceSlider,
+    song_choice: SongChoice,
+    song_start_ticks: IntInput,
 
     name: Input,
     sound_effect_type: Choice,
@@ -218,6 +231,15 @@ impl SoundEffectsTab {
 
         let mut reset_pan = button("", "Center pan");
 
+        let _spacer = Widget::default().with_size(button_size / 4, button_size);
+
+        let song_choice = SongChoice::new(button_size * 4, 0);
+        let mut song_start_ticks = IntInput::default().with_size(button_size * 3 / 2, 0);
+        let mut play_song_button = button("@>", "Play song (F7)");
+
+        song_start_ticks.set_value("500");
+        song_start_ticks.set_tooltip("Song start position (in ticks)");
+
         main_toolbar.end();
 
         let mut name_flex = Flex::default();
@@ -270,6 +292,8 @@ impl SoundEffectsTab {
             selected_id: None,
 
             pan,
+            song_choice,
+            song_start_ticks,
 
             old_name: "sfx".parse().unwrap(),
             name: name.clone(),
@@ -288,6 +312,10 @@ impl SoundEffectsTab {
                         s.borrow_mut().play_sound_effect();
                         true
                     }
+                    Key::F7 => {
+                        s.borrow_mut().play_song();
+                        true
+                    }
                     _ => false,
                 },
                 _ => false,
@@ -299,6 +327,15 @@ impl SoundEffectsTab {
             move |_| {
                 if let Ok(mut s) = s.try_borrow_mut() {
                     s.play_sound_effect();
+                }
+            }
+        });
+
+        play_song_button.set_callback({
+            let s = state.clone();
+            move |_| {
+                if let Ok(mut s) = s.try_borrow_mut() {
+                    s.play_song();
                 }
             }
         });
@@ -412,6 +449,79 @@ impl SoundEffectsTab {
     pub fn n_missing_sfx_changed(&mut self, n_missing: usize) {
         self.add_missing_sfx_button.set_active(n_missing != 0);
     }
+
+    pub fn pf_songs_changed(&mut self) {
+        if let Ok(mut s) = self.state.try_borrow_mut() {
+            s.song_choice.pf_songs_changed();
+        }
+    }
+
+    pub fn selected_tab_changed(&mut self, tab: Option<FileType>, pf_songs: &ListData<data::Song>) {
+        if let Ok(mut s) = self.state.try_borrow_mut() {
+            s.song_choice.selected_tab_changed(tab, pf_songs);
+        }
+    }
+}
+
+impl SongChoice {
+    fn new(width: i32, height: i32) -> Self {
+        Self {
+            choice: Choice::default().with_size(width, height),
+            song_ids: Vec::new(),
+            song_choice_out_of_date: true,
+            pending_song_change: None,
+        }
+    }
+
+    fn selected_song_id(&self) -> Option<ItemId> {
+        let index = usize::try_from(self.choice.value()).ok()?;
+        self.song_ids.get(index).cloned()
+    }
+
+    fn pf_songs_changed(&mut self) {
+        self.song_choice_out_of_date = true;
+    }
+
+    fn selected_tab_changed(&mut self, tab: Option<FileType>, pf_songs: &ListData<data::Song>) {
+        match tab {
+            Some(FileType::SoundEffects) => self.update_song_list(pf_songs),
+            Some(FileType::Song(song_id)) => self.pending_song_change = Some(song_id),
+            _ => (),
+        }
+    }
+
+    fn update_song_list(&mut self, pf_songs: &ListData<data::Song>) {
+        if self.song_choice_out_of_date {
+            let old_song_id = usize::try_from(self.choice.value())
+                .ok()
+                .and_then(|i| self.song_ids.get(i))
+                .cloned();
+
+            self.choice.clear();
+            self.song_ids.clear();
+
+            for (id, song) in pf_songs.iter() {
+                self.choice.add_choice(song.name.as_str());
+                self.song_ids.push(*id);
+            }
+
+            if self.pending_song_change.is_none() {
+                self.pending_song_change = old_song_id;
+                if old_song_id.is_none() {
+                    self.choice.set_value(0);
+                }
+            }
+
+            self.song_choice_out_of_date = false;
+        }
+
+        if let Some(song_id) = &self.pending_song_change {
+            let new_value = self.song_ids.iter().position(|i| i == song_id).unwrap_or(0);
+            self.choice.set_value(new_value.try_into().unwrap_or(0));
+
+            self.pending_song_change = None;
+        }
+    }
 }
 
 impl ListEditor<SoundEffectInput> for SoundEffectsTab {
@@ -523,6 +633,14 @@ impl State {
             | ListAction::Add(..)
             | ListAction::AddMultiple(..)
             | ListAction::Edit(..) => (),
+        }
+    }
+
+    fn play_song(&mut self) {
+        if let Some(id) = self.song_choice.selected_song_id() {
+            let ticks = TickCounter::new(self.song_start_ticks.value().parse().unwrap_or(0));
+
+            self.sender.send(GuiMessage::PlaySongForSfxTab(id, ticks));
         }
     }
 

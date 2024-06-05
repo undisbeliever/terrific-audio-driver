@@ -193,6 +193,10 @@ where
         Self { max_size, list }
     }
 
+    pub fn iter(&self) -> impl Iterator<Item = &(ItemId, T)> {
+        self.list.iter()
+    }
+
     pub fn item_iter(&self) -> impl Iterator<Item = &T> {
         self.list.iter().map(|(_id, item)| item)
     }
