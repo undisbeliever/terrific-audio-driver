@@ -4,6 +4,7 @@
 //
 // SPDX-License-Identifier: MIT
 
+use crate::audio_thread::Pan;
 use crate::compiler_thread::{ItemId, SfxError, SoundEffectOutput};
 use crate::helpers::*;
 use crate::list_editor::{
@@ -16,6 +17,7 @@ use crate::tabs::{FileType, Tab};
 use crate::{GuiMessage, ProjectData, SoundEffectsData};
 
 use compiler::data::Name;
+use compiler::driver_constants::{CENTER_PAN, MAX_PAN};
 use compiler::errors::SfxErrorLines;
 use compiler::sound_effects::{SoundEffectInput, SoundEffectText, SoundEffectsFile};
 
@@ -28,6 +30,7 @@ use fltk::input::Input;
 use fltk::menu::Choice;
 use fltk::prelude::*;
 use fltk::text::{TextBuffer, TextDisplay, WrapMode};
+use fltk::valuator::HorNiceSlider;
 
 use std::cell::RefCell;
 use std::collections::HashSet;
@@ -115,6 +118,8 @@ pub struct State {
     selected: Option<usize>,
     selected_id: Option<ItemId>,
     old_name: Name,
+
+    pan: HorNiceSlider,
 
     name: Input,
     sound_effect_type: Choice,
@@ -204,6 +209,15 @@ impl SoundEffectsTab {
         // NOTE: toolbar shortcuts are handled by the `group.handle()` callback below
         let mut play_button = button("@>", "Play sound effect (F5)");
 
+        label_packed("  Pan:  ");
+        let mut pan = HorNiceSlider::default().with_size(button_size * 4, button_size);
+        pan.set_range(0.0, MAX_PAN as f64);
+        pan.set_value(CENTER_PAN as f64);
+        pan.set_slider_size(1.0 / MAX_PAN as f32);
+        pan.set_tooltip("Pan");
+
+        let mut reset_pan = button("", "Center pan");
+
         main_toolbar.end();
 
         let mut name_flex = Flex::default();
@@ -243,10 +257,19 @@ impl SoundEffectsTab {
             move |_| s.send(GuiMessage::AddMissingSoundEffects)
         });
 
+        reset_pan.set_callback({
+            let mut p = pan.clone();
+            move |_| {
+                p.set_value(CENTER_PAN as f64);
+            }
+        });
+
         let state = Rc::new(RefCell::from(State {
             sender,
             selected: None,
             selected_id: None,
+
+            pan,
 
             old_name: "sfx".parse().unwrap(),
             name: name.clone(),
@@ -506,7 +529,9 @@ impl State {
     fn play_sound_effect(&mut self) {
         self.commit_sfx();
         if let Some(id) = self.selected_id {
-            self.sender.send(GuiMessage::PlaySoundEffect(id));
+            let pan = Pan::checked_new(self.pan.value() as u8);
+
+            self.sender.send(GuiMessage::PlaySoundEffect(id, pan));
         }
     }
 

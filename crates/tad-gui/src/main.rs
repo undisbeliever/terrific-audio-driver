@@ -59,7 +59,7 @@ use crate::tabs::{
     Tab, TabManager,
 };
 
-use audio_thread::{AudioMessage, AudioMonitor, ChannelsMask, SongSkip};
+use audio_thread::{AudioMessage, AudioMonitor, ChannelsMask, Pan, SongSkip};
 
 use compiler::data;
 use compiler::data::ProjectFile;
@@ -153,7 +153,7 @@ pub enum GuiMessage {
     RecompileSong(ItemId, String),
 
     PlaySong(ItemId, String, Option<SongSkip>, ChannelsMask),
-    PlaySoundEffect(ItemId),
+    PlaySoundEffect(ItemId, Pan),
     PlayInstrument(ItemId, PlaySampleArgs),
     PlaySample(ItemId, PlaySampleArgs),
     PauseResumeAudio(ItemId),
@@ -426,8 +426,10 @@ impl Project {
                     channels_mask,
                 ));
             }
-            GuiMessage::PlaySoundEffect(id) => {
-                let _ = self.compiler_sender.send(ToCompiler::PlaySoundEffect(id));
+            GuiMessage::PlaySoundEffect(id, pan) => {
+                let _ = self
+                    .compiler_sender
+                    .send(ToCompiler::PlaySoundEffect(id, pan));
             }
             GuiMessage::PlayInstrument(id, args) => {
                 let _ = self

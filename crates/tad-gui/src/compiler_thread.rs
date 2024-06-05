@@ -8,7 +8,7 @@ use crate::names::NameGetter;
 use crate::sample_analyser::{self, SampleAnalysis};
 use crate::GuiMessage;
 
-use crate::audio_thread::{AudioMessage, ChannelsMask, SongSkip, SFX_BUFFER_SIZE};
+use crate::audio_thread::{AudioMessage, ChannelsMask, Pan, SongSkip, SFX_BUFFER_SIZE};
 
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
@@ -98,7 +98,7 @@ pub enum ToCompiler {
     FinishedEditingSoundEffects,
 
     SoundEffects(ItemChanged<SoundEffectInput>),
-    PlaySoundEffect(ItemId),
+    PlaySoundEffect(ItemId, Pan),
 
     SongTabClosed(ItemId),
     SongChanged(ItemId, String),
@@ -1176,10 +1176,10 @@ fn bg_thread(
                     );
                 }
             }
-            ToCompiler::PlaySoundEffect(id) => {
+            ToCompiler::PlaySoundEffect(id, pan) => {
                 if let Some(Some(sfx_data)) = sound_effects.get_output_for_id(&id) {
                     if sfx_data.bytecode().len() <= SFX_BUFFER_SIZE {
-                        sender.send_audio(AudioMessage::PlaySoundEffect(sfx_data.clone()));
+                        sender.send_audio(AudioMessage::PlaySoundEffect(sfx_data.clone(), pan));
                     } else {
                         let s = Arc::new(sound_effect_to_song(sfx_data));
                         sender.send_audio(AudioMessage::PlaySong(id, s, None, ChannelsMask::ALL));

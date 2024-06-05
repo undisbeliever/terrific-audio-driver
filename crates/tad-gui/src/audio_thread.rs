@@ -10,6 +10,7 @@ use brr::{BrrSample, SAMPLES_PER_BLOCK};
 use compiler::audio_driver;
 use compiler::bytecode_interpreter;
 use compiler::common_audio_data::CommonAudioData;
+use compiler::driver_constants::MAX_PAN;
 use compiler::driver_constants::{
     addresses, io_commands, LoaderDataType, CENTER_PAN, FIRST_SFX_CHANNEL, IO_COMMAND_I_MASK,
     IO_COMMAND_MASK, N_SFX_CHANNELS,
@@ -46,6 +47,19 @@ pub const N_VOICES: usize = 8;
 
 // Amount of Audio-RAM (in common-audio-data) to allocate to sound effects
 pub const SFX_BUFFER_SIZE: usize = 128;
+
+#[derive(Debug, Clone, Copy)]
+pub struct Pan(u8);
+
+impl Pan {
+    pub fn checked_new(value: u8) -> Self {
+        if value < MAX_PAN {
+            Self(value)
+        } else {
+            Self(CENTER_PAN)
+        }
+    }
+}
 
 #[derive(Debug, Clone, Copy)]
 pub struct ChannelsMask(pub u8);
@@ -88,7 +102,7 @@ pub enum AudioMessage {
 
     CommonAudioDataChanged(Option<CommonAudioData>),
     PlaySong(ItemId, Arc<SongData>, Option<SongSkip>, ChannelsMask),
-    PlaySoundEffect(Arc<CompiledSoundEffect>),
+    PlaySoundEffect(Arc<CompiledSoundEffect>, Pan),
     PlaySample(ItemId, CommonAudioData, Arc<SongData>),
 
     PlayBrrSampleAt32Khz(Arc<BrrSample>),
@@ -396,7 +410,7 @@ struct TadEmu {
     song_id: Option<ItemId>,
 
     previous_command: u8,
-    sfx_queue: Option<Arc<CompiledSoundEffect>>,
+    sfx_queue: Option<(Arc<CompiledSoundEffect>, Pan)>,
 }
 
 impl TadEmu {
@@ -611,13 +625,13 @@ impl TadEmu {
         apuram[addresses::ENABLED_CHANNELS_MASK as usize] = mask.0;
     }
 
-    fn queue_sound_effect(&mut self, data: Arc<CompiledSoundEffect>) {
+    fn queue_sound_effect(&mut self, sfx: Arc<CompiledSoundEffect>, pan: Pan) {
         if self.common_audio_data_loaded && self.song_loaded {
-            self.sfx_queue = Some(data);
+            self.sfx_queue = Some((sfx, pan));
         } else {
             let r = self.load_blank_song().is_ok();
             if r {
-                self.sfx_queue = Some(data);
+                self.sfx_queue = Some((sfx, pan));
             }
         }
     }
@@ -641,7 +655,7 @@ impl TadEmu {
             None => return,
         };
 
-        let sfx = match &self.sfx_queue {
+        let (sfx, pan) = match &self.sfx_queue {
             Some(sfx) => sfx,
             None => return,
         };
@@ -658,13 +672,13 @@ impl TadEmu {
             .any(|&pc_h| pc_h > COMMON_DATA_ADDR_H);
 
         if active_sfx_channels {
-            self.try_send_io_command(io_commands::STOP_SOUND_EFFECTS, 0, 0);
+            self.try_send_io_command(io_commands::STOP_SOUND_EFFECTS, 0, pan.0);
         } else {
             let bc = sfx.bytecode();
             let sfx_buffer = &mut apuram[common_data.sfx_data_aram_range()];
             sfx_buffer[..bc.len()].copy_from_slice(bc);
 
-            self.try_send_io_command(io_commands::PLAY_SOUND_EFFECT, 0, CENTER_PAN);
+            self.try_send_io_command(io_commands::PLAY_SOUND_EFFECT, 0, pan.0);
             self.sfx_queue = None;
         }
     }
@@ -841,9 +855,9 @@ impl AudioThread {
                     return self.play_song();
                 }
             }
-            AudioMessage::PlaySoundEffect(sfx_data) => {
+            AudioMessage::PlaySoundEffect(sfx_data, pan) => {
                 if self.tad.load_blank_song().is_ok() {
-                    self.tad.queue_sound_effect(sfx_data);
+                    self.tad.queue_sound_effect(sfx_data, pan);
                     return self.play_song();
                 }
             }
@@ -949,16 +963,16 @@ impl AudioThread {
 
                 AudioMessage::CommonAudioDataChanged(data) => self.tad.load_common_audio_data(data),
 
-                AudioMessage::PlaySoundEffect(sfx_data) => match state {
+                AudioMessage::PlaySoundEffect(sfx_data, pan) => match state {
                     PlayState::Running => {
-                        self.tad.queue_sound_effect(sfx_data);
+                        self.tad.queue_sound_effect(sfx_data, pan);
                     }
                     PlayState::Paused
                     | PlayState::PauseRequested
                     | PlayState::Pausing
                     | PlayState::SongFinished => {
                         if self.tad.load_blank_song().is_ok() {
-                            self.tad.queue_sound_effect(sfx_data);
+                            self.tad.queue_sound_effect(sfx_data, pan);
                             state = PlayState::Running;
                             playback.resume();
                         }
