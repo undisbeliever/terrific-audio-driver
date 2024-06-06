@@ -605,7 +605,7 @@ fn build_play_instrument_data(
     instruments: &CList<data::Instrument, Option<InstrumentSampleData>>,
     id: ItemId,
     args: PlaySampleArgs,
-) -> Option<(CommonAudioData, Arc<SongData>)> {
+) -> Option<(CommonAudioData, SongData)> {
     let sample = match instruments.get_output_for_id(&id) {
         Some(Some(s)) => s,
         _ => return None,
@@ -619,11 +619,7 @@ fn build_play_instrument_data(
 
     let blank_sfx = blank_compiled_sound_effects();
     let common_audio_data = build_common_audio_data(&sample_data, &blank_sfx).ok()?;
-
-    let song_data = match test_sample_song(0, args.note, args.note_length, args.envelope) {
-        Ok(sd) => Arc::new(sd),
-        Err(_) => return None,
-    };
+    let song_data = test_sample_song(0, args.note, args.note_length, args.envelope).ok()?;
 
     Some((common_audio_data, song_data))
 }
@@ -632,7 +628,7 @@ fn build_play_sample_data(
     samples: &CList<data::Sample, Option<SampleSampleData>>,
     id: ItemId,
     args: PlaySampleArgs,
-) -> Option<(CommonAudioData, Arc<SongData>)> {
+) -> Option<(CommonAudioData, SongData)> {
     let sample = match samples.get_output_for_id(&id) {
         Some(Some(s)) => s.clone(),
         _ => return None,
@@ -642,11 +638,7 @@ fn build_play_sample_data(
 
     let blank_sfx = blank_compiled_sound_effects();
     let common_audio_data = build_common_audio_data(&sample_data, &blank_sfx).ok()?;
-
-    let song_data = match test_sample_song(0, args.note, args.note_length, args.envelope) {
-        Ok(sd) => Arc::new(sd),
-        Err(_) => return None,
-    };
+    let song_data = test_sample_song(0, args.note, args.note_length, args.envelope).ok()?;
 
     Some((common_audio_data, song_data))
 }
@@ -1231,12 +1223,12 @@ fn bg_thread(
             }
             ToCompiler::PlayInstrument(id, args) => {
                 if let Some((c_data, s_data)) = build_play_instrument_data(&instruments, id, args) {
-                    sender.send_audio(AudioMessage::PlaySample(id, c_data, s_data));
+                    sender.send_audio(AudioMessage::PlaySample(id, c_data, s_data.into()));
                 }
             }
             ToCompiler::PlaySample(id, args) => {
                 if let Some((c_data, s_data)) = build_play_sample_data(&samples, id, args) {
-                    sender.send_audio(AudioMessage::PlaySample(id, c_data, s_data));
+                    sender.send_audio(AudioMessage::PlaySample(id, c_data, s_data.into()));
                 }
             }
 
