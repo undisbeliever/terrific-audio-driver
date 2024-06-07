@@ -162,6 +162,7 @@ pub enum GuiMessage {
     PlayEditedSoundEffect(ItemId, Pan),
     PlayInstrument(ItemId, PlaySampleArgs),
     PlaySample(ItemId, PlaySampleArgs),
+    PauseAudio,
     PauseResumeAudio(ItemId),
     SetEnabledChannels(ItemId, ChannelsMask),
 
@@ -465,6 +466,9 @@ impl Project {
             }
             GuiMessage::PlaySample(id, args) => {
                 let _ = self.compiler_sender.send(ToCompiler::PlaySample(id, args));
+            }
+            GuiMessage::PauseAudio => {
+                let _ = self.audio_sender.send(AudioMessage::Pause);
             }
             GuiMessage::PauseResumeAudio(id) => {
                 let _ = self.audio_sender.send(AudioMessage::PauseResume(id));

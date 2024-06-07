@@ -223,7 +223,7 @@ impl SoundEffectsTab {
         let mut play_button = button("@>", "Play sound effect (F5)");
 
         label_packed("  Pan:  ");
-        let mut pan = HorNiceSlider::default().with_size(button_size * 4, button_size);
+        let mut pan = HorNiceSlider::default().with_size(button_size * 5 / 2, button_size);
         pan.set_range(0.0, MAX_PAN as f64);
         pan.set_value(CENTER_PAN as f64);
         pan.set_slider_size(1.0 / MAX_PAN as f32);
@@ -236,6 +236,7 @@ impl SoundEffectsTab {
         let song_choice = SongChoice::new(button_size * 4, 0);
         let mut song_start_ticks = IntInput::default().with_size(button_size * 3 / 2, 0);
         let mut play_song_button = button("@>", "Play song (F7)");
+        let mut stop_button = button("@square", "Stop (F8)");
 
         song_start_ticks.set_value("500");
         song_start_ticks.set_tooltip("Song start position (in ticks)");
@@ -287,7 +288,7 @@ impl SoundEffectsTab {
         });
 
         let state = Rc::new(RefCell::from(State {
-            sender,
+            sender: sender.clone(),
             selected: None,
             selected_id: None,
 
@@ -306,6 +307,7 @@ impl SoundEffectsTab {
         // This is done here so focus is not stolen from the editor.
         group.handle({
             let s = state.clone();
+            let sender = sender.clone();
             move |_widget, ev| match ev {
                 Event::KeyDown => match event_key() {
                     Key::F5 => {
@@ -314,6 +316,10 @@ impl SoundEffectsTab {
                     }
                     Key::F7 => {
                         s.borrow_mut().play_song();
+                        true
+                    }
+                    Key::F8 => {
+                        sender.send(GuiMessage::PauseAudio);
                         true
                     }
                     _ => false,
@@ -328,6 +334,13 @@ impl SoundEffectsTab {
                 if let Ok(mut s) = s.try_borrow_mut() {
                     s.play_sound_effect();
                 }
+            }
+        });
+
+        stop_button.set_callback({
+            let s = sender.clone();
+            move |_| {
+                s.send(GuiMessage::PauseAudio);
             }
         });
 
