@@ -25,6 +25,7 @@ use shvc_sound_emu::ShvcSoundEmu;
 extern crate sdl2;
 use sdl2::audio::{AudioCallback, AudioDevice, AudioSpecDesired};
 
+use std::collections::HashMap;
 use std::ops::Range;
 use std::rc::Rc;
 use std::sync::{mpsc, Arc, Mutex};
@@ -88,6 +89,13 @@ pub struct SongSkip {
     pub target_ticks: TickCounter,
 }
 
+pub struct CommonAudioDataWithSfxBuffer(pub CommonAudioData);
+
+pub struct CommonAudioDataWithSfx {
+    pub common_audio_data: CommonAudioData,
+    pub sfx_id_map: HashMap<ItemId, usize>,
+}
+
 pub enum AudioMessage {
     RingBufferConsumed(PrivateToken),
 
@@ -100,9 +108,13 @@ pub enum AudioMessage {
     PauseResume(ItemId),
     SetEnabledChannels(ItemId, ChannelsMask),
 
-    CommonAudioDataChanged(Option<CommonAudioData>),
+    CommonAudioDataChanged(Option<CommonAudioDataWithSfxBuffer>),
+    CommandAudioDataWithSfxChanged(Option<CommonAudioDataWithSfx>),
+
     PlaySong(ItemId, Arc<SongData>, Option<SongSkip>, ChannelsMask),
-    PlaySoundEffect(Arc<CompiledSoundEffect>, Pan),
+    PlaySoundEffectCommand(ItemId, Pan),
+    PlaySongWithSfxBuffer(ItemId, Arc<SongData>, Option<SongSkip>),
+    PlaySfxUsingSfxBuffer(Arc<CompiledSoundEffect>, Pan),
     PlaySample(ItemId, CommonAudioData, Box<SongData>),
 
     PlayBrrSampleAt32Khz(Arc<BrrSample>),
@@ -399,7 +411,14 @@ enum AudioDataState {
     NotLoaded,
     CommonDataOutOfDate, // Audio is still platying
     Sample(CommonAudioData, Box<SongData>),
-    SongWithSfxBuffer(Rc<CommonAudioData>, Arc<SongData>),
+    SongAndSfx(Rc<CommonAudioDataWithSfx>, Arc<SongData>),
+    SongWithSfxBuffer(Rc<CommonAudioDataWithSfxBuffer>, Arc<SongData>),
+}
+
+enum SfxQueue {
+    None,
+    TestSfx(Arc<CompiledSoundEffect>, Pan),
+    PlaySfx(ItemId, Pan),
 }
 
 struct TadEmu {
@@ -408,13 +427,14 @@ struct TadEmu {
     blank_song: Arc<SongData>,
 
     stereo_flag: StereoFlag,
-    cad_with_sfx_buffer: Option<Rc<CommonAudioData>>,
+    cad_with_sfx_buffer: Option<Rc<CommonAudioDataWithSfxBuffer>>,
+    cad_with_sfx: Option<Rc<CommonAudioDataWithSfx>>,
 
     data_state: AudioDataState,
     song_id: Option<ItemId>,
 
     previous_command: u8,
-    sfx_queue: Option<(Arc<CompiledSoundEffect>, Pan)>,
+    sfx_queue: SfxQueue,
 }
 
 impl TadEmu {
@@ -427,10 +447,11 @@ impl TadEmu {
             blank_song: Arc::new(blank_song()),
             stereo_flag: StereoFlag::Stereo,
             cad_with_sfx_buffer: None,
+            cad_with_sfx: None,
             data_state: AudioDataState::NotLoaded,
             song_id: None,
             previous_command: 0,
-            sfx_queue: None,
+            sfx_queue: SfxQueue::None,
         }
     }
 
@@ -440,6 +461,7 @@ impl TadEmu {
 
             AudioDataState::CommonDataOutOfDate
             | AudioDataState::Sample(..)
+            | AudioDataState::SongAndSfx(..)
             | AudioDataState::SongWithSfxBuffer(..) => true,
         }
     }
@@ -452,9 +474,19 @@ impl TadEmu {
         self.stereo_flag = stereo_flag;
     }
 
-    fn load_cad_with_sfx_buffer(&mut self, common_audio_data: Option<CommonAudioData>) {
+    fn load_cad_with_sfx_buffer(
+        &mut self,
+        common_audio_data: Option<CommonAudioDataWithSfxBuffer>,
+    ) {
         self.cad_with_sfx_buffer = common_audio_data.map(Rc::new);
         if matches!(self.data_state, AudioDataState::SongWithSfxBuffer(..)) {
+            self.data_state = AudioDataState::CommonDataOutOfDate;
+        }
+    }
+
+    fn load_cad_with_sfx(&mut self, cad: Option<CommonAudioDataWithSfx>) {
+        self.cad_with_sfx = cad.map(Rc::new);
+        if matches!(self.data_state, AudioDataState::SongAndSfx(..)) {
             self.data_state = AudioDataState::CommonDataOutOfDate;
         }
     }
@@ -471,29 +503,43 @@ impl TadEmu {
         song_skip: Option<SongSkip>,
         enabled_channels_mask: ChannelsMask,
     ) -> Result<(), ()> {
-        let cad = match &self.cad_with_sfx_buffer {
-            Some(cad) => cad.clone(),
-            None => return Err(()),
+        let data = match (&self.cad_with_sfx, &self.cad_with_sfx_buffer) {
+            (Some(c), _) => AudioDataState::SongAndSfx(c.clone(), song),
+            (None, Some(c)) => AudioDataState::SongWithSfxBuffer(c.clone(), song),
+            (None, None) => return Err(()),
         };
-        self._load_song_into_memory(
-            Some(song_id),
-            AudioDataState::SongWithSfxBuffer(cad, song),
-            song_skip,
-            enabled_channels_mask,
-        )
+        self._load_song_into_memory(Some(song_id), data, song_skip, enabled_channels_mask)
     }
 
     fn load_blank_song(&mut self) -> Result<(), ()> {
-        let cad = match &self.cad_with_sfx_buffer {
-            Some(cad) => cad.clone(),
+        let blank_song = &self.blank_song;
+        let data = match (&self.cad_with_sfx, &self.cad_with_sfx_buffer) {
+            (Some(c), _) => AudioDataState::SongAndSfx(c.clone(), blank_song.clone()),
+            (None, Some(c)) => AudioDataState::SongWithSfxBuffer(c.clone(), blank_song.clone()),
+            (None, None) => return Err(()),
+        };
+        self._load_song_into_memory(None, data, None, ChannelsMask::ALL)
+    }
+
+    fn load_song_with_sfx_buffer(
+        &mut self,
+        song_id: ItemId,
+        song: Arc<SongData>,
+        song_skip: Option<SongSkip>,
+    ) -> Result<(), ()> {
+        let data = match &self.cad_with_sfx_buffer {
+            Some(c) => AudioDataState::SongWithSfxBuffer(c.clone(), song),
             None => return Err(()),
         };
-        self._load_song_into_memory(
-            None,
-            AudioDataState::SongWithSfxBuffer(cad, self.blank_song.clone()),
-            None,
-            ChannelsMask::ALL,
-        )
+        self._load_song_into_memory(Some(song_id), data, song_skip, ChannelsMask::ALL)
+    }
+
+    fn load_blank_song_with_sfx_buffer(&mut self) -> Result<(), ()> {
+        let data = match &self.cad_with_sfx_buffer {
+            Some(c) => AudioDataState::SongWithSfxBuffer(c.clone(), self.blank_song.clone()),
+            None => return Err(()),
+        };
+        self._load_song_into_memory(None, data, None, ChannelsMask::ALL)
     }
 
     fn play_sample(
@@ -522,13 +568,14 @@ impl TadEmu {
         self.data_state = AudioDataState::NotLoaded;
         self.song_id = None;
 
-        self.sfx_queue = None;
+        self.sfx_queue = SfxQueue::None;
 
         let (common_audio_data, song) = match &data_state {
             AudioDataState::NotLoaded => return Err(()),
             AudioDataState::CommonDataOutOfDate => return Err(()),
             AudioDataState::Sample(cad, sd) => (cad, sd.as_ref()),
-            AudioDataState::SongWithSfxBuffer(cad, sd) => (cad.as_ref(), sd.as_ref()),
+            AudioDataState::SongAndSfx(cad, sd) => (&cad.common_audio_data, sd.as_ref()),
+            AudioDataState::SongWithSfxBuffer(cad, sd) => (&cad.0, sd.as_ref()),
         };
 
         self.emu.power(true);
@@ -644,13 +691,24 @@ impl TadEmu {
         apuram[addresses::ENABLED_CHANNELS_MASK as usize] = mask.0;
     }
 
-    fn queue_sound_effect(&mut self, sfx: Arc<CompiledSoundEffect>, pan: Pan) {
-        if matches!(self.data_state, AudioDataState::SongWithSfxBuffer(..)) {
-            self.sfx_queue = Some((sfx, pan));
+    fn queue_sound_effect(&mut self, id: ItemId, pan: Pan) {
+        if matches!(self.data_state, AudioDataState::SongAndSfx(..)) {
+            self.sfx_queue = SfxQueue::PlaySfx(id, pan);
         } else {
             let r = self.load_blank_song().is_ok();
             if r {
-                self.sfx_queue = Some((sfx, pan));
+                self.sfx_queue = SfxQueue::PlaySfx(id, pan);
+            }
+        }
+    }
+
+    fn queue_test_sfx(&mut self, sfx: Arc<CompiledSoundEffect>, pan: Pan) {
+        if matches!(self.data_state, AudioDataState::SongWithSfxBuffer(..)) {
+            self.sfx_queue = SfxQueue::TestSfx(sfx, pan);
+        } else {
+            let r = self.load_blank_song_with_sfx_buffer().is_ok();
+            if r {
+                self.sfx_queue = SfxQueue::TestSfx(sfx, pan);
             }
         }
     }
@@ -662,44 +720,63 @@ impl TadEmu {
             end: addresses::CHANNEL_INSTRUCTION_PTR_H as usize + FIRST_SFX_CHANNEL + N_SFX_CHANNELS,
         };
 
-        let (sfx, pan) = match &self.sfx_queue {
-            Some(sfx) => sfx,
-            None => return,
-        };
+        match &self.sfx_queue {
+            SfxQueue::None => (),
+            SfxQueue::PlaySfx(id, pan) => {
+                let c = match &self.data_state {
+                    AudioDataState::SongAndSfx(c, _) => c.as_ref(),
+                    _ => {
+                        self.sfx_queue = SfxQueue::None;
+                        return;
+                    }
+                };
 
-        let common_data = match &self.data_state {
-            AudioDataState::SongWithSfxBuffer(cad, _) => cad.as_ref(),
-            _ => {
-                self.sfx_queue = None;
-                return;
+                if self.is_io_command_acknowledged() {
+                    if let Some(&sfx_index) = c.sfx_id_map.get(id) {
+                        if let Ok(sfx) = sfx_index.try_into() {
+                            self.try_send_io_command(io_commands::PLAY_SOUND_EFFECT, sfx, pan.0);
+                        }
+                    }
+                    self.sfx_queue = SfxQueue::None;
+                }
+            }
+            SfxQueue::TestSfx(sfx, pan) => {
+                let common_data = match &self.data_state {
+                    AudioDataState::SongWithSfxBuffer(cad, _) => cad.as_ref(),
+                    _ => {
+                        self.sfx_queue = SfxQueue::None;
+                        return;
+                    }
+                };
+
+                if !self.is_io_command_acknowledged() {
+                    return;
+                }
+
+                if sfx.bytecode().len() >= SFX_BUFFER_SIZE {
+                    self.sfx_queue = SfxQueue::None;
+                    return;
+                }
+
+                let apuram = self.emu.apuram_mut();
+
+                let active_sfx_channels = apuram[SFX_SOA_INSTRUCTION_PTR_H]
+                    .iter()
+                    .any(|&pc_h| pc_h > COMMON_DATA_ADDR_H);
+
+                if active_sfx_channels {
+                    // sfx_buffer can only onld one sound effect at a time
+                    self.try_send_io_command(io_commands::STOP_SOUND_EFFECTS, 0, pan.0);
+                } else {
+                    let bc = sfx.bytecode();
+                    let sfx_buffer = &mut apuram[common_data.0.sfx_data_aram_range()];
+                    sfx_buffer[..bc.len()].copy_from_slice(bc);
+
+                    self.try_send_io_command(io_commands::PLAY_SOUND_EFFECT, 0, pan.0);
+                    self.sfx_queue = SfxQueue::None;
+                }
             }
         };
-
-        if !self.is_io_command_acknowledged() {
-            return;
-        }
-
-        if sfx.bytecode().len() >= SFX_BUFFER_SIZE {
-            self.sfx_queue = None;
-            return;
-        }
-
-        let apuram = self.emu.apuram_mut();
-
-        let active_sfx_channels = apuram[SFX_SOA_INSTRUCTION_PTR_H]
-            .iter()
-            .any(|&pc_h| pc_h > COMMON_DATA_ADDR_H);
-
-        if active_sfx_channels {
-            self.try_send_io_command(io_commands::STOP_SOUND_EFFECTS, 0, pan.0);
-        } else {
-            let bc = sfx.bytecode();
-            let sfx_buffer = &mut apuram[common_data.sfx_data_aram_range()];
-            sfx_buffer[..bc.len()].copy_from_slice(bc);
-
-            self.try_send_io_command(io_commands::PLAY_SOUND_EFFECT, 0, pan.0);
-            self.sfx_queue = None;
-        }
     }
 
     fn emulate(&mut self) -> &[i16; RingBuffer::EMU_BUFFER_SIZE] {
@@ -857,6 +934,9 @@ impl AudioThread {
             AudioMessage::CommonAudioDataChanged(data) => {
                 self.tad.load_cad_with_sfx_buffer(data);
             }
+            AudioMessage::CommandAudioDataWithSfxChanged(d) => {
+                self.tad.load_cad_with_sfx(d);
+            }
             AudioMessage::SetStereoFlag(sf) => {
                 self.tad.set_stereo_flag(sf);
 
@@ -874,9 +954,25 @@ impl AudioThread {
                     return self.play_song();
                 }
             }
-            AudioMessage::PlaySoundEffect(sfx_data, pan) => {
+            AudioMessage::PlaySoundEffectCommand(id, pan) => {
                 if self.tad.load_blank_song().is_ok() {
-                    self.tad.queue_sound_effect(sfx_data, pan);
+                    self.tad.queue_sound_effect(id, pan);
+                    return self.play_song();
+                }
+            }
+            AudioMessage::PlaySongWithSfxBuffer(song_id, song, song_skip) => {
+                if self
+                    .tad
+                    .load_song_with_sfx_buffer(song_id, song.clone(), song_skip)
+                    .is_ok()
+                {
+                    self.send_started_song_message(song_id, song);
+                    return self.play_song();
+                }
+            }
+            AudioMessage::PlaySfxUsingSfxBuffer(sfx_data, pan) => {
+                if self.tad.load_blank_song_with_sfx_buffer().is_ok() {
+                    self.tad.queue_test_sfx(sfx_data, pan);
                     return self.play_song();
                 }
             }
@@ -983,22 +1079,9 @@ impl AudioThread {
                 AudioMessage::CommonAudioDataChanged(data) => {
                     self.tad.load_cad_with_sfx_buffer(data)
                 }
-
-                AudioMessage::PlaySoundEffect(sfx_data, pan) => match state {
-                    PlayState::Running => {
-                        self.tad.queue_sound_effect(sfx_data, pan);
-                    }
-                    PlayState::Paused
-                    | PlayState::PauseRequested
-                    | PlayState::Pausing
-                    | PlayState::SongFinished => {
-                        if self.tad.load_blank_song().is_ok() {
-                            self.tad.queue_sound_effect(sfx_data, pan);
-                            state = PlayState::Running;
-                            playback.resume();
-                        }
-                    }
-                },
+                AudioMessage::CommandAudioDataWithSfxChanged(data) => {
+                    self.tad.load_cad_with_sfx(data)
+                }
 
                 AudioMessage::PlaySong(id, song, song_skip, channels_mask) => {
                     // Pause playback to prevent buffer overrun when tick_to_skip is large.
@@ -1020,6 +1103,59 @@ impl AudioThread {
                         }
                     }
                 }
+
+                AudioMessage::PlaySoundEffectCommand(id, pan) => match state {
+                    PlayState::Running => {
+                        self.tad.queue_sound_effect(id, pan);
+                    }
+                    PlayState::Paused
+                    | PlayState::PauseRequested
+                    | PlayState::Pausing
+                    | PlayState::SongFinished => {
+                        if self.tad.load_blank_song().is_ok() {
+                            self.tad.queue_sound_effect(id, pan);
+                            state = PlayState::Running;
+                            playback.resume();
+                        }
+                    }
+                },
+
+                AudioMessage::PlaySongWithSfxBuffer(id, song, song_skip) => {
+                    // Pause playback to prevent buffer overrun when tick_to_skip is large.
+                    playback.pause();
+                    playback.lock().reset();
+                    match self
+                        .tad
+                        .load_song_with_sfx_buffer(id, song.clone(), song_skip)
+                    {
+                        Ok(()) => {
+                            self.send_started_song_message(id, song);
+
+                            state = PlayState::Running;
+                            playback.resume();
+                        }
+                        Err(()) => {
+                            // Stop playback
+                            state = PlayState::PauseRequested;
+                        }
+                    }
+                }
+
+                AudioMessage::PlaySfxUsingSfxBuffer(sfx_data, pan) => match state {
+                    PlayState::Running => {
+                        self.tad.queue_test_sfx(sfx_data, pan);
+                    }
+                    PlayState::Paused
+                    | PlayState::PauseRequested
+                    | PlayState::Pausing
+                    | PlayState::SongFinished => {
+                        if self.tad.load_blank_song_with_sfx_buffer().is_ok() {
+                            self.tad.queue_test_sfx(sfx_data, pan);
+                            state = PlayState::Running;
+                            playback.resume();
+                        }
+                    }
+                },
 
                 AudioMessage::PlaySample(id, common_data, song_data) => {
                     playback.pause();

@@ -8,7 +8,10 @@ use crate::names::NameGetter;
 use crate::sample_analyser::{self, SampleAnalysis};
 use crate::GuiMessage;
 
-use crate::audio_thread::{AudioMessage, ChannelsMask, Pan, SongSkip, SFX_BUFFER_SIZE};
+use crate::audio_thread::{
+    AudioMessage, ChannelsMask, CommonAudioDataWithSfx, CommonAudioDataWithSfxBuffer, Pan,
+    SongSkip, SFX_BUFFER_SIZE,
+};
 
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
@@ -32,7 +35,7 @@ use compiler::samples::{
 };
 use compiler::songs::{sound_effect_to_song, test_sample_song, SongData};
 use compiler::sound_effects::{
-    blank_compiled_sound_effects, tad_gui_sfx_data, CombinedSoundEffectsData,
+    blank_compiled_sound_effects, combine_sound_effects, tad_gui_sfx_data, CombinedSoundEffectsData,
 };
 use compiler::sound_effects::{compile_sound_effect_input, CompiledSoundEffect, SoundEffectInput};
 use compiler::spc_file_export::export_spc_file;
@@ -99,8 +102,9 @@ pub enum ToCompiler {
     FinishedEditingSoundEffects,
 
     SoundEffects(ItemChanged<SoundEffectInput>),
-    PlaySongForSfxTab(ItemId, TickCounter),
-    PlaySoundEffect(ItemId, Pan),
+    PlaySongWithSfxBuffer(ItemId, TickCounter),
+    PlaySfxUsingSfxBuffer(ItemId, Pan),
+    PlaySoundEffectCommand(ItemId, Pan),
 
     SongTabClosed(ItemId),
     SongChanged(ItemId, String),
@@ -139,6 +143,7 @@ pub enum CompilerOutput {
 
     Song(ItemId, SongOutput),
 
+    CanSendPlaySfxCommands(bool),
     NumberOfMissingSoundEffects(usize),
 
     SoundEffectsDataSize(usize),
@@ -561,7 +566,7 @@ fn create_sample_compiler<'a>(
 fn combine_sample_data(
     instruments: &CList<data::Instrument, Option<InstrumentSampleData>>,
     samples: &CList<data::Sample, Option<SampleSampleData>>,
-    blank_sfx_data: &CombinedSoundEffectsData,
+    sfx_data: &CombinedSoundEffectsData,
 ) -> Result<(CommonAudioData, PitchTable), CombineSamplesError> {
     let expected_instruments_len = instruments.items().len();
     let expected_samples_len = samples.items().len();
@@ -595,7 +600,7 @@ fn combine_sample_data(
         }
     };
 
-    match build_common_audio_data(&samples, blank_sfx_data) {
+    match build_common_audio_data(&samples, sfx_data) {
         Ok(common) => Ok((common, samples.take_pitch_table())),
         Err(e) => Err(CombineSamplesError::CommonAudioData(e)),
     }
@@ -719,6 +724,7 @@ impl SongDependencies {
     }
 }
 
+// ::TODO optimise (somehow combine with build_common_audio_data_with_sfx)::
 fn build_common_data_no_sfx_and_song_dependencies(
     instruments: &CList<data::Instrument, Option<InstrumentSampleData>>,
     samples: &CList<data::Sample, Option<SampleSampleData>>,
@@ -743,6 +749,25 @@ fn build_common_data_no_sfx_and_song_dependencies(
         }
         Err(e) => Err(CombineSamplesError::UniqueNamesError(e)),
     }
+}
+
+// ::TODO optimise (somehow combine with build_common_data_no_sfx_and_song_dependencies)::
+fn build_common_audio_data_with_sfx(
+    instruments: &CList<data::Instrument, Option<InstrumentSampleData>>,
+    samples: &CList<data::Sample, Option<SampleSampleData>>,
+    sfx_export_order: &IList<data::Name>,
+    sound_effects: &CList<SoundEffectInput, Option<Arc<CompiledSoundEffect>>>,
+) -> Option<CommonAudioDataWithSfx> {
+    let sound_effects = sound_effects.output().iter().filter_map(|s| s.as_deref());
+
+    let sfx_data = combine_sound_effects(sound_effects, sfx_export_order.items()).ok()?;
+
+    let (common_audio_data, _) = combine_sample_data(instruments, samples, &sfx_data).ok()?;
+
+    Some(CommonAudioDataWithSfx {
+        common_audio_data,
+        sfx_id_map: sfx_export_order.map.clone(),
+    })
 }
 
 struct SongState {
@@ -1128,17 +1153,42 @@ fn bg_thread(
                     }
 
                     sender.send_audio(AudioMessage::CommonAudioDataChanged(
-                        common_audio_data_no_sfx.clone(),
+                        common_audio_data_no_sfx
+                            .as_ref()
+                            .map(|c| CommonAudioDataWithSfxBuffer(c.clone())),
                     ));
 
                     let c = create_sfx_compiler(&song_dependencies, &sender);
                     sound_effects.recompile_all(c);
+
+                    sound_effects.clear_changed_flag();
+                    let c = build_common_audio_data_with_sfx(
+                        &instruments,
+                        &samples,
+                        &sfx_export_order,
+                        &sound_effects,
+                    );
+                    sender.send(CompilerOutput::CanSendPlaySfxCommands(c.is_some()));
+                    sender.send_audio(AudioMessage::CommandAudioDataWithSfxChanged(c));
 
                     songs.compile_all_songs(&pf_songs, &song_dependencies, &sender);
                 }
             }
 
             ToCompiler::FinishedEditingSoundEffects => {
+                if sound_effects.is_changed() {
+                    sound_effects.clear_changed_flag();
+
+                    let c = build_common_audio_data_with_sfx(
+                        &instruments,
+                        &samples,
+                        &sfx_export_order,
+                        &sound_effects,
+                    );
+                    sender.send(CompilerOutput::CanSendPlaySfxCommands(c.is_some()));
+                    sender.send_audio(AudioMessage::CommandAudioDataWithSfxChanged(c));
+                }
+
                 update_sfx_data_size_and_recheck_all_songs(
                     &mut song_dependencies,
                     &mut songs,
@@ -1170,7 +1220,7 @@ fn bg_thread(
                     );
                 }
             }
-            ToCompiler::PlaySongForSfxTab(id, ticks) => {
+            ToCompiler::PlaySongWithSfxBuffer(id, ticks) => {
                 if let Some(song) = songs.get_song_data(&id) {
                     let song_ticks = song.max_tick_count();
 
@@ -1181,26 +1231,29 @@ fn bg_thread(
                     };
                     let ticks = ticks.value().clamp(0, max_ticks);
 
-                    sender.send_audio(AudioMessage::PlaySong(
+                    sender.send_audio(AudioMessage::PlaySongWithSfxBuffer(
                         id,
                         song.clone(),
                         Some(SongSkip {
                             subroutine_index: None,
                             target_ticks: TickCounter::new(ticks),
                         }),
-                        ChannelsMask::ALL,
                     ));
                 }
             }
-            ToCompiler::PlaySoundEffect(id, pan) => {
+            ToCompiler::PlaySfxUsingSfxBuffer(id, pan) => {
                 if let Some(Some(sfx_data)) = sound_effects.get_output_for_id(&id) {
                     if sfx_data.bytecode().len() <= SFX_BUFFER_SIZE {
-                        sender.send_audio(AudioMessage::PlaySoundEffect(sfx_data.clone(), pan));
+                        sender
+                            .send_audio(AudioMessage::PlaySfxUsingSfxBuffer(sfx_data.clone(), pan));
                     } else {
                         let s = Arc::new(sound_effect_to_song(sfx_data));
                         sender.send_audio(AudioMessage::PlaySong(id, s, None, ChannelsMask::ALL));
                     }
                 }
+            }
+            ToCompiler::PlaySoundEffectCommand(id, pan) => {
+                sender.send_audio(AudioMessage::PlaySoundEffectCommand(id, pan));
             }
 
             ToCompiler::SongTabClosed(id) => {

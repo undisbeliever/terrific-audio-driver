@@ -291,6 +291,14 @@ where
         let n_rows = state.data.len().try_into().unwrap_or(0);
         self.table.set_rows(n_rows);
     }
+
+    pub fn show(&mut self) {
+        self.table.show();
+    }
+
+    pub fn hide(&mut self) {
+        self.table.hide();
+    }
 }
 
 fn blank_callback(_: TableEvent, _: usize, _: i32) -> bool {

@@ -649,7 +649,7 @@ impl State {
         if let Some(id) = self.selected_id {
             let pan = Pan::checked_new(self.pan.value() as u8);
 
-            self.sender.send(GuiMessage::PlaySoundEffect(id, pan));
+            self.sender.send(GuiMessage::PlayEditedSoundEffect(id, pan));
         }
     }
 

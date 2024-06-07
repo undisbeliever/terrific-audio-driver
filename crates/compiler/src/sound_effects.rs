@@ -6,10 +6,7 @@
 
 use crate::bytecode::{opcodes, BcTerminator, BytecodeContext};
 use crate::bytecode_assembler::BytecodeAssembler;
-use crate::data::{
-    load_text_file_with_limit, InstrumentOrSample, Name, TextFile, UniqueNamesList,
-    UniqueNamesProjectFile,
-};
+use crate::data::{load_text_file_with_limit, InstrumentOrSample, Name, TextFile, UniqueNamesList};
 use crate::driver_constants::SFX_TICK_CLOCK;
 use crate::errors::{
     BytecodeAssemblerError, CombineSoundEffectsError, ErrorWithPos, FileError, SoundEffectError,
@@ -239,9 +236,9 @@ pub struct CombinedSoundEffectsData {
     pub(crate) sfx_offsets: Vec<usize>,
 }
 
-fn build_sfx_map(
-    sound_effects: &[CompiledSoundEffect],
-) -> Result<HashMap<&Name, &[u8]>, CombineSoundEffectsError> {
+fn build_sfx_map<'a>(
+    sound_effects: impl Iterator<Item = &'a CompiledSoundEffect>,
+) -> Result<HashMap<&'a Name, &'a [u8]>, CombineSoundEffectsError> {
     let mut out = HashMap::new();
     let mut duplicates = Vec::new();
 
@@ -258,24 +255,22 @@ fn build_sfx_map(
     }
 }
 
-pub fn combine_sound_effects(
-    sound_effects: &[CompiledSoundEffect],
-    pf: &UniqueNamesProjectFile,
+pub fn combine_sound_effects<'a>(
+    sound_effects: impl Iterator<Item = &'a CompiledSoundEffect>,
+    export_order: &[Name],
 ) -> Result<CombinedSoundEffectsData, CombineSoundEffectsError> {
-    if sound_effects.is_empty() {
-        return Err(CombineSoundEffectsError::NoSoundEffectFiles);
-    }
-
     let sfx_map = build_sfx_map(sound_effects)?;
 
-    let export_order = &pf.sound_effects;
+    if sfx_map.is_empty() {
+        return Err(CombineSoundEffectsError::NoSoundEffectFiles);
+    }
 
     let mut sfx_data = Vec::new();
     let mut sfx_offsets = Vec::with_capacity(export_order.len());
 
     let mut missing = Vec::new();
 
-    for name in export_order.list() {
+    for name in export_order {
         match sfx_map.get(name) {
             Some(s) => {
                 sfx_offsets.push(sfx_data.len());

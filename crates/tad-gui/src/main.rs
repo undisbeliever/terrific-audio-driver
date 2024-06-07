@@ -24,6 +24,7 @@ mod names;
 mod sample_analyser;
 mod sample_editor;
 mod sample_widgets;
+mod sfx_window;
 mod tables;
 mod tabs;
 
@@ -82,6 +83,7 @@ use licenses_dialog::LicensesDialog;
 use list_editor::ListPairWithCompilerOutputs;
 use monitor_timer::MonitorTimer;
 use sample_analyser::SampleAnalyserDialog;
+use sfx_window::SfxWindow;
 
 use std::collections::HashMap;
 use std::env;
@@ -122,6 +124,7 @@ pub enum GuiMessage {
     OpenMmlFile,
 
     ExportCurrentTabToSpcFile,
+    ToggleSfxWindow,
 
     OpenSfxFileDialog,
     NewSfxFile,
@@ -155,7 +158,8 @@ pub enum GuiMessage {
 
     PlaySong(ItemId, String, Option<SongSkip>, ChannelsMask),
     PlaySongForSfxTab(ItemId, TickCounter),
-    PlaySoundEffect(ItemId, Pan),
+    PlaySoundEffectCommand(usize, Pan),
+    PlayEditedSoundEffect(ItemId, Pan),
     PlayInstrument(ItemId, PlaySampleArgs),
     PlaySample(ItemId, PlaySampleArgs),
     PauseResumeAudio(ItemId),
@@ -237,6 +241,8 @@ struct Project {
     ///  1. `DisplayExt::set_buffer()` extends the lifetime of a `TextBuffer` to the lifetime of the program.
     ///  2. There might be an circular reference in the callbacks.
     closed_song_tabs: Vec<SongTab>,
+
+    sfx_window: SfxWindow,
 }
 
 impl Project {
@@ -306,6 +312,8 @@ impl Project {
                 sender.clone(),
             ),
 
+            sfx_window: SfxWindow::new(data.sfx_export_orders.list(), sender.clone()),
+
             samples_tab: SamplesTab::new(data.instruments(), data.samples(), sender.clone()),
             sound_effects_tab: SoundEffectsTab::new(sender.clone()),
             closed_song_tabs: Vec::new(),
@@ -347,6 +355,9 @@ impl Project {
                     .data
                     .sfx_export_orders
                     .process(m, &mut self.project_tab.sfx_export_order_table);
+
+                self.sfx_window.sfx_export_order_edited(&a);
+
                 self.mark_project_file_unsaved(a);
 
                 if let Some(c) = c {
@@ -433,12 +444,19 @@ impl Project {
             GuiMessage::PlaySongForSfxTab(id, ticks) => {
                 let _ = self
                     .compiler_sender
-                    .send(ToCompiler::PlaySongForSfxTab(id, ticks));
+                    .send(ToCompiler::PlaySongWithSfxBuffer(id, ticks));
             }
-            GuiMessage::PlaySoundEffect(id, pan) => {
+            GuiMessage::PlaySoundEffectCommand(index, pan) => {
+                if let Some((id, _)) = self.data.sfx_export_orders.list().get_with_id(index) {
+                    let _ = self
+                        .compiler_sender
+                        .send(ToCompiler::PlaySoundEffectCommand(id, pan));
+                }
+            }
+            GuiMessage::PlayEditedSoundEffect(id, pan) => {
                 let _ = self
                     .compiler_sender
-                    .send(ToCompiler::PlaySoundEffect(id, pan));
+                    .send(ToCompiler::PlaySfxUsingSfxBuffer(id, pan));
             }
             GuiMessage::PlayInstrument(id, args) => {
                 let _ = self
@@ -638,6 +656,8 @@ impl Project {
                 }
             }
 
+            GuiMessage::ToggleSfxWindow => self.sfx_window.show_or_hide(),
+
             // Ignore these messages, they are handled by MainWindow
             GuiMessage::ShowAboutTab => (),
             GuiMessage::ShowOrHideHelpSyntax => (),
@@ -720,6 +740,10 @@ impl Project {
 
                     self.tab_manager.set_selected_tab(&self.samples_tab);
                 }
+            }
+
+            CompilerOutput::CanSendPlaySfxCommands(can_play_sfx) => {
+                self.sfx_window.set_can_play_sfx(can_play_sfx);
             }
 
             CompilerOutput::NumberOfMissingSoundEffects(n_missing) => {
@@ -816,6 +840,8 @@ impl Project {
             self.tab_manager.selected_file(),
             self.data.project_songs.list(),
         );
+        self.sfx_window
+            .tab_changed(self.tab_manager.selected_file());
     }
 
     fn maybe_set_sfx_file(&mut self, sfx_file: SoundEffectsFile) {
@@ -841,6 +867,9 @@ impl Project {
         let _ = self.compiler_sender.send(ToCompiler::SoundEffects(
             sound_effects.replace_all_message(),
         ));
+        let _ = self
+            .compiler_sender
+            .send(ToCompiler::FinishedEditingSoundEffects);
 
         self.sfx_data = Some(SoundEffectsData {
             header: sfx_file.header,

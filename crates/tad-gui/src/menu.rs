@@ -32,6 +32,7 @@ const SAVE_ALL: &str = "&File/Save &All";
 
 const EXPORT_SPC: &str = "&File/&Export song to .spc";
 
+const AUDIO_SFX_WINDOW: &str = "&Audio/Sound &Effects";
 const AUDIO_STOP: &str = "&Audio/&Stop Audio";
 
 const AUDIO_MONO: &str = "&Audio/&Mono";
@@ -115,6 +116,13 @@ impl Menu {
         add(QUIT, Shortcut::None, fltk::menu::MenuFlag::Normal, || {
             GuiMessage::QuitRequested
         });
+
+        add(
+            AUDIO_SFX_WINDOW,
+            Shortcut::from_key(Key::F2),
+            fltk::menu::MenuFlag::Normal,
+            || GuiMessage::ToggleSfxWindow,
+        );
 
         add_audio(
             AUDIO_STOP,

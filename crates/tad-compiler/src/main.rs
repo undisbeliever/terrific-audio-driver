@@ -135,7 +135,7 @@ fn compile_sound_effects(
         }
     };
 
-    match sound_effects::combine_sound_effects(&sound_effects, pf) {
+    match sound_effects::combine_sound_effects(sound_effects.iter(), pf.sound_effects.list()) {
         Ok(sfx) => Ok(sfx),
         Err(e) => {
             eprintln!("Error compiling sound effects: {}", e);

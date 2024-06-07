@@ -127,6 +127,8 @@ impl SongTab {
             b.set_tooltip(&format!("Toggle channel {} (Ctrl {})", channel, i + 1));
             b
         });
+        spacer(spacing * 2);
+        let mut sfx_button = button("SFX", "Open play sound effect window");
 
         main_toolbar.end();
 
@@ -150,7 +152,7 @@ impl SongTab {
         editor.take_focus();
 
         let state = Rc::new(RefCell::from(State {
-            sender,
+            sender: sender.clone(),
             song_id,
             prev_channel_mask: ChannelsMask::ALL,
             channel_buttons,
@@ -314,6 +316,13 @@ impl SongTab {
                 });
             }
         }
+
+        sfx_button.set_callback({
+            let s = sender;
+            move |_| {
+                s.send(GuiMessage::ToggleSfxWindow);
+            }
+        });
 
         Self {
             state,
