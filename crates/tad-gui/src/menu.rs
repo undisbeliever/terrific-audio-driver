@@ -119,7 +119,7 @@ impl Menu {
 
         add(
             AUDIO_SFX_WINDOW,
-            Shortcut::from_key(Key::F2),
+            Shortcut::from_key(Key::F9),
             fltk::menu::MenuFlag::Normal,
             || GuiMessage::ToggleSfxWindow,
         );
