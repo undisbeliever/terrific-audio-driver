@@ -30,8 +30,8 @@ use compiler::path::{ParentPathBuf, SourcePathBuf};
 use compiler::pitch_table::PitchTable;
 use compiler::samples::{
     combine_samples, create_test_instrument_data, encode_or_load_brr_file,
-    load_sample_for_instrument, load_sample_for_sample, InstrumentSampleData, SampleFileCache,
-    SampleSampleData, WAV_EXTENSION,
+    load_sample_for_instrument, load_sample_for_sample, CompiledDataList, InstrumentSampleData,
+    SampleFileCache, SampleSampleData, WAV_EXTENSION,
 };
 use compiler::songs::{sound_effect_to_song, test_sample_song, SongData};
 use compiler::sound_effects::{
@@ -510,6 +510,24 @@ where
     }
 }
 
+impl<ItemT, OutT> CList<ItemT, Option<OutT>> {
+    fn count_errors(&self) -> usize {
+        self.output.iter().filter(|o| o.is_none()).count()
+    }
+}
+
+impl<ItemT, OutT> CompiledDataList for CList<ItemT, Option<OutT>> {
+    type Item = OutT;
+
+    fn expected_len(&self) -> usize {
+        self.output.len()
+    }
+
+    fn data_iter(&self) -> impl Iterator<Item = &Self::Item> {
+        self.output.iter().flatten()
+    }
+}
+
 struct Sender {
     sender: fltk::app::Sender<GuiMessage>,
     audio_sender: mpsc::Sender<AudioMessage>,
@@ -568,24 +586,9 @@ fn combine_sample_data(
     samples: &CList<data::Sample, Option<SampleSampleData>>,
     sfx_data: &CombinedSoundEffectsData,
 ) -> Result<(CommonAudioData, PitchTable), CombineSamplesError> {
-    let expected_instruments_len = instruments.items().len();
-    let expected_samples_len = samples.items().len();
-
-    let instruments: Vec<_> = instruments
-        .output()
-        .iter()
-        .filter_map(|s| s.as_ref().cloned())
-        .collect();
-
-    let samples: Vec<_> = samples
-        .output()
-        .iter()
-        .filter_map(|s| s.as_ref().cloned())
-        .collect();
-
     // Test all instruments and samples are compiled
-    let n_instrument_errors = expected_instruments_len - instruments.len();
-    let n_sample_errors = expected_samples_len - samples.len();
+    let n_instrument_errors = instruments.count_errors();
+    let n_sample_errors = samples.count_errors();
     if n_instrument_errors + n_sample_errors > 0 {
         return Err(CombineSamplesError::IndividualErrors {
             n_instrument_errors,
@@ -593,7 +596,7 @@ fn combine_sample_data(
         });
     }
 
-    let samples = match combine_samples(&instruments, &samples) {
+    let samples = match combine_samples(instruments, samples) {
         Ok(s) => s,
         Err(e) => {
             return Err(CombineSamplesError::CombineError(e));
@@ -639,7 +642,7 @@ fn build_play_sample_data(
         _ => return None,
     };
 
-    let sample_data = combine_samples(&[], &[sample]).ok()?;
+    let sample_data = combine_samples([].as_slice(), [sample].as_slice()).ok()?;
 
     let blank_sfx = blank_compiled_sound_effects();
     let common_audio_data = build_common_audio_data(&sample_data, &blank_sfx).ok()?;

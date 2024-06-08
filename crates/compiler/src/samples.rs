@@ -199,6 +199,24 @@ impl<PitchT> SampleData<PitchT> {
 pub type InstrumentSampleData = SampleData<InstrumentPitch>;
 pub type SampleSampleData = SampleData<SamplePitches>;
 
+pub trait CompiledDataList {
+    type Item;
+    fn expected_len(&self) -> usize;
+    fn data_iter(&self) -> impl Iterator<Item = &Self::Item>;
+}
+
+impl<T> CompiledDataList for [T] {
+    type Item = T;
+
+    fn expected_len(&self) -> usize {
+        self.len()
+    }
+
+    fn data_iter(&self) -> impl Iterator<Item = &Self::Item> {
+        self.iter()
+    }
+}
+
 pub fn load_sample_for_instrument(
     inst: &Instrument,
     cache: &mut SampleFileCache,
@@ -292,17 +310,18 @@ struct BrrDirectory {
 
 // NOTE: Does not check the size of the directory.
 fn build_brr_directroy(
-    instruments: &[InstrumentSampleData],
-    samples: &[SampleSampleData],
+    instruments: &(impl CompiledDataList<Item = InstrumentSampleData> + ?Sized),
+    samples: &(impl CompiledDataList<Item = SampleSampleData> + ?Sized),
 ) -> BrrDirectory {
     let mut brr_data = Vec::new();
     let mut brr_directory_offsets = Vec::new();
-    let mut instruments_scrn = Vec::with_capacity(samples.len());
+    let mut instruments_scrn =
+        Vec::with_capacity(instruments.expected_len() + samples.expected_len());
 
     let mut sample_map: HashMap<&BrrSample, u8> = HashMap::new();
 
-    let instruments = instruments.iter().map(|s| &s.brr_sample);
-    let samples = samples.iter().map(|s| &s.brr_sample);
+    let instruments = instruments.data_iter().map(|s| &s.brr_sample);
+    let samples = samples.data_iter().map(|s| &s.brr_sample);
 
     for brr in instruments.chain(samples) {
         let scrn = match sample_map.get(&brr) {
@@ -376,30 +395,31 @@ pub fn create_test_instrument_data(
         pitch,
         ..sample.clone()
     }];
-    let data = combine_samples(&samples, &[]).ok()?;
+    let data = combine_samples(samples.as_slice(), [].as_slice()).ok()?;
 
     Some((data, max_octave))
 }
 
+/// Panics if instrument/samples `data_iter().count()` != `expected_len()`.
 pub fn combine_samples(
-    instruments: &[InstrumentSampleData],
-    samples: &[SampleSampleData],
+    instruments: &(impl CompiledDataList<Item = InstrumentSampleData> + ?Sized),
+    samples: &(impl CompiledDataList<Item = SampleSampleData> + ?Sized),
 ) -> Result<SampleAndInstrumentData, SampleAndInstrumentDataError> {
-    let total_len = instruments.len() + samples.len();
+    let total_len = instruments.expected_len() + samples.expected_len();
 
     let mut instruments_adsr1 = Vec::with_capacity(total_len);
-    instruments_adsr1.extend(instruments.iter().map(|s| s.adsr1));
-    instruments_adsr1.extend(samples.iter().map(|s| s.adsr1));
+    instruments_adsr1.extend(instruments.data_iter().map(|s| s.adsr1));
+    instruments_adsr1.extend(samples.data_iter().map(|s| s.adsr1));
 
     let mut instruments_adsr2_or_gain = Vec::with_capacity(total_len);
-    instruments_adsr2_or_gain.extend(instruments.iter().map(|s| s.adsr2_or_gain));
-    instruments_adsr2_or_gain.extend(samples.iter().map(|s| s.adsr2_or_gain));
+    instruments_adsr2_or_gain.extend(instruments.data_iter().map(|s| s.adsr2_or_gain));
+    instruments_adsr2_or_gain.extend(samples.data_iter().map(|s| s.adsr2_or_gain));
 
     let brr = build_brr_directroy(instruments, samples);
 
     let sorted_pitches = sort_pitches_iterator(
-        instruments.iter().map(|s| s.pitch.clone()),
-        samples.iter().map(|s| s.pitch.clone()),
+        instruments.data_iter().map(|s| s.pitch.clone()),
+        samples.data_iter().map(|s| s.pitch.clone()),
     );
 
     let pitch_table = match merge_pitch_vec(sorted_pitches, total_len) {
@@ -411,6 +431,9 @@ pub fn combine_samples(
             })
         }
     };
+
+    assert_eq!(instruments_adsr1.len(), total_len);
+    assert_eq!(instruments_adsr2_or_gain.len(), total_len);
     assert_eq!(pitch_table.instruments_pitch_offset.len(), total_len);
 
     Ok(SampleAndInstrumentData {
@@ -447,7 +470,7 @@ pub fn build_sample_and_instrument_data(
         return Err(error);
     }
     let (instruments, samples) = sample_data.unwrap();
-    combine_samples(&instruments, &samples)
+    combine_samples(instruments.as_slice(), samples.as_slice())
 }
 
 pub fn note_range(s: &InstrumentOrSample) -> Result<(Note, Note), ValueError> {
