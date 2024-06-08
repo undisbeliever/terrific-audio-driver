@@ -26,6 +26,7 @@ use compiler::{
     spc_file_export::export_spc_file,
 };
 
+use std::collections::HashMap;
 use std::ffi::{OsStr, OsString};
 use std::path::{Path, PathBuf};
 
@@ -127,7 +128,7 @@ fn compile_sound_effects(
         }
         None => {
             if pf.sound_effects.is_empty() {
-                Vec::new()
+                HashMap::new()
             } else {
                 eprintln!("No sound effect file in {}", pf.file_name);
                 return Err(());
@@ -135,7 +136,7 @@ fn compile_sound_effects(
         }
     };
 
-    match sound_effects::combine_sound_effects(sound_effects.iter(), pf.sound_effects.list()) {
+    match sound_effects::combine_sound_effects(&sound_effects, pf.sound_effects.list()) {
         Ok(sfx) => Ok(sfx),
         Err(e) => {
             eprintln!("Error compiling sound effects: {}", e);

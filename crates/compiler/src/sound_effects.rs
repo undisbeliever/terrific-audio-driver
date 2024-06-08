@@ -18,7 +18,7 @@ use crate::path::{ParentPathBuf, SourcePathBuf};
 use crate::pitch_table::PitchTable;
 use crate::time::{TickClock, TickCounter};
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::time::Duration;
 
@@ -179,19 +179,18 @@ pub fn compile_sound_effects_file(
     sfx_file: &SoundEffectsFile,
     inst_map: &UniqueNamesList<InstrumentOrSample>,
     pitch_table: &PitchTable,
-) -> Result<Vec<CompiledSoundEffect>, SoundEffectsFileError> {
-    let mut sound_effects = Vec::with_capacity(sfx_file.sound_effects.len());
-    let mut names = HashSet::with_capacity(sfx_file.sound_effects.len());
+) -> Result<HashMap<Name, CompiledSoundEffect>, SoundEffectsFileError> {
+    let mut sound_effects = HashMap::with_capacity(sfx_file.sound_effects.len());
 
     let mut errors = Vec::new();
 
     for sfx in &sfx_file.sound_effects {
-        let duplicate_name = !names.insert(&sfx.name);
-
         let (name, name_valid) = match sfx.name.parse() {
             Ok(n) => (n, true),
             Err(_) => ("sfx".parse().unwrap(), false),
         };
+
+        let duplicate_name = sound_effects.contains_key(&name);
 
         let r = match &sfx.sfx {
             SoundEffectText::BytecodeAssembly(text) => compile_bytecode_sound_effect(
@@ -215,7 +214,9 @@ pub fn compile_sound_effects_file(
             ),
         };
         match r {
-            Ok(s) => sound_effects.push(s),
+            Ok(s) => {
+                sound_effects.insert(name, s);
+            }
             Err(e) => errors.push(e),
         }
     }
@@ -236,31 +237,25 @@ pub struct CombinedSoundEffectsData {
     pub(crate) sfx_offsets: Vec<usize>,
 }
 
-fn build_sfx_map<'a>(
-    sound_effects: impl Iterator<Item = &'a CompiledSoundEffect>,
-) -> Result<HashMap<&'a Name, &'a [u8]>, CombineSoundEffectsError> {
-    let mut out = HashMap::new();
-    let mut duplicates = Vec::new();
+pub trait CompiledSfxMap {
+    fn is_empty(&self) -> bool;
+    fn get(&self, name: &Name) -> Option<&CompiledSoundEffect>;
+}
 
-    for sfx in sound_effects {
-        if out.insert(&sfx.name, sfx.bytecode()).is_some() {
-            duplicates.push(sfx.name.to_string())
-        }
+impl CompiledSfxMap for HashMap<Name, CompiledSoundEffect> {
+    fn is_empty(&self) -> bool {
+        self.is_empty()
     }
 
-    if duplicates.is_empty() {
-        Ok(out)
-    } else {
-        Err(CombineSoundEffectsError::DuplicateSoundEffects(duplicates))
+    fn get(&self, name: &Name) -> Option<&CompiledSoundEffect> {
+        self.get(name)
     }
 }
 
-pub fn combine_sound_effects<'a>(
-    sound_effects: impl Iterator<Item = &'a CompiledSoundEffect>,
+pub fn combine_sound_effects(
+    sfx_map: &impl CompiledSfxMap,
     export_order: &[Name],
 ) -> Result<CombinedSoundEffectsData, CombineSoundEffectsError> {
-    let sfx_map = build_sfx_map(sound_effects)?;
-
     if sfx_map.is_empty() {
         return Err(CombineSoundEffectsError::NoSoundEffectFiles);
     }
@@ -274,7 +269,7 @@ pub fn combine_sound_effects<'a>(
         match sfx_map.get(name) {
             Some(s) => {
                 sfx_offsets.push(sfx_data.len());
-                sfx_data.extend(*s);
+                sfx_data.extend(s.bytecode());
             }
             None => missing.push(name.as_str().to_owned()),
         }

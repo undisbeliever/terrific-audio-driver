@@ -35,7 +35,8 @@ use compiler::samples::{
 };
 use compiler::songs::{sound_effect_to_song, test_sample_song, SongData};
 use compiler::sound_effects::{
-    blank_compiled_sound_effects, combine_sound_effects, tad_gui_sfx_data, CombinedSoundEffectsData,
+    blank_compiled_sound_effects, combine_sound_effects, tad_gui_sfx_data,
+    CombinedSoundEffectsData, CompiledSfxMap,
 };
 use compiler::sound_effects::{compile_sound_effect_input, CompiledSoundEffect, SoundEffectInput};
 use compiler::spc_file_export::export_spc_file;
@@ -366,10 +367,6 @@ where
 
     fn items(&self) -> &[ItemT] {
         &self.items
-    }
-
-    fn output(&self) -> &[OutT] {
-        &self.output
     }
 
     fn get_output_for_name(&self, name: &data::Name) -> Option<&OutT> {
@@ -754,6 +751,16 @@ fn build_common_data_no_sfx_and_song_dependencies(
     }
 }
 
+impl CompiledSfxMap for CList<SoundEffectInput, Option<Arc<CompiledSoundEffect>>> {
+    fn is_empty(&self) -> bool {
+        self.output.is_empty()
+    }
+
+    fn get(&self, name: &data::Name) -> Option<&CompiledSoundEffect> {
+        self.get_output_for_name(name)?.as_deref()
+    }
+}
+
 // ::TODO optimise (somehow combine with build_common_data_no_sfx_and_song_dependencies)::
 fn build_common_audio_data_with_sfx(
     instruments: &CList<data::Instrument, Option<InstrumentSampleData>>,
@@ -761,8 +768,6 @@ fn build_common_audio_data_with_sfx(
     sfx_export_order: &IList<data::Name>,
     sound_effects: &CList<SoundEffectInput, Option<Arc<CompiledSoundEffect>>>,
 ) -> Option<CommonAudioDataWithSfx> {
-    let sound_effects = sound_effects.output().iter().filter_map(|s| s.as_deref());
-
     let sfx_data = combine_sound_effects(sound_effects, sfx_export_order.items()).ok()?;
 
     let (common_audio_data, _) = combine_sample_data(instruments, samples, &sfx_data).ok()?;
