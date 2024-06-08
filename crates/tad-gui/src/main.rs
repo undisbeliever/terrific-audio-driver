@@ -479,31 +479,31 @@ impl Project {
                     .send(AudioMessage::SetEnabledChannels(id, channel_mask));
             }
 
-            GuiMessage::AudioThreadStartedSong(item_id, song_data) => {
-                if let Some(tab) = self.song_tabs.get_mut(&item_id) {
+            GuiMessage::AudioThreadStartedSong(song_id, song_data) => {
+                if let Some(tab) = self.song_tabs.get_mut(&song_id) {
                     tab.audio_thread_started_song(song_data);
                     self.audio_monitor_timer.start();
 
-                    for (&song_id, tab) in self.song_tabs.iter_mut() {
-                        if song_id != item_id {
+                    for (&tab_song_id, tab) in self.song_tabs.iter_mut() {
+                        if tab_song_id != song_id {
                             tab.clear_note_tracking();
                         }
                     }
                 }
             }
-            GuiMessage::AudioThreadResumedSong(item_id) => {
-                if self.song_tabs.contains_key(&item_id) {
+            GuiMessage::AudioThreadResumedSong(song_id) => {
+                if self.song_tabs.contains_key(&song_id) {
                     self.audio_monitor_timer.start();
                 }
             }
             GuiMessage::SongMonitorTimeout => match self.audio_monitor.get() {
-                Some(mon) => match mon.item_id {
+                Some(mon) => match mon.song_id {
                     Some(id) => match self.song_tabs.get_mut(&id) {
                         Some(tab) => tab.monitor_timer_elapsed(mon),
                         None => self.audio_monitor_timer.stop(),
                     },
                     None => {
-                        // Playing the blank song
+                        // Playing the blank song or testing a sample
                         self.audio_monitor_timer.stop();
                         for tab in self.song_tabs.values_mut() {
                             tab.clear_note_tracking();

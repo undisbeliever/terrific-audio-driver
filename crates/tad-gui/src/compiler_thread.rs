@@ -1276,12 +1276,12 @@ fn bg_thread(
             }
             ToCompiler::PlayInstrument(id, args) => {
                 if let Some((c_data, s_data)) = build_play_instrument_data(&instruments, id, args) {
-                    sender.send_audio(AudioMessage::PlaySample(id, c_data, s_data.into()));
+                    sender.send_audio(AudioMessage::PlaySample(c_data, s_data.into()));
                 }
             }
             ToCompiler::PlaySample(id, args) => {
                 if let Some((c_data, s_data)) = build_play_sample_data(&samples, id, args) {
-                    sender.send_audio(AudioMessage::PlaySample(id, c_data, s_data.into()));
+                    sender.send_audio(AudioMessage::PlaySample(c_data, s_data.into()));
                 }
             }
 

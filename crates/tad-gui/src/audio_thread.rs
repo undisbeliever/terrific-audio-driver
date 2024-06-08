@@ -115,7 +115,7 @@ pub enum AudioMessage {
     PlaySoundEffectCommand(ItemId, Pan),
     PlaySongWithSfxBuffer(ItemId, Arc<SongData>, Option<SongSkip>),
     PlaySfxUsingSfxBuffer(Arc<CompiledSoundEffect>, Pan),
-    PlaySample(ItemId, CommonAudioData, Box<SongData>),
+    PlaySample(CommonAudioData, Box<SongData>),
 
     PlayBrrSampleAt32Khz(Arc<BrrSample>),
 }
@@ -140,16 +140,16 @@ impl PrivateToken {
 
 #[derive(Debug, Default, Clone)]
 pub struct AudioMonitorData {
-    pub item_id: Option<ItemId>,
+    pub song_id: Option<ItemId>,
     pub voice_instruction_ptrs: [Option<u16>; N_VOICES],
     /// May not be valid.
     pub voice_return_inst_ptrs: [Option<u16>; N_VOICES],
 }
 
 impl AudioMonitorData {
-    fn new(item_id: Option<ItemId>) -> Self {
+    fn new(song_id: Option<ItemId>) -> Self {
         Self {
-            item_id,
+            song_id,
             voice_instruction_ptrs: Default::default(),
             voice_return_inst_ptrs: Default::default(),
         }
@@ -544,12 +544,11 @@ impl TadEmu {
 
     fn play_sample(
         &mut self,
-        sample_id: ItemId,
         common_audio_data: CommonAudioData,
         song_data: Box<SongData>,
     ) -> Result<(), ()> {
         self._load_song_into_memory(
-            Some(sample_id),
+            None,
             AudioDataState::Sample(common_audio_data, song_data),
             None,
             ChannelsMask::ALL,
@@ -834,7 +833,7 @@ impl TadEmu {
 
         if any_channels_active {
             Some(AudioMonitorData {
-                item_id: self.song_id,
+                song_id: self.song_id,
                 voice_instruction_ptrs: read_offsets(
                     addresses::CHANNEL_INSTRUCTION_PTR_L,
                     addresses::CHANNEL_INSTRUCTION_PTR_H,
@@ -976,8 +975,8 @@ impl AudioThread {
                     return self.play_song();
                 }
             }
-            AudioMessage::PlaySample(id, common_data, song_data) => {
-                if self.tad.play_sample(id, common_data, song_data).is_ok() {
+            AudioMessage::PlaySample(common_data, song_data) => {
+                if self.tad.play_sample(common_data, song_data).is_ok() {
                     return self.play_song();
                 }
             }
@@ -1157,11 +1156,11 @@ impl AudioThread {
                     }
                 },
 
-                AudioMessage::PlaySample(id, common_data, song_data) => {
+                AudioMessage::PlaySample(common_data, song_data) => {
                     playback.pause();
                     playback.lock().reset();
 
-                    match self.tad.play_sample(id, common_data, song_data) {
+                    match self.tad.play_sample(common_data, song_data) {
                         Ok(()) => {
                             state = PlayState::Running;
                             playback.resume();
