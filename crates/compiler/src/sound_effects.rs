@@ -31,29 +31,29 @@ const MML_SFX_IDENTIFIER: &str = "MML\n";
 const MML_SFX_IDENTIFIER_NO_NEWLINE: &str = "MML";
 
 #[derive(Debug)]
-pub enum SoundEffectData {
-    Mml(mml::MmlSoundEffect),
-    BytecodeAssembly(Vec<u8>, TickCounter),
+pub struct BytecodeSoundEffect {
+    bytecode: Vec<u8>,
+    tick_counter: TickCounter,
 }
 
 #[derive(Debug)]
-pub struct CompiledSoundEffect {
-    name: Name,
-    data: SoundEffectData,
+pub enum CompiledSoundEffect {
+    Mml(mml::MmlSoundEffect),
+    BytecodeAssembly(BytecodeSoundEffect),
 }
 
 impl CompiledSoundEffect {
     pub fn bytecode(&self) -> &[u8] {
-        match &self.data {
-            SoundEffectData::BytecodeAssembly(d, _) => d,
-            SoundEffectData::Mml(d) => d.bytecode(),
+        match &self {
+            CompiledSoundEffect::BytecodeAssembly(s) => &s.bytecode,
+            CompiledSoundEffect::Mml(s) => s.bytecode(),
         }
     }
 
     pub fn tick_counter(&self) -> TickCounter {
-        match &self.data {
-            SoundEffectData::BytecodeAssembly(_, tc) => *tc,
-            SoundEffectData::Mml(d) => d.tick_counter(),
+        match &self {
+            CompiledSoundEffect::BytecodeAssembly(s) => s.tick_counter,
+            CompiledSoundEffect::Mml(s) => s.tick_counter(),
         }
     }
 
@@ -64,16 +64,14 @@ impl CompiledSoundEffect {
 
     #[cfg(feature = "mml_tracking")]
     pub fn cursor_tracker(&self) -> Option<&mml::CursorTracker> {
-        match &self.data {
-            SoundEffectData::BytecodeAssembly(_, _) => None,
-            SoundEffectData::Mml(d) => Some(d.cursor_tracker()),
+        match &self {
+            CompiledSoundEffect::BytecodeAssembly(_) => None,
+            CompiledSoundEffect::Mml(s) => Some(s.cursor_tracker()),
         }
     }
 }
 
-#[allow(clippy::too_many_arguments)]
 fn compile_mml_sound_effect(
-    name: &Name,
     sfx: &str,
     name_string: &str,
     starting_line_number: u32,
@@ -87,10 +85,7 @@ fn compile_mml_sound_effect(
     match mml::compile_sound_effect(sfx, inst_map, pitch_table) {
         Ok(o) => {
             if !invalid_name && !duplicate_name {
-                Ok(CompiledSoundEffect {
-                    name: name.clone(),
-                    data: SoundEffectData::Mml(o),
-                })
+                Ok(CompiledSoundEffect::Mml(o))
             } else {
                 Err(SoundEffectError {
                     sfx_name: name_string.to_owned(),
@@ -112,7 +107,6 @@ fn compile_mml_sound_effect(
 }
 
 fn compile_bytecode_sound_effect(
-    name: &Name,
     sfx: &str,
     name_string: &str,
     starting_line_number: u32,
@@ -159,11 +153,11 @@ fn compile_bytecode_sound_effect(
     let invalid_name = !name_valid;
     let no_errors = !invalid_name && !duplicate_name && errors.is_empty();
 
-    if let (Some(data), true) = (out, no_errors) {
-        Ok(CompiledSoundEffect {
-            name: name.clone(),
-            data: SoundEffectData::BytecodeAssembly(data, tick_counter),
-        })
+    if let (Some(bytecode), true) = (out, no_errors) {
+        Ok(CompiledSoundEffect::BytecodeAssembly(BytecodeSoundEffect {
+            bytecode,
+            tick_counter,
+        }))
     } else {
         Err(SoundEffectError {
             sfx_name: name_string.to_owned(),
@@ -194,7 +188,6 @@ pub fn compile_sound_effects_file(
 
         let r = match &sfx.sfx {
             SoundEffectText::BytecodeAssembly(text) => compile_bytecode_sound_effect(
-                &name,
                 text,
                 &sfx.name,
                 sfx.line_no + 1,
@@ -203,7 +196,6 @@ pub fn compile_sound_effects_file(
                 duplicate_name,
             ),
             SoundEffectText::Mml(text) => compile_mml_sound_effect(
-                &name,
                 text,
                 &sfx.name,
                 sfx.line_no + 1,
@@ -327,17 +319,10 @@ pub fn compile_sound_effect_input(
     pitch_table: &PitchTable,
 ) -> Result<CompiledSoundEffect, SoundEffectError> {
     match &input.sfx {
-        SoundEffectText::BytecodeAssembly(text) => compile_bytecode_sound_effect(
-            &input.name,
-            text,
-            input.name.as_str(),
-            1,
-            inst_map,
-            true,
-            false,
-        ),
+        SoundEffectText::BytecodeAssembly(text) => {
+            compile_bytecode_sound_effect(text, input.name.as_str(), 1, inst_map, true, false)
+        }
         SoundEffectText::Mml(text) => compile_mml_sound_effect(
-            &input.name,
             text,
             input.name.as_str(),
             1,
