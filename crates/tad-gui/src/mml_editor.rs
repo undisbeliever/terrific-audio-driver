@@ -89,6 +89,7 @@ pub struct MmlEditorState {
 
     compiled_data: Option<CompiledEditorData>,
     playing_song_notes_valid: bool,
+    tracking_notes: bool,
     note_tracking_state: [NoteTrackingState; N_MUSIC_CHANNELS],
     subroutine_tracking_state: [NoteTrackingState; N_MUSIC_CHANNELS],
 
@@ -142,6 +143,7 @@ impl MmlEditor {
             style_vec: Vec::new(),
 
             playing_song_notes_valid: false,
+            tracking_notes: false,
             note_tracking_state: Default::default(),
             subroutine_tracking_state: Default::default(),
 
@@ -303,6 +305,10 @@ impl MmlEditor {
 
     pub fn update_note_tracking(&mut self, mon: AudioMonitorData) {
         self.state.borrow_mut().update_note_tracking(mon);
+    }
+
+    pub fn clear_note_tracking(&mut self) {
+        self.state.borrow_mut().clear_note_tracking();
     }
 }
 
@@ -585,12 +591,24 @@ impl MmlEditorState {
 
     fn set_compiled_data(&mut self, data: Option<CompiledEditorData>) {
         self.compiled_data = data;
-        self.note_tracking_state = Default::default();
 
-        let style = std::str::from_utf8(&self.style_vec).unwrap();
-        self.style_buffer.set_text(style);
+        self.clear_note_tracking();
 
         self.prev_cursor_index = None;
+    }
+
+    fn clear_note_tracking(&mut self) {
+        if self.tracking_notes {
+            self.tracking_notes = false;
+            self.note_tracking_state = Default::default();
+
+            let style = std::str::from_utf8(&self.style_vec).unwrap();
+            self.style_buffer.set_text(style);
+
+            // Redraw the entire widget, required for the new style to be immediately visible.
+            // NOTE: Fl_Text_Display::redisplay_range() is not available.
+            self.widget.redraw();
+        }
     }
 
     fn song_started(&mut self, song_data: Arc<SongData>) {
@@ -602,6 +620,8 @@ impl MmlEditorState {
         if !self.playing_song_notes_valid {
             return;
         }
+
+        self.tracking_notes = true;
 
         let mut changed = false;
         if let Some(CompiledEditorData::Song(song_data)) = &self.compiled_data {

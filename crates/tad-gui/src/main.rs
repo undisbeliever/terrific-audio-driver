@@ -483,6 +483,12 @@ impl Project {
                 if let Some(tab) = self.song_tabs.get_mut(&item_id) {
                     tab.audio_thread_started_song(song_data);
                     self.audio_monitor_timer.start();
+
+                    for (&song_id, tab) in self.song_tabs.iter_mut() {
+                        if song_id != item_id {
+                            tab.clear_note_tracking();
+                        }
+                    }
                 }
             }
             GuiMessage::AudioThreadResumedSong(item_id) => {
@@ -496,9 +502,18 @@ impl Project {
                         Some(tab) => tab.monitor_timer_elapsed(mon),
                         None => self.audio_monitor_timer.stop(),
                     },
-                    None => self.audio_monitor_timer.stop(),
+                    None => {
+                        // Playing the blank song
+                        self.audio_monitor_timer.stop();
+                        for tab in self.song_tabs.values_mut() {
+                            tab.clear_note_tracking();
+                        }
+                    }
                 },
-                None => self.audio_monitor_timer.stop(),
+                None => {
+                    // Paused or stopped
+                    self.audio_monitor_timer.stop();
+                }
             },
 
             GuiMessage::RequestCloseSongTab(song_id) => {

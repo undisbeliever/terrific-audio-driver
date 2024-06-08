@@ -381,6 +381,10 @@ impl SongTab {
     pub fn monitor_timer_elapsed(&mut self, mon: AudioMonitorData) {
         self.state.borrow_mut().editor.update_note_tracking(mon);
     }
+
+    pub fn clear_note_tracking(&mut self) {
+        self.state.borrow_mut().editor.clear_note_tracking();
+    }
 }
 
 impl State {
