@@ -318,12 +318,9 @@ impl<ItemT> IList<ItemT> {
 }
 
 struct CList<ItemT, OutT> {
-    name_map_changed: bool,
     items: Vec<ItemT>,
     output: Vec<OutT>,
     map: HashMap<ItemId, usize>,
-
-    // Instrument compiler requires a String map
     name_map: HashMap<data::Name, usize>,
 }
 
@@ -333,20 +330,11 @@ where
 {
     fn new() -> Self {
         Self {
-            name_map_changed: false,
             items: Vec::new(),
             output: Vec::new(),
             map: HashMap::new(),
             name_map: HashMap::new(),
         }
-    }
-
-    fn is_name_map_changed(&self) -> bool {
-        self.name_map_changed
-    }
-
-    fn clear_name_map_changed_flag(&mut self) {
-        self.name_map_changed = false;
     }
 
     fn items(&self) -> &[ItemT] {
@@ -386,7 +374,6 @@ where
             .enumerate()
             .map(|(index, (_id, item))| (item.name().clone(), index))
             .collect();
-        self.name_map_changed = true;
 
         self.items = data.into_iter().map(|(_id, item)| item).collect();
     }
@@ -405,7 +392,6 @@ where
                 if item.name() != old_name {
                     self.name_map.remove(old_name);
                     self.name_map.insert(item.name().clone(), *index);
-                    self.name_map_changed = true;
                 }
 
                 self.output[*index] = out;
@@ -416,7 +402,6 @@ where
                 let out = compiler_fn(id, &item);
 
                 self.name_map.insert(item.name().clone(), index);
-                self.name_map_changed = true;
 
                 self.map.insert(id, index);
                 self.output.push(out);
@@ -432,8 +417,6 @@ where
             let name_map_index = self.name_map.remove(self.items[index].name());
             decrement_index_from_map(&mut self.name_map, index);
             assert_eq!(name_map_index, Some(index));
-
-            self.name_map_changed = true;
 
             self.output.remove(index);
             self.items.remove(index);
@@ -461,6 +444,27 @@ where
         assert_eq!(self.output.len(), self.items.len());
         assert_eq!(self.map.len(), self.items.len());
         assert_eq!(self.name_map.len(), self.items.len());
+    }
+
+    fn item_changes_name(&mut self, m: &ItemChanged<ItemT>) -> bool {
+        let test_add_or_edit = |id, item: &ItemT| -> bool {
+            match self.map.get(id) {
+                Some(i) => match self.name_map.get(item.name()) {
+                    Some(j) => i != j,
+                    None => true,
+                },
+                None => true,
+            }
+        };
+
+        match m {
+            ItemChanged::ReplaceAll(_) => true,
+            ItemChanged::AddedOrEdited(id, item) => test_add_or_edit(id, item),
+            ItemChanged::MultipleAddedOrEdited(vec) => {
+                vec.iter().any(|(id, item)| test_add_or_edit(id, item))
+            }
+            ItemChanged::Removed(_) => true,
+        }
     }
 
     fn recompile_all(&mut self, compiler_fn: impl Fn(ItemId, &ItemT) -> OutT) {
@@ -1121,13 +1125,12 @@ fn bg_thread(
 
             ToCompiler::SoundEffects(m) => {
                 let replace_all_message = matches!(m, ItemChanged::ReplaceAll(_));
+                let name_changed = sound_effects.item_changes_name(&m);
 
                 let c = create_sfx_compiler(&song_dependencies, &sender);
                 sound_effects.process_message(m, c);
 
-                if sound_effects.is_name_map_changed() {
-                    sound_effects.clear_name_map_changed_flag();
-
+                if name_changed {
                     count_missing_sfx(&sfx_export_order, &sound_effects, &sender);
                 }
 
