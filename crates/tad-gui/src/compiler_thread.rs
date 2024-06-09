@@ -93,10 +93,6 @@ pub enum ToCompiler {
 
     AnalyseSample(SourcePathBuf, LoopSetting),
 
-    // Merges Instruments into SampleAndInstrumentData
-    // (sent when the user deselects the samples tab in the GUI)
-    FinishedEditingSamples,
-
     // Updates sfx_data_size and rechecks song sizes.
     // (sent when the user deselects the sound effects tab in the GUI)
     FinishedEditingSoundEffects,
@@ -1094,11 +1090,18 @@ fn bg_thread(
     let mut song_dependencies = None;
     let mut common_audio_data_no_sfx = None;
 
+    let mut pending_combine_samples = true;
+    let mut pending_compile_all_sfx = true;
+    let mut pending_build_cad_with_sfx = true;
+    let mut pending_compile_all_songs = true;
+
     while let Ok(m) = receiever.recv() {
         match m {
             ToCompiler::SfxExportOrder(m) => {
                 sfx_export_order.process_message(m);
                 count_missing_sfx(&sfx_export_order, &sound_effects, &sender);
+
+                pending_build_cad_with_sfx = true;
             }
             ToCompiler::ProjectSongs(m) => {
                 songs.process_pf_song_message(&m, &pf_songs, &song_dependencies, &sender);
@@ -1109,12 +1112,14 @@ fn bg_thread(
                 instruments.process_message(m, c);
 
                 song_dependencies = None;
+                pending_combine_samples = true;
             }
             ToCompiler::Sample(m) => {
                 let c = create_sample_compiler(&mut sample_file_cache, &sender);
                 samples.process_message(m, c);
 
                 song_dependencies = None;
+                pending_combine_samples = true;
             }
             ToCompiler::RecompileInstrumentsUsingSample(source_path) => {
                 let c = create_instrument_compiler(&mut sample_file_cache, &sender);
@@ -1124,76 +1129,15 @@ fn bg_thread(
                 samples.recompile_all_if(c, |inst| inst.source == source_path);
 
                 song_dependencies = None;
-            }
-
-            ToCompiler::FinishedEditingSamples => {
-                if instruments.is_changed() || samples.is_changed() {
-                    instruments.clear_changed_flag();
-                    samples.clear_changed_flag();
-
-                    match build_common_data_no_sfx_and_song_dependencies(
-                        &instruments,
-                        &samples,
-                        &sfx_export_order,
-                        &sound_effects,
-                        &blank_sfx_data,
-                    ) {
-                        Ok((cd, sd)) => {
-                            let data_size = cd.data().len();
-                            sender.send(CompilerOutput::CombineSamples(Ok(data_size)));
-
-                            common_audio_data_no_sfx = Some(cd);
-                            song_dependencies = Some(sd);
-                        }
-                        Err(e) => {
-                            sender.send(CompilerOutput::CombineSamples(Err(e)));
-                            common_audio_data_no_sfx = None;
-                            song_dependencies = None;
-                        }
-                    }
-
-                    sender.send_audio(AudioMessage::CommonAudioDataChanged(
-                        common_audio_data_no_sfx
-                            .as_ref()
-                            .map(|c| CommonAudioDataWithSfxBuffer(c.clone())),
-                    ));
-
-                    let c = create_sfx_compiler(&song_dependencies, &sender);
-                    sound_effects.recompile_all(c);
-
-                    sound_effects.clear_changed_flag();
-                    let c = build_common_audio_data_with_sfx(
-                        &song_dependencies,
-                        &sfx_export_order,
-                        &sound_effects,
-                    );
-                    sender.send(CompilerOutput::CanSendPlaySfxCommands(c.is_some()));
-                    sender.send_audio(AudioMessage::CommandAudioDataWithSfxChanged(c));
-
-                    songs.compile_all_songs(&pf_songs, &song_dependencies, &sender);
-                }
+                pending_combine_samples = true;
             }
 
             ToCompiler::FinishedEditingSoundEffects => {
                 if sound_effects.is_changed() {
                     sound_effects.clear_changed_flag();
 
-                    let c = build_common_audio_data_with_sfx(
-                        &song_dependencies,
-                        &sfx_export_order,
-                        &sound_effects,
-                    );
-                    sender.send(CompilerOutput::CanSendPlaySfxCommands(c.is_some()));
-                    sender.send_audio(AudioMessage::CommandAudioDataWithSfxChanged(c));
+                    pending_build_cad_with_sfx = true;
                 }
-
-                update_sfx_data_size_and_recheck_all_songs(
-                    &mut song_dependencies,
-                    &mut songs,
-                    &sfx_export_order,
-                    &sound_effects,
-                    &sender,
-                );
             }
 
             ToCompiler::SoundEffects(m) => {
@@ -1209,14 +1153,10 @@ fn bg_thread(
                 }
 
                 if replace_all_message {
-                    update_sfx_data_size_and_recheck_all_songs(
-                        &mut song_dependencies,
-                        &mut songs,
-                        &sfx_export_order,
-                        &sound_effects,
-                        &sender,
-                    );
+                    pending_build_cad_with_sfx = true;
                 }
+                sender.send(CompilerOutput::CanSendPlaySfxCommands(false));
+                sender.send_audio(AudioMessage::CommandAudioDataWithSfxChanged(None));
             }
             ToCompiler::PlaySongWithSfxBuffer(id, ticks) => {
                 if let Some(song) = songs.get_song_data(&id) {
@@ -1296,6 +1236,78 @@ fn bg_thread(
                 let r = analyse_sample(&mut sample_file_cache, source_path, loop_setting);
                 sender.send(CompilerOutput::SampleAnalysis(r));
             }
+        }
+
+        if pending_combine_samples {
+            pending_combine_samples = false;
+
+            match build_common_data_no_sfx_and_song_dependencies(
+                &instruments,
+                &samples,
+                &sfx_export_order,
+                &sound_effects,
+                &blank_sfx_data,
+            ) {
+                Ok((cd, sd)) => {
+                    let data_size = cd.data().len();
+                    sender.send(CompilerOutput::CombineSamples(Ok(data_size)));
+
+                    common_audio_data_no_sfx = Some(cd);
+                    song_dependencies = Some(sd);
+                }
+                Err(e) => {
+                    sender.send(CompilerOutput::CombineSamples(Err(e)));
+                    common_audio_data_no_sfx = None;
+                    song_dependencies = None;
+                }
+            }
+
+            sender.send_audio(AudioMessage::CommonAudioDataChanged(
+                common_audio_data_no_sfx
+                    .as_ref()
+                    .map(|c| CommonAudioDataWithSfxBuffer(c.clone())),
+            ));
+
+            pending_compile_all_sfx = true;
+            pending_build_cad_with_sfx = true;
+            pending_compile_all_songs = true;
+        }
+
+        if pending_compile_all_sfx {
+            pending_compile_all_sfx = false;
+
+            let c = create_sfx_compiler(&song_dependencies, &sender);
+            sound_effects.recompile_all(c);
+
+            pending_build_cad_with_sfx = true;
+        }
+
+        if pending_build_cad_with_sfx {
+            pending_build_cad_with_sfx = false;
+
+            let c = build_common_audio_data_with_sfx(
+                &song_dependencies,
+                &sfx_export_order,
+                &sound_effects,
+            );
+            sender.send(CompilerOutput::CanSendPlaySfxCommands(c.is_some()));
+            sender.send_audio(AudioMessage::CommandAudioDataWithSfxChanged(c));
+
+            if !pending_compile_all_songs {
+                update_sfx_data_size_and_recheck_all_songs(
+                    &mut song_dependencies,
+                    &mut songs,
+                    &sfx_export_order,
+                    &sound_effects,
+                    &sender,
+                );
+            }
+        }
+
+        if pending_compile_all_songs {
+            pending_compile_all_songs = false;
+
+            songs.compile_all_songs(&pf_songs, &song_dependencies, &sender);
         }
     }
 }

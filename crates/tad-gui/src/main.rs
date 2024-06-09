@@ -227,7 +227,6 @@ struct Project {
     sample_analyser_dialog: SampleAnalyserDialog,
 
     tab_manager: TabManager,
-    samples_tab_selected: bool,
     sfx_tab_selected: bool,
 
     project_tab: ProjectTab,
@@ -299,7 +298,6 @@ impl Project {
 
         let mut out = Self {
             tab_manager: TabManager::new(tabs, menu),
-            samples_tab_selected: false,
             sfx_tab_selected: false,
 
             sample_analyser_dialog: SampleAnalyserDialog::new(
@@ -802,10 +800,6 @@ impl Project {
         ));
 
         // Combine samples after they have been compiled
-        let _ = self
-            .compiler_sender
-            .send(ToCompiler::FinishedEditingSamples);
-
         if let Some(sfx_data) = &self.sfx_data {
             let _ = self.compiler_sender.send(ToCompiler::SoundEffects(
                 sfx_data.sound_effects.replace_all_message(),
@@ -819,12 +813,6 @@ impl Project {
     }
 
     fn selected_tab_changed(&mut self, window: &mut fltk::window::Window) {
-        if self.samples_tab_selected {
-            let _ = self
-                .compiler_sender
-                .send(ToCompiler::FinishedEditingSamples);
-        }
-
         if self.sfx_tab_selected {
             let _ = self
                 .compiler_sender
@@ -832,10 +820,6 @@ impl Project {
         }
 
         let selected_widget = self.tab_manager.selected_widget();
-
-        self.samples_tab_selected = selected_widget
-            .as_ref()
-            .is_some_and(|t| t.is_same(self.samples_tab.widget()));
 
         self.sfx_tab_selected = selected_widget
             .as_ref()
