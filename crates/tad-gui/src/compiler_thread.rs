@@ -27,11 +27,10 @@ use compiler::envelope::Envelope;
 use compiler::errors::{self, BrrError, ExportSpcFileError, ProjectFileErrors, SongTooLargeError};
 use compiler::notes::Note;
 use compiler::path::{ParentPathBuf, SourcePathBuf};
-use compiler::pitch_table::PitchTable;
 use compiler::samples::{
     combine_samples, create_test_instrument_data, encode_or_load_brr_file,
     load_sample_for_instrument, load_sample_for_sample, CompiledDataList, InstrumentSampleData,
-    SampleFileCache, SampleSampleData, WAV_EXTENSION,
+    SampleAndInstrumentData, SampleFileCache, SampleSampleData, WAV_EXTENSION,
 };
 use compiler::songs::{sound_effect_to_song, test_sample_song, SongData};
 use compiler::sound_effects::{
@@ -578,34 +577,6 @@ fn create_sample_compiler<'a>(
     }
 }
 
-fn combine_sample_data(
-    instruments: &CList<data::Instrument, Option<InstrumentSampleData>>,
-    samples: &CList<data::Sample, Option<SampleSampleData>>,
-    sfx_data: &CombinedSoundEffectsData,
-) -> Result<(CommonAudioData, PitchTable), CombineSamplesError> {
-    // Test all instruments and samples are compiled
-    let n_instrument_errors = instruments.count_errors();
-    let n_sample_errors = samples.count_errors();
-    if n_instrument_errors + n_sample_errors > 0 {
-        return Err(CombineSamplesError::IndividualErrors {
-            n_instrument_errors,
-            n_sample_errors,
-        });
-    }
-
-    let samples = match combine_samples(instruments, samples) {
-        Ok(s) => s,
-        Err(e) => {
-            return Err(CombineSamplesError::CombineError(e));
-        }
-    };
-
-    match build_common_audio_data(&samples, sfx_data) {
-        Ok(common) => Ok((common, samples.take_pitch_table())),
-        Err(e) => Err(CombineSamplesError::CommonAudioData(e)),
-    }
-}
-
 fn build_play_instrument_data(
     instruments: &CList<data::Instrument, Option<InstrumentSampleData>>,
     id: ItemId,
@@ -660,7 +631,7 @@ fn create_sfx_compiler<'a>(
                 return None;
             }
         };
-        match compile_sound_effect_input(sfx, &dep.inst_map, &dep.pitch_table) {
+        match compile_sound_effect_input(sfx, &dep.inst_map, dep.combined_samples.pitch_table()) {
             Ok(sfx) => {
                 let sfx = Arc::from(sfx);
                 sender.send(CompilerOutput::SoundEffect(id, Ok(sfx.clone())));
@@ -713,7 +684,7 @@ fn calc_sfx_data_size(
 
 struct SongDependencies {
     inst_map: data::UniqueNamesList<data::InstrumentOrSample>,
-    pitch_table: PitchTable,
+    combined_samples: SampleAndInstrumentData,
     common_data_no_sfx_size: usize,
     sfx_data_size: usize,
 }
@@ -724,7 +695,6 @@ impl SongDependencies {
     }
 }
 
-// ::TODO optimise (somehow combine with build_common_audio_data_with_sfx)::
 fn build_common_data_no_sfx_and_song_dependencies(
     instruments: &CList<data::Instrument, Option<InstrumentSampleData>>,
     samples: &CList<data::Sample, Option<SampleSampleData>>,
@@ -732,20 +702,40 @@ fn build_common_data_no_sfx_and_song_dependencies(
     sound_effects: &CList<SoundEffectInput, Option<Arc<CompiledSoundEffect>>>,
     blank_sfx_data: &CombinedSoundEffectsData,
 ) -> Result<(CommonAudioData, SongDependencies), CombineSamplesError> {
-    let (common_data, pitch_table) = combine_sample_data(instruments, samples, blank_sfx_data)?;
+    // Test all instruments and samples are compiled
+    let n_instrument_errors = instruments.count_errors();
+    let n_sample_errors = samples.count_errors();
+    if n_instrument_errors + n_sample_errors > 0 {
+        return Err(CombineSamplesError::IndividualErrors {
+            n_instrument_errors,
+            n_sample_errors,
+        });
+    }
+
+    let combined_samples = match combine_samples(instruments, samples) {
+        Ok(s) => s,
+        Err(e) => {
+            return Err(CombineSamplesError::CombineError(e));
+        }
+    };
+
+    let cad = match build_common_audio_data(&combined_samples, blank_sfx_data) {
+        Ok(common) => common,
+        Err(e) => return Err(CombineSamplesError::CommonAudioData(e)),
+    };
 
     match data::validate_instrument_and_sample_names(
         instruments.items().iter(),
-        samples.items().iter(),
+        samples.items.iter(),
     ) {
         Ok(instruments) => {
             let sd = SongDependencies {
                 inst_map: instruments,
-                pitch_table,
-                common_data_no_sfx_size: common_data.data().len(),
+                combined_samples,
+                common_data_no_sfx_size: cad.data().len(),
                 sfx_data_size: calc_sfx_data_size(sfx_export_order, sound_effects),
             };
-            Ok((common_data, sd))
+            Ok((cad, sd))
         }
         Err(e) => Err(CombineSamplesError::UniqueNamesError(e)),
     }
@@ -761,16 +751,14 @@ impl CompiledSfxMap for CList<SoundEffectInput, Option<Arc<CompiledSoundEffect>>
     }
 }
 
-// ::TODO optimise (somehow combine with build_common_data_no_sfx_and_song_dependencies)::
 fn build_common_audio_data_with_sfx(
-    instruments: &CList<data::Instrument, Option<InstrumentSampleData>>,
-    samples: &CList<data::Sample, Option<SampleSampleData>>,
+    dep: &Option<SongDependencies>,
     sfx_export_order: &IList<data::Name>,
     sound_effects: &CList<SoundEffectInput, Option<Arc<CompiledSoundEffect>>>,
 ) -> Option<CommonAudioDataWithSfx> {
+    let samples = &dep.as_ref()?.combined_samples;
     let sfx_data = combine_sound_effects(sound_effects, sfx_export_order.items()).ok()?;
-
-    let (common_audio_data, _) = combine_sample_data(instruments, samples, &sfx_data).ok()?;
+    let common_audio_data = build_common_audio_data(samples, &sfx_data).ok()?;
 
     Some(CommonAudioDataWithSfx {
         common_audio_data,
@@ -820,7 +808,12 @@ impl SongCompiler {
         };
 
         let name = name.cloned();
-        let song_data = match compiler::mml::compile_mml(f, name, &dep.inst_map, &dep.pitch_table) {
+        let song_data = match compiler::mml::compile_mml(
+            f,
+            name,
+            &dep.inst_map,
+            dep.combined_samples.pitch_table(),
+        ) {
             Ok(sd) => Arc::from(sd),
             Err(e) => {
                 sender.send(CompilerOutput::Song(id, Err(SongError::Song(e))));
@@ -1171,8 +1164,7 @@ fn bg_thread(
 
                     sound_effects.clear_changed_flag();
                     let c = build_common_audio_data_with_sfx(
-                        &instruments,
-                        &samples,
+                        &song_dependencies,
                         &sfx_export_order,
                         &sound_effects,
                     );
@@ -1188,8 +1180,7 @@ fn bg_thread(
                     sound_effects.clear_changed_flag();
 
                     let c = build_common_audio_data_with_sfx(
-                        &instruments,
-                        &samples,
+                        &song_dependencies,
                         &sfx_export_order,
                         &sound_effects,
                     );
