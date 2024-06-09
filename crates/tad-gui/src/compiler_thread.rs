@@ -749,19 +749,32 @@ impl CompiledSfxMap for CList<SoundEffectInput, Option<Arc<CompiledSoundEffect>>
     }
 }
 
+/// Returns `(CommonAudioDataWithSize, sfx_data_size)`
 fn build_common_audio_data_with_sfx(
     dep: &Option<SongDependencies>,
     sfx_export_order: &IList<data::Name>,
     sound_effects: &CList<SoundEffectInput, Option<Arc<CompiledSoundEffect>>>,
-) -> Option<CommonAudioDataWithSfx> {
-    let samples = &dep.as_ref()?.combined_samples;
-    let sfx_data = combine_sound_effects(sound_effects, sfx_export_order.items()).ok()?;
-    let common_audio_data = build_common_audio_data(samples, &sfx_data).ok()?;
+) -> (Option<CommonAudioDataWithSfx>, usize) {
+    let sfx_data = combine_sound_effects(sound_effects, sfx_export_order.items());
 
-    Some(CommonAudioDataWithSfx {
-        common_audio_data,
-        sfx_id_map: sfx_export_order.map.clone(),
-    })
+    // Always try to calculate sfx_data size (to keep song size checks and Project tab up-to-date)
+    let sfx_data_size = match &sfx_data {
+        Ok(s) => s.sfx_data_size(),
+        Err(_) => calc_sfx_data_size(sfx_export_order, sound_effects),
+    };
+
+    let cad = match (&dep, &sfx_data) {
+        (Some(dep), Ok(sd)) => match build_common_audio_data(&dep.combined_samples, sd) {
+            Ok(cad) => Some(CommonAudioDataWithSfx {
+                common_audio_data: cad,
+                sfx_id_map: sfx_export_order.map.clone(),
+            }),
+            Err(_) => None,
+        },
+        _ => None,
+    };
+
+    (cad, sfx_data_size)
 }
 
 struct SongState {
@@ -1042,22 +1055,6 @@ impl SongCompiler {
     }
 }
 
-fn update_sfx_data_size_and_recheck_all_songs(
-    song_dependencies: &mut Option<SongDependencies>,
-    songs: &mut SongCompiler,
-    sfx_export_order: &IList<data::Name>,
-    sound_effects: &CList<SoundEffectInput, Option<Arc<CompiledSoundEffect>>>,
-    sender: &Sender,
-) {
-    let sfx_data_size = calc_sfx_data_size(sfx_export_order, sound_effects);
-    sender.send(CompilerOutput::SoundEffectsDataSize(sfx_data_size));
-
-    if let Some(dep) = song_dependencies {
-        dep.sfx_data_size = sfx_data_size;
-        songs.recheck_song_sizes(dep, sender);
-    }
-}
-
 fn analyse_sample(
     cache: &mut SampleFileCache,
     source: SourcePathBuf,
@@ -1316,23 +1313,26 @@ fn bg_thread(
         if pending_build_cad_with_sfx {
             pending_build_cad_with_sfx = false;
 
-            let c = build_common_audio_data_with_sfx(
+            let (cad, sfx_data_size) = build_common_audio_data_with_sfx(
                 &song_dependencies,
                 &sfx_export_order,
                 &sound_effects,
             );
-            sender.send(CompilerOutput::CanSendPlaySfxCommands(c.is_some()));
-            sender.send_audio(AudioMessage::CommandAudioDataWithSfxChanged(c));
 
-            if !pending_compile_all_songs {
-                update_sfx_data_size_and_recheck_all_songs(
-                    &mut song_dependencies,
-                    &mut songs,
-                    &sfx_export_order,
-                    &sound_effects,
-                    &sender,
-                );
+            if let Some(deps) = &mut song_dependencies {
+                if deps.sfx_data_size != sfx_data_size {
+                    deps.sfx_data_size = sfx_data_size;
+
+                    if !pending_compile_all_songs {
+                        songs.recheck_song_sizes(deps, &sender);
+                    }
+                }
             }
+
+            sender.send(CompilerOutput::SoundEffectsDataSize(sfx_data_size));
+            sender.send(CompilerOutput::CanSendPlaySfxCommands(cad.is_some()));
+            sender.send_audio(AudioMessage::CommandAudioDataWithSfxChanged(cad));
+
             cad_with_sfx_out_of_date = false;
         }
 
