@@ -76,8 +76,24 @@ pub struct PlaySampleArgs {
 }
 
 #[derive(Debug)]
+pub struct ReplaceAllVec<T>(Vec<(ItemId, T)>);
+
+impl<T> ReplaceAllVec<T> {
+    pub fn new(v: Vec<(ItemId, T)>) -> Self {
+        Self(v)
+    }
+}
+
+#[derive(Debug)]
+pub struct ProjectToCompiler {
+    pub sfx_export_order: ReplaceAllVec<data::Name>,
+    pub pf_songs: ReplaceAllVec<data::Song>,
+    pub instruments: ReplaceAllVec<data::Instrument>,
+    pub samples: ReplaceAllVec<data::Sample>,
+}
+
+#[derive(Debug)]
 pub enum ItemChanged<T> {
-    ReplaceAll(Vec<(ItemId, T)>),
     AddedOrEdited(ItemId, T),
     MultipleAddedOrEdited(Vec<(ItemId, T)>),
     Removed(ItemId),
@@ -85,6 +101,9 @@ pub enum ItemChanged<T> {
 
 #[derive(Debug)]
 pub enum ToCompiler {
+    LoadProject(ProjectToCompiler),
+    LoadSoundEffects(ReplaceAllVec<SoundEffectInput>),
+
     SfxExportOrder(ItemChanged<data::Name>),
     ProjectSongs(ItemChanged<data::Song>),
 
@@ -267,14 +286,15 @@ impl<ItemT> IList<ItemT> {
         self.map.get(id).and_then(|i| self.items.get(*i))
     }
 
-    fn replace(&mut self, data: Vec<(ItemId, ItemT)>) {
+    fn replace_all(&mut self, data: ReplaceAllVec<ItemT>) {
         self.map = data
+            .0
             .iter()
             .enumerate()
             .map(|(index, (id, _item))| (*id, index))
             .collect();
 
-        self.items = data.into_iter().map(|(_id, item)| item).collect();
+        self.items = data.0.into_iter().map(|(_id, item)| item).collect();
     }
 
     fn add_or_edit(&mut self, id: ItemId, item: ItemT) {
@@ -301,7 +321,6 @@ impl<ItemT> IList<ItemT> {
 
     fn process_message(&mut self, m: ItemChanged<ItemT>) {
         match m {
-            ItemChanged::ReplaceAll(v) => self.replace(v),
             ItemChanged::AddedOrEdited(id, item) => {
                 self.add_or_edit(id, item);
             }
@@ -327,6 +346,7 @@ struct CList<ItemT, OutT> {
 impl<ItemT, OutT> CList<ItemT, OutT>
 where
     ItemT: NameGetter,
+    OutT: Default,
 {
     fn new() -> Self {
         Self {
@@ -353,29 +373,26 @@ where
         &self.name_map
     }
 
-    fn replace(
-        &mut self,
-        data: Vec<(ItemId, ItemT)>,
-        mut compiler_fn: impl FnMut(ItemId, &ItemT) -> OutT,
-    ) {
+    // NOTE: Does not compile the items::
+    fn replace_all(&mut self, data: ReplaceAllVec<ItemT>) {
         self.map = data
+            .0
             .iter()
             .enumerate()
             .map(|(index, (id, _item))| (*id, index))
             .collect();
 
-        self.output = data
-            .iter()
-            .map(|(id, item)| compiler_fn(*id, item))
-            .collect();
+        self.output.clear();
+        self.output.resize_with(data.0.len(), OutT::default);
 
         self.name_map = data
+            .0
             .iter()
             .enumerate()
             .map(|(index, (_id, item))| (item.name().clone(), index))
             .collect();
 
-        self.items = data.into_iter().map(|(_id, item)| item).collect();
+        self.items = data.0.into_iter().map(|(_id, item)| item).collect();
     }
 
     fn add_or_edit(
@@ -429,7 +446,6 @@ where
         mut compiler_fn: impl FnMut(ItemId, &ItemT) -> OutT,
     ) {
         match m {
-            ItemChanged::ReplaceAll(v) => self.replace(v, compiler_fn),
             ItemChanged::AddedOrEdited(id, item) => {
                 self.add_or_edit(id, item, &mut compiler_fn);
             }
@@ -458,7 +474,6 @@ where
         };
 
         match m {
-            ItemChanged::ReplaceAll(_) => true,
             ItemChanged::AddedOrEdited(id, item) => test_add_or_edit(id, item),
             ItemChanged::MultipleAddedOrEdited(vec) => {
                 vec.iter().any(|(id, item)| test_add_or_edit(id, item))
@@ -467,7 +482,7 @@ where
         }
     }
 
-    fn recompile_all(&mut self, compiler_fn: impl Fn(ItemId, &ItemT) -> OutT) {
+    fn recompile_all(&mut self, mut compiler_fn: impl FnMut(ItemId, &ItemT) -> OutT) {
         for (&id, &index) in &self.map {
             let out = compiler_fn(id, &self.items[index]);
             self.output[index] = out;
@@ -816,7 +831,7 @@ impl SongCompiler {
         Some(song_data)
     }
 
-    fn load_song(
+    fn load_and_compile_song(
         &self,
         id: ItemId,
         source_path: &SourcePathBuf,
@@ -841,6 +856,25 @@ impl SongCompiler {
         }
     }
 
+    fn replace_all_and_load_songs(&mut self, pf_songs: &ReplaceAllVec<data::Song>) {
+        self.songs = pf_songs
+            .0
+            .iter()
+            .filter_map(|(id, item)| {
+                match load_text_file_with_limit(&item.source, &self.parent_path) {
+                    Ok(file) => Some((
+                        *id,
+                        SongState {
+                            song_data: None,
+                            file,
+                        },
+                    )),
+                    Err(_) => None,
+                }
+            })
+            .collect();
+    }
+
     fn process_pf_song_message(
         &mut self,
         m: &ItemChanged<data::Song>,
@@ -855,23 +889,12 @@ impl SongCompiler {
             if !self.songs.contains_key(id) {
                 self.songs.insert(
                     *id,
-                    self.load_song(*id, &item.source, pf_songs, dependencies, sender),
+                    self.load_and_compile_song(*id, &item.source, pf_songs, dependencies, sender),
                 );
             }
         };
 
         match m {
-            ItemChanged::ReplaceAll(v) => {
-                self.songs = v
-                    .iter()
-                    .map(|(id, item)| {
-                        (
-                            *id,
-                            self.load_song(*id, &item.source, pf_songs, dependencies, sender),
-                        )
-                    })
-                    .collect();
-            }
             ItemChanged::AddedOrEdited(id, item) => {
                 add_or_edit(id, item);
             }
@@ -900,7 +923,7 @@ impl SongCompiler {
                 // The song-tab may have been closed without saving it, reload the song file.
                 self.songs.insert(
                     id,
-                    self.load_song(id, &pf_song.source, pf_songs, dependencies, sender),
+                    self.load_and_compile_song(id, &pf_song.source, pf_songs, dependencies, sender),
                 );
             }
             None => {
@@ -1081,13 +1104,35 @@ fn bg_thread(
     // Used to test if a sound effect was edited in the sfx tab.
     let mut cad_with_sfx_out_of_date = true;
 
-    let mut pending_combine_samples = true;
-    let mut pending_compile_all_sfx = true;
-    let mut pending_build_cad_with_sfx = true;
-    let mut pending_compile_all_songs = true;
+    let mut pending_combine_samples = false;
+    let mut pending_compile_all_sfx = false;
+    let mut pending_build_cad_with_sfx = false;
+    let mut pending_compile_all_songs = false;
 
     while let Ok(m) = receiever.recv() {
         match m {
+            ToCompiler::LoadProject(p) => {
+                songs.replace_all_and_load_songs(&p.pf_songs);
+
+                sfx_export_order.replace_all(p.sfx_export_order);
+                pf_songs.replace_all(p.pf_songs);
+                instruments.replace_all(p.instruments);
+                samples.replace_all(p.samples);
+
+                let c = create_instrument_compiler(&mut sample_file_cache, &sender);
+                instruments.recompile_all(c);
+
+                let c = create_sample_compiler(&mut sample_file_cache, &sender);
+                samples.recompile_all(c);
+
+                pending_combine_samples = true;
+                pending_compile_all_songs = true;
+            }
+            ToCompiler::LoadSoundEffects(sfx) => {
+                sound_effects.replace_all(sfx);
+                pending_compile_all_sfx = true;
+            }
+
             ToCompiler::SfxExportOrder(m) => {
                 sfx_export_order.process_message(m);
                 count_missing_sfx(&sfx_export_order, &sound_effects, &sender);
@@ -1124,7 +1169,6 @@ fn bg_thread(
             }
 
             ToCompiler::SoundEffects(m) => {
-                let replace_all_message = matches!(m, ItemChanged::ReplaceAll(_));
                 let name_changed = sound_effects.item_changes_name(&m);
 
                 let c = create_sfx_compiler(&song_dependencies, &sender);
@@ -1134,9 +1178,6 @@ fn bg_thread(
                     count_missing_sfx(&sfx_export_order, &sound_effects, &sender);
                 }
 
-                if replace_all_message {
-                    pending_build_cad_with_sfx = true;
-                }
                 sender.send(CompilerOutput::CanSendPlaySfxCommands(false));
                 sender.send_audio(AudioMessage::CommandAudioDataWithSfxChanged(None));
 

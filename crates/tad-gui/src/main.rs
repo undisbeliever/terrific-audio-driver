@@ -789,27 +789,21 @@ impl Project {
     }
 
     fn recompile_everything(&self) {
-        let _ = self.compiler_sender.send(ToCompiler::SfxExportOrder(
-            self.data.sfx_export_orders.replace_all_message(),
-        ));
-        let _ = self.compiler_sender.send(ToCompiler::Instrument(
-            self.data.instruments().replace_all_message(),
-        ));
-        let _ = self.compiler_sender.send(ToCompiler::Sample(
-            self.data.samples().replace_all_message(),
+        let _ = self.compiler_sender.send(ToCompiler::LoadProject(
+            compiler_thread::ProjectToCompiler {
+                sfx_export_order: self.data.sfx_export_orders.list().replace_all_vec(),
+                pf_songs: self.data.project_songs.list().replace_all_vec(),
+                instruments: self.data.instruments().list().replace_all_vec(),
+                samples: self.data.samples().list().replace_all_vec(),
+            },
         ));
 
         // Combine samples after they have been compiled
         if let Some(sfx_data) = &self.sfx_data {
-            let _ = self.compiler_sender.send(ToCompiler::SoundEffects(
-                sfx_data.sound_effects.replace_all_message(),
+            let _ = self.compiler_sender.send(ToCompiler::LoadSoundEffects(
+                sfx_data.sound_effects.list().replace_all_vec(),
             ));
         }
-
-        // Compile songs after samples have been compiled
-        let _ = self.compiler_sender.send(ToCompiler::ProjectSongs(
-            self.data.project_songs.replace_all_message(),
-        ));
     }
 
     fn selected_tab_changed(&mut self, window: &mut fltk::window::Window) {
@@ -866,12 +860,9 @@ impl Project {
             Some("Sound Effects"),
         );
 
-        let _ = self.compiler_sender.send(ToCompiler::SoundEffects(
-            sound_effects.replace_all_message(),
+        let _ = self.compiler_sender.send(ToCompiler::LoadSoundEffects(
+            sound_effects.list().replace_all_vec(),
         ));
-        let _ = self
-            .compiler_sender
-            .send(ToCompiler::FinishedEditingSoundEffects);
 
         self.sfx_data = Some(SoundEffectsData {
             header: sfx_file.header,

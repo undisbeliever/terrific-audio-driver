@@ -4,7 +4,7 @@
 //
 // SPDX-License-Identifier: MIT
 
-use crate::compiler_thread::{ItemChanged, ItemId};
+use crate::compiler_thread::{self, ItemChanged, ItemId};
 use crate::helpers::SetActive;
 use crate::names::{DeduplicatedNameVec, NameDeduplicator};
 use crate::tables;
@@ -238,8 +238,8 @@ where
     }
 
     #[must_use]
-    fn replace_all_message(&self) -> ItemChanged<T> {
-        ItemChanged::ReplaceAll(self.list.to_owned())
+    pub fn replace_all_vec(&self) -> compiler_thread::ReplaceAllVec<T> {
+        compiler_thread::ReplaceAllVec::new(self.list.0.clone())
     }
 
     #[must_use]
@@ -452,7 +452,6 @@ where
 
     fn selected(&self) -> Option<usize>;
     fn list(&self) -> &ListData<Self::Item>;
-    fn replace_all_message(&self) -> ItemChanged<Self::Item>;
 }
 
 pub struct ListWithSelection<T>
@@ -475,10 +474,6 @@ where
 
     fn list(&self) -> &ListData<T> {
         &self.list
-    }
-
-    fn replace_all_message(&self) -> ItemChanged<T> {
-        self.list.replace_all_message()
     }
 }
 
@@ -600,10 +595,6 @@ where
 
     fn list(&self) -> &ListData<T> {
         &self.list
-    }
-
-    fn replace_all_message(&self) -> ItemChanged<T> {
-        self.list.replace_all_message()
     }
 }
 
