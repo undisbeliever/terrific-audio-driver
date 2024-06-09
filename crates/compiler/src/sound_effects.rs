@@ -229,6 +229,12 @@ pub struct CombinedSoundEffectsData {
     pub(crate) sfx_offsets: Vec<usize>,
 }
 
+impl CombinedSoundEffectsData {
+    pub fn sfx_data_size(&self) -> usize {
+        2 * self.sfx_offsets.len() + self.sfx_data.len()
+    }
+}
+
 pub trait CompiledSfxMap {
     fn is_empty(&self) -> bool;
     fn get(&self, name: &Name) -> Option<&CompiledSoundEffect>;

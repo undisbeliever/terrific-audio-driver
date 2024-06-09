@@ -730,7 +730,7 @@ fn build_common_data_no_sfx_and_song_dependencies(
             let sd = SongDependencies {
                 inst_map: instruments,
                 combined_samples,
-                common_data_no_sfx_size: cad.data().len(),
+                common_data_no_sfx_size: cad.data().len() - blank_sfx_data.sfx_data_size(),
                 sfx_data_size: calc_sfx_data_size(sfx_export_order, sound_effects),
             };
             Ok((cad, sd))
@@ -1279,8 +1279,9 @@ fn bg_thread(
                 &blank_sfx_data,
             ) {
                 Ok((cd, sd)) => {
-                    let data_size = cd.data().len();
-                    sender.send(CompilerOutput::CombineSamples(Ok(data_size)));
+                    sender.send(CompilerOutput::CombineSamples(Ok(
+                        sd.common_data_no_sfx_size
+                    )));
 
                     common_audio_data_no_sfx = Some(cd);
                     song_dependencies = Some(sd);
