@@ -16,6 +16,7 @@ use crate::instrument_editor::{InstrumentEditor, InstrumentMapping, TestInstrume
 use crate::sample_editor::{SampleEditor, SampleMapping, TestSampleWidget};
 
 use compiler::data::{self, Instrument};
+use fltk::button::Button;
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -29,6 +30,7 @@ use fltk::text::{TextBuffer, TextDisplay, WrapMode};
 
 #[derive(PartialEq)]
 enum EditorType {
+    CombinedSamplesResult,
     Instrument,
     Sample,
 }
@@ -37,11 +39,15 @@ pub struct SamplesTab {
     group: Flex,
 
     selected_editor: EditorType,
+    combined_samples: Option<Result<usize, CombineSamplesError>>,
 
+    show_combined_samples_button: Button,
     inst_table: ListEditorTable<InstrumentMapping>,
     sample_table: ListEditorTable<SampleMapping>,
 
     editor_wizard: Wizard,
+
+    combined_samples_widget: Frame,
 
     instrument_group: Flex,
     instrument_editor: Rc<RefCell<InstrumentEditor>>,
@@ -82,6 +88,12 @@ impl SamplesTab {
         let mut sidebar = Flex::default().column();
         group.fixed(&sidebar, ch_units_to_width(&sidebar, 30));
 
+        let mut show_combined_samples_button = Button::default().with_label("Unchecked");
+        sidebar.fixed(
+            &show_combined_samples_button,
+            ch_units_to_width(&sidebar, 5),
+        );
+
         let mut inst_table = ListEditorTable::new_with_data(instruments, sender.clone());
 
         let button_height = inst_table.button_height();
@@ -95,6 +107,8 @@ impl SamplesTab {
         let mut main_group = Flex::default().column();
 
         let editor_wizard = Wizard::default().with_size(400, 400);
+
+        let combined_samples_widget = label("::TODO add graph and/or table of sample sizes::");
 
         let mut instrument_group = Flex::default().column().size_of_parent();
         instrument_group.set_margin(margin);
@@ -143,9 +157,19 @@ impl SamplesTab {
         console.set_buffer(console_buffer.clone());
         console.wrap_mode(WrapMode::AtBounds, 0);
 
+        show_combined_samples_button.set_callback({
+            let sender = sender.clone();
+            move |_| {
+                sender.send(GuiMessage::ShowSamplesResult);
+            }
+        });
+
         Self {
             group,
-            selected_editor: EditorType::Instrument,
+            selected_editor: EditorType::CombinedSamplesResult,
+            combined_samples: None,
+            show_combined_samples_button,
+            combined_samples_widget,
             inst_table,
             sample_table,
             editor_wizard,
@@ -160,12 +184,86 @@ impl SamplesTab {
         }
     }
 
-    pub fn set_combine_result(&mut self, r: &Result<usize, CombineSamplesError>) {
-        match r {
-            Ok(_) => self.group.set_label_color(Color::Foreground),
-            Err(_) => self.group.set_label_color(Color::Red),
+    pub fn set_combined_samples(&mut self, r: Result<usize, CombineSamplesError>) {
+        let label_color = match r {
+            Ok(_) => Color::Foreground,
+            Err(_) => Color::Red,
+        };
+        if self.group.label_color() != label_color {
+            self.group.set_label_color(label_color);
+            self.group.redraw_label();
         }
-        self.group.redraw_label();
+
+        match &r {
+            Ok(_) => {
+                self.show_combined_samples_button.set_label("All OK");
+                self.show_combined_samples_button
+                    .set_label_color(Color::Foreground);
+            }
+            Err(e) => {
+                self.show_combined_samples_button
+                    .set_label_color(Color::Red);
+                match e {
+                    CombineSamplesError::IndividualErrors {
+                        n_instrument_errors,
+                        n_sample_errors,
+                    } => {
+                        let n_errors = n_instrument_errors + n_sample_errors;
+                        if n_errors == 1 {
+                            self.show_combined_samples_button.set_label("1 error");
+                        } else {
+                            self.show_combined_samples_button
+                                .set_label(&format!("{n_errors} errors"));
+                        }
+                    }
+                    CombineSamplesError::CombineError(..) => self
+                        .show_combined_samples_button
+                        .set_label("Combine samples error"),
+                    CombineSamplesError::CommonAudioData(..) => self
+                        .show_combined_samples_button
+                        .set_label("Common audio data error"),
+                    CombineSamplesError::UniqueNamesError(..) => self
+                        .show_combined_samples_button
+                        .set_label("Unique names error"),
+                }
+            }
+        };
+
+        self.combined_samples = Some(r);
+
+        match &self.selected_editor {
+            EditorType::CombinedSamplesResult => self.update_combined_samples_widget_and_console(),
+            EditorType::Instrument => (),
+            EditorType::Sample => (),
+        }
+    }
+
+    pub fn show_combined_samples_widget(&mut self) {
+        self.selected_editor = EditorType::CombinedSamplesResult;
+        self.editor_wizard
+            .set_current_widget(&self.combined_samples_widget);
+        self.update_combined_samples_widget_and_console();
+    }
+
+    fn update_combined_samples_widget_and_console(&mut self) {
+        match &self.combined_samples {
+            None => {
+                self.console_buffer.set_text("");
+                self.console.set_text_color(Color::Foreground);
+                self.console.scroll(0, 0);
+            }
+            Some(Ok(size)) => {
+                self.console_buffer
+                    .set_text(&format!("Total size: {} bytes", size));
+                self.console.set_text_color(Color::Foreground);
+                self.console.scroll(0, 0);
+            }
+            Some(Err(e)) => {
+                self.console_buffer.set_text(&e.to_string());
+                self.console.set_text_color(Color::Red);
+                self.console.scroll(0, 0);
+            }
+        }
     }
 }
 
@@ -183,6 +281,10 @@ impl ListEditor<Instrument> for SamplesTab {
         self.inst_table.clear_selected();
         self.instrument_editor.borrow_mut().disable_editor();
         self.test_instrument_widget.borrow_mut().clear_selected();
+
+        if matches!(self.selected_editor, EditorType::Instrument) {
+            self.show_combined_samples_widget();
+        }
     }
 
     fn set_selected(&mut self, index: usize, id: ItemId, inst: &Instrument) {
@@ -252,6 +354,10 @@ impl ListEditor<data::Sample> for SamplesTab {
 
         self.sample_editor.borrow_mut().disable_editor();
         self.test_sample_widget.borrow_mut().clear_selected();
+
+        if matches!(self.selected_editor, EditorType::Sample) {
+            self.show_combined_samples_widget();
+        }
     }
 
     fn set_selected(&mut self, index: usize, id: ItemId, sample: &data::Sample) {

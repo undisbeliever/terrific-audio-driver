@@ -139,6 +139,8 @@ pub enum GuiMessage {
     AddSongToProjectDialog,
     SetProjectSongName(usize, data::Name),
 
+    ShowSamplesResult,
+
     OpenAnalyseInstrumentDialog(usize),
     OpenAnalyseSampleDialog(usize),
 
@@ -601,6 +603,10 @@ impl Project {
             GuiMessage::AddSongToProjectDialog => {
                 add_song_to_pf_dialog(&self.sender, &self.data, &self.tab_manager);
             }
+
+            GuiMessage::ShowSamplesResult => {
+                self.samples_tab.show_combined_samples_widget();
+            }
             GuiMessage::OpenInstrumentSampleDialog(index) => {
                 open_instrument_sample_dialog(
                     &self.sender,
@@ -750,15 +756,8 @@ impl Project {
             }
 
             CompilerOutput::CombineSamples(o) => {
-                self.samples_tab.set_combine_result(&o);
                 self.project_tab.memory_stats.samples_compiled(&o);
-
-                if let Err(e) = o {
-                    dialog::message_title("Error combining samples");
-                    dialog::alert_default(&e.to_string());
-
-                    self.tab_manager.set_selected_tab(&self.samples_tab);
-                }
+                self.samples_tab.set_combined_samples(o);
             }
 
             CompilerOutput::CanSendPlaySfxCommands(can_play_sfx) => {

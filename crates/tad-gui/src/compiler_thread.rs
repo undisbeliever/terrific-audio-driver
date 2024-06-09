@@ -136,7 +136,6 @@ pub enum CompilerOutput {
     Instrument(ItemId, InstrumentOutput),
     Sample(ItemId, SampleOutput),
 
-    // ::TODO the prevent user from leaving the Samples tab if this error occurs::
     CombineSamples(Result<usize, CombineSamplesError>),
 
     SoundEffect(ItemId, SoundEffectOutput),
