@@ -318,7 +318,6 @@ impl<ItemT> IList<ItemT> {
 }
 
 struct CList<ItemT, OutT> {
-    changed: bool,
     name_map_changed: bool,
     items: Vec<ItemT>,
     output: Vec<OutT>,
@@ -334,21 +333,12 @@ where
 {
     fn new() -> Self {
         Self {
-            changed: false,
             name_map_changed: false,
             items: Vec::new(),
             output: Vec::new(),
             map: HashMap::new(),
             name_map: HashMap::new(),
         }
-    }
-
-    fn is_changed(&self) -> bool {
-        self.changed
-    }
-
-    fn clear_changed_flag(&mut self) {
-        self.changed = false;
     }
 
     fn is_name_map_changed(&self) -> bool {
@@ -399,8 +389,6 @@ where
         self.name_map_changed = true;
 
         self.items = data.into_iter().map(|(_id, item)| item).collect();
-
-        self.changed = true;
     }
 
     fn add_or_edit(
@@ -435,8 +423,6 @@ where
                 self.items.push(item);
             }
         }
-
-        self.changed = true;
     }
 
     fn remove(&mut self, id: ItemId) {
@@ -452,8 +438,6 @@ where
             self.output.remove(index);
             self.items.remove(index);
         }
-
-        self.changed = true;
     }
 
     fn process_message(
@@ -1090,6 +1074,9 @@ fn bg_thread(
     let mut song_dependencies = None;
     let mut common_audio_data_no_sfx = None;
 
+    // Used to test if a sound effect was edited in the sfx tab.
+    let mut cad_with_sfx_out_of_date = true;
+
     let mut pending_combine_samples = true;
     let mut pending_compile_all_sfx = true;
     let mut pending_build_cad_with_sfx = true;
@@ -1132,14 +1119,6 @@ fn bg_thread(
                 pending_combine_samples = true;
             }
 
-            ToCompiler::FinishedEditingSoundEffects => {
-                if sound_effects.is_changed() {
-                    sound_effects.clear_changed_flag();
-
-                    pending_build_cad_with_sfx = true;
-                }
-            }
-
             ToCompiler::SoundEffects(m) => {
                 let replace_all_message = matches!(m, ItemChanged::ReplaceAll(_));
 
@@ -1157,6 +1136,13 @@ fn bg_thread(
                 }
                 sender.send(CompilerOutput::CanSendPlaySfxCommands(false));
                 sender.send_audio(AudioMessage::CommandAudioDataWithSfxChanged(None));
+
+                cad_with_sfx_out_of_date = true;
+            }
+            ToCompiler::FinishedEditingSoundEffects => {
+                if cad_with_sfx_out_of_date {
+                    pending_build_cad_with_sfx = true;
+                }
             }
             ToCompiler::PlaySongWithSfxBuffer(id, ticks) => {
                 if let Some(song) = songs.get_song_data(&id) {
@@ -1302,6 +1288,7 @@ fn bg_thread(
                     &sender,
                 );
             }
+            cad_with_sfx_out_of_date = false;
         }
 
         if pending_compile_all_songs {
