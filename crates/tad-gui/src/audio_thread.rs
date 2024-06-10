@@ -88,8 +88,10 @@ pub struct SongSkip {
     pub target_ticks: TickCounter,
 }
 
+#[derive(Debug)]
 pub struct CommonAudioDataWithSfxBuffer(pub CommonAudioData);
 
+#[derive(Debug)]
 pub struct CommonAudioDataWithSfx {
     pub common_audio_data: CommonAudioData,
     pub sfx_id_map: HashMap<ItemId, usize>,
@@ -763,8 +765,11 @@ impl TadEmu {
                     // sfx_buffer can only onld one sound effect at a time
                     self.try_send_io_command(io_commands::STOP_SOUND_EFFECTS, 0, pan.0);
                 } else {
+                    let bc_addr_range = common_data.0.sfx_bytecode_addr_range();
+                    let bc_addr_range = bc_addr_range.start.into()..bc_addr_range.end.into();
+
                     let bc = sfx.bytecode();
-                    let sfx_buffer = &mut apuram[common_data.0.sfx_data_aram_range()];
+                    let sfx_buffer = &mut apuram[bc_addr_range];
                     sfx_buffer[..bc.len()].copy_from_slice(bc);
 
                     self.try_send_io_command(io_commands::PLAY_SOUND_EFFECT, 0, pan.0);

@@ -11,17 +11,17 @@ use crate::bytecode::{
     SubroutineId, Volume,
 };
 use crate::driver_constants::{
-    addresses, AUDIO_RAM_SIZE, MAX_SONG_DATA_SIZE, MAX_SUBROUTINES, N_MUSIC_CHANNELS,
-    SFX_TICK_CLOCK, SONG_HEADER_CHANNELS_SIZE, SONG_HEADER_N_SUBROUTINES_OFFSET, SONG_HEADER_SIZE,
-    SONG_HEADER_TICK_TIMER_OFFSET,
+    addresses, AUDIO_RAM_SIZE, ECHO_BUFFER_MIN_SIZE, MAX_SONG_DATA_SIZE, MAX_SUBROUTINES,
+    N_MUSIC_CHANNELS, SFX_TICK_CLOCK, SONG_HEADER_CHANNELS_SIZE, SONG_HEADER_N_SUBROUTINES_OFFSET,
+    SONG_HEADER_SIZE, SONG_HEADER_TICK_TIMER_OFFSET,
 };
 use crate::envelope::Envelope;
 use crate::errors::{SongError, SongTooLargeError, ValueError};
-use crate::mml;
 use crate::mml::{MetaData, MmlInstrument, Section};
 use crate::notes::Note;
 use crate::sound_effects::CompiledSoundEffect;
 use crate::time::{TickClock, TickCounter, TickCounterWithLoopFlag};
+use crate::{audio_driver, mml};
 
 use std::cmp::min;
 use std::fmt::Debug;
@@ -29,6 +29,23 @@ use std::ops::Range;
 use std::time::Duration;
 
 const NULL_OFFSET: u16 = 0xffff_u16;
+
+#[derive(Debug, PartialEq)]
+pub struct SongAramSize {
+    pub data_size: u16,
+    pub echo_buffer_size: u16,
+}
+
+impl SongAramSize {
+    pub fn total_size(&self) -> usize {
+        usize::from(self.data_size) + usize::from(self.echo_buffer_size)
+    }
+}
+
+pub const BLANK_SONG_ARAM_SIZE: SongAramSize = SongAramSize {
+    data_size: audio_driver::BLANK_SONG.len() as u16,
+    echo_buffer_size: ECHO_BUFFER_MIN_SIZE as u16,
+};
 
 #[cfg(feature = "mml_tracking")]
 #[derive(Debug, Copy, Clone, PartialEq)]
@@ -142,12 +159,15 @@ impl SongData {
         &self.subroutines
     }
 
-    pub fn data_and_echo_size(&self) -> usize {
-        let song_data_size = self.data().len();
-        // Loader can only a multiple of 2 bytes
-        let song_data_size = song_data_size + (song_data_size % 2);
+    pub fn song_aram_size(&self) -> SongAramSize {
+        let data_size = self.data().len();
+        // Loader can only load a multiple of 2 bytes
+        let data_size = data_size + (data_size % 2);
 
-        song_data_size + self.metadata.echo_buffer.edl.buffer_size()
+        SongAramSize {
+            data_size: data_size.try_into().unwrap_or(u16::MAX),
+            echo_buffer_size: self.metadata.echo_buffer.edl.buffer_size_u16(),
+        }
     }
 
     #[cfg(feature = "mml_tracking")]

@@ -32,7 +32,9 @@ use compiler::samples::{
     load_sample_for_instrument, load_sample_for_sample, CompiledDataList, InstrumentSampleData,
     SampleAndInstrumentData, SampleFileCache, SampleSampleData, WAV_EXTENSION,
 };
-use compiler::songs::{sound_effect_to_song, test_sample_song, SongData};
+use compiler::songs::{
+    sound_effect_to_song, test_sample_song, SongAramSize, SongData, BLANK_SONG_ARAM_SIZE,
+};
 use compiler::sound_effects::{
     blank_compiled_sound_effects, combine_sound_effects, tad_gui_sfx_data,
     CombinedSoundEffectsData, CompiledSfxMap,
@@ -145,6 +147,13 @@ pub type SoundEffectOutput = Result<Arc<CompiledSoundEffect>, SfxError>;
 pub type SongOutput = Result<Arc<SongData>, SongError>;
 
 #[derive(Debug)]
+pub enum CadOutput {
+    None,
+    NoSfx(Arc<CommonAudioDataWithSfxBuffer>, Arc<Vec<data::Name>>),
+    WithSfx(Arc<CommonAudioDataWithSfx>, Arc<Vec<data::Name>>),
+}
+
+#[derive(Debug)]
 pub enum CompilerOutput {
     Panic(String),
 
@@ -152,6 +161,7 @@ pub enum CompilerOutput {
     Sample(ItemId, SampleOutput),
 
     CombineSamples(Result<usize, CombineSamplesError>),
+    CommonAudioData(CadOutput),
 
     SoundEffect(ItemId, SoundEffectOutput),
 
@@ -161,7 +171,7 @@ pub enum CompilerOutput {
     NumberOfMissingSoundEffects(usize),
 
     SoundEffectsDataSize(usize),
-    LargestSongSize(usize),
+    LargestSongSize(SongAramSize),
 
     // The result of the last `ToCompiler::ExportSongToSpcFile` operation
     SpcFileResult(Result<(String, Vec<u8>), SpcFileError>),
@@ -617,6 +627,16 @@ fn build_play_sample_data(
     Some((common_audio_data, song_data))
 }
 
+fn instrument_and_sample_names(
+    instruments: &CList<data::Instrument, Option<InstrumentSampleData>>,
+    samples: &CList<data::Sample, Option<SampleSampleData>>,
+) -> Arc<Vec<data::Name>> {
+    let i_names = instruments.items().iter().map(|inst| inst.name.clone());
+    let s_names = samples.items().iter().map(|s| s.name.clone());
+
+    Arc::new(i_names.chain(s_names).collect())
+}
+
 fn create_sfx_compiler<'a>(
     dependencies: &'a Option<SongDependencies>,
     sender: &'a Sender,
@@ -1013,9 +1033,9 @@ impl SongCompiler {
             .songs
             .iter()
             .filter_map(|(_k, v)| v.song_data.as_ref())
-            .map(|s| s.data_and_echo_size())
-            .max()
-            .unwrap_or(0);
+            .map(|s| s.song_aram_size())
+            .max_by_key(|s| s.total_size())
+            .unwrap_or(BLANK_SONG_ARAM_SIZE);
 
         sender.send(CompilerOutput::LargestSongSize(max_total_size));
     }
@@ -1098,6 +1118,8 @@ fn bg_thread(
     let mut song_dependencies = None;
     let mut cad_with_sfx_buffer: Option<Arc<CommonAudioDataWithSfxBuffer>> = None;
 
+    let mut inst_sample_names = Arc::default();
+
     // Used to test if a sound effect was edited in the sfx tab.
     let mut cad_with_sfx_out_of_date = true;
 
@@ -1115,6 +1137,8 @@ fn bg_thread(
                 pf_songs.replace_all(p.pf_songs);
                 instruments.replace_all(p.instruments);
                 samples.replace_all(p.samples);
+
+                inst_sample_names = instrument_and_sample_names(&instruments, &samples);
 
                 let c = create_instrument_compiler(&mut sample_file_cache, &sender);
                 instruments.recompile_all(c);
@@ -1141,16 +1165,26 @@ fn bg_thread(
                 pf_songs.process_message(m);
             }
             ToCompiler::Instrument(m) => {
+                let name_changed = instruments.item_changes_name(&m);
+
                 let c = create_instrument_compiler(&mut sample_file_cache, &sender);
                 instruments.process_message(m, c);
 
+                if name_changed {
+                    inst_sample_names = instrument_and_sample_names(&instruments, &samples);
+                }
                 song_dependencies = None;
                 pending_combine_samples = true;
             }
             ToCompiler::Sample(m) => {
+                let name_changed = samples.item_changes_name(&m);
+
                 let c = create_sample_compiler(&mut sample_file_cache, &sender);
                 samples.process_message(m, c);
 
+                if name_changed {
+                    inst_sample_names = instrument_and_sample_names(&instruments, &samples);
+                }
                 song_dependencies = None;
                 pending_combine_samples = true;
             }
@@ -1269,6 +1303,9 @@ fn bg_thread(
             }
         }
 
+        // This ensures only 1 CadOutput is sent to the GUI thread per event
+        let mut pending_cad_output = None;
+
         if pending_combine_samples {
             pending_combine_samples = false;
 
@@ -1284,11 +1321,18 @@ fn bg_thread(
                         sd.common_data_no_sfx_size
                     )));
 
+                    pending_cad_output =
+                        Some(CadOutput::NoSfx(cd.clone(), inst_sample_names.clone()));
+
                     cad_with_sfx_buffer = Some(cd);
                     song_dependencies = Some(sd);
                 }
                 Err(e) => {
+                    sender.send(CompilerOutput::CommonAudioData(CadOutput::None));
                     sender.send(CompilerOutput::CombineSamples(Err(e)));
+
+                    pending_cad_output = Some(CadOutput::None);
+
                     cad_with_sfx_buffer = None;
                     song_dependencies = None;
                 }
@@ -1331,11 +1375,21 @@ fn bg_thread(
                 }
             }
 
+            pending_cad_output = Some(match (&cad, &cad_with_sfx_buffer) {
+                (Some(c), _) => CadOutput::WithSfx(c.clone(), inst_sample_names.clone()),
+                (_, Some(c)) => CadOutput::NoSfx(c.clone(), inst_sample_names.clone()),
+                (None, None) => CadOutput::None,
+            });
+
             sender.send(CompilerOutput::SoundEffectsDataSize(sfx_data_size));
             sender.send(CompilerOutput::CanSendPlaySfxCommands(cad.is_some()));
             sender.send_audio(AudioMessage::CommandAudioDataWithSfxChanged(cad));
 
             cad_with_sfx_out_of_date = false;
+        }
+
+        if let Some(c) = pending_cad_output {
+            sender.send(CompilerOutput::CommonAudioData(c));
         }
 
         if pending_compile_all_songs {

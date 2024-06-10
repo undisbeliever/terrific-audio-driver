@@ -23,6 +23,7 @@ mod monitor_timer;
 mod names;
 mod sample_analyser;
 mod sample_editor;
+mod sample_sizes_widget;
 mod sample_widgets;
 mod sfx_window;
 mod tables;
@@ -603,7 +604,7 @@ impl Project {
             }
 
             GuiMessage::ShowSamplesResult => {
-                self.samples_tab.show_combined_samples_widget();
+                self.samples_tab.show_sample_sizes_widget();
             }
             GuiMessage::OpenInstrumentSampleDialog(index) => {
                 open_instrument_sample_dialog(
@@ -757,6 +758,9 @@ impl Project {
                 self.project_tab.memory_stats.samples_compiled(&o);
                 self.samples_tab.set_combined_samples(o);
             }
+            CompilerOutput::CommonAudioData(cad) => {
+                self.samples_tab.set_common_audio_data(cad);
+            }
 
             CompilerOutput::CanSendPlaySfxCommands(can_play_sfx) => {
                 self.sfx_window.set_can_play_sfx(can_play_sfx);
@@ -771,7 +775,8 @@ impl Project {
                 self.project_tab.memory_stats.set_sfx_data_size(size);
             }
             CompilerOutput::LargestSongSize(size) => {
-                self.project_tab.memory_stats.set_largest_song(size);
+                self.project_tab.memory_stats.set_largest_song(&size);
+                self.samples_tab.set_largest_song(size);
             }
 
             CompilerOutput::SpcFileResult(r) => match r {

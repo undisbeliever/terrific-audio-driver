@@ -17,7 +17,7 @@ use crate::GuiMessage;
 use compiler::data;
 use compiler::data::Name;
 use compiler::path::SourcePathBuf;
-use compiler::songs::song_duration_string;
+use compiler::songs::{song_duration_string, SongAramSize};
 
 use fltk::app;
 use fltk::enums::Color;
@@ -384,7 +384,9 @@ impl MemoryStats {
         self.update_free_space();
     }
 
-    pub fn set_largest_song(&mut self, s: usize) {
+    pub fn set_largest_song(&mut self, s: &SongAramSize) {
+        let s = s.total_size();
+
         if s != self.largest_song_size {
             self.largest_song_size = s;
             Self::output_bytes(&mut self.largest_song_out, s);

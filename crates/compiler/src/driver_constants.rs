@@ -117,7 +117,9 @@ pub const PITCH_TABLE_SIZE: usize = 256;
 pub const COMMON_DATA_N_DIR_ITEMS_OFFSET: usize = 0;
 pub const COMMON_DATA_N_INSTRUMENTS_OFFSET: usize = 1;
 pub const COMMON_DATA_HEADER_SIZE: usize = 4 + (2 * PITCH_TABLE_SIZE);
+
 pub const COMMON_DATA_PITCH_TABLE_OFFSET: usize = 4;
+pub const COMMON_DATA_DIR_TABLE_OFFSET: usize = COMMON_DATA_HEADER_SIZE;
 
 pub const COMMON_DATA_BYTES_PER_DIR: usize = 4;
 pub const COMMON_DATA_BYTES_PER_INSTRUMENTS: usize = 4;

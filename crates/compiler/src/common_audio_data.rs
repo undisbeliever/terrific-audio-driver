@@ -6,7 +6,8 @@
 
 use crate::driver_constants::{
     addresses, COMMON_DATA_BYTES_PER_DIR, COMMON_DATA_BYTES_PER_INSTRUMENTS,
-    COMMON_DATA_BYTES_PER_SOUND_EFFECT, COMMON_DATA_HEADER_SIZE, MAX_COMMON_DATA_SIZE,
+    COMMON_DATA_BYTES_PER_SOUND_EFFECT, COMMON_DATA_DIR_TABLE_OFFSET, COMMON_DATA_HEADER_SIZE,
+    COMMON_DATA_N_DIR_ITEMS_OFFSET, COMMON_DATA_N_INSTRUMENTS_OFFSET, MAX_COMMON_DATA_SIZE,
     MAX_DIR_ITEMS, MAX_INSTRUMENTS_AND_SAMPLES, MAX_SOUND_EFFECTS,
 };
 use crate::errors::{CommonAudioDataError, CommonAudioDataErrors};
@@ -18,7 +19,14 @@ use std::ops::Range;
 #[derive(Clone)]
 pub struct CommonAudioData {
     data: Vec<u8>,
-    sfx_data_aram_range: Range<usize>,
+    brr_addr_range: Range<u16>,
+    sfx_bytecode_addr_range: Range<u16>,
+}
+
+impl std::fmt::Debug for CommonAudioData {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "CommonAudioData {} bytes", self.data.len())
+    }
 }
 
 impl CommonAudioData {
@@ -26,8 +34,42 @@ impl CommonAudioData {
         &self.data
     }
 
-    pub fn sfx_data_aram_range(&self) -> Range<usize> {
-        self.sfx_data_aram_range.clone()
+    pub fn aram_size(&self) -> u16 {
+        let s = self.data.len().try_into().unwrap_or(u16::MAX);
+        // Loader can only load a multiple of 2 bytes
+        s + (s % 2)
+    }
+
+    pub fn dir_table_start_iter(&self) -> impl Iterator<Item = u16> + '_ {
+        let n_dir_items: usize = self.data[COMMON_DATA_N_DIR_ITEMS_OFFSET].into();
+        let range = Range {
+            start: COMMON_DATA_DIR_TABLE_OFFSET,
+            end: COMMON_DATA_DIR_TABLE_OFFSET + n_dir_items * COMMON_DATA_BYTES_PER_DIR,
+        };
+
+        let dir_table = &self.data[range];
+        (0..n_dir_items).map(|i| u16::from_le_bytes([dir_table[i * 4], dir_table[i * 4 + 1]]))
+    }
+
+    pub fn instruments_scrn(&self) -> &[u8] {
+        let n_dir_items: usize = self.data[COMMON_DATA_N_DIR_ITEMS_OFFSET].into();
+
+        let start = COMMON_DATA_HEADER_SIZE + n_dir_items * COMMON_DATA_BYTES_PER_DIR;
+        let size: usize = self.data[COMMON_DATA_N_INSTRUMENTS_OFFSET].into();
+
+        &self.data[start..start + size]
+    }
+
+    pub fn header_size(&self) -> u16 {
+        self.brr_addr_range.start - addresses::COMMON_DATA
+    }
+
+    pub fn brr_addr_range(&self) -> &Range<u16> {
+        &self.brr_addr_range
+    }
+
+    pub fn sfx_bytecode_addr_range(&self) -> &Range<u16> {
+        &self.sfx_bytecode_addr_range
     }
 }
 
@@ -87,8 +129,10 @@ pub fn build_common_audio_data(
     assert!(samples_and_instruments.instruments_adsr2_or_gain.len() == n_instruments_and_samples);
 
     let brr_data_addr: u16 = addresses::COMMON_DATA + u16::try_from(header_size).unwrap();
-    let sfx_data_addr: u16 =
+    let brr_data_end: u16 =
         brr_data_addr + u16::try_from(samples_and_instruments.brr_data.len()).unwrap();
+    let sfx_data_addr: u16 = brr_data_end;
+    let sfx_data_end: u16 = sfx_data_addr + u16::try_from(sound_effects.sfx_data.len()).unwrap();
 
     let mut out = Vec::with_capacity(common_data_size);
 
@@ -135,9 +179,7 @@ pub fn build_common_audio_data(
 
     Ok(CommonAudioData {
         data: out,
-        sfx_data_aram_range: Range {
-            start: usize::from(sfx_data_addr),
-            end: usize::from(sfx_data_addr) + sound_effects.sfx_data.len(),
-        },
+        brr_addr_range: brr_data_addr..brr_data_end,
+        sfx_bytecode_addr_range: sfx_data_addr..sfx_data_end,
     })
 }

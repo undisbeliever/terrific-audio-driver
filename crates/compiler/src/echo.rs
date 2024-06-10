@@ -35,6 +35,14 @@ impl EchoEdl {
         }
     }
 
+    pub fn buffer_size_u16(&self) -> u16 {
+        if self.as_u8() == 0 {
+            ECHO_BUFFER_MIN_SIZE as u16
+        } else {
+            u16::from(self.as_u8()) * (ECHO_BUFFER_EDL_SIZE as u16)
+        }
+    }
+
     pub fn echo_buffer_addr(&self) -> u16 {
         u16::try_from(0x10000 - self.buffer_size()).unwrap()
     }

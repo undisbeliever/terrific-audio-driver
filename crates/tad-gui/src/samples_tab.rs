@@ -4,11 +4,14 @@
 //
 // SPDX-License-Identifier: MIT
 
-use crate::compiler_thread::{CombineSamplesError, InstrumentOutput, ItemId, SampleOutput};
+use crate::compiler_thread::{
+    CadOutput, CombineSamplesError, InstrumentOutput, ItemId, SampleOutput,
+};
 use crate::helpers::*;
 use crate::list_editor::{
     CompilerOutputGui, ListAction, ListButtons, ListEditor, ListEditorTable, ListState,
 };
+use crate::sample_sizes_widget::SampleSizesWidget;
 use crate::tabs::{FileType, Tab};
 use crate::GuiMessage;
 
@@ -16,6 +19,7 @@ use crate::instrument_editor::{InstrumentEditor, InstrumentMapping, TestInstrume
 use crate::sample_editor::{SampleEditor, SampleMapping, TestSampleWidget};
 
 use compiler::data::{self, Instrument};
+use compiler::songs::SongAramSize;
 use fltk::button::Button;
 
 use std::cell::RefCell;
@@ -39,6 +43,7 @@ pub struct SamplesTab {
     group: Flex,
 
     selected_editor: EditorType,
+    common_audio_data: CadOutput,
     combined_samples: Option<Result<usize, CombineSamplesError>>,
 
     show_combined_samples_button: Button,
@@ -47,7 +52,8 @@ pub struct SamplesTab {
 
     editor_wizard: Wizard,
 
-    combined_samples_widget: Frame,
+    sample_sizes_group: Flex,
+    sample_sizes_widget: Rc<RefCell<SampleSizesWidget>>,
 
     instrument_group: Flex,
     instrument_editor: Rc<RefCell<InstrumentEditor>>,
@@ -108,7 +114,10 @@ impl SamplesTab {
 
         let editor_wizard = Wizard::default().with_size(400, 400);
 
-        let combined_samples_widget = label("::TODO add graph and/or table of sample sizes::");
+        let mut sample_sizes_group = Flex::default().column().size_of_parent();
+        sample_sizes_group.set_margin(margin);
+        let sample_sizes_widget = SampleSizesWidget::new(&mut sample_sizes_group);
+        sample_sizes_group.end();
 
         let mut instrument_group = Flex::default().column().size_of_parent();
         instrument_group.set_margin(margin);
@@ -167,9 +176,11 @@ impl SamplesTab {
         Self {
             group,
             selected_editor: EditorType::CombinedSamplesResult,
+            common_audio_data: CadOutput::None,
             combined_samples: None,
             show_combined_samples_button,
-            combined_samples_widget,
+            sample_sizes_group,
+            sample_sizes_widget,
             inst_table,
             sample_table,
             editor_wizard,
@@ -182,6 +193,20 @@ impl SamplesTab {
             console,
             console_buffer,
         }
+    }
+
+    pub fn set_common_audio_data(&mut self, cad: CadOutput) {
+        self.common_audio_data = cad;
+
+        if matches!(self.selected_editor, EditorType::CombinedSamplesResult) {
+            self.sample_sizes_widget
+                .borrow_mut()
+                .cad_changed(&self.common_audio_data);
+        }
+    }
+
+    pub fn set_largest_song(&mut self, s: SongAramSize) {
+        self.sample_sizes_widget.borrow_mut().set_largest_song(s);
     }
 
     pub fn set_combined_samples(&mut self, r: Result<usize, CombineSamplesError>) {
@@ -232,31 +257,33 @@ impl SamplesTab {
         self.combined_samples = Some(r);
 
         match &self.selected_editor {
-            EditorType::CombinedSamplesResult => self.update_combined_samples_widget_and_console(),
+            EditorType::CombinedSamplesResult => self.update_sample_sizes_widget_and_console(),
             EditorType::Instrument => (),
             EditorType::Sample => (),
         }
     }
 
-    pub fn show_combined_samples_widget(&mut self) {
-        self.selected_editor = EditorType::CombinedSamplesResult;
-        self.editor_wizard
-            .set_current_widget(&self.combined_samples_widget);
-        self.update_combined_samples_widget_and_console();
+    pub fn show_sample_sizes_widget(&mut self) {
+        if !matches!(self.selected_editor, EditorType::CombinedSamplesResult) {
+            self.selected_editor = EditorType::CombinedSamplesResult;
+            self.editor_wizard
+                .set_current_widget(&self.sample_sizes_group);
+
+            self.update_sample_sizes_widget_and_console();
+        }
     }
 
-    fn update_combined_samples_widget_and_console(&mut self) {
+    fn update_sample_sizes_widget_and_console(&mut self) {
+        self.sample_sizes_widget
+            .borrow_mut()
+            .cad_changed(&self.common_audio_data);
+
         match &self.combined_samples {
             None => {
                 self.console_buffer.set_text("");
-                self.console.set_text_color(Color::Foreground);
-                self.console.scroll(0, 0);
             }
-            Some(Ok(size)) => {
-                self.console_buffer
-                    .set_text(&format!("Total size: {} bytes", size));
-                self.console.set_text_color(Color::Foreground);
-                self.console.scroll(0, 0);
+            Some(Ok(_)) => {
+                self.console_buffer.set_text("");
             }
             Some(Err(e)) => {
                 self.console_buffer.set_text(&e.to_string());
@@ -283,7 +310,7 @@ impl ListEditor<Instrument> for SamplesTab {
         self.test_instrument_widget.borrow_mut().clear_selected();
 
         if matches!(self.selected_editor, EditorType::Instrument) {
-            self.show_combined_samples_widget();
+            self.show_sample_sizes_widget();
         }
     }
 
@@ -356,7 +383,7 @@ impl ListEditor<data::Sample> for SamplesTab {
         self.test_sample_widget.borrow_mut().clear_selected();
 
         if matches!(self.selected_editor, EditorType::Sample) {
-            self.show_combined_samples_widget();
+            self.show_sample_sizes_widget();
         }
     }
 
