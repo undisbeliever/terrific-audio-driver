@@ -27,7 +27,6 @@ use sdl2::audio::{AudioCallback, AudioDevice, AudioSpecDesired};
 
 use std::collections::HashMap;
 use std::ops::Range;
-use std::rc::Rc;
 use std::sync::{mpsc, Arc, Mutex};
 use std::thread;
 use std::time::Duration;
@@ -108,8 +107,8 @@ pub enum AudioMessage {
     PauseResume(ItemId),
     SetEnabledChannels(ItemId, ChannelsMask),
 
-    CommonAudioDataChanged(Option<CommonAudioDataWithSfxBuffer>),
-    CommandAudioDataWithSfxChanged(Option<CommonAudioDataWithSfx>),
+    CommonAudioDataChanged(Option<Arc<CommonAudioDataWithSfxBuffer>>),
+    CommandAudioDataWithSfxChanged(Option<Arc<CommonAudioDataWithSfx>>),
 
     PlaySong(ItemId, Arc<SongData>, Option<SongSkip>, ChannelsMask),
     PlaySoundEffectCommand(ItemId, Pan),
@@ -411,8 +410,8 @@ enum AudioDataState {
     NotLoaded,
     CommonDataOutOfDate, // Audio is still platying
     Sample(CommonAudioData, Box<SongData>),
-    SongAndSfx(Rc<CommonAudioDataWithSfx>, Arc<SongData>),
-    SongWithSfxBuffer(Rc<CommonAudioDataWithSfxBuffer>, Arc<SongData>),
+    SongAndSfx(Arc<CommonAudioDataWithSfx>, Arc<SongData>),
+    SongWithSfxBuffer(Arc<CommonAudioDataWithSfxBuffer>, Arc<SongData>),
 }
 
 enum SfxQueue {
@@ -427,8 +426,8 @@ struct TadEmu {
     blank_song: Arc<SongData>,
 
     stereo_flag: StereoFlag,
-    cad_with_sfx_buffer: Option<Rc<CommonAudioDataWithSfxBuffer>>,
-    cad_with_sfx: Option<Rc<CommonAudioDataWithSfx>>,
+    cad_with_sfx_buffer: Option<Arc<CommonAudioDataWithSfxBuffer>>,
+    cad_with_sfx: Option<Arc<CommonAudioDataWithSfx>>,
 
     data_state: AudioDataState,
     song_id: Option<ItemId>,
@@ -474,18 +473,15 @@ impl TadEmu {
         self.stereo_flag = stereo_flag;
     }
 
-    fn load_cad_with_sfx_buffer(
-        &mut self,
-        common_audio_data: Option<CommonAudioDataWithSfxBuffer>,
-    ) {
-        self.cad_with_sfx_buffer = common_audio_data.map(Rc::new);
+    fn load_cad_with_sfx_buffer(&mut self, cad: Option<Arc<CommonAudioDataWithSfxBuffer>>) {
+        self.cad_with_sfx_buffer = cad;
         if matches!(self.data_state, AudioDataState::SongWithSfxBuffer(..)) {
             self.data_state = AudioDataState::CommonDataOutOfDate;
         }
     }
 
-    fn load_cad_with_sfx(&mut self, cad: Option<CommonAudioDataWithSfx>) {
-        self.cad_with_sfx = cad.map(Rc::new);
+    fn load_cad_with_sfx(&mut self, cad: Option<Arc<CommonAudioDataWithSfx>>) {
+        self.cad_with_sfx = cad;
         if matches!(self.data_state, AudioDataState::SongAndSfx(..)) {
             self.data_state = AudioDataState::CommonDataOutOfDate;
         }

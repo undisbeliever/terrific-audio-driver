@@ -699,7 +699,7 @@ fn build_common_data_no_sfx_and_song_dependencies(
     sfx_export_order: &IList<data::Name>,
     sound_effects: &CList<SoundEffectInput, Option<Arc<CompiledSoundEffect>>>,
     blank_sfx_data: &CombinedSoundEffectsData,
-) -> Result<(CommonAudioData, SongDependencies), CombineSamplesError> {
+) -> Result<(Arc<CommonAudioDataWithSfxBuffer>, SongDependencies), CombineSamplesError> {
     // Test all instruments and samples are compiled
     let n_instrument_errors = instruments.count_errors();
     let n_sample_errors = samples.count_errors();
@@ -733,7 +733,7 @@ fn build_common_data_no_sfx_and_song_dependencies(
                 common_data_no_sfx_size: cad.data().len() - blank_sfx_data.sfx_data_size(),
                 sfx_data_size: calc_sfx_data_size(sfx_export_order, sound_effects),
             };
-            Ok((cad, sd))
+            Ok((Arc::new(CommonAudioDataWithSfxBuffer(cad)), sd))
         }
         Err(e) => Err(CombineSamplesError::UniqueNamesError(e)),
     }
@@ -754,7 +754,7 @@ fn build_common_audio_data_with_sfx(
     dep: &Option<SongDependencies>,
     sfx_export_order: &IList<data::Name>,
     sound_effects: &CList<SoundEffectInput, Option<Arc<CompiledSoundEffect>>>,
-) -> (Option<CommonAudioDataWithSfx>, usize) {
+) -> (Option<Arc<CommonAudioDataWithSfx>>, usize) {
     let sfx_data = combine_sound_effects(sound_effects, sfx_export_order.items());
 
     // Always try to calculate sfx_data size (to keep song size checks and Project tab up-to-date)
@@ -765,10 +765,10 @@ fn build_common_audio_data_with_sfx(
 
     let cad = match (&dep, &sfx_data) {
         (Some(dep), Ok(sd)) => match build_common_audio_data(&dep.combined_samples, sd) {
-            Ok(cad) => Some(CommonAudioDataWithSfx {
+            Ok(cad) => Some(Arc::new(CommonAudioDataWithSfx {
                 common_audio_data: cad,
                 sfx_id_map: sfx_export_order.map.clone(),
-            }),
+            })),
             Err(_) => None,
         },
         _ => None,
@@ -1096,7 +1096,7 @@ fn bg_thread(
     let mut sample_file_cache = SampleFileCache::new(parent_path);
 
     let mut song_dependencies = None;
-    let mut common_audio_data_no_sfx = None;
+    let mut cad_with_sfx_buffer: Option<Arc<CommonAudioDataWithSfxBuffer>> = None;
 
     // Used to test if a sound effect was edited in the sfx tab.
     let mut cad_with_sfx_out_of_date = true;
@@ -1251,7 +1251,11 @@ fn bg_thread(
             }
 
             ToCompiler::ExportSongToSpcFile(id) => {
-                let r = songs.export_to_spc_file(id, &pf_songs, common_audio_data_no_sfx.as_ref());
+                let r = songs.export_to_spc_file(
+                    id,
+                    &pf_songs,
+                    cad_with_sfx_buffer.as_ref().map(|c| &c.0),
+                );
                 sender.send(CompilerOutput::SpcFileResult(r));
             }
 
@@ -1280,20 +1284,18 @@ fn bg_thread(
                         sd.common_data_no_sfx_size
                     )));
 
-                    common_audio_data_no_sfx = Some(cd);
+                    cad_with_sfx_buffer = Some(cd);
                     song_dependencies = Some(sd);
                 }
                 Err(e) => {
                     sender.send(CompilerOutput::CombineSamples(Err(e)));
-                    common_audio_data_no_sfx = None;
+                    cad_with_sfx_buffer = None;
                     song_dependencies = None;
                 }
             }
 
             sender.send_audio(AudioMessage::CommonAudioDataChanged(
-                common_audio_data_no_sfx
-                    .as_ref()
-                    .map(|c| CommonAudioDataWithSfxBuffer(c.clone())),
+                cad_with_sfx_buffer.clone(),
             ));
 
             pending_compile_all_sfx = true;
