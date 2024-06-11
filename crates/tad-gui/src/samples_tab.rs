@@ -46,7 +46,7 @@ pub struct SamplesTab {
     common_audio_data: CadOutput,
     combined_samples: Option<Result<usize, CombineSamplesError>>,
 
-    show_combined_samples_button: Button,
+    show_sample_sizes_button: Button,
     inst_table: ListEditorTable<InstrumentMapping>,
     sample_table: ListEditorTable<SampleMapping>,
 
@@ -94,9 +94,10 @@ impl SamplesTab {
         let mut sidebar = Flex::default().column();
         group.fixed(&sidebar, ch_units_to_width(&sidebar, 30));
 
-        let mut show_combined_samples_button = Button::default().with_label("Unchecked");
+        let mut show_sample_sizes_button = Button::default().with_label("Unchecked");
+        show_sample_sizes_button.set_tooltip("Show sample sizes");
         sidebar.fixed(
-            &show_combined_samples_button,
+            &show_sample_sizes_button,
             ch_units_to_width(&sidebar, 5),
         );
 
@@ -166,10 +167,10 @@ impl SamplesTab {
         console.set_buffer(console_buffer.clone());
         console.wrap_mode(WrapMode::AtBounds, 0);
 
-        show_combined_samples_button.set_callback({
+        show_sample_sizes_button.set_callback({
             let sender = sender.clone();
             move |_| {
-                sender.send(GuiMessage::ShowSamplesResult);
+                sender.send(GuiMessage::ShowSampleSizes);
             }
         });
 
@@ -178,7 +179,7 @@ impl SamplesTab {
             selected_editor: EditorType::CombinedSamplesResult,
             common_audio_data: CadOutput::None,
             combined_samples: None,
-            show_combined_samples_button,
+            show_sample_sizes_button,
             sample_sizes_group,
             sample_sizes_widget,
             inst_table,
@@ -221,12 +222,12 @@ impl SamplesTab {
 
         match &r {
             Ok(_) => {
-                self.show_combined_samples_button.set_label("All OK");
-                self.show_combined_samples_button
+                self.show_sample_sizes_button.set_label("All OK");
+                self.show_sample_sizes_button
                     .set_label_color(Color::Foreground);
             }
             Err(e) => {
-                self.show_combined_samples_button
+                self.show_sample_sizes_button
                     .set_label_color(Color::Red);
                 match e {
                     CombineSamplesError::IndividualErrors {
@@ -235,20 +236,20 @@ impl SamplesTab {
                     } => {
                         let n_errors = n_instrument_errors + n_sample_errors;
                         if n_errors == 1 {
-                            self.show_combined_samples_button.set_label("1 error");
+                            self.show_sample_sizes_button.set_label("1 error");
                         } else {
-                            self.show_combined_samples_button
+                            self.show_sample_sizes_button
                                 .set_label(&format!("{n_errors} errors"));
                         }
                     }
                     CombineSamplesError::CombineError(..) => self
-                        .show_combined_samples_button
+                        .show_sample_sizes_button
                         .set_label("Combine samples error"),
                     CombineSamplesError::CommonAudioData(..) => self
-                        .show_combined_samples_button
+                        .show_sample_sizes_button
                         .set_label("Common audio data error"),
                     CombineSamplesError::UniqueNamesError(..) => self
-                        .show_combined_samples_button
+                        .show_sample_sizes_button
                         .set_label("Unique names error"),
                 }
             }

@@ -140,7 +140,7 @@ pub enum GuiMessage {
     AddSongToProjectDialog,
     SetProjectSongName(usize, data::Name),
 
-    ShowSamplesResult,
+    ShowSampleSizes,
 
     OpenAnalyseInstrumentDialog(usize),
     OpenAnalyseSampleDialog(usize),
@@ -603,7 +603,7 @@ impl Project {
                 add_song_to_pf_dialog(&self.sender, &self.data, &self.tab_manager);
             }
 
-            GuiMessage::ShowSamplesResult => {
+            GuiMessage::ShowSampleSizes => {
                 self.data
                     .instruments_and_samples
                     .clear_selection(&mut self.samples_tab);
