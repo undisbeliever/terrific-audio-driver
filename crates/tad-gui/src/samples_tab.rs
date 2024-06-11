@@ -46,7 +46,7 @@ pub struct SamplesTab {
     common_audio_data: CadOutput,
     combined_samples: Option<Result<usize, CombineSamplesError>>,
 
-    show_sample_sizes_button: Button,
+    sample_sizes_button: Button,
     inst_table: ListEditorTable<InstrumentMapping>,
     sample_table: ListEditorTable<SampleMapping>,
 
@@ -94,12 +94,9 @@ impl SamplesTab {
         let mut sidebar = Flex::default().column();
         group.fixed(&sidebar, ch_units_to_width(&sidebar, 30));
 
-        let mut show_sample_sizes_button = Button::default().with_label("Unchecked");
-        show_sample_sizes_button.set_tooltip("Show sample sizes");
-        sidebar.fixed(
-            &show_sample_sizes_button,
-            ch_units_to_width(&sidebar, 5),
-        );
+        let mut sample_sizes_button = Button::default().with_label("Unchecked");
+        sample_sizes_button.set_tooltip("Show sample sizes");
+        sidebar.fixed(&sample_sizes_button, ch_units_to_width(&sidebar, 5));
 
         let mut inst_table = ListEditorTable::new_with_data(instruments, sender.clone());
 
@@ -167,7 +164,7 @@ impl SamplesTab {
         console.set_buffer(console_buffer.clone());
         console.wrap_mode(WrapMode::AtBounds, 0);
 
-        show_sample_sizes_button.set_callback({
+        sample_sizes_button.set_callback({
             let sender = sender.clone();
             move |_| {
                 sender.send(GuiMessage::ShowSampleSizes);
@@ -179,7 +176,7 @@ impl SamplesTab {
             selected_editor: EditorType::CombinedSamplesResult,
             common_audio_data: CadOutput::None,
             combined_samples: None,
-            show_sample_sizes_button,
+            sample_sizes_button,
             sample_sizes_group,
             sample_sizes_widget,
             inst_table,
@@ -222,13 +219,11 @@ impl SamplesTab {
 
         match &r {
             Ok(_) => {
-                self.show_sample_sizes_button.set_label("All OK");
-                self.show_sample_sizes_button
-                    .set_label_color(Color::Foreground);
+                self.sample_sizes_button.set_label("All OK");
+                self.sample_sizes_button.set_label_color(Color::Foreground);
             }
             Err(e) => {
-                self.show_sample_sizes_button
-                    .set_label_color(Color::Red);
+                self.sample_sizes_button.set_label_color(Color::Red);
                 match e {
                     CombineSamplesError::IndividualErrors {
                         n_instrument_errors,
@@ -236,21 +231,21 @@ impl SamplesTab {
                     } => {
                         let n_errors = n_instrument_errors + n_sample_errors;
                         if n_errors == 1 {
-                            self.show_sample_sizes_button.set_label("1 error");
+                            self.sample_sizes_button.set_label("1 error");
                         } else {
-                            self.show_sample_sizes_button
+                            self.sample_sizes_button
                                 .set_label(&format!("{n_errors} errors"));
                         }
                     }
-                    CombineSamplesError::CombineError(..) => self
-                        .show_sample_sizes_button
-                        .set_label("Combine samples error"),
+                    CombineSamplesError::CombineError(..) => {
+                        self.sample_sizes_button.set_label("Combine samples error")
+                    }
                     CombineSamplesError::CommonAudioData(..) => self
-                        .show_sample_sizes_button
+                        .sample_sizes_button
                         .set_label("Common audio data error"),
-                    CombineSamplesError::UniqueNamesError(..) => self
-                        .show_sample_sizes_button
-                        .set_label("Unique names error"),
+                    CombineSamplesError::UniqueNamesError(..) => {
+                        self.sample_sizes_button.set_label("Unique names error")
+                    }
                 }
             }
         };
