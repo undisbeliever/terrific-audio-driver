@@ -861,6 +861,18 @@ where
         &self.list2
     }
 
+    pub fn clear_selection<Editor>(&mut self, editor: &mut Editor)
+    where
+        Editor: ListEditor<T1> + CompilerOutputGui<O1> + ListEditor<T2> + CompilerOutputGui<O2>,
+    {
+        if self.list1.selected().is_some() {
+            self.list1.clear_selection(editor);
+        }
+        if self.list2.selected().is_some() {
+            self.list2.clear_selection(editor);
+        }
+    }
+
     #[must_use]
     pub fn process1<Editor>(
         &mut self,

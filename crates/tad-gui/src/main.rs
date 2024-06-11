@@ -604,6 +604,9 @@ impl Project {
             }
 
             GuiMessage::ShowSamplesResult => {
+                self.data
+                    .instruments_and_samples
+                    .clear_selection(&mut self.samples_tab);
                 self.samples_tab.show_sample_sizes_widget();
             }
             GuiMessage::OpenInstrumentSampleDialog(index) => {
