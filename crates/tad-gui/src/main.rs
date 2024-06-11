@@ -173,6 +173,7 @@ pub enum GuiMessage {
     AudioThreadResumedSong(ItemId),
     SongMonitorTimeout,
 
+    ClearSampleCacheAndRebuild,
     FromCompiler(compiler_thread::CompilerOutput),
 
     ShowAboutTab,
@@ -681,6 +682,12 @@ impl Project {
                         .compiler_sender
                         .send(ToCompiler::ExportSongToSpcFile(id));
                 }
+            }
+
+            GuiMessage::ClearSampleCacheAndRebuild => {
+                let _ = self
+                    .compiler_sender
+                    .send(ToCompiler::ClearSampleCacheAndRebuild);
             }
 
             GuiMessage::ToggleSfxWindow => self.sfx_window.show_or_hide(),

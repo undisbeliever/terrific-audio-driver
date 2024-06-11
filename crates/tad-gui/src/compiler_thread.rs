@@ -106,6 +106,8 @@ pub enum ToCompiler {
     LoadProject(ProjectToCompiler),
     LoadSoundEffects(ReplaceAllVec<SoundEffectInput>),
 
+    ClearSampleCacheAndRebuild,
+
     SfxExportOrder(ItemChanged<data::Name>),
     ProjectSongs(ItemChanged<data::Song>),
 
@@ -1093,6 +1095,19 @@ fn analyse_sample(
     Ok(sample_analyser::analyse_sample(brr_sample, wav_sample))
 }
 
+fn compile_all_samples(
+    instruments: &mut CList<data::Instrument, Option<InstrumentSampleData>>,
+    samples: &mut CList<data::Sample, Option<SampleSampleData>>,
+    sample_file_cache: &mut SampleFileCache,
+    sender: &Sender,
+) {
+    let c = create_instrument_compiler(sample_file_cache, sender);
+    instruments.recompile_all(c);
+
+    let c = create_sample_compiler(sample_file_cache, sender);
+    samples.recompile_all(c);
+}
+
 fn bg_thread(
     parent_path: ParentPathBuf,
     receiever: mpsc::Receiver<ToCompiler>,
@@ -1140,11 +1155,12 @@ fn bg_thread(
 
                 inst_sample_names = instrument_and_sample_names(&instruments, &samples);
 
-                let c = create_instrument_compiler(&mut sample_file_cache, &sender);
-                instruments.recompile_all(c);
-
-                let c = create_sample_compiler(&mut sample_file_cache, &sender);
-                samples.recompile_all(c);
+                compile_all_samples(
+                    &mut instruments,
+                    &mut samples,
+                    &mut sample_file_cache,
+                    &sender,
+                );
 
                 pending_combine_samples = true;
                 pending_compile_all_songs = true;
@@ -1152,6 +1168,18 @@ fn bg_thread(
             ToCompiler::LoadSoundEffects(sfx) => {
                 sound_effects.replace_all(sfx);
                 pending_compile_all_sfx = true;
+            }
+
+            ToCompiler::ClearSampleCacheAndRebuild => {
+                sample_file_cache.clear_cache();
+                compile_all_samples(
+                    &mut instruments,
+                    &mut samples,
+                    &mut sample_file_cache,
+                    &sender,
+                );
+
+                pending_combine_samples = true;
             }
 
             ToCompiler::SfxExportOrder(m) => {

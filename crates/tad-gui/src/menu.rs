@@ -30,6 +30,7 @@ const SAVE: &str = "&File/&Save";
 const SAVE_AS: &str = "&File/Save As";
 const SAVE_ALL: &str = "&File/Save &All";
 
+const CLEAR_CACHE_AND_REBUILD: &str = "&File/&Clear sample cache and rebuild";
 const EXPORT_SPC: &str = "&File/&Export song to .spc";
 
 const AUDIO_SFX_WINDOW: &str = "&Audio/Sound &Effects";
@@ -106,6 +107,12 @@ impl Menu {
             Shortcut::Ctrl | Shortcut::Shift | 's',
             fltk::menu::MenuFlag::Normal,
             || GuiMessage::SaveAllUnsaved,
+        );
+        add(
+            CLEAR_CACHE_AND_REBUILD,
+            Shortcut::None,
+            fltk::menu::MenuFlag::Normal,
+            || GuiMessage::ClearSampleCacheAndRebuild,
         );
         add(
             EXPORT_SPC,
