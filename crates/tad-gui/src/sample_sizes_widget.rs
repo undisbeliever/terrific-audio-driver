@@ -254,6 +254,8 @@ impl SampleSizesWidget {
         let w = self.graph_widget.w().clamp(100, MAX_W);
         let h = self.graph_widget.h();
 
+        draw::draw_rect_fill(x, y, w, h, Color::Background);
+
         if let Some(d) = &self.graph_data {
             let addr_x = |addr: u16| x + (i32::from(addr) * w) / 0x10000;
             let y1 = y + 1;
