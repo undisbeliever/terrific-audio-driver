@@ -24,7 +24,9 @@ use compiler::data::{self, LoopSetting};
 use compiler::data::{load_text_file_with_limit, TextFile};
 use compiler::driver_constants::COMMON_DATA_BYTES_PER_SOUND_EFFECT;
 use compiler::envelope::Envelope;
-use compiler::errors::{self, BrrError, ExportSpcFileError, ProjectFileErrors, SongTooLargeError};
+use compiler::errors::{
+    self, BrrError, CommonAudioDataErrors, ExportSpcFileError, ProjectFileErrors, SongTooLargeError,
+};
 use compiler::notes::Note;
 use compiler::path::{ParentPathBuf, SourcePathBuf};
 use compiler::samples::{
@@ -252,16 +254,21 @@ impl Display for SongError {
 pub enum SpcFileError {
     NoSong,
     InvalidSong,
-    NoCommonAudioData,
+    NoSamples,
+    CommonAudioDataError(CommonAudioDataErrors),
     Spc(ExportSpcFileError),
 }
 
 impl std::fmt::Display for SpcFileError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::NoSong => writeln!(f, "No song to export"),
-            Self::InvalidSong => writeln!(f, "Error compiling song"),
-            Self::NoCommonAudioData => writeln!(f, "Error in common audio data"),
+            Self::NoSong => write!(f, "No song to export"),
+            Self::InvalidSong => write!(f, "Error compiling song"),
+            Self::NoSamples => write!(
+                f,
+                "cannot create common-audio-data: Sample or Instrument error"
+            ),
+            Self::CommonAudioDataError(e) => e.multiline_display().fmt(f),
             Self::Spc(e) => e.fmt(f),
         }
     }
@@ -1046,11 +1053,17 @@ impl SongCompiler {
         &self,
         id: ItemId,
         pf_songs: &IList<data::Song>,
-        common_audio_data: Option<&CommonAudioData>,
+        sd: &Option<SongDependencies>,
     ) -> Result<(String, Vec<u8>), SpcFileError> {
-        let common_audio_data = match common_audio_data {
-            None => return Err(SpcFileError::NoCommonAudioData),
-            Some(c) => c,
+        let common_audio_data = match sd {
+            None => return Err(SpcFileError::NoSamples),
+            Some(sd) => {
+                match build_common_audio_data(&sd.combined_samples, &blank_compiled_sound_effects())
+                {
+                    Ok(cad) => cad,
+                    Err(e) => return Err(SpcFileError::CommonAudioDataError(e)),
+                }
+            }
         };
 
         let (title, song_data) = match self.songs.get(&id) {
@@ -1064,7 +1077,7 @@ impl SongCompiler {
             },
         };
 
-        match export_spc_file(common_audio_data, song_data) {
+        match export_spc_file(&common_audio_data, song_data) {
             Err(e) => Err(SpcFileError::Spc(e)),
             Ok(spc_data) => {
                 let name = title
@@ -1313,11 +1326,7 @@ fn bg_thread(
             }
 
             ToCompiler::ExportSongToSpcFile(id) => {
-                let r = songs.export_to_spc_file(
-                    id,
-                    &pf_songs,
-                    cad_with_sfx_buffer.as_ref().map(|c| &c.0),
-                );
+                let r = songs.export_to_spc_file(id, &pf_songs, &song_dependencies);
                 sender.send(CompilerOutput::SpcFileResult(r));
             }
 
