@@ -114,7 +114,8 @@ impl SamplesTab {
 
         let mut sample_sizes_group = Flex::default().column().size_of_parent();
         sample_sizes_group.set_margin(margin);
-        let sample_sizes_widget = SampleSizesWidget::new(&mut sample_sizes_group);
+        let sample_sizes_widget =
+            SampleSizesWidget::new(&mut sample_sizes_group, instruments, samples);
         sample_sizes_group.end();
 
         let mut instrument_group = Flex::default().column().size_of_parent();
@@ -298,6 +299,9 @@ impl ListEditor<Instrument> for SamplesTab {
     fn list_edited(&mut self, action: &ListAction<Instrument>) {
         self.inst_table.list_edited(action);
         self.instrument_editor.borrow_mut().list_edited(action);
+        self.sample_sizes_widget
+            .borrow_mut()
+            .instrument_edited(action);
     }
 
     fn clear_selected(&mut self) {
@@ -325,6 +329,9 @@ impl ListEditor<Instrument> for SamplesTab {
 impl CompilerOutputGui<InstrumentOutput> for SamplesTab {
     fn set_compiler_output(&mut self, index: usize, compiler_output: &Option<InstrumentOutput>) {
         self.inst_table.set_compiler_output(index, compiler_output);
+        self.sample_sizes_widget
+            .borrow_mut()
+            .instrument_compiled(index, compiler_output);
     }
 
     fn set_selected_compiler_output(&mut self, compiler_output: &Option<InstrumentOutput>) {
@@ -370,6 +377,7 @@ impl ListEditor<data::Sample> for SamplesTab {
         self.sample_table.list_edited(action);
         self.sample_editor.borrow_mut().list_edited(action);
         self.test_sample_widget.borrow_mut().list_edited(action);
+        self.sample_sizes_widget.borrow_mut().sample_edited(action);
     }
 
     fn clear_selected(&mut self) {
@@ -400,6 +408,9 @@ impl CompilerOutputGui<SampleOutput> for SamplesTab {
     fn set_compiler_output(&mut self, index: usize, compiler_output: &Option<SampleOutput>) {
         self.sample_table
             .set_compiler_output(index, compiler_output);
+        self.sample_sizes_widget
+            .borrow_mut()
+            .sample_compiled(index, compiler_output);
     }
 
     fn set_selected_compiler_output(&mut self, compiler_output: &Option<SampleOutput>) {
