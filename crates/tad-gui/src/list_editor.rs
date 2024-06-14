@@ -5,7 +5,7 @@
 // SPDX-License-Identifier: MIT
 
 use crate::compiler_thread::{self, ItemChanged, ItemId};
-use crate::helpers::SetActive;
+use crate::helpers::{ch_units_to_width, SetActive};
 use crate::names::{DeduplicatedNameVec, NameDeduplicator};
 use crate::tables;
 use crate::GuiMessage;
@@ -947,29 +947,33 @@ pub struct ListButtons {
 
 impl ListButtons {
     pub fn new(type_name: &str, show_clone: bool) -> Self {
-        let pack = Pack::default().with_type(PackType::Horizontal);
+        let mut pack = Pack::default().with_type(PackType::Horizontal);
 
-        let button_size = pack.label_size() + 10;
+        let button_label_size = pack.label_size() * 8 / 10;
+        pack.set_label_size(button_label_size);
+
+        let button_size = ch_units_to_width(&pack, 4);
 
         let button = |label: &str, tooltip: String| {
             let mut b = Button::default()
                 .with_size(button_size, button_size)
                 .with_label(label);
             b.set_tooltip(&tooltip);
+            b.set_label_size(button_label_size);
             b
         };
 
-        let add = button("@#+", format!("Add {}", type_name));
+        let add = button("@add", format!("Add {}", type_name));
         let clone = if show_clone {
-            Some(button("@#-9+", format!("Clone {}", type_name)))
+            Some(button("@clone", format!("Clone {}", type_name)))
         } else {
             None
         };
-        let remove = button("@#line", format!("Remove {}", type_name));
-        let move_top = button("@#8>|", format!("Move {} to top", type_name));
-        let move_up = button("@#8>", format!("Move {} up", type_name));
-        let move_down = button("@#2>", format!("Move {} down", type_name));
-        let move_bottom = button("@#2>|", format!("Move {} to bottom", type_name));
+        let remove = button("@remove", format!("Remove {}", type_name));
+        let move_top = button("@top", format!("Move {} to top", type_name));
+        let move_up = button("@up", format!("Move {} up", type_name));
+        let move_down = button("@down", format!("Move {} down", type_name));
+        let move_bottom = button("@bottom", format!("Move {} to bottom", type_name));
 
         pack.end();
 

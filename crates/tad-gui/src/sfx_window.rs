@@ -98,7 +98,7 @@ impl SfxWindow {
         group.deactivate();
 
         let pan_slider = {
-            let pan_height = ch_units_to_width(&group, 3);
+            let pan_height = ch_units_to_width(&group, 4);
 
             let mut flex = Flex::default().row();
             group.fixed(&flex, pan_height);
@@ -112,8 +112,9 @@ impl SfxWindow {
             slider.set_slider_size(1.0 / MAX_PAN as f32);
             slider.set_tooltip("Pan");
 
-            let mut reset_pan = Button::default().with_label("");
+            let mut reset_pan = Button::default().with_label("@center_pan");
             flex.fixed(&reset_pan, pan_height);
+            reset_pan.set_label_size(reset_pan.label_size() * 8 / 10);
             reset_pan.set_tooltip("Center pan");
             reset_pan.set_callback({
                 let mut p = slider.clone();

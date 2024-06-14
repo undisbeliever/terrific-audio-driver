@@ -26,6 +26,7 @@ mod sample_editor;
 mod sample_sizes_widget;
 mod sample_widgets;
 mod sfx_window;
+mod symbols;
 mod tables;
 mod tabs;
 
@@ -1165,6 +1166,7 @@ struct MainWindow {
 impl MainWindow {
     fn new(sender: fltk::app::Sender<GuiMessage>) -> Self {
         let app = fltk::app::App::default();
+        symbols::register_symbols();
 
         let mut window = fltk::window::Window::default().with_label(DEFAULT_WINDOW_TITLE);
 

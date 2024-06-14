@@ -220,7 +220,7 @@ impl SoundEffectsTab {
         };
 
         // NOTE: toolbar shortcuts are handled by the `group.handle()` callback below
-        let mut play_button = button("@>", "Play sound effect (F5)");
+        let mut play_button = button("@play", "Play sound effect (F5)");
 
         label_packed("  Pan:  ");
         let mut pan = HorNiceSlider::default().with_size(button_size * 5 / 2, button_size);
@@ -229,14 +229,14 @@ impl SoundEffectsTab {
         pan.set_slider_size(1.0 / MAX_PAN as f32);
         pan.set_tooltip("Pan");
 
-        let mut reset_pan = button("", "Center pan");
+        let mut reset_pan = button("@center_pan", "Center pan");
 
         let _spacer = Widget::default().with_size(button_size / 4, button_size);
 
         let song_choice = SongChoice::new(button_size * 4, 0);
         let mut song_start_ticks = IntInput::default().with_size(button_size * 3 / 2, 0);
-        let mut play_song_button = button("@>", "Play song (F7)");
-        let mut stop_button = button("@square", "Stop (F8)");
+        let mut play_song_button = button("@play", "Play song (F7)");
+        let mut stop_button = button("@stop", "Stop (F8)");
 
         song_start_ticks.set_value("500");
         song_start_ticks.set_tooltip("Song start position (in ticks)");

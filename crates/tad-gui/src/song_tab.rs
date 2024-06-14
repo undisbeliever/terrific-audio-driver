@@ -102,18 +102,18 @@ impl SongTab {
             b
         };
 
-        // ::TODO add custom icons::
-
         // NOTE: toolbar shortcuts are handled by the `group.handle()` callback below
         let mut compile_button = button("C", "Compile song");
+        compile_button.set_label_font(Font::ScreenBold);
         spacer(spacing);
-        let mut play_button = button("@>", "Play song from the beginning (F5)");
-        let mut play_at_line_start_button = button("@>|", "Play from line start (F6)");
-        let mut play_at_cursor_button = button("@>[]", "Play from cursor (F7)");
+        let mut play_button = button("@play", "Play song from the beginning (F5)");
+        let mut play_at_line_start_button = button("@play_line", "Play from line start (F6)");
+        let mut play_at_cursor_button = button("@play_cursor", "Play from cursor (F7)");
         let mut play_channel_line_start_button =
-            button("@>|", "Play channel from line start (Shift F6)");
-        let mut play_channel_cursor_button = button("@>[]", "Play channel from cursor (Shift F7)");
-        let mut pause_resume_button = button("@||", "Pause/Resume song (F8)");
+            button("@play_c_line", "Play channel from line start (Shift F6)");
+        let mut play_channel_cursor_button =
+            button("@play_c_cursor", "Play channel from cursor (Shift F7)");
+        let mut pause_resume_button = button("@pause", "Pause/Resume song (F8)");
         spacer(spacing * 2);
         let mut enable_all_button = button("All", "Enable all channels (Ctrl `)");
         spacer(spacing);
