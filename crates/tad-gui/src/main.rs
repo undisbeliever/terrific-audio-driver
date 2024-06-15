@@ -719,22 +719,12 @@ impl Project {
                     co,
                     &mut self.samples_tab,
                 );
-
-                self.tab_manager.set_tab_label_color(
-                    &mut self.samples_tab,
-                    self.data.instruments_and_samples.all_valid(),
-                );
             }
             CompilerOutput::Sample(id, co) => {
                 self.data.instruments_and_samples.set_compiler_output2(
                     id,
                     co,
                     &mut self.samples_tab,
-                );
-
-                self.tab_manager.set_tab_label_color(
-                    &mut self.samples_tab,
-                    self.data.instruments_and_samples.all_valid(),
                 );
             }
             CompilerOutput::SoundEffect(id, co) => {
@@ -767,6 +757,8 @@ impl Project {
 
             CompilerOutput::CommonAudioData(cad) => {
                 self.project_tab.memory_stats.cad_output_changed(&cad);
+                self.tab_manager
+                    .set_tab_label_color(&mut self.samples_tab, cad.is_ok_or_none());
                 self.samples_tab.set_common_audio_data(cad);
             }
 

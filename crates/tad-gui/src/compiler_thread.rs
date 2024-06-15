@@ -182,6 +182,15 @@ pub enum CadOutput {
     WithSfx(Arc<CommonAudioDataWithSfx>, Arc<Vec<data::Name>>),
 }
 
+impl CadOutput {
+    pub fn is_ok_or_none(&self) -> bool {
+        match self {
+            Self::Err(..) => false,
+            Self::None | Self::NoSfx(..) | Self::WithSfx(..) => true,
+        }
+    }
+}
+
 #[derive(Debug)]
 pub enum CombineSamplesError {
     IndividualErrors {

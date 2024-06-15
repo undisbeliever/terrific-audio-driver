@@ -914,10 +914,6 @@ where
     ) {
         self.list2.set_compiler_output(id, co, editor)
     }
-
-    pub fn all_valid(&self) -> bool {
-        self.list1.all_valid() && self.list2.all_valid()
-    }
 }
 
 pub fn update_compiler_output<CO, T>(
