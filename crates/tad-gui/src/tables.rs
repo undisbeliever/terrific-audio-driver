@@ -622,17 +622,6 @@ impl<const C: usize> SimpleRow<C> {
             false
         }
     }
-
-    pub fn edit_column_string(&mut self, index: usize, s: String) -> bool {
-        let c = &mut self.columns[index];
-
-        if c != &s {
-            *c = s;
-            true
-        } else {
-            false
-        }
-    }
 }
 
 impl<const C: usize> TableRow for SimpleRow<C> {

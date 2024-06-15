@@ -10,7 +10,7 @@ use crate::list_editor::{
     ListEditor, ListEditorTable, ListMessage, ListState, TableAction, TableCompilerOutput,
     TableMapping,
 };
-use crate::tables::{RowWithStatus, SimpleRow, TableEvent};
+use crate::tables::{RowWithStatus, SimpleRow, TableEvent, TableRow};
 use crate::tabs::{FileType, Tab};
 use crate::GuiMessage;
 
@@ -20,12 +20,12 @@ use compiler::data::Name;
 use compiler::path::SourcePathBuf;
 use compiler::songs::{song_duration_string, SongAramSize};
 
-use fltk::app;
-use fltk::enums::Color;
+use fltk::enums::{Align, Color};
 use fltk::frame::Frame;
 use fltk::group::Flex;
 use fltk::output::Output;
 use fltk::prelude::*;
+use fltk::{app, draw};
 
 pub struct SfxExportOrderMapping;
 impl TableMapping for SfxExportOrderMapping {
@@ -77,10 +77,38 @@ impl TableMapping for SfxExportOrderMapping {
     }
 }
 
+pub struct SongRow {
+    name: String,
+    filename: String,
+    duration: String,
+    data_size: String,
+}
+
+impl TableRow for SongRow {
+    const N_COLUMNS: i32 = 4;
+
+    fn draw_cell(&self, col: i32, x: i32, y: i32, w: i32, h: i32) {
+        match col {
+            0 => draw::draw_text2(self.name.as_str(), x, y, w, h, Align::Left),
+            1 => draw::draw_text2(&self.filename, x, y, w, h, Align::Left),
+            2 => draw::draw_text2(&self.duration, x, y, w, h, Align::Right),
+            3 => draw::draw_text2(&self.data_size, x, y, w, h, Align::Right),
+            _ => (),
+        }
+    }
+
+    fn value(&self, col: i32) -> Option<&str> {
+        match col {
+            0 => Some(&self.name),
+            _ => None,
+        }
+    }
+}
+
 pub struct SongMapping;
 impl TableMapping for SongMapping {
     type DataType = data::Song;
-    type RowType = RowWithStatus<SimpleRow<4>>;
+    type RowType = RowWithStatus<SongRow>;
 
     const CAN_CLONE: bool = false;
     const CAN_EDIT: bool = true;
@@ -107,21 +135,28 @@ impl TableMapping for SongMapping {
     }
 
     fn new_row(song: &data::Song) -> Self::RowType {
-        RowWithStatus::new_unchecked(SimpleRow::new([
-            song.name.as_str().to_string(),
-            song.source.as_str().to_string(),
-            String::new(),
-            String::new(),
-        ]))
+        RowWithStatus::new_unchecked(SongRow {
+            name: song.name.as_str().to_owned(),
+            filename: song.source.as_str().to_owned(),
+            duration: String::new(),
+            data_size: String::new(),
+        })
     }
 
     fn edit_row(r: &mut Self::RowType, song: &data::Song) -> bool {
         let mut edited = false;
 
-        let filename = song.source.as_str().to_string();
+        let write_if_changed = |dest: &mut String, src: &str| {
+            if dest != src {
+                src.clone_into(dest);
+                true
+            } else {
+                false
+            }
+        };
 
-        edited |= r.columns.edit_column(0, song.name.as_str());
-        edited |= r.columns.edit_column(1, filename.as_ref());
+        edited |= write_if_changed(&mut r.columns.name, song.name.as_str());
+        edited |= write_if_changed(&mut r.columns.filename, song.source.as_str());
 
         edited
     }
@@ -167,14 +202,12 @@ impl TableCompilerOutput for SongMapping {
             Some(Err(e)) => (String::new(), e.to_string()),
         };
 
-        let mut edited = false;
+        r.set_status_optional_result(co);
 
-        edited |= r.set_status_optional_result(co);
-        edited |= r.columns.edit_column_string(2, duration);
+        r.columns.duration = duration;
+        r.columns.data_size = data_size;
 
-        edited |= r.columns.edit_column_string(3, data_size);
-
-        edited
+        true
     }
 }
 
