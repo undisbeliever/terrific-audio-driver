@@ -155,6 +155,8 @@ pub struct SoundEffectsTab {
 
     sidebar: Flex,
     sfx_table: ListEditorTable<SoundEffectMapping>,
+
+    missing_sfx: bool,
     add_missing_sfx_button: Button,
 
     main_group: Flex,
@@ -420,6 +422,7 @@ impl SoundEffectsTab {
 
             sidebar,
             sfx_table,
+            missing_sfx: false,
             add_missing_sfx_button,
 
             main_group,
@@ -460,8 +463,13 @@ impl SoundEffectsTab {
         self.header_buffer.borrow().text()
     }
 
+    pub fn is_missing_sfx(&mut self) -> bool {
+        self.missing_sfx
+    }
+
     pub fn n_missing_sfx_changed(&mut self, n_missing: usize) {
-        self.add_missing_sfx_button.set_active(n_missing != 0);
+        self.missing_sfx = n_missing != 0;
+        self.add_missing_sfx_button.set_active(self.missing_sfx);
     }
 
     pub fn pf_songs_changed(&mut self) {

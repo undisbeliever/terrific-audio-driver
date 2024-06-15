@@ -733,10 +733,7 @@ impl Project {
                         .sound_effects
                         .set_compiler_output(id, co, &mut self.sound_effects_tab);
 
-                    self.tab_manager.set_tab_label_color(
-                        &mut self.sound_effects_tab,
-                        sfx_data.sound_effects.all_valid(),
-                    );
+                    self.update_sfx_tab_color();
                 }
             }
             CompilerOutput::Song(id, co) => {
@@ -759,6 +756,7 @@ impl Project {
                 self.project_tab.memory_stats.cad_output_changed(&cad);
                 self.tab_manager
                     .set_tab_label_color(&mut self.samples_tab, cad.is_ok_or_none());
+
                 self.samples_tab.set_common_audio_data(cad);
             }
 
@@ -769,6 +767,8 @@ impl Project {
             CompilerOutput::NumberOfMissingSoundEffects(n_missing) => {
                 self.project_tab.memory_stats.set_n_missing_sfx(n_missing);
                 self.sound_effects_tab.n_missing_sfx_changed(n_missing);
+
+                self.update_sfx_tab_color();
             }
             CompilerOutput::LargestSongSize(size) => {
                 self.project_tab.memory_stats.set_largest_song(&size);
@@ -869,6 +869,17 @@ impl Project {
             header: sfx_file.header,
             sound_effects,
         });
+    }
+
+    fn update_sfx_tab_color(&mut self) {
+        let sfx_bc_valid = self
+            .sfx_data
+            .as_ref()
+            .is_some_and(|s| s.sound_effects.all_valid());
+        let no_missing_sfx = !self.sound_effects_tab.is_missing_sfx();
+
+        self.tab_manager
+            .set_tab_label_color(&mut self.sound_effects_tab, sfx_bc_valid && no_missing_sfx);
     }
 
     fn new_blank_song_tab(&mut self) {
