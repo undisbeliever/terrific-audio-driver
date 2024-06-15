@@ -43,8 +43,7 @@ pub struct SamplesTab {
     group: Flex,
 
     selected_editor: EditorType,
-    common_audio_data: CadOutput,
-    combined_samples: Option<Result<usize, CombineSamplesError>>,
+    cad_output: CadOutput,
 
     sample_sizes_button: Button,
     inst_table: ListEditorTable<InstrumentMapping>,
@@ -175,8 +174,7 @@ impl SamplesTab {
         Self {
             group,
             selected_editor: EditorType::CombinedSamplesResult,
-            common_audio_data: CadOutput::None,
-            combined_samples: None,
+            cad_output: CadOutput::None,
             sample_sizes_button,
             sample_sizes_group,
             sample_sizes_widget,
@@ -195,35 +193,14 @@ impl SamplesTab {
     }
 
     pub fn set_common_audio_data(&mut self, cad: CadOutput) {
-        self.common_audio_data = cad;
+        self.cad_output = cad;
 
-        if matches!(self.selected_editor, EditorType::CombinedSamplesResult) {
-            self.sample_sizes_widget
-                .borrow_mut()
-                .cad_changed(&self.common_audio_data);
-        }
-    }
-
-    pub fn set_largest_song(&mut self, s: SongAramSize) {
-        self.sample_sizes_widget.borrow_mut().set_largest_song(s);
-    }
-
-    pub fn set_combined_samples(&mut self, r: Result<usize, CombineSamplesError>) {
-        let label_color = match r {
-            Ok(_) => Color::Foreground,
-            Err(_) => Color::Red,
-        };
-        if self.group.label_color() != label_color {
-            self.group.set_label_color(label_color);
-            self.group.redraw_label();
-        }
-
-        match &r {
-            Ok(_) => {
-                self.sample_sizes_button.set_label("All OK");
+        match &self.cad_output {
+            CadOutput::None => {
+                self.sample_sizes_button.set_label("Sample sizes");
                 self.sample_sizes_button.set_label_color(Color::Foreground);
             }
-            Err(e) => {
+            CadOutput::Err(e) => {
                 self.sample_sizes_button.set_label_color(Color::Red);
                 match e {
                     CombineSamplesError::IndividualErrors {
@@ -249,15 +226,27 @@ impl SamplesTab {
                     }
                 }
             }
-        };
+            CadOutput::NoSfx(..) | CadOutput::WithSfx(..) => {
+                self.sample_sizes_button.set_label("All OK");
+                self.sample_sizes_button.set_label_color(Color::Foreground);
+            }
+        }
 
-        self.combined_samples = Some(r);
+        if matches!(self.selected_editor, EditorType::CombinedSamplesResult) {
+            self.sample_sizes_widget
+                .borrow_mut()
+                .cad_changed(&self.cad_output);
+        }
 
         match &self.selected_editor {
             EditorType::CombinedSamplesResult => self.update_sample_sizes_widget_and_console(),
             EditorType::Instrument => (),
             EditorType::Sample => (),
         }
+    }
+
+    pub fn set_largest_song(&mut self, s: SongAramSize) {
+        self.sample_sizes_widget.borrow_mut().set_largest_song(s);
     }
 
     pub fn show_sample_sizes_widget(&mut self) {
@@ -273,16 +262,13 @@ impl SamplesTab {
     fn update_sample_sizes_widget_and_console(&mut self) {
         self.sample_sizes_widget
             .borrow_mut()
-            .cad_changed(&self.common_audio_data);
+            .cad_changed(&self.cad_output);
 
-        match &self.combined_samples {
-            None => {
+        match &self.cad_output {
+            CadOutput::None | CadOutput::NoSfx(..) | CadOutput::WithSfx(..) => {
                 self.console_buffer.set_text("");
             }
-            Some(Ok(_)) => {
-                self.console_buffer.set_text("");
-            }
-            Some(Err(e)) => {
+            CadOutput::Err(e) => {
                 self.console_buffer.set_text(&e.to_string());
                 self.console.set_text_color(Color::Red);
                 self.console.scroll(0, 0);

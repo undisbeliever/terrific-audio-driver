@@ -151,20 +151,12 @@ pub type SoundEffectOutput = Result<Arc<CompiledSoundEffect>, SfxError>;
 pub type SongOutput = Result<Arc<SongData>, SongError>;
 
 #[derive(Debug)]
-pub enum CadOutput {
-    None,
-    NoSfx(Arc<CommonAudioDataWithSfxBuffer>, Arc<Vec<data::Name>>),
-    WithSfx(Arc<CommonAudioDataWithSfx>, Arc<Vec<data::Name>>),
-}
-
-#[derive(Debug)]
 pub enum CompilerOutput {
     Panic(String),
 
     Instrument(ItemId, InstrumentOutput),
     Sample(ItemId, SampleOutput),
 
-    CombineSamples(Result<usize, CombineSamplesError>),
     CommonAudioData(CadOutput),
 
     SoundEffect(ItemId, SoundEffectOutput),
@@ -181,6 +173,14 @@ pub enum CompilerOutput {
     SpcFileResult(Result<(String, Vec<u8>), SpcFileError>),
 
     SampleAnalysis(Result<SampleAnalysis, BrrError>),
+}
+
+#[derive(Debug)]
+pub enum CadOutput {
+    None,
+    Err(CombineSamplesError),
+    NoSfx(Arc<CommonAudioDataWithSfxBuffer>, Arc<Vec<data::Name>>),
+    WithSfx(Arc<CommonAudioDataWithSfx>, Arc<Vec<data::Name>>),
 }
 
 #[derive(Debug)]
@@ -1341,7 +1341,7 @@ fn bg_thread(
         }
 
         // This ensures only 1 CadOutput is sent to the GUI thread per event
-        let mut pending_cad_output = None;
+        let mut pending_cad_output = CadOutput::None;
 
         if pending_combine_samples {
             pending_combine_samples = false;
@@ -1354,21 +1354,13 @@ fn bg_thread(
                 &blank_sfx_data,
             ) {
                 Ok((cd, sd)) => {
-                    sender.send(CompilerOutput::CombineSamples(Ok(
-                        sd.common_data_no_sfx_size
-                    )));
-
-                    pending_cad_output =
-                        Some(CadOutput::NoSfx(cd.clone(), inst_sample_names.clone()));
+                    pending_cad_output = CadOutput::NoSfx(cd.clone(), inst_sample_names.clone());
 
                     cad_with_sfx_buffer = Some(cd);
                     song_dependencies = Some(sd);
                 }
                 Err(e) => {
-                    sender.send(CompilerOutput::CommonAudioData(CadOutput::None));
-                    sender.send(CompilerOutput::CombineSamples(Err(e)));
-
-                    pending_cad_output = Some(CadOutput::None);
+                    pending_cad_output = CadOutput::Err(e);
 
                     cad_with_sfx_buffer = None;
                     song_dependencies = None;
@@ -1412,11 +1404,12 @@ fn bg_thread(
                 }
             }
 
-            pending_cad_output = Some(match (&cad, &cad_with_sfx_buffer) {
-                (Some(c), _) => CadOutput::WithSfx(c.clone(), inst_sample_names.clone()),
-                (_, Some(c)) => CadOutput::NoSfx(c.clone(), inst_sample_names.clone()),
-                (None, None) => CadOutput::None,
-            });
+            if let Some(c) = &cad {
+                pending_cad_output = CadOutput::WithSfx(c.clone(), inst_sample_names.clone());
+            } else if let Some(c) = &cad_with_sfx_buffer {
+                // Restores CadOutput to NoSfx if there is an sfx error and the instrument/samples are OK
+                pending_cad_output = CadOutput::NoSfx(c.clone(), inst_sample_names.clone());
+            }
 
             sender.send(CompilerOutput::SoundEffectsDataSize(sfx_data_size));
             sender.send(CompilerOutput::CanSendPlaySfxCommands(cad.is_some()));
@@ -1425,8 +1418,8 @@ fn bg_thread(
             cad_with_sfx_out_of_date = false;
         }
 
-        if let Some(c) = pending_cad_output {
-            sender.send(CompilerOutput::CommonAudioData(c));
+        if !matches!(pending_cad_output, CadOutput::None) {
+            sender.send(CompilerOutput::CommonAudioData(pending_cad_output));
         }
 
         if pending_compile_all_songs {

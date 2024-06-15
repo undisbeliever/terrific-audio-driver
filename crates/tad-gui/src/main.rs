@@ -765,11 +765,8 @@ impl Project {
                 }
             }
 
-            CompilerOutput::CombineSamples(o) => {
-                self.project_tab.memory_stats.samples_compiled(&o);
-                self.samples_tab.set_combined_samples(o);
-            }
             CompilerOutput::CommonAudioData(cad) => {
+                self.project_tab.memory_stats.samples_compiled(&cad);
                 self.samples_tab.set_common_audio_data(cad);
             }
 

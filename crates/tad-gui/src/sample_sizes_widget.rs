@@ -193,7 +193,7 @@ impl SampleSizesWidget {
 
     pub fn cad_changed(&mut self, cad: &CadOutput) {
         match cad {
-            CadOutput::None => {
+            CadOutput::None | CadOutput::Err(_) => {
                 if self.graph_data.is_some() {
                     self.clear_table();
                 }

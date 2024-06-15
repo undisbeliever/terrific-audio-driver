@@ -4,7 +4,7 @@
 //
 // SPDX-License-Identifier: MIT
 
-use crate::compiler_thread::{CombineSamplesError, SongOutput};
+use crate::compiler_thread::{CadOutput, SongOutput};
 use crate::helpers::*;
 use crate::list_editor::{
     ListEditor, ListEditorTable, ListMessage, ListState, TableAction, TableCompilerOutput,
@@ -14,6 +14,7 @@ use crate::tables::{RowWithStatus, SimpleRow, TableEvent};
 use crate::tabs::{FileType, Tab};
 use crate::GuiMessage;
 
+use compiler::common_audio_data::CommonAudioData;
 use compiler::data;
 use compiler::data::Name;
 use compiler::path::SourcePathBuf;
@@ -358,16 +359,28 @@ impl MemoryStats {
         }
     }
 
-    pub fn samples_compiled(&mut self, r: &Result<usize, CombineSamplesError>) {
-        match r {
-            Ok(size) => {
-                self.samples_size = *size;
-                Self::output_bytes(&mut self.samples_out, *size);
+    pub fn samples_compiled(&mut self, cad_output: &CadOutput) {
+        let mut valid = |cad: &CommonAudioData| {
+            let size = cad.data().len() - cad.sfx_size_incl_addr_table();
+            self.samples_size = size;
+            Self::output_bytes(&mut self.samples_out, size);
+        };
+
+        match cad_output {
+            CadOutput::None => {
+                self.samples_size = 0;
+                self.samples_out.set_value("");
             }
-            Err(_) => {
+            CadOutput::Err(_) => {
                 self.samples_size = 0;
                 self.samples_out.set_value("ERROR");
                 self.samples_out.set_text_color(Color::Red);
+            }
+            CadOutput::NoSfx(cad, _) => {
+                valid(&cad.0);
+            }
+            CadOutput::WithSfx(cad, _) => {
+                valid(&cad.common_audio_data);
             }
         }
         self.update_free_space();

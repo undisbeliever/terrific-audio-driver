@@ -7,8 +7,9 @@
 use crate::driver_constants::{
     addresses, COMMON_DATA_BYTES_PER_DIR, COMMON_DATA_BYTES_PER_INSTRUMENTS,
     COMMON_DATA_BYTES_PER_SOUND_EFFECT, COMMON_DATA_DIR_TABLE_OFFSET, COMMON_DATA_HEADER_SIZE,
-    COMMON_DATA_N_DIR_ITEMS_OFFSET, COMMON_DATA_N_INSTRUMENTS_OFFSET, MAX_COMMON_DATA_SIZE,
-    MAX_DIR_ITEMS, MAX_INSTRUMENTS_AND_SAMPLES, MAX_SOUND_EFFECTS,
+    COMMON_DATA_N_DIR_ITEMS_OFFSET, COMMON_DATA_N_INSTRUMENTS_OFFSET,
+    COMMON_DATA_N_SOUND_EFFECTS_OFFSET, MAX_COMMON_DATA_SIZE, MAX_DIR_ITEMS,
+    MAX_INSTRUMENTS_AND_SAMPLES, MAX_SOUND_EFFECTS,
 };
 use crate::errors::{CommonAudioDataError, CommonAudioDataErrors};
 use crate::samples::SampleAndInstrumentData;
@@ -62,6 +63,12 @@ impl CommonAudioData {
 
     pub fn header_size(&self) -> u16 {
         self.brr_addr_range.start - addresses::COMMON_DATA
+    }
+
+    pub fn sfx_size_incl_addr_table(&self) -> usize {
+        let n_sfx: usize = self.data[COMMON_DATA_N_SOUND_EFFECTS_OFFSET].into();
+
+        n_sfx * COMMON_DATA_BYTES_PER_SOUND_EFFECT + self.sfx_bytecode_addr_range.len()
     }
 
     pub fn brr_addr_range(&self) -> &Range<u16> {
