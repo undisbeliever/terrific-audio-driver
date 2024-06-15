@@ -1188,6 +1188,7 @@ fn bg_thread(
             }
             ToCompiler::LoadSoundEffects(sfx) => {
                 sound_effects.replace_all(sfx);
+                count_missing_sfx(&sfx_export_order, &sound_effects, &sender);
                 pending_compile_all_sfx = true;
             }
 

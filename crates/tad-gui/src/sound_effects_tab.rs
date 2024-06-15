@@ -275,6 +275,7 @@ impl SoundEffectsTab {
         console.set_buffer(console_buffer.clone());
         console.wrap_mode(WrapMode::AtBounds, 0);
 
+        add_missing_sfx_button.deactivate();
         add_missing_sfx_button.set_callback({
             let s = sender.clone();
             move |_| s.send(GuiMessage::AddMissingSoundEffects)
