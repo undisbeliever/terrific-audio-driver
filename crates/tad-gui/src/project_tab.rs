@@ -326,6 +326,18 @@ impl MemoryStats {
         o.set_text_color(Color::Foreground);
     }
 
+    fn show_sfx_error_message(&mut self) {
+        if self.n_missing_sfx == 0 {
+            self.sfx_out.set_value("ERROR");
+        } else {
+            self.sfx_out.set_value(&format!(
+                "ERROR: missing {} sound effects",
+                self.n_missing_sfx
+            ));
+        }
+        self.sfx_out.set_text_color(Color::Red);
+    }
+
     fn update_free_space(&mut self) {
         let common_data = self.samples_size + self.sfx_data_size;
         // Add 1 if odd (loader can only transfer a multiple of 2 bytes)
@@ -347,20 +359,8 @@ impl MemoryStats {
         }
     }
 
-    fn update_sfx_out(&mut self) {
-        if self.n_missing_sfx == 0 {
-            Self::output_bytes(&mut self.sfx_out, self.sfx_data_size);
-        } else {
-            self.sfx_out.set_value(&format!(
-                "ERROR: missing {} sound effects",
-                self.n_missing_sfx
-            ));
-            self.sfx_out.set_text_color(Color::Red);
-        }
-    }
-
-    pub fn samples_compiled(&mut self, cad_output: &CadOutput) {
-        let mut valid = |cad: &CommonAudioData| {
+    pub fn cad_output_changed(&mut self, cad_output: &CadOutput) {
+        let mut valid_samples = |cad: &CommonAudioData| {
             let size = cad.data().len() - cad.sfx_size_incl_addr_table();
             self.samples_size = size;
             Self::output_bytes(&mut self.samples_out, size);
@@ -375,12 +375,22 @@ impl MemoryStats {
                 self.samples_size = 0;
                 self.samples_out.set_value("ERROR");
                 self.samples_out.set_text_color(Color::Red);
+
+                self.sfx_data_size = 0;
+                self.sfx_out.set_value("ERROR");
+                self.sfx_out.set_text_color(Color::Red);
             }
             CadOutput::NoSfx(cad, _) => {
-                valid(&cad.0);
+                valid_samples(&cad.0);
+
+                self.sfx_data_size = 0;
+                self.show_sfx_error_message();
             }
             CadOutput::WithSfx(cad, _) => {
-                valid(&cad.common_audio_data);
+                valid_samples(&cad.common_audio_data);
+
+                self.sfx_data_size = cad.common_audio_data.sfx_size_incl_addr_table();
+                Self::output_bytes(&mut self.sfx_out, self.sfx_data_size);
             }
         }
         self.update_free_space();
@@ -388,13 +398,9 @@ impl MemoryStats {
 
     pub fn set_n_missing_sfx(&mut self, s: usize) {
         self.n_missing_sfx = s;
-        self.update_sfx_out();
-    }
-
-    pub fn set_sfx_data_size(&mut self, s: usize) {
-        self.sfx_data_size = s;
-        self.update_sfx_out();
-        self.update_free_space();
+        if s > 0 {
+            self.show_sfx_error_message();
+        }
     }
 
     pub fn set_largest_song(&mut self, s: &SongAramSize) {

@@ -166,7 +166,6 @@ pub enum CompilerOutput {
     CanSendPlaySfxCommands(bool),
     NumberOfMissingSoundEffects(usize),
 
-    SoundEffectsDataSize(usize),
     LargestSongSize(SongAramSize),
 
     // The result of the last `ToCompiler::ExportSongToSpcFile` operation
@@ -1411,7 +1410,6 @@ fn bg_thread(
                 pending_cad_output = CadOutput::NoSfx(c.clone(), inst_sample_names.clone());
             }
 
-            sender.send(CompilerOutput::SoundEffectsDataSize(sfx_data_size));
             sender.send(CompilerOutput::CanSendPlaySfxCommands(cad.is_some()));
             sender.send_audio(AudioMessage::CommandAudioDataWithSfxChanged(cad));
 
