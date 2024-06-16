@@ -119,6 +119,10 @@ API Tests
 
 NOTE: The tests test how the loader handles to delays and interrupts and requires ~20 seconds to run.
 
+CAUTION: This test can fail if it running in an emulator and the S-CPU is overclocked.  To make the
+tests pass with an overclocked S-CPU, delays will need to be added to `_Wait`, `_WaitForLoader` and
+`__CountTransfers` subroutines.
+
 If the loader is modified, the memory accesses must also be verified.
  * Run the test in Mesen
  * Open Mesen's Memory Viewer
