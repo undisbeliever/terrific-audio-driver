@@ -29,7 +29,7 @@ VERSION     = 0
 ROM_SIZE    = 2
 REGION      = REGION__Japan
 CART_TYPE   = CART_TYPE__RomOnly
-ROM_SPEED   = ROM_SPEED__Slow
+ROM_SPEED   = ROM_SPEED__Fast
 
 
 .include "../../_common/snes-header.inc"
@@ -95,6 +95,11 @@ CopHandler             = BreakHandler
 .i16
 ;; DB = $80
 .proc Main
+    ; Enable FastROM
+    ; (ResetRegisters clears FastRoM bit)
+    lda     #1
+    sta     MEMSEL
+
     ; Set backdrop
     stz     CGADD
     lda     #.lobyte(TESTING_COLOR)
