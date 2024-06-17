@@ -517,31 +517,32 @@ where
         self.table.unset_selection();
     }
 
+    fn scan_row_open_editor(&mut self, row: i32, cols: impl Iterator<Item = i32>) -> bool {
+        if let Ok(index) = usize::try_from(row) {
+            for col in cols {
+                let open_editor = (self.callback)(TableEvent::EditorRequested, index, col);
+                if open_editor {
+                    self.open_editor(row, col);
+                    return true;
+                }
+            }
+        }
+        false
+    }
+
     fn open_previous_editor(&mut self) {
-        if self.editing_col > 0 {
-            // ::TODO how do I skip non-editable columns::
-            self.do_callback_at(
-                TableEvent::EditorRequested,
-                self.editing_row,
-                self.editing_col - 1,
-            );
-        } else if self.editing_row > 0 {
-            self.do_callback_at(TableEvent::EditorRequested, self.editing_row - 1, 0);
+        let prev_col = self.editing_col.clamp(0, T::N_COLUMNS - 1) - 1;
+
+        if !self.scan_row_open_editor(self.editing_row, (0..prev_col).rev()) {
+            self.scan_row_open_editor(self.editing_row - 1, (0..T::N_COLUMNS).rev());
         }
     }
 
     fn open_next_editor(&mut self) {
-        if self.editing_row >= 0 {
-            if self.editing_col == T::N_COLUMNS - 1 {
-                self.do_callback_at(TableEvent::EditorRequested, self.editing_row + 1, 0);
-            } else {
-                // ::TODO how do I skip non-editable columns::
-                self.do_callback_at(
-                    TableEvent::EditorRequested,
-                    self.editing_row,
-                    self.editing_col + 1,
-                );
-            }
+        let next_col = self.editing_col.clamp(0, T::N_COLUMNS - 1) + 1;
+
+        if !self.scan_row_open_editor(self.editing_row, next_col..T::N_COLUMNS) {
+            self.scan_row_open_editor(self.editing_row + 1, 0..T::N_COLUMNS);
         }
     }
 
