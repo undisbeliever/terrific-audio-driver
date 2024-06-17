@@ -319,7 +319,6 @@ impl BytecodeAssembler<'_, '_> {
                 Some(s) => Ok(*s),
                 None => Err(BytecodeAssemblerError::UnknownSubroutine(arg.to_owned())),
             },
-            // ::TODO is this correct?::
             None => Err(BytecodeAssemblerError::UnknownSubroutine(arg.to_owned())),
         }
     }
@@ -407,7 +406,6 @@ fn parse_play_note_ticks(
     Ok(PlayNoteTicks::try_from_is_slur(ticks, is_slur)?)
 }
 
-// ::TODO clamp to max on error::
 fn parse_u32(s: &str) -> Result<u32, ValueError> {
     match s.bytes().next() {
         Some(b'$') => match u32::from_str_radix(&s[1..], 16) {

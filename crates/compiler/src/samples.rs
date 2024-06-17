@@ -4,8 +4,6 @@
 //
 // SPDX-License-Identifier: MIT
 
-// ::TODO add pub(crate) to more things::
-
 use crate::data::{Instrument, InstrumentOrSample, LoopSetting, Sample, UniqueNamesProjectFile};
 use crate::errors::{
     BrrError, SampleAndInstrumentDataError, SampleError, TaggedSampleError, ValueError,

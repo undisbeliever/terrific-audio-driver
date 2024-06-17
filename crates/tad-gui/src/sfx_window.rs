@@ -44,7 +44,6 @@ impl PlaySfxTableRow {
     const HEADER: &'static str = "Play Sound Effect";
 }
 
-// ::TODO add a read-only ListAction TableMapping::
 impl PlaySfxTableRow {
     fn new_row(name: &Name) -> Self {
         Self { name: name.clone() }

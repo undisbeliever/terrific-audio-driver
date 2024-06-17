@@ -39,8 +39,6 @@ use std::cell::RefCell;
 use std::collections::HashSet;
 use std::rc::Rc;
 
-// ::TODO read and write sound effects file header in Sound Effects Tab::
-
 #[derive(Clone, Copy)]
 enum SoundEffectTypeChoice {
     BytecodeAssembly = 0,
