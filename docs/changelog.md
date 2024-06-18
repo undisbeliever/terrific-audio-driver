@@ -1,6 +1,37 @@
 Terrific Audio Driver Changelog
 ===============================
 
+Version 0.0.9
+=============
+
+BRR changes:
+ * Added more invalid wave file error messages
+
+GUI changes:
+ * Songs can be played in the sound effect tab.
+    * Select a song on the Sound Effect tab toolbar, click the rightmost play button (or press F7).
+    * The textbox after the song combo-box is the starting offset in ticks.
+ * Sound effects can now be played while a song is playing.
+    * Click on the SFX button in a song tab or Menu > Audio > Sound Effects.
+    * Double click on a Sound Effect name to play the sound effect.
+    * This window will send PLAY_SOUND_EFFECT IO commands to the emulated audio driver,
+      allowing the user to hear how the sound effects will sound in-game.
+    * The sound effects window is disabled when the sound effects tab is open.
+ * Added a sample sizes graph and table to the Samples tab.
+    * Click on the large button above the Instruments list to view it.
+    * If there is an error combining samples into Common Audio Data, the sample sizes widget will
+      display an error message.
+ * Added a pan slider to the Sound Effects tab.
+ * Added custom toolbar icons.
+ * Added *Clear sample cache and rebuild* to the File menu.
+ * Fixed song note tracking not cleared when the audio thread plays a different song
+ * Lots of improvements to the compiler thread:
+    * The Common Audio Data is compiled whenever an instrument or sample is changed.
+    * The "Dependency Error" bug has been fixed.
+    * Improved inter-thread messaging.
+    * Plus many more small optimisations.
+
+
 Version 0.0.8
 =============
  * Added PVSnesLib integration code
