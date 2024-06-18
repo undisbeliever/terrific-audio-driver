@@ -206,7 +206,10 @@ impl Menu {
         self.deactivate(SAVE_AS);
         self.deactivate(SAVE_ALL);
 
+        self.deactivate(CLEAR_CACHE_AND_REBUILD);
         self.deactivate(EXPORT_SPC);
+
+        self.deactivate(AUDIO_SFX_WINDOW);
     }
 
     pub fn is_help_syntax_checked(&self) -> bool {
@@ -221,6 +224,9 @@ impl Menu {
         self.activate(OPEN_MML_FILE);
 
         self.activate(SAVE_ALL);
+        self.activate(CLEAR_CACHE_AND_REBUILD);
+
+        self.activate(AUDIO_SFX_WINDOW);
     }
 
     pub fn update_save_menus(&mut self, can_save: bool, can_save_as: bool) {
