@@ -47,7 +47,7 @@ pub struct SampleSizesWidget {
 
 const AUDIO_DRIVER_COLOR: Color = Color::Magenta;
 const CAD_HEADER_COLOR: Color = Color::Green;
-const SFX_BYTECODE_COLOR: Color = Color::Blue;
+const SFX_COLOR: Color = Color::Blue;
 const BRR_SAMPLES_COLOR: Color = Color::Yellow;
 const BRR_SAMPLES_LINE_COLOR: Color = Color::DarkYellow;
 const LARGEST_SONG_COLOR: Color = Color::Red;
@@ -61,7 +61,7 @@ const STAT_NAMES: [(&str, Color); 5] = [
     ("Audio Driver", AUDIO_DRIVER_COLOR),
     ("Largest Song", LARGEST_SONG_COLOR),
     ("Common Audio Data Header", CAD_HEADER_COLOR),
-    ("Sound Effect Bytecode", SFX_BYTECODE_COLOR),
+    ("Sound Effects", SFX_COLOR),
     ("BRR Samples", BRR_SAMPLES_COLOR),
 ];
 const N_STAT_ROWS: usize = STAT_NAMES.len();
@@ -69,12 +69,12 @@ const N_STAT_ROWS: usize = STAT_NAMES.len();
 const DRIVER_SIZE_IDX: usize = 0;
 const LARGEST_SONG_IDX: usize = 1;
 const CAD_HEADER_IDX: usize = 2;
-const BC_SIZE_IDX: usize = 3;
+const SFX_IDX: usize = 3;
 const BRR_SAMPLES_IDX: usize = 4;
 
 struct GraphData {
     cad_size: u16,
-    sfx_bytecode: Range<u16>,
+    sfx_range: Range<u16>,
     brr_samples_range: Range<u16>,
     brr_start_addrs: Vec<u16>,
 }
@@ -212,7 +212,7 @@ impl SampleSizesWidget {
         self.brr_sizes.clear();
 
         self.stat_sizes[CAD_HEADER_IDX].clear();
-        self.stat_sizes[BC_SIZE_IDX].clear();
+        self.stat_sizes[SFX_IDX].clear();
         self.stat_sizes[BRR_SAMPLES_IDX].clear();
 
         self.graph_widget.redraw();
@@ -234,7 +234,7 @@ impl SampleSizesWidget {
         self.graph_data = Some(GraphData {
             cad_size: cad.aram_size(),
             brr_samples_range: cad.brr_addr_range().clone(),
-            sfx_bytecode: cad.sfx_bytecode_addr_range().clone(),
+            sfx_range: cad.sfx_data_addr_range(),
             brr_start_addrs: cad.dir_table_start_iter().collect(),
         });
         let d = self.graph_data.as_ref().unwrap();
@@ -243,9 +243,9 @@ impl SampleSizesWidget {
 
         self.stat_sizes[CAD_HEADER_IDX] = size_string(cad.header_size());
         if sfx_valid {
-            self.stat_sizes[BC_SIZE_IDX] = range_size_string(cad.sfx_bytecode_addr_range());
+            self.stat_sizes[SFX_IDX] = range_size_string(&cad.sfx_data_addr_range());
         } else {
-            "ERROR".clone_into(&mut self.stat_sizes[BC_SIZE_IDX]);
+            "ERROR".clone_into(&mut self.stat_sizes[SFX_IDX]);
         }
         self.stat_sizes[BRR_SAMPLES_IDX] = range_size_string(cad.brr_addr_range());
 
@@ -368,7 +368,7 @@ impl SampleSizesWidget {
                 d.brr_samples_range.start,
                 CAD_HEADER_COLOR,
             );
-            addr_rect(d.sfx_bytecode.start, d.sfx_bytecode.end, SFX_BYTECODE_COLOR);
+            addr_rect(d.sfx_range.start, d.sfx_range.end, SFX_COLOR);
             addr_rect(
                 d.brr_samples_range.start,
                 d.brr_samples_range.end,
@@ -385,8 +385,8 @@ impl SampleSizesWidget {
             addr_line(AUDIO_DRIVER_SIZE);
             addr_line(d.brr_samples_range.start);
             addr_line(d.brr_samples_range.end);
-            addr_line(d.sfx_bytecode.start);
-            addr_line(d.sfx_bytecode.end);
+            addr_line(d.sfx_range.start);
+            addr_line(d.sfx_range.end);
 
             if let Some(song_end) = song_end {
                 addr_line(song_end);
