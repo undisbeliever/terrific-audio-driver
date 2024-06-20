@@ -9,8 +9,8 @@ use crate::bytecode_assembler::BytecodeAssembler;
 use crate::data::{load_text_file_with_limit, InstrumentOrSample, Name, TextFile, UniqueNamesList};
 use crate::driver_constants::SFX_TICK_CLOCK;
 use crate::errors::{
-    BytecodeAssemblerError, CombineSoundEffectsError, ErrorWithPos, FileError, SoundEffectError,
-    SoundEffectErrorList, SoundEffectsFileError,
+    BytecodeAssemblerError, CombineSoundEffectsError, ErrorWithPos, FileError, OtherSfxError,
+    SoundEffectError, SoundEffectErrorList, SoundEffectsFileError,
 };
 use crate::file_pos::{blank_file_range, split_lines};
 use crate::mml;
@@ -77,21 +77,17 @@ fn compile_mml_sound_effect(
     starting_line_number: u32,
     inst_map: &UniqueNamesList<InstrumentOrSample>,
     pitch_table: &PitchTable,
-    name_valid: bool,
-    duplicate_name: bool,
+    other_errors: Vec<OtherSfxError>,
 ) -> Result<CompiledSoundEffect, SoundEffectError> {
-    let invalid_name = !name_valid;
-
     match mml::compile_sound_effect(sfx, inst_map, pitch_table) {
         Ok(o) => {
-            if !invalid_name && !duplicate_name {
+            if other_errors.is_empty() {
                 Ok(CompiledSoundEffect::Mml(o))
             } else {
                 Err(SoundEffectError {
                     sfx_name: name_string.to_owned(),
                     sfx_line_no: starting_line_number,
-                    invalid_name,
-                    duplicate_name,
+                    other_errors,
                     errors: SoundEffectErrorList::MmlErrors(Vec::new()),
                 })
             }
@@ -99,8 +95,7 @@ fn compile_mml_sound_effect(
         Err(errors) => Err(SoundEffectError {
             sfx_name: name_string.to_owned(),
             sfx_line_no: starting_line_number,
-            invalid_name,
-            duplicate_name,
+            other_errors,
             errors,
         }),
     }
@@ -111,8 +106,7 @@ fn compile_bytecode_sound_effect(
     name_string: &str,
     starting_line_number: u32,
     instruments: &UniqueNamesList<InstrumentOrSample>,
-    name_valid: bool,
-    duplicate_name: bool,
+    other_errors: Vec<OtherSfxError>,
 ) -> Result<CompiledSoundEffect, SoundEffectError> {
     let mut errors = Vec::new();
 
@@ -150,20 +144,16 @@ fn compile_bytecode_sound_effect(
         ));
     }
 
-    let invalid_name = !name_valid;
-    let no_errors = !invalid_name && !duplicate_name && errors.is_empty();
-
-    if let (Some(bytecode), true) = (out, no_errors) {
+    if other_errors.is_empty() && errors.is_empty() {
         Ok(CompiledSoundEffect::BytecodeAssembly(BytecodeSoundEffect {
-            bytecode,
+            bytecode: out.unwrap(),
             tick_counter,
         }))
     } else {
         Err(SoundEffectError {
             sfx_name: name_string.to_owned(),
             sfx_line_no: starting_line_number,
-            invalid_name,
-            duplicate_name,
+            other_errors,
             errors: SoundEffectErrorList::BytecodeErrors(errors),
         })
     }
@@ -179,12 +169,20 @@ pub fn compile_sound_effects_file(
     let mut errors = Vec::new();
 
     for sfx in &sfx_file.sound_effects {
-        let (name, name_valid) = match sfx.name.parse() {
-            Ok(n) => (n, true),
-            Err(_) => ("sfx".parse().unwrap(), false),
-        };
+        let mut other_errors = Vec::new();
 
-        let duplicate_name = sound_effects.contains_key(&name);
+        let name = match sfx.name.parse::<Name>() {
+            Ok(name) => {
+                if sound_effects.contains_key(&name) {
+                    other_errors.push(OtherSfxError::DuplicateName(name.clone()));
+                }
+                name
+            }
+            Err(_) => {
+                other_errors.push(OtherSfxError::InvalidName(sfx.name.clone()));
+                "sfx".parse().unwrap()
+            }
+        };
 
         let r = match &sfx.sfx {
             SoundEffectText::BytecodeAssembly(text) => compile_bytecode_sound_effect(
@@ -192,8 +190,7 @@ pub fn compile_sound_effects_file(
                 &sfx.name,
                 sfx.line_no + 1,
                 inst_map,
-                name_valid,
-                duplicate_name,
+                other_errors,
             ),
             SoundEffectText::Mml(text) => compile_mml_sound_effect(
                 text,
@@ -201,8 +198,7 @@ pub fn compile_sound_effects_file(
                 sfx.line_no + 1,
                 inst_map,
                 pitch_table,
-                name_valid,
-                duplicate_name,
+                other_errors,
             ),
         };
         match r {
@@ -324,9 +320,12 @@ pub fn compile_sound_effect_input(
     inst_map: &UniqueNamesList<InstrumentOrSample>,
     pitch_table: &PitchTable,
 ) -> Result<CompiledSoundEffect, SoundEffectError> {
+    // tad-gui ensures the name is valid and unique
+    let other_errors = Vec::new();
+
     match &input.sfx {
         SoundEffectText::BytecodeAssembly(text) => {
-            compile_bytecode_sound_effect(text, input.name.as_str(), 1, inst_map, true, false)
+            compile_bytecode_sound_effect(text, input.name.as_str(), 1, inst_map, other_errors)
         }
         SoundEffectText::Mml(text) => compile_mml_sound_effect(
             text,
@@ -334,8 +333,7 @@ pub fn compile_sound_effect_input(
             1,
             inst_map,
             pitch_table,
-            true,
-            false,
+            other_errors,
         ),
     }
 }

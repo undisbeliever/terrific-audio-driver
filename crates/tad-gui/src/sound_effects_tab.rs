@@ -734,9 +734,9 @@ impl State {
             return;
         }
         if let Some(error_lines) = &self.error_lines {
-            let editor_line = error_line
-                .checked_sub(error_lines.offset)
-                .and_then(|i| usize::try_from(i).ok())
+            let editor_line = usize::try_from(error_line)
+                .ok()
+                .and_then(|i| i.checked_sub(error_lines.offset))
                 .and_then(|i| error_lines.lines.get(i))
                 .copied()
                 .unwrap_or(1);

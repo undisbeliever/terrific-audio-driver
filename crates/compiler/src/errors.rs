@@ -235,11 +235,17 @@ pub enum SoundEffectErrorList {
 }
 
 #[derive(Debug)]
+pub enum OtherSfxError {
+    InvalidName(String),
+    DuplicateName(Name),
+}
+
+#[derive(Debug)]
 pub struct SoundEffectError {
     pub sfx_name: String,
     pub sfx_line_no: u32,
-    pub invalid_name: bool,
-    pub duplicate_name: bool,
+
+    pub other_errors: Vec<OtherSfxError>,
     pub errors: SoundEffectErrorList,
 }
 
@@ -880,6 +886,15 @@ impl Display for BytecodeAssemblerError {
     }
 }
 
+impl Display for OtherSfxError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            Self::InvalidName(n) => write!(f, "invalid name: {}", n),
+            Self::DuplicateName(n) => write!(f, "duplicate name: {}", n),
+        }
+    }
+}
+
 impl Display for SoundEffectError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "error compiling {}", self.sfx_name)
@@ -1331,15 +1346,10 @@ fn fmt_indented_sound_effect_error(
 ) -> std::fmt::Result {
     let line_no = error.sfx_line_no;
 
-    if !error.invalid_name {
-        writeln!(f, "{}{}:", name_prefix, error.sfx_name)?;
-    } else {
-        writeln!(f, "{}unnamed sound effect:", name_prefix)?;
-        writeln!(f, "    {}{}: invalid name", line_prefix, line_no)?;
-    }
+    writeln!(f, "{}{}:", name_prefix, error.sfx_name)?;
 
-    if error.duplicate_name {
-        writeln!(f, "    {}{}: duplicate name: {}", line_prefix, line_no, error.sfx_name)?;
+    for e in &error.other_errors {
+        writeln!(f, "    {}{}: {}", line_prefix, line_no, e)?;
     }
 
     match &error.errors {
@@ -1367,22 +1377,14 @@ fn fmt_indented_sound_effect_error(
 }
 
 pub struct SfxErrorLines {
-    pub offset: u32,
+    pub offset: usize,
     pub lines: Vec<u32>,
 }
 
 impl SoundEffectError {
     pub fn error_lines(&self) -> SfxErrorLines {
-        let mut offset = 1;
-        if self.invalid_name {
-            offset += 1
-        }
-        if self.duplicate_name {
-            offset += 1
-        }
-
         SfxErrorLines {
-            offset,
+            offset: 1 + self.other_errors.len(),
             lines: match &self.errors {
                 SoundEffectErrorList::BytecodeErrors(errors) => {
                     errors.iter().map(|e| e.0.line_number).collect()
