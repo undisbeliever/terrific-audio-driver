@@ -73,41 +73,19 @@ impl CompiledSoundEffect {
 
 fn compile_mml_sound_effect(
     sfx: &str,
-    name_string: &str,
-    starting_line_number: u32,
     inst_map: &UniqueNamesList<InstrumentOrSample>,
     pitch_table: &PitchTable,
-    other_errors: Vec<OtherSfxError>,
-) -> Result<CompiledSoundEffect, SoundEffectError> {
+) -> Result<CompiledSoundEffect, SoundEffectErrorList> {
     match mml::compile_sound_effect(sfx, inst_map, pitch_table) {
-        Ok(o) => {
-            if other_errors.is_empty() {
-                Ok(CompiledSoundEffect::Mml(o))
-            } else {
-                Err(SoundEffectError {
-                    sfx_name: name_string.to_owned(),
-                    sfx_line_no: starting_line_number,
-                    other_errors,
-                    errors: SoundEffectErrorList::MmlErrors(Vec::new()),
-                })
-            }
-        }
-        Err(errors) => Err(SoundEffectError {
-            sfx_name: name_string.to_owned(),
-            sfx_line_no: starting_line_number,
-            other_errors,
-            errors,
-        }),
+        Ok(o) => Ok(CompiledSoundEffect::Mml(o)),
+        Err(errors) => Err(errors),
     }
 }
 
 fn compile_bytecode_sound_effect(
     sfx: &str,
-    name_string: &str,
-    starting_line_number: u32,
     instruments: &UniqueNamesList<InstrumentOrSample>,
-    other_errors: Vec<OtherSfxError>,
-) -> Result<CompiledSoundEffect, SoundEffectError> {
+) -> Result<CompiledSoundEffect, SoundEffectErrorList> {
     let mut errors = Vec::new();
 
     let mut bc = BytecodeAssembler::new(instruments, None, BytecodeContext::SoundEffect);
@@ -144,18 +122,13 @@ fn compile_bytecode_sound_effect(
         ));
     }
 
-    if other_errors.is_empty() && errors.is_empty() {
+    if errors.is_empty() {
         Ok(CompiledSoundEffect::BytecodeAssembly(BytecodeSoundEffect {
             bytecode: out.unwrap(),
             tick_counter,
         }))
     } else {
-        Err(SoundEffectError {
-            sfx_name: name_string.to_owned(),
-            sfx_line_no: starting_line_number,
-            other_errors,
-            errors: SoundEffectErrorList::BytecodeErrors(errors),
-        })
+        Err(SoundEffectErrorList::BytecodeErrors(errors))
     }
 }
 
@@ -185,27 +158,23 @@ pub fn compile_sound_effects_file(
         };
 
         let r = match &sfx.sfx {
-            SoundEffectText::BytecodeAssembly(text) => compile_bytecode_sound_effect(
-                text,
-                &sfx.name,
-                sfx.line_no + 1,
-                inst_map,
-                other_errors,
-            ),
-            SoundEffectText::Mml(text) => compile_mml_sound_effect(
-                text,
-                &sfx.name,
-                sfx.line_no + 1,
-                inst_map,
-                pitch_table,
-                other_errors,
-            ),
+            SoundEffectText::BytecodeAssembly(text) => {
+                compile_bytecode_sound_effect(text, inst_map)
+            }
+            SoundEffectText::Mml(text) => compile_mml_sound_effect(text, inst_map, pitch_table),
         };
         match r {
             Ok(s) => {
                 sound_effects.insert(name, s);
             }
-            Err(e) => errors.push(e),
+            Err(e) => {
+                errors.push(SoundEffectError {
+                    sfx_name: sfx.name.clone(),
+                    sfx_line_no: sfx.line_no + 1,
+                    other_errors,
+                    errors: e,
+                });
+            }
         }
     }
 
@@ -320,21 +289,19 @@ pub fn compile_sound_effect_input(
     inst_map: &UniqueNamesList<InstrumentOrSample>,
     pitch_table: &PitchTable,
 ) -> Result<CompiledSoundEffect, SoundEffectError> {
-    // tad-gui ensures the name is valid and unique
-    let other_errors = Vec::new();
-
-    match &input.sfx {
-        SoundEffectText::BytecodeAssembly(text) => {
-            compile_bytecode_sound_effect(text, input.name.as_str(), 1, inst_map, other_errors)
-        }
-        SoundEffectText::Mml(text) => compile_mml_sound_effect(
-            text,
-            input.name.as_str(),
-            1,
-            inst_map,
-            pitch_table,
-            other_errors,
-        ),
+    let r = match &input.sfx {
+        SoundEffectText::BytecodeAssembly(text) => compile_bytecode_sound_effect(text, inst_map),
+        SoundEffectText::Mml(text) => compile_mml_sound_effect(text, inst_map, pitch_table),
+    };
+    match r {
+        Ok(o) => Ok(o),
+        Err(e) => Err(SoundEffectError {
+            sfx_name: input.name.as_str().to_owned(),
+            sfx_line_no: 1,
+            // tad-gui ensures the name is valid and unique
+            other_errors: Vec::new(),
+            errors: e,
+        }),
     }
 }
 
