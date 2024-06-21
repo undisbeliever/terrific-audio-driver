@@ -56,7 +56,11 @@ let EDL_SLEEP_COUNT   = smp.TIMER_0_HZ / 1000;
 // Variables
 // =========
 
-let FIRST_SFX_CHANNEL = N_MUSIC_CHANNELS;
+let FIRST_MUSIC_CHANNEL = 0;
+let LAST_MUSIC_CHANNEL = N_MUSIC_CHANNELS - 1;
+let FIRST_SFX_CHANNEL = LAST_MUSIC_CHANNEL + 1;
+let LAST_SFX_CHANNEL = N_CHANNELS - 1;
+
 
 in zeropage {
     // Temporary variables
@@ -108,6 +112,15 @@ in zeropage {
     var activeSoundEffects : u8;
 
 
+    // Virtual channels valid flags
+    // (using a bitset so they can be masked when channel ducking)
+    var virtualChannelValidFlags_music : u8;
+    var virtualChannelValidFlags_sfx   : u8;
+
+    // Temporary variable for reading and writing `virtualChannelValidFlag_*` bits
+    var _virtualChannelValidFlags_tmp  : u8;
+
+
     // Shadow variables for KOFF DSP register
     var keyOffShadow_music : u8;
     var keyOffShadow_sfx : u8;
@@ -155,21 +168,6 @@ in zeropage {
 
         // S-DSP voice register shadows (AKA Virtual Channels)
         namespace virtualChannels {
-            // This variable tracks two things:
-            //  1. If the S-DSP voice registers need to be updated
-            //  2. If the channel is disabled and the S-DSP voice registers must not be changed.
-            //
-            // Values:
-            //  * 0  = update registers
-            //  * 1  = enabled, no pending updates
-            //  * 2+ = channel is disabled
-            //
-            // To disable a channel, write `0xff` to this variable.
-            // To request a register update, do `lsr updateState+X`.
-            //
-            // NOTE: A maximum of 6 update requests can occur before the next `__update_dsp_voice_registers()` call.
-            var updateState : [u8 ; N_CHANNELS];
-
             var vol_l       : [u8 ; N_CHANNELS];
             var vol_r       : [u8 ; N_CHANNELS];
             var pitch_l     : [u8 ; N_CHANNELS];
@@ -648,7 +646,8 @@ var _startLoop : u8 in zpTmp;
             channelIndexEndLoop = x = N_MUSIC_CHANNELS;
 
             write_dsp(GlobalDspAddr.KOFF, keyOffShadow_music);
-            __update_dsp_voice_registers(0, channelIndexEndLoop);
+
+            _update_music_voice_registers__inline();
 
             y = a = keyOnShadow_music & enabledChannelsMask;
             write_dsp(GlobalDspAddr.KON, y);
@@ -670,7 +669,8 @@ var _startLoop : u8 in zpTmp;
             channelIndexEndLoop = x = N_CHANNELS;
 
             write_dsp(GlobalDspAddr.KOFF, keyOffShadow_sfx);
-            __update_dsp_voice_registers(FIRST_SFX_CHANNEL, channelIndexEndLoop);
+
+            _update_sfx_voice_registers__inline();
 
             y = a = keyOnShadow_sfx & enabledChannelsMask;
             write_dsp(GlobalDspAddr.KON, y);
@@ -686,31 +686,52 @@ var _startLoop : u8 in zpTmp;
     // X = starting channelIndex
 
     ^do {
-        process_pitch_effects__inline(x);
+        carry = process_pitch_effects__inline(x);
+
+        _virtualChannelValidFlags_tmp <<<<#= 1;
 
         process_channel__inline(x);
         x++;
     } while x < channelIndexEndLoop;
+
+    if x < N_CHANNELS {
+        virtualChannelValidFlags_music = _virtualChannelValidFlags_tmp;
+    }
+    else {
+        virtualChannelValidFlags_sfx = _virtualChannelValidFlags_tmp;
+    }
 }
 
+
+inline func _update_music_voice_registers__inline() {
+    a = virtualChannelValidFlags_music;
+    __update_dsp_voice_registers(a, LAST_MUSIC_CHANNEL + 1, FIRST_MUSIC_CHANNEL + 1);
+}
+
+
+inline func _update_sfx_voice_registers__inline() {
+    a = virtualChannelValidFlags_sfx;
+    __update_dsp_voice_registers(a, LAST_SFX_CHANNEL + 1, FIRST_SFX_CHANNEL + 1);
+}
 
 
 // Set the DSP voice registers.
 //
 // This function should be called after the `KOFF` write and before the `KON` write.
-func __update_dsp_voice_registers(firstChannelIndex: u8 in x, endIndex : u8 in channelIndexEndLoop) {
-    do {
-        a = channelSoA.virtualChannels.updateState[x];
-        if !zero {
-            // Do not write to voice registers.
-            if a != 1 {
-                // No Writes requested because channel is disabled.
+func __update_dsp_voice_registers(validChannels : u8 in a, afterLastChannel: u8 in x, afterFirstChannel: u8 in y) {
+    var _endLoop : u8 in zpTmp;
 
-                // Reset the high bits of updateState to ensure `lsr updateState+X` does not re-enable the channel.
-                a = 0xff;
-            }
-        }
-        else {
+    _endLoop = y;
+
+    // This loop MUST read the channels (and _virtualChannelValidFlags_tmp) in the opposite order
+    // to `process_channel__inline()`.
+    // That way I can populate `_virtualChannelValidFlags_tmp` using `rol` and read it with `lsr`.
+    _virtualChannelValidFlags_tmp = a;
+    do {
+        x--;
+
+        _virtualChannelValidFlags_tmp >>>= 1;
+        if !carry {
             a = LastVoiceRegister[x];
 
             // Voice registers are written in reverse order so the ADSR2/GAIN voice register is
@@ -758,15 +779,8 @@ func __update_dsp_voice_registers(firstChannelIndex: u8 in x, endIndex : u8 in c
             a--;
             y = channelSoA.virtualChannels.vol_l[x];
             smp.dsp_addr_and_data = ya;
-
-
-            // channel enabled, no pending register writes
-            a = 1;
         }
-        channelSoA.virtualChannels.updateState[x] = a;
-
-        x++;
-    } while x < channelIndexEndLoop;
+    } while x >= _endLoop;
 
 
     y = a = eonShadow_music | eonShadow_sfx;
@@ -948,10 +962,6 @@ func __reset_channel(channelIndex : u8 in x, pan: u8 in zpTmp) {
 
     a = 0;
 
-    // Enable S-DSP voice register writes
-    // and update S-DSP voice register writes on the start of the next tick
-    channelSoA.virtualChannels.updateState[x] = a;  // 0
-
     channelSoA.instructionPtrAfterEnd_h[x] = a;     // don't loop SFX
 
     channelSoA.nextEventIsKeyOff[x] = a;
@@ -1037,8 +1047,9 @@ func _update_voll_and_volr(channelIndex : u8 in x, vol_or_pan : u8 in a, pan_or_
 // ================
 
 
+// Returns: True if the virtual channels are unchanged.
 // KEEP: X
-inline func process_pitch_effects__inline(channelIndex : u8 in x) {
+inline func process_pitch_effects__inline(channelIndex : u8 in x) : bool in carry {
 var _target_h : u8 in zpTmp;
 
     a = channelSoA.portamento_direction[x] as u8;
@@ -1119,8 +1130,7 @@ var _target_h : u8 in zpTmp;
         channelSoA.virtualChannels.pitch_l[x] = a;
         channelSoA.virtualChannels.pitch_h[x] = y;
 
-        // Request S-DSP voice register update
-        channelSoA.virtualChannels.updateState[x] >>>= 1;
+        return false;
     }
     else {
         // Vibrato
@@ -1158,10 +1168,11 @@ var _target_h : u8 in zpTmp;
                 channelSoA.vibrato_tickCounter[x] = a = channelSoA.vibrato_waveLengthInTicks[x];
             }
 
-            // Request S-DSP voice register update
-            channelSoA.virtualChannels.updateState[x] >>>= 1;
+            return false;
         }
     }
+
+    return true;
 }
 
 
@@ -1190,13 +1201,13 @@ inline func process_channel__inline(channelIndex : u8 in x) {
             channelSoA.countdownTimer[x]++;
         }
         else {
-            // Request S-DSP voice register update.
+            // Request S-DSP voice register update (clear valid bit).
             // The bytecode instruction will most likely change the virtual channel.
             //
             // The flag is set here (and once) instead of every instruction that changes
             // `channelSoA.virtualChannels` to save a lot of code space.
             //
-            channelSoA.virtualChannels.updateState[x] >>>= 1;
+            _virtualChannelValidFlags_tmp $ 0 = false;
 
             a = channelSoA.instructionPtr_l[x];
             y = channelSoA.instructionPtr_h[x];
@@ -1494,9 +1505,6 @@ func disable_channel(channelIndex : u8 in x) {
 
     // Disable vibrato
     channelSoA.vibrato_pitchOffsetPerTick[x] = a;
-
-    // Mark channel as disabled
-    channelSoA.virtualChannels.updateState[x] = a = 0xff;
 
 
     // Send key-off event

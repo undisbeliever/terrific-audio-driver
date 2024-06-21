@@ -712,17 +712,6 @@ impl InterpreterOutput {
                 "Audio driver is not at the start of the song"
             );
 
-            // Test the `channelSoA.virtualChannels.updateOnZero` flags are zero
-            {
-                let r = usize::from(addresses::CHANNEL_VC_UPDATE_STATE)
-                    ..usize::from(addresses::CHANNEL_VC_UPDATE_STATE) + N_MUSIC_CHANNELS;
-
-                assert!(
-                    apuram[r].iter().all(|&i| i == 0),
-                    "Audio driver is not initialized"
-                );
-            }
-
             let mut apu_write = |addr: u16, value: u8| {
                 apuram[usize::from(addr)] = value;
             };
