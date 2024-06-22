@@ -1615,10 +1615,9 @@ inline func __skip_last_loop(channelIndex : u8 in x, bytesToSkip : u8 in a, let 
     y = _loopState_counter[x];
     y--;
     if zero {
-        <:instructionPtr = a = a + <:instructionPtr;
-        if carry {
-            (>:instructionPtr)++;
-        }
+        // Y = 0
+        ya += instructionPtr as u16;
+        ^return process_bytecode(x, ya);
     }
 
     ^return process_next_bytecode(x);
