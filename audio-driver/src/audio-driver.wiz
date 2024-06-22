@@ -109,10 +109,11 @@ in zeropage {
     var activeSoundEffects : u8;
 
 
-    // Virtual channels valid flags
+    // S-DSP voice channels dirty flags.
+    // Used to test if the virtualChannels should be written to the S-DSP voice registers.
     // (using a bitset so they can be masked when channel ducking)
-    var virtualChannelValidFlags_music : u8;
-    var virtualChannelValidFlags_sfx   : u8;
+    var voiceChannelsDirty_music : u8;
+    var voiceChannelsDirty_sfx   : u8;
 
 
     // Shadow variables for KOFF DSP register
@@ -143,10 +144,10 @@ in zeropage {
     var instructionPtr : *const u8;
 
 
-    // Temporary variable for reading and writing `virtualChannelValidFlag_*` bits
+    // Temporary variable for reading and writing `voiceChannelsDirty_*` bits.
     //
     // MUST ONLY be written to in `__process_channels()`.
-    var virtualChannelValidFlags_tmp  : u8;
+    var voiceChannelsDirty_tmp  : u8;
 
     // The one-past-the-end index when looping through the channels.
     //
@@ -669,10 +670,10 @@ inline func _process_music_channels__inline() {
     keyOnShadow_music = 0;
     keyOffShadow_music = 0;
 
-    a = virtualChannelValidFlags_music;
+    a = voiceChannelsDirty_music;
     __process_channels(a, zpTmp, FIRST_MUSIC_CHANNEL + 1, LAST_MUSIC_CHANNEL + 1);
 
-    virtualChannelValidFlags_music = virtualChannelValidFlags_tmp;
+    voiceChannelsDirty_music = voiceChannelsDirty_tmp;
 }
 
 
@@ -684,10 +685,10 @@ inline func _process_sfx_channels__inline() {
     keyOnShadow_sfx = 0;
     keyOffShadow_sfx = 0;
 
-    a = virtualChannelValidFlags_sfx;
+    a = voiceChannelsDirty_sfx;
     __process_channels(a, zpTmp, FIRST_SFX_CHANNEL + 1, LAST_SFX_CHANNEL + 1);
 
-    virtualChannelValidFlags_sfx = virtualChannelValidFlags_tmp;
+    voiceChannelsDirty_sfx = voiceChannelsDirty_tmp;
 }
 
 
@@ -700,15 +701,15 @@ var _afterFirstChannel : u8 in zpTmp2;
 
     channelIndexEndLoop = x;
 
-    // This loop MUST read the channels (and _virtualChannelValidFlags_tmp) in the opposite order
+    // This loop MUST read the channels (and voiceChannelsDirty_tmp) in the opposite order
     // to the loop below this one.
-    // That way I can populate `_virtualChannelValidFlags_tmp` using `rol` and read it with `lsr`.
-    virtualChannelValidFlags_tmp = a;
+    // That way I can populate `_voiceChannelsDirty_tmp` using `ROR` and read it with `ASL`.
+    voiceChannelsDirty_tmp = a;
     do {
         x--;
 
-        virtualChannelValidFlags_tmp >>>= 1;
-        if !carry {
+        voiceChannelsDirty_tmp <<<= 1;
+        if carry {
             a = LastVoiceRegister[x];
 
             // Voice registers are written in reverse order so the ADSR2/GAIN voice register is
@@ -771,7 +772,7 @@ var _afterFirstChannel : u8 in zpTmp2;
 
         carry = process_pitch_effects__inline(x);
 
-        virtualChannelValidFlags_tmp <<<<#= 1;
+        voiceChannelsDirty_tmp >>>>#= 1;
 
         channelSoA.countdownTimer[x]--;
         if zero {
@@ -804,13 +805,13 @@ var _afterFirstChannel : u8 in zpTmp2;
                     channelSoA.instructionPtr_l[x] = a;
                     channelSoA.instructionPtr_h[x] = y;
 
-                    // Request S-DSP voice register update (clear valid bit).
+                    // Request S-DSP voice register update (set dirty bit).
                     // The bytecode most likely changed the virtual channel.
                     //
                     // The flag is set here (and once) instead of every instruction that changes
                     // `channelSoA.virtualChannels` to save a lot of code space.
                     //
-                    virtualChannelValidFlags_tmp $ 0 = false;
+                    voiceChannelsDirty_tmp $ 7 = true;
 
                     _update_vol_shadow_if_required__inline(x);
                 }
@@ -1101,7 +1102,7 @@ inline func _update_vol_shadow_if_required__inline(channelIndex : u8 in x) {
 // =======
 
 
-// Returns: True if the virtual channels are unchanged.
+// Returns: True if the virtual channels have changed.
 // KEEP: X
 inline func process_pitch_effects__inline(channelIndex : u8 in x) : bool in carry {
 var _target_h : u8 in zpTmp;
@@ -1184,7 +1185,7 @@ var _target_h : u8 in zpTmp;
         channelSoA.virtualChannels.pitch_l[x] = a;
         channelSoA.virtualChannels.pitch_h[x] = y;
 
-        return false;
+        return true;
     }
     else {
         // Vibrato
@@ -1222,11 +1223,11 @@ var _target_h : u8 in zpTmp;
                 channelSoA.vibrato_tickCounter[x] = a = channelSoA.vibrato_waveLengthInTicks[x];
             }
 
-            return false;
+            return true;
         }
     }
 
-    return true;
+    return false;
 }
 
 
