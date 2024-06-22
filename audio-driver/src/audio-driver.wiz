@@ -198,11 +198,16 @@ in zeropage {
         var instPitchOffset : [u8 ; N_CHANNELS];
 
 
+        // Used to determine if vol_l and vol_r need recalculating.
+        //
+        // This is a per-channel flag so it can be cleared in __reset_channel().
+        //
+        // As the spc700 lacks a `stz dp+X` instruction, I am using `LSR dp+X` to clear this value.
+        // Only the MSB is tested when reading this flag.
+        var volShadowValid : [u8 ; N_CHANNELS];
+
         // Channel volume (0-255)
         var volume : [u8 ; N_CHANNELS];
-
-        // Channel pan (0-MAX_PAN)
-        var pan : [u8 ; N_CHANNELS];
 
 
         // Portamento direction
@@ -279,6 +284,10 @@ in firstpage {
         // If `instructionPtrAfterEnd_h` is 0, the channel does not loop and will instead stop.
         var instructionPtrAfterEnd_l : [u8 ; N_CHANNELS];
         var instructionPtrAfterEnd_h : [u8 ; N_CHANNELS];
+
+
+        // Channel pan (0-MAX_PAN)
+        var pan : [u8 ; N_CHANNELS];
     }
 }
 
@@ -814,6 +823,9 @@ var _afterFirstChannel : u8 in zpTmp2;
                 ya = instructionPtr as u16;
                 channelSoA.instructionPtr_l[x] = a;
                 channelSoA.instructionPtr_h[x] = y;
+
+
+                _update_vol_shadow_if_required__inline(x);
             }
         }
 
@@ -989,7 +1001,6 @@ func __play_sfx_on_channel(channelIndex : u8 in x, sfx_id : u8 in y) {
 // NOTE: Also disables `end` looping (instructionPtrAfterEnd).
 //
 // KEEP: X
-#[fallthrough]
 func __reset_channel(channelIndex : u8 in x, pan: u8 in zpTmp) {
     // Immediately process the next event
     channelSoA.countdownTimer[x] = a = 1;
@@ -1008,6 +1019,14 @@ func __reset_channel(channelIndex : u8 in x, pan: u8 in zpTmp) {
     channelSoA.vibrato_pitchOffsetPerTick[x] = a;
 
 
+    // Clear volShadowValid flag, so vol_l and vol_r is updated after the next bytecode instruction.
+    channelSoA.volShadowValid[x] = a;   // a = 0
+
+    // Set channel volume
+    channelSoA.volume[x] = a = STARTING_VOLUME;
+    channelSoA.pan[x] = a = pan;
+
+
     // Set keyOnMask.  The next play-note instruction will queue a KON event.
     a = ChannelVoiceBit[x];
     if x >= FIRST_SFX_CHANNEL {
@@ -1021,57 +1040,68 @@ func __reset_channel(channelIndex : u8 in x, pan: u8 in zpTmp) {
         test_and_set(a, keyOnMask_music);
         test_and_clear(a, eonShadow_music);
     }
-
-
-    // Set channel volume
-    channelSoA.volume[x] = y = STARTING_VOLUME;
-    channelSoA.pan[x] = a = pan;
-
-// Fallthrough
 }
 
 
-// volume and pan must be set in channelSoA.
+// Volume and Pan
+// ==============
+
+
+// KEEP: x
+inline func clear_vol_shadow_valid_flag(channelIndex : u8 in x) {
+    // No `STZ dp+X` instruction, using `LSR dp+X` instead.
+    // Safe as I only use the MSB of `volShadowValid` to read the flag value.
+    channelSoA.volShadowValid[x] >>>= 1;
+}
+
+
+
+// Checks the volShadowValid flag and update vol_l and vol_r shadow variables if required.
 //
 // NOTE: Does not change `channelSoA.virtualChannels.updateState[x]`.
 //
 // KEEP: x
-func _update_voll_and_volr(channelIndex : u8 in x, vol_or_pan : u8 in a, pan_or_vol : u8 in y) {
+inline func _update_vol_shadow_if_required__inline(channelIndex : u8 in x) {
 
-    // Reading carry here saves a `SEC` instruction when calculating VOL_R
-    carry = loaderDataType $ LoaderDataType.STEREO_FLAG_BIT;
-    if carry {
-        // Stereo
+    a = channelSoA.volShadowValid[x];
+    if !negative {
+        // volShadowValid flag clear.
+        channelSoA.volShadowValid[x] = a = 0xff;
 
-        // Calculate right volume
-        // A pan value of `MAX_PAN` is 100% to the right.
-        // (MUST NOT USE CARRY)
-        ya = mul(a, y);
-        channelSoA.virtualChannels.vol_r[x] = y;
+        // Reading carry here saves a `SEC` instruction when calculating VOL_R
+        carry = loaderDataType $ LoaderDataType.STEREO_FLAG_BIT;
+        if carry {
+            // Stereo
+
+            // Calculate right volume
+            // A pan value of `MAX_PAN` is 100% to the right.
+            // (MUST NOT USE CARRY)
+
+            a = channelSoA.pan[x];
+            y = channelSoA.volume[x];
+            ya = mul(a, y);
+            channelSoA.virtualChannels.vol_r[x] = y;
 
 
-        // Calculate left volume
-        // A pan value of `0` is 100% to the left.
+            // Calculate left volume
+            // A pan value of `0` is 100% to the left.
 
-        // Carry set (MUL does not set carry)
-        a = MAX_PAN -# channelSoA.pan[x];
-        y = channelSoA.volume[x];
-        ya = mul(a, y);
-        channelSoA.virtualChannels.vol_l[x] = y;
+            // Carry set (MUL does not set carry)
+            a = MAX_PAN -# channelSoA.pan[x];
+            y = channelSoA.volume[x];
+            ya = mul(a, y);
+            channelSoA.virtualChannels.vol_l[x] = y;
+        }
+        else {
+            // Mono
 
-        return;
-    }
-    else {
-        // Mono
+            // First shift converts 8-bit volume to 7-bit VOL
+            // Second shift ensure mono vol has same combined amplitude as stereo vol
+            a = channelSoA.volume[x] >>> 2;
 
-        // First shift converts 8-bit volume to 7-bit VOL
-        // Second shift ensure mono vol has same combined amplitude as stereo vol
-        a = channelSoA.volume[x] >>> 2;
-
-        channelSoA.virtualChannels.vol_l[x] = a;
-        channelSoA.virtualChannels.vol_r[x] = a;
-
-        return;
+            channelSoA.virtualChannels.vol_l[x] = a;
+            channelSoA.virtualChannels.vol_r[x] = a;
+        }
     }
 }
 
@@ -1788,12 +1818,9 @@ func adjust_pan(channelIndex : u8 in x, detla : i8 in a) {
 
 // KEEP: X
 func set_pan(channelIndex : u8 in x, pan : u8 in a) {
-
     channelSoA.pan[x] = a;
 
-    y = channelSoA.volume[x];
-
-    _update_voll_and_volr(x, a, y);
+    clear_vol_shadow_valid_flag(x);
 
     ^return process_next_bytecode(x);
 }
@@ -1845,9 +1872,7 @@ func adjust_volume(channelIndex : u8 in x, delta: i8 in a) {
 func set_volume(channelIndex : u8 in x, volume : u8 in a) {
     channelSoA.volume[x] = a;
 
-    y = channelSoA.pan[x];
-
-    _update_voll_and_volr(x, a, y);
+    clear_vol_shadow_valid_flag(x);
 
     ^return process_next_bytecode(x);
 }
