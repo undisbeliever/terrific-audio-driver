@@ -593,14 +593,34 @@ func main() {
         io_commands.unpause();
     }
 
-    ^while true {
+    while true {
         do {
             io_commands.process_io_ports__inline();
 
             a = pausedIfZero;
         } while zero;
 
-        process_event_loop__inline();
+        // Song tick timer
+        a = smp.counter_0;
+        if !zero {
+            if a >= maxTimerCounter {
+                maxTimerCounter = a;
+            }
+
+            songTickCounter++;
+
+            _process_music_channels__inline();
+        }
+
+        // SFX tick timer
+        a = smp.counter_1;
+        if !zero {
+            if a >= maxTimerCounter {
+                maxTimerCounter = a;
+            }
+
+            _process_sfx_channels__inline();
+        }
     }
 }
 
@@ -641,39 +661,6 @@ inline func __clear_echo_buffer__inline(esa : u8 in x) {
         (&STA_1 as *u8)[2]++;
         (&STA_2 as *u8)[2]++;
         goto OuterLoop if !zero;
-}
-
-
-
-inline func process_event_loop__inline() {
-    // Loop until a timer has ticked
-    ^while true {
-        // Song tick timer
-        a = smp.counter_0;
-        if !zero {
-            if a >= maxTimerCounter {
-                maxTimerCounter = a;
-            }
-
-            songTickCounter++;
-
-            _process_music_channels__inline();
-
-            break;
-        }
-
-        // SFX tick timer
-        a = smp.counter_1;
-        if !zero {
-            if a >= maxTimerCounter {
-                maxTimerCounter = a;
-            }
-
-            _process_sfx_channels__inline();
-
-            break;
-        }
-    }
 }
 
 
