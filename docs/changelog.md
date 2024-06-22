@@ -1,6 +1,20 @@
 Terrific Audio Driver Changelog
 ===============================
 
+Version 0.0.10
+==============
+
+Audio driver changes:
+ * Rewrote the main loop
+    * Virtual channel valid/dirty state is stored in a bitset in preparation for channel ducking.
+    * IO ports are read a lot more often.
+    * Changed how disabled channels are handled.
+ * Added a `channelSoA.volShadowValid` flag.
+    * `vol_l` and `vol_r` are now calculated after the bytecode has been processed.
+ * `return_from_subroutine` bytecode instruction disables the channel if it is not in a subroutine.
+ * Optimised `skip_last_loop` bytecode instructions
+
+
 Version 0.0.9
 =============
 
