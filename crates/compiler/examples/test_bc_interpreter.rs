@@ -170,13 +170,15 @@ fn assert_bc_intrepreter_matches_emu(
     );
 
     test_channel_soa_ptrs(
+        addresses::CHANNEL_INSTRUCTION_PTR_L,
+        addresses::CHANNEL_INSTRUCTION_PTR_H,
+        "instructionPtr",
+    );
+    test_channel_soa_ptrs(
         addresses::CHANNEL_RETURN_INST_PTR_L,
         addresses::CHANNEL_RETURN_INST_PTR_H,
         "returnInstPtr",
     );
-
-    test_channel_soa(addresses::CHANNEL_INSTRUCTION_PTR_L, "instructionPtr_l");
-    test_channel_soa(addresses::CHANNEL_INSTRUCTION_PTR_H, "instructionPtr_h");
 
     test_channel_soa(addresses::CHANNEL_INST_PITCH_OFFSET, "instPitchOffset");
 

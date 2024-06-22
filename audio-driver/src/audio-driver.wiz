@@ -183,7 +183,10 @@ in zeropage {
         }
 
 
-        // The address of the next bytecode to execute
+        // The address of the next bytecode to execute.
+        //
+        // If the high-byte of the instructionPtr is 0, no bytecode will be executed.
+        //
         // (The low-byte of instructionPtr is in firstpage)
         var instructionPtr_h : [u8 ; N_CHANNELS];
 
@@ -256,6 +259,10 @@ in zeropage {
 
 
 in firstpage {
+    // ::BUGFIX fixes a missing channelSoA variable in the symbol file::
+    var __padding : u8;
+
+
     // Channel variables that do not fit in zeropage
     namespace channelSoA {
         // The length of the vibrato wavelength in ticks.
@@ -487,15 +494,6 @@ func main() {
     }
 
 
-    // Disable SFX channels
-    a = <:&ChannelDisabledBytecode;
-    y = >:&ChannelDisabledBytecode;
-    inline for let i in N_MUSIC_CHANNELS..7 {
-        channelSoA.instructionPtr_l[i] = a;
-        channelSoA.instructionPtr_h[i] = y;
-    }
-
-
     // Calculate `subroutineTable` addresses.
     // subroutineTable_l = songPtr + sizeof(SongHeader)
     a = sizeof(SongHeader);
@@ -522,13 +520,13 @@ func main() {
         // ASSUMES sizeof(MusicChannelHeader) == 4
         y = a = x <<< 2;
 
-        // Calculate instructionPtr (and setting it to `ChannelDisabledBytecode` if the addition overflows)
+        // Calculate instructionPtr (disabling the channel if the addition overflows)
         channelSoA.instructionPtr_l[x] = a = songPtr[y] + <:songPtr;
         y++;
         a = songPtr[y] +# >:songPtr;
         if carry {
-            channelSoA.instructionPtr_l[x] = a = <:&ChannelDisabledBytecode;
-            a = >:&ChannelDisabledBytecode;
+            // Disable channel
+            a = 0;
         }
         channelSoA.instructionPtr_h[x] = a;
         y++;
@@ -544,6 +542,10 @@ func main() {
 
         x--;
     } while !negative;
+
+
+    // No need to reset SFX channels.
+    // The sfx channels are disabled as `instructionPtr_h` is 0.
 
 
     // Pop ESA from the stack
@@ -809,25 +811,25 @@ var _afterFirstChannel : u8 in zpTmp2;
                 channelSoA.countdownTimer[x]++;
             }
             else {
-                // Request S-DSP voice register update (clear valid bit).
-                // The bytecode instruction will most likely change the virtual channel.
-                //
-                // The flag is set here (and once) instead of every instruction that changes
-                // `channelSoA.virtualChannels` to save a lot of code space.
-                //
-                virtualChannelValidFlags_tmp $ 0 = false;
-
-                a = channelSoA.instructionPtr_l[x];
                 y = channelSoA.instructionPtr_h[x];
+                if !zero {
+                    a = channelSoA.instructionPtr_l[x];
+                    process_bytecode(x, ya);
 
-                process_bytecode(x, ya);
+                    ya = instructionPtr as u16;
+                    channelSoA.instructionPtr_l[x] = a;
+                    channelSoA.instructionPtr_h[x] = y;
 
-                ya = instructionPtr as u16;
-                channelSoA.instructionPtr_l[x] = a;
-                channelSoA.instructionPtr_h[x] = y;
+                    // Request S-DSP voice register update (clear valid bit).
+                    // The bytecode most likely changed the virtual channel.
+                    //
+                    // The flag is set here (and once) instead of every instruction that changes
+                    // `channelSoA.virtualChannels` to save a lot of code space.
+                    //
+                    virtualChannelValidFlags_tmp $ 0 = false;
 
-
-                _update_vol_shadow_if_required__inline(x);
+                    _update_vol_shadow_if_required__inline(x);
+                }
             }
         }
 
@@ -955,6 +957,8 @@ func set_song_tempo(tempo : u8 in y) {
 
 
 func stop_sound_effects(unused : u8 in y) {
+    // ::TODO optimise::
+
     x = N_MUSIC_CHANNELS;
     do {
         channelSoA.instructionPtr_l[x] = a = <:&ChannelDisabledBytecode;
@@ -1521,6 +1525,9 @@ func disable_channel(channelIndex : u8 in x) {
     a = 0;
     channelSoA.countdownTimer[x] = a;
 
+    // No bytecode is processed if instructionPtr_h is 0
+    >:instructionPtr = a;
+
     // Disable portamento
     channelSoA.portamento_direction[x] = a as i8;
 
@@ -1538,10 +1545,6 @@ func disable_channel(channelIndex : u8 in x) {
     else {
         test_and_set(a, keyOffShadow_music);
     }
-
-    a = <:&ChannelDisabledBytecode;
-    y = >:&ChannelDisabledBytecode;
-    instructionPtr = ya as *const u8;
 
     // return (do not execute the next bytecode and sleep)
     return;
@@ -1932,8 +1935,7 @@ in code {
     // The address of the last writeable voice DSP register for each channel
     const LastVoiceRegister : [u8; 8] = [i * 0x10 | 0x07 for let i in 0..7];
 
-
-    // This is the bytecode used by a disabled channel.
+    // Used by `stop_sound_effects`.
     const ChannelDisabledBytecode : [ u8; 1 ] = [ bytecode.DISABLE_CHANNEL_BYTECODE ];
 }
 

@@ -7,12 +7,11 @@
 use crate::bytecode::opcodes;
 use crate::bytecode::{Pan, LAST_PLAY_NOTE_OPCODE};
 use crate::common_audio_data::CommonAudioData;
-use crate::driver_constants::addresses::CHANNEL_DISABLED_BYTECODE;
 use crate::driver_constants::{
-    addresses, LoaderDataType, COMMON_DATA_BYTES_PER_DIR, COMMON_DATA_BYTES_PER_INSTRUMENTS,
-    COMMON_DATA_HEADER_SIZE, COMMON_DATA_N_DIR_ITEMS_OFFSET, COMMON_DATA_N_INSTRUMENTS_OFFSET,
-    N_MUSIC_CHANNELS, SONG_HEADER_N_SUBROUTINES_OFFSET, SONG_HEADER_SIZE, STARTING_VOLUME,
-    S_DSP_EON_REGISTER, S_SMP_TIMER_0_REGISTER,
+    addresses, LoaderDataType, CENTER_PAN, COMMON_DATA_BYTES_PER_DIR,
+    COMMON_DATA_BYTES_PER_INSTRUMENTS, COMMON_DATA_HEADER_SIZE, COMMON_DATA_N_DIR_ITEMS_OFFSET,
+    COMMON_DATA_N_INSTRUMENTS_OFFSET, N_MUSIC_CHANNELS, SONG_HEADER_N_SUBROUTINES_OFFSET,
+    SONG_HEADER_SIZE, STARTING_VOLUME, S_DSP_EON_REGISTER, S_SMP_TIMER_0_REGISTER,
 };
 use crate::songs::SongData;
 use crate::time::TickCounter;
@@ -513,11 +512,11 @@ fn build_channel(
             next_event_is_key_off,
 
             instruction_ptr: match c.disabled {
-                true => addresses::CHANNEL_DISABLED_BYTECODE,
+                true => 0,
                 false => c
                     .instruction_ptr
                     .checked_add(common.song_data_addr)
-                    .unwrap_or(CHANNEL_DISABLED_BYTECODE),
+                    .unwrap_or(0),
             },
             return_ptr: match c.return_ptr {
                 Some(o) => o.checked_add(common.song_data_addr).unwrap_or(0),
@@ -554,14 +553,13 @@ fn build_channel(
     }
 }
 
-// Used by `interpret_song_subroutine()` to populate the unused channels
 const UNUSED_CHANNEL: Channel = Channel {
     soa: ChannelSoA {
         countdown_timer: 0,
         next_event_is_key_off: 0,
 
-        instruction_ptr: addresses::CHANNEL_DISABLED_BYTECODE,
-        return_ptr: addresses::CHANNEL_DISABLED_BYTECODE,
+        instruction_ptr: 0,
+        return_ptr: 0,
         loop_state: [
             LoopStateSoA {
                 counter: 0,
@@ -577,8 +575,8 @@ const UNUSED_CHANNEL: Channel = Channel {
             },
         ],
         inst_pitch_offset: 0,
-        volume: 0,
-        pan: 0,
+        volume: STARTING_VOLUME,
+        pan: CENTER_PAN,
         vibrato_pitch_offset_per_tick: 0,
         vibrato_tick_counter_start: 0,
         vibrato_tick_counter: 0,
@@ -611,22 +609,25 @@ pub fn interpret_song(
 
     let common = CommonAudioDataSoA::new(common_audio_data, stereo_flag, song_data_addr);
 
-    let channel_states: [ChannelState; N_MUSIC_CHANNELS] = std::array::from_fn(|i| {
-        let mut ci = ChannelInterpreter::new(song, i, target_ticks);
+    let channels: [Channel; N_MUSIC_CHANNELS] =
+        std::array::from_fn(|i| match song.channels().get(i) {
+            Some(Some(_)) => {
+                let mut ci = ChannelInterpreter::new(song, i, target_ticks);
 
-        valid &= ci.process_until_target();
+                valid &= ci.process_until_target();
 
-        if let Some(tco) = &ci.s.tick_clock_override {
-            if tco.when >= tick_clock_override.when {
-                tick_clock_override = tco.clone();
+                if let Some(tco) = &ci.s.tick_clock_override {
+                    if tco.when >= tick_clock_override.when {
+                        tick_clock_override = tco.clone();
+                    }
+                }
+
+                build_channel(&ci.s, target_ticks, &common)
             }
-        }
-        ci.s
-    });
+            Some(None) | None => UNUSED_CHANNEL,
+        });
 
     if valid {
-        let channels =
-            std::array::from_fn(|i| build_channel(&channel_states[i], target_ticks, &common));
         Some(InterpreterOutput {
             channels,
             tick_clock: tick_clock_override.timer_register,
