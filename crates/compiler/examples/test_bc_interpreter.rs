@@ -142,6 +142,13 @@ fn assert_bc_intrepreter_matches_emu(
             "channelsSoA.{name} mismatch (tick_count: {tick_count})"
         );
     };
+    let test_channel_soa_ptrs = |addr_l: u16, addr_h, name: &'static str| {
+        assert_eq!(
+            read_ptrs(int_apuram, addr_l, addr_h),
+            read_ptrs(emu_apuram, addr_l, addr_h),
+            "channelsSoA.{name} mismatch (tick_count: {tick_count})"
+        );
+    };
     let test_loop_state_soa = |addr: u16, name: &'static str| {
         let addr = usize::from(addr);
         let range = addr..addr + N_VOICES * N_NESTED_LOOPS;
@@ -162,11 +169,14 @@ fn assert_bc_intrepreter_matches_emu(
         "virtualChannels.adsr2OrGain",
     );
 
+    test_channel_soa_ptrs(
+        addresses::CHANNEL_RETURN_INST_PTR_L,
+        addresses::CHANNEL_RETURN_INST_PTR_H,
+        "returnInstPtr",
+    );
+
     test_channel_soa(addresses::CHANNEL_INSTRUCTION_PTR_L, "instructionPtr_l");
     test_channel_soa(addresses::CHANNEL_INSTRUCTION_PTR_H, "instructionPtr_h");
-
-    test_channel_soa(addresses::CHANNEL_RETURN_INST_PTR_L, "returnInstPtr_l");
-    test_channel_soa(addresses::CHANNEL_RETURN_INST_PTR_H, "returnInstPtr_h");
 
     test_channel_soa(addresses::CHANNEL_INST_PITCH_OFFSET, "instPitchOffset");
 
@@ -213,6 +223,18 @@ fn assert_bc_intrepreter_matches_emu(
             "ticks until next bytecode mismatch (tick_count: {tick_count}, voice: {v})"
         );
     }
+}
+
+fn read_ptrs(apuram: &[u8; 0x10000], addr_l: u16, addr_h: u16) -> [Option<u16>; N_VOICES] {
+    std::array::from_fn(|i| {
+        let h = apuram[usize::from(addr_h) + i];
+        if h != 0 {
+            let l = apuram[usize::from(addr_l) + i];
+            Some(u16::from_le_bytes([l, h]))
+        } else {
+            None
+        }
+    })
 }
 
 // returns u32::MAX if the channel is disabled

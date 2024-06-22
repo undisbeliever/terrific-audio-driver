@@ -101,7 +101,7 @@ struct ChannelState {
 
     instruction_ptr: u16,
     instruction_ptr_after_end: u16,
-    return_ptr: u16,
+    return_ptr: Option<u16>,
 
     loop_state: [LoopState; 3],
 
@@ -135,7 +135,7 @@ impl ChannelState {
                 .and_then(|c| c.loop_point)
                 .and_then(|lp| u16::try_from(lp.bytecode_offset).ok())
                 .unwrap_or(u16::MAX),
-            return_ptr: u16::MAX,
+            return_ptr: None,
             loop_state: Default::default(),
             instrument: None,
             adsr_or_gain_override: Some((0, 0)),
@@ -173,7 +173,7 @@ impl ChannelInterpreter<'_> {
         let mut ci = ChannelInterpreter::new(song, channel_id, target_ticks);
 
         ci.s.instruction_ptr = ci.read_subroutine_instruction_ptr(subroutine_index);
-        ci.s.return_ptr = u16::MAX;
+        ci.s.return_ptr = None;
 
         // Subroutine might not set an instruemnt before the play_note instructions.
         //
@@ -306,13 +306,19 @@ impl ChannelInterpreter<'_> {
                     let s_id = self.read_pc();
                     self.s.vibrato_pitch_offset_per_tick = 0;
 
-                    self.s.return_ptr = self.s.instruction_ptr;
+                    self.s.return_ptr = Some(self.s.instruction_ptr);
                     self.s.instruction_ptr = self.read_subroutine_instruction_ptr(s_id);
                 }
-                opcodes::RETURN_FROM_SUBROUTINE => {
-                    self.s.vibrato_pitch_offset_per_tick = 0;
-                    self.s.instruction_ptr = self.s.return_ptr;
-                }
+                opcodes::RETURN_FROM_SUBROUTINE => match self.s.return_ptr {
+                    Some(pc) => {
+                        self.s.return_ptr = None;
+                        self.s.vibrato_pitch_offset_per_tick = 0;
+                        self.s.instruction_ptr = pc;
+                    }
+                    None => {
+                        self.disable_channel();
+                    }
+                },
 
                 opcodes::SET_INSTRUMENT => {
                     self.s.instrument = Some(self.read_pc());
@@ -513,7 +519,10 @@ fn build_channel(
                     .checked_add(common.song_data_addr)
                     .unwrap_or(CHANNEL_DISABLED_BYTECODE),
             },
-            return_ptr: c.return_ptr.checked_add(common.song_data_addr).unwrap_or(0),
+            return_ptr: match c.return_ptr {
+                Some(o) => o.checked_add(common.song_data_addr).unwrap_or(0),
+                None => 0,
+            },
             loop_state: [
                 loop_soa(&c.loop_state[0], common),
                 loop_soa(&c.loop_state[1], common),
@@ -648,15 +657,14 @@ pub fn interpret_song_subroutine(
     let mut ci = ChannelInterpreter::new_subroutine_intrepreter(song, 0, subroutine_index, ticks);
     let valid = ci.process_until_target();
 
+    // return_ptr must be None so audio-driver disables the channel on a return_from_subroutine instruction
+    assert_eq!(ci.s.return_ptr, None, "Invalid return_ptr");
+
     if valid {
         Some(InterpreterOutput {
             channels: std::array::from_fn(|i| {
                 if i == 0 {
-                    let mut c = build_channel(&ci.s, ticks, &common);
-                    // Override `return_ptr` to ensure audio-driver stops at the first `return_from_subroutine` instruction.
-                    // (build_channel uses `return_ptr: 0` to match the audio driver)
-                    c.soa.return_ptr = addresses::CHANNEL_DISABLED_BYTECODE;
-                    c
+                    build_channel(&ci.s, ticks, &common)
                 } else {
                     UNUSED_CHANNEL.clone()
                 }

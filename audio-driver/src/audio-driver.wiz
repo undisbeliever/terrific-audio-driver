@@ -271,6 +271,8 @@ in firstpage {
         var instructionPtr_l : [u8 ; N_CHANNELS];
 
         // Address to return to in a `return_from_subroutine` bytecode
+        //
+        // If `returnInstPtr_h` is 0, `return_from_subroutine` will disable the channel instead.
         var returnInstPtr_l : [u8 ; N_CHANNELS];
         var returnInstPtr_h : [u8 ; N_CHANNELS];
 
@@ -1008,6 +1010,7 @@ func __reset_channel(channelIndex : u8 in x, pan: u8 in zpTmp) {
     a = 0;
 
     channelSoA.instructionPtrAfterEnd_h[x] = a;     // don't loop SFX
+    channelSoA.returnInstPtr_h[x] = a;              // clear subroutine return ptr
 
     channelSoA.nextEventIsKeyOff[x] = a;
     channelSoA.instPitchOffset[x] = a;
@@ -1583,12 +1586,17 @@ var _subroutineId : u8 in zpTmp;
 
 // KEEP: X
 func return_from_subroutine(channelIndex : u8 in x) {
-    // Disable vibrato
-    // Y IS NOT 0
-    // (no stz instruction)
-    channelSoA.vibrato_pitchOffsetPerTick[x] = a = 0;
+    // Disable channel if not in a subroutine.
+    a = channelSoA.returnInstPtr_h[x];
+    goto disable_channel if zero;
 
-    y = a = channelSoA.returnInstPtr_h[x];
+    y = a;
+
+    // Reset subroutine return ptr and vibrato
+    a = 0;
+    channelSoA.returnInstPtr_h[x] = a;
+    channelSoA.vibrato_pitchOffsetPerTick[x] = a;
+
     a = channelSoA.returnInstPtr_l[x];
 
     ^return process_bytecode_with_loader_test(x, ya);
