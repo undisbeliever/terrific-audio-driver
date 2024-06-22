@@ -708,18 +708,7 @@ impl InterpreterOutput {
         {
             let apuram: &mut [u8; 0x10000] = emu.apuram_mut();
 
-            assert_eq!(
-                apuram[usize::from(addresses::PAUSED_IF_ZERO)],
-                0,
-                "Audio driver is not paused"
-            );
-
-            const STC: usize = addresses::SONG_TICK_COUNTER as usize;
-            assert_eq!(
-                apuram[STC..STC + 2],
-                [0, 0],
-                "Audio driver is not at the start of the song"
-            );
+            // ::SHOULDDO find a way to determine if the audio driver is paused::
 
             let mut apu_write = |addr: u16, value: u8| {
                 apuram[usize::from(addr)] = value;

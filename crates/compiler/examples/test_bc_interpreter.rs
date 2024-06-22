@@ -295,14 +295,16 @@ fn test_bc_intrepreter(song: &SongData, common_audio_data: &CommonAudioData) {
         for _ in 0..17 {
             emu.emulate();
         }
+
         // Pausing the emulator ensures all bytecode instructions have completed
         emu.write_io_ports([io_commands::PAUSE, 0, 0, 0]);
         emu.emulate();
 
+        // Confirm previous command was acknowledged by the audio driver.
         assert_eq!(
-            emu.apuram()[usize::from(addresses::PAUSED_IF_ZERO)],
-            0,
-            "Audio driver is not paused"
+            emu.read_io_ports()[0],
+            io_commands::PAUSE,
+            "audio driver not paused"
         );
 
         const STC: usize = addresses::SONG_TICK_COUNTER as usize;

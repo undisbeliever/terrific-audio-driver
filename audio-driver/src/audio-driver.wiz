@@ -83,10 +83,6 @@ in zeropage {
     // Increases once every song tick
     var songTickCounter : u16;
 
-    // If this variable is zero, the audio driver is paused.
-    // (using zero so the audio driver starts paused)
-    var pausedIfZero : u8;
-
 
     // A bitmask of the channels that can send key-on events.
     //
@@ -587,18 +583,19 @@ func main() {
 
     io_commands.init__inline();
 
+
+    // Reset counters to ensure `maxTimerCounter` is accurate
+    // Timers and counters reset when the timer control bits transition from 0 to 1
+    smp.control = 0;
+
     // (cannot use `bbs` instructions in wiz, using `mov1 c, addr, bit` instead)
     carry = loaderDataType $ LoaderDataType.PLAY_SONG_BIT;
     if carry {
-        io_commands.unpause();
+        smp.control = smp.CONTROL__ENABLE_TIMER_0 | smp.CONTROL__ENABLE_TIMER_1;
     }
 
     while true {
-        do {
-            io_commands.process_io_ports__inline();
-
-            a = pausedIfZero;
-        } while zero;
+        io_commands.process_io_ports__inline();
 
         // Song tick timer
         a = smp.counter_0;
@@ -910,17 +907,14 @@ func null_command(unused : u8 in y) {
 func pause() {
     write_dsp(GlobalDspAddr.KOFF, 0xff);  // all keys off
 
-    pausedIfZero = 0;
+    // Disable timers
+    smp.control = 0;
 }
 
 
 func unpause() {
-    // Reset counters to ensure `maxTimerCounter` is accurate
-    // Timers and counters reset when the timer control bits transition from 0 to 1
-    smp.control = 0;
+    // Enable music and sfx timers
     smp.control = smp.CONTROL__ENABLE_TIMER_0 | smp.CONTROL__ENABLE_TIMER_1;
-
-    pausedIfZero = 1;
 }
 
 
