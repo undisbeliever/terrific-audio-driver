@@ -870,12 +870,14 @@ inline func process_io_ports__inline() {
 
     // Execute the loader if the _SWITCH_TO_LOADER_BIT is set.
     //
-    // (cannot use `bbs` instructions in wiz, using two `and dp` instructions instead)
-    a = (1 << IO.ToDriver._SWITCH_TO_LOADER_BIT);
-    a &= IO.ToDriver.switch_to_loader;
-    a &= IO.ToDriver.switch_to_loader;
-    if !zero {
-        ^goto (LOADER_ADDR as func);
+    // (cannot use `bbc` instructions in wiz, using two `MOV1 ; bcc` instructions instead)
+    carry = IO.ToDriver.switch_to_loader $ IO.ToDriver._SWITCH_TO_LOADER_BIT;
+    if carry {
+        // Read the IO port a second time just in case it was a glitch
+        carry = IO.ToDriver.switch_to_loader $ IO.ToDriver._SWITCH_TO_LOADER_BIT;
+        if carry {
+            ^goto (LOADER_ADDR as func);
+        }
     }
 }
 
@@ -1240,10 +1242,9 @@ var _target_h : u8 in zpTmp;
 func __bbs_loader_bit_set(channelIndex : u8 in x, addr : u16 in ya) {
     // Test the SWITCH_TO_LOADER_BIT a second time (just to be safe) before switching to the loader
 
-    let _MASK = 1 << IO.ToDriver._SWITCH_TO_LOADER_BIT;
-
-    a = IO.ToDriver.switch_to_loader & _MASK;
-    goto process_bytecode if zero;
+    // (cannot use `bbc` instructions in wiz, using an `MOV1 ; bcc` instruction instead)
+    carry = IO.ToDriver.switch_to_loader $ IO.ToDriver._SWITCH_TO_LOADER_BIT;
+    goto process_bytecode if !carry;
 
     ^goto (LOADER_ADDR as func);
 }
