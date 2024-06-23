@@ -256,9 +256,6 @@ in zeropage {
 
 
 in firstpage {
-    // ::BUGFIX fixes a missing channelSoA variable in the symbol file::
-    var __padding : u8;
-
 
     // Channel variables that do not fit in zeropage
     namespace channelSoA {
@@ -539,6 +536,9 @@ func main() {
 
         x--;
     } while !negative;
+
+    // Set keyOnMask for all music channels.
+    keyOnMask_music = (1 << N_MUSIC_CHANNELS) - 1;
 
 
     // No need to reset SFX channels.
@@ -980,6 +980,17 @@ func __play_sfx_on_channel(channelIndex : u8 in x, sfx_id : u8 in y) {
     channelSoA.instructionPtr_l[x] = a = commonData.soundEffects_l[y];
     channelSoA.instructionPtr_h[x] = a = commonData.soundEffects_h[y];
 
+
+    // Set keyOnMask.  The next play-note instruction will queue a KON event.
+    a = ChannelVoiceBit[x];
+    test_and_set(a, keyOnMask_sfx);
+
+    test_and_clear(a, eonShadow_sfx);
+
+    // Mark as active
+    test_and_set(a, activeSoundEffects);
+
+
 // Fallthrough into __reset_channel()
 }
 
@@ -987,6 +998,8 @@ func __play_sfx_on_channel(channelIndex : u8 in x, sfx_id : u8 in y) {
 
 // NOTE: Does not set:
 //  * channelSoA.instructionPtr
+//  * keyOnMask
+//  * eonShadow
 //
 // NOTE: Also disables `end` looping (instructionPtrAfterEnd).
 //
@@ -1016,21 +1029,6 @@ func __reset_channel(channelIndex : u8 in x, pan: u8 in zpTmp) {
     // Set channel volume
     channelSoA.volume[x] = a = STARTING_VOLUME;
     channelSoA.pan[x] = a = pan;
-
-
-    // Set keyOnMask.  The next play-note instruction will queue a KON event.
-    a = ChannelVoiceBit[x];
-    if x >= FIRST_SFX_CHANNEL {
-        test_and_set(a, keyOnMask_sfx);
-        test_and_clear(a, eonShadow_sfx);
-
-        // Mark as active
-        test_and_set(a, activeSoundEffects);
-    }
-    else {
-        test_and_set(a, keyOnMask_music);
-        test_and_clear(a, eonShadow_music);
-    }
 }
 
 
