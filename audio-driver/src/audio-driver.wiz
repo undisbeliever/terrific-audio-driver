@@ -998,6 +998,8 @@ func __play_sfx_on_channel(channelIndex : u8 in x, sfx_id : u8 in y) {
 
 // NOTE: Does not set:
 //  * channelSoA.instructionPtr
+//  * instrument/envelope
+//  * virtual channels
 //  * keyOnMask
 //  * eonShadow
 //
@@ -1009,8 +1011,6 @@ func __reset_channel(channelIndex : u8 in x, pan: u8 in zpTmp) {
 
     channelSoA.instructionPtrAfterEnd_h[x] = a;     // don't loop SFX
     channelSoA.returnInstPtr_h[x] = a;              // clear subroutine return ptr
-
-    channelSoA.instPitchOffset[x] = a;
 
     // Disable portamento
     channelSoA.portamento_direction[x] = a as i8;
