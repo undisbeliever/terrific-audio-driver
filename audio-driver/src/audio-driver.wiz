@@ -1005,15 +1005,11 @@ func __play_sfx_on_channel(channelIndex : u8 in x, sfx_id : u8 in y) {
 //
 // KEEP: X
 func __reset_channel(channelIndex : u8 in x, pan: u8 in zpTmp) {
-    // Immediately process the next event
-    channelSoA.countdownTimer[x] = a = 1;
-
     a = 0;
 
     channelSoA.instructionPtrAfterEnd_h[x] = a;     // don't loop SFX
     channelSoA.returnInstPtr_h[x] = a;              // clear subroutine return ptr
 
-    channelSoA.nextEventIsKeyOff[x] = a;
     channelSoA.instPitchOffset[x] = a;
 
     // Disable portamento
@@ -1022,9 +1018,13 @@ func __reset_channel(channelIndex : u8 in x, pan: u8 in zpTmp) {
     // Disable vibrato
     channelSoA.vibrato_pitchOffsetPerTick[x] = a;
 
-
     // Clear volShadowValid flag, so vol_l and vol_r is updated after the next bytecode instruction.
     channelSoA.volShadowValid[x] = a;   // a = 0
+
+    // Immediately process bytecode on the next tick
+    channelSoA.nextEventIsKeyOff[x] = a; // a = 0
+    a++;
+    channelSoA.countdownTimer[x] = a;    // a = 1
 
     // Set channel volume
     channelSoA.volume[x] = a = STARTING_VOLUME;
