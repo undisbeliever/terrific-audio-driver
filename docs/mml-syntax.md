@@ -80,7 +80,7 @@ Instrument ids can be decimal numbers or alphanumeric.
 Channels
 ========
 
-Lines starting with `A` - `F` select which track the MML will be played on.
+Lines starting with `A` - `H` select which track the MML will be played on.
 
 The channels must be separated from the MML by a space or tab.
 
@@ -332,7 +332,9 @@ Engine Limitations
 
 This audio engine was designed to be simple, to that effect the following limitations apply:
 
- * Only 6 channels can be used for music.  2 channels are dedicated to sound effects.
+ * Song channels `G` and `H` are also used for sound effects.
+    * When a sound effect is playing, song channels `G` and/or `H` will be ducked (temporally muted).
+    * The sound effects window (SFX button or Menu > Audio > Sound Effects) can be used to test how channel ducking affects the song.
  * To prevent popping, there needs to be a 8 millisecond delay between key-off and key-on events.  This is accomplished by:
     * Setting a minimum tick-clock of 8ms.
     * Subtracting a single tick from every non-slurred note and adding a 1-tick rest after a key-off event.

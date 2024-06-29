@@ -90,11 +90,13 @@ pub mod addresses {
 
 pub const TAD_IO_VERSION: usize = _symbols::TAD_IO_VERSION;
 
-pub const N_MUSIC_CHANNELS: usize = 6;
+pub const N_MUSIC_CHANNELS: usize = 8;
 pub const N_SFX_CHANNELS: usize = 2;
+pub const N_CHANNELS: usize = N_MUSIC_CHANNELS + N_SFX_CHANNELS;
+
 pub const FIRST_SFX_CHANNEL: usize = N_MUSIC_CHANNELS;
 
-pub const N_VOICES: usize = 8;
+pub const N_DSP_VOICES: usize = 8;
 
 pub const N_NESTED_LOOPS: usize = 3;
 

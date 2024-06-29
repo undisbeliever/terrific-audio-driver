@@ -102,10 +102,16 @@ in zeropage {
     var maxTimerCounter : u8;
 
 
+    // bitmask - Set if S-DSP voice channel is music, clear if sfx.
+    // Used to disable music channel S-DSP writes that are used by sound effects.
+    // Bits 0-5 MUST be set.
+    // MUST be equal to `~activeSoundEffects`.
+    var musicSfxChannelMask : u8;
+
+    // bitmask - Set if S-DSP voice channel is sfx.
+    // Used to disable S-DSP voice register writes for unused sfx channels.
     // Used to determine the next available sound effect channel.
-    //  * Set in `__reset_channel()`
-    //  * Cleared in `disable_channel()`
-    // (bitfield)
+    // MUST be equal to `~musicSfxChannelMask`.
     var activeSoundEffects : u8;
 
 
@@ -453,7 +459,9 @@ func main() {
     } while !zero;
 
 
-    enabledChannelsMask = 0xff;
+    a = 0xff;
+    musicSfxChannelMask = a;
+    enabledChannelsMask = a;
 
 
     // Calculate common audio data addresses
@@ -664,14 +672,15 @@ inline func __clear_echo_buffer__inline(esa : u8 in x) {
 
 
 inline func _process_music_channels__inline() {
-    write_dsp(GlobalDspAddr.KOFF, keyOffShadow_music);
+    y = a = keyOffShadow_music & musicSfxChannelMask;
+    write_dsp(GlobalDspAddr.KOFF, y);
 
-    zpTmp = a = keyOnShadow_music & enabledChannelsMask;
+    zpTmp = a = keyOnShadow_music & musicSfxChannelMask & enabledChannelsMask;
 
     keyOnShadow_music = 0;
     keyOffShadow_music = 0;
 
-    a = voiceChannelsDirty_music;
+    a = voiceChannelsDirty_music & musicSfxChannelMask;
     __process_channels(a, zpTmp, FIRST_MUSIC_CHANNEL + 1, LAST_MUSIC_CHANNEL + 1);
 
     voiceChannelsDirty_music = voiceChannelsDirty_tmp;
@@ -679,6 +688,9 @@ inline func _process_music_channels__inline() {
 
 
 inline func _process_sfx_channels__inline() {
+    // No need to mask sfx keyOff/keyOn events.
+    // The sfx channels do not emit key-off or key-on events when disabled.
+
     write_dsp(GlobalDspAddr.KOFF, keyOffShadow_sfx);
 
     zpTmp = a = keyOnShadow_sfx & enabledChannelsMask;
@@ -686,7 +698,8 @@ inline func _process_sfx_channels__inline() {
     keyOnShadow_sfx = 0;
     keyOffShadow_sfx = 0;
 
-    a = voiceChannelsDirty_sfx;
+    // DSP voice register writes must be masked
+    a = voiceChannelsDirty_sfx & activeSoundEffects;
     __process_channels(a, zpTmp, FIRST_SFX_CHANNEL + 1, LAST_SFX_CHANNEL + 1);
 
     voiceChannelsDirty_sfx = voiceChannelsDirty_tmp;
@@ -762,7 +775,8 @@ var _afterFirstChannel : u8 in zpTmp2;
     } while x >= _afterFirstChannel;
 
 
-    y = a = eonShadow_music | eonShadow_sfx;
+    // ASSUMES `eonShadow_sfx` only set for active sfx channels
+    y = a = (eonShadow_music & musicSfxChannelMask) | eonShadow_sfx;
     write_dsp(GlobalDspAddr.EON, y);
 
     write_dsp(GlobalDspAddr.KON, _konShadow);
@@ -963,7 +977,7 @@ func play_sound_effect(sfx_id : u8 in y) {
         inline for let i in 0..(N_SFX_CHANNELS - 1) {
             a <<<= 1;
             if !carry {
-                x = 7 - i;
+                x = LAST_SFX_CHANNEL - i;
                 return __play_sfx_on_channel(x, y);
             }
         }
@@ -990,7 +1004,9 @@ func __play_sfx_on_channel(channelIndex : u8 in x, sfx_id : u8 in y) {
     // Disable echo
     test_and_clear(a, eonShadow_sfx);
 
-    // Mark as active
+    // Disable music S-DSP writes for channel X
+    test_and_clear(a, musicSfxChannelMask);
+    // Enable sfx channel.
     test_and_set(a, activeSoundEffects);
 
 
@@ -1521,7 +1537,13 @@ func disable_channel(channelIndex : u8 in x) {
     a = ChannelVoiceBit[x];
     if x >= FIRST_SFX_CHANNEL {
         test_and_set(a, keyOffShadow_sfx);
-        // Also mark SFX as not active
+
+        // Disable echo
+        test_and_clear(a, eonShadow_sfx);
+
+        // Enable music S-DSP writes for channel X.
+        test_and_set(a, musicSfxChannelMask);
+        // Disable sfx S-DSP writes.
         test_and_clear(a, activeSoundEffects);
     }
     else {
@@ -1910,11 +1932,14 @@ func set_song_tick_clock(channelIndex : u8 in x, timer_clock: u8 in a) {
 
 // Using the `code` bank so the data is included in `audio-driver.bin`
 in code {
+    // The S-DSP voice used by each channel
+    let __VOICE_CHANNELS = [0, 1, 2, 3, 4, 5, 6, 7, 6, 7];
+
     // The bit used for global DSP registers (KON, KOFF, NON, EON, etc)
-    const ChannelVoiceBit : [u8; 8] = [1 << i for let i in 0..7];
+    const ChannelVoiceBit : [u8; N_CHANNELS] = [1 << i for let i in __VOICE_CHANNELS];
 
     // The address of the last writeable voice DSP register for each channel
-    const LastVoiceRegister : [u8; 8] = [i * 0x10 | 0x07 for let i in 0..7];
+    const LastVoiceRegister : [u8; N_CHANNELS] = [i * 0x10 | 0x07 for let i in __VOICE_CHANNELS];
 
     // Used by `stop_sound_effects`.
     const ChannelDisabledBytecode : [ u8; 1 ] = [ bytecode.DISABLE_CHANNEL_BYTECODE ];

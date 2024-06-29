@@ -10,8 +10,9 @@ use crate::common_audio_data::CommonAudioData;
 use crate::driver_constants::{
     addresses, LoaderDataType, CENTER_PAN, COMMON_DATA_BYTES_PER_DIR,
     COMMON_DATA_BYTES_PER_INSTRUMENTS, COMMON_DATA_HEADER_SIZE, COMMON_DATA_N_DIR_ITEMS_OFFSET,
-    COMMON_DATA_N_INSTRUMENTS_OFFSET, N_MUSIC_CHANNELS, SONG_HEADER_N_SUBROUTINES_OFFSET,
-    SONG_HEADER_SIZE, STARTING_VOLUME, S_DSP_EON_REGISTER, S_SMP_TIMER_0_REGISTER,
+    COMMON_DATA_N_INSTRUMENTS_OFFSET, N_CHANNELS, N_MUSIC_CHANNELS,
+    SONG_HEADER_N_SUBROUTINES_OFFSET, SONG_HEADER_SIZE, STARTING_VOLUME, S_DSP_EON_REGISTER,
+    S_SMP_TIMER_0_REGISTER,
 };
 use crate::songs::SongData;
 use crate::time::TickCounter;
@@ -788,7 +789,7 @@ impl InterpreterOutput {
                 for (li, loop_state) in c.loop_state.iter().enumerate() {
                     let li = u16::try_from(li).unwrap();
                     let mut write_ls = |addr: u16, value: u8| {
-                        const SOA_ARRAY_SIZE: u16 = 8;
+                        const SOA_ARRAY_SIZE: u16 = N_CHANNELS as u16;
                         soa_write_u8(addr + li * SOA_ARRAY_SIZE, value);
                     };
                     write_ls(addresses::CHANNEL_LOOP_STATE_COUNTER, loop_state.counter);

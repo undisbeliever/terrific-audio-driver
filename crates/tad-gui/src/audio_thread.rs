@@ -11,6 +11,9 @@ use compiler::audio_driver;
 use compiler::bytecode_interpreter;
 use compiler::common_audio_data::CommonAudioData;
 use compiler::driver_constants::MAX_PAN;
+use compiler::driver_constants::N_CHANNELS;
+use compiler::driver_constants::N_DSP_VOICES;
+use compiler::driver_constants::N_MUSIC_CHANNELS;
 use compiler::driver_constants::{
     addresses, io_commands, LoaderDataType, CENTER_PAN, FIRST_SFX_CHANNEL, IO_COMMAND_I_MASK,
     IO_COMMAND_MASK, N_SFX_CHANNELS,
@@ -43,8 +46,6 @@ const BRR_SAMPLE_RATE: i32 = 32000;
 /// Approximate number of samples to play a looping BRR sample for
 const LOOPING_BRR_SAMPLE_SAMPLES: usize = 24000;
 
-pub const N_VOICES: usize = 8;
-
 // Amount of Audio-RAM (in common-audio-data) to allocate to sound effects
 pub const SFX_BUFFER_SIZE: usize = 128;
 
@@ -69,7 +70,7 @@ impl ChannelsMask {
 
     pub fn only_one_channel(channel_name: char) -> Self {
         const FIRST: u32 = 'A' as u32;
-        const LAST: u32 = 'A' as u32 + N_VOICES as u32 - 1;
+        const LAST: u32 = 'A' as u32 + N_DSP_VOICES as u32 - 1;
 
         let c = u32::from(channel_name);
         match c {
@@ -142,9 +143,9 @@ impl PrivateToken {
 #[derive(Debug, Default, Clone)]
 pub struct AudioMonitorData {
     pub song_id: Option<ItemId>,
-    pub voice_instruction_ptrs: [Option<u16>; N_VOICES],
+    pub voice_instruction_ptrs: [Option<u16>; N_MUSIC_CHANNELS],
     /// May not be valid.
-    pub voice_return_inst_ptrs: [Option<u16>; N_VOICES],
+    pub voice_return_inst_ptrs: [Option<u16>; N_MUSIC_CHANNELS],
 }
 
 impl AudioMonitorData {
@@ -791,11 +792,11 @@ impl TadEmu {
         self.emu.emulate()
     }
 
-    /// Returns None if the song has finished
+    /// Returns None if the song and sound effects have finished
     fn read_voice_positions(&self) -> Option<AudioMonitorData> {
         const CHANNEL_INSTRUCTION_PTR_H_RANGE: Range<usize> = Range {
             start: addresses::CHANNEL_INSTRUCTION_PTR_H as usize,
-            end: addresses::CHANNEL_INSTRUCTION_PTR_H as usize + N_VOICES,
+            end: addresses::CHANNEL_INSTRUCTION_PTR_H as usize + N_CHANNELS,
         };
         const COMMON_DATA_ADDR_H: u8 = (addresses::COMMON_DATA >> 8) as u8;
 
@@ -812,9 +813,9 @@ impl TadEmu {
 
         let enabled_channels_mask = apuram[addresses::ENABLED_CHANNELS_MASK as usize];
 
-        let read_offsets = |addr_l: u16, addr_h: u16| -> [Option<u16>; N_VOICES] {
+        let read_offsets = |addr_l: u16, addr_h: u16| -> [Option<u16>; N_MUSIC_CHANNELS] {
             std::array::from_fn(|i| {
-                const _: () = assert!(N_VOICES <= 8);
+                const _: () = assert!(N_MUSIC_CHANNELS <= 8);
 
                 if enabled_channels_mask & (1 << i) != 0 {
                     let word = u16::from_le_bytes([

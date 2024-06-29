@@ -148,14 +148,7 @@ pub(super) fn split_mml_song_lines(
     let mut headers = Vec::new();
     let mut instruments = Vec::new();
     let mut subroutines: Vec<(Identifier, Vec<MmlLine>)> = Vec::new();
-    let mut channels: [Vec<MmlLine>; N_MUSIC_CHANNELS] = [
-        Vec::new(),
-        Vec::new(),
-        Vec::new(),
-        Vec::new(),
-        Vec::new(),
-        Vec::new(),
-    ];
+    let mut channels: [Vec<MmlLine>; N_MUSIC_CHANNELS] = Default::default();
     let mut sections = Vec::new();
 
     let mut subroutine_map: HashMap<Identifier, usize> = HashMap::new();

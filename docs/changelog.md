@@ -5,6 +5,7 @@ Version 0.0.10
 ==============
 
 Audio driver changes:
+ * Increased the number of music channels to 8.
  * Rewrote the main loop
     * Virtual channel valid/dirty state is stored in a bitset in preparation for channel ducking.
     * IO ports are read a lot more often.

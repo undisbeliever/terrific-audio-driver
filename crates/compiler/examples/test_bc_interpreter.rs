@@ -13,7 +13,7 @@ use compiler::{
     common_audio_data::{build_common_audio_data, CommonAudioData},
     data::{load_project_file, load_text_file_with_limit, validate_project_file_names},
     driver_constants::{
-        addresses, io_commands, LoaderDataType, N_NESTED_LOOPS, N_VOICES, S_DSP_EON_REGISTER,
+        addresses, io_commands, LoaderDataType, N_CHANNELS, N_NESTED_LOOPS, S_DSP_EON_REGISTER,
         S_SMP_TIMER_0_REGISTER,
     },
     mml::compile_mml,
@@ -135,7 +135,7 @@ fn assert_bc_intrepreter_matches_emu(
 
     let test_channel_soa = |addr: u16, name: &'static str| {
         let addr = usize::from(addr);
-        let range = addr..addr + N_VOICES;
+        let range = addr..addr + N_CHANNELS;
         assert_eq!(
             int_apuram[range.clone()],
             emu_apuram[range],
@@ -151,7 +151,7 @@ fn assert_bc_intrepreter_matches_emu(
     };
     let test_loop_state_soa = |addr: u16, name: &'static str| {
         let addr = usize::from(addr);
-        let range = addr..addr + N_VOICES * N_NESTED_LOOPS;
+        let range = addr..addr + N_CHANNELS * N_NESTED_LOOPS;
         assert_eq!(
             int_apuram[range.clone()],
             emu_apuram[range],
@@ -218,7 +218,7 @@ fn assert_bc_intrepreter_matches_emu(
         "channel_loopState_loopPoint_h",
     );
 
-    for v in 0..N_VOICES {
+    for v in 0..N_CHANNELS {
         assert_eq!(
             read_ticks_until_next_bytecode(int_apuram, v),
             read_ticks_until_next_bytecode(emu_apuram, v),
@@ -227,7 +227,7 @@ fn assert_bc_intrepreter_matches_emu(
     }
 }
 
-fn read_ptrs(apuram: &[u8; 0x10000], addr_l: u16, addr_h: u16) -> [Option<u16>; N_VOICES] {
+fn read_ptrs(apuram: &[u8; 0x10000], addr_l: u16, addr_h: u16) -> [Option<u16>; N_CHANNELS] {
     std::array::from_fn(|i| {
         let h = apuram[usize::from(addr_h) + i];
         if h != 0 {
@@ -241,7 +241,7 @@ fn read_ptrs(apuram: &[u8; 0x10000], addr_l: u16, addr_h: u16) -> [Option<u16>; 
 
 // returns u32::MAX if the channel is disabled
 fn read_ticks_until_next_bytecode(apuram: &[u8; 0x10000], v: usize) -> u32 {
-    assert!(v < N_VOICES);
+    assert!(v < N_CHANNELS);
     let read = |addr: u16| apuram[usize::from(addr) + v];
 
     if read(addresses::CHANNEL_INSTRUCTION_PTR_H) > addresses::COMMON_DATA.to_le_bytes()[1] {

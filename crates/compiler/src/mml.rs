@@ -38,15 +38,15 @@ use std::collections::HashMap;
 use std::ops::RangeInclusive;
 
 pub const FIRST_MUSIC_CHANNEL: char = 'A';
-pub const LAST_MUSIC_CHANNEL: char = 'F';
-const MUSIC_CHANNEL_RANGE: RangeInclusive<char> = 'A'..='F';
+pub const LAST_MUSIC_CHANNEL: char = 'H';
+const MUSIC_CHANNEL_RANGE: RangeInclusive<char> = 'A'..='H';
 
 const _: () = assert!(
     *MUSIC_CHANNEL_RANGE.end() as usize - *MUSIC_CHANNEL_RANGE.start() as usize + 1
         == N_MUSIC_CHANNELS
 );
 
-const CHANNEL_NAMES: [&str; N_MUSIC_CHANNELS] = ["A", "B", "C", "D", "E", "F"];
+const CHANNEL_NAMES: [&str; N_MUSIC_CHANNELS] = ["A", "B", "C", "D", "E", "F", "G", "H"];
 
 pub use self::bc_generator::MAX_BROKEN_CHORD_NOTES;
 pub use self::instruments::MmlInstrument;
