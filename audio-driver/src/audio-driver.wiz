@@ -982,10 +982,12 @@ func __play_sfx_on_channel(channelIndex : u8 in x, sfx_id : u8 in y) {
     channelSoA.instructionPtr_h[x] = a = commonData.soundEffects_h[y];
 
 
-    // Set keyOnMask.  The next play-note instruction will queue a KON event.
     a = ChannelVoiceBit[x];
+    // Send a key-off event, the S-DSP voice channel might be active.
+    test_and_set(a, keyOffShadow_sfx);
+    // Set keyOnMask.  The next play-note instruction will queue a KON event.
     test_and_set(a, keyOnMask_sfx);
-
+    // Disable echo
     test_and_clear(a, eonShadow_sfx);
 
     // Mark as active
