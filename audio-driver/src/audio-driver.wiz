@@ -192,12 +192,6 @@ in zeropage {
         var loopState_counter : [[u8 ; N_CHANNELS] ; bytecode.MAX_NESTED_LOOPS];
 
 
-        // Offset between the note to play and the pitch table.
-        //
-        // NOTE: Adding `instPitchOffset` to the note to play is allowed to an can overflow.
-        var instPitchOffset : [u8 ; N_CHANNELS];
-
-
         // Used to determine if vol_l and vol_r need recalculating.
         //
         // This is a per-channel flag so it can be cleared in __reset_channel().
@@ -220,10 +214,6 @@ in zeropage {
         // (pitch change/tick)
         var portamento_speed : [u8 ; N_CHANNELS];
 
-        // Portamento target pitch
-        var portamento_target_l : [u8 ; N_CHANNELS];
-        var portamento_target_h : [u8 ; N_CHANNELS];
-
 
 
         // Vibrato PITCH offset per tick.
@@ -233,24 +223,11 @@ in zeropage {
         // (pitch change/tick)
         var vibrato_pitchOffsetPerTick : [u8 ; N_CHANNELS];
 
-        // Used to determine the vibrato pitch shift direction for the current vibrato tick counter.
-        //
-        // This variable is equal to `vibrato_waveLengthInTicks / 2`
-        var vibrato_directionComparator : [u8 ; N_CHANNELS];
-
         // Vibrato tick counter
         //  * Starts at `vibrato_tickCounterStart` to offset the vibrato pitch-shift
         //  * Counts down from `vibrato_waveLengthInTicks` to 0.
         //  * If 0, there are 256 ticks remaining
         var vibrato_tickCounter : [u8 ; N_CHANNELS];
-
-        // The value to reset the tick counter to when playing a note or starting a vibrato.
-        //
-        // This variable is equal to the `quarterWavelengthInTicks` parameter of the `set_vibrato` instruction
-        // This variable is equal to `vibrato_waveLengthInTicks / 4`
-        //
-        // Offsetting the start of the vibrato allows me to save a comparison in `process_pitch_effects__inline()`.
-        var vibrato_tickCounterStart : [u8 ; N_CHANNELS];
     }
 }
 
@@ -259,12 +236,30 @@ in firstpage {
 
     // Channel variables that do not fit in zeropage
     namespace channelSoA {
+        // Portamento target pitch
+        var portamento_target_l : [u8 ; N_CHANNELS];
+        var portamento_target_h : [u8 ; N_CHANNELS];
+
+
+        // Used to determine the vibrato pitch shift direction for the current vibrato tick counter.
+        //
+        // This variable is equal to `vibrato_waveLengthInTicks / 2`
+        var vibrato_directionComparator : [u8 ; N_CHANNELS];
+
         // The length of the vibrato wavelength in ticks.
         //
         // If this value is 0. The wavelength is 256 ticks.
         //
         // This variable is equal to `4 * vibrato_tickCounterStart`
         var vibrato_waveLengthInTicks : [u8 ; N_CHANNELS];
+
+        // The value to reset the tick counter to when playing a note or starting a vibrato.
+        //
+        // This variable is equal to the `quarterWavelengthInTicks` parameter of the `set_vibrato` instruction
+        // This variable is equal to `vibrato_waveLengthInTicks / 4`
+        //
+        // Offsetting the start of the vibrato allows me to save a comparison in `process_pitch_effects__inline()`.
+        var vibrato_tickCounterStart : [u8 ; N_CHANNELS];
 
 
         // The address of the next bytecode to execute
@@ -291,6 +286,12 @@ in firstpage {
 
         // Channel pan (0-MAX_PAN)
         var pan : [u8 ; N_CHANNELS];
+
+
+        // Offset between the note to play and the pitch table.
+        //
+        // NOTE: Adding `instPitchOffset` to the note to play is allowed to an can overflow.
+        var instPitchOffset : [u8 ; N_CHANNELS];
     }
 }
 
@@ -1398,16 +1399,14 @@ func _play_note(channelIndex : u8 in x, noteAndKeyOffBit : u8 in a) {
     a = instructionPtr[y];
     instructionPtr++;
 
-    // MUST NOT USE A
+    channelSoA.countdownTimer[x] = a;
 
     // Y = 0
     // disable portamento
     channelSoA.portamento_direction[x] = y as i8;
 
     // Restart vibrato
-    channelSoA.vibrato_tickCounter[x] = y = channelSoA.vibrato_tickCounterStart[x];
-
-    channelSoA.countdownTimer[x] = a;
+    channelSoA.vibrato_tickCounter[x] = a = channelSoA.vibrato_tickCounterStart[x];
 }
 
 
