@@ -105,13 +105,12 @@ in zeropage {
     // bitmask - Set if S-DSP voice channel is music, clear if sfx.
     // Used to disable music channel S-DSP writes that are used by sound effects.
     // Bits 0-5 MUST be set.
-    // MUST be equal to `~activeSoundEffects`.
+    // MUST ONLY be modified by `_process_sfx_channels__inline()`.
     var musicSfxChannelMask : u8;
 
     // bitmask - Set if S-DSP voice channel is sfx.
     // Used to disable S-DSP voice register writes for unused sfx channels.
     // Used to determine the next available sound effect channel.
-    // MUST be equal to `~musicSfxChannelMask`.
     var activeSoundEffects : u8;
 
 
@@ -604,7 +603,7 @@ func main() {
         smp.control = smp.CONTROL__ENABLE_TIMER_0 | smp.CONTROL__ENABLE_TIMER_1;
     }
 
-    while true {
+    ^while true {
         io_commands.process_io_ports__inline();
 
         // Song tick timer
@@ -690,6 +689,11 @@ inline func _process_music_channels__inline() {
 inline func _process_sfx_channels__inline() {
     // No need to mask sfx keyOff/keyOn events.
     // The sfx channels do not emit key-off or key-on events when disabled.
+
+    // Update `musicSfxChannelMask`.
+    // Music channels can only write to the S-DSP when the sound effect is disabled AND there is no key-off event.
+    // Prevents an audio glitch when a music channel writes to a voice channel in the middle of the key-off release envelope.
+    musicSfxChannelMask = a = (activeSoundEffects | keyOffShadow_sfx) ^ 0xff;
 
     write_dsp(GlobalDspAddr.KOFF, keyOffShadow_sfx);
 
@@ -1004,8 +1008,6 @@ func __play_sfx_on_channel(channelIndex : u8 in x, sfx_id : u8 in y) {
     // Disable echo
     test_and_clear(a, eonShadow_sfx);
 
-    // Disable music S-DSP writes for channel X
-    test_and_clear(a, musicSfxChannelMask);
     // Enable sfx channel.
     test_and_set(a, activeSoundEffects);
 
@@ -1541,8 +1543,6 @@ func disable_channel(channelIndex : u8 in x) {
         // Disable echo
         test_and_clear(a, eonShadow_sfx);
 
-        // Enable music S-DSP writes for channel X.
-        test_and_set(a, musicSfxChannelMask);
         // Disable sfx S-DSP writes.
         test_and_clear(a, activeSoundEffects);
     }
