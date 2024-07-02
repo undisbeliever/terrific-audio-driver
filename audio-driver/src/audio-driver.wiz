@@ -461,6 +461,7 @@ func main() {
     a = 0xff;
     musicSfxChannelMask = a;
     enabledChannelsMask = a;
+    keyOnMask_music = a;
 
 
     // Calculate common audio data addresses
@@ -544,9 +545,6 @@ func main() {
 
         x--;
     } while !negative;
-
-    // Set keyOnMask for all music channels.
-    keyOnMask_music = (1 << N_MUSIC_CHANNELS) - 1;
 
 
     // No need to reset SFX channels.
