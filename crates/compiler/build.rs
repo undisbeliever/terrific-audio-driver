@@ -33,7 +33,7 @@ const AUDIO_DRIVER_SYMBOLS: &[(&str, &str)] = &[
     ("songTickCounter", "SONG_TICK_COUNTER"),
     ("eonShadow_music", "EON_SHADOW_MUSIC"),
     ("eonShadow_sfx", "EON_SHADOW_SFX"),
-    ("enabledChannelsMask", "ENABLED_CHANNELS_MASK"),
+    ("io_musicChannelsMask", "IO_MUSIC_CHANNELS_MASK"),
 
     ("channelSoA.virtualChannels.vol_l", "CHANNEL_VC_VOL_L"),
     ("channelSoA.virtualChannels.vol_r", "CHANNEL_VC_VOL_R"),

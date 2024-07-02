@@ -257,7 +257,7 @@ void test_queueCommand(void) {
     ASSERT_EQ(r, true)
 
     // Queue is full
-    r = tad_queueCommand_setEnabledChannels(0);
+    r = tad_queueCommand_setMusicChannels(0);
     ASSERT_EQ(r, false)
 
     // Queue is full
@@ -306,7 +306,7 @@ void test_queueCommandOverride(void) {
 
 
     tad_queueCommandOverride_setMainVolume(20);
-    tad_queueCommandOverride_setEnabledChannels(0);
+    tad_queueCommandOverride_setMusicChannels(0);
     tad_queueCommandOverride_stopSoundEffects();
 
     wait();

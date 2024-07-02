@@ -84,10 +84,11 @@ in zeropage {
     var songTickCounter : u16;
 
 
-    // A bitmask of the channels that can send key-on events.
+    // Enabled or disabled music channels.
+    // A bitmask of the music channels that can send key-on events.
     //
-    // This bitmask is set the IO comamnds, it is not `keyOnMask`.
-    var enabledChannelsMask : u8;
+    // This bitmask is set by the SET_MUSIC_CHANNELS IO comamnd, it is not `keyOnMask`.
+    var io_musicChannelsMask : u8;
 
 
     // The previous IO port command
@@ -459,8 +460,8 @@ func main() {
 
 
     a = 0xff;
+    io_musicChannelsMask = a;
     musicSfxChannelMask = a;
-    enabledChannelsMask = a;
     keyOnMask_music = a;
 
 
@@ -672,7 +673,7 @@ inline func _process_music_channels__inline() {
     y = a = keyOffShadow_music & musicSfxChannelMask;
     write_dsp(GlobalDspAddr.KOFF, y);
 
-    zpTmp = a = keyOnShadow_music & musicSfxChannelMask & enabledChannelsMask;
+    zpTmp = a = keyOnShadow_music & musicSfxChannelMask & io_musicChannelsMask;
 
     keyOnShadow_music = 0;
     keyOffShadow_music = 0;
@@ -695,7 +696,7 @@ inline func _process_sfx_channels__inline() {
 
     write_dsp(GlobalDspAddr.KOFF, keyOffShadow_sfx);
 
-    zpTmp = a = keyOnShadow_sfx & enabledChannelsMask;
+    zpTmp = keyOnShadow_sfx;
 
     keyOnShadow_sfx = 0;
     keyOffShadow_sfx = 0;
@@ -915,7 +916,7 @@ const CommandFunctionTable : [func(parameter0: u8 in y) ; IO.ToDriver.N_COMMANDS
     null_command,
     stop_sound_effects,
     set_main_volume,
-    set_enabled_channels,
+    set_music_channels,
     set_song_tempo,
 ];
 
@@ -944,8 +945,8 @@ func set_main_volume(volume : u8 in y) {
 }
 
 
-func set_enabled_channels(mask : u8 in y) {
-    enabledChannelsMask = y;
+func set_music_channels(mask : u8 in y) {
+    io_musicChannelsMask = y;
 }
 
 

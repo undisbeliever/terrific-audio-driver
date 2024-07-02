@@ -462,7 +462,7 @@ TestTable_SIZE = * - TestTable
     assert_carry    Tad_QueueCommand, true
 
     ; Queue is full
-    lda     #TadCommand::SET_ENABLED_CHANNELS
+    lda     #TadCommand::SET_MUSIC_CHANNELS
     ldx     #0
     assert_carry    Tad_QueueCommand, false
 
@@ -533,7 +533,7 @@ TestTable_SIZE = * - TestTable
     ldx     #20
     jsr     Tad_QueueCommandOverride
 
-    lda     #TadCommand::SET_ENABLED_CHANNELS
+    lda     #TadCommand::SET_MUSIC_CHANNELS
     ldx     #0
     jsr     Tad_QueueCommandOverride
 

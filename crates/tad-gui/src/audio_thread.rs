@@ -63,10 +63,10 @@ impl Pan {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct ChannelsMask(pub u8);
+pub struct MusicChannelsMask(pub u8);
 
-impl ChannelsMask {
-    pub const ALL: ChannelsMask = ChannelsMask(0xff);
+impl MusicChannelsMask {
+    pub const ALL: MusicChannelsMask = MusicChannelsMask(0xff);
 
     pub fn only_one_channel(channel_name: char) -> Self {
         const FIRST: u32 = 'A' as u32;
@@ -76,9 +76,9 @@ impl ChannelsMask {
         match c {
             FIRST..=LAST => {
                 let shift = c - FIRST;
-                ChannelsMask(1 << shift)
+                MusicChannelsMask(1 << shift)
             }
-            _ => ChannelsMask(0),
+            _ => MusicChannelsMask(0),
         }
     }
 }
@@ -108,12 +108,12 @@ pub enum AudioMessage {
 
     Pause,
     PauseResume(ItemId),
-    SetEnabledChannels(ItemId, ChannelsMask),
+    SetMusicChannels(ItemId, MusicChannelsMask),
 
     CommonAudioDataChanged(Option<Arc<CommonAudioDataWithSfxBuffer>>),
     CommandAudioDataWithSfxChanged(Option<Arc<CommonAudioDataWithSfx>>),
 
-    PlaySong(ItemId, Arc<SongData>, Option<SongSkip>, ChannelsMask),
+    PlaySong(ItemId, Arc<SongData>, Option<SongSkip>, MusicChannelsMask),
     PlaySoundEffectCommand(ItemId, Pan),
     PlaySongWithSfxBuffer(ItemId, Arc<SongData>, Option<SongSkip>),
     PlaySfxUsingSfxBuffer(Arc<CompiledSoundEffect>, Pan),
@@ -500,14 +500,14 @@ impl TadEmu {
         song_id: ItemId,
         song: Arc<SongData>,
         song_skip: Option<SongSkip>,
-        enabled_channels_mask: ChannelsMask,
+        music_channels_mask: MusicChannelsMask,
     ) -> Result<(), ()> {
         let data = match (&self.cad_with_sfx, &self.cad_with_sfx_buffer) {
             (Some(c), _) => AudioDataState::SongAndSfx(c.clone(), song),
             (None, Some(c)) => AudioDataState::SongWithSfxBuffer(c.clone(), song),
             (None, None) => return Err(()),
         };
-        self._load_song_into_memory(Some(song_id), data, song_skip, enabled_channels_mask)
+        self._load_song_into_memory(Some(song_id), data, song_skip, music_channels_mask)
     }
 
     fn load_blank_song(&mut self) -> Result<(), ()> {
@@ -517,7 +517,7 @@ impl TadEmu {
             (None, Some(c)) => AudioDataState::SongWithSfxBuffer(c.clone(), blank_song.clone()),
             (None, None) => return Err(()),
         };
-        self._load_song_into_memory(None, data, None, ChannelsMask::ALL)
+        self._load_song_into_memory(None, data, None, MusicChannelsMask::ALL)
     }
 
     fn load_song_with_sfx_buffer(
@@ -530,7 +530,7 @@ impl TadEmu {
             Some(c) => AudioDataState::SongWithSfxBuffer(c.clone(), song),
             None => return Err(()),
         };
-        self._load_song_into_memory(Some(song_id), data, song_skip, ChannelsMask::ALL)
+        self._load_song_into_memory(Some(song_id), data, song_skip, MusicChannelsMask::ALL)
     }
 
     fn load_blank_song_with_sfx_buffer(&mut self) -> Result<(), ()> {
@@ -538,7 +538,7 @@ impl TadEmu {
             Some(c) => AudioDataState::SongWithSfxBuffer(c.clone(), self.blank_song.clone()),
             None => return Err(()),
         };
-        self._load_song_into_memory(None, data, None, ChannelsMask::ALL)
+        self._load_song_into_memory(None, data, None, MusicChannelsMask::ALL)
     }
 
     fn play_sample(
@@ -550,7 +550,7 @@ impl TadEmu {
             None,
             AudioDataState::Sample(common_audio_data, song_data),
             None,
-            ChannelsMask::ALL,
+            MusicChannelsMask::ALL,
         )
     }
 
@@ -559,7 +559,7 @@ impl TadEmu {
         song_id: Option<ItemId>,
         data_state: AudioDataState,
         song_skip: Option<SongSkip>,
-        enabled_channels_mask: ChannelsMask,
+        music_channels_mask: MusicChannelsMask,
     ) -> Result<(), ()> {
         const LOADER_DATA_TYPE_ADDR: usize = addresses::LOADER_DATA_TYPE as usize;
 
@@ -656,7 +656,7 @@ impl TadEmu {
             }
         }
 
-        self.set_enabled_channels_mask(enabled_channels_mask);
+        self.set_music_channels_mask(music_channels_mask);
 
         // Unpause the audio driver
         self.emu.write_io_ports([io_commands::UNPAUSE, 0, 0, 0]);
@@ -683,10 +683,10 @@ impl TadEmu {
         }
     }
 
-    fn set_enabled_channels_mask(&mut self, mask: ChannelsMask) {
+    fn set_music_channels_mask(&mut self, mask: MusicChannelsMask) {
         let apuram = self.emu.apuram_mut();
 
-        apuram[addresses::ENABLED_CHANNELS_MASK as usize] = mask.0;
+        apuram[addresses::IO_MUSIC_CHANNELS_MASK as usize] = mask.0;
     }
 
     fn queue_sound_effect(&mut self, id: ItemId, pan: Pan) {
@@ -811,13 +811,13 @@ impl TadEmu {
             apuram[usize::from(addresses::SONG_PTR) + 1],
         ]);
 
-        let enabled_channels_mask = apuram[addresses::ENABLED_CHANNELS_MASK as usize];
+        let music_channels_mask = apuram[addresses::IO_MUSIC_CHANNELS_MASK as usize];
 
         let read_offsets = |addr_l: u16, addr_h: u16| -> [Option<u16>; N_MUSIC_CHANNELS] {
             std::array::from_fn(|i| {
                 const _: () = assert!(N_MUSIC_CHANNELS <= 8);
 
-                if enabled_channels_mask & (1 << i) != 0 {
+                if music_channels_mask & (1 << i) != 0 {
                     let word = u16::from_le_bytes([
                         apuram[usize::from(addr_l) + i],
                         apuram[usize::from(addr_h) + i],
@@ -992,9 +992,9 @@ impl AudioThread {
                     return self.play_song();
                 }
             }
-            AudioMessage::SetEnabledChannels(id, mask) => {
+            AudioMessage::SetMusicChannels(id, mask) => {
                 if Some(id) == self.tad.song_id() {
-                    self.tad.set_enabled_channels_mask(mask);
+                    self.tad.set_music_channels_mask(mask);
                 }
             }
 
@@ -1200,9 +1200,9 @@ impl AudioThread {
                     }
                 }
 
-                AudioMessage::SetEnabledChannels(id, mask) => {
+                AudioMessage::SetMusicChannels(id, mask) => {
                     if Some(id) == self.tad.song_id() {
-                        self.tad.set_enabled_channels_mask(mask);
+                        self.tad.set_music_channels_mask(mask);
                     }
                 }
 

@@ -121,7 +121,7 @@ const char* const MenuLabels[11] = {
     "SFX PAN",
     "MAIN VOLUME",
     "OVERRIDE TEMPO",
-    "MASK CHANNELS",
+    "MUSIC CHANNELS",
     NULL,
     NULL,
     "STOP SOUND EFFECTS (X)",
@@ -365,7 +365,7 @@ void menu_process_action(void) {
         menu_channelMask ^= selectedChannelMask;
         menu_updateChannelMask();
         // Tests `tad_queueCommandOverride_*(u8)` (built using a macro)
-        tad_queueCommandOverride_setEnabledChannels(menu_channelMask);
+        tad_queueCommandOverride_setMusicChannels(menu_channelMask);
         break;
 
     case MENU__STEREO_FLAG:

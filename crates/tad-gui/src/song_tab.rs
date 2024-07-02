@@ -4,7 +4,7 @@
 //
 // SPDX-License-Identifier: MIT
 
-use crate::audio_thread::{AudioMonitorData, ChannelsMask, SongSkip};
+use crate::audio_thread::{AudioMonitorData, MusicChannelsMask, SongSkip};
 use crate::compiler_thread::{ItemId, SongError, SongOutput};
 use crate::helpers::*;
 use crate::mml_editor::{CompiledEditorData, MmlEditor, TextErrorRef, TextFormat};
@@ -43,7 +43,7 @@ pub struct State {
 
     song_id: ItemId,
 
-    prev_channel_mask: ChannelsMask,
+    prev_channel_mask: MusicChannelsMask,
     channel_buttons: [ToggleButton; N_MUSIC_CHANNELS],
 
     editor: MmlEditor,
@@ -154,7 +154,7 @@ impl SongTab {
         let state = Rc::new(RefCell::from(State {
             sender: sender.clone(),
             song_id,
-            prev_channel_mask: ChannelsMask::ALL,
+            prev_channel_mask: MusicChannelsMask::ALL,
             channel_buttons,
             editor,
             console,
@@ -349,8 +349,8 @@ impl SongTab {
 
         s.console.scroll(0, 0);
 
-        s.prev_channel_mask = ChannelsMask::ALL;
-        s.update_channel_buttons(ChannelsMask::ALL);
+        s.prev_channel_mask = MusicChannelsMask::ALL;
+        s.update_channel_buttons(MusicChannelsMask::ALL);
     }
 
     pub fn contents(&self) -> String {
@@ -417,7 +417,7 @@ impl State {
         match cursor {
             Some((ChannelId::Channel(c), tc)) => {
                 let channels_mask = match mute_other_channels {
-                    true => ChannelsMask::only_one_channel(c),
+                    true => MusicChannelsMask::only_one_channel(c),
                     false => self.prev_channel_mask,
                 };
                 self.update_channel_buttons(channels_mask);
@@ -433,7 +433,7 @@ impl State {
                 ));
             }
             Some((ChannelId::Subroutine(si), tc)) => {
-                let channels_mask = ChannelsMask(1);
+                let channels_mask = MusicChannelsMask(1);
                 self.update_channel_buttons(channels_mask);
 
                 self.sender.send(GuiMessage::PlaySong(
@@ -466,20 +466,20 @@ impl State {
     }
 
     /// NOTE: will not modify `self.prev_channel_mask`
-    fn update_channel_buttons(&mut self, mask: ChannelsMask) {
+    fn update_channel_buttons(&mut self, mask: MusicChannelsMask) {
         for (i, b) in self.channel_buttons.iter_mut().enumerate() {
             b.set_value(mask.0 & (1u8 << i) != 0);
         }
     }
 
     fn enable_all_channels(&mut self) {
-        self.prev_channel_mask = ChannelsMask::ALL;
+        self.prev_channel_mask = MusicChannelsMask::ALL;
         for b in &mut self.channel_buttons {
             b.set_value(true);
         }
-        self.sender.send(GuiMessage::SetEnabledChannels(
+        self.sender.send(GuiMessage::SetMusicChannels(
             self.song_id,
-            ChannelsMask::ALL,
+            MusicChannelsMask::ALL,
         ));
     }
 
@@ -497,10 +497,10 @@ impl State {
                 channel_mask |= 1u8 << i;
             }
         }
-        let channel_mask = ChannelsMask(channel_mask);
+        let channel_mask = MusicChannelsMask(channel_mask);
 
         self.sender
-            .send(GuiMessage::SetEnabledChannels(self.song_id, channel_mask));
+            .send(GuiMessage::SetMusicChannels(self.song_id, channel_mask));
 
         self.prev_channel_mask = channel_mask;
     }

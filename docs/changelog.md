@@ -15,6 +15,11 @@ Audio driver changes:
  * `return_from_subroutine` bytecode instruction disables the channel if it is not in a subroutine.
  * Optimised `skip_last_loop` bytecode instructions
 
+IO Command changes:
+ * Removed `SET_ENABLED_CHANNELS` IO command, replaced with `SET_MUSIC_CHANNELS`.
+    * Masking channels 6 & 7 no-longer silences sound effects.
+
+
 
 Version 0.0.9
 =============

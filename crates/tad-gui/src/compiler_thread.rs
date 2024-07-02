@@ -9,7 +9,7 @@ use crate::sample_analyser::{self, SampleAnalysis};
 use crate::GuiMessage;
 
 use crate::audio_thread::{
-    AudioMessage, ChannelsMask, CommonAudioDataWithSfx, CommonAudioDataWithSfxBuffer, Pan,
+    AudioMessage, CommonAudioDataWithSfx, CommonAudioDataWithSfxBuffer, MusicChannelsMask, Pan,
     SongSkip, SFX_BUFFER_SIZE,
 };
 
@@ -129,7 +129,7 @@ pub enum ToCompiler {
 
     SongTabClosed(ItemId),
     SongChanged(ItemId, String),
-    CompileAndPlaySong(ItemId, String, Option<SongSkip>, ChannelsMask),
+    CompileAndPlaySong(ItemId, String, Option<SongSkip>, MusicChannelsMask),
     PlayInstrument(ItemId, PlaySampleArgs),
     PlaySample(ItemId, PlaySampleArgs),
 
@@ -1297,7 +1297,12 @@ fn bg_thread(
                             .send_audio(AudioMessage::PlaySfxUsingSfxBuffer(sfx_data.clone(), pan));
                     } else {
                         let s = Arc::new(sound_effect_to_song(sfx_data));
-                        sender.send_audio(AudioMessage::PlaySong(id, s, None, ChannelsMask::ALL));
+                        sender.send_audio(AudioMessage::PlaySong(
+                            id,
+                            s,
+                            None,
+                            MusicChannelsMask::ALL,
+                        ));
                     }
                 }
             }

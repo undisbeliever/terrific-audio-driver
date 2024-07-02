@@ -62,7 +62,7 @@ use crate::tabs::{
     Tab, TabManager,
 };
 
-use audio_thread::{AudioMessage, AudioMonitor, ChannelsMask, Pan, SongSkip};
+use audio_thread::{AudioMessage, AudioMonitor, MusicChannelsMask, Pan, SongSkip};
 
 use compiler::data;
 use compiler::data::ProjectFile;
@@ -160,7 +160,7 @@ pub enum GuiMessage {
     SongChanged(ItemId, String),
     RecompileSong(ItemId, String),
 
-    PlaySong(ItemId, String, Option<SongSkip>, ChannelsMask),
+    PlaySong(ItemId, String, Option<SongSkip>, MusicChannelsMask),
     PlaySongForSfxTab(ItemId, TickCounter),
     PlaySoundEffectCommand(usize, Pan),
     PlayEditedSoundEffect(ItemId, Pan),
@@ -168,7 +168,7 @@ pub enum GuiMessage {
     PlaySample(ItemId, PlaySampleArgs),
     PauseAudio,
     PauseResumeAudio(ItemId),
-    SetEnabledChannels(ItemId, ChannelsMask),
+    SetMusicChannels(ItemId, MusicChannelsMask),
 
     AudioThreadStartedSong(ItemId, Arc<SongData>),
     AudioThreadResumedSong(ItemId),
@@ -476,10 +476,10 @@ impl Project {
             GuiMessage::PauseResumeAudio(id) => {
                 let _ = self.audio_sender.send(AudioMessage::PauseResume(id));
             }
-            GuiMessage::SetEnabledChannels(id, channel_mask) => {
+            GuiMessage::SetMusicChannels(id, channel_mask) => {
                 let _ = self
                     .audio_sender
-                    .send(AudioMessage::SetEnabledChannels(id, channel_mask));
+                    .send(AudioMessage::SetMusicChannels(id, channel_mask));
             }
 
             GuiMessage::AudioThreadStartedSong(song_id, song_data) => {

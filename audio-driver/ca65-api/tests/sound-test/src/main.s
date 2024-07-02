@@ -157,7 +157,7 @@ MenuLabel_01: .byte "PLAY SFX", 0
 MenuLabel_02: .byte "SFX PAN", 0
 MenuLabel_03: .byte "MAIN VOLUME", 0
 MenuLabel_04: .byte "OVERRIDE TEMPO", 0
-MenuLabel_05: .byte "MASK CHANNELS", 0
+MenuLabel_05: .byte "MUSIC CHANNELS", 0
 MenuLabel_06: .byte "", 0
 MenuLabel_07: .byte "", 0
 MenuLabel_08: .byte "STOP SOUND EFFECTS (X)", 0
@@ -555,7 +555,7 @@ Menu_SfxPan_Action = Menu_PlaySfx_Action
 
     jsr     _SetChannelMask
 
-    lda     #TadCommand::SET_ENABLED_CHANNELS
+    lda     #TadCommand::SET_MUSIC_CHANNELS
     ldx     Menu::channelMask
     jmp     Tad_QueueCommandOverride
 .endproc

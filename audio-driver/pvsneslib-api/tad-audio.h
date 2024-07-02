@@ -259,16 +259,16 @@ bool tad_queueCommand_stopSoundEffects(void);
 bool tad_queueCommand_setMainVolume(s8 volume);
 
 /*!
- * Queue a set-enabled-channels command.
+ * Queue a set-music-channels command.
  *
- * Enables or disable channels.  Useful for disabling channels in a song.
+ * Enables or disables music channels.
  *
- * NOTE: The enabled channels bitmask is reset whenever a new song is loaded.
+ * NOTE: The music channels bitmask is reset whenever a new song is loaded.
  *
- * @param mask A bitmask of the 8 channels that can send key-on events
+ * @param mask A bitmask of the 8 music channels that can send key-on events
  * @return true if the command was added to the command queue.
  */
-bool tad_queueCommand_setEnabledChannels(u8 mask);
+bool tad_queueCommand_setMusicChannels(u8 mask);
 
 /*!
  * Queues a set-song-tempo command.
@@ -318,10 +318,10 @@ void tad_queueCommandOverride_stopSoundEffects(void);
 void tad_queueCommandOverride_setMainVolume(s8 volume);
 
 /*!
- * Queue a set-enabled-channels command (overriding any unprocessed IO commands)
- * @see tad_queueCommand_setEnabledChannels()
+ * Queue a set-music-channels command (overriding any unprocessed IO commands)
+ * @see tad_queueCommand_setMusicChannels()
  */
-void tad_queueCommandOverride_setEnabledChannels(u8 mask);
+void tad_queueCommandOverride_setMusicChannels(u8 mask);
 
 /*!
  * Queue a set-song-tempo command (overriding any unprocessed IO commands)

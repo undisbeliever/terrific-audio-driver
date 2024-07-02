@@ -129,13 +129,11 @@ MIN_TICK_CLOCK = 64
     ;; NOTE: The main volume is reset whenever a new song is loaded.
     SET_MAIN_VOLUME = 10
 
-    ;; Enables or disable channels.
-    ;;  * parameter0: A bitmask of the 8 channels that can send key-on events
+    ;; Enables or disables music channels.
+    ;;  * parameter0: A bitmask of the 8 music channels that can send key-on events
     ;;
-    ;; Useful for disabling channels in a song.
-    ;;
-    ;; NOTE: The enabled channels bitmask is reset whenever a new song is loaded.
-    SET_ENABLED_CHANNELS = 12
+    ;; NOTE: The music channels bitmask is reset whenever a new song is loaded.
+    SET_MUSIC_CHANNELS = 12
 
     ;; Set the song tempo.
     ;;  * parameter0: The new S-DSP TIMER_0 register value

@@ -104,7 +104,7 @@ TAD_Command__UNPAUSE = 2
 TAD_Command__PLAY_SOUND_EFFECT_COMMAND = 4
 TAD_Command__STOP_SOUND_EFFECTS = 8
 TAD_Command__SET_MAIN_VOLUME = 10
-TAD_Command__SET_ENABLED_CHANNELS = 12
+TAD_Command__SET_MUSIC_CHANNELS = 12
 TAD_Command__SET_SONG_TEMPO = 14
 
 TAD_COMMAND_MASK   = %00001110
@@ -1552,14 +1552,14 @@ _Tad_QueueCommandFunction tad_queueCommand_pause                       Test     
 _Tad_QueueCommandFunction tad_queueCommand_unpause                     Test        NoParameter     UNPAUSE
 _Tad_QueueCommandFunction tad_queueCommand_stopSoundEffects            Test        NoParameter     STOP_SOUND_EFFECTS
 _Tad_QueueCommandFunction tad_queueCommand_setMainVolume               Test        WithParameter   SET_MAIN_VOLUME
-_Tad_QueueCommandFunction tad_queueCommand_setEnabledChannels          Test        WithParameter   SET_ENABLED_CHANNELS
+_Tad_QueueCommandFunction tad_queueCommand_setMusicChannels            Test        WithParameter   SET_MUSIC_CHANNELS
 _Tad_QueueCommandFunction tad_queueCommand_setSongTempo                Test        WithParameter   SET_SONG_TEMPO
 
 _Tad_QueueCommandFunction tad_queueCommandOverride_pause               Override    NoParameter     PAUSE
 _Tad_QueueCommandFunction tad_queueCommandOverride_unpause             Override    NoParameter     UNPAUSE
 _Tad_QueueCommandFunction tad_queueCommandOverride_stopSoundEffects    Override    NoParameter     STOP_SOUND_EFFECTS
 _Tad_QueueCommandFunction tad_queueCommandOverride_setMainVolume       Override    WithParameter   SET_MAIN_VOLUME
-_Tad_QueueCommandFunction tad_queueCommandOverride_setEnabledChannels  Override    WithParameter   SET_ENABLED_CHANNELS
+_Tad_QueueCommandFunction tad_queueCommandOverride_setMusicChannels    Override    WithParameter   SET_MUSIC_CHANNELS
 _Tad_QueueCommandFunction tad_queueCommandOverride_setSongTempo        Override    WithParameter   SET_SONG_TEMPO
 
 
