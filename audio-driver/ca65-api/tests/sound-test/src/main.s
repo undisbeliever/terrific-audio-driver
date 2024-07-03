@@ -111,7 +111,7 @@ CHANNEL_MASK_XPOS   = VAR_XPOS - 5
 STATE_XPOS          = 23
 STATE_YPOS          = 2
 
-MENU_YPOS           = 4
+MENU_YPOS           = 3
 
 PLAY_SONG_YPOS      = MENU_YPOS + 0 * 2
 PLAY_SFX_YPOS       = MENU_YPOS + 1 * 2
@@ -122,7 +122,7 @@ CHANNEL_MASK_YPOS   = MENU_YPOS + 5 * 2
 STEREO_FLAG_YPOS    = MENU_YPOS + 6 * 2
 SONG_STARTS_YPOS    = MENU_YPOS + 7 * 2
 
-N_MENU_ITEMS        = 11
+N_MENU_ITEMS        = 12
 LAST_MENU_INDEX     = (N_MENU_ITEMS - 1) * 2
 
 CHANNEL_MASK_MENU_POS = 5 * 2
@@ -162,7 +162,8 @@ MenuLabel_06: .byte "", 0
 MenuLabel_07: .byte "", 0
 MenuLabel_08: .byte "STOP SOUND EFFECTS (X)", 0
 MenuLabel_09: .byte "PAUSE / UNPAUSE (START)", 0
-MenuLabel_10: .byte "RELOAD COMMON AUDIO DATA", 0
+MenuLabel_10: .byte "PAUSE MUSIC AND SFX", 0
+MenuLabel_11: .byte "RELOAD COMMON AUDIO DATA", 0
 
 
 .code
@@ -183,6 +184,7 @@ MenuProcessFunctions:
     .addr   Menu_Null_Process
     .addr   Menu_Null_Process
     .addr   Menu_Null_Process
+    .addr   Menu_Null_Process
 .assert * - MenuProcessFunctions = N_MENU_ITEMS * 2, error
 
 
@@ -199,7 +201,8 @@ MenuActionFunctions:
     .addr   Menu_StereoFlag_Action
     .addr   Menu_SongStartsFlag_Action
     .addr   Menu_StopSoundEffects_Action
-    .addr   Menu_PauseUnPause_Action
+    .addr   Menu_PauseUnPauseMusic_Action
+    .addr   Menu_PauseMusicAndSfx_Action
     .addr   Menu_ReloadCommonAudioData_Action
 .assert * - MenuActionFunctions = N_MENU_ITEMS * 2, error
 
@@ -326,7 +329,7 @@ MenuActionFunctions:
     lda     joypadPressed + 1
     bit     #JOYPAD_H_START
     beq     :+
-        jmp     Menu_PauseUnPause_Action
+        jmp     Menu_PauseUnPauseMusic_Action
     :
 
     lda     joypadPressed + 0
@@ -410,6 +413,11 @@ MenuActionFunctions:
     jsr     Tad_IsSongPlaying
     bcc     :+
         TextBuffer_PrintLiteral STATE_XPOS, STATE_YPOS, "PLAYING"
+        rts
+    :
+    jsr     Tad_IsSfxPlaying
+    bcc     :+
+        TextBuffer_PrintLiteral STATE_XPOS, STATE_YPOS, "SFX    "
         rts
     :
     jsr     Tad_IsSongLoaded
@@ -621,14 +629,23 @@ Menu_SfxPan_Action = Menu_PlaySfx_Action
 .a8
 .i16
 ;: DB = $7e
-.proc Menu_PauseUnPause_Action
+.proc Menu_PauseUnPauseMusic_Action
     jsr     Tad_IsSongPlaying
     bcc     :+
-        lda     #TadCommand::PAUSE
+        lda     #TadCommand::PAUSE_MUSIC_PLAY_SFX
         bra     :++
     :
         lda     #TadCommand::UNPAUSE
     :
+    jmp     Tad_QueueCommandOverride
+.endproc
+
+
+.a8
+.i16
+;: DB = $7e
+.proc Menu_PauseMusicAndSfx_Action
+    lda     #TadCommand::PAUSE
     jmp     Tad_QueueCommandOverride
 .endproc
 

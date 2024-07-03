@@ -911,9 +911,9 @@ func __call_command(command : u8 in a, parameter : u8 in y) {
 // MUST match `Command` enum in `io-commands.wiz`
 const CommandFunctionTable : [func(parameter0: u8 in y) ; IO.ToDriver.N_COMMANDS] = [
     pause as func(u8 in y),
+    pause_music_play_sfx as func(u8 in y),
     unpause as func(u8 in y),
     play_sound_effect,
-    null_command,
     stop_sound_effects,
     set_main_volume,
     set_music_channels,
@@ -921,15 +921,26 @@ const CommandFunctionTable : [func(parameter0: u8 in y) ; IO.ToDriver.N_COMMANDS
 ];
 
 
-func null_command(unused : u8 in y) {
+// Pause music and sound effects
+func pause() {
+    return __write_control_and_keyoff(
+        0,  // Disable timers
+        0xff, // key-off all channels
+    );
 }
 
 
-func pause() {
-    write_dsp(GlobalDspAddr.KOFF, 0xff);  // all keys off
+#[fallthrough]
+func pause_music_play_sfx() {
+    a = smp.CONTROL__ENABLE_TIMER_1; // Disable music timer, enable sfx timer
+    y = musicSfxChannelMask; // key-off music channels
 
-    // Disable timers
-    smp.control = 0;
+// fallthrough
+}
+
+func __write_control_and_keyoff(control : u8 in a, channelsMask: u8 in y) {
+    smp.control = a;
+    write_dsp(GlobalDspAddr.KOFF, y);
 }
 
 

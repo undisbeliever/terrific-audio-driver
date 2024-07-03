@@ -317,6 +317,129 @@ void test_queueCommandOverride(void) {
     ASSERT_EQ(tad_isSongPlaying(), true)
 }
 
+void test_pauseCommand_1(void) {
+    ASSERT_EQ(tad_isSongPlaying(), true);
+
+    tad_queueCommandOverride_pause();
+    wait();
+    tad_process();
+
+    ASSERT_EQ(tad_isSongPlaying(), false);
+    ASSERT_EQ(tad_isSfxPlaying(), false);
+}
+
+void test_pauseCommand_2(void) {
+    tad_queueCommandOverride_pause();
+    wait();
+    tad_process();
+    ASSERT_EQ(tad_isSongPlaying(), false);
+    ASSERT_EQ(tad_isSfxPlaying(), false);
+
+    tad_queueCommandOverride_pause();
+    wait();
+    tad_process();
+
+    ASSERT_EQ(tad_isSongPlaying(), false);
+    ASSERT_EQ(tad_isSfxPlaying(), false);
+}
+
+void test_pauseCommand_3(void) {
+    tad_queueCommandOverride_pauseMusicPlaySfx();
+    wait();
+    tad_process();
+    ASSERT_EQ(tad_isSongPlaying(), false);
+    ASSERT_EQ(tad_isSfxPlaying(), true);
+
+    tad_queueCommandOverride_pause();
+    wait();
+    tad_process();
+
+    ASSERT_EQ(tad_isSongPlaying(), false);
+    ASSERT_EQ(tad_isSfxPlaying(), false);
+}
+
+void test_pauseMusicPlaySfxCommand_1(void) {
+    ASSERT_EQ(tad_isSongPlaying(), true);
+
+    tad_queueCommandOverride_pauseMusicPlaySfx();
+    wait();
+    tad_process();
+
+    ASSERT_EQ(tad_isSongPlaying(), false);
+    ASSERT_EQ(tad_isSfxPlaying(), true);
+}
+
+void test_pauseMusicPlaySfxCommand_2(void) {
+    tad_queueCommandOverride_pause();
+    wait();
+    tad_process();
+    ASSERT_EQ(tad_isSongPlaying(), false);
+    ASSERT_EQ(tad_isSfxPlaying(), false);
+
+    tad_queueCommandOverride_pauseMusicPlaySfx();
+    wait();
+    tad_process();
+
+    ASSERT_EQ(tad_isSongPlaying(), false);
+    ASSERT_EQ(tad_isSfxPlaying(), true);
+}
+
+void test_pauseMusicPlaySfxCommand_3(void) {
+    tad_queueCommandOverride_pauseMusicPlaySfx();
+    wait();
+    tad_process();
+    ASSERT_EQ(tad_isSongPlaying(), false);
+    ASSERT_EQ(tad_isSfxPlaying(), true);
+
+    tad_queueCommandOverride_pauseMusicPlaySfx();
+    wait();
+    tad_process();
+
+    ASSERT_EQ(tad_isSongPlaying(), false);
+    ASSERT_EQ(tad_isSfxPlaying(), true);
+}
+
+void test_unpauseCommand_1(void) {
+    ASSERT_EQ(tad_isSongPlaying(), true);
+
+    tad_queueCommandOverride_unpause();
+    wait();
+    tad_process();
+
+    ASSERT_EQ(tad_isSongPlaying(), true);
+    ASSERT_EQ(tad_isSfxPlaying(), true);
+}
+
+void test_unpauseCommand_2(void) {
+    tad_queueCommandOverride_pause();
+    wait();
+    tad_process();
+    ASSERT_EQ(tad_isSongPlaying(), false);
+    ASSERT_EQ(tad_isSfxPlaying(), false);
+
+    tad_queueCommandOverride_unpause();
+    wait();
+    tad_process();
+
+    ASSERT_EQ(tad_isSongPlaying(), true);
+    ASSERT_EQ(tad_isSfxPlaying(), true);
+}
+
+void test_unpauseCommand_3(void) {
+    tad_queueCommandOverride_pauseMusicPlaySfx();
+    wait();
+    tad_process();
+    ASSERT_EQ(tad_isSongPlaying(), false);
+    ASSERT_EQ(tad_isSfxPlaying(), true);
+
+    tad_queueCommandOverride_unpause();
+    wait();
+    tad_process();
+
+    ASSERT_EQ(tad_isSongPlaying(), true);
+    ASSERT_EQ(tad_isSfxPlaying(), true);
+}
+
 void test_queuePannedSoundEffect(void) {
     ASSERT_EQ(tad_isSongPlaying(), true);
 
@@ -459,6 +582,7 @@ void test_songStartsImmediately(void) {
     finishLoading();
 
     ASSERT_EQ(tad_isSongPlaying(), true);
+    ASSERT_EQ(tad_isSfxPlaying(), true);
 }
 
 // Does NOT test if the PlaySongImmediately flag is sent to the loader
@@ -470,6 +594,7 @@ void test_songStartPaused(void) {
 
     ASSERT_EQ(tad_isSongLoaded(), true);
     ASSERT_EQ(tad_isSongPlaying(), false);
+    ASSERT_EQ(tad_isSfxPlaying(), false);
 }
 
 
@@ -509,6 +634,15 @@ static const VoidFn TAD_TESTS[] = {
     test_getSong,
     test_queueCommand,
     test_queueCommandOverride,
+    test_pauseCommand_1,
+    test_pauseCommand_2,
+    test_pauseCommand_3,
+    test_pauseMusicPlaySfxCommand_1,
+    test_pauseMusicPlaySfxCommand_2,
+    test_pauseMusicPlaySfxCommand_3,
+    test_unpauseCommand_1,
+    test_unpauseCommand_2,
+    test_unpauseCommand_3,
     test_queuePannedSoundEffect,
     test_queueSoundEffect,
     test_commandAndSfxQueuePriority,

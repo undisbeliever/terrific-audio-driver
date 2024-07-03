@@ -4,6 +4,10 @@ Terrific Audio Driver Changelog
 Version 0.0.10
 ==============
 
+**CAUTION**: This release changes the data formats and IO commands.
+You must update the audio driver and ca65/PVSnesLib API.
+
+
 Audio driver changes:
  * Increased the number of music channels to 8.
  * Rewrote the main loop
@@ -18,6 +22,7 @@ Audio driver changes:
 IO Command changes:
  * Removed `SET_ENABLED_CHANNELS` IO command, replaced with `SET_MUSIC_CHANNELS`.
     * Masking channels 6 & 7 no-longer silences sound effects.
+ * Added `PAUSE_MUSIC_PLAY_SFX` IO command.
 
 
 

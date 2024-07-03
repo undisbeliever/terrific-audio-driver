@@ -123,6 +123,15 @@ TestTable:
     .addr   TestGetSong
     .addr   TestQueueCommand
     .addr   TestQueueCommandOverride
+    .addr   TestPauseCommand1
+    .addr   TestPauseCommand2
+    .addr   TestPauseCommand3
+    .addr   TestPauseMusicPlaySfxCommand1
+    .addr   TestPauseMusicPlaySfxCommand2
+    .addr   TestPauseMusicPlaySfxCommand3
+    .addr   TestUnpauseCommand1
+    .addr   TestUnpauseCommand2
+    .addr   TestUnpauseCommand3
     .addr   TestQueuePannedSoundEffect
     .addr   TestQueueSoundEffect
     .addr   TestCommandAndSfxQueuePriority
@@ -555,6 +564,207 @@ TestTable_SIZE = * - TestTable
 .endproc
 
 
+.a8
+.i16
+;; DB access lowram
+.proc TestPauseCommand1
+    assert_carry    Tad_IsSongPlaying, true
+
+
+    lda     #TadCommand::PAUSE
+    jsr     Tad_QueueCommandOverride
+    jsr     _Wait
+    jsl     Tad_Process
+
+    assert_carry    Tad_IsSongPlaying, false
+    assert_carry    Tad_IsSfxPlaying, false
+
+    rts
+.endproc
+
+
+.a8
+.i16
+;; DB access lowram
+.proc TestPauseCommand2
+    lda     #TadCommand::PAUSE
+    jsr     Tad_QueueCommandOverride
+    jsr     _Wait
+    jsl     Tad_Process
+    assert_carry    Tad_IsSongPlaying, false
+    assert_carry    Tad_IsSfxPlaying, false
+
+
+    lda     #TadCommand::PAUSE
+    jsr     Tad_QueueCommandOverride
+    jsr     _Wait
+    jsl     Tad_Process
+
+    assert_carry    Tad_IsSongPlaying, false
+    assert_carry    Tad_IsSfxPlaying, false
+
+    rts
+.endproc
+
+
+.a8
+.i16
+;; DB access lowram
+.proc TestPauseCommand3
+    lda     #TadCommand::PAUSE_MUSIC_PLAY_SFX
+    jsr     Tad_QueueCommandOverride
+    jsr     _Wait
+    jsl     Tad_Process
+    assert_carry    Tad_IsSongPlaying, false
+    assert_carry    Tad_IsSfxPlaying, true
+
+
+    lda     #TadCommand::PAUSE
+    jsr     Tad_QueueCommandOverride
+    jsr     _Wait
+    jsl     Tad_Process
+
+    assert_carry    Tad_IsSongPlaying, false
+    assert_carry    Tad_IsSfxPlaying, false
+
+    rts
+.endproc
+
+
+.a8
+.i16
+;; DB access lowram
+.proc TestPauseMusicPlaySfxCommand1
+    assert_carry    Tad_IsSongPlaying, true
+
+
+    lda     #TadCommand::PAUSE_MUSIC_PLAY_SFX
+    jsr     Tad_QueueCommandOverride
+    jsr     _Wait
+    jsl     Tad_Process
+
+    assert_carry    Tad_IsSongPlaying, false
+    assert_carry    Tad_IsSfxPlaying, true
+
+    rts
+.endproc
+
+
+.a8
+.i16
+;; DB access lowram
+.proc TestPauseMusicPlaySfxCommand2
+    lda     #TadCommand::PAUSE
+    jsr     Tad_QueueCommandOverride
+    jsr     _Wait
+    jsl     Tad_Process
+    assert_carry    Tad_IsSongPlaying, false
+    assert_carry    Tad_IsSfxPlaying, false
+
+
+    lda     #TadCommand::PAUSE_MUSIC_PLAY_SFX
+    jsr     Tad_QueueCommandOverride
+    jsr     _Wait
+    jsl     Tad_Process
+
+    assert_carry    Tad_IsSongPlaying, false
+    assert_carry    Tad_IsSfxPlaying, true
+
+    rts
+.endproc
+
+
+.a8
+.i16
+;; DB access lowram
+.proc TestPauseMusicPlaySfxCommand3
+    lda     #TadCommand::PAUSE_MUSIC_PLAY_SFX
+    jsr     Tad_QueueCommandOverride
+    jsr     _Wait
+    jsl     Tad_Process
+    assert_carry    Tad_IsSongPlaying, false
+    assert_carry    Tad_IsSfxPlaying, true
+
+
+    lda     #TadCommand::PAUSE_MUSIC_PLAY_SFX
+    jsr     Tad_QueueCommandOverride
+    jsr     _Wait
+    jsl     Tad_Process
+
+    assert_carry    Tad_IsSongPlaying, false
+    assert_carry    Tad_IsSfxPlaying, true
+
+    rts
+.endproc
+
+
+.a8
+.i16
+;; DB access lowram
+.proc TestUnpauseCommand1
+    assert_carry    Tad_IsSongPlaying, true
+
+
+    lda     #TadCommand::UNPAUSE
+    jsr     Tad_QueueCommandOverride
+    jsr     _Wait
+    jsl     Tad_Process
+
+    assert_carry    Tad_IsSongPlaying, true
+    assert_carry    Tad_IsSfxPlaying, true
+
+    rts
+.endproc
+
+
+.a8
+.i16
+;; DB access lowram
+.proc TestUnpauseCommand2
+    lda     #TadCommand::PAUSE
+    jsr     Tad_QueueCommandOverride
+    jsr     _Wait
+    jsl     Tad_Process
+    assert_carry    Tad_IsSongPlaying, false
+    assert_carry    Tad_IsSfxPlaying, false
+
+
+    lda     #TadCommand::UNPAUSE
+    jsr     Tad_QueueCommandOverride
+    jsr     _Wait
+    jsl     Tad_Process
+
+    assert_carry    Tad_IsSongPlaying, true
+    assert_carry    Tad_IsSfxPlaying, true
+
+    rts
+.endproc
+
+
+.a8
+.i16
+;; DB access lowram
+.proc TestUnpauseCommand3
+    lda     #TadCommand::PAUSE_MUSIC_PLAY_SFX
+    jsr     Tad_QueueCommandOverride
+    jsr     _Wait
+    jsl     Tad_Process
+    assert_carry    Tad_IsSongPlaying, false
+    assert_carry    Tad_IsSfxPlaying, true
+
+
+    lda     #TadCommand::UNPAUSE
+    jsr     Tad_QueueCommandOverride
+    jsr     _Wait
+    jsl     Tad_Process
+
+    assert_carry    Tad_IsSongPlaying, true
+    assert_carry    Tad_IsSfxPlaying, true
+
+    rts
+.endproc
+
+
 
 ;; Test Tad_QueuePannedSoundEffect
 .a8
@@ -918,6 +1128,7 @@ TestTable_SIZE = * - TestTable
     jsr     _FinishLoading
 
     assert_carry    Tad_IsSongPlaying, true
+    assert_carry    Tad_IsSfxPlaying, true
 
     rts
 .endproc
@@ -936,6 +1147,7 @@ TestTable_SIZE = * - TestTable
     jsr     _FinishLoading
 
     assert_carry    Tad_IsSongPlaying, false
+    assert_carry    Tad_IsSfxPlaying, false
 
     rts
 .endproc

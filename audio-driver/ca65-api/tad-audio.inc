@@ -105,20 +105,20 @@ MIN_TICK_CLOCK = 64
 ;;
 ; MUST match `audio-driver/src/io-commands.wiz`
 .enum TadCommand
-    ;; Stop song and sound effect execution.
-    ;; * Commands will still be executed when the audio-driver is paused.
-    ;; * The audio driver starts paused unless the `PlaySongImmediately` flag is set.
+    ;; Pause the song and sound effect channels.
+    ;; * IO commands will still be executed when the audio-driver is paused.
+    ;; * The audio driver starts paused unless the `LoaderDataType.PLAY_SONG_BIT` is set.
     PAUSE = 0
 
-    ;; Unpauses the audio driver.
-    ;;
-    ;; * Resets the S-SMP timer counters,
-    ;;   can cause issues if the S-CPU spams `UNPAUSE` commands.
-    UNPAUSE = 2
+    ;; Pauses the music channels, sound effects will continue to play.
+    ;; Unpauses the sound effects channels.
+    PAUSE_MUSIC_PLAY_SFX = 2
 
-    ;; MUST NOT USE PLAY_SOUND_EFFECT in `queue_command`
+    ;; Unpauses the music and sound effect channels.
+    UNPAUSE = 4
 
-    ;; reserved
+    ; SHOULD NOT USE PLAY_SOUND_EFFECT in `queue_command`
+    ; (command queue only holds 1 parameter byte and PLAY_SOUND_EFFECT has 2 parameters)
 
     ;; Stop all active sound effects
     STOP_SOUND_EFFECTS = 8
@@ -399,7 +399,7 @@ MIN_TICK_CLOCK = 64
 .import Tad_IsLoaderActive
 
 
-;; OUT: Carry set if the song is loaded into audio-RAM (state is `PAUSED` or `PLAYING`)
+;; OUT: Carry set if the song is loaded into audio-RAM (state is `PAUSED`, `PLAYING_SFX` or `PLAYING`)
 ;;
 ;; A8
 ;; I unknown
@@ -407,7 +407,16 @@ MIN_TICK_CLOCK = 64
 .import Tad_IsSongLoaded
 
 
-;; OUT: Carry set if state is PLAYING
+;; OUT: Carry set if the song is loaded into audio-RAM and sound effects are not paused
+;;      (state is `PLAYING_SFX` or `PLAYING`)
+;;
+;; A8
+;; I unknown
+;; DB access lowram
+.import Tad_IsSfxPlaying
+
+
+;; OUT: Carry set if the song is playing (state is `PLAYING`)
 ;;
 ;; A8
 ;; I unknown
@@ -457,7 +466,7 @@ MIN_TICK_CLOCK = 64
 ;;  * The data MUST remain in memory while it is being transferred to Audio-RAM
 ;;    (which may take several frames).
 ;;  * The data can be freed on the next `LoadAudioData` call.
-;;  * The data can be freed when the state changes to PAUSED or PLAYING.
+;;  * The data can be freed when the state changes to PAUSED, PLAYING_SFX or PLAYING.
 ;;  * The data can be freed if the `Tad_IsLoaderActive` function returns false.
 ;;  * The `Tad_FinishLoadingData` subroutine can be used to flush decompressed
 ;;    memory into Audio-RAM.  The data can be freed immediately after a

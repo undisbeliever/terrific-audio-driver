@@ -191,8 +191,8 @@ pub const SFX_TICK_CLOCK: u8 = 64;
 // IO Commands
 pub mod io_commands {
     pub const PAUSE: u8 = 0;
-    pub const UNPAUSE: u8 = 2;
-    pub const PLAY_SOUND_EFFECT: u8 = 4;
+    pub const UNPAUSE: u8 = 4;
+    pub const PLAY_SOUND_EFFECT: u8 = 6;
     pub const STOP_SOUND_EFFECTS: u8 = 8;
 }
 

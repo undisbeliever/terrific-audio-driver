@@ -232,6 +232,16 @@ void tad_finishLoadingData(void);
 bool tad_queueCommand_pause(void);
 
 /*!
+ * Queue a pause-music-play-sfx command.
+ *
+ * Pauses the music channels, sound effects will continue to play.
+ * Unpauses the sound effects channels.
+ *
+ * @return true if the command was added to the command queue.
+ */
+bool tad_queueCommand_pauseMusicPlaySfx(void);
+
+/*!
  * Queue an unpause command.
  *
  * * Resets the S-SMP timer counters,
@@ -298,6 +308,12 @@ bool tad_queueCommand_setSongTempo(u8 tickClock);
  * @see tad_queueCommand_pause()
  */
 void tad_queueCommandOverride_pause(void);
+
+/*!
+ * Queue a pause-music-play-sfx command (overriding any unprocessed IO commands)
+ * @see tad_queueCommand_pauseMusicPlaySfx()
+ */
+void tad_queueCommandOverride_pauseMusicPlaySfx(void);
 
 /*!
  * Queue a unpause command (overriding any unprocessed IO commands)
@@ -460,6 +476,12 @@ bool tad_isLoaderActive(void);
 bool tad_isSongLoaded(void);
 
 /*!
+ * @return true if the song is loaded into audio-RAM and sound effects are not paused
+ * (state is `PLAYING_SFX` or `PLAYING`)
+ */
+bool tad_isSfxPlaying(void);
+
+/*!
  * @return true if the song is playing (state is `PLAYING`)
  */
 bool tad_isSongPlaying(void);
@@ -526,7 +548,7 @@ extern struct Tad_AudioData loadAudioData_out;
  *  * The data MUST remain in memory while it is being transferred to Audio-RAM
  *    (which may take several frames).
  *  * The data can be freed on the next loadAudioData() call.
- *  * The data can be freed when the state changes to PAUSED or PLAYING.
+ *  * The data can be freed when the state changes to PAUSED, PLAYING_SFX or PLAYING.
  *  * The data can be freed if the tad_isLoaderActive() function returns false.
  *  * tad_finishLoadingData() can be used to flush decompressed memory into Audio-RAM.
  *    The data can be freed immediately after a tad_finishLoadingData() call.

@@ -28,7 +28,7 @@ import "registers";
 
 
 // This constant MUST be increased if `LOADER_ADDR` or the IO Communication protocol changes.
-let TAD_IO_VERSION = 15;
+let TAD_IO_VERSION = 16;
 
 
 // Loader Commands
@@ -237,23 +237,22 @@ namespace IO {
 
     // MUST match CommandFunctionTable in `audio-driver.wiz`.
     enum Command : u8 {
-        // Stop song and sound effect execution.
-        // * Commands will still be executed when the audio-driver is paused
+        // Pause the song and sound effect channels.
+        // * Commands will still be executed when the audio-driver is paused.
         // * The audio driver starts paused unless the `LoaderDataType.PLAY_SONG_BIT` is set.
-        PAUSE               = 0,
+        PAUSE = 0,
 
-        // Unpauses the audio driver.
-        //
-        // * Resets the S-SMP timer counters,
-        //   can cause issues if the S-CPU spams `UNPAUSE` commands.
-        UNPAUSE             = 2,
+        // Pauses the music channels, sound effects will continue to play.
+        // Unpauses the sound effects channels.
+        PAUSE_MUSIC_PLAY_SFX = 2,
+
+        // Unpauses the music and sound effect channels.
+        UNPAUSE = 4,
 
         // Play a sound effect
         //  * parameter0: sound effect id
         //  * parameter1: pan (0-128) (not bounds checked)
-        PLAY_SOUND_EFFECT   = 4,
-
-        // reserved
+        PLAY_SOUND_EFFECT = 6,
 
         // Stop all active sound effects
         STOP_SOUND_EFFECTS = 8,

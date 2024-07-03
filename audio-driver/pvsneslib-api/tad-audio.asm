@@ -100,8 +100,9 @@ TAD_LOADER_ARAM_ADDR = $0200
 
 
 TAD_Command__PAUSE = 0
-TAD_Command__UNPAUSE = 2
-TAD_Command__PLAY_SOUND_EFFECT_COMMAND = 4
+TAD_Command__PAUSE_MUSIC_PLAY_SFX = 2
+TAD_Command__UNPAUSE = 4
+TAD_Command__PLAY_SOUND_EFFECT_COMMAND = 6
 TAD_Command__STOP_SOUND_EFFECTS = 8
 TAD_Command__SET_MAIN_VOLUME = 10
 TAD_Command__SET_MUSIC_CHANNELS = 12
@@ -282,8 +283,11 @@ TAD_State__LOADING_SONG_DATA_PLAY       = $7f
 ;; No play-sound-effect commands will be sent when the driver is paused.
 TAD_State__PAUSED                       = $80
 
+;; Song is loaded into Audio-RAM and the audio driver is playing sfx (song paused).
+TAD_State__PLAYING_SFX                  = $81
+
 ;; Song is loaded into Audio-RAM and the audio driver is playing the song.
-TAD_State__PLAYING                      = $81
+TAD_State__PLAYING                      = $82
 
 TAD_FIRST_LOADING_STATE      = TAD_State__LOADING_COMMON_AUDIO_DATA
 TAD_FIRST_LOADING_SONG_STATE = TAD_State__LOADING_SONG_DATA_PAUSED
@@ -966,11 +970,13 @@ _tad_loader_gotoNextBank__:
     bcs     @SC_NotPauseOrPlay
         ; Change state if the command is a pause or play command
         .assert TAD_Command__PAUSE == 0
-        .assert TAD_Command__UNPAUSE == 2
-        .assert (TAD_Command__PAUSE >> 1) & 1 | $80 == TAD_State__PAUSED
-        .assert (TAD_Command__UNPAUSE >> 1) & 1 | $80 = TAD_State__PLAYING
+        .assert TAD_Command__PAUSE_MUSIC_PLAY_SFX
+        .assert TAD_Command__UNPAUSE == 4
+        .assert (TAD_Command__PAUSE >> 1) & 3 | $80 == TAD_State__PAUSED
+        .assert (TAD_Command__PAUSE_MUSIC_PLAY_SFX >> 1) & 3 | $80 == TAD_State__PLAYING_SFX
+        .assert (TAD_Command__UNPAUSE >> 1) & 3 | $80 = TAD_State__PLAYING
         lsr
-        and     #1
+        and     #3
         ora     #$80
         sta     tad_state__
 @SC_NotPauseOrPlay:
@@ -1128,10 +1134,11 @@ _tad_process__loading__:
             ; Use `tad_state` to determine if the song is playing or paused.
             ; Cannot use `tad_flags` as it may have changed after the `LoaderDataType` was sent to
             ; the loader (while the song was loaded).
-            .assert TAD_State__LOADING_SONG_DATA_PAUSED & 1 | $80 == TAD_State__PAUSED
-            .assert TAD_State__LOADING_SONG_DATA_PLAY & 1 | $80 == TAD_State__PLAYING
+            .assert ((TAD_State__LOADING_SONG_DATA_PAUSED & 1) << 1) | $80 == TAD_State__PAUSED
+            .assert ((TAD_State__LOADING_SONG_DATA_PLAY & 1) << 1) | $80 == TAD_State__PLAYING
             lda     tad_state__
             and     #1
+            asl
             ora     #$80
 
         ; A = new state
@@ -1169,7 +1176,9 @@ _tad_process__loading__:
             bpl     @SendCommand
 
             ; X = tad_state
-            .assert TAD_State__PLAYING == $81
+            .assert TAD_State__PAUSED < $81
+            .assert TAD_State__PLAYING >= $81
+            .assert TAD_State__PLAYING_SFX >= $81
             dex
             bpl     @Return_I8
                 ; Playing state
@@ -1508,9 +1517,25 @@ tad_isLoaderActive:
 tad_isSongLoaded:
     __Push__A8_noX_noY
 
+    .assert TAD_State__PLAYING_SFX > TAD_State__PAUSED
     .assert TAD_State__PLAYING > TAD_State__PAUSED
     lda.l   tad_state__
     cmp     #TAD_State__PAUSED
+
+    __PopReturn_noX_noY__bool_in_carry
+.ends
+
+
+
+.section "tad_isSfxPlaying" SUPERFREE
+
+; bool tad_isSfxPlaying(void)
+tad_isSfxPlaying:
+    __Push__A8_noX_noY
+
+    .assert TAD_State__PLAYING > TAD_State__PLAYING_SFX
+    lda.l   tad_state__
+    cmp     #TAD_State__PLAYING_SFX
 
     __PopReturn_noX_noY__bool_in_carry
 .ends
@@ -1549,6 +1574,7 @@ tad_isSongPlaying:
 .endm
 
 _Tad_QueueCommandFunction tad_queueCommand_pause                       Test        NoParameter     PAUSE
+_Tad_QueueCommandFunction tad_queueCommand_pauseMusicPlaySfx           Test        NoParameter     PAUSE_MUSIC_PLAY_SFX
 _Tad_QueueCommandFunction tad_queueCommand_unpause                     Test        NoParameter     UNPAUSE
 _Tad_QueueCommandFunction tad_queueCommand_stopSoundEffects            Test        NoParameter     STOP_SOUND_EFFECTS
 _Tad_QueueCommandFunction tad_queueCommand_setMainVolume               Test        WithParameter   SET_MAIN_VOLUME
@@ -1556,6 +1582,7 @@ _Tad_QueueCommandFunction tad_queueCommand_setMusicChannels            Test     
 _Tad_QueueCommandFunction tad_queueCommand_setSongTempo                Test        WithParameter   SET_SONG_TEMPO
 
 _Tad_QueueCommandFunction tad_queueCommandOverride_pause               Override    NoParameter     PAUSE
+_Tad_QueueCommandFunction tad_queueCommandOverride_pauseMusicPlaySfx   Override    NoParameter     PAUSE_MUSIC_PLAY_SFX
 _Tad_QueueCommandFunction tad_queueCommandOverride_unpause             Override    NoParameter     UNPAUSE
 _Tad_QueueCommandFunction tad_queueCommandOverride_stopSoundEffects    Override    NoParameter     STOP_SOUND_EFFECTS
 _Tad_QueueCommandFunction tad_queueCommandOverride_setMainVolume       Override    WithParameter   SET_MAIN_VOLUME

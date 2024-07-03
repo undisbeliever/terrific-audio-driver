@@ -71,7 +71,7 @@ bool menu_songStartsFlag;
 #define STATE_XPOS          23
 #define STATE_YPOS          2
 
-#define MENU_YPOS           4
+#define MENU_YPOS           3
 
 
 #define MENU_TO_YPOS(m)     ((m) * 2 + MENU_YPOS)
@@ -99,13 +99,15 @@ enum MenuItem {
     MENU__STEREO_FLAG,
     MENU__SONG_STARTS_FLAG,
     MENU__STOP_SOUND_EFFECTS,
-    MENU__PAUSE_UNPAUSE,
+    MENU__PAUSE_UNPAUSE_MUSIC,
+    MENU__PAUSE_MUSIC_AND_SFX,
     MENU__RELOAD_COMMON_AUDIO_DATA,
 };
-#define N_MENU_ITEMS 11
+#define N_MENU_ITEMS 12
 
 const char* const STATE_LABEL__UNKNOWN = ".......";
 const char* const STATE_LABEL__PLAYING = "PLAYING";
+const char* const STATE_LABEL__SFX     = "SFX    ";
 const char* const STATE_LABEL__PAUSED  = "PAUSED ";
 const char* const STATE_LABEL__LOADING = "LOADING";
 
@@ -115,7 +117,7 @@ const char* const STEREO_FLAG_CLEAR_LABEL = "MONO  ";
 const char* const SONG_STARTS_SET_LABEL   = "SONGS START IMMEDIATELY";
 const char* const SONG_STARTS_CLEAR_LABEL = "SONGS START PAUSED     ";
 
-const char* const MenuLabels[11] = {
+const char* const MenuLabels[12] = {
     "PLAY SONG",
     "PLAY SFX",
     "SFX PAN",
@@ -126,6 +128,7 @@ const char* const MenuLabels[11] = {
     NULL,
     "STOP SOUND EFFECTS (X)",
     "PAUSE / UNPAUSE (START)",
+    "PAUSE MUSIC AND SFX",
     "RELOAD COMMON AUDIO DATA",
 };
 
@@ -138,7 +141,8 @@ void menu_setSongStartsFlag(bool f);
 void menu_setPos(u8 newPos);
 void menu_updateChannelMask(void);
 void highlightLine(u8 menuItem, u8 palette);
-void menu_pauseUnpause(void);
+void menu_pauseUnpauseMusic(void);
+void menu_pauseMusicAndSfx(void);
 void menu_process_action(void);
 void menu_process_item(void);
 u8 menu_adjustValue(u8 value, enum MenuItem item, u8 min, u8 max, u16 pad);
@@ -188,6 +192,9 @@ void menu_printState(void) {
 
     if (tad_isSongPlaying()) {
         label = STATE_LABEL__PLAYING;
+    }
+    else if (tad_isSfxPlaying()) {
+        label = STATE_LABEL__SFX;
     }
     else if (tad_isSongLoaded()) {
         label = STATE_LABEL__PAUSED;
@@ -328,15 +335,19 @@ void highlightLine(u8 menuItem, u8 palette) {
     scr_txt_dirty = true;
 }
 
-void menu_pauseUnpause(void) {
+void menu_pauseUnpauseMusic(void) {
     if (tad_isSongPlaying()) {
         // Tests `tad_queueCommand_*(void)` (built using a macro)
-        tad_queueCommand_pause();
+        tad_queueCommand_pauseMusicPlaySfx();
     }
     else {
         // Tests `tad_queueCommandOverride_*(void)` (built using a macro)
         tad_queueCommandOverride_unpause();
     }
+}
+
+void menu_pauseMusicAndSfx(void) {
+    tad_queueCommand_pause();
 }
 
 //! Called if an action button is pressed
@@ -380,8 +391,12 @@ void menu_process_action(void) {
         tad_queueCommandOverride_stopSoundEffects();
         break;
 
-    case MENU__PAUSE_UNPAUSE:
-        menu_pauseUnpause();
+    case MENU__PAUSE_UNPAUSE_MUSIC:
+        menu_pauseUnpauseMusic();
+        break;
+
+    case MENU__PAUSE_MUSIC_AND_SFX:
+        menu_pauseMusicAndSfx();
         break;
 
     case MENU__RELOAD_COMMON_AUDIO_DATA:
@@ -453,7 +468,8 @@ void menu_process_item(void) {
         break;
 
     case MENU__STOP_SOUND_EFFECTS:
-    case MENU__PAUSE_UNPAUSE:
+    case MENU__PAUSE_UNPAUSE_MUSIC:
+    case MENU__PAUSE_MUSIC_AND_SFX:
     case MENU__RELOAD_COMMON_AUDIO_DATA:
         break;
     }
@@ -509,7 +525,7 @@ void menu_process(void) {
         menu_process_action();
     }
     else if (joyPressed & KEY_START) {
-        menu_pauseUnpause();
+        menu_pauseUnpauseMusic();
     }
     else if (joyPressed & KEY_X) {
         tad_queueCommandOverride_stopSoundEffects();
