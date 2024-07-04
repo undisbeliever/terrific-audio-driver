@@ -24,6 +24,10 @@ IO Command changes:
     * Masking channels 6 & 7 no-longer silences sound effects.
  * Added `PAUSE_MUSIC_PLAY_SFX` IO command.
 
+File formats:
+ * Changed the format of the sound effects file.
+    * Added attributes to the sound effect name line
+    * tad-compiler and tad-gui can still read sound effect files in the old format.
 
 
 Version 0.0.9

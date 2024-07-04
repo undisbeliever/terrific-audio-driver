@@ -76,42 +76,36 @@
         rest         30
     end_loop
 
-=== spawn_item ===
-MML
+=== spawn_item === mml
 @1 triangle adsr 10 6 3 12
 
 A @1 v9
 A o5 l6 c+ c+ e a > e.
 
-=== collect_coin ===
-MML
+=== collect_coin === mml
 @1 triangle adsr 14 2 6 27
 
 A @1 v8
 A o5 l12 f b-.
 
-=== robot_notices_player ===
-MML
+=== robot_notices_player === mml
 @1 sine adsr 10 2 4 28
 
 A @1 v8
 A o4 l32 [ e & >e & b & >e r ]2
 
-=== robot_ascend ===
-MML
+=== robot_ascend === mml
 @1 sine adsr 7 3 0 0
 
 A @1 {{o4 b o5 c}}%75,%3
 
-=== robot_fires_laser ===
-MML
+=== robot_fires_laser === mml
 @1 square adsr 12 7 7 25
 
 A @1 v10
 A o5 {{f a}}4
 
-=== fire_arrow ===
-MML
+=== fire_arrow === mml
 @1 triangle adsr 10 6 3 28
 
 A @1 v10

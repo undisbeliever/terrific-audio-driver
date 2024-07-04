@@ -13,9 +13,10 @@ use std::path::PathBuf;
 
 const NEW_SFX_TOKEN_NO_NEWLINE: &str = "===";
 const NEW_SFX_TOKEN: &str = "\n===";
-const NEW_SFX_TOKEN_END: &str = "===";
-const MML_SFX_IDENTIFIER: &str = "MML\n";
-const MML_SFX_IDENTIFIER_NO_NEWLINE: &str = "MML";
+const OLD_MML_SFX_IDENTIFIER: &str = "MML\n";
+const OLD_MML_SFX_IDENTIFIER_NO_NEWLINE: &str = "MML";
+
+const MML_ATTR: &str = "mml";
 
 // NOTE: fields are not validated
 #[derive(Debug, PartialEq)]
@@ -76,31 +77,52 @@ fn sfx_file_from_text_file(tf: TextFile) -> SoundEffectsFile {
 
     for sfx_block in after_header.split(NEW_SFX_TOKEN) {
         // The first part of `sfx_block` is the name line
-        let (name_line, sfx_lines) = match sfx_block.split_once('\n') {
+        let (name_and_attrs, sfx_lines) = match sfx_block.split_once('\n') {
             Some((a, b)) => (a, b),
             None => (sfx_block, ""),
         };
 
-        let name_line = name_line
-            .trim()
-            .trim_end_matches(NEW_SFX_TOKEN_END)
-            .trim_end();
+        let mut attrs = name_and_attrs
+            .trim_matches('=')
+            .split(|c: char| c.is_whitespace() || c == '=')
+            .filter(|s| !s.is_empty());
+        let mut mml_sfx = false;
 
-        let sfx = match sfx_lines.strip_prefix(MML_SFX_IDENTIFIER) {
-            Some(s) => SoundEffectText::Mml(s.to_owned()),
-            None => {
-                if sfx_lines == MML_SFX_IDENTIFIER_NO_NEWLINE {
-                    SoundEffectText::Mml(String::new())
-                } else {
-                    SoundEffectText::BytecodeAssembly(sfx_lines.to_owned())
-                }
+        let mut name = match attrs.next() {
+            Some(s) => s.to_owned(),
+            None => String::new(),
+        };
+
+        for a in attrs {
+            if a.eq_ignore_ascii_case(MML_ATTR) {
+                mml_sfx = true;
+            } else {
+                // Save unknown tags in the name so they are not lost and become an error when compiling SFX
+                name.push(' ');
+                name.push_str(a);
+            }
+        }
+
+        let (sfx_lines, mml_sfx) = if mml_sfx {
+            (sfx_lines.to_owned(), true)
+        } else {
+            // No MML attribute, check for the old MML tag (the string "MML" on a new line)
+            match sfx_lines.strip_prefix(OLD_MML_SFX_IDENTIFIER) {
+                Some(s) => (s.to_owned(), true),
+                None => match sfx_lines {
+                    OLD_MML_SFX_IDENTIFIER_NO_NEWLINE => (String::new(), true),
+                    _ => (sfx_lines.to_owned(), false),
+                },
             }
         };
 
         sound_effects.push(SoundEffectFileSfx {
-            name: name_line.to_owned(),
+            name,
             line_no: line_no.try_into().unwrap(),
-            sfx,
+            sfx: match mml_sfx {
+                true => SoundEffectText::Mml(sfx_lines),
+                false => SoundEffectText::BytecodeAssembly(sfx_lines),
+            },
         });
 
         line_no += count_lines_including_end(sfx_block);
@@ -126,38 +148,32 @@ pub fn build_sound_effects_file<'a>(
     header: &'a str,
     sound_effects: impl Iterator<Item = &'a SoundEffectInput>,
 ) -> String {
-    let mut sound_effects = sound_effects;
-
     let mut out = String::with_capacity(32 * 1024);
 
-    if header.is_empty() {
-        if let Some(sfx) = sound_effects.next() {
-            out.push_str("=== ");
-            out.push_str(sfx.name.as_str());
-            out.push_str(" ===\n");
-            match &sfx.sfx {
-                SoundEffectText::BytecodeAssembly(s) => out.push_str(s),
-                SoundEffectText::Mml(s) => {
-                    out.push_str(MML_SFX_IDENTIFIER);
-                    out.push_str(s);
-                }
-            }
-        }
-    } else {
-        out.push_str(header);
-    }
+    out.push_str(header);
 
-    for sfx in sound_effects {
-        out.push_str("\n=== ");
-        out.push_str(sfx.name.as_str());
-        out.push_str(" ===\n");
-        match &sfx.sfx {
-            SoundEffectText::BytecodeAssembly(s) => out.push_str(s),
-            SoundEffectText::Mml(s) => {
-                out.push_str(MML_SFX_IDENTIFIER);
-                out.push_str(s);
-            }
+    for (i, sfx) in sound_effects.enumerate() {
+        let (sfx_lines, is_mml) = match &sfx.sfx {
+            SoundEffectText::BytecodeAssembly(s) => (s, false),
+            SoundEffectText::Mml(s) => (s, true),
+        };
+
+        if i == 0 && header.is_empty() {
+            out.push_str("=== ");
+        } else {
+            out.push_str("\n=== ");
         }
+
+        out.push_str(sfx.name.as_str());
+        out.push_str(" ===");
+
+        if is_mml {
+            out.push(' ');
+            out.push_str(MML_ATTR);
+        }
+
+        out.push('\n');
+        out.push_str(sfx_lines);
     }
 
     out
@@ -168,7 +184,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn sfx_file_from_string_1() {
+    fn sfx_old_file_format_from_string_1() {
         const INPUT: &str = r##"=== test_first ===
 a
 b
@@ -238,7 +254,7 @@ MML
     }
 
     #[test]
-    fn sfx_file_from_string_2() {
+    fn sfx_old_file_format_from_string_2() {
         const INPUT: &str = r##"; This is a header
 ; With multiple lines
 
@@ -295,6 +311,332 @@ c
                     }
                 ]
             }
+        );
+    }
+
+    #[test]
+    fn sfx_new_file_format_from_string_1() {
+        const INPUT: &str = r##"=== test_first ===
+a
+b
+
+=== test_one
+c
+===empty===
+===    test_two   ===
+d
+e
+
+
+=== empty_MML mml ===
+=== last_empty ===
+"##;
+
+        let file_name = "fn.txt".to_owned();
+        let tf = TextFile {
+            path: None,
+            file_name: file_name.clone(),
+            contents: INPUT.to_owned(),
+        };
+
+        let sfx_file = sfx_file_from_text_file(tf);
+
+        assert_eq!(
+            sfx_file,
+            SoundEffectsFile {
+                path: None,
+                file_name,
+                header: "".to_owned(),
+                sound_effects: vec![
+                    SoundEffectFileSfx {
+                        name: "test_first".to_owned(),
+                        line_no: 1,
+                        sfx: SoundEffectText::BytecodeAssembly("a\nb\n".to_owned()),
+                    },
+                    SoundEffectFileSfx {
+                        name: "test_one".to_owned(),
+                        line_no: 5,
+                        sfx: SoundEffectText::BytecodeAssembly("c".to_owned()),
+                    },
+                    SoundEffectFileSfx {
+                        name: "empty".to_owned(),
+                        line_no: 7,
+                        sfx: SoundEffectText::BytecodeAssembly("".to_owned()),
+                    },
+                    SoundEffectFileSfx {
+                        name: "test_two".to_owned(),
+                        line_no: 8,
+                        sfx: SoundEffectText::BytecodeAssembly("d\ne\n\n".to_owned()),
+                    },
+                    SoundEffectFileSfx {
+                        name: "empty_MML".to_owned(),
+                        line_no: 13,
+                        sfx: SoundEffectText::Mml("".to_owned()),
+                    },
+                    SoundEffectFileSfx {
+                        name: "last_empty".to_owned(),
+                        line_no: 14,
+                        sfx: SoundEffectText::BytecodeAssembly("".to_owned()),
+                    }
+                ]
+            }
+        );
+    }
+
+    #[test]
+    fn sfx_new_file_format_from_string_2() {
+        const INPUT: &str = r##"; This is a header
+; With multiple lines
+
+=== test_first
+a
+
+=== test_MML mml ===
+@1 mml
+
+=== test_only_newline ===
+
+===last_not_empty
+b
+c
+"##;
+
+        let path: PathBuf = "path.txt".to_owned().into();
+        let file_name = "test.txt".to_owned();
+        let tf = TextFile {
+            path: Some(path.clone()),
+            file_name: file_name.clone(),
+            contents: INPUT.to_owned(),
+        };
+
+        let sfx_file = sfx_file_from_text_file(tf);
+
+        assert_eq!(
+            sfx_file,
+            SoundEffectsFile {
+                path: Some(path),
+                file_name,
+                header: "; This is a header\n; With multiple lines\n".to_owned(),
+                sound_effects: vec![
+                    SoundEffectFileSfx {
+                        name: "test_first".to_owned(),
+                        line_no: 4,
+                        sfx: SoundEffectText::BytecodeAssembly("a\n".to_owned()),
+                    },
+                    SoundEffectFileSfx {
+                        name: "test_MML".to_owned(),
+                        line_no: 7,
+                        sfx: SoundEffectText::Mml("@1 mml\n".to_owned()),
+                    },
+                    SoundEffectFileSfx {
+                        name: "test_only_newline".to_owned(),
+                        line_no: 10,
+                        sfx: SoundEffectText::BytecodeAssembly("".to_owned()),
+                    },
+                    SoundEffectFileSfx {
+                        name: "last_not_empty".to_owned(),
+                        line_no: 12,
+                        sfx: SoundEffectText::BytecodeAssembly("b\nc\n".to_owned()),
+                    }
+                ]
+            }
+        );
+    }
+
+    #[test]
+    fn test_multiple_equals_signs() {
+        const INPUT: &str = concat![
+            "=== name1 ===\nTest 1\n",
+            "==== name2 ====\nTest 2\n",
+            "===== name3 ====\nTest 3",
+        ];
+
+        let tf = TextFile {
+            path: Default::default(),
+            file_name: Default::default(),
+            contents: INPUT.to_owned(),
+        };
+
+        let sfx_file = sfx_file_from_text_file(tf);
+
+        assert_eq!(
+            sfx_file,
+            SoundEffectsFile {
+                path: Default::default(),
+                file_name: Default::default(),
+                header: String::new(),
+                sound_effects: vec![
+                    SoundEffectFileSfx {
+                        name: "name1".to_owned(),
+                        line_no: 1,
+                        sfx: SoundEffectText::BytecodeAssembly("Test 1".to_owned()),
+                    },
+                    SoundEffectFileSfx {
+                        name: "name2".to_owned(),
+                        line_no: 3,
+                        sfx: SoundEffectText::BytecodeAssembly("Test 2".to_owned()),
+                    },
+                    SoundEffectFileSfx {
+                        name: "name3".to_owned(),
+                        line_no: 5,
+                        sfx: SoundEffectText::BytecodeAssembly("Test 3".to_owned()),
+                    },
+                ]
+            }
+        );
+    }
+
+    #[test]
+    fn test_attr_order() {
+        const INPUT: &str = "=== name ===== mml\nTest";
+
+        let tf = TextFile {
+            path: Default::default(),
+            file_name: Default::default(),
+            contents: INPUT.to_owned(),
+        };
+
+        let sfx_file = sfx_file_from_text_file(tf);
+
+        assert_eq!(
+            sfx_file,
+            SoundEffectsFile {
+                path: Default::default(),
+                file_name: Default::default(),
+                header: String::new(),
+                sound_effects: vec![SoundEffectFileSfx {
+                    name: "name".to_owned(),
+                    line_no: 1,
+                    sfx: SoundEffectText::Mml("Test".to_owned()),
+                }]
+            }
+        );
+    }
+
+    #[test]
+    fn test_unknown_attr() {
+        const INPUT: &str = "=== name mml unknown ===\nTest";
+
+        let tf = TextFile {
+            path: Default::default(),
+            file_name: Default::default(),
+            contents: INPUT.to_owned(),
+        };
+
+        let sfx_file = sfx_file_from_text_file(tf);
+
+        assert_eq!(
+            sfx_file,
+            SoundEffectsFile {
+                path: Default::default(),
+                file_name: Default::default(),
+                header: String::new(),
+                sound_effects: vec![SoundEffectFileSfx {
+                    name: "name unknown".to_owned(),
+                    line_no: 1,
+                    sfx: SoundEffectText::Mml("Test".to_owned()),
+                }]
+            }
+        );
+    }
+
+    #[test]
+    fn test_mml_is_case_insensitive() {
+        const INPUT: &str = concat![
+            "=== name MML ===\nTest 1\n",
+            "=== name MmL ===\nTest 2\n",
+            "=== name mMl ===\nTest 3",
+        ];
+
+        let tf = TextFile {
+            path: Default::default(),
+            file_name: Default::default(),
+            contents: INPUT.to_owned(),
+        };
+
+        let sfx_file = sfx_file_from_text_file(tf);
+
+        assert_eq!(
+            sfx_file,
+            SoundEffectsFile {
+                path: Default::default(),
+                file_name: Default::default(),
+                header: String::new(),
+                sound_effects: vec![
+                    SoundEffectFileSfx {
+                        name: "name".to_owned(),
+                        line_no: 1,
+                        sfx: SoundEffectText::Mml("Test 1".to_owned()),
+                    },
+                    SoundEffectFileSfx {
+                        name: "name".to_owned(),
+                        line_no: 3,
+                        sfx: SoundEffectText::Mml("Test 2".to_owned()),
+                    },
+                    SoundEffectFileSfx {
+                        name: "name".to_owned(),
+                        line_no: 5,
+                        sfx: SoundEffectText::Mml("Test 3".to_owned()),
+                    },
+                ]
+            }
+        );
+    }
+
+    // Test that a MML attribute takes priority over the old MML tag
+    #[test]
+    fn test_mml_mml() {
+        const INPUT: &str = "=== name mml===\nMML\n\n";
+
+        let tf = TextFile {
+            path: Default::default(),
+            file_name: Default::default(),
+            contents: INPUT.to_owned(),
+        };
+
+        let sfx_file = sfx_file_from_text_file(tf);
+
+        assert_eq!(
+            sfx_file,
+            SoundEffectsFile {
+                path: Default::default(),
+                file_name: Default::default(),
+                header: String::new(),
+                sound_effects: vec![SoundEffectFileSfx {
+                    name: "name".to_owned(),
+                    line_no: 1,
+                    sfx: SoundEffectText::Mml("MML\n\n".to_owned()),
+                }]
+            }
+        );
+    }
+
+    #[test]
+    fn test_save_and_load() {
+        let header = "This is the file header\nHello === World ===\n\n";
+        let sound_effects = vec![
+            SoundEffectInput {
+                name: Name::new_lossy("".to_owned()),
+                sfx: SoundEffectText::BytecodeAssembly("Bytecode\nAssembly".to_owned()),
+            },
+            SoundEffectInput {
+                name: Name::new_lossy("MML_Sound_Effect".to_owned()),
+                sfx: SoundEffectText::Mml("Test".to_owned()),
+            },
+        ];
+
+        let sfx_file = build_sound_effects_file(header, sound_effects.iter());
+
+        let read_sfx = sfx_file_from_text_file(TextFile {
+            path: Default::default(),
+            file_name: Default::default(),
+            contents: sfx_file,
+        });
+
+        assert_eq!(read_sfx.header, header);
+        assert_eq!(
+            convert_sfx_inputs_lossy(read_sfx.sound_effects),
+            sound_effects
         );
     }
 }
