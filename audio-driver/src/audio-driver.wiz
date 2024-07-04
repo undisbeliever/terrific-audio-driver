@@ -216,10 +216,6 @@ in zeropage {
         //  *  < 0 - decrease pitch
         var portamento_direction : [i8 ; N_CHANNELS];
 
-        // Portamento PITCH speed
-        // (pitch change/tick)
-        var portamento_speed : [u8 ; N_CHANNELS];
-
 
 
         // Vibrato PITCH offset per tick.
@@ -242,6 +238,10 @@ in firstpage {
 
     // Channel variables that do not fit in zeropage
     namespace channelSoA {
+        // Portamento PITCH speed
+        // (pitch change/tick)
+        var portamento_speed : [u8 ; N_CHANNELS];
+
         // Portamento target pitch
         var portamento_target_l : [u8 ; N_CHANNELS];
         var portamento_target_h : [u8 ; N_CHANNELS];
