@@ -27,6 +27,7 @@ use crate::mml::command_parser::{
 use crate::mml::MAX_BROKEN_CHORD_NOTES;
 use crate::notes::{MidiNote, Note, Octave};
 use crate::path::PathString;
+use crate::sound_effects::MAX_SFX_TICKS;
 use crate::time::{Bpm, TickClock, TickCounter, ZenLen};
 use crate::{export, mml, spc_file_export};
 
@@ -225,6 +226,8 @@ pub enum BytecodeAssemblerError {
     NoDirectionInPortamentoVelocity,
 
     NoTicksInSoundEffect,
+
+    TooManySfxTicks(TickCounter),
 }
 
 #[derive(Debug)]
@@ -444,6 +447,8 @@ pub enum MmlError {
     BrokenChordTickCountMismatch(TickCounter, TickCounter),
 
     NoTicksAfterLoopPoint,
+
+    TooManySfxTicks(TickCounter),
 }
 
 #[derive(Debug)]
@@ -882,6 +887,13 @@ impl Display for BytecodeAssemblerError {
             }
 
             Self::NoTicksInSoundEffect => write!(f, "No notes in sound effect"),
+
+            Self::TooManySfxTicks(t) => write!(
+                f,
+                "sound effect too long ({} ticks, max {})",
+                t.value(),
+                MAX_SFX_TICKS.value()
+            ),
         }
     }
 }
@@ -1173,6 +1185,13 @@ impl Display for MmlError {
             }
 
             Self::NoTicksAfterLoopPoint => write!(f, "no notes or rests after loop point"),
+
+            Self::TooManySfxTicks(t) => write!(
+                f,
+                "sound effect too long ({} ticks, max {})",
+                t.value(),
+                MAX_SFX_TICKS.value()
+            ),
         }
     }
 }

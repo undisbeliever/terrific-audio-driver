@@ -76,8 +76,10 @@ in zeropage {
         var instruments_adsr1 : *u8;
         var instruments_adsr2OrGain : *u8;
 
-        var soundEffects_l : *u8;
-        var soundEffects_h : *u8;
+        var soundEffects_addr_l : *u8;
+        var soundEffects_addr_h : *u8;
+        var soundEffects_ticks_l : *u8;
+        var soundEffects_ticks_h : *u8;
     }
 
     // Increases once every song tick
@@ -113,6 +115,10 @@ in zeropage {
     // Used to disable S-DSP voice register writes for unused sfx channels.
     // Used to determine the next available sound effect channel.
     var activeSoundEffects : u8;
+
+
+    // The remaining duration of the two sound effects in ticks
+    var sfx_remainingTicks : [u16 ; N_SFX_CHANNELS];
 
 
     // S-DSP voice channels dirty flags.
@@ -493,8 +499,10 @@ func main() {
         *(&commonData.instruments_adsr1 as *u16)       = ya = ya + _nInstruments;
         *(&commonData.instruments_adsr2OrGain as *u16) = ya = ya + _nInstruments;
 
-        *(&commonData.soundEffects_l as *u16)          = ya = ya + _nInstruments;
-        *(&commonData.soundEffects_h as *u16)          = ya = ya + _nSoundEffects;
+        *(&commonData.soundEffects_addr_l as *u16)     = ya = ya + _nInstruments;
+        *(&commonData.soundEffects_addr_h as *u16)     = ya = ya + _nSoundEffects;
+        *(&commonData.soundEffects_ticks_l as *u16)    = ya = ya + _nSoundEffects;
+        *(&commonData.soundEffects_ticks_h as *u16)    = ya = ya + _nSoundEffects;
     }
 
 
@@ -706,6 +714,10 @@ inline func _process_sfx_channels__inline() {
     __process_channels(a, zpTmp, FIRST_SFX_CHANNEL + 1, LAST_SFX_CHANNEL + 1);
 
     voiceChannelsDirty_sfx = voiceChannelsDirty_tmp;
+
+    inline for let _I in 0..(N_SFX_CHANNELS - 1) {
+        sfx_remainingTicks[_I]--;
+    }
 }
 
 
@@ -986,16 +998,48 @@ func stop_sound_effects(unused : u8 in y) {
 
 
 func play_sound_effect(sfx_id : u8 in y) {
+    let BOTH_SFX_ACTIVE = (1 << 7) | (1 << 6);
+
     if y < commonDataHeader.nSoundEffects {
         a = activeSoundEffects;
-        inline for let i in 0..(N_SFX_CHANNELS - 1) {
+        if a >= BOTH_SFX_ACTIVE {
+            // Both sound effect channels are active,
+            // check remaining ticks and drop the sound effect that will finish first.
+
+            // Assumes 2 sound effect channels
+            ya = sfx_remainingTicks[0];
+            cmp(ya, sfx_remainingTicks[1]);
+
+            y = IO.ToDriver.parameter0;
+            goto _play_sfx_0 if !carry;
+            goto _play_sfx_1;
+        }
+        else {
+            // At most 1 sound effect channel is active
             a <<<= 1;
-            if !carry {
-                x = LAST_SFX_CHANNEL - i;
-                return __play_sfx_on_channel(x, y);
-            }
+            goto _play_sfx_1 if !carry;
+            goto _play_sfx_0;
         }
     }
+}
+
+
+inline func __play_sfx__inline(let _I : u8, sfx_id : u8 in y) {
+    <:sfx_remainingTicks[_I] = a = commonData.soundEffects_ticks_l[y];
+    >:sfx_remainingTicks[_I] = a = commonData.soundEffects_ticks_h[y];
+}
+
+func _play_sfx_0(sfx_id : u8 in y) {
+    __play_sfx__inline(0, y);
+    return __play_sfx_on_channel(FIRST_SFX_CHANNEL, y);
+}
+
+#[fallthrough]
+func _play_sfx_1(sfx_id : u8 in y) {
+    __play_sfx__inline(1, y);
+
+    x = LAST_SFX_CHANNEL;
+// Fallthrough
 }
 
 
@@ -1006,8 +1050,8 @@ func __play_sfx_on_channel(channelIndex : u8 in x, sfx_id : u8 in y) {
     // pan
     zpTmp = IO.ToDriver.parameter1;
 
-    channelSoA.instructionPtr_l[x] = a = commonData.soundEffects_l[y];
-    channelSoA.instructionPtr_h[x] = a = commonData.soundEffects_h[y];
+    channelSoA.instructionPtr_l[x] = a = commonData.soundEffects_addr_l[y];
+    channelSoA.instructionPtr_h[x] = a = commonData.soundEffects_addr_h[y];
 
 
     a = ChannelVoiceBit[x];

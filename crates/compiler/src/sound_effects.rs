@@ -7,7 +7,7 @@
 use crate::bytecode::{opcodes, BcTerminator, BytecodeContext};
 use crate::bytecode_assembler::BytecodeAssembler;
 use crate::data::{InstrumentOrSample, Name, UniqueNamesList};
-use crate::driver_constants::SFX_TICK_CLOCK;
+use crate::driver_constants::{COMMON_DATA_BYTES_PER_SOUND_EFFECT, SFX_TICK_CLOCK};
 use crate::errors::{
     BytecodeAssemblerError, CombineSoundEffectsError, ErrorWithPos, OtherSfxError,
     SoundEffectError, SoundEffectErrorList, SoundEffectsFileError,
@@ -21,33 +21,35 @@ use crate::time::{TickClock, TickCounter};
 use std::collections::HashMap;
 use std::time::Duration;
 
+// Increment the sfx header tick counter by a fixed amount to prevent it underflowing
+pub const SFX_TICKS_OFFSET: u32 = 64;
+
+pub const MAX_SFX_TICKS: TickCounter = TickCounter::new(u16::MAX as u32 - SFX_TICKS_OFFSET);
+
 const COMMENT_CHAR: char = ';';
 
 #[derive(Debug)]
-pub struct BytecodeSoundEffect {
-    bytecode: Vec<u8>,
-    tick_counter: TickCounter,
+enum SfxData {
+    Mml(mml::MmlSoundEffect),
+    BytecodeAssembly(Vec<u8>),
 }
 
 #[derive(Debug)]
-pub enum CompiledSoundEffect {
-    Mml(mml::MmlSoundEffect),
-    BytecodeAssembly(BytecodeSoundEffect),
+pub struct CompiledSoundEffect {
+    data: SfxData,
+    tick_counter: TickCounter,
 }
 
 impl CompiledSoundEffect {
     pub fn bytecode(&self) -> &[u8] {
-        match &self {
-            CompiledSoundEffect::BytecodeAssembly(s) => &s.bytecode,
-            CompiledSoundEffect::Mml(s) => s.bytecode(),
+        match &self.data {
+            SfxData::BytecodeAssembly(s) => s,
+            SfxData::Mml(s) => s.bytecode(),
         }
     }
 
     pub fn tick_counter(&self) -> TickCounter {
-        match &self {
-            CompiledSoundEffect::BytecodeAssembly(s) => s.tick_counter,
-            CompiledSoundEffect::Mml(s) => s.tick_counter(),
-        }
+        self.tick_counter
     }
 
     pub fn duration(&self) -> Duration {
@@ -57,9 +59,9 @@ impl CompiledSoundEffect {
 
     #[cfg(feature = "mml_tracking")]
     pub fn cursor_tracker(&self) -> Option<&mml::CursorTracker> {
-        match &self {
-            CompiledSoundEffect::BytecodeAssembly(_) => None,
-            CompiledSoundEffect::Mml(s) => Some(s.cursor_tracker()),
+        match &self.data {
+            SfxData::BytecodeAssembly(_) => None,
+            SfxData::Mml(s) => Some(s.cursor_tracker()),
         }
     }
 }
@@ -70,7 +72,10 @@ fn compile_mml_sound_effect(
     pitch_table: &PitchTable,
 ) -> Result<CompiledSoundEffect, SoundEffectErrorList> {
     match mml::compile_sound_effect(sfx, inst_map, pitch_table) {
-        Ok(o) => Ok(CompiledSoundEffect::Mml(o)),
+        Ok(o) => Ok(CompiledSoundEffect {
+            tick_counter: o.tick_counter(),
+            data: SfxData::Mml(o),
+        }),
         Err(errors) => Err(errors),
     }
 }
@@ -110,16 +115,23 @@ fn compile_bytecode_sound_effect(
 
     if tick_counter.is_zero() {
         errors.push(ErrorWithPos(
-            last_line_range,
+            last_line_range.clone(),
             BytecodeAssemblerError::NoTicksInSoundEffect,
         ));
     }
 
+    if tick_counter > MAX_SFX_TICKS {
+        errors.push(ErrorWithPos(
+            last_line_range,
+            BytecodeAssemblerError::TooManySfxTicks(tick_counter),
+        ));
+    }
+
     if errors.is_empty() {
-        Ok(CompiledSoundEffect::BytecodeAssembly(BytecodeSoundEffect {
-            bytecode: out.unwrap(),
+        Ok(CompiledSoundEffect {
+            data: SfxData::BytecodeAssembly(out.unwrap()),
             tick_counter,
-        }))
+        })
     } else {
         Err(SoundEffectErrorList::BytecodeErrors(errors))
     }
@@ -182,14 +194,45 @@ pub fn compile_sound_effects_file(
     }
 }
 
+pub(crate) struct SfxHeader {
+    pub(crate) offset: u16,
+    pub(crate) ticks: u16,
+}
+
 pub struct CombinedSoundEffectsData {
+    pub(crate) sfx_header: Vec<SfxHeader>,
     pub(crate) sfx_data: Vec<u8>,
-    pub(crate) sfx_offsets: Vec<usize>,
 }
 
 impl CombinedSoundEffectsData {
     pub fn sfx_data_size(&self) -> usize {
-        2 * self.sfx_offsets.len() + self.sfx_data.len()
+        self.sfx_header.len() * COMMON_DATA_BYTES_PER_SOUND_EFFECT + self.sfx_data.len()
+    }
+
+    pub(crate) fn sfx_header_addr_l_iter(
+        &self,
+        sfx_data_addr: u16,
+    ) -> impl Iterator<Item = u8> + '_ {
+        self.sfx_header
+            .iter()
+            .map(move |h| (h.offset + sfx_data_addr).to_le_bytes()[0])
+    }
+
+    pub(crate) fn sfx_header_addr_h_iter(
+        &self,
+        sfx_data_addr: u16,
+    ) -> impl Iterator<Item = u8> + '_ {
+        self.sfx_header
+            .iter()
+            .map(move |h| (h.offset + sfx_data_addr).to_le_bytes()[1])
+    }
+
+    pub(crate) fn sfx_header_ticks_l_iter(&self) -> impl Iterator<Item = u8> + '_ {
+        self.sfx_header.iter().map(|h| (h.ticks).to_le_bytes()[0])
+    }
+
+    pub(crate) fn sfx_header_ticks_h_iter(&self) -> impl Iterator<Item = u8> + '_ {
+        self.sfx_header.iter().map(|h| (h.ticks).to_le_bytes()[1])
     }
 }
 
@@ -216,15 +259,21 @@ pub fn combine_sound_effects(
         return Err(CombineSoundEffectsError::NoSoundEffectFiles);
     }
 
+    let mut sfx_header = Vec::with_capacity(export_order.len());
     let mut sfx_data = Vec::new();
-    let mut sfx_offsets = Vec::with_capacity(export_order.len());
 
     let mut missing = Vec::new();
 
     for name in export_order {
         match sfx_map.get(name) {
             Some(s) => {
-                sfx_offsets.push(sfx_data.len());
+                let t = s.tick_counter.value();
+                assert!(t < MAX_SFX_TICKS.value());
+
+                sfx_header.push(SfxHeader {
+                    offset: sfx_data.len().try_into().unwrap_or(0),
+                    ticks: u16::try_from(t + SFX_TICKS_OFFSET).unwrap(),
+                });
                 sfx_data.extend(s.bytecode());
             }
             None => missing.push(name.as_str().to_owned()),
@@ -233,8 +282,8 @@ pub fn combine_sound_effects(
 
     if missing.is_empty() {
         Ok(CombinedSoundEffectsData {
+            sfx_header,
             sfx_data,
-            sfx_offsets,
         })
     } else {
         Err(CombineSoundEffectsError::MissingSoundEffects(missing))
@@ -243,8 +292,8 @@ pub fn combine_sound_effects(
 
 pub fn blank_compiled_sound_effects() -> CombinedSoundEffectsData {
     CombinedSoundEffectsData {
+        sfx_header: Vec::new(),
         sfx_data: Vec::new(),
-        sfx_offsets: Vec::new(),
     }
 }
 
@@ -252,8 +301,11 @@ pub fn blank_compiled_sound_effects() -> CombinedSoundEffectsData {
 /// Used by the GUI to allocate a block of Audio-RAM that the audio-thread can write sound-effect bytecode to.
 pub fn tad_gui_sfx_data(buffer_size: usize) -> CombinedSoundEffectsData {
     CombinedSoundEffectsData {
+        sfx_header: vec![SfxHeader {
+            offset: 0,
+            ticks: MAX_SFX_TICKS.value().try_into().unwrap(),
+        }],
         sfx_data: vec![opcodes::DISABLE_CHANNEL; buffer_size],
-        sfx_offsets: vec![0; 1],
     }
 }
 

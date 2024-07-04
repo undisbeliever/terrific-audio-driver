@@ -61,7 +61,7 @@ pub struct TickCounter {
 }
 
 impl TickCounter {
-    pub fn new(value: u32) -> TickCounter {
+    pub const fn new(value: u32) -> TickCounter {
         Self { value }
     }
 

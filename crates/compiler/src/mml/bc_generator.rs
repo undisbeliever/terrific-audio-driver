@@ -26,6 +26,7 @@ use crate::errors::{ErrorWithPos, MmlChannelError, MmlError, ValueError};
 use crate::notes::{Note, SEMITONES_PER_OCTAVE};
 use crate::pitch_table::PitchTable;
 use crate::songs::{Channel, LoopPoint, Subroutine};
+use crate::sound_effects::MAX_SFX_TICKS;
 use crate::time::{TickClock, TickCounter, ZenLen, DEFAULT_ZENLEN};
 
 use std::cmp::max;
@@ -1273,7 +1274,14 @@ pub fn parse_and_compile_sound_effect(
         }
     };
 
-    let (_, errors) = parser.finalize();
+    let (_, mut errors) = parser.finalize();
+
+    if tick_counter > MAX_SFX_TICKS {
+        errors.push(ErrorWithPos(
+            last_pos.to_range(1),
+            MmlError::TooManySfxTicks(tick_counter),
+        ));
+    }
 
     if errors.is_empty() {
         Ok(MmlSoundEffect {

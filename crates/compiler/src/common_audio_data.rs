@@ -87,7 +87,7 @@ pub fn build_common_audio_data(
 
     let n_instruments_and_samples = samples_and_instruments.n_instruments;
     let n_dir_items = samples_and_instruments.brr_directory_offsets.len();
-    let n_sound_effects = sound_effects.sfx_offsets.len();
+    let n_sound_effects = sound_effects.sfx_header.len();
 
     if n_instruments_and_samples > MAX_INSTRUMENTS_AND_SAMPLES {
         errors.push(CommonAudioDataError::TooManyInstrumentsAndSamples(
@@ -163,19 +163,12 @@ pub fn build_common_audio_data(
     out.extend(&samples_and_instruments.instruments_adsr1);
     out.extend(&samples_and_instruments.instruments_adsr2_or_gain);
 
-    // soundEffects_l
+    // soundEffects SoA
     let sfx_table_addr = u16::try_from(out.len()).unwrap() + addresses::COMMON_DATA;
-    for o in &sound_effects.sfx_offsets {
-        // This should never panic, `o` < sfx_data.len().
-        let addr = u16::try_from(*o).unwrap() + sfx_data_addr;
-        out.push(addr.to_le_bytes()[0]);
-    }
-
-    // soundEffects_h
-    for o in &sound_effects.sfx_offsets {
-        let addr = u16::try_from(*o).unwrap() + sfx_data_addr;
-        out.push(addr.to_le_bytes()[1]);
-    }
+    out.extend(sound_effects.sfx_header_addr_l_iter(sfx_data_addr));
+    out.extend(sound_effects.sfx_header_addr_h_iter(sfx_data_addr));
+    out.extend(sound_effects.sfx_header_ticks_l_iter());
+    out.extend(sound_effects.sfx_header_ticks_h_iter());
 
     assert_eq!(out.len(), header_size);
     assert_eq!(
