@@ -68,8 +68,9 @@ use compiler::data;
 use compiler::data::ProjectFile;
 use compiler::driver_constants;
 use compiler::path::{ParentPathBuf, SourcePathBuf};
+use compiler::sfx_file::{convert_sfx_inputs_lossy, SoundEffectsFile};
 use compiler::songs::SongData;
-use compiler::sound_effects::{convert_sfx_inputs_lossy, SoundEffectInput, SoundEffectsFile};
+use compiler::sound_effects::SoundEffectInput;
 
 use compiler::time::TickCounter;
 use compiler_thread::{PlaySampleArgs, SampleOutput};

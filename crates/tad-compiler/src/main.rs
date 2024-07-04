@@ -21,6 +21,7 @@ use compiler::{
     mml::{compile_mml, MmlTickCountTable},
     pitch_table::{build_pitch_table, PitchTable},
     samples::build_sample_and_instrument_data,
+    sfx_file,
     songs::{song_duration_string, validate_song_size, SongData},
     sound_effects,
     spc_file_export::export_spc_file,
@@ -106,7 +107,7 @@ fn compile_sound_effects(
 ) -> Result<sound_effects::CombinedSoundEffectsData, ()> {
     let sound_effects = match &pf.sound_effect_file {
         Some(sfx_file_source) => {
-            match sound_effects::load_sound_effects_file(sfx_file_source, &pf.parent_path) {
+            match sfx_file::load_sound_effects_file(sfx_file_source, &pf.parent_path) {
                 Err(e) => {
                     eprintln!("{}", e);
                     return Err(());

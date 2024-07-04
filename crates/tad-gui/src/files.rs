@@ -13,9 +13,7 @@ use crate::{GuiMessage, ProjectData, SoundEffectsData};
 use compiler::data;
 use compiler::data::{load_text_file_with_limit, Name, ProjectFile, Song, TextFile, MAX_FILE_SIZE};
 use compiler::path::{ParentPathBuf, SourcePathBuf, SourcePathResult};
-use compiler::sound_effects::{
-    build_sound_effects_file, load_sound_effects_file, SoundEffectsFile,
-};
+use compiler::sfx_file::{build_sound_effects_file, load_sound_effects_file, SoundEffectsFile};
 
 extern crate fltk;
 use fltk::dialog;

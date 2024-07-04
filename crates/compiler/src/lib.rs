@@ -24,6 +24,7 @@ pub mod notes;
 pub mod path;
 pub mod pitch_table;
 pub mod samples;
+pub mod sfx_file;
 pub mod songs;
 pub mod sound_effects;
 pub mod spc_file_export;

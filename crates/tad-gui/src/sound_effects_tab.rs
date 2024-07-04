@@ -20,7 +20,8 @@ use compiler::data;
 use compiler::data::Name;
 use compiler::driver_constants::{CENTER_PAN, MAX_PAN};
 use compiler::errors::SfxErrorLines;
-use compiler::sound_effects::{SoundEffectInput, SoundEffectText, SoundEffectsFile};
+use compiler::sfx_file::SoundEffectsFile;
+use compiler::sound_effects::{SoundEffectInput, SoundEffectText};
 
 use compiler::time::TickCounter;
 use fltk::app::{self, event_key};
