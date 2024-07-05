@@ -28,13 +28,14 @@ use shvc_sound_emu::ShvcSoundEmu;
 extern crate sdl2;
 use sdl2::audio::{AudioCallback, AudioDevice, AudioSpecDesired};
 
-use std::collections::HashMap;
 use std::ops::Range;
 use std::sync::{mpsc, Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 
+use crate::compiler_thread::CommonAudioDataWithSfx;
 use crate::compiler_thread::ItemId;
+use crate::compiler_thread::SfxId;
 use crate::GuiMessage;
 
 /// Sample rate to run the audio driver at
@@ -92,12 +93,6 @@ pub struct SongSkip {
 #[derive(Debug)]
 pub struct CommonAudioDataWithSfxBuffer(pub CommonAudioData);
 
-#[derive(Debug)]
-pub struct CommonAudioDataWithSfx {
-    pub common_audio_data: CommonAudioData,
-    pub sfx_id_map: HashMap<ItemId, usize>,
-}
-
 pub enum AudioMessage {
     RingBufferConsumed(PrivateToken),
 
@@ -114,7 +109,7 @@ pub enum AudioMessage {
     CommandAudioDataWithSfxChanged(Option<Arc<CommonAudioDataWithSfx>>),
 
     PlaySong(ItemId, Arc<SongData>, Option<SongSkip>, MusicChannelsMask),
-    PlaySoundEffectCommand(ItemId, Pan),
+    PlaySoundEffectCommand(SfxId, Pan),
     PlaySongWithSfxBuffer(ItemId, Arc<SongData>, Option<SongSkip>),
     PlaySfxUsingSfxBuffer(Arc<CompiledSoundEffect>, Pan),
     PlaySample(CommonAudioData, Box<SongData>),
@@ -420,7 +415,7 @@ enum AudioDataState {
 enum SfxQueue {
     None,
     TestSfx(Arc<CompiledSoundEffect>, Pan),
-    PlaySfx(ItemId, Pan),
+    PlaySfx(SfxId, Pan),
 }
 
 struct TadEmu {
@@ -689,13 +684,13 @@ impl TadEmu {
         apuram[addresses::IO_MUSIC_CHANNELS_MASK as usize] = mask.0;
     }
 
-    fn queue_sound_effect(&mut self, id: ItemId, pan: Pan) {
+    fn queue_sound_effect(&mut self, sfx_id: SfxId, pan: Pan) {
         if matches!(self.data_state, AudioDataState::SongAndSfx(..)) {
-            self.sfx_queue = SfxQueue::PlaySfx(id, pan);
+            self.sfx_queue = SfxQueue::PlaySfx(sfx_id, pan);
         } else {
             let r = self.load_blank_song().is_ok();
             if r {
-                self.sfx_queue = SfxQueue::PlaySfx(id, pan);
+                self.sfx_queue = SfxQueue::PlaySfx(sfx_id, pan);
             }
         }
     }
@@ -720,21 +715,9 @@ impl TadEmu {
 
         match &self.sfx_queue {
             SfxQueue::None => (),
-            SfxQueue::PlaySfx(id, pan) => {
-                let c = match &self.data_state {
-                    AudioDataState::SongAndSfx(c, _) => c.as_ref(),
-                    _ => {
-                        self.sfx_queue = SfxQueue::None;
-                        return;
-                    }
-                };
-
+            SfxQueue::PlaySfx(sfx_id, pan) => {
                 if self.is_io_command_acknowledged() {
-                    if let Some(&sfx_index) = c.sfx_id_map.get(id) {
-                        if let Ok(sfx) = sfx_index.try_into() {
-                            self.try_send_io_command(io_commands::PLAY_SOUND_EFFECT, sfx, pan.0);
-                        }
-                    }
+                    self.try_send_io_command(io_commands::PLAY_SOUND_EFFECT, sfx_id.value(), pan.0);
                     self.sfx_queue = SfxQueue::None;
                 }
             }

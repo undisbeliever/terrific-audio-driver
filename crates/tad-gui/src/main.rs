@@ -38,7 +38,7 @@ mod sound_effects_tab;
 
 use crate::about_tab::AboutTab;
 use crate::compiler_thread::{
-    CompilerOutput, InstrumentOutput, ItemId, SoundEffectOutput, ToCompiler,
+    CompilerOutput, InstrumentOutput, ItemId, SfxId, SoundEffectOutput, ToCompiler,
 };
 use crate::files::{
     add_song_to_pf_dialog, load_mml_file, load_pf_sfx_file,
@@ -163,7 +163,7 @@ pub enum GuiMessage {
 
     PlaySong(ItemId, String, Option<SongSkip>, MusicChannelsMask),
     PlaySongForSfxTab(ItemId, TickCounter),
-    PlaySoundEffectCommand(usize, Pan),
+    PlaySoundEffectCommand(SfxId, Pan),
     PlayEditedSoundEffect(ItemId, Pan),
     PlayInstrument(ItemId, PlaySampleArgs),
     PlaySample(ItemId, PlaySampleArgs),
@@ -317,7 +317,7 @@ impl Project {
                 sender.clone(),
             ),
 
-            sfx_window: SfxWindow::new(data.sfx_export_orders.list(), sender.clone()),
+            sfx_window: SfxWindow::new(sender.clone()),
 
             samples_tab: SamplesTab::new(data.instruments(), data.samples(), sender.clone()),
             sound_effects_tab: SoundEffectsTab::new(sender.clone()),
@@ -360,8 +360,6 @@ impl Project {
                     .data
                     .sfx_export_orders
                     .process(m, &mut self.project_tab.sfx_export_order_table);
-
-                self.sfx_window.sfx_export_order_edited(&a);
 
                 self.mark_project_file_unsaved(a);
 
@@ -451,12 +449,10 @@ impl Project {
                     .compiler_sender
                     .send(ToCompiler::PlaySongWithSfxBuffer(id, ticks));
             }
-            GuiMessage::PlaySoundEffectCommand(index, pan) => {
-                if let Some((id, _)) = self.data.sfx_export_orders.list().get_with_id(index) {
-                    let _ = self
-                        .compiler_sender
-                        .send(ToCompiler::PlaySoundEffectCommand(id, pan));
-                }
+            GuiMessage::PlaySoundEffectCommand(sfx_id, pan) => {
+                let _ = self
+                    .audio_sender
+                    .send(AudioMessage::PlaySoundEffectCommand(sfx_id, pan));
             }
             GuiMessage::PlayEditedSoundEffect(id, pan) => {
                 let _ = self
@@ -758,11 +754,8 @@ impl Project {
                 self.tab_manager
                     .set_tab_label_color(&mut self.samples_tab, cad.is_ok_or_none());
 
+                self.sfx_window.cad_output_changed(&cad);
                 self.samples_tab.set_common_audio_data(cad);
-            }
-
-            CompilerOutput::CanSendPlaySfxCommands(can_play_sfx) => {
-                self.sfx_window.set_can_play_sfx(can_play_sfx);
             }
 
             CompilerOutput::NumberOfMissingSoundEffects(n_missing) => {

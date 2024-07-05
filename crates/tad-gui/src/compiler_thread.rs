@@ -9,8 +9,7 @@ use crate::sample_analyser::{self, SampleAnalysis};
 use crate::GuiMessage;
 
 use crate::audio_thread::{
-    AudioMessage, CommonAudioDataWithSfx, CommonAudioDataWithSfxBuffer, MusicChannelsMask, Pan,
-    SongSkip, SFX_BUFFER_SIZE,
+    AudioMessage, CommonAudioDataWithSfxBuffer, MusicChannelsMask, Pan, SongSkip, SFX_BUFFER_SIZE,
 };
 
 use std::collections::hash_map::Entry;
@@ -125,7 +124,6 @@ pub enum ToCompiler {
     SoundEffects(ItemChanged<SoundEffectInput>),
     PlaySongWithSfxBuffer(ItemId, TickCounter),
     PlaySfxUsingSfxBuffer(ItemId, Pan),
-    PlaySoundEffectCommand(ItemId, Pan),
 
     SongTabClosed(ItemId),
     SongChanged(ItemId, String),
@@ -163,7 +161,6 @@ pub enum CompilerOutput {
 
     Song(ItemId, SongOutput),
 
-    CanSendPlaySfxCommands(bool),
     NumberOfMissingSoundEffects(usize),
 
     LargestSongSize(SongAramSize),
@@ -172,6 +169,48 @@ pub enum CompilerOutput {
     SpcFileResult(Result<(String, Vec<u8>), SpcFileError>),
 
     SampleAnalysis(Result<SampleAnalysis, BrrError>),
+}
+
+#[derive(Debug)]
+pub struct SfxId(u8);
+
+impl SfxId {
+    pub fn value(&self) -> u8 {
+        self.0
+    }
+}
+
+#[derive(Debug)]
+pub struct SfxExportOrder {
+    pub names: Vec<data::Name>,
+}
+
+impl SfxExportOrder {
+    pub fn new(names: Vec<data::Name>) -> SfxExportOrder {
+        SfxExportOrder { names }
+    }
+
+    pub fn n_sound_effects(&self) -> usize {
+        self.names.len()
+    }
+
+    pub fn export_order(&self) -> &[data::Name] {
+        &self.names
+    }
+
+    pub fn sfx_id(&self, index: usize) -> Option<SfxId> {
+        if index < self.names.len() {
+            index.try_into().ok().map(SfxId)
+        } else {
+            None
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct CommonAudioDataWithSfx {
+    pub common_audio_data: CommonAudioData,
+    pub sfx_export_order: Arc<SfxExportOrder>,
 }
 
 #[derive(Debug)]
@@ -680,19 +719,23 @@ fn create_sfx_compiler<'a>(
     }
 }
 
+fn build_sfx_export_order(eo: &IList<data::Name>) -> Arc<SfxExportOrder> {
+    Arc::new(SfxExportOrder::new(eo.items().to_vec()))
+}
+
 fn count_missing_sfx(
-    sfx_export_order: &IList<data::Name>,
+    sfx_export_order: &SfxExportOrder,
     sound_effects: &CList<SoundEffectInput, Option<Arc<CompiledSoundEffect>>>,
     sender: &Sender,
 ) {
     if sound_effects.items().is_empty() {
-        let n_missing = sfx_export_order.items().len();
+        let n_missing = sfx_export_order.n_sound_effects();
         sender.send(CompilerOutput::NumberOfMissingSoundEffects(n_missing));
         return;
     }
 
     let n_missing = sfx_export_order
-        .items()
+        .export_order()
         .iter()
         .filter(|name| !sound_effects.name_map().contains_key(name))
         .count();
@@ -701,18 +744,18 @@ fn count_missing_sfx(
 }
 
 fn calc_sfx_data_size(
-    sfx_export_order: &IList<data::Name>,
+    sfx_export_order: &SfxExportOrder,
     sound_effects: &CList<SoundEffectInput, Option<Arc<CompiledSoundEffect>>>,
 ) -> usize {
     let sfx_size: usize = sfx_export_order
-        .items()
+        .export_order()
         .iter()
         .filter_map(|name| sound_effects.get_output_for_name(name))
         .filter_map(Option::as_ref)
         .map(|o| o.bytecode().len())
         .sum();
 
-    let table_size = sfx_export_order.items().len() * COMMON_DATA_BYTES_PER_SOUND_EFFECT;
+    let table_size = sfx_export_order.n_sound_effects() * COMMON_DATA_BYTES_PER_SOUND_EFFECT;
 
     table_size + sfx_size
 }
@@ -733,7 +776,7 @@ impl SongDependencies {
 fn build_common_data_no_sfx_and_song_dependencies(
     instruments: &CList<data::Instrument, Option<InstrumentSampleData>>,
     samples: &CList<data::Sample, Option<SampleSampleData>>,
-    sfx_export_order: &IList<data::Name>,
+    sfx_export_order: &SfxExportOrder,
     sound_effects: &CList<SoundEffectInput, Option<Arc<CompiledSoundEffect>>>,
     blank_sfx_data: &CombinedSoundEffectsData,
 ) -> Result<(Arc<CommonAudioDataWithSfxBuffer>, SongDependencies), CombineSamplesError> {
@@ -789,22 +832,22 @@ impl CompiledSfxMap for CList<SoundEffectInput, Option<Arc<CompiledSoundEffect>>
 /// Returns `(CommonAudioDataWithSize, sfx_data_size)`
 fn build_common_audio_data_with_sfx(
     dep: &Option<SongDependencies>,
-    sfx_export_order: &IList<data::Name>,
+    sfx_export_order: Arc<SfxExportOrder>,
     sound_effects: &CList<SoundEffectInput, Option<Arc<CompiledSoundEffect>>>,
 ) -> (Option<Arc<CommonAudioDataWithSfx>>, usize) {
-    let sfx_data = combine_sound_effects(sound_effects, sfx_export_order.items());
+    let sfx_data = combine_sound_effects(sound_effects, sfx_export_order.export_order());
 
     // Always try to calculate sfx_data size (to keep song size checks and Project tab up-to-date)
     let sfx_data_size = match &sfx_data {
         Ok(s) => s.sfx_data_size(),
-        Err(_) => calc_sfx_data_size(sfx_export_order, sound_effects),
+        Err(_) => calc_sfx_data_size(&sfx_export_order, sound_effects),
     };
 
     let cad = match (&dep, &sfx_data) {
         (Some(dep), Ok(sd)) => match build_common_audio_data(&dep.combined_samples, sd) {
             Ok(cad) => Some(Arc::new(CommonAudioDataWithSfx {
                 common_audio_data: cad,
-                sfx_id_map: sfx_export_order.map.clone(),
+                sfx_export_order,
             })),
             Err(_) => None,
         },
@@ -1142,7 +1185,7 @@ fn bg_thread(
 
     let blank_sfx_data = tad_gui_sfx_data(SFX_BUFFER_SIZE);
 
-    let mut sfx_export_order = IList::new();
+    let mut sfx_export_order_ilist = IList::new();
     let mut pf_songs = IList::new();
     let mut instruments = CList::new();
     let mut samples = CList::new();
@@ -1155,6 +1198,8 @@ fn bg_thread(
     let mut cad_with_sfx_buffer: Option<Arc<CommonAudioDataWithSfxBuffer>> = None;
 
     let mut inst_sample_names = Arc::default();
+
+    let mut sfx_export_order = build_sfx_export_order(&sfx_export_order_ilist);
 
     // Used to test if a sound effect was edited in the sfx tab.
     let mut cad_with_sfx_out_of_date = true;
@@ -1169,11 +1214,12 @@ fn bg_thread(
             ToCompiler::LoadProject(p) => {
                 songs.replace_all_and_load_songs(&p.pf_songs);
 
-                sfx_export_order.replace_all(p.sfx_export_order);
+                sfx_export_order_ilist.replace_all(p.sfx_export_order);
                 pf_songs.replace_all(p.pf_songs);
                 instruments.replace_all(p.instruments);
                 samples.replace_all(p.samples);
 
+                sfx_export_order = build_sfx_export_order(&sfx_export_order_ilist);
                 inst_sample_names = instrument_and_sample_names(&instruments, &samples);
 
                 compile_all_samples(
@@ -1205,7 +1251,8 @@ fn bg_thread(
             }
 
             ToCompiler::SfxExportOrder(m) => {
-                sfx_export_order.process_message(m);
+                sfx_export_order_ilist.process_message(m);
+                sfx_export_order = build_sfx_export_order(&sfx_export_order_ilist);
                 count_missing_sfx(&sfx_export_order, &sound_effects, &sender);
 
                 pending_build_cad_with_sfx = true;
@@ -1259,7 +1306,6 @@ fn bg_thread(
                     count_missing_sfx(&sfx_export_order, &sound_effects, &sender);
                 }
 
-                sender.send(CompilerOutput::CanSendPlaySfxCommands(false));
                 sender.send_audio(AudioMessage::CommandAudioDataWithSfxChanged(None));
 
                 cad_with_sfx_out_of_date = true;
@@ -1305,9 +1351,6 @@ fn bg_thread(
                         ));
                     }
                 }
-            }
-            ToCompiler::PlaySoundEffectCommand(id, pan) => {
-                sender.send_audio(AudioMessage::PlaySoundEffectCommand(id, pan));
             }
 
             ToCompiler::SongTabClosed(id) => {
@@ -1404,7 +1447,7 @@ fn bg_thread(
 
             let (cad, sfx_data_size) = build_common_audio_data_with_sfx(
                 &song_dependencies,
-                &sfx_export_order,
+                sfx_export_order.clone(),
                 &sound_effects,
             );
 
@@ -1425,7 +1468,6 @@ fn bg_thread(
                 pending_cad_output = CadOutput::NoSfx(c.clone(), inst_sample_names.clone());
             }
 
-            sender.send(CompilerOutput::CanSendPlaySfxCommands(cad.is_some()));
             sender.send_audio(AudioMessage::CommandAudioDataWithSfxChanged(cad));
 
             cad_with_sfx_out_of_date = false;
