@@ -159,7 +159,7 @@ pub struct SoundEffectsTab {
     add_missing_sfx_button: Button,
 
     main_group: Flex,
-    main_toolbar: Pack,
+    sfx_group: Flex,
 
     name: Input,
 
@@ -209,8 +209,14 @@ impl SoundEffectsTab {
 
         let button_size = ch_units_to_width(&main_group, 5);
 
+        let mut sfx_group = Flex::default().column();
+        main_group.fixed(
+            &sfx_group,
+            button_size + input_height(&sfx_group) + sfx_group.pad(),
+        );
+
         let main_toolbar = Pack::default().with_type(PackType::Horizontal);
-        main_group.fixed(&main_toolbar, button_size);
+        sfx_group.fixed(&main_toolbar, button_size);
 
         let button = |label: &str, tooltip: &str| {
             let mut b = Button::default()
@@ -253,8 +259,10 @@ impl SoundEffectsTab {
         sound_effect_type.add_choice(SoundEffectTypeChoice::CHOICES);
         name_flex.fixed(&sound_effect_type, ch_units_to_width(&name_flex, 20));
 
-        main_group.fixed(&name_flex, input_height(&name));
+        sfx_group.fixed(&name_flex, input_height(&name));
         name_flex.end();
+
+        sfx_group.end();
 
         let mut editor = MmlEditor::new("", TextFormat::SoundEffectHeader);
         editor.set_text_size(editor.widget().text_size() * 12 / 10);
@@ -425,7 +433,7 @@ impl SoundEffectsTab {
             add_missing_sfx_button,
 
             main_group,
-            main_toolbar,
+            sfx_group,
             name,
 
             console,
@@ -572,17 +580,14 @@ impl ListEditor<SoundEffectInput> for SoundEffectsTab {
             state.selected = None;
 
             state.name.set_value("Header (not a sound effect)");
-            state.name.deactivate();
-
             state.sound_effect_type.set_value(-1);
-            state.sound_effect_type.deactivate();
 
             state.editor.set_buffer(self.header_buffer.clone());
         }
 
         self.sfx_table.clear_selected();
 
-        self.main_toolbar.deactivate();
+        self.sfx_group.deactivate();
     }
 
     fn set_selected(&mut self, index: usize, id: ItemId, sfx: &SoundEffectInput) {
@@ -597,7 +602,6 @@ impl ListEditor<SoundEffectInput> for SoundEffectsTab {
 
                     self.name.set_value(sfx.name.as_str());
                     self.name.clear_changed();
-                    self.name.activate();
 
                     let type_choice = match &sfx.sfx {
                         SoundEffectText::BytecodeAssembly(_) => {
@@ -605,9 +609,7 @@ impl ListEditor<SoundEffectInput> for SoundEffectsTab {
                         }
                         SoundEffectText::Mml(_) => SoundEffectTypeChoice::Mml,
                     };
-
                     state.sound_effect_type.set_value(type_choice.to_i32());
-                    state.sound_effect_type.activate();
 
                     match sfx_buffer {
                         Some(b) => state.editor.set_buffer(b.clone()),
@@ -624,7 +626,7 @@ impl ListEditor<SoundEffectInput> for SoundEffectsTab {
 
                     self.sfx_table.set_selected(index, id, sfx);
 
-                    self.main_toolbar.activate();
+                    self.sfx_group.activate();
                     self.main_group.activate();
                 }
                 // This should not happen
