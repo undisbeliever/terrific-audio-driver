@@ -849,10 +849,11 @@ pub fn add_missing_sfx(
     let sfx_list = sfx_data.sound_effects.list();
     let sfx_set: HashSet<&Name> = sfx_list.item_iter().map(|s| &s.name).collect();
 
-    let to_add: Vec<SoundEffectInput> = data
-        .sfx_export_orders
-        .list()
-        .item_iter()
+    let sfx_eo = data.sfx_export_orders.list().item_iter();
+    let lp_sfx_eo = data.low_priority_sfx_export_orders.list().item_iter();
+
+    let to_add: Vec<SoundEffectInput> = sfx_eo
+        .chain(lp_sfx_eo)
         .filter_map(|sfx_name| {
             if !sfx_set.contains(sfx_name) {
                 Some(SoundEffectInput {

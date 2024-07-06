@@ -19,6 +19,7 @@ Audio driver changes:
  * `return_from_subroutine` bytecode instruction disables the channel if it is not in a subroutine.
  * Optimised `skip_last_loop` bytecode instructions
  * Added sound effect dropout behaviour
+    * Low-priority sound effects will not play if both sfx channels are active
 
 IO Command changes:
  * Removed `SET_ENABLED_CHANNELS` IO command, replaced with `SET_MUSIC_CHANNELS`.

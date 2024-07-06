@@ -68,9 +68,9 @@ struct CommonDataHeader {
     // MUST BE <= MAX_SOUND_EFFECTS
     nSoundEffects  : u8,
 
-    // Padding required to ensure `COMMON_DATA_ADDR` is even
-    // (The loader only works with even starting addresses)
-    _padding: u8,
+    // The sfx_id of the first low-priority sound effect.
+    // If both sound effects channels are active and sfx_id >= firstLowPrioritySfx, sfx_id will be dropped.
+    firstLowPrioritySfx: u8,
 
 
     // These fields will be page-aligned

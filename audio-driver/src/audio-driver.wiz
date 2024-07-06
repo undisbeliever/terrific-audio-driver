@@ -1004,6 +1004,10 @@ func play_sound_effect(sfx_id : u8 in y) {
         a = activeSoundEffects;
         if a >= BOTH_SFX_ACTIVE {
             // Both sound effect channels are active,
+
+            // Drop sfx_id if it is a low-priority sound effect
+            goto Return if y >= commonDataHeader.firstLowPrioritySfx;
+
             // check remaining ticks and drop the sound effect that will finish first.
 
             // Assumes 2 sound effect channels
@@ -1021,6 +1025,7 @@ func play_sound_effect(sfx_id : u8 in y) {
             goto _play_sfx_0;
         }
     }
+Return:
 }
 
 

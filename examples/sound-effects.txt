@@ -110,3 +110,15 @@ A o5 {{f a}}4
 
 A @1 v10
 A o5 {e- g}6
+
+=== low_priority_beep ===
+	set_instrument_and_adsr square 14 7 7 22
+    set_volume          128
+
+    play_note           c5 20
+
+
+=== low_priority_long === mml
+@1 square adsr 14 7 7 22
+
+A @1 o5 [c c c r]4

@@ -50,6 +50,8 @@ impl Exporter for Ca65Exporter {
     type MemoryMap = Ca65MemoryMap;
 
     fn generate_include_file(pf: UniqueNamesProjectFile) -> Result<String, std::fmt::Error> {
+        let sfx = &pf.sfx_export_order;
+
         let mut out = String::with_capacity(4096);
 
         write!(
@@ -68,7 +70,7 @@ impl Exporter for Ca65Exporter {
         )?;
 
         writeln!(out, "LAST_SONG_ID = {}", pf.last_song_id())?;
-        writeln!(out, "N_SOUND_EFFECTS = {}", pf.sound_effects.len())?;
+        writeln!(out, "N_SOUND_EFFECTS = {}", sfx.export_order.len())?;
         writeln!(out)?;
 
         writeln!(out, ";; Song enum.")?;
@@ -89,7 +91,10 @@ impl Exporter for Ca65Exporter {
         writeln!(out, ";; Sound Effects enum.")?;
         writeln!(out, ";; Input argument for `Tad_QueueSoundEffect` and `Tad_QueuePannedSoundEffect`")?;
         writeln!(out, ".enum SFX")?;
-        for (i, s) in pf.sound_effects.list().iter().enumerate() {
+        for (i, s) in sfx.export_order.list().iter().enumerate() {
+            if i == sfx.low_priority_index {
+                writeln!(out, "  ; low-priority sound effects")?;
+            }
             writeln!(out, "  {} = {}", s, i)?;
         }
         writeln!(out, ".endenum")?;

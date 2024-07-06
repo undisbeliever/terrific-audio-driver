@@ -266,6 +266,7 @@ pub enum CombineSoundEffectsError {
     NoSoundEffectFiles,
     MissingSoundEffects(Vec<String>),
     DuplicateSoundEffects(Vec<String>),
+    InvalidLowPriorityIndex,
 }
 
 // BrrError is cloneable as the sample file cache caches errors.
@@ -929,6 +930,7 @@ impl Display for CombineSoundEffectsError {
                 names.len(),
                 names.join(", ")
             ),
+            Self::InvalidLowPriorityIndex => write!(f, "Invalid low-priority index"),
         }
     }
 }

@@ -324,6 +324,9 @@ pub struct Project {
     pub samples: Vec<Sample>,
 
     pub sound_effects: Vec<Name>,
+    #[serde(default)]
+    pub low_priority_sound_effects: Vec<Name>,
+
     pub sound_effect_file: Option<SourcePathBuf>,
 
     #[serde(default)]
@@ -444,6 +447,11 @@ pub enum InstrumentOrSample {
     Sample(Sample),
 }
 
+pub struct UniqueSoundEffectExportOrder {
+    pub export_order: UniqueNamesList<Name>,
+    pub low_priority_index: usize,
+}
+
 pub struct UniqueNamesProjectFile {
     pub path: PathBuf,
     pub file_name: String,
@@ -454,7 +462,7 @@ pub struct UniqueNamesProjectFile {
 
     pub instruments_and_samples: UniqueNamesList<InstrumentOrSample>,
 
-    pub sound_effects: UniqueNamesList<Name>,
+    pub sfx_export_order: UniqueSoundEffectExportOrder,
     pub sound_effect_file: Option<SourcePathBuf>,
 
     pub songs: UniqueNamesList<Song>,
@@ -529,6 +537,29 @@ pub fn validate_instrument_and_sample_names<'a>(
     }
 }
 
+pub fn validate_sfx_export_order(
+    sound_effects: Vec<Name>,
+    low_priority_sound_effects: Vec<Name>,
+) -> Result<UniqueSoundEffectExportOrder, ProjectFileErrors> {
+    let mut errors = Vec::new();
+
+    let low_priority_index = sound_effects.len();
+    let export_order = [sound_effects, low_priority_sound_effects].concat();
+
+    let export_order = validate_list_names(export_order, false, MAX_SOUND_EFFECTS, |e| {
+        errors.push(ProjectFileError::SoundEffect(e))
+    });
+
+    if errors.is_empty() {
+        Ok(UniqueSoundEffectExportOrder {
+            export_order,
+            low_priority_index,
+        })
+    } else {
+        Err(ProjectFileErrors(errors))
+    }
+}
+
 pub fn validate_project_file_names(
     pf: ProjectFile,
 ) -> Result<UniqueNamesProjectFile, ProjectFileErrors> {
@@ -548,10 +579,16 @@ pub fn validate_project_file_names(
         |e| errors.push(ProjectFileError::Sample(e)),
     );
 
-    let sound_effects =
-        validate_list_names(pf.contents.sound_effects, false, MAX_SOUND_EFFECTS, |e| {
-            errors.push(ProjectFileError::SoundEffect(e))
-        });
+    let sfx_export_order = match validate_sfx_export_order(
+        pf.contents.sound_effects,
+        pf.contents.low_priority_sound_effects,
+    ) {
+        Ok(sfx) => Some(sfx),
+        Err(e) => {
+            errors.extend(e.0);
+            None
+        }
+    };
 
     let songs = validate_list_names(pf.contents.songs, false, MAX_N_SONGS, |e| {
         errors.push(ProjectFileError::Song(e))
@@ -578,7 +615,7 @@ pub fn validate_project_file_names(
             instruments,
             samples,
             instruments_and_samples: instruments_and_samples.unwrap(),
-            sound_effects,
+            sfx_export_order: sfx_export_order.unwrap(),
             sound_effect_file: pf.contents.sound_effect_file,
             songs,
         })

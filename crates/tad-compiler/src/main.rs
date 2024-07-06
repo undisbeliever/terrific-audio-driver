@@ -24,6 +24,7 @@ use compiler::{
     sfx_file,
     songs::{song_duration_string, validate_song_size, SongData},
     sound_effects,
+    sound_effects::SfxExportOrder,
     spc_file_export::export_spc_file,
 };
 
@@ -128,7 +129,7 @@ fn compile_sound_effects(
             }
         }
         None => {
-            if pf.sound_effects.is_empty() {
+            if pf.sfx_export_order.n_sound_effects() == 0 {
                 HashMap::new()
             } else {
                 eprintln!("No sound effect file in {}", pf.file_name);
@@ -137,7 +138,7 @@ fn compile_sound_effects(
         }
     };
 
-    match sound_effects::combine_sound_effects(&sound_effects, pf.sound_effects.list()) {
+    match sound_effects::combine_sound_effects(&sound_effects, &pf.sfx_export_order) {
         Ok(sfx) => Ok(sfx),
         Err(e) => {
             eprintln!("Error compiling sound effects: {}", e);

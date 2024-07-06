@@ -6,7 +6,7 @@
 
 use crate::bytecode::{opcodes, BcTerminator, BytecodeContext};
 use crate::bytecode_assembler::BytecodeAssembler;
-use crate::data::{InstrumentOrSample, Name, UniqueNamesList};
+use crate::data::{InstrumentOrSample, Name, UniqueNamesList, UniqueSoundEffectExportOrder};
 use crate::driver_constants::{COMMON_DATA_BYTES_PER_SOUND_EFFECT, SFX_TICK_CLOCK};
 use crate::errors::{
     BytecodeAssemblerError, CombineSoundEffectsError, ErrorWithPos, OtherSfxError,
@@ -200,6 +200,7 @@ pub(crate) struct SfxHeader {
 }
 
 pub struct CombinedSoundEffectsData {
+    pub(crate) low_priority_index: u8,
     pub(crate) sfx_header: Vec<SfxHeader>,
     pub(crate) sfx_data: Vec<u8>,
 }
@@ -251,15 +252,42 @@ impl CompiledSfxMap for HashMap<Name, CompiledSoundEffect> {
     }
 }
 
+pub trait SfxExportOrder {
+    fn n_sound_effects(&self) -> usize;
+    fn export_order(&self) -> &[Name];
+    fn low_priority_index(&self) -> usize;
+}
+
+impl SfxExportOrder for UniqueSoundEffectExportOrder {
+    fn n_sound_effects(&self) -> usize {
+        self.export_order.len()
+    }
+
+    fn export_order(&self) -> &[Name] {
+        self.export_order.list()
+    }
+
+    fn low_priority_index(&self) -> usize {
+        self.low_priority_index
+    }
+}
+
 pub fn combine_sound_effects(
     sfx_map: &impl CompiledSfxMap,
-    export_order: &[Name],
+    sfx_export_order: &impl SfxExportOrder,
 ) -> Result<CombinedSoundEffectsData, CombineSoundEffectsError> {
+    let export_order = sfx_export_order.export_order();
+
     if sfx_map.is_empty() {
         return Err(CombineSoundEffectsError::NoSoundEffectFiles);
     }
 
-    let mut sfx_header = Vec::with_capacity(export_order.len());
+    let low_priority_index = match sfx_export_order.low_priority_index().try_into() {
+        Ok(i) => i,
+        Err(_) => return Err(CombineSoundEffectsError::InvalidLowPriorityIndex),
+    };
+
+    let mut sfx_header = Vec::with_capacity(sfx_export_order.n_sound_effects());
     let mut sfx_data = Vec::new();
 
     let mut missing = Vec::new();
@@ -282,6 +310,7 @@ pub fn combine_sound_effects(
 
     if missing.is_empty() {
         Ok(CombinedSoundEffectsData {
+            low_priority_index,
             sfx_header,
             sfx_data,
         })
@@ -292,6 +321,7 @@ pub fn combine_sound_effects(
 
 pub fn blank_compiled_sound_effects() -> CombinedSoundEffectsData {
     CombinedSoundEffectsData {
+        low_priority_index: u8::MAX,
         sfx_header: Vec::new(),
         sfx_data: Vec::new(),
     }
@@ -301,6 +331,7 @@ pub fn blank_compiled_sound_effects() -> CombinedSoundEffectsData {
 /// Used by the GUI to allocate a block of Audio-RAM that the audio-thread can write sound-effect bytecode to.
 pub fn tad_gui_sfx_data(buffer_size: usize) -> CombinedSoundEffectsData {
     CombinedSoundEffectsData {
+        low_priority_index: u8::MAX,
         sfx_header: vec![SfxHeader {
             offset: 0,
             ticks: MAX_SFX_TICKS.value().try_into().unwrap(),

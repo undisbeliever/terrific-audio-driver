@@ -1,7 +1,7 @@
 {
   "_about": {
     "file_type": "Terrific Audio Driver project file",
-    "version": "0.0.6"
+    "version": "0.0.9"
   },
   "instruments": [
     {
@@ -117,6 +117,10 @@
     "robot_ascend",
     "robot_fires_laser",
     "fire_arrow"
+  ],
+  "low_priority_sound_effects": [
+    "low_priority_beep",
+    "low_priority_long"
   ],
   "sound_effect_file": "sound-effects.txt",
   "songs": [

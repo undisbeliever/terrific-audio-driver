@@ -21,7 +21,6 @@ use compiler::path::SourcePathBuf;
 use compiler::songs::{song_duration_string, SongAramSize};
 
 use fltk::enums::{Align, Color};
-use fltk::frame::Frame;
 use fltk::group::Flex;
 use fltk::output::Output;
 use fltk::prelude::*;
@@ -72,6 +71,59 @@ impl TableMapping for SfxExportOrderMapping {
         match col {
             0 => Name::try_new_lossy(value)
                 .map(|name| GuiMessage::EditSfxExportOrder(ListMessage::ItemEdited(index, name))),
+            _ => None,
+        }
+    }
+}
+
+pub struct LowPrioritySfxExportOrderMapping;
+impl TableMapping for LowPrioritySfxExportOrderMapping {
+    type DataType = data::Name;
+    type RowType = SimpleRow<1>;
+
+    const CAN_CLONE: bool = true;
+    const CAN_EDIT: bool = true;
+
+    fn type_name() -> &'static str {
+        "low priority sound effect"
+    }
+
+    fn headers() -> Vec<String> {
+        vec!["Low Priority SFX Export Order".to_owned()]
+    }
+
+    fn add_clicked() -> GuiMessage {
+        GuiMessage::EditLowPrioritySfxExportOrder(ListMessage::Add(
+            "name".to_owned().try_into().unwrap(),
+        ))
+    }
+
+    fn to_message(lm: ListMessage<data::Name>) -> GuiMessage {
+        GuiMessage::EditLowPrioritySfxExportOrder(lm)
+    }
+
+    fn new_row(sfx_name: &data::Name) -> Self::RowType {
+        SimpleRow::new([sfx_name.as_str().to_string()])
+    }
+
+    fn edit_row(r: &mut Self::RowType, sfx_name: &data::Name) -> bool {
+        r.edit_column(0, sfx_name.as_str())
+    }
+
+    fn table_event(event: TableEvent, _row: usize, _col: i32) -> TableAction {
+        match event {
+            TableEvent::Enter | TableEvent::EditorRequested | TableEvent::CellClicked => {
+                TableAction::OpenEditor
+            }
+            TableEvent::DoubleClick => TableAction::None,
+        }
+    }
+
+    fn commit_edited_value(index: usize, col: i32, value: String) -> Option<GuiMessage> {
+        match col {
+            0 => Name::try_new_lossy(value).map(|name| {
+                GuiMessage::EditLowPrioritySfxExportOrder(ListMessage::ItemEdited(index, name))
+            }),
             _ => None,
         }
     }
@@ -214,7 +266,9 @@ impl TableCompilerOutput for SongMapping {
 pub struct ProjectTab {
     group: Flex,
 
-    pub sfx_export_order_table: ListEditorTable<SfxExportOrderMapping>,
+    pub sfx_table: ListEditorTable<SfxExportOrderMapping>,
+    pub lp_sfx_table: ListEditorTable<LowPrioritySfxExportOrderMapping>,
+
     pub song_table: ListEditorTable<SongMapping>,
 
     sound_effects_file: Output,
@@ -239,40 +293,25 @@ impl Tab for ProjectTab {
 impl ProjectTab {
     pub fn new(
         sfx_list: &impl ListState<Item = Name>,
+        lp_sfx_list: &impl ListState<Item = Name>,
         song_list: &impl ListState<Item = data::Song>,
         sfx_source_path: Option<&SourcePathBuf>,
         sender: app::Sender<GuiMessage>,
     ) -> Self {
-        let mut group = Flex::default_fill().column();
+        let mut group = Flex::default_fill().row();
 
-        let mut sfx_flex = Flex::default().row();
-        group.fixed(&sfx_flex, input_height(&sfx_flex));
+        let mut sfx_sidebar = Flex::default().column();
+        group.fixed(&sfx_sidebar, ch_units_to_width(&sfx_sidebar, 30));
 
-        let sfx_file_label = label("Sound Effects File: ");
-        sfx_flex.fixed(&sfx_file_label, ch_units_to_width(&sfx_file_label, 18));
+        // ::TODO add a button to move SFX between low and high priorities::
+        let mut sfx_table = ListEditorTable::new_with_data(sfx_list, sender.clone());
+        let mut lp_sfx_table = ListEditorTable::new_with_data(lp_sfx_list, sender.clone());
 
-        let mut sound_effects_file = Output::default();
-        sound_effects_file.set_color(Color::Background);
-        if let Some(p) = sfx_source_path {
-            sound_effects_file.set_value(p.as_str());
-        }
+        let button_height = sfx_table.button_height();
+        sfx_sidebar.fixed(&sfx_table.list_buttons().pack, button_height);
+        sfx_sidebar.fixed(&lp_sfx_table.list_buttons().pack, button_height);
 
-        sfx_flex.end();
-
-        let sfx_flex_padding = Frame::default();
-        group.fixed(&sfx_flex_padding, 8);
-
-        let mut left_right = Flex::default().row();
-
-        let mut left = Flex::default().column();
-        left_right.fixed(&left, ch_units_to_width(&left, 30));
-
-        let mut sfx_export_order_table = ListEditorTable::new_with_data(sfx_list, sender.clone());
-
-        let button_height = sfx_export_order_table.button_height();
-        left.fixed(&sfx_export_order_table.list_buttons().pack, button_height);
-
-        left.end();
+        sfx_sidebar.end();
 
         let mut right = Flex::default().column();
 
@@ -281,16 +320,30 @@ impl ProjectTab {
         let button_height = song_table.button_height();
         right.fixed(&song_table.list_buttons().pack, button_height);
 
-        right.end();
-        left_right.end();
+        let mut sfx_file_flex = Flex::default().row();
+        right.fixed(&sfx_file_flex, input_height(&sfx_file_flex));
 
-        let memory_stats = MemoryStats::new(&mut group, 18);
+        let sfx_file_label = label("Sound Effects File: ");
+        sfx_file_flex.fixed(&sfx_file_label, ch_units_to_width(&sfx_file_label, 18));
+
+        let mut sound_effects_file = Output::default();
+        sound_effects_file.set_color(Color::Background);
+        if let Some(p) = sfx_source_path {
+            sound_effects_file.set_value(p.as_str());
+        }
+
+        sfx_file_flex.end();
+
+        let memory_stats = MemoryStats::new(&mut right, 18);
+
+        right.end();
 
         group.end();
 
         Self {
             group,
-            sfx_export_order_table,
+            sfx_table,
+            lp_sfx_table,
             song_table,
             sound_effects_file,
             memory_stats,

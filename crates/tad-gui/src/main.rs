@@ -119,6 +119,7 @@ pub enum GuiMessage {
     SaveAllAndQuit(Vec<FileType>),
 
     EditSfxExportOrder(ListMessage<data::Name>),
+    EditLowPrioritySfxExportOrder(ListMessage<data::Name>),
     EditProjectSongs(ListMessage<data::Song>),
     Instrument(ListMessage<data::Instrument>),
     Sample(ListMessage<data::Sample>),
@@ -193,6 +194,8 @@ pub struct ProjectData {
     sound_effects_file: Option<SourcePathBuf>,
 
     sfx_export_orders: ListWithSelection<data::Name>,
+    low_priority_sfx_export_orders: ListWithSelection<data::Name>,
+
     project_songs: ListWithSelection<data::Song>,
 
     instruments_and_samples:
@@ -262,12 +265,18 @@ impl Project {
     ) -> Self {
         let c = pf.contents;
 
+        // ::TODO deduplicate paired names (sfx_eo, lp_sfx_eo), (instruments, samples)::
         let (sfx_eo, sfx_eo_renamed) = deduplicate_names(c.sound_effects);
+        let (lp_sfx_eo, lp_sfx_eo_renamed) = deduplicate_names(c.low_priority_sound_effects);
         let (songs, songs_renamed) = deduplicate_names(c.songs);
         let (instruments, instruments_renamed) = deduplicate_names(c.instruments);
         let (samples, samples_renamed) = deduplicate_names(c.samples);
 
-        let total_renamed = sfx_eo_renamed + songs_renamed + instruments_renamed + samples_renamed;
+        let total_renamed = sfx_eo_renamed
+            + lp_sfx_eo_renamed
+            + songs_renamed
+            + instruments_renamed
+            + samples_renamed;
         if total_renamed > 0 {
             dialog::message_title("Duplicate names found");
             dialog::alert_default(&format!("{} items have been renamed", total_renamed));
@@ -279,6 +288,11 @@ impl Project {
             sound_effects_file: c.sound_effect_file,
 
             sfx_export_orders: ListWithSelection::new(sfx_eo, driver_constants::MAX_SOUND_EFFECTS),
+            low_priority_sfx_export_orders: ListWithSelection::new(
+                lp_sfx_eo,
+                driver_constants::MAX_SOUND_EFFECTS,
+            ),
+
             project_songs: ListWithSelection::new(songs, driver_constants::MAX_N_SONGS),
             instruments_and_samples: ListPairWithCompilerOutputs::new(
                 instruments,
@@ -312,6 +326,7 @@ impl Project {
 
             project_tab: ProjectTab::new(
                 &data.sfx_export_orders,
+                &data.low_priority_sfx_export_orders,
                 &data.project_songs,
                 data.sound_effects_file.as_ref(),
                 sender.clone(),
@@ -359,7 +374,7 @@ impl Project {
                 let (a, c) = self
                     .data
                     .sfx_export_orders
-                    .process(m, &mut self.project_tab.sfx_export_order_table);
+                    .process(m, &mut self.project_tab.sfx_table);
 
                 self.mark_project_file_unsaved(a);
 
@@ -367,6 +382,21 @@ impl Project {
                     let _ = self.compiler_sender.send(ToCompiler::SfxExportOrder(c));
                 }
             }
+            GuiMessage::EditLowPrioritySfxExportOrder(m) => {
+                let (a, c) = self
+                    .data
+                    .low_priority_sfx_export_orders
+                    .process(m, &mut self.project_tab.lp_sfx_table);
+
+                self.mark_project_file_unsaved(a);
+
+                if let Some(c) = c {
+                    let _ = self
+                        .compiler_sender
+                        .send(ToCompiler::LowPrioritySfxExportOrder(c));
+                }
+            }
+
             GuiMessage::EditProjectSongs(m) => {
                 let (a, c) = self
                     .data
@@ -787,6 +817,11 @@ impl Project {
         let _ = self.compiler_sender.send(ToCompiler::LoadProject(
             compiler_thread::ProjectToCompiler {
                 sfx_export_order: self.data.sfx_export_orders.list().replace_all_vec(),
+                low_priority_sfx_export_order: self
+                    .data
+                    .low_priority_sfx_export_orders
+                    .list()
+                    .replace_all_vec(),
                 pf_songs: self.data.project_songs.list().replace_all_vec(),
                 instruments: self.data.instruments().list().replace_all_vec(),
                 samples: self.data.samples().list().replace_all_vec(),
@@ -1112,7 +1147,14 @@ impl ProjectData {
             instruments: self.instruments().list().item_iter().cloned().collect(),
             samples: self.samples().list().item_iter().cloned().collect(),
             songs: self.project_songs.list().item_iter().cloned().collect(),
+
             sound_effects: self.sfx_export_orders.list().item_iter().cloned().collect(),
+            low_priority_sound_effects: self
+                .low_priority_sfx_export_orders
+                .list()
+                .item_iter()
+                .cloned()
+                .collect(),
 
             sound_effect_file: self.sound_effects_file.clone(),
         }

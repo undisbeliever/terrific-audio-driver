@@ -5,12 +5,13 @@
 // SPDX-License-Identifier: MIT
 
 use crate::audio_thread::Pan;
-use crate::compiler_thread::{CadOutput, SfxExportOrder};
+use crate::compiler_thread::{CadOutput, GuiSfxExportOrder};
 use crate::helpers::{ch_units_to_width, label_packed};
 use crate::tabs::FileType;
 use crate::GuiMessage;
 
 use compiler::driver_constants::{CENTER_PAN, MAX_PAN};
+use compiler::sound_effects::SfxExportOrder;
 use fltk::table::TableContext;
 
 use std::cell::RefCell;
@@ -163,7 +164,7 @@ impl SfxWindow {
 
 pub struct SfxTable {
     table: fltk::table::Table,
-    export_order: Option<Arc<SfxExportOrder>>,
+    export_order: Option<Arc<GuiSfxExportOrder>>,
 
     pan_slider: HorNiceSlider,
     sender: app::Sender<GuiMessage>,
@@ -307,6 +308,7 @@ impl SfxTable {
     ) {
         // X-axis margin
         const MX: i32 = 3;
+        const LOW_PRIORITY_LINE: Color = Color::DarkRed;
 
         match ctx {
             TableContext::StartPage => draw::set_font(self.font, self.font_size),
@@ -325,6 +327,15 @@ impl SfxTable {
                             };
                             draw::set_draw_color(bg_color);
                             draw::draw_rectf(x, y, w, h);
+
+                            if i == eo.low_priority_index() {
+                                draw::set_draw_color(LOW_PRIORITY_LINE);
+                                draw::draw_xyline(x, y, x + w);
+                            } else if i + 1 == eo.low_priority_index() {
+                                draw::set_draw_color(LOW_PRIORITY_LINE);
+                                draw::draw_xyline(x, y + h, x + w);
+                            }
+
                             draw::set_draw_color(fg_color);
                             draw::set_font(self.font, self.font_size);
                             draw::draw_text2(name.as_str(), x + MX, y, w - 2 * MX, h, Align::Left);
