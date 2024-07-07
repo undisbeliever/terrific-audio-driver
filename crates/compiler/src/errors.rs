@@ -309,6 +309,7 @@ pub enum CommonAudioDataError {
     TooManyBrrSamples(usize),
     TooManySoundEffects(usize),
     CommonAudioDataTooLarge(usize),
+    SoundEffectDataTooLarge { by: usize },
 }
 
 #[derive(Debug)]
@@ -979,6 +980,9 @@ impl Display for CommonAudioDataError {
                 "common audio data is too large ({} bytes, max: {})",
                 len, MAX_COMMON_DATA_SIZE
             ),
+            Self::SoundEffectDataTooLarge { by } => {
+                write!(f, "sound effect data is too large (by {} bytes)", by)
+            }
         }
     }
 }

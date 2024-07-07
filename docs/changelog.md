@@ -20,7 +20,11 @@ Audio driver changes:
  * Optimised `skip_last_loop` bytecode instructions
  * Added sound effect dropout behaviour
     * Low-priority sound effects will not play if both sfx channels are active
-    * Added interruptible flag to sound effects
+    * Added *interruptible* flag to sound effects
+    * Sound effects with the *one-channel* flag set will play on at most 1 sfx channel.  
+      If there is a `play_sound_effect` command for a *one-channel* sound effect that is already playing:
+       * The sound effect will be reset if the sound effect is *interruptible*.
+       * The `play_sound_effect` command will be dropped if the sound effect is not *interruptible*.
 
 IO Command changes:
  * Removed `SET_ENABLED_CHANNELS` IO command, replaced with `SET_MUSIC_CHANNELS`.

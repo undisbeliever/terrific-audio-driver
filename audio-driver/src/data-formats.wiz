@@ -97,9 +97,11 @@ struct CommonDataHeader {
     //              (pitchOffset + note is allowed to overflow and underflow)
 
     //  Sound Effects SoA
-    //      soundEffects_addr_l : [u8 ; nSoundEffects]
-    //      soundEffects_addr_h : [u8 ; nSoundEffects]
-    //          The address of the sound effect bytecode.
+    //      soundEffects_addrAndOneChannelFlag_l : [u8 ; nSoundEffects]
+    //      soundEffects_addrAndOneChannelFlag_h : [u8 ; nSoundEffects]
+    //          oaaaaaaa aaaaaaaa
+    //              o = if set sound effect will play on at most 1 channel
+    //              a = address of the sound effect bytecode
     //
     //      soundEffects_durationAndInterruptFlag_l : [u8 ; nSoundEffects]
     //      soundEffects_durationAndInterruptFlag_h : [u8 ; nSoundEffects]

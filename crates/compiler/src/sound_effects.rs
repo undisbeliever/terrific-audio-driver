@@ -34,6 +34,7 @@ enum SfxData {
 #[derive(Default, Clone, Debug, PartialEq)]
 pub struct SfxFlags {
     pub interruptible: Option<bool>,
+    pub one_channel: Option<bool>,
 }
 
 #[derive(Debug)]
@@ -204,8 +205,9 @@ pub fn compile_sound_effects_file(
 }
 
 pub(crate) struct SfxHeader {
-    pub(crate) offset: u16,
-    pub(crate) duration_and_interrupt_flag: u16,
+    one_channel_flag: bool,
+    offset: u16,
+    duration_and_interrupt_flag: u16,
 }
 
 pub struct CombinedSoundEffectsData {
@@ -219,7 +221,11 @@ impl CombinedSoundEffectsData {
         self.sfx_header.len() * COMMON_DATA_BYTES_PER_SOUND_EFFECT + self.sfx_data.len()
     }
 
-    pub(crate) fn sfx_header_addr_l_iter(
+    pub(crate) fn last_offset(&self) -> Option<u16> {
+        self.sfx_header.last().map(|h| h.offset)
+    }
+
+    pub(crate) fn sfx_header_addr_and_one_channel_flag_l_iter(
         &self,
         sfx_data_addr: u16,
     ) -> impl Iterator<Item = u8> + '_ {
@@ -228,13 +234,22 @@ impl CombinedSoundEffectsData {
             .map(move |h| (h.offset + sfx_data_addr).to_le_bytes()[0])
     }
 
-    pub(crate) fn sfx_header_addr_h_iter(
+    pub(crate) fn sfx_header_addr_and_one_channel_flag_h_iter(
         &self,
         sfx_data_addr: u16,
     ) -> impl Iterator<Item = u8> + '_ {
-        self.sfx_header
-            .iter()
-            .map(move |h| (h.offset + sfx_data_addr).to_le_bytes()[1])
+        self.sfx_header.iter().map(move |h| {
+            const ONE_CHANNEL_BIT: u8 = 7;
+            let flags = u8::from(h.one_channel_flag) << ONE_CHANNEL_BIT;
+
+            let addr_h = (h.offset + sfx_data_addr).to_le_bytes()[1];
+            assert!(
+                addr_h & (1 << ONE_CHANNEL_BIT) == 0,
+                "addr_h must not set one-channel flag"
+            );
+
+            addr_h | flags
+        })
     }
 
     pub(crate) fn sfx_header_duration_and_interrupt_flag_l_iter(
@@ -327,6 +342,8 @@ pub fn combine_sound_effects(
                 };
 
                 sfx_header.push(SfxHeader {
+                    // ::TODO add user configurable default values::
+                    one_channel_flag: s.flags.one_channel.unwrap_or(true),
                     offset,
                     duration_and_interrupt_flag: ticks | interruptible_flag,
                 });
@@ -361,6 +378,7 @@ pub fn tad_gui_sfx_data(buffer_size: usize) -> CombinedSoundEffectsData {
     CombinedSoundEffectsData {
         low_priority_index: u8::MAX,
         sfx_header: vec![SfxHeader {
+            one_channel_flag: false,
             offset: 0,
             duration_and_interrupt_flag: MAX_SFX_TICKS.value().try_into().unwrap(),
         }],

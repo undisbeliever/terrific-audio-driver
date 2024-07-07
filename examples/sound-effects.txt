@@ -10,13 +10,13 @@
     play_note       c+4  $10
     play_note       b-4  $60
 
-=== menu_incorrect ===
+=== menu_incorrect === both interruptible
     set_instrument  sawtooth
 
     play_note       f3    16
     play_note       b-2   32
 
-=== player_hurt ===
+=== player_hurt === both
 
     set_volume 255
 
@@ -55,14 +55,14 @@
     portamento c3 no_keyoff -30 8
     portamento g3 keyoff +20 20
 
-=== vibrato_alarm ===
+=== vibrato_alarm === one interruptible
     set_volume 196
     set_instrument_and_gain square I24
 
     set_vibrato 60 12
     play_note a4 240
 
-=== play_samples_bytecode === uninterruptible
+=== play_samples_bytecode === one uninterruptible
 
     set_volume 255
 

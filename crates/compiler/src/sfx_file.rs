@@ -19,6 +19,8 @@ const OLD_MML_SFX_IDENTIFIER_NO_NEWLINE: &str = "MML";
 const MML_ATTR: &str = "mml";
 const INTERRUPTIBLE_ATTR: &str = "interruptible";
 const UNINTERRUPTIBLE_ATTR: &str = "uninterruptible";
+const ONE_CHANNEL_ATTR: &str = "one";
+const ONE_CHANNEL_FALSE_ATTR: &str = "both";
 
 // NOTE: fields are not validated
 #[derive(Debug, PartialEq)]
@@ -106,6 +108,10 @@ fn sfx_file_from_text_file(tf: TextFile) -> SoundEffectsFile {
                 flags.interruptible = Some(true)
             } else if a.eq_ignore_ascii_case(UNINTERRUPTIBLE_ATTR) {
                 flags.interruptible = Some(false)
+            } else if a.eq_ignore_ascii_case(ONE_CHANNEL_ATTR) {
+                flags.one_channel = Some(true)
+            } else if a.eq_ignore_ascii_case(ONE_CHANNEL_FALSE_ATTR) {
+                flags.one_channel = Some(false)
             } else {
                 // Save unknown tags in the name so they are not lost and become an error when compiling SFX
                 name.push(' ');
@@ -185,6 +191,12 @@ pub fn build_sound_effects_file<'a>(
 
         if is_mml {
             add_attr(MML_ATTR);
+        }
+
+        match sfx.flags.one_channel {
+            None => (),
+            Some(true) => add_attr(ONE_CHANNEL_ATTR),
+            Some(false) => add_attr(ONE_CHANNEL_FALSE_ATTR),
         }
 
         match sfx.flags.interruptible {
@@ -678,6 +690,7 @@ c
                 name: Name::new_lossy("name".to_owned()),
                 flags: SfxFlags {
                     interruptible: None,
+                    ..SfxFlags::default()
                 },
                 sfx: SoundEffectText::BytecodeAssembly(String::new())
             }]
@@ -692,6 +705,7 @@ c
                 name: Name::new_lossy("name".to_owned()),
                 flags: SfxFlags {
                     interruptible: Some(true),
+                    ..SfxFlags::default()
                 },
                 sfx: SoundEffectText::BytecodeAssembly(String::new())
             }]
@@ -706,12 +720,57 @@ c
                 name: Name::new_lossy("name".to_owned()),
                 flags: SfxFlags {
                     interruptible: Some(false),
+                    ..SfxFlags::default()
                 },
                 sfx: SoundEffectText::BytecodeAssembly(String::new())
             }]
         );
     }
 
+    #[test]
+    fn test_one_channel_flag_default() {
+        assert_eq!(
+            read_sfx_from_string("=== name ==="),
+            [SoundEffectInput {
+                name: Name::new_lossy("name".to_owned()),
+                flags: SfxFlags {
+                    one_channel: None,
+                    ..SfxFlags::default()
+                },
+                sfx: SoundEffectText::BytecodeAssembly(String::new())
+            }]
+        );
+    }
+
+    #[test]
+    fn test_one_channel_flag_set() {
+        assert_eq!(
+            read_sfx_from_string("=== name === one"),
+            [SoundEffectInput {
+                name: Name::new_lossy("name".to_owned()),
+                flags: SfxFlags {
+                    one_channel: Some(true),
+                    ..SfxFlags::default()
+                },
+                sfx: SoundEffectText::BytecodeAssembly(String::new())
+            }]
+        );
+    }
+
+    #[test]
+    fn test_one_channel_flag_clear() {
+        assert_eq!(
+            read_sfx_from_string("=== name === both"),
+            [SoundEffectInput {
+                name: Name::new_lossy("name".to_owned()),
+                flags: SfxFlags {
+                    one_channel: Some(false),
+                    ..SfxFlags::default()
+                },
+                sfx: SoundEffectText::BytecodeAssembly(String::new())
+            }]
+        );
+    }
     #[test]
     fn test_save_and_load() {
         let header = "This is the file header\nHello === World ===\n\n";
@@ -730,6 +789,7 @@ c
                 name: Name::new_lossy("interruptible_1".to_owned()),
                 flags: SfxFlags {
                     interruptible: None,
+                    ..SfxFlags::default()
                 },
                 sfx: SoundEffectText::BytecodeAssembly(String::new()),
             },
@@ -737,6 +797,7 @@ c
                 name: Name::new_lossy("interruptible_2".to_owned()),
                 flags: SfxFlags {
                     interruptible: Some(false),
+                    ..SfxFlags::default()
                 },
                 sfx: SoundEffectText::BytecodeAssembly(String::new()),
             },
@@ -744,6 +805,47 @@ c
                 name: Name::new_lossy("interruptible_3".to_owned()),
                 flags: SfxFlags {
                     interruptible: Some(true),
+                    ..SfxFlags::default()
+                },
+                sfx: SoundEffectText::BytecodeAssembly(String::new()),
+            },
+            SoundEffectInput {
+                name: Name::new_lossy("one_channel_flag_1".to_owned()),
+                flags: SfxFlags {
+                    one_channel: None,
+                    ..SfxFlags::default()
+                },
+                sfx: SoundEffectText::BytecodeAssembly(String::new()),
+            },
+            SoundEffectInput {
+                name: Name::new_lossy("one_channel_flag_2".to_owned()),
+                flags: SfxFlags {
+                    one_channel: Some(false),
+                    ..SfxFlags::default()
+                },
+                sfx: SoundEffectText::BytecodeAssembly(String::new()),
+            },
+            SoundEffectInput {
+                name: Name::new_lossy("one_channel_flag_3".to_owned()),
+                flags: SfxFlags {
+                    one_channel: Some(true),
+                    ..SfxFlags::default()
+                },
+                sfx: SoundEffectText::BytecodeAssembly(String::new()),
+            },
+            SoundEffectInput {
+                name: Name::new_lossy("both_flags_set".to_owned()),
+                flags: SfxFlags {
+                    one_channel: Some(true),
+                    interruptible: Some(true),
+                },
+                sfx: SoundEffectText::BytecodeAssembly(String::new()),
+            },
+            SoundEffectInput {
+                name: Name::new_lossy("both_flags_clear".to_owned()),
+                flags: SfxFlags {
+                    one_channel: Some(true),
+                    interruptible: Some(false),
                 },
                 sfx: SoundEffectText::BytecodeAssembly(String::new()),
             },

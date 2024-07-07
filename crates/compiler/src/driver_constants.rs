@@ -125,6 +125,10 @@ pub const COMMON_DATA_BYTES_PER_DIR: usize = 4;
 pub const COMMON_DATA_BYTES_PER_INSTRUMENTS: usize = 4;
 pub const COMMON_DATA_BYTES_PER_SOUND_EFFECT: usize = 4;
 
+// The largest valid sound effect address.
+// Bit 15 of the address is used as a flag.
+pub const MAX_SFX_DATA_ADDR: usize = 0x7fff;
+
 pub const MAX_COMMON_DATA_SIZE: usize = 0xD000;
 
 // Loader constants

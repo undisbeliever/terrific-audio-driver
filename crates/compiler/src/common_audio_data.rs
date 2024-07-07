@@ -8,7 +8,7 @@ use crate::driver_constants::{
     addresses, COMMON_DATA_BYTES_PER_DIR, COMMON_DATA_BYTES_PER_INSTRUMENTS,
     COMMON_DATA_BYTES_PER_SOUND_EFFECT, COMMON_DATA_DIR_TABLE_OFFSET, COMMON_DATA_HEADER_SIZE,
     COMMON_DATA_N_DIR_ITEMS_OFFSET, COMMON_DATA_N_INSTRUMENTS_OFFSET, MAX_COMMON_DATA_SIZE,
-    MAX_DIR_ITEMS, MAX_INSTRUMENTS_AND_SAMPLES, MAX_SOUND_EFFECTS,
+    MAX_DIR_ITEMS, MAX_INSTRUMENTS_AND_SAMPLES, MAX_SFX_DATA_ADDR, MAX_SOUND_EFFECTS,
 };
 use crate::errors::{CommonAudioDataError, CommonAudioDataErrors};
 use crate::samples::SampleAndInstrumentData;
@@ -115,6 +115,18 @@ pub fn build_common_audio_data(
         ));
     }
 
+    let sfx_data_addr = usize::from(addresses::COMMON_DATA) + header_size;
+    let sfx_data_end = sfx_data_addr + sound_effects.sfx_data.len();
+
+    if let Some(last_offset) = sound_effects.last_offset() {
+        let last_sfx_addr = sfx_data_addr + usize::from(last_offset);
+        if last_sfx_addr > MAX_SFX_DATA_ADDR {
+            errors.push(CommonAudioDataError::SoundEffectDataTooLarge {
+                by: last_sfx_addr - MAX_SFX_DATA_ADDR,
+            });
+        }
+    }
+
     if !errors.is_empty() {
         return Err(CommonAudioDataErrors { errors });
     }
@@ -134,8 +146,8 @@ pub fn build_common_audio_data(
     assert!(samples_and_instruments.instruments_adsr1.len() == n_instruments_and_samples);
     assert!(samples_and_instruments.instruments_adsr2_or_gain.len() == n_instruments_and_samples);
 
-    let sfx_data_addr: u16 = addresses::COMMON_DATA + u16::try_from(header_size).unwrap();
-    let sfx_data_end: u16 = sfx_data_addr + u16::try_from(sound_effects.sfx_data.len()).unwrap();
+    let sfx_data_addr: u16 = sfx_data_addr.try_into().unwrap();
+    let sfx_data_end: u16 = sfx_data_end.try_into().unwrap();
     let brr_data_addr: u16 = sfx_data_end;
     let brr_data_end: u16 =
         brr_data_addr + u16::try_from(samples_and_instruments.brr_data.len()).unwrap();
@@ -165,8 +177,8 @@ pub fn build_common_audio_data(
 
     // soundEffects SoA
     let sfx_table_addr = u16::try_from(out.len()).unwrap() + addresses::COMMON_DATA;
-    out.extend(sound_effects.sfx_header_addr_l_iter(sfx_data_addr));
-    out.extend(sound_effects.sfx_header_addr_h_iter(sfx_data_addr));
+    out.extend(sound_effects.sfx_header_addr_and_one_channel_flag_l_iter(sfx_data_addr));
+    out.extend(sound_effects.sfx_header_addr_and_one_channel_flag_h_iter(sfx_data_addr));
     out.extend(sound_effects.sfx_header_duration_and_interrupt_flag_l_iter());
     out.extend(sound_effects.sfx_header_duration_and_interrupt_flag_h_iter());
 

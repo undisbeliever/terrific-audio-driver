@@ -76,8 +76,8 @@ in zeropage {
         var instruments_adsr1 : *u8;
         var instruments_adsr2OrGain : *u8;
 
-        var soundEffects_addr_l : *u8;
-        var soundEffects_addr_h : *u8;
+        var soundEffects_addrAndOneChannelFlag_l : *u8;
+        var soundEffects_addrAndOneChannelFlag_h : *u8;
         var soundEffects_durationAndInterruptFlag_l : *u8;
         var soundEffects_durationAndInterruptFlag_h : *u8;
     }
@@ -123,6 +123,10 @@ in zeropage {
 
     // The remaining duration of the two sound effects in ticks
     var sfx_remainingTicks : [u16 ; N_SFX_CHANNELS];
+
+    // Used to detect active one-channel sound effects.
+    // This value MUST BE 0xff if the channel is disabled or the *one-channel* flag is clear.
+    var sfx_oneChannelSfxId : [u8 ; N_SFX_CHANNELS];
 
 
     // S-DSP voice channels dirty flags.
@@ -473,6 +477,9 @@ func main() {
     io_musicChannelsMask = a;
     musicSfxChannelMask = a;
     keyOnMask_music = a;
+    inline for let _I in 0..(N_SFX_CHANNELS - 1) {
+        sfx_oneChannelSfxId[_I] = a;
+    }
 
 
     // Calculate common audio data addresses
@@ -503,8 +510,8 @@ func main() {
         *(&commonData.instruments_adsr1 as *u16)       = ya = ya + _nInstruments;
         *(&commonData.instruments_adsr2OrGain as *u16) = ya = ya + _nInstruments;
 
-        *(&commonData.soundEffects_addr_l as *u16)                      = ya = ya + _nInstruments;
-        *(&commonData.soundEffects_addr_h as *u16)                      = ya = ya + _nSoundEffects;
+        *(&commonData.soundEffects_addrAndOneChannelFlag_l as *u16)     = ya = ya + _nInstruments;
+        *(&commonData.soundEffects_addrAndOneChannelFlag_h as *u16)     = ya = ya + _nSoundEffects;
         *(&commonData.soundEffects_durationAndInterruptFlag_l as *u16)  = ya = ya + _nSoundEffects;
         *(&commonData.soundEffects_durationAndInterruptFlag_h as *u16)  = ya = ya + _nSoundEffects;
     }
@@ -1001,10 +1008,14 @@ func stop_sound_effects(unused : u8 in y) {
 }
 
 
+#[fallthrough]
 func play_sound_effect(sfx_id : u8 in y) {
     let BOTH_SFX_ACTIVE = (1 << 7) | (1 << 6);
 
     if y < commonDataHeader.nSoundEffects {
+        goto _maybe_restart_sfx_0 if y == sfx_oneChannelSfxId[0];
+        goto _maybe_restart_sfx_1 if y == sfx_oneChannelSfxId[1];
+
         a = activeSoundEffects;
         if a >= BOTH_SFX_ACTIVE {
             // Both sound effect channels are active,
@@ -1038,11 +1049,17 @@ func play_sound_effect(sfx_id : u8 in y) {
             goto _play_sfx_0;
         }
     }
+
 Return:
+    // Fallthrough
 }
 
+func __play_sfx_return() {
+    return;
+}
 
-inline func __play_sfx__inline(let _I : u8, sfx_id : u8 in y) {
+// returns soundEffects_addrAndOneChannelFlag_h
+inline func __play_sfx__inline(let _I : u8, sfx_id : u8 in y) : u8 in a {
     let BIT = 8 - N_SFX_CHANNELS + _I;
 
     <:sfx_remainingTicks[_I] = a = commonData.soundEffects_durationAndInterruptFlag_l[y];
@@ -1050,17 +1067,54 @@ inline func __play_sfx__inline(let _I : u8, sfx_id : u8 in y) {
 
     a <<<= 1;
     sfx_interruptibleFlags $ BIT = carry;
+
+
+    sfx_oneChannelSfxId[_I] = y;
+
+    a = commonData.soundEffects_addrAndOneChannelFlag_h[y];
+    if !negative {
+        sfx_oneChannelSfxId[_I] = 0xff;
+    }
+    return a;
 }
 
+
+// Restart sfx channel 0 if it is interruptible
+// ASSUMES: sfx_id == sfx_oneChannelSfxId[0]
+#[fallthrough]
+func _maybe_restart_sfx_0(sfx_id : u8 in y) {}
+    // HACK: wiz does not support bbc instructions.
+    // Manually writing a `bbc` instruction that branches to `__play_sfx_return` if the sfx is not interruptible.
+    const __maybe_restart_sfx_0 : [u8 ; 3] = [
+        // bbc sfx_interruptibleFlags.6 __play_sfx_return
+        0x13 | (6 << 5) as u8,
+        &sfx_interruptibleFlags as u8,
+        (&__play_sfx_return as i16 - &__maybe_restart_sfx_0 as i16 - 3) as u8
+    ];
+
 func _play_sfx_0(sfx_id : u8 in y) {
-    __play_sfx__inline(0, y);
-    return __play_sfx_on_channel(FIRST_SFX_CHANNEL, y);
+    a = __play_sfx__inline(0, y);
+    return __play_sfx_on_channel(a, FIRST_SFX_CHANNEL, y);
 }
+
+
+
+// Restart sfx channel 1 if it is interruptible
+// ASSUMES: sfx_id == sfx_oneChannelSfxId[1]
+#[fallthrough]
+func _maybe_restart_sfx_1(sfx_id : u8 in y) {}
+    // HACK: wiz does not support bbc instructions.
+    // Manually writing a `bbc` instruction that branches to `__play_sfx_return` if the sfx is not interruptible.
+    const __maybe_restart_sfx_1 : [u8 ; 3] = [
+        // bbc sfx_interruptibleFlags.7 __play_sfx_return
+        0x13 | (7 << 5) as u8,
+        &sfx_interruptibleFlags as u8,
+        (&__play_sfx_return as i16 - &__maybe_restart_sfx_1 as i16 - 3) as u8
+    ];
 
 #[fallthrough]
 func _play_sfx_1(sfx_id : u8 in y) {
-    __play_sfx__inline(1, y);
-
+    a = __play_sfx__inline(1, y);
     x = LAST_SFX_CHANNEL;
 // Fallthrough
 }
@@ -1069,13 +1123,12 @@ func _play_sfx_1(sfx_id : u8 in y) {
 // ASSUMES: sfx_id < commonData.nSoundEffects
 // KEEP: X
 #[fallthrough]
-func __play_sfx_on_channel(channelIndex : u8 in x, sfx_id : u8 in y) {
+func __play_sfx_on_channel(addrAndOneChannelFlag_h: u8 in a, channelIndex : u8 in x, sfx_id : u8 in y) {
+    channelSoA.instructionPtr_h[x] = a = a & 0x7f;
+    channelSoA.instructionPtr_l[x] = a = commonData.soundEffects_addrAndOneChannelFlag_l[y];
+
     // pan
     zpTmp = IO.ToDriver.parameter1;
-
-    channelSoA.instructionPtr_l[x] = a = commonData.soundEffects_addr_l[y];
-    channelSoA.instructionPtr_h[x] = a = commonData.soundEffects_addr_h[y];
-
 
     a = ChannelVoiceBit[x];
     // Send a key-off event, the S-DSP voice channel might be active.
@@ -1622,6 +1675,9 @@ func disable_channel(channelIndex : u8 in x) {
 
         // Disable sfx S-DSP writes.
         test_and_clear(a, activeSoundEffects);
+
+        // Clear `sfx_oneChannelSfxId` so the sfx can be restarted if it is not interruptible.
+        (&sfx_oneChannelSfxId[-N_MUSIC_CHANNELS])[x] = a = 0xff;
     }
     else {
         test_and_set(a, keyOffShadow_music);

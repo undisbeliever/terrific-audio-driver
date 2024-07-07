@@ -137,6 +137,7 @@ pub struct State {
 
     name: Input,
     sound_effect_type: Choice,
+    one_channel_flag: SfxFlagRadios,
     interruptible_flag: SfxFlagRadios,
     editor: MmlEditor,
 
@@ -214,7 +215,7 @@ impl SoundEffectsTab {
         let mut sfx_group = Flex::default().column();
         main_group.fixed(
             &sfx_group,
-            2 * (input_height(&sfx_group) + sfx_group.pad()) + button_size,
+            3 * (input_height(&sfx_group) + sfx_group.pad()) + button_size,
         );
 
         let main_toolbar = Pack::default().with_type(PackType::Horizontal);
@@ -264,6 +265,13 @@ impl SoundEffectsTab {
         sfx_group.fixed(&name_flex, input_height(&name));
         name_flex.end();
 
+        let one_channel_flag = SfxFlagRadios::new(
+            &mut sfx_group,
+            "One Channel",
+            "The sound effect will play on a maximum of 1 channel\n(The sound effect will reset if it is interruptable)",
+            "Both Channels",
+            "The sound effect can play on both sound effect channels at the same time",
+        );
         let interruptible_flag = SfxFlagRadios::new(
             &mut sfx_group,
             "Interruptible",
@@ -321,6 +329,7 @@ impl SoundEffectsTab {
 
             name: name.clone(),
             sound_effect_type,
+            one_channel_flag,
             interruptible_flag,
             editor,
             error_lines: None,
@@ -412,6 +421,14 @@ impl SoundEffectsTab {
                 }
             });
 
+            s.one_channel_flag.set_callback({
+                let s = state.clone();
+                move || {
+                    if let Ok(mut s) = s.try_borrow_mut() {
+                        s.commit_sfx();
+                    }
+                }
+            });
             s.interruptible_flag.set_callback({
                 let s = state.clone();
                 move || {
@@ -604,6 +621,7 @@ impl ListEditor<SoundEffectInput> for SoundEffectsTab {
             state.name.set_value("Header (not a sound effect)");
             state.sound_effect_type.set_value(-1);
 
+            state.one_channel_flag.clear_value();
             state.interruptible_flag.clear_value();
 
             state.editor.set_buffer(self.header_buffer.clone());
@@ -636,6 +654,7 @@ impl ListEditor<SoundEffectInput> for SoundEffectsTab {
                     };
                     state.sound_effect_type.set_value(type_choice.to_i32());
 
+                    state.one_channel_flag.set_value(sfx.flags.one_channel);
                     state.interruptible_flag.set_value(sfx.flags.interruptible);
 
                     match sfx_buffer {
@@ -744,6 +763,7 @@ impl State {
             };
 
             self.old_flags = SfxFlags {
+                one_channel: self.one_channel_flag.value(),
                 interruptible: self.interruptible_flag.value(),
             };
 
