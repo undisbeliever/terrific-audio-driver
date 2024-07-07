@@ -101,9 +101,11 @@ struct CommonDataHeader {
     //      soundEffects_addr_h : [u8 ; nSoundEffects]
     //          The address of the sound effect bytecode.
     //
-    //      soundEffects_ticks_l : [u8 ; nSoundEffects]
-    //      soundEffects_ticks_h : [u8 ; nSoundEffects]
-    //          The duration of the sound effect in ticks.
+    //      soundEffects_durationAndInterruptFlag_l : [u8 ; nSoundEffects]
+    //      soundEffects_durationAndInterruptFlag_h : [u8 ; nSoundEffects]
+    //          iddddddd ddddddd
+    //              i = sfx interruptible flag
+    //              d = duration in ticks
 };
 
 

@@ -4,7 +4,7 @@
 
     play_note           d4 8
 
-=== menu_select ===
+=== menu_select === uninterruptible
     set_instrument  sawtooth
 
     play_note       c+4  $10
@@ -26,7 +26,7 @@
     portamento c2 no_keyoff -25 8
     portamento c1 keyoff -90 8
 
-=== player_hurt_low_health ===
+=== player_hurt_low_health === uninterruptible
     set_volume 255
 
     set_instrument_and_adsr triangle    10 2 1 25
@@ -62,7 +62,7 @@
     set_vibrato 60 12
     play_note a4 240
 
-=== play_samples_bytecode ===
+=== play_samples_bytecode === uninterruptible
 
     set_volume 255
 
@@ -105,7 +105,7 @@ A @1 {{o4 b o5 c}}%75,%3
 A @1 v10
 A o5 {{f a}}4
 
-=== fire_arrow === mml
+=== fire_arrow === mml interruptible
 @1 triangle adsr 10 6 3 28
 
 A @1 v10
@@ -118,7 +118,7 @@ A o5 {e- g}6
     play_note           c5 20
 
 
-=== low_priority_long === mml
+=== low_priority_long === mml interruptible
 @1 square adsr 14 7 7 22
 
 A @1 o5 [c c c r]4

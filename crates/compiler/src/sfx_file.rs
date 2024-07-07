@@ -7,7 +7,7 @@
 use crate::data::{load_text_file_with_limit, Name, TextFile};
 use crate::errors::FileError;
 use crate::path::{ParentPathBuf, SourcePathBuf};
-use crate::sound_effects::{SoundEffectInput, SoundEffectText};
+use crate::sound_effects::{SfxFlags, SoundEffectInput, SoundEffectText};
 
 use std::path::PathBuf;
 
@@ -17,12 +17,15 @@ const OLD_MML_SFX_IDENTIFIER: &str = "MML\n";
 const OLD_MML_SFX_IDENTIFIER_NO_NEWLINE: &str = "MML";
 
 const MML_ATTR: &str = "mml";
+const INTERRUPTIBLE_ATTR: &str = "interruptible";
+const UNINTERRUPTIBLE_ATTR: &str = "uninterruptible";
 
 // NOTE: fields are not validated
 #[derive(Debug, PartialEq)]
 pub struct SoundEffectFileSfx {
     pub name: String,
     pub line_no: u32, // Line number of the name line
+    pub flags: SfxFlags,
     pub sfx: SoundEffectText,
 }
 
@@ -42,6 +45,7 @@ pub fn convert_sfx_inputs_lossy(sound_effects: Vec<SoundEffectFileSfx>) -> Vec<S
         .into_iter()
         .map(|s| SoundEffectInput {
             name: Name::new_lossy(s.name),
+            flags: s.flags,
             sfx: s.sfx,
         })
         .collect()
@@ -82,6 +86,8 @@ fn sfx_file_from_text_file(tf: TextFile) -> SoundEffectsFile {
             None => (sfx_block, ""),
         };
 
+        let mut flags = SfxFlags::default();
+
         let mut attrs = name_and_attrs
             .trim_matches('=')
             .split(|c: char| c.is_whitespace() || c == '=')
@@ -96,6 +102,10 @@ fn sfx_file_from_text_file(tf: TextFile) -> SoundEffectsFile {
         for a in attrs {
             if a.eq_ignore_ascii_case(MML_ATTR) {
                 mml_sfx = true;
+            } else if a.eq_ignore_ascii_case(INTERRUPTIBLE_ATTR) {
+                flags.interruptible = Some(true)
+            } else if a.eq_ignore_ascii_case(UNINTERRUPTIBLE_ATTR) {
+                flags.interruptible = Some(false)
             } else {
                 // Save unknown tags in the name so they are not lost and become an error when compiling SFX
                 name.push(' ');
@@ -119,6 +129,7 @@ fn sfx_file_from_text_file(tf: TextFile) -> SoundEffectsFile {
         sound_effects.push(SoundEffectFileSfx {
             name,
             line_no: line_no.try_into().unwrap(),
+            flags,
             sfx: match mml_sfx {
                 true => SoundEffectText::Mml(sfx_lines),
                 false => SoundEffectText::BytecodeAssembly(sfx_lines),
@@ -167,9 +178,19 @@ pub fn build_sound_effects_file<'a>(
         out.push_str(sfx.name.as_str());
         out.push_str(" ===");
 
-        if is_mml {
+        let mut add_attr = |attr| {
             out.push(' ');
-            out.push_str(MML_ATTR);
+            out.push_str(attr);
+        };
+
+        if is_mml {
+            add_attr(MML_ATTR);
+        }
+
+        match sfx.flags.interruptible {
+            None => (),
+            Some(true) => add_attr(INTERRUPTIBLE_ATTR),
+            Some(false) => add_attr(UNINTERRUPTIBLE_ATTR),
         }
 
         out.push('\n');
@@ -221,31 +242,37 @@ MML
                     SoundEffectFileSfx {
                         name: "test_first".to_owned(),
                         line_no: 1,
+                        flags: SfxFlags::default(),
                         sfx: SoundEffectText::BytecodeAssembly("a\nb\n".to_owned()),
                     },
                     SoundEffectFileSfx {
                         name: "test_one".to_owned(),
                         line_no: 5,
+                        flags: SfxFlags::default(),
                         sfx: SoundEffectText::BytecodeAssembly("c".to_owned()),
                     },
                     SoundEffectFileSfx {
                         name: "empty".to_owned(),
                         line_no: 7,
+                        flags: SfxFlags::default(),
                         sfx: SoundEffectText::BytecodeAssembly("".to_owned()),
                     },
                     SoundEffectFileSfx {
                         name: "test_two".to_owned(),
                         line_no: 8,
+                        flags: SfxFlags::default(),
                         sfx: SoundEffectText::BytecodeAssembly("d\ne\n\n".to_owned()),
                     },
                     SoundEffectFileSfx {
                         name: "empty_MML".to_owned(),
                         line_no: 13,
+                        flags: SfxFlags::default(),
                         sfx: SoundEffectText::Mml("".to_owned()),
                     },
                     SoundEffectFileSfx {
                         name: "last_empty".to_owned(),
                         line_no: 15,
+                        flags: SfxFlags::default(),
                         sfx: SoundEffectText::BytecodeAssembly("".to_owned()),
                     }
                 ]
@@ -292,21 +319,25 @@ c
                     SoundEffectFileSfx {
                         name: "test_first".to_owned(),
                         line_no: 4,
+                        flags: SfxFlags::default(),
                         sfx: SoundEffectText::BytecodeAssembly("a\n".to_owned()),
                     },
                     SoundEffectFileSfx {
                         name: "test_MML".to_owned(),
                         line_no: 7,
+                        flags: SfxFlags::default(),
                         sfx: SoundEffectText::Mml("@1 mml\n".to_owned()),
                     },
                     SoundEffectFileSfx {
                         name: "test_only_newline".to_owned(),
                         line_no: 11,
+                        flags: SfxFlags::default(),
                         sfx: SoundEffectText::BytecodeAssembly("".to_owned()),
                     },
                     SoundEffectFileSfx {
                         name: "last_not_empty".to_owned(),
                         line_no: 13,
+                        flags: SfxFlags::default(),
                         sfx: SoundEffectText::BytecodeAssembly("b\nc\n".to_owned()),
                     }
                 ]
@@ -351,31 +382,37 @@ e
                     SoundEffectFileSfx {
                         name: "test_first".to_owned(),
                         line_no: 1,
+                        flags: SfxFlags::default(),
                         sfx: SoundEffectText::BytecodeAssembly("a\nb\n".to_owned()),
                     },
                     SoundEffectFileSfx {
                         name: "test_one".to_owned(),
                         line_no: 5,
+                        flags: SfxFlags::default(),
                         sfx: SoundEffectText::BytecodeAssembly("c".to_owned()),
                     },
                     SoundEffectFileSfx {
                         name: "empty".to_owned(),
                         line_no: 7,
+                        flags: SfxFlags::default(),
                         sfx: SoundEffectText::BytecodeAssembly("".to_owned()),
                     },
                     SoundEffectFileSfx {
                         name: "test_two".to_owned(),
                         line_no: 8,
+                        flags: SfxFlags::default(),
                         sfx: SoundEffectText::BytecodeAssembly("d\ne\n\n".to_owned()),
                     },
                     SoundEffectFileSfx {
                         name: "empty_MML".to_owned(),
                         line_no: 13,
+                        flags: SfxFlags::default(),
                         sfx: SoundEffectText::Mml("".to_owned()),
                     },
                     SoundEffectFileSfx {
                         name: "last_empty".to_owned(),
                         line_no: 14,
+                        flags: SfxFlags::default(),
                         sfx: SoundEffectText::BytecodeAssembly("".to_owned()),
                     }
                 ]
@@ -421,21 +458,25 @@ c
                     SoundEffectFileSfx {
                         name: "test_first".to_owned(),
                         line_no: 4,
+                        flags: SfxFlags::default(),
                         sfx: SoundEffectText::BytecodeAssembly("a\n".to_owned()),
                     },
                     SoundEffectFileSfx {
                         name: "test_MML".to_owned(),
                         line_no: 7,
+                        flags: SfxFlags::default(),
                         sfx: SoundEffectText::Mml("@1 mml\n".to_owned()),
                     },
                     SoundEffectFileSfx {
                         name: "test_only_newline".to_owned(),
                         line_no: 10,
+                        flags: SfxFlags::default(),
                         sfx: SoundEffectText::BytecodeAssembly("".to_owned()),
                     },
                     SoundEffectFileSfx {
                         name: "last_not_empty".to_owned(),
                         line_no: 12,
+                        flags: SfxFlags::default(),
                         sfx: SoundEffectText::BytecodeAssembly("b\nc\n".to_owned()),
                     }
                 ]
@@ -469,16 +510,19 @@ c
                     SoundEffectFileSfx {
                         name: "name1".to_owned(),
                         line_no: 1,
+                        flags: SfxFlags::default(),
                         sfx: SoundEffectText::BytecodeAssembly("Test 1".to_owned()),
                     },
                     SoundEffectFileSfx {
                         name: "name2".to_owned(),
                         line_no: 3,
+                        flags: SfxFlags::default(),
                         sfx: SoundEffectText::BytecodeAssembly("Test 2".to_owned()),
                     },
                     SoundEffectFileSfx {
                         name: "name3".to_owned(),
                         line_no: 5,
+                        flags: SfxFlags::default(),
                         sfx: SoundEffectText::BytecodeAssembly("Test 3".to_owned()),
                     },
                 ]
@@ -507,6 +551,7 @@ c
                 sound_effects: vec![SoundEffectFileSfx {
                     name: "name".to_owned(),
                     line_no: 1,
+                    flags: SfxFlags::default(),
                     sfx: SoundEffectText::Mml("Test".to_owned()),
                 }]
             }
@@ -534,6 +579,7 @@ c
                 sound_effects: vec![SoundEffectFileSfx {
                     name: "name unknown".to_owned(),
                     line_no: 1,
+                    flags: SfxFlags::default(),
                     sfx: SoundEffectText::Mml("Test".to_owned()),
                 }]
             }
@@ -566,16 +612,19 @@ c
                     SoundEffectFileSfx {
                         name: "name".to_owned(),
                         line_no: 1,
+                        flags: SfxFlags::default(),
                         sfx: SoundEffectText::Mml("Test 1".to_owned()),
                     },
                     SoundEffectFileSfx {
                         name: "name".to_owned(),
                         line_no: 3,
+                        flags: SfxFlags::default(),
                         sfx: SoundEffectText::Mml("Test 2".to_owned()),
                     },
                     SoundEffectFileSfx {
                         name: "name".to_owned(),
                         line_no: 5,
+                        flags: SfxFlags::default(),
                         sfx: SoundEffectText::Mml("Test 3".to_owned()),
                     },
                 ]
@@ -605,9 +654,61 @@ c
                 sound_effects: vec![SoundEffectFileSfx {
                     name: "name".to_owned(),
                     line_no: 1,
+                    flags: SfxFlags::default(),
                     sfx: SoundEffectText::Mml("MML\n\n".to_owned()),
                 }]
             }
+        );
+    }
+
+    fn read_sfx_from_string(input: &str) -> Vec<SoundEffectInput> {
+        let sfx_file = sfx_file_from_text_file(TextFile {
+            path: Default::default(),
+            file_name: Default::default(),
+            contents: input.to_owned(),
+        });
+        convert_sfx_inputs_lossy(sfx_file.sound_effects)
+    }
+
+    #[test]
+    fn test_interruptible_default() {
+        assert_eq!(
+            read_sfx_from_string("=== name ==="),
+            [SoundEffectInput {
+                name: Name::new_lossy("name".to_owned()),
+                flags: SfxFlags {
+                    interruptible: None,
+                },
+                sfx: SoundEffectText::BytecodeAssembly(String::new())
+            }]
+        );
+    }
+
+    #[test]
+    fn test_interruptible_set() {
+        assert_eq!(
+            read_sfx_from_string("=== name === interruptible"),
+            [SoundEffectInput {
+                name: Name::new_lossy("name".to_owned()),
+                flags: SfxFlags {
+                    interruptible: Some(true),
+                },
+                sfx: SoundEffectText::BytecodeAssembly(String::new())
+            }]
+        );
+    }
+
+    #[test]
+    fn test_interruptible_clear() {
+        assert_eq!(
+            read_sfx_from_string("=== name === uninterruptible"),
+            [SoundEffectInput {
+                name: Name::new_lossy("name".to_owned()),
+                flags: SfxFlags {
+                    interruptible: Some(false),
+                },
+                sfx: SoundEffectText::BytecodeAssembly(String::new())
+            }]
         );
     }
 
@@ -617,11 +718,34 @@ c
         let sound_effects = vec![
             SoundEffectInput {
                 name: Name::new_lossy("".to_owned()),
+                flags: SfxFlags::default(),
                 sfx: SoundEffectText::BytecodeAssembly("Bytecode\nAssembly".to_owned()),
             },
             SoundEffectInput {
                 name: Name::new_lossy("MML_Sound_Effect".to_owned()),
+                flags: SfxFlags::default(),
                 sfx: SoundEffectText::Mml("Test".to_owned()),
+            },
+            SoundEffectInput {
+                name: Name::new_lossy("interruptible_1".to_owned()),
+                flags: SfxFlags {
+                    interruptible: None,
+                },
+                sfx: SoundEffectText::BytecodeAssembly(String::new()),
+            },
+            SoundEffectInput {
+                name: Name::new_lossy("interruptible_2".to_owned()),
+                flags: SfxFlags {
+                    interruptible: Some(false),
+                },
+                sfx: SoundEffectText::BytecodeAssembly(String::new()),
+            },
+            SoundEffectInput {
+                name: Name::new_lossy("interruptible_3".to_owned()),
+                flags: SfxFlags {
+                    interruptible: Some(true),
+                },
+                sfx: SoundEffectText::BytecodeAssembly(String::new()),
             },
         ];
 

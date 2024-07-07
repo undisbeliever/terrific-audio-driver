@@ -167,8 +167,8 @@ pub fn build_common_audio_data(
     let sfx_table_addr = u16::try_from(out.len()).unwrap() + addresses::COMMON_DATA;
     out.extend(sound_effects.sfx_header_addr_l_iter(sfx_data_addr));
     out.extend(sound_effects.sfx_header_addr_h_iter(sfx_data_addr));
-    out.extend(sound_effects.sfx_header_ticks_l_iter());
-    out.extend(sound_effects.sfx_header_ticks_h_iter());
+    out.extend(sound_effects.sfx_header_duration_and_interrupt_flag_l_iter());
+    out.extend(sound_effects.sfx_header_duration_and_interrupt_flag_h_iter());
 
     assert_eq!(out.len(), header_size);
     assert_eq!(

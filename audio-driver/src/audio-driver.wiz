@@ -78,8 +78,8 @@ in zeropage {
 
         var soundEffects_addr_l : *u8;
         var soundEffects_addr_h : *u8;
-        var soundEffects_ticks_l : *u8;
-        var soundEffects_ticks_h : *u8;
+        var soundEffects_durationAndInterruptFlag_l : *u8;
+        var soundEffects_durationAndInterruptFlag_h : *u8;
     }
 
     // Increases once every song tick
@@ -115,6 +115,10 @@ in zeropage {
     // Used to disable S-DSP voice register writes for unused sfx channels.
     // Used to determine the next available sound effect channel.
     var activeSoundEffects : u8;
+
+    // bitmask - Set if the sound effect is interruptible
+    // (only uses bits 6 & 7)
+    var sfx_interruptibleFlags : u8;
 
 
     // The remaining duration of the two sound effects in ticks
@@ -499,10 +503,10 @@ func main() {
         *(&commonData.instruments_adsr1 as *u16)       = ya = ya + _nInstruments;
         *(&commonData.instruments_adsr2OrGain as *u16) = ya = ya + _nInstruments;
 
-        *(&commonData.soundEffects_addr_l as *u16)     = ya = ya + _nInstruments;
-        *(&commonData.soundEffects_addr_h as *u16)     = ya = ya + _nSoundEffects;
-        *(&commonData.soundEffects_ticks_l as *u16)    = ya = ya + _nSoundEffects;
-        *(&commonData.soundEffects_ticks_h as *u16)    = ya = ya + _nSoundEffects;
+        *(&commonData.soundEffects_addr_l as *u16)                      = ya = ya + _nInstruments;
+        *(&commonData.soundEffects_addr_h as *u16)                      = ya = ya + _nSoundEffects;
+        *(&commonData.soundEffects_durationAndInterruptFlag_l as *u16)  = ya = ya + _nSoundEffects;
+        *(&commonData.soundEffects_durationAndInterruptFlag_h as *u16)  = ya = ya + _nSoundEffects;
     }
 
 
@@ -1008,15 +1012,24 @@ func play_sound_effect(sfx_id : u8 in y) {
             // Drop sfx_id if it is a low-priority sound effect
             goto Return if y >= commonDataHeader.firstLowPrioritySfx;
 
-            // check remaining ticks and drop the sound effect that will finish first.
+            a = sfx_interruptibleFlags;
+            if a >= BOTH_SFX_ACTIVE {
+                // Both sound effects can be interrupted
+                // check remaining ticks and drop the sound effect that will finish first.
 
-            // Assumes 2 sound effect channels
-            ya = sfx_remainingTicks[0];
-            cmp(ya, sfx_remainingTicks[1]);
+                // Assumes 2 sound effect channels
+                ya = sfx_remainingTicks[0];
+                cmp(ya, sfx_remainingTicks[1]);
 
-            y = IO.ToDriver.parameter0;
-            goto _play_sfx_0 if !carry;
-            goto _play_sfx_1;
+                y = IO.ToDriver.parameter0;
+                goto _play_sfx_0 if !carry;
+                goto _play_sfx_1;
+            }
+
+            // Play sound effect if a channel is interruptible
+            a <<<= 1;
+            goto _play_sfx_1 if carry;
+            goto _play_sfx_0 if negative;
         }
         else {
             // At most 1 sound effect channel is active
@@ -1030,8 +1043,13 @@ Return:
 
 
 inline func __play_sfx__inline(let _I : u8, sfx_id : u8 in y) {
-    <:sfx_remainingTicks[_I] = a = commonData.soundEffects_ticks_l[y];
-    >:sfx_remainingTicks[_I] = a = commonData.soundEffects_ticks_h[y];
+    let BIT = 8 - N_SFX_CHANNELS + _I;
+
+    <:sfx_remainingTicks[_I] = a = commonData.soundEffects_durationAndInterruptFlag_l[y];
+    >:sfx_remainingTicks[_I] = a = commonData.soundEffects_durationAndInterruptFlag_h[y];
+
+    a <<<= 1;
+    sfx_interruptibleFlags $ BIT = carry;
 }
 
 func _play_sfx_0(sfx_id : u8 in y) {

@@ -21,10 +21,7 @@ use crate::time::{TickClock, TickCounter};
 use std::collections::HashMap;
 use std::time::Duration;
 
-// Increment the sfx header tick counter by a fixed amount to prevent it underflowing
-pub const SFX_TICKS_OFFSET: u32 = 64;
-
-pub const MAX_SFX_TICKS: TickCounter = TickCounter::new(u16::MAX as u32 - SFX_TICKS_OFFSET);
+pub const MAX_SFX_TICKS: TickCounter = TickCounter::new(0x7fff);
 
 const COMMENT_CHAR: char = ';';
 
@@ -34,9 +31,15 @@ enum SfxData {
     BytecodeAssembly(Vec<u8>),
 }
 
+#[derive(Default, Clone, Debug, PartialEq)]
+pub struct SfxFlags {
+    pub interruptible: Option<bool>,
+}
+
 #[derive(Debug)]
 pub struct CompiledSoundEffect {
     data: SfxData,
+    flags: SfxFlags,
     tick_counter: TickCounter,
 }
 
@@ -70,10 +73,12 @@ fn compile_mml_sound_effect(
     sfx: &str,
     inst_map: &UniqueNamesList<InstrumentOrSample>,
     pitch_table: &PitchTable,
+    flags: SfxFlags,
 ) -> Result<CompiledSoundEffect, SoundEffectErrorList> {
     match mml::compile_sound_effect(sfx, inst_map, pitch_table) {
         Ok(o) => Ok(CompiledSoundEffect {
             tick_counter: o.tick_counter(),
+            flags,
             data: SfxData::Mml(o),
         }),
         Err(errors) => Err(errors),
@@ -83,6 +88,7 @@ fn compile_mml_sound_effect(
 fn compile_bytecode_sound_effect(
     sfx: &str,
     instruments: &UniqueNamesList<InstrumentOrSample>,
+    flags: SfxFlags,
 ) -> Result<CompiledSoundEffect, SoundEffectErrorList> {
     let mut errors = Vec::new();
 
@@ -130,6 +136,7 @@ fn compile_bytecode_sound_effect(
     if errors.is_empty() {
         Ok(CompiledSoundEffect {
             data: SfxData::BytecodeAssembly(out.unwrap()),
+            flags,
             tick_counter,
         })
     } else {
@@ -164,9 +171,11 @@ pub fn compile_sound_effects_file(
 
         let r = match &sfx.sfx {
             SoundEffectText::BytecodeAssembly(text) => {
-                compile_bytecode_sound_effect(text, inst_map)
+                compile_bytecode_sound_effect(text, inst_map, sfx.flags.clone())
             }
-            SoundEffectText::Mml(text) => compile_mml_sound_effect(text, inst_map, pitch_table),
+            SoundEffectText::Mml(text) => {
+                compile_mml_sound_effect(text, inst_map, pitch_table, sfx.flags.clone())
+            }
         };
         match r {
             Ok(s) => {
@@ -196,7 +205,7 @@ pub fn compile_sound_effects_file(
 
 pub(crate) struct SfxHeader {
     pub(crate) offset: u16,
-    pub(crate) ticks: u16,
+    pub(crate) duration_and_interrupt_flag: u16,
 }
 
 pub struct CombinedSoundEffectsData {
@@ -228,12 +237,20 @@ impl CombinedSoundEffectsData {
             .map(move |h| (h.offset + sfx_data_addr).to_le_bytes()[1])
     }
 
-    pub(crate) fn sfx_header_ticks_l_iter(&self) -> impl Iterator<Item = u8> + '_ {
-        self.sfx_header.iter().map(|h| (h.ticks).to_le_bytes()[0])
+    pub(crate) fn sfx_header_duration_and_interrupt_flag_l_iter(
+        &self,
+    ) -> impl Iterator<Item = u8> + '_ {
+        self.sfx_header
+            .iter()
+            .map(|h| (h.duration_and_interrupt_flag).to_le_bytes()[0])
     }
 
-    pub(crate) fn sfx_header_ticks_h_iter(&self) -> impl Iterator<Item = u8> + '_ {
-        self.sfx_header.iter().map(|h| (h.ticks).to_le_bytes()[1])
+    pub(crate) fn sfx_header_duration_and_interrupt_flag_h_iter(
+        &self,
+    ) -> impl Iterator<Item = u8> + '_ {
+        self.sfx_header
+            .iter()
+            .map(|h| (h.duration_and_interrupt_flag).to_le_bytes()[1])
     }
 }
 
@@ -295,12 +312,23 @@ pub fn combine_sound_effects(
     for name in export_order {
         match sfx_map.get(name) {
             Some(s) => {
+                const FLAG_MASK: u16 = 1 << 15;
+
                 let t = s.tick_counter.value();
-                assert!(t < MAX_SFX_TICKS.value());
+                assert!(t <= FLAG_MASK as u32);
+                const _: () = assert!(MAX_SFX_TICKS.value() < FLAG_MASK as u32);
+
+                let offset = u16::try_from(sfx_data.len()).unwrap_or(0xffff);
+                let ticks = u16::try_from(t).unwrap();
+
+                let interruptible_flag = match s.flags.interruptible.unwrap_or(true) {
+                    true => FLAG_MASK,
+                    false => 0,
+                };
 
                 sfx_header.push(SfxHeader {
-                    offset: sfx_data.len().try_into().unwrap_or(0),
-                    ticks: u16::try_from(t + SFX_TICKS_OFFSET).unwrap(),
+                    offset,
+                    duration_and_interrupt_flag: ticks | interruptible_flag,
                 });
                 sfx_data.extend(s.bytecode());
             }
@@ -334,7 +362,7 @@ pub fn tad_gui_sfx_data(buffer_size: usize) -> CombinedSoundEffectsData {
         low_priority_index: u8::MAX,
         sfx_header: vec![SfxHeader {
             offset: 0,
-            ticks: MAX_SFX_TICKS.value().try_into().unwrap(),
+            duration_and_interrupt_flag: MAX_SFX_TICKS.value().try_into().unwrap(),
         }],
         sfx_data: vec![opcodes::DISABLE_CHANNEL; buffer_size],
     }
@@ -352,6 +380,7 @@ pub enum SoundEffectText {
 #[derive(Clone, Debug, PartialEq)]
 pub struct SoundEffectInput {
     pub name: Name,
+    pub flags: SfxFlags,
     pub sfx: SoundEffectText,
 }
 
@@ -361,8 +390,12 @@ pub fn compile_sound_effect_input(
     pitch_table: &PitchTable,
 ) -> Result<CompiledSoundEffect, SoundEffectError> {
     let r = match &input.sfx {
-        SoundEffectText::BytecodeAssembly(text) => compile_bytecode_sound_effect(text, inst_map),
-        SoundEffectText::Mml(text) => compile_mml_sound_effect(text, inst_map, pitch_table),
+        SoundEffectText::BytecodeAssembly(text) => {
+            compile_bytecode_sound_effect(text, inst_map, input.flags.clone())
+        }
+        SoundEffectText::Mml(text) => {
+            compile_mml_sound_effect(text, inst_map, pitch_table, input.flags.clone())
+        }
     };
     match r {
         Ok(o) => Ok(o),

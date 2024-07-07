@@ -21,11 +21,11 @@ use compiler::data::Name;
 use compiler::driver_constants::{CENTER_PAN, MAX_PAN};
 use compiler::errors::SfxErrorLines;
 use compiler::sfx_file::SoundEffectsFile;
-use compiler::sound_effects::{SoundEffectInput, SoundEffectText};
+use compiler::sound_effects::{SfxFlags, SoundEffectInput, SoundEffectText};
 
 use compiler::time::TickCounter;
 use fltk::app::{self, event_key};
-use fltk::button::Button;
+use fltk::button::{Button, RadioRoundButton};
 use fltk::enums::{Color, Event, Font, Key};
 use fltk::frame::Frame;
 use fltk::group::{Flex, Pack, PackType};
@@ -90,6 +90,7 @@ impl TableMapping for SoundEffectMapping {
     fn add_clicked() -> GuiMessage {
         GuiMessage::EditSoundEffectList(ListMessage::Add(SoundEffectInput {
             name: "name".parse().unwrap(),
+            flags: SfxFlags::default(),
             sfx: SoundEffectText::BytecodeAssembly(String::new()),
         }))
     }
@@ -128,6 +129,7 @@ pub struct State {
     selected: Option<usize>,
     selected_id: Option<ItemId>,
     old_name: Name,
+    old_flags: SfxFlags,
 
     pan: HorNiceSlider,
     song_choice: SongChoice,
@@ -135,6 +137,7 @@ pub struct State {
 
     name: Input,
     sound_effect_type: Choice,
+    interruptible_flag: SfxFlagRadios,
     editor: MmlEditor,
 
     error_lines: Option<SfxErrorLines>,
@@ -162,7 +165,6 @@ pub struct SoundEffectsTab {
     sfx_group: Flex,
 
     name: Input,
-
     console: TextDisplay,
     console_buffer: TextBuffer,
 }
@@ -212,7 +214,7 @@ impl SoundEffectsTab {
         let mut sfx_group = Flex::default().column();
         main_group.fixed(
             &sfx_group,
-            button_size + input_height(&sfx_group) + sfx_group.pad(),
+            2 * (input_height(&sfx_group) + sfx_group.pad()) + button_size,
         );
 
         let main_toolbar = Pack::default().with_type(PackType::Horizontal);
@@ -262,6 +264,14 @@ impl SoundEffectsTab {
         sfx_group.fixed(&name_flex, input_height(&name));
         name_flex.end();
 
+        let interruptible_flag = SfxFlagRadios::new(
+            &mut sfx_group,
+            "Interruptible",
+            "Can be interrupted by a play_sound_effect command",
+            "Uninterruptible",
+            "Will not be interrupted by a play_sound_effect command",
+        );
+
         sfx_group.end();
 
         let mut editor = MmlEditor::new("", TextFormat::SoundEffectHeader);
@@ -307,8 +317,11 @@ impl SoundEffectsTab {
             song_start_ticks,
 
             old_name: "sfx".parse().unwrap(),
+            old_flags: SfxFlags::default(),
+
             name: name.clone(),
             sound_effect_type,
+            interruptible_flag,
             editor,
             error_lines: None,
         }));
@@ -395,6 +408,15 @@ impl SoundEffectsTab {
                 move |buffer| {
                     if let Ok(s) = s.try_borrow() {
                         s.text_changed(buffer)
+                    }
+                }
+            });
+
+            s.interruptible_flag.set_callback({
+                let s = state.clone();
+                move || {
+                    if let Ok(mut s) = s.try_borrow_mut() {
+                        s.commit_sfx();
                     }
                 }
             });
@@ -582,6 +604,8 @@ impl ListEditor<SoundEffectInput> for SoundEffectsTab {
             state.name.set_value("Header (not a sound effect)");
             state.sound_effect_type.set_value(-1);
 
+            state.interruptible_flag.clear_value();
+
             state.editor.set_buffer(self.header_buffer.clone());
         }
 
@@ -599,6 +623,7 @@ impl ListEditor<SoundEffectInput> for SoundEffectsTab {
                     state.selected = Some(index);
                     state.selected_id = Some(id);
                     state.old_name = sfx.name.clone();
+                    state.old_flags = sfx.flags.clone();
 
                     self.name.set_value(sfx.name.as_str());
                     self.name.clear_changed();
@@ -610,6 +635,8 @@ impl ListEditor<SoundEffectInput> for SoundEffectsTab {
                         SoundEffectText::Mml(_) => SoundEffectTypeChoice::Mml,
                     };
                     state.sound_effect_type.set_value(type_choice.to_i32());
+
+                    state.interruptible_flag.set_value(sfx.flags.interruptible);
 
                     match sfx_buffer {
                         Some(b) => state.editor.set_buffer(b.clone()),
@@ -689,6 +716,7 @@ impl State {
         if let Some(index) = self.selected {
             let sfx = SoundEffectInput {
                 name: self.old_name.clone(),
+                flags: self.old_flags.clone(),
                 sfx: match SoundEffectTypeChoice::read_widget(&self.sound_effect_type) {
                     SoundEffectTypeChoice::BytecodeAssembly => {
                         SoundEffectText::BytecodeAssembly(buffer.text())
@@ -715,8 +743,13 @@ impl State {
                 self.old_name = n;
             };
 
+            self.old_flags = SfxFlags {
+                interruptible: self.interruptible_flag.value(),
+            };
+
             let sfx = SoundEffectInput {
                 name: self.old_name.clone(),
+                flags: self.old_flags.clone(),
                 sfx: match SoundEffectTypeChoice::read_widget(&self.sound_effect_type) {
                     SoundEffectTypeChoice::BytecodeAssembly => {
                         SoundEffectText::BytecodeAssembly(text)
@@ -860,6 +893,7 @@ pub fn add_missing_sfx(
             if !sfx_set.contains(sfx_name) {
                 Some(SoundEffectInput {
                     name: sfx_name.clone(),
+                    flags: SfxFlags::default(),
                     sfx: SoundEffectText::BytecodeAssembly(String::new()),
                 })
             } else {
@@ -872,5 +906,84 @@ pub fn add_missing_sfx(
         sender.send(GuiMessage::EditSoundEffectList(ListMessage::AddMultiple(
             to_add,
         )));
+    }
+}
+
+struct SfxFlagRadios {
+    set: RadioRoundButton,
+    clear: RadioRoundButton,
+    default: RadioRoundButton,
+}
+
+impl SfxFlagRadios {
+    const WIDTH_CH: i32 = 20;
+
+    fn new(
+        parent: &mut Flex,
+        set_label: &str,
+        set_tooltip: &str,
+        clear_label: &str,
+        clear_tooltip: &str,
+    ) -> Self {
+        let w = ch_units_to_width(parent, Self::WIDTH_CH);
+        let h = input_height(parent);
+
+        let mut pack = Pack::default().with_size(w * 3, h);
+        parent.fixed(&pack, h);
+
+        let mut set = RadioRoundButton::default()
+            .with_size(w, h)
+            .with_label(set_label);
+        set.set_tooltip(set_tooltip);
+
+        let mut clear = RadioRoundButton::default()
+            .with_size(w, h)
+            .with_label(clear_label);
+        clear.set_tooltip(clear_tooltip);
+
+        let default = RadioRoundButton::default()
+            .with_size(w, h)
+            .with_label("Default");
+
+        pack.end();
+        pack.set_type(fltk::group::PackType::Horizontal);
+
+        Self {
+            default,
+            set,
+            clear,
+        }
+    }
+
+    fn value(&self) -> Option<bool> {
+        if self.set.value() {
+            Some(true)
+        } else if self.clear.value() {
+            Some(false)
+        } else {
+            None
+        }
+    }
+
+    fn set_value(&mut self, value: Option<bool>) {
+        self.set.set_value(value == Some(true));
+        self.clear.set_value(value == Some(false));
+        self.default.set_value(value.is_none());
+    }
+
+    fn clear_value(&mut self) {
+        self.set.clear();
+        self.clear.clear();
+        self.default.clear();
+    }
+
+    fn set_callback(&mut self, cb: impl Fn() + Clone + 'static) {
+        let cb = move |_: &mut RadioRoundButton| {
+            cb();
+        };
+
+        self.set.set_callback(cb.clone());
+        self.clear.set_callback(cb.clone());
+        self.default.set_callback(cb);
     }
 }
