@@ -6,7 +6,9 @@
 
 use crate::bytecode::{opcodes, BcTerminator, BytecodeContext};
 use crate::bytecode_assembler::BytecodeAssembler;
-use crate::data::{InstrumentOrSample, Name, UniqueNamesList, UniqueSoundEffectExportOrder};
+use crate::data::{
+    DefaultSfxFlags, InstrumentOrSample, Name, UniqueNamesList, UniqueSoundEffectExportOrder,
+};
 use crate::driver_constants::{COMMON_DATA_BYTES_PER_SOUND_EFFECT, SFX_TICK_CLOCK};
 use crate::errors::{
     BytecodeAssemblerError, CombineSoundEffectsError, ErrorWithPos, OtherSfxError,
@@ -307,6 +309,7 @@ impl SfxExportOrder for UniqueSoundEffectExportOrder {
 pub fn combine_sound_effects(
     sfx_map: &impl CompiledSfxMap,
     sfx_export_order: &impl SfxExportOrder,
+    default_flags: DefaultSfxFlags,
 ) -> Result<CombinedSoundEffectsData, CombineSoundEffectsError> {
     let export_order = sfx_export_order.export_order();
 
@@ -336,14 +339,14 @@ pub fn combine_sound_effects(
                 let offset = u16::try_from(sfx_data.len()).unwrap_or(0xffff);
                 let ticks = u16::try_from(t).unwrap();
 
-                let interruptible_flag = match s.flags.interruptible.unwrap_or(true) {
-                    true => FLAG_MASK,
-                    false => 0,
-                };
+                let interruptible_flag =
+                    match s.flags.interruptible.unwrap_or(default_flags.interruptible) {
+                        true => FLAG_MASK,
+                        false => 0,
+                    };
 
                 sfx_header.push(SfxHeader {
-                    // ::TODO add user configurable default values::
-                    one_channel_flag: s.flags.one_channel.unwrap_or(true),
+                    one_channel_flag: s.flags.one_channel.unwrap_or(default_flags.one_channel),
                     offset,
                     duration_and_interrupt_flag: ticks | interruptible_flag,
                 });

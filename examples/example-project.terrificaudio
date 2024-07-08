@@ -102,6 +102,10 @@
       "comment": "Sample by Doug Fraker. public domain, source: https://github.com/nesdoug/SNES_13/blob/master/MUSIC/More_Samples"
     }
   ],
+  "default_sfx_flags": {
+    "interruptible": true,
+    "one_channel": true
+  },
   "sound_effects": [
     "menu_cursor",
     "menu_select",

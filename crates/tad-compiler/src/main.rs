@@ -138,7 +138,11 @@ fn compile_sound_effects(
         }
     };
 
-    match sound_effects::combine_sound_effects(&sound_effects, &pf.sfx_export_order) {
+    match sound_effects::combine_sound_effects(
+        &sound_effects,
+        &pf.sfx_export_order,
+        pf.default_sfx_flags,
+    ) {
         Ok(sfx) => Ok(sfx),
         Err(e) => {
             eprintln!("Error compiling sound effects: {}", e);

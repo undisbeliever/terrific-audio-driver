@@ -20,8 +20,8 @@ use std::sync::{mpsc, Arc};
 use std::thread;
 
 use compiler::common_audio_data::{build_common_audio_data, CommonAudioData};
-use compiler::data::{self, LoopSetting};
-use compiler::data::{load_text_file_with_limit, TextFile};
+use compiler::data;
+use compiler::data::{load_text_file_with_limit, DefaultSfxFlags, LoopSetting, TextFile};
 use compiler::driver_constants::COMMON_DATA_BYTES_PER_SOUND_EFFECT;
 use compiler::envelope::Envelope;
 use compiler::errors::{
@@ -90,6 +90,7 @@ impl<T> ReplaceAllVec<T> {
 
 #[derive(Debug)]
 pub struct ProjectToCompiler {
+    pub default_sfx_flags: DefaultSfxFlags,
     pub sfx_export_order: ReplaceAllVec<data::Name>,
     pub low_priority_sfx_export_order: ReplaceAllVec<data::Name>,
     pub pf_songs: ReplaceAllVec<data::Song>,
@@ -111,6 +112,7 @@ pub enum ToCompiler {
 
     ClearSampleCacheAndRebuild,
 
+    DefaultSfxFlagChanged(DefaultSfxFlags),
     SfxExportOrder(ItemChanged<data::Name>),
     LowPrioritySfxExportOrder(ItemChanged<data::Name>),
 
@@ -848,8 +850,10 @@ fn build_common_audio_data_with_sfx(
     dep: &Option<SongDependencies>,
     sfx_export_order: &Arc<GuiSfxExportOrder>,
     sound_effects: &CList<SoundEffectInput, Option<Arc<CompiledSoundEffect>>>,
+    default_sfx_flags: DefaultSfxFlags,
 ) -> (Option<Arc<CommonAudioDataWithSfx>>, usize) {
-    let sfx_data = combine_sound_effects(sound_effects, sfx_export_order.deref());
+    let sfx_data =
+        combine_sound_effects(sound_effects, sfx_export_order.deref(), default_sfx_flags);
 
     // Always try to calculate sfx_data size (to keep song size checks and Project tab up-to-date)
     let sfx_data_size = match &sfx_data {
@@ -1199,6 +1203,7 @@ fn bg_thread(
 
     let blank_sfx_data = tad_gui_sfx_data(SFX_BUFFER_SIZE);
 
+    let mut default_sfx_flags = DefaultSfxFlags::default();
     let mut sfx_eo_ilist = IList::new();
     let mut lp_sfx_eo_ilist = IList::new();
     let mut pf_songs = IList::new();
@@ -1227,6 +1232,8 @@ fn bg_thread(
     while let Ok(m) = receiever.recv() {
         match m {
             ToCompiler::LoadProject(p) => {
+                default_sfx_flags = p.default_sfx_flags;
+
                 songs.replace_all_and_load_songs(&p.pf_songs);
 
                 sfx_eo_ilist.replace_all(p.sfx_export_order);
@@ -1266,6 +1273,10 @@ fn bg_thread(
                 pending_combine_samples = true;
             }
 
+            ToCompiler::DefaultSfxFlagChanged(flags) => {
+                default_sfx_flags = flags;
+                pending_build_cad_with_sfx = true;
+            }
             ToCompiler::SfxExportOrder(m) => {
                 sfx_eo_ilist.process_message(m);
                 sfx_export_order = build_sfx_export_order(&sfx_eo_ilist, &lp_sfx_eo_ilist);
@@ -1472,6 +1483,7 @@ fn bg_thread(
                 &song_dependencies,
                 &sfx_export_order,
                 &sound_effects,
+                default_sfx_flags,
             );
 
             if let Some(deps) = &mut song_dependencies {

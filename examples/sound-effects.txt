@@ -26,7 +26,7 @@
     portamento c2 no_keyoff -25 8
     portamento c1 keyoff -90 8
 
-=== player_hurt_low_health === uninterruptible
+=== player_hurt_low_health === both uninterruptible
     set_volume 255
 
     set_instrument_and_adsr triangle    10 2 1 25
@@ -55,7 +55,7 @@
     portamento c3 no_keyoff -30 8
     portamento g3 keyoff +20 20
 
-=== vibrato_alarm === one interruptible
+=== vibrato_alarm ===
     set_volume 196
     set_instrument_and_gain square I24
 
@@ -118,7 +118,7 @@ A o5 {e- g}6
     play_note           c5 20
 
 
-=== low_priority_long === mml interruptible
+=== low_priority_long === mml
 @1 square adsr 14 7 7 22
 
 A @1 o5 [c c c r]4

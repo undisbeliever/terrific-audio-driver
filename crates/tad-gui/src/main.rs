@@ -65,7 +65,7 @@ use crate::tabs::{
 use audio_thread::{AudioMessage, AudioMonitor, MusicChannelsMask, Pan, SongSkip};
 
 use compiler::data;
-use compiler::data::ProjectFile;
+use compiler::data::{DefaultSfxFlags, ProjectFile};
 use compiler::driver_constants;
 use compiler::path::{ParentPathBuf, SourcePathBuf};
 use compiler::sfx_file::{convert_sfx_inputs_lossy, SoundEffectsFile};
@@ -118,6 +118,7 @@ pub enum GuiMessage {
     ForceQuit,
     SaveAllAndQuit(Vec<FileType>),
 
+    DefaultSfxFlagChanged(DefaultSfxFlags),
     EditSfxExportOrder(ListMessage<data::Name>),
     EditLowPrioritySfxExportOrder(ListMessage<data::Name>),
     EditProjectSongs(ListMessage<data::Song>),
@@ -193,6 +194,7 @@ pub struct ProjectData {
     // This the value stored in `data::Project`, it is relative to `pf_parent_path`
     sound_effects_file: Option<SourcePathBuf>,
 
+    default_sfx_flags: DefaultSfxFlags,
     sfx_export_orders: ListWithSelection<data::Name>,
     low_priority_sfx_export_orders: ListWithSelection<data::Name>,
 
@@ -287,6 +289,7 @@ impl Project {
 
             sound_effects_file: c.sound_effect_file,
 
+            default_sfx_flags: c.default_sfx_flags,
             sfx_export_orders: ListWithSelection::new(sfx_eo, driver_constants::MAX_SOUND_EFFECTS),
             low_priority_sfx_export_orders: ListWithSelection::new(
                 lp_sfx_eo,
@@ -361,6 +364,15 @@ impl Project {
         match m {
             GuiMessage::FromCompiler(m) => {
                 self.process_compiler_output(m);
+            }
+
+            GuiMessage::DefaultSfxFlagChanged(flags) => {
+                self.data.default_sfx_flags = flags;
+                let _ = self
+                    .compiler_sender
+                    .send(ToCompiler::DefaultSfxFlagChanged(flags));
+
+                self.tab_manager.mark_unsaved(FileType::Project);
             }
 
             GuiMessage::EditSfxExportOrder(m) => {
@@ -810,6 +822,7 @@ impl Project {
         let _ = self.compiler_sender.send(ToCompiler::LoadProject(
             compiler_thread::ProjectToCompiler {
                 sfx_export_order: self.data.sfx_export_orders.list().replace_all_vec(),
+                default_sfx_flags: self.data.default_sfx_flags,
                 low_priority_sfx_export_order: self
                     .data
                     .low_priority_sfx_export_orders
@@ -1140,6 +1153,8 @@ impl ProjectData {
             instruments: self.instruments().list().item_iter().cloned().collect(),
             samples: self.samples().list().item_iter().cloned().collect(),
             songs: self.project_songs.list().item_iter().cloned().collect(),
+
+            default_sfx_flags: self.default_sfx_flags,
 
             sound_effects: self.sfx_export_orders.list().item_iter().cloned().collect(),
             low_priority_sound_effects: self

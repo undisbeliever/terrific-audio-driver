@@ -6,8 +6,7 @@
 
 use crate::compiler_thread::{CadOutput, SongOutput};
 use crate::list_editor::{
-    ListEditor, ListEditorTable, ListMessage, TableAction, TableCompilerOutput,
-    TableMapping,
+    ListEditor, ListEditorTable, ListMessage, TableAction, TableCompilerOutput, TableMapping,
 };
 use crate::tables::{RowWithStatus, SimpleRow, TableEvent, TableRow};
 use crate::tabs::{FileType, Tab};
@@ -15,11 +14,15 @@ use crate::GuiMessage;
 use crate::{helpers::*, ProjectData};
 
 use compiler::common_audio_data::CommonAudioData;
-use compiler::data;
 use compiler::data::Name;
+use compiler::data::{self, DefaultSfxFlags};
 use compiler::path::SourcePathBuf;
 use compiler::songs::{song_duration_string, SongAramSize};
 
+use std::cell::RefCell;
+use std::rc::Rc;
+
+use fltk::button::CheckButton;
 use fltk::enums::{Align, Color};
 use fltk::group::Flex;
 use fltk::output::Output;
@@ -306,6 +309,8 @@ impl ProjectTab {
         sfx_sidebar.fixed(&sfx_table.list_buttons().pack, button_height);
         sfx_sidebar.fixed(&lp_sfx_table.list_buttons().pack, button_height);
 
+        DefaultSfxFlagsWidget::new(&mut sfx_sidebar, data.default_sfx_flags, sender.clone());
+
         sfx_sidebar.end();
 
         let mut right = Flex::default().column();
@@ -347,6 +352,67 @@ impl ProjectTab {
 
     pub fn sfx_file_changed(&mut self, source: &SourcePathBuf) {
         self.sound_effects_file.set_value(source.as_str());
+    }
+}
+
+struct DefaultSfxFlagsWidget {
+    sender: app::Sender<GuiMessage>,
+    interruptible: CheckButton,
+    one_channel: CheckButton,
+}
+
+impl DefaultSfxFlagsWidget {
+    fn new(
+        parent: &mut Flex,
+        sfx_flags: DefaultSfxFlags,
+        sender: app::Sender<GuiMessage>,
+    ) -> Rc<RefCell<DefaultSfxFlagsWidget>> {
+        let height = input_height(parent);
+
+        let l = label("Default SFX Flags:");
+        parent.fixed(&l, height);
+
+        let mut group = Flex::default().column();
+        group.set_margins(ch_units_to_width(&group, 5), 0, 0, 0);
+        parent.fixed(&group, height * 2);
+
+        let mut add_checkbox = |label, value| {
+            let mut b = CheckButton::default().with_label(label);
+            parent.fixed(&b, height);
+            b.set_value(value);
+            b
+        };
+
+        let out = Rc::new(RefCell::new(DefaultSfxFlagsWidget {
+            sender,
+            interruptible: add_checkbox("Interruptible", sfx_flags.interruptible),
+            one_channel: add_checkbox("One Channel", sfx_flags.one_channel),
+        }));
+
+        group.end();
+
+        {
+            let mut o = out.borrow_mut();
+
+            let set_callback = |b: &mut CheckButton| {
+                let state = out.clone();
+                b.set_callback(move |_| {
+                    state.borrow().flags_changed();
+                });
+            };
+            set_callback(&mut o.interruptible);
+            set_callback(&mut o.one_channel);
+        }
+
+        out
+    }
+
+    fn flags_changed(&self) {
+        self.sender
+            .send(GuiMessage::DefaultSfxFlagChanged(DefaultSfxFlags {
+                interruptible: self.interruptible.value(),
+                one_channel: self.one_channel.value(),
+            }))
     }
 }
 

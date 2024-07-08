@@ -288,6 +288,21 @@ pub struct Sample {
     pub comment: Option<String>,
 }
 
+#[derive(Deserialize, Serialize, Clone, Copy, PartialEq, Debug)]
+pub struct DefaultSfxFlags {
+    pub interruptible: bool,
+    pub one_channel: bool,
+}
+
+impl Default for DefaultSfxFlags {
+    fn default() -> Self {
+        Self {
+            interruptible: true,
+            one_channel: true,
+        }
+    }
+}
+
 #[derive(Deserialize, Serialize, Clone, PartialEq, Debug)]
 pub struct Song {
     pub name: Name,
@@ -322,6 +337,9 @@ pub struct Project {
 
     #[serde(default)]
     pub samples: Vec<Sample>,
+
+    #[serde(default)]
+    pub default_sfx_flags: DefaultSfxFlags,
 
     pub sound_effects: Vec<Name>,
     #[serde(default)]
@@ -462,6 +480,7 @@ pub struct UniqueNamesProjectFile {
 
     pub instruments_and_samples: UniqueNamesList<InstrumentOrSample>,
 
+    pub default_sfx_flags: DefaultSfxFlags,
     pub sfx_export_order: UniqueSoundEffectExportOrder,
     pub sound_effect_file: Option<SourcePathBuf>,
 
@@ -616,6 +635,7 @@ pub fn validate_project_file_names(
             samples,
             instruments_and_samples: instruments_and_samples.unwrap(),
             sfx_export_order: sfx_export_order.unwrap(),
+            default_sfx_flags: pf.contents.default_sfx_flags,
             sound_effect_file: pf.contents.sound_effect_file,
             songs,
         })
