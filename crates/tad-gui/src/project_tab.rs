@@ -5,14 +5,14 @@
 // SPDX-License-Identifier: MIT
 
 use crate::compiler_thread::{CadOutput, SongOutput};
-use crate::helpers::*;
 use crate::list_editor::{
-    ListEditor, ListEditorTable, ListMessage, ListState, TableAction, TableCompilerOutput,
+    ListEditor, ListEditorTable, ListMessage, TableAction, TableCompilerOutput,
     TableMapping,
 };
 use crate::tables::{RowWithStatus, SimpleRow, TableEvent, TableRow};
 use crate::tabs::{FileType, Tab};
 use crate::GuiMessage;
+use crate::{helpers::*, ProjectData};
 
 use compiler::common_audio_data::CommonAudioData;
 use compiler::data;
@@ -291,21 +291,16 @@ impl Tab for ProjectTab {
 }
 
 impl ProjectTab {
-    pub fn new(
-        sfx_list: &impl ListState<Item = Name>,
-        lp_sfx_list: &impl ListState<Item = Name>,
-        song_list: &impl ListState<Item = data::Song>,
-        sfx_source_path: Option<&SourcePathBuf>,
-        sender: app::Sender<GuiMessage>,
-    ) -> Self {
+    pub fn new(data: &ProjectData, sender: app::Sender<GuiMessage>) -> Self {
         let mut group = Flex::default_fill().row();
 
         let mut sfx_sidebar = Flex::default().column();
         group.fixed(&sfx_sidebar, ch_units_to_width(&sfx_sidebar, 30));
 
         // ::TODO add a button to move SFX between low and high priorities::
-        let mut sfx_table = ListEditorTable::new_with_data(sfx_list, sender.clone());
-        let mut lp_sfx_table = ListEditorTable::new_with_data(lp_sfx_list, sender.clone());
+        let mut sfx_table = ListEditorTable::new_with_data(&data.sfx_export_orders, sender.clone());
+        let mut lp_sfx_table =
+            ListEditorTable::new_with_data(&data.low_priority_sfx_export_orders, sender.clone());
 
         let button_height = sfx_table.button_height();
         sfx_sidebar.fixed(&sfx_table.list_buttons().pack, button_height);
@@ -315,7 +310,7 @@ impl ProjectTab {
 
         let mut right = Flex::default().column();
 
-        let mut song_table = ListEditorTable::new_with_data(song_list, sender);
+        let mut song_table = ListEditorTable::new_with_data(&data.project_songs, sender);
 
         let button_height = song_table.button_height();
         right.fixed(&song_table.list_buttons().pack, button_height);
@@ -328,7 +323,7 @@ impl ProjectTab {
 
         let mut sound_effects_file = Output::default();
         sound_effects_file.set_color(Color::Background);
-        if let Some(p) = sfx_source_path {
+        if let Some(p) = &data.sound_effects_file {
             sound_effects_file.set_value(p.as_str());
         }
 

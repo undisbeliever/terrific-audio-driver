@@ -324,16 +324,9 @@ impl Project {
                 audio_sender.clone(),
             ),
 
-            project_tab: ProjectTab::new(
-                &data.sfx_export_orders,
-                &data.low_priority_sfx_export_orders,
-                &data.project_songs,
-                data.sound_effects_file.as_ref(),
-                sender.clone(),
-            ),
-
             sfx_window: SfxWindow::new(sender.clone()),
 
+            project_tab: ProjectTab::new(&data, sender.clone()),
             samples_tab: SamplesTab::new(data.instruments(), data.samples(), sender.clone()),
             sound_effects_tab: SoundEffectsTab::new(sender.clone()),
             closed_song_tabs: Vec::new(),
