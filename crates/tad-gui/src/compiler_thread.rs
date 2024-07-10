@@ -6,6 +6,7 @@
 
 use crate::names::NameGetter;
 use crate::sample_analyser::{self, SampleAnalysis};
+use crate::sfx_export_order::{GuiSfxExportOrder, SfxExportOrderAction};
 use crate::GuiMessage;
 
 use crate::audio_thread::{
@@ -91,8 +92,7 @@ impl<T> ReplaceAllVec<T> {
 #[derive(Debug)]
 pub struct ProjectToCompiler {
     pub default_sfx_flags: DefaultSfxFlags,
-    pub sfx_export_order: ReplaceAllVec<data::Name>,
-    pub low_priority_sfx_export_order: ReplaceAllVec<data::Name>,
+    pub sfx_export_order: GuiSfxExportOrder,
     pub pf_songs: ReplaceAllVec<data::Song>,
     pub instruments: ReplaceAllVec<data::Instrument>,
     pub samples: ReplaceAllVec<data::Sample>,
@@ -113,8 +113,7 @@ pub enum ToCompiler {
     ClearSampleCacheAndRebuild,
 
     DefaultSfxFlagChanged(DefaultSfxFlags),
-    SfxExportOrder(ItemChanged<data::Name>),
-    LowPrioritySfxExportOrder(ItemChanged<data::Name>),
+    SfxExportOrder(SfxExportOrderAction),
 
     ProjectSongs(ItemChanged<data::Song>),
 
@@ -175,45 +174,6 @@ pub enum CompilerOutput {
     SpcFileResult(Result<(String, Vec<u8>), SpcFileError>),
 
     SampleAnalysis(Result<SampleAnalysis, BrrError>),
-}
-
-#[derive(Debug)]
-pub struct SfxId(u8);
-
-impl SfxId {
-    pub fn value(&self) -> u8 {
-        self.0
-    }
-}
-
-#[derive(Debug)]
-pub struct GuiSfxExportOrder {
-    export_order: Vec<data::Name>,
-    low_priority_index: usize,
-}
-
-impl SfxExportOrder for GuiSfxExportOrder {
-    fn n_sound_effects(&self) -> usize {
-        self.export_order.len()
-    }
-
-    fn export_order(&self) -> &[data::Name] {
-        &self.export_order
-    }
-
-    fn low_priority_index(&self) -> usize {
-        self.low_priority_index
-    }
-}
-
-impl GuiSfxExportOrder {
-    pub fn sfx_id(&self, index: usize) -> Option<SfxId> {
-        if index < self.export_order.len() {
-            index.try_into().ok().map(SfxId)
-        } else {
-            None
-        }
-    }
 }
 
 #[derive(Debug)]
@@ -351,10 +311,6 @@ impl<ItemT> IList<ItemT> {
             items: Vec::new(),
             map: HashMap::new(),
         }
-    }
-
-    fn items(&self) -> &[ItemT] {
-        &self.items
     }
 
     fn get(&self, id: &ItemId) -> Option<&ItemT> {
@@ -726,17 +682,6 @@ fn create_sfx_compiler<'a>(
             }
         }
     }
-}
-
-fn build_sfx_export_order(
-    eo: &IList<data::Name>,
-    lp_eo: &IList<data::Name>,
-) -> Arc<GuiSfxExportOrder> {
-    // Assumes eo and lp_eo do not contain duplicate names
-    Arc::new(GuiSfxExportOrder {
-        export_order: [eo.items(), lp_eo.items()].concat(),
-        low_priority_index: eo.items().len(),
-    })
 }
 
 fn count_missing_sfx(
@@ -1204,8 +1149,14 @@ fn bg_thread(
     let blank_sfx_data = tad_gui_sfx_data(SFX_BUFFER_SIZE);
 
     let mut default_sfx_flags = DefaultSfxFlags::default();
-    let mut sfx_eo_ilist = IList::new();
-    let mut lp_sfx_eo_ilist = IList::new();
+
+    // Editable sfx export order
+    let mut sfx_eo = GuiSfxExportOrder::default();
+
+    // Sfx export order stored
+    // Using an Arc to reduce clones and allow the GUI to detect if the sfx_export_order in CommonAudioDataWithSfx has changed.
+    let mut sfx_export_order = Arc::new(sfx_eo.clone());
+
     let mut pf_songs = IList::new();
     let mut instruments = CList::new();
     let mut samples = CList::new();
@@ -1219,8 +1170,6 @@ fn bg_thread(
 
     let mut inst_sample_names = Arc::default();
 
-    let mut sfx_export_order = build_sfx_export_order(&sfx_eo_ilist, &lp_sfx_eo_ilist);
-
     // Used to test if a sound effect was edited in the sfx tab.
     let mut cad_with_sfx_out_of_date = true;
 
@@ -1233,16 +1182,15 @@ fn bg_thread(
         match m {
             ToCompiler::LoadProject(p) => {
                 default_sfx_flags = p.default_sfx_flags;
+                sfx_eo = p.sfx_export_order;
 
                 songs.replace_all_and_load_songs(&p.pf_songs);
 
-                sfx_eo_ilist.replace_all(p.sfx_export_order);
-                lp_sfx_eo_ilist.replace_all(p.low_priority_sfx_export_order);
                 pf_songs.replace_all(p.pf_songs);
                 instruments.replace_all(p.instruments);
                 samples.replace_all(p.samples);
 
-                sfx_export_order = build_sfx_export_order(&sfx_eo_ilist, &lp_sfx_eo_ilist);
+                sfx_export_order = Arc::new(sfx_eo.clone());
                 inst_sample_names = instrument_and_sample_names(&instruments, &samples);
 
                 compile_all_samples(
@@ -1277,16 +1225,10 @@ fn bg_thread(
                 default_sfx_flags = flags;
                 pending_build_cad_with_sfx = true;
             }
-            ToCompiler::SfxExportOrder(m) => {
-                sfx_eo_ilist.process_message(m);
-                sfx_export_order = build_sfx_export_order(&sfx_eo_ilist, &lp_sfx_eo_ilist);
-                count_missing_sfx(&sfx_export_order, &sound_effects, &sender);
+            ToCompiler::SfxExportOrder(a) => {
+                sfx_eo.process(&a);
+                sfx_export_order = Arc::new(sfx_eo.clone());
 
-                pending_build_cad_with_sfx = true;
-            }
-            ToCompiler::LowPrioritySfxExportOrder(m) => {
-                lp_sfx_eo_ilist.process_message(m);
-                sfx_export_order = build_sfx_export_order(&sfx_eo_ilist, &lp_sfx_eo_ilist);
                 count_missing_sfx(&sfx_export_order, &sound_effects, &sender);
 
                 pending_build_cad_with_sfx = true;

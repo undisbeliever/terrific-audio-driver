@@ -5,8 +5,9 @@
 // SPDX-License-Identifier: MIT
 
 use crate::audio_thread::Pan;
-use crate::compiler_thread::{CadOutput, GuiSfxExportOrder};
+use crate::compiler_thread::CadOutput;
 use crate::helpers::{ch_units_to_width, label_packed};
+use crate::sfx_export_order::GuiSfxExportOrder;
 use crate::tabs::FileType;
 use crate::GuiMessage;
 

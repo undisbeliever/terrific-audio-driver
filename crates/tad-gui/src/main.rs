@@ -25,6 +25,7 @@ mod sample_analyser;
 mod sample_editor;
 mod sample_sizes_widget;
 mod sample_widgets;
+mod sfx_export_order;
 mod sfx_window;
 mod symbols;
 mod tables;
@@ -38,7 +39,7 @@ mod sound_effects_tab;
 
 use crate::about_tab::AboutTab;
 use crate::compiler_thread::{
-    CompilerOutput, InstrumentOutput, ItemId, SfxId, SoundEffectOutput, ToCompiler,
+    CompilerOutput, InstrumentOutput, ItemId, SoundEffectOutput, ToCompiler,
 };
 use crate::files::{
     add_song_to_pf_dialog, load_mml_file, load_pf_sfx_file,
@@ -55,6 +56,7 @@ use crate::menu::Menu;
 use crate::names::deduplicate_names;
 use crate::project_tab::ProjectTab;
 use crate::samples_tab::SamplesTab;
+use crate::sfx_export_order::SfxId;
 use crate::song_tab::{blank_mml_file, SongTab};
 use crate::sound_effects_tab::{blank_sfx_file, SoundEffectsTab};
 use crate::tabs::{
@@ -86,6 +88,7 @@ use licenses_dialog::LicensesDialog;
 use list_editor::ListPairWithCompilerOutputs;
 use monitor_timer::MonitorTimer;
 use sample_analyser::SampleAnalyserDialog;
+use sfx_export_order::{GuiSfxExportOrder, SfxExportOrderMessage};
 use sfx_window::SfxWindow;
 
 use std::collections::HashMap;
@@ -119,8 +122,7 @@ pub enum GuiMessage {
     SaveAllAndQuit(Vec<FileType>),
 
     DefaultSfxFlagChanged(DefaultSfxFlags),
-    EditSfxExportOrder(ListMessage<data::Name>),
-    EditLowPrioritySfxExportOrder(ListMessage<data::Name>),
+    EditSfxExportOrder(SfxExportOrderMessage),
     EditProjectSongs(ListMessage<data::Song>),
     Instrument(ListMessage<data::Instrument>),
     Sample(ListMessage<data::Sample>),
@@ -195,8 +197,7 @@ pub struct ProjectData {
     sound_effects_file: Option<SourcePathBuf>,
 
     default_sfx_flags: DefaultSfxFlags,
-    sfx_export_orders: ListWithSelection<data::Name>,
-    low_priority_sfx_export_orders: ListWithSelection<data::Name>,
+    sfx_export_order: GuiSfxExportOrder,
 
     project_songs: ListWithSelection<data::Song>,
 
@@ -267,18 +268,14 @@ impl Project {
     ) -> Self {
         let c = pf.contents;
 
-        // ::TODO deduplicate paired names (sfx_eo, lp_sfx_eo), (instruments, samples)::
-        let (sfx_eo, sfx_eo_renamed) = deduplicate_names(c.sound_effects);
-        let (lp_sfx_eo, lp_sfx_eo_renamed) = deduplicate_names(c.low_priority_sound_effects);
+        // ::TODO deduplicate paired names (instruments, samples)::
+        let (sfx_export_order, sfx_renamed) =
+            GuiSfxExportOrder::new_lossy(c.sound_effects, c.low_priority_sound_effects);
         let (songs, songs_renamed) = deduplicate_names(c.songs);
         let (instruments, instruments_renamed) = deduplicate_names(c.instruments);
         let (samples, samples_renamed) = deduplicate_names(c.samples);
 
-        let total_renamed = sfx_eo_renamed
-            + lp_sfx_eo_renamed
-            + songs_renamed
-            + instruments_renamed
-            + samples_renamed;
+        let total_renamed = sfx_renamed + songs_renamed + instruments_renamed + samples_renamed;
         if total_renamed > 0 {
             dialog::message_title("Duplicate names found");
             dialog::alert_default(&format!("{} items have been renamed", total_renamed));
@@ -290,11 +287,7 @@ impl Project {
             sound_effects_file: c.sound_effect_file,
 
             default_sfx_flags: c.default_sfx_flags,
-            sfx_export_orders: ListWithSelection::new(sfx_eo, driver_constants::MAX_SOUND_EFFECTS),
-            low_priority_sfx_export_orders: ListWithSelection::new(
-                lp_sfx_eo,
-                driver_constants::MAX_SOUND_EFFECTS,
-            ),
+            sfx_export_order,
 
             project_songs: ListWithSelection::new(songs, driver_constants::MAX_N_SONGS),
             instruments_and_samples: ListPairWithCompilerOutputs::new(
@@ -376,29 +369,15 @@ impl Project {
             }
 
             GuiMessage::EditSfxExportOrder(m) => {
-                let (a, c) = self
-                    .data
-                    .sfx_export_orders
-                    .process(m, &mut self.project_tab.sfx_table);
+                let a = self
+                    .project_tab
+                    .sfx_export_order
+                    .process(m, &mut self.data.sfx_export_order);
 
-                self.mark_project_file_unsaved(a);
+                if let Some(a) = a {
+                    let _ = self.compiler_sender.send(ToCompiler::SfxExportOrder(a));
 
-                if let Some(c) = c {
-                    let _ = self.compiler_sender.send(ToCompiler::SfxExportOrder(c));
-                }
-            }
-            GuiMessage::EditLowPrioritySfxExportOrder(m) => {
-                let (a, c) = self
-                    .data
-                    .low_priority_sfx_export_orders
-                    .process(m, &mut self.project_tab.lp_sfx_table);
-
-                self.mark_project_file_unsaved(a);
-
-                if let Some(c) = c {
-                    let _ = self
-                        .compiler_sender
-                        .send(ToCompiler::LowPrioritySfxExportOrder(c));
+                    self.tab_manager.mark_unsaved(FileType::Project);
                 }
             }
 
@@ -821,13 +800,8 @@ impl Project {
     fn recompile_everything(&self) {
         let _ = self.compiler_sender.send(ToCompiler::LoadProject(
             compiler_thread::ProjectToCompiler {
-                sfx_export_order: self.data.sfx_export_orders.list().replace_all_vec(),
                 default_sfx_flags: self.data.default_sfx_flags,
-                low_priority_sfx_export_order: self
-                    .data
-                    .low_priority_sfx_export_orders
-                    .list()
-                    .replace_all_vec(),
+                sfx_export_order: self.data.sfx_export_order.clone(),
                 pf_songs: self.data.project_songs.list().replace_all_vec(),
                 instruments: self.data.instruments().list().replace_all_vec(),
                 samples: self.data.samples().list().replace_all_vec(),
@@ -1156,13 +1130,8 @@ impl ProjectData {
 
             default_sfx_flags: self.default_sfx_flags,
 
-            sound_effects: self.sfx_export_orders.list().item_iter().cloned().collect(),
-            low_priority_sound_effects: self
-                .low_priority_sfx_export_orders
-                .list()
-                .item_iter()
-                .cloned()
-                .collect(),
+            sound_effects: self.sfx_export_order.normal_priority_sfx().to_owned(),
+            low_priority_sound_effects: self.sfx_export_order.low_priority_sfx().to_owned(),
 
             sound_effect_file: self.sound_effects_file.clone(),
         }

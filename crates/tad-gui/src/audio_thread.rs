@@ -35,7 +35,7 @@ use std::time::Duration;
 
 use crate::compiler_thread::CommonAudioDataWithSfx;
 use crate::compiler_thread::ItemId;
-use crate::compiler_thread::SfxId;
+use crate::sfx_export_order::SfxId;
 use crate::GuiMessage;
 
 /// Sample rate to run the audio driver at

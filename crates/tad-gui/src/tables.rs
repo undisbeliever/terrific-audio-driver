@@ -264,6 +264,14 @@ where
         }
     }
 
+    pub fn selected_row(&self) -> Option<usize> {
+        let s = self.state.borrow();
+
+        usize::try_from(s.sel_row)
+            .ok()
+            .filter(|&i| i < s.data.len())
+    }
+
     pub fn set_selected(&mut self, row_index: usize) {
         if let Ok(mut s) = self.state.try_borrow_mut() {
             match row_index.try_into() {
@@ -290,6 +298,14 @@ where
 
         let n_rows = state.data.len().try_into().unwrap_or(0);
         self.table.set_rows(n_rows);
+    }
+
+    pub fn open_editor(&mut self, index: usize, col: i32) {
+        if let Ok(mut s) = self.state.try_borrow_mut() {
+            if let Ok(row) = index.try_into() {
+                s.open_editor(row, col);
+            }
+        }
     }
 }
 

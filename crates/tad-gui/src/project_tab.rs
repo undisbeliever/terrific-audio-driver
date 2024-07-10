@@ -8,7 +8,8 @@ use crate::compiler_thread::{CadOutput, SongOutput};
 use crate::list_editor::{
     ListEditor, ListEditorTable, ListMessage, TableAction, TableCompilerOutput, TableMapping,
 };
-use crate::tables::{RowWithStatus, SimpleRow, TableEvent, TableRow};
+use crate::sfx_export_order::SfxExportOrderEditor;
+use crate::tables::{RowWithStatus, TableEvent, TableRow};
 use crate::tabs::{FileType, Tab};
 use crate::GuiMessage;
 use crate::{helpers::*, ProjectData};
@@ -28,109 +29,6 @@ use fltk::group::Flex;
 use fltk::output::Output;
 use fltk::prelude::*;
 use fltk::{app, draw};
-
-pub struct SfxExportOrderMapping;
-impl TableMapping for SfxExportOrderMapping {
-    type DataType = data::Name;
-    type RowType = SimpleRow<1>;
-
-    const CAN_CLONE: bool = true;
-    const CAN_EDIT: bool = true;
-
-    fn type_name() -> &'static str {
-        "sound effect"
-    }
-
-    fn headers() -> Vec<String> {
-        vec!["Sound Effect Export Order".to_owned()]
-    }
-
-    fn add_clicked() -> GuiMessage {
-        GuiMessage::EditSfxExportOrder(ListMessage::Add("name".to_owned().try_into().unwrap()))
-    }
-
-    fn to_message(lm: ListMessage<data::Name>) -> GuiMessage {
-        GuiMessage::EditSfxExportOrder(lm)
-    }
-
-    fn new_row(sfx_name: &data::Name) -> Self::RowType {
-        SimpleRow::new([sfx_name.as_str().to_string()])
-    }
-
-    fn edit_row(r: &mut Self::RowType, sfx_name: &data::Name) -> bool {
-        r.edit_column(0, sfx_name.as_str())
-    }
-
-    fn table_event(event: TableEvent, _row: usize, _col: i32) -> TableAction {
-        match event {
-            TableEvent::Enter | TableEvent::EditorRequested | TableEvent::CellClicked => {
-                TableAction::OpenEditor
-            }
-            TableEvent::DoubleClick => TableAction::None,
-        }
-    }
-
-    fn commit_edited_value(index: usize, col: i32, value: String) -> Option<GuiMessage> {
-        match col {
-            0 => Name::try_new_lossy(value)
-                .map(|name| GuiMessage::EditSfxExportOrder(ListMessage::ItemEdited(index, name))),
-            _ => None,
-        }
-    }
-}
-
-pub struct LowPrioritySfxExportOrderMapping;
-impl TableMapping for LowPrioritySfxExportOrderMapping {
-    type DataType = data::Name;
-    type RowType = SimpleRow<1>;
-
-    const CAN_CLONE: bool = true;
-    const CAN_EDIT: bool = true;
-
-    fn type_name() -> &'static str {
-        "low priority sound effect"
-    }
-
-    fn headers() -> Vec<String> {
-        vec!["Low Priority SFX Export Order".to_owned()]
-    }
-
-    fn add_clicked() -> GuiMessage {
-        GuiMessage::EditLowPrioritySfxExportOrder(ListMessage::Add(
-            "name".to_owned().try_into().unwrap(),
-        ))
-    }
-
-    fn to_message(lm: ListMessage<data::Name>) -> GuiMessage {
-        GuiMessage::EditLowPrioritySfxExportOrder(lm)
-    }
-
-    fn new_row(sfx_name: &data::Name) -> Self::RowType {
-        SimpleRow::new([sfx_name.as_str().to_string()])
-    }
-
-    fn edit_row(r: &mut Self::RowType, sfx_name: &data::Name) -> bool {
-        r.edit_column(0, sfx_name.as_str())
-    }
-
-    fn table_event(event: TableEvent, _row: usize, _col: i32) -> TableAction {
-        match event {
-            TableEvent::Enter | TableEvent::EditorRequested | TableEvent::CellClicked => {
-                TableAction::OpenEditor
-            }
-            TableEvent::DoubleClick => TableAction::None,
-        }
-    }
-
-    fn commit_edited_value(index: usize, col: i32, value: String) -> Option<GuiMessage> {
-        match col {
-            0 => Name::try_new_lossy(value).map(|name| {
-                GuiMessage::EditLowPrioritySfxExportOrder(ListMessage::ItemEdited(index, name))
-            }),
-            _ => None,
-        }
-    }
-}
 
 pub struct SongRow {
     name: String,
@@ -269,8 +167,7 @@ impl TableCompilerOutput for SongMapping {
 pub struct ProjectTab {
     group: Flex,
 
-    pub sfx_table: ListEditorTable<SfxExportOrderMapping>,
-    pub lp_sfx_table: ListEditorTable<LowPrioritySfxExportOrderMapping>,
+    pub sfx_export_order: SfxExportOrderEditor,
 
     pub song_table: ListEditorTable<SongMapping>,
 
@@ -300,14 +197,8 @@ impl ProjectTab {
         let mut sfx_sidebar = Flex::default().column();
         group.fixed(&sfx_sidebar, ch_units_to_width(&sfx_sidebar, 30));
 
-        // ::TODO add a button to move SFX between low and high priorities::
-        let mut sfx_table = ListEditorTable::new_with_data(&data.sfx_export_orders, sender.clone());
-        let mut lp_sfx_table =
-            ListEditorTable::new_with_data(&data.low_priority_sfx_export_orders, sender.clone());
-
-        let button_height = sfx_table.button_height();
-        sfx_sidebar.fixed(&sfx_table.list_buttons().pack, button_height);
-        sfx_sidebar.fixed(&lp_sfx_table.list_buttons().pack, button_height);
+        let sfx_export_order =
+            SfxExportOrderEditor::new(&mut sfx_sidebar, &data.sfx_export_order, sender.clone());
 
         DefaultSfxFlagsWidget::new(&mut sfx_sidebar, data.default_sfx_flags, sender.clone());
 
@@ -342,8 +233,7 @@ impl ProjectTab {
 
         Self {
             group,
-            sfx_table,
-            lp_sfx_table,
+            sfx_export_order,
             song_table,
             sound_effects_file,
             memory_stats,

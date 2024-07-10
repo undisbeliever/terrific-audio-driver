@@ -127,7 +127,7 @@ pub fn process_list_action_map<T, U>(
 }
 
 /// A `Vec` that can only be resized or reordered by a `ListAction<T>`
-#[derive(Default)]
+#[derive(Debug, Default, Clone)]
 pub struct LaVec<T>(Vec<T>);
 
 impl<T> LaVec<T> {
@@ -994,7 +994,7 @@ impl ListButtons {
         }
     }
 
-    fn selected_changed(&mut self, index: usize, list_len: usize, can_add: bool) {
+    pub fn selected_changed(&mut self, index: usize, list_len: usize, can_add: bool) {
         self.add.set_active(can_add);
 
         if let Some(c) = &mut self.clone {
@@ -1019,7 +1019,7 @@ impl ListButtons {
         }
     }
 
-    fn selected_clear(&mut self, can_add: bool) {
+    pub fn selected_clear(&mut self, can_add: bool) {
         self.add.set_active(can_add);
 
         if let Some(c) = &mut self.clone {
@@ -1169,6 +1169,13 @@ where
         }
     }
 
+    pub fn new_from_slice(data: &[T::DataType], sender: fltk::app::Sender<GuiMessage>) -> Self {
+        let mut out = Self::new(sender);
+        out.table
+            .edit_table(|v| v.extend(data.iter().map(T::new_row)));
+        out
+    }
+
     pub fn new_with_data(
         state: &impl ListState<Item = T::DataType>,
         sender: fltk::app::Sender<GuiMessage>,
@@ -1192,6 +1199,18 @@ where
 
     pub fn button_height(&self) -> i32 {
         self.list_buttons.add.height()
+    }
+
+    pub fn selected_row(&self) -> Option<usize> {
+        self.table.selected_row()
+    }
+
+    pub fn set_selected_row(&mut self, index: usize) {
+        self.table.set_selected(index);
+    }
+
+    pub fn open_editor(&mut self, index: usize, col: i32) {
+        self.table.open_editor(index, col);
     }
 }
 

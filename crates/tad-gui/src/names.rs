@@ -141,7 +141,7 @@ where
     (DeduplicatedNameVec(out), n_fixed)
 }
 
-fn deduplicate_item_name<T>(name: &Name, list: &[T], index: Option<usize>) -> Option<Name>
+pub fn deduplicate_item_name<T>(name: &Name, list: &[T], index: Option<usize>) -> Option<Name>
 where
     T: NameGetter,
 {
