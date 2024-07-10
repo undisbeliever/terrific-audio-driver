@@ -36,6 +36,10 @@ File formats:
     * Added attributes to the sound effect name line
     * tad-compiler and tad-gui can still read sound effect files in the old format.
 
+GUI changes:
+ * Fixed table not scrolling when items are added or moved.
+ * Fixed selected row not visible when editing table cells.
+
 
 Version 0.0.9
 =============

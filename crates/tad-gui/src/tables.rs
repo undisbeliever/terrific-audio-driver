@@ -476,6 +476,26 @@ where
         self.sel_col = col.clamp(0, T::N_COLUMNS - 1);
     }
 
+    // Scroll table so the row is visible
+    fn scroll_to_row(&mut self, row: i32) {
+        // Using +1 -2 so there is a row above/below `row`.
+        let (top_row, bottom_row, _, _) = self.table.visible_cells();
+        let n_visible_rows = bottom_row - top_row;
+        if row < top_row + 1 {
+            if n_visible_rows > 1 {
+                self.table.set_row_position(row - 2);
+            } else {
+                self.table.set_row_position(row);
+            }
+        } else if row > bottom_row - 2 {
+            if n_visible_rows > 2 {
+                self.table.set_row_position(row - n_visible_rows + 2);
+            } else {
+                self.table.set_row_position(row);
+            }
+        }
+    }
+
     fn set_selection(&mut self, row: i32, col: i32, user_selection: bool) {
         let col = col.clamp(0, T::N_COLUMNS - 1);
 
@@ -483,6 +503,10 @@ where
             if index < self.data.len() {
                 if self.sel_row != row {
                     (self.row_selected_callback)(Some(index), user_selection);
+
+                    if !user_selection {
+                        self.scroll_to_row(row);
+                    }
                 }
 
                 self.sel_row = row;
@@ -539,6 +563,8 @@ where
     }
 
     fn open_editor(&mut self, row: i32, col: i32) {
+        // Always scroll: row might be selected and not fully visible.
+        self.scroll_to_row(row);
         self.set_selection(row, col, true);
 
         let widget = match &mut self.edit_widget {
