@@ -535,11 +535,13 @@ where
 
     fn scan_row_open_editor(&mut self, row: i32, cols: impl Iterator<Item = i32>) -> bool {
         if let Ok(index) = usize::try_from(row) {
-            for col in cols {
-                let open_editor = (self.callback)(TableEvent::EditorRequested, index, col);
-                if open_editor {
-                    self.open_editor(row, col);
-                    return true;
+            if index < self.data.len() {
+                for col in cols {
+                    let open_editor = (self.callback)(TableEvent::EditorRequested, index, col);
+                    if open_editor {
+                        self.open_editor(row, col);
+                        return true;
+                    }
                 }
             }
         }
