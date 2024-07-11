@@ -4,7 +4,7 @@
 //
 // SPDX-License-Identifier: MIT
 
-use crate::compiler_thread::{CadOutput, SongOutput};
+use crate::compiler_thread::{CadOutput, ShortSongError};
 use crate::list_editor::{
     ListEditor, ListEditorTable, ListMessage, TableAction, TableCompilerOutput, TableMapping,
 };
@@ -18,10 +18,11 @@ use compiler::common_audio_data::CommonAudioData;
 use compiler::data::Name;
 use compiler::data::{self, DefaultSfxFlags};
 use compiler::path::SourcePathBuf;
-use compiler::songs::{song_duration_string, SongAramSize};
+use compiler::songs::{song_duration_string, SongAramSize, SongData};
 
 use std::cell::RefCell;
 use std::rc::Rc;
+use std::sync::Arc;
 
 use fltk::button::CheckButton;
 use fltk::enums::{Align, Color};
@@ -142,9 +143,9 @@ impl TableMapping for SongMapping {
 }
 
 impl TableCompilerOutput for SongMapping {
-    type CompilerOutputType = SongOutput;
+    type CompilerOutputType = Result<Arc<SongData>, ShortSongError>;
 
-    fn set_row_state(r: &mut Self::RowType, co: &Option<SongOutput>) -> bool {
+    fn set_row_state(r: &mut Self::RowType, co: &Option<Self::CompilerOutputType>) -> bool {
         let (duration, data_size) = match co {
             None => (String::new(), String::new()),
             Some(Ok(song_data)) => {

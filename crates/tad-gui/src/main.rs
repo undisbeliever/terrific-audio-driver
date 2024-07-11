@@ -48,10 +48,7 @@ use crate::files::{
 };
 use crate::help::HelpWidget;
 use crate::helpers::input_height;
-use crate::list_editor::{
-    update_compiler_output, ListAction, ListMessage, ListState, ListWithCompilerOutput,
-    ListWithSelection,
-};
+use crate::list_editor::{ListAction, ListMessage, ListState, ListWithCompilerOutput};
 use crate::menu::Menu;
 use crate::names::deduplicate_names;
 use crate::project_tab::ProjectTab;
@@ -75,7 +72,7 @@ use compiler::songs::SongData;
 use compiler::sound_effects::SoundEffectInput;
 
 use compiler::time::TickCounter;
-use compiler_thread::{PlaySampleArgs, SampleOutput};
+use compiler_thread::{PlaySampleArgs, SampleOutput, ShortSongError};
 use files::{
     new_project_dialog, open_instrument_sample_dialog, open_project_dialog,
     open_sample_sample_dialog, song_name_from_path,
@@ -199,7 +196,8 @@ pub struct ProjectData {
     default_sfx_flags: DefaultSfxFlags,
     sfx_export_order: GuiSfxExportOrder,
 
-    project_songs: ListWithSelection<data::Song>,
+    // Using ShortSongError so I do not have to clong a complicated `SongError` struct.
+    project_songs: ListWithCompilerOutput<data::Song, Result<Arc<SongData>, ShortSongError>>,
 
     instruments_and_samples:
         ListPairWithCompilerOutputs<data::Instrument, InstrumentOutput, data::Sample, SampleOutput>,
@@ -289,7 +287,7 @@ impl Project {
             default_sfx_flags: c.default_sfx_flags,
             sfx_export_order,
 
-            project_songs: ListWithSelection::new(songs, driver_constants::MAX_N_SONGS),
+            project_songs: ListWithCompilerOutput::new(songs, driver_constants::MAX_N_SONGS),
             instruments_and_samples: ListPairWithCompilerOutputs::new(
                 instruments,
                 samples,
@@ -748,18 +746,19 @@ impl Project {
                 }
             }
             CompilerOutput::Song(id, co) => {
-                let co = Some(co);
-                update_compiler_output(
+                let pf_co = match &co {
+                    Ok(sd) => Ok(sd.clone()),
+                    Err(e) => Err(e.to_short_error()),
+                };
+                self.data.project_songs.set_compiler_output(
                     id,
-                    &co,
-                    self.data.project_songs.list(),
+                    pf_co,
                     &mut self.project_tab.song_table,
                 );
 
                 if let Some(song_tab) = self.song_tabs.get_mut(&id) {
-                    self.tab_manager
-                        .set_tab_label_color(song_tab, co.as_ref().is_some_and(|c| c.is_ok()));
-                    song_tab.set_compiler_output(co);
+                    self.tab_manager.set_tab_label_color(song_tab, co.is_ok());
+                    song_tab.set_compiler_output(Some(co));
                 }
             }
 

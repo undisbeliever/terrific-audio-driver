@@ -454,113 +454,6 @@ where
     fn list(&self) -> &ListData<Self::Item>;
 }
 
-pub struct ListWithSelection<T>
-where
-    T: Clone + PartialEq<T>,
-{
-    list: ListData<T>,
-    selected: Option<usize>,
-}
-
-impl<T> ListState for ListWithSelection<T>
-where
-    T: Clone + PartialEq<T> + NameDeduplicator,
-{
-    type Item = T;
-
-    fn selected(&self) -> Option<usize> {
-        self.selected
-    }
-
-    fn list(&self) -> &ListData<T> {
-        &self.list
-    }
-}
-
-impl<T> ListWithSelection<T>
-where
-    T: Clone + PartialEq<T>,
-    T: NameDeduplicator,
-{
-    pub fn new(list: DeduplicatedNameVec<T>, max_size: usize) -> Self {
-        Self {
-            list: ListData::new(list, max_size),
-            selected: None,
-        }
-    }
-
-    #[must_use]
-    pub fn process(
-        &mut self,
-        m: ListMessage<T>,
-        editor: &mut impl ListEditor<T>,
-    ) -> (ListAction<T>, Option<ItemChanged<T>>) {
-        match m {
-            ListMessage::ClearSelection => {
-                self.clear_selection(editor);
-                (ListAction::None, None)
-            }
-            ListMessage::ItemSelected(index) => {
-                self.set_selected(index, editor);
-                (ListAction::None, None)
-            }
-
-            m => {
-                let (action, c) = self.list.process(m, self.selected);
-                self.process_action(&action, editor);
-                (action, c)
-            }
-        }
-    }
-
-    fn process_action(&mut self, action: &ListAction<T>, editor: &mut impl ListEditor<T>) {
-        editor.list_edited(action);
-        match action {
-            ListAction::Add(index, _) => {
-                self.set_selected(*index, editor);
-            }
-            ListAction::AddMultiple(index, _) => {
-                self.set_selected(*index, editor);
-            }
-            ListAction::Remove(index) => {
-                if self.selected == Some(*index) {
-                    self.clear_selection(editor);
-                }
-            }
-            ListAction::Move(from, to) => {
-                if self.selected == Some(*from) {
-                    self.set_selected(*to, editor);
-                }
-            }
-            ListAction::None => (),
-            ListAction::Edit(_, _) => (),
-        }
-    }
-
-    fn set_selected(&mut self, index: usize, editor: &mut impl ListEditor<T>) {
-        match self.list.get_with_id(index) {
-            Some((id, item)) => {
-                self.selected = Some(index);
-                editor.set_selected(index, id, item);
-                editor.list_buttons().selected_changed(
-                    index,
-                    self.list.len(),
-                    self.list().can_add(),
-                );
-            }
-            None => {
-                self.clear_selection(editor);
-            }
-        };
-    }
-
-    fn clear_selection(&mut self, editor: &mut impl ListEditor<T>) {
-        self.selected = None;
-        editor.clear_selected();
-        editor.list_buttons().selected_clear(self.list.can_add());
-    }
-}
-
 pub trait CompilerOutput {
     fn is_valid(&self) -> bool;
 }
@@ -913,19 +806,6 @@ where
         editor: &mut impl CompilerOutputGui<O2>,
     ) {
         self.list2.set_compiler_output(id, co, editor)
-    }
-}
-
-pub fn update_compiler_output<CO, T>(
-    id: ItemId,
-    compiler_output: &Option<CO>,
-    list: &ListData<T>,
-    editor: &mut impl CompilerOutputGui<CO>,
-) where
-    T: Clone + PartialEq<T> + NameDeduplicator,
-{
-    if let Some(index) = list.id_to_index(id) {
-        editor.set_compiler_output(index, compiler_output);
     }
 }
 
