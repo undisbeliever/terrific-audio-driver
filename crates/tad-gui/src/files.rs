@@ -506,7 +506,6 @@ pub fn add_song_to_pf_dialog(
     if let Some(p) = open_mml_file_dialog(pd) {
         match pd
             .project_songs
-            .list()
             .item_iter()
             .position(|s| s.source == p.source_path)
         {
@@ -566,7 +565,7 @@ pub fn open_instrument_sample_dialog(
     pd: &ProjectData,
     index: usize,
 ) {
-    let inst = match pd.instruments().list().get(index) {
+    let inst = match pd.instruments().get(index) {
         Some(inst) => inst,
         None => return,
     };
@@ -588,7 +587,7 @@ pub fn open_sample_sample_dialog(
     pd: &ProjectData,
     index: usize,
 ) {
-    let sample = match pd.samples().list().get(index) {
+    let sample = match pd.samples().get(index) {
         Some(s) => s,
         None => return,
     };

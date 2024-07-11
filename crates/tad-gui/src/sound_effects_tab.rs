@@ -6,17 +6,16 @@
 
 use crate::audio_thread::Pan;
 use crate::compiler_thread::{ItemId, SfxError, SoundEffectOutput};
-use crate::helpers::*;
 use crate::list_editor::{
-    CompilerOutputGui, LaVec, ListAction, ListButtons, ListData, ListEditor, ListEditorTable,
-    ListMessage, ListState, TableCompilerOutput, TableMapping,
+    CompilerOutputGui, LaVec, ListAction, ListButtons, ListEditor, ListEditorTable, ListMessage,
+    ListState, TableCompilerOutput, TableMapping,
 };
 use crate::mml_editor::{CompiledEditorData, EditorBuffer, MmlEditor, TextErrorRef, TextFormat};
 use crate::tables::{RowWithStatus, SimpleRow};
 use crate::tabs::{FileType, Tab};
+use crate::{helpers::*, ProjectSongsData};
 use crate::{GuiMessage, ProjectData, SoundEffectsData};
 
-use compiler::data;
 use compiler::data::Name;
 use compiler::driver_constants::{CENTER_PAN, MAX_PAN};
 use compiler::errors::SfxErrorLines;
@@ -487,8 +486,8 @@ impl SoundEffectsTab {
         header: &str,
         state: &impl ListState<Item = SoundEffectInput>,
     ) {
-        let v: Vec<_> = (0..state.list().len()).map(|_| None).collect();
-        assert!(v.len() == state.list().len());
+        let v: Vec<_> = (0..state.len()).map(|_| None).collect();
+        assert!(v.len() == state.len());
 
         self.clear_selected();
         self.state.borrow_mut().editor.set_text(header);
@@ -524,7 +523,7 @@ impl SoundEffectsTab {
         }
     }
 
-    pub fn selected_tab_changed(&mut self, tab: Option<FileType>, pf_songs: &ListData<data::Song>) {
+    pub fn selected_tab_changed(&mut self, tab: Option<FileType>, pf_songs: &ProjectSongsData) {
         if let Ok(mut s) = self.state.try_borrow_mut() {
             s.song_choice.selected_tab_changed(tab, pf_songs);
         }
@@ -550,7 +549,7 @@ impl SongChoice {
         self.song_choice_out_of_date = true;
     }
 
-    fn selected_tab_changed(&mut self, tab: Option<FileType>, pf_songs: &ListData<data::Song>) {
+    fn selected_tab_changed(&mut self, tab: Option<FileType>, pf_songs: &ProjectSongsData) {
         match tab {
             Some(FileType::SoundEffects) => self.update_song_list(pf_songs),
             Some(FileType::Song(song_id)) => self.pending_song_change = Some(song_id),
@@ -558,7 +557,7 @@ impl SongChoice {
         }
     }
 
-    fn update_song_list(&mut self, pf_songs: &ListData<data::Song>) {
+    fn update_song_list(&mut self, pf_songs: &ProjectSongsData) {
         if self.song_choice_out_of_date {
             let old_song_id = usize::try_from(self.choice.value())
                 .ok()
@@ -901,8 +900,11 @@ pub fn add_missing_sfx(
     sfx_data: &SoundEffectsData,
     sender: &fltk::app::Sender<GuiMessage>,
 ) {
-    let sfx_list = sfx_data.sound_effects.list();
-    let sfx_set: HashSet<&Name> = sfx_list.item_iter().map(|s| &s.name).collect();
+    let sfx_set: HashSet<&Name> = sfx_data
+        .sound_effects
+        .item_iter()
+        .map(|s| &s.name)
+        .collect();
 
     let to_add: Vec<SoundEffectInput> = data
         .sfx_export_order

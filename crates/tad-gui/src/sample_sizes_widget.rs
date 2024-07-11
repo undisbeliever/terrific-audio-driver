@@ -141,14 +141,12 @@ impl SampleSizesWidget {
 
             no_cad_instruments: LaVec::from_vec(
                 instruments
-                    .list()
                     .item_iter()
                     .map(|i| (i.name.clone(), String::new()))
                     .collect(),
             ),
             no_cad_samples: LaVec::from_vec(
                 samples
-                    .list()
                     .item_iter()
                     .map(|s| (s.name.clone(), String::new()))
                     .collect(),

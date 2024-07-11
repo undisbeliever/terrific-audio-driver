@@ -187,6 +187,9 @@ pub enum GuiMessage {
     OpenProject,
 }
 
+pub type ProjectSongsData =
+    ListWithCompilerOutput<data::Song, Result<Arc<SongData>, ShortSongError>>;
+
 pub struct ProjectData {
     pf_parent_path: ParentPathBuf,
 
@@ -633,13 +636,12 @@ impl Project {
             }
 
             GuiMessage::OpenAnalyseInstrumentDialog(instrument_id) => {
-                if let Some((id, inst)) = self.data.instruments().list().get_with_id(instrument_id)
-                {
+                if let Some((id, inst)) = self.data.instruments().get_with_id(instrument_id) {
                     self.sample_analyser_dialog.show_for_instrument(id, inst);
                 }
             }
             GuiMessage::OpenAnalyseSampleDialog(sample_id) => {
-                if let Some((id, s)) = self.data.samples().list().get_with_id(sample_id) {
+                if let Some((id, s)) = self.data.samples().get_with_id(sample_id) {
                     self.sample_analyser_dialog.show_for_sample(id, s);
                 }
             }
@@ -649,7 +651,7 @@ impl Project {
                 loop_setting,
             } => match id {
                 InstrumentOrSampleId::Instrument(id) => {
-                    if let Some((index, inst)) = self.data.instruments().list().get_id(id) {
+                    if let Some((index, inst)) = self.data.instruments().get_id(id) {
                         self.process(GuiMessage::Instrument(ListMessage::ItemEdited(
                             index,
                             data::Instrument {
@@ -661,7 +663,7 @@ impl Project {
                     }
                 }
                 InstrumentOrSampleId::Sample(id) => {
-                    if let Some((index, sample)) = self.data.samples().list().get_id(id) {
+                    if let Some((index, sample)) = self.data.samples().get_id(id) {
                         self.process(GuiMessage::Sample(ListMessage::ItemEdited(
                             index,
                             data::Sample {
@@ -674,7 +676,7 @@ impl Project {
             },
 
             GuiMessage::SetProjectSongName(index, name) => {
-                if let Some(s) = self.data.project_songs.list().get(index) {
+                if let Some(s) = self.data.project_songs.get(index) {
                     self.sender
                         .send(GuiMessage::EditProjectSongs(ListMessage::ItemEdited(
                             index,
@@ -801,16 +803,16 @@ impl Project {
             compiler_thread::ProjectToCompiler {
                 default_sfx_flags: self.data.default_sfx_flags,
                 sfx_export_order: self.data.sfx_export_order.clone(),
-                pf_songs: self.data.project_songs.list().replace_all_vec(),
-                instruments: self.data.instruments().list().replace_all_vec(),
-                samples: self.data.samples().list().replace_all_vec(),
+                pf_songs: self.data.project_songs.replace_all_vec(),
+                instruments: self.data.instruments().replace_all_vec(),
+                samples: self.data.samples().replace_all_vec(),
             },
         ));
 
         // Combine samples after they have been compiled
         if let Some(sfx_data) = &self.sfx_data {
             let _ = self.compiler_sender.send(ToCompiler::LoadSoundEffects(
-                sfx_data.sound_effects.list().replace_all_vec(),
+                sfx_data.sound_effects.replace_all_vec(),
             ));
         }
     }
@@ -841,10 +843,8 @@ impl Project {
             None => window.set_label(DEFAULT_WINDOW_TITLE),
         }
 
-        self.sound_effects_tab.selected_tab_changed(
-            self.tab_manager.selected_file(),
-            self.data.project_songs.list(),
-        );
+        self.sound_effects_tab
+            .selected_tab_changed(self.tab_manager.selected_file(), &self.data.project_songs);
         self.sfx_window
             .tab_changed(self.tab_manager.selected_file());
     }
@@ -870,7 +870,7 @@ impl Project {
         );
 
         let _ = self.compiler_sender.send(ToCompiler::LoadSoundEffects(
-            sound_effects.list().replace_all_vec(),
+            sound_effects.replace_all_vec(),
         ));
 
         self.sfx_data = Some(SoundEffectsData {
@@ -901,7 +901,6 @@ impl Project {
             let pf_song_index = self
                 .data
                 .project_songs
-                .list()
                 .item_iter()
                 .position(|s| s.source == p.source_path);
 
@@ -923,7 +922,7 @@ impl Project {
     }
 
     fn open_pf_song_tab(&mut self, song_index: usize) {
-        let (id, song) = match self.data.project_songs.list().get_with_id(song_index) {
+        let (id, song) = match self.data.project_songs.get_with_id(song_index) {
             Some(v) => v,
             None => return,
         };
@@ -1065,7 +1064,7 @@ impl Project {
     }
 
     fn edit_pf_song_source(&mut self, id: ItemId, source: SourcePathBuf) {
-        let pf_songs = self.data.project_songs.list();
+        let pf_songs = &self.data.project_songs;
 
         if let Some((index, song)) = pf_songs.get_id(id) {
             // Update song source
@@ -1123,9 +1122,9 @@ impl ProjectData {
                 version: CARGO_PKG_VERSION.to_owned(),
             },
 
-            instruments: self.instruments().list().item_iter().cloned().collect(),
-            samples: self.samples().list().item_iter().cloned().collect(),
-            songs: self.project_songs.list().item_iter().cloned().collect(),
+            instruments: self.instruments().item_iter().cloned().collect(),
+            samples: self.samples().item_iter().cloned().collect(),
+            songs: self.project_songs.item_iter().cloned().collect(),
 
             default_sfx_flags: self.default_sfx_flags,
 
@@ -1143,7 +1142,7 @@ impl SoundEffectsData {
     }
 
     pub fn sound_effects_iter(&self) -> impl Iterator<Item = &SoundEffectInput> {
-        self.sound_effects.list().item_iter()
+        self.sound_effects.item_iter()
     }
 }
 

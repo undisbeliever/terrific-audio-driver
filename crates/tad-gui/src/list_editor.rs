@@ -169,18 +169,73 @@ impl<T> Deref for LaVec<T> {
     }
 }
 
-pub struct ListData<T>
+pub trait ListState
 where
-    T: Clone + PartialEq<T>,
+    Self::Item: Clone + PartialEq<Self::Item> + NameDeduplicator,
+{
+    type Item;
+
+    fn selected(&self) -> Option<usize>;
+    fn len(&self) -> usize;
+    fn can_add(&self) -> bool;
+    fn can_add_multiple(&self, count: usize) -> bool;
+    fn item_iter(&self) -> impl Iterator<Item = &Self::Item>;
+}
+
+pub trait CompilerOutput {
+    fn is_valid(&self) -> bool;
+}
+
+impl<T, E> CompilerOutput for Result<T, E> {
+    fn is_valid(&self) -> bool {
+        self.is_ok()
+    }
+}
+
+pub struct ListWithCompilerOutput<T, O>
+where
+    T: Clone + PartialEq<T> + NameDeduplicator,
+    O: CompilerOutput,
 {
     max_size: usize,
     list: LaVec<(ItemId, T)>,
+    compiler_output: Vec<Option<O>>,
+    error_set: HashSet<ItemId>,
+    selected: Option<usize>,
 }
 
-impl<T> ListData<T>
+impl<T, O> ListState for ListWithCompilerOutput<T, O>
 where
-    T: Clone + std::cmp::PartialEq<T>,
-    T: NameDeduplicator,
+    T: Clone + PartialEq<T> + NameDeduplicator,
+    O: CompilerOutput,
+{
+    type Item = T;
+
+    fn len(&self) -> usize {
+        self.list.len()
+    }
+
+    fn selected(&self) -> Option<usize> {
+        self.selected
+    }
+
+    fn can_add(&self) -> bool {
+        self.list.len() < self.max_size
+    }
+
+    fn can_add_multiple(&self, count: usize) -> bool {
+        self.list.len() + count <= self.max_size
+    }
+
+    fn item_iter(&self) -> impl Iterator<Item = &T> {
+        self.list.iter().map(|(_id, item)| item)
+    }
+}
+
+impl<T, O> ListWithCompilerOutput<T, O>
+where
+    T: Clone + PartialEq<T> + NameDeduplicator,
+    O: CompilerOutput,
 {
     pub fn new(list: DeduplicatedNameVec<T>, max_size: usize) -> Self {
         let list = LaVec::from_vec(
@@ -190,64 +245,56 @@ where
                 .collect(),
         );
 
-        Self { max_size, list }
+        // Compiler output is not cloneable
+        let compiler_output = std::iter::repeat_with(|| None).take(list.len()).collect();
+
+        Self {
+            max_size,
+            list,
+            compiler_output,
+            error_set: HashSet::new(),
+            selected: None,
+        }
     }
 
-    pub fn iter(&self) -> impl Iterator<Item = &(ItemId, T)> {
-        self.list.iter()
+    pub fn all_valid(&self) -> bool {
+        self.error_set.is_empty()
     }
 
-    pub fn item_iter(&self) -> impl Iterator<Item = &T> {
-        self.list.iter().map(|(_id, item)| item)
-    }
+    pub fn set_compiler_output(
+        &mut self,
+        id: ItemId,
+        co: O,
+        editor: &mut impl CompilerOutputGui<O>,
+    ) {
+        match co.is_valid() {
+            true => self.error_set.remove(&id),
+            false => self.error_set.insert(id),
+        };
 
-    pub fn len(&self) -> usize {
-        self.list.len()
-    }
+        let co = Some(co);
 
-    pub fn get(&self, index: usize) -> Option<&T> {
-        self.list.get(index).map(|(_id, item)| item)
-    }
+        if let Some(index) = self.id_to_index(id) {
+            editor.set_compiler_output(index, &co);
 
-    pub fn get_with_id(&self, index: usize) -> Option<(ItemId, &T)> {
-        self.list.get(index).map(|(id, item)| (*id, item))
-    }
-
-    pub fn can_add(&self) -> bool {
-        self.list.len() < self.max_size
-    }
-
-    pub fn can_add_multiple(&self, count: usize) -> bool {
-        self.list.len() + count <= self.max_size
-    }
-
-    fn id_to_index(&self, id: ItemId) -> Option<usize> {
-        self.list.iter().position(|i| i.0 == id)
-    }
-
-    fn contains_id(&self, id: ItemId) -> bool {
-        self.list.iter().any(|i| i.0 == id)
-    }
-
-    pub fn get_id(&self, id: ItemId) -> Option<(usize, &T)> {
-        self.list
-            .iter()
-            .enumerate()
-            .find(|(_, i)| i.0 == id)
-            .map(|(id, i)| (id, &i.1))
+            if self.selected == Some(index) {
+                editor.set_selected_compiler_output(&co);
+            }
+            if let Some(co_item) = self.compiler_output.get_mut(index) {
+                *co_item = co;
+            }
+        }
     }
 
     #[must_use]
-    pub fn replace_all_vec(&self) -> compiler_thread::ReplaceAllVec<T> {
-        compiler_thread::ReplaceAllVec::new(self.list.0.clone())
-    }
-
-    #[must_use]
-    fn process(
+    pub fn process<Editor>(
         &mut self,
         m: ListMessage<T>,
-        selected: Option<usize>,
-    ) -> (ListAction<T>, Option<ItemChanged<T>>) {
+        editor: &mut Editor,
+    ) -> (ListAction<T>, Option<ItemChanged<T>>)
+    where
+        Editor: ListEditor<T> + CompilerOutputGui<O>,
+    {
         let update_list = |list: &mut LaVec<(ItemId, T)>, a: &ListAction<T>| {
             list.process_map(
                 a,
@@ -258,8 +305,15 @@ where
             );
         };
 
-        match m {
-            ListMessage::ClearSelection | ListMessage::ItemSelected(_) => (ListAction::None, None),
+        let (action, c) = match m {
+            ListMessage::ClearSelection => {
+                self.clear_selection(editor);
+                (ListAction::None, None)
+            }
+            ListMessage::ItemSelected(index) => {
+                self.set_selected(index, editor);
+                (ListAction::None, None)
+            }
 
             ListMessage::ItemEdited(index, mut new_value) => {
                 if let Some((id, item)) = self.list.get(index) {
@@ -357,7 +411,7 @@ where
 
             lm => {
                 // These list actions use the currently selected index
-                let sel_index = match selected {
+                let sel_index = match self.selected {
                     Some(i) if i < self.list.len() => i,
                     _ => return (ListAction::None, None),
                 };
@@ -440,147 +494,19 @@ where
                     }
                 }
             }
-        }
-    }
-}
-
-pub trait ListState
-where
-    Self::Item: Clone + PartialEq<Self::Item> + NameDeduplicator,
-{
-    type Item;
-
-    fn selected(&self) -> Option<usize>;
-    fn list(&self) -> &ListData<Self::Item>;
-}
-
-pub trait CompilerOutput {
-    fn is_valid(&self) -> bool;
-}
-
-impl<T, E> CompilerOutput for Result<T, E> {
-    fn is_valid(&self) -> bool {
-        self.is_ok()
-    }
-}
-
-pub struct ListWithCompilerOutput<T, O>
-where
-    T: Clone + PartialEq<T> + NameDeduplicator,
-    O: CompilerOutput,
-{
-    list: ListData<T>,
-    compiler_output: Vec<Option<O>>,
-    error_set: HashSet<ItemId>,
-    selected: Option<usize>,
-}
-
-impl<T, O> ListState for ListWithCompilerOutput<T, O>
-where
-    T: Clone + PartialEq<T> + NameDeduplicator,
-    O: CompilerOutput,
-{
-    type Item = T;
-
-    fn selected(&self) -> Option<usize> {
-        self.selected
-    }
-
-    fn list(&self) -> &ListData<T> {
-        &self.list
-    }
-}
-
-impl<T, O> ListWithCompilerOutput<T, O>
-where
-    T: Clone + PartialEq<T> + NameDeduplicator,
-    O: CompilerOutput,
-{
-    pub fn new(list: DeduplicatedNameVec<T>, max_size: usize) -> Self {
-        let list = ListData::new(list, max_size);
-
-        // Compiler output is not cloneable
-        let compiler_output = std::iter::repeat_with(|| None).take(list.len()).collect();
-
-        Self {
-            list,
-            compiler_output,
-            error_set: HashSet::new(),
-            selected: None,
-        }
-    }
-
-    pub fn all_valid(&self) -> bool {
-        self.error_set.is_empty()
-    }
-
-    pub fn set_compiler_output(
-        &mut self,
-        id: ItemId,
-        co: O,
-        editor: &mut impl CompilerOutputGui<O>,
-    ) {
-        match co.is_valid() {
-            true => self.error_set.remove(&id),
-            false => self.error_set.insert(id),
         };
 
-        let co = Some(co);
-
-        if let Some(index) = self.list.id_to_index(id) {
-            editor.set_compiler_output(index, &co);
-
-            if self.selected == Some(index) {
-                editor.set_selected_compiler_output(&co);
-            }
-            if let Some(co_item) = self.compiler_output.get_mut(index) {
-                *co_item = co;
-            }
-        }
-    }
-
-    #[must_use]
-    pub fn process<Editor>(
-        &mut self,
-        m: ListMessage<T>,
-        editor: &mut Editor,
-    ) -> (ListAction<T>, Option<ItemChanged<T>>)
-    where
-        Editor: ListEditor<T> + CompilerOutputGui<O>,
-    {
-        match m {
-            ListMessage::ClearSelection => {
-                self.clear_selection(editor);
-                (ListAction::None, None)
-            }
-            ListMessage::ItemSelected(index) => {
-                self.set_selected(index, editor);
-                (ListAction::None, None)
-            }
-
-            m => {
-                let (action, c) = self.list.process(m, self.selected);
-                self.process_action(&action, editor);
-                (action, c)
-            }
-        }
-    }
-
-    fn process_action<Editor>(&mut self, action: &ListAction<T>, editor: &mut Editor)
-    where
-        Editor: ListEditor<T> + CompilerOutputGui<O>,
-    {
         process_list_action_map(
             &mut self.compiler_output,
-            action,
+            &action,
             // new
             |_| None,
             // edit
             |e, _| *e = None,
         );
 
-        editor.list_edited(action);
-        match action {
+        editor.list_edited(&action);
+        match &action {
             ListAction::None => (),
 
             ListAction::Add(index, _) => {
@@ -608,25 +534,25 @@ where
                 // are not called here to prevent an annoying flash in tables and the Sound Effect console.
             }
         }
+
+        (action, c)
     }
 
     fn set_selected<Editor>(&mut self, index: usize, editor: &mut Editor)
     where
         Editor: ListEditor<T> + CompilerOutputGui<O>,
     {
-        match self.list.get_with_id(index) {
+        match self.get_with_id(index) {
             Some((id, item)) => {
-                self.selected = Some(index);
                 editor.set_selected(index, id, item);
+                self.selected = Some(index);
 
                 let co = self.compiler_output.get(index).unwrap_or(&None);
                 editor.set_selected_compiler_output(co);
 
-                editor.list_buttons().selected_changed(
-                    index,
-                    self.list.len(),
-                    self.list().can_add(),
-                );
+                editor
+                    .list_buttons()
+                    .selected_changed(index, self.list.len(), self.can_add());
             }
             None => {
                 self.clear_selection(editor);
@@ -641,7 +567,40 @@ where
         self.selected = None;
         editor.clear_selected();
         editor.set_selected_compiler_output(&None);
-        editor.list_buttons().selected_clear(self.list.can_add());
+        editor.list_buttons().selected_clear(self.can_add());
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = &(ItemId, T)> {
+        self.list.iter()
+    }
+
+    pub fn get(&self, index: usize) -> Option<&T> {
+        self.list.get(index).map(|(_id, item)| item)
+    }
+
+    pub fn get_with_id(&self, index: usize) -> Option<(ItemId, &T)> {
+        self.list.get(index).map(|(id, item)| (*id, item))
+    }
+
+    fn id_to_index(&self, id: ItemId) -> Option<usize> {
+        self.list.iter().position(|i| i.0 == id)
+    }
+
+    fn contains_id(&self, id: ItemId) -> bool {
+        self.list.iter().any(|i| i.0 == id)
+    }
+
+    pub fn get_id(&self, id: ItemId) -> Option<(usize, &T)> {
+        self.list
+            .iter()
+            .enumerate()
+            .find(|(_, i)| i.0 == id)
+            .map(|(id, i)| (id, &i.1))
+    }
+
+    #[must_use]
+    pub fn replace_all_vec(&self) -> compiler_thread::ReplaceAllVec<T> {
+        compiler_thread::ReplaceAllVec::new(self.list.0.clone())
     }
 }
 
@@ -671,10 +630,10 @@ where
     Editor: ListEditor<T1> + CompilerOutputGui<O1> + ListEditor<T2> + CompilerOutputGui<O2>,
 {
     let can_add = |count: usize| -> bool {
-        debug_assert!(list1.list().max_size == list2.list().max_size);
+        debug_assert!(list1.max_size == list2.max_size);
 
-        let max_size = list1.list().max_size;
-        let len = list1.list().len() + list2.list().len();
+        let max_size = list1.max_size;
+        let len = list1.len() + list2.len();
 
         len + count <= max_size
     };
@@ -869,8 +828,8 @@ impl ListButtons {
 
     pub fn update(&mut self, state: &impl ListState) {
         match state.selected() {
-            Some(i) => self.selected_changed(i, state.list().len(), state.list().can_add()),
-            None => self.selected_clear(state.list().can_add()),
+            Some(i) => self.selected_changed(i, state.len(), state.can_add()),
+            None => self.selected_clear(state.can_add()),
         }
     }
 
@@ -1067,7 +1026,7 @@ where
 
     pub fn replace(&mut self, state: &impl ListState<Item = T::DataType>) {
         self.table.edit_table(|v| {
-            *v = state.list().item_iter().map(T::new_row).collect();
+            *v = state.item_iter().map(T::new_row).collect();
         });
         self.list_buttons.update(state);
 
