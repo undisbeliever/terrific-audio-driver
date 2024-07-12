@@ -14,8 +14,10 @@ use fltk::button::Button;
 use fltk::group::{Pack, PackType};
 use fltk::prelude::{GroupExt, WidgetExt};
 
+use std::cell::RefCell;
 use std::collections::HashSet;
 use std::ops::Deref;
+use std::rc::Rc;
 
 // A ListMessage MUST ONLY be called once per frame
 // (to prevent a potential infinite `ListMessage::ItemSelected` loop)
@@ -30,12 +32,12 @@ pub enum ListMessage<T> {
 
     Add(T),
     AddMultiple(Vec<T>),
-    CloneSelected,
-    RemoveSelected,
-    MoveSelectedToTop,
-    MoveSelectedUp,
-    MoveSelectedDown,
-    MoveSelectedToBottom,
+    Clone(usize),
+    Remove(usize),
+    MoveToTop(usize),
+    MoveUp(usize),
+    MoveDown(usize),
+    MoveToBottom(usize),
 
     // Only adds the item if the list does not contain ItemId.
     AddWithItemId(ItemId, T),
@@ -409,89 +411,75 @@ where
                 }
             }
 
-            lm => {
-                // These list actions use the currently selected index
-                let sel_index = match self.selected {
-                    Some(i) if i < self.list.len() => i,
-                    _ => return (ListAction::None, None),
-                };
+            ListMessage::Clone(index) => {
+                if let (Some(item), true) = (self.list.get(index), self.can_add()) {
+                    let mut item = item.1.clone();
+                    NameDeduplicator::dedupe_name(&mut item, &self.list, None);
 
-                match lm {
-                    ListMessage::ClearSelection
-                    | ListMessage::ItemSelected(_)
-                    | ListMessage::ItemEdited(_, _)
-                    | ListMessage::Add(_)
-                    | ListMessage::AddWithItemId(_, _)
-                    | ListMessage::AddMultiple(_) => (ListAction::None, None),
+                    let i = index + 1;
+                    let action = ListAction::Add(i, item);
 
-                    ListMessage::CloneSelected => {
-                        if let (Some(item), true) = (self.get(sel_index), self.can_add()) {
-                            let mut item = item.clone();
-                            NameDeduplicator::dedupe_name(&mut item, &self.list, None);
+                    update_list(&mut self.list, &action);
+                    let c_message = self
+                        .list
+                        .get(i)
+                        .map(|(id, item)| ItemChanged::AddedOrEdited(*id, item.clone()));
 
-                            let i = sel_index + 1;
-                            let action = ListAction::Add(i, item);
+                    (action, c_message)
+                } else {
+                    (ListAction::None, None)
+                }
+            }
+            ListMessage::Remove(index) => {
+                if let Some(item) = self.list.get(index) {
+                    let c_message = ItemChanged::Removed(item.0);
 
-                            update_list(&mut self.list, &action);
-                            let c_message = self
-                                .list
-                                .get(i)
-                                .map(|(id, item)| ItemChanged::AddedOrEdited(*id, item.clone()));
+                    let action = ListAction::Remove(index);
+                    update_list(&mut self.list, &action);
 
-                            (action, c_message)
-                        } else {
-                            (ListAction::None, None)
-                        }
-                    }
-                    ListMessage::RemoveSelected => {
-                        let item_id = self.list[sel_index].0;
-                        let c_message = ItemChanged::Removed(item_id);
+                    (action, Some(c_message))
+                } else {
+                    (ListAction::None, None)
+                }
+            }
+            ListMessage::MoveToTop(index) => {
+                if index > 0 && index < self.list.len() {
+                    let action = ListAction::Move(index, 0);
+                    update_list(&mut self.list, &action);
 
-                        let action = ListAction::Remove(sel_index);
-                        update_list(&mut self.list, &action);
+                    (action, None)
+                } else {
+                    (ListAction::None, None)
+                }
+            }
+            ListMessage::MoveUp(index) => {
+                if index > 0 && index < self.list.len() {
+                    let action = ListAction::Move(index, index - 1);
+                    update_list(&mut self.list, &action);
 
-                        (action, Some(c_message))
-                    }
-                    ListMessage::MoveSelectedToTop => {
-                        if sel_index > 0 {
-                            let action = ListAction::Move(sel_index, 0);
-                            update_list(&mut self.list, &action);
+                    (action, None)
+                } else {
+                    (ListAction::None, None)
+                }
+            }
+            ListMessage::MoveDown(index) => {
+                if index + 1 < self.list.len() {
+                    let action = ListAction::Move(index, index + 1);
+                    update_list(&mut self.list, &action);
 
-                            (action, None)
-                        } else {
-                            (ListAction::None, None)
-                        }
-                    }
-                    ListMessage::MoveSelectedUp => {
-                        if sel_index > 0 && sel_index < self.list.len() {
-                            let action = ListAction::Move(sel_index, sel_index - 1);
-                            update_list(&mut self.list, &action);
+                    (action, None)
+                } else {
+                    (ListAction::None, None)
+                }
+            }
+            ListMessage::MoveToBottom(index) => {
+                if index + 1 < self.list.len() {
+                    let action = ListAction::Move(index, self.list.len() - 1);
+                    update_list(&mut self.list, &action);
 
-                            (action, None)
-                        } else {
-                            (ListAction::None, None)
-                        }
-                    }
-                    ListMessage::MoveSelectedDown => {
-                        if sel_index + 1 < self.list.len() {
-                            let action = ListAction::Move(sel_index, sel_index + 1);
-                            update_list(&mut self.list, &action);
-
-                            (action, None)
-                        } else {
-                            (ListAction::None, None)
-                        }
-                    }
-                    ListMessage::MoveSelectedToBottom => {
-                        if sel_index + 1 < self.list.len() {
-                            let action = ListAction::Move(sel_index, self.list.len() - 1);
-                            update_list(&mut self.list, &action);
-
-                            (action, None)
-                        } else {
-                            (ListAction::None, None)
-                        }
-                    }
+                    (action, None)
+                } else {
+                    (ListAction::None, None)
                 }
             }
         };
@@ -641,16 +629,16 @@ where
         ListMessage::Add(..) => can_add(1),
         ListMessage::AddWithItemId(..) => can_add(1),
         ListMessage::AddMultiple(vec) => can_add(vec.len()),
-        ListMessage::CloneSelected => can_add(1),
+        ListMessage::Clone(..) => can_add(1),
 
         ListMessage::ClearSelection
-        | ListMessage::ItemSelected(_)
+        | ListMessage::ItemSelected(..)
         | ListMessage::ItemEdited(..)
-        | ListMessage::RemoveSelected
-        | ListMessage::MoveSelectedToTop
-        | ListMessage::MoveSelectedUp
-        | ListMessage::MoveSelectedDown
-        | ListMessage::MoveSelectedToBottom => true,
+        | ListMessage::Remove(..)
+        | ListMessage::MoveToTop(..)
+        | ListMessage::MoveUp(..)
+        | ListMessage::MoveDown(..)
+        | ListMessage::MoveToBottom(..) => true,
     };
     if !can_do_message {
         return (ListAction::None, None);
@@ -667,13 +655,13 @@ where
         ListMessage::Add(..)
         | ListMessage::AddWithItemId(..)
         | ListMessage::AddMultiple(_)
-        | ListMessage::CloneSelected
+        | ListMessage::Clone(_)
         | ListMessage::ItemSelected(_)
-        | ListMessage::RemoveSelected
-        | ListMessage::MoveSelectedToTop
-        | ListMessage::MoveSelectedUp
-        | ListMessage::MoveSelectedDown
-        | ListMessage::MoveSelectedToBottom => true,
+        | ListMessage::Remove(_)
+        | ListMessage::MoveToTop(_)
+        | ListMessage::MoveUp(_)
+        | ListMessage::MoveDown(_)
+        | ListMessage::MoveToBottom(_) => true,
     };
 
     // ::TODO deduplicate name::
@@ -923,7 +911,7 @@ where
     T: TableMapping,
 {
     list_buttons: ListButtons,
-    table: tables::TrTable<T::RowType>,
+    table: Rc<RefCell<tables::TrTable<T::RowType>>>,
 }
 
 impl<T> ListEditorTable<T>
@@ -933,9 +921,11 @@ where
 {
     pub fn new(sender: fltk::app::Sender<GuiMessage>) -> Self {
         let mut list_buttons = ListButtons::new(T::type_name(), T::CAN_CLONE);
-        let mut table = tables::TrTable::new(T::headers());
+        let table = Rc::new(RefCell::new(tables::TrTable::new(T::headers())));
 
-        table.set_selection_changed_callback({
+        let mut t = table.borrow_mut();
+
+        t.set_selection_changed_callback({
             let s = sender.clone();
             move |i, user_selection| {
                 if user_selection {
@@ -948,7 +938,7 @@ where
         });
 
         if T::CAN_EDIT {
-            table.enable_cell_editing({
+            t.enable_cell_editing({
                 // Commit edited value
                 let s = sender.clone();
                 move |index, col, value| {
@@ -959,7 +949,7 @@ where
             });
         }
 
-        table.set_callback({
+        t.set_callback({
             let s = sender.clone();
             move |ev, row, col| match T::table_event(ev, row, col) {
                 TableAction::None => false,
@@ -978,29 +968,61 @@ where
         if let Some(b) = &mut list_buttons.clone {
             b.set_callback({
                 let s = sender.clone();
-                move |_| s.send(T::to_message(ListMessage::CloneSelected))
+                let table = table.clone();
+                move |_| {
+                    if let Some(i) = table.borrow().selected_row() {
+                        s.send(T::to_message(ListMessage::Clone(i)))
+                    }
+                }
             });
         }
         list_buttons.remove.set_callback({
             let s = sender.clone();
-            move |_| s.send(T::to_message(ListMessage::RemoveSelected))
+            let table = table.clone();
+            move |_| {
+                if let Some(i) = table.borrow().selected_row() {
+                    s.send(T::to_message(ListMessage::Remove(i)))
+                }
+            }
         });
         list_buttons.move_top.set_callback({
             let s = sender.clone();
-            move |_| s.send(T::to_message(ListMessage::MoveSelectedToTop))
+            let table = table.clone();
+            move |_| {
+                if let Some(i) = table.borrow().selected_row() {
+                    s.send(T::to_message(ListMessage::MoveToTop(i)))
+                }
+            }
         });
         list_buttons.move_up.set_callback({
             let s = sender.clone();
-            move |_| s.send(T::to_message(ListMessage::MoveSelectedUp))
+            let table = table.clone();
+            move |_| {
+                if let Some(i) = table.borrow().selected_row() {
+                    s.send(T::to_message(ListMessage::MoveUp(i)))
+                }
+            }
         });
         list_buttons.move_down.set_callback({
             let s = sender.clone();
-            move |_| s.send(T::to_message(ListMessage::MoveSelectedDown))
+            let table = table.clone();
+            move |_| {
+                if let Some(i) = table.borrow().selected_row() {
+                    s.send(T::to_message(ListMessage::MoveDown(i)))
+                }
+            }
         });
         list_buttons.move_bottom.set_callback({
             let s = sender;
-            move |_| s.send(T::to_message(ListMessage::MoveSelectedToBottom))
+            let table = table.clone();
+            move |_| {
+                if let Some(i) = table.borrow().selected_row() {
+                    s.send(T::to_message(ListMessage::MoveToBottom(i)))
+                }
+            }
         });
+
+        drop(t);
 
         Self {
             list_buttons,
@@ -1009,8 +1031,9 @@ where
     }
 
     pub fn new_from_slice(data: &[T::DataType], sender: fltk::app::Sender<GuiMessage>) -> Self {
-        let mut out = Self::new(sender);
+        let out = Self::new(sender);
         out.table
+            .borrow_mut()
             .edit_table(|v| v.extend(data.iter().map(T::new_row)));
         out
     }
@@ -1025,14 +1048,16 @@ where
     }
 
     pub fn replace(&mut self, state: &impl ListState<Item = T::DataType>) {
-        self.table.edit_table(|v| {
+        let mut t = self.table.borrow_mut();
+
+        t.edit_table(|v| {
             *v = state.item_iter().map(T::new_row).collect();
         });
         self.list_buttons.update(state);
 
         match state.selected() {
-            Some(i) => self.table.set_selected(i),
-            None => self.table.clear_selected(),
+            Some(i) => t.set_selected(i),
+            None => t.clear_selected(),
         }
     }
 
@@ -1040,16 +1065,12 @@ where
         self.list_buttons.add.height()
     }
 
-    pub fn selected_row(&self) -> Option<usize> {
-        self.table.selected_row()
-    }
-
     pub fn set_selected_row(&mut self, index: usize) {
-        self.table.set_selected(index);
+        self.table.borrow_mut().set_selected(index);
     }
 
     pub fn open_editor(&mut self, index: usize, col: i32) {
-        self.table.open_editor(index, col);
+        self.table.borrow_mut().open_editor(index, col);
     }
 }
 
@@ -1067,9 +1088,10 @@ where
             ListAction::None => (),
             ListAction::Edit(index, value) => {
                 self.table
+                    .borrow_mut()
                     .edit_row(*index, |d| -> bool { T::edit_row(d, value) });
             }
-            a => self.table.edit_table(|table_vec| {
+            a => self.table.borrow_mut().edit_table(|table_vec| {
                 process_list_action_map(table_vec, a, T::new_row, |row, new_value| {
                     T::edit_row(row, new_value);
                 })
@@ -1078,11 +1100,11 @@ where
     }
 
     fn clear_selected(&mut self) {
-        self.table.clear_selected();
+        self.table.borrow_mut().clear_selected();
     }
 
     fn set_selected(&mut self, index: usize, _: ItemId, _: &T::DataType) {
-        self.table.set_selected(index);
+        self.table.borrow_mut().set_selected(index);
     }
 }
 
@@ -1097,7 +1119,7 @@ where
         index: usize,
         compiler_output: &Option<T::CompilerOutputType>,
     ) {
-        self.table.edit_row(index, |row| -> bool {
+        self.table.borrow_mut().edit_row(index, |row| -> bool {
             T::set_row_state(row, compiler_output)
         });
     }

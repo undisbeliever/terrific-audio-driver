@@ -281,7 +281,6 @@ impl SfxExportOrderEditor {
         T::DataType: NameDeduplicator,
     {
         let eo_offset = range.start;
-        let selected = table.selected_row().unwrap_or(usize::MAX);
         let slice = &data.export_order[range.clone()];
 
         let deduplicate_name =
@@ -333,9 +332,9 @@ impl SfxExportOrderEditor {
                 }
             }
 
-            ListMessage::CloneSelected => match (slice.get(selected), data.can_add_one()) {
+            ListMessage::Clone(index) => match (slice.get(index), data.can_add_one()) {
                 (Some(name), true) => {
-                    let i = selected + 1;
+                    let i = index + 1;
                     let name = deduplicate_name(name.clone(), None);
 
                     table.list_edited(&ListAction::Add(i, name.clone()));
@@ -346,40 +345,40 @@ impl SfxExportOrderEditor {
                 _ => None,
             },
 
-            ListMessage::RemoveSelected => {
-                if selected < slice.len() {
-                    table.list_edited(&ListAction::Remove(selected));
+            ListMessage::Remove(index) => {
+                if index < slice.len() {
+                    table.list_edited(&ListAction::Remove(index));
                     Self::clear_table_selection(table, data);
 
-                    Some((ListAction::Remove(selected + eo_offset), -1))
+                    Some((ListAction::Remove(index + eo_offset), -1))
                 } else {
                     None
                 }
             }
-            ListMessage::MoveSelectedToTop => {
-                if selected > 0 && selected < slice.len() {
-                    Self::process_move(table, data, range, selected, 0)
+            ListMessage::MoveToTop(index) => {
+                if index > 0 && index < slice.len() {
+                    Self::process_move(table, data, range, index, 0)
                 } else {
                     None
                 }
             }
-            ListMessage::MoveSelectedUp => {
-                if selected > 0 && selected < slice.len() {
-                    Self::process_move(table, data, range, selected, selected - 1)
+            ListMessage::MoveUp(index) => {
+                if index > 0 && index < slice.len() {
+                    Self::process_move(table, data, range, index, index - 1)
                 } else {
                     None
                 }
             }
-            ListMessage::MoveSelectedDown => {
-                if selected + 1 < slice.len() {
-                    Self::process_move(table, data, range, selected, selected + 1)
+            ListMessage::MoveDown(index) => {
+                if index + 1 < slice.len() {
+                    Self::process_move(table, data, range, index, index + 1)
                 } else {
                     None
                 }
             }
-            ListMessage::MoveSelectedToBottom => {
-                if selected + 1 < slice.len() {
-                    Self::process_move(table, data, range, selected, slice.len() - 1)
+            ListMessage::MoveToBottom(index) => {
+                if index + 1 < slice.len() {
+                    Self::process_move(table, data, range, index, slice.len() - 1)
                 } else {
                     None
                 }
