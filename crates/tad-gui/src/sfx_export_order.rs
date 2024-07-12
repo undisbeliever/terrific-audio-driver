@@ -308,11 +308,11 @@ impl SfxExportOrderEditor {
 
             ListMessage::ItemEdited(index, new_name) => match slice.get(index) {
                 Some(name) if name != &new_name => {
-                    let new_name = deduplicate_name(new_name, Some(selected));
+                    let new_name = deduplicate_name(new_name, Some(index));
 
-                    table.list_edited(&ListAction::Edit(selected, new_name.clone()));
+                    table.list_edited(&ListAction::Edit(index, new_name.clone()));
 
-                    Some((ListAction::Edit(selected + eo_offset, new_name), 0))
+                    Some((ListAction::Edit(index + eo_offset, new_name), 0))
                 }
                 _ => None,
             },
