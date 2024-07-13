@@ -4,7 +4,7 @@
 //
 // SPDX-License-Identifier: MIT
 
-use crate::compiler_thread::ToCompiler;
+use crate::compiler_thread::{ItemId, ToCompiler};
 use crate::list_editor::{ListMessage, ListState};
 use crate::song_tab::SongTab;
 use crate::tabs::{FileType, TabManager};
@@ -563,10 +563,10 @@ pub fn open_instrument_sample_dialog(
     sender: &fltk::app::Sender<GuiMessage>,
     compiler_sender: &mpsc::Sender<ToCompiler>,
     pd: &ProjectData,
-    index: usize,
+    id: ItemId,
 ) {
-    let inst = match pd.instruments().get(index) {
-        Some(inst) => inst,
+    let inst = match pd.instruments().get_id(id) {
+        Some((_, inst)) => inst,
         None => return,
     };
 
@@ -575,9 +575,7 @@ pub fn open_instrument_sample_dialog(
             source: new_source,
             ..inst.clone()
         };
-        sender.send(GuiMessage::Instrument(ListMessage::ItemEdited(
-            index, new_inst,
-        )));
+        sender.send(GuiMessage::EditInstrument(id, new_inst));
     }
 }
 
@@ -585,10 +583,10 @@ pub fn open_sample_sample_dialog(
     sender: &fltk::app::Sender<GuiMessage>,
     compiler_sender: &mpsc::Sender<ToCompiler>,
     pd: &ProjectData,
-    index: usize,
+    id: ItemId,
 ) {
-    let sample = match pd.samples().get(index) {
-        Some(s) => s,
+    let sample = match pd.samples().get_id(id) {
+        Some((_, s)) => s,
         None => return,
     };
 
@@ -597,9 +595,7 @@ pub fn open_sample_sample_dialog(
             source: new_source,
             ..sample.clone()
         };
-        sender.send(GuiMessage::Sample(ListMessage::ItemEdited(
-            index, new_sample,
-        )));
+        sender.send(GuiMessage::EditSample(id, new_sample));
     }
 }
 

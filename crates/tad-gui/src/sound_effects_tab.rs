@@ -128,14 +128,14 @@ struct SongChoice {
 
 pub struct State {
     sender: app::Sender<GuiMessage>,
-    selected: Option<usize>,
-    selected_id: Option<ItemId>,
-    old_name: Name,
-    old_flags: SfxFlags,
 
     pan: HorNiceSlider,
     song_choice: SongChoice,
     song_start_ticks: IntInput,
+
+    selected_id: Option<ItemId>,
+    old_name: Name,
+    old_flags: SfxFlags,
 
     name: Input,
     sound_effect_type: Choice,
@@ -319,13 +319,12 @@ impl SoundEffectsTab {
 
         let state = Rc::new(RefCell::from(State {
             sender: sender.clone(),
-            selected: None,
-            selected_id: None,
 
             pan,
             song_choice,
             song_start_ticks,
 
+            selected_id: None,
             old_name: "sfx".parse().unwrap(),
             old_flags: SfxFlags::default(),
 
@@ -611,11 +610,13 @@ impl ListEditor<SoundEffectInput> for SoundEffectsTab {
         );
     }
 
+    fn item_edited(&mut self, _: ItemId, _: &SoundEffectInput) {}
+
     fn clear_selected(&mut self) {
         if let Ok(mut state) = self.state.try_borrow_mut() {
             state.commit_sfx();
-            state.selected = None;
 
+            state.selected_id = None;
             state.name.set_value("Header (not a sound effect)");
             state.sound_effect_type.set_value(-1);
 
@@ -636,7 +637,6 @@ impl ListEditor<SoundEffectInput> for SoundEffectsTab {
                 Ok(mut state) => {
                     state.commit_sfx();
 
-                    state.selected = Some(index);
                     state.selected_id = Some(id);
                     state.old_name = sfx.name.clone();
                     state.old_flags = sfx.flags.clone();
@@ -683,25 +683,7 @@ impl ListEditor<SoundEffectInput> for SoundEffectsTab {
 }
 
 impl State {
-    fn list_edited(&mut self, action: &ListAction<SoundEffectInput>) {
-        match action {
-            ListAction::Move(from, to) => {
-                if self.selected == Some(*from) {
-                    self.selected = Some(*to);
-                }
-            }
-            ListAction::Remove(_) => {
-                // Prevent `commit_sfx()` from sending a `ListMessage::ItemEdited` message for the old
-                // index and overriding the next item in the list with the deleted value.
-                self.selected = None;
-                self.selected_id = None;
-            }
-            ListAction::None
-            | ListAction::Add(..)
-            | ListAction::AddMultiple(..)
-            | ListAction::Edit(..) => (),
-        }
-    }
+    fn list_edited(&mut self, _: &ListAction<SoundEffectInput>) {}
 
     fn play_song(&mut self) {
         if let Some(id) = self.song_choice.selected_song_id() {
@@ -730,7 +712,7 @@ impl State {
     }
 
     fn text_changed(&self, buffer: &EditorBuffer) {
-        if let Some(index) = self.selected {
+        if let Some(id) = self.selected_id {
             let sfx = SoundEffectInput {
                 name: self.old_name.clone(),
                 flags: self.old_flags.clone(),
@@ -741,10 +723,7 @@ impl State {
                     SoundEffectTypeChoice::Mml => SoundEffectText::Mml(buffer.text()),
                 },
             };
-            self.sender
-                .send(GuiMessage::EditSoundEffectList(ListMessage::ItemEdited(
-                    index, sfx,
-                )));
+            self.sender.send(GuiMessage::EditSoundEffect(id, sfx));
         } else {
             // Header
             self.sender.send(GuiMessage::SfxFileHeaderChanged);
@@ -752,7 +731,7 @@ impl State {
     }
 
     fn commit_sfx(&mut self) {
-        if let Some(index) = self.selected {
+        if let Some(id) = self.selected_id {
             let text = self.editor.text();
 
             if let Some(n) = Name::try_new_lossy(self.name.value()) {
@@ -775,10 +754,7 @@ impl State {
                     SoundEffectTypeChoice::Mml => SoundEffectText::Mml(text),
                 },
             };
-            self.sender
-                .send(GuiMessage::EditSoundEffectList(ListMessage::ItemEdited(
-                    index, sfx,
-                )));
+            self.sender.send(GuiMessage::EditSoundEffect(id, sfx));
         }
     }
 

@@ -92,7 +92,7 @@ pub struct SampleEditor {
 
     sender: app::Sender<GuiMessage>,
 
-    selected_index: Option<usize>,
+    selected_id: Option<ItemId>,
     data: Sample,
 
     name: Input,
@@ -123,7 +123,7 @@ impl SampleEditor {
         let out = Rc::from(RefCell::new(Self {
             group,
             sender,
-            selected_index: None,
+            selected_id: None,
             data: blank_sample(),
             name,
             source,
@@ -182,27 +182,26 @@ impl SampleEditor {
     }
 
     fn source_button_clicked(&mut self) {
-        if let Some(index) = self.selected_index {
-            self.sender.send(GuiMessage::OpenSampleSampleDialog(index));
+        if let Some(id) = self.selected_id {
+            self.sender.send(GuiMessage::OpenSampleSampleDialog(id));
         }
     }
 
     fn analyse_button_clicked(&mut self) {
-        if let Some(index) = self.selected_index {
-            self.sender.send(GuiMessage::OpenAnalyseSampleDialog(index));
+        if let Some(id) = self.selected_id {
+            self.sender.send(GuiMessage::OpenAnalyseSampleDialog(id));
         }
     }
 
     fn send_edit_message(&self, data: Sample) {
-        if let Some(index) = self.selected_index {
-            self.sender
-                .send(GuiMessage::Sample(ListMessage::ItemEdited(index, data)));
+        if let Some(id) = self.selected_id {
+            self.sender.send(GuiMessage::EditSample(id, data));
         }
     }
 
     fn read_or_reset(&mut self) -> Option<Sample> {
         #[allow(clippy::question_mark)]
-        if self.selected_index.is_none() {
+        if self.selected_id.is_none() {
             return None;
         }
 
@@ -272,10 +271,10 @@ impl SampleEditor {
         self.sample_rates.set_value("");
         self.envelope.clear_value();
 
-        self.selected_index = None;
+        self.selected_id = None;
     }
 
-    pub fn set_data(&mut self, index: usize, data: &Sample) {
+    fn set_data_update_widget(&mut self, data: &Sample) {
         macro_rules! set_widget {
             ($name:ident) => {
                 InputHelper::set_widget_value(&mut self.$name, &data.$name);
@@ -295,17 +294,19 @@ impl SampleEditor {
         self.loop_setting
             .update_loop_type_choice(SourceFileType::from_source(&data.source));
 
-        self.selected_index = Some(index);
         self.data = data.clone();
 
         self.group.activate();
     }
 
-    pub fn list_edited(&mut self, action: &ListAction<Sample>) {
-        if let ListAction::Edit(index, data) = action {
-            if self.selected_index == Some(*index) {
-                self.set_data(*index, data);
-            }
+    pub fn set_selected(&mut self, id: ItemId, value: &Sample) {
+        self.selected_id = Some(id);
+        self.set_data_update_widget(value);
+    }
+
+    pub fn item_edited(&mut self, id: ItemId, value: &Sample) {
+        if self.selected_id == Some(id) {
+            self.set_data_update_widget(value);
         }
     }
 }

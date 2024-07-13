@@ -124,6 +124,9 @@ pub enum GuiMessage {
     Instrument(ListMessage<data::Instrument>),
     Sample(ListMessage<data::Sample>),
 
+    EditInstrument(ItemId, data::Instrument),
+    EditSample(ItemId, data::Sample),
+
     NewMmlFile,
     OpenMmlFile,
 
@@ -137,6 +140,7 @@ pub enum GuiMessage {
     RecompileEverything,
 
     EditSoundEffectList(ListMessage<SoundEffectInput>),
+    EditSoundEffect(ItemId, SoundEffectInput),
     SfxFileHeaderChanged,
     AddMissingSoundEffects,
 
@@ -145,8 +149,8 @@ pub enum GuiMessage {
 
     ShowSampleSizes,
 
-    OpenAnalyseInstrumentDialog(usize),
-    OpenAnalyseSampleDialog(usize),
+    OpenAnalyseInstrumentDialog(ItemId),
+    OpenAnalyseSampleDialog(ItemId),
 
     CommitSampleAnalyserChanges {
         id: InstrumentOrSampleId,
@@ -154,8 +158,8 @@ pub enum GuiMessage {
         loop_setting: data::LoopSetting,
     },
 
-    OpenInstrumentSampleDialog(usize),
-    OpenSampleSampleDialog(usize),
+    OpenInstrumentSampleDialog(ItemId),
+    OpenSampleSampleDialog(ItemId),
 
     OpenSongTab(usize),
 
@@ -420,11 +424,51 @@ impl Project {
                     let _ = self.compiler_sender.send(ToCompiler::Sample(c));
                 }
             }
+            GuiMessage::EditInstrument(id, inst) => {
+                let (a, c) =
+                    self.data
+                        .instruments_and_samples
+                        .edit_item1(id, inst, &mut self.samples_tab);
+
+                self.mark_project_file_unsaved(a);
+
+                if let Some(c) = c {
+                    let _ = self.compiler_sender.send(ToCompiler::Instrument(c));
+                }
+            }
+            GuiMessage::EditSample(id, sample) => {
+                let (a, c) =
+                    self.data
+                        .instruments_and_samples
+                        .edit_item2(id, sample, &mut self.samples_tab);
+
+                self.mark_project_file_unsaved(a);
+
+                if let Some(c) = c {
+                    let _ = self.compiler_sender.send(ToCompiler::Sample(c));
+                }
+            }
+
             GuiMessage::EditSoundEffectList(m) => {
                 if let Some(sfx_data) = &mut self.sfx_data {
                     let (a, c) = sfx_data
                         .sound_effects
                         .process(m, &mut self.sound_effects_tab);
+                    if let Some(c) = c {
+                        let _ = self.compiler_sender.send(ToCompiler::SoundEffects(c));
+                    }
+                    if !a.is_none() {
+                        self.tab_manager.mark_unsaved(FileType::SoundEffects);
+                    }
+                }
+            }
+            GuiMessage::EditSoundEffect(id, sfx) => {
+                if let Some(sfx_data) = &mut self.sfx_data {
+                    let (a, c) =
+                        sfx_data
+                            .sound_effects
+                            .edit_item(id, sfx, &mut self.sound_effects_tab);
+
                     if let Some(c) = c {
                         let _ = self.compiler_sender.send(ToCompiler::SoundEffects(c));
                     }
@@ -623,25 +667,20 @@ impl Project {
                     .clear_selection(&mut self.samples_tab);
                 self.samples_tab.show_sample_sizes_widget();
             }
-            GuiMessage::OpenInstrumentSampleDialog(index) => {
-                open_instrument_sample_dialog(
-                    &self.sender,
-                    &self.compiler_sender,
-                    &self.data,
-                    index,
-                );
+            GuiMessage::OpenInstrumentSampleDialog(id) => {
+                open_instrument_sample_dialog(&self.sender, &self.compiler_sender, &self.data, id);
             }
-            GuiMessage::OpenSampleSampleDialog(index) => {
-                open_sample_sample_dialog(&self.sender, &self.compiler_sender, &self.data, index);
+            GuiMessage::OpenSampleSampleDialog(id) => {
+                open_sample_sample_dialog(&self.sender, &self.compiler_sender, &self.data, id);
             }
 
-            GuiMessage::OpenAnalyseInstrumentDialog(instrument_id) => {
-                if let Some((id, inst)) = self.data.instruments().get_with_id(instrument_id) {
+            GuiMessage::OpenAnalyseInstrumentDialog(id) => {
+                if let Some((_, inst)) = self.data.instruments().get_id(id) {
                     self.sample_analyser_dialog.show_for_instrument(id, inst);
                 }
             }
-            GuiMessage::OpenAnalyseSampleDialog(sample_id) => {
-                if let Some((id, s)) = self.data.samples().get_with_id(sample_id) {
+            GuiMessage::OpenAnalyseSampleDialog(id) => {
+                if let Some((_, s)) = self.data.samples().get_id(id) {
                     self.sample_analyser_dialog.show_for_sample(id, s);
                 }
             }

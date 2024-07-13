@@ -278,10 +278,13 @@ impl SamplesTab {
 impl ListEditor<Instrument> for SamplesTab {
     fn list_edited(&mut self, action: &ListAction<Instrument>) {
         self.inst_table.list_edited(action);
-        self.instrument_editor.borrow_mut().list_edited(action);
         self.sample_sizes_widget
             .borrow_mut()
             .instrument_edited(action);
+    }
+
+    fn item_edited(&mut self, id: ItemId, value: &Instrument) {
+        self.instrument_editor.borrow_mut().item_edited(id, value)
     }
 
     fn clear_selected(&mut self) {
@@ -301,7 +304,7 @@ impl ListEditor<Instrument> for SamplesTab {
         self.selected_editor = EditorType::Instrument;
 
         self.inst_table.set_selected(index, id, inst);
-        self.instrument_editor.borrow_mut().set_data(index, inst);
+        self.instrument_editor.borrow_mut().set_selected(id, inst);
         self.test_instrument_widget.borrow_mut().set_selected(id);
     }
 }
@@ -351,9 +354,12 @@ impl CompilerOutputGui<InstrumentOutput> for SamplesTab {
 impl ListEditor<data::Sample> for SamplesTab {
     fn list_edited(&mut self, action: &ListAction<data::Sample>) {
         self.sample_table.list_edited(action);
-        self.sample_editor.borrow_mut().list_edited(action);
         self.test_sample_widget.borrow_mut().list_edited(action);
         self.sample_sizes_widget.borrow_mut().sample_edited(action);
+    }
+
+    fn item_edited(&mut self, id: ItemId, value: &data::Sample) {
+        self.sample_editor.borrow_mut().item_edited(id, value);
     }
 
     fn clear_selected(&mut self) {
@@ -373,7 +379,7 @@ impl ListEditor<data::Sample> for SamplesTab {
         self.selected_editor = EditorType::Sample;
 
         self.sample_table.set_selected(index, id, sample);
-        self.sample_editor.borrow_mut().set_data(index, sample);
+        self.sample_editor.borrow_mut().set_selected(id, sample);
         self.test_sample_widget
             .borrow_mut()
             .set_selected(index, id, sample);

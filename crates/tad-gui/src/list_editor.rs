@@ -46,6 +46,8 @@ pub enum ListMessage<T> {
 pub trait ListEditor<T> {
     fn list_edited(&mut self, action: &ListAction<T>);
 
+    fn item_edited(&mut self, id: ItemId, value: &T);
+
     fn clear_selected(&mut self);
     fn set_selected(&mut self, index: usize, id: ItemId, value: &T);
 }
@@ -515,12 +517,59 @@ where
                     // Clear stored compiler output when an item is edited
                     *co = None;
                 }
+
                 // `editor.set_compiler_output` and `editor.set_selected_compiler_output`
                 // are not called here to prevent an annoying flash in tables and the Sound Effect console.
+
+                if let Some((id, value)) = self.list.get(*index) {
+                    editor.item_edited(*id, value);
+                }
             }
         }
 
         (action, c)
+    }
+
+    #[must_use]
+    pub fn edit_item<Editor>(
+        &mut self,
+        id: ItemId,
+        new_value: T,
+        editor: &mut Editor,
+    ) -> (ListAction<T>, Option<ItemChanged<T>>)
+    where
+        Editor: ListEditor<T> + CompilerOutputGui<O>,
+    {
+        if let Some((index, item)) = self.get_id(id) {
+            let mut new_value = new_value;
+
+            if *item != new_value {
+                if NameDeduplicator::test_name_changed(item, &new_value) {
+                    NameDeduplicator::dedupe_name(&mut new_value, &self.list, Some(index));
+                }
+
+                let action = ListAction::Edit(index, new_value.clone());
+
+                self.list.process_map(
+                    &action,
+                    // new
+                    |v: &T| (ItemId::new(), v.clone()),
+                    // edit
+                    |e, v: &T| e.1 = v.clone(),
+                );
+
+                editor.list_edited(&action);
+                editor.item_edited(id, &new_value);
+
+                let c_message = ItemChanged::AddedOrEdited(id, new_value);
+
+                (action, Some(c_message))
+            } else {
+                (ListAction::None, None)
+            }
+        } else {
+            (ListAction::None, None)
+        }
     }
 
     fn set_selected<Editor>(&mut self, index: usize, editor: &mut Editor)
@@ -727,6 +776,32 @@ where
         Editor: ListEditor<T1> + CompilerOutputGui<O1> + ListEditor<T2> + CompilerOutputGui<O2>,
     {
         list_pair_process(m, &mut self.list2, &mut self.list1, editor)
+    }
+
+    #[must_use]
+    pub fn edit_item1<Editor>(
+        &mut self,
+        id: ItemId,
+        new_value: T1,
+        editor: &mut Editor,
+    ) -> (ListAction<T1>, Option<ItemChanged<T1>>)
+    where
+        Editor: ListEditor<T1> + CompilerOutputGui<O1> + ListEditor<T2> + CompilerOutputGui<O2>,
+    {
+        self.list1.edit_item(id, new_value, editor)
+    }
+
+    #[must_use]
+    pub fn edit_item2<Editor>(
+        &mut self,
+        id: ItemId,
+        new_value: T2,
+        editor: &mut Editor,
+    ) -> (ListAction<T2>, Option<ItemChanged<T2>>)
+    where
+        Editor: ListEditor<T1> + CompilerOutputGui<O1> + ListEditor<T2> + CompilerOutputGui<O2>,
+    {
+        self.list2.edit_item(id, new_value, editor)
     }
 
     pub fn set_compiler_output1(
@@ -1143,6 +1218,8 @@ where
             }),
         }
     }
+
+    fn item_edited(&mut self, _: ItemId, _: &T::DataType) {}
 
     fn clear_selected(&mut self) {
         self.table.borrow_mut().clear_selected();
