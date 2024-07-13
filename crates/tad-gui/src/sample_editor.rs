@@ -7,7 +7,7 @@
 use crate::compiler_thread::{ItemId, PlaySampleArgs, SampleOutput};
 use crate::envelope_widget::EnvelopeWidget;
 use crate::helpers::*;
-use crate::list_editor::{ListAction, ListMessage, TableCompilerOutput, TableMapping};
+use crate::list_editor::{ListMessage, TableCompilerOutput, TableMapping};
 use crate::sample_widgets::{
     LoopSettingWidget, SampleEnvelopeWidget, SampleWidgetEditor, SourceFileType, DEFAULT_ENVELOPE,
 };
@@ -334,7 +334,6 @@ impl SampleWidgetEditor for SampleEditor {
 
 pub struct TestSampleWidget {
     selected_id: Option<ItemId>,
-    selected_index: Option<usize>,
 
     sender: app::Sender<GuiMessage>,
 
@@ -386,7 +385,6 @@ impl TestSampleWidget {
 
         let out = Rc::from(RefCell::new(Self {
             selected_id: None,
-            selected_index: None,
             sender,
             group,
             note_length,
@@ -411,13 +409,11 @@ impl TestSampleWidget {
 
     pub fn clear_selected(&mut self) {
         self.selected_id = None;
-        self.selected_index = None;
         self.group.deactivate();
     }
 
-    pub fn set_selected(&mut self, index: usize, id: ItemId, data: &Sample) {
+    pub fn set_selected(&mut self, id: ItemId, data: &Sample) {
         self.selected_id = Some(id);
-        self.selected_index = Some(index);
         self.group.activate();
         self.update_buttons(data);
     }
@@ -426,11 +422,9 @@ impl TestSampleWidget {
         self.group.set_active(active && self.selected_id.is_some());
     }
 
-    pub fn list_edited(&mut self, action: &ListAction<Sample>) {
-        if let ListAction::Edit(index, data) = action {
-            if self.selected_index == Some(*index) {
-                self.update_buttons(data);
-            }
+    pub fn item_edited(&mut self, id: ItemId, data: &Sample) {
+        if self.selected_id == Some(id) {
+            self.update_buttons(data);
         }
     }
 

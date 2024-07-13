@@ -334,7 +334,7 @@ impl SamplesTab {
                     self.sample_editor.borrow_mut().set_selected(id, sample);
                     self.test_sample_widget
                         .borrow_mut()
-                        .set_selected(index, id, sample);
+                        .set_selected(id, sample);
 
                     self.editor_wizard.set_current_widget(&self.sample_group);
 
@@ -448,12 +448,12 @@ impl CompilerOutputGui<InstrumentOutput> for SamplesTab {
 impl ListEditor<data::Sample> for SamplesTab {
     fn list_edited(&mut self, action: &ListAction<data::Sample>) {
         self.sample_table.list_edited(action);
-        self.test_sample_widget.borrow_mut().list_edited(action);
         self.sample_sizes_widget.borrow_mut().sample_edited(action);
     }
 
     fn item_edited(&mut self, id: ItemId, value: &data::Sample) {
         self.sample_editor.borrow_mut().item_edited(id, value);
+        self.test_sample_widget.borrow_mut().item_edited(id, value);
     }
 }
 
