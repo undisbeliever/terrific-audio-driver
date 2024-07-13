@@ -7,7 +7,7 @@
 use crate::audio_thread::Pan;
 use crate::compiler_thread::{ItemId, SfxError, SoundEffectOutput};
 use crate::list_editor::{
-    CompilerOutputGui, LaVec, ListAction, ListEditor, ListEditorTable, ListMessage, ListState,
+    CompilerOutputGui, ListAction, ListEditor, ListEditorTable, ListMessage, ListState,
     ListWithCompilerOutput, TableCompilerOutput, TableMapping,
 };
 use crate::mml_editor::{CompiledEditorData, EditorBuffer, MmlEditor, TextErrorRef, TextFormat};
@@ -36,7 +36,7 @@ use fltk::valuator::HorNiceSlider;
 use fltk::widget::Widget;
 
 use std::cell::RefCell;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
 #[derive(Clone, Copy)]
@@ -159,7 +159,7 @@ pub struct SoundEffectsTab {
     header_buffer: Rc<RefCell<EditorBuffer>>,
 
     // Each sound effect gets it own buffer so they have their own undo/redo stack.
-    sfx_buffers: LaVec<Option<Rc<RefCell<EditorBuffer>>>>,
+    sfx_buffers: HashMap<ItemId, Rc<RefCell<EditorBuffer>>>,
 
     group: Flex,
 
@@ -470,7 +470,7 @@ impl SoundEffectsTab {
             state,
 
             header_buffer,
-            sfx_buffers: LaVec::new(),
+            sfx_buffers: HashMap::new(),
 
             group,
             no_sfx_file_gui: no_sfx_file_group,
@@ -491,16 +491,15 @@ impl SoundEffectsTab {
     pub fn replace_sfx_file(
         &mut self,
         header: &str,
-        state: &impl ListState<Item = SoundEffectInput>,
+        sfx_list: &ListWithCompilerOutput<SoundEffectInput, SoundEffectOutput>,
     ) {
-        let v: Vec<_> = (0..state.len()).map(|_| None).collect();
-        assert!(v.len() == state.len());
-
         self.disable_editor();
         self.state.borrow_mut().editor.set_text(header);
 
-        self.sfx_buffers = LaVec::from_vec(v);
-        self.sfx_table.replace(state);
+        self.sfx_table.replace(sfx_list);
+
+        // ::TODO save old buffers::
+        self.sfx_buffers.clear();
 
         self.group.remove(&self.no_sfx_file_gui);
 
@@ -550,7 +549,7 @@ impl SoundEffectsTab {
                 if self.state.borrow().selected_id != Some(id) {
                     let co = sfx_list.get_compiler_output(index);
 
-                    self.enable_editor(index, id, sfx, co);
+                    self.enable_editor(id, sfx, co);
                 }
             }
 
@@ -581,56 +580,43 @@ impl SoundEffectsTab {
 
     fn enable_editor(
         &mut self,
-        index: usize,
         id: ItemId,
         sfx: &SoundEffectInput,
         co: &Option<SoundEffectOutput>,
     ) {
-        match self.sfx_buffers.get_mut(index) {
-            Some(sfx_buffer) => {
-                let mut state = self.state.borrow_mut();
+        let mut state = self.state.borrow_mut();
 
-                state.commit_sfx();
+        state.commit_sfx();
 
-                state.selected_id = Some(id);
-                state.old_name = sfx.name.clone();
-                state.old_flags = sfx.flags.clone();
+        state.selected_id = Some(id);
+        state.old_name = sfx.name.clone();
+        state.old_flags = sfx.flags.clone();
 
-                self.name.set_value(sfx.name.as_str());
-                self.name.clear_changed();
+        self.name.set_value(sfx.name.as_str());
+        self.name.clear_changed();
 
-                let type_choice = match &sfx.sfx {
-                    SoundEffectText::BytecodeAssembly(_) => SoundEffectTypeChoice::BytecodeAssembly,
-                    SoundEffectText::Mml(_) => SoundEffectTypeChoice::Mml,
-                };
-                state.sound_effect_type.set_value(type_choice.to_i32());
+        let type_choice = match &sfx.sfx {
+            SoundEffectText::BytecodeAssembly(_) => SoundEffectTypeChoice::BytecodeAssembly,
+            SoundEffectText::Mml(_) => SoundEffectTypeChoice::Mml,
+        };
+        state.sound_effect_type.set_value(type_choice.to_i32());
 
-                state.one_channel_flag.set_value(sfx.flags.one_channel);
-                state.interruptible_flag.set_value(sfx.flags.interruptible);
+        state.one_channel_flag.set_value(sfx.flags.one_channel);
+        state.interruptible_flag.set_value(sfx.flags.interruptible);
 
-                match sfx_buffer {
-                    Some(b) => state.editor.set_buffer(b.clone()),
-                    None => {
-                        let (text, format) = match &sfx.sfx {
-                            SoundEffectText::BytecodeAssembly(s) => (s, TextFormat::Bytecode),
-                            SoundEffectText::Mml(s) => (s, TextFormat::Mml),
-                        };
+        let b = self.sfx_buffers.entry(id).or_insert_with(|| {
+            let (text, format) = match &sfx.sfx {
+                SoundEffectText::BytecodeAssembly(s) => (s, TextFormat::Bytecode),
+                SoundEffectText::Mml(s) => (s, TextFormat::Mml),
+            };
+            state.editor.new_buffer(text, format)
+        });
+        state.editor.set_buffer(b.clone());
 
-                        let b = state.editor.new_buffer(text, format);
-                        *sfx_buffer = Some(b);
-                    }
-                }
+        state.selected_compiler_output_changed(co);
 
-                state.selected_compiler_output_changed(co);
-
-                self.sfx_group.activate();
-                self.main_group.activate();
-            }
-            None => {
-                // Index is out of bounds
-                self.disable_editor();
-            }
-        }
+        self.sfx_group.activate();
+        self.main_group.activate();
     }
 }
 
@@ -701,15 +687,9 @@ impl ListEditor<SoundEffectInput> for SoundEffectsTab {
             state.list_edited(action);
         }
 
-        self.sfx_table.list_edited(action);
+        // ::TODO extract removed sound effect from `sfx_buffers`::
 
-        self.sfx_buffers.process_map(
-            action,
-            // new: Don't create a buffer until the sfx is selected
-            |_| None,
-            // edit: Do not change the buffer, ensures undo/redo stack is unchanged.
-            |_, _| {},
-        );
+        self.sfx_table.list_edited(action);
     }
 
     fn item_edited(&mut self, id: ItemId, sfx: &SoundEffectInput) {
