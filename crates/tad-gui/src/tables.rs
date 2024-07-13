@@ -59,7 +59,7 @@ where
     ///  * true if the user caused the change in selection
     ///    (ie, by clicking with the cursor or opening the editor)
     ///  * false if the change is selction was caused by `set_selected()` or `clear_selected()`.
-    row_selected_callback: Box<dyn Fn(Option<usize>, bool)>,
+    row_selected_callback: Box<dyn Fn(Option<usize>, usize, bool)>,
 
     edit_widget: Option<fltk::input::Input>,
 
@@ -253,8 +253,11 @@ where
         self.state.borrow_mut().callback = Box::from(f);
     }
 
-    /// Callback `f(index, user_selection);`
-    pub fn set_selection_changed_callback(&mut self, f: impl Fn(Option<usize>, bool) + 'static) {
+    /// Callback `f(index, n_rows, user_selection);`
+    pub fn set_selection_changed_callback(
+        &mut self,
+        f: impl Fn(Option<usize>, usize, bool) + 'static,
+    ) {
         self.state.borrow_mut().row_selected_callback = Box::from(f);
     }
 
@@ -307,13 +310,17 @@ where
             }
         }
     }
+
+    pub fn n_rows(&self) -> usize {
+        self.state.borrow().data.len()
+    }
 }
 
 fn blank_callback(_: TableEvent, _: usize, _: i32) -> bool {
     false
 }
 
-fn blank_sel_changed_callback(_: Option<usize>, _: bool) {}
+fn blank_sel_changed_callback(_: Option<usize>, _: usize, _: bool) {}
 
 impl<T> TableState<T>
 where
@@ -518,7 +525,7 @@ where
         if let Ok(index) = usize::try_from(row) {
             if index < self.data.len() {
                 if self.sel_row != row {
-                    (self.row_selected_callback)(Some(index), user_selection);
+                    (self.row_selected_callback)(Some(index), self.data.len(), user_selection);
 
                     if !user_selection {
                         self.scroll_to_row(row);
@@ -541,7 +548,7 @@ where
 
     fn unset_selection(&mut self, user_selection: bool) {
         if self.sel_row != -1 {
-            (self.row_selected_callback)(None, user_selection);
+            (self.row_selected_callback)(None, self.data.len(), user_selection);
         }
 
         self.sel_row = -1;

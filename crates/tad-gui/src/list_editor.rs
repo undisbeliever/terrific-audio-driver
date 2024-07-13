@@ -44,9 +44,6 @@ pub enum ListMessage<T> {
 }
 
 pub trait ListEditor<T> {
-    // Called once at the start of the event
-    fn list_buttons(&mut self) -> &mut ListButtons;
-
     fn list_edited(&mut self, action: &ListAction<T>);
 
     fn clear_selected(&mut self);
@@ -537,10 +534,6 @@ where
 
                 let co = self.compiler_output.get(index).unwrap_or(&None);
                 editor.set_selected_compiler_output(co);
-
-                editor
-                    .list_buttons()
-                    .selected_changed(index, self.list.len(), self.can_add());
             }
             None => {
                 self.clear_selection(editor);
@@ -555,7 +548,6 @@ where
         self.selected = None;
         editor.clear_selected();
         editor.set_selected_compiler_output(&None);
-        editor.list_buttons().selected_clear(self.can_add());
     }
 
     pub fn iter(&self) -> impl Iterator<Item = &(ItemId, T)> {
@@ -759,6 +751,8 @@ where
 pub struct ListButtons {
     pub pack: Pack,
 
+    pub max_size: usize,
+
     pub add: Button,
     pub clone: Option<Button>,
     pub remove: Button,
@@ -769,7 +763,7 @@ pub struct ListButtons {
 }
 
 impl ListButtons {
-    pub fn new(type_name: &str, show_clone: bool) -> Self {
+    pub fn new(type_name: &str, max_size: usize, show_clone: bool) -> Self {
         let mut pack = Pack::default().with_type(PackType::Horizontal);
 
         let button_label_size = pack.label_size() * 8 / 10;
@@ -802,6 +796,7 @@ impl ListButtons {
 
         let mut out = Self {
             pack,
+            max_size,
             add,
             clone,
             remove,
@@ -810,18 +805,13 @@ impl ListButtons {
             move_down,
             move_bottom,
         };
-        out.selected_clear(false);
+        out.deactivate_all();
         out
     }
 
-    pub fn update(&mut self, state: &impl ListState) {
-        match state.selected() {
-            Some(i) => self.selected_changed(i, state.len(), state.can_add()),
-            None => self.selected_clear(state.can_add()),
-        }
-    }
+    fn selected_changed(&mut self, index: usize, list_len: usize) {
+        let can_add = list_len < self.max_size;
 
-    pub fn selected_changed(&mut self, index: usize, list_len: usize, can_add: bool) {
         self.add.set_active(can_add);
 
         if let Some(c) = &mut self.clone {
@@ -846,8 +836,30 @@ impl ListButtons {
         }
     }
 
-    pub fn selected_clear(&mut self, can_add: bool) {
+    fn selected_clear(&mut self, list_len: usize) {
+        let can_add = list_len < self.max_size;
+
         self.add.set_active(can_add);
+
+        if let Some(c) = &mut self.clone {
+            c.deactivate();
+        }
+        self.remove.deactivate();
+        self.move_top.deactivate();
+        self.move_up.deactivate();
+        self.move_down.deactivate();
+        self.move_bottom.deactivate();
+    }
+
+    pub fn update_buttons(&mut self, selected: Option<usize>, list_len: usize) {
+        match selected {
+            Some(i) => self.selected_changed(i, list_len),
+            None => self.selected_clear(list_len),
+        }
+    }
+
+    pub fn deactivate_all(&mut self) {
+        self.add.deactivate();
 
         if let Some(c) = &mut self.clone {
             c.deactivate();
@@ -873,6 +885,8 @@ where
 {
     type DataType;
     type RowType;
+
+    const MAX_SIZE: usize;
 
     const CAN_CLONE: bool;
     const CAN_EDIT: bool;
@@ -910,7 +924,10 @@ pub struct ListEditorTable<T>
 where
     T: TableMapping,
 {
-    list_buttons: ListButtons,
+    list_buttons_pack: Pack,
+    // Must store list_buttons in a separate Rc to prevent a BorrowMutError in set_selection_changed_callback
+    list_buttons: Rc<RefCell<ListButtons>>,
+
     table: Rc<RefCell<tables::TrTable<T::RowType>>>,
 }
 
@@ -920,18 +937,28 @@ where
     T::DataType: NameDeduplicator,
 {
     pub fn new(sender: fltk::app::Sender<GuiMessage>) -> Self {
-        let mut list_buttons = ListButtons::new(T::type_name(), T::CAN_CLONE);
+        let list_buttons = Rc::new(RefCell::new(ListButtons::new(
+            T::type_name(),
+            T::MAX_SIZE,
+            T::CAN_CLONE,
+        )));
         let table = Rc::new(RefCell::new(tables::TrTable::new(T::headers())));
 
         let mut t = table.borrow_mut();
+        let mut lb = list_buttons.borrow_mut();
 
         t.set_selection_changed_callback({
-            let s = sender.clone();
-            move |i, user_selection| {
+            let sender = sender.clone();
+            let list_buttons = list_buttons.clone();
+            move |selected, n_rows, user_selection| {
+                let mut lb = list_buttons.borrow_mut();
+
+                lb.update_buttons(selected, n_rows);
+
                 if user_selection {
-                    match i {
-                        Some(i) => s.send(T::to_message(ListMessage::ItemSelected(i))),
-                        None => s.send(T::to_message(ListMessage::ClearSelection)),
+                    match selected {
+                        Some(i) => sender.send(T::to_message(ListMessage::ItemSelected(i))),
+                        None => sender.send(T::to_message(ListMessage::ClearSelection)),
                     }
                 }
             }
@@ -961,11 +988,11 @@ where
             }
         });
 
-        list_buttons.add.set_callback({
+        lb.add.set_callback({
             let s = sender.clone();
             move |_| s.send(T::add_clicked())
         });
-        if let Some(b) = &mut list_buttons.clone {
+        if let Some(b) = &mut lb.clone {
             b.set_callback({
                 let s = sender.clone();
                 let table = table.clone();
@@ -976,7 +1003,7 @@ where
                 }
             });
         }
-        list_buttons.remove.set_callback({
+        lb.remove.set_callback({
             let s = sender.clone();
             let table = table.clone();
             move |_| {
@@ -985,7 +1012,7 @@ where
                 }
             }
         });
-        list_buttons.move_top.set_callback({
+        lb.move_top.set_callback({
             let s = sender.clone();
             let table = table.clone();
             move |_| {
@@ -994,7 +1021,7 @@ where
                 }
             }
         });
-        list_buttons.move_up.set_callback({
+        lb.move_up.set_callback({
             let s = sender.clone();
             let table = table.clone();
             move |_| {
@@ -1003,7 +1030,7 @@ where
                 }
             }
         });
-        list_buttons.move_down.set_callback({
+        lb.move_down.set_callback({
             let s = sender.clone();
             let table = table.clone();
             move |_| {
@@ -1012,7 +1039,7 @@ where
                 }
             }
         });
-        list_buttons.move_bottom.set_callback({
+        lb.move_bottom.set_callback({
             let s = sender;
             let table = table.clone();
             move |_| {
@@ -1021,10 +1048,15 @@ where
                 }
             }
         });
+        Self::update_list_buttons(&mut lb, &t);
 
+        let list_buttons_pack = lb.pack.clone();
+
+        drop(lb);
         drop(t);
 
         Self {
+            list_buttons_pack,
             list_buttons,
             table,
         }
@@ -1032,9 +1064,16 @@ where
 
     pub fn new_from_slice(data: &[T::DataType], sender: fltk::app::Sender<GuiMessage>) -> Self {
         let out = Self::new(sender);
-        out.table
-            .borrow_mut()
-            .edit_table(|v| v.extend(data.iter().map(T::new_row)));
+
+        {
+            let mut t = out.table.borrow_mut();
+            let mut lb = out.list_buttons.borrow_mut();
+
+            t.edit_table(|v| v.extend(data.iter().map(T::new_row)));
+
+            Self::update_list_buttons(&mut lb, &t);
+        }
+
         out
     }
 
@@ -1049,20 +1088,30 @@ where
 
     pub fn replace(&mut self, state: &impl ListState<Item = T::DataType>) {
         let mut t = self.table.borrow_mut();
+        let mut lb = self.list_buttons.borrow_mut();
 
         t.edit_table(|v| {
             *v = state.item_iter().map(T::new_row).collect();
         });
-        self.list_buttons.update(state);
 
         match state.selected() {
             Some(i) => t.set_selected(i),
             None => t.clear_selected(),
         }
+
+        Self::update_list_buttons(&mut lb, &t);
+    }
+
+    fn update_list_buttons(list_buttons: &mut ListButtons, table: &tables::TrTable<T::RowType>) {
+        list_buttons.update_buttons(table.selected_row(), table.n_rows());
     }
 
     pub fn button_height(&self) -> i32 {
-        self.list_buttons.add.height()
+        self.list_buttons.borrow().add.height()
+    }
+
+    pub fn list_buttons_pack(&self) -> &Pack {
+        &self.list_buttons_pack
     }
 
     pub fn set_selected_row(&mut self, index: usize) {
@@ -1079,10 +1128,6 @@ where
     T: TableMapping + 'static,
     T::DataType: Clone,
 {
-    fn list_buttons(&mut self) -> &mut ListButtons {
-        &mut self.list_buttons
-    }
-
     fn list_edited(&mut self, action: &ListAction<T::DataType>) {
         match action {
             ListAction::None => (),

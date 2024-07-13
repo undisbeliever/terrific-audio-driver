@@ -8,9 +8,7 @@ use crate::compiler_thread::{
     CadOutput, CombineSamplesError, InstrumentOutput, ItemId, SampleOutput,
 };
 use crate::helpers::*;
-use crate::list_editor::{
-    CompilerOutputGui, ListAction, ListButtons, ListEditor, ListEditorTable, ListState,
-};
+use crate::list_editor::{CompilerOutputGui, ListAction, ListEditor, ListEditorTable, ListState};
 use crate::sample_sizes_widget::SampleSizesWidget;
 use crate::tabs::{FileType, Tab};
 use crate::GuiMessage;
@@ -97,13 +95,13 @@ impl SamplesTab {
         sample_sizes_button.set_tooltip("Show sample sizes");
         sidebar.fixed(&sample_sizes_button, ch_units_to_width(&sidebar, 5));
 
-        let mut inst_table = ListEditorTable::new_with_data(instruments, sender.clone());
+        let inst_table = ListEditorTable::new_with_data(instruments, sender.clone());
 
         let button_height = inst_table.button_height();
-        sidebar.fixed(&inst_table.list_buttons().pack, button_height);
+        sidebar.fixed(inst_table.list_buttons_pack(), button_height);
 
-        let mut sample_table = ListEditorTable::new_with_data(samples, sender.clone());
-        sidebar.fixed(&sample_table.list_buttons().pack, button_height);
+        let sample_table = ListEditorTable::new_with_data(samples, sender.clone());
+        sidebar.fixed(sample_table.list_buttons_pack(), button_height);
 
         sidebar.end();
 
@@ -278,10 +276,6 @@ impl SamplesTab {
 }
 
 impl ListEditor<Instrument> for SamplesTab {
-    fn list_buttons(&mut self) -> &mut ListButtons {
-        self.inst_table.list_buttons()
-    }
-
     fn list_edited(&mut self, action: &ListAction<Instrument>) {
         self.inst_table.list_edited(action);
         self.instrument_editor.borrow_mut().list_edited(action);
@@ -355,10 +349,6 @@ impl CompilerOutputGui<InstrumentOutput> for SamplesTab {
 }
 
 impl ListEditor<data::Sample> for SamplesTab {
-    fn list_buttons(&mut self) -> &mut ListButtons {
-        self.sample_table.list_buttons()
-    }
-
     fn list_edited(&mut self, action: &ListAction<data::Sample>) {
         self.sample_table.list_edited(action);
         self.sample_editor.borrow_mut().list_edited(action);

@@ -7,8 +7,8 @@
 use crate::audio_thread::Pan;
 use crate::compiler_thread::{ItemId, SfxError, SoundEffectOutput};
 use crate::list_editor::{
-    CompilerOutputGui, LaVec, ListAction, ListButtons, ListEditor, ListEditorTable, ListMessage,
-    ListState, TableCompilerOutput, TableMapping,
+    CompilerOutputGui, LaVec, ListAction, ListEditor, ListEditorTable, ListMessage, ListState,
+    TableCompilerOutput, TableMapping,
 };
 use crate::mml_editor::{CompiledEditorData, EditorBuffer, MmlEditor, TextErrorRef, TextFormat};
 use crate::tables::{RowWithStatus, SimpleRow};
@@ -74,6 +74,9 @@ struct SoundEffectMapping;
 impl TableMapping for SoundEffectMapping {
     type DataType = SoundEffectInput;
     type RowType = RowWithStatus<SimpleRow<1>>;
+
+    // Sound effect file can hold more sound effects then export-order allows
+    const MAX_SIZE: usize = 1024;
 
     const CAN_CLONE: bool = true;
     const CAN_EDIT: bool = false;
@@ -191,10 +194,10 @@ impl SoundEffectsTab {
         let mut sidebar = Flex::default().column();
         group.fixed(&sidebar, ch_units_to_width(&sidebar, 30));
 
-        let mut sfx_table = ListEditorTable::new(sender.clone());
+        let sfx_table = ListEditorTable::new(sender.clone());
 
         let button_height = sfx_table.button_height();
-        sidebar.fixed(&sfx_table.list_buttons().pack, button_height);
+        sidebar.fixed(sfx_table.list_buttons_pack(), button_height);
 
         let mut add_missing_sfx_button = Button::default().with_label("Add missing sound effects");
         sidebar.fixed(
@@ -592,10 +595,6 @@ impl SongChoice {
 }
 
 impl ListEditor<SoundEffectInput> for SoundEffectsTab {
-    fn list_buttons(&mut self) -> &mut ListButtons {
-        self.sfx_table.list_buttons()
-    }
-
     fn list_edited(&mut self, action: &ListAction<SoundEffectInput>) {
         if let Ok(mut state) = self.state.try_borrow_mut() {
             state.list_edited(action);

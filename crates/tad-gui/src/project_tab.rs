@@ -6,7 +6,7 @@
 
 use crate::compiler_thread::{CadOutput, ShortSongError};
 use crate::list_editor::{
-    ListEditor, ListEditorTable, ListMessage, TableAction, TableCompilerOutput, TableMapping,
+    ListEditorTable, ListMessage, TableAction, TableCompilerOutput, TableMapping,
 };
 use crate::sfx_export_order::SfxExportOrderEditor;
 use crate::tables::{RowWithStatus, TableEvent, TableRow};
@@ -17,6 +17,7 @@ use crate::{helpers::*, ProjectData};
 use compiler::common_audio_data::CommonAudioData;
 use compiler::data::Name;
 use compiler::data::{self, DefaultSfxFlags};
+use compiler::driver_constants::MAX_N_SONGS;
 use compiler::path::SourcePathBuf;
 use compiler::songs::{song_duration_string, SongAramSize, SongData};
 
@@ -63,6 +64,8 @@ pub struct SongMapping;
 impl TableMapping for SongMapping {
     type DataType = data::Song;
     type RowType = RowWithStatus<SongRow>;
+
+    const MAX_SIZE: usize = MAX_N_SONGS;
 
     const CAN_CLONE: bool = false;
     const CAN_EDIT: bool = true;
@@ -207,10 +210,10 @@ impl ProjectTab {
 
         let mut right = Flex::default().column();
 
-        let mut song_table = ListEditorTable::new_with_data(&data.project_songs, sender);
+        let song_table = ListEditorTable::new_with_data(&data.project_songs, sender);
 
         let button_height = song_table.button_height();
-        right.fixed(&song_table.list_buttons().pack, button_height);
+        right.fixed(song_table.list_buttons_pack(), button_height);
 
         let mut sfx_file_flex = Flex::default().row();
         right.fixed(&sfx_file_flex, input_height(&sfx_file_flex));
