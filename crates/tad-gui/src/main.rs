@@ -406,6 +406,9 @@ impl Project {
                     .instruments_and_samples
                     .process1(m, &mut self.samples_tab);
 
+                self.samples_tab
+                    .instrument_list_edited(self.data.instruments());
+
                 self.mark_project_file_unsaved(a);
 
                 if let Some(c) = c {
@@ -417,6 +420,8 @@ impl Project {
                     .data
                     .instruments_and_samples
                     .process2(m, &mut self.samples_tab);
+
+                self.samples_tab.sample_list_edited(self.data.samples());
 
                 self.mark_project_file_unsaved(a);
 
@@ -454,6 +459,10 @@ impl Project {
                     let (a, c) = sfx_data
                         .sound_effects
                         .process(m, &mut self.sound_effects_tab);
+
+                    self.sound_effects_tab
+                        .sfx_list_edited(&sfx_data.sound_effects);
+
                     if let Some(c) = c {
                         let _ = self.compiler_sender.send(ToCompiler::SoundEffects(c));
                     }

@@ -8,7 +8,7 @@ use crate::audio_thread::Pan;
 use crate::compiler_thread::{ItemId, SfxError, SoundEffectOutput};
 use crate::list_editor::{
     CompilerOutputGui, LaVec, ListAction, ListEditor, ListEditorTable, ListMessage, ListState,
-    TableCompilerOutput, TableMapping,
+    ListWithCompilerOutput, TableCompilerOutput, TableMapping,
 };
 use crate::mml_editor::{CompiledEditorData, EditorBuffer, MmlEditor, TextErrorRef, TextFormat};
 use crate::tables::{RowWithStatus, SimpleRow};
@@ -143,6 +143,9 @@ pub struct State {
     interruptible_flag: SfxFlagRadios,
     editor: MmlEditor,
 
+    console: TextDisplay,
+    console_buffer: TextBuffer,
+
     error_lines: Option<SfxErrorLines>,
 }
 
@@ -168,8 +171,6 @@ pub struct SoundEffectsTab {
     sfx_group: Flex,
 
     name: Input,
-    console: TextDisplay,
-    console_buffer: TextBuffer,
 }
 
 impl Tab for SoundEffectsTab {
@@ -334,6 +335,9 @@ impl SoundEffectsTab {
             interruptible_flag,
             editor,
             error_lines: None,
+
+            console,
+            console_buffer,
         }));
 
         // Handle toolbar shortcut keys.
@@ -438,25 +442,25 @@ impl SoundEffectsTab {
                     }
                 }
             });
-        }
 
-        console.handle({
-            let s = state.clone();
-            move |widget, ev| {
-                if ev == Event::Released && app::event_clicks() {
-                    if let Some(mut buffer) = widget.buffer() {
-                        buffer.unselect();
+            s.console.handle({
+                let s = state.clone();
+                move |widget, ev| {
+                    if ev == Event::Released && app::event_clicks() {
+                        if let Some(mut buffer) = widget.buffer() {
+                            buffer.unselect();
 
-                        if let Ok(mut state) = s.try_borrow_mut() {
-                            let line = widget.count_lines(0, widget.insert_position(), false);
-                            let line = line.try_into().unwrap_or(0);
-                            state.error_line_clicked(line);
+                            if let Ok(mut state) = s.try_borrow_mut() {
+                                let line = widget.count_lines(0, widget.insert_position(), false);
+                                let line = line.try_into().unwrap_or(0);
+                                state.error_line_clicked(line);
+                            }
                         }
                     }
+                    false
                 }
-                false
-            }
-        });
+            });
+        }
 
         let mut s = Self {
             state,
@@ -475,9 +479,6 @@ impl SoundEffectsTab {
             main_group,
             sfx_group,
             name,
-
-            console,
-            console_buffer,
         };
         s.clear_selected();
         s
@@ -528,6 +529,17 @@ impl SoundEffectsTab {
     pub fn selected_tab_changed(&mut self, tab: Option<FileType>, pf_songs: &ProjectSongsData) {
         if let Ok(mut s) = self.state.try_borrow_mut() {
             s.song_choice.selected_tab_changed(tab, pf_songs);
+        }
+    }
+
+    pub fn sfx_list_edited(
+        &mut self,
+        sfx_list: &ListWithCompilerOutput<SoundEffectInput, SoundEffectOutput>,
+    ) {
+        if let Some(i) = sfx_list.selected() {
+            self.state
+                .borrow_mut()
+                .selected_compiler_output_changed(sfx_list.get_compiler_output(i));
         }
     }
 }
@@ -781,16 +793,8 @@ impl State {
             self.editor.move_cursor_to_line_end(editor_line);
         }
     }
-}
 
-impl CompilerOutputGui<SoundEffectOutput> for SoundEffectsTab {
-    fn set_compiler_output(&mut self, index: usize, compiler_output: &Option<SoundEffectOutput>) {
-        self.sfx_table.set_compiler_output(index, compiler_output);
-    }
-
-    fn set_selected_compiler_output(&mut self, compiler_output: &Option<SoundEffectOutput>) {
-        let mut state = self.state.borrow_mut();
-
+    fn selected_compiler_output_changed(&mut self, compiler_output: &Option<SoundEffectOutput>) {
         match compiler_output {
             None => self.console_buffer.set_text(""),
             Some(Ok(o)) => {
@@ -806,14 +810,13 @@ impl CompilerOutputGui<SoundEffectOutput> for SoundEffectsTab {
                     duration_ms % 1000,
                 ));
                 self.console.set_text_color(Color::Foreground);
-                state.error_lines = None;
+                self.error_lines = None;
 
-                state
-                    .editor
+                self.editor
                     .set_compiled_data(CompiledEditorData::SoundEffect(o.clone()));
             }
             Some(Err(e)) => {
-                state.editor.clear_compiled_data();
+                self.editor.clear_compiled_data();
 
                 let (error_lines, text) = match e {
                     SfxError::Error(e) => (
@@ -822,7 +825,7 @@ impl CompilerOutputGui<SoundEffectOutput> for SoundEffectsTab {
                     ),
                     SfxError::Dependency => (None, e.to_string()),
                 };
-                state.error_lines = error_lines;
+                self.error_lines = error_lines;
 
                 self.console_buffer.set_text(&text);
                 self.console.set_text_color(Color::Red);
@@ -833,7 +836,24 @@ impl CompilerOutputGui<SoundEffectOutput> for SoundEffectsTab {
             Some(Err(SfxError::Error(e))) => Some(TextErrorRef::SoundEffect(e)),
             _ => None,
         };
-        state.editor.highlight_errors(e);
+        self.editor.highlight_errors(e);
+    }
+}
+
+impl CompilerOutputGui<SoundEffectOutput> for SoundEffectsTab {
+    fn set_compiler_output(
+        &mut self,
+        index: usize,
+        id: ItemId,
+        compiler_output: &Option<SoundEffectOutput>,
+    ) {
+        self.sfx_table
+            .set_compiler_output(index, id, compiler_output);
+
+        let mut s = self.state.borrow_mut();
+        if s.selected_id == Some(id) {
+            s.selected_compiler_output_changed(compiler_output);
+        }
     }
 }
 

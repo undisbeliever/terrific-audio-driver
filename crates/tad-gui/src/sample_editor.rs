@@ -304,6 +304,10 @@ impl SampleEditor {
         self.set_data_update_widget(value);
     }
 
+    pub fn selected_id(&self) -> Option<ItemId> {
+        self.selected_id
+    }
+
     pub fn item_edited(&mut self, id: ItemId, value: &Sample) {
         if self.selected_id == Some(id) {
             self.set_data_update_widget(value);

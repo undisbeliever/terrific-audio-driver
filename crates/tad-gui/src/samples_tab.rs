@@ -8,7 +8,9 @@ use crate::compiler_thread::{
     CadOutput, CombineSamplesError, InstrumentOutput, ItemId, SampleOutput,
 };
 use crate::helpers::*;
-use crate::list_editor::{CompilerOutputGui, ListAction, ListEditor, ListEditorTable, ListState};
+use crate::list_editor::{
+    CompilerOutputGui, ListAction, ListEditor, ListEditorTable, ListState, ListWithCompilerOutput,
+};
 use crate::sample_sizes_widget::SampleSizesWidget;
 use crate::tabs::{FileType, Tab};
 use crate::GuiMessage;
@@ -273,6 +275,90 @@ impl SamplesTab {
             }
         }
     }
+
+    pub fn instrument_list_edited(
+        &mut self,
+        instruments: &ListWithCompilerOutput<data::Instrument, InstrumentOutput>,
+    ) {
+        if let Some(i) = instruments.selected() {
+            self.selected_instrument_output_changed(instruments.get_compiler_output(i));
+        }
+    }
+
+    fn selected_instrument_output_changed(&mut self, compiler_output: &Option<InstrumentOutput>) {
+        self.test_instrument_widget
+            .borrow_mut()
+            .set_active(matches!(compiler_output, Some(Ok(_))));
+
+        match compiler_output {
+            None => {
+                if self.selected_editor == EditorType::Instrument {
+                    self.console_buffer.set_text("")
+                }
+            }
+            Some(Ok(o)) => {
+                self.console_buffer
+                    .set_text(&format!("BRR Sample size: {} bytes", o.0));
+                self.console.set_text_color(Color::Foreground);
+            }
+            Some(Err(errors)) => {
+                let mut text = "ERROR:".to_owned();
+
+                if let Some(e) = &errors.brr_error {
+                    text += &format!("\n\t{}", e)
+                }
+                if let Some(e) = &errors.pitch_error {
+                    text += &format!("\n\t{}", e)
+                }
+
+                self.console_buffer.set_text(&text);
+                self.console.set_text_color(Color::Red);
+                self.console.scroll(0, 0);
+            }
+        }
+    }
+
+    pub fn sample_list_edited(
+        &mut self,
+        samples: &ListWithCompilerOutput<data::Sample, SampleOutput>,
+    ) {
+        if let Some(i) = samples.selected() {
+            self.selected_sample_output_changed(samples.get_compiler_output(i));
+        }
+    }
+
+    fn selected_sample_output_changed(&mut self, compiler_output: &Option<SampleOutput>) {
+        self.test_sample_widget
+            .borrow_mut()
+            .set_active(matches!(compiler_output, Some(Ok(_))));
+
+        match compiler_output {
+            None => {
+                if self.selected_editor == EditorType::Sample {
+                    self.console_buffer.set_text("")
+                }
+            }
+            Some(Ok(o)) => {
+                self.console_buffer
+                    .set_text(&format!("BRR Sample size: {} bytes", o.0));
+                self.console.set_text_color(Color::Foreground);
+            }
+            Some(Err(errors)) => {
+                let mut text = "ERROR:".to_owned();
+
+                if let Some(e) = &errors.brr_error {
+                    text += &format!("\n\t{}", e)
+                }
+                if let Some(e) = &errors.pitch_error {
+                    text += &format!("\n\t{}", e)
+                }
+
+                self.console_buffer.set_text(&text);
+                self.console.set_text_color(Color::Red);
+                self.console.scroll(0, 0);
+            }
+        }
+    }
 }
 
 impl ListEditor<Instrument> for SamplesTab {
@@ -310,43 +396,21 @@ impl ListEditor<Instrument> for SamplesTab {
 }
 
 impl CompilerOutputGui<InstrumentOutput> for SamplesTab {
-    fn set_compiler_output(&mut self, index: usize, compiler_output: &Option<InstrumentOutput>) {
-        self.inst_table.set_compiler_output(index, compiler_output);
+    fn set_compiler_output(
+        &mut self,
+        index: usize,
+        id: ItemId,
+        compiler_output: &Option<InstrumentOutput>,
+    ) {
+        self.inst_table
+            .set_compiler_output(index, id, compiler_output);
         self.sample_sizes_widget
             .borrow_mut()
             .instrument_compiled(index, compiler_output);
-    }
 
-    fn set_selected_compiler_output(&mut self, compiler_output: &Option<InstrumentOutput>) {
-        self.test_instrument_widget
-            .borrow_mut()
-            .set_active(matches!(compiler_output, Some(Ok(_))));
-
-        match compiler_output {
-            None => {
-                if self.selected_editor == EditorType::Instrument {
-                    self.console_buffer.set_text("")
-                }
-            }
-            Some(Ok(o)) => {
-                self.console_buffer
-                    .set_text(&format!("BRR Sample size: {} bytes", o.0));
-                self.console.set_text_color(Color::Foreground);
-            }
-            Some(Err(errors)) => {
-                let mut text = "ERROR:".to_owned();
-
-                if let Some(e) = &errors.brr_error {
-                    text += &format!("\n\t{}", e)
-                }
-                if let Some(e) = &errors.pitch_error {
-                    text += &format!("\n\t{}", e)
-                }
-
-                self.console_buffer.set_text(&text);
-                self.console.set_text_color(Color::Red);
-                self.console.scroll(0, 0);
-            }
+        let sel_id = self.instrument_editor.borrow().selected_id();
+        if sel_id == Some(id) {
+            self.selected_instrument_output_changed(compiler_output);
         }
     }
 }
@@ -387,44 +451,22 @@ impl ListEditor<data::Sample> for SamplesTab {
 }
 
 impl CompilerOutputGui<SampleOutput> for SamplesTab {
-    fn set_compiler_output(&mut self, index: usize, compiler_output: &Option<SampleOutput>) {
+    fn set_compiler_output(
+        &mut self,
+        index: usize,
+        id: ItemId,
+        compiler_output: &Option<SampleOutput>,
+    ) {
         self.sample_table
-            .set_compiler_output(index, compiler_output);
+            .set_compiler_output(index, id, compiler_output);
+
         self.sample_sizes_widget
             .borrow_mut()
             .sample_compiled(index, compiler_output);
-    }
 
-    fn set_selected_compiler_output(&mut self, compiler_output: &Option<SampleOutput>) {
-        self.test_sample_widget
-            .borrow_mut()
-            .set_active(matches!(compiler_output, Some(Ok(_))));
-
-        match compiler_output {
-            None => {
-                if self.selected_editor == EditorType::Sample {
-                    self.console_buffer.set_text("")
-                }
-            }
-            Some(Ok(o)) => {
-                self.console_buffer
-                    .set_text(&format!("BRR Sample size: {} bytes", o.0));
-                self.console.set_text_color(Color::Foreground);
-            }
-            Some(Err(errors)) => {
-                let mut text = "ERROR:".to_owned();
-
-                if let Some(e) = &errors.brr_error {
-                    text += &format!("\n\t{}", e)
-                }
-                if let Some(e) = &errors.pitch_error {
-                    text += &format!("\n\t{}", e)
-                }
-
-                self.console_buffer.set_text(&text);
-                self.console.set_text_color(Color::Red);
-                self.console.scroll(0, 0);
-            }
+        let selected_id = self.sample_editor.borrow().selected_id();
+        if selected_id == Some(id) {
+            self.selected_sample_output_changed(compiler_output);
         }
     }
 }

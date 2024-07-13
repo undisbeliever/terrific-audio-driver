@@ -53,8 +53,7 @@ pub trait ListEditor<T> {
 }
 
 pub trait CompilerOutputGui<T> {
-    fn set_compiler_output(&mut self, index: usize, compiler_output: &Option<T>);
-    fn set_selected_compiler_output(&mut self, compiler_output: &Option<T>);
+    fn set_compiler_output(&mut self, index: usize, id: ItemId, compiler_output: &Option<T>);
 }
 
 #[derive(Debug)]
@@ -276,11 +275,8 @@ where
         let co = Some(co);
 
         if let Some(index) = self.id_to_index(id) {
-            editor.set_compiler_output(index, &co);
+            editor.set_compiler_output(index, id, &co);
 
-            if self.selected == Some(index) {
-                editor.set_selected_compiler_output(&co);
-            }
             if let Some(co_item) = self.compiler_output.get_mut(index) {
                 *co_item = co;
             }
@@ -580,9 +576,6 @@ where
             Some((id, item)) => {
                 editor.set_selected(index, id, item);
                 self.selected = Some(index);
-
-                let co = self.compiler_output.get(index).unwrap_or(&None);
-                editor.set_selected_compiler_output(co);
             }
             None => {
                 self.clear_selection(editor);
@@ -596,7 +589,6 @@ where
     {
         self.selected = None;
         editor.clear_selected();
-        editor.set_selected_compiler_output(&None);
     }
 
     pub fn iter(&self) -> impl Iterator<Item = &(ItemId, T)> {
@@ -609,6 +601,13 @@ where
 
     pub fn get_with_id(&self, index: usize) -> Option<(ItemId, &T)> {
         self.list.get(index).map(|(id, item)| (*id, item))
+    }
+
+    pub fn get_compiler_output(&self, index: usize) -> &Option<O> {
+        match self.compiler_output.get(index) {
+            Some(o) => o,
+            _ => &None,
+        }
     }
 
     fn id_to_index(&self, id: ItemId) -> Option<usize> {
@@ -1234,11 +1233,10 @@ impl<T> CompilerOutputGui<T::CompilerOutputType> for ListEditorTable<T>
 where
     T: TableMapping + TableCompilerOutput + 'static,
 {
-    fn set_selected_compiler_output(&mut self, _: &Option<T::CompilerOutputType>) {}
-
     fn set_compiler_output(
         &mut self,
         index: usize,
+        _: ItemId,
         compiler_output: &Option<T::CompilerOutputType>,
     ) {
         self.table.borrow_mut().edit_row(index, |row| -> bool {
