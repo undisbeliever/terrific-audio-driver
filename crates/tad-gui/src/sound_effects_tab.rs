@@ -610,7 +610,14 @@ impl ListEditor<SoundEffectInput> for SoundEffectsTab {
         );
     }
 
-    fn item_edited(&mut self, _: ItemId, _: &SoundEffectInput) {}
+    fn item_edited(&mut self, id: ItemId, sfx: &SoundEffectInput) {
+        let mut s = self.state.borrow_mut();
+
+        if s.selected_id == Some(id) && s.old_name != sfx.name {
+            s.old_name = sfx.name.clone();
+            s.name.set_value(sfx.name.as_str());
+        }
+    }
 
     fn clear_selected(&mut self) {
         if let Ok(mut state) = self.state.try_borrow_mut() {
