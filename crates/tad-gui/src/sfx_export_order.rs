@@ -209,17 +209,14 @@ impl SfxExportOrderEditor {
         sender: Sender<GuiMessage>,
     ) -> Self {
         // ::TODO add a button to move SFX between low and high priorities::
-        let mut normal_priority =
+        let normal_priority =
             ListEditorTable::new_from_slice(sfx_export_order.normal_priority_sfx(), sender.clone());
-        let mut low_priority =
+        let low_priority =
             ListEditorTable::new_from_slice(sfx_export_order.low_priority_sfx(), sender.clone());
 
         let button_height = normal_priority.button_height();
         parent.fixed(normal_priority.list_buttons_pack(), button_height);
         parent.fixed(low_priority.list_buttons_pack(), button_height);
-
-        normal_priority.clear_selected();
-        low_priority.clear_selected();
 
         Self {
             normal_priority,
@@ -267,19 +264,6 @@ impl SfxExportOrderEditor {
             };
 
         match m {
-            ListMessage::ClearSelection => {
-                table.clear_selected();
-                None
-            }
-
-            ListMessage::ItemSelected(i) => {
-                match slice.get(i) {
-                    Some(_) => table.set_selected_row(i),
-                    None => table.clear_selected(),
-                }
-                None
-            }
-
             ListMessage::ItemEdited(index, new_name) => match slice.get(index) {
                 Some(name) if name != &new_name => {
                     let new_name = deduplicate_name(new_name, Some(index));
@@ -371,7 +355,7 @@ impl SfxExportOrderEditor {
     ) -> Option<SfxExportOrderAction> {
         let a = match m {
             SfxExportOrderMessage::NormalPriority(m) => {
-                self.low_priority.clear_selected();
+                self.low_priority.clear_selected_row();
 
                 let (action, size_delta) = Self::process_list_message(
                     m,
@@ -389,7 +373,7 @@ impl SfxExportOrderEditor {
                 }
             }
             SfxExportOrderMessage::LowPriority(m) => {
-                self.normal_priority.clear_selected();
+                self.normal_priority.clear_selected_row();
 
                 let (action, _size_delta) = Self::process_list_message(
                     m,

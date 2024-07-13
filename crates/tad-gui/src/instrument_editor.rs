@@ -79,6 +79,10 @@ impl TableMapping for InstrumentMapping {
     fn edit_row(r: &mut Self::RowType, i: &Instrument) -> bool {
         r.columns.edit_column(0, i.name.as_str())
     }
+
+    fn user_changes_selection() -> Option<GuiMessage> {
+        Some(GuiMessage::UserChangedSelectedInstrument)
+    }
 }
 
 impl TableCompilerOutput for InstrumentMapping {

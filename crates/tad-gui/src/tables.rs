@@ -284,6 +284,27 @@ where
         }
     }
 
+    /// Clears selection.  Always calls the `row_selected_callback`.
+    pub fn force_clear_selected(&mut self) {
+        if let Ok(mut s) = self.state.try_borrow_mut() {
+            s.sel_row = i32::MIN;
+            s.unset_selection(false);
+        }
+    }
+
+    /// Set selected row.
+    /// Will always call `row_selected_callback` and scroll to `row_index`.
+    pub fn force_set_selected(&mut self, row_index: usize) {
+        if let Ok(mut s) = self.state.try_borrow_mut() {
+            s.sel_row = i32::MIN;
+
+            match row_index.try_into() {
+                Ok(r) => s.set_sel_row(r, false),
+                Err(_) => s.unset_selection(false),
+            }
+        }
+    }
+
     pub fn edit_row(&mut self, index: usize, f: impl Fn(&mut T) -> bool) {
         let mut state = self.state.borrow_mut();
         if let Some(d) = state.data.get_mut(index) {

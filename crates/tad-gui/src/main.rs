@@ -121,11 +121,15 @@ pub enum GuiMessage {
     DefaultSfxFlagChanged(DefaultSfxFlags),
     EditSfxExportOrder(SfxExportOrderMessage),
     EditProjectSongs(ListMessage<data::Song>),
+
+    SelectProjectSong(usize),
+
     Instrument(ListMessage<data::Instrument>),
     Sample(ListMessage<data::Sample>),
-
     EditInstrument(ItemId, data::Instrument),
+    UserChangedSelectedInstrument,
     EditSample(ItemId, data::Sample),
+    UserChangedSelectedSample,
 
     NewMmlFile,
     OpenMmlFile,
@@ -141,6 +145,7 @@ pub enum GuiMessage {
 
     EditSoundEffectList(ListMessage<SoundEffectInput>),
     EditSoundEffect(ItemId, SoundEffectInput),
+    UserChangesSelectedSoundEffect,
     SfxFileHeaderChanged,
     AddMissingSoundEffects,
 
@@ -400,6 +405,10 @@ impl Project {
                     let _ = self.compiler_sender.send(ToCompiler::ProjectSongs(c));
                 }
             }
+            GuiMessage::SelectProjectSong(index) => {
+                self.project_tab.song_table.set_selected_row(index)
+            }
+
             GuiMessage::Instrument(m) => {
                 let (a, c) = self
                     .data
@@ -407,7 +416,7 @@ impl Project {
                     .process1(m, &mut self.samples_tab);
 
                 self.samples_tab
-                    .instrument_list_edited(self.data.instruments());
+                    .selected_instrument_changed(self.data.instruments());
 
                 self.mark_project_file_unsaved(a);
 
@@ -421,13 +430,22 @@ impl Project {
                     .instruments_and_samples
                     .process2(m, &mut self.samples_tab);
 
-                self.samples_tab.sample_list_edited(self.data.samples());
+                self.samples_tab
+                    .selected_sample_changed(self.data.samples());
 
                 self.mark_project_file_unsaved(a);
 
                 if let Some(c) = c {
                     let _ = self.compiler_sender.send(ToCompiler::Sample(c));
                 }
+            }
+            GuiMessage::UserChangedSelectedInstrument => {
+                self.samples_tab
+                    .selected_instrument_changed(self.data.instruments());
+            }
+            GuiMessage::UserChangedSelectedSample => {
+                self.samples_tab
+                    .selected_sample_changed(self.data.samples());
             }
             GuiMessage::EditInstrument(id, inst) => {
                 let (a, c) =
@@ -461,7 +479,7 @@ impl Project {
                         .process(m, &mut self.sound_effects_tab);
 
                     self.sound_effects_tab
-                        .sfx_list_edited(&sfx_data.sound_effects);
+                        .selected_sfx_changed(&sfx_data.sound_effects);
 
                     if let Some(c) = c {
                         let _ = self.compiler_sender.send(ToCompiler::SoundEffects(c));
@@ -484,6 +502,12 @@ impl Project {
                     if !a.is_none() {
                         self.tab_manager.mark_unsaved(FileType::SoundEffects);
                     }
+                }
+            }
+            GuiMessage::UserChangesSelectedSoundEffect => {
+                if let Some(sfx_data) = &self.sfx_data {
+                    self.sound_effects_tab
+                        .selected_sfx_changed(&sfx_data.sound_effects)
                 }
             }
             GuiMessage::SfxFileHeaderChanged => {
@@ -671,9 +695,6 @@ impl Project {
             }
 
             GuiMessage::ShowSampleSizes => {
-                self.data
-                    .instruments_and_samples
-                    .clear_selection(&mut self.samples_tab);
                 self.samples_tab.show_sample_sizes_widget();
             }
             GuiMessage::OpenInstrumentSampleDialog(id) => {

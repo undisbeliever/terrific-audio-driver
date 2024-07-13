@@ -108,6 +108,10 @@ impl TableMapping for SoundEffectMapping {
     fn edit_row(r: &mut Self::RowType, i: &SoundEffectInput) -> bool {
         r.columns.edit_column(0, i.name.as_str())
     }
+
+    fn user_changes_selection() -> Option<GuiMessage> {
+        Some(GuiMessage::UserChangesSelectedSoundEffect)
+    }
 }
 
 impl TableCompilerOutput for SoundEffectMapping {
@@ -480,7 +484,7 @@ impl SoundEffectsTab {
             sfx_group,
             name,
         };
-        s.clear_selected();
+        s.disable_editor();
         s
     }
 
@@ -492,7 +496,7 @@ impl SoundEffectsTab {
         let v: Vec<_> = (0..state.len()).map(|_| None).collect();
         assert!(v.len() == state.len());
 
-        self.clear_selected();
+        self.disable_editor();
         self.state.borrow_mut().editor.set_text(header);
 
         self.sfx_buffers = LaVec::from_vec(v);
@@ -532,14 +536,100 @@ impl SoundEffectsTab {
         }
     }
 
-    pub fn sfx_list_edited(
+    pub fn selected_sfx_changed(
         &mut self,
         sfx_list: &ListWithCompilerOutput<SoundEffectInput, SoundEffectOutput>,
     ) {
-        if let Some(i) = sfx_list.selected() {
-            self.state
-                .borrow_mut()
-                .selected_compiler_output_changed(sfx_list.get_compiler_output(i));
+        let sel = match self.sfx_table.selected_row() {
+            Some(i) => sfx_list.get_with_id(i).map(|(a, b)| (i, a, b)),
+            None => None,
+        };
+
+        match sel {
+            Some((index, id, sfx)) => {
+                if self.state.borrow().selected_id != Some(id) {
+                    let co = sfx_list.get_compiler_output(index);
+
+                    self.enable_editor(index, id, sfx, co);
+                }
+            }
+
+            None => {
+                if self.state.borrow().selected_id.is_some() {
+                    self.disable_editor();
+                }
+            }
+        }
+    }
+
+    fn disable_editor(&mut self) {
+        let mut state = self.state.borrow_mut();
+
+        state.commit_sfx();
+
+        state.selected_id = None;
+        state.name.set_value("Header (not a sound effect)");
+        state.sound_effect_type.set_value(-1);
+
+        state.one_channel_flag.clear_value();
+        state.interruptible_flag.clear_value();
+
+        state.editor.set_buffer(self.header_buffer.clone());
+
+        self.sfx_group.deactivate();
+    }
+
+    fn enable_editor(
+        &mut self,
+        index: usize,
+        id: ItemId,
+        sfx: &SoundEffectInput,
+        co: &Option<SoundEffectOutput>,
+    ) {
+        match self.sfx_buffers.get_mut(index) {
+            Some(sfx_buffer) => {
+                let mut state = self.state.borrow_mut();
+
+                state.commit_sfx();
+
+                state.selected_id = Some(id);
+                state.old_name = sfx.name.clone();
+                state.old_flags = sfx.flags.clone();
+
+                self.name.set_value(sfx.name.as_str());
+                self.name.clear_changed();
+
+                let type_choice = match &sfx.sfx {
+                    SoundEffectText::BytecodeAssembly(_) => SoundEffectTypeChoice::BytecodeAssembly,
+                    SoundEffectText::Mml(_) => SoundEffectTypeChoice::Mml,
+                };
+                state.sound_effect_type.set_value(type_choice.to_i32());
+
+                state.one_channel_flag.set_value(sfx.flags.one_channel);
+                state.interruptible_flag.set_value(sfx.flags.interruptible);
+
+                match sfx_buffer {
+                    Some(b) => state.editor.set_buffer(b.clone()),
+                    None => {
+                        let (text, format) = match &sfx.sfx {
+                            SoundEffectText::BytecodeAssembly(s) => (s, TextFormat::Bytecode),
+                            SoundEffectText::Mml(s) => (s, TextFormat::Mml),
+                        };
+
+                        let b = state.editor.new_buffer(text, format);
+                        *sfx_buffer = Some(b);
+                    }
+                }
+
+                state.selected_compiler_output_changed(co);
+
+                self.sfx_group.activate();
+                self.main_group.activate();
+            }
+            None => {
+                // Index is out of bounds
+                self.disable_editor();
+            }
         }
     }
 }
@@ -628,75 +718,6 @@ impl ListEditor<SoundEffectInput> for SoundEffectsTab {
         if s.selected_id == Some(id) && s.old_name != sfx.name {
             s.old_name = sfx.name.clone();
             s.name.set_value(sfx.name.as_str());
-        }
-    }
-
-    fn clear_selected(&mut self) {
-        if let Ok(mut state) = self.state.try_borrow_mut() {
-            state.commit_sfx();
-
-            state.selected_id = None;
-            state.name.set_value("Header (not a sound effect)");
-            state.sound_effect_type.set_value(-1);
-
-            state.one_channel_flag.clear_value();
-            state.interruptible_flag.clear_value();
-
-            state.editor.set_buffer(self.header_buffer.clone());
-        }
-
-        self.sfx_table.clear_selected();
-
-        self.sfx_group.deactivate();
-    }
-
-    fn set_selected(&mut self, index: usize, id: ItemId, sfx: &SoundEffectInput) {
-        if let Some(sfx_buffer) = self.sfx_buffers.get_mut(index) {
-            match self.state.try_borrow_mut() {
-                Ok(mut state) => {
-                    state.commit_sfx();
-
-                    state.selected_id = Some(id);
-                    state.old_name = sfx.name.clone();
-                    state.old_flags = sfx.flags.clone();
-
-                    self.name.set_value(sfx.name.as_str());
-                    self.name.clear_changed();
-
-                    let type_choice = match &sfx.sfx {
-                        SoundEffectText::BytecodeAssembly(_) => {
-                            SoundEffectTypeChoice::BytecodeAssembly
-                        }
-                        SoundEffectText::Mml(_) => SoundEffectTypeChoice::Mml,
-                    };
-                    state.sound_effect_type.set_value(type_choice.to_i32());
-
-                    state.one_channel_flag.set_value(sfx.flags.one_channel);
-                    state.interruptible_flag.set_value(sfx.flags.interruptible);
-
-                    match sfx_buffer {
-                        Some(b) => state.editor.set_buffer(b.clone()),
-                        None => {
-                            let (text, format) = match &sfx.sfx {
-                                SoundEffectText::BytecodeAssembly(s) => (s, TextFormat::Bytecode),
-                                SoundEffectText::Mml(s) => (s, TextFormat::Mml),
-                            };
-
-                            let b = state.editor.new_buffer(text, format);
-                            *sfx_buffer = Some(b);
-                        }
-                    }
-
-                    self.sfx_table.set_selected(index, id, sfx);
-
-                    self.sfx_group.activate();
-                    self.main_group.activate();
-                }
-                // This should not happen
-                Err(_) => self.main_group.deactivate(),
-            }
-        } else {
-            self.clear_selected();
         }
     }
 }

@@ -509,7 +509,9 @@ pub fn add_song_to_pf_dialog(
             .item_iter()
             .position(|s| s.source == p.source_path)
         {
-            Some(i) => sender.send(GuiMessage::EditProjectSongs(ListMessage::ItemSelected(i))),
+            Some(i) => {
+                sender.send(GuiMessage::SelectProjectSong(i));
+            }
             None => match tab_manager.find_file(&p.full_path) {
                 Some(FileType::Song(id)) => {
                     // The MML file is already open

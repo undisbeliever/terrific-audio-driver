@@ -77,6 +77,10 @@ impl TableMapping for SampleMapping {
     fn edit_row(r: &mut Self::RowType, i: &data::Sample) -> bool {
         r.columns.edit_column(0, i.name.as_str())
     }
+
+    fn user_changes_selection() -> Option<GuiMessage> {
+        Some(GuiMessage::UserChangedSelectedSample)
+    }
 }
 
 impl TableCompilerOutput for SampleMapping {

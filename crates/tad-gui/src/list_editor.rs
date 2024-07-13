@@ -23,9 +23,6 @@ use std::rc::Rc;
 // (to prevent a potential infinite `ListMessage::ItemSelected` loop)
 #[derive(Debug)]
 pub enum ListMessage<T> {
-    ClearSelection,
-    ItemSelected(usize),
-
     // The `SelectedItemEdited` message has been removed because clicking on a TrTable list item
     // will cause the `ItemSelected` message to be sent before the `SelectedItemEdited` event.
     ItemEdited(usize, T),
@@ -45,11 +42,7 @@ pub enum ListMessage<T> {
 
 pub trait ListEditor<T> {
     fn list_edited(&mut self, action: &ListAction<T>);
-
     fn item_edited(&mut self, id: ItemId, value: &T);
-
-    fn clear_selected(&mut self);
-    fn set_selected(&mut self, index: usize, id: ItemId, value: &T);
 }
 
 pub trait CompilerOutputGui<T> {
@@ -175,7 +168,6 @@ where
 {
     type Item;
 
-    fn selected(&self) -> Option<usize>;
     fn len(&self) -> usize;
     fn can_add(&self) -> bool;
     fn can_add_multiple(&self, count: usize) -> bool;
@@ -201,7 +193,6 @@ where
     list: LaVec<(ItemId, T)>,
     compiler_output: Vec<Option<O>>,
     error_set: HashSet<ItemId>,
-    selected: Option<usize>,
 }
 
 impl<T, O> ListState for ListWithCompilerOutput<T, O>
@@ -213,10 +204,6 @@ where
 
     fn len(&self) -> usize {
         self.list.len()
-    }
-
-    fn selected(&self) -> Option<usize> {
-        self.selected
     }
 
     fn can_add(&self) -> bool {
@@ -253,7 +240,6 @@ where
             list,
             compiler_output,
             error_set: HashSet::new(),
-            selected: None,
         }
     }
 
@@ -303,15 +289,6 @@ where
         };
 
         let (action, c) = match m {
-            ListMessage::ClearSelection => {
-                self.clear_selection(editor);
-                (ListAction::None, None)
-            }
-            ListMessage::ItemSelected(index) => {
-                self.set_selected(index, editor);
-                (ListAction::None, None)
-            }
-
             ListMessage::ItemEdited(index, mut new_value) => {
                 if let Some((id, item)) = self.list.get(index) {
                     if *item != new_value {
@@ -489,37 +466,18 @@ where
         );
 
         editor.list_edited(&action);
-        match &action {
-            ListAction::None => (),
 
-            ListAction::Add(index, _) => {
-                self.set_selected(*index, editor);
+        if let ListAction::Edit(index, _) = &action {
+            if let Some(co) = self.compiler_output.get_mut(*index) {
+                // Clear stored compiler output when an item is edited
+                *co = None;
             }
-            ListAction::AddMultiple(index, _) => {
-                self.set_selected(*index, editor);
-            }
-            ListAction::Remove(index) => {
-                if self.selected == Some(*index) {
-                    self.clear_selection(editor);
-                }
-            }
-            ListAction::Move(from, to) => {
-                if self.selected == Some(*from) {
-                    self.set_selected(*to, editor);
-                }
-            }
-            ListAction::Edit(index, _) => {
-                if let Some(co) = self.compiler_output.get_mut(*index) {
-                    // Clear stored compiler output when an item is edited
-                    *co = None;
-                }
 
-                // `editor.set_compiler_output` and `editor.set_selected_compiler_output`
-                // are not called here to prevent an annoying flash in tables and the Sound Effect console.
+            // `editor.set_compiler_output` and `editor.set_selected_compiler_output`
+            // are not called here to prevent an annoying flash in tables and the Sound Effect console.
 
-                if let Some((id, value)) = self.list.get(*index) {
-                    editor.item_edited(*id, value);
-                }
+            if let Some((id, value)) = self.list.get(*index) {
+                editor.item_edited(*id, value);
             }
         }
 
@@ -566,29 +524,6 @@ where
         } else {
             (ListAction::None, None)
         }
-    }
-
-    fn set_selected<Editor>(&mut self, index: usize, editor: &mut Editor)
-    where
-        Editor: ListEditor<T> + CompilerOutputGui<O>,
-    {
-        match self.get_with_id(index) {
-            Some((id, item)) => {
-                editor.set_selected(index, id, item);
-                self.selected = Some(index);
-            }
-            None => {
-                self.clear_selection(editor);
-            }
-        };
-    }
-
-    fn clear_selection<Editor>(&mut self, editor: &mut Editor)
-    where
-        Editor: ListEditor<T> + CompilerOutputGui<O>,
-    {
-        self.selected = None;
-        editor.clear_selected();
     }
 
     pub fn iter(&self) -> impl Iterator<Item = &(ItemId, T)> {
@@ -671,49 +606,20 @@ where
         ListMessage::AddMultiple(vec) => can_add(vec.len()),
         ListMessage::Clone(..) => can_add(1),
 
-        ListMessage::ClearSelection
-        | ListMessage::ItemSelected(..)
-        | ListMessage::ItemEdited(..)
+        ListMessage::ItemEdited(..)
         | ListMessage::Remove(..)
         | ListMessage::MoveToTop(..)
         | ListMessage::MoveUp(..)
         | ListMessage::MoveDown(..)
         | ListMessage::MoveToBottom(..) => true,
     };
-    if !can_do_message {
-        return (ListAction::None, None);
+
+    if can_do_message {
+        // ::TODO deduplicate name::
+        list1.process(m, editor)
+    } else {
+        (ListAction::None, None)
     }
-
-    let clear_list2_selection = match &m {
-        // Not changing list2 selection when a list1 item is unselected
-        ListMessage::ClearSelection => false,
-
-        // Not changing list2 selection for ItemEdited as it could have been
-        // sent because the user selected a list2 item.
-        ListMessage::ItemEdited(..) => false,
-
-        ListMessage::Add(..)
-        | ListMessage::AddWithItemId(..)
-        | ListMessage::AddMultiple(_)
-        | ListMessage::Clone(_)
-        | ListMessage::ItemSelected(_)
-        | ListMessage::Remove(_)
-        | ListMessage::MoveToTop(_)
-        | ListMessage::MoveUp(_)
-        | ListMessage::MoveDown(_)
-        | ListMessage::MoveToBottom(_) => true,
-    };
-
-    // ::TODO deduplicate name::
-
-    let out = list1.process(m, editor);
-
-    // Must clear list2 **after** list1 is processed to prevent a flash in the Samples Tab.
-    // (The flash was caused by the GUI disabling the widgets, then switching editors on the next frame)
-    if clear_list2_selection {
-        list2.clear_selection(editor);
-    }
-    out
 }
 
 impl<T1, O1, T2, O2> ListPairWithCompilerOutputs<T1, O1, T2, O2>
@@ -739,18 +645,6 @@ where
     }
     pub fn list2(&self) -> &ListWithCompilerOutput<T2, O2> {
         &self.list2
-    }
-
-    pub fn clear_selection<Editor>(&mut self, editor: &mut Editor)
-    where
-        Editor: ListEditor<T1> + CompilerOutputGui<O1> + ListEditor<T2> + CompilerOutputGui<O2>,
-    {
-        if self.list1.selected().is_some() {
-            self.list1.clear_selection(editor);
-        }
-        if self.list2.selected().is_some() {
-            self.list2.clear_selection(editor);
-        }
     }
 
     #[must_use]
@@ -983,6 +877,10 @@ where
         let _ = (index, col, value);
         None
     }
+
+    fn user_changes_selection() -> Option<GuiMessage> {
+        None
+    }
 }
 
 pub trait TableCompilerOutput
@@ -1022,17 +920,14 @@ where
         let mut lb = list_buttons.borrow_mut();
 
         t.set_selection_changed_callback({
-            let sender = sender.clone();
+            let s = sender.clone();
             let list_buttons = list_buttons.clone();
             move |selected, n_rows, user_selection| {
-                let mut lb = list_buttons.borrow_mut();
-
-                lb.update_buttons(selected, n_rows);
+                list_buttons.borrow_mut().update_buttons(selected, n_rows);
 
                 if user_selection {
-                    match selected {
-                        Some(i) => sender.send(T::to_message(ListMessage::ItemSelected(i))),
-                        None => sender.send(T::to_message(ListMessage::ClearSelection)),
+                    if let Some(m) = T::user_changes_selection() {
+                        s.send(m)
                     }
                 }
             }
@@ -1167,11 +1062,7 @@ where
         t.edit_table(|v| {
             *v = state.item_iter().map(T::new_row).collect();
         });
-
-        match state.selected() {
-            Some(i) => t.set_selected(i),
-            None => t.clear_selected(),
-        }
+        t.clear_selected();
 
         Self::update_list_buttons(&mut lb, &t);
     }
@@ -1188,8 +1079,16 @@ where
         &self.list_buttons_pack
     }
 
+    pub fn selected_row(&self) -> Option<usize> {
+        self.table.borrow().selected_row()
+    }
+
     pub fn set_selected_row(&mut self, index: usize) {
         self.table.borrow_mut().set_selected(index);
+    }
+
+    pub fn clear_selected_row(&mut self) {
+        self.table.borrow_mut().clear_selected();
     }
 
     pub fn open_editor(&mut self, index: usize, col: i32) {
@@ -1200,33 +1099,44 @@ where
 impl<T> ListEditor<T::DataType> for ListEditorTable<T>
 where
     T: TableMapping + 'static,
-    T::DataType: Clone,
+    T::DataType: NameDeduplicator + Clone,
 {
     fn list_edited(&mut self, action: &ListAction<T::DataType>) {
+        let mut table = self.table.borrow_mut();
+
         match action {
             ListAction::None => (),
             ListAction::Edit(index, value) => {
-                self.table
-                    .borrow_mut()
-                    .edit_row(*index, |d| -> bool { T::edit_row(d, value) });
+                table.edit_row(*index, |d| -> bool { T::edit_row(d, value) });
             }
-            a => self.table.borrow_mut().edit_table(|table_vec| {
-                process_list_action_map(table_vec, a, T::new_row, |row, new_value| {
-                    T::edit_row(row, new_value);
+            a => table.edit_table(|table_vec| {
+                process_list_action_map(table_vec, a, T::new_row, {
+                    |row, new_value| {
+                        T::edit_row(row, new_value);
+                    }
                 })
             }),
+        }
+
+        match action {
+            ListAction::None => (),
+            ListAction::Edit(..) => (),
+            ListAction::Add(index, _) => table.force_set_selected(*index),
+            ListAction::AddMultiple(..) => table.force_clear_selected(),
+            ListAction::Remove(index) => {
+                if table.selected_row() == Some(*index) {
+                    table.force_clear_selected();
+                }
+            }
+            ListAction::Move(from, to) => {
+                if table.selected_row() == Some(*from) {
+                    table.force_set_selected(*to);
+                }
+            }
         }
     }
 
     fn item_edited(&mut self, _: ItemId, _: &T::DataType) {}
-
-    fn clear_selected(&mut self) {
-        self.table.borrow_mut().clear_selected();
-    }
-
-    fn set_selected(&mut self, index: usize, _: ItemId, _: &T::DataType) {
-        self.table.borrow_mut().set_selected(index);
-    }
 }
 
 impl<T> CompilerOutputGui<T::CompilerOutputType> for ListEditorTable<T>

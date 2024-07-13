@@ -33,16 +33,16 @@ use fltk::prelude::*;
 use fltk::text::{TextBuffer, TextDisplay, WrapMode};
 
 #[derive(PartialEq)]
-enum EditorType {
+enum SelectedEditor {
     CombinedSamplesResult,
-    Instrument,
-    Sample,
+    Instrument(ItemId),
+    Sample(ItemId),
 }
 
 pub struct SamplesTab {
     group: Flex,
 
-    selected_editor: EditorType,
+    selected_editor: SelectedEditor,
     cad_output: CadOutput,
 
     sample_sizes_button: Button,
@@ -173,7 +173,7 @@ impl SamplesTab {
 
         Self {
             group,
-            selected_editor: EditorType::CombinedSamplesResult,
+            selected_editor: SelectedEditor::CombinedSamplesResult,
             cad_output: CadOutput::None,
             sample_sizes_button,
             sample_sizes_group,
@@ -232,16 +232,16 @@ impl SamplesTab {
             }
         }
 
-        if matches!(self.selected_editor, EditorType::CombinedSamplesResult) {
+        if matches!(self.selected_editor, SelectedEditor::CombinedSamplesResult) {
             self.sample_sizes_widget
                 .borrow_mut()
                 .cad_changed(&self.cad_output);
         }
 
         match &self.selected_editor {
-            EditorType::CombinedSamplesResult => self.update_sample_sizes_widget_and_console(),
-            EditorType::Instrument => (),
-            EditorType::Sample => (),
+            SelectedEditor::CombinedSamplesResult => self.update_sample_sizes_widget_and_console(),
+            SelectedEditor::Instrument(_) => (),
+            SelectedEditor::Sample(_) => (),
         }
     }
 
@@ -250,8 +250,14 @@ impl SamplesTab {
     }
 
     pub fn show_sample_sizes_widget(&mut self) {
-        if !matches!(self.selected_editor, EditorType::CombinedSamplesResult) {
-            self.selected_editor = EditorType::CombinedSamplesResult;
+        self.inst_table.clear_selected_row();
+        self.sample_table.clear_selected_row();
+
+        self.sample_editor.borrow_mut().disable_editor();
+        self.test_sample_widget.borrow_mut().clear_selected();
+
+        if !matches!(self.selected_editor, SelectedEditor::CombinedSamplesResult) {
+            self.selected_editor = SelectedEditor::CombinedSamplesResult;
             self.editor_wizard
                 .set_current_widget(&self.sample_sizes_group);
 
@@ -276,12 +282,70 @@ impl SamplesTab {
         }
     }
 
-    pub fn instrument_list_edited(
+    pub fn selected_instrument_changed(
         &mut self,
         instruments: &ListWithCompilerOutput<data::Instrument, InstrumentOutput>,
     ) {
-        if let Some(i) = instruments.selected() {
-            self.selected_instrument_output_changed(instruments.get_compiler_output(i));
+        let sel = match self.inst_table.selected_row() {
+            Some(i) => instruments.get_with_id(i).map(|(a, b)| (i, a, b)),
+            None => None,
+        };
+
+        match sel {
+            Some((index, id, inst)) => {
+                self.sample_table.clear_selected_row();
+
+                if self.selected_editor != SelectedEditor::Instrument(id) {
+                    self.selected_editor = SelectedEditor::Instrument(id);
+
+                    self.instrument_editor.borrow_mut().set_selected(id, inst);
+                    self.test_instrument_widget.borrow_mut().set_selected(id);
+
+                    self.editor_wizard
+                        .set_current_widget(&self.instrument_group);
+
+                    self.selected_instrument_output_changed(instruments.get_compiler_output(index));
+                }
+            }
+            None => {
+                if matches!(self.selected_editor, SelectedEditor::Instrument(_)) {
+                    self.show_sample_sizes_widget();
+                }
+            }
+        }
+    }
+
+    pub fn selected_sample_changed(
+        &mut self,
+        samples: &ListWithCompilerOutput<data::Sample, SampleOutput>,
+    ) {
+        let sel = match self.sample_table.selected_row() {
+            Some(i) => samples.get_with_id(i).map(|(a, b)| (i, a, b)),
+            None => None,
+        };
+
+        match sel {
+            Some((index, id, sample)) => {
+                self.inst_table.clear_selected_row();
+
+                if self.selected_editor != SelectedEditor::Sample(id) {
+                    self.selected_editor = SelectedEditor::Sample(id);
+
+                    self.sample_editor.borrow_mut().set_selected(id, sample);
+                    self.test_sample_widget
+                        .borrow_mut()
+                        .set_selected(index, id, sample);
+
+                    self.editor_wizard.set_current_widget(&self.sample_group);
+
+                    self.selected_sample_output_changed(samples.get_compiler_output(index));
+                }
+            }
+            None => {
+                if matches!(self.selected_editor, SelectedEditor::Sample(_)) {
+                    self.show_sample_sizes_widget();
+                }
+            }
         }
     }
 
@@ -292,9 +356,7 @@ impl SamplesTab {
 
         match compiler_output {
             None => {
-                if self.selected_editor == EditorType::Instrument {
-                    self.console_buffer.set_text("")
-                }
+                self.console_buffer.set_text("");
             }
             Some(Ok(o)) => {
                 self.console_buffer
@@ -318,15 +380,6 @@ impl SamplesTab {
         }
     }
 
-    pub fn sample_list_edited(
-        &mut self,
-        samples: &ListWithCompilerOutput<data::Sample, SampleOutput>,
-    ) {
-        if let Some(i) = samples.selected() {
-            self.selected_sample_output_changed(samples.get_compiler_output(i));
-        }
-    }
-
     fn selected_sample_output_changed(&mut self, compiler_output: &Option<SampleOutput>) {
         self.test_sample_widget
             .borrow_mut()
@@ -334,9 +387,7 @@ impl SamplesTab {
 
         match compiler_output {
             None => {
-                if self.selected_editor == EditorType::Sample {
-                    self.console_buffer.set_text("")
-                }
+                self.console_buffer.set_text("");
             }
             Some(Ok(o)) => {
                 self.console_buffer
@@ -372,27 +423,6 @@ impl ListEditor<Instrument> for SamplesTab {
     fn item_edited(&mut self, id: ItemId, value: &Instrument) {
         self.instrument_editor.borrow_mut().item_edited(id, value)
     }
-
-    fn clear_selected(&mut self) {
-        self.inst_table.clear_selected();
-        self.instrument_editor.borrow_mut().disable_editor();
-        self.test_instrument_widget.borrow_mut().clear_selected();
-
-        if matches!(self.selected_editor, EditorType::Instrument) {
-            self.show_sample_sizes_widget();
-        }
-    }
-
-    fn set_selected(&mut self, index: usize, id: ItemId, inst: &Instrument) {
-        self.editor_wizard
-            .set_current_widget(&self.instrument_group);
-
-        self.selected_editor = EditorType::Instrument;
-
-        self.inst_table.set_selected(index, id, inst);
-        self.instrument_editor.borrow_mut().set_selected(id, inst);
-        self.test_instrument_widget.borrow_mut().set_selected(id);
-    }
 }
 
 impl CompilerOutputGui<InstrumentOutput> for SamplesTab {
@@ -424,29 +454,6 @@ impl ListEditor<data::Sample> for SamplesTab {
 
     fn item_edited(&mut self, id: ItemId, value: &data::Sample) {
         self.sample_editor.borrow_mut().item_edited(id, value);
-    }
-
-    fn clear_selected(&mut self) {
-        self.sample_table.clear_selected();
-
-        self.sample_editor.borrow_mut().disable_editor();
-        self.test_sample_widget.borrow_mut().clear_selected();
-
-        if matches!(self.selected_editor, EditorType::Sample) {
-            self.show_sample_sizes_widget();
-        }
-    }
-
-    fn set_selected(&mut self, index: usize, id: ItemId, sample: &data::Sample) {
-        self.editor_wizard.set_current_widget(&self.sample_group);
-
-        self.selected_editor = EditorType::Sample;
-
-        self.sample_table.set_selected(index, id, sample);
-        self.sample_editor.borrow_mut().set_selected(id, sample);
-        self.test_sample_widget
-            .borrow_mut()
-            .set_selected(index, id, sample);
     }
 }
 
