@@ -538,13 +538,6 @@ where
         self.list.get(index).map(|(id, item)| (*id, item))
     }
 
-    pub fn get_compiler_output(&self, index: usize) -> &Option<O> {
-        match self.compiler_output.get(index) {
-            Some(o) => o,
-            _ => &None,
-        }
-    }
-
     fn id_to_index(&self, id: ItemId) -> Option<usize> {
         self.list.iter().position(|i| i.0 == id)
     }
@@ -559,6 +552,21 @@ where
             .enumerate()
             .find(|(_, i)| i.0 == id)
             .map(|(id, i)| (id, &i.1))
+    }
+
+    // Assumes `table` is in sync with `self`.
+    pub fn get_selected_row<M>(
+        &self,
+        table: &ListEditorTable<M>,
+    ) -> Option<(ItemId, &T, &Option<O>)>
+    where
+        M: TableMapping<DataType = T>,
+    {
+        let i = table.selected_row()?;
+        let item = self.list.get(i)?;
+        let co = self.compiler_output.get(i)?;
+
+        Some((item.0, &item.1, co))
     }
 
     #[must_use]

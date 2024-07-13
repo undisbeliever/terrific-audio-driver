@@ -286,13 +286,8 @@ impl SamplesTab {
         &mut self,
         instruments: &ListWithCompilerOutput<data::Instrument, InstrumentOutput>,
     ) {
-        let sel = match self.inst_table.selected_row() {
-            Some(i) => instruments.get_with_id(i).map(|(a, b)| (i, a, b)),
-            None => None,
-        };
-
-        match sel {
-            Some((index, id, inst)) => {
+        match instruments.get_selected_row(&self.inst_table) {
+            Some((id, inst, co)) => {
                 self.sample_table.clear_selected_row();
 
                 if self.selected_editor != SelectedEditor::Instrument(id) {
@@ -304,7 +299,7 @@ impl SamplesTab {
                     self.editor_wizard
                         .set_current_widget(&self.instrument_group);
 
-                    self.selected_instrument_output_changed(instruments.get_compiler_output(index));
+                    self.selected_instrument_output_changed(co);
                 }
             }
             None => {
@@ -319,13 +314,8 @@ impl SamplesTab {
         &mut self,
         samples: &ListWithCompilerOutput<data::Sample, SampleOutput>,
     ) {
-        let sel = match self.sample_table.selected_row() {
-            Some(i) => samples.get_with_id(i).map(|(a, b)| (i, a, b)),
-            None => None,
-        };
-
-        match sel {
-            Some((index, id, sample)) => {
+        match samples.get_selected_row(&self.sample_table) {
+            Some((id, sample, co)) => {
                 self.inst_table.clear_selected_row();
 
                 if self.selected_editor != SelectedEditor::Sample(id) {
@@ -338,7 +328,7 @@ impl SamplesTab {
 
                     self.editor_wizard.set_current_widget(&self.sample_group);
 
-                    self.selected_sample_output_changed(samples.get_compiler_output(index));
+                    self.selected_sample_output_changed(co);
                 }
             }
             None => {

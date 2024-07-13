@@ -539,16 +539,9 @@ impl SoundEffectsTab {
         &mut self,
         sfx_list: &ListWithCompilerOutput<SoundEffectInput, SoundEffectOutput>,
     ) {
-        let sel = match self.sfx_table.selected_row() {
-            Some(i) => sfx_list.get_with_id(i).map(|(a, b)| (i, a, b)),
-            None => None,
-        };
-
-        match sel {
-            Some((index, id, sfx)) => {
+        match sfx_list.get_selected_row(&self.sfx_table) {
+            Some((id, sfx, co)) => {
                 if self.state.borrow().selected_id != Some(id) {
-                    let co = sfx_list.get_compiler_output(index);
-
                     self.enable_editor(id, sfx, co);
                 }
             }
