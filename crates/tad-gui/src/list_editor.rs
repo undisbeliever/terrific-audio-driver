@@ -7,9 +7,10 @@
 use crate::compiler_thread::{self, ItemChanged, ItemId};
 use crate::helpers::{ch_units_to_width, SetActive};
 use crate::names::{DeduplicatedNameVec, NameDeduplicator};
-use crate::tables;
 use crate::GuiMessage;
+use crate::{sfx_export_order, tables};
 
+use compiler::data::Name;
 use fltk::button::Button;
 use fltk::group::{Pack, PackType};
 use fltk::prelude::{GroupExt, WidgetExt};
@@ -38,15 +39,6 @@ pub enum ListMessage<T> {
 
     // Only adds the item if the list does not contain ItemId.
     AddWithItemId(ItemId, T),
-}
-
-pub trait ListEditor<T> {
-    fn list_edited(&mut self, action: &ListAction<T>);
-    fn item_edited(&mut self, id: ItemId, value: &T);
-}
-
-pub trait CompilerOutputGui<T> {
-    fn set_compiler_output(&mut self, index: usize, id: ItemId, compiler_output: &Option<T>);
 }
 
 #[derive(Debug)]
@@ -195,6 +187,25 @@ where
     error_set: HashSet<ItemId>,
 }
 
+pub trait ListWithCompilerOutputEditor<T, O>
+where
+    T: Clone + PartialEq<T> + NameDeduplicator,
+    O: CompilerOutput,
+    Self::TableMapping:
+        TableMapping<DataType = T> + TableCompilerOutput<CompilerOutputType = O> + 'static,
+{
+    type TableMapping;
+
+    fn table_mut(&mut self) -> &mut ListEditorTable<Self::TableMapping>;
+
+    // Called by ListWithCompilerOutput when the list's size or item order changes.
+    fn selected_item_changed(&mut self, _list: &ListWithCompilerOutput<T, O>) {}
+
+    fn list_edited(&mut self, _action: &ListAction<T>) {}
+    fn item_edited(&mut self, _id: ItemId, _value: &T) {}
+    fn set_compiler_output(&mut self, _index: usize, _id: ItemId, _compiler_output: &Option<O>) {}
+}
+
 impl<T, O> ListState for ListWithCompilerOutput<T, O>
 where
     T: Clone + PartialEq<T> + NameDeduplicator,
@@ -251,7 +262,7 @@ where
         &mut self,
         id: ItemId,
         co: O,
-        editor: &mut impl CompilerOutputGui<O>,
+        editor: &mut impl ListWithCompilerOutputEditor<T, O>,
     ) {
         match co.is_valid() {
             true => self.error_set.remove(&id),
@@ -261,6 +272,7 @@ where
         let co = Some(co);
 
         if let Some(index) = self.id_to_index(id) {
+            editor.table_mut().set_compiler_output(index, &co);
             editor.set_compiler_output(index, id, &co);
 
             if let Some(co_item) = self.compiler_output.get_mut(index) {
@@ -270,14 +282,11 @@ where
     }
 
     #[must_use]
-    pub fn process<Editor>(
+    pub fn process(
         &mut self,
         m: ListMessage<T>,
-        editor: &mut Editor,
-    ) -> (ListAction<T>, Option<ItemChanged<T>>)
-    where
-        Editor: ListEditor<T> + CompilerOutputGui<O>,
-    {
+        editor: &mut impl ListWithCompilerOutputEditor<T, O>,
+    ) -> (ListAction<T>, Option<ItemChanged<T>>) {
         let update_list = |list: &mut LaVec<(ItemId, T)>, a: &ListAction<T>| {
             list.process_map(
                 a,
@@ -465,19 +474,32 @@ where
             |e, _| *e = None,
         );
 
+        editor.table_mut().list_edited(&action);
         editor.list_edited(&action);
 
-        if let ListAction::Edit(index, _) = &action {
-            if let Some(co) = self.compiler_output.get_mut(*index) {
-                // Clear stored compiler output when an item is edited
-                *co = None;
+        match &action {
+            ListAction::None => (),
+
+            ListAction::Edit(index, _) => {
+                if let Some(co) = self.compiler_output.get_mut(*index) {
+                    // Clear stored compiler output when an item is edited
+                    *co = None;
+                }
+
+                // The compiler output is not changed in this method to prevent
+                // an annoying flash in tables and the Sound Effect console.
+
+                if let Some((id, value)) = self.list.get(*index) {
+                    editor.item_edited(*id, value);
+                }
             }
 
-            // `editor.set_compiler_output` and `editor.set_selected_compiler_output`
-            // are not called here to prevent an annoying flash in tables and the Sound Effect console.
-
-            if let Some((id, value)) = self.list.get(*index) {
-                editor.item_edited(*id, value);
+            // Action has modified the table size of order.
+            ListAction::Add(..)
+            | ListAction::AddMultiple(..)
+            | ListAction::Remove(..)
+            | ListAction::Move(..) => {
+                editor.selected_item_changed(self);
             }
         }
 
@@ -485,15 +507,12 @@ where
     }
 
     #[must_use]
-    pub fn edit_item<Editor>(
+    pub fn edit_item(
         &mut self,
         id: ItemId,
         new_value: T,
-        editor: &mut Editor,
-    ) -> (ListAction<T>, Option<ItemChanged<T>>)
-    where
-        Editor: ListEditor<T> + CompilerOutputGui<O>,
-    {
+        editor: &mut impl ListWithCompilerOutputEditor<T, O>,
+    ) -> (ListAction<T>, Option<ItemChanged<T>>) {
         if let Some((index, item)) = self.get_id(id) {
             let mut new_value = new_value;
 
@@ -512,6 +531,7 @@ where
                     |e, v: &T| e.1 = v.clone(),
                 );
 
+                editor.table_mut().list_edited(&action);
                 editor.list_edited(&action);
                 editor.item_edited(id, &new_value);
 
@@ -598,7 +618,7 @@ where
     O1: CompilerOutput,
     T2: Clone + PartialEq<T2> + NameDeduplicator + std::fmt::Debug,
     O2: CompilerOutput,
-    Editor: ListEditor<T1> + CompilerOutputGui<O1> + ListEditor<T2> + CompilerOutputGui<O2>,
+    Editor: ListWithCompilerOutputEditor<T1, O1> + ListWithCompilerOutputEditor<T2, O2>,
 {
     let can_add = |count: usize| -> bool {
         debug_assert!(list1.max_size == list2.max_size);
@@ -662,7 +682,7 @@ where
         editor: &mut Editor,
     ) -> (ListAction<T1>, Option<ItemChanged<T1>>)
     where
-        Editor: ListEditor<T1> + CompilerOutputGui<O1> + ListEditor<T2> + CompilerOutputGui<O2>,
+        Editor: ListWithCompilerOutputEditor<T1, O1> + ListWithCompilerOutputEditor<T2, O2>,
     {
         list_pair_process(m, &mut self.list1, &mut self.list2, editor)
     }
@@ -674,34 +694,28 @@ where
         editor: &mut Editor,
     ) -> (ListAction<T2>, Option<ItemChanged<T2>>)
     where
-        Editor: ListEditor<T1> + CompilerOutputGui<O1> + ListEditor<T2> + CompilerOutputGui<O2>,
+        Editor: ListWithCompilerOutputEditor<T1, O1> + ListWithCompilerOutputEditor<T2, O2>,
     {
         list_pair_process(m, &mut self.list2, &mut self.list1, editor)
     }
 
     #[must_use]
-    pub fn edit_item1<Editor>(
+    pub fn edit_item1(
         &mut self,
         id: ItemId,
         new_value: T1,
-        editor: &mut Editor,
-    ) -> (ListAction<T1>, Option<ItemChanged<T1>>)
-    where
-        Editor: ListEditor<T1> + CompilerOutputGui<O1> + ListEditor<T2> + CompilerOutputGui<O2>,
-    {
+        editor: &mut impl ListWithCompilerOutputEditor<T1, O1>,
+    ) -> (ListAction<T1>, Option<ItemChanged<T1>>) {
         self.list1.edit_item(id, new_value, editor)
     }
 
     #[must_use]
-    pub fn edit_item2<Editor>(
+    pub fn edit_item2(
         &mut self,
         id: ItemId,
         new_value: T2,
-        editor: &mut Editor,
-    ) -> (ListAction<T2>, Option<ItemChanged<T2>>)
-    where
-        Editor: ListEditor<T1> + CompilerOutputGui<O1> + ListEditor<T2> + CompilerOutputGui<O2>,
-    {
+        editor: &mut impl ListWithCompilerOutputEditor<T2, O2>,
+    ) -> (ListAction<T2>, Option<ItemChanged<T2>>) {
         self.list2.edit_item(id, new_value, editor)
     }
 
@@ -709,7 +723,7 @@ where
         &mut self,
         id: ItemId,
         co: O1,
-        editor: &mut impl CompilerOutputGui<O1>,
+        editor: &mut impl ListWithCompilerOutputEditor<T1, O1>,
     ) {
         self.list1.set_compiler_output(id, co, editor)
     }
@@ -718,7 +732,7 @@ where
         &mut self,
         id: ItemId,
         co: O2,
-        editor: &mut impl CompilerOutputGui<O2>,
+        editor: &mut impl ListWithCompilerOutputEditor<T2, O2>,
     ) {
         self.list2.set_compiler_output(id, co, editor)
     }
@@ -1104,9 +1118,9 @@ where
     }
 }
 
-impl<T> ListEditor<T::DataType> for ListEditorTable<T>
+impl<T> ListEditorTable<T>
 where
-    T: TableMapping + 'static,
+    T: TableMapping,
     T::DataType: NameDeduplicator + Clone,
 {
     fn list_edited(&mut self, action: &ListAction<T::DataType>) {
@@ -1143,22 +1157,29 @@ where
             }
         }
     }
-
-    fn item_edited(&mut self, _: ItemId, _: &T::DataType) {}
 }
 
-impl<T> CompilerOutputGui<T::CompilerOutputType> for ListEditorTable<T>
+impl<T> ListEditorTable<T>
 where
-    T: TableMapping + TableCompilerOutput + 'static,
+    T: TableMapping + TableCompilerOutput,
 {
     fn set_compiler_output(
         &mut self,
         index: usize,
-        _: ItemId,
         compiler_output: &Option<T::CompilerOutputType>,
     ) {
         self.table.borrow_mut().edit_row(index, |row| -> bool {
             T::set_row_state(row, compiler_output)
         });
+    }
+}
+
+impl<T> ListEditorTable<T>
+where
+    T: sfx_export_order::SfxEoMapping,
+{
+    // Must only be called by SfxExportOrderEditor
+    pub fn sfx_eo_edited(&mut self, action: &ListAction<Name>) {
+        self.list_edited(action);
     }
 }

@@ -82,7 +82,7 @@ use fltk::prelude::*;
 use help::HelpSection;
 use helpers::ch_units_to_width;
 use licenses_dialog::LicensesDialog;
-use list_editor::ListPairWithCompilerOutputs;
+use list_editor::{ListPairWithCompilerOutputs, ListWithCompilerOutputEditor};
 use monitor_timer::MonitorTimer;
 use sample_analyser::SampleAnalyserDialog;
 use sfx_export_order::{GuiSfxExportOrder, SfxExportOrderMessage};
@@ -392,10 +392,7 @@ impl Project {
             }
 
             GuiMessage::EditProjectSongs(m) => {
-                let (a, c) = self
-                    .data
-                    .project_songs
-                    .process(m, &mut self.project_tab.song_table);
+                let (a, c) = self.data.project_songs.process(m, &mut self.project_tab);
 
                 self.mark_project_file_unsaved(a);
 
@@ -415,9 +412,6 @@ impl Project {
                     .instruments_and_samples
                     .process1(m, &mut self.samples_tab);
 
-                self.samples_tab
-                    .selected_instrument_changed(self.data.instruments());
-
                 self.mark_project_file_unsaved(a);
 
                 if let Some(c) = c {
@@ -430,22 +424,17 @@ impl Project {
                     .instruments_and_samples
                     .process2(m, &mut self.samples_tab);
 
-                self.samples_tab
-                    .selected_sample_changed(self.data.samples());
-
                 self.mark_project_file_unsaved(a);
 
                 if let Some(c) = c {
                     let _ = self.compiler_sender.send(ToCompiler::Sample(c));
                 }
             }
-            GuiMessage::UserChangedSelectedInstrument => {
-                self.samples_tab
-                    .selected_instrument_changed(self.data.instruments());
-            }
+            GuiMessage::UserChangedSelectedInstrument => self
+                .samples_tab
+                .selected_item_changed(self.data.instruments()),
             GuiMessage::UserChangedSelectedSample => {
-                self.samples_tab
-                    .selected_sample_changed(self.data.samples());
+                self.samples_tab.selected_item_changed(self.data.samples())
             }
             GuiMessage::EditInstrument(id, inst) => {
                 let (a, c) =
@@ -478,9 +467,6 @@ impl Project {
                         .sound_effects
                         .process(m, &mut self.sound_effects_tab);
 
-                    self.sound_effects_tab
-                        .selected_sfx_changed(&sfx_data.sound_effects);
-
                     if let Some(c) = c {
                         let _ = self.compiler_sender.send(ToCompiler::SoundEffects(c));
                     }
@@ -507,7 +493,7 @@ impl Project {
             GuiMessage::UserChangesSelectedSoundEffect => {
                 if let Some(sfx_data) = &self.sfx_data {
                     self.sound_effects_tab
-                        .selected_sfx_changed(&sfx_data.sound_effects)
+                        .selected_item_changed(&sfx_data.sound_effects)
                 }
             }
             GuiMessage::SfxFileHeaderChanged => {
@@ -821,11 +807,9 @@ impl Project {
                     Ok(sd) => Ok(sd.clone()),
                     Err(e) => Err(e.to_short_error()),
                 };
-                self.data.project_songs.set_compiler_output(
-                    id,
-                    pf_co,
-                    &mut self.project_tab.song_table,
-                );
+                self.data
+                    .project_songs
+                    .set_compiler_output(id, pf_co, &mut self.project_tab);
 
                 if let Some(song_tab) = self.song_tabs.get_mut(&id) {
                     self.tab_manager.set_tab_label_color(song_tab, co.is_ok());

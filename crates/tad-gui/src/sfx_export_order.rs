@@ -7,9 +7,9 @@
 use std::ops::Range;
 
 use crate::list_editor::{
-    LaVec, ListAction, ListEditor, ListEditorTable, ListMessage, TableAction, TableMapping,
+    LaVec, ListAction, ListEditorTable, ListMessage, TableAction, TableMapping,
 };
-use crate::names::{deduplicate_item_name, deduplicate_names, NameDeduplicator};
+use crate::names::{deduplicate_item_name, deduplicate_names};
 use crate::tables::{SimpleRow, TableEvent};
 use crate::GuiMessage;
 
@@ -114,7 +114,7 @@ pub enum SfxExportOrderMessage {
     LowPriority(ListMessage<Name>),
 }
 
-trait SfxEoMapping {
+pub trait SfxEoMapping {
     const TYPE_NAME: &'static str;
     const HEADER: &'static str;
 
@@ -231,14 +231,13 @@ impl SfxExportOrderEditor {
         to: usize,
     ) -> Option<(ListAction<Name>, isize)>
     where
-        T: TableMapping<DataType = Name> + 'static,
-        T::DataType: NameDeduplicator,
+        T: SfxEoMapping,
     {
         assert_ne!(from, to);
 
         let eo_offset = range.start;
 
-        table.list_edited(&ListAction::Move(from, to));
+        table.sfx_eo_edited(&ListAction::Move(from, to));
         table.set_selected_row(to);
 
         Some((ListAction::Move(from + eo_offset, to + range.start), 0))
@@ -251,8 +250,7 @@ impl SfxExportOrderEditor {
         range: Range<usize>,
     ) -> Option<(ListAction<Name>, isize)>
     where
-        T: TableMapping<DataType = Name> + 'static,
-        T::DataType: NameDeduplicator,
+        T: SfxEoMapping,
     {
         let eo_offset = range.start;
         let slice = &data.export_order[range.clone()];
@@ -268,7 +266,7 @@ impl SfxExportOrderEditor {
                 Some(name) if name != &new_name => {
                     let new_name = deduplicate_name(new_name, Some(index));
 
-                    table.list_edited(&ListAction::Edit(index, new_name.clone()));
+                    table.sfx_eo_edited(&ListAction::Edit(index, new_name.clone()));
 
                     Some((ListAction::Edit(index + eo_offset, new_name), 0))
                 }
@@ -280,7 +278,7 @@ impl SfxExportOrderEditor {
                     let i = slice.len();
                     let name = deduplicate_name(name, None);
 
-                    table.list_edited(&ListAction::Add(i, name.clone()));
+                    table.sfx_eo_edited(&ListAction::Add(i, name.clone()));
                     table.set_selected_row(i);
 
                     table.open_editor(i, 0);
@@ -296,7 +294,7 @@ impl SfxExportOrderEditor {
                     let i = index + 1;
                     let name = deduplicate_name(name.clone(), None);
 
-                    table.list_edited(&ListAction::Add(i, name.clone()));
+                    table.sfx_eo_edited(&ListAction::Add(i, name.clone()));
                     table.set_selected_row(i);
 
                     Some((ListAction::Add(i + eo_offset, name), 1))
@@ -306,7 +304,7 @@ impl SfxExportOrderEditor {
 
             ListMessage::Remove(index) => {
                 if index < slice.len() {
-                    table.list_edited(&ListAction::Remove(index));
+                    table.sfx_eo_edited(&ListAction::Remove(index));
                     table.set_selected_row(index);
 
                     Some((ListAction::Remove(index + eo_offset), -1))

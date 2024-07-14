@@ -7,8 +7,8 @@
 use crate::audio_thread::Pan;
 use crate::compiler_thread::{ItemId, SfxError, SoundEffectOutput};
 use crate::list_editor::{
-    CompilerOutputGui, ListAction, ListEditor, ListEditorTable, ListMessage, ListState,
-    ListWithCompilerOutput, TableCompilerOutput, TableMapping,
+    ListAction, ListEditorTable, ListMessage, ListState, ListWithCompilerOutput,
+    ListWithCompilerOutputEditor, TableCompilerOutput, TableMapping,
 };
 use crate::mml_editor::{CompiledEditorData, EditorBuffer, MmlEditor, TextErrorRef, TextFormat};
 use crate::tables::{RowWithStatus, SimpleRow};
@@ -70,7 +70,7 @@ pub fn blank_sfx_file() -> SoundEffectsFile {
     }
 }
 
-struct SoundEffectMapping;
+pub struct SoundEffectMapping;
 impl TableMapping for SoundEffectMapping {
     type DataType = SoundEffectInput;
     type RowType = RowWithStatus<SimpleRow<1>>;
@@ -535,25 +535,6 @@ impl SoundEffectsTab {
         }
     }
 
-    pub fn selected_sfx_changed(
-        &mut self,
-        sfx_list: &ListWithCompilerOutput<SoundEffectInput, SoundEffectOutput>,
-    ) {
-        match sfx_list.get_selected_row(&self.sfx_table) {
-            Some((id, sfx, co)) => {
-                if self.state.borrow().selected_id != Some(id) {
-                    self.enable_editor(id, sfx, co);
-                }
-            }
-
-            None => {
-                if self.state.borrow().selected_id.is_some() {
-                    self.disable_editor();
-                }
-            }
-        }
-    }
-
     fn disable_editor(&mut self) {
         let mut state = self.state.borrow_mut();
 
@@ -674,15 +655,19 @@ impl SongChoice {
     }
 }
 
-impl ListEditor<SoundEffectInput> for SoundEffectsTab {
+impl ListWithCompilerOutputEditor<SoundEffectInput, SoundEffectOutput> for SoundEffectsTab {
+    type TableMapping = SoundEffectMapping;
+
+    fn table_mut(&mut self) -> &mut ListEditorTable<Self::TableMapping> {
+        &mut self.sfx_table
+    }
+
     fn list_edited(&mut self, action: &ListAction<SoundEffectInput>) {
         if let Ok(mut state) = self.state.try_borrow_mut() {
             state.list_edited(action);
         }
 
         // ::TODO extract removed sound effect from `sfx_buffers`::
-
-        self.sfx_table.list_edited(action);
     }
 
     fn item_edited(&mut self, id: ItemId, sfx: &SoundEffectInput) {
@@ -691,6 +676,37 @@ impl ListEditor<SoundEffectInput> for SoundEffectsTab {
         if s.selected_id == Some(id) && s.old_name != sfx.name {
             s.old_name = sfx.name.clone();
             s.name.set_value(sfx.name.as_str());
+        }
+    }
+
+    fn set_compiler_output(
+        &mut self,
+        _index: usize,
+        id: ItemId,
+        compiler_output: &Option<SoundEffectOutput>,
+    ) {
+        let mut s = self.state.borrow_mut();
+        if s.selected_id == Some(id) {
+            s.selected_compiler_output_changed(compiler_output);
+        }
+    }
+
+    fn selected_item_changed(
+        &mut self,
+        sfx_list: &ListWithCompilerOutput<SoundEffectInput, SoundEffectOutput>,
+    ) {
+        match sfx_list.get_selected_row(&self.sfx_table) {
+            Some((id, sfx, co)) => {
+                if self.state.borrow().selected_id != Some(id) {
+                    self.enable_editor(id, sfx, co);
+                }
+            }
+
+            None => {
+                if self.state.borrow().selected_id.is_some() {
+                    self.disable_editor();
+                }
+            }
         }
     }
 }
@@ -831,23 +847,6 @@ impl State {
             _ => None,
         };
         self.editor.highlight_errors(e);
-    }
-}
-
-impl CompilerOutputGui<SoundEffectOutput> for SoundEffectsTab {
-    fn set_compiler_output(
-        &mut self,
-        index: usize,
-        id: ItemId,
-        compiler_output: &Option<SoundEffectOutput>,
-    ) {
-        self.sfx_table
-            .set_compiler_output(index, id, compiler_output);
-
-        let mut s = self.state.borrow_mut();
-        if s.selected_id == Some(id) {
-            s.selected_compiler_output_changed(compiler_output);
-        }
     }
 }
 

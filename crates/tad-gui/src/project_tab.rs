@@ -6,7 +6,8 @@
 
 use crate::compiler_thread::{CadOutput, ShortSongError};
 use crate::list_editor::{
-    ListEditorTable, ListMessage, TableAction, TableCompilerOutput, TableMapping,
+    ListEditorTable, ListMessage, ListWithCompilerOutputEditor, TableAction, TableCompilerOutput,
+    TableMapping,
 };
 use crate::sfx_export_order::SfxExportOrderEditor;
 use crate::tables::{RowWithStatus, TableEvent, TableRow};
@@ -246,6 +247,16 @@ impl ProjectTab {
 
     pub fn sfx_file_changed(&mut self, source: &SourcePathBuf) {
         self.sound_effects_file.set_value(source.as_str());
+    }
+}
+
+impl ListWithCompilerOutputEditor<data::Song, Result<Arc<SongData>, ShortSongError>>
+    for ProjectTab
+{
+    type TableMapping = SongMapping;
+
+    fn table_mut(&mut self) -> &mut ListEditorTable<Self::TableMapping> {
+        &mut self.song_table
     }
 }
 
