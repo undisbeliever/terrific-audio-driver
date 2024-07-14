@@ -286,7 +286,7 @@ where
         &mut self,
         m: ListMessage<T>,
         editor: &mut impl ListWithCompilerOutputEditor<T, O>,
-    ) -> (ListAction<T>, Option<ItemChanged<T>>) {
+    ) -> (bool, Option<ItemChanged<T>>) {
         let update_list = |list: &mut LaVec<(ItemId, T)>, a: &ListAction<T>| {
             list.process_map(
                 a,
@@ -503,7 +503,7 @@ where
             }
         }
 
-        (action, c)
+        (!action.is_none(), c)
     }
 
     #[must_use]
@@ -512,7 +512,7 @@ where
         id: ItemId,
         new_value: T,
         editor: &mut impl ListWithCompilerOutputEditor<T, O>,
-    ) -> (ListAction<T>, Option<ItemChanged<T>>) {
+    ) -> (bool, Option<ItemChanged<T>>) {
         if let Some((index, item)) = self.get_id(id) {
             let mut new_value = new_value;
 
@@ -537,12 +537,12 @@ where
 
                 let c_message = ItemChanged::AddedOrEdited(id, new_value);
 
-                (action, Some(c_message))
+                (true, Some(c_message))
             } else {
-                (ListAction::None, None)
+                (false, None)
             }
         } else {
-            (ListAction::None, None)
+            (false, None)
         }
     }
 
@@ -612,7 +612,7 @@ fn list_pair_process<T1, O1, T2, O2, Editor>(
     list1: &mut ListWithCompilerOutput<T1, O1>,
     list2: &mut ListWithCompilerOutput<T2, O2>,
     editor: &mut Editor,
-) -> (ListAction<T1>, Option<ItemChanged<T1>>)
+) -> (bool, Option<ItemChanged<T1>>)
 where
     T1: Clone + PartialEq<T1> + NameDeduplicator + std::fmt::Debug,
     O1: CompilerOutput,
@@ -646,7 +646,7 @@ where
         // ::TODO deduplicate name::
         list1.process(m, editor)
     } else {
-        (ListAction::None, None)
+        (false, None)
     }
 }
 
@@ -680,7 +680,7 @@ where
         &mut self,
         m: ListMessage<T1>,
         editor: &mut Editor,
-    ) -> (ListAction<T1>, Option<ItemChanged<T1>>)
+    ) -> (bool, Option<ItemChanged<T1>>)
     where
         Editor: ListWithCompilerOutputEditor<T1, O1> + ListWithCompilerOutputEditor<T2, O2>,
     {
@@ -692,7 +692,7 @@ where
         &mut self,
         m: ListMessage<T2>,
         editor: &mut Editor,
-    ) -> (ListAction<T2>, Option<ItemChanged<T2>>)
+    ) -> (bool, Option<ItemChanged<T2>>)
     where
         Editor: ListWithCompilerOutputEditor<T1, O1> + ListWithCompilerOutputEditor<T2, O2>,
     {
@@ -705,7 +705,7 @@ where
         id: ItemId,
         new_value: T1,
         editor: &mut impl ListWithCompilerOutputEditor<T1, O1>,
-    ) -> (ListAction<T1>, Option<ItemChanged<T1>>) {
+    ) -> (bool, Option<ItemChanged<T1>>) {
         self.list1.edit_item(id, new_value, editor)
     }
 
@@ -715,7 +715,7 @@ where
         id: ItemId,
         new_value: T2,
         editor: &mut impl ListWithCompilerOutputEditor<T2, O2>,
-    ) -> (ListAction<T2>, Option<ItemChanged<T2>>) {
+    ) -> (bool, Option<ItemChanged<T2>>) {
         self.list2.edit_item(id, new_value, editor)
     }
 

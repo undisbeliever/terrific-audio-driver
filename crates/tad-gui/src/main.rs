@@ -48,7 +48,7 @@ use crate::files::{
 };
 use crate::help::HelpWidget;
 use crate::helpers::input_height;
-use crate::list_editor::{ListAction, ListMessage, ListState, ListWithCompilerOutput};
+use crate::list_editor::{ListMessage, ListState, ListWithCompilerOutput};
 use crate::menu::Menu;
 use crate::names::deduplicate_names;
 use crate::project_tab::ProjectTab;
@@ -392,10 +392,11 @@ impl Project {
             }
 
             GuiMessage::EditProjectSongs(m) => {
-                let (a, c) = self.data.project_songs.process(m, &mut self.project_tab);
+                let (edited, c) = self.data.project_songs.process(m, &mut self.project_tab);
 
-                self.mark_project_file_unsaved(a);
-
+                if edited {
+                    self.tab_manager.mark_unsaved(FileType::Project);
+                }
                 if let Some(c) = c {
                     self.sound_effects_tab.pf_songs_changed();
 
@@ -407,25 +408,27 @@ impl Project {
             }
 
             GuiMessage::Instrument(m) => {
-                let (a, c) = self
+                let (changed, c) = self
                     .data
                     .instruments_and_samples
                     .process1(m, &mut self.samples_tab);
 
-                self.mark_project_file_unsaved(a);
-
+                if changed {
+                    self.tab_manager.mark_unsaved(FileType::Project);
+                }
                 if let Some(c) = c {
                     let _ = self.compiler_sender.send(ToCompiler::Instrument(c));
                 }
             }
             GuiMessage::Sample(m) => {
-                let (a, c) = self
+                let (changed, c) = self
                     .data
                     .instruments_and_samples
                     .process2(m, &mut self.samples_tab);
 
-                self.mark_project_file_unsaved(a);
-
+                if changed {
+                    self.tab_manager.mark_unsaved(FileType::Project);
+                }
                 if let Some(c) = c {
                     let _ = self.compiler_sender.send(ToCompiler::Sample(c));
                 }
@@ -437,25 +440,27 @@ impl Project {
                 self.samples_tab.selected_item_changed(self.data.samples())
             }
             GuiMessage::EditInstrument(id, inst) => {
-                let (a, c) =
+                let (changed, c) =
                     self.data
                         .instruments_and_samples
                         .edit_item1(id, inst, &mut self.samples_tab);
 
-                self.mark_project_file_unsaved(a);
-
+                if changed {
+                    self.tab_manager.mark_unsaved(FileType::Project);
+                }
                 if let Some(c) = c {
                     let _ = self.compiler_sender.send(ToCompiler::Instrument(c));
                 }
             }
             GuiMessage::EditSample(id, sample) => {
-                let (a, c) =
+                let (changed, c) =
                     self.data
                         .instruments_and_samples
                         .edit_item2(id, sample, &mut self.samples_tab);
 
-                self.mark_project_file_unsaved(a);
-
+                if changed {
+                    self.tab_manager.mark_unsaved(FileType::Project);
+                }
                 if let Some(c) = c {
                     let _ = self.compiler_sender.send(ToCompiler::Sample(c));
                 }
@@ -463,30 +468,30 @@ impl Project {
 
             GuiMessage::EditSoundEffectList(m) => {
                 if let Some(sfx_data) = &mut self.sfx_data {
-                    let (a, c) = sfx_data
+                    let (changed, c) = sfx_data
                         .sound_effects
                         .process(m, &mut self.sound_effects_tab);
 
+                    if changed {
+                        self.tab_manager.mark_unsaved(FileType::SoundEffects);
+                    }
                     if let Some(c) = c {
                         let _ = self.compiler_sender.send(ToCompiler::SoundEffects(c));
-                    }
-                    if !a.is_none() {
-                        self.tab_manager.mark_unsaved(FileType::SoundEffects);
                     }
                 }
             }
             GuiMessage::EditSoundEffect(id, sfx) => {
                 if let Some(sfx_data) = &mut self.sfx_data {
-                    let (a, c) =
+                    let (changed, c) =
                         sfx_data
                             .sound_effects
                             .edit_item(id, sfx, &mut self.sound_effects_tab);
 
+                    if changed {
+                        self.tab_manager.mark_unsaved(FileType::SoundEffects);
+                    }
                     if let Some(c) = c {
                         let _ = self.compiler_sender.send(ToCompiler::SoundEffects(c));
-                    }
-                    if !a.is_none() {
-                        self.tab_manager.mark_unsaved(FileType::SoundEffects);
                     }
                 }
             }
@@ -1053,12 +1058,6 @@ impl Project {
             self.closed_song_tabs.push(song_tab);
 
             self.process(GuiMessage::SelectedTabChanged);
-        }
-    }
-
-    fn mark_project_file_unsaved<T>(&mut self, a: ListAction<T>) {
-        if !a.is_none() {
-            self.tab_manager.mark_unsaved(FileType::Project);
         }
     }
 
