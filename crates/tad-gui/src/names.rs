@@ -159,15 +159,34 @@ where
     deduplicate_name_iter(name, &mut list.iter().map(NameGetter::name), index)
 }
 
+const DEDUPLICATED_NAME_SEPARATOR: &str = "__";
+
+fn extract_deduplicated_name_suffix(name: &Name) -> Option<(&str, u32)> {
+    let name = name.as_str();
+
+    let prefix = name.trim_end_matches(|c: char| c.is_ascii_digit());
+    let num_str = name.get(prefix.len()..)?;
+
+    if prefix.ends_with(DEDUPLICATED_NAME_SEPARATOR) && !num_str.is_empty() {
+        let number = num_str.parse().ok()?;
+        Some((prefix, number))
+    } else {
+        None
+    }
+}
+
 pub fn deduplicate_name_iter<'a>(
     name: &Name,
     iter: impl Iterator<Item = &'a Name>,
     index: Option<usize>,
 ) -> Option<Name> {
-    let dupe_prefix = [name.as_str(), "__"].concat();
+    let (dupe_prefix, max_number) = match extract_deduplicated_name_suffix(name) {
+        Some((prefix, i)) => (prefix.to_owned(), i),
+        None => ([name.as_str(), DEDUPLICATED_NAME_SEPARATOR].concat(), 1),
+    };
 
     let mut duplicate_found = false;
-    let mut max_found = 1;
+    let mut max_number = max_number;
 
     for (i, v) in iter.enumerate() {
         if Some(i) != index {
@@ -177,8 +196,8 @@ pub fn deduplicate_name_iter<'a>(
             }
             if let Some(a) = v_name.as_str().strip_prefix(&dupe_prefix) {
                 if let Ok(n) = a.parse() {
-                    if n > max_found {
-                        max_found = n;
+                    if n > max_number {
+                        max_number = n;
                     }
                 }
             }
@@ -188,6 +207,10 @@ pub fn deduplicate_name_iter<'a>(
     if !duplicate_found {
         None
     } else {
-        Some(Name::new_lossy(format!("{}{}", dupe_prefix, max_found + 1)))
+        Some(Name::new_lossy(format!(
+            "{}{}",
+            dupe_prefix,
+            max_number + 1
+        )))
     }
 }
