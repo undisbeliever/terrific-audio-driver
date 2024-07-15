@@ -84,6 +84,7 @@ use helpers::ch_units_to_width;
 use licenses_dialog::LicensesDialog;
 use list_editor::{ListPairWithCompilerOutputs, ListWithCompilerOutputEditor};
 use monitor_timer::MonitorTimer;
+use names::deduplicate_two_name_vecs;
 use sample_analyser::SampleAnalyserDialog;
 use sfx_export_order::{GuiSfxExportOrder, SfxExportOrderMessage};
 use sfx_window::SfxWindow;
@@ -282,10 +283,10 @@ impl Project {
         let (sfx_export_order, sfx_renamed) =
             GuiSfxExportOrder::new_lossy(c.sound_effects, c.low_priority_sound_effects);
         let (songs, songs_renamed) = deduplicate_names(c.songs);
-        let (instruments, instruments_renamed) = deduplicate_names(c.instruments);
-        let (samples, samples_renamed) = deduplicate_names(c.samples);
+        let (instruments_and_samples, i_and_s_renamed) =
+            deduplicate_two_name_vecs(c.instruments, c.samples);
 
-        let total_renamed = sfx_renamed + songs_renamed + instruments_renamed + samples_renamed;
+        let total_renamed = sfx_renamed + songs_renamed + i_and_s_renamed;
         if total_renamed > 0 {
             dialog::message_title("Duplicate names found");
             dialog::alert_default(&format!("{} items have been renamed", total_renamed));
@@ -301,8 +302,7 @@ impl Project {
 
             project_songs: ListWithCompilerOutput::new(songs, driver_constants::MAX_N_SONGS),
             instruments_and_samples: ListPairWithCompilerOutputs::new(
-                instruments,
-                samples,
+                instruments_and_samples,
                 driver_constants::MAX_INSTRUMENTS_AND_SAMPLES,
             ),
         };

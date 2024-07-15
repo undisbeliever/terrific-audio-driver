@@ -6,7 +6,9 @@
 
 use crate::compiler_thread::{self, ItemChanged, ItemId};
 use crate::helpers::{ch_units_to_width, SetActive};
-use crate::names::{deduplicate_item_name_inplace, DeduplicatedNameVec, NameGetter, NameSetter};
+use crate::names::{
+    deduplicate_name_iter, DeduplicatedNameVec, NameGetter, NameSetter, TwoDeduplicatedNameVecs,
+};
 use crate::GuiMessage;
 use crate::{sfx_export_order, tables};
 
@@ -166,8 +168,6 @@ where
     type Item;
 
     fn len(&self) -> usize;
-    fn can_add(&self) -> bool;
-    fn can_add_multiple(&self, count: usize) -> bool;
     fn item_iter(&self) -> impl Iterator<Item = &Self::Item>;
 }
 
@@ -178,6 +178,45 @@ pub trait CompilerOutput {
 impl<T, E> CompilerOutput for Result<T, E> {
     fn is_valid(&self) -> bool {
         self.is_ok()
+    }
+}
+
+trait OtherList {
+    fn len(&self) -> usize;
+
+    fn chain_name_iter<'a>(
+        &'a self,
+        main: impl Iterator<Item = &'a Name>,
+    ) -> impl Iterator<Item = &'a Name>;
+}
+
+impl OtherList for () {
+    fn len(&self) -> usize {
+        0
+    }
+
+    fn chain_name_iter<'a>(
+        &'a self,
+        main: impl Iterator<Item = &'a Name>,
+    ) -> impl Iterator<Item = &'a Name> {
+        main
+    }
+}
+
+impl<T, O> OtherList for &ListWithCompilerOutput<T, O>
+where
+    T: Clone + PartialEq<T> + NameGetter + NameSetter,
+    O: CompilerOutput,
+{
+    fn len(&self) -> usize {
+        ListWithCompilerOutput::len(self)
+    }
+
+    fn chain_name_iter<'a>(
+        &'a self,
+        main: impl Iterator<Item = &'a Name>,
+    ) -> impl Iterator<Item = &'a Name> {
+        main.chain(self.iter().map(NameGetter::name))
     }
 }
 
@@ -220,14 +259,6 @@ where
 
     fn len(&self) -> usize {
         self.list.len()
-    }
-
-    fn can_add(&self) -> bool {
-        self.list.len() < self.max_size
-    }
-
-    fn can_add_multiple(&self, count: usize) -> bool {
-        self.list.len() + count <= self.max_size
     }
 
     fn item_iter(&self) -> impl Iterator<Item = &T> {
@@ -286,8 +317,22 @@ where
         }
     }
 
+    fn deduplicate_item_name_inplace(
+        &self,
+        item: &mut T,
+        other_list: &impl OtherList,
+        index: Option<usize>,
+    ) {
+        let name_iter = other_list.chain_name_iter(self.list.iter().map(NameGetter::name));
+
+        if let Some(new_name) = deduplicate_name_iter(item.name(), name_iter, index) {
+            item.set_name(new_name)
+        }
+    }
+
     fn edit_item_index(
         &mut self,
+        other_list: impl OtherList,
         index: usize,
         mut new_value: T,
         editor: &mut impl ListWithCompilerOutputEditor<T, O>,
@@ -297,7 +342,7 @@ where
                 let id = *id;
 
                 if old_value.name() != new_value.name() {
-                    deduplicate_item_name_inplace(&mut new_value, &self.list, Some(index));
+                    self.deduplicate_item_name_inplace(&mut new_value, &other_list, Some(index));
                 }
 
                 self.list[index].1 = new_value.clone();
@@ -324,15 +369,18 @@ where
 
     fn add_item(
         &mut self,
+        other_list: impl OtherList,
         id: Option<ItemId>,
         index: usize,
         mut item: T,
         editor: &mut impl ListWithCompilerOutputEditor<T, O>,
     ) -> (bool, Option<ItemChanged<T>>) {
-        if self.can_add() && index <= self.list.len() {
+        let can_add = self.list.len() + other_list.len() < self.max_size;
+
+        if can_add && index <= self.list.len() {
             let id = id.unwrap_or_else(ItemId::new);
 
-            deduplicate_item_name_inplace(&mut item, &self.list, None);
+            self.deduplicate_item_name_inplace(&mut item, &other_list, None);
 
             self.list.insert(index, (id, item.clone()));
             self.compiler_output.insert(index, None);
@@ -354,16 +402,19 @@ where
 
     fn add_multiple_items(
         &mut self,
+        other_list: impl OtherList,
         index: usize,
         mut items: Vec<T>,
         editor: &mut impl ListWithCompilerOutputEditor<T, O>,
     ) -> (bool, Option<ItemChanged<T>>) {
-        if self.can_add_multiple(items.len()) && index <= items.len() {
+        let can_add = self.list.len() + other_list.len() + items.len() <= self.max_size;
+
+        if can_add && index <= items.len() {
             let mut new_items = Vec::with_capacity(items.len());
 
             // Must add and deduplicate items one at a time to ensure names are unique.
             for item in &mut items {
-                deduplicate_item_name_inplace(item, &self.list, None);
+                self.deduplicate_item_name_inplace(item, &other_list, None);
 
                 let i = index + new_items.len();
                 let item_with_id = (ItemId::new(), item.clone());
@@ -429,29 +480,32 @@ where
         }
     }
 
-    #[must_use]
-    pub fn process(
+    #[inline]
+    fn process_(
         &mut self,
+        other_list: impl OtherList,
         m: ListMessage<T>,
         editor: &mut impl ListWithCompilerOutputEditor<T, O>,
     ) -> (bool, Option<ItemChanged<T>>) {
         match m {
             ListMessage::ItemEdited(index, new_value) => {
-                self.edit_item_index(index, new_value, editor)
+                self.edit_item_index(other_list, index, new_value, editor)
             }
-            ListMessage::Add(item) => self.add_item(None, self.list.len(), item, editor),
+            ListMessage::Add(item) => {
+                self.add_item(other_list, None, self.list.len(), item, editor)
+            }
             ListMessage::AddWithItemId(id, item) => {
                 if !self.contains_id(id) {
-                    self.add_item(Some(id), self.list.len(), item, editor)
+                    self.add_item(other_list, Some(id), self.list.len(), item, editor)
                 } else {
                     (false, None)
                 }
             }
             ListMessage::AddMultiple(items) => {
-                self.add_multiple_items(self.list.len(), items, editor)
+                self.add_multiple_items(other_list, self.list.len(), items, editor)
             }
             ListMessage::Clone(index) => match self.list.get(index) {
-                Some(item) => self.add_item(None, index + 1, item.1.clone(), editor),
+                Some(item) => self.add_item(other_list, None, index + 1, item.1.clone(), editor),
                 None => (false, None),
             },
             ListMessage::Remove(index) => self.remove_item(index, editor),
@@ -475,6 +529,29 @@ where
         }
     }
 
+    #[inline]
+    fn edit_item_(
+        &mut self,
+        other_list: impl OtherList,
+        id: ItemId,
+        new_value: T,
+        editor: &mut impl ListWithCompilerOutputEditor<T, O>,
+    ) -> (bool, Option<ItemChanged<T>>) {
+        match self.id_to_index(id) {
+            Some(index) => self.edit_item_index(other_list, index, new_value, editor),
+            None => (false, None),
+        }
+    }
+
+    #[must_use]
+    pub fn process(
+        &mut self,
+        m: ListMessage<T>,
+        editor: &mut impl ListWithCompilerOutputEditor<T, O>,
+    ) -> (bool, Option<ItemChanged<T>>) {
+        self.process_((), m, editor)
+    }
+
     #[must_use]
     pub fn edit_item(
         &mut self,
@@ -482,10 +559,7 @@ where
         new_value: T,
         editor: &mut impl ListWithCompilerOutputEditor<T, O>,
     ) -> (bool, Option<ItemChanged<T>>) {
-        match self.id_to_index(id) {
-            Some(index) => self.edit_item_index(index, new_value, editor),
-            None => (false, None),
-        }
+        self.edit_item_((), id, new_value, editor)
     }
 
     pub fn iter(&self) -> impl Iterator<Item = &(ItemId, T)> {
@@ -548,50 +622,6 @@ where
     list2: ListWithCompilerOutput<T2, O2>,
 }
 
-#[inline]
-fn list_pair_process<T1, O1, T2, O2, Editor>(
-    m: ListMessage<T1>,
-    list1: &mut ListWithCompilerOutput<T1, O1>,
-    list2: &mut ListWithCompilerOutput<T2, O2>,
-    editor: &mut Editor,
-) -> (bool, Option<ItemChanged<T1>>)
-where
-    T1: Clone + PartialEq<T1> + NameGetter + NameSetter + std::fmt::Debug,
-    O1: CompilerOutput,
-    T2: Clone + PartialEq<T2> + NameGetter + NameSetter + std::fmt::Debug,
-    O2: CompilerOutput,
-    Editor: ListWithCompilerOutputEditor<T1, O1> + ListWithCompilerOutputEditor<T2, O2>,
-{
-    let can_add = |count: usize| -> bool {
-        debug_assert!(list1.max_size == list2.max_size);
-
-        let max_size = list1.max_size;
-        let len = list1.len() + list2.len();
-
-        len + count <= max_size
-    };
-    let can_do_message = match &m {
-        ListMessage::Add(..) => can_add(1),
-        ListMessage::AddWithItemId(..) => can_add(1),
-        ListMessage::AddMultiple(vec) => can_add(vec.len()),
-        ListMessage::Clone(..) => can_add(1),
-
-        ListMessage::ItemEdited(..)
-        | ListMessage::Remove(..)
-        | ListMessage::MoveToTop(..)
-        | ListMessage::MoveUp(..)
-        | ListMessage::MoveDown(..)
-        | ListMessage::MoveToBottom(..) => true,
-    };
-
-    if can_do_message {
-        // ::TODO deduplicate name::
-        list1.process(m, editor)
-    } else {
-        (false, None)
-    }
-}
-
 impl<T1, O1, T2, O2> ListPairWithCompilerOutputs<T1, O1, T2, O2>
 where
     T1: Clone + PartialEq<T1> + NameGetter + NameSetter + std::fmt::Debug,
@@ -599,11 +629,9 @@ where
     T2: Clone + PartialEq<T2> + NameGetter + NameSetter + std::fmt::Debug,
     O2: CompilerOutput,
 {
-    pub fn new(
-        list1: DeduplicatedNameVec<T1>,
-        list2: DeduplicatedNameVec<T2>,
-        max_size: usize,
-    ) -> Self {
+    pub fn new(lists: TwoDeduplicatedNameVecs<T1, T2>, max_size: usize) -> Self {
+        let (list1, list2) = lists.into_tuple();
+
         let list1 = ListWithCompilerOutput::new(list1, max_size);
         let list2 = ListWithCompilerOutput::new(list2, max_size);
 
@@ -613,6 +641,7 @@ where
     pub fn list1(&self) -> &ListWithCompilerOutput<T1, O1> {
         &self.list1
     }
+
     pub fn list2(&self) -> &ListWithCompilerOutput<T2, O2> {
         &self.list2
     }
@@ -626,7 +655,7 @@ where
     where
         Editor: ListWithCompilerOutputEditor<T1, O1> + ListWithCompilerOutputEditor<T2, O2>,
     {
-        list_pair_process(m, &mut self.list1, &mut self.list2, editor)
+        self.list1.process_(&self.list2, m, editor)
     }
 
     #[must_use]
@@ -638,7 +667,7 @@ where
     where
         Editor: ListWithCompilerOutputEditor<T1, O1> + ListWithCompilerOutputEditor<T2, O2>,
     {
-        list_pair_process(m, &mut self.list2, &mut self.list1, editor)
+        self.list2.process_(&self.list1, m, editor)
     }
 
     #[must_use]
@@ -648,7 +677,7 @@ where
         new_value: T1,
         editor: &mut impl ListWithCompilerOutputEditor<T1, O1>,
     ) -> (bool, Option<ItemChanged<T1>>) {
-        self.list1.edit_item(id, new_value, editor)
+        self.list1.edit_item_(&self.list2, id, new_value, editor)
     }
 
     #[must_use]
@@ -658,7 +687,7 @@ where
         new_value: T2,
         editor: &mut impl ListWithCompilerOutputEditor<T2, O2>,
     ) -> (bool, Option<ItemChanged<T2>>) {
-        self.list2.edit_item(id, new_value, editor)
+        self.list2.edit_item_(&self.list1, id, new_value, editor)
     }
 
     pub fn set_compiler_output1(
