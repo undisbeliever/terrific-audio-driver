@@ -5,9 +5,7 @@
 // SPDX-License-Identifier: MIT
 
 use crate::compiler_thread::ItemId;
-use crate::list_editor::LaVec;
 
-extern crate compiler;
 use compiler::data;
 use compiler::data::Name;
 use compiler::sound_effects::SoundEffectInput;
@@ -89,32 +87,6 @@ impl NameSetter for SoundEffectInput {
     }
 }
 
-pub trait NameDeduplicator
-where
-    Self: Sized,
-{
-    /// Returns true if a's name != b's name
-    fn test_name_changed(a: &Self, b: &Self) -> bool;
-
-    /// Renames item if the name exists in the list.
-    fn dedupe_name(item: &mut Self, list: &LaVec<(ItemId, Self)>, index: Option<usize>);
-}
-
-impl<T> NameDeduplicator for T
-where
-    T: NameGetter + NameSetter,
-{
-    fn test_name_changed(a: &Self, b: &Self) -> bool {
-        a.name() != b.name()
-    }
-
-    fn dedupe_name(item: &mut Self, list: &LaVec<(ItemId, Self)>, index: Option<usize>) {
-        if let Some(new_name) = deduplicate_item_name(item.name(), list, index) {
-            item.set_name(new_name);
-        }
-    }
-}
-
 pub struct DeduplicatedNameVec<T>(Vec<T>);
 
 impl<T> DeduplicatedNameVec<T> {
@@ -139,6 +111,19 @@ where
     }
 
     (DeduplicatedNameVec(out), n_fixed)
+}
+
+pub fn deduplicate_item_name_inplace<ItemT, ListT>(
+    item: &mut ItemT,
+    list: &[ListT],
+    index: Option<usize>,
+) where
+    ItemT: NameGetter + NameSetter,
+    ListT: NameGetter,
+{
+    if let Some(new_name) = deduplicate_item_name(item.name(), list, index) {
+        item.set_name(new_name);
+    }
 }
 
 pub fn deduplicate_item_name<T>(name: &Name, list: &[T], index: Option<usize>) -> Option<Name>
