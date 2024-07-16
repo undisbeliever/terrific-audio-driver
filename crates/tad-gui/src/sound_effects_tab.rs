@@ -7,8 +7,8 @@
 use crate::audio_thread::Pan;
 use crate::compiler_thread::{ItemId, SfxError, SoundEffectOutput};
 use crate::list_editor::{
-    ListAction, ListEditorTable, ListMessage, ListState, ListWithCompilerOutput,
-    ListWithCompilerOutputEditor, TableCompilerOutput, TableMapping,
+    ListAction, ListEditorTable, ListMessage, ListWithCompilerOutput, ListWithCompilerOutputEditor,
+    TableCompilerOutput, TableMapping,
 };
 use crate::mml_editor::{CompiledEditorData, EditorBuffer, MmlEditor, TextErrorRef, TextFormat};
 use crate::tables::{RowWithStatus, SimpleRow};

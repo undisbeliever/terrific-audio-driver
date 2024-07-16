@@ -108,11 +108,8 @@ impl SamplesTab {
 
         let mut sample_sizes_group = Flex::default().column().size_of_parent();
         sample_sizes_group.set_margin(margin);
-        let sample_sizes_widget = SampleSizesWidget::new(
-            &mut sample_sizes_group,
-            instruments_and_samples.list1(),
-            instruments_and_samples.list2(),
-        );
+        let sample_sizes_widget =
+            SampleSizesWidget::new(&mut sample_sizes_group, instruments_and_samples);
         sample_sizes_group.end();
 
         let mut instrument_group = Flex::default().column().size_of_parent();

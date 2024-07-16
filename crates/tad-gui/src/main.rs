@@ -48,7 +48,7 @@ use crate::files::{
 };
 use crate::help::HelpWidget;
 use crate::helpers::input_height;
-use crate::list_editor::{ListMessage, ListState, ListWithCompilerOutput};
+use crate::list_editor::{ListMessage, ListWithCompilerOutput};
 use crate::menu::Menu;
 use crate::names::deduplicate_names;
 use crate::project_tab::ProjectTab;

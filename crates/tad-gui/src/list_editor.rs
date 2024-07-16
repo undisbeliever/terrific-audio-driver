@@ -177,17 +177,6 @@ impl<T> Deref for LaVec<T> {
     }
 }
 
-pub trait ListState
-where
-    Self::Item: Clone + PartialEq<Self::Item> + NameGetter + NameSetter,
-{
-    type Item;
-
-    fn max_size(&self) -> usize;
-    fn len(&self) -> usize;
-    fn item_iter(&self) -> impl Iterator<Item = &Self::Item>;
-}
-
 pub trait CompilerOutput {
     fn is_valid(&self) -> bool;
 }
@@ -265,26 +254,6 @@ where
     fn list_edited(&mut self, _action: &ListAction<T>) {}
     fn item_edited(&mut self, _id: ItemId, _value: &T) {}
     fn set_compiler_output(&mut self, _index: usize, _id: ItemId, _compiler_output: &Option<O>) {}
-}
-
-impl<T, O> ListState for ListWithCompilerOutput<T, O>
-where
-    T: Clone + PartialEq<T> + NameGetter + NameSetter,
-    O: CompilerOutput,
-{
-    type Item = T;
-
-    fn max_size(&self) -> usize {
-        self.max_size
-    }
-
-    fn len(&self) -> usize {
-        self.list.len()
-    }
-
-    fn item_iter(&self) -> impl Iterator<Item = &T> {
-        self.list.iter().map(|(_id, item)| item)
-    }
 }
 
 impl<T, O> ListWithCompilerOutput<T, O>
@@ -581,6 +550,18 @@ where
         editor: &mut impl ListWithCompilerOutputEditor<T, O>,
     ) -> (bool, Option<ItemChanged<T>>) {
         self.edit_item_((), id, new_value, editor)
+    }
+
+    pub fn max_size(&self) -> usize {
+        self.max_size
+    }
+
+    pub fn len(&self) -> usize {
+        self.list.len()
+    }
+
+    pub fn item_iter(&self) -> impl Iterator<Item = &T> {
+        self.list.iter().map(|(_id, item)| item)
     }
 
     pub fn iter(&self) -> impl Iterator<Item = &(ItemId, T)> {
@@ -1055,30 +1036,6 @@ where
         out
     }
 
-    // MUST NOT be called with a `ListPairWithCompilerOutputs` list,
-    pub fn new_with_data(
-        parent: &mut Flex,
-        state: &impl ListState<Item = T::DataType>,
-        sender: fltk::app::Sender<GuiMessage>,
-    ) -> Self {
-        let mut out = Self::new(parent, sender);
-        out.replace(state);
-        out
-    }
-
-    // MUST NOT be called with a `ListPairWithCompilerOutputs` list,
-    pub fn replace(&mut self, state: &impl ListState<Item = T::DataType>) {
-        let mut t = self.table.borrow_mut();
-        let mut lb = self.list_buttons.borrow_mut();
-
-        t.edit_table(|v| {
-            *v = state.item_iter().map(T::new_row).collect();
-        });
-        t.clear_selected();
-
-        lb.set_max_size_and_force_update_buttons(state.max_size(), t.selected_row(), t.n_rows());
-    }
-
     pub fn add_button(
         &mut self,
         label: &str,
@@ -1198,6 +1155,33 @@ impl<T> ListEditorTable<T>
 where
     T: TableMapping + TableCompilerOutput,
 {
+    // SHOULD NOT be directly called with a `ListPairWithCompilerOutputs` list,
+    pub fn new_with_data(
+        parent: &mut Flex,
+        list: &ListWithCompilerOutput<T::DataType, T::CompilerOutputType>,
+        sender: fltk::app::Sender<GuiMessage>,
+    ) -> Self
+    where
+        T: TableCompilerOutput,
+    {
+        let mut out = Self::new(parent, sender);
+        out.replace(list);
+        out
+    }
+
+    // SHOULD NOT be directly called with a `ListPairWithCompilerOutputs` list,
+    pub fn replace(&mut self, list: &ListWithCompilerOutput<T::DataType, T::CompilerOutputType>) {
+        let mut t = self.table.borrow_mut();
+        let mut lb = self.list_buttons.borrow_mut();
+
+        t.edit_table(|v| {
+            *v = list.item_iter().map(T::new_row).collect();
+        });
+        t.clear_selected();
+
+        lb.set_max_size_and_force_update_buttons(list.max_size(), t.selected_row(), t.n_rows());
+    }
+
     fn set_compiler_output(
         &mut self,
         index: usize,

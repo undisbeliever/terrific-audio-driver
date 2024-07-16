@@ -6,7 +6,8 @@
 
 use crate::compiler_thread::{CadOutput, InstrumentOutput, SampleOutput};
 use crate::helpers::ch_units_to_width;
-use crate::list_editor::{LaVec, ListAction, ListState};
+use crate::list_editor::{LaVec, ListAction};
+use crate::InstrumentsAndSamplesData;
 
 use compiler::common_audio_data::CommonAudioData;
 use compiler::data::{Instrument, Name, Sample};
@@ -102,8 +103,7 @@ fn largest_song_string(largest_song: &SongAramSize) -> String {
 impl SampleSizesWidget {
     pub fn new(
         parent: &mut Flex,
-        instruments: &impl ListState<Item = Instrument>,
-        samples: &impl ListState<Item = Sample>,
+        instruments_and_samples: &InstrumentsAndSamplesData,
     ) -> Rc<RefCell<SampleSizesWidget>> {
         let graph_height = ch_units_to_width(parent, 10);
 
@@ -125,6 +125,9 @@ impl SampleSizesWidget {
                 }
             }
         });
+
+        let instruments = instruments_and_samples.list1();
+        let samples = instruments_and_samples.list2();
 
         let state = Rc::new(RefCell::new(SampleSizesWidget {
             font: table.label_font(),

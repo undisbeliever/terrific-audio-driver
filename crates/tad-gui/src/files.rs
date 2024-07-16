@@ -5,7 +5,7 @@
 // SPDX-License-Identifier: MIT
 
 use crate::compiler_thread::{ItemId, ToCompiler};
-use crate::list_editor::{ListMessage, ListState};
+use crate::list_editor::ListMessage;
 use crate::song_tab::SongTab;
 use crate::tabs::{FileType, TabManager};
 use crate::{GuiMessage, ProjectData, SoundEffectsData};
