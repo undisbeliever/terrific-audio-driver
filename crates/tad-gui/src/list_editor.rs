@@ -5,7 +5,7 @@
 // SPDX-License-Identifier: MIT
 
 use crate::compiler_thread::{self, ItemChanged, ItemId};
-use crate::helpers::{ch_units_to_width, SetActive};
+use crate::helpers::ch_units_to_width;
 use crate::names::{
     deduplicate_name_iter, DeduplicatedNameVec, NameGetter, NameSetter, TwoDeduplicatedNameVecs,
 };
@@ -706,130 +706,6 @@ where
     }
 }
 
-pub struct ListButtons {
-    pub pack: Pack,
-
-    pub max_size: usize,
-
-    pub add: Button,
-    pub clone: Option<Button>,
-    pub remove: Button,
-    pub move_top: Button,
-    pub move_up: Button,
-    pub move_down: Button,
-    pub move_bottom: Button,
-}
-
-impl ListButtons {
-    pub fn new(type_name: &str, max_size: usize, show_clone: bool) -> Self {
-        let mut pack = Pack::default().with_type(PackType::Horizontal);
-
-        let button_label_size = pack.label_size() * 8 / 10;
-        pack.set_label_size(button_label_size);
-
-        let button_size = ch_units_to_width(&pack, 4);
-
-        let button = |label: &str, tooltip: String| {
-            let mut b = Button::default()
-                .with_size(button_size, button_size)
-                .with_label(label);
-            b.set_tooltip(&tooltip);
-            b.set_label_size(button_label_size);
-            b
-        };
-
-        let add = button("@add", format!("Add {}", type_name));
-        let clone = if show_clone {
-            Some(button("@clone", format!("Clone {}", type_name)))
-        } else {
-            None
-        };
-        let remove = button("@remove", format!("Remove {}", type_name));
-        let move_top = button("@top", format!("Move {} to top", type_name));
-        let move_up = button("@up", format!("Move {} up", type_name));
-        let move_down = button("@down", format!("Move {} down", type_name));
-        let move_bottom = button("@bottom", format!("Move {} to bottom", type_name));
-
-        pack.end();
-
-        let mut out = Self {
-            pack,
-            max_size,
-            add,
-            clone,
-            remove,
-            move_top,
-            move_up,
-            move_down,
-            move_bottom,
-        };
-        out.deactivate_all();
-        out
-    }
-
-    fn selected_changed(&mut self, index: usize, list_len: usize) {
-        let can_add = list_len < self.max_size;
-
-        self.add.set_active(can_add);
-
-        if let Some(c) = &mut self.clone {
-            c.set_active(can_add);
-        }
-        self.remove.activate();
-
-        if index > 0 {
-            self.move_top.activate();
-            self.move_up.activate();
-        } else {
-            self.move_top.deactivate();
-            self.move_up.deactivate();
-        }
-
-        if index + 1 < list_len {
-            self.move_down.activate();
-            self.move_bottom.activate();
-        } else {
-            self.move_down.deactivate();
-            self.move_bottom.deactivate();
-        }
-    }
-
-    fn selected_clear(&mut self, list_len: usize) {
-        let can_add = list_len < self.max_size;
-
-        self.add.set_active(can_add);
-
-        if let Some(c) = &mut self.clone {
-            c.deactivate();
-        }
-        self.remove.deactivate();
-        self.move_top.deactivate();
-        self.move_up.deactivate();
-        self.move_down.deactivate();
-        self.move_bottom.deactivate();
-    }
-
-    pub fn update_buttons(&mut self, selected: Option<usize>, list_len: usize) {
-        match selected {
-            Some(i) => self.selected_changed(i, list_len),
-            None => self.selected_clear(list_len),
-        }
-    }
-
-    pub fn deactivate_all(&mut self) {
-        self.add.deactivate();
-
-        if let Some(c) = &mut self.clone {
-            c.deactivate();
-        }
-        self.remove.deactivate();
-        self.move_top.deactivate();
-        self.move_up.deactivate();
-        self.move_down.deactivate();
-        self.move_bottom.deactivate();
-    }
-}
-
 pub enum TableAction {
     None,
     OpenEditor,
@@ -882,14 +758,102 @@ where
     fn set_row_state(r: &mut Self::RowType, co: &Option<Self::CompilerOutputType>) -> bool;
 }
 
+/// Arguments to the ListEditorTableButtons update callback
+pub struct UpdateButtonArgs {
+    pub max_len: usize,
+    pub list_len: usize,
+    pub selected: Option<usize>,
+}
+
+/// Callback used to enable or disable ListEditorTableButtons
+type UpdateButtonCallback = Box<dyn Fn(&UpdateButtonArgs) -> bool>;
+
+struct ListEditorTableButtons {
+    pack: Pack,
+
+    button_size: i32,
+    label_size: i32,
+
+    max_size: usize,
+    buttons: Vec<(Button, UpdateButtonCallback)>,
+}
+
+impl ListEditorTableButtons {
+    fn new(max_size: usize) -> Self {
+        let mut pack = Pack::default().with_type(PackType::Horizontal);
+        pack.end();
+
+        let label_size = pack.label_size() * 8 / 10;
+        pack.set_label_size(label_size);
+
+        Self {
+            button_size: ch_units_to_width(&pack, 4),
+            label_size,
+            max_size,
+            buttons: Vec::new(),
+
+            pack,
+        }
+    }
+
+    fn add_button(
+        &mut self,
+        label: &str,
+        tooltip: &str,
+        update_cb: UpdateButtonCallback,
+        callback: impl FnMut(&mut Button) + 'static,
+        list_len: usize,
+        selected: Option<usize>,
+    ) {
+        let mut b = Button::default()
+            .with_size(self.button_size, self.button_size)
+            .with_label(label);
+        b.set_tooltip(tooltip);
+        b.set_label_size(self.label_size);
+
+        let sel_args = UpdateButtonArgs {
+            max_len: self.max_size,
+            list_len,
+            selected,
+        };
+        match update_cb(&sel_args) {
+            true => b.activate(),
+            false => b.deactivate(),
+        }
+
+        b.set_callback(callback);
+
+        self.pack.add(&b);
+
+        self.buttons.push((b, update_cb));
+    }
+
+    fn update_buttons(&mut self, selected: Option<usize>, list_len: usize) {
+        let sel_args = UpdateButtonArgs {
+            max_len: self.max_size,
+            list_len,
+            selected,
+        };
+
+        for (b, cb) in &mut self.buttons {
+            match cb(&sel_args) {
+                true => b.activate(),
+                false => b.deactivate(),
+            }
+        }
+    }
+}
+
 pub struct ListEditorTable<T>
 where
     T: TableMapping,
 {
+    sender: fltk::app::Sender<GuiMessage>,
+
     list_buttons_pack: Pack,
 
     // Must store list_buttons in a separate Rc to prevent a BorrowMutError in set_selection_changed_callback
-    list_buttons: Rc<RefCell<ListButtons>>,
+    list_buttons: Rc<RefCell<ListEditorTableButtons>>,
 
     table: Rc<RefCell<tables::TrTable<T::RowType>>>,
 }
@@ -899,126 +863,108 @@ where
     T: TableMapping,
 {
     pub fn new(sender: fltk::app::Sender<GuiMessage>) -> Self {
-        let list_buttons = Rc::new(RefCell::new(ListButtons::new(
-            T::type_name(),
-            T::MAX_SIZE,
-            T::CAN_CLONE,
-        )));
+        let list_buttons = Rc::new(RefCell::new(ListEditorTableButtons::new(T::MAX_SIZE)));
         let table = Rc::new(RefCell::new(tables::TrTable::new(T::headers())));
 
-        let mut t = table.borrow_mut();
-        let mut lb = list_buttons.borrow_mut();
+        {
+            let mut t = table.borrow_mut();
 
-        t.set_selection_changed_callback({
-            let s = sender.clone();
-            let list_buttons = list_buttons.clone();
-            move |selected, n_rows, user_selection| {
-                list_buttons.borrow_mut().update_buttons(selected, n_rows);
+            t.set_selection_changed_callback({
+                let s = sender.clone();
+                let list_buttons = list_buttons.clone();
+                move |selected, n_rows, user_selection| {
+                    list_buttons.borrow_mut().update_buttons(selected, n_rows);
 
-                if user_selection {
-                    if let Some(m) = T::user_changes_selection() {
-                        s.send(m)
+                    if user_selection {
+                        if let Some(m) = T::user_changes_selection() {
+                            s.send(m)
+                        }
                     }
                 }
-            }
-        });
+            });
 
-        if T::CAN_EDIT {
-            t.enable_cell_editing({
-                // Commit edited value
+            if T::CAN_EDIT {
+                t.enable_cell_editing({
+                    // Commit edited value
+                    let s = sender.clone();
+                    move |index, col, value| {
+                        if let Some(m) = T::commit_edited_value(index, col, value) {
+                            s.send(m);
+                        }
+                    }
+                });
+            }
+
+            t.set_callback({
                 let s = sender.clone();
-                move |index, col, value| {
-                    if let Some(m) = T::commit_edited_value(index, col, value) {
+                move |ev, row, col| match T::table_event(ev, row, col) {
+                    TableAction::None => false,
+                    TableAction::OpenEditor => true,
+                    TableAction::Send(m) => {
                         s.send(m);
+                        false
                     }
                 }
             });
         }
 
-        t.set_callback({
-            let s = sender.clone();
-            move |ev, row, col| match T::table_event(ev, row, col) {
-                TableAction::None => false,
-                TableAction::OpenEditor => true,
-                TableAction::Send(m) => {
-                    s.send(m);
-                    false
-                }
-            }
-        });
+        let list_buttons_pack = list_buttons.borrow().pack.clone();
 
-        lb.add.set_callback({
-            let s = sender.clone();
-            move |_| s.send(T::add_clicked())
-        });
-        if let Some(b) = &mut lb.clone {
-            b.set_callback({
-                let s = sender.clone();
-                let table = table.clone();
-                move |_| {
-                    if let Some(i) = table.borrow().selected_row() {
-                        s.send(T::to_message(ListMessage::Clone(i)))
-                    }
-                }
-            });
-        }
-        lb.remove.set_callback({
-            let s = sender.clone();
-            let table = table.clone();
-            move |_| {
-                if let Some(i) = table.borrow().selected_row() {
-                    s.send(T::to_message(ListMessage::Remove(i)))
-                }
-            }
-        });
-        lb.move_top.set_callback({
-            let s = sender.clone();
-            let table = table.clone();
-            move |_| {
-                if let Some(i) = table.borrow().selected_row() {
-                    s.send(T::to_message(ListMessage::MoveToTop(i)))
-                }
-            }
-        });
-        lb.move_up.set_callback({
-            let s = sender.clone();
-            let table = table.clone();
-            move |_| {
-                if let Some(i) = table.borrow().selected_row() {
-                    s.send(T::to_message(ListMessage::MoveUp(i)))
-                }
-            }
-        });
-        lb.move_down.set_callback({
-            let s = sender.clone();
-            let table = table.clone();
-            move |_| {
-                if let Some(i) = table.borrow().selected_row() {
-                    s.send(T::to_message(ListMessage::MoveDown(i)))
-                }
-            }
-        });
-        lb.move_bottom.set_callback({
-            let s = sender;
-            let table = table.clone();
-            move |_| {
-                if let Some(i) = table.borrow().selected_row() {
-                    s.send(T::to_message(ListMessage::MoveToBottom(i)))
-                }
-            }
-        });
-        Self::update_list_buttons(&mut lb, &t);
-
-        let list_buttons_pack = lb.pack.clone();
-
-        drop(lb);
-        drop(t);
-
-        Self {
+        let mut out = Self {
+            sender,
             list_buttons_pack,
             list_buttons,
             table,
+        };
+
+        let type_name = T::type_name();
+
+        out.add_button(
+            "@add",
+            &format!("Add {type_name}"),
+            |a| a.list_len < a.max_len,
+            || T::add_clicked(),
+        );
+        if T::CAN_CLONE {
+            out.add_sel_button(
+                "@clone",
+                &format!("Clone {type_name}"),
+                |a| a.selected.is_some() && a.list_len < a.max_len,
+                |index| T::to_message(ListMessage::Clone(index)),
+            );
         }
+        out.add_sel_button(
+            "@remove",
+            &format!("Remove {type_name}"),
+            |a| a.selected.is_some(),
+            |index| T::to_message(ListMessage::Remove(index)),
+        );
+        out.add_sel_button(
+            "@top",
+            &format!("Move {type_name} to top"),
+            |a| a.selected.is_some_and(|i| i > 0),
+            |index| T::to_message(ListMessage::MoveToTop(index)),
+        );
+        out.add_sel_button(
+            "@up",
+            &format!("Move {type_name} up"),
+            |a| a.selected.is_some_and(|i| i > 0),
+            |index| T::to_message(ListMessage::MoveUp(index)),
+        );
+        out.add_sel_button(
+            "@down",
+            &format!("Move {type_name} down"),
+            |a| a.selected.is_some_and(|i| i + 1 < a.list_len),
+            |index| T::to_message(ListMessage::MoveDown(index)),
+        );
+        out.add_sel_button(
+            "@bottom",
+            &format!("Move {type_name} to bottom"),
+            |a| a.selected.is_some_and(|i| i + 1 < a.list_len),
+            |index| T::to_message(ListMessage::MoveToBottom(index)),
+        );
+
+        out
     }
 
     pub fn new_from_slice(data: &[T::DataType], sender: fltk::app::Sender<GuiMessage>) -> Self {
@@ -1045,6 +991,57 @@ where
         out
     }
 
+    pub fn add_button(
+        &mut self,
+        label: &str,
+        tooltip: &str,
+        update_cb: impl Fn(&UpdateButtonArgs) -> bool + 'static,
+        cb: impl Fn() -> GuiMessage + 'static,
+    ) {
+        let t = self.table.borrow();
+        let mut lb = self.list_buttons.borrow_mut();
+
+        lb.add_button(
+            label,
+            tooltip,
+            Box::new(update_cb),
+            {
+                let s = self.sender.clone();
+                move |_| s.send(cb())
+            },
+            t.n_rows(),
+            t.selected_row(),
+        );
+    }
+
+    pub fn add_sel_button(
+        &mut self,
+        label: &str,
+        tooltip: &str,
+        update_cb: impl Fn(&UpdateButtonArgs) -> bool + 'static,
+        cb: impl Fn(usize) -> GuiMessage + 'static,
+    ) {
+        let t = self.table.borrow();
+        let mut lb = self.list_buttons.borrow_mut();
+
+        lb.add_button(
+            label,
+            tooltip,
+            Box::new(update_cb),
+            {
+                let s = self.sender.clone();
+                let t = self.table.clone();
+                move |_| {
+                    if let Some(i) = t.borrow().selected_row() {
+                        s.send(cb(i))
+                    }
+                }
+            },
+            t.n_rows(),
+            t.selected_row(),
+        );
+    }
+
     pub fn replace(&mut self, state: &impl ListState<Item = T::DataType>) {
         let mut t = self.table.borrow_mut();
         let mut lb = self.list_buttons.borrow_mut();
@@ -1057,12 +1054,15 @@ where
         Self::update_list_buttons(&mut lb, &t);
     }
 
-    fn update_list_buttons(list_buttons: &mut ListButtons, table: &tables::TrTable<T::RowType>) {
+    fn update_list_buttons(
+        list_buttons: &mut ListEditorTableButtons,
+        table: &tables::TrTable<T::RowType>,
+    ) {
         list_buttons.update_buttons(table.selected_row(), table.n_rows());
     }
 
     pub fn button_height(&self) -> i32 {
-        self.list_buttons.borrow().add.height()
+        self.list_buttons.borrow().button_size
     }
 
     pub fn list_buttons_pack(&self) -> &Pack {
