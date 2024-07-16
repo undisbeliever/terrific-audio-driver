@@ -389,6 +389,12 @@ impl SfxExportOrderEditor {
 
         data.process(&a);
 
+        self.normal_priority
+            .set_max_size(MAX_SOUND_EFFECTS.saturating_sub(data.low_priority_sfx().len()));
+
+        self.low_priority
+            .set_max_size(MAX_SOUND_EFFECTS.saturating_sub(data.normal_priority_sfx().len()));
+
         Some(a)
     }
 }

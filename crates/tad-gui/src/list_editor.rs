@@ -40,6 +40,25 @@ pub enum ListMessage<T> {
     AddWithItemId(ItemId, T),
 }
 
+impl<T> ListMessage<T> {
+    fn may_resize_list(&self) -> bool {
+        match self {
+            Self::ItemEdited(..) => false,
+
+            Self::Add(..)
+            | Self::AddMultiple(..)
+            | Self::AddWithItemId(..)
+            | Self::Clone(..)
+            | Self::Remove(..) => true,
+
+            Self::MoveToTop(..)
+            | Self::MoveUp(..)
+            | Self::MoveDown(..)
+            | Self::MoveToBottom(..) => false,
+        }
+    }
+}
+
 #[derive(Debug)]
 pub enum ListAction<T> {
     None,
@@ -652,7 +671,17 @@ where
     where
         Editor: ListWithCompilerOutputEditor<T1, O1> + ListWithCompilerOutputEditor<T2, O2>,
     {
-        self.list1.process_(&self.list2, m, editor)
+        let may_resize_list = m.may_resize_list();
+
+        let out = self.list1.process_(&self.list2, m, editor);
+
+        if may_resize_list {
+            // Assumes list1 and list2 have the same max_size
+            ListWithCompilerOutputEditor::<T2, O2>::table_mut(editor)
+                .set_max_size(self.list1.max_size.saturating_sub(self.list1.len()));
+        }
+
+        out
     }
 
     #[must_use]
@@ -664,7 +693,17 @@ where
     where
         Editor: ListWithCompilerOutputEditor<T1, O1> + ListWithCompilerOutputEditor<T2, O2>,
     {
-        self.list2.process_(&self.list1, m, editor)
+        let may_resize_list = m.may_resize_list();
+
+        let out = self.list2.process_(&self.list1, m, editor);
+
+        if may_resize_list {
+            // Assumes list1 and list2 have the same max_size
+            ListWithCompilerOutputEditor::<T1, O1>::table_mut(editor)
+                .set_max_size(self.list2.max_size.saturating_sub(self.list2.len()));
+        }
+
+        out
     }
 
     #[must_use]
@@ -826,6 +865,18 @@ impl ListEditorTableButtons {
         self.pack.add(&b);
 
         self.buttons.push((b, update_cb));
+    }
+
+    fn set_max_size_and_update_buttons(
+        &mut self,
+        max_size: usize,
+        selected: Option<usize>,
+        list_len: usize,
+    ) {
+        if self.max_size != max_size {
+            self.max_size = max_size;
+            self.update_buttons(selected, list_len);
+        }
     }
 
     fn update_buttons(&mut self, selected: Option<usize>, list_len: usize) {
@@ -1052,6 +1103,13 @@ where
         t.clear_selected();
 
         Self::update_list_buttons(&mut lb, &t);
+    }
+
+    pub fn set_max_size(&mut self, max_size: usize) {
+        let t = self.table.borrow_mut();
+        let mut lb = self.list_buttons.borrow_mut();
+
+        lb.set_max_size_and_update_buttons(max_size, t.selected_row(), t.n_rows());
     }
 
     fn update_list_buttons(
