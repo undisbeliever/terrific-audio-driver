@@ -22,12 +22,9 @@ use std::collections::HashSet;
 use std::ops::Deref;
 use std::rc::Rc;
 
-// A ListMessage MUST ONLY be called once per frame
-// (to prevent a potential infinite `ListMessage::ItemSelected` loop)
+// CAUTION: A ListMessage SHOULD ONLY be called once per frame.
 #[derive(Debug)]
 pub enum ListMessage<T> {
-    // The `SelectedItemEdited` message has been removed because clicking on a TrTable list item
-    // will cause the `ItemSelected` message to be sent before the `SelectedItemEdited` event.
     ItemEdited(usize, T),
 
     Add(T),
