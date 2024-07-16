@@ -663,8 +663,10 @@ impl ListWithCompilerOutputEditor<SoundEffectInput, SoundEffectOutput> for Sound
         if let Ok(mut state) = self.state.try_borrow_mut() {
             state.list_edited(action);
         }
+    }
 
-        // ::TODO extract removed sound effect from `sfx_buffers`::
+    fn item_removed(&mut self, id: ItemId) {
+        self.sfx_buffers.remove(&id);
     }
 
     fn item_edited(&mut self, id: ItemId, sfx: &SoundEffectInput) {

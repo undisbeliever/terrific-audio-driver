@@ -253,6 +253,7 @@ where
 
     fn list_edited(&mut self, _action: &ListAction<T>) {}
     fn item_edited(&mut self, _id: ItemId, _value: &T) {}
+    fn item_removed(&mut self, _id: ItemId) {}
     fn set_compiler_output(&mut self, _index: usize, _id: ItemId, _compiler_output: &Option<O>) {}
 }
 
@@ -440,6 +441,7 @@ where
             let action = ListAction::Remove(index);
             editor.table_mut().list_edited(&action);
             editor.list_edited(&action);
+            editor.item_removed(id);
             editor.selected_item_changed(self);
 
             (true, Some(ItemChanged::Removed(id)))
