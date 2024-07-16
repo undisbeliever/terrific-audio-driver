@@ -6,17 +6,16 @@
 
 use crate::audio_thread::Pan;
 use crate::compiler_thread::{ItemId, SfxError, SoundEffectOutput};
-use crate::helpers::*;
 use crate::list_editor::{
-    CompilerOutputGui, LaVec, ListAction, ListButtons, ListData, ListEditor, ListEditorTable,
-    ListMessage, ListState, TableCompilerOutput, TableMapping,
+    ListAction, ListEditorTable, ListMessage, ListWithCompilerOutput, ListWithCompilerOutputEditor,
+    TableCompilerOutput, TableMapping,
 };
 use crate::mml_editor::{CompiledEditorData, EditorBuffer, MmlEditor, TextErrorRef, TextFormat};
 use crate::tables::{RowWithStatus, SimpleRow};
 use crate::tabs::{FileType, Tab};
+use crate::{helpers::*, ProjectSongsData};
 use crate::{GuiMessage, ProjectData, SoundEffectsData};
 
-use compiler::data;
 use compiler::data::Name;
 use compiler::driver_constants::{CENTER_PAN, MAX_PAN};
 use compiler::errors::SfxErrorLines;
@@ -37,8 +36,11 @@ use fltk::valuator::HorNiceSlider;
 use fltk::widget::Widget;
 
 use std::cell::RefCell;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
+
+// Sound effect file can hold more sound effects then export-order allows
+pub const MAX_SFX_FILE_SOUND_EFFECTS: usize = 1024;
 
 #[derive(Clone, Copy)]
 enum SoundEffectTypeChoice {
@@ -71,7 +73,7 @@ pub fn blank_sfx_file() -> SoundEffectsFile {
     }
 }
 
-struct SoundEffectMapping;
+pub struct SoundEffectMapping;
 impl TableMapping for SoundEffectMapping {
     type DataType = SoundEffectInput;
     type RowType = RowWithStatus<SimpleRow<1>>;
@@ -106,6 +108,10 @@ impl TableMapping for SoundEffectMapping {
     fn edit_row(r: &mut Self::RowType, i: &SoundEffectInput) -> bool {
         r.columns.edit_column(0, i.name.as_str())
     }
+
+    fn user_changes_selection() -> Option<GuiMessage> {
+        Some(GuiMessage::UserChangesSelectedSoundEffect)
+    }
 }
 
 impl TableCompilerOutput for SoundEffectMapping {
@@ -126,20 +132,23 @@ struct SongChoice {
 
 pub struct State {
     sender: app::Sender<GuiMessage>,
-    selected: Option<usize>,
-    selected_id: Option<ItemId>,
-    old_name: Name,
-    old_flags: SfxFlags,
 
     pan: HorNiceSlider,
     song_choice: SongChoice,
     song_start_ticks: IntInput,
+
+    selected_id: Option<ItemId>,
+    old_name: Name,
+    old_flags: SfxFlags,
 
     name: Input,
     sound_effect_type: Choice,
     one_channel_flag: SfxFlagRadios,
     interruptible_flag: SfxFlagRadios,
     editor: MmlEditor,
+
+    console: TextDisplay,
+    console_buffer: TextBuffer,
 
     error_lines: Option<SfxErrorLines>,
 }
@@ -150,7 +159,7 @@ pub struct SoundEffectsTab {
     header_buffer: Rc<RefCell<EditorBuffer>>,
 
     // Each sound effect gets it own buffer so they have their own undo/redo stack.
-    sfx_buffers: LaVec<Option<Rc<RefCell<EditorBuffer>>>>,
+    sfx_buffers: HashMap<ItemId, Rc<RefCell<EditorBuffer>>>,
 
     group: Flex,
 
@@ -166,8 +175,6 @@ pub struct SoundEffectsTab {
     sfx_group: Flex,
 
     name: Input,
-    console: TextDisplay,
-    console_buffer: TextBuffer,
 }
 
 impl Tab for SoundEffectsTab {
@@ -192,10 +199,7 @@ impl SoundEffectsTab {
         let mut sidebar = Flex::default().column();
         group.fixed(&sidebar, ch_units_to_width(&sidebar, 30));
 
-        let mut sfx_table = ListEditorTable::new(sender.clone());
-
-        let button_height = sfx_table.button_height();
-        sidebar.fixed(&sfx_table.list_buttons().pack, button_height);
+        let sfx_table = ListEditorTable::new(&mut sidebar, sender.clone());
 
         let mut add_missing_sfx_button = Button::default().with_label("Add missing sound effects");
         sidebar.fixed(
@@ -286,7 +290,7 @@ impl SoundEffectsTab {
         editor.set_text_size(editor.widget().text_size() * 12 / 10);
 
         let mut console = TextDisplay::default();
-        main_group.fixed(&console, button_height * 5);
+        main_group.fixed(&console, ch_units_to_width(&console, 15));
 
         main_group.add(editor.status_bar());
         main_group.fixed(editor.status_bar(), input_height(editor.status_bar()));
@@ -317,13 +321,12 @@ impl SoundEffectsTab {
 
         let state = Rc::new(RefCell::from(State {
             sender: sender.clone(),
-            selected: None,
-            selected_id: None,
 
             pan,
             song_choice,
             song_start_ticks,
 
+            selected_id: None,
             old_name: "sfx".parse().unwrap(),
             old_flags: SfxFlags::default(),
 
@@ -333,6 +336,9 @@ impl SoundEffectsTab {
             interruptible_flag,
             editor,
             error_lines: None,
+
+            console,
+            console_buffer,
         }));
 
         // Handle toolbar shortcut keys.
@@ -437,31 +443,31 @@ impl SoundEffectsTab {
                     }
                 }
             });
-        }
 
-        console.handle({
-            let s = state.clone();
-            move |widget, ev| {
-                if ev == Event::Released && app::event_clicks() {
-                    if let Some(mut buffer) = widget.buffer() {
-                        buffer.unselect();
+            s.console.handle({
+                let s = state.clone();
+                move |widget, ev| {
+                    if ev == Event::Released && app::event_clicks() {
+                        if let Some(mut buffer) = widget.buffer() {
+                            buffer.unselect();
 
-                        if let Ok(mut state) = s.try_borrow_mut() {
-                            let line = widget.count_lines(0, widget.insert_position(), false);
-                            let line = line.try_into().unwrap_or(0);
-                            state.error_line_clicked(line);
+                            if let Ok(mut state) = s.try_borrow_mut() {
+                                let line = widget.count_lines(0, widget.insert_position(), false);
+                                let line = line.try_into().unwrap_or(0);
+                                state.error_line_clicked(line);
+                            }
                         }
                     }
+                    false
                 }
-                false
-            }
-        });
+            });
+        }
 
         let mut s = Self {
             state,
 
             header_buffer,
-            sfx_buffers: LaVec::new(),
+            sfx_buffers: HashMap::new(),
 
             group,
             no_sfx_file_gui: no_sfx_file_group,
@@ -474,27 +480,23 @@ impl SoundEffectsTab {
             main_group,
             sfx_group,
             name,
-
-            console,
-            console_buffer,
         };
-        s.clear_selected();
+        s.disable_editor();
         s
     }
 
     pub fn replace_sfx_file(
         &mut self,
         header: &str,
-        state: &impl ListState<Item = SoundEffectInput>,
+        sfx_list: &ListWithCompilerOutput<SoundEffectInput, SoundEffectOutput>,
     ) {
-        let v: Vec<_> = (0..state.list().len()).map(|_| None).collect();
-        assert!(v.len() == state.list().len());
-
-        self.clear_selected();
+        self.disable_editor();
         self.state.borrow_mut().editor.set_text(header);
 
-        self.sfx_buffers = LaVec::from_vec(v);
-        self.sfx_table.replace(state);
+        self.sfx_table.replace(sfx_list);
+
+        // ::TODO save old buffers::
+        self.sfx_buffers.clear();
 
         self.group.remove(&self.no_sfx_file_gui);
 
@@ -524,10 +526,68 @@ impl SoundEffectsTab {
         }
     }
 
-    pub fn selected_tab_changed(&mut self, tab: Option<FileType>, pf_songs: &ListData<data::Song>) {
+    pub fn selected_tab_changed(&mut self, tab: Option<FileType>, pf_songs: &ProjectSongsData) {
         if let Ok(mut s) = self.state.try_borrow_mut() {
             s.song_choice.selected_tab_changed(tab, pf_songs);
         }
+    }
+
+    fn disable_editor(&mut self) {
+        let mut state = self.state.borrow_mut();
+
+        state.commit_sfx();
+
+        state.selected_id = None;
+        state.name.set_value("Header (not a sound effect)");
+        state.sound_effect_type.set_value(-1);
+
+        state.one_channel_flag.clear_value();
+        state.interruptible_flag.clear_value();
+
+        state.editor.set_buffer(self.header_buffer.clone());
+
+        self.sfx_group.deactivate();
+    }
+
+    fn enable_editor(
+        &mut self,
+        id: ItemId,
+        sfx: &SoundEffectInput,
+        co: &Option<SoundEffectOutput>,
+    ) {
+        let mut state = self.state.borrow_mut();
+
+        state.commit_sfx();
+
+        state.selected_id = Some(id);
+        state.old_name = sfx.name.clone();
+        state.old_flags = sfx.flags.clone();
+
+        self.name.set_value(sfx.name.as_str());
+        self.name.clear_changed();
+
+        let type_choice = match &sfx.sfx {
+            SoundEffectText::BytecodeAssembly(_) => SoundEffectTypeChoice::BytecodeAssembly,
+            SoundEffectText::Mml(_) => SoundEffectTypeChoice::Mml,
+        };
+        state.sound_effect_type.set_value(type_choice.to_i32());
+
+        state.one_channel_flag.set_value(sfx.flags.one_channel);
+        state.interruptible_flag.set_value(sfx.flags.interruptible);
+
+        let b = self.sfx_buffers.entry(id).or_insert_with(|| {
+            let (text, format) = match &sfx.sfx {
+                SoundEffectText::BytecodeAssembly(s) => (s, TextFormat::Bytecode),
+                SoundEffectText::Mml(s) => (s, TextFormat::Mml),
+            };
+            state.editor.new_buffer(text, format)
+        });
+        state.editor.set_buffer(b.clone());
+
+        state.selected_compiler_output_changed(co);
+
+        self.sfx_group.activate();
+        self.main_group.activate();
     }
 }
 
@@ -550,7 +610,7 @@ impl SongChoice {
         self.song_choice_out_of_date = true;
     }
 
-    fn selected_tab_changed(&mut self, tab: Option<FileType>, pf_songs: &ListData<data::Song>) {
+    fn selected_tab_changed(&mut self, tab: Option<FileType>, pf_songs: &ProjectSongsData) {
         match tab {
             Some(FileType::SoundEffects) => self.update_song_list(pf_songs),
             Some(FileType::Song(song_id)) => self.pending_song_change = Some(song_id),
@@ -558,7 +618,7 @@ impl SongChoice {
         }
     }
 
-    fn update_song_list(&mut self, pf_songs: &ListData<data::Song>) {
+    fn update_song_list(&mut self, pf_songs: &ProjectSongsData) {
         if self.song_choice_out_of_date {
             let old_song_id = usize::try_from(self.choice.value())
                 .ok()
@@ -592,118 +652,66 @@ impl SongChoice {
     }
 }
 
-impl ListEditor<SoundEffectInput> for SoundEffectsTab {
-    fn list_buttons(&mut self) -> &mut ListButtons {
-        self.sfx_table.list_buttons()
+impl ListWithCompilerOutputEditor<SoundEffectInput, SoundEffectOutput> for SoundEffectsTab {
+    type TableMapping = SoundEffectMapping;
+
+    fn table_mut(&mut self) -> &mut ListEditorTable<Self::TableMapping> {
+        &mut self.sfx_table
     }
 
     fn list_edited(&mut self, action: &ListAction<SoundEffectInput>) {
         if let Ok(mut state) = self.state.try_borrow_mut() {
             state.list_edited(action);
         }
-
-        self.sfx_table.list_edited(action);
-
-        self.sfx_buffers.process_map(
-            action,
-            // new: Don't create a buffer until the sfx is selected
-            |_| None,
-            // edit: Do not change the buffer, ensures undo/redo stack is unchanged.
-            |_, _| {},
-        );
     }
 
-    fn clear_selected(&mut self) {
-        if let Ok(mut state) = self.state.try_borrow_mut() {
-            state.commit_sfx();
-            state.selected = None;
+    fn item_removed(&mut self, id: ItemId) {
+        self.sfx_buffers.remove(&id);
+    }
 
-            state.name.set_value("Header (not a sound effect)");
-            state.sound_effect_type.set_value(-1);
+    fn item_edited(&mut self, id: ItemId, sfx: &SoundEffectInput) {
+        let mut s = self.state.borrow_mut();
 
-            state.one_channel_flag.clear_value();
-            state.interruptible_flag.clear_value();
-
-            state.editor.set_buffer(self.header_buffer.clone());
+        if s.selected_id == Some(id) && s.old_name != sfx.name {
+            s.old_name = sfx.name.clone();
+            s.name.set_value(sfx.name.as_str());
         }
-
-        self.sfx_table.clear_selected();
-
-        self.sfx_group.deactivate();
     }
 
-    fn set_selected(&mut self, index: usize, id: ItemId, sfx: &SoundEffectInput) {
-        if let Some(sfx_buffer) = self.sfx_buffers.get_mut(index) {
-            match self.state.try_borrow_mut() {
-                Ok(mut state) => {
-                    state.commit_sfx();
+    fn set_compiler_output(
+        &mut self,
+        _index: usize,
+        id: ItemId,
+        compiler_output: &Option<SoundEffectOutput>,
+    ) {
+        let mut s = self.state.borrow_mut();
+        if s.selected_id == Some(id) {
+            s.selected_compiler_output_changed(compiler_output);
+        }
+    }
 
-                    state.selected = Some(index);
-                    state.selected_id = Some(id);
-                    state.old_name = sfx.name.clone();
-                    state.old_flags = sfx.flags.clone();
-
-                    self.name.set_value(sfx.name.as_str());
-                    self.name.clear_changed();
-
-                    let type_choice = match &sfx.sfx {
-                        SoundEffectText::BytecodeAssembly(_) => {
-                            SoundEffectTypeChoice::BytecodeAssembly
-                        }
-                        SoundEffectText::Mml(_) => SoundEffectTypeChoice::Mml,
-                    };
-                    state.sound_effect_type.set_value(type_choice.to_i32());
-
-                    state.one_channel_flag.set_value(sfx.flags.one_channel);
-                    state.interruptible_flag.set_value(sfx.flags.interruptible);
-
-                    match sfx_buffer {
-                        Some(b) => state.editor.set_buffer(b.clone()),
-                        None => {
-                            let (text, format) = match &sfx.sfx {
-                                SoundEffectText::BytecodeAssembly(s) => (s, TextFormat::Bytecode),
-                                SoundEffectText::Mml(s) => (s, TextFormat::Mml),
-                            };
-
-                            let b = state.editor.new_buffer(text, format);
-                            *sfx_buffer = Some(b);
-                        }
-                    }
-
-                    self.sfx_table.set_selected(index, id, sfx);
-
-                    self.sfx_group.activate();
-                    self.main_group.activate();
+    fn selected_item_changed(
+        &mut self,
+        sfx_list: &ListWithCompilerOutput<SoundEffectInput, SoundEffectOutput>,
+    ) {
+        match sfx_list.get_selected_row(&self.sfx_table) {
+            Some((id, sfx, co)) => {
+                if self.state.borrow().selected_id != Some(id) {
+                    self.enable_editor(id, sfx, co);
                 }
-                // This should not happen
-                Err(_) => self.main_group.deactivate(),
             }
-        } else {
-            self.clear_selected();
+
+            None => {
+                if self.state.borrow().selected_id.is_some() {
+                    self.disable_editor();
+                }
+            }
         }
     }
 }
 
 impl State {
-    fn list_edited(&mut self, action: &ListAction<SoundEffectInput>) {
-        match action {
-            ListAction::Move(from, to) => {
-                if self.selected == Some(*from) {
-                    self.selected = Some(*to);
-                }
-            }
-            ListAction::Remove(_) => {
-                // Prevent `commit_sfx()` from sending a `ListMessage::ItemEdited` message for the old
-                // index and overriding the next item in the list with the deleted value.
-                self.selected = None;
-                self.selected_id = None;
-            }
-            ListAction::None
-            | ListAction::Add(..)
-            | ListAction::AddMultiple(..)
-            | ListAction::Edit(..) => (),
-        }
-    }
+    fn list_edited(&mut self, _: &ListAction<SoundEffectInput>) {}
 
     fn play_song(&mut self) {
         if let Some(id) = self.song_choice.selected_song_id() {
@@ -732,7 +740,7 @@ impl State {
     }
 
     fn text_changed(&self, buffer: &EditorBuffer) {
-        if let Some(index) = self.selected {
+        if let Some(id) = self.selected_id {
             let sfx = SoundEffectInput {
                 name: self.old_name.clone(),
                 flags: self.old_flags.clone(),
@@ -743,10 +751,7 @@ impl State {
                     SoundEffectTypeChoice::Mml => SoundEffectText::Mml(buffer.text()),
                 },
             };
-            self.sender
-                .send(GuiMessage::EditSoundEffectList(ListMessage::ItemEdited(
-                    index, sfx,
-                )));
+            self.sender.send(GuiMessage::EditSoundEffect(id, sfx));
         } else {
             // Header
             self.sender.send(GuiMessage::SfxFileHeaderChanged);
@@ -754,7 +759,7 @@ impl State {
     }
 
     fn commit_sfx(&mut self) {
-        if let Some(index) = self.selected {
+        if let Some(id) = self.selected_id {
             let text = self.editor.text();
 
             if let Some(n) = Name::try_new_lossy(self.name.value()) {
@@ -777,10 +782,7 @@ impl State {
                     SoundEffectTypeChoice::Mml => SoundEffectText::Mml(text),
                 },
             };
-            self.sender
-                .send(GuiMessage::EditSoundEffectList(ListMessage::ItemEdited(
-                    index, sfx,
-                )));
+            self.sender.send(GuiMessage::EditSoundEffect(id, sfx));
         }
     }
 
@@ -800,16 +802,8 @@ impl State {
             self.editor.move_cursor_to_line_end(editor_line);
         }
     }
-}
 
-impl CompilerOutputGui<SoundEffectOutput> for SoundEffectsTab {
-    fn set_compiler_output(&mut self, index: usize, compiler_output: &Option<SoundEffectOutput>) {
-        self.sfx_table.set_compiler_output(index, compiler_output);
-    }
-
-    fn set_selected_compiler_output(&mut self, compiler_output: &Option<SoundEffectOutput>) {
-        let mut state = self.state.borrow_mut();
-
+    fn selected_compiler_output_changed(&mut self, compiler_output: &Option<SoundEffectOutput>) {
         match compiler_output {
             None => self.console_buffer.set_text(""),
             Some(Ok(o)) => {
@@ -825,14 +819,13 @@ impl CompilerOutputGui<SoundEffectOutput> for SoundEffectsTab {
                     duration_ms % 1000,
                 ));
                 self.console.set_text_color(Color::Foreground);
-                state.error_lines = None;
+                self.error_lines = None;
 
-                state
-                    .editor
+                self.editor
                     .set_compiled_data(CompiledEditorData::SoundEffect(o.clone()));
             }
             Some(Err(e)) => {
-                state.editor.clear_compiled_data();
+                self.editor.clear_compiled_data();
 
                 let (error_lines, text) = match e {
                     SfxError::Error(e) => (
@@ -841,7 +834,7 @@ impl CompilerOutputGui<SoundEffectOutput> for SoundEffectsTab {
                     ),
                     SfxError::Dependency => (None, e.to_string()),
                 };
-                state.error_lines = error_lines;
+                self.error_lines = error_lines;
 
                 self.console_buffer.set_text(&text);
                 self.console.set_text_color(Color::Red);
@@ -852,7 +845,7 @@ impl CompilerOutputGui<SoundEffectOutput> for SoundEffectsTab {
             Some(Err(SfxError::Error(e))) => Some(TextErrorRef::SoundEffect(e)),
             _ => None,
         };
-        state.editor.highlight_errors(e);
+        self.editor.highlight_errors(e);
     }
 }
 
@@ -901,8 +894,11 @@ pub fn add_missing_sfx(
     sfx_data: &SoundEffectsData,
     sender: &fltk::app::Sender<GuiMessage>,
 ) {
-    let sfx_list = sfx_data.sound_effects.list();
-    let sfx_set: HashSet<&Name> = sfx_list.item_iter().map(|s| &s.name).collect();
+    let sfx_set: HashSet<&Name> = sfx_data
+        .sound_effects
+        .item_iter()
+        .map(|s| &s.name)
+        .collect();
 
     let to_add: Vec<SoundEffectInput> = data
         .sfx_export_order

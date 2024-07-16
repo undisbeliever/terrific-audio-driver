@@ -7,9 +7,9 @@
 use std::ops::Range;
 
 use crate::list_editor::{
-    LaVec, ListAction, ListEditor, ListEditorTable, ListMessage, TableAction, TableMapping,
+    LaVec, ListAction, ListEditorTable, ListMessage, TableAction, TableMapping,
 };
-use crate::names::{deduplicate_item_name, deduplicate_names, NameDeduplicator};
+use crate::names::{deduplicate_item_name, deduplicate_names};
 use crate::tables::{SimpleRow, TableEvent};
 use crate::GuiMessage;
 
@@ -82,6 +82,13 @@ impl GuiSfxExportOrder {
     pub fn low_priority_sfx(&self) -> &[Name] {
         &self.export_order[self.low_priority_index..]
     }
+
+    fn table_max_sizes(&self) -> (usize, usize) {
+        (
+            MAX_SOUND_EFFECTS.saturating_sub(self.low_priority_sfx().len()),
+            MAX_SOUND_EFFECTS.saturating_sub(self.normal_priority_sfx().len()),
+        )
+    }
 }
 
 impl SfxExportOrder for GuiSfxExportOrder {
@@ -114,7 +121,7 @@ pub enum SfxExportOrderMessage {
     LowPriority(ListMessage<Name>),
 }
 
-trait SfxEoMapping {
+pub trait SfxEoMapping {
     const TYPE_NAME: &'static str;
     const HEADER: &'static str;
 
@@ -206,18 +213,21 @@ impl SfxExportOrderEditor {
         sfx_export_order: &GuiSfxExportOrder,
         sender: Sender<GuiMessage>,
     ) -> Self {
+        let (max_normal, max_lp) = sfx_export_order.table_max_sizes();
+
         // ::TODO add a button to move SFX between low and high priorities::
-        let mut normal_priority =
-            ListEditorTable::new_from_slice(sfx_export_order.normal_priority_sfx(), sender.clone());
-        let mut low_priority =
-            ListEditorTable::new_from_slice(sfx_export_order.low_priority_sfx(), sender.clone());
-
-        let button_height = normal_priority.button_height();
-        parent.fixed(&normal_priority.list_buttons().pack, button_height);
-        parent.fixed(&low_priority.list_buttons().pack, button_height);
-
-        Self::clear_table_selection(&mut normal_priority, sfx_export_order);
-        Self::clear_table_selection(&mut low_priority, sfx_export_order);
+        let normal_priority = ListEditorTable::new_from_slice(
+            parent,
+            sfx_export_order.normal_priority_sfx(),
+            max_normal,
+            sender.clone(),
+        );
+        let low_priority = ListEditorTable::new_from_slice(
+            parent,
+            sfx_export_order.low_priority_sfx(),
+            max_lp,
+            sender.clone(),
+        );
 
         Self {
             normal_priority,
@@ -225,47 +235,21 @@ impl SfxExportOrderEditor {
         }
     }
 
-    fn clear_table_selection<T>(table: &mut ListEditorTable<T>, data: &GuiSfxExportOrder)
-    where
-        T: TableMapping + 'static,
-        T::DataType: NameDeduplicator,
-    {
-        table.clear_selected();
-        table.list_buttons().selected_clear(data.can_add_one());
-    }
-
-    fn update_table_selection<T>(
-        table: &mut ListEditorTable<T>,
-        index: usize,
-        data: &GuiSfxExportOrder,
-        range: &Range<usize>,
-    ) where
-        T: TableMapping + 'static,
-        T::DataType: NameDeduplicator,
-    {
-        table.set_selected_row(index);
-        table
-            .list_buttons()
-            .selected_changed(index, range.len(), data.can_add_one())
-    }
-
     fn process_move<T>(
         table: &mut ListEditorTable<T>,
-        data: &GuiSfxExportOrder,
         range: Range<usize>,
         from: usize,
         to: usize,
     ) -> Option<(ListAction<Name>, isize)>
     where
-        T: TableMapping<DataType = Name> + 'static,
-        T::DataType: NameDeduplicator,
+        T: SfxEoMapping,
     {
         assert_ne!(from, to);
 
         let eo_offset = range.start;
 
-        table.list_edited(&ListAction::Move(from, to));
-        Self::update_table_selection(table, to, data, &range);
+        table.sfx_eo_edited(&ListAction::Move(from, to));
+        table.set_selected_row(to);
 
         Some((ListAction::Move(from + eo_offset, to + range.start), 0))
     }
@@ -277,11 +261,9 @@ impl SfxExportOrderEditor {
         range: Range<usize>,
     ) -> Option<(ListAction<Name>, isize)>
     where
-        T: TableMapping<DataType = Name> + 'static,
-        T::DataType: NameDeduplicator,
+        T: SfxEoMapping,
     {
         let eo_offset = range.start;
-        let selected = table.selected_row().unwrap_or(usize::MAX);
         let slice = &data.export_order[range.clone()];
 
         let deduplicate_name =
@@ -291,28 +273,13 @@ impl SfxExportOrderEditor {
             };
 
         match m {
-            ListMessage::ClearSelection => {
-                Self::clear_table_selection(table, data);
-                None
-            }
-
-            ListMessage::ItemSelected(i) => {
-                match slice.get(i) {
-                    Some(_) => {
-                        Self::update_table_selection(table, i, data, &range);
-                    }
-                    None => table.clear_selected(),
-                }
-                None
-            }
-
             ListMessage::ItemEdited(index, new_name) => match slice.get(index) {
                 Some(name) if name != &new_name => {
-                    let new_name = deduplicate_name(new_name, Some(selected));
+                    let new_name = deduplicate_name(new_name, Some(index));
 
-                    table.list_edited(&ListAction::Edit(selected, new_name.clone()));
+                    table.sfx_eo_edited(&ListAction::Edit(index, new_name.clone()));
 
-                    Some((ListAction::Edit(selected + eo_offset, new_name), 0))
+                    Some((ListAction::Edit(index + eo_offset, new_name), 0))
                 }
                 _ => None,
             },
@@ -322,8 +289,8 @@ impl SfxExportOrderEditor {
                     let i = slice.len();
                     let name = deduplicate_name(name, None);
 
-                    table.list_edited(&ListAction::Add(i, name.clone()));
-                    Self::update_table_selection(table, i, data, &range);
+                    table.sfx_eo_edited(&ListAction::Add(i, name.clone()));
+                    table.set_selected_row(i);
 
                     table.open_editor(i, 0);
 
@@ -333,53 +300,53 @@ impl SfxExportOrderEditor {
                 }
             }
 
-            ListMessage::CloneSelected => match (slice.get(selected), data.can_add_one()) {
+            ListMessage::Clone(index) => match (slice.get(index), data.can_add_one()) {
                 (Some(name), true) => {
-                    let i = selected + 1;
+                    let i = index + 1;
                     let name = deduplicate_name(name.clone(), None);
 
-                    table.list_edited(&ListAction::Add(i, name.clone()));
-                    Self::update_table_selection(table, i, data, &range);
+                    table.sfx_eo_edited(&ListAction::Add(i, name.clone()));
+                    table.set_selected_row(i);
 
                     Some((ListAction::Add(i + eo_offset, name), 1))
                 }
                 _ => None,
             },
 
-            ListMessage::RemoveSelected => {
-                if selected < slice.len() {
-                    table.list_edited(&ListAction::Remove(selected));
-                    Self::clear_table_selection(table, data);
+            ListMessage::Remove(index) => {
+                if index < slice.len() {
+                    table.sfx_eo_edited(&ListAction::Remove(index));
+                    table.set_selected_row(index);
 
-                    Some((ListAction::Remove(selected + eo_offset), -1))
+                    Some((ListAction::Remove(index + eo_offset), -1))
                 } else {
                     None
                 }
             }
-            ListMessage::MoveSelectedToTop => {
-                if selected > 0 && selected < slice.len() {
-                    Self::process_move(table, data, range, selected, 0)
+            ListMessage::MoveToTop(index) => {
+                if index > 0 && index < slice.len() {
+                    Self::process_move(table, range, index, 0)
                 } else {
                     None
                 }
             }
-            ListMessage::MoveSelectedUp => {
-                if selected > 0 && selected < slice.len() {
-                    Self::process_move(table, data, range, selected, selected - 1)
+            ListMessage::MoveUp(index) => {
+                if index > 0 && index < slice.len() {
+                    Self::process_move(table, range, index, index - 1)
                 } else {
                     None
                 }
             }
-            ListMessage::MoveSelectedDown => {
-                if selected + 1 < slice.len() {
-                    Self::process_move(table, data, range, selected, selected + 1)
+            ListMessage::MoveDown(index) => {
+                if index + 1 < slice.len() {
+                    Self::process_move(table, range, index, index + 1)
                 } else {
                     None
                 }
             }
-            ListMessage::MoveSelectedToBottom => {
-                if selected + 1 < slice.len() {
-                    Self::process_move(table, data, range, selected, slice.len() - 1)
+            ListMessage::MoveToBottom(index) => {
+                if index + 1 < slice.len() {
+                    Self::process_move(table, range, index, slice.len() - 1)
                 } else {
                     None
                 }
@@ -397,7 +364,7 @@ impl SfxExportOrderEditor {
     ) -> Option<SfxExportOrderAction> {
         let a = match m {
             SfxExportOrderMessage::NormalPriority(m) => {
-                self.low_priority.clear_selected();
+                self.low_priority.clear_selected_row();
 
                 let (action, size_delta) = Self::process_list_message(
                     m,
@@ -415,7 +382,7 @@ impl SfxExportOrderEditor {
                 }
             }
             SfxExportOrderMessage::LowPriority(m) => {
-                self.normal_priority.clear_selected();
+                self.normal_priority.clear_selected_row();
 
                 let (action, _size_delta) = Self::process_list_message(
                     m,
@@ -432,6 +399,10 @@ impl SfxExportOrderEditor {
         };
 
         data.process(&a);
+
+        let (max_normal, max_lp) = data.table_max_sizes();
+        self.normal_priority.set_max_size(max_normal);
+        self.low_priority.set_max_size(max_lp);
 
         Some(a)
     }

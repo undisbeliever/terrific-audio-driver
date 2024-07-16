@@ -5,55 +5,58 @@
 // SPDX-License-Identifier: MIT
 
 use crate::compiler_thread::{self, ItemChanged, ItemId};
-use crate::helpers::{ch_units_to_width, SetActive};
-use crate::names::{DeduplicatedNameVec, NameDeduplicator};
-use crate::tables;
+use crate::helpers::ch_units_to_width;
+use crate::names::{
+    deduplicate_name_iter, DeduplicatedNameVec, NameGetter, NameSetter, TwoDeduplicatedNameVecs,
+};
 use crate::GuiMessage;
+use crate::{sfx_export_order, tables};
 
+use compiler::data::Name;
 use fltk::button::Button;
-use fltk::group::{Pack, PackType};
+use fltk::group::{Flex, Pack, PackType};
 use fltk::prelude::{GroupExt, WidgetExt};
 
+use std::cell::RefCell;
 use std::collections::HashSet;
 use std::ops::Deref;
+use std::rc::Rc;
 
-// A ListMessage MUST ONLY be called once per frame
-// (to prevent a potential infinite `ListMessage::ItemSelected` loop)
+// CAUTION: A ListMessage SHOULD ONLY be called once per frame.
 #[derive(Debug)]
 pub enum ListMessage<T> {
-    ClearSelection,
-    ItemSelected(usize),
-
-    // The `SelectedItemEdited` message has been removed because clicking on a TrTable list item
-    // will cause the `ItemSelected` message to be sent before the `SelectedItemEdited` event.
     ItemEdited(usize, T),
 
     Add(T),
     AddMultiple(Vec<T>),
-    CloneSelected,
-    RemoveSelected,
-    MoveSelectedToTop,
-    MoveSelectedUp,
-    MoveSelectedDown,
-    MoveSelectedToBottom,
+    Clone(usize),
+    Remove(usize),
+    MoveToTop(usize),
+    MoveUp(usize),
+    MoveDown(usize),
+    MoveToBottom(usize),
 
     // Only adds the item if the list does not contain ItemId.
     AddWithItemId(ItemId, T),
 }
 
-pub trait ListEditor<T> {
-    // Called once at the start of the event
-    fn list_buttons(&mut self) -> &mut ListButtons;
+impl<T> ListMessage<T> {
+    fn may_resize_list(&self) -> bool {
+        match self {
+            Self::ItemEdited(..) => false,
 
-    fn list_edited(&mut self, action: &ListAction<T>);
+            Self::Add(..)
+            | Self::AddMultiple(..)
+            | Self::AddWithItemId(..)
+            | Self::Clone(..)
+            | Self::Remove(..) => true,
 
-    fn clear_selected(&mut self);
-    fn set_selected(&mut self, index: usize, id: ItemId, value: &T);
-}
-
-pub trait CompilerOutputGui<T> {
-    fn set_compiler_output(&mut self, index: usize, compiler_output: &Option<T>);
-    fn set_selected_compiler_output(&mut self, compiler_output: &Option<T>);
+            Self::MoveToTop(..)
+            | Self::MoveUp(..)
+            | Self::MoveDown(..)
+            | Self::MoveToBottom(..) => false,
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -110,18 +113,23 @@ pub fn process_list_action_map<T, U>(
             list.remove(*i);
         }
         ListAction::Edit(i, item) => edit(&mut list[*i], item),
-        &ListAction::Move(from, to) => {
-            if from < to {
-                // Move down
-                for i in from..to {
-                    list.swap(i, i + 1);
-                }
-            } else {
-                // Move up
-                for i in (to + 1..=from).rev() {
-                    list.swap(i, i - 1);
-                }
-            }
+        &ListAction::Move(from, to) => move_list_item(list, from, to),
+    }
+}
+
+/// Move list item from index `from` to index `to`.
+/// #Panics
+/// Panics if `from` or `to` are out of bounds.
+fn move_list_item<T>(list: &mut [T], from: usize, to: usize) {
+    if from < to {
+        // Move down
+        for i in from..to {
+            list.swap(i, i + 1);
+        }
+    } else {
+        // Move up
+        for i in (to + 1..=from).rev() {
+            list.swap(i, i - 1);
         }
     }
 }
@@ -169,40 +177,397 @@ impl<T> Deref for LaVec<T> {
     }
 }
 
-pub struct ListData<T>
-where
-    T: Clone + PartialEq<T>,
-{
-    max_size: usize,
-    list: LaVec<(ItemId, T)>,
+pub trait CompilerOutput {
+    fn is_valid(&self) -> bool;
 }
 
-impl<T> ListData<T>
-where
-    T: Clone + std::cmp::PartialEq<T>,
-    T: NameDeduplicator,
-{
-    pub fn new(list: DeduplicatedNameVec<T>, max_size: usize) -> Self {
-        let list = LaVec::from_vec(
-            list.into_vec()
-                .into_iter()
-                .map(|i| (ItemId::new(), i))
-                .collect(),
-        );
+impl<T, E> CompilerOutput for Result<T, E> {
+    fn is_valid(&self) -> bool {
+        self.is_ok()
+    }
+}
 
-        Self { max_size, list }
+trait OtherList {
+    fn len(&self) -> usize;
+
+    fn chain_name_iter<'a>(
+        &'a self,
+        main: impl Iterator<Item = &'a Name>,
+    ) -> impl Iterator<Item = &'a Name>;
+}
+
+impl OtherList for () {
+    fn len(&self) -> usize {
+        0
     }
 
-    pub fn iter(&self) -> impl Iterator<Item = &(ItemId, T)> {
-        self.list.iter()
+    fn chain_name_iter<'a>(
+        &'a self,
+        main: impl Iterator<Item = &'a Name>,
+    ) -> impl Iterator<Item = &'a Name> {
+        main
+    }
+}
+
+impl<T, O> OtherList for &ListWithCompilerOutput<T, O>
+where
+    T: Clone + PartialEq<T> + NameGetter + NameSetter,
+    O: CompilerOutput,
+{
+    fn len(&self) -> usize {
+        ListWithCompilerOutput::len(self)
+    }
+
+    fn chain_name_iter<'a>(
+        &'a self,
+        main: impl Iterator<Item = &'a Name>,
+    ) -> impl Iterator<Item = &'a Name> {
+        main.chain(self.iter().map(NameGetter::name))
+    }
+}
+
+pub struct ListWithCompilerOutput<T, O>
+where
+    T: Clone + PartialEq<T> + NameGetter + NameSetter,
+    O: CompilerOutput,
+{
+    max_size: usize,
+    list: Vec<(ItemId, T)>,
+    compiler_output: Vec<Option<O>>,
+    error_set: HashSet<ItemId>,
+}
+
+pub trait ListWithCompilerOutputEditor<T, O>
+where
+    T: Clone + PartialEq<T> + NameGetter + NameSetter,
+    O: CompilerOutput,
+    Self::TableMapping:
+        TableMapping<DataType = T> + TableCompilerOutput<CompilerOutputType = O> + 'static,
+{
+    type TableMapping;
+
+    fn table_mut(&mut self) -> &mut ListEditorTable<Self::TableMapping>;
+
+    // Called by ListWithCompilerOutput when the list's size or item order changes.
+    fn selected_item_changed(&mut self, _list: &ListWithCompilerOutput<T, O>) {}
+
+    fn list_edited(&mut self, _action: &ListAction<T>) {}
+    fn item_edited(&mut self, _id: ItemId, _value: &T) {}
+    fn item_removed(&mut self, _id: ItemId) {}
+    fn set_compiler_output(&mut self, _index: usize, _id: ItemId, _compiler_output: &Option<O>) {}
+}
+
+impl<T, O> ListWithCompilerOutput<T, O>
+where
+    T: Clone + PartialEq<T> + NameGetter + NameSetter,
+    T: NameGetter + NameSetter,
+    O: CompilerOutput,
+{
+    pub fn new(list: DeduplicatedNameVec<T>, max_size: usize) -> Self {
+        let list: Vec<(ItemId, T)> = list
+            .into_vec()
+            .into_iter()
+            .map(|i| (ItemId::new(), i))
+            .collect();
+
+        // Compiler output is not cloneable
+        let compiler_output = std::iter::repeat_with(|| None).take(list.len()).collect();
+
+        Self {
+            max_size,
+            list,
+            compiler_output,
+            error_set: HashSet::new(),
+        }
+    }
+
+    pub fn all_valid(&self) -> bool {
+        self.error_set.is_empty()
+    }
+
+    pub fn set_compiler_output(
+        &mut self,
+        id: ItemId,
+        co: O,
+        editor: &mut impl ListWithCompilerOutputEditor<T, O>,
+    ) {
+        match co.is_valid() {
+            true => self.error_set.remove(&id),
+            false => self.error_set.insert(id),
+        };
+
+        let co = Some(co);
+
+        if let Some(index) = self.id_to_index(id) {
+            editor.table_mut().set_compiler_output(index, &co);
+            editor.set_compiler_output(index, id, &co);
+
+            if let Some(co_item) = self.compiler_output.get_mut(index) {
+                *co_item = co;
+            }
+        }
+    }
+
+    fn deduplicate_item_name_inplace(
+        &self,
+        item: &mut T,
+        other_list: &impl OtherList,
+        index: Option<usize>,
+    ) {
+        let name_iter = other_list.chain_name_iter(self.list.iter().map(NameGetter::name));
+
+        if let Some(new_name) = deduplicate_name_iter(item.name(), name_iter, index) {
+            item.set_name(new_name)
+        }
+    }
+
+    fn edit_item_index(
+        &mut self,
+        other_list: impl OtherList,
+        index: usize,
+        mut new_value: T,
+        editor: &mut impl ListWithCompilerOutputEditor<T, O>,
+    ) -> (bool, Option<ItemChanged<T>>) {
+        if let Some((id, old_value)) = self.list.get(index) {
+            if *old_value != new_value {
+                let id = *id;
+
+                if old_value.name() != new_value.name() {
+                    self.deduplicate_item_name_inplace(&mut new_value, &other_list, Some(index));
+                }
+
+                self.list[index].1 = new_value.clone();
+                self.compiler_output[index] = None;
+
+                let action = ListAction::Edit(index, new_value);
+                editor.table_mut().list_edited(&action);
+                editor.list_edited(&action);
+
+                if let ListAction::Edit(_, item) = action {
+                    editor.item_edited(id, &item);
+
+                    (true, Some(ItemChanged::AddedOrEdited(id, item)))
+                } else {
+                    panic!();
+                }
+            } else {
+                (false, None)
+            }
+        } else {
+            (false, None)
+        }
+    }
+
+    fn add_item(
+        &mut self,
+        other_list: impl OtherList,
+        id: Option<ItemId>,
+        index: usize,
+        mut item: T,
+        editor: &mut impl ListWithCompilerOutputEditor<T, O>,
+    ) -> (bool, Option<ItemChanged<T>>) {
+        let can_add = self.list.len() + other_list.len() < self.max_size;
+
+        if can_add && index <= self.list.len() {
+            let id = id.unwrap_or_else(ItemId::new);
+
+            self.deduplicate_item_name_inplace(&mut item, &other_list, None);
+
+            self.list.insert(index, (id, item.clone()));
+            self.compiler_output.insert(index, None);
+
+            let action = ListAction::Add(index, item);
+            editor.table_mut().list_edited(&action);
+            editor.list_edited(&action);
+            editor.selected_item_changed(self);
+
+            if let ListAction::Add(_, item) = action {
+                (true, Some(ItemChanged::AddedOrEdited(id, item)))
+            } else {
+                panic!();
+            }
+        } else {
+            (false, None)
+        }
+    }
+
+    fn add_multiple_items(
+        &mut self,
+        other_list: impl OtherList,
+        index: usize,
+        mut items: Vec<T>,
+        editor: &mut impl ListWithCompilerOutputEditor<T, O>,
+    ) -> (bool, Option<ItemChanged<T>>) {
+        let can_add = self.list.len() + other_list.len() + items.len() <= self.max_size;
+
+        if can_add && index <= items.len() {
+            let mut new_items = Vec::with_capacity(items.len());
+
+            // Must add and deduplicate items one at a time to ensure names are unique.
+            for item in &mut items {
+                self.deduplicate_item_name_inplace(item, &other_list, None);
+
+                let i = index + new_items.len();
+                let item_with_id = (ItemId::new(), item.clone());
+
+                self.list.insert(i, item_with_id.clone());
+                self.compiler_output.insert(i, None);
+
+                new_items.push(item_with_id);
+            }
+
+            let action = ListAction::AddMultiple(index, items);
+            editor.table_mut().list_edited(&action);
+            editor.list_edited(&action);
+            editor.selected_item_changed(self);
+
+            (true, Some(ItemChanged::MultipleAddedOrEdited(new_items)))
+        } else {
+            (false, None)
+        }
+    }
+
+    fn remove_item(
+        &mut self,
+        index: usize,
+        editor: &mut impl ListWithCompilerOutputEditor<T, O>,
+    ) -> (bool, Option<ItemChanged<T>>) {
+        if let Some((id, _)) = self.list.get(index) {
+            let id = *id;
+
+            self.list.remove(index);
+            self.compiler_output.remove(index);
+
+            let action = ListAction::Remove(index);
+            editor.table_mut().list_edited(&action);
+            editor.list_edited(&action);
+            editor.item_removed(id);
+            editor.selected_item_changed(self);
+
+            (true, Some(ItemChanged::Removed(id)))
+        } else {
+            (false, None)
+        }
+    }
+
+    fn move_item(
+        &mut self,
+        from: usize,
+        to: usize,
+        editor: &mut impl ListWithCompilerOutputEditor<T, O>,
+    ) -> (bool, Option<ItemChanged<T>>) {
+        let range = 0..self.list.len();
+        if range.contains(&from) && range.contains(&to) && from != to {
+            move_list_item(&mut self.list, from, to);
+            move_list_item(&mut self.compiler_output, from, to);
+
+            let action = ListAction::Move(from, to);
+            editor.table_mut().list_edited(&action);
+            editor.list_edited(&action);
+            editor.selected_item_changed(self);
+
+            (true, None)
+        } else {
+            (false, None)
+        }
+    }
+
+    #[inline]
+    fn process_(
+        &mut self,
+        other_list: impl OtherList,
+        m: ListMessage<T>,
+        editor: &mut impl ListWithCompilerOutputEditor<T, O>,
+    ) -> (bool, Option<ItemChanged<T>>) {
+        match m {
+            ListMessage::ItemEdited(index, new_value) => {
+                self.edit_item_index(other_list, index, new_value, editor)
+            }
+            ListMessage::Add(item) => {
+                self.add_item(other_list, None, self.list.len(), item, editor)
+            }
+            ListMessage::AddWithItemId(id, item) => {
+                if !self.contains_id(id) {
+                    self.add_item(other_list, Some(id), self.list.len(), item, editor)
+                } else {
+                    (false, None)
+                }
+            }
+            ListMessage::AddMultiple(items) => {
+                self.add_multiple_items(other_list, self.list.len(), items, editor)
+            }
+            ListMessage::Clone(index) => match self.list.get(index) {
+                Some(item) => self.add_item(other_list, None, index + 1, item.1.clone(), editor),
+                None => (false, None),
+            },
+            ListMessage::Remove(index) => self.remove_item(index, editor),
+            ListMessage::MoveToTop(index) => self.move_item(index, 0, editor),
+            ListMessage::MoveUp(index) => {
+                if index > 0 {
+                    self.move_item(index, index - 1, editor)
+                } else {
+                    (false, None)
+                }
+            }
+            ListMessage::MoveDown(index) => self.move_item(index, index + 1, editor),
+            ListMessage::MoveToBottom(index) => {
+                let len = self.list.len();
+                if len > 0 {
+                    self.move_item(index, len - 1, editor)
+                } else {
+                    (false, None)
+                }
+            }
+        }
+    }
+
+    #[inline]
+    fn edit_item_(
+        &mut self,
+        other_list: impl OtherList,
+        id: ItemId,
+        new_value: T,
+        editor: &mut impl ListWithCompilerOutputEditor<T, O>,
+    ) -> (bool, Option<ItemChanged<T>>) {
+        match self.id_to_index(id) {
+            Some(index) => self.edit_item_index(other_list, index, new_value, editor),
+            None => (false, None),
+        }
+    }
+
+    #[must_use]
+    pub fn process(
+        &mut self,
+        m: ListMessage<T>,
+        editor: &mut impl ListWithCompilerOutputEditor<T, O>,
+    ) -> (bool, Option<ItemChanged<T>>) {
+        self.process_((), m, editor)
+    }
+
+    #[must_use]
+    pub fn edit_item(
+        &mut self,
+        id: ItemId,
+        new_value: T,
+        editor: &mut impl ListWithCompilerOutputEditor<T, O>,
+    ) -> (bool, Option<ItemChanged<T>>) {
+        self.edit_item_((), id, new_value, editor)
+    }
+
+    pub fn max_size(&self) -> usize {
+        self.max_size
+    }
+
+    pub fn len(&self) -> usize {
+        self.list.len()
     }
 
     pub fn item_iter(&self) -> impl Iterator<Item = &T> {
         self.list.iter().map(|(_id, item)| item)
     }
 
-    pub fn len(&self) -> usize {
-        self.list.len()
+    pub fn iter(&self) -> impl Iterator<Item = &(ItemId, T)> {
+        self.list.iter()
     }
 
     pub fn get(&self, index: usize) -> Option<&T> {
@@ -211,14 +576,6 @@ where
 
     pub fn get_with_id(&self, index: usize) -> Option<(ItemId, &T)> {
         self.list.get(index).map(|(id, item)| (*id, item))
-    }
-
-    pub fn can_add(&self) -> bool {
-        self.list.len() < self.max_size
-    }
-
-    pub fn can_add_multiple(&self, count: usize) -> bool {
-        self.list.len() + count <= self.max_size
     }
 
     fn id_to_index(&self, id: ItemId) -> Option<usize> {
@@ -237,617 +594,48 @@ where
             .map(|(id, i)| (id, &i.1))
     }
 
-    #[must_use]
-    pub fn replace_all_vec(&self) -> compiler_thread::ReplaceAllVec<T> {
-        compiler_thread::ReplaceAllVec::new(self.list.0.clone())
-    }
+    // Assumes `table` is in sync with `self`.
+    pub fn get_selected_row<M>(
+        &self,
+        table: &ListEditorTable<M>,
+    ) -> Option<(ItemId, &T, &Option<O>)>
+    where
+        M: TableMapping<DataType = T>,
+    {
+        let i = table.selected_row()?;
+        let item = self.list.get(i)?;
+        let co = self.compiler_output.get(i)?;
 
-    #[must_use]
-    fn process(
-        &mut self,
-        m: ListMessage<T>,
-        selected: Option<usize>,
-    ) -> (ListAction<T>, Option<ItemChanged<T>>) {
-        let update_list = |list: &mut LaVec<(ItemId, T)>, a: &ListAction<T>| {
-            list.process_map(
-                a,
-                // new
-                |v: &T| (ItemId::new(), v.clone()),
-                // edit
-                |e, v: &T| e.1 = v.clone(),
-            );
-        };
-
-        match m {
-            ListMessage::ClearSelection | ListMessage::ItemSelected(_) => (ListAction::None, None),
-
-            ListMessage::ItemEdited(index, mut new_value) => {
-                if let Some((id, item)) = self.list.get(index) {
-                    if *item != new_value {
-                        if NameDeduplicator::test_name_changed(item, &new_value) {
-                            NameDeduplicator::dedupe_name(&mut new_value, &self.list, Some(index));
-                        }
-
-                        let c_message = ItemChanged::AddedOrEdited(*id, new_value.clone());
-
-                        let action = ListAction::Edit(index, new_value);
-                        update_list(&mut self.list, &action);
-                        (action, Some(c_message))
-                    } else {
-                        (ListAction::None, None)
-                    }
-                } else {
-                    (ListAction::None, None)
-                }
-            }
-
-            ListMessage::Add(mut item) => {
-                if self.can_add() {
-                    NameDeduplicator::dedupe_name(&mut item, &self.list, None);
-
-                    let i = self.list.len();
-                    let action = ListAction::Add(i, item);
-                    update_list(&mut self.list, &action);
-                    let c_message = self
-                        .list
-                        .get(i)
-                        .map(|(id, item)| ItemChanged::AddedOrEdited(*id, item.clone()));
-
-                    (action, c_message)
-                } else {
-                    (ListAction::None, None)
-                }
-            }
-
-            ListMessage::AddWithItemId(id, mut item) => {
-                if self.can_add() && !self.contains_id(id) {
-                    NameDeduplicator::dedupe_name(&mut item, &self.list, None);
-
-                    let i = self.list.len();
-                    let action = ListAction::Add(i, item);
-
-                    self.list.process_map(
-                        &action,
-                        // new
-                        |v: &T| (id, v.clone()),
-                        // edit
-                        |_, _| (),
-                    );
-
-                    let c_message = self
-                        .list
-                        .get(i)
-                        .map(|(id, item)| ItemChanged::AddedOrEdited(*id, item.clone()));
-
-                    assert!(self.contains_id(id));
-
-                    (action, c_message)
-                } else {
-                    (ListAction::None, None)
-                }
-            }
-
-            ListMessage::AddMultiple(mut items) => {
-                if self.can_add_multiple(items.len()) {
-                    let old_size = self.list.len();
-
-                    let mut new_items_with_id = Vec::with_capacity(items.len());
-
-                    // Must add and deduplicate items one at a time to ensure names are unique.
-                    for item in &mut items {
-                        NameDeduplicator::dedupe_name(item, &self.list, None);
-
-                        let i = self.list.len();
-                        let action = ListAction::Add(i, item.clone());
-                        update_list(&mut self.list, &action);
-
-                        if let Some(c) = self.list.get(i) {
-                            new_items_with_id.push(c.clone());
-                        }
-                    }
-
-                    let action = ListAction::AddMultiple(old_size, items);
-                    let c_message = Some(ItemChanged::MultipleAddedOrEdited(new_items_with_id));
-
-                    (action, c_message)
-                } else {
-                    (ListAction::None, None)
-                }
-            }
-
-            lm => {
-                // These list actions use the currently selected index
-                let sel_index = match selected {
-                    Some(i) if i < self.list.len() => i,
-                    _ => return (ListAction::None, None),
-                };
-
-                match lm {
-                    ListMessage::ClearSelection
-                    | ListMessage::ItemSelected(_)
-                    | ListMessage::ItemEdited(_, _)
-                    | ListMessage::Add(_)
-                    | ListMessage::AddWithItemId(_, _)
-                    | ListMessage::AddMultiple(_) => (ListAction::None, None),
-
-                    ListMessage::CloneSelected => {
-                        if let (Some(item), true) = (self.get(sel_index), self.can_add()) {
-                            let mut item = item.clone();
-                            NameDeduplicator::dedupe_name(&mut item, &self.list, None);
-
-                            let i = sel_index + 1;
-                            let action = ListAction::Add(i, item);
-
-                            update_list(&mut self.list, &action);
-                            let c_message = self
-                                .list
-                                .get(i)
-                                .map(|(id, item)| ItemChanged::AddedOrEdited(*id, item.clone()));
-
-                            (action, c_message)
-                        } else {
-                            (ListAction::None, None)
-                        }
-                    }
-                    ListMessage::RemoveSelected => {
-                        let item_id = self.list[sel_index].0;
-                        let c_message = ItemChanged::Removed(item_id);
-
-                        let action = ListAction::Remove(sel_index);
-                        update_list(&mut self.list, &action);
-
-                        (action, Some(c_message))
-                    }
-                    ListMessage::MoveSelectedToTop => {
-                        if sel_index > 0 {
-                            let action = ListAction::Move(sel_index, 0);
-                            update_list(&mut self.list, &action);
-
-                            (action, None)
-                        } else {
-                            (ListAction::None, None)
-                        }
-                    }
-                    ListMessage::MoveSelectedUp => {
-                        if sel_index > 0 && sel_index < self.list.len() {
-                            let action = ListAction::Move(sel_index, sel_index - 1);
-                            update_list(&mut self.list, &action);
-
-                            (action, None)
-                        } else {
-                            (ListAction::None, None)
-                        }
-                    }
-                    ListMessage::MoveSelectedDown => {
-                        if sel_index + 1 < self.list.len() {
-                            let action = ListAction::Move(sel_index, sel_index + 1);
-                            update_list(&mut self.list, &action);
-
-                            (action, None)
-                        } else {
-                            (ListAction::None, None)
-                        }
-                    }
-                    ListMessage::MoveSelectedToBottom => {
-                        if sel_index + 1 < self.list.len() {
-                            let action = ListAction::Move(sel_index, self.list.len() - 1);
-                            update_list(&mut self.list, &action);
-
-                            (action, None)
-                        } else {
-                            (ListAction::None, None)
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-pub trait ListState
-where
-    Self::Item: Clone + PartialEq<Self::Item> + NameDeduplicator,
-{
-    type Item;
-
-    fn selected(&self) -> Option<usize>;
-    fn list(&self) -> &ListData<Self::Item>;
-}
-
-pub struct ListWithSelection<T>
-where
-    T: Clone + PartialEq<T>,
-{
-    list: ListData<T>,
-    selected: Option<usize>,
-}
-
-impl<T> ListState for ListWithSelection<T>
-where
-    T: Clone + PartialEq<T> + NameDeduplicator,
-{
-    type Item = T;
-
-    fn selected(&self) -> Option<usize> {
-        self.selected
-    }
-
-    fn list(&self) -> &ListData<T> {
-        &self.list
-    }
-}
-
-impl<T> ListWithSelection<T>
-where
-    T: Clone + PartialEq<T>,
-    T: NameDeduplicator,
-{
-    pub fn new(list: DeduplicatedNameVec<T>, max_size: usize) -> Self {
-        Self {
-            list: ListData::new(list, max_size),
-            selected: None,
-        }
+        Some((item.0, &item.1, co))
     }
 
     #[must_use]
-    pub fn process(
-        &mut self,
-        m: ListMessage<T>,
-        editor: &mut impl ListEditor<T>,
-    ) -> (ListAction<T>, Option<ItemChanged<T>>) {
-        match m {
-            ListMessage::ClearSelection => {
-                self.clear_selection(editor);
-                (ListAction::None, None)
-            }
-            ListMessage::ItemSelected(index) => {
-                self.set_selected(index, editor);
-                (ListAction::None, None)
-            }
-
-            m => {
-                let (action, c) = self.list.process(m, self.selected);
-                self.process_action(&action, editor);
-                (action, c)
-            }
-        }
-    }
-
-    fn process_action(&mut self, action: &ListAction<T>, editor: &mut impl ListEditor<T>) {
-        editor.list_edited(action);
-        match action {
-            ListAction::Add(index, _) => {
-                self.set_selected(*index, editor);
-            }
-            ListAction::AddMultiple(index, _) => {
-                self.set_selected(*index, editor);
-            }
-            ListAction::Remove(index) => {
-                if self.selected == Some(*index) {
-                    self.clear_selection(editor);
-                }
-            }
-            ListAction::Move(from, to) => {
-                if self.selected == Some(*from) {
-                    self.set_selected(*to, editor);
-                }
-            }
-            ListAction::None => (),
-            ListAction::Edit(_, _) => (),
-        }
-    }
-
-    fn set_selected(&mut self, index: usize, editor: &mut impl ListEditor<T>) {
-        match self.list.get_with_id(index) {
-            Some((id, item)) => {
-                self.selected = Some(index);
-                editor.set_selected(index, id, item);
-                editor.list_buttons().selected_changed(
-                    index,
-                    self.list.len(),
-                    self.list().can_add(),
-                );
-            }
-            None => {
-                self.clear_selection(editor);
-            }
-        };
-    }
-
-    fn clear_selection(&mut self, editor: &mut impl ListEditor<T>) {
-        self.selected = None;
-        editor.clear_selected();
-        editor.list_buttons().selected_clear(self.list.can_add());
-    }
-}
-
-pub trait CompilerOutput {
-    fn is_valid(&self) -> bool;
-}
-
-impl<T, E> CompilerOutput for Result<T, E> {
-    fn is_valid(&self) -> bool {
-        self.is_ok()
-    }
-}
-
-pub struct ListWithCompilerOutput<T, O>
-where
-    T: Clone + PartialEq<T> + NameDeduplicator,
-    O: CompilerOutput,
-{
-    list: ListData<T>,
-    compiler_output: Vec<Option<O>>,
-    error_set: HashSet<ItemId>,
-    selected: Option<usize>,
-}
-
-impl<T, O> ListState for ListWithCompilerOutput<T, O>
-where
-    T: Clone + PartialEq<T> + NameDeduplicator,
-    O: CompilerOutput,
-{
-    type Item = T;
-
-    fn selected(&self) -> Option<usize> {
-        self.selected
-    }
-
-    fn list(&self) -> &ListData<T> {
-        &self.list
-    }
-}
-
-impl<T, O> ListWithCompilerOutput<T, O>
-where
-    T: Clone + PartialEq<T> + NameDeduplicator,
-    O: CompilerOutput,
-{
-    pub fn new(list: DeduplicatedNameVec<T>, max_size: usize) -> Self {
-        let list = ListData::new(list, max_size);
-
-        // Compiler output is not cloneable
-        let compiler_output = std::iter::repeat_with(|| None).take(list.len()).collect();
-
-        Self {
-            list,
-            compiler_output,
-            error_set: HashSet::new(),
-            selected: None,
-        }
-    }
-
-    pub fn all_valid(&self) -> bool {
-        self.error_set.is_empty()
-    }
-
-    pub fn set_compiler_output(
-        &mut self,
-        id: ItemId,
-        co: O,
-        editor: &mut impl CompilerOutputGui<O>,
-    ) {
-        match co.is_valid() {
-            true => self.error_set.remove(&id),
-            false => self.error_set.insert(id),
-        };
-
-        let co = Some(co);
-
-        if let Some(index) = self.list.id_to_index(id) {
-            editor.set_compiler_output(index, &co);
-
-            if self.selected == Some(index) {
-                editor.set_selected_compiler_output(&co);
-            }
-            if let Some(co_item) = self.compiler_output.get_mut(index) {
-                *co_item = co;
-            }
-        }
-    }
-
-    #[must_use]
-    pub fn process<Editor>(
-        &mut self,
-        m: ListMessage<T>,
-        editor: &mut Editor,
-    ) -> (ListAction<T>, Option<ItemChanged<T>>)
-    where
-        Editor: ListEditor<T> + CompilerOutputGui<O>,
-    {
-        match m {
-            ListMessage::ClearSelection => {
-                self.clear_selection(editor);
-                (ListAction::None, None)
-            }
-            ListMessage::ItemSelected(index) => {
-                self.set_selected(index, editor);
-                (ListAction::None, None)
-            }
-
-            m => {
-                let (action, c) = self.list.process(m, self.selected);
-                self.process_action(&action, editor);
-                (action, c)
-            }
-        }
-    }
-
-    fn process_action<Editor>(&mut self, action: &ListAction<T>, editor: &mut Editor)
-    where
-        Editor: ListEditor<T> + CompilerOutputGui<O>,
-    {
-        process_list_action_map(
-            &mut self.compiler_output,
-            action,
-            // new
-            |_| None,
-            // edit
-            |e, _| *e = None,
-        );
-
-        editor.list_edited(action);
-        match action {
-            ListAction::None => (),
-
-            ListAction::Add(index, _) => {
-                self.set_selected(*index, editor);
-            }
-            ListAction::AddMultiple(index, _) => {
-                self.set_selected(*index, editor);
-            }
-            ListAction::Remove(index) => {
-                if self.selected == Some(*index) {
-                    self.clear_selection(editor);
-                }
-            }
-            ListAction::Move(from, to) => {
-                if self.selected == Some(*from) {
-                    self.set_selected(*to, editor);
-                }
-            }
-            ListAction::Edit(index, _) => {
-                if let Some(co) = self.compiler_output.get_mut(*index) {
-                    // Clear stored compiler output when an item is edited
-                    *co = None;
-                }
-                // `editor.set_compiler_output` and `editor.set_selected_compiler_output`
-                // are not called here to prevent an annoying flash in tables and the Sound Effect console.
-            }
-        }
-    }
-
-    fn set_selected<Editor>(&mut self, index: usize, editor: &mut Editor)
-    where
-        Editor: ListEditor<T> + CompilerOutputGui<O>,
-    {
-        match self.list.get_with_id(index) {
-            Some((id, item)) => {
-                self.selected = Some(index);
-                editor.set_selected(index, id, item);
-
-                let co = self.compiler_output.get(index).unwrap_or(&None);
-                editor.set_selected_compiler_output(co);
-
-                editor.list_buttons().selected_changed(
-                    index,
-                    self.list.len(),
-                    self.list().can_add(),
-                );
-            }
-            None => {
-                self.clear_selection(editor);
-            }
-        };
-    }
-
-    fn clear_selection<Editor>(&mut self, editor: &mut Editor)
-    where
-        Editor: ListEditor<T> + CompilerOutputGui<O>,
-    {
-        self.selected = None;
-        editor.clear_selected();
-        editor.set_selected_compiler_output(&None);
-        editor.list_buttons().selected_clear(self.list.can_add());
+    pub fn replace_all_vec(&self) -> compiler_thread::ReplaceAllVec<T> {
+        compiler_thread::ReplaceAllVec::new(self.list.clone())
     }
 }
 
 pub struct ListPairWithCompilerOutputs<T1, O1, T2, O2>
 where
-    T1: Clone + PartialEq<T1> + NameDeduplicator,
+    T1: Clone + PartialEq<T1> + NameGetter + NameSetter,
     O1: CompilerOutput,
-    T2: Clone + PartialEq<T2> + NameDeduplicator,
+    T2: Clone + PartialEq<T2> + NameGetter + NameSetter,
     O2: CompilerOutput,
 {
     list1: ListWithCompilerOutput<T1, O1>,
     list2: ListWithCompilerOutput<T2, O2>,
 }
 
-#[inline]
-fn list_pair_process<T1, O1, T2, O2, Editor>(
-    m: ListMessage<T1>,
-    list1: &mut ListWithCompilerOutput<T1, O1>,
-    list2: &mut ListWithCompilerOutput<T2, O2>,
-    editor: &mut Editor,
-) -> (ListAction<T1>, Option<ItemChanged<T1>>)
-where
-    T1: Clone + PartialEq<T1> + NameDeduplicator + std::fmt::Debug,
-    O1: CompilerOutput,
-    T2: Clone + PartialEq<T2> + NameDeduplicator + std::fmt::Debug,
-    O2: CompilerOutput,
-    Editor: ListEditor<T1> + CompilerOutputGui<O1> + ListEditor<T2> + CompilerOutputGui<O2>,
-{
-    let can_add = |count: usize| -> bool {
-        debug_assert!(list1.list().max_size == list2.list().max_size);
-
-        let max_size = list1.list().max_size;
-        let len = list1.list().len() + list2.list().len();
-
-        len + count <= max_size
-    };
-    let can_do_message = match &m {
-        ListMessage::Add(..) => can_add(1),
-        ListMessage::AddWithItemId(..) => can_add(1),
-        ListMessage::AddMultiple(vec) => can_add(vec.len()),
-        ListMessage::CloneSelected => can_add(1),
-
-        ListMessage::ClearSelection
-        | ListMessage::ItemSelected(_)
-        | ListMessage::ItemEdited(..)
-        | ListMessage::RemoveSelected
-        | ListMessage::MoveSelectedToTop
-        | ListMessage::MoveSelectedUp
-        | ListMessage::MoveSelectedDown
-        | ListMessage::MoveSelectedToBottom => true,
-    };
-    if !can_do_message {
-        return (ListAction::None, None);
-    }
-
-    let clear_list2_selection = match &m {
-        // Not changing list2 selection when a list1 item is unselected
-        ListMessage::ClearSelection => false,
-
-        // Not changing list2 selection for ItemEdited as it could have been
-        // sent because the user selected a list2 item.
-        ListMessage::ItemEdited(..) => false,
-
-        ListMessage::Add(..)
-        | ListMessage::AddWithItemId(..)
-        | ListMessage::AddMultiple(_)
-        | ListMessage::CloneSelected
-        | ListMessage::ItemSelected(_)
-        | ListMessage::RemoveSelected
-        | ListMessage::MoveSelectedToTop
-        | ListMessage::MoveSelectedUp
-        | ListMessage::MoveSelectedDown
-        | ListMessage::MoveSelectedToBottom => true,
-    };
-
-    // ::TODO deduplicate name::
-
-    let out = list1.process(m, editor);
-
-    // Must clear list2 **after** list1 is processed to prevent a flash in the Samples Tab.
-    // (The flash was caused by the GUI disabling the widgets, then switching editors on the next frame)
-    if clear_list2_selection {
-        list2.clear_selection(editor);
-    }
-    out
-}
-
 impl<T1, O1, T2, O2> ListPairWithCompilerOutputs<T1, O1, T2, O2>
 where
-    T1: Clone + PartialEq<T1> + NameDeduplicator + std::fmt::Debug,
+    T1: Clone + PartialEq<T1> + NameGetter + NameSetter + std::fmt::Debug,
     O1: CompilerOutput,
-    T2: Clone + PartialEq<T2> + NameDeduplicator + std::fmt::Debug,
+    T2: Clone + PartialEq<T2> + NameGetter + NameSetter + std::fmt::Debug,
     O2: CompilerOutput,
 {
-    pub fn new(
-        list1: DeduplicatedNameVec<T1>,
-        list2: DeduplicatedNameVec<T2>,
-        max_size: usize,
-    ) -> Self {
+    pub fn new(lists: TwoDeduplicatedNameVecs<T1, T2>, max_size: usize) -> Self {
+        let (list1, list2) = lists.into_tuple();
+
         let list1 = ListWithCompilerOutput::new(list1, max_size);
         let list2 = ListWithCompilerOutput::new(list2, max_size);
 
@@ -857,20 +645,9 @@ where
     pub fn list1(&self) -> &ListWithCompilerOutput<T1, O1> {
         &self.list1
     }
+
     pub fn list2(&self) -> &ListWithCompilerOutput<T2, O2> {
         &self.list2
-    }
-
-    pub fn clear_selection<Editor>(&mut self, editor: &mut Editor)
-    where
-        Editor: ListEditor<T1> + CompilerOutputGui<O1> + ListEditor<T2> + CompilerOutputGui<O2>,
-    {
-        if self.list1.selected().is_some() {
-            self.list1.clear_selection(editor);
-        }
-        if self.list2.selected().is_some() {
-            self.list2.clear_selection(editor);
-        }
     }
 
     #[must_use]
@@ -878,11 +655,21 @@ where
         &mut self,
         m: ListMessage<T1>,
         editor: &mut Editor,
-    ) -> (ListAction<T1>, Option<ItemChanged<T1>>)
+    ) -> (bool, Option<ItemChanged<T1>>)
     where
-        Editor: ListEditor<T1> + CompilerOutputGui<O1> + ListEditor<T2> + CompilerOutputGui<O2>,
+        Editor: ListWithCompilerOutputEditor<T1, O1> + ListWithCompilerOutputEditor<T2, O2>,
     {
-        list_pair_process(m, &mut self.list1, &mut self.list2, editor)
+        let may_resize_list = m.may_resize_list();
+
+        let out = self.list1.process_(&self.list2, m, editor);
+
+        if may_resize_list {
+            // Assumes list1 and list2 have the same max_size
+            ListWithCompilerOutputEditor::<T2, O2>::table_mut(editor)
+                .set_max_size(self.list1.max_size.saturating_sub(self.list1.len()));
+        }
+
+        out
     }
 
     #[must_use]
@@ -890,18 +677,48 @@ where
         &mut self,
         m: ListMessage<T2>,
         editor: &mut Editor,
-    ) -> (ListAction<T2>, Option<ItemChanged<T2>>)
+    ) -> (bool, Option<ItemChanged<T2>>)
     where
-        Editor: ListEditor<T1> + CompilerOutputGui<O1> + ListEditor<T2> + CompilerOutputGui<O2>,
+        Editor: ListWithCompilerOutputEditor<T1, O1> + ListWithCompilerOutputEditor<T2, O2>,
     {
-        list_pair_process(m, &mut self.list2, &mut self.list1, editor)
+        let may_resize_list = m.may_resize_list();
+
+        let out = self.list2.process_(&self.list1, m, editor);
+
+        if may_resize_list {
+            // Assumes list1 and list2 have the same max_size
+            ListWithCompilerOutputEditor::<T1, O1>::table_mut(editor)
+                .set_max_size(self.list2.max_size.saturating_sub(self.list2.len()));
+        }
+
+        out
+    }
+
+    #[must_use]
+    pub fn edit_item1(
+        &mut self,
+        id: ItemId,
+        new_value: T1,
+        editor: &mut impl ListWithCompilerOutputEditor<T1, O1>,
+    ) -> (bool, Option<ItemChanged<T1>>) {
+        self.list1.edit_item_(&self.list2, id, new_value, editor)
+    }
+
+    #[must_use]
+    pub fn edit_item2(
+        &mut self,
+        id: ItemId,
+        new_value: T2,
+        editor: &mut impl ListWithCompilerOutputEditor<T2, O2>,
+    ) -> (bool, Option<ItemChanged<T2>>) {
+        self.list2.edit_item_(&self.list1, id, new_value, editor)
     }
 
     pub fn set_compiler_output1(
         &mut self,
         id: ItemId,
         co: O1,
-        editor: &mut impl CompilerOutputGui<O1>,
+        editor: &mut impl ListWithCompilerOutputEditor<T1, O1>,
     ) {
         self.list1.set_compiler_output(id, co, editor)
     }
@@ -910,126 +727,9 @@ where
         &mut self,
         id: ItemId,
         co: O2,
-        editor: &mut impl CompilerOutputGui<O2>,
+        editor: &mut impl ListWithCompilerOutputEditor<T2, O2>,
     ) {
         self.list2.set_compiler_output(id, co, editor)
-    }
-}
-
-pub fn update_compiler_output<CO, T>(
-    id: ItemId,
-    compiler_output: &Option<CO>,
-    list: &ListData<T>,
-    editor: &mut impl CompilerOutputGui<CO>,
-) where
-    T: Clone + PartialEq<T> + NameDeduplicator,
-{
-    if let Some(index) = list.id_to_index(id) {
-        editor.set_compiler_output(index, compiler_output);
-    }
-}
-
-pub struct ListButtons {
-    pub pack: Pack,
-
-    pub add: Button,
-    pub clone: Option<Button>,
-    pub remove: Button,
-    pub move_top: Button,
-    pub move_up: Button,
-    pub move_down: Button,
-    pub move_bottom: Button,
-}
-
-impl ListButtons {
-    pub fn new(type_name: &str, show_clone: bool) -> Self {
-        let mut pack = Pack::default().with_type(PackType::Horizontal);
-
-        let button_label_size = pack.label_size() * 8 / 10;
-        pack.set_label_size(button_label_size);
-
-        let button_size = ch_units_to_width(&pack, 4);
-
-        let button = |label: &str, tooltip: String| {
-            let mut b = Button::default()
-                .with_size(button_size, button_size)
-                .with_label(label);
-            b.set_tooltip(&tooltip);
-            b.set_label_size(button_label_size);
-            b
-        };
-
-        let add = button("@add", format!("Add {}", type_name));
-        let clone = if show_clone {
-            Some(button("@clone", format!("Clone {}", type_name)))
-        } else {
-            None
-        };
-        let remove = button("@remove", format!("Remove {}", type_name));
-        let move_top = button("@top", format!("Move {} to top", type_name));
-        let move_up = button("@up", format!("Move {} up", type_name));
-        let move_down = button("@down", format!("Move {} down", type_name));
-        let move_bottom = button("@bottom", format!("Move {} to bottom", type_name));
-
-        pack.end();
-
-        let mut out = Self {
-            pack,
-            add,
-            clone,
-            remove,
-            move_top,
-            move_up,
-            move_down,
-            move_bottom,
-        };
-        out.selected_clear(false);
-        out
-    }
-
-    pub fn update(&mut self, state: &impl ListState) {
-        match state.selected() {
-            Some(i) => self.selected_changed(i, state.list().len(), state.list().can_add()),
-            None => self.selected_clear(state.list().can_add()),
-        }
-    }
-
-    pub fn selected_changed(&mut self, index: usize, list_len: usize, can_add: bool) {
-        self.add.set_active(can_add);
-
-        if let Some(c) = &mut self.clone {
-            c.set_active(can_add);
-        }
-        self.remove.activate();
-
-        if index > 0 {
-            self.move_top.activate();
-            self.move_up.activate();
-        } else {
-            self.move_top.deactivate();
-            self.move_up.deactivate();
-        }
-
-        if index + 1 < list_len {
-            self.move_down.activate();
-            self.move_bottom.activate();
-        } else {
-            self.move_down.deactivate();
-            self.move_bottom.deactivate();
-        }
-    }
-
-    pub fn selected_clear(&mut self, can_add: bool) {
-        self.add.set_active(can_add);
-
-        if let Some(c) = &mut self.clone {
-            c.deactivate();
-        }
-        self.remove.deactivate();
-        self.move_top.deactivate();
-        self.move_up.deactivate();
-        self.move_down.deactivate();
-        self.move_bottom.deactivate();
     }
 }
 
@@ -1041,7 +741,12 @@ pub enum TableAction {
 
 pub trait TableMapping
 where
-    Self::DataType: Sized + Clone + std::cmp::PartialEq<Self::DataType>,
+    Self::DataType: Sized
+        + Clone
+        + NameGetter
+        + NameSetter
+        + std::cmp::PartialEq<Self::DataType>
+        + std::fmt::Debug,
     Self::RowType: tables::TableRow + 'static,
 {
     type DataType;
@@ -1068,198 +773,461 @@ where
         let _ = (index, col, value);
         None
     }
+
+    fn user_changes_selection() -> Option<GuiMessage> {
+        None
+    }
 }
 
 pub trait TableCompilerOutput
 where
     Self: TableMapping,
+    Self::CompilerOutputType: CompilerOutput,
 {
     type CompilerOutputType;
 
     fn set_row_state(r: &mut Self::RowType, co: &Option<Self::CompilerOutputType>) -> bool;
 }
 
+/// Arguments to the ListEditorTableButtons update callback
+pub struct UpdateButtonArgs {
+    pub max_len: usize,
+    pub list_len: usize,
+    pub selected: Option<usize>,
+}
+
+/// Callback used to enable or disable ListEditorTableButtons
+type UpdateButtonCallback = Box<dyn Fn(&UpdateButtonArgs) -> bool>;
+
+struct ListEditorTableButtons {
+    pack: Pack,
+
+    button_size: i32,
+    label_size: i32,
+
+    max_size: usize,
+    buttons: Vec<(Button, UpdateButtonCallback)>,
+}
+
+impl ListEditorTableButtons {
+    fn new(parent: &mut Flex) -> Self {
+        let mut pack = Pack::default().with_type(PackType::Horizontal);
+        pack.end();
+
+        let label_size = pack.label_size() * 8 / 10;
+        pack.set_label_size(label_size);
+
+        let button_size = ch_units_to_width(&pack, 4);
+        parent.fixed(&pack, button_size);
+
+        Self {
+            button_size,
+            label_size,
+            max_size: 0,
+            buttons: Vec::new(),
+
+            pack,
+        }
+    }
+
+    fn add_button(
+        &mut self,
+        label: &str,
+        tooltip: &str,
+        update_cb: UpdateButtonCallback,
+        callback: impl FnMut(&mut Button) + 'static,
+        list_len: usize,
+        selected: Option<usize>,
+    ) {
+        let mut b = Button::default()
+            .with_size(self.button_size, self.button_size)
+            .with_label(label);
+        b.set_tooltip(tooltip);
+        b.set_label_size(self.label_size);
+
+        let sel_args = UpdateButtonArgs {
+            max_len: self.max_size,
+            list_len,
+            selected,
+        };
+        match update_cb(&sel_args) {
+            true => b.activate(),
+            false => b.deactivate(),
+        }
+
+        b.set_callback(callback);
+
+        self.pack.add(&b);
+
+        self.buttons.push((b, update_cb));
+    }
+
+    fn set_max_size_and_maybe_update_buttons(
+        &mut self,
+        max_size: usize,
+        selected: Option<usize>,
+        list_len: usize,
+    ) {
+        if self.max_size != max_size {
+            self.max_size = max_size;
+            self.update_buttons(selected, list_len);
+        }
+    }
+
+    fn set_max_size_and_force_update_buttons(
+        &mut self,
+        max_size: usize,
+        selected: Option<usize>,
+        list_len: usize,
+    ) {
+        self.max_size = max_size;
+        self.update_buttons(selected, list_len);
+    }
+
+    fn update_buttons(&mut self, selected: Option<usize>, list_len: usize) {
+        let sel_args = UpdateButtonArgs {
+            max_len: self.max_size,
+            list_len,
+            selected,
+        };
+
+        for (b, cb) in &mut self.buttons {
+            match cb(&sel_args) {
+                true => b.activate(),
+                false => b.deactivate(),
+            }
+        }
+    }
+}
+
 pub struct ListEditorTable<T>
 where
     T: TableMapping,
 {
-    list_buttons: ListButtons,
-    table: tables::TrTable<T::RowType>,
+    sender: fltk::app::Sender<GuiMessage>,
+
+    // Must store list_buttons in a separate Rc to prevent a BorrowMutError in set_selection_changed_callback
+    list_buttons: Rc<RefCell<ListEditorTableButtons>>,
+
+    table: Rc<RefCell<tables::TrTable<T::RowType>>>,
 }
 
 impl<T> ListEditorTable<T>
 where
     T: TableMapping,
-    T::DataType: NameDeduplicator,
 {
-    pub fn new(sender: fltk::app::Sender<GuiMessage>) -> Self {
-        let mut list_buttons = ListButtons::new(T::type_name(), T::CAN_CLONE);
-        let mut table = tables::TrTable::new(T::headers());
+    pub fn new(parent: &mut Flex, sender: fltk::app::Sender<GuiMessage>) -> Self {
+        let list_buttons = Rc::new(RefCell::new(ListEditorTableButtons::new(parent)));
+        let table = Rc::new(RefCell::new(tables::TrTable::new(T::headers())));
 
-        table.set_selection_changed_callback({
-            let s = sender.clone();
-            move |i, user_selection| {
-                if user_selection {
-                    match i {
-                        Some(i) => s.send(T::to_message(ListMessage::ItemSelected(i))),
-                        None => s.send(T::to_message(ListMessage::ClearSelection)),
+        {
+            let mut t = table.borrow_mut();
+
+            t.set_selection_changed_callback({
+                let s = sender.clone();
+                let list_buttons = list_buttons.clone();
+                move |selected, n_rows, user_selection| {
+                    list_buttons.borrow_mut().update_buttons(selected, n_rows);
+
+                    if user_selection {
+                        if let Some(m) = T::user_changes_selection() {
+                            s.send(m)
+                        }
                     }
                 }
-            }
-        });
+            });
 
-        if T::CAN_EDIT {
-            table.enable_cell_editing({
-                // Commit edited value
+            if T::CAN_EDIT {
+                t.enable_cell_editing({
+                    // Commit edited value
+                    let s = sender.clone();
+                    move |index, col, value| {
+                        if let Some(m) = T::commit_edited_value(index, col, value) {
+                            s.send(m);
+                        }
+                    }
+                });
+            }
+
+            t.set_callback({
                 let s = sender.clone();
-                move |index, col, value| {
-                    if let Some(m) = T::commit_edited_value(index, col, value) {
+                move |ev, row, col| match T::table_event(ev, row, col) {
+                    TableAction::None => false,
+                    TableAction::OpenEditor => true,
+                    TableAction::Send(m) => {
                         s.send(m);
+                        false
                     }
                 }
             });
         }
 
-        table.set_callback({
-            let s = sender.clone();
-            move |ev, row, col| match T::table_event(ev, row, col) {
-                TableAction::None => false,
-                TableAction::OpenEditor => true,
-                TableAction::Send(m) => {
-                    s.send(m);
-                    false
-                }
-            }
-        });
-
-        list_buttons.add.set_callback({
-            let s = sender.clone();
-            move |_| s.send(T::add_clicked())
-        });
-        if let Some(b) = &mut list_buttons.clone {
-            b.set_callback({
-                let s = sender.clone();
-                move |_| s.send(T::to_message(ListMessage::CloneSelected))
-            });
-        }
-        list_buttons.remove.set_callback({
-            let s = sender.clone();
-            move |_| s.send(T::to_message(ListMessage::RemoveSelected))
-        });
-        list_buttons.move_top.set_callback({
-            let s = sender.clone();
-            move |_| s.send(T::to_message(ListMessage::MoveSelectedToTop))
-        });
-        list_buttons.move_up.set_callback({
-            let s = sender.clone();
-            move |_| s.send(T::to_message(ListMessage::MoveSelectedUp))
-        });
-        list_buttons.move_down.set_callback({
-            let s = sender.clone();
-            move |_| s.send(T::to_message(ListMessage::MoveSelectedDown))
-        });
-        list_buttons.move_bottom.set_callback({
-            let s = sender;
-            move |_| s.send(T::to_message(ListMessage::MoveSelectedToBottom))
-        });
-
-        Self {
+        let mut out = Self {
+            sender,
             list_buttons,
             table,
-        }
-    }
+        };
 
-    pub fn new_from_slice(data: &[T::DataType], sender: fltk::app::Sender<GuiMessage>) -> Self {
-        let mut out = Self::new(sender);
-        out.table
-            .edit_table(|v| v.extend(data.iter().map(T::new_row)));
+        let type_name = T::type_name();
+
+        out.add_button(
+            "@add",
+            &format!("Add {type_name}"),
+            |a| a.list_len < a.max_len,
+            || T::add_clicked(),
+        );
+        if T::CAN_CLONE {
+            out.add_sel_button(
+                "@clone",
+                &format!("Clone {type_name}"),
+                |a| a.selected.is_some() && a.list_len < a.max_len,
+                |index| T::to_message(ListMessage::Clone(index)),
+            );
+        }
+        out.add_sel_button(
+            "@remove",
+            &format!("Remove {type_name}"),
+            |a| a.selected.is_some(),
+            |index| T::to_message(ListMessage::Remove(index)),
+        );
+        out.add_sel_button(
+            "@top",
+            &format!("Move {type_name} to top"),
+            |a| a.selected.is_some_and(|i| i > 0),
+            |index| T::to_message(ListMessage::MoveToTop(index)),
+        );
+        out.add_sel_button(
+            "@up",
+            &format!("Move {type_name} up"),
+            |a| a.selected.is_some_and(|i| i > 0),
+            |index| T::to_message(ListMessage::MoveUp(index)),
+        );
+        out.add_sel_button(
+            "@down",
+            &format!("Move {type_name} down"),
+            |a| a.selected.is_some_and(|i| i + 1 < a.list_len),
+            |index| T::to_message(ListMessage::MoveDown(index)),
+        );
+        out.add_sel_button(
+            "@bottom",
+            &format!("Move {type_name} to bottom"),
+            |a| a.selected.is_some_and(|i| i + 1 < a.list_len),
+            |index| T::to_message(ListMessage::MoveToBottom(index)),
+        );
+
         out
     }
 
-    pub fn new_with_data(
-        state: &impl ListState<Item = T::DataType>,
+    pub fn new_from_slice(
+        parent: &mut Flex,
+        data: &[T::DataType],
+        max_size: usize,
         sender: fltk::app::Sender<GuiMessage>,
     ) -> Self {
-        let mut out = Self::new(sender);
-        out.replace(state);
+        let out = Self::new(parent, sender);
+
+        {
+            let mut t = out.table.borrow_mut();
+            let mut lb = out.list_buttons.borrow_mut();
+
+            t.edit_table(|v| v.extend(data.iter().map(T::new_row)));
+
+            lb.set_max_size_and_force_update_buttons(max_size, t.selected_row(), t.n_rows());
+        }
+
         out
     }
 
-    pub fn replace(&mut self, state: &impl ListState<Item = T::DataType>) {
-        self.table.edit_table(|v| {
-            *v = state.list().item_iter().map(T::new_row).collect();
-        });
-        self.list_buttons.update(state);
+    pub fn add_button(
+        &mut self,
+        label: &str,
+        tooltip: &str,
+        update_cb: impl Fn(&UpdateButtonArgs) -> bool + 'static,
+        cb: impl Fn() -> GuiMessage + 'static,
+    ) {
+        let t = self.table.borrow();
+        let mut lb = self.list_buttons.borrow_mut();
 
-        match state.selected() {
-            Some(i) => self.table.set_selected(i),
-            None => self.table.clear_selected(),
-        }
+        lb.add_button(
+            label,
+            tooltip,
+            Box::new(update_cb),
+            {
+                let s = self.sender.clone();
+                move |_| s.send(cb())
+            },
+            t.n_rows(),
+            t.selected_row(),
+        );
     }
 
-    pub fn button_height(&self) -> i32 {
-        self.list_buttons.add.height()
+    pub fn add_sel_button(
+        &mut self,
+        label: &str,
+        tooltip: &str,
+        update_cb: impl Fn(&UpdateButtonArgs) -> bool + 'static,
+        cb: impl Fn(usize) -> GuiMessage + 'static,
+    ) {
+        let t = self.table.borrow();
+        let mut lb = self.list_buttons.borrow_mut();
+
+        lb.add_button(
+            label,
+            tooltip,
+            Box::new(update_cb),
+            {
+                let s = self.sender.clone();
+                let t = self.table.clone();
+                move |_| {
+                    if let Some(i) = t.borrow().selected_row() {
+                        s.send(cb(i))
+                    }
+                }
+            },
+            t.n_rows(),
+            t.selected_row(),
+        );
+    }
+
+    pub fn set_max_size(&mut self, max_size: usize) {
+        let t = self.table.borrow_mut();
+        let mut lb = self.list_buttons.borrow_mut();
+
+        lb.set_max_size_and_maybe_update_buttons(max_size, t.selected_row(), t.n_rows());
     }
 
     pub fn selected_row(&self) -> Option<usize> {
-        self.table.selected_row()
+        self.table.borrow().selected_row()
     }
 
     pub fn set_selected_row(&mut self, index: usize) {
-        self.table.set_selected(index);
+        self.table.borrow_mut().set_selected(index);
+    }
+
+    pub fn clear_selected_row(&mut self) {
+        self.table.borrow_mut().clear_selected();
     }
 
     pub fn open_editor(&mut self, index: usize, col: i32) {
-        self.table.open_editor(index, col);
+        self.table.borrow_mut().open_editor(index, col);
     }
 }
 
-impl<T> ListEditor<T::DataType> for ListEditorTable<T>
+impl<T> ListEditorTable<T>
 where
-    T: TableMapping + 'static,
-    T::DataType: Clone,
+    T: TableMapping,
 {
-    fn list_buttons(&mut self) -> &mut ListButtons {
-        &mut self.list_buttons
-    }
-
     fn list_edited(&mut self, action: &ListAction<T::DataType>) {
+        let mut table = self.table.borrow_mut();
+
         match action {
             ListAction::None => (),
             ListAction::Edit(index, value) => {
-                self.table
-                    .edit_row(*index, |d| -> bool { T::edit_row(d, value) });
+                table.edit_row(*index, |d| -> bool { T::edit_row(d, value) });
             }
-            a => self.table.edit_table(|table_vec| {
-                process_list_action_map(table_vec, a, T::new_row, |row, new_value| {
-                    T::edit_row(row, new_value);
+            a => table.edit_table(|table_vec| {
+                process_list_action_map(table_vec, a, T::new_row, {
+                    |row, new_value| {
+                        T::edit_row(row, new_value);
+                    }
                 })
             }),
         }
-    }
 
-    fn clear_selected(&mut self) {
-        self.table.clear_selected();
-    }
-
-    fn set_selected(&mut self, index: usize, _: ItemId, _: &T::DataType) {
-        self.table.set_selected(index);
+        match action {
+            ListAction::None => (),
+            ListAction::Edit(..) => (),
+            ListAction::Add(index, _) => table.force_set_selected(*index),
+            ListAction::AddMultiple(..) => table.force_clear_selected(),
+            ListAction::Remove(index) => {
+                if table.selected_row() == Some(*index) {
+                    table.force_clear_selected();
+                }
+            }
+            ListAction::Move(from, to) => {
+                if table.selected_row() == Some(*from) {
+                    table.force_set_selected(*to);
+                }
+            }
+        }
     }
 }
 
-impl<T> CompilerOutputGui<T::CompilerOutputType> for ListEditorTable<T>
+impl<T> ListEditorTable<T>
 where
-    T: TableMapping + TableCompilerOutput + 'static,
+    T: TableMapping + TableCompilerOutput,
 {
-    fn set_selected_compiler_output(&mut self, _: &Option<T::CompilerOutputType>) {}
+    // SHOULD NOT be directly called with a `ListPairWithCompilerOutputs` list,
+    pub fn new_with_data(
+        parent: &mut Flex,
+        list: &ListWithCompilerOutput<T::DataType, T::CompilerOutputType>,
+        sender: fltk::app::Sender<GuiMessage>,
+    ) -> Self
+    where
+        T: TableCompilerOutput,
+    {
+        let mut out = Self::new(parent, sender);
+        out.replace(list);
+        out
+    }
+
+    // SHOULD NOT be directly called with a `ListPairWithCompilerOutputs` list,
+    pub fn replace(&mut self, list: &ListWithCompilerOutput<T::DataType, T::CompilerOutputType>) {
+        let mut t = self.table.borrow_mut();
+        let mut lb = self.list_buttons.borrow_mut();
+
+        t.edit_table(|v| {
+            *v = list.item_iter().map(T::new_row).collect();
+        });
+        t.clear_selected();
+
+        lb.set_max_size_and_force_update_buttons(list.max_size(), t.selected_row(), t.n_rows());
+    }
 
     fn set_compiler_output(
         &mut self,
         index: usize,
         compiler_output: &Option<T::CompilerOutputType>,
     ) {
-        self.table.edit_row(index, |row| -> bool {
+        self.table.borrow_mut().edit_row(index, |row| -> bool {
             T::set_row_state(row, compiler_output)
         });
     }
+}
+
+impl<T> ListEditorTable<T>
+where
+    T: sfx_export_order::SfxEoMapping,
+{
+    // Must only be called by SfxExportOrderEditor
+    pub fn sfx_eo_edited(&mut self, action: &ListAction<Name>) {
+        self.list_edited(action);
+    }
+}
+
+pub fn tables_for_list_pair<M1, M2>(
+    parent: &mut Flex,
+    sender: fltk::app::Sender<GuiMessage>,
+    data: &ListPairWithCompilerOutputs<
+        M1::DataType,
+        M1::CompilerOutputType,
+        M2::DataType,
+        M2::CompilerOutputType,
+    >,
+) -> (ListEditorTable<M1>, ListEditorTable<M2>)
+where
+    M1: TableMapping + TableCompilerOutput,
+    M2: TableMapping + TableCompilerOutput,
+{
+    // Assumes list1 and list2 have the same max_size
+    let max_size_1 = data.list1.max_size.saturating_sub(data.list2.len());
+    let max_size_2 = data.list2.max_size.saturating_sub(data.list1.len());
+
+    let mut table1 = ListEditorTable::new_with_data(parent, data.list1(), sender.clone());
+    let mut table2 = ListEditorTable::new_with_data(parent, data.list2(), sender.clone());
+
+    table1.set_max_size(max_size_1);
+    table2.set_max_size(max_size_2);
+
+    (table1, table2)
 }

@@ -5,9 +5,7 @@
 // SPDX-License-Identifier: MIT
 
 use crate::compiler_thread::ItemId;
-use crate::list_editor::LaVec;
 
-extern crate compiler;
 use compiler::data;
 use compiler::data::Name;
 use compiler::sound_effects::SoundEffectInput;
@@ -89,32 +87,6 @@ impl NameSetter for SoundEffectInput {
     }
 }
 
-pub trait NameDeduplicator
-where
-    Self: Sized,
-{
-    /// Returns true if a's name != b's name
-    fn test_name_changed(a: &Self, b: &Self) -> bool;
-
-    /// Renames item if the name exists in the list.
-    fn dedupe_name(item: &mut Self, list: &LaVec<(ItemId, Self)>, index: Option<usize>);
-}
-
-impl<T> NameDeduplicator for T
-where
-    T: NameGetter + NameSetter,
-{
-    fn test_name_changed(a: &Self, b: &Self) -> bool {
-        a.name() != b.name()
-    }
-
-    fn dedupe_name(item: &mut Self, list: &LaVec<(ItemId, Self)>, index: Option<usize>) {
-        if let Some(new_name) = deduplicate_item_name(item.name(), list, index) {
-            item.set_name(new_name);
-        }
-    }
-}
-
 pub struct DeduplicatedNameVec<T>(Vec<T>);
 
 impl<T> DeduplicatedNameVec<T> {
@@ -141,16 +113,82 @@ where
     (DeduplicatedNameVec(out), n_fixed)
 }
 
+/// A two different lists that share names
+pub struct TwoDeduplicatedNameVecs<T, U>(DeduplicatedNameVec<T>, DeduplicatedNameVec<U>);
+
+impl<T, U> TwoDeduplicatedNameVecs<T, U> {
+    pub fn into_tuple(self) -> (DeduplicatedNameVec<T>, DeduplicatedNameVec<U>) {
+        (self.0, self.1)
+    }
+}
+
+pub fn deduplicate_two_name_vecs<T, U>(
+    list1: Vec<T>,
+    list2: Vec<U>,
+) -> (TwoDeduplicatedNameVecs<T, U>, usize)
+where
+    T: NameGetter + NameSetter,
+    U: NameGetter + NameSetter,
+{
+    let (out1, n_fixed) = deduplicate_names(list1);
+    let iter1 = out1.0.iter().map(NameGetter::name);
+
+    let mut n_fixed = n_fixed;
+    let mut out2 = Vec::with_capacity(list2.len());
+
+    for mut e in list2.into_iter() {
+        let iter = iter1.clone().chain(out2.iter().map(NameGetter::name));
+
+        if let Some(new_name) = deduplicate_name_iter(e.name(), iter, None) {
+            e.set_name(new_name);
+            n_fixed += 1;
+        }
+        out2.push(e);
+    }
+
+    (
+        TwoDeduplicatedNameVecs(out1, DeduplicatedNameVec(out2)),
+        n_fixed,
+    )
+}
+
 pub fn deduplicate_item_name<T>(name: &Name, list: &[T], index: Option<usize>) -> Option<Name>
 where
     T: NameGetter,
 {
-    let dupe_prefix = [name.as_str(), "__"].concat();
+    deduplicate_name_iter(name, &mut list.iter().map(NameGetter::name), index)
+}
+
+const DEDUPLICATED_NAME_SEPARATOR: &str = "__";
+
+fn extract_deduplicated_name_suffix(name: &Name) -> Option<(&str, u32)> {
+    let name = name.as_str();
+
+    let prefix = name.trim_end_matches(|c: char| c.is_ascii_digit());
+    let num_str = name.get(prefix.len()..)?;
+
+    if prefix.ends_with(DEDUPLICATED_NAME_SEPARATOR) && !num_str.is_empty() {
+        let number = num_str.parse().ok()?;
+        Some((prefix, number))
+    } else {
+        None
+    }
+}
+
+pub fn deduplicate_name_iter<'a>(
+    name: &Name,
+    iter: impl Iterator<Item = &'a Name>,
+    index: Option<usize>,
+) -> Option<Name> {
+    let (dupe_prefix, max_number) = match extract_deduplicated_name_suffix(name) {
+        Some((prefix, i)) => (prefix.to_owned(), i),
+        None => ([name.as_str(), DEDUPLICATED_NAME_SEPARATOR].concat(), 1),
+    };
 
     let mut duplicate_found = false;
-    let mut max_found = 1;
+    let mut max_number = max_number;
 
-    for (i, v) in list.iter().enumerate() {
+    for (i, v) in iter.enumerate() {
         if Some(i) != index {
             let v_name = v.name();
             if v_name == name {
@@ -158,8 +196,8 @@ where
             }
             if let Some(a) = v_name.as_str().strip_prefix(&dupe_prefix) {
                 if let Ok(n) = a.parse() {
-                    if n > max_found {
-                        max_found = n;
+                    if n > max_number {
+                        max_number = n;
                     }
                 }
             }
@@ -169,6 +207,10 @@ where
     if !duplicate_found {
         None
     } else {
-        Some(Name::new_lossy(format!("{}{}", dupe_prefix, max_found + 1)))
+        Some(Name::new_lossy(format!(
+            "{}{}",
+            dupe_prefix,
+            max_number + 1
+        )))
     }
 }

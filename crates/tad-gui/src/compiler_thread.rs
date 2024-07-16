@@ -256,12 +256,29 @@ pub enum SongError {
     TooLarge(SongTooLargeError),
 }
 
-impl Display for SongError {
+impl SongError {
+    pub fn to_short_error(&self) -> ShortSongError {
+        match self {
+            Self::Dependency => ShortSongError::Dependency,
+            Self::Song(_) => ShortSongError::Song,
+            Self::TooLarge(_) => ShortSongError::TooLarge,
+        }
+    }
+}
+
+#[derive(Debug)]
+pub enum ShortSongError {
+    Dependency,
+    Song,
+    TooLarge,
+}
+
+impl Display for ShortSongError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Dependency => writeln!(f, "dependency error"),
-            Self::Song(_) => writeln!(f, "song error"),
-            Self::TooLarge(_) => writeln!(f, "song too large"),
+            Self::Song => writeln!(f, "song error"),
+            Self::TooLarge => writeln!(f, "song too large"),
         }
     }
 }

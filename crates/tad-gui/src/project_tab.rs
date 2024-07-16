@@ -4,9 +4,10 @@
 //
 // SPDX-License-Identifier: MIT
 
-use crate::compiler_thread::{CadOutput, SongOutput};
+use crate::compiler_thread::{CadOutput, ShortSongError};
 use crate::list_editor::{
-    ListEditor, ListEditorTable, ListMessage, TableAction, TableCompilerOutput, TableMapping,
+    ListEditorTable, ListMessage, ListWithCompilerOutputEditor, TableAction, TableCompilerOutput,
+    TableMapping,
 };
 use crate::sfx_export_order::SfxExportOrderEditor;
 use crate::tables::{RowWithStatus, TableEvent, TableRow};
@@ -18,10 +19,11 @@ use compiler::common_audio_data::CommonAudioData;
 use compiler::data::Name;
 use compiler::data::{self, DefaultSfxFlags};
 use compiler::path::SourcePathBuf;
-use compiler::songs::{song_duration_string, SongAramSize};
+use compiler::songs::{song_duration_string, SongAramSize, SongData};
 
 use std::cell::RefCell;
 use std::rc::Rc;
+use std::sync::Arc;
 
 use fltk::button::CheckButton;
 use fltk::enums::{Align, Color};
@@ -142,9 +144,9 @@ impl TableMapping for SongMapping {
 }
 
 impl TableCompilerOutput for SongMapping {
-    type CompilerOutputType = SongOutput;
+    type CompilerOutputType = Result<Arc<SongData>, ShortSongError>;
 
-    fn set_row_state(r: &mut Self::RowType, co: &Option<SongOutput>) -> bool {
+    fn set_row_state(r: &mut Self::RowType, co: &Option<Self::CompilerOutputType>) -> bool {
         let (duration, data_size) = match co {
             None => (String::new(), String::new()),
             Some(Ok(song_data)) => {
@@ -206,10 +208,7 @@ impl ProjectTab {
 
         let mut right = Flex::default().column();
 
-        let mut song_table = ListEditorTable::new_with_data(&data.project_songs, sender);
-
-        let button_height = song_table.button_height();
-        right.fixed(&song_table.list_buttons().pack, button_height);
+        let song_table = ListEditorTable::new_with_data(&mut right, &data.project_songs, sender);
 
         let mut sfx_file_flex = Flex::default().row();
         right.fixed(&sfx_file_flex, input_height(&sfx_file_flex));
@@ -242,6 +241,16 @@ impl ProjectTab {
 
     pub fn sfx_file_changed(&mut self, source: &SourcePathBuf) {
         self.sound_effects_file.set_value(source.as_str());
+    }
+}
+
+impl ListWithCompilerOutputEditor<data::Song, Result<Arc<SongData>, ShortSongError>>
+    for ProjectTab
+{
+    type TableMapping = SongMapping;
+
+    fn table_mut(&mut self) -> &mut ListEditorTable<Self::TableMapping> {
+        &mut self.song_table
     }
 }
 

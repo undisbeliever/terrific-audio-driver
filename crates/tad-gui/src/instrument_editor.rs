@@ -7,7 +7,7 @@
 use crate::compiler_thread::{InstrumentOutput, ItemId, PlaySampleArgs};
 use crate::envelope_widget::EnvelopeWidget;
 use crate::helpers::*;
-use crate::list_editor::{ListAction, ListMessage, TableCompilerOutput, TableMapping};
+use crate::list_editor::{ListMessage, TableCompilerOutput, TableMapping};
 use crate::sample_widgets::{
     LoopSettingWidget, SampleEnvelopeWidget, SampleWidgetEditor, SourceFileType, DEFAULT_ENVELOPE,
 };
@@ -76,6 +76,10 @@ impl TableMapping for InstrumentMapping {
     fn edit_row(r: &mut Self::RowType, i: &Instrument) -> bool {
         r.columns.edit_column(0, i.name.as_str())
     }
+
+    fn user_changes_selection() -> Option<GuiMessage> {
+        Some(GuiMessage::UserChangedSelectedInstrument)
+    }
 }
 
 impl TableCompilerOutput for InstrumentMapping {
@@ -91,7 +95,7 @@ pub struct InstrumentEditor {
 
     sender: app::Sender<GuiMessage>,
 
-    selected_index: Option<usize>,
+    selected_id: Option<ItemId>,
     data: Instrument,
 
     name: Input,
@@ -126,7 +130,7 @@ impl InstrumentEditor {
         let out = Rc::from(RefCell::new(Self {
             group,
             sender,
-            selected_index: None,
+            selected_id: None,
             data: blank_instrument(),
             name,
             source,
@@ -190,16 +194,15 @@ impl InstrumentEditor {
     }
 
     fn source_button_clicked(&mut self) {
-        if let Some(index) = self.selected_index {
-            self.sender
-                .send(GuiMessage::OpenInstrumentSampleDialog(index));
+        if let Some(id) = self.selected_id {
+            self.sender.send(GuiMessage::OpenInstrumentSampleDialog(id));
         }
     }
 
     fn analyse_button_clicked(&mut self) {
-        if let Some(index) = self.selected_index {
+        if let Some(id) = self.selected_id {
             self.sender
-                .send(GuiMessage::OpenAnalyseInstrumentDialog(index));
+                .send(GuiMessage::OpenAnalyseInstrumentDialog(id));
         }
     }
 
@@ -210,15 +213,14 @@ impl InstrumentEditor {
     }
 
     fn send_edit_message(&self, data: Instrument) {
-        if let Some(index) = self.selected_index {
-            self.sender
-                .send(GuiMessage::Instrument(ListMessage::ItemEdited(index, data)));
+        if let Some(id) = self.selected_id {
+            self.sender.send(GuiMessage::EditInstrument(id, data));
         }
     }
 
     fn read_or_reset(&mut self) -> Option<Instrument> {
         #[allow(clippy::question_mark)]
-        if self.selected_index.is_none() {
+        if self.selected_id.is_none() {
             return None;
         }
 
@@ -263,10 +265,10 @@ impl InstrumentEditor {
         self.loop_setting.clear_value();
         self.envelope.clear_value();
 
-        self.selected_index = None;
+        self.selected_id = None;
     }
 
-    pub fn set_data(&mut self, index: usize, data: &Instrument) {
+    fn set_data_update_widget(&mut self, data: &Instrument) {
         macro_rules! set_widget {
             ($name:ident) => {
                 InputHelper::set_widget_value(&mut self.$name, &data.$name);
@@ -285,17 +287,23 @@ impl InstrumentEditor {
         self.loop_setting
             .update_loop_type_choice(SourceFileType::from_source(&data.source));
 
-        self.selected_index = Some(index);
         self.data = data.clone();
 
         self.group.activate();
     }
 
-    pub fn list_edited(&mut self, action: &ListAction<Instrument>) {
-        if let ListAction::Edit(index, data) = action {
-            if self.selected_index == Some(*index) {
-                self.set_data(*index, data);
-            }
+    pub fn set_selected(&mut self, id: ItemId, value: &Instrument) {
+        self.selected_id = Some(id);
+        self.set_data_update_widget(value);
+    }
+
+    pub fn selected_id(&self) -> Option<ItemId> {
+        self.selected_id
+    }
+
+    pub fn item_edited(&mut self, id: ItemId, value: &Instrument) {
+        if self.selected_id == Some(id) {
+            self.set_data_update_widget(value);
         }
     }
 }

@@ -7,7 +7,7 @@
 use crate::compiler_thread::{ItemId, PlaySampleArgs, SampleOutput};
 use crate::envelope_widget::EnvelopeWidget;
 use crate::helpers::*;
-use crate::list_editor::{ListAction, ListMessage, TableCompilerOutput, TableMapping};
+use crate::list_editor::{ListMessage, TableCompilerOutput, TableMapping};
 use crate::sample_widgets::{
     LoopSettingWidget, SampleEnvelopeWidget, SampleWidgetEditor, SourceFileType, DEFAULT_ENVELOPE,
 };
@@ -74,6 +74,10 @@ impl TableMapping for SampleMapping {
     fn edit_row(r: &mut Self::RowType, i: &data::Sample) -> bool {
         r.columns.edit_column(0, i.name.as_str())
     }
+
+    fn user_changes_selection() -> Option<GuiMessage> {
+        Some(GuiMessage::UserChangedSelectedSample)
+    }
 }
 
 impl TableCompilerOutput for SampleMapping {
@@ -89,7 +93,7 @@ pub struct SampleEditor {
 
     sender: app::Sender<GuiMessage>,
 
-    selected_index: Option<usize>,
+    selected_id: Option<ItemId>,
     data: Sample,
 
     name: Input,
@@ -120,7 +124,7 @@ impl SampleEditor {
         let out = Rc::from(RefCell::new(Self {
             group,
             sender,
-            selected_index: None,
+            selected_id: None,
             data: blank_sample(),
             name,
             source,
@@ -179,27 +183,26 @@ impl SampleEditor {
     }
 
     fn source_button_clicked(&mut self) {
-        if let Some(index) = self.selected_index {
-            self.sender.send(GuiMessage::OpenSampleSampleDialog(index));
+        if let Some(id) = self.selected_id {
+            self.sender.send(GuiMessage::OpenSampleSampleDialog(id));
         }
     }
 
     fn analyse_button_clicked(&mut self) {
-        if let Some(index) = self.selected_index {
-            self.sender.send(GuiMessage::OpenAnalyseSampleDialog(index));
+        if let Some(id) = self.selected_id {
+            self.sender.send(GuiMessage::OpenAnalyseSampleDialog(id));
         }
     }
 
     fn send_edit_message(&self, data: Sample) {
-        if let Some(index) = self.selected_index {
-            self.sender
-                .send(GuiMessage::Sample(ListMessage::ItemEdited(index, data)));
+        if let Some(id) = self.selected_id {
+            self.sender.send(GuiMessage::EditSample(id, data));
         }
     }
 
     fn read_or_reset(&mut self) -> Option<Sample> {
         #[allow(clippy::question_mark)]
-        if self.selected_index.is_none() {
+        if self.selected_id.is_none() {
             return None;
         }
 
@@ -269,10 +272,10 @@ impl SampleEditor {
         self.sample_rates.set_value("");
         self.envelope.clear_value();
 
-        self.selected_index = None;
+        self.selected_id = None;
     }
 
-    pub fn set_data(&mut self, index: usize, data: &Sample) {
+    fn set_data_update_widget(&mut self, data: &Sample) {
         macro_rules! set_widget {
             ($name:ident) => {
                 InputHelper::set_widget_value(&mut self.$name, &data.$name);
@@ -292,17 +295,23 @@ impl SampleEditor {
         self.loop_setting
             .update_loop_type_choice(SourceFileType::from_source(&data.source));
 
-        self.selected_index = Some(index);
         self.data = data.clone();
 
         self.group.activate();
     }
 
-    pub fn list_edited(&mut self, action: &ListAction<Sample>) {
-        if let ListAction::Edit(index, data) = action {
-            if self.selected_index == Some(*index) {
-                self.set_data(*index, data);
-            }
+    pub fn set_selected(&mut self, id: ItemId, value: &Sample) {
+        self.selected_id = Some(id);
+        self.set_data_update_widget(value);
+    }
+
+    pub fn selected_id(&self) -> Option<ItemId> {
+        self.selected_id
+    }
+
+    pub fn item_edited(&mut self, id: ItemId, value: &Sample) {
+        if self.selected_id == Some(id) {
+            self.set_data_update_widget(value);
         }
     }
 }
@@ -322,7 +331,6 @@ impl SampleWidgetEditor for SampleEditor {
 
 pub struct TestSampleWidget {
     selected_id: Option<ItemId>,
-    selected_index: Option<usize>,
 
     sender: app::Sender<GuiMessage>,
 
@@ -374,7 +382,6 @@ impl TestSampleWidget {
 
         let out = Rc::from(RefCell::new(Self {
             selected_id: None,
-            selected_index: None,
             sender,
             group,
             note_length,
@@ -399,13 +406,11 @@ impl TestSampleWidget {
 
     pub fn clear_selected(&mut self) {
         self.selected_id = None;
-        self.selected_index = None;
         self.group.deactivate();
     }
 
-    pub fn set_selected(&mut self, index: usize, id: ItemId, data: &Sample) {
+    pub fn set_selected(&mut self, id: ItemId, data: &Sample) {
         self.selected_id = Some(id);
-        self.selected_index = Some(index);
         self.group.activate();
         self.update_buttons(data);
     }
@@ -414,11 +419,9 @@ impl TestSampleWidget {
         self.group.set_active(active && self.selected_id.is_some());
     }
 
-    pub fn list_edited(&mut self, action: &ListAction<Sample>) {
-        if let ListAction::Edit(index, data) = action {
-            if self.selected_index == Some(*index) {
-                self.update_buttons(data);
-            }
+    pub fn item_edited(&mut self, id: ItemId, data: &Sample) {
+        if self.selected_id == Some(id) {
+            self.update_buttons(data);
         }
     }
 

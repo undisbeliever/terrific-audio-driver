@@ -531,7 +531,7 @@ impl State {
                 self.editor.clear_compiled_data();
 
                 let text = match &e {
-                    SongError::Dependency => e.to_string(),
+                    SongError::Dependency => "dependency error".to_string(),
                     SongError::Song(e) => e.multiline_display().to_string(),
                     SongError::TooLarge(e) => e.multiline_display().to_string(),
                 };
