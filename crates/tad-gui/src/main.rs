@@ -200,6 +200,9 @@ pub enum GuiMessage {
 pub type ProjectSongsData =
     ListWithCompilerOutput<data::Song, Result<Arc<SongData>, ShortSongError>>;
 
+pub type InstrumentsAndSamplesData =
+    ListPairWithCompilerOutputs<data::Instrument, InstrumentOutput, data::Sample, SampleOutput>;
+
 pub struct ProjectData {
     pf_parent_path: ParentPathBuf,
 
@@ -212,8 +215,7 @@ pub struct ProjectData {
     // Using ShortSongError so I do not have to clong a complicated `SongError` struct.
     project_songs: ListWithCompilerOutput<data::Song, Result<Arc<SongData>, ShortSongError>>,
 
-    instruments_and_samples:
-        ListPairWithCompilerOutputs<data::Instrument, InstrumentOutput, data::Sample, SampleOutput>,
+    instruments_and_samples: InstrumentsAndSamplesData,
 }
 
 impl ProjectData {
@@ -333,7 +335,7 @@ impl Project {
             sfx_window: SfxWindow::new(sender.clone()),
 
             project_tab: ProjectTab::new(&data, sender.clone()),
-            samples_tab: SamplesTab::new(data.instruments(), data.samples(), sender.clone()),
+            samples_tab: SamplesTab::new(&data.instruments_and_samples, sender.clone()),
             sound_effects_tab: SoundEffectsTab::new(sender.clone()),
             closed_song_tabs: Vec::new(),
             song_tabs: HashMap::new(),

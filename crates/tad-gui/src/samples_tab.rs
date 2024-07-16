@@ -7,13 +7,14 @@
 use crate::compiler_thread::{
     CadOutput, CombineSamplesError, InstrumentOutput, ItemId, SampleOutput,
 };
-use crate::helpers::*;
 use crate::list_editor::{
-    ListAction, ListEditorTable, ListState, ListWithCompilerOutput, ListWithCompilerOutputEditor,
+    tables_for_list_pair, ListAction, ListEditorTable, ListWithCompilerOutput,
+    ListWithCompilerOutputEditor,
 };
 use crate::sample_sizes_widget::SampleSizesWidget;
 use crate::tabs::{FileType, Tab};
 use crate::GuiMessage;
+use crate::{helpers::*, InstrumentsAndSamplesData};
 
 use crate::instrument_editor::{InstrumentEditor, InstrumentMapping, TestInstrumentWidget};
 use crate::sample_editor::{SampleEditor, SampleMapping, TestSampleWidget};
@@ -82,8 +83,7 @@ impl Tab for SamplesTab {
 
 impl SamplesTab {
     pub fn new(
-        instruments: &impl ListState<Item = data::Instrument>,
-        samples: &impl ListState<Item = data::Sample>,
+        instruments_and_samples: &InstrumentsAndSamplesData,
         sender: app::Sender<GuiMessage>,
     ) -> Self {
         let mut group = Flex::default_fill().row();
@@ -97,13 +97,8 @@ impl SamplesTab {
         sample_sizes_button.set_tooltip("Show sample sizes");
         sidebar.fixed(&sample_sizes_button, ch_units_to_width(&sidebar, 5));
 
-        let inst_table = ListEditorTable::new_with_data(instruments, sender.clone());
-
-        let button_height = inst_table.button_height();
-        sidebar.fixed(inst_table.list_buttons_pack(), button_height);
-
-        let sample_table = ListEditorTable::new_with_data(samples, sender.clone());
-        sidebar.fixed(sample_table.list_buttons_pack(), button_height);
+        let (inst_table, sample_table) =
+            tables_for_list_pair(&mut sidebar, sender.clone(), instruments_and_samples);
 
         sidebar.end();
 
@@ -113,8 +108,11 @@ impl SamplesTab {
 
         let mut sample_sizes_group = Flex::default().column().size_of_parent();
         sample_sizes_group.set_margin(margin);
-        let sample_sizes_widget =
-            SampleSizesWidget::new(&mut sample_sizes_group, instruments, samples);
+        let sample_sizes_widget = SampleSizesWidget::new(
+            &mut sample_sizes_group,
+            instruments_and_samples.list1(),
+            instruments_and_samples.list2(),
+        );
         sample_sizes_group.end();
 
         let mut instrument_group = Flex::default().column().size_of_parent();
@@ -155,7 +153,7 @@ impl SamplesTab {
         editor_wizard.end();
 
         let mut console = TextDisplay::default();
-        main_group.fixed(&console, button_height * 3);
+        main_group.fixed(&console, ch_units_to_width(&console, 10));
 
         main_group.end();
         group.end();

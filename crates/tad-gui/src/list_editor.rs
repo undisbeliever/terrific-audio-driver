@@ -14,7 +14,7 @@ use crate::{sfx_export_order, tables};
 
 use compiler::data::Name;
 use fltk::button::Button;
-use fltk::group::{Pack, PackType};
+use fltk::group::{Flex, Pack, PackType};
 use fltk::prelude::{GroupExt, WidgetExt};
 
 use std::cell::RefCell;
@@ -753,7 +753,12 @@ pub enum TableAction {
 
 pub trait TableMapping
 where
-    Self::DataType: Sized + Clone + std::cmp::PartialEq<Self::DataType>,
+    Self::DataType: Sized
+        + Clone
+        + NameGetter
+        + NameSetter
+        + std::cmp::PartialEq<Self::DataType>
+        + std::fmt::Debug,
     Self::RowType: tables::TableRow + 'static,
 {
     type DataType;
@@ -791,6 +796,7 @@ where
 pub trait TableCompilerOutput
 where
     Self: TableMapping,
+    Self::CompilerOutputType: CompilerOutput,
 {
     type CompilerOutputType;
 
@@ -1207,4 +1213,34 @@ where
     pub fn sfx_eo_edited(&mut self, action: &ListAction<Name>) {
         self.list_edited(action);
     }
+}
+
+pub fn tables_for_list_pair<M1, M2>(
+    parent: &mut Flex,
+    sender: fltk::app::Sender<GuiMessage>,
+    data: &ListPairWithCompilerOutputs<
+        M1::DataType,
+        M1::CompilerOutputType,
+        M2::DataType,
+        M2::CompilerOutputType,
+    >,
+) -> (ListEditorTable<M1>, ListEditorTable<M2>)
+where
+    M1: TableMapping + TableCompilerOutput,
+    M2: TableMapping + TableCompilerOutput,
+{
+    // Assumes list1 and list2 have the same max_size
+    let max_size_1 = data.list1.max_size.saturating_sub(data.list2.len());
+    let max_size_2 = data.list2.max_size.saturating_sub(data.list1.len());
+
+    let mut table1 = ListEditorTable::new_with_data(data.list1(), sender.clone());
+    let mut table2 = ListEditorTable::new_with_data(data.list2(), sender.clone());
+
+    table1.set_max_size(max_size_1);
+    table2.set_max_size(max_size_2);
+
+    parent.fixed(table1.list_buttons_pack(), table1.button_height());
+    parent.fixed(table2.list_buttons_pack(), table2.button_height());
+
+    (table1, table2)
 }
