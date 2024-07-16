@@ -39,6 +39,10 @@ File formats:
 GUI changes:
  * Fixed table not scrolling when items are added or moved.
  * Fixed selected row not visible when editing table cells.
+ * Rewrote the GUI's data storage, list messages and item selection:
+    * Fixed instrument and sample tables button enabled/disabled state.
+    * Fixed missing name deduplication in instrument and sample tables.
+    * Fixed name deduplicator not detecting an already deduplicated name.
 
 
 Version 0.0.9
