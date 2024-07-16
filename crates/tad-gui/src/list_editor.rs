@@ -824,15 +824,18 @@ struct ListEditorTableButtons {
 }
 
 impl ListEditorTableButtons {
-    fn new(max_size: usize) -> Self {
+    fn new(parent: &mut Flex, max_size: usize) -> Self {
         let mut pack = Pack::default().with_type(PackType::Horizontal);
         pack.end();
 
         let label_size = pack.label_size() * 8 / 10;
         pack.set_label_size(label_size);
 
+        let button_size = ch_units_to_width(&pack, 4);
+        parent.fixed(&pack, button_size);
+
         Self {
-            button_size: ch_units_to_width(&pack, 4),
+            button_size,
             label_size,
             max_size,
             buttons: Vec::new(),
@@ -907,8 +910,6 @@ where
 {
     sender: fltk::app::Sender<GuiMessage>,
 
-    list_buttons_pack: Pack,
-
     // Must store list_buttons in a separate Rc to prevent a BorrowMutError in set_selection_changed_callback
     list_buttons: Rc<RefCell<ListEditorTableButtons>>,
 
@@ -919,8 +920,11 @@ impl<T> ListEditorTable<T>
 where
     T: TableMapping,
 {
-    pub fn new(sender: fltk::app::Sender<GuiMessage>) -> Self {
-        let list_buttons = Rc::new(RefCell::new(ListEditorTableButtons::new(T::MAX_SIZE)));
+    pub fn new(parent: &mut Flex, sender: fltk::app::Sender<GuiMessage>) -> Self {
+        let list_buttons = Rc::new(RefCell::new(ListEditorTableButtons::new(
+            parent,
+            T::MAX_SIZE,
+        )));
         let table = Rc::new(RefCell::new(tables::TrTable::new(T::headers())));
 
         {
@@ -965,11 +969,8 @@ where
             });
         }
 
-        let list_buttons_pack = list_buttons.borrow().pack.clone();
-
         let mut out = Self {
             sender,
-            list_buttons_pack,
             list_buttons,
             table,
         };
@@ -1024,8 +1025,12 @@ where
         out
     }
 
-    pub fn new_from_slice(data: &[T::DataType], sender: fltk::app::Sender<GuiMessage>) -> Self {
-        let out = Self::new(sender);
+    pub fn new_from_slice(
+        parent: &mut Flex,
+        data: &[T::DataType],
+        sender: fltk::app::Sender<GuiMessage>,
+    ) -> Self {
+        let out = Self::new(parent, sender);
 
         {
             let mut t = out.table.borrow_mut();
@@ -1040,10 +1045,11 @@ where
     }
 
     pub fn new_with_data(
+        parent: &mut Flex,
         state: &impl ListState<Item = T::DataType>,
         sender: fltk::app::Sender<GuiMessage>,
     ) -> Self {
-        let mut out = Self::new(sender);
+        let mut out = Self::new(parent, sender);
         out.replace(state);
         out
     }
@@ -1123,14 +1129,6 @@ where
         table: &tables::TrTable<T::RowType>,
     ) {
         list_buttons.update_buttons(table.selected_row(), table.n_rows());
-    }
-
-    pub fn button_height(&self) -> i32 {
-        self.list_buttons.borrow().button_size
-    }
-
-    pub fn list_buttons_pack(&self) -> &Pack {
-        &self.list_buttons_pack
     }
 
     pub fn selected_row(&self) -> Option<usize> {
@@ -1233,14 +1231,11 @@ where
     let max_size_1 = data.list1.max_size.saturating_sub(data.list2.len());
     let max_size_2 = data.list2.max_size.saturating_sub(data.list1.len());
 
-    let mut table1 = ListEditorTable::new_with_data(data.list1(), sender.clone());
-    let mut table2 = ListEditorTable::new_with_data(data.list2(), sender.clone());
+    let mut table1 = ListEditorTable::new_with_data(parent, data.list1(), sender.clone());
+    let mut table2 = ListEditorTable::new_with_data(parent, data.list2(), sender.clone());
 
     table1.set_max_size(max_size_1);
     table2.set_max_size(max_size_2);
-
-    parent.fixed(table1.list_buttons_pack(), table1.button_height());
-    parent.fixed(table2.list_buttons_pack(), table2.button_height());
 
     (table1, table2)
 }

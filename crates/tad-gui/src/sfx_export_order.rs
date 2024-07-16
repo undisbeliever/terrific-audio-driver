@@ -209,14 +209,16 @@ impl SfxExportOrderEditor {
         sender: Sender<GuiMessage>,
     ) -> Self {
         // ::TODO add a button to move SFX between low and high priorities::
-        let normal_priority =
-            ListEditorTable::new_from_slice(sfx_export_order.normal_priority_sfx(), sender.clone());
-        let low_priority =
-            ListEditorTable::new_from_slice(sfx_export_order.low_priority_sfx(), sender.clone());
-
-        let button_height = normal_priority.button_height();
-        parent.fixed(normal_priority.list_buttons_pack(), button_height);
-        parent.fixed(low_priority.list_buttons_pack(), button_height);
+        let normal_priority = ListEditorTable::new_from_slice(
+            parent,
+            sfx_export_order.normal_priority_sfx(),
+            sender.clone(),
+        );
+        let low_priority = ListEditorTable::new_from_slice(
+            parent,
+            sfx_export_order.low_priority_sfx(),
+            sender.clone(),
+        );
 
         Self {
             normal_priority,

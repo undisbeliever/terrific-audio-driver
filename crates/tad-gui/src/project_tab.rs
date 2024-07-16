@@ -211,10 +211,7 @@ impl ProjectTab {
 
         let mut right = Flex::default().column();
 
-        let song_table = ListEditorTable::new_with_data(&data.project_songs, sender);
-
-        let button_height = song_table.button_height();
-        right.fixed(song_table.list_buttons_pack(), button_height);
+        let song_table = ListEditorTable::new_with_data(&mut right, &data.project_songs, sender);
 
         let mut sfx_file_flex = Flex::default().row();
         right.fixed(&sfx_file_flex, input_height(&sfx_file_flex));

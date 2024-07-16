@@ -199,10 +199,7 @@ impl SoundEffectsTab {
         let mut sidebar = Flex::default().column();
         group.fixed(&sidebar, ch_units_to_width(&sidebar, 30));
 
-        let sfx_table = ListEditorTable::new(sender.clone());
-
-        let button_height = sfx_table.button_height();
-        sidebar.fixed(sfx_table.list_buttons_pack(), button_height);
+        let sfx_table = ListEditorTable::new(&mut sidebar, sender.clone());
 
         let mut add_missing_sfx_button = Button::default().with_label("Add missing sound effects");
         sidebar.fixed(
@@ -293,7 +290,7 @@ impl SoundEffectsTab {
         editor.set_text_size(editor.widget().text_size() * 12 / 10);
 
         let mut console = TextDisplay::default();
-        main_group.fixed(&console, button_height * 5);
+        main_group.fixed(&console, ch_units_to_width(&console, 15));
 
         main_group.add(editor.status_bar());
         main_group.fixed(editor.status_bar(), input_height(editor.status_bar()));
