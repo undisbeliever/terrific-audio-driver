@@ -15,7 +15,6 @@ use crate::tables::{RowWithStatus, SimpleRow};
 use crate::GuiMessage;
 
 use compiler::data::{self, Instrument, LoopSetting};
-use compiler::driver_constants::MAX_INSTRUMENTS_AND_SAMPLES;
 use compiler::errors::ValueError;
 use compiler::notes::{Note, Octave, PitchChar, STARTING_OCTAVE};
 use compiler::path::SourcePathBuf;
@@ -50,8 +49,6 @@ pub struct InstrumentMapping;
 impl TableMapping for InstrumentMapping {
     type DataType = data::Instrument;
     type RowType = RowWithStatus<SimpleRow<1>>;
-
-    const MAX_SIZE: usize = MAX_INSTRUMENTS_AND_SAMPLES;
 
     const CAN_CLONE: bool = true;
     const CAN_EDIT: bool = false;

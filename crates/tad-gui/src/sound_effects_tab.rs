@@ -39,6 +39,9 @@ use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
+// Sound effect file can hold more sound effects then export-order allows
+pub const MAX_SFX_FILE_SOUND_EFFECTS: usize = 1024;
+
 #[derive(Clone, Copy)]
 enum SoundEffectTypeChoice {
     BytecodeAssembly = 0,
@@ -74,9 +77,6 @@ pub struct SoundEffectMapping;
 impl TableMapping for SoundEffectMapping {
     type DataType = SoundEffectInput;
     type RowType = RowWithStatus<SimpleRow<1>>;
-
-    // Sound effect file can hold more sound effects then export-order allows
-    const MAX_SIZE: usize = 1024;
 
     const CAN_CLONE: bool = true;
     const CAN_EDIT: bool = false;

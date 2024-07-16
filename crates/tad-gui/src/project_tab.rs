@@ -18,7 +18,6 @@ use crate::{helpers::*, ProjectData};
 use compiler::common_audio_data::CommonAudioData;
 use compiler::data::Name;
 use compiler::data::{self, DefaultSfxFlags};
-use compiler::driver_constants::MAX_N_SONGS;
 use compiler::path::SourcePathBuf;
 use compiler::songs::{song_duration_string, SongAramSize, SongData};
 
@@ -65,8 +64,6 @@ pub struct SongMapping;
 impl TableMapping for SongMapping {
     type DataType = data::Song;
     type RowType = RowWithStatus<SongRow>;
-
-    const MAX_SIZE: usize = MAX_N_SONGS;
 
     const CAN_CLONE: bool = false;
     const CAN_EDIT: bool = true;

@@ -82,6 +82,13 @@ impl GuiSfxExportOrder {
     pub fn low_priority_sfx(&self) -> &[Name] {
         &self.export_order[self.low_priority_index..]
     }
+
+    fn table_max_sizes(&self) -> (usize, usize) {
+        (
+            MAX_SOUND_EFFECTS.saturating_sub(self.low_priority_sfx().len()),
+            MAX_SOUND_EFFECTS.saturating_sub(self.normal_priority_sfx().len()),
+        )
+    }
 }
 
 impl SfxExportOrder for GuiSfxExportOrder {
@@ -150,8 +157,6 @@ where
     type DataType = Name;
     type RowType = SimpleRow<1>;
 
-    const MAX_SIZE: usize = MAX_SOUND_EFFECTS;
-
     const CAN_CLONE: bool = true;
     const CAN_EDIT: bool = true;
 
@@ -208,15 +213,19 @@ impl SfxExportOrderEditor {
         sfx_export_order: &GuiSfxExportOrder,
         sender: Sender<GuiMessage>,
     ) -> Self {
+        let (max_normal, max_lp) = sfx_export_order.table_max_sizes();
+
         // ::TODO add a button to move SFX between low and high priorities::
         let normal_priority = ListEditorTable::new_from_slice(
             parent,
             sfx_export_order.normal_priority_sfx(),
+            max_normal,
             sender.clone(),
         );
         let low_priority = ListEditorTable::new_from_slice(
             parent,
             sfx_export_order.low_priority_sfx(),
+            max_lp,
             sender.clone(),
         );
 
@@ -391,11 +400,9 @@ impl SfxExportOrderEditor {
 
         data.process(&a);
 
-        self.normal_priority
-            .set_max_size(MAX_SOUND_EFFECTS.saturating_sub(data.low_priority_sfx().len()));
-
-        self.low_priority
-            .set_max_size(MAX_SOUND_EFFECTS.saturating_sub(data.normal_priority_sfx().len()));
+        let (max_normal, max_lp) = data.table_max_sizes();
+        self.normal_priority.set_max_size(max_normal);
+        self.low_priority.set_max_size(max_lp);
 
         Some(a)
     }

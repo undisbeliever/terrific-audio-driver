@@ -88,6 +88,7 @@ use names::deduplicate_two_name_vecs;
 use sample_analyser::SampleAnalyserDialog;
 use sfx_export_order::{GuiSfxExportOrder, SfxExportOrderMessage};
 use sfx_window::SfxWindow;
+use sound_effects_tab::MAX_SFX_FILE_SOUND_EFFECTS;
 
 use std::collections::HashMap;
 use std::env;
@@ -918,8 +919,7 @@ impl Project {
             dialog::alert_default(&format!("{} sound effects have been renamed", sfx_renamed));
         }
 
-        let sound_effects =
-            ListWithCompilerOutput::new(sfx, driver_constants::MAX_SOUND_EFFECTS + 20);
+        let sound_effects = ListWithCompilerOutput::new(sfx, MAX_SFX_FILE_SOUND_EFFECTS);
 
         self.sound_effects_tab
             .replace_sfx_file(&sfx_file.header, &sound_effects);

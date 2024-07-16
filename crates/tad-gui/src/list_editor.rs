@@ -183,6 +183,7 @@ where
 {
     type Item;
 
+    fn max_size(&self) -> usize;
     fn len(&self) -> usize;
     fn item_iter(&self) -> impl Iterator<Item = &Self::Item>;
 }
@@ -272,6 +273,10 @@ where
     O: CompilerOutput,
 {
     type Item = T;
+
+    fn max_size(&self) -> usize {
+        self.max_size
+    }
 
     fn len(&self) -> usize {
         self.list.len()
@@ -764,8 +769,6 @@ where
     type DataType;
     type RowType;
 
-    const MAX_SIZE: usize;
-
     const CAN_CLONE: bool;
     const CAN_EDIT: bool;
 
@@ -824,7 +827,7 @@ struct ListEditorTableButtons {
 }
 
 impl ListEditorTableButtons {
-    fn new(parent: &mut Flex, max_size: usize) -> Self {
+    fn new(parent: &mut Flex) -> Self {
         let mut pack = Pack::default().with_type(PackType::Horizontal);
         pack.end();
 
@@ -837,7 +840,7 @@ impl ListEditorTableButtons {
         Self {
             button_size,
             label_size,
-            max_size,
+            max_size: 0,
             buttons: Vec::new(),
 
             pack,
@@ -876,7 +879,7 @@ impl ListEditorTableButtons {
         self.buttons.push((b, update_cb));
     }
 
-    fn set_max_size_and_update_buttons(
+    fn set_max_size_and_maybe_update_buttons(
         &mut self,
         max_size: usize,
         selected: Option<usize>,
@@ -886,6 +889,16 @@ impl ListEditorTableButtons {
             self.max_size = max_size;
             self.update_buttons(selected, list_len);
         }
+    }
+
+    fn set_max_size_and_force_update_buttons(
+        &mut self,
+        max_size: usize,
+        selected: Option<usize>,
+        list_len: usize,
+    ) {
+        self.max_size = max_size;
+        self.update_buttons(selected, list_len);
     }
 
     fn update_buttons(&mut self, selected: Option<usize>, list_len: usize) {
@@ -921,10 +934,7 @@ where
     T: TableMapping,
 {
     pub fn new(parent: &mut Flex, sender: fltk::app::Sender<GuiMessage>) -> Self {
-        let list_buttons = Rc::new(RefCell::new(ListEditorTableButtons::new(
-            parent,
-            T::MAX_SIZE,
-        )));
+        let list_buttons = Rc::new(RefCell::new(ListEditorTableButtons::new(parent)));
         let table = Rc::new(RefCell::new(tables::TrTable::new(T::headers())));
 
         {
@@ -1028,6 +1038,7 @@ where
     pub fn new_from_slice(
         parent: &mut Flex,
         data: &[T::DataType],
+        max_size: usize,
         sender: fltk::app::Sender<GuiMessage>,
     ) -> Self {
         let out = Self::new(parent, sender);
@@ -1038,12 +1049,13 @@ where
 
             t.edit_table(|v| v.extend(data.iter().map(T::new_row)));
 
-            Self::update_list_buttons(&mut lb, &t);
+            lb.set_max_size_and_force_update_buttons(max_size, t.selected_row(), t.n_rows());
         }
 
         out
     }
 
+    // MUST NOT be called with a `ListPairWithCompilerOutputs` list,
     pub fn new_with_data(
         parent: &mut Flex,
         state: &impl ListState<Item = T::DataType>,
@@ -1052,6 +1064,19 @@ where
         let mut out = Self::new(parent, sender);
         out.replace(state);
         out
+    }
+
+    // MUST NOT be called with a `ListPairWithCompilerOutputs` list,
+    pub fn replace(&mut self, state: &impl ListState<Item = T::DataType>) {
+        let mut t = self.table.borrow_mut();
+        let mut lb = self.list_buttons.borrow_mut();
+
+        t.edit_table(|v| {
+            *v = state.item_iter().map(T::new_row).collect();
+        });
+        t.clear_selected();
+
+        lb.set_max_size_and_force_update_buttons(state.max_size(), t.selected_row(), t.n_rows());
     }
 
     pub fn add_button(
@@ -1105,30 +1130,11 @@ where
         );
     }
 
-    pub fn replace(&mut self, state: &impl ListState<Item = T::DataType>) {
-        let mut t = self.table.borrow_mut();
-        let mut lb = self.list_buttons.borrow_mut();
-
-        t.edit_table(|v| {
-            *v = state.item_iter().map(T::new_row).collect();
-        });
-        t.clear_selected();
-
-        Self::update_list_buttons(&mut lb, &t);
-    }
-
     pub fn set_max_size(&mut self, max_size: usize) {
         let t = self.table.borrow_mut();
         let mut lb = self.list_buttons.borrow_mut();
 
-        lb.set_max_size_and_update_buttons(max_size, t.selected_row(), t.n_rows());
-    }
-
-    fn update_list_buttons(
-        list_buttons: &mut ListEditorTableButtons,
-        table: &tables::TrTable<T::RowType>,
-    ) {
-        list_buttons.update_buttons(table.selected_row(), table.n_rows());
+        lb.set_max_size_and_maybe_update_buttons(max_size, t.selected_row(), t.n_rows());
     }
 
     pub fn selected_row(&self) -> Option<usize> {

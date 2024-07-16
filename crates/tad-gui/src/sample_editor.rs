@@ -15,7 +15,6 @@ use crate::tables::{RowWithStatus, SimpleRow};
 use crate::GuiMessage;
 
 use compiler::data::{self, LoopSetting, Sample};
-use compiler::driver_constants::MAX_INSTRUMENTS_AND_SAMPLES;
 use compiler::notes::Note;
 use compiler::path::SourcePathBuf;
 use fltk::group::{Flex, Group};
@@ -48,8 +47,6 @@ pub struct SampleMapping;
 impl TableMapping for SampleMapping {
     type DataType = data::Sample;
     type RowType = RowWithStatus<SimpleRow<1>>;
-
-    const MAX_SIZE: usize = MAX_INSTRUMENTS_AND_SAMPLES;
 
     const CAN_CLONE: bool = true;
     const CAN_EDIT: bool = false;
