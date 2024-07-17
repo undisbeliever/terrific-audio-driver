@@ -36,6 +36,13 @@ pub struct SfxExportOrderAction {
     low_priority_index: usize,
 }
 
+#[derive(Clone, Copy, PartialEq)]
+enum Priority {
+    High,
+    Normal,
+    Low,
+}
+
 #[derive(Debug, Clone)]
 pub struct GuiSfxExportOrder {
     export_order: LaVec<Name>,
@@ -75,6 +82,8 @@ impl GuiSfxExportOrder {
         self.export_order.process(&action.action);
         self.n_high_priority_sfx = action.n_high_priority_sfx;
         self.low_priority_index = action.low_priority_index;
+
+        assert!(self.low_priority_index <= self.export_order.len());
     }
 
     pub fn can_add_one(&self) -> bool {
@@ -91,6 +100,14 @@ impl GuiSfxExportOrder {
 
     pub fn low_priority_range(&self) -> Range<usize> {
         self.low_priority_index..self.export_order.len()
+    }
+
+    fn priority_range(&self, p: Priority) -> Range<usize> {
+        match p {
+            Priority::High => self.high_priority_range(),
+            Priority::Normal => self.normal_priority_range(),
+            Priority::Low => self.low_priority_range(),
+        }
     }
 
     pub fn high_priority_sfx(&self) -> &[Name] {
@@ -151,6 +168,12 @@ pub enum SfxExportOrderMessage {
     High(ListMessage<Name>),
     Normal(ListMessage<Name>),
     Low(ListMessage<Name>),
+    MoveFromHighToNormal(usize),
+    MoveFromHighToLow(usize),
+    MoveFromNormalToHigh(usize),
+    MoveFromNormalToLow(usize),
+    MoveFromLowToHigh(usize),
+    MoveFromLowToNormal(usize),
 }
 
 pub trait SfxEoMapping {
@@ -256,25 +279,62 @@ impl SfxExportOrderEditor {
     ) -> Self {
         let (max_high, max_normal, max_low) = sfx_export_order.table_max_sizes();
 
-        // ::TODO add a button to move SFX between low and high priorities::
-
-        let high_priority = ListEditorTable::new_from_slice(
+        let mut high_priority = ListEditorTable::new_from_slice(
             parent,
             sfx_export_order.high_priority_sfx(),
             max_high,
             sender.clone(),
         );
-        let normal_priority = ListEditorTable::new_from_slice(
+        let mut normal_priority = ListEditorTable::new_from_slice(
             parent,
             sfx_export_order.normal_priority_sfx(),
             max_normal,
             sender.clone(),
         );
-        let low_priority = ListEditorTable::new_from_slice(
+        let mut low_priority = ListEditorTable::new_from_slice(
             parent,
             sfx_export_order.low_priority_sfx(),
             max_low,
             sender.clone(),
+        );
+
+        high_priority.add_sel_button(
+            "N",
+            "Move to normal priority",
+            |a| a.selected.is_some(),
+            |i| GuiMessage::EditSfxExportOrder(SfxExportOrderMessage::MoveFromHighToNormal(i)),
+        );
+        high_priority.add_sel_button(
+            "L",
+            "Move to low priority",
+            |a| a.selected.is_some(),
+            |i| GuiMessage::EditSfxExportOrder(SfxExportOrderMessage::MoveFromHighToLow(i)),
+        );
+
+        normal_priority.add_sel_button(
+            "H",
+            "Move to high priority",
+            |a| a.selected.is_some(),
+            |i| GuiMessage::EditSfxExportOrder(SfxExportOrderMessage::MoveFromNormalToHigh(i)),
+        );
+        normal_priority.add_sel_button(
+            "L",
+            "Move to low priority",
+            |a| a.selected.is_some(),
+            |i| GuiMessage::EditSfxExportOrder(SfxExportOrderMessage::MoveFromNormalToLow(i)),
+        );
+
+        low_priority.add_sel_button(
+            "H",
+            "Move to high priority",
+            |a| a.selected.is_some(),
+            |i| GuiMessage::EditSfxExportOrder(SfxExportOrderMessage::MoveFromLowToHigh(i)),
+        );
+        low_priority.add_sel_button(
+            "N",
+            "Move to normal priority",
+            |a| a.selected.is_some(),
+            |i| GuiMessage::EditSfxExportOrder(SfxExportOrderMessage::MoveFromLowToNormal(i)),
         );
 
         Self {
@@ -406,6 +466,55 @@ impl SfxExportOrderEditor {
         }
     }
 
+    fn move_between_priorities<M1, M2>(
+        data: &GuiSfxExportOrder,
+        index: usize,
+        from: Priority,
+        from_table: &mut ListEditorTable<M1>,
+        to: Priority,
+        to_table: &mut ListEditorTable<M2>,
+    ) -> Option<SfxExportOrderAction>
+    where
+        M1: SfxEoMapping,
+        M2: SfxEoMapping,
+    {
+        let from_range = data.priority_range(from);
+        let to_range = data.priority_range(to);
+
+        let sfx_list = &data.export_order[from_range.clone()];
+
+        let sfx = sfx_list.get(index)?;
+        from_table.sfx_eo_edited(&ListAction::Remove(index));
+
+        let from_index = index + from_range.start;
+
+        let to_index = if from_index < to_range.start {
+            to_table.sfx_eo_edited(&ListAction::Add(0, sfx.clone()));
+            to_range.start - 1
+        } else {
+            to_table.sfx_eo_edited(&ListAction::Add(to_range.len(), sfx.clone()));
+            to_range.end
+        };
+
+        Some(SfxExportOrderAction {
+            action: ListAction::Move(from_index, to_index),
+            n_high_priority_sfx: if from == Priority::High {
+                data.n_high_priority_sfx - 1
+            } else if to == Priority::High {
+                data.n_high_priority_sfx + 1
+            } else {
+                data.n_high_priority_sfx
+            },
+            low_priority_index: if from == Priority::Low {
+                data.low_priority_index + 1
+            } else if to == Priority::Low {
+                data.low_priority_index - 1
+            } else {
+                data.low_priority_index
+            },
+        })
+    }
+
     pub fn process(
         &mut self,
         m: SfxExportOrderMessage,
@@ -472,6 +581,54 @@ impl SfxExportOrderEditor {
                     low_priority_index: data.low_priority_index,
                 }
             }
+            SfxExportOrderMessage::MoveFromHighToNormal(index) => Self::move_between_priorities(
+                data,
+                index,
+                Priority::High,
+                &mut self.high_priority,
+                Priority::Normal,
+                &mut self.normal_priority,
+            )?,
+            SfxExportOrderMessage::MoveFromHighToLow(index) => Self::move_between_priorities(
+                data,
+                index,
+                Priority::High,
+                &mut self.high_priority,
+                Priority::Low,
+                &mut self.low_priority,
+            )?,
+            SfxExportOrderMessage::MoveFromNormalToHigh(index) => Self::move_between_priorities(
+                data,
+                index,
+                Priority::Normal,
+                &mut self.normal_priority,
+                Priority::High,
+                &mut self.high_priority,
+            )?,
+            SfxExportOrderMessage::MoveFromNormalToLow(index) => Self::move_between_priorities(
+                data,
+                index,
+                Priority::Normal,
+                &mut self.normal_priority,
+                Priority::Low,
+                &mut self.low_priority,
+            )?,
+            SfxExportOrderMessage::MoveFromLowToHigh(index) => Self::move_between_priorities(
+                data,
+                index,
+                Priority::Low,
+                &mut self.low_priority,
+                Priority::High,
+                &mut self.high_priority,
+            )?,
+            SfxExportOrderMessage::MoveFromLowToNormal(index) => Self::move_between_priorities(
+                data,
+                index,
+                Priority::Low,
+                &mut self.low_priority,
+                Priority::Normal,
+                &mut self.normal_priority,
+            )?,
         };
 
         data.process(&a);
