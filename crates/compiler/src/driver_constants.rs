@@ -62,7 +62,7 @@ pub mod addresses {
     );
 
     // MUST match `audio-driver/src/common_memmap.wiz`
-    pub const COMMON_DATA: u16 = 0xA00 - 4;
+    pub const COMMON_DATA: u16 = 0xA00 - 6;
 
     const _: () = assert!(
         _symbols::_LAST_LOADER_SYMBOL < DRIVER_CODE,
@@ -116,9 +116,9 @@ pub const PITCH_TABLE_SIZE: usize = 256;
 pub const COMMON_DATA_N_DIR_ITEMS_OFFSET: usize = 0;
 pub const COMMON_DATA_N_INSTRUMENTS_OFFSET: usize = 1;
 pub const COMMON_DATA_N_SOUND_EFFECTS_OFFSET: usize = 2;
-pub const COMMON_DATA_HEADER_SIZE: usize = 4 + (2 * PITCH_TABLE_SIZE);
+pub const COMMON_DATA_HEADER_SIZE: usize = 6 + (2 * PITCH_TABLE_SIZE);
 
-pub const COMMON_DATA_PITCH_TABLE_OFFSET: usize = 4;
+pub const COMMON_DATA_PITCH_TABLE_OFFSET: usize = 6;
 pub const COMMON_DATA_DIR_TABLE_OFFSET: usize = COMMON_DATA_HEADER_SIZE;
 
 pub const COMMON_DATA_BYTES_PER_DIR: usize = 4;
