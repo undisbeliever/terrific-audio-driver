@@ -133,7 +133,7 @@ pub trait SfxEoMapping {
 struct NormalSfxEoMapping;
 impl SfxEoMapping for NormalSfxEoMapping {
     const TYPE_NAME: &'static str = "sound effect";
-    const HEADER: &'static str = "Low Priority SFX Export Order";
+    const HEADER: &'static str = "Sound Effect Export Order";
 
     fn to_gui_message(lm: ListMessage<Name>) -> GuiMessage {
         GuiMessage::EditSfxExportOrder(SfxExportOrderMessage::NormalPriority(lm))
@@ -143,7 +143,7 @@ impl SfxEoMapping for NormalSfxEoMapping {
 struct LowPrioritySfxEoMapping;
 impl SfxEoMapping for LowPrioritySfxEoMapping {
     const TYPE_NAME: &'static str = "sound effect";
-    const HEADER: &'static str = "Sound Effect Export Order";
+    const HEADER: &'static str = "Low Priority SFX Export Order";
 
     fn to_gui_message(lm: ListMessage<Name>) -> GuiMessage {
         GuiMessage::EditSfxExportOrder(SfxExportOrderMessage::LowPriority(lm))
