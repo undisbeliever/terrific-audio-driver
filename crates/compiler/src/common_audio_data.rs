@@ -158,7 +158,7 @@ pub fn build_common_audio_data(
     out.push(u8::try_from(n_instruments_and_samples).unwrap());
     out.push(u8::try_from(n_sound_effects).unwrap());
     out.push(0); // _padding1
-    out.push(0); // _padding2
+    out.push(sound_effects.n_high_priority_sfx);
     out.push(sound_effects.low_priority_index);
 
     out.extend(samples_and_instruments.pitch_table.table_data_l);

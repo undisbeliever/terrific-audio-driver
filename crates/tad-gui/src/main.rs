@@ -282,9 +282,11 @@ impl Project {
     ) -> Self {
         let c = pf.contents;
 
-        // ::TODO deduplicate paired names (instruments, samples)::
-        let (sfx_export_order, sfx_renamed) =
-            GuiSfxExportOrder::new_lossy(c.sound_effects, c.low_priority_sound_effects);
+        let (sfx_export_order, sfx_renamed) = GuiSfxExportOrder::new_lossy(
+            c.high_priority_sound_effects,
+            c.sound_effects,
+            c.low_priority_sound_effects,
+        );
         let (songs, songs_renamed) = deduplicate_names(c.songs);
         let (instruments_and_samples, i_and_s_renamed) =
             deduplicate_two_name_vecs(c.instruments, c.samples);
@@ -1182,6 +1184,7 @@ impl ProjectData {
 
             default_sfx_flags: self.default_sfx_flags,
 
+            high_priority_sound_effects: self.sfx_export_order.high_priority_sfx().to_owned(),
             sound_effects: self.sfx_export_order.normal_priority_sfx().to_owned(),
             low_priority_sound_effects: self.sfx_export_order.low_priority_sfx().to_owned(),
 

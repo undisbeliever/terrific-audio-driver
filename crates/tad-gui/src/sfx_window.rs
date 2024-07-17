@@ -309,7 +309,7 @@ impl SfxTable {
     ) {
         // X-axis margin
         const MX: i32 = 3;
-        const LOW_PRIORITY_LINE: Color = Color::DarkRed;
+        const PRIORITY_LINE: Color = Color::DarkRed;
 
         match ctx {
             TableContext::StartPage => draw::set_font(self.font, self.font_size),
@@ -329,12 +329,14 @@ impl SfxTable {
                             draw::set_draw_color(bg_color);
                             draw::draw_rectf(x, y, w, h);
 
-                            if i == eo.low_priority_index() {
-                                draw::set_draw_color(LOW_PRIORITY_LINE);
+                            if i == eo.n_high_priority_sfx() || i == eo.low_priority_index() {
+                                draw::set_draw_color(PRIORITY_LINE);
                                 draw::draw_xyline(x, y, x + w);
-                            } else if i + 1 == eo.low_priority_index() {
-                                draw::set_draw_color(LOW_PRIORITY_LINE);
-                                draw::draw_xyline(x, y + h, x + w);
+                            } else if i + 1 == eo.n_high_priority_sfx()
+                                || i + 1 == eo.low_priority_index()
+                            {
+                                draw::set_draw_color(PRIORITY_LINE);
+                                draw::draw_xyline(x, y + h - 1, x + w);
                             }
 
                             draw::set_draw_color(fg_color);

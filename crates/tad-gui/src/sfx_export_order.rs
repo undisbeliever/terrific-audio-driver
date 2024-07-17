@@ -32,34 +32,39 @@ impl SfxId {
 #[derive(Debug)]
 pub struct SfxExportOrderAction {
     action: ListAction<Name>,
+    n_high_priority_sfx: usize,
     low_priority_index: usize,
 }
 
 #[derive(Debug, Clone)]
 pub struct GuiSfxExportOrder {
     export_order: LaVec<Name>,
+    n_high_priority_sfx: usize,
     low_priority_index: usize,
 }
 
 impl Default for GuiSfxExportOrder {
     fn default() -> Self {
         Self {
-            low_priority_index: 0,
             export_order: LaVec::new(),
+            n_high_priority_sfx: 0,
+            low_priority_index: 0,
         }
     }
 }
 
 impl GuiSfxExportOrder {
-    pub fn new_lossy(eo: Vec<Name>, lp_eo: Vec<Name>) -> (Self, usize) {
-        let low_priority_index = eo.len();
+    pub fn new_lossy(hp_eo: Vec<Name>, eo: Vec<Name>, lp_eo: Vec<Name>) -> (Self, usize) {
+        let n_high_priority_sfx = hp_eo.len();
+        let low_priority_index = hp_eo.len() + eo.len();
 
-        let export_order = [eo, lp_eo].concat();
+        let export_order = [hp_eo, eo, lp_eo].concat();
         let (export_order, n_renamed) = deduplicate_names(export_order);
 
         (
             Self {
                 export_order: LaVec::from_vec(export_order.into_vec()),
+                n_high_priority_sfx,
                 low_priority_index,
             },
             n_renamed,
@@ -68,6 +73,7 @@ impl GuiSfxExportOrder {
 
     pub fn process(&mut self, action: &SfxExportOrderAction) {
         self.export_order.process(&action.action);
+        self.n_high_priority_sfx = action.n_high_priority_sfx;
         self.low_priority_index = action.low_priority_index;
     }
 
@@ -75,18 +81,39 @@ impl GuiSfxExportOrder {
         self.export_order.len() < MAX_SOUND_EFFECTS
     }
 
+    pub fn high_priority_range(&self) -> Range<usize> {
+        0..self.n_high_priority_sfx
+    }
+
+    pub fn normal_priority_range(&self) -> Range<usize> {
+        self.n_high_priority_sfx..self.low_priority_index
+    }
+
+    pub fn low_priority_range(&self) -> Range<usize> {
+        self.low_priority_index..self.export_order.len()
+    }
+
+    pub fn high_priority_sfx(&self) -> &[Name] {
+        &self.export_order[..self.n_high_priority_sfx]
+    }
+
     pub fn normal_priority_sfx(&self) -> &[Name] {
-        &self.export_order[0..self.low_priority_index]
+        &self.export_order[self.normal_priority_range()]
     }
 
     pub fn low_priority_sfx(&self) -> &[Name] {
         &self.export_order[self.low_priority_index..]
     }
 
-    fn table_max_sizes(&self) -> (usize, usize) {
+    fn table_max_sizes(&self) -> (usize, usize, usize) {
+        let n_high = self.n_high_priority_sfx;
+        let n_normal = self.normal_priority_range().len();
+        let n_low = self.low_priority_range().len();
+
         (
-            MAX_SOUND_EFFECTS.saturating_sub(self.low_priority_sfx().len()),
-            MAX_SOUND_EFFECTS.saturating_sub(self.normal_priority_sfx().len()),
+            MAX_SOUND_EFFECTS.saturating_sub(n_normal + n_low),
+            MAX_SOUND_EFFECTS.saturating_sub(n_high + n_low),
+            MAX_SOUND_EFFECTS.saturating_sub(n_high + n_normal),
         )
     }
 }
@@ -98,6 +125,10 @@ impl SfxExportOrder for GuiSfxExportOrder {
 
     fn export_order(&self) -> &[Name] {
         &self.export_order
+    }
+
+    fn n_high_priority_sfx(&self) -> usize {
+        self.n_high_priority_sfx
     }
 
     fn low_priority_index(&self) -> usize {
@@ -117,16 +148,25 @@ impl GuiSfxExportOrder {
 
 #[derive(Debug)]
 pub enum SfxExportOrderMessage {
-    NormalPriority(ListMessage<Name>),
-    LowPriority(ListMessage<Name>),
+    High(ListMessage<Name>),
+    Normal(ListMessage<Name>),
+    Low(ListMessage<Name>),
 }
 
 pub trait SfxEoMapping {
     const TYPE_NAME: &'static str;
     const HEADER: &'static str;
 
+    fn to_gui_message(lm: ListMessage<Name>) -> GuiMessage;
+}
+
+struct HighPrioritySfxEoMapping;
+impl SfxEoMapping for HighPrioritySfxEoMapping {
+    const TYPE_NAME: &'static str = "sound effect";
+    const HEADER: &'static str = "High Priority SFX Export Order";
+
     fn to_gui_message(lm: ListMessage<Name>) -> GuiMessage {
-        GuiMessage::EditSfxExportOrder(SfxExportOrderMessage::NormalPriority(lm))
+        GuiMessage::EditSfxExportOrder(SfxExportOrderMessage::High(lm))
     }
 }
 
@@ -136,7 +176,7 @@ impl SfxEoMapping for NormalSfxEoMapping {
     const HEADER: &'static str = "Sound Effect Export Order";
 
     fn to_gui_message(lm: ListMessage<Name>) -> GuiMessage {
-        GuiMessage::EditSfxExportOrder(SfxExportOrderMessage::NormalPriority(lm))
+        GuiMessage::EditSfxExportOrder(SfxExportOrderMessage::Normal(lm))
     }
 }
 
@@ -146,7 +186,7 @@ impl SfxEoMapping for LowPrioritySfxEoMapping {
     const HEADER: &'static str = "Low Priority SFX Export Order";
 
     fn to_gui_message(lm: ListMessage<Name>) -> GuiMessage {
-        GuiMessage::EditSfxExportOrder(SfxExportOrderMessage::LowPriority(lm))
+        GuiMessage::EditSfxExportOrder(SfxExportOrderMessage::Low(lm))
     }
 }
 
@@ -203,6 +243,7 @@ where
 }
 
 pub struct SfxExportOrderEditor {
+    high_priority: ListEditorTable<HighPrioritySfxEoMapping>,
     normal_priority: ListEditorTable<NormalSfxEoMapping>,
     low_priority: ListEditorTable<LowPrioritySfxEoMapping>,
 }
@@ -213,9 +254,16 @@ impl SfxExportOrderEditor {
         sfx_export_order: &GuiSfxExportOrder,
         sender: Sender<GuiMessage>,
     ) -> Self {
-        let (max_normal, max_lp) = sfx_export_order.table_max_sizes();
+        let (max_high, max_normal, max_low) = sfx_export_order.table_max_sizes();
 
         // ::TODO add a button to move SFX between low and high priorities::
+
+        let high_priority = ListEditorTable::new_from_slice(
+            parent,
+            sfx_export_order.high_priority_sfx(),
+            max_high,
+            sender.clone(),
+        );
         let normal_priority = ListEditorTable::new_from_slice(
             parent,
             sfx_export_order.normal_priority_sfx(),
@@ -225,11 +273,12 @@ impl SfxExportOrderEditor {
         let low_priority = ListEditorTable::new_from_slice(
             parent,
             sfx_export_order.low_priority_sfx(),
-            max_lp,
+            max_low,
             sender.clone(),
         );
 
         Self {
+            high_priority,
             normal_priority,
             low_priority,
         }
@@ -363,36 +412,63 @@ impl SfxExportOrderEditor {
         data: &mut GuiSfxExportOrder,
     ) -> Option<SfxExportOrderAction> {
         let a = match m {
-            SfxExportOrderMessage::NormalPriority(m) => {
+            SfxExportOrderMessage::High(m) => {
+                self.normal_priority.clear_selected_row();
                 self.low_priority.clear_selected_row();
 
                 let (action, size_delta) = Self::process_list_message(
                     m,
-                    &mut self.normal_priority,
+                    &mut self.high_priority,
                     data,
-                    0..data.low_priority_index,
+                    data.high_priority_range(),
                 )?;
 
                 SfxExportOrderAction {
                     action,
+                    n_high_priority_sfx: data
+                        .n_high_priority_sfx
+                        .checked_add_signed(size_delta)
+                        .unwrap(),
                     low_priority_index: data
                         .low_priority_index
                         .checked_add_signed(size_delta)
                         .unwrap(),
                 }
             }
-            SfxExportOrderMessage::LowPriority(m) => {
+            SfxExportOrderMessage::Normal(m) => {
+                self.high_priority.clear_selected_row();
+                self.low_priority.clear_selected_row();
+
+                let (action, size_delta) = Self::process_list_message(
+                    m,
+                    &mut self.normal_priority,
+                    data,
+                    data.normal_priority_range(),
+                )?;
+
+                SfxExportOrderAction {
+                    action,
+                    n_high_priority_sfx: data.n_high_priority_sfx,
+                    low_priority_index: data
+                        .low_priority_index
+                        .checked_add_signed(size_delta)
+                        .unwrap(),
+                }
+            }
+            SfxExportOrderMessage::Low(m) => {
+                self.high_priority.clear_selected_row();
                 self.normal_priority.clear_selected_row();
 
                 let (action, _size_delta) = Self::process_list_message(
                     m,
                     &mut self.low_priority,
                     data,
-                    data.low_priority_index..data.export_order.len(),
+                    data.low_priority_range(),
                 )?;
 
                 SfxExportOrderAction {
                     action,
+                    n_high_priority_sfx: data.n_high_priority_sfx,
                     low_priority_index: data.low_priority_index,
                 }
             }
@@ -400,9 +476,10 @@ impl SfxExportOrderEditor {
 
         data.process(&a);
 
-        let (max_normal, max_lp) = data.table_max_sizes();
+        let (max_high, max_normal, max_low) = data.table_max_sizes();
+        self.high_priority.set_max_size(max_high);
         self.normal_priority.set_max_size(max_normal);
-        self.low_priority.set_max_size(max_lp);
+        self.low_priority.set_max_size(max_low);
 
         Some(a)
     }

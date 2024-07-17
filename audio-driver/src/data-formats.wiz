@@ -69,7 +69,11 @@ struct CommonDataHeader {
     nSoundEffects  : u8,
 
     _padding1      : u8,
-    _padding2      : u8,
+
+
+    // The number of high-priority sound effects.
+    // High priority sound effects ignore the interruptible flag if both sound effect channels are active and uninterruptible.
+    nHighPrioritySfx: u8,
 
     // The sfx_id of the first low-priority sound effect.
     // If both sound effects channels are active and sfx_id >= firstLowPrioritySfx, sfx_id will be dropped.

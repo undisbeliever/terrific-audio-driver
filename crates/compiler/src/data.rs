@@ -341,6 +341,9 @@ pub struct Project {
     #[serde(default)]
     pub default_sfx_flags: DefaultSfxFlags,
 
+    #[serde(default)]
+    pub high_priority_sound_effects: Vec<Name>,
+    #[serde(default)]
     pub sound_effects: Vec<Name>,
     #[serde(default)]
     pub low_priority_sound_effects: Vec<Name>,
@@ -467,6 +470,7 @@ pub enum InstrumentOrSample {
 
 pub struct UniqueSoundEffectExportOrder {
     pub export_order: UniqueNamesList<Name>,
+    pub n_high_priority_sfx: usize,
     pub low_priority_index: usize,
 }
 
@@ -557,13 +561,20 @@ pub fn validate_instrument_and_sample_names<'a>(
 }
 
 pub fn validate_sfx_export_order(
+    high_priority_sound_effects: Vec<Name>,
     sound_effects: Vec<Name>,
     low_priority_sound_effects: Vec<Name>,
 ) -> Result<UniqueSoundEffectExportOrder, ProjectFileErrors> {
     let mut errors = Vec::new();
 
-    let low_priority_index = sound_effects.len();
-    let export_order = [sound_effects, low_priority_sound_effects].concat();
+    let n_high_priority_sfx = high_priority_sound_effects.len();
+    let low_priority_index = high_priority_sound_effects.len() + sound_effects.len();
+    let export_order = [
+        high_priority_sound_effects,
+        sound_effects,
+        low_priority_sound_effects,
+    ]
+    .concat();
 
     let export_order = validate_list_names(export_order, false, MAX_SOUND_EFFECTS, |e| {
         errors.push(ProjectFileError::SoundEffect(e))
@@ -572,6 +583,7 @@ pub fn validate_sfx_export_order(
     if errors.is_empty() {
         Ok(UniqueSoundEffectExportOrder {
             export_order,
+            n_high_priority_sfx,
             low_priority_index,
         })
     } else {
@@ -599,6 +611,7 @@ pub fn validate_project_file_names(
     );
 
     let sfx_export_order = match validate_sfx_export_order(
+        pf.contents.high_priority_sound_effects,
         pf.contents.sound_effects,
         pf.contents.low_priority_sound_effects,
     ) {

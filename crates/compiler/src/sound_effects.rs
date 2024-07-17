@@ -23,7 +23,11 @@ use crate::time::{TickClock, TickCounter};
 use std::collections::HashMap;
 use std::time::Duration;
 
-pub const MAX_SFX_TICKS: TickCounter = TickCounter::new(0x7fff);
+// Offset to add to the duration field of SfxHeader
+// Should prevent `sfx_remainingTicks` from underflowing in the audio-driver.
+const SFX_HEADER_DURATION_OFFSET: u32 = 32;
+
+pub const MAX_SFX_TICKS: TickCounter = TickCounter::new(0x7fff - SFX_HEADER_DURATION_OFFSET);
 
 const COMMENT_CHAR: char = ';';
 
@@ -213,6 +217,7 @@ pub(crate) struct SfxHeader {
 }
 
 pub struct CombinedSoundEffectsData {
+    pub(crate) n_high_priority_sfx: u8,
     pub(crate) low_priority_index: u8,
     pub(crate) sfx_header: Vec<SfxHeader>,
     pub(crate) sfx_data: Vec<u8>,
@@ -289,6 +294,7 @@ impl CompiledSfxMap for HashMap<Name, CompiledSoundEffect> {
 pub trait SfxExportOrder {
     fn n_sound_effects(&self) -> usize;
     fn export_order(&self) -> &[Name];
+    fn n_high_priority_sfx(&self) -> usize;
     fn low_priority_index(&self) -> usize;
 }
 
@@ -299,6 +305,10 @@ impl SfxExportOrder for UniqueSoundEffectExportOrder {
 
     fn export_order(&self) -> &[Name] {
         self.export_order.list()
+    }
+
+    fn n_high_priority_sfx(&self) -> usize {
+        self.n_high_priority_sfx
     }
 
     fn low_priority_index(&self) -> usize {
@@ -317,10 +327,19 @@ pub fn combine_sound_effects(
         return Err(CombineSoundEffectsError::NoSoundEffectFiles);
     }
 
+    let n_high_priority_sfx = match sfx_export_order.n_high_priority_sfx().try_into() {
+        Ok(i) => i,
+        Err(_) => return Err(CombineSoundEffectsError::InvalidNumberOfHighPrioritySfx),
+    };
+
     let low_priority_index = match sfx_export_order.low_priority_index().try_into() {
         Ok(i) => i,
         Err(_) => return Err(CombineSoundEffectsError::InvalidLowPriorityIndex),
     };
+
+    if n_high_priority_sfx > low_priority_index {
+        return Err(CombineSoundEffectsError::InvalidLowPriorityIndex);
+    }
 
     let mut sfx_header = Vec::with_capacity(sfx_export_order.n_sound_effects());
     let mut sfx_data = Vec::new();
@@ -337,7 +356,9 @@ pub fn combine_sound_effects(
                 const _: () = assert!(MAX_SFX_TICKS.value() < FLAG_MASK as u32);
 
                 let offset = u16::try_from(sfx_data.len()).unwrap_or(0xffff);
-                let ticks = u16::try_from(t).unwrap();
+                let duration = u16::try_from(t + SFX_HEADER_DURATION_OFFSET).unwrap();
+
+                assert!(duration < FLAG_MASK);
 
                 let interruptible_flag =
                     match s.flags.interruptible.unwrap_or(default_flags.interruptible) {
@@ -348,7 +369,7 @@ pub fn combine_sound_effects(
                 sfx_header.push(SfxHeader {
                     one_channel_flag: s.flags.one_channel.unwrap_or(default_flags.one_channel),
                     offset,
-                    duration_and_interrupt_flag: ticks | interruptible_flag,
+                    duration_and_interrupt_flag: duration | interruptible_flag,
                 });
                 sfx_data.extend(s.bytecode());
             }
@@ -358,6 +379,7 @@ pub fn combine_sound_effects(
 
     if missing.is_empty() {
         Ok(CombinedSoundEffectsData {
+            n_high_priority_sfx,
             low_priority_index,
             sfx_header,
             sfx_data,
@@ -369,6 +391,7 @@ pub fn combine_sound_effects(
 
 pub fn blank_compiled_sound_effects() -> CombinedSoundEffectsData {
     CombinedSoundEffectsData {
+        n_high_priority_sfx: 0,
         low_priority_index: u8::MAX,
         sfx_header: Vec::new(),
         sfx_data: Vec::new(),
@@ -379,6 +402,7 @@ pub fn blank_compiled_sound_effects() -> CombinedSoundEffectsData {
 /// Used by the GUI to allocate a block of Audio-RAM that the audio-thread can write sound-effect bytecode to.
 pub fn tad_gui_sfx_data(buffer_size: usize) -> CombinedSoundEffectsData {
     CombinedSoundEffectsData {
+        n_high_priority_sfx: 0,
         low_priority_index: u8::MAX,
         sfx_header: vec![SfxHeader {
             one_channel_flag: false,

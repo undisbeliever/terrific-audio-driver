@@ -1024,8 +1024,11 @@ func play_sound_effect(sfx_id : u8 in y) {
             goto Return if y >= commonDataHeader.firstLowPrioritySfx;
 
             a = sfx_interruptibleFlags;
-            if a >= BOTH_SFX_ACTIVE {
-                // Both sound effects can be interrupted
+            if (zero && y < commonDataHeader.nHighPrioritySfx) || a >= BOTH_SFX_ACTIVE {
+                // Both sound effect channels active and either:
+                //   * both uninterruptible and sfx_id is high-priority
+                //   * both interruptible and sfx_id is normal priority
+                //
                 // check remaining ticks and drop the sound effect that will finish first.
 
                 // Assumes 2 sound effect channels

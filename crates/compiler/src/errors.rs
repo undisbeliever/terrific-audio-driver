@@ -266,6 +266,7 @@ pub enum CombineSoundEffectsError {
     NoSoundEffectFiles,
     MissingSoundEffects(Vec<String>),
     DuplicateSoundEffects(Vec<String>),
+    InvalidNumberOfHighPrioritySfx,
     InvalidLowPriorityIndex,
 }
 
@@ -931,6 +932,9 @@ impl Display for CombineSoundEffectsError {
                 names.len(),
                 names.join(", ")
             ),
+            Self::InvalidNumberOfHighPrioritySfx => {
+                write!(f, "Invalid number of high-priority sound effects")
+            }
             Self::InvalidLowPriorityIndex => write!(f, "Invalid low-priority index"),
         }
     }

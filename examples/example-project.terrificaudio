@@ -106,12 +106,14 @@
     "interruptible": true,
     "one_channel": true
   },
+  "high_priority_sound_effects": [
+    "player_hurt_low_health"
+  ],
   "sound_effects": [
     "menu_cursor",
     "menu_select",
     "menu_incorrect",
     "player_hurt",
-    "player_hurt_low_health",
     "jump",
     "vibrato_alarm",
     "play_samples_bytecode",
