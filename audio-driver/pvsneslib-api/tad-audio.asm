@@ -993,7 +993,7 @@ _tad_loader_gotoNextBank__:
 ;; REQUIRES: state == PLAYING
 ;; REQUIRES: The previous command has been processed by the audio-driver.
 ;;
-;; IN: A = tad_sfxQueue
+;; IN: A = tad_sfxQueue_sfx
 ;;
 ;; A8
 ;; I8
@@ -1003,7 +1003,7 @@ _tad_loader_gotoNextBank__:
     sta     TAD_IO_ToDriver__PARAMETER0_PORT
 
     ; parameter 1 = pan
-    lda     tad_sfxQueue_pan__
+    lda     tad_sfxQueue_pan
     cmp     #MAX_PAN + 1
     bcc     +
         lda     #CENTER_PAN
@@ -1021,7 +1021,8 @@ _tad_loader_gotoNextBank__:
 
     ; Reset the SFX queue
     ldy     #$ff
-    sty     tad_sfxQueue__
+    sty     tad_sfxQueue_sfx
+    sty     tad_sfxQueue_pan
 .endm
 
 
@@ -1129,7 +1130,8 @@ _tad_process__loading__:
             ; Reset command and SFX queues
             lda     #$ff
             sta     tad_nextCommand_id__
-            sta     tad_sfxQueue__
+            sta     tad_sfxQueue_sfx
+            sta     tad_sfxQueue_pan
 
             ; Use `tad_state` to determine if the song is playing or paused.
             ; Cannot use `tad_flags` as it may have changed after the `LoaderDataType` was sent to
@@ -1182,7 +1184,7 @@ _tad_process__loading__:
             dex
             bpl     @Return_I8
                 ; Playing state
-                lda     tad_sfxQueue__
+                lda     tad_sfxQueue_sfx
                 cmp     #$ff
                 beq     @Return_I8
                     _Tad_Process_SendSfxCommand__
@@ -1247,7 +1249,7 @@ tad_init:
 
     lda     #$ff
     sta     tad_nextCommand_id__
-    sta     tad_sfxQueue__
+    sta     tad_sfxQueue_sfx
 
     stz     tad_nextSong__
 
@@ -1320,12 +1322,12 @@ tad_queuePannedSoundEffect:
 .accu 8
 
     lda     _stack_arg_offset + 0,s
-    cmp.l   tad_sfxQueue__
+    cmp.l   tad_sfxQueue_sfx
     bcs     +
-        sta.l   tad_sfxQueue__
+        sta.l   tad_sfxQueue_sfx
 
         lda     _stack_arg_offset + 1,s
-        sta.l   tad_sfxQueue_pan__
+        sta.l   tad_sfxQueue_pan
     +
 
     __PopReturn_noX_noY
@@ -1341,12 +1343,12 @@ tad_queueSoundEffect:
 .accu 8
 
     lda     _stack_arg_offset,s
-    cmp.l   tad_sfxQueue__
+    cmp.l   tad_sfxQueue_sfx
     bcs     +
-        sta.l   tad_sfxQueue__
+        sta.l   tad_sfxQueue_sfx
 
         lda     #CENTER_PAN
-        sta.l   tad_sfxQueue_pan__
+        sta.l   tad_sfxQueue_pan
     +
 
     __PopReturn_noX_noY
@@ -1800,16 +1802,9 @@ tad__Command_A__Override_WithParameter__:
 ;; ---------------------------------------
 ;; Queue 4 - The next sound effect to play
 ;; ---------------------------------------
-    ;; The sound effect to play next.
-    ;;
-    ;; Lower sound effect indexes take priority over higher sound effect indexes
-    ;; (as defined by the project file sound effect export order).
-    ;;
-    ;; If `tad_sfxQueue == $ff`, then the queue is considered empty.
-    tad_sfxQueue__ db
-
-    ;; The pan value for the next sound effect to play.
-    tad_sfxQueue_pan__: db
+    ;; see tad-audio.h
+    tad_sfxQueue_sfx: db
+    tad_sfxQueue_pan: db
 .ends
 
 

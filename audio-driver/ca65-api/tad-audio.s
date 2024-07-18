@@ -41,6 +41,8 @@
 .export Tad_SongsStartImmediately, Tad_SongsStartPaused, Tad_SetTransferSize
 .export Tad_IsLoaderActive, Tad_IsSongLoaded, Tad_IsSfxPlaying, Tad_IsSongPlaying
 
+.exportzp Tad_sfxQueue_sfx, Tad_sfxQueue_pan
+
 
 ;; =======
 ;; DEFINES
@@ -452,19 +454,9 @@ __FIRST_LOADING_SONG_STATE = State::LOADING_SONG_DATA_PAUSED
 ;; Queue 4 - The next sound effect to play
 ;; ---------------------------------------
 .zeropage
-    ;; The sound effect to play next.
-    ;;
-    ;; Lower sound effect indexes take priority over higher sound effect indexes
-    ;; (as defined by the project file sound effect export order).
-    ;;
-    ;; If `Tad_sfxQueue == $ff`, then the queue is considered empty.
-    Tad_sfxQueue: .res 1
-
-
-.bss
-    ;; The pan value for the next sound effect to play.
-    ;; (Using 2 bytes so this variable can be written to using a 16 bit register)
-    Tad_sfxQueue_pan: .res 2
+    ;; see tad-audio.inc
+    Tad_sfxQueue_sfx: .res 1
+    Tad_sfxQueue_pan: .res 1
 
 
 ;; Memory Map Asserts
@@ -874,7 +866,7 @@ ReturnFalse:
 
     lda     #$ff
     sta     Tad_nextCommand_id
-    sta     Tad_sfxQueue
+    sta     Tad_sfxQueue_sfx
 
     stz     Tad_nextSong
 
@@ -948,7 +940,7 @@ ReturnFalse:
 ;; REQUIRES: state == PLAYING
 ;; REQUIRES: The previous command has been processed by the audio-driver.
 ;;
-;; IN: A = Tad_sfxQueue
+;; IN: A = Tad_sfxQueue_sfx
 ;;
 ;; A8
 ;; I8
@@ -979,7 +971,8 @@ ReturnFalse:
 
     ; Reset the SFX queue
     ldy     #$ff
-    sty     Tad_sfxQueue
+    sty     Tad_sfxQueue_sfx
+    sty     Tad_sfxQueue_pan
 .endmacro
 
 
@@ -1014,7 +1007,7 @@ ReturnFalse:
             dex
             bpl     @Return_I8
                 ; Playing state
-                lda     Tad_sfxQueue
+                lda     Tad_sfxQueue_sfx
                 cmp     #$ff
                 beq     @Return_I8
                     __Tad_Process_SendSfxCommand
@@ -1163,7 +1156,8 @@ ReturnFalse:
             ; Reset command and SFX queues
             lda     #$ff
             sta     Tad_nextCommand_id
-            sta     Tad_sfxQueue
+            sta     Tad_sfxQueue_sfx
+            sta     Tad_sfxQueue_pan
 
             ; Use `Tad_state` to determine if the song is playing or paused.
             ; Cannot use `Tad_flags` as it may have changed after the `LoaderDataType` was sent to
@@ -1251,13 +1245,12 @@ Tad_QueueCommandOverride := Tad_QueueCommand::WriteCommand
 ; DB access lowram
 ; KEEP: X, Y
 .proc Tad_QueuePannedSoundEffect
-    cmp     Tad_sfxQueue
+    cmp     Tad_sfxQueue_sfx
     bcs     @EndIf
-        sta     Tad_sfxQueue
+        sta     Tad_sfxQueue_sfx
 
-        ; Safe to use a 16 bit index to write to `Tad_sfxQueue_pan`
-        .assert .sizeof(Tad_sfxQueue_pan) = 2, error
-        stx     Tad_sfxQueue_pan
+        txa
+        sta     Tad_sfxQueue_pan
 
 @EndIf:
     rts
@@ -1271,9 +1264,9 @@ Tad_QueueCommandOverride := Tad_QueueCommand::WriteCommand
 ; DB access lowram
 ; KEEP: X, Y
 .proc Tad_QueueSoundEffect
-    cmp     Tad_sfxQueue
+    cmp     Tad_sfxQueue_sfx
     bcs     @EndIf
-        sta     Tad_sfxQueue
+        sta     Tad_sfxQueue_sfx
 
         lda     #CENTER_PAN
         sta     Tad_sfxQueue_pan

@@ -31,10 +31,5 @@
     .define TAD_PROCESS_SEGMENT "CODE1"
 .endif
 
-; ::HACK::
-; Exporting SFX queue so it can be tested in `tad-tests.asm`.
-; The SFX queue is normally private in `tad-audio.s`
-.export Tad_sfxQueue, Tad_sfxQueue_pan
-
 .include "../../../tad-audio.s"
 

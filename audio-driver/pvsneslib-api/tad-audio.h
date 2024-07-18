@@ -490,6 +490,51 @@ bool tad_isSongPlaying(void);
  * @}
  */
 
+/*!
+ * @name Sound Effect Queue
+ *
+ * This queue is read by tad_process() and a `play_sound_effect` command is sent
+ * to the audio driver when:
+ *  * A song is loaded into Audio-RAM
+ *  * Sound effects are playing (not paused)
+ *  * The previous command sent to the audio driver has been acknowledged
+ *  * The command queue is empty
+ *  * `tad_sfxQueue_sfx != $ff`
+ *
+ * If `tad_sfxQueue_pan > MAX_PAN`, then `CENTER_PAN` will be used instead.
+ *
+ * After the `play_sound_effect` command (or when a song is loaded),
+ * `tad_sfxQueue_sfx` and `tad_sfxQueue_pan` will be reset to $ff.
+ *
+ * In tad_queueSoundEffect() lower sound effect indexes take priority over
+ * higher sound effect indexes (as defined by the project file sound effect
+ * export order).
+ *
+ * The sound-effect queue variables are public to allow for the creation of
+ * custom queue-sound-effect functions.
+ *
+ *
+ * @{
+ */
+
+/*!
+ * @brief The next sound effect id to send to the audio driver.
+ *
+ * If `tad_sfxQueue_sfx == $ff`, then the queue is considered empty.
+ */
+extern u8 tad_sfxQueue_sfx;
+
+/*!
+ * @brief The pan value to play @ref tad_sfxQueue_sfx with.
+ *
+ * If this value is greater than @ref MAX_PAN, then @ref CENTER_PAN will be used instead.
+ */
+extern u8 tad_sfxQueue_pan;
+
+/*!
+ * @}
+ */
+
 
 /*!
  * @name Callbacks

@@ -46,11 +46,6 @@ extern u8 DummyCommonAudioData_Part1;
 extern u8 DummySongData_Part1;
 
 
-// ::HACK manually accessing the sfxQueue to test if the values were added to the SFX queue::
-extern u8 tad_sfxQueue__;
-extern u8 tad_sfxQueue_pan__;
-
-
 // from main.c
 void assert_failure(void);
 
@@ -486,6 +481,29 @@ void test_queueSoundEffect(void) {
     tad_process();
 }
 
+void test_sfxQueueAfterLoadSong(void) {
+    tad_sfxQueue_sfx = 42;
+    tad_sfxQueue_pan = 42;
+
+    tad_loadSong(0);
+    finishLoading();
+
+    ASSERT_EQ(tad_sfxQueue_sfx, 0xff);
+    ASSERT_EQ(tad_sfxQueue_pan, 0xff);
+}
+
+void test_sfxQueueAfterPlaySoundEffectCommand(void) {
+    tad_sfxQueue_sfx = 42;
+    tad_sfxQueue_pan = 42;
+
+    wait();
+    tad_process();
+    // play_sound_effect command sent to the audio driver
+
+    ASSERT_EQ(tad_sfxQueue_sfx, 0xff);
+    ASSERT_EQ(tad_sfxQueue_pan, 0xff);
+}
+
 void test_commandAndSfxQueuePriority(void) {
     bool r;
 
@@ -645,6 +663,8 @@ static const VoidFn TAD_TESTS[] = {
     test_unpauseCommand_3,
     test_queuePannedSoundEffect,
     test_queueSoundEffect,
+    test_sfxQueueAfterLoadSong,
+    test_sfxQueueAfterPlaySoundEffectCommand,
     test_commandAndSfxQueuePriority,
     test_commandAndSfxQueueEmptyAfterSongLoad,
     // Skipped TestQueuePannedSoundEffectKeepsXY16
@@ -711,38 +731,38 @@ static void queueSoundEffect_assertSuccess(u8 sfx_id) {
     tad_queueSoundEffect(sfx_id);
 
     // Test the queue contains sfx_id
-    ASSERT_EQ(tad_sfxQueue__, sfx_id);
-    ASSERT_EQ(tad_sfxQueue_pan__, CENTER_PAN);
+    ASSERT_EQ(tad_sfxQueue_sfx, sfx_id);
+    ASSERT_EQ(tad_sfxQueue_pan, CENTER_PAN);
 }
 
 static void queueSoundEffect_assertFail(u8 sfx_id) {
-    u8 oldSfxId = tad_sfxQueue__;
-    u8 oldPan = tad_sfxQueue_pan__;
+    u8 oldSfxId = tad_sfxQueue_sfx;
+    u8 oldPan = tad_sfxQueue_pan;
 
     tad_queueSoundEffect(sfx_id);
 
     // Test oldSfxId unchanged.
-    ASSERT_EQ(tad_sfxQueue__, oldSfxId);
-    ASSERT_EQ(tad_sfxQueue_pan__, oldPan);
+    ASSERT_EQ(tad_sfxQueue_sfx, oldSfxId);
+    ASSERT_EQ(tad_sfxQueue_pan, oldPan);
 }
 
 static void queuePannedSoundEffect_assertSuccess(u8 sfx_id, u8 pan) {
     tad_queuePannedSoundEffect(sfx_id, pan);
 
     // Test the sfx queue contains sfx_id and pan
-    ASSERT_EQ(tad_sfxQueue__, sfx_id);
-    ASSERT_EQ(tad_sfxQueue_pan__, pan);
+    ASSERT_EQ(tad_sfxQueue_sfx, sfx_id);
+    ASSERT_EQ(tad_sfxQueue_pan, pan);
 }
 
 static void queuePannedSoundEffect_assertFail(u8 sfx_id, u8 pan) {
-    u8 oldSfxId = tad_sfxQueue__;
-    u8 oldPan = tad_sfxQueue_pan__;
+    u8 oldSfxId = tad_sfxQueue_sfx;
+    u8 oldPan = tad_sfxQueue_pan;
 
     tad_queuePannedSoundEffect(sfx_id, pan);
 
     // Test sfx queue is unchanged
-    ASSERT_EQ(tad_sfxQueue__, oldSfxId);
-    ASSERT_EQ(tad_sfxQueue_pan__, oldPan);
+    ASSERT_EQ(tad_sfxQueue_sfx, oldSfxId);
+    ASSERT_EQ(tad_sfxQueue_pan, oldPan);
 }
 
 //! Returns the number of `tad_process()` calls required to load song id 1 to audio-RAM

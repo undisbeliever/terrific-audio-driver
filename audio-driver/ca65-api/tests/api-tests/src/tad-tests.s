@@ -32,11 +32,6 @@
 .export RunTests
 
 
-; ::HACK import SFX queue so the SFX queue can be tested (the queue is normally private to `tad-audio.s`)::
-.importzp Tad_sfxQueue
-.import   Tad_sfxQueue_pan
-
-
 .bss
     testIndex:  .res 2
     counter:    .res 2
@@ -134,6 +129,8 @@ TestTable:
     .addr   TestUnpauseCommand3
     .addr   TestQueuePannedSoundEffect
     .addr   TestQueueSoundEffect
+    .addr   TestSfxQueueAfterLoadSong
+    .addr   TestSfxQueueAfterPlaySoundEffectCommand
     .addr   TestCommandAndSfxQueuePriority
     .addr   TestCommandAndSfxQueueEmptyAfterSongLoad
     .addr   TestQueuePannedSoundEffectKeepsXY16
@@ -859,6 +856,48 @@ TestTable_SIZE = * - TestTable
 
 
 
+.a8
+.i16
+;; DB access lowram
+.proc TestSfxQueueAfterLoadSong
+    lda     #42
+    sta     Tad_sfxQueue_sfx
+    sta     Tad_sfxQueue_pan
+
+    lda     #0
+    jsr     Tad_LoadSong
+    jsr     _FinishLoading
+
+    ; Assert queue has been reset
+    assert_u8_var_eq   Tad_sfxQueue_sfx, #$ff
+    assert_u8_var_eq   Tad_sfxQueue_pan, #$ff
+
+    rts
+.endproc
+
+
+
+.a8
+.i16
+;; DB access lowram
+.proc   TestSfxQueueAfterPlaySoundEffectCommand
+    lda     #42
+    sta     Tad_sfxQueue_sfx
+    sta     Tad_sfxQueue_pan
+
+    jsr     _Wait
+    jsl     Tad_Process
+    ; play_sound_effect command sent to the audio driver
+
+    ; Assert queue has been reset
+    assert_u8_var_eq   Tad_sfxQueue_sfx, #$ff
+    assert_u8_var_eq   Tad_sfxQueue_pan, #$ff
+
+    rts
+.endproc
+
+
+
 ;; Tests Command queue has a higher priority then the SFX queue
 .a8
 .i16
@@ -1304,7 +1343,7 @@ TestTable_SIZE = * - TestTable
     assert_carry    Tad_QueuePannedSoundEffect, false
 
     ; test SFX queue matches function arguments
-    assert_u8_var_eq   Tad_sfxQueue,     _queueSfxTest_id
+    assert_u8_var_eq   Tad_sfxQueue_sfx, _queueSfxTest_id
     assert_u8_var_eq   Tad_sfxQueue_pan, _queueSfxTest_pan
 
     rts
@@ -1318,7 +1357,7 @@ TestTable_SIZE = * - TestTable
 .proc _QueuePannedSoundEffect_AssertFail
     ; save SFX queue
     pha
-        lda     Tad_sfxQueue
+        lda     Tad_sfxQueue_sfx
         sta     _queueSfxTest_id
 
         lda     Tad_sfxQueue_pan
@@ -1330,7 +1369,7 @@ TestTable_SIZE = * - TestTable
     assert_carry    Tad_QueuePannedSoundEffect, true
 
     ; test SFX queue unchanged
-    assert_u8_var_eq   Tad_sfxQueue,     _queueSfxTest_id
+    assert_u8_var_eq   Tad_sfxQueue_sfx, _queueSfxTest_id
     assert_u8_var_eq   Tad_sfxQueue_pan, _queueSfxTest_pan
 
     rts
@@ -1350,7 +1389,7 @@ TestTable_SIZE = * - TestTable
     assert_carry    Tad_QueueSoundEffect, false
 
     ; test SFX queue matches input
-    assert_u8_var_eq   Tad_sfxQueue,     _queueSfxTest_id
+    assert_u8_var_eq   Tad_sfxQueue_sfx, _queueSfxTest_id
     assert_u8_var_eq   Tad_sfxQueue_pan, #CENTER_PAN
 
     rts
@@ -1364,7 +1403,7 @@ TestTable_SIZE = * - TestTable
 .proc _QueueSoundEffect_AssertFail
     ; save SFX queue
     pha
-        lda     Tad_sfxQueue
+        lda     Tad_sfxQueue_sfx
         sta     _queueSfxTest_id
 
         lda     Tad_sfxQueue_pan
@@ -1376,7 +1415,7 @@ TestTable_SIZE = * - TestTable
     assert_carry    Tad_QueueSoundEffect, true
 
     ; test SFX queue unchanged
-    assert_u8_var_eq   Tad_sfxQueue,     _queueSfxTest_id
+    assert_u8_var_eq   Tad_sfxQueue_sfx, _queueSfxTest_id
     assert_u8_var_eq   Tad_sfxQueue_pan, _queueSfxTest_pan
 
     rts

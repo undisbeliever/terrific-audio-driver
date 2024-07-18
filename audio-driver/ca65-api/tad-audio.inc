@@ -424,6 +424,50 @@ MIN_TICK_CLOCK = 64
 .import Tad_IsSongPlaying
 
 
+;; =========
+;; Variables
+;; =========
+
+;; Sound Effect Queue
+;; ==================
+;;
+;; This queue is read by `Tad_Process` and a `play_sound_effect` command is sent to the audio driver when:
+;;  * A song is loaded into Audio-RAM
+;;  * Sound effects are playing (not paused)
+;;  * The previous command sent to the audio driver has been acknowledged
+;;  * The command queue is empty
+;;  * `Tad_sfxQueue_sfx != $ff`
+;;
+;; If `Tad_sfxQueue_pan > MAX_PAN`, then `CENTER_PAN` will be used instead.
+;;
+;; After the `play_sound_effect` command (or when a song is loaded), `Tad_sfxQueue_sfx` and
+;; `Tad_sfxQueue_pan` will be reset to $ff.
+;;
+;; In `Tad_QueueSoundEffect` lower sound effect indexes take priority over higher sound effect
+;; indexes (as defined by the project file sound effect export order).
+;;
+;;
+;; The sound-effect queue variables are public to allow for custom queue sound-effect subroutines.
+;; For example, a queue-sound-effect subroutine with a different ABI or copies of
+;; `Tad_QueueSoundEffect` in multiple banks, etc.
+
+
+;; The next sound effect id to send to the audio driver.
+;;
+;; If `Tad_sfxQueue_sfx == $ff` then the queue is considered empty.
+;;
+;; (zeropage u8)
+.importzp Tad_sfxQueue_sfx
+
+
+;; The pan value to play `Tad_sfxQueue_sfx` with.
+;;
+;; If this value is greater than `MAX_PAN`, then `CENTER_PAN` will be used instead.
+;;
+;; (zeropage u8)
+.importzp Tad_sfxQueue_pan
+
+
 
 ;; =========
 ;; CALLBACKS

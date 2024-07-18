@@ -31,9 +31,15 @@ IO Command changes:
     * Masking channels 6 & 7 no-longer silences sound effects.
  * Added `PAUSE_MUSIC_PLAY_SFX` IO command.
 
+ca65 API changes:
+ * The sound effect queue variables are now public.
+
+PVSnesLib API changes:
+ * The sound effect queue variables are now public.
+
 File formats:
  * Changed the format of the sound effects file.
-    * Added attributes to the sound effect name line
+    * Added attributes to the sound effect name line.
     * tad-compiler and tad-gui can still read sound effect files in the old format.
 
 GUI changes:
