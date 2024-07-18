@@ -504,6 +504,26 @@ void test_sfxQueueAfterPlaySoundEffectCommand(void) {
     ASSERT_EQ(tad_sfxQueue_pan, 0xff);
 }
 
+void test_sfxQueueWithOnlyMusicPaused(void) {
+    tad_queueCommandOverride_pauseMusicPlaySfx();
+    wait();
+    tad_process();
+    ASSERT_EQ(tad_isSongPlaying(), false);
+    ASSERT_EQ(tad_isSfxPlaying(), true);
+
+    queueSoundEffect_assertSuccess(10);
+
+    wait();
+    tad_process();
+    // play_sound_effect command sent to the audio driver
+
+    ASSERT_EQ(tad_isSfxPlaying(), true);
+
+    // Assert sfx queue has been reset (a play_sound_effect command was sent to the audio driver)
+    ASSERT_EQ(tad_sfxQueue_sfx, 0xff);
+    ASSERT_EQ(tad_sfxQueue_pan, 0xff);
+}
+
 void test_commandAndSfxQueuePriority(void) {
     bool r;
 
@@ -665,6 +685,7 @@ static const VoidFn TAD_TESTS[] = {
     test_queueSoundEffect,
     test_sfxQueueAfterLoadSong,
     test_sfxQueueAfterPlaySoundEffectCommand,
+    test_sfxQueueWithOnlyMusicPaused,
     test_commandAndSfxQueuePriority,
     test_commandAndSfxQueueEmptyAfterSongLoad,
     // Skipped TestQueuePannedSoundEffectKeepsXY16

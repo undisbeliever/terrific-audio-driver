@@ -131,6 +131,7 @@ TestTable:
     .addr   TestQueueSoundEffect
     .addr   TestSfxQueueAfterLoadSong
     .addr   TestSfxQueueAfterPlaySoundEffectCommand
+    .addr   TestSfxQueueWithOnlyMusicPaused
     .addr   TestCommandAndSfxQueuePriority
     .addr   TestCommandAndSfxQueueEmptyAfterSongLoad
     .addr   TestQueuePannedSoundEffectKeepsXY16
@@ -890,6 +891,35 @@ TestTable_SIZE = * - TestTable
     ; play_sound_effect command sent to the audio driver
 
     ; Assert queue has been reset
+    assert_u8_var_eq   Tad_sfxQueue_sfx, #$ff
+    assert_u8_var_eq   Tad_sfxQueue_pan, #$ff
+
+    rts
+.endproc
+
+
+
+.a8
+.i16
+;; DB access lowram
+.proc TestSfxQueueWithOnlyMusicPaused
+    lda     #TadCommand::PAUSE_MUSIC_PLAY_SFX
+    jsr     Tad_QueueCommandOverride
+    jsr     _Wait
+    jsl     Tad_Process
+    assert_carry    Tad_IsSongPlaying, false
+    assert_carry    Tad_IsSfxPlaying, true
+
+    lda     #10
+    jsr     _QueueSoundEffect_AssertSuccess
+
+    jsr     _Wait
+    jsl     Tad_Process
+    ; play_sound_effect command sent to the audio driver
+
+    assert_carry Tad_IsSfxPlaying, true
+
+    ; Assert sfx queue has been reset (a play_sound_effect command was sent to the audio driver)
     assert_u8_var_eq   Tad_sfxQueue_sfx, #$ff
     assert_u8_var_eq   Tad_sfxQueue_pan, #$ff
 
