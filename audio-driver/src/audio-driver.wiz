@@ -532,12 +532,9 @@ func main() {
     subroutineTable_h = ya as *const u8;
 
 
-    // Reset all music channels
-    zpTmp = MAX_PAN / 2;
-
     x = N_MUSIC_CHANNELS - 1;
     do {
-        __reset_channel(x, zpTmp);
+        __reset_channel(x, MAX_PAN / 2);
 
         // ASSUMES offsetof(SongHeader, channels) == 0
         // ASSUMES sizeof(MusicChannelHeader) == 4
@@ -1130,9 +1127,6 @@ func __play_sfx_on_channel(addrAndOneChannelFlag_h: u8 in a, channelIndex : u8 i
     channelSoA.instructionPtr_h[x] = a = a & 0x7f;
     channelSoA.instructionPtr_l[x] = a = commonData.soundEffects_addrAndOneChannelFlag_l[y];
 
-    // pan
-    zpTmp = IO.ToDriver.parameter1;
-
     a = ChannelVoiceBit[x];
     // Send a key-off event, the S-DSP voice channel might be active.
     test_and_set(a, keyOffShadow_sfx);
@@ -1144,6 +1138,9 @@ func __play_sfx_on_channel(addrAndOneChannelFlag_h: u8 in a, channelIndex : u8 i
     // Enable sfx channel.
     test_and_set(a, activeSoundEffects);
 
+
+    // pan
+    a = IO.ToDriver.parameter1;
 
 // Fallthrough into __reset_channel()
 }
@@ -1160,7 +1157,11 @@ func __play_sfx_on_channel(addrAndOneChannelFlag_h: u8 in a, channelIndex : u8 i
 // NOTE: Also disables `end` looping (instructionPtrAfterEnd).
 //
 // KEEP: X
-func __reset_channel(channelIndex : u8 in x, pan: u8 in zpTmp) {
+func __reset_channel(channelIndex : u8 in x, pan: u8 in a) {
+    channelSoA.pan[x] = a = pan;
+    channelSoA.volume[x] = a = STARTING_VOLUME;
+
+
     a = 0;
 
     channelSoA.instructionPtrAfterEnd_h[x] = a;     // don't loop SFX
@@ -1179,10 +1180,6 @@ func __reset_channel(channelIndex : u8 in x, pan: u8 in zpTmp) {
     channelSoA.nextEventIsKeyOff[x] = a; // a = 0
     a++;
     channelSoA.countdownTimer[x] = a;    // a = 1
-
-    // Set channel volume
-    channelSoA.volume[x] = a = STARTING_VOLUME;
-    channelSoA.pan[x] = a = pan;
 }
 
 
