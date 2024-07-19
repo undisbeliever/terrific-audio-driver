@@ -1522,24 +1522,6 @@ func _play_note(channelIndex : u8 in x, noteAndKeyOffBit : u8 in a) {
     channelSoA.virtualChannels.pitch_h[x] = a = commonDataHeader.pitchTable_h[y];
 
 
-    // queue KON if the previous note has been KOFFed
-    a = ChannelVoiceBit[x];
-    if x >= FIRST_SFX_CHANNEL {
-        a &= keyOnMask_sfx;
-        test_and_set(a, keyOnShadow_sfx);
-
-        // Disable KON the next time the note is played (slur the note)
-        test_and_clear(a, keyOnMask_sfx);
-    }
-    else {
-        a &= keyOnMask_music;
-        test_and_set(a, keyOnShadow_music);
-
-        // Disable KON the next time the note is played (slur the note)
-        test_and_clear(a, keyOnMask_music);
-    }
-
-
     // Get note length from the next byte in the instructionPtr
     y = 0;
     a = instructionPtr[y];
@@ -1553,6 +1535,25 @@ func _play_note(channelIndex : u8 in x, noteAndKeyOffBit : u8 in a) {
 
     // Restart vibrato
     channelSoA.vibrato_tickCounter[x] = a = channelSoA.vibrato_tickCounterStart[x];
+
+
+    // queue KON if the previous note has been KOFFed
+    a = ChannelVoiceBit[x];
+    if x >= FIRST_SFX_CHANNEL {
+        a &= keyOnMask_sfx;
+        test_and_set(a, keyOnShadow_sfx);
+
+        // Disable KON the next time the note is played (slur the note)
+        test_and_clear(a, keyOnMask_sfx);
+
+        return;
+    }
+
+    a &= keyOnMask_music;
+    test_and_set(a, keyOnShadow_music);
+
+    // Disable KON the next time the note is played (slur the note)
+    test_and_clear(a, keyOnMask_music);
 }
 
 
