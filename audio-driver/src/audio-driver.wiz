@@ -1001,7 +1001,6 @@ func stop_sound_effects(unused : u8 in y) {
 }
 
 
-#[fallthrough]
 func play_sound_effect(sfx_id : u8 in y) {
     let BOTH_SFX_ACTIVE = (1 << 7) | (1 << 6);
 
@@ -1010,44 +1009,48 @@ func play_sound_effect(sfx_id : u8 in y) {
         goto _maybe_restart_sfx_1 if y == sfx_oneChannelSfxId[1];
 
         a = activeSoundEffects;
-        if a >= BOTH_SFX_ACTIVE {
-            // Both sound effect channels are active,
+        goto __play_sfx__both_channels_active if a >= BOTH_SFX_ACTIVE;
 
-            // Drop sfx_id if it is a low-priority sound effect
-            goto Return if y >= commonDataHeader.firstLowPrioritySfx;
+        // At most 1 sound effect channel is active
+        a <<<= 1;
+        goto _play_sfx_1 if !carry;
+        goto _play_sfx_0;
+    }
+}
 
-            a = sfx_interruptibleFlags;
-            if (zero && y < commonDataHeader.nHighPrioritySfx) || a >= BOTH_SFX_ACTIVE {
-                // Both sound effect channels active and either:
-                //   * both uninterruptible and sfx_id is high-priority
-                //   * both interruptible and sfx_id is normal priority
-                //
-                // check remaining ticks and drop the sound effect that will finish first.
 
-                // Assumes 2 sound effect channels
-                ya = sfx_remainingTicks[0];
-                cmp(ya, sfx_remainingTicks[1]);
+#[fallthrough]
+func __play_sfx__both_channels_active(sfx_id : u8 in y) {
+    let BOTH_SFX_ACTIVE = (1 << 7) | (1 << 6);
 
-                y = IO.ToDriver.parameter0;
-                goto _play_sfx_0 if !carry;
-                goto _play_sfx_1;
-            }
+    // Both sound effect channels are active,
 
-            // Play sound effect if a channel is interruptible
-            a <<<= 1;
-            goto _play_sfx_1 if carry;
-            goto _play_sfx_0 if negative;
+    // Drop sfx_id if it is a low-priority sound effect
+    if y < commonDataHeader.firstLowPrioritySfx {
+        a = sfx_interruptibleFlags;
+        if (zero && y < commonDataHeader.nHighPrioritySfx) || a >= BOTH_SFX_ACTIVE {
+            // Both sound effect channels active and either:
+            //   * both uninterruptible and sfx_id is high-priority
+            //   * both interruptible and sfx_id is normal priority
+            //
+            // check remaining ticks and drop the sound effect that will finish first.
+
+            // Assumes 2 sound effect channels
+            ya = sfx_remainingTicks[0];
+            cmp(ya, sfx_remainingTicks[1]);
+
+            y = IO.ToDriver.parameter0;
+            goto _play_sfx_0 if !carry;
+            goto _play_sfx_1;
         }
-        else {
-            // At most 1 sound effect channel is active
-            a <<<= 1;
-            goto _play_sfx_1 if !carry;
-            goto _play_sfx_0;
-        }
+
+        // Play sound effect if a channel is interruptible
+        a <<<= 1;
+        goto _play_sfx_1 if carry;
+        goto _play_sfx_0 if negative;
     }
 
-Return:
-    // Fallthrough
+// Fallthrough
 }
 
 func __play_sfx_return() {
