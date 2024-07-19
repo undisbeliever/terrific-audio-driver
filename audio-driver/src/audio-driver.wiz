@@ -1661,9 +1661,12 @@ func disable_channel(channelIndex : u8 in x) {
     channelSoA.vibrato_pitchOffsetPerTick[x] = a;
 
 
-    // Send key-off event
+    // Determine if this is a music or sound effect channel.
     a = ChannelVoiceBit[x];
     if x >= FIRST_SFX_CHANNEL {
+        // X is a sound effect channel
+
+        // Send key-off event
         test_and_set(a, keyOffShadow_sfx);
 
         // Disable echo
@@ -1674,10 +1677,16 @@ func disable_channel(channelIndex : u8 in x) {
 
         // Clear `sfx_oneChannelSfxId` so the sfx can be restarted if it is not interruptible.
         (&sfx_oneChannelSfxId[-N_MUSIC_CHANNELS])[x] = a = 0xff;
+
+        // return (do not execute the next bytecode and sleep)
+        return;
     }
-    else {
-        test_and_set(a, keyOffShadow_music);
-    }
+
+
+    // X is a music channel
+
+    // Send key-off event
+    test_and_set(a, keyOffShadow_music);
 
     // return (do not execute the next bytecode and sleep)
     return;
