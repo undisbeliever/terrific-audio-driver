@@ -1255,6 +1255,8 @@ inline func _update_vol_shadow_if_required__inline(channelIndex : u8 in x) {
 inline func process_pitch_effects__inline(channelIndex : u8 in x) : bool in carry {
 var _target_h : u8 in zpTmp;
 
+    // Warning: spaghetti code
+
     a = channelSoA.portamento_direction[x] as u8;
     if !zero {
         // Portamento
@@ -1273,7 +1275,8 @@ var _target_h : u8 in zpTmp;
             a -= channelSoA.portamento_speed[x];
             if !carry {
                 y--;
-                goto Underflowed if negative;
+                // Test for underflow
+                goto MetTarget if negative;
             }
 
             // Test pitch against target
@@ -1282,16 +1285,6 @@ var _target_h : u8 in zpTmp;
                 cmp(a, channelSoA.portamento_target_l[x]);
             }
             goto WritePitchRegisters if carry;
-
-        Underflowed:
-            // pitch < target
-
-            // Disable portamento
-            a = 0;
-            channelSoA.portamento_direction[x] = a as i8;
-
-            a = channelSoA.portamento_target_l[x];
-            y = _target_h;
         }
         else {
             // portamento up
@@ -1314,19 +1307,17 @@ var _target_h : u8 in zpTmp;
             if zero {
                 cmp(a, channelSoA.portamento_target_l[x]);
             }
-
-            if carry {
-                // Pitch >= target
-
-                // Disable portamento
-                a = 0;
-                channelSoA.portamento_direction[x] = a as i8;
-
-                a = channelSoA.portamento_target_l[x];
-                y = _target_h;
-            }
+            goto WritePitchRegisters if !carry;
         }
 
+        // Pitch reached or exceeded target
+    MetTarget:
+        // Disable portamento
+        a = 0;
+        channelSoA.portamento_direction[x] = a as i8;
+
+        a = channelSoA.portamento_target_l[x];
+        y = _target_h;
 
     WritePitchRegisters:
         // ya = new pitch
@@ -1335,44 +1326,41 @@ var _target_h : u8 in zpTmp;
 
         return true;
     }
-    else {
-        // Vibrato
-        // (not active during portamento)
 
-        y = channelSoA.vibrato_pitchOffsetPerTick[x];
-        if !zero {
-            // Determine the vibrato direction
-            a = channelSoA.vibrato_directionComparator[x];
-            cmp(a, channelSoA.vibrato_tickCounter[x]);
+    // Vibrato
+    // (not active during portamento)
+    y = channelSoA.vibrato_pitchOffsetPerTick[x];
+    if !zero {
+        // Determine the vibrato direction
+        a = channelSoA.vibrato_directionComparator[x];
+        cmp(a, channelSoA.vibrato_tickCounter[x]);
 
-            if !carry {
-                // Add Y to PITCH_L
-                // carry clear
-                channelSoA.virtualChannels.pitch_l[x] = a = y +# channelSoA.virtualChannels.pitch_l[x];
-
-                if carry {
-                    channelSoA.virtualChannels.pitch_h[x]++;
-                }
+        if !carry {
+            // Add Y to pitch_l
+            // carry clear
+            a = y +# channelSoA.virtualChannels.pitch_l[x];
+            if carry {
+                channelSoA.virtualChannels.pitch_h[x]++;
             }
-            else {
-                // Subtract pitchOffsetPerTick from PITCH_L
-                // (uses 1 less byte than reverse subtract Y, with the same CPU cycle count)
-                // carry set
-                a = channelSoA.virtualChannels.pitch_l[x] -# channelSoA.vibrato_pitchOffsetPerTick[x];
-                channelSoA.virtualChannels.pitch_l[x] = a;
-
-                if !carry {
-                    channelSoA.virtualChannels.pitch_h[x]--;
-                }
-            }
-
-            channelSoA.vibrato_tickCounter[x]--;
-            if zero {
-                channelSoA.vibrato_tickCounter[x] = a = channelSoA.vibrato_waveLengthInTicks[x];
-            }
-
-            return true;
         }
+        else {
+            // Subtract pitchOffsetPerTick from pitch_l
+            // (uses 1 less byte than reverse subtract Y, with the same CPU cycle count)
+            // carry set
+            a = channelSoA.virtualChannels.pitch_l[x] -# channelSoA.vibrato_pitchOffsetPerTick[x];
+            if !carry {
+                channelSoA.virtualChannels.pitch_h[x]--;
+            }
+        }
+
+        channelSoA.virtualChannels.pitch_l[x] = a;
+
+        channelSoA.vibrato_tickCounter[x]--;
+        if zero {
+            channelSoA.vibrato_tickCounter[x] = a = channelSoA.vibrato_waveLengthInTicks[x];
+        }
+
+        return true;
     }
 
     return false;
