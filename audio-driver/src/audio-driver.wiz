@@ -990,18 +990,14 @@ func set_song_tempo(tempo : u8 in y) {
 
 
 func stop_sound_effects(unused : u8 in y) {
-    // ::TODO optimise::
+    // Assumes 2 sound effect channels
 
-    x = N_MUSIC_CHANNELS;
-    do {
-        channelSoA.instructionPtr_l[x] = a = <:&ChannelDisabledBytecode;
-        channelSoA.instructionPtr_h[x] = y = >:&ChannelDisabledBytecode;
+    // `disable_channel` does not write to channelSoa.instructionPtr*.
+    channelSoA.instructionPtr_h[FIRST_SFX_CHANNEL] = 0;
+    channelSoA.instructionPtr_h[LAST_SFX_CHANNEL] = 0;
 
-        // Immediately process the next event
-        channelSoA.countdownTimer[x] = a = 1;
-
-        x++;
-    } while x < N_CHANNELS;
+    bytecode.disable_channel(FIRST_SFX_CHANNEL);
+    ^return bytecode.disable_channel(LAST_SFX_CHANNEL);
 }
 
 
@@ -2073,9 +2069,6 @@ in code {
 
     // The address of the last writeable voice DSP register for each channel
     const LastVoiceRegister : [u8; N_CHANNELS] = [i * 0x10 | 0x07 for let i in __VOICE_CHANNELS];
-
-    // Used by `stop_sound_effects`.
-    const ChannelDisabledBytecode : [ u8; 1 ] = [ bytecode.DISABLE_CHANNEL_BYTECODE ];
 }
 
 import "bytecode";
