@@ -1775,13 +1775,11 @@ inline func __skip_last_loop(channelIndex : u8 in x, bytesToSkip : u8 in a, let 
     // Add `bytesToSkip` to `instructionPtr` if counter == 1
     y = _loopState_counter[x];
     y--;
-    if zero {
-        // Y = 0
-        ya += instructionPtr as u16;
-        ^return process_bytecode(x, ya);
-    }
+    goto __jump_to_process_next_bytecode if !zero;
 
-    ^return process_next_bytecode(x);
+    // Y = 0
+    ya += instructionPtr as u16;
+    ^return process_bytecode(x, ya);
 }
 
 
@@ -1792,12 +1790,17 @@ inline func __end_loop(channelIndex : u8 in x, let LOOP_ID : u8) {
     let _loopState_loopPoint_h = &channelSoA.loopState_loopPoint_h[LOOP_ID] as *u8;
 
     _loopState_counter[x]--;
-    if !zero {
-        y = a = _loopState_loopPoint_h[x];
-        a = _loopState_loopPoint_l[x];
+    goto __jump_to_process_next_bytecode if zero;
 
-        ^return process_bytecode_with_loader_test(x, ya);
-    }
+    y = a = _loopState_loopPoint_h[x];
+    a = _loopState_loopPoint_l[x];
+
+    ^return process_bytecode_with_loader_test(x, ya);
+}
+
+
+// KEEP: X
+func __jump_to_process_next_bytecode(channelIndex : u8 in x) {
     ^return process_next_bytecode(x);
 }
 
