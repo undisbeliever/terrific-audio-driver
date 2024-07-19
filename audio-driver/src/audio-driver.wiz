@@ -1855,10 +1855,9 @@ func enable_echo(channelIndex : u8 in x) {
         test_and_set(a, eonShadow_sfx);
         ^return process_next_bytecode(x);
     }
-    else {
-        test_and_set(a, eonShadow_music);
-        ^return process_next_bytecode(x);
-    }
+
+    test_and_set(a, eonShadow_music);
+    ^return process_next_bytecode(x);
 }
 
 
@@ -1870,11 +1869,8 @@ func disable_echo(channelIndex : u8 in x) {
         test_and_clear(a, eonShadow_sfx);
         ^return process_next_bytecode(x);
     }
-    else {
-        test_and_clear(a, eonShadow_music);
-        ^return process_next_bytecode(x);
-    }
 
+    test_and_clear(a, eonShadow_music);
     ^return process_next_bytecode(x);
 }
 
