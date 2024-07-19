@@ -1767,15 +1767,42 @@ inline func __start_loop(channelIndex : u8 in x, loopCount : u8 in a, let LOOP_I
 
 
 // KEEP: X
-inline func __skip_last_loop(channelIndex : u8 in x, bytesToSkip : u8 in a, let LOOP_ID : u8) {
-    let _loopState_counter     = &channelSoA.loopState_counter[LOOP_ID] as *u8;
-    let _loopState_loopPoint_l = &channelSoA.loopState_loopPoint_l[LOOP_ID] as *u8;
-    let _loopState_loopPoint_h = &channelSoA.loopState_loopPoint_h[LOOP_ID] as *u8;
-
+func skip_last_loop_0(channelIndex : u8 in x, bytesToSkip : u8 in a) {
     // Add `bytesToSkip` to `instructionPtr` if counter == 1
-    y = _loopState_counter[x];
+    y = (&channelSoA.loopState_counter[0] as *u8)[x];
     y--;
     goto __jump_to_process_next_bytecode if !zero;
+
+    return __skip_last_loop__last_loop__y0(x, a);
+}
+
+
+// KEEP: X
+func skip_last_loop_1(channelIndex : u8 in x, bytesToSkip : u8 in a) {
+    // Add `bytesToSkip` to `instructionPtr` if counter == 1
+    y = (&channelSoA.loopState_counter[1] as *u8)[x];
+    y--;
+    goto __jump_to_process_next_bytecode if !zero;
+
+    return __skip_last_loop__last_loop__y0(x, a);
+}
+
+
+// KEEP: X
+#[fallthrough]
+func skip_last_loop_2(channelIndex : u8 in x, bytesToSkip : u8 in a) {
+    // Add `bytesToSkip` to `instructionPtr` if counter == 1
+    y = (&channelSoA.loopState_counter[2] as *u8)[x];
+    y--;
+    goto __jump_to_process_next_bytecode if !zero;
+
+// Fallthrough
+}
+
+// REQUIRES: Y = 0
+// KEEP: X
+func __skip_last_loop__last_loop__y0(channelIndex: u8 in x, bytesToSkip: u8 in a) {
+    // This is the last loop
 
     // Y = 0
     ya += instructionPtr as u16;
@@ -1818,21 +1845,6 @@ func start_loop_1(channelIndex : u8 in x, loopCount : u8 in a) {
 // KEEP: X
 func start_loop_2(channelIndex : u8 in x, loopCount : u8 in a) {
     return __start_loop(x, a, 2);
-}
-
-// KEEP: X
-func skip_last_loop_0(channelIndex : u8 in x, loopCount : u8 in a) {
-    return __skip_last_loop(x, a, 0);
-}
-
-// KEEP: X
-func skip_last_loop_1(channelIndex : u8 in x, loopCount : u8 in a) {
-    return __skip_last_loop(x, a, 1);
-}
-
-// KEEP: X
-func skip_last_loop_2(channelIndex : u8 in x, loopCount : u8 in a) {
-    return __skip_last_loop(x, a, 2);
 }
 
 // KEEP: X
