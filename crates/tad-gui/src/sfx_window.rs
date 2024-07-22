@@ -233,10 +233,17 @@ impl SfxTable {
 
         match ev {
             Event::Released => {
-                if app::event_is_click() && fltk::app::event_clicks() {
-                    if let Ok(s) = state.try_borrow() {
+                if app::event_is_click() {
+                    if let Ok(mut s) = state.try_borrow_mut() {
                         if let Some((TableContext::Cell, row, _, _)) = s.table.cursor2rowcol() {
-                            s.play_sfx(row);
+                            let sel = s.table.get_selection().0;
+                            if row == sel {
+                                if fltk::app::event_clicks() {
+                                    s.play_sfx(row);
+                                }
+                            } else {
+                                s.table.set_selection(row, 0, row, 0);
+                            }
                         }
                     }
                 }
