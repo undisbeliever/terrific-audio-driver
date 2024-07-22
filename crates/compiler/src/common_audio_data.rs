@@ -61,12 +61,13 @@ impl CommonAudioData {
         &self.data[start..start + size]
     }
 
-    pub fn header_size(&self) -> u16 {
-        self.brr_addr_range.start - addresses::COMMON_DATA
-    }
-
     pub fn brr_addr_range(&self) -> &Range<u16> {
         &self.brr_addr_range
+    }
+
+    /// Does not include SFX table
+    pub fn header_size(&self) -> u16 {
+        self.sfx_table_addr - addresses::COMMON_DATA
     }
 
     /// Includes SFX table
