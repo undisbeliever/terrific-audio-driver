@@ -235,7 +235,9 @@ impl SfxTable {
             Event::Released => {
                 if app::event_is_click() && fltk::app::event_clicks() {
                     if let Ok(s) = state.try_borrow() {
-                        s.play_selected_sfx();
+                        if let Some((TableContext::Cell, row, _, _)) = s.table.cursor2rowcol() {
+                            s.play_sfx(row);
+                        }
                     }
                 }
                 false
@@ -243,7 +245,8 @@ impl SfxTable {
             Event::KeyDown => match app::event_key() {
                 Key::Enter | SPACEBAR_KEY => {
                     if let Ok(s) = state.try_borrow() {
-                        s.play_selected_sfx();
+                        // Assumes only 1 row is selected
+                        s.play_sfx(s.table.get_selection().0);
                     }
                     true
                 }
@@ -253,15 +256,13 @@ impl SfxTable {
         }
     }
 
-    fn play_selected_sfx(&self) {
+    fn play_sfx(&self, row: i32) {
         if let Some(eo) = &self.export_order {
-            if let Some((TableContext::Cell, row, _, _)) = self.table.cursor2rowcol() {
-                if let Ok(row) = row.try_into() {
-                    if let Some(sfx_id) = eo.sfx_id(row) {
-                        let pan = Pan::checked_new(self.pan_slider.value() as u8);
-                        self.sender
-                            .send(GuiMessage::PlaySoundEffectCommand(sfx_id, pan));
-                    }
+            if let Ok(row) = row.try_into() {
+                if let Some(sfx_id) = eo.sfx_id(row) {
+                    let pan = Pan::checked_new(self.pan_slider.value() as u8);
+                    self.sender
+                        .send(GuiMessage::PlaySoundEffectCommand(sfx_id, pan));
                 }
             }
         }
