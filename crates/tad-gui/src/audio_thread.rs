@@ -55,7 +55,7 @@ pub struct Pan(u8);
 
 impl Pan {
     pub fn checked_new(value: u8) -> Self {
-        if value < MAX_PAN {
+        if value <= MAX_PAN {
             Self(value)
         } else {
             Self(CENTER_PAN)
