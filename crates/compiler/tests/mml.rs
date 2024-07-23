@@ -1020,6 +1020,20 @@ fn test_merge_pan_and_volume() {
     merge_mml_commands_test("V-10 || p+5", &["adjust_volume -10", "adjust_pan +5"]);
 }
 
+// Tests if a large relative pan command turns into an absolute pan command
+#[test]
+fn test_large_adjust_pan() {
+    assert_line_matches_bytecode("p+127", &["adjust_pan +127"]);
+    assert_line_matches_bytecode("p+128", &["set_pan 128"]);
+    assert_line_matches_bytecode("p+200", &["set_pan 128"]);
+    assert_line_matches_bytecode("p+100 p+100", &["set_pan 128"]);
+
+    assert_line_matches_bytecode("p-127", &["adjust_pan -127"]);
+    assert_line_matches_bytecode("p-128", &["set_pan 0"]);
+    assert_line_matches_bytecode("p-200", &["set_pan 0"]);
+    assert_line_matches_bytecode("p-100 p-100", &["set_pan 0"]);
+}
+
 #[test]
 fn test_set_instrument() {
     let mml = r##"

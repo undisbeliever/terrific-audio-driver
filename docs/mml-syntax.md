@@ -250,7 +250,7 @@ Numbers can be decimal, or hexadecimal when prefixed with `$` (ie, `$ff`)
     * The default pan is 64 (centered).
     * Panning is disabled if the stereo flag is false (mono output).
  * `p-<1..128>` - Decrement pan (pan to the left)
- * `p+<1..127>` - Increment pan (pan to the right)
+ * `p+<1..128>` - Increment pan (pan to the right)
  * `E` - Enable echo
  * `E1` - Enable echo
  * `E0` - Disable echo

@@ -68,6 +68,20 @@ fn merge_volumes_commands(v1: Option<VolumeCommand>, v2: VolumeCommand) -> Volum
     }
 }
 
+fn relative_pan(p: i32) -> PanCommand {
+    const _: () = assert!(Pan::MAX as i32 == i8::MAX as i32 + 1);
+    const _: () = assert!(Pan::MAX as i32 == -(i8::MIN as i32));
+    const _: () = assert!(Pan::MIN == 0);
+
+    if p <= -(Pan::MAX as i32) {
+        PanCommand::Absolute(Pan::MIN.try_into().unwrap())
+    } else if p >= Pan::MAX.into() {
+        PanCommand::Absolute(Pan::MAX.try_into().unwrap())
+    } else {
+        PanCommand::Relative(p.try_into().unwrap())
+    }
+}
+
 fn merge_pan_commands(p1: Option<PanCommand>, p2: PanCommand) -> PanCommand {
     match (p1, p2) {
         (Some(PanCommand::Absolute(p1)), PanCommand::Relative(p2)) => {
@@ -75,8 +89,9 @@ fn merge_pan_commands(p1: Option<PanCommand>, p2: PanCommand) -> PanCommand {
             PanCommand::Absolute(p.try_into().unwrap())
         }
         (Some(PanCommand::Relative(p1)), PanCommand::Relative(p2)) => {
-            let p: i32 = p1.as_i8().saturating_add(p2.as_i8()).into();
-            PanCommand::Relative(p.try_into().unwrap())
+            let p1: i32 = p1.as_i8().into();
+            let p2: i32 = p2.as_i8().into();
+            relative_pan(p1 + p2)
         }
         (Some(_), PanCommand::Absolute(_)) => p2,
         (None, p2) => p2,
@@ -772,13 +787,7 @@ fn parse_pan_value(pos: FilePos, p: &mut Parser) -> Option<PanCommand> {
             }
         },
         &Token::RelativeNumber(n) => {
-            match n.try_into() {
-                Ok(v) => Some(PanCommand::Relative(v)),
-                Err(e) => {
-                    p.add_error(pos, e.into());
-                    None
-                }
-            }
+            Some(relative_pan(n))
         },
         #_ => None
     )

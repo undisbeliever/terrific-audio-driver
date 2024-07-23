@@ -50,6 +50,11 @@ GUI changes:
     * Fixed missing name deduplication in instrument and sample tables.
     * Fixed name deduplicator not detecting an already deduplicated name.
 
+MML Changes:
+ * Support larger values for `p+`/`p-` relative pan commands.
+ * Optimise saturating relative pan command into absolute pan commands.
+   (For example, `p+200` is transformed into `p128` and `p-100` is transformed into `p0`.)
+
 
 Version 0.0.9
 =============
