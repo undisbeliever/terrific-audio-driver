@@ -20,7 +20,8 @@ use crate::songs::{BytecodePos, SongBcTracking};
 
 use crate::bytecode::{
     BcTerminator, BcTicks, BcTicksKeyOff, BcTicksNoKeyOff, Bytecode, BytecodeContext, LoopCount,
-    PitchOffsetPerTick, PlayNoteTicks, PortamentoVelocity, SubroutineId, MAX_NESTED_LOOPS,
+    PitchOffsetPerTick, PlayNoteTicks, PortamentoVelocity, RelativeVolume, SubroutineId,
+    MAX_NESTED_LOOPS,
 };
 use crate::errors::{ErrorWithPos, MmlChannelError, MmlError, ValueError};
 use crate::notes::{Note, SEMITONES_PER_OCTAVE};
@@ -936,7 +937,27 @@ impl ChannelBcGenerator<'_> {
                 (pan, volume) => {
                     match volume {
                         Some(VolumeCommand::Absolute(v)) => self.bc.set_volume(v),
-                        Some(VolumeCommand::Relative(v)) => self.bc.adjust_volume(v),
+                        Some(VolumeCommand::Relative(v)) => {
+                            match RelativeVolume::try_from(v) {
+                                Ok(v) => self.bc.adjust_volume(v),
+                                Err(_) => {
+                                    // Two relative volume commands are required
+                                    assert!(
+                                        v >= RelativeVolume::MIN as i32 * 2
+                                            && v <= RelativeVolume::MAX as i32 * 2
+                                    );
+
+                                    let v1 = if v < 0 {
+                                        RelativeVolume::MIN as i32
+                                    } else {
+                                        RelativeVolume::MAX as i32
+                                    };
+                                    let v2 = v - v1;
+                                    self.bc.adjust_volume(RelativeVolume::try_from(v1).unwrap());
+                                    self.bc.adjust_volume(RelativeVolume::try_from(v2).unwrap());
+                                }
+                            }
+                        }
                         None => (),
                     }
                     match pan {

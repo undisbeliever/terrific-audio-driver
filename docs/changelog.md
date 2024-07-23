@@ -51,6 +51,11 @@ GUI changes:
     * Fixed name deduplicator not detecting an already deduplicated name.
 
 MML Changes:
+ * Fixed merged relative volume commands clamping to an i8 (-128..=+127).
+    * `V+100 V+100` will now correctly merge into a single `V+200` command.
+ * Support larger values for `v+`/`v-`/`V+`/`V-` relative volume commands.
+ * Optimise saturating relative volume command into absolute pan commands.
+   (For example, `V+255` is transformed into `v255` and `v-255` is transformed into `v0`).
  * Support larger values for `p+`/`p-` relative pan commands.
  * Optimise saturating relative pan command into absolute pan commands.
    (For example, `p+200` is transformed into `p128` and `p-100` is transformed into `p0`.)

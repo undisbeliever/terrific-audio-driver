@@ -1020,6 +1020,38 @@ fn test_merge_pan_and_volume() {
     merge_mml_commands_test("V-10 || p+5", &["adjust_volume -10", "adjust_pan +5"]);
 }
 
+#[test]
+fn test_large_adjust_volume() {
+    assert_line_matches_bytecode("V+127", &["adjust_volume +127"]);
+    assert_line_matches_bytecode("V+128", &["adjust_volume +127", "adjust_volume +1"]);
+    assert_line_matches_bytecode("V+200", &["adjust_volume +127", "adjust_volume +73"]);
+    assert_line_matches_bytecode("V+100 V+100", &["adjust_volume +127", "adjust_volume +73"]);
+
+    assert_line_matches_bytecode("v+12", &["adjust_volume +127", "adjust_volume +65"]);
+    assert_line_matches_bytecode("v+6 v+6", &["adjust_volume +127", "adjust_volume +65"]);
+
+    assert_line_matches_bytecode("V-128", &["adjust_volume -128"]);
+    assert_line_matches_bytecode("V-129", &["adjust_volume -128", "adjust_volume -1"]);
+    assert_line_matches_bytecode("V-200", &["adjust_volume -128", "adjust_volume -72"]);
+    assert_line_matches_bytecode("V-100 V-100", &["adjust_volume -128", "adjust_volume -72"]);
+
+    assert_line_matches_bytecode("v-12", &["adjust_volume -128", "adjust_volume -64"]);
+    assert_line_matches_bytecode("v-6 v-6", &["adjust_volume -128", "adjust_volume -64"]);
+
+    assert_line_matches_bytecode("V+254", &["adjust_volume +127", "adjust_volume +127"]);
+    assert_line_matches_bytecode("V+255", &["set_volume 255"]);
+    assert_line_matches_bytecode("V+400", &["set_volume 255"]);
+    assert_line_matches_bytecode("V+200 V+200", &["set_volume 255"]);
+
+    assert_line_matches_bytecode("V-254", &["adjust_volume -128", "adjust_volume -126"]);
+    assert_line_matches_bytecode("V-255", &["set_volume 0"]);
+    assert_line_matches_bytecode("V-400", &["set_volume 0"]);
+    assert_line_matches_bytecode("V-200 V-200", &["set_volume 0"]);
+
+    assert_line_matches_bytecode("v+16", &["set_volume 255"]);
+    assert_line_matches_bytecode("v-16", &["set_volume 0"]);
+}
+
 // Tests if a large relative pan command turns into an absolute pan command
 #[test]
 fn test_large_adjust_pan() {

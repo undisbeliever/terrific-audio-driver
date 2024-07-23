@@ -12,7 +12,7 @@ use super::note_tracking::CursorTracker;
 
 use crate::bytecode::{
     LoopCount, Pan, PitchOffsetPerTick, PlayNoteTicks, QuarterWavelengthInTicks, RelativePan,
-    RelativeVolume, SubroutineId, Volume, KEY_OFF_TICK_DELAY,
+    SubroutineId, Volume, KEY_OFF_TICK_DELAY,
 };
 use crate::envelope::{Adsr, Gain, GainMode};
 use crate::errors::{ErrorWithPos, MmlError, ValueError};
@@ -44,7 +44,7 @@ i8_value_newtype!(Transpose, TransposeOutOfRange, NoTranspose);
 #[derive(Debug, Copy, Clone)]
 pub enum VolumeCommand {
     Absolute(Volume),
-    Relative(RelativeVolume),
+    Relative(i32),
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -53,15 +53,28 @@ pub enum PanCommand {
     Relative(RelativePan),
 }
 
+fn relative_volume(v: i32) -> VolumeCommand {
+    const _: () = assert!(Volume::MIN == 0);
+
+    if v <= -(Volume::MAX as i32) {
+        VolumeCommand::Absolute(Volume::new(Volume::MIN))
+    } else if v >= Volume::MAX.into() {
+        VolumeCommand::Absolute(Volume::new(Volume::MAX))
+    } else {
+        VolumeCommand::Relative(v)
+    }
+}
+
 fn merge_volumes_commands(v1: Option<VolumeCommand>, v2: VolumeCommand) -> VolumeCommand {
     match (v1, v2) {
         (Some(VolumeCommand::Absolute(v1)), VolumeCommand::Relative(v2)) => {
-            let v = v1.as_u8().saturating_add_signed(v2.as_i8());
+            let v = u32::from(v1.as_u8()).saturating_add_signed(v2);
+            let v = u8::try_from(v).unwrap_or(u8::MAX);
             VolumeCommand::Absolute(Volume::new(v))
         }
         (Some(VolumeCommand::Relative(v1)), VolumeCommand::Relative(v2)) => {
-            let v = v1.as_i8().saturating_add(v2.as_i8());
-            VolumeCommand::Relative(RelativeVolume::new(v))
+            let v = v1.saturating_add(v2);
+            relative_volume(v)
         }
         (Some(_), VolumeCommand::Absolute(_)) => v2,
         (None, v2) => v2,
@@ -807,13 +820,7 @@ fn parse_fine_volume_value(pos: FilePos, p: &mut Parser) -> Option<VolumeCommand
             }
         },
         &Token::RelativeNumber(n) => {
-            match n.try_into() {
-                Ok(v) => Some(VolumeCommand::Relative(v)),
-                Err(e) => {
-                    p.add_error(pos, e.into());
-                    None
-                }
-            }
+            Some(relative_volume(n))
         },
         #_ => None
     )
@@ -835,13 +842,8 @@ fn parse_coarse_volume_value(pos: FilePos, p: &mut Parser) -> Option<VolumeComma
             }
         },
         &Token::RelativeNumber(n) => {
-            match n.saturating_mul(COARSE_VOLUME_MULTIPLIER.into()).try_into() {
-                Ok(v) => Some(VolumeCommand::Relative(v)),
-                Err(_) => {
-                    p.add_error(pos, ValueError::RelativeCoarseVolumeOutOfRange.into());
-                    None
-                }
-            }
+            let v = n.saturating_mul(COARSE_VOLUME_MULTIPLIER.into());
+            Some(relative_volume(v))
         },
         #_ => None
     )
