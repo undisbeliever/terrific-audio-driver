@@ -9,6 +9,7 @@ use super::{BinIncludePath, ExportedBinFile, Exporter, MemoryMapMode, BLANK_SONG
 use crate::data::UniqueNamesProjectFile;
 use crate::driver_constants::TAD_IO_VERSION;
 use crate::errors::ExportError;
+use crate::sound_effects::SfxExportOrder;
 
 use std::fmt::Write;
 
@@ -92,8 +93,12 @@ impl Exporter for Ca65Exporter {
         writeln!(out, ";; Input argument for `Tad_QueueSoundEffect` and `Tad_QueuePannedSoundEffect`")?;
         writeln!(out, ".enum SFX")?;
         for (i, s) in sfx.export_order.list().iter().enumerate() {
-            if i == sfx.low_priority_index {
+            if i == sfx.low_priority_index() {
                 writeln!(out, "  ; low-priority sound effects")?;
+            } else if i == sfx.n_high_priority_sfx() {
+                writeln!(out, "  ; normal-priority sound effects")?;
+            } else if i == 0 {
+                writeln!(out, "  ; high-priority sound effects")?;
             }
             writeln!(out, "  {} = {}", s, i)?;
         }
