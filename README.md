@@ -58,10 +58,10 @@ Engine Limitations and Deliberate Design Decisions
     * Sound effects cannot call subroutines.
     * The echo buffer and FIR Filter settings are set by the song.  If a sound effect enables echo,
       it can have an inconsistent sound (depending on the songs echo and FIR settings).
-    * If both sound effect channels are occupied, new sound effects will be ignored.
-    * Only 1 sound effect can be played per frame.  If the game requests two or more sound effects
-      in a single frame, the one with the lowest index (as defined by the *Sound Effect Export
-      Order*) will be prioritised.
+    * The default sound effect queue can only hold 1 sound effect.
+      This means only 1 sound effect can be played per frame.
+      If the game requests two or more sound effects in a single frame, the one with the lowest
+      index (as defined by the *Sound Effect Export Order*) will be prioritised.
 
 
 <!-- START RELEASE CUT -->

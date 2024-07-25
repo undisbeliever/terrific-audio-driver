@@ -18,7 +18,7 @@ Audio driver changes:
     * `vol_l` and `vol_r` are now calculated after the bytecode has been processed.
  * `return_from_subroutine` bytecode instruction disables the channel if it is not in a subroutine.
  * Optimised `skip_last_loop` bytecode instructions
- * Added sound effect dropout behaviour
+ * Added sound effect dropout behaviour. [(documentation)](sound-effects.md)
     * Low-priority sound effects will not play if both sfx channels are active
     * Added *interruptible* flag to sound effects
     * Sound effects with the *one-channel* flag set will play on at most 1 sfx channel.  
