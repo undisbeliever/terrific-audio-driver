@@ -920,7 +920,7 @@ ReturnFalse:
         .assert Command::PAUSE_MUSIC_PLAY_SFX = 2, error
         .assert Command::UNPAUSE = 4, error
         .assert (Command::PAUSE >> 1) & 3 | $80 = State::PAUSED, error
-        .assert (Command::PAUSE_MUSIC_PLAY_SFX >> 1) & 1 | $80 = State::PLAYING_SFX, error
+        .assert (Command::PAUSE_MUSIC_PLAY_SFX >> 1) & 3 | $80 = State::PLAYING_SFX, error
         .assert (Command::UNPAUSE >> 1) & 3 | $80 = State::PLAYING, error
         lsr
         and     #3
