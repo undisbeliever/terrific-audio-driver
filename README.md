@@ -32,7 +32,8 @@ Engine Limitations and Deliberate Design Decisions
       project (with a different set of samples) and manually swap the common audio data in S-CPU
       code.
  * All pitches and pitch offsets are precalculated by the compiler
-    * The pitches are stored in a fixed-size 256 entry pitch table.
+    * The pitches are stored in a pitch table in the Common Audio Data.
+    * The pitch table holds a maximum 256 pitches (512 bytes).
     * All pitch offsets are precalculated by the MML compiler.  To calculate this *pitch-offset per
       tick* value, the MML compiler needs to know what instrument is playing the portamento/vibrato
       note.  The MML syntax provides a way to manually set the *pitch-offset per tick* value.

@@ -59,6 +59,12 @@ struct DirItem {
 
 
 struct CommonDataPointers {
+    // Pitch Table SoA
+    // The pitch table must contain a maximum 256 pitches.
+    pitchTable_l : *u8,
+    pitchTable_h : *u8,
+
+
     // Instruments SoA
 
     // The DIR table index for the instrument/sample
@@ -109,12 +115,6 @@ struct CommonDataHeader {
     // The sfx_id of the first low-priority sound effect.
     // If both sound effects channels are active and sfx_id >= firstLowPrioritySfx, sfx_id will be dropped.
     firstLowPrioritySfx: u8,
-
-
-    // These fields will be page-aligned
-    pitchTable_l   : [u8; 256],
-    pitchTable_h   : [u8; 256],
-
 
     // Immediately after the header is the BRR Directory:
     //      BRR Directory:  [DirItem ; nDirItems]

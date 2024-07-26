@@ -49,6 +49,7 @@ pub struct SampleSizesWidget {
 const AUDIO_DRIVER_COLOR: Color = Color::Magenta;
 const CAD_HEADER_COLOR: Color = Color::Green;
 const SFX_COLOR: Color = Color::Blue;
+const PITCH_TABLE_COLOR: Color = Color::DarkGreen;
 const DIR_TABLE_COLOR: Color = Color::Yellow;
 const BRR_SAMPLES_COLOR: Color = Color::Yellow;
 const BRR_SAMPLES_LINE_COLOR: Color = Color::DarkYellow;
@@ -60,11 +61,12 @@ const CAD_HEADER_END: u16 = addresses::COMMON_DATA + COMMON_DATA_HEADER_SIZE as 
 
 const N_COLUMNS: i32 = 2;
 
-const STAT_NAMES: [(&str, Color); 5] = [
+const STAT_NAMES: [(&str, Color); 6] = [
     ("Audio Driver", AUDIO_DRIVER_COLOR),
     ("Largest Song", LARGEST_SONG_COLOR),
     ("Common Audio Data Header", CAD_HEADER_COLOR),
     ("Sound Effects", SFX_COLOR),
+    ("Pitch Table", PITCH_TABLE_COLOR),
     ("Instruments and Samples", BRR_SAMPLES_COLOR),
 ];
 const N_STAT_ROWS: usize = STAT_NAMES.len();
@@ -73,11 +75,13 @@ const DRIVER_SIZE_IDX: usize = 0;
 const LARGEST_SONG_IDX: usize = 1;
 const CAD_HEADER_IDX: usize = 2;
 const SFX_IDX: usize = 3;
-const INST_SAMPLES_IDX: usize = 4;
+const PITCH_TABLE_IDX: usize = 4;
+const INST_SAMPLES_IDX: usize = 5;
 
 struct GraphData {
     dir_table_range: Range<u16>,
     sfx_range: Range<u16>,
+    pitch_table: Range<u16>,
     instruments_samples_range: Range<u16>,
     brr_start_addrs: Vec<u16>,
     song_start: u16,
@@ -217,6 +221,7 @@ impl SampleSizesWidget {
 
         self.stat_sizes[CAD_HEADER_IDX].clear();
         self.stat_sizes[SFX_IDX].clear();
+        self.stat_sizes[PITCH_TABLE_IDX].clear();
         self.stat_sizes[INST_SAMPLES_IDX].clear();
 
         self.graph_widget.redraw();
@@ -238,7 +243,11 @@ impl SampleSizesWidget {
         self.graph_data = Some(GraphData {
             dir_table_range: cad.dir_addr_range(),
             sfx_range: cad.sfx_bc_and_table_addr_range(),
-            instruments_samples_range: cad.instruments_and_samples_addr_range(),
+            pitch_table: cad.pitch_table_addr_range(),
+            instruments_samples_range: Range {
+                start: cad.instruments_soa_addr_range().start,
+                end: cad.brr_addr_range().end,
+            },
             brr_start_addrs: cad.dir_table_start_iter().collect(),
             song_start: cad.song_data_addr(),
         });
@@ -252,6 +261,7 @@ impl SampleSizesWidget {
         } else {
             "ERROR".clone_into(&mut self.stat_sizes[SFX_IDX]);
         }
+        self.stat_sizes[PITCH_TABLE_IDX] = range_size_string(&d.pitch_table);
         self.stat_sizes[INST_SAMPLES_IDX] = size_string(cad.instruments_and_samples_size());
 
         {
@@ -374,6 +384,7 @@ impl SampleSizesWidget {
             addr_rect(AUDIO_DRIVER_SIZE, CAD_HEADER_END, CAD_HEADER_COLOR);
             addr_rect_range(&d.dir_table_range, DIR_TABLE_COLOR);
             addr_rect_range(&d.sfx_range, SFX_COLOR);
+            addr_rect_range(&d.pitch_table, PITCH_TABLE_COLOR);
             addr_rect_range(&d.instruments_samples_range, DIR_TABLE_COLOR);
 
             draw::set_draw_color(BRR_SAMPLES_LINE_COLOR);
@@ -387,6 +398,7 @@ impl SampleSizesWidget {
             addr_line(CAD_HEADER_END);
             addr_line(d.dir_table_range.end);
             addr_line(d.sfx_range.end);
+            addr_line(d.pitch_table.end);
             addr_line(d.instruments_samples_range.end);
 
             if let Some(song_end) = song_end {

@@ -6,7 +6,7 @@
 
 use crate::bytecode::InstrumentId;
 use crate::data::{Instrument, InstrumentOrSample, Sample, UniqueNamesList};
-use crate::driver_constants::{MAX_INSTRUMENTS_AND_SAMPLES, PITCH_TABLE_SIZE};
+use crate::driver_constants::{MAX_INSTRUMENTS_AND_SAMPLES, MAX_N_PITCHES};
 use crate::errors::{PitchError, PitchTableError};
 use crate::notes::{self, Note, Octave};
 
@@ -338,8 +338,10 @@ fn process_pitch_vecs(sorted_pitches: SortedPitches, n_instruments_and_samples: 
 }
 
 pub struct PitchTable {
-    pub(crate) table_data_l: [u8; PITCH_TABLE_SIZE],
-    pub(crate) table_data_h: [u8; PITCH_TABLE_SIZE],
+    pub(crate) table_data_l: [u8; MAX_N_PITCHES],
+    pub(crate) table_data_h: [u8; MAX_N_PITCHES],
+
+    pub(crate) n_pitches: usize,
 
     pub(crate) instruments_pitch_offset: Vec<u8>,
 }
@@ -350,7 +352,7 @@ pub(crate) fn merge_pitch_vec(
 ) -> Result<PitchTable, PitchTableError> {
     let pt = process_pitch_vecs(sorted_pitches, n_instruments_and_samples);
 
-    if pt.pitches.len() > PITCH_TABLE_SIZE {
+    if pt.pitches.len() > MAX_N_PITCHES {
         return Err(PitchTableError::TooManyPitches(pt.pitches.len()));
     }
     if pt.instruments_pitch_offset.len() > MAX_INSTRUMENTS_AND_SAMPLES {
@@ -362,9 +364,10 @@ pub(crate) fn merge_pitch_vec(
     const DEFAULT_H: u8 = PITCH_REGISTER_FP_SCALE.to_le_bytes()[1];
 
     let mut out = PitchTable {
-        table_data_l: [DEFAULT_L; PITCH_TABLE_SIZE],
-        table_data_h: [DEFAULT_H; PITCH_TABLE_SIZE],
+        table_data_l: [DEFAULT_L; MAX_N_PITCHES],
+        table_data_h: [DEFAULT_H; MAX_N_PITCHES],
         instruments_pitch_offset: pt.instruments_pitch_offset,
+        n_pitches: pt.pitches.len(),
     };
 
     for (i, p) in pt.pitches.iter().enumerate() {
@@ -392,5 +395,13 @@ impl PitchTable {
         let i = usize::from(index);
 
         u16::from_le_bytes([self.table_data_l[i], self.table_data_h[i]])
+    }
+
+    pub(crate) fn pitch_table_l(&self) -> &[u8] {
+        &self.table_data_l[..self.n_pitches]
+    }
+
+    pub(crate) fn pitch_table_h(&self) -> &[u8] {
+        &self.table_data_h[..self.n_pitches]
     }
 }

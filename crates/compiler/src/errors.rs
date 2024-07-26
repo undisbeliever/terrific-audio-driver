@@ -14,8 +14,8 @@ use crate::bytecode::{
 use crate::data::{LoopSetting, Name};
 use crate::driver_constants::{
     addresses, ECHO_BUFFER_EDL_MS, FIR_FILTER_SIZE, MAX_COMMON_DATA_SIZE, MAX_DIR_ITEMS,
-    MAX_INSTRUMENTS_AND_SAMPLES, MAX_N_SONGS, MAX_SONG_DATA_SIZE, MAX_SOUND_EFFECTS,
-    MAX_SUBROUTINES, PITCH_TABLE_SIZE,
+    MAX_INSTRUMENTS_AND_SAMPLES, MAX_N_PITCHES, MAX_N_SONGS, MAX_SONG_DATA_SIZE, MAX_SOUND_EFFECTS,
+    MAX_SUBROUTINES,
 };
 use crate::echo::{EchoEdl, EchoLength, MAX_FIR_ABS_SUM};
 use crate::envelope::Gain;
@@ -1481,7 +1481,7 @@ impl Display for PitchTableErrorIndentedDisplay<'_> {
         match self.0 {
             PitchTableError::TooManyInstruments => writeln!(f, "  too many instruments"),
             PitchTableError::TooManyPitches(len) => {
-                writeln!(f, "  too many pitches ({}, max {})", len, PITCH_TABLE_SIZE)
+                writeln!(f, "  too many pitches ({}, max {})", len, MAX_N_PITCHES)
             }
             PitchTableError::InstrumentErrors(errors) => {
                 for (i, name, e) in errors {

@@ -27,6 +27,7 @@ Audio driver changes:
        * The `play_sound_effect` command will be dropped if the sound effect is not *interruptible*.
  * Moved common audio data Structure of Arrays pointers to common audio data
     * The amount of available Audio-RAM is unchanged.
+ * The pitch table is now variable-sized.
 
 IO Command changes:
  * Removed `SET_ENABLED_CHANNELS` IO command, replaced with `SET_MUSIC_CHANNELS`.

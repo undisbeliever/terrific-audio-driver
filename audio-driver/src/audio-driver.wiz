@@ -1474,8 +1474,8 @@ func _play_note(channelIndex : u8 in x, noteAndKeyOffBit : u8 in a) {
     y = a = a + channelSoA.instPitchOffset[x];
 
     // Set voice pitch
-    channelSoA.virtualChannels.pitch_l[x] = a = commonDataHeader.pitchTable_l[y];
-    channelSoA.virtualChannels.pitch_h[x] = a = commonDataHeader.pitchTable_h[y];
+    channelSoA.virtualChannels.pitch_l[x] = a = commonData.pitchTable_l[y];
+    channelSoA.virtualChannels.pitch_h[x] = a = commonData.pitchTable_h[y];
 
 
     // Get note length from the next byte in the instructionPtr
@@ -1565,8 +1565,8 @@ func __portamento(channelIndex : u8 in x, direction : u8 in a) {
     // calculate pitch table index
     y = a = a + channelSoA.instPitchOffset[x];
 
-    channelSoA.portamento_target_l[x] = a = commonDataHeader.pitchTable_l[y];
-    channelSoA.portamento_target_h[x] = a = commonDataHeader.pitchTable_h[y];
+    channelSoA.portamento_target_l[x] = a = commonData.pitchTable_l[y];
+    channelSoA.portamento_target_h[x] = a = commonData.pitchTable_h[y];
 
 
     // return (do not execute the next bytecode and sleep)
