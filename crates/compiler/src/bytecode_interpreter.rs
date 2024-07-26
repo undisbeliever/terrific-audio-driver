@@ -8,16 +8,12 @@ use crate::bytecode::opcodes;
 use crate::bytecode::{Pan, LAST_PLAY_NOTE_OPCODE};
 use crate::common_audio_data::CommonAudioData;
 use crate::driver_constants::{
-    addresses, LoaderDataType, CENTER_PAN, COMMON_DATA_BYTES_PER_DIR,
-    COMMON_DATA_BYTES_PER_INSTRUMENTS, COMMON_DATA_HEADER_SIZE, COMMON_DATA_N_DIR_ITEMS_OFFSET,
-    COMMON_DATA_N_INSTRUMENTS_OFFSET, N_CHANNELS, N_MUSIC_CHANNELS,
-    SONG_HEADER_N_SUBROUTINES_OFFSET, SONG_HEADER_SIZE, STARTING_VOLUME, S_DSP_EON_REGISTER,
-    S_SMP_TIMER_0_REGISTER,
+    addresses, LoaderDataType, CENTER_PAN, COMMON_DATA_BYTES_PER_INSTRUMENT, N_CHANNELS,
+    N_MUSIC_CHANNELS, SONG_HEADER_N_SUBROUTINES_OFFSET, SONG_HEADER_SIZE, STARTING_VOLUME,
+    S_DSP_EON_REGISTER, S_SMP_TIMER_0_REGISTER,
 };
 use crate::songs::SongData;
 use crate::time::TickCounter;
-
-use std::ops::Range;
 
 #[derive(Clone)]
 pub struct VirtualChannel {
@@ -426,33 +422,26 @@ struct CommonAudioDataSoA<'a> {
 
 impl CommonAudioDataSoA<'_> {
     fn new(c: &CommonAudioData, stereo_flag: bool, song_data_addr: u16) -> CommonAudioDataSoA {
-        let data = c.data();
+        let inst_soa_data = |i| {
+            assert!(i < COMMON_DATA_BYTES_PER_INSTRUMENT);
 
-        let n_dir_items = data[COMMON_DATA_N_DIR_ITEMS_OFFSET];
-        let n_instruments = data[COMMON_DATA_N_INSTRUMENTS_OFFSET];
+            let n_instruments = c.n_instruments_and_samples();
+            let start = n_instruments * i;
+            let end = start + n_instruments;
 
-        let inst_soa_range = |i| {
-            assert!(i < COMMON_DATA_BYTES_PER_INSTRUMENTS);
-
-            let n_instruments = usize::from(n_instruments);
-
-            let start = COMMON_DATA_HEADER_SIZE
-                + usize::from(n_dir_items) * COMMON_DATA_BYTES_PER_DIR
-                + i * n_instruments;
-            Range {
-                start,
-                end: start + n_instruments,
-            }
+            &c.instruments_soa_data()[start..end]
         };
+
+        let n_instruments = c.n_instruments_and_samples().try_into().unwrap();
 
         CommonAudioDataSoA {
             stereo_flag,
             song_data_addr,
             n_instruments,
-            instruments_scrn: &data[inst_soa_range(0)],
-            instruments_pitch_offset: &data[inst_soa_range(1)],
-            instruments_adsr1: &data[inst_soa_range(2)],
-            instruments_adsr2_or_gain: &data[inst_soa_range(3)],
+            instruments_scrn: inst_soa_data(0),
+            instruments_pitch_offset: inst_soa_data(1),
+            instruments_adsr1: inst_soa_data(2),
+            instruments_adsr2_or_gain: inst_soa_data(3),
         }
     }
 }

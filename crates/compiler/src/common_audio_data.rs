@@ -5,10 +5,10 @@
 // SPDX-License-Identifier: MIT
 
 use crate::driver_constants::{
-    addresses, COMMON_DATA_BYTES_PER_DIR, COMMON_DATA_BYTES_PER_INSTRUMENTS,
+    addresses, COMMON_DATA_BYTES_PER_DIR, COMMON_DATA_BYTES_PER_INSTRUMENT,
     COMMON_DATA_BYTES_PER_SOUND_EFFECT, COMMON_DATA_DIR_TABLE_OFFSET, COMMON_DATA_HEADER_SIZE,
-    COMMON_DATA_N_DIR_ITEMS_OFFSET, COMMON_DATA_N_INSTRUMENTS_OFFSET, MAX_COMMON_DATA_SIZE,
-    MAX_DIR_ITEMS, MAX_INSTRUMENTS_AND_SAMPLES, MAX_SFX_DATA_ADDR, MAX_SOUND_EFFECTS,
+    MAX_COMMON_DATA_SIZE, MAX_DIR_ITEMS, MAX_INSTRUMENTS_AND_SAMPLES, MAX_SFX_DATA_ADDR,
+    MAX_SOUND_EFFECTS,
 };
 use crate::errors::{CommonAudioDataError, CommonAudioDataErrors};
 use crate::samples::SampleAndInstrumentData;
@@ -19,9 +19,15 @@ use std::ops::Range;
 #[derive(Clone)]
 pub struct CommonAudioData {
     data: Vec<u8>,
-    brr_addr_range: Range<u16>,
-    sfx_table_addr: u16,
-    sfx_bytecode_addr_range: Range<u16>,
+    n_dir_items: usize,
+    n_instruments_and_samples: usize,
+    instruments_soa_offset: usize,
+
+    sfx_bc_addr: u16,
+    sfx_soa_addr: u16,
+    instruments_soa_addr: u16,
+    brr_data_addr: u16,
+    song_data_addr: u16,
 }
 
 impl std::fmt::Debug for CommonAudioData {
@@ -31,18 +37,64 @@ impl std::fmt::Debug for CommonAudioData {
 }
 
 impl CommonAudioData {
+    const DIR_TABLE_ADDR: u16 = addresses::COMMON_DATA + COMMON_DATA_DIR_TABLE_OFFSET as u16;
+
     pub fn data(&self) -> &[u8] {
         &self.data
     }
 
+    pub fn dir_addr_range(&self) -> Range<u16> {
+        Self::DIR_TABLE_ADDR..self.sfx_bc_addr
+    }
+
+    pub fn sfx_bytecode_addr_range(&self) -> Range<u16> {
+        self.sfx_bc_addr..self.sfx_soa_addr
+    }
+
+    /// Includes SFX table and SFX bytecode
+    pub fn sfx_bc_and_table_addr_range(&self) -> Range<u16> {
+        self.sfx_bc_addr..self.instruments_soa_addr
+    }
+
+    pub fn instruments_soa_addr_range(&self) -> Range<u16> {
+        self.instruments_soa_addr..self.brr_data_addr
+    }
+
+    /// Caution: Includes padding byte
+    pub fn instruments_and_samples_addr_range(&self) -> Range<u16> {
+        self.instruments_soa_addr..self.song_data_addr
+    }
+
+    /// Caution: Includes padding byte
+    pub fn brr_addr_range(&self) -> Range<u16> {
+        self.brr_data_addr..self.song_data_addr
+    }
+
+    pub fn song_data_addr(&self) -> u16 {
+        self.song_data_addr
+    }
+
     pub fn aram_size(&self) -> u16 {
-        let s = self.data.len().try_into().unwrap_or(u16::MAX);
-        // Loader can only load a multiple of 2 bytes
-        s + (s % 2)
+        self.song_data_addr - addresses::COMMON_DATA
+    }
+
+    pub fn instruments_and_samples_size(&self) -> u16 {
+        let sfx = self.sfx_bc_and_table_addr_range();
+        let sfx_size = sfx.end - sfx.start;
+
+        self.aram_size() - sfx_size
+    }
+
+    pub fn n_dir_items(&self) -> usize {
+        self.n_dir_items
+    }
+
+    pub fn n_instruments_and_samples(&self) -> usize {
+        self.n_instruments_and_samples
     }
 
     pub fn dir_table_start_iter(&self) -> impl Iterator<Item = u16> + '_ {
-        let n_dir_items: usize = self.data[COMMON_DATA_N_DIR_ITEMS_OFFSET].into();
+        let n_dir_items: usize = self.n_dir_items;
         let range = Range {
             start: COMMON_DATA_DIR_TABLE_OFFSET,
             end: COMMON_DATA_DIR_TABLE_OFFSET + n_dir_items * COMMON_DATA_BYTES_PER_DIR,
@@ -52,31 +104,16 @@ impl CommonAudioData {
         (0..n_dir_items).map(|i| u16::from_le_bytes([dir_table[i * 4], dir_table[i * 4 + 1]]))
     }
 
-    pub fn instruments_scrn(&self) -> &[u8] {
-        let n_dir_items: usize = self.data[COMMON_DATA_N_DIR_ITEMS_OFFSET].into();
-
-        let start = COMMON_DATA_HEADER_SIZE + n_dir_items * COMMON_DATA_BYTES_PER_DIR;
-        let size: usize = self.data[COMMON_DATA_N_INSTRUMENTS_OFFSET].into();
-
-        &self.data[start..start + size]
+    pub fn instruments_soa_data(&self) -> &[u8] {
+        let start = self.instruments_soa_offset;
+        let end = start + self.n_instruments_and_samples * COMMON_DATA_BYTES_PER_INSTRUMENT;
+        &self.data[start..end]
     }
 
-    pub fn brr_addr_range(&self) -> &Range<u16> {
-        &self.brr_addr_range
-    }
-
-    /// Does not include SFX table
-    pub fn header_size(&self) -> u16 {
-        self.sfx_table_addr - addresses::COMMON_DATA
-    }
-
-    /// Includes SFX table
-    pub fn sfx_data_addr_range(&self) -> Range<u16> {
-        self.sfx_table_addr..self.sfx_bytecode_addr_range.end
-    }
-
-    pub fn sfx_bytecode_addr_range(&self) -> &Range<u16> {
-        &self.sfx_bytecode_addr_range
+    pub fn instruments_soa_scrn(&self) -> &[u8] {
+        let start = self.instruments_soa_offset;
+        let end = start + self.n_instruments_and_samples;
+        &self.data[start..end]
     }
 }
 
@@ -84,6 +121,8 @@ pub fn build_common_audio_data(
     samples_and_instruments: &SampleAndInstrumentData,
     sound_effects: &CombinedSoundEffectsData,
 ) -> Result<CommonAudioData, CommonAudioDataErrors> {
+    const CAD_ADDR: usize = addresses::COMMON_DATA as usize;
+
     let mut errors = Vec::new();
 
     let n_instruments_and_samples = samples_and_instruments.n_instruments;
@@ -102,13 +141,13 @@ pub fn build_common_audio_data(
         errors.push(CommonAudioDataError::TooManySoundEffects(n_sound_effects));
     }
 
-    let header_size = COMMON_DATA_HEADER_SIZE
-        + n_dir_items * COMMON_DATA_BYTES_PER_DIR
-        + n_instruments_and_samples * COMMON_DATA_BYTES_PER_INSTRUMENTS
-        + n_sound_effects * COMMON_DATA_BYTES_PER_SOUND_EFFECT;
+    let header_size = COMMON_DATA_HEADER_SIZE + n_dir_items * COMMON_DATA_BYTES_PER_DIR;
 
-    let common_data_size =
-        header_size + samples_and_instruments.brr_data.len() + sound_effects.sfx_data.len();
+    let common_data_size = header_size
+        + n_sound_effects * COMMON_DATA_BYTES_PER_SOUND_EFFECT
+        + sound_effects.sfx_data.len()
+        + n_instruments_and_samples * COMMON_DATA_BYTES_PER_INSTRUMENT
+        + samples_and_instruments.brr_data.len();
 
     if common_data_size > MAX_COMMON_DATA_SIZE {
         errors.push(CommonAudioDataError::CommonAudioDataTooLarge(
@@ -116,11 +155,19 @@ pub fn build_common_audio_data(
         ));
     }
 
-    let sfx_data_addr = usize::from(addresses::COMMON_DATA) + header_size;
-    let sfx_data_end = sfx_data_addr + sound_effects.sfx_data.len();
+    let sfx_bc_addr = CAD_ADDR + header_size;
+    let sfx_soa_addr = sfx_bc_addr + sound_effects.sfx_data.len();
+    let instruments_soa_addr = sfx_soa_addr + n_sound_effects * COMMON_DATA_BYTES_PER_SOUND_EFFECT;
+    let brr_data_addr =
+        instruments_soa_addr + n_instruments_and_samples * COMMON_DATA_BYTES_PER_INSTRUMENT;
+
+    assert_eq!(
+        brr_data_addr + samples_and_instruments.brr_data.len(),
+        common_data_size + CAD_ADDR
+    );
 
     if let Some(last_offset) = sound_effects.last_offset() {
-        let last_sfx_addr = sfx_data_addr + usize::from(last_offset);
+        let last_sfx_addr = sfx_bc_addr + usize::from(last_offset);
         if last_sfx_addr > MAX_SFX_DATA_ADDR {
             errors.push(CommonAudioDataError::SoundEffectDataTooLarge {
                 by: last_sfx_addr - MAX_SFX_DATA_ADDR,
@@ -134,7 +181,7 @@ pub fn build_common_audio_data(
     let _disable_errors = errors;
 
     const _: () = assert!(MAX_COMMON_DATA_SIZE < u16::MAX as usize);
-    assert!(usize::from(addresses::COMMON_DATA) + common_data_size < u16::MAX.into());
+    assert!(CAD_ADDR + common_data_size < u16::MAX.into());
 
     assert!(samples_and_instruments.instruments_scrn.len() == n_instruments_and_samples);
     assert!(
@@ -147,18 +194,25 @@ pub fn build_common_audio_data(
     assert!(samples_and_instruments.instruments_adsr1.len() == n_instruments_and_samples);
     assert!(samples_and_instruments.instruments_adsr2_or_gain.len() == n_instruments_and_samples);
 
-    let sfx_data_addr: u16 = sfx_data_addr.try_into().unwrap();
-    let sfx_data_end: u16 = sfx_data_end.try_into().unwrap();
-    let brr_data_addr: u16 = sfx_data_end;
-    let brr_data_end: u16 =
-        brr_data_addr + u16::try_from(samples_and_instruments.brr_data.len()).unwrap();
-
     let mut out = Vec::with_capacity(common_data_size);
 
-    out.push(u8::try_from(n_dir_items).unwrap());
-    out.push(u8::try_from(n_instruments_and_samples).unwrap());
-    out.push(u8::try_from(n_sound_effects).unwrap());
+    let mut push_ptr = |start, n_elements, i| {
+        let addr = u16::try_from(start + n_elements * i).unwrap();
+        out.extend(addr.to_le_bytes());
+    };
+
+    push_ptr(instruments_soa_addr, n_instruments_and_samples, 0); // instruments_scrn
+    push_ptr(instruments_soa_addr, n_instruments_and_samples, 1); // instruments_pitchOffset
+    push_ptr(instruments_soa_addr, n_instruments_and_samples, 2); // instruments_adsr1
+    push_ptr(instruments_soa_addr, n_instruments_and_samples, 3); // instruments_adsr2OrGain
+
+    push_ptr(sfx_soa_addr, n_sound_effects, 0); // soundEffects_addrAndOneChannelFlag_l
+    push_ptr(sfx_soa_addr, n_sound_effects, 1); // soundEffects_addrAndOneChannelFlag_h
+    push_ptr(sfx_soa_addr, n_sound_effects, 2); // soundEffects_durationAndInterruptFlag_l
+    push_ptr(sfx_soa_addr, n_sound_effects, 3); // soundEffects_durationAndInterruptFlag_h
+
     out.push(0); // _padding1
+    out.push(n_sound_effects.try_into().unwrap());
     out.push(sound_effects.n_high_priority_sfx);
     out.push(sound_effects.low_priority_index);
 
@@ -167,43 +221,51 @@ pub fn build_common_audio_data(
 
     assert_eq!(out.len(), COMMON_DATA_HEADER_SIZE);
 
+    let brr_data_addr = u16::try_from(brr_data_addr).unwrap();
     for o in &samples_and_instruments.brr_directory_offsets {
         out.extend((o.start + brr_data_addr).to_le_bytes());
         out.extend((o.loop_point + brr_data_addr).to_le_bytes());
     }
 
+    assert_eq!(out.len() + CAD_ADDR, sfx_bc_addr);
+    let sfx_bc_addr = u16::try_from(sfx_bc_addr).unwrap();
+    out.extend(&sound_effects.sfx_data);
+
+    // soundEffects SoA
+    assert_eq!(out.len() + CAD_ADDR, sfx_soa_addr);
+    let sfx_soa_addr = u16::try_from(sfx_soa_addr).unwrap();
+    out.extend(sound_effects.sfx_header_addr_and_one_channel_flag_l_iter(sfx_bc_addr));
+    out.extend(sound_effects.sfx_header_addr_and_one_channel_flag_h_iter(sfx_bc_addr));
+    out.extend(sound_effects.sfx_header_duration_and_interrupt_flag_l_iter());
+    out.extend(sound_effects.sfx_header_duration_and_interrupt_flag_h_iter());
+
     // instruments SoA
+    assert_eq!(out.len() + CAD_ADDR, instruments_soa_addr);
+    let instruments_soa_addr = u16::try_from(instruments_soa_addr).unwrap();
+    let instruments_soa_offset = out.len();
     out.extend(&samples_and_instruments.instruments_scrn);
     out.extend(&samples_and_instruments.pitch_table.instruments_pitch_offset);
     out.extend(&samples_and_instruments.instruments_adsr1);
     out.extend(&samples_and_instruments.instruments_adsr2_or_gain);
 
-    // soundEffects SoA
-    let sfx_table_addr = u16::try_from(out.len()).unwrap() + addresses::COMMON_DATA;
-    out.extend(sound_effects.sfx_header_addr_and_one_channel_flag_l_iter(sfx_data_addr));
-    out.extend(sound_effects.sfx_header_addr_and_one_channel_flag_h_iter(sfx_data_addr));
-    out.extend(sound_effects.sfx_header_duration_and_interrupt_flag_l_iter());
-    out.extend(sound_effects.sfx_header_duration_and_interrupt_flag_h_iter());
-
-    assert_eq!(out.len(), header_size);
-    assert_eq!(
-        out.len(),
-        usize::from(sfx_data_addr - addresses::COMMON_DATA)
-    );
-    out.extend(&sound_effects.sfx_data);
-
-    assert_eq!(
-        out.len(),
-        usize::from(brr_data_addr - addresses::COMMON_DATA)
-    );
     out.extend(&samples_and_instruments.brr_data);
 
     assert_eq!(out.len(), common_data_size);
 
+    // Loader can only load a multiple of 2 bytes
+    let song_data_addr =
+        u16::try_from(CAD_ADDR + common_data_size + (common_data_size % 2)).unwrap();
+
     Ok(CommonAudioData {
         data: out,
-        brr_addr_range: brr_data_addr..brr_data_end,
-        sfx_table_addr,
-        sfx_bytecode_addr_range: sfx_data_addr..sfx_data_end,
+        n_dir_items,
+        n_instruments_and_samples,
+        instruments_soa_offset,
+
+        sfx_bc_addr,
+        sfx_soa_addr,
+        instruments_soa_addr,
+        brr_data_addr,
+        song_data_addr,
     })
 }

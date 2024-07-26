@@ -58,18 +58,49 @@ struct DirItem {
 };
 
 
+struct CommonDataPointers {
+    // Instruments SoA
+
+    // The DIR table index for the instrument/sample
+    instruments_scrn : *u8,
+
+    // offset between note c0 and `CommonDataHeader.pitchTable[0]`
+    // (pitchOffset + note is allowed to overflow and underflow)
+    instruments_pitchOffset : *u8,
+
+    // The ADSR1 register value for the instrument/sample default envelope
+    instruments_adsr1 : *u8,
+
+    // This variable is either:
+    //  * ADSR2 if bit 7 of `adsr1` is set
+    //  * GAIN if bit 7 of `adsr1` is clear
+    instruments_adsr2OrGain : *u8,
+
+
+    // Sound Effects SoA
+
+    // oaaaaaaa aaaaaaaa
+    //      o = if set sound effect will play on at most 1 channel
+    //      a = address of the sound effect bytecode
+    soundEffects_addrAndOneChannelFlag_l : *u8,
+    soundEffects_addrAndOneChannelFlag_h : *u8,
+
+    // iddddddd ddddddd
+    //      i = sfx interruptible flag
+    //      d = duration in ticks
+    soundEffects_durationAndInterruptFlag_l : *u8,
+    soundEffects_durationAndInterruptFlag_h : *u8,
+};
+
+
 // Assumes `sizeof(CommonDataHeader) + COMMON_DATA_ADDR` is page aligned.
-
 struct CommonDataHeader {
-    nDirItems      : u8,
-
-    nInstruments   : u8,
-
-    // MUST BE <= MAX_SOUND_EFFECTS
-    nSoundEffects  : u8,
+    pointers       : CommonDataPointers,
 
     _padding1      : u8,
 
+    // MUST BE <= MAX_SOUND_EFFECTS
+    nSoundEffects  : u8,
 
     // The number of high-priority sound effects.
     // High priority sound effects ignore the interruptible flag if both sound effect channels are active and uninterruptible.
@@ -85,36 +116,8 @@ struct CommonDataHeader {
     pitchTable_h   : [u8; 256],
 
 
-    // After the header is common data.
-
-    //  BRR Directory:  [DirItem ; nDirItems]
-
-    //  Instruments SoA
-    //      instrument_scrn        : [u8 ; nInstruments]
-    //
-    //      instrument_pitchOffset : [u8 ; nInstruments]
-    //          This variable is either:
-    //              * ADSR2 if bit 7 of `adsr1` is set
-    //              * GAIN if bit 7 of `adsr1` is clear
-    //
-    //          instrument_adsr1       : [u8 ; nInstruments]
-    //
-    //          instrument_adsr2OrGain ; [u8 ; nInstruments]
-    //              offset between note c0 and `CommonDataHeader.pitchTable[0]`
-    //              (pitchOffset + note is allowed to overflow and underflow)
-
-    //  Sound Effects SoA
-    //      soundEffects_addrAndOneChannelFlag_l : [u8 ; nSoundEffects]
-    //      soundEffects_addrAndOneChannelFlag_h : [u8 ; nSoundEffects]
-    //          oaaaaaaa aaaaaaaa
-    //              o = if set sound effect will play on at most 1 channel
-    //              a = address of the sound effect bytecode
-    //
-    //      soundEffects_durationAndInterruptFlag_l : [u8 ; nSoundEffects]
-    //      soundEffects_durationAndInterruptFlag_h : [u8 ; nSoundEffects]
-    //          iddddddd ddddddd
-    //              i = sfx interruptible flag
-    //              d = duration in ticks
+    // Immediately after the header is the BRR Directory:
+    //      BRR Directory:  [DirItem ; nDirItems]
 };
 
 

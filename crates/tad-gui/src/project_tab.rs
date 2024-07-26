@@ -407,9 +407,8 @@ impl MemoryStats {
 
     pub fn cad_output_changed(&mut self, cad_output: &CadOutput) {
         let mut valid_samples = |cad: &CommonAudioData| {
-            let size = cad.data().len() - cad.sfx_data_addr_range().len();
-            self.samples_size = size;
-            Self::output_bytes(&mut self.samples_out, size);
+            self.samples_size = cad.instruments_and_samples_size().into();
+            Self::output_bytes(&mut self.samples_out, self.samples_size);
         };
 
         match cad_output {
@@ -435,7 +434,7 @@ impl MemoryStats {
             CadOutput::WithSfx(cad, _) => {
                 valid_samples(&cad.common_audio_data);
 
-                self.sfx_data_size = cad.common_audio_data.sfx_data_addr_range().len();
+                self.sfx_data_size = cad.common_audio_data.sfx_bc_and_table_addr_range().len();
                 Self::output_bytes(&mut self.sfx_out, self.sfx_data_size);
             }
         }

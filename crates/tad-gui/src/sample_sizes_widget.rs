@@ -11,7 +11,7 @@ use crate::InstrumentsAndSamplesData;
 
 use compiler::common_audio_data::CommonAudioData;
 use compiler::data::{Instrument, Name, Sample};
-use compiler::driver_constants::addresses;
+use compiler::driver_constants::{addresses, COMMON_DATA_HEADER_SIZE};
 use compiler::songs::{SongAramSize, BLANK_SONG_ARAM_SIZE};
 use fltk::table::TableContext;
 
@@ -49,12 +49,14 @@ pub struct SampleSizesWidget {
 const AUDIO_DRIVER_COLOR: Color = Color::Magenta;
 const CAD_HEADER_COLOR: Color = Color::Green;
 const SFX_COLOR: Color = Color::Blue;
+const DIR_TABLE_COLOR: Color = Color::Yellow;
 const BRR_SAMPLES_COLOR: Color = Color::Yellow;
 const BRR_SAMPLES_LINE_COLOR: Color = Color::DarkYellow;
 const LARGEST_SONG_COLOR: Color = Color::Red;
 const LARGEST_SONG_ECHO_COLOR: Color = Color::Red;
 
 const AUDIO_DRIVER_SIZE: u16 = addresses::COMMON_DATA;
+const CAD_HEADER_END: u16 = addresses::COMMON_DATA + COMMON_DATA_HEADER_SIZE as u16;
 
 const N_COLUMNS: i32 = 2;
 
@@ -63,7 +65,7 @@ const STAT_NAMES: [(&str, Color); 5] = [
     ("Largest Song", LARGEST_SONG_COLOR),
     ("Common Audio Data Header", CAD_HEADER_COLOR),
     ("Sound Effects", SFX_COLOR),
-    ("BRR Samples", BRR_SAMPLES_COLOR),
+    ("Instruments and Samples", BRR_SAMPLES_COLOR),
 ];
 const N_STAT_ROWS: usize = STAT_NAMES.len();
 
@@ -71,13 +73,14 @@ const DRIVER_SIZE_IDX: usize = 0;
 const LARGEST_SONG_IDX: usize = 1;
 const CAD_HEADER_IDX: usize = 2;
 const SFX_IDX: usize = 3;
-const BRR_SAMPLES_IDX: usize = 4;
+const INST_SAMPLES_IDX: usize = 4;
 
 struct GraphData {
-    cad_size: u16,
+    dir_table_range: Range<u16>,
     sfx_range: Range<u16>,
-    brr_samples_range: Range<u16>,
+    instruments_samples_range: Range<u16>,
     brr_start_addrs: Vec<u16>,
+    song_start: u16,
 }
 
 fn size_string(s: u16) -> String {
@@ -214,7 +217,7 @@ impl SampleSizesWidget {
 
         self.stat_sizes[CAD_HEADER_IDX].clear();
         self.stat_sizes[SFX_IDX].clear();
-        self.stat_sizes[BRR_SAMPLES_IDX].clear();
+        self.stat_sizes[INST_SAMPLES_IDX].clear();
 
         self.graph_widget.redraw();
         self.update_table_size();
@@ -233,35 +236,36 @@ impl SampleSizesWidget {
 
     fn update_table(&mut self, cad: &CommonAudioData, names: &Arc<Vec<Name>>, sfx_valid: bool) {
         self.graph_data = Some(GraphData {
-            cad_size: cad.aram_size(),
-            brr_samples_range: cad.brr_addr_range().clone(),
-            sfx_range: cad.sfx_data_addr_range(),
+            dir_table_range: cad.dir_addr_range(),
+            sfx_range: cad.sfx_bc_and_table_addr_range(),
+            instruments_samples_range: cad.instruments_and_samples_addr_range(),
             brr_start_addrs: cad.dir_table_start_iter().collect(),
+            song_start: cad.song_data_addr(),
         });
         let d = self.graph_data.as_ref().unwrap();
 
         self.brr_sample_names = names.clone();
 
-        self.stat_sizes[CAD_HEADER_IDX] = size_string(cad.header_size());
+        self.stat_sizes[CAD_HEADER_IDX] = usize_string(COMMON_DATA_HEADER_SIZE);
         if sfx_valid {
-            self.stat_sizes[SFX_IDX] = range_size_string(&cad.sfx_data_addr_range());
+            self.stat_sizes[SFX_IDX] = range_size_string(&d.sfx_range);
         } else {
             "ERROR".clone_into(&mut self.stat_sizes[SFX_IDX]);
         }
-        self.stat_sizes[BRR_SAMPLES_IDX] = range_size_string(cad.brr_addr_range());
+        self.stat_sizes[INST_SAMPLES_IDX] = size_string(cad.instruments_and_samples_size());
 
         {
             self.brr_sizes.clear();
 
             let mut prev_brr_start = 0;
-            for scrn in cad.instruments_scrn() {
+            for scrn in cad.instruments_soa_scrn() {
                 let scrn = usize::from(*scrn);
 
                 if let Some(&brr_start) = d.brr_start_addrs.get(scrn) {
                     let s = if brr_start > prev_brr_start {
                         let brr_end = match d.brr_start_addrs.get(scrn + 1) {
                             Some(&v) => v,
-                            None => d.brr_samples_range.end,
+                            None => d.instruments_samples_range.end,
                         };
                         size_string(brr_end - brr_start)
                     } else {
@@ -350,12 +354,15 @@ impl SampleSizesWidget {
                 let x2 = addr_x(addr2);
                 draw::draw_rect_fill(x1, y1, x2 - x1, h - 2, c);
             };
+            let addr_rect_range = |r: &Range<u16>, c: Color| {
+                addr_rect(r.start, r.end, c);
+            };
             let addr_line = |addr: u16| {
                 draw::draw_yxline(addr_x(addr), y1, y2);
             };
 
             // Largest song
-            let song_start = AUDIO_DRIVER_SIZE + d.cad_size;
+            let song_start = d.song_start;
             let song_end = song_start.checked_add(self.largest_song.data_size);
             let echo_start = 0xffff - self.largest_song.echo_buffer_size + 1;
 
@@ -364,17 +371,10 @@ impl SampleSizesWidget {
                 addr_rect(echo_start, u16::MAX, LARGEST_SONG_ECHO_COLOR);
             }
             addr_rect(0, AUDIO_DRIVER_SIZE, AUDIO_DRIVER_COLOR);
-            addr_rect(
-                AUDIO_DRIVER_SIZE,
-                d.brr_samples_range.start,
-                CAD_HEADER_COLOR,
-            );
-            addr_rect(d.sfx_range.start, d.sfx_range.end, SFX_COLOR);
-            addr_rect(
-                d.brr_samples_range.start,
-                d.brr_samples_range.end,
-                BRR_SAMPLES_COLOR,
-            );
+            addr_rect(AUDIO_DRIVER_SIZE, CAD_HEADER_END, CAD_HEADER_COLOR);
+            addr_rect_range(&d.dir_table_range, DIR_TABLE_COLOR);
+            addr_rect_range(&d.sfx_range, SFX_COLOR);
+            addr_rect_range(&d.instruments_samples_range, DIR_TABLE_COLOR);
 
             draw::set_draw_color(BRR_SAMPLES_LINE_COLOR);
             for &addr in d.brr_start_addrs.iter().skip(1) {
@@ -384,10 +384,10 @@ impl SampleSizesWidget {
             draw::set_draw_color(Color::Foreground);
 
             addr_line(AUDIO_DRIVER_SIZE);
-            addr_line(d.brr_samples_range.start);
-            addr_line(d.brr_samples_range.end);
-            addr_line(d.sfx_range.start);
+            addr_line(CAD_HEADER_END);
+            addr_line(d.dir_table_range.end);
             addr_line(d.sfx_range.end);
+            addr_line(d.instruments_samples_range.end);
 
             if let Some(song_end) = song_end {
                 addr_line(song_end);

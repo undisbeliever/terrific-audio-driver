@@ -62,7 +62,7 @@ pub mod addresses {
     );
 
     // MUST match `audio-driver/src/common_memmap.wiz`
-    pub const COMMON_DATA: u16 = 0xA00 - 6;
+    pub const COMMON_DATA: u16 = 0xA00 - 20;
 
     const _: () = assert!(
         _symbols::_LAST_LOADER_SYMBOL < DRIVER_CODE,
@@ -113,16 +113,14 @@ pub const MAX_SOUND_EFFECTS: usize = 254;
 
 pub const PITCH_TABLE_SIZE: usize = 256;
 
-pub const COMMON_DATA_N_DIR_ITEMS_OFFSET: usize = 0;
-pub const COMMON_DATA_N_INSTRUMENTS_OFFSET: usize = 1;
-pub const COMMON_DATA_N_SOUND_EFFECTS_OFFSET: usize = 2;
-pub const COMMON_DATA_HEADER_SIZE: usize = 6 + (2 * PITCH_TABLE_SIZE);
+pub const COMMON_DATA_POINTERS_SIZE: usize = 8 * 2;
+pub const COMMON_DATA_HEADER_SIZE: usize = COMMON_DATA_POINTERS_SIZE + 4 + (2 * PITCH_TABLE_SIZE);
 
-pub const COMMON_DATA_PITCH_TABLE_OFFSET: usize = 6;
+pub const COMMON_DATA_PITCH_TABLE_OFFSET: usize = 20;
 pub const COMMON_DATA_DIR_TABLE_OFFSET: usize = COMMON_DATA_HEADER_SIZE;
 
 pub const COMMON_DATA_BYTES_PER_DIR: usize = 4;
-pub const COMMON_DATA_BYTES_PER_INSTRUMENTS: usize = 4;
+pub const COMMON_DATA_BYTES_PER_INSTRUMENT: usize = 4;
 pub const COMMON_DATA_BYTES_PER_SOUND_EFFECT: usize = 4;
 
 // The largest valid sound effect address.

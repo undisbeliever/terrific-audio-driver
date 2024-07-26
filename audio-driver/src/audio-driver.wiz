@@ -68,19 +68,10 @@ in zeropage {
     var zpTmp2 : u8;
 
 
-    // Common audio data addresses
+    // Common audio data pointers.
     // See `data-formats.wiz` for more details about these variables.
-    namespace commonData {
-        var instruments_scrn : *u8;
-        var instruments_pitchOffset : *u8;
-        var instruments_adsr1 : *u8;
-        var instruments_adsr2OrGain : *u8;
+    var commonData : CommonDataPointers;
 
-        var soundEffects_addrAndOneChannelFlag_l : *u8;
-        var soundEffects_addrAndOneChannelFlag_h : *u8;
-        var soundEffects_durationAndInterruptFlag_l : *u8;
-        var soundEffects_durationAndInterruptFlag_h : *u8;
-    }
 
     // Increases once every song tick
     var songTickCounter : u16;
@@ -249,7 +240,6 @@ in zeropage {
 
 
 in firstpage {
-
     // Channel variables that do not fit in zeropage
     namespace channelSoA {
         // Portamento PITCH speed
@@ -482,38 +472,13 @@ func main() {
     }
 
 
-    // Calculate common audio data addresses
+    // Copy Common Audio Data pointers to zeropage
     {
-        // Reuse these two variables for temporary word space
-        var _nInstruments  : u16 in instructionPtr;
-        var _nSoundEffects : u16 in subroutineTable_l;
-
-        a = commonDataHeader.nInstruments;
-        y = 0;
-        _nInstruments = ya;
-
-        a = commonDataHeader.nSoundEffects;
-        // y = 0
-        _nSoundEffects = ya;
-
-
-        // Calculate `instruments` address (COMMON_DATA_HEADER_END_ADDR + nDirItems * 4)
-        a = <:COMMON_DATA_HEADER_END_ADDR;
-        y = >:COMMON_DATA_HEADER_END_ADDR;
-        commonData.instruments_scrn = ya as *u8;
-
-        ya = mul(commonDataHeader.nDirItems, sizeof(DirItem));
-        ya += commonData.instruments_scrn as u16;
-
-        *(&commonData.instruments_scrn as *u16)        = ya;
-        *(&commonData.instruments_pitchOffset as *u16) = ya = ya + _nInstruments;
-        *(&commonData.instruments_adsr1 as *u16)       = ya = ya + _nInstruments;
-        *(&commonData.instruments_adsr2OrGain as *u16) = ya = ya + _nInstruments;
-
-        *(&commonData.soundEffects_addrAndOneChannelFlag_l as *u16)     = ya = ya + _nInstruments;
-        *(&commonData.soundEffects_addrAndOneChannelFlag_h as *u16)     = ya = ya + _nSoundEffects;
-        *(&commonData.soundEffects_durationAndInterruptFlag_l as *u16)  = ya = ya + _nSoundEffects;
-        *(&commonData.soundEffects_durationAndInterruptFlag_h as *u16)  = ya = ya + _nSoundEffects;
+        x = sizeof(typeof(commonData)) - 1;
+        do {
+            (&commonData as *u8)[x] = a = (&commonDataHeader.pointers as *u8)[x];
+            x--;
+        } while !negative;
     }
 
 
