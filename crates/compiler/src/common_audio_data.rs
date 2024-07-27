@@ -52,6 +52,10 @@ impl CommonAudioData {
         self.sfx_bc_addr..self.sfx_soa_addr
     }
 
+    pub fn sfx_soa_addr_range(&self) -> Range<u16> {
+        self.sfx_soa_addr..self.pitch_table_addr
+    }
+
     /// Includes SFX table and SFX bytecode
     pub fn sfx_bc_and_table_addr_range(&self) -> Range<u16> {
         self.sfx_bc_addr..self.pitch_table_addr
@@ -114,6 +118,27 @@ impl CommonAudioData {
         let start = self.instruments_soa_offset;
         let end = start + self.n_instruments_and_samples;
         &self.data[start..end]
+    }
+
+    pub fn sound_effect_addresses(&self) -> Vec<u16> {
+        let r = self.sfx_soa_addr_range();
+        let r = Range {
+            start: (r.start - addresses::COMMON_DATA).into(),
+            end: (r.end - addresses::COMMON_DATA).into(),
+        };
+        let sfx_soa = &self.data[r];
+
+        let n_sfx = sfx_soa.len() / 4;
+
+        let sfx_addr_and_one_channel_flag_l = &sfx_soa[..n_sfx];
+        let sfx_addr_and_one_channel_flag_h = &sfx_soa[n_sfx..n_sfx * 2];
+
+        std::iter::zip(
+            sfx_addr_and_one_channel_flag_l,
+            sfx_addr_and_one_channel_flag_h,
+        )
+        .map(|(&l, &h)| u16::from_le_bytes([l, h]) & 0x7fff)
+        .collect()
     }
 }
 
