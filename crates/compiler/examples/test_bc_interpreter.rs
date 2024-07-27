@@ -30,14 +30,14 @@ fn load_song(
     common_audio_data: &CommonAudioData,
     song: &SongData,
     stereo_flag: bool,
-    song_data_addr: u16,
 ) -> ShvcSoundEmu {
     const LOADER_DATA_TYPE_ADDR: usize = addresses::LOADER_DATA_TYPE as usize;
 
     let mut emu = ShvcSoundEmu::new(&[0; 64]);
 
-    let song_data = song.data();
     let common_data = common_audio_data.data();
+    let song_data = song.data();
+    let song_data_addr = common_audio_data.song_data_addr();
     let edl = &song.metadata().echo_buffer.edl;
 
     let apuram = emu.apuram_mut();
@@ -276,10 +276,7 @@ fn test_bc_intrepreter(song: &SongData, common_audio_data: &CommonAudioData) {
     let ticks_to_test = song_ticks(song).clamp(TickCounter::new(192), TickCounter::new(0x8000))
         + TickCounter::new(30);
 
-    let song_data_addr = usize::from(addresses::COMMON_DATA) + common_audio_data.data().len();
-    let song_data_addr = u16::try_from(song_data_addr).unwrap();
-
-    let mut emu = load_song(common_audio_data, song, STEREO_FLAG, song_data_addr);
+    let mut emu = load_song(common_audio_data, song, STEREO_FLAG);
 
     // Wait for the audio-driver to finish initialization
     emu.emulate();
@@ -312,14 +309,7 @@ fn test_bc_intrepreter(song: &SongData, common_audio_data: &CommonAudioData) {
 
         let tick_count = TickCounter::new(tick_count.into());
 
-        let intrepreter = interpret_song(
-            song,
-            common_audio_data,
-            STEREO_FLAG,
-            song_data_addr,
-            tick_count,
-        )
-        .unwrap();
+        let intrepreter = interpret_song(song, common_audio_data, STEREO_FLAG, tick_count).unwrap();
 
         assert_bc_intrepreter_matches_emu(intrepreter, &dummy_emu_init, &emu, tick_count);
 

@@ -582,13 +582,7 @@ impl TadEmu {
             StereoFlag::Mono => false,
         };
 
-        let song_data_addr =
-            usize::from(addresses::COMMON_DATA) + common_data.len() + (common_data.len() % 2);
-
-        let song_data_addr = match u16::try_from(song_data_addr) {
-            Ok(a) => a,
-            Err(_) => return Err(()),
-        };
+        let song_data_addr = common_audio_data.song_data_addr();
 
         let apuram = self.emu.apuram_mut();
 
@@ -634,14 +628,12 @@ impl TadEmu {
                     song,
                     common_audio_data,
                     stereo_flag,
-                    song_data_addr,
                     s.target_ticks,
                 ),
                 Some(subroutine_index) => bytecode_interpreter::interpret_song_subroutine(
                     song,
                     common_audio_data,
                     stereo_flag,
-                    song_data_addr,
                     subroutine_index,
                     s.target_ticks,
                 ),

@@ -79,6 +79,8 @@ pub fn export_spc_file(
     common_audio_data: &CommonAudioData,
     song_data: &SongData,
 ) -> Result<Vec<u8>, ExportSpcFileError> {
+    let song_data_addr = common_audio_data.song_data_addr();
+
     let common_audio_data = common_audio_data.data();
     let metadata = song_data.metadata();
     let song_duration = song_data.duration();
@@ -86,10 +88,7 @@ pub fn export_spc_file(
 
     let echo_edl = metadata.echo_buffer.edl;
 
-    let song_data_addr = usize::from(addresses::COMMON_DATA)
-        + common_audio_data.len()
-        + (common_audio_data.len() % 2);
-    let song_end_addr = song_data_addr + song_data.len();
+    let song_end_addr = usize::from(song_data_addr) + song_data.len();
     let echo_buffer_size = echo_edl.buffer_size();
 
     if song_end_addr + echo_buffer_size > AUDIO_RAM_SIZE {
@@ -99,8 +98,6 @@ pub fn export_spc_file(
             echo: echo_buffer_size,
         });
     }
-
-    let song_data_addr = u16::try_from(song_data_addr).unwrap();
 
     // song_data_addr should be even, the loader will always transfer an even number of bytes.
     assert!(song_data_addr % 2 == 0);

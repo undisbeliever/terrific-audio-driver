@@ -266,6 +266,8 @@ pub fn build_common_audio_data(
     let song_data_addr =
         u16::try_from(CAD_ADDR + common_data_size + (common_data_size % 2)).unwrap();
 
+    assert!(song_data_addr % 2 == 0);
+
     Ok(CommonAudioData {
         data: out,
         n_dir_items,

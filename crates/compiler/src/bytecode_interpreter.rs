@@ -67,6 +67,7 @@ pub struct Channel {
 
 pub struct InterpreterOutput {
     channels: [Channel; N_MUSIC_CHANNELS],
+    song_data_addr: u16,
     stereo_flag: bool,
     tick_clock: u8,
 }
@@ -421,7 +422,7 @@ struct CommonAudioDataSoA<'a> {
 }
 
 impl CommonAudioDataSoA<'_> {
-    fn new(c: &CommonAudioData, stereo_flag: bool, song_data_addr: u16) -> CommonAudioDataSoA {
+    fn new(c: &CommonAudioData, stereo_flag: bool) -> CommonAudioDataSoA {
         let inst_soa_data = |i| {
             assert!(i < COMMON_DATA_BYTES_PER_INSTRUMENT);
 
@@ -436,7 +437,7 @@ impl CommonAudioDataSoA<'_> {
 
         CommonAudioDataSoA {
             stereo_flag,
-            song_data_addr,
+            song_data_addr: c.song_data_addr(),
             n_instruments,
             instruments_scrn: inst_soa_data(0),
             instruments_pitch_offset: inst_soa_data(1),
@@ -588,7 +589,6 @@ pub fn interpret_song(
     song: &SongData,
     common_audio_data: &CommonAudioData,
     stereo_flag: bool,
-    song_data_addr: u16,
     target_ticks: TickCounter,
 ) -> Option<InterpreterOutput> {
     let mut tick_clock_override = TickClockOverride {
@@ -597,7 +597,7 @@ pub fn interpret_song(
     };
     let mut valid = true;
 
-    let common = CommonAudioDataSoA::new(common_audio_data, stereo_flag, song_data_addr);
+    let common = CommonAudioDataSoA::new(common_audio_data, stereo_flag);
 
     let channels: [Channel; N_MUSIC_CHANNELS] =
         std::array::from_fn(|i| match song.channels().get(i) {
@@ -621,6 +621,7 @@ pub fn interpret_song(
         Some(InterpreterOutput {
             channels,
             tick_clock: tick_clock_override.timer_register,
+            song_data_addr: common_audio_data.song_data_addr(),
             stereo_flag,
         })
     } else {
@@ -635,7 +636,6 @@ pub fn interpret_song_subroutine(
     song: &SongData,
     common_audio_data: &CommonAudioData,
     stereo_flag: bool,
-    song_data_addr: u16,
     subroutine_index: u8,
     ticks: TickCounter,
 ) -> Option<InterpreterOutput> {
@@ -643,7 +643,7 @@ pub fn interpret_song_subroutine(
         return None;
     }
 
-    let common = CommonAudioDataSoA::new(common_audio_data, stereo_flag, song_data_addr);
+    let common = CommonAudioDataSoA::new(common_audio_data, stereo_flag);
 
     let mut ci = ChannelInterpreter::new_subroutine_intrepreter(song, 0, subroutine_index, ticks);
     let valid = ci.process_until_target();
@@ -664,6 +664,7 @@ pub fn interpret_song_subroutine(
                 Some(tco) => tco.timer_register,
                 None => song.metadata().tick_clock.as_u8(),
             },
+            song_data_addr: common_audio_data.song_data_addr(),
             stereo_flag,
         })
     } else {
@@ -698,7 +699,18 @@ impl InterpreterOutput {
         {
             let apuram: &mut [u8; 0x10000] = emu.apuram_mut();
 
-            // ::SHOULDDO find a way to determine if the audio driver is paused::
+            // Verify songPtr is correct
+            let get_u16 = |addr| {
+                let addr = usize::from(addr);
+                u16::from_le_bytes(apuram[addr..addr + 2].try_into().unwrap())
+            };
+            assert_eq!(
+                get_u16(addresses::SONG_PTR),
+                self.song_data_addr,
+                "songPtr does not match"
+            );
+
+            // ::TODO find a way to determine if the audio driver is paused::
 
             let mut apu_write = |addr: u16, value: u8| {
                 apuram[usize::from(addr)] = value;
