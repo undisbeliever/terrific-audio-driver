@@ -256,8 +256,8 @@ impl ListWithCompilerOutputEditor<data::Song, Result<Arc<SongData>, ShortSongErr
 
 struct DefaultSfxFlagsWidget {
     sender: app::Sender<GuiMessage>,
-    interruptible: CheckButton,
     one_channel: CheckButton,
+    interruptible: CheckButton,
 }
 
 impl DefaultSfxFlagsWidget {
@@ -284,8 +284,8 @@ impl DefaultSfxFlagsWidget {
 
         let out = Rc::new(RefCell::new(DefaultSfxFlagsWidget {
             sender,
-            interruptible: add_checkbox("Interruptible", sfx_flags.interruptible),
             one_channel: add_checkbox("One Channel", sfx_flags.one_channel),
+            interruptible: add_checkbox("Interruptible", sfx_flags.interruptible),
         }));
 
         group.end();
@@ -299,8 +299,8 @@ impl DefaultSfxFlagsWidget {
                     state.borrow().flags_changed();
                 });
             };
-            set_callback(&mut o.interruptible);
             set_callback(&mut o.one_channel);
+            set_callback(&mut o.interruptible);
         }
 
         out
@@ -309,8 +309,8 @@ impl DefaultSfxFlagsWidget {
     fn flags_changed(&self) {
         self.sender
             .send(GuiMessage::DefaultSfxFlagChanged(DefaultSfxFlags {
-                interruptible: self.interruptible.value(),
                 one_channel: self.one_channel.value(),
+                interruptible: self.interruptible.value(),
             }))
     }
 }

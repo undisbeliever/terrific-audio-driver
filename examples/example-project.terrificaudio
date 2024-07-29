@@ -103,8 +103,8 @@
     }
   ],
   "default_sfx_flags": {
-    "interruptible": true,
-    "one_channel": true
+    "one_channel": true,
+    "interruptible": true
   },
   "high_priority_sound_effects": [
     "player_hurt_low_health"

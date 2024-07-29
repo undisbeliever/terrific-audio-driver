@@ -288,15 +288,15 @@ pub struct Sample {
 
 #[derive(Deserialize, Serialize, Clone, Copy, PartialEq, Debug)]
 pub struct DefaultSfxFlags {
-    pub interruptible: bool,
     pub one_channel: bool,
+    pub interruptible: bool,
 }
 
 impl Default for DefaultSfxFlags {
     fn default() -> Self {
         Self {
-            interruptible: true,
             one_channel: true,
+            interruptible: true,
         }
     }
 }

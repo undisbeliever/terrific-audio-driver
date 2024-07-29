@@ -39,8 +39,8 @@ enum SfxData {
 
 #[derive(Default, Clone, Debug, PartialEq)]
 pub struct SfxFlags {
-    pub interruptible: Option<bool>,
     pub one_channel: Option<bool>,
+    pub interruptible: Option<bool>,
 }
 
 #[derive(Debug)]
