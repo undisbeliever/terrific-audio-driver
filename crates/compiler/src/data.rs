@@ -46,14 +46,12 @@ impl Name {
         let mut iter = s.bytes();
 
         // first character
-        match iter.next() {
-            // Empty name
-            None => return false,
-            Some(b) => match b {
+        if let Some(b) = iter.next() {
+            match b {
                 b'A'..=b'Z' | b'a'..=b'z' | b'_' => {}
                 _ => return false,
-            },
-        };
+            }
+        }
 
         for b in iter {
             match b {
