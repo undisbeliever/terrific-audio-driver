@@ -339,7 +339,7 @@ impl Project {
 
             project_tab: ProjectTab::new(&data, sender.clone()),
             samples_tab: SamplesTab::new(&data.instruments_and_samples, sender.clone()),
-            sound_effects_tab: SoundEffectsTab::new(sender.clone()),
+            sound_effects_tab: SoundEffectsTab::new(data.default_sfx_flags, sender.clone()),
             closed_song_tabs: Vec::new(),
             song_tabs: HashMap::new(),
 
@@ -379,6 +379,8 @@ impl Project {
                 let _ = self
                     .compiler_sender
                     .send(ToCompiler::DefaultSfxFlagChanged(flags));
+
+                self.sound_effects_tab.default_sfx_flags_changed(flags);
 
                 self.tab_manager.mark_unsaved(FileType::Project);
             }

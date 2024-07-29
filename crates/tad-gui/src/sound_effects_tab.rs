@@ -16,7 +16,7 @@ use crate::tabs::{FileType, Tab};
 use crate::{helpers::*, ProjectSongsData};
 use crate::{GuiMessage, ProjectData, SoundEffectsData};
 
-use compiler::data::Name;
+use compiler::data::{DefaultSfxFlags, Name};
 use compiler::driver_constants::{CENTER_PAN, MAX_PAN};
 use compiler::errors::SfxErrorLines;
 use compiler::sfx_file::SoundEffectsFile;
@@ -192,7 +192,7 @@ impl Tab for SoundEffectsTab {
 }
 
 impl SoundEffectsTab {
-    pub fn new(sender: app::Sender<GuiMessage>) -> Self {
+    pub fn new(sfx_flags: DefaultSfxFlags, sender: app::Sender<GuiMessage>) -> Self {
         let mut group = Flex::default_fill().row();
 
         // Sidebar
@@ -409,6 +409,8 @@ impl SoundEffectsTab {
         {
             let mut s = state.borrow_mut();
 
+            s.default_sfx_flags_changed(sfx_flags);
+
             s.sound_effect_type.set_callback({
                 let s = state.clone();
                 move |_widget| {
@@ -513,6 +515,12 @@ impl SoundEffectsTab {
 
     pub fn is_missing_sfx(&mut self) -> bool {
         self.missing_sfx
+    }
+
+    pub fn default_sfx_flags_changed(&mut self, flags: DefaultSfxFlags) {
+        if let Ok(mut s) = self.state.try_borrow_mut() {
+            s.default_sfx_flags_changed(flags);
+        }
     }
 
     pub fn n_missing_sfx_changed(&mut self, n_missing: usize) {
@@ -730,6 +738,13 @@ impl State {
         }
     }
 
+    fn default_sfx_flags_changed(&mut self, flags: DefaultSfxFlags) {
+        self.one_channel_flag
+            .update_default_label(flags.one_channel);
+        self.interruptible_flag
+            .update_default_label(flags.interruptible);
+    }
+
     fn sound_effect_type_changed(&mut self) {
         let f = match SoundEffectTypeChoice::read_widget(&self.sound_effect_type) {
             SoundEffectTypeChoice::BytecodeAssembly => TextFormat::Bytecode,
@@ -928,6 +943,9 @@ struct SfxFlagRadios {
     set: RadioRoundButton,
     clear: RadioRoundButton,
     default: RadioRoundButton,
+
+    default_set: String,
+    default_clear: String,
 }
 
 impl SfxFlagRadios {
@@ -967,7 +985,16 @@ impl SfxFlagRadios {
             default,
             set,
             clear,
+            default_set: format!("Default ({set_label})"),
+            default_clear: format!("Default ({clear_label})"),
         }
+    }
+
+    fn update_default_label(&mut self, default: bool) {
+        self.default.set_label(match default {
+            true => &self.default_set,
+            false => &self.default_clear,
+        });
     }
 
     fn value(&self) -> Option<bool> {
