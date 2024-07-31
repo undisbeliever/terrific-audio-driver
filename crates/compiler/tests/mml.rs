@@ -1050,6 +1050,9 @@ fn test_large_adjust_volume() {
 
     assert_line_matches_bytecode("v+16", &["set_volume 255"]);
     assert_line_matches_bytecode("v-16", &["set_volume 0"]);
+
+    assert_line_matches_bytecode("V+200 V+200 V-10", &["set_volume 245"]);
+    assert_line_matches_bytecode("V-200 V-200 V+10", &["set_volume 10"]);
 }
 
 // Tests if a large relative pan command turns into an absolute pan command
@@ -1064,6 +1067,9 @@ fn test_large_adjust_pan() {
     assert_line_matches_bytecode("p-128", &["set_pan 0"]);
     assert_line_matches_bytecode("p-200", &["set_pan 0"]);
     assert_line_matches_bytecode("p-100 p-100", &["set_pan 0"]);
+
+    assert_line_matches_bytecode("p+100 p+100 p-10", &["set_pan 118"]);
+    assert_line_matches_bytecode("p-100 p-100 p+10", &["set_pan 10"]);
 }
 
 #[test]
