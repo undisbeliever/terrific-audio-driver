@@ -107,7 +107,7 @@ Licenses marked "synthesized" did not have a license file in their crate.
 
 
 Terrific Audio Driver makes use of the following open source projects:
-  * MIT License (79)
+  * MIT License (80)
   * Apache License 2.0 (2)
   * Unicode License Agreement - Data Files and Software (2016) (1)
   * FLTK License (1)
@@ -389,15 +389,15 @@ limitations under the License.
 
 Used by:
   * [windows-sys 0.52.0](https://github.com/microsoft/windows-rs)
-  * [windows-targets 0.52.5](https://github.com/microsoft/windows-rs)
-  * [windows_aarch64_gnullvm 0.52.5](https://github.com/microsoft/windows-rs)
-  * [windows_aarch64_msvc 0.52.5](https://github.com/microsoft/windows-rs)
-  * [windows_i686_gnu 0.52.5](https://github.com/microsoft/windows-rs)
-  * [windows_i686_gnullvm 0.52.5](https://github.com/microsoft/windows-rs)
-  * [windows_i686_msvc 0.52.5](https://github.com/microsoft/windows-rs)
-  * [windows_x86_64_gnu 0.52.5](https://github.com/microsoft/windows-rs)
-  * [windows_x86_64_gnullvm 0.52.5](https://github.com/microsoft/windows-rs)
-  * [windows_x86_64_msvc 0.52.5](https://github.com/microsoft/windows-rs)
+  * [windows-targets 0.52.6](https://github.com/microsoft/windows-rs)
+  * [windows_aarch64_gnullvm 0.52.6](https://github.com/microsoft/windows-rs)
+  * [windows_aarch64_msvc 0.52.6](https://github.com/microsoft/windows-rs)
+  * [windows_i686_gnu 0.52.6](https://github.com/microsoft/windows-rs)
+  * [windows_i686_gnullvm 0.52.6](https://github.com/microsoft/windows-rs)
+  * [windows_i686_msvc 0.52.6](https://github.com/microsoft/windows-rs)
+  * [windows_x86_64_gnu 0.52.6](https://github.com/microsoft/windows-rs)
+  * [windows_x86_64_gnullvm 0.52.6](https://github.com/microsoft/windows-rs)
+  * [windows_x86_64_msvc 0.52.6](https://github.com/microsoft/windows-rs)
 
 ```
     MIT License
@@ -428,7 +428,7 @@ Used by:
 ## MIT License
 
 Used by:
-  * [markdown 1.0.0-alpha.17](https://github.com/wooorm/markdown-rs)
+  * [markdown 1.0.0-alpha.18](https://github.com/wooorm/markdown-rs)
 
 ```
 (The MIT License)
@@ -460,7 +460,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ## MIT License
 
 Used by:
-  * [lazy_static 1.4.0](https://github.com/rust-lang-nursery/lazy-static.rs)
+  * [lazy_static 1.5.0](https://github.com/rust-lang-nursery/lazy-static.rs)
 
 ```
 Copyright (c) 2010 The Rust Project Developers
@@ -495,7 +495,7 @@ DEALINGS IN THE SOFTWARE.
 ## MIT License
 
 Used by:
-  * [cc 1.0.99](https://github.com/rust-lang/cc-rs)
+  * [cc 1.1.7](https://github.com/rust-lang/cc-rs)
   * [cfg-if 1.0.0](https://github.com/alexcrichton/cfg-if)
   * [cmake 0.1.50](https://github.com/rust-lang/cmake-rs)
 
@@ -533,7 +533,7 @@ DEALINGS IN THE SOFTWARE.
 
 Used by:
   * [bitflags 1.3.2](https://github.com/bitflags/bitflags)
-  * [bitflags 2.5.0](https://github.com/bitflags/bitflags)
+  * [bitflags 2.6.0](https://github.com/bitflags/bitflags)
   * [num-complex 0.4.6](https://github.com/rust-num/num-complex)
   * [num-traits 0.2.19](https://github.com/rust-num/num-traits)
   * [regex-automata 0.4.7](https://github.com/rust-lang/regex/tree/master/regex-automata)
@@ -637,7 +637,7 @@ DEALINGS IN THE SOFTWARE.
 ## MIT License
 
 Used by:
-  * [anstyle-wincon 3.0.3](https://github.com/rust-cli/anstyle.git)
+  * [anstyle-wincon 3.0.4](https://github.com/rust-cli/anstyle.git)
 
 ```
 Copyright (c) 2015 Josh Triplett, 2022 The rust-cli Developers
@@ -738,7 +738,7 @@ DEALINGS IN THE SOFTWARE.
 ## MIT License
 
 Used by:
-  * [anstyle-parse 0.2.4](https://github.com/rust-cli/anstyle.git)
+  * [anstyle-parse 0.2.5](https://github.com/rust-cli/anstyle.git)
 
 ```
 Copyright (c) 2016 Joe Wilm and individual contributors
@@ -873,7 +873,7 @@ DEALINGS IN THE SOFTWARE.
 ## MIT License
 
 Used by:
-  * [ttf-parser 0.21.1](https://github.com/RazrFalcon/ttf-parser)
+  * [ttf-parser 0.24.0](https://github.com/RazrFalcon/ttf-parser)
 
 ```
 Copyright (c) 2018 Yevhenii Reizner
@@ -903,7 +903,7 @@ THE SOFTWARE.
 ## MIT License
 
 Used by:
-  * [anstyle 1.0.7](https://github.com/rust-cli/anstyle.git)
+  * [anstyle 1.0.8](https://github.com/rust-cli/anstyle.git)
 
 ```
 Copyright (c) 2022 The rust-cli Developers
@@ -932,11 +932,11 @@ SOFTWARE.
 ## MIT License
 
 Used by:
-  * [anstream 0.6.14](https://github.com/rust-cli/anstyle.git)
-  * [anstyle-query 1.1.0](https://github.com/rust-cli/anstyle)
-  * [clap 4.5.7](https://github.com/clap-rs/clap)
-  * [colorchoice 1.0.1](https://github.com/rust-cli/anstyle)
-  * [is_terminal_polyfill 1.70.0](https://github.com/polyfill-rs/is_terminal_polyfill)
+  * [anstream 0.6.15](https://github.com/rust-cli/anstyle.git)
+  * [anstyle-query 1.1.1](https://github.com/rust-cli/anstyle)
+  * [clap 4.5.11](https://github.com/clap-rs/clap)
+  * [colorchoice 1.0.2](https://github.com/rust-cli/anstyle)
+  * [is_terminal_polyfill 1.70.1](https://github.com/polyfill-rs/is_terminal_polyfill)
 
 ```
 Copyright (c) Individual contributors
@@ -1098,8 +1098,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 ## MIT License
 
 Used by:
-  * [fltk-sys 1.4.31](https://github.com/fltk-rs/fltk-rs)
-  * [fltk 1.4.31](https://github.com/fltk-rs/fltk-rs)
+  * [fltk-sys 1.4.33](https://github.com/fltk-rs/fltk-rs)
+  * [fltk 1.4.33](https://github.com/fltk-rs/fltk-rs)
 
 ```
 MIT License
@@ -1138,13 +1138,13 @@ Used by:
   * [link-cplusplus 1.0.9](https://github.com/dtolnay/link-cplusplus)
   * [once_cell 1.19.0](https://github.com/matklad/once_cell)
   * [paste 1.0.15](https://github.com/dtolnay/paste)
-  * [proc-macro2 1.0.85](https://github.com/dtolnay/proc-macro2)
+  * [proc-macro2 1.0.86](https://github.com/dtolnay/proc-macro2)
   * [quote 1.0.36](https://github.com/dtolnay/quote)
   * [scratch 1.0.7](https://github.com/dtolnay/scratch)
-  * [serde 1.0.203](https://github.com/serde-rs/serde)
-  * [serde_derive 1.0.203](https://github.com/serde-rs/serde)
-  * [serde_json 1.0.117](https://github.com/serde-rs/json)
-  * [syn 2.0.66](https://github.com/dtolnay/syn)
+  * [serde 1.0.204](https://github.com/serde-rs/serde)
+  * [serde_derive 1.0.204](https://github.com/serde-rs/serde)
+  * [serde_json 1.0.121](https://github.com/serde-rs/json)
+  * [syn 2.0.72](https://github.com/dtolnay/syn)
   * [unicode-ident 1.0.12](https://github.com/dtolnay/unicode-ident)
 
 ```
@@ -1274,9 +1274,9 @@ SOFTWARE.
 ## MIT License
 
 Used by:
-  * [clap_builder 4.5.7](https://github.com/clap-rs/clap)
-  * [clap_derive 4.5.5](https://github.com/clap-rs/clap)
-  * [clap_lex 0.7.1](https://github.com/clap-rs/clap)
+  * [clap_builder 4.5.11](https://github.com/clap-rs/clap)
+  * [clap_derive 4.5.11](https://github.com/clap-rs/clap)
+  * [clap_lex 0.7.2](https://github.com/clap-rs/clap)
 
 ```
 The MIT License (MIT)
@@ -1377,6 +1377,7 @@ DEALINGS IN THE SOFTWARE.
 
 Used by:
   * [aho-corasick 1.1.3](https://github.com/BurntSushi/aho-corasick)
+  * [memchr 2.7.4](https://github.com/BurntSushi/memchr)
   * [termcolor 1.4.1](https://github.com/BurntSushi/termcolor)
   * [winapi-util 0.1.8](https://github.com/BurntSushi/winapi-util)
 
