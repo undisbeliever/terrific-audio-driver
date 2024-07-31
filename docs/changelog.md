@@ -7,27 +7,45 @@ Version 0.0.10
 **CAUTION**: This release changes the data formats and IO commands.
 You must update the audio driver and ca65/PVSnesLib API.
 
+TLDR:
+ * 8 music channels.
+ * New sound effect dropout behaviour [(documentation)](sound-effects.md).
+ * Made the ca65/PVSnesLib sound effect queue public.
+ * Added a `PAUSE_MUSIC_PLAY_SFX` IO command.
+ * Lots of space saving optimisations.
+
 
 Audio driver changes:
  * Increased the number of music channels to 8.
- * Rewrote the main loop
+ * Rewrote the main loop.
     * Virtual channel valid/dirty state is stored in a bitset in preparation for channel ducking.
     * IO ports are read a lot more often.
     * Changed how disabled channels are handled.
- * Added a `channelSoA.volShadowValid` flag.
-    * `vol_l` and `vol_r` are now calculated after the bytecode has been processed.
- * `return_from_subroutine` bytecode instruction disables the channel if it is not in a subroutine.
- * Optimised `skip_last_loop` bytecode instructions
- * Added sound effect dropout behaviour. [(documentation)](sound-effects.md)
-    * Low-priority sound effects will not play if both sfx channels are active
-    * Added *interruptible* flag to sound effects
+ * Added sound effect dropout behaviour [(documentation)](sound-effects.md).
+    * Added *interruptible* flag to sound effects.
     * Sound effects with the *one-channel* flag set will play on at most 1 sfx channel.  
       If there is a `play_sound_effect` command for a *one-channel* sound effect that is already playing:
        * The sound effect will be reset if the sound effect is *interruptible*.
        * The `play_sound_effect` command will be dropped if the sound effect is not *interruptible*.
- * Moved common audio data Structure of Arrays pointers to common audio data
-    * The amount of available Audio-RAM is unchanged.
+    * High-priority sound effects will ignore the *interruptible* flag if both sfx channels are uninterruptible.
+    * Low-priority sound effects will not play if both sfx channels are active.
  * The pitch table is now variable-sized.
+ * Added a `channelSoA.volShadowValid` flag.
+    * `vol_l` and `vol_r` are now calculated after the bytecode has been processed.
+ * `return_from_subroutine` bytecode instruction disables the channel if it is not in a subroutine.
+ * Moved common audio data Structure of Arrays pointers to common audio data.
+    * The amount of available Audio-RAM is unchanged.
+ * Lots of little space-saving optimisations.
+
+MML Changes:
+ * Fixed merged relative volume commands clamping to an i8 (-128..=+127).
+    * `V+100 V+100` will now correctly merge into a single `V+200` command.
+ * Support larger values for `v+`/`v-`/`V+`/`V-` relative volume commands.
+ * Optimise saturating relative volume command into absolute pan commands.
+   (For example, `V+255` is transformed into `V255` and `V-255` is transformed into `V0`).
+ * Support larger values for `p+`/`p-` relative pan commands.
+ * Optimise saturating relative pan command into absolute pan commands.
+   (For example, `p+200` is transformed into `p128` and `p-100` is transformed into `p0`.)
 
 IO Command changes:
  * Removed `SET_ENABLED_CHANNELS` IO command, replaced with `SET_MUSIC_CHANNELS`.
@@ -52,16 +70,10 @@ GUI changes:
     * Fixed instrument and sample tables button enabled/disabled state.
     * Fixed missing name deduplication in instrument and sample tables.
     * Fixed name deduplicator not detecting an already deduplicated name.
-
-MML Changes:
- * Fixed merged relative volume commands clamping to an i8 (-128..=+127).
-    * `V+100 V+100` will now correctly merge into a single `V+200` command.
- * Support larger values for `v+`/`v-`/`V+`/`V-` relative volume commands.
- * Optimise saturating relative volume command into absolute pan commands.
-   (For example, `V+255` is transformed into `V255` and `V-255` is transformed into `V0`).
- * Support larger values for `p+`/`p-` relative pan commands.
- * Optimise saturating relative pan command into absolute pan commands.
-   (For example, `p+200` is transformed into `p128` and `p-100` is transformed into `p0`.)
+ * Added pitch table size to the sample sizes widget.
+ * Fixed sound effects window not playing selected sound effect with spacebar.
+ * Fixed sound effects window selection scrolling and clicking without moving the mouse cursor.
+ * Fixed pan slider playing from both speakers when 100% to the right
 
 
 Version 0.0.9
