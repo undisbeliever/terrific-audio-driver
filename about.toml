@@ -1,6 +1,6 @@
 # cargo-about configuration
 #
-# Used to generate the `docs/licences.md` file.
+# Used to generate the `docs/licenses.md` and `docs/licenses-short.md` files.
 
 accepted = [
     # In order of priority (if a project is multi-licensed)
