@@ -28,6 +28,6 @@ Build Requirements
 
 Licensing
 =========
-The `shvc-sound-emu` crate is released under the [ISC licence](LICENSE) (the same licence as ares).
+The `shvc-sound-emu` crate is released under the [ISC license](LICENSE) (the same license as ares).
 
 
