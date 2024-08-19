@@ -54,7 +54,9 @@ impl Bpm {
     }
 }
 
-// TickCounter can only be incremented
+/// A tick counter that can only be incremented
+///
+/// CAUTION: TickCounter uses saturating_add to ensure it never overflows in release mode.
 #[derive(Copy, Clone, Default, Eq, PartialEq, PartialOrd, Ord, Debug)]
 pub struct TickCounter {
     value: u32,
@@ -89,14 +91,14 @@ impl std::ops::Add for TickCounter {
 
     fn add(self, b: Self) -> Self {
         TickCounter {
-            value: self.value + b.value,
+            value: self.value.saturating_add(b.value),
         }
     }
 }
 
 impl std::ops::AddAssign for TickCounter {
     fn add_assign(&mut self, b: Self) {
-        self.value += b.value;
+        self.value = self.value.saturating_add(b.value);
     }
 }
 

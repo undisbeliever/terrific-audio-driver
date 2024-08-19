@@ -761,9 +761,12 @@ impl Bytecode {
 
             assert!(ticks_skipped_in_last_loop < ticks_in_loop);
 
-            self.tick_counter += TickCounter::new(
-                (ticks_in_loop * (loop_count_u32 - 1)) - ticks_skipped_in_last_loop,
-            );
+            let ticks_to_add = ticks_in_loop
+                .checked_mul(loop_count_u32 - 1)
+                .and_then(|t| t.checked_sub(ticks_skipped_in_last_loop))
+                .unwrap_or(u32::MAX);
+
+            self.tick_counter += TickCounter::new(ticks_to_add);
         }
 
         // Write the loop_count parameter for the start_loop instruction (if required)
