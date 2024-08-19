@@ -107,8 +107,9 @@ Licenses marked "synthesized" did not have a license file in their crate.
 
 
 Terrific Audio Driver makes use of the following open source projects:
-  * MIT License (80)
+  * MIT License (83)
   * Apache License 2.0 (2)
+  * zlib License (2)
   * Unicode License Agreement - Data Files and Software (2016) (1)
   * FLTK License (1)
 
@@ -428,7 +429,7 @@ Used by:
 ## MIT License
 
 Used by:
-  * [markdown 1.0.0-alpha.18](https://github.com/wooorm/markdown-rs)
+  * [markdown 1.0.0-alpha.20](https://github.com/wooorm/markdown-rs)
 
 ```
 (The MIT License)
@@ -495,9 +496,9 @@ DEALINGS IN THE SOFTWARE.
 ## MIT License
 
 Used by:
-  * [cc 1.1.7](https://github.com/rust-lang/cc-rs)
+  * [cc 1.1.13](https://github.com/rust-lang/cc-rs)
   * [cfg-if 1.0.0](https://github.com/alexcrichton/cfg-if)
-  * [cmake 0.1.50](https://github.com/rust-lang/cmake-rs)
+  * [cmake 0.1.51](https://github.com/rust-lang/cmake-rs)
 
 ```
 Copyright (c) 2014 Alex Crichton
@@ -538,7 +539,7 @@ Used by:
   * [num-traits 0.2.19](https://github.com/rust-num/num-traits)
   * [regex-automata 0.4.7](https://github.com/rust-lang/regex/tree/master/regex-automata)
   * [regex-syntax 0.8.4](https://github.com/rust-lang/regex/tree/master/regex-syntax)
-  * [regex 1.10.5](https://github.com/rust-lang/regex)
+  * [regex 1.10.6](https://github.com/rust-lang/regex)
 
 ```
 Copyright (c) 2014 The Rust Project Developers
@@ -602,7 +603,7 @@ IN THE SOFTWARE.
 ## MIT License
 
 Used by:
-  * [libc 0.2.155](https://github.com/rust-lang/libc)
+  * [libc 0.2.158](https://github.com/rust-lang/libc)
 
 ```
 Copyright (c) 2014-2020 The Rust Project Developers
@@ -873,7 +874,7 @@ DEALINGS IN THE SOFTWARE.
 ## MIT License
 
 Used by:
-  * [ttf-parser 0.24.0](https://github.com/RazrFalcon/ttf-parser)
+  * [ttf-parser 0.24.1](https://github.com/RazrFalcon/ttf-parser)
 
 ```
 Copyright (c) 2018 Yevhenii Reizner
@@ -934,7 +935,7 @@ SOFTWARE.
 Used by:
   * [anstream 0.6.15](https://github.com/rust-cli/anstyle.git)
   * [anstyle-query 1.1.1](https://github.com/rust-cli/anstyle)
-  * [clap 4.5.11](https://github.com/clap-rs/clap)
+  * [clap 4.5.16](https://github.com/clap-rs/clap)
   * [colorchoice 1.0.2](https://github.com/rust-cli/anstyle)
   * [is_terminal_polyfill 1.70.1](https://github.com/polyfill-rs/is_terminal_polyfill)
 
@@ -989,6 +990,37 @@ Used by:
 MIT License
 
 Copyright (c) 2017 Nikolai Vazquez
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+```
+
+
+## MIT License
+
+Used by:
+  * [fltk-sys 1.4.33](https://github.com/fltk-rs/fltk-rs)
+
+```
+MIT License
+
+Copyright (c) 2019 Mohammed Alyousef
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -1079,7 +1111,7 @@ SOFTWARE.
 
 Used by:
   * [relative-path 1.9.3](https://github.com/udoprog/relative-path)
-  * [sdl2-sys 0.35.2](https://github.com/rust-sdl2/rust-sdl2)
+  * [sdl2-sys 0.37.0](https://github.com/rust-sdl2/rust-sdl2)
 
 ```
 MIT License
@@ -1130,10 +1162,39 @@ SOFTWARE.
 ## MIT License
 
 Used by:
-  * [cxx-build 1.0.124](https://github.com/dtolnay/cxx)
-  * [cxx 1.0.124](https://github.com/dtolnay/cxx)
-  * [cxxbridge-flags 1.0.124](https://github.com/dtolnay/cxx)
-  * [cxxbridge-macro 1.0.124](https://github.com/dtolnay/cxx)
+  * [fltk-sys 1.4.33](https://github.com/fltk-rs/fltk-rs)
+
+```
+MIT License
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+```
+
+
+## MIT License
+
+Used by:
+  * [cxx-build 1.0.125](https://github.com/dtolnay/cxx)
+  * [cxx 1.0.125](https://github.com/dtolnay/cxx)
+  * [cxxbridge-flags 1.0.125](https://github.com/dtolnay/cxx)
+  * [cxxbridge-macro 1.0.125](https://github.com/dtolnay/cxx)
   * [itoa 1.0.11](https://github.com/dtolnay/itoa)
   * [link-cplusplus 1.0.9](https://github.com/dtolnay/link-cplusplus)
   * [once_cell 1.19.0](https://github.com/matklad/once_cell)
@@ -1141,10 +1202,10 @@ Used by:
   * [proc-macro2 1.0.86](https://github.com/dtolnay/proc-macro2)
   * [quote 1.0.36](https://github.com/dtolnay/quote)
   * [scratch 1.0.7](https://github.com/dtolnay/scratch)
-  * [serde 1.0.204](https://github.com/serde-rs/serde)
-  * [serde_derive 1.0.204](https://github.com/serde-rs/serde)
-  * [serde_json 1.0.121](https://github.com/serde-rs/json)
-  * [syn 2.0.72](https://github.com/dtolnay/syn)
+  * [serde 1.0.208](https://github.com/serde-rs/serde)
+  * [serde_derive 1.0.208](https://github.com/serde-rs/serde)
+  * [serde_json 1.0.125](https://github.com/serde-rs/json)
+  * [syn 2.0.75](https://github.com/dtolnay/syn)
   * [unicode-ident 1.0.12](https://github.com/dtolnay/unicode-ident)
 
 ```
@@ -1178,7 +1239,7 @@ DEALINGS IN THE SOFTWARE.
 ## MIT License
 
 Used by:
-  * [sdl2 0.35.2](https://github.com/Rust-SDL2/rust-sdl2)
+  * [sdl2 0.37.0](https://github.com/Rust-SDL2/rust-sdl2)
 
 ```
 The MIT License (MIT)
@@ -1274,8 +1335,39 @@ SOFTWARE.
 ## MIT License
 
 Used by:
-  * [clap_builder 4.5.11](https://github.com/clap-rs/clap)
-  * [clap_derive 4.5.11](https://github.com/clap-rs/clap)
+  * [shlex 1.3.0](https://github.com/comex/rust-shlex)
+
+```
+The MIT License (MIT)
+
+Copyright (c) 2015 Nicholas Allegra (comex).
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+
+```
+
+
+## MIT License
+
+Used by:
+  * [clap_builder 4.5.15](https://github.com/clap-rs/clap)
+  * [clap_derive 4.5.13](https://github.com/clap-rs/clap)
   * [clap_lex 0.7.2](https://github.com/clap-rs/clap)
 
 ```
@@ -1307,7 +1399,7 @@ SOFTWARE.
 ## MIT License
 
 Used by:
-  * [winapi-util 0.1.8](https://github.com/BurntSushi/winapi-util)
+  * [winapi-util 0.1.9](https://github.com/BurntSushi/winapi-util)
 
 ```
 The MIT License (MIT)
@@ -1379,7 +1471,7 @@ Used by:
   * [aho-corasick 1.1.3](https://github.com/BurntSushi/aho-corasick)
   * [memchr 2.7.4](https://github.com/BurntSushi/memchr)
   * [termcolor 1.4.1](https://github.com/BurntSushi/termcolor)
-  * [winapi-util 0.1.8](https://github.com/BurntSushi/winapi-util)
+  * [winapi-util 0.1.9](https://github.com/BurntSushi/winapi-util)
 
 ```
 This project is dual-licensed under the Unlicense and MIT licenses.
@@ -1419,6 +1511,63 @@ Permission is hereby granted, free of charge, to any person obtaining a copy of 
 THE DATA FILES AND SOFTWARE ARE PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT OF THIRD PARTY RIGHTS. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR HOLDERS INCLUDED IN THIS NOTICE BE LIABLE FOR ANY CLAIM, OR ANY SPECIAL INDIRECT OR CONSEQUENTIAL DAMAGES, OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THE DATA FILES OR SOFTWARE.
 
 Except as contained in this notice, the name of a copyright holder shall not be used in advertising or otherwise to promote the sale, use or other dealings in these Data Files or Software without prior written authorization of the copyright holder.
+
+```
+
+
+## zlib License
+
+Used by:
+  * [sdl2-sys 0.37.0](https://github.com/rust-sdl2/rust-sdl2)
+
+```
+
+Simple DirectMedia Layer
+Copyright (C) 1997-2023 Sam Lantinga <slouken@libsdl.org>
+  
+This software is provided 'as-is', without any express or implied
+warranty.  In no event will the authors be held liable for any damages
+arising from the use of this software.
+
+Permission is granted to anyone to use this software for any purpose,
+including commercial applications, and to alter it and redistribute it
+freely, subject to the following restrictions:
+  
+1. The origin of this software must not be misrepresented; you must not
+   claim that you wrote the original software. If you use this software
+   in a product, an acknowledgment in the product documentation would be
+   appreciated but is not required. 
+2. Altered source versions must be plainly marked as such, and must not be
+   misrepresented as being the original software.
+3. This notice may not be removed or altered from any source distribution.
+
+```
+
+
+## zlib License
+
+Used by:
+  * [sdl2-sys 0.37.0](https://github.com/rust-sdl2/rust-sdl2)
+
+```
+Copyright (C) 1997-2023 Sam Lantinga <slouken@libsdl.org>
+  
+This software is provided 'as-is', without any express or implied
+warranty.  In no event will the authors be held liable for any damages
+arising from the use of this software.
+
+Permission is granted to anyone to use this software for any purpose,
+including commercial applications, and to alter it and redistribute it
+freely, subject to the following restrictions:
+  
+1. The origin of this software must not be misrepresented; you must not
+   claim that you wrote the original software. If you use this software
+   in a product, an acknowledgment in the product documentation would be
+   appreciated but is not required. 
+2. Altered source versions must be plainly marked as such, and must not be
+   misrepresented as being the original software.
+3. This notice may not be removed or altered from any source distribution.
+
 
 ```
 

@@ -5,6 +5,7 @@
 accepted = [
     # In order of priority (if a project is multi-licensed)
     "MIT",
+    "Zlib",
     "Apache-2.0",
     "Unicode-DFS-2016",
 ]

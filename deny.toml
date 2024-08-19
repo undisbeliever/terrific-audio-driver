@@ -8,6 +8,7 @@ confidence-threshold = 0.93
 allow = [
     "MIT",
     "ISC",
+    "Zlib",
     "Apache-2.0",
     "Unicode-DFS-2016",
 ]
