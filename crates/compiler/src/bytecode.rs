@@ -6,7 +6,9 @@
 
 #![allow(clippy::assertions_on_constants)]
 
-use crate::driver_constants::MAX_INSTRUMENTS_AND_SAMPLES;
+use crate::driver_constants::{
+    BC_CHANNEL_STACK_SIZE, BC_STACK_BYTES_PER_LOOP, MAX_INSTRUMENTS_AND_SAMPLES,
+};
 use crate::envelope::{Adsr, Gain};
 use crate::errors::{BytecodeError, ValueError};
 use crate::notes::{Note, LAST_NOTE_ID};
@@ -16,7 +18,11 @@ use crate::value_newtypes::{i8_value_newtype, u8_value_newtype, ValueNewType};
 use std::cmp::max;
 
 pub const KEY_OFF_TICK_DELAY: u32 = 1;
-pub const MAX_NESTED_LOOPS: u8 = 3;
+
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord)]
+pub struct StackDepth(u32);
+
+const MAX_STACK_DEPTH: StackDepth = StackDepth(BC_CHANNEL_STACK_SIZE as u32);
 
 pub const LAST_PLAY_NOTE_OPCODE: u8 = 0xbf;
 
@@ -58,35 +64,29 @@ pub mod opcodes {
     pub const REST_KEYOFF: u8 = 0xca;
     pub const CALL_SUBROUTINE: u8 = 0xcc;
 
-    pub const START_LOOP_0: u8 = 0xce;
-    pub const START_LOOP_1: u8 = 0xd0;
-    pub const START_LOOP_2: u8 = 0xd2;
-    pub const SKIP_LAST_LOOP_0: u8 = 0xd4;
-    pub const SKIP_LAST_LOOP_1: u8 = 0xd6;
-    pub const SKIP_LAST_LOOP_2: u8 = 0xd8;
+    pub const SET_INSTRUMENT: u8 = 0xce;
+    pub const SET_INSTRUMENT_AND_ADSR_OR_GAIN: u8 = 0xd0;
+    pub const SET_ADSR: u8 = 0xd2;
+    pub const SET_GAIN: u8 = 0xd4;
 
-    pub const SET_INSTRUMENT: u8 = 0xda;
-    pub const SET_INSTRUMENT_AND_ADSR_OR_GAIN: u8 = 0xdc;
-    pub const SET_ADSR: u8 = 0xde;
-    pub const SET_GAIN: u8 = 0xe0;
+    pub const ADJUST_PAN: u8 = 0xd6;
+    pub const SET_PAN: u8 = 0xd8;
+    pub const SET_PAN_AND_VOLUME: u8 = 0xda;
+    pub const ADJUST_VOLUME: u8 = 0xdc;
+    pub const SET_VOLUME: u8 = 0xde;
 
-    pub const ADJUST_PAN: u8 = 0xe2;
-    pub const SET_PAN: u8 = 0xe4;
-    pub const SET_PAN_AND_VOLUME: u8 = 0xe6;
-    pub const ADJUST_VOLUME: u8 = 0xe8;
-    pub const SET_VOLUME: u8 = 0xea;
+    pub const SET_SONG_TICK_CLOCK: u8 = 0xe0;
 
-    pub const SET_SONG_TICK_CLOCK: u8 = 0xec;
+    pub const START_LOOP: u8 = 0xe2;
+    pub const SKIP_LAST_LOOP: u8 = 0xe4;
 
-    pub const END: u8 = 0xee;
-    pub const RETURN_FROM_SUBROUTINE: u8 = 0xf0;
-    pub const END_LOOP_0: u8 = 0xf2;
-    pub const END_LOOP_1: u8 = 0xf4;
-    pub const END_LOOP_2: u8 = 0xf6;
+    pub const END_LOOP: u8 = 0xe6;
+    pub const END: u8 = 0xe8;
+    pub const RETURN_FROM_SUBROUTINE: u8 = 0xea;
+    pub const ENABLE_ECHO: u8 = 0xec;
+    pub const DISABLE_ECHO: u8 = 0xee;
 
-    pub const ENABLE_ECHO: u8 = 0xf8;
-    pub const DISABLE_ECHO: u8 = 0xfa;
-
+    // Last opcode
     pub const DISABLE_CHANNEL: u8 = 0xfe;
 }
 
@@ -103,15 +103,15 @@ u8_value_newtype!(
 pub struct SubroutineId {
     id: u8,
     tick_counter: TickCounter,
-    max_nested_loops: usize,
+    max_stack_depth: StackDepth,
 }
 
 impl SubroutineId {
-    pub fn new(id: u8, tick_counter: TickCounter, max_nested_loops: usize) -> Self {
+    pub fn new(id: u8, tick_counter: TickCounter, max_stack_depth: StackDepth) -> Self {
         Self {
             id,
             tick_counter,
-            max_nested_loops,
+            max_stack_depth,
         }
     }
 
@@ -416,7 +416,7 @@ pub struct Bytecode {
     tick_counter: TickCounter,
 
     loop_stack: Vec<LoopState>,
-    max_nested_loops: usize,
+    max_stack_depth: StackDepth,
 }
 
 impl Bytecode {
@@ -433,7 +433,7 @@ impl Bytecode {
             bytecode: vec,
             tick_counter: TickCounter::new(0),
             loop_stack: Vec::new(),
-            max_nested_loops: 0,
+            max_stack_depth: StackDepth(0),
         }
     }
 
@@ -456,12 +456,20 @@ impl Bytecode {
         !self.loop_stack.is_empty()
     }
 
-    pub fn get_loop_stack_len(&self) -> usize {
-        self.loop_stack.len()
+    pub fn can_loop(&self) -> bool {
+        self.loop_stack.len() < BC_CHANNEL_STACK_SIZE / BC_STACK_BYTES_PER_LOOP
     }
 
-    pub fn get_max_nested_loops(&self) -> usize {
-        self.max_nested_loops
+    pub fn get_stack_depth(&self) -> StackDepth {
+        StackDepth(
+            (self.loop_stack.len() * BC_STACK_BYTES_PER_LOOP)
+                .try_into()
+                .unwrap_or(u32::MAX),
+        )
+    }
+
+    pub fn get_max_stack_depth(&self) -> StackDepth {
+        self.max_stack_depth
     }
 
     pub fn get_bytecode_len(&self) -> usize {
@@ -630,33 +638,6 @@ impl Bytecode {
         emit_bytecode!(self, opcodes::DISABLE_ECHO);
     }
 
-    // Returns the current loops id.
-    //   * For subroutines:     loop_id starts at `MAX_NESTED_LOOPS-1` and decreases to 0
-    //   * For non-subroutines: loop_id starts at 0 and increases to `MAX_NESTED_LOOPS-1`
-    //
-    // When starting a new loop, this method MUST be called after `skip_last_loop_pos` is appended.
-    fn _loop_id(&self) -> Result<u8, BytecodeError> {
-        let n_loops = self.loop_stack.len();
-
-        if n_loops == 0 {
-            return Err(BytecodeError::NotInALoop);
-        }
-
-        let n_loops = match u8::try_from(n_loops) {
-            Ok(i) => i,
-            Err(_) => return Err(BytecodeError::TooManyLoops),
-        };
-        if n_loops > MAX_NESTED_LOOPS {
-            return Err(BytecodeError::TooManyLoops);
-        }
-
-        match self.context {
-            BytecodeContext::SongSubroutine => Ok(MAX_NESTED_LOOPS - n_loops),
-            BytecodeContext::SongChannel => Ok(n_loops - 1),
-            BytecodeContext::SoundEffect => Ok(n_loops - 1),
-        }
-    }
-
     pub fn start_loop(&mut self, loop_count: Option<LoopCount>) -> Result<(), BytecodeError> {
         self.loop_stack.push(LoopState {
             start_loop_count: loop_count,
@@ -665,73 +646,52 @@ impl Bytecode {
             skip_last_loop: None,
         });
 
-        self.max_nested_loops = max(self.max_nested_loops, self.loop_stack.len());
-
-        let loop_id = self._loop_id()?;
-        let opcode = match loop_id {
-            0 => opcodes::START_LOOP_0,
-            1 => opcodes::START_LOOP_1,
-            2 => opcodes::START_LOOP_2,
-            MAX_NESTED_LOOPS.. => panic!("Invalid loop_id"),
-        };
-
         let loop_count = match loop_count {
             Some(lc) => lc.0,
             None => 0,
         };
 
-        emit_bytecode!(self, opcode, loop_count);
-        Ok(())
+        emit_bytecode!(self, opcodes::START_LOOP, loop_count);
+
+        let stack_depth = self.get_stack_depth();
+        self.max_stack_depth = max(self.max_stack_depth, stack_depth);
+
+        if stack_depth <= MAX_STACK_DEPTH {
+            Ok(())
+        } else {
+            Err(BytecodeError::StackOverflowInStartLoop(stack_depth.0))
+        }
     }
 
     pub fn skip_last_loop(&mut self) -> Result<(), BytecodeError> {
-        let loop_id = self._loop_id()?;
-        let opcode = match loop_id {
-            0 => opcodes::SKIP_LAST_LOOP_0,
-            1 => opcodes::SKIP_LAST_LOOP_1,
-            2 => opcodes::SKIP_LAST_LOOP_2,
-            MAX_NESTED_LOOPS.. => panic!("Invalid loop_id"),
+        let loop_state = match self.loop_stack.last_mut() {
+            Some(l) => l,
+            None => return Err(BytecodeError::NotInALoop),
         };
 
-        // loop_stack contains at least 1 item
-        let loop_stack = self.loop_stack.last_mut().unwrap();
-
-        if loop_stack.skip_last_loop.is_some() {
+        if loop_state.skip_last_loop.is_some() {
             return Err(BytecodeError::MultipleSkipLastLoopInstructions);
         }
 
-        if loop_stack.tick_counter_at_start_of_loop == self.tick_counter {
+        if loop_state.tick_counter_at_start_of_loop == self.tick_counter {
             return Err(BytecodeError::NoTicksBeforeSkipLastLoop);
         }
 
-        loop_stack.skip_last_loop = Some(SkipLastLoop {
+        loop_state.skip_last_loop = Some(SkipLastLoop {
             tick_counter: self.tick_counter,
             bc_parameter_position: self.bytecode.len() + 1,
         });
 
-        emit_bytecode!(self, opcode, 0u8);
+        emit_bytecode!(self, opcodes::SKIP_LAST_LOOP, 0u8);
 
         Ok(())
     }
 
     pub fn end_loop(&mut self, loop_count: Option<LoopCount>) -> Result<(), BytecodeError> {
-        let loop_id = match self._loop_id() {
-            Ok(i) => i,
-            Err(e) => {
-                // Always pop loop_stack
-                self.loop_stack.pop();
-                return Err(e);
-            }
+        let loop_state = match self.loop_stack.pop() {
+            Some(l) => l,
+            None => return Err(BytecodeError::NotInALoop),
         };
-        let opcode = match loop_id {
-            0 => opcodes::END_LOOP_0,
-            1 => opcodes::END_LOOP_1,
-            2 => opcodes::END_LOOP_2,
-            MAX_NESTED_LOOPS.. => panic!("Invalid loop_id"),
-        };
-
-        // loop_stack contains at least 1 item
-        let loop_state = self.loop_stack.pop().unwrap();
 
         let loop_count_u32 = match (loop_state.start_loop_count, &loop_count) {
             (Some(start_lc), None) => start_lc.to_u32(),
@@ -771,8 +731,10 @@ impl Bytecode {
 
         // Write the loop_count parameter for the start_loop instruction (if required)
         if let Some(loop_count) = loop_count {
-            let start_loop_opcode = opcodes::START_LOOP_0 + loop_id * 2;
-            assert!(self.bytecode[loop_state.start_loop_pos] == start_loop_opcode);
+            assert_eq!(
+                self.bytecode[loop_state.start_loop_pos],
+                opcodes::START_LOOP
+            );
 
             self.bytecode[loop_state.start_loop_pos + 1] = loop_count.0;
         }
@@ -781,8 +743,7 @@ impl Bytecode {
         if let Some(skip_last_loop) = loop_state.skip_last_loop {
             let sll_param_pos = skip_last_loop.bc_parameter_position;
 
-            let skip_last_loop_opcode = opcodes::SKIP_LAST_LOOP_0 + loop_id * 2;
-            assert!(self.bytecode[sll_param_pos - 1] == skip_last_loop_opcode);
+            assert_eq!(self.bytecode[sll_param_pos - 1], opcodes::SKIP_LAST_LOOP);
 
             let to_skip = self.bytecode.len() - sll_param_pos;
             if to_skip < 1 {
@@ -796,11 +757,15 @@ impl Bytecode {
             self.bytecode[sll_param_pos] = to_skip;
         }
 
-        emit_bytecode!(self, opcode);
+        emit_bytecode!(self, opcodes::END_LOOP);
         Ok(())
     }
 
-    pub fn call_subroutine(&mut self, subroutine: SubroutineId) -> Result<(), BytecodeError> {
+    pub fn call_subroutine(
+        &mut self,
+        name: &str,
+        subroutine: SubroutineId,
+    ) -> Result<(), BytecodeError> {
         match self.context {
             BytecodeContext::SongSubroutine => {
                 return Err(BytecodeError::SubroutineCallInSubroutine)
@@ -811,11 +776,14 @@ impl Bytecode {
 
         self.tick_counter += subroutine.tick_counter;
 
-        let n_nested_loops = self.loop_stack.len() + subroutine.max_nested_loops;
-        self.max_nested_loops = max(self.max_nested_loops, n_nested_loops);
+        let stack_depth = StackDepth(self.get_stack_depth().0 + subroutine.max_stack_depth.0);
+        self.max_stack_depth = max(self.max_stack_depth, stack_depth);
 
-        if n_nested_loops > MAX_NESTED_LOOPS.into() {
-            return Err(BytecodeError::TooManyLoopsInSubroutineCall);
+        if stack_depth > MAX_STACK_DEPTH {
+            return Err(BytecodeError::StackOverflowInSubroutineCall(
+                name.to_owned(),
+                stack_depth.0,
+            ));
         }
 
         emit_bytecode!(self, opcodes::CALL_SUBROUTINE, subroutine.id);

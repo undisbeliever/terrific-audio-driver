@@ -34,6 +34,7 @@ pub mod addresses {
         EON_SHADOW_SFX,
         SONG_TICK_COUNTER,
         IO_MUSIC_CHANNELS_MASK,
+        BYTECODE_STACK,
         CHANNEL_VC_VOL_L,
         CHANNEL_VC_VOL_R,
         CHANNEL_VC_PITCH_L,
@@ -45,9 +46,8 @@ pub mod addresses {
         CHANNEL_INST_PITCH_OFFSET,
         CHANNEL_INSTRUCTION_PTR_L,
         CHANNEL_INSTRUCTION_PTR_H,
-        CHANNEL_LOOP_STATE_COUNTER,
-        CHANNEL_LOOP_STATE_LOOP_POINT_L,
-        CHANNEL_LOOP_STATE_LOOP_POINT_H,
+        CHANNEL_STACK_POINTER,
+        CHANNEL_LOOP_STACK_POINTER,
         CHANNEL_NEXT_EVENT_IS_KEY_OFF,
         CHANNEL_PAN,
         CHANNEL_DIRECTION,
@@ -98,10 +98,16 @@ pub const FIRST_SFX_CHANNEL: usize = N_MUSIC_CHANNELS;
 
 pub const N_DSP_VOICES: usize = 8;
 
-pub const N_NESTED_LOOPS: usize = 3;
-
 pub const MAX_PAN: u8 = 128;
 pub const CENTER_PAN: u8 = MAX_PAN / 2;
+
+pub const BC_CHANNEL_STACK_SIZE: usize = 21;
+pub const BC_CHANNEL_STACK_OFFSET: usize = 6;
+pub const BC_TOTAL_STACK_SIZE: usize = BC_CHANNEL_STACK_SIZE * N_CHANNELS;
+pub const BC_STACK_BYTES_PER_LOOP: usize = 3;
+
+const _: () =
+    assert!(BC_TOTAL_STACK_SIZE + BC_CHANNEL_STACK_OFFSET + BC_STACK_BYTES_PER_LOOP < 0xff);
 
 // Song ID 0 is silence
 pub const FIRST_SONG_ID: usize = 1;

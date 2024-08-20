@@ -8,9 +8,10 @@ use crate::bytecode::opcodes;
 use crate::bytecode::{Pan, LAST_PLAY_NOTE_OPCODE};
 use crate::common_audio_data::CommonAudioData;
 use crate::driver_constants::{
-    addresses, LoaderDataType, CENTER_PAN, COMMON_DATA_BYTES_PER_INSTRUMENT, N_CHANNELS,
-    N_MUSIC_CHANNELS, SONG_HEADER_N_SUBROUTINES_OFFSET, SONG_HEADER_SIZE, STARTING_VOLUME,
-    S_DSP_EON_REGISTER, S_SMP_TIMER_0_REGISTER,
+    addresses, LoaderDataType, BC_CHANNEL_STACK_OFFSET, BC_CHANNEL_STACK_SIZE,
+    BC_STACK_BYTES_PER_LOOP, CENTER_PAN, COMMON_DATA_BYTES_PER_INSTRUMENT, N_MUSIC_CHANNELS,
+    SONG_HEADER_N_SUBROUTINES_OFFSET, SONG_HEADER_SIZE, STARTING_VOLUME, S_DSP_EON_REGISTER,
+    S_SMP_TIMER_0_REGISTER,
 };
 use crate::songs::SongData;
 use crate::time::TickCounter;
@@ -28,12 +29,6 @@ pub struct VirtualChannel {
 }
 
 #[derive(Clone)]
-struct LoopStateSoA {
-    counter: u8,
-    loop_point: u16,
-}
-
-#[derive(Clone)]
 pub struct ChannelSoA {
     countdown_timer: u8,
     next_event_is_key_off: u8,
@@ -41,7 +36,8 @@ pub struct ChannelSoA {
     instruction_ptr: u16,
     return_ptr: u16,
 
-    loop_state: [LoopStateSoA; 3],
+    stack_pointer: u8,
+    loop_stack_pointer: u8,
 
     inst_pitch_offset: u8,
     volume: u8,
@@ -62,6 +58,7 @@ pub struct ChannelSoA {
 #[derive(Clone)]
 pub struct Channel {
     soa: ChannelSoA,
+    bc_stack: [u8; BC_CHANNEL_STACK_SIZE],
     dsp: VirtualChannel,
 }
 
@@ -78,29 +75,27 @@ struct TickClockOverride {
     when: TickCounter,
 }
 
-struct LoopState {
-    counter: u8,
-    loop_point: u16,
-}
-
-impl Default for LoopState {
-    fn default() -> Self {
-        Self {
-            counter: 0,
-            loop_point: u16::MAX,
-        }
-    }
-}
-
 struct ChannelState {
     ticks: TickCounter,
     disabled: bool,
+
+    song_ptr: u16,
 
     instruction_ptr: u16,
     instruction_ptr_after_end: u16,
     return_ptr: Option<u16>,
 
-    loop_state: [LoopState; 3],
+    // Stack pointer
+    // Grows downwards (from CHANNEL_STACK_SIZE to 0)
+    // MUST always be <= `CHANNEL_STACK_SIZE`
+    stack_pointer: usize,
+
+    // Stack pointer to use in the SKIP_LAST_LOOP and END_LOOP instructions.
+    // Used to remove bounds checking when reading/modifying loop counter.
+    // MUST always be <= `CHANNEL_STACK_SIZE - STACK_BYTES_PER_LOOP`
+    loop_stack_pointer: usize,
+
+    bc_stack: [u8; BC_CHANNEL_STACK_SIZE],
 
     instrument: Option<u8>,
     adsr_or_gain_override: Option<(u8, u8)>,
@@ -121,19 +116,22 @@ struct ChannelState {
 }
 
 impl ChannelState {
-    fn new(song: &SongData, channel_id: usize) -> Self {
+    fn new(song: &SongData, song_ptr: u16, channel_id: usize) -> Self {
         let channel = song.channels()[channel_id].as_ref();
 
         Self {
             ticks: TickCounter::new(0),
             disabled: false,
+            song_ptr,
             instruction_ptr: channel.map(|c| c.bytecode_offset).unwrap_or(u16::MAX),
             instruction_ptr_after_end: channel
                 .and_then(|c| c.loop_point)
                 .and_then(|lp| u16::try_from(lp.bytecode_offset).ok())
                 .unwrap_or(u16::MAX),
             return_ptr: None,
-            loop_state: Default::default(),
+            stack_pointer: BC_CHANNEL_STACK_SIZE,
+            loop_stack_pointer: BC_CHANNEL_STACK_SIZE - BC_STACK_BYTES_PER_LOOP,
+            bc_stack: Default::default(),
             instrument: None,
             adsr_or_gain_override: Some((0, 0)),
             volume: STARTING_VOLUME,
@@ -153,21 +151,27 @@ struct ChannelInterpreter<'a> {
 }
 
 impl ChannelInterpreter<'_> {
-    fn new(song: &SongData, channel_id: usize, target_ticks: TickCounter) -> ChannelInterpreter {
+    fn new(
+        song: &SongData,
+        song_ptr: u16,
+        channel_id: usize,
+        target_ticks: TickCounter,
+    ) -> ChannelInterpreter {
         ChannelInterpreter {
             song_data: song.data(),
             target_ticks,
-            s: ChannelState::new(song, channel_id),
+            s: ChannelState::new(song, song_ptr, channel_id),
         }
     }
 
     fn new_subroutine_intrepreter(
         song: &SongData,
+        song_ptr: u16,
         channel_id: usize,
         subroutine_index: u8,
         target_ticks: TickCounter,
     ) -> ChannelInterpreter {
-        let mut ci = ChannelInterpreter::new(song, channel_id, target_ticks);
+        let mut ci = ChannelInterpreter::new(song, song_ptr, channel_id, target_ticks);
 
         ci.s.instruction_ptr = ci.read_subroutine_instruction_ptr(subroutine_index);
         ci.s.return_ptr = None;
@@ -231,33 +235,6 @@ impl ChannelInterpreter<'_> {
         let key_off = note_and_key_off_bit & 1 == 1;
 
         self.s.ticks += Self::to_tick_count(length, key_off);
-    }
-
-    fn start_loop(&mut self, i: usize) {
-        let counter = self.read_pc();
-
-        self.s.loop_state[i] = LoopState {
-            counter,
-            loop_point: self.s.instruction_ptr,
-        };
-    }
-
-    fn skip_last_loop(&mut self, i: usize) {
-        let bytes_to_skip = self.read_pc();
-
-        let ls = &self.s.loop_state[i];
-        if ls.counter == 1 {
-            self.s.instruction_ptr += u16::from(bytes_to_skip);
-        }
-    }
-
-    fn end_loop(&mut self, i: usize) {
-        let ls = &mut self.s.loop_state[i];
-
-        ls.counter = ls.counter.wrapping_sub(1);
-        if ls.counter != 0 {
-            self.s.instruction_ptr = ls.loop_point;
-        }
     }
 
     fn process_next_bytecode(&mut self) {
@@ -375,15 +352,63 @@ impl ChannelInterpreter<'_> {
                     }
                 }
 
-                opcodes::START_LOOP_0 => self.start_loop(0),
-                opcodes::START_LOOP_1 => self.start_loop(1),
-                opcodes::START_LOOP_2 => self.start_loop(2),
-                opcodes::SKIP_LAST_LOOP_0 => self.skip_last_loop(0),
-                opcodes::SKIP_LAST_LOOP_1 => self.skip_last_loop(1),
-                opcodes::SKIP_LAST_LOOP_2 => self.skip_last_loop(2),
-                opcodes::END_LOOP_0 => self.end_loop(0),
-                opcodes::END_LOOP_1 => self.end_loop(1),
-                opcodes::END_LOOP_2 => self.end_loop(2),
+                opcodes::START_LOOP => {
+                    let counter = self.read_pc();
+
+                    match self.s.stack_pointer.checked_sub(3) {
+                        Some(sp) => {
+                            self.s.stack_pointer = sp;
+                            self.s.loop_stack_pointer = sp;
+
+                            let inst_ptr = self.s.song_ptr + self.s.instruction_ptr;
+                            let inst_ptr = inst_ptr.to_le_bytes();
+
+                            self.s.bc_stack[sp] = counter;
+                            self.s.bc_stack[sp + 1] = inst_ptr[0];
+                            self.s.bc_stack[sp + 2] = inst_ptr[1];
+                        }
+                        None => self.disable_channel(),
+                    }
+                }
+                opcodes::SKIP_LAST_LOOP => {
+                    let bytes_to_skip = self.read_pc();
+
+                    // No bounds testing required when reading counter
+                    let sp = self.s.loop_stack_pointer;
+
+                    let counter = self.s.bc_stack[sp];
+                    if counter == 1 {
+                        self.s.instruction_ptr += u16::from(bytes_to_skip);
+
+                        let sp = sp + 3;
+                        self.s.stack_pointer = sp;
+                        if sp <= BC_CHANNEL_STACK_SIZE - BC_STACK_BYTES_PER_LOOP {
+                            self.s.loop_stack_pointer = sp;
+                        }
+                    }
+                }
+                opcodes::END_LOOP => {
+                    // No bounds testing required when modifying counter
+                    let sp = self.s.loop_stack_pointer;
+
+                    let counter = self.s.bc_stack[sp].wrapping_sub(1);
+
+                    if counter != 0 {
+                        self.s.bc_stack[sp] = counter;
+                        let inst_ptr =
+                            u16::from_le_bytes([self.s.bc_stack[sp + 1], self.s.bc_stack[sp + 2]]);
+                        match inst_ptr.checked_sub(self.s.song_ptr) {
+                            Some(i) => self.s.instruction_ptr = i,
+                            None => self.disable_channel(),
+                        }
+                    } else {
+                        let sp = sp + 3;
+                        self.s.stack_pointer = sp;
+                        if sp <= BC_CHANNEL_STACK_SIZE - BC_STACK_BYTES_PER_LOOP {
+                            self.s.loop_stack_pointer = sp;
+                        }
+                    }
+                }
 
                 opcodes::ENABLE_ECHO => self.s.echo = true,
                 opcodes::DISABLE_ECHO => self.s.echo = false,
@@ -447,17 +472,8 @@ impl CommonAudioDataSoA<'_> {
     }
 }
 
-fn loop_soa(ls: &LoopState, common: &CommonAudioDataSoA) -> LoopStateSoA {
-    LoopStateSoA {
-        counter: ls.counter,
-        loop_point: ls
-            .loop_point
-            .checked_add(common.song_data_addr)
-            .unwrap_or(0),
-    }
-}
-
 fn build_channel(
+    channel_index: usize,
     c: &ChannelState,
     target_ticks: TickCounter,
     common: &CommonAudioDataSoA,
@@ -497,6 +513,13 @@ fn build_channel(
     let volume = c.volume;
     let pan = c.pan;
 
+    assert!(c.stack_pointer <= BC_CHANNEL_STACK_SIZE);
+    assert!(c.loop_stack_pointer + BC_STACK_BYTES_PER_LOOP <= BC_CHANNEL_STACK_SIZE);
+
+    let stack_start = BC_CHANNEL_STACK_OFFSET + channel_index * BC_CHANNEL_STACK_SIZE;
+    let stack_pointer = u8::try_from(stack_start + c.stack_pointer).unwrap();
+    let loop_stack_index = u8::try_from(stack_start + c.loop_stack_pointer).unwrap();
+
     Channel {
         soa: ChannelSoA {
             countdown_timer,
@@ -513,11 +536,8 @@ fn build_channel(
                 Some(o) => o.checked_add(common.song_data_addr).unwrap_or(0),
                 None => 0,
             },
-            loop_state: [
-                loop_soa(&c.loop_state[0], common),
-                loop_soa(&c.loop_state[1], common),
-                loop_soa(&c.loop_state[2], common),
-            ],
+            stack_pointer,
+            loop_stack_pointer: loop_stack_index,
             inst_pitch_offset,
             volume,
             pan,
@@ -527,6 +547,7 @@ fn build_channel(
             vibrato_direction_comparator: c.vibrato_quarter_wavelength_in_ticks << 1,
             vibrato_wavelength_in_ticks: c.vibrato_quarter_wavelength_in_ticks << 2,
         },
+        bc_stack: c.bc_stack,
         dsp: VirtualChannel {
             vol_l: match common.stereo_flag {
                 true => (u16::from(volume) * u16::from(Pan::MAX - pan)).to_le_bytes()[1],
@@ -544,45 +565,40 @@ fn build_channel(
     }
 }
 
-const UNUSED_CHANNEL: Channel = Channel {
-    soa: ChannelSoA {
-        countdown_timer: 0,
-        next_event_is_key_off: 0,
+fn unused_channel(channel_index: usize) -> Channel {
+    let stack_pointer =
+        u8::try_from((channel_index + 1) * BC_CHANNEL_STACK_SIZE + BC_CHANNEL_STACK_OFFSET)
+            .unwrap();
 
-        instruction_ptr: 0,
-        return_ptr: 0,
-        loop_state: [
-            LoopStateSoA {
-                counter: 0,
-                loop_point: 0,
-            },
-            LoopStateSoA {
-                counter: 0,
-                loop_point: 0,
-            },
-            LoopStateSoA {
-                counter: 0,
-                loop_point: 0,
-            },
-        ],
-        inst_pitch_offset: 0,
-        volume: STARTING_VOLUME,
-        pan: CENTER_PAN,
-        vibrato_pitch_offset_per_tick: 0,
-        vibrato_tick_counter_start: 0,
-        vibrato_tick_counter: 0,
-        vibrato_direction_comparator: 0,
-        vibrato_wavelength_in_ticks: 0,
-    },
-    dsp: VirtualChannel {
-        vol_l: 0,
-        vol_r: 0,
-        scrn: 0,
-        adsr1: 0,
-        adsr2_or_gain: 0,
-        echo: false,
-    },
-};
+    Channel {
+        soa: ChannelSoA {
+            countdown_timer: 0,
+            next_event_is_key_off: 0,
+
+            instruction_ptr: 0,
+            return_ptr: 0,
+            stack_pointer,
+            loop_stack_pointer: stack_pointer - BC_STACK_BYTES_PER_LOOP as u8,
+            inst_pitch_offset: 0,
+            volume: STARTING_VOLUME,
+            pan: CENTER_PAN,
+            vibrato_pitch_offset_per_tick: 0,
+            vibrato_tick_counter_start: 0,
+            vibrato_tick_counter: 0,
+            vibrato_direction_comparator: 0,
+            vibrato_wavelength_in_ticks: 0,
+        },
+        bc_stack: [0; BC_CHANNEL_STACK_SIZE],
+        dsp: VirtualChannel {
+            vol_l: 0,
+            vol_r: 0,
+            scrn: 0,
+            adsr1: 0,
+            adsr2_or_gain: 0,
+            echo: false,
+        },
+    }
+}
 
 /// returns None if there is a timeout
 pub fn interpret_song(
@@ -598,11 +614,12 @@ pub fn interpret_song(
     let mut valid = true;
 
     let common = CommonAudioDataSoA::new(common_audio_data, stereo_flag);
+    let song_data_addr = common_audio_data.song_data_addr();
 
     let channels: [Channel; N_MUSIC_CHANNELS] =
         std::array::from_fn(|i| match song.channels().get(i) {
             Some(Some(_)) => {
-                let mut ci = ChannelInterpreter::new(song, i, target_ticks);
+                let mut ci = ChannelInterpreter::new(song, song_data_addr, i, target_ticks);
 
                 valid &= ci.process_until_target();
 
@@ -612,16 +629,16 @@ pub fn interpret_song(
                     }
                 }
 
-                build_channel(&ci.s, target_ticks, &common)
+                build_channel(i, &ci.s, target_ticks, &common)
             }
-            Some(None) | None => UNUSED_CHANNEL,
+            Some(None) | None => unused_channel(i),
         });
 
     if valid {
         Some(InterpreterOutput {
             channels,
             tick_clock: tick_clock_override.timer_register,
-            song_data_addr: common_audio_data.song_data_addr(),
+            song_data_addr,
             stereo_flag,
         })
     } else {
@@ -644,8 +661,15 @@ pub fn interpret_song_subroutine(
     }
 
     let common = CommonAudioDataSoA::new(common_audio_data, stereo_flag);
+    let song_data_addr = common_audio_data.song_data_addr();
 
-    let mut ci = ChannelInterpreter::new_subroutine_intrepreter(song, 0, subroutine_index, ticks);
+    let mut ci = ChannelInterpreter::new_subroutine_intrepreter(
+        song,
+        song_data_addr,
+        0,
+        subroutine_index,
+        ticks,
+    );
     let valid = ci.process_until_target();
 
     // return_ptr must be None so audio-driver disables the channel on a return_from_subroutine instruction
@@ -655,16 +679,16 @@ pub fn interpret_song_subroutine(
         Some(InterpreterOutput {
             channels: std::array::from_fn(|i| {
                 if i == 0 {
-                    build_channel(&ci.s, ticks, &common)
+                    build_channel(i, &ci.s, ticks, &common)
                 } else {
-                    UNUSED_CHANNEL.clone()
+                    unused_channel(i)
                 }
             }),
             tick_clock: match &ci.s.tick_clock_override {
                 Some(tco) => tco.timer_register,
                 None => song.metadata().tick_clock.as_u8(),
             },
-            song_data_addr: common_audio_data.song_data_addr(),
+            song_data_addr,
             stereo_flag,
         })
     } else {
@@ -754,6 +778,10 @@ impl InterpreterOutput {
                     c.return_ptr,
                 );
 
+                soa_write_u8(addresses::CHANNEL_STACK_POINTER, c.stack_pointer);
+
+                soa_write_u8(addresses::CHANNEL_LOOP_STACK_POINTER, c.loop_stack_pointer);
+
                 soa_write_u8(addresses::CHANNEL_COUNTDOWN_TIMER, c.countdown_timer);
                 soa_write_u8(
                     addresses::CHANNEL_NEXT_EVENT_IS_KEY_OFF,
@@ -787,23 +815,6 @@ impl InterpreterOutput {
                     c.vibrato_wavelength_in_ticks,
                 );
 
-                for (li, loop_state) in c.loop_state.iter().enumerate() {
-                    let li = u16::try_from(li).unwrap();
-                    let mut write_ls = |addr: u16, value: u8| {
-                        const SOA_ARRAY_SIZE: u16 = N_CHANNELS as u16;
-                        soa_write_u8(addr + li * SOA_ARRAY_SIZE, value);
-                    };
-                    write_ls(addresses::CHANNEL_LOOP_STATE_COUNTER, loop_state.counter);
-                    write_ls(
-                        addresses::CHANNEL_LOOP_STATE_LOOP_POINT_L,
-                        loop_state.loop_point.to_le_bytes()[0],
-                    );
-                    write_ls(
-                        addresses::CHANNEL_LOOP_STATE_LOOP_POINT_H,
-                        loop_state.loop_point.to_le_bytes()[1],
-                    );
-                }
-
                 // Virtual channels
                 soa_write_u8(addresses::CHANNEL_VC_VOL_L, vc.vol_l);
                 soa_write_u8(addresses::CHANNEL_VC_VOL_R, vc.vol_r);
@@ -811,6 +822,12 @@ impl InterpreterOutput {
                 soa_write_u8(addresses::CHANNEL_VC_SCRN, vc.scrn);
                 soa_write_u8(addresses::CHANNEL_VC_ADSR1, vc.adsr1);
                 soa_write_u8(addresses::CHANNEL_VC_ADSR2_OR_GAIN, vc.adsr2_or_gain);
+            }
+
+            for (channel_index, c) in self.channels.iter().enumerate() {
+                let addr =
+                    usize::from(addresses::BYTECODE_STACK) + BC_CHANNEL_STACK_SIZE * channel_index;
+                apuram[addr..addr + BC_CHANNEL_STACK_SIZE].copy_from_slice(&c.bc_stack);
             }
         }
 

@@ -8,13 +8,13 @@
 //!    * test_bc_interpreter is slow and thorough, emulating the first few minutes of every song in the project file.
 
 use compiler::{
-    audio_driver, bytecode_interpreter,
-    bytecode_interpreter::{interpret_song, InterpreterOutput},
+    audio_driver,
+    bytecode_interpreter::{self, interpret_song, InterpreterOutput},
     common_audio_data::{build_common_audio_data, CommonAudioData},
     data::{load_project_file, load_text_file_with_limit, validate_project_file_names},
     driver_constants::{
-        addresses, io_commands, LoaderDataType, N_CHANNELS, N_NESTED_LOOPS, S_DSP_EON_REGISTER,
-        S_SMP_TIMER_0_REGISTER,
+        addresses, io_commands, LoaderDataType, BC_TOTAL_STACK_SIZE, N_CHANNELS,
+        S_DSP_EON_REGISTER, S_SMP_TIMER_0_REGISTER,
     },
     mml::compile_mml,
     samples::build_sample_and_instrument_data,
@@ -149,15 +149,6 @@ fn assert_bc_intrepreter_matches_emu(
             "channelsSoA.{name} mismatch (tick_count: {tick_count})"
         );
     };
-    let test_loop_state_soa = |addr: u16, name: &'static str| {
-        let addr = usize::from(addr);
-        let range = addr..addr + N_CHANNELS * N_NESTED_LOOPS;
-        assert_eq!(
-            int_apuram[range.clone()],
-            emu_apuram[range],
-            "channelsSoA.{name} mismatch (tick_count: {tick_count})"
-        );
-    };
 
     test_channel_soa(addresses::CHANNEL_VC_VOL_L, "virtualChannels.vol_l");
     test_channel_soa(addresses::CHANNEL_VC_VOL_R, "virtualChannels.vol_r");
@@ -178,6 +169,12 @@ fn assert_bc_intrepreter_matches_emu(
         addresses::CHANNEL_RETURN_INST_PTR_L,
         addresses::CHANNEL_RETURN_INST_PTR_H,
         "returnInstPtr",
+    );
+
+    test_channel_soa(addresses::CHANNEL_STACK_POINTER, "channel_stackPointer");
+    test_channel_soa(
+        addresses::CHANNEL_LOOP_STACK_POINTER,
+        "channel_loopStackPointer",
     );
 
     test_channel_soa(addresses::CHANNEL_INST_PITCH_OFFSET, "instPitchOffset");
@@ -205,24 +202,21 @@ fn assert_bc_intrepreter_matches_emu(
         "vibrato_waveLengthInTicks",
     );
 
-    test_loop_state_soa(
-        addresses::CHANNEL_LOOP_STATE_COUNTER,
-        "channel_loopState_counter",
-    );
-    test_loop_state_soa(
-        addresses::CHANNEL_LOOP_STATE_LOOP_POINT_L,
-        "channel_loopState_loopPoint_l",
-    );
-    test_loop_state_soa(
-        addresses::CHANNEL_LOOP_STATE_LOOP_POINT_H,
-        "channel_loopState_loopPoint_h",
-    );
-
     for v in 0..N_CHANNELS {
         assert_eq!(
             read_ticks_until_next_bytecode(int_apuram, v),
             read_ticks_until_next_bytecode(emu_apuram, v),
             "ticks until next bytecode mismatch (tick_count: {tick_count}, voice: {v})"
+        );
+    }
+
+    {
+        let addr = usize::from(addresses::BYTECODE_STACK);
+        let range = addr..addr + BC_TOTAL_STACK_SIZE;
+        assert_eq!(
+            int_apuram[range.clone()],
+            emu_apuram[range],
+            "bytecode stack mismatch (tick_count: {tick_count})"
         );
     }
 }
@@ -295,6 +289,7 @@ fn test_bc_intrepreter(song: &SongData, common_audio_data: &CommonAudioData) {
 
         // Pausing the emulator ensures all bytecode instructions have completed
         emu.write_io_ports([io_commands::PAUSE, 0, 0, 0]);
+        emu.emulate();
         emu.emulate();
 
         // Confirm previous command was acknowledged by the audio driver.

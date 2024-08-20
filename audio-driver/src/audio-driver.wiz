@@ -33,7 +33,8 @@ config {
     trim = true
 }
 
-bank code           @ CODE_ADDR : [constdata;   CODE_SIZE];
+bank code           @ CODE_ADDR             : [constdata; CODE_SIZE];
+bank bytecode_stack @ CODE_ADDR + CODE_SIZE : [vardata; BC_TOTAL_STACK_SIZE];
 
 
 extern const commonDataHeader @ COMMON_DATA_ADDR : CommonDataHeader;
@@ -199,8 +200,29 @@ in zeropage {
         var instructionPtr_h : [u8 ; N_CHANNELS];
 
 
-        // Number of remaining loops
-        var loopState_counter : [[u8 ; N_CHANNELS] ; bytecode.MAX_NESTED_LOOPS];
+        // Stack pointer.
+        // The stack grows downwards,
+        // from highest address (BcStackIndexesStart[x]) to lowest address (BcStackIndexesEnd[x])
+        //
+        // CAUTION: Is out of bounds when the stack is empty.
+        // CAUTION: `bcStack` label is offset by BC_CHANNEL_STACK_OFFSET.
+        //
+        // MUST always be >= `BcStackIndexesEnd[x]` and <= `(BcStackIndexesStart[x]`
+        //
+        // (index into `bcStack`)
+        var stackPointer : [u8 ; N_CHANNELS];
+
+
+        // The stack pointer to use in the `skip_last_loop` and `end_loop` instructions.
+        //
+        // Used to skip bounds checking when reading/modifying counter.
+        //
+        // CAUTION: Not equal to `stackPointer` if there is less than 2 or fewer bytes on the stack.
+        //
+        // MUST always be >= `BcStackIndexesEnd[x]` and <= `(BcStackIndexesStart[x] - 3)`
+        //
+        // (index into `bcStack`)
+        var loopStackPointer : [u8 ; N_CHANNELS];
 
 
         // Used to determine if vol_l and vol_r need recalculating.
@@ -281,11 +303,6 @@ in firstpage {
         // If `returnInstPtr_h` is 0, `return_from_subroutine` will disable the channel instead.
         var returnInstPtr_l : [u8 ; N_CHANNELS];
         var returnInstPtr_h : [u8 ; N_CHANNELS];
-
-
-        // Instruction pointer at the start of the loop.
-        var loopState_loopPoint_l : [[u8 ; N_CHANNELS] ; bytecode.MAX_NESTED_LOOPS];
-        var loopState_loopPoint_h : [[u8 ; N_CHANNELS] ; bytecode.MAX_NESTED_LOOPS];
 
 
         // Bytecode address to loop to when the channel encounters and `end` instruction.
@@ -1144,6 +1161,12 @@ func __reset_channel(channelIndex : u8 in x, pan: u8 in a) {
     channelSoA.nextEventIsKeyOff[x] = a; // a = 0
     a++;
     channelSoA.countdownTimer[x] = a;    // a = 1
+
+
+    channelSoA.stackPointer[x] = a = BcStackIndexesStart[x];
+
+    // Ensures loopStackPointer is in-bounds if the first instruction is `end_loop`.
+    channelSoA.loopStackPointer[x] = a = a - 3;
 }
 
 
@@ -1446,6 +1469,14 @@ let null_instruction = disable_channel as func(u8 in x, u8 in a);
 
 
 
+// KEEP: X
+func skip_last_loop(channelIndex : u8 in x, bytesToSkip : u8 in a) {
+    // `skip_last_loop` is here so I can `bne` to process_bytecode().
+    return __skip_last_loop__inline(x, a);
+}
+
+
+
 // IN: Y = 0
 // KEEP: X
 #[fallthrough]
@@ -1601,6 +1632,85 @@ func set_vibrato(channelIndex : u8 in x, pitchOffsetPerTick: u8 in a) {
 
 
 // KEEP: X
+func start_loop(channelIndex : u8 in x, loopCount : u8 in a) {
+    var _loopCount : u8 in  zpTmp;
+
+    _loopCount = a;
+
+    a = channelSoA.stackPointer[x] - 3;
+    goto disable_channel if a < BcStackIndexesEnd[x];
+
+    channelSoA.stackPointer[x] = a;
+    channelSoA.loopStackPointer[x] = a;
+
+    y = a;
+    (&bcStack[0])[y] = a = _loopCount;
+    (&bcStack[1])[y] = a = <:instructionPtr;
+    (&bcStack[2])[y] = a = >:instructionPtr;
+
+    ^return process_next_bytecode(x);
+}
+
+
+
+// KEEP: X
+inline func __skip_last_loop__inline(channelIndex : u8 in x, bytesToSkip : u8 in a) {
+    var _bytesToSkip : u8 in  zpTmp;
+
+    _bytesToSkip = a;
+
+    // No need to bounds check `loopStackPointer`, it is always in bounds.
+    y = channelSoA.loopStackPointer[x];
+
+    a = (&bcStack[0])[y]; // loop counter
+    a--;
+    goto process_next_bytecode if !zero;
+
+    // Assumes `y + 3` is a valid stackPointer
+    channelSoA.stackPointer[x] = a = y + 3;
+    if a < ValidLoopStackPointerTable[x] {
+        // Only write to loopStackPointer if it is valid
+        channelSoA.loopStackPointer[x] = a;
+    }
+
+    a = _bytesToSkip;
+    y = 0;
+    ya += instructionPtr as u16;
+
+    ^return process_bytecode_with_loader_test(x, ya);
+}
+
+
+
+// KEEP: X
+func end_loop(channelIndex : u8 in x) {
+    // No need to bounds check `loopStackPointer`, it is always in bounds.
+    y = channelSoA.loopStackPointer[x];
+
+    a = (&bcStack[0])[y]; // loop counter
+    a--;
+    if !zero {
+        (&bcStack[0])[y] = a; // loop counter
+
+        <:instructionPtr = a = (&bcStack[1])[y];
+        >:instructionPtr = a = (&bcStack[2])[y];
+
+        ^return process_next_bytecode(x);
+    }
+
+    // Assumes `y + 3` is a valid stackPointer
+    channelSoA.stackPointer[x] = a = y + 3;
+    if a < ValidLoopStackPointerTable[x] {
+        // Only write to loopStackPointer if it is valid
+        channelSoA.loopStackPointer[x] = a;
+    }
+
+    ^return process_next_bytecode(x);
+}
+
+
+
+// KEEP: X
 func disable_channel(channelIndex : u8 in x) {
     // Y may not be 0
 
@@ -1702,120 +1812,6 @@ func return_from_subroutine(channelIndex : u8 in x) {
     a = channelSoA.returnInstPtr_l[x];
 
     ^return process_bytecode_with_loader_test(x, ya);
-}
-
-
-// KEEP: X
-inline func __start_loop(channelIndex : u8 in x, loopCount : u8 in a, let LOOP_ID : u8) {
-    let _loopState_counter     = &channelSoA.loopState_counter[LOOP_ID] as *u8;
-    let _loopState_loopPoint_l = &channelSoA.loopState_loopPoint_l[LOOP_ID] as *u8;
-    let _loopState_loopPoint_h = &channelSoA.loopState_loopPoint_h[LOOP_ID] as *u8;
-
-    _loopState_counter[x] = a;
-
-    ya = instructionPtr as u16;
-
-    _loopState_loopPoint_l[x] = a;
-    _loopState_loopPoint_h[x] = a = y;
-
-    ^return process_next_bytecode(x);
-}
-
-
-// KEEP: X
-func skip_last_loop_0(channelIndex : u8 in x, bytesToSkip : u8 in a) {
-    // Add `bytesToSkip` to `instructionPtr` if counter == 1
-    y = (&channelSoA.loopState_counter[0] as *u8)[x];
-    y--;
-    goto __jump_to_process_next_bytecode if !zero;
-
-    return __skip_last_loop__last_loop__y0(x, a);
-}
-
-
-// KEEP: X
-func skip_last_loop_1(channelIndex : u8 in x, bytesToSkip : u8 in a) {
-    // Add `bytesToSkip` to `instructionPtr` if counter == 1
-    y = (&channelSoA.loopState_counter[1] as *u8)[x];
-    y--;
-    goto __jump_to_process_next_bytecode if !zero;
-
-    return __skip_last_loop__last_loop__y0(x, a);
-}
-
-
-// KEEP: X
-#[fallthrough]
-func skip_last_loop_2(channelIndex : u8 in x, bytesToSkip : u8 in a) {
-    // Add `bytesToSkip` to `instructionPtr` if counter == 1
-    y = (&channelSoA.loopState_counter[2] as *u8)[x];
-    y--;
-    goto __jump_to_process_next_bytecode if !zero;
-
-// Fallthrough
-}
-
-// REQUIRES: Y = 0
-// KEEP: X
-func __skip_last_loop__last_loop__y0(channelIndex: u8 in x, bytesToSkip: u8 in a) {
-    // This is the last loop
-
-    // Y = 0
-    ya += instructionPtr as u16;
-    ^return process_bytecode(x, ya);
-}
-
-
-// KEEP: X
-inline func __end_loop(channelIndex : u8 in x, let LOOP_ID : u8) {
-    let _loopState_counter     = &channelSoA.loopState_counter[LOOP_ID] as *u8;
-    let _loopState_loopPoint_l = &channelSoA.loopState_loopPoint_l[LOOP_ID] as *u8;
-    let _loopState_loopPoint_h = &channelSoA.loopState_loopPoint_h[LOOP_ID] as *u8;
-
-    _loopState_counter[x]--;
-    goto __jump_to_process_next_bytecode if zero;
-
-    y = a = _loopState_loopPoint_h[x];
-    a = _loopState_loopPoint_l[x];
-
-    ^return process_bytecode_with_loader_test(x, ya);
-}
-
-
-// KEEP: X
-func __jump_to_process_next_bytecode(channelIndex : u8 in x) {
-    ^return process_next_bytecode(x);
-}
-
-
-// KEEP: X
-func start_loop_0(channelIndex : u8 in x, loopCount : u8 in a) {
-    return __start_loop(x, a, 0);
-}
-
-// KEEP: X
-func start_loop_1(channelIndex : u8 in x, loopCount : u8 in a) {
-    return __start_loop(x, a, 1);
-}
-
-// KEEP: X
-func start_loop_2(channelIndex : u8 in x, loopCount : u8 in a) {
-    return __start_loop(x, a, 2);
-}
-
-// KEEP: X
-func end_loop_0(channelIndex : u8 in x) {
-    return __end_loop(x, 0);
-}
-
-// KEEP: X
-func end_loop_1(channelIndex : u8 in x) {
-    return __end_loop(x, 1);
-}
-
-// KEEP: X
-func end_loop_2(channelIndex : u8 in x) {
-    return __end_loop(x, 2);
 }
 
 
@@ -2046,6 +2042,25 @@ in code {
 
     // The address of the last writeable voice DSP register for each channel
     const LastVoiceRegister : [u8; N_CHANNELS] = [i * 0x10 | 0x07 for let i in __VOICE_CHANNELS];
+
+
+    let __BC_STACK_INDEXES = [ i * BC_CHANNEL_STACK_SIZE + BC_CHANNEL_STACK_OFFSET for let i in 0..N_CHANNELS];
+
+    const _BcStackIndexes : [u8; N_CHANNELS + 1] = __BC_STACK_INDEXES;
+        let BcStackIndexesStart = &_BcStackIndexes[1] as *u8;
+        let BcStackIndexesEnd = &_BcStackIndexes[0] as *u8;
+
+    // Used to determine if `loopStackPointer` is valid.
+    // Equal to `BcStackIndexesEnd[x] - 3 + 1` (+1 for < comparison)
+    const ValidLoopStackPointerTable : [u8; N_CHANNELS] = [ __BC_STACK_INDEXES[i + 1] - 3 + 1 for let i in 0..(N_CHANNELS - 1)];
+}
+
+in bytecode_stack {
+    // The bytecode stack
+    //
+    // CAUTION: `bcStack` is offset by BC_CHANNEL_STACK_OFFSET to eliminate signed comparisons.
+    var __bcStack : [u8 ; BC_CHANNEL_STACK_SIZE * N_CHANNELS];
+        var bcStack @ (&__bcStack as u16) - BC_CHANNEL_STACK_OFFSET : [u8 ; BC_CHANNEL_STACK_SIZE * N_CHANNELS + BC_CHANNEL_STACK_OFFSET];
 }
 
 import "bytecode";

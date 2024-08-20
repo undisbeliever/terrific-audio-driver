@@ -11,7 +11,7 @@ use compiler::bytecode_assembler::BcTerminator;
 use compiler::data;
 use compiler::data::{Name, TextFile, UniqueNamesList};
 use compiler::envelope::{Adsr, Envelope, Gain};
-use compiler::errors::{MmlError, SongError};
+use compiler::errors::{BytecodeError, MmlError, SongError};
 use compiler::mml;
 use compiler::notes::Octave;
 use compiler::pitch_table::{build_pitch_table, PitchTable};
@@ -485,8 +485,12 @@ fn test_wait_loop() {
 
     // Test no compile errors when loop stack is full
     assert_line_matches_bytecode(
-        "[ [ [ w%1024 ]2 ]3 ]4",
+        "[[[[[[[ w%1024 ]2]3]4]5]6]7]8",
         &[
+            "start_loop",
+            "start_loop",
+            "start_loop",
+            "start_loop",
             "start_loop",
             "start_loop",
             "start_loop",
@@ -497,6 +501,10 @@ fn test_wait_loop() {
             "end_loop 2",
             "end_loop 3",
             "end_loop 4",
+            "end_loop 5",
+            "end_loop 6",
+            "end_loop 7",
+            "end_loop 8",
         ],
     );
 
@@ -579,8 +587,12 @@ fn test_rest_loop() {
 
     // Test no compile errors when loop stack is full
     assert_line_matches_bytecode(
-        "[ [ [ r%1024 ]2 ]3 ]4",
+        "[[[[[[[ r%1024 ]2]3]4]5]6]7]8",
         &[
+            "start_loop",
+            "start_loop",
+            "start_loop",
+            "start_loop",
             "start_loop",
             "start_loop",
             "start_loop",
@@ -591,6 +603,10 @@ fn test_rest_loop() {
             "end_loop 2",
             "end_loop 3",
             "end_loop 4",
+            "end_loop 5",
+            "end_loop 6",
+            "end_loop 7",
+            "end_loop 8",
         ],
     );
 }
@@ -718,8 +734,12 @@ fn test_merged_rest_loop() {
 
     // Test no compile errors when loop stack is full
     assert_line_matches_bytecode(
-        "[ [ [ r%2 r%1028 ]2 ]3 ]4",
+        "[[[[[[[ r%2 r%1028 ]2]3]4]5]6]7]8",
         &[
+            "start_loop",
+            "start_loop",
+            "start_loop",
+            "start_loop",
             "start_loop",
             "start_loop",
             "start_loop",
@@ -732,6 +752,10 @@ fn test_merged_rest_loop() {
             "end_loop 2",
             "end_loop 3",
             "end_loop 4",
+            "end_loop 5",
+            "end_loop 6",
+            "end_loop 7",
+            "end_loop 8",
         ],
     );
 
@@ -810,6 +834,39 @@ fn test_loops() {
             "end_loop 8",
             "end_loop 9",
         ],
+    );
+}
+
+#[test]
+fn test_max_loops() {
+    assert_line_matches_bytecode(
+        "[[[[[[[a]11]12]13]14]15]16]17",
+        &[
+            "start_loop 17",
+            "start_loop 16",
+            "start_loop 15",
+            "start_loop 14",
+            "start_loop 13",
+            "start_loop 12",
+            "start_loop 11",
+            "play_note a4 24",
+            "end_loop",
+            "end_loop",
+            "end_loop",
+            "end_loop",
+            "end_loop",
+            "end_loop",
+            "end_loop",
+        ],
+    );
+}
+
+#[test]
+fn test_too_many_loops() {
+    assert_error_in_mml_line(
+        "[[[[[[[[a]11]12]13]14]15]16]17]18",
+        8,
+        MmlError::BytecodeError(BytecodeError::StackOverflowInStartLoop(8 * 3)),
     );
 }
 

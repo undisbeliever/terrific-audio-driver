@@ -167,7 +167,7 @@ impl BytecodeAssembler<'_, '_> {
            skip_last_loop 0 no_arguments,
            end_loop 1 optional_loop_count_argument,
 
-           call_subroutine 1 subroutine_argument,
+           call_subroutine 2 subroutine_argument,
 
            set_song_tick_clock 1 one_vnt_argument,
         )
@@ -311,12 +311,15 @@ impl BytecodeAssembler<'_, '_> {
         Ok((inst, gain))
     }
 
-    fn subroutine_argument(&self, args: &[&str]) -> Result<SubroutineId, BytecodeAssemblerError> {
+    fn subroutine_argument<'a>(
+        &self,
+        args: &[&'a str],
+    ) -> Result<(&'a str, SubroutineId), BytecodeAssemblerError> {
         let arg = one_argument(args)?;
 
         match self.subroutines {
             Some(subroutines) => match subroutines.get(arg) {
-                Some(s) => Ok(*s),
+                Some(s) => Ok((arg, *s)),
                 None => Err(BytecodeAssemblerError::UnknownSubroutine(arg.to_owned())),
             },
             None => Err(BytecodeAssemblerError::UnknownSubroutine(arg.to_owned())),

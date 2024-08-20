@@ -163,6 +163,10 @@
       "source": "mml-tests/test-loop.mml"
     },
     {
+      "name": "test_loop_stack",
+      "source": "mml-tests/test-loop-stack.mml"
+    },
+    {
       "name": "test_pan",
       "source": "mml-tests/test-pan.mml"
     },

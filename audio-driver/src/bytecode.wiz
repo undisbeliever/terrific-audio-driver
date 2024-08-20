@@ -32,8 +32,6 @@ let MAX_PAN = 128;
 
 namespace bytecode {
 
-let MAX_NESTED_LOOPS = 3;
-
 let N_NOTE_OCTAVES = 8;
 let N_PLAY_NOTE_INSTRUCTIONS = N_NOTE_OCTAVES * 12 * 2;
 
@@ -130,23 +128,6 @@ let INSTRUCTIONS_WITH_ARGUMENTS = [
     call_subroutine,
 
 
-    // parameter = u8 number of times to loop
-    start_loop_0,
-    start_loop_1,
-    start_loop_2,
-
-
-    // Breaks a loop early if the loop is on the last cycle
-    //  Used to implement the `:` token in a MML loop.
-    //
-    // ie. Allows for `[ abc : de ]3` loops, which will play `abc de abc de abc`.
-    //
-    // parameter = number of bytes in the bytecode to skip if loop counter == 1.
-    skip_last_loop_0,
-    skip_last_loop_1,
-    skip_last_loop_2,
-
-
     // parameter = u8 instrument_id
     //
     // NOTE: There is no bounds-checking on instrument_id
@@ -197,11 +178,34 @@ let INSTRUCTIONS_WITH_ARGUMENTS = [
     //
     // NOTE: Only sets the song timer (tempo).  The timer for the sound-effect channels is unchanged.
     set_song_tick_clock,
+
+
+    // parameter = u8 number of times to loop
+    //
+    // CAUTION: disables channels if the stack is full
+    start_loop,
+
+
+    // Breaks a loop early if the loop is on the last cycle
+    //  Used to implement the `:` token in a MML loop.
+    //
+    // ie. Allows for `[ abc : de ]3` loops, which will play `abc de abc de abc`.
+    //
+    // parameter = number of bytes in the bytecode to skip if loop counter == 1.
+    //
+    // CAUTION: Must be used in a loop.
+    skip_last_loop,
 ];
 
 
 // These bytecodes do not have parameters
 let NO_ARGUMENT_INSTRUCTIONS = [
+    // Jump to `start_loop` if `--loop_count != 0`
+    //
+    // CAUTION: Must be used in a loop.
+    end_loop,
+
+
     // End of channel bytecode.
     //
     // This instruction will either jump to the loop point or stop the channel
@@ -217,12 +221,6 @@ let NO_ARGUMENT_INSTRUCTIONS = [
     return_from_subroutine,
 
 
-    // Jump to `start_loop_*` if `--loop_count != 0`
-    end_loop_0,
-    end_loop_1,
-    end_loop_2,
-
-
     // Enable echo on this channel
     enable_echo,
 
@@ -231,6 +229,12 @@ let NO_ARGUMENT_INSTRUCTIONS = [
 
 
     // Padding
+    disable_channel,
+    disable_channel,
+    disable_channel,
+    disable_channel,
+    disable_channel,
+    disable_channel,
     disable_channel,
 ];
 

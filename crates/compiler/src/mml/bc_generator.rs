@@ -21,7 +21,6 @@ use crate::songs::{BytecodePos, SongBcTracking};
 use crate::bytecode::{
     BcTerminator, BcTicks, BcTicksKeyOff, BcTicksNoKeyOff, Bytecode, BytecodeContext, LoopCount,
     PitchOffsetPerTick, PlayNoteTicks, PortamentoVelocity, RelativeVolume, SubroutineId,
-    MAX_NESTED_LOOPS,
 };
 use crate::errors::{ErrorWithPos, MmlChannelError, MmlError, ValueError};
 use crate::notes::{Note, SEMITONES_PER_OCTAVE};
@@ -183,10 +182,6 @@ impl ChannelBcGenerator<'_> {
             loop_point: None,
             show_missing_set_instrument_error: !is_subroutine,
         }
-    }
-
-    fn can_loop(&self) -> bool {
-        self.bc.get_loop_stack_len() < MAX_NESTED_LOOPS.into()
     }
 
     fn instrument_from_index(&self, i: usize) -> &MmlInstrument {
@@ -452,7 +447,7 @@ impl ChannelBcGenerator<'_> {
         }
         self.prev_slurred_note = None;
 
-        if length.value() < MIN_LOOP_REST || !self.can_loop() {
+        if length.value() < MIN_LOOP_REST || !self.bc.can_loop() {
             self.rest_one_keyoff_no_loop(length)
         } else {
             // Convert a long rest to a rest loop.
@@ -479,7 +474,7 @@ impl ChannelBcGenerator<'_> {
         }
         self.prev_slurred_note = None;
 
-        if length.value() < MIN_LOOP_REST || !self.can_loop() {
+        if length.value() < MIN_LOOP_REST || !self.bc.can_loop() {
             self.rest_many_keyoffs_no_loop(length)
         } else {
             // Convert a long rest to a rest loop.
@@ -502,7 +497,7 @@ impl ChannelBcGenerator<'_> {
     fn wait(&mut self, length: TickCounter) -> Result<(), MmlError> {
         const MIN_LOOP_REST: u32 = BcTicksNoKeyOff::MAX * REST_LOOP_INSTRUCTION_THREASHOLD + 1;
 
-        if length.value() < MIN_LOOP_REST || !self.can_loop() {
+        if length.value() < MIN_LOOP_REST || !self.bc.can_loop() {
             self.wait_no_loop(length)
         } else {
             // Convert a long rest to a rest loop.
@@ -762,7 +757,7 @@ impl ChannelBcGenerator<'_> {
             self.envelope = IeState::Known(e);
         }
 
-        self.bc.call_subroutine(s_id)?;
+        self.bc.call_subroutine(sub.identifier.as_str(), s_id)?;
 
         Ok(())
     }
@@ -1126,7 +1121,7 @@ impl<'a, 'b> MmlSongBytecodeGenerator<'a, 'b> {
 
         let last_pos = *parser.peek_pos();
         let tick_counter = gen.bc.get_tick_counter();
-        let max_nested_loops = gen.bc.get_max_nested_loops();
+        let max_stack_depth = gen.bc.get_max_stack_depth();
 
         assert!(gen.loop_point.is_none());
 
@@ -1144,7 +1139,7 @@ impl<'a, 'b> MmlSongBytecodeGenerator<'a, 'b> {
             Ok(Subroutine {
                 identifier,
                 bytecode_offset: sd_start_index.try_into().unwrap_or(u16::MAX),
-                subroutine_id: SubroutineId::new(subroutine_index, tick_counter, max_nested_loops),
+                subroutine_id: SubroutineId::new(subroutine_index, tick_counter, max_stack_depth),
                 last_instrument: match gen.instrument {
                     IeState::Known(i) => Some(i),
                     IeState::Maybe(_) => panic!("unexpected maybe instrument"),

@@ -9,13 +9,12 @@ use relative_path::RelativeToError;
 use crate::bytecode::{
     BcTicks, BcTicksKeyOff, BcTicksNoKeyOff, InstrumentId, LoopCount, Pan, PitchOffsetPerTick,
     PortamentoVelocity, QuarterWavelengthInTicks, RelativePan, RelativeVolume, Volume,
-    MAX_NESTED_LOOPS,
 };
 use crate::data::{LoopSetting, Name};
 use crate::driver_constants::{
-    addresses, ECHO_BUFFER_EDL_MS, FIR_FILTER_SIZE, MAX_COMMON_DATA_SIZE, MAX_DIR_ITEMS,
-    MAX_INSTRUMENTS_AND_SAMPLES, MAX_N_PITCHES, MAX_N_SONGS, MAX_SONG_DATA_SIZE, MAX_SOUND_EFFECTS,
-    MAX_SUBROUTINES,
+    addresses, BC_CHANNEL_STACK_SIZE, ECHO_BUFFER_EDL_MS, FIR_FILTER_SIZE, MAX_COMMON_DATA_SIZE,
+    MAX_DIR_ITEMS, MAX_INSTRUMENTS_AND_SAMPLES, MAX_N_PITCHES, MAX_N_SONGS, MAX_SONG_DATA_SIZE,
+    MAX_SOUND_EFFECTS, MAX_SUBROUTINES,
 };
 use crate::echo::{EchoEdl, EchoLength, MAX_FIR_ABS_SUM};
 use crate::envelope::Gain;
@@ -193,13 +192,14 @@ pub enum BytecodeError {
     NotInALoop,
     MissingLoopCount,
     CannotHaveLoopCountAtStartAndEndLoop,
-    TooManyLoops,
-    TooManyLoopsInSubroutineCall,
     MultipleSkipLastLoopInstructions,
     NoTicksBeforeSkipLastLoop,
     NoTicksAfterSkipLastLoop,
     NoTicksInLoop,
     SkipLastLoopOutOfBounds(usize),
+
+    StackOverflowInStartLoop(u32),
+    StackOverflowInSubroutineCall(String, u32),
 
     SubroutineCallInSubroutine,
     SubroutineCallInSoundEffect,
@@ -435,7 +435,6 @@ pub enum MmlError {
     LoopPointAlreadySet,
     CannotSetLoopPoint,
     CannotSetLoopPointInALoop,
-    CannotCallSubroutineTooManyNestedLoops(mml::Identifier, usize),
     CannotUseMpWithoutInstrument,
     MpPitchOffsetTooLarge(u32),
     MpDepthZero,
@@ -832,8 +831,6 @@ impl Display for BytecodeError {
             Self::CannotHaveLoopCountAtStartAndEndLoop => {
                 write!(f, "cannot have a loop count at the start and end of a loop")
             }
-            Self::TooManyLoops => write!(f, "too many nested loops (max: {})", MAX_NESTED_LOOPS),
-            Self::TooManyLoopsInSubroutineCall => write!(f, "too many loops in subroutine call"),
             Self::MultipleSkipLastLoopInstructions => {
                 write!(f, "multiple skip_last_loop instructions in a single loop")
             }
@@ -850,6 +847,23 @@ impl Display for BytecodeError {
                     "skip_last_loop out of bounds ({}, max: {}",
                     to_skip,
                     u8::MAX
+                )
+            }
+
+            Self::StackOverflowInStartLoop(stack_depth) => {
+                write!(
+                    f,
+                    "too many loops (requires {} bytes of stack, stack is {} bytes)",
+                    stack_depth, BC_CHANNEL_STACK_SIZE
+                )
+            }
+            Self::StackOverflowInSubroutineCall(name, stack_depth) => {
+                write!(
+                    f,
+                    "cannot call subroutine {}, stack overflow ({} bytes required, max {})",
+                    name.as_str(),
+                    stack_depth,
+                    BC_CHANNEL_STACK_SIZE
                 )
             }
 
@@ -1139,15 +1153,6 @@ impl Display for MmlError {
             Self::LoopPointAlreadySet => write!(f, "loop point already set"),
             Self::CannotSetLoopPoint => write!(f, "cannot set loop point"),
             Self::CannotSetLoopPointInALoop => write!(f, "cannot set loop point in a loop"),
-            Self::CannotCallSubroutineTooManyNestedLoops(name, loops) => {
-                write!(
-                    f,
-                    "cannot call subroutine {}, too many nested loops ({} required, max {})",
-                    name.as_str(),
-                    loops,
-                    MAX_NESTED_LOOPS
-                )
-            }
             Self::CannotUseMpWithoutInstrument => {
                 write!(f, "cannot use MP vibrato without setting an instrument")
             }
