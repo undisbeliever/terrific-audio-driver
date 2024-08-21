@@ -8,7 +8,7 @@
 
 use crate::bytecode::{
     BcTerminator, BcTicks, BcTicksKeyOff, BcTicksNoKeyOff, Bytecode, InstrumentId, PlayNoteTicks,
-    SubroutineId, Volume,
+    StackDepth, SubroutineId, Volume,
 };
 use crate::driver_constants::{
     addresses, AUDIO_RAM_SIZE, ECHO_BUFFER_MIN_SIZE, MAX_SONG_DATA_SIZE, MAX_SUBROUTINES,
@@ -90,6 +90,8 @@ pub struct Channel {
     pub bytecode_offset: u16,
     pub loop_point: Option<LoopPoint>,
     pub tick_counter: TickCounter,
+
+    pub max_stack_depth: StackDepth,
 
     pub section_tick_counters: Vec<TickCounterWithLoopFlag>,
     pub tempo_changes: Vec<(TickCounter, TickClock)>,

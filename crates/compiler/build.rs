@@ -53,8 +53,6 @@ const AUDIO_DRIVER_SYMBOLS: &[(&str, &str)] = &[
     ("channelSoA.nextEventIsKeyOff", "CHANNEL_NEXT_EVENT_IS_KEY_OFF"),
     ("channelSoA.pan", "CHANNEL_PAN"),
     ("channelSoA.portamento_direction", "CHANNEL_DIRECTION"),
-    ("channelSoA.returnInstPtr_l", "CHANNEL_RETURN_INST_PTR_L"),
-    ("channelSoA.returnInstPtr_h", "CHANNEL_RETURN_INST_PTR_H"),
     ("channelSoA.vibrato_pitchOffsetPerTick", "CHANNEL_VIBRATO_PITCH_OFFSET_PER_TICK"),
     ("channelSoA.vibrato_directionComparator", "CHANNEL_VIBRATO_DIRECTION_COMPARATOR"),
     ("channelSoA.vibrato_tickCounter", "CHANNEL_VIBRATO_TICK_COUNTER"),

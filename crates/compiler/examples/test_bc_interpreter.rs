@@ -165,11 +165,6 @@ fn assert_bc_intrepreter_matches_emu(
         addresses::CHANNEL_INSTRUCTION_PTR_H,
         "instructionPtr",
     );
-    test_channel_soa_ptrs(
-        addresses::CHANNEL_RETURN_INST_PTR_L,
-        addresses::CHANNEL_RETURN_INST_PTR_H,
-        "returnInstPtr",
-    );
 
     test_channel_soa(addresses::CHANNEL_STACK_POINTER, "channel_stackPointer");
     test_channel_soa(

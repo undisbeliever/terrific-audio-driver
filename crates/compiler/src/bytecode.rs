@@ -7,7 +7,8 @@
 #![allow(clippy::assertions_on_constants)]
 
 use crate::driver_constants::{
-    BC_CHANNEL_STACK_SIZE, BC_STACK_BYTES_PER_LOOP, MAX_INSTRUMENTS_AND_SAMPLES,
+    BC_CHANNEL_STACK_SIZE, BC_STACK_BYTES_PER_LOOP, BC_STACK_BYTES_PER_SUBROUTINE_CALL,
+    MAX_INSTRUMENTS_AND_SAMPLES,
 };
 use crate::envelope::{Adsr, Gain};
 use crate::errors::{BytecodeError, ValueError};
@@ -121,6 +122,16 @@ impl SubroutineId {
 
     pub fn tick_counter(&self) -> TickCounter {
         self.tick_counter
+    }
+
+    pub fn max_stack_depth(&self) -> StackDepth {
+        self.max_stack_depth
+    }
+}
+
+impl StackDepth {
+    pub fn to_u32(self) -> u32 {
+        self.0
     }
 }
 
@@ -469,7 +480,12 @@ impl Bytecode {
     }
 
     pub fn get_max_stack_depth(&self) -> StackDepth {
-        self.max_stack_depth
+        match self.context {
+            BytecodeContext::SongSubroutine => {
+                StackDepth(self.max_stack_depth.0 + BC_STACK_BYTES_PER_SUBROUTINE_CALL as u32)
+            }
+            BytecodeContext::SongChannel | BytecodeContext::SoundEffect => self.max_stack_depth,
+        }
     }
 
     pub fn get_bytecode_len(&self) -> usize {

@@ -815,10 +815,8 @@ impl TadEmu {
                     addresses::CHANNEL_INSTRUCTION_PTR_L,
                     addresses::CHANNEL_INSTRUCTION_PTR_H,
                 ),
-                voice_return_inst_ptrs: read_offsets(
-                    addresses::CHANNEL_RETURN_INST_PTR_L,
-                    addresses::CHANNEL_RETURN_INST_PTR_H,
-                ),
+                // ::TODO find a way to read the return address::
+                voice_return_inst_ptrs: Default::default(),
             })
         } else {
             None

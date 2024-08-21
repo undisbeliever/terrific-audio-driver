@@ -5,9 +5,8 @@ Version 0.0.11
 ==============
 
 Bytecode changes:
- * The loop instructions now use a traditional stack.
+ * Loops and subroutines now use a traditional stack.
     * The maximum number of nested loops has increased.
-
 
 
 Version 0.0.10

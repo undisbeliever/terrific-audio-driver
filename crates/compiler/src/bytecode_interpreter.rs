@@ -34,7 +34,6 @@ pub struct ChannelSoA {
     next_event_is_key_off: u8,
 
     instruction_ptr: u16,
-    return_ptr: u16,
 
     stack_pointer: u8,
     loop_stack_pointer: u8,
@@ -83,7 +82,6 @@ struct ChannelState {
 
     instruction_ptr: u16,
     instruction_ptr_after_end: u16,
-    return_ptr: Option<u16>,
 
     // Stack pointer
     // Grows downwards (from CHANNEL_STACK_SIZE to 0)
@@ -128,7 +126,6 @@ impl ChannelState {
                 .and_then(|c| c.loop_point)
                 .and_then(|lp| u16::try_from(lp.bytecode_offset).ok())
                 .unwrap_or(u16::MAX),
-            return_ptr: None,
             stack_pointer: BC_CHANNEL_STACK_SIZE,
             loop_stack_pointer: BC_CHANNEL_STACK_SIZE - BC_STACK_BYTES_PER_LOOP,
             bc_stack: Default::default(),
@@ -174,7 +171,6 @@ impl ChannelInterpreter<'_> {
         let mut ci = ChannelInterpreter::new(song, song_ptr, channel_id, target_ticks);
 
         ci.s.instruction_ptr = ci.read_subroutine_instruction_ptr(subroutine_index);
-        ci.s.return_ptr = None;
 
         // Subroutine might not set an instruemnt before the play_note instructions.
         //
@@ -275,24 +271,6 @@ impl ChannelInterpreter<'_> {
                     let to_rest = self.read_pc();
                     self.s.ticks += Self::to_tick_count(to_rest, true);
                 }
-
-                opcodes::CALL_SUBROUTINE => {
-                    let s_id = self.read_pc();
-                    self.s.vibrato_pitch_offset_per_tick = 0;
-
-                    self.s.return_ptr = Some(self.s.instruction_ptr);
-                    self.s.instruction_ptr = self.read_subroutine_instruction_ptr(s_id);
-                }
-                opcodes::RETURN_FROM_SUBROUTINE => match self.s.return_ptr {
-                    Some(pc) => {
-                        self.s.return_ptr = None;
-                        self.s.vibrato_pitch_offset_per_tick = 0;
-                        self.s.instruction_ptr = pc;
-                    }
-                    None => {
-                        self.disable_channel();
-                    }
-                },
 
                 opcodes::SET_INSTRUMENT => {
                     self.s.instrument = Some(self.read_pc());
@@ -407,6 +385,50 @@ impl ChannelInterpreter<'_> {
                         if sp <= BC_CHANNEL_STACK_SIZE - BC_STACK_BYTES_PER_LOOP {
                             self.s.loop_stack_pointer = sp;
                         }
+                    }
+                }
+
+                opcodes::CALL_SUBROUTINE => {
+                    let s_id = self.read_pc();
+
+                    match self.s.stack_pointer.checked_sub(2) {
+                        Some(sp) => {
+                            self.s.stack_pointer = sp;
+
+                            self.s.vibrato_pitch_offset_per_tick = 0;
+
+                            let inst_ptr = self.s.instruction_ptr + self.s.song_ptr;
+                            let inst_ptr = inst_ptr.to_le_bytes();
+
+                            self.s.bc_stack[sp] = inst_ptr[0];
+                            self.s.bc_stack[sp + 1] = inst_ptr[1];
+
+                            self.s.instruction_ptr = self.read_subroutine_instruction_ptr(s_id);
+                        }
+                        None => self.disable_channel(),
+                    }
+                }
+                opcodes::RETURN_FROM_SUBROUTINE => {
+                    let sp = self.s.stack_pointer;
+
+                    if sp <= BC_CHANNEL_STACK_SIZE - 2 {
+                        self.s.stack_pointer = sp + 2;
+
+                        if self.s.stack_pointer <= BC_CHANNEL_STACK_SIZE - 2 {
+                            self.s.loop_stack_pointer = self.s.stack_pointer;
+                        }
+
+                        self.s.vibrato_pitch_offset_per_tick = 0;
+
+                        let inst_ptr =
+                            u16::from_le_bytes([self.s.bc_stack[sp], self.s.bc_stack[sp + 1]]);
+
+                        match inst_ptr.checked_sub(self.s.song_ptr) {
+                            Some(i) => self.s.instruction_ptr = i,
+                            None => self.disable_channel(),
+                        }
+                    } else {
+                        self.disable_channel();
                     }
                 }
 
@@ -532,10 +554,6 @@ fn build_channel(
                     .checked_add(common.song_data_addr)
                     .unwrap_or(0),
             },
-            return_ptr: match c.return_ptr {
-                Some(o) => o.checked_add(common.song_data_addr).unwrap_or(0),
-                None => 0,
-            },
             stack_pointer,
             loop_stack_pointer: loop_stack_index,
             inst_pitch_offset,
@@ -576,7 +594,6 @@ fn unused_channel(channel_index: usize) -> Channel {
             next_event_is_key_off: 0,
 
             instruction_ptr: 0,
-            return_ptr: 0,
             stack_pointer,
             loop_stack_pointer: stack_pointer - BC_STACK_BYTES_PER_LOOP as u8,
             inst_pitch_offset: 0,
@@ -671,9 +688,6 @@ pub fn interpret_song_subroutine(
         ticks,
     );
     let valid = ci.process_until_target();
-
-    // return_ptr must be None so audio-driver disables the channel on a return_from_subroutine instruction
-    assert_eq!(ci.s.return_ptr, None, "Invalid return_ptr");
 
     if valid {
         Some(InterpreterOutput {
@@ -771,11 +785,6 @@ impl InterpreterOutput {
                     addresses::CHANNEL_INSTRUCTION_PTR_L,
                     addresses::CHANNEL_INSTRUCTION_PTR_H,
                     c.instruction_ptr,
-                );
-                soa_write_u16(
-                    addresses::CHANNEL_RETURN_INST_PTR_L,
-                    addresses::CHANNEL_RETURN_INST_PTR_H,
-                    c.return_ptr,
                 );
 
                 soa_write_u8(addresses::CHANNEL_STACK_POINTER, c.stack_pointer);

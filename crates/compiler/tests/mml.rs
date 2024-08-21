@@ -10,6 +10,9 @@ use compiler::bytecode_assembler;
 use compiler::bytecode_assembler::BcTerminator;
 use compiler::data;
 use compiler::data::{Name, TextFile, UniqueNamesList};
+use compiler::driver_constants::{
+    BC_CHANNEL_STACK_OFFSET, BC_STACK_BYTES_PER_LOOP, BC_STACK_BYTES_PER_SUBROUTINE_CALL,
+};
 use compiler::envelope::{Adsr, Envelope, Gain};
 use compiler::errors::{BytecodeError, MmlError, SongError};
 use compiler::mml;
@@ -867,6 +870,95 @@ fn test_too_many_loops() {
         "[[[[[[[[a]11]12]13]14]15]16]17]18",
         8,
         MmlError::BytecodeError(BytecodeError::StackOverflowInStartLoop(8 * 3)),
+    );
+}
+
+#[test]
+fn test_max_loops_with_subroutine() {
+    let subroutine_stack_depth = 3 * BC_STACK_BYTES_PER_LOOP + BC_STACK_BYTES_PER_SUBROUTINE_CALL;
+    let channel_a_stack_depth = subroutine_stack_depth + 3 * BC_STACK_BYTES_PER_LOOP;
+
+    // Assert this is the maximum depth
+    assert!(channel_a_stack_depth + BC_STACK_BYTES_PER_LOOP > BC_CHANNEL_STACK_OFFSET);
+    assert!(channel_a_stack_depth + BC_STACK_BYTES_PER_SUBROUTINE_CALL > BC_CHANNEL_STACK_OFFSET);
+
+    // Cannot test with asm, no easy way to implement a "call_subroutine s" bytecode.
+    // Instead, this test will confirm it compiles with no errors and the correct stack depth
+
+    let mml = compile_mml(
+        r##"
+@0 dummy_instrument
+
+!s [[[a]11]12]13
+
+A @0
+A [[[ !s ]14]15]16
+"##,
+        &dummy_data(),
+    );
+
+    let subroutine = &mml.subroutines()[0];
+    let channel_a = mml.channels()[0].as_ref().unwrap();
+
+    assert_eq!(
+        subroutine.subroutine_id.max_stack_depth().to_u32(),
+        u32::try_from(subroutine_stack_depth).unwrap()
+    );
+
+    assert_eq!(
+        channel_a.max_stack_depth.to_u32(),
+        u32::try_from(channel_a_stack_depth).unwrap()
+    );
+}
+
+#[test]
+fn test_too_many_loops_with_subroutine_call() {
+    assert_err_in_channel_a_mml(
+        r##"
+@0 dummy_instrument
+
+!s [[[[[[[a]11]12]13]14]15]16]17
+
+A @0
+A !s
+"##,
+        3,
+        MmlError::BytecodeError(BytecodeError::StackOverflowInSubroutineCall(
+            "s".to_owned(),
+            23,
+        )),
+    );
+
+    assert_err_in_channel_a_mml(
+        r##"
+@0 dummy_instrument
+
+!s a
+
+A @0
+A [[[[[[[ !s ]11]12]13]14]15]16]17
+"##,
+        11,
+        MmlError::BytecodeError(BytecodeError::StackOverflowInSubroutineCall(
+            "s".to_owned(),
+            23,
+        )),
+    );
+
+    assert_err_in_channel_a_mml(
+        r##"
+@0 dummy_instrument
+
+!s [[[a]11]12]13
+
+A @0
+A [[[[[ !s ]14]15]16]17]18
+"##,
+        9,
+        MmlError::BytecodeError(BytecodeError::StackOverflowInSubroutineCall(
+            "s".to_owned(),
+            26,
+        )),
     );
 }
 

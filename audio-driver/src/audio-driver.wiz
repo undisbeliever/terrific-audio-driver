@@ -298,12 +298,6 @@ in firstpage {
         // (The high-byte of instructionPtr is in firstpage)
         var instructionPtr_l : [u8 ; N_CHANNELS];
 
-        // Address to return to in a `return_from_subroutine` bytecode
-        //
-        // If `returnInstPtr_h` is 0, `return_from_subroutine` will disable the channel instead.
-        var returnInstPtr_l : [u8 ; N_CHANNELS];
-        var returnInstPtr_h : [u8 ; N_CHANNELS];
-
 
         // Bytecode address to loop to when the channel encounters and `end` instruction.
         // If `instructionPtrAfterEnd_h` is 0, the channel does not loop and will instead stop.
@@ -1146,7 +1140,6 @@ func __reset_channel(channelIndex : u8 in x, pan: u8 in a) {
     a = 0;
 
     channelSoA.instructionPtrAfterEnd_h[x] = a;     // don't loop SFX
-    channelSoA.returnInstPtr_h[x] = a;              // clear subroutine return ptr
 
     // Disable portamento
     channelSoA.portamento_direction[x] = a as i8;
@@ -1777,17 +1770,25 @@ func end(channelIndex : u8 in x) {
 func call_subroutine(channelIndex : u8 in x, subroutineId : u8 in a) {
 var _subroutineId : u8 in zpTmp;
 
+    _subroutineId = a;
+
+    a = channelSoA.stackPointer[x];
+    a--;
+    a--;
+    goto disable_channel if a < BcStackIndexesEnd[x];
+
+    channelSoA.stackPointer[x] = a;
+
     // Disable vibrato
     // Y = 0
     channelSoA.vibrato_pitchOffsetPerTick[x] = y;
 
     y = a;
-
-    // Save return address
-    channelSoA.returnInstPtr_l[x] = a = <:instructionPtr;
-    channelSoA.returnInstPtr_h[x] = a = >:instructionPtr;
+    (&bcStack[0])[y] = a = <:instructionPtr;
+    (&bcStack[1])[y] = a = >:instructionPtr;
 
     // Add songPtr to subroutineTable[y] to get the subroutine address
+    y = _subroutineId;
     <:instructionPtr = a = (subroutineTable_l as *u8)[y] + <:songPtr;
     >:instructionPtr = a = (subroutineTable_h as *u8)[y] +# >:songPtr;
 
@@ -1798,20 +1799,27 @@ var _subroutineId : u8 in zpTmp;
 
 // KEEP: X
 func return_from_subroutine(channelIndex : u8 in x) {
-    // Disable channel if not in a subroutine.
-    a = channelSoA.returnInstPtr_h[x];
-    goto disable_channel if zero;
+
+    a = channelSoA.stackPointer[x];
+    a++;
+    goto disable_channel if a >= BcStackIndexesStart[x];
+    a++;
+
+    channelSoA.stackPointer[x] = a;
+
+    if a < ValidLoopStackPointerTable[x] {
+        // Only write to loopStackPointer if it is valid
+        channelSoA.loopStackPointer[x] = a;
+    }
 
     y = a;
+    <:instructionPtr = a = (&bcStack[-2])[y];
+    >:instructionPtr = a = (&bcStack[-1])[y];
 
-    // Reset subroutine return ptr and vibrato
-    a = 0;
-    channelSoA.returnInstPtr_h[x] = a;
-    channelSoA.vibrato_pitchOffsetPerTick[x] = a;
+    // Disable vibrato
+    channelSoA.vibrato_pitchOffsetPerTick[x] = a = 0;
 
-    a = channelSoA.returnInstPtr_l[x];
-
-    ^return process_bytecode_with_loader_test(x, ya);
+    ^return process_next_bytecode(x);
 }
 
 

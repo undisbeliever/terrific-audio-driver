@@ -1214,6 +1214,8 @@ impl<'a, 'b> MmlSongBytecodeGenerator<'a, 'b> {
             }
         };
 
+        let max_stack_depth = gen.bc.get_max_stack_depth();
+
         self.song_data = match gen.bc.bytecode(terminator) {
             Ok(b) => b,
             Err((e, b)) => {
@@ -1230,6 +1232,7 @@ impl<'a, 'b> MmlSongBytecodeGenerator<'a, 'b> {
                 bytecode_offset: sd_start_index.try_into().unwrap_or(u16::MAX),
                 loop_point: gen.loop_point,
                 tick_counter,
+                max_stack_depth,
                 section_tick_counters,
                 tempo_changes: gen.tempo_changes,
             })
