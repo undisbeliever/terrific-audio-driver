@@ -637,14 +637,8 @@ impl MmlEditorState {
                     let return_pos = mon.voice_return_inst_ptrs[i];
 
                     // Only show return_pos if voice_pos is in a subroutine
-                    let return_pos = match (voice_pos, return_pos) {
-                        (Some(vp), Some(sp)) => {
-                            if vp < ntd.first_channel_bc_offset {
-                                Some(sp)
-                            } else {
-                                None
-                            }
-                        }
+                    let return_pos = match voice_pos {
+                        Some(_) => return_pos,
                         _ => None,
                     };
 

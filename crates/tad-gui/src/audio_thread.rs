@@ -12,7 +12,6 @@ use compiler::bytecode_interpreter;
 use compiler::bytecode_interpreter::SongInterpreter;
 use compiler::common_audio_data::CommonAudioData;
 use compiler::driver_constants::MAX_PAN;
-use compiler::driver_constants::N_CHANNELS;
 use compiler::driver_constants::N_DSP_VOICES;
 use compiler::driver_constants::N_MUSIC_CHANNELS;
 use compiler::driver_constants::{
@@ -472,6 +471,7 @@ struct TadEmu {
 
     data_state: AudioDataState,
     song_id: Option<ItemId>,
+    bc_interpreter: Option<SongInterpreter<SiCad, Arc<SongData>>>,
 
     previous_command: u8,
     sfx_queue: SfxQueue,
@@ -489,6 +489,7 @@ impl TadEmu {
             cad_with_sfx_buffer: None,
             cad_with_sfx: None,
             data_state: AudioDataState::NotLoaded,
+            bc_interpreter: None,
             song_id: None,
             previous_command: 0,
             sfx_queue: SfxQueue::None,
@@ -603,6 +604,7 @@ impl TadEmu {
 
         self.data_state = AudioDataState::NotLoaded;
         self.song_id = None;
+        self.bc_interpreter = None;
 
         self.sfx_queue = SfxQueue::None;
 
@@ -664,12 +666,12 @@ impl TadEmu {
         // Wait for the audio-driver to finish initialization
         self.emu.emulate();
 
-        if let Some(s) = &song_skip {
-            let mut si = new_song_interpreter(&data_state, song_skip.as_ref(), stereo_flag);
+        self.bc_interpreter = new_song_interpreter(&data_state, song_skip.as_ref(), stereo_flag);
 
-            if let Some(si) = &mut si {
-                si.process_ticks(s.target_ticks);
-                si.write_to_emulator(&mut EmulatorWrapper(&mut self.emu));
+        if let Some(s) = &song_skip {
+            if let Some(b) = &mut self.bc_interpreter {
+                b.process_ticks(s.target_ticks);
+                b.write_to_emulator(&mut EmulatorWrapper(&mut self.emu));
             }
         }
 
@@ -798,13 +800,7 @@ impl TadEmu {
     }
 
     /// Returns None if the song and sound effects have finished
-    fn read_voice_positions(&self) -> Option<AudioMonitorData> {
-        const CHANNEL_INSTRUCTION_PTR_H_RANGE: Range<usize> = Range {
-            start: addresses::CHANNEL_INSTRUCTION_PTR_H as usize,
-            end: addresses::CHANNEL_INSTRUCTION_PTR_H as usize + N_CHANNELS,
-        };
-        const COMMON_DATA_ADDR_H: u8 = (addresses::COMMON_DATA >> 8) as u8;
-
+    fn read_voice_positions(&mut self) -> Option<AudioMonitorData> {
         if !self.song_loaded() {
             return None;
         }
@@ -834,19 +830,37 @@ impl TadEmu {
             })
         };
 
-        let any_channels_active = apuram[CHANNEL_INSTRUCTION_PTR_H_RANGE]
-            .iter()
-            .any(|&inst_ptr_h| inst_ptr_h > COMMON_DATA_ADDR_H);
+        let voice_instruction_ptrs = read_offsets(
+            addresses::CHANNEL_INSTRUCTION_PTR_L,
+            addresses::CHANNEL_INSTRUCTION_PTR_H,
+        );
+
+        let voice_return_inst_ptrs = match &mut self.bc_interpreter {
+            Some(b) => {
+                // Assumes number of ticks since the last read was < 256;
+                let bc_tick_counter_l = b.tick_counter().value().to_le_bytes()[0];
+                let emu_tick_counter_l = apuram[usize::from(addresses::SONG_TICK_COUNTER)];
+
+                let ticks_passed = emu_tick_counter_l.wrapping_sub(bc_tick_counter_l);
+                if ticks_passed > 0 {
+                    let v = b.process_ticks(TickCounter::new(ticks_passed.into()));
+                    debug_assert!(v, "Bytecode interpreter timeout");
+                }
+
+                let channels = b.channels();
+
+                std::array::from_fn(|i| channels[i].as_ref().and_then(|c| c.topmost_return_pos))
+            }
+            None => Default::default(),
+        };
+
+        let any_channels_active = voice_instruction_ptrs.iter().any(|v| v.is_some());
 
         if any_channels_active {
             Some(AudioMonitorData {
                 song_id: self.song_id,
-                voice_instruction_ptrs: read_offsets(
-                    addresses::CHANNEL_INSTRUCTION_PTR_L,
-                    addresses::CHANNEL_INSTRUCTION_PTR_H,
-                ),
-                // ::TODO find a way to read the return address::
-                voice_return_inst_ptrs: Default::default(),
+                voice_instruction_ptrs,
+                voice_return_inst_ptrs,
             })
         } else {
             None

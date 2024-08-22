@@ -77,14 +77,20 @@ struct TickClockOverride {
     when: TickCounter,
 }
 
-struct ChannelState {
+pub struct ChannelState {
     ticks: TickCounter,
     disabled: bool,
 
     song_ptr: u16,
 
-    instruction_ptr: u16,
+    pub instruction_ptr: u16,
+
     instruction_ptr_after_end: u16,
+
+    /// The return position (with SongData) of the topmost subroutine call.
+    pub topmost_return_pos: Option<u16>,
+
+    call_stack_depth: u8,
 
     // Stack pointer
     // Grows downwards (from CHANNEL_STACK_SIZE to 0)
@@ -127,6 +133,8 @@ impl ChannelState {
                 .and_then(|c| c.loop_point)
                 .and_then(|lp| u16::try_from(lp.bytecode_offset).ok())
                 .unwrap_or(u16::MAX),
+            topmost_return_pos: None,
+            call_stack_depth: 0,
             stack_pointer: BC_CHANNEL_STACK_SIZE,
             loop_stack_pointer: BC_CHANNEL_STACK_SIZE - BC_STACK_BYTES_PER_LOOP,
             bc_stack: Default::default(),
@@ -374,6 +382,11 @@ impl ChannelState {
                 opcodes::CALL_SUBROUTINE => {
                     let s_id = read_pc();
 
+                    self.call_stack_depth += 1;
+                    if self.call_stack_depth == 1 {
+                        self.topmost_return_pos = Some(self.instruction_ptr);
+                    }
+
                     match self.stack_pointer.checked_sub(2) {
                         Some(sp) => {
                             self.stack_pointer = sp;
@@ -393,6 +406,11 @@ impl ChannelState {
                     }
                 }
                 opcodes::RETURN_FROM_SUBROUTINE => {
+                    self.call_stack_depth = self.call_stack_depth.saturating_sub(1);
+                    if self.call_stack_depth == 0 {
+                        self.topmost_return_pos = None;
+                    }
+
                     let sp = self.stack_pointer;
 
                     if sp <= BC_CHANNEL_STACK_SIZE - 2 {
@@ -507,6 +525,10 @@ where
             song_data,
             common_audio_data,
         }
+    }
+
+    pub fn channels(&self) -> &[Option<ChannelState>; N_MUSIC_CHANNELS] {
+        &self.channels
     }
 
     /// Returns false if there was a timeout
