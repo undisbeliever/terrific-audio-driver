@@ -13,11 +13,14 @@ use crate::driver_constants::{
     SONG_HEADER_N_SUBROUTINES_OFFSET, SONG_HEADER_SIZE, STARTING_VOLUME, S_DSP_EON_REGISTER,
     S_SMP_TIMER_0_REGISTER,
 };
+use crate::songs::Channel as SongChannel;
 use crate::songs::SongData;
 use crate::time::TickCounter;
 
+use std::ops::Deref;
+
 #[derive(Clone)]
-pub struct VirtualChannel {
+struct VirtualChannel {
     vol_l: u8,
     vol_r: u8,
     // Not emulating pitch (all key-on bytecode instructions set the pitch)
@@ -29,7 +32,7 @@ pub struct VirtualChannel {
 }
 
 #[derive(Clone)]
-pub struct ChannelSoA {
+struct ChannelSoA {
     countdown_timer: u8,
     next_event_is_key_off: u8,
 
@@ -55,13 +58,13 @@ pub struct ChannelSoA {
 }
 
 #[derive(Clone)]
-pub struct Channel {
+struct Channel {
     soa: ChannelSoA,
     bc_stack: [u8; BC_CHANNEL_STACK_SIZE],
     dsp: VirtualChannel,
 }
 
-pub struct InterpreterOutput {
+struct InterpreterOutput {
     channels: [Channel; N_MUSIC_CHANNELS],
     song_data_addr: u16,
     stereo_flag: bool,
@@ -114,9 +117,7 @@ struct ChannelState {
 }
 
 impl ChannelState {
-    fn new(song: &SongData, song_ptr: u16, channel_id: usize) -> Self {
-        let channel = song.channels()[channel_id].as_ref();
-
+    fn new(channel: Option<&SongChannel>, song_ptr: u16) -> Self {
         Self {
             ticks: TickCounter::new(0),
             disabled: false,
@@ -139,48 +140,34 @@ impl ChannelState {
             tick_clock_override: None,
         }
     }
-}
 
-struct ChannelInterpreter<'a> {
-    song_data: &'a [u8],
-    target_ticks: TickCounter,
-    s: ChannelState,
-}
+    fn new_subroutine(song: &SongData, song_ptr: u16, subroutine_index: u8) -> Self {
+        let mut s = ChannelState::new(None, song_ptr);
 
-impl ChannelInterpreter<'_> {
-    fn new(
-        song: &SongData,
-        song_ptr: u16,
-        channel_id: usize,
-        target_ticks: TickCounter,
-    ) -> ChannelInterpreter {
-        ChannelInterpreter {
-            song_data: song.data(),
-            target_ticks,
-            s: ChannelState::new(song, song_ptr, channel_id),
-        }
-    }
-
-    fn new_subroutine_intrepreter(
-        song: &SongData,
-        song_ptr: u16,
-        channel_id: usize,
-        subroutine_index: u8,
-        target_ticks: TickCounter,
-    ) -> ChannelInterpreter {
-        let mut ci = ChannelInterpreter::new(song, song_ptr, channel_id, target_ticks);
-
-        ci.s.instruction_ptr = ci.read_subroutine_instruction_ptr(subroutine_index);
+        s.instruction_ptr =
+            ChannelState::read_subroutine_instruction_ptr(subroutine_index, song.data());
 
         // Subroutine might not set an instruemnt before the play_note instructions.
         //
         // Use the first instrument defined in the MML file.
         if let Some(i) = song.instruments().first() {
-            ci.s.instrument = Some(i.instrument_id.as_u8());
-            ci.s.adsr_or_gain_override = Some(i.envelope.engine_value());
+            s.instrument = Some(i.instrument_id.as_u8());
+            s.adsr_or_gain_override = Some(i.envelope.engine_value());
         }
 
-        ci
+        s
+    }
+
+    fn read_subroutine_instruction_ptr(s_id: u8, song_data: &[u8]) -> u16 {
+        let n_subroutines = song_data[SONG_HEADER_N_SUBROUTINES_OFFSET];
+
+        let li = usize::from(s_id) + SONG_HEADER_SIZE;
+        let hi = li + usize::from(n_subroutines);
+
+        let l = song_data.get(li).copied().unwrap_or(0xff);
+        let h = song_data.get(hi).copied().unwrap_or(0xff);
+
+        u16::from_le_bytes([l, h])
     }
 
     fn to_tick_count(length: u8, key_off: bool) -> TickCounter {
@@ -191,53 +178,35 @@ impl ChannelInterpreter<'_> {
         }
     }
 
-    fn read_pc(&mut self) -> u8 {
-        match self.song_data.get(usize::from(self.s.instruction_ptr)) {
+    fn disable_channel(&mut self) {
+        self.disabled = true;
+        self.ticks = TickCounter::new(u32::MAX);
+
+        self.vibrato_pitch_offset_per_tick = 0;
+    }
+
+    fn play_note(&mut self, note_and_key_off_bit: u8, length: u8) {
+        let key_off = note_and_key_off_bit & 1 == 1;
+
+        self.ticks += Self::to_tick_count(length, key_off);
+    }
+
+    fn process_next_bytecode(&mut self, song_data: &[u8]) {
+        let mut read_pc = || match song_data.get(usize::from(self.instruction_ptr)) {
             Some(b) => {
-                self.s.instruction_ptr += 1;
+                self.instruction_ptr += 1;
                 *b
             }
             None => {
                 self.disable_channel();
                 opcodes::DISABLE_CHANNEL
             }
-        }
-    }
+        };
 
-    fn read_pc_i8(&mut self) -> i8 {
-        i8::from_le_bytes([self.read_pc()])
-    }
-
-    fn read_subroutine_instruction_ptr(&self, s_id: u8) -> u16 {
-        let n_subroutines = self.song_data[SONG_HEADER_N_SUBROUTINES_OFFSET];
-
-        let li = usize::from(s_id) + SONG_HEADER_SIZE;
-        let hi = li + usize::from(n_subroutines);
-
-        let l = self.song_data.get(li).copied().unwrap_or(0xff);
-        let h = self.song_data.get(hi).copied().unwrap_or(0xff);
-
-        u16::from_le_bytes([l, h])
-    }
-
-    fn disable_channel(&mut self) {
-        self.s.disabled = true;
-        self.s.ticks = self.target_ticks;
-
-        self.s.vibrato_pitch_offset_per_tick = 0;
-    }
-
-    fn play_note(&mut self, note_and_key_off_bit: u8, length: u8) {
-        let key_off = note_and_key_off_bit & 1 == 1;
-
-        self.s.ticks += Self::to_tick_count(length, key_off);
-    }
-
-    fn process_next_bytecode(&mut self) {
-        let opcode: u8 = self.read_pc();
+        let opcode: u8 = read_pc();
 
         if opcode <= LAST_PLAY_NOTE_OPCODE {
-            let length = self.read_pc();
+            let length = read_pc();
             self.play_note(opcode, length)
         } else {
             let opcode = opcode & 0b11111110;
@@ -245,186 +214,201 @@ impl ChannelInterpreter<'_> {
             match opcode {
                 opcodes::PORTAMENTO_DOWN | opcodes::PORTAMENTO_UP => {
                     // Ignore portamento state
-                    let _portamento_speed = self.read_pc();
-                    let wait_length = self.read_pc();
-                    let note_and_key_off_bit = self.read_pc();
+                    let _portamento_speed = read_pc();
+                    let wait_length = read_pc();
+                    let note_and_key_off_bit = read_pc();
 
                     self.play_note(note_and_key_off_bit, wait_length);
                 }
 
                 opcodes::SET_VIBRATO => {
-                    self.s.vibrato_pitch_offset_per_tick = self.read_pc();
-                    self.s.vibrato_quarter_wavelength_in_ticks = self.read_pc();
+                    let depth = read_pc();
+                    let wavelength = read_pc();
+
+                    self.vibrato_pitch_offset_per_tick = depth;
+                    self.vibrato_quarter_wavelength_in_ticks = wavelength;
                 }
                 opcodes::SET_VIBRATO_DEPTH_AND_PLAY_NOTE => {
-                    self.s.vibrato_pitch_offset_per_tick = self.read_pc();
-                    let note = self.read_pc();
-                    let length = self.read_pc();
+                    let depth = read_pc();
+                    let note = read_pc();
+                    let length = read_pc();
+
+                    self.vibrato_pitch_offset_per_tick = depth;
                     self.play_note(note, length);
                 }
 
                 opcodes::REST => {
-                    let to_rest = self.read_pc();
-                    self.s.ticks += Self::to_tick_count(to_rest, false);
+                    let to_rest = read_pc();
+                    self.ticks += Self::to_tick_count(to_rest, false);
                 }
                 opcodes::REST_KEYOFF => {
-                    let to_rest = self.read_pc();
-                    self.s.ticks += Self::to_tick_count(to_rest, true);
+                    let to_rest = read_pc();
+                    self.ticks += Self::to_tick_count(to_rest, true);
                 }
 
                 opcodes::SET_INSTRUMENT => {
-                    self.s.instrument = Some(self.read_pc());
-                    self.s.adsr_or_gain_override = None;
+                    self.instrument = Some(read_pc());
+                    self.adsr_or_gain_override = None;
                 }
                 opcodes::SET_INSTRUMENT_AND_ADSR_OR_GAIN => {
-                    self.s.instrument = Some(self.read_pc());
-                    let adsr1 = self.read_pc();
-                    let adsr2_or_gain = self.read_pc();
+                    let instrument = read_pc();
+                    let adsr1 = read_pc();
+                    let adsr2_or_gain = read_pc();
 
-                    self.s.adsr_or_gain_override = Some((adsr1, adsr2_or_gain));
+                    self.instrument = Some(instrument);
+                    self.adsr_or_gain_override = Some((adsr1, adsr2_or_gain));
                 }
                 opcodes::SET_ADSR => {
-                    let adsr1 = self.read_pc();
-                    let adsr2 = self.read_pc();
+                    let adsr1 = read_pc();
+                    let adsr2 = read_pc();
 
-                    self.s.adsr_or_gain_override = Some((adsr1, adsr2));
+                    self.adsr_or_gain_override = Some((adsr1, adsr2));
                 }
                 opcodes::SET_GAIN => {
-                    let gain = self.read_pc();
+                    let gain = read_pc();
 
-                    self.s.adsr_or_gain_override = Some((0, gain));
+                    self.adsr_or_gain_override = Some((0, gain));
                 }
 
                 opcodes::ADJUST_PAN => {
-                    let p = self.read_pc_i8();
-                    self.s.pan = self.s.pan.saturating_add_signed(p).clamp(0, Pan::MAX);
+                    let adjust = read_pc();
+
+                    let p = i8::from_le_bytes([adjust]);
+                    self.pan = self.pan.saturating_add_signed(p).clamp(0, Pan::MAX);
                 }
                 opcodes::SET_PAN => {
-                    self.s.pan = self.read_pc();
+                    self.pan = read_pc();
                 }
                 opcodes::SET_PAN_AND_VOLUME => {
-                    self.s.pan = self.read_pc();
-                    self.s.volume = self.read_pc();
+                    let pan = read_pc();
+                    let volume = read_pc();
+
+                    self.pan = pan;
+                    self.volume = volume;
                 }
                 opcodes::ADJUST_VOLUME => {
-                    let v = self.read_pc_i8();
-                    self.s.volume = self.s.volume.saturating_add_signed(v);
+                    let adjust = read_pc();
+
+                    let v = i8::from_le_bytes([adjust]);
+                    self.volume = self.volume.saturating_add_signed(v);
                 }
                 opcodes::SET_VOLUME => {
-                    self.s.volume = self.read_pc();
+                    self.volume = read_pc();
                 }
 
                 opcodes::SET_SONG_TICK_CLOCK => {
-                    let timer = self.read_pc();
-                    self.s.tick_clock_override = Some(TickClockOverride {
+                    let timer = read_pc();
+
+                    self.tick_clock_override = Some(TickClockOverride {
                         timer_register: timer,
-                        when: self.s.ticks,
+                        when: self.ticks,
                     });
                 }
 
                 opcodes::END => {
-                    if self.s.instruction_ptr_after_end != 0 {
-                        self.s.instruction_ptr = self.s.instruction_ptr_after_end;
+                    if self.instruction_ptr_after_end != 0 {
+                        self.instruction_ptr = self.instruction_ptr_after_end;
                     } else {
                         self.disable_channel()
                     }
                 }
 
                 opcodes::START_LOOP => {
-                    let counter = self.read_pc();
+                    let counter = read_pc();
 
-                    match self.s.stack_pointer.checked_sub(3) {
+                    match self.stack_pointer.checked_sub(3) {
                         Some(sp) => {
-                            self.s.stack_pointer = sp;
-                            self.s.loop_stack_pointer = sp;
+                            self.stack_pointer = sp;
+                            self.loop_stack_pointer = sp;
 
-                            let inst_ptr = self.s.song_ptr + self.s.instruction_ptr;
+                            let inst_ptr = self.song_ptr + self.instruction_ptr;
                             let inst_ptr = inst_ptr.to_le_bytes();
 
-                            self.s.bc_stack[sp] = counter;
-                            self.s.bc_stack[sp + 1] = inst_ptr[0];
-                            self.s.bc_stack[sp + 2] = inst_ptr[1];
+                            self.bc_stack[sp] = counter;
+                            self.bc_stack[sp + 1] = inst_ptr[0];
+                            self.bc_stack[sp + 2] = inst_ptr[1];
                         }
                         None => self.disable_channel(),
                     }
                 }
                 opcodes::SKIP_LAST_LOOP => {
-                    let bytes_to_skip = self.read_pc();
+                    let bytes_to_skip = read_pc();
 
                     // No bounds testing required when reading counter
-                    let sp = self.s.loop_stack_pointer;
+                    let sp = self.loop_stack_pointer;
 
-                    let counter = self.s.bc_stack[sp];
+                    let counter = self.bc_stack[sp];
                     if counter == 1 {
-                        self.s.instruction_ptr += u16::from(bytes_to_skip);
+                        self.instruction_ptr += u16::from(bytes_to_skip);
 
                         let sp = sp + 3;
-                        self.s.stack_pointer = sp;
+                        self.stack_pointer = sp;
                         if sp <= BC_CHANNEL_STACK_SIZE - BC_STACK_BYTES_PER_LOOP {
-                            self.s.loop_stack_pointer = sp;
+                            self.loop_stack_pointer = sp;
                         }
                     }
                 }
                 opcodes::END_LOOP => {
                     // No bounds testing required when modifying counter
-                    let sp = self.s.loop_stack_pointer;
+                    let sp = self.loop_stack_pointer;
 
-                    let counter = self.s.bc_stack[sp].wrapping_sub(1);
+                    let counter = self.bc_stack[sp].wrapping_sub(1);
 
                     if counter != 0 {
-                        self.s.bc_stack[sp] = counter;
+                        self.bc_stack[sp] = counter;
                         let inst_ptr =
-                            u16::from_le_bytes([self.s.bc_stack[sp + 1], self.s.bc_stack[sp + 2]]);
-                        match inst_ptr.checked_sub(self.s.song_ptr) {
-                            Some(i) => self.s.instruction_ptr = i,
+                            u16::from_le_bytes([self.bc_stack[sp + 1], self.bc_stack[sp + 2]]);
+                        match inst_ptr.checked_sub(self.song_ptr) {
+                            Some(i) => self.instruction_ptr = i,
                             None => self.disable_channel(),
                         }
                     } else {
                         let sp = sp + 3;
-                        self.s.stack_pointer = sp;
+                        self.stack_pointer = sp;
                         if sp <= BC_CHANNEL_STACK_SIZE - BC_STACK_BYTES_PER_LOOP {
-                            self.s.loop_stack_pointer = sp;
+                            self.loop_stack_pointer = sp;
                         }
                     }
                 }
 
                 opcodes::CALL_SUBROUTINE => {
-                    let s_id = self.read_pc();
+                    let s_id = read_pc();
 
-                    match self.s.stack_pointer.checked_sub(2) {
+                    match self.stack_pointer.checked_sub(2) {
                         Some(sp) => {
-                            self.s.stack_pointer = sp;
+                            self.stack_pointer = sp;
 
-                            self.s.vibrato_pitch_offset_per_tick = 0;
+                            self.vibrato_pitch_offset_per_tick = 0;
 
-                            let inst_ptr = self.s.instruction_ptr + self.s.song_ptr;
+                            let inst_ptr = self.instruction_ptr + self.song_ptr;
                             let inst_ptr = inst_ptr.to_le_bytes();
 
-                            self.s.bc_stack[sp] = inst_ptr[0];
-                            self.s.bc_stack[sp + 1] = inst_ptr[1];
+                            self.bc_stack[sp] = inst_ptr[0];
+                            self.bc_stack[sp + 1] = inst_ptr[1];
 
-                            self.s.instruction_ptr = self.read_subroutine_instruction_ptr(s_id);
+                            self.instruction_ptr =
+                                Self::read_subroutine_instruction_ptr(s_id, song_data);
                         }
                         None => self.disable_channel(),
                     }
                 }
                 opcodes::RETURN_FROM_SUBROUTINE => {
-                    let sp = self.s.stack_pointer;
+                    let sp = self.stack_pointer;
 
                     if sp <= BC_CHANNEL_STACK_SIZE - 2 {
-                        self.s.stack_pointer = sp + 2;
+                        self.stack_pointer = sp + 2;
 
-                        if self.s.stack_pointer <= BC_CHANNEL_STACK_SIZE - 2 {
-                            self.s.loop_stack_pointer = self.s.stack_pointer;
+                        if self.stack_pointer <= BC_CHANNEL_STACK_SIZE - 2 {
+                            self.loop_stack_pointer = self.stack_pointer;
                         }
 
-                        self.s.vibrato_pitch_offset_per_tick = 0;
+                        self.vibrato_pitch_offset_per_tick = 0;
 
                         let inst_ptr =
-                            u16::from_le_bytes([self.s.bc_stack[sp], self.s.bc_stack[sp + 1]]);
+                            u16::from_le_bytes([self.bc_stack[sp], self.bc_stack[sp + 1]]);
 
-                        match inst_ptr.checked_sub(self.s.song_ptr) {
-                            Some(i) => self.s.instruction_ptr = i,
+                        match inst_ptr.checked_sub(self.song_ptr) {
+                            Some(i) => self.instruction_ptr = i,
                             None => self.disable_channel(),
                         }
                     } else {
@@ -432,8 +416,8 @@ impl ChannelInterpreter<'_> {
                     }
                 }
 
-                opcodes::ENABLE_ECHO => self.s.echo = true,
-                opcodes::DISABLE_ECHO => self.s.echo = false,
+                opcodes::ENABLE_ECHO => self.echo = true,
+                opcodes::DISABLE_ECHO => self.echo = false,
 
                 opcodes::DISABLE_CHANNEL => self.disable_channel(),
 
@@ -443,16 +427,136 @@ impl ChannelInterpreter<'_> {
     }
 
     // Returns false if target could not be reached in the time limit
-    fn process_until_target(&mut self) -> bool {
+    fn process_until_target(&mut self, target_ticks: TickCounter, song_data: &[u8]) -> bool {
         // Prevent infinite loops by limiting the number of processed instructions
+        // ::TODO implement a better watchdog::
         let mut watchdog_counter: u32 = 250_000;
 
-        while self.s.ticks < self.target_ticks && watchdog_counter > 0 {
-            self.process_next_bytecode();
+        while self.ticks < target_ticks && watchdog_counter > 0 {
+            self.process_next_bytecode(song_data);
             watchdog_counter -= 1;
         }
 
+        if watchdog_counter == 0 {
+            self.disable_channel();
+        }
+
+        if self.disabled {
+            self.ticks = target_ticks;
+        }
+
         watchdog_counter > 0
+    }
+}
+
+pub struct SongInterpreter<CAD, SD>
+where
+    CAD: Deref<Target = CommonAudioData>,
+    SD: Deref<Target = SongData>,
+{
+    common_audio_data: CAD,
+    song_data: SD,
+
+    channels: [Option<ChannelState>; N_MUSIC_CHANNELS],
+    tick_counter: TickCounter,
+    song_timer_register: u8,
+    stereo_flag: bool,
+}
+
+impl<CAD, SD> SongInterpreter<CAD, SD>
+where
+    CAD: Deref<Target = CommonAudioData>,
+    SD: Deref<Target = SongData>,
+{
+    pub fn new(common_audio_data: CAD, song_data: SD, stereo_flag: bool) -> Self {
+        Self {
+            channels: std::array::from_fn(|i| {
+                song_data.channels()[i]
+                    .as_ref()
+                    .map(|c| ChannelState::new(Some(c), common_audio_data.song_data_addr()))
+            }),
+            tick_counter: TickCounter::default(),
+            song_timer_register: song_data.metadata().tick_clock.as_u8(),
+            stereo_flag,
+            song_data,
+            common_audio_data,
+        }
+    }
+
+    pub fn new_song_subroutine(
+        common_audio_data: CAD,
+        song_data: SD,
+        subroutine_index: u8,
+        stereo_flag: bool,
+    ) -> Self {
+        let mut channels: [Option<ChannelState>; N_MUSIC_CHANNELS] = Default::default();
+
+        if usize::from(subroutine_index) < song_data.subroutines().len() {
+            channels[0] = Some(ChannelState::new_subroutine(
+                &song_data,
+                common_audio_data.song_data_addr(),
+                subroutine_index,
+            ));
+        }
+
+        Self {
+            channels,
+            tick_counter: TickCounter::default(),
+            song_timer_register: song_data.metadata().tick_clock.as_u8(),
+            stereo_flag,
+            song_data,
+            common_audio_data,
+        }
+    }
+
+    /// Returns false if there was a timeout
+    pub fn process_ticks(&mut self, ticks: TickCounter) -> bool {
+        let song_data = self.song_data.data();
+
+        let mut valid = true;
+
+        let target_ticks = self.tick_counter + ticks;
+
+        let mut song_tco = TickClockOverride {
+            timer_register: self.song_timer_register,
+            when: TickCounter::new(0),
+        };
+
+        for c in self.channels.iter_mut().flatten() {
+            valid &= c.process_until_target(target_ticks, song_data);
+
+            if let Some(tco) = &c.tick_clock_override {
+                if tco.when >= song_tco.when {
+                    song_tco = tco.clone();
+                }
+            }
+        }
+
+        self.tick_counter = target_ticks;
+
+        self.song_timer_register = song_tco.timer_register;
+
+        valid
+    }
+
+    pub fn tick_counter(&self) -> TickCounter {
+        self.tick_counter
+    }
+
+    pub fn write_to_emulator(&self, emu: &mut impl Emulator) {
+        let common = CommonAudioDataSoA::new(&self.common_audio_data, self.stereo_flag);
+
+        let o = InterpreterOutput {
+            channels: std::array::from_fn(|i| match &self.channels[i] {
+                Some(c) => build_channel(i, c, self.tick_counter, &common),
+                None => unused_channel(i),
+            }),
+            tick_clock: self.song_timer_register,
+            song_data_addr: self.common_audio_data.song_data_addr(),
+            stereo_flag: self.stereo_flag,
+        };
+
+        o.write_to_emulator(emu);
     }
 }
 
@@ -501,6 +605,8 @@ fn build_channel(
     common: &CommonAudioDataSoA,
 ) -> Channel {
     assert!(Pan::try_from(c.pan).is_ok());
+
+    assert_eq!(c.song_ptr, common.song_data_addr);
 
     assert!(c.ticks >= target_ticks);
     let delay = c.ticks.value() - target_ticks.value();
@@ -617,99 +723,6 @@ fn unused_channel(channel_index: usize) -> Channel {
     }
 }
 
-/// returns None if there is a timeout
-pub fn interpret_song(
-    song: &SongData,
-    common_audio_data: &CommonAudioData,
-    stereo_flag: bool,
-    target_ticks: TickCounter,
-) -> Option<InterpreterOutput> {
-    let mut tick_clock_override = TickClockOverride {
-        timer_register: song.metadata().tick_clock.as_u8(),
-        when: TickCounter::new(0),
-    };
-    let mut valid = true;
-
-    let common = CommonAudioDataSoA::new(common_audio_data, stereo_flag);
-    let song_data_addr = common_audio_data.song_data_addr();
-
-    let channels: [Channel; N_MUSIC_CHANNELS] =
-        std::array::from_fn(|i| match song.channels().get(i) {
-            Some(Some(_)) => {
-                let mut ci = ChannelInterpreter::new(song, song_data_addr, i, target_ticks);
-
-                valid &= ci.process_until_target();
-
-                if let Some(tco) = &ci.s.tick_clock_override {
-                    if tco.when >= tick_clock_override.when {
-                        tick_clock_override = tco.clone();
-                    }
-                }
-
-                build_channel(i, &ci.s, target_ticks, &common)
-            }
-            Some(None) | None => unused_channel(i),
-        });
-
-    if valid {
-        Some(InterpreterOutput {
-            channels,
-            tick_clock: tick_clock_override.timer_register,
-            song_data_addr,
-            stereo_flag,
-        })
-    } else {
-        None
-    }
-}
-
-/// Intrepret a single subroutine within the song.
-///
-/// Returns None if `subroutine_index` is invalid or there is a timeout.
-pub fn interpret_song_subroutine(
-    song: &SongData,
-    common_audio_data: &CommonAudioData,
-    stereo_flag: bool,
-    subroutine_index: u8,
-    ticks: TickCounter,
-) -> Option<InterpreterOutput> {
-    if usize::from(subroutine_index) >= song.subroutines().len() {
-        return None;
-    }
-
-    let common = CommonAudioDataSoA::new(common_audio_data, stereo_flag);
-    let song_data_addr = common_audio_data.song_data_addr();
-
-    let mut ci = ChannelInterpreter::new_subroutine_intrepreter(
-        song,
-        song_data_addr,
-        0,
-        subroutine_index,
-        ticks,
-    );
-    let valid = ci.process_until_target();
-
-    if valid {
-        Some(InterpreterOutput {
-            channels: std::array::from_fn(|i| {
-                if i == 0 {
-                    build_channel(i, &ci.s, ticks, &common)
-                } else {
-                    unused_channel(i)
-                }
-            }),
-            tick_clock: match &ci.s.tick_clock_override {
-                Some(tco) => tco.timer_register,
-                None => song.metadata().tick_clock.as_u8(),
-            },
-            song_data_addr,
-            stereo_flag,
-        })
-    } else {
-        None
-    }
-}
-
 pub trait Emulator {
     fn apuram_mut(&mut self) -> &mut [u8; 0x10000];
     fn write_dsp_register(&mut self, addr: u8, value: u8);
@@ -725,7 +738,7 @@ pub trait Emulator {
 ///
 /// SAFETY: panics if the audio driver is not the paused state
 impl InterpreterOutput {
-    pub fn write_to_emulator(&self, emu: &mut impl Emulator) {
+    fn write_to_emulator(&self, emu: &mut impl Emulator) {
         let eon_shadow: u8 = self
             .channels
             .iter()
@@ -827,7 +840,7 @@ impl InterpreterOutput {
                 // Virtual channels
                 soa_write_u8(addresses::CHANNEL_VC_VOL_L, vc.vol_l);
                 soa_write_u8(addresses::CHANNEL_VC_VOL_R, vc.vol_r);
-                // Not intrepreting pitch
+                // Not interpreting pitch
                 soa_write_u8(addresses::CHANNEL_VC_SCRN, vc.scrn);
                 soa_write_u8(addresses::CHANNEL_VC_ADSR1, vc.adsr1);
                 soa_write_u8(addresses::CHANNEL_VC_ADSR2_OR_GAIN, vc.adsr2_or_gain);

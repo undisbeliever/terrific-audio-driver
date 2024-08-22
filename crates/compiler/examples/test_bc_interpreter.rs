@@ -9,7 +9,7 @@
 
 use compiler::{
     audio_driver,
-    bytecode_interpreter::{self, interpret_song, InterpreterOutput},
+    bytecode_interpreter::{self, SongInterpreter},
     common_audio_data::{build_common_audio_data, CommonAudioData},
     data::{load_project_file, load_text_file_with_limit, validate_project_file_names},
     driver_constants::{
@@ -96,7 +96,7 @@ impl bytecode_interpreter::Emulator for DummyEmu {
 }
 
 fn assert_bc_intrepreter_matches_emu(
-    to_test: InterpreterOutput,
+    to_test: &SongInterpreter<&CommonAudioData, &SongData>,
     dummy: &DummyEmu,
     emu: &ShvcSoundEmu,
     tick_count: TickCounter,
@@ -299,9 +299,10 @@ fn test_bc_intrepreter(song: &SongData, common_audio_data: &CommonAudioData) {
 
         let tick_count = TickCounter::new(tick_count.into());
 
-        let intrepreter = interpret_song(song, common_audio_data, STEREO_FLAG, tick_count).unwrap();
-
-        assert_bc_intrepreter_matches_emu(intrepreter, &dummy_emu_init, &emu, tick_count);
+        let mut interpreter = SongInterpreter::new(common_audio_data, song, STEREO_FLAG);
+        let valid = interpreter.process_ticks(tick_count);
+        assert!(valid, "SongIntreperter time out");
+        assert_bc_intrepreter_matches_emu(&interpreter, &dummy_emu_init, &emu, tick_count);
 
         if tick_count > ticks_to_test {
             break;

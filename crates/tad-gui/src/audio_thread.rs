@@ -9,6 +9,7 @@
 use brr::{BrrSample, SAMPLES_PER_BLOCK};
 use compiler::audio_driver;
 use compiler::bytecode_interpreter;
+use compiler::bytecode_interpreter::SongInterpreter;
 use compiler::common_audio_data::CommonAudioData;
 use compiler::driver_constants::MAX_PAN;
 use compiler::driver_constants::N_CHANNELS;
@@ -412,6 +413,48 @@ enum AudioDataState {
     SongWithSfxBuffer(Arc<CommonAudioDataWithSfxBuffer>, Arc<SongData>),
 }
 
+enum SiCad {
+    SongAndSfx(Arc<CommonAudioDataWithSfx>),
+    SongWithSfxBuffer(Arc<CommonAudioDataWithSfxBuffer>),
+}
+
+impl std::ops::Deref for SiCad {
+    type Target = CommonAudioData;
+
+    fn deref(&self) -> &Self::Target {
+        match self {
+            Self::SongAndSfx(c) => &c.common_audio_data,
+            Self::SongWithSfxBuffer(c) => &c.0,
+        }
+    }
+}
+
+fn new_song_interpreter(
+    audio_data: &AudioDataState,
+    song_skip: Option<&SongSkip>,
+    stereo_flag: bool,
+) -> Option<SongInterpreter<SiCad, Arc<SongData>>> {
+    let (cad, sd) = match audio_data {
+        AudioDataState::NotLoaded => return None,
+        AudioDataState::CommonDataOutOfDate => return None,
+        AudioDataState::Sample(..) => return None,
+        AudioDataState::SongAndSfx(cad, sd) => (SiCad::SongAndSfx(cad.clone()), sd.clone()),
+        AudioDataState::SongWithSfxBuffer(cad, sd) => {
+            (SiCad::SongWithSfxBuffer(cad.clone()), sd.clone())
+        }
+    };
+
+    match song_skip.and_then(|s| s.subroutine_index) {
+        Some(si) => Some(SongInterpreter::new_song_subroutine(
+            cad,
+            sd,
+            si,
+            stereo_flag,
+        )),
+        None => Some(SongInterpreter::new(cad, sd, stereo_flag)),
+    }
+}
+
 enum SfxQueue {
     None,
     TestSfx(Arc<CompiledSoundEffect>, Pan),
@@ -621,25 +664,12 @@ impl TadEmu {
         // Wait for the audio-driver to finish initialization
         self.emu.emulate();
 
-        if let Some(s) = song_skip {
-            // Intrepreting song in the compiler thread, the `stereo_flag` is unknown.
-            let o = match s.subroutine_index {
-                None => bytecode_interpreter::interpret_song(
-                    song,
-                    common_audio_data,
-                    stereo_flag,
-                    s.target_ticks,
-                ),
-                Some(subroutine_index) => bytecode_interpreter::interpret_song_subroutine(
-                    song,
-                    common_audio_data,
-                    stereo_flag,
-                    subroutine_index,
-                    s.target_ticks,
-                ),
-            };
-            if let Some(o) = o {
-                o.write_to_emulator(&mut EmulatorWrapper(&mut self.emu));
+        if let Some(s) = &song_skip {
+            let mut si = new_song_interpreter(&data_state, song_skip.as_ref(), stereo_flag);
+
+            if let Some(si) = &mut si {
+                si.process_ticks(s.target_ticks);
+                si.write_to_emulator(&mut EmulatorWrapper(&mut self.emu));
             }
         }
 
