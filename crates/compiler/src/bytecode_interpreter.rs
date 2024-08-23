@@ -416,7 +416,7 @@ impl ChannelState {
                     if sp <= BC_CHANNEL_STACK_SIZE - 2 {
                         self.stack_pointer = sp + 2;
 
-                        if self.stack_pointer <= BC_CHANNEL_STACK_SIZE - 2 {
+                        if self.stack_pointer <= BC_CHANNEL_STACK_SIZE - BC_STACK_BYTES_PER_LOOP {
                             self.loop_stack_pointer = self.stack_pointer;
                         }
 
