@@ -24,7 +24,7 @@ use self::bc_generator::{parse_and_compile_sound_effect, MmlSongBytecodeGenerato
 use self::instruments::{build_instrument_map, parse_instruments};
 use self::line_splitter::{split_mml_song_lines, split_mml_sound_effect_lines};
 use self::metadata::parse_headers;
-pub(crate) use identifier::{Identifier, IdentifierStr};
+pub(crate) use identifier::{IdentifierBuf, IdentifierStr};
 
 use crate::data::{self, TextFile, UniqueNamesList};
 use crate::driver_constants::N_MUSIC_CHANNELS;
@@ -163,7 +163,7 @@ pub fn compile_mml(
     for (s_index, (s_id, tokens)) in lines.subroutines.into_iter().enumerate() {
         let s_index = s_index.try_into().unwrap();
 
-        match compiler.parse_and_compile_song_subroutione(tokens, s_id.clone(), s_index) {
+        match compiler.parse_and_compile_song_subroutione(tokens, s_id, s_index) {
             Ok(data) => subroutines.push(data),
             Err(e) => errors.subroutine_errors.push(e),
         }
@@ -181,9 +181,9 @@ pub fn compile_mml(
     let channels = std::array::from_fn(|c_index| {
         let tokens = channels_iter.next().unwrap();
         if !tokens.is_empty() {
-            let c_id = Identifier::try_from_name(CHANNEL_NAMES[c_index].to_owned()).unwrap();
+            let c_id = IdentifierStr::try_from_name(CHANNEL_NAMES[c_index]).unwrap();
 
-            match compiler.parse_and_compile_song_channel(tokens, c_id.clone()) {
+            match compiler.parse_and_compile_song_channel(tokens, c_id) {
                 Ok(data) => Some(data),
                 Err(e) => {
                     errors.channel_errors.push(e);

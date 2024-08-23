@@ -4,7 +4,7 @@
 //
 // SPDX-License-Identifier: MIT
 
-use super::{Identifier, IdentifierStr};
+use super::{IdentifierBuf, IdentifierStr};
 
 use crate::bytecode::InstrumentId;
 use crate::data::UniqueNamesList;
@@ -19,7 +19,7 @@ use std::collections::HashMap;
 
 #[derive(Debug, Clone)]
 pub struct MmlInstrument {
-    pub(crate) identifier: Identifier,
+    pub(crate) identifier: IdentifierBuf,
 
     pub(crate) file_range: FilePosRange,
 
@@ -34,7 +34,7 @@ pub struct MmlInstrument {
 }
 
 fn parse_instrument(
-    id: Identifier,
+    id: IdentifierStr,
     line: &Line,
     inst_map: &UniqueNamesList<data::InstrumentOrSample>,
 ) -> Result<MmlInstrument, ErrorWithPos<MmlLineError>> {
@@ -91,7 +91,7 @@ fn parse_instrument(
     };
 
     Ok(MmlInstrument {
-        identifier: id,
+        identifier: id.to_owned(),
         file_range: line.range(),
         instrument_id,
         first_note,
@@ -102,7 +102,7 @@ fn parse_instrument(
 }
 
 pub fn parse_instruments(
-    instrument_lines: Vec<(Identifier, Line)>,
+    instrument_lines: Vec<(IdentifierStr, Line)>,
     inst_map: &UniqueNamesList<data::InstrumentOrSample>,
 ) -> (Vec<MmlInstrument>, Vec<ErrorWithPos<MmlLineError>>) {
     let mut out = Vec::with_capacity(instrument_lines.len());

@@ -4,7 +4,7 @@
 //
 // SPDX-License-Identifier: MIT
 
-use super::identifier::Identifier;
+use super::identifier::IdentifierStr;
 use super::tokenizer::MmlTokens;
 use super::MUSIC_CHANNEL_RANGE;
 use super::{Section, FIRST_MUSIC_CHANNEL};
@@ -20,14 +20,14 @@ const SECTION_PREFIX: &str = ";;";
 
 pub(crate) struct MmlLines<'a> {
     pub headers: Vec<Line<'a>>,
-    pub instruments: Vec<(Identifier, Line<'a>)>,
-    pub subroutines: Vec<(Identifier, MmlTokens<'a>)>,
+    pub instruments: Vec<(IdentifierStr<'a>, Line<'a>)>,
+    pub subroutines: Vec<(IdentifierStr<'a>, MmlTokens<'a>)>,
     pub channels: [MmlTokens<'a>; N_MUSIC_CHANNELS],
     pub sections: Vec<Section>,
 }
 
 pub(crate) struct MmlSfxLines<'a> {
-    pub instruments: Vec<(Identifier, Line<'a>)>,
+    pub instruments: Vec<(IdentifierStr<'a>, Line<'a>)>,
     pub tokens: MmlTokens<'a>,
 }
 
@@ -85,13 +85,13 @@ fn split_idstr_and_line(line: Line) -> (&str, Line) {
 fn split_id_and_line(
     line: Line,
     prefix: char,
-) -> Result<(Identifier, Line), ErrorWithPos<MmlLineError>> {
+) -> Result<(IdentifierStr, Line), ErrorWithPos<MmlLineError>> {
     let start_pos = line.position;
     let (id_str, line) = split_idstr_and_line(line);
 
     let id_str = id_str.trim_start_matches(prefix);
     if !id_str.is_empty() {
-        match Identifier::try_from_string(id_str.to_owned()) {
+        match IdentifierStr::try_from_str(id_str) {
             Ok(id) => Ok((id, line)),
             Err(e) => Err(ErrorWithPos(
                 line.position.to_range(1),
@@ -139,11 +139,11 @@ pub(super) fn split_mml_song_lines(
 
     let mut headers = Vec::new();
     let mut instruments = Vec::new();
-    let mut subroutines: Vec<(Identifier, MmlTokens)> = Vec::new();
+    let mut subroutines: Vec<(IdentifierStr, MmlTokens)> = Vec::new();
     let mut channels: [MmlTokens; N_MUSIC_CHANNELS] = Default::default();
     let mut sections = Vec::new();
 
-    let mut subroutine_map: HashMap<Identifier, usize> = HashMap::new();
+    let mut subroutine_map: HashMap<IdentifierStr, usize> = HashMap::new();
 
     for entire_line in split_lines(mml_text) {
         let start_pos = entire_line.position;
@@ -187,7 +187,7 @@ pub(super) fn split_mml_song_lines(
                             .1
                             .parse_line(line, entire_line.index_range()),
                         None => {
-                            subroutine_map.insert(id.clone(), subroutines.len());
+                            subroutine_map.insert(id, subroutines.len());
                             subroutines.push((
                                 id,
                                 MmlTokens::new_with_line(line, entire_line.index_range()),

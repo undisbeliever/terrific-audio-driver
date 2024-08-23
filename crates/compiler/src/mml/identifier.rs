@@ -8,13 +8,19 @@ use crate::data::Name;
 use crate::errors::IdentifierError;
 
 // An identifier is a name or a number
-// Storing the identifier as a string so a it can be hashed and compared without copying
-// the string contents.
-#[derive(Debug, Clone, Hash, Eq, PartialEq)]
-pub struct Identifier(String);
+// Using `&str` to avoid a string copy.
+// CAUTION: might not be valid.
+#[derive(Debug, Copy, Clone, Hash, Eq, PartialEq)]
+pub struct IdentifierStr<'a>(&'a str);
 
-impl Identifier {
-    pub fn try_from_string(s: String) -> Result<Self, IdentifierError> {
+impl<'a> IdentifierStr<'a> {
+    // Must only be called by the tokenizer.
+    // Should not be used to get the actual instrument or subroutine name.
+    pub(super) fn from_str(s: &'a str) -> Self {
+        Self(s)
+    }
+
+    pub fn try_from_str(s: &'a str) -> Result<Self, IdentifierError> {
         match s.chars().next() {
             Some(c) if c.is_ascii_digit() => Self::try_from_number(s),
             Some(_) => Self::try_from_name(s),
@@ -22,44 +28,42 @@ impl Identifier {
         }
     }
 
-    pub(super) fn try_from_name(s: String) -> Result<Self, IdentifierError> {
-        if Name::is_valid_name(&s) {
+    pub(super) fn try_from_name(s: &'a str) -> Result<Self, IdentifierError> {
+        if Name::is_valid_name(s) {
             Ok(Self(s))
         } else {
-            Err(IdentifierError::InvalidName(s))
+            Err(IdentifierError::InvalidName(s.to_owned()))
         }
     }
 
-    pub(super) fn try_from_number(s: String) -> Result<Self, IdentifierError> {
+    pub(super) fn try_from_number(s: &'a str) -> Result<Self, IdentifierError> {
         // Number identifier
         if s.chars().all(|c| c.is_ascii_digit()) {
             Ok(Self(s))
         } else {
-            Err(IdentifierError::InvalidNumber(s))
+            Err(IdentifierError::InvalidNumber(s.to_owned()))
         }
     }
 
-    pub(super) fn as_ref(&self) -> IdentifierStr {
-        IdentifierStr::from_str(&self.0)
-    }
-
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
-}
-
-// An identifier str.
-// Using `&str` to avoid a string copy.
-// The contents of this variable might not be a valid Identifier
-#[derive(Debug, Clone, Hash, Eq, PartialEq)]
-pub struct IdentifierStr<'a>(&'a str);
-
-impl IdentifierStr<'_> {
-    pub fn from_str(s: &str) -> IdentifierStr {
-        IdentifierStr(s)
+    pub fn to_owned(self) -> IdentifierBuf {
+        IdentifierBuf(self.0.to_owned())
     }
 
     pub fn as_str(&self) -> &str {
         self.0
+    }
+}
+
+// An owned identifier stored in a String
+#[derive(Debug, Clone, Hash, Eq, PartialEq)]
+pub struct IdentifierBuf(String);
+
+impl IdentifierBuf {
+    pub(super) fn as_ref(&self) -> IdentifierStr {
+        IdentifierStr(&self.0)
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
     }
 }

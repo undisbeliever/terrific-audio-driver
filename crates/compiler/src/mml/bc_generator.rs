@@ -7,10 +7,10 @@
 use super::command_parser::{
     ManualVibrato, MmlCommand, MpVibrato, PanCommand, Parser, PortamentoSpeed, VolumeCommand,
 };
-use super::identifier::Identifier;
+use super::identifier::IdentifierStr;
 use super::instruments::MmlInstrument;
 use super::tokenizer::MmlTokens;
-use super::{ChannelId, IdentifierStr, MmlSoundEffect, Section};
+use super::{ChannelId, MmlSoundEffect, Section};
 
 #[cfg(feature = "mml_tracking")]
 use super::note_tracking::CursorTracker;
@@ -1085,7 +1085,7 @@ impl<'a, 'b> MmlSongBytecodeGenerator<'a, 'b> {
     pub fn parse_and_compile_song_subroutione(
         &mut self,
         tokens: MmlTokens,
-        identifier: Identifier,
+        identifier: IdentifierStr<'a>,
         subroutine_index: u8,
     ) -> Result<Subroutine, MmlChannelError> {
         assert!(self.subroutine_map.is_none());
@@ -1137,7 +1137,7 @@ impl<'a, 'b> MmlSongBytecodeGenerator<'a, 'b> {
 
         if errors.is_empty() {
             Ok(Subroutine {
-                identifier,
+                identifier: identifier.to_owned(),
                 bytecode_offset: sd_start_index.try_into().unwrap_or(u16::MAX),
                 subroutine_id: SubroutineId::new(subroutine_index, tick_counter, max_stack_depth),
                 last_instrument: match gen.instrument {
@@ -1153,14 +1153,17 @@ impl<'a, 'b> MmlSongBytecodeGenerator<'a, 'b> {
                 changes_song_tempo: !gen.tempo_changes.is_empty(),
             })
         } else {
-            Err(MmlChannelError { identifier, errors })
+            Err(MmlChannelError {
+                identifier: identifier.to_owned(),
+                errors,
+            })
         }
     }
 
     pub fn parse_and_compile_song_channel(
         &mut self,
         tokens: MmlTokens,
-        identifier: Identifier,
+        identifier: IdentifierStr<'a>,
     ) -> Result<Channel, MmlChannelError> {
         assert!(self.subroutine_map.is_some());
 
@@ -1237,7 +1240,10 @@ impl<'a, 'b> MmlSongBytecodeGenerator<'a, 'b> {
                 tempo_changes: gen.tempo_changes,
             })
         } else {
-            Err(MmlChannelError { identifier, errors })
+            Err(MmlChannelError {
+                identifier: identifier.to_owned(),
+                errors,
+            })
         }
     }
 }

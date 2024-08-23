@@ -69,7 +69,7 @@ pub struct SongBcTracking {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Subroutine {
-    pub identifier: mml::Identifier,
+    pub identifier: mml::IdentifierBuf,
     pub subroutine_id: SubroutineId,
     pub bytecode_offset: u16,
     pub last_instrument: Option<usize>,

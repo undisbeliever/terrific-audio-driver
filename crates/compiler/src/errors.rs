@@ -455,7 +455,7 @@ pub enum MmlError {
 
 #[derive(Debug)]
 pub struct MmlChannelError {
-    pub identifier: mml::Identifier,
+    pub identifier: mml::IdentifierBuf,
     pub errors: Vec<ErrorWithPos<MmlError>>,
 }
 
