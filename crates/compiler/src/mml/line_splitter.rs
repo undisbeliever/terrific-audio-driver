@@ -5,38 +5,30 @@
 // SPDX-License-Identifier: MIT
 
 use super::identifier::Identifier;
+use super::tokenizer::MmlTokens;
 use super::MUSIC_CHANNEL_RANGE;
 use super::{Section, FIRST_MUSIC_CHANNEL};
 
 use crate::driver_constants::{MAX_SUBROUTINES, N_MUSIC_CHANNELS};
 use crate::errors::{ErrorWithPos, MmlLineError};
-use crate::file_pos::{
-    blank_file_range, split_lines, FilePos, Line, LineIndexRange, MAX_MML_TEXT_LENGTH,
-};
+use crate::file_pos::{blank_file_range, split_lines, FilePos, Line, MAX_MML_TEXT_LENGTH};
 
 use std::collections::HashMap;
 
 const COMMENT_CHAR: char = ';';
 const SECTION_PREFIX: &str = ";;";
 
-pub struct MmlLine<'a> {
-    pub text: &'a str,
-    pub position: FilePos,
-    /// Includes the subroutine/channel name and comments
-    pub entire_line_range: LineIndexRange,
-}
-
 pub(crate) struct MmlLines<'a> {
     pub headers: Vec<Line<'a>>,
     pub instruments: Vec<(Identifier, Line<'a>)>,
-    pub subroutines: Vec<(Identifier, Vec<MmlLine<'a>>)>,
-    pub channels: [Vec<MmlLine<'a>>; N_MUSIC_CHANNELS],
+    pub subroutines: Vec<(Identifier, MmlTokens<'a>)>,
+    pub channels: [MmlTokens<'a>; N_MUSIC_CHANNELS],
     pub sections: Vec<Section>,
 }
 
 pub(crate) struct MmlSfxLines<'a> {
     pub instruments: Vec<(Identifier, Line<'a>)>,
-    pub mml: Vec<MmlLine<'a>>,
+    pub tokens: MmlTokens<'a>,
 }
 
 /// MML line splitter
@@ -147,8 +139,8 @@ pub(super) fn split_mml_song_lines(
 
     let mut headers = Vec::new();
     let mut instruments = Vec::new();
-    let mut subroutines: Vec<(Identifier, Vec<MmlLine>)> = Vec::new();
-    let mut channels: [Vec<MmlLine>; N_MUSIC_CHANNELS] = Default::default();
+    let mut subroutines: Vec<(Identifier, MmlTokens)> = Vec::new();
+    let mut channels: [MmlTokens; N_MUSIC_CHANNELS] = Default::default();
     let mut sections = Vec::new();
 
     let mut subroutine_map: HashMap<Identifier, usize> = HashMap::new();
@@ -190,20 +182,18 @@ pub(super) fn split_mml_song_lines(
             Some('!') => {
                 // Subroutines
                 match split_id_and_line(line, '!') {
-                    Ok((id, line)) => {
-                        let line = MmlLine {
-                            text: line.text,
-                            position: line.position,
-                            entire_line_range: entire_line.index_range(),
-                        };
-                        match subroutine_map.get(&id) {
-                            Some(index) => subroutines[*index].1.push(line),
-                            None => {
-                                subroutine_map.insert(id.clone(), subroutines.len());
-                                subroutines.push((id, vec![line]));
-                            }
+                    Ok((id, line)) => match subroutine_map.get(&id) {
+                        Some(index) => subroutines[*index]
+                            .1
+                            .parse_line(line, entire_line.index_range()),
+                        None => {
+                            subroutine_map.insert(id.clone(), subroutines.len());
+                            subroutines.push((
+                                id,
+                                MmlTokens::new_with_line(line, entire_line.index_range()),
+                            ));
                         }
-                    }
+                    },
                     Err(e) => errors.push(e),
                 }
             }
@@ -221,11 +211,7 @@ pub(super) fn split_mml_song_lines(
                             let index = usize::try_from(index).unwrap();
 
                             if used[index] {
-                                channels[index].push(MmlLine {
-                                    text: line.text,
-                                    position: line.position,
-                                    entire_line_range: entire_line.index_range(),
-                                });
+                                channels[index].parse_line(line.clone(), entire_line.index_range());
                                 used[index] = false;
                             }
                         }
@@ -276,7 +262,7 @@ pub(super) fn split_mml_sound_effect_lines(
     }
 
     let mut instruments = Vec::new();
-    let mut mml = Vec::new();
+    let mut mml = MmlTokens::new();
 
     for entire_line in split_lines(mml_text) {
         let start_pos = entire_line.position;
@@ -309,11 +295,7 @@ pub(super) fn split_mml_sound_effect_lines(
                 // MML channel
                 let (id, line) = split_idstr_and_line(line);
                 if id == "A" {
-                    mml.push(MmlLine {
-                        text: line.text,
-                        position: line.position,
-                        entire_line_range: entire_line.index_range(),
-                    });
+                    mml.parse_line(line, entire_line.index_range());
                 } else {
                     errors.push(ErrorWithPos(
                         start_pos.to_range(1),
@@ -328,7 +310,10 @@ pub(super) fn split_mml_sound_effect_lines(
     }
 
     if errors.is_empty() {
-        Ok(MmlSfxLines { instruments, mml })
+        Ok(MmlSfxLines {
+            instruments,
+            tokens: mml,
+        })
     } else {
         Err(errors)
     }

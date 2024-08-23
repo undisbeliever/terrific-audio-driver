@@ -160,10 +160,10 @@ pub fn compile_mml(
     );
 
     let mut subroutines = Vec::with_capacity(lines.subroutines.len());
-    for (s_index, (s_id, s_lines)) in lines.subroutines.iter().enumerate() {
+    for (s_index, (s_id, tokens)) in lines.subroutines.into_iter().enumerate() {
         let s_index = s_index.try_into().unwrap();
 
-        match compiler.parse_and_compile_song_subroutione(s_lines, s_id.clone(), s_index) {
+        match compiler.parse_and_compile_song_subroutione(tokens, s_id.clone(), s_index) {
             Ok(data) => subroutines.push(data),
             Err(e) => errors.subroutine_errors.push(e),
         }
@@ -176,12 +176,14 @@ pub fn compile_mml(
 
     compiler.set_subroutines(&subroutines);
 
+    let mut channels_iter = lines.channels.into_iter();
+
     let channels = std::array::from_fn(|c_index| {
-        let c_lines = &lines.channels[c_index];
-        if !c_lines.is_empty() {
+        let tokens = channels_iter.next().unwrap();
+        if !tokens.is_empty() {
             let c_id = Identifier::try_from_name(CHANNEL_NAMES[c_index].to_owned()).unwrap();
 
-            match compiler.parse_and_compile_song_channel(c_lines, c_id.clone()) {
+            match compiler.parse_and_compile_song_channel(tokens, c_id.clone()) {
                 Ok(data) => Some(data),
                 Err(e) => {
                     errors.channel_errors.push(e);
@@ -192,7 +194,7 @@ pub fn compile_mml(
             None
         }
     });
-    assert_eq!(channels.len(), lines.channels.len());
+    assert!(channels_iter.next().is_none());
 
     if !errors.channel_errors.is_empty() {
         return Err(SongError::MmlError(errors));
@@ -245,7 +247,8 @@ pub fn compile_sound_effect(
     }
     drop(line_errors);
 
-    match parse_and_compile_sound_effect(&lines.mml, pitch_table, &instruments, &instruments_map) {
+    match parse_and_compile_sound_effect(lines.tokens, pitch_table, &instruments, &instruments_map)
+    {
         Ok(o) => Ok(o),
         Err(e) => Err(SoundEffectErrorList::MmlErrors(e)),
     }

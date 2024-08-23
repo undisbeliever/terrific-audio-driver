@@ -4,7 +4,7 @@
 //
 // SPDX-License-Identifier: MIT
 
-use super::tokenizer::{PeekingTokenizer, Token};
+use super::tokenizer::{MmlTokens, PeekableTokenIterator, Token};
 use super::{IdentifierStr, Section};
 
 #[cfg(feature = "mml_tracking")]
@@ -212,10 +212,7 @@ pub struct State {
 }
 
 mod parser {
-    use crate::{
-        file_pos::LineIndexRange,
-        mml::{line_splitter::MmlLine, ChannelId},
-    };
+    use crate::{file_pos::LineIndexRange, mml::ChannelId};
 
     use super::*;
 
@@ -223,7 +220,7 @@ mod parser {
         #[allow(dead_code)]
         channel: ChannelId,
 
-        tokenizer: PeekingTokenizer<'a>,
+        tokens: PeekableTokenIterator<'a>,
         errors: Vec<ErrorWithPos<MmlError>>,
         state: State,
 
@@ -234,14 +231,17 @@ mod parser {
 
         pending_sections: Option<&'a [Section]>,
 
+        instruments_map: &'a HashMap<IdentifierStr<'a>, usize>,
+        subroutine_map: Option<&'a HashMap<IdentifierStr<'a>, SubroutineId>>,
+
         #[cfg(feature = "mml_tracking")]
         cursor_tracker: &'a mut CursorTracker,
     }
 
-    impl Parser<'_> {
-        pub fn new<'a>(
+    impl<'a> Parser<'a> {
+        pub fn new(
             channel: ChannelId,
-            lines: &'a [MmlLine],
+            tokens: MmlTokens<'a>,
             instruments_map: &'a HashMap<IdentifierStr, usize>,
             subroutine_map: Option<&'a HashMap<IdentifierStr, SubroutineId>>,
             zenlen: ZenLen,
@@ -258,9 +258,11 @@ mod parser {
                 None => (0, None),
             };
 
-            let mut p = Parser {
+            debug_assert!(matches!(tokens.first_token(), Some(Token::NewLine(_))));
+
+            Parser {
                 channel,
-                tokenizer: PeekingTokenizer::new(lines, instruments_map, subroutine_map),
+                tokens: PeekableTokenIterator::new(tokens),
                 errors: Vec::new(),
                 state: State {
                     zenlen,
@@ -276,13 +278,12 @@ mod parser {
                 sections_tick_counters: Vec::with_capacity(n_sections),
                 pending_sections,
 
+                instruments_map,
+                subroutine_map,
+
                 #[cfg(feature = "mml_tracking")]
                 cursor_tracker: cursor_tracking,
-            };
-            if let Some(line) = lines.first() {
-                p.process_new_line(line.entire_line_range);
             }
-            p
         }
 
         pub(super) fn state(&self) -> &State {
@@ -297,25 +298,25 @@ mod parser {
         }
 
         // Must ONLY be called by the parsing macros in this module.
-        pub(super) fn __peek(&self) -> &Token {
-            self.tokenizer.peek()
+        pub(super) fn __peek(&self) -> &Token<'a> {
+            self.tokens.peek()
         }
 
         // Must ONLY be called by the parsing macros in this module.
         pub(super) fn __next_token(&mut self) {
-            self.tokenizer.next();
+            self.tokens.next();
         }
 
-        pub fn peek_pos(&self) -> &FilePos {
-            self.tokenizer.peek_pos()
+        pub fn peek_pos(&self) -> FilePos {
+            self.tokens.peek_pos()
         }
 
         pub(super) fn file_pos_range_from(&self, pos: FilePos) -> FilePosRange {
-            pos.to_range_pos(self.tokenizer.prev_end_pos())
+            pos.to_range_pos(self.tokens.prev_end_pos())
         }
 
-        pub(super) fn peek_and_next(&mut self) -> (FilePos, Token) {
-            self.tokenizer.peek_and_next()
+        pub(super) fn peek_and_next(&mut self) -> (FilePos, Token<'a>) {
+            self.tokens.peek_and_next()
         }
 
         pub fn add_error(&mut self, pos: FilePos, e: MmlError) {
@@ -325,6 +326,14 @@ mod parser {
 
         pub fn add_error_range(&mut self, pos: FilePosRange, e: MmlError) {
             self.errors.push(ErrorWithPos(pos, e))
+        }
+
+        pub fn instruments_map(&self) -> &HashMap<IdentifierStr<'a>, usize> {
+            self.instruments_map
+        }
+
+        pub fn subroutine_map(&self) -> Option<&HashMap<IdentifierStr<'a>, SubroutineId>> {
+            self.subroutine_map
         }
 
         pub fn set_tick_counter(&mut self, tc: TickCounterWithLoopFlag) {
@@ -362,7 +371,7 @@ mod parser {
             if let Some(pending_sections) = self.pending_sections.as_mut() {
                 while pending_sections
                     .first()
-                    .is_some_and(|s| self.tokenizer.peek_pos().line_number >= s.line_number)
+                    .is_some_and(|s| self.tokens.peek_pos().line_number >= s.line_number)
                 {
                     *pending_sections = &pending_sections[1..];
                     self.sections_tick_counters.push(self.tick_counter);
@@ -377,7 +386,7 @@ mod parser {
         #[cfg(feature = "mml_tracking")]
         fn add_to_cursor_tracker(&mut self) {
             self.cursor_tracker.add(
-                self.tokenizer.prev_end_pos(),
+                self.tokens.prev_end_pos(),
                 self.tick_counter,
                 self.state.clone(),
             );
@@ -630,7 +639,7 @@ fn parse_quantize(pos: FilePos, p: &mut Parser) {
 
 // Returns true if the token was recognised and processed
 fn merge_state_change(p: &mut Parser) -> bool {
-    let pos = *p.peek_pos();
+    let pos = p.peek_pos();
 
     match_next_token!(
         p,
@@ -677,7 +686,7 @@ fn merge_state_change(p: &mut Parser) -> bool {
 }
 
 fn parse_tracked_length(p: &mut Parser) -> TickCounter {
-    let pos = *p.peek_pos();
+    let pos = p.peek_pos();
 
     let length_in_ticks = next_token_matches!(p, Token::PercentSign);
 
@@ -737,7 +746,7 @@ fn parse_untracked_optional_mml_length(p: &mut Parser) -> Option<MmlLength> {
 }
 
 fn parse_untracked_optional_length(p: &mut Parser) -> Option<TickCounter> {
-    let pos = *p.peek_pos();
+    let pos = p.peek_pos();
 
     let note_length = parse_untracked_optional_mml_length(p)?;
     let tc = match note_length.to_tick_count(p.default_length(), p.state().zenlen) {
@@ -750,7 +759,7 @@ fn parse_untracked_optional_length(p: &mut Parser) -> Option<TickCounter> {
     Some(tc)
 }
 
-fn parse_pitch_list(p: &mut Parser) -> (Vec<Note>, FilePos, Token) {
+fn parse_pitch_list<'a>(p: &mut Parser<'a>) -> (Vec<Note>, FilePos, Token<'a>) {
     let mut out = Vec::new();
 
     loop {
@@ -858,7 +867,7 @@ fn merge_pan_or_volume(
     let mut volume = volume;
 
     loop {
-        let pos = *p.peek_pos();
+        let pos = p.peek_pos();
 
         match_next_token!(
             p,
@@ -1136,7 +1145,7 @@ fn parse_portamento(pos: FilePos, p: &mut Parser) -> MmlCommand {
     let mut speed_override = None;
 
     if next_token_matches!(p, Token::Comma) {
-        let dt_pos = *p.peek_pos();
+        let dt_pos = p.peek_pos();
         if let Some(dt) = parse_untracked_optional_length(p) {
             if dt < total_length {
                 delay_length = dt;
@@ -1145,7 +1154,7 @@ fn parse_portamento(pos: FilePos, p: &mut Parser) -> MmlCommand {
             }
         }
         if next_token_matches!(p, Token::Comma) {
-            speed_override = parse_unsigned_newtype(*p.peek_pos(), p);
+            speed_override = parse_unsigned_newtype(p.peek_pos(), p);
         }
     }
 
@@ -1180,11 +1189,11 @@ fn parse_broken_chord(p: &mut Parser) -> MmlCommand {
     let mut note_length = None;
 
     if next_token_matches!(p, Token::Comma) {
-        note_length_pos = *p.peek_pos();
+        note_length_pos = p.peek_pos();
         note_length = parse_untracked_optional_length(p);
 
         if next_token_matches!(p, Token::Comma) {
-            let tie_pos = *p.peek_pos();
+            let tie_pos = p.peek_pos();
             match_next_token!(
                 p,
                 Token::Number(0) => tie = false,
@@ -1312,6 +1321,31 @@ fn parse_echo(pos: FilePos, p: &mut Parser) -> MmlCommand {
     )
 }
 
+fn parse_set_instrument(pos: FilePos, id: IdentifierStr, p: &mut Parser) -> MmlCommand {
+    match p.instruments_map().get(&id) {
+        Some(inst) => MmlCommand::SetInstrument(*inst),
+        None => invalid_token_error(
+            p,
+            pos,
+            MmlError::CannotFindInstrument(id.as_str().to_owned()),
+        ),
+    }
+}
+
+fn parse_call_subroutine(pos: FilePos, id: IdentifierStr, p: &mut Parser) -> MmlCommand {
+    match p.subroutine_map().and_then(|m| m.get(&id)) {
+        Some(&id) => {
+            p.increment_tick_counter(id.tick_counter());
+            MmlCommand::CallSubroutine(id)
+        }
+        None => invalid_token_error(
+            p,
+            pos,
+            MmlError::CannotFindSubroutine(id.as_str().to_owned()),
+        ),
+    }
+}
+
 fn invalid_token_error(p: &mut Parser, pos: FilePos, e: MmlError) -> MmlCommand {
     p.add_error(pos, e);
     MmlCommand::NoCommand
@@ -1337,14 +1371,11 @@ fn parse_token(pos: FilePos, token: Token, p: &mut Parser) -> MmlCommand {
         Token::MpVibrato => MmlCommand::SetMpVibrato(parse_mp_vibrato(pos, p)),
         Token::ManualVibrato => MmlCommand::SetManualVibrato(parse_manual_vibrato(pos, p)),
 
-        Token::SetInstrument(inst) => MmlCommand::SetInstrument(inst),
         Token::SetAdsr => parse_set_adsr(pos, p),
         Token::SetGain(mode) => parse_set_gain(pos, mode, p),
 
-        Token::CallSubroutine(id) => {
-            p.increment_tick_counter(id.tick_counter());
-            MmlCommand::CallSubroutine(id)
-        }
+        Token::SetInstrument(id) => parse_set_instrument(pos, id, p),
+        Token::CallSubroutine(id) => parse_call_subroutine(pos, id, p),
 
         Token::StartLoop => {
             p.set_loop_flag();

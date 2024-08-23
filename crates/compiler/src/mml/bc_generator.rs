@@ -9,7 +9,7 @@ use super::command_parser::{
 };
 use super::identifier::Identifier;
 use super::instruments::MmlInstrument;
-use super::line_splitter::MmlLine;
+use super::tokenizer::MmlTokens;
 use super::{ChannelId, IdentifierStr, MmlSoundEffect, Section};
 
 #[cfg(feature = "mml_tracking")]
@@ -1084,7 +1084,7 @@ impl<'a, 'b> MmlSongBytecodeGenerator<'a, 'b> {
 
     pub fn parse_and_compile_song_subroutione(
         &mut self,
-        lines: &[MmlLine],
+        tokens: MmlTokens,
         identifier: Identifier,
         subroutine_index: u8,
     ) -> Result<Subroutine, MmlChannelError> {
@@ -1095,7 +1095,7 @@ impl<'a, 'b> MmlSongBytecodeGenerator<'a, 'b> {
 
         let mut parser = Parser::new(
             ChannelId::Subroutine(subroutine_index),
-            lines,
+            tokens,
             &self.instrument_map,
             None,
             self.default_zenlen,
@@ -1119,7 +1119,7 @@ impl<'a, 'b> MmlSongBytecodeGenerator<'a, 'b> {
             &mut self.bytecode_tracker,
         );
 
-        let last_pos = *parser.peek_pos();
+        let last_pos = parser.peek_pos();
         let tick_counter = gen.bc.get_tick_counter();
         let max_stack_depth = gen.bc.get_max_stack_depth();
 
@@ -1159,7 +1159,7 @@ impl<'a, 'b> MmlSongBytecodeGenerator<'a, 'b> {
 
     pub fn parse_and_compile_song_channel(
         &mut self,
-        lines: &[MmlLine],
+        tokens: MmlTokens,
         identifier: Identifier,
     ) -> Result<Channel, MmlChannelError> {
         assert!(self.subroutine_map.is_some());
@@ -1177,7 +1177,7 @@ impl<'a, 'b> MmlSongBytecodeGenerator<'a, 'b> {
 
         let mut parser = Parser::new(
             ChannelId::Channel(channel_char),
-            lines,
+            tokens,
             &self.instrument_map,
             self.subroutine_map.as_ref(),
             self.default_zenlen,
@@ -1201,7 +1201,7 @@ impl<'a, 'b> MmlSongBytecodeGenerator<'a, 'b> {
             &mut self.bytecode_tracker,
         );
 
-        let last_pos = *parser.peek_pos();
+        let last_pos = parser.peek_pos();
         let tick_counter = gen.bc.get_tick_counter();
 
         let terminator = match gen.loop_point {
@@ -1243,7 +1243,7 @@ impl<'a, 'b> MmlSongBytecodeGenerator<'a, 'b> {
 }
 
 pub fn parse_and_compile_sound_effect(
-    lines: &[MmlLine],
+    tokens: MmlTokens,
     pitch_table: &PitchTable,
     instruments: &Vec<MmlInstrument>,
     instruments_map: &HashMap<IdentifierStr, usize>,
@@ -1253,7 +1253,7 @@ pub fn parse_and_compile_sound_effect(
 
     let mut parser = Parser::new(
         ChannelId::SoundEffect,
-        lines,
+        tokens,
         instruments_map,
         None,
         DEFAULT_ZENLEN,
@@ -1280,7 +1280,7 @@ pub fn parse_and_compile_sound_effect(
         }
     }
 
-    let last_pos = *parser.peek_pos();
+    let last_pos = parser.peek_pos();
     let tick_counter = gen.bc.get_tick_counter();
 
     assert!(gen.loop_point.is_none());
