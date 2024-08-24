@@ -201,7 +201,6 @@ pub enum BytecodeError {
     StackOverflowInStartLoop(u32),
     StackOverflowInSubroutineCall(String, u32),
 
-    SubroutineCallInSubroutine,
     SubroutineCallInSoundEffect,
     ReturnInNonSubroutine,
 
@@ -407,7 +406,6 @@ pub enum MmlError {
 
     NoSubroutine,
     NoInstrument,
-    CannotCallSubroutineInASubroutine,
     CannotFindSubroutine(String),
     CannotFindInstrument(String),
 
@@ -449,6 +447,9 @@ pub enum MmlError {
     BrokenChordTickCountMismatch(TickCounter, TickCounter),
 
     NoTicksAfterLoopPoint,
+
+    CannotCallSubroutineInASoundEffect,
+    CannotCallSubroutineRecursion(String),
 
     TooManySfxTicks(TickCounter),
 }
@@ -867,7 +868,6 @@ impl Display for BytecodeError {
                 )
             }
 
-            Self::SubroutineCallInSubroutine => write!(f, "cannot call subroutine in a subroutine"),
             Self::SubroutineCallInSoundEffect => {
                 write!(f, "cannot call subroutine in a sound effect")
             }
@@ -1110,12 +1110,16 @@ impl Display for MmlError {
 
             Self::NoSubroutine => write!(f, "no subroutine"),
             Self::NoInstrument => write!(f, "no instrument"),
-            Self::CannotCallSubroutineInASubroutine => {
-                write!(f, "cannot call subroutine in a subroutine")
-            }
 
-            Self::CannotFindSubroutine(name) => write!(f, "cannot find subroutine: {}", name),
+            Self::CannotFindSubroutine(name) => write!(f, "cannot find subroutine: !{}", name),
             Self::CannotFindInstrument(name) => write!(f, "cannot find instrument: {}", name),
+
+            Self::CannotCallSubroutineInASoundEffect => {
+                write!(f, "cannot call subroutine in a sound effect")
+            }
+            Self::CannotCallSubroutineRecursion(id) => {
+                write!(f, "cannot call subroutine !{id}: recursion detected")
+            }
 
             Self::NoStartBrokenChord => write!(f, "not in a broken chord (no `{{{{`)"),
             Self::NoStartPortamento => write!(f, "not in a portamento (no `{{)`"),

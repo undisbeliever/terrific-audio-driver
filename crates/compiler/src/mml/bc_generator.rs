@@ -983,7 +983,7 @@ impl ChannelBcGenerator<'_> {
     }
 }
 
-pub struct MmlSongBytecodeGenerator<'a, 'b> {
+pub struct MmlSongBytecodeGenerator<'a> {
     song_data: Vec<u8>,
 
     default_zenlen: ZenLen,
@@ -992,8 +992,9 @@ pub struct MmlSongBytecodeGenerator<'a, 'b> {
     instruments: &'a Vec<MmlInstrument>,
     instrument_map: HashMap<IdentifierStr<'a>, usize>,
 
-    subroutines: Option<&'b Vec<Subroutine>>,
-    subroutine_map: Option<HashMap<IdentifierStr<'b>, SubroutineId>>,
+    subroutines: Vec<Subroutine>,
+    subroutine_map: HashMap<IdentifierStr<'a>, Option<SubroutineId>>,
+    subroutine_name_map: &'a HashMap<IdentifierStr<'a>, usize>,
 
     #[cfg(feature = "mml_tracking")]
     first_channel_bc_offset: Option<u16>,
@@ -1003,13 +1004,14 @@ pub struct MmlSongBytecodeGenerator<'a, 'b> {
     bytecode_tracker: Vec<BytecodePos>,
 }
 
-impl<'a, 'b> MmlSongBytecodeGenerator<'a, 'b> {
+impl<'a> MmlSongBytecodeGenerator<'a> {
     pub fn new(
         default_zenlen: ZenLen,
         pitch_table: &'a PitchTable,
         sections: &'a [Section],
         instruments: &'a Vec<MmlInstrument>,
         instrument_map: HashMap<IdentifierStr<'a>, usize>,
+        subroutine_name_map: &'a HashMap<IdentifierStr<'a>, usize>,
         header_size: usize,
     ) -> Self {
         Self {
@@ -1019,8 +1021,10 @@ impl<'a, 'b> MmlSongBytecodeGenerator<'a, 'b> {
             sections,
             instruments,
             instrument_map,
-            subroutines: None,
-            subroutine_map: None,
+            subroutine_name_map,
+
+            subroutines: Vec::new(),
+            subroutine_map: HashMap::new(),
 
             #[cfg(feature = "mml_tracking")]
             first_channel_bc_offset: None,
@@ -1032,9 +1036,10 @@ impl<'a, 'b> MmlSongBytecodeGenerator<'a, 'b> {
     }
 
     #[cfg(feature = "mml_tracking")]
-    pub(crate) fn take_data(self) -> (Vec<u8>, SongBcTracking) {
+    pub(crate) fn take_data(self) -> (Vec<u8>, Vec<Subroutine>, SongBcTracking) {
         (
             self.song_data,
+            self.subroutines,
             SongBcTracking {
                 bytecode: self.bytecode_tracker,
                 cursor_tracker: self.cursor_tracker,
@@ -1044,19 +1049,8 @@ impl<'a, 'b> MmlSongBytecodeGenerator<'a, 'b> {
     }
 
     #[cfg(not(feature = "mml_tracking"))]
-    pub(crate) fn take_data(self) -> Vec<u8> {
-        self.song_data
-    }
-
-    // Should only be called when all subroutines have been compiled.
-    pub fn set_subroutines(&mut self, subroutines: &'b Vec<Subroutine>) {
-        let subroutine_map = subroutines
-            .iter()
-            .map(|s| (s.identifier.as_ref(), s.subroutine_id))
-            .collect();
-
-        self.subroutines = Some(subroutines);
-        self.subroutine_map = Some(subroutine_map);
+    pub(crate) fn take_data(self) -> (Vec<u8>, Vec<Subroutine>) {
+        (self.song_data, self.subroutines)
     }
 
     fn parse_and_compile(
@@ -1084,20 +1078,20 @@ impl<'a, 'b> MmlSongBytecodeGenerator<'a, 'b> {
 
     pub fn parse_and_compile_song_subroutione(
         &mut self,
-        tokens: MmlTokens,
         identifier: IdentifierStr<'a>,
-        subroutine_index: u8,
-    ) -> Result<Subroutine, MmlChannelError> {
-        assert!(self.subroutine_map.is_none());
+        tokens: MmlTokens,
+    ) -> Result<(), MmlChannelError> {
+        // Index in SongData, not mml file
+        let song_subroutine_index = self.subroutines.len().try_into().unwrap();
 
         let song_data = std::mem::take(&mut self.song_data);
         let sd_start_index = song_data.len();
 
         let mut parser = Parser::new(
-            ChannelId::Subroutine(subroutine_index),
+            ChannelId::Subroutine(song_subroutine_index),
             tokens,
             &self.instrument_map,
-            None,
+            Some((&self.subroutine_map, self.subroutine_name_map)),
             self.default_zenlen,
             None, // No sections in subroutines
             #[cfg(feature = "mml_tracking")]
@@ -1108,7 +1102,7 @@ impl<'a, 'b> MmlSongBytecodeGenerator<'a, 'b> {
             song_data,
             self.pitch_table,
             self.instruments,
-            None,
+            Some(&self.subroutines),
             BytecodeContext::SongSubroutine,
         );
 
@@ -1136,10 +1130,15 @@ impl<'a, 'b> MmlSongBytecodeGenerator<'a, 'b> {
         let (_, errors) = parser.finalize();
 
         if errors.is_empty() {
-            Ok(Subroutine {
+            let subroutine_id =
+                SubroutineId::new(song_subroutine_index, tick_counter, max_stack_depth);
+
+            self.subroutine_map.insert(identifier, Some(subroutine_id));
+
+            self.subroutines.push(Subroutine {
                 identifier: identifier.to_owned(),
                 bytecode_offset: sd_start_index.try_into().unwrap_or(u16::MAX),
-                subroutine_id: SubroutineId::new(subroutine_index, tick_counter, max_stack_depth),
+                subroutine_id,
                 last_instrument: match gen.instrument {
                     IeState::Known(i) => Some(i),
                     IeState::Maybe(_) => panic!("unexpected maybe instrument"),
@@ -1151,8 +1150,12 @@ impl<'a, 'b> MmlSongBytecodeGenerator<'a, 'b> {
                     IeState::Unknown => None,
                 },
                 changes_song_tempo: !gen.tempo_changes.is_empty(),
-            })
+            });
+
+            Ok(())
         } else {
+            self.subroutine_map.insert(identifier, None);
+
             Err(MmlChannelError {
                 identifier: identifier.to_owned(),
                 errors,
@@ -1165,8 +1168,6 @@ impl<'a, 'b> MmlSongBytecodeGenerator<'a, 'b> {
         tokens: MmlTokens,
         identifier: IdentifierStr<'a>,
     ) -> Result<Channel, MmlChannelError> {
-        assert!(self.subroutine_map.is_some());
-
         assert!(identifier.as_str().len() == 1);
         let channel_char = identifier.as_str().chars().next().unwrap();
 
@@ -1182,7 +1183,7 @@ impl<'a, 'b> MmlSongBytecodeGenerator<'a, 'b> {
             ChannelId::Channel(channel_char),
             tokens,
             &self.instrument_map,
-            self.subroutine_map.as_ref(),
+            Some((&self.subroutine_map, self.subroutine_name_map)),
             self.default_zenlen,
             Some(self.sections),
             #[cfg(feature = "mml_tracking")]
@@ -1193,7 +1194,7 @@ impl<'a, 'b> MmlSongBytecodeGenerator<'a, 'b> {
             song_data,
             self.pitch_table,
             self.instruments,
-            self.subroutines,
+            Some(&self.subroutines),
             BytecodeContext::SongChannel,
         );
 

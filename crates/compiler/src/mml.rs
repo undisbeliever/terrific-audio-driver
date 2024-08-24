@@ -12,6 +12,7 @@ mod instruments;
 mod line_splitter;
 mod metadata;
 mod song_duration;
+mod subroutines;
 mod tick_count_table;
 mod tokenizer;
 
@@ -30,6 +31,7 @@ use crate::data::{self, TextFile, UniqueNamesList};
 use crate::driver_constants::N_MUSIC_CHANNELS;
 use crate::errors::{MmlCompileErrors, SongError, SoundEffectErrorList};
 use crate::mml::song_duration::calc_song_duration;
+use crate::mml::subroutines::compile_subroutines;
 use crate::pitch_table::PitchTable;
 use crate::songs::{mml_to_song, song_header_size, SongData};
 use crate::time::TickCounter;
@@ -156,25 +158,16 @@ pub fn compile_mml(
         &lines.sections,
         &instruments,
         instrument_map,
+        &lines.subroutine_name_map,
         song_header_size(lines.subroutines.len()),
     );
 
-    let mut subroutines = Vec::with_capacity(lines.subroutines.len());
-    for (s_index, (s_id, tokens)) in lines.subroutines.into_iter().enumerate() {
-        let s_index = s_index.try_into().unwrap();
-
-        match compiler.parse_and_compile_song_subroutione(tokens, s_id, s_index) {
-            Ok(data) => subroutines.push(data),
-            Err(e) => errors.subroutine_errors.push(e),
-        }
-    }
-    let subroutines = subroutines;
+    errors.subroutine_errors =
+        compile_subroutines(&mut compiler, lines.subroutines, &lines.subroutine_name_map);
 
     if !errors.subroutine_errors.is_empty() {
         return Err(SongError::MmlError(errors));
     }
-
-    compiler.set_subroutines(&subroutines);
 
     let mut channels_iter = lines.channels.into_iter();
 
@@ -202,9 +195,9 @@ pub fn compile_mml(
     drop(errors);
 
     #[cfg(feature = "mml_tracking")]
-    let (song_data, tracking) = compiler.take_data();
+    let (song_data, subroutines, tracking) = compiler.take_data();
     #[cfg(not(feature = "mml_tracking"))]
-    let song_data = compiler.take_data();
+    let (song_data, subroutines) = compiler.take_data();
 
     let duration = calc_song_duration(&metadata, &channels, &subroutines);
 

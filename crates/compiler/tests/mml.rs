@@ -11,7 +11,8 @@ use compiler::bytecode_assembler::BcTerminator;
 use compiler::data;
 use compiler::data::{Name, TextFile, UniqueNamesList};
 use compiler::driver_constants::{
-    BC_CHANNEL_STACK_OFFSET, BC_STACK_BYTES_PER_LOOP, BC_STACK_BYTES_PER_SUBROUTINE_CALL,
+    BC_CHANNEL_STACK_OFFSET, BC_CHANNEL_STACK_SIZE, BC_STACK_BYTES_PER_LOOP,
+    BC_STACK_BYTES_PER_SUBROUTINE_CALL, MAX_SUBROUTINES,
 };
 use compiler::envelope::{Adsr, Envelope, Gain};
 use compiler::errors::{BytecodeError, MmlError, SongError};
@@ -19,6 +20,8 @@ use compiler::mml;
 use compiler::notes::Octave;
 use compiler::pitch_table::{build_pitch_table, PitchTable};
 use compiler::songs::SongData;
+
+use std::fmt::Write;
 
 const SAMPLE_FREQ: f64 = 500.0;
 
@@ -958,6 +961,299 @@ A [[[[[ !s ]14]15]16]17]18
         MmlError::BytecodeError(BytecodeError::StackOverflowInSubroutineCall(
             "s".to_owned(),
             26,
+        )),
+    );
+}
+
+#[test]
+fn test_max_subroutines() {
+    const N_SUBROUTINES: u32 = MAX_SUBROUTINES as u32;
+
+    let mut mml = String::new();
+    writeln!(mml, "@0 dummy_instrument").unwrap();
+
+    write!(mml, "A ").unwrap();
+    for i in 1..=N_SUBROUTINES {
+        write!(mml, " !s{i}").unwrap();
+    }
+    writeln!(mml).unwrap();
+
+    for i in 1..=N_SUBROUTINES {
+        writeln!(mml, "!s{i} a").unwrap();
+    }
+
+    let song = compile_mml(&mml, &dummy_data());
+    let channel_a = song.channels()[0].as_ref().unwrap();
+
+    assert_eq!(song.subroutines().len(), N_SUBROUTINES as usize);
+    assert_eq!(
+        channel_a.max_stack_depth.to_u32(),
+        BC_STACK_BYTES_PER_SUBROUTINE_CALL as u32,
+    );
+    assert_eq!(channel_a.tick_counter.value(), 24 * N_SUBROUTINES);
+}
+
+#[test]
+fn test_max_subroutines_with_nesting() {
+    const N_SUBROUTINES: u32 = MAX_SUBROUTINES as u32;
+
+    let mut mml = String::new();
+    writeln!(mml, "@0 dummy_instrument").unwrap();
+
+    write!(mml, "A ").unwrap();
+    for i in 1..=N_SUBROUTINES {
+        write!(mml, " !{i}").unwrap();
+    }
+    writeln!(mml).unwrap();
+
+    for i in 1..=N_SUBROUTINES {
+        if i % 3 == 0 {
+            writeln!(mml, "!{i} a !1 a").unwrap();
+        } else if i % 5 == 0 {
+            writeln!(mml, "!{i} b !3 b").unwrap();
+        } else {
+            writeln!(mml, "!{i} c").unwrap();
+        }
+    }
+
+    let song = compile_mml(&mml, &dummy_data());
+    let channel_a = song.channels()[0].as_ref().unwrap();
+
+    assert_eq!(song.subroutines().len(), N_SUBROUTINES as usize);
+    for s in song.subroutines() {
+        let i: u32 = s.identifier.as_str().parse().unwrap();
+
+        let stack_depth = if i % 3 == 0 {
+            2 * BC_STACK_BYTES_PER_SUBROUTINE_CALL as u32
+        } else if i % 5 == 0 {
+            3 * BC_STACK_BYTES_PER_SUBROUTINE_CALL as u32
+        } else {
+            BC_STACK_BYTES_PER_SUBROUTINE_CALL as u32
+        };
+
+        assert_eq!(
+            s.subroutine_id.max_stack_depth().to_u32(),
+            stack_depth,
+            "subroutine max_stack_depth mismatch for !{i}"
+        );
+    }
+
+    assert_eq!(
+        channel_a.max_stack_depth.to_u32(),
+        3 * BC_STACK_BYTES_PER_SUBROUTINE_CALL as u32,
+    );
+}
+
+#[test]
+fn test_nested_subroutines() {
+    // Cannot test with asm, no easy way to implement a "call_subroutine s" bytecode.
+    // Instead, this test will confirm it compiles with no errors and the correct stack depth
+
+    let _test = |mml| {
+        let mml = compile_mml(mml, &dummy_data());
+        let channel_a = mml.channels()[0].as_ref().unwrap();
+        assert_eq!(
+            channel_a.max_stack_depth.to_u32(),
+            3 * BC_STACK_BYTES_PER_SUBROUTINE_CALL as u32,
+        );
+        assert_eq!(channel_a.tick_counter.value(), 24 * 2 * 3,);
+    };
+
+    _test(
+        r##"
+@0 dummy_instrument
+
+!s1 a !s2 a
+!s2 b !s3 b
+!s3 c c
+
+A @0 !s1
+"##,
+    );
+
+    _test(
+        r##"
+@0 dummy_instrument
+
+!s3 c c
+!s2 b !s3 b
+!s1 a !s2 a
+
+A @0 !s1
+"##,
+    );
+
+    _test(
+        r##"
+@0 dummy_instrument
+
+!s2 b !s3 b
+!s3 c c
+!s1 a !s2 a
+
+A @0 !s1
+"##,
+    );
+}
+
+#[test]
+fn test_nested_subroutines_recursion() {
+    assert_subroutine_err_in_mml(
+        r##"
+@0 dummy_instrument
+
+!s a !s a
+
+A @0 !s
+"##,
+        &[(
+            "s",
+            &[MmlError::CannotCallSubroutineRecursion("s".to_owned())],
+        )],
+    );
+}
+
+#[test]
+fn test_nested_subroutines_recursion2() {
+    assert_subroutine_err_in_mml(
+        r##"
+@0 dummy_instrument
+
+!s1 !s2 a
+!s2 !s3 b
+!s3 !s1 c
+
+A @0 !s1
+"##,
+        &[
+            (
+                "s1",
+                &[MmlError::CannotCallSubroutineRecursion("s2".to_owned())],
+            ),
+            (
+                "s2",
+                &[MmlError::CannotCallSubroutineRecursion("s3".to_owned())],
+            ),
+            // No error in !s3.  It is compiled last
+        ],
+    );
+}
+
+#[test]
+fn test_nested_subroutines_with_missing1() {
+    assert_subroutine_err_in_mml(
+        r##"
+@0 dummy_instrument
+
+!s !s2 a
+
+A @0 !s
+"##,
+        &[("s", &[MmlError::CannotFindSubroutine("s2".to_owned())])],
+    );
+}
+
+#[test]
+fn test_nested_subroutines_with_missing2() {
+    assert_subroutine_err_in_mml(
+        r##"
+@0 dummy_instrument
+
+!s1 !s2 a
+!s2 !missing b
+!s3 !s1 c
+!s4 d
+
+A @0 !s1 !s3
+"##,
+        &[(
+            "s2",
+            &[MmlError::CannotFindSubroutine("missing".to_owned())],
+        )],
+    );
+}
+
+#[test]
+fn test_nested_subroutines_stack_depth_limit() {
+    let channel_a_stack_depth =
+        3 * BC_STACK_BYTES_PER_LOOP + 6 * BC_STACK_BYTES_PER_SUBROUTINE_CALL;
+    assert_eq!(channel_a_stack_depth, BC_CHANNEL_STACK_SIZE);
+
+    let mml = compile_mml(
+        r##"
+@0 dummy_instrument
+
+!s1 [ !s2 ]2
+!s2 [ !s3 ]2
+!s3 [ !s4 ]2
+!s4 !s5 d
+!s5 !s6 e
+!s6 f
+
+A @0 !s1
+"##,
+        &dummy_data(),
+    );
+
+    let channel_a = mml.channels()[0].as_ref().unwrap();
+    assert_eq!(
+        channel_a.max_stack_depth.to_u32(),
+        u32::try_from(channel_a_stack_depth).unwrap()
+    );
+    assert_eq!(channel_a.tick_counter.value(), (24 * 3) * 2 * 2 * 2);
+
+    // Same subroutines but shuffled
+    let mml = compile_mml(
+        r##"
+@0 dummy_instrument
+
+!s5 !s6 e
+!s2 [ !s3 ]2
+!s6 f
+!s3 [ !s4 ]2
+!s4 !s5 d
+!s1 [ !s2 ]2
+
+A @0 !s1
+"##,
+        &dummy_data(),
+    );
+
+    let channel_a = mml.channels()[0].as_ref().unwrap();
+    assert_eq!(
+        channel_a.max_stack_depth.to_u32(),
+        u32::try_from(channel_a_stack_depth).unwrap()
+    );
+    assert_eq!(channel_a.tick_counter.value(), (24 * 3) * 2 * 2 * 2);
+}
+
+#[test]
+fn test_nested_subroutines_stack_overflow() {
+    let stack_depth = 11 * BC_STACK_BYTES_PER_SUBROUTINE_CALL as u32;
+    assert!(stack_depth > BC_CHANNEL_STACK_SIZE as u32);
+
+    assert_err_in_channel_a_mml(
+        r##"
+@0 dummy_instrument
+
+!s1 !s2 r
+!s2 !s3 r
+!s3 !s4 r
+!s4 !s5 r
+!s5 !s6 r
+!s6 !s7 r
+!s7 !s8 r
+!s8 !s9 r
+!s9 !s10 r
+!s10 !s11 r
+!s11 a
+
+A @0 !s1
+"##,
+        6,
+        MmlError::BytecodeError(BytecodeError::StackOverflowInSubroutineCall(
+            "s1".to_owned(),
+            stack_depth,
         )),
     );
 }
@@ -2389,6 +2685,47 @@ fn assert_err_in_channel_a_mml(mml: &str, line_char: u32, expected_error: MmlErr
 
     if !valid {
         panic!("expected a single {expected_error:?} error on line_char {line_char}\nInput: {mml:?}\nResult: {r:?}")
+    }
+}
+
+fn assert_subroutine_err_in_mml(mml: &str, expected_errors: &[(&str, &[MmlError])]) {
+    let dummy_data = dummy_data();
+
+    let r = mml::compile_mml(
+        &TextFile {
+            contents: mml.to_string(),
+            path: None,
+            file_name: "".to_owned(),
+        },
+        None,
+        &dummy_data.instruments_and_samples,
+        &dummy_data.pitch_table,
+    );
+
+    let matches_err = match &r {
+        Err(SongError::MmlError(e)) => {
+            e.subroutine_errors.len() == expected_errors.len()
+                && e.subroutine_errors.iter().all(|subroutine_error| {
+                    let expected = expected_errors
+                        .iter()
+                        .find(|e| e.0 == subroutine_error.identifier.as_str());
+                    match expected {
+                        Some((_id, expected)) => {
+                            let iter1 = subroutine_error.errors.iter().map(|e| &e.1);
+                            let iter2 = expected.iter();
+
+                            expected.len() == subroutine_error.errors.len()
+                                && iter1.zip(iter2).all(|(i1, i2)| i1 == i2)
+                        }
+                        None => false,
+                    }
+                })
+        }
+        _ => false,
+    };
+
+    if !matches_err {
+        panic!("Subroutine error mismatch:\nInput: {mml:?}\nExpected: {expected_errors:?}\nResult: {r:?}")
     }
 }
 

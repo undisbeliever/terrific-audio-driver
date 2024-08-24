@@ -211,6 +211,11 @@ pub struct State {
     pub quantize: Quantization,
 }
 
+type SubroutineMaps<'a> = (
+    &'a HashMap<IdentifierStr<'a>, Option<SubroutineId>>,
+    &'a HashMap<IdentifierStr<'a>, usize>,
+);
+
 mod parser {
     use crate::{file_pos::LineIndexRange, mml::ChannelId};
 
@@ -232,7 +237,7 @@ mod parser {
         pending_sections: Option<&'a [Section]>,
 
         instruments_map: &'a HashMap<IdentifierStr<'a>, usize>,
-        subroutine_map: Option<&'a HashMap<IdentifierStr<'a>, SubroutineId>>,
+        subroutine_maps: Option<SubroutineMaps<'a>>,
 
         #[cfg(feature = "mml_tracking")]
         cursor_tracker: &'a mut CursorTracker,
@@ -243,7 +248,7 @@ mod parser {
             channel: ChannelId,
             tokens: MmlTokens<'a>,
             instruments_map: &'a HashMap<IdentifierStr, usize>,
-            subroutine_map: Option<&'a HashMap<IdentifierStr, SubroutineId>>,
+            subroutine_maps: Option<SubroutineMaps<'a>>,
             zenlen: ZenLen,
             sections: Option<&'a [Section]>,
 
@@ -279,7 +284,7 @@ mod parser {
                 pending_sections,
 
                 instruments_map,
-                subroutine_map,
+                subroutine_maps,
 
                 #[cfg(feature = "mml_tracking")]
                 cursor_tracker: cursor_tracking,
@@ -332,8 +337,8 @@ mod parser {
             self.instruments_map
         }
 
-        pub fn subroutine_map(&self) -> Option<&HashMap<IdentifierStr<'a>, SubroutineId>> {
-            self.subroutine_map
+        pub fn subroutine_maps(&self) -> Option<SubroutineMaps<'a>> {
+            self.subroutine_maps
         }
 
         pub fn set_tick_counter(&mut self, tc: TickCounterWithLoopFlag) {
@@ -1333,16 +1338,30 @@ fn parse_set_instrument(pos: FilePos, id: IdentifierStr, p: &mut Parser) -> MmlC
 }
 
 fn parse_call_subroutine(pos: FilePos, id: IdentifierStr, p: &mut Parser) -> MmlCommand {
-    match p.subroutine_map().and_then(|m| m.get(&id)) {
-        Some(&id) => {
-            p.increment_tick_counter(id.tick_counter());
-            MmlCommand::CallSubroutine(id)
-        }
-        None => invalid_token_error(
-            p,
-            pos,
-            MmlError::CannotFindSubroutine(id.as_str().to_owned()),
-        ),
+    match p.subroutine_maps() {
+        Some((id_map, name_map)) => match id_map.get(&id) {
+            Some(Some(s)) => {
+                p.increment_tick_counter(s.tick_counter());
+                MmlCommand::CallSubroutine(*s)
+            }
+            Some(None) => {
+                // Subroutine has been compiled, but it contains an error
+                MmlCommand::NoCommand
+            }
+            None => match name_map.get(&id) {
+                Some(_) => invalid_token_error(
+                    p,
+                    pos,
+                    MmlError::CannotCallSubroutineRecursion(id.as_str().to_owned()),
+                ),
+                None => invalid_token_error(
+                    p,
+                    pos,
+                    MmlError::CannotFindSubroutine(id.as_str().to_owned()),
+                ),
+            },
+        },
+        None => invalid_token_error(p, pos, MmlError::CannotCallSubroutineInASoundEffect),
     }
 }
 

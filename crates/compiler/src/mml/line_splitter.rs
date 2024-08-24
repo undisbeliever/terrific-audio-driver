@@ -22,6 +22,7 @@ pub(crate) struct MmlLines<'a> {
     pub headers: Vec<Line<'a>>,
     pub instruments: Vec<(IdentifierStr<'a>, Line<'a>)>,
     pub subroutines: Vec<(IdentifierStr<'a>, MmlTokens<'a>)>,
+    pub subroutine_name_map: HashMap<IdentifierStr<'a>, usize>,
     pub channels: [MmlTokens<'a>; N_MUSIC_CHANNELS],
     pub sections: Vec<Section>,
 }
@@ -143,7 +144,7 @@ pub(super) fn split_mml_song_lines(
     let mut channels: [MmlTokens; N_MUSIC_CHANNELS] = Default::default();
     let mut sections = Vec::new();
 
-    let mut subroutine_map: HashMap<IdentifierStr, usize> = HashMap::new();
+    let mut subroutine_name_map: HashMap<IdentifierStr, usize> = HashMap::new();
 
     for entire_line in split_lines(mml_text) {
         let start_pos = entire_line.position;
@@ -182,12 +183,12 @@ pub(super) fn split_mml_song_lines(
             Some('!') => {
                 // Subroutines
                 match split_id_and_line(line, '!') {
-                    Ok((id, line)) => match subroutine_map.get(&id) {
+                    Ok((id, line)) => match subroutine_name_map.get(&id) {
                         Some(index) => subroutines[*index]
                             .1
                             .parse_line(line, entire_line.index_range()),
                         None => {
-                            subroutine_map.insert(id, subroutines.len());
+                            subroutine_name_map.insert(id, subroutines.len());
                             subroutines.push((
                                 id,
                                 MmlTokens::new_with_line(line, entire_line.index_range()),
@@ -240,6 +241,7 @@ pub(super) fn split_mml_song_lines(
             headers,
             instruments,
             subroutines,
+            subroutine_name_map,
             channels,
             sections,
         })

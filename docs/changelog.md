@@ -8,6 +8,9 @@ Bytecode changes:
  * Loops and subroutines now use a traditional stack.
     * The maximum number of nested loops has increased.
 
+MML changes:
+ * MML subroutines can now call subroutines
+
 
 Version 0.0.10
 ==============

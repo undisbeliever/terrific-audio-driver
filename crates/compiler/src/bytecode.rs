@@ -783,9 +783,7 @@ impl Bytecode {
         subroutine: SubroutineId,
     ) -> Result<(), BytecodeError> {
         match self.context {
-            BytecodeContext::SongSubroutine => {
-                return Err(BytecodeError::SubroutineCallInSubroutine)
-            }
+            BytecodeContext::SongSubroutine => (),
             BytecodeContext::SongChannel => (),
             BytecodeContext::SoundEffect => return Err(BytecodeError::SubroutineCallInSoundEffect),
         }
