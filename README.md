@@ -43,8 +43,8 @@ Engine Limitations and Deliberate Design Decisions
       For example, a `play_note c+4 16` instruction will play the note, sleep for 15 ticks, emit a
       key-off event, and sleep for 1 final tick.
     * This delay is required to prevent popping.
- * A MML subroutine cannot call a MML subroutine.
- * A maximum of 3 loops can be nested at once (including loops within subroutine calls).
+ * MML subroutines and loops share a bytecode stack.  The compiler will refuse to compile songs and
+   sound effects that would cause a stack-overflow.
  * There are no overflow or underflow checks when playing notes.
     * The MML compiler will check for pitch-out-of-range errors, but only if it knows which
       instrument is playing the note.

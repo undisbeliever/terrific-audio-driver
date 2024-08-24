@@ -259,7 +259,6 @@ Numbers can be decimal, or hexadecimal when prefixed with `$` (ie, `$ff`)
 
  * `[ <mml> ]<2..255>` - Loop
     * Repeats a section of MML a given number of times
-    * You can nest a maximum of 3 loops, including the loops in any subroutines you call.
     * The broken chord command `{{ }}` consumes a loop.
  * `[ <mml1> : <mml2> ]<2..255>` - Loop
     * Repeats a section of MML a given number of times, skipping the MML after the `:` on the last loop.
@@ -267,7 +266,6 @@ Numbers can be decimal, or hexadecimal when prefixed with `$` (ie, `$ff`)
  * `!<id>` - Call subroutine
     * A subroutine may change the instrument.
     * Calling a subroutine disables manual vibrato.
-    * A subroutine cannot call a subroutine.
  * `L` - Set loop point
     * If a loop point is set, the channel will restart at the loop point when the channel has reached the end.
  * `;` - Comment.  The text between a `;` and a new line is ignored.
@@ -340,8 +338,11 @@ This audio engine was designed to be simple, to that effect the following limita
     * Subtracting a single tick from every non-slurred note and adding a 1-tick rest after a key-off event.
     * The minimum length of a non-slurred note is 2 ticks.
  * All songs and sound effects use the same samples (no sample swapping).
- * A subroutine cannot call a subroutine.
- * A maximum of 3 loops can be nested at once (including any subroutines that are called).
+ * Loops and subroutines share a stack.
+    * The stack is 21 bytes per channel.
+    * 3 bytes of stack are required for a loop.
+    * 2 bytes of stack are required for a subroutine call.
+    * The compiler will refuse to compile MML that would overflow the stack.
  * The echo buffer is always active, even if `#EchoLength` is 0.
  * A 250ms delay is required to initialize and clear the echo buffer before it can be written to.  All songs will be delayed a minimum of 250ms before the song starts, even if the song does not use echo.
 
