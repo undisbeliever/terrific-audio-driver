@@ -48,6 +48,11 @@ Instructions
     * Not available in sound effects.
     * Not available in subroutines.
 
+ * `call_subroutine_and_disable_vibrato <name>` - Disable vibrato and call the subroutine *name*.
+    * Disables vibrato before the subroutine call.
+    * Not available in sound effects.
+    * Not available in subroutines.
+
  * `set_song_tick_clock <tick_clock>` - Set the tick TIMER0 clock register to *tick_clock*
     * `tick_clock` must be >= 64 and <= 255.
     * Not available in sound effects.

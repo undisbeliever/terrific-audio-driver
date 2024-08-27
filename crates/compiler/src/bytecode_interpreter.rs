@@ -199,6 +199,54 @@ impl ChannelState {
         self.ticks += Self::to_tick_count(length, key_off);
     }
 
+    fn call_subroutine(&mut self, s_id: u8, song_data: &[u8]) {
+        self.call_stack_depth += 1;
+        if self.call_stack_depth == 1 {
+            self.topmost_return_pos = Some(self.instruction_ptr);
+        }
+
+        match self.stack_pointer.checked_sub(2) {
+            Some(sp) => {
+                self.stack_pointer = sp;
+
+                let inst_ptr = self.instruction_ptr + self.song_ptr;
+                let inst_ptr = inst_ptr.to_le_bytes();
+
+                self.bc_stack[sp] = inst_ptr[0];
+                self.bc_stack[sp + 1] = inst_ptr[1];
+
+                self.instruction_ptr = Self::read_subroutine_instruction_ptr(s_id, song_data);
+            }
+            None => self.disable_channel(),
+        }
+    }
+
+    fn return_from_subroutine(&mut self) {
+        self.call_stack_depth = self.call_stack_depth.saturating_sub(1);
+        if self.call_stack_depth == 0 {
+            self.topmost_return_pos = None;
+        }
+
+        let sp = self.stack_pointer;
+
+        if sp <= BC_CHANNEL_STACK_SIZE - 2 {
+            self.stack_pointer = sp + 2;
+
+            if self.stack_pointer <= BC_CHANNEL_STACK_SIZE - BC_STACK_BYTES_PER_LOOP {
+                self.loop_stack_pointer = self.stack_pointer;
+            }
+
+            let inst_ptr = u16::from_le_bytes([self.bc_stack[sp], self.bc_stack[sp + 1]]);
+
+            match inst_ptr.checked_sub(self.song_ptr) {
+                Some(i) => self.instruction_ptr = i,
+                None => self.disable_channel(),
+            }
+        } else {
+            self.disable_channel();
+        }
+    }
+
     fn process_next_bytecode(&mut self, song_data: &[u8]) {
         let mut read_pc = || match song_data.get(usize::from(self.instruction_ptr)) {
             Some(b) => {
@@ -379,59 +427,24 @@ impl ChannelState {
                     }
                 }
 
+                opcodes::CALL_SUBROUTINE_AND_DISABLE_VIBRATO => {
+                    let s_id = read_pc();
+
+                    self.vibrato_pitch_offset_per_tick = 0;
+                    self.call_subroutine(s_id, song_data);
+                }
                 opcodes::CALL_SUBROUTINE => {
                     let s_id = read_pc();
 
-                    self.call_stack_depth += 1;
-                    if self.call_stack_depth == 1 {
-                        self.topmost_return_pos = Some(self.instruction_ptr);
-                    }
+                    self.call_subroutine(s_id, song_data);
+                }
 
-                    match self.stack_pointer.checked_sub(2) {
-                        Some(sp) => {
-                            self.stack_pointer = sp;
-
-                            self.vibrato_pitch_offset_per_tick = 0;
-
-                            let inst_ptr = self.instruction_ptr + self.song_ptr;
-                            let inst_ptr = inst_ptr.to_le_bytes();
-
-                            self.bc_stack[sp] = inst_ptr[0];
-                            self.bc_stack[sp + 1] = inst_ptr[1];
-
-                            self.instruction_ptr =
-                                Self::read_subroutine_instruction_ptr(s_id, song_data);
-                        }
-                        None => self.disable_channel(),
-                    }
+                opcodes::RETURN_FROM_SUBROUTINE_AND_DISABLE_VIBRATO => {
+                    self.vibrato_pitch_offset_per_tick = 0;
+                    self.return_from_subroutine();
                 }
                 opcodes::RETURN_FROM_SUBROUTINE => {
-                    self.call_stack_depth = self.call_stack_depth.saturating_sub(1);
-                    if self.call_stack_depth == 0 {
-                        self.topmost_return_pos = None;
-                    }
-
-                    let sp = self.stack_pointer;
-
-                    if sp <= BC_CHANNEL_STACK_SIZE - 2 {
-                        self.stack_pointer = sp + 2;
-
-                        if self.stack_pointer <= BC_CHANNEL_STACK_SIZE - BC_STACK_BYTES_PER_LOOP {
-                            self.loop_stack_pointer = self.stack_pointer;
-                        }
-
-                        self.vibrato_pitch_offset_per_tick = 0;
-
-                        let inst_ptr =
-                            u16::from_le_bytes([self.bc_stack[sp], self.bc_stack[sp + 1]]);
-
-                        match inst_ptr.checked_sub(self.song_ptr) {
-                            Some(i) => self.instruction_ptr = i,
-                            None => self.disable_channel(),
-                        }
-                    } else {
-                        self.disable_channel();
-                    }
+                    self.return_from_subroutine();
                 }
 
                 opcodes::ENABLE_ECHO => self.echo = true,

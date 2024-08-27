@@ -117,7 +117,7 @@ pub struct MpVibrato {
     pub quarter_wavelength_ticks: QuarterWavelengthInTicks,
 }
 
-#[derive(Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub struct ManualVibrato {
     pub pitch_offset_per_tick: PitchOffsetPerTick,
     pub quarter_wavelength_ticks: QuarterWavelengthInTicks,

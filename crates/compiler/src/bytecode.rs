@@ -63,29 +63,32 @@ pub mod opcodes {
 
     pub const REST: u8 = 0xc8;
     pub const REST_KEYOFF: u8 = 0xca;
-    pub const CALL_SUBROUTINE: u8 = 0xcc;
 
-    pub const SET_INSTRUMENT: u8 = 0xce;
-    pub const SET_INSTRUMENT_AND_ADSR_OR_GAIN: u8 = 0xd0;
-    pub const SET_ADSR: u8 = 0xd2;
-    pub const SET_GAIN: u8 = 0xd4;
+    pub const SET_INSTRUMENT: u8 = 0xcc;
+    pub const SET_INSTRUMENT_AND_ADSR_OR_GAIN: u8 = 0xce;
+    pub const SET_ADSR: u8 = 0xd0;
+    pub const SET_GAIN: u8 = 0xd2;
 
-    pub const ADJUST_PAN: u8 = 0xd6;
-    pub const SET_PAN: u8 = 0xd8;
-    pub const SET_PAN_AND_VOLUME: u8 = 0xda;
-    pub const ADJUST_VOLUME: u8 = 0xdc;
-    pub const SET_VOLUME: u8 = 0xde;
+    pub const ADJUST_PAN: u8 = 0xd4;
+    pub const SET_PAN: u8 = 0xd6;
+    pub const SET_PAN_AND_VOLUME: u8 = 0xd8;
+    pub const ADJUST_VOLUME: u8 = 0xda;
+    pub const SET_VOLUME: u8 = 0xdc;
 
-    pub const SET_SONG_TICK_CLOCK: u8 = 0xe0;
+    pub const SET_SONG_TICK_CLOCK: u8 = 0xde;
 
-    pub const START_LOOP: u8 = 0xe2;
-    pub const SKIP_LAST_LOOP: u8 = 0xe4;
+    pub const START_LOOP: u8 = 0xe0;
+    pub const SKIP_LAST_LOOP: u8 = 0xe2;
 
-    pub const END_LOOP: u8 = 0xe6;
-    pub const END: u8 = 0xe8;
-    pub const RETURN_FROM_SUBROUTINE: u8 = 0xea;
-    pub const ENABLE_ECHO: u8 = 0xec;
-    pub const DISABLE_ECHO: u8 = 0xee;
+    pub const CALL_SUBROUTINE_AND_DISABLE_VIBRATO: u8 = 0xe4;
+    pub const CALL_SUBROUTINE: u8 = 0xe6;
+
+    pub const END_LOOP: u8 = 0xe8;
+    pub const END: u8 = 0xea;
+    pub const RETURN_FROM_SUBROUTINE_AND_DISABLE_VIBRATO: u8 = 0xec;
+    pub const RETURN_FROM_SUBROUTINE: u8 = 0xee;
+    pub const ENABLE_ECHO: u8 = 0xf0;
+    pub const DISABLE_ECHO: u8 = 0xf2;
 
     // Last opcode
     pub const DISABLE_CHANNEL: u8 = 0xfe;
@@ -365,6 +368,18 @@ pub enum BcTerminator {
     DisableChannel,
     LoopChannel,
     ReturnFromSubroutine,
+    ReturnFromSubroutineAndDisableVibrato,
+}
+
+impl BcTerminator {
+    pub fn is_return(&self) -> bool {
+        match self {
+            Self::DisableChannel => false,
+            Self::LoopChannel => false,
+            Self::ReturnFromSubroutine => true,
+            Self::ReturnFromSubroutineAndDisableVibrato => true,
+        }
+    }
 }
 
 // Macro to automatically cast Opcode/NoteOpcode/i8 values and append it to `Bytecode::bytecode`.
@@ -503,9 +518,7 @@ impl Bytecode {
             ));
         }
 
-        if terminator == BcTerminator::ReturnFromSubroutine
-            && !matches!(self.context, BytecodeContext::SongSubroutine)
-        {
+        if terminator.is_return() && !matches!(self.context, BytecodeContext::SongSubroutine) {
             return Err((BytecodeError::ReturnInNonSubroutine, self.bytecode));
         }
 
@@ -513,6 +526,9 @@ impl Bytecode {
             BcTerminator::DisableChannel => opcodes::DISABLE_CHANNEL,
             BcTerminator::LoopChannel => opcodes::END,
             BcTerminator::ReturnFromSubroutine => opcodes::RETURN_FROM_SUBROUTINE,
+            BcTerminator::ReturnFromSubroutineAndDisableVibrato => {
+                opcodes::RETURN_FROM_SUBROUTINE_AND_DISABLE_VIBRATO
+            }
         };
         emit_bytecode!(self, opcode);
 
@@ -777,10 +793,11 @@ impl Bytecode {
         Ok(())
     }
 
-    pub fn call_subroutine(
+    fn _call_subroutine(
         &mut self,
         name: &str,
         subroutine: SubroutineId,
+        disable_vibraro: bool,
     ) -> Result<(), BytecodeError> {
         match self.context {
             BytecodeContext::SongSubroutine => (),
@@ -800,8 +817,29 @@ impl Bytecode {
             ));
         }
 
-        emit_bytecode!(self, opcodes::CALL_SUBROUTINE, subroutine.id);
+        let opcode = match disable_vibraro {
+            true => opcodes::CALL_SUBROUTINE_AND_DISABLE_VIBRATO,
+            false => opcodes::CALL_SUBROUTINE,
+        };
+
+        emit_bytecode!(self, opcode, subroutine.id);
         Ok(())
+    }
+
+    pub fn call_subroutine_and_disable_vibrato(
+        &mut self,
+        name: &str,
+        subroutine: SubroutineId,
+    ) -> Result<(), BytecodeError> {
+        self._call_subroutine(name, subroutine, true)
+    }
+
+    pub fn call_subroutine(
+        &mut self,
+        name: &str,
+        subroutine: SubroutineId,
+    ) -> Result<(), BytecodeError> {
+        self._call_subroutine(name, subroutine, false)
     }
 
     pub fn set_song_tick_clock(&mut self, tick_clock: TickClock) -> Result<(), BytecodeError> {

@@ -7,9 +7,22 @@
 
 A @1 v16 l4
 
-A MP150,3 c d e f g r
+!s1 l4 @1 e f
+A MP150,3 c d !s1 g a r
+A ~80,5   c d !s1 g a r
+A MP0     c d !s1 g a r
 
-A ~50,6   c d e f g r
+!s2 l4 @1 MP50,2 e f
+A MP150,3 c d !s2 g a r
+A ~80,5   c d !s2 g a r
+A MP0     c d !s2 g a r
 
-A MP 0    c d e f g r
+!s3 l4 ~120,1 e f
+A MP150,3 c d !s3 g a r
+A ~80,5   c d !s3 g a r
+A MP0     c d !s3 g a r
 
+!s4 l4 ~0 e f
+A MP150,3 c d !s4 g a r
+A ~80,5   c d !s4 g a r
+A MP0     c d !s4 g a r

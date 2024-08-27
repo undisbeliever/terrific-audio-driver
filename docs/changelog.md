@@ -4,9 +4,19 @@ Terrific Audio Driver Changelog
 Version 0.0.11
 ==============
 
+**BREAKING MML changes:**
+ * `~` manual vibrato persists across subroutine calls.
+    * `MP` vibrato does not persist across subroutine calls (unchanged from v0.0.10).
+
+**BREAKING Bytecode changes:**
+ * `call_subroutine` does not disable vibrato
+ * `return_from_subroutine` does not disable vibrato
+
 Bytecode changes:
  * Loops and subroutines now use a traditional stack.
     * The maximum number of nested loops has increased.
+ * Added `call_subroutine_and_disable_vibrato` instruction
+ * Added `return_from_subroutine_and_disable_vibrato` instruction
 
 MML changes:
  * MML subroutines can now call subroutines

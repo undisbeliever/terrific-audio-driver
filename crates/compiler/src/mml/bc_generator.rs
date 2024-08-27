@@ -126,11 +126,28 @@ enum MpState {
     Mp(MpVibrato),
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub enum VibratoState {
+    Unchanged,
+    Disabled,
+    Set(ManualVibrato),
+}
+
+impl VibratoState {
+    fn disable(&mut self) {
+        match self {
+            Self::Unchanged => *self = Self::Disabled,
+            Self::Disabled => *self = Self::Disabled,
+            Self::Set(v) => v.pitch_offset_per_tick = PitchOffsetPerTick::new(0),
+        }
+    }
+}
+
 struct SkipLastLoopState {
     instrument: IeState<usize>,
     envelope: IeState<Envelope>,
     prev_slurred_note: Option<Note>,
-    vibrato: Option<ManualVibrato>,
+    vibrato: VibratoState,
 }
 
 struct ChannelBcGenerator<'a> {
@@ -148,7 +165,7 @@ struct ChannelBcGenerator<'a> {
     prev_slurred_note: Option<Note>,
 
     mp: MpState,
-    vibrato: Option<ManualVibrato>,
+    vibrato: VibratoState,
 
     skip_last_loop_state: Vec<Option<SkipLastLoopState>>,
 
@@ -177,7 +194,7 @@ impl ChannelBcGenerator<'_> {
             envelope: IeState::Unknown,
             prev_slurred_note: None,
             mp: MpState::Disabled,
-            vibrato: None,
+            vibrato: VibratoState::Unchanged,
             skip_last_loop_state: Vec::new(),
             loop_point: None,
             show_missing_set_instrument_error: !is_subroutine,
@@ -313,9 +330,10 @@ impl ChannelBcGenerator<'_> {
             MpState::Disabled => {
                 const POPT: PitchOffsetPerTick = PitchOffsetPerTick::new(0);
 
-                let vibrato_disabled = match self.vibrato {
-                    None => true,
-                    Some(v) => v.pitch_offset_per_tick == POPT,
+                let vibrato_disabled = match &self.vibrato {
+                    VibratoState::Unchanged => true,
+                    VibratoState::Disabled => true,
+                    VibratoState::Set(v) => v.pitch_offset_per_tick == POPT,
                 };
 
                 if vibrato_disabled {
@@ -323,20 +341,19 @@ impl ChannelBcGenerator<'_> {
                 } else {
                     self.bc
                         .set_vibrato_depth_and_play_note(POPT, note, pn_length);
-
-                    if let Some(v) = &mut self.vibrato {
-                        v.pitch_offset_per_tick = POPT;
-                    }
+                    self.vibrato.disable();
                 }
             }
             MpState::Mp(mp) => {
                 let cv = self.calculate_vibrato_for_note(mp, note)?;
 
-                if self.vibrato == Some(cv) {
+                if self.vibrato == VibratoState::Set(cv) {
                     self.bc.play_note(note, pn_length);
                 } else {
                     match self.vibrato {
-                        Some(sv) if sv.quarter_wavelength_ticks == cv.quarter_wavelength_ticks => {
+                        VibratoState::Set(sv)
+                            if sv.quarter_wavelength_ticks == cv.quarter_wavelength_ticks =>
+                        {
                             self.bc.set_vibrato_depth_and_play_note(
                                 cv.pitch_offset_per_tick,
                                 note,
@@ -350,7 +367,7 @@ impl ChannelBcGenerator<'_> {
                         }
                     }
 
-                    self.vibrato = Some(cv);
+                    self.vibrato = VibratoState::Set(cv);
                 }
             }
         }
@@ -744,20 +761,27 @@ impl ChannelBcGenerator<'_> {
             None => panic!("subroutines is None"),
         };
 
-        // Calling a subroutine disables manual vibrato
-        self.vibrato = None;
-        if self.mp == MpState::Manual {
-            self.mp = MpState::Disabled;
-        }
-
         if let Some(inst) = sub.last_instrument {
             self.instrument = IeState::Known(inst);
         }
         if let Some(e) = sub.last_envelope {
             self.envelope = IeState::Known(e);
         }
+        match &sub.vibrato {
+            VibratoState::Unchanged => (),
+            VibratoState::Disabled => self.vibrato = VibratoState::Disabled,
+            VibratoState::Set(v) => self.vibrato = VibratoState::Set(*v),
+        }
 
-        self.bc.call_subroutine(sub.identifier.as_str(), s_id)?;
+        match &self.mp {
+            MpState::Mp(_) => {
+                self.bc
+                    .call_subroutine_and_disable_vibrato(sub.identifier.as_str(), s_id)?;
+            }
+            MpState::Disabled | MpState::Manual => {
+                self.bc.call_subroutine(sub.identifier.as_str(), s_id)?;
+            }
+        }
 
         Ok(())
     }
@@ -766,12 +790,12 @@ impl ChannelBcGenerator<'_> {
         self.mp = MpState::Manual;
         match v {
             Some(v) => {
-                self.vibrato = Some(v);
+                self.vibrato = VibratoState::Set(v);
                 self.bc
                     .set_vibrato(v.pitch_offset_per_tick, v.quarter_wavelength_ticks);
             }
             None => {
-                self.vibrato = None;
+                self.vibrato.disable();
                 self.bc.disable_vibrato();
             }
         }
@@ -904,7 +928,7 @@ impl ChannelBcGenerator<'_> {
                         instrument: self.instrument.clone(),
                         envelope: self.envelope.clone(),
                         prev_slurred_note: self.prev_slurred_note,
-                        vibrato: self.vibrato,
+                        vibrato: self.vibrato.clone(),
                     });
                 }
             }
@@ -1119,7 +1143,18 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
 
         assert!(gen.loop_point.is_none());
 
-        self.song_data = match gen.bc.bytecode(BcTerminator::ReturnFromSubroutine) {
+        let mut vibrato = gen.vibrato;
+
+        let terminator = match &gen.mp {
+            MpState::Disabled => BcTerminator::ReturnFromSubroutine,
+            MpState::Manual => BcTerminator::ReturnFromSubroutine,
+            MpState::Mp(_) => {
+                vibrato.disable();
+                BcTerminator::ReturnFromSubroutineAndDisableVibrato
+            }
+        };
+
+        self.song_data = match gen.bc.bytecode(terminator) {
             Ok(b) => b,
             Err((e, b)) => {
                 parser.add_error_range(last_pos.to_range(1), MmlError::BytecodeError(e));
@@ -1149,6 +1184,7 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
                     IeState::Maybe(_) => panic!("unexpected maybe envelope"),
                     IeState::Unknown => None,
                 },
+                vibrato,
                 changes_song_tempo: !gen.tempo_changes.is_empty(),
             });
 

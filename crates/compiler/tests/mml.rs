@@ -1368,6 +1368,9 @@ fn test_mp_vibrato() {
     );
 }
 
+// ::TODO add vibrato + subroutine call test::
+// ::TODO add MP vibrato + subroutine call test::
+
 #[test]
 fn test_volume() {
     assert_line_matches_bytecode("v1", &["set_volume 16"]);

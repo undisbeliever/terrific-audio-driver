@@ -167,6 +167,7 @@ impl BytecodeAssembler<'_, '_> {
            skip_last_loop 0 no_arguments,
            end_loop 1 optional_loop_count_argument,
 
+           call_subroutine_and_disable_vibrato 2 subroutine_argument,
            call_subroutine 2 subroutine_argument,
 
            set_song_tick_clock 1 one_vnt_argument,

@@ -120,14 +120,6 @@ let INSTRUCTIONS_WITH_ARGUMENTS = [
     rest_keyoff,
 
 
-    // parameter = subroutine ID (MAX: 127)
-    //
-    // NOTE: Only the lower 7 bits of the subroutine id are used.
-    // NOTE: There is no bounds checking
-    // NOTE: Disables vibrato
-    call_subroutine,
-
-
     // parameter = u8 instrument_id
     //
     // NOTE: There is no bounds-checking on instrument_id
@@ -195,6 +187,16 @@ let INSTRUCTIONS_WITH_ARGUMENTS = [
     //
     // CAUTION: Must be used in a loop.
     skip_last_loop,
+
+
+    // parameter = subroutine ID
+    //
+    // NOTE: There is no bounds checking
+    call_subroutine_and_disable_vibrato,
+
+    // parameter = subroutine ID
+    // NOTE: There is no bounds checking
+    call_subroutine,
 ];
 
 
@@ -215,9 +217,10 @@ let NO_ARGUMENT_INSTRUCTIONS = [
     // NOTE: `disable_channel` is slightly faster then `end`.
     end,
 
+    // Return from a call instruction and disabled vibrato
+    return_from_subroutine_and_disable_vibrato,
 
     // Return from a call instruction
-    // NOTE: Disables vibrato
     return_from_subroutine,
 
 
@@ -229,8 +232,6 @@ let NO_ARGUMENT_INSTRUCTIONS = [
 
 
     // Padding
-    disable_channel,
-    disable_channel,
     disable_channel,
     disable_channel,
     disable_channel,

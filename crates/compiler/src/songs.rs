@@ -17,6 +17,7 @@ use crate::driver_constants::{
 };
 use crate::envelope::Envelope;
 use crate::errors::{SongError, SongTooLargeError, ValueError};
+use crate::mml::VibratoState;
 use crate::mml::{MetaData, MmlInstrument, Section};
 use crate::notes::Note;
 use crate::sound_effects::CompiledSoundEffect;
@@ -74,6 +75,7 @@ pub struct Subroutine {
     pub bytecode_offset: u16,
     pub last_instrument: Option<usize>,
     pub last_envelope: Option<Envelope>,
+    pub vibrato: VibratoState,
     pub changes_song_tempo: bool,
 }
 

@@ -308,7 +308,7 @@ Numbers can be decimal, or hexadecimal when prefixed with `$` (ie, `$ff`)
     * Vibrato will add or subtract a `pitch_offset_per_tick` value to the S-DSP `PITCH` register in a sawtooth pattern on every tick.
     * `quarter_wavelength_in_ticks` value controls the rate of vibrato.
     * Manual vibrato will disable MP Vibrato.
-    * Calling a subroutine will disables manual vibrato.
+    * Manual vibrato will persist across subroutine calls.
 
  * `MP0` - Disable MP vibrato
  * `MP<depth_in_cents>,<quarter_wavelength_in_ticks>` - MP Vibrato
@@ -316,6 +316,8 @@ Numbers can be decimal, or hexadecimal when prefixed with `$` (ie, `$ff`)
     * `quarter_wavelength_in_ticks` value controls the rate of vibrato.
     * When MP Vibrato is activated the MML compiler will calculate a `pitch_offset_per_tick` value for each subsequent note played.  This greatly simplifies and speedups the SPC-700 code, but requires the MML compiler to know which instrument is playing the note.
     * MP Vibrato does not take effect immediately.  The vibrato starts on the next note played.
+    * CAUTION: MP Vibrato does not persist across subroutine calls.
+      When calling a `!` subroutine, MP vibrato is temporally disabled and MP vibrato resumes after the `!` mml subroutine returns.
 
 
 <br/>
