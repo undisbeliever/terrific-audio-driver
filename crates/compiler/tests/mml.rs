@@ -19,7 +19,7 @@ use compiler::errors::{BytecodeError, MmlError, SongError};
 use compiler::mml;
 use compiler::notes::Octave;
 use compiler::pitch_table::{build_pitch_table, PitchTable};
-use compiler::songs::SongData;
+use compiler::songs::{SongData, Subroutine};
 
 use std::fmt::Write;
 
@@ -1045,6 +1045,173 @@ fn test_max_subroutines_with_nesting() {
 }
 
 #[test]
+fn test_call_subroutine() {
+    assert_mml_channel_a_matches_bytecode(
+        r##"
+@0 dummy_instrument
+
+!s1 a
+!s2 b
+!s3 c
+
+A @0 !s1 !s2 !s3
+"##,
+        &[
+            "set_instrument dummy_instrument",
+            "call_subroutine s1",
+            "call_subroutine s2",
+            "call_subroutine s3",
+        ],
+    );
+}
+
+#[test]
+fn test_set_instrument_after_call_subroutine() {
+    assert_mml_channel_a_matches_bytecode(
+        r##"
+@0 dummy_instrument
+@1 dummy_instrument_2
+
+!s @1 a
+
+A @0 !s b @0 c
+"##,
+        &[
+            "set_instrument dummy_instrument",
+            "call_subroutine s",
+            "play_note b4 24",
+            "set_instrument dummy_instrument",
+            "play_note c4 24",
+        ],
+    );
+
+    assert_mml_channel_a_matches_bytecode(
+        r##"
+@0 dummy_instrument
+
+!s @0 a
+
+A !s b @0 c
+"##,
+        &[
+            "call_subroutine s",
+            "play_note b4 24",
+            // `set_instrument` is optimised out
+            "play_note c4 24",
+        ],
+    );
+}
+#[test]
+fn test_adsr_after_call_subroutine() {
+    assert_mml_channel_a_matches_bytecode(
+        r##"
+@0 dummy_instrument adsr 1 1 1 1
+
+!s @0 a
+
+A !s b A2,2,2,2 c
+"##,
+        &[
+            "call_subroutine s",
+            "play_note b4 24",
+            "set_adsr 2 2 2 2",
+            "play_note c4 24",
+        ],
+    );
+
+    assert_mml_channel_a_matches_bytecode(
+        r##"
+@0 dummy_instrument adsr 2 2 2 2
+
+!s @0 a
+
+A !s b A2,2,2,2 c
+"##,
+        &[
+            "call_subroutine s",
+            "play_note b4 24",
+            // `set_adsr 2 2 2 2` is optimised out
+            "play_note c4 24",
+        ],
+    );
+}
+
+#[test]
+fn test_gain_after_call_subroutine() {
+    assert_mml_channel_a_matches_bytecode(
+        r##"
+@0 dummy_instrument gain F100
+
+!s @0 a
+
+A !s b GF50 c
+"##,
+        &[
+            "call_subroutine s",
+            "play_note b4 24",
+            "set_gain F50",
+            "play_note c4 24",
+        ],
+    );
+
+    assert_mml_channel_a_matches_bytecode(
+        r##"
+@0 dummy_instrument gain F100
+
+!s @0 a
+
+A !s b GF100 c
+"##,
+        &[
+            "call_subroutine s",
+            "play_note b4 24",
+            // `set_gain F100` is optimised out
+            "play_note c4 24",
+        ],
+    );
+}
+
+#[test]
+fn test_prev_slurred_note_after_subroutine_call() {
+    // see `test_skip_last_loop_prev_slurred_note()`
+
+    assert_mml_channel_a_matches_bytecode(
+        r##"
+@0 dummy_instrument
+
+!s a
+
+A @0 a& !s {ab},,10
+"##,
+        &[
+            "set_instrument dummy_instrument",
+            "play_note a4 no_keyoff 24",
+            "call_subroutine s",
+            // Previous note is a4 and NOT slurred
+            "play_note a4 no_keyoff 1",
+            "portamento b4 keyoff +10 23",
+        ],
+    );
+
+    assert_mml_channel_a_matches_bytecode(
+        r##"
+@0 dummy_instrument
+
+!s a&
+
+A @0 g !s {ab},,10
+"##,
+        &[
+            "set_instrument dummy_instrument",
+            "play_note g4 24",
+            "call_subroutine s",
+            // Previous slurred note is a4
+            "portamento b4 keyoff +10 24",
+        ],
+    );
+}
+
+#[test]
 fn test_nested_subroutines() {
     // Cannot test with asm, no easy way to implement a "call_subroutine s" bytecode.
     // Instead, this test will confirm it compiles with no errors and the correct stack depth
@@ -1368,8 +1535,331 @@ fn test_mp_vibrato() {
     );
 }
 
-// ::TODO add vibrato + subroutine call test::
-// ::TODO add MP vibrato + subroutine call test::
+#[test]
+fn test_subroutine_vibrato_bugfix() {
+    assert_mml_channel_a_matches_bytecode(
+        r##"
+@1 dummy_instrument
+!s ~250,4
+A @1 c !s d e
+"##,
+        &[
+            "set_instrument dummy_instrument",
+            "play_note c4 24",
+            "call_subroutine s",
+            "play_note d4 24",
+            "play_note e4 24",
+        ],
+    );
+}
+
+#[test]
+fn test_vibrato_before_subroutine_call() {
+    assert_mml_channel_a_matches_bytecode(
+        r##"
+@1 dummy_instrument
+!s @1 d
+A @1 c ~50,4 !s d
+"##,
+        &[
+            "set_instrument dummy_instrument",
+            "play_note c4 24",
+            "set_vibrato 50 4",
+            "call_subroutine s",
+            "play_note d4 24",
+        ],
+    );
+}
+
+#[test]
+fn test_vibrato_after_subroutine_call() {
+    assert_mml_channel_a_matches_bytecode(
+        r##"
+@1 dummy_instrument
+!s @1 ~50,4 d
+A @1 c !s ~50,4 d
+"##,
+        &[
+            "set_instrument dummy_instrument",
+            "play_note c4 24",
+            "call_subroutine s",
+            // subroutine returns with vibrato depth 50 and quarter_wavelength 4
+            // set vibrato instructions are not deduplicated
+            "set_vibrato 50 4",
+            "play_note d4 24",
+        ],
+    );
+}
+
+#[test]
+fn test_mp_vibrato_before_subroutine_call() {
+    assert_mml_channel_a_matches_bytecode(
+        r##"
+@1 dummy_instrument
+!s @1
+A @1 MP20,4 c !s c
+"##,
+        &[
+            "set_instrument dummy_instrument",
+            "set_vibrato 6 4",
+            "play_note c4 24",
+            "call_subroutine_and_disable_vibrato s",
+            // subroutine returns with vibrato depth 0 and quarter_wavelength 4
+            "set_vibrato_depth_and_play_note 6 c4 24",
+        ],
+    );
+
+    assert_mml_channel_a_matches_bytecode(
+        r##"
+@1 dummy_instrument
+!s @1 d
+A @1 MP20,4 c !s d
+"##,
+        &[
+            "set_instrument dummy_instrument",
+            "set_vibrato 6 4",
+            "play_note c4 24",
+            "call_subroutine_and_disable_vibrato s",
+            // subroutine returns with vibrato depth 0 and quarter_wavelength 4
+            "set_vibrato_depth_and_play_note 7 d4 24",
+        ],
+    );
+
+    assert_mml_channel_a_matches_bytecode(
+        r##"
+@1 dummy_instrument
+!s @1 MP20,4 d
+A @1 MP20,4 c !s d d
+"##,
+        &[
+            "set_instrument dummy_instrument",
+            "set_vibrato 6 4",
+            "play_note c4 24",
+            "call_subroutine_and_disable_vibrato s",
+            // subroutine returns with vibrato depth 0 and quarter_wavelength 4
+            "set_vibrato_depth_and_play_note 7 d4 24",
+            // vibrato active and depth unchanged
+            "play_note d4 24",
+        ],
+    );
+
+    assert_mml_channel_a_matches_bytecode(
+        r##"
+@1 dummy_instrument
+!s @1 ~50,4 d
+A @1 MP20,4 c !s d
+"##,
+        &[
+            "set_instrument dummy_instrument",
+            "set_vibrato 6 4",
+            "play_note c4 24",
+            "call_subroutine_and_disable_vibrato s",
+            // subroutine returns with vibrato depth 50 and quarter_wavelength 4
+            "set_vibrato_depth_and_play_note 7 d4 24",
+        ],
+    );
+
+    assert_mml_channel_a_matches_bytecode(
+        r##"
+@1 dummy_instrument
+!s @1 MP20,6 d
+A @1 MP20,4 c !s d
+"##,
+        &[
+            "set_instrument dummy_instrument",
+            "set_vibrato 6 4",
+            "play_note c4 24",
+            "call_subroutine_and_disable_vibrato s",
+            // subroutine returns with vibrato depth 0 and quarter_wavelength 6
+            "set_vibrato 7 4",
+            "play_note d4 24",
+        ],
+    );
+
+    assert_mml_channel_a_matches_bytecode(
+        r##"
+@1 dummy_instrument
+!s @1 ~50,6 d
+A @1 MP20,4 c !s d
+"##,
+        &[
+            "set_instrument dummy_instrument",
+            "set_vibrato 6 4",
+            "play_note c4 24",
+            "call_subroutine_and_disable_vibrato s",
+            // subroutine returns with vibrato depth 50 and quarter_wavelength 6
+            "set_vibrato 7 4",
+            "play_note d4 24",
+        ],
+    );
+
+    assert_mml_channel_a_matches_bytecode(
+        r##"
+@1 dummy_instrument
+!s @1 ~7,4 d
+A @1 MP20,4 c !s d
+"##,
+        &[
+            "set_instrument dummy_instrument",
+            "set_vibrato 6 4",
+            "play_note c4 24",
+            "call_subroutine_and_disable_vibrato s",
+            // subroutine returns with vibrato depth 7 and quarter_wavelength 4
+            "play_note d4 24",
+        ],
+    );
+}
+
+#[test]
+fn test_mp_vibrato_after_subroutine_call() {
+    assert_mml_channel_a_matches_bytecode(
+        r##"
+@1 dummy_instrument
+!s @1
+A @1 c !s MP20,4 c
+"##,
+        &[
+            "set_instrument dummy_instrument",
+            "play_note c4 24",
+            "call_subroutine s",
+            // subroutine returns with vibrato unchanged
+            "set_vibrato 6 4",
+            "play_note c4 24",
+        ],
+    );
+
+    assert_mml_channel_a_matches_bytecode(
+        r##"
+@1 dummy_instrument
+!s @1 d
+A @1 c !s MP20,4 d
+"##,
+        &[
+            "set_instrument dummy_instrument",
+            "play_note c4 24",
+            "call_subroutine s",
+            // subroutine returns with vibrato unchanged
+            "set_vibrato 7 4",
+            "play_note d4 24",
+        ],
+    );
+
+    assert_mml_channel_a_matches_bytecode(
+        r##"
+@1 dummy_instrument
+!s @1 MP20,4 d
+A @1 c !s MP20,4 d d
+"##,
+        &[
+            "set_instrument dummy_instrument",
+            "play_note c4 24",
+            "call_subroutine s",
+            // subroutine returns with vibrato depth 0 and quarter_wavelength 4
+            "set_vibrato_depth_and_play_note 7 d4 24",
+            // vibrato active and depth unchanged
+            "play_note d4 24",
+        ],
+    );
+
+    assert_mml_channel_a_matches_bytecode(
+        r##"
+@1 dummy_instrument
+!s @1 ~50,4 d
+A @1 c !s MP20,4 d
+"##,
+        &[
+            "set_instrument dummy_instrument",
+            "play_note c4 24",
+            "call_subroutine s",
+            // subroutine returns with vibrato depth 50 and quarter_wavelength 4
+            "set_vibrato_depth_and_play_note 7 d4 24",
+        ],
+    );
+
+    assert_mml_channel_a_matches_bytecode(
+        r##"
+@1 dummy_instrument
+!s @1 MP20,6 d
+A @1 c !s MP20,4 d
+"##,
+        &[
+            "set_instrument dummy_instrument",
+            "play_note c4 24",
+            "call_subroutine s",
+            // subroutine returns with vibrato depth 0 and quarter_wavelength 6
+            "set_vibrato 7 4",
+            "play_note d4 24",
+        ],
+    );
+
+    assert_mml_channel_a_matches_bytecode(
+        r##"
+@1 dummy_instrument
+!s @1 ~50,6 d
+A @1 c !s MP20,4 d
+"##,
+        &[
+            "set_instrument dummy_instrument",
+            "play_note c4 24",
+            "call_subroutine s",
+            // subroutine returns with vibrato depth 50 and quarter_wavelength 6
+            "set_vibrato 7 4",
+            "play_note d4 24",
+        ],
+    );
+
+    assert_mml_channel_a_matches_bytecode(
+        r##"
+@1 dummy_instrument
+!s @1 ~7,4 d
+A @1 c !s MP20,4 d
+"##,
+        &[
+            "set_instrument dummy_instrument",
+            "play_note c4 24",
+            "call_subroutine s",
+            // subroutine returns with vibrato depth 7 and quarter_wavelength 4
+            "play_note d4 24",
+        ],
+    );
+}
+
+#[test]
+fn test_mp0_before_subroutine_call() {
+    assert_mml_channel_a_matches_bytecode(
+        r##"
+@1 dummy_instrument
+!s @1 ~7,4 d
+A @1 MP0 c !s d
+"##,
+        &[
+            "set_instrument dummy_instrument",
+            "play_note c4 24",
+            "call_subroutine s",
+            // subroutine returns with vibrato depth 7 and quarter_wavelength 4
+            // subroutine vibrato overrides MP0
+            "play_note d4 24",
+        ],
+    );
+}
+
+#[test]
+fn test_mp0_after_subroutine_call() {
+    assert_mml_channel_a_matches_bytecode(
+        r##"
+@1 dummy_instrument
+!s @1 ~7,4 d
+A @1 c !s MP0 d
+"##,
+        &[
+            "set_instrument dummy_instrument",
+            "play_note c4 24",
+            "call_subroutine s",
+            // subroutine returns with vibrato depth 7 and quarter_wavelength 4
+            "set_vibrato_depth_and_play_note 0 d4 24",
+        ],
+    );
+}
 
 #[test]
 fn test_volume() {
@@ -2565,6 +3055,7 @@ fn assert_line_matches_bytecode(mml_line: &str, bc_asm: &[&str]) {
     let bc_asm = assemble_channel_bytecode(
         &bc_asm,
         &dd.instruments_and_samples,
+        &[],
         BcTerminator::DisableChannel,
     );
 
@@ -2612,6 +3103,7 @@ fn assert_line_matches_line_and_bytecode(mml_line1: &str, mml_line2: &str, bc_as
     let bc_asm = assemble_channel_bytecode(
         &bc_asm,
         &dd.instruments_and_samples,
+        &[],
         BcTerminator::DisableChannel,
     );
 
@@ -2626,6 +3118,7 @@ fn assert_mml_channel_a_matches_bytecode(mml: &str, bc_asm: &[&str]) {
     let bc_asm = assemble_channel_bytecode(
         bc_asm,
         &dummy_data.instruments_and_samples,
+        mml.subroutines(),
         BcTerminator::DisableChannel,
     );
 
@@ -2640,6 +3133,7 @@ fn assert_mml_channel_a_matches_looping_bytecode(mml: &str, bc_asm: &[&str]) {
     let bc_asm = assemble_channel_bytecode(
         bc_asm,
         &dummy_data.instruments_and_samples,
+        mml.subroutines(),
         BcTerminator::LoopChannel,
     );
 
@@ -2749,11 +3243,17 @@ fn compile_mml(mml: &str, dummy_data: &DummyData) -> SongData {
 fn assemble_channel_bytecode(
     bc_asm: &[&str],
     inst_map: &UniqueNamesList<data::InstrumentOrSample>,
+    subroutines: &[Subroutine],
     terminator: BcTerminator,
 ) -> Vec<u8> {
+    let subroutines = subroutines
+        .iter()
+        .map(|s| (s.identifier.as_str(), s.subroutine_id))
+        .collect();
+
     let mut bc = bytecode_assembler::BytecodeAssembler::new(
         inst_map,
-        None,
+        Some(&subroutines),
         bytecode_assembler::BytecodeContext::SongChannel,
     );
 
