@@ -763,6 +763,8 @@ impl ChannelBcGenerator<'_> {
 
         match &self.mp {
             MpState::Mp(_) => {
+                self.vibrato.disable();
+
                 self.bc
                     .call_subroutine_and_disable_vibrato(sub.identifier.as_str(), s_id)?;
             }
