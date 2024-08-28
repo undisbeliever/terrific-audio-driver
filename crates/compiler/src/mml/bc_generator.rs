@@ -761,6 +761,16 @@ impl ChannelBcGenerator<'_> {
             None => panic!("subroutines is None"),
         };
 
+        match &self.mp {
+            MpState::Mp(_) => {
+                self.bc
+                    .call_subroutine_and_disable_vibrato(sub.identifier.as_str(), s_id)?;
+            }
+            MpState::Disabled | MpState::Manual => {
+                self.bc.call_subroutine(sub.identifier.as_str(), s_id)?;
+            }
+        }
+
         if let Some(inst) = sub.last_instrument {
             self.instrument = IeState::Known(inst);
         }
@@ -770,16 +780,12 @@ impl ChannelBcGenerator<'_> {
         match &sub.vibrato {
             VibratoState::Unchanged => (),
             VibratoState::Disabled => self.vibrato = VibratoState::Disabled,
-            VibratoState::Set(v) => self.vibrato = VibratoState::Set(*v),
-        }
-
-        match &self.mp {
-            MpState::Mp(_) => {
-                self.bc
-                    .call_subroutine_and_disable_vibrato(sub.identifier.as_str(), s_id)?;
-            }
-            MpState::Disabled | MpState::Manual => {
-                self.bc.call_subroutine(sub.identifier.as_str(), s_id)?;
+            VibratoState::Set(v) => {
+                self.vibrato = VibratoState::Set(*v);
+                match self.mp {
+                    MpState::Disabled | MpState::Manual => self.mp = MpState::Manual,
+                    MpState::Mp(_) => (),
+                }
             }
         }
 

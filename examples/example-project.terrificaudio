@@ -201,6 +201,10 @@
     {
       "name": "envelope_race_condition",
       "source": "bug-tests/envelope-race-condition.mml"
+    },
+    {
+      "name": "subroutine_vibrato_bug",
+      "source": "bug-tests/subroutine-vibrato-bug.mml"
     }
   ]
 }

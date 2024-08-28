@@ -1,0 +1,14 @@
+; If ~ vibrato is enabled in a subroutine and MP is disabled in channel A
+; then vibrato erroneously disabled in the note after the subroutine call.
+;
+; Reported by KungFuFurby
+
+#ZenLen 192
+#Tempo 120
+
+@1 triangle
+
+; The two notes after the subroutine should be played with manual vibrato
+!s ~250,4
+A @1 c !s d e
+
