@@ -20,6 +20,9 @@ Bytecode changes:
 
 MML changes:
  * MML subroutines can now call subroutines
+ * Fixed slurred note tracking after a subroutine call.  
+   A `{}` portamento after an MML subroutine that ends with a slurred note now has the same
+   behaviour as a `{}` portamento after a loop that ends with a slurred note.
 
 
 Version 0.0.10

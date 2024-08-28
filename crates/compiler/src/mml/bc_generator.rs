@@ -143,10 +143,17 @@ impl VibratoState {
     }
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub enum SlurredNoteState {
+    Unchanged,
+    None,
+    Slurred(Note),
+}
+
 struct SkipLastLoopState {
     instrument: IeState<usize>,
     envelope: IeState<Envelope>,
-    prev_slurred_note: Option<Note>,
+    prev_slurred_note: SlurredNoteState,
     vibrato: VibratoState,
 }
 
@@ -162,7 +169,7 @@ struct ChannelBcGenerator<'a> {
     instrument: IeState<usize>,
     envelope: IeState<Envelope>,
 
-    prev_slurred_note: Option<Note>,
+    prev_slurred_note: SlurredNoteState,
 
     mp: MpState,
     vibrato: VibratoState,
@@ -192,7 +199,7 @@ impl ChannelBcGenerator<'_> {
             tempo_changes: Vec::new(),
             instrument: IeState::Unknown,
             envelope: IeState::Unknown,
-            prev_slurred_note: None,
+            prev_slurred_note: SlurredNoteState::Unchanged,
             mp: MpState::Disabled,
             vibrato: VibratoState::Unchanged,
             skip_last_loop_state: Vec::new(),
@@ -321,7 +328,11 @@ impl ChannelBcGenerator<'_> {
 
         self.test_note(note)?;
 
-        self.prev_slurred_note = if is_slur { Some(note) } else { None };
+        self.prev_slurred_note = if is_slur {
+            SlurredNoteState::Slurred(note)
+        } else {
+            SlurredNoteState::None
+        };
 
         match &self.mp {
             MpState::Manual => {
@@ -462,7 +473,7 @@ impl ChannelBcGenerator<'_> {
         if length.is_zero() {
             return Ok(());
         }
-        self.prev_slurred_note = None;
+        self.prev_slurred_note = SlurredNoteState::None;
 
         if length.value() < MIN_LOOP_REST || !self.bc.can_loop() {
             self.rest_one_keyoff_no_loop(length)
@@ -489,7 +500,7 @@ impl ChannelBcGenerator<'_> {
         if length.is_zero() {
             return Ok(());
         }
-        self.prev_slurred_note = None;
+        self.prev_slurred_note = SlurredNoteState::None;
 
         if length.value() < MIN_LOOP_REST || !self.bc.can_loop() {
             self.rest_many_keyoffs_no_loop(length)
@@ -551,7 +562,7 @@ impl ChannelBcGenerator<'_> {
 
         // Play note1 (if required)
         let note1_length = {
-            if self.prev_slurred_note != Some(note1) {
+            if self.prev_slurred_note != SlurredNoteState::Slurred(note1) {
                 let note_1_length = max(TickCounter::new(1), delay_length);
                 let (pn_length, rest) = Self::split_play_note_length(note_1_length, true)?;
 
@@ -605,7 +616,11 @@ impl ChannelBcGenerator<'_> {
             Self::split_play_note_length(tie_length + portamento_length, is_slur)?;
         self.bc.portamento(note2, velocity, p_length);
 
-        self.prev_slurred_note = if is_slur { Some(note2) } else { None };
+        self.prev_slurred_note = if is_slur {
+            SlurredNoteState::Slurred(note2)
+        } else {
+            SlurredNoteState::None
+        };
 
         self.rest_after_play_note(p_rest, is_slur)
     }
@@ -616,7 +631,7 @@ impl ChannelBcGenerator<'_> {
         total_length: TickCounter,
         note_length: PlayNoteTicks,
     ) -> Result<(), MmlError> {
-        self.prev_slurred_note = None;
+        self.prev_slurred_note = SlurredNoteState::None;
 
         if notes.is_empty() {
             return Err(MmlError::NoNotesInBrokenChord);
@@ -790,6 +805,12 @@ impl ChannelBcGenerator<'_> {
                 }
             }
         }
+        match &sub.prev_slurred_note {
+            SlurredNoteState::Unchanged => (),
+            s @ SlurredNoteState::None | s @ SlurredNoteState::Slurred(_) => {
+                self.prev_slurred_note = s.clone()
+            }
+        }
 
         Ok(())
     }
@@ -935,7 +956,7 @@ impl ChannelBcGenerator<'_> {
                     *s = Some(SkipLastLoopState {
                         instrument: self.instrument.clone(),
                         envelope: self.envelope.clone(),
-                        prev_slurred_note: self.prev_slurred_note,
+                        prev_slurred_note: self.prev_slurred_note.clone(),
                         vibrato: self.vibrato.clone(),
                     });
                 }
@@ -1193,6 +1214,7 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
                     IeState::Unknown => None,
                 },
                 vibrato,
+                prev_slurred_note: gen.prev_slurred_note,
                 changes_song_tempo: !gen.tempo_changes.is_empty(),
             });
 

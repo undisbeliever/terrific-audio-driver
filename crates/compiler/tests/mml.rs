@@ -1209,6 +1209,40 @@ A @0 g !s {ab},,10
             "portamento b4 keyoff +10 24",
         ],
     );
+
+    assert_mml_channel_a_matches_bytecode(
+        r##"
+@0 dummy_instrument
+
+!s r10
+A @0 a& !s {ab},,10
+"##,
+        &[
+            "set_instrument dummy_instrument",
+            "play_note a4 no_keyoff 24",
+            "call_subroutine s",
+            // s will rest and key-off
+            "play_note a4 no_keyoff 1",
+            "portamento b4 keyoff +10 23",
+        ],
+    );
+
+    assert_mml_channel_a_matches_bytecode(
+        r##"
+@0 dummy_instrument
+
+!s w10
+A @0 a& !s {ab},,10
+"##,
+        &[
+            "set_instrument dummy_instrument",
+            "play_note a4 no_keyoff 24",
+            "call_subroutine s",
+            // s does not key-off and does not play a note
+            // Previous slurred note is still a4
+            "portamento b4 keyoff +10 24",
+        ],
+    );
 }
 
 #[test]

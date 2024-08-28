@@ -50,8 +50,8 @@ const _: () = assert!(
 
 const CHANNEL_NAMES: [&str; N_MUSIC_CHANNELS] = ["A", "B", "C", "D", "E", "F", "G", "H"];
 
-pub use self::bc_generator::VibratoState;
 pub use self::bc_generator::MAX_BROKEN_CHORD_NOTES;
+pub use self::bc_generator::{SlurredNoteState, VibratoState};
 pub use self::instruments::MmlInstrument;
 pub use self::tick_count_table::MmlTickCountTable;
 
