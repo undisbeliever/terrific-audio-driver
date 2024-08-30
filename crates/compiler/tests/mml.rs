@@ -2578,6 +2578,87 @@ fn test_skip_last_loop_prev_slurred_note() {
     );
 }
 
+/// Test if `last_slurred_note` is correctly tracked after a *skip last loop* command.
+/// Assumes `test_portamento()` passes
+#[test]
+fn test_skip_last_loop_prev_slurred_note_2() {
+    assert_line_matches_bytecode(
+        "[w16 : d&]4 {df},,10",
+        &[
+            "start_loop",
+            "rest 6",
+            "skip_last_loop",
+            "play_note d4 no_keyoff 24",
+            "end_loop 4",
+            // Previous slurred note is d4
+            "portamento f4 keyoff +10 24",
+        ],
+    );
+
+    assert_line_matches_bytecode(
+        "[w : [w : d&]2 ]3 {df},,10",
+        &[
+            "start_loop",
+            "rest 24",
+            "skip_last_loop",
+            "start_loop",
+            "rest 24",
+            "skip_last_loop",
+            "play_note d4 no_keyoff 24",
+            "end_loop 2",
+            "end_loop 3",
+            // Previous slurred note is d4
+            "portamento f4 keyoff +10 24",
+        ],
+    );
+}
+
+/// Test the first portamento after a `start_loop` does not use prev_slurred_note
+/// Assumes `test_portamento()` passes
+#[test]
+fn test_prev_slurred_note_after_start_loop() {
+    assert_line_matches_bytecode(
+        "d& [{df},,10 c]3",
+        &[
+            "play_note d4 no_keyoff 24",
+            "start_loop",
+            // Previous slurred note is unknown
+            "play_note d4 no_keyoff 1",
+            "portamento f4 keyoff +10 23",
+            "play_note c4 24",
+            "end_loop 3",
+        ],
+    );
+
+    assert_line_matches_bytecode(
+        "d& [w16]4 {df},,10",
+        &[
+            "play_note d4 no_keyoff 24",
+            "start_loop",
+            "rest 6",
+            "end_loop 4",
+            // Previous slurred note is unknown
+            "play_note d4 no_keyoff 1",
+            "portamento f4 keyoff +10 23",
+        ],
+    );
+
+    assert_line_matches_bytecode(
+        "d& [w16 : w]4 {df},,10",
+        &[
+            "play_note d4 no_keyoff 24",
+            "start_loop",
+            "rest 6",
+            "skip_last_loop",
+            "rest 24",
+            "end_loop 4",
+            // Previous slurred note is unknown
+            "play_note d4 no_keyoff 1",
+            "portamento f4 keyoff +10 23",
+        ],
+    );
+}
+
 #[test]
 fn test_set_instrument_start_of_loop() {
     assert_mml_channel_a_matches_bytecode(

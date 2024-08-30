@@ -150,6 +150,16 @@ pub enum SlurredNoteState {
     Slurred(Note),
 }
 
+impl SlurredNoteState {
+    fn merge(&mut self, o: &Self) {
+        match o {
+            SlurredNoteState::Unchanged => (),
+            SlurredNoteState::None => *self = SlurredNoteState::None,
+            SlurredNoteState::Slurred(n) => *self = SlurredNoteState::Slurred(*n),
+        }
+    }
+}
+
 struct SkipLastLoopState {
     instrument: IeState<usize>,
     envelope: IeState<Envelope>,
@@ -805,12 +815,7 @@ impl ChannelBcGenerator<'_> {
                 }
             }
         }
-        match &sub.prev_slurred_note {
-            SlurredNoteState::Unchanged => (),
-            s @ SlurredNoteState::None | s @ SlurredNoteState::Slurred(_) => {
-                self.prev_slurred_note = s.clone()
-            }
-        }
+        self.prev_slurred_note.merge(&sub.prev_slurred_note);
 
         Ok(())
     }
@@ -947,6 +952,9 @@ impl ChannelBcGenerator<'_> {
                 // When the loop loops, the instrument/envelope might have changed.
                 self.instrument = self.instrument.demote_to_maybe();
                 self.envelope = self.envelope.demote_to_maybe();
+
+                // Loop might end on a note that is not slurred and matching `prev_slurred_note`.
+                self.prev_slurred_note = SlurredNoteState::Unchanged;
             }
 
             MmlCommand::SkipLastLoop => {
@@ -968,7 +976,7 @@ impl ChannelBcGenerator<'_> {
                 if let Some(Some(s)) = self.skip_last_loop_state.pop() {
                     self.instrument = s.instrument;
                     self.envelope = s.envelope;
-                    self.prev_slurred_note = s.prev_slurred_note;
+                    self.prev_slurred_note.merge(&s.prev_slurred_note);
                     self.vibrato = s.vibrato;
                 }
 
