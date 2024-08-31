@@ -6,7 +6,6 @@
 
 #![allow(clippy::assertions_on_constants)]
 
-use compiler::bytecode_assembler;
 use compiler::bytecode_assembler::BcTerminator;
 use compiler::data;
 use compiler::data::{Name, TextFile, UniqueNamesList};
@@ -20,6 +19,7 @@ use compiler::mml;
 use compiler::notes::Octave;
 use compiler::pitch_table::{build_pitch_table, PitchTable};
 use compiler::songs::{SongData, Subroutine};
+use compiler::{bytecode_assembler, opcodes};
 
 use std::fmt::Write;
 
@@ -1043,6 +1043,118 @@ fn test_max_subroutines_with_nesting() {
         channel_a.max_stack_depth.to_u32(),
         3 * BC_STACK_BYTES_PER_SUBROUTINE_CALL as u32,
     );
+}
+
+/// Testing for tail call optimisation by checking stack depth
+#[test]
+fn test_tail_call_1() {
+    let sd = compile_mml(
+        r##"
+@0 dummy_instrument
+
+!s !t
+!t r
+
+A @0 !s
+"##,
+        &dummy_data(),
+    );
+
+    let (s, bc) = get_subroutine_and_bytecode(&sd, "s").unwrap();
+
+    assert_eq!(s.identifier.as_str(), "s");
+    assert_eq!(s.subroutine_id.max_stack_depth().to_u32(), 0);
+    assert_eq!(s.subroutine_id.tick_counter().value(), 24);
+
+    assert_eq!(bc[bc.len().checked_sub(3).unwrap()], opcodes::GOTO_RELATIVE);
+}
+
+/// Testing for tail call optimisation by checking stack depth
+#[test]
+fn test_tail_call_2() {
+    let sd = compile_mml(
+        r##"
+@0 dummy_instrument
+
+!tco r !t      ; expect tail-call optimsation
+!no_tco !t r   ; expect no tail-call optimisation
+
+!t r
+
+A @0 !tco !no_tco
+"##,
+        &dummy_data(),
+    );
+
+    let (s, bc) = get_subroutine_and_bytecode(&sd, "tco").unwrap();
+    assert_eq!(s.identifier.as_str(), "tco");
+    assert_eq!(s.subroutine_id.max_stack_depth().to_u32(), 0);
+    assert_eq!(s.subroutine_id.tick_counter().value(), 48);
+    assert_eq!(bc[bc.len().checked_sub(3).unwrap()], opcodes::GOTO_RELATIVE);
+
+    let (s, bc) = get_subroutine_and_bytecode(&sd, "no_tco").unwrap();
+    assert_eq!(s.identifier.as_str(), "no_tco");
+    assert_eq!(s.subroutine_id.max_stack_depth().to_u32(), 2);
+    assert_eq!(s.subroutine_id.tick_counter().value(), 48);
+    assert_eq!(
+        bc[bc.len().checked_sub(1).unwrap()],
+        opcodes::RETURN_FROM_SUBROUTINE
+    );
+}
+
+/// Testing that tail call optimisation is disabled if the subroutine ends with MP vibracto.
+///
+/// Using `call_subroutine_and_disable_vibrato ; return_from_subroutine` (3 bytes)
+/// uses less Audio-RAM then `disable_vibrato ; goto_relative` (4 bytes).
+///
+/// Testing for the existance of tail call optimisation by checking stack depth.
+#[test]
+fn test_tail_call_mp() {
+    let sd = compile_mml(
+        r##"
+@0 dummy_instrument
+
+!s @0 MP20,5 a !t
+!t r
+
+A @0 !s
+"##,
+        &dummy_data(),
+    );
+
+    let (s, bc) = get_subroutine_and_bytecode(&sd, "s").unwrap();
+    assert_eq!(s.identifier.as_str(), "s");
+    assert_eq!(s.subroutine_id.max_stack_depth().to_u32(), 2);
+    assert_eq!(s.subroutine_id.tick_counter().value(), 48);
+    assert_eq!(
+        bc[bc.len().checked_sub(1).unwrap()],
+        opcodes::RETURN_FROM_SUBROUTINE_AND_DISABLE_VIBRATO
+    );
+}
+
+/// Testing that manual vibrato does not affect tail call optimisation.
+///
+/// Testing for the existance of tail call optimisation by checking stack depth.
+#[test]
+fn test_tail_call_manual_vibrato() {
+    let sd = compile_mml(
+        r##"
+@0 dummy_instrument
+
+!s @0 ~50,5 a !t
+!t r
+
+A @0 !s
+"##,
+        &dummy_data(),
+    );
+
+    let (s, bc) = get_subroutine_and_bytecode(&sd, "s").unwrap();
+
+    assert_eq!(s.identifier.as_str(), "s");
+    assert_eq!(s.subroutine_id.max_stack_depth().to_u32(), 0);
+    assert_eq!(s.subroutine_id.tick_counter().value(), 48);
+    assert_eq!(bc[bc.len().checked_sub(3).unwrap()], opcodes::GOTO_RELATIVE);
 }
 
 #[test]
@@ -3147,6 +3259,32 @@ fn merge_mml_commands_test(mml_line: &str, bc_asm: &[&str]) {
 }
 
 // ----------------------------------------------------------------------------------------------
+
+fn get_subroutine_and_bytecode<'a>(
+    sd: &'a SongData,
+    name: &str,
+) -> Option<(&'a Subroutine, &'a [u8])> {
+    let s = sd
+        .subroutines()
+        .iter()
+        .find(|s| s.identifier.as_str() == name)?;
+
+    let end = match sd.subroutines().get(s.subroutine_id.as_usize() + 1) {
+        Some(s) => s.bytecode_offset,
+        None => {
+            sd.channels()
+                .iter()
+                .flatten()
+                .next()
+                .unwrap()
+                .bytecode_offset
+        }
+    };
+
+    let bc_range = usize::from(s.bytecode_offset)..usize::from(end);
+
+    Some((s, &sd.data()[bc_range]))
+}
 
 fn mml_bytecode(mml: &SongData) -> &[u8] {
     let song_data = mml.data();

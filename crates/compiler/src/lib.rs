@@ -30,6 +30,7 @@ pub mod sound_effects;
 pub mod spc_file_export;
 pub mod time;
 
+pub use bytecode::opcodes;
 pub use file_pos::{FilePos, FilePosRange};
 pub use value_newtypes::ValueNewType;
 

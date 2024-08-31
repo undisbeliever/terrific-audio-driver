@@ -5,7 +5,8 @@
 // SPDX-License-Identifier: MIT
 
 use super::command_parser::{
-    ManualVibrato, MmlCommand, MpVibrato, PanCommand, Parser, PortamentoSpeed, VolumeCommand,
+    ManualVibrato, MmlCommand, MmlCommandWithPos, MpVibrato, PanCommand, Parser, PortamentoSpeed,
+    VolumeCommand,
 };
 use super::identifier::IdentifierStr;
 use super::instruments::MmlInstrument;
@@ -1114,27 +1115,56 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
         (self.song_data, self.subroutines)
     }
 
+    fn parse_and_compile_tail_call(
+        parser: &mut Parser,
+        gen: &mut ChannelBcGenerator,
+        #[cfg(feature = "mml_tracking")] bytecode_tracker: &mut Vec<BytecodePos>,
+    ) -> Option<MmlCommandWithPos> {
+        // ::TODO refactor to remove this hack::
+        // ::HACK to peek into parser tokens without a mutable borrow::
+        let mut next = parser.next();
+
+        while let Some(c) = next {
+            next = parser.next();
+
+            if next.is_none() && matches!(c.command(), MmlCommand::CallSubroutine(_)) {
+                return Some(c);
+            }
+            Self::_compile_command(c, parser, gen, bytecode_tracker);
+        }
+        None
+    }
+
     fn parse_and_compile(
         parser: &mut Parser,
         gen: &mut ChannelBcGenerator,
         #[cfg(feature = "mml_tracking")] bytecode_tracker: &mut Vec<BytecodePos>,
     ) {
         while let Some(c) = parser.next() {
-            match gen.process_command(c.command()) {
-                Ok(()) => (),
-                Err(e) => parser.add_error_range(c.pos().clone(), e),
-            }
-
-            if matches!(c.command(), MmlCommand::EndLoop(_)) {
-                parser.set_tick_counter(gen.bc.get_tick_counter_with_loop_flag());
-            }
-
-            #[cfg(feature = "mml_tracking")]
-            bytecode_tracker.push(BytecodePos {
-                bc_end_pos: gen.bc.get_bytecode_len().try_into().unwrap_or(0xffff),
-                char_index: c.pos().index_start,
-            });
+            Self::_compile_command(c, parser, gen, bytecode_tracker);
         }
+    }
+
+    fn _compile_command(
+        c: MmlCommandWithPos,
+        parser: &mut Parser,
+        gen: &mut ChannelBcGenerator,
+        #[cfg(feature = "mml_tracking")] bytecode_tracker: &mut Vec<BytecodePos>,
+    ) {
+        match gen.process_command(c.command()) {
+            Ok(()) => (),
+            Err(e) => parser.add_error_range(c.pos().clone(), e),
+        }
+
+        if matches!(c.command(), MmlCommand::EndLoop(_)) {
+            parser.set_tick_counter(gen.bc.get_tick_counter_with_loop_flag());
+        }
+
+        #[cfg(feature = "mml_tracking")]
+        bytecode_tracker.push(BytecodePos {
+            bc_end_pos: gen.bc.get_bytecode_len().try_into().unwrap_or(0xffff),
+            char_index: c.pos().index_start,
+        });
     }
 
     pub fn parse_and_compile_song_subroutione(
@@ -1167,29 +1197,57 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
             BytecodeContext::SongSubroutine,
         );
 
-        Self::parse_and_compile(
+        let tail_call = Self::parse_and_compile_tail_call(
             &mut parser,
             &mut gen,
             #[cfg(feature = "mml_tracking")]
             &mut self.bytecode_tracker,
         );
 
+        let (terminator, tick_counter) = match &gen.mp {
+            MpState::Mp(_) => {
+                gen.vibrato.disable();
+
+                // `call_subroutine_and_disable_vibrato` + `return_from_subroutine` uses
+                // less Audio-RAM then `disable_vibraro` + `goto_relative``
+                if let Some(tc) = tail_call {
+                    Self::_compile_command(
+                        tc,
+                        &mut parser,
+                        &mut gen,
+                        #[cfg(feature = "mml_tracking")]
+                        &mut self.bytecode_tracker,
+                    );
+                }
+                (
+                    BcTerminator::ReturnFromSubroutineAndDisableVibrato,
+                    gen.bc.get_tick_counter(),
+                )
+            }
+            MpState::Disabled | MpState::Manual => match tail_call {
+                Some(tc) => match tc.command() {
+                    MmlCommand::CallSubroutine(s) => {
+                        let sub = self.subroutines.get(s.as_usize()).unwrap();
+                        (
+                            BcTerminator::Goto(sub.bytecode_offset.into()),
+                            gen.bc.get_tick_counter() + s.tick_counter(),
+                        )
+                    }
+                    _ => panic!("tail_call is not a CallSubroutine command"),
+                },
+                None => (
+                    BcTerminator::ReturnFromSubroutine,
+                    gen.bc.get_tick_counter(),
+                ),
+            },
+        };
+
         let last_pos = parser.peek_pos();
-        let tick_counter = gen.bc.get_tick_counter();
         let max_stack_depth = gen.bc.get_max_stack_depth();
 
         assert!(gen.loop_point.is_none());
 
-        let mut vibrato = gen.vibrato;
-
-        let terminator = match &gen.mp {
-            MpState::Disabled => BcTerminator::ReturnFromSubroutine,
-            MpState::Manual => BcTerminator::ReturnFromSubroutine,
-            MpState::Mp(_) => {
-                vibrato.disable();
-                BcTerminator::ReturnFromSubroutineAndDisableVibrato
-            }
-        };
+        let vibrato = gen.vibrato.clone();
 
         self.song_data = match gen.bc.bytecode(terminator) {
             Ok(b) => b,
