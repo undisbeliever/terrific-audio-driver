@@ -220,8 +220,11 @@ impl ChannelBcGenerator<'_> {
             instrument: IeState::Unknown,
             envelope: IeState::Unknown,
             prev_slurred_note: SlurredNoteState::Unchanged,
-            mp: MpState::Disabled,
-            vibrato: VibratoState::Unchanged,
+            mp: MpState::Manual,
+            vibrato: match is_subroutine {
+                true => VibratoState::Unchanged,
+                false => VibratoState::Disabled,
+            },
             skip_last_loop_state: Vec::new(),
             loop_point: None,
             show_missing_set_instrument_error: !is_subroutine,
@@ -891,10 +894,19 @@ impl ChannelBcGenerator<'_> {
                 self.set_manual_vibrato(v);
             }
 
-            &MmlCommand::SetMpVibrato(mp) => match mp {
-                Some(mp) => self.mp = MpState::Mp(mp),
-                None => self.mp = MpState::Disabled,
-            },
+            &MmlCommand::SetMpVibrato(mp) => {
+                self.mp = match mp {
+                    Some(mp) => MpState::Mp(mp),
+                    None => match self.mp {
+                        MpState::Mp(_) => MpState::Disabled,
+                        MpState::Disabled => MpState::Disabled,
+                        MpState::Manual => match self.vibrato.is_active() {
+                            true => MpState::Disabled,
+                            false => MpState::Manual,
+                        },
+                    },
+                };
+            }
 
             &MmlCommand::Rest {
                 ticks_until_keyoff,
