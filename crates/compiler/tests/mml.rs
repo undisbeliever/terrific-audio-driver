@@ -2009,6 +2009,41 @@ A @1 c !s MP0 d
 }
 
 #[test]
+fn test_mp0_at_end_of_subroutine_call() {
+    assert_mml_channel_a_matches_bytecode(
+        r##"
+@1 dummy_instrument
+!s @1 MP20,4 d MP0
+A @1 ~25,5 c !s MP0 d
+"##,
+        &[
+            "set_instrument dummy_instrument",
+            "set_vibrato 25 5",
+            "play_note c4 24",
+            "call_subroutine s",
+            // subroutine returns with vibrato depth 0 and quarter_wavelength 4
+            "play_note d4 24",
+        ],
+    );
+
+    assert_mml_channel_a_matches_bytecode(
+        r##"
+@1 dummy_instrument
+!s @1 MP20,4 d MP0
+A @1 ~25,10 c !s MP20,4 d
+"##,
+        &[
+            "set_instrument dummy_instrument",
+            "set_vibrato 25 10",
+            "play_note c4 24",
+            "call_subroutine s",
+            // subroutine returns with vibrato depth 0 and quarter_wavelength 4
+            "set_vibrato_depth_and_play_note 7 d4 24",
+        ],
+    );
+}
+
+#[test]
 fn test_volume() {
     assert_line_matches_bytecode("v1", &["set_volume 16"]);
     assert_line_matches_bytecode("v8", &["set_volume 128"]);

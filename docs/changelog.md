@@ -25,6 +25,7 @@ MML changes:
    A `{}` portamento after an MML subroutine that ends with a slurred note now has the same
    behaviour as a `{}` portamento after a loop that ends with a slurred note.
  * Fixed slurred note tracking at the start of a loop and after a `:` skip last loop command.
+ * Fixed vibrato not disabled if a subroutine ends with `MP0`.
 
 Data format changes:
  * Removed loop point from song header.  Songs now loop using the `goto_relative` instruction.

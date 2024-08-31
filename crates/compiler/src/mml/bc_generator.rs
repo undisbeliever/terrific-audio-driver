@@ -130,11 +130,20 @@ enum MpState {
 #[derive(Debug, Clone, PartialEq)]
 pub enum VibratoState {
     Unchanged,
+    // Disabled with an unknown value
     Disabled,
     Set(ManualVibrato),
 }
 
 impl VibratoState {
+    fn is_active(&self) -> bool {
+        match self {
+            Self::Unchanged => false,
+            Self::Disabled => false,
+            Self::Set(v) => v.pitch_offset_per_tick.as_u8() > 0,
+        }
+    }
+
     fn disable(&mut self) {
         match self {
             Self::Unchanged => *self = Self::Disabled,
@@ -1204,8 +1213,8 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
             &mut self.bytecode_tracker,
         );
 
-        let (terminator, tick_counter) = match &gen.mp {
-            MpState::Mp(_) => {
+        let (terminator, tick_counter) = match (&gen.mp, gen.vibrato.is_active()) {
+            (MpState::Mp(_), true) | (MpState::Disabled, true) => {
                 gen.vibrato.disable();
 
                 // `call_subroutine_and_disable_vibrato` + `return_from_subroutine` uses
@@ -1224,22 +1233,24 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
                     gen.bc.get_tick_counter(),
                 )
             }
-            MpState::Disabled | MpState::Manual => match tail_call {
-                Some(tc) => match tc.command() {
-                    MmlCommand::CallSubroutine(s) => {
-                        let sub = self.subroutines.get(s.as_usize()).unwrap();
-                        (
-                            BcTerminator::Goto(sub.bytecode_offset.into()),
-                            gen.bc.get_tick_counter() + s.tick_counter(),
-                        )
-                    }
-                    _ => panic!("tail_call is not a CallSubroutine command"),
-                },
-                None => (
-                    BcTerminator::ReturnFromSubroutine,
-                    gen.bc.get_tick_counter(),
-                ),
-            },
+            (MpState::Mp(_), false) | (MpState::Disabled, false) | (MpState::Manual, _) => {
+                match tail_call {
+                    Some(tc) => match tc.command() {
+                        MmlCommand::CallSubroutine(s) => {
+                            let sub = self.subroutines.get(s.as_usize()).unwrap();
+                            (
+                                BcTerminator::Goto(sub.bytecode_offset.into()),
+                                gen.bc.get_tick_counter() + s.tick_counter(),
+                            )
+                        }
+                        _ => panic!("tail_call is not a CallSubroutine command"),
+                    },
+                    None => (
+                        BcTerminator::ReturnFromSubroutine,
+                        gen.bc.get_tick_counter(),
+                    ),
+                }
+            }
         };
 
         let last_pos = parser.peek_pos();
