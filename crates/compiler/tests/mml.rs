@@ -878,8 +878,9 @@ fn test_too_many_loops() {
 
 #[test]
 fn test_max_loops_with_subroutine() {
-    let subroutine_stack_depth = 3 * BC_STACK_BYTES_PER_LOOP + BC_STACK_BYTES_PER_SUBROUTINE_CALL;
-    let channel_a_stack_depth = subroutine_stack_depth + 3 * BC_STACK_BYTES_PER_LOOP;
+    let subroutine_stack_depth = 3 * BC_STACK_BYTES_PER_LOOP;
+    let channel_a_stack_depth =
+        subroutine_stack_depth + BC_STACK_BYTES_PER_SUBROUTINE_CALL + 3 * BC_STACK_BYTES_PER_LOOP;
 
     // Assert this is the maximum depth
     assert!(channel_a_stack_depth + BC_STACK_BYTES_PER_LOOP > BC_CHANNEL_STACK_OFFSET);
@@ -1024,11 +1025,11 @@ fn test_max_subroutines_with_nesting() {
         let i: u32 = s.identifier.as_str().parse().unwrap();
 
         let stack_depth = if i % 3 == 0 {
-            2 * BC_STACK_BYTES_PER_SUBROUTINE_CALL as u32
-        } else if i % 5 == 0 {
-            3 * BC_STACK_BYTES_PER_SUBROUTINE_CALL as u32
-        } else {
             BC_STACK_BYTES_PER_SUBROUTINE_CALL as u32
+        } else if i % 5 == 0 {
+            2 * BC_STACK_BYTES_PER_SUBROUTINE_CALL as u32
+        } else {
+            0
         };
 
         assert_eq!(

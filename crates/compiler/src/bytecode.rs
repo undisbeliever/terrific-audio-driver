@@ -108,6 +108,7 @@ u8_value_newtype!(
 pub struct SubroutineId {
     id: u8,
     tick_counter: TickCounter,
+    // NOTE: does not include the stack usage when calling the subroutine (ie, can be 0).
     max_stack_depth: StackDepth,
 }
 
@@ -496,12 +497,7 @@ impl Bytecode {
     }
 
     pub fn get_max_stack_depth(&self) -> StackDepth {
-        match self.context {
-            BytecodeContext::SongSubroutine => {
-                StackDepth(self.max_stack_depth.0 + BC_STACK_BYTES_PER_SUBROUTINE_CALL as u32)
-            }
-            BytecodeContext::SongChannel | BytecodeContext::SoundEffect => self.max_stack_depth,
-        }
+        self.max_stack_depth
     }
 
     pub fn get_bytecode_len(&self) -> usize {
@@ -822,7 +818,12 @@ impl Bytecode {
 
         self.tick_counter += subroutine.tick_counter;
 
-        let stack_depth = StackDepth(self.get_stack_depth().0 + subroutine.max_stack_depth.0);
+        let stack_depth = StackDepth(
+            self.get_stack_depth().0
+                + BC_STACK_BYTES_PER_SUBROUTINE_CALL as u32
+                + subroutine.max_stack_depth.0,
+        );
+
         self.max_stack_depth = max(self.max_stack_depth, stack_depth);
 
         if stack_depth > MAX_STACK_DEPTH {
