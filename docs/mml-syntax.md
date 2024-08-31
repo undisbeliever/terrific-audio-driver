@@ -311,6 +311,7 @@ Numbers can be decimal, or hexadecimal when prefixed with `$` (ie, `$ff`)
     * Manual vibrato will persist across subroutine calls.
 
  * `MP0` - Disable MP vibrato
+    * MP Vibrato does not take effect immediately.  Vibrato will be disabled on the next note.
  * `MP<depth_in_cents>,<quarter_wavelength_in_ticks>` - MP Vibrato
     * `depth_in_cents` controls the depth of the vibrato, in cents either side of the note (half-extent).
     * `quarter_wavelength_in_ticks` value controls the rate of vibrato.
