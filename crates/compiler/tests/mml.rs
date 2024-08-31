@@ -3245,11 +3245,18 @@ fn assert_mml_channel_a_matches_looping_bytecode(mml: &str, bc_asm: &[&str]) {
 
     let mml = compile_mml(mml, &dummy_data);
 
+    let channel_a = mml.channels()[0].as_ref().unwrap();
+
+    let loop_point = match channel_a.loop_point {
+        Some(lp) => lp.bytecode_offset - usize::from(channel_a.bytecode_offset),
+        None => panic!("No loop point in MML"),
+    };
+
     let bc_asm = assemble_channel_bytecode(
         bc_asm,
         &dummy_data.instruments_and_samples,
         mml.subroutines(),
-        BcTerminator::LoopChannel,
+        BcTerminator::Goto(loop_point),
     );
 
     assert_eq!(mml_bytecode(&mml), bc_asm);

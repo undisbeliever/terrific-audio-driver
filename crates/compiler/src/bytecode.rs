@@ -83,8 +83,9 @@ pub mod opcodes {
     pub const CALL_SUBROUTINE_AND_DISABLE_VIBRATO: u8 = 0xe4;
     pub const CALL_SUBROUTINE: u8 = 0xe6;
 
-    pub const END_LOOP: u8 = 0xe8;
-    pub const END: u8 = 0xea;
+    pub const GOTO_RELATIVE: u8 = 0xe8;
+
+    pub const END_LOOP: u8 = 0xea;
     pub const RETURN_FROM_SUBROUTINE_AND_DISABLE_VIBRATO: u8 = 0xec;
     pub const RETURN_FROM_SUBROUTINE: u8 = 0xee;
     pub const ENABLE_ECHO: u8 = 0xf0;
@@ -366,7 +367,7 @@ impl NoteOpcode {
 #[derive(PartialEq)]
 pub enum BcTerminator {
     DisableChannel,
-    LoopChannel,
+    Goto(usize),
     ReturnFromSubroutine,
     ReturnFromSubroutineAndDisableVibrato,
 }
@@ -375,7 +376,7 @@ impl BcTerminator {
     pub fn is_return(&self) -> bool {
         match self {
             Self::DisableChannel => false,
-            Self::LoopChannel => false,
+            Self::Goto(_) => false,
             Self::ReturnFromSubroutine => true,
             Self::ReturnFromSubroutineAndDisableVibrato => true,
         }
@@ -522,15 +523,29 @@ impl Bytecode {
             return Err((BytecodeError::ReturnInNonSubroutine, self.bytecode));
         }
 
-        let opcode = match terminator {
-            BcTerminator::DisableChannel => opcodes::DISABLE_CHANNEL,
-            BcTerminator::LoopChannel => opcodes::END,
-            BcTerminator::ReturnFromSubroutine => opcodes::RETURN_FROM_SUBROUTINE,
-            BcTerminator::ReturnFromSubroutineAndDisableVibrato => {
-                opcodes::RETURN_FROM_SUBROUTINE_AND_DISABLE_VIBRATO
+        match terminator {
+            BcTerminator::DisableChannel => {
+                emit_bytecode!(self, opcodes::DISABLE_CHANNEL);
             }
-        };
-        emit_bytecode!(self, opcode);
+            BcTerminator::ReturnFromSubroutine => {
+                emit_bytecode!(self, opcodes::RETURN_FROM_SUBROUTINE);
+            }
+            BcTerminator::ReturnFromSubroutineAndDisableVibrato => {
+                emit_bytecode!(self, opcodes::RETURN_FROM_SUBROUTINE_AND_DISABLE_VIBRATO);
+            }
+            BcTerminator::Goto(pos) => {
+                match (u16::try_from(self.bytecode.len()), u16::try_from(pos)) {
+                    (Ok(inst_ptr), Ok(pos)) => {
+                        let o = pos.wrapping_sub(inst_ptr).wrapping_sub(2).to_le_bytes();
+                        emit_bytecode!(self, opcodes::GOTO_RELATIVE, o[0], o[1]);
+                    }
+                    _ => {
+                        emit_bytecode!(self, opcodes::DISABLE_CHANNEL);
+                        return Err((BytecodeError::GotoRelativeOutOfBounds, self.bytecode));
+                    }
+                };
+            }
+        }
 
         Ok(self.bytecode)
     }

@@ -85,8 +85,6 @@ pub struct ChannelState {
 
     pub instruction_ptr: u16,
 
-    instruction_ptr_after_end: u16,
-
     /// The return position (with SongData) of the topmost subroutine call.
     pub topmost_return_pos: Option<u16>,
 
@@ -129,10 +127,6 @@ impl ChannelState {
             disabled: false,
             song_ptr,
             instruction_ptr: channel.map(|c| c.bytecode_offset).unwrap_or(u16::MAX),
-            instruction_ptr_after_end: channel
-                .and_then(|c| c.loop_point)
-                .and_then(|lp| u16::try_from(lp.bytecode_offset).ok())
-                .unwrap_or(u16::MAX),
             topmost_return_pos: None,
             call_stack_depth: 0,
             stack_pointer: BC_CHANNEL_STACK_SIZE,
@@ -361,11 +355,20 @@ impl ChannelState {
                     });
                 }
 
-                opcodes::END => {
-                    if self.instruction_ptr_after_end != 0 {
-                        self.instruction_ptr = self.instruction_ptr_after_end;
-                    } else {
-                        self.disable_channel()
+                opcodes::GOTO_RELATIVE => {
+                    let l = read_pc();
+                    let h = read_pc();
+
+                    if !self.disabled {
+                        // undo `h = read_pc()`.
+                        self.instruction_ptr -= 1;
+
+                        let offset = i16::from_le_bytes([l, h]);
+
+                        match self.instruction_ptr.checked_add_signed(offset) {
+                            Some(i) => self.instruction_ptr = i,
+                            None => self.disable_channel(),
+                        }
                     }
                 }
 

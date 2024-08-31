@@ -205,6 +205,8 @@ pub enum BytecodeError {
     ReturnInNonSubroutine,
 
     CannotChangeTickClockInASoundEffect,
+
+    GotoRelativeOutOfBounds,
 }
 
 #[derive(Debug)]
@@ -877,6 +879,13 @@ impl Display for BytecodeError {
 
             Self::CannotChangeTickClockInASoundEffect => {
                 write!(f, "cannot change tick clock in a sound effect")
+            }
+
+            Self::GotoRelativeOutOfBounds => {
+                write!(
+                    f,
+                    "goto_relative offset out of bounds (bytecode is too large)"
+                )
             }
         }
     }

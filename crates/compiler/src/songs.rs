@@ -308,31 +308,17 @@ fn write_song_header(
         let channel_header = &mut header[0..SONG_HEADER_CHANNELS_SIZE];
 
         for (i, c) in channels.iter().enumerate() {
-            let (start_offset, loop_offset) = match c {
+            let start_offset = match c {
                 Some(c) => {
                     let offset = c.bytecode_offset;
                     assert!(valid_offsets.contains(&offset));
-
-                    let loop_offset: u16 = match c.loop_point {
-                        Some(lp) => {
-                            if lp.bytecode_offset >= valid_offsets.end.into() {
-                                return Err(SongError::InvalidMmlData);
-                            }
-                            let lp = u16::try_from(lp.bytecode_offset).unwrap();
-                            assert!(valid_offsets.contains(&lp));
-                            lp
-                        }
-                        None => NULL_OFFSET,
-                    };
-
-                    (offset, loop_offset)
+                    offset
                 }
-                None => (NULL_OFFSET, NULL_OFFSET),
+                None => NULL_OFFSET,
             };
 
-            let o = i * 4;
+            let o = i * 2;
             channel_header[o..o + 2].copy_from_slice(&start_offset.to_le_bytes());
-            channel_header[o + 2..o + 4].copy_from_slice(&loop_offset.to_le_bytes());
         }
     }
 

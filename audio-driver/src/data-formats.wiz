@@ -125,18 +125,6 @@ struct CommonDataHeader {
 // Song Data
 // =========
 
-struct MusicChannelHeader {
-    // The starting offset of the channel bytecode (relative to the start of the song data).
-    //
-    // If `starting+songPtr` overflows (ie, starting >= 0xff00), then the channel is disabled.
-    starting : u16,
-
-    // The loop point in the channel bytecode (relative to the start of the song data).
-    //
-    // If `loop+songPtr` overflows (ie, loop >= 0xff00), then the channel will not loop.
-    loop: u16,
-};
-
 struct EchoBufferSettings {
 
     // 4-bit echo buffer size.
@@ -161,7 +149,10 @@ struct EchoBufferSettings {
 
 // Size MUST match `audio/driver_constants.py`
 struct SongHeader {
-    channels : [MusicChannelHeader ; N_MUSIC_CHANNELS],
+    // The starting offset of the channel bytecode (relative to the start of the song data).
+    //
+    // If `offset+songPtr` overflows (ie, offset >= 0xff00), then the channel is disabled.
+    channels : [u16 ; N_MUSIC_CHANNELS],
 
 
     echo: EchoBufferSettings,

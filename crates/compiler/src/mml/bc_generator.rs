@@ -1288,7 +1288,7 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
                 if lp.tick_counter == tick_counter {
                     parser.add_error_range(last_pos.to_range(1), MmlError::NoTicksAfterLoopPoint);
                 }
-                BcTerminator::LoopChannel
+                BcTerminator::Goto(lp.bytecode_offset)
             }
         };
 

@@ -17,6 +17,7 @@ Bytecode changes:
     * The maximum number of nested loops has increased.
  * Added `call_subroutine_and_disable_vibrato` instruction
  * Added `return_from_subroutine_and_disable_vibrato` instruction
+ * Added `goto_relative` bytecode instruction.
 
 MML changes:
  * MML subroutines can now call subroutines
@@ -24,6 +25,9 @@ MML changes:
    A `{}` portamento after an MML subroutine that ends with a slurred note now has the same
    behaviour as a `{}` portamento after a loop that ends with a slurred note.
  * Fixed slurred note tracking at the start of a loop and after a `:` skip last loop command.
+
+Data format changes:
+ * Removed loop point from song header.  Songs now loop using the `goto_relative` instruction.
 
 
 Version 0.0.10

@@ -197,6 +197,13 @@ let INSTRUCTIONS_WITH_ARGUMENTS = [
     // parameter = subroutine ID
     // NOTE: There is no bounds checking
     call_subroutine,
+
+    // parameter = i16le offset
+    //
+    // Goto `instructionPtr + offset + 2`
+    //
+    // CAUTION: Not bounds checked
+    goto_relative,
 ];
 
 
@@ -207,15 +214,6 @@ let NO_ARGUMENT_INSTRUCTIONS = [
     // CAUTION: Must be used in a loop.
     end_loop,
 
-
-    // End of channel bytecode.
-    //
-    // This instruction will either jump to the loop point or stop the channel
-    // (depending `MusicChannelHeader.loop`)
-    //
-    // This instruction is not recommended for sound effects.
-    // NOTE: `disable_channel` is slightly faster then `end`.
-    end,
 
     // Return from a call instruction and disabled vibrato
     return_from_subroutine_and_disable_vibrato,

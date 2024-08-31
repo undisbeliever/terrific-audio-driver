@@ -299,12 +299,6 @@ in firstpage {
         var instructionPtr_l : [u8 ; N_CHANNELS];
 
 
-        // Bytecode address to loop to when the channel encounters and `end` instruction.
-        // If `instructionPtrAfterEnd_h` is 0, the channel does not loop and will instead stop.
-        var instructionPtrAfterEnd_l : [u8 ; N_CHANNELS];
-        var instructionPtrAfterEnd_h : [u8 ; N_CHANNELS];
-
-
         // Channel pan (0-MAX_PAN)
         var pan : [u8 ; N_CHANNELS];
 
@@ -510,11 +504,9 @@ func main() {
 
     x = N_MUSIC_CHANNELS - 1;
     do {
-        __reset_channel(x, MAX_PAN / 2);
-
         // ASSUMES offsetof(SongHeader, channels) == 0
-        // ASSUMES sizeof(MusicChannelHeader) == 4
-        y = a = x <<< 2;
+        // ASSUMES sizeof(SongHeader.channels[0]) == 2
+        y = a = x <<< 1;
 
         // Calculate instructionPtr (disabling the channel if the addition overflows)
         channelSoA.instructionPtr_l[x] = a = songPtr[y] + <:songPtr;
@@ -525,16 +517,8 @@ func main() {
             a = 0;
         }
         channelSoA.instructionPtr_h[x] = a;
-        y++;
 
-        // Calculate endInstPtr (and set the high byte to 0 (no looping) if the addition overflows)
-        channelSoA.instructionPtrAfterEnd_l[x] = a = songPtr[y] + <:songPtr;
-        y++;
-        a = songPtr[y] +# >:songPtr;
-        if carry {
-            a = 0;
-        }
-        channelSoA.instructionPtrAfterEnd_h[x] = a;
+        __reset_channel(x, MAX_PAN / 2);
 
         x--;
     } while !negative;
@@ -1129,8 +1113,6 @@ func __play_sfx_on_channel(addrAndOneChannelFlag_h: u8 in a, channelIndex : u8 i
 //  * keyOnMask
 //  * eonShadow
 //
-// NOTE: Also disables `end` looping (instructionPtrAfterEnd).
-//
 // KEEP: X
 func __reset_channel(channelIndex : u8 in x, pan: u8 in a) {
     channelSoA.pan[x] = a = pan;
@@ -1138,8 +1120,6 @@ func __reset_channel(channelIndex : u8 in x, pan: u8 in a) {
 
 
     a = 0;
-
-    channelSoA.instructionPtrAfterEnd_h[x] = a;     // don't loop SFX
 
     // Disable portamento
     channelSoA.portamento_direction[x] = a as i8;
@@ -1753,14 +1733,16 @@ func disable_channel(channelIndex : u8 in x) {
 }
 
 
+
+// Y = 0
 // KEEP: X
-func end(channelIndex : u8 in x) {
-    a = channelSoA.instructionPtrAfterEnd_h[x];
-    goto disable_channel if zero;
+func goto_relative(channelIndex : u8 in x, offset_l : u8 in a) {
+    // Y = 0
+    push(a);
+    y = a = instructionPtr[y];
+    a = pop();
 
-    y = a;
-    a = channelSoA.instructionPtrAfterEnd_l[x];
-
+    ya += instructionPtr as u16;
     ^return process_bytecode_with_loader_test(x, ya);
 }
 
