@@ -381,6 +381,13 @@ impl ChannelBcGenerator<'_> {
                         .set_vibrato_depth_and_play_note(POPT, note, pn_length);
                     self.vibrato.disable();
                 }
+
+                // Switching MpState to Manual to skip the `vibrato_disabled` checks on subsequent notes.
+                // This must be done outside of the loop in case the `MP0` is after a `:` skip-last-loop command.
+                // (see `test_mp0_after_skip_last_loop()` test)
+                if !self.bc.is_in_loop() {
+                    self.mp = MpState::Manual;
+                }
             }
             MpState::Mp(mp) => {
                 let cv = self.calculate_vibrato_for_note(mp, note)?;

@@ -2678,7 +2678,7 @@ A [ @i a G10 b : [ G20 c : d ]2 ]3 G10 e
 
 /// Test that the vibrato state is correctly tracked after a *skip last loop* command.
 #[test]
-fn test_skip_last_loop_vibrato() {
+fn test_mp0_after_skip_last_loop() {
     assert_line_matches_bytecode(
         "[MP2,4 a b : MP0 c]4 d",
         &[
