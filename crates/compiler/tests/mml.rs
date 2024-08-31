@@ -1683,6 +1683,27 @@ fn test_mp_vibrato() {
 }
 
 #[test]
+fn test_mp_vibrato_start_of_loop() {
+    assert_line_matches_bytecode(
+        "MP40,2 a [a a b MP30,5 c]4",
+        &[
+            "set_vibrato 42 2",
+            "play_note a4 24",
+            "start_loop",
+            // Vibrato state is unknown
+            "set_vibrato 42 2",
+            "play_note a4 24",
+            // Vibrato unchanged
+            "play_note a4 24",
+            "set_vibrato_depth_and_play_note 47 b4 24",
+            "set_vibrato 7 5",
+            "play_note c4 24",
+            "end_loop 4",
+        ],
+    );
+}
+
+#[test]
 fn test_subroutine_vibrato_bugfix() {
     assert_mml_channel_a_matches_bytecode(
         r##"
@@ -3267,6 +3288,26 @@ A @0 a GE24 b L GE24 c GE24 d GF127 e
 #[test]
 fn test_set_loop_point_in_loop_is_err() {
     assert_error_in_mml_line("[a b L c]5", 6, MmlError::CannotSetLoopPointInALoop);
+}
+
+#[test]
+fn test_mp_vibrato_with_set_loop_point() {
+    assert_mml_channel_a_matches_looping_bytecode(
+        r###"
+@0 dummy_instrument
+
+A @0 MP20,2 a L a
+"###,
+        &[
+            "set_instrument dummy_instrument",
+            "set_vibrato 21 2",
+            "play_note a4 24",
+            // Loop
+            // This set_vibrato instruction is not optimised out.
+            "set_vibrato 21 2",
+            "play_note a4 24",
+        ],
+    );
 }
 
 // ----------------------------------------------------------------------------------------------

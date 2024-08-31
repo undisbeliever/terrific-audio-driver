@@ -26,6 +26,10 @@ MML changes:
    behaviour as a `{}` portamento after a loop that ends with a slurred note.
  * Fixed slurred note tracking at the start of a loop and after a `:` skip last loop command.
  * Fixed vibrato not disabled if a subroutine ends with `MP0`.
+ * Fixed wrong MP vibrato state at the start of a loop (ie, `MP20,4 [a MP30,6 b]4`).
+    * `~` manual vibrato loop behaviour is unchanged.
+ * Fixed wrong MP vibrato state after a `L` set loop point MML command.
+    * `~` manual vibrato loop behaviour is unchanged.
 
 Data format changes:
  * Removed loop point from song header.  Songs now loop using the `goto_relative` instruction.

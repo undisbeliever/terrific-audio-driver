@@ -130,6 +130,7 @@ enum MpState {
 #[derive(Debug, Clone, PartialEq)]
 pub enum VibratoState {
     Unchanged,
+    Unknown,
     // Disabled with an unknown value
     Disabled,
     Set(ManualVibrato),
@@ -139,6 +140,7 @@ impl VibratoState {
     fn is_active(&self) -> bool {
         match self {
             Self::Unchanged => false,
+            Self::Unknown => false,
             Self::Disabled => false,
             Self::Set(v) => v.pitch_offset_per_tick.as_u8() > 0,
         }
@@ -147,6 +149,7 @@ impl VibratoState {
     fn disable(&mut self) {
         match self {
             Self::Unchanged => *self = Self::Disabled,
+            Self::Unknown => *self = Self::Disabled,
             Self::Disabled => *self = Self::Disabled,
             Self::Set(v) => v.pitch_offset_per_tick = PitchOffsetPerTick::new(0),
         }
@@ -366,6 +369,7 @@ impl ChannelBcGenerator<'_> {
 
                 let vibrato_disabled = match &self.vibrato {
                     VibratoState::Unchanged => true,
+                    VibratoState::Unknown => false,
                     VibratoState::Disabled => true,
                     VibratoState::Set(v) => v.pitch_offset_per_tick == POPT,
                 };
@@ -819,6 +823,7 @@ impl ChannelBcGenerator<'_> {
         }
         match &sub.vibrato {
             VibratoState::Unchanged => (),
+            VibratoState::Unknown => self.vibrato = VibratoState::Unknown,
             VibratoState::Disabled => self.vibrato = VibratoState::Disabled,
             VibratoState::Set(v) => {
                 self.vibrato = VibratoState::Set(*v);
@@ -875,6 +880,8 @@ impl ChannelBcGenerator<'_> {
                     // The instrument or envelope may have changed when the song loops.
                     self.instrument = self.instrument.demote_to_maybe();
                     self.envelope = self.envelope.demote_to_maybe();
+
+                    self.vibrato = VibratoState::Unknown;
                 }
                 BytecodeContext::SongSubroutine => return Err(MmlError::CannotSetLoopPoint),
                 &BytecodeContext::SoundEffect => return Err(MmlError::CannotSetLoopPoint),
@@ -974,6 +981,8 @@ impl ChannelBcGenerator<'_> {
                 // When the loop loops, the instrument/envelope might have changed.
                 self.instrument = self.instrument.demote_to_maybe();
                 self.envelope = self.envelope.demote_to_maybe();
+
+                self.vibrato = VibratoState::Unknown;
 
                 // Loop might end on a note that is not slurred and matching `prev_slurred_note`.
                 self.prev_slurred_note = SlurredNoteState::Unchanged;
