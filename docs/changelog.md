@@ -4,6 +4,12 @@ Terrific Audio Driver Changelog
 Version 0.0.11
 ==============
 
+**CAUTION**: This release has breaking changes to the `rest` bytecode instruction, please check all sound effects.
+
+**CAUTION**: This release has breaking changes to MML vibrato and subroutine calls, please check all songs.
+
+<br/>
+
 **BREAKING MML changes:**
  * `~` manual vibrato persists across subroutine calls.
     * `MP` vibrato does not persist across subroutine calls (unchanged from v0.0.10).
