@@ -7,8 +7,8 @@ The audio-engine and bytecode syntax is still in development and **subject to ch
 Instructions
 ============
 
- * `rest <duration>` - Sleep for *duration* ticks
- * `rest <duration>` - Sleep for *duration-1* ticks then send a key-off event.
+ * `rest_keyoff <duration>` - Sleep for *duration-1* ticks then send a key-off event.
+ * `wait <duration>` - Sleep for *duration* ticks (no key-off).
 
  * `play_note <note> <duration>` - Play *note* for *duration* ticks then key-off the note
  * `play_note <note> <ko> <duration>` - Play *note* for *duration* ticks

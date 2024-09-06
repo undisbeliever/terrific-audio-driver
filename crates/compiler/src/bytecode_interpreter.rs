@@ -287,7 +287,7 @@ impl ChannelState {
                     self.play_note(note, length);
                 }
 
-                opcodes::REST => {
+                opcodes::WAIT => {
                     let to_rest = read_pc();
                     self.ticks += Self::to_tick_count(to_rest, false);
                 }

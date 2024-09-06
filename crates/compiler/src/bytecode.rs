@@ -61,7 +61,7 @@ pub mod opcodes {
     pub const SET_VIBRATO: u8 = 0xc4;
     pub const SET_VIBRATO_DEPTH_AND_PLAY_NOTE: u8 = 0xc6;
 
-    pub const REST: u8 = 0xc8;
+    pub const WAIT: u8 = 0xc8;
     pub const REST_KEYOFF: u8 = 0xca;
 
     pub const SET_INSTRUMENT: u8 = 0xcc;
@@ -546,10 +546,10 @@ impl Bytecode {
         Ok(self.bytecode)
     }
 
-    pub fn rest(&mut self, length: BcTicksNoKeyOff) {
+    pub fn wait(&mut self, length: BcTicksNoKeyOff) {
         self.tick_counter += length.to_tick_count();
 
-        emit_bytecode!(self, opcodes::REST, length.bc_argument);
+        emit_bytecode!(self, opcodes::WAIT, length.bc_argument);
     }
 
     pub fn rest_keyoff(&mut self, length: BcTicksKeyOff) {

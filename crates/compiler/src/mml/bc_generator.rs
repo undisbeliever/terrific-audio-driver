@@ -446,7 +446,7 @@ impl ChannelBcGenerator<'_> {
             } else {
                 MAX_REST - 1
             };
-            self.bc.rest(BcTicksNoKeyOff::try_from(l).unwrap());
+            self.bc.wait(BcTicksNoKeyOff::try_from(l).unwrap());
             remaining_ticks -= l;
         }
 
@@ -490,11 +490,11 @@ impl ChannelBcGenerator<'_> {
         const _: () = assert!(BcTicksNoKeyOff::MIN == 1);
 
         while remaining_ticks > rest_length.ticks() {
-            self.bc.rest(rest_length);
+            self.bc.wait(rest_length);
             remaining_ticks -= rest_length.ticks();
         }
 
-        self.bc.rest(BcTicksNoKeyOff::try_from(remaining_ticks)?);
+        self.bc.wait(BcTicksNoKeyOff::try_from(remaining_ticks)?);
 
         Ok(())
     }
@@ -571,7 +571,7 @@ impl ChannelBcGenerator<'_> {
             self.bc.end_loop(None)?;
 
             if rl.remainder > 0 {
-                self.bc.rest(rl.remainder.try_into()?);
+                self.bc.wait(rl.remainder.try_into()?);
             }
 
             Ok(())

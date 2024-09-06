@@ -2009,7 +2009,7 @@ func rest_keyoff(channelIndex : u8 in x, length: u8 in a) {
 
 
 // KEEP: x
-func rest(channelIndex : u8 in x, length: u8 in a) {
+func wait(channelIndex : u8 in x, length: u8 in a) {
     channelSoA.countdownTimer[x] = a;
 
     // return (do not execute the next bytecode and sleep)

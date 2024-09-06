@@ -39,7 +39,7 @@
     set_adsr 12 2 2 28
 
     start_loop 3
-        rest 6
+        wait 6
 
         play_note  f4 no_keyoff 4
         play_note  g5 keyoff 8
@@ -73,7 +73,7 @@
 
         set_instrument cowbell
         play_note 0, 30
-        rest         30
+        wait         30
     end_loop
 
 === spawn_item === mml

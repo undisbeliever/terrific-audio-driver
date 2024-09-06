@@ -302,12 +302,12 @@ fn play_long_note() {
     assert_line_matches_bytecode("a%513", &["play_note a4 no_keyoff 256", "rest_keyoff 257"]);
     assert_line_matches_bytecode(
         "a%514",
-        &["play_note a4 no_keyoff 256", "rest 256", "rest_keyoff 2"],
+        &["play_note a4 no_keyoff 256", "wait 256", "rest_keyoff 2"],
     );
 
     assert_line_matches_bytecode(
         "a%600",
-        &["play_note a4 no_keyoff 256", "rest 256", "rest_keyoff 88"],
+        &["play_note a4 no_keyoff 256", "wait 256", "rest_keyoff 88"],
     );
 }
 
@@ -317,22 +317,22 @@ fn play_long_slurred_note() {
     // `rest_keyoff` can rest for 2 to 257 tick.
 
     assert_line_matches_bytecode("a%256 &", &["play_note a4 no_keyoff 256"]);
-    assert_line_matches_bytecode("a%257 &", &["play_note a4 no_keyoff 256", "rest 1"]);
-    assert_line_matches_bytecode("a%258 &", &["play_note a4 no_keyoff 256", "rest 2"]);
+    assert_line_matches_bytecode("a%257 &", &["play_note a4 no_keyoff 256", "wait 1"]);
+    assert_line_matches_bytecode("a%258 &", &["play_note a4 no_keyoff 256", "wait 2"]);
 
-    assert_line_matches_bytecode("a%512 &", &["play_note a4 no_keyoff 256", "rest 256"]);
+    assert_line_matches_bytecode("a%512 &", &["play_note a4 no_keyoff 256", "wait 256"]);
     assert_line_matches_bytecode(
         "a%513 &",
-        &["play_note a4 no_keyoff 256", "rest 256", "rest 1"],
+        &["play_note a4 no_keyoff 256", "wait 256", "wait 1"],
     );
     assert_line_matches_bytecode(
         "a%514 &",
-        &["play_note a4 no_keyoff 256", "rest 256", "rest 2"],
+        &["play_note a4 no_keyoff 256", "wait 256", "wait 2"],
     );
 
     assert_line_matches_bytecode(
         "a%600 &",
-        &["play_note a4 no_keyoff 256", "rest 256", "rest 88"],
+        &["play_note a4 no_keyoff 256", "wait 256", "wait 88"],
     );
 }
 
@@ -347,11 +347,11 @@ fn test_rests() {
 
     assert_line_matches_bytecode("r%256", &["rest_keyoff 256"]);
     assert_line_matches_bytecode("r%257", &["rest_keyoff 257"]);
-    assert_line_matches_bytecode("r%258", &["rest 256", "rest_keyoff 2"]);
-    assert_line_matches_bytecode("r%512", &["rest 256", "rest_keyoff 256"]);
-    assert_line_matches_bytecode("r%513", &["rest 256", "rest_keyoff 257"]);
-    assert_line_matches_bytecode("r%514", &["rest 256", "rest 256", "rest_keyoff 2"]);
-    assert_line_matches_bytecode("r%600", &["rest 256", "rest 256", "rest_keyoff 88"]);
+    assert_line_matches_bytecode("r%258", &["wait 256", "rest_keyoff 2"]);
+    assert_line_matches_bytecode("r%512", &["wait 256", "rest_keyoff 256"]);
+    assert_line_matches_bytecode("r%513", &["wait 256", "rest_keyoff 257"]);
+    assert_line_matches_bytecode("r%514", &["wait 256", "wait 256", "rest_keyoff 2"]);
+    assert_line_matches_bytecode("r%600", &["wait 256", "wait 256", "rest_keyoff 88"]);
 
     // User expects a keyoff after the first rest command
     merge_mml_commands_test("r || r", &["rest_keyoff 24", "rest_keyoff 24"]);
@@ -364,14 +364,14 @@ fn test_rests() {
 
     assert_line_matches_bytecode(
         "r%300 r%256",
-        &["rest 256", "rest_keyoff 44", "rest_keyoff 256"],
+        &["wait 256", "rest_keyoff 44", "rest_keyoff 256"],
     );
 
     // It does not matter if subsequent rests send keyoff events or not, no note is playing
     merge_mml_commands_test(
         "r%300 || r%300",
         &[
-            "rest 256",
+            "wait 256",
             "rest_keyoff 44",
             "rest_keyoff 257",
             "rest_keyoff 43",
@@ -380,7 +380,7 @@ fn test_rests() {
     assert_line_matches_bytecode(
         "r%300 r%100 r%100 r%100",
         &[
-            "rest 256",
+            "wait 256",
             "rest_keyoff 44",
             "rest_keyoff 257",
             "rest_keyoff 43",
@@ -410,21 +410,21 @@ fn test_rest_tie() {
 
 #[test]
 fn test_waits() {
-    assert_line_matches_bytecode("w", &["rest 24"]);
-    assert_line_matches_bytecode("w.", &["rest 36"]);
-    assert_line_matches_bytecode("w8", &["rest 12"]);
-    assert_line_matches_bytecode("w8.", &["rest 18"]);
+    assert_line_matches_bytecode("w", &["wait 24"]);
+    assert_line_matches_bytecode("w.", &["wait 36"]);
+    assert_line_matches_bytecode("w8", &["wait 12"]);
+    assert_line_matches_bytecode("w8.", &["wait 18"]);
 
-    assert_line_matches_bytecode("w%30", &["rest 30"]);
+    assert_line_matches_bytecode("w%30", &["wait 30"]);
 
-    assert_line_matches_bytecode("w%256", &["rest 256"]);
-    assert_line_matches_bytecode("w%257", &["rest 256", "rest 1"]);
-    assert_line_matches_bytecode("w%512", &["rest 256", "rest 256"]);
-    assert_line_matches_bytecode("w%600", &["rest 256", "rest 256", "rest 88"]);
+    assert_line_matches_bytecode("w%256", &["wait 256"]);
+    assert_line_matches_bytecode("w%257", &["wait 256", "wait 1"]);
+    assert_line_matches_bytecode("w%512", &["wait 256", "wait 256"]);
+    assert_line_matches_bytecode("w%600", &["wait 256", "wait 256", "wait 88"]);
 
-    merge_mml_commands_test("w || w", &["rest 48"]);
-    merge_mml_commands_test("w || w8", &["rest 36"]);
-    merge_mml_commands_test("w%30||w%20", &["rest 50"]);
+    merge_mml_commands_test("w || w", &["wait 48"]);
+    merge_mml_commands_test("w || w8", &["wait 36"]);
+    merge_mml_commands_test("w%30||w%20", &["wait 50"]);
 
     // From `mml-syntax.md`
     assert_line_matches_line("w4 w8 w8", "w2");
@@ -432,40 +432,40 @@ fn test_waits() {
 
 #[test]
 fn test_wait_tie() {
-    assert_line_matches_bytecode("w^^^", &["rest 96"]);
+    assert_line_matches_bytecode("w^^^", &["wait 96"]);
 
-    assert_line_matches_bytecode("w^8", &["rest 36"]);
-    assert_line_matches_bytecode("w8^", &["rest 36"]);
-    assert_line_matches_bytecode("w8^16", &["rest 18"]);
+    assert_line_matches_bytecode("w^8", &["wait 36"]);
+    assert_line_matches_bytecode("w8^", &["wait 36"]);
+    assert_line_matches_bytecode("w8^16", &["wait 18"]);
 
-    assert_line_matches_bytecode("w2^4^8", &["rest 84"]);
+    assert_line_matches_bytecode("w2^4^8", &["wait 84"]);
 
-    assert_line_matches_bytecode("w%5^%7", &["rest 12"]);
+    assert_line_matches_bytecode("w%5^%7", &["wait 12"]);
 
-    merge_mml_commands_test("w || ^ 8", &["rest 36"]);
+    merge_mml_commands_test("w || ^ 8", &["wait 36"]);
 }
 
 #[test]
 fn test_wait_loop() {
     // Test wait tick-counter threashold
-    assert_line_matches_bytecode("w%768", &["rest 256", "rest 256", "rest 256"]);
+    assert_line_matches_bytecode("w%768", &["wait 256", "wait 256", "wait 256"]);
 
     assert_line_matches_line_and_bytecode(
         "w%769",
         "[w%256]3 w%1",
-        &["start_loop 3", "rest 256", "end_loop", "rest 1"],
+        &["start_loop 3", "wait 256", "end_loop", "wait 1"],
     );
 
     assert_line_matches_line_and_bytecode(
         "w%25600",
         "[w%256]100",
-        &["start_loop 100", "rest 256", "end_loop"],
+        &["start_loop 100", "wait 256", "end_loop"],
     );
 
     assert_line_matches_line_and_bytecode(
         "w%25601",
         "[w%256]100 w%1",
-        &["start_loop 100", "rest 256", "end_loop", "rest 1"],
+        &["start_loop 100", "wait 256", "end_loop", "wait 1"],
     );
 
     assert!(512 * 195 + 159 == 99999);
@@ -474,10 +474,10 @@ fn test_wait_loop() {
         "[w%512]195 w%159",
         &[
             "start_loop 195",
-            "rest 256",
-            "rest 256",
+            "wait 256",
+            "wait 256",
             "end_loop",
-            "rest 159",
+            "wait 159",
         ],
     );
 
@@ -486,7 +486,7 @@ fn test_wait_loop() {
     assert_line_matches_line_and_bytecode(
         "w%7039",
         "[w%251]28 w%11",
-        &["start_loop 28", "rest 251", "end_loop", "rest 11"],
+        &["start_loop 28", "wait 251", "end_loop", "wait 11"],
     );
 
     // Test no compile errors when loop stack is full
@@ -500,10 +500,10 @@ fn test_wait_loop() {
             "start_loop",
             "start_loop",
             "start_loop",
-            "rest 256",
-            "rest 256",
-            "rest 256",
-            "rest 256",
+            "wait 256",
+            "wait 256",
+            "wait 256",
+            "wait 256",
             "end_loop 2",
             "end_loop 3",
             "end_loop 4",
@@ -521,13 +521,13 @@ fn test_wait_loop() {
 #[test]
 fn test_rest_loop() {
     // Test rest tick-counter threashold
-    assert_line_matches_bytecode("r%768", &["rest 256", "rest 256", "rest_keyoff 256"]);
-    assert_line_matches_bytecode("r%769", &["rest 256", "rest 256", "rest_keyoff 257"]);
+    assert_line_matches_bytecode("r%768", &["wait 256", "wait 256", "rest_keyoff 256"]);
+    assert_line_matches_bytecode("r%769", &["wait 256", "wait 256", "rest_keyoff 257"]);
 
     assert_line_matches_line_and_bytecode(
         "r%770",
         "[w%256]3 r%2",
-        &["start_loop 3", "rest 256", "end_loop", "rest_keyoff 2"],
+        &["start_loop 3", "wait 256", "end_loop", "rest_keyoff 2"],
     );
 
     // Test that RestLoop remainder of 0 is skipped
@@ -536,7 +536,7 @@ fn test_rest_loop() {
     assert_line_matches_line_and_bytecode(
         "r%1024",
         "[w%204]5 r%4",
-        &["start_loop 5", "rest 204", "end_loop", "rest_keyoff 4"],
+        &["start_loop 5", "wait 204", "end_loop", "rest_keyoff 4"],
     );
 
     // Test that RestLoop remainder of 1 is skipped
@@ -545,7 +545,7 @@ fn test_rest_loop() {
     assert_line_matches_line_and_bytecode(
         "r%1025",
         "[w%170]6 r%5",
-        &["start_loop 6", "rest 170", "end_loop", "rest_keyoff 5"],
+        &["start_loop 6", "wait 170", "end_loop", "rest_keyoff 5"],
     );
 
     assert!(25600 % 256 == 0);
@@ -553,7 +553,7 @@ fn test_rest_loop() {
     assert_line_matches_line_and_bytecode(
         "r%25600",
         "[w%253]101 r%47",
-        &["start_loop 101", "rest 253", "end_loop", "rest_keyoff 47"],
+        &["start_loop 101", "wait 253", "end_loop", "rest_keyoff 47"],
     );
 
     assert!(25601 % 256 == 1);
@@ -561,13 +561,13 @@ fn test_rest_loop() {
     assert_line_matches_line_and_bytecode(
         "r%25601",
         "[w%253]101 r%48",
-        &["start_loop 101", "rest 253", "end_loop", "rest_keyoff 48"],
+        &["start_loop 101", "wait 253", "end_loop", "rest_keyoff 48"],
     );
 
     assert_line_matches_line_and_bytecode(
         "r%25602",
         "[w%256]100 r%2",
-        &["start_loop 100", "rest 256", "end_loop", "rest_keyoff 2"],
+        &["start_loop 100", "wait 256", "end_loop", "rest_keyoff 2"],
     );
 
     assert!(512 * 195 + 159 == 99999);
@@ -576,8 +576,8 @@ fn test_rest_loop() {
         "[w%512]195 r%159",
         &[
             "start_loop 195",
-            "rest 256",
-            "rest 256",
+            "wait 256",
+            "wait 256",
             "end_loop",
             "rest_keyoff 159",
         ],
@@ -588,7 +588,7 @@ fn test_rest_loop() {
     assert_line_matches_line_and_bytecode(
         "r%5237",
         "[w%249]21 r%8",
-        &["start_loop 21", "rest 249", "end_loop", "rest_keyoff 8"],
+        &["start_loop 21", "wait 249", "end_loop", "rest_keyoff 8"],
     );
 
     // Test no compile errors when loop stack is full
@@ -602,9 +602,9 @@ fn test_rest_loop() {
             "start_loop",
             "start_loop",
             "start_loop",
-            "rest 256",
-            "rest 256",
-            "rest 256",
+            "wait 256",
+            "wait 256",
+            "wait 256",
             "rest_keyoff 256",
             "end_loop 2",
             "end_loop 3",
@@ -773,7 +773,7 @@ fn test_merged_rest_loop() {
         "[w%166]6 r%4 [r%250]4",
         &[
             "start_loop 6",
-            "rest 166",
+            "wait 166",
             "end_loop",
             "rest_keyoff 4",
             "start_loop 4",
@@ -2755,7 +2755,7 @@ fn test_skip_last_loop_prev_slurred_note_2() {
         "[w16 : d&]4 {df},,10",
         &[
             "start_loop",
-            "rest 6",
+            "wait 6",
             "skip_last_loop",
             "play_note d4 no_keyoff 24",
             "end_loop 4",
@@ -2768,10 +2768,10 @@ fn test_skip_last_loop_prev_slurred_note_2() {
         "[w : [w : d&]2 ]3 {df},,10",
         &[
             "start_loop",
-            "rest 24",
+            "wait 24",
             "skip_last_loop",
             "start_loop",
-            "rest 24",
+            "wait 24",
             "skip_last_loop",
             "play_note d4 no_keyoff 24",
             "end_loop 2",
@@ -2804,7 +2804,7 @@ fn test_prev_slurred_note_after_start_loop() {
         &[
             "play_note d4 no_keyoff 24",
             "start_loop",
-            "rest 6",
+            "wait 6",
             "end_loop 4",
             // Previous slurred note is unknown
             "play_note d4 no_keyoff 1",
@@ -2817,9 +2817,9 @@ fn test_prev_slurred_note_after_start_loop() {
         &[
             "play_note d4 no_keyoff 24",
             "start_loop",
-            "rest 6",
+            "wait 6",
             "skip_last_loop",
-            "rest 24",
+            "wait 24",
             "end_loop 4",
             // Previous slurred note is unknown
             "play_note d4 no_keyoff 1",

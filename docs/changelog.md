@@ -11,6 +11,7 @@ Version 0.0.11
 **BREAKING Bytecode changes:**
  * `call_subroutine` does not disable vibrato
  * `return_from_subroutine` does not disable vibrato
+ * `rest` has been renamed to `wait` (to match the `w` MML command)
 
 Bytecode changes:
  * Loops and subroutines now use a traditional stack.

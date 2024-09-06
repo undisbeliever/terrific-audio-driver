@@ -137,7 +137,7 @@ impl BytecodeAssembler<'_, '_> {
         }
 
         build_match!(
-           rest 1 rest_argument,
+           wait 1 ticks_no_keyoff_argument,
            rest_keyoff 1 rest_keyoff_argument,
 
            play_note 2 play_note_argument,
@@ -200,7 +200,10 @@ impl BytecodeAssembler<'_, '_> {
         Ok((T::try_from_str(arg1)?, U::try_from_str(arg2)?))
     }
 
-    fn rest_argument(&self, args: &[&str]) -> Result<BcTicksNoKeyOff, BytecodeAssemblerError> {
+    fn ticks_no_keyoff_argument(
+        &self,
+        args: &[&str],
+    ) -> Result<BcTicksNoKeyOff, BytecodeAssemblerError> {
         let arg = one_argument(args)?;
 
         Ok(BcTicksNoKeyOff::try_from(parse_u32(arg)?)?)
