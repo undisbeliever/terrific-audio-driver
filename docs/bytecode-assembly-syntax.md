@@ -38,7 +38,6 @@ Instructions
  * `disable_echo` - Disable echo on this channel.
 
  * `start_loop [loop_count]` - Start a loop block
-    * You can nest a maximum of 3 loops, including the loops in any subroutines that will be called.
     * The `loop_count` instruction is optional if the *loop_count* is set in `end_loop`.
  * `skip_last_loop` - All bytecode after `skip_last_loop` will be skipped on the last iteration of the loop.
  * `end_loop [loop_count]` - End the loop block
@@ -46,12 +45,10 @@ Instructions
 
  * `call_subroutine <name>` - Call the subroutine *name*.
     * Not available in sound effects.
-    * Not available in subroutines.
 
  * `call_subroutine_and_disable_vibrato <name>` - Disable vibrato and call the subroutine *name*.
     * Disables vibrato before the subroutine call.
     * Not available in sound effects.
-    * Not available in subroutines.
 
  * `set_song_tick_clock <tick_clock>` - Set the tick TIMER0 clock register to *tick_clock*
     * `tick_clock` must be >= 64 and <= 255.
