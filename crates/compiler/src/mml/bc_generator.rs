@@ -450,8 +450,7 @@ impl ChannelBcGenerator<'_> {
             remaining_ticks -= l;
         }
 
-        self.bc
-            .rest_keyoff(BcTicksKeyOff::try_from(remaining_ticks)?);
+        self.bc.rest(BcTicksKeyOff::try_from(remaining_ticks)?);
 
         Ok(())
     }
@@ -472,12 +471,11 @@ impl ChannelBcGenerator<'_> {
             } else {
                 MAX_REST - 1
             };
-            self.bc.rest_keyoff(BcTicksKeyOff::try_from(l).unwrap());
+            self.bc.rest(BcTicksKeyOff::try_from(l).unwrap());
             remaining_ticks -= l;
         }
 
-        self.bc
-            .rest_keyoff(BcTicksKeyOff::try_from(remaining_ticks)?);
+        self.bc.rest(BcTicksKeyOff::try_from(remaining_ticks)?);
 
         Ok(())
     }
@@ -520,7 +518,7 @@ impl ChannelBcGenerator<'_> {
             self.wait_no_loop(TickCounter::new(rl.ticks_in_loop))?;
             self.bc.end_loop(None)?;
 
-            self.bc.rest_keyoff(rl.remainder.try_into()?);
+            self.bc.rest(rl.remainder.try_into()?);
 
             Ok(())
         }
@@ -548,7 +546,7 @@ impl ChannelBcGenerator<'_> {
             self.bc.end_loop(None)?;
 
             if rl.remainder > 0 {
-                self.bc.rest_keyoff(rl.remainder.try_into()?);
+                self.bc.rest(rl.remainder.try_into()?);
             }
 
             Ok(())

@@ -2002,7 +2002,7 @@ func set_volume(channelIndex : u8 in x, volume : u8 in a) {
 
 // KEEP: x
 #[fallthrough]
-func rest_keyoff(channelIndex : u8 in x, length: u8 in a) {
+func rest(channelIndex : u8 in x, length: u8 in a) {
     channelSoA.nextEventIsKeyOff[x] = y = 1;
 // Fallthrough
 }

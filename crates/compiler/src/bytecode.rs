@@ -62,7 +62,7 @@ pub mod opcodes {
     pub const SET_VIBRATO_DEPTH_AND_PLAY_NOTE: u8 = 0xc6;
 
     pub const WAIT: u8 = 0xc8;
-    pub const REST_KEYOFF: u8 = 0xca;
+    pub const REST: u8 = 0xca;
 
     pub const SET_INSTRUMENT: u8 = 0xcc;
     pub const SET_INSTRUMENT_AND_ADSR_OR_GAIN: u8 = 0xce;
@@ -552,10 +552,10 @@ impl Bytecode {
         emit_bytecode!(self, opcodes::WAIT, length.bc_argument);
     }
 
-    pub fn rest_keyoff(&mut self, length: BcTicksKeyOff) {
+    pub fn rest(&mut self, length: BcTicksKeyOff) {
         self.tick_counter += length.to_tick_count();
 
-        emit_bytecode!(self, opcodes::REST_KEYOFF, length.bc_argument);
+        emit_bytecode!(self, opcodes::REST, length.bc_argument);
     }
 
     pub fn play_note(&mut self, note: Note, length: PlayNoteTicks) {

@@ -291,7 +291,7 @@ impl ChannelState {
                     let to_rest = read_pc();
                     self.ticks += Self::to_tick_count(to_rest, false);
                 }
-                opcodes::REST_KEYOFF => {
+                opcodes::REST => {
                     let to_rest = read_pc();
                     self.ticks += Self::to_tick_count(to_rest, true);
                 }

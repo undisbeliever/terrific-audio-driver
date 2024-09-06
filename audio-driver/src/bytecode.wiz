@@ -115,9 +115,10 @@ let INSTRUCTIONS_WITH_ARGUMENTS = [
     // NOTE: Does not key-off the channel.
     wait,
 
-    // parameter = number of ticks to wait.
-    // Sends a keyoff event after resting (NOTE: waits an extra tick after keyoff).
-    rest_keyoff,
+    // parameter = number of ticks to sleep before key-off
+    // Sends a key-off after sleeping and sleeps for 1 extra tick after key-off.
+    // (This instruction sleeps for `parameter + 1` ticks)
+    rest,
 
 
     // parameter = u8 instrument_id

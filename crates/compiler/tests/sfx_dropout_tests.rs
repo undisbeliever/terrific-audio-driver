@@ -563,7 +563,7 @@ fn _build_test_common_audio_data() -> CommonAudioData {
         .map(|s| {
             let sfx = SoundEffectInput {
                 name: Name::from_str(s.name).unwrap(),
-                sfx: SoundEffectText::BytecodeAssembly(format!("rest_keyoff {}", s.ticks)),
+                sfx: SoundEffectText::BytecodeAssembly(format!("rest {}", s.ticks)),
                 flags: SfxFlags {
                     interruptible: Some(s.interruptible),
                     one_channel: Some(s.one_channel),
