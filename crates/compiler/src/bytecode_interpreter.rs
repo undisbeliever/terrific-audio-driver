@@ -68,6 +68,7 @@ struct InterpreterOutput {
     channels: [Channel; N_MUSIC_CHANNELS],
     song_data_addr: u16,
     stereo_flag: bool,
+    song_tick_counter: u16,
     tick_clock: u8,
 }
 
@@ -590,6 +591,7 @@ where
                 None => unused_channel(i),
             }),
             tick_clock: self.song_timer_register,
+            song_tick_counter: (self.tick_counter.value() & 0xffff).try_into().unwrap(),
             song_data_addr: self.common_audio_data.song_data_addr(),
             stereo_flag: self.stereo_flag,
         };
@@ -804,6 +806,14 @@ impl InterpreterOutput {
             let mut apu_write = |addr: u16, value: u8| {
                 apuram[usize::from(addr)] = value;
             };
+
+            let mut apu_write_16 = |addr: u16, value: u16| {
+                let value = value.to_le_bytes();
+                apu_write(addr, value[0]);
+                apu_write(addr + 1, value[1]);
+            };
+
+            apu_write_16(addresses::SONG_TICK_COUNTER, self.song_tick_counter);
 
             apu_write(
                 addresses::LOADER_DATA_TYPE,

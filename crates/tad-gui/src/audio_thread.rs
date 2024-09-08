@@ -837,15 +837,22 @@ impl TadEmu {
 
         let voice_return_inst_ptrs = match &mut self.bc_interpreter {
             Some(b) => {
+                const STC: usize = addresses::SONG_TICK_COUNTER as usize;
+
                 // Assumes number of ticks since the last read was < 256;
                 let bc_tick_counter_l = b.tick_counter().value().to_le_bytes()[0];
-                let emu_tick_counter_l = apuram[usize::from(addresses::SONG_TICK_COUNTER)];
+                let emu_tick_counter_l = apuram[STC];
 
                 let ticks_passed = emu_tick_counter_l.wrapping_sub(bc_tick_counter_l);
                 if ticks_passed > 0 {
                     let v = b.process_ticks(TickCounter::new(ticks_passed.into()));
                     debug_assert!(v, "Bytecode interpreter timeout");
                 }
+                debug_assert_eq!(
+                    b.tick_counter().value() as u16,
+                    u16::from_le_bytes(apuram[STC..STC + 2].try_into().unwrap()),
+                    "Bytecode interpreter desync"
+                );
 
                 let channels = b.channels();
 
