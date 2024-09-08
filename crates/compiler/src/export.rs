@@ -165,7 +165,7 @@ pub fn bin_include_path(
 ) -> Result<BinIncludePath, ExportError> {
     match bin_filename.to_str() {
         Some(s) => {
-            if s.contains(|c| c == '"' || c == '\'') {
+            if s.contains(['"', '\'']) {
                 return Err(ExportError::BinPathContainsQuotes);
             }
         }
