@@ -107,7 +107,7 @@ Licenses marked "synthesized" did not have a license file in their crate.
 
 
 Terrific Audio Driver makes use of the following open source projects:
-  * MIT License (83)
+  * MIT License (84)
   * Apache License 2.0 (2)
   * zlib License (2)
   * Unicode License Agreement - Data Files and Software (2016) (1)
@@ -390,6 +390,7 @@ limitations under the License.
 
 Used by:
   * [windows-sys 0.52.0](https://github.com/microsoft/windows-rs)
+  * [windows-sys 0.59.0](https://github.com/microsoft/windows-rs)
   * [windows-targets 0.52.6](https://github.com/microsoft/windows-rs)
   * [windows_aarch64_gnullvm 0.52.6](https://github.com/microsoft/windows-rs)
   * [windows_aarch64_msvc 0.52.6](https://github.com/microsoft/windows-rs)
@@ -496,7 +497,7 @@ DEALINGS IN THE SOFTWARE.
 ## MIT License
 
 Used by:
-  * [cc 1.1.13](https://github.com/rust-lang/cc-rs)
+  * [cc 1.1.18](https://github.com/rust-lang/cc-rs)
   * [cfg-if 1.0.0](https://github.com/alexcrichton/cfg-if)
   * [cmake 0.1.51](https://github.com/rust-lang/cmake-rs)
 
@@ -935,7 +936,7 @@ SOFTWARE.
 Used by:
   * [anstream 0.6.15](https://github.com/rust-cli/anstyle.git)
   * [anstyle-query 1.1.1](https://github.com/rust-cli/anstyle)
-  * [clap 4.5.16](https://github.com/clap-rs/clap)
+  * [clap 4.5.17](https://github.com/clap-rs/clap)
   * [colorchoice 1.0.2](https://github.com/rust-cli/anstyle)
   * [is_terminal_polyfill 1.70.1](https://github.com/polyfill-rs/is_terminal_polyfill)
 
@@ -1191,21 +1192,21 @@ SOFTWARE.
 ## MIT License
 
 Used by:
-  * [cxx-build 1.0.125](https://github.com/dtolnay/cxx)
-  * [cxx 1.0.125](https://github.com/dtolnay/cxx)
-  * [cxxbridge-flags 1.0.125](https://github.com/dtolnay/cxx)
-  * [cxxbridge-macro 1.0.125](https://github.com/dtolnay/cxx)
+  * [cxx-build 1.0.128](https://github.com/dtolnay/cxx)
+  * [cxx 1.0.128](https://github.com/dtolnay/cxx)
+  * [cxxbridge-flags 1.0.128](https://github.com/dtolnay/cxx)
+  * [cxxbridge-macro 1.0.128](https://github.com/dtolnay/cxx)
   * [itoa 1.0.11](https://github.com/dtolnay/itoa)
   * [link-cplusplus 1.0.9](https://github.com/dtolnay/link-cplusplus)
   * [once_cell 1.19.0](https://github.com/matklad/once_cell)
   * [paste 1.0.15](https://github.com/dtolnay/paste)
   * [proc-macro2 1.0.86](https://github.com/dtolnay/proc-macro2)
-  * [quote 1.0.36](https://github.com/dtolnay/quote)
+  * [quote 1.0.37](https://github.com/dtolnay/quote)
   * [scratch 1.0.7](https://github.com/dtolnay/scratch)
-  * [serde 1.0.208](https://github.com/serde-rs/serde)
-  * [serde_derive 1.0.208](https://github.com/serde-rs/serde)
-  * [serde_json 1.0.125](https://github.com/serde-rs/json)
-  * [syn 2.0.75](https://github.com/dtolnay/syn)
+  * [serde 1.0.210](https://github.com/serde-rs/serde)
+  * [serde_derive 1.0.210](https://github.com/serde-rs/serde)
+  * [serde_json 1.0.128](https://github.com/serde-rs/json)
+  * [syn 2.0.77](https://github.com/dtolnay/syn)
   * [unicode-ident 1.0.12](https://github.com/dtolnay/unicode-ident)
 
 ```
@@ -1366,7 +1367,7 @@ THE SOFTWARE.
 ## MIT License
 
 Used by:
-  * [clap_builder 4.5.15](https://github.com/clap-rs/clap)
+  * [clap_builder 4.5.17](https://github.com/clap-rs/clap)
   * [clap_derive 4.5.13](https://github.com/clap-rs/clap)
   * [clap_lex 0.7.2](https://github.com/clap-rs/clap)
 

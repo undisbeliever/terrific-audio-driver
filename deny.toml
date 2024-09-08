@@ -21,11 +21,10 @@ wildcards = "deny"
 deny = []
 
 skip = [
-    # used by sdl2
-    { name="bitflags", version = "1.3" },
+    { name="bitflags", version = "1.3", reason = "used by sdl2" },
+    { name="bitflags", version = "2.4", reason = "used by fltk" },
 
-    # used by fltk
-    { name="bitflags", version = "2.4" },
+    { name="windows-sys", version="0.52.0", reason = "anstyle-query has not updated windows-sys" },
 ]
 
 
