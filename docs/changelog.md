@@ -39,6 +39,9 @@ MML changes:
  * Fixed wrong MP vibrato state after a `L` set loop point MML command.
     * `~` manual vibrato loop behaviour is unchanged.
 
+GUI changes:
+ * Closing a song tab while the song is playing will stop audio.
+
 Data format changes:
  * Removed loop point from song header.  Songs now loop using the `goto_relative` instruction.
 

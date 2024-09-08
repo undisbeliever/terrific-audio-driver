@@ -612,7 +612,7 @@ impl Project {
                     let file_name = self.tab_manager.get_file_name(&ft);
                     close_unsaved_song_tab_dialog(song_id, file_name, &self.sender);
                 } else {
-                    self.close_song_tab(song_id)
+                    self.close_song_tab(song_id);
                 }
             }
 
@@ -1060,6 +1060,10 @@ impl Project {
             let _ = self
                 .compiler_sender
                 .send(ToCompiler::SongTabClosed(song_id));
+
+            let _ = self
+                .audio_sender
+                .send(AudioMessage::CloseIfSongIdEquals(song_id));
 
             self.closed_song_tabs.push(song_tab);
 
