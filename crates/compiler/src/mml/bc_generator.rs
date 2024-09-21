@@ -797,11 +797,11 @@ impl ChannelBcGenerator<'_> {
         }
     }
 
-    fn call_subroutine(&mut self, s_id: SubroutineId) -> Result<(), MmlError> {
+    fn call_subroutine(&mut self, index: usize) -> Result<(), MmlError> {
         // CallSubroutine commands should only be created if the channel can call a subroutine.
         // `s_id` should always be valid
         let sub = match self.subroutines {
-            Some(s) => match s.get(s_id.as_usize()) {
+            Some(s) => match s.get(index) {
                 Some(s) => s,
                 None => panic!("invalid SubroutineId"),
             },
@@ -812,11 +812,14 @@ impl ChannelBcGenerator<'_> {
             MpState::Mp(_) => {
                 self.vibrato.disable();
 
-                self.bc
-                    .call_subroutine_and_disable_vibrato(sub.identifier.as_str(), s_id)?;
+                self.bc.call_subroutine_and_disable_vibrato(
+                    sub.identifier.as_str(),
+                    &sub.subroutine_id,
+                )?;
             }
             MpState::Disabled | MpState::Manual => {
-                self.bc.call_subroutine(sub.identifier.as_str(), s_id)?;
+                self.bc
+                    .call_subroutine(sub.identifier.as_str(), &sub.subroutine_id)?;
             }
         }
 
@@ -1263,10 +1266,10 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
                 match tail_call {
                     Some(tc) => match tc.command() {
                         MmlCommand::CallSubroutine(s) => {
-                            let sub = self.subroutines.get(s.as_usize()).unwrap();
+                            let sub = self.subroutines.get(*s).unwrap();
                             (
                                 BcTerminator::Goto(sub.bytecode_offset.into()),
-                                gen.bc.get_tick_counter() + s.tick_counter(),
+                                gen.bc.get_tick_counter() + sub.subroutine_id.tick_counter(),
                             )
                         }
                         _ => panic!("tail_call is not a CallSubroutine command"),
@@ -1300,7 +1303,8 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
             let subroutine_id =
                 SubroutineId::new(song_subroutine_index, tick_counter, max_stack_depth);
 
-            self.subroutine_map.insert(identifier, Some(subroutine_id));
+            self.subroutine_map
+                .insert(identifier, Some(subroutine_id.clone()));
 
             self.subroutines.push(Subroutine {
                 identifier: identifier.to_owned(),

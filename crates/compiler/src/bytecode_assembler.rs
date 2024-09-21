@@ -43,19 +43,19 @@ impl BytecodeResultWrapper for Result<(), BytecodeError> {
     }
 }
 
-pub struct BytecodeAssembler<'a, 'b> {
+pub struct BytecodeAssembler<'i, 's> {
     bc: Bytecode,
-    inst_map: &'a UniqueNamesList<InstrumentOrSample>,
-    subroutines: Option<&'b SubroutinesMap<'b>>,
+    inst_map: &'i UniqueNamesList<InstrumentOrSample>,
+    subroutines: Option<&'s SubroutinesMap<'s>>,
 }
 
-impl BytecodeAssembler<'_, '_> {
-    pub fn new<'a, 'b>(
-        inst_map: &'a UniqueNamesList<InstrumentOrSample>,
-        subroutines: Option<&'b SubroutinesMap<'b>>,
+impl<'i, 's> BytecodeAssembler<'i, 's> {
+    pub fn new(
+        inst_map: &'i UniqueNamesList<InstrumentOrSample>,
+        subroutines: Option<&'s SubroutinesMap<'s>>,
         context: BytecodeContext,
-    ) -> BytecodeAssembler<'a, 'b> {
-        BytecodeAssembler {
+    ) -> Self {
+        Self {
             bc: Bytecode::new(context),
             inst_map,
             subroutines,
@@ -321,12 +321,12 @@ impl BytecodeAssembler<'_, '_> {
     fn subroutine_argument<'a>(
         &self,
         args: &[&'a str],
-    ) -> Result<(&'a str, SubroutineId), BytecodeAssemblerError> {
+    ) -> Result<(&'a str, &'s SubroutineId), BytecodeAssemblerError> {
         let arg = one_argument(args)?;
 
         match self.subroutines {
             Some(subroutines) => match subroutines.get(arg) {
-                Some(s) => Ok((arg, *s)),
+                Some(s) => Ok((arg, s)),
                 None => Err(BytecodeAssemblerError::UnknownSubroutine(arg.to_owned())),
             },
             None => Err(BytecodeAssemblerError::UnknownSubroutine(arg.to_owned())),

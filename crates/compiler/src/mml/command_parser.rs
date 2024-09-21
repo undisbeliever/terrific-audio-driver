@@ -170,7 +170,7 @@ pub enum MmlCommand {
         note_length: PlayNoteTicks,
     },
 
-    CallSubroutine(SubroutineId),
+    CallSubroutine(usize),
     StartLoop,
     SkipLastLoop,
     EndLoop(LoopCount),
@@ -1342,7 +1342,7 @@ fn parse_call_subroutine(pos: FilePos, id: IdentifierStr, p: &mut Parser) -> Mml
         Some((id_map, name_map)) => match id_map.get(&id) {
             Some(Some(s)) => {
                 p.increment_tick_counter(s.tick_counter());
-                MmlCommand::CallSubroutine(*s)
+                MmlCommand::CallSubroutine(s.as_usize())
             }
             Some(None) => {
                 // Subroutine has been compiled, but it contains an error

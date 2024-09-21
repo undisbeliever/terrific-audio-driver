@@ -3522,7 +3522,7 @@ fn assemble_channel_bytecode(
 ) -> Vec<u8> {
     let subroutines = subroutines
         .iter()
-        .map(|s| (s.identifier.as_str(), s.subroutine_id))
+        .map(|s| (s.identifier.as_str(), s.subroutine_id.clone()))
         .collect();
 
     let mut bc = bytecode_assembler::BytecodeAssembler::new(

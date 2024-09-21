@@ -103,8 +103,7 @@ u8_value_newtype!(
     (MAX_INSTRUMENTS_AND_SAMPLES - 1) as u8
 );
 
-// Added Copy trait to Subroutine to satisfy the borrow checker in `BytecodeAssembler`.
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct SubroutineId {
     id: u8,
     tick_counter: TickCounter,
@@ -807,7 +806,7 @@ impl Bytecode {
     fn _call_subroutine(
         &mut self,
         name: &str,
-        subroutine: SubroutineId,
+        subroutine: &SubroutineId,
         disable_vibraro: bool,
     ) -> Result<(), BytecodeError> {
         match self.context {
@@ -845,7 +844,7 @@ impl Bytecode {
     pub fn call_subroutine_and_disable_vibrato(
         &mut self,
         name: &str,
-        subroutine: SubroutineId,
+        subroutine: &SubroutineId,
     ) -> Result<(), BytecodeError> {
         self._call_subroutine(name, subroutine, true)
     }
@@ -853,7 +852,7 @@ impl Bytecode {
     pub fn call_subroutine(
         &mut self,
         name: &str,
-        subroutine: SubroutineId,
+        subroutine: &SubroutineId,
     ) -> Result<(), BytecodeError> {
         self._call_subroutine(name, subroutine, false)
     }
