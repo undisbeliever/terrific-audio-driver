@@ -220,7 +220,7 @@ pub fn test_sample_song(
     let nl = BcTicksKeyOff::try_from(remaining_length)?;
     bc.play_note(note, PlayNoteTicks::KeyOff(nl));
 
-    let bytecode = bc.bytecode(BcTerminator::DisableChannel).unwrap();
+    let bytecode = bc.bytecode(BcTerminator::DisableChannel).unwrap().0;
 
     Ok(sfx_bytecode_to_song(&bytecode))
 }

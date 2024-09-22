@@ -106,18 +106,12 @@ u8_value_newtype!(
 #[derive(Debug, Clone, PartialEq)]
 pub struct SubroutineId {
     id: u8,
-    tick_counter: TickCounter,
-    // NOTE: does not include the stack usage when calling the subroutine (ie, can be 0).
-    max_stack_depth: StackDepth,
+    state: State,
 }
 
 impl SubroutineId {
-    pub fn new(id: u8, tick_counter: TickCounter, max_stack_depth: StackDepth) -> Self {
-        Self {
-            id,
-            tick_counter,
-            max_stack_depth,
-        }
+    pub fn new(id: u8, state: State) -> Self {
+        Self { id, state }
     }
 
     pub fn as_usize(&self) -> usize {
@@ -125,11 +119,11 @@ impl SubroutineId {
     }
 
     pub fn tick_counter(&self) -> TickCounter {
-        self.tick_counter
+        self.state.tick_counter
     }
 
     pub fn max_stack_depth(&self) -> StackDepth {
-        self.max_stack_depth
+        self.state.max_stack_depth
     }
 }
 
@@ -365,20 +359,22 @@ impl NoteOpcode {
 }
 
 #[derive(PartialEq)]
-pub enum BcTerminator {
+pub enum BcTerminator<'a> {
     DisableChannel,
     Goto(usize),
     ReturnFromSubroutine,
     ReturnFromSubroutineAndDisableVibrato,
+    TailSubroutineCall(usize, &'a SubroutineId),
 }
 
-impl BcTerminator {
+impl BcTerminator<'_> {
     pub fn is_return(&self) -> bool {
         match self {
             Self::DisableChannel => false,
             Self::Goto(_) => false,
             Self::ReturnFromSubroutine => true,
             Self::ReturnFromSubroutineAndDisableVibrato => true,
+            Self::TailSubroutineCall(..) => true,
         }
     }
 }
@@ -421,6 +417,12 @@ mod emit_bytecode {
     }
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct State {
+    pub tick_counter: TickCounter,
+    pub max_stack_depth: StackDepth,
+}
+
 struct SkipLastLoop {
     tick_counter: TickCounter,
     // Location of the parameter of the `skip_last_loop` instruction inside `Bytecode::bytecode`.
@@ -440,10 +442,9 @@ pub struct Bytecode {
     context: BytecodeContext,
     bytecode: Vec<u8>,
 
-    tick_counter: TickCounter,
+    state: State,
 
     loop_stack: Vec<LoopState>,
-    max_stack_depth: StackDepth,
 }
 
 impl Bytecode {
@@ -458,9 +459,11 @@ impl Bytecode {
         Bytecode {
             context,
             bytecode: vec,
-            tick_counter: TickCounter::new(0),
+            state: State {
+                tick_counter: TickCounter::new(0),
+                max_stack_depth: StackDepth(0),
+            },
             loop_stack: Vec::new(),
-            max_stack_depth: StackDepth(0),
         }
     }
 
@@ -469,12 +472,12 @@ impl Bytecode {
     }
 
     pub fn get_tick_counter(&self) -> TickCounter {
-        self.tick_counter
+        self.state.tick_counter
     }
 
     pub fn get_tick_counter_with_loop_flag(&self) -> TickCounterWithLoopFlag {
         TickCounterWithLoopFlag {
-            ticks: self.tick_counter,
+            ticks: self.state.tick_counter,
             in_loop: self.is_in_loop(),
         }
     }
@@ -495,10 +498,6 @@ impl Bytecode {
         )
     }
 
-    pub fn get_max_stack_depth(&self) -> StackDepth {
-        self.max_stack_depth
-    }
-
     pub fn get_bytecode_len(&self) -> usize {
         self.bytecode.len()
     }
@@ -506,7 +505,7 @@ impl Bytecode {
     pub fn bytecode(
         mut self,
         terminator: BcTerminator,
-    ) -> Result<Vec<u8>, (BytecodeError, Vec<u8>)> {
+    ) -> Result<(Vec<u8>, State), (BytecodeError, Vec<u8>)> {
         if !self.loop_stack.is_empty() {
             return Err((
                 BytecodeError::OpenLoopStack(self.loop_stack.len()),
@@ -516,6 +515,10 @@ impl Bytecode {
 
         if terminator.is_return() && !matches!(self.context, BytecodeContext::SongSubroutine) {
             return Err((BytecodeError::ReturnInNonSubroutine, self.bytecode));
+        }
+
+        if let BcTerminator::TailSubroutineCall(_, s) = &terminator {
+            self._update_subtroutine_state_excluding_stack_depth(s);
         }
 
         match terminator {
@@ -528,7 +531,7 @@ impl Bytecode {
             BcTerminator::ReturnFromSubroutineAndDisableVibrato => {
                 emit_bytecode!(self, opcodes::RETURN_FROM_SUBROUTINE_AND_DISABLE_VIBRATO);
             }
-            BcTerminator::Goto(pos) => {
+            BcTerminator::Goto(pos) | BcTerminator::TailSubroutineCall(pos, _) => {
                 match (u16::try_from(self.bytecode.len()), u16::try_from(pos)) {
                     (Ok(inst_ptr), Ok(pos)) => {
                         let o = pos.wrapping_sub(inst_ptr).wrapping_sub(2).to_le_bytes();
@@ -538,27 +541,27 @@ impl Bytecode {
                         emit_bytecode!(self, opcodes::DISABLE_CHANNEL);
                         return Err((BytecodeError::GotoRelativeOutOfBounds, self.bytecode));
                     }
-                };
+                }
             }
         }
 
-        Ok(self.bytecode)
+        Ok((self.bytecode, self.state))
     }
 
     pub fn wait(&mut self, length: BcTicksNoKeyOff) {
-        self.tick_counter += length.to_tick_count();
+        self.state.tick_counter += length.to_tick_count();
 
         emit_bytecode!(self, opcodes::WAIT, length.bc_argument);
     }
 
     pub fn rest(&mut self, length: BcTicksKeyOff) {
-        self.tick_counter += length.to_tick_count();
+        self.state.tick_counter += length.to_tick_count();
 
         emit_bytecode!(self, opcodes::REST, length.bc_argument);
     }
 
     pub fn play_note(&mut self, note: Note, length: PlayNoteTicks) {
-        self.tick_counter += length.to_tick_count();
+        self.state.tick_counter += length.to_tick_count();
 
         let opcode = NoteOpcode::new(note, &length);
 
@@ -566,7 +569,7 @@ impl Bytecode {
     }
 
     pub fn portamento(&mut self, note: Note, velocity: PortamentoVelocity, length: PlayNoteTicks) {
-        self.tick_counter += length.to_tick_count();
+        self.state.tick_counter += length.to_tick_count();
 
         let speed = velocity.pitch_offset_per_tick();
         let note_param = NoteOpcode::new(note, &length);
@@ -585,7 +588,7 @@ impl Bytecode {
         note: Note,
         length: PlayNoteTicks,
     ) {
-        self.tick_counter += length.to_tick_count();
+        self.state.tick_counter += length.to_tick_count();
 
         let play_note_opcode = NoteOpcode::new(note, &length);
 
@@ -684,7 +687,7 @@ impl Bytecode {
         self.loop_stack.push(LoopState {
             start_loop_count: loop_count,
             start_loop_pos: self.bytecode.len(),
-            tick_counter_at_start_of_loop: self.tick_counter,
+            tick_counter_at_start_of_loop: self.state.tick_counter,
             skip_last_loop: None,
         });
 
@@ -696,7 +699,7 @@ impl Bytecode {
         emit_bytecode!(self, opcodes::START_LOOP, loop_count);
 
         let stack_depth = self.get_stack_depth();
-        self.max_stack_depth = max(self.max_stack_depth, stack_depth);
+        self.state.max_stack_depth = max(self.state.max_stack_depth, stack_depth);
 
         if stack_depth <= MAX_STACK_DEPTH {
             Ok(())
@@ -715,12 +718,12 @@ impl Bytecode {
             return Err(BytecodeError::MultipleSkipLastLoopInstructions);
         }
 
-        if loop_state.tick_counter_at_start_of_loop == self.tick_counter {
+        if loop_state.tick_counter_at_start_of_loop == self.state.tick_counter {
             return Err(BytecodeError::NoTicksBeforeSkipLastLoop);
         }
 
         loop_state.skip_last_loop = Some(SkipLastLoop {
-            tick_counter: self.tick_counter,
+            tick_counter: self.state.tick_counter,
             bc_parameter_position: self.bytecode.len() + 1,
         });
 
@@ -746,17 +749,17 @@ impl Bytecode {
         // Increment tick counter
         {
             let ticks_in_loop =
-                self.tick_counter.value() - loop_state.tick_counter_at_start_of_loop.value();
+                self.state.tick_counter.value() - loop_state.tick_counter_at_start_of_loop.value();
             if ticks_in_loop == 0 {
                 return Err(BytecodeError::NoTicksInLoop);
             }
 
             let ticks_skipped_in_last_loop = match &loop_state.skip_last_loop {
                 Some(s) => {
-                    if self.tick_counter == s.tick_counter {
+                    if self.state.tick_counter == s.tick_counter {
                         return Err(BytecodeError::NoTicksAfterSkipLastLoop);
                     }
-                    self.tick_counter.value() - s.tick_counter.value()
+                    self.state.tick_counter.value() - s.tick_counter.value()
                 }
                 None => 0,
             };
@@ -768,7 +771,7 @@ impl Bytecode {
                 .and_then(|t| t.checked_sub(ticks_skipped_in_last_loop))
                 .unwrap_or(u32::MAX);
 
-            self.tick_counter += TickCounter::new(ticks_to_add);
+            self.state.tick_counter += TickCounter::new(ticks_to_add);
         }
 
         // Write the loop_count parameter for the start_loop instruction (if required)
@@ -803,6 +806,10 @@ impl Bytecode {
         Ok(())
     }
 
+    fn _update_subtroutine_state_excluding_stack_depth(&mut self, subroutine: &SubroutineId) {
+        self.state.tick_counter += subroutine.state.tick_counter;
+    }
+
     fn _call_subroutine(
         &mut self,
         name: &str,
@@ -815,15 +822,15 @@ impl Bytecode {
             BytecodeContext::SoundEffect => return Err(BytecodeError::SubroutineCallInSoundEffect),
         }
 
-        self.tick_counter += subroutine.tick_counter;
+        self._update_subtroutine_state_excluding_stack_depth(subroutine);
 
         let stack_depth = StackDepth(
             self.get_stack_depth().0
                 + BC_STACK_BYTES_PER_SUBROUTINE_CALL as u32
-                + subroutine.max_stack_depth.0,
+                + subroutine.state.max_stack_depth.0,
         );
 
-        self.max_stack_depth = max(self.max_stack_depth, stack_depth);
+        self.state.max_stack_depth = max(self.state.max_stack_depth, stack_depth);
 
         if stack_depth > MAX_STACK_DEPTH {
             return Err(BytecodeError::StackOverflowInSubroutineCall(

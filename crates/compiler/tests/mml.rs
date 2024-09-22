@@ -3535,7 +3535,7 @@ fn assemble_channel_bytecode(
         bc.parse_line(line).unwrap();
     }
 
-    bc.bytecode(terminator).unwrap().to_owned()
+    bc.bytecode(terminator).unwrap().0
 }
 
 struct DummyData {

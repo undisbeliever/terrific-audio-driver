@@ -1242,7 +1242,7 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
             &mut self.bytecode_tracker,
         );
 
-        let (terminator, tick_counter) = match (&gen.mp, gen.vibrato.is_active()) {
+        let terminator = match (&gen.mp, gen.vibrato.is_active()) {
             (MpState::Mp(_), true) | (MpState::Disabled, true) => {
                 gen.vibrato.disable();
 
@@ -1257,51 +1257,46 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
                         &mut self.bytecode_tracker,
                     );
                 }
-                (
-                    BcTerminator::ReturnFromSubroutineAndDisableVibrato,
-                    gen.bc.get_tick_counter(),
-                )
+                BcTerminator::ReturnFromSubroutineAndDisableVibrato
             }
             (MpState::Mp(_), false) | (MpState::Disabled, false) | (MpState::Manual, _) => {
                 match tail_call {
                     Some(tc) => match tc.command() {
                         MmlCommand::CallSubroutine(s) => {
                             let sub = self.subroutines.get(*s).unwrap();
-                            (
-                                BcTerminator::Goto(sub.bytecode_offset.into()),
-                                gen.bc.get_tick_counter() + sub.subroutine_id.tick_counter(),
+                            BcTerminator::TailSubroutineCall(
+                                sub.bytecode_offset.into(),
+                                &sub.subroutine_id,
                             )
                         }
                         _ => panic!("tail_call is not a CallSubroutine command"),
                     },
-                    None => (
-                        BcTerminator::ReturnFromSubroutine,
-                        gen.bc.get_tick_counter(),
-                    ),
+                    None => BcTerminator::ReturnFromSubroutine,
                 }
             }
         };
 
         let last_pos = parser.peek_pos();
-        let max_stack_depth = gen.bc.get_max_stack_depth();
 
         assert!(gen.loop_point.is_none());
 
         let vibrato = gen.vibrato.clone();
 
-        self.song_data = match gen.bc.bytecode(terminator) {
-            Ok(b) => b,
-            Err((e, b)) => {
+        let (bc_data, bc_state) = match gen.bc.bytecode(terminator) {
+            Ok((d, s)) => (d, Some(s)),
+            Err((e, d)) => {
                 parser.add_error_range(last_pos.to_range(1), MmlError::BytecodeError(e));
-                b
+                (d, None)
             }
         };
+        self.song_data = bc_data;
 
         let (_, errors) = parser.finalize();
 
-        if errors.is_empty() {
-            let subroutine_id =
-                SubroutineId::new(song_subroutine_index, tick_counter, max_stack_depth);
+        if errors.is_empty() && bc_state.is_some() {
+            let bc_state = bc_state.unwrap();
+
+            let subroutine_id = SubroutineId::new(song_subroutine_index, bc_state);
 
             self.subroutine_map
                 .insert(identifier, Some(subroutine_id.clone()));
@@ -1391,25 +1386,26 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
             }
         };
 
-        let max_stack_depth = gen.bc.get_max_stack_depth();
-
-        self.song_data = match gen.bc.bytecode(terminator) {
-            Ok(b) => b,
+        let (bc_data, bc_state) = match gen.bc.bytecode(terminator) {
+            Ok((b, s)) => (b, Some(s)),
             Err((e, b)) => {
                 parser.add_error_range(last_pos.to_range(1), MmlError::BytecodeError(e));
-                b
+                (b, None)
             }
         };
+        self.song_data = bc_data;
 
         let (section_tick_counters, errors) = parser.finalize();
 
-        if errors.is_empty() {
+        if errors.is_empty() && bc_state.is_some() {
+            let bc_state = bc_state.unwrap();
+
             Ok(Channel {
                 name: identifier.as_str().chars().next().unwrap(),
                 bytecode_offset: sd_start_index.try_into().unwrap_or(u16::MAX),
                 loop_point: gen.loop_point,
-                tick_counter,
-                max_stack_depth,
+                tick_counter: bc_state.tick_counter,
+                max_stack_depth: bc_state.max_stack_depth,
                 section_tick_counters,
                 tempo_changes: gen.tempo_changes,
             })
@@ -1466,7 +1462,7 @@ pub fn parse_and_compile_sound_effect(
     assert!(gen.loop_point.is_none());
 
     let bytecode = match gen.bc.bytecode(BcTerminator::DisableChannel) {
-        Ok(b) => b,
+        Ok((b, _)) => b,
         Err((e, b)) => {
             parser.add_error_range(last_pos.to_range(1), MmlError::BytecodeError(e));
             b

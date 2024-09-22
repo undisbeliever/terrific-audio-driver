@@ -6,7 +6,7 @@
 
 use crate::bytecode::{
     BcTicksKeyOff, BcTicksNoKeyOff, Bytecode, InstrumentId, LoopCount, PitchOffsetPerTick,
-    PlayNoteTicks, PortamentoVelocity, SubroutineId,
+    PlayNoteTicks, PortamentoVelocity, State, SubroutineId,
 };
 use crate::data::{InstrumentOrSample, UniqueNamesList};
 use crate::envelope::{Adsr, Gain};
@@ -66,7 +66,10 @@ impl<'i, 's> BytecodeAssembler<'i, 's> {
         self.bc.get_tick_counter()
     }
 
-    pub fn bytecode(self, terminator: BcTerminator) -> Result<Vec<u8>, BytecodeAssemblerError> {
+    pub fn bytecode(
+        self,
+        terminator: BcTerminator,
+    ) -> Result<(Vec<u8>, State), BytecodeAssemblerError> {
         match self.bc.bytecode(terminator) {
             Ok(b) => Ok(b),
             Err((e, _)) => Err(BytecodeAssemblerError::BytecodeError(e)),

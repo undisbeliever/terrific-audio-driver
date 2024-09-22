@@ -141,10 +141,12 @@ fn compile_bytecode_sound_effect(
     }
 
     if errors.is_empty() {
+        let (data, bc_state) = out.unwrap();
+
         Ok(CompiledSoundEffect {
-            data: SfxData::BytecodeAssembly(out.unwrap()),
+            data: SfxData::BytecodeAssembly(data),
             flags,
-            tick_counter,
+            tick_counter: bc_state.tick_counter,
         })
     } else {
         Err(SoundEffectErrorList::BytecodeErrors(errors))
