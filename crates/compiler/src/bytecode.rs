@@ -458,6 +458,48 @@ where
     }
 }
 
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub enum VibratoState {
+    Unchanged,
+    Unknown,
+    // Disabled with an unknown value
+    Disabled,
+    Set(PitchOffsetPerTick, QuarterWavelengthInTicks),
+}
+
+impl VibratoState {
+    pub fn is_active(&self) -> bool {
+        match self {
+            Self::Unchanged => false,
+            Self::Unknown => false,
+            Self::Disabled => false,
+            Self::Set(pitch_offset_per_tick, _) => pitch_offset_per_tick.as_u8() > 0,
+        }
+    }
+
+    fn set_depth(&mut self, depth: PitchOffsetPerTick) {
+        *self = match self {
+            VibratoState::Unchanged | VibratoState::Unknown | VibratoState::Disabled => {
+                if depth.as_u8() > 0 {
+                    VibratoState::Unknown
+                } else {
+                    VibratoState::Disabled
+                }
+            }
+            VibratoState::Set(_, qwt) => VibratoState::Set(depth, *qwt),
+        }
+    }
+
+    fn disable(&mut self) {
+        *self = match self {
+            VibratoState::Unchanged => VibratoState::Disabled,
+            VibratoState::Unknown => VibratoState::Disabled,
+            VibratoState::Disabled => VibratoState::Disabled,
+            VibratoState::Set(_, qwt) => VibratoState::Set(PitchOffsetPerTick::new(0), *qwt),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct State {
     pub tick_counter: TickCounter,
@@ -465,6 +507,7 @@ pub struct State {
 
     pub(crate) instrument: IeState<InstrumentId>,
     pub(crate) envelope: IeState<Envelope>,
+    pub(crate) vibrato: VibratoState,
 }
 
 struct SkipLastLoop {
@@ -474,6 +517,7 @@ struct SkipLastLoop {
 
     instrument: IeState<InstrumentId>,
     envelope: IeState<Envelope>,
+    vibrato: VibratoState,
 }
 
 struct LoopState {
@@ -513,7 +557,6 @@ impl Bytecode<'_> {
         instruments: &UniqueNamesList<data::InstrumentOrSample>,
     ) -> Bytecode {
         Bytecode {
-            context,
             bytecode: vec,
             instruments,
             state: State {
@@ -521,7 +564,13 @@ impl Bytecode<'_> {
                 max_stack_depth: StackDepth(0),
                 instrument: IeState::Unknown,
                 envelope: IeState::Unknown,
+                vibrato: match &context {
+                    BytecodeContext::SoundEffect => VibratoState::Disabled,
+                    BytecodeContext::SongChannel => VibratoState::Disabled,
+                    BytecodeContext::SongSubroutine => VibratoState::Unchanged,
+                },
             },
+            context,
             loop_stack: Vec::new(),
         }
     }
@@ -573,6 +622,8 @@ impl Bytecode<'_> {
         // The instrument or envelope may have changed when the song loops.
         self.state.instrument = self.state.instrument.demote_to_maybe();
         self.state.envelope = self.state.envelope.demote_to_maybe();
+
+        self.state.vibrato = VibratoState::Unknown;
     }
 
     pub fn bytecode(
@@ -602,6 +653,8 @@ impl Bytecode<'_> {
                 emit_bytecode!(self, opcodes::RETURN_FROM_SUBROUTINE);
             }
             BcTerminator::ReturnFromSubroutineAndDisableVibrato => {
+                self.state.vibrato.disable();
+
                 emit_bytecode!(self, opcodes::RETURN_FROM_SUBROUTINE_AND_DISABLE_VIBRATO);
             }
             BcTerminator::Goto(pos) | BcTerminator::TailSubroutineCall(pos, _) => {
@@ -662,6 +715,7 @@ impl Bytecode<'_> {
         length: PlayNoteTicks,
     ) {
         self.state.tick_counter += length.to_tick_count();
+        self.state.vibrato.set_depth(pitch_offset_per_tick);
 
         let play_note_opcode = NoteOpcode::new(note, &length);
 
@@ -679,6 +733,8 @@ impl Bytecode<'_> {
         pitch_offset_per_tick: PitchOffsetPerTick,
         quarter_wavelength_ticks: QuarterWavelengthInTicks,
     ) {
+        self.state.vibrato = VibratoState::Set(pitch_offset_per_tick, quarter_wavelength_ticks);
+
         emit_bytecode!(
             self,
             opcodes::SET_VIBRATO,
@@ -688,6 +744,8 @@ impl Bytecode<'_> {
     }
 
     pub fn disable_vibrato(&mut self) {
+        self.state.vibrato.disable();
+
         emit_bytecode!(self, opcodes::SET_VIBRATO, 0u8, 0u8);
     }
 
@@ -777,6 +835,7 @@ impl Bytecode<'_> {
         // When the loop loops, the instrument/envelope might have changed.
         self.state.instrument = self.state.instrument.demote_to_maybe();
         self.state.envelope = self.state.envelope.demote_to_maybe();
+        self.state.vibrato = VibratoState::Unknown;
 
         self.loop_stack.push(LoopState {
             start_loop_count: loop_count,
@@ -821,6 +880,7 @@ impl Bytecode<'_> {
             bc_parameter_position: self.bytecode.len() + 1,
             instrument: self.state.instrument,
             envelope: self.state.envelope,
+            vibrato: self.state.vibrato,
         });
 
         emit_bytecode!(self, opcodes::SKIP_LAST_LOOP, 0u8);
@@ -883,6 +943,7 @@ impl Bytecode<'_> {
         if let Some(skip_last_loop) = loop_state.skip_last_loop {
             self.state.instrument = skip_last_loop.instrument;
             self.state.envelope = skip_last_loop.envelope;
+            self.state.vibrato = skip_last_loop.vibrato;
 
             // Write the parameter for the skip_last_loop instruction (if required)
             let sll_param_pos = skip_last_loop.bc_parameter_position;
@@ -923,6 +984,12 @@ impl Bytecode<'_> {
             IeState::Known(e) => self.state.envelope = IeState::Known(e),
             IeState::Maybe(_) => panic!("unexpected maybe envelope"),
             IeState::Unknown => (),
+        }
+        match &subroutine.state.vibrato {
+            VibratoState::Unchanged => (),
+            VibratoState::Unknown => self.state.vibrato = VibratoState::Unknown,
+            VibratoState::Disabled => self.state.vibrato = VibratoState::Disabled,
+            v @ VibratoState::Set(..) => self.state.vibrato = *v,
         }
     }
 
@@ -969,6 +1036,8 @@ impl Bytecode<'_> {
         name: &str,
         subroutine: &SubroutineId,
     ) -> Result<(), BytecodeError> {
+        self.state.vibrato.disable();
+
         self._call_subroutine(name, subroutine, true)
     }
 

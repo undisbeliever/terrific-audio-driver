@@ -23,6 +23,7 @@ use crate::songs::{BytecodePos, SongBcTracking};
 use crate::bytecode::{
     BcTerminator, BcTicks, BcTicksKeyOff, BcTicksNoKeyOff, Bytecode, BytecodeContext, IeState,
     LoopCount, PitchOffsetPerTick, PlayNoteTicks, PortamentoVelocity, RelativeVolume, SubroutineId,
+    VibratoState,
 };
 use crate::errors::{ErrorWithPos, MmlChannelError, MmlError, ValueError};
 use crate::notes::{Note, SEMITONES_PER_OCTAVE};
@@ -92,35 +93,6 @@ enum MpState {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum VibratoState {
-    Unchanged,
-    Unknown,
-    // Disabled with an unknown value
-    Disabled,
-    Set(ManualVibrato),
-}
-
-impl VibratoState {
-    fn is_active(&self) -> bool {
-        match self {
-            Self::Unchanged => false,
-            Self::Unknown => false,
-            Self::Disabled => false,
-            Self::Set(v) => v.pitch_offset_per_tick.as_u8() > 0,
-        }
-    }
-
-    fn disable(&mut self) {
-        match self {
-            Self::Unchanged => *self = Self::Disabled,
-            Self::Unknown => *self = Self::Disabled,
-            Self::Disabled => *self = Self::Disabled,
-            Self::Set(v) => v.pitch_offset_per_tick = PitchOffsetPerTick::new(0),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq)]
 pub enum SlurredNoteState {
     Unchanged,
     None,
@@ -139,7 +111,6 @@ impl SlurredNoteState {
 
 struct SkipLastLoopState {
     prev_slurred_note: SlurredNoteState,
-    vibrato: VibratoState,
 }
 
 struct ChannelBcGenerator<'a> {
@@ -154,7 +125,6 @@ struct ChannelBcGenerator<'a> {
     prev_slurred_note: SlurredNoteState,
 
     mp: MpState,
-    vibrato: VibratoState,
 
     skip_last_loop_state: Vec<Option<SkipLastLoopState>>,
 
@@ -182,10 +152,6 @@ impl ChannelBcGenerator<'_> {
             tempo_changes: Vec::new(),
             prev_slurred_note: SlurredNoteState::Unchanged,
             mp: MpState::Manual,
-            vibrato: match is_subroutine {
-                true => VibratoState::Unchanged,
-                false => VibratoState::Disabled,
-            },
             skip_last_loop_state: Vec::new(),
             loop_point: None,
             show_missing_set_instrument_error: !is_subroutine,
@@ -312,6 +278,8 @@ impl ChannelBcGenerator<'_> {
             SlurredNoteState::None
         };
 
+        let vibrato = self.bc.get_state().vibrato;
+
         match &self.mp {
             MpState::Manual => {
                 self.bc.play_note(note, pn_length);
@@ -319,11 +287,11 @@ impl ChannelBcGenerator<'_> {
             MpState::Disabled => {
                 const POPT: PitchOffsetPerTick = PitchOffsetPerTick::new(0);
 
-                let vibrato_disabled = match &self.vibrato {
+                let vibrato_disabled = match vibrato {
                     VibratoState::Unchanged => true,
                     VibratoState::Unknown => false,
                     VibratoState::Disabled => true,
-                    VibratoState::Set(v) => v.pitch_offset_per_tick == POPT,
+                    VibratoState::Set(v_popt, _) => v_popt == POPT,
                 };
 
                 if vibrato_disabled {
@@ -331,7 +299,6 @@ impl ChannelBcGenerator<'_> {
                 } else {
                     self.bc
                         .set_vibrato_depth_and_play_note(POPT, note, pn_length);
-                    self.vibrato.disable();
                 }
 
                 // Switching MpState to Manual to skip the `vibrato_disabled` checks on subsequent notes.
@@ -344,27 +311,27 @@ impl ChannelBcGenerator<'_> {
             MpState::Mp(mp) => {
                 let cv = self.calculate_vibrato_for_note(mp, note)?;
 
-                if self.vibrato == VibratoState::Set(cv) {
-                    self.bc.play_note(note, pn_length);
-                } else {
-                    match self.vibrato {
-                        VibratoState::Set(sv)
-                            if sv.quarter_wavelength_ticks == cv.quarter_wavelength_ticks =>
-                        {
-                            self.bc.set_vibrato_depth_and_play_note(
-                                cv.pitch_offset_per_tick,
-                                note,
-                                pn_length,
-                            );
-                        }
-                        _ => {
-                            self.bc
-                                .set_vibrato(cv.pitch_offset_per_tick, cv.quarter_wavelength_ticks);
-                            self.bc.play_note(note, pn_length);
-                        }
+                match vibrato {
+                    v if v
+                        == VibratoState::Set(
+                            cv.pitch_offset_per_tick,
+                            cv.quarter_wavelength_ticks,
+                        ) =>
+                    {
+                        self.bc.play_note(note, pn_length);
                     }
-
-                    self.vibrato = VibratoState::Set(cv);
+                    VibratoState::Set(_, qwt) if qwt == cv.quarter_wavelength_ticks => {
+                        self.bc.set_vibrato_depth_and_play_note(
+                            cv.pitch_offset_per_tick,
+                            note,
+                            pn_length,
+                        );
+                    }
+                    _ => {
+                        self.bc
+                            .set_vibrato(cv.pitch_offset_per_tick, cv.quarter_wavelength_ticks);
+                        self.bc.play_note(note, pn_length);
+                    }
                 }
             }
         }
@@ -757,8 +724,6 @@ impl ChannelBcGenerator<'_> {
 
         match &self.mp {
             MpState::Mp(_) => {
-                self.vibrato.disable();
-
                 self.bc.call_subroutine_and_disable_vibrato(
                     sub.identifier.as_str(),
                     &sub.subroutine_id,
@@ -770,19 +735,14 @@ impl ChannelBcGenerator<'_> {
             }
         }
 
-        match &sub.vibrato {
-            VibratoState::Unchanged => (),
-            VibratoState::Unknown => self.vibrato = VibratoState::Unknown,
-            VibratoState::Disabled => self.vibrato = VibratoState::Disabled,
-            VibratoState::Set(v) => {
-                self.vibrato = VibratoState::Set(*v);
-                match self.mp {
-                    MpState::Disabled | MpState::Manual => self.mp = MpState::Manual,
-                    MpState::Mp(_) => (),
-                }
+        self.prev_slurred_note.merge(&sub.prev_slurred_note);
+
+        if let VibratoState::Set(..) = &self.bc.get_state().vibrato {
+            match self.mp {
+                MpState::Disabled | MpState::Manual => self.mp = MpState::Manual,
+                MpState::Mp(_) => (),
             }
         }
-        self.prev_slurred_note.merge(&sub.prev_slurred_note);
 
         Ok(())
     }
@@ -791,12 +751,10 @@ impl ChannelBcGenerator<'_> {
         self.mp = MpState::Manual;
         match v {
             Some(v) => {
-                self.vibrato = VibratoState::Set(v);
                 self.bc
                     .set_vibrato(v.pitch_offset_per_tick, v.quarter_wavelength_ticks);
             }
             None => {
-                self.vibrato.disable();
                 self.bc.disable_vibrato();
             }
         }
@@ -828,8 +786,6 @@ impl ChannelBcGenerator<'_> {
                     });
 
                     self.bc._song_loop_point();
-
-                    self.vibrato = VibratoState::Unknown;
                 }
                 BytecodeContext::SongSubroutine => return Err(MmlError::CannotSetLoopPoint),
                 &BytecodeContext::SoundEffect => return Err(MmlError::CannotSetLoopPoint),
@@ -855,7 +811,7 @@ impl ChannelBcGenerator<'_> {
                     None => match self.mp {
                         MpState::Mp(_) => MpState::Disabled,
                         MpState::Disabled => MpState::Disabled,
-                        MpState::Manual => match self.vibrato.is_active() {
+                        MpState::Manual => match self.bc.get_state().vibrato.is_active() {
                             true => MpState::Disabled,
                             false => MpState::Manual,
                         },
@@ -925,8 +881,6 @@ impl ChannelBcGenerator<'_> {
                 self.bc.start_loop(None)?;
                 self.skip_last_loop_state.push(None);
 
-                self.vibrato = VibratoState::Unknown;
-
                 // Loop might end on a note that is not slurred and matching `prev_slurred_note`.
                 self.prev_slurred_note = SlurredNoteState::Unchanged;
             }
@@ -937,7 +891,6 @@ impl ChannelBcGenerator<'_> {
                 if let Some(s) = self.skip_last_loop_state.last_mut() {
                     *s = Some(SkipLastLoopState {
                         prev_slurred_note: self.prev_slurred_note.clone(),
-                        vibrato: self.vibrato.clone(),
                     });
                 }
             }
@@ -947,7 +900,6 @@ impl ChannelBcGenerator<'_> {
 
                 if let Some(Some(s)) = self.skip_last_loop_state.pop() {
                     self.prev_slurred_note.merge(&s.prev_slurred_note);
-                    self.vibrato = s.vibrato;
                 }
             }
 
@@ -1173,10 +1125,8 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
             &mut self.bytecode_tracker,
         );
 
-        let terminator = match (&gen.mp, gen.vibrato.is_active()) {
+        let terminator = match (&gen.mp, gen.bc.get_state().vibrato.is_active()) {
             (MpState::Mp(_), true) | (MpState::Disabled, true) => {
-                gen.vibrato.disable();
-
                 // `call_subroutine_and_disable_vibrato` + `return_from_subroutine` uses
                 // less Audio-RAM then `disable_vibraro` + `goto_relative``
                 if let Some(tc) = tail_call {
@@ -1211,8 +1161,6 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
 
         assert!(gen.loop_point.is_none());
 
-        let vibrato = gen.vibrato.clone();
-
         let (bc_data, bc_state) = match gen.bc.bytecode(terminator) {
             Ok((d, s)) => (d, Some(s)),
             Err((e, d)) => {
@@ -1236,7 +1184,6 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
                 identifier: identifier.to_owned(),
                 bytecode_offset: sd_start_index.try_into().unwrap_or(u16::MAX),
                 subroutine_id,
-                vibrato,
                 prev_slurred_note: gen.prev_slurred_note,
                 changes_song_tempo: !gen.tempo_changes.is_empty(),
             });

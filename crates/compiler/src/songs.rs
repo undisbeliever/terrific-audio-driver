@@ -18,8 +18,8 @@ use crate::driver_constants::{
 };
 use crate::envelope::Envelope;
 use crate::errors::{SongError, SongTooLargeError, ValueError};
+use crate::mml::SlurredNoteState;
 use crate::mml::{MetaData, MmlInstrument, Section};
-use crate::mml::{SlurredNoteState, VibratoState};
 use crate::notes::Note;
 use crate::sound_effects::CompiledSoundEffect;
 use crate::time::{TickClock, TickCounter, TickCounterWithLoopFlag};
@@ -74,7 +74,6 @@ pub struct Subroutine {
     pub identifier: mml::IdentifierBuf,
     pub subroutine_id: SubroutineId,
     pub bytecode_offset: u16,
-    pub vibrato: VibratoState,
     pub prev_slurred_note: SlurredNoteState,
     pub changes_song_tempo: bool,
 }
