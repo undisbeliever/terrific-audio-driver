@@ -12,8 +12,6 @@ use crate::data::{self, InstrumentOrSample};
 use crate::envelope::Envelope;
 use crate::errors::{ErrorWithPos, MmlLineError};
 use crate::file_pos::{FilePosRange, Line};
-use crate::notes::Note;
-use crate::samples::note_range;
 
 use std::collections::HashMap;
 
@@ -24,9 +22,6 @@ pub struct MmlInstrument {
     pub(crate) file_range: FilePosRange,
 
     pub(crate) instrument_id: InstrumentId,
-
-    pub(crate) first_note: Note,
-    pub(crate) last_note: Note,
 
     // No envelope override or envelope override matches instrument
     pub(crate) envelope_unchanged: bool,
@@ -85,17 +80,10 @@ fn parse_instrument(
         }
     }
 
-    let (first_note, last_note) = match note_range(inst) {
-        Ok(o) => o,
-        Err(e) => return Err(ErrorWithPos(line.range(), e.into())),
-    };
-
     Ok(MmlInstrument {
         identifier: id.to_owned(),
         file_range: line.range(),
         instrument_id,
-        first_note,
-        last_note,
         envelope_unchanged: &envelope == source_envelope,
         envelope,
     })

@@ -245,14 +245,16 @@ impl ChannelBcGenerator<'_> {
     fn test_note(&mut self, note: Note) -> Result<(), MmlError> {
         match self.instrument {
             IeState::Known(i) | IeState::Maybe(i) => {
-                let inst = self.instrument_from_index(i);
-                if note >= inst.first_note && note <= inst.last_note {
+                let inst_id = self.instrument_from_index(i).instrument_id;
+                let note_range = self.pitch_table.instrument_note_range(inst_id);
+
+                if note_range.contains(&note) {
                     Ok(())
                 } else {
                     Err(MmlError::NoteOutOfRange(
                         note,
-                        inst.first_note,
-                        inst.last_note,
+                        *note_range.start(),
+                        *note_range.end(),
                     ))
                 }
             }
