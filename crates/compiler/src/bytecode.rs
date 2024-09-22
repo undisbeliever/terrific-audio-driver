@@ -6,11 +6,12 @@
 
 #![allow(clippy::assertions_on_constants)]
 
+use crate::data::{self, UniqueNamesList};
 use crate::driver_constants::{
     BC_CHANNEL_STACK_SIZE, BC_STACK_BYTES_PER_LOOP, BC_STACK_BYTES_PER_SUBROUTINE_CALL,
     MAX_INSTRUMENTS_AND_SAMPLES,
 };
-use crate::envelope::{Adsr, Gain};
+use crate::envelope::{Adsr, Envelope, Gain};
 use crate::errors::{BytecodeError, ValueError};
 use crate::notes::{Note, LAST_NOTE_ID};
 use crate::time::{TickClock, TickCounter, TickCounterWithLoopFlag};
@@ -417,16 +418,62 @@ mod emit_bytecode {
     }
 }
 
+// Instrument or envelope state
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub(crate) enum IeState<T>
+where
+    T: Copy + PartialEq,
+{
+    Known(T),
+    Maybe(T),
+    Unknown,
+}
+
+impl<T> IeState<T>
+where
+    T: Copy + PartialEq,
+{
+    pub fn is_known_and_eq(&self, o: &T) -> bool {
+        match self {
+            Self::Known(v) => o == v,
+            Self::Maybe(_) => false,
+            Self::Unknown => false,
+        }
+    }
+
+    fn promote_to_known(&self) -> Self {
+        match self {
+            Self::Known(v) => Self::Known(*v),
+            Self::Maybe(v) => Self::Known(*v),
+            Self::Unknown => Self::Unknown,
+        }
+    }
+
+    fn demote_to_maybe(&self) -> Self {
+        match self {
+            Self::Known(v) => Self::Maybe(*v),
+            Self::Maybe(v) => Self::Maybe(*v),
+            Self::Unknown => Self::Unknown,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct State {
     pub tick_counter: TickCounter,
     pub max_stack_depth: StackDepth,
+
+    pub(crate) instrument: IeState<InstrumentId>,
+    pub(crate) envelope: IeState<Envelope>,
 }
 
 struct SkipLastLoop {
     tick_counter: TickCounter,
     // Location of the parameter of the `skip_last_loop` instruction inside `Bytecode::bytecode`.
     bc_parameter_position: usize,
+
+    instrument: IeState<InstrumentId>,
+    envelope: IeState<Envelope>,
 }
 
 struct LoopState {
@@ -438,30 +485,42 @@ struct LoopState {
     skip_last_loop: Option<SkipLastLoop>,
 }
 
-pub struct Bytecode {
+pub struct Bytecode<'a> {
     context: BytecodeContext,
     bytecode: Vec<u8>,
+
+    instruments: &'a UniqueNamesList<data::InstrumentOrSample>,
 
     state: State,
 
     loop_stack: Vec<LoopState>,
 }
 
-impl Bytecode {
-    pub fn new(context: BytecodeContext) -> Bytecode {
-        Self::new_append_to_vec(Vec::new(), context)
+impl Bytecode<'_> {
+    pub fn new(
+        context: BytecodeContext,
+        instruments: &UniqueNamesList<data::InstrumentOrSample>,
+    ) -> Bytecode {
+        Self::new_append_to_vec(Vec::new(), context, instruments)
     }
 
     // Instead of creating a new `Vec<u8>` to hold the bytecode, write the data to the end of `vec`.
     // Takes ownership of the `Vec<u8>`.
     // The `Vec<u8>` can be taken out of `Bytecode` with `Self::bytecode()`.
-    pub fn new_append_to_vec(vec: Vec<u8>, context: BytecodeContext) -> Bytecode {
+    pub fn new_append_to_vec(
+        vec: Vec<u8>,
+        context: BytecodeContext,
+        instruments: &UniqueNamesList<data::InstrumentOrSample>,
+    ) -> Bytecode {
         Bytecode {
             context,
             bytecode: vec,
+            instruments,
             state: State {
                 tick_counter: TickCounter::new(0),
                 max_stack_depth: StackDepth(0),
+                instrument: IeState::Unknown,
+                envelope: IeState::Unknown,
             },
             loop_stack: Vec::new(),
         }
@@ -469,6 +528,10 @@ impl Bytecode {
 
     pub fn get_context(&self) -> &BytecodeContext {
         &self.context
+    }
+
+    pub fn get_state(&self) -> &State {
+        &self.state
     }
 
     pub fn get_tick_counter(&self) -> TickCounter {
@@ -500,6 +563,16 @@ impl Bytecode {
 
     pub fn get_bytecode_len(&self) -> usize {
         self.bytecode.len()
+    }
+
+    /// CAUTION: Does not emit bytecode
+    pub fn _song_loop_point(&mut self) {
+        assert!(matches!(self.context, BytecodeContext::SongChannel));
+        assert_eq!(self.get_stack_depth(), StackDepth(0));
+
+        // The instrument or envelope may have changed when the song loops.
+        self.state.instrument = self.state.instrument.demote_to_maybe();
+        self.state.envelope = self.state.envelope.demote_to_maybe();
     }
 
     pub fn bytecode(
@@ -619,10 +692,19 @@ impl Bytecode {
     }
 
     pub fn set_instrument(&mut self, instrument: InstrumentId) {
+        self.state.instrument = IeState::Known(instrument);
+        self.state.envelope = match self.instruments.get_index(instrument.as_u8().into()) {
+            Some(i) => IeState::Known(i.envelope()),
+            None => IeState::Unknown,
+        };
+
         emit_bytecode!(self, opcodes::SET_INSTRUMENT, instrument.as_u8());
     }
 
     pub fn set_instrument_and_adsr(&mut self, instrument: InstrumentId, adsr: Adsr) {
+        self.state.instrument = IeState::Known(instrument);
+        self.state.envelope = IeState::Known(Envelope::Adsr(adsr));
+
         emit_bytecode!(
             self,
             opcodes::SET_INSTRUMENT_AND_ADSR_OR_GAIN,
@@ -633,6 +715,9 @@ impl Bytecode {
     }
 
     pub fn set_instrument_and_gain(&mut self, instrument: InstrumentId, gain: Gain) {
+        self.state.instrument = IeState::Known(instrument);
+        self.state.envelope = IeState::Known(Envelope::Gain(gain));
+
         emit_bytecode!(
             self,
             opcodes::SET_INSTRUMENT_AND_ADSR_OR_GAIN,
@@ -643,10 +728,14 @@ impl Bytecode {
     }
 
     pub fn set_adsr(&mut self, adsr: Adsr) {
+        self.state.envelope = IeState::Known(Envelope::Adsr(adsr));
+
         emit_bytecode!(self, opcodes::SET_ADSR, adsr.adsr1(), adsr.adsr2());
     }
 
     pub fn set_gain(&mut self, gain: Gain) {
+        self.state.envelope = IeState::Known(Envelope::Gain(gain));
+
         emit_bytecode!(self, opcodes::SET_GAIN, gain.value());
     }
 
@@ -684,6 +773,11 @@ impl Bytecode {
     }
 
     pub fn start_loop(&mut self, loop_count: Option<LoopCount>) -> Result<(), BytecodeError> {
+        // The loop might change the instrument and evelope.
+        // When the loop loops, the instrument/envelope might have changed.
+        self.state.instrument = self.state.instrument.demote_to_maybe();
+        self.state.envelope = self.state.envelope.demote_to_maybe();
+
         self.loop_stack.push(LoopState {
             start_loop_count: loop_count,
             start_loop_pos: self.bytecode.len(),
@@ -725,6 +819,8 @@ impl Bytecode {
         loop_state.skip_last_loop = Some(SkipLastLoop {
             tick_counter: self.state.tick_counter,
             bc_parameter_position: self.bytecode.len() + 1,
+            instrument: self.state.instrument,
+            envelope: self.state.envelope,
         });
 
         emit_bytecode!(self, opcodes::SKIP_LAST_LOOP, 0u8);
@@ -784,8 +880,11 @@ impl Bytecode {
             self.bytecode[loop_state.start_loop_pos + 1] = loop_count.0;
         }
 
-        // Write the parameter for the skip_last_loop instruction (if required)
         if let Some(skip_last_loop) = loop_state.skip_last_loop {
+            self.state.instrument = skip_last_loop.instrument;
+            self.state.envelope = skip_last_loop.envelope;
+
+            // Write the parameter for the skip_last_loop instruction (if required)
             let sll_param_pos = skip_last_loop.bc_parameter_position;
 
             assert_eq!(self.bytecode[sll_param_pos - 1], opcodes::SKIP_LAST_LOOP);
@@ -802,12 +901,29 @@ impl Bytecode {
             self.bytecode[sll_param_pos] = to_skip;
         }
 
+        if self.loop_stack.is_empty() {
+            self.state.instrument = self.state.instrument.promote_to_known();
+            self.state.envelope = self.state.envelope.promote_to_known();
+        }
+
         emit_bytecode!(self, opcodes::END_LOOP);
         Ok(())
     }
 
     fn _update_subtroutine_state_excluding_stack_depth(&mut self, subroutine: &SubroutineId) {
         self.state.tick_counter += subroutine.state.tick_counter;
+
+        match subroutine.state.instrument {
+            IeState::Known(i) => self.state.instrument = IeState::Known(i),
+            IeState::Maybe(_) => panic!("unexpected maybe instrument"),
+            IeState::Unknown => (),
+        }
+
+        match subroutine.state.envelope {
+            IeState::Known(e) => self.state.envelope = IeState::Known(e),
+            IeState::Maybe(_) => panic!("unexpected maybe envelope"),
+            IeState::Unknown => (),
+        }
     }
 
     fn _call_subroutine(

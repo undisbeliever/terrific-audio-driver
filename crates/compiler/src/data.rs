@@ -432,6 +432,13 @@ pub struct UniqueNamesList<T> {
 }
 
 impl<T> UniqueNamesList<T> {
+    pub(crate) fn blank_list() -> Self {
+        Self {
+            list: Vec::new(),
+            map: HashMap::new(),
+        }
+    }
+
     pub fn list(&self) -> &[T] {
         &self.list
     }
@@ -459,11 +466,23 @@ impl<T> UniqueNamesList<T> {
             },
         }
     }
+    pub fn get_index(&self, index: usize) -> Option<&T> {
+        self.list.get(index)
+    }
 }
 
 pub enum InstrumentOrSample {
     Instrument(Instrument),
     Sample(Sample),
+}
+
+impl InstrumentOrSample {
+    pub fn envelope(&self) -> Envelope {
+        match self {
+            Self::Instrument(i) => i.envelope,
+            Self::Sample(s) => s.envelope,
+        }
+    }
 }
 
 pub struct UniqueSoundEffectExportOrder {

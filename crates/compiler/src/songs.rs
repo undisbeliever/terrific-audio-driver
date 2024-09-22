@@ -10,6 +10,7 @@ use crate::bytecode::{
     BcTerminator, BcTicks, BcTicksKeyOff, BcTicksNoKeyOff, Bytecode, InstrumentId, PlayNoteTicks,
     StackDepth, SubroutineId, Volume,
 };
+use crate::data::UniqueNamesList;
 use crate::driver_constants::{
     addresses, AUDIO_RAM_SIZE, ECHO_BUFFER_MIN_SIZE, MAX_SONG_DATA_SIZE, MAX_SUBROUTINES,
     N_MUSIC_CHANNELS, SFX_TICK_CLOCK, SONG_HEADER_CHANNELS_SIZE, SONG_HEADER_N_SUBROUTINES_OFFSET,
@@ -73,8 +74,6 @@ pub struct Subroutine {
     pub identifier: mml::IdentifierBuf,
     pub subroutine_id: SubroutineId,
     pub bytecode_offset: u16,
-    pub last_instrument: Option<usize>,
-    pub last_envelope: Option<Envelope>,
     pub vibrato: VibratoState,
     pub prev_slurred_note: SlurredNoteState,
     pub changes_song_tempo: bool,
@@ -196,7 +195,9 @@ pub fn test_sample_song(
     note_length: u32,
     envelope: Option<Envelope>,
 ) -> Result<SongData, ValueError> {
-    let mut bc = Bytecode::new(crate::bytecode::BytecodeContext::SongChannel);
+    let instruments = UniqueNamesList::blank_list();
+
+    let mut bc = Bytecode::new(crate::bytecode::BytecodeContext::SongChannel, &instruments);
 
     let inst = InstrumentId::try_from(instrument)?;
 

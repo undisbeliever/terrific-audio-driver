@@ -44,7 +44,7 @@ impl BytecodeResultWrapper for Result<(), BytecodeError> {
 }
 
 pub struct BytecodeAssembler<'i, 's> {
-    bc: Bytecode,
+    bc: Bytecode<'i>,
     inst_map: &'i UniqueNamesList<InstrumentOrSample>,
     subroutines: Option<&'s SubroutinesMap<'s>>,
 }
@@ -56,7 +56,7 @@ impl<'i, 's> BytecodeAssembler<'i, 's> {
         context: BytecodeContext,
     ) -> Self {
         Self {
-            bc: Bytecode::new(context),
+            bc: Bytecode::new(context, inst_map),
             inst_map,
             subroutines,
         }
