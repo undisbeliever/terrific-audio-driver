@@ -501,6 +501,23 @@ impl VibratoState {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub enum SlurredNoteState {
+    Unchanged,
+    None,
+    Slurred(Note),
+}
+
+impl SlurredNoteState {
+    fn merge(&mut self, o: &Self) {
+        match o {
+            SlurredNoteState::Unchanged => (),
+            SlurredNoteState::None => *self = SlurredNoteState::None,
+            SlurredNoteState::Slurred(n) => *self = SlurredNoteState::Slurred(*n),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct State {
     pub tick_counter: TickCounter,
     pub max_stack_depth: StackDepth,
@@ -508,6 +525,7 @@ pub struct State {
     pub(crate) instrument: IeState<InstrumentId>,
     pub(crate) envelope: IeState<Envelope>,
     pub(crate) vibrato: VibratoState,
+    pub(crate) prev_slurred_note: SlurredNoteState,
 }
 
 struct SkipLastLoop {
@@ -518,6 +536,7 @@ struct SkipLastLoop {
     instrument: IeState<InstrumentId>,
     envelope: IeState<Envelope>,
     vibrato: VibratoState,
+    prev_slurred_note: SlurredNoteState,
 }
 
 struct LoopState {
@@ -569,6 +588,7 @@ impl Bytecode<'_> {
                     BytecodeContext::SongChannel => VibratoState::Disabled,
                     BytecodeContext::SongSubroutine => VibratoState::Unchanged,
                 },
+                prev_slurred_note: SlurredNoteState::Unchanged,
             },
             context,
             loop_stack: Vec::new(),
@@ -682,12 +702,17 @@ impl Bytecode<'_> {
 
     pub fn rest(&mut self, length: BcTicksKeyOff) {
         self.state.tick_counter += length.to_tick_count();
+        self.state.prev_slurred_note = SlurredNoteState::None;
 
         emit_bytecode!(self, opcodes::REST, length.bc_argument);
     }
 
     pub fn play_note(&mut self, note: Note, length: PlayNoteTicks) {
         self.state.tick_counter += length.to_tick_count();
+        self.state.prev_slurred_note = match length {
+            PlayNoteTicks::KeyOff(_) => SlurredNoteState::None,
+            PlayNoteTicks::NoKeyOff(_) => SlurredNoteState::Slurred(note),
+        };
 
         let opcode = NoteOpcode::new(note, &length);
 
@@ -837,6 +862,9 @@ impl Bytecode<'_> {
         self.state.envelope = self.state.envelope.demote_to_maybe();
         self.state.vibrato = VibratoState::Unknown;
 
+        // Loop might end on a note that is not slurred and matching `prev_slurred_note`.
+        self.state.prev_slurred_note = SlurredNoteState::Unchanged;
+
         self.loop_stack.push(LoopState {
             start_loop_count: loop_count,
             start_loop_pos: self.bytecode.len(),
@@ -881,6 +909,7 @@ impl Bytecode<'_> {
             instrument: self.state.instrument,
             envelope: self.state.envelope,
             vibrato: self.state.vibrato,
+            prev_slurred_note: self.state.prev_slurred_note.clone(),
         });
 
         emit_bytecode!(self, opcodes::SKIP_LAST_LOOP, 0u8);
@@ -944,6 +973,9 @@ impl Bytecode<'_> {
             self.state.instrument = skip_last_loop.instrument;
             self.state.envelope = skip_last_loop.envelope;
             self.state.vibrato = skip_last_loop.vibrato;
+            self.state
+                .prev_slurred_note
+                .merge(&skip_last_loop.prev_slurred_note);
 
             // Write the parameter for the skip_last_loop instruction (if required)
             let sll_param_pos = skip_last_loop.bc_parameter_position;
@@ -991,6 +1023,9 @@ impl Bytecode<'_> {
             VibratoState::Disabled => self.state.vibrato = VibratoState::Disabled,
             v @ VibratoState::Set(..) => self.state.vibrato = *v,
         }
+        self.state
+            .prev_slurred_note
+            .merge(&subroutine.state.prev_slurred_note);
     }
 
     fn _call_subroutine(
