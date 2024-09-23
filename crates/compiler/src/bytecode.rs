@@ -521,6 +521,7 @@ impl SlurredNoteState {
 pub struct State {
     pub tick_counter: TickCounter,
     pub max_stack_depth: StackDepth,
+    pub tempo_changes: Vec<(TickCounter, TickClock)>,
 
     pub(crate) instrument: IeState<InstrumentId>,
     pub(crate) envelope: IeState<Envelope>,
@@ -581,6 +582,7 @@ impl Bytecode<'_> {
             state: State {
                 tick_counter: TickCounter::new(0),
                 max_stack_depth: StackDepth(0),
+                tempo_changes: Vec::new(),
                 instrument: IeState::Unknown,
                 envelope: IeState::Unknown,
                 vibrato: match &context {
@@ -1091,6 +1093,10 @@ impl Bytecode<'_> {
             }
             BytecodeContext::SongChannel | BytecodeContext::SongSubroutine => (),
         }
+
+        self.state
+            .tempo_changes
+            .push((self.state.tick_counter, tick_clock));
 
         emit_bytecode!(self, opcodes::SET_SONG_TICK_CLOCK, tick_clock.as_u8());
         Ok(())

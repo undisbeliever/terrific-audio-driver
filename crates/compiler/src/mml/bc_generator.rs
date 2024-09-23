@@ -99,8 +99,6 @@ struct ChannelBcGenerator<'a> {
 
     bc: Bytecode<'a>,
 
-    tempo_changes: Vec<(TickCounter, TickClock)>,
-
     mp: MpState,
 
     loop_point: Option<LoopPoint>,
@@ -124,7 +122,6 @@ impl ChannelBcGenerator<'_> {
             instruments: mml_instruments,
             subroutines,
             bc: Bytecode::new_append_to_vec(bc_data, context, data_instruments),
-            tempo_changes: Vec::new(),
             mp: MpState::Manual,
             loop_point: None,
             show_missing_set_instrument_error: !is_subroutine,
@@ -716,9 +713,6 @@ impl ChannelBcGenerator<'_> {
     }
 
     fn set_song_tick_clock(&mut self, tick_clock: TickClock) -> Result<(), MmlError> {
-        let tc = (self.bc.get_tick_counter(), tick_clock);
-        self.tempo_changes.push(tc);
-
         self.bc.set_song_tick_clock(tick_clock)?;
         Ok(())
     }
@@ -1116,6 +1110,7 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
         if errors.is_empty() && bc_state.is_some() {
             let bc_state = bc_state.unwrap();
 
+            let changes_song_tempo = !bc_state.tempo_changes.is_empty();
             let subroutine_id = SubroutineId::new(song_subroutine_index, bc_state);
 
             self.subroutine_map
@@ -1125,7 +1120,7 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
                 identifier: identifier.to_owned(),
                 bytecode_offset: sd_start_index.try_into().unwrap_or(u16::MAX),
                 subroutine_id,
-                changes_song_tempo: !gen.tempo_changes.is_empty(),
+                changes_song_tempo,
             });
 
             Ok(())
@@ -1216,7 +1211,7 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
                 tick_counter: bc_state.tick_counter,
                 max_stack_depth: bc_state.max_stack_depth,
                 section_tick_counters,
-                tempo_changes: gen.tempo_changes,
+                tempo_changes: bc_state.tempo_changes,
             })
         } else {
             Err(MmlChannelError {
