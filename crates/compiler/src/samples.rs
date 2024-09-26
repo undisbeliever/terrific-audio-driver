@@ -185,7 +185,6 @@ pub struct SampleData<PitchT> {
     pitch: PitchT,
     adsr1: u8,
     adsr2_or_gain: u8,
-    note_range: RangeInclusive<Note>,
 }
 
 impl<PitchT> SampleData<PitchT> {
@@ -231,7 +230,6 @@ pub fn load_sample_for_instrument(
             pitch,
             adsr1: envelope.0,
             adsr2_or_gain: envelope.1,
-            note_range: instrument_note_range(inst),
         }),
         (b, p) => Err(SampleError {
             brr_error: b.err(),
@@ -256,7 +254,6 @@ pub fn load_sample_for_sample(
             pitch,
             adsr1: envelope.0,
             adsr2_or_gain: envelope.1,
-            note_range: sample_note_range(sample),
         }),
         (b, p) => Err(SampleError {
             brr_error: b.err(),
@@ -422,13 +419,7 @@ pub fn combine_samples(
         samples.data_iter().map(|s| s.pitch.clone()),
     );
 
-    let inst_note_range = instruments.data_iter().map(|i| i.note_range.clone());
-    let sample_note_range = samples.data_iter().map(|s| s.note_range.clone());
-    let instrument_note_ranges: Vec<_> = inst_note_range.chain(sample_note_range).collect();
-
-    assert_eq!(instrument_note_ranges.len(), total_len);
-
-    let pitch_table = match merge_pitch_vec(sorted_pitches, total_len, instrument_note_ranges) {
+    let pitch_table = match merge_pitch_vec(sorted_pitches, total_len) {
         Ok(pt) => pt,
         Err(e) => {
             return Err(SampleAndInstrumentDataError {

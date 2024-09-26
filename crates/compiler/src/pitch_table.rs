@@ -4,14 +4,11 @@
 //
 // SPDX-License-Identifier: MIT
 
-use std::ops::RangeInclusive;
-
 use crate::bytecode::InstrumentId;
 use crate::data::{Instrument, InstrumentOrSample, Sample, UniqueNamesList};
 use crate::driver_constants::{MAX_INSTRUMENTS_AND_SAMPLES, MAX_N_PITCHES};
 use crate::errors::{PitchError, PitchTableError};
 use crate::notes::{self, Note, Octave};
-use crate::samples::note_range;
 
 const SEMITONES_PER_OCTAVE: i32 = notes::SEMITONES_PER_OCTAVE as i32;
 
@@ -347,14 +344,11 @@ pub struct PitchTable {
     pub(crate) n_pitches: usize,
 
     pub(crate) instruments_pitch_offset: Vec<u8>,
-
-    instrument_note_ranges: Vec<RangeInclusive<Note>>,
 }
 
 pub(crate) fn merge_pitch_vec(
     sorted_pitches: SortedPitches,
     n_instruments_and_samples: usize,
-    instrument_note_ranges: Vec<RangeInclusive<Note>>,
 ) -> Result<PitchTable, PitchTableError> {
     let pt = process_pitch_vecs(sorted_pitches, n_instruments_and_samples);
 
@@ -374,7 +368,6 @@ pub(crate) fn merge_pitch_vec(
         table_data_h: [DEFAULT_H; MAX_N_PITCHES],
         instruments_pitch_offset: pt.instruments_pitch_offset,
         n_pitches: pt.pitches.len(),
-        instrument_note_ranges,
     };
 
     for (i, p) in pt.pitches.iter().enumerate() {
@@ -392,24 +385,10 @@ pub fn build_pitch_table(
 ) -> Result<PitchTable, PitchTableError> {
     let sorted_pitches = inst_pitch_vec(instruments_and_samples)?;
 
-    let inst_note_ranges = instruments_and_samples
-        .list()
-        .iter()
-        .map(note_range)
-        .collect();
-
-    merge_pitch_vec(
-        sorted_pitches,
-        instruments_and_samples.len(),
-        inst_note_ranges,
-    )
+    merge_pitch_vec(sorted_pitches, instruments_and_samples.len())
 }
 
 impl PitchTable {
-    pub fn instrument_note_range(&self, inst_id: InstrumentId) -> RangeInclusive<Note> {
-        self.instrument_note_ranges[usize::from(inst_id.as_u8())].clone()
-    }
-
     pub fn pitch_for_note(&self, inst_id: InstrumentId, note: Note) -> u16 {
         let offset: u8 = self.instruments_pitch_offset[usize::from(inst_id.as_u8())];
         let index: u8 = offset.wrapping_add(note.note_id());
