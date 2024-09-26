@@ -5,10 +5,8 @@
 // SPDX-License-Identifier: MIT
 
 use crate::data::{Instrument, InstrumentOrSample, LoopSetting, Sample, UniqueNamesProjectFile};
-use crate::errors::{
-    BrrError, SampleAndInstrumentDataError, SampleError, TaggedSampleError, ValueError,
-};
-use crate::notes::{Note, Octave};
+use crate::errors::{BrrError, SampleAndInstrumentDataError, SampleError, TaggedSampleError};
+use crate::notes::{Note, Octave, LAST_NOTE_ID};
 use crate::path::{ParentPathBuf, SourcePathBuf};
 use crate::pitch_table::{
     instrument_pitch, maximize_pitch_range, merge_pitch_vec, sample_pitch, sort_pitches_iterator,
@@ -23,6 +21,7 @@ use brr::{
 use std::collections::HashMap;
 use std::fs;
 use std::io::Read;
+use std::ops::RangeInclusive;
 use std::sync::Arc;
 
 const MAX_BRR_SAMPLE_LOAD: u64 = 16 * 1024;
@@ -471,15 +470,23 @@ pub fn build_sample_and_instrument_data(
     combine_samples(instruments.as_slice(), samples.as_slice())
 }
 
-pub fn note_range(s: &InstrumentOrSample) -> Result<(Note, Note), ValueError> {
+pub fn instrument_note_range(inst: &Instrument) -> RangeInclusive<Note> {
+    Note::first_note_for_octave(inst.first_octave)..=Note::last_note_for_octave(inst.last_octave)
+}
+
+pub fn sample_note_range(sample: &Sample) -> RangeInclusive<Note> {
+    let last = sample
+        .sample_rates
+        .len()
+        .saturating_sub(1)
+        .clamp(0, LAST_NOTE_ID.into());
+
+    Note::from_note_id_usize(0).unwrap()..=Note::from_note_id_usize(last).unwrap()
+}
+
+pub fn note_range(s: &InstrumentOrSample) -> RangeInclusive<Note> {
     match s {
-        InstrumentOrSample::Instrument(inst) => Ok((
-            Note::first_note_for_octave(inst.first_octave),
-            Note::last_note_for_octave(inst.last_octave),
-        )),
-        InstrumentOrSample::Sample(sample) => Ok((
-            Note::from_note_id_usize(0)?,
-            Note::from_note_id_usize(sample.sample_rates.len().saturating_sub(1))?,
-        )),
+        InstrumentOrSample::Instrument(inst) => instrument_note_range(inst),
+        InstrumentOrSample::Sample(sample) => sample_note_range(sample),
     }
 }

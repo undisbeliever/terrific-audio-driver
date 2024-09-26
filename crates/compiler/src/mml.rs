@@ -51,7 +51,6 @@ const _: () = assert!(
 const CHANNEL_NAMES: [&str; N_MUSIC_CHANNELS] = ["A", "B", "C", "D", "E", "F", "G", "H"];
 
 pub use self::bc_generator::MAX_BROKEN_CHORD_NOTES;
-pub use self::bc_generator::{SlurredNoteState, VibratoState};
 pub use self::instruments::MmlInstrument;
 pub use self::tick_count_table::MmlTickCountTable;
 
@@ -108,7 +107,7 @@ impl MmlSoundEffect {
 pub fn compile_mml(
     mml_file: &TextFile,
     song_name: Option<data::Name>,
-    inst_map: &UniqueNamesList<data::InstrumentOrSample>,
+    data_instruments: &UniqueNamesList<data::InstrumentOrSample>,
     pitch_table: &PitchTable,
 ) -> Result<SongData, SongError> {
     let mut errors = MmlCompileErrors {
@@ -135,7 +134,7 @@ pub fn compile_mml(
         }
     };
 
-    let (instruments, inst_errors) = parse_instruments(lines.instruments, inst_map);
+    let (instruments, inst_errors) = parse_instruments(lines.instruments, data_instruments);
 
     errors.line_errors.extend(inst_errors);
 
@@ -156,6 +155,7 @@ pub fn compile_mml(
     let mut compiler = MmlSongBytecodeGenerator::new(
         metadata.zenlen,
         pitch_table,
+        data_instruments,
         &lines.sections,
         &instruments,
         instrument_map,
@@ -217,7 +217,7 @@ pub fn compile_mml(
 
 pub fn compile_sound_effect(
     sfx: &str,
-    inst_map: &UniqueNamesList<data::InstrumentOrSample>,
+    data_instruments: &UniqueNamesList<data::InstrumentOrSample>,
     pitch_table: &PitchTable,
 ) -> Result<MmlSoundEffect, SoundEffectErrorList> {
     let lines = match split_mml_sound_effect_lines(sfx) {
@@ -225,7 +225,7 @@ pub fn compile_sound_effect(
         Err(e) => return Err(SoundEffectErrorList::MmlLineErrors(e)),
     };
 
-    let (instruments, inst_errors) = parse_instruments(lines.instruments, inst_map);
+    let (instruments, inst_errors) = parse_instruments(lines.instruments, data_instruments);
     let mut line_errors = inst_errors;
 
     let instruments_map = match build_instrument_map(&instruments) {
@@ -241,8 +241,13 @@ pub fn compile_sound_effect(
     }
     drop(line_errors);
 
-    match parse_and_compile_sound_effect(lines.tokens, pitch_table, &instruments, &instruments_map)
-    {
+    match parse_and_compile_sound_effect(
+        lines.tokens,
+        pitch_table,
+        &instruments,
+        data_instruments,
+        &instruments_map,
+    ) {
         Ok(o) => Ok(o),
         Err(e) => Err(SoundEffectErrorList::MmlErrors(e)),
     }

@@ -6,7 +6,7 @@
 
 use crate::bytecode::{
     BcTicksKeyOff, BcTicksNoKeyOff, Bytecode, InstrumentId, LoopCount, PitchOffsetPerTick,
-    PlayNoteTicks, PortamentoVelocity, SubroutineId,
+    PlayNoteTicks, PortamentoVelocity, State, SubroutineId,
 };
 use crate::data::{InstrumentOrSample, UniqueNamesList};
 use crate::envelope::{Adsr, Gain};
@@ -43,20 +43,20 @@ impl BytecodeResultWrapper for Result<(), BytecodeError> {
     }
 }
 
-pub struct BytecodeAssembler<'a, 'b> {
-    bc: Bytecode,
-    inst_map: &'a UniqueNamesList<InstrumentOrSample>,
-    subroutines: Option<&'b SubroutinesMap<'b>>,
+pub struct BytecodeAssembler<'i, 's> {
+    bc: Bytecode<'i>,
+    inst_map: &'i UniqueNamesList<InstrumentOrSample>,
+    subroutines: Option<&'s SubroutinesMap<'s>>,
 }
 
-impl BytecodeAssembler<'_, '_> {
-    pub fn new<'a, 'b>(
-        inst_map: &'a UniqueNamesList<InstrumentOrSample>,
-        subroutines: Option<&'b SubroutinesMap<'b>>,
+impl<'i, 's> BytecodeAssembler<'i, 's> {
+    pub fn new(
+        inst_map: &'i UniqueNamesList<InstrumentOrSample>,
+        subroutines: Option<&'s SubroutinesMap<'s>>,
         context: BytecodeContext,
-    ) -> BytecodeAssembler<'a, 'b> {
-        BytecodeAssembler {
-            bc: Bytecode::new(context),
+    ) -> Self {
+        Self {
+            bc: Bytecode::new(context, inst_map),
             inst_map,
             subroutines,
         }
@@ -66,7 +66,10 @@ impl BytecodeAssembler<'_, '_> {
         self.bc.get_tick_counter()
     }
 
-    pub fn bytecode(self, terminator: BcTerminator) -> Result<Vec<u8>, BytecodeAssemblerError> {
+    pub fn bytecode(
+        self,
+        terminator: BcTerminator,
+    ) -> Result<(Vec<u8>, State), BytecodeAssemblerError> {
         match self.bc.bytecode(terminator) {
             Ok(b) => Ok(b),
             Err((e, _)) => Err(BytecodeAssemblerError::BytecodeError(e)),
@@ -321,12 +324,12 @@ impl BytecodeAssembler<'_, '_> {
     fn subroutine_argument<'a>(
         &self,
         args: &[&'a str],
-    ) -> Result<(&'a str, SubroutineId), BytecodeAssemblerError> {
+    ) -> Result<(&'a str, &'s SubroutineId), BytecodeAssemblerError> {
         let arg = one_argument(args)?;
 
         match self.subroutines {
             Some(subroutines) => match subroutines.get(arg) {
-                Some(s) => Ok((arg, *s)),
+                Some(s) => Ok((arg, s)),
                 None => Err(BytecodeAssemblerError::UnknownSubroutine(arg.to_owned())),
             },
             None => Err(BytecodeAssemblerError::UnknownSubroutine(arg.to_owned())),

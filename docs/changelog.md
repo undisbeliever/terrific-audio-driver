@@ -1,6 +1,13 @@
 Terrific Audio Driver Changelog
 ===============================
 
+Version 0.0.12
+==============
+
+Bytecode changes:
+ * Added note range tests to bytecode assembly.
+
+
 Version 0.0.11
 ==============
 

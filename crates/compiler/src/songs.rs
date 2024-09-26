@@ -10,15 +10,15 @@ use crate::bytecode::{
     BcTerminator, BcTicks, BcTicksKeyOff, BcTicksNoKeyOff, Bytecode, InstrumentId, PlayNoteTicks,
     StackDepth, SubroutineId, Volume,
 };
+use crate::data::UniqueNamesList;
 use crate::driver_constants::{
     addresses, AUDIO_RAM_SIZE, ECHO_BUFFER_MIN_SIZE, MAX_SONG_DATA_SIZE, MAX_SUBROUTINES,
     N_MUSIC_CHANNELS, SFX_TICK_CLOCK, SONG_HEADER_CHANNELS_SIZE, SONG_HEADER_N_SUBROUTINES_OFFSET,
     SONG_HEADER_SIZE, SONG_HEADER_TICK_TIMER_OFFSET,
 };
 use crate::envelope::Envelope;
-use crate::errors::{SongError, SongTooLargeError, ValueError};
+use crate::errors::{BytecodeAssemblerError, SongError, SongTooLargeError};
 use crate::mml::{MetaData, MmlInstrument, Section};
-use crate::mml::{SlurredNoteState, VibratoState};
 use crate::notes::Note;
 use crate::sound_effects::CompiledSoundEffect;
 use crate::time::{TickClock, TickCounter, TickCounterWithLoopFlag};
@@ -73,10 +73,6 @@ pub struct Subroutine {
     pub identifier: mml::IdentifierBuf,
     pub subroutine_id: SubroutineId,
     pub bytecode_offset: u16,
-    pub last_instrument: Option<usize>,
-    pub last_envelope: Option<Envelope>,
-    pub vibrato: VibratoState,
-    pub prev_slurred_note: SlurredNoteState,
     pub changes_song_tempo: bool,
 }
 
@@ -195,8 +191,10 @@ pub fn test_sample_song(
     note: Note,
     note_length: u32,
     envelope: Option<Envelope>,
-) -> Result<SongData, ValueError> {
-    let mut bc = Bytecode::new(crate::bytecode::BytecodeContext::SongChannel);
+) -> Result<SongData, BytecodeAssemblerError> {
+    let instruments = UniqueNamesList::blank_list();
+
+    let mut bc = Bytecode::new(crate::bytecode::BytecodeContext::SongChannel, &instruments);
 
     let inst = InstrumentId::try_from(instrument)?;
 
@@ -214,13 +212,13 @@ pub fn test_sample_song(
         remaining_length -= nl;
 
         let nl = BcTicksNoKeyOff::try_from(nl)?;
-        bc.play_note(note, PlayNoteTicks::NoKeyOff(nl));
+        bc.play_note(note, PlayNoteTicks::NoKeyOff(nl))?;
     }
 
     let nl = BcTicksKeyOff::try_from(remaining_length)?;
-    bc.play_note(note, PlayNoteTicks::KeyOff(nl));
+    bc.play_note(note, PlayNoteTicks::KeyOff(nl))?;
 
-    let bytecode = bc.bytecode(BcTerminator::DisableChannel).unwrap();
+    let bytecode = bc.bytecode(BcTerminator::DisableChannel).unwrap().0;
 
     Ok(sfx_bytecode_to_song(&bytecode))
 }

@@ -6,17 +6,20 @@
 
 #![allow(clippy::assertions_on_constants)]
 
+use crate::data::{self, UniqueNamesList};
 use crate::driver_constants::{
     BC_CHANNEL_STACK_SIZE, BC_STACK_BYTES_PER_LOOP, BC_STACK_BYTES_PER_SUBROUTINE_CALL,
     MAX_INSTRUMENTS_AND_SAMPLES,
 };
-use crate::envelope::{Adsr, Gain};
+use crate::envelope::{Adsr, Envelope, Gain};
 use crate::errors::{BytecodeError, ValueError};
 use crate::notes::{Note, LAST_NOTE_ID};
+use crate::samples::note_range;
 use crate::time::{TickClock, TickCounter, TickCounterWithLoopFlag};
 use crate::value_newtypes::{i8_value_newtype, u8_value_newtype, ValueNewType};
 
 use std::cmp::max;
+use std::ops::RangeInclusive;
 
 pub const KEY_OFF_TICK_DELAY: u32 = 1;
 
@@ -103,22 +106,15 @@ u8_value_newtype!(
     (MAX_INSTRUMENTS_AND_SAMPLES - 1) as u8
 );
 
-// Added Copy trait to Subroutine to satisfy the borrow checker in `BytecodeAssembler`.
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct SubroutineId {
     id: u8,
-    tick_counter: TickCounter,
-    // NOTE: does not include the stack usage when calling the subroutine (ie, can be 0).
-    max_stack_depth: StackDepth,
+    state: State,
 }
 
 impl SubroutineId {
-    pub fn new(id: u8, tick_counter: TickCounter, max_stack_depth: StackDepth) -> Self {
-        Self {
-            id,
-            tick_counter,
-            max_stack_depth,
-        }
+    pub fn new(id: u8, state: State) -> Self {
+        Self { id, state }
     }
 
     pub fn as_usize(&self) -> usize {
@@ -126,11 +122,11 @@ impl SubroutineId {
     }
 
     pub fn tick_counter(&self) -> TickCounter {
-        self.tick_counter
+        self.state.tick_counter
     }
 
     pub fn max_stack_depth(&self) -> StackDepth {
-        self.max_stack_depth
+        self.state.max_stack_depth
     }
 }
 
@@ -366,20 +362,22 @@ impl NoteOpcode {
 }
 
 #[derive(PartialEq)]
-pub enum BcTerminator {
+pub enum BcTerminator<'a> {
     DisableChannel,
     Goto(usize),
     ReturnFromSubroutine,
     ReturnFromSubroutineAndDisableVibrato,
+    TailSubroutineCall(usize, &'a SubroutineId),
 }
 
-impl BcTerminator {
+impl BcTerminator<'_> {
     pub fn is_return(&self) -> bool {
         match self {
             Self::DisableChannel => false,
             Self::Goto(_) => false,
             Self::ReturnFromSubroutine => true,
             Self::ReturnFromSubroutineAndDisableVibrato => true,
+            Self::TailSubroutineCall(..) => true,
         }
     }
 }
@@ -422,10 +420,126 @@ mod emit_bytecode {
     }
 }
 
+// Instrument or envelope state
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub(crate) enum IeState<T>
+where
+    T: Copy + PartialEq,
+{
+    Known(T),
+    Maybe(T),
+    Unknown,
+}
+
+impl<T> IeState<T>
+where
+    T: Copy + PartialEq,
+{
+    pub fn is_known_and_eq(&self, o: &T) -> bool {
+        match self {
+            Self::Known(v) => o == v,
+            Self::Maybe(_) => false,
+            Self::Unknown => false,
+        }
+    }
+
+    fn promote_to_known(&self) -> Self {
+        match self {
+            Self::Known(v) => Self::Known(*v),
+            Self::Maybe(v) => Self::Known(*v),
+            Self::Unknown => Self::Unknown,
+        }
+    }
+
+    fn demote_to_maybe(&self) -> Self {
+        match self {
+            Self::Known(v) => Self::Maybe(*v),
+            Self::Maybe(v) => Self::Maybe(*v),
+            Self::Unknown => Self::Unknown,
+        }
+    }
+}
+
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub enum VibratoState {
+    Unchanged,
+    Unknown,
+    // Disabled with an unknown value
+    Disabled,
+    Set(PitchOffsetPerTick, QuarterWavelengthInTicks),
+}
+
+impl VibratoState {
+    pub fn is_active(&self) -> bool {
+        match self {
+            Self::Unchanged => false,
+            Self::Unknown => false,
+            Self::Disabled => false,
+            Self::Set(pitch_offset_per_tick, _) => pitch_offset_per_tick.as_u8() > 0,
+        }
+    }
+
+    fn set_depth(&mut self, depth: PitchOffsetPerTick) {
+        *self = match self {
+            VibratoState::Unchanged | VibratoState::Unknown | VibratoState::Disabled => {
+                if depth.as_u8() > 0 {
+                    VibratoState::Unknown
+                } else {
+                    VibratoState::Disabled
+                }
+            }
+            VibratoState::Set(_, qwt) => VibratoState::Set(depth, *qwt),
+        }
+    }
+
+    fn disable(&mut self) {
+        *self = match self {
+            VibratoState::Unchanged => VibratoState::Disabled,
+            VibratoState::Unknown => VibratoState::Disabled,
+            VibratoState::Disabled => VibratoState::Disabled,
+            VibratoState::Set(_, qwt) => VibratoState::Set(PitchOffsetPerTick::new(0), *qwt),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum SlurredNoteState {
+    Unchanged,
+    None,
+    Slurred(Note),
+}
+
+impl SlurredNoteState {
+    fn merge(&mut self, o: &Self) {
+        match o {
+            SlurredNoteState::Unchanged => (),
+            SlurredNoteState::None => *self = SlurredNoteState::None,
+            SlurredNoteState::Slurred(n) => *self = SlurredNoteState::Slurred(*n),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct State {
+    pub tick_counter: TickCounter,
+    pub max_stack_depth: StackDepth,
+    pub tempo_changes: Vec<(TickCounter, TickClock)>,
+
+    pub(crate) instrument: IeState<InstrumentId>,
+    pub(crate) envelope: IeState<Envelope>,
+    pub(crate) vibrato: VibratoState,
+    pub(crate) prev_slurred_note: SlurredNoteState,
+}
+
 struct SkipLastLoop {
     tick_counter: TickCounter,
     // Location of the parameter of the `skip_last_loop` instruction inside `Bytecode::bytecode`.
     bc_parameter_position: usize,
+
+    instrument: IeState<InstrumentId>,
+    envelope: IeState<Envelope>,
+    vibrato: VibratoState,
+    prev_slurred_note: SlurredNoteState,
 }
 
 struct LoopState {
@@ -437,31 +551,60 @@ struct LoopState {
     skip_last_loop: Option<SkipLastLoop>,
 }
 
-pub struct Bytecode {
+pub struct Bytecode<'a> {
     context: BytecodeContext,
     bytecode: Vec<u8>,
 
-    tick_counter: TickCounter,
+    instruments: &'a UniqueNamesList<data::InstrumentOrSample>,
+
+    state: State,
 
     loop_stack: Vec<LoopState>,
-    max_stack_depth: StackDepth,
+
+    note_range: Option<RangeInclusive<Note>>,
+    show_missing_set_instrument_error: bool,
 }
 
-impl Bytecode {
-    pub fn new(context: BytecodeContext) -> Bytecode {
-        Self::new_append_to_vec(Vec::new(), context)
+impl Bytecode<'_> {
+    pub fn new(
+        context: BytecodeContext,
+        instruments: &UniqueNamesList<data::InstrumentOrSample>,
+    ) -> Bytecode {
+        Self::new_append_to_vec(Vec::new(), context, instruments)
     }
 
     // Instead of creating a new `Vec<u8>` to hold the bytecode, write the data to the end of `vec`.
     // Takes ownership of the `Vec<u8>`.
     // The `Vec<u8>` can be taken out of `Bytecode` with `Self::bytecode()`.
-    pub fn new_append_to_vec(vec: Vec<u8>, context: BytecodeContext) -> Bytecode {
+    pub fn new_append_to_vec(
+        vec: Vec<u8>,
+        context: BytecodeContext,
+        instruments: &UniqueNamesList<data::InstrumentOrSample>,
+    ) -> Bytecode {
         Bytecode {
-            context,
             bytecode: vec,
-            tick_counter: TickCounter::new(0),
+            instruments,
+            state: State {
+                tick_counter: TickCounter::new(0),
+                max_stack_depth: StackDepth(0),
+                tempo_changes: Vec::new(),
+                instrument: IeState::Unknown,
+                envelope: IeState::Unknown,
+                vibrato: match &context {
+                    BytecodeContext::SoundEffect => VibratoState::Disabled,
+                    BytecodeContext::SongChannel => VibratoState::Disabled,
+                    BytecodeContext::SongSubroutine => VibratoState::Unchanged,
+                },
+                prev_slurred_note: SlurredNoteState::Unchanged,
+            },
             loop_stack: Vec::new(),
-            max_stack_depth: StackDepth(0),
+            note_range: None,
+            show_missing_set_instrument_error: match &context {
+                BytecodeContext::SoundEffect => true,
+                BytecodeContext::SongChannel => true,
+                BytecodeContext::SongSubroutine => false,
+            },
+            context,
         }
     }
 
@@ -469,13 +612,17 @@ impl Bytecode {
         &self.context
     }
 
+    pub fn get_state(&self) -> &State {
+        &self.state
+    }
+
     pub fn get_tick_counter(&self) -> TickCounter {
-        self.tick_counter
+        self.state.tick_counter
     }
 
     pub fn get_tick_counter_with_loop_flag(&self) -> TickCounterWithLoopFlag {
         TickCounterWithLoopFlag {
-            ticks: self.tick_counter,
+            ticks: self.state.tick_counter,
             in_loop: self.is_in_loop(),
         }
     }
@@ -496,18 +643,26 @@ impl Bytecode {
         )
     }
 
-    pub fn get_max_stack_depth(&self) -> StackDepth {
-        self.max_stack_depth
-    }
-
     pub fn get_bytecode_len(&self) -> usize {
         self.bytecode.len()
+    }
+
+    /// CAUTION: Does not emit bytecode
+    pub fn _song_loop_point(&mut self) {
+        assert!(matches!(self.context, BytecodeContext::SongChannel));
+        assert_eq!(self.get_stack_depth(), StackDepth(0));
+
+        // The instrument or envelope may have changed when the song loops.
+        self.state.instrument = self.state.instrument.demote_to_maybe();
+        self.state.envelope = self.state.envelope.demote_to_maybe();
+
+        self.state.vibrato = VibratoState::Unknown;
     }
 
     pub fn bytecode(
         mut self,
         terminator: BcTerminator,
-    ) -> Result<Vec<u8>, (BytecodeError, Vec<u8>)> {
+    ) -> Result<(Vec<u8>, State), (BytecodeError, Vec<u8>)> {
         if !self.loop_stack.is_empty() {
             return Err((
                 BytecodeError::OpenLoopStack(self.loop_stack.len()),
@@ -519,6 +674,10 @@ impl Bytecode {
             return Err((BytecodeError::ReturnInNonSubroutine, self.bytecode));
         }
 
+        if let BcTerminator::TailSubroutineCall(_, s) = &terminator {
+            self._update_subtroutine_state_excluding_stack_depth(s);
+        }
+
         match terminator {
             BcTerminator::DisableChannel => {
                 emit_bytecode!(self, opcodes::DISABLE_CHANNEL);
@@ -527,9 +686,11 @@ impl Bytecode {
                 emit_bytecode!(self, opcodes::RETURN_FROM_SUBROUTINE);
             }
             BcTerminator::ReturnFromSubroutineAndDisableVibrato => {
+                self.state.vibrato.disable();
+
                 emit_bytecode!(self, opcodes::RETURN_FROM_SUBROUTINE_AND_DISABLE_VIBRATO);
             }
-            BcTerminator::Goto(pos) => {
+            BcTerminator::Goto(pos) | BcTerminator::TailSubroutineCall(pos, _) => {
                 match (u16::try_from(self.bytecode.len()), u16::try_from(pos)) {
                     (Ok(inst_ptr), Ok(pos)) => {
                         let o = pos.wrapping_sub(inst_ptr).wrapping_sub(2).to_le_bytes();
@@ -539,35 +700,71 @@ impl Bytecode {
                         emit_bytecode!(self, opcodes::DISABLE_CHANNEL);
                         return Err((BytecodeError::GotoRelativeOutOfBounds, self.bytecode));
                     }
-                };
+                }
             }
         }
 
-        Ok(self.bytecode)
+        Ok((self.bytecode, self.state))
+    }
+
+    fn _test_note_in_range(&mut self, note: Note) -> Result<(), BytecodeError> {
+        match &self.note_range {
+            Some(note_range) => {
+                if note_range.contains(&note) {
+                    Ok(())
+                } else {
+                    Err(BytecodeError::NoteOutOfRange(note, note_range.clone()))
+                }
+            }
+            None => {
+                if self.show_missing_set_instrument_error {
+                    self.show_missing_set_instrument_error = false;
+                    Err(BytecodeError::CannotPlayNoteBeforeSettingInstrument)
+                } else {
+                    Ok(())
+                }
+            }
+        }
     }
 
     pub fn wait(&mut self, length: BcTicksNoKeyOff) {
-        self.tick_counter += length.to_tick_count();
+        self.state.tick_counter += length.to_tick_count();
 
         emit_bytecode!(self, opcodes::WAIT, length.bc_argument);
     }
 
     pub fn rest(&mut self, length: BcTicksKeyOff) {
-        self.tick_counter += length.to_tick_count();
+        self.state.tick_counter += length.to_tick_count();
+        self.state.prev_slurred_note = SlurredNoteState::None;
 
         emit_bytecode!(self, opcodes::REST, length.bc_argument);
     }
 
-    pub fn play_note(&mut self, note: Note, length: PlayNoteTicks) {
-        self.tick_counter += length.to_tick_count();
+    pub fn play_note(&mut self, note: Note, length: PlayNoteTicks) -> Result<(), BytecodeError> {
+        self._test_note_in_range(note)?;
+
+        self.state.tick_counter += length.to_tick_count();
+        self.state.prev_slurred_note = match length {
+            PlayNoteTicks::KeyOff(_) => SlurredNoteState::None,
+            PlayNoteTicks::NoKeyOff(_) => SlurredNoteState::Slurred(note),
+        };
 
         let opcode = NoteOpcode::new(note, &length);
 
         emit_bytecode!(self, opcode.opcode, length.bc_argument());
+
+        Ok(())
     }
 
-    pub fn portamento(&mut self, note: Note, velocity: PortamentoVelocity, length: PlayNoteTicks) {
-        self.tick_counter += length.to_tick_count();
+    pub fn portamento(
+        &mut self,
+        note: Note,
+        velocity: PortamentoVelocity,
+        length: PlayNoteTicks,
+    ) -> Result<(), BytecodeError> {
+        self._test_note_in_range(note)?;
+
+        self.state.tick_counter += length.to_tick_count();
 
         let speed = velocity.pitch_offset_per_tick();
         let note_param = NoteOpcode::new(note, &length);
@@ -578,6 +775,8 @@ impl Bytecode {
         } else {
             emit_bytecode!(self, opcodes::PORTAMENTO_UP, speed, length, note_param);
         }
+
+        Ok(())
     }
 
     pub fn set_vibrato_depth_and_play_note(
@@ -586,7 +785,8 @@ impl Bytecode {
         note: Note,
         length: PlayNoteTicks,
     ) {
-        self.tick_counter += length.to_tick_count();
+        self.state.tick_counter += length.to_tick_count();
+        self.state.vibrato.set_depth(pitch_offset_per_tick);
 
         let play_note_opcode = NoteOpcode::new(note, &length);
 
@@ -604,6 +804,8 @@ impl Bytecode {
         pitch_offset_per_tick: PitchOffsetPerTick,
         quarter_wavelength_ticks: QuarterWavelengthInTicks,
     ) {
+        self.state.vibrato = VibratoState::Set(pitch_offset_per_tick, quarter_wavelength_ticks);
+
         emit_bytecode!(
             self,
             opcodes::SET_VIBRATO,
@@ -613,14 +815,35 @@ impl Bytecode {
     }
 
     pub fn disable_vibrato(&mut self) {
+        self.state.vibrato.disable();
+
         emit_bytecode!(self, opcodes::SET_VIBRATO, 0u8, 0u8);
     }
 
+    fn _set_state_instrument_and_note_range(&mut self, instrument: InstrumentId) {
+        self.note_range = self
+            .instruments
+            .get_index(instrument.as_u8().into())
+            .map(note_range);
+        self.state.instrument = IeState::Known(instrument);
+    }
+
     pub fn set_instrument(&mut self, instrument: InstrumentId) {
+        self._set_state_instrument_and_note_range(instrument);
+
+        self.state.envelope = match self.instruments.get_index(instrument.as_u8().into()) {
+            Some(i) => IeState::Known(i.envelope()),
+            None => IeState::Unknown,
+        };
+
         emit_bytecode!(self, opcodes::SET_INSTRUMENT, instrument.as_u8());
     }
 
     pub fn set_instrument_and_adsr(&mut self, instrument: InstrumentId, adsr: Adsr) {
+        self._set_state_instrument_and_note_range(instrument);
+
+        self.state.envelope = IeState::Known(Envelope::Adsr(adsr));
+
         emit_bytecode!(
             self,
             opcodes::SET_INSTRUMENT_AND_ADSR_OR_GAIN,
@@ -631,6 +854,10 @@ impl Bytecode {
     }
 
     pub fn set_instrument_and_gain(&mut self, instrument: InstrumentId, gain: Gain) {
+        self._set_state_instrument_and_note_range(instrument);
+
+        self.state.envelope = IeState::Known(Envelope::Gain(gain));
+
         emit_bytecode!(
             self,
             opcodes::SET_INSTRUMENT_AND_ADSR_OR_GAIN,
@@ -641,10 +868,14 @@ impl Bytecode {
     }
 
     pub fn set_adsr(&mut self, adsr: Adsr) {
+        self.state.envelope = IeState::Known(Envelope::Adsr(adsr));
+
         emit_bytecode!(self, opcodes::SET_ADSR, adsr.adsr1(), adsr.adsr2());
     }
 
     pub fn set_gain(&mut self, gain: Gain) {
+        self.state.envelope = IeState::Known(Envelope::Gain(gain));
+
         emit_bytecode!(self, opcodes::SET_GAIN, gain.value());
     }
 
@@ -682,10 +913,19 @@ impl Bytecode {
     }
 
     pub fn start_loop(&mut self, loop_count: Option<LoopCount>) -> Result<(), BytecodeError> {
+        // The loop might change the instrument and evelope.
+        // When the loop loops, the instrument/envelope might have changed.
+        self.state.instrument = self.state.instrument.demote_to_maybe();
+        self.state.envelope = self.state.envelope.demote_to_maybe();
+        self.state.vibrato = VibratoState::Unknown;
+
+        // Loop might end on a note that is not slurred and matching `prev_slurred_note`.
+        self.state.prev_slurred_note = SlurredNoteState::Unchanged;
+
         self.loop_stack.push(LoopState {
             start_loop_count: loop_count,
             start_loop_pos: self.bytecode.len(),
-            tick_counter_at_start_of_loop: self.tick_counter,
+            tick_counter_at_start_of_loop: self.state.tick_counter,
             skip_last_loop: None,
         });
 
@@ -697,7 +937,7 @@ impl Bytecode {
         emit_bytecode!(self, opcodes::START_LOOP, loop_count);
 
         let stack_depth = self.get_stack_depth();
-        self.max_stack_depth = max(self.max_stack_depth, stack_depth);
+        self.state.max_stack_depth = max(self.state.max_stack_depth, stack_depth);
 
         if stack_depth <= MAX_STACK_DEPTH {
             Ok(())
@@ -716,13 +956,17 @@ impl Bytecode {
             return Err(BytecodeError::MultipleSkipLastLoopInstructions);
         }
 
-        if loop_state.tick_counter_at_start_of_loop == self.tick_counter {
+        if loop_state.tick_counter_at_start_of_loop == self.state.tick_counter {
             return Err(BytecodeError::NoTicksBeforeSkipLastLoop);
         }
 
         loop_state.skip_last_loop = Some(SkipLastLoop {
-            tick_counter: self.tick_counter,
+            tick_counter: self.state.tick_counter,
             bc_parameter_position: self.bytecode.len() + 1,
+            instrument: self.state.instrument,
+            envelope: self.state.envelope,
+            vibrato: self.state.vibrato,
+            prev_slurred_note: self.state.prev_slurred_note.clone(),
         });
 
         emit_bytecode!(self, opcodes::SKIP_LAST_LOOP, 0u8);
@@ -747,17 +991,17 @@ impl Bytecode {
         // Increment tick counter
         {
             let ticks_in_loop =
-                self.tick_counter.value() - loop_state.tick_counter_at_start_of_loop.value();
+                self.state.tick_counter.value() - loop_state.tick_counter_at_start_of_loop.value();
             if ticks_in_loop == 0 {
                 return Err(BytecodeError::NoTicksInLoop);
             }
 
             let ticks_skipped_in_last_loop = match &loop_state.skip_last_loop {
                 Some(s) => {
-                    if self.tick_counter == s.tick_counter {
+                    if self.state.tick_counter == s.tick_counter {
                         return Err(BytecodeError::NoTicksAfterSkipLastLoop);
                     }
-                    self.tick_counter.value() - s.tick_counter.value()
+                    self.state.tick_counter.value() - s.tick_counter.value()
                 }
                 None => 0,
             };
@@ -769,7 +1013,7 @@ impl Bytecode {
                 .and_then(|t| t.checked_sub(ticks_skipped_in_last_loop))
                 .unwrap_or(u32::MAX);
 
-            self.tick_counter += TickCounter::new(ticks_to_add);
+            self.state.tick_counter += TickCounter::new(ticks_to_add);
         }
 
         // Write the loop_count parameter for the start_loop instruction (if required)
@@ -782,8 +1026,15 @@ impl Bytecode {
             self.bytecode[loop_state.start_loop_pos + 1] = loop_count.0;
         }
 
-        // Write the parameter for the skip_last_loop instruction (if required)
         if let Some(skip_last_loop) = loop_state.skip_last_loop {
+            self.state.instrument = skip_last_loop.instrument;
+            self.state.envelope = skip_last_loop.envelope;
+            self.state.vibrato = skip_last_loop.vibrato;
+            self.state
+                .prev_slurred_note
+                .merge(&skip_last_loop.prev_slurred_note);
+
+            // Write the parameter for the skip_last_loop instruction (if required)
             let sll_param_pos = skip_last_loop.bc_parameter_position;
 
             assert_eq!(self.bytecode[sll_param_pos - 1], opcodes::SKIP_LAST_LOOP);
@@ -800,14 +1051,44 @@ impl Bytecode {
             self.bytecode[sll_param_pos] = to_skip;
         }
 
+        if self.loop_stack.is_empty() {
+            self.state.instrument = self.state.instrument.promote_to_known();
+            self.state.envelope = self.state.envelope.promote_to_known();
+        }
+
         emit_bytecode!(self, opcodes::END_LOOP);
         Ok(())
+    }
+
+    fn _update_subtroutine_state_excluding_stack_depth(&mut self, subroutine: &SubroutineId) {
+        self.state.tick_counter += subroutine.state.tick_counter;
+
+        match subroutine.state.instrument {
+            IeState::Known(i) => self._set_state_instrument_and_note_range(i),
+            IeState::Maybe(_) => panic!("unexpected maybe instrument"),
+            IeState::Unknown => (),
+        }
+
+        match subroutine.state.envelope {
+            IeState::Known(e) => self.state.envelope = IeState::Known(e),
+            IeState::Maybe(_) => panic!("unexpected maybe envelope"),
+            IeState::Unknown => (),
+        }
+        match &subroutine.state.vibrato {
+            VibratoState::Unchanged => (),
+            VibratoState::Unknown => self.state.vibrato = VibratoState::Unknown,
+            VibratoState::Disabled => self.state.vibrato = VibratoState::Disabled,
+            v @ VibratoState::Set(..) => self.state.vibrato = *v,
+        }
+        self.state
+            .prev_slurred_note
+            .merge(&subroutine.state.prev_slurred_note);
     }
 
     fn _call_subroutine(
         &mut self,
         name: &str,
-        subroutine: SubroutineId,
+        subroutine: &SubroutineId,
         disable_vibraro: bool,
     ) -> Result<(), BytecodeError> {
         match self.context {
@@ -816,15 +1097,15 @@ impl Bytecode {
             BytecodeContext::SoundEffect => return Err(BytecodeError::SubroutineCallInSoundEffect),
         }
 
-        self.tick_counter += subroutine.tick_counter;
+        self._update_subtroutine_state_excluding_stack_depth(subroutine);
 
         let stack_depth = StackDepth(
             self.get_stack_depth().0
                 + BC_STACK_BYTES_PER_SUBROUTINE_CALL as u32
-                + subroutine.max_stack_depth.0,
+                + subroutine.state.max_stack_depth.0,
         );
 
-        self.max_stack_depth = max(self.max_stack_depth, stack_depth);
+        self.state.max_stack_depth = max(self.state.max_stack_depth, stack_depth);
 
         if stack_depth > MAX_STACK_DEPTH {
             return Err(BytecodeError::StackOverflowInSubroutineCall(
@@ -845,15 +1126,17 @@ impl Bytecode {
     pub fn call_subroutine_and_disable_vibrato(
         &mut self,
         name: &str,
-        subroutine: SubroutineId,
+        subroutine: &SubroutineId,
     ) -> Result<(), BytecodeError> {
+        self.state.vibrato.disable();
+
         self._call_subroutine(name, subroutine, true)
     }
 
     pub fn call_subroutine(
         &mut self,
         name: &str,
-        subroutine: SubroutineId,
+        subroutine: &SubroutineId,
     ) -> Result<(), BytecodeError> {
         self._call_subroutine(name, subroutine, false)
     }
@@ -865,6 +1148,10 @@ impl Bytecode {
             }
             BytecodeContext::SongChannel | BytecodeContext::SongSubroutine => (),
         }
+
+        self.state
+            .tempo_changes
+            .push((self.state.tick_counter, tick_clock));
 
         emit_bytecode!(self, opcodes::SET_SONG_TICK_CLOCK, tick_clock.as_u8());
         Ok(())

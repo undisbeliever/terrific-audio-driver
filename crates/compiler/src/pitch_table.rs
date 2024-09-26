@@ -384,6 +384,7 @@ pub fn build_pitch_table(
     instruments_and_samples: &UniqueNamesList<InstrumentOrSample>,
 ) -> Result<PitchTable, PitchTableError> {
     let sorted_pitches = inst_pitch_vec(instruments_and_samples)?;
+
     merge_pitch_vec(sorted_pitches, instruments_and_samples.len())
 }
 
