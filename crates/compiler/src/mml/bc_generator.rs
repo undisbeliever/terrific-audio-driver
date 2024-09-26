@@ -102,8 +102,6 @@ struct ChannelBcGenerator<'a> {
     mp: MpState,
 
     loop_point: Option<LoopPoint>,
-
-    show_missing_set_instrument_error: bool,
 }
 
 impl ChannelBcGenerator<'_> {
@@ -115,8 +113,6 @@ impl ChannelBcGenerator<'_> {
         subroutines: Option<&'a Vec<Subroutine>>,
         context: BytecodeContext,
     ) -> ChannelBcGenerator<'a> {
-        let is_subroutine = matches!(context, BytecodeContext::SongSubroutine);
-
         ChannelBcGenerator {
             pitch_table,
             instruments: mml_instruments,
@@ -124,34 +120,6 @@ impl ChannelBcGenerator<'_> {
             bc: Bytecode::new_append_to_vec(bc_data, context, data_instruments),
             mp: MpState::Manual,
             loop_point: None,
-            show_missing_set_instrument_error: !is_subroutine,
-        }
-    }
-
-    fn test_note(&mut self, note: Note) -> Result<(), MmlError> {
-        // ::TODO move to Bytecode::
-        match self.bc.get_state().instrument {
-            IeState::Known(inst_id) | IeState::Maybe(inst_id) => {
-                let note_range = self.pitch_table.instrument_note_range(inst_id);
-
-                if note_range.contains(&note) {
-                    Ok(())
-                } else {
-                    Err(MmlError::NoteOutOfRange(
-                        note,
-                        *note_range.start(),
-                        *note_range.end(),
-                    ))
-                }
-            }
-            IeState::Unknown => {
-                if self.show_missing_set_instrument_error {
-                    self.show_missing_set_instrument_error = false;
-                    Err(MmlError::CannotPlayNoteBeforeSettingInstrument)
-                } else {
-                    Ok(())
-                }
-            }
         }
     }
 
@@ -240,13 +208,11 @@ impl ChannelBcGenerator<'_> {
     ) -> Result<(), MmlError> {
         let (pn_length, rest) = Self::split_play_note_length(length, is_slur)?;
 
-        self.test_note(note)?;
-
         let vibrato = self.bc.get_state().vibrato;
 
         match &self.mp {
             MpState::Manual => {
-                self.bc.play_note(note, pn_length);
+                self.bc.play_note(note, pn_length)?;
             }
             MpState::Disabled => {
                 const POPT: PitchOffsetPerTick = PitchOffsetPerTick::new(0);
@@ -259,7 +225,7 @@ impl ChannelBcGenerator<'_> {
                 };
 
                 if vibrato_disabled {
-                    self.bc.play_note(note, pn_length);
+                    self.bc.play_note(note, pn_length)?;
                 } else {
                     self.bc
                         .set_vibrato_depth_and_play_note(POPT, note, pn_length);
@@ -282,7 +248,7 @@ impl ChannelBcGenerator<'_> {
                             cv.quarter_wavelength_ticks,
                         ) =>
                     {
-                        self.bc.play_note(note, pn_length);
+                        self.bc.play_note(note, pn_length)?;
                     }
                     VibratoState::Set(_, qwt) if qwt == cv.quarter_wavelength_ticks => {
                         self.bc.set_vibrato_depth_and_play_note(
@@ -294,7 +260,7 @@ impl ChannelBcGenerator<'_> {
                     _ => {
                         self.bc
                             .set_vibrato(cv.pitch_offset_per_tick, cv.quarter_wavelength_ticks);
-                        self.bc.play_note(note, pn_length);
+                        self.bc.play_note(note, pn_length)?;
                     }
                 }
             }
@@ -470,16 +436,13 @@ impl ChannelBcGenerator<'_> {
     ) -> Result<(), MmlError> {
         assert!(delay_length < total_length);
 
-        self.test_note(note1)?;
-        self.test_note(note2)?;
-
         // Play note1 (if required)
         let note1_length = {
             if self.bc.get_state().prev_slurred_note != SlurredNoteState::Slurred(note1) {
                 let note_1_length = max(TickCounter::new(1), delay_length);
                 let (pn_length, rest) = Self::split_play_note_length(note_1_length, true)?;
 
-                self.bc.play_note(note1, pn_length);
+                self.bc.play_note(note1, pn_length)?;
                 self.rest_after_play_note(rest, true)?;
                 note_1_length
             } else if !delay_length.is_zero() {
@@ -521,7 +484,7 @@ impl ChannelBcGenerator<'_> {
 
         let (p_length, p_rest) =
             Self::split_play_note_length(tie_length + portamento_length, is_slur)?;
-        self.bc.portamento(note2, velocity, p_length);
+        self.bc.portamento(note2, velocity, p_length)?;
 
         self.rest_after_play_note(p_rest, is_slur)
     }
@@ -539,10 +502,6 @@ impl ChannelBcGenerator<'_> {
             return Err(MmlError::TooManyNotesInBrokenChord(notes.len()));
         }
         let n_notes: u32 = notes.len().try_into().unwrap();
-
-        for n in notes {
-            self.test_note(*n)?;
-        }
 
         let expected_tick_counter = self.bc.get_tick_counter() + total_length;
 
@@ -583,7 +542,14 @@ impl ChannelBcGenerator<'_> {
             if i == break_point && i != 0 {
                 self.bc.skip_last_loop()?;
             }
-            self.bc.play_note(*n, note_length);
+            match self.bc.play_note(*n, note_length) {
+                Ok(()) => (),
+                Err(e) => {
+                    // Hides an unneeded "loop stack not empty" (or end_loop) error
+                    let _ = self.bc.end_loop(None);
+                    return Err(e.into());
+                }
+            }
         }
 
         self.bc.end_loop(None)?;
@@ -593,7 +559,7 @@ impl ChannelBcGenerator<'_> {
             self.bc.play_note(
                 notes[break_point],
                 PlayNoteTicks::KeyOff(BcTicksKeyOff::try_from(last_note_ticks)?),
-            )
+            )?;
         }
 
         if self.bc.get_tick_counter() != expected_tick_counter {

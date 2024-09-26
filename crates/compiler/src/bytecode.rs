@@ -14,10 +14,12 @@ use crate::driver_constants::{
 use crate::envelope::{Adsr, Envelope, Gain};
 use crate::errors::{BytecodeError, ValueError};
 use crate::notes::{Note, LAST_NOTE_ID};
+use crate::samples::note_range;
 use crate::time::{TickClock, TickCounter, TickCounterWithLoopFlag};
 use crate::value_newtypes::{i8_value_newtype, u8_value_newtype, ValueNewType};
 
 use std::cmp::max;
+use std::ops::RangeInclusive;
 
 pub const KEY_OFF_TICK_DELAY: u32 = 1;
 
@@ -558,6 +560,9 @@ pub struct Bytecode<'a> {
     state: State,
 
     loop_stack: Vec<LoopState>,
+
+    note_range: Option<RangeInclusive<Note>>,
+    show_missing_set_instrument_error: bool,
 }
 
 impl Bytecode<'_> {
@@ -592,8 +597,14 @@ impl Bytecode<'_> {
                 },
                 prev_slurred_note: SlurredNoteState::Unchanged,
             },
-            context,
             loop_stack: Vec::new(),
+            note_range: None,
+            show_missing_set_instrument_error: match &context {
+                BytecodeContext::SoundEffect => true,
+                BytecodeContext::SongChannel => true,
+                BytecodeContext::SongSubroutine => false,
+            },
+            context,
         }
     }
 
@@ -696,6 +707,26 @@ impl Bytecode<'_> {
         Ok((self.bytecode, self.state))
     }
 
+    fn _test_note_in_range(&mut self, note: Note) -> Result<(), BytecodeError> {
+        match &self.note_range {
+            Some(note_range) => {
+                if note_range.contains(&note) {
+                    Ok(())
+                } else {
+                    Err(BytecodeError::NoteOutOfRange(note, note_range.clone()))
+                }
+            }
+            None => {
+                if self.show_missing_set_instrument_error {
+                    self.show_missing_set_instrument_error = false;
+                    Err(BytecodeError::CannotPlayNoteBeforeSettingInstrument)
+                } else {
+                    Ok(())
+                }
+            }
+        }
+    }
+
     pub fn wait(&mut self, length: BcTicksNoKeyOff) {
         self.state.tick_counter += length.to_tick_count();
 
@@ -709,7 +740,9 @@ impl Bytecode<'_> {
         emit_bytecode!(self, opcodes::REST, length.bc_argument);
     }
 
-    pub fn play_note(&mut self, note: Note, length: PlayNoteTicks) {
+    pub fn play_note(&mut self, note: Note, length: PlayNoteTicks) -> Result<(), BytecodeError> {
+        self._test_note_in_range(note)?;
+
         self.state.tick_counter += length.to_tick_count();
         self.state.prev_slurred_note = match length {
             PlayNoteTicks::KeyOff(_) => SlurredNoteState::None,
@@ -719,9 +752,18 @@ impl Bytecode<'_> {
         let opcode = NoteOpcode::new(note, &length);
 
         emit_bytecode!(self, opcode.opcode, length.bc_argument());
+
+        Ok(())
     }
 
-    pub fn portamento(&mut self, note: Note, velocity: PortamentoVelocity, length: PlayNoteTicks) {
+    pub fn portamento(
+        &mut self,
+        note: Note,
+        velocity: PortamentoVelocity,
+        length: PlayNoteTicks,
+    ) -> Result<(), BytecodeError> {
+        self._test_note_in_range(note)?;
+
         self.state.tick_counter += length.to_tick_count();
 
         let speed = velocity.pitch_offset_per_tick();
@@ -733,6 +775,8 @@ impl Bytecode<'_> {
         } else {
             emit_bytecode!(self, opcodes::PORTAMENTO_UP, speed, length, note_param);
         }
+
+        Ok(())
     }
 
     pub fn set_vibrato_depth_and_play_note(
@@ -776,8 +820,17 @@ impl Bytecode<'_> {
         emit_bytecode!(self, opcodes::SET_VIBRATO, 0u8, 0u8);
     }
 
-    pub fn set_instrument(&mut self, instrument: InstrumentId) {
+    fn _set_state_instrument_and_note_range(&mut self, instrument: InstrumentId) {
+        self.note_range = self
+            .instruments
+            .get_index(instrument.as_u8().into())
+            .map(note_range);
         self.state.instrument = IeState::Known(instrument);
+    }
+
+    pub fn set_instrument(&mut self, instrument: InstrumentId) {
+        self._set_state_instrument_and_note_range(instrument);
+
         self.state.envelope = match self.instruments.get_index(instrument.as_u8().into()) {
             Some(i) => IeState::Known(i.envelope()),
             None => IeState::Unknown,
@@ -787,7 +840,8 @@ impl Bytecode<'_> {
     }
 
     pub fn set_instrument_and_adsr(&mut self, instrument: InstrumentId, adsr: Adsr) {
-        self.state.instrument = IeState::Known(instrument);
+        self._set_state_instrument_and_note_range(instrument);
+
         self.state.envelope = IeState::Known(Envelope::Adsr(adsr));
 
         emit_bytecode!(
@@ -800,7 +854,8 @@ impl Bytecode<'_> {
     }
 
     pub fn set_instrument_and_gain(&mut self, instrument: InstrumentId, gain: Gain) {
-        self.state.instrument = IeState::Known(instrument);
+        self._set_state_instrument_and_note_range(instrument);
+
         self.state.envelope = IeState::Known(Envelope::Gain(gain));
 
         emit_bytecode!(
@@ -1009,7 +1064,7 @@ impl Bytecode<'_> {
         self.state.tick_counter += subroutine.state.tick_counter;
 
         match subroutine.state.instrument {
-            IeState::Known(i) => self.state.instrument = IeState::Known(i),
+            IeState::Known(i) => self._set_state_instrument_and_note_range(i),
             IeState::Maybe(_) => panic!("unexpected maybe instrument"),
             IeState::Unknown => (),
         }

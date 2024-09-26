@@ -32,6 +32,7 @@ use crate::{export, mml, spc_file_export};
 
 use std::fmt::Display;
 use std::io;
+use std::ops::RangeInclusive;
 use std::path::PathBuf;
 
 #[derive(Debug)]
@@ -207,6 +208,9 @@ pub enum BytecodeError {
     CannotChangeTickClockInASoundEffect,
 
     GotoRelativeOutOfBounds,
+
+    NoteOutOfRange(Note, RangeInclusive<Note>),
+    CannotPlayNoteBeforeSettingInstrument,
 }
 
 #[derive(Debug)]
@@ -429,9 +433,6 @@ pub enum MmlError {
 
     InvalidPitchListSymbol,
 
-    NoteOutOfRange(Note, Note, Note),
-    CannotPlayNoteBeforeSettingInstrument,
-
     LoopPointAlreadySet,
     CannotSetLoopPoint,
     CannotSetLoopPointInALoop,
@@ -534,6 +535,12 @@ impl From<ValueError> for BytecodeAssemblerError {
 impl From<InvalidAdsrError> for BytecodeAssemblerError {
     fn from(e: InvalidAdsrError) -> Self {
         Self::ArgumentError(ValueError::InvalidAdsr(e))
+    }
+}
+
+impl From<BytecodeError> for BytecodeAssemblerError {
+    fn from(e: BytecodeError) -> Self {
+        Self::BytecodeError(e)
     }
 }
 
@@ -887,6 +894,19 @@ impl Display for BytecodeError {
                     "goto_relative offset out of bounds (bytecode is too large)"
                 )
             }
+
+            Self::NoteOutOfRange(n, range) => {
+                write!(
+                    f,
+                    "note out of range ({}, {} - {})",
+                    n.note_id(),
+                    range.start().note_id(),
+                    range.end().note_id(),
+                )
+            }
+            Self::CannotPlayNoteBeforeSettingInstrument => {
+                write!(f, "cannot play note before setting an instrument")
+            }
         }
     }
 }
@@ -1149,19 +1169,6 @@ impl Display for MmlError {
             Self::UnexpectedNumber => write!(f, "unexpected number"),
 
             Self::InvalidPitchListSymbol => write!(f, "invalid pitch list symbol"),
-
-            Self::NoteOutOfRange(n, min, max) => {
-                write!(
-                    f,
-                    "note out of range ({}, {} - {})",
-                    n.note_id(),
-                    min.note_id(),
-                    max.note_id()
-                )
-            }
-            Self::CannotPlayNoteBeforeSettingInstrument => {
-                write!(f, "cannot play note before setting an instrument")
-            }
 
             Self::LoopPointAlreadySet => write!(f, "loop point already set"),
             Self::CannotSetLoopPoint => write!(f, "cannot set loop point"),
