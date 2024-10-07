@@ -154,7 +154,7 @@ impl TryFrom<[u32; 4]> for Adsr {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub enum GainMode {
     Raw,
     Fixed,

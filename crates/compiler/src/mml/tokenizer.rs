@@ -11,7 +11,7 @@ use crate::errors::{MmlError, ValueError};
 use crate::file_pos::{FilePos, Line, LineIndexRange};
 use crate::notes::{parse_pitch_char, MmlPitch};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Token<'a> {
     End,
 
@@ -65,6 +65,7 @@ pub enum Token<'a> {
     Divider,
 }
 
+#[derive(Clone)]
 pub struct TokenWithPosition<'a> {
     pub pos: FilePos,
     pub token: Token<'a>,
@@ -436,6 +437,11 @@ impl<'a> MmlTokens<'a> {
 
     pub fn is_empty(&self) -> bool {
         self.tokens.is_empty()
+    }
+
+    pub fn extend(&mut self, tokens: &MmlTokens<'a>) {
+        self.tokens.extend(tokens.tokens.iter().cloned());
+        self.end_pos = tokens.end_pos;
     }
 
     pub fn parse_line(&mut self, line: Line<'a>, entire_line_range: LineIndexRange) {

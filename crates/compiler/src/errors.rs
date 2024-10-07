@@ -73,7 +73,7 @@ pub enum ProjectFileError {
 #[derive(Debug)]
 pub struct ProjectFileErrors(pub Vec<ProjectFileError>);
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct InvalidAdsrError {
     pub valid_a: bool,
     pub valid_d: bool,
@@ -81,7 +81,7 @@ pub struct InvalidAdsrError {
     pub valid_sr: bool,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum ValueError {
     CannotParseUnsigned(String),
     CannotParseSigned(String),
@@ -187,7 +187,7 @@ pub enum ValueError {
     NoGain,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum BytecodeError {
     OpenLoopStack(usize),
     NotInALoop,
@@ -394,7 +394,7 @@ pub enum MmlLineError {
     InvalidSoundEffectChannel,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum MmlError {
     // MmlStreamParser errors
     ValueError(ValueError),

@@ -204,16 +204,26 @@ pub(super) fn split_mml_song_lines(
                 let (id, line) = split_idstr_and_line(line);
                 match validate_music_channels(id, &start_pos) {
                     Ok(id) => {
-                        // Each channel will only use the line once
-                        let mut used = [true; N_MUSIC_CHANNELS];
-
-                        for c in id.chars() {
+                        if id.len() == 1 {
+                            let c = id.bytes().next().unwrap();
                             let index = u32::from(c) - u32::from(FIRST_MUSIC_CHANNEL);
                             let index = usize::try_from(index).unwrap();
 
-                            if used[index] {
-                                channels[index].parse_line(line.clone(), entire_line.index_range());
-                                used[index] = false;
+                            channels[index].parse_line(line.clone(), entire_line.index_range());
+                        } else {
+                            let tokens = MmlTokens::new_with_line(line, entire_line.index_range());
+
+                            // Each channel will only use the line once
+                            let mut unused = [true; N_MUSIC_CHANNELS];
+
+                            for c in id.chars() {
+                                let index = u32::from(c) - u32::from(FIRST_MUSIC_CHANNEL);
+                                let index = usize::try_from(index).unwrap();
+
+                                if unused[index] {
+                                    channels[index].extend(&tokens);
+                                    unused[index] = false;
+                                }
                             }
                         }
                     }

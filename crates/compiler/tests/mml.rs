@@ -3247,6 +3247,43 @@ A @0 MP20,2 a L a
     );
 }
 
+#[test]
+fn test_mml_repeated_channel_is_only_processed_once() {
+    assert_mml_channel_a_matches_bytecode(
+        r###"
+@0 dummy_instrument
+
+AAAAAAAAAAA @0 a
+"###,
+        &["set_instrument dummy_instrument", "play_note a4 24"],
+    );
+}
+
+/// Test the bytecode is repeated 4 times if there are 4 different channels on a single MML line
+#[test]
+fn test_mml_with_multiple_channels_on_one_line() {
+    let mml = r###"
+@0 dummy_instrument
+
+ADEF @0 a
+"###;
+    let bc_asm = &["set_instrument dummy_instrument", "play_note a4 24"];
+
+    let dummy_data = dummy_data();
+
+    let mml = compile_mml(mml, &dummy_data);
+
+    let bc_asm = assemble_channel_bytecode(
+        bc_asm,
+        &dummy_data.instruments_and_samples,
+        mml.subroutines(),
+        BcTerminator::DisableChannel,
+    )
+    .repeat(4);
+
+    assert_eq!(mml_bytecode(&mml), bc_asm);
+}
+
 // ----------------------------------------------------------------------------------------------
 
 /// Tests MML commands will still be merged if there are a change MML state command in between
