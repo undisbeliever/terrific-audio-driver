@@ -10,11 +10,12 @@ use super::command_parser::{
 };
 use super::identifier::IdentifierStr;
 use super::instruments::MmlInstrument;
-use super::tokenizer::MmlTokens;
+use super::tokenizer::{MmlTokens, SubroutineCallType};
 use super::{ChannelId, MmlSoundEffect, Section};
 
 #[cfg(feature = "mml_tracking")]
 use super::note_tracking::CursorTracker;
+use crate::bytecode_assembler::parse_asm_line;
 use crate::data::{self, UniqueNamesList};
 use crate::envelope::{Adsr, Envelope, Gain};
 #[cfg(feature = "mml_tracking")]
@@ -94,6 +95,7 @@ enum MpState {
 
 struct ChannelBcGenerator<'a> {
     pitch_table: &'a PitchTable,
+    mml_file: &'a str,
     instruments: &'a Vec<MmlInstrument>,
     subroutines: Option<&'a Vec<Subroutine>>,
 
@@ -108,6 +110,7 @@ impl ChannelBcGenerator<'_> {
     fn new<'a>(
         bc_data: Vec<u8>,
         pitch_table: &'a PitchTable,
+        mml_file: &'a str,
         data_instruments: &'a UniqueNamesList<data::InstrumentOrSample>,
         mml_instruments: &'a Vec<MmlInstrument>,
         subroutines: Option<&'a Vec<Subroutine>>,
@@ -115,6 +118,7 @@ impl ChannelBcGenerator<'_> {
     ) -> ChannelBcGenerator<'a> {
         ChannelBcGenerator {
             pitch_table,
+            mml_file,
             instruments: mml_instruments,
             subroutines,
             // Using None for subroutines to forbid subroutine calls in bytecode assembly
@@ -632,7 +636,11 @@ impl ChannelBcGenerator<'_> {
         }
     }
 
-    fn call_subroutine(&mut self, index: usize) -> Result<(), MmlError> {
+    fn call_subroutine(
+        &mut self,
+        index: usize,
+        disable_vibrato: SubroutineCallType,
+    ) -> Result<(), MmlError> {
         // CallSubroutine commands should only be created if the channel can call a subroutine.
         // `s_id` should always be valid
         let sub = match self.subroutines {
@@ -643,14 +651,24 @@ impl ChannelBcGenerator<'_> {
             None => panic!("subroutines is None"),
         };
 
-        match &self.mp {
-            MpState::Mp(_) => {
+        match (disable_vibrato, &self.mp) {
+            (SubroutineCallType::Asm, _) => {
+                self.bc
+                    .call_subroutine(sub.identifier.as_str(), &sub.subroutine_id)?;
+            }
+            (SubroutineCallType::AsmDisableVibrato, _) => {
                 self.bc.call_subroutine_and_disable_vibrato(
                     sub.identifier.as_str(),
                     &sub.subroutine_id,
                 )?;
             }
-            MpState::Disabled | MpState::Manual => {
+            (SubroutineCallType::Mml, MpState::Mp(_)) => {
+                self.bc.call_subroutine_and_disable_vibrato(
+                    sub.identifier.as_str(),
+                    &sub.subroutine_id,
+                )?;
+            }
+            (SubroutineCallType::Mml, MpState::Disabled | MpState::Manual) => {
                 self.bc
                     .call_subroutine(sub.identifier.as_str(), &sub.subroutine_id)?;
             }
@@ -713,8 +731,8 @@ impl ChannelBcGenerator<'_> {
             &MmlCommand::SetAdsr(adsr) => self.set_adsr(adsr),
             &MmlCommand::SetGain(gain) => self.set_gain(gain),
 
-            &MmlCommand::CallSubroutine(s_id) => {
-                self.call_subroutine(s_id)?;
+            &MmlCommand::CallSubroutine(s_id, d) => {
+                self.call_subroutine(s_id, d)?;
             }
 
             &MmlCommand::SetManualVibrato(v) => {
@@ -857,6 +875,12 @@ impl ChannelBcGenerator<'_> {
             &MmlCommand::SetSongTickClock(tick_clock) => {
                 self.set_song_tick_clock(tick_clock)?;
             }
+
+            MmlCommand::BytecodeAsm(range) => {
+                let asm = &self.mml_file[range.clone()];
+
+                parse_asm_line(&mut self.bc, asm)?
+            }
         }
 
         Ok(())
@@ -868,6 +892,7 @@ pub struct MmlSongBytecodeGenerator<'a> {
 
     default_zenlen: ZenLen,
     pitch_table: &'a PitchTable,
+    mml_file: &'a str,
     data_instruments: &'a UniqueNamesList<data::InstrumentOrSample>,
     sections: &'a [Section],
     mml_instruments: &'a Vec<MmlInstrument>,
@@ -890,6 +915,7 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
     pub fn new(
         default_zenlen: ZenLen,
         pitch_table: &'a PitchTable,
+        mml_file: &'a str,
         data_instruments: &'a UniqueNamesList<data::InstrumentOrSample>,
         sections: &'a [Section],
         instruments: &'a Vec<MmlInstrument>,
@@ -901,6 +927,7 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
             song_data: vec![0; header_size],
             default_zenlen,
             pitch_table,
+            mml_file,
             data_instruments,
             sections,
             mml_instruments: instruments,
@@ -949,7 +976,7 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
         while let Some(c) = next {
             next = parser.next();
 
-            if next.is_none() && matches!(c.command(), MmlCommand::CallSubroutine(_)) {
+            if next.is_none() && matches!(c.command(), MmlCommand::CallSubroutine(_, _)) {
                 return Some(c);
             }
             Self::_compile_command(c, parser, gen, bytecode_tracker);
@@ -978,8 +1005,11 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
             Err(e) => parser.add_error_range(c.pos().clone(), e),
         }
 
-        if matches!(c.command(), MmlCommand::EndLoop(_)) {
-            parser.set_tick_counter(gen.bc.get_tick_counter_with_loop_flag());
+        match c.command() {
+            MmlCommand::EndLoop(_) | MmlCommand::BytecodeAsm(_) => {
+                parser.set_tick_counter(gen.bc.get_tick_counter_with_loop_flag());
+            }
+            _ => (),
         }
 
         #[cfg(feature = "mml_tracking")]
@@ -1014,6 +1044,7 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
         let mut gen = ChannelBcGenerator::new(
             song_data,
             self.pitch_table,
+            self.mml_file,
             self.data_instruments,
             self.mml_instruments,
             Some(&self.subroutines),
@@ -1045,12 +1076,27 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
             (MpState::Mp(_), false) | (MpState::Disabled, false) | (MpState::Manual, _) => {
                 match tail_call {
                     Some(tc) => match tc.command() {
-                        MmlCommand::CallSubroutine(s) => {
+                        MmlCommand::CallSubroutine(
+                            s,
+                            SubroutineCallType::Mml | SubroutineCallType::Asm,
+                        ) => {
                             let sub = self.subroutines.get(*s).unwrap();
                             BcTerminator::TailSubroutineCall(
                                 sub.bytecode_offset.into(),
                                 &sub.subroutine_id,
                             )
+                        }
+                        MmlCommand::CallSubroutine(_, SubroutineCallType::AsmDisableVibrato) => {
+                            // `call_subroutine_and_disable_vibrato` + `return_from_subroutine` uses
+                            // less Audio-RAM then `disable_vibraro` + `goto_relative``
+                            Self::_compile_command(
+                                tc,
+                                &mut parser,
+                                &mut gen,
+                                #[cfg(feature = "mml_tracking")]
+                                &mut self.bytecode_tracker,
+                            );
+                            BcTerminator::ReturnFromSubroutine
                         }
                         _ => panic!("tail_call is not a CallSubroutine command"),
                     },
@@ -1131,6 +1177,7 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
         let mut gen = ChannelBcGenerator::new(
             song_data,
             self.pitch_table,
+            self.mml_file,
             self.data_instruments,
             self.mml_instruments,
             Some(&self.subroutines),
@@ -1190,6 +1237,7 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
 }
 
 pub fn parse_and_compile_sound_effect(
+    mml_file: &str,
     tokens: MmlTokens,
     pitch_table: &PitchTable,
     mml_instruments: &Vec<MmlInstrument>,
@@ -1213,6 +1261,7 @@ pub fn parse_and_compile_sound_effect(
     let mut gen = ChannelBcGenerator::new(
         Vec::new(),
         pitch_table,
+        mml_file,
         data_instruments,
         mml_instruments,
         None,

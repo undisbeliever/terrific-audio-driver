@@ -355,6 +355,9 @@ pub fn parse_asm_line(bc: &mut Bytecode, line: &str) -> Result<(), BytecodeAssem
     )
 }
 
+pub(crate) const CALL_SUBROUTINE: &str = "call_subroutine";
+pub(crate) const CALL_SUBROUTINE_AND_DISABLE_VIBRATO: &str = "call_subroutine_and_disable_vibrato";
+
 pub struct BytecodeAssembler<'a> {
     bc: Bytecode<'a>,
 }

@@ -4,12 +4,22 @@
 //
 // SPDX-License-Identifier: MIT
 
+use std::ops::Range;
+
 use super::IdentifierStr;
 
+use crate::bytecode_assembler;
 use crate::envelope::GainMode;
 use crate::errors::{MmlError, ValueError};
-use crate::file_pos::{FilePos, Line, LineIndexRange};
+use crate::file_pos::{FilePos, Line, LineIndexRange, LineSplitter};
 use crate::notes::{parse_pitch_char, MmlPitch};
+
+#[derive(Debug, Clone, Copy)]
+pub enum SubroutineCallType {
+    Mml,
+    Asm,
+    AsmDisableVibrato,
+}
 
 #[derive(Debug, Clone)]
 pub enum Token<'a> {
@@ -21,7 +31,7 @@ pub enum Token<'a> {
 
     Pitch(MmlPitch),
 
-    CallSubroutine(IdentifierStr<'a>),
+    CallSubroutine(IdentifierStr<'a>, SubroutineCallType),
     SetInstrument(IdentifierStr<'a>),
 
     Number(u32),
@@ -63,6 +73,12 @@ pub enum Token<'a> {
     Dot,
     Comma,
     Divider,
+
+    StartBytecodeAsm,
+
+    // Must not contain a call subroutine instruction.
+    // Using Range to remove lifetime from MmlCommand.
+    BytecodeAsm(Range<usize>),
 }
 
 #[derive(Clone)]
@@ -201,6 +217,12 @@ impl<'a> Scanner<'a> {
         self.pos.char_index += 2;
         self.to_process = &self.to_process[2..];
     }
+
+    fn skip_whitespace(&mut self) {
+        if self.starts_with(|c: char| c.is_ascii_whitespace()) {
+            self.skip_while_char(|c| c.is_ascii_whitespace());
+        }
+    }
 }
 
 fn is_unknown_u8(c: u8) -> bool {
@@ -213,6 +235,7 @@ fn is_unknown_u8(c: u8) -> bool {
         | b'l' | b'r' | b'w' | b'o' | b'>' | b'<' | b'v' | b'V' | b'p' | b'Q' | b'~' | b'A'
         | b'G' | b'E' | b't' | b'T' | b'L' | b'%' | b'.' | b',' | b'|' | b'_' | b'{' | b'}'
         | b'M' => false,
+        b'\\' => false,
         c if c.is_ascii_whitespace() => false,
         _ => true,
     }
@@ -252,10 +275,7 @@ fn next_token<'a>(scanner: &mut Scanner<'a>) -> Option<TokenWithPosition<'a>> {
         }};
     }
 
-    // Skip whitespace
-    if scanner.starts_with(|c: char| c.is_ascii_whitespace()) {
-        scanner.skip_while_char(|c| c.is_ascii_whitespace());
-    }
+    scanner.skip_whitespace();
 
     let pos = scanner.pos();
 
@@ -309,7 +329,7 @@ fn next_token<'a>(scanner: &mut Scanner<'a>) -> Option<TokenWithPosition<'a>> {
         }
 
         b'!' => match scanner.identifier_token() {
-            Some(id) => Token::CallSubroutine(id),
+            Some(id) => Token::CallSubroutine(id, SubroutineCallType::Mml),
             None => Token::Error(MmlError::NoSubroutine),
         },
 
@@ -397,6 +417,16 @@ fn next_token<'a>(scanner: &mut Scanner<'a>) -> Option<TokenWithPosition<'a>> {
             }
         }
 
+        b'\\' => {
+            scanner.advance_one();
+
+            match scanner.read_while(|b: u8| b.is_ascii_alphabetic()) {
+                "asm" => Token::StartBytecodeAsm,
+                "" => Token::Error(MmlError::NoSlashCommand),
+                s => Token::Error(MmlError::InvalidSlashCommand(s.to_owned())),
+            }
+        }
+
         _ => parse_unknown_chars(scanner),
     };
 
@@ -405,6 +435,111 @@ fn next_token<'a>(scanner: &mut Scanner<'a>) -> Option<TokenWithPosition<'a>> {
         token,
         end: scanner.pos(),
     })
+}
+
+fn parse_bytecode_asm<'a>(
+    tokens: &mut Vec<TokenWithPosition<'a>>,
+    scanner: &mut Scanner<'a>,
+    remaining_lines: &mut LineSplitter<'a>,
+) {
+    scanner.skip_whitespace();
+
+    if scanner.first_byte() != Some(b'{') {
+        tokens.push(TokenWithPosition {
+            pos: scanner.pos(),
+            token: Token::Error(MmlError::NoBraceAfterAsm),
+            end: scanner.pos(),
+        });
+
+        return;
+    }
+    scanner.advance_one();
+
+    scanner.skip_whitespace();
+
+    loop {
+        scanner.skip_whitespace();
+
+        match scanner.first_byte() {
+            None => match remaining_lines.next() {
+                Some(l) => {
+                    tokens.push(TokenWithPosition {
+                        pos: scanner.pos(),
+                        token: Token::NewLine(l.index_range()),
+                        end: scanner.pos(),
+                    });
+                    *scanner = Scanner::new(l.text, l.position);
+                }
+                None => {
+                    tokens.push(TokenWithPosition {
+                        pos: scanner.pos(),
+                        token: Token::Error(MmlError::MissingEndAsm),
+                        end: scanner.pos(),
+                    });
+                    return;
+                }
+            },
+            Some(b'}') => {
+                scanner.advance_one();
+                return;
+            }
+            Some(b'|') => {
+                scanner.advance_one();
+            }
+            _ => {
+                let pos = scanner.pos();
+                let asm = scanner.read_while(|c: u8| c != b'|' && c != b'}');
+
+                // This assert ensures no infinite loops
+                assert!(!asm.is_empty());
+
+                if let Some(token) = parse_call_subroutine_asm(asm) {
+                    tokens.push(TokenWithPosition {
+                        pos,
+                        token,
+                        end: scanner.pos(),
+                    });
+                } else {
+                    let start = usize::try_from(pos.char_index()).unwrap();
+
+                    tokens.push(TokenWithPosition {
+                        pos,
+                        token: Token::BytecodeAsm(start..(start + asm.len())),
+                        end: scanner.pos(),
+                    });
+
+                    if scanner.first_byte() == Some(b'|') {
+                        scanner.advance_one();
+                    }
+                }
+            }
+        }
+    }
+}
+
+fn parse_call_subroutine_asm(asm: &str) -> Option<Token> {
+    if !asm.starts_with(bytecode_assembler::CALL_SUBROUTINE) {
+        return None;
+    }
+
+    let (instruction, argument) = asm.split_once(|c: char| c.is_ascii_whitespace())?;
+    let argument = argument.trim();
+
+    if argument.bytes().any(|c| c.is_ascii_whitespace()) {
+        return None;
+    }
+
+    match instruction {
+        bytecode_assembler::CALL_SUBROUTINE => Some(Token::CallSubroutine(
+            IdentifierStr::from_str(argument),
+            SubroutineCallType::Asm,
+        )),
+        bytecode_assembler::CALL_SUBROUTINE_AND_DISABLE_VIBRATO => Some(Token::CallSubroutine(
+            IdentifierStr::from_str(argument),
+            SubroutineCallType::AsmDisableVibrato,
+        )),
+        _ => None,
+    }
 }
 
 pub struct MmlTokens<'a> {
@@ -429,9 +564,13 @@ impl<'a> MmlTokens<'a> {
         }
     }
 
-    pub fn new_with_line(line: Line<'a>, entire_line_range: LineIndexRange) -> Self {
+    pub fn new_with_line(
+        line: Line<'a>,
+        entire_line_range: LineIndexRange,
+        remaining_lines: &mut LineSplitter<'a>,
+    ) -> Self {
         let mut s = Self::new();
-        s.parse_line(line, entire_line_range);
+        s.parse_line(line, entire_line_range, remaining_lines);
         s
     }
 
@@ -444,7 +583,12 @@ impl<'a> MmlTokens<'a> {
         self.end_pos = tokens.end_pos;
     }
 
-    pub fn parse_line(&mut self, line: Line<'a>, entire_line_range: LineIndexRange) {
+    pub fn parse_line(
+        &mut self,
+        line: Line<'a>,
+        entire_line_range: LineIndexRange,
+        remaining_lines: &mut LineSplitter<'a>,
+    ) {
         debug_assert!(entire_line_range.start <= line.position.char_index);
         debug_assert!(entire_line_range.end >= line.position.char_index);
         debug_assert!(
@@ -461,7 +605,12 @@ impl<'a> MmlTokens<'a> {
         let mut scanner = Scanner::new(line.text, line.position);
 
         while let Some(t) = next_token(&mut scanner) {
-            self.tokens.push(t)
+            match t.token {
+                Token::StartBytecodeAsm => {
+                    parse_bytecode_asm(&mut self.tokens, &mut scanner, remaining_lines);
+                }
+                _ => self.tokens.push(t),
+            }
         }
 
         self.end_pos = scanner.pos();

@@ -7,6 +7,11 @@ Version 0.0.12
 Bytecode changes:
  * Added note range tests to bytecode assembly.
 
+MML changes:
+ * Added bytecode assembly to MML
+    * Syntax: `\asm {  }`
+    * Bytecode instructions can be separated by `|` dividers or new lines.
+
 
 Version 0.0.11
 ==============

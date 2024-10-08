@@ -320,6 +320,10 @@ Numbers can be decimal, or hexadecimal when prefixed with `$` (ie, `$ff`)
     * CAUTION: MP Vibrato does not persist across subroutine calls.
       When calling a `!` subroutine, MP vibrato is temporally disabled and MP vibrato resumes after the `!` mml subroutine returns.
 
+ * `\asm { <asm_code> }` - bytecode assembly
+    * Instructions can be separated by `|` dividers or newlines.
+    * See [bytecode assembly documentation](bytecode-assembly-syntax.md).
+
 
 <br/>
 

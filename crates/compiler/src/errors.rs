@@ -219,7 +219,7 @@ pub enum BytecodeError {
     CannotPlayNoteBeforeSettingInstrument,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum BytecodeAssemblerError {
     BytecodeError(BytecodeError),
 
@@ -403,6 +403,7 @@ pub enum MmlError {
     ValueError(ValueError),
 
     BytecodeError(BytecodeError),
+    BytecodeAssemblerError(BytecodeAssemblerError),
 
     // + or - after a pitch
     TooManyAccidentals,
@@ -410,6 +411,11 @@ pub enum MmlError {
 
     // Number of unknown characters
     UnknownCharacters(u32),
+    NoSlashCommand,
+    InvalidSlashCommand(String),
+
+    NoBraceAfterAsm,
+    MissingEndAsm,
 
     InvalidNote,
 
@@ -568,6 +574,12 @@ impl From<ValueError> for MmlError {
 impl From<BytecodeError> for MmlError {
     fn from(e: BytecodeError) -> Self {
         Self::BytecodeError(e)
+    }
+}
+
+impl From<BytecodeAssemblerError> for MmlError {
+    fn from(e: BytecodeAssemblerError) -> Self {
+        Self::BytecodeAssemblerError(e)
     }
 }
 
@@ -1141,11 +1153,17 @@ impl Display for MmlError {
         match self {
             Self::ValueError(e) => e.fmt(f),
             Self::BytecodeError(e) => e.fmt(f),
+            Self::BytecodeAssemblerError(e) => e.fmt(f),
 
             Self::TooManyAccidentals => write!(f, "too many accidentals"),
             Self::TooManyDotsInNoteLength => write!(f, "too many dots in note length"),
 
             Self::UnknownCharacters(n) => write!(f, "{} unknown characters", n),
+            Self::NoSlashCommand => write!(f, "invalid command: \\"),
+            Self::InvalidSlashCommand(t) => write!(f, "invalid command: \\{t}"),
+
+            Self::NoBraceAfterAsm => write!(f, r"missing `{{` brace after \asm"),
+            Self::MissingEndAsm => write!(f, r"cannot find \asm end (no `}}`)"),
 
             Self::InvalidNote => write!(f, "invalid note"),
 

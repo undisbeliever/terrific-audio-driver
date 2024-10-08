@@ -60,7 +60,7 @@ fn subroutine_call_bitset(
     let mut o = SubroutineBitArray::new_all_clear();
 
     for t in tokens.token_iter() {
-        if let Token::CallSubroutine(id) = t {
+        if let Token::CallSubroutine(id, _) = t {
             match subroutine_name_map.get(id) {
                 Some(&i) => {
                     let bit = i.try_into().unwrap();

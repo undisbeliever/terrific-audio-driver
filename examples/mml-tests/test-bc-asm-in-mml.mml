@@ -1,0 +1,25 @@
+; Bytecode assembly in MML example
+
+#Tempo 120
+
+@1 sine
+
+A \asm {
+    set_instrument triangle
+    set_vibrato 15 2
+
+    set_gain I12
+    play_note e5 no_keyoff 48
+    set_gain D6
+    wait 24
+    play_note g5 no_keyoff 72
+    set_gain I6
+    play_note d5 no_keyoff 48
+    set_gain E18
+    rest 48
+
+    set_adsr 12 2 6 14
+	rest 24
+}
+
+A \asm { play_note e5 72 | play_note g5 72 | play_note d5 96 }

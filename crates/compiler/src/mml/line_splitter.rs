@@ -146,7 +146,9 @@ pub(super) fn split_mml_song_lines(
 
     let mut subroutine_name_map: HashMap<IdentifierStr, usize> = HashMap::new();
 
-    for entire_line in split_lines(mml_text) {
+    let mut line_splitter = split_lines(mml_text);
+
+    while let Some(entire_line) = line_splitter.next() {
         let start_pos = entire_line.position;
 
         if let Some(section_name) = entire_line.text.strip_prefix(SECTION_PREFIX) {
@@ -184,14 +186,20 @@ pub(super) fn split_mml_song_lines(
                 // Subroutines
                 match split_id_and_line(line, '!') {
                     Ok((id, line)) => match subroutine_name_map.get(&id) {
-                        Some(index) => subroutines[*index]
-                            .1
-                            .parse_line(line, entire_line.index_range()),
+                        Some(index) => subroutines[*index].1.parse_line(
+                            line,
+                            entire_line.index_range(),
+                            &mut line_splitter,
+                        ),
                         None => {
                             subroutine_name_map.insert(id, subroutines.len());
                             subroutines.push((
                                 id,
-                                MmlTokens::new_with_line(line, entire_line.index_range()),
+                                MmlTokens::new_with_line(
+                                    line,
+                                    entire_line.index_range(),
+                                    &mut line_splitter,
+                                ),
                             ));
                         }
                     },
@@ -209,9 +217,17 @@ pub(super) fn split_mml_song_lines(
                             let index = u32::from(c) - u32::from(FIRST_MUSIC_CHANNEL);
                             let index = usize::try_from(index).unwrap();
 
-                            channels[index].parse_line(line.clone(), entire_line.index_range());
+                            channels[index].parse_line(
+                                line.clone(),
+                                entire_line.index_range(),
+                                &mut line_splitter,
+                            );
                         } else {
-                            let tokens = MmlTokens::new_with_line(line, entire_line.index_range());
+                            let tokens = MmlTokens::new_with_line(
+                                line,
+                                entire_line.index_range(),
+                                &mut line_splitter,
+                            );
 
                             // Each channel will only use the line once
                             let mut unused = [true; N_MUSIC_CHANNELS];
@@ -276,7 +292,9 @@ pub(super) fn split_mml_sound_effect_lines(
     let mut instruments = Vec::new();
     let mut mml = MmlTokens::new();
 
-    for entire_line in split_lines(mml_text) {
+    let mut line_splitter = split_lines(mml_text);
+
+    while let Some(entire_line) = line_splitter.next() {
         let start_pos = entire_line.position;
 
         let line = match entire_line.text.split_once(COMMENT_CHAR) {
@@ -307,7 +325,7 @@ pub(super) fn split_mml_sound_effect_lines(
                 // MML channel
                 let (id, line) = split_idstr_and_line(line);
                 if id == "A" {
-                    mml.parse_line(line, entire_line.index_range());
+                    mml.parse_line(line, entire_line.index_range(), &mut line_splitter);
                 } else {
                     errors.push(ErrorWithPos(
                         start_pos.to_range(1),

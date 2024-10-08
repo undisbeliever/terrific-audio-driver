@@ -155,6 +155,7 @@ pub fn compile_mml(
     let mut compiler = MmlSongBytecodeGenerator::new(
         metadata.zenlen,
         pitch_table,
+        &mml_file.contents,
         data_instruments,
         &lines.sections,
         &instruments,
@@ -242,6 +243,7 @@ pub fn compile_sound_effect(
     drop(line_errors);
 
     match parse_and_compile_sound_effect(
+        sfx,
         lines.tokens,
         pitch_table,
         &instruments,
