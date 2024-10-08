@@ -117,7 +117,8 @@ impl ChannelBcGenerator<'_> {
             pitch_table,
             instruments: mml_instruments,
             subroutines,
-            bc: Bytecode::new_append_to_vec(bc_data, context, data_instruments),
+            // Using None for subroutines to forbid subroutine calls in bytecode assembly
+            bc: Bytecode::new_append_to_vec(bc_data, context, data_instruments, None),
             mp: MpState::Manual,
             loop_point: None,
         }

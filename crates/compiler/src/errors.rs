@@ -189,6 +189,8 @@ pub enum ValueError {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum BytecodeError {
+    ValueError(ValueError),
+
     OpenLoopStack(usize),
     NotInALoop,
     MissingLoopCount,
@@ -201,6 +203,10 @@ pub enum BytecodeError {
 
     StackOverflowInStartLoop(u32),
     StackOverflowInSubroutineCall(String, u32),
+
+    UnknownInstrument(String),
+    UnknownSubroutine(String),
+    NotAllowedToCallSubroutine,
 
     SubroutineCallInSoundEffect,
     ReturnInNonSubroutine,
@@ -223,9 +229,6 @@ pub enum BytecodeAssemblerError {
     InvalidNumberOfArgumentsRange(u8, u8),
 
     ArgumentError(ValueError),
-
-    UnknownInstrument(String),
-    UnknownSubroutine(String),
 
     InvalidKeyoffArgument(String),
     NoDirectionInPortamentoVelocity,
@@ -523,6 +526,12 @@ pub enum ExportError {
 impl From<InvalidAdsrError> for ValueError {
     fn from(e: InvalidAdsrError) -> Self {
         Self::InvalidAdsr(e)
+    }
+}
+
+impl From<ValueError> for BytecodeError {
+    fn from(v: ValueError) -> Self {
+        Self::ValueError(v)
     }
 }
 
@@ -835,6 +844,8 @@ impl Display for ValueError {
 impl Display for BytecodeError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
+            Self::ValueError(e) => e.fmt(f),
+
             Self::OpenLoopStack(len) => write!(f, "loop stack not empty ({} open loops)", len),
             Self::NotInALoop => write!(f, "not in a loop"),
             Self::MissingLoopCount => write!(f, "missing loop count"),
@@ -876,6 +887,10 @@ impl Display for BytecodeError {
                     BC_CHANNEL_STACK_SIZE
                 )
             }
+
+            Self::UnknownInstrument(s) => write!(f, "cannot find instrument: {}", s),
+            Self::UnknownSubroutine(s) => write!(f, "cannot find subroutine: {}", s),
+            Self::NotAllowedToCallSubroutine => write!(f, "not allowed to call subroutine here"),
 
             Self::SubroutineCallInSoundEffect => {
                 write!(f, "cannot call subroutine in a sound effect")
@@ -923,9 +938,6 @@ impl Display for BytecodeAssemblerError {
             Self::InvalidNumberOfArgumentsRange(min, max) => {
                 write!(f, "expected {} - {} arguments", min, max)
             }
-
-            Self::UnknownInstrument(s) => write!(f, "cannot find instrument: {}", s),
-            Self::UnknownSubroutine(s) => write!(f, "cannot find subroutine: {}", s),
 
             Self::InvalidKeyoffArgument(s) => write!(f, "invalid keyoff argument: {}", s),
             Self::NoDirectionInPortamentoVelocity => {

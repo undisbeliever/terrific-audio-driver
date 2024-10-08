@@ -19,6 +19,7 @@ use crate::time::{TickClock, TickCounter, TickCounterWithLoopFlag};
 use crate::value_newtypes::{i8_value_newtype, u8_value_newtype, ValueNewType};
 
 use std::cmp::max;
+use std::collections::HashMap;
 use std::ops::RangeInclusive;
 
 pub const KEY_OFF_TICK_DELAY: u32 = 1;
@@ -556,6 +557,7 @@ pub struct Bytecode<'a> {
     bytecode: Vec<u8>,
 
     instruments: &'a UniqueNamesList<data::InstrumentOrSample>,
+    subroutines: Option<&'a HashMap<&'a str, SubroutineId>>,
 
     state: State,
 
@@ -565,12 +567,13 @@ pub struct Bytecode<'a> {
     show_missing_set_instrument_error: bool,
 }
 
-impl Bytecode<'_> {
+impl<'a> Bytecode<'a> {
     pub fn new(
         context: BytecodeContext,
-        instruments: &UniqueNamesList<data::InstrumentOrSample>,
-    ) -> Bytecode {
-        Self::new_append_to_vec(Vec::new(), context, instruments)
+        instruments: &'a UniqueNamesList<data::InstrumentOrSample>,
+        subroutines: Option<&'a HashMap<&'a str, SubroutineId>>,
+    ) -> Bytecode<'a> {
+        Self::new_append_to_vec(Vec::new(), context, instruments, subroutines)
     }
 
     // Instead of creating a new `Vec<u8>` to hold the bytecode, write the data to the end of `vec`.
@@ -579,11 +582,13 @@ impl Bytecode<'_> {
     pub fn new_append_to_vec(
         vec: Vec<u8>,
         context: BytecodeContext,
-        instruments: &UniqueNamesList<data::InstrumentOrSample>,
-    ) -> Bytecode {
+        instruments: &'a UniqueNamesList<data::InstrumentOrSample>,
+        subroutines: Option<&'a HashMap<&'a str, SubroutineId>>,
+    ) -> Bytecode<'a> {
         Bytecode {
             bytecode: vec,
             instruments,
+            subroutines,
             state: State {
                 tick_counter: TickCounter::new(0),
                 max_stack_depth: StackDepth(0),
@@ -1154,6 +1159,62 @@ impl Bytecode<'_> {
             .push((self.state.tick_counter, tick_clock));
 
         emit_bytecode!(self, opcodes::SET_SONG_TICK_CLOCK, tick_clock.as_u8());
+        Ok(())
+    }
+
+    fn _find_subroutine(&self, name: &str) -> Result<&'a SubroutineId, BytecodeError> {
+        match self.subroutines {
+            Some(s) => match s.get(name) {
+                Some(s) => Ok(s),
+                None => Err(BytecodeError::UnknownSubroutine(name.to_owned())),
+            },
+            None => match &self.context {
+                BytecodeContext::SoundEffect => Err(BytecodeError::SubroutineCallInSoundEffect),
+                BytecodeContext::SongChannel | BytecodeContext::SongSubroutine => {
+                    Err(BytecodeError::NotAllowedToCallSubroutine)
+                }
+            },
+        }
+    }
+
+    pub fn call_subroutine_str(&mut self, name: &str) -> Result<(), BytecodeError> {
+        self.call_subroutine(name, self._find_subroutine(name)?)
+    }
+
+    pub fn call_subroutine_and_disable_vibrato_str(
+        &mut self,
+        name: &str,
+    ) -> Result<(), BytecodeError> {
+        self.call_subroutine_and_disable_vibrato(name, self._find_subroutine(name)?)
+    }
+
+    fn _find_instrument(&self, name: &str) -> Result<InstrumentId, BytecodeError> {
+        match self.instruments.get_with_index(name) {
+            Some((i, _inst)) => Ok(InstrumentId::try_from(i)?),
+            None => Err(BytecodeError::UnknownInstrument(name.to_owned())),
+        }
+    }
+
+    pub fn set_instrument_str(&mut self, name: &str) -> Result<(), BytecodeError> {
+        self.set_instrument(self._find_instrument(name)?);
+        Ok(())
+    }
+
+    pub fn set_instrument_and_adsr_str(
+        &mut self,
+        name: &str,
+        adsr: Adsr,
+    ) -> Result<(), BytecodeError> {
+        self.set_instrument_and_adsr(self._find_instrument(name)?, adsr);
+        Ok(())
+    }
+
+    pub fn set_instrument_and_gain_str(
+        &mut self,
+        name: &str,
+        gain: Gain,
+    ) -> Result<(), BytecodeError> {
+        self.set_instrument_and_gain(self._find_instrument(name)?, gain);
         Ok(())
     }
 }
