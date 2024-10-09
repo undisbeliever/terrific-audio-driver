@@ -3316,6 +3316,23 @@ A \asm {
 }
 
 #[test]
+fn test_multiline_asm_then_comments() {
+    assert_mml_channel_a_matches_bytecode(
+        r###"
+A \asm {
+    set_instrument dummy_instrument ; comment 1
+    play_note a4 no_keyoff 5
+} b ; comment afer \asm line
+"###,
+        &[
+            "set_instrument dummy_instrument",
+            "play_note a4 no_keyoff 5",
+            "play_note b4 24",
+        ],
+    );
+}
+
+#[test]
 fn test_bc_asm_call_subroutine_in_subroutine() {
     let sd = compile_mml(
         r##"

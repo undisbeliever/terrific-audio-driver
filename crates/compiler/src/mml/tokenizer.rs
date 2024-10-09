@@ -6,7 +6,7 @@
 
 use std::ops::Range;
 
-use super::IdentifierStr;
+use super::{IdentifierStr, COMMENT_CHAR};
 
 use crate::bytecode_assembler;
 use crate::envelope::GainMode;
@@ -470,9 +470,12 @@ fn parse_bytecode_asm<'a>(
         match scanner.first_byte() {
             None => match remaining_lines.next() {
                 Some(l) => {
+                    let line_range = l.index_range();
+                    let l = l.trim_comments(COMMENT_CHAR);
+
                     tokens.push(TokenWithPosition {
                         pos: scanner.pos(),
-                        token: Token::NewLine(l.index_range()),
+                        token: Token::NewLine(line_range),
                         end: scanner.pos(),
                     });
                     *scanner = Scanner::new(l.text, l.position);

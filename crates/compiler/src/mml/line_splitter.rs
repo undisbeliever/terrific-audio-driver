@@ -6,17 +6,14 @@
 
 use super::identifier::IdentifierStr;
 use super::tokenizer::MmlTokens;
-use super::MUSIC_CHANNEL_RANGE;
 use super::{Section, FIRST_MUSIC_CHANNEL};
+use super::{COMMENT_CHAR, MUSIC_CHANNEL_RANGE, SECTION_PREFIX};
 
 use crate::driver_constants::{MAX_SUBROUTINES, N_MUSIC_CHANNELS};
 use crate::errors::{ErrorWithPos, MmlLineError};
 use crate::file_pos::{blank_file_range, split_lines, FilePos, Line, MAX_MML_TEXT_LENGTH};
 
 use std::collections::HashMap;
-
-const COMMENT_CHAR: char = ';';
-const SECTION_PREFIX: &str = ";;";
 
 pub(crate) struct MmlLines<'a> {
     pub headers: Vec<Line<'a>>,
