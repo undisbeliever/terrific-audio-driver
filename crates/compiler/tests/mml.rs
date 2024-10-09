@@ -3345,8 +3345,12 @@ A !s
     );
 }
 
+/// Testing if loops in an `\asm` block are self-contained breaks tail-call-optimsation
+/// on subroutines that end with a subroutine call in an `\asm` block.
+//
+// ::TODO find a way to add tail call optimsation to subrotuines that end in `\asm { call_subroutine <name> }`::
 #[test]
-fn test_bc_asm_tail_call_subroutine_in_subroutine() {
+fn test_bc_asm_no_tail_call_optimsation() {
     let sd = compile_mml(
         r##"
 !s \asm { call_subroutine    t }
@@ -3360,13 +3364,13 @@ A !s
     let (s, bc) = get_subroutine_and_bytecode(&sd, "s").unwrap();
 
     assert_eq!(s.identifier.as_str(), "s");
-    assert_eq!(s.subroutine_id.max_stack_depth().to_u32(), 0);
+    assert_eq!(s.subroutine_id.max_stack_depth().to_u32(), 2);
     assert_eq!(s.subroutine_id.tick_counter().value(), 24);
 
-    // !t is 3 bytes in size
-    let offset = (-5i16).to_le_bytes();
-
-    assert_eq!(bc, [opcodes::GOTO_RELATIVE, offset[0], offset[1]]);
+    assert_eq!(
+        bc,
+        [opcodes::CALL_SUBROUTINE, 0, opcodes::RETURN_FROM_SUBROUTINE]
+    );
 }
 
 #[test]
@@ -3401,11 +3405,10 @@ A !s
 #[test]
 fn test_bc_asm_in_mml_loop() {
     assert_line_matches_bytecode(
-        r"[ \asm { play_note d4 10 | skip_last_loop | play_note e4 20 } ]5",
+        r"[ \asm { play_note d4 10 | play_note e4 20 } ]5",
         &[
             "start_loop 5",
             "play_note d4 10",
-            "skip_last_loop",
             "play_note e4 20",
             "end_loop",
         ],
@@ -3442,9 +3445,32 @@ fn test_bc_asm_skip_last_loop() {
     );
 }
 
-// ::TODO add start_loop (` \asm { start_loop } ]`) error tests::
-// ::TODO add end_loop (` [ \asm { end_loop }`) error tests::
-// ::TODO add skip_last_loop (` [ \asm { skip_last_loop } ]`) error tests::
+#[test]
+fn test_missing_end_loop_in_bc_asm_err() {
+    assert_error_in_mml_line(
+        r"\asm{start_loop} a ]2",
+        16,
+        BytecodeError::MissingEndLoopInAsmBlock.into(),
+    );
+}
+
+#[test]
+fn test_missing_start_loop_in_bc_asm_err() {
+    assert_error_in_mml_line(
+        r"[ a \asm{ end_loop 2}",
+        11,
+        MmlError::BytecodeAssemblerError(BytecodeError::MissingStartLoopInAsmBlock.into()),
+    );
+}
+
+#[test]
+fn test_skip_last_loop_outside_asm_loop_err() {
+    assert_error_in_mml_line(
+        r"[ c \asm{ skip_last_loop } c ]2",
+        11,
+        MmlError::BytecodeAssemblerError(BytecodeError::CannotModifyLoopOutsideAsmBlock.into()),
+    );
+}
 
 #[test]
 fn test_mml_bc_asm_repeated_channel_is_only_processed_once() {

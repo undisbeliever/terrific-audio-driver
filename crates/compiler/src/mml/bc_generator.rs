@@ -876,6 +876,14 @@ impl ChannelBcGenerator<'_> {
                 self.set_song_tick_clock(tick_clock)?;
             }
 
+            MmlCommand::StartBytecodeAsm => {
+                self.bc._start_asm_block();
+            }
+
+            MmlCommand::EndBytecodeAsm => {
+                self.bc._end_asm_block()?;
+            }
+
             MmlCommand::BytecodeAsm(range) => {
                 let asm = &self.mml_file[range.clone()];
 

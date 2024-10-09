@@ -187,6 +187,9 @@ pub enum MmlCommand {
     SetSongTempo(Bpm),
     SetSongTickClock(TickClock),
 
+    StartBytecodeAsm,
+    EndBytecodeAsm,
+
     // Using range so there is no lifetime in MmlCommand
     BytecodeAsm(Range<usize>),
 }
@@ -1475,7 +1478,8 @@ fn parse_token(pos: FilePos, token: Token, p: &mut Parser) -> MmlCommand {
         }
         Token::Divider => MmlCommand::NoCommand,
 
-        Token::StartBytecodeAsm => MmlCommand::NoCommand,
+        Token::StartBytecodeAsm => MmlCommand::StartBytecodeAsm,
+        Token::EndBytecodeAsm => MmlCommand::EndBytecodeAsm,
         Token::BytecodeAsm(range) => MmlCommand::BytecodeAsm(range),
 
         Token::EndPortamento => invalid_token_error(p, pos, MmlError::NoStartPortamento),

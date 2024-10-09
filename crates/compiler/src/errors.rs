@@ -217,6 +217,10 @@ pub enum BytecodeError {
 
     NoteOutOfRange(Note, RangeInclusive<Note>),
     CannotPlayNoteBeforeSettingInstrument,
+
+    MissingEndLoopInAsmBlock,
+    CannotModifyLoopOutsideAsmBlock,
+    MissingStartLoopInAsmBlock,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -933,6 +937,22 @@ impl Display for BytecodeError {
             }
             Self::CannotPlayNoteBeforeSettingInstrument => {
                 write!(f, "cannot play note before setting an instrument")
+            }
+
+            Self::MissingEndLoopInAsmBlock => {
+                write!(
+                    f,
+                    r"missing end_loop in \asm block (loops inside \asm blocks must be self-contained)"
+                )
+            }
+            Self::CannotModifyLoopOutsideAsmBlock => {
+                write!(f, r"cannot modify loop outside of an \asm block")
+            }
+            Self::MissingStartLoopInAsmBlock => {
+                write!(
+                    f,
+                    r"missing start_loop in \asm block (loops inside \asm blocks must be self-contained)"
+                )
             }
         }
     }

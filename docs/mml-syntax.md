@@ -322,6 +322,8 @@ Numbers can be decimal, or hexadecimal when prefixed with `$` (ie, `$ff`)
 
  * `\asm { <asm_code> }` - bytecode assembly
     * Instructions can be separated by `|` dividers or newlines.
+    * Loops inside `\asm` blocks must be self-contained.
+      The `start_loop` and `end_loop` instructions must be within the same `\asm` block.
     * See [bytecode assembly documentation](bytecode-assembly-syntax.md).
 
 

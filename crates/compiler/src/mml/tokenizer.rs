@@ -75,6 +75,7 @@ pub enum Token<'a> {
     Divider,
 
     StartBytecodeAsm,
+    EndBytecodeAsm,
 
     // Must not contain a call subroutine instruction.
     // Using Range to remove lifetime from MmlCommand.
@@ -455,6 +456,12 @@ fn parse_bytecode_asm<'a>(
     }
     scanner.advance_one();
 
+    tokens.push(TokenWithPosition {
+        pos: scanner.pos(),
+        token: Token::StartBytecodeAsm,
+        end: scanner.pos(),
+    });
+
     scanner.skip_whitespace();
 
     loop {
@@ -480,7 +487,14 @@ fn parse_bytecode_asm<'a>(
                 }
             },
             Some(b'}') => {
+                let pos = scanner.pos();
                 scanner.advance_one();
+
+                tokens.push(TokenWithPosition {
+                    pos,
+                    token: Token::EndBytecodeAsm,
+                    end: scanner.pos(),
+                });
                 return;
             }
             Some(b'|') => {

@@ -563,6 +563,9 @@ pub struct Bytecode<'a> {
 
     loop_stack: Vec<LoopState>,
 
+    /// The loop_stack len() (NOT depth) at the start of a `\asm` MML block
+    asm_block_stack_len: usize,
+
     note_range: Option<RangeInclusive<Note>>,
     show_missing_set_instrument_error: bool,
 }
@@ -603,6 +606,7 @@ impl<'a> Bytecode<'a> {
                 prev_slurred_note: SlurredNoteState::Unchanged,
             },
             loop_stack: Vec::new(),
+            asm_block_stack_len: 0,
             note_range: None,
             show_missing_set_instrument_error: match &context {
                 BytecodeContext::SoundEffect => true,
@@ -662,6 +666,24 @@ impl<'a> Bytecode<'a> {
         self.state.envelope = self.state.envelope.demote_to_maybe();
 
         self.state.vibrato = VibratoState::Unknown;
+    }
+
+    pub fn _start_asm_block(&mut self) {
+        debug_assert_eq!(self.asm_block_stack_len, 0);
+
+        self.asm_block_stack_len = self.loop_stack.len();
+    }
+
+    pub fn _end_asm_block(&mut self) -> Result<(), BytecodeError> {
+        let expected_stack_len = self.asm_block_stack_len;
+
+        self.asm_block_stack_len = 0;
+
+        if self.loop_stack.len() <= expected_stack_len {
+            Ok(())
+        } else {
+            Err(BytecodeError::MissingEndLoopInAsmBlock)
+        }
     }
 
     pub fn bytecode(
@@ -976,7 +998,11 @@ impl<'a> Bytecode<'a> {
 
         emit_bytecode!(self, opcodes::SKIP_LAST_LOOP, 0u8);
 
-        Ok(())
+        if self.loop_stack.len() > self.asm_block_stack_len {
+            Ok(())
+        } else {
+            Err(BytecodeError::CannotModifyLoopOutsideAsmBlock)
+        }
     }
 
     pub fn end_loop(&mut self, loop_count: Option<LoopCount>) -> Result<(), BytecodeError> {
@@ -1062,7 +1088,12 @@ impl<'a> Bytecode<'a> {
         }
 
         emit_bytecode!(self, opcodes::END_LOOP);
-        Ok(())
+
+        if self.loop_stack.len() >= self.asm_block_stack_len {
+            Ok(())
+        } else {
+            Err(BytecodeError::MissingStartLoopInAsmBlock)
+        }
     }
 
     fn _update_subtroutine_state_excluding_stack_depth(&mut self, subroutine: &SubroutineId) {
