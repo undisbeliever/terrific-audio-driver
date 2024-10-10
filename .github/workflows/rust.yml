@@ -56,5 +56,8 @@ jobs:
       shell: bash
       run: |
         if [[ ${RUNNER_OS} == "Linux" ]]; then
+            git submodule update --init --recursive
+            pushd cfltk || return 1
+            make -j8
             cargo build --quiet || cargo build --verbose
         fi
