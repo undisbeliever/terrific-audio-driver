@@ -32,7 +32,7 @@ jobs:
       run: |
         if [[ ${RUNNER_OS} == "Linux" ]]; then
             sudo apt-get update
-            sudo apt-get install -y lib{pango1.0,x11,xext,xft,xinerama,mpv}-dev\
+            sudo apt-get install -y lib{sdl2,pango1.0,x11,xext,xft,xinerama,mpv}-dev\
                 lib{xcursor,xrender,xfixes,webkit2gtk-4.1,vlc,png,gl1-mesa}-dev\
                 ninja-build libglu1-mesa-dev
         fi
