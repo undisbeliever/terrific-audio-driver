@@ -43,18 +43,19 @@ jobs:
         }
         export -f log
         if [[ ${RUNNER_OS} == "Linux" ]]; then
-            log 'INFO' 'Download dep'
+            log 'info' 'Download dep'
             sudo apt-get update
             sudo apt-get install -y ninja-build lib{x11,xext,xft,xinerama,xcursor,xrender,xfixes,pango1.0,gl1-mesa,glu1-mesa,sdl2}-dev
-            log 'INFO' 'Build Wiz'
+            log 'info' 'Build Wiz'
             git submodule update --init --recursive
             make -j -C wiz
-            log 'INFO' 'Cargo Fmt'
+            log 'info' 'Cargo Fmt'
             cargo fmt --check --all
-            log 'INFO' 'Cargo Clippy'
+            log 'info' 'Cargo Clippy'
             cargo clippy --quiet
-            log 'INFO' 'Cargo Test'
+            log 'info' 'Cargo Test'
             cargo test --quiet
-            log 'INFO' 'Cargo Build'
+            cargo run --example test_bc_interpreter examples/example-project.terrificaudio
+            log 'info' 'Cargo Build'
             cargo build --quiet
         fi > /dev/null
