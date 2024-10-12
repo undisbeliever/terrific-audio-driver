@@ -29,15 +29,31 @@ jobs:
     - name: Build
       shell: bash
       run: |
+        function log
+        {
+            declare -rAi TAG=(
+                [error]=31
+                [info]=32
+                [audit]=33
+            )
+            printf '%(%y-%m-%d_%T)T\x1b[%dm\t%s:\t%b\x1b[0m\n' -1 "${TAG[${1,,:?}]}" "${1^^}" "${2:?}" 1>&2
+            if [[ ${1} == 'error' ]]; then
+                return 1
+            fi
+        }
         if [[ ${RUNNER_OS} == "Linux" ]]; then
+            log 'INFO' 'Download dep'
             sudo apt-get update
-            sudo apt-get install -y lib{sdl2,pango1.0,x11,xext,xft,xinerama,mpv}-dev\
-                lib{xcursor,xrender,xfixes,webkit2gtk-4.1,vlc,png,gl1-mesa}-dev\
-                ninja-build libglu1-mesa-dev
+            sudo apt-get install -y ninja-build lib{glu1-mesa,xcursor,xrender,xfixes,webkit2gtk-4.1,vlc,png,gl1-mesa,sdl2,pango1.0,x11,xext,xft,xinerama,mpv}-dev\
+            log 'INFO' 'Build Wiz'
             git submodule update --init --recursive
             make -j -C wiz
+            log 'INFO' 'Cargo Fmt'
             cargo fmt --check --all
+            log 'INFO' 'Cargo Clippy'
             cargo clippy --quiet
+            log 'INFO' 'Cargo Test'
             cargo test --quiet
+            log 'INFO' 'Cargo Build'
             cargo build --quiet
         fi > /dev/null
