@@ -107,7 +107,7 @@ Licenses marked "synthesized" did not have a license file in their crate.
 
 
 Terrific Audio Driver makes use of the following open source projects:
-  * MIT License (84)
+  * MIT License (81)
   * Apache License 2.0 (2)
   * zlib License (2)
   * Unicode License Agreement - Data Files and Software (2016) (1)
@@ -430,7 +430,7 @@ Used by:
 ## MIT License
 
 Used by:
-  * [markdown 1.0.0-alpha.20](https://github.com/wooorm/markdown-rs)
+  * [markdown 1.0.0-alpha.21](https://github.com/wooorm/markdown-rs)
 
 ```
 (The MIT License)
@@ -497,7 +497,7 @@ DEALINGS IN THE SOFTWARE.
 ## MIT License
 
 Used by:
-  * [cc 1.1.18](https://github.com/rust-lang/cc-rs)
+  * [cc 1.1.30](https://github.com/rust-lang/cc-rs)
   * [cfg-if 1.0.0](https://github.com/alexcrichton/cfg-if)
   * [cmake 0.1.51](https://github.com/rust-lang/cmake-rs)
 
@@ -538,9 +538,9 @@ Used by:
   * [bitflags 2.6.0](https://github.com/bitflags/bitflags)
   * [num-complex 0.4.6](https://github.com/rust-num/num-complex)
   * [num-traits 0.2.19](https://github.com/rust-num/num-traits)
-  * [regex-automata 0.4.7](https://github.com/rust-lang/regex/tree/master/regex-automata)
-  * [regex-syntax 0.8.4](https://github.com/rust-lang/regex/tree/master/regex-syntax)
-  * [regex 1.10.6](https://github.com/rust-lang/regex)
+  * [regex-automata 0.4.8](https://github.com/rust-lang/regex/tree/master/regex-automata)
+  * [regex-syntax 0.8.5](https://github.com/rust-lang/regex/tree/master/regex-syntax)
+  * [regex 1.11.0](https://github.com/rust-lang/regex)
 
 ```
 Copyright (c) 2014 The Rust Project Developers
@@ -604,7 +604,7 @@ IN THE SOFTWARE.
 ## MIT License
 
 Used by:
-  * [libc 0.2.158](https://github.com/rust-lang/libc)
+  * [libc 0.2.159](https://github.com/rust-lang/libc)
 
 ```
 Copyright (c) 2014-2020 The Rust Project Developers
@@ -669,8 +669,8 @@ SOFTWARE.
 
 Used by:
   * [heck 0.5.0](https://github.com/withoutboats/heck)
-  * [unicode-id 0.3.4](https://github.com/Boshen/unicode-id)
-  * [unicode-width 0.1.13](https://github.com/unicode-rs/unicode-width)
+  * [unicode-id 0.3.5](https://github.com/Boshen/unicode-id)
+  * [unicode-width 0.1.14](https://github.com/unicode-rs/unicode-width)
 
 ```
 Copyright (c) 2015 The Rust Project Developers
@@ -840,7 +840,7 @@ DEALINGS IN THE SOFTWARE.
 ## MIT License
 
 Used by:
-  * [autocfg 1.3.0](https://github.com/cuviper/autocfg)
+  * [autocfg 1.4.0](https://github.com/cuviper/autocfg)
 
 ```
 Copyright (c) 2018 Josh Stone
@@ -936,7 +936,7 @@ SOFTWARE.
 Used by:
   * [anstream 0.6.15](https://github.com/rust-cli/anstyle.git)
   * [anstyle-query 1.1.1](https://github.com/rust-cli/anstyle)
-  * [clap 4.5.17](https://github.com/clap-rs/clap)
+  * [clap 4.5.20](https://github.com/clap-rs/clap)
   * [colorchoice 1.0.2](https://github.com/rust-cli/anstyle)
   * [is_terminal_polyfill 1.70.1](https://github.com/polyfill-rs/is_terminal_polyfill)
 
@@ -967,8 +967,7 @@ SOFTWARE.
 ## MIT License
 
 Used by:
-  * [unicode-id 0.3.4](https://github.com/Boshen/unicode-id)
-  * [unicode-width 0.1.13](https://github.com/unicode-rs/unicode-width)
+  * [unicode-width 0.1.14](https://github.com/unicode-rs/unicode-width)
 
 ```
 Licensed under the Apache License, Version 2.0
@@ -1016,7 +1015,7 @@ SOFTWARE.
 ## MIT License
 
 Used by:
-  * [fltk-sys 1.4.33](https://github.com/fltk-rs/fltk-rs)
+  * [fltk-sys 1.4.34](https://github.com/fltk-rs/fltk-rs)
 
 ```
 MIT License
@@ -1131,42 +1130,12 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 ## MIT License
 
 Used by:
-  * [fltk-sys 1.4.33](https://github.com/fltk-rs/fltk-rs)
-  * [fltk 1.4.33](https://github.com/fltk-rs/fltk-rs)
+  * [fltk 1.4.34](https://github.com/fltk-rs/fltk-rs)
 
 ```
 MIT License
 
 Copyright © 2021 The fltk-rs Authors.
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-
-```
-
-
-## MIT License
-
-Used by:
-  * [fltk-sys 1.4.33](https://github.com/fltk-rs/fltk-rs)
-
-```
-MIT License
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -1198,16 +1167,16 @@ Used by:
   * [cxxbridge-macro 1.0.128](https://github.com/dtolnay/cxx)
   * [itoa 1.0.11](https://github.com/dtolnay/itoa)
   * [link-cplusplus 1.0.9](https://github.com/dtolnay/link-cplusplus)
-  * [once_cell 1.19.0](https://github.com/matklad/once_cell)
+  * [once_cell 1.20.2](https://github.com/matklad/once_cell)
   * [paste 1.0.15](https://github.com/dtolnay/paste)
-  * [proc-macro2 1.0.86](https://github.com/dtolnay/proc-macro2)
+  * [proc-macro2 1.0.87](https://github.com/dtolnay/proc-macro2)
   * [quote 1.0.37](https://github.com/dtolnay/quote)
   * [scratch 1.0.7](https://github.com/dtolnay/scratch)
   * [serde 1.0.210](https://github.com/serde-rs/serde)
   * [serde_derive 1.0.210](https://github.com/serde-rs/serde)
   * [serde_json 1.0.128](https://github.com/serde-rs/json)
-  * [syn 2.0.77](https://github.com/dtolnay/syn)
-  * [unicode-ident 1.0.12](https://github.com/dtolnay/unicode-ident)
+  * [syn 2.0.79](https://github.com/dtolnay/syn)
+  * [unicode-ident 1.0.13](https://github.com/dtolnay/unicode-ident)
 
 ```
 Permission is hereby granted, free of charge, to any
@@ -1367,8 +1336,8 @@ THE SOFTWARE.
 ## MIT License
 
 Used by:
-  * [clap_builder 4.5.17](https://github.com/clap-rs/clap)
-  * [clap_derive 4.5.13](https://github.com/clap-rs/clap)
+  * [clap_builder 4.5.20](https://github.com/clap-rs/clap)
+  * [clap_derive 4.5.18](https://github.com/clap-rs/clap)
   * [clap_lex 0.7.2](https://github.com/clap-rs/clap)
 
 ```
@@ -1487,7 +1456,7 @@ You may use this code under the terms of either license.
   (synthesized by cargo-about)
 
 Used by:
-  * [unicode-ident 1.0.12](https://github.com/dtolnay/unicode-ident)
+  * [unicode-ident 1.0.13](https://github.com/dtolnay/unicode-ident)
 
 ```
 UNICODE, INC. LICENSE AGREEMENT - DATA FILES AND SOFTWARE
