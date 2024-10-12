@@ -41,6 +41,7 @@ jobs:
                 return 1
             fi
         }
+        expoer -f log
         if [[ ${RUNNER_OS} == "Linux" ]]; then
             log 'INFO' 'Download dep'
             sudo apt-get update
