@@ -1391,23 +1391,21 @@ func process_next_bytecode(channelIndex : u8 in x) {
     a = instructionPtr[y];
     instructionPtr++;
 
-    goto bytecode._play_note if a < bytecode.N_PLAY_NOTE_INSTRUCTIONS;
-
+    goto bytecode._play_note if a >= bytecode.InstructionTable.len;
 
     // A is a non play-note bytecode
-    y = a = a & 0b11111110;
+    y = a = a <<<= 1;
 
     // Push return address to the stack.
     //
-    // This method uses the same number of CPU cycles (and the least amount of code space) as:
+    // This method uses the same number of CPU cycles (and the least amount of code space) compared to:
     //   * `JMP[!abs+X]` plus saving/restoring X via a zeropage register (as there is no `TXY` or `TXY` instruction
     //   * self modifying code (writing the return address of a JMP instruction)
     //
+    push(a = (&>:bytecode.InstructionTable[0] as *u8)[y]);
+    push(a = (&<:bytecode.InstructionTable[0] as *u8)[y]);
 
-    push(a = ((&>:bytecode.InstructionTable[0] as u16 - bytecode.N_PLAY_NOTE_INSTRUCTIONS) as *u8)[y]);
-    push(a = ((&<:bytecode.InstructionTable[0] as u16 - bytecode.N_PLAY_NOTE_INSTRUCTIONS) as *u8)[y]);
-
-    if y < bytecode.FIRST_NO_ARGUMENT_INSTRUCTION_OPCODE {
+    if y < bytecode.FIRST_NO_ARGUMENT_INSTRUCTION_OPCODE * 2 {
         // Instruction has a parameter
         y = 0;
         a = instructionPtr[y];
@@ -1433,12 +1431,6 @@ func process_next_bytecode(channelIndex : u8 in x) {
 //    * Jump to `process_bytecode_with_loader_test`.
 //
 namespace bytecode {
-
-const InstructionTable : [u16 ; 32] = [ f as u16 for let f in INSTRUCTIONS_WITH_ARGUMENTS]
-                                    ~ [ f as u16 for let f in NO_ARGUMENT_INSTRUCTIONS]
-                                    ~ [ disable_channel as u16, ];
-
-let null_instruction = disable_channel as func(u8 in x, u8 in a);
 
 
 
@@ -2028,6 +2020,12 @@ func set_song_tick_clock(channelIndex : u8 in x, timer_clock: u8 in a) {
 
     ^return process_next_bytecode(x);
 }
+
+
+const InstructionTable : [u16 ; 64] = [ f as u16 for let f in INSTRUCTIONS_WITH_ARGUMENTS ]
+                                    ~ [ f as u16 for let f in NO_ARGUMENT_INSTRUCTIONS ]
+                                    ~ [ disable_channel as u16 ; N_PADDING_INSTRUCTIONS ]
+                                    ~ [ disable_channel as u16, ];
 
 }
 

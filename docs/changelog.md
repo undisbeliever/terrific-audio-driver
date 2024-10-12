@@ -6,6 +6,8 @@ Version 0.0.12
 
 Bytecode changes:
  * Added note range tests to bytecode assembly.
+ * Changed the bytecode format to increase the number of non play-note instructions from 32 to 64.
+
 
 MML changes:
  * Added bytecode assembly to MML

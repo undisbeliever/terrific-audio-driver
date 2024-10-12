@@ -61,6 +61,8 @@ struct DirItem {
 struct CommonDataPointers {
     // Pitch Table SoA
     // The pitch table must contain a maximum 256 pitches.
+    //
+    // CAUTION: This table is indexed by `play_note_opcode / 2 + instruments_pitchOffset`
     pitchTable_l : *u8,
     pitchTable_h : *u8,
 
@@ -70,8 +72,9 @@ struct CommonDataPointers {
     // The DIR table index for the instrument/sample
     instruments_scrn : *u8,
 
-    // offset between note c0 and `CommonDataHeader.pitchTable[0]`
-    // (pitchOffset + note is allowed to overflow and underflow)
+    // offset between note c0, `FIRST_PLAY_NOTE_INSTRUCTION/2` and  `CommonDataHeader.pitchTable[0]`
+    // The pitch that will be played for each note-opcode is `pitchTable[note_opcode/2 + pitchOffset]`.
+    // (`pitchOffset + note_opcode / 2` is allowed to overflow and underflow)
     instruments_pitchOffset : *u8,
 
     // The ADSR1 register value for the instrument/sample default envelope

@@ -5,7 +5,7 @@
 // SPDX-License-Identifier: MIT
 
 use crate::bytecode::opcodes;
-use crate::bytecode::{Pan, LAST_PLAY_NOTE_OPCODE};
+use crate::bytecode::Pan;
 use crate::common_audio_data::CommonAudioData;
 use crate::driver_constants::{
     addresses, LoaderDataType, BC_CHANNEL_STACK_OFFSET, BC_CHANNEL_STACK_SIZE,
@@ -256,208 +256,206 @@ impl ChannelState {
 
         let opcode: u8 = read_pc();
 
-        if opcode <= LAST_PLAY_NOTE_OPCODE {
-            let length = read_pc();
-            self.play_note(opcode, length)
-        } else {
-            let opcode = opcode & 0b11111110;
+        match opcode {
+            opcodes::FIRST_PLAY_NOTE_INSTRUCTION.. => {
+                let length = read_pc();
+                self.play_note(opcode, length);
+            }
 
-            match opcode {
-                opcodes::PORTAMENTO_DOWN | opcodes::PORTAMENTO_UP => {
-                    // Ignore portamento state
-                    let _portamento_speed = read_pc();
-                    let wait_length = read_pc();
-                    let note_and_key_off_bit = read_pc();
+            opcodes::PORTAMENTO_DOWN | opcodes::PORTAMENTO_UP => {
+                // Ignore portamento state
+                let _portamento_speed = read_pc();
+                let wait_length = read_pc();
+                let note_and_key_off_bit = read_pc();
 
-                    self.play_note(note_and_key_off_bit, wait_length);
-                }
+                self.play_note(note_and_key_off_bit, wait_length);
+            }
 
-                opcodes::SET_VIBRATO => {
-                    let depth = read_pc();
-                    let wavelength = read_pc();
+            opcodes::SET_VIBRATO => {
+                let depth = read_pc();
+                let wavelength = read_pc();
 
-                    self.vibrato_pitch_offset_per_tick = depth;
-                    self.vibrato_quarter_wavelength_in_ticks = wavelength;
-                }
-                opcodes::SET_VIBRATO_DEPTH_AND_PLAY_NOTE => {
-                    let depth = read_pc();
-                    let note = read_pc();
-                    let length = read_pc();
+                self.vibrato_pitch_offset_per_tick = depth;
+                self.vibrato_quarter_wavelength_in_ticks = wavelength;
+            }
+            opcodes::SET_VIBRATO_DEPTH_AND_PLAY_NOTE => {
+                let depth = read_pc();
+                let note = read_pc();
+                let length = read_pc();
 
-                    self.vibrato_pitch_offset_per_tick = depth;
-                    self.play_note(note, length);
-                }
+                self.vibrato_pitch_offset_per_tick = depth;
+                self.play_note(note, length);
+            }
 
-                opcodes::WAIT => {
-                    let to_rest = read_pc();
-                    self.ticks += Self::to_tick_count(to_rest, false);
-                }
-                opcodes::REST => {
-                    let to_rest = read_pc();
-                    self.ticks += Self::to_tick_count(to_rest, true);
-                }
+            opcodes::WAIT => {
+                let to_rest = read_pc();
+                self.ticks += Self::to_tick_count(to_rest, false);
+            }
+            opcodes::REST => {
+                let to_rest = read_pc();
+                self.ticks += Self::to_tick_count(to_rest, true);
+            }
 
-                opcodes::SET_INSTRUMENT => {
-                    self.instrument = Some(read_pc());
-                    self.adsr_or_gain_override = None;
-                }
-                opcodes::SET_INSTRUMENT_AND_ADSR_OR_GAIN => {
-                    let instrument = read_pc();
-                    let adsr1 = read_pc();
-                    let adsr2_or_gain = read_pc();
+            opcodes::SET_INSTRUMENT => {
+                self.instrument = Some(read_pc());
+                self.adsr_or_gain_override = None;
+            }
+            opcodes::SET_INSTRUMENT_AND_ADSR_OR_GAIN => {
+                let instrument = read_pc();
+                let adsr1 = read_pc();
+                let adsr2_or_gain = read_pc();
 
-                    self.instrument = Some(instrument);
-                    self.adsr_or_gain_override = Some((adsr1, adsr2_or_gain));
-                }
-                opcodes::SET_ADSR => {
-                    let adsr1 = read_pc();
-                    let adsr2 = read_pc();
+                self.instrument = Some(instrument);
+                self.adsr_or_gain_override = Some((adsr1, adsr2_or_gain));
+            }
+            opcodes::SET_ADSR => {
+                let adsr1 = read_pc();
+                let adsr2 = read_pc();
 
-                    self.adsr_or_gain_override = Some((adsr1, adsr2));
-                }
-                opcodes::SET_GAIN => {
-                    let gain = read_pc();
+                self.adsr_or_gain_override = Some((adsr1, adsr2));
+            }
+            opcodes::SET_GAIN => {
+                let gain = read_pc();
 
-                    self.adsr_or_gain_override = Some((0, gain));
-                }
+                self.adsr_or_gain_override = Some((0, gain));
+            }
 
-                opcodes::ADJUST_PAN => {
-                    let adjust = read_pc();
+            opcodes::ADJUST_PAN => {
+                let adjust = read_pc();
 
-                    let p = i8::from_le_bytes([adjust]);
-                    self.pan = self.pan.saturating_add_signed(p).clamp(0, Pan::MAX);
-                }
-                opcodes::SET_PAN => {
-                    self.pan = read_pc();
-                }
-                opcodes::SET_PAN_AND_VOLUME => {
-                    let pan = read_pc();
-                    let volume = read_pc();
+                let p = i8::from_le_bytes([adjust]);
+                self.pan = self.pan.saturating_add_signed(p).clamp(0, Pan::MAX);
+            }
+            opcodes::SET_PAN => {
+                self.pan = read_pc();
+            }
+            opcodes::SET_PAN_AND_VOLUME => {
+                let pan = read_pc();
+                let volume = read_pc();
 
-                    self.pan = pan;
-                    self.volume = volume;
-                }
-                opcodes::ADJUST_VOLUME => {
-                    let adjust = read_pc();
+                self.pan = pan;
+                self.volume = volume;
+            }
+            opcodes::ADJUST_VOLUME => {
+                let adjust = read_pc();
 
-                    let v = i8::from_le_bytes([adjust]);
-                    self.volume = self.volume.saturating_add_signed(v);
-                }
-                opcodes::SET_VOLUME => {
-                    self.volume = read_pc();
-                }
+                let v = i8::from_le_bytes([adjust]);
+                self.volume = self.volume.saturating_add_signed(v);
+            }
+            opcodes::SET_VOLUME => {
+                self.volume = read_pc();
+            }
 
-                opcodes::SET_SONG_TICK_CLOCK => {
-                    let timer = read_pc();
+            opcodes::SET_SONG_TICK_CLOCK => {
+                let timer = read_pc();
 
-                    self.tick_clock_override = Some(TickClockOverride {
-                        timer_register: timer,
-                        when: self.ticks,
-                    });
-                }
+                self.tick_clock_override = Some(TickClockOverride {
+                    timer_register: timer,
+                    when: self.ticks,
+                });
+            }
 
-                opcodes::GOTO_RELATIVE => {
-                    let l = read_pc();
-                    let h = read_pc();
+            opcodes::GOTO_RELATIVE => {
+                let l = read_pc();
+                let h = read_pc();
 
-                    if !self.disabled {
-                        // undo `h = read_pc()`.
-                        self.instruction_ptr -= 1;
+                if !self.disabled {
+                    // undo `h = read_pc()`.
+                    self.instruction_ptr -= 1;
 
-                        let offset = i16::from_le_bytes([l, h]);
+                    let offset = i16::from_le_bytes([l, h]);
 
-                        match self.instruction_ptr.checked_add_signed(offset) {
-                            Some(i) => self.instruction_ptr = i,
-                            None => self.disable_channel(),
-                        }
-                    }
-                }
-
-                opcodes::START_LOOP => {
-                    let counter = read_pc();
-
-                    match self.stack_pointer.checked_sub(3) {
-                        Some(sp) => {
-                            self.stack_pointer = sp;
-                            self.loop_stack_pointer = sp;
-
-                            let inst_ptr = self.song_ptr + self.instruction_ptr;
-                            let inst_ptr = inst_ptr.to_le_bytes();
-
-                            self.bc_stack[sp] = counter;
-                            self.bc_stack[sp + 1] = inst_ptr[0];
-                            self.bc_stack[sp + 2] = inst_ptr[1];
-                        }
+                    match self.instruction_ptr.checked_add_signed(offset) {
+                        Some(i) => self.instruction_ptr = i,
                         None => self.disable_channel(),
                     }
                 }
-                opcodes::SKIP_LAST_LOOP => {
-                    let bytes_to_skip = read_pc();
-
-                    // No bounds testing required when reading counter
-                    let sp = self.loop_stack_pointer;
-
-                    let counter = self.bc_stack[sp];
-                    if counter == 1 {
-                        self.instruction_ptr += u16::from(bytes_to_skip);
-
-                        let sp = sp + 3;
-                        self.stack_pointer = sp;
-                        if sp <= BC_CHANNEL_STACK_SIZE - BC_STACK_BYTES_PER_LOOP {
-                            self.loop_stack_pointer = sp;
-                        }
-                    }
-                }
-                opcodes::END_LOOP => {
-                    // No bounds testing required when modifying counter
-                    let sp = self.loop_stack_pointer;
-
-                    let counter = self.bc_stack[sp].wrapping_sub(1);
-
-                    if counter != 0 {
-                        self.bc_stack[sp] = counter;
-                        let inst_ptr =
-                            u16::from_le_bytes([self.bc_stack[sp + 1], self.bc_stack[sp + 2]]);
-                        match inst_ptr.checked_sub(self.song_ptr) {
-                            Some(i) => self.instruction_ptr = i,
-                            None => self.disable_channel(),
-                        }
-                    } else {
-                        let sp = sp + 3;
-                        self.stack_pointer = sp;
-                        if sp <= BC_CHANNEL_STACK_SIZE - BC_STACK_BYTES_PER_LOOP {
-                            self.loop_stack_pointer = sp;
-                        }
-                    }
-                }
-
-                opcodes::CALL_SUBROUTINE_AND_DISABLE_VIBRATO => {
-                    let s_id = read_pc();
-
-                    self.vibrato_pitch_offset_per_tick = 0;
-                    self.call_subroutine(s_id, song_data);
-                }
-                opcodes::CALL_SUBROUTINE => {
-                    let s_id = read_pc();
-
-                    self.call_subroutine(s_id, song_data);
-                }
-
-                opcodes::RETURN_FROM_SUBROUTINE_AND_DISABLE_VIBRATO => {
-                    self.vibrato_pitch_offset_per_tick = 0;
-                    self.return_from_subroutine();
-                }
-                opcodes::RETURN_FROM_SUBROUTINE => {
-                    self.return_from_subroutine();
-                }
-
-                opcodes::ENABLE_ECHO => self.echo = true,
-                opcodes::DISABLE_ECHO => self.echo = false,
-
-                opcodes::DISABLE_CHANNEL => self.disable_channel(),
-
-                _ => self.disable_channel(),
             }
+
+            opcodes::START_LOOP => {
+                let counter = read_pc();
+
+                match self.stack_pointer.checked_sub(3) {
+                    Some(sp) => {
+                        self.stack_pointer = sp;
+                        self.loop_stack_pointer = sp;
+
+                        let inst_ptr = self.song_ptr + self.instruction_ptr;
+                        let inst_ptr = inst_ptr.to_le_bytes();
+
+                        self.bc_stack[sp] = counter;
+                        self.bc_stack[sp + 1] = inst_ptr[0];
+                        self.bc_stack[sp + 2] = inst_ptr[1];
+                    }
+                    None => self.disable_channel(),
+                }
+            }
+            opcodes::SKIP_LAST_LOOP => {
+                let bytes_to_skip = read_pc();
+
+                // No bounds testing required when reading counter
+                let sp = self.loop_stack_pointer;
+
+                let counter = self.bc_stack[sp];
+                if counter == 1 {
+                    self.instruction_ptr += u16::from(bytes_to_skip);
+
+                    let sp = sp + 3;
+                    self.stack_pointer = sp;
+                    if sp <= BC_CHANNEL_STACK_SIZE - BC_STACK_BYTES_PER_LOOP {
+                        self.loop_stack_pointer = sp;
+                    }
+                }
+            }
+            opcodes::END_LOOP => {
+                // No bounds testing required when modifying counter
+                let sp = self.loop_stack_pointer;
+
+                let counter = self.bc_stack[sp].wrapping_sub(1);
+
+                if counter != 0 {
+                    self.bc_stack[sp] = counter;
+                    let inst_ptr =
+                        u16::from_le_bytes([self.bc_stack[sp + 1], self.bc_stack[sp + 2]]);
+                    match inst_ptr.checked_sub(self.song_ptr) {
+                        Some(i) => self.instruction_ptr = i,
+                        None => self.disable_channel(),
+                    }
+                } else {
+                    let sp = sp + 3;
+                    self.stack_pointer = sp;
+                    if sp <= BC_CHANNEL_STACK_SIZE - BC_STACK_BYTES_PER_LOOP {
+                        self.loop_stack_pointer = sp;
+                    }
+                }
+            }
+
+            opcodes::CALL_SUBROUTINE_AND_DISABLE_VIBRATO => {
+                let s_id = read_pc();
+
+                self.vibrato_pitch_offset_per_tick = 0;
+                self.call_subroutine(s_id, song_data);
+            }
+            opcodes::CALL_SUBROUTINE => {
+                let s_id = read_pc();
+
+                self.call_subroutine(s_id, song_data);
+            }
+
+            opcodes::RETURN_FROM_SUBROUTINE_AND_DISABLE_VIBRATO => {
+                self.vibrato_pitch_offset_per_tick = 0;
+                self.return_from_subroutine();
+            }
+            opcodes::RETURN_FROM_SUBROUTINE => {
+                self.return_from_subroutine();
+            }
+
+            opcodes::ENABLE_ECHO => self.echo = true,
+            opcodes::DISABLE_ECHO => self.echo = false,
+
+            opcodes::DISABLE_CHANNEL => self.disable_channel(),
+
+            _ => self.disable_channel(),
         }
     }
 

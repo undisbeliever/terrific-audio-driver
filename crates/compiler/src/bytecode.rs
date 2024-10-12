@@ -13,7 +13,7 @@ use crate::driver_constants::{
 };
 use crate::envelope::{Adsr, Envelope, Gain};
 use crate::errors::{BytecodeError, ValueError};
-use crate::notes::{Note, LAST_NOTE_ID};
+use crate::notes::{Note, LAST_NOTE_ID, N_NOTES};
 use crate::samples::note_range;
 use crate::time::{TickClock, TickCounter, TickCounterWithLoopFlag};
 use crate::value_newtypes::{i8_value_newtype, u8_value_newtype, ValueNewType};
@@ -28,8 +28,6 @@ pub const KEY_OFF_TICK_DELAY: u32 = 1;
 pub struct StackDepth(u32);
 
 const MAX_STACK_DEPTH: StackDepth = StackDepth(BC_CHANNEL_STACK_SIZE as u32);
-
-pub const LAST_PLAY_NOTE_OPCODE: u8 = 0xbf;
 
 u8_value_newtype!(Volume, VolumeOutOfRange, NoVolume);
 u8_value_newtype!(Pan, PanOutOfRange, NoPan, 0, 128);
@@ -55,49 +53,67 @@ pub enum BytecodeContext {
     SoundEffect,
 }
 
-// Using lower case to match bytecode names in the audio-driver source code.
 pub mod opcodes {
-    // opcodes 0x00 - 0xbf are play_note opcodes
+    // opcodes 0x00..FIRST_PLAY_NOTE_INSTRUCTION
 
-    pub const PORTAMENTO_DOWN: u8 = 0xc0;
-    pub const PORTAMENTO_UP: u8 = 0xc2;
+    macro_rules! declare_opcode_recursive {
+        ($opcode:expr, $name:ident) => {
+            pub const $name : u8 = $opcode;
+            const _ : () = assert!($name < DISABLE_CHANNEL, "Too many opcodes");
+        };
+        ($opcode:expr, $name:ident, $($tail:ident),+) => {
+            pub const $name : u8 = $opcode;
+            declare_opcode_recursive!($opcode + 1u8, $($tail),+);
+        };
+    }
 
-    pub const SET_VIBRATO: u8 = 0xc4;
-    pub const SET_VIBRATO_DEPTH_AND_PLAY_NOTE: u8 = 0xc6;
+    macro_rules! declare_opcodes {
+        ($first:ident, $($tail:ident),+ $(,)?) => {
+            declare_opcode_recursive!(0u8, $first, $($tail),+);
+        };
+    }
 
-    pub const WAIT: u8 = 0xc8;
-    pub const REST: u8 = 0xca;
+    // Order MUST MATCH `audio-driver/src/bytecode.wiz`
+    declare_opcodes!(
+        PORTAMENTO_DOWN,
+        PORTAMENTO_UP,
+        SET_VIBRATO,
+        SET_VIBRATO_DEPTH_AND_PLAY_NOTE,
+        WAIT,
+        REST,
+        SET_INSTRUMENT,
+        SET_INSTRUMENT_AND_ADSR_OR_GAIN,
+        SET_ADSR,
+        SET_GAIN,
+        ADJUST_PAN,
+        SET_PAN,
+        SET_PAN_AND_VOLUME,
+        ADJUST_VOLUME,
+        SET_VOLUME,
+        SET_SONG_TICK_CLOCK,
+        START_LOOP,
+        SKIP_LAST_LOOP,
+        CALL_SUBROUTINE_AND_DISABLE_VIBRATO,
+        CALL_SUBROUTINE,
+        GOTO_RELATIVE,
+        END_LOOP,
+        RETURN_FROM_SUBROUTINE_AND_DISABLE_VIBRATO,
+        RETURN_FROM_SUBROUTINE,
+        ENABLE_ECHO,
+        DISABLE_ECHO,
+    );
 
-    pub const SET_INSTRUMENT: u8 = 0xcc;
-    pub const SET_INSTRUMENT_AND_ADSR_OR_GAIN: u8 = 0xce;
-    pub const SET_ADSR: u8 = 0xd0;
-    pub const SET_GAIN: u8 = 0xd2;
+    // Last not play-note opcode
+    pub const DISABLE_CHANNEL: u8 = FIRST_PLAY_NOTE_INSTRUCTION - 1;
 
-    pub const ADJUST_PAN: u8 = 0xd4;
-    pub const SET_PAN: u8 = 0xd6;
-    pub const SET_PAN_AND_VOLUME: u8 = 0xd8;
-    pub const ADJUST_VOLUME: u8 = 0xda;
-    pub const SET_VOLUME: u8 = 0xdc;
-
-    pub const SET_SONG_TICK_CLOCK: u8 = 0xde;
-
-    pub const START_LOOP: u8 = 0xe0;
-    pub const SKIP_LAST_LOOP: u8 = 0xe2;
-
-    pub const CALL_SUBROUTINE_AND_DISABLE_VIBRATO: u8 = 0xe4;
-    pub const CALL_SUBROUTINE: u8 = 0xe6;
-
-    pub const GOTO_RELATIVE: u8 = 0xe8;
-
-    pub const END_LOOP: u8 = 0xea;
-    pub const RETURN_FROM_SUBROUTINE_AND_DISABLE_VIBRATO: u8 = 0xec;
-    pub const RETURN_FROM_SUBROUTINE: u8 = 0xee;
-    pub const ENABLE_ECHO: u8 = 0xf0;
-    pub const DISABLE_ECHO: u8 = 0xf2;
-
-    // Last opcode
-    pub const DISABLE_CHANNEL: u8 = 0xfe;
+    // Opcodes FIRST_PLAY_NOTE_INSTRUCTION.. are play note opcodes
+    pub const FIRST_PLAY_NOTE_INSTRUCTION: u8 = 64;
 }
+
+const _: () = assert!(
+    opcodes::FIRST_PLAY_NOTE_INSTRUCTION as u32 + (N_NOTES * 2) as u32 == 0x100,
+    "There are unaccounted bytecode opcodes"
+);
 
 u8_value_newtype!(
     InstrumentId,
@@ -351,13 +367,17 @@ struct NoteOpcode {
 
 impl NoteOpcode {
     fn new(note: Note, length: &PlayNoteTicks) -> Self {
-        assert!(LAST_NOTE_ID * 2 < LAST_PLAY_NOTE_OPCODE);
+        const _: () = assert!(
+            opcodes::FIRST_PLAY_NOTE_INSTRUCTION as u32 + (((LAST_NOTE_ID as u32) << 1) | 1)
+                <= u8::MAX as u32,
+            "Overflow test failed"
+        );
 
         let key_off_bit = match length {
             PlayNoteTicks::NoKeyOff(_) => 0,
             PlayNoteTicks::KeyOff(_) => 1,
         };
-        let opcode = (note.note_id() << 1) | key_off_bit;
+        let opcode = opcodes::FIRST_PLAY_NOTE_INSTRUCTION + ((note.note_id() << 1) | key_off_bit);
         Self { opcode }
     }
 }
@@ -395,7 +415,8 @@ macro_rules! emit_bytecode {
 }
 
 mod emit_bytecode {
-    use super::{NoteOpcode, LAST_PLAY_NOTE_OPCODE};
+    use super::NoteOpcode;
+    use crate::opcodes;
 
     pub trait Parameter {
         fn cast(self) -> u8;
@@ -415,7 +436,7 @@ mod emit_bytecode {
 
     impl Parameter for NoteOpcode {
         fn cast(self) -> u8 {
-            assert!(self.opcode <= LAST_PLAY_NOTE_OPCODE);
+            debug_assert!(self.opcode >= opcodes::FIRST_PLAY_NOTE_INSTRUCTION);
             self.opcode
         }
     }

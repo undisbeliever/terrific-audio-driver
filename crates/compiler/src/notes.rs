@@ -17,6 +17,8 @@ pub const LAST_OCTAVE: u8 = 7;
 pub const SEMITONES_PER_OCTAVE: u8 = 12;
 pub const LAST_NOTE_ID: u8 = (LAST_OCTAVE + 1) * SEMITONES_PER_OCTAVE - 1;
 
+pub const N_NOTES: u8 = (LAST_OCTAVE + 1) * SEMITONES_PER_OCTAVE;
+
 #[derive(Debug, Clone, Copy)]
 pub struct PitchChar(u8);
 
