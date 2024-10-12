@@ -4,7 +4,7 @@
 //
 // SPDX-License-Identifier: MIT
 
-use super::tokenizer::{MmlTokens, PeekableTokenIterator, Token};
+use super::tokenizer::{MmlTokens, PeekableTokenIterator, SubroutineCallType, Token};
 use super::{IdentifierStr, Section};
 
 #[cfg(feature = "mml_tracking")]
@@ -27,6 +27,7 @@ use crate::ValueNewType;
 
 use std::cmp::min;
 use std::collections::HashMap;
+use std::ops::Range;
 
 pub const MAX_COARSE_VOLUME: u32 = 16;
 pub const COARSE_VOLUME_MULTIPLIER: u8 = 16;
@@ -170,7 +171,7 @@ pub enum MmlCommand {
         note_length: PlayNoteTicks,
     },
 
-    CallSubroutine(usize),
+    CallSubroutine(usize, SubroutineCallType),
     StartLoop,
     SkipLastLoop,
     EndLoop(LoopCount),
@@ -185,6 +186,12 @@ pub enum MmlCommand {
 
     SetSongTempo(Bpm),
     SetSongTickClock(TickClock),
+
+    StartBytecodeAsm,
+    EndBytecodeAsm,
+
+    // Using range so there is no lifetime in MmlCommand
+    BytecodeAsm(Range<usize>),
 }
 
 pub struct MmlCommandWithPos {
@@ -1337,12 +1344,17 @@ fn parse_set_instrument(pos: FilePos, id: IdentifierStr, p: &mut Parser) -> MmlC
     }
 }
 
-fn parse_call_subroutine(pos: FilePos, id: IdentifierStr, p: &mut Parser) -> MmlCommand {
+fn parse_call_subroutine(
+    pos: FilePos,
+    id: IdentifierStr,
+    d: SubroutineCallType,
+    p: &mut Parser,
+) -> MmlCommand {
     match p.subroutine_maps() {
         Some((id_map, name_map)) => match id_map.get(&id) {
             Some(Some(s)) => {
                 p.increment_tick_counter(s.tick_counter());
-                MmlCommand::CallSubroutine(s.as_usize())
+                MmlCommand::CallSubroutine(s.as_usize(), d)
             }
             Some(None) => {
                 // Subroutine has been compiled, but it contains an error
@@ -1394,7 +1406,7 @@ fn parse_token(pos: FilePos, token: Token, p: &mut Parser) -> MmlCommand {
         Token::SetGain(mode) => parse_set_gain(pos, mode, p),
 
         Token::SetInstrument(id) => parse_set_instrument(pos, id, p),
-        Token::CallSubroutine(id) => parse_call_subroutine(pos, id, p),
+        Token::CallSubroutine(id, d) => parse_call_subroutine(pos, id, d, p),
 
         Token::StartLoop => {
             p.set_loop_flag();
@@ -1465,6 +1477,10 @@ fn parse_token(pos: FilePos, token: Token, p: &mut Parser) -> MmlCommand {
             MmlCommand::NoCommand
         }
         Token::Divider => MmlCommand::NoCommand,
+
+        Token::StartBytecodeAsm => MmlCommand::StartBytecodeAsm,
+        Token::EndBytecodeAsm => MmlCommand::EndBytecodeAsm,
+        Token::BytecodeAsm(range) => MmlCommand::BytecodeAsm(range),
 
         Token::EndPortamento => invalid_token_error(p, pos, MmlError::NoStartPortamento),
         Token::EndBrokenChord => invalid_token_error(p, pos, MmlError::NoStartBrokenChord),

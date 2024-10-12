@@ -33,27 +33,28 @@ let MAX_PAN = 128;
 namespace bytecode {
 
 let N_NOTE_OCTAVES = 8;
+
 let N_PLAY_NOTE_INSTRUCTIONS = N_NOTE_OCTAVES * 12 * 2;
 
-let FIRST_INSTRUCTION_WITH_ARGUMENT_OPCODE = N_PLAY_NOTE_INSTRUCTIONS;
-let FIRST_NO_ARGUMENT_INSTRUCTION_OPCODE = FIRST_INSTRUCTION_WITH_ARGUMENT_OPCODE + bytecode.INSTRUCTIONS_WITH_ARGUMENTS.len * 2;
+let FIRST_PLAY_NOTE_INSTRUCTION = 64;
+let FIRST_NO_ARGUMENT_INSTRUCTION_OPCODE = bytecode.INSTRUCTIONS_WITH_ARGUMENTS.len;
 
-// Last instruction is the `disable_channel` instruction
+// The last not-note instruction is the `disable_channel` instruction
 // `disable_channel` will also send a KEY-OFF event.
-let DISABLE_CHANNEL_BYTECODE = 0xfe;
+let DISABLE_CHANNEL_BYTECODE = FIRST_PLAY_NOTE_INSTRUCTION - 1;
 
 
 
-// OPCODES < N_PLAY_NOTE_INSTRUCTIONS are a two-byte play note instruction.
+// Opcodes >= FIRST_PLAY_NOTE_INSTRUCTION are a two-byte play note instruction.
 //
 //  nnnnnnnO llllllll
-//      nnnnnnn = note to play (number of semitones above c0)
+//      nnnnnnn = note to play (number of semitones above c0 + FIRST_PLAY_NOTE_INSTRUCTION / 2)
 //            O = key-off after note ends
 //     llllllll = note length
 //
 //  NOTE: This instruction will wait an extra tick if the `key-off` bit is set.
-
-// The remaining instructions have an opcode of `0xc0 + instruction_index * 2`
+//
+//  CAUTION: play-note instructions are offset by `FIRST_PLAY_NOTE_INSTRUCTION`.
 
 
 // Notes about rest/note length:
@@ -65,7 +66,7 @@ let INSTRUCTIONS_WITH_ARGUMENTS = [
     // parameters: ssssssss llllllll nnnnnnnO
     //     ssssssss = u8 speed (PITCH change per tick)
     //     llllllll = note length
-    //      nnnnnnn = note to target (number of semitones above c0)
+    //      nnnnnnn = note to play (same note format as a play-note instruction)
     //            O = key-off after note ends
     //
     // NOTE: portamento does not emit a KON event
@@ -74,7 +75,7 @@ let INSTRUCTIONS_WITH_ARGUMENTS = [
     // parameters: ssssssss llllllll nnnnnnnO
     //     ssssssss = u8 speed (PITCH change per tick)
     //     llllllll = note length
-    //      nnnnnnn = note to target (number of semitones above c0)
+    //      nnnnnnn = note to play (same note format as a play-note instruction)
     //            O = key-off after note ends
     //
     // NOTE: portamento does not emit a KON event
@@ -228,15 +229,9 @@ let NO_ARGUMENT_INSTRUCTIONS = [
 
     // Disable echo on this channel
     disable_echo,
-
-
-    // Padding
-    disable_channel,
-    disable_channel,
-    disable_channel,
-    disable_channel,
-    disable_channel,
 ];
+
+let N_PADDING_INSTRUCTIONS = 64 - 1 - INSTRUCTIONS_WITH_ARGUMENTS.len - NO_ARGUMENT_INSTRUCTIONS.len;
 
 }
 

@@ -1,7 +1,7 @@
 {
   "_about": {
     "file_type": "Terrific Audio Driver project file",
-    "version": "0.0.10"
+    "version": "0.0.11"
   },
   "instruments": [
     {
@@ -189,6 +189,10 @@
     {
       "name": "test_vibrato",
       "source": "mml-tests/test-vibrato.mml"
+    },
+    {
+      "name": "test_bc_asm_in_mml",
+      "source": "mml-tests/test-bc-asm-in-mml.mml"
     },
     {
       "name": "volume_pop_bug",

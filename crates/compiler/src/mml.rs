@@ -50,6 +50,9 @@ const _: () = assert!(
 
 const CHANNEL_NAMES: [&str; N_MUSIC_CHANNELS] = ["A", "B", "C", "D", "E", "F", "G", "H"];
 
+pub const COMMENT_CHAR: char = ';';
+pub const SECTION_PREFIX: &str = ";;";
+
 pub use self::bc_generator::MAX_BROKEN_CHORD_NOTES;
 pub use self::instruments::MmlInstrument;
 pub use self::tick_count_table::MmlTickCountTable;
@@ -155,6 +158,7 @@ pub fn compile_mml(
     let mut compiler = MmlSongBytecodeGenerator::new(
         metadata.zenlen,
         pitch_table,
+        &mml_file.contents,
         data_instruments,
         &lines.sections,
         &instruments,
@@ -242,6 +246,7 @@ pub fn compile_sound_effect(
     drop(line_errors);
 
     match parse_and_compile_sound_effect(
+        sfx,
         lines.tokens,
         pitch_table,
         &instruments,

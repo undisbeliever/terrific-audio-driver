@@ -13,12 +13,13 @@ use crate::driver_constants::{
 };
 use crate::envelope::{Adsr, Envelope, Gain};
 use crate::errors::{BytecodeError, ValueError};
-use crate::notes::{Note, LAST_NOTE_ID};
+use crate::notes::{Note, LAST_NOTE_ID, N_NOTES};
 use crate::samples::note_range;
 use crate::time::{TickClock, TickCounter, TickCounterWithLoopFlag};
 use crate::value_newtypes::{i8_value_newtype, u8_value_newtype, ValueNewType};
 
 use std::cmp::max;
+use std::collections::HashMap;
 use std::ops::RangeInclusive;
 
 pub const KEY_OFF_TICK_DELAY: u32 = 1;
@@ -27,8 +28,6 @@ pub const KEY_OFF_TICK_DELAY: u32 = 1;
 pub struct StackDepth(u32);
 
 const MAX_STACK_DEPTH: StackDepth = StackDepth(BC_CHANNEL_STACK_SIZE as u32);
-
-pub const LAST_PLAY_NOTE_OPCODE: u8 = 0xbf;
 
 u8_value_newtype!(Volume, VolumeOutOfRange, NoVolume);
 u8_value_newtype!(Pan, PanOutOfRange, NoPan, 0, 128);
@@ -54,49 +53,67 @@ pub enum BytecodeContext {
     SoundEffect,
 }
 
-// Using lower case to match bytecode names in the audio-driver source code.
 pub mod opcodes {
-    // opcodes 0x00 - 0xbf are play_note opcodes
+    // opcodes 0x00..FIRST_PLAY_NOTE_INSTRUCTION
 
-    pub const PORTAMENTO_DOWN: u8 = 0xc0;
-    pub const PORTAMENTO_UP: u8 = 0xc2;
+    macro_rules! declare_opcode_recursive {
+        ($opcode:expr, $name:ident) => {
+            pub const $name : u8 = $opcode;
+            const _ : () = assert!($name < DISABLE_CHANNEL, "Too many opcodes");
+        };
+        ($opcode:expr, $name:ident, $($tail:ident),+) => {
+            pub const $name : u8 = $opcode;
+            declare_opcode_recursive!($opcode + 1u8, $($tail),+);
+        };
+    }
 
-    pub const SET_VIBRATO: u8 = 0xc4;
-    pub const SET_VIBRATO_DEPTH_AND_PLAY_NOTE: u8 = 0xc6;
+    macro_rules! declare_opcodes {
+        ($first:ident, $($tail:ident),+ $(,)?) => {
+            declare_opcode_recursive!(0u8, $first, $($tail),+);
+        };
+    }
 
-    pub const WAIT: u8 = 0xc8;
-    pub const REST: u8 = 0xca;
+    // Order MUST MATCH `audio-driver/src/bytecode.wiz`
+    declare_opcodes!(
+        PORTAMENTO_DOWN,
+        PORTAMENTO_UP,
+        SET_VIBRATO,
+        SET_VIBRATO_DEPTH_AND_PLAY_NOTE,
+        WAIT,
+        REST,
+        SET_INSTRUMENT,
+        SET_INSTRUMENT_AND_ADSR_OR_GAIN,
+        SET_ADSR,
+        SET_GAIN,
+        ADJUST_PAN,
+        SET_PAN,
+        SET_PAN_AND_VOLUME,
+        ADJUST_VOLUME,
+        SET_VOLUME,
+        SET_SONG_TICK_CLOCK,
+        START_LOOP,
+        SKIP_LAST_LOOP,
+        CALL_SUBROUTINE_AND_DISABLE_VIBRATO,
+        CALL_SUBROUTINE,
+        GOTO_RELATIVE,
+        END_LOOP,
+        RETURN_FROM_SUBROUTINE_AND_DISABLE_VIBRATO,
+        RETURN_FROM_SUBROUTINE,
+        ENABLE_ECHO,
+        DISABLE_ECHO,
+    );
 
-    pub const SET_INSTRUMENT: u8 = 0xcc;
-    pub const SET_INSTRUMENT_AND_ADSR_OR_GAIN: u8 = 0xce;
-    pub const SET_ADSR: u8 = 0xd0;
-    pub const SET_GAIN: u8 = 0xd2;
+    // Last not play-note opcode
+    pub const DISABLE_CHANNEL: u8 = FIRST_PLAY_NOTE_INSTRUCTION - 1;
 
-    pub const ADJUST_PAN: u8 = 0xd4;
-    pub const SET_PAN: u8 = 0xd6;
-    pub const SET_PAN_AND_VOLUME: u8 = 0xd8;
-    pub const ADJUST_VOLUME: u8 = 0xda;
-    pub const SET_VOLUME: u8 = 0xdc;
-
-    pub const SET_SONG_TICK_CLOCK: u8 = 0xde;
-
-    pub const START_LOOP: u8 = 0xe0;
-    pub const SKIP_LAST_LOOP: u8 = 0xe2;
-
-    pub const CALL_SUBROUTINE_AND_DISABLE_VIBRATO: u8 = 0xe4;
-    pub const CALL_SUBROUTINE: u8 = 0xe6;
-
-    pub const GOTO_RELATIVE: u8 = 0xe8;
-
-    pub const END_LOOP: u8 = 0xea;
-    pub const RETURN_FROM_SUBROUTINE_AND_DISABLE_VIBRATO: u8 = 0xec;
-    pub const RETURN_FROM_SUBROUTINE: u8 = 0xee;
-    pub const ENABLE_ECHO: u8 = 0xf0;
-    pub const DISABLE_ECHO: u8 = 0xf2;
-
-    // Last opcode
-    pub const DISABLE_CHANNEL: u8 = 0xfe;
+    // Opcodes FIRST_PLAY_NOTE_INSTRUCTION.. are play note opcodes
+    pub const FIRST_PLAY_NOTE_INSTRUCTION: u8 = 64;
 }
+
+const _: () = assert!(
+    opcodes::FIRST_PLAY_NOTE_INSTRUCTION as u32 + (N_NOTES * 2) as u32 == 0x100,
+    "There are unaccounted bytecode opcodes"
+);
 
 u8_value_newtype!(
     InstrumentId,
@@ -350,13 +367,17 @@ struct NoteOpcode {
 
 impl NoteOpcode {
     fn new(note: Note, length: &PlayNoteTicks) -> Self {
-        assert!(LAST_NOTE_ID * 2 < LAST_PLAY_NOTE_OPCODE);
+        const _: () = assert!(
+            opcodes::FIRST_PLAY_NOTE_INSTRUCTION as u32 + (((LAST_NOTE_ID as u32) << 1) | 1)
+                <= u8::MAX as u32,
+            "Overflow test failed"
+        );
 
         let key_off_bit = match length {
             PlayNoteTicks::NoKeyOff(_) => 0,
             PlayNoteTicks::KeyOff(_) => 1,
         };
-        let opcode = (note.note_id() << 1) | key_off_bit;
+        let opcode = opcodes::FIRST_PLAY_NOTE_INSTRUCTION + ((note.note_id() << 1) | key_off_bit);
         Self { opcode }
     }
 }
@@ -394,7 +415,8 @@ macro_rules! emit_bytecode {
 }
 
 mod emit_bytecode {
-    use super::{NoteOpcode, LAST_PLAY_NOTE_OPCODE};
+    use super::NoteOpcode;
+    use crate::opcodes;
 
     pub trait Parameter {
         fn cast(self) -> u8;
@@ -414,7 +436,7 @@ mod emit_bytecode {
 
     impl Parameter for NoteOpcode {
         fn cast(self) -> u8 {
-            assert!(self.opcode <= LAST_PLAY_NOTE_OPCODE);
+            debug_assert!(self.opcode >= opcodes::FIRST_PLAY_NOTE_INSTRUCTION);
             self.opcode
         }
     }
@@ -556,21 +578,26 @@ pub struct Bytecode<'a> {
     bytecode: Vec<u8>,
 
     instruments: &'a UniqueNamesList<data::InstrumentOrSample>,
+    subroutines: Option<&'a HashMap<&'a str, SubroutineId>>,
 
     state: State,
 
     loop_stack: Vec<LoopState>,
 
+    /// The loop_stack len() (NOT depth) at the start of a `\asm` MML block
+    asm_block_stack_len: usize,
+
     note_range: Option<RangeInclusive<Note>>,
     show_missing_set_instrument_error: bool,
 }
 
-impl Bytecode<'_> {
+impl<'a> Bytecode<'a> {
     pub fn new(
         context: BytecodeContext,
-        instruments: &UniqueNamesList<data::InstrumentOrSample>,
-    ) -> Bytecode {
-        Self::new_append_to_vec(Vec::new(), context, instruments)
+        instruments: &'a UniqueNamesList<data::InstrumentOrSample>,
+        subroutines: Option<&'a HashMap<&'a str, SubroutineId>>,
+    ) -> Bytecode<'a> {
+        Self::new_append_to_vec(Vec::new(), context, instruments, subroutines)
     }
 
     // Instead of creating a new `Vec<u8>` to hold the bytecode, write the data to the end of `vec`.
@@ -579,11 +606,13 @@ impl Bytecode<'_> {
     pub fn new_append_to_vec(
         vec: Vec<u8>,
         context: BytecodeContext,
-        instruments: &UniqueNamesList<data::InstrumentOrSample>,
-    ) -> Bytecode {
+        instruments: &'a UniqueNamesList<data::InstrumentOrSample>,
+        subroutines: Option<&'a HashMap<&'a str, SubroutineId>>,
+    ) -> Bytecode<'a> {
         Bytecode {
             bytecode: vec,
             instruments,
+            subroutines,
             state: State {
                 tick_counter: TickCounter::new(0),
                 max_stack_depth: StackDepth(0),
@@ -598,6 +627,7 @@ impl Bytecode<'_> {
                 prev_slurred_note: SlurredNoteState::Unchanged,
             },
             loop_stack: Vec::new(),
+            asm_block_stack_len: 0,
             note_range: None,
             show_missing_set_instrument_error: match &context {
                 BytecodeContext::SoundEffect => true,
@@ -657,6 +687,24 @@ impl Bytecode<'_> {
         self.state.envelope = self.state.envelope.demote_to_maybe();
 
         self.state.vibrato = VibratoState::Unknown;
+    }
+
+    pub fn _start_asm_block(&mut self) {
+        debug_assert_eq!(self.asm_block_stack_len, 0);
+
+        self.asm_block_stack_len = self.loop_stack.len();
+    }
+
+    pub fn _end_asm_block(&mut self) -> Result<(), BytecodeError> {
+        let expected_stack_len = self.asm_block_stack_len;
+
+        self.asm_block_stack_len = 0;
+
+        if self.loop_stack.len() <= expected_stack_len {
+            Ok(())
+        } else {
+            Err(BytecodeError::MissingEndLoopInAsmBlock)
+        }
     }
 
     pub fn bytecode(
@@ -971,7 +1019,11 @@ impl Bytecode<'_> {
 
         emit_bytecode!(self, opcodes::SKIP_LAST_LOOP, 0u8);
 
-        Ok(())
+        if self.loop_stack.len() > self.asm_block_stack_len {
+            Ok(())
+        } else {
+            Err(BytecodeError::CannotModifyLoopOutsideAsmBlock)
+        }
     }
 
     pub fn end_loop(&mut self, loop_count: Option<LoopCount>) -> Result<(), BytecodeError> {
@@ -1057,7 +1109,12 @@ impl Bytecode<'_> {
         }
 
         emit_bytecode!(self, opcodes::END_LOOP);
-        Ok(())
+
+        if self.loop_stack.len() >= self.asm_block_stack_len {
+            Ok(())
+        } else {
+            Err(BytecodeError::MissingStartLoopInAsmBlock)
+        }
     }
 
     fn _update_subtroutine_state_excluding_stack_depth(&mut self, subroutine: &SubroutineId) {
@@ -1154,6 +1211,62 @@ impl Bytecode<'_> {
             .push((self.state.tick_counter, tick_clock));
 
         emit_bytecode!(self, opcodes::SET_SONG_TICK_CLOCK, tick_clock.as_u8());
+        Ok(())
+    }
+
+    fn _find_subroutine(&self, name: &str) -> Result<&'a SubroutineId, BytecodeError> {
+        match self.subroutines {
+            Some(s) => match s.get(name) {
+                Some(s) => Ok(s),
+                None => Err(BytecodeError::UnknownSubroutine(name.to_owned())),
+            },
+            None => match &self.context {
+                BytecodeContext::SoundEffect => Err(BytecodeError::SubroutineCallInSoundEffect),
+                BytecodeContext::SongChannel | BytecodeContext::SongSubroutine => {
+                    Err(BytecodeError::NotAllowedToCallSubroutine)
+                }
+            },
+        }
+    }
+
+    pub fn call_subroutine_str(&mut self, name: &str) -> Result<(), BytecodeError> {
+        self.call_subroutine(name, self._find_subroutine(name)?)
+    }
+
+    pub fn call_subroutine_and_disable_vibrato_str(
+        &mut self,
+        name: &str,
+    ) -> Result<(), BytecodeError> {
+        self.call_subroutine_and_disable_vibrato(name, self._find_subroutine(name)?)
+    }
+
+    fn _find_instrument(&self, name: &str) -> Result<InstrumentId, BytecodeError> {
+        match self.instruments.get_with_index(name) {
+            Some((i, _inst)) => Ok(InstrumentId::try_from(i)?),
+            None => Err(BytecodeError::UnknownInstrument(name.to_owned())),
+        }
+    }
+
+    pub fn set_instrument_str(&mut self, name: &str) -> Result<(), BytecodeError> {
+        self.set_instrument(self._find_instrument(name)?);
+        Ok(())
+    }
+
+    pub fn set_instrument_and_adsr_str(
+        &mut self,
+        name: &str,
+        adsr: Adsr,
+    ) -> Result<(), BytecodeError> {
+        self.set_instrument_and_adsr(self._find_instrument(name)?, adsr);
+        Ok(())
+    }
+
+    pub fn set_instrument_and_gain_str(
+        &mut self,
+        name: &str,
+        gain: Gain,
+    ) -> Result<(), BytecodeError> {
+        self.set_instrument_and_gain(self._find_instrument(name)?, gain);
         Ok(())
     }
 }

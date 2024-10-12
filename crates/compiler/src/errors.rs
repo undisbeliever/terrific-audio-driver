@@ -73,7 +73,7 @@ pub enum ProjectFileError {
 #[derive(Debug)]
 pub struct ProjectFileErrors(pub Vec<ProjectFileError>);
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct InvalidAdsrError {
     pub valid_a: bool,
     pub valid_d: bool,
@@ -81,7 +81,7 @@ pub struct InvalidAdsrError {
     pub valid_sr: bool,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum ValueError {
     CannotParseUnsigned(String),
     CannotParseSigned(String),
@@ -187,8 +187,10 @@ pub enum ValueError {
     NoGain,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum BytecodeError {
+    ValueError(ValueError),
+
     OpenLoopStack(usize),
     NotInALoop,
     MissingLoopCount,
@@ -202,6 +204,10 @@ pub enum BytecodeError {
     StackOverflowInStartLoop(u32),
     StackOverflowInSubroutineCall(String, u32),
 
+    UnknownInstrument(String),
+    UnknownSubroutine(String),
+    NotAllowedToCallSubroutine,
+
     SubroutineCallInSoundEffect,
     ReturnInNonSubroutine,
 
@@ -211,9 +217,13 @@ pub enum BytecodeError {
 
     NoteOutOfRange(Note, RangeInclusive<Note>),
     CannotPlayNoteBeforeSettingInstrument,
+
+    MissingEndLoopInAsmBlock,
+    CannotModifyLoopOutsideAsmBlock,
+    MissingStartLoopInAsmBlock,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum BytecodeAssemblerError {
     BytecodeError(BytecodeError),
 
@@ -223,9 +233,6 @@ pub enum BytecodeAssemblerError {
     InvalidNumberOfArgumentsRange(u8, u8),
 
     ArgumentError(ValueError),
-
-    UnknownInstrument(String),
-    UnknownSubroutine(String),
 
     InvalidKeyoffArgument(String),
     NoDirectionInPortamentoVelocity,
@@ -394,12 +401,13 @@ pub enum MmlLineError {
     InvalidSoundEffectChannel,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum MmlError {
     // MmlStreamParser errors
     ValueError(ValueError),
 
     BytecodeError(BytecodeError),
+    BytecodeAssemblerError(BytecodeAssemblerError),
 
     // + or - after a pitch
     TooManyAccidentals,
@@ -407,6 +415,11 @@ pub enum MmlError {
 
     // Number of unknown characters
     UnknownCharacters(u32),
+    NoSlashCommand,
+    InvalidSlashCommand(String),
+
+    NoBraceAfterAsm,
+    MissingEndAsm,
 
     InvalidNote,
 
@@ -526,6 +539,12 @@ impl From<InvalidAdsrError> for ValueError {
     }
 }
 
+impl From<ValueError> for BytecodeError {
+    fn from(v: ValueError) -> Self {
+        Self::ValueError(v)
+    }
+}
+
 impl From<ValueError> for BytecodeAssemblerError {
     fn from(e: ValueError) -> Self {
         Self::ArgumentError(e)
@@ -559,6 +578,12 @@ impl From<ValueError> for MmlError {
 impl From<BytecodeError> for MmlError {
     fn from(e: BytecodeError) -> Self {
         Self::BytecodeError(e)
+    }
+}
+
+impl From<BytecodeAssemblerError> for MmlError {
+    fn from(e: BytecodeAssemblerError) -> Self {
+        Self::BytecodeAssemblerError(e)
     }
 }
 
@@ -835,6 +860,8 @@ impl Display for ValueError {
 impl Display for BytecodeError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
+            Self::ValueError(e) => e.fmt(f),
+
             Self::OpenLoopStack(len) => write!(f, "loop stack not empty ({} open loops)", len),
             Self::NotInALoop => write!(f, "not in a loop"),
             Self::MissingLoopCount => write!(f, "missing loop count"),
@@ -877,6 +904,10 @@ impl Display for BytecodeError {
                 )
             }
 
+            Self::UnknownInstrument(s) => write!(f, "cannot find instrument: {}", s),
+            Self::UnknownSubroutine(s) => write!(f, "cannot find subroutine: {}", s),
+            Self::NotAllowedToCallSubroutine => write!(f, "not allowed to call subroutine here"),
+
             Self::SubroutineCallInSoundEffect => {
                 write!(f, "cannot call subroutine in a sound effect")
             }
@@ -907,6 +938,22 @@ impl Display for BytecodeError {
             Self::CannotPlayNoteBeforeSettingInstrument => {
                 write!(f, "cannot play note before setting an instrument")
             }
+
+            Self::MissingEndLoopInAsmBlock => {
+                write!(
+                    f,
+                    r"missing end_loop in \asm block (loops inside \asm blocks must be self-contained)"
+                )
+            }
+            Self::CannotModifyLoopOutsideAsmBlock => {
+                write!(f, r"cannot modify loop outside of an \asm block")
+            }
+            Self::MissingStartLoopInAsmBlock => {
+                write!(
+                    f,
+                    r"missing start_loop in \asm block (loops inside \asm blocks must be self-contained)"
+                )
+            }
         }
     }
 }
@@ -923,9 +970,6 @@ impl Display for BytecodeAssemblerError {
             Self::InvalidNumberOfArgumentsRange(min, max) => {
                 write!(f, "expected {} - {} arguments", min, max)
             }
-
-            Self::UnknownInstrument(s) => write!(f, "cannot find instrument: {}", s),
-            Self::UnknownSubroutine(s) => write!(f, "cannot find subroutine: {}", s),
 
             Self::InvalidKeyoffArgument(s) => write!(f, "invalid keyoff argument: {}", s),
             Self::NoDirectionInPortamentoVelocity => {
@@ -1129,11 +1173,17 @@ impl Display for MmlError {
         match self {
             Self::ValueError(e) => e.fmt(f),
             Self::BytecodeError(e) => e.fmt(f),
+            Self::BytecodeAssemblerError(e) => e.fmt(f),
 
             Self::TooManyAccidentals => write!(f, "too many accidentals"),
             Self::TooManyDotsInNoteLength => write!(f, "too many dots in note length"),
 
             Self::UnknownCharacters(n) => write!(f, "{} unknown characters", n),
+            Self::NoSlashCommand => write!(f, "invalid command: \\"),
+            Self::InvalidSlashCommand(t) => write!(f, "invalid command: \\{t}"),
+
+            Self::NoBraceAfterAsm => write!(f, r"missing `{{` brace after \asm"),
+            Self::MissingEndAsm => write!(f, r"cannot find \asm end (no `}}`)"),
 
             Self::InvalidNote => write!(f, "invalid note"),
 

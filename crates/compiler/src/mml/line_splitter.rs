@@ -6,17 +6,14 @@
 
 use super::identifier::IdentifierStr;
 use super::tokenizer::MmlTokens;
-use super::MUSIC_CHANNEL_RANGE;
 use super::{Section, FIRST_MUSIC_CHANNEL};
+use super::{COMMENT_CHAR, MUSIC_CHANNEL_RANGE, SECTION_PREFIX};
 
 use crate::driver_constants::{MAX_SUBROUTINES, N_MUSIC_CHANNELS};
 use crate::errors::{ErrorWithPos, MmlLineError};
 use crate::file_pos::{blank_file_range, split_lines, FilePos, Line, MAX_MML_TEXT_LENGTH};
 
 use std::collections::HashMap;
-
-const COMMENT_CHAR: char = ';';
-const SECTION_PREFIX: &str = ";;";
 
 pub(crate) struct MmlLines<'a> {
     pub headers: Vec<Line<'a>>,
@@ -146,7 +143,9 @@ pub(super) fn split_mml_song_lines(
 
     let mut subroutine_name_map: HashMap<IdentifierStr, usize> = HashMap::new();
 
-    for entire_line in split_lines(mml_text) {
+    let mut line_splitter = split_lines(mml_text);
+
+    while let Some(entire_line) = line_splitter.next() {
         let start_pos = entire_line.position;
 
         if let Some(section_name) = entire_line.text.strip_prefix(SECTION_PREFIX) {
@@ -184,14 +183,20 @@ pub(super) fn split_mml_song_lines(
                 // Subroutines
                 match split_id_and_line(line, '!') {
                     Ok((id, line)) => match subroutine_name_map.get(&id) {
-                        Some(index) => subroutines[*index]
-                            .1
-                            .parse_line(line, entire_line.index_range()),
+                        Some(index) => subroutines[*index].1.parse_line(
+                            line,
+                            entire_line.index_range(),
+                            &mut line_splitter,
+                        ),
                         None => {
                             subroutine_name_map.insert(id, subroutines.len());
                             subroutines.push((
                                 id,
-                                MmlTokens::new_with_line(line, entire_line.index_range()),
+                                MmlTokens::new_with_line(
+                                    line,
+                                    entire_line.index_range(),
+                                    &mut line_splitter,
+                                ),
                             ));
                         }
                     },
@@ -204,16 +209,34 @@ pub(super) fn split_mml_song_lines(
                 let (id, line) = split_idstr_and_line(line);
                 match validate_music_channels(id, &start_pos) {
                     Ok(id) => {
-                        // Each channel will only use the line once
-                        let mut used = [true; N_MUSIC_CHANNELS];
-
-                        for c in id.chars() {
+                        if id.len() == 1 {
+                            let c = id.bytes().next().unwrap();
                             let index = u32::from(c) - u32::from(FIRST_MUSIC_CHANNEL);
                             let index = usize::try_from(index).unwrap();
 
-                            if used[index] {
-                                channels[index].parse_line(line.clone(), entire_line.index_range());
-                                used[index] = false;
+                            channels[index].parse_line(
+                                line.clone(),
+                                entire_line.index_range(),
+                                &mut line_splitter,
+                            );
+                        } else {
+                            let tokens = MmlTokens::new_with_line(
+                                line,
+                                entire_line.index_range(),
+                                &mut line_splitter,
+                            );
+
+                            // Each channel will only use the line once
+                            let mut unused = [true; N_MUSIC_CHANNELS];
+
+                            for c in id.chars() {
+                                let index = u32::from(c) - u32::from(FIRST_MUSIC_CHANNEL);
+                                let index = usize::try_from(index).unwrap();
+
+                                if unused[index] {
+                                    channels[index].extend(&tokens);
+                                    unused[index] = false;
+                                }
                             }
                         }
                     }
@@ -266,7 +289,9 @@ pub(super) fn split_mml_sound_effect_lines(
     let mut instruments = Vec::new();
     let mut mml = MmlTokens::new();
 
-    for entire_line in split_lines(mml_text) {
+    let mut line_splitter = split_lines(mml_text);
+
+    while let Some(entire_line) = line_splitter.next() {
         let start_pos = entire_line.position;
 
         let line = match entire_line.text.split_once(COMMENT_CHAR) {
@@ -297,7 +322,7 @@ pub(super) fn split_mml_sound_effect_lines(
                 // MML channel
                 let (id, line) = split_idstr_and_line(line);
                 if id == "A" {
-                    mml.parse_line(line, entire_line.index_range());
+                    mml.parse_line(line, entire_line.index_range(), &mut line_splitter);
                 } else {
                     errors.push(ErrorWithPos(
                         start_pos.to_range(1),

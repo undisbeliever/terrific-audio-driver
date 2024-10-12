@@ -4,6 +4,7 @@
 //
 // SPDX-License-Identifier: MIT
 
+use crate::bytecode::opcodes;
 use crate::bytecode::InstrumentId;
 use crate::data::{Instrument, InstrumentOrSample, Sample, UniqueNamesList};
 use crate::driver_constants::{MAX_INSTRUMENTS_AND_SAMPLES, MAX_N_PITCHES};
@@ -11,6 +12,7 @@ use crate::errors::{PitchError, PitchTableError};
 use crate::notes::{self, Note, Octave};
 
 const SEMITONES_PER_OCTAVE: i32 = notes::SEMITONES_PER_OCTAVE as i32;
+const PITCH_TABLE_OFFSET: u8 = opcodes::FIRST_PLAY_NOTE_INSTRUCTION / 2;
 
 // Using micro-semitones to remove floating point equality comparisons.
 const SEMITONE_SCALE: i32 = 1_000_000;
@@ -294,7 +296,9 @@ fn process_pitch_vecs(sorted_pitches: SortedPitches, n_instruments_and_samples: 
         let pt_offset = i32::try_from(pitches.len() & 0xff).unwrap();
 
         for (instrument_id, pitch) in slice {
-            let o = pt_offset - (pitch.octaves_above_c0 + min_octave_offset) * SEMITONES_PER_OCTAVE;
+            let o = pt_offset
+                - (pitch.octaves_above_c0 + min_octave_offset) * SEMITONES_PER_OCTAVE
+                - PITCH_TABLE_OFFSET as i32;
             instruments_pitch_offset[*instrument_id] = o.to_le_bytes()[0];
         }
 
@@ -317,18 +321,19 @@ fn process_pitch_vecs(sorted_pitches: SortedPitches, n_instruments_and_samples: 
 
     // Samples
     for (inst_id, sp) in &sorted_pitches.samples {
-        match pitches
+        let o: u8 = match pitches
             .windows(sp.pitches.len())
             .position(|s| s == sp.pitches)
         {
-            Some(i) => {
-                instruments_pitch_offset[*inst_id] = i.try_into().unwrap_or(0);
-            }
+            Some(i) => i.try_into().unwrap_or(0),
             None => {
-                instruments_pitch_offset[*inst_id] = pitches.len().try_into().unwrap_or(0);
+                let o = pitches.len().try_into().unwrap_or(0);
                 pitches.extend(&sp.pitches);
+                o
             }
-        }
+        };
+
+        instruments_pitch_offset[*inst_id] = o.wrapping_sub(PITCH_TABLE_OFFSET);
     }
 
     Pt {
@@ -391,7 +396,9 @@ pub fn build_pitch_table(
 impl PitchTable {
     pub fn pitch_for_note(&self, inst_id: InstrumentId, note: Note) -> u16 {
         let offset: u8 = self.instruments_pitch_offset[usize::from(inst_id.as_u8())];
-        let index: u8 = offset.wrapping_add(note.note_id());
+        let index: u8 = offset
+            .wrapping_add(PITCH_TABLE_OFFSET)
+            .wrapping_add(note.note_id());
 
         let i = usize::from(index);
 

@@ -194,7 +194,11 @@ pub fn test_sample_song(
 ) -> Result<SongData, BytecodeAssemblerError> {
     let instruments = UniqueNamesList::blank_list();
 
-    let mut bc = Bytecode::new(crate::bytecode::BytecodeContext::SongChannel, &instruments);
+    let mut bc = Bytecode::new(
+        crate::bytecode::BytecodeContext::SongChannel,
+        &instruments,
+        None,
+    );
 
     let inst = InstrumentId::try_from(instrument)?;
 

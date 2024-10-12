@@ -891,6 +891,7 @@ struct MmlColors {
 
     channel_names: Color,
     invalid: Color,
+    mml_bc_asm: Color,
 
     error_bg: Color,
     bytecode_error: Color,
@@ -906,6 +907,7 @@ const MML_COLORS: MmlColors = MmlColors {
     metadata: Color::DarkRed,
     metadata_values: Color::DarkRed,
     instruments: Color::DarkGreen,
+    mml_bc_asm: Color::DarkGreen,
 
     subroutines: Color::from_rgb(0xcc, 0x55, 0x00), // hsl(25, 100, 40)
 
@@ -946,6 +948,15 @@ enum Style {
     ChannelName,
     InvalidLine,
 
+    SlashAsm0,
+    SlashAsm1,
+    SlashAsm2,
+    SlashAsm3,
+
+    BytecodeAsm,
+    BytecodeAsmComment,
+    BytecodeAsmSeparator,
+
     Error,
     BytecodeError,
 
@@ -979,17 +990,26 @@ impl Style {
             b'O' => Style::ChannelName,
             b'P' => Style::InvalidLine,
 
-            b'Q' => Style::Error,
-            b'R' => Style::BytecodeError,
+            b'Q' => Style::SlashAsm0,
+            b'R' => Style::SlashAsm1,
+            b'S' => Style::SlashAsm2,
+            b'T' => Style::SlashAsm3,
+
+            b'U' => Style::BytecodeAsm,
+            b'V' => Style::BytecodeAsmComment,
+            b'W' => Style::BytecodeAsmSeparator,
+
+            b'X' => Style::Error,
+            b'Y' => Style::BytecodeError,
 
             // MUST edit `NOTE_TRACKER_STR` when this character changes
-            b'S' => Style::NoteTracking,
+            b'Z' => Style::NoteTracking,
 
             _ => Style::Unknown,
         }
     }
 
-    const NOTE_TRACKER_STR: &'static str = "S";
+    const NOTE_TRACKER_STR: &'static str = "Z";
 
     const fn to_u8_char(self) -> u8 {
         b'A' + (self as u8)
@@ -1034,6 +1054,13 @@ fn highlight_data(mml_colors: &MmlColors, font_size: i32) -> Vec<StyleTableEntry
         courier(mml_colors.subroutines),
         courier_bold(mml_colors.channel_names),
         courier(mml_colors.invalid),
+        courier(mml_colors.normal),
+        courier(mml_colors.normal),
+        courier(mml_colors.normal),
+        courier(mml_colors.normal),
+        courier(mml_colors.mml_bc_asm),
+        courier(mml_colors.comments),
+        courier(mml_colors.normal),
         bg_bold(mml_colors.error_bg),
         courier_bold(mml_colors.bytecode_error),
         bg_bold(mml_colors.tracker_bg),
@@ -1046,10 +1073,18 @@ fn next_style_mml(current: Style, c: u8) -> Style {
     const LAST_CHANNEL: u8 = LAST_MUSIC_CHANNEL as u8;
 
     if c == b'\n' {
-        return Style::NewLine;
+        return match current {
+            Style::BytecodeAsm => Style::BytecodeAsm,
+            Style::BytecodeAsmComment => Style::BytecodeAsm,
+            _ => Style::NewLine,
+        };
     }
     if c == b';' {
-        return Style::Comment;
+        return match current {
+            Style::BytecodeAsm => Style::BytecodeAsmComment,
+            Style::BytecodeAsmComment => Style::BytecodeAsmComment,
+            _ => Style::Comment,
+        };
     }
 
     match current {
@@ -1117,6 +1152,36 @@ fn next_style_mml(current: Style, c: u8) -> Style {
             _ => Style::SubroutineName,
         },
 
+        Style::SlashAsm0 => match c {
+            b'a' => Style::SlashAsm1,
+            _ => Style::Normal,
+        },
+        Style::SlashAsm1 => match c {
+            b's' => Style::SlashAsm2,
+            _ => Style::Normal,
+        },
+        Style::SlashAsm2 => match c {
+            b'm' => Style::SlashAsm3,
+            _ => Style::Normal,
+        },
+        Style::SlashAsm3 => match c {
+            b'{' => Style::BytecodeAsm,
+            c if c.is_ascii_whitespace() => Style::SlashAsm3,
+            _ => Style::Normal,
+        },
+
+        Style::BytecodeAsm | Style::BytecodeAsmSeparator => match c {
+            b'}' => Style::Normal,
+            b';' => Style::BytecodeAsmComment,
+            b'|' => Style::BytecodeAsmSeparator,
+            _ => Style::BytecodeAsm,
+        },
+
+        Style::BytecodeAsmComment => match c {
+            b'\n' => Style::BytecodeAsm,
+            _ => Style::BytecodeAsmComment,
+        },
+
         Style::Error => Style::Error,
         Style::BytecodeError => Style::Error,
         Style::NoteTracking => Style::Error,
@@ -1127,6 +1192,7 @@ fn channel_or_subroutine_style(c: u8) -> Style {
     match c {
         b'@' => Style::Instrument,
         b'!' => Style::Subroutine,
+        b'\\' => Style::SlashAsm0,
         _ => Style::Normal,
     }
 }
