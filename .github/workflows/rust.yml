@@ -29,32 +29,19 @@ jobs:
     - name: Build
       shell: bash
       run: |
-        function log
-        {
-            declare -rAi TAG=(
-                [error]=31
-                [info]=32
-                [audit]=33
-            )
-            printf '%(%y-%m-%d_%T)T\x1b[%dm\t%s:\t%b\x1b[0m\n' -1 "${TAG[${1,,:?}]}" "${1^^}" "${2:?}" 1>&2
-            if [[ ${1} == 'error' ]]; then
-                return 1
-            fi
-        }
-        export -f log
         if [[ ${RUNNER_OS} == "Linux" ]]; then
-            log 'INFO' 'Download dep'
+            printf '%(%y-%m-%d_%T)T\x1b[32m\t%b\x1b[0m\n' -1 'Download dep' 1>&2
             sudo apt-get update
             sudo apt-get install -y ninja-build lib{glu1-mesa,xcursor,xrender,xfixes,webkit2gtk-4.1,vlc,png,gl1-mesa,sdl2,pango1.0,x11,xext,xft,xinerama,mpv}-dev\
-            log 'INFO' 'Build Wiz'
+            printf '%(%y-%m-%d_%T)T\x1b[32m\t%b\x1b[0m\n' -1 'Build Wiz' 1>&2
             git submodule update --init --recursive
             make -j -C wiz
-            log 'INFO' 'Cargo Fmt'
+            printf '%(%y-%m-%d_%T)T\x1b[32m\t%b\x1b[0m\n' -1 'Cargo Fmt' 1>&2
             cargo fmt --check --all
-            log 'INFO' 'Cargo Clippy'
+            printf '%(%y-%m-%d_%T)T\x1b[32m\t%b\x1b[0m\n' -1 'Cargo Clippy' 1>&2
             cargo clippy --quiet
-            log 'INFO' 'Cargo Test'
+            printf '%(%y-%m-%d_%T)T\x1b[32m\t%b\x1b[0m\n' -1 'Cargo Test' 1>&2
             cargo test --quiet
-            log 'INFO' 'Cargo Build'
+            printf '%(%y-%m-%d_%T)T\x1b[32m\t%b\x1b[0m\n' -1 'Cargo Build' 1>&2
             cargo build --quiet
         fi > /dev/null
