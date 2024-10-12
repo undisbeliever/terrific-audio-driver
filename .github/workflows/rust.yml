@@ -35,10 +35,9 @@ jobs:
                 lib{xcursor,xrender,xfixes,webkit2gtk-4.1,vlc,png,gl1-mesa}-dev\
                 ninja-build libglu1-mesa-dev
             git submodule update --init --recursive
-            pushd wiz || return 1
-            make -j8
+            make -j -C wiz
             cargo fmt --check --all
             cargo clippy --quiet
             cargo test --quiet
             cargo build --quiet
-        fi
+        fi > /dev/null
