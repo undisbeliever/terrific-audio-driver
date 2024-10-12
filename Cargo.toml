@@ -54,7 +54,7 @@ spectrum-analyzer = { version="1.5.0" }
 
 # fltk-rs 1.4.20 has a bug where the group::Tabs tab height is way too tall and the contents are not visible
 # fltk-rs 1.4.21 has an illegal instruction crash when creating a native save-as dialog
-fltk = { version="1.4.22" }
+fltk = { version="1.4.34", features = ["use-ninja"] }
 
 cxx = { version="1.0.107" }
 
