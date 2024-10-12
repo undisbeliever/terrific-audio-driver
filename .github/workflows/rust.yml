@@ -32,7 +32,7 @@ jobs:
         if [[ ${RUNNER_OS} == "Linux" ]]; then
             printf '%(%y-%m-%d_%T)T\x1b[32m\t%b\x1b[0m\n' -1 'Download dep' 1>&2
             sudo apt-get update
-            sudo apt-get install -y ninja-build lib{glu1-mesa,xcursor,xrender,xfixes,webkit2gtk-4.1,vlc,png,gl1-mesa,sdl2,pango1.0,x11,xext,xft,xinerama,mpv}-dev\
+            sudo apt-get install -y ninja-build lib{glu1-mesa,xcursor,xrender,xfixes,webkit2gtk-4.1,vlc,png,gl1-mesa,sdl2,pango1.0,x11,xext,xft,xinerama,mpv}-dev
             printf '%(%y-%m-%d_%T)T\x1b[32m\t%b\x1b[0m\n' -1 'Build Wiz' 1>&2
             git submodule update --init --recursive
             make -j -C wiz
