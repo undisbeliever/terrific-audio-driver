@@ -225,6 +225,7 @@ Numbers can be decimal, or hexadecimal when prefixed with `$` (ie, `$ff`)
      * `GET<rate>` - exponential decrease temporary envelope (0-31)
      * `GIT<rate>` - linear increase temporary envelope (0-31)
      * `GBT<rate>` - bent increase temporary envelope (0-31)
+     * `GT` - reuse previous temporary GAIN
 
 
 <br/>

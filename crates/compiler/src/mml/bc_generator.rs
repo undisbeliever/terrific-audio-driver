@@ -660,43 +660,73 @@ impl ChannelBcGenerator<'_> {
         }
     }
 
-    fn set_temp_gain(&mut self, temp_gain: Gain) {
-        self.bc.set_temp_gain(temp_gain);
+    fn temp_gain(&mut self, temp_gain: Option<Gain>) {
+        if temp_gain.is_some_and(|t| !self.bc.get_state().prev_temp_gain.is_known_and_eq(&t)) {
+            self.bc.set_temp_gain(temp_gain.unwrap())
+        } else {
+            self.bc.reuse_temp_gain()
+        }
     }
 
-    fn set_temp_gain_and_wait(
+    fn temp_gain_and_rest(
         &mut self,
-        temp_gain: Gain,
+        temp_gain: Option<Gain>,
+        ticks_until_keyoff: TickCounter,
+        ticks_after_keyoff: TickCounter,
+    ) -> Result<(), MmlError> {
+        if temp_gain.is_some_and(|t| !self.bc.get_state().prev_temp_gain.is_known_and_eq(&t)) {
+            let temp_gain = temp_gain.unwrap();
+
+            match ticks_until_keyoff.value() {
+                l @ ..=BcTicksKeyOff::MAX => {
+                    self.bc
+                        .set_temp_gain_and_rest(temp_gain, BcTicksKeyOff::try_from(l)?);
+                }
+                l => {
+                    let (wait, rest) = Self::split_long_rest_length(TickCounter::new(l));
+                    self.bc.set_temp_gain_and_wait(temp_gain, wait);
+                    self.rest_one_keyoff(rest)?;
+                }
+            }
+        } else {
+            // Reuse temp GAIN
+            match ticks_until_keyoff.value() {
+                l @ ..=BcTicksKeyOff::MAX => {
+                    self.bc
+                        .reuse_temp_gain_and_rest(BcTicksKeyOff::try_from(l)?);
+                }
+                l => {
+                    let (wait, rest) = Self::split_long_rest_length(TickCounter::new(l));
+                    self.bc.reuse_temp_gain_and_wait(wait);
+                    self.rest_one_keyoff(rest)?;
+                }
+            }
+        }
+
+        self.rest_many_keyoffs(ticks_after_keyoff)?;
+
+        Ok(())
+    }
+
+    fn temp_gain_and_wait(
+        &mut self,
+        temp_gain: Option<Gain>,
         ticks: TickCounter,
     ) -> Result<(), MmlError> {
         let (wait1, wait2) = Self::split_wait_length(ticks)?;
 
-        self.bc.set_temp_gain_and_wait(temp_gain, wait1);
+        if temp_gain.is_some_and(|t| !self.bc.get_state().prev_temp_gain.is_known_and_eq(&t)) {
+            let temp_gain = temp_gain.unwrap();
+
+            self.bc.set_temp_gain_and_wait(temp_gain, wait1);
+        } else {
+            self.bc.reuse_temp_gain_and_wait(wait1);
+        }
 
         if !wait2.is_zero() {
             self.wait(wait2)?;
         }
-        Ok(())
-    }
 
-    fn set_temp_gain_and_rest(
-        &mut self,
-        temp_gain: Gain,
-        ticks_until_keyoff: TickCounter,
-        ticks_after_keyoff: TickCounter,
-    ) -> Result<(), MmlError> {
-        match ticks_until_keyoff.value() {
-            l @ ..=BcTicksKeyOff::MAX => {
-                self.bc
-                    .set_temp_gain_and_rest(temp_gain, BcTicksKeyOff::try_from(l)?);
-            }
-            l => {
-                let (wait, rest) = Self::split_long_rest_length(TickCounter::new(l));
-                self.bc.set_temp_gain_and_wait(temp_gain, wait);
-                self.rest_one_keyoff(rest)?;
-            }
-        }
-        self.rest_many_keyoffs(ticks_after_keyoff)?;
         Ok(())
     }
 
@@ -830,17 +860,17 @@ impl ChannelBcGenerator<'_> {
             }
 
             &MmlCommand::TempGain(temp_gain) => {
-                self.set_temp_gain(temp_gain);
+                self.temp_gain(temp_gain);
             }
             &MmlCommand::TempGainAndRest {
                 temp_gain,
                 ticks_until_keyoff,
                 ticks_after_keyoff,
             } => {
-                self.set_temp_gain_and_rest(temp_gain, ticks_until_keyoff, ticks_after_keyoff)?;
+                self.temp_gain_and_rest(temp_gain, ticks_until_keyoff, ticks_after_keyoff)?;
             }
             &MmlCommand::TempGainAndWait(temp_gain, ticks) => {
-                self.set_temp_gain_and_wait(temp_gain, ticks)?;
+                self.temp_gain_and_wait(temp_gain, ticks)?;
             }
 
             &MmlCommand::PlayNote {

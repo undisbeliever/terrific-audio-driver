@@ -166,6 +166,20 @@ let INSTRUCTIONS_WITH_ARGUMENTS = [
     // See `set_temp_gain` and `rest`
     set_temp_gain_and_rest,
 
+    // parameter: u8 number of ticks to wait.
+    //
+    // Reuses the temp-GAIN in the last `set_temp_gain*` instruction.
+    //
+    // See `wait`
+    reuse_temp_gain_and_wait,
+
+    // parameter: u8 number of ticks to sleep before key-off
+    //
+    // Reuses the temp-GAIN in the last `set_temp_gain*` instruction.
+    //
+    // See `rest`
+    reuse_temp_gain_and_rest,
+
 
     // parameter = i8 pan adjustment
     adjust_pan,
@@ -250,6 +264,10 @@ let NO_ARGUMENT_INSTRUCTIONS = [
 
     // Disable echo on this channel
     disable_echo,
+
+
+    // Reuses the temp-GAIN in the last `set_temp_gain*` instruction.
+    reuse_temp_gain,
 ];
 
 let N_PADDING_INSTRUCTIONS = 64 - 1 - INSTRUCTIONS_WITH_ARGUMENTS.len - NO_ARGUMENT_INSTRUCTIONS.len;

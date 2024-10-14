@@ -2504,6 +2504,189 @@ fn test_temp_gain_wait() {
 }
 
 #[test]
+fn test_reuse_temp_gain() {
+    assert_line_matches_bytecode(
+        "GT100 a GT b",
+        &[
+            "set_temp_gain 100",
+            "play_note a4 24",
+            "reuse_temp_gain",
+            "play_note b4 24",
+        ],
+    );
+
+    assert_line_matches_bytecode(
+        "GIT20 a GIT20 b",
+        &[
+            "set_temp_gain I20",
+            "play_note a4 24",
+            "reuse_temp_gain",
+            "play_note b4 24",
+        ],
+    );
+}
+
+#[test]
+fn test_set_gain_does_not_affect_temp_gain_reuse() {
+    assert_line_matches_bytecode(
+        "GIT10 c GI20 d GIT10 e",
+        &[
+            "set_temp_gain I10",
+            "play_note c4 24",
+            "set_gain I20",
+            "play_note d4 24",
+            "reuse_temp_gain",
+            "play_note e4 24",
+        ],
+    );
+}
+
+#[test]
+fn test_reuse_temp_gain_and_wait() {
+    assert_line_matches_bytecode(
+        "a & GT100 w | b & GT w",
+        &[
+            "play_note a4 no_keyoff 24",
+            "set_temp_gain_and_wait 100 24",
+            "play_note b4 no_keyoff 24",
+            "reuse_temp_gain_and_wait 24",
+        ],
+    );
+
+    assert_line_matches_bytecode(
+        "a & GDT10 w | b & GDT10 w",
+        &[
+            "play_note a4 no_keyoff 24",
+            "set_temp_gain_and_wait D10 24",
+            "play_note b4 no_keyoff 24",
+            "reuse_temp_gain_and_wait 24",
+        ],
+    );
+}
+
+#[test]
+fn test_reuse_temp_gain_and_rest() {
+    assert_line_matches_bytecode(
+        "a & GT100 r | b & GT r",
+        &[
+            "play_note a4 no_keyoff 24",
+            "set_temp_gain_and_rest 100 24",
+            "play_note b4 no_keyoff 24",
+            "reuse_temp_gain_and_rest 24",
+        ],
+    );
+
+    assert_line_matches_bytecode(
+        "a & GDT10 r | b & GDT10 r",
+        &[
+            "play_note a4 no_keyoff 24",
+            "set_temp_gain_and_rest D10 24",
+            "play_note b4 no_keyoff 24",
+            "reuse_temp_gain_and_rest 24",
+        ],
+    );
+}
+
+#[test]
+fn test_reuse_temp_gain_loop() {
+    assert_line_matches_bytecode(
+        "[GIT10 c : GIT20 d]3 GIT10 e",
+        &[
+            "start_loop",
+            "set_temp_gain I10",
+            "play_note c4 24",
+            "skip_last_loop",
+            "set_temp_gain I20",
+            "play_note d4 24",
+            "end_loop 3",
+            "reuse_temp_gain",
+            "play_note e4 24",
+        ],
+    );
+
+    assert_line_matches_bytecode(
+        "[GIT10 c : GIT20 d]3 GIT20 e",
+        &[
+            "start_loop",
+            "set_temp_gain I10",
+            "play_note c4 24",
+            "skip_last_loop",
+            "set_temp_gain I20",
+            "play_note d4 24",
+            "end_loop 3",
+            // After the skip-last-loop, temp-GAIN is GI10
+            "set_temp_gain I20",
+            "play_note e4 24",
+        ],
+    );
+
+    assert_line_matches_bytecode(
+        "[GIT10 c GIT20 d]3 GIT20 e",
+        &[
+            "start_loop",
+            "set_temp_gain I10",
+            "play_note c4 24",
+            "set_temp_gain I20",
+            "play_note d4 24",
+            "end_loop 3",
+            "reuse_temp_gain",
+            "play_note e4 24",
+        ],
+    );
+
+    // prev temp GAIN is unknown at the start of a loop
+    assert_line_matches_bytecode(
+        "GT10 [GT10 c]3 GT10 d",
+        &[
+            "set_temp_gain 10",
+            "start_loop",
+            "set_temp_gain 10",
+            "play_note c4 24",
+            "end_loop 3",
+            "reuse_temp_gain",
+            "play_note d4 24",
+        ],
+    );
+}
+
+#[test]
+fn test_reuse_temp_gain_after_call_subroutine() {
+    assert_mml_channel_a_matches_bytecode(
+        r##"
+@1 dummy_instrument
+
+!s GT20 b
+
+A @1 GT10 !s GT20 b
+"##,
+        &[
+            "set_instrument dummy_instrument",
+            "set_temp_gain 10",
+            "call_subroutine s",
+            "reuse_temp_gain",
+            "play_note b4 24",
+        ],
+    );
+
+    assert_mml_channel_a_matches_bytecode(
+        r##"
+@1 dummy_instrument
+
+!s GT20 b
+
+A @1 GT10 !s GT10 b
+"##,
+        &[
+            "set_instrument dummy_instrument",
+            "set_temp_gain 10",
+            "call_subroutine s",
+            "set_temp_gain 10",
+            "play_note b4 24",
+        ],
+    );
+}
+
+#[test]
 fn test_parse_hex() {
     assert!(96 / 0xc == 8);
     assert_line_matches_bytecode("c$c", &["play_note c4 8"]);

@@ -56,6 +56,8 @@ struct ChannelSoA {
     vibrato_direction_comparator: u8,
     vibrato_tick_counter_start: u8,
     vibrato_wavelength_in_ticks: u8,
+
+    prev_temp_gain: u8,
 }
 
 #[derive(Clone)]
@@ -107,6 +109,7 @@ pub struct ChannelState {
     instrument: Option<u8>,
     adsr_or_gain_override: Option<(u8, u8)>,
     temp_gain: u8,
+    prev_temp_gain: u8,
 
     volume: u8,
     pan: u8,
@@ -138,6 +141,7 @@ impl ChannelState {
             instrument: None,
             adsr_or_gain_override: Some((0, 0)),
             temp_gain: 0,
+            prev_temp_gain: 0,
             volume: STARTING_VOLUME,
             pan: Pan::MAX / 2,
             echo: false,
@@ -333,15 +337,19 @@ impl ChannelState {
             }
 
             opcodes::SET_TEMP_GAIN => {
-                self.temp_gain = read_pc();
+                let temp_gain = read_pc();
+
+                self.temp_gain = temp_gain;
+                self.prev_temp_gain = temp_gain;
             }
 
             opcodes::SET_TEMP_GAIN_AND_REST => {
-                // Temp gain is reset on key-off
-                let _temp_gain = read_pc();
+                let temp_gain = read_pc();
                 let to_rest = read_pc();
 
+                self.prev_temp_gain = temp_gain;
                 self.ticks += Self::to_tick_count(to_rest, true);
+                // Temp gain is reset on key-off
                 self.temp_gain = 0;
             }
 
@@ -350,6 +358,24 @@ impl ChannelState {
                 let to_rest = read_pc();
 
                 self.temp_gain = temp_gain;
+                self.prev_temp_gain = temp_gain;
+                self.ticks += Self::to_tick_count(to_rest, false);
+            }
+
+            opcodes::REUSE_TEMP_GAIN => {
+                self.temp_gain = self.prev_temp_gain;
+            }
+            opcodes::REUSE_TEMP_GAIN_AND_REST => {
+                let to_rest = read_pc();
+
+                self.ticks += Self::to_tick_count(to_rest, true);
+                // Temp gain is reset on key-off
+                self.temp_gain = 0;
+            }
+            opcodes::REUSE_TEMP_GAIN_AND_WAIT => {
+                let to_rest = read_pc();
+
+                self.temp_gain = self.prev_temp_gain;
                 self.ticks += Self::to_tick_count(to_rest, false);
             }
 
@@ -741,6 +767,7 @@ fn build_channel(
             vibrato_tick_counter: c.vibrato_quarter_wavelength_in_ticks,
             vibrato_direction_comparator: c.vibrato_quarter_wavelength_in_ticks << 1,
             vibrato_wavelength_in_ticks: c.vibrato_quarter_wavelength_in_ticks << 2,
+            prev_temp_gain: c.prev_temp_gain,
         },
         bc_stack: c.bc_stack,
         dsp: VirtualChannel {
@@ -782,6 +809,7 @@ fn unused_channel(channel_index: usize) -> Channel {
             vibrato_tick_counter: 0,
             vibrato_direction_comparator: 0,
             vibrato_wavelength_in_ticks: 0,
+            prev_temp_gain: 0,
         },
         bc_stack: [0; BC_CHANNEL_STACK_SIZE],
         dsp: VirtualChannel {
@@ -917,6 +945,7 @@ impl InterpreterOutput {
                     addresses::CHANNEL_VIBRATO_WAVELENGTH_IN_TICKS,
                     c.vibrato_wavelength_in_ticks,
                 );
+                soa_write_u8(addresses::CHANNEL_PREV_TEMP_GAIN, c.prev_temp_gain);
 
                 // Virtual channels
                 soa_write_u8(addresses::CHANNEL_VC_VOL_L, vc.vol_l);

@@ -313,6 +313,10 @@ in firstpage {
         //
         // NOTE: Adding `instPitchOffset` to the note to play is allowed to an can overflow.
         var instPitchOffset : [u8 ; N_CHANNELS];
+
+
+        // The previous temp-GAIN used by the channel.
+        var prevTempGain : [u8 ; N_CHANNELS];
     }
 }
 
@@ -2027,8 +2031,42 @@ func set_volume(channelIndex : u8 in x, volume : u8 in a) {
 
 
 // KEEP: x
+func reuse_temp_gain(channelIndex : u8 in x) {
+    a = channelSoA.prevTempGain[x];
+    channelSoA.virtualChannels.tempGain[x] = a;
+
+    ^return process_next_bytecode(x);
+}
+
+
+// KEEP: x
+func reuse_temp_gain_and_wait(channelIndex : u8 in x, ticks : u8 in a) {
+    y = a;
+
+    a = channelSoA.prevTempGain[x];
+    channelSoA.virtualChannels.tempGain[x] = a;
+
+    a = y;
+    return wait(x, a);
+}
+
+
+// KEEP: x
+func reuse_temp_gain_and_rest(channelIndex : u8 in x, ticks : u8 in a) {
+    y = a;
+
+    a = channelSoA.prevTempGain[x];
+    channelSoA.virtualChannels.tempGain[x] = a;
+
+    a = y;
+    return rest(x, a);
+}
+
+
+// KEEP: x
 func set_temp_gain(channelIndex : u8 in x, tempGain: u8 in a) {
     channelSoA.virtualChannels.tempGain[x] = a;
+    channelSoA.prevTempGain[x] = a;
 
     ^return process_next_bytecode(x);
 }
@@ -2038,7 +2076,9 @@ func set_temp_gain(channelIndex : u8 in x, tempGain: u8 in a) {
 // KEEP: x
 func set_temp_gain_and_wait(channelIndex : u8 in x, tempGain: u8 in a) {
     channelSoA.virtualChannels.tempGain[x] = a;
+    channelSoA.prevTempGain[x] = a;
 
+    // Y = 0
     a = instructionPtr[y];
     instructionPtr++;
 
@@ -2051,7 +2091,9 @@ func set_temp_gain_and_wait(channelIndex : u8 in x, tempGain: u8 in a) {
 #[fallthrough]
 func set_temp_gain_and_rest(channelIndex : u8 in x, tempGain: u8 in a) {
     channelSoA.virtualChannels.tempGain[x] = a;
+    channelSoA.prevTempGain[x] = a;
 
+    // Y = 0
     a = instructionPtr[y];
     instructionPtr++;
 
@@ -2062,6 +2104,8 @@ func set_temp_gain_and_rest(channelIndex : u8 in x, tempGain: u8 in a) {
 // KEEP: x
 #[fallthrough]
 func rest(channelIndex : u8 in x, length: u8 in a) {
+    // Y is not 0
+
     channelSoA.nextEventIsKeyOff[x] = y = 1;
 // Fallthrough
 }
@@ -2069,6 +2113,8 @@ func rest(channelIndex : u8 in x, length: u8 in a) {
 
 // KEEP: x
 func wait(channelIndex : u8 in x, length: u8 in a) {
+    // Y is not 0
+
     channelSoA.countdownTimer[x] = a;
 
     // return (do not execute the next bytecode and sleep)

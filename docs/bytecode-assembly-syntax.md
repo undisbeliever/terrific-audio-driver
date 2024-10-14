@@ -38,6 +38,9 @@ Instructions
  * `set_temp_gain_and_wait <gain> <duration>` - Temporarily sets the channel's GAIN register to `<gain>` and wait (no key-off).
     * A *gain* value of `0` will disable temp-gain.
     * The envelope will be restored on key-off
+ * `reuse_temp_gain` - Reuses the temporary-GAIN from the previous `set_temp_gain*` instruction.
+ * `reuse_temp_gain_and_rest <duration>` - Reuses the temporary-GAIN from the previous `set_temp_gain*` instruction and rests.
+ * `reuse_temp_gain_and_wait <duration>` - Reuses the temporary-GAIN from the previous `set_temp_gain*` instruction and waits.
 
  * `set_volume <volume>` - Set the channel's volume (0-255).
  * `adjust_volume <i8>` - Adjusts the channel's volume.

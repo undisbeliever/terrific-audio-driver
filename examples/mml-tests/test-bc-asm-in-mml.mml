@@ -4,11 +4,12 @@
 
 
 A \asm {
-    set_instrument_and_adsr triangle 12 2 6 14
+    set_instrument_and_adsr triangle 10 2 5 10
     set_vibrato 15 2
 }
 
 A \asm {
+    ; Using temp GAIN to create a custom envelope for multiple slurred notes
     set_temp_gain I12
     play_note d5 no_keyoff 48
     set_temp_gain_and_wait D6 24
@@ -18,4 +19,9 @@ A \asm {
     set_temp_gain_and_rest E18 72
 }
 
-A \asm { play_note d5 72 | play_note e5 72 | play_note d5 96 }
+A \asm {
+    ; Using temp GAIN for a custom release envelope
+    play_note d5 no_keyoff 36 | set_temp_gain_and_rest D10 36
+    play_note d5 no_keyoff 36 | reuse_temp_gain_and_rest   36
+    play_note d5 36
+}

@@ -216,6 +216,7 @@ fn assert_bc_intrepreter_matches_emu(
         addresses::CHANNEL_VIBRATO_WAVELENGTH_IN_TICKS,
         "vibrato_waveLengthInTicks",
     );
+    test_channel_soa(addresses::CHANNEL_PREV_TEMP_GAIN, "prevTempGain");
 
     for v in 0..N_CHANNELS {
         assert_eq!(

@@ -181,13 +181,13 @@ pub enum MmlCommand {
     SetAdsr(Adsr),
     SetGain(Gain),
 
-    TempGain(Gain),
+    TempGain(Option<Gain>),
     TempGainAndRest {
-        temp_gain: Gain,
+        temp_gain: Option<Gain>,
         ticks_until_keyoff: TickCounter,
         ticks_after_keyoff: TickCounter,
     },
-    TempGainAndWait(Gain, TickCounter),
+    TempGainAndWait(Option<Gain>, TickCounter),
 
     ChangePanAndOrVolume(Option<PanCommand>, Option<VolumeCommand>),
     SetEcho(bool),
@@ -1345,10 +1345,10 @@ fn parse_set_gain(pos: FilePos, mode: GainMode, p: &mut Parser) -> MmlCommand {
 fn parse_temp_gain(pos: FilePos, mode: GainMode, p: &mut Parser) -> MmlCommand {
     let mut temp_gain = match next_token_number(p) {
         Some(v) => match Gain::from_mode_and_value(mode, v) {
-            Ok(g) => g,
+            Ok(g) => Some(g),
             Err(e) => return invalid_token_error(p, pos, e.into()),
         },
-        None => return invalid_token_error(p, pos, ValueError::NoGain.into()),
+        None => None,
     };
 
     loop {
@@ -1358,10 +1358,11 @@ fn parse_temp_gain(pos: FilePos, mode: GainMode, p: &mut Parser) -> MmlCommand {
             &Token::TempGain(mode) => {
                 temp_gain = match next_token_number(p) {
                     Some(v) => match Gain::from_mode_and_value(mode, v) {
-                        Ok(g) => g,
+                        Ok(g) => Some(g),
                         Err(e) => return invalid_token_error(p, pos, e.into()),
                     },
-                    None => return invalid_token_error(p, pos, ValueError::NoGain.into()),
+                    // Temp gain is unchanged
+                    None => temp_gain,
                 };
             },
 

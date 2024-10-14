@@ -88,6 +88,8 @@ pub mod opcodes {
         SET_TEMP_GAIN,
         SET_TEMP_GAIN_AND_WAIT,
         SET_TEMP_GAIN_AND_REST,
+        REUSE_TEMP_GAIN_AND_WAIT,
+        REUSE_TEMP_GAIN_AND_REST,
         ADJUST_PAN,
         SET_PAN,
         SET_PAN_AND_VOLUME,
@@ -104,6 +106,7 @@ pub mod opcodes {
         RETURN_FROM_SUBROUTINE,
         ENABLE_ECHO,
         DISABLE_ECHO,
+        REUSE_TEMP_GAIN,
     );
 
     // Last not play-note opcode
@@ -552,6 +555,7 @@ pub struct State {
 
     pub(crate) instrument: IeState<InstrumentId>,
     pub(crate) envelope: IeState<Envelope>,
+    pub(crate) prev_temp_gain: IeState<Gain>,
     pub(crate) vibrato: VibratoState,
     pub(crate) prev_slurred_note: SlurredNoteState,
 }
@@ -563,6 +567,7 @@ struct SkipLastLoop {
 
     instrument: IeState<InstrumentId>,
     envelope: IeState<Envelope>,
+    prev_temp_gain: IeState<Gain>,
     vibrato: VibratoState,
     prev_slurred_note: SlurredNoteState,
 }
@@ -622,6 +627,7 @@ impl<'a> Bytecode<'a> {
                 tempo_changes: Vec::new(),
                 instrument: IeState::Unknown,
                 envelope: IeState::Unknown,
+                prev_temp_gain: IeState::Unknown,
                 vibrato: match &context {
                     BytecodeContext::SoundEffect => VibratoState::Disabled,
                     BytecodeContext::SongChannel => VibratoState::Disabled,
@@ -688,6 +694,7 @@ impl<'a> Bytecode<'a> {
         // The instrument or envelope may have changed when the song loops.
         self.state.instrument = self.state.instrument.demote_to_maybe();
         self.state.envelope = self.state.envelope.demote_to_maybe();
+        self.state.prev_temp_gain = self.state.prev_temp_gain.demote_to_maybe();
 
         self.state.vibrato = VibratoState::Unknown;
     }
@@ -931,10 +938,13 @@ impl<'a> Bytecode<'a> {
     }
 
     pub fn set_temp_gain(&mut self, gain: Gain) {
+        self.state.prev_temp_gain = IeState::Known(gain);
+
         emit_bytecode!(self, opcodes::SET_TEMP_GAIN, gain.value());
     }
 
     pub fn set_temp_gain_and_wait(&mut self, gain: Gain, length: BcTicksNoKeyOff) {
+        self.state.prev_temp_gain = IeState::Known(gain);
         self.state.tick_counter += length.to_tick_count();
 
         emit_bytecode!(
@@ -946,6 +956,7 @@ impl<'a> Bytecode<'a> {
     }
 
     pub fn set_temp_gain_and_rest(&mut self, gain: Gain, length: BcTicksKeyOff) {
+        self.state.prev_temp_gain = IeState::Known(gain);
         self.state.tick_counter += length.to_tick_count();
 
         emit_bytecode!(
@@ -954,6 +965,22 @@ impl<'a> Bytecode<'a> {
             gain.value(),
             length.bc_argument
         );
+    }
+
+    pub fn reuse_temp_gain(&mut self) {
+        emit_bytecode!(self, opcodes::REUSE_TEMP_GAIN);
+    }
+
+    pub fn reuse_temp_gain_and_wait(&mut self, length: BcTicksNoKeyOff) {
+        self.state.tick_counter += length.to_tick_count();
+
+        emit_bytecode!(self, opcodes::REUSE_TEMP_GAIN_AND_WAIT, length.bc_argument);
+    }
+
+    pub fn reuse_temp_gain_and_rest(&mut self, length: BcTicksKeyOff) {
+        self.state.tick_counter += length.to_tick_count();
+
+        emit_bytecode!(self, opcodes::REUSE_TEMP_GAIN_AND_REST, length.bc_argument);
     }
 
     pub fn adjust_volume(&mut self, v: RelativeVolume) {
@@ -994,6 +1021,7 @@ impl<'a> Bytecode<'a> {
         // When the loop loops, the instrument/envelope might have changed.
         self.state.instrument = self.state.instrument.demote_to_maybe();
         self.state.envelope = self.state.envelope.demote_to_maybe();
+        self.state.prev_temp_gain = self.state.prev_temp_gain.demote_to_maybe();
         self.state.vibrato = VibratoState::Unknown;
 
         // Loop might end on a note that is not slurred and matching `prev_slurred_note`.
@@ -1042,6 +1070,7 @@ impl<'a> Bytecode<'a> {
             bc_parameter_position: self.bytecode.len() + 1,
             instrument: self.state.instrument,
             envelope: self.state.envelope,
+            prev_temp_gain: self.state.prev_temp_gain,
             vibrato: self.state.vibrato,
             prev_slurred_note: self.state.prev_slurred_note.clone(),
         });
@@ -1110,6 +1139,7 @@ impl<'a> Bytecode<'a> {
         if let Some(skip_last_loop) = loop_state.skip_last_loop {
             self.state.instrument = skip_last_loop.instrument;
             self.state.envelope = skip_last_loop.envelope;
+            self.state.prev_temp_gain = skip_last_loop.prev_temp_gain;
             self.state.vibrato = skip_last_loop.vibrato;
             self.state
                 .prev_slurred_note
@@ -1135,6 +1165,7 @@ impl<'a> Bytecode<'a> {
         if self.loop_stack.is_empty() {
             self.state.instrument = self.state.instrument.promote_to_known();
             self.state.envelope = self.state.envelope.promote_to_known();
+            self.state.prev_temp_gain = self.state.prev_temp_gain.promote_to_known();
         }
 
         emit_bytecode!(self, opcodes::END_LOOP);
@@ -1158,6 +1189,11 @@ impl<'a> Bytecode<'a> {
         match subroutine.state.envelope {
             IeState::Known(e) => self.state.envelope = IeState::Known(e),
             IeState::Maybe(_) => panic!("unexpected maybe envelope"),
+            IeState::Unknown => (),
+        }
+        match subroutine.state.prev_temp_gain {
+            IeState::Known(e) => self.state.prev_temp_gain = IeState::Known(e),
+            IeState::Maybe(_) => panic!("unexpected maybe prevTempGain"),
             IeState::Unknown => (),
         }
         match &subroutine.state.vibrato {

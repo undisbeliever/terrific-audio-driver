@@ -356,6 +356,10 @@ pub fn parse_asm_line(bc: &mut Bytecode, line: &str) -> Result<(), BytecodeAssem
        set_temp_gain_and_wait 2 gain_and_wait_arguments,
        set_temp_gain_and_rest 2 gain_and_rest_arguments,
 
+       reuse_temp_gain 0 no_arguments,
+       reuse_temp_gain_and_wait 1 ticks_no_keyoff_argument,
+       reuse_temp_gain_and_rest 1 ticks_keyoff_argument,
+
        adjust_volume 1 one_vnt_argument,
        set_volume 1 one_vnt_argument,
        adjust_pan 1 one_vnt_argument,
