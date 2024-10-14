@@ -212,7 +212,7 @@ Numbers can be decimal, or hexadecimal when prefixed with `$` (ie, `$ff`)
  * `A<attack>,<decay>,<sustain_level>,<sustain_rate>` - Set the channel's ADSR register
  * `G` - Set the channel's GAIN register (disables ADSR)
      * `G<gain>` - write the raw 8 bit value to the GAIN register
-     * `GF<value>` - fixed envelope (0-128)
+     * `GF<value>` - fixed envelope (0-127)
      * `GD<rate>` - linear decrease envelope (0-31)
      * `GE<rate>` - exponential decrease envelope (0-31)
      * `GI<rate>` - linear increase envelope (0-31)

@@ -89,7 +89,7 @@ Parameters
 
  * GAIN settings:
     * `<u8>` (no prefix) - the raw 8 bit value to write to the GAIN register
-    * `F<value>` - fixed GAIN envelope (0-128)
+    * `F<value>` - fixed GAIN envelope (0-127)
     * `D<rate>` - linear decrease (0-31)
     * `E<rate>` - exponential decrease (0-31)
     * `I<rate>` - linear increase (0-31)
