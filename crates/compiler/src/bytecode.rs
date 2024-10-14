@@ -85,6 +85,9 @@ pub mod opcodes {
         SET_INSTRUMENT_AND_ADSR_OR_GAIN,
         SET_ADSR,
         SET_GAIN,
+        SET_TEMP_GAIN,
+        SET_TEMP_GAIN_AND_WAIT,
+        SET_TEMP_GAIN_AND_REST,
         ADJUST_PAN,
         SET_PAN,
         SET_PAN_AND_VOLUME,
@@ -925,6 +928,32 @@ impl<'a> Bytecode<'a> {
         self.state.envelope = IeState::Known(Envelope::Gain(gain));
 
         emit_bytecode!(self, opcodes::SET_GAIN, gain.value());
+    }
+
+    pub fn set_temp_gain(&mut self, gain: Gain) {
+        emit_bytecode!(self, opcodes::SET_TEMP_GAIN, gain.value());
+    }
+
+    pub fn set_temp_gain_and_wait(&mut self, gain: Gain, length: BcTicksNoKeyOff) {
+        self.state.tick_counter += length.to_tick_count();
+
+        emit_bytecode!(
+            self,
+            opcodes::SET_TEMP_GAIN_AND_WAIT,
+            gain.value(),
+            length.bc_argument
+        );
+    }
+
+    pub fn set_temp_gain_and_rest(&mut self, gain: Gain, length: BcTicksKeyOff) {
+        self.state.tick_counter += length.to_tick_count();
+
+        emit_bytecode!(
+            self,
+            opcodes::SET_TEMP_GAIN_AND_REST,
+            gain.value(),
+            length.bc_argument
+        );
     }
 
     pub fn adjust_volume(&mut self, v: RelativeVolume) {

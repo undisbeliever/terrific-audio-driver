@@ -28,6 +28,17 @@ Instructions
  * `set_adsr <attack> <decay> <sustain_level> <sustain_rate>` - Set the channel's ADSR register (disables GAIN).
  * `set_gain <gain>` - Set's the channel's GAIN register (disables ADSR).
 
+ * `set_temp_gain <gain>` - Temporarily sets the channel's GAIN register to `<gain>`.
+    * The envelope will be restored on key-off.
+    * A *gain* value of `0` will disable temp-gain.
+ * `set_temp_gain_and_rest <gain> <duration>` - Temporarily sets the channel's GAIN register to `<gain>` and rest.
+    * Sleeps for *duration-1* ticks then key-off for 1 tick.
+    * A *gain* value of `0` will disable temp-gain.
+    * The envelope will be restored at the end of the instruction.
+ * `set_temp_gain_and_wait <gain> <duration>` - Temporarily sets the channel's GAIN register to `<gain>` and wait (no key-off).
+    * A *gain* value of `0` will disable temp-gain.
+    * The envelope will be restored on key-off
+
  * `set_volume <volume>` - Set the channel's volume (0-255).
  * `adjust_volume <i8>` - Adjusts the channel's volume.
  * `set_pan <pan>` - Set the channel's pan (0-128).  0 is 100% to the left, 64 is centered, 128 is 100% to the right.

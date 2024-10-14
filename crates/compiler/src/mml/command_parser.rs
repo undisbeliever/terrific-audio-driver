@@ -181,6 +181,14 @@ pub enum MmlCommand {
     SetAdsr(Adsr),
     SetGain(Gain),
 
+    TempGain(Gain),
+    TempGainAndRest {
+        temp_gain: Gain,
+        ticks_until_keyoff: TickCounter,
+        ticks_after_keyoff: TickCounter,
+    },
+    TempGainAndWait(Gain, TickCounter),
+
     ChangePanAndOrVolume(Option<PanCommand>, Option<VolumeCommand>),
     SetEcho(bool),
 
@@ -987,7 +995,7 @@ fn parse_ties_and_slur(p: &mut Parser) -> (TickCounter, bool) {
     }
 }
 
-fn parse_wait(p: &mut Parser) -> MmlCommand {
+fn parse_wait_length_and_ties(p: &mut Parser) -> TickCounter {
     let mut ticks = parse_tracked_length(p);
 
     // Merge `w` wait and `^` tie commands
@@ -1003,18 +1011,28 @@ fn parse_wait(p: &mut Parser) -> MmlCommand {
             },
             #_ => {
                 if !merge_state_change(p) {
-                    return MmlCommand::Wait(ticks);
+                    return ticks;
                 }
             }
         )
     }
 }
 
-fn parse_rest(p: &mut Parser) -> MmlCommand {
+fn parse_wait(p: &mut Parser) -> MmlCommand {
+    MmlCommand::Wait(parse_wait_length_and_ties(p))
+}
+
+fn parse_rest_lengths(p: &mut Parser) -> (TickCounter, TickCounter) {
     let ticks_until_keyoff = parse_tracked_length(p);
     let ticks_until_keyoff = ticks_until_keyoff + parse_ties(p);
 
     let ticks_after_keyoff = parse_rests_after_rest(p);
+
+    (ticks_until_keyoff, ticks_after_keyoff)
+}
+
+fn parse_rest(p: &mut Parser) -> MmlCommand {
+    let (ticks_until_keyoff, ticks_after_keyoff) = parse_rest_lengths(p);
 
     MmlCommand::Rest {
         ticks_until_keyoff,
@@ -1324,6 +1342,50 @@ fn parse_set_gain(pos: FilePos, mode: GainMode, p: &mut Parser) -> MmlCommand {
     }
 }
 
+fn parse_temp_gain(pos: FilePos, mode: GainMode, p: &mut Parser) -> MmlCommand {
+    let mut temp_gain = match next_token_number(p) {
+        Some(v) => match Gain::from_mode_and_value(mode, v) {
+            Ok(g) => g,
+            Err(e) => return invalid_token_error(p, pos, e.into()),
+        },
+        None => return invalid_token_error(p, pos, ValueError::NoGain.into()),
+    };
+
+    loop {
+        match_next_token!(
+            p,
+
+            &Token::TempGain(mode) => {
+                temp_gain = match next_token_number(p) {
+                    Some(v) => match Gain::from_mode_and_value(mode, v) {
+                        Ok(g) => g,
+                        Err(e) => return invalid_token_error(p, pos, e.into()),
+                    },
+                    None => return invalid_token_error(p, pos, ValueError::NoGain.into()),
+                };
+            },
+
+            Token::Rest => {
+                let (ticks_until_keyoff, ticks_after_keyoff) = parse_rest_lengths(p);
+
+                return MmlCommand::TempGainAndRest{temp_gain, ticks_until_keyoff, ticks_after_keyoff};
+            },
+
+            Token::Wait => {
+                let length = parse_wait_length_and_ties(p);
+
+                return MmlCommand::TempGainAndWait(temp_gain, length);
+            },
+
+            #_ => {
+                if !merge_state_change(p) {
+                    return MmlCommand::TempGain(temp_gain);
+                }
+            }
+        )
+    }
+}
+
 fn parse_echo(pos: FilePos, p: &mut Parser) -> MmlCommand {
     match_next_token!(p,
         Token::Number(0) => MmlCommand::SetEcho(false),
@@ -1404,6 +1466,7 @@ fn parse_token(pos: FilePos, token: Token, p: &mut Parser) -> MmlCommand {
 
         Token::SetAdsr => parse_set_adsr(pos, p),
         Token::SetGain(mode) => parse_set_gain(pos, mode, p),
+        Token::TempGain(mode) => parse_temp_gain(pos, mode, p),
 
         Token::SetInstrument(id) => parse_set_instrument(pos, id, p),
         Token::CallSubroutine(id, d) => parse_call_subroutine(pos, id, d, p),

@@ -146,6 +146,27 @@ let INSTRUCTIONS_WITH_ARGUMENTS = [
     set_gain,
 
 
+    // parameter = u8 value to temporarily send to the GAIN register
+    // NOTE: a temp-gain of 0 disables temp-gain.
+    // NOTE: Disables ADSR and GAIN envelope
+    // The envelope will be restored on key-off.
+    set_temp_gain,
+
+    // parameters: gggggggg tttttttt
+    //  gggggggg = temp GAIN value
+    //  tttttttt = number of ticks to wait.
+    //
+    // See `set_temp_gain` and `wait`
+    set_temp_gain_and_wait,
+
+    // parameters: gggggggg tttttttt
+    //  gggggggg = temp GAIN value
+    //  tttttttt = number of ticks to sleep before key-off
+    //
+    // See `set_temp_gain` and `rest`
+    set_temp_gain_and_rest,
+
+
     // parameter = i8 pan adjustment
     adjust_pan,
 

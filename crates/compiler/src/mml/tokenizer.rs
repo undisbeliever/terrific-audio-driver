@@ -65,6 +65,7 @@ pub enum Token<'a> {
     MpVibrato,
     SetAdsr,
     SetGain(GainMode),
+    TempGain(GainMode),
     Echo,
     SetSongTempo,
     SetSongTickClock,
@@ -110,6 +111,10 @@ impl<'a> Scanner<'a> {
 
     fn second_byte(&self) -> Option<u8> {
         self.to_process.as_bytes().get(1).copied()
+    }
+
+    fn third_byte(&self) -> Option<u8> {
+        self.to_process.as_bytes().get(2).copied()
     }
 
     fn starts_with(&self, p: impl Fn(char) -> bool) -> bool {
@@ -219,6 +224,12 @@ impl<'a> Scanner<'a> {
         self.to_process = &self.to_process[2..];
     }
 
+    fn advance_three(&mut self) {
+        self.pos.line_char += 3;
+        self.pos.char_index += 3;
+        self.to_process = &self.to_process[3..];
+    }
+
     fn skip_whitespace(&mut self) {
         if self.starts_with(|c: char| c.is_ascii_whitespace()) {
             self.skip_while_char(|c| c.is_ascii_whitespace());
@@ -272,6 +283,12 @@ fn next_token<'a>(scanner: &mut Scanner<'a>) -> Option<TokenWithPosition<'a>> {
     macro_rules! two_ascii_token {
         ($t:expr) => {{
             scanner.advance_two();
+            $t
+        }};
+    }
+    macro_rules! three_ascii_token {
+        ($t:expr) => {{
+            scanner.advance_three();
             $t
         }};
     }
@@ -390,13 +407,19 @@ fn next_token<'a>(scanner: &mut Scanner<'a>) -> Option<TokenWithPosition<'a>> {
         b',' => one_ascii_token!(Token::Comma),
         b'|' => one_ascii_token!(Token::Divider),
 
-        // Gain might use 2 chacters
+        // Gain might use 2 or 3 chacters
         b'G' => {
             let c2 = scanner.second_byte();
 
-            match c2.and_then(GainMode::from_u8_char) {
-                Some(m) => two_ascii_token!(Token::SetGain(m)),
-                None => one_ascii_token!(Token::SetGain(GainMode::Raw)),
+            if c2 == Some(b'T') {
+                two_ascii_token!(Token::TempGain(GainMode::Raw))
+            } else if let Some(mode) = c2.and_then(GainMode::from_u8_char) {
+                match scanner.third_byte() {
+                    Some(b'T') => three_ascii_token!(Token::TempGain(mode)),
+                    _ => two_ascii_token!(Token::SetGain(mode)),
+                }
+            } else {
+                one_ascii_token!(Token::SetGain(GainMode::Raw))
             }
         }
 

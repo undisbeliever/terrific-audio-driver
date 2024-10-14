@@ -184,6 +184,23 @@ fn gain_argument(args: &[&str]) -> Result<Gain, BytecodeAssemblerError> {
     Ok(arg.parse()?)
 }
 
+fn gain_and_wait_arguments(
+    args: &[&str],
+) -> Result<(Gain, BcTicksNoKeyOff), BytecodeAssemblerError> {
+    let (gain, length) = two_arguments(args)?;
+
+    Ok((
+        gain.parse()?,
+        BcTicksNoKeyOff::try_from(parse_u32(length)?)?,
+    ))
+}
+
+fn gain_and_rest_arguments(args: &[&str]) -> Result<(Gain, BcTicksKeyOff), BytecodeAssemblerError> {
+    let (gain, length) = two_arguments(args)?;
+
+    Ok((gain.parse()?, BcTicksKeyOff::try_from(parse_u32(length)?)?))
+}
+
 fn instrument_and_adsr_argument<'a>(
     args: &[&'a str],
 ) -> Result<(&'a str, Adsr), BytecodeAssemblerError> {
@@ -334,6 +351,10 @@ pub fn parse_asm_line(bc: &mut Bytecode, line: &str) -> Result<(), BytecodeAssem
 
        set_adsr 1 adsr_argument,
        set_gain 1 gain_argument,
+
+       set_temp_gain 1 gain_argument,
+       set_temp_gain_and_wait 2 gain_and_wait_arguments,
+       set_temp_gain_and_rest 2 gain_and_rest_arguments,
 
        adjust_volume 1 one_vnt_argument,
        set_volume 1 one_vnt_argument,

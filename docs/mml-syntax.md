@@ -217,6 +217,14 @@ Numbers can be decimal, or hexadecimal when prefixed with `$` (ie, `$ff`)
      * `GE<rate>` - exponential decrease envelope (0-31)
      * `GI<rate>` - linear increase envelope (0-31)
      * `GB<rate>` - bent increase envelope (0-31)
+ * `GT` - Temporarily sets the channel's GAIN register (the envelope will be restored on key-off)
+     * `GT0` - disable temporary GAIN
+     * `GT<gain>` - write the raw 8 bit value to the GAIN register
+     * `GFT<value>` - fixed temporary envelope (0-127)
+     * `GDT<rate>` - linear temporary decrease envelope (0-31)
+     * `GET<rate>` - exponential decrease temporary envelope (0-31)
+     * `GIT<rate>` - linear increase temporary envelope (0-31)
+     * `GBT<rate>` - bent increase temporary envelope (0-31)
 
 
 <br/>

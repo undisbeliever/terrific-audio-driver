@@ -189,6 +189,12 @@ in zeropage {
             // If the MSB of adsr1 is set, this value is written to the ADSR2 register.
             // If the MSB of adsr1 is clear, this value is written to the GAIN register.
             var adsr2OrGain : [u8 ; N_CHANNELS];
+
+            // Temporary GAIN
+            //
+            // If this variable is non-zero, it overrides `adsr1` and `adsr2OrGain`.
+            // Reset to 0 on key-off.
+            var tempGain : [u8 ; N_CHANNELS];
         }
 
 
@@ -719,20 +725,29 @@ var _afterFirstChannel : u8 in zpTmp2;
             // This race condition can affect multiple samples if the previous GAIN was a fixed
             // value and thus audible to the listener.
 
-            // Need to test which register (ADSR2 or GAIN) to write to.
-            y = channelSoA.virtualChannels.adsr1[x];
-            if negative {
-                a--;
+            y = channelSoA.virtualChannels.tempGain[x];
+            if !zero {
+                smp.dsp_addr_and_data = ya;
+
+                y = 0;
             }
-            y = channelSoA.virtualChannels.adsr2OrGain[x];
-            smp.dsp_addr_and_data = ya;
+            else {
+                // Need to test which register (ADSR2 or GAIN) to write to.
+                y = channelSoA.virtualChannels.adsr1[x];
+                if negative {
+                    a--;
+                }
+                y = channelSoA.virtualChannels.adsr2OrGain[x];
+                smp.dsp_addr_and_data = ya;
+
+                y = channelSoA.virtualChannels.adsr1[x];
+            }
 
             // A = GAIN (0x?7) or ADSR2 (0x?6)
             a &= 0b1111_0110;
             // A = 0x?6
             a--;
             // A = ADSR1 (0x?5)
-            y = channelSoA.virtualChannels.adsr1[x];
             smp.dsp_addr_and_data = ya;
 
             a--;
@@ -787,8 +802,11 @@ var _afterFirstChannel : u8 in zpTmp2;
                     test_and_set(a, keyOnMask_music);
                 }
 
+                a = 0;
                 // schedule a bytecode event
-                channelSoA.nextEventIsKeyOff[x] = a = 0;
+                channelSoA.nextEventIsKeyOff[x] = a;
+                // Disable temp gain
+                channelSoA.virtualChannels.tempGain[x] = a;
 
                 // Previous countdownTimer value was 0
                 channelSoA.countdownTimer[x]++;
@@ -1120,6 +1138,9 @@ func __reset_channel(channelIndex : u8 in x, pan: u8 in a) {
 
 
     a = 0;
+
+    // Disable temp-gain
+    channelSoA.virtualChannels.tempGain[x] = a;
 
     // Disable portamento
     channelSoA.portamento_direction[x] = a as i8;
@@ -1842,8 +1863,12 @@ func disable_echo(channelIndex : u8 in x) {
 
 
 
+// IN: Y = 0
 // KEEP: X
 func set_instrument(channelIndex : u8 in x, instrumentId : u8 in a) {
+    // disable temp GAIN
+    channelSoA.virtualChannels.tempGain[x] = y;
+
     y = a;
 
     channelSoA.instPitchOffset[x] = a = commonData.instruments_pitchOffset[y];
@@ -1857,8 +1882,12 @@ func set_instrument(channelIndex : u8 in x, instrumentId : u8 in a) {
 
 
 
+// IN: Y = 0
 // KEEP: X
 func set_instrument_and_adsr_or_gain(channelIndex : u8 in x, instrumentId : u8 in a) {
+    // disable temp GAIN
+    channelSoA.virtualChannels.tempGain[x] = y;
+
     y = a;
 
     channelSoA.instPitchOffset[x] = a = commonData.instruments_pitchOffset[y];
@@ -1881,6 +1910,9 @@ func set_instrument_and_adsr_or_gain(channelIndex : u8 in x, instrumentId : u8 i
 // IN: Y = 0
 // KEEP: X
 func set_adsr(channelIndex: u8 in x, adsr1 : u8 in a) {
+    // disable temp GAIN
+    channelSoA.virtualChannels.tempGain[x] = y;
+
     channelSoA.virtualChannels.adsr1[x] = a;
 
     // Y = 0
@@ -1895,6 +1927,9 @@ func set_adsr(channelIndex: u8 in x, adsr1 : u8 in a) {
 // IN: Y = 0
 // KEEP: X
 func set_gain(channelIndex: u8 in x, gain : u8 in a) {
+    // disable temp GAIN
+    channelSoA.virtualChannels.tempGain[x] = y;
+
     // Y = 0
     channelSoA.virtualChannels.adsr1[x] = y;
 
@@ -1982,13 +2017,45 @@ func adjust_volume(channelIndex : u8 in x, delta: i8 in a) {
 
 
 // KEEP: X
-#[fallthrough]
 func set_volume(channelIndex : u8 in x, volume : u8 in a) {
     channelSoA.volume[x] = a;
 
     clear_vol_shadow_valid_flag(x);
 
     ^return process_next_bytecode(x);
+}
+
+
+// KEEP: x
+func set_temp_gain(channelIndex : u8 in x, tempGain: u8 in a) {
+    channelSoA.virtualChannels.tempGain[x] = a;
+
+    ^return process_next_bytecode(x);
+}
+
+
+// IN: Y = 0
+// KEEP: x
+func set_temp_gain_and_wait(channelIndex : u8 in x, tempGain: u8 in a) {
+    channelSoA.virtualChannels.tempGain[x] = a;
+
+    a = instructionPtr[y];
+    instructionPtr++;
+
+    return wait(x, a);
+}
+
+
+// IN: Y = 0
+// KEEP: x
+#[fallthrough]
+func set_temp_gain_and_rest(channelIndex : u8 in x, tempGain: u8 in a) {
+    channelSoA.virtualChannels.tempGain[x] = a;
+
+    a = instructionPtr[y];
+    instructionPtr++;
+
+// Fallthrough into rest()
 }
 
 

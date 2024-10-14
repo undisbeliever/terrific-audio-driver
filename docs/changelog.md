@@ -7,12 +7,21 @@ Version 0.0.12
 Bytecode changes:
  * Added note range tests to bytecode assembly.
  * Changed the bytecode format to increase the number of non play-note instructions from 32 to 64.
+ * Added `set_temp_gain`, `set_temp_gain_and_rest` and `set_temp_gain_and_wait` instructions.
 
 
 MML changes:
  * Added bytecode assembly to MML
     * Syntax: `\asm {  }`
     * Bytecode instructions can be separated by `|` dividers or new lines.
+ * Added temporary GAIN MML commands
+    * `GT0` - disable temporary GAIN
+    * `GT<gain>` - write the raw 8 bit value to the GAIN register
+    * `GFT<value>` - fixed temporary envelope (0-127)
+    * `GDT<rate>` - linear temporary decrease envelope (0-31)
+    * `GET<rate>` - exponential decrease temporary envelope (0-31)
+    * `GIT<rate>` - linear increase temporary envelope (0-31)
+    * `GBT<rate>` - bent increase temporary envelope (0-31)
 
 
 Version 0.0.11

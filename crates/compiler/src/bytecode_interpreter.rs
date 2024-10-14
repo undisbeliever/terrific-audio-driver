@@ -27,6 +27,7 @@ struct VirtualChannel {
     scrn: u8,
     adsr1: u8,
     adsr2_or_gain: u8,
+    temp_gain: u8,
 
     echo: bool,
 }
@@ -105,6 +106,7 @@ pub struct ChannelState {
 
     instrument: Option<u8>,
     adsr_or_gain_override: Option<(u8, u8)>,
+    temp_gain: u8,
 
     volume: u8,
     pan: u8,
@@ -135,6 +137,7 @@ impl ChannelState {
             bc_stack: Default::default(),
             instrument: None,
             adsr_or_gain_override: Some((0, 0)),
+            temp_gain: 0,
             volume: STARTING_VOLUME,
             pan: Pan::MAX / 2,
             echo: false,
@@ -192,6 +195,10 @@ impl ChannelState {
         let key_off = note_and_key_off_bit & 1 == 1;
 
         self.ticks += Self::to_tick_count(length, key_off);
+
+        if key_off {
+            self.temp_gain = 0;
+        }
     }
 
     fn call_subroutine(&mut self, s_id: u8, song_data: &[u8]) {
@@ -294,11 +301,13 @@ impl ChannelState {
             opcodes::REST => {
                 let to_rest = read_pc();
                 self.ticks += Self::to_tick_count(to_rest, true);
+                self.temp_gain = 0;
             }
 
             opcodes::SET_INSTRUMENT => {
                 self.instrument = Some(read_pc());
                 self.adsr_or_gain_override = None;
+                self.temp_gain = 0;
             }
             opcodes::SET_INSTRUMENT_AND_ADSR_OR_GAIN => {
                 let instrument = read_pc();
@@ -307,17 +316,41 @@ impl ChannelState {
 
                 self.instrument = Some(instrument);
                 self.adsr_or_gain_override = Some((adsr1, adsr2_or_gain));
+                self.temp_gain = 0;
             }
             opcodes::SET_ADSR => {
                 let adsr1 = read_pc();
                 let adsr2 = read_pc();
 
                 self.adsr_or_gain_override = Some((adsr1, adsr2));
+                self.temp_gain = 0;
             }
             opcodes::SET_GAIN => {
                 let gain = read_pc();
 
                 self.adsr_or_gain_override = Some((0, gain));
+                self.temp_gain = 0;
+            }
+
+            opcodes::SET_TEMP_GAIN => {
+                self.temp_gain = read_pc();
+            }
+
+            opcodes::SET_TEMP_GAIN_AND_REST => {
+                // Temp gain is reset on key-off
+                let _temp_gain = read_pc();
+                let to_rest = read_pc();
+
+                self.ticks += Self::to_tick_count(to_rest, true);
+                self.temp_gain = 0;
+            }
+
+            opcodes::SET_TEMP_GAIN_AND_WAIT => {
+                let temp_gain = read_pc();
+                let to_rest = read_pc();
+
+                self.temp_gain = temp_gain;
+                self.ticks += Self::to_tick_count(to_rest, false);
             }
 
             opcodes::ADJUST_PAN => {
@@ -722,6 +755,7 @@ fn build_channel(
             scrn,
             adsr1,
             adsr2_or_gain,
+            temp_gain: c.temp_gain,
             echo: c.echo,
         },
     }
@@ -756,6 +790,7 @@ fn unused_channel(channel_index: usize) -> Channel {
             scrn: 0,
             adsr1: 0,
             adsr2_or_gain: 0,
+            temp_gain: 0,
             echo: false,
         },
     }
@@ -890,6 +925,7 @@ impl InterpreterOutput {
                 soa_write_u8(addresses::CHANNEL_VC_SCRN, vc.scrn);
                 soa_write_u8(addresses::CHANNEL_VC_ADSR1, vc.adsr1);
                 soa_write_u8(addresses::CHANNEL_VC_ADSR2_OR_GAIN, vc.adsr2_or_gain);
+                soa_write_u8(addresses::CHANNEL_VC_TEMP_GAIN, vc.temp_gain);
             }
 
             for (channel_index, c) in self.channels.iter().enumerate() {

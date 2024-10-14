@@ -168,6 +168,30 @@ impl ChannelBcGenerator<'_> {
         }
     }
 
+    fn split_wait_length(length: TickCounter) -> Result<(BcTicksNoKeyOff, TickCounter), MmlError> {
+        let l = length.value();
+
+        let bc = u32::min(l, BcTicksNoKeyOff::MAX);
+        let bc = BcTicksNoKeyOff::try_from(bc)?;
+
+        Ok((bc, TickCounter::new(l - bc.ticks())))
+    }
+
+    fn split_long_rest_length(length: TickCounter) -> (BcTicksNoKeyOff, TickCounter) {
+        let l = length.value();
+
+        debug_assert!(l > BcTicksKeyOff::MAX);
+
+        let wait = BcTicksNoKeyOff::MAX;
+        let rest = l - wait;
+        debug_assert!(rest > 0);
+
+        (
+            BcTicksNoKeyOff::try_from(wait).unwrap(),
+            TickCounter::new(rest),
+        )
+    }
+
     fn split_play_note_length(
         length: TickCounter,
         is_slur: bool,
@@ -636,6 +660,46 @@ impl ChannelBcGenerator<'_> {
         }
     }
 
+    fn set_temp_gain(&mut self, temp_gain: Gain) {
+        self.bc.set_temp_gain(temp_gain);
+    }
+
+    fn set_temp_gain_and_wait(
+        &mut self,
+        temp_gain: Gain,
+        ticks: TickCounter,
+    ) -> Result<(), MmlError> {
+        let (wait1, wait2) = Self::split_wait_length(ticks)?;
+
+        self.bc.set_temp_gain_and_wait(temp_gain, wait1);
+
+        if !wait2.is_zero() {
+            self.wait(wait2)?;
+        }
+        Ok(())
+    }
+
+    fn set_temp_gain_and_rest(
+        &mut self,
+        temp_gain: Gain,
+        ticks_until_keyoff: TickCounter,
+        ticks_after_keyoff: TickCounter,
+    ) -> Result<(), MmlError> {
+        match ticks_until_keyoff.value() {
+            l @ ..=BcTicksKeyOff::MAX => {
+                self.bc
+                    .set_temp_gain_and_rest(temp_gain, BcTicksKeyOff::try_from(l)?);
+            }
+            l => {
+                let (wait, rest) = Self::split_long_rest_length(TickCounter::new(l));
+                self.bc.set_temp_gain_and_wait(temp_gain, wait);
+                self.rest_one_keyoff(rest)?;
+            }
+        }
+        self.rest_many_keyoffs(ticks_after_keyoff)?;
+        Ok(())
+    }
+
     fn call_subroutine(
         &mut self,
         index: usize,
@@ -763,6 +827,20 @@ impl ChannelBcGenerator<'_> {
 
             &MmlCommand::Wait(length) => {
                 self.wait(length)?;
+            }
+
+            &MmlCommand::TempGain(temp_gain) => {
+                self.set_temp_gain(temp_gain);
+            }
+            &MmlCommand::TempGainAndRest {
+                temp_gain,
+                ticks_until_keyoff,
+                ticks_after_keyoff,
+            } => {
+                self.set_temp_gain_and_rest(temp_gain, ticks_until_keyoff, ticks_after_keyoff)?;
+            }
+            &MmlCommand::TempGainAndWait(temp_gain, ticks) => {
+                self.set_temp_gain_and_wait(temp_gain, ticks)?;
             }
 
             &MmlCommand::PlayNote {
