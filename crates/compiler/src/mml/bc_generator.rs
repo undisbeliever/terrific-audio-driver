@@ -884,11 +884,16 @@ impl ChannelBcGenerator<'_> {
             &MmlCommand::PlayQuantizedNote {
                 note,
                 length: _,
-                key_on_length,
+                note_length,
                 rest,
             } => {
-                self.play_note_with_mp(note, key_on_length, false)?;
-                self.rest_many_keyoffs(rest)?;
+                self.play_note_with_mp(note, note_length, false)?;
+
+                // can `wait` here, `play_note_with_mp()` sends a key-off event
+                match rest.value() {
+                    1 => self.wait(rest)?,
+                    _ => self.rest_many_keyoffs(rest)?,
+                }
             }
 
             &MmlCommand::Portamento {

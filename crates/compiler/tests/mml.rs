@@ -290,7 +290,10 @@ fn test_fine_quantisation() {
     assert_line_matches_bytecode("Q%$c0 c%80", &["play_note c4 61", "rest 19"]);
 
     assert_line_matches_bytecode("Q%249  c%80", &["play_note c4 78", "rest 2"]);
-    assert_line_matches_bytecode("Q%250  c%80", &["play_note c4 80"]);
+    assert_line_matches_bytecode("Q%250  c%80", &["play_note c4 79", "wait 1"]);
+
+    assert_line_matches_bytecode("Q%252  c%80", &["play_note c4 79", "wait 1"]);
+    assert_line_matches_bytecode("Q%253  c%80", &["play_note c4 80"]);
 
     assert_line_matches_bytecode("Q%255  c%80", &["play_note c4 80"]);
 }

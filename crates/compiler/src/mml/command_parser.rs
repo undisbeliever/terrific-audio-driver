@@ -170,7 +170,8 @@ pub enum MmlCommand {
     PlayQuantizedNote {
         note: Note,
         length: TickCounter,
-        key_on_length: TickCounter,
+        // Includes the key-off rest in the `play_note` instruction
+        note_length: TickCounter,
         // May be longer the `length - key_on_length`.
         rest: TickCounter,
     },
@@ -1089,21 +1090,21 @@ fn play_note(note: Note, length: TickCounter, p: &mut Parser) -> MmlCommand {
         // Note is quantized
         let q = u32::from(q.unwrap().0);
         let l = length.value();
-        let key_on_length = (l * q) / FineQuantization::UNITS + KEY_OFF_TICK_DELAY;
+        let note_length = (l * q) / FineQuantization::UNITS + KEY_OFF_TICK_DELAY;
 
-        let key_on_length = key_on_length.clamp(KEY_OFF_TICK_DELAY + 1, l);
-        let key_off_length = l - key_on_length;
+        let note_length = note_length.clamp(KEY_OFF_TICK_DELAY + 1, l);
+        let rest = l - note_length;
 
-        if key_off_length > KEY_OFF_TICK_DELAY {
-            let key_on_length = TickCounter::new(key_on_length);
+        if rest > 0 {
+            let note_length = TickCounter::new(note_length);
 
-            let rest = TickCounter::new(key_off_length);
+            let rest = TickCounter::new(rest);
             let rest = rest + parse_rests_after_rest(p);
 
             MmlCommand::PlayQuantizedNote {
                 note,
                 length,
-                key_on_length,
+                note_length,
                 rest,
             }
         } else {
