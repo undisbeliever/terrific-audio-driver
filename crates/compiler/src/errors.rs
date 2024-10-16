@@ -20,8 +20,8 @@ use crate::echo::{EchoEdl, EchoLength, MAX_FIR_ABS_SUM};
 use crate::envelope::Gain;
 use crate::file_pos::{FilePosRange, MAX_MML_TEXT_LENGTH};
 use crate::mml::command_parser::{
-    PortamentoSpeed, Quantization, Transpose, MAX_COARSE_VOLUME, MAX_RELATIVE_COARSE_VOLUME,
-    MIN_RELATIVE_COARSE_VOLUME,
+    FineQuantization, PortamentoSpeed, Quantization, Transpose, MAX_COARSE_VOLUME,
+    MAX_RELATIVE_COARSE_VOLUME, MIN_RELATIVE_COARSE_VOLUME,
 };
 use crate::mml::MAX_BROKEN_CHORD_NOTES;
 use crate::notes::{MidiNote, Note, Octave};
@@ -129,6 +129,7 @@ pub enum ValueError {
     PortamentoVelocityOutOfRange,
 
     QuantizeOutOfRange,
+    FineQuantizeOutOfRange,
     TransposeOutOfRange,
     PortamentoSpeedOutOfRange,
 
@@ -172,6 +173,7 @@ pub enum ValueError {
     NoTranspose,
     NoLoopCount,
     NoQuantize,
+    NoFineQuantizate,
     NoTickClock,
     NoBpm,
     NoMidiNote,
@@ -770,6 +772,7 @@ impl Display for ValueError {
             }
 
             Self::QuantizeOutOfRange => out_of_range!("quantization", Quantization),
+            Self::FineQuantizeOutOfRange => out_of_range!("fine quantization", FineQuantization),
             Self::TransposeOutOfRange => out_of_range!("transpose", Transpose),
 
             Self::PortamentoSpeedOutOfRange => out_of_range!("portamento speed", PortamentoSpeed),
@@ -838,6 +841,7 @@ impl Display for ValueError {
             Self::NoTranspose => write!(f, "no transpose value"),
             Self::NoLoopCount => write!(f, "no loop count"),
             Self::NoQuantize => write!(f, "no quantization value"),
+            Self::NoFineQuantizate => write!(f, "no fine quntization value"),
             Self::NoTickClock => write!(f, "no tick clock"),
             Self::NoBpm => write!(f, "no tempo bpm"),
             Self::NoMidiNote => write!(f, "no MIDI note number"),

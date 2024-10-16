@@ -751,8 +751,13 @@ impl MmlEditorState {
                     Ordering::Equal => {}
                 }
 
-                if c.state.quantize.as_u8() != Quantization::MAX {
-                    let _ = write!(s, "  Q{}", c.state.quantize.as_u8());
+                if let Some(q) = c.state.quantize {
+                    let q = q.as_u8();
+                    if q % Quantization::FINE_QUANTIZATION_SCALE == 0 {
+                        let _ = write!(s, "  Q{}", q / Quantization::FINE_QUANTIZATION_SCALE);
+                    } else {
+                        let _ = write!(s, "  Q%{}", q);
+                    }
                 }
 
                 if c.state.zenlen != compiled_data.zenlen() {

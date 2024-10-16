@@ -279,6 +279,23 @@ fn test_quantization() {
 }
 
 #[test]
+fn test_fine_quantisation() {
+    // Cannot use `assert_mml_matches_mml`.
+    // There is a single rest tick at the end of a play_note instruction
+
+    assert_line_matches_bytecode("Q%1  c%80", &["play_note c4 2", "rest 78"]);
+
+    assert_line_matches_bytecode("Q%10 c%80", &["play_note c4 4", "rest 76"]);
+    assert_line_matches_bytecode("Q%128 c%80", &["play_note c4 41", "rest 39"]);
+    assert_line_matches_bytecode("Q%$c0 c%80", &["play_note c4 61", "rest 19"]);
+
+    assert_line_matches_bytecode("Q%249  c%80", &["play_note c4 78", "rest 2"]);
+    assert_line_matches_bytecode("Q%250  c%80", &["play_note c4 80"]);
+
+    assert_line_matches_bytecode("Q%255  c%80", &["play_note c4 80"]);
+}
+
+#[test]
 fn play_long_note() {
     // `rest` can rest for 1 to 256 ticks.
     // `rest_keyoff` can rest for 2 to 257 tick.

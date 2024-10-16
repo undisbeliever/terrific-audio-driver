@@ -23,7 +23,7 @@ MML changes:
     * `GIT<rate>` - linear increase temporary envelope (0-31)
     * `GBT<rate>` - bent increase temporary envelope (0-31)
     * `GT` - reuse previous temporary GAIN
-
+ * Added `Q%<0-255>` Fine Quantize MML command.
 
 GUI changes:
  * Fix sound effects stopping at the first rest instruction.

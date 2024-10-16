@@ -39,8 +39,26 @@ u8_value_newtype!(
     PortamentoSpeedOutOfRange,
     NoPortamentoSpeed
 );
-u8_value_newtype!(Quantization, QuantizeOutOfRange, NoQuantize, 0, 8);
 i8_value_newtype!(Transpose, TransposeOutOfRange, NoTranspose);
+
+u8_value_newtype!(Quantization, QuantizeOutOfRange, NoQuantize, 0, 8);
+u8_value_newtype!(FineQuantization, FineQuantizeOutOfRange, NoFineQuantizate);
+
+impl Quantization {
+    pub const FINE_QUANTIZATION_SCALE: u8 = 32;
+
+    fn to_fine(self) -> Option<FineQuantization> {
+        if self.0 < 8 {
+            Some(FineQuantization(self.0 * Self::FINE_QUANTIZATION_SCALE))
+        } else {
+            None
+        }
+    }
+}
+
+impl FineQuantization {
+    pub const UNITS: u32 = 256;
+}
 
 #[derive(Debug, Copy, Clone)]
 pub enum VolumeCommand {
@@ -223,7 +241,7 @@ pub struct State {
     pub default_length: MmlDefaultLength,
     pub octave: Octave,
     pub semitone_offset: i8,
-    pub quantize: Quantization,
+    pub quantize: Option<FineQuantization>,
 }
 
 type SubroutineMaps<'a> = (
@@ -289,7 +307,7 @@ mod parser {
                     default_length: STARTING_MML_LENGTH,
                     octave: STARTING_OCTAVE,
                     semitone_offset: 0,
-                    quantize: Quantization(8),
+                    quantize: None,
                 },
 
                 default_length: zenlen.starting_length(),
@@ -649,12 +667,27 @@ fn parse_relative_transpose(pos: FilePos, p: &mut Parser) {
 }
 
 fn parse_quantize(pos: FilePos, p: &mut Parser) {
-    if let Some(q) = parse_unsigned_newtype(pos, p) {
-        p.set_state(State {
-            quantize: q,
-            ..p.state().clone()
-        });
-    }
+    match_next_token!(
+        p,
+
+        Token::PercentSign => {
+            if let Some(q) = parse_unsigned_newtype(pos, p) {
+                p.set_state(State {
+                    quantize: Some(q),
+                    ..p.state().clone()
+                });
+            }
+        },
+
+        #_ => {
+            if let Some(q) = parse_unsigned_newtype::<Quantization>(pos, p) {
+                p.set_state(State {
+                    quantize: q.to_fine(),
+                    ..p.state().clone()
+                });
+            }
+        }
+    );
 }
 
 // Returns true if the token was recognised and processed
@@ -1044,10 +1077,9 @@ fn play_note(note: Note, length: TickCounter, p: &mut Parser) -> MmlCommand {
     let (tie_length, is_slur) = parse_ties_and_slur(p);
     let length = length + tie_length;
 
-    let q = p.state().quantize.as_u8();
-    const MAX_Q: u8 = Quantization::MAX;
+    let q = p.state().quantize;
 
-    if q >= MAX_Q || is_slur {
+    if is_slur || q.is_none() {
         MmlCommand::PlayNote {
             note,
             length,
@@ -1055,12 +1087,14 @@ fn play_note(note: Note, length: TickCounter, p: &mut Parser) -> MmlCommand {
         }
     } else {
         // Note is quantized
-        let q = u32::from(q);
+        let q = u32::from(q.unwrap().0);
         let l = length.value();
-        let key_on_length = (l * q) / u32::from(MAX_Q) + KEY_OFF_TICK_DELAY;
+        let key_on_length = (l * q) / FineQuantization::UNITS + KEY_OFF_TICK_DELAY;
+
+        let key_on_length = key_on_length.clamp(KEY_OFF_TICK_DELAY + 1, l);
         let key_off_length = l - key_on_length;
 
-        if key_on_length > KEY_OFF_TICK_DELAY && key_off_length > KEY_OFF_TICK_DELAY {
+        if key_off_length > KEY_OFF_TICK_DELAY {
             let key_on_length = TickCounter::new(key_on_length);
 
             let rest = TickCounter::new(key_off_length);

@@ -240,8 +240,11 @@ Numbers can be decimal, or hexadecimal when prefixed with `$` (ie, `$ff`)
 
  * `Q<1-8>` - Quantize
     * Cuts the note by *param*/8.  The default value is 8.
+    * Has no effect on slurred notes.
     * For example: `Q4 c4` will cut the notes length in half (4/8) and play `c8 r8`
     * `Q8` (the default) will not cut notes.
+ * `Q%<0-255>` - Fine Quantize
+    * Same as `Q`, except it cuts the notes by *param*/256.
  * `l<length>` - Set the default length
  * `C<4..256>` - Set the whole note length (in ticks).
     * Default is `#Zenlen` or 96 if `#Zenlen` not set.
