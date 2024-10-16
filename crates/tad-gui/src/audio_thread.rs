@@ -12,6 +12,7 @@ use compiler::bytecode_interpreter;
 use compiler::bytecode_interpreter::SongInterpreter;
 use compiler::common_audio_data::CommonAudioData;
 use compiler::driver_constants::MAX_PAN;
+use compiler::driver_constants::N_CHANNELS;
 use compiler::driver_constants::N_DSP_VOICES;
 use compiler::driver_constants::N_MUSIC_CHANNELS;
 use compiler::driver_constants::{
@@ -804,6 +805,12 @@ impl TadEmu {
 
     /// Returns None if the song and sound effects have finished
     fn read_voice_positions(&mut self) -> Option<AudioMonitorData> {
+        const ALL_CHANNELS_INSTRUCTION_PTR_H_RANGE: Range<usize> = Range {
+            start: addresses::CHANNEL_INSTRUCTION_PTR_H as usize,
+            end: addresses::CHANNEL_INSTRUCTION_PTR_H as usize + N_CHANNELS,
+        };
+        const COMMON_DATA_ADDR_H: u8 = (addresses::COMMON_DATA >> 8) as u8;
+
         if !self.song_loaded() {
             return None;
         }
@@ -864,7 +871,9 @@ impl TadEmu {
             None => Default::default(),
         };
 
-        let any_channels_active = voice_instruction_ptrs.iter().any(|v| v.is_some());
+        let any_channels_active = apuram[ALL_CHANNELS_INSTRUCTION_PTR_H_RANGE]
+            .iter()
+            .any(|&inst_ptr_h| inst_ptr_h > COMMON_DATA_ADDR_H);
 
         if any_channels_active {
             Some(AudioMonitorData {

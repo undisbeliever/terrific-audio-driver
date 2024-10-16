@@ -25,6 +25,11 @@ MML changes:
     * `GT` - reuse previous temporary GAIN
 
 
+GUI changes:
+ * Fix sound effects stopping at the first rest instruction.
+   (This only effected the GUI, the spc700 audio driver was unaffected).
+
+
 Version 0.0.11
 ==============
 
