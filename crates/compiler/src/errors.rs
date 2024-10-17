@@ -187,6 +187,7 @@ pub enum ValueError {
     NoEchoEdl,
     NoInstrumentId,
     NoGain,
+    NoTempGainValue,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -444,6 +445,7 @@ pub enum MmlError {
     CannotParseComma,
     CannotParseDot,
     CannotParsePercentSign,
+    CannotParseGainMode,
     UnexpectedNumber,
 
     InvalidPitchListSymbol,
@@ -857,6 +859,7 @@ impl Display for ValueError {
             Self::NoEchoEdl => write!(f, "no echo EDL"),
             Self::NoInstrumentId => write!(f, "no instrument id"),
             Self::NoGain => write!(f, "no gain"),
+            Self::NoTempGainValue => write!(f, "no temp-GAIN value"),
         }
     }
 }
@@ -1220,6 +1223,9 @@ impl Display for MmlError {
             Self::CannotParseComma => write!(f, "cannot parse comma"),
             Self::CannotParseDot => write!(f, "cannot parse dot"),
             Self::CannotParsePercentSign => write!(f, "cannot parse %"),
+            Self::CannotParseGainMode => {
+                write!(f, "cannot parse GAIN mode (used by Q and q commands)")
+            }
             Self::UnexpectedNumber => write!(f, "unexpected number"),
 
             Self::InvalidPitchListSymbol => write!(f, "invalid pitch list symbol"),

@@ -245,6 +245,14 @@ Numbers can be decimal, or hexadecimal when prefixed with `$` (ie, `$ff`)
     * `Q8` (the default) will not cut notes.
  * `Q%<0-255>` - Fine Quantize
     * Same as `Q`, except it cuts the notes by *param*/256.
+ * `Q<1-7>,<temp-gain>` / `Q%<0-255>,<temp-gain>` - Quantize with Temp-GAIN
+    * Instead of a hard 1 tick keyoff, this command will a set temp-GAIN, then rest.
+    * For example: `Q4,D10 c4` will expand to `c8 & GDT10 r8`
+    * `Q<n>,D<rate>` - Quantize with linear decrease envelope (0-31)
+    * `Q<n>,E<rate>` - Quantize with exponential decrease envelope (0-31)
+    * `Q<n>,I<rate>` - Quantize with linear increase envelope (0-31)
+    * `Q<n>,B<rate>` - Quantize with bent increase envelope (0-31)
+    * `Q<n>,<gain>` - Quantize with a raw GAIN value (1-255)
  * `l<length>` - Set the default length
  * `C<4..256>` - Set the whole note length (in ticks).
     * Default is `#Zenlen` or 96 if `#Zenlen` not set.

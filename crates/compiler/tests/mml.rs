@@ -299,6 +299,43 @@ fn test_fine_quantisation() {
 }
 
 #[test]
+fn test_quantize_with_temp_gain() {
+    assert_line_matches_line("Q4,$84 c", "c8 & GT$84 r8");
+
+    assert_line_matches_line("Q4,F12 c", "c8 & GFT12 r8");
+    assert_line_matches_line("Q4,D3 c", "c8 & GDT3 r8");
+    assert_line_matches_line("Q4,E4 c", "c8 & GET4 r8");
+    assert_line_matches_line("Q4,I5 c", "c8 & GIT5 r8");
+    assert_line_matches_line("Q4,B6 c", "c8 & GBT6 r8");
+
+    assert_line_matches_line("Q%0,$84 c", "c%1 & GT$84 r%23");
+
+    assert_line_matches_line("Q%250,$84 c2", "c%46 & GT$84 r%2");
+    assert_line_matches_line("Q%251,$84 c2", "c%48");
+
+    assert_line_matches_line("Q4,D10    c d d f2. r", "Q%128,D10 c d d f2. r");
+
+    assert_line_matches_bytecode(
+        "Q6,E4 c d8 e8 f",
+        &[
+            "play_note c4 slur_next 18",
+            "set_temp_gain_and_rest E4 6",
+            "play_note d4 slur_next 9",
+            "reuse_temp_gain_and_rest 3",
+            "play_note e4 slur_next 9",
+            "reuse_temp_gain_and_rest 3",
+            "play_note f4 slur_next 18",
+            "reuse_temp_gain_and_rest 6",
+        ],
+    );
+
+    assert_line_matches_bytecode("Q1,E4 c%2", &["play_note c4 2"]);
+
+    // From mml-syntax.md
+    assert_line_matches_line("Q4,D10 c4", "c8 & GDT10 r8");
+}
+
+#[test]
 fn play_long_note() {
     // `rest` can rest for 1 to 256 ticks.
     // `rest_keyoff` can rest for 2 to 257 tick.

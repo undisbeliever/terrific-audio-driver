@@ -175,6 +175,17 @@ pub enum MmlCommand {
         // May be longer the `length - key_on_length`.
         rest: TickCounter,
     },
+    PlayQuantizedNoteWithTempGain {
+        note: Note,
+        length: TickCounter,
+        // Includes the key-off rest in the `play_note` instruction
+        key_on_length: TickCounter,
+        temp_gain: Gain,
+        temp_gain_ticks: TickCounter,
+        /// Combined length of all rests after the first rest
+        /// (keyoff already sent, it does not matter if these rests keyoff or not)
+        ticks_after_keyoff: TickCounter,
+    },
     Portamento {
         note1: Note,
         note2: Note,
@@ -242,7 +253,7 @@ pub struct State {
     pub default_length: MmlDefaultLength,
     pub octave: Octave,
     pub semitone_offset: i8,
-    pub quantize: Option<FineQuantization>,
+    pub quantize: Option<(FineQuantization, Gain)>,
 }
 
 type SubroutineMaps<'a> = (
@@ -667,25 +678,76 @@ fn parse_relative_transpose(pos: FilePos, p: &mut Parser) {
     }
 }
 
+// Returns 0 if there is no Temp-GAIN
+fn parse_optional_q_temp_gain(p: &mut Parser) -> Gain {
+    if next_token_matches!(p, Token::Comma) {
+        let pos = p.peek_pos();
+
+        let mode = match_next_token!(
+            p,
+
+            Token::GainModeF => GainMode::Fixed,
+            Token::GainModeD => GainMode::LinearDecrease,
+            Token::Echo => GainMode::ExponentialDecrease,
+            Token::GainModeI => GainMode::LinearIncrease,
+            Token::GainModeB => GainMode::BentIncrease,
+
+            #_ => GainMode::Raw
+        );
+
+        match next_token_number(p) {
+            Some(v) => match Gain::from_mode_and_value(mode, v) {
+                Ok(g) => g,
+                Err(e) => {
+                    p.add_error(pos, e.into());
+                    Gain::new(0)
+                }
+            },
+            None => {
+                p.add_error(pos, ValueError::NoTempGainValue.into());
+                Gain::new(0)
+            }
+        }
+    } else {
+        Gain::new(0)
+    }
+}
+
 fn parse_quantize(pos: FilePos, p: &mut Parser) {
     match_next_token!(
         p,
 
         Token::PercentSign => {
-            if let Some(q) = parse_unsigned_newtype(pos, p) {
+            let q = parse_unsigned_newtype(pos, p);
+            let temp_gain = parse_optional_q_temp_gain(p);
+
+            if let Some(q) = q {
                 p.set_state(State {
-                    quantize: Some(q),
+                    quantize: Some((q, temp_gain)),
                     ..p.state().clone()
                 });
             }
         },
 
         #_ => {
-            if let Some(q) = parse_unsigned_newtype::<Quantization>(pos, p) {
-                p.set_state(State {
-                    quantize: q.to_fine(),
-                    ..p.state().clone()
-                });
+            let q = parse_unsigned_newtype::<Quantization>(pos, p);
+            let temp_gain = parse_optional_q_temp_gain(p);
+
+            if let Some(q) = q {
+                match q.to_fine() {
+                    Some(q) => {
+                        p.set_state(State {
+                            quantize: Some((q, temp_gain)),
+                            ..p.state().clone()
+                        });
+                    }
+                    None => {
+                        p.set_state(State {
+                            quantize: None,
+                            ..p.state().clone()
+                        });
+                    }
+                }
             }
         }
     );
@@ -1088,24 +1150,42 @@ fn play_note(note: Note, length: TickCounter, p: &mut Parser) -> MmlCommand {
         }
     } else {
         // Note is quantized
-        let q = u32::from(q.unwrap().0);
+        let (q, temp_gain) = q.unwrap();
+
         let l = length.value();
-        let note_length = (l * q) / FineQuantization::UNITS + KEY_OFF_TICK_DELAY;
+        let q = u32::from(q.0);
 
-        let note_length = note_length.clamp(KEY_OFF_TICK_DELAY + 1, l);
-        let rest = l - note_length;
+        let key_on_length = (l * q) / FineQuantization::UNITS;
 
-        if rest > 0 {
-            let note_length = TickCounter::new(note_length);
+        let key_on_length = key_on_length.clamp(1, l - KEY_OFF_TICK_DELAY);
+        let key_off_length = l - key_on_length;
 
-            let rest = TickCounter::new(rest);
-            let rest = rest + parse_rests_after_rest(p);
+        let ticks_after_keyoff = parse_rests_after_rest(p);
 
-            MmlCommand::PlayQuantizedNote {
-                note,
-                length,
-                note_length,
-                rest,
+        if key_off_length > KEY_OFF_TICK_DELAY {
+            if temp_gain.as_u8() == 0 {
+                // No temp GAIN
+
+                let note_length = TickCounter::new(key_on_length + KEY_OFF_TICK_DELAY);
+                let rest = TickCounter::new(key_off_length - KEY_OFF_TICK_DELAY);
+
+                MmlCommand::PlayQuantizedNote {
+                    note,
+                    length,
+                    note_length,
+                    rest: rest + ticks_after_keyoff,
+                }
+            } else {
+                // Quantize with Temp GAIN
+
+                MmlCommand::PlayQuantizedNoteWithTempGain {
+                    note,
+                    length,
+                    key_on_length: TickCounter::new(key_on_length),
+                    temp_gain,
+                    temp_gain_ticks: TickCounter::new(key_off_length),
+                    ticks_after_keyoff,
+                }
             }
         } else {
             // Note is too short to be quantized
@@ -1591,6 +1671,10 @@ fn parse_token(pos: FilePos, token: Token, p: &mut Parser) -> MmlCommand {
         Token::PercentSign => invalid_token_error(p, pos, MmlError::CannotParsePercentSign),
         Token::Number(_) => invalid_token_error(p, pos, MmlError::UnexpectedNumber),
         Token::RelativeNumber(_) => invalid_token_error(p, pos, MmlError::UnexpectedNumber),
+
+        Token::GainModeB | Token::GainModeD | Token::GainModeF | Token::GainModeI => {
+            invalid_token_error(p, pos, MmlError::CannotParseGainMode)
+        }
 
         Token::Error(e) => invalid_token_error(p, pos, e),
     }

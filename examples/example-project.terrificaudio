@@ -151,6 +151,10 @@
       "source": "mml-tests/test-broken-chord.mml"
     },
     {
+      "name": "quantize_with_temp_gain",
+      "source": "mml-tests/quantize-with-temp-gain.mml"
+    },
+    {
       "name": "test_echo",
       "source": "mml-tests/test-echo.mml"
     },

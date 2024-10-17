@@ -24,6 +24,14 @@ MML changes:
     * `GBT<rate>` - bent increase temporary envelope (0-31)
     * `GT` - reuse previous temporary GAIN
  * Added `Q%<0-255>` Fine Quantize MML command.
+ * Added `Q` Quantize with temp-GAIN.
+    * For example: `Q4,D10 c4` will expand to `c8 & GDT10 r8`
+    * `Q<n>,D<rate>` - Quantize with linear decrease envelope (0-31)
+    * `Q<n>,E<rate>` - Quantize with exponential decrease envelope (0-31)
+    * `Q<n>,I<rate>` - Quantize with linear increase envelope (0-31)
+    * `Q<n>,B<rate>` - Quantize with bent increase envelope (0-31)
+    * `Q<n>,<gain>` - Quantize with a raw GAIN value (1-255)
+
 
 GUI changes:
  * Fix sound effects stopping at the first rest instruction.

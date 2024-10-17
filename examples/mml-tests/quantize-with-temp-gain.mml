@@ -1,0 +1,20 @@
+; Quantize with temp-GAIN examples
+
+#Tempo 144
+#ZenLen 192
+
+@1 square adsr 10 2 4 10
+
+A @1 o4
+
+A Q4
+A c d d f2.  c d d e2.  r
+
+; Quantize with linear decrease temp-GAIN release envelope
+A Q4,D10
+A c d d f2.  c d d e2.  r
+
+; Quantize with exponential decrease temp-GAIN release envelope
+A Q%128,E24
+A c d d f2.  c d d e2.  r
+

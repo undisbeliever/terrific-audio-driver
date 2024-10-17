@@ -896,6 +896,18 @@ impl ChannelBcGenerator<'_> {
                 }
             }
 
+            &MmlCommand::PlayQuantizedNoteWithTempGain {
+                note,
+                length: _,
+                key_on_length,
+                temp_gain,
+                temp_gain_ticks,
+                ticks_after_keyoff,
+            } => {
+                self.play_note_with_mp(note, key_on_length, true)?;
+                self.temp_gain_and_rest(Some(temp_gain), temp_gain_ticks, ticks_after_keyoff)?;
+            }
+
             &MmlCommand::Portamento {
                 note1,
                 note2,

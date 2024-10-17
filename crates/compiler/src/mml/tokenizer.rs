@@ -75,6 +75,13 @@ pub enum Token<'a> {
     Comma,
     Divider,
 
+    // Temp GAIN after quantization tokens
+    // (GainModeE is the Echo token)
+    GainModeB,
+    GainModeD,
+    GainModeF,
+    GainModeI,
+
     StartBytecodeAsm,
     EndBytecodeAsm,
 
@@ -246,7 +253,7 @@ fn is_unknown_u8(c: u8) -> bool {
         b'!' | b'@' | b'+' | b'-' | b'[' | b':' | b']' | b'^' | b'&' | b'C' | b's' | b'n'
         | b'l' | b'r' | b'w' | b'o' | b'>' | b'<' | b'v' | b'V' | b'p' | b'Q' | b'~' | b'A'
         | b'G' | b'E' | b't' | b'T' | b'L' | b'%' | b'.' | b',' | b'|' | b'_' | b'{' | b'}'
-        | b'M' => false,
+        | b'B' | b'D' | b'F' | b'I' | b'M' => false,
         b'\\' => false,
         c if c.is_ascii_whitespace() => false,
         _ => true,
@@ -406,6 +413,11 @@ fn next_token<'a>(scanner: &mut Scanner<'a>) -> Option<TokenWithPosition<'a>> {
         b'.' => one_ascii_token!(Token::Dot),
         b',' => one_ascii_token!(Token::Comma),
         b'|' => one_ascii_token!(Token::Divider),
+
+        b'B' => one_ascii_token!(Token::GainModeB),
+        b'D' => one_ascii_token!(Token::GainModeD),
+        b'F' => one_ascii_token!(Token::GainModeF),
+        b'I' => one_ascii_token!(Token::GainModeI),
 
         // Gain might use 2 or 3 chacters
         b'G' => {
