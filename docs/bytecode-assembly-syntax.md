@@ -8,6 +8,7 @@ Instructions
 ============
 
  * `rest <duration>` - Sleep for *duration-1* ticks then key-off for 1 tick.
+    * CAUTION: A wait-rest chain should end with `rest 257` to prevent conflict with early-release.
  * `wait <duration>` - Sleep for *duration* ticks (no key-off).
 
  * `play_note <note> <duration>` - Play *note* for *duration* ticks then key-off the note

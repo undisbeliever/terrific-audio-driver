@@ -337,30 +337,31 @@ fn test_quantize_with_temp_gain() {
 
 #[test]
 fn play_long_note() {
-    // `rest` can rest for 1 to 256 ticks.
-    // `rest_keyoff` can rest for 2 to 257 tick.
+    // `wait` can rest for 1 to 256 ticks.
+    // `rest` can rest for 2 to 257 tick.
+    // The last rest in a wait-rest chain must be 257 ticks to prevent interference with early-release
 
     assert_line_matches_bytecode("a%256", &["play_note a4 keyoff 256"]);
     assert_line_matches_bytecode("a%257", &["play_note a4 keyoff 257"]);
-    assert_line_matches_bytecode("a%258", &["play_note a4 no_keyoff 256", "rest 2"]);
 
-    assert_line_matches_bytecode("a%512", &["play_note a4 no_keyoff 256", "rest 256"]);
+    assert_line_matches_bytecode("a%258", &["play_note a4 no_keyoff 1", "rest 257"]);
+
+    assert_line_matches_bytecode("a%512", &["play_note a4 no_keyoff 255", "rest 257"]);
     assert_line_matches_bytecode("a%513", &["play_note a4 no_keyoff 256", "rest 257"]);
     assert_line_matches_bytecode(
         "a%514",
-        &["play_note a4 no_keyoff 256", "wait 256", "rest 2"],
+        &["play_note a4 no_keyoff 256", "wait 1", "rest 257"],
     );
 
     assert_line_matches_bytecode(
         "a%600",
-        &["play_note a4 no_keyoff 256", "wait 256", "rest 88"],
+        &["play_note a4 no_keyoff 256", "wait 87", "rest 257"],
     );
 }
 
 #[test]
 fn play_long_slurred_note() {
-    // `rest` can rest for 1 to 256 ticks.
-    // `rest_keyoff` can rest for 2 to 257 tick.
+    // `wait` can rest for 1 to 256 ticks.
 
     assert_line_matches_bytecode("a%256 &", &["play_note a4 no_keyoff 256"]);
     assert_line_matches_bytecode("a%257 &", &["play_note a4 no_keyoff 256", "wait 1"]);
@@ -384,6 +385,8 @@ fn play_long_slurred_note() {
 
 #[test]
 fn test_rests() {
+    // The last rest in a wait-rest chain must be 257 ticks to prevent interference with early-release
+
     assert_line_matches_bytecode("r", &["rest 24"]);
     assert_line_matches_bytecode("r.", &["rest 36"]);
     assert_line_matches_bytecode("r8", &["rest 12"]);
@@ -393,11 +396,11 @@ fn test_rests() {
 
     assert_line_matches_bytecode("r%256", &["rest 256"]);
     assert_line_matches_bytecode("r%257", &["rest 257"]);
-    assert_line_matches_bytecode("r%258", &["wait 256", "rest 2"]);
-    assert_line_matches_bytecode("r%512", &["wait 256", "rest 256"]);
+    assert_line_matches_bytecode("r%258", &["wait 1", "rest 257"]);
+    assert_line_matches_bytecode("r%512", &["wait 255", "rest 257"]);
     assert_line_matches_bytecode("r%513", &["wait 256", "rest 257"]);
-    assert_line_matches_bytecode("r%514", &["wait 256", "wait 256", "rest 2"]);
-    assert_line_matches_bytecode("r%600", &["wait 256", "wait 256", "rest 88"]);
+    assert_line_matches_bytecode("r%514", &["wait 256", "wait 1", "rest 257"]);
+    assert_line_matches_bytecode("r%600", &["wait 256", "wait 87", "rest 257"]);
 
     // User expects a keyoff after the first rest command
     merge_mml_commands_test("r || r", &["rest 24", "rest 24"]);
@@ -408,16 +411,16 @@ fn test_rests() {
     merge_mml_commands_test("r r || r8", &["rest 24", "rest 36"]);
     merge_mml_commands_test("r%30 r%30||r%20", &["rest 30", "rest 50"]);
 
-    assert_line_matches_bytecode("r%300 r%256", &["wait 256", "rest 44", "rest 256"]);
+    assert_line_matches_bytecode("r%300 r%256", &["wait 43", "rest 257", "rest 256"]);
 
     // It does not matter if subsequent rests send keyoff events or not, no note is playing
     merge_mml_commands_test(
         "r%300 || r%300",
-        &["wait 256", "rest 44", "rest 257", "rest 43"],
+        &["wait 43", "rest 257", "rest 257", "rest 43"],
     );
     assert_line_matches_bytecode(
         "r%300 r%100 r%100 r%100",
-        &["wait 256", "rest 44", "rest 257", "rest 43"],
+        &["wait 43", "rest 257", "rest 257", "rest 43"],
     );
 
     // From `mml-syntax.md`
@@ -554,79 +557,98 @@ fn test_wait_loop() {
 #[test]
 fn test_rest_loop() {
     // Test rest tick-counter threashold
-    assert_line_matches_bytecode("r%768", &["wait 256", "wait 256", "rest 256"]);
-    assert_line_matches_bytecode("r%769", &["wait 256", "wait 256", "rest 257"]);
+    assert_line_matches_bytecode("r%1024", &["wait 256", "wait 256", "wait 255", "rest 257"]);
+    assert_line_matches_bytecode("r%1025", &["wait 256", "wait 256", "wait 256", "rest 257"]);
 
     assert_line_matches_line_and_bytecode(
-        "r%770",
-        "[w%256]3 r%2",
-        &["start_loop 3", "wait 256", "end_loop", "rest 2"],
+        "r%1026",
+        "[w%256]3 w%1 r%257",
+        &["start_loop 3", "wait 256", "end_loop", "wait 1", "rest 257"],
     );
 
-    // Test that RestLoop remainder of 0 is skipped
-    assert!(1024 % 256 == 0);
-    assert!(204 * 5 + 4 == 1024);
+    assert!(255 * 4 + 257 == 1277);
     assert_line_matches_line_and_bytecode(
-        "r%1024",
-        "[w%204]5 r%4",
-        &["start_loop 5", "wait 204", "end_loop", "rest 4"],
+        "r%1277",
+        "[w%255]4 r%257",
+        &["start_loop 4", "wait 255", "end_loop", "rest 257"],
     );
 
-    // Test that RestLoop remainder of 1 is skipped
-    assert!(1025 % 256 == 1);
-    assert!(170 * 6 + 5 == 1025);
+    assert!(255 * 100 + 52 + 257 == 25809);
     assert_line_matches_line_and_bytecode(
-        "r%1025",
-        "[w%170]6 r%5",
-        &["start_loop 6", "wait 170", "end_loop", "rest 5"],
+        "r%25809",
+        "[w%255]100 w%52 r%257",
+        &[
+            "start_loop 100",
+            "wait 255",
+            "end_loop",
+            "wait 52",
+            "rest 257",
+        ],
     );
 
-    assert!(25600 % 256 == 0);
-    assert!(253 * 101 + 47 == 25600);
+    assert!(253 * 101 + 257 == 25810);
     assert_line_matches_line_and_bytecode(
-        "r%25600",
-        "[w%253]101 r%47",
-        &["start_loop 101", "wait 253", "end_loop", "rest 47"],
-    );
-
-    assert!(25601 % 256 == 1);
-    assert!(253 * 101 + 48 == 25601);
-    assert_line_matches_line_and_bytecode(
-        "r%25601",
-        "[w%253]101 r%48",
-        &["start_loop 101", "wait 253", "end_loop", "rest 48"],
+        "r%25810",
+        "[w%253]101 r%257",
+        &["start_loop 101", "wait 253", "end_loop", "rest 257"],
     );
 
     assert_line_matches_line_and_bytecode(
-        "r%25602",
-        "[w%256]100 r%2",
-        &["start_loop 100", "wait 256", "end_loop", "rest 2"],
+        "r%25811",
+        "[w%255]100 w%54 r%257",
+        &[
+            "start_loop 100",
+            "wait 255",
+            "end_loop",
+            "wait 54",
+            "rest 257",
+        ],
     );
 
-    assert!(512 * 195 + 159 == 99999);
     assert_line_matches_line_and_bytecode(
-        "r%99999",
-        "[w%512]195 r%159",
+        "r%25858",
+        "[w%256]100 w%1 r%257",
+        &[
+            "start_loop 100",
+            "wait 256",
+            "end_loop",
+            "wait 1",
+            "rest 257",
+        ],
+    );
+
+    assert!(512 * 195 + 257 == 100097);
+    assert_line_matches_line_and_bytecode(
+        "r%100097",
+        "[w%512]195 r%257",
         &[
             "start_loop 195",
             "wait 256",
             "wait 256",
             "end_loop",
-            "rest 159",
+            "rest 257",
         ],
     );
 
-    // A random prime number
+    // A random prime number for the wait portion
+    // 5237 is prime
     assert!(249 * 21 + 8 == 5237);
+    assert!(5237 + 257 == 5494);
     assert_line_matches_line_and_bytecode(
-        "r%5237",
-        "[w%249]21 r%8",
-        &["start_loop 21", "wait 249", "end_loop", "rest 8"],
+        "r%5494",
+        "[w%249]21 w%8 r%257",
+        &[
+            "start_loop 21",
+            "wait 249",
+            "end_loop",
+            "wait 8",
+            "rest 257",
+        ],
     );
 
     // Test no compile errors when loop stack is full
     assert_line_matches_bytecode(
-        "[[[[[[[ r%1024 ]2]3]4]5]6]7]8",
+        "[[[[[[[ r%1281 ]2]3]4]5]6]7]8",
         &[
             "start_loop",
             "start_loop",
@@ -638,7 +660,8 @@ fn test_rest_loop() {
             "wait 256",
             "wait 256",
             "wait 256",
-            "rest 256",
+            "wait 256",
+            "rest 257",
             "end_loop 2",
             "end_loop 3",
             "end_loop 4",
@@ -728,6 +751,20 @@ fn test_merged_rest_loop() {
         ],
     );
 
+    // A random prime number for wait part of the first rest
+    assert!(9743 == 10000 - 257);
+    assert_line_matches_line_and_bytecode(
+        "r%10000",
+        "[w%256]38 w%15 r%257",
+        &[
+            "start_loop 38",
+            "wait 256",
+            "end_loop",
+            "wait 15",
+            "rest 257",
+        ],
+    );
+
     // A random prime number
     assert!(242 * 27 + 19 == 6553);
     assert_line_matches_line_and_bytecode(
@@ -736,7 +773,6 @@ fn test_merged_rest_loop() {
         &["rest 2", "start_loop 27", "rest 242", "end_loop", "rest 19"],
     );
 
-    // Test no compile errors when loop stack is full
     assert_line_matches_bytecode(
         "[[[[[[[ r%2 r%1028 ]2]3]4]5]6]7]8",
         &[
@@ -763,17 +799,50 @@ fn test_merged_rest_loop() {
         ],
     );
 
+    // Test no compile errors when loop stack is full
+    assert_line_matches_bytecode(
+        "[[[[[[[ r%1537 r%1028 ]2]3]4]5]6]7]8",
+        &[
+            "start_loop",
+            "start_loop",
+            "start_loop",
+            "start_loop",
+            "start_loop",
+            "start_loop",
+            "start_loop",
+            // first rest
+            "wait 256",
+            "wait 256",
+            "wait 256",
+            "wait 256",
+            "wait 256",
+            "rest 257",
+            // second rest
+            "rest 257",
+            "rest 257",
+            "rest 257",
+            "rest 257",
+            "end_loop 2",
+            "end_loop 3",
+            "end_loop 4",
+            "end_loop 5",
+            "end_loop 6",
+            "end_loop 7",
+            "end_loop 8",
+        ],
+    );
+
     // Test both rests are converted to loops
-    assert!(166 * 6 + 4 == 1000);
+    assert!(249 * 7 == 2000 - 257);
     assert!(250 * 4 == 1000);
     assert_line_matches_line_and_bytecode(
-        "r%1000 r%1000",
-        "[w%166]6 r%4 [r%250]4",
+        "r%2000 r%1000",
+        "[w%249]7 r%257 [r%250]4",
         &[
-            "start_loop 6",
-            "wait 166",
+            "start_loop 7",
+            "wait 249",
             "end_loop",
-            "rest 4",
+            "rest 257",
             "start_loop 4",
             "rest 250",
             "end_loop",
@@ -2461,16 +2530,16 @@ fn test_temp_gain_rest() {
 
     assert_line_matches_bytecode("GDT12 r%256", &["set_temp_gain_and_rest D12 256"]);
     assert_line_matches_bytecode("GDT12 r%257", &["set_temp_gain_and_rest D12 257"]);
-    assert_line_matches_bytecode("GDT12 r%258", &["set_temp_gain_and_wait D12 256", "rest 2"]);
-    assert_line_matches_bytecode("GDT12 r%259", &["set_temp_gain_and_wait D12 256", "rest 3"]);
+    assert_line_matches_bytecode("GDT12 r%258", &["set_temp_gain_and_wait D12 1", "rest 257"]);
+    assert_line_matches_bytecode("GDT12 r%259", &["set_temp_gain_and_wait D12 2", "rest 257"]);
 
     assert_line_matches_bytecode(
         "GDT12 r%1000",
         &[
             "set_temp_gain_and_wait D12 256",
             "wait 256",
-            "wait 256",
-            "rest 232",
+            "wait 231",
+            "rest 257",
         ],
     );
 
@@ -2478,8 +2547,8 @@ fn test_temp_gain_rest() {
         "GDT12 r%700 r%200 || r%500",
         &[
             "set_temp_gain_and_wait D12 256",
-            "wait 256",
-            "rest 188",
+            "wait 187",
+            "rest 257",
             "rest 257",
             "rest 257",
             "rest 186",
@@ -2490,10 +2559,10 @@ fn test_temp_gain_rest() {
         "GDT12 r%10000 r%2000",
         &[
             "set_temp_gain_and_wait D12 256",
-            "start_loop 38",
-            "wait 256",
+            "start_loop 53",
+            "wait 179",
             "end_loop",
-            "rest 16",
+            "rest 257",
             // second rest
             "start_loop 8",
             "rest 250",

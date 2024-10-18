@@ -60,6 +60,7 @@ let DISABLE_CHANNEL_BYTECODE = FIRST_PLAY_NOTE_INSTRUCTION - 1;
 // Notes about rest/note length:
 //   * A rest/note length of 0 will pause for 256 ticks
 //   * A rest/note instruction will wait for an extra tick if the key-off bit is set.
+//   * A wait-rest chain should end with `rest 257` to prevent conflict with early-release.
 
 // These bytecodes do have parameters
 let INSTRUCTIONS_WITH_ARGUMENTS = [
@@ -119,6 +120,7 @@ let INSTRUCTIONS_WITH_ARGUMENTS = [
     // parameter = number of ticks to sleep before key-off
     // Sends a key-off after sleeping and sleeps for 1 extra tick after key-off.
     // (This instruction sleeps for `parameter + 1` ticks)
+    // CAUTION: A wait-rest chain should end with `rest 257` to prevent conflict with early-release.
     rest,
 
 
