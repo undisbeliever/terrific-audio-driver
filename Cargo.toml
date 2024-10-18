@@ -46,7 +46,7 @@ wav2brr = { path = "./crates/wav2brr", version = "0.0.0" }
 # External crates
 clap = { version="4.5.16", features=[ "derive" ] }
 serde = { version="1.0.164", features=[ "derive" ] }
-serde_json = { version="1.0.97" }
+serde_json = { version="1.0.130" }
 relative-path = { version="1.9.0", features=[ "serde" ] }
 
 sdl2 = { version="0.37.0", features=[] }
