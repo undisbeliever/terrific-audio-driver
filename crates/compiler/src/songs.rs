@@ -10,16 +10,16 @@ use crate::bytecode::{
     BcTerminator, BcTicks, BcTicksKeyOff, BcTicksNoKeyOff, Bytecode, InstrumentId, PlayNoteTicks,
     StackDepth, SubroutineId, Volume,
 };
-use crate::data::UniqueNamesList;
+use crate::data::{self, single_item_unique_names_list, InstrumentOrSample, Name, UniqueNamesList};
 use crate::driver_constants::{
     addresses, AUDIO_RAM_SIZE, ECHO_BUFFER_MIN_SIZE, MAX_SONG_DATA_SIZE, MAX_SUBROUTINES,
     N_MUSIC_CHANNELS, SFX_TICK_CLOCK, SONG_HEADER_CHANNELS_SIZE, SONG_HEADER_N_SUBROUTINES_OFFSET,
     SONG_HEADER_SIZE, SONG_HEADER_TICK_TIMER_OFFSET,
 };
-use crate::envelope::Envelope;
+use crate::envelope::{Envelope, Gain};
 use crate::errors::{BytecodeAssemblerError, SongError, SongTooLargeError};
 use crate::mml::{MetaData, MmlInstrument, Section};
-use crate::notes::Note;
+use crate::notes::{Note, Octave};
 use crate::sound_effects::CompiledSoundEffect;
 use crate::time::{TickClock, TickCounter, TickCounterWithLoopFlag};
 use crate::{audio_driver, mml};
@@ -27,6 +27,7 @@ use crate::{audio_driver, mml};
 use std::cmp::min;
 use std::fmt::Debug;
 use std::ops::Range;
+use std::sync::OnceLock;
 use std::time::Duration;
 
 const NULL_OFFSET: u16 = 0xffff_u16;
@@ -186,17 +187,33 @@ pub fn song_header_size(n_subroutines: usize) -> usize {
     SONG_HEADER_SIZE + n_subroutines * 2
 }
 
+fn sample_song_fake_instruments() -> &'static UniqueNamesList<InstrumentOrSample> {
+    static LOCK: OnceLock<UniqueNamesList<InstrumentOrSample>> = OnceLock::new();
+
+    LOCK.get_or_init(|| {
+        let inst = InstrumentOrSample::Instrument(data::Instrument {
+            name: Name::try_new("name".to_owned()).unwrap(),
+            source: Default::default(),
+            freq: 0.0,
+            loop_setting: data::LoopSetting::None,
+            first_octave: Octave::try_new(Octave::MIN.into()).unwrap(),
+            last_octave: Octave::try_new(Octave::MAX.into()).unwrap(),
+            envelope: Envelope::Gain(Gain::new(0)),
+            comment: Default::default(),
+        });
+        single_item_unique_names_list(inst)
+    })
+}
+
 pub fn test_sample_song(
     instrument: u8,
     note: Note,
     note_length: u32,
     envelope: Option<Envelope>,
 ) -> Result<SongData, BytecodeAssemblerError> {
-    let instruments = UniqueNamesList::blank_list();
-
     let mut bc = Bytecode::new(
         crate::bytecode::BytecodeContext::SongChannel,
-        &instruments,
+        sample_song_fake_instruments(),
         None,
     );
 

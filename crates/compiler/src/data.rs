@@ -389,7 +389,7 @@ pub fn serialize_project(project: &Project) -> Result<Vec<u8>, serde_json::error
     serde_json::to_vec_pretty(project)
 }
 
-trait NameGetter {
+pub(crate) trait NameGetter {
     fn name(&self) -> &Name;
 }
 
@@ -432,13 +432,6 @@ pub struct UniqueNamesList<T> {
 }
 
 impl<T> UniqueNamesList<T> {
-    pub(crate) fn blank_list() -> Self {
-        Self {
-            list: Vec::new(),
-            map: HashMap::new(),
-        }
-    }
-
     pub fn list(&self) -> &[T] {
         &self.list
     }
@@ -521,6 +514,18 @@ impl UniqueNamesProjectFile {
             None => None,
         }
     }
+}
+
+pub(crate) fn single_item_unique_names_list<T>(item: T) -> UniqueNamesList<T>
+where
+    T: NameGetter,
+{
+    let mut map = HashMap::with_capacity(1);
+    map.insert(item.name().as_str().to_owned(), 0);
+
+    let list = vec![item];
+
+    UniqueNamesList { list, map }
 }
 
 fn validate_list_names<T>(
