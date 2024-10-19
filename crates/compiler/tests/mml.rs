@@ -14,7 +14,7 @@ use compiler::driver_constants::{
     BC_STACK_BYTES_PER_SUBROUTINE_CALL, MAX_SUBROUTINES,
 };
 use compiler::envelope::{Adsr, Envelope, Gain};
-use compiler::errors::{BytecodeError, MmlError, SongError};
+use compiler::errors::{BytecodeError, MmlError, SongError, ValueError};
 use compiler::mml;
 use compiler::notes::Octave;
 use compiler::pitch_table::{build_pitch_table, PitchTable};
@@ -336,6 +336,12 @@ fn test_quantize_with_temp_gain() {
 }
 
 #[test]
+fn test_quantise_comma_0_gain_is_err() {
+    assert_error_in_mml_line("Q2,0", 4, ValueError::OptionalGainCannotBeZero.into());
+    assert_error_in_mml_line("Q2,F0", 4, ValueError::OptionalGainCannotBeZero.into());
+}
+
+#[test]
 fn test_early_release() {
     assert_line_matches_bytecode("q0", &["disable_early_release"]);
     assert_line_matches_bytecode("q10", &["set_early_release 10"]);
@@ -434,6 +440,12 @@ A @1 !s q8,E20 a
             "play_note a4 24",
         ],
     );
+}
+
+#[test]
+fn test_early_release_comma_0_gain_is_err() {
+    assert_error_in_mml_line("q10,0", 5, ValueError::OptionalGainCannotBeZero.into());
+    assert_error_in_mml_line("q10,F0", 5, ValueError::OptionalGainCannotBeZero.into());
 }
 
 #[test]
@@ -2585,7 +2597,7 @@ A @a1 @a2 @a3 @g1 @g2 @g3
 #[test]
 fn test_temp_gain() {
     assert_line_matches_bytecode("GFT$12", &["set_temp_gain 18"]);
-    assert_line_matches_bytecode("GFT0", &["set_temp_gain 0"]);
+    assert_line_matches_bytecode("GT0", &["set_temp_gain 0"]);
 
     assert_line_matches_bytecode("GFT127", &["set_temp_gain 127"]);
 
@@ -2607,6 +2619,11 @@ fn test_temp_gain() {
             "play_note f4 24",
         ],
     );
+}
+
+#[test]
+fn test_gft0_is_err() {
+    assert_error_in_mml_line("GFT0", 1, ValueError::F0TempGain.into());
 }
 
 #[test]

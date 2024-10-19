@@ -289,30 +289,34 @@ impl FromStr for Gain {
     type Err = ValueError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let first = match s.as_bytes().first() {
-            Some(f) => *f,
-            None => return Err(ValueError::NoGain),
-        };
-
-        let (mode, value_str) = match GainMode::from_u8_char(first) {
-            Some(mode) => (mode, s[1..].trim_start()),
-            None => (GainMode::Raw, s),
-        };
-
-        let value = match value_str.as_bytes().first() {
-            Some(b'$') => match u32::from_str_radix(&value_str[1..], 16) {
-                Ok(i) => i,
-                Err(_) => return Err(ValueError::InvalidGainString(value_str.to_owned())),
-            },
-            Some(_) => match value_str.parse() {
-                Ok(i) => i,
-                Err(_) => return Err(ValueError::InvalidGainString(value_str.to_owned())),
-            },
-            None => return Err(ValueError::NoGain),
-        };
-
+        let (mode, value) = extract_gain_mode_and_value(s)?;
         Gain::from_mode_and_value(mode, value)
     }
+}
+
+fn extract_gain_mode_and_value(s: &str) -> Result<(GainMode, u32), ValueError> {
+    let first = match s.as_bytes().first() {
+        Some(f) => *f,
+        None => return Err(ValueError::NoGain),
+    };
+
+    let (mode, value_str) = match GainMode::from_u8_char(first) {
+        Some(mode) => (mode, s[1..].trim_start()),
+        None => (GainMode::Raw, s),
+    };
+
+    let value = match value_str.as_bytes().first() {
+        Some(b'$') => match u32::from_str_radix(&value_str[1..], 16) {
+            Ok(i) => i,
+            Err(_) => return Err(ValueError::InvalidGainString(value_str.to_owned())),
+        },
+        Some(_) => match value_str.parse() {
+            Ok(i) => i,
+            Err(_) => return Err(ValueError::InvalidGainString(value_str.to_owned())),
+        },
+        None => return Err(ValueError::NoGain),
+    };
+    Ok((mode, value))
 }
 
 #[derive(Clone, Copy, PartialEq, Debug)]
@@ -394,8 +398,13 @@ impl TempGain {
     pub const DISABLED: TempGain = TempGain(0);
 
     pub fn try_from_mode_and_value(mode: GainMode, value: u32) -> Result<Self, ValueError> {
-        let g = Gain::from_mode_and_value(mode, value)?;
-        Ok(Self(g.as_u8()))
+        match (mode, value) {
+            (GainMode::Fixed, 0) => Err(ValueError::F0TempGain),
+            (mode, value) => {
+                let g = Gain::from_mode_and_value(mode, value)?;
+                Ok(Self(g.as_u8()))
+            }
+        }
     }
 
     pub fn as_u8(self) -> u8 {
@@ -411,8 +420,8 @@ impl FromStr for TempGain {
     type Err = ValueError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let g = Gain::from_str(s)?;
-        Ok(Self(g.as_u8()))
+        let (mode, value) = extract_gain_mode_and_value(s)?;
+        Self::try_from_mode_and_value(mode, value)
     }
 }
 
@@ -422,9 +431,21 @@ pub struct OptionalGain(u8);
 impl OptionalGain {
     pub const NONE: OptionalGain = OptionalGain(0);
 
-    pub fn try_from_mode_and_value(mode: GainMode, value: u32) -> Result<Self, ValueError> {
-        let g = Gain::from_mode_and_value(mode, value)?;
-        Ok(Self(g.as_u8()))
+    pub fn try_from_mode_and_value_forbid_none(
+        mode: GainMode,
+        value: u32,
+    ) -> Result<Self, ValueError> {
+        match Gain::from_mode_and_value(mode, value)?.as_u8() {
+            0 => Err(ValueError::OptionalGainCannotBeZero),
+            g => Ok(Self(g)),
+        }
+    }
+
+    pub fn try_from_str_forbid_none(s: &str) -> Result<Self, ValueError> {
+        match Gain::from_str(s)?.as_u8() {
+            0 => Err(ValueError::OptionalGainCannotBeZero),
+            g => Ok(Self(g)),
+        }
     }
 
     pub fn as_u8(self) -> u8 {
@@ -433,15 +454,6 @@ impl OptionalGain {
 
     pub fn is_none(self) -> bool {
         self.0 == 0
-    }
-}
-
-impl FromStr for OptionalGain {
-    type Err = ValueError;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let g = Gain::from_str(s)?;
-        Ok(Self(g.as_u8()))
     }
 }
 

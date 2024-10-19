@@ -236,7 +236,10 @@ fn early_release_arguments(
             EarlyReleaseTicks::try_from_str(args[0])?,
             OptionalGain::NONE,
         )),
-        2 => Ok((EarlyReleaseTicks::try_from_str(args[0])?, args[1].parse()?)),
+        2 => Ok((
+            EarlyReleaseTicks::try_from_str(args[0])?,
+            OptionalGain::try_from_str_forbid_none(args[1])?,
+        )),
         _ => Err(BytecodeAssemblerError::InvalidNumberOfArgumentsRange(1, 2)),
     }
 }

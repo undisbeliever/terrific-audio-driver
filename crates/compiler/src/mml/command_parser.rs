@@ -699,7 +699,7 @@ fn parse_optional_comma_optional_gain(p: &mut Parser) -> OptionalGain {
         );
 
         match next_token_number(p) {
-            Some(v) => match OptionalGain::try_from_mode_and_value(mode, v) {
+            Some(v) => match OptionalGain::try_from_mode_and_value_forbid_none(mode, v) {
                 Ok(g) => g,
                 Err(e) => {
                     p.add_error(pos, e.into());

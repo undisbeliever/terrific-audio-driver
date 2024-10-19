@@ -99,6 +99,8 @@ pub enum ValueError {
     GainOutOfRange,
     FixedGainOutOfRange,
     GainRateOutOfRange,
+    F0TempGain,
+    OptionalGainCannotBeZero,
 
     InvalidNote,
     NoNoteOctave,
@@ -724,6 +726,12 @@ impl Display for ValueError {
                     0,
                     Gain::RATE_MASK
                 )
+            }
+            Self::F0TempGain => {
+                write!(f, "temp-GAIN cannot be F0")
+            }
+            Self::OptionalGainCannotBeZero => {
+                write!(f, "optional GAIN cannot be 0 or F0")
             }
 
             Self::InvalidNote => write!(f, "invalid note"),
