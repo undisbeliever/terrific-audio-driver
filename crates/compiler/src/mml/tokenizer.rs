@@ -55,6 +55,7 @@ pub enum Token<'a> {
     FineVolume,
     Pan,
     Quantize,
+    EarlyRelease,
     Transpose,
     RelativeTranspose,
     StartBrokenChord,
@@ -251,9 +252,9 @@ fn is_unknown_u8(c: u8) -> bool {
         b'a'..=b'g' => false,
         b'$' => false,
         b'!' | b'@' | b'+' | b'-' | b'[' | b':' | b']' | b'^' | b'&' | b'C' | b's' | b'n'
-        | b'l' | b'r' | b'w' | b'o' | b'>' | b'<' | b'v' | b'V' | b'p' | b'Q' | b'~' | b'A'
-        | b'G' | b'E' | b't' | b'T' | b'L' | b'%' | b'.' | b',' | b'|' | b'_' | b'{' | b'}'
-        | b'B' | b'D' | b'F' | b'I' | b'M' => false,
+        | b'l' | b'r' | b'w' | b'o' | b'>' | b'<' | b'v' | b'V' | b'p' | b'Q' | b'q' | b'~'
+        | b'A' | b'G' | b'E' | b't' | b'T' | b'L' | b'%' | b'.' | b',' | b'|' | b'_' | b'{'
+        | b'}' | b'B' | b'D' | b'F' | b'I' | b'M' => false,
         b'\\' => false,
         c if c.is_ascii_whitespace() => false,
         _ => true,
@@ -403,6 +404,7 @@ fn next_token<'a>(scanner: &mut Scanner<'a>) -> Option<TokenWithPosition<'a>> {
         b'V' => one_ascii_token!(Token::FineVolume),
         b'p' => one_ascii_token!(Token::Pan),
         b'Q' => one_ascii_token!(Token::Quantize),
+        b'q' => one_ascii_token!(Token::EarlyRelease),
         b'~' => one_ascii_token!(Token::ManualVibrato),
         b'A' => one_ascii_token!(Token::SetAdsr),
         b'E' => one_ascii_token!(Token::Echo),

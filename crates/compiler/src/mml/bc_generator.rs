@@ -850,6 +850,18 @@ impl ChannelBcGenerator<'_> {
                 self.temp_gain_and_wait(temp_gain, ticks)?;
             }
 
+            &MmlCommand::DisableEarlyRelease => {
+                if !self.bc.get_state().early_release.is_known_and_eq(&None) {
+                    self.bc.disable_early_release();
+                }
+            }
+            &MmlCommand::SetEarlyRelease(ticks, gain) => {
+                let state = self.bc.get_state();
+                if !state.early_release.is_known_and_eq(&Some((ticks, gain))) {
+                    self.bc.set_early_release(ticks, gain);
+                }
+            }
+
             &MmlCommand::PlayNote {
                 note,
                 length,

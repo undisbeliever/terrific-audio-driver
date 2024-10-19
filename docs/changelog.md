@@ -8,6 +8,8 @@ Bytecode changes:
  * Added note range tests to bytecode assembly.
  * Changed the bytecode format to increase the number of non play-note instructions from 32 to 64.
  * Added temporary GAIN instructions
+ * Added `set_early_release` instruction
+    * `set_early_release` can also be used to add a custom release envelope to channels.
 
 
 MML changes:
@@ -31,6 +33,9 @@ MML changes:
     * `Q<n>,I<rate>` - Quantize with linear increase envelope (0-31)
     * `Q<n>,B<rate>` - Quantize with bent increase envelope (0-31)
     * `Q<n>,<gain>` - Quantize with a raw GAIN value (1-255)
+ * Added `q` set early release command
+    * The `q` command supports early-release with a custom GAIN envelope and is useful for custom-release envelopes.  
+      For example, `q10,D16` will change the envelope to linear-decrease (`D16`) 10 ticks before a note's key-off.
 
 
 GUI changes:

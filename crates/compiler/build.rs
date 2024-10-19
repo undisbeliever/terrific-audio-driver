@@ -60,6 +60,8 @@ const AUDIO_DRIVER_SYMBOLS: &[(&str, &str)] = &[
     ("channelSoA.vibrato_tickCounterStart", "CHANNEL_VIBRATO_TICK_COUNTER_START"),
     ("channelSoA.vibrato_waveLengthInTicks", "CHANNEL_VIBRATO_WAVELENGTH_IN_TICKS"),
     ("channelSoA.prevTempGain", "CHANNEL_PREV_TEMP_GAIN"),
+    ("channelSoA.earlyRelease_cmp", "CHANNEL_EARLY_RELEASE_CMP"),
+    ("channelSoA.earlyRelease_gain", "CHANNEL_EARLY_RELEASE_GAIN"),
     ("channelSoA.volume", "CHANNEL_VOLUME"),
 ];
 

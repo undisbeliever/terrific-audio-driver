@@ -1,0 +1,36 @@
+; q early-release examples
+
+#Tempo 144
+#ZenLen 192
+
+@1 square adsr 10 2 4 10
+
+A @1 o4
+
+; Early release
+A q10
+A c d d f2.  c d d e2.  r
+
+; Early release with linear decrease temp-GAIN release envelope
+A q10,D16
+A c d d f2.  c d d e2.  r
+
+; Early release with exponential decrease temp-GAIN release envelope
+A q8,E28
+A c d d f2.  c d d e2.  r
+
+; If early release ticks > note ticks, the note will only be played for a single tick
+; Using Fixed GAIN so the single tick is audible
+A G127
+A q254
+A c d d f2.  c d d e2.  r
+
+; Disable early release
+A @1
+A q0
+A c d d f2.  c d d e2.  r
+
+
+; These two notes should sound the same (from mml-syntax.md)
+A q4 c%24 	  r
+A q0 c%20 w%4 r

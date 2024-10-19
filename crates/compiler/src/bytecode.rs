@@ -90,6 +90,7 @@ pub mod opcodes {
         SET_TEMP_GAIN_AND_REST,
         REUSE_TEMP_GAIN_AND_WAIT,
         REUSE_TEMP_GAIN_AND_REST,
+        SET_EARLY_RELEASE,
         ADJUST_PAN,
         SET_PAN,
         SET_PAN_AND_VOLUME,
@@ -388,6 +389,20 @@ impl NoteOpcode {
     }
 }
 
+u8_value_newtype!(
+    EarlyReleaseTicks,
+    EarlyReleaseTicksOutOfRange,
+    NoEarlyReleaseTicks,
+    1,
+    u8::MAX - 1
+);
+
+impl EarlyReleaseTicks {
+    fn bc_argument(self) -> u8 {
+        self.0 + 1
+    }
+}
+
 #[derive(PartialEq)]
 pub enum BcTerminator<'a> {
     DisableChannel,
@@ -556,6 +571,7 @@ pub struct State {
     pub(crate) instrument: IeState<InstrumentId>,
     pub(crate) envelope: IeState<Envelope>,
     pub(crate) prev_temp_gain: IeState<Gain>,
+    pub(crate) early_release: IeState<Option<(EarlyReleaseTicks, Gain)>>,
     pub(crate) vibrato: VibratoState,
     pub(crate) prev_slurred_note: SlurredNoteState,
 }
@@ -568,6 +584,7 @@ struct SkipLastLoop {
     instrument: IeState<InstrumentId>,
     envelope: IeState<Envelope>,
     prev_temp_gain: IeState<Gain>,
+    early_release: IeState<Option<(EarlyReleaseTicks, Gain)>>,
     vibrato: VibratoState,
     prev_slurred_note: SlurredNoteState,
 }
@@ -628,6 +645,7 @@ impl<'a> Bytecode<'a> {
                 instrument: IeState::Unknown,
                 envelope: IeState::Unknown,
                 prev_temp_gain: IeState::Unknown,
+                early_release: IeState::Unknown,
                 vibrato: match &context {
                     BytecodeContext::SoundEffect => VibratoState::Disabled,
                     BytecodeContext::SongChannel => VibratoState::Disabled,
@@ -695,6 +713,7 @@ impl<'a> Bytecode<'a> {
         self.state.instrument = self.state.instrument.demote_to_maybe();
         self.state.envelope = self.state.envelope.demote_to_maybe();
         self.state.prev_temp_gain = self.state.prev_temp_gain.demote_to_maybe();
+        self.state.early_release = self.state.early_release.demote_to_maybe();
 
         self.state.vibrato = VibratoState::Unknown;
     }
@@ -983,6 +1002,23 @@ impl<'a> Bytecode<'a> {
         emit_bytecode!(self, opcodes::REUSE_TEMP_GAIN_AND_REST, length.bc_argument);
     }
 
+    pub fn disable_early_release(&mut self) {
+        self.state.early_release = IeState::Known(None);
+
+        emit_bytecode!(self, opcodes::SET_EARLY_RELEASE, 0u8, 0u8);
+    }
+
+    pub fn set_early_release(&mut self, ticks: EarlyReleaseTicks, gain: Gain) {
+        self.state.early_release = IeState::Known(Some((ticks, gain)));
+
+        emit_bytecode!(
+            self,
+            opcodes::SET_EARLY_RELEASE,
+            ticks.bc_argument(),
+            gain.as_u8()
+        );
+    }
+
     pub fn adjust_volume(&mut self, v: RelativeVolume) {
         emit_bytecode!(self, opcodes::ADJUST_VOLUME, v.as_i8());
     }
@@ -1022,6 +1058,7 @@ impl<'a> Bytecode<'a> {
         self.state.instrument = self.state.instrument.demote_to_maybe();
         self.state.envelope = self.state.envelope.demote_to_maybe();
         self.state.prev_temp_gain = self.state.prev_temp_gain.demote_to_maybe();
+        self.state.early_release = self.state.early_release.demote_to_maybe();
         self.state.vibrato = VibratoState::Unknown;
 
         // Loop might end on a note that is not slurred and matching `prev_slurred_note`.
@@ -1071,6 +1108,7 @@ impl<'a> Bytecode<'a> {
             instrument: self.state.instrument,
             envelope: self.state.envelope,
             prev_temp_gain: self.state.prev_temp_gain,
+            early_release: self.state.early_release,
             vibrato: self.state.vibrato,
             prev_slurred_note: self.state.prev_slurred_note.clone(),
         });
@@ -1140,6 +1178,7 @@ impl<'a> Bytecode<'a> {
             self.state.instrument = skip_last_loop.instrument;
             self.state.envelope = skip_last_loop.envelope;
             self.state.prev_temp_gain = skip_last_loop.prev_temp_gain;
+            self.state.early_release = skip_last_loop.early_release;
             self.state.vibrato = skip_last_loop.vibrato;
             self.state
                 .prev_slurred_note
@@ -1166,6 +1205,7 @@ impl<'a> Bytecode<'a> {
             self.state.instrument = self.state.instrument.promote_to_known();
             self.state.envelope = self.state.envelope.promote_to_known();
             self.state.prev_temp_gain = self.state.prev_temp_gain.promote_to_known();
+            self.state.early_release = self.state.early_release.promote_to_known();
         }
 
         emit_bytecode!(self, opcodes::END_LOOP);
@@ -1194,6 +1234,11 @@ impl<'a> Bytecode<'a> {
         match subroutine.state.prev_temp_gain {
             IeState::Known(e) => self.state.prev_temp_gain = IeState::Known(e),
             IeState::Maybe(_) => panic!("unexpected maybe prevTempGain"),
+            IeState::Unknown => (),
+        }
+        match subroutine.state.early_release {
+            IeState::Known(e) => self.state.early_release = IeState::Known(e),
+            IeState::Maybe(_) => panic!("unexpected maybe early_release"),
             IeState::Unknown => (),
         }
         match &subroutine.state.vibrato {

@@ -317,6 +317,11 @@ in firstpage {
 
         // The previous temp-GAIN used by the channel.
         var prevTempGain : [u8 ; N_CHANNELS];
+
+
+        // set_early_release instruction arguments
+        var earlyRelease_cmp : [u8 ; N_CHANNELS];
+        var earlyRelease_gain : [u8 ; N_CHANNELS];
     }
 }
 
@@ -792,7 +797,38 @@ var _afterFirstChannel : u8 in zpTmp2;
         voiceChannelsDirty_tmp >>>>#= 1;
 
         channelSoA.countdownTimer[x]--;
-        if zero {
+        if !zero {
+            // Check for early-release
+
+            // (not using `goto NextChannel if zero` here as the branch is too long)
+            a = channelSoA.nextEventIsKeyOff[x];
+            if !zero {
+                // Must be a `<` comparison (not a `==`)
+                // Ensures notes shorter than early-release are cut at the correct time.
+                a = channelSoA.countdownTimer[x];
+                if a < channelSoA.earlyRelease_cmp[x] {
+                    a = channelSoA.earlyRelease_gain[x];
+                    if !zero {
+                        channelSoA.virtualChannels.tempGain[x] = a;
+
+                        voiceChannelsDirty_tmp $ 7 = true;
+                    }
+                    else {
+                        // ::TODO deduplicate::
+                        a = ChannelVoiceBit[x];
+                        if x >= FIRST_SFX_CHANNEL {
+                            test_and_set(a, keyOffShadow_sfx);
+                            test_and_set(a, keyOnMask_sfx);
+                        }
+                        else {
+                            test_and_set(a, keyOffShadow_music);
+                            test_and_set(a, keyOnMask_music);
+                        }
+                    }
+                }
+            }
+        }
+        else {
             // Check if a KEY_OFF is required
             a = channelSoA.nextEventIsKeyOff[x];
             if !zero {
@@ -1145,6 +1181,9 @@ func __reset_channel(channelIndex : u8 in x, pan: u8 in a) {
 
     // Disable temp-gain
     channelSoA.virtualChannels.tempGain[x] = a;
+
+    // Disable early-release
+    channelSoA.earlyRelease_cmp[x] = a;
 
     // Disable portamento
     channelSoA.portamento_direction[x] = a as i8;
@@ -1938,6 +1977,22 @@ func set_gain(channelIndex: u8 in x, gain : u8 in a) {
     channelSoA.virtualChannels.adsr1[x] = y;
 
     channelSoA.virtualChannels.adsr2OrGain[x] = a;
+
+    ^return process_next_bytecode(x);
+}
+
+
+
+// Y = 0
+// KEEP: X
+func set_early_release(channelIndex: u8 in x, cmp_: u8 in a) {
+    channelSoA.earlyRelease_cmp[x] = a;
+
+    // Y = 0
+    a = instructionPtr[y];
+    instructionPtr++;
+
+    channelSoA.earlyRelease_gain[x] = a;
 
     ^return process_next_bytecode(x);
 }

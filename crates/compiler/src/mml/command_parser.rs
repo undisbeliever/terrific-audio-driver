@@ -11,8 +11,8 @@ use super::{IdentifierStr, Section};
 use super::note_tracking::CursorTracker;
 
 use crate::bytecode::{
-    LoopCount, Pan, PitchOffsetPerTick, PlayNoteTicks, QuarterWavelengthInTicks, RelativePan,
-    SubroutineId, Volume, KEY_OFF_TICK_DELAY,
+    EarlyReleaseTicks, LoopCount, Pan, PitchOffsetPerTick, PlayNoteTicks, QuarterWavelengthInTicks,
+    RelativePan, SubroutineId, Volume, KEY_OFF_TICK_DELAY,
 };
 use crate::envelope::{Adsr, Gain, GainMode};
 use crate::errors::{ErrorWithPos, MmlError, ValueError};
@@ -218,6 +218,9 @@ pub enum MmlCommand {
         ticks_after_keyoff: TickCounter,
     },
     TempGainAndWait(Option<Gain>, TickCounter),
+
+    DisableEarlyRelease,
+    SetEarlyRelease(EarlyReleaseTicks, Gain),
 
     ChangePanAndOrVolume(Option<PanCommand>, Option<VolumeCommand>),
     SetEcho(bool),
@@ -751,6 +754,29 @@ fn parse_quantize(pos: FilePos, p: &mut Parser) {
             }
         }
     );
+}
+
+fn parse_set_early_release(pos: FilePos, p: &mut Parser) -> MmlCommand {
+    match next_token_number(p) {
+        Some(0) => MmlCommand::DisableEarlyRelease,
+        Some(t) => {
+            let t = match t.try_into() {
+                Ok(t) => t,
+                Err(e) => {
+                    p.add_error(pos, MmlError::ValueError(e));
+                    EarlyReleaseTicks::try_from(EarlyReleaseTicks::MIN).unwrap()
+                }
+            };
+            let g = parse_optional_q_temp_gain(p);
+
+            MmlCommand::SetEarlyRelease(t, g)
+        }
+        None => {
+            p.add_error(pos, ValueError::NoEarlyReleaseTicks.into());
+            parse_optional_q_temp_gain(p);
+            MmlCommand::NoCommand
+        }
+    }
 }
 
 // Returns true if the token was recognised and processed
@@ -1627,6 +1653,7 @@ fn parse_token(pos: FilePos, token: Token, p: &mut Parser) -> MmlCommand {
             parse_quantize(pos, p);
             MmlCommand::NoCommand
         }
+        Token::EarlyRelease => parse_set_early_release(pos, p),
         Token::SetDefaultLength => {
             parse_set_default_length(pos, p);
             MmlCommand::NoCommand

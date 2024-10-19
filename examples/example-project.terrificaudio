@@ -155,6 +155,10 @@
       "source": "mml-tests/quantize-with-temp-gain.mml"
     },
     {
+      "name": "early_release",
+      "source": "mml-tests/early-release.mml"
+    },
+    {
       "name": "test_echo",
       "source": "mml-tests/test-echo.mml"
     },

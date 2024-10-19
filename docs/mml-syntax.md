@@ -253,6 +253,24 @@ Numbers can be decimal, or hexadecimal when prefixed with `$` (ie, `$ff`)
     * `Q<n>,I<rate>` - Quantize with linear increase envelope (0-31)
     * `Q<n>,B<rate>` - Quantize with bent increase envelope (0-31)
     * `Q<n>,<gain>` - Quantize with a raw GAIN value (1-255)
+ * `q<1-254>` - Early release (sound cut)
+    * Keys off each note `<1-254>` ticks earlier then normal.
+    * If the note length is >= early-release-length, the note will be played for a single tick.
+    * For example: `q4 c%24` is equivalent to `c%20 w%4`
+    * CAUTION: `q` persists across subroutine calls.
+ * `q<1-254>,<gain>` - Early release with custom GAIN envelope
+    * When playing notes, the envelope is temporarily changed to GAIN(*gain*) *t* ticks before key-off.
+    * Useful for custom release envelopes (ie, `q10,D16` or `q8,E28`).
+    * Of the various ways to write custom release envelopes, the `q` command uses the least audio-RAM.
+    * If the note length is >= early-release-length, the envelope will be changed on the second note tick.
+    * CAUTION: the GAIN rate may need to be changed if the song's tempo changes.
+    * CAUTION: `q` persists across subroutine calls and `:` skip-last-loop commands.
+    * `q<n>,D<rate>` - linear decrease envelope (0-31)
+    * `q<n>,E<rate>` - exponential decrease envelope (0-31)
+    * `q<n>,I<rate>` - linear increase envelope (0-31)
+    * `q<n>,B<rate>` - bent increase envelope (0-31)
+    * `q<n>,<gain>` - raw GAIN envelope (1-255)
+ * `q0` - Disable early-release.
  * `l<length>` - Set the default length
  * `C<4..256>` - Set the whole note length (in ticks).
     * Default is `#Zenlen` or 96 if `#Zenlen` not set.

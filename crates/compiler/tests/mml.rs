@@ -336,6 +336,107 @@ fn test_quantize_with_temp_gain() {
 }
 
 #[test]
+fn test_early_release() {
+    assert_line_matches_bytecode("q0", &["disable_early_release"]);
+    assert_line_matches_bytecode("q10", &["set_early_release 10"]);
+    assert_line_matches_bytecode("q16,D15", &["set_early_release 16 D15"]);
+}
+
+#[test]
+fn test_early_release_deduplication() {
+    assert_line_matches_line("q0 q0 q0", "q0");
+
+    assert_line_matches_line(
+        "q0 q20 q20 q21 q15,I10 q15,I20 q15,I20 q0",
+        "q0 q20 q21 q15,I10 q15,I20 q0",
+    );
+
+    assert_line_matches_bytecode(
+        "q3,D5 [a]5 q3,D8",
+        &[
+            "set_early_release 3 D5",
+            "start_loop",
+            "play_note a4 24",
+            "end_loop 5",
+            "set_early_release 3 D8",
+        ],
+    );
+
+    assert_line_matches_bytecode(
+        "q1 [a]5 q1",
+        &[
+            "set_early_release 1",
+            "start_loop",
+            "play_note a4 24",
+            "end_loop 5",
+            // q1 deduplicated
+        ],
+    );
+
+    assert_line_matches_bytecode(
+        "q1 [q1 a : q10 b]5 q2",
+        &[
+            "set_early_release 1",
+            "start_loop",
+            "set_early_release 1",
+            "play_note a4 24",
+            "skip_last_loop",
+            "set_early_release 10",
+            "play_note b4 24",
+            "end_loop 5",
+            "set_early_release 2",
+        ],
+    );
+
+    assert_line_matches_bytecode(
+        "q1 [q1 a : q10 b]5 q1",
+        &[
+            "set_early_release 1",
+            "start_loop",
+            "set_early_release 1",
+            "play_note a4 24",
+            "skip_last_loop",
+            "set_early_release 10",
+            "play_note b4 24",
+            "end_loop 5",
+            // q1 deduplicated
+        ],
+    );
+
+    assert_mml_channel_a_matches_bytecode(
+        r##"
+@1 dummy_instrument
+
+!s q8,E20 a
+
+A @1 !s q10,E15 a
+"##,
+        &[
+            "set_instrument dummy_instrument",
+            "call_subroutine s",
+            "set_early_release 10 E15",
+            "play_note a4 24",
+        ],
+    );
+
+    assert_mml_channel_a_matches_bytecode(
+        r##"
+@1 dummy_instrument
+
+!s q8,E20 a
+
+A @1 !s q8,E20 a
+"##,
+        &[
+            "set_instrument dummy_instrument",
+            "call_subroutine s",
+            // q8,E20 deduplicated
+            "play_note a4 24",
+        ],
+    );
+}
+
+#[test]
 fn play_long_note() {
     // `wait` can rest for 1 to 256 ticks.
     // `rest` can rest for 2 to 257 tick.

@@ -7,8 +7,9 @@
 use relative_path::RelativeToError;
 
 use crate::bytecode::{
-    BcTicks, BcTicksKeyOff, BcTicksNoKeyOff, InstrumentId, LoopCount, Pan, PitchOffsetPerTick,
-    PortamentoVelocity, QuarterWavelengthInTicks, RelativePan, RelativeVolume, Volume,
+    BcTicks, BcTicksKeyOff, BcTicksNoKeyOff, EarlyReleaseTicks, InstrumentId, LoopCount, Pan,
+    PitchOffsetPerTick, PortamentoVelocity, QuarterWavelengthInTicks, RelativePan, RelativeVolume,
+    Volume,
 };
 use crate::data::{LoopSetting, Name};
 use crate::driver_constants::{
@@ -122,6 +123,7 @@ pub enum ValueError {
     RelativeVolumeOutOfRange,
     RelativeCoarseVolumeOutOfRange,
 
+    EarlyReleaseTicksOutOfRange,
     PitchOffsetPerTickOutOfRange,
     QuarterWavelengthOutOfRange,
 
@@ -188,6 +190,7 @@ pub enum ValueError {
     NoInstrumentId,
     NoGain,
     NoTempGainValue,
+    NoEarlyReleaseTicks,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -761,6 +764,9 @@ impl Display for ValueError {
                 MIN_RELATIVE_COARSE_VOLUME, MAX_RELATIVE_COARSE_VOLUME
             ),
 
+            Self::EarlyReleaseTicksOutOfRange => {
+                out_of_range!("early-release ticks", EarlyReleaseTicks)
+            }
             Self::PitchOffsetPerTickOutOfRange => {
                 out_of_range!("pitch offset per tick", PitchOffsetPerTick)
             }
@@ -860,6 +866,7 @@ impl Display for ValueError {
             Self::NoInstrumentId => write!(f, "no instrument id"),
             Self::NoGain => write!(f, "no gain"),
             Self::NoTempGainValue => write!(f, "no temp-GAIN value"),
+            Self::NoEarlyReleaseTicks => write!(f, "no early-release ticks"),
         }
     }
 }

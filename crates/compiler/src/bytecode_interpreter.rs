@@ -58,6 +58,9 @@ struct ChannelSoA {
     vibrato_wavelength_in_ticks: u8,
 
     prev_temp_gain: u8,
+
+    early_release_cmp: u8,
+    early_release_gain: u8,
 }
 
 #[derive(Clone)]
@@ -110,6 +113,8 @@ pub struct ChannelState {
     adsr_or_gain_override: Option<(u8, u8)>,
     temp_gain: u8,
     prev_temp_gain: u8,
+    early_release_cmp: u8,
+    early_release_gain: u8,
 
     volume: u8,
     pan: u8,
@@ -142,6 +147,8 @@ impl ChannelState {
             adsr_or_gain_override: Some((0, 0)),
             temp_gain: 0,
             prev_temp_gain: 0,
+            early_release_cmp: 0,
+            early_release_gain: 0,
             volume: STARTING_VOLUME,
             pan: Pan::MAX / 2,
             echo: false,
@@ -377,6 +384,14 @@ impl ChannelState {
 
                 self.temp_gain = self.prev_temp_gain;
                 self.ticks += Self::to_tick_count(to_rest, false);
+            }
+
+            opcodes::SET_EARLY_RELEASE => {
+                let cmp = read_pc();
+                let gain = read_pc();
+
+                self.early_release_cmp = cmp;
+                self.early_release_gain = gain;
             }
 
             opcodes::ADJUST_PAN => {
@@ -768,6 +783,8 @@ fn build_channel(
             vibrato_direction_comparator: c.vibrato_quarter_wavelength_in_ticks << 1,
             vibrato_wavelength_in_ticks: c.vibrato_quarter_wavelength_in_ticks << 2,
             prev_temp_gain: c.prev_temp_gain,
+            early_release_cmp: c.early_release_cmp,
+            early_release_gain: c.early_release_gain,
         },
         bc_stack: c.bc_stack,
         dsp: VirtualChannel {
@@ -810,6 +827,8 @@ fn unused_channel(channel_index: usize) -> Channel {
             vibrato_direction_comparator: 0,
             vibrato_wavelength_in_ticks: 0,
             prev_temp_gain: 0,
+            early_release_cmp: 0,
+            early_release_gain: 0,
         },
         bc_stack: [0; BC_CHANNEL_STACK_SIZE],
         dsp: VirtualChannel {
@@ -946,6 +965,8 @@ impl InterpreterOutput {
                     c.vibrato_wavelength_in_ticks,
                 );
                 soa_write_u8(addresses::CHANNEL_PREV_TEMP_GAIN, c.prev_temp_gain);
+                soa_write_u8(addresses::CHANNEL_EARLY_RELEASE_CMP, c.early_release_cmp);
+                soa_write_u8(addresses::CHANNEL_EARLY_RELEASE_GAIN, c.early_release_gain);
 
                 // Virtual channels
                 soa_write_u8(addresses::CHANNEL_VC_VOL_L, vc.vol_l);
