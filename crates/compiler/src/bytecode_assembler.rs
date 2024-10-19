@@ -9,7 +9,7 @@ use crate::bytecode::{
     PlayNoteTicks, PortamentoVelocity, State, SubroutineId,
 };
 use crate::data::{InstrumentOrSample, UniqueNamesList};
-use crate::envelope::{Adsr, Gain};
+use crate::envelope::{Adsr, Gain, OptionalGain, TempGain};
 use crate::errors::{BytecodeAssemblerError, BytecodeError, ValueError};
 use crate::notes::Note;
 use crate::time::TickCounter;
@@ -184,9 +184,15 @@ fn gain_argument(args: &[&str]) -> Result<Gain, BytecodeAssemblerError> {
     Ok(arg.parse()?)
 }
 
-fn gain_and_wait_arguments(
+fn temp_gain_argument(args: &[&str]) -> Result<TempGain, BytecodeAssemblerError> {
+    let arg = one_argument(args)?;
+
+    Ok(arg.parse()?)
+}
+
+fn temp_gain_and_wait_arguments(
     args: &[&str],
-) -> Result<(Gain, BcTicksNoKeyOff), BytecodeAssemblerError> {
+) -> Result<(TempGain, BcTicksNoKeyOff), BytecodeAssemblerError> {
     let (gain, length) = two_arguments(args)?;
 
     Ok((
@@ -195,7 +201,9 @@ fn gain_and_wait_arguments(
     ))
 }
 
-fn gain_and_rest_arguments(args: &[&str]) -> Result<(Gain, BcTicksKeyOff), BytecodeAssemblerError> {
+fn temp_gain_and_rest_arguments(
+    args: &[&str],
+) -> Result<(TempGain, BcTicksKeyOff), BytecodeAssemblerError> {
     let (gain, length) = two_arguments(args)?;
 
     Ok((gain.parse()?, BcTicksKeyOff::try_from(parse_u32(length)?)?))
@@ -222,9 +230,12 @@ fn instrument_and_gain_argument<'a>(
 
 fn early_release_arguments(
     args: &[&str],
-) -> Result<(EarlyReleaseTicks, Gain), BytecodeAssemblerError> {
+) -> Result<(EarlyReleaseTicks, OptionalGain), BytecodeAssemblerError> {
     match args.len() {
-        1 => Ok((EarlyReleaseTicks::try_from_str(args[0])?, Gain::new(0))),
+        1 => Ok((
+            EarlyReleaseTicks::try_from_str(args[0])?,
+            OptionalGain::NONE,
+        )),
         2 => Ok((EarlyReleaseTicks::try_from_str(args[0])?, args[1].parse()?)),
         _ => Err(BytecodeAssemblerError::InvalidNumberOfArgumentsRange(1, 2)),
     }
@@ -362,9 +373,9 @@ pub fn parse_asm_line(bc: &mut Bytecode, line: &str) -> Result<(), BytecodeAssem
        set_adsr 1 adsr_argument,
        set_gain 1 gain_argument,
 
-       set_temp_gain 1 gain_argument,
-       set_temp_gain_and_wait 2 gain_and_wait_arguments,
-       set_temp_gain_and_rest 2 gain_and_rest_arguments,
+       set_temp_gain 1 temp_gain_argument,
+       set_temp_gain_and_wait 2 temp_gain_and_wait_arguments,
+       set_temp_gain_and_rest 2 temp_gain_and_rest_arguments,
 
        reuse_temp_gain 0 no_arguments,
        reuse_temp_gain_and_wait 1 ticks_no_keyoff_argument,

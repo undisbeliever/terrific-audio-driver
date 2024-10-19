@@ -14,7 +14,7 @@ use crate::bytecode::{
     EarlyReleaseTicks, LoopCount, Pan, PitchOffsetPerTick, PlayNoteTicks, QuarterWavelengthInTicks,
     RelativePan, SubroutineId, Volume, KEY_OFF_TICK_DELAY,
 };
-use crate::envelope::{Adsr, Gain, GainMode};
+use crate::envelope::{Adsr, Gain, GainMode, OptionalGain, TempGain};
 use crate::errors::{ErrorWithPos, MmlError, ValueError};
 use crate::file_pos::{FilePos, FilePosRange};
 use crate::notes::{MidiNote, MmlPitch, Note, Octave, STARTING_OCTAVE};
@@ -180,7 +180,7 @@ pub enum MmlCommand {
         length: TickCounter,
         // Includes the key-off rest in the `play_note` instruction
         key_on_length: TickCounter,
-        temp_gain: Gain,
+        temp_gain: TempGain,
         temp_gain_ticks: TickCounter,
         /// Combined length of all rests after the first rest
         /// (keyoff already sent, it does not matter if these rests keyoff or not)
@@ -211,16 +211,17 @@ pub enum MmlCommand {
     SetAdsr(Adsr),
     SetGain(Gain),
 
-    TempGain(Option<Gain>),
+    // None reuses previous temp gain
+    TempGain(Option<TempGain>),
     TempGainAndRest {
-        temp_gain: Option<Gain>,
+        temp_gain: Option<TempGain>,
         ticks_until_keyoff: TickCounter,
         ticks_after_keyoff: TickCounter,
     },
-    TempGainAndWait(Option<Gain>, TickCounter),
+    TempGainAndWait(Option<TempGain>, TickCounter),
 
     DisableEarlyRelease,
-    SetEarlyRelease(EarlyReleaseTicks, Gain),
+    SetEarlyRelease(EarlyReleaseTicks, OptionalGain),
 
     ChangePanAndOrVolume(Option<PanCommand>, Option<VolumeCommand>),
     SetEcho(bool),
@@ -256,7 +257,7 @@ pub struct State {
     pub default_length: MmlDefaultLength,
     pub octave: Octave,
     pub semitone_offset: i8,
-    pub quantize: Option<(FineQuantization, Gain)>,
+    pub quantize: Option<(FineQuantization, TempGain)>,
 }
 
 type SubroutineMaps<'a> = (
@@ -681,8 +682,7 @@ fn parse_relative_transpose(pos: FilePos, p: &mut Parser) {
     }
 }
 
-// Returns 0 if there is no Temp-GAIN
-fn parse_optional_q_temp_gain(p: &mut Parser) -> Gain {
+fn parse_optional_comma_optional_gain(p: &mut Parser) -> OptionalGain {
     if next_token_matches!(p, Token::Comma) {
         let pos = p.peek_pos();
 
@@ -699,20 +699,20 @@ fn parse_optional_q_temp_gain(p: &mut Parser) -> Gain {
         );
 
         match next_token_number(p) {
-            Some(v) => match Gain::from_mode_and_value(mode, v) {
+            Some(v) => match OptionalGain::try_from_mode_and_value(mode, v) {
                 Ok(g) => g,
                 Err(e) => {
                     p.add_error(pos, e.into());
-                    Gain::new(0)
+                    OptionalGain::NONE
                 }
             },
             None => {
-                p.add_error(pos, ValueError::NoTempGainValue.into());
-                Gain::new(0)
+                p.add_error(pos, ValueError::NoOptionalGainValue.into());
+                OptionalGain::NONE
             }
         }
     } else {
-        Gain::new(0)
+        OptionalGain::NONE
     }
 }
 
@@ -722,11 +722,11 @@ fn parse_quantize(pos: FilePos, p: &mut Parser) {
 
         Token::PercentSign => {
             let q = parse_unsigned_newtype(pos, p);
-            let temp_gain = parse_optional_q_temp_gain(p);
+            let g = parse_optional_comma_optional_gain(p);
 
             if let Some(q) = q {
                 p.set_state(State {
-                    quantize: Some((q, temp_gain)),
+                    quantize: Some((q, g.into())),
                     ..p.state().clone()
                 });
             }
@@ -734,13 +734,13 @@ fn parse_quantize(pos: FilePos, p: &mut Parser) {
 
         #_ => {
             let q = parse_unsigned_newtype::<Quantization>(pos, p);
-            let temp_gain = parse_optional_q_temp_gain(p);
+            let g = parse_optional_comma_optional_gain(p);
 
             if let Some(q) = q {
                 match q.to_fine() {
                     Some(q) => {
                         p.set_state(State {
-                            quantize: Some((q, temp_gain)),
+                            quantize: Some((q, g.into())),
                             ..p.state().clone()
                         });
                     }
@@ -767,13 +767,13 @@ fn parse_set_early_release(pos: FilePos, p: &mut Parser) -> MmlCommand {
                     EarlyReleaseTicks::try_from(EarlyReleaseTicks::MIN).unwrap()
                 }
             };
-            let g = parse_optional_q_temp_gain(p);
+            let g = parse_optional_comma_optional_gain(p);
 
             MmlCommand::SetEarlyRelease(t, g)
         }
         None => {
             p.add_error(pos, ValueError::NoEarlyReleaseTicks.into());
-            parse_optional_q_temp_gain(p);
+            parse_optional_comma_optional_gain(p);
             MmlCommand::NoCommand
         }
     }
@@ -1189,7 +1189,7 @@ fn play_note(note: Note, length: TickCounter, p: &mut Parser) -> MmlCommand {
         let ticks_after_keyoff = parse_rests_after_rest(p);
 
         if key_off_length > KEY_OFF_TICK_DELAY {
-            if temp_gain.as_u8() == 0 {
+            if temp_gain.is_disabled() {
                 // No temp GAIN
 
                 let note_length = TickCounter::new(key_on_length + KEY_OFF_TICK_DELAY);
@@ -1485,7 +1485,7 @@ fn parse_set_gain(pos: FilePos, mode: GainMode, p: &mut Parser) -> MmlCommand {
 
 fn parse_temp_gain(pos: FilePos, mode: GainMode, p: &mut Parser) -> MmlCommand {
     let mut temp_gain = match next_token_number(p) {
-        Some(v) => match Gain::from_mode_and_value(mode, v) {
+        Some(v) => match TempGain::try_from_mode_and_value(mode, v) {
             Ok(g) => Some(g),
             Err(e) => return invalid_token_error(p, pos, e.into()),
         },
@@ -1498,7 +1498,7 @@ fn parse_temp_gain(pos: FilePos, mode: GainMode, p: &mut Parser) -> MmlCommand {
 
             &Token::TempGain(mode) => {
                 temp_gain = match next_token_number(p) {
-                    Some(v) => match Gain::from_mode_and_value(mode, v) {
+                    Some(v) => match TempGain::try_from_mode_and_value(mode, v) {
                         Ok(g) => Some(g),
                         Err(e) => return invalid_token_error(p, pos, e.into()),
                     },

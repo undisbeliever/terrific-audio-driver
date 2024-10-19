@@ -17,7 +17,7 @@ use super::{ChannelId, MmlSoundEffect, Section};
 use super::note_tracking::CursorTracker;
 use crate::bytecode_assembler::parse_asm_line;
 use crate::data::{self, UniqueNamesList};
-use crate::envelope::{Adsr, Envelope, Gain};
+use crate::envelope::{Adsr, Envelope, Gain, TempGain};
 #[cfg(feature = "mml_tracking")]
 use crate::songs::{BytecodePos, SongBcTracking};
 
@@ -623,7 +623,7 @@ impl ChannelBcGenerator<'_> {
         }
     }
 
-    fn temp_gain(&mut self, temp_gain: Option<Gain>) {
+    fn temp_gain(&mut self, temp_gain: Option<TempGain>) {
         if temp_gain.is_some_and(|t| !self.bc.get_state().prev_temp_gain.is_known_and_eq(&t)) {
             self.bc.set_temp_gain(temp_gain.unwrap())
         } else {
@@ -633,7 +633,7 @@ impl ChannelBcGenerator<'_> {
 
     fn temp_gain_and_rest(
         &mut self,
-        temp_gain: Option<Gain>,
+        temp_gain: Option<TempGain>,
         ticks_until_keyoff: TickCounter,
         ticks_after_keyoff: TickCounter,
     ) -> Result<(), MmlError> {
@@ -687,7 +687,7 @@ impl ChannelBcGenerator<'_> {
 
     fn temp_gain_and_wait(
         &mut self,
-        temp_gain: Option<Gain>,
+        temp_gain: Option<TempGain>,
         ticks: TickCounter,
     ) -> Result<(), MmlError> {
         let (wait1, wait2) = Self::split_wait_length(ticks)?;

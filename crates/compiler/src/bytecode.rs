@@ -11,7 +11,7 @@ use crate::driver_constants::{
     BC_CHANNEL_STACK_SIZE, BC_STACK_BYTES_PER_LOOP, BC_STACK_BYTES_PER_SUBROUTINE_CALL,
     MAX_INSTRUMENTS_AND_SAMPLES,
 };
-use crate::envelope::{Adsr, Envelope, Gain};
+use crate::envelope::{Adsr, Envelope, Gain, OptionalGain, TempGain};
 use crate::errors::{BytecodeError, ValueError};
 use crate::notes::{Note, LAST_NOTE_ID, N_NOTES};
 use crate::samples::note_range;
@@ -570,8 +570,8 @@ pub struct State {
 
     pub(crate) instrument: IeState<InstrumentId>,
     pub(crate) envelope: IeState<Envelope>,
-    pub(crate) prev_temp_gain: IeState<Gain>,
-    pub(crate) early_release: IeState<Option<(EarlyReleaseTicks, Gain)>>,
+    pub(crate) prev_temp_gain: IeState<TempGain>,
+    pub(crate) early_release: IeState<Option<(EarlyReleaseTicks, OptionalGain)>>,
     pub(crate) vibrato: VibratoState,
     pub(crate) prev_slurred_note: SlurredNoteState,
 }
@@ -583,8 +583,8 @@ struct SkipLastLoop {
 
     instrument: IeState<InstrumentId>,
     envelope: IeState<Envelope>,
-    prev_temp_gain: IeState<Gain>,
-    early_release: IeState<Option<(EarlyReleaseTicks, Gain)>>,
+    prev_temp_gain: IeState<TempGain>,
+    early_release: IeState<Option<(EarlyReleaseTicks, OptionalGain)>>,
     vibrato: VibratoState,
     prev_slurred_note: SlurredNoteState,
 }
@@ -956,32 +956,32 @@ impl<'a> Bytecode<'a> {
         emit_bytecode!(self, opcodes::SET_GAIN, gain.value());
     }
 
-    pub fn set_temp_gain(&mut self, gain: Gain) {
+    pub fn set_temp_gain(&mut self, gain: TempGain) {
         self.state.prev_temp_gain = IeState::Known(gain);
 
-        emit_bytecode!(self, opcodes::SET_TEMP_GAIN, gain.value());
+        emit_bytecode!(self, opcodes::SET_TEMP_GAIN, gain.as_u8());
     }
 
-    pub fn set_temp_gain_and_wait(&mut self, gain: Gain, length: BcTicksNoKeyOff) {
+    pub fn set_temp_gain_and_wait(&mut self, gain: TempGain, length: BcTicksNoKeyOff) {
         self.state.prev_temp_gain = IeState::Known(gain);
         self.state.tick_counter += length.to_tick_count();
 
         emit_bytecode!(
             self,
             opcodes::SET_TEMP_GAIN_AND_WAIT,
-            gain.value(),
+            gain.as_u8(),
             length.bc_argument
         );
     }
 
-    pub fn set_temp_gain_and_rest(&mut self, gain: Gain, length: BcTicksKeyOff) {
+    pub fn set_temp_gain_and_rest(&mut self, gain: TempGain, length: BcTicksKeyOff) {
         self.state.prev_temp_gain = IeState::Known(gain);
         self.state.tick_counter += length.to_tick_count();
 
         emit_bytecode!(
             self,
             opcodes::SET_TEMP_GAIN_AND_REST,
-            gain.value(),
+            gain.as_u8(),
             length.bc_argument
         );
     }
@@ -1008,7 +1008,7 @@ impl<'a> Bytecode<'a> {
         emit_bytecode!(self, opcodes::SET_EARLY_RELEASE, 0u8, 0u8);
     }
 
-    pub fn set_early_release(&mut self, ticks: EarlyReleaseTicks, gain: Gain) {
+    pub fn set_early_release(&mut self, ticks: EarlyReleaseTicks, gain: OptionalGain) {
         self.state.early_release = IeState::Known(Some((ticks, gain)));
 
         emit_bytecode!(

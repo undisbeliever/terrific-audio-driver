@@ -386,3 +386,67 @@ impl Serialize for Envelope {
         serializer.serialize_str(&self.to_envelope_string())
     }
 }
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct TempGain(u8);
+
+impl TempGain {
+    pub const DISABLED: TempGain = TempGain(0);
+
+    pub fn try_from_mode_and_value(mode: GainMode, value: u32) -> Result<Self, ValueError> {
+        let g = Gain::from_mode_and_value(mode, value)?;
+        Ok(Self(g.as_u8()))
+    }
+
+    pub fn as_u8(self) -> u8 {
+        self.0
+    }
+
+    pub fn is_disabled(self) -> bool {
+        self.0 == 0
+    }
+}
+
+impl FromStr for TempGain {
+    type Err = ValueError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let g = Gain::from_str(s)?;
+        Ok(Self(g.as_u8()))
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct OptionalGain(u8);
+
+impl OptionalGain {
+    pub const NONE: OptionalGain = OptionalGain(0);
+
+    pub fn try_from_mode_and_value(mode: GainMode, value: u32) -> Result<Self, ValueError> {
+        let g = Gain::from_mode_and_value(mode, value)?;
+        Ok(Self(g.as_u8()))
+    }
+
+    pub fn as_u8(self) -> u8 {
+        self.0
+    }
+
+    pub fn is_none(self) -> bool {
+        self.0 == 0
+    }
+}
+
+impl FromStr for OptionalGain {
+    type Err = ValueError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let g = Gain::from_str(s)?;
+        Ok(Self(g.as_u8()))
+    }
+}
+
+impl From<OptionalGain> for TempGain {
+    fn from(value: OptionalGain) -> Self {
+        Self(value.0)
+    }
+}

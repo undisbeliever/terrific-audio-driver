@@ -189,7 +189,7 @@ pub enum ValueError {
     NoEchoEdl,
     NoInstrumentId,
     NoGain,
-    NoTempGainValue,
+    NoOptionalGainValue,
     NoEarlyReleaseTicks,
 }
 
@@ -865,7 +865,7 @@ impl Display for ValueError {
             Self::NoEchoEdl => write!(f, "no echo EDL"),
             Self::NoInstrumentId => write!(f, "no instrument id"),
             Self::NoGain => write!(f, "no gain"),
-            Self::NoTempGainValue => write!(f, "no temp-GAIN value"),
+            Self::NoOptionalGainValue => write!(f, "no optional GAIN value"),
             Self::NoEarlyReleaseTicks => write!(f, "no early-release ticks"),
         }
     }
