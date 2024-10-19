@@ -11,11 +11,11 @@ A @1 o4
 A q10
 A c d d f2.  c d d e2.  r
 
-; Early release with linear decrease temp-GAIN release envelope
+; Early release with linear decrease GAIN release envelope
 A q10,D16
 A c d d f2.  c d d e2.  r
 
-; Early release with exponential decrease temp-GAIN release envelope
+; Early release with exponential decrease GAIN release envelope
 A q8,E28
 A c d d f2.  c d d e2.  r
 
