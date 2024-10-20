@@ -456,8 +456,12 @@ impl ChannelBcGenerator<'_> {
             }
         };
 
-        if slide_length.is_zero() {
-            return Err(MmlError::PortamentoDelayTooLong);
+        let min_ticks = match is_slur {
+            false => 1 + KEY_OFF_TICK_DELAY,
+            true => 1,
+        };
+        if slide_length.value() < min_ticks {
+            return Err(MmlError::PortamentoTooShort);
         }
 
         let velocity = match speed_override {
@@ -478,6 +482,7 @@ impl ChannelBcGenerator<'_> {
 
                 let ticks = i32::try_from(slide_length.value()).unwrap();
 
+                assert!(ticks > 0);
                 (p2 - p1) / ticks
             }
         };
