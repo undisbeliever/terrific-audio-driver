@@ -1186,9 +1186,9 @@ fn play_note(note: Note, length: TickCounter, p: &mut Parser) -> MmlCommand {
         let key_on_length = key_on_length.clamp(1, l - KEY_OFF_TICK_DELAY);
         let key_off_length = l - key_on_length;
 
-        let ticks_after_keyoff = parse_rests_after_rest(p);
-
         if key_off_length > KEY_OFF_TICK_DELAY {
+            let ticks_after_keyoff = parse_rests_after_rest(p);
+
             if temp_gain.is_disabled() {
                 // No temp GAIN
 

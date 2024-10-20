@@ -299,6 +299,15 @@ fn test_fine_quantisation() {
 }
 
 #[test]
+fn bugfix_quantization_of_short_note_then_rest() {
+    // The rest notes were erroniously dropped and ignored
+
+    assert_line_matches_bytecode("Q8 c%6 r%6", &["play_note c4 6", "rest 6"]);
+
+    assert_line_matches_bytecode("Q%255  c%100 r%100", &["play_note c4 100", "rest 100"]);
+}
+
+#[test]
 fn test_quantize_with_temp_gain() {
     assert_line_matches_line("Q4,$84 c", "c8 & GT$84 r8");
 
