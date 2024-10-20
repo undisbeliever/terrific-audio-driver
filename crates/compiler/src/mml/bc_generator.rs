@@ -1167,7 +1167,13 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
             if next.is_none() && matches!(c.command(), MmlCommand::CallSubroutine(_, _)) {
                 return Some(c);
             }
-            Self::_compile_command(c, parser, gen, bytecode_tracker);
+            Self::_compile_command(
+                c,
+                parser,
+                gen,
+                #[cfg(feature = "mml_tracking")]
+                bytecode_tracker,
+            );
         }
         None
     }
@@ -1178,7 +1184,13 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
         #[cfg(feature = "mml_tracking")] bytecode_tracker: &mut Vec<BytecodePos>,
     ) {
         while let Some(c) = parser.next() {
-            Self::_compile_command(c, parser, gen, bytecode_tracker);
+            Self::_compile_command(
+                c,
+                parser,
+                gen,
+                #[cfg(feature = "mml_tracking")]
+                bytecode_tracker,
+            );
         }
     }
 
