@@ -204,7 +204,6 @@ Numbers can be decimal, or hexadecimal when prefixed with `$` (ie, `$ff`)
     * Multiple `w` wait commands will be merged by the MML parser. For example, `w4 w8 w8` will be merged into a single `w2` command.
     * Very long `w` waits will be optimised into a loop.  For example, when Whole Note Length is 96, `w1 w1 w1 w1 w1 w1 w1 w1 w1 w1` will be converted to `[w%240]4`.
 
-
 <br/>
 
  * `@<id>` - Set instrument
@@ -227,7 +226,6 @@ Numbers can be decimal, or hexadecimal when prefixed with `$` (ie, `$ff`)
      * `GBT<rate>` - bent increase temporary envelope (0-31)
      * `GT` - reuse previous temporary GAIN
 
-
 <br/>
 
  * `o<0..7>` - Set octave
@@ -238,39 +236,6 @@ Numbers can be decimal, or hexadecimal when prefixed with `$` (ie, `$ff`)
 
 <br/>
 
- * `Q<1-8>` - Quantize
-    * Cuts the note by *param*/8.  The default value is 8.
-    * Has no effect on slurred notes.
-    * For example: `Q4 c4` will cut the notes length in half (4/8) and play `c8 r8`
-    * `Q8` (the default) will not cut notes.
- * `Q%<0-255>` - Fine Quantize
-    * Same as `Q`, except it cuts the notes by *param*/256.
- * `Q<1-7>,<temp-gain>` / `Q%<0-255>,<temp-gain>` - Quantize with Temp-GAIN
-    * Instead of a hard 1 tick keyoff, this command will a set temp-GAIN, then rest.
-    * For example: `Q4,D10 c4` will expand to `c8 & GDT10 r8`
-    * `Q<n>,D<rate>` - Quantize with linear decrease envelope (0-31)
-    * `Q<n>,E<rate>` - Quantize with exponential decrease envelope (0-31)
-    * `Q<n>,I<rate>` - Quantize with linear increase envelope (0-31)
-    * `Q<n>,B<rate>` - Quantize with bent increase envelope (0-31)
-    * `Q<n>,<gain>` - Quantize with a raw GAIN value (1-255)
- * `q<1-254>` - Early release (sound cut)
-    * Keys off each note `<1-254>` ticks earlier then normal.
-    * If the note length is >= early-release-length, the note will be played for a single tick.
-    * For example: `q4 c%24` is equivalent to `c%20 w%4`
-    * CAUTION: `q` persists across subroutine calls.
- * `q<1-254>,<gain>` - Early release with custom GAIN envelope
-    * When playing notes, the envelope is temporarily changed to GAIN(*gain*) *t* ticks before key-off.
-    * Useful for custom release envelopes (ie, `q10,D16` or `q8,E28`).
-    * Of the various ways to write custom release envelopes, the `q` command uses the least audio-RAM.
-    * If the note length is >= early-release-length, the envelope will be changed on the second note tick.
-    * CAUTION: the GAIN rate may need to be changed if the song's tempo changes.
-    * CAUTION: `q` persists across subroutine calls and `:` skip-last-loop commands.
-    * `q<n>,D<rate>` - linear decrease envelope (0-31)
-    * `q<n>,E<rate>` - exponential decrease envelope (0-31)
-    * `q<n>,I<rate>` - linear increase envelope (0-31)
-    * `q<n>,B<rate>` - bent increase envelope (0-31)
-    * `q<n>,<gain>` - raw GAIN envelope (1-255)
- * `q0` - Disable early-release.
  * `l<length>` - Set the default length
  * `C<4..256>` - Set the whole note length (in ticks).
     * Default is `#Zenlen` or 96 if `#Zenlen` not set.
@@ -357,6 +322,44 @@ Numbers can be decimal, or hexadecimal when prefixed with `$` (ie, `$ff`)
     * MP Vibrato does not take effect immediately.  The vibrato starts on the next note played.
     * CAUTION: MP Vibrato does not persist across subroutine calls.
       When calling a `!` subroutine, MP vibrato is temporally disabled and MP vibrato resumes after the `!` mml subroutine returns.
+
+<br/>
+
+ * `Q<1-8>` - Quantize
+    * Cuts the note by *param*/8.  The default value is 8.
+    * Has no effect on slurred notes.
+    * For example: `Q4 c4` will cut the notes length in half (4/8) and play `c8 r8`
+    * `Q8` (the default) will not cut notes.
+ * `Q%<0-255>` - Fine Quantize
+    * Same as `Q`, except it cuts the notes by *param*/256.
+ * `Q<1-7>,<temp-gain>` / `Q%<0-255>,<temp-gain>` - Quantize with Temp-GAIN
+    * Instead of a hard 1 tick keyoff, this command will a set temp-GAIN, then rest.
+    * For example: `Q4,D10 c4` will expand to `c8 & GDT10 r8`
+    * `Q<n>,D<rate>` - Quantize with linear decrease envelope (0-31)
+    * `Q<n>,E<rate>` - Quantize with exponential decrease envelope (0-31)
+    * `Q<n>,I<rate>` - Quantize with linear increase envelope (0-31)
+    * `Q<n>,B<rate>` - Quantize with bent increase envelope (0-31)
+    * `Q<n>,<gain>` - Quantize with a raw GAIN value (1-255)
+ * `q<1-254>` - Early release (sound cut)
+    * Keys off each note `<1-254>` ticks earlier then normal.
+    * If the note length is >= early-release-length, the note will be played for a single tick.
+    * For example: `q4 c%24` is equivalent to `c%20 w%4`
+    * CAUTION: `q` persists across subroutine calls.
+ * `q<1-254>,<gain>` - Early release with custom GAIN envelope
+    * When playing notes, the envelope is temporarily changed to GAIN(*gain*) *t* ticks before key-off.
+    * Useful for custom release envelopes (ie, `q10,D16` or `q8,E28`).
+    * Of the various ways to write custom release envelopes, the `q` command uses the least audio-RAM.
+    * If the note length is >= early-release-length, the envelope will be changed on the second note tick.
+    * CAUTION: the GAIN rate may need to be changed if the song's tempo changes.
+    * CAUTION: `q` persists across subroutine calls and `:` skip-last-loop commands.
+    * `q<n>,D<rate>` - linear decrease envelope (0-31)
+    * `q<n>,E<rate>` - exponential decrease envelope (0-31)
+    * `q<n>,I<rate>` - linear increase envelope (0-31)
+    * `q<n>,B<rate>` - bent increase envelope (0-31)
+    * `q<n>,<gain>` - raw GAIN envelope (1-255)
+ * `q0` - Disable early-release.
+
+<br/>
 
  * `\asm { <asm_code> }` - bytecode assembly
     * Instructions can be separated by `|` dividers or newlines.
