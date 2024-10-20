@@ -430,6 +430,7 @@ pub enum MmlError {
     MissingEndAsm,
 
     InvalidNote,
+    NoteIsTooShort,
 
     NoSubroutine,
     NoInstrument,
@@ -1208,6 +1209,10 @@ impl Display for MmlError {
             Self::MissingEndAsm => write!(f, r"cannot find \asm end (no `}}`)"),
 
             Self::InvalidNote => write!(f, "invalid note"),
+            Self::NoteIsTooShort => write!(
+                f,
+                "note is too short (2 ticks are required for a key-off note)"
+            ),
 
             Self::NoSubroutine => write!(f, "no subroutine"),
             Self::NoInstrument => write!(f, "no instrument"),

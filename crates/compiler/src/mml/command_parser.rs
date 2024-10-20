@@ -1162,9 +1162,13 @@ fn parse_rest(p: &mut Parser) -> MmlCommand {
     }
 }
 
-fn play_note(note: Note, length: TickCounter, p: &mut Parser) -> MmlCommand {
+fn play_note(pos: FilePos, note: Note, length: TickCounter, p: &mut Parser) -> MmlCommand {
     let (tie_length, is_slur) = parse_ties_and_slur(p);
     let length = length + tie_length;
+
+    if !is_slur && length.value() <= KEY_OFF_TICK_DELAY {
+        return invalid_token_error(p, pos, MmlError::NoteIsTooShort);
+    }
 
     let q = p.state().quantize;
 
@@ -1228,7 +1232,7 @@ fn parse_pitch(pos: FilePos, pitch: MmlPitch, p: &mut Parser) -> MmlCommand {
     match Note::from_mml_pitch(pitch, p.state().octave, p.state().semitone_offset) {
         Ok(note) => {
             let length = parse_tracked_length(p);
-            play_note(note, length, p)
+            play_note(pos, note, length, p)
         }
         Err(e) => {
             p.add_error(pos, e.into());
@@ -1256,7 +1260,7 @@ fn parse_play_sample(pos: FilePos, p: &mut Parser) -> MmlCommand {
     };
 
     match Note::from_note_id_u32(index) {
-        Ok(note) => play_note(note, length, p),
+        Ok(note) => play_note(pos, note, length, p),
         Err(e) => {
             p.add_error(pos, e.into());
 
@@ -1287,7 +1291,7 @@ fn parse_play_midi_note_number(pos: FilePos, p: &mut Parser) -> MmlCommand {
     };
 
     match note {
-        Some(note) => play_note(note, length, p),
+        Some(note) => play_note(pos, note, length, p),
         None => {
             // Output a rest (so tick-counter is correct)
             let (tie_length, _) = parse_ties_and_slur(p);

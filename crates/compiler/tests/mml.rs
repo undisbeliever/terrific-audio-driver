@@ -308,6 +308,11 @@ fn bugfix_quantization_of_short_note_then_rest() {
 }
 
 #[test]
+fn bugfix_quantization_of_1_tick_note_panic() {
+    assert_error_in_mml_line("Q4 c%1", 4, MmlError::NoteIsTooShort);
+}
+
+#[test]
 fn test_quantize_with_temp_gain() {
     assert_line_matches_line("Q4,$84 c", "c8 & GT$84 r8");
 
