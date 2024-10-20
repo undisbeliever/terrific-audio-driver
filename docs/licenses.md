@@ -497,7 +497,7 @@ DEALINGS IN THE SOFTWARE.
 ## MIT License
 
 Used by:
-  * [cc 1.1.30](https://github.com/rust-lang/cc-rs)
+  * [cc 1.1.31](https://github.com/rust-lang/cc-rs)
   * [cfg-if 1.0.0](https://github.com/alexcrichton/cfg-if)
   * [cmake 0.1.51](https://github.com/rust-lang/cmake-rs)
 
@@ -604,7 +604,7 @@ IN THE SOFTWARE.
 ## MIT License
 
 Used by:
-  * [libc 0.2.159](https://github.com/rust-lang/libc)
+  * [libc 0.2.161](https://github.com/rust-lang/libc)
 
 ```
 Copyright (c) 2014-2020 The Rust Project Developers
@@ -1161,21 +1161,21 @@ SOFTWARE.
 ## MIT License
 
 Used by:
-  * [cxx-build 1.0.128](https://github.com/dtolnay/cxx)
-  * [cxx 1.0.128](https://github.com/dtolnay/cxx)
-  * [cxxbridge-flags 1.0.128](https://github.com/dtolnay/cxx)
-  * [cxxbridge-macro 1.0.128](https://github.com/dtolnay/cxx)
+  * [cxx-build 1.0.129](https://github.com/dtolnay/cxx)
+  * [cxx 1.0.129](https://github.com/dtolnay/cxx)
+  * [cxxbridge-flags 1.0.129](https://github.com/dtolnay/cxx)
+  * [cxxbridge-macro 1.0.129](https://github.com/dtolnay/cxx)
   * [itoa 1.0.11](https://github.com/dtolnay/itoa)
   * [link-cplusplus 1.0.9](https://github.com/dtolnay/link-cplusplus)
   * [once_cell 1.20.2](https://github.com/matklad/once_cell)
   * [paste 1.0.15](https://github.com/dtolnay/paste)
-  * [proc-macro2 1.0.87](https://github.com/dtolnay/proc-macro2)
+  * [proc-macro2 1.0.88](https://github.com/dtolnay/proc-macro2)
   * [quote 1.0.37](https://github.com/dtolnay/quote)
   * [scratch 1.0.7](https://github.com/dtolnay/scratch)
   * [serde 1.0.210](https://github.com/serde-rs/serde)
   * [serde_derive 1.0.210](https://github.com/serde-rs/serde)
-  * [serde_json 1.0.128](https://github.com/serde-rs/json)
-  * [syn 2.0.79](https://github.com/dtolnay/syn)
+  * [serde_json 1.0.132](https://github.com/serde-rs/json)
+  * [syn 2.0.81](https://github.com/dtolnay/syn)
   * [unicode-ident 1.0.13](https://github.com/dtolnay/unicode-ident)
 
 ```

@@ -119,7 +119,7 @@ Please see the included [licenses file](licenses.md) for the full third party li
   * [windows_x86_64_msvc 0.52.6](https://github.com/microsoft/windows-rs), MIT License
   * [markdown 1.0.0-alpha.21](https://github.com/wooorm/markdown-rs), MIT License
   * [lazy_static 1.5.0](https://github.com/rust-lang-nursery/lazy-static.rs), MIT License
-  * [cc 1.1.30](https://github.com/rust-lang/cc-rs), MIT License
+  * [cc 1.1.31](https://github.com/rust-lang/cc-rs), MIT License
   * [cfg-if 1.0.0](https://github.com/alexcrichton/cfg-if), MIT License
   * [cmake 0.1.51](https://github.com/rust-lang/cmake-rs), MIT License
   * [bitflags 1.3.2](https://github.com/bitflags/bitflags), MIT License
@@ -130,7 +130,7 @@ Please see the included [licenses file](licenses.md) for the full third party li
   * [regex-syntax 0.8.5](https://github.com/rust-lang/regex/tree/master/regex-syntax), MIT License
   * [regex 1.11.0](https://github.com/rust-lang/regex), MIT License
   * [float-cmp 0.9.0](https://github.com/mikedilger/float-cmp), MIT License
-  * [libc 0.2.159](https://github.com/rust-lang/libc), MIT License
+  * [libc 0.2.161](https://github.com/rust-lang/libc), MIT License
   * [anstyle-wincon 3.0.4](https://github.com/rust-cli/anstyle.git), MIT License
   * [heck 0.5.0](https://github.com/withoutboats/heck), MIT License
   * [unicode-id 0.3.5](https://github.com/Boshen/unicode-id), MIT License
@@ -155,21 +155,21 @@ Please see the included [licenses file](licenses.md) for the full third party li
   * [relative-path 1.9.3](https://github.com/udoprog/relative-path), MIT License
   * [sdl2-sys 0.37.0](https://github.com/rust-sdl2/rust-sdl2), MIT License
   * [fltk 1.4.34](https://github.com/fltk-rs/fltk-rs), MIT License
-  * [cxx-build 1.0.128](https://github.com/dtolnay/cxx), MIT License
-  * [cxx 1.0.128](https://github.com/dtolnay/cxx), MIT License
-  * [cxxbridge-flags 1.0.128](https://github.com/dtolnay/cxx), MIT License
-  * [cxxbridge-macro 1.0.128](https://github.com/dtolnay/cxx), MIT License
+  * [cxx-build 1.0.129](https://github.com/dtolnay/cxx), MIT License
+  * [cxx 1.0.129](https://github.com/dtolnay/cxx), MIT License
+  * [cxxbridge-flags 1.0.129](https://github.com/dtolnay/cxx), MIT License
+  * [cxxbridge-macro 1.0.129](https://github.com/dtolnay/cxx), MIT License
   * [itoa 1.0.11](https://github.com/dtolnay/itoa), MIT License
   * [link-cplusplus 1.0.9](https://github.com/dtolnay/link-cplusplus), MIT License
   * [once_cell 1.20.2](https://github.com/matklad/once_cell), MIT License
   * [paste 1.0.15](https://github.com/dtolnay/paste), MIT License
-  * [proc-macro2 1.0.87](https://github.com/dtolnay/proc-macro2), MIT License
+  * [proc-macro2 1.0.88](https://github.com/dtolnay/proc-macro2), MIT License
   * [quote 1.0.37](https://github.com/dtolnay/quote), MIT License
   * [scratch 1.0.7](https://github.com/dtolnay/scratch), MIT License
   * [serde 1.0.210](https://github.com/serde-rs/serde), MIT License
   * [serde_derive 1.0.210](https://github.com/serde-rs/serde), MIT License
-  * [serde_json 1.0.128](https://github.com/serde-rs/json), MIT License
-  * [syn 2.0.79](https://github.com/dtolnay/syn), MIT License
+  * [serde_json 1.0.132](https://github.com/serde-rs/json), MIT License
+  * [syn 2.0.81](https://github.com/dtolnay/syn), MIT License
   * [unicode-ident 1.0.13](https://github.com/dtolnay/unicode-ident), MIT License
   * [sdl2 0.37.0](https://github.com/Rust-SDL2/rust-sdl2), MIT License
   * [aho-corasick 1.1.3](https://github.com/BurntSushi/aho-corasick), MIT License
