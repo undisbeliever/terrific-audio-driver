@@ -33,7 +33,6 @@ use crate::songs::{Channel, LoopPoint, Subroutine};
 use crate::sound_effects::MAX_SFX_TICKS;
 use crate::time::{TickClock, TickCounter, ZenLen, DEFAULT_ZENLEN};
 
-use std::cmp::max;
 use std::collections::HashMap;
 
 pub const MAX_BROKEN_CHORD_NOTES: usize = 128;
@@ -422,32 +421,42 @@ impl ChannelBcGenerator<'_> {
         note2: Note,
         is_slur: bool,
         speed_override: Option<PortamentoSpeed>,
-        total_length: TickCounter,
         delay_length: TickCounter,
+        slide_length: TickCounter,
         tie_length: TickCounter,
     ) -> Result<(), MmlError> {
-        assert!(delay_length < total_length);
+        let play_note1 = self.bc.get_state().prev_slurred_note != SlurredNoteState::Slurred(note1);
 
         // Play note1 (if required)
-        let note1_length = {
-            if self.bc.get_state().prev_slurred_note != SlurredNoteState::Slurred(note1) {
-                let note_1_length = max(TickCounter::new(1), delay_length);
-                let (pn_length, rest) = Self::split_play_note_length(note_1_length, true)?;
+        let slide_length = match (play_note1, delay_length.value()) {
+            (true, 0) => {
+                // Play note1 for a single tick
+                let t = PlayNoteTicks::NoKeyOff(BcTicksNoKeyOff::try_from(1).unwrap());
+                self.bc.play_note(note1, t)?;
+
+                // subtract 1 tick from slide_length
+                TickCounter::new(slide_length.value().saturating_sub(1))
+            }
+            (true, _) => {
+                let (pn_length, rest) = Self::split_play_note_length(delay_length, true)?;
 
                 self.bc.play_note(note1, pn_length)?;
                 self.rest_after_play_note(rest, true)?;
-                note_1_length
-            } else if !delay_length.is_zero() {
+
+                slide_length
+            }
+            (false, 0) => {
+                // No delay and pitch is correct
+                slide_length
+            }
+            (false, _) => {
+                // pitch is correct
                 self.wait(delay_length)?;
-                delay_length
-            } else {
-                TickCounter::new(0)
+                slide_length
             }
         };
 
-        let portamento_length =
-            TickCounter::new(total_length.value().wrapping_sub(note1_length.value()));
-        if portamento_length.is_zero() {
+        if slide_length.is_zero() {
             return Err(MmlError::PortamentoDelayTooLong);
         }
 
@@ -467,15 +476,14 @@ impl ChannelBcGenerator<'_> {
                 let p1: i32 = self.pitch_table.pitch_for_note(instrument_id, note1).into();
                 let p2: i32 = self.pitch_table.pitch_for_note(instrument_id, note2).into();
 
-                let ticks = i32::try_from(portamento_length.value()).unwrap();
+                let ticks = i32::try_from(slide_length.value()).unwrap();
 
                 (p2 - p1) / ticks
             }
         };
         let velocity = PortamentoVelocity::try_from(velocity)?;
 
-        let (p_length, p_rest) =
-            Self::split_play_note_length(tie_length + portamento_length, is_slur)?;
+        let (p_length, p_rest) = Self::split_play_note_length(tie_length + slide_length, is_slur)?;
         self.bc.portamento(note2, velocity, p_length)?;
 
         self.rest_after_play_note(p_rest, is_slur)
@@ -908,8 +916,8 @@ impl ChannelBcGenerator<'_> {
                 note2,
                 is_slur,
                 speed_override,
-                total_length,
                 delay_length,
+                slide_length,
                 tie_length,
             } => {
                 self.portamento(
@@ -917,8 +925,8 @@ impl ChannelBcGenerator<'_> {
                     note2,
                     is_slur,
                     speed_override,
-                    total_length,
                     delay_length,
+                    slide_length,
                     tie_length,
                 )?;
             }

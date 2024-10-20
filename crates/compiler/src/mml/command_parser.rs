@@ -181,8 +181,11 @@ pub enum MmlCommand {
         note2: Note,
         is_slur: bool,
         speed_override: Option<PortamentoSpeed>,
-        total_length: TickCounter,
+        /// Number of ticks to hold the pitch at note1 before the pitch slide
         delay_length: TickCounter,
+        /// Length of the pitch slide (portamento_length - delay_length)
+        slide_length: TickCounter,
+        /// Number of ticks to hold the pitch at note2
         tie_length: TickCounter,
     },
     BrokenChord {
@@ -1284,7 +1287,7 @@ fn parse_portamento(pos: FilePos, p: &mut Parser) -> MmlCommand {
         p.add_error(pos, MmlError::PortamentoRequiresTwoPitches);
     }
 
-    let total_length = parse_tracked_length(p);
+    let mut slide_length = parse_tracked_length(p);
 
     let mut delay_length = TickCounter::new(0);
     let mut speed_override = None;
@@ -1292,8 +1295,9 @@ fn parse_portamento(pos: FilePos, p: &mut Parser) -> MmlCommand {
     if next_token_matches!(p, Token::Comma) {
         let dt_pos = p.peek_pos();
         if let Some(dt) = parse_untracked_optional_length(p) {
-            if dt < total_length {
-                delay_length = dt;
+            if dt < slide_length {
+                slide_length = TickCounter::new(slide_length.value() - dt.value());
+                delay_length = dt
             } else {
                 p.add_error(dt_pos, MmlError::InvalidPortamentoDelay);
             }
@@ -1311,8 +1315,8 @@ fn parse_portamento(pos: FilePos, p: &mut Parser) -> MmlCommand {
             note2: notes[1],
             is_slur,
             speed_override,
-            total_length,
             delay_length,
+            slide_length,
             tie_length,
         }
     } else {
