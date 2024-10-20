@@ -1856,6 +1856,118 @@ fn test_portamento() {
 }
 
 #[test]
+fn test_quantized_portamento() {
+    // Only testing portamento with a speed override
+
+    assert_line_matches_bytecode(
+        "Q4 {df},,10",
+        &[
+            "play_note d4 no_keyoff 1",
+            "portamento f4 keyoff +10 12",
+            "rest 11",
+        ],
+    );
+
+    assert_line_matches_bytecode(
+        "Q4 {df}2,,10",
+        &[
+            "play_note d4 no_keyoff 1",
+            "portamento f4 keyoff +10 24",
+            "rest 23",
+        ],
+    );
+
+    assert_line_matches_bytecode(
+        "Q4 d& {df},,10",
+        &[
+            "play_note d4 no_keyoff 24",
+            "portamento f4 keyoff +10 13",
+            "rest 11",
+        ],
+    );
+
+    assert_line_matches_bytecode(
+        "Q4 {df},,10 ^",
+        &[
+            "play_note d4 no_keyoff 1",
+            "portamento f4 keyoff +10 24",
+            "rest 23",
+        ],
+    );
+
+    assert_line_matches_bytecode(
+        "Q4,D8 {df},,10 ^2",
+        &[
+            "play_note d4 no_keyoff 1",
+            "portamento f4 no_keyoff +10 35",
+            "set_temp_gain_and_rest D8 36",
+        ],
+    );
+
+    assert_line_matches_bytecode(
+        "GDT8 Q4,D8 {df},,10 ^2",
+        &[
+            "set_temp_gain D8",
+            "play_note d4 no_keyoff 1",
+            "portamento f4 no_keyoff +10 35",
+            "reuse_temp_gain_and_rest 36",
+        ],
+    );
+
+    assert_line_matches_line_and_bytecode(
+        "Q4 {df},,10 & b",
+        "{df},,10 & Q4 b",
+        &[
+            // portamento is not quantized
+            "play_note d4 no_keyoff 1",
+            "portamento f4 no_keyoff +10 23",
+            // play note is quantized
+            "play_note b4 13",
+            "rest 11",
+        ],
+    );
+
+    assert_line_matches_line("Q4 {df}4,8", "d8 & Q4 {df}8");
+    assert_line_matches_line("Q4 {df}4,8", "Q4 d8 & {df}8");
+
+    assert_line_matches_line_and_bytecode(
+        "Q4 {df}4,8,15",
+        "Q4 d8 & {df}8,,15",
+        &[
+            "play_note d4 no_keyoff 12",
+            "portamento f4 keyoff +15 7",
+            "rest 5",
+        ],
+    );
+
+    assert_line_matches_line("Q4 {a > c}2", "Q4 {a _+12 c}2");
+    assert_line_matches_line("Q4 {o3 c o4 c}2", "Q4 {< c > c}2");
+
+    assert_line_matches_bytecode(
+        "Q4 {df},,10 r%90 r%90 ^%90 r%90",
+        &[
+            "play_note d4 no_keyoff 1",
+            "portamento f4 keyoff +10 12",
+            // 360 + 11 ticks of rest
+            "rest 257",
+            "rest 114",
+        ],
+    );
+
+    assert_line_matches_bytecode(
+        "Q4,E15 {df},,10 r%90 r%90 ^%90 r%90",
+        &[
+            "play_note d4 no_keyoff 1",
+            "portamento f4 no_keyoff +10 11",
+            "set_temp_gain_and_rest E15 12",
+            // 360 ticks of rest
+            "rest 257",
+            "rest 103",
+        ],
+    );
+}
+
+#[test]
 fn test_vibrato() {
     assert_line_matches_bytecode(
         "~23,4 a ~0",

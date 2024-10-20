@@ -58,6 +58,11 @@ impl Quantization {
 
 impl FineQuantization {
     pub const UNITS: u32 = 256;
+
+    fn quantize(&self, l: u32) -> u32 {
+        let q = u32::from(self.0);
+        std::cmp::max((l * q) / Self::UNITS, 1)
+    }
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -187,6 +192,19 @@ pub enum MmlCommand {
         slide_length: TickCounter,
         /// Number of ticks to hold the pitch at note2
         tie_length: TickCounter,
+    },
+    QuantizedPortamento {
+        note1: Note,
+        note2: Note,
+        speed_override: Option<PortamentoSpeed>,
+        delay_length: TickCounter,
+        slide_length: TickCounter,
+        tie_length: TickCounter,
+        temp_gain: TempGain,
+        rest: TickCounter,
+        /// Combined length of all rests after the portamento
+        /// (keyoff already sent, it does not matter if these rests keyoff or not)
+        rest_ticks_after_note: TickCounter,
     },
     BrokenChord {
         notes: Vec<Note>,
@@ -1176,9 +1194,7 @@ fn play_note(pos: FilePos, note: Note, length: TickCounter, p: &mut Parser) -> M
         let (q, temp_gain) = q.unwrap();
 
         let l = length.value();
-        let q = u32::from(q.0);
-
-        let key_on_length = ((l * q) / FineQuantization::UNITS).clamp(1, l);
+        let key_on_length = q.quantize(l);
 
         if key_on_length + KEY_OFF_TICK_DELAY < l {
             let rest_ticks_after_note = parse_rests_after_rest(p);
@@ -1310,14 +1326,67 @@ fn parse_portamento(pos: FilePos, p: &mut Parser) -> MmlCommand {
     let (tie_length, is_slur) = parse_ties_and_slur(p);
 
     if notes.len() == 2 {
-        MmlCommand::Portamento {
-            note1: notes[0],
-            note2: notes[1],
-            is_slur,
-            speed_override,
-            delay_length,
-            slide_length,
-            tie_length,
+        let q = p.state().quantize;
+
+        if is_slur || q.is_none() {
+            MmlCommand::Portamento {
+                note1: notes[0],
+                note2: notes[1],
+                is_slur,
+                speed_override,
+                delay_length,
+                slide_length,
+                tie_length,
+            }
+        } else {
+            // Portamento is quantized
+            // In PMDMML only the portamento slide is quantized, delay_length is not.
+
+            let (q, temp_gain) = q.unwrap();
+
+            let note2_length = slide_length.value() + tie_length.value();
+            let key_on_length = q.quantize(note2_length);
+
+            if key_on_length + KEY_OFF_TICK_DELAY < note2_length {
+                let rest_ticks_after_note = parse_rests_after_rest(p);
+
+                let (slide_length, tie_length) = if key_on_length <= slide_length.value() {
+                    (TickCounter::new(key_on_length), TickCounter::new(0))
+                } else {
+                    (
+                        slide_length,
+                        TickCounter::new(note2_length - key_on_length - slide_length.value()),
+                    )
+                };
+                let rest = TickCounter::new(note2_length - key_on_length);
+
+                debug_assert!(
+                    slide_length.value() + tie_length.value() + rest.value() == note2_length
+                );
+
+                MmlCommand::QuantizedPortamento {
+                    note1: notes[0],
+                    note2: notes[1],
+                    speed_override,
+                    slide_length,
+                    delay_length,
+                    tie_length,
+                    temp_gain,
+                    rest,
+                    rest_ticks_after_note,
+                }
+            } else {
+                // Note is too short for Quanization
+                MmlCommand::Portamento {
+                    note1: notes[0],
+                    note2: notes[1],
+                    is_slur,
+                    speed_override,
+                    delay_length,
+                    slide_length,
+                    tie_length,
+                }
+            }
         }
     } else {
         MmlCommand::NoCommand

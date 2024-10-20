@@ -36,6 +36,7 @@ MML changes:
  * Added `q` set early release command
     * The `q` command supports early-release with a custom GAIN envelope and is useful for custom-release envelopes.  
       For example, `q10,D16` will change the envelope to linear-decrease (`D16`) 10 ticks before a note's key-off.
+ * Fixed portamento not quantized with the `Q` quantize MML command.
 
 
 GUI changes:

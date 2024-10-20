@@ -936,6 +936,53 @@ impl ChannelBcGenerator<'_> {
                 )?;
             }
 
+            &MmlCommand::QuantizedPortamento {
+                note1,
+                note2,
+                speed_override,
+                delay_length,
+                slide_length,
+                tie_length,
+                temp_gain,
+                rest,
+                rest_ticks_after_note,
+            } => {
+                if temp_gain.is_disabled() {
+                    assert!(rest.value() > KEY_OFF_TICK_DELAY);
+                    let slide_length = TickCounter::new(slide_length.value() + KEY_OFF_TICK_DELAY);
+                    let rest = TickCounter::new(
+                        rest.value() - KEY_OFF_TICK_DELAY + rest_ticks_after_note.value(),
+                    );
+
+                    self.portamento(
+                        note1,
+                        note2,
+                        false,
+                        speed_override,
+                        delay_length,
+                        slide_length,
+                        tie_length,
+                    )?;
+                    // can `wait` here, `portamento` will emit a key-off event
+                    match rest.value() {
+                        1 => self.wait(rest)?,
+                        _ => self.rest_many_keyoffs(rest)?,
+                    }
+                } else {
+                    self.portamento(
+                        note1,
+                        note2,
+                        true,
+                        speed_override,
+                        delay_length,
+                        slide_length,
+                        tie_length,
+                    )?;
+
+                    self.temp_gain_and_rest(Some(temp_gain), rest, rest_ticks_after_note)?;
+                }
+            }
+
             MmlCommand::BrokenChord {
                 notes,
                 total_length,
