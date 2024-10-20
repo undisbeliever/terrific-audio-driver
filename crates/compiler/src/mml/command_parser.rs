@@ -170,21 +170,11 @@ pub enum MmlCommand {
     PlayQuantizedNote {
         note: Note,
         length: TickCounter,
-        // Includes the key-off rest in the `play_note` instruction
-        note_length: TickCounter,
-        // May be longer the `length - key_on_length`.
-        rest: TickCounter,
-    },
-    PlayQuantizedNoteWithTempGain {
-        note: Note,
-        length: TickCounter,
-        // Includes the key-off rest in the `play_note` instruction
         key_on_length: TickCounter,
         temp_gain: TempGain,
-        temp_gain_ticks: TickCounter,
-        /// Combined length of all rests after the first rest
+        /// Combined length of all rests after the note
         /// (keyoff already sent, it does not matter if these rests keyoff or not)
-        ticks_after_keyoff: TickCounter,
+        rest_ticks_after_note: TickCounter,
     },
     Portamento {
         note1: Note,
@@ -1185,37 +1175,17 @@ fn play_note(pos: FilePos, note: Note, length: TickCounter, p: &mut Parser) -> M
         let l = length.value();
         let q = u32::from(q.0);
 
-        let key_on_length = (l * q) / FineQuantization::UNITS;
+        let key_on_length = ((l * q) / FineQuantization::UNITS).clamp(1, l);
 
-        let key_on_length = key_on_length.clamp(1, l - KEY_OFF_TICK_DELAY);
-        let key_off_length = l - key_on_length;
+        if key_on_length + KEY_OFF_TICK_DELAY < l {
+            let rest_ticks_after_note = parse_rests_after_rest(p);
 
-        if key_off_length > KEY_OFF_TICK_DELAY {
-            let ticks_after_keyoff = parse_rests_after_rest(p);
-
-            if temp_gain.is_disabled() {
-                // No temp GAIN
-
-                let note_length = TickCounter::new(key_on_length + KEY_OFF_TICK_DELAY);
-                let rest = TickCounter::new(key_off_length - KEY_OFF_TICK_DELAY);
-
-                MmlCommand::PlayQuantizedNote {
-                    note,
-                    length,
-                    note_length,
-                    rest: rest + ticks_after_keyoff,
-                }
-            } else {
-                // Quantize with Temp GAIN
-
-                MmlCommand::PlayQuantizedNoteWithTempGain {
-                    note,
-                    length,
-                    key_on_length: TickCounter::new(key_on_length),
-                    temp_gain,
-                    temp_gain_ticks: TickCounter::new(key_off_length),
-                    ticks_after_keyoff,
-                }
+            MmlCommand::PlayQuantizedNote {
+                note,
+                length,
+                key_on_length: TickCounter::new(key_on_length),
+                temp_gain,
+                rest_ticks_after_note,
             }
         } else {
             // Note is too short to be quantized

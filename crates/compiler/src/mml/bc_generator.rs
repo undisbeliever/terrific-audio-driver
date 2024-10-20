@@ -24,7 +24,7 @@ use crate::songs::{BytecodePos, SongBcTracking};
 use crate::bytecode::{
     BcTerminator, BcTicks, BcTicksKeyOff, BcTicksNoKeyOff, Bytecode, BytecodeContext, IeState,
     LoopCount, PitchOffsetPerTick, PlayNoteTicks, PortamentoVelocity, RelativeVolume,
-    SlurredNoteState, SubroutineId, VibratoState,
+    SlurredNoteState, SubroutineId, VibratoState, KEY_OFF_TICK_DELAY,
 };
 use crate::errors::{ErrorWithPos, MmlChannelError, MmlError, ValueError};
 use crate::notes::{Note, SEMITONES_PER_OCTAVE};
@@ -872,29 +872,35 @@ impl ChannelBcGenerator<'_> {
 
             &MmlCommand::PlayQuantizedNote {
                 note,
-                length: _,
-                note_length,
-                rest,
-            } => {
-                self.play_note_with_mp(note, note_length, false)?;
-
-                // can `wait` here, `play_note_with_mp()` sends a key-off event
-                match rest.value() {
-                    1 => self.wait(rest)?,
-                    _ => self.rest_many_keyoffs(rest)?,
-                }
-            }
-
-            &MmlCommand::PlayQuantizedNoteWithTempGain {
-                note,
-                length: _,
+                length,
                 key_on_length,
                 temp_gain,
-                temp_gain_ticks,
-                ticks_after_keyoff,
+                rest_ticks_after_note,
             } => {
-                self.play_note_with_mp(note, key_on_length, true)?;
-                self.temp_gain_and_rest(Some(temp_gain), temp_gain_ticks, ticks_after_keyoff)?;
+                assert!(length.value() > key_on_length.value() + KEY_OFF_TICK_DELAY);
+
+                if temp_gain.is_disabled() {
+                    let note_length = TickCounter::new(key_on_length.value() + KEY_OFF_TICK_DELAY);
+                    let rest = TickCounter::new(
+                        length.value() - note_length.value() + rest_ticks_after_note.value(),
+                    );
+
+                    self.play_note_with_mp(note, note_length, false)?;
+                    // can `wait` here, `play_note_with_mp()` sends a key-off event
+                    match rest.value() {
+                        1 => self.wait(rest)?,
+                        _ => self.rest_many_keyoffs(rest)?,
+                    }
+                } else {
+                    let temp_gain_ticks = TickCounter::new(length.value() - key_on_length.value());
+
+                    self.play_note_with_mp(note, key_on_length, true)?;
+                    self.temp_gain_and_rest(
+                        Some(temp_gain),
+                        temp_gain_ticks,
+                        rest_ticks_after_note,
+                    )?;
+                }
             }
 
             &MmlCommand::Portamento {
