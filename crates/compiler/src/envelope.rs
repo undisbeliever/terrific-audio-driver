@@ -448,6 +448,14 @@ impl OptionalGain {
         }
     }
 
+    pub fn try_from_str_forbid_none_and_raw(s: &str) -> Result<Self, ValueError> {
+        let (mode, value) = extract_gain_mode_and_value(s)?;
+        match mode {
+            GainMode::Raw => Err(ValueError::NoOptionalGainMode),
+            _ => Self::try_from_mode_and_value_forbid_none(mode, value),
+        }
+    }
+
     pub fn as_u8(self) -> u8 {
         self.0
     }

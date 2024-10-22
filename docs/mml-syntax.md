@@ -356,7 +356,6 @@ Numbers can be decimal, or hexadecimal when prefixed with `$` (ie, `$ff`)
     * `q<n>,E<rate>` - exponential decrease envelope (0-31)
     * `q<n>,I<rate>` - linear increase envelope (0-31)
     * `q<n>,B<rate>` - bent increase envelope (0-31)
-    * `q<n>,<gain>` - raw GAIN envelope (1-255)
  * `q0` - Disable early-release.
 
 <br/>

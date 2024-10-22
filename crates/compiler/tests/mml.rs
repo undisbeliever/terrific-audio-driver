@@ -457,8 +457,12 @@ A @1 !s q8,E20 a
 }
 
 #[test]
-fn test_early_release_comma_0_gain_is_err() {
-    assert_error_in_mml_line("q10,0", 5, ValueError::OptionalGainCannotBeZero.into());
+fn test_early_release_raw_gain_is_err() {
+    assert_error_in_mml_line("q10,15", 5, ValueError::NoOptionalGainMode.into());
+}
+
+#[test]
+fn test_early_release_comma_f0_gain_is_err() {
     assert_error_in_mml_line("q10,F0", 5, ValueError::OptionalGainCannotBeZero.into());
 }
 

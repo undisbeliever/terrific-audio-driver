@@ -693,7 +693,23 @@ fn parse_relative_transpose(pos: FilePos, p: &mut Parser) {
     }
 }
 
-fn parse_optional_comma_optional_gain(p: &mut Parser) -> OptionalGain {
+fn parse_optional_gain_value(pos: FilePos, p: &mut Parser, mode: GainMode) -> OptionalGain {
+    match next_token_number(p) {
+        Some(v) => match OptionalGain::try_from_mode_and_value_forbid_none(mode, v) {
+            Ok(g) => g,
+            Err(e) => {
+                p.add_error(pos, e.into());
+                OptionalGain::NONE
+            }
+        },
+        None => {
+            p.add_error(pos, ValueError::NoOptionalGainValue.into());
+            OptionalGain::NONE
+        }
+    }
+}
+
+fn parse_quantize_optional_comma_optional_gain(p: &mut Parser) -> OptionalGain {
     if next_token_matches!(p, Token::Comma) {
         let pos = p.peek_pos();
 
@@ -709,19 +725,7 @@ fn parse_optional_comma_optional_gain(p: &mut Parser) -> OptionalGain {
             #_ => GainMode::Raw
         );
 
-        match next_token_number(p) {
-            Some(v) => match OptionalGain::try_from_mode_and_value_forbid_none(mode, v) {
-                Ok(g) => g,
-                Err(e) => {
-                    p.add_error(pos, e.into());
-                    OptionalGain::NONE
-                }
-            },
-            None => {
-                p.add_error(pos, ValueError::NoOptionalGainValue.into());
-                OptionalGain::NONE
-            }
-        }
+        parse_optional_gain_value(pos, p, mode)
     } else {
         OptionalGain::NONE
     }
@@ -733,7 +737,7 @@ fn parse_quantize(pos: FilePos, p: &mut Parser) {
 
         Token::PercentSign => {
             let q = parse_unsigned_newtype(pos, p);
-            let g = parse_optional_comma_optional_gain(p);
+            let g = parse_quantize_optional_comma_optional_gain(p);
 
             if let Some(q) = q {
                 p.set_state(State {
@@ -745,7 +749,7 @@ fn parse_quantize(pos: FilePos, p: &mut Parser) {
 
         #_ => {
             let q = parse_unsigned_newtype::<Quantization>(pos, p);
-            let g = parse_optional_comma_optional_gain(p);
+            let g = parse_quantize_optional_comma_optional_gain(p);
 
             if let Some(q) = q {
                 match q.to_fine() {
@@ -767,6 +771,34 @@ fn parse_quantize(pos: FilePos, p: &mut Parser) {
     );
 }
 
+fn parse_set_early_release_arguments(p: &mut Parser) -> OptionalGain {
+    if next_token_matches!(p, Token::Comma) {
+        let pos = p.peek_pos();
+
+        match_next_token!(
+            p,
+
+            Token::GainModeF => parse_optional_gain_value(pos, p, GainMode::Fixed),
+            Token::GainModeD => parse_optional_gain_value(pos, p, GainMode::LinearDecrease),
+            Token::Echo => parse_optional_gain_value(pos, p, GainMode::ExponentialDecrease),
+            Token::GainModeI => parse_optional_gain_value(pos, p, GainMode::LinearIncrease),
+            Token::GainModeB => parse_optional_gain_value(pos, p, GainMode::BentIncrease),
+
+            Token::Number(_) => {
+                p.add_error(pos, ValueError::NoOptionalGainMode.into());
+                OptionalGain::NONE
+            },
+
+            #_ => {
+                p.add_error(pos, ValueError::NoOptionalGainMode.into());
+                OptionalGain::NONE
+            }
+        )
+    } else {
+        OptionalGain::NONE
+    }
+}
+
 fn parse_set_early_release(pos: FilePos, p: &mut Parser) -> MmlCommand {
     match next_token_number(p) {
         Some(0) => MmlCommand::DisableEarlyRelease,
@@ -778,13 +810,13 @@ fn parse_set_early_release(pos: FilePos, p: &mut Parser) -> MmlCommand {
                     EarlyReleaseTicks::try_from(EarlyReleaseTicks::MIN).unwrap()
                 }
             };
-            let g = parse_optional_comma_optional_gain(p);
+            let g = parse_set_early_release_arguments(p);
 
             MmlCommand::SetEarlyRelease(t, g)
         }
         None => {
             p.add_error(pos, ValueError::NoEarlyReleaseTicks.into());
-            parse_optional_comma_optional_gain(p);
+            parse_set_early_release_arguments(p);
             MmlCommand::NoCommand
         }
     }
