@@ -1,9 +1,10 @@
 ; q early-release examples
 
-#Tempo 144
+; 1 tick = 8ms
+#Timer 64
 #ZenLen 192
 
-@1 square adsr 10 2 4 10
+@1 square adsr 10 2 4 5
 
 A @1 o4
 
@@ -24,13 +25,30 @@ A c d d f2.  c d d e2.  r
 A G127
 A q254
 A c d d f2.  c d d e2.  r
+A @1
+
+
+; Early release with minimum tick parameter
+; (The note will be played for a minimum of 12 ticks before early-release)
+A q48,12
+A c d d f2.  c d d e2.  r
+
+
+; Early release with minimum tick parameter and GAIN envelope
+; (The notes will be played for a minimum of 24 ticks before early-release)
+A q48,24,D8
+A c d d f2.  c d d e2.  r
+
 
 ; Disable early release
-A @1
 A q0
 A c d d f2.  c d d e2.  r
 
 
 ; These two notes should sound the same (from mml-syntax.md)
-A q4 c%24 	  r
+A q4 c%24     r
 A q0 c%20 w%4 r
+
+A q20,8 c%48      | c%24     | r
+A q0    c%28 w%20 | c%9 w%11 | r
+

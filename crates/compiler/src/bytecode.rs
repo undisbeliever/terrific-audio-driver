@@ -91,6 +91,7 @@ pub mod opcodes {
         REUSE_TEMP_GAIN_AND_WAIT,
         REUSE_TEMP_GAIN_AND_REST,
         SET_EARLY_RELEASE,
+        SET_EARLY_RELEASE_NO_MINIMUM,
         ADJUST_PAN,
         SET_PAN,
         SET_PAN_AND_VOLUME,
@@ -403,6 +404,20 @@ impl EarlyReleaseTicks {
     }
 }
 
+u8_value_newtype!(
+    EarlyReleaseMinTicks,
+    EarlyReleaseMinTicksOutOfRange,
+    NoEarlyReleaseMinTicks,
+    1,
+    u8::MAX
+);
+
+impl EarlyReleaseMinTicks {
+    fn bc_argument(self) -> u8 {
+        self.0
+    }
+}
+
 #[derive(PartialEq)]
 pub enum BcTerminator<'a> {
     DisableChannel,
@@ -571,7 +586,8 @@ pub struct State {
     pub(crate) instrument: IeState<InstrumentId>,
     pub(crate) envelope: IeState<Envelope>,
     pub(crate) prev_temp_gain: IeState<TempGain>,
-    pub(crate) early_release: IeState<Option<(EarlyReleaseTicks, OptionalGain)>>,
+    pub(crate) early_release:
+        IeState<Option<(EarlyReleaseTicks, EarlyReleaseMinTicks, OptionalGain)>>,
     pub(crate) vibrato: VibratoState,
     pub(crate) prev_slurred_note: SlurredNoteState,
 }
@@ -584,7 +600,7 @@ struct SkipLastLoop {
     instrument: IeState<InstrumentId>,
     envelope: IeState<Envelope>,
     prev_temp_gain: IeState<TempGain>,
-    early_release: IeState<Option<(EarlyReleaseTicks, OptionalGain)>>,
+    early_release: IeState<Option<(EarlyReleaseTicks, EarlyReleaseMinTicks, OptionalGain)>>,
     vibrato: VibratoState,
     prev_slurred_note: SlurredNoteState,
 }
@@ -1005,18 +1021,40 @@ impl<'a> Bytecode<'a> {
     pub fn disable_early_release(&mut self) {
         self.state.early_release = IeState::Known(None);
 
-        emit_bytecode!(self, opcodes::SET_EARLY_RELEASE, 0u8, 0u8);
+        emit_bytecode!(self, opcodes::SET_EARLY_RELEASE_NO_MINIMUM, 0u8, 0u8);
     }
 
-    pub fn set_early_release(&mut self, ticks: EarlyReleaseTicks, gain: OptionalGain) {
-        self.state.early_release = IeState::Known(Some((ticks, gain)));
+    pub fn set_early_release_no_minimum(&mut self, ticks: EarlyReleaseTicks, gain: OptionalGain) {
+        let min = EarlyReleaseMinTicks::try_from(EarlyReleaseMinTicks::MIN).unwrap();
+        self.state.early_release = IeState::Known(Some((ticks, min, gain)));
 
         emit_bytecode!(
             self,
-            opcodes::SET_EARLY_RELEASE,
+            opcodes::SET_EARLY_RELEASE_NO_MINIMUM,
             ticks.bc_argument(),
             gain.as_u8()
         );
+    }
+
+    pub fn set_early_release(
+        &mut self,
+        ticks: EarlyReleaseTicks,
+        min: EarlyReleaseMinTicks,
+        gain: OptionalGain,
+    ) {
+        if min.as_u8() == EarlyReleaseMinTicks::MIN {
+            self.set_early_release_no_minimum(ticks, gain);
+        } else {
+            self.state.early_release = IeState::Known(Some((ticks, min, gain)));
+
+            emit_bytecode!(
+                self,
+                opcodes::SET_EARLY_RELEASE,
+                ticks.bc_argument(),
+                min.bc_argument(),
+                gain.as_u8()
+            );
+        }
     }
 
     pub fn adjust_volume(&mut self, v: RelativeVolume) {

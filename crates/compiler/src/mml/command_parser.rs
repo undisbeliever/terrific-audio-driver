@@ -11,8 +11,8 @@ use super::{IdentifierStr, Section};
 use super::note_tracking::CursorTracker;
 
 use crate::bytecode::{
-    EarlyReleaseTicks, LoopCount, Pan, PitchOffsetPerTick, PlayNoteTicks, QuarterWavelengthInTicks,
-    RelativePan, SubroutineId, Volume, KEY_OFF_TICK_DELAY,
+    EarlyReleaseMinTicks, EarlyReleaseTicks, LoopCount, Pan, PitchOffsetPerTick, PlayNoteTicks,
+    QuarterWavelengthInTicks, RelativePan, SubroutineId, Volume, KEY_OFF_TICK_DELAY,
 };
 use crate::envelope::{Adsr, Gain, GainMode, OptionalGain, TempGain};
 use crate::errors::{ErrorWithPos, MmlError, ValueError};
@@ -232,7 +232,7 @@ pub enum MmlCommand {
     TempGainAndWait(Option<TempGain>, TickCounter),
 
     DisableEarlyRelease,
-    SetEarlyRelease(EarlyReleaseTicks, OptionalGain),
+    SetEarlyRelease(EarlyReleaseTicks, EarlyReleaseMinTicks, OptionalGain),
 
     ChangePanAndOrVolume(Option<PanCommand>, Option<VolumeCommand>),
     SetEcho(bool),
@@ -771,31 +771,67 @@ fn parse_quantize(pos: FilePos, p: &mut Parser) {
     );
 }
 
-fn parse_set_early_release_arguments(p: &mut Parser) -> OptionalGain {
+fn parse_early_release_gain_argument(comma_pos: FilePos, p: &mut Parser) -> OptionalGain {
+    let pos = p.peek_pos();
+    match_next_token!(
+        p,
+
+        Token::GainModeF => parse_optional_gain_value(pos, p, GainMode::Fixed),
+        Token::GainModeD => parse_optional_gain_value(pos, p, GainMode::LinearDecrease),
+        Token::Echo => parse_optional_gain_value(pos, p, GainMode::ExponentialDecrease),
+        Token::GainModeI => parse_optional_gain_value(pos, p, GainMode::LinearIncrease),
+        Token::GainModeB => parse_optional_gain_value(pos, p, GainMode::BentIncrease),
+        #_ => {
+            // Ignore raw GAIN number
+            let _ = next_token_matches!(p, Token::Number(_));
+            p.add_error(comma_pos, ValueError::NoOptionalGainMode.into());
+            OptionalGain::NONE
+        }
+    )
+}
+
+fn parse_set_early_release_arguments(p: &mut Parser) -> (EarlyReleaseMinTicks, OptionalGain) {
+    let min = EarlyReleaseMinTicks::try_from(EarlyReleaseMinTicks::MIN).unwrap();
+
+    let comma_pos = p.peek_pos();
     if next_token_matches!(p, Token::Comma) {
         let pos = p.peek_pos();
 
         match_next_token!(
             p,
 
-            Token::GainModeF => parse_optional_gain_value(pos, p, GainMode::Fixed),
-            Token::GainModeD => parse_optional_gain_value(pos, p, GainMode::LinearDecrease),
-            Token::Echo => parse_optional_gain_value(pos, p, GainMode::ExponentialDecrease),
-            Token::GainModeI => parse_optional_gain_value(pos, p, GainMode::LinearIncrease),
-            Token::GainModeB => parse_optional_gain_value(pos, p, GainMode::BentIncrease),
+            Token::GainModeF => (min, parse_optional_gain_value(pos, p, GainMode::Fixed)),
+            Token::GainModeD => (min, parse_optional_gain_value(pos, p, GainMode::LinearDecrease)),
+            Token::Echo => (min, parse_optional_gain_value(pos, p, GainMode::ExponentialDecrease)),
+            Token::GainModeI => (min, parse_optional_gain_value(pos, p, GainMode::LinearIncrease)),
+            Token::GainModeB => (min, parse_optional_gain_value(pos, p, GainMode::BentIncrease)),
 
-            Token::Number(_) => {
-                p.add_error(pos, ValueError::NoOptionalGainMode.into());
-                OptionalGain::NONE
+            // min field is blank
+            &Token::Comma => (min, parse_early_release_gain_argument(pos, p)),
+
+            &Token::Number(n) => {
+                let min = match n.try_into() {
+                    Ok(o) => o,
+                    Err(e) => {
+                        p.add_error(pos, MmlError::ValueError(e));
+                        min
+                    }
+                };
+                let comma_pos = p.peek_pos();
+                match_next_token!(
+                    p,
+                    Token::Comma => (min, parse_early_release_gain_argument(comma_pos, p)),
+                    #_ => (min, OptionalGain::NONE)
+                )
             },
 
             #_ => {
-                p.add_error(pos, ValueError::NoOptionalGainMode.into());
-                OptionalGain::NONE
+                p.add_error(comma_pos, ValueError::NoEarlyReleaseMinTicksOrGain.into());
+                (min, OptionalGain::NONE)
             }
         )
     } else {
-        OptionalGain::NONE
+        (min, OptionalGain::NONE)
     }
 }
 
@@ -803,16 +839,16 @@ fn parse_set_early_release(pos: FilePos, p: &mut Parser) -> MmlCommand {
     match next_token_number(p) {
         Some(0) => MmlCommand::DisableEarlyRelease,
         Some(t) => {
-            let t = match t.try_into() {
+            let ticks = match t.try_into() {
                 Ok(t) => t,
                 Err(e) => {
                     p.add_error(pos, MmlError::ValueError(e));
                     EarlyReleaseTicks::try_from(EarlyReleaseTicks::MIN).unwrap()
                 }
             };
-            let g = parse_set_early_release_arguments(p);
+            let (min, g) = parse_set_early_release_arguments(p);
 
-            MmlCommand::SetEarlyRelease(t, g)
+            MmlCommand::SetEarlyRelease(ticks, min, g)
         }
         None => {
             p.add_error(pos, ValueError::NoEarlyReleaseTicks.into());

@@ -5,8 +5,8 @@
 // SPDX-License-Identifier: MIT
 
 use crate::bytecode::{
-    BcTicksKeyOff, BcTicksNoKeyOff, Bytecode, EarlyReleaseTicks, LoopCount, PitchOffsetPerTick,
-    PlayNoteTicks, PortamentoVelocity, State, SubroutineId,
+    BcTicksKeyOff, BcTicksNoKeyOff, Bytecode, EarlyReleaseMinTicks, EarlyReleaseTicks, LoopCount,
+    PitchOffsetPerTick, PlayNoteTicks, PortamentoVelocity, State, SubroutineId,
 };
 use crate::data::{InstrumentOrSample, UniqueNamesList};
 use crate::envelope::{Adsr, Gain, OptionalGain, TempGain};
@@ -230,17 +230,19 @@ fn instrument_and_gain_argument<'a>(
 
 fn early_release_arguments(
     args: &[&str],
-) -> Result<(EarlyReleaseTicks, OptionalGain), BytecodeAssemblerError> {
+) -> Result<(EarlyReleaseTicks, EarlyReleaseMinTicks, OptionalGain), BytecodeAssemblerError> {
     match args.len() {
-        1 => Ok((
-            EarlyReleaseTicks::try_from_str(args[0])?,
-            OptionalGain::NONE,
-        )),
         2 => Ok((
             EarlyReleaseTicks::try_from_str(args[0])?,
-            OptionalGain::try_from_str_forbid_none_and_raw(args[1])?,
+            EarlyReleaseMinTicks::try_from_str(args[1])?,
+            OptionalGain::NONE,
         )),
-        _ => Err(BytecodeAssemblerError::InvalidNumberOfArgumentsRange(1, 2)),
+        3 => Ok((
+            EarlyReleaseTicks::try_from_str(args[0])?,
+            EarlyReleaseMinTicks::try_from_str(args[1])?,
+            OptionalGain::try_from_str_forbid_none_and_raw(args[2])?,
+        )),
+        _ => Err(BytecodeAssemblerError::InvalidNumberOfArgumentsRange(2, 3)),
     }
 }
 
@@ -385,7 +387,7 @@ pub fn parse_asm_line(bc: &mut Bytecode, line: &str) -> Result<(), BytecodeAssem
        reuse_temp_gain_and_rest 1 ticks_keyoff_argument,
 
        disable_early_release 0 no_arguments,
-       set_early_release 2 early_release_arguments,
+       set_early_release 3 early_release_arguments,
 
        adjust_volume 1 one_vnt_argument,
        set_volume 1 one_vnt_argument,

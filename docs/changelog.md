@@ -5,13 +5,13 @@ Terrific Audio Driver Changelog
 Version 0.0.13
 ==============
 
-Bytecode changes:
- * Forbid raw GAIN in `set_early_release` instructions
-
-
-MML changes:
+**BREAKING MML changes:**
+ * Added optional minimum-ticks parameter to the `q` early release MML command.
  * Forbid raw GAIN in `q` early release MML command.
 
+**BREAKING Bytecode changes:**
+ * Added required minimum ticks parameter to the `set_early_release` instruction.
+ * Forbid raw GAIN in `set_early_release` instructions
 
 
 Version 0.0.12

@@ -321,7 +321,12 @@ in firstpage {
 
         // set_early_release instruction arguments
         var earlyRelease_cmp : [u8 ; N_CHANNELS];
+        var earlyRelease_minTicks : [u8 ; N_CHANNELS];
         var earlyRelease_gain : [u8 ; N_CHANNELS];
+
+        // Number of ticks since the last play_note or portamento instruction.
+        // ::TODO move to zeropage::
+        var ticksAfterNote : [u8 ; N_CHANNELS];
     }
 }
 
@@ -796,33 +801,43 @@ var _afterFirstChannel : u8 in zpTmp2;
 
         voiceChannelsDirty_tmp >>>>#= 1;
 
+        // Must saturate-increment on every tick.
+        // The note could be a part of a `play-note nokeyoff | rest` chain.
+        a = channelSoA.ticksAfterNote[x];
+        a++;
+        if zero {
+            a--;
+        }
+        channelSoA.ticksAfterNote[x] = a;
+
         channelSoA.countdownTimer[x]--;
         if !zero {
             // Check for early-release
-
-            // (not using `goto NextChannel if zero` here as the branch is too long)
-            a = channelSoA.nextEventIsKeyOff[x];
+            y = channelSoA.nextEventIsKeyOff[x];
             if !zero {
-                // Must be a `<` comparison (not a `==`)
-                // Ensures notes shorter than early-release are cut at the correct time.
-                a = channelSoA.countdownTimer[x];
-                if a < channelSoA.earlyRelease_cmp[x] {
-                    a = channelSoA.earlyRelease_gain[x];
-                    if !zero {
-                        channelSoA.virtualChannels.tempGain[x] = a;
+                // Do not early-release if the note has been playing for min-ticks
+                if a >= channelSoA.earlyRelease_minTicks[x] {
+                    // Must be a `<` comparison (not a `==`)
+                    // Ensures notes shorter than early-release are cut at the correct time.
+                    a = channelSoA.countdownTimer[x];
+                    if a < channelSoA.earlyRelease_cmp[x] {
+                        a = channelSoA.earlyRelease_gain[x];
+                        if !zero {
+                            channelSoA.virtualChannels.tempGain[x] = a;
 
-                        voiceChannelsDirty_tmp $ 7 = true;
-                    }
-                    else {
-                        // ::TODO deduplicate::
-                        a = ChannelVoiceBit[x];
-                        if x >= FIRST_SFX_CHANNEL {
-                            test_and_set(a, keyOffShadow_sfx);
-                            test_and_set(a, keyOnMask_sfx);
+                            voiceChannelsDirty_tmp $ 7 = true;
                         }
                         else {
-                            test_and_set(a, keyOffShadow_music);
-                            test_and_set(a, keyOnMask_music);
+                            // ::TODO deduplicate::
+                            a = ChannelVoiceBit[x];
+                            if x >= FIRST_SFX_CHANNEL {
+                                test_and_set(a, keyOffShadow_sfx);
+                                test_and_set(a, keyOnMask_sfx);
+                            }
+                            else {
+                                test_and_set(a, keyOffShadow_music);
+                                test_and_set(a, keyOnMask_music);
+                            }
                         }
                     }
                 }
@@ -1549,6 +1564,11 @@ func _play_note(channelIndex : u8 in x, noteAndKeyOffBit : u8 in a) {
     // disable portamento
     channelSoA.portamento_direction[x] = y as i8;
 
+    // Reset early release min-tick counter.
+    // Y = 0
+    a = y;
+    channelSoA.ticksAfterNote[x] = a;
+
     // Restart vibrato
     channelSoA.vibrato_tickCounter[x] = a = channelSoA.vibrato_tickCounterStart[x];
 
@@ -1611,6 +1631,10 @@ func __portamento(channelIndex : u8 in x, direction : u8 in a) {
 
     channelSoA.countdownTimer[x] = a;
 
+    // Reset early release min-tick counter.
+    // Y = 0
+    a = y;
+    channelSoA.ticksAfterNote[x] = a;
 
     // Read note target and key-off bit
     // Y = 0
@@ -1985,9 +2009,35 @@ func set_gain(channelIndex: u8 in x, gain : u8 in a) {
 
 // Y = 0
 // KEEP: X
+func set_early_release_no_minimum(channelIndex: u8 in x, cmp_: u8 in a) {
+    channelSoA.earlyRelease_cmp[x] = a;
+
+    // Y = 0
+    a = y;
+    channelSoA.earlyRelease_minTicks[x] = a;
+
+    return __set_early_release_gain(x);
+}
+
+
+// Y = 0
+// KEEP: X
+#[fallthrough]
 func set_early_release(channelIndex: u8 in x, cmp_: u8 in a) {
     channelSoA.earlyRelease_cmp[x] = a;
 
+    // Y = 0
+    a = instructionPtr[y];
+    instructionPtr++;
+    channelSoA.earlyRelease_minTicks[x] = a;
+
+// Fallthrough into __set_early_release_gain(x);
+}
+
+
+// Y = 0
+// KEEP: X
+func __set_early_release_gain(channelIndex: u8 in x) {
     // Y = 0
     a = instructionPtr[y];
     instructionPtr++;

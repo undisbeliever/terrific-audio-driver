@@ -43,11 +43,14 @@ Instructions
  * `reuse_temp_gain_and_rest <duration>` - Reuses the temporary-GAIN from the previous `set_temp_gain*` instruction and rests.
  * `reuse_temp_gain_and_wait <duration>` - Reuses the temporary-GAIN from the previous `set_temp_gain*` instruction and waits.
 
- * `set_early_release <t>` - When playing notes, key-off the channel *t* ticks before the note normally ends.
-    * If the note length is < *t*, the note will only be played for a single tick.
+ * `set_early_release <t> <min>` - When playing notes, key-off the channel *t* ticks before the note normally ends.
+    * The note will play for a minimum *min* ticks, unless the note is shorter than *min*.
+    * This instruction uses less audio-RAM if *min* is 1.
     * CAUTION: The rest instruction in a `play-note rest` or `play-note wait rest` chain should be 257 ticks to ensure long notes are cut at the correct time.
- * `set_early_release <t> <gain>` - early release with custom GAIN envelope
+ * `set_early_release <t> <min> <gain>` - early release with custom GAIN envelope
     * When playing notes, the envelope is temporarily changed to GAIN(*gain*) *t* ticks before key-off.
+    * The envelope is changed a minimum *min* ticks after the start of the last note.
+    * This instruction uses less audio-RAM if *min* is 1.
     * Useful for setting a custom release envelope.
     * CAUTION: the GAIN rate may need to be changed if the song's tempo changes.
  * `disable_early_release` - disables early-release.

@@ -218,6 +218,10 @@ fn assert_bc_intrepreter_matches_emu(
     );
     test_channel_soa(addresses::CHANNEL_PREV_TEMP_GAIN, "prevTempGain");
     test_channel_soa(addresses::CHANNEL_EARLY_RELEASE_CMP, "earlyRelease_cmp");
+    test_channel_soa(
+        addresses::CHANNEL_EARLY_RELEASE_MIN_TICKS,
+        "earlyRelease_minTicks",
+    );
     test_channel_soa(addresses::CHANNEL_EARLY_RELEASE_GAIN, "earlyRelease_gain");
 
     for v in 0..N_CHANNELS {

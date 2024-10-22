@@ -183,12 +183,15 @@ let INSTRUCTIONS_WITH_ARGUMENTS = [
     reuse_temp_gain_and_rest,
 
 
-    // parameter: u8 cmp, u8 gain
+    // parameter: u8 cmp, u8 minTicks, u8 gain
     //  * cmp = number of ticks to remove + 1
+    //  * minTicks = minimum number of ticks before release
     //  * gain = GAIN envelope to use on early release
     //
-    // If `gain` is 0, the note will be key-offed when `countdownTimer < cmp`.
-    // If `gain` is non-zero, the envelope will be temporarily set to GAIN(`gain`) when `countdownTimer < cmp`.
+    // If `gain` is 0, the note will be key-offed on early release.
+    // If `gain` is non-zero, the envelope will be temporarily set to GAIN(`gain`) at early release.
+    //
+    // Early release is when `nextEventIsKeyOff && ticksAfterNote >= min && countdownTimer < cmp`.
     //
     // Early release is disabled if `cmp` is 0.
     //
@@ -197,6 +200,14 @@ let INSTRUCTIONS_WITH_ARGUMENTS = [
     // CAUTION: The rest instruction in a `play-note rest` or `play-note wait rest` chain should be
     //          257 ticks to ensure long notes are cut at the correct time.
     set_early_release,
+
+
+    // parameter: u8 cmp, u8 gain
+    //  * cmp = number of ticks to remove + 1
+    //  * gain = GAIN envelope to use on early release
+    //
+    // This instruction is `set_early_release cmp, 0, gain`.
+    set_early_release_no_minimum,
 
 
     // parameter = i8 pan adjustment

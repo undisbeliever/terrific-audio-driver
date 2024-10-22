@@ -340,22 +340,24 @@ Numbers can be decimal, or hexadecimal when prefixed with `$` (ie, `$ff`)
     * `Q<n>,I<rate>` - Quantize with linear increase envelope (0-31)
     * `Q<n>,B<rate>` - Quantize with bent increase envelope (0-31)
     * `Q<n>,<gain>` - Quantize with a raw GAIN value (1-255)
- * `q<1-254>` - Early release (sound cut)
-    * Keys off each note `<1-254>` ticks earlier then normal.
-    * If the note length is >= early-release-length, the note will be played for a single tick.
-    * For example: `q4 c%24` is equivalent to `c%20 w%4`
-    * CAUTION: `q` persists across subroutine calls.
- * `q<1-254>,<gain>` - Early release with custom GAIN envelope
-    * When playing notes, the envelope is temporarily changed to GAIN(*gain*) *t* ticks before key-off.
-    * Useful for custom release envelopes (ie, `q10,D16` or `q8,E28`).
-    * Of the various ways to write custom release envelopes, the `q` command uses the least audio-RAM.
-    * If the note length is >= early-release-length, the envelope will be changed on the second note tick.
+ * `q<1-254>[,<1-255>][,<gain>] - early release (sound cut)
+    * First parameter: number of ticks to cut the note earlier then normal.
+    * Second parameter: minimum ticks before a note is cut (default 1 tick).
+    * Third parameter: temporally change the envelope to GAIN(*gain*) on early-release.
+    * If there is no GAIN parameter, the note will be key-offed on early-release.
+    * Examples:
+       * `q4 c%24` is equivalent to `c%20 w%4`.
+       * `q20,8 c%48` is equivalent to `c%28 w%20`.
+       * `q20,8 c%24` is equivalent to `c%9 w%11` (8 ticks playing `c`, then key-off, then wait for 11 more ticks).
+    * The *gain* parameter is useful for custom release envelopes (ie, `q10,D16` or `q8,E28`).
+       * Of the various ways to write custom release envelopes, the `q` command uses the least audio-RAM.
+    * The *minimum ticks* parameter can be skipped:
+       * `q<n>,D<rate>` - linear decrease envelope (0-31)
+       * `q<n>,E<rate>` - exponential decrease envelope (0-31)
+       * `q<n>,I<rate>` - linear increase envelope (0-31)
+       * `q<n>,B<rate>` - bent increase envelope (0-31)
     * CAUTION: the GAIN rate may need to be changed if the song's tempo changes.
     * CAUTION: `q` persists across subroutine calls and `:` skip-last-loop commands.
-    * `q<n>,D<rate>` - linear decrease envelope (0-31)
-    * `q<n>,E<rate>` - exponential decrease envelope (0-31)
-    * `q<n>,I<rate>` - linear increase envelope (0-31)
-    * `q<n>,B<rate>` - bent increase envelope (0-31)
  * `q0` - Disable early-release.
 
 <br/>

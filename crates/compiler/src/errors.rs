@@ -7,9 +7,9 @@
 use relative_path::RelativeToError;
 
 use crate::bytecode::{
-    BcTicks, BcTicksKeyOff, BcTicksNoKeyOff, EarlyReleaseTicks, InstrumentId, LoopCount, Pan,
-    PitchOffsetPerTick, PortamentoVelocity, QuarterWavelengthInTicks, RelativePan, RelativeVolume,
-    Volume,
+    BcTicks, BcTicksKeyOff, BcTicksNoKeyOff, EarlyReleaseMinTicks, EarlyReleaseTicks, InstrumentId,
+    LoopCount, Pan, PitchOffsetPerTick, PortamentoVelocity, QuarterWavelengthInTicks, RelativePan,
+    RelativeVolume, Volume,
 };
 use crate::data::{LoopSetting, Name};
 use crate::driver_constants::{
@@ -126,6 +126,7 @@ pub enum ValueError {
     RelativeCoarseVolumeOutOfRange,
 
     EarlyReleaseTicksOutOfRange,
+    EarlyReleaseMinTicksOutOfRange,
     PitchOffsetPerTickOutOfRange,
     QuarterWavelengthOutOfRange,
 
@@ -194,6 +195,8 @@ pub enum ValueError {
     NoOptionalGainMode,
     NoOptionalGainValue,
     NoEarlyReleaseTicks,
+    NoEarlyReleaseMinTicks,
+    NoEarlyReleaseMinTicksOrGain,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -777,6 +780,9 @@ impl Display for ValueError {
             Self::EarlyReleaseTicksOutOfRange => {
                 out_of_range!("early-release ticks", EarlyReleaseTicks)
             }
+            Self::EarlyReleaseMinTicksOutOfRange => {
+                out_of_range!("early-release minimum ticks", EarlyReleaseMinTicks)
+            }
             Self::PitchOffsetPerTickOutOfRange => {
                 out_of_range!("pitch offset per tick", PitchOffsetPerTick)
             }
@@ -878,6 +884,10 @@ impl Display for ValueError {
             Self::NoOptionalGainMode => write!(f, "no optional GAIN mode (F, D, E, I, B)"),
             Self::NoOptionalGainValue => write!(f, "no optional GAIN value"),
             Self::NoEarlyReleaseTicks => write!(f, "no early-release ticks"),
+            Self::NoEarlyReleaseMinTicks => write!(f, "no early-release minimum ticks"),
+            Self::NoEarlyReleaseMinTicksOrGain => {
+                write!(f, "no early-release minimum ticks or GAIN (F, D, E, I, B)")
+            }
         }
     }
 }

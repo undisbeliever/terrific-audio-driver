@@ -868,10 +868,13 @@ impl ChannelBcGenerator<'_> {
                     self.bc.disable_early_release();
                 }
             }
-            &MmlCommand::SetEarlyRelease(ticks, gain) => {
+            &MmlCommand::SetEarlyRelease(ticks, min, gain) => {
                 let state = self.bc.get_state();
-                if !state.early_release.is_known_and_eq(&Some((ticks, gain))) {
-                    self.bc.set_early_release(ticks, gain);
+                if !state
+                    .early_release
+                    .is_known_and_eq(&Some((ticks, min, gain)))
+                {
+                    self.bc.set_early_release(ticks, min, gain);
                 }
             }
 
