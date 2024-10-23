@@ -341,6 +341,7 @@ Numbers can be decimal, or hexadecimal when prefixed with `$` (ie, `$ff`)
     * `Q<n>,B<rate>` - Quantize with bent increase envelope (0-31)
     * `Q<n>,F<value>` - Quantize with fixed envelope (1-127)
     * `Q<n>,<gain>` - Quantize with a raw GAIN value (1-255)
+    * CAUTION: This command changes temporary GAIN on the next note.
  * `q<1-254>[,<1-255>][,<gain>]` - early release (sound cut)
     * First parameter: number of ticks to cut the note earlier then normal.
     * Second parameter: minimum ticks before a note is cut (default 1 tick).
