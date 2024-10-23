@@ -21,6 +21,10 @@ Version 0.0.13
  * Added required minimum ticks parameter to the `set_early_release` instruction.
  * Forbid raw GAIN in `set_early_release` instructions
 
+MML Changes:
+ * Fixed an off-by-one error in the portamento PITCH velocity calculation.
+
+
 
 Version 0.0.12
 ==============

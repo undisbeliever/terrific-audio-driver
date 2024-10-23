@@ -1997,6 +1997,135 @@ fn test_quantized_portamento() {
 }
 
 #[test]
+fn test_portamento_speed() {
+    const A4: u32 = 0x0e14;
+    const A5: u32 = 0x1c29;
+
+    assert_line_matches_line_and_bytecode(
+        "{o4 a > a}%64",
+        // -1 for play-note a4, -1 for key-off
+        &format!("{{o4 a o5 a}}%64,,{}", (A5 - A4) / (64 - 2)),
+        &[
+            "play_note a4 no_keyoff 1",
+            &format!("portamento a5 keyoff +{} 63", (A5 - A4) / (64 - 2)),
+        ],
+    );
+
+    assert_line_matches_line(
+        "{o4 a > a}%64,%10",
+        // -10 for delay, -1 for key-off
+        &format!("{{o4 a o5 a}}%64,%10,{}", (A5 - A4) / (64 - 11)),
+    );
+
+    assert_line_matches_line(
+        "{o4 a > a}%32 & b",
+        // -1 for play-note a4, no-key-off
+        &format!("{{o4 a o5 a}}%32,,{} & b", (A5 - A4) / (32 - 1)),
+    );
+
+    assert_line_matches_line(
+        "{o4 a > a}%32,%10 & b",
+        // -10 for delay, no-key-off
+        &format!("{{o4 a o5 a}}%32,%10,{} & b", (A5 - A4) / (32 - 10)),
+    );
+
+    assert_line_matches_line(
+        "{o4 a > a}%32 ^ %32",
+        // -1 for play-note a4, no key-off (after pitch slide ends)
+        &format!("{{o4 a o5 a}}%64,,{}", (A5 - A4) / (32 - 1)),
+    );
+
+    assert_line_matches_line(
+        "{o4 a > a}%32 & %32 & g",
+        // -1 for play-note a4, no key-off
+        &format!("{{o4 a o5 a}}%64,,{} & g", (A5 - A4) / (32 - 1)),
+    );
+
+    assert_line_matches_line(
+        "{o4 a > a}%32,%10 ^ %32",
+        // -10 for delay
+        &format!("{{o4 a o5 a}}%64,%10,{}", (A5 - A4) / (32 - 10)),
+    );
+
+    assert_line_matches_line(
+        "o4 a & {o4 a > a}%40",
+        // no play-note, -1 for key-off
+        &format!("o4 a & {{o4 a o5 a}}%40,,{}", (A5 - A4) / (40 - 1)),
+    );
+
+    assert_line_matches_line(
+        "o4 a & {o4 a > a}%40,%15",
+        // -15 for play-note delay, -1 for key-off
+        &format!("o4 a & {{o4 a o5 a}}%40,%15,{}", (A5 - A4) / (40 - 16)),
+    );
+
+    assert_line_matches_line(
+        "o4 a & {o4 a > a}%40 & b",
+        // no play-note, no key-off
+        &format!("o4 a & {{o4 a o5 a}}%40,,{} & b", (A5 - A4) / (40)),
+    );
+
+    assert_line_matches_line(
+        "o4 a & {o4 a > a}%40,%15 & b",
+        // -15 for play-note delay, no key-off
+        &format!("o4 a & {{o4 a o5 a}}%40,%15,{} & b", (A5 - A4) / (40 - 15)),
+    );
+
+    assert_line_matches_line(
+        "o4 a & {o4 a > a}%60,%30 ^ %40",
+        // -30 for delay
+        &format!("o4 a & {{o4 a o5 a}}%100,%30,{}", (A5 - A4) / (60 - 30)),
+    );
+
+    assert_line_matches_line(
+        "o4 a & {o4 a > a}%60,%30 ^ %40 & g",
+        // -30 for delay
+        &format!("o4 a & {{o4 a o5 a}}%100,%30,{} & g", (A5 - A4) / (60 - 30)),
+    );
+
+    assert_line_matches_line(
+        "e & {o4 a > a}%100",
+        // -1 for play-note, -1 for key-off
+        &format!("e & {{o4 a o5 a}}%100,,{}", (A5 - A4) / (100 - 2)),
+    );
+
+    assert_line_matches_line(
+        "e & {o4 a > a}%100,%20",
+        // -20 for play-note delay, -1 for key-off
+        &format!("e & {{o4 a o5 a}}%100,%20,{}", (A5 - A4) / (100 - 21)),
+    );
+
+    assert_line_matches_line(
+        "e & {o4 a > a}%100,%20 ^ %40",
+        // -20 for delay
+        &format!("e & {{o4 a o5 a}}%140,%20,{}", (A5 - A4) / (100 - 20)),
+    );
+
+    // Testing negative portamento velocity
+    assert_line_matches_line_and_bytecode(
+        "{o5 a < a}%64",
+        // -1 for play-note a4, -1 for key-off
+        &format!("{{o5 a o4 a}}%64,,{}", (A5 - A4) / (64 - 2)),
+        &[
+            "play_note a5 no_keyoff 1",
+            &format!("portamento a4 keyoff -{} 63", (A5 - A4) / (64 - 2)),
+        ],
+    );
+
+    assert_line_matches_line(
+        "o5 a & {o5 a o4 a}%40 & b",
+        // no play-note, no key-off
+        &format!("o5 a & {{o5 a < a}}%40,,{} & b", (A5 - A4) / (40)),
+    );
+
+    assert_line_matches_line(
+        "e & {o5 a o4 a}%100,%20",
+        // -20 for play-note delay, -1 for key-off
+        &format!("e & {{o5 a < a}}%100,%20,{}", (A5 - A4) / (100 - 21)),
+    );
+}
+
+#[test]
 fn test_vibrato() {
     assert_line_matches_bytecode(
         "~23,4 a ~0",

@@ -425,6 +425,10 @@ impl ChannelBcGenerator<'_> {
         slide_length: TickCounter,
         tie_length: TickCounter,
     ) -> Result<(), MmlError> {
+        #[cfg(debug_assertions)]
+        let expected_tick_counter =
+            self.bc.get_tick_counter() + delay_length + slide_length + tie_length;
+
         let play_note1 = self.bc.get_state().prev_slurred_note != SlurredNoteState::Slurred(note1);
 
         // Play note1 (if required)
@@ -456,11 +460,18 @@ impl ChannelBcGenerator<'_> {
             }
         };
 
-        let min_ticks = match is_slur {
-            false => 1 + KEY_OFF_TICK_DELAY,
-            true => 1,
+        // slide_length: number of ticks in the pitch-slide.  Does NOT include the key-off tick.
+        // tie_length: number of ticks after pitch-slide reaches note2, includes the key-off tick (as required).
+        let (slide_length, tie_length) = if !is_slur && tie_length.is_zero() {
+            (
+                TickCounter::new(slide_length.value().saturating_sub(1)),
+                TickCounter::new(1),
+            )
+        } else {
+            (slide_length, tie_length)
         };
-        if slide_length.value() < min_ticks {
+
+        if slide_length.is_zero() {
             return Err(MmlError::PortamentoTooShort);
         }
 
@@ -488,10 +499,15 @@ impl ChannelBcGenerator<'_> {
         };
         let velocity = PortamentoVelocity::try_from(velocity)?;
 
-        let (p_length, p_rest) = Self::split_play_note_length(tie_length + slide_length, is_slur)?;
+        let (p_length, p_rest) = Self::split_play_note_length(slide_length + tie_length, is_slur)?;
         self.bc.portamento(note2, velocity, p_length)?;
 
-        self.rest_after_play_note(p_rest, is_slur)
+        self.rest_after_play_note(p_rest, is_slur)?;
+
+        #[cfg(debug_assertions)]
+        debug_assert_eq!(self.bc.get_tick_counter(), expected_tick_counter);
+
+        Ok(())
     }
 
     fn broken_chord(
