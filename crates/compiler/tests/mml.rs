@@ -2135,6 +2135,30 @@ fn test_portamento_speed() {
 }
 
 #[test]
+fn test_portamento_err() {
+    assert_error_in_mml_line("{c g}4,4", 8, MmlError::InvalidPortamentoDelay);
+    assert_error_in_mml_line("l2 {c g},2", 10, MmlError::InvalidPortamentoDelay);
+
+    assert_error_in_mml_line("{c g}4,,0", 1, ValueError::PortamentoVelocityZero.into());
+    assert_error_in_mml_line(
+        "{c g}4,,800",
+        9,
+        ValueError::PortamentoSpeedOutOfRange.into(),
+    );
+
+    assert_error_in_mml_line("{c g}%0", 1, MmlError::PortamentoTooShort);
+    assert_error_in_mml_line("{c g}%1", 1, MmlError::PortamentoTooShort);
+    assert_error_in_mml_line("{c g}%10,%9", 1, MmlError::PortamentoTooShort);
+
+    assert_error_in_mml_line("{c c}4", 1, ValueError::PortamentoVelocityZero.into());
+    assert_error_in_mml_line(
+        "{c > c}16",
+        1,
+        ValueError::PortamentoVelocityOutOfRange.into(),
+    );
+}
+
+#[test]
 fn test_vibrato() {
     assert_line_matches_bytecode(
         "~23,4 a ~0",
