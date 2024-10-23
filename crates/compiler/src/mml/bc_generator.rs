@@ -28,13 +28,14 @@ use crate::bytecode::{
 };
 use crate::errors::{ErrorWithPos, MmlChannelError, MmlError, ValueError};
 use crate::notes::{Note, SEMITONES_PER_OCTAVE};
-use crate::pitch_table::PitchTable;
+use crate::pitch_table::{PitchTable, PITCH_REGISTER_MAX};
 use crate::songs::{Channel, LoopPoint, Subroutine};
 use crate::sound_effects::MAX_SFX_TICKS;
 use crate::time::{TickClock, TickCounter, ZenLen, DEFAULT_ZENLEN};
 
 use std::collections::HashMap;
 
+pub const MAX_PORTAMENTO_SLIDE_TICKS: u32 = 16 * 1024;
 pub const MAX_BROKEN_CHORD_NOTES: usize = 128;
 
 // Number of rest instructions before a loop uses less space
@@ -473,6 +474,15 @@ impl ChannelBcGenerator<'_> {
 
         if slide_length.is_zero() {
             return Err(MmlError::PortamentoTooShort);
+        }
+        if slide_length.value() > MAX_PORTAMENTO_SLIDE_TICKS {
+            const _: () = assert!(
+                (MAX_PORTAMENTO_SLIDE_TICKS as u64) * (PITCH_REGISTER_MAX as u64)
+                    < (i32::MAX as u64) / 2,
+                "Portamento velocity can overflow"
+            );
+
+            return Err(MmlError::PortamentoTooLong);
         }
 
         let velocity = match speed_override {

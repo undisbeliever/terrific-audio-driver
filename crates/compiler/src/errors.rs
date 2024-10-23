@@ -468,6 +468,7 @@ pub enum MmlError {
     MpDepthZero,
 
     PortamentoTooShort,
+    PortamentoTooLong,
     PortamentoRequiresInstrument,
 
     NoNotesInBrokenChord,
@@ -1279,6 +1280,7 @@ impl Display for MmlError {
             Self::MpDepthZero => write!(f, "MP vibrato depth cannot be 0"),
 
             Self::PortamentoTooShort => write!(f, "portamento length is too short"),
+            Self::PortamentoTooLong => write!(f, "portamento length is too long"),
             Self::PortamentoRequiresInstrument => {
                 write!(
                     f,
