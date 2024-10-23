@@ -107,7 +107,7 @@ Licenses marked "synthesized" did not have a license file in their crate.
 
 
 Terrific Audio Driver makes use of the following open source projects:
-  * MIT License (81)
+  * MIT License (82)
   * Apache License 2.0 (2)
   * zlib License (2)
   * Unicode License Agreement - Data Files and Software (2016) (1)
@@ -875,7 +875,7 @@ DEALINGS IN THE SOFTWARE.
 ## MIT License
 
 Used by:
-  * [ttf-parser 0.24.1](https://github.com/RazrFalcon/ttf-parser)
+  * [ttf-parser 0.25.0](https://github.com/RazrFalcon/ttf-parser)
 
 ```
 Copyright (c) 2018 Yevhenii Reizner
@@ -1015,7 +1015,7 @@ SOFTWARE.
 ## MIT License
 
 Used by:
-  * [fltk-sys 1.4.34](https://github.com/fltk-rs/fltk-rs)
+  * [fltk-sys 1.4.35](https://github.com/fltk-rs/fltk-rs)
 
 ```
 MIT License
@@ -1106,6 +1106,36 @@ SOFTWARE.
 
 
 ## MIT License
+
+Used by:
+  * [cmk 0.1.2](https://github.com/MoAlyousef/cmk)
+
+```
+MIT License
+
+Copyright (c) 2024 Mohammed Alyousef
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
+
+## MIT License
   
   (synthesized by cargo-about)
 
@@ -1130,7 +1160,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 ## MIT License
 
 Used by:
-  * [fltk 1.4.34](https://github.com/fltk-rs/fltk-rs)
+  * [fltk 1.4.35](https://github.com/fltk-rs/fltk-rs)
 
 ```
 MIT License
@@ -1169,13 +1199,13 @@ Used by:
   * [link-cplusplus 1.0.9](https://github.com/dtolnay/link-cplusplus)
   * [once_cell 1.20.2](https://github.com/matklad/once_cell)
   * [paste 1.0.15](https://github.com/dtolnay/paste)
-  * [proc-macro2 1.0.88](https://github.com/dtolnay/proc-macro2)
+  * [proc-macro2 1.0.89](https://github.com/dtolnay/proc-macro2)
   * [quote 1.0.37](https://github.com/dtolnay/quote)
   * [scratch 1.0.7](https://github.com/dtolnay/scratch)
-  * [serde 1.0.210](https://github.com/serde-rs/serde)
-  * [serde_derive 1.0.210](https://github.com/serde-rs/serde)
+  * [serde 1.0.213](https://github.com/serde-rs/serde)
+  * [serde_derive 1.0.213](https://github.com/serde-rs/serde)
   * [serde_json 1.0.132](https://github.com/serde-rs/json)
-  * [syn 2.0.81](https://github.com/dtolnay/syn)
+  * [syn 2.0.85](https://github.com/dtolnay/syn)
   * [unicode-ident 1.0.13](https://github.com/dtolnay/unicode-ident)
 
 ```
