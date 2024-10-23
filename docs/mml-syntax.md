@@ -339,6 +339,7 @@ Numbers can be decimal, or hexadecimal when prefixed with `$` (ie, `$ff`)
     * `Q<n>,E<rate>` - Quantize with exponential decrease envelope (0-31)
     * `Q<n>,I<rate>` - Quantize with linear increase envelope (0-31)
     * `Q<n>,B<rate>` - Quantize with bent increase envelope (0-31)
+    * `Q<n>,F<value>` - Quantize with fixed envelope (1-127)
     * `Q<n>,<gain>` - Quantize with a raw GAIN value (1-255)
  * `q<1-254>[,<1-255>][,<gain>]` - early release (sound cut)
     * First parameter: number of ticks to cut the note earlier then normal.
@@ -356,6 +357,7 @@ Numbers can be decimal, or hexadecimal when prefixed with `$` (ie, `$ff`)
        * `q<n>,E<rate>` - exponential decrease envelope (0-31)
        * `q<n>,I<rate>` - linear increase envelope (0-31)
        * `q<n>,B<rate>` - bent increase envelope (0-31)
+       * `q<n>,F<rate>` - fixed envelope (1-127)
     * CAUTION: the GAIN rate may need to be changed if the song's tempo changes.
     * CAUTION: `q` persists across subroutine calls and `:` skip-last-loop commands.
  * `q0` - Disable early-release.
