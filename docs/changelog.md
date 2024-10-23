@@ -23,6 +23,7 @@ Version 0.0.13
 
 MML Changes:
  * Fixed an off-by-one error in the portamento PITCH velocity calculation.
+ * Added rounding to the portamento PITCH velocity calculation.
 
 
 

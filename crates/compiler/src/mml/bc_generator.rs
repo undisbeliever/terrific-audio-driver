@@ -490,11 +490,17 @@ impl ChannelBcGenerator<'_> {
                 };
                 let p1: i32 = self.pitch_table.pitch_for_note(instrument_id, note1).into();
                 let p2: i32 = self.pitch_table.pitch_for_note(instrument_id, note2).into();
+                let delta = p2 - p1;
 
                 let ticks = i32::try_from(slide_length.value()).unwrap();
-
                 assert!(ticks > 0);
-                (p2 - p1) / ticks
+
+                // division with rounding
+                if delta > 0 {
+                    (delta + (ticks / 2)) / ticks
+                } else {
+                    (delta - (ticks / 2)) / ticks
+                }
             }
         };
         let velocity = PortamentoVelocity::try_from(velocity)?;
