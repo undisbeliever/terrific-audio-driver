@@ -5,21 +5,33 @@ Terrific Audio Driver Changelog
 Version 0.0.13
 ==============
 
+**CAUTION**: This release has breaking changes to portamento and early-release.
+Please check all songs and sound effect that use portamento and early-release.
+
+
 **BREAKING Audio Driver changes:**
  * Portamento effects are now processed immediately after bytecode.
     * The pitch now changes on the same tick as the `portamento` instruction.
     * Previously, the pitch changed 1 tick after the `portamento` instruction.
     * This fixes a bug in the MML `{}` portamento command,
-      where (for example) `{c g}` played `c` note for 2 ticks, when it should have played it for 1 tick.
+      where (for example) `{c g}` played `c` note for 2 ticks, when it should have played `c` for 1 tick.
 
 
 **BREAKING MML changes:**
  * Added optional minimum-ticks parameter to the `q` early release MML command.
+    * two-parameter `q` early release is unaffected if the second parameter has a GAIN mode
+      (`D` `E` `I` `B` `F`).
+    * If the second `q` early release parameter is a number, it will be read as the minimum-ticks parameter.
  * Forbid raw GAIN in `q` early release MML command.
+
 
 **BREAKING Bytecode changes:**
  * Added required minimum ticks parameter to the `set_early_release` instruction.
+    * `set_early_release` instructions will need to be modified.
+    * If the instruction used a GAIN mode (`D` `E` `I` `B` `F`) it will output an error
+    * If the instruction used raw GAIN, it will erroneously read the 2nd argument as minimum-ticks.
  * Forbid raw GAIN in `set_early_release` instructions
+
 
 MML Changes:
  * Fixed an off-by-one error in the portamento PITCH velocity calculation.
