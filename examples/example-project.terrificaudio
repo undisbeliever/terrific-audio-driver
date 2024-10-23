@@ -1,7 +1,7 @@
 {
   "_about": {
     "file_type": "Terrific Audio Driver project file",
-    "version": "0.0.11"
+    "version": "0.0.12"
   },
   "instruments": [
     {
@@ -217,6 +217,10 @@
     {
       "name": "subroutine_vibrato_bug",
       "source": "bug-tests/subroutine-vibrato-bug.mml"
+    },
+    {
+      "name": "portamento_first_tick_bugtest",
+      "source": "bug-tests/portamento-first-tick-bugtest.mml"
     }
   ]
 }

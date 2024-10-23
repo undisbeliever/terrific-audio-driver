@@ -5,6 +5,14 @@ Terrific Audio Driver Changelog
 Version 0.0.13
 ==============
 
+**BREAKING Audio Driver changes:**
+ * Portamento effects are now processed immediately after bytecode.
+    * The pitch now changes on the same tick as the `portamento` instruction.
+    * Previously, the pitch changed 1 tick after the `portamento` instruction.
+    * This fixes a bug in the MML `{}` portamento command,
+      where (for example) `{c g}` played `c` note for 2 ticks, when it should have played it for 1 tick.
+
+
 **BREAKING MML changes:**
  * Added optional minimum-ticks parameter to the `q` early release MML command.
  * Forbid raw GAIN in `q` early release MML command.

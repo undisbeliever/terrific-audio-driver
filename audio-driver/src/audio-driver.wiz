@@ -296,7 +296,7 @@ in firstpage {
         // This variable is equal to the `quarterWavelengthInTicks` parameter of the `set_vibrato` instruction
         // This variable is equal to `vibrato_waveLengthInTicks / 4`
         //
-        // Offsetting the start of the vibrato allows me to save a comparison in `process_pitch_effects__inline()`.
+        // Offsetting the start of the vibrato allows me to save a comparison in `_process_vibrato__inline()`.
         var vibrato_tickCounterStart : [u8 ; N_CHANNELS];
 
 
@@ -795,11 +795,16 @@ var _afterFirstChannel : u8 in zpTmp2;
 
 
     ^do {
-        // MUST NOT use temporary variables in this loop.
+        // MUST NOT use `_konShadow` and `_afterFirstChannel` in this loop.
+        // The are clobbered by pitch effects and bytecode.
 
-        carry = process_pitch_effects__inline(x);
 
-        voiceChannelsDirty_tmp >>>>#= 1;
+        voiceChannelsDirty_tmp >>>= 1;
+
+        // Vibrato is processed before bytecode.
+        // This delays all pitch changes 1 tick after a play-note instruction
+        // and ensures the first pitch on a play-note instruction is the requested note.
+        _process_vibrato__inline(x);
 
         // Must saturate-increment on every tick.
         // The note could be a part of a `play-note nokeyoff | rest` chain.
@@ -888,6 +893,10 @@ var _afterFirstChannel : u8 in zpTmp2;
                 }
             }
         }
+
+        // Portamento is processed after bytecode to ensure pitch slide occurs
+        // on the same tick as the portamento instruction.
+        _process_portamento__inline(x);
 
         x++;
     } while x < channelIndexEndLoop;
@@ -1290,9 +1299,53 @@ inline func _update_vol_shadow_if_required__inline(channelIndex : u8 in x) {
 // =======
 
 
-// Returns: True if the virtual channels have changed.
 // KEEP: X
-inline func process_pitch_effects__inline(channelIndex : u8 in x) : bool in carry {
+inline func _process_vibrato__inline(channelIndex : u8 in x) {
+var _target_h : u8 in zpTmp;
+
+    // (vibrato is not active during portamento)
+    y = channelSoA.portamento_direction[x] as u8;
+    if zero {
+        y = channelSoA.vibrato_pitchOffsetPerTick[x];
+        if !zero {
+            // Determine the vibrato direction
+            a = channelSoA.vibrato_directionComparator[x];
+            cmp(a, channelSoA.vibrato_tickCounter[x]);
+
+            if !carry {
+                // Add Y to pitch_l
+                // carry clear
+                a = y +# channelSoA.virtualChannels.pitch_l[x];
+                if carry {
+                    channelSoA.virtualChannels.pitch_h[x]++;
+                }
+            }
+            else {
+                // Subtract pitchOffsetPerTick from pitch_l
+                // (uses 1 less byte than reverse subtract Y, with the same CPU cycle count)
+                // carry set
+                a = channelSoA.virtualChannels.pitch_l[x] -# channelSoA.vibrato_pitchOffsetPerTick[x];
+                if !carry {
+                    channelSoA.virtualChannels.pitch_h[x]--;
+                }
+            }
+
+            channelSoA.virtualChannels.pitch_l[x] = a;
+
+            channelSoA.vibrato_tickCounter[x]--;
+            if zero {
+                channelSoA.vibrato_tickCounter[x] = a = channelSoA.vibrato_waveLengthInTicks[x];
+            }
+
+            // Set S-DSP voice registers dirty bit
+            voiceChannelsDirty_tmp $ 7 = true;
+        }
+    }
+}
+
+
+// KEEP: X
+inline func _process_portamento__inline(channelIndex : u8 in x) {
 var _target_h : u8 in zpTmp;
 
     // Warning: spaghetti code
@@ -1364,46 +1417,9 @@ var _target_h : u8 in zpTmp;
         channelSoA.virtualChannels.pitch_l[x] = a;
         channelSoA.virtualChannels.pitch_h[x] = y;
 
-        return true;
+        // Set S-DSP voice registers dirty bit
+        voiceChannelsDirty_tmp $ 7 = true;
     }
-
-    // Vibrato
-    // (not active during portamento)
-    y = channelSoA.vibrato_pitchOffsetPerTick[x];
-    if !zero {
-        // Determine the vibrato direction
-        a = channelSoA.vibrato_directionComparator[x];
-        cmp(a, channelSoA.vibrato_tickCounter[x]);
-
-        if !carry {
-            // Add Y to pitch_l
-            // carry clear
-            a = y +# channelSoA.virtualChannels.pitch_l[x];
-            if carry {
-                channelSoA.virtualChannels.pitch_h[x]++;
-            }
-        }
-        else {
-            // Subtract pitchOffsetPerTick from pitch_l
-            // (uses 1 less byte than reverse subtract Y, with the same CPU cycle count)
-            // carry set
-            a = channelSoA.virtualChannels.pitch_l[x] -# channelSoA.vibrato_pitchOffsetPerTick[x];
-            if !carry {
-                channelSoA.virtualChannels.pitch_h[x]--;
-            }
-        }
-
-        channelSoA.virtualChannels.pitch_l[x] = a;
-
-        channelSoA.vibrato_tickCounter[x]--;
-        if zero {
-            channelSoA.vibrato_tickCounter[x] = a = channelSoA.vibrato_waveLengthInTicks[x];
-        }
-
-        return true;
-    }
-
-    return false;
 }
 
 

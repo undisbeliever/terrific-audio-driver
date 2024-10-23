@@ -1,0 +1,31 @@
+; I realised I was processing portamento before bytecode.
+; This delayed portamento pitch slide by 1 tick.
+
+; 30ms per tick
+#Timer 240
+
+A \asm {
+	set_instrument_and_gain sine F64
+}
+
+; This should play c4 for 1 tick, then c6 for 1 tick, then key-off
+A \asm {
+	play_note  c4 no_keyoff   1
+	; using temp-GAIN to easily see when the play_note tick ends
+	set_temp_gain F127
+	; Should increment pitch for 1 tick then key-off
+	; Using negative portamento velocity to immediately switch to the target pitch
+	portamento c6 keyoff -255 2
+	wait 1
+}
+
+; This should play c4 for 1 tick, then c6 for 2 ticks, then key-off
+A \asm {
+	play_note  c4 no_keyoff   1
+	; using temp-GAIN to easily see when the play_note tick ends
+	set_temp_gain F127
+	; Should increment pitch for 2 ticks then key-off
+	; Using negative portamento velocity to immediately switch to the target pitch
+	portamento c6 keyoff -255 3
+	wait 1
+}
