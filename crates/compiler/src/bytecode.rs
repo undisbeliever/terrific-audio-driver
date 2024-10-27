@@ -165,8 +165,11 @@ pub trait BcTicks
 where
     Self: TryFrom<u32>,
 {
-    const MIN: u32;
-    const MAX: u32;
+    const MIN: Self;
+    const MAX: Self;
+
+    const MIN_TICKS: u32;
+    const MAX_TICKS: u32;
 
     fn ticks(self) -> u32;
     fn to_tick_count(self) -> TickCounter;
@@ -179,8 +182,17 @@ pub struct BcTicksKeyOff {
 }
 
 impl BcTicks for BcTicksKeyOff {
-    const MIN: u32 = 1 + KEY_OFF_TICK_DELAY;
-    const MAX: u32 = 0x100 + KEY_OFF_TICK_DELAY;
+    const MIN_TICKS: u32 = 1 + KEY_OFF_TICK_DELAY;
+    const MAX_TICKS: u32 = 0x100 + KEY_OFF_TICK_DELAY;
+
+    const MIN: Self = Self {
+        ticks: Self::MIN_TICKS as u16,
+        bc_argument: 1,
+    };
+    const MAX: Self = Self {
+        ticks: Self::MAX_TICKS as u16,
+        bc_argument: 0,
+    };
 
     fn ticks(self) -> u32 {
         self.ticks.into()
@@ -195,7 +207,7 @@ impl TryFrom<u32> for BcTicksKeyOff {
     type Error = ValueError;
 
     fn try_from(ticks: u32) -> Result<Self, ValueError> {
-        if matches!(ticks, Self::MIN..=Self::MAX) {
+        if matches!(ticks, Self::MIN_TICKS..=Self::MAX_TICKS) {
             Ok(Self {
                 ticks: ticks.try_into().unwrap(),
                 bc_argument: ((ticks - KEY_OFF_TICK_DELAY) & 0xff).try_into().unwrap(),
@@ -213,8 +225,17 @@ pub struct BcTicksNoKeyOff {
 }
 
 impl BcTicks for BcTicksNoKeyOff {
-    const MIN: u32 = 1;
-    const MAX: u32 = 0x100;
+    const MIN_TICKS: u32 = 1;
+    const MAX_TICKS: u32 = 0x100;
+
+    const MIN: Self = Self {
+        ticks: Self::MIN_TICKS as u16,
+        bc_argument: 1,
+    };
+    const MAX: Self = Self {
+        ticks: Self::MAX_TICKS as u16,
+        bc_argument: 0,
+    };
 
     #[allow(dead_code)]
     fn ticks(self) -> u32 {
@@ -230,7 +251,7 @@ impl TryFrom<u32> for BcTicksNoKeyOff {
     type Error = ValueError;
 
     fn try_from(ticks: u32) -> Result<Self, ValueError> {
-        if matches!(ticks, Self::MIN..=Self::MAX) {
+        if matches!(ticks, Self::MIN_TICKS..=Self::MAX_TICKS) {
             // A note length of 0 will wait for 256 ticks.
             let bc_argument = (ticks & 0xff).try_into().unwrap();
             Ok(Self {
@@ -260,9 +281,9 @@ impl PlayNoteTicks {
 
     pub fn min_for_is_slur(is_slur: bool) -> Self {
         if is_slur {
-            PlayNoteTicks::NoKeyOff(BcTicksNoKeyOff::try_from(BcTicksNoKeyOff::MIN).unwrap())
+            PlayNoteTicks::NoKeyOff(BcTicksNoKeyOff::MIN)
         } else {
-            PlayNoteTicks::KeyOff(BcTicksKeyOff::try_from(BcTicksKeyOff::MIN).unwrap())
+            PlayNoteTicks::KeyOff(BcTicksKeyOff::MIN)
         }
     }
 
@@ -299,8 +320,8 @@ impl PlayNoteTicks {
 pub struct PortamentoVelocity(i16);
 
 impl PortamentoVelocity {
-    pub const MIN: i16 = -Self::MAX;
-    pub const MAX: i16 = u8::MAX as i16;
+    pub const MIN: Self = Self(-Self::MAX.0);
+    pub const MAX: Self = Self(u8::MAX as i16);
 
     pub fn is_negative(&self) -> bool {
         self.0 < 0
@@ -311,8 +332,13 @@ impl PortamentoVelocity {
 }
 
 impl ValueNewType for PortamentoVelocity {
+    type ValueType = i16;
     type ConvertFrom = i32;
     const MISSING_ERROR: ValueError = ValueError::NoPortamentoVelocity;
+
+    fn value(&self) -> Self::ValueType {
+        self.0
+    }
 }
 
 impl TryFrom<i32> for PortamentoVelocity {
@@ -321,7 +347,7 @@ impl TryFrom<i32> for PortamentoVelocity {
     fn try_from(velocity: i32) -> Result<Self, Self::Error> {
         if velocity == 0 {
             Err(ValueError::PortamentoVelocityZero)
-        } else if velocity >= Self::MIN.into() && velocity <= Self::MAX.into() {
+        } else if velocity >= Self::MIN.0.into() && velocity <= Self::MAX.0.into() {
             Ok(PortamentoVelocity(velocity.try_into().unwrap()))
         } else {
             Err(ValueError::PortamentoVelocityOutOfRange)
@@ -333,10 +359,11 @@ impl TryFrom<i32> for PortamentoVelocity {
 pub struct LoopCount(u8);
 
 impl LoopCount {
-    pub const MIN: u32 = 2;
-    pub const MAX: u32 = 0x100;
+    pub const MIN_LOOPS: u32 = 2;
+    pub const MAX_LOOPS: u32 = 0x100;
 
-    pub const MIN_LOOPCOUNT: LoopCount = LoopCount(Self::MIN as u8);
+    pub const MIN: Self = Self(Self::MIN_LOOPS as u8);
+    pub const MAX: Self = Self(0);
 
     pub fn to_u32(self) -> u32 {
         if self.0 == 0 {
@@ -348,8 +375,13 @@ impl LoopCount {
 }
 
 impl ValueNewType for LoopCount {
+    type ValueType = u32;
     type ConvertFrom = u32;
     const MISSING_ERROR: ValueError = ValueError::NoLoopCount;
+
+    fn value(&self) -> Self::ValueType {
+        self.to_u32()
+    }
 }
 
 impl TryFrom<u32> for LoopCount {
@@ -358,7 +390,7 @@ impl TryFrom<u32> for LoopCount {
     fn try_from(loop_count: u32) -> Result<Self, Self::Error> {
         if loop_count == 0x100 {
             Ok(LoopCount(0))
-        } else if loop_count < Self::MIN {
+        } else if loop_count < Self::MIN_LOOPS {
             Err(ValueError::NotEnoughLoops)
         } else {
             match u8::try_from(loop_count) {
@@ -1025,7 +1057,7 @@ impl<'a> Bytecode<'a> {
     }
 
     pub fn set_early_release_no_minimum(&mut self, ticks: EarlyReleaseTicks, gain: OptionalGain) {
-        let min = EarlyReleaseMinTicks::try_from(EarlyReleaseMinTicks::MIN).unwrap();
+        let min = EarlyReleaseMinTicks::MIN;
         self.state.early_release = IeState::Known(Some((ticks, min, gain)));
 
         emit_bytecode!(
@@ -1042,7 +1074,7 @@ impl<'a> Bytecode<'a> {
         min: EarlyReleaseMinTicks,
         gain: OptionalGain,
     ) {
-        if min.as_u8() == EarlyReleaseMinTicks::MIN {
+        if min == EarlyReleaseMinTicks::MIN {
             self.set_early_release_no_minimum(ticks, gain);
         } else {
             self.state.early_release = IeState::Known(Some((ticks, min, gain)));

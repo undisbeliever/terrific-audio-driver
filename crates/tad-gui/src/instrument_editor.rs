@@ -415,7 +415,16 @@ impl TestInstrumentWidget {
                 c
             };
 
-        let octave = spinner(1, 2, 0, "Octave", "", Octave::MIN, Octave::MAX, 4);
+        let octave = spinner(
+            1,
+            2,
+            0,
+            "Octave",
+            "",
+            Octave::MIN.as_u8(),
+            Octave::MAX.as_u8(),
+            4,
+        );
         let mut note_length = spinner(1, 2, 1, "Note Length", "", 2, 255, u8::MAX);
         note_length.set_maximum(1000.0);
 

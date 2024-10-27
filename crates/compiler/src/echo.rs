@@ -59,7 +59,11 @@ impl EchoEdl {
 pub struct EchoLength(u8);
 
 impl EchoLength {
-    pub const MAX: u8 = (ECHO_BUFFER_EDL_MS * ECHO_BUFFER_MAX_EDL as u32) as u8;
+    pub const MAX: Self = Self((ECHO_BUFFER_EDL_MS * ECHO_BUFFER_MAX_EDL as u32) as u8);
+
+    pub fn value(&self) -> u8 {
+        self.0
+    }
 }
 
 impl TryFrom<u32> for EchoLength {
@@ -69,7 +73,7 @@ impl TryFrom<u32> for EchoLength {
         if length_ms % ECHO_BUFFER_EDL_MS != 0 {
             return Err(ValueError::EchoLengthNotMultiple);
         }
-        if length_ms > Self::MAX.into() {
+        if length_ms > Self::MAX.0.into() {
             return Err(ValueError::EchoBufferTooLarge);
         }
 

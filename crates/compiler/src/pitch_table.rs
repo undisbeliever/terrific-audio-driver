@@ -128,10 +128,10 @@ pub(crate) fn maximize_pitch_range(pitch: &InstrumentPitch) -> (InstrumentPitch,
     let maximum_octave_increment = maximum_octave_increment(pitch.microsemitones_above_c);
 
     let max_octave = (pitch.octaves_above_c0 + maximum_octave_increment)
-        .clamp(Octave::MIN.into(), Octave::MAX.into());
+        .clamp(Octave::MIN.as_i32(), Octave::MAX.as_i32());
     let max_octave = Octave::try_new(max_octave.try_into().unwrap()).unwrap();
 
-    let min_octave_offset = i32::from(Octave::MIN) - pitch.octaves_above_c0;
+    let min_octave_offset = Octave::MIN.as_i32() - pitch.octaves_above_c0;
     let max_octave_offset = max_octave.as_i32() - pitch.octaves_above_c0;
 
     let new_pitch = InstrumentPitch {

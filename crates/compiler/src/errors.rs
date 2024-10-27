@@ -29,7 +29,7 @@ use crate::notes::{MidiNote, Note, Octave};
 use crate::path::PathString;
 use crate::sound_effects::MAX_SFX_TICKS;
 use crate::time::{Bpm, TickClock, TickCounter, ZenLen};
-use crate::{export, mml, spc_file_export};
+use crate::{export, mml, spc_file_export, ValueNewType};
 
 use std::fmt::Display;
 use std::io;
@@ -697,7 +697,7 @@ impl Display for ValueError {
         #[rustfmt::skip]
         macro_rules! out_of_range {
             ($name:literal, $newtype:ident) => {
-                write!(f, concat!($name, " out of bounds ({} - {})"), $newtype::MIN, $newtype::MAX)
+                write!(f, concat!($name, " out of bounds ({} - {})"), $newtype::MIN.value(), $newtype::MAX.value())
             };
         }
 
@@ -715,7 +715,12 @@ impl Display for ValueError {
 
             Self::InvalidGainString(e) => e.fmt(f),
             Self::GainOutOfRange => {
-                write!(f, "invalid gain (expected {} - {})", Gain::MIN, Gain::MAX)
+                write!(
+                    f,
+                    "invalid gain (expected {} - {})",
+                    Gain::MIN.value(),
+                    Gain::MAX.value()
+                )
             }
             Self::FixedGainOutOfRange => {
                 write!(
@@ -754,14 +759,14 @@ impl Display for ValueError {
             Self::BcTicksKeyOffOutOfRange => write!(
                 f,
                 "invalid tick count (expected {} - {})",
-                BcTicksKeyOff::MIN,
-                BcTicksKeyOff::MAX
+                BcTicksKeyOff::MIN_TICKS,
+                BcTicksKeyOff::MAX_TICKS
             ),
             Self::BcTicksNoKeyOffOutOfRange => write!(
                 f,
                 "invalid tick count (expected {} - {})",
-                BcTicksNoKeyOff::MIN,
-                BcTicksNoKeyOff::MAX
+                BcTicksNoKeyOff::MIN_TICKS,
+                BcTicksNoKeyOff::MAX_TICKS
             ),
 
             Self::PanOutOfRange => out_of_range!("pan", Pan),
@@ -813,8 +818,8 @@ impl Display for ValueError {
 
             Self::InvalidMmlBool => write!(f, "cannot parse bool, expected a 0 or a 1"),
 
-            Self::NotEnoughLoops => write!(f, "not enough loops (min: {})", LoopCount::MIN),
-            Self::TooManyLoops => write!(f, "too many loops (max: {})", LoopCount::MAX),
+            Self::NotEnoughLoops => write!(f, "not enough loops (min: {})", LoopCount::MIN_LOOPS),
+            Self::TooManyLoops => write!(f, "too many loops (max: {})", LoopCount::MAX_LOOPS),
 
             Self::MissingNoteLengthTickCount => write!(f, "missing tick count in note length"),
             Self::InvalidNoteLength => write!(f, "invalid note length"),
@@ -833,7 +838,11 @@ impl Display for ValueError {
                 ECHO_BUFFER_EDL_MS
             ),
             Self::EchoBufferTooLarge => {
-                write!(f, "echo buffer too large (max {}ms)", EchoLength::MAX)
+                write!(
+                    f,
+                    "echo buffer too large (max {}ms)",
+                    EchoLength::MAX.value()
+                )
             }
 
             Self::InvalidFirFilterSize => {
@@ -1274,7 +1283,7 @@ impl Display for MmlError {
                     f,
                     "cannot MP vibrato note.  Pitch offset per tick too large ({}, max: {})",
                     po,
-                    PitchOffsetPerTick::MAX
+                    PitchOffsetPerTick::MAX.value()
                 )
             }
             Self::MpDepthZero => write!(f, "MP vibrato depth cannot be 0"),
@@ -1300,7 +1309,7 @@ impl Display for MmlError {
                 write!(
                     f,
                     "broken chord total length too short (a minimum of {} loops are required)",
-                    LoopCount::MIN
+                    LoopCount::MIN_LOOPS
                 )
             }
 

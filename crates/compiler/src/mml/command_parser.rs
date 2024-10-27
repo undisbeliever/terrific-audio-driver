@@ -78,12 +78,12 @@ pub enum PanCommand {
 }
 
 fn relative_volume(v: i32) -> VolumeCommand {
-    const _: () = assert!(Volume::MIN == 0);
+    const _: () = assert!(Volume::MIN.as_u8() == 0);
 
-    if v <= -(Volume::MAX as i32) {
-        VolumeCommand::Absolute(Volume::new(Volume::MIN))
-    } else if v >= Volume::MAX.into() {
-        VolumeCommand::Absolute(Volume::new(Volume::MAX))
+    if v <= -(Volume::MAX.as_u8() as i32) {
+        VolumeCommand::Absolute(Volume::MIN)
+    } else if v >= Volume::MAX.as_u8().into() {
+        VolumeCommand::Absolute(Volume::MAX)
     } else {
         VolumeCommand::Relative(v)
     }
@@ -106,14 +106,14 @@ fn merge_volumes_commands(v1: Option<VolumeCommand>, v2: VolumeCommand) -> Volum
 }
 
 fn relative_pan(p: i32) -> PanCommand {
-    const _: () = assert!(Pan::MAX as i32 == i8::MAX as i32 + 1);
-    const _: () = assert!(Pan::MAX as i32 == -(i8::MIN as i32));
-    const _: () = assert!(Pan::MIN == 0);
+    const _: () = assert!(Pan::MAX.as_u8() as i32 == i8::MAX as i32 + 1);
+    const _: () = assert!(Pan::MAX.as_u8() as i32 == -(i8::MIN as i32));
+    const _: () = assert!(Pan::MIN.as_u8() == 0);
 
-    if p <= -(Pan::MAX as i32) {
-        PanCommand::Absolute(Pan::MIN.try_into().unwrap())
-    } else if p >= Pan::MAX.into() {
-        PanCommand::Absolute(Pan::MAX.try_into().unwrap())
+    if p <= -(Pan::MAX.as_u8() as i32) {
+        PanCommand::Absolute(Pan::MIN)
+    } else if p >= Pan::MAX.as_u8().into() {
+        PanCommand::Absolute(Pan::MAX)
     } else {
         PanCommand::Relative(p.try_into().unwrap())
     }
@@ -122,7 +122,10 @@ fn relative_pan(p: i32) -> PanCommand {
 fn merge_pan_commands(p1: Option<PanCommand>, p2: PanCommand) -> PanCommand {
     match (p1, p2) {
         (Some(PanCommand::Absolute(p1)), PanCommand::Relative(p2)) => {
-            let p = min(p1.as_u8().saturating_add_signed(p2.as_i8()), Pan::MAX);
+            let p = min(
+                p1.as_u8().saturating_add_signed(p2.as_i8()),
+                Pan::MAX.as_u8(),
+            );
             PanCommand::Absolute(p.try_into().unwrap())
         }
         (Some(PanCommand::Relative(p1)), PanCommand::Relative(p2)) => {
@@ -791,7 +794,7 @@ fn parse_early_release_gain_argument(comma_pos: FilePos, p: &mut Parser) -> Opti
 }
 
 fn parse_set_early_release_arguments(p: &mut Parser) -> (EarlyReleaseMinTicks, OptionalGain) {
-    let min = EarlyReleaseMinTicks::try_from(EarlyReleaseMinTicks::MIN).unwrap();
+    let min = EarlyReleaseMinTicks::MIN;
 
     let comma_pos = p.peek_pos();
     if next_token_matches!(p, Token::Comma) {
@@ -843,7 +846,7 @@ fn parse_set_early_release(pos: FilePos, p: &mut Parser) -> MmlCommand {
                 Ok(t) => t,
                 Err(e) => {
                     p.add_error(pos, MmlError::ValueError(e));
-                    EarlyReleaseTicks::try_from(EarlyReleaseTicks::MIN).unwrap()
+                    EarlyReleaseTicks::MIN
                 }
             };
             let (min, g) = parse_set_early_release_arguments(p);
@@ -1734,7 +1737,7 @@ fn parse_token(pos: FilePos, token: Token, p: &mut Parser) -> MmlCommand {
         }
         Token::SkipLastLoop => MmlCommand::SkipLastLoop,
         Token::EndLoop => {
-            let lc = parse_unsigned_newtype(pos, p).unwrap_or(LoopCount::MIN_LOOPCOUNT);
+            let lc = parse_unsigned_newtype(pos, p).unwrap_or(LoopCount::MIN);
             MmlCommand::EndLoop(lc)
         }
 

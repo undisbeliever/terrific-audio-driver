@@ -196,8 +196,8 @@ fn sample_song_fake_instruments() -> &'static UniqueNamesList<InstrumentOrSample
             source: Default::default(),
             freq: 0.0,
             loop_setting: data::LoopSetting::None,
-            first_octave: Octave::try_new(Octave::MIN.into()).unwrap(),
-            last_octave: Octave::try_new(Octave::MAX.into()).unwrap(),
+            first_octave: Octave::try_new(Octave::MIN.as_u8().into()).unwrap(),
+            last_octave: Octave::try_new(Octave::MAX.as_u8().into()).unwrap(),
             envelope: Envelope::Gain(Gain::new(0)),
             comment: Default::default(),
         });
@@ -228,8 +228,8 @@ pub fn test_sample_song(
     };
 
     let mut remaining_length = min(2000, note_length);
-    while remaining_length > BcTicksKeyOff::MAX {
-        let nl = min(remaining_length, BcTicksNoKeyOff::MAX);
+    while remaining_length > BcTicksKeyOff::MAX_TICKS {
+        let nl = min(remaining_length, BcTicksNoKeyOff::MAX_TICKS);
         remaining_length -= nl;
 
         let nl = BcTicksNoKeyOff::try_from(nl)?;

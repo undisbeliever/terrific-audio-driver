@@ -153,7 +153,7 @@ impl ChannelState {
             early_release_min_ticks: 0,
             early_release_gain: 0,
             volume: STARTING_VOLUME,
-            pan: Pan::MAX / 2,
+            pan: Pan::MAX.as_u8() / 2,
             echo: false,
             vibrato_pitch_offset_per_tick: 0,
             vibrato_quarter_wavelength_in_ticks: 0,
@@ -412,7 +412,7 @@ impl ChannelState {
                 let adjust = read_pc();
 
                 let p = i8::from_le_bytes([adjust]);
-                self.pan = self.pan.saturating_add_signed(p).clamp(0, Pan::MAX);
+                self.pan = self.pan.saturating_add_signed(p).clamp(0, Pan::MAX.as_u8());
             }
             opcodes::SET_PAN => {
                 self.pan = read_pc();
@@ -804,7 +804,7 @@ fn build_channel(
         bc_stack: c.bc_stack,
         dsp: VirtualChannel {
             vol_l: match common.stereo_flag {
-                true => (u16::from(volume) * u16::from(Pan::MAX - pan)).to_le_bytes()[1],
+                true => (u16::from(volume) * u16::from(Pan::MAX.as_u8() - pan)).to_le_bytes()[1],
                 false => volume >> 2,
             },
             vol_r: match common.stereo_flag {

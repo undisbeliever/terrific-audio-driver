@@ -12,7 +12,10 @@ where
     <Self as ValueNewType>::ConvertFrom: std::str::FromStr,
     <Self as ValueNewType>::ConvertFrom: VntStrParser,
 {
+    /// May not be the internal value of the ValueNewType
+    type ValueType;
     type ConvertFrom;
+
     const MISSING_ERROR: ValueError;
 
     // I have no idea how to turn this into a `FromStr` trait implementation.
@@ -20,6 +23,8 @@ where
         let v = <Self::ConvertFrom as VntStrParser>::parse_str(s)?;
         <Self as TryFrom<Self::ConvertFrom>>::try_from(v)
     }
+
+    fn value(&self) -> Self::ValueType;
 }
 
 /// Used to convert a `&str` to `ValueNewType::ConvertFrom`
@@ -52,20 +57,25 @@ macro_rules! u8_value_newtype {
 
         #[allow(dead_code)]
         impl $name {
-            pub const MIN: u8 = u8::MIN;
-            pub const MAX: u8 = u8::MAX;
+            pub const MIN: Self = Self(u8::MIN);
+            pub const MAX: Self = Self(u8::MAX);
 
             pub const fn new(value: u8) -> Self {
                 Self(value)
             }
-            pub fn as_u8(&self) -> u8 {
+            pub const fn as_u8(&self) -> u8 {
                 self.0
             }
         }
 
         impl crate::value_newtypes::ValueNewType for $name {
+            type ValueType = u8;
             type ConvertFrom = u32;
             const MISSING_ERROR: ValueError = ValueError::$missing_error;
+
+            fn value(&self) -> Self::ValueType {
+                self.0
+            }
         }
 
         impl TryFrom<u32> for $name {
@@ -85,17 +95,22 @@ macro_rules! u8_value_newtype {
 
         #[allow(dead_code)]
         impl $name {
-            pub const MIN: u8 = $min;
-            pub const MAX: u8 = $max;
+            pub const MIN: Self = Self($min);
+            pub const MAX: Self = Self($max);
 
-            pub fn as_u8(&self) -> u8 {
+            pub const fn as_u8(&self) -> u8 {
                 self.0
             }
         }
 
         impl crate::value_newtypes::ValueNewType for $name {
+            type ValueType = u8;
             type ConvertFrom = u32;
             const MISSING_ERROR: ValueError = ValueError::$missing_error;
+
+            fn value(&self) -> Self::ValueType {
+                self.0
+            }
         }
 
         impl TryFrom<u8> for $name {
@@ -103,7 +118,7 @@ macro_rules! u8_value_newtype {
 
             #[allow(clippy::manual_range_contains)]
             fn try_from(value: u8) -> Result<Self, Self::Error> {
-                if value >= Self::MIN && value <= Self::MAX {
+                if value >= Self::MIN.0 && value <= Self::MAX.0 {
                     Ok(Self(value))
                 } else {
                     Err(ValueError::$error)
@@ -115,7 +130,7 @@ macro_rules! u8_value_newtype {
             type Error = ValueError;
 
             fn try_from(value: u32) -> Result<Self, Self::Error> {
-                if value >= Self::MIN.into() && value <= Self::MAX.into() {
+                if value >= Self::MIN.0.into() && value <= Self::MAX.0.into() {
                     Ok(Self(u8::try_from(value).unwrap()))
                 } else {
                     Err(ValueError::$error)
@@ -132,20 +147,25 @@ macro_rules! i8_value_newtype {
 
         #[allow(dead_code)]
         impl $name {
-            pub const MIN: i8 = i8::MIN;
-            pub const MAX: i8 = i8::MAX;
+            pub const MIN: Self = Self(i8::MIN);
+            pub const MAX: Self = Self(i8::MAX);
 
             pub const fn new(p: i8) -> Self {
                 Self(p)
             }
-            pub fn as_i8(&self) -> i8 {
+            pub const fn as_i8(&self) -> i8 {
                 self.0
             }
         }
 
         impl crate::value_newtypes::ValueNewType for $name {
+            type ValueType = i8;
             type ConvertFrom = i32;
             const MISSING_ERROR: ValueError = ValueError::$missing_error;
+
+            fn value(&self) -> Self::ValueType {
+                self.0
+            }
         }
 
         impl TryFrom<i32> for $name {

@@ -63,20 +63,21 @@ where
 {
     let ticks = ticks.value();
 
-    assert!(ticks > Loop::MAX * 3);
+    assert!(ticks > Loop::MAX_TICKS * 3);
 
-    (LoopCount::MIN..=LoopCount::MAX)
+    (LoopCount::MIN_LOOPS..=LoopCount::MAX_LOOPS)
         .filter_map(|l| {
             let div = ticks / l;
             let rem = ticks % l;
 
-            if div >= Loop::MIN && ((ALLOW_ZERO_REM && rem == 0) || rem >= Rem::MIN) {
+            if div >= Loop::MIN_TICKS && ((ALLOW_ZERO_REM && rem == 0) || rem >= Rem::MIN_TICKS) {
                 Some(RestLoop {
                     ticks_in_loop: div,
                     n_loops: l,
                     remainder: rem,
 
-                    n_rest_instructions: div_ceiling(div, Loop::MAX) + div_ceiling(rem, Rem::MAX),
+                    n_rest_instructions: div_ceiling(div, Loop::MAX_TICKS)
+                        + div_ceiling(rem, Rem::MAX_TICKS),
                 })
             } else {
                 None
@@ -171,7 +172,7 @@ impl ChannelBcGenerator<'_> {
     fn split_wait_length(length: TickCounter) -> Result<(BcTicksNoKeyOff, TickCounter), MmlError> {
         let l = length.value();
 
-        let bc = u32::min(l, BcTicksNoKeyOff::MAX);
+        let bc = u32::min(l, BcTicksNoKeyOff::MAX_TICKS);
         let bc = BcTicksNoKeyOff::try_from(bc)?;
 
         Ok((bc, TickCounter::new(l - bc.ticks())))
@@ -185,22 +186,23 @@ impl ChannelBcGenerator<'_> {
 
         if !is_slur {
             // Add rest
-            const MIN_TWO_INSTRUCTIONS: u32 = BcTicksKeyOff::MAX + 1;
-            const MIN_THREE_INSTRUCTIONS: u32 = BcTicksNoKeyOff::MAX + BcTicksKeyOff::MAX + 1;
+            const MIN_TWO_INSTRUCTIONS: u32 = BcTicksKeyOff::MAX_TICKS + 1;
+            const MIN_THREE_INSTRUCTIONS: u32 =
+                BcTicksNoKeyOff::MAX_TICKS + BcTicksKeyOff::MAX_TICKS + 1;
             match l {
-                0..=BcTicksKeyOff::MAX => Ok((
+                0..=BcTicksKeyOff::MAX_TICKS => Ok((
                     PlayNoteTicks::KeyOff(BcTicksKeyOff::try_from(l)?),
                     TickCounter::new(0),
                 )),
                 MIN_TWO_INSTRUCTIONS..MIN_THREE_INSTRUCTIONS => {
-                    let w = BcTicksNoKeyOff::try_from(l - BcTicksKeyOff::MAX)?;
+                    let w = BcTicksNoKeyOff::try_from(l - BcTicksKeyOff::MAX_TICKS)?;
                     let r = l - w.ticks();
                     debug_assert_eq!(w.ticks() + r, l);
 
                     Ok((PlayNoteTicks::NoKeyOff(w), TickCounter::new(r)))
                 }
                 MIN_THREE_INSTRUCTIONS.. => {
-                    let w = BcTicksNoKeyOff::try_from(BcTicksNoKeyOff::MAX).unwrap();
+                    let w = BcTicksNoKeyOff::try_from(BcTicksNoKeyOff::MAX_TICKS).unwrap();
                     let r = l - w.ticks();
                     debug_assert_eq!(w.ticks() + r, l);
 
@@ -209,12 +211,12 @@ impl ChannelBcGenerator<'_> {
             }
         } else {
             match l {
-                0..=BcTicksNoKeyOff::MAX => Ok((
+                0..=BcTicksNoKeyOff::MAX_TICKS => Ok((
                     PlayNoteTicks::NoKeyOff(BcTicksNoKeyOff::try_from(l)?),
                     TickCounter::new(0),
                 )),
                 _ => {
-                    let w1 = BcTicksNoKeyOff::try_from(BcTicksNoKeyOff::MAX).unwrap();
+                    let w1 = BcTicksNoKeyOff::MAX;
                     let w2 = l - w1.ticks();
 
                     Ok((PlayNoteTicks::NoKeyOff(w1), TickCounter::new(w2)))
@@ -299,7 +301,7 @@ impl ChannelBcGenerator<'_> {
             // no keyoff event
             self.wait(length)
         } else {
-            debug_assert!(length.value() >= BcTicksKeyOff::MAX);
+            debug_assert!(length.value() >= BcTicksKeyOff::MAX_TICKS);
             self.rest_one_keyoff(length)
         }
     }
@@ -307,9 +309,9 @@ impl ChannelBcGenerator<'_> {
     // Rest that can send multiple `rest_keyoff` instructions
     // The `rest_keyoff` instruction can wait for more ticks than the `rest` instruction.
     fn rest_many_keyoffs_no_loop(&mut self, length: TickCounter) -> Result<(), MmlError> {
-        const _: () = assert!(BcTicksKeyOff::MAX > BcTicksNoKeyOff::MAX);
-        const MAX_REST: u32 = BcTicksKeyOff::MAX;
-        const MIN_REST: u32 = BcTicksKeyOff::MIN;
+        const _: () = assert!(BcTicksKeyOff::MAX_TICKS > BcTicksNoKeyOff::MAX_TICKS);
+        const MAX_REST: u32 = BcTicksKeyOff::MAX_TICKS;
+        const MIN_REST: u32 = BcTicksKeyOff::MIN_TICKS;
         const _: () = assert!(MIN_REST > 1);
 
         let mut remaining_ticks = length.value();
@@ -334,8 +336,8 @@ impl ChannelBcGenerator<'_> {
     fn wait_no_loop(&mut self, length: TickCounter) -> Result<(), MmlError> {
         let mut remaining_ticks = length.value();
 
-        let rest_length = BcTicksNoKeyOff::try_from(BcTicksNoKeyOff::MAX).unwrap();
-        const _: () = assert!(BcTicksNoKeyOff::MIN == 1);
+        let rest_length = BcTicksNoKeyOff::MAX;
+        const _: () = assert!(BcTicksNoKeyOff::MIN_TICKS == 1);
 
         while remaining_ticks > rest_length.ticks() {
             self.bc.wait(rest_length);
@@ -349,12 +351,12 @@ impl ChannelBcGenerator<'_> {
 
     // A rest that sends a single keyoff event
     fn rest_one_keyoff(&mut self, length: TickCounter) -> Result<(), MmlError> {
-        const REST_TICKS: u32 = BcTicksKeyOff::MAX;
+        const REST_TICKS: u32 = BcTicksKeyOff::MAX_TICKS;
         const MIN_TWO_INSTRUCTIONS: u32 = REST_TICKS + 1;
 
         match length.value() {
             0 => (),
-            l @ 1..=BcTicksKeyOff::MAX => self.bc.rest(BcTicksKeyOff::try_from(l)?),
+            l @ 1..=BcTicksKeyOff::MAX_TICKS => self.bc.rest(BcTicksKeyOff::try_from(l)?),
             l @ MIN_TWO_INSTRUCTIONS.. => {
                 self.wait(TickCounter::new(l - REST_TICKS))?;
                 self.bc.rest(BcTicksKeyOff::try_from(REST_TICKS).unwrap());
@@ -366,7 +368,7 @@ impl ChannelBcGenerator<'_> {
     // Rest that can send multiple `rest_keyoff` instructions
     // The `rest_keyoff` instruction can wait for more ticks than the `rest` instruction.
     fn rest_many_keyoffs(&mut self, length: TickCounter) -> Result<(), MmlError> {
-        const MIN_LOOP_REST: u32 = BcTicksKeyOff::MAX * REST_LOOP_INSTRUCTION_THREASHOLD + 1;
+        const MIN_LOOP_REST: u32 = BcTicksKeyOff::MAX_TICKS * REST_LOOP_INSTRUCTION_THREASHOLD + 1;
 
         if length.is_zero() {
             return Ok(());
@@ -394,7 +396,8 @@ impl ChannelBcGenerator<'_> {
 
     // rest with no keyoff
     fn wait(&mut self, length: TickCounter) -> Result<(), MmlError> {
-        const MIN_LOOP_REST: u32 = BcTicksNoKeyOff::MAX * REST_LOOP_INSTRUCTION_THREASHOLD + 1;
+        const MIN_LOOP_REST: u32 =
+            BcTicksNoKeyOff::MAX_TICKS * REST_LOOP_INSTRUCTION_THREASHOLD + 1;
 
         if length.value() < MIN_LOOP_REST || !self.bc.can_loop() {
             self.wait_no_loop(length)
@@ -552,8 +555,8 @@ impl ChannelBcGenerator<'_> {
             last_note_ticks += note_length.ticks();
         }
 
-        if last_note_ticks != 0 && last_note_ticks < BcTicksKeyOff::MIN {
-            last_note_ticks = BcTicksKeyOff::MIN;
+        if last_note_ticks != 0 && last_note_ticks < BcTicksKeyOff::MIN_TICKS {
+            last_note_ticks = BcTicksKeyOff::MIN_TICKS;
         }
         let last_note_ticks = last_note_ticks;
 
@@ -686,14 +689,14 @@ impl ChannelBcGenerator<'_> {
             let temp_gain = temp_gain.unwrap();
 
             match ticks_until_keyoff.value() {
-                l @ ..=BcTicksKeyOff::MAX => {
+                l @ ..=BcTicksKeyOff::MAX_TICKS => {
                     self.bc
                         .set_temp_gain_and_rest(temp_gain, BcTicksKeyOff::try_from(l)?);
                 }
                 l => {
                     let (wait1, wait2) =
-                        Self::split_wait_length(TickCounter::new(l - BcTicksKeyOff::MAX))?;
-                    let rest = BcTicksKeyOff::try_from(BcTicksKeyOff::MAX).unwrap();
+                        Self::split_wait_length(TickCounter::new(l - BcTicksKeyOff::MAX_TICKS))?;
+                    let rest = BcTicksKeyOff::MAX;
                     debug_assert_eq!(wait1.ticks() + wait2.value() + rest.ticks(), l);
 
                     self.bc.set_temp_gain_and_wait(temp_gain, wait1);
@@ -706,14 +709,14 @@ impl ChannelBcGenerator<'_> {
         } else {
             // Reuse temp GAIN
             match ticks_until_keyoff.value() {
-                l @ ..=BcTicksKeyOff::MAX => {
+                l @ ..=BcTicksKeyOff::MAX_TICKS => {
                     self.bc
                         .reuse_temp_gain_and_rest(BcTicksKeyOff::try_from(l)?);
                 }
                 l => {
                     let (wait1, wait2) =
-                        Self::split_wait_length(TickCounter::new(l - BcTicksKeyOff::MAX))?;
-                    let rest = BcTicksKeyOff::try_from(BcTicksKeyOff::MAX).unwrap();
+                        Self::split_wait_length(TickCounter::new(l - BcTicksKeyOff::MAX_TICKS))?;
+                    let rest = BcTicksKeyOff::MAX;
                     debug_assert_eq!(wait1.ticks() + wait2.value() + rest.ticks(), l);
 
                     self.bc.reuse_temp_gain_and_wait(wait1);
@@ -1051,14 +1054,14 @@ impl ChannelBcGenerator<'_> {
                                 Err(_) => {
                                     // Two relative volume commands are required
                                     assert!(
-                                        v >= RelativeVolume::MIN as i32 * 2
-                                            && v <= RelativeVolume::MAX as i32 * 2
+                                        v >= RelativeVolume::MIN.as_i8() as i32 * 2
+                                            && v <= RelativeVolume::MAX.as_i8() as i32 * 2
                                     );
 
-                                    let v1 = if v < 0 {
-                                        RelativeVolume::MIN as i32
+                                    let v1: i32 = if v < 0 {
+                                        RelativeVolume::MIN.as_i8().into()
                                     } else {
-                                        RelativeVolume::MAX as i32
+                                        RelativeVolume::MAX.as_i8().into()
                                     };
                                     let v2 = v - v1;
                                     self.bc.adjust_volume(RelativeVolume::try_from(v1).unwrap());

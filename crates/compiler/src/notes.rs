@@ -217,8 +217,8 @@ impl Serialize for Octave {
 pub const STARTING_OCTAVE: Octave = Octave(4);
 
 impl Octave {
-    pub const MIN: u8 = 0;
-    pub const MAX: u8 = LAST_OCTAVE;
+    pub const MIN: Self = Self(0);
+    pub const MAX: Self = Self(LAST_OCTAVE);
 
     pub fn try_new(o: u32) -> Result<Self, ValueError> {
         if o <= LAST_OCTAVE.into() {
@@ -250,8 +250,13 @@ impl Octave {
 }
 
 impl ValueNewType for Octave {
+    type ValueType = u8;
     type ConvertFrom = u32;
     const MISSING_ERROR: ValueError = ValueError::NoOctave;
+
+    fn value(&self) -> Self::ValueType {
+        self.0
+    }
 }
 
 impl TryFrom<u32> for Octave {
