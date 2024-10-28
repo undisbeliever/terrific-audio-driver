@@ -44,7 +44,7 @@ u8_value_newtype!(
     QuarterWavelengthOutOfRange,
     NoQuarterWavelength,
     1,
-    u8::MAX
+    64
 );
 
 pub enum BytecodeContext {

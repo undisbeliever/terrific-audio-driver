@@ -2,6 +2,17 @@ Terrific Audio Driver Changelog
 ===============================
 
 
+Version 0.0.14
+==============
+
+Bytecode assembly changes:
+ * Fixed maximum vibrato quarter wavelength value
+
+
+MML changes:
+ * Fixed maximum vibrato quarter wavelength value
+
+
 Version 0.0.13
 ==============
 
