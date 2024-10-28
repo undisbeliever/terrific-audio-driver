@@ -1301,7 +1301,6 @@ inline func _update_vol_shadow_if_required__inline(channelIndex : u8 in x) {
 
 // KEEP: X
 inline func _process_vibrato__inline(channelIndex : u8 in x) {
-var _target_h : u8 in zpTmp;
 
     // (vibrato is not active during portamento)
     y = channelSoA.portamento_direction[x] as u8;
