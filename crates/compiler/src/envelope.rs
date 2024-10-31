@@ -6,10 +6,7 @@
 
 use std::str::FromStr;
 
-use crate::{
-    errors::{InvalidAdsrError, ValueError},
-    value_newtypes::u8_value_newtype,
-};
+use crate::errors::{InvalidAdsrError, ValueError};
 
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
@@ -199,9 +196,13 @@ impl GainMode {
     }
 }
 
-u8_value_newtype!(Gain, GainOutOfRange, NoGain);
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub struct Gain(u8);
 
 impl Gain {
+    pub const MIN: Gain = Gain(u8::MIN);
+    pub const MAX: Gain = Gain(u8::MAX);
+
     pub const FIXED_GAIN_MASK: u8 = 127;
     pub const RATE_MASK: u8 = 0b000_11111;
 
@@ -209,6 +210,14 @@ impl Gain {
     const EXPONENTIAL_DECREASE_PREFIX: u8 = 0b101_00000;
     const LINEAR_INCREASE_PREFIX: u8 = 0b110_00000;
     const BENT_INCREASE_PREFIX: u8 = 0b111_00000;
+
+    pub const fn new(value: u8) -> Self {
+        Self(value)
+    }
+
+    pub const fn as_u8(&self) -> u8 {
+        self.0
+    }
 
     pub fn from_mode_and_value(mode: GainMode, value: u32) -> Result<Gain, ValueError> {
         let to_fixed_gain = || match u8::try_from(value) {
@@ -282,6 +291,17 @@ impl Gain {
 impl From<u8> for Gain {
     fn from(i: u8) -> Self {
         Gain::new(i)
+    }
+}
+
+impl TryFrom<u32> for Gain {
+    type Error = ValueError;
+
+    fn try_from(value: u32) -> Result<Self, Self::Error> {
+        match value.try_into() {
+            Ok(v) => Ok(Self(v)),
+            Err(_) => Err(ValueError::GainOutOfRange),
+        }
     }
 }
 
