@@ -8,6 +8,7 @@ Version 0.0.14
 Bytecode assembly changes:
  * Fixed maximum vibrato quarter wavelength value
  * Added `$` hexadecimal number parsing to bytecode assembly
+ * Instructions with signed arguments (`adjust_volume` and `adjust_pan`) now require a + or - sign
 
 
 MML changes:

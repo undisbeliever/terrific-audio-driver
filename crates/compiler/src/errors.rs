@@ -130,6 +130,10 @@ pub enum ValueError {
     VibratoPitchOffsetPerTickOutOfRange,
     VibratoQuarterWavelengthOutOfRange,
 
+    NoRelativeVolumeSign,
+    NoRelativePanSign,
+    NoDirectionInPortamentoVelocity,
+
     PortamentoVelocityZero,
     PortamentoVelocityOutOfRange,
 
@@ -247,7 +251,6 @@ pub enum BytecodeAssemblerError {
     ArgumentError(ValueError),
 
     InvalidKeyoffArgument(String),
-    NoDirectionInPortamentoVelocity,
 
     NoTicksInSoundEffect,
 
@@ -799,6 +802,15 @@ impl Display for ValueError {
                 )
             }
 
+            Self::NoRelativeVolumeSign => {
+                write!(f, "missing + or - in relative volume")
+            }
+            Self::NoRelativePanSign => {
+                write!(f, "missing + or - in relative pan")
+            }
+            Self::NoDirectionInPortamentoVelocity => {
+                write!(f, "missing + or - in portamento velocity")
+            }
             Self::PortamentoVelocityZero => write!(f, "portamento velocity cannot be 0"),
             Self::PortamentoVelocityOutOfRange => {
                 out_of_range!("portamento velocity", PortamentoVelocity)
@@ -1020,9 +1032,6 @@ impl Display for BytecodeAssemblerError {
             }
 
             Self::InvalidKeyoffArgument(s) => write!(f, "invalid keyoff argument: {}", s),
-            Self::NoDirectionInPortamentoVelocity => {
-                write!(f, "missing + or - in portamento velocity")
-            }
 
             Self::NoTicksInSoundEffect => write!(f, "No notes in sound effect"),
 

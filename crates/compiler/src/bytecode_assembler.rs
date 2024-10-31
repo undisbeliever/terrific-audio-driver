@@ -13,7 +13,7 @@ use crate::envelope::{Adsr, Gain, OptionalGain, TempGain};
 use crate::errors::{BytecodeAssemblerError, BytecodeError, ValueError};
 use crate::notes::Note;
 use crate::time::TickCounter;
-use crate::value_newtypes::ValueNewType;
+use crate::value_newtypes::{SignedValueNewType, ValueNewType};
 
 pub use crate::bytecode::{BcTerminator, BytecodeContext};
 
@@ -98,7 +98,7 @@ fn five_arguments<'a>(
 
 fn one_svnt_argument<T>(args: &[&str]) -> Result<T, BytecodeAssemblerError>
 where
-    T: ValueNewType<ConvertFrom = i32>,
+    T: SignedValueNewType,
 {
     let arg = one_argument(args)?;
     parse_svnt(arg)
@@ -170,11 +170,6 @@ fn portamento_argument(
     let note = Note::parse_bytecode_argument(note)?;
     let ticks = parse_play_note_ticks(ticks, key_off)?;
 
-    match velocity.chars().next() {
-        Some('+') => 1,
-        Some('-') => -1,
-        _ => return Err(BytecodeAssemblerError::NoDirectionInPortamentoVelocity),
-    };
     let velocity = parse_svnt(velocity)?;
 
     Ok((note, velocity, ticks))
@@ -301,7 +296,7 @@ fn parse_u32(s: &str) -> Result<u32, ValueError> {
     }
 }
 
-fn parse_i32(src: &str) -> Result<i32, ValueError> {
+fn parse_i32(src: &str, missing_sign_err: &ValueError) -> Result<i32, ValueError> {
     if let Some(s) = src.strip_prefix("+$") {
         match i32::from_str_radix(s, 16) {
             Ok(i) => Ok(i),
@@ -312,15 +307,13 @@ fn parse_i32(src: &str) -> Result<i32, ValueError> {
             Ok(i) => Ok(-i),
             Err(_) => Err(ValueError::CannotParseHex(src.to_owned())),
         }
-    } else if let Some(s) = src.strip_prefix("$") {
-        match i32::from_str_radix(s, 16) {
-            Ok(i) => Ok(i),
-            Err(_) => Err(ValueError::CannotParseHex(src.to_owned())),
-        }
     } else {
-        match src.parse() {
-            Ok(i) => Ok(i),
-            Err(_) => Err(ValueError::CannotParseSigned(src.to_owned())),
+        match src.bytes().next() {
+            Some(b'-') | Some(b'+') => match src.parse() {
+                Ok(i) => Ok(i),
+                Err(_) => Err(ValueError::CannotParseSigned(src.to_owned())),
+            },
+            _ => Err(missing_sign_err.clone()),
         }
     }
 }
@@ -333,12 +326,12 @@ where
     Ok(parse_u32(s)?.try_into()?)
 }
 
-/// Parse Unsigned ValueNewType
+/// Parse Signed ValueNewType
 fn parse_svnt<T>(s: &str) -> Result<T, BytecodeAssemblerError>
 where
-    T: ValueNewType<ConvertFrom = i32>,
+    T: SignedValueNewType,
 {
-    Ok(parse_i32(s)?.try_into()?)
+    Ok(parse_i32(s, &T::MISSING_SIGN_ERROR)?.try_into()?)
 }
 
 pub fn parse_asm_line(bc: &mut Bytecode, line: &str) -> Result<(), BytecodeAssemblerError> {

@@ -16,7 +16,7 @@ use crate::errors::{BytecodeError, ValueError};
 use crate::notes::{Note, LAST_NOTE_ID, N_NOTES};
 use crate::samples::note_range;
 use crate::time::{TickClock, TickCounter, TickCounterWithLoopFlag};
-use crate::value_newtypes::{i8_value_newtype, u8_value_newtype, ValueNewType};
+use crate::value_newtypes::{i8_value_newtype, u8_value_newtype, SignedValueNewType, ValueNewType};
 
 use std::cmp::max;
 use std::collections::HashMap;
@@ -31,8 +31,18 @@ const MAX_STACK_DEPTH: StackDepth = StackDepth(BC_CHANNEL_STACK_SIZE as u32);
 
 u8_value_newtype!(Volume, VolumeOutOfRange, NoVolume);
 u8_value_newtype!(Pan, PanOutOfRange, NoPan, 0, 128);
-i8_value_newtype!(RelativeVolume, RelativeVolumeOutOfRange, NoVolume);
-i8_value_newtype!(RelativePan, RelativePanOutOfRange, NoPan);
+i8_value_newtype!(
+    RelativeVolume,
+    RelativeVolumeOutOfRange,
+    NoVolume,
+    NoRelativeVolumeSign
+);
+i8_value_newtype!(
+    RelativePan,
+    RelativePanOutOfRange,
+    NoPan,
+    NoRelativeVolumeSign
+);
 
 u8_value_newtype!(
     VibratoPitchOffsetPerTick,
@@ -339,6 +349,10 @@ impl ValueNewType for PortamentoVelocity {
     fn value(&self) -> Self::ValueType {
         self.0
     }
+}
+
+impl SignedValueNewType for PortamentoVelocity {
+    const MISSING_SIGN_ERROR: ValueError = ValueError::NoDirectionInPortamentoVelocity;
 }
 
 impl TryFrom<i32> for PortamentoVelocity {

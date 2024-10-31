@@ -27,6 +27,13 @@ where
     fn value(&self) -> Self::ValueType;
 }
 
+pub trait SignedValueNewType
+where
+    Self: ValueNewType<ConvertFrom = i32>,
+{
+    const MISSING_SIGN_ERROR: ValueError;
+}
+
 /// Used to convert a `&str` to `ValueNewType::ConvertFrom`
 pub trait VntStrParser: Sized {
     fn parse_str(s: &str) -> Result<Self, ValueError>;
@@ -177,6 +184,14 @@ macro_rules! i8_value_newtype {
                     Err(_) => Err(ValueError::$error),
                 }
             }
+        }
+    };
+
+    ($name:ident, $error:ident, $missing_error:ident, $missing_sign_error:ident) => {
+        crate::value_newtypes::i8_value_newtype!($name, $error, $missing_error);
+
+        impl crate::value_newtypes::SignedValueNewType for $name {
+            const MISSING_SIGN_ERROR: ValueError = ValueError::$missing_sign_error;
         }
     };
 }
