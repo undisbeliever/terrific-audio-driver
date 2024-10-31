@@ -13,7 +13,7 @@ use crate::envelope::{Adsr, Gain, OptionalGain, TempGain};
 use crate::errors::{BytecodeAssemblerError, BytecodeError, ValueError};
 use crate::notes::Note;
 use crate::time::TickCounter;
-use crate::value_newtypes::{SignedValueNewType, ValueNewType};
+use crate::value_newtypes::{SignedValueNewType, UnsignedValueNewType};
 
 pub use crate::bytecode::{BcTerminator, BytecodeContext};
 
@@ -106,7 +106,7 @@ where
 
 fn one_uvnt_argument<T>(args: &[&str]) -> Result<T, BytecodeAssemblerError>
 where
-    T: ValueNewType<ConvertFrom = u32>,
+    T: UnsignedValueNewType,
 {
     let arg = one_argument(args)?;
     parse_uvnt(arg)
@@ -114,8 +114,8 @@ where
 
 fn two_uvnt_arguments<T, U>(args: &[&str]) -> Result<(T, U), BytecodeAssemblerError>
 where
-    T: ValueNewType<ConvertFrom = u32>,
-    U: ValueNewType<ConvertFrom = u32>,
+    T: UnsignedValueNewType,
+    U: UnsignedValueNewType,
 {
     let (arg1, arg2) = two_arguments(args)?;
 
@@ -318,15 +318,15 @@ fn parse_i32(src: &str, missing_sign_err: &ValueError) -> Result<i32, ValueError
     }
 }
 
-/// Parse Unsigned ValueNewType
+/// Parse UnsignedValueNewType
 fn parse_uvnt<T>(s: &str) -> Result<T, BytecodeAssemblerError>
 where
-    T: ValueNewType<ConvertFrom = u32>,
+    T: UnsignedValueNewType,
 {
     Ok(parse_u32(s)?.try_into()?)
 }
 
-/// Parse Signed ValueNewType
+/// Parse SignedValueNewType
 fn parse_svnt<T>(s: &str) -> Result<T, BytecodeAssemblerError>
 where
     T: SignedValueNewType,

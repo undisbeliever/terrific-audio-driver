@@ -6,13 +6,12 @@
 
 use crate::errors::ValueError;
 
-pub trait ValueNewType
+pub trait UnsignedValueNewType
 where
-    Self: TryFrom<<Self as ValueNewType>::ConvertFrom, Error = ValueError>,
+    Self: TryFrom<u32, Error = ValueError>,
 {
     /// May not be the internal value of the ValueNewType
     type ValueType;
-    type ConvertFrom;
 
     const MISSING_ERROR: ValueError;
 
@@ -21,9 +20,15 @@ where
 
 pub trait SignedValueNewType
 where
-    Self: ValueNewType<ConvertFrom = i32>,
+    Self: TryFrom<i32, Error = ValueError>,
 {
+    /// May not be the internal value of the ValueNewType
+    type ValueType;
+
+    const MISSING_ERROR: ValueError;
     const MISSING_SIGN_ERROR: ValueError;
+
+    fn value(&self) -> Self::ValueType;
 }
 
 macro_rules! u8_value_newtype {
@@ -44,9 +49,9 @@ macro_rules! u8_value_newtype {
             }
         }
 
-        impl crate::value_newtypes::ValueNewType for $name {
+        impl crate::value_newtypes::UnsignedValueNewType for $name {
             type ValueType = u8;
-            type ConvertFrom = u32;
+
             const MISSING_ERROR: ValueError = ValueError::$missing_error;
 
             fn value(&self) -> Self::ValueType {
@@ -79,9 +84,9 @@ macro_rules! u8_value_newtype {
             }
         }
 
-        impl crate::value_newtypes::ValueNewType for $name {
+        impl crate::value_newtypes::UnsignedValueNewType for $name {
             type ValueType = u8;
-            type ConvertFrom = u32;
+
             const MISSING_ERROR: ValueError = ValueError::$missing_error;
 
             fn value(&self) -> Self::ValueType {
@@ -134,18 +139,15 @@ macro_rules! i8_value_newtype {
             }
         }
 
-        impl crate::value_newtypes::ValueNewType for $name {
+        impl crate::value_newtypes::SignedValueNewType for $name {
             type ValueType = i8;
-            type ConvertFrom = i32;
+
             const MISSING_ERROR: ValueError = ValueError::$missing_error;
+            const MISSING_SIGN_ERROR: ValueError = ValueError::$missing_sign_error;
 
             fn value(&self) -> Self::ValueType {
                 self.0
             }
-        }
-
-        impl crate::value_newtypes::SignedValueNewType for $name {
-            const MISSING_SIGN_ERROR: ValueError = ValueError::$missing_sign_error;
         }
 
         impl TryFrom<i32> for $name {

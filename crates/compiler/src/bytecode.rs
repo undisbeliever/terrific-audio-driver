@@ -16,7 +16,9 @@ use crate::errors::{BytecodeError, ValueError};
 use crate::notes::{Note, LAST_NOTE_ID, N_NOTES};
 use crate::samples::note_range;
 use crate::time::{TickClock, TickCounter, TickCounterWithLoopFlag};
-use crate::value_newtypes::{i8_value_newtype, u8_value_newtype, SignedValueNewType, ValueNewType};
+use crate::value_newtypes::{
+    i8_value_newtype, u8_value_newtype, SignedValueNewType, UnsignedValueNewType,
+};
 
 use std::cmp::max;
 use std::collections::HashMap;
@@ -341,18 +343,15 @@ impl PortamentoVelocity {
     }
 }
 
-impl ValueNewType for PortamentoVelocity {
+impl SignedValueNewType for PortamentoVelocity {
     type ValueType = i16;
-    type ConvertFrom = i32;
+
     const MISSING_ERROR: ValueError = ValueError::NoPortamentoVelocity;
+    const MISSING_SIGN_ERROR: ValueError = ValueError::NoDirectionInPortamentoVelocity;
 
     fn value(&self) -> Self::ValueType {
         self.0
     }
-}
-
-impl SignedValueNewType for PortamentoVelocity {
-    const MISSING_SIGN_ERROR: ValueError = ValueError::NoDirectionInPortamentoVelocity;
 }
 
 impl TryFrom<i32> for PortamentoVelocity {
@@ -388,9 +387,9 @@ impl LoopCount {
     }
 }
 
-impl ValueNewType for LoopCount {
+impl UnsignedValueNewType for LoopCount {
     type ValueType = u32;
-    type ConvertFrom = u32;
+
     const MISSING_ERROR: ValueError = ValueError::NoLoopCount;
 
     fn value(&self) -> Self::ValueType {

@@ -32,7 +32,6 @@ pub mod time;
 
 pub use bytecode::opcodes;
 pub use file_pos::{FilePos, FilePosRange};
-pub use value_newtypes::ValueNewType;
 
 pub mod audio_driver {
     // SPDX-SnippetBegin

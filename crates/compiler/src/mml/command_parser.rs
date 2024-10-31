@@ -23,8 +23,9 @@ use crate::time::{
     Bpm, MmlDefaultLength, MmlLength, TickClock, TickCounter, TickCounterWithLoopFlag, ZenLen,
     STARTING_MML_LENGTH,
 };
-use crate::value_newtypes::{i8_value_newtype, u8_value_newtype, SignedValueNewType};
-use crate::ValueNewType;
+use crate::value_newtypes::{
+    i8_value_newtype, u8_value_newtype, SignedValueNewType, UnsignedValueNewType,
+};
 
 use std::cmp::min;
 use std::collections::HashMap;
@@ -542,7 +543,7 @@ fn next_token_number(p: &mut Parser) -> Option<u32> {
 
 fn parse_unsigned_newtype<T>(pos: FilePos, p: &mut Parser) -> Option<T>
 where
-    T: ValueNewType + TryFrom<u32, Error = ValueError>,
+    T: UnsignedValueNewType,
 {
     match_next_token!(
         p,

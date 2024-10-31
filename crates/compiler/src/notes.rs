@@ -7,7 +7,7 @@
 #![allow(clippy::assertions_on_constants)]
 
 use crate::errors::ValueError;
-use crate::value_newtypes::{u8_value_newtype, ValueNewType};
+use crate::value_newtypes::{u8_value_newtype, UnsignedValueNewType};
 
 use serde::{Deserialize, Serialize, Serializer};
 
@@ -249,9 +249,9 @@ impl Octave {
     }
 }
 
-impl ValueNewType for Octave {
+impl UnsignedValueNewType for Octave {
     type ValueType = u8;
-    type ConvertFrom = u32;
+
     const MISSING_ERROR: ValueError = ValueError::NoOctave;
 
     fn value(&self) -> Self::ValueType {

@@ -29,7 +29,8 @@ use crate::notes::{MidiNote, Note, Octave};
 use crate::path::PathString;
 use crate::sound_effects::MAX_SFX_TICKS;
 use crate::time::{Bpm, TickClock, TickCounter, ZenLen};
-use crate::{export, mml, spc_file_export, ValueNewType};
+use crate::value_newtypes::{SignedValueNewType, UnsignedValueNewType};
+use crate::{export, mml, spc_file_export};
 
 use std::fmt::Display;
 use std::io;
