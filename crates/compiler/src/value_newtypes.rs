@@ -9,20 +9,12 @@ use crate::errors::ValueError;
 pub trait ValueNewType
 where
     Self: TryFrom<<Self as ValueNewType>::ConvertFrom, Error = ValueError>,
-    <Self as ValueNewType>::ConvertFrom: std::str::FromStr,
-    <Self as ValueNewType>::ConvertFrom: VntStrParser,
 {
     /// May not be the internal value of the ValueNewType
     type ValueType;
     type ConvertFrom;
 
     const MISSING_ERROR: ValueError;
-
-    // I have no idea how to turn this into a `FromStr` trait implementation.
-    fn try_from_str(s: &str) -> Result<Self, ValueError> {
-        let v = <Self::ConvertFrom as VntStrParser>::parse_str(s)?;
-        <Self as TryFrom<Self::ConvertFrom>>::try_from(v)
-    }
 
     fn value(&self) -> Self::ValueType;
 }
@@ -32,29 +24,6 @@ where
     Self: ValueNewType<ConvertFrom = i32>,
 {
     const MISSING_SIGN_ERROR: ValueError;
-}
-
-/// Used to convert a `&str` to `ValueNewType::ConvertFrom`
-pub trait VntStrParser: Sized {
-    fn parse_str(s: &str) -> Result<Self, ValueError>;
-}
-
-impl VntStrParser for u32 {
-    fn parse_str(s: &str) -> Result<Self, ValueError> {
-        match s.parse::<u32>() {
-            Ok(v) => Ok(v),
-            Err(_) => Err(ValueError::CannotParseUnsigned(s.to_owned())),
-        }
-    }
-}
-
-impl VntStrParser for i32 {
-    fn parse_str(s: &str) -> Result<Self, ValueError> {
-        match s.parse::<i32>() {
-            Ok(v) => Ok(v),
-            Err(_) => Err(ValueError::CannotParseUnsigned(s.to_owned())),
-        }
-    }
 }
 
 macro_rules! u8_value_newtype {

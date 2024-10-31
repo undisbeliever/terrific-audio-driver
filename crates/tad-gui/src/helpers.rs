@@ -4,7 +4,7 @@
 //
 // SPDX-License-Identifier: MIT
 
-use compiler::{data::Name, envelope::Adsr, envelope::Gain, notes::Octave, ValueNewType};
+use compiler::{data::Name, envelope::Adsr, envelope::Gain, notes::Octave};
 
 use fltk::button::CheckButton;
 use fltk::enums::{Align, Event, Key};
@@ -159,7 +159,7 @@ impl InputHelper for Octave {
     type Widget = IntInput;
 
     fn parse(s: String) -> Option<Self> {
-        Self::try_from_str(&s).ok()
+        s.parse::<u32>().ok()?.try_into().ok()
     }
 
     fn set_widget_value(w: &mut Self::Widget, value: &Self) {
