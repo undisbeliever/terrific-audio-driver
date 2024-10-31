@@ -177,6 +177,8 @@ pub enum ValueError {
     NoIncrementOrDecrement,
     NoVolume,
     NoPan,
+    NoRelativeVolume,
+    NoRelativePan,
     NoOctave,
     NoZenLen,
     NoTranspose,
@@ -885,6 +887,8 @@ impl Display for ValueError {
             }
             Self::NoVolume => write!(f, "no volume"),
             Self::NoPan => write!(f, "no pan"),
+            Self::NoRelativeVolume => write!(f, "no relative volume"),
+            Self::NoRelativePan => write!(f, "no relative pan"),
             Self::NoOctave => write!(f, "no octave"),
             Self::NoZenLen => write!(f, "no zenlen value"),
             Self::NoTranspose => write!(f, "no transpose value"),

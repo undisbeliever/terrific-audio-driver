@@ -34,13 +34,13 @@ u8_value_newtype!(Pan, PanOutOfRange, NoPan, 0, 128);
 i8_value_newtype!(
     RelativeVolume,
     RelativeVolumeOutOfRange,
-    NoVolume,
+    NoRelativeVolume,
     NoRelativeVolumeSign
 );
 i8_value_newtype!(
     RelativePan,
     RelativePanOutOfRange,
-    NoPan,
+    NoRelativePan,
     NoRelativeVolumeSign
 );
 
