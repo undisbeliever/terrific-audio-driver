@@ -7,6 +7,7 @@ Version 0.0.14
 
 Bytecode assembly changes:
  * Fixed maximum vibrato quarter wavelength value
+ * Added `$` hexadecimal number parsing to bytecode assembly
 
 
 MML changes:

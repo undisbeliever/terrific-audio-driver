@@ -4573,6 +4573,43 @@ fn test_prev_slurred_note_after_bc_asm() {
     );
 }
 
+#[test]
+fn test_hexadecimal_in_mml_bc_asm() {
+    assert_mml_channel_a_matches_bytecode(
+        r##"
+A \asm {
+    set_instrument dummy_instrument
+    set_vibrato $f $2
+    set_volume $5A
+    set_pan $40
+
+    adjust_volume -$14
+    adjust_pan +$14
+
+    play_note d5 no_keyoff $30
+    set_temp_gain_and_wait D6 $18
+    play_note e5 no_keyoff $48
+    set_temp_gain I6
+    play_note d5 no_keyoff $30
+    set_temp_gain_and_rest E18 $48
+}"##,
+        &[
+            "set_instrument dummy_instrument",
+            "set_vibrato 15 2",
+            "set_volume 90",
+            "set_pan 64",
+            "adjust_volume -20",
+            "adjust_pan +20",
+            "play_note d5 no_keyoff 48",
+            "set_temp_gain_and_wait D6 24",
+            "play_note e5 no_keyoff 72",
+            "set_temp_gain I6",
+            "play_note d5 no_keyoff 48",
+            "set_temp_gain_and_rest E18 72",
+        ],
+    );
+}
+
 // ----------------------------------------------------------------------------------------------
 
 /// Tests MML commands will still be merged if there are a change MML state command in between

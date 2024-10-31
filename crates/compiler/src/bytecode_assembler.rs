@@ -96,22 +96,30 @@ fn five_arguments<'a>(
     }
 }
 
-fn one_vnt_argument<T>(args: &[&str]) -> Result<T, BytecodeAssemblerError>
+fn one_svnt_argument<T>(args: &[&str]) -> Result<T, BytecodeAssemblerError>
 where
-    T: ValueNewType,
+    T: ValueNewType<ConvertFrom = i32>,
 {
     let arg = one_argument(args)?;
-    Ok(T::try_from_str(arg)?)
+    parse_svnt(arg)
 }
 
-fn two_vnt_arguments<T, U>(args: &[&str]) -> Result<(T, U), BytecodeAssemblerError>
+fn one_uvnt_argument<T>(args: &[&str]) -> Result<T, BytecodeAssemblerError>
 where
-    T: ValueNewType,
-    U: ValueNewType,
+    T: ValueNewType<ConvertFrom = u32>,
+{
+    let arg = one_argument(args)?;
+    parse_uvnt(arg)
+}
+
+fn two_uvnt_arguments<T, U>(args: &[&str]) -> Result<(T, U), BytecodeAssemblerError>
+where
+    T: ValueNewType<ConvertFrom = u32>,
+    U: ValueNewType<ConvertFrom = u32>,
 {
     let (arg1, arg2) = two_arguments(args)?;
 
-    Ok((T::try_from_str(arg1)?, U::try_from_str(arg2)?))
+    Ok((parse_uvnt(arg1)?, parse_uvnt(arg2)?))
 }
 
 fn ticks_no_keyoff_argument(args: &[&str]) -> Result<BcTicksNoKeyOff, BytecodeAssemblerError> {
@@ -147,7 +155,7 @@ fn vibrato_depth_and_play_note_argument(
         _ => return Err(BytecodeAssemblerError::InvalidNumberOfArgumentsRange(3, 4)),
     };
 
-    let depth = VibratoPitchOffsetPerTick::try_from_str(depth)?;
+    let depth = parse_uvnt(depth)?;
     let note = Note::parse_bytecode_argument(note)?;
     let ticks = parse_play_note_ticks(ticks, key_off)?;
 
@@ -167,7 +175,7 @@ fn portamento_argument(
         Some('-') => -1,
         _ => return Err(BytecodeAssemblerError::NoDirectionInPortamentoVelocity),
     };
-    let velocity = PortamentoVelocity::try_from_str(velocity)?;
+    let velocity = parse_svnt(velocity)?;
 
     Ok((note, velocity, ticks))
 }
@@ -233,13 +241,13 @@ fn early_release_arguments(
 ) -> Result<(EarlyReleaseTicks, EarlyReleaseMinTicks, OptionalGain), BytecodeAssemblerError> {
     match args.len() {
         2 => Ok((
-            EarlyReleaseTicks::try_from_str(args[0])?,
-            EarlyReleaseMinTicks::try_from_str(args[1])?,
+            parse_uvnt(args[0])?,
+            parse_uvnt(args[1])?,
             OptionalGain::NONE,
         )),
         3 => Ok((
-            EarlyReleaseTicks::try_from_str(args[0])?,
-            EarlyReleaseMinTicks::try_from_str(args[1])?,
+            parse_uvnt(args[0])?,
+            parse_uvnt(args[1])?,
             OptionalGain::try_from_str_forbid_none_and_raw(args[2])?,
         )),
         _ => Err(BytecodeAssemblerError::InvalidNumberOfArgumentsRange(2, 3)),
@@ -251,7 +259,7 @@ fn optional_loop_count_argument(
 ) -> Result<Option<LoopCount>, BytecodeAssemblerError> {
     match args.len() {
         0 => Ok(None),
-        1 => Ok(Some(LoopCount::try_from_str(args[0])?)),
+        1 => Ok(Some(parse_uvnt(args[0])?)),
         _ => Err(BytecodeAssemblerError::InvalidNumberOfArgumentsRange(0, 1)),
     }
 }
@@ -291,6 +299,46 @@ fn parse_u32(s: &str) -> Result<u32, ValueError> {
             Err(_) => Err(ValueError::CannotParseUnsigned(s.to_owned())),
         },
     }
+}
+
+fn parse_i32(src: &str) -> Result<i32, ValueError> {
+    if let Some(s) = src.strip_prefix("+$") {
+        match i32::from_str_radix(s, 16) {
+            Ok(i) => Ok(i),
+            Err(_) => Err(ValueError::CannotParseHex(src.to_owned())),
+        }
+    } else if let Some(s) = src.strip_prefix("-$") {
+        match i32::from_str_radix(s, 16) {
+            Ok(i) => Ok(-i),
+            Err(_) => Err(ValueError::CannotParseHex(src.to_owned())),
+        }
+    } else if let Some(s) = src.strip_prefix("$") {
+        match i32::from_str_radix(s, 16) {
+            Ok(i) => Ok(i),
+            Err(_) => Err(ValueError::CannotParseHex(src.to_owned())),
+        }
+    } else {
+        match src.parse() {
+            Ok(i) => Ok(i),
+            Err(_) => Err(ValueError::CannotParseSigned(src.to_owned())),
+        }
+    }
+}
+
+/// Parse Unsigned ValueNewType
+fn parse_uvnt<T>(s: &str) -> Result<T, BytecodeAssemblerError>
+where
+    T: ValueNewType<ConvertFrom = u32>,
+{
+    Ok(parse_u32(s)?.try_into()?)
+}
+
+/// Parse Unsigned ValueNewType
+fn parse_svnt<T>(s: &str) -> Result<T, BytecodeAssemblerError>
+where
+    T: ValueNewType<ConvertFrom = i32>,
+{
+    Ok(parse_i32(s)?.try_into()?)
 }
 
 pub fn parse_asm_line(bc: &mut Bytecode, line: &str) -> Result<(), BytecodeAssemblerError> {
@@ -368,7 +416,7 @@ pub fn parse_asm_line(bc: &mut Bytecode, line: &str) -> Result<(), BytecodeAssem
        portamento 3 portamento_argument,
        set_vibrato_depth_and_play_note 3 vibrato_depth_and_play_note_argument,
 
-       set_vibrato 2 two_vnt_arguments,
+       set_vibrato 2 two_uvnt_arguments,
        disable_vibrato 0 no_arguments,
 
        set_instrument 1 one_argument set_instrument_str,
@@ -389,11 +437,11 @@ pub fn parse_asm_line(bc: &mut Bytecode, line: &str) -> Result<(), BytecodeAssem
        disable_early_release 0 no_arguments,
        set_early_release 3 early_release_arguments,
 
-       adjust_volume 1 one_vnt_argument,
-       set_volume 1 one_vnt_argument,
-       adjust_pan 1 one_vnt_argument,
-       set_pan 1 one_vnt_argument,
-       set_pan_and_volume 2 two_vnt_arguments,
+       adjust_volume 1 one_svnt_argument,
+       set_volume 1 one_uvnt_argument,
+       adjust_pan 1 one_svnt_argument,
+       set_pan 1 one_uvnt_argument,
+       set_pan_and_volume 2 two_uvnt_arguments,
 
        enable_echo 0 no_arguments,
        disable_echo 0 no_arguments,
@@ -405,7 +453,7 @@ pub fn parse_asm_line(bc: &mut Bytecode, line: &str) -> Result<(), BytecodeAssem
        call_subroutine_and_disable_vibrato 1 one_argument call_subroutine_and_disable_vibrato_str,
        call_subroutine 1 one_argument call_subroutine_str,
 
-       set_song_tick_clock 1 one_vnt_argument,
+       set_song_tick_clock 1 one_uvnt_argument,
     )
 }
 
