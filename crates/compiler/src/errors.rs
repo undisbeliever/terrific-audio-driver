@@ -174,7 +174,6 @@ pub enum ValueError {
     NoName,
     NoBool,
     NoNote,
-    NoIncrementOrDecrement,
     NoVolume,
     NoPan,
     NoRelativeVolume,
@@ -882,9 +881,6 @@ impl Display for ValueError {
             Self::NoName => write!(f, "no name"),
             Self::NoBool => write!(f, "no bool"),
             Self::NoNote => write!(f, "no note"),
-            Self::NoIncrementOrDecrement => {
-                write!(f, "cannot parse relative value: expected a + or -")
-            }
             Self::NoVolume => write!(f, "no volume"),
             Self::NoPan => write!(f, "no pan"),
             Self::NoRelativeVolume => write!(f, "no relative volume"),
