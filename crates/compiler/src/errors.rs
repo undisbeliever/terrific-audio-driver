@@ -8,8 +8,8 @@ use relative_path::RelativeToError;
 
 use crate::bytecode::{
     BcTicks, BcTicksKeyOff, BcTicksNoKeyOff, EarlyReleaseMinTicks, EarlyReleaseTicks, InstrumentId,
-    LoopCount, Pan, PitchOffsetPerTick, PortamentoVelocity, QuarterWavelengthInTicks, RelativePan,
-    RelativeVolume, Volume,
+    LoopCount, Pan, PortamentoVelocity, RelativePan, RelativeVolume, VibratoPitchOffsetPerTick,
+    VibratoQuarterWavelengthInTicks, Volume,
 };
 use crate::data::{LoopSetting, Name};
 use crate::driver_constants::{
@@ -127,8 +127,8 @@ pub enum ValueError {
 
     EarlyReleaseTicksOutOfRange,
     EarlyReleaseMinTicksOutOfRange,
-    PitchOffsetPerTickOutOfRange,
-    QuarterWavelengthOutOfRange,
+    VibratoPitchOffsetPerTickOutOfRange,
+    VibratoQuarterWavelengthOutOfRange,
 
     PortamentoVelocityZero,
     PortamentoVelocityOutOfRange,
@@ -185,10 +185,10 @@ pub enum ValueError {
     NoPortamentoSpeed,
     NoPortamentoVelocity,
     NoMpDepth,
-    NoPitchOffsetPerTick,
+    NoVibratoPitchOffsetPerTick,
     NoVibratoDepth,
     NoCommaQuarterWavelength,
-    NoQuarterWavelength,
+    NoVibratoQuarterWavelength,
     NoEchoEdl,
     NoInstrumentId,
     NoGain,
@@ -789,11 +789,14 @@ impl Display for ValueError {
             Self::EarlyReleaseMinTicksOutOfRange => {
                 out_of_range!("early-release minimum ticks", EarlyReleaseMinTicks)
             }
-            Self::PitchOffsetPerTickOutOfRange => {
-                out_of_range!("pitch offset per tick", PitchOffsetPerTick)
+            Self::VibratoPitchOffsetPerTickOutOfRange => {
+                out_of_range!("vibrato pitch offset per tick", VibratoPitchOffsetPerTick)
             }
-            Self::QuarterWavelengthOutOfRange => {
-                out_of_range!("quarter wavelength", QuarterWavelengthInTicks)
+            Self::VibratoQuarterWavelengthOutOfRange => {
+                out_of_range!(
+                    "vibrato quarter wavelength",
+                    VibratoQuarterWavelengthInTicks
+                )
             }
 
             Self::PortamentoVelocityZero => write!(f, "portamento velocity cannot be 0"),
@@ -882,12 +885,12 @@ impl Display for ValueError {
             Self::NoPortamentoSpeed => write!(f, "no portamento speed"),
             Self::NoPortamentoVelocity => write!(f, "no portamento velocity"),
             Self::NoMpDepth => write!(f, "no MP depth"),
-            Self::NoPitchOffsetPerTick => write!(f, "no pitch-offset-per-tick"),
+            Self::NoVibratoPitchOffsetPerTick => write!(f, "no vibrato pitch-offset-per-tick"),
             Self::NoVibratoDepth => write!(f, "no vibrato depth"),
             Self::NoCommaQuarterWavelength => {
                 write!(f, "cannot parse quarter-wavelength, expected a comma ','")
             }
-            Self::NoQuarterWavelength => write!(f, "no quarter-wavelength"),
+            Self::NoVibratoQuarterWavelength => write!(f, "no vibrato quarter-wavelength"),
             Self::NoEchoEdl => write!(f, "no echo EDL"),
             Self::NoInstrumentId => write!(f, "no instrument id"),
             Self::NoGain => write!(f, "no gain"),
@@ -1283,7 +1286,7 @@ impl Display for MmlError {
                     f,
                     "cannot MP vibrato note.  Pitch offset per tick too large ({}, max: {})",
                     po,
-                    PitchOffsetPerTick::MAX.value()
+                    VibratoPitchOffsetPerTick::MAX.value()
                 )
             }
             Self::MpDepthZero => write!(f, "MP vibrato depth cannot be 0"),

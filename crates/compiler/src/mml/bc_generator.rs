@@ -23,8 +23,8 @@ use crate::songs::{BytecodePos, SongBcTracking};
 
 use crate::bytecode::{
     BcTerminator, BcTicks, BcTicksKeyOff, BcTicksNoKeyOff, Bytecode, BytecodeContext, IeState,
-    LoopCount, PitchOffsetPerTick, PlayNoteTicks, PortamentoVelocity, RelativeVolume,
-    SlurredNoteState, SubroutineId, VibratoState, KEY_OFF_TICK_DELAY,
+    LoopCount, PlayNoteTicks, PortamentoVelocity, RelativeVolume, SlurredNoteState, SubroutineId,
+    VibratoPitchOffsetPerTick, VibratoState, KEY_OFF_TICK_DELAY,
 };
 use crate::errors::{ErrorWithPos, MmlChannelError, MmlError, ValueError};
 use crate::notes::{Note, SEMITONES_PER_OCTAVE};
@@ -240,7 +240,7 @@ impl ChannelBcGenerator<'_> {
                 self.bc.play_note(note, pn_length)?;
             }
             MpState::Disabled => {
-                const POPT: PitchOffsetPerTick = PitchOffsetPerTick::new(0);
+                const POPT: VibratoPitchOffsetPerTick = VibratoPitchOffsetPerTick::new(0);
 
                 let vibrato_disabled = match vibrato {
                     VibratoState::Unchanged => true,

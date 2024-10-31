@@ -35,14 +35,14 @@ i8_value_newtype!(RelativeVolume, RelativeVolumeOutOfRange, NoVolume);
 i8_value_newtype!(RelativePan, RelativePanOutOfRange, NoPan);
 
 u8_value_newtype!(
-    PitchOffsetPerTick,
-    PitchOffsetPerTickOutOfRange,
-    NoPitchOffsetPerTick
+    VibratoPitchOffsetPerTick,
+    VibratoPitchOffsetPerTickOutOfRange,
+    NoVibratoPitchOffsetPerTick
 );
 u8_value_newtype!(
-    QuarterWavelengthInTicks,
-    QuarterWavelengthOutOfRange,
-    NoQuarterWavelength,
+    VibratoQuarterWavelengthInTicks,
+    VibratoQuarterWavelengthOutOfRange,
+    NoVibratoQuarterWavelength,
     1,
     64
 );
@@ -556,7 +556,7 @@ pub enum VibratoState {
     Unknown,
     // Disabled with an unknown value
     Disabled,
-    Set(PitchOffsetPerTick, QuarterWavelengthInTicks),
+    Set(VibratoPitchOffsetPerTick, VibratoQuarterWavelengthInTicks),
 }
 
 impl VibratoState {
@@ -569,7 +569,7 @@ impl VibratoState {
         }
     }
 
-    fn set_depth(&mut self, depth: PitchOffsetPerTick) {
+    fn set_depth(&mut self, depth: VibratoPitchOffsetPerTick) {
         *self = match self {
             VibratoState::Unchanged | VibratoState::Unknown | VibratoState::Disabled => {
                 if depth.as_u8() > 0 {
@@ -587,7 +587,7 @@ impl VibratoState {
             VibratoState::Unchanged => VibratoState::Disabled,
             VibratoState::Unknown => VibratoState::Disabled,
             VibratoState::Disabled => VibratoState::Disabled,
-            VibratoState::Set(_, qwt) => VibratoState::Set(PitchOffsetPerTick::new(0), *qwt),
+            VibratoState::Set(_, qwt) => VibratoState::Set(VibratoPitchOffsetPerTick::new(0), *qwt),
         }
     }
 }
@@ -906,7 +906,7 @@ impl<'a> Bytecode<'a> {
 
     pub fn set_vibrato_depth_and_play_note(
         &mut self,
-        pitch_offset_per_tick: PitchOffsetPerTick,
+        pitch_offset_per_tick: VibratoPitchOffsetPerTick,
         note: Note,
         length: PlayNoteTicks,
     ) {
@@ -926,8 +926,8 @@ impl<'a> Bytecode<'a> {
 
     pub fn set_vibrato(
         &mut self,
-        pitch_offset_per_tick: PitchOffsetPerTick,
-        quarter_wavelength_ticks: QuarterWavelengthInTicks,
+        pitch_offset_per_tick: VibratoPitchOffsetPerTick,
+        quarter_wavelength_ticks: VibratoQuarterWavelengthInTicks,
     ) {
         self.state.vibrato = VibratoState::Set(pitch_offset_per_tick, quarter_wavelength_ticks);
 

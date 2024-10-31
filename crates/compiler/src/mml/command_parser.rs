@@ -11,8 +11,9 @@ use super::{IdentifierStr, Section};
 use super::note_tracking::CursorTracker;
 
 use crate::bytecode::{
-    EarlyReleaseMinTicks, EarlyReleaseTicks, LoopCount, Pan, PitchOffsetPerTick, PlayNoteTicks,
-    QuarterWavelengthInTicks, RelativePan, SubroutineId, Volume, KEY_OFF_TICK_DELAY,
+    EarlyReleaseMinTicks, EarlyReleaseTicks, LoopCount, Pan, PlayNoteTicks, RelativePan,
+    SubroutineId, VibratoPitchOffsetPerTick, VibratoQuarterWavelengthInTicks, Volume,
+    KEY_OFF_TICK_DELAY,
 };
 use crate::envelope::{Adsr, Gain, GainMode, OptionalGain, TempGain};
 use crate::errors::{ErrorWithPos, MmlError, ValueError};
@@ -141,13 +142,13 @@ fn merge_pan_commands(p1: Option<PanCommand>, p2: PanCommand) -> PanCommand {
 #[derive(Copy, Clone, PartialEq)]
 pub struct MpVibrato {
     pub depth_in_cents: u32,
-    pub quarter_wavelength_ticks: QuarterWavelengthInTicks,
+    pub quarter_wavelength_ticks: VibratoQuarterWavelengthInTicks,
 }
 
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub struct ManualVibrato {
-    pub pitch_offset_per_tick: PitchOffsetPerTick,
-    pub quarter_wavelength_ticks: QuarterWavelengthInTicks,
+    pub pitch_offset_per_tick: VibratoPitchOffsetPerTick,
+    pub quarter_wavelength_ticks: VibratoQuarterWavelengthInTicks,
 }
 
 pub enum MmlCommand {
@@ -1537,7 +1538,7 @@ fn parse_mp_vibrato(pos: FilePos, p: &mut Parser) -> Option<MpVibrato> {
 }
 
 fn parse_manual_vibrato(pos: FilePos, p: &mut Parser) -> Option<ManualVibrato> {
-    let pitch_offset_per_tick: PitchOffsetPerTick = match parse_unsigned_newtype(pos, p) {
+    let pitch_offset_per_tick: VibratoPitchOffsetPerTick = match parse_unsigned_newtype(pos, p) {
         Some(v) => v,
         None => return None,
     };

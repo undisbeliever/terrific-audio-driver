@@ -6,7 +6,7 @@
 
 use crate::bytecode::{
     BcTicksKeyOff, BcTicksNoKeyOff, Bytecode, EarlyReleaseMinTicks, EarlyReleaseTicks, LoopCount,
-    PitchOffsetPerTick, PlayNoteTicks, PortamentoVelocity, State, SubroutineId,
+    PlayNoteTicks, PortamentoVelocity, State, SubroutineId, VibratoPitchOffsetPerTick,
 };
 use crate::data::{InstrumentOrSample, UniqueNamesList};
 use crate::envelope::{Adsr, Gain, OptionalGain, TempGain};
@@ -140,14 +140,14 @@ fn play_note_argument(args: &[&str]) -> Result<(Note, PlayNoteTicks), BytecodeAs
 
 fn vibrato_depth_and_play_note_argument(
     args: &[&str],
-) -> Result<(PitchOffsetPerTick, Note, PlayNoteTicks), BytecodeAssemblerError> {
+) -> Result<(VibratoPitchOffsetPerTick, Note, PlayNoteTicks), BytecodeAssemblerError> {
     let (depth, note, key_off, ticks) = match args.len() {
         3 => (args[0], args[1], "", args[2]),
         4 => (args[0], args[1], args[2], args[3]),
         _ => return Err(BytecodeAssemblerError::InvalidNumberOfArgumentsRange(3, 4)),
     };
 
-    let depth = PitchOffsetPerTick::try_from_str(depth)?;
+    let depth = VibratoPitchOffsetPerTick::try_from_str(depth)?;
     let note = Note::parse_bytecode_argument(note)?;
     let ticks = parse_play_note_ticks(ticks, key_off)?;
 
