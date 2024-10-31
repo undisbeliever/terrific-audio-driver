@@ -133,6 +133,7 @@ pub enum ValueError {
     NoRelativeVolumeSign,
     NoRelativePanSign,
     NoDirectionInPortamentoVelocity,
+    NoTransposeSign,
 
     PortamentoVelocityZero,
     PortamentoVelocityOutOfRange,
@@ -812,6 +813,10 @@ impl Display for ValueError {
             Self::NoDirectionInPortamentoVelocity => {
                 write!(f, "missing + or - in portamento velocity")
             }
+            Self::NoTransposeSign => {
+                write!(f, "missing + or - in transpose value")
+            }
+
             Self::PortamentoVelocityZero => write!(f, "portamento velocity cannot be 0"),
             Self::PortamentoVelocityOutOfRange => {
                 out_of_range!("portamento velocity", PortamentoVelocity)

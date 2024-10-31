@@ -23,7 +23,7 @@ use crate::time::{
     Bpm, MmlDefaultLength, MmlLength, TickClock, TickCounter, TickCounterWithLoopFlag, ZenLen,
     STARTING_MML_LENGTH,
 };
-use crate::value_newtypes::{i8_value_newtype, u8_value_newtype};
+use crate::value_newtypes::{i8_value_newtype, u8_value_newtype, SignedValueNewType};
 use crate::ValueNewType;
 
 use std::cmp::min;
@@ -40,7 +40,7 @@ u8_value_newtype!(
     PortamentoSpeedOutOfRange,
     NoPortamentoSpeed
 );
-i8_value_newtype!(Transpose, TransposeOutOfRange, NoTranspose);
+i8_value_newtype!(Transpose, TransposeOutOfRange, NoTranspose, NoTransposeSign);
 
 u8_value_newtype!(Quantization, QuantizeOutOfRange, NoQuantize, 0, 8);
 u8_value_newtype!(FineQuantization, FineQuantizeOutOfRange, NoFineQuantizate);
@@ -565,7 +565,7 @@ where
 
 fn parse_signed_newtype<T>(pos: FilePos, p: &mut Parser) -> Option<T>
 where
-    T: ValueNewType + TryFrom<i32, Error = ValueError>,
+    T: SignedValueNewType,
 {
     match_next_token!(
         p,
@@ -578,6 +578,10 @@ where
                     None
                 }
             }
+        },
+        &Token::Number(_) => {
+            p.add_error(pos, T::MISSING_SIGN_ERROR.into());
+            None
         },
         #_ => {
             p.add_error(pos, T::MISSING_ERROR.into());

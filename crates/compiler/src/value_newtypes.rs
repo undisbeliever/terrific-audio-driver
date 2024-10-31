@@ -148,7 +148,7 @@ macro_rules! u8_value_newtype {
 }
 
 macro_rules! i8_value_newtype {
-    ($name:ident, $error:ident, $missing_error:ident) => {
+    ($name:ident, $error:ident, $missing_error:ident, $missing_sign_error:ident) => {
         #[derive(Debug, Copy, Clone, PartialEq)]
         pub struct $name(i8);
 
@@ -175,6 +175,10 @@ macro_rules! i8_value_newtype {
             }
         }
 
+        impl crate::value_newtypes::SignedValueNewType for $name {
+            const MISSING_SIGN_ERROR: ValueError = ValueError::$missing_sign_error;
+        }
+
         impl TryFrom<i32> for $name {
             type Error = ValueError;
 
@@ -184,14 +188,6 @@ macro_rules! i8_value_newtype {
                     Err(_) => Err(ValueError::$error),
                 }
             }
-        }
-    };
-
-    ($name:ident, $error:ident, $missing_error:ident, $missing_sign_error:ident) => {
-        crate::value_newtypes::i8_value_newtype!($name, $error, $missing_error);
-
-        impl crate::value_newtypes::SignedValueNewType for $name {
-            const MISSING_SIGN_ERROR: ValueError = ValueError::$missing_sign_error;
         }
     };
 }
