@@ -36,6 +36,9 @@ pub const COARSE_VOLUME_MULTIPLIER: u8 = 16;
 pub const MIN_RELATIVE_COARSE_VOLUME: i8 = i8::MIN / COARSE_VOLUME_MULTIPLIER as i8;
 pub const MAX_RELATIVE_COARSE_VOLUME: i8 = i8::MAX / COARSE_VOLUME_MULTIPLIER as i8;
 
+pub const PX_PAN_RANGE: std::ops::RangeInclusive<i32> =
+    (-(Pan::CENTER.as_u8() as i32))..=(Pan::CENTER.as_u8() as i32);
+
 u8_value_newtype!(
     PortamentoSpeed,
     PortamentoSpeedOutOfRange,
@@ -1045,6 +1048,31 @@ fn parse_pan_value(pos: FilePos, p: &mut Parser) -> Option<PanCommand> {
     )
 }
 
+fn parse_px_pan_value(pos: FilePos, p: &mut Parser) -> Option<PanCommand> {
+    match_next_token!(
+        p,
+
+        &Token::Number(0) => {
+            Some(PanCommand::Absolute(Pan::CENTER))
+        },
+        &Token::RelativeNumber(n) => {
+            if PX_PAN_RANGE.contains(&n) {
+                let p = n + i32::from(Pan::CENTER.as_u8());
+                Some(PanCommand::Absolute(Pan::try_from(u8::try_from(p).unwrap()).unwrap()))
+            }
+            else {
+                p.add_error(pos, ValueError::PxPanOutOfRange.into());
+                None
+            }
+        },
+        &Token::Number(_) => {
+            p.add_error(pos, ValueError::NoPxPanSign.into());
+            None
+        },
+        #_ => None
+    )
+}
+
 fn parse_fine_volume_value(pos: FilePos, p: &mut Parser) -> Option<VolumeCommand> {
     match_next_token!(
         p,
@@ -1114,6 +1142,11 @@ fn merge_pan_or_volume(
             },
             Token::Pan => {
                 if let Some(new_pan) = parse_pan_value(pos, p) {
+                    pan = Some(merge_pan_commands(pan, new_pan));
+                }
+            },
+            Token::PxPan => {
+                if let Some(new_pan) = parse_px_pan_value(pos, p) {
                     pan = Some(merge_pan_commands(pan, new_pan));
                 }
             },
@@ -1770,6 +1803,10 @@ fn parse_token(pos: FilePos, token: Token, p: &mut Parser) -> MmlCommand {
         }
         Token::Pan => {
             let pan = parse_pan_value(pos, p);
+            merge_pan_or_volume(pan, None, p)
+        }
+        Token::PxPan => {
+            let pan = parse_px_pan_value(pos, p);
             merge_pan_or_volume(pan, None, p)
         }
 

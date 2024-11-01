@@ -13,6 +13,10 @@ Bytecode assembly changes:
 
 MML changes:
  * Fixed maximum vibrato quarter wavelength value
+ * Added `px` set pan command
+    * `px0` is centered
+    * Negative `px` values pan to the left. `px-64` is 100% to the left.
+    * Positive `px` values pan to the right. `px+64` is 100% to the right.
 
 
 Version 0.0.13

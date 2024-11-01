@@ -18,6 +18,7 @@ Song metadata:
  * `#Date`
  * `#License`
 
+* Added `px` Pan command
 <br/>
 
 The song tempo can be set with either `#Tempo` or `#Timer`:
@@ -251,6 +252,11 @@ Numbers can be decimal, or hexadecimal when prefixed with `$` (ie, `$ff`)
  * `p<0..128>` - Set pan
     * A pan of 0 will output to the left speaker only.  A pan of 128 will output to the right speaker only.
     * The default pan is 64 (centered).
+    * Panning is disabled if the stereo flag is false (mono output).
+ * `px<-64..+64>` - Set pan
+    * Negative `px` values pan to the left. `px-64` is 100% to the left.
+    * Positive `px` values pan to the right. `px+64` is 100% to the right.
+    * `px0` is centered
     * Panning is disabled if the stereo flag is false (mono output).
  * `p-<1..128>` - Decrement pan (pan to the left)
  * `p+<1..128>` - Increment pan (pan to the right)

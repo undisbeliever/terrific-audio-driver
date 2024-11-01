@@ -2617,6 +2617,32 @@ fn test_merge_pan() {
 }
 
 #[test]
+fn test_px_pan() {
+    assert_line_matches_bytecode("px0", &["set_pan 64"]);
+    assert_line_matches_bytecode("px-64", &["set_pan 0"]);
+    assert_line_matches_bytecode("px+64", &["set_pan 128"]);
+
+    assert_error_in_mml_line("px-65", 1, ValueError::PxPanOutOfRange.into());
+    assert_error_in_mml_line("px+65", 1, ValueError::PxPanOutOfRange.into());
+
+    assert_line_matches_bytecode("px+16", &["set_pan 80"]);
+    assert_line_matches_bytecode("px+32", &["set_pan 96"]);
+    assert_line_matches_bytecode("px-48", &["set_pan 16"]);
+    assert_line_matches_bytecode("px-15", &["set_pan 49"]);
+}
+
+#[test]
+fn test_merge_pan_px() {
+    merge_mml_commands_test("px+1 px-2 || px+3 px-4", &["set_pan 60"]);
+    merge_mml_commands_test("px-1 px+2 || px-3 px+4", &["set_pan 68"]);
+
+    merge_mml_commands_test("px-20 || p+5 p+6", &["set_pan 55"]);
+    merge_mml_commands_test("px+40 || p+100", &["set_pan 128"]);
+    merge_mml_commands_test("px-50 p+5 || px+10", &["set_pan 74"]);
+    merge_mml_commands_test("p+1 || px+20 p-40", &["set_pan 44"]);
+}
+
+#[test]
 fn test_merge_coarse_volume() {
     merge_mml_commands_test("v1 v2 || v3 v4", &["set_volume 64"]);
 

@@ -22,7 +22,7 @@ use crate::envelope::Gain;
 use crate::file_pos::{FilePosRange, MAX_MML_TEXT_LENGTH};
 use crate::mml::command_parser::{
     FineQuantization, PortamentoSpeed, Quantization, Transpose, MAX_COARSE_VOLUME,
-    MAX_RELATIVE_COARSE_VOLUME, MIN_RELATIVE_COARSE_VOLUME,
+    MAX_RELATIVE_COARSE_VOLUME, MIN_RELATIVE_COARSE_VOLUME, PX_PAN_RANGE,
 };
 use crate::mml::MAX_BROKEN_CHORD_NOTES;
 use crate::notes::{MidiNote, Note, Octave};
@@ -118,6 +118,7 @@ pub enum ValueError {
     BcTicksKeyOffOutOfRange,
     BcTicksNoKeyOffOutOfRange,
 
+    PxPanOutOfRange,
     PanOutOfRange,
     VolumeOutOfRange,
     CoarseVolumeOutOfRange,
@@ -131,6 +132,7 @@ pub enum ValueError {
     VibratoPitchOffsetPerTickOutOfRange,
     VibratoQuarterWavelengthOutOfRange,
 
+    NoPxPanSign,
     NoRelativeVolumeSign,
     NoRelativePanSign,
     NoDirectionInPortamentoVelocity,
@@ -775,6 +777,12 @@ impl Display for ValueError {
                 BcTicksNoKeyOff::MAX_TICKS
             ),
 
+            Self::PxPanOutOfRange => write!(
+                f,
+                "px pan out of bounds ({} - {})",
+                PX_PAN_RANGE.start(),
+                PX_PAN_RANGE.end()
+            ),
             Self::PanOutOfRange => out_of_range!("pan", Pan),
             Self::VolumeOutOfRange => out_of_range!("volume", Volume),
             Self::CoarseVolumeOutOfRange => {
@@ -805,6 +813,9 @@ impl Display for ValueError {
                 )
             }
 
+            Self::NoPxPanSign => {
+                write!(f, "missing + or - in px pan")
+            }
             Self::NoRelativeVolumeSign => {
                 write!(f, "missing + or - in relative volume")
             }
