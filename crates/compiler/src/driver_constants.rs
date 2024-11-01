@@ -101,9 +101,6 @@ pub const FIRST_SFX_CHANNEL: usize = N_MUSIC_CHANNELS;
 
 pub const N_DSP_VOICES: usize = 8;
 
-pub const MAX_PAN: u8 = 128;
-pub const CENTER_PAN: u8 = MAX_PAN / 2;
-
 pub const BC_CHANNEL_STACK_SIZE: usize = 21;
 pub const BC_CHANNEL_STACK_OFFSET: usize = 6;
 pub const BC_TOTAL_STACK_SIZE: usize = BC_CHANNEL_STACK_SIZE * N_CHANNELS;

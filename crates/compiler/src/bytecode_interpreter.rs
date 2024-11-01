@@ -9,7 +9,7 @@ use crate::bytecode::Pan;
 use crate::common_audio_data::CommonAudioData;
 use crate::driver_constants::{
     addresses, LoaderDataType, BC_CHANNEL_STACK_OFFSET, BC_CHANNEL_STACK_SIZE,
-    BC_STACK_BYTES_PER_LOOP, CENTER_PAN, COMMON_DATA_BYTES_PER_INSTRUMENT, N_MUSIC_CHANNELS,
+    BC_STACK_BYTES_PER_LOOP, COMMON_DATA_BYTES_PER_INSTRUMENT, N_MUSIC_CHANNELS,
     SONG_HEADER_N_SUBROUTINES_OFFSET, SONG_HEADER_SIZE, STARTING_VOLUME, S_DSP_EON_REGISTER,
     S_SMP_TIMER_0_REGISTER,
 };
@@ -835,7 +835,7 @@ fn unused_channel(channel_index: usize) -> Channel {
             loop_stack_pointer: stack_pointer - BC_STACK_BYTES_PER_LOOP as u8,
             inst_pitch_offset: 0,
             volume: STARTING_VOLUME,
-            pan: CENTER_PAN,
+            pan: Pan::CENTER.as_u8(),
             vibrato_pitch_offset_per_tick: 0,
             vibrato_tick_counter_start: 0,
             vibrato_tick_counter: 0,

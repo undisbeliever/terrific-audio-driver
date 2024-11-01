@@ -10,7 +10,7 @@ use crate::sfx_export_order::{GuiSfxExportOrder, SfxExportOrderAction};
 use crate::GuiMessage;
 
 use crate::audio_thread::{
-    AudioMessage, CommonAudioDataWithSfxBuffer, MusicChannelsMask, Pan, SongSkip, SFX_BUFFER_SIZE,
+    AudioMessage, CommonAudioDataWithSfxBuffer, MusicChannelsMask, SongSkip, SFX_BUFFER_SIZE,
 };
 
 use std::collections::hash_map::Entry;
@@ -44,6 +44,7 @@ use compiler::sound_effects::{
 };
 use compiler::sound_effects::{compile_sound_effect_input, CompiledSoundEffect, SoundEffectInput};
 use compiler::spc_file_export::export_spc_file;
+use compiler::Pan;
 
 extern crate fltk;
 

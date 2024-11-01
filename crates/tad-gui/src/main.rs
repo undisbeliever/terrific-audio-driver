@@ -61,7 +61,7 @@ use crate::tabs::{
     Tab, TabManager,
 };
 
-use audio_thread::{AudioMessage, AudioMonitor, MusicChannelsMask, Pan, SongSkip};
+use audio_thread::{AudioMessage, AudioMonitor, MusicChannelsMask, SongSkip};
 
 use compiler::data;
 use compiler::data::{DefaultSfxFlags, ProjectFile};
@@ -70,6 +70,7 @@ use compiler::path::{ParentPathBuf, SourcePathBuf};
 use compiler::sfx_file::{convert_sfx_inputs_lossy, SoundEffectsFile};
 use compiler::songs::SongData;
 use compiler::sound_effects::SoundEffectInput;
+use compiler::Pan;
 
 use compiler::time::TickCounter;
 use compiler_thread::{PlaySampleArgs, SampleOutput, ShortSongError};

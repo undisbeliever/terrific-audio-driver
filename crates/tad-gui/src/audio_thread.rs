@@ -11,17 +11,17 @@ use compiler::audio_driver;
 use compiler::bytecode_interpreter;
 use compiler::bytecode_interpreter::SongInterpreter;
 use compiler::common_audio_data::CommonAudioData;
-use compiler::driver_constants::MAX_PAN;
 use compiler::driver_constants::N_CHANNELS;
 use compiler::driver_constants::N_DSP_VOICES;
 use compiler::driver_constants::N_MUSIC_CHANNELS;
 use compiler::driver_constants::{
-    addresses, io_commands, LoaderDataType, CENTER_PAN, FIRST_SFX_CHANNEL, IO_COMMAND_I_MASK,
-    IO_COMMAND_MASK, N_SFX_CHANNELS,
+    addresses, io_commands, LoaderDataType, FIRST_SFX_CHANNEL, IO_COMMAND_I_MASK, IO_COMMAND_MASK,
+    N_SFX_CHANNELS,
 };
 use compiler::songs::{blank_song, SongData};
 use compiler::sound_effects::CompiledSoundEffect;
 use compiler::time::TickCounter;
+use compiler::Pan;
 
 use sdl2::Sdl;
 use shvc_sound_emu::ShvcSoundEmu;
@@ -50,19 +50,6 @@ const LOOPING_BRR_SAMPLE_SAMPLES: usize = 24000;
 
 // Amount of Audio-RAM (in common-audio-data) to allocate to sound effects
 pub const SFX_BUFFER_SIZE: usize = 128;
-
-#[derive(Debug, Clone, Copy)]
-pub struct Pan(u8);
-
-impl Pan {
-    pub fn checked_new(value: u8) -> Self {
-        if value <= MAX_PAN {
-            Self(value)
-        } else {
-            Self(CENTER_PAN)
-        }
-    }
-}
 
 #[derive(Debug, Clone, Copy)]
 pub struct MusicChannelsMask(pub u8);
@@ -745,7 +732,11 @@ impl TadEmu {
             SfxQueue::None => (),
             SfxQueue::PlaySfx(sfx_id, pan) => {
                 if self.is_io_command_acknowledged() {
-                    self.try_send_io_command(io_commands::PLAY_SOUND_EFFECT, sfx_id.value(), pan.0);
+                    self.try_send_io_command(
+                        io_commands::PLAY_SOUND_EFFECT,
+                        sfx_id.value(),
+                        pan.as_u8(),
+                    );
                     self.sfx_queue = SfxQueue::None;
                 }
             }
@@ -775,7 +766,7 @@ impl TadEmu {
 
                 if active_sfx_channels {
                     // sfx_buffer can only onld one sound effect at a time
-                    self.try_send_io_command(io_commands::STOP_SOUND_EFFECTS, 0, pan.0);
+                    self.try_send_io_command(io_commands::STOP_SOUND_EFFECTS, 0, pan.as_u8());
                 } else {
                     let bc_addr_range = common_data.0.sfx_bytecode_addr_range();
                     let bc_addr_range = bc_addr_range.start.into()..bc_addr_range.end.into();
@@ -784,7 +775,7 @@ impl TadEmu {
                     let sfx_buffer = &mut apuram[bc_addr_range];
                     sfx_buffer[..bc.len()].copy_from_slice(bc);
 
-                    self.try_send_io_command(io_commands::PLAY_SOUND_EFFECT, 0, pan.0);
+                    self.try_send_io_command(io_commands::PLAY_SOUND_EFFECT, 0, pan.as_u8());
                     self.sfx_queue = SfxQueue::None;
                 }
             }

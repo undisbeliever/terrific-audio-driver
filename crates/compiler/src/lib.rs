@@ -31,6 +31,8 @@ pub mod spc_file_export;
 pub mod time;
 
 pub use bytecode::opcodes;
+
+pub use bytecode::Pan;
 pub use file_pos::{FilePos, FilePosRange};
 
 pub mod audio_driver {

@@ -59,6 +59,10 @@ u8_value_newtype!(
     64
 );
 
+impl Pan {
+    pub const CENTER: Pan = Self(Self::MAX.0 / 2);
+}
+
 pub enum BytecodeContext {
     SongSubroutine,
     SongChannel,

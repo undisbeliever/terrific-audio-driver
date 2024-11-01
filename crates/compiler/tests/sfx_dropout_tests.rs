@@ -14,8 +14,8 @@ use compiler::common_audio_data::{build_common_audio_data, CommonAudioData};
 use compiler::data;
 use compiler::data::{validate_sfx_export_order, DefaultSfxFlags, Instrument, Name};
 use compiler::driver_constants::{
-    addresses, io_commands, LoaderDataType, CENTER_PAN, FIRST_SFX_CHANNEL, IO_COMMAND_I_MASK,
-    IO_COMMAND_MASK, N_SFX_CHANNELS,
+    addresses, io_commands, LoaderDataType, FIRST_SFX_CHANNEL, IO_COMMAND_I_MASK, IO_COMMAND_MASK,
+    N_SFX_CHANNELS,
 };
 use compiler::envelope::{Envelope, Gain};
 use compiler::notes::Octave;
@@ -23,6 +23,7 @@ use compiler::samples::combine_samples;
 use compiler::sound_effects::{
     combine_sound_effects, compile_sound_effect_input, SfxFlags, SoundEffectInput, SoundEffectText,
 };
+use compiler::Pan;
 
 use shvc_sound_emu::ShvcSoundEmu;
 
@@ -521,7 +522,11 @@ impl Emu {
     }
 
     pub fn play_sound_effect_command(&mut self, sfx_id: Sfx) {
-        self.emu_and_send_command(io_commands::PLAY_SOUND_EFFECT, sfx_id as u8, CENTER_PAN);
+        self.emu_and_send_command(
+            io_commands::PLAY_SOUND_EFFECT,
+            sfx_id as u8,
+            Pan::CENTER.as_u8(),
+        );
     }
 
     pub fn pause_command(&mut self) {

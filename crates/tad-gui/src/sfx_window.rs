@@ -4,15 +4,14 @@
 //
 // SPDX-License-Identifier: MIT
 
-use crate::audio_thread::Pan;
 use crate::compiler_thread::CadOutput;
 use crate::helpers::{ch_units_to_width, label_packed};
 use crate::sfx_export_order::GuiSfxExportOrder;
 use crate::tabs::FileType;
 use crate::GuiMessage;
 
-use compiler::driver_constants::{CENTER_PAN, MAX_PAN};
 use compiler::sound_effects::SfxExportOrder;
+use compiler::Pan;
 use fltk::table::TableContext;
 
 use std::cell::RefCell;
@@ -73,9 +72,9 @@ impl SfxWindow {
             flex.fixed(&label, label.width());
 
             let mut slider = HorNiceSlider::default();
-            slider.set_range(0.0, MAX_PAN as f64);
-            slider.set_value(CENTER_PAN as f64);
-            slider.set_slider_size(1.0 / MAX_PAN as f32);
+            slider.set_range(Pan::MIN.as_u8().into(), Pan::MAX.as_u8().into());
+            slider.set_value(Pan::CENTER.as_u8().into());
+            slider.set_slider_size(1.0 / Pan::MAX.as_u8() as f32);
             slider.set_tooltip("Pan");
 
             let mut reset_pan = Button::default().with_label("@center_pan");
@@ -85,7 +84,7 @@ impl SfxWindow {
             reset_pan.set_callback({
                 let mut p = slider.clone();
                 move |_| {
-                    p.set_value(CENTER_PAN as f64);
+                    p.set_value(Pan::CENTER.as_u8().into());
                 }
             });
 
@@ -267,7 +266,7 @@ impl SfxTable {
         if let Some(eo) = &self.export_order {
             if let Ok(row) = row.try_into() {
                 if let Some(sfx_id) = eo.sfx_id(row) {
-                    let pan = Pan::checked_new(self.pan_slider.value() as u8);
+                    let pan = Pan::try_from(self.pan_slider.value() as u8).unwrap_or(Pan::CENTER);
                     self.sender
                         .send(GuiMessage::PlaySoundEffectCommand(sfx_id, pan));
                 }

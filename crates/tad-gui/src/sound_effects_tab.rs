@@ -4,7 +4,6 @@
 //
 // SPDX-License-Identifier: MIT
 
-use crate::audio_thread::Pan;
 use crate::compiler_thread::{ItemId, SfxError, SoundEffectOutput};
 use crate::list_editor::{
     ListAction, ListEditorTable, ListMessage, ListWithCompilerOutput, ListWithCompilerOutputEditor,
@@ -17,10 +16,10 @@ use crate::{helpers::*, ProjectSongsData};
 use crate::{GuiMessage, ProjectData, SoundEffectsData};
 
 use compiler::data::{DefaultSfxFlags, Name};
-use compiler::driver_constants::{CENTER_PAN, MAX_PAN};
 use compiler::errors::SfxErrorLines;
 use compiler::sfx_file::SoundEffectsFile;
 use compiler::sound_effects::{SfxExportOrder, SfxFlags, SoundEffectInput, SoundEffectText};
+use compiler::Pan;
 
 use compiler::time::TickCounter;
 use fltk::app::{self, event_key};
@@ -238,9 +237,9 @@ impl SoundEffectsTab {
 
         label_packed("  Pan:  ");
         let mut pan = HorNiceSlider::default().with_size(button_size * 5 / 2, button_size);
-        pan.set_range(0.0, MAX_PAN as f64);
-        pan.set_value(CENTER_PAN as f64);
-        pan.set_slider_size(1.0 / MAX_PAN as f32);
+        pan.set_range(Pan::MIN.as_u8().into(), Pan::MAX.as_u8().into());
+        pan.set_value(Pan::CENTER.as_u8().into());
+        pan.set_slider_size(1.0 / Pan::MAX.as_u8() as f32);
         pan.set_tooltip("Pan");
 
         let mut reset_pan = button("@center_pan", "Center pan");
@@ -315,7 +314,7 @@ impl SoundEffectsTab {
         reset_pan.set_callback({
             let mut p = pan.clone();
             move |_| {
-                p.set_value(CENTER_PAN as f64);
+                p.set_value(Pan::CENTER.as_u8().into());
             }
         });
 
@@ -732,7 +731,7 @@ impl State {
     fn play_sound_effect(&mut self) {
         self.commit_sfx();
         if let Some(id) = self.selected_id {
-            let pan = Pan::checked_new(self.pan.value() as u8);
+            let pan = Pan::try_from(self.pan.value() as u8).unwrap_or(Pan::CENTER);
 
             self.sender.send(GuiMessage::PlayEditedSoundEffect(id, pan));
         }
