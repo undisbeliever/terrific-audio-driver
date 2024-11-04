@@ -18,6 +18,9 @@ MML changes:
     * Negative `px` values pan to the left. `px-64` is 100% to the left.
     * Positive `px` values pan to the right. `px+64` is 100% to the right.
 
+Compiler changes:
+ * Increased maximum common-audio-data size
+
 
 Version 0.0.13
 ==============
