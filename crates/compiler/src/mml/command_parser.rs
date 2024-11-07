@@ -1526,6 +1526,7 @@ fn parse_broken_chord(p: &mut Parser) -> MmlCommand {
                 p,
                 Token::Number(0) => tie = false,
                 Token::Number(1) => tie = true,
+                Token::Number(_) => p.add_error(tie_pos, ValueError::InvalidMmlBool.into()),
                 #_ => p.add_error(tie_pos, ValueError::NoBool.into())
             )
         }
@@ -1689,7 +1690,7 @@ fn parse_echo(pos: FilePos, p: &mut Parser) -> MmlCommand {
     match_next_token!(p,
         Token::Number(0) => MmlCommand::SetEcho(false),
         Token::Number(1) => MmlCommand::SetEcho(true),
-        Token::Number(_) => invalid_token_error(p, pos, ValueError::NoBool.into()),
+        Token::Number(_) => invalid_token_error(p, pos, ValueError::InvalidMmlBool.into()),
         #_ => MmlCommand::SetEcho(true)
     )
 }
