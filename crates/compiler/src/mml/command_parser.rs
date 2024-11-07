@@ -31,6 +31,9 @@ use std::cmp::min;
 use std::collections::HashMap;
 use std::ops::Range;
 
+// The maximum default-length is `C255 l1........` = 502 ticks
+pub const MAX_N_DOTS: u8 = 8;
+
 pub const MAX_COARSE_VOLUME: u32 = 16;
 pub const COARSE_VOLUME_MULTIPLIER: u8 = 16;
 
@@ -429,6 +432,9 @@ mod parser {
         }
 
         pub(super) fn set_default_length(&mut self, ticks: TickCounter) {
+            debug_assert!(ticks.value() <= 502);
+            debug_assert!(ticks.value() < (1u32 << (MAX_N_DOTS + 1)));
+
             self.default_length = ticks;
         }
 
@@ -592,6 +598,17 @@ where
     )
 }
 
+fn parse_dots_after_length(p: &mut Parser) -> u8 {
+    let mut number_of_dots = 0;
+    while next_token_matches!(p, Token::Dot) {
+        if number_of_dots <= MAX_N_DOTS {
+            number_of_dots += 1;
+        }
+    }
+
+    number_of_dots
+}
+
 fn parse_set_default_length(pos: FilePos, p: &mut Parser) {
     let length_in_ticks = next_token_matches!(p, Token::PercentSign);
     let length = match_next_token!(
@@ -608,10 +625,8 @@ fn parse_set_default_length(pos: FilePos, p: &mut Parser) {
             return;
         }
     );
-    let mut number_of_dots = 0;
-    while next_token_matches!(p, Token::Dot) {
-        number_of_dots += 1;
-    }
+
+    let number_of_dots = parse_dots_after_length(p);
 
     let default_length = MmlDefaultLength::new(length, length_in_ticks, number_of_dots);
 
@@ -927,10 +942,7 @@ fn parse_tracked_length(p: &mut Parser) -> TickCounter {
         #_ => None
     );
 
-    let mut number_of_dots = 0;
-    while next_token_matches!(p, Token::Dot) {
-        number_of_dots += 1;
-    }
+    let number_of_dots = parse_dots_after_length(p);
 
     let note_length = MmlLength::new(length, length_in_ticks, number_of_dots);
 
@@ -964,10 +976,7 @@ fn parse_untracked_optional_mml_length(p: &mut Parser) -> Option<MmlLength> {
         #_ => None
     );
 
-    let mut number_of_dots = 0;
-    while next_token_matches!(p, Token::Dot) {
-        number_of_dots += 1;
-    }
+    let number_of_dots = parse_dots_after_length(p);
 
     if length_in_ticks || length.is_some() || number_of_dots > 0 {
         Some(MmlLength::new(length, length_in_ticks, number_of_dots))

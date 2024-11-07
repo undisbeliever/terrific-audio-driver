@@ -147,6 +147,57 @@ fn test_note_length() {
 }
 
 #[test]
+fn test_lots_of_dots_in_length() {
+    // Test "attempt to add with overflow" panic is fixed
+    let lots_of_dots = ".".repeat(512);
+    assert_line_matches_line(&format!("l1{lots_of_dots} a"), "a%190");
+    assert_line_matches_line(&format!("a{lots_of_dots}"), "a%46");
+    assert_line_matches_line(&format!("a ^{lots_of_dots}"), "a%70");
+    assert_line_matches_line(&format!("a &{lots_of_dots}"), "a%70");
+    assert_line_matches_line(&format!("r2{lots_of_dots}"), "r%94");
+    assert_line_matches_line(&format!("w3{lots_of_dots}"), "w%63");
+    assert_line_matches_line(
+        &format!("{{ab}}1{lots_of_dots},2{lots_of_dots}"),
+        "{ab}%190,%94",
+    );
+    assert_line_matches_line(
+        &format!("{{{{ab}}}}1{lots_of_dots},8{lots_of_dots}"),
+        "{{ab}}%190,%22",
+    );
+
+    // Confirm %255 the largest default length in ticks
+    assert_error_in_mml_line("l%256", 1, ValueError::InvalidDefaultLength.into());
+
+    assert_line_matches_line(
+        "l%255 a...................................................................................",
+        "a%502"
+    );
+
+    // Confirm 255 is the largest ZenLen
+    assert_error_in_mml_line("C256", 1, ValueError::ZenLenOutOfRange.into());
+
+    assert_line_matches_line(
+        "C255 a1...................................................................................",
+        "a%502",
+    );
+
+    assert_line_matches_line(
+        "C255 l1................................................................................... a....................................................................................",
+        "a%997"
+    );
+
+    assert_line_matches_line(
+        "C255 l1.............................................. {ab}%1024,1.....................................................",
+        "{ab}%1024,%502",
+    );
+
+    assert_line_matches_line(
+        "C255 l1.............................................. {ab}%1024,.....................................................",
+        "{ab}%1024,%997",
+    );
+}
+
+#[test]
 #[rustfmt::skip]
 fn test_transpose() {
     assert_line_matches_line("_+2 d e f", "e f+ g");
