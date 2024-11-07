@@ -33,8 +33,6 @@ use std::ops::Range;
 
 pub const MAX_COARSE_VOLUME: u32 = 16;
 pub const COARSE_VOLUME_MULTIPLIER: u8 = 16;
-pub const MIN_RELATIVE_COARSE_VOLUME: i8 = i8::MIN / COARSE_VOLUME_MULTIPLIER as i8;
-pub const MAX_RELATIVE_COARSE_VOLUME: i8 = i8::MAX / COARSE_VOLUME_MULTIPLIER as i8;
 
 pub const PX_PAN_RANGE: std::ops::RangeInclusive<i32> =
     (-(Pan::CENTER.as_u8() as i32))..=(Pan::CENTER.as_u8() as i32);

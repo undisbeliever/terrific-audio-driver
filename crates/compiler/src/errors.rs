@@ -21,8 +21,7 @@ use crate::echo::{EchoEdl, EchoLength, MAX_FIR_ABS_SUM};
 use crate::envelope::Gain;
 use crate::file_pos::{FilePosRange, MAX_MML_TEXT_LENGTH};
 use crate::mml::command_parser::{
-    FineQuantization, PortamentoSpeed, Quantization, Transpose, MAX_COARSE_VOLUME,
-    MAX_RELATIVE_COARSE_VOLUME, MIN_RELATIVE_COARSE_VOLUME, PX_PAN_RANGE,
+    FineQuantization, PortamentoSpeed, Quantization, Transpose, MAX_COARSE_VOLUME, PX_PAN_RANGE,
 };
 use crate::mml::MAX_BROKEN_CHORD_NOTES;
 use crate::notes::{MidiNote, Note, Octave};
@@ -111,7 +110,6 @@ pub enum ValueError {
 
     InstrumentIdOutOfRange,
 
-    NoteOutOfRange,
     OctaveOutOfRange,
 
     // bytecode tick-count arguments out of range
@@ -125,7 +123,6 @@ pub enum ValueError {
 
     RelativePanOutOfRange,
     RelativeVolumeOutOfRange,
-    RelativeCoarseVolumeOutOfRange,
 
     EarlyReleaseTicksOutOfRange,
     EarlyReleaseMinTicksOutOfRange,
@@ -175,7 +172,6 @@ pub enum ValueError {
     InvalidFirFilterGain { abs_sum: i32 },
 
     NoHexDigits,
-    NoName,
     NoBool,
     NoNote,
     NoVolume,
@@ -195,7 +191,6 @@ pub enum ValueError {
     NoPortamentoVelocity,
     NoMpDepth,
     NoVibratoPitchOffsetPerTick,
-    NoVibratoDepth,
     NoCommaQuarterWavelength,
     NoVibratoQuarterWavelength,
     NoEchoEdl,
@@ -297,7 +292,6 @@ pub enum CombineSoundEffectsError {
     // Using String so they can be joined with slice::join
     NoSoundEffectFiles,
     MissingSoundEffects(Vec<String>),
-    DuplicateSoundEffects(Vec<String>),
     InvalidNumberOfHighPrioritySfx,
     InvalidLowPriorityIndex,
 }
@@ -391,8 +385,6 @@ pub enum MmlLineError {
 
     // String is a list of invalid channels in the line
     UnknownChannel(String),
-    MissingInstrumentText,
-    MissingSubroutineText,
     CannotParseLine,
 
     // MML Header errors
@@ -412,7 +404,6 @@ pub enum MmlLineError {
     // Instrument errors
     NoInstrument,
     CannotFindInstrument(String),
-    ExpectedFourAdsrArguments,
     DuplicateInstrumentName(String),
 
     // Sound effect errors
@@ -429,10 +420,6 @@ pub enum MmlError {
     BytecodeError(BytecodeError),
     BytecodeAssemblerError(BytecodeAssemblerError),
 
-    // + or - after a pitch
-    TooManyAccidentals,
-    TooManyDotsInNoteLength,
-
     // Number of unknown characters
     UnknownCharacters(u32),
     NoSlashCommand,
@@ -441,7 +428,6 @@ pub enum MmlError {
     NoBraceAfterAsm,
     MissingEndAsm,
 
-    InvalidNote,
     NoteIsTooShort,
 
     NoSubroutine,
@@ -761,7 +747,6 @@ impl Display for ValueError {
 
             Self::InstrumentIdOutOfRange => out_of_range!("instrument id", InstrumentId),
 
-            Self::NoteOutOfRange => write!(f, "note out of range"),
             Self::OctaveOutOfRange => out_of_range!("octave", Octave),
 
             Self::BcTicksKeyOffOutOfRange => write!(
@@ -791,11 +776,6 @@ impl Display for ValueError {
 
             Self::RelativePanOutOfRange => out_of_range!("relative pan", RelativePan),
             Self::RelativeVolumeOutOfRange => out_of_range!("relative volume", RelativeVolume),
-            Self::RelativeCoarseVolumeOutOfRange => write!(
-                f,
-                "relative volume out of range ({} - {})",
-                MIN_RELATIVE_COARSE_VOLUME, MAX_RELATIVE_COARSE_VOLUME
-            ),
 
             Self::EarlyReleaseTicksOutOfRange => {
                 out_of_range!("early-release ticks", EarlyReleaseTicks)
@@ -895,7 +875,6 @@ impl Display for ValueError {
             ),
 
             Self::NoHexDigits => write!(f, "no hexidecimal digits"),
-            Self::NoName => write!(f, "no name"),
             Self::NoBool => write!(f, "no bool"),
             Self::NoNote => write!(f, "no note"),
             Self::NoVolume => write!(f, "no volume"),
@@ -915,7 +894,6 @@ impl Display for ValueError {
             Self::NoPortamentoVelocity => write!(f, "no portamento velocity"),
             Self::NoMpDepth => write!(f, "no MP depth"),
             Self::NoVibratoPitchOffsetPerTick => write!(f, "no vibrato pitch-offset-per-tick"),
-            Self::NoVibratoDepth => write!(f, "no vibrato depth"),
             Self::NoCommaQuarterWavelength => {
                 write!(f, "cannot parse quarter-wavelength, expected a comma ','")
             }
@@ -1087,12 +1065,6 @@ impl Display for CombineSoundEffectsError {
                 names.len(),
                 names.join(", ")
             ),
-            Self::DuplicateSoundEffects(names) => write!(
-                f,
-                "{} duplicate sound effects: {}",
-                names.len(),
-                names.join(", ")
-            ),
             Self::InvalidNumberOfHighPrioritySfx => {
                 write!(f, "Invalid number of high-priority sound effects")
             }
@@ -1202,8 +1174,6 @@ impl Display for MmlLineError {
             Self::NoIdentifier(c) => write!(f, "missing identifier after {}", c),
             Self::InvalidIdentifier(e) => e.fmt(f),
             Self::UnknownChannel(name) => write!(f, "unknown channels {}", name),
-            Self::MissingInstrumentText => write!(f, "missing instrument"),
-            Self::MissingSubroutineText => write!(f, "missing subroutine"),
             Self::CannotParseLine => write!(f, "cannot parse line"),
 
             Self::NoHeader => write!(f, "no header name"),
@@ -1229,7 +1199,6 @@ impl Display for MmlLineError {
 
             Self::NoInstrument => write!(f, "no instrument"),
             Self::CannotFindInstrument(name) => write!(f, "cannot find instrument: {}", name),
-            Self::ExpectedFourAdsrArguments => write!(f, "adsr requires 4 arguments"),
             Self::DuplicateInstrumentName(s) => write!(f, "duplicate instrument name: {}", s),
 
             Self::HeaderInSoundEffect => write!(f, "# headers not allowed in sound effects"),
@@ -1249,9 +1218,6 @@ impl Display for MmlError {
             Self::BytecodeError(e) => e.fmt(f),
             Self::BytecodeAssemblerError(e) => e.fmt(f),
 
-            Self::TooManyAccidentals => write!(f, "too many accidentals"),
-            Self::TooManyDotsInNoteLength => write!(f, "too many dots in note length"),
-
             Self::UnknownCharacters(n) => write!(f, "{} unknown characters", n),
             Self::NoSlashCommand => write!(f, "invalid command: \\"),
             Self::InvalidSlashCommand(t) => write!(f, "invalid command: \\{t}"),
@@ -1259,7 +1225,6 @@ impl Display for MmlError {
             Self::NoBraceAfterAsm => write!(f, r"missing `{{` brace after \asm"),
             Self::MissingEndAsm => write!(f, r"cannot find \asm end (no `}}`)"),
 
-            Self::InvalidNote => write!(f, "invalid note"),
             Self::NoteIsTooShort => write!(
                 f,
                 "note is too short (2 ticks are required for a key-off note)"
