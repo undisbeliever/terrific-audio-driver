@@ -43,7 +43,7 @@ i8_value_newtype!(
     RelativePan,
     RelativePanOutOfRange,
     NoRelativePan,
-    NoRelativeVolumeSign
+    NoRelativePanSign
 );
 
 u8_value_newtype!(
