@@ -1068,7 +1068,7 @@ fn parse_px_pan_value(pos: FilePos, p: &mut Parser) -> Option<PanCommand> {
                 Some(PanCommand::Absolute(Pan::try_from(u8::try_from(p).unwrap()).unwrap()))
             }
             else {
-                p.add_error(pos, ValueError::PxPanOutOfRange.into());
+                p.add_error(pos, ValueError::PxPanOutOfRange(n).into());
                 None
             }
         },
@@ -1111,7 +1111,7 @@ fn parse_coarse_volume_value(pos: FilePos, p: &mut Parser) -> Option<VolumeComma
                 Some(VolumeCommand::Absolute(Volume::new(v)))
             }
             else {
-                p.add_error(pos, ValueError::CoarseVolumeOutOfRange.into());
+                p.add_error(pos, ValueError::CoarseVolumeOutOfRange(v).into());
                 None
             }
         },

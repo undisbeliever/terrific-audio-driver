@@ -122,7 +122,7 @@ impl Note {
         octave: u32,
     ) -> Result<Self, ValueError> {
         if octave > LAST_OCTAVE.into() {
-            return Err(ValueError::OctaveOutOfRange);
+            return Err(ValueError::OctaveOutOfRange(octave));
         }
         assert!((LAST_OCTAVE + 1) * SEMITONES_PER_OCTAVE < u8::MAX);
         let semitones_per_octave = u32::from(SEMITONES_PER_OCTAVE);
@@ -224,7 +224,7 @@ impl Octave {
         if o <= LAST_OCTAVE.into() {
             Ok(Octave(o.try_into().unwrap()))
         } else {
-            Err(ValueError::OctaveOutOfRange)
+            Err(ValueError::OctaveOutOfRange(o))
         }
     }
 

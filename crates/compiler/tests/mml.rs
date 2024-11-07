@@ -198,7 +198,7 @@ fn test_lots_of_dots_in_length() {
     );
 
     // Confirm 255 is the largest ZenLen
-    assert_error_in_mml_line("C256", 1, ValueError::ZenLenOutOfRange.into());
+    assert_error_in_mml_line("C256", 1, ValueError::ZenLenOutOfRange(256).into());
 
     assert_line_matches_line(
         "C255 a1...................................................................................",
@@ -2218,7 +2218,7 @@ fn test_portamento_err() {
     assert_error_in_mml_line(
         "{c g}4,,800",
         9,
-        ValueError::PortamentoSpeedOutOfRange.into(),
+        ValueError::PortamentoSpeedOutOfRange(800).into(),
     );
 
     assert_error_in_mml_line("{c g}%0", 1, MmlError::PortamentoTooShort);
@@ -2229,7 +2229,7 @@ fn test_portamento_err() {
     assert_error_in_mml_line(
         "{c > c}16",
         1,
-        ValueError::PortamentoVelocityOutOfRange.into(),
+        ValueError::PortamentoVelocityOutOfRange(536).into(),
     );
 
     // Tests if the TryFromIntError panic in ChannelBcGenerator::portamento() has been fixed
@@ -2697,8 +2697,8 @@ fn test_px_pan() {
     assert_line_matches_bytecode("px-64", &["set_pan 0"]);
     assert_line_matches_bytecode("px+64", &["set_pan 128"]);
 
-    assert_error_in_mml_line("px-65", 1, ValueError::PxPanOutOfRange.into());
-    assert_error_in_mml_line("px+65", 1, ValueError::PxPanOutOfRange.into());
+    assert_error_in_mml_line("px-65", 1, ValueError::PxPanOutOfRange(-65).into());
+    assert_error_in_mml_line("px+65", 1, ValueError::PxPanOutOfRange(65).into());
 
     assert_line_matches_bytecode("px+16", &["set_pan 80"]);
     assert_line_matches_bytecode("px+32", &["set_pan 96"]);

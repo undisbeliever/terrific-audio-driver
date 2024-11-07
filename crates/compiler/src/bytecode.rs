@@ -229,7 +229,7 @@ impl TryFrom<u32> for BcTicksKeyOff {
                 bc_argument: ((ticks - KEY_OFF_TICK_DELAY) & 0xff).try_into().unwrap(),
             })
         } else {
-            Err(ValueError::BcTicksKeyOffOutOfRange)
+            Err(ValueError::BcTicksKeyOffOutOfRange(ticks))
         }
     }
 }
@@ -275,7 +275,7 @@ impl TryFrom<u32> for BcTicksNoKeyOff {
                 bc_argument,
             })
         } else {
-            Err(ValueError::BcTicksNoKeyOffOutOfRange)
+            Err(ValueError::BcTicksNoKeyOffOutOfRange(ticks))
         }
     }
 }
@@ -367,7 +367,7 @@ impl TryFrom<i32> for PortamentoVelocity {
         } else if velocity >= Self::MIN.0.into() && velocity <= Self::MAX.0.into() {
             Ok(PortamentoVelocity(velocity.try_into().unwrap()))
         } else {
-            Err(ValueError::PortamentoVelocityOutOfRange)
+            Err(ValueError::PortamentoVelocityOutOfRange(velocity))
         }
     }
 }

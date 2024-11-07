@@ -108,26 +108,26 @@ pub enum ValueError {
     InvalidPitch,
     UnknownNoteCharacter(char),
 
-    InstrumentIdOutOfRange,
+    InstrumentIdOutOfRange(u32),
 
-    OctaveOutOfRange,
+    OctaveOutOfRange(u32),
 
     // bytecode tick-count arguments out of range
-    BcTicksKeyOffOutOfRange,
-    BcTicksNoKeyOffOutOfRange,
+    BcTicksKeyOffOutOfRange(u32),
+    BcTicksNoKeyOffOutOfRange(u32),
 
-    PxPanOutOfRange,
-    PanOutOfRange,
-    VolumeOutOfRange,
-    CoarseVolumeOutOfRange,
+    PxPanOutOfRange(i32),
+    PanOutOfRange(u32),
+    VolumeOutOfRange(u32),
+    CoarseVolumeOutOfRange(u32),
 
-    RelativePanOutOfRange,
-    RelativeVolumeOutOfRange,
+    RelativePanOutOfRange(i32),
+    RelativeVolumeOutOfRange(i32),
 
-    EarlyReleaseTicksOutOfRange,
-    EarlyReleaseMinTicksOutOfRange,
-    VibratoPitchOffsetPerTickOutOfRange,
-    VibratoQuarterWavelengthOutOfRange,
+    EarlyReleaseTicksOutOfRange(u32),
+    EarlyReleaseMinTicksOutOfRange(u32),
+    VibratoPitchOffsetPerTickOutOfRange(u32),
+    VibratoQuarterWavelengthOutOfRange(u32),
 
     NoPxPanSign,
     NoRelativeVolumeSign,
@@ -136,18 +136,18 @@ pub enum ValueError {
     NoTransposeSign,
 
     PortamentoVelocityZero,
-    PortamentoVelocityOutOfRange,
+    PortamentoVelocityOutOfRange(i32),
 
-    QuantizeOutOfRange,
-    FineQuantizeOutOfRange,
-    TransposeOutOfRange,
-    PortamentoSpeedOutOfRange,
+    QuantizeOutOfRange(u32),
+    FineQuantizeOutOfRange(u32),
+    TransposeOutOfRange(i32),
+    PortamentoSpeedOutOfRange(u32),
 
-    ZenLenOutOfRange,
-    TickClockOutOfRange,
-    BpmOutOfRange,
+    ZenLenOutOfRange(u32),
+    TickClockOutOfRange(u32),
+    BpmOutOfRange(u32),
 
-    MidiNoteNumberOutOfRange,
+    MidiNoteNumberOutOfRange(u32),
     CannotConvertMidiNote,
 
     InvalidMmlBool,
@@ -163,7 +163,7 @@ pub enum ValueError {
 
     CannotConvertBpmToTickClock,
 
-    EchoEdlOutOfRange,
+    EchoEdlOutOfRange(u32),
     EchoLengthNotMultiple,
     EchoBufferTooLarge,
 
@@ -690,8 +690,8 @@ impl Display for ValueError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         #[rustfmt::skip]
         macro_rules! out_of_range {
-            ($name:literal, $newtype:ident) => {
-                write!(f, concat!($name, " out of bounds ({} - {})"), $newtype::MIN.value(), $newtype::MAX.value())
+            ($name:literal, $v:ident, $newtype:ident) => {
+                write!(f, concat!($name, " out of bounds ({}, expected {} - {})"), $v, $newtype::MIN.value(), $newtype::MAX.value())
             };
         }
 
@@ -745,50 +745,64 @@ impl Display for ValueError {
             Self::InvalidPitch => write!(f, "invalid note pitch"),
             Self::UnknownNoteCharacter(c) => write!(f, "invalid note character: {}", c),
 
-            Self::InstrumentIdOutOfRange => out_of_range!("instrument id", InstrumentId),
+            Self::InstrumentIdOutOfRange(v) => out_of_range!("instrument id", v, InstrumentId),
 
-            Self::OctaveOutOfRange => out_of_range!("octave", Octave),
+            Self::OctaveOutOfRange(v) => out_of_range!("octave", v, Octave),
 
-            Self::BcTicksKeyOffOutOfRange => write!(
+            Self::BcTicksKeyOffOutOfRange(v) => write!(
                 f,
-                "invalid tick count (expected {} - {})",
+                "invalid tick count ({}, expected {} - {})",
+                v,
                 BcTicksKeyOff::MIN_TICKS,
                 BcTicksKeyOff::MAX_TICKS
             ),
-            Self::BcTicksNoKeyOffOutOfRange => write!(
+            Self::BcTicksNoKeyOffOutOfRange(v) => write!(
                 f,
-                "invalid tick count (expected {} - {})",
+                "invalid tick count ({}, expected {} - {})",
+                v,
                 BcTicksNoKeyOff::MIN_TICKS,
                 BcTicksNoKeyOff::MAX_TICKS
             ),
 
-            Self::PxPanOutOfRange => write!(
+            Self::PxPanOutOfRange(v) => write!(
                 f,
-                "px pan out of bounds ({} - {})",
+                "px pan out of bounds ({}, expected {} - {})",
+                v,
                 PX_PAN_RANGE.start(),
                 PX_PAN_RANGE.end()
             ),
-            Self::PanOutOfRange => out_of_range!("pan", Pan),
-            Self::VolumeOutOfRange => out_of_range!("volume", Volume),
-            Self::CoarseVolumeOutOfRange => {
-                write!(f, "volume out of range ({} - {})", 0, MAX_COARSE_VOLUME)
+            Self::PanOutOfRange(v) => out_of_range!("pan", v, Pan),
+            Self::VolumeOutOfRange(v) => out_of_range!("volume", v, Volume),
+            Self::CoarseVolumeOutOfRange(v) => {
+                write!(
+                    f,
+                    "volume out of range ({}, expected {} - {})",
+                    v, 0, MAX_COARSE_VOLUME
+                )
             }
 
-            Self::RelativePanOutOfRange => out_of_range!("relative pan", RelativePan),
-            Self::RelativeVolumeOutOfRange => out_of_range!("relative volume", RelativeVolume),
+            Self::RelativePanOutOfRange(v) => out_of_range!("relative pan", v, RelativePan),
+            Self::RelativeVolumeOutOfRange(v) => {
+                out_of_range!("relative volume", v, RelativeVolume)
+            }
 
-            Self::EarlyReleaseTicksOutOfRange => {
-                out_of_range!("early-release ticks", EarlyReleaseTicks)
+            Self::EarlyReleaseTicksOutOfRange(v) => {
+                out_of_range!("early-release ticks", v, EarlyReleaseTicks)
             }
-            Self::EarlyReleaseMinTicksOutOfRange => {
-                out_of_range!("early-release minimum ticks", EarlyReleaseMinTicks)
+            Self::EarlyReleaseMinTicksOutOfRange(v) => {
+                out_of_range!("early-release minimum ticks", v, EarlyReleaseMinTicks)
             }
-            Self::VibratoPitchOffsetPerTickOutOfRange => {
-                out_of_range!("vibrato pitch offset per tick", VibratoPitchOffsetPerTick)
+            Self::VibratoPitchOffsetPerTickOutOfRange(v) => {
+                out_of_range!(
+                    "vibrato pitch offset per tick",
+                    v,
+                    VibratoPitchOffsetPerTick
+                )
             }
-            Self::VibratoQuarterWavelengthOutOfRange => {
+            Self::VibratoQuarterWavelengthOutOfRange(v) => {
                 out_of_range!(
                     "vibrato quarter wavelength",
+                    v,
                     VibratoQuarterWavelengthInTicks
                 )
             }
@@ -810,21 +824,25 @@ impl Display for ValueError {
             }
 
             Self::PortamentoVelocityZero => write!(f, "portamento velocity cannot be 0"),
-            Self::PortamentoVelocityOutOfRange => {
-                out_of_range!("portamento velocity", PortamentoVelocity)
+            Self::PortamentoVelocityOutOfRange(v) => {
+                out_of_range!("portamento velocity", v, PortamentoVelocity)
             }
 
-            Self::QuantizeOutOfRange => out_of_range!("quantization", Quantization),
-            Self::FineQuantizeOutOfRange => out_of_range!("fine quantization", FineQuantization),
-            Self::TransposeOutOfRange => out_of_range!("transpose", Transpose),
+            Self::QuantizeOutOfRange(v) => out_of_range!("quantization", v, Quantization),
+            Self::FineQuantizeOutOfRange(v) => {
+                out_of_range!("fine quantization", v, FineQuantization)
+            }
+            Self::TransposeOutOfRange(v) => out_of_range!("transpose", v, Transpose),
 
-            Self::PortamentoSpeedOutOfRange => out_of_range!("portamento speed", PortamentoSpeed),
+            Self::PortamentoSpeedOutOfRange(v) => {
+                out_of_range!("portamento speed", v, PortamentoSpeed)
+            }
 
-            Self::ZenLenOutOfRange => out_of_range!("zenlen", ZenLen),
-            Self::TickClockOutOfRange => out_of_range!("tick clock", TickClock),
-            Self::BpmOutOfRange => out_of_range!("bpm", Bpm),
+            Self::ZenLenOutOfRange(v) => out_of_range!("zenlen", v, ZenLen),
+            Self::TickClockOutOfRange(v) => out_of_range!("tick clock", v, TickClock),
+            Self::BpmOutOfRange(v) => out_of_range!("bpm", v, Bpm),
 
-            Self::MidiNoteNumberOutOfRange => out_of_range!("MIDI note number", MidiNote),
+            Self::MidiNoteNumberOutOfRange(v) => out_of_range!("MIDI note number", v, MidiNote),
             Self::CannotConvertMidiNote => {
                 write!(f, "cannot convert MIDI note to audio-driver note")
             }
@@ -844,7 +862,7 @@ impl Display for ValueError {
 
             Self::CannotConvertBpmToTickClock => write!(f, "cannot convert bpm to tick clock"),
 
-            Self::EchoEdlOutOfRange => out_of_range!("echo EDL", EchoEdl),
+            Self::EchoEdlOutOfRange(v) => out_of_range!("echo EDL", v, EchoEdl),
             Self::EchoLengthNotMultiple => write!(
                 f,
                 "echo length is not a multiple of {}ms",

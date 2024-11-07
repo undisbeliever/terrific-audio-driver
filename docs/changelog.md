@@ -17,6 +17,7 @@ MML changes:
     * `px0` is centered
     * Negative `px` values pan to the left. `px-64` is 100% to the left.
     * Positive `px` values pan to the right. `px+64` is 100% to the right.
+ * Out-of-range errors now show the value that was out-of-range
 
 Compiler changes:
  * Increased maximum common-audio-data size

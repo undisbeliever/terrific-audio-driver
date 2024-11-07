@@ -65,7 +65,7 @@ macro_rules! u8_value_newtype {
             fn try_from(value: u32) -> Result<Self, Self::Error> {
                 match value.try_into() {
                     Ok(v) => Ok($name(v)),
-                    Err(_) => Err(ValueError::$error),
+                    Err(_) => Err(ValueError::$error(value)),
                 }
             }
         }
@@ -102,7 +102,7 @@ macro_rules! u8_value_newtype {
                 if value >= Self::MIN.0 && value <= Self::MAX.0 {
                     Ok(Self(value))
                 } else {
-                    Err(ValueError::$error)
+                    Err(ValueError::$error(u32::from(value)))
                 }
             }
         }
@@ -114,7 +114,7 @@ macro_rules! u8_value_newtype {
                 if value >= Self::MIN.0.into() && value <= Self::MAX.0.into() {
                     Ok(Self(u8::try_from(value).unwrap()))
                 } else {
-                    Err(ValueError::$error)
+                    Err(ValueError::$error(value))
                 }
             }
         }
@@ -153,10 +153,10 @@ macro_rules! i8_value_newtype {
         impl TryFrom<i32> for $name {
             type Error = ValueError;
 
-            fn try_from(p: i32) -> Result<Self, Self::Error> {
-                match p.try_into() {
-                    Ok(p) => Ok($name(p)),
-                    Err(_) => Err(ValueError::$error),
+            fn try_from(value: i32) -> Result<Self, Self::Error> {
+                match value.try_into() {
+                    Ok(v) => Ok($name(v)),
+                    Err(_) => Err(ValueError::$error(value)),
                 }
             }
         }
