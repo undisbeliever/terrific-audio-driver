@@ -1854,7 +1854,7 @@ fn parse_token(pos: FilePos, token: Token, p: &mut Parser) -> MmlCommand {
         Token::EndBrokenChord => invalid_token_error(p, pos, MmlError::NoStartBrokenChord),
 
         Token::Tie => invalid_token_error(p, pos, MmlError::MissingNoteBeforeTie),
-        Token::Slur => invalid_token_error(p, pos, MmlError::MissingNoteBeforeTie),
+        Token::Slur => invalid_token_error(p, pos, MmlError::MissingNoteBeforeSlur),
         Token::Comma => invalid_token_error(p, pos, MmlError::CannotParseComma),
         Token::Dot => invalid_token_error(p, pos, MmlError::CannotParseDot),
         Token::PercentSign => invalid_token_error(p, pos, MmlError::CannotParsePercentSign),
