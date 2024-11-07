@@ -116,6 +116,30 @@ fn test_accidentals_against_midi_note_numbers() {
 }
 
 #[test]
+fn test_too_many_accidentals() {
+    let lots_of_plusses = "+".repeat(1024);
+    let lots_of_minuses = "+".repeat(1024);
+
+    assert_error_in_mml_line(
+        &format!("c{lots_of_plusses}"),
+        1,
+        ValueError::InvalidNote.into(),
+    );
+
+    assert_error_in_mml_line(
+        &format!("c{lots_of_minuses}"),
+        1,
+        ValueError::InvalidNote.into(),
+    );
+
+    assert_error_in_mml_line(
+        &format!("c{lots_of_plusses}{lots_of_minuses}"),
+        1,
+        ValueError::InvalidNote.into(),
+    );
+}
+
+#[test]
 #[rustfmt::skip]
 fn test_note_length() {
     assert_line_matches_bytecode("a", &["play_note a4 24"]);
