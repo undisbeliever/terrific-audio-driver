@@ -205,8 +205,6 @@ pub enum ValueError {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum BytecodeError {
-    ValueError(ValueError),
-
     OpenLoopStack(usize),
     NotInALoop,
     MissingLoopCount,
@@ -221,6 +219,7 @@ pub enum BytecodeError {
     StackOverflowInSubroutineCall(String, u32),
 
     UnknownInstrument(String),
+    InvalidInstrumentId,
     UnknownSubroutine(String),
     NotAllowedToCallSubroutine,
 
@@ -532,12 +531,6 @@ pub enum ExportError {
 impl From<InvalidAdsrError> for ValueError {
     fn from(e: InvalidAdsrError) -> Self {
         Self::InvalidAdsr(e)
-    }
-}
-
-impl From<ValueError> for BytecodeError {
-    fn from(v: ValueError) -> Self {
-        Self::ValueError(v)
     }
 }
 
@@ -902,8 +895,6 @@ impl Display for ValueError {
 impl Display for BytecodeError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            Self::ValueError(e) => e.fmt(f),
-
             Self::OpenLoopStack(len) => write!(f, "loop stack not empty ({} open loops)", len),
             Self::NotInALoop => write!(f, "not in a loop"),
             Self::MissingLoopCount => write!(f, "missing loop count"),
@@ -947,6 +938,7 @@ impl Display for BytecodeError {
             }
 
             Self::UnknownInstrument(s) => write!(f, "cannot find instrument: {}", s),
+            Self::InvalidInstrumentId => write!(f, "invalid instrument id"),
             Self::UnknownSubroutine(s) => write!(f, "cannot find subroutine: {}", s),
             Self::NotAllowedToCallSubroutine => write!(f, "not allowed to call subroutine here"),
 

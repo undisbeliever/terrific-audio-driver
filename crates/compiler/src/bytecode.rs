@@ -1439,7 +1439,10 @@ impl<'a> Bytecode<'a> {
 
     fn _find_instrument(&self, name: &str) -> Result<InstrumentId, BytecodeError> {
         match self.instruments.get_with_index(name) {
-            Some((i, _inst)) => Ok(InstrumentId::try_from(i)?),
+            Some((i, _inst)) => match InstrumentId::try_from(i) {
+                Ok(inst) => Ok(inst),
+                Err(_) => Err(BytecodeError::InvalidInstrumentId),
+            },
             None => Err(BytecodeError::UnknownInstrument(name.to_owned())),
         }
     }
