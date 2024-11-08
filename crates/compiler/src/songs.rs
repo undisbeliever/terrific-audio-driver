@@ -17,7 +17,7 @@ use crate::driver_constants::{
     SONG_HEADER_SIZE, SONG_HEADER_TICK_TIMER_OFFSET,
 };
 use crate::envelope::{Envelope, Gain};
-use crate::errors::{BytecodeAssemblerError, SongError, SongTooLargeError};
+use crate::errors::{ChannelError, SongError, SongTooLargeError};
 use crate::mml::{MetaData, MmlInstrument, Section};
 use crate::notes::{Note, Octave};
 use crate::sound_effects::CompiledSoundEffect;
@@ -210,7 +210,7 @@ pub fn test_sample_song(
     note: Note,
     note_length: u32,
     envelope: Option<Envelope>,
-) -> Result<SongData, BytecodeAssemblerError> {
+) -> Result<SongData, ChannelError> {
     let mut bc = Bytecode::new(
         crate::bytecode::BytecodeContext::SongChannel,
         sample_song_fake_instruments(),

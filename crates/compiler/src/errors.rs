@@ -239,27 +239,9 @@ pub enum BytecodeError {
     MissingStartLoopInAsmBlock,
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub enum BytecodeAssemblerError {
-    BytecodeError(BytecodeError),
-
-    UnknownInstruction(String),
-
-    InvalidNumberOfArguments(u8),
-    InvalidNumberOfArgumentsRange(u8, u8),
-
-    ArgumentError(ValueError),
-
-    InvalidKeyoffArgument(String),
-
-    NoTicksInSoundEffect,
-
-    TooManySfxTicks(TickCounter),
-}
-
 #[derive(Debug)]
 pub enum SoundEffectErrorList {
-    BytecodeErrors(Vec<ErrorWithPos<BytecodeAssemblerError>>),
+    BytecodeErrors(Vec<ErrorWithPos<ChannelError>>),
     MmlLineErrors(Vec<ErrorWithPos<MmlLineError>>),
     MmlErrors(Vec<ErrorWithPos<ChannelError>>),
 }
@@ -417,7 +399,6 @@ pub enum ChannelError {
     ValueError(ValueError),
 
     BytecodeError(BytecodeError),
-    BytecodeAssemblerError(BytecodeAssemblerError),
 
     // Number of unknown characters
     UnknownCharacters(u32),
@@ -476,6 +457,13 @@ pub enum ChannelError {
     CannotCallSubroutineRecursion(String),
 
     TooManySfxTicks(TickCounter),
+
+    // Bytecode assembler errors
+    UnknownInstruction(String),
+    InvalidNumberOfArguments(u8),
+    InvalidNumberOfArgumentsRange(u8, u8),
+    InvalidKeyoffArgument(String),
+    NoTicksInSoundEffect,
 }
 
 #[derive(Debug)]
@@ -553,27 +541,15 @@ impl From<ValueError> for BytecodeError {
     }
 }
 
-impl From<ValueError> for BytecodeAssemblerError {
-    fn from(e: ValueError) -> Self {
-        Self::ArgumentError(e)
-    }
-}
-
-impl From<InvalidAdsrError> for BytecodeAssemblerError {
-    fn from(e: InvalidAdsrError) -> Self {
-        Self::ArgumentError(ValueError::InvalidAdsr(e))
-    }
-}
-
-impl From<BytecodeError> for BytecodeAssemblerError {
-    fn from(e: BytecodeError) -> Self {
-        Self::BytecodeError(e)
-    }
-}
-
 impl From<ValueError> for MmlLineError {
     fn from(e: ValueError) -> Self {
         Self::ValueError(e)
+    }
+}
+
+impl From<InvalidAdsrError> for ChannelError {
+    fn from(e: InvalidAdsrError) -> Self {
+        Self::ValueError(ValueError::InvalidAdsr(e))
     }
 }
 
@@ -586,12 +562,6 @@ impl From<ValueError> for ChannelError {
 impl From<BytecodeError> for ChannelError {
     fn from(e: BytecodeError) -> Self {
         Self::BytecodeError(e)
-    }
-}
-
-impl From<BytecodeAssemblerError> for ChannelError {
-    fn from(e: BytecodeAssemblerError) -> Self {
-        Self::BytecodeAssemblerError(e)
     }
 }
 
@@ -1030,33 +1000,6 @@ impl Display for BytecodeError {
     }
 }
 
-impl Display for BytecodeAssemblerError {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        match self {
-            Self::BytecodeError(e) => e.fmt(f),
-            Self::ArgumentError(e) => e.fmt(f),
-
-            Self::UnknownInstruction(s) => write!(f, "unknown instruction {}", s),
-
-            Self::InvalidNumberOfArguments(n) => write!(f, "expected {} arguments", n),
-            Self::InvalidNumberOfArgumentsRange(min, max) => {
-                write!(f, "expected {} - {} arguments", min, max)
-            }
-
-            Self::InvalidKeyoffArgument(s) => write!(f, "invalid keyoff argument: {}", s),
-
-            Self::NoTicksInSoundEffect => write!(f, "No notes in sound effect"),
-
-            Self::TooManySfxTicks(t) => write!(
-                f,
-                "sound effect too long ({} ticks, max {})",
-                t.value(),
-                MAX_SFX_TICKS.value()
-            ),
-        }
-    }
-}
-
 impl Display for OtherSfxError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
@@ -1233,7 +1176,6 @@ impl Display for ChannelError {
         match self {
             Self::ValueError(e) => e.fmt(f),
             Self::BytecodeError(e) => e.fmt(f),
-            Self::BytecodeAssemblerError(e) => e.fmt(f),
 
             Self::UnknownCharacters(n) => write!(f, "{} unknown characters", n),
             Self::NoSlashCommand => write!(f, "invalid command: \\"),
@@ -1341,6 +1283,15 @@ impl Display for ChannelError {
                 t.value(),
                 MAX_SFX_TICKS.value()
             ),
+
+            // Bytecode assembler errors
+            Self::UnknownInstruction(s) => write!(f, "unknown instruction {}", s),
+            Self::InvalidNumberOfArguments(n) => write!(f, "expected {} arguments", n),
+            Self::InvalidNumberOfArgumentsRange(min, max) => {
+                write!(f, "expected {} - {} arguments", min, max)
+            }
+            Self::InvalidKeyoffArgument(s) => write!(f, "invalid keyoff argument: {}", s),
+            Self::NoTicksInSoundEffect => write!(f, "No notes in sound effect"),
         }
     }
 }

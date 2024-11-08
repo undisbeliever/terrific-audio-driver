@@ -11,8 +11,8 @@ use crate::data::{
 };
 use crate::driver_constants::{COMMON_DATA_BYTES_PER_SOUND_EFFECT, SFX_TICK_CLOCK};
 use crate::errors::{
-    BytecodeAssemblerError, CombineSoundEffectsError, ErrorWithPos, OtherSfxError,
-    SoundEffectError, SoundEffectErrorList, SoundEffectsFileError,
+    ChannelError, CombineSoundEffectsError, ErrorWithPos, OtherSfxError, SoundEffectError,
+    SoundEffectErrorList, SoundEffectsFileError,
 };
 use crate::file_pos::{blank_file_range, split_lines};
 use crate::mml;
@@ -129,14 +129,14 @@ fn compile_bytecode_sound_effect(
     if tick_counter.is_zero() {
         errors.push(ErrorWithPos(
             last_line_range.clone(),
-            BytecodeAssemblerError::NoTicksInSoundEffect,
+            ChannelError::NoTicksInSoundEffect,
         ));
     }
 
     if tick_counter > MAX_SFX_TICKS {
         errors.push(ErrorWithPos(
             last_line_range,
-            BytecodeAssemblerError::TooManySfxTicks(tick_counter),
+            ChannelError::TooManySfxTicks(tick_counter),
         ));
     }
 
