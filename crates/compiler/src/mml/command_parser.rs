@@ -4,32 +4,32 @@
 //
 // SPDX-License-Identifier: MIT
 
-use super::tokenizer::{MmlTokens, PeekableTokenIterator, SubroutineCallType, Token};
+use super::tokenizer::{MmlTokens, PeekableTokenIterator, Token};
 use super::{IdentifierStr, Section};
 
 #[cfg(feature = "mml_tracking")]
 use super::note_tracking::CursorTracker;
 
 use crate::bytecode::{
-    EarlyReleaseMinTicks, EarlyReleaseTicks, LoopCount, Pan, PlayNoteTicks, RelativePan,
-    SubroutineId, VibratoPitchOffsetPerTick, VibratoQuarterWavelengthInTicks, Volume,
-    KEY_OFF_TICK_DELAY,
+    EarlyReleaseMinTicks, EarlyReleaseTicks, LoopCount, Pan, PlayNoteTicks, SubroutineId,
+    VibratoPitchOffsetPerTick, Volume, KEY_OFF_TICK_DELAY,
 };
-use crate::envelope::{Adsr, Gain, GainMode, OptionalGain, TempGain};
+use crate::channel_bc_generator::{
+    merge_pan_commands, merge_volumes_commands, relative_pan, relative_volume, Command,
+    FineQuantization, ManualVibrato, MpVibrato, PanCommand, SubroutineCallType, VolumeCommand,
+};
+use crate::envelope::{Gain, GainMode, OptionalGain, TempGain};
 use crate::errors::{ChannelError, ErrorWithPos, ValueError};
 use crate::file_pos::{FilePos, FilePosRange};
 use crate::notes::{MidiNote, MmlPitch, Note, Octave, STARTING_OCTAVE};
 use crate::time::{
-    Bpm, MmlDefaultLength, MmlLength, TickClock, TickCounter, TickCounterWithLoopFlag, ZenLen,
-    STARTING_MML_LENGTH,
+    MmlDefaultLength, MmlLength, TickCounter, TickCounterWithLoopFlag, ZenLen, STARTING_MML_LENGTH,
 };
-use crate::value_newtypes::{
-    i8_value_newtype, u8_value_newtype, SignedValueNewType, UnsignedValueNewType,
-};
+use crate::value_newtypes::{i8_value_newtype, SignedValueNewType, UnsignedValueNewType};
 
-use std::cmp::min;
+pub use crate::channel_bc_generator::Quantization;
+
 use std::collections::HashMap;
-use std::ops::Range;
 
 // The maximum default-length is `C255 l1........` = 502 ticks
 pub const MAX_N_DOTS: u8 = 8;
@@ -40,223 +40,9 @@ pub const COARSE_VOLUME_MULTIPLIER: u8 = 16;
 pub const PX_PAN_RANGE: std::ops::RangeInclusive<i32> =
     (-(Pan::CENTER.as_u8() as i32))..=(Pan::CENTER.as_u8() as i32);
 
-u8_value_newtype!(
-    PortamentoSpeed,
-    PortamentoSpeedOutOfRange,
-    NoPortamentoSpeed
-);
 i8_value_newtype!(Transpose, TransposeOutOfRange, NoTranspose, NoTransposeSign);
 
-u8_value_newtype!(Quantization, QuantizeOutOfRange, NoQuantize, 0, 8);
-u8_value_newtype!(FineQuantization, FineQuantizeOutOfRange, NoFineQuantizate);
-
-impl Quantization {
-    pub const FINE_QUANTIZATION_SCALE: u8 = 32;
-
-    fn to_fine(self) -> Option<FineQuantization> {
-        if self.0 < 8 {
-            Some(FineQuantization(self.0 * Self::FINE_QUANTIZATION_SCALE))
-        } else {
-            None
-        }
-    }
-}
-
-impl FineQuantization {
-    pub const UNITS: u32 = 256;
-
-    fn quantize(&self, l: u32) -> u32 {
-        let q = u32::from(self.0);
-        std::cmp::max((l * q) / Self::UNITS, 1)
-    }
-}
-
-#[derive(Debug, Copy, Clone)]
-pub enum VolumeCommand {
-    Absolute(Volume),
-    Relative(i32),
-}
-
-#[derive(Debug, Copy, Clone)]
-pub enum PanCommand {
-    Absolute(Pan),
-    Relative(RelativePan),
-}
-
-fn relative_volume(v: i32) -> VolumeCommand {
-    const _: () = assert!(Volume::MIN.as_u8() == 0);
-
-    if v <= -(Volume::MAX.as_u8() as i32) {
-        VolumeCommand::Absolute(Volume::MIN)
-    } else if v >= Volume::MAX.as_u8().into() {
-        VolumeCommand::Absolute(Volume::MAX)
-    } else {
-        VolumeCommand::Relative(v)
-    }
-}
-
-fn merge_volumes_commands(v1: Option<VolumeCommand>, v2: VolumeCommand) -> VolumeCommand {
-    match (v1, v2) {
-        (Some(VolumeCommand::Absolute(v1)), VolumeCommand::Relative(v2)) => {
-            let v = u32::from(v1.as_u8()).saturating_add_signed(v2);
-            let v = u8::try_from(v).unwrap_or(u8::MAX);
-            VolumeCommand::Absolute(Volume::new(v))
-        }
-        (Some(VolumeCommand::Relative(v1)), VolumeCommand::Relative(v2)) => {
-            let v = v1.saturating_add(v2);
-            relative_volume(v)
-        }
-        (Some(_), VolumeCommand::Absolute(_)) => v2,
-        (None, v2) => v2,
-    }
-}
-
-fn relative_pan(p: i32) -> PanCommand {
-    const _: () = assert!(Pan::MAX.as_u8() as i32 == i8::MAX as i32 + 1);
-    const _: () = assert!(Pan::MAX.as_u8() as i32 == -(i8::MIN as i32));
-    const _: () = assert!(Pan::MIN.as_u8() == 0);
-
-    if p <= -(Pan::MAX.as_u8() as i32) {
-        PanCommand::Absolute(Pan::MIN)
-    } else if p >= Pan::MAX.as_u8().into() {
-        PanCommand::Absolute(Pan::MAX)
-    } else {
-        PanCommand::Relative(p.try_into().unwrap())
-    }
-}
-
-fn merge_pan_commands(p1: Option<PanCommand>, p2: PanCommand) -> PanCommand {
-    match (p1, p2) {
-        (Some(PanCommand::Absolute(p1)), PanCommand::Relative(p2)) => {
-            let p = min(
-                p1.as_u8().saturating_add_signed(p2.as_i8()),
-                Pan::MAX.as_u8(),
-            );
-            PanCommand::Absolute(p.try_into().unwrap())
-        }
-        (Some(PanCommand::Relative(p1)), PanCommand::Relative(p2)) => {
-            let p1: i32 = p1.as_i8().into();
-            let p2: i32 = p2.as_i8().into();
-            relative_pan(p1 + p2)
-        }
-        (Some(_), PanCommand::Absolute(_)) => p2,
-        (None, p2) => p2,
-    }
-}
-
-#[derive(Copy, Clone, PartialEq)]
-pub struct MpVibrato {
-    pub depth_in_cents: u32,
-    pub quarter_wavelength_ticks: VibratoQuarterWavelengthInTicks,
-}
-
-#[derive(Debug, Copy, Clone, PartialEq)]
-pub struct ManualVibrato {
-    pub pitch_offset_per_tick: VibratoPitchOffsetPerTick,
-    pub quarter_wavelength_ticks: VibratoQuarterWavelengthInTicks,
-}
-
-pub enum Command {
-    NoCommand,
-
-    SetLoopPoint,
-
-    SetManualVibrato(Option<ManualVibrato>),
-    SetMpVibrato(Option<MpVibrato>),
-
-    Rest {
-        /// Length of the first rest
-        /// (The user expects a keyoff after the first rest command)
-        ticks_until_keyoff: TickCounter,
-        /// Combined length of all rests after the first rest
-        /// (keyoff already sent, it does not matter if these rests keyoff or not)
-        ticks_after_keyoff: TickCounter,
-    },
-
-    // wait with no keyoff
-    Wait(TickCounter),
-
-    PlayNote {
-        note: Note,
-        length: TickCounter,
-        is_slur: bool,
-    },
-    PlayQuantizedNote {
-        note: Note,
-        length: TickCounter,
-        key_on_length: TickCounter,
-        temp_gain: TempGain,
-        /// Combined length of all rests after the note
-        /// (keyoff already sent, it does not matter if these rests keyoff or not)
-        rest_ticks_after_note: TickCounter,
-    },
-    Portamento {
-        note1: Note,
-        note2: Note,
-        is_slur: bool,
-        speed_override: Option<PortamentoSpeed>,
-        /// Number of ticks to hold the pitch at note1 before the pitch slide
-        delay_length: TickCounter,
-        /// Length of the pitch slide (portamento_length - delay_length)
-        slide_length: TickCounter,
-        /// Number of ticks to hold the pitch at note2
-        tie_length: TickCounter,
-    },
-    QuantizedPortamento {
-        note1: Note,
-        note2: Note,
-        speed_override: Option<PortamentoSpeed>,
-        delay_length: TickCounter,
-        slide_length: TickCounter,
-        tie_length: TickCounter,
-        temp_gain: TempGain,
-        rest: TickCounter,
-        /// Combined length of all rests after the portamento
-        /// (keyoff already sent, it does not matter if these rests keyoff or not)
-        rest_ticks_after_note: TickCounter,
-    },
-    BrokenChord {
-        notes: Vec<Note>,
-        total_length: TickCounter,
-        note_length: PlayNoteTicks,
-    },
-
-    CallSubroutine(usize, SubroutineCallType),
-    StartLoop,
-    SkipLastLoop,
-    EndLoop(LoopCount),
-
-    // index into Vec<ChannelData>.
-    SetInstrument(usize),
-    SetAdsr(Adsr),
-    SetGain(Gain),
-
-    // None reuses previous temp gain
-    TempGain(Option<TempGain>),
-    TempGainAndRest {
-        temp_gain: Option<TempGain>,
-        ticks_until_keyoff: TickCounter,
-        ticks_after_keyoff: TickCounter,
-    },
-    TempGainAndWait(Option<TempGain>, TickCounter),
-
-    DisableEarlyRelease,
-    SetEarlyRelease(EarlyReleaseTicks, EarlyReleaseMinTicks, OptionalGain),
-
-    ChangePanAndOrVolume(Option<PanCommand>, Option<VolumeCommand>),
-    SetEcho(bool),
-
-    SetSongTempo(Bpm),
-    SetSongTickClock(TickClock),
-
-    StartBytecodeAsm,
-    EndBytecodeAsm,
-
-    // Using range so there is no lifetime in MmlCommand
-    BytecodeAsm(Range<usize>),
-}
-
-pub struct MmlCommandWithPos {
+pub(crate) struct MmlCommandWithPos {
     command: Command,
     pos: FilePosRange,
 }

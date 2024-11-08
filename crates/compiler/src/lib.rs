@@ -7,6 +7,7 @@
 #![forbid(unsafe_code)]
 
 mod bytecode;
+mod channel_bc_generator;
 mod file_pos;
 mod value_newtypes;
 

@@ -10,6 +10,7 @@ use crate::bytecode::{
     BcTerminator, BcTicks, BcTicksKeyOff, BcTicksNoKeyOff, Bytecode, InstrumentId, PlayNoteTicks,
     StackDepth, SubroutineId, Volume,
 };
+use crate::channel_bc_generator::MmlInstrument;
 use crate::data::{self, single_item_unique_names_list, InstrumentOrSample, Name, UniqueNamesList};
 use crate::driver_constants::{
     addresses, AUDIO_RAM_SIZE, ECHO_BUFFER_MIN_SIZE, MAX_SONG_DATA_SIZE, MAX_SUBROUTINES,
@@ -18,7 +19,7 @@ use crate::driver_constants::{
 };
 use crate::envelope::{Envelope, Gain};
 use crate::errors::{ChannelError, SongError, SongTooLargeError};
-use crate::mml::{MetaData, MmlInstrument, Section};
+use crate::mml::{MetaData, Section};
 use crate::notes::{Note, Octave};
 use crate::sound_effects::CompiledSoundEffect;
 use crate::time::{TickClock, TickCounter, TickCounterWithLoopFlag};

@@ -9,17 +9,11 @@ use std::ops::Range;
 use super::{IdentifierStr, COMMENT_CHAR};
 
 use crate::bytecode_assembler;
+use crate::channel_bc_generator::SubroutineCallType;
 use crate::envelope::GainMode;
 use crate::errors::{ChannelError, ValueError};
 use crate::file_pos::{FilePos, Line, LineIndexRange, LineSplitter};
 use crate::notes::{parse_pitch_char, MmlPitch};
-
-#[derive(Debug, Clone, Copy)]
-pub enum SubroutineCallType {
-    Mml,
-    Asm,
-    AsmDisableVibrato,
-}
 
 #[derive(Debug, Clone)]
 pub enum Token<'a> {

@@ -53,8 +53,6 @@ const CHANNEL_NAMES: [&str; N_MUSIC_CHANNELS] = ["A", "B", "C", "D", "E", "F", "
 pub const COMMENT_CHAR: char = ';';
 pub const SECTION_PREFIX: &str = ";;";
 
-pub use self::bc_generator::MAX_BROKEN_CHORD_NOTES;
-pub use self::instruments::MmlInstrument;
 pub use self::tick_count_table::MmlTickCountTable;
 
 pub use self::metadata::MetaData;

@@ -4,29 +4,17 @@
 //
 // SPDX-License-Identifier: MIT
 
-use super::{IdentifierBuf, IdentifierStr};
+use super::IdentifierStr;
 
 use crate::bytecode::InstrumentId;
+use crate::channel_bc_generator::MmlInstrument;
 use crate::data::UniqueNamesList;
 use crate::data::{self, InstrumentOrSample};
 use crate::envelope::Envelope;
 use crate::errors::{ErrorWithPos, MmlLineError};
-use crate::file_pos::{FilePosRange, Line};
+use crate::file_pos::Line;
 
 use std::collections::HashMap;
-
-#[derive(Debug, Clone)]
-pub struct MmlInstrument {
-    pub(crate) identifier: IdentifierBuf,
-
-    pub(crate) file_range: FilePosRange,
-
-    pub(crate) instrument_id: InstrumentId,
-
-    // No envelope override or envelope override matches instrument
-    pub(crate) envelope_unchanged: bool,
-    pub(crate) envelope: Envelope,
-}
 
 fn parse_instrument(
     id: IdentifierStr,

@@ -11,6 +11,9 @@ use crate::bytecode::{
     LoopCount, Pan, PortamentoVelocity, RelativePan, RelativeVolume, VibratoPitchOffsetPerTick,
     VibratoQuarterWavelengthInTicks, Volume,
 };
+use crate::channel_bc_generator::{
+    FineQuantization, PortamentoSpeed, Quantization, MAX_BROKEN_CHORD_NOTES,
+};
 use crate::data::{LoopSetting, Name};
 use crate::driver_constants::{
     addresses, BC_CHANNEL_STACK_SIZE, ECHO_BUFFER_EDL_MS, FIR_FILTER_SIZE, MAX_COMMON_DATA_SIZE,
@@ -20,10 +23,7 @@ use crate::driver_constants::{
 use crate::echo::{EchoEdl, EchoLength, MAX_FIR_ABS_SUM};
 use crate::envelope::Gain;
 use crate::file_pos::{FilePosRange, MAX_MML_TEXT_LENGTH};
-use crate::mml::command_parser::{
-    FineQuantization, PortamentoSpeed, Quantization, Transpose, MAX_COARSE_VOLUME, PX_PAN_RANGE,
-};
-use crate::mml::MAX_BROKEN_CHORD_NOTES;
+use crate::mml::command_parser::{Transpose, MAX_COARSE_VOLUME, PX_PAN_RANGE};
 use crate::notes::{MidiNote, Note, Octave};
 use crate::path::PathString;
 use crate::sound_effects::MAX_SFX_TICKS;
