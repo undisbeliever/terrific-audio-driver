@@ -156,7 +156,7 @@ pub struct ManualVibrato {
     pub quarter_wavelength_ticks: VibratoQuarterWavelengthInTicks,
 }
 
-pub enum MmlCommand {
+pub enum Command {
     NoCommand,
 
     SetLoopPoint,
@@ -257,12 +257,12 @@ pub enum MmlCommand {
 }
 
 pub struct MmlCommandWithPos {
-    command: MmlCommand,
+    command: Command,
     pos: FilePosRange,
 }
 
 impl MmlCommandWithPos {
-    pub fn command(&self) -> &MmlCommand {
+    pub fn command(&self) -> &Command {
         &self.command
     }
     pub fn pos(&self) -> &FilePosRange {
@@ -865,9 +865,9 @@ fn parse_set_early_release_arguments(p: &mut Parser) -> (EarlyReleaseMinTicks, O
     }
 }
 
-fn parse_set_early_release(pos: FilePos, p: &mut Parser) -> MmlCommand {
+fn parse_set_early_release(pos: FilePos, p: &mut Parser) -> Command {
     match next_token_number(p) {
-        Some(0) => MmlCommand::DisableEarlyRelease,
+        Some(0) => Command::DisableEarlyRelease,
         Some(t) => {
             let ticks = match t.try_into() {
                 Ok(t) => t,
@@ -878,12 +878,12 @@ fn parse_set_early_release(pos: FilePos, p: &mut Parser) -> MmlCommand {
             };
             let (min, g) = parse_set_early_release_arguments(p);
 
-            MmlCommand::SetEarlyRelease(ticks, min, g)
+            Command::SetEarlyRelease(ticks, min, g)
         }
         None => {
             p.add_error(pos, ValueError::NoEarlyReleaseTicks.into());
             parse_set_early_release_arguments(p);
-            MmlCommand::NoCommand
+            Command::NoCommand
         }
     }
 }
@@ -1132,7 +1132,7 @@ fn merge_pan_or_volume(
     pan: Option<PanCommand>,
     volume: Option<VolumeCommand>,
     p: &mut Parser,
-) -> MmlCommand {
+) -> Command {
     let mut pan = pan;
     let mut volume = volume;
 
@@ -1165,7 +1165,7 @@ fn merge_pan_or_volume(
 
             #_ => {
                 if !merge_state_change(p) {
-                    return MmlCommand::ChangePanAndOrVolume(pan, volume);
+                    return Command::ChangePanAndOrVolume(pan, volume);
                 }
             }
         )
@@ -1273,8 +1273,8 @@ fn parse_wait_length_and_ties(p: &mut Parser) -> TickCounter {
     }
 }
 
-fn parse_wait(p: &mut Parser) -> MmlCommand {
-    MmlCommand::Wait(parse_wait_length_and_ties(p))
+fn parse_wait(p: &mut Parser) -> Command {
+    Command::Wait(parse_wait_length_and_ties(p))
 }
 
 fn parse_rest_lengths(p: &mut Parser) -> (TickCounter, TickCounter) {
@@ -1286,16 +1286,16 @@ fn parse_rest_lengths(p: &mut Parser) -> (TickCounter, TickCounter) {
     (ticks_until_keyoff, ticks_after_keyoff)
 }
 
-fn parse_rest(p: &mut Parser) -> MmlCommand {
+fn parse_rest(p: &mut Parser) -> Command {
     let (ticks_until_keyoff, ticks_after_keyoff) = parse_rest_lengths(p);
 
-    MmlCommand::Rest {
+    Command::Rest {
         ticks_until_keyoff,
         ticks_after_keyoff,
     }
 }
 
-fn play_note(pos: FilePos, note: Note, length: TickCounter, p: &mut Parser) -> MmlCommand {
+fn play_note(pos: FilePos, note: Note, length: TickCounter, p: &mut Parser) -> Command {
     let (tie_length, is_slur) = parse_ties_and_slur(p);
     let length = length + tie_length;
 
@@ -1306,7 +1306,7 @@ fn play_note(pos: FilePos, note: Note, length: TickCounter, p: &mut Parser) -> M
     let q = p.state().quantize;
 
     if is_slur || q.is_none() {
-        MmlCommand::PlayNote {
+        Command::PlayNote {
             note,
             length,
             is_slur,
@@ -1321,7 +1321,7 @@ fn play_note(pos: FilePos, note: Note, length: TickCounter, p: &mut Parser) -> M
         if key_on_length + KEY_OFF_TICK_DELAY < l {
             let rest_ticks_after_note = parse_rests_after_rest(p);
 
-            MmlCommand::PlayQuantizedNote {
+            Command::PlayQuantizedNote {
                 note,
                 length,
                 key_on_length: TickCounter::new(key_on_length),
@@ -1330,7 +1330,7 @@ fn play_note(pos: FilePos, note: Note, length: TickCounter, p: &mut Parser) -> M
             }
         } else {
             // Note is too short to be quantized
-            MmlCommand::PlayNote {
+            Command::PlayNote {
                 note,
                 length,
                 is_slur,
@@ -1339,7 +1339,7 @@ fn play_note(pos: FilePos, note: Note, length: TickCounter, p: &mut Parser) -> M
     }
 }
 
-fn parse_pitch(pos: FilePos, pitch: MmlPitch, p: &mut Parser) -> MmlCommand {
+fn parse_pitch(pos: FilePos, pitch: MmlPitch, p: &mut Parser) -> Command {
     match Note::from_mml_pitch(pitch, p.state().octave, p.state().semitone_offset) {
         Ok(note) => {
             let length = parse_tracked_length(p);
@@ -1352,7 +1352,7 @@ fn parse_pitch(pos: FilePos, pitch: MmlPitch, p: &mut Parser) -> MmlCommand {
             let length = parse_tracked_length(p);
             let (tie_length, _) = parse_ties_and_slur(p);
             let length = length + tie_length;
-            MmlCommand::Rest {
+            Command::Rest {
                 ticks_until_keyoff: length,
                 ticks_after_keyoff: TickCounter::default(),
             }
@@ -1360,7 +1360,7 @@ fn parse_pitch(pos: FilePos, pitch: MmlPitch, p: &mut Parser) -> MmlCommand {
     }
 }
 
-fn parse_play_sample(pos: FilePos, p: &mut Parser) -> MmlCommand {
+fn parse_play_sample(pos: FilePos, p: &mut Parser) -> Command {
     let index = next_token_number(p).unwrap_or(0);
 
     let length = if next_token_matches!(p, Token::Comma) {
@@ -1377,7 +1377,7 @@ fn parse_play_sample(pos: FilePos, p: &mut Parser) -> MmlCommand {
 
             // Output a rest (so tick-counter is correct)
             let (tie_length, _) = parse_ties_and_slur(p);
-            MmlCommand::Rest {
+            Command::Rest {
                 ticks_until_keyoff: length + tie_length,
                 ticks_after_keyoff: TickCounter::new(0),
             }
@@ -1385,7 +1385,7 @@ fn parse_play_sample(pos: FilePos, p: &mut Parser) -> MmlCommand {
     }
 }
 
-fn parse_play_midi_note_number(pos: FilePos, p: &mut Parser) -> MmlCommand {
+fn parse_play_midi_note_number(pos: FilePos, p: &mut Parser) -> Command {
     let length = p.default_length();
     p.increment_tick_counter(length);
 
@@ -1406,7 +1406,7 @@ fn parse_play_midi_note_number(pos: FilePos, p: &mut Parser) -> MmlCommand {
         None => {
             // Output a rest (so tick-counter is correct)
             let (tie_length, _) = parse_ties_and_slur(p);
-            MmlCommand::Rest {
+            Command::Rest {
                 ticks_until_keyoff: length + tie_length,
                 ticks_after_keyoff: TickCounter::new(0),
             }
@@ -1414,7 +1414,7 @@ fn parse_play_midi_note_number(pos: FilePos, p: &mut Parser) -> MmlCommand {
     }
 }
 
-fn parse_portamento(pos: FilePos, p: &mut Parser) -> MmlCommand {
+fn parse_portamento(pos: FilePos, p: &mut Parser) -> Command {
     let (notes, end_pos, end_token) = parse_pitch_list(p);
 
     if !matches!(end_token, Token::EndPortamento) {
@@ -1451,7 +1451,7 @@ fn parse_portamento(pos: FilePos, p: &mut Parser) -> MmlCommand {
         let q = p.state().quantize;
 
         if is_slur || q.is_none() {
-            MmlCommand::Portamento {
+            Command::Portamento {
                 note1: notes[0],
                 note2: notes[1],
                 is_slur,
@@ -1486,7 +1486,7 @@ fn parse_portamento(pos: FilePos, p: &mut Parser) -> MmlCommand {
                     slide_length.value() + tie_length.value() + rest.value() == note2_length
                 );
 
-                MmlCommand::QuantizedPortamento {
+                Command::QuantizedPortamento {
                     note1: notes[0],
                     note2: notes[1],
                     speed_override,
@@ -1499,7 +1499,7 @@ fn parse_portamento(pos: FilePos, p: &mut Parser) -> MmlCommand {
                 }
             } else {
                 // Note is too short for Quanization
-                MmlCommand::Portamento {
+                Command::Portamento {
                     note1: notes[0],
                     note2: notes[1],
                     is_slur,
@@ -1511,11 +1511,11 @@ fn parse_portamento(pos: FilePos, p: &mut Parser) -> MmlCommand {
             }
         }
     } else {
-        MmlCommand::NoCommand
+        Command::NoCommand
     }
 }
 
-fn parse_broken_chord(p: &mut Parser) -> MmlCommand {
+fn parse_broken_chord(p: &mut Parser) -> Command {
     let (notes, end_pos, end_token) = parse_pitch_list(p);
 
     if !matches!(end_token, Token::EndBrokenChord) {
@@ -1555,7 +1555,7 @@ fn parse_broken_chord(p: &mut Parser) -> MmlCommand {
         None => PlayNoteTicks::min_for_is_slur(tie),
     };
 
-    MmlCommand::BrokenChord {
+    Command::BrokenChord {
         notes,
         total_length,
         note_length,
@@ -1608,52 +1608,52 @@ fn parse_manual_vibrato(pos: FilePos, p: &mut Parser) -> Option<ManualVibrato> {
     }
 }
 
-fn parse_set_adsr(pos: FilePos, p: &mut Parser) -> MmlCommand {
+fn parse_set_adsr(pos: FilePos, p: &mut Parser) -> Command {
     let mut values = [0; 4];
 
     values[0] = match next_token_number(p) {
         Some(n) => n,
         None => {
             p.add_error(pos, ValueError::AdsrNotFourValues.into());
-            return MmlCommand::NoCommand;
+            return Command::NoCommand;
         }
     };
 
     for v in &mut values[1..] {
         if !next_token_matches!(p, Token::Comma) {
             p.add_error(pos, ValueError::AdsrNotFourValues.into());
-            return MmlCommand::NoCommand;
+            return Command::NoCommand;
         }
 
         *v = match next_token_number(p) {
             Some(n) => n,
             None => {
                 p.add_error(pos, ValueError::AdsrNotFourValues.into());
-                return MmlCommand::NoCommand;
+                return Command::NoCommand;
             }
         };
     }
 
     match values.try_into() {
-        Ok(adsr) => MmlCommand::SetAdsr(adsr),
+        Ok(adsr) => Command::SetAdsr(adsr),
         Err(e) => {
             p.add_error(pos, e.into());
-            MmlCommand::NoCommand
+            Command::NoCommand
         }
     }
 }
 
-fn parse_set_gain(pos: FilePos, mode: GainMode, p: &mut Parser) -> MmlCommand {
+fn parse_set_gain(pos: FilePos, mode: GainMode, p: &mut Parser) -> Command {
     match next_token_number(p) {
         Some(v) => match Gain::from_mode_and_value(mode, v) {
-            Ok(gain) => MmlCommand::SetGain(gain),
+            Ok(gain) => Command::SetGain(gain),
             Err(e) => invalid_token_error(p, pos, e.into()),
         },
         None => invalid_token_error(p, pos, ValueError::NoGain.into()),
     }
 }
 
-fn parse_temp_gain(pos: FilePos, mode: GainMode, p: &mut Parser) -> MmlCommand {
+fn parse_temp_gain(pos: FilePos, mode: GainMode, p: &mut Parser) -> Command {
     let mut temp_gain = match next_token_number(p) {
         Some(v) => match TempGain::try_from_mode_and_value(mode, v) {
             Ok(g) => Some(g),
@@ -1680,36 +1680,36 @@ fn parse_temp_gain(pos: FilePos, mode: GainMode, p: &mut Parser) -> MmlCommand {
             Token::Rest => {
                 let (ticks_until_keyoff, ticks_after_keyoff) = parse_rest_lengths(p);
 
-                return MmlCommand::TempGainAndRest{temp_gain, ticks_until_keyoff, ticks_after_keyoff};
+                return Command::TempGainAndRest{temp_gain, ticks_until_keyoff, ticks_after_keyoff};
             },
 
             Token::Wait => {
                 let length = parse_wait_length_and_ties(p);
 
-                return MmlCommand::TempGainAndWait(temp_gain, length);
+                return Command::TempGainAndWait(temp_gain, length);
             },
 
             #_ => {
                 if !merge_state_change(p) {
-                    return MmlCommand::TempGain(temp_gain);
+                    return Command::TempGain(temp_gain);
                 }
             }
         )
     }
 }
 
-fn parse_echo(pos: FilePos, p: &mut Parser) -> MmlCommand {
+fn parse_echo(pos: FilePos, p: &mut Parser) -> Command {
     match_next_token!(p,
-        Token::Number(0) => MmlCommand::SetEcho(false),
-        Token::Number(1) => MmlCommand::SetEcho(true),
+        Token::Number(0) => Command::SetEcho(false),
+        Token::Number(1) => Command::SetEcho(true),
         Token::Number(_) => invalid_token_error(p, pos, ValueError::InvalidMmlBool.into()),
-        #_ => MmlCommand::SetEcho(true)
+        #_ => Command::SetEcho(true)
     )
 }
 
-fn parse_set_instrument(pos: FilePos, id: IdentifierStr, p: &mut Parser) -> MmlCommand {
+fn parse_set_instrument(pos: FilePos, id: IdentifierStr, p: &mut Parser) -> Command {
     match p.instruments_map().get(&id) {
-        Some(inst) => MmlCommand::SetInstrument(*inst),
+        Some(inst) => Command::SetInstrument(*inst),
         None => invalid_token_error(
             p,
             pos,
@@ -1723,16 +1723,16 @@ fn parse_call_subroutine(
     id: IdentifierStr,
     d: SubroutineCallType,
     p: &mut Parser,
-) -> MmlCommand {
+) -> Command {
     match p.subroutine_maps() {
         Some((id_map, name_map)) => match id_map.get(&id) {
             Some(Some(s)) => {
                 p.increment_tick_counter(s.tick_counter());
-                MmlCommand::CallSubroutine(s.as_usize(), d)
+                Command::CallSubroutine(s.as_usize(), d)
             }
             Some(None) => {
                 // Subroutine has been compiled, but it contains an error
-                MmlCommand::NoCommand
+                Command::NoCommand
             }
             None => match name_map.get(&id) {
                 Some(_) => invalid_token_error(
@@ -1751,18 +1751,18 @@ fn parse_call_subroutine(
     }
 }
 
-fn invalid_token_error(p: &mut Parser, pos: FilePos, e: ChannelError) -> MmlCommand {
+fn invalid_token_error(p: &mut Parser, pos: FilePos, e: ChannelError) -> Command {
     p.add_error(pos, e);
-    MmlCommand::NoCommand
+    Command::NoCommand
 }
 
-fn parse_token(pos: FilePos, token: Token, p: &mut Parser) -> MmlCommand {
+fn parse_token(pos: FilePos, token: Token, p: &mut Parser) -> Command {
     match token {
-        Token::End => MmlCommand::NoCommand,
+        Token::End => Command::NoCommand,
 
         Token::NewLine(r) => {
             p.process_new_line(r);
-            MmlCommand::NoCommand
+            Command::NoCommand
         }
 
         Token::Pitch(pitch) => parse_pitch(pos, pitch, p),
@@ -1773,8 +1773,8 @@ fn parse_token(pos: FilePos, token: Token, p: &mut Parser) -> MmlCommand {
         Token::StartPortamento => parse_portamento(pos, p),
         Token::StartBrokenChord => parse_broken_chord(p),
 
-        Token::MpVibrato => MmlCommand::SetMpVibrato(parse_mp_vibrato(pos, p)),
-        Token::ManualVibrato => MmlCommand::SetManualVibrato(parse_manual_vibrato(pos, p)),
+        Token::MpVibrato => Command::SetMpVibrato(parse_mp_vibrato(pos, p)),
+        Token::ManualVibrato => Command::SetManualVibrato(parse_manual_vibrato(pos, p)),
 
         Token::SetAdsr => parse_set_adsr(pos, p),
         Token::SetGain(mode) => parse_set_gain(pos, mode, p),
@@ -1785,25 +1785,25 @@ fn parse_token(pos: FilePos, token: Token, p: &mut Parser) -> MmlCommand {
 
         Token::StartLoop => {
             p.set_loop_flag();
-            MmlCommand::StartLoop
+            Command::StartLoop
         }
-        Token::SkipLastLoop => MmlCommand::SkipLastLoop,
+        Token::SkipLastLoop => Command::SkipLastLoop,
         Token::EndLoop => {
             let lc = parse_unsigned_newtype(pos, p).unwrap_or(LoopCount::MIN);
-            MmlCommand::EndLoop(lc)
+            Command::EndLoop(lc)
         }
 
-        Token::SetLoopPoint => MmlCommand::SetLoopPoint,
+        Token::SetLoopPoint => Command::SetLoopPoint,
 
         Token::Echo => parse_echo(pos, p),
 
         Token::SetSongTempo => match parse_unsigned_newtype(pos, p) {
-            Some(t) => MmlCommand::SetSongTempo(t),
-            None => MmlCommand::NoCommand,
+            Some(t) => Command::SetSongTempo(t),
+            None => Command::NoCommand,
         },
         Token::SetSongTickClock => match parse_unsigned_newtype(pos, p) {
-            Some(t) => MmlCommand::SetSongTickClock(t),
-            None => MmlCommand::NoCommand,
+            Some(t) => Command::SetSongTickClock(t),
+            None => Command::NoCommand,
         },
 
         Token::CoarseVolume => {
@@ -1825,42 +1825,42 @@ fn parse_token(pos: FilePos, token: Token, p: &mut Parser) -> MmlCommand {
 
         Token::Quantize => {
             parse_quantize(pos, p);
-            MmlCommand::NoCommand
+            Command::NoCommand
         }
         Token::EarlyRelease => parse_set_early_release(pos, p),
         Token::SetDefaultLength => {
             parse_set_default_length(pos, p);
-            MmlCommand::NoCommand
+            Command::NoCommand
         }
         Token::SetOctave => {
             parse_set_octave(pos, p);
-            MmlCommand::NoCommand
+            Command::NoCommand
         }
         Token::IncrementOctave => {
             parse_increment_octave(p);
-            MmlCommand::NoCommand
+            Command::NoCommand
         }
         Token::DecrementOctave => {
             parse_decrement_octave(p);
-            MmlCommand::NoCommand
+            Command::NoCommand
         }
         Token::Transpose => {
             parse_transpose(pos, p);
-            MmlCommand::NoCommand
+            Command::NoCommand
         }
         Token::RelativeTranspose => {
             parse_relative_transpose(pos, p);
-            MmlCommand::NoCommand
+            Command::NoCommand
         }
         Token::ChangeWholeNoteLength => {
             parse_change_whole_note_length(pos, p);
-            MmlCommand::NoCommand
+            Command::NoCommand
         }
-        Token::Divider => MmlCommand::NoCommand,
+        Token::Divider => Command::NoCommand,
 
-        Token::StartBytecodeAsm => MmlCommand::StartBytecodeAsm,
-        Token::EndBytecodeAsm => MmlCommand::EndBytecodeAsm,
-        Token::BytecodeAsm(range) => MmlCommand::BytecodeAsm(range),
+        Token::StartBytecodeAsm => Command::StartBytecodeAsm,
+        Token::EndBytecodeAsm => Command::EndBytecodeAsm,
+        Token::BytecodeAsm(range) => Command::BytecodeAsm(range),
 
         Token::EndPortamento => invalid_token_error(p, pos, ChannelError::NoStartPortamento),
         Token::EndBrokenChord => invalid_token_error(p, pos, ChannelError::NoStartBrokenChord),

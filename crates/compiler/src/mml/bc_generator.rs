@@ -5,7 +5,7 @@
 // SPDX-License-Identifier: MIT
 
 use super::command_parser::{
-    ManualVibrato, MmlCommand, MmlCommandWithPos, MpVibrato, PanCommand, Parser, PortamentoSpeed,
+    Command, ManualVibrato, MmlCommandWithPos, MpVibrato, PanCommand, Parser, PortamentoSpeed,
     VolumeCommand,
 };
 use super::identifier::IdentifierStr;
@@ -827,11 +827,11 @@ impl ChannelBcGenerator<'_> {
         Ok(())
     }
 
-    fn process_command(&mut self, command: &MmlCommand) -> Result<(), ChannelError> {
+    fn process_command(&mut self, command: &Command) -> Result<(), ChannelError> {
         match command {
-            MmlCommand::NoCommand => (),
+            Command::NoCommand => (),
 
-            &MmlCommand::SetLoopPoint => match self.bc.get_context() {
+            &Command::SetLoopPoint => match self.bc.get_context() {
                 BytecodeContext::SongChannel => {
                     if self.loop_point.is_some() {
                         return Err(ChannelError::LoopPointAlreadySet);
@@ -850,21 +850,21 @@ impl ChannelBcGenerator<'_> {
                 &BytecodeContext::SoundEffect => return Err(ChannelError::CannotSetLoopPoint),
             },
 
-            &MmlCommand::SetInstrument(inst_index) => {
+            &Command::SetInstrument(inst_index) => {
                 self.set_instrument(inst_index)?;
             }
-            &MmlCommand::SetAdsr(adsr) => self.set_adsr(adsr),
-            &MmlCommand::SetGain(gain) => self.set_gain(gain),
+            &Command::SetAdsr(adsr) => self.set_adsr(adsr),
+            &Command::SetGain(gain) => self.set_gain(gain),
 
-            &MmlCommand::CallSubroutine(s_id, d) => {
+            &Command::CallSubroutine(s_id, d) => {
                 self.call_subroutine(s_id, d)?;
             }
 
-            &MmlCommand::SetManualVibrato(v) => {
+            &Command::SetManualVibrato(v) => {
                 self.set_manual_vibrato(v);
             }
 
-            &MmlCommand::SetMpVibrato(mp) => {
+            &Command::SetMpVibrato(mp) => {
                 self.mp = match mp {
                     Some(mp) => MpState::Mp(mp),
                     None => match self.mp {
@@ -878,7 +878,7 @@ impl ChannelBcGenerator<'_> {
                 };
             }
 
-            &MmlCommand::Rest {
+            &Command::Rest {
                 ticks_until_keyoff,
                 ticks_after_keyoff,
             } => {
@@ -886,30 +886,30 @@ impl ChannelBcGenerator<'_> {
                 self.rest_many_keyoffs(ticks_after_keyoff)?;
             }
 
-            &MmlCommand::Wait(length) => {
+            &Command::Wait(length) => {
                 self.wait(length)?;
             }
 
-            &MmlCommand::TempGain(temp_gain) => {
+            &Command::TempGain(temp_gain) => {
                 self.temp_gain(temp_gain);
             }
-            &MmlCommand::TempGainAndRest {
+            &Command::TempGainAndRest {
                 temp_gain,
                 ticks_until_keyoff,
                 ticks_after_keyoff,
             } => {
                 self.temp_gain_and_rest(temp_gain, ticks_until_keyoff, ticks_after_keyoff)?;
             }
-            &MmlCommand::TempGainAndWait(temp_gain, ticks) => {
+            &Command::TempGainAndWait(temp_gain, ticks) => {
                 self.temp_gain_and_wait(temp_gain, ticks)?;
             }
 
-            &MmlCommand::DisableEarlyRelease => {
+            &Command::DisableEarlyRelease => {
                 if !self.bc.get_state().early_release.is_known_and_eq(&None) {
                     self.bc.disable_early_release();
                 }
             }
-            &MmlCommand::SetEarlyRelease(ticks, min, gain) => {
+            &Command::SetEarlyRelease(ticks, min, gain) => {
                 let state = self.bc.get_state();
                 if !state
                     .early_release
@@ -919,7 +919,7 @@ impl ChannelBcGenerator<'_> {
                 }
             }
 
-            &MmlCommand::PlayNote {
+            &Command::PlayNote {
                 note,
                 length,
                 is_slur,
@@ -927,7 +927,7 @@ impl ChannelBcGenerator<'_> {
                 self.play_note_with_mp(note, length, is_slur)?;
             }
 
-            &MmlCommand::PlayQuantizedNote {
+            &Command::PlayQuantizedNote {
                 note,
                 length,
                 key_on_length,
@@ -960,7 +960,7 @@ impl ChannelBcGenerator<'_> {
                 }
             }
 
-            &MmlCommand::Portamento {
+            &Command::Portamento {
                 note1,
                 note2,
                 is_slur,
@@ -980,7 +980,7 @@ impl ChannelBcGenerator<'_> {
                 )?;
             }
 
-            &MmlCommand::QuantizedPortamento {
+            &Command::QuantizedPortamento {
                 note1,
                 note2,
                 speed_override,
@@ -1027,7 +1027,7 @@ impl ChannelBcGenerator<'_> {
                 }
             }
 
-            MmlCommand::BrokenChord {
+            Command::BrokenChord {
                 notes,
                 total_length,
                 note_length,
@@ -1035,19 +1035,19 @@ impl ChannelBcGenerator<'_> {
                 self.broken_chord(notes, *total_length, *note_length)?;
             }
 
-            MmlCommand::StartLoop => {
+            Command::StartLoop => {
                 self.bc.start_loop(None)?;
             }
 
-            MmlCommand::SkipLastLoop => {
+            Command::SkipLastLoop => {
                 self.bc.skip_last_loop()?;
             }
 
-            &MmlCommand::EndLoop(loop_count) => {
+            &Command::EndLoop(loop_count) => {
                 self.bc.end_loop(Some(loop_count))?;
             }
 
-            &MmlCommand::ChangePanAndOrVolume(pan, volume) => match (pan, volume) {
+            &Command::ChangePanAndOrVolume(pan, volume) => match (pan, volume) {
                 (Some(PanCommand::Absolute(p)), Some(VolumeCommand::Absolute(v))) => {
                     self.bc.set_pan_and_volume(p, v);
                 }
@@ -1085,7 +1085,7 @@ impl ChannelBcGenerator<'_> {
                 }
             },
 
-            &MmlCommand::SetEcho(e) => {
+            &Command::SetEcho(e) => {
                 if e {
                     self.bc.enable_echo();
                 } else {
@@ -1093,22 +1093,22 @@ impl ChannelBcGenerator<'_> {
                 }
             }
 
-            &MmlCommand::SetSongTempo(bpm) => {
+            &Command::SetSongTempo(bpm) => {
                 self.set_song_tick_clock(bpm.to_tick_clock()?)?;
             }
-            &MmlCommand::SetSongTickClock(tick_clock) => {
+            &Command::SetSongTickClock(tick_clock) => {
                 self.set_song_tick_clock(tick_clock)?;
             }
 
-            MmlCommand::StartBytecodeAsm => {
+            Command::StartBytecodeAsm => {
                 self.bc._start_asm_block();
             }
 
-            MmlCommand::EndBytecodeAsm => {
+            Command::EndBytecodeAsm => {
                 self.bc._end_asm_block()?;
             }
 
-            MmlCommand::BytecodeAsm(range) => {
+            Command::BytecodeAsm(range) => {
                 let asm = &self.mml_file[range.clone()];
 
                 parse_asm_line(&mut self.bc, asm)?
@@ -1208,7 +1208,7 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
         while let Some(c) = next {
             next = parser.next();
 
-            if next.is_none() && matches!(c.command(), MmlCommand::CallSubroutine(_, _)) {
+            if next.is_none() && matches!(c.command(), Command::CallSubroutine(_, _)) {
                 return Some(c);
             }
             Self::_compile_command(
@@ -1250,7 +1250,7 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
         }
 
         match c.command() {
-            MmlCommand::EndLoop(_) | MmlCommand::BytecodeAsm(_) => {
+            Command::EndLoop(_) | Command::BytecodeAsm(_) => {
                 parser.set_tick_counter(gen.bc.get_tick_counter_with_loop_flag());
             }
             _ => (),
@@ -1320,7 +1320,7 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
             (MpState::Mp(_), false) | (MpState::Disabled, false) | (MpState::Manual, _) => {
                 match tail_call {
                     Some(tc) => match tc.command() {
-                        MmlCommand::CallSubroutine(
+                        Command::CallSubroutine(
                             s,
                             SubroutineCallType::Mml | SubroutineCallType::Asm,
                         ) => {
@@ -1330,7 +1330,7 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
                                 &sub.subroutine_id,
                             )
                         }
-                        MmlCommand::CallSubroutine(_, SubroutineCallType::AsmDisableVibrato) => {
+                        Command::CallSubroutine(_, SubroutineCallType::AsmDisableVibrato) => {
                             // `call_subroutine_and_disable_vibrato` + `return_from_subroutine` uses
                             // less Audio-RAM then `disable_vibraro` + `goto_relative``
                             Self::_compile_command(
@@ -1518,7 +1518,7 @@ pub fn parse_and_compile_sound_effect(
             Ok(()) => (),
             Err(e) => parser.add_error_range(c.pos().clone(), e),
         }
-        if matches!(c.command(), MmlCommand::EndLoop(_)) {
+        if matches!(c.command(), Command::EndLoop(_)) {
             parser.set_tick_counter(gen.bc.get_tick_counter_with_loop_flag());
         }
     }
