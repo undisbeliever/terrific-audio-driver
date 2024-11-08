@@ -261,7 +261,7 @@ pub enum BytecodeAssemblerError {
 pub enum SoundEffectErrorList {
     BytecodeErrors(Vec<ErrorWithPos<BytecodeAssemblerError>>),
     MmlLineErrors(Vec<ErrorWithPos<MmlLineError>>),
-    MmlErrors(Vec<ErrorWithPos<MmlError>>),
+    MmlErrors(Vec<ErrorWithPos<ChannelError>>),
 }
 
 #[derive(Debug)]
@@ -413,8 +413,7 @@ pub enum MmlLineError {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum MmlError {
-    // MmlStreamParser errors
+pub enum ChannelError {
     ValueError(ValueError),
 
     BytecodeError(BytecodeError),
@@ -482,7 +481,7 @@ pub enum MmlError {
 #[derive(Debug)]
 pub struct MmlChannelError {
     pub identifier: mml::IdentifierBuf,
-    pub errors: Vec<ErrorWithPos<MmlError>>,
+    pub errors: Vec<ErrorWithPos<ChannelError>>,
 }
 
 #[derive(Debug)]
@@ -578,19 +577,19 @@ impl From<ValueError> for MmlLineError {
     }
 }
 
-impl From<ValueError> for MmlError {
+impl From<ValueError> for ChannelError {
     fn from(e: ValueError) -> Self {
         Self::ValueError(e)
     }
 }
 
-impl From<BytecodeError> for MmlError {
+impl From<BytecodeError> for ChannelError {
     fn from(e: BytecodeError) -> Self {
         Self::BytecodeError(e)
     }
 }
 
-impl From<BytecodeAssemblerError> for MmlError {
+impl From<BytecodeAssemblerError> for ChannelError {
     fn from(e: BytecodeAssemblerError) -> Self {
         Self::BytecodeAssemblerError(e)
     }
@@ -1229,7 +1228,7 @@ impl Display for MmlLineError {
     }
 }
 
-impl Display for MmlError {
+impl Display for ChannelError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
             Self::ValueError(e) => e.fmt(f),

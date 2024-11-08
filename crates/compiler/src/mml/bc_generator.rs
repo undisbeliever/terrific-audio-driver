@@ -26,7 +26,7 @@ use crate::bytecode::{
     LoopCount, PlayNoteTicks, PortamentoVelocity, RelativeVolume, SlurredNoteState, SubroutineId,
     VibratoPitchOffsetPerTick, VibratoState, KEY_OFF_TICK_DELAY,
 };
-use crate::errors::{ErrorWithPos, MmlChannelError, MmlError, ValueError};
+use crate::errors::{ChannelError, ErrorWithPos, MmlChannelError, ValueError};
 use crate::notes::{Note, SEMITONES_PER_OCTAVE};
 use crate::pitch_table::{PitchTable, PITCH_REGISTER_MAX};
 use crate::songs::{Channel, LoopPoint, Subroutine};
@@ -133,13 +133,13 @@ impl ChannelBcGenerator<'_> {
         &self,
         mp: &MpVibrato,
         note: Note,
-    ) -> Result<ManualVibrato, MmlError> {
+    ) -> Result<ManualVibrato, ChannelError> {
         if mp.depth_in_cents == 0 {
-            return Err(MmlError::MpDepthZero);
+            return Err(ChannelError::MpDepthZero);
         }
         let instrument_id = match self.bc.get_state().instrument {
             IeState::Known(i) | IeState::Maybe(i) => i,
-            IeState::Unknown => return Err(MmlError::CannotUseMpWithoutInstrument),
+            IeState::Unknown => return Err(ChannelError::CannotUseMpWithoutInstrument),
         };
 
         let pitch = self.pitch_table.pitch_for_note(instrument_id, note);
@@ -156,7 +156,7 @@ impl ChannelBcGenerator<'_> {
         let po_per_tick = if po_per_tick > 1.0 { po_per_tick } else { 1.0 };
 
         if po_per_tick > u32::MAX.into() {
-            return Err(MmlError::MpPitchOffsetTooLarge(u32::MAX));
+            return Err(ChannelError::MpPitchOffsetTooLarge(u32::MAX));
         }
         let po_per_tick = po_per_tick as u32;
 
@@ -165,11 +165,13 @@ impl ChannelBcGenerator<'_> {
                 quarter_wavelength_ticks: mp.quarter_wavelength_ticks,
                 pitch_offset_per_tick: po,
             }),
-            Err(_) => Err(MmlError::MpPitchOffsetTooLarge(po_per_tick)),
+            Err(_) => Err(ChannelError::MpPitchOffsetTooLarge(po_per_tick)),
         }
     }
 
-    fn split_wait_length(length: TickCounter) -> Result<(BcTicksNoKeyOff, TickCounter), MmlError> {
+    fn split_wait_length(
+        length: TickCounter,
+    ) -> Result<(BcTicksNoKeyOff, TickCounter), ChannelError> {
         let l = length.value();
 
         let bc = u32::min(l, BcTicksNoKeyOff::MAX_TICKS);
@@ -230,7 +232,7 @@ impl ChannelBcGenerator<'_> {
         note: Note,
         length: TickCounter,
         is_slur: bool,
-    ) -> Result<(), MmlError> {
+    ) -> Result<(), ChannelError> {
         let (pn_length, rest) = Self::split_play_note_length(length, is_slur)?;
 
         let vibrato = self.bc.get_state().vibrato;
@@ -294,7 +296,11 @@ impl ChannelBcGenerator<'_> {
         self.rest_after_play_note(rest, is_slur)
     }
 
-    fn rest_after_play_note(&mut self, length: TickCounter, is_slur: bool) -> Result<(), MmlError> {
+    fn rest_after_play_note(
+        &mut self,
+        length: TickCounter,
+        is_slur: bool,
+    ) -> Result<(), ChannelError> {
         if length.is_zero() {
             Ok(())
         } else if is_slur {
@@ -308,7 +314,7 @@ impl ChannelBcGenerator<'_> {
 
     // Rest that can send multiple `rest_keyoff` instructions
     // The `rest_keyoff` instruction can wait for more ticks than the `rest` instruction.
-    fn rest_many_keyoffs_no_loop(&mut self, length: TickCounter) -> Result<(), MmlError> {
+    fn rest_many_keyoffs_no_loop(&mut self, length: TickCounter) -> Result<(), ChannelError> {
         const _: () = assert!(BcTicksKeyOff::MAX_TICKS > BcTicksNoKeyOff::MAX_TICKS);
         const MAX_REST: u32 = BcTicksKeyOff::MAX_TICKS;
         const MIN_REST: u32 = BcTicksKeyOff::MIN_TICKS;
@@ -333,7 +339,7 @@ impl ChannelBcGenerator<'_> {
     }
 
     // rest with no keyoff
-    fn wait_no_loop(&mut self, length: TickCounter) -> Result<(), MmlError> {
+    fn wait_no_loop(&mut self, length: TickCounter) -> Result<(), ChannelError> {
         let mut remaining_ticks = length.value();
 
         let rest_length = BcTicksNoKeyOff::MAX;
@@ -350,7 +356,7 @@ impl ChannelBcGenerator<'_> {
     }
 
     // A rest that sends a single keyoff event
-    fn rest_one_keyoff(&mut self, length: TickCounter) -> Result<(), MmlError> {
+    fn rest_one_keyoff(&mut self, length: TickCounter) -> Result<(), ChannelError> {
         const REST_TICKS: u32 = BcTicksKeyOff::MAX_TICKS;
         const MIN_TWO_INSTRUCTIONS: u32 = REST_TICKS + 1;
 
@@ -367,7 +373,7 @@ impl ChannelBcGenerator<'_> {
 
     // Rest that can send multiple `rest_keyoff` instructions
     // The `rest_keyoff` instruction can wait for more ticks than the `rest` instruction.
-    fn rest_many_keyoffs(&mut self, length: TickCounter) -> Result<(), MmlError> {
+    fn rest_many_keyoffs(&mut self, length: TickCounter) -> Result<(), ChannelError> {
         const MIN_LOOP_REST: u32 = BcTicksKeyOff::MAX_TICKS * REST_LOOP_INSTRUCTION_THREASHOLD + 1;
 
         if length.is_zero() {
@@ -395,7 +401,7 @@ impl ChannelBcGenerator<'_> {
     }
 
     // rest with no keyoff
-    fn wait(&mut self, length: TickCounter) -> Result<(), MmlError> {
+    fn wait(&mut self, length: TickCounter) -> Result<(), ChannelError> {
         const MIN_LOOP_REST: u32 =
             BcTicksNoKeyOff::MAX_TICKS * REST_LOOP_INSTRUCTION_THREASHOLD + 1;
 
@@ -428,7 +434,7 @@ impl ChannelBcGenerator<'_> {
         delay_length: TickCounter,
         slide_length: TickCounter,
         tie_length: TickCounter,
-    ) -> Result<(), MmlError> {
+    ) -> Result<(), ChannelError> {
         #[cfg(debug_assertions)]
         let expected_tick_counter =
             self.bc.get_tick_counter() + delay_length + slide_length + tie_length;
@@ -476,7 +482,7 @@ impl ChannelBcGenerator<'_> {
         };
 
         if slide_length.is_zero() {
-            return Err(MmlError::PortamentoTooShort);
+            return Err(ChannelError::PortamentoTooShort);
         }
         if slide_length.value() > MAX_PORTAMENTO_SLIDE_TICKS {
             const _: () = assert!(
@@ -485,7 +491,7 @@ impl ChannelBcGenerator<'_> {
                 "Portamento velocity can overflow"
             );
 
-            return Err(MmlError::PortamentoTooLong);
+            return Err(ChannelError::PortamentoTooLong);
         }
 
         let velocity = match speed_override {
@@ -499,7 +505,7 @@ impl ChannelBcGenerator<'_> {
             None => {
                 let instrument_id = match self.bc.get_state().instrument {
                     IeState::Known(i) | IeState::Maybe(i) => i,
-                    IeState::Unknown => return Err(MmlError::PortamentoRequiresInstrument),
+                    IeState::Unknown => return Err(ChannelError::PortamentoRequiresInstrument),
                 };
                 let p1: i32 = self.pitch_table.pitch_for_note(instrument_id, note1).into();
                 let p2: i32 = self.pitch_table.pitch_for_note(instrument_id, note2).into();
@@ -534,12 +540,12 @@ impl ChannelBcGenerator<'_> {
         notes: &[Note],
         total_length: TickCounter,
         note_length: PlayNoteTicks,
-    ) -> Result<(), MmlError> {
+    ) -> Result<(), ChannelError> {
         if notes.is_empty() {
-            return Err(MmlError::NoNotesInBrokenChord);
+            return Err(ChannelError::NoNotesInBrokenChord);
         }
         if notes.len() > MAX_BROKEN_CHORD_NOTES {
-            return Err(MmlError::TooManyNotesInBrokenChord(notes.len()));
+            return Err(ChannelError::TooManyNotesInBrokenChord(notes.len()));
         }
         let n_notes: u32 = notes.len().try_into().unwrap();
 
@@ -561,7 +567,7 @@ impl ChannelBcGenerator<'_> {
         let last_note_ticks = last_note_ticks;
 
         if total_ticks < last_note_ticks {
-            return Err(MmlError::BrokenChordTotalLengthTooShort);
+            return Err(ChannelError::BrokenChordTotalLengthTooShort);
         }
         let notes_in_loop = (total_ticks - last_note_ticks) / note_length.ticks();
 
@@ -571,7 +577,7 @@ impl ChannelBcGenerator<'_> {
         let n_loops = (notes_in_loop / n_notes) + u32::from(has_break_point);
 
         if n_loops < 2 {
-            return Err(MmlError::BrokenChordTotalLengthTooShort);
+            return Err(ChannelError::BrokenChordTotalLengthTooShort);
         }
 
         let n_loops = LoopCount::try_from(n_loops)?;
@@ -603,7 +609,7 @@ impl ChannelBcGenerator<'_> {
         }
 
         if self.bc.get_tick_counter() != expected_tick_counter {
-            return Err(MmlError::BrokenChordTickCountMismatch(
+            return Err(ChannelError::BrokenChordTickCountMismatch(
                 expected_tick_counter,
                 self.bc.get_tick_counter(),
             ));
@@ -612,7 +618,7 @@ impl ChannelBcGenerator<'_> {
         Ok(())
     }
 
-    fn set_instrument(&mut self, inst: usize) -> Result<(), MmlError> {
+    fn set_instrument(&mut self, inst: usize) -> Result<(), ChannelError> {
         let inst = match self.instruments.get(inst) {
             Some(inst) => inst,
             None => panic!("invalid instrument index"),
@@ -684,7 +690,7 @@ impl ChannelBcGenerator<'_> {
         temp_gain: Option<TempGain>,
         ticks_until_keyoff: TickCounter,
         ticks_after_keyoff: TickCounter,
-    ) -> Result<(), MmlError> {
+    ) -> Result<(), ChannelError> {
         if temp_gain.is_some_and(|t| !self.bc.get_state().prev_temp_gain.is_known_and_eq(&t)) {
             let temp_gain = temp_gain.unwrap();
 
@@ -737,7 +743,7 @@ impl ChannelBcGenerator<'_> {
         &mut self,
         temp_gain: Option<TempGain>,
         ticks: TickCounter,
-    ) -> Result<(), MmlError> {
+    ) -> Result<(), ChannelError> {
         let (wait1, wait2) = Self::split_wait_length(ticks)?;
 
         if temp_gain.is_some_and(|t| !self.bc.get_state().prev_temp_gain.is_known_and_eq(&t)) {
@@ -759,7 +765,7 @@ impl ChannelBcGenerator<'_> {
         &mut self,
         index: usize,
         disable_vibrato: SubroutineCallType,
-    ) -> Result<(), MmlError> {
+    ) -> Result<(), ChannelError> {
         // CallSubroutine commands should only be created if the channel can call a subroutine.
         // `s_id` should always be valid
         let sub = match self.subroutines {
@@ -816,22 +822,22 @@ impl ChannelBcGenerator<'_> {
         }
     }
 
-    fn set_song_tick_clock(&mut self, tick_clock: TickClock) -> Result<(), MmlError> {
+    fn set_song_tick_clock(&mut self, tick_clock: TickClock) -> Result<(), ChannelError> {
         self.bc.set_song_tick_clock(tick_clock)?;
         Ok(())
     }
 
-    fn process_command(&mut self, command: &MmlCommand) -> Result<(), MmlError> {
+    fn process_command(&mut self, command: &MmlCommand) -> Result<(), ChannelError> {
         match command {
             MmlCommand::NoCommand => (),
 
             &MmlCommand::SetLoopPoint => match self.bc.get_context() {
                 BytecodeContext::SongChannel => {
                     if self.loop_point.is_some() {
-                        return Err(MmlError::LoopPointAlreadySet);
+                        return Err(ChannelError::LoopPointAlreadySet);
                     }
                     if self.bc.is_in_loop() {
-                        return Err(MmlError::CannotSetLoopPointInALoop);
+                        return Err(ChannelError::CannotSetLoopPointInALoop);
                     }
                     self.loop_point = Some(LoopPoint {
                         bytecode_offset: self.bc.get_bytecode_len(),
@@ -840,8 +846,8 @@ impl ChannelBcGenerator<'_> {
 
                     self.bc._song_loop_point();
                 }
-                BytecodeContext::SongSubroutine => return Err(MmlError::CannotSetLoopPoint),
-                &BytecodeContext::SoundEffect => return Err(MmlError::CannotSetLoopPoint),
+                BytecodeContext::SongSubroutine => return Err(ChannelError::CannotSetLoopPoint),
+                &BytecodeContext::SoundEffect => return Err(ChannelError::CannotSetLoopPoint),
             },
 
             &MmlCommand::SetInstrument(inst_index) => {
@@ -1350,7 +1356,7 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
         let (bc_data, bc_state) = match gen.bc.bytecode(terminator) {
             Ok((d, s)) => (d, Some(s)),
             Err((e, d)) => {
-                parser.add_error_range(last_pos.to_range(1), MmlError::BytecodeError(e));
+                parser.add_error_range(last_pos.to_range(1), ChannelError::BytecodeError(e));
                 (d, None)
             }
         };
@@ -1436,7 +1442,8 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
             None => BcTerminator::DisableChannel,
             Some(lp) => {
                 if lp.tick_counter == tick_counter {
-                    parser.add_error_range(last_pos.to_range(1), MmlError::NoTicksAfterLoopPoint);
+                    parser
+                        .add_error_range(last_pos.to_range(1), ChannelError::NoTicksAfterLoopPoint);
                 }
                 BcTerminator::Goto(lp.bytecode_offset)
             }
@@ -1445,7 +1452,7 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
         let (bc_data, bc_state) = match gen.bc.bytecode(terminator) {
             Ok((b, s)) => (b, Some(s)),
             Err((e, b)) => {
-                parser.add_error_range(last_pos.to_range(1), MmlError::BytecodeError(e));
+                parser.add_error_range(last_pos.to_range(1), ChannelError::BytecodeError(e));
                 (b, None)
             }
         };
@@ -1481,7 +1488,7 @@ pub fn parse_and_compile_sound_effect(
     mml_instruments: &Vec<MmlInstrument>,
     data_instruments: &UniqueNamesList<data::InstrumentOrSample>,
     instruments_map: &HashMap<IdentifierStr, usize>,
-) -> Result<MmlSoundEffect, Vec<ErrorWithPos<MmlError>>> {
+) -> Result<MmlSoundEffect, Vec<ErrorWithPos<ChannelError>>> {
     #[cfg(feature = "mml_tracking")]
     let mut cursor_tracker = CursorTracker::new();
 
@@ -1524,7 +1531,7 @@ pub fn parse_and_compile_sound_effect(
     let bytecode = match gen.bc.bytecode(BcTerminator::DisableChannel) {
         Ok((b, _)) => b,
         Err((e, b)) => {
-            parser.add_error_range(last_pos.to_range(1), MmlError::BytecodeError(e));
+            parser.add_error_range(last_pos.to_range(1), ChannelError::BytecodeError(e));
             b
         }
     };
@@ -1534,7 +1541,7 @@ pub fn parse_and_compile_sound_effect(
     if tick_counter > MAX_SFX_TICKS {
         errors.push(ErrorWithPos(
             last_pos.to_range(1),
-            MmlError::TooManySfxTicks(tick_counter),
+            ChannelError::TooManySfxTicks(tick_counter),
         ));
     }
 

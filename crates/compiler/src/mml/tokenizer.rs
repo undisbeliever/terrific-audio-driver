@@ -10,7 +10,7 @@ use super::{IdentifierStr, COMMENT_CHAR};
 
 use crate::bytecode_assembler;
 use crate::envelope::GainMode;
-use crate::errors::{MmlError, ValueError};
+use crate::errors::{ChannelError, ValueError};
 use crate::file_pos::{FilePos, Line, LineIndexRange, LineSplitter};
 use crate::notes::{parse_pitch_char, MmlPitch};
 
@@ -27,7 +27,7 @@ pub enum Token<'a> {
 
     NewLine(LineIndexRange),
 
-    Error(MmlError),
+    Error(ChannelError),
 
     Pitch(MmlPitch),
 
@@ -279,7 +279,7 @@ fn parse_unknown_chars<'a>(scanner: &mut Scanner<'a>) -> Token<'a> {
         }
     }
 
-    Token::Error(MmlError::UnknownCharacters(n_chars))
+    Token::Error(ChannelError::UnknownCharacters(n_chars))
 }
 
 fn next_token<'a>(scanner: &mut Scanner<'a>) -> Option<TokenWithPosition<'a>> {
@@ -357,12 +357,12 @@ fn next_token<'a>(scanner: &mut Scanner<'a>) -> Option<TokenWithPosition<'a>> {
 
         b'!' => match scanner.identifier_token() {
             Some(id) => Token::CallSubroutine(id, SubroutineCallType::Mml),
-            None => Token::Error(MmlError::NoSubroutine),
+            None => Token::Error(ChannelError::NoSubroutine),
         },
 
         b'@' => match scanner.identifier_token() {
             Some(id) => Token::SetInstrument(id),
-            None => Token::Error(MmlError::NoInstrument),
+            None => Token::Error(ChannelError::NoInstrument),
         },
 
         b'+' => {
@@ -371,7 +371,7 @@ fn next_token<'a>(scanner: &mut Scanner<'a>) -> Option<TokenWithPosition<'a>> {
             let num = scanner.read_while(|c| c.is_ascii_digit());
             match num.parse() {
                 Ok(i) => Token::RelativeNumber(i),
-                Err(_) => Token::Error(MmlError::ValueError(ValueError::CannotParseSigned(
+                Err(_) => Token::Error(ChannelError::ValueError(ValueError::CannotParseSigned(
                     num.to_owned(),
                 ))),
             }
@@ -381,7 +381,7 @@ fn next_token<'a>(scanner: &mut Scanner<'a>) -> Option<TokenWithPosition<'a>> {
             let num = scanner.read_while(|c| c == b'-' || c.is_ascii_digit());
             match num.parse() {
                 Ok(i) => Token::RelativeNumber(i),
-                Err(_) => Token::Error(MmlError::ValueError(ValueError::CannotParseSigned(
+                Err(_) => Token::Error(ChannelError::ValueError(ValueError::CannotParseSigned(
                     num.to_owned(),
                 ))),
             }
@@ -470,8 +470,8 @@ fn next_token<'a>(scanner: &mut Scanner<'a>) -> Option<TokenWithPosition<'a>> {
 
             match scanner.read_while(|b: u8| b.is_ascii_alphabetic()) {
                 "asm" => Token::StartBytecodeAsm,
-                "" => Token::Error(MmlError::NoSlashCommand),
-                s => Token::Error(MmlError::InvalidSlashCommand(s.to_owned())),
+                "" => Token::Error(ChannelError::NoSlashCommand),
+                s => Token::Error(ChannelError::InvalidSlashCommand(s.to_owned())),
             }
         }
 
@@ -495,7 +495,7 @@ fn parse_bytecode_asm<'a>(
     if scanner.first_byte() != Some(b'{') {
         tokens.push(TokenWithPosition {
             pos: scanner.pos(),
-            token: Token::Error(MmlError::NoBraceAfterAsm),
+            token: Token::Error(ChannelError::NoBraceAfterAsm),
             end: scanner.pos(),
         });
 
@@ -530,7 +530,7 @@ fn parse_bytecode_asm<'a>(
                 None => {
                     tokens.push(TokenWithPosition {
                         pos: scanner.pos(),
-                        token: Token::Error(MmlError::MissingEndAsm),
+                        token: Token::Error(ChannelError::MissingEndAsm),
                         end: scanner.pos(),
                     });
                     return;
@@ -779,8 +779,10 @@ mod tests {
             let mut scanner = Scanner::new(text, blank_pos());
 
             let token = next_token(&mut scanner).map(|t| t.token);
-            let is_unknown_token =
-                matches!(token, Some(Token::Error(MmlError::UnknownCharacters(_))));
+            let is_unknown_token = matches!(
+                token,
+                Some(Token::Error(ChannelError::UnknownCharacters(_)))
+            );
 
             if SPECIAL_CHARS.contains(&c) {
                 // Confirm a single SPECIAL_CHARS character is not a token according to `next()`

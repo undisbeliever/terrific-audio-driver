@@ -14,7 +14,7 @@ use compiler::driver_constants::{
     BC_STACK_BYTES_PER_SUBROUTINE_CALL, MAX_SUBROUTINES,
 };
 use compiler::envelope::{Adsr, Envelope, Gain};
-use compiler::errors::{BytecodeError, MmlError, SongError, ValueError};
+use compiler::errors::{BytecodeError, ChannelError, SongError, ValueError};
 use compiler::mml;
 use compiler::notes::Octave;
 use compiler::pitch_table::{build_pitch_table, PitchTable};
@@ -384,7 +384,7 @@ fn bugfix_quantization_of_short_note_then_rest() {
 
 #[test]
 fn bugfix_quantization_of_1_tick_note_panic() {
-    assert_error_in_mml_line("Q4 c%1", 4, MmlError::NoteIsTooShort);
+    assert_error_in_mml_line("Q4 c%1", 4, ChannelError::NoteIsTooShort);
 }
 
 #[test]
@@ -1170,7 +1170,7 @@ fn test_too_many_loops() {
     assert_error_in_mml_line(
         "[[[[[[[[a]11]12]13]14]15]16]17]18",
         8,
-        MmlError::BytecodeError(BytecodeError::StackOverflowInStartLoop(8 * 3)),
+        ChannelError::BytecodeError(BytecodeError::StackOverflowInStartLoop(8 * 3)),
     );
 }
 
@@ -1225,7 +1225,7 @@ A @0
 A !s
 "##,
         3,
-        MmlError::BytecodeError(BytecodeError::StackOverflowInSubroutineCall(
+        ChannelError::BytecodeError(BytecodeError::StackOverflowInSubroutineCall(
             "s".to_owned(),
             23,
         )),
@@ -1241,7 +1241,7 @@ A @0
 A [[[[[[[ !s ]11]12]13]14]15]16]17
 "##,
         11,
-        MmlError::BytecodeError(BytecodeError::StackOverflowInSubroutineCall(
+        ChannelError::BytecodeError(BytecodeError::StackOverflowInSubroutineCall(
             "s".to_owned(),
             23,
         )),
@@ -1257,7 +1257,7 @@ A @0
 A [[[[[ !s ]14]15]16]17]18
 "##,
         9,
-        MmlError::BytecodeError(BytecodeError::StackOverflowInSubroutineCall(
+        ChannelError::BytecodeError(BytecodeError::StackOverflowInSubroutineCall(
             "s".to_owned(),
             26,
         )),
@@ -1720,7 +1720,7 @@ A @0 !s
 "##,
         &[(
             "s",
-            &[MmlError::CannotCallSubroutineRecursion("s".to_owned())],
+            &[ChannelError::CannotCallSubroutineRecursion("s".to_owned())],
         )],
     );
 }
@@ -1740,11 +1740,11 @@ A @0 !s1
         &[
             (
                 "s1",
-                &[MmlError::CannotCallSubroutineRecursion("s2".to_owned())],
+                &[ChannelError::CannotCallSubroutineRecursion("s2".to_owned())],
             ),
             (
                 "s2",
-                &[MmlError::CannotCallSubroutineRecursion("s3".to_owned())],
+                &[ChannelError::CannotCallSubroutineRecursion("s3".to_owned())],
             ),
             // No error in !s3.  It is compiled last
         ],
@@ -1761,7 +1761,7 @@ fn test_nested_subroutines_with_missing1() {
 
 A @0 !s
 "##,
-        &[("s", &[MmlError::CannotFindSubroutine("s2".to_owned())])],
+        &[("s", &[ChannelError::CannotFindSubroutine("s2".to_owned())])],
     );
 }
 
@@ -1780,7 +1780,7 @@ A @0 !s1 !s3
 "##,
         &[(
             "s2",
-            &[MmlError::CannotFindSubroutine("missing".to_owned())],
+            &[ChannelError::CannotFindSubroutine("missing".to_owned())],
         )],
     );
 }
@@ -1863,7 +1863,7 @@ fn test_nested_subroutines_stack_overflow() {
 A @0 !s1
 "##,
         6,
-        MmlError::BytecodeError(BytecodeError::StackOverflowInSubroutineCall(
+        ChannelError::BytecodeError(BytecodeError::StackOverflowInSubroutineCall(
             "s1".to_owned(),
             stack_depth,
         )),
@@ -2211,8 +2211,8 @@ fn test_portamento_speed() {
 
 #[test]
 fn test_portamento_err() {
-    assert_error_in_mml_line("{c g}4,4", 8, MmlError::InvalidPortamentoDelay);
-    assert_error_in_mml_line("l2 {c g},2", 10, MmlError::InvalidPortamentoDelay);
+    assert_error_in_mml_line("{c g}4,4", 8, ChannelError::InvalidPortamentoDelay);
+    assert_error_in_mml_line("l2 {c g},2", 10, ChannelError::InvalidPortamentoDelay);
 
     assert_error_in_mml_line("{c g}4,,0", 1, ValueError::PortamentoVelocityZero.into());
     assert_error_in_mml_line(
@@ -2221,9 +2221,9 @@ fn test_portamento_err() {
         ValueError::PortamentoSpeedOutOfRange(800).into(),
     );
 
-    assert_error_in_mml_line("{c g}%0", 1, MmlError::PortamentoTooShort);
-    assert_error_in_mml_line("{c g}%1", 1, MmlError::PortamentoTooShort);
-    assert_error_in_mml_line("{c g}%10,%9", 1, MmlError::PortamentoTooShort);
+    assert_error_in_mml_line("{c g}%0", 1, ChannelError::PortamentoTooShort);
+    assert_error_in_mml_line("{c g}%1", 1, ChannelError::PortamentoTooShort);
+    assert_error_in_mml_line("{c g}%10,%9", 1, ChannelError::PortamentoTooShort);
 
     assert_error_in_mml_line("{c c}4", 1, ValueError::PortamentoVelocityZero.into());
     assert_error_in_mml_line(
@@ -2233,9 +2233,9 @@ fn test_portamento_err() {
     );
 
     // Tests if the TryFromIntError panic in ChannelBcGenerator::portamento() has been fixed
-    assert_error_in_mml_line("{c g}%$ffffffff", 1, MmlError::PortamentoTooLong);
-    assert_error_in_mml_line("{c g}%16387", 1, MmlError::PortamentoTooLong);
-    assert_error_in_mml_line("c & {c g}%16385 & a", 5, MmlError::PortamentoTooLong);
+    assert_error_in_mml_line("{c g}%$ffffffff", 1, ChannelError::PortamentoTooLong);
+    assert_error_in_mml_line("{c g}%16387", 1, ChannelError::PortamentoTooLong);
+    assert_error_in_mml_line("c & {c g}%16385 & a", 5, ChannelError::PortamentoTooLong);
 }
 
 #[test]
@@ -4222,7 +4222,7 @@ A @0 a GE24 b L GE24 c GE24 d GF127 e
 
 #[test]
 fn test_set_loop_point_in_loop_is_err() {
-    assert_error_in_mml_line("[a b L c]5", 6, MmlError::CannotSetLoopPointInALoop);
+    assert_error_in_mml_line("[a b L c]5", 6, ChannelError::CannotSetLoopPointInALoop);
 }
 
 #[test]
@@ -4474,7 +4474,7 @@ fn test_missing_start_loop_in_bc_asm_err() {
     assert_error_in_mml_line(
         r"[ a \asm{ end_loop 2}",
         11,
-        MmlError::BytecodeAssemblerError(BytecodeError::MissingStartLoopInAsmBlock.into()),
+        ChannelError::BytecodeAssemblerError(BytecodeError::MissingStartLoopInAsmBlock.into()),
     );
 }
 
@@ -4483,7 +4483,7 @@ fn test_skip_last_loop_outside_asm_loop_err() {
     assert_error_in_mml_line(
         r"[ c \asm{ skip_last_loop } c ]2",
         11,
-        MmlError::BytecodeAssemblerError(BytecodeError::CannotModifyLoopOutsideAsmBlock.into()),
+        ChannelError::BytecodeAssemblerError(BytecodeError::CannotModifyLoopOutsideAsmBlock.into()),
     );
 }
 
@@ -4878,12 +4878,12 @@ fn assert_mml_channel_a_matches_looping_bytecode(mml: &str, bc_asm: &[&str]) {
     assert_eq!(mml_bytecode(&mml), bc_asm);
 }
 
-fn assert_error_in_mml_line(mml_line: &str, line_char: u32, expected_error: MmlError) {
+fn assert_error_in_mml_line(mml_line: &str, line_char: u32, expected_error: ChannelError) {
     let mml = ["@1 dummy_instrument\nA @1 o4\nA ", mml_line].concat();
     assert_err_in_channel_a_mml(&mml, line_char + 2, expected_error);
 }
 
-fn assert_err_in_channel_a_mml(mml: &str, line_char: u32, expected_error: MmlError) {
+fn assert_err_in_channel_a_mml(mml: &str, line_char: u32, expected_error: ChannelError) {
     let dummy_data = dummy_data();
 
     let r = mml::compile_mml(
@@ -4923,7 +4923,7 @@ fn assert_err_in_channel_a_mml(mml: &str, line_char: u32, expected_error: MmlErr
     }
 }
 
-fn assert_subroutine_err_in_mml(mml: &str, expected_errors: &[(&str, &[MmlError])]) {
+fn assert_subroutine_err_in_mml(mml: &str, expected_errors: &[(&str, &[ChannelError])]) {
     let dummy_data = dummy_data();
 
     let r = mml::compile_mml(

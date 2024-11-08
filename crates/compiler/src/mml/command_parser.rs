@@ -16,7 +16,7 @@ use crate::bytecode::{
     KEY_OFF_TICK_DELAY,
 };
 use crate::envelope::{Adsr, Gain, GainMode, OptionalGain, TempGain};
-use crate::errors::{ErrorWithPos, MmlError, ValueError};
+use crate::errors::{ChannelError, ErrorWithPos, ValueError};
 use crate::file_pos::{FilePos, FilePosRange};
 use crate::notes::{MidiNote, MmlPitch, Note, Octave, STARTING_OCTAVE};
 use crate::time::{
@@ -295,7 +295,7 @@ mod parser {
         channel: ChannelId,
 
         tokens: PeekableTokenIterator<'a>,
-        errors: Vec<ErrorWithPos<MmlError>>,
+        errors: Vec<ErrorWithPos<ChannelError>>,
         state: State,
 
         default_length: TickCounter,
@@ -393,12 +393,12 @@ mod parser {
             self.tokens.peek_and_next()
         }
 
-        pub fn add_error(&mut self, pos: FilePos, e: MmlError) {
+        pub fn add_error(&mut self, pos: FilePos, e: ChannelError) {
             self.errors
                 .push(ErrorWithPos(self.file_pos_range_from(pos), e))
         }
 
-        pub fn add_error_range(&mut self, pos: FilePosRange, e: MmlError) {
+        pub fn add_error_range(&mut self, pos: FilePosRange, e: ChannelError) {
             self.errors.push(ErrorWithPos(pos, e))
         }
 
@@ -469,7 +469,12 @@ mod parser {
             );
         }
 
-        pub fn finalize(mut self) -> (Vec<TickCounterWithLoopFlag>, Vec<ErrorWithPos<MmlError>>) {
+        pub fn finalize(
+            mut self,
+        ) -> (
+            Vec<TickCounterWithLoopFlag>,
+            Vec<ErrorWithPos<ChannelError>>,
+        ) {
             if let Some(pending_sections) = self.pending_sections {
                 for _ in pending_sections {
                     self.sections_tick_counters.push(self.tick_counter);
@@ -838,7 +843,7 @@ fn parse_set_early_release_arguments(p: &mut Parser) -> (EarlyReleaseMinTicks, O
                 let min = match n.try_into() {
                     Ok(o) => o,
                     Err(e) => {
-                        p.add_error(pos, MmlError::ValueError(e));
+                        p.add_error(pos, ChannelError::ValueError(e));
                         min
                     }
                 };
@@ -867,7 +872,7 @@ fn parse_set_early_release(pos: FilePos, p: &mut Parser) -> MmlCommand {
             let ticks = match t.try_into() {
                 Ok(t) => t,
                 Err(e) => {
-                    p.add_error(pos, MmlError::ValueError(e));
+                    p.add_error(pos, ChannelError::ValueError(e));
                     EarlyReleaseTicks::MIN
                 }
             };
@@ -1030,7 +1035,7 @@ fn parse_pitch_list<'a>(p: &mut Parser<'a>) -> (Vec<Note>, FilePos, Token<'a>) {
             Token::Transpose => parse_transpose(pos, p),
             Token::RelativeTranspose => parse_relative_transpose(pos, p),
 
-            _ => p.add_error(pos, MmlError::InvalidPitchListSymbol),
+            _ => p.add_error(pos, ChannelError::InvalidPitchListSymbol),
         }
     }
 }
@@ -1295,7 +1300,7 @@ fn play_note(pos: FilePos, note: Note, length: TickCounter, p: &mut Parser) -> M
     let length = length + tie_length;
 
     if !is_slur && length.value() <= KEY_OFF_TICK_DELAY {
-        return invalid_token_error(p, pos, MmlError::NoteIsTooShort);
+        return invalid_token_error(p, pos, ChannelError::NoteIsTooShort);
     }
 
     let q = p.state().quantize;
@@ -1413,11 +1418,11 @@ fn parse_portamento(pos: FilePos, p: &mut Parser) -> MmlCommand {
     let (notes, end_pos, end_token) = parse_pitch_list(p);
 
     if !matches!(end_token, Token::EndPortamento) {
-        return invalid_token_error(p, end_pos, MmlError::MissingEndPortamento);
+        return invalid_token_error(p, end_pos, ChannelError::MissingEndPortamento);
     }
 
     if notes.len() != 2 {
-        p.add_error(pos, MmlError::PortamentoRequiresTwoPitches);
+        p.add_error(pos, ChannelError::PortamentoRequiresTwoPitches);
     }
 
     let mut slide_length = parse_tracked_length(p);
@@ -1432,7 +1437,7 @@ fn parse_portamento(pos: FilePos, p: &mut Parser) -> MmlCommand {
                 slide_length = TickCounter::new(slide_length.value() - dt.value());
                 delay_length = dt
             } else {
-                p.add_error(dt_pos, MmlError::InvalidPortamentoDelay);
+                p.add_error(dt_pos, ChannelError::InvalidPortamentoDelay);
             }
         }
         if next_token_matches!(p, Token::Comma) {
@@ -1514,7 +1519,7 @@ fn parse_broken_chord(p: &mut Parser) -> MmlCommand {
     let (notes, end_pos, end_token) = parse_pitch_list(p);
 
     if !matches!(end_token, Token::EndBrokenChord) {
-        return invalid_token_error(p, end_pos, MmlError::MissingEndBrokenChord);
+        return invalid_token_error(p, end_pos, ChannelError::MissingEndBrokenChord);
     }
 
     let mut note_length_pos = end_pos;
@@ -1708,7 +1713,7 @@ fn parse_set_instrument(pos: FilePos, id: IdentifierStr, p: &mut Parser) -> MmlC
         None => invalid_token_error(
             p,
             pos,
-            MmlError::CannotFindInstrument(id.as_str().to_owned()),
+            ChannelError::CannotFindInstrument(id.as_str().to_owned()),
         ),
     }
 }
@@ -1733,20 +1738,20 @@ fn parse_call_subroutine(
                 Some(_) => invalid_token_error(
                     p,
                     pos,
-                    MmlError::CannotCallSubroutineRecursion(id.as_str().to_owned()),
+                    ChannelError::CannotCallSubroutineRecursion(id.as_str().to_owned()),
                 ),
                 None => invalid_token_error(
                     p,
                     pos,
-                    MmlError::CannotFindSubroutine(id.as_str().to_owned()),
+                    ChannelError::CannotFindSubroutine(id.as_str().to_owned()),
                 ),
             },
         },
-        None => invalid_token_error(p, pos, MmlError::CannotCallSubroutineInASoundEffect),
+        None => invalid_token_error(p, pos, ChannelError::CannotCallSubroutineInASoundEffect),
     }
 }
 
-fn invalid_token_error(p: &mut Parser, pos: FilePos, e: MmlError) -> MmlCommand {
+fn invalid_token_error(p: &mut Parser, pos: FilePos, e: ChannelError) -> MmlCommand {
     p.add_error(pos, e);
     MmlCommand::NoCommand
 }
@@ -1857,19 +1862,19 @@ fn parse_token(pos: FilePos, token: Token, p: &mut Parser) -> MmlCommand {
         Token::EndBytecodeAsm => MmlCommand::EndBytecodeAsm,
         Token::BytecodeAsm(range) => MmlCommand::BytecodeAsm(range),
 
-        Token::EndPortamento => invalid_token_error(p, pos, MmlError::NoStartPortamento),
-        Token::EndBrokenChord => invalid_token_error(p, pos, MmlError::NoStartBrokenChord),
+        Token::EndPortamento => invalid_token_error(p, pos, ChannelError::NoStartPortamento),
+        Token::EndBrokenChord => invalid_token_error(p, pos, ChannelError::NoStartBrokenChord),
 
-        Token::Tie => invalid_token_error(p, pos, MmlError::MissingNoteBeforeTie),
-        Token::Slur => invalid_token_error(p, pos, MmlError::MissingNoteBeforeSlur),
-        Token::Comma => invalid_token_error(p, pos, MmlError::CannotParseComma),
-        Token::Dot => invalid_token_error(p, pos, MmlError::CannotParseDot),
-        Token::PercentSign => invalid_token_error(p, pos, MmlError::CannotParsePercentSign),
-        Token::Number(_) => invalid_token_error(p, pos, MmlError::UnexpectedNumber),
-        Token::RelativeNumber(_) => invalid_token_error(p, pos, MmlError::UnexpectedNumber),
+        Token::Tie => invalid_token_error(p, pos, ChannelError::MissingNoteBeforeTie),
+        Token::Slur => invalid_token_error(p, pos, ChannelError::MissingNoteBeforeSlur),
+        Token::Comma => invalid_token_error(p, pos, ChannelError::CannotParseComma),
+        Token::Dot => invalid_token_error(p, pos, ChannelError::CannotParseDot),
+        Token::PercentSign => invalid_token_error(p, pos, ChannelError::CannotParsePercentSign),
+        Token::Number(_) => invalid_token_error(p, pos, ChannelError::UnexpectedNumber),
+        Token::RelativeNumber(_) => invalid_token_error(p, pos, ChannelError::UnexpectedNumber),
 
         Token::GainModeB | Token::GainModeD | Token::GainModeF | Token::GainModeI => {
-            invalid_token_error(p, pos, MmlError::CannotParseGainMode)
+            invalid_token_error(p, pos, ChannelError::CannotParseGainMode)
         }
 
         Token::Error(e) => invalid_token_error(p, pos, e),
