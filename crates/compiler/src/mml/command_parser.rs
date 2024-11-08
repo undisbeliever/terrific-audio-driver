@@ -669,7 +669,7 @@ fn parse_set_early_release(pos: FilePos, p: &mut Parser) -> Command {
         None => {
             p.add_error(pos, ValueError::NoEarlyReleaseTicks.into());
             parse_set_early_release_arguments(p);
-            Command::NoCommand
+            Command::None
         }
     }
 }
@@ -1297,7 +1297,7 @@ fn parse_portamento(pos: FilePos, p: &mut Parser) -> Command {
             }
         }
     } else {
-        Command::NoCommand
+        Command::None
     }
 }
 
@@ -1401,21 +1401,21 @@ fn parse_set_adsr(pos: FilePos, p: &mut Parser) -> Command {
         Some(n) => n,
         None => {
             p.add_error(pos, ValueError::AdsrNotFourValues.into());
-            return Command::NoCommand;
+            return Command::None;
         }
     };
 
     for v in &mut values[1..] {
         if !next_token_matches!(p, Token::Comma) {
             p.add_error(pos, ValueError::AdsrNotFourValues.into());
-            return Command::NoCommand;
+            return Command::None;
         }
 
         *v = match next_token_number(p) {
             Some(n) => n,
             None => {
                 p.add_error(pos, ValueError::AdsrNotFourValues.into());
-                return Command::NoCommand;
+                return Command::None;
             }
         };
     }
@@ -1424,7 +1424,7 @@ fn parse_set_adsr(pos: FilePos, p: &mut Parser) -> Command {
         Ok(adsr) => Command::SetAdsr(adsr),
         Err(e) => {
             p.add_error(pos, e.into());
-            Command::NoCommand
+            Command::None
         }
     }
 }
@@ -1518,7 +1518,7 @@ fn parse_call_subroutine(
             }
             Some(None) => {
                 // Subroutine has been compiled, but it contains an error
-                Command::NoCommand
+                Command::None
             }
             None => match name_map.get(&id) {
                 Some(_) => invalid_token_error(
@@ -1539,16 +1539,16 @@ fn parse_call_subroutine(
 
 fn invalid_token_error(p: &mut Parser, pos: FilePos, e: ChannelError) -> Command {
     p.add_error(pos, e);
-    Command::NoCommand
+    Command::None
 }
 
 fn parse_token(pos: FilePos, token: Token, p: &mut Parser) -> Command {
     match token {
-        Token::End => Command::NoCommand,
+        Token::End => Command::None,
 
         Token::NewLine(r) => {
             p.process_new_line(r);
-            Command::NoCommand
+            Command::None
         }
 
         Token::Pitch(pitch) => parse_pitch(pos, pitch, p),
@@ -1585,11 +1585,11 @@ fn parse_token(pos: FilePos, token: Token, p: &mut Parser) -> Command {
 
         Token::SetSongTempo => match parse_unsigned_newtype(pos, p) {
             Some(t) => Command::SetSongTempo(t),
-            None => Command::NoCommand,
+            None => Command::None,
         },
         Token::SetSongTickClock => match parse_unsigned_newtype(pos, p) {
             Some(t) => Command::SetSongTickClock(t),
-            None => Command::NoCommand,
+            None => Command::None,
         },
 
         Token::CoarseVolume => {
@@ -1611,38 +1611,38 @@ fn parse_token(pos: FilePos, token: Token, p: &mut Parser) -> Command {
 
         Token::Quantize => {
             parse_quantize(pos, p);
-            Command::NoCommand
+            Command::None
         }
         Token::EarlyRelease => parse_set_early_release(pos, p),
         Token::SetDefaultLength => {
             parse_set_default_length(pos, p);
-            Command::NoCommand
+            Command::None
         }
         Token::SetOctave => {
             parse_set_octave(pos, p);
-            Command::NoCommand
+            Command::None
         }
         Token::IncrementOctave => {
             parse_increment_octave(p);
-            Command::NoCommand
+            Command::None
         }
         Token::DecrementOctave => {
             parse_decrement_octave(p);
-            Command::NoCommand
+            Command::None
         }
         Token::Transpose => {
             parse_transpose(pos, p);
-            Command::NoCommand
+            Command::None
         }
         Token::RelativeTranspose => {
             parse_relative_transpose(pos, p);
-            Command::NoCommand
+            Command::None
         }
         Token::ChangeWholeNoteLength => {
             parse_change_whole_note_length(pos, p);
-            Command::NoCommand
+            Command::None
         }
-        Token::Divider => Command::NoCommand,
+        Token::Divider => Command::None,
 
         Token::StartBytecodeAsm => Command::StartBytecodeAsm,
         Token::EndBytecodeAsm => Command::EndBytecodeAsm,

@@ -157,7 +157,7 @@ pub enum SubroutineCallType {
 }
 
 pub(crate) enum Command {
-    NoCommand,
+    None,
 
     SetLoopPoint,
 
@@ -1057,7 +1057,7 @@ impl<'a> ChannelBcGenerator<'a> {
 
     pub fn process_command(&mut self, command: &Command) -> Result<(), ChannelError> {
         match command {
-            Command::NoCommand => (),
+            Command::None => (),
 
             &Command::SetLoopPoint => match self.bc.get_context() {
                 BytecodeContext::SongChannel => {
