@@ -262,6 +262,9 @@ pub struct Instrument {
     #[serde(flatten)]
     pub loop_setting: LoopSetting,
 
+    #[serde(default)]
+    pub ignore_gaussian_overflow: bool,
+
     pub first_octave: Octave,
     pub last_octave: Octave,
 
@@ -278,6 +281,9 @@ pub struct Sample {
 
     #[serde(flatten)]
     pub loop_setting: LoopSetting,
+
+    #[serde(default)]
+    pub ignore_gaussian_overflow: bool,
 
     pub sample_rates: Vec<u32>,
 

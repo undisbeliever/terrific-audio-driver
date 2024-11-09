@@ -552,6 +552,7 @@ fn _build_test_common_audio_data() -> CommonAudioData {
         source: Default::default(),
         freq: 500.0,
         loop_setting: data::LoopSetting::None,
+        ignore_gaussian_overflow: false,
         first_octave: Octave::try_new(2).unwrap(),
         last_octave: Octave::try_new(5).unwrap(),
         envelope: Envelope::Gain(Gain::new(127)),

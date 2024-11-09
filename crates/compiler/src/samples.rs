@@ -221,9 +221,10 @@ pub fn load_sample_for_instrument(
 ) -> Result<InstrumentSampleData, SampleError> {
     let mut brr_sample = encode_or_load_brr_file(&inst.source, cache, &inst.loop_setting);
 
-    if brr_sample
-        .as_ref()
-        .is_ok_and(BrrSample::test_for_gaussian_overflow_glitch_autoloop)
+    if !inst.ignore_gaussian_overflow
+        && brr_sample
+            .as_ref()
+            .is_ok_and(BrrSample::test_for_gaussian_overflow_glitch_autoloop)
     {
         brr_sample = Err(BrrError::GaussianOverflowDetected);
     }
@@ -252,9 +253,10 @@ pub fn load_sample_for_sample(
 ) -> Result<SampleSampleData, SampleError> {
     let mut brr_sample = encode_or_load_brr_file(&sample.source, cache, &sample.loop_setting);
 
-    if brr_sample
-        .as_ref()
-        .is_ok_and(BrrSample::test_for_gaussian_overflow_glitch_autoloop)
+    if !sample.ignore_gaussian_overflow
+        && brr_sample
+            .as_ref()
+            .is_ok_and(BrrSample::test_for_gaussian_overflow_glitch_autoloop)
     {
         brr_sample = Err(BrrError::GaussianOverflowDetected);
     }

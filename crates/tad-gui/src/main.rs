@@ -1245,7 +1245,7 @@ impl MainWindow {
 
         let window_size = (
             ch_units_to_width(&window, 100),
-            ch_units_to_width(&window, 75),
+            ch_units_to_width(&window, 80),
         );
         window.set_size(window_size.0, window_size.1);
         window.size_range(window_size.0, window_size.1, 0, 0);

@@ -57,6 +57,9 @@ struct Args {
         conflicts_with = "loop_resets_filter"
     )]
     loop_filter: Option<BrrFilter>,
+
+    #[arg(short = 'i', long, help = "Ignore the gaussian overflow glitch")]
+    ignore_gaussian_overflow: bool,
 }
 
 macro_rules! error {
@@ -66,6 +69,7 @@ macro_rules! error {
     }};
 }
 
+#[allow(clippy::collapsible_if)]
 fn main() {
     let args = Args::parse();
 
@@ -99,8 +103,10 @@ fn main() {
         Ok(brr) => brr,
     };
 
-    if brr.test_for_gaussian_overflow_glitch_autoloop() {
-        error!("ERROR: gaussian overflow glitch detected (3 maximum-negative values in a row)");
+    if !args.ignore_gaussian_overflow {
+        if brr.test_for_gaussian_overflow_glitch_autoloop() {
+            error!("ERROR: gaussian overflow glitch detected (3 maximum-negative values in a row)");
+        }
     }
 
     let brr = brr.brr_with_loop_header();

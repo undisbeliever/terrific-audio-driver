@@ -25,7 +25,7 @@ use std::fmt::Write;
 use std::rc::Rc;
 
 use fltk::app;
-use fltk::button::Button;
+use fltk::button::{Button, CheckButton};
 use fltk::enums::Event;
 use fltk::input::Input;
 use fltk::output::Output;
@@ -36,6 +36,7 @@ fn blank_sample() -> data::Sample {
         name: "name".parse().unwrap(),
         source: SourcePathBuf::default(),
         loop_setting: LoopSetting::None,
+        ignore_gaussian_overflow: false,
         sample_rates: Vec::new(),
         envelope: DEFAULT_ENVELOPE,
         comment: None,
@@ -99,6 +100,7 @@ pub struct SampleEditor {
     name: Input,
     source: Output,
     loop_setting: LoopSettingWidget,
+    ignore_gaussian_overflow: CheckButton,
     sample_rates: Input,
     envelope: SampleEnvelopeWidget,
     comment: Input,
@@ -111,12 +113,13 @@ impl SampleEditor {
         let name = form.add_input::<Input>("Name:");
         let source = form.add_two_inputs_right::<Output, Button>("Source:", 5);
         let loop_setting = LoopSettingWidget::new(&mut form);
+        let ignore_gaussian_overflow = form.add_checkbox_right("Ignore Gaussian overflow");
         let mut analyse_button = form.add_input::<Button>("");
         let sample_rates = form.add_input::<Input>("Sample Rates:");
         let envelope = SampleEnvelopeWidget::new(&mut form);
         let comment = form.add_input::<Input>("Comment:");
 
-        let form_height = 7 * form.row_height();
+        let form_height = 8 * form.row_height();
         let group = form.take_group_end();
 
         let (source, mut source_button) = source;
@@ -129,6 +132,7 @@ impl SampleEditor {
             name,
             source,
             loop_setting,
+            ignore_gaussian_overflow,
             sample_rates,
             envelope,
             comment,
@@ -155,6 +159,11 @@ impl SampleEditor {
 
             editor.loop_setting.set_editor(out.clone());
             editor.envelope.set_editor(out.clone());
+
+            editor.ignore_gaussian_overflow.set_callback({
+                let s = out.clone();
+                move |_widget| s.borrow_mut().on_finished_editing()
+            });
 
             source_button.set_label("...");
             source_button.set_callback({
@@ -217,12 +226,14 @@ impl SampleEditor {
         read_or_reset!(comment);
 
         let loop_setting = self.loop_setting.read_or_reset(&self.data.loop_setting);
+        let ignore_gaussian_overflow = self.ignore_gaussian_overflow.value();
         let envelope = self.envelope.read_or_reset();
         let sample_rates = self.read_or_reset_sample_rates();
 
         Some(Sample {
             name: name?,
             loop_setting: loop_setting?,
+            ignore_gaussian_overflow,
             sample_rates: sample_rates?,
             envelope: envelope?,
             comment: comment?,
@@ -269,6 +280,7 @@ impl SampleEditor {
         self.name.set_value("");
         self.source.set_value("");
         self.loop_setting.clear_value();
+        self.ignore_gaussian_overflow.clear();
         self.sample_rates.set_value("");
         self.envelope.clear_value();
 
@@ -294,6 +306,9 @@ impl SampleEditor {
 
         self.loop_setting
             .update_loop_type_choice(SourceFileType::from_source(&data.source));
+
+        self.ignore_gaussian_overflow
+            .set_value(data.ignore_gaussian_overflow);
 
         self.data = data.clone();
 

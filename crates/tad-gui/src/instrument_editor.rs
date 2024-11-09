@@ -23,7 +23,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use fltk::app;
-use fltk::button::Button;
+use fltk::button::{Button, CheckButton};
 use fltk::enums::{Align, Color, Event};
 use fltk::group::{Flex, Group};
 use fltk::input::{FloatInput, Input, IntInput};
@@ -37,6 +37,7 @@ fn blank_instrument() -> Instrument {
         source: SourcePathBuf::default(),
         freq: 500.0,
         loop_setting: LoopSetting::None,
+        ignore_gaussian_overflow: false,
         first_octave: STARTING_OCTAVE,
         last_octave: STARTING_OCTAVE,
         envelope: DEFAULT_ENVELOPE,
@@ -102,6 +103,7 @@ pub struct InstrumentEditor {
     source: Output,
     freq: FloatInput,
     loop_setting: LoopSettingWidget,
+    ignore_gaussian_overflow: CheckButton,
     first_octave: IntInput,
     last_octave: IntInput,
     envelope: SampleEnvelopeWidget,
@@ -116,12 +118,13 @@ impl InstrumentEditor {
         let source = form.add_two_inputs_right::<Output, Button>("Source:", 5);
         let freq = form.add_two_inputs_right::<FloatInput, Button>("Frequency:", 5);
         let loop_setting = LoopSettingWidget::new(&mut form);
+        let ignore_gaussian_overflow = form.add_checkbox_right("Ignore Gaussian overflow");
         let first_octave = form.add_input::<IntInput>("First octave:");
         let last_octave = form.add_input::<IntInput>("Last octave:");
         let envelope = SampleEnvelopeWidget::new(&mut form);
         let comment = form.add_input::<Input>("Comment:");
 
-        let form_height = 9 * form.row_height();
+        let form_height = 10 * form.row_height() + form.row_height() / 2;
         let group = form.take_group_end();
 
         let (source, mut source_button) = source;
@@ -136,6 +139,7 @@ impl InstrumentEditor {
             source,
             freq,
             loop_setting,
+            ignore_gaussian_overflow,
             first_octave,
             last_octave,
             envelope,
@@ -165,6 +169,11 @@ impl InstrumentEditor {
 
             editor.loop_setting.set_editor(out.clone());
             editor.envelope.set_editor(out.clone());
+
+            editor.ignore_gaussian_overflow.set_callback({
+                let s = out.clone();
+                move |_widget| s.borrow_mut().on_finished_editing()
+            });
 
             source_button.set_label("...");
             source_button.set_callback({
@@ -238,12 +247,14 @@ impl InstrumentEditor {
         read_or_reset!(comment);
 
         let loop_setting = self.loop_setting.read_or_reset(&self.data.loop_setting);
+        let ignore_gaussian_overflow = self.ignore_gaussian_overflow.value();
         let envelope = self.envelope.read_or_reset();
 
         Some(Instrument {
             name: name?,
             freq: freq?,
             loop_setting: loop_setting?,
+            ignore_gaussian_overflow,
             first_octave: first_octave?,
             last_octave: last_octave?,
             envelope: envelope?,
@@ -260,6 +271,7 @@ impl InstrumentEditor {
         self.name.set_value("");
         self.source.set_value("");
         self.freq.set_value("");
+        self.ignore_gaussian_overflow.clear();
         self.first_octave.set_value("");
         self.last_octave.set_value("");
         self.loop_setting.clear_value();
@@ -282,6 +294,8 @@ impl InstrumentEditor {
         set_widget!(comment);
         self.source.set_value(data.source.as_str());
         self.loop_setting.set_value(&data.loop_setting);
+        self.ignore_gaussian_overflow
+            .set_value(data.ignore_gaussian_overflow);
         self.envelope.set_value(&data.envelope);
 
         self.loop_setting
