@@ -99,6 +99,10 @@ fn main() {
         Ok(brr) => brr,
     };
 
+    if brr.test_for_gaussian_overflow_glitch_autoloop() {
+        error!("ERROR: gaussian overflow glitch detected (3 maximum-negative values in a row)");
+    }
+
     let brr = brr.brr_with_loop_header();
 
     match fs::write(&args.output, brr) {

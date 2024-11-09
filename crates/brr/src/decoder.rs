@@ -12,6 +12,10 @@ pub struct I15Sample {
 }
 
 impl I15Sample {
+    pub const MIN: I15Sample = I15Sample {
+        value: i16::MIN >> 1,
+    };
+
     pub fn value(self) -> i32 {
         self.value.into()
     }
@@ -33,7 +37,7 @@ impl I15Sample {
         Self { value: s >> 1 }
     }
 
-    pub fn to_sample(self) -> i16 {
+    pub const fn to_sample(self) -> i16 {
         self.value << 1
     }
 }

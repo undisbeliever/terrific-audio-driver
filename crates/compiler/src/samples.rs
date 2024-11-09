@@ -167,6 +167,7 @@ fn load_brr_file(
     }
 }
 
+// MUST NOT detect gaussian overflow here - used by tad-gui sample analyser.
 pub fn encode_or_load_brr_file(
     source: &SourcePathBuf,
     cache: &mut SampleFileCache,
@@ -218,7 +219,14 @@ pub fn load_sample_for_instrument(
     inst: &Instrument,
     cache: &mut SampleFileCache,
 ) -> Result<InstrumentSampleData, SampleError> {
-    let brr_sample = encode_or_load_brr_file(&inst.source, cache, &inst.loop_setting);
+    let mut brr_sample = encode_or_load_brr_file(&inst.source, cache, &inst.loop_setting);
+
+    if brr_sample
+        .as_ref()
+        .is_ok_and(BrrSample::test_for_gaussian_overflow_glitch_autoloop)
+    {
+        brr_sample = Err(BrrError::GaussianOverflowDetected);
+    }
 
     let pitch = instrument_pitch(inst);
 
@@ -242,7 +250,14 @@ pub fn load_sample_for_sample(
     sample: &Sample,
     cache: &mut SampleFileCache,
 ) -> Result<SampleSampleData, SampleError> {
-    let brr_sample = encode_or_load_brr_file(&sample.source, cache, &sample.loop_setting);
+    let mut brr_sample = encode_or_load_brr_file(&sample.source, cache, &sample.loop_setting);
+
+    if brr_sample
+        .as_ref()
+        .is_ok_and(BrrSample::test_for_gaussian_overflow_glitch_autoloop)
+    {
+        brr_sample = Err(BrrError::GaussianOverflowDetected);
+    }
 
     let pitch = sample_pitch(sample);
 

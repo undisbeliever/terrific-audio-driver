@@ -291,6 +291,8 @@ pub enum BrrError {
 
     InvalidLoopSettingWav(LoopSetting),
     InvalidLoopSettingBrr(LoopSetting),
+
+    GaussianOverflowDetected,
 }
 
 #[derive(Debug)]
@@ -1041,6 +1043,13 @@ impl Display for BrrError {
             }
             Self::InvalidLoopSettingBrr(ls) => {
                 write!(f, "cannot use {} on brr files", ls.serialier_value())
+            }
+
+            Self::GaussianOverflowDetected => {
+                write!(
+                    f,
+                    "gaussian overflow glitch detected (3 maximum-negative values in a row)"
+                )
             }
         }
     }
