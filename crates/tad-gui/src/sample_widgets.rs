@@ -176,9 +176,7 @@ impl BrrEvaluatorChoice {
         self as i32
     }
 
-    pub fn to_data(self) -> data::BrrEvaluator {
-        use data::BrrEvaluator;
-
+    pub fn to_data(self) -> BrrEvaluator {
         match self {
             Self::Default => BrrEvaluator::Default,
             Self::SquaredError => BrrEvaluator::SquaredError,
@@ -188,9 +186,7 @@ impl BrrEvaluatorChoice {
         }
     }
 
-    pub fn from_data(e: data::BrrEvaluator) -> Self {
-        use data::BrrEvaluator;
-
+    pub fn from_data(e: BrrEvaluator) -> Self {
         match e {
             BrrEvaluator::Default => Self::Default,
             BrrEvaluator::SquaredError => Self::SquaredError,
