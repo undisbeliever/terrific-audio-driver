@@ -9,7 +9,7 @@ use crate::envelope_widget::EnvelopeWidget;
 use crate::helpers::*;
 use crate::list_editor::{ListMessage, TableCompilerOutput, TableMapping};
 use crate::sample_widgets::{
-    LoopSettingWidget, SampleEnvelopeWidget, SampleWidgetEditor, SourceFileType, DEFAULT_ENVELOPE,
+    BrrSettingsWidget, SampleEnvelopeWidget, SampleWidgetEditor, SourceFileType, DEFAULT_ENVELOPE,
 };
 use crate::tables::{RowWithStatus, SimpleRow};
 use crate::GuiMessage;
@@ -103,7 +103,7 @@ pub struct InstrumentEditor {
     name: Input,
     source: Output,
     freq: FloatInput,
-    loop_setting: LoopSettingWidget,
+    brr_settings: BrrSettingsWidget,
     ignore_gaussian_overflow: CheckButton,
     first_octave: IntInput,
     last_octave: IntInput,
@@ -118,7 +118,7 @@ impl InstrumentEditor {
         let name = form.add_input::<Input>("Name:");
         let source = form.add_two_inputs_right::<Output, Button>("Source:", 5);
         let freq = form.add_two_inputs_right::<FloatInput, Button>("Frequency:", 5);
-        let loop_setting = LoopSettingWidget::new(&mut form);
+        let brr_settings = BrrSettingsWidget::new(&mut form);
         let ignore_gaussian_overflow = form.add_checkbox_right("Ignore Gaussian overflow");
         let first_octave = form.add_input::<IntInput>("First octave:");
         let last_octave = form.add_input::<IntInput>("Last octave:");
@@ -139,7 +139,7 @@ impl InstrumentEditor {
             name,
             source,
             freq,
-            loop_setting,
+            brr_settings,
             ignore_gaussian_overflow,
             first_octave,
             last_octave,
@@ -168,7 +168,7 @@ impl InstrumentEditor {
             add_callbacks!(last_octave);
             add_callbacks!(comment);
 
-            editor.loop_setting.set_editor(out.clone());
+            editor.brr_settings.set_editor(out.clone());
             editor.envelope.set_editor(out.clone());
 
             editor.ignore_gaussian_overflow.set_callback({
@@ -247,7 +247,7 @@ impl InstrumentEditor {
         read_or_reset!(last_octave);
         read_or_reset!(comment);
 
-        let (loop_setting, evaluator) = self.loop_setting.read_or_reset(&self.data.loop_setting);
+        let (loop_setting, evaluator) = self.brr_settings.read_or_reset(&self.data.loop_setting);
         let ignore_gaussian_overflow = self.ignore_gaussian_overflow.value();
         let envelope = self.envelope.read_or_reset();
 
@@ -276,7 +276,7 @@ impl InstrumentEditor {
         self.ignore_gaussian_overflow.clear();
         self.first_octave.set_value("");
         self.last_octave.set_value("");
-        self.loop_setting.clear_value();
+        self.brr_settings.clear_value();
         self.envelope.clear_value();
 
         self.selected_id = None;
@@ -295,13 +295,13 @@ impl InstrumentEditor {
         set_widget!(last_octave);
         set_widget!(comment);
         self.source.set_value(data.source.as_str());
-        self.loop_setting
+        self.brr_settings
             .set_value(&data.loop_setting, data.evaluator);
         self.ignore_gaussian_overflow
             .set_value(data.ignore_gaussian_overflow);
         self.envelope.set_value(&data.envelope);
 
-        self.loop_setting
+        self.brr_settings
             .update_loop_type_choice(SourceFileType::from_source(&data.source));
 
         self.data = data.clone();

@@ -201,18 +201,18 @@ impl BrrEvaluatorChoice {
     }
 }
 
-pub struct LoopSettingWidget {
+pub struct BrrSettingsWidget {
     source_file_type: SourceFileType,
     loop_type: Choice,
     loop_filter: Choice,
-    argument: IntInput,
+    loop_argument: IntInput,
     evaluator: Choice,
 }
 
-impl LoopSettingWidget {
+impl BrrSettingsWidget {
     pub fn new(form: &mut InputForm) -> Self {
         let loop_settings = form.add_three_inputs::<Choice, Choice, IntInput>("Loop:", 25, 15);
-        let (mut loop_type, mut loop_filter, argument) = loop_settings;
+        let (mut loop_type, mut loop_filter, loop_argument) = loop_settings;
 
         loop_type.set_tooltip("Loop type");
         loop_type.add_choice(LoopTypeChoice::CHOICES);
@@ -228,7 +228,7 @@ impl LoopSettingWidget {
             source_file_type: SourceFileType::Unknown,
             loop_type,
             loop_filter,
-            argument,
+            loop_argument,
             evaluator,
         }
     }
@@ -236,11 +236,16 @@ impl LoopSettingWidget {
     pub fn set_editor<E: SampleWidgetEditor + 'static>(&mut self, editor: Rc<RefCell<E>>) {
         self.loop_type.set_callback({
             let mut filter = self.loop_filter.clone();
-            let mut argument = self.argument.clone();
+            let mut loop_argument = self.loop_argument.clone();
             let editor = editor.clone();
             move |choice| {
                 let mut e = editor.borrow_mut();
-                Self::on_loop_type_changed(choice, &mut filter, &mut argument, e.loop_settings());
+                Self::on_loop_type_changed(
+                    choice,
+                    &mut filter,
+                    &mut loop_argument,
+                    e.loop_settings(),
+                );
                 e.on_finished_editing();
             }
         });
@@ -255,7 +260,7 @@ impl LoopSettingWidget {
         self.loop_filter.set_callback(choice_cb.clone());
         self.evaluator.set_callback(choice_cb);
 
-        self.argument.handle({
+        self.loop_argument.handle({
             move |_, ev| {
                 if is_input_done_event(ev) {
                     editor.borrow_mut().on_finished_editing();
@@ -272,7 +277,7 @@ impl LoopSettingWidget {
         let loop_type = LoopTypeChoice::read_widget(&self.loop_type);
         let loop_filter = LoopFilterChoice::read_widget(&self.loop_filter);
 
-        let arg = self.argument.value().parse().ok();
+        let arg = self.loop_argument.value().parse().ok();
 
         let loop_setting = match (loop_type, loop_filter) {
             (LT::None, _) => Some(LoopSetting::None),
@@ -364,7 +369,7 @@ impl LoopSettingWidget {
 
     pub fn clear_value(&mut self) {
         self.loop_type.set_value(-1);
-        self.argument.set_value("");
+        self.loop_argument.set_value("");
         self.evaluator.set_value(-1);
     }
 
@@ -403,12 +408,12 @@ impl LoopSettingWidget {
 
         match arg {
             Some(v) => {
-                self.argument.set_value(&v.to_string());
-                self.argument.activate();
+                self.loop_argument.set_value(&v.to_string());
+                self.loop_argument.activate();
             }
             None => {
-                self.argument.set_value("");
-                self.argument.deactivate();
+                self.loop_argument.set_value("");
+                self.loop_argument.deactivate();
             }
         }
     }

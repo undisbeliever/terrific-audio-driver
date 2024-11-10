@@ -7,7 +7,7 @@
 use crate::audio_thread::AudioMessage;
 use crate::compiler_thread::{ItemId, ToCompiler};
 use crate::helpers::{ch_units_to_width, input_height, label_packed, InputForm, SetActive};
-use crate::sample_widgets::{LoopSettingWidget, SampleWidgetEditor, SourceFileType};
+use crate::sample_widgets::{BrrSettingsWidget, SampleWidgetEditor, SourceFileType};
 use crate::{GuiMessage, InstrumentOrSampleId};
 
 use brr::{BrrSample, MonoPcm16WaveFile};
@@ -126,7 +126,7 @@ struct State {
 
     source_out: Output,
     freq_widget: Spinner,
-    ls_widget: LoopSettingWidget,
+    brr_settings_widget: BrrSettingsWidget,
 
     ok_button: Button,
     play_button: Button,
@@ -201,7 +201,7 @@ impl SampleAnalyserDialog {
         let mut form = InputForm::new(15);
         let source_out = form.add_input::<Output>("Source:");
         let freq = form.add_input::<Spinner>("Frequency:");
-        let loop_setting = LoopSettingWidget::new(&mut form);
+        let brr_settings_widget = BrrSettingsWidget::new(&mut form);
 
         let form_row_height = form.row_height();
         let form_height = 4 * form.row_height() + margin;
@@ -275,7 +275,7 @@ impl SampleAnalyserDialog {
 
             source_out,
             freq_widget: freq,
-            ls_widget: loop_setting,
+            brr_settings_widget,
 
             ok_button,
             play_button,
@@ -326,7 +326,7 @@ impl SampleAnalyserDialog {
                 }
             });
 
-            s.ls_widget.set_editor(state.clone());
+            s.brr_settings_widget.set_editor(state.clone());
 
             s.freq_widget.set_minimum(0.0);
             s.freq_widget.set_maximum(16000.0);
@@ -445,7 +445,7 @@ impl SampleAnalyserDialog {
 
 impl SampleWidgetEditor for State {
     fn on_finished_editing(&mut self) {
-        let (loop_setting, evaluator) = self.ls_widget.read_or_reset(&self.loop_setting);
+        let (loop_setting, evaluator) = self.brr_settings_widget.read_or_reset(&self.loop_setting);
 
         self.evaluator = evaluator;
 
@@ -485,9 +485,10 @@ impl State {
 
         self.source_out.set_value(self.source.as_str());
         self.freq_widget.set_value(freq);
-        self.ls_widget.set_value(&self.loop_setting, self.evaluator);
+        self.brr_settings_widget
+            .set_value(&self.loop_setting, self.evaluator);
 
-        self.ls_widget
+        self.brr_settings_widget
             .update_loop_type_choice(SourceFileType::from_source(&self.source));
 
         self.analysis = None;
