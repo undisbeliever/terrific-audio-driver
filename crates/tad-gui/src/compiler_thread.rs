@@ -21,7 +21,7 @@ use std::sync::{mpsc, Arc};
 use std::thread;
 
 use compiler::common_audio_data::{build_common_audio_data, CommonAudioData};
-use compiler::data;
+use compiler::data::{self, BrrEvaluator};
 use compiler::data::{load_text_file_with_limit, DefaultSfxFlags, LoopSetting, TextFile};
 use compiler::driver_constants::COMMON_DATA_BYTES_PER_SOUND_EFFECT;
 use compiler::envelope::Envelope;
@@ -121,7 +121,7 @@ pub enum ToCompiler {
     Instrument(ItemChanged<data::Instrument>),
     Sample(ItemChanged<data::Sample>),
 
-    AnalyseSample(SourcePathBuf, LoopSetting),
+    AnalyseSample(SourcePathBuf, LoopSetting, BrrEvaluator),
 
     // Updates sfx_data_size and rechecks song sizes.
     // (sent when the user deselects the sound effects tab in the GUI)
@@ -1126,8 +1126,14 @@ fn analyse_sample(
     cache: &mut SampleFileCache,
     source: SourcePathBuf,
     loop_setting: LoopSetting,
+    evaluator: BrrEvaluator,
 ) -> Result<SampleAnalysis, BrrError> {
-    let brr_sample = Arc::new(encode_or_load_brr_file(&source, cache, &loop_setting)?);
+    let brr_sample = Arc::new(encode_or_load_brr_file(
+        &source,
+        cache,
+        &loop_setting,
+        evaluator,
+    )?);
 
     let wav_sample = match source.extension() {
         Some(WAV_EXTENSION) => match cache.load_wav_file(&source) {
@@ -1385,8 +1391,9 @@ fn bg_thread(
                 sample_file_cache.remove_path(&source_path);
             }
 
-            ToCompiler::AnalyseSample(source_path, loop_setting) => {
-                let r = analyse_sample(&mut sample_file_cache, source_path, loop_setting);
+            ToCompiler::AnalyseSample(source_path, loop_setting, evaluator) => {
+                let r =
+                    analyse_sample(&mut sample_file_cache, source_path, loop_setting, evaluator);
                 sender.send(CompilerOutput::SampleAnalysis(r));
             }
         }

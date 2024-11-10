@@ -15,7 +15,7 @@ mod parse_brr_file;
 use std::str::FromStr;
 
 pub use decoder::decode_brr_data;
-pub use encoder::{encode_brr, EncodeError};
+pub use encoder::{encode_brr, EncodeError, Evaluator, DEFAULT_EVALUATOR};
 use gaussian_overflow_test::test_for_gaussian_overflow_glitch;
 pub use mono_pcm_wav::{read_mono_pcm_wave_file, MonoPcm16WaveFile, WavError};
 pub use parse_brr_file::{parse_brr_file, ParseError, ValidBrrFile};

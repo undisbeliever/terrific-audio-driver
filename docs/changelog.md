@@ -21,6 +21,7 @@ MML changes:
 
 BRR changes:
  * Added gaussian overflow glitch detector (3 maximum-negative values in a row)
+ * Added a gaussian overflow glitch penalty to the BRR encoder (Optional - on by default)
 
 Compiler changes:
  * Increased maximum common-audio-data size

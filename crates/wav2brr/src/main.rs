@@ -6,12 +6,36 @@
 
 #![forbid(unsafe_code)]
 
-use brr::{encode_brr, read_mono_pcm_wave_file, BrrFilter};
+use brr::{encode_brr, read_mono_pcm_wave_file, BrrFilter, Evaluator};
 
 use clap::Parser;
 
 use std::fs;
 use std::path::PathBuf;
+
+#[derive(clap::ValueEnum, Clone)]
+enum BrrEvaluator {
+    SquaredError,
+    AvoidGaussianOverflow,
+}
+
+impl BrrEvaluator {
+    fn to_evaluator(&self) -> brr::Evaluator {
+        match self {
+            Self::SquaredError => Evaluator::SquaredError,
+            Self::AvoidGaussianOverflow => Evaluator::SquaredErrorAvoidGaussianOverflow,
+        }
+    }
+
+    // Used to verify I have implemented all `brr::Evaluator` items`
+    #[allow(dead_code)]
+    fn from_evaluator(e: brr::Evaluator) -> Self {
+        match e {
+            Evaluator::SquaredError => Self::SquaredError,
+            Evaluator::SquaredErrorAvoidGaussianOverflow => Self::AvoidGaussianOverflow,
+        }
+    }
+}
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -58,9 +82,23 @@ struct Args {
     )]
     loop_filter: Option<BrrFilter>,
 
+    #[arg(
+        short = 'e',
+        long,
+        help = "Evaluator for finding the best BRR filters and nibbles",
+        value_enum,
+        default_value_t=BrrEvaluator::AvoidGaussianOverflow
+    )]
+    evaluator: BrrEvaluator,
+
     #[arg(short = 'i', long, help = "Ignore the gaussian overflow glitch")]
     ignore_gaussian_overflow: bool,
 }
+
+const _: () = assert!(matches!(
+    brr::DEFAULT_EVALUATOR,
+    Evaluator::SquaredErrorAvoidGaussianOverflow
+));
 
 macro_rules! error {
     ($($arg:tt)*) => {{
@@ -95,6 +133,7 @@ fn main() {
 
     let brr = match encode_brr(
         &wav.samples,
+        args.evaluator.to_evaluator(),
         args.loop_point,
         args.dupe_block_hack,
         loop_filter,

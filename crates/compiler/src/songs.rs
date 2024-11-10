@@ -197,6 +197,7 @@ fn sample_song_fake_instruments() -> &'static UniqueNamesList<InstrumentOrSample
             source: Default::default(),
             freq: 0.0,
             loop_setting: data::LoopSetting::None,
+            evaluator: Default::default(),
             ignore_gaussian_overflow: false,
             first_octave: Octave::try_new(Octave::MIN.as_u8().into()).unwrap(),
             last_octave: Octave::try_new(Octave::MAX.as_u8().into()).unwrap(),

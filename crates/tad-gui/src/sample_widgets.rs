@@ -6,7 +6,7 @@
 
 use crate::helpers::{is_input_done_event, InputForm, InputHelper};
 
-use compiler::data::LoopSetting;
+use compiler::data::{self, BrrEvaluator, LoopSetting};
 use compiler::envelope::{Adsr, Envelope, Gain};
 use compiler::path::SourcePathBuf;
 use compiler::samples::{BRR_EXTENSION, WAV_EXTENSION};
@@ -144,11 +144,69 @@ pub trait SampleWidgetEditor {
     fn on_finished_editing(&mut self);
 }
 
+#[derive(Clone, Copy, PartialEq)]
+pub enum BrrEvaluatorChoice {
+    Default = 0,
+    SquaredError = 1,
+    SquaredErrorAvoidGaussianOverflow = 2,
+}
+impl BrrEvaluatorChoice {
+    const _DEFAULT_MATCHES: () = assert!(matches!(
+        brr::DEFAULT_EVALUATOR,
+        brr::Evaluator::SquaredErrorAvoidGaussianOverflow
+    ));
+
+    pub const CHOICES: &'static str = concat![
+        "&Default (avoid Gaussian overflow)",
+        "|&Squared Error",
+        "|&Avoid Gaussian Overflow (Squared Error)",
+    ];
+
+    pub fn read_widget(c: &Choice) -> Self {
+        match c.value() {
+            0 => Self::Default,
+            1 => Self::SquaredError,
+            2 => Self::SquaredErrorAvoidGaussianOverflow,
+
+            _ => Self::Default,
+        }
+    }
+
+    pub const fn to_i32(self) -> i32 {
+        self as i32
+    }
+
+    pub fn to_data(self) -> data::BrrEvaluator {
+        use data::BrrEvaluator;
+
+        match self {
+            Self::Default => BrrEvaluator::Default,
+            Self::SquaredError => BrrEvaluator::SquaredError,
+            Self::SquaredErrorAvoidGaussianOverflow => {
+                BrrEvaluator::SquaredErrorAvoidGaussianOverflow
+            }
+        }
+    }
+
+    pub fn from_data(e: data::BrrEvaluator) -> Self {
+        use data::BrrEvaluator;
+
+        match e {
+            BrrEvaluator::Default => Self::Default,
+            BrrEvaluator::SquaredError => Self::SquaredError,
+            BrrEvaluator::SquaredErrorAvoidGaussianOverflow => {
+                Self::SquaredErrorAvoidGaussianOverflow
+            }
+        }
+    }
+}
+
 pub struct LoopSettingWidget {
     source_file_type: SourceFileType,
     loop_type: Choice,
     loop_filter: Choice,
     argument: IntInput,
+    evaluator: Choice,
 }
 
 impl LoopSettingWidget {
@@ -162,11 +220,16 @@ impl LoopSettingWidget {
         loop_filter.set_tooltip("BRR Filter at loop point");
         loop_filter.add_choice(LoopFilterChoice::CHOICES);
 
+        let mut evaluator = form.add_input::<Choice>("Evaluator:");
+        evaluator.set_tooltip("wav2brr evaluator to find the best BRR filters and nibbles");
+        evaluator.add_choice(BrrEvaluatorChoice::CHOICES);
+
         Self {
             source_file_type: SourceFileType::Unknown,
             loop_type,
             loop_filter,
             argument,
+            evaluator,
         }
     }
 
@@ -182,12 +245,15 @@ impl LoopSettingWidget {
             }
         });
 
-        self.loop_filter.set_callback({
+        let choice_cb = {
             let editor = editor.clone();
-            move |_| {
+            move |_: &mut Choice| {
                 editor.borrow_mut().on_finished_editing();
             }
-        });
+        };
+
+        self.loop_filter.set_callback(choice_cb.clone());
+        self.evaluator.set_callback(choice_cb);
 
         self.argument.handle({
             move |_, ev| {
@@ -199,15 +265,16 @@ impl LoopSettingWidget {
         });
     }
 
-    pub fn read_or_reset(&mut self, ls: &LoopSetting) -> Option<LoopSetting> {
+    pub fn read_or_reset(&mut self, ls: &LoopSetting) -> (Option<LoopSetting>, BrrEvaluator) {
         type LT = LoopTypeChoice;
         type LF = LoopFilterChoice;
 
         let loop_type = LoopTypeChoice::read_widget(&self.loop_type);
         let loop_filter = LoopFilterChoice::read_widget(&self.loop_filter);
+
         let arg = self.argument.value().parse().ok();
 
-        let value = match (loop_type, loop_filter) {
+        let loop_setting = match (loop_type, loop_filter) {
             (LT::None, _) => Some(LoopSetting::None),
             (LT::OverrideBrrLoopPoint, _) => arg.map(LoopSetting::OverrideBrrLoopPoint),
 
@@ -224,10 +291,13 @@ impl LoopSettingWidget {
             (LT::DupeBlockHack, LF::Filter3) => arg.map(LoopSetting::DupeBlockHackFilter3),
         };
 
-        if value.is_none() {
-            self.set_value(ls);
+        if loop_setting.is_none() {
+            self.set_loop_setting_value(ls);
         }
-        value
+
+        let evaluator = BrrEvaluatorChoice::read_widget(&self.evaluator).to_data();
+
+        (loop_setting, evaluator)
     }
 
     fn on_loop_type_changed(
@@ -295,9 +365,10 @@ impl LoopSettingWidget {
     pub fn clear_value(&mut self) {
         self.loop_type.set_value(-1);
         self.argument.set_value("");
+        self.evaluator.set_value(-1);
     }
 
-    pub fn set_value(&mut self, ls: &LoopSetting) {
+    pub fn set_loop_setting_value(&mut self, ls: &LoopSetting) {
         type LS = LoopSetting;
         type LT = LoopTypeChoice;
         type LF = LoopFilterChoice;
@@ -342,6 +413,13 @@ impl LoopSettingWidget {
         }
     }
 
+    pub fn set_value(&mut self, ls: &LoopSetting, e: data::BrrEvaluator) {
+        self.set_loop_setting_value(ls);
+
+        self.evaluator
+            .set_value(BrrEvaluatorChoice::from_data(e).to_i32());
+    }
+
     pub fn update_loop_type_choice(&mut self, sft: SourceFileType) {
         macro_rules! update_choices {
             ($($choice:ident),*) => {
@@ -362,6 +440,11 @@ impl LoopSettingWidget {
 
         if self.source_file_type != sft {
             update_choices!(None, OverrideBrrLoopPoint, Loop, DupeBlockHack);
+
+            match sft {
+                SourceFileType::Unknown | SourceFileType::Brr => self.evaluator.deactivate(),
+                SourceFileType::Wav => self.evaluator.activate(),
+            }
 
             self.source_file_type = sft;
         }

@@ -37,6 +37,7 @@ fn blank_instrument() -> Instrument {
         source: SourcePathBuf::default(),
         freq: 500.0,
         loop_setting: LoopSetting::None,
+        evaluator: Default::default(),
         ignore_gaussian_overflow: false,
         first_octave: STARTING_OCTAVE,
         last_octave: STARTING_OCTAVE,
@@ -124,7 +125,7 @@ impl InstrumentEditor {
         let envelope = SampleEnvelopeWidget::new(&mut form);
         let comment = form.add_input::<Input>("Comment:");
 
-        let form_height = 10 * form.row_height() + form.row_height() / 2;
+        let form_height = 11 * form.row_height() + form.row_height() / 2;
         let group = form.take_group_end();
 
         let (source, mut source_button) = source;
@@ -246,7 +247,7 @@ impl InstrumentEditor {
         read_or_reset!(last_octave);
         read_or_reset!(comment);
 
-        let loop_setting = self.loop_setting.read_or_reset(&self.data.loop_setting);
+        let (loop_setting, evaluator) = self.loop_setting.read_or_reset(&self.data.loop_setting);
         let ignore_gaussian_overflow = self.ignore_gaussian_overflow.value();
         let envelope = self.envelope.read_or_reset();
 
@@ -254,6 +255,7 @@ impl InstrumentEditor {
             name: name?,
             freq: freq?,
             loop_setting: loop_setting?,
+            evaluator,
             ignore_gaussian_overflow,
             first_octave: first_octave?,
             last_octave: last_octave?,
@@ -293,7 +295,8 @@ impl InstrumentEditor {
         set_widget!(last_octave);
         set_widget!(comment);
         self.source.set_value(data.source.as_str());
-        self.loop_setting.set_value(&data.loop_setting);
+        self.loop_setting
+            .set_value(&data.loop_setting, data.evaluator);
         self.ignore_gaussian_overflow
             .set_value(data.ignore_gaussian_overflow);
         self.envelope.set_value(&data.envelope);
@@ -375,7 +378,7 @@ impl TestInstrumentWidget {
         group.set_size(widget_width, widget_height);
 
         let key_width = ch_units_to_width(&group, 5);
-        let key_height = line_height * 3;
+        let key_height = line_height * 5 / 2;
         let key_group_width = key_width * 7;
 
         let key_group = Group::new(0, 0, key_group_width, key_height * 2, None);

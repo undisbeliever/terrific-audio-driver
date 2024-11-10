@@ -59,6 +59,93 @@ impl std::fmt::Display for EncodeError {
     }
 }
 
+trait Scorer {
+    // BRR encoder will select the lowest scoring sample
+    fn score_sample(source: I15Sample, decoded: I15Sample, prev: (I15Sample, I15Sample)) -> i32;
+
+    // BRR encoder will select the lowest scoring block
+    fn score_block(
+        samples: &[I15Sample; SAMPLES_PER_BLOCK],
+        block: &BrrBlock,
+        prev: (I15Sample, I15Sample),
+    ) -> i64;
+}
+
+struct SquaredError {}
+
+impl SquaredError {
+    fn sample_squared_error(s1: I15Sample, s2: I15Sample) -> i32 {
+        let delta = s1.value() - s2.value();
+        delta * delta
+    }
+}
+
+impl Scorer for SquaredError {
+    fn score_sample(source: I15Sample, decoded: I15Sample, _prev: (I15Sample, I15Sample)) -> i32 {
+        Self::sample_squared_error(source, decoded)
+    }
+
+    fn score_block(
+        samples: &[I15Sample; SAMPLES_PER_BLOCK],
+        block: &BrrBlock,
+        _prev: (I15Sample, I15Sample),
+    ) -> i64 {
+        assert!(block.decoded_samples.len() == samples.len());
+
+        let mut square_error = 0;
+
+        for (b, s) in block.decoded_samples.iter().zip(samples) {
+            square_error += i64::from(Self::sample_squared_error(*b, *s));
+        }
+
+        square_error
+    }
+}
+
+struct SquaredErrorAvoidGaussianOverflow {}
+
+impl Scorer for SquaredErrorAvoidGaussianOverflow {
+    fn score_sample(source: I15Sample, decoded: I15Sample, prev: (I15Sample, I15Sample)) -> i32 {
+        const MAX_NEGATIVE_PENALTY_1: i32 = 100_000_000;
+        const MAX_NEGATIVE_PENALTY_2: i32 = 1_000_000_000;
+
+        const _MAX_DELTA: i32 = (i16::MAX as i32 >> 1) - (i16::MIN as i32 >> 1);
+        const _: () = assert!(MAX_NEGATIVE_PENALTY_1 + (_MAX_DELTA * _MAX_DELTA) < i32::MAX);
+        const _: () = assert!(MAX_NEGATIVE_PENALTY_2 + (_MAX_DELTA * _MAX_DELTA) < i32::MAX);
+
+        let penalty = match (decoded, prev.0, prev.1) {
+            (I15Sample::MIN, I15Sample::MIN, I15Sample::MIN) => return i32::MAX,
+            (I15Sample::MIN, I15Sample::MIN, _) => MAX_NEGATIVE_PENALTY_2,
+            (I15Sample::MIN, _, _) => MAX_NEGATIVE_PENALTY_1,
+            (_, _, _) => 0,
+        };
+
+        let delta = source.value() - decoded.value();
+        delta * delta + penalty
+    }
+
+    fn score_block(
+        samples: &[I15Sample; SAMPLES_PER_BLOCK],
+        block: &BrrBlock,
+        prev: (I15Sample, I15Sample),
+    ) -> i64 {
+        assert!(block.decoded_samples.len() == samples.len());
+
+        let mut error = 0;
+
+        let mut prev = prev;
+
+        for (s, b) in samples.iter().zip(block.decoded_samples) {
+            error += i64::from(Self::score_sample(*s, b, prev));
+
+            prev.1 = prev.0;
+            prev.0 = b;
+        }
+
+        error
+    }
+}
+
 struct BrrBlock {
     filter: BrrFilter,
     shift: u8,
@@ -67,7 +154,7 @@ struct BrrBlock {
     decoded_samples: [I15Sample; SAMPLES_PER_BLOCK],
 }
 
-fn build_block(
+fn build_block<S: Scorer>(
     samples: &[I15Sample; SAMPLES_PER_BLOCK],
     shift: u8,
     filter: BrrFilter,
@@ -100,7 +187,7 @@ fn build_block(
                 let d = I15Sample::clamp_and_clip(((n << shift) >> 1) + offset);
                 (n, d)
             })
-            .min_by_key(|(_, d)| sample_squared_error(*d, *s))
+            .min_by_key(|(_, d)| S::score_sample(*s, *d, (prev1, prev2)))
             .unwrap();
 
         prev2 = prev1;
@@ -118,24 +205,7 @@ fn build_block(
     }
 }
 
-fn sample_squared_error(s1: I15Sample, s2: I15Sample) -> i32 {
-    let delta = s1.value() - s2.value();
-    delta * delta
-}
-
-fn calc_squared_error(block: &BrrBlock, samples: &[I15Sample; SAMPLES_PER_BLOCK]) -> i64 {
-    assert!(block.decoded_samples.len() == samples.len());
-
-    let mut square_error = 0;
-
-    for (b, s) in block.decoded_samples.iter().zip(samples) {
-        square_error += i64::from(sample_squared_error(*b, *s));
-    }
-
-    square_error
-}
-
-fn find_best_block(
+fn find_best_block<S: Scorer>(
     samples: &[I15Sample; SAMPLES_PER_BLOCK],
     prev1: I15Sample,
     prev2: I15Sample,
@@ -145,9 +215,9 @@ fn find_best_block(
 
     let mut test_filter = |filter, filter_fn| {
         for shift in 0..=MAX_SHIFT {
-            let block = build_block(samples, shift, filter, filter_fn, prev1, prev2);
+            let block = build_block::<S>(samples, shift, filter, filter_fn, prev1, prev2);
 
-            let score = calc_squared_error(&block, samples);
+            let score = S::score_block(samples, &block, (prev1, prev2));
             if score < best_block_score {
                 best_block = Some(block);
                 best_block_score = score;
@@ -163,7 +233,7 @@ fn find_best_block(
     best_block.unwrap()
 }
 
-fn find_best_block_filter(
+fn find_best_block_filter<S: Scorer>(
     samples: &[I15Sample; SAMPLES_PER_BLOCK],
     filter: BrrFilter,
     prev1: I15Sample,
@@ -171,8 +241,8 @@ fn find_best_block_filter(
 ) -> BrrBlock {
     let test_filter = |filter, filter_fn| {
         (0..=MAX_SHIFT)
-            .map(|shift| build_block(samples, shift, filter, filter_fn, prev1, prev2))
-            .min_by_key(|block| calc_squared_error(block, samples))
+            .map(|shift| build_block::<S>(samples, shift, filter, filter_fn, prev1, prev2))
+            .min_by_key(|block| S::score_block(samples, block, (prev1, prev2)))
             .unwrap()
     };
 
@@ -212,7 +282,7 @@ fn encode_block(block: BrrBlock, end_flag: bool, loop_flag: bool) -> [u8; BYTES_
     out
 }
 
-pub fn encode_brr(
+fn encode_brr_with_scorer<S: Scorer>(
     samples: &[i16],
     loop_offset: Option<usize>,
     dupe_block_hack: Option<usize>,
@@ -285,14 +355,16 @@ pub fn encode_brr(
 
         let block = if i == 0 {
             // The first block always uses filter 0
-            find_best_block_filter(&samples, BrrFilter::Filter0, prev1, prev2)
+            find_best_block_filter::<S>(&samples, BrrFilter::Filter0, prev1, prev2)
         } else if i == loop_block {
             match loop_filter {
-                None => find_best_block(&samples, prev1, prev2),
-                Some(loop_filter) => find_best_block_filter(&samples, loop_filter, prev1, prev2),
+                None => find_best_block::<S>(&samples, prev1, prev2),
+                Some(loop_filter) => {
+                    find_best_block_filter::<S>(&samples, loop_filter, prev1, prev2)
+                }
             }
         } else {
-            find_best_block(&samples, prev1, prev2)
+            find_best_block::<S>(&samples, prev1, prev2)
         };
 
         prev1 = block.decoded_samples[SAMPLES_PER_BLOCK - 1];
@@ -309,6 +381,116 @@ pub fn encode_brr(
         loop_offset,
         brr_data,
     })
+}
+
+pub enum Evaluator {
+    SquaredError,
+    SquaredErrorAvoidGaussianOverflow,
+}
+
+pub const DEFAULT_EVALUATOR: Evaluator = Evaluator::SquaredErrorAvoidGaussianOverflow;
+
+pub fn encode_brr(
+    samples: &[i16],
+    evaluator: Evaluator,
+    loop_offset: Option<usize>,
+    dupe_block_hack: Option<usize>,
+    loop_filter: Option<BrrFilter>,
+) -> Result<BrrSample, EncodeError> {
+    match evaluator {
+        Evaluator::SquaredError => encode_brr_with_scorer::<SquaredError>(
+            samples,
+            loop_offset,
+            dupe_block_hack,
+            loop_filter,
+        ),
+        Evaluator::SquaredErrorAvoidGaussianOverflow => {
+            encode_brr_with_scorer::<SquaredErrorAvoidGaussianOverflow>(
+                samples,
+                loop_offset,
+                dupe_block_hack,
+                loop_filter,
+            )
+        }
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::bool_assert_comparison)]
+mod test_avoid_gaussian_overflow {
+    use super::*;
+
+    fn _test(input: &[i16]) {
+        let no_avoid = encode_brr(input, Evaluator::SquaredError, None, None, None).unwrap();
+
+        let with_avoid = encode_brr(
+            input,
+            Evaluator::SquaredErrorAvoidGaussianOverflow,
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+
+        // Confirm input would glitch
+        assert_eq!(no_avoid.test_for_gaussian_overflow_glitch_autoloop(), true);
+
+        assert_eq!(
+            with_avoid.test_for_gaussian_overflow_glitch_autoloop(),
+            false
+        );
+    }
+
+    #[test]
+    fn square_wave() {
+        // Created using audacity's tone generator (Square, no alias, 0.95 amplitude)
+        _test(&[
+            0, 25623, 31830, 31316, 31479, 31409, 31444, 31423, 31439, 31422, 31446, 31408, 31479,
+            31316, 31831, 25621, 2, -25624, -31830, -31314, -31483, -31405, -31447, -31420, -31443,
+            -31418, -31450, -31403, -31484, -31312, -31834, -25619,
+        ]);
+    }
+
+    #[test]
+    fn one_block() {
+        const N: i16 = i16::MIN;
+
+        _test(&[0, 0, 0, 0, 0, 0, 0, 0, N, N, N, N, N, N, N, N]);
+    }
+
+    #[test]
+    fn glitch_with_prev1() {
+        const N: i16 = i16::MIN;
+
+        const INPUT: [i16; SAMPLES_PER_BLOCK * 2] = [
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, N, N, N, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0,
+        ];
+
+        assert_eq!(INPUT[SAMPLES_PER_BLOCK - 2], 0);
+        assert_eq!(INPUT[SAMPLES_PER_BLOCK - 1], N);
+        assert_eq!(INPUT[SAMPLES_PER_BLOCK], N);
+        assert_eq!(INPUT[SAMPLES_PER_BLOCK + 1], N);
+
+        _test(&INPUT);
+    }
+
+    #[test]
+    fn glitch_with_prev1_and_prev2() {
+        const N: i16 = i16::MIN;
+
+        const INPUT: [i16; SAMPLES_PER_BLOCK * 2] = [
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, N, N, N, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0,
+        ];
+
+        assert_eq!(INPUT[SAMPLES_PER_BLOCK - 3], 0);
+        assert_eq!(INPUT[SAMPLES_PER_BLOCK - 2], N);
+        assert_eq!(INPUT[SAMPLES_PER_BLOCK - 1], N);
+        assert_eq!(INPUT[SAMPLES_PER_BLOCK], N);
+
+        _test(&INPUT);
+    }
 }
 
 #[cfg(test)]
@@ -331,7 +513,8 @@ mod test_decoded_samples {
         let i15_p2 = I15Sample::from_sample(p2);
 
         for filter in ALL_FILTERS {
-            let best_block = find_best_block_filter(&i15_input, filter, i15_p1, i15_p2);
+            let best_block =
+                find_best_block_filter::<SquaredError>(&i15_input, filter, i15_p1, i15_p2);
             let brr_block_samples = best_block.decoded_samples.map(I15Sample::to_sample);
 
             let brr_block = encode_block(best_block, false, false);

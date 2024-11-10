@@ -36,6 +36,7 @@ fn blank_sample() -> data::Sample {
         name: "name".parse().unwrap(),
         source: SourcePathBuf::default(),
         loop_setting: LoopSetting::None,
+        evaluator: Default::default(),
         ignore_gaussian_overflow: false,
         sample_rates: Vec::new(),
         envelope: DEFAULT_ENVELOPE,
@@ -119,7 +120,7 @@ impl SampleEditor {
         let envelope = SampleEnvelopeWidget::new(&mut form);
         let comment = form.add_input::<Input>("Comment:");
 
-        let form_height = 8 * form.row_height();
+        let form_height = 9 * form.row_height();
         let group = form.take_group_end();
 
         let (source, mut source_button) = source;
@@ -225,7 +226,7 @@ impl SampleEditor {
         read_or_reset!(name);
         read_or_reset!(comment);
 
-        let loop_setting = self.loop_setting.read_or_reset(&self.data.loop_setting);
+        let (loop_setting, evaluator) = self.loop_setting.read_or_reset(&self.data.loop_setting);
         let ignore_gaussian_overflow = self.ignore_gaussian_overflow.value();
         let envelope = self.envelope.read_or_reset();
         let sample_rates = self.read_or_reset_sample_rates();
@@ -233,6 +234,7 @@ impl SampleEditor {
         Some(Sample {
             name: name?,
             loop_setting: loop_setting?,
+            evaluator,
             ignore_gaussian_overflow,
             sample_rates: sample_rates?,
             envelope: envelope?,
@@ -298,7 +300,8 @@ impl SampleEditor {
         set_widget!(comment);
 
         self.source.set_value(data.source.as_str());
-        self.loop_setting.set_value(&data.loop_setting);
+        self.loop_setting
+            .set_value(&data.loop_setting, data.evaluator);
         self.envelope.set_value(&data.envelope);
 
         self.sample_rates

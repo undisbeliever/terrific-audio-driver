@@ -150,7 +150,7 @@ impl SamplesTab {
         editor_wizard.end();
 
         let mut console = TextDisplay::default();
-        main_group.fixed(&console, ch_units_to_width(&console, 10));
+        main_group.fixed(&console, ch_units_to_width(&console, 8));
 
         main_group.end();
         group.end();

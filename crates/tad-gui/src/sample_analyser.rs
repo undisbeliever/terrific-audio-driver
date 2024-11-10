@@ -11,7 +11,7 @@ use crate::sample_widgets::{LoopSettingWidget, SampleWidgetEditor, SourceFileTyp
 use crate::{GuiMessage, InstrumentOrSampleId};
 
 use brr::{BrrSample, MonoPcm16WaveFile};
-use compiler::data::{self, LoopSetting};
+use compiler::data::{self, BrrEvaluator, LoopSetting};
 
 use std::cell::RefCell;
 use std::cmp::{max, min};
@@ -97,6 +97,7 @@ struct State {
     source: SourcePathBuf,
     freq: f64,
     loop_setting: data::LoopSetting,
+    evaluator: data::BrrEvaluator,
 
     analysis: Option<SampleAnalysis>,
     analysis_error: Option<String>,
@@ -203,7 +204,7 @@ impl SampleAnalyserDialog {
         let loop_setting = LoopSettingWidget::new(&mut form);
 
         let form_row_height = form.row_height();
-        let form_height = 3 * form.row_height() + margin;
+        let form_height = 4 * form.row_height() + margin;
         bottom_column.fixed(&form.take_group_end(), ch(65));
 
         let _empty_space = Widget::default();
@@ -246,6 +247,7 @@ impl SampleAnalyserDialog {
             source: Default::default(),
             freq: 500.0,
             loop_setting: LoopSetting::None,
+            evaluator: BrrEvaluator::Default,
 
             analysis: None,
             analysis_error: None,
@@ -376,6 +378,7 @@ impl SampleAnalyserDialog {
             inst.source.clone(),
             inst.freq,
             inst.loop_setting.clone(),
+            inst.evaluator,
         );
     }
 
@@ -385,6 +388,7 @@ impl SampleAnalyserDialog {
             s.source.clone(),
             0.0,
             s.loop_setting.clone(),
+            s.evaluator,
         );
     }
 
@@ -441,7 +445,11 @@ impl SampleAnalyserDialog {
 
 impl SampleWidgetEditor for State {
     fn on_finished_editing(&mut self) {
-        if let Some(ls) = self.ls_widget.read_or_reset(&self.loop_setting) {
+        let (loop_setting, evaluator) = self.ls_widget.read_or_reset(&self.loop_setting);
+
+        self.evaluator = evaluator;
+
+        if let Some(ls) = loop_setting {
             self.loop_setting = ls;
             self.send_analyse_sample_message();
         }
@@ -466,16 +474,18 @@ impl State {
         source: SourcePathBuf,
         freq: f64,
         loop_setting: LoopSetting,
+        evaluator: BrrEvaluator,
     ) {
         self.item_id = Some(id);
 
         self.source = source;
         self.freq = freq;
         self.loop_setting = loop_setting;
+        self.evaluator = evaluator;
 
         self.source_out.set_value(self.source.as_str());
         self.freq_widget.set_value(freq);
-        self.ls_widget.set_value(&self.loop_setting);
+        self.ls_widget.set_value(&self.loop_setting, self.evaluator);
 
         self.ls_widget
             .update_loop_type_choice(SourceFileType::from_source(&self.source));
@@ -504,6 +514,7 @@ impl State {
         let _ = self.compiler_sender.send(ToCompiler::AnalyseSample(
             self.source.clone(),
             self.loop_setting.clone(),
+            self.evaluator,
         ));
     }
 
@@ -862,6 +873,7 @@ impl State {
                 id: *id,
                 freq: self.freq,
                 loop_setting: self.loop_setting.clone(),
+                evaluator: self.evaluator,
             });
         }
         self.window.hide();

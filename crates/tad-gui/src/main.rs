@@ -164,6 +164,7 @@ pub enum GuiMessage {
         id: InstrumentOrSampleId,
         freq: f64,
         loop_setting: data::LoopSetting,
+        evaluator: data::BrrEvaluator,
     },
 
     OpenInstrumentSampleDialog(ItemId),
@@ -717,6 +718,7 @@ impl Project {
                 id,
                 freq,
                 loop_setting,
+                evaluator,
             } => match id {
                 InstrumentOrSampleId::Instrument(id) => {
                     if let Some((index, inst)) = self.data.instruments().get_id(id) {
@@ -725,6 +727,7 @@ impl Project {
                             data::Instrument {
                                 freq,
                                 loop_setting,
+                                evaluator,
                                 ..inst.clone()
                             },
                         )));
@@ -736,6 +739,7 @@ impl Project {
                             index,
                             data::Sample {
                                 loop_setting,
+                                evaluator,
                                 ..sample.clone()
                             },
                         )));

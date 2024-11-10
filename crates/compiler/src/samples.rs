@@ -4,7 +4,9 @@
 //
 // SPDX-License-Identifier: MIT
 
-use crate::data::{Instrument, InstrumentOrSample, LoopSetting, Sample, UniqueNamesProjectFile};
+use crate::data::{
+    BrrEvaluator, Instrument, InstrumentOrSample, LoopSetting, Sample, UniqueNamesProjectFile,
+};
 use crate::errors::{BrrError, SampleAndInstrumentDataError, SampleError, TaggedSampleError};
 use crate::notes::{Note, Octave, LAST_NOTE_ID};
 use crate::path::{ParentPathBuf, SourcePathBuf};
@@ -116,6 +118,7 @@ fn encode_wave_file(
     source: &SourcePathBuf,
     cache: &mut SampleFileCache,
     loop_setting: &LoopSetting,
+    evaluator: BrrEvaluator,
 ) -> Result<BrrSample, BrrError> {
     let wav = match cache.load_wav_file(source) {
         Ok(w) => w,
@@ -138,7 +141,13 @@ fn encode_wave_file(
         LoopSetting::DupeBlockHackFilter3(dbh) => (None, Some(*dbh), Some(BrrFilter::Filter3)),
     };
 
-    match encode_brr(&wav.samples, loop_point, dupe_block_hack, loop_filter) {
+    match encode_brr(
+        &wav.samples,
+        evaluator.to_evaluator(),
+        loop_point,
+        dupe_block_hack,
+        loop_filter,
+    ) {
         Ok(b) => Ok(b),
         Err(e) => Err(BrrError::BrrEncodeError(source.to_path_string(), e)),
     }
@@ -172,9 +181,10 @@ pub fn encode_or_load_brr_file(
     source: &SourcePathBuf,
     cache: &mut SampleFileCache,
     loop_setting: &LoopSetting,
+    evaluator: BrrEvaluator,
 ) -> Result<BrrSample, BrrError> {
     match source.extension() {
-        Some(WAV_EXTENSION) => encode_wave_file(source, cache, loop_setting),
+        Some(WAV_EXTENSION) => encode_wave_file(source, cache, loop_setting, evaluator),
         Some(BRR_EXTENSION) => load_brr_file(source, cache, loop_setting),
         _ => Err(BrrError::UnknownFileType(source.to_path_string())),
     }
@@ -219,7 +229,8 @@ pub fn load_sample_for_instrument(
     inst: &Instrument,
     cache: &mut SampleFileCache,
 ) -> Result<InstrumentSampleData, SampleError> {
-    let mut brr_sample = encode_or_load_brr_file(&inst.source, cache, &inst.loop_setting);
+    let mut brr_sample =
+        encode_or_load_brr_file(&inst.source, cache, &inst.loop_setting, inst.evaluator);
 
     if !inst.ignore_gaussian_overflow
         && brr_sample
@@ -251,7 +262,12 @@ pub fn load_sample_for_sample(
     sample: &Sample,
     cache: &mut SampleFileCache,
 ) -> Result<SampleSampleData, SampleError> {
-    let mut brr_sample = encode_or_load_brr_file(&sample.source, cache, &sample.loop_setting);
+    let mut brr_sample = encode_or_load_brr_file(
+        &sample.source,
+        cache,
+        &sample.loop_setting,
+        sample.evaluator,
+    );
 
     if !sample.ignore_gaussian_overflow
         && brr_sample

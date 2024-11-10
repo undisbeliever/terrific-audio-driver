@@ -252,6 +252,44 @@ impl LoopSetting {
     }
 }
 
+#[derive(Deserialize, Serialize, Debug, Default, Clone, Copy, PartialEq)]
+pub enum BrrEvaluator {
+    #[serde(rename = "default")]
+    #[default]
+    Default,
+    #[serde(rename = "square_error")]
+    SquaredError,
+    #[serde(rename = "se_avoid_gaussian_overflow")]
+    SquaredErrorAvoidGaussianOverflow,
+}
+
+impl BrrEvaluator {
+    pub fn to_evaluator(&self) -> brr::Evaluator {
+        match self {
+            Self::Default => brr::DEFAULT_EVALUATOR,
+            Self::SquaredError => brr::Evaluator::SquaredError,
+            Self::SquaredErrorAvoidGaussianOverflow => {
+                brr::Evaluator::SquaredErrorAvoidGaussianOverflow
+            }
+        }
+    }
+
+    pub fn is_default(&self) -> bool {
+        matches!(self, Self::Default)
+    }
+
+    // Used to verify I have implemented all `brr::Evaluator` items
+    #[allow(dead_code)]
+    fn from_evaluator(e: brr::Evaluator) -> Self {
+        match e {
+            brr::Evaluator::SquaredError => Self::SquaredError,
+            brr::Evaluator::SquaredErrorAvoidGaussianOverflow => {
+                Self::SquaredErrorAvoidGaussianOverflow
+            }
+        }
+    }
+}
+
 #[derive(Deserialize, Serialize, Clone, PartialEq, Debug)]
 pub struct Instrument {
     pub name: Name,
@@ -261,6 +299,9 @@ pub struct Instrument {
 
     #[serde(flatten)]
     pub loop_setting: LoopSetting,
+
+    #[serde(default)]
+    pub evaluator: BrrEvaluator,
 
     #[serde(default)]
     pub ignore_gaussian_overflow: bool,
@@ -281,6 +322,9 @@ pub struct Sample {
 
     #[serde(flatten)]
     pub loop_setting: LoopSetting,
+
+    #[serde(default)]
+    pub evaluator: BrrEvaluator,
 
     #[serde(default)]
     pub ignore_gaussian_overflow: bool,
