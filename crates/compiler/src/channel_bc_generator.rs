@@ -416,15 +416,17 @@ impl<'a> ChannelBcGenerator<'a> {
 
         if !is_slur {
             // Add rest
-            const MIN_TWO_INSTRUCTIONS: u32 = BcTicksKeyOff::MAX_TICKS + 1;
             const MIN_THREE_INSTRUCTIONS: u32 =
                 BcTicksNoKeyOff::MAX_TICKS + BcTicksKeyOff::MAX_TICKS + 1;
+            const MIN_TWO_INSTRUCTIONS: u32 = BcTicksKeyOff::MAX_TICKS + 1;
+            const MAX_TWO_INSTRUCTIONS: u32 = MIN_THREE_INSTRUCTIONS - 1;
+
             match l {
                 0..=BcTicksKeyOff::MAX_TICKS => Ok((
                     PlayNoteTicks::KeyOff(BcTicksKeyOff::try_from(l)?),
                     TickCounter::new(0),
                 )),
-                MIN_TWO_INSTRUCTIONS..MIN_THREE_INSTRUCTIONS => {
+                MIN_TWO_INSTRUCTIONS..=MAX_TWO_INSTRUCTIONS => {
                     let w = BcTicksNoKeyOff::try_from(l - BcTicksKeyOff::MAX_TICKS)?;
                     let r = l - w.ticks();
                     debug_assert_eq!(w.ticks() + r, l);
