@@ -1,0 +1,5 @@
+# test binaries and object files go here
+*.o
+*.bin
+*.txt
+
