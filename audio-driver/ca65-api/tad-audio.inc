@@ -381,7 +381,7 @@ MIN_TICK_CLOCK = 64
 
 ;; Sets the number of bytes to transfer to Audio-RAM per `Tad_Process` call.
 ;;
-;; The value will be clamped from `MIN_TRANSFER_PER_FRAME` to `MAX_TRANSFER_PER_FRAME`.
+;; The value will be clamped from `TAD_MIN_TRANSFER_PER_FRAME` to `TAD_MAX_TRANSFER_PER_FRAME`.
 ;;
 ;; IN: X = number of bytes to transfer on every `Tad_Process` call.
 ;;
