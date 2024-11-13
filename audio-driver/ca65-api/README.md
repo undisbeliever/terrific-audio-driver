@@ -9,7 +9,8 @@ The Terrific Audio Driver can deadlock if:
  * `Tad_Init` is called more than once.
  * A `Tad_*` subroutine is called inside an Interrupt Service Routine.
  * A `Tad_*` subroutine is called by multiple threads.
- * A variable is modified outside of `tad-audio.s`
+ * A private variable is modified outside of `tad-audio.s`
+ * The APUIO registers are written to outside of `tad-audio.s`.
 
 
 
