@@ -1361,7 +1361,7 @@ Tad_QueueCommandOverride := Tad_QueueCommand::WriteCommand
 .endproc
 
 
-; OUT: carry set if stero
+; OUT: carry set if stereo
 .a8
 ; I unknown
 ; DB access lowram
