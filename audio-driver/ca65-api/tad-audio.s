@@ -462,7 +462,7 @@ TAD__FIRST_LOADING_SONG_STATE = TadState::LOADING_SONG_DATA_PAUSED
 ;; Memory Map Asserts
 ;; ==================
 .bss
-    .assert (* > $100) && (* < $2000), lderror, ".bss is not in lowram"
+    .assert ((* > $100) && (* < $2000)) || ((* > $7e0100) && (* < $7e2000)), lderror, ".bss is not in lowram"
 
 
 
