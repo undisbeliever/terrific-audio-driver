@@ -229,7 +229,7 @@ MenuActionFunctions:
     lda     #0
     jsr     _SetSfx
 
-    lda     #CENTER_PAN
+    lda     #TAD_CENTER_PAN
     jsr     _SetSfxPan
 
     lda     #$7f
@@ -809,11 +809,11 @@ Menu_SfxPan_Action = Menu_PlaySfx_Action
     .endproc
 .endmacro
 
-_SetVarFn_  _SetSong,           PLAY_SONG_YPOS,         song,           0,              LAST_SONG_ID
-_SetVarFn_  _SetSfx,            PLAY_SFX_YPOS,          sfx,            0,              N_SOUND_EFFECTS - 1
-_SetVarFn_  _SetSfxPan,         SFX_PAN_YPOS,           sfxPan,         0,              MAX_PAN
-_SetVarFn_  _SetMainVolume,     MAIN_VOLUME_YPOS,       mainVolume,     0,              $7f
-_SetVarFn_  _SetTempoOverride,  OVERRIDE_TEMPO_YPOS,    tempoOverride,  MIN_TICK_CLOCK, $ff
+_SetVarFn_  _SetSong,           PLAY_SONG_YPOS,         song,           0,                  LAST_SONG_ID
+_SetVarFn_  _SetSfx,            PLAY_SFX_YPOS,          sfx,            0,                  N_SOUND_EFFECTS - 1
+_SetVarFn_  _SetSfxPan,         SFX_PAN_YPOS,           sfxPan,         0,                  TAD_MAX_PAN
+_SetVarFn_  _SetMainVolume,     MAIN_VOLUME_YPOS,       mainVolume,     0,                  $7f
+_SetVarFn_  _SetTempoOverride,  OVERRIDE_TEMPO_YPOS,    tempoOverride,  TAD_MIN_TICK_CLOCK, $ff
 
 
 ;; IN: A = new value

@@ -160,7 +160,7 @@ void menu_init(void) {
 
     menu_song = 0;
     menu_sfx = 0;
-    menu_sfxPan = CENTER_PAN;
+    menu_sfxPan = TAD_CENTER_PAN;
     menu_mainVolume = MAX_VOLUME;
     menu_tempoOverride = 100;
     menu_channelMask = 0xff;
@@ -419,7 +419,7 @@ void menu_process_item(void) {
         break;
 
     case MENU__SFX_PAN:
-        menu_sfxPan = menu_adjustValue_fast(menu_sfxPan, MENU__SFX_PAN, 0, MAX_PAN);
+        menu_sfxPan = menu_adjustValue_fast(menu_sfxPan, MENU__SFX_PAN, 0, TAD_MAX_PAN);
         break;
 
     case MENU__MAIN_VOLUME: {
@@ -434,7 +434,7 @@ void menu_process_item(void) {
     }
 
     case MENU__OVERRIDE_TEMPO:
-        menu_tempoOverride = menu_adjustValue_fast(menu_tempoOverride, MENU__OVERRIDE_TEMPO, MIN_TICK_CLOCK, 0xff);
+        menu_tempoOverride = menu_adjustValue_fast(menu_tempoOverride, MENU__OVERRIDE_TEMPO, TAD_MIN_TICK_CLOCK, 0xff);
         break;
 
     case MENU__CHANNEL_MASK:

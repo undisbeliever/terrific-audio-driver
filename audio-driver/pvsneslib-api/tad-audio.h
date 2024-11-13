@@ -139,13 +139,13 @@
 
 
 /*! Maximum pan value (100% to the right) */
-#define MAX_PAN 128
+#define TAD_MAX_PAN 128
 
 /*! Center pan value (default if pan is not specified) */
-#define CENTER_PAN 64
+#define TAD_CENTER_PAN 64
 
 /*! Minimum tick clock value for tad_queueCommand_setSongTempo() and tad_queueCommandOverride_setSongTempo() */
-#define MIN_TICK_CLOCK 64
+#define TAD_MIN_TICK_CLOCK 64
 
 
 /*!
@@ -285,7 +285,7 @@ bool tad_queueCommand_setMusicChannels(u8 mask);
  *
  * NOTE: The song can still change the tempo.
  *
- * @param tickClock The new S-DSP TIMER_0 register value (MUST be >= MIN_TICK_CLOCK 64, is bounds checked)
+ * @param tickClock The new S-DSP TIMER_0 register value (MUST be >= TAD_MIN_TICK_CLOCK 64, is bounds checked)
  * @return true if the command was added to the command queue.
  */
 bool tad_queueCommand_setSongTempo(u8 tickClock);
@@ -357,12 +357,12 @@ void tad_queueCommandOverride_setSongTempo(u8 tickClock);
  * NOTE: Lower sound effect IDs take priority over higher sound effect IDs.
  *
  * @param sfx_id the sound effect to play
- * @param pan pan value. 0 = 100% to the left, MAX_PAN = 100% to the right.
+ * @param pan pan value. 0 = 100% to the left, TAD_MAX_PAN = 100% to the right.
  */
 void tad_queuePannedSoundEffect(u8 sfx_id, u8 pan);
 
 /*!
- * Queue the next sound effect to play with center pan (MAX_PAN/2).
+ * Queue the next sound effect to play with center pan (TAD_MAX_PAN/2).
  *
  * NOTE: Only 1 sound effect can be played at a time.
  * NOTE: Lower sound effect IDs take priority over higher sound effect IDs.
@@ -501,7 +501,7 @@ bool tad_isSongPlaying(void);
  *  * The command queue is empty
  *  * `tad_sfxQueue_sfx != $ff`
  *
- * If `tad_sfxQueue_pan > MAX_PAN`, then `CENTER_PAN` will be used instead.
+ * If `tad_sfxQueue_pan > TAD_MAX_PAN`, then `TAD_CENTER_PAN` will be used instead.
  *
  * After the `play_sound_effect` command (or when a song is loaded),
  * `tad_sfxQueue_sfx` and `tad_sfxQueue_pan` will be reset to $ff.
@@ -527,7 +527,7 @@ extern u8 tad_sfxQueue_sfx;
 /*!
  * @brief The pan value to play @ref tad_sfxQueue_sfx with.
  *
- * If this value is greater than @ref MAX_PAN, then @ref CENTER_PAN will be used instead.
+ * If this value is greater than @ref TAD_MAX_PAN, then @ref TAD_CENTER_PAN will be used instead.
  */
 extern u8 tad_sfxQueue_pan;
 

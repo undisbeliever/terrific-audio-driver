@@ -111,8 +111,8 @@ TAD_Command__SET_SONG_TEMPO = 14
 TAD_COMMAND_MASK   = %00001110
 TAD_COMMAND_I_MASK = %11100001
 
-MAX_PAN = 128
-CENTER_PAN = MAX_PAN / 2
+TAD_MAX_PAN = 128
+TAD_CENTER_PAN = TAD_MAX_PAN / 2
 
 
 ;; The command to execute.
@@ -1004,9 +1004,9 @@ _tad_loader_gotoNextBank__:
 
     ; parameter 1 = pan
     lda     tad_sfxQueue_pan
-    cmp     #MAX_PAN + 1
+    cmp     #TAD_MAX_PAN + 1
     bcc     +
-        lda     #CENTER_PAN
+        lda     #TAD_CENTER_PAN
     +
     sta     TAD_IO_ToDriver__PARAMETER1_PORT
 
@@ -1347,7 +1347,7 @@ tad_queueSoundEffect:
     bcs     +
         sta.l   tad_sfxQueue_sfx
 
-        lda     #CENTER_PAN
+        lda     #TAD_CENTER_PAN
         sta.l   tad_sfxQueue_pan
     +
 

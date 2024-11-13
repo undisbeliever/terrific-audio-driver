@@ -753,7 +753,7 @@ static void queueSoundEffect_assertSuccess(u8 sfx_id) {
 
     // Test the queue contains sfx_id
     ASSERT_EQ(tad_sfxQueue_sfx, sfx_id);
-    ASSERT_EQ(tad_sfxQueue_pan, CENTER_PAN);
+    ASSERT_EQ(tad_sfxQueue_pan, TAD_CENTER_PAN);
 }
 
 static void queueSoundEffect_assertFail(u8 sfx_id) {

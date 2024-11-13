@@ -1420,7 +1420,7 @@ TestTable_SIZE = * - TestTable
 
     ; test SFX queue matches input
     assert_u8_var_eq   Tad_sfxQueue_sfx, _queueSfxTest_id
-    assert_u8_var_eq   Tad_sfxQueue_pan, #CENTER_PAN
+    assert_u8_var_eq   Tad_sfxQueue_pan, #TAD_CENTER_PAN
 
     rts
 .endproc

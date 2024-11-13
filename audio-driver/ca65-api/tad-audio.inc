@@ -91,13 +91,13 @@
 
 
 ;; Maximum pan value (100% to the right)
-MAX_PAN = 128
+TAD_MAX_PAN = 128
 
 ;; Center pan value (default if pan is not specified)
-CENTER_PAN = MAX_PAN / 2
+TAD_CENTER_PAN = TAD_MAX_PAN / 2
 
 ;; Minimum tick clock value for the `TadCommand::SET_SONG_TEMPO` command.
-MIN_TICK_CLOCK = 64
+TAD_MIN_TICK_CLOCK = 64
 
 
 
@@ -137,7 +137,7 @@ MIN_TICK_CLOCK = 64
 
     ;; Set the song tempo.
     ;;  * parameter0: The new S-DSP TIMER_0 register value
-    ;;    (MUST be >= MIN_TICK_CLOCK 64, is bounds checked)
+    ;;    (MUST be >= TAD_MIN_TICK_CLOCK 64, is bounds checked)
     ;;
     ;; NOTE: The song can still change the tempo.
     SET_SONG_TEMPO = 14
@@ -258,7 +258,7 @@ MIN_TICK_CLOCK = 64
 ;; NOTE: Lower sound effect IDs take priority over higher sound effect IDs.
 ;;
 ;; IN: A = sfx id (as determined by the sound effect export order in the project file)
-;; IN: X = pan (only the lower 8 bits are used.  If `pan > MAX_PAN`, the sound effect will use center pan)
+;; IN: X = pan (only the lower 8 bits are used.  If `pan > TAD_MAX_PAN`, the sound effect will use center pan)
 ;;
 ;; A8
 ;; I unknown
@@ -267,7 +267,7 @@ MIN_TICK_CLOCK = 64
 .import Tad_QueuePannedSoundEffect
 
 
-;; Queue the next sound effect to play with center pan (MAX_PAN/2).
+;; Queue the next sound effect to play with center pan (TAD_MAX_PAN/2).
 ;;
 ;; NOTE: Only 1 sound effect can be played at a time.
 ;; NOTE: Lower sound effect IDs take priority over higher sound effect IDs.
@@ -438,7 +438,7 @@ MIN_TICK_CLOCK = 64
 ;;  * The command queue is empty
 ;;  * `Tad_sfxQueue_sfx != $ff`
 ;;
-;; If `Tad_sfxQueue_pan > MAX_PAN`, then `CENTER_PAN` will be used instead.
+;; If `Tad_sfxQueue_pan > TAD_MAX_PAN`, then `TAD_CENTER_PAN` will be used instead.
 ;;
 ;; After the `play_sound_effect` command (or when a song is loaded), `Tad_sfxQueue_sfx` and
 ;; `Tad_sfxQueue_pan` will be reset to $ff.
@@ -462,7 +462,7 @@ MIN_TICK_CLOCK = 64
 
 ;; The pan value to play `Tad_sfxQueue_sfx` with.
 ;;
-;; If this value is greater than `MAX_PAN`, then `CENTER_PAN` will be used instead.
+;; If this value is greater than `TAD_MAX_PAN`, then `TAD_CENTER_PAN` will be used instead.
 ;;
 ;; (zeropage u8)
 .importzp Tad_sfxQueue_pan

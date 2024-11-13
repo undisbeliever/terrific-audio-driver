@@ -26,6 +26,11 @@ BRR changes:
 Compiler changes:
  * Increased maximum common-audio-data size
 
+65816 API changes:
+ * Renamed `MAX_PAN` to `TAD_MAX_PAN`
+ * Renamed `CENTER_PAN` to `TAD_CENTER_PAN`
+ * Renamed `MIN_TICK_CLOCK` to `TAD_MIN_TICK_CLOCK`
+
 
 Version 0.0.13
 ==============
