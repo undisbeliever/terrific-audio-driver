@@ -119,7 +119,7 @@
 
 
 .assert Tad_Loader_SIZE > 64 && Tad_Loader_SIZE < 128, lderror, "Invalid Tad_Loader_Bin size"
-.assert .bankbyte(Tad_Loader_Bin) + .bankbyte(Tad_Loader_Bin + Tad_Loader_SIZE), lderror, "Tad_Loader_Bin does not fit inside a single bank"
+.assert .bankbyte(Tad_Loader_Bin) = .bankbyte(Tad_Loader_Bin + Tad_Loader_SIZE), lderror, "Tad_Loader_Bin does not fit inside a single bank"
 
 .assert Tad_AudioDriver_SIZE > $600 && Tad_AudioDriver_SIZE < $a00, lderror, "Invalid Tad_AudioDriver_Bin size"
 ; `Tad_AudioDriver_Bin` can cross bank boundaries
