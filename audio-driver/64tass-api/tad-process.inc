@@ -55,14 +55,11 @@ TAD_DB_REGISTERS   = 0
 ; CONSTANTS
 ; =========
 
-
 .weak
-    LOROM = 0
-    HIROM = 0
+    TAD_MEMORY_MAP = ""
 .endweak
 
-.cerror LOROM != 0 && HIROM != 0, "Cannot use HIROM and LOROM at the same time"
-.cerror LOROM == 0 && HIROM == 0, "Unknown memory map: Missing HIROM or LOROM define"
+.cerror TAD_MEMORY_MAP != "LOROM" && TAD_MEMORY_MAP != "HIROM", "Unknown memory map, set TAD_MEMORY_MAP to the string LOROM or HIROM"
 
 
 ; Address to store the loader (in Audio-RAM).
@@ -553,14 +550,14 @@ TadPrivate_Loader_GotoNextBank__ .proc
     ; MUST NOT CHANGE X
 
     ; Y = 0
-    .if LOROM != 0
+    .if TAD_MEMORY_MAP == "LOROM"
         and     #$fe
         cmp     #$7e
         beq     +
             ; Bank is not Work-RAM
             ldy     #$8000
         +
-    .elsif HIROM != 0
+    .elsif TAD_MEMORY_MAP == "HIROM"
         and     #$7f
         cmp     #$40
         bcs     +
@@ -569,7 +566,7 @@ TadPrivate_Loader_GotoNextBank__ .proc
             ldy     #$8000
         +
     .else
-        .error "Unknown memory map, "
+        .error "Unknown memory map."
     .endif
 
     ; Y = 0 or $8000

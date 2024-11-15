@@ -30,7 +30,7 @@ Do not modify them outside of the TAD API.
 Compiling the API
 -----------------
 
-Define a `HIROM` or `LOROM` symbol to a non-zero value, depending on the memory map.
+Assign the string `"LOROM"` or `"HIROM"` to the `TAD_MEMORY_MAP` constant, depending on memory map.
 
 Include the four include files into the 64tass assembly file.
  * **tad-variables-private.inc**: private variables.
@@ -48,7 +48,7 @@ Include the four include files into the 64tass assembly file.
 Simplified example:
 
 ``` asm
-LOROM = 1
+TAD_MEMORY_MAP = "LOROM"
 
 .section Lowram
     .include "{{path to API}}/tad-variables-private.inc"

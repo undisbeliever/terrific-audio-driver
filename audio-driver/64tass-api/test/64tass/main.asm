@@ -49,6 +49,20 @@ STACK_BOTTOM = $1f80
     .cerror * > $7e2000, "lowram section overflow"
 
 
+.weak
+    LOROM = 0
+    HIROM = 0
+.endweak
+
+.if LOROM != 0
+    TAD_MEMORY_MAP = "LOROM"
+.endif
+
+.if HIROM != 0
+    TAD_MEMORY_MAP = "HIROM"
+.endif
+
+
 .dpage 0
 .databank ?
 
