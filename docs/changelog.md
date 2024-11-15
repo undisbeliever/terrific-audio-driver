@@ -25,6 +25,8 @@ BRR changes:
 
 Compiler changes:
  * Increased maximum common-audio-data size
+ * Added `tad-compiler 64tass-enums` command
+ * Added `tad-compiler 64tass-export` command
 
 65816 API changes:
  * Added a 64tass API (identical to the ca65 API)

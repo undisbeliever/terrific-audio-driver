@@ -16,15 +16,14 @@ use compiler::{
     },
     export::{
         bin_include_path, export_bin_file, Ca65Exporter, Ca65MemoryMap, ExportedBinFile, Exporter,
-        MemoryMapMode, PvExporter, PvMemoryMap,
+        MemoryMapMode, PvExporter, PvMemoryMap, Tass64Exporter, Tass64MemoryMap,
     },
     mml::{compile_mml, MmlTickCountTable},
     pitch_table::{build_pitch_table, PitchTable},
     samples::build_sample_and_instrument_data,
     sfx_file,
     songs::{song_duration_string, validate_song_size, SongData},
-    sound_effects,
-    sound_effects::SfxExportOrder,
+    sound_effects::{self, SfxExportOrder},
     spc_file_export::export_spc_file,
 };
 
@@ -67,6 +66,14 @@ enum Command {
 
     /// Compile the project and output a ca65 assembly file containing LoadSongData and .incbin statements
     Ca65Export(Ca65ExportArgs),
+
+    /// Generate an 64tass include file containing songs and sound effect enums
+    #[clap(name = "64tass-enums")]
+    Tass64Enums(EnumArgs),
+
+    /// Compile the project and output a 64tass assembly file containing LoadSongData and .incbin statements
+    #[clap(name = "64tass-export")]
+    Tass64Export(Tass64ExportArgs),
 
     /// Generate an PVSnesLib include file containing songs and sound effect enums
     PvEnums(EnumArgs),
@@ -605,6 +612,35 @@ fn parse_ca65_memory_map(args: &Ca65ExportArgs) -> Ca65MemoryMap {
 }
 
 //
+// 64tass-export
+// =============
+
+#[derive(Args)]
+struct Tass64ExportArgs {
+    #[command(flatten)]
+    base: ExportWithAsmArgs,
+
+    #[command(flatten)]
+    memory_map: MemoryMapModeArgument,
+
+    #[arg(
+        long = "section",
+        short = 's',
+        value_name = "SECTION_NAME",
+        requires = "mm_mode",
+        help = "First section to store the binary data in.\nMust be suffixed with a number (eg, AudioBank0)\nIf data does not fit in a single bank, the next section will be used (ie, AudioBank1)"
+    )]
+    first_section: String,
+}
+
+fn parse_64tass_memory_map(args: &Tass64ExportArgs) -> Tass64MemoryMap {
+    match Tass64MemoryMap::try_new(args.memory_map.mode(), &args.first_section) {
+        Ok(mm) => mm,
+        Err(e) => error!("Invalid memory map: {}", e),
+    }
+}
+
+//
 // pv-export
 // =========
 
@@ -649,6 +685,10 @@ fn main() {
         Command::Ca65Enums(args) => generate_enums_command::<Ca65Exporter>(args),
         Command::Ca65Export(args) => {
             export_with_asm_command::<Ca65Exporter>(&parse_ca65_memory_map(&args), args.base)
+        }
+        Command::Tass64Enums(args) => generate_enums_command::<Tass64Exporter>(args),
+        Command::Tass64Export(args) => {
+            export_with_asm_command::<Tass64Exporter>(&parse_64tass_memory_map(&args), args.base)
         }
         Command::PvEnums(args) => generate_enums_command::<PvExporter>(args),
         Command::PvExport(args) => {

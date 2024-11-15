@@ -518,6 +518,8 @@ pub enum ExportSpcFileError {
 pub enum ExportError {
     InvalidSegmentName(String),
     NoSegmentNumberSuffix(String),
+    InvalidSectionName(String),
+    NoSectionNumberSuffix(String),
     PvSnesLibInvalidFirstBank,
     BinPathNotUtf8,
     BinPathContainsQuotes,
@@ -1341,6 +1343,10 @@ impl Display for ExportError {
             Self::InvalidSegmentName(name) => write!(f, "invalid segment name: {}", name),
             Self::NoSegmentNumberSuffix(name) => {
                 write!(f, "segment name must end with a number: {}", name)
+            }
+            Self::InvalidSectionName(name) => write!(f, "invalid section name: {}", name),
+            Self::NoSectionNumberSuffix(name) => {
+                write!(f, "section name must end with a number: {}", name)
             }
             Self::PvSnesLibInvalidFirstBank => write!(
                 f,
