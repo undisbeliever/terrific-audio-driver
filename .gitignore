@@ -1,6 +1,7 @@
 *.bin
 *.sym
 *.dbg
+*.label
 *.sfc
 *-map.txt
 *.obj
