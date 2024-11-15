@@ -4,42 +4,36 @@
 //
 // SPDX-License-Identifier: MIT
 
-use super::{BinIncludePath, ExportedBinFile, Exporter, MemoryMapMode, BLANK_SONG_NAME};
+use super::{
+    BinIncludePath, ExportedBinFile, Exporter, MemoryMapMode, SegmentPrefix, SuffixType,
+    BLANK_SONG_NAME,
+};
 
 use crate::data::UniqueNamesProjectFile;
 use crate::driver_constants::TAD_IO_VERSION;
-use crate::errors::ExportError;
+use crate::errors::{ExportError, ExportSegmentType};
 use crate::sound_effects::SfxExportOrder;
 
 use std::fmt::Write;
 
 pub struct Ca65MemoryMap {
     mode: MemoryMapMode,
-    segment_prefix: String,
-    first_segment_number: usize,
+    prefix: SegmentPrefix,
 }
 
 impl Ca65MemoryMap {
-    fn valid_segment_char(c: char) -> bool {
-        c.is_ascii_alphanumeric() || c == '_' || c == '.'
-    }
-
-    pub fn try_new(mode: MemoryMapMode, first_segment: &str) -> Result<Ca65MemoryMap, ExportError> {
-        if first_segment.contains(|c| !Self::valid_segment_char(c)) {
-            return Err(ExportError::InvalidSegmentName(first_segment.to_owned()));
-        }
-
-        let prefix = first_segment.trim_end_matches(|c: char| c.is_ascii_digit());
-        if prefix.len() == first_segment.len() {
-            return Err(ExportError::NoSegmentNumberSuffix(first_segment.to_owned()));
-        }
-
-        let first_segment_number = first_segment[prefix.len()..].parse().unwrap();
-
-        Ok(Ca65MemoryMap {
+    pub fn try_new(
+        mode: MemoryMapMode,
+        first_segment: &str,
+        suffix_type: SuffixType,
+    ) -> Result<Ca65MemoryMap, ExportError> {
+        Ok(Self {
             mode,
-            segment_prefix: prefix.to_owned(),
-            first_segment_number,
+            prefix: SegmentPrefix::try_from(
+                first_segment,
+                suffix_type,
+                ExportSegmentType::Segment,
+            )?,
         })
     }
 }
@@ -153,7 +147,7 @@ impl Exporter for Ca65Exporter {
         writeln!(out)?;
 
         for block_number in 0..n_banks {
-            writeln!(out, "\n.segment \"{}{}\"", memory_map.segment_prefix, memory_map.first_segment_number + block_number)?;
+            writeln!(out, "\n.segment \"{}\"", memory_map.prefix.index(block_number))?;
 
             let incbin_offset = block_number * bank_size;
             let remaining_bytes = bin_data.data().len() - incbin_offset;
@@ -174,7 +168,7 @@ impl Exporter for Ca65Exporter {
         };
 
         if (bin_data.data().len() + load_audio_data_size) / bank_size > n_banks {
-            writeln!(out, "\n.segment \"{}{}\"", memory_map.segment_prefix, memory_map.first_segment_number + n_banks)?;
+            writeln!(out, "\n.segment \"{}\"", memory_map.prefix.index(n_banks))?;
         }
 
         out += match memory_map.mode {
@@ -195,11 +189,9 @@ impl Exporter for Ca65Exporter {
         for i in 1..n_banks {
             writeln!(
                 out,
-                ".assert .bankbyte({BLOCK_PREFIX}{i}) = .bankbyte({FIRST_BLOCK}) + {i}, lderror, \"{}{} segment must point to the bank immediatly after {}{}\"",
-                memory_map.segment_prefix,
-                memory_map.first_segment_number + i,
-                memory_map.segment_prefix,
-                memory_map.first_segment_number + i - 1
+                ".assert .bankbyte({BLOCK_PREFIX}{i}) = .bankbyte({FIRST_BLOCK}) + {i}, lderror, \"{} segment must point to the bank immediatly after {}\"",
+                memory_map.prefix.index(i),
+                memory_map.prefix.index(i - 1),
             )?;
         }
         if n_banks > 1 {

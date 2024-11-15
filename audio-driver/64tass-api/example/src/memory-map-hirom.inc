@@ -51,19 +51,19 @@ ROM_SIZE = 2
 
 * = $010000             ; ROM offset
 .logical $c10000        ; start address
-    .dsection AudioData0
+    .dsection BankC1
         .cerror * > $c20000, "Bank c1 overflow by ", * - $c20000
 .here
 
 * = $020000             ; ROM offset
 .logical $c20000        ; start address
-    .dsection AudioData1
+    .dsection BankC2
         .cerror * > $c30000, "Bank c2 overflow by ", * - $c30000
 .here
 
 * = $030000             ; ROM offset
 .logical $c30000        ; start address
-    .dsection AudioData2
+    .dsection BankC3
         .cerror * > $c40000, "Bank c3 overflow by ", * - $c40000
 .here
 

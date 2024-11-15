@@ -4,45 +4,36 @@
 //
 // SPDX-License-Identifier: MIT
 
-use super::{BinIncludePath, ExportedBinFile, Exporter, MemoryMapMode, BLANK_SONG_NAME};
+use super::{
+    BinIncludePath, ExportedBinFile, Exporter, MemoryMapMode, SegmentPrefix, SuffixType,
+    BLANK_SONG_NAME,
+};
 
 use crate::data::UniqueNamesProjectFile;
 use crate::driver_constants::TAD_IO_VERSION;
-use crate::errors::ExportError;
+use crate::errors::{ExportError, ExportSegmentType};
 use crate::sound_effects::SfxExportOrder;
 
 use std::fmt::Write;
 
 pub struct Tass64MemoryMap {
     mode: MemoryMapMode,
-    section_prefix: String,
-    first_section_number: usize,
+    prefix: SegmentPrefix,
 }
 
 impl Tass64MemoryMap {
-    fn valid_section_char(c: char) -> bool {
-        c.is_ascii_alphanumeric() || c == '_' || c == '.'
-    }
-
     pub fn try_new(
         mode: MemoryMapMode,
         first_section: &str,
+        suffix_type: SuffixType,
     ) -> Result<Tass64MemoryMap, ExportError> {
-        if first_section.contains(|c| !Self::valid_section_char(c)) {
-            return Err(ExportError::InvalidSectionName(first_section.to_owned()));
-        }
-
-        let prefix = first_section.trim_end_matches(|c: char| c.is_ascii_digit());
-        if prefix.len() == first_section.len() {
-            return Err(ExportError::NoSectionNumberSuffix(first_section.to_owned()));
-        }
-
-        let first_section_number = first_section[prefix.len()..].parse().unwrap();
-
-        Ok(Tass64MemoryMap {
+        Ok(Self {
             mode,
-            section_prefix: prefix.to_owned(),
-            first_section_number,
+            prefix: SegmentPrefix::try_from(
+                first_section,
+                suffix_type,
+                ExportSegmentType::Section,
+            )?,
         })
     }
 }
@@ -155,7 +146,7 @@ impl Exporter for Tass64Exporter {
         writeln!(out)?;
 
         for block_number in 0..n_banks {
-            writeln!(out, "\n.section {}{}", memory_map.section_prefix, memory_map.first_section_number + block_number)?;
+            writeln!(out, "\n.section {}", memory_map.prefix.index(block_number))?;
 
             let incbin_offset = block_number * bank_size;
             let remaining_bytes = bin_data.data().len() - incbin_offset;
@@ -177,9 +168,9 @@ impl Exporter for Tass64Exporter {
         };
 
         if (bin_data.data().len() + load_audio_data_size) / bank_size > n_banks {
-            writeln!(out, "\n.section {}{}", memory_map.section_prefix, memory_map.first_section_number + n_banks)?;
+            writeln!(out, "\n.section {}", memory_map.prefix.index(n_banks))?;
         } else {
-            writeln!(out, "\n.section {}{}", memory_map.section_prefix, memory_map.first_section_number + n_banks - 1)?;
+            writeln!(out, "\n.section {}", memory_map.prefix.index(n_banks - 1))?;
         }
 
         out += match memory_map.mode {
@@ -201,11 +192,9 @@ impl Exporter for Tass64Exporter {
         for i in 1..n_banks {
             writeln!(
                 out,
-                ".cerror ({BLOCK_PREFIX}{i} >> 16) != ({FIRST_BLOCK} >> 16) + {i}, \"{}{} section must point to the bank immediatly after {}{}\"",
-                memory_map.section_prefix,
-                memory_map.first_section_number + i,
-                memory_map.section_prefix,
-                memory_map.first_section_number + i - 1
+                ".cerror ({BLOCK_PREFIX}{i} >> 16) != ({FIRST_BLOCK} >> 16) + {i}, \"{} section must point to the bank immediatly after {}\"",
+                memory_map.prefix.index(i),
+                memory_map.prefix.index(i - 1),
             )?;
         }
         if n_banks > 1 {

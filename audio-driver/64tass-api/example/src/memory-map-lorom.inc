@@ -42,43 +42,43 @@ ROM_SIZE = 2
 
 * = $008000             ; ROM offset
 .logical $818000        ; start address
-    .dsection AudioData0
+    .dsection Bank81
         .cerror * > $820000, "Bank 81 overflow by ", * - $820000
 .here
 
 * = $010000             ; ROM offset
 .logical $828000        ; start address
-    .dsection AudioData1
+    .dsection Bank82
         .cerror * > $830000, "Bank 82 overflow by ", * - $830000
 .here
 
 * = $018000             ; ROM offset
 .logical $838000        ; start address
-    .dsection AudioData2
+    .dsection Bank83
         .cerror * > $840000, "Bank 83 overflow by ", * - $840000
 .here
 
 * = $020000             ; ROM offset
 .logical $848000        ; start address
-    .dsection AudioData3
+    .dsection Bank84
         .cerror * > $850000, "Bank 84 overflow by ", * - $850000
 .here
 
 * = $028000             ; ROM offset
 .logical $858000        ; start address
-    .dsection AudioData4
+    .dsection Bank85
         .cerror * > $860000, "Bank 85 overflow by ", * - $860000
 .here
 
 * = $030000             ; ROM offset
 .logical $868000        ; start address
-    .dsection AudioData5
+    .dsection Bank86
         .cerror * > $870000, "Bank 86 overflow by ", * - $870000
 .here
 
 * = $038000             ; ROM offset
 .logical $878000        ; start address
-    .dsection AudioData6
+    .dsection Bank87
         .cerror * > $880000, "Bank 87 overflow by ", * - $880000
 .here
 

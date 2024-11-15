@@ -16,7 +16,7 @@ use compiler::{
     },
     export::{
         bin_include_path, export_bin_file, Ca65Exporter, Ca65MemoryMap, ExportedBinFile, Exporter,
-        MemoryMapMode, PvExporter, PvMemoryMap, Tass64Exporter, Tass64MemoryMap,
+        MemoryMapMode, PvExporter, PvMemoryMap, SuffixType, Tass64Exporter, Tass64MemoryMap,
     },
     mml::{compile_mml, MmlTickCountTable},
     pitch_table::{build_pitch_table, PitchTable},
@@ -602,10 +602,36 @@ struct Ca65ExportArgs {
         help = "First segment to store the binary data in.\nMust be suffixed with a number (eg, RODATA2, AUDIO_DATA_0)\nIf data does not fit in a single bank, the next segment will be used (ie, RODATA3, AUDIO_DATA_1)"
     )]
     first_segment: String,
+
+    #[arg(
+        short = 'x',
+        long = "segment-lower-hex",
+        help = "Segment ends in two lower-case hexadecimal digits"
+    )]
+    lower_hex: bool,
+
+    #[arg(
+        short = 'X',
+        long = "segment-upper-hex",
+        help = "Segment ends in two upper-case hexadecimal digits",
+        conflicts_with = "lower_hex"
+    )]
+    upper_hex: bool,
+}
+
+fn parse_suffix_type(lower_hex: bool, upper_hex: bool) -> SuffixType {
+    match (lower_hex, upper_hex) {
+        (false, false) => SuffixType::Integer,
+        (true, false) => SuffixType::LowerHex,
+        (false, true) => SuffixType::UpperHex,
+        (true, true) => error!("Invalid suffix type"),
+    }
 }
 
 fn parse_ca65_memory_map(args: &Ca65ExportArgs) -> Ca65MemoryMap {
-    match Ca65MemoryMap::try_new(args.memory_map.mode(), &args.first_segment) {
+    let suffix_type = parse_suffix_type(args.lower_hex, args.upper_hex);
+
+    match Ca65MemoryMap::try_new(args.memory_map.mode(), &args.first_segment, suffix_type) {
         Ok(mm) => mm,
         Err(e) => error!("Invalid memory map: {}", e),
     }
@@ -631,10 +657,27 @@ struct Tass64ExportArgs {
         help = "First section to store the binary data in.\nMust be suffixed with a number (eg, AudioBank0)\nIf data does not fit in a single bank, the next section will be used (ie, AudioBank1)"
     )]
     first_section: String,
+
+    #[arg(
+        short = 'x',
+        long = "section-lower-hex",
+        help = "Section ends in two lower-case hexidecimal digits"
+    )]
+    lower_hex: bool,
+
+    #[arg(
+        short = 'X',
+        long = "section-upper-hex",
+        help = "Section ends in two upper-case hexidecimal digits",
+        conflicts_with = "lower_hex"
+    )]
+    upper_hex: bool,
 }
 
 fn parse_64tass_memory_map(args: &Tass64ExportArgs) -> Tass64MemoryMap {
-    match Tass64MemoryMap::try_new(args.memory_map.mode(), &args.first_section) {
+    let suffix_type = parse_suffix_type(args.lower_hex, args.upper_hex);
+
+    match Tass64MemoryMap::try_new(args.memory_map.mode(), &args.first_section, suffix_type) {
         Ok(mm) => mm,
         Err(e) => error!("Invalid memory map: {}", e),
     }

@@ -16,7 +16,7 @@ use crate::audio_driver;
 use crate::common_audio_data::CommonAudioData;
 use crate::data::UniqueNamesProjectFile;
 use crate::driver_constants::MAX_N_SONGS;
-use crate::errors::ExportError;
+use crate::errors::{ExportError, ExportSegmentType};
 use crate::songs::SongData;
 
 use std::ops::Range;
@@ -193,4 +193,213 @@ pub trait Exporter {
         memory_map: &Self::MemoryMap,
         bin_include_path: &BinIncludePath,
     ) -> Result<String, std::fmt::Error>;
+}
+
+pub enum SuffixType {
+    Integer,
+    LowerHex,
+    UpperHex,
+}
+
+#[derive(Debug, PartialEq)]
+enum SegmentPrefix {
+    Integer(String, usize),
+    LowerHex(String, usize),
+    UpperHex(String, usize),
+}
+
+impl SegmentPrefix {
+    fn split_hex(s: &str, hex_match: fn(u8) -> bool) -> Result<(String, usize), ()> {
+        match s.len().checked_sub(2).and_then(|i| s.split_at_checked(i)) {
+            Some((prefix, hex)) => {
+                if !hex.bytes().all(hex_match) {
+                    return Err(());
+                }
+
+                match usize::from_str_radix(hex, 16) {
+                    Ok(n) => Ok((prefix.to_owned(), n)),
+                    Err(_) => Err(()),
+                }
+            }
+            None => Err(()),
+        }
+    }
+
+    fn valid_segment_char(c: char) -> bool {
+        c.is_ascii_alphanumeric() || c == '_' || c == '.'
+    }
+
+    pub fn try_from(
+        first_segment: &str,
+        suffix_type: SuffixType,
+        stype: ExportSegmentType,
+    ) -> Result<SegmentPrefix, ExportError> {
+        if first_segment.contains(|c| !Self::valid_segment_char(c)) {
+            return Err(ExportError::InvalidSegmentName(
+                stype,
+                first_segment.to_owned(),
+            ));
+        }
+
+        match suffix_type {
+            SuffixType::Integer => {
+                let prefix = first_segment.trim_end_matches(|c: char| c.is_ascii_digit());
+                if prefix.len() != first_segment.len() {
+                    let number = first_segment[prefix.len()..].parse().unwrap();
+                    Ok(SegmentPrefix::Integer(prefix.to_owned(), number))
+                } else {
+                    Err(ExportError::NoSegmentNumberSuffix(
+                        stype,
+                        first_segment.to_owned(),
+                    ))
+                }
+            }
+
+            SuffixType::LowerHex => {
+                match Self::split_hex(first_segment, |c| {
+                    c.is_ascii_digit() | matches!(c, b'a'..=b'f')
+                }) {
+                    Ok((prefix, n)) => Ok(SegmentPrefix::LowerHex(prefix, n)),
+                    Err(()) => Err(ExportError::NoSegmentLowerHexSuffix(
+                        stype,
+                        first_segment.to_owned(),
+                    )),
+                }
+            }
+
+            SuffixType::UpperHex => {
+                match Self::split_hex(first_segment, |c| {
+                    c.is_ascii_digit() | matches!(c, b'A'..=b'F')
+                }) {
+                    Ok((prefix, n)) => Ok(SegmentPrefix::UpperHex(prefix, n)),
+                    Err(()) => Err(ExportError::NoSegmentUpperHexSuffix(
+                        stype,
+                        first_segment.to_owned(),
+                    )),
+                }
+            }
+        }
+    }
+
+    pub fn index(&self, index: usize) -> Segment {
+        Segment {
+            segment: self,
+            index,
+        }
+    }
+}
+
+struct Segment<'a> {
+    segment: &'a SegmentPrefix,
+    index: usize,
+}
+
+impl std::fmt::Display for Segment<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self.segment {
+            SegmentPrefix::Integer(prefix, start) => {
+                write!(f, "{prefix}{}", start + self.index)
+            }
+            SegmentPrefix::LowerHex(prefix, start) => {
+                write!(f, "{prefix}{:02x}", start + self.index)
+            }
+            SegmentPrefix::UpperHex(prefix, start) => {
+                write!(f, "{prefix}{:02X}", start + self.index)
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn segment_prefix_integer() {
+        assert_eq!(
+            SegmentPrefix::try_from("name 2", SuffixType::Integer, ExportSegmentType::Section),
+            Err(ExportError::InvalidSegmentName(
+                ExportSegmentType::Section,
+                "name 2".to_owned()
+            ))
+        );
+        assert_eq!(
+            SegmentPrefix::try_from("name", SuffixType::Integer, ExportSegmentType::Section),
+            Err(ExportError::NoSegmentNumberSuffix(
+                ExportSegmentType::Section,
+                "name".to_owned()
+            ))
+        );
+        assert_eq!(
+            SegmentPrefix::try_from("name892", SuffixType::Integer, ExportSegmentType::Section)
+                .unwrap()
+                .index(10)
+                .to_string(),
+            "name902"
+        );
+    }
+
+    #[test]
+    fn segment_prefix_lower_hex() {
+        assert_eq!(
+            SegmentPrefix::try_from("name-c1", SuffixType::LowerHex, ExportSegmentType::Section),
+            Err(ExportError::InvalidSegmentName(
+                ExportSegmentType::Section,
+                "name-c1".to_owned()
+            ))
+        );
+        assert_eq!(
+            SegmentPrefix::try_from("name_", SuffixType::LowerHex, ExportSegmentType::Section),
+            Err(ExportError::NoSegmentLowerHexSuffix(
+                ExportSegmentType::Section,
+                "name_".to_owned()
+            ))
+        );
+        assert_eq!(
+            SegmentPrefix::try_from("name_C1", SuffixType::LowerHex, ExportSegmentType::Section),
+            Err(ExportError::NoSegmentLowerHexSuffix(
+                ExportSegmentType::Section,
+                "name_C1".to_owned()
+            ))
+        );
+        assert_eq!(
+            SegmentPrefix::try_from("name_c1", SuffixType::LowerHex, ExportSegmentType::Section)
+                .unwrap()
+                .index(10)
+                .to_string(),
+            "name_cb"
+        );
+    }
+
+    #[test]
+    fn segment_prefix_upper_hex() {
+        assert_eq!(
+            SegmentPrefix::try_from("name-ab", SuffixType::UpperHex, ExportSegmentType::Section),
+            Err(ExportError::InvalidSegmentName(
+                ExportSegmentType::Section,
+                "name-ab".to_owned()
+            ))
+        );
+        assert_eq!(
+            SegmentPrefix::try_from("name", SuffixType::UpperHex, ExportSegmentType::Section),
+            Err(ExportError::NoSegmentUpperHexSuffix(
+                ExportSegmentType::Section,
+                "name".to_owned()
+            ))
+        );
+        assert_eq!(
+            SegmentPrefix::try_from("nameab", SuffixType::UpperHex, ExportSegmentType::Section),
+            Err(ExportError::NoSegmentUpperHexSuffix(
+                ExportSegmentType::Section,
+                "nameab".to_owned()
+            ))
+        );
+        assert_eq!(
+            SegmentPrefix::try_from("nameAB", SuffixType::UpperHex, ExportSegmentType::Section)
+                .unwrap()
+                .index(20)
+                .to_string(),
+            "nameBF"
+        );
+    }
 }

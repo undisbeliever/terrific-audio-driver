@@ -514,12 +514,18 @@ pub enum ExportSpcFileError {
     },
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
+pub enum ExportSegmentType {
+    Segment,
+    Section,
+}
+
+#[derive(Debug, PartialEq)]
 pub enum ExportError {
-    InvalidSegmentName(String),
-    NoSegmentNumberSuffix(String),
-    InvalidSectionName(String),
-    NoSectionNumberSuffix(String),
+    InvalidSegmentName(ExportSegmentType, String),
+    NoSegmentNumberSuffix(ExportSegmentType, String),
+    NoSegmentLowerHexSuffix(ExportSegmentType, String),
+    NoSegmentUpperHexSuffix(ExportSegmentType, String),
     PvSnesLibInvalidFirstBank,
     BinPathNotUtf8,
     BinPathContainsQuotes,
@@ -664,7 +670,7 @@ impl Display for ValueError {
         match self {
             Self::CannotParseUnsigned(s) => write!(f, "cannot parse unsigned number: {}", s),
             Self::CannotParseSigned(s) => write!(f, "cannot parse signed number: {}", s),
-            Self::CannotParseHex(s) => write!(f, "cannot parse hexidecimal number: {}", s),
+            Self::CannotParseHex(s) => write!(f, "cannot parse hexadecimal number: {}", s),
 
             Self::InvalidName(s) => write!(f, "invalid name: {}", s),
 
@@ -1337,17 +1343,29 @@ impl Display for ExportSpcFileError {
     }
 }
 
+impl Display for ExportSegmentType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Segment => write!(f, "segment"),
+            Self::Section => write!(f, "section"),
+        }
+    }
+}
+
 impl Display for ExportError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::InvalidSegmentName(name) => write!(f, "invalid segment name: {}", name),
-            Self::NoSegmentNumberSuffix(name) => {
-                write!(f, "segment name must end with a number: {}", name)
+            Self::InvalidSegmentName(sc, s) => write!(f, "invalid {sc} name: {s}"),
+            Self::NoSegmentNumberSuffix(sc, s) => {
+                write!(f, "{sc} name must end with a number: {s}")
             }
-            Self::InvalidSectionName(name) => write!(f, "invalid section name: {}", name),
-            Self::NoSectionNumberSuffix(name) => {
-                write!(f, "section name must end with a number: {}", name)
+            Self::NoSegmentLowerHexSuffix(sc, s) => {
+                write!(f, "{sc} name must end with 2 lower hex digits: {s}")
             }
+            Self::NoSegmentUpperHexSuffix(sc, s) => {
+                write!(f, "{sc} name must end with 2 upper hex digits: {s}")
+            }
+
             Self::PvSnesLibInvalidFirstBank => write!(
                 f,
                 "the first BANK to store the audio data in must be >= {}",

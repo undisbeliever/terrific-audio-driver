@@ -15,9 +15,6 @@ GEN_FILES  := gen/audio.inc gen/audio-data-lorom.inc gen/audio-data-lorom.bin ge
 SRC_FILES := $(wildcard src/*.asm src/*.inc)
 
 
-# First segment to store audio data in (must end in a decimal number)
-TAD_DATA_SECTION = AudioData0
-
 ifneq (1,$(words [$(TAD_PROJECT)]))
   $(error TAD_PROJECT variable cannot contain whitespace)
 endif
@@ -52,10 +49,10 @@ all: $(BIN_FILES)
 
 
 gen/audio-data-lorom.inc gen/audio-data-lorom.bin &: $(TAD_PROJECT) $(TAD_PROJECT_FILES)
-	$(TAD_COMPILER) 64tass-export --lorom --section '$(TAD_DATA_SECTION)' --output-asm gen/audio-data-lorom.inc --output-bin gen/audio-data-lorom.bin $(TAD_PROJECT)
+	$(TAD_COMPILER) 64tass-export --lorom -X --section Bank81 --output-asm gen/audio-data-lorom.inc --output-bin gen/audio-data-lorom.bin $(TAD_PROJECT)
 
 gen/audio-data-hirom.inc gen/audio-data-hirom.bin &: $(TAD_PROJECT) $(TAD_PROJECT_FILES)
-	$(TAD_COMPILER) 64tass-export --hirom --section '$(TAD_DATA_SECTION)' --output-asm gen/audio-data-hirom.inc --output-bin gen/audio-data-hirom.bin $(TAD_PROJECT)
+	$(TAD_COMPILER) 64tass-export --hirom -X --section BankC1 --output-asm gen/audio-data-hirom.inc --output-bin gen/audio-data-hirom.bin $(TAD_PROJECT)
 
 gen/audio.inc : $(TAD_PROJECT)
 	$(TAD_COMPILER) 64tass-enums -o $@ $(TAD_PROJECT)
