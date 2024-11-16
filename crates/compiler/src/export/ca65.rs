@@ -156,11 +156,13 @@ impl Exporter for Ca65Exporter {
         writeln!(out)?;
 
         for block_number in 0..n_banks {
-            writeln!(out, "\n.segment \"{}\"", memory_map.prefix.index(block_number))?;
+            let segment = memory_map.prefix.index(block_number);
+
+            writeln!(out, "\n.segment \"{segment}\"")?;
 
             writeln!(
                 out,
-                "  .assert .loword(*) = ${bank_start:04x}, lderror, \"{BLOCK_PREFIX}{block_number} does not start at the beginning of a {bank_name} bank (${bank_start:04x})\""
+                "  .assert .loword(*) = ${bank_start:04x}, lderror, \"{segment} does not start at the beginning of a {bank_name} bank (${bank_start:04x})\""
             )?;
 
             match block_number {
@@ -173,11 +175,10 @@ impl Exporter for Ca65Exporter {
                     writeln!(out)?;
                 }
                 1.. => {
+                    let prev_segment = memory_map.prefix.index(block_number - 1);
                     writeln!(
                         out,
-                        "  .assert .bankbyte(*) = .bankbyte({FIRST_BLOCK}) + {block_number}, lderror, \"{} segment must point to the bank immediatly after {}\"",
-                        memory_map.prefix.index(block_number),
-                        memory_map.prefix.index(block_number - 1),
+                        "  .assert .bankbyte(*) = .bankbyte({FIRST_BLOCK}) + {block_number}, lderror, \"{segment} segment must point to the bank immediatly after {prev_segment}\"",
                     )?;
                 }
             }
@@ -195,7 +196,7 @@ impl Exporter for Ca65Exporter {
 
             if remaining_bytes > block_size {
                 writeln!(out, "  {BLOCK_PREFIX}{block_number}: .incbin \"{incbin_path}\", ${incbin_offset:x}, ${block_size:x}")?;
-                writeln!(out, "  .assert (* & $ffff) = $0000, lderror, \"Not at the end of a bank ({})\"", memory_map.prefix.index(block_number))?;
+                writeln!(out, "  .assert (* & $ffff) = $0000, lderror, \"Not at the end of a bank ({segment})\"")?;
             } else {
                 writeln!(out, "  {BLOCK_PREFIX}{block_number}: .incbin \"{incbin_path}\", ${incbin_offset:x}")?;
                 writeln!(out, "  .assert .sizeof({BLOCK_PREFIX}{block_number}) = ${remaining_bytes:x}, error, \"{incbin_path} file size does not match binary size in the assembly file\"")?;

@@ -155,11 +155,12 @@ impl Exporter for Tass64Exporter {
         writeln!(out)?;
 
         for block_number in 0..n_banks {
+            let section = memory_map.prefix.index(block_number);
+
             writeln!(out, "\n.section {}", memory_map.prefix.index(block_number))?;
             writeln!(
                 out,
-                "  .cerror (* & $ffff) != ${bank_start:04x}, \"{} does not start at the beginning of a {bank_name} bank (${bank_start:04x}) \", *",
-                memory_map.prefix.index(0)
+                "  .cerror (* & $ffff) != ${bank_start:04x}, \"{section} does not start at the beginning of a {bank_name} bank (${bank_start:04x}) \", *",
             )?;
 
             match block_number {
@@ -172,11 +173,10 @@ impl Exporter for Tass64Exporter {
                     writeln!(out)?;
                 }
                 1.. => {
+                    let prev_section = memory_map.prefix.index(block_number - 1);
                     writeln!(
                         out,
-                        "  .cerror (* >> 16) != ({FIRST_BLOCK} >> 16) + {block_number}, \"{} section must point to the bank immediatly after {}\"",
-                        memory_map.prefix.index(block_number),
-                        memory_map.prefix.index(block_number - 1),
+                        "  .cerror (* >> 16) != ({FIRST_BLOCK} >> 16) + {block_number}, \"{section} section must point to the bank immediatly after {prev_section}\"",
                     )?;
                 }
             }
@@ -194,7 +194,7 @@ impl Exporter for Tass64Exporter {
 
             if remaining_bytes > block_size {
                 writeln!(out, "  {BLOCK_PREFIX}{block_number}: .binary \"{incbin_path}\", ${incbin_offset:x}, ${block_size:x}")?;
-                writeln!(out, "  .cerror (* & $ffff) != $0000, \"Not at the end of a bank ({})\", *", memory_map.prefix.index(block_number))?;
+                writeln!(out, "  .cerror (* & $ffff) != $0000, \"Not at the end of a bank ({section})\", *")?;
             } else {
                 writeln!(out, "  {BLOCK_PREFIX}{block_number}: .binary \"{incbin_path}\", ${incbin_offset:x}")?;
                 writeln!(out, "  .cerror (* - {BLOCK_PREFIX}{block_number}) != ${remaining_bytes:x}, \"{incbin_path} file size does not match binary size in the assembly file\"")?;
