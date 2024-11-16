@@ -134,22 +134,6 @@ impl Exporter for Tass64Exporter {
 
         out += ASM_HEADER;
 
-        writeln!(out, "Tad_Loader_Bin = {} + {}", FIRST_BLOCK, ExportedBinFile::LOADER_OFFSET)?;
-        writeln!(out, "Tad_Loader_SIZE = {}", ExportedBinFile::LOADER_SIZE)?;
-        writeln!(out, "Tad_AudioDriver_Bin = {} + {}", FIRST_BLOCK, ExportedBinFile::AUDIO_DRIVER_OFFSET)?;
-        writeln!(out, "Tad_AudioDriver_SIZE = {}", ExportedBinFile::AUDIO_DRIVER_SIZE)?;
-        writeln!(out, "Tad_BlankSong_Bin = {} + {}", FIRST_BLOCK, ExportedBinFile::BLANK_SONG_OFFSET)?;
-        writeln!(out, "Tad_BlankSong_SIZE = {}", ExportedBinFile::BLANK_SONG_SIZE)?;
-        writeln!(out)?;
-        writeln!(out, ";; {}", ExportedBinFile::DATA_TABLE_DOCSTRING)?;
-        writeln!(out, ";; {}", ExportedBinFile::DATA_TABLE_FOOTER_DOCSTRING)?;
-        writeln!(out, "Tad_DataTable = {} + {}", FIRST_BLOCK, ExportedBinFile::DATA_TABLE_OFFSET)?;
-        writeln!(out, "Tad_DataTable_SIZE = {}", bin_data.data_table_size())?;
-        writeln!(out)?;
-        writeln!(out, "N_DATA_ITEMS = {}", n_data_items)?;
-        writeln!(out, "AUDIO_DATA_BANK = `{FIRST_BLOCK}")?;
-        writeln!(out)?;
-
         // Add an assert to ensure TAD_IO_VERSION in the audio driver matches the one is `tad-process.inc`
         writeln!(out, ".cerror TAD_IO_VERSION != {}, \"TAD_IO_VERSION in audio driver does not match TAD_IO_VERSION in the 64tass-api\"", TAD_IO_VERSION)?;
         writeln!(out)?;
@@ -201,6 +185,22 @@ impl Exporter for Tass64Exporter {
             }
             writeln!(out, ".endsection")?;
         }
+        writeln!(out)?;
+
+        writeln!(out, "Tad_Loader_Bin = {} + {}", FIRST_BLOCK, ExportedBinFile::LOADER_OFFSET)?;
+        writeln!(out, "Tad_Loader_SIZE = {}", ExportedBinFile::LOADER_SIZE)?;
+        writeln!(out, "Tad_AudioDriver_Bin = {} + {}", FIRST_BLOCK, ExportedBinFile::AUDIO_DRIVER_OFFSET)?;
+        writeln!(out, "Tad_AudioDriver_SIZE = {}", ExportedBinFile::AUDIO_DRIVER_SIZE)?;
+        writeln!(out, "Tad_BlankSong_Bin = {} + {}", FIRST_BLOCK, ExportedBinFile::BLANK_SONG_OFFSET)?;
+        writeln!(out, "Tad_BlankSong_SIZE = {}", ExportedBinFile::BLANK_SONG_SIZE)?;
+        writeln!(out)?;
+        writeln!(out, ";; {}", ExportedBinFile::DATA_TABLE_DOCSTRING)?;
+        writeln!(out, ";; {}", ExportedBinFile::DATA_TABLE_FOOTER_DOCSTRING)?;
+        writeln!(out, "Tad_DataTable = {} + {}", FIRST_BLOCK, ExportedBinFile::DATA_TABLE_OFFSET)?;
+        writeln!(out, "Tad_DataTable_SIZE = {}", bin_data.data_table_size())?;
+        writeln!(out)?;
+        writeln!(out, "N_DATA_ITEMS = {}", n_data_items)?;
+        writeln!(out, "AUDIO_DATA_BANK = `{FIRST_BLOCK}")?;
         writeln!(out)?;
 
         writeln!(out, ".cerror (Tad_DataTable >> 16) != ((Tad_DataTable + Tad_DataTable_SIZE) >> 16), \"Tad_DataTable does not fit in a single bank\"")?;
