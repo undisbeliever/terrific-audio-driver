@@ -44,6 +44,13 @@ pub struct Tass64Exporter;
 impl Exporter for Tass64Exporter {
     type MemoryMap = Tass64MemoryMap;
 
+    fn bin_data_offset(memory_map: &Self::MemoryMap) -> usize {
+        match memory_map.mode {
+            MemoryMapMode::LoRom => LOAD_AUDIO_DATA_LOROM_SIZE,
+            MemoryMapMode::HiRom => LOAD_AUDIO_DATA_HIROM_SIZE,
+        }
+    }
+
     fn generate_include_file(pf: UniqueNamesProjectFile) -> Result<String, std::fmt::Error> {
         let sfx = &pf.sfx_export_order;
 
@@ -110,14 +117,16 @@ impl Exporter for Tass64Exporter {
         let bank_name = memory_map.mode.name();
         let bank_size = memory_map.mode.bank_size();
         let bank_start = memory_map.mode.bank_start();
-        let n_banks = (bin_data.data().len() + (bank_size - 1)) / bank_size;
-
         let n_data_items = bin_data.n_songs() + 1;
 
+        let load_audio_data_size = Self::bin_data_offset(memory_map);
+        let n_banks = (load_audio_data_size + bin_data.data().len() + (bank_size - 1)) / bank_size;
+
         assert!(n_banks > 0);
-        assert!(bin_data.n_songs + 1 < u8::MAX.into());
+        assert!(n_data_items < u8::MAX.into());
         assert!(
-            ExportedBinFile::DATA_TABLE_OFFSET + bin_data.data_table_size() < bank_size,
+            load_audio_data_size + ExportedBinFile::DATA_TABLE_OFFSET + bin_data.data_table_size()
+                < bank_size,
             "data table does not fit inside a single bank"
         );
 
@@ -147,13 +156,45 @@ impl Exporter for Tass64Exporter {
 
         for block_number in 0..n_banks {
             writeln!(out, "\n.section {}", memory_map.prefix.index(block_number))?;
+            writeln!(
+                out,
+                "  .cerror (* & $ffff) != ${bank_start:04x}, \"{} does not start at the beginning of a {bank_name} bank (${bank_start:04x}) \", *",
+                memory_map.prefix.index(0)
+            )?;
 
-            let incbin_offset = block_number * bank_size;
+            match block_number {
+                0 => {
+                    out += match memory_map.mode {
+                        MemoryMapMode::LoRom => LOAD_AUDIO_DATA_LOROM,
+                        MemoryMapMode::HiRom => LOAD_AUDIO_DATA_HIROM,
+                    };
+                    writeln!(out, ".cerror (* - LoadAudioData) != {load_audio_data_size}, \"LoadAudioData size mismatch\"")?;
+                    writeln!(out)?;
+                }
+                1.. => {
+                    writeln!(
+                        out,
+                        "  .cerror (* >> 16) != ({FIRST_BLOCK} >> 16) + {block_number}, \"{} section must point to the bank immediatly after {}\"",
+                        memory_map.prefix.index(block_number),
+                        memory_map.prefix.index(block_number - 1),
+                    )?;
+                }
+            }
+
+            let incbin_offset = match block_number {
+                0 => 0,
+                1.. => block_number * bank_size - load_audio_data_size,
+            };
+            let block_size = match block_number {
+                0 => bank_size - load_audio_data_size,
+                1.. => bank_size,
+            };
             let remaining_bytes = bin_data.data().len() - incbin_offset;
             assert!(remaining_bytes > 0);
 
-            if remaining_bytes > bank_size {
-                writeln!(out, "  {BLOCK_PREFIX}{block_number}: .binary \"{incbin_path}\", ${incbin_offset:x}, ${bank_size:x}")?;
+            if remaining_bytes > block_size {
+                writeln!(out, "  {BLOCK_PREFIX}{block_number}: .binary \"{incbin_path}\", ${incbin_offset:x}, ${block_size:x}")?;
+                writeln!(out, "  .cerror (* & $ffff) != $0000, \"Not at the end of a bank ({})\", *", memory_map.prefix.index(block_number))?;
             } else {
                 writeln!(out, "  {BLOCK_PREFIX}{block_number}: .binary \"{incbin_path}\", ${incbin_offset:x}")?;
                 writeln!(out, "  .cerror (* - {BLOCK_PREFIX}{block_number}) != ${remaining_bytes:x}, \"{incbin_path} file size does not match binary size in the assembly file\"")?;
@@ -162,46 +203,8 @@ impl Exporter for Tass64Exporter {
         }
         writeln!(out)?;
 
-        let load_audio_data_size = match memory_map.mode {
-            MemoryMapMode::LoRom => LOAD_AUDIO_DATA_LOROM_SIZE,
-            MemoryMapMode::HiRom => LOAD_AUDIO_DATA_HIROM_SIZE,
-        };
-
-        if (bin_data.data().len() + load_audio_data_size) / bank_size > n_banks {
-            writeln!(out, "\n.section {}", memory_map.prefix.index(n_banks))?;
-        } else {
-            writeln!(out, "\n.section {}", memory_map.prefix.index(n_banks - 1))?;
-        }
-
-        out += match memory_map.mode {
-            MemoryMapMode::LoRom => LOAD_AUDIO_DATA_LOROM,
-            MemoryMapMode::HiRom => LOAD_AUDIO_DATA_HIROM,
-        };
-        writeln!(out, "  .cerror (* - LoadAudioData) != {load_audio_data_size}, \"LoadAudioData size mismatch\"")?;
-        writeln!(out, ".endsection")?;
-        writeln!(out)?;
-
-        for i in 0..n_banks {
-            writeln!(
-                out,
-                ".cerror ({BLOCK_PREFIX}{i} & $ffff) != ${bank_start:04x}, \"{BLOCK_PREFIX}{i} does not start at the beginning of a {bank_name} bank (${bank_start:04x}) \", {BLOCK_PREFIX}{i}"
-            )?;
-        }
-        writeln!(out)?;
-
-        for i in 1..n_banks {
-            writeln!(
-                out,
-                ".cerror ({BLOCK_PREFIX}{i} >> 16) != ({FIRST_BLOCK} >> 16) + {i}, \"{} section must point to the bank immediatly after {}\"",
-                memory_map.prefix.index(i),
-                memory_map.prefix.index(i - 1),
-            )?;
-        }
-        if n_banks > 1 {
-            writeln!(out)?;
-        }
-
         writeln!(out, ".cerror (Tad_DataTable >> 16) != ((Tad_DataTable + Tad_DataTable_SIZE) >> 16), \"Tad_DataTable does not fit in a single bank\"")?;
+        writeln!(out)?;
 
         Ok(out)
     }

@@ -29,6 +29,7 @@ Compiler changes:
  * Added `tad-compiler 64tass-export` command
  * Added hexadecimal segment suffix to `tad-compiler ca65-export`
    (using the `-x` or `-X` command line options)
+ * Moved `ca65-export` `LoadAudioData` to the start of the first segment.
 
 65816 API changes:
  * Added a 64tass API (identical to the ca65 API)

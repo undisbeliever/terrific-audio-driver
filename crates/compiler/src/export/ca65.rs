@@ -44,6 +44,13 @@ pub struct Ca65Exporter;
 impl Exporter for Ca65Exporter {
     type MemoryMap = Ca65MemoryMap;
 
+    fn bin_data_offset(memory_map: &Self::MemoryMap) -> usize {
+        match memory_map.mode {
+            MemoryMapMode::LoRom => LOAD_AUDIO_DATA_LOROM_SIZE,
+            MemoryMapMode::HiRom => LOAD_AUDIO_DATA_HIROM_SIZE,
+        }
+    }
+
     fn generate_include_file(pf: UniqueNamesProjectFile) -> Result<String, std::fmt::Error> {
         let sfx = &pf.sfx_export_order;
 
@@ -110,14 +117,16 @@ impl Exporter for Ca65Exporter {
         let bank_name = memory_map.mode.name();
         let bank_size = memory_map.mode.bank_size();
         let bank_start = memory_map.mode.bank_start();
-        let n_banks = (bin_data.data().len() + (bank_size - 1)) / bank_size;
-
         let n_data_items = bin_data.n_songs() + 1;
 
+        let load_audio_data_size = Self::bin_data_offset(memory_map);
+        let n_banks = (load_audio_data_size + bin_data.data().len() + (bank_size - 1)) / bank_size;
+
         assert!(n_banks > 0);
-        assert!(bin_data.n_songs + 1 < u8::MAX.into());
+        assert!(n_data_items < u8::MAX.into());
         assert!(
-            ExportedBinFile::DATA_TABLE_OFFSET + bin_data.data_table_size() < bank_size,
+            load_audio_data_size + ExportedBinFile::DATA_TABLE_OFFSET + bin_data.data_table_size()
+                < bank_size,
             "data table does not fit inside a single bank"
         );
 
@@ -149,12 +158,44 @@ impl Exporter for Ca65Exporter {
         for block_number in 0..n_banks {
             writeln!(out, "\n.segment \"{}\"", memory_map.prefix.index(block_number))?;
 
-            let incbin_offset = block_number * bank_size;
+            writeln!(
+                out,
+                "  .assert .loword(*) = ${bank_start:04x}, lderror, \"{BLOCK_PREFIX}{block_number} does not start at the beginning of a {bank_name} bank (${bank_start:04x})\""
+            )?;
+
+            match block_number {
+                0 => {
+                    out += match memory_map.mode {
+                        MemoryMapMode::LoRom => LOAD_AUDIO_DATA_LOROM,
+                        MemoryMapMode::HiRom => LOAD_AUDIO_DATA_HIROM,
+                    };
+                    writeln!(out, ".assert .sizeof(LoadAudioData) = {load_audio_data_size}, error")?;
+                    writeln!(out)?;
+                }
+                1.. => {
+                    writeln!(
+                        out,
+                        "  .assert .bankbyte(*) = .bankbyte({FIRST_BLOCK}) + {block_number}, lderror, \"{} segment must point to the bank immediatly after {}\"",
+                        memory_map.prefix.index(block_number),
+                        memory_map.prefix.index(block_number - 1),
+                    )?;
+                }
+            }
+
+            let incbin_offset = match block_number {
+                0 => 0,
+                1.. => block_number * bank_size - load_audio_data_size,
+            };
+            let block_size = match block_number {
+                0 => bank_size - load_audio_data_size,
+                1.. => bank_size,
+            };
             let remaining_bytes = bin_data.data().len() - incbin_offset;
             assert!(remaining_bytes > 0);
 
-            if remaining_bytes > bank_size {
-                writeln!(out, "  {BLOCK_PREFIX}{block_number}: .incbin \"{incbin_path}\", ${incbin_offset:x}, ${bank_size:x}")?;
+            if remaining_bytes > block_size {
+                writeln!(out, "  {BLOCK_PREFIX}{block_number}: .incbin \"{incbin_path}\", ${incbin_offset:x}, ${block_size:x}")?;
+                writeln!(out, "  .assert (* & $ffff) = $0000, lderror, \"Not at the end of a bank ({})\"", memory_map.prefix.index(block_number))?;
             } else {
                 writeln!(out, "  {BLOCK_PREFIX}{block_number}: .incbin \"{incbin_path}\", ${incbin_offset:x}")?;
                 writeln!(out, "  .assert .sizeof({BLOCK_PREFIX}{block_number}) = ${remaining_bytes:x}, error, \"{incbin_path} file size does not match binary size in the assembly file\"")?;
@@ -162,43 +203,8 @@ impl Exporter for Ca65Exporter {
         }
         writeln!(out)?;
 
-        let load_audio_data_size = match memory_map.mode {
-            MemoryMapMode::LoRom => LOAD_AUDIO_DATA_LOROM_SIZE,
-            MemoryMapMode::HiRom => LOAD_AUDIO_DATA_HIROM_SIZE,
-        };
-
-        if (bin_data.data().len() + load_audio_data_size) / bank_size > n_banks {
-            writeln!(out, "\n.segment \"{}\"", memory_map.prefix.index(n_banks))?;
-        }
-
-        out += match memory_map.mode {
-            MemoryMapMode::LoRom => LOAD_AUDIO_DATA_LOROM,
-            MemoryMapMode::HiRom => LOAD_AUDIO_DATA_HIROM,
-        };
-        writeln!(out, ".assert .sizeof(LoadAudioData) = {load_audio_data_size}, error")?;
-        writeln!(out)?;
-
-        for i in 0..n_banks {
-            writeln!(
-                out,
-                ".assert .loword({BLOCK_PREFIX}{i}) = ${bank_start:04x}, lderror, \"{BLOCK_PREFIX}{i} does not start at the beginning of a {bank_name} bank (${bank_start:04x})\""
-            )?;
-        }
-        writeln!(out)?;
-
-        for i in 1..n_banks {
-            writeln!(
-                out,
-                ".assert .bankbyte({BLOCK_PREFIX}{i}) = .bankbyte({FIRST_BLOCK}) + {i}, lderror, \"{} segment must point to the bank immediatly after {}\"",
-                memory_map.prefix.index(i),
-                memory_map.prefix.index(i - 1),
-            )?;
-        }
-        if n_banks > 1 {
-            writeln!(out)?;
-        }
-
         writeln!(out, ".assert .bankbyte(Tad_DataTable) = .bankbyte(Tad_DataTable + Tad_DataTable_SIZE), lderror, \"Tad_DataTable does not fit in a single bank\"")?;
+        writeln!(out)?;
 
         Ok(out)
     }

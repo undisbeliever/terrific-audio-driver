@@ -74,9 +74,9 @@ impl ExportedBinFile {
     pub const DATA_TABLE_FOOTER_SIZE: usize = 2;
 
     pub const DATA_TABLE_DOCSTRING: &'static str =
-        "[u24 ; N_DATA_ITEMS] - table of offsets within the binary file";
+        "[u24 ; N_DATA_ITEMS] - table of PRG ROM offsets (from the start of the first Audio Data segment)";
     pub const DATA_TABLE_FOOTER_DOCSTRING: &'static str =
-        "u16 footer - 16 bit clipped binary file size (used to determine the size of the last item)";
+        "u16 footer - 16 bit clipped `bin_data_offset + bin_file.len()` (used to determine the size of the last item)";
 
     pub fn data(&self) -> &[u8] {
         &self.data
@@ -91,9 +91,10 @@ impl ExportedBinFile {
     }
 }
 
-pub fn export_bin_file(
+fn export_bin_file(
     common_audio_data: &CommonAudioData,
     songs: &[SongData],
+    bin_data_offset: usize,
 ) -> Result<ExportedBinFile, ExportError> {
     if songs.len() > MAX_N_SONGS {
         return Err(ExportError::TooManySongs(songs.len()));
@@ -129,7 +130,9 @@ pub fn export_bin_file(
     let mut add_data = |d: &[u8]| {
         assert!(d.len() < u16::MAX.into());
 
-        let offset_le_bytes = u32::try_from(bin_file.len()).unwrap().to_le_bytes();
+        let offset_le_bytes = u32::try_from(bin_data_offset + bin_file.len())
+            .unwrap()
+            .to_le_bytes();
         let u24_offset = &offset_le_bytes[..3];
 
         data_table.extend(u24_offset);
@@ -142,8 +145,11 @@ pub fn export_bin_file(
         add_data(s.data());
     }
 
-    // Add data table footer (16 bit clipped value of the data size)
-    let data_table_footer: u16 = (bin_file.len() & usize::from(u16::MAX)).try_into().unwrap();
+    // Add data table footer (16 bit clipped value end of binary file)
+    let data_table_footer = bin_data_offset + bin_file.len();
+    let data_table_footer: u16 = (data_table_footer & usize::from(u16::MAX))
+        .try_into()
+        .unwrap();
     data_table.extend(data_table_footer.to_le_bytes());
 
     assert!(data_table.len() == data_table_size);
@@ -193,6 +199,16 @@ pub trait Exporter {
         memory_map: &Self::MemoryMap,
         bin_include_path: &BinIncludePath,
     ) -> Result<String, std::fmt::Error>;
+
+    fn bin_data_offset(memory_map: &Self::MemoryMap) -> usize;
+
+    fn export_bin_file(
+        common_audio_data: &CommonAudioData,
+        songs: &[SongData],
+        memory_map: &Self::MemoryMap,
+    ) -> Result<ExportedBinFile, ExportError> {
+        export_bin_file(common_audio_data, songs, Self::bin_data_offset(memory_map))
+    }
 }
 
 pub enum SuffixType {

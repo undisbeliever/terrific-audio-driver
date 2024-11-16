@@ -15,8 +15,8 @@ use compiler::{
         TextFile, UniqueNamesProjectFile,
     },
     export::{
-        bin_include_path, export_bin_file, Ca65Exporter, Ca65MemoryMap, ExportedBinFile, Exporter,
-        MemoryMapMode, PvExporter, PvMemoryMap, SuffixType, Tass64Exporter, Tass64MemoryMap,
+        bin_include_path, Ca65Exporter, Ca65MemoryMap, Exporter, MemoryMapMode, PvExporter,
+        PvMemoryMap, SuffixType, Tass64Exporter, Tass64MemoryMap,
     },
     mml::{compile_mml, MmlTickCountTable},
     pitch_table::{build_pitch_table, PitchTable},
@@ -465,7 +465,12 @@ fn export_with_asm_command<E: Exporter>(memory_map: &E::MemoryMap, args: ExportW
         Err(e) => error!("Error:  {}", e),
     };
 
-    let (pf, bin_file) = load_and_export_project(&args);
+    let (pf, common_audio_data, songs) = load_and_compile_project(&args);
+
+    let bin_file = match E::export_bin_file(&common_audio_data, &songs, memory_map) {
+        Ok(b) => b,
+        Err(e) => error!("Error: {}", e),
+    };
 
     let asm_file = match E::generate_asm_file(&bin_file, memory_map, &relative_bin_path) {
         Ok(o) => o,
@@ -491,16 +496,13 @@ fn export_with_asm_command<E: Exporter>(memory_map: &E::MemoryMap, args: ExportW
     }
 }
 
-fn load_and_export_project(args: &ExportWithAsmArgs) -> (UniqueNamesProjectFile, ExportedBinFile) {
+fn load_and_compile_project(
+    args: &ExportWithAsmArgs,
+) -> (UniqueNamesProjectFile, CommonAudioData, Vec<SongData>) {
     let pf = load_project_file(&args.project_file);
     let (common_audio_data, songs) = compile_project(&pf);
 
-    let bin_file = match export_bin_file(&common_audio_data, &songs) {
-        Ok(b) => b,
-        Err(e) => error!("Error: {}", e),
-    };
-
-    (pf, bin_file)
+    (pf, common_audio_data, songs)
 }
 
 fn compile_and_check_song(

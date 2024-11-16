@@ -37,6 +37,10 @@ pub struct PvExporter;
 impl Exporter for PvExporter {
     type MemoryMap = PvMemoryMap;
 
+    fn bin_data_offset(_memory_map: &Self::MemoryMap) -> usize {
+        0
+    }
+
     fn generate_include_file(pf: UniqueNamesProjectFile) -> Result<String, std::fmt::Error> {
         let sfx = &pf.sfx_export_order;
 
