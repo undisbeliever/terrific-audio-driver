@@ -200,6 +200,7 @@ impl ChannelState {
 
     fn disable_channel(&mut self) {
         self.disabled = true;
+        self.instruction_ptr = u16::MAX;
         self.ticks = TickCounter::new(u32::MAX);
 
         self.vibrato_pitch_offset_per_tick = 0;
@@ -553,9 +554,13 @@ impl ChannelState {
         // ::TODO implement a better watchdog::
         let mut watchdog_counter: u32 = 250_000;
 
-        while self.ticks < target_ticks && watchdog_counter > 0 {
-            self.process_next_bytecode(song_data);
-            watchdog_counter -= 1;
+        // Do not process channel if it is disabled
+        // (cannot use `self.ticks` to test if the channel is disabled)
+        if !self.disabled {
+            while self.ticks < target_ticks && watchdog_counter > 0 {
+                self.process_next_bytecode(song_data);
+                watchdog_counter -= 1;
+            }
         }
 
         if watchdog_counter == 0 {
@@ -563,6 +568,7 @@ impl ChannelState {
         }
 
         if self.disabled {
+            // Required to ensure audio thread advances bytecode_interpreter correctly
             self.ticks = target_ticks;
         }
 

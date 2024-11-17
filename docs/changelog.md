@@ -39,6 +39,9 @@ Compiler changes:
  * Renamed `CENTER_PAN` to `TAD_CENTER_PAN`
  * Renamed `MIN_TICK_CLOCK` to `TAD_MIN_TICK_CLOCK`
 
+GUI changes:
+ * Fixed rust bytecode interpreter going off the rails after a channel ends
+
 
 Version 0.0.13
 ==============
