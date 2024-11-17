@@ -18,6 +18,8 @@ MML changes:
     * Negative `px` values pan to the left. `px-64` is 100% to the left.
     * Positive `px` values pan to the right. `px+64` is 100% to the right.
  * Out-of-range errors now show the value that was out-of-range
+ * Added subroutine no-instrument note tracking.
+   The compiler now emits an error if a subroutine call would play an out-of-range note.
 
 BRR changes:
  * Added gaussian overflow glitch detector (3 maximum-negative values in a row)

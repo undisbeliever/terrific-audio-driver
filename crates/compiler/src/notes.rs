@@ -70,6 +70,11 @@ impl TryFrom<MidiNote> for Note {
 }
 
 impl Note {
+    pub const MIN: Self = Self { note_id: 0 };
+    pub const MAX: Self = Self {
+        note_id: LAST_NOTE_ID,
+    };
+
     /// audio-driver note_id.
     /// NOT MIDI-note-number and NOT Piano-key-number
     pub fn note_id(&self) -> u8 {

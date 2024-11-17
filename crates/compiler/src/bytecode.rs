@@ -20,7 +20,7 @@ use crate::value_newtypes::{
     i8_value_newtype, u8_value_newtype, SignedValueNewType, UnsignedValueNewType,
 };
 
-use std::cmp::max;
+use std::cmp::{max, min};
 use std::collections::HashMap;
 use std::ops::RangeInclusive;
 
@@ -639,6 +639,8 @@ pub struct State {
         IeState<Option<(EarlyReleaseTicks, EarlyReleaseMinTicks, OptionalGain)>>,
     pub(crate) vibrato: VibratoState,
     pub(crate) prev_slurred_note: SlurredNoteState,
+
+    no_instrument_notes: RangeInclusive<Note>,
 }
 
 struct SkipLastLoop {
@@ -717,6 +719,7 @@ impl<'a> Bytecode<'a> {
                     BytecodeContext::SongSubroutine => VibratoState::Unchanged,
                 },
                 prev_slurred_note: SlurredNoteState::Unchanged,
+                no_instrument_notes: Note::MAX..=Note::MIN,
             },
             loop_stack: Vec::new(),
             asm_block_stack_len: 0,
@@ -817,7 +820,9 @@ impl<'a> Bytecode<'a> {
         }
 
         if let BcTerminator::TailSubroutineCall(_, s) = &terminator {
-            self._update_subtroutine_state_excluding_stack_depth(s);
+            if let Err(e) = self._update_subtroutine_state_excluding_stack_depth(s) {
+                return Err((e, self.bytecode));
+            }
         }
 
         match terminator {
@@ -859,6 +864,15 @@ impl<'a> Bytecode<'a> {
                 }
             }
             None => {
+                let s = &mut self.state;
+                if s.no_instrument_notes.is_empty() {
+                    s.no_instrument_notes = note..=note;
+                } else if note < *s.no_instrument_notes.start() {
+                    s.no_instrument_notes = note..=*(s.no_instrument_notes.end());
+                } else if note > *s.no_instrument_notes.end() {
+                    s.no_instrument_notes = *(s.no_instrument_notes.start())..=note;
+                }
+
                 if self.show_missing_set_instrument_error {
                     self.show_missing_set_instrument_error = false;
                     Err(BytecodeError::CannotPlayNoteBeforeSettingInstrument)
@@ -1304,8 +1318,13 @@ impl<'a> Bytecode<'a> {
         }
     }
 
-    fn _update_subtroutine_state_excluding_stack_depth(&mut self, subroutine: &SubroutineId) {
+    fn _update_subtroutine_state_excluding_stack_depth(
+        &mut self,
+        subroutine: &SubroutineId,
+    ) -> Result<(), BytecodeError> {
         self.state.tick_counter += subroutine.state.tick_counter;
+
+        let old_note_range = self.note_range.clone();
 
         match subroutine.state.instrument {
             IeState::Known(i) => self._set_state_instrument_and_note_range(i),
@@ -1337,6 +1356,41 @@ impl<'a> Bytecode<'a> {
         self.state
             .prev_slurred_note
             .merge(&subroutine.state.prev_slurred_note);
+
+        if !subroutine.state.no_instrument_notes.is_empty() {
+            // Subroutine plays a note without an instrument
+
+            let self_notes = &self.state.no_instrument_notes;
+            let sub_notes = &subroutine.state.no_instrument_notes;
+
+            match old_note_range {
+                None => match self.context {
+                    BytecodeContext::SongChannel | BytecodeContext::SoundEffect => {
+                        return Err(BytecodeError::SubroutinePlaysNotesWithNoInstrument)
+                    }
+                    BytecodeContext::SongSubroutine => {
+                        self.state.no_instrument_notes = if self_notes.is_empty() {
+                            sub_notes.clone()
+                        } else {
+                            min(*sub_notes.start(), *self_notes.start())
+                                ..=max(*sub_notes.end(), *self_notes.end())
+                        };
+                    }
+                },
+                Some(old_note_range) => {
+                    if !old_note_range.contains(sub_notes.start())
+                        || !old_note_range.contains(sub_notes.end())
+                    {
+                        return Err(BytecodeError::SubroutineNotesOutOfRange {
+                            subroutine_range: sub_notes.clone(),
+                            inst_range: old_note_range,
+                        });
+                    }
+                }
+            }
+        }
+
+        Ok(())
     }
 
     fn _call_subroutine(
@@ -1351,7 +1405,7 @@ impl<'a> Bytecode<'a> {
             BytecodeContext::SoundEffect => return Err(BytecodeError::SubroutineCallInSoundEffect),
         }
 
-        self._update_subtroutine_state_excluding_stack_depth(subroutine);
+        self._update_subtroutine_state_excluding_stack_depth(subroutine)?;
 
         let stack_depth = StackDepth(
             self.get_stack_depth().0

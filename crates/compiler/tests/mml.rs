@@ -16,7 +16,7 @@ use compiler::driver_constants::{
 use compiler::envelope::{Adsr, Envelope, Gain};
 use compiler::errors::{BytecodeError, ChannelError, SongError, ValueError};
 use compiler::mml;
-use compiler::notes::Octave;
+use compiler::notes::{Note, Octave};
 use compiler::pitch_table::{build_pitch_table, PitchTable};
 use compiler::songs::{SongData, Subroutine};
 use compiler::{bytecode_assembler, opcodes};
@@ -1271,7 +1271,7 @@ fn test_max_subroutines() {
     let mut mml = String::new();
     writeln!(mml, "@0 dummy_instrument").unwrap();
 
-    write!(mml, "A ").unwrap();
+    write!(mml, "A @0 ").unwrap();
     for i in 1..=N_SUBROUTINES {
         write!(mml, " !s{i}").unwrap();
     }
@@ -1299,7 +1299,7 @@ fn test_max_subroutines_with_nesting() {
     let mut mml = String::new();
     writeln!(mml, "@0 dummy_instrument").unwrap();
 
-    write!(mml, "A ").unwrap();
+    write!(mml, "A @0 ").unwrap();
     for i in 1..=N_SUBROUTINES {
         write!(mml, " !{i}").unwrap();
     }
@@ -1867,6 +1867,192 @@ A @0 !s1
             "s1".to_owned(),
             stack_depth,
         )),
+    );
+}
+
+#[test]
+fn test_subroutine_call_no_instrument_err() {
+    assert_err_in_channel_a_mml(
+        r##"
+!s c d e f
+
+A !s
+"##,
+        3,
+        BytecodeError::SubroutinePlaysNotesWithNoInstrument.into(),
+    );
+
+    assert_err_in_channel_a_mml(
+        r##"
+!s c d e f
+
+A !s
+"##,
+        3,
+        BytecodeError::SubroutinePlaysNotesWithNoInstrument.into(),
+    );
+
+    assert_err_in_channel_a_mml(
+        r##"
+@0 dummy_instrument
+
+!s a @0 b c d
+
+A !s
+"##,
+        3,
+        BytecodeError::SubroutinePlaysNotesWithNoInstrument.into(),
+    );
+
+    assert_err_in_channel_a_mml(
+        r##"
+@0 dummy_instrument
+
+!s1 r !s2 r
+!s2 a
+
+A !s2
+"##,
+        3,
+        BytecodeError::SubroutinePlaysNotesWithNoInstrument.into(),
+    );
+
+    // test tail call
+    assert_err_in_channel_a_mml(
+        r##"
+@0 dummy_instrument
+
+!s1 r !s2
+!s2 a
+
+A !s2
+"##,
+        3,
+        BytecodeError::SubroutinePlaysNotesWithNoInstrument.into(),
+    );
+}
+
+#[test]
+fn test_subroutine_call_note_range_errors() {
+    let inst_range = Note::first_note_for_octave(Octave::try_from(2).unwrap())
+        ..=Note::last_note_for_octave(Octave::try_from(6).unwrap());
+
+    assert_err_in_channel_a_mml(
+        r##"
+@0 dummy_instrument
+
+!s o7 f d c e
+
+A @0 !s
+"##,
+        6,
+        BytecodeError::SubroutineNotesOutOfRange {
+            subroutine_range: note("c7")..=note("f7"),
+            inst_range: inst_range.clone(),
+        }
+        .into(),
+    );
+
+    assert_err_in_channel_a_mml(
+        r##"
+@0 dummy_instrument
+
+!s o4 f d o7 e c
+
+A @0 !s
+"##,
+        6,
+        BytecodeError::SubroutineNotesOutOfRange {
+            subroutine_range: note("d4")..=note("e7"),
+            inst_range: inst_range.clone(),
+        }
+        .into(),
+    );
+
+    assert_err_in_channel_a_mml(
+        r##"
+@0 dummy_instrument
+
+!s o1 a o4 c d
+
+A @0 !s
+"##,
+        6,
+        BytecodeError::SubroutineNotesOutOfRange {
+            subroutine_range: note("a1")..=note("d4"),
+            inst_range: inst_range.clone(),
+        }
+        .into(),
+    );
+
+    assert_err_in_channel_a_mml(
+        r##"
+@0 dummy_instrument
+
+!s1 o1 a !s2
+!s2 o5 c d e
+
+A @0 !s1
+"##,
+        6,
+        BytecodeError::SubroutineNotesOutOfRange {
+            subroutine_range: note("a1")..=note("e5"),
+            inst_range: inst_range.clone(),
+        }
+        .into(),
+    );
+
+    assert_err_in_channel_a_mml(
+        r##"
+@0 dummy_instrument
+
+!s1 o1 a !s2 o4 d e
+!s2 @0 b
+
+A @0 !s1
+"##,
+        6,
+        // Only o1 a is played with an unknown instrument
+        BytecodeError::SubroutineNotesOutOfRange {
+            subroutine_range: note("a1")..=note("a1"),
+            inst_range: inst_range.clone(),
+        }
+        .into(),
+    );
+
+    // Test tail call
+    assert_err_in_channel_a_mml(
+        r##"
+@0 dummy_instrument
+
+!s1 o1 a !s2
+!s2 o4 b
+
+A @0 !s1
+"##,
+        6,
+        BytecodeError::SubroutineNotesOutOfRange {
+            subroutine_range: note("a1")..=note("b4"),
+            inst_range: inst_range.clone(),
+        }
+        .into(),
+    );
+}
+
+#[test]
+fn test_nested_subroutine_no_instrument_bug() {
+    assert_mml_channel_a_matches_bytecode(
+        r##"
+@0 dummy_instrument
+
+!n1 @0 c d e
+!n2 b
+
+!s !n1 !n2
+
+A !s
+"##,
+        &["call_subroutine s"],
     );
 }
 
@@ -5058,4 +5244,8 @@ fn dummy_instrument(
         envelope,
         comment: None,
     }
+}
+
+fn note(note: &str) -> Note {
+    Note::parse_bytecode_argument(note).unwrap()
 }

@@ -233,6 +233,12 @@ pub enum BytecodeError {
     NoteOutOfRange(Note, RangeInclusive<Note>),
     CannotPlayNoteBeforeSettingInstrument,
 
+    SubroutinePlaysNotesWithNoInstrument,
+    SubroutineNotesOutOfRange {
+        subroutine_range: RangeInclusive<Note>,
+        inst_range: RangeInclusive<Note>,
+    },
+
     MissingEndLoopInAsmBlock,
     CannotModifyLoopOutsideAsmBlock,
     MissingStartLoopInAsmBlock,
@@ -981,6 +987,33 @@ impl Display for BytecodeError {
             }
             Self::CannotPlayNoteBeforeSettingInstrument => {
                 write!(f, "cannot play note before setting an instrument")
+            }
+
+            Self::SubroutinePlaysNotesWithNoInstrument => {
+                write!(f, "cannot play subroutine before setting an instrument (subroutine plays notes without an instrument)")
+            }
+            Self::SubroutineNotesOutOfRange {
+                subroutine_range,
+                inst_range,
+            } => {
+                if subroutine_range.start() == subroutine_range.end() {
+                    write!(
+                        f,
+                        "subroutine call plays an out of range note ({}, instrument range: {} - {})",
+                        subroutine_range.start().note_id(),
+                        inst_range.start().note_id(),
+                        inst_range.end().note_id(),
+                    )
+                } else {
+                    write!(
+                        f,
+                        "subroutine call plays an out of range note ({} - {}, instrument range: {} - {})",
+                        subroutine_range.start().note_id(),
+                        subroutine_range.end().note_id(),
+                        inst_range.start().note_id(),
+                        inst_range.end().note_id(),
+                    )
+                }
             }
 
             Self::MissingEndLoopInAsmBlock => {
