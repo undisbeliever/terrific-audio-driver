@@ -169,6 +169,10 @@ impl SubroutineId {
     pub fn max_stack_depth(&self) -> StackDepth {
         self.state.max_stack_depth
     }
+
+    pub fn no_instrument_notes(&self) -> &RangeInclusive<Note> {
+        &self.state.no_instrument_notes
+    }
 }
 
 impl StackDepth {

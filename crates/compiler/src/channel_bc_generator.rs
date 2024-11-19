@@ -26,7 +26,7 @@ use crate::value_newtypes::u8_value_newtype;
 use crate::FilePosRange;
 
 use std::cmp::min;
-use std::ops::Range;
+use std::ops::{Range, RangeInclusive};
 
 pub const MAX_PORTAMENTO_SLIDE_TICKS: u32 = 16 * 1024;
 pub const MAX_BROKEN_CHORD_NOTES: usize = 128;
@@ -267,6 +267,8 @@ pub struct MmlInstrument {
     // No envelope override or envelope override matches instrument
     pub(crate) envelope_unchanged: bool,
     pub(crate) envelope: Envelope,
+
+    pub(crate) note_range: RangeInclusive<Note>,
 }
 
 #[derive(Clone, PartialEq)]

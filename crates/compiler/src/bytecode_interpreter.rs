@@ -162,20 +162,41 @@ impl ChannelState {
     }
 
     fn new_subroutine(song: &SongData, song_ptr: u16, subroutine_index: u8) -> Self {
-        let mut s = ChannelState::new(None, song_ptr);
+        let mut c = ChannelState::new(None, song_ptr);
 
-        s.instruction_ptr =
-            ChannelState::read_subroutine_instruction_ptr(subroutine_index, song.data());
+        match song.subroutines().get(usize::from(subroutine_index)) {
+            Some(sub) => {
+                let notes = sub.subroutine_id.no_instrument_notes();
+                let song_instruments = song.instruments();
 
-        // Subroutine might not set an instruemnt before the play_note instructions.
-        //
-        // Use the first instrument defined in the MML file.
-        if let Some(i) = song.instruments().first() {
-            s.instrument = Some(i.instrument_id.as_u8());
-            s.adsr_or_gain_override = Some(i.envelope.engine_value());
+                c.instruction_ptr = sub.bytecode_offset;
+
+                // Subroutine might not set an instrument before the play_note instructions.
+                //
+                // Find the first instrument that can play all notes in the subroutine.
+                // If no instrument can be found, use the first instrument in the MML file.
+                let inst = match notes.is_empty() {
+                    true => song_instruments.first(),
+                    false => song_instruments
+                        .iter()
+                        .find(|i| {
+                            i.note_range.contains(notes.start())
+                                && i.note_range.contains(notes.end())
+                        })
+                        .or_else(|| song_instruments.first()),
+                };
+
+                if let Some(i) = inst {
+                    c.instrument = Some(i.instrument_id.as_u8());
+                    c.adsr_or_gain_override = Some(i.envelope.engine_value());
+                }
+            }
+            None => {
+                c.disable_channel();
+            }
         }
 
-        s
+        c
     }
 
     fn read_subroutine_instruction_ptr(s_id: u8, song_data: &[u8]) -> u16 {

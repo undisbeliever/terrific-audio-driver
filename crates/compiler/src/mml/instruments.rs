@@ -13,6 +13,7 @@ use crate::data::{self, InstrumentOrSample};
 use crate::envelope::Envelope;
 use crate::errors::{ErrorWithPos, MmlLineError};
 use crate::file_pos::Line;
+use crate::samples::note_range;
 
 use std::collections::HashMap;
 
@@ -74,6 +75,7 @@ fn parse_instrument(
         instrument_id,
         envelope_unchanged: &envelope == source_envelope,
         envelope,
+        note_range: note_range(inst),
     })
 }
 
