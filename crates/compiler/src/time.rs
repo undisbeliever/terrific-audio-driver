@@ -63,6 +63,8 @@ pub struct TickCounter {
 }
 
 impl TickCounter {
+    pub const MAX: TickCounter = TickCounter { value: u32::MAX };
+
     pub const fn new(value: u32) -> TickCounter {
         Self { value }
     }

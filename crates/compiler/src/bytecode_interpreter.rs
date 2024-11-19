@@ -15,8 +15,10 @@ use crate::driver_constants::{
 };
 use crate::songs::Channel as SongChannel;
 use crate::songs::SongData;
+use crate::time::TickClock;
 use crate::time::TickCounter;
 
+use std::cmp::min;
 use std::ops::Deref;
 
 #[derive(Clone)]
@@ -79,10 +81,16 @@ struct InterpreterOutput {
     tick_clock: u8,
 }
 
-#[derive(Clone)]
-struct TickClockOverride {
+struct GlobalState {
     timer_register: u8,
-    when: TickCounter,
+}
+
+impl GlobalState {
+    fn new(tick_clock: TickClock) -> Self {
+        Self {
+            timer_register: tick_clock.as_u8(),
+        }
+    }
 }
 
 pub struct ChannelState {
@@ -129,8 +137,6 @@ pub struct ChannelState {
     // Partially emulating vibrato
     vibrato_pitch_offset_per_tick: u8,
     vibrato_quarter_wavelength_in_ticks: u8,
-
-    tick_clock_override: Option<TickClockOverride>,
 }
 
 impl ChannelState {
@@ -157,7 +163,6 @@ impl ChannelState {
             echo: false,
             vibrato_pitch_offset_per_tick: 0,
             vibrato_quarter_wavelength_in_ticks: 0,
-            tick_clock_override: None,
         }
     }
 
@@ -222,7 +227,7 @@ impl ChannelState {
     fn disable_channel(&mut self) {
         self.disabled = true;
         self.instruction_ptr = u16::MAX;
-        self.ticks = TickCounter::new(u32::MAX);
+        self.ticks = TickCounter::MAX;
 
         self.vibrato_pitch_offset_per_tick = 0;
     }
@@ -285,7 +290,7 @@ impl ChannelState {
         }
     }
 
-    fn process_next_bytecode(&mut self, song_data: &[u8]) {
+    fn process_next_bytecode(&mut self, global: &mut GlobalState, song_data: &[u8]) {
         let mut read_pc = || match song_data.get(usize::from(self.instruction_ptr)) {
             Some(b) => {
                 self.instruction_ptr += 1;
@@ -459,10 +464,7 @@ impl ChannelState {
             opcodes::SET_SONG_TICK_CLOCK => {
                 let timer = read_pc();
 
-                self.tick_clock_override = Some(TickClockOverride {
-                    timer_register: timer,
-                    when: self.ticks,
-                });
+                global.timer_register = timer;
             }
 
             opcodes::GOTO_RELATIVE => {
@@ -568,33 +570,6 @@ impl ChannelState {
             _ => self.disable_channel(),
         }
     }
-
-    // Returns false if target could not be reached in the time limit
-    fn process_until_target(&mut self, target_ticks: TickCounter, song_data: &[u8]) -> bool {
-        // Prevent infinite loops by limiting the number of processed instructions
-        // ::TODO implement a better watchdog::
-        let mut watchdog_counter: u32 = 250_000;
-
-        // Do not process channel if it is disabled
-        // (cannot use `self.ticks` to test if the channel is disabled)
-        if !self.disabled {
-            while self.ticks < target_ticks && watchdog_counter > 0 {
-                self.process_next_bytecode(song_data);
-                watchdog_counter -= 1;
-            }
-        }
-
-        if watchdog_counter == 0 {
-            self.disable_channel();
-        }
-
-        if self.disabled {
-            // Required to ensure audio thread advances bytecode_interpreter correctly
-            self.ticks = target_ticks;
-        }
-
-        watchdog_counter > 0
-    }
 }
 
 pub struct SongInterpreter<CAD, SD>
@@ -605,9 +580,9 @@ where
     common_audio_data: CAD,
     song_data: SD,
 
+    global: GlobalState,
     channels: [Option<ChannelState>; N_MUSIC_CHANNELS],
     tick_counter: TickCounter,
-    song_timer_register: u8,
     stereo_flag: bool,
 }
 
@@ -624,7 +599,7 @@ where
                     .map(|c| ChannelState::new(Some(c), common_audio_data.song_data_addr()))
             }),
             tick_counter: TickCounter::default(),
-            song_timer_register: song_data.metadata().tick_clock.as_u8(),
+            global: GlobalState::new(song_data.metadata().tick_clock),
             stereo_flag,
             song_data,
             common_audio_data,
@@ -650,7 +625,7 @@ where
         Self {
             channels,
             tick_counter: TickCounter::default(),
-            song_timer_register: song_data.metadata().tick_clock.as_u8(),
+            global: GlobalState::new(song_data.metadata().tick_clock),
             stereo_flag,
             song_data,
             common_audio_data,
@@ -661,34 +636,62 @@ where
         &self.channels
     }
 
-    /// Returns false if there was a timeout
-    pub fn process_ticks(&mut self, ticks: TickCounter) -> bool {
-        let song_data = self.song_data.data();
+    /// Return the channel with the smallest tick-counter and the tick-counter of the next smallest channel
+    fn next_channel_to_process(
+        channels: &mut [Option<ChannelState>; N_MUSIC_CHANNELS],
+        target_ticks: TickCounter,
+    ) -> Option<(&mut ChannelState, TickCounter)> {
+        // ::SHOULDDO optimise (profile before and after)::
 
-        let mut valid = true;
+        let mut out = None;
 
-        let target_ticks = self.tick_counter + ticks;
-
-        let mut song_tco = TickClockOverride {
-            timer_register: self.song_timer_register,
-            when: TickCounter::new(0),
-        };
-
-        for c in self.channels.iter_mut().flatten() {
-            valid &= c.process_until_target(target_ticks, song_data);
-
-            if let Some(tco) = &c.tick_clock_override {
-                if tco.when >= song_tco.when {
-                    song_tco = tco.clone();
+        for c in channels.iter_mut().flatten() {
+            match out {
+                None => out = Some((c, TickCounter::MAX)),
+                Some(ref o) => {
+                    if c.ticks < o.0.ticks {
+                        out = Some((c, o.0.ticks))
+                    }
                 }
             }
         }
 
+        out.filter(|c| c.0.ticks < target_ticks)
+    }
+
+    /// Returns false if there was a timeout
+    pub fn process_ticks(&mut self, ticks: TickCounter) -> bool {
+        // Prevent infinite loops by limiting the number of processed instructions
+        let mut watchdog_counter: u32 = 2_000_000;
+
+        let song_data = self.song_data.data();
+
+        let target_ticks = self.tick_counter + ticks;
+
+        while let Some((c, next_channel_ticks)) =
+            Self::next_channel_to_process(&mut self.channels, target_ticks)
+        {
+            let next_channel_ticks = min(next_channel_ticks, target_ticks);
+
+            while c.ticks < next_channel_ticks {
+                c.process_next_bytecode(&mut self.global, song_data);
+
+                watchdog_counter -= 1;
+                if watchdog_counter == 0 {
+                    return false;
+                }
+            }
+        }
+
+        debug_assert!(self
+            .channels
+            .iter()
+            .flatten()
+            .all(|c| c.ticks == TickCounter::MAX || c.ticks >= target_ticks));
+
         self.tick_counter = target_ticks;
 
-        self.song_timer_register = song_tco.timer_register;
-
-        valid
+        true
     }
 
     pub fn tick_counter(&self) -> TickCounter {
@@ -703,7 +706,7 @@ where
                 Some(c) => build_channel(i, c, self.tick_counter, &common),
                 None => unused_channel(i),
             }),
-            tick_clock: self.song_timer_register,
+            tick_clock: self.global.timer_register,
             song_tick_counter: (self.tick_counter.value() & 0xffff).try_into().unwrap(),
             song_data_addr: self.common_audio_data.song_data_addr(),
             stereo_flag: self.stereo_flag,
@@ -762,7 +765,10 @@ fn build_channel(
     assert_eq!(c.song_ptr, common.song_data_addr);
 
     assert!(c.ticks >= target_ticks);
-    let delay = c.ticks.value() - target_ticks.value();
+    let delay = match c.disabled {
+        true => 0,
+        false => c.ticks.value() - target_ticks.value(),
+    };
 
     let (countdown_timer, next_event_is_key_off) = match delay {
         0..=0xfe => (u8::try_from(delay + 1).unwrap(), 0),
