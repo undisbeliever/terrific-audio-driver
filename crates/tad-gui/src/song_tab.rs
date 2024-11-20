@@ -4,7 +4,7 @@
 //
 // SPDX-License-Identifier: MIT
 
-use crate::audio_thread::{AudioMonitorData, MusicChannelsMask, SongSkip};
+use crate::audio_thread::{AudioMonitorData, MusicChannelsMask};
 use crate::compiler_thread::{ItemId, SongError, SongOutput};
 use crate::helpers::*;
 use crate::mml_editor::{CompiledEditorData, MmlEditor, TextErrorRef, TextFormat};
@@ -404,7 +404,7 @@ impl State {
         self.sender.send(GuiMessage::PlaySong(
             self.song_id,
             self.editor.text(),
-            None,
+            TickCounter::new(0),
             self.prev_channel_mask,
         ));
     }
@@ -415,7 +415,7 @@ impl State {
         mute_other_channels: bool,
     ) {
         match cursor {
-            Some((ChannelId::Channel(c), tc)) => {
+            Some((ChannelId::Channel(c), ticks)) => {
                 let channels_mask = match mute_other_channels {
                     true => MusicChannelsMask::only_one_channel(c),
                     false => self.prev_channel_mask,
@@ -425,25 +425,16 @@ impl State {
                 self.sender.send(GuiMessage::PlaySong(
                     self.song_id,
                     self.editor.text(),
-                    Some(SongSkip {
-                        subroutine_index: None,
-                        target_ticks: tc,
-                    }),
+                    ticks,
                     channels_mask,
                 ));
             }
-            Some((ChannelId::Subroutine(si), tc)) => {
-                let channels_mask = MusicChannelsMask(1);
-                self.update_channel_buttons(channels_mask);
-
-                self.sender.send(GuiMessage::PlaySong(
+            Some((ChannelId::Subroutine(si), ticks)) => {
+                self.sender.send(GuiMessage::PlaySongSubroutine(
                     self.song_id,
                     self.editor.text(),
-                    Some(SongSkip {
-                        subroutine_index: Some(si),
-                        target_ticks: tc,
-                    }),
-                    channels_mask,
+                    si,
+                    ticks,
                 ));
             }
             _ => (),

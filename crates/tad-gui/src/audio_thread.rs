@@ -72,10 +72,10 @@ impl MusicChannelsMask {
     }
 }
 
-#[derive(Debug)]
-pub struct SongSkip {
-    pub subroutine_index: Option<u8>,
-    pub target_ticks: TickCounter,
+enum SongSkip {
+    None,
+    Song(TickCounter),
+    Subroutine(u8, TickCounter),
 }
 
 #[derive(Debug)]
@@ -99,9 +99,10 @@ pub enum AudioMessage {
     CommonAudioDataChanged(Option<Arc<CommonAudioDataWithSfxBuffer>>),
     CommandAudioDataWithSfxChanged(Option<Arc<CommonAudioDataWithSfx>>),
 
-    PlaySong(ItemId, Arc<SongData>, Option<SongSkip>, MusicChannelsMask),
+    PlaySong(ItemId, Arc<SongData>, TickCounter, MusicChannelsMask),
+    PlaySongSubroutine(ItemId, Arc<SongData>, u8, TickCounter),
     PlaySoundEffectCommand(SfxId, Pan),
-    PlaySongWithSfxBuffer(ItemId, Arc<SongData>, Option<SongSkip>),
+    PlaySongWithSfxBuffer(ItemId, Arc<SongData>, TickCounter),
     PlaySfxUsingSfxBuffer(Arc<CompiledSoundEffect>, Pan),
     PlaySample(CommonAudioData, Box<SongData>),
 
@@ -419,9 +420,10 @@ impl std::ops::Deref for SiCad {
     }
 }
 
-fn new_song_interpreter(
+fn create_and_process_song_interpreter(
+    emu: &mut ShvcSoundEmu,
     audio_data: &AudioDataState,
-    song_skip: Option<&SongSkip>,
+    song_skip: SongSkip,
     stereo_flag: bool,
 ) -> Option<SongInterpreter<SiCad, Arc<SongData>>> {
     let (cad, sd) = match audio_data {
@@ -434,14 +436,26 @@ fn new_song_interpreter(
         }
     };
 
-    match song_skip.and_then(|s| s.subroutine_index) {
-        Some(si) => Some(SongInterpreter::new_song_subroutine(
-            cad,
-            sd,
-            si,
-            stereo_flag,
-        )),
-        None => Some(SongInterpreter::new(cad, sd, stereo_flag)),
+    match song_skip {
+        SongSkip::None => Some(SongInterpreter::new(cad, sd, stereo_flag)),
+        SongSkip::Song(ticks) => {
+            let mut si = SongInterpreter::new(cad, sd, stereo_flag);
+            if !ticks.is_zero() {
+                let valid = si.process_ticks(ticks);
+                if valid {
+                    si.write_to_emulator(&mut EmulatorWrapper(emu));
+                }
+            }
+            Some(si)
+        }
+        SongSkip::Subroutine(si, ticks) => {
+            let mut si = SongInterpreter::new_song_subroutine(cad, sd, si, stereo_flag);
+            if !ticks.is_zero() {
+                si.process_ticks(ticks);
+            }
+            si.write_to_emulator(&mut EmulatorWrapper(emu));
+            Some(si)
+        }
     }
 }
 
@@ -529,7 +543,7 @@ impl TadEmu {
         &mut self,
         song_id: ItemId,
         song: Arc<SongData>,
-        song_skip: Option<SongSkip>,
+        skip: TickCounter,
         music_channels_mask: MusicChannelsMask,
     ) -> Result<(), ()> {
         let data = match (&self.cad_with_sfx, &self.cad_with_sfx_buffer) {
@@ -537,7 +551,32 @@ impl TadEmu {
             (None, Some(c)) => AudioDataState::SongWithSfxBuffer(c.clone(), song),
             (None, None) => return Err(()),
         };
-        self._load_song_into_memory(Some(song_id), data, song_skip, music_channels_mask)
+        self._load_song_into_memory(
+            Some(song_id),
+            data,
+            SongSkip::Song(skip),
+            music_channels_mask,
+        )
+    }
+
+    fn load_song_subroutine(
+        &mut self,
+        song_id: ItemId,
+        song: Arc<SongData>,
+        subroutine_id: u8,
+        skip: TickCounter,
+    ) -> Result<(), ()> {
+        let data = match (&self.cad_with_sfx, &self.cad_with_sfx_buffer) {
+            (Some(c), _) => AudioDataState::SongAndSfx(c.clone(), song),
+            (None, Some(c)) => AudioDataState::SongWithSfxBuffer(c.clone(), song),
+            (None, None) => return Err(()),
+        };
+        self._load_song_into_memory(
+            Some(song_id),
+            data,
+            SongSkip::Subroutine(subroutine_id, skip),
+            MusicChannelsMask::ALL,
+        )
     }
 
     fn load_blank_song(&mut self) -> Result<(), ()> {
@@ -547,20 +586,25 @@ impl TadEmu {
             (None, Some(c)) => AudioDataState::SongWithSfxBuffer(c.clone(), blank_song.clone()),
             (None, None) => return Err(()),
         };
-        self._load_song_into_memory(None, data, None, MusicChannelsMask::ALL)
+        self._load_song_into_memory(None, data, SongSkip::None, MusicChannelsMask::ALL)
     }
 
     fn load_song_with_sfx_buffer(
         &mut self,
         song_id: ItemId,
         song: Arc<SongData>,
-        song_skip: Option<SongSkip>,
+        skip: TickCounter,
     ) -> Result<(), ()> {
         let data = match &self.cad_with_sfx_buffer {
             Some(c) => AudioDataState::SongWithSfxBuffer(c.clone(), song),
             None => return Err(()),
         };
-        self._load_song_into_memory(Some(song_id), data, song_skip, MusicChannelsMask::ALL)
+        self._load_song_into_memory(
+            Some(song_id),
+            data,
+            SongSkip::Song(skip),
+            MusicChannelsMask::ALL,
+        )
     }
 
     fn load_blank_song_with_sfx_buffer(&mut self) -> Result<(), ()> {
@@ -568,7 +612,7 @@ impl TadEmu {
             Some(c) => AudioDataState::SongWithSfxBuffer(c.clone(), self.blank_song.clone()),
             None => return Err(()),
         };
-        self._load_song_into_memory(None, data, None, MusicChannelsMask::ALL)
+        self._load_song_into_memory(None, data, SongSkip::None, MusicChannelsMask::ALL)
     }
 
     fn play_sample(
@@ -579,7 +623,7 @@ impl TadEmu {
         self._load_song_into_memory(
             None,
             AudioDataState::Sample(common_audio_data, song_data),
-            None,
+            SongSkip::None,
             MusicChannelsMask::ALL,
         )
     }
@@ -588,7 +632,7 @@ impl TadEmu {
         &mut self,
         song_id: Option<ItemId>,
         data_state: AudioDataState,
-        song_skip: Option<SongSkip>,
+        song_skip: SongSkip,
         music_channels_mask: MusicChannelsMask,
     ) -> Result<(), ()> {
         const LOADER_DATA_TYPE_ADDR: usize = addresses::LOADER_DATA_TYPE as usize;
@@ -657,14 +701,8 @@ impl TadEmu {
         // Wait for the audio-driver to finish initialization
         self.emu.emulate();
 
-        self.bc_interpreter = new_song_interpreter(&data_state, song_skip.as_ref(), stereo_flag);
-
-        if let Some(s) = &song_skip {
-            if let Some(b) = &mut self.bc_interpreter {
-                b.process_ticks(s.target_ticks);
-                b.write_to_emulator(&mut EmulatorWrapper(&mut self.emu));
-            }
-        }
+        self.bc_interpreter =
+            create_and_process_song_interpreter(&mut self.emu, &data_state, song_skip, stereo_flag);
 
         self.set_music_channels_mask(music_channels_mask);
 
@@ -982,6 +1020,16 @@ impl AudioThread {
                     return self.play_song();
                 }
             }
+            AudioMessage::PlaySongSubroutine(song_id, song, prefix, skip) => {
+                if self
+                    .tad
+                    .load_song_subroutine(song_id, song.clone(), prefix, skip)
+                    .is_ok()
+                {
+                    self.send_started_song_message(song_id, song);
+                    return self.play_song();
+                }
+            }
             AudioMessage::PlaySoundEffectCommand(id, pan) => {
                 if self.tad.load_blank_song().is_ok() {
                     self.tad.queue_sound_effect(id, pan);
@@ -1126,6 +1174,24 @@ impl AudioThread {
                         .tad
                         .load_song(id, song.clone(), song_skip, channels_mask)
                     {
+                        Ok(()) => {
+                            self.send_started_song_message(id, song);
+
+                            state = PlayState::Running;
+                            playback.resume();
+                        }
+                        Err(()) => {
+                            // Stop playback
+                            state = PlayState::PauseRequested;
+                        }
+                    }
+                }
+
+                AudioMessage::PlaySongSubroutine(id, song, sid, skip) => {
+                    // Pause playback to prevent buffer overrun when tick_to_skip is large.
+                    playback.pause();
+                    playback.lock().reset();
+                    match self.tad.load_song_subroutine(id, song.clone(), sid, skip) {
                         Ok(()) => {
                             self.send_started_song_message(id, song);
 

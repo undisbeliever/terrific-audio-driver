@@ -10,7 +10,7 @@ use crate::sfx_export_order::{GuiSfxExportOrder, SfxExportOrderAction};
 use crate::GuiMessage;
 
 use crate::audio_thread::{
-    AudioMessage, CommonAudioDataWithSfxBuffer, MusicChannelsMask, SongSkip, SFX_BUFFER_SIZE,
+    AudioMessage, CommonAudioDataWithSfxBuffer, MusicChannelsMask, SFX_BUFFER_SIZE,
 };
 
 use std::collections::hash_map::Entry;
@@ -133,7 +133,8 @@ pub enum ToCompiler {
 
     SongTabClosed(ItemId),
     SongChanged(ItemId, String),
-    CompileAndPlaySong(ItemId, String, Option<SongSkip>, MusicChannelsMask),
+    CompileAndPlaySong(ItemId, String, TickCounter, MusicChannelsMask),
+    CompileAndPlaySongSubroutine(ItemId, String, u8, TickCounter),
     PlayInstrument(ItemId, PlaySampleArgs),
     PlaySample(ItemId, PlaySampleArgs),
 
@@ -1329,10 +1330,7 @@ fn bg_thread(
                     sender.send_audio(AudioMessage::PlaySongWithSfxBuffer(
                         id,
                         song.clone(),
-                        Some(SongSkip {
-                            subroutine_index: None,
-                            target_ticks: TickCounter::new(ticks),
-                        }),
+                        TickCounter::new(ticks),
                     ));
                 }
             }
@@ -1346,7 +1344,7 @@ fn bg_thread(
                         sender.send_audio(AudioMessage::PlaySong(
                             id,
                             s,
-                            None,
+                            TickCounter::new(0),
                             MusicChannelsMask::ALL,
                         ));
                     }
@@ -1359,15 +1357,27 @@ fn bg_thread(
             ToCompiler::SongChanged(id, mml) => {
                 songs.edit_and_compile_song(id, mml, &pf_songs, &song_dependencies, &sender);
             }
-            ToCompiler::CompileAndPlaySong(id, mml, song_skip, channels_mask) => {
+            ToCompiler::CompileAndPlaySong(id, mml, skip, channels_mask) => {
                 sender.send_audio(AudioMessage::Pause);
                 songs.edit_and_compile_song(id, mml, &pf_songs, &song_dependencies, &sender);
                 if let Some(song) = songs.get_song_data(&id) {
                     sender.send_audio(AudioMessage::PlaySong(
                         id,
                         song.clone(),
-                        song_skip,
+                        skip,
                         channels_mask,
+                    ));
+                }
+            }
+            ToCompiler::CompileAndPlaySongSubroutine(id, mml, sid, skip) => {
+                sender.send_audio(AudioMessage::Pause);
+                songs.edit_and_compile_song(id, mml, &pf_songs, &song_dependencies, &sender);
+                if let Some(song) = songs.get_song_data(&id) {
+                    sender.send_audio(AudioMessage::PlaySongSubroutine(
+                        id,
+                        song.clone(),
+                        sid,
+                        skip,
                     ));
                 }
             }

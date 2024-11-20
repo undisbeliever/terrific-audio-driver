@@ -61,7 +61,7 @@ use crate::tabs::{
     Tab, TabManager,
 };
 
-use audio_thread::{AudioMessage, AudioMonitor, MusicChannelsMask, SongSkip};
+use audio_thread::{AudioMessage, AudioMonitor, MusicChannelsMask};
 
 use compiler::data;
 use compiler::data::{DefaultSfxFlags, ProjectFile};
@@ -175,7 +175,8 @@ pub enum GuiMessage {
     SongChanged(ItemId, String),
     RecompileSong(ItemId, String),
 
-    PlaySong(ItemId, String, Option<SongSkip>, MusicChannelsMask),
+    PlaySong(ItemId, String, TickCounter, MusicChannelsMask),
+    PlaySongSubroutine(ItemId, String, u8, TickCounter),
     PlaySongForSfxTab(ItemId, TickCounter),
     PlaySoundEffectCommand(SfxId, Pan),
     PlayEditedSoundEffect(ItemId, Pan),
@@ -527,14 +528,20 @@ impl Project {
                 // RecompileSong should not mark the song as unsaved
                 let _ = self.compiler_sender.send(ToCompiler::SongChanged(id, mml));
             }
-            GuiMessage::PlaySong(id, mml, ticks_to_skip, channels_mask) => {
+            GuiMessage::PlaySong(id, mml, skip, channels_mask) => {
                 // RecompileSong should not mark the song as unsaved
                 let _ = self.compiler_sender.send(ToCompiler::CompileAndPlaySong(
                     id,
                     mml,
-                    ticks_to_skip,
+                    skip,
                     channels_mask,
                 ));
+            }
+            GuiMessage::PlaySongSubroutine(id, mml, sid, skip) => {
+                // RecompileSong should not mark the song as unsaved
+                let _ = self
+                    .compiler_sender
+                    .send(ToCompiler::CompileAndPlaySongSubroutine(id, mml, sid, skip));
             }
             GuiMessage::PlaySongForSfxTab(id, ticks) => {
                 let _ = self
