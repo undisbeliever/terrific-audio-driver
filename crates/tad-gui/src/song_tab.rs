@@ -161,7 +161,13 @@ impl SongTab {
             let mut b = ToggleButton::default()
                 .with_size(button_size, button_size)
                 .with_label(&channel.to_string());
-            b.set_tooltip(&format!("Toggle channel {} (Ctrl {})", channel, i + 1));
+            b.set_tooltip(&format!(
+                "Toggle channel {} (Ctrl {})\nShift-click to select only channel {} (Ctrl+Shift {})",
+                channel,
+                i + 1,
+                channel,
+                i + 1
+            ));
             b
         });
         spacer(spacing * 2);
@@ -272,7 +278,11 @@ impl SongTab {
                                 }
                                 k @ FIRST_CHANNEL..=LAST_CHANNEL => {
                                     let c = usize::try_from(k - FIRST_CHANNEL).unwrap();
-                                    s.borrow_mut().toggle_channel(c);
+                                    let mut s = s.borrow_mut();
+                                    match app::is_event_shift() {
+                                        false => s.toggle_channel(c),
+                                        true => s.set_only_one_channel_index(c),
+                                    }
                                     true
                                 }
                                 _ => false,
@@ -386,14 +396,17 @@ impl SongTab {
                 }
             });
 
-            for b in &mut s.channel_buttons {
+            for (i, b) in &mut s.channel_buttons.iter_mut().enumerate() {
                 b.set_value(true);
 
                 b.set_callback({
                     let s = state.clone();
                     move |_| {
                         if let Ok(mut s) = s.try_borrow_mut() {
-                            s.channel_button_clicked();
+                            match app::is_event_shift() {
+                                false => s.channel_button_clicked(),
+                                true => s.set_only_one_channel_index(i),
+                            }
                         }
                     }
                 });
@@ -626,6 +639,11 @@ impl State {
 
     fn set_only_one_channel(&mut self, c: char) {
         self.prev_channel_mask = MusicChannelsMask::only_one_channel(c);
+        self.update_channel_buttons(self.prev_channel_mask);
+    }
+
+    fn set_only_one_channel_index(&mut self, i: usize) {
+        self.prev_channel_mask = MusicChannelsMask::only_one_channel_index(i);
         self.update_channel_buttons(self.prev_channel_mask);
     }
 

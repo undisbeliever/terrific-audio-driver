@@ -56,6 +56,7 @@ GUI changes:
       Press `F9` before the subroutines is called, edit macro, press `F5` to listen to the macro.
     * Pressing Shift + "set" or `Shift+F9` will also mute the other channels.
     * Pressing Shift + play-button or `Shift+F5` will play the song from the beginning
+ * Shift clicking the channel buttons A-H will select only one channel (Ctrl+Shift 0-9).
 
 
 Version 0.0.13

@@ -71,6 +71,15 @@ impl MusicChannelsMask {
             _ => MusicChannelsMask(0),
         }
     }
+
+    pub fn only_one_channel_index(index: usize) -> Self {
+        const LAST: usize = N_MUSIC_CHANNELS - 1;
+
+        match index {
+            0..=LAST => MusicChannelsMask(1 << index),
+            _ => MusicChannelsMask(0),
+        }
+    }
 }
 
 enum SongSkip {
