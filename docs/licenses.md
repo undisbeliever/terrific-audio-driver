@@ -107,10 +107,10 @@ Licenses marked "synthesized" did not have a license file in their crate.
 
 
 Terrific Audio Driver makes use of the following open source projects:
-  * MIT License (84)
+  * MIT License (83)
   * Apache License 2.0 (2)
   * zlib License (2)
-  * Unicode License Agreement - Data Files and Software (2016) (1)
+  * Unicode License v3 (1)
   * FLTK License (1)
 
 
@@ -496,7 +496,7 @@ DEALINGS IN THE SOFTWARE.
 ## MIT License
 
 Used by:
-  * [cc 1.1.37](https://github.com/rust-lang/cc-rs)
+  * [cc 1.2.1](https://github.com/rust-lang/cc-rs)
   * [cfg-if 1.0.0](https://github.com/alexcrichton/cfg-if)
   * [cmake 0.1.51](https://github.com/rust-lang/cmake-rs)
 
@@ -537,7 +537,7 @@ Used by:
   * [bitflags 2.6.0](https://github.com/bitflags/bitflags)
   * [num-complex 0.4.6](https://github.com/rust-num/num-complex)
   * [num-traits 0.2.19](https://github.com/rust-num/num-traits)
-  * [regex-automata 0.4.8](https://github.com/rust-lang/regex/tree/master/regex-automata)
+  * [regex-automata 0.4.9](https://github.com/rust-lang/regex/tree/master/regex-automata)
   * [regex-syntax 0.8.5](https://github.com/rust-lang/regex/tree/master/regex-syntax)
   * [regex 1.11.1](https://github.com/rust-lang/regex)
 
@@ -603,7 +603,7 @@ IN THE SOFTWARE.
 ## MIT License
 
 Used by:
-  * [libc 0.2.162](https://github.com/rust-lang/libc)
+  * [libc 0.2.164](https://github.com/rust-lang/libc)
 
 ```
 Copyright (c) 2014-2020 The Rust Project Developers
@@ -900,7 +900,7 @@ SOFTWARE.
 Used by:
   * [anstream 0.6.18](https://github.com/rust-cli/anstyle.git)
   * [anstyle-query 1.1.2](https://github.com/rust-cli/anstyle.git)
-  * [clap 4.5.20](https://github.com/clap-rs/clap)
+  * [clap 4.5.21](https://github.com/clap-rs/clap)
   * [colorchoice 1.0.3](https://github.com/rust-cli/anstyle.git)
   * [is_terminal_polyfill 1.70.1](https://github.com/polyfill-rs/is_terminal_polyfill)
 
@@ -980,7 +980,7 @@ SOFTWARE.
 ## MIT License
 
 Used by:
-  * [fltk-sys 1.4.35](https://github.com/fltk-rs/fltk-rs)
+  * [fltk-sys 1.4.36](https://github.com/fltk-rs/fltk-rs)
 
 ```
 MIT License
@@ -1126,8 +1126,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 ## MIT License
 
 Used by:
-  * [fltk-sys 1.4.35](https://github.com/fltk-rs/fltk-rs)
-  * [fltk 1.4.35](https://github.com/fltk-rs/fltk-rs)
+  * [fltk 1.4.36](https://github.com/fltk-rs/fltk-rs)
 
 ```
 MIT License
@@ -1158,51 +1157,23 @@ SOFTWARE.
 ## MIT License
 
 Used by:
-  * [fltk-sys 1.4.35](https://github.com/fltk-rs/fltk-rs)
-
-```
-MIT License
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-
-```
-
-
-## MIT License
-
-Used by:
-  * [cxx-build 1.0.129](https://github.com/dtolnay/cxx)
-  * [cxx 1.0.129](https://github.com/dtolnay/cxx)
-  * [cxxbridge-flags 1.0.129](https://github.com/dtolnay/cxx)
-  * [cxxbridge-macro 1.0.129](https://github.com/dtolnay/cxx)
-  * [itoa 1.0.11](https://github.com/dtolnay/itoa)
+  * [cxx-build 1.0.130](https://github.com/dtolnay/cxx)
+  * [cxx 1.0.130](https://github.com/dtolnay/cxx)
+  * [cxxbridge-flags 1.0.130](https://github.com/dtolnay/cxx)
+  * [cxxbridge-macro 1.0.130](https://github.com/dtolnay/cxx)
+  * [itoa 1.0.13](https://github.com/dtolnay/itoa)
   * [link-cplusplus 1.0.9](https://github.com/dtolnay/link-cplusplus)
   * [once_cell 1.20.2](https://github.com/matklad/once_cell)
   * [paste 1.0.15](https://github.com/dtolnay/paste)
   * [proc-macro2 1.0.89](https://github.com/dtolnay/proc-macro2)
   * [quote 1.0.37](https://github.com/dtolnay/quote)
+  * [rustversion 1.0.18](https://github.com/dtolnay/rustversion)
   * [scratch 1.0.7](https://github.com/dtolnay/scratch)
-  * [serde 1.0.214](https://github.com/serde-rs/serde)
-  * [serde_derive 1.0.214](https://github.com/serde-rs/serde)
-  * [serde_json 1.0.132](https://github.com/serde-rs/json)
+  * [serde 1.0.215](https://github.com/serde-rs/serde)
+  * [serde_derive 1.0.215](https://github.com/serde-rs/serde)
+  * [serde_json 1.0.133](https://github.com/serde-rs/json)
   * [syn 2.0.87](https://github.com/dtolnay/syn)
-  * [unicode-ident 1.0.13](https://github.com/dtolnay/unicode-ident)
+  * [unicode-ident 1.0.14](https://github.com/dtolnay/unicode-ident)
 
 ```
 Permission is hereby granted, free of charge, to any
@@ -1362,9 +1333,9 @@ THE SOFTWARE.
 ## MIT License
 
 Used by:
-  * [clap_builder 4.5.20](https://github.com/clap-rs/clap)
+  * [clap_builder 4.5.21](https://github.com/clap-rs/clap)
   * [clap_derive 4.5.18](https://github.com/clap-rs/clap)
-  * [clap_lex 0.7.2](https://github.com/clap-rs/clap)
+  * [clap_lex 0.7.3](https://github.com/clap-rs/clap)
 
 ```
 The MIT License (MIT)
@@ -1477,36 +1448,51 @@ You may use this code under the terms of either license.
 ```
 
 
-## Unicode License Agreement - Data Files and Software (2016)
-  
-  (synthesized by cargo-about)
+## Unicode License v3
 
 Used by:
-  * [unicode-ident 1.0.13](https://github.com/dtolnay/unicode-ident)
+  * [unicode-ident 1.0.14](https://github.com/dtolnay/unicode-ident)
 
 ```
-UNICODE, INC. LICENSE AGREEMENT - DATA FILES AND SOFTWARE
-
-Unicode Data Files include all data files under the directories http://www.unicode.org/Public/, http://www.unicode.org/reports/, http://www.unicode.org/cldr/data/, http://source.icu-project.org/repos/icu/, and http://www.unicode.org/utility/trac/browser/.
-
-Unicode Data Files do not include PDF online code charts under the directory http://www.unicode.org/Public/.
-
-Software includes any source code published in the Unicode Standard or under the directories http://www.unicode.org/Public/, http://www.unicode.org/reports/, http://www.unicode.org/cldr/data/, http://source.icu-project.org/repos/icu/, and http://www.unicode.org/utility/trac/browser/.
-
-NOTICE TO USER: Carefully read the following legal agreement. BY DOWNLOADING, INSTALLING, COPYING OR OTHERWISE USING UNICODE INC.'S DATA FILES ("DATA FILES"), AND/OR SOFTWARE ("SOFTWARE"), YOU UNEQUIVOCALLY ACCEPT, AND AGREE TO BE BOUND BY, ALL OF THE TERMS AND CONDITIONS OF THIS AGREEMENT. IF YOU DO NOT AGREE, DO NOT DOWNLOAD, INSTALL, COPY, DISTRIBUTE OR USE THE DATA FILES OR SOFTWARE.
+UNICODE LICENSE V3
 
 COPYRIGHT AND PERMISSION NOTICE
 
-Copyright © 1991-2016 Unicode, Inc. All rights reserved. Distributed under the Terms of Use in http://www.unicode.org/copyright.html.
+Copyright © 1991-2023 Unicode, Inc.
 
-Permission is hereby granted, free of charge, to any person obtaining a copy of the Unicode data files and any associated documentation (the "Data Files") or Unicode software and any associated documentation (the "Software") to deal in the Data Files or Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, and/or sell copies of the Data Files or Software, and to permit persons to whom the Data Files or Software are furnished to do so, provided that either
+NOTICE TO USER: Carefully read the following legal agreement. BY
+DOWNLOADING, INSTALLING, COPYING OR OTHERWISE USING DATA FILES, AND/OR
+SOFTWARE, YOU UNEQUIVOCALLY ACCEPT, AND AGREE TO BE BOUND BY, ALL OF THE
+TERMS AND CONDITIONS OF THIS AGREEMENT. IF YOU DO NOT AGREE, DO NOT
+DOWNLOAD, INSTALL, COPY, DISTRIBUTE OR USE THE DATA FILES OR SOFTWARE.
 
-     (a) this copyright and permission notice appear with all copies of the Data Files or Software, or
-     (b) this copyright and permission notice appear in associated Documentation.
+Permission is hereby granted, free of charge, to any person obtaining a
+copy of data files and any associated documentation (the "Data Files") or
+software and any associated documentation (the "Software") to deal in the
+Data Files or Software without restriction, including without limitation
+the rights to use, copy, modify, merge, publish, distribute, and/or sell
+copies of the Data Files or Software, and to permit persons to whom the
+Data Files or Software are furnished to do so, provided that either (a)
+this copyright and permission notice appear with all copies of the Data
+Files or Software, or (b) this copyright and permission notice appear in
+associated Documentation.
 
-THE DATA FILES AND SOFTWARE ARE PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT OF THIRD PARTY RIGHTS. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR HOLDERS INCLUDED IN THIS NOTICE BE LIABLE FOR ANY CLAIM, OR ANY SPECIAL INDIRECT OR CONSEQUENTIAL DAMAGES, OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THE DATA FILES OR SOFTWARE.
+THE DATA FILES AND SOFTWARE ARE PROVIDED "AS IS", WITHOUT WARRANTY OF ANY
+KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT OF
+THIRD PARTY RIGHTS.
 
-Except as contained in this notice, the name of a copyright holder shall not be used in advertising or otherwise to promote the sale, use or other dealings in these Data Files or Software without prior written authorization of the copyright holder.
+IN NO EVENT SHALL THE COPYRIGHT HOLDER OR HOLDERS INCLUDED IN THIS NOTICE
+BE LIABLE FOR ANY CLAIM, OR ANY SPECIAL INDIRECT OR CONSEQUENTIAL DAMAGES,
+OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS,
+WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION,
+ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THE DATA
+FILES OR SOFTWARE.
+
+Except as contained in this notice, the name of a copyright holder shall
+not be used in advertising or otherwise to promote the sale, use or other
+dealings in these Data Files or Software without prior written
+authorization of the copyright holder.
 
 ```
 
