@@ -176,7 +176,7 @@ pub enum GuiMessage {
     RecompileSong(ItemId, String),
 
     PlaySong(ItemId, String, TickCounter, MusicChannelsMask),
-    PlaySongSubroutine(ItemId, String, u8, TickCounter),
+    PlaySongSubroutine(ItemId, String, Option<String>, u8, TickCounter),
     PlaySongForSfxTab(ItemId, TickCounter),
     PlaySoundEffectCommand(SfxId, Pan),
     PlayEditedSoundEffect(ItemId, Pan),
@@ -537,11 +537,13 @@ impl Project {
                     channels_mask,
                 ));
             }
-            GuiMessage::PlaySongSubroutine(id, mml, sid, skip) => {
+            GuiMessage::PlaySongSubroutine(id, mml, mml_prefix, si, skip) => {
                 // RecompileSong should not mark the song as unsaved
                 let _ = self
                     .compiler_sender
-                    .send(ToCompiler::CompileAndPlaySongSubroutine(id, mml, sid, skip));
+                    .send(ToCompiler::CompileAndPlaySongSubroutine(
+                        id, mml, mml_prefix, si, skip,
+                    ));
             }
             GuiMessage::PlaySongForSfxTab(id, ticks) => {
                 let _ = self
@@ -838,6 +840,12 @@ impl Project {
                 if let Some(song_tab) = self.song_tabs.get_mut(&id) {
                     self.tab_manager.set_tab_label_color(song_tab, co.is_ok());
                     song_tab.set_compiler_output(Some(co));
+                }
+            }
+
+            CompilerOutput::SongPrefix(id, r) => {
+                if let Some(song_tab) = self.song_tabs.get_mut(&id) {
+                    song_tab.set_song_prefix_result(r);
                 }
             }
 

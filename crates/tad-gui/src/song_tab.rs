@@ -13,7 +13,7 @@ use crate::GuiMessage;
 
 use compiler::data::TextFile;
 use compiler::driver_constants::N_MUSIC_CHANNELS;
-use compiler::errors::MmlCompileErrors;
+use compiler::errors::{MmlCompileErrors, MmlPrefixError};
 use compiler::mml::{ChannelId, MmlTickCountTable};
 use compiler::songs::{song_duration_string, SongData};
 
@@ -22,6 +22,7 @@ use fltk::app;
 use fltk::button::{Button, ToggleButton};
 use fltk::enums::{CallbackReason, CallbackTrigger, Color, Event, Font, Key};
 use fltk::group::{Flex, Pack, PackType};
+use fltk::input::Input;
 use fltk::prelude::*;
 use fltk::text::{TextBuffer, TextDisplay, WrapMode};
 use fltk::widget::Widget;
@@ -43,8 +44,14 @@ pub struct State {
 
     song_id: ItemId,
 
+    group: Flex,
+
     prev_channel_mask: MusicChannelsMask,
     channel_buttons: [ToggleButton; N_MUSIC_CHANNELS],
+
+    sub_prefix_button: ToggleButton,
+    sub_prefix_flex: Flex,
+    sub_prefix: Input,
 
     editor: MmlEditor,
 
@@ -102,6 +109,14 @@ impl SongTab {
             b
         };
 
+        let toggle_button = |label: &str, tooltip: &str| {
+            let mut b = ToggleButton::default()
+                .with_size(button_size, button_size)
+                .with_label(label);
+            b.set_tooltip(tooltip);
+            b
+        };
+
         // NOTE: toolbar shortcuts are handled by the `group.handle()` callback below
         let mut compile_button = button("C", "Compile song");
         compile_button.set_label_font(Font::ScreenBold);
@@ -115,6 +130,11 @@ impl SongTab {
             button("@play_c_cursor", "Play channel from cursor (Shift F7)");
         let mut pause_resume_button = button("@pause", "Pause/Resume song (F8)");
         spacer(spacing * 2);
+
+        let sub_prefix_button =
+            toggle_button("!", "Temporary MML to run when previewing a subroutine");
+        spacer(spacing * 2);
+
         let mut enable_all_button = button("All", "Enable all channels (Ctrl `)");
         spacer(spacing);
 
@@ -131,6 +151,17 @@ impl SongTab {
         let mut sfx_button = button("SFX", "Open play sound effect window");
 
         main_toolbar.end();
+
+        let mut sub_prefix_flex = Flex::default().row();
+        group.fixed(&sub_prefix_flex, input_height(&sub_prefix_flex));
+        sub_prefix_flex.hide();
+
+        let l = label("! preview prefix: ");
+        sub_prefix_flex.fixed(&l, ch_units_to_width(&l, 15));
+        let mut sub_prefix = Input::default();
+        sub_prefix.set_text_font(Font::Courier);
+
+        sub_prefix_flex.end();
 
         let mut editor = MmlEditor::new(&mml_file.contents, TextFormat::Mml);
 
@@ -154,8 +185,12 @@ impl SongTab {
         let state = Rc::new(RefCell::from(State {
             sender: sender.clone(),
             song_id,
+            group: group.clone(),
             prev_channel_mask: MusicChannelsMask::ALL,
             channel_buttons,
+            sub_prefix_button,
+            sub_prefix_flex,
+            sub_prefix,
             editor,
             console,
             console_buffer,
@@ -315,6 +350,25 @@ impl SongTab {
                     }
                 });
             }
+
+            s.sub_prefix_button.set_callback({
+                let s = state.clone();
+                move |_| {
+                    if let Ok(mut s) = s.try_borrow_mut() {
+                        match s.sub_prefix_button.value() {
+                            true => {
+                                s.sub_prefix_flex.show();
+                                let _ = s.sub_prefix_flex.take_focus();
+                            }
+                            false => s.sub_prefix_flex.hide(),
+                        }
+                        s.group.layout();
+                    }
+                }
+            });
+
+            s.sub_prefix.set_trigger(CallbackTrigger::Changed);
+            s.sub_prefix.set_callback(State::on_sub_prefix_changed);
         }
 
         sfx_button.set_callback({
@@ -344,6 +398,10 @@ impl SongTab {
         s.set_compiler_output(None);
         s.editor.set_text(&mml_file.contents);
 
+        s.sub_prefix_button.set(false);
+        s.sub_prefix_flex.hide();
+        s.sub_prefix.set_value("");
+
         s.editor.scroll_to_top();
         s.editor.take_focus();
 
@@ -351,6 +409,8 @@ impl SongTab {
 
         s.prev_channel_mask = MusicChannelsMask::ALL;
         s.update_channel_buttons(MusicChannelsMask::ALL);
+
+        s.group.layout();
     }
 
     pub fn contents(&self) -> String {
@@ -360,6 +420,12 @@ impl SongTab {
     pub fn set_compiler_output(&mut self, co: Option<SongOutput>) {
         if let Ok(mut s) = self.state.try_borrow_mut() {
             s.set_compiler_output(co);
+        }
+    }
+
+    pub fn set_song_prefix_result(&mut self, r: Result<(), MmlPrefixError>) {
+        if let Ok(mut s) = self.state.try_borrow_mut() {
+            s.set_song_prefix_result(r);
         }
     }
 
@@ -430,9 +496,15 @@ impl State {
                 ));
             }
             Some((ChannelId::Subroutine(si), ticks)) => {
+                let prefix = match self.sub_prefix_button.value() {
+                    true => Some(self.sub_prefix.value()),
+                    false => None,
+                };
+
                 self.sender.send(GuiMessage::PlaySongSubroutine(
                     self.song_id,
                     self.editor.text(),
+                    prefix,
                     si,
                     ticks,
                 ));
@@ -541,5 +613,30 @@ impl State {
 
         self.editor
             .highlight_errors(self.errors.as_ref().map(TextErrorRef::Song));
+    }
+
+    fn set_song_prefix_result(&mut self, r: Result<(), MmlPrefixError>) {
+        match r {
+            Ok(()) => {
+                self.sub_prefix.set_text_color(Color::Foreground);
+                self.sub_prefix.redraw();
+            }
+            Err(e) => {
+                self.sub_prefix.set_text_color(Color::Red);
+                self.sub_prefix.redraw();
+
+                let text = e.multiline_display().to_string();
+
+                self.console_buffer.set_text(&text);
+                self.console.set_text_color(Color::Red);
+            }
+        }
+    }
+
+    fn on_sub_prefix_changed(sub_prefix: &mut Input) {
+        if sub_prefix.text_color() == Color::Red {
+            sub_prefix.set_text_color(Color::Foreground);
+            sub_prefix.redraw();
+        }
     }
 }

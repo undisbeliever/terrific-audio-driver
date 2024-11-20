@@ -25,11 +25,13 @@ use self::bc_generator::{parse_and_compile_sound_effect, MmlSongBytecodeGenerato
 use self::instruments::{build_instrument_map, parse_instruments};
 use self::line_splitter::{split_mml_song_lines, split_mml_sound_effect_lines};
 use self::metadata::parse_headers;
+use bc_generator::parse_and_compile_mml_prefix;
 pub(crate) use identifier::{IdentifierBuf, IdentifierStr};
+use tokenizer::MmlTokens;
 
 use crate::data::{self, TextFile, UniqueNamesList};
 use crate::driver_constants::N_MUSIC_CHANNELS;
-use crate::errors::{MmlCompileErrors, SongError, SoundEffectErrorList};
+use crate::errors::{MmlCompileErrors, MmlPrefixError, SongError, SoundEffectErrorList};
 use crate::mml::song_duration::calc_song_duration;
 use crate::mml::subroutines::compile_subroutines;
 use crate::pitch_table::PitchTable;
@@ -52,6 +54,9 @@ const CHANNEL_NAMES: [&str; N_MUSIC_CHANNELS] = ["A", "B", "C", "D", "E", "F", "
 
 pub const COMMENT_CHAR: char = ';';
 pub const SECTION_PREFIX: &str = ";;";
+
+pub const MAX_MML_PREFIX_STR_LENGTH: usize = 16 * 1024;
+pub const MAX_MML_PREFIX_TICKS: TickCounter = TickCounter::new(16);
 
 pub use self::tick_count_table::MmlTickCountTable;
 
@@ -102,6 +107,17 @@ impl MmlSoundEffect {
     #[cfg(feature = "mml_tracking")]
     pub fn cursor_tracker(&self) -> &note_tracking::CursorTracker {
         &self.cursor_tracker
+    }
+}
+
+#[derive(Debug)]
+pub struct MmlPrefixData {
+    bytecode: Vec<u8>,
+}
+
+impl MmlPrefixData {
+    pub fn bytecode(&self) -> &[u8] {
+        &self.bytecode
     }
 }
 
@@ -253,5 +269,40 @@ pub fn compile_sound_effect(
     ) {
         Ok(o) => Ok(o),
         Err(e) => Err(SoundEffectErrorList::MmlErrors(e)),
+    }
+}
+
+pub fn compile_mml_prefix(
+    mml_prefix: &str,
+    song: &SongData,
+    pitch_table: &PitchTable,
+    data_instruments: &UniqueNamesList<data::InstrumentOrSample>,
+) -> Result<MmlPrefixData, MmlPrefixError> {
+    if mml_prefix.len() > MAX_MML_PREFIX_STR_LENGTH {
+        return Err(MmlPrefixError::PrefixStrTooLarge(mml_prefix.len()));
+    }
+
+    let mml_instruments = song.instruments();
+
+    let instruments_map = match build_instrument_map(mml_instruments) {
+        Ok(map) => map,
+        Err(_) => {
+            // This should not happen
+            return Err(MmlPrefixError::InstrumentError);
+        }
+    };
+
+    let tokens = MmlTokens::tokenize_one_line(mml_prefix);
+
+    match parse_and_compile_mml_prefix(
+        mml_prefix,
+        tokens,
+        pitch_table,
+        mml_instruments,
+        data_instruments,
+        &instruments_map,
+    ) {
+        Ok(o) => Ok(o),
+        Err(e) => Err(MmlPrefixError::MmlErrors(e)),
     }
 }

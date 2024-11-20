@@ -43,6 +43,12 @@ Compiler changes:
 
 GUI changes:
  * Fixed rust bytecode interpreter going off the rails after a channel ends
+ * Added a way to set the instrument and settings when previewing song subroutines
+    * Click on the `!` button in the song toolbar and a new textbox will appear
+    * Input (or paste) the MML you want to execute before the subroutine is played
+      (ie, `@Flute E` would set the instrument to Flute and turn on echo)
+    * Preview the subroutine with the *Play from line start* (F6) or *Play from cursor* (F7) buttons.
+    * Be aware, no notes in the "! preview prefix" textbox will not be played.
 
 
 Version 0.0.13

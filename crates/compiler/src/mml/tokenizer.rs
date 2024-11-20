@@ -12,7 +12,7 @@ use crate::bytecode_assembler;
 use crate::channel_bc_generator::SubroutineCallType;
 use crate::envelope::GainMode;
 use crate::errors::{ChannelError, ValueError};
-use crate::file_pos::{FilePos, Line, LineIndexRange, LineSplitter};
+use crate::file_pos::{blank_line_splitter, FilePos, Line, LineIndexRange, LineSplitter};
 use crate::notes::{parse_pitch_char, MmlPitch};
 
 #[derive(Debug, Clone)]
@@ -630,6 +630,27 @@ impl<'a> MmlTokens<'a> {
         let mut s = Self::new();
         s.parse_line(line, entire_line_range, remaining_lines);
         s
+    }
+
+    /// Safety: Panics if text len() is > u32::MAX
+    pub fn tokenize_one_line(text: &'a str) -> Self {
+        let file_pos = FilePos {
+            line_number: 1,
+            line_char: 0,
+            char_index: 0,
+        };
+
+        Self::new_with_line(
+            Line {
+                text,
+                position: file_pos,
+            },
+            LineIndexRange {
+                start: 0,
+                end: text.len().try_into().unwrap(),
+            },
+            &mut blank_line_splitter(),
+        )
     }
 
     pub fn is_empty(&self) -> bool {

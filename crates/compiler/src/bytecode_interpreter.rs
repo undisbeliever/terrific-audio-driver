@@ -6,6 +6,7 @@
 
 use crate::bytecode::opcodes;
 use crate::bytecode::Pan;
+use crate::channel_bc_generator::MmlInstrument;
 use crate::common_audio_data::CommonAudioData;
 use crate::driver_constants::{
     addresses, LoaderDataType, BC_CHANNEL_STACK_OFFSET, BC_CHANNEL_STACK_SIZE,
@@ -13,13 +14,19 @@ use crate::driver_constants::{
     SONG_HEADER_N_SUBROUTINES_OFFSET, SONG_HEADER_SIZE, STARTING_VOLUME, S_DSP_EON_REGISTER,
     S_SMP_TIMER_0_REGISTER,
 };
+use crate::mml::MmlPrefixData;
 use crate::songs::Channel as SongChannel;
 use crate::songs::SongData;
+use crate::songs::Subroutine;
 use crate::time::TickClock;
 use crate::time::TickCounter;
 
 use std::cmp::min;
 use std::ops::Deref;
+
+/// Error advancing subroutine to the end of the pointer
+#[derive(Debug)]
+pub struct SongSubroutineError;
 
 #[derive(Clone)]
 struct VirtualChannel {
@@ -164,44 +171,6 @@ impl ChannelState {
             vibrato_pitch_offset_per_tick: 0,
             vibrato_quarter_wavelength_in_ticks: 0,
         }
-    }
-
-    fn new_subroutine(song: &SongData, song_ptr: u16, subroutine_index: u8) -> Self {
-        let mut c = ChannelState::new(None, song_ptr);
-
-        match song.subroutines().get(usize::from(subroutine_index)) {
-            Some(sub) => {
-                let notes = sub.subroutine_id.no_instrument_notes();
-                let song_instruments = song.instruments();
-
-                c.instruction_ptr = sub.bytecode_offset;
-
-                // Subroutine might not set an instrument before the play_note instructions.
-                //
-                // Find the first instrument that can play all notes in the subroutine.
-                // If no instrument can be found, use the first instrument in the MML file.
-                let inst = match notes.is_empty() {
-                    true => song_instruments.first(),
-                    false => song_instruments
-                        .iter()
-                        .find(|i| {
-                            i.note_range.contains(notes.start())
-                                && i.note_range.contains(notes.end())
-                        })
-                        .or_else(|| song_instruments.first()),
-                };
-
-                if let Some(i) = inst {
-                    c.instrument = Some(i.instrument_id.as_u8());
-                    c.adsr_or_gain_override = Some(i.envelope.engine_value());
-                }
-            }
-            None => {
-                c.disable_channel();
-            }
-        }
-
-        c
     }
 
     fn read_subroutine_instruction_ptr(s_id: u8, song_data: &[u8]) -> u16 {
@@ -570,6 +539,42 @@ impl ChannelState {
             _ => self.disable_channel(),
         }
     }
+
+    // Create a new song subroutine interpreter channel and process a mml-prefix.
+    fn subroutine_prefix(
+        song_ptr: u16,
+        inst: &MmlInstrument,
+        prefix: Option<MmlPrefixData>,
+        sub: &Subroutine,
+        global: &mut GlobalState,
+    ) -> Option<Self> {
+        let mut c = Self::new(None, song_ptr);
+
+        c.instrument = Some(inst.instrument_id.as_u8());
+        c.adsr_or_gain_override = Some(inst.envelope.engine_value());
+
+        if let Some(prefix) = prefix {
+            // Prevent infinite loops by limiting the number of processed instructions
+            let mut watchdog_counter: u32 = 8_000;
+
+            c.instruction_ptr = 0;
+
+            while !c.disabled {
+                c.process_next_bytecode(global, prefix.bytecode());
+
+                watchdog_counter -= 1;
+                if watchdog_counter == 0 {
+                    return None;
+                }
+            }
+        }
+
+        c.instruction_ptr = sub.bytecode_offset;
+        c.disabled = false;
+        c.ticks = TickCounter::new(0);
+
+        Some(c)
+    }
 }
 
 pub struct SongInterpreter<CAD, SD>
@@ -609,27 +614,58 @@ where
     pub fn new_song_subroutine(
         common_audio_data: CAD,
         song_data: SD,
+        prefix: Option<MmlPrefixData>,
         subroutine_index: u8,
         stereo_flag: bool,
-    ) -> Self {
-        let mut channels: [Option<ChannelState>; N_MUSIC_CHANNELS] = Default::default();
-
-        if usize::from(subroutine_index) < song_data.subroutines().len() {
-            channels[0] = Some(ChannelState::new_subroutine(
-                &song_data,
-                common_audio_data.song_data_addr(),
-                subroutine_index,
-            ));
-        }
-
-        Self {
-            channels,
+    ) -> Result<Self, SongSubroutineError> {
+        let mut out = Self {
+            channels: Default::default(),
             tick_counter: TickCounter::default(),
             global: GlobalState::new(song_data.metadata().tick_clock),
             stereo_flag,
             song_data,
             common_audio_data,
-        }
+        };
+
+        let sub = match out
+            .song_data
+            .subroutines()
+            .get(usize::from(subroutine_index))
+        {
+            Some(s) => s,
+            None => return Err(SongSubroutineError),
+        };
+
+        // Subroutine might not set an instrument before the play_note instructions.
+        //
+        // Find the first instrument that can play all notes in the subroutine.
+        // If no instrument can be found, use the first instrument in the MML file.
+        let inst = {
+            let instruments = out.song_data.instruments();
+            let notes = sub.subroutine_id.no_instrument_notes();
+
+            let i = match notes.is_empty() {
+                true => instruments.first(),
+                false => instruments.iter().find(|i| {
+                    i.note_range.contains(notes.start()) && i.note_range.contains(notes.end())
+                }),
+            };
+
+            match i {
+                Some(i) => i,
+                None => return Err(SongSubroutineError),
+            }
+        };
+
+        out.channels[0] = ChannelState::subroutine_prefix(
+            out.common_audio_data.song_data_addr(),
+            inst,
+            prefix,
+            sub,
+            &mut out.global,
+        );
+
+        Ok(out)
     }
 
     pub fn channels(&self) -> &[Option<ChannelState>; N_MUSIC_CHANNELS] {

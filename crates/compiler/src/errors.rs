@@ -24,6 +24,7 @@ use crate::echo::{EchoEdl, EchoLength, MAX_FIR_ABS_SUM};
 use crate::envelope::Gain;
 use crate::file_pos::{FilePosRange, MAX_MML_TEXT_LENGTH};
 use crate::mml::command_parser::{Transpose, MAX_COARSE_VOLUME, PX_PAN_RANGE};
+use crate::mml::{MAX_MML_PREFIX_STR_LENGTH, MAX_MML_PREFIX_TICKS};
 use crate::notes::{MidiNote, Note, Octave};
 use crate::path::PathString;
 use crate::sound_effects::MAX_SFX_TICKS;
@@ -464,6 +465,7 @@ pub enum ChannelError {
     CannotCallSubroutineRecursion(String),
 
     TooManySfxTicks(TickCounter),
+    TooManyTicksInMmlPrefix(TickCounter),
 
     // Bytecode assembler errors
     UnknownInstruction(String),
@@ -471,6 +473,13 @@ pub enum ChannelError {
     InvalidNumberOfArgumentsRange(u8, u8),
     InvalidKeyoffArgument(String),
     NoTicksInSoundEffect,
+}
+
+#[derive(Debug)]
+pub enum MmlPrefixError {
+    PrefixStrTooLarge(usize),
+    InstrumentError,
+    MmlErrors(Vec<ErrorWithPos<ChannelError>>),
 }
 
 #[derive(Debug)]
@@ -1326,6 +1335,13 @@ impl Display for ChannelError {
                 MAX_SFX_TICKS.value()
             ),
 
+            Self::TooManyTicksInMmlPrefix(t) => write!(
+                f,
+                "mml prefix too long ({} ticks, max {})",
+                t.value(),
+                MAX_MML_PREFIX_TICKS.value()
+            ),
+
             // Bytecode assembler errors
             Self::UnknownInstruction(s) => write!(f, "unknown instruction {}", s),
             Self::InvalidNumberOfArguments(n) => write!(f, "expected {} arguments", n),
@@ -1334,6 +1350,22 @@ impl Display for ChannelError {
             }
             Self::InvalidKeyoffArgument(s) => write!(f, "invalid keyoff argument: {}", s),
             Self::NoTicksInSoundEffect => write!(f, "No notes in sound effect"),
+        }
+    }
+}
+
+impl Display for MmlPrefixError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::InstrumentError => write!(f, "instrument error"),
+            Self::PrefixStrTooLarge(len) => {
+                write!(
+                    f,
+                    "mml prefix is too large ({} bytes, max {})",
+                    len, MAX_MML_PREFIX_STR_LENGTH
+                )
+            }
+            Self::MmlErrors(_) => write!(f, "mml error"),
         }
     }
 }
@@ -1750,6 +1782,8 @@ impl Display for SongTooLargeErrorIndentedDisplay<'_> {
     }
 }
 
+pub struct SongErrorIndentedDisplay<'a>(&'a SongError);
+
 impl SongError {
     pub fn multiline_display(&self) -> SongErrorIndentedDisplay {
         SongErrorIndentedDisplay(self)
@@ -1770,4 +1804,29 @@ impl SongTooLargeError {
         SongTooLargeErrorIndentedDisplay(self)
     }
 }
-pub struct SongErrorIndentedDisplay<'a>(&'a SongError);
+
+pub struct MmlPrefixErrorIndentedDisplay<'a>(&'a MmlPrefixError);
+
+impl MmlPrefixError {
+    pub fn multiline_display(&self) -> MmlPrefixErrorIndentedDisplay {
+        MmlPrefixErrorIndentedDisplay(self)
+    }
+}
+
+impl Display for MmlPrefixErrorIndentedDisplay<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        writeln!(f, "error compiling MML subroutine prefix:")?;
+
+        match self.0 {
+            MmlPrefixError::MmlErrors(errors) => {
+                for e in errors.iter().take(SFX_MML_ERROR_LIMIT) {
+                    writeln!(f, "    prefix:{} {}", e.0.line_char, e.1)?;
+                }
+                plus_more_errors_line(f, "    ", errors.len())?;
+            }
+            e => e.fmt(f)?,
+        }
+
+        Ok(())
+    }
+}

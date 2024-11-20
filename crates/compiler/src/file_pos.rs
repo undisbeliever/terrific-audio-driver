@@ -186,6 +186,14 @@ pub struct LineSplitter<'a> {
     char_index: u32,
 }
 
+pub fn blank_line_splitter() -> LineSplitter<'static> {
+    LineSplitter {
+        remaining: "",
+        line_no: 0,
+        char_index: 0,
+    }
+}
+
 pub fn split_lines(s: &str) -> LineSplitter {
     assert!(s.len() < i32::MAX as usize);
 

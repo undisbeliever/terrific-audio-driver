@@ -18,6 +18,7 @@ use compiler::driver_constants::{
     addresses, io_commands, LoaderDataType, FIRST_SFX_CHANNEL, IO_COMMAND_I_MASK, IO_COMMAND_MASK,
     N_SFX_CHANNELS,
 };
+use compiler::mml::MmlPrefixData;
 use compiler::songs::{blank_song, SongData};
 use compiler::sound_effects::CompiledSoundEffect;
 use compiler::time::TickCounter;
@@ -75,7 +76,7 @@ impl MusicChannelsMask {
 enum SongSkip {
     None,
     Song(TickCounter),
-    Subroutine(u8, TickCounter),
+    Subroutine(Option<MmlPrefixData>, u8, TickCounter),
 }
 
 #[derive(Debug)]
@@ -100,7 +101,13 @@ pub enum AudioMessage {
     CommandAudioDataWithSfxChanged(Option<Arc<CommonAudioDataWithSfx>>),
 
     PlaySong(ItemId, Arc<SongData>, TickCounter, MusicChannelsMask),
-    PlaySongSubroutine(ItemId, Arc<SongData>, u8, TickCounter),
+    PlaySongSubroutine(
+        ItemId,
+        Arc<SongData>,
+        Option<MmlPrefixData>,
+        u8,
+        TickCounter,
+    ),
     PlaySoundEffectCommand(SfxId, Pan),
     PlaySongWithSfxBuffer(ItemId, Arc<SongData>, TickCounter),
     PlaySfxUsingSfxBuffer(Arc<CompiledSoundEffect>, Pan),
@@ -425,11 +432,11 @@ fn create_and_process_song_interpreter(
     audio_data: &AudioDataState,
     song_skip: SongSkip,
     stereo_flag: bool,
-) -> Option<SongInterpreter<SiCad, Arc<SongData>>> {
+) -> Result<Option<SongInterpreter<SiCad, Arc<SongData>>>, ()> {
     let (cad, sd) = match audio_data {
-        AudioDataState::NotLoaded => return None,
-        AudioDataState::CommonDataOutOfDate => return None,
-        AudioDataState::Sample(..) => return None,
+        AudioDataState::NotLoaded => return Ok(None),
+        AudioDataState::CommonDataOutOfDate => return Ok(None),
+        AudioDataState::Sample(..) => return Ok(None),
         AudioDataState::SongAndSfx(cad, sd) => (SiCad::SongAndSfx(cad.clone()), sd.clone()),
         AudioDataState::SongWithSfxBuffer(cad, sd) => {
             (SiCad::SongWithSfxBuffer(cad.clone()), sd.clone())
@@ -437,7 +444,7 @@ fn create_and_process_song_interpreter(
     };
 
     match song_skip {
-        SongSkip::None => Some(SongInterpreter::new(cad, sd, stereo_flag)),
+        SongSkip::None => Ok(Some(SongInterpreter::new(cad, sd, stereo_flag))),
         SongSkip::Song(ticks) => {
             let mut si = SongInterpreter::new(cad, sd, stereo_flag);
             if !ticks.is_zero() {
@@ -446,15 +453,19 @@ fn create_and_process_song_interpreter(
                     si.write_to_emulator(&mut EmulatorWrapper(emu));
                 }
             }
-            Some(si)
+            Ok(Some(si))
         }
-        SongSkip::Subroutine(si, ticks) => {
-            let mut si = SongInterpreter::new_song_subroutine(cad, sd, si, stereo_flag);
-            if !ticks.is_zero() {
-                si.process_ticks(ticks);
+        SongSkip::Subroutine(prefix, si, ticks) => {
+            match SongInterpreter::new_song_subroutine(cad, sd, prefix, si, stereo_flag) {
+                Ok(mut si) => {
+                    if !ticks.is_zero() {
+                        si.process_ticks(ticks);
+                    }
+                    si.write_to_emulator(&mut EmulatorWrapper(emu));
+                    Ok(Some(si))
+                }
+                Err(_) => Err(()),
             }
-            si.write_to_emulator(&mut EmulatorWrapper(emu));
-            Some(si)
         }
     }
 }
@@ -563,7 +574,8 @@ impl TadEmu {
         &mut self,
         song_id: ItemId,
         song: Arc<SongData>,
-        subroutine_id: u8,
+        prefix: Option<MmlPrefixData>,
+        subroutine_index: u8,
         skip: TickCounter,
     ) -> Result<(), ()> {
         let data = match (&self.cad_with_sfx, &self.cad_with_sfx_buffer) {
@@ -574,7 +586,7 @@ impl TadEmu {
         self._load_song_into_memory(
             Some(song_id),
             data,
-            SongSkip::Subroutine(subroutine_id, skip),
+            SongSkip::Subroutine(prefix, subroutine_index, skip),
             MusicChannelsMask::ALL,
         )
     }
@@ -701,8 +713,12 @@ impl TadEmu {
         // Wait for the audio-driver to finish initialization
         self.emu.emulate();
 
-        self.bc_interpreter =
-            create_and_process_song_interpreter(&mut self.emu, &data_state, song_skip, stereo_flag);
+        self.bc_interpreter = create_and_process_song_interpreter(
+            &mut self.emu,
+            &data_state,
+            song_skip,
+            stereo_flag,
+        )?;
 
         self.set_music_channels_mask(music_channels_mask);
 
@@ -1020,10 +1036,10 @@ impl AudioThread {
                     return self.play_song();
                 }
             }
-            AudioMessage::PlaySongSubroutine(song_id, song, prefix, skip) => {
+            AudioMessage::PlaySongSubroutine(song_id, song, prefix, si, skip) => {
                 if self
                     .tad
-                    .load_song_subroutine(song_id, song.clone(), prefix, skip)
+                    .load_song_subroutine(song_id, song.clone(), prefix, si, skip)
                     .is_ok()
                 {
                     self.send_started_song_message(song_id, song);
@@ -1187,11 +1203,14 @@ impl AudioThread {
                     }
                 }
 
-                AudioMessage::PlaySongSubroutine(id, song, sid, skip) => {
+                AudioMessage::PlaySongSubroutine(id, song, prefix, si, skip) => {
                     // Pause playback to prevent buffer overrun when tick_to_skip is large.
                     playback.pause();
                     playback.lock().reset();
-                    match self.tad.load_song_subroutine(id, song.clone(), sid, skip) {
+                    match self
+                        .tad
+                        .load_song_subroutine(id, song.clone(), prefix, si, skip)
+                    {
                         Ok(()) => {
                             self.send_started_song_message(id, song);
 

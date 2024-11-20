@@ -12,6 +12,7 @@ use super::{ChannelId, MmlSoundEffect, Section};
 #[cfg(feature = "mml_tracking")]
 use super::note_tracking::CursorTracker;
 use crate::data::{self, UniqueNamesList};
+use crate::mml::{MmlPrefixData, MAX_MML_PREFIX_TICKS};
 #[cfg(feature = "mml_tracking")]
 use crate::songs::{BytecodePos, SongBcTracking};
 
@@ -402,7 +403,7 @@ pub fn parse_and_compile_sound_effect(
     mml_file: &str,
     tokens: MmlTokens,
     pitch_table: &PitchTable,
-    mml_instruments: &Vec<MmlInstrument>,
+    mml_instruments: &[MmlInstrument],
     data_instruments: &UniqueNamesList<data::InstrumentOrSample>,
     instruments_map: &HashMap<IdentifierStr, usize>,
 ) -> Result<MmlSoundEffect, Vec<ErrorWithPos<ChannelError>>> {
@@ -470,6 +471,78 @@ pub fn parse_and_compile_sound_effect(
             #[cfg(feature = "mml_tracking")]
             cursor_tracker,
         })
+    } else {
+        Err(errors)
+    }
+}
+
+pub fn parse_and_compile_mml_prefix(
+    mml_prefix: &str,
+    tokens: MmlTokens,
+    pitch_table: &PitchTable,
+    mml_instruments: &[MmlInstrument],
+    data_instruments: &UniqueNamesList<data::InstrumentOrSample>,
+    instruments_map: &HashMap<IdentifierStr, usize>,
+) -> Result<MmlPrefixData, Vec<ErrorWithPos<ChannelError>>> {
+    #[cfg(feature = "mml_tracking")]
+    let mut cursor_tracker = CursorTracker::new();
+
+    let mut parser = Parser::new(
+        ChannelId::SoundEffect,
+        tokens,
+        instruments_map,
+        None,
+        DEFAULT_ZENLEN,
+        None, // No sections in sound effect
+        // ::TODO remove cursor tracker here::
+        #[cfg(feature = "mml_tracking")]
+        &mut cursor_tracker,
+    );
+
+    let mut gen = ChannelBcGenerator::new(
+        Vec::new(),
+        pitch_table,
+        mml_prefix,
+        data_instruments,
+        mml_instruments,
+        None,
+        BytecodeContext::SoundEffect,
+    );
+
+    while let Some(c) = parser.next() {
+        match gen.process_command(c.command()) {
+            Ok(()) => (),
+            Err(e) => parser.add_error_range(c.pos().clone(), e),
+        }
+        if matches!(c.command(), Command::EndLoop(_)) {
+            parser.set_tick_counter(gen.bytecode().get_tick_counter_with_loop_flag());
+        }
+    }
+
+    let last_pos = parser.peek_pos();
+    let tick_counter = gen.bytecode().get_tick_counter();
+
+    assert!(gen.loop_point().is_none());
+
+    let bytecode = match gen.take_bytecode().bytecode(BcTerminator::DisableChannel) {
+        Ok((b, _)) => b,
+        Err((e, b)) => {
+            parser.add_error_range(last_pos.to_range(1), ChannelError::BytecodeError(e));
+            b
+        }
+    };
+
+    let (_, mut errors) = parser.finalize();
+
+    if tick_counter > MAX_MML_PREFIX_TICKS {
+        errors.push(ErrorWithPos(
+            last_pos.to_range(1),
+            ChannelError::TooManyTicksInMmlPrefix(tick_counter),
+        ))
+    }
+
+    if errors.is_empty() {
+        Ok(MmlPrefixData { bytecode })
     } else {
         Err(errors)
     }

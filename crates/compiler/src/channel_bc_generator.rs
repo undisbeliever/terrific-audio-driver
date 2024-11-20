@@ -327,7 +327,7 @@ where
 pub(crate) struct ChannelBcGenerator<'a> {
     pitch_table: &'a PitchTable,
     mml_file: &'a str,
-    instruments: &'a Vec<MmlInstrument>,
+    instruments: &'a [MmlInstrument],
     subroutines: Option<&'a Vec<Subroutine>>,
 
     bc: Bytecode<'a>,
@@ -343,7 +343,7 @@ impl<'a> ChannelBcGenerator<'a> {
         pitch_table: &'a PitchTable,
         mml_file: &'a str,
         data_instruments: &'a UniqueNamesList<data::InstrumentOrSample>,
-        mml_instruments: &'a Vec<MmlInstrument>,
+        mml_instruments: &'a [MmlInstrument],
         subroutines: Option<&'a Vec<Subroutine>>,
         context: BytecodeContext,
     ) -> ChannelBcGenerator<'a> {

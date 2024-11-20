@@ -26,8 +26,10 @@ use compiler::data::{load_text_file_with_limit, DefaultSfxFlags, LoopSetting, Te
 use compiler::driver_constants::COMMON_DATA_BYTES_PER_SOUND_EFFECT;
 use compiler::envelope::Envelope;
 use compiler::errors::{
-    self, BrrError, CommonAudioDataErrors, ExportSpcFileError, ProjectFileErrors, SongTooLargeError,
+    self, BrrError, CommonAudioDataErrors, ExportSpcFileError, MmlPrefixError, ProjectFileErrors,
+    SongTooLargeError,
 };
+use compiler::mml::compile_mml_prefix;
 use compiler::notes::Note;
 use compiler::path::{ParentPathBuf, SourcePathBuf};
 use compiler::samples::{
@@ -134,7 +136,7 @@ pub enum ToCompiler {
     SongTabClosed(ItemId),
     SongChanged(ItemId, String),
     CompileAndPlaySong(ItemId, String, TickCounter, MusicChannelsMask),
-    CompileAndPlaySongSubroutine(ItemId, String, u8, TickCounter),
+    CompileAndPlaySongSubroutine(ItemId, String, Option<String>, u8, TickCounter),
     PlayInstrument(ItemId, PlaySampleArgs),
     PlaySample(ItemId, PlaySampleArgs),
 
@@ -167,6 +169,7 @@ pub enum CompilerOutput {
     SoundEffect(ItemId, SoundEffectOutput),
 
     Song(ItemId, SongOutput),
+    SongPrefix(ItemId, Result<(), MmlPrefixError>),
 
     NumberOfMissingSoundEffects(usize),
 
@@ -1369,16 +1372,45 @@ fn bg_thread(
                     ));
                 }
             }
-            ToCompiler::CompileAndPlaySongSubroutine(id, mml, sid, skip) => {
+            ToCompiler::CompileAndPlaySongSubroutine(id, mml, mml_prefix, sid, skip) => {
                 sender.send_audio(AudioMessage::Pause);
                 songs.edit_and_compile_song(id, mml, &pf_songs, &song_dependencies, &sender);
-                if let Some(song) = songs.get_song_data(&id) {
-                    sender.send_audio(AudioMessage::PlaySongSubroutine(
-                        id,
-                        song.clone(),
-                        sid,
-                        skip,
-                    ));
+
+                if let (Some(song), Some(d)) = (songs.get_song_data(&id), &song_dependencies) {
+                    match mml_prefix {
+                        Some(prefix) => {
+                            match compile_mml_prefix(
+                                &prefix,
+                                song,
+                                d.combined_samples.pitch_table(),
+                                &d.inst_map,
+                            ) {
+                                Ok(prefix) => {
+                                    sender.send(CompilerOutput::SongPrefix(id, Ok(())));
+
+                                    sender.send_audio(AudioMessage::PlaySongSubroutine(
+                                        id,
+                                        song.clone(),
+                                        Some(prefix),
+                                        sid,
+                                        skip,
+                                    ));
+                                }
+                                Err(e) => {
+                                    sender.send(CompilerOutput::SongPrefix(id, Err(e)));
+                                }
+                            }
+                        }
+                        None => {
+                            sender.send_audio(AudioMessage::PlaySongSubroutine(
+                                id,
+                                song.clone(),
+                                None,
+                                sid,
+                                skip,
+                            ));
+                        }
+                    };
                 }
             }
             ToCompiler::PlayInstrument(id, args) => {
