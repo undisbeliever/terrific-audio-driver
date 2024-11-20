@@ -49,6 +49,13 @@ GUI changes:
       (ie, `@Flute E` would set the instrument to Flute and turn on echo)
     * Preview the subroutine with the *Play from line start* (F6) or *Play from cursor* (F7) buttons.
     * Be aware, no notes in the "! preview prefix" textbox will not be played.
+ * Added a song start field to the song tab
+    * Sets the starting position when playing the song with the play-button or F5
+    * Pressing "set" or `F9` while editing the song selects the start position
+    * Useful for editing and previewing `!` MML subroutines.
+      Press `F9` before the subroutines is called, edit macro, press `F5` to listen to the macro.
+    * Pressing Shift + "set" or `Shift+F9` will also mute the other channels.
+    * Pressing Shift + play-button or `Shift+F5` will play the song from the beginning
 
 
 Version 0.0.13

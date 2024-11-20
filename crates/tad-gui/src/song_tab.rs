@@ -22,14 +22,17 @@ use fltk::app;
 use fltk::button::{Button, ToggleButton};
 use fltk::enums::{CallbackReason, CallbackTrigger, Color, Event, Font, Key};
 use fltk::group::{Flex, Pack, PackType};
-use fltk::input::Input;
+use fltk::input::{Input, IntInput};
 use fltk::prelude::*;
 use fltk::text::{TextBuffer, TextDisplay, WrapMode};
 use fltk::widget::Widget;
 
 use std::cell::RefCell;
+use std::cmp::min;
 use std::rc::Rc;
 use std::sync::Arc;
+
+const MAX_START_TICKS: u32 = 2_000_000;
 
 pub fn blank_mml_file() -> TextFile {
     TextFile {
@@ -45,6 +48,8 @@ pub struct State {
     song_id: ItemId,
 
     group: Flex,
+
+    song_start_ticks: IntInput,
 
     prev_channel_mask: MusicChannelsMask,
     channel_buttons: [ToggleButton; N_MUSIC_CHANNELS],
@@ -121,7 +126,19 @@ impl SongTab {
         let mut compile_button = button("C", "Compile song");
         compile_button.set_label_font(Font::ScreenBold);
         spacer(spacing);
-        let mut play_button = button("@play", "Play song from the beginning (F5)");
+
+        let mut song_start_ticks = IntInput::default().with_size(button_size * 2, 0);
+        song_start_ticks.set_value("0");
+        song_start_ticks.set_tooltip("Song start position (in ticks)");
+
+        let mut zero_start_ticks = button("0", "Zero start ticks");
+        let mut set_start_ticks = button("set", "Set start ticks to cursor (F9)\nShift+Click (Shift+F9) will also mute the other channels");
+        spacer(spacing);
+
+        let mut play_button = button(
+            "@play",
+            "Play song (F5)\nShift+click (Shift+F5) to play song from the beginning",
+        );
         let mut play_at_line_start_button = button("@play_line", "Play from line start (F6)");
         let mut play_at_cursor_button = button("@play_cursor", "Play from cursor (F7)");
         let mut play_channel_line_start_button =
@@ -186,6 +203,7 @@ impl SongTab {
             sender: sender.clone(),
             song_id,
             group: group.clone(),
+            song_start_ticks,
             prev_channel_mask: MusicChannelsMask::ALL,
             channel_buttons,
             sub_prefix_button,
@@ -215,8 +233,17 @@ impl SongTab {
             let s = state.clone();
             move |_widget, ev| match ev {
                 Event::KeyDown => match app::event_key() {
+                    Key::F9 => {
+                        s.borrow_mut()
+                            .set_start_ticks_clicked(app::is_event_shift());
+                        true
+                    }
                     Key::F5 => {
-                        s.borrow_mut().play_song();
+                        let mut s = s.borrow_mut();
+                        match app::is_event_shift() {
+                            false => s.play_song(),
+                            true => s.play_song_start(),
+                        }
                         true
                     }
                     Key::F6 => {
@@ -268,11 +295,32 @@ impl SongTab {
             }
         });
 
+        zero_start_ticks.set_callback({
+            let s = state.clone();
+            move |_| {
+                if let Ok(mut s) = s.try_borrow_mut() {
+                    s.song_start_ticks.set_value("0");
+                }
+            }
+        });
+
+        set_start_ticks.set_callback({
+            let s = state.clone();
+            move |_| {
+                if let Ok(mut s) = s.try_borrow_mut() {
+                    s.set_start_ticks_clicked(app::is_event_shift());
+                }
+            }
+        });
+
         play_button.set_callback({
             let s = state.clone();
             move |_| {
                 if let Ok(mut s) = s.try_borrow_mut() {
-                    s.play_song();
+                    match app::is_event_shift() {
+                        false => s.play_song(),
+                        true => s.play_song_start(),
+                    }
                 }
             }
         });
@@ -464,7 +512,48 @@ impl State {
             .send(GuiMessage::RecompileSong(self.song_id, self.editor.text()));
     }
 
+    fn set_start_ticks_clicked(&mut self, shift_pressed: bool) {
+        if let Some((c, t)) = self.editor.cursor_tick_counter_line_start() {
+            match c {
+                ChannelId::Channel(c) => {
+                    if shift_pressed {
+                        self.set_only_one_channel(c);
+                    }
+
+                    let t = min(t.value(), MAX_START_TICKS);
+                    self.song_start_ticks.set_value(&t.to_string());
+                }
+                ChannelId::SoundEffect => (),
+                ChannelId::Subroutine(_) => (),
+            }
+        }
+    }
+
     fn play_song(&mut self) {
+        let ticks: u32 = match self.song_start_ticks.value().parse() {
+            Ok(t) if t <= MAX_START_TICKS => t,
+            Ok(_) => {
+                self.song_start_ticks
+                    .set_value(&MAX_START_TICKS.to_string());
+                MAX_START_TICKS
+            }
+            Err(_) => {
+                self.song_start_ticks.set_value("0");
+                0
+            }
+        };
+
+        self.update_channel_buttons(self.prev_channel_mask);
+
+        self.sender.send(GuiMessage::PlaySong(
+            self.song_id,
+            self.editor.text(),
+            TickCounter::new(ticks),
+            self.prev_channel_mask,
+        ));
+    }
+
+    fn play_song_start(&mut self) {
         self.update_channel_buttons(self.prev_channel_mask);
 
         self.sender.send(GuiMessage::PlaySong(
@@ -533,6 +622,11 @@ impl State {
         for (i, b) in self.channel_buttons.iter_mut().enumerate() {
             b.set_value(mask.0 & (1u8 << i) != 0);
         }
+    }
+
+    fn set_only_one_channel(&mut self, c: char) {
+        self.prev_channel_mask = MusicChannelsMask::only_one_channel(c);
+        self.update_channel_buttons(self.prev_channel_mask);
     }
 
     fn enable_all_channels(&mut self) {
