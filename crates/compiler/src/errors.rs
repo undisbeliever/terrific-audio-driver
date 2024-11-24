@@ -278,7 +278,7 @@ pub struct SoundEffectsFileError {
 #[derive(Debug)]
 pub enum CombineSoundEffectsError {
     // Using String so they can be joined with slice::join
-    NoSoundEffectFiles,
+    NoSoundEffectFile,
     MissingSoundEffects(Vec<String>),
     InvalidNumberOfHighPrioritySfx,
     InvalidLowPriorityIndex,
@@ -1062,7 +1062,7 @@ impl Display for SoundEffectError {
 impl Display for CombineSoundEffectsError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            Self::NoSoundEffectFiles => write!(f, "no sound effect files"),
+            Self::NoSoundEffectFile => write!(f, "no sound effect file"),
             Self::MissingSoundEffects(names) => write!(
                 f,
                 "missing {} sound effects: {}",

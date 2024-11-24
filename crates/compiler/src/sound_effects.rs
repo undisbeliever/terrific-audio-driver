@@ -326,7 +326,7 @@ pub fn combine_sound_effects(
     let export_order = sfx_export_order.export_order();
 
     if sfx_map.is_empty() {
-        return Err(CombineSoundEffectsError::NoSoundEffectFiles);
+        return Err(CombineSoundEffectsError::NoSoundEffectFile);
     }
 
     let n_high_priority_sfx = match sfx_export_order.n_high_priority_sfx().try_into() {
