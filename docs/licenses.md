@@ -108,8 +108,8 @@ Licenses marked "synthesized" did not have a license file in their crate.
 
 Terrific Audio Driver makes use of the following open source projects:
   * MIT License (83)
+  * zlib License (3)
   * Apache License 2.0 (2)
-  * zlib License (2)
   * Unicode License v3 (1)
   * FLTK License (1)
 
@@ -1157,22 +1157,22 @@ SOFTWARE.
 ## MIT License
 
 Used by:
-  * [cxx-build 1.0.130](https://github.com/dtolnay/cxx)
-  * [cxx 1.0.130](https://github.com/dtolnay/cxx)
-  * [cxxbridge-flags 1.0.130](https://github.com/dtolnay/cxx)
-  * [cxxbridge-macro 1.0.130](https://github.com/dtolnay/cxx)
+  * [cxx-build 1.0.131](https://github.com/dtolnay/cxx)
+  * [cxx 1.0.131](https://github.com/dtolnay/cxx)
+  * [cxxbridge-flags 1.0.131](https://github.com/dtolnay/cxx)
+  * [cxxbridge-macro 1.0.131](https://github.com/dtolnay/cxx)
   * [itoa 1.0.13](https://github.com/dtolnay/itoa)
   * [link-cplusplus 1.0.9](https://github.com/dtolnay/link-cplusplus)
   * [once_cell 1.20.2](https://github.com/matklad/once_cell)
   * [paste 1.0.15](https://github.com/dtolnay/paste)
-  * [proc-macro2 1.0.89](https://github.com/dtolnay/proc-macro2)
+  * [proc-macro2 1.0.92](https://github.com/dtolnay/proc-macro2)
   * [quote 1.0.37](https://github.com/dtolnay/quote)
   * [rustversion 1.0.18](https://github.com/dtolnay/rustversion)
   * [scratch 1.0.7](https://github.com/dtolnay/scratch)
   * [serde 1.0.215](https://github.com/serde-rs/serde)
   * [serde_derive 1.0.215](https://github.com/serde-rs/serde)
   * [serde_json 1.0.133](https://github.com/serde-rs/json)
-  * [syn 2.0.87](https://github.com/dtolnay/syn)
+  * [syn 2.0.89](https://github.com/dtolnay/syn)
   * [unicode-ident 1.0.14](https://github.com/dtolnay/unicode-ident)
 
 ```
@@ -1551,6 +1551,34 @@ freely, subject to the following restrictions:
 3. This notice may not be removed or altered from any source distribution.
 
 
+```
+
+
+## zlib License
+
+Used by:
+  * [foldhash 0.1.3](https://github.com/orlp/foldhash)
+
+```
+Copyright (c) 2024 Orson Peters
+
+This software is provided 'as-is', without any express or implied warranty. In
+no event will the authors be held liable for any damages arising from the use of
+this software.
+
+Permission is granted to anyone to use this software for any purpose, including
+commercial applications, and to alter it and redistribute it freely, subject to
+the following restrictions:
+
+1. The origin of this software must not be misrepresented; you must not claim
+    that you wrote the original software. If you use this software in a product,
+    an acknowledgment in the product documentation would be appreciated but is
+    not required.
+
+2. Altered source versions must be plainly marked as such, and must not be
+    misrepresented as being the original software.
+
+3. This notice may not be removed or altered from any source distribution.
 ```
 
 
