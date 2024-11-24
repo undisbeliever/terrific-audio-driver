@@ -415,7 +415,9 @@ void menu_process_item(void) {
         break;
 
     case MENU__PLAY_SFX:
+#if N_SOUND_EFFECTS > 0
         menu_sfx = menu_adjustValue_slow(menu_sfx, MENU__PLAY_SFX, 0, N_SOUND_EFFECTS - 1);
+#endif
         break;
 
     case MENU__SFX_PAN:
