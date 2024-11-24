@@ -82,20 +82,22 @@ impl Exporter for PvExporter {
 
         writeln!(out, "\n")?;
 
-        writeln!(out, "// Sound Effects enum.")?;
-        writeln!(out, "// Input argument for `tad_queueSoundEffect` and `tad_queuePannedSoundEffect`")?;
-        writeln!(out, "enum SFX {{")?;
-        for (i, s) in sfx.export_order.list().iter().enumerate() {
-            if i == sfx.low_priority_index() {
-                writeln!(out, "  // low-priority sound effects")?;
-            } else if i == sfx.n_high_priority_sfx() {
-                writeln!(out, "  // normal-priority sound effects")?;
-            } else if i == 0 {
-                writeln!(out, "  // high-priority sound effects")?;
+        if !sfx.export_order.is_empty() {
+            writeln!(out, "// Sound Effects enum.")?;
+            writeln!(out, "// Input argument for `tad_queueSoundEffect` and `tad_queuePannedSoundEffect`")?;
+            writeln!(out, "enum SFX {{")?;
+            for (i, s) in sfx.export_order.list().iter().enumerate() {
+                if i == sfx.low_priority_index() {
+                    writeln!(out, "  // low-priority sound effects")?;
+                } else if i == sfx.n_high_priority_sfx() {
+                    writeln!(out, "  // normal-priority sound effects")?;
+                } else if i == 0 {
+                    writeln!(out, "  // high-priority sound effects")?;
+                }
+                writeln!(out, "  SFX_{} = {},", s, i)?;
             }
-            writeln!(out, "  SFX_{} = {},", s, i)?;
+            writeln!(out, "}};")?;
         }
-        writeln!(out, "}};")?;
 
         writeln!(out)?;
         writeln!(out, "#endif")?;
