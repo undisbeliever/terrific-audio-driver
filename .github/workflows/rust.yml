@@ -25,7 +25,9 @@ jobs:
           - ubuntu-latest
     steps:
     - name: Checkout
-      uses: actions/checkout@v2
+      uses: actions/checkout@v4
+      with:
+        submodules: 'true'
     - name: Build
       shell: bash
       run: |
@@ -47,7 +49,6 @@ jobs:
             sudo apt-get update
             sudo apt-get install -y ninja-build lib{x11,xext,xft,xinerama,xcursor,xrender,xfixes,pango1.0,gl1-mesa,glu1-mesa,sdl2}-dev
             log 'info' 'Build Wiz'
-            git submodule update --init --recursive
             make -j -C wiz
             log 'info' 'Cargo Fmt'
             cargo fmt --check --all
