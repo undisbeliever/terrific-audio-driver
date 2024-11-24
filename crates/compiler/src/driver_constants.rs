@@ -30,6 +30,7 @@ pub mod addresses {
         LOADER,
         SONG_PTR,
         LOADER_DATA_TYPE,
+        KEYOFF_SHADOW_MUSIC,
         EON_SHADOW_MUSIC,
         EON_SHADOW_SFX,
         SONG_TICK_COUNTER,

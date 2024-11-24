@@ -266,6 +266,8 @@ namespace IO {
         // Enables or disable music channels.
         //  * parameter0: A bitmask of the 8 music channels that can send key-on events
         //
+        // Disabled channels will be keyed-off.
+        //
         // NOTE: The music channels bitmask is reset whenever a new song is loaded.
         SET_MUSIC_CHANNELS = 12,
 

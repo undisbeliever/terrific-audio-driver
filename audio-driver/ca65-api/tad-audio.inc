@@ -126,6 +126,8 @@ TAD_MIN_TICK_CLOCK = 64
     ;; Set the main volume
     ;;  * parameter0: signed i8 volume
     ;;
+    ;; Disabled channels will be keyed-off.
+    ;;
     ;; NOTE: The main volume is reset whenever a new song is loaded.
     SET_MAIN_VOLUME = 10
 

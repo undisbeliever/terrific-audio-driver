@@ -31,6 +31,7 @@ const AUDIO_DRIVER_SYMBOLS: &[(&str, &str)] = &[
     ("__loader_songPtr", "SONG_PTR"),
     ("__loader_dataType", "LOADER_DATA_TYPE"),
     ("songTickCounter", "SONG_TICK_COUNTER"),
+    ("keyOffShadow_music", "KEYOFF_SHADOW_MUSIC"),
     ("eonShadow_music", "EON_SHADOW_MUSIC"),
     ("eonShadow_sfx", "EON_SHADOW_SFX"),
     ("io_musicChannelsMask", "IO_MUSIC_CHANNELS_MASK"),

@@ -760,6 +760,8 @@ impl TadEmu {
         let apuram = self.emu.apuram_mut();
 
         apuram[addresses::IO_MUSIC_CHANNELS_MASK as usize] = mask.0;
+        // Keyoff muted channels
+        apuram[addresses::KEYOFF_SHADOW_MUSIC as usize] |= mask.0 ^ 0xff;
     }
 
     fn queue_sound_effect(&mut self, sfx_id: SfxId, pan: Pan) {

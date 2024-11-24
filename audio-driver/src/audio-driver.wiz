@@ -1020,6 +1020,10 @@ func set_main_volume(volume : u8 in y) {
 
 func set_music_channels(mask : u8 in y) {
     io_musicChannelsMask = y;
+
+    // key-off muted channels
+    a = y ^ 0xff;
+    test_and_set(a, keyOffShadow_music);
 }
 
 

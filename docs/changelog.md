@@ -5,6 +5,10 @@ Terrific Audio Driver Changelog
 Version 0.0.14
 ==============
 
+Audio driver changes:
+ * SET_MUSIC_CHANNELS IO command now key-offs the disabled channels
+
+
 Bytecode assembly changes:
  * Fixed maximum vibrato quarter wavelength value
  * Added `$` hexadecimal number parsing to bytecode assembly

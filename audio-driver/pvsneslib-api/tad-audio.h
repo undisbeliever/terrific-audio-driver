@@ -273,6 +273,8 @@ bool tad_queueCommand_setMainVolume(s8 volume);
  *
  * Enables or disables music channels.
  *
+ * Disabled channels will be keyed-off.
+ *
  * NOTE: The music channels bitmask is reset whenever a new song is loaded.
  *
  * @param mask A bitmask of the 8 music channels that can send key-on events
