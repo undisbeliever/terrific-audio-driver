@@ -325,7 +325,7 @@ pub fn combine_sound_effects(
 ) -> Result<CombinedSoundEffectsData, CombineSoundEffectsError> {
     let export_order = sfx_export_order.export_order();
 
-    if sfx_map.is_empty() {
+    if sfx_map.is_empty() && !export_order.is_empty() {
         return Err(CombineSoundEffectsError::NoSoundEffectFile);
     }
 
