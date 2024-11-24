@@ -797,9 +797,9 @@ Menu_SfxPan_Action = Menu_PlaySfx_Action
         bcs     :+
             lda     #min
         :
-        cmp     #max
+        cmp     #.max(max, min)
         bcc     :+
-            lda     #max
+            lda     #.max(max, min)
         :
 
         sta     Menu::var
