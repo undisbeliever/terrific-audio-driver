@@ -231,14 +231,6 @@ in zeropage {
         var loopStackPointer : [u8 ; N_CHANNELS];
 
 
-        // Used to determine if vol_l and vol_r need recalculating.
-        //
-        // This is a per-channel flag so it can be cleared in __reset_channel().
-        //
-        // As the spc700 lacks a `stz dp+X` instruction, I am using `LSR dp+X` to clear this value.
-        // Only the MSB is tested when reading this flag.
-        var volShadowValid : [u8 ; N_CHANNELS];
-
         // Channel volume (0-255)
         var volume : [u8 ; N_CHANNELS];
 
@@ -264,6 +256,18 @@ in zeropage {
         //  * If 0, there are 256 ticks remaining
         var vibrato_tickCounter : [u8 ; N_CHANNELS];
     }
+
+
+    // Used to determine if vol_l and vol_r need recalculating.
+    // In the `__process_channels()` loop, bit 7 is left-shifted out and the volume is updated if set.
+    // (bitfield)
+    var volShadowDirty_tmp : u8;
+
+    // The sound effects with invalid vol_l and vol_r shadow variables.
+    // Set in the PLAY_SOUND_EFFECT command.
+    // CAUTION: bits 6 & 7 are swapped from other the other *_sfx bitsets
+    // (bitfield)
+    var volShadowDirty_sfx : u8;
 }
 
 
@@ -540,6 +544,10 @@ func main() {
 
         __reset_channel(x, MAX_PAN / 2);
 
+        a = STARTING_VOLUME >> 2;
+        channelSoA.virtualChannels.vol_l[x] = a;
+        channelSoA.virtualChannels.vol_r[x] = a;
+
         x--;
     } while !negative;
 
@@ -671,11 +679,15 @@ inline func _process_music_channels__inline() {
 
     zpTmp = a = keyOnShadow_music & musicSfxChannelMask & io_musicChannelsMask;
 
-    keyOnShadow_music = 0;
-    keyOffShadow_music = 0;
+    a = 0;
+    // Music channel volume can only be modified by bytecode, never externally
+    volShadowDirty_tmp = a;
+
+    keyOnShadow_music = a;
+    keyOffShadow_music = a;
 
     a = voiceChannelsDirty_music & musicSfxChannelMask;
-    __process_channels(a, zpTmp, FIRST_MUSIC_CHANNEL + 1, LAST_MUSIC_CHANNEL + 1);
+    __process_channels(a, zpTmp, volShadowDirty_tmp, FIRST_MUSIC_CHANNEL + 1, LAST_MUSIC_CHANNEL + 1);
 
     voiceChannelsDirty_music = voiceChannelsDirty_tmp;
 }
@@ -693,13 +705,16 @@ inline func _process_sfx_channels__inline() {
     write_dsp(GlobalDspAddr.KOFF, keyOffShadow_sfx);
 
     zpTmp = keyOnShadow_sfx;
+    volShadowDirty_tmp = volShadowDirty_sfx;
 
-    keyOnShadow_sfx = 0;
-    keyOffShadow_sfx = 0;
+    a = 0;
+    keyOnShadow_sfx = a;
+    keyOffShadow_sfx = a;
+    volShadowDirty_sfx = a;
 
     // DSP voice register writes must be masked
     a = voiceChannelsDirty_sfx & activeSoundEffects;
-    __process_channels(a, zpTmp, FIRST_SFX_CHANNEL + 1, LAST_SFX_CHANNEL + 1);
+    __process_channels(a, zpTmp, volShadowDirty_tmp, FIRST_SFX_CHANNEL + 1, LAST_SFX_CHANNEL + 1);
 
     voiceChannelsDirty_sfx = voiceChannelsDirty_tmp;
 
@@ -712,7 +727,11 @@ inline func _process_sfx_channels__inline() {
 // Update the DSP voice registers, write to EON & KON, then execute channel bytecode.
 //
 // CAUTION: This function DOES NOT write to the `KOFF` S-DSP register.
-func __process_channels(validChannels : u8 in a, konShadow: u8 in zpTmp, afterFirstChannel: u8 in zpTmp2, afterLastChannel: u8 in x) {
+func __process_channels(validChannels : u8 in a,
+                        konShadow: u8 in zpTmp,
+                        _volShadowDirty_tmp: u8 in volShadowDirty_tmp,
+                        afterFirstChannel: u8 in zpTmp2,
+                        afterLastChannel: u8 in x) {
 var _konShadow : u8 in zpTmp;
 var _afterFirstChannel : u8 in zpTmp2;
 
@@ -888,10 +907,16 @@ var _afterFirstChannel : u8 in zpTmp2;
                     // `channelSoA.virtualChannels` to save a lot of code space.
                     //
                     voiceChannelsDirty_tmp $ 7 = true;
-
-                    _update_vol_shadow_if_required__inline(x);
                 }
             }
+        }
+
+        // Cannot do this after process_bytecode() for 2 reasons:
+        //  1. Volume must be calculated on the first instruction of a sound-effect
+        //  2. Volume/pan slide/vibrato
+        volShadowDirty_tmp <<<= 1;
+        if carry {
+            _update_vol_shadow__inline(x);
         }
 
         // Portamento is processed after bytecode to ensure pitch slide occurs
@@ -1183,6 +1208,11 @@ func __play_sfx_on_channel(addrAndOneChannelFlag_h: u8 in a, channelIndex : u8 i
     // Enable sfx channel.
     test_and_set(a, activeSoundEffects);
 
+    // Mark sfx channel volume dirty
+    // eor used to swap bits 6 & 7 (since only 1 bit is set)
+    a ^= 0b11_000000;
+    test_and_set(a, volShadowDirty_sfx);
+
 
     // pan
     a = IO.ToDriver.parameter1;
@@ -1219,9 +1249,6 @@ func __reset_channel(channelIndex : u8 in x, pan: u8 in a) {
     // Disable vibrato
     channelSoA.vibrato_pitchOffsetPerTick[x] = a;
 
-    // Clear volShadowValid flag, so vol_l and vol_r is updated after the next bytecode instruction.
-    channelSoA.volShadowValid[x] = a;   // a = 0
-
     // Immediately process bytecode on the next tick
     channelSoA.nextEventIsKeyOff[x] = a; // a = 0
     a++;
@@ -1239,61 +1266,47 @@ func __reset_channel(channelIndex : u8 in x, pan: u8 in a) {
 // ==============
 
 
-// KEEP: x
-inline func clear_vol_shadow_valid_flag(channelIndex : u8 in x) {
-    // No `STZ dp+X` instruction, using `LSR dp+X` instead.
-    // Safe as I only use the MSB of `volShadowValid` to read the flag value.
-    channelSoA.volShadowValid[x] >>>= 1;
-}
 
-
-
-// Checks the volShadowValid flag and update vol_l and vol_r shadow variables if required.
+// Updates vol_l and vol_r shadow variables.
 //
 // NOTE: Does not change `channelSoA.virtualChannels.updateState[x]`.
 //
 // KEEP: x
-inline func _update_vol_shadow_if_required__inline(channelIndex : u8 in x) {
+inline func _update_vol_shadow__inline(channelIndex : u8 in x) {
 
-    a = channelSoA.volShadowValid[x];
-    if !negative {
-        // volShadowValid flag clear.
-        channelSoA.volShadowValid[x] = a = 0xff;
+    // Reading carry here saves a `SEC` instruction when calculating VOL_R
+    carry = loaderDataType $ LoaderDataType.STEREO_FLAG_BIT;
+    if carry {
+        // Stereo
 
-        // Reading carry here saves a `SEC` instruction when calculating VOL_R
-        carry = loaderDataType $ LoaderDataType.STEREO_FLAG_BIT;
-        if carry {
-            // Stereo
+        // Calculate right volume
+        // A pan value of `MAX_PAN` is 100% to the right.
+        // (MUST NOT USE CARRY)
 
-            // Calculate right volume
-            // A pan value of `MAX_PAN` is 100% to the right.
-            // (MUST NOT USE CARRY)
-
-            a = channelSoA.pan[x];
-            y = channelSoA.volume[x];
-            ya = mul(a, y);
-            channelSoA.virtualChannels.vol_r[x] = y;
+        a = channelSoA.pan[x];
+        y = channelSoA.volume[x];
+        ya = mul(a, y);
+        channelSoA.virtualChannels.vol_r[x] = y;
 
 
-            // Calculate left volume
-            // A pan value of `0` is 100% to the left.
+        // Calculate left volume
+        // A pan value of `0` is 100% to the left.
 
-            // Carry set (MUL does not set carry)
-            a = MAX_PAN -# channelSoA.pan[x];
-            y = channelSoA.volume[x];
-            ya = mul(a, y);
-            channelSoA.virtualChannels.vol_l[x] = y;
-        }
-        else {
-            // Mono
+        // Carry set (MUL does not set carry)
+        a = MAX_PAN -# channelSoA.pan[x];
+        y = channelSoA.volume[x];
+        ya = mul(a, y);
+        channelSoA.virtualChannels.vol_l[x] = y;
+    }
+    else {
+        // Mono
 
-            // First shift converts 8-bit volume to 7-bit VOL
-            // Second shift ensure mono vol has same combined amplitude as stereo vol
-            a = channelSoA.volume[x] >>> 2;
+        // First shift converts 8-bit volume to 7-bit VOL
+        // Second shift ensure mono vol has same combined amplitude as stereo vol
+        a = channelSoA.volume[x] >>> 2;
 
-            channelSoA.virtualChannels.vol_l[x] = a;
-            channelSoA.virtualChannels.vol_r[x] = a;
-        }
+        channelSoA.virtualChannels.vol_l[x] = a;
+        channelSoA.virtualChannels.vol_r[x] = a;
     }
 }
 
@@ -1529,6 +1542,13 @@ func process_next_bytecode(channelIndex : u8 in x) {
 //    * Jump to `process_bytecode_with_loader_test`.
 //
 namespace bytecode {
+
+
+// ASSUMES: in the channel process loop
+// KEEP: x
+inline func mark_vol_shadow_dirty__inline() {
+    volShadowDirty_tmp $ 7 = true;
+}
 
 
 
@@ -2097,7 +2117,7 @@ func adjust_pan(channelIndex : u8 in x, detla : i8 in a) {
 func set_pan(channelIndex : u8 in x, pan : u8 in a) {
     channelSoA.pan[x] = a;
 
-    clear_vol_shadow_valid_flag(x);
+    mark_vol_shadow_dirty__inline();
 
     ^return process_next_bytecode(x);
 }
@@ -2148,7 +2168,7 @@ func adjust_volume(channelIndex : u8 in x, delta: i8 in a) {
 func set_volume(channelIndex : u8 in x, volume : u8 in a) {
     channelSoA.volume[x] = a;
 
-    clear_vol_shadow_valid_flag(x);
+    mark_vol_shadow_dirty__inline();
 
     ^return process_next_bytecode(x);
 }

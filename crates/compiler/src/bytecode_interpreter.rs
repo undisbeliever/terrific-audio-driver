@@ -917,8 +917,8 @@ fn unused_channel(channel_index: usize) -> Channel {
         },
         bc_stack: [0; BC_CHANNEL_STACK_SIZE],
         dsp: VirtualChannel {
-            vol_l: 0,
-            vol_r: 0,
+            vol_l: STARTING_VOLUME >> 2,
+            vol_r: STARTING_VOLUME >> 2,
             scrn: 0,
             adsr1: 0,
             adsr2_or_gain: 0,
