@@ -1276,8 +1276,19 @@ inline func _update_vol_shadow__inline(channelIndex : u8 in x) {
 
     // Reading carry here saves a `SEC` instruction when calculating VOL_R
     carry = loaderDataType $ LoaderDataType.STEREO_FLAG_BIT;
-    if carry {
+    if !carry {
+        // Mono
+
+        // First shift converts 8-bit volume to 7-bit VOL
+        // Second shift ensure mono vol has same combined amplitude as stereo vol
+        a = channelSoA.volume[x] >>> 2;
+
+        channelSoA.virtualChannels.vol_l[x] = a;
+        channelSoA.virtualChannels.vol_r[x] = a;
+    }
+    else {
         // Stereo
+        // carry set
 
         // Calculate right volume
         // A pan value of `MAX_PAN` is 100% to the right.
@@ -1297,16 +1308,6 @@ inline func _update_vol_shadow__inline(channelIndex : u8 in x) {
         y = channelSoA.volume[x];
         ya = mul(a, y);
         channelSoA.virtualChannels.vol_l[x] = y;
-    }
-    else {
-        // Mono
-
-        // First shift converts 8-bit volume to 7-bit VOL
-        // Second shift ensure mono vol has same combined amplitude as stereo vol
-        a = channelSoA.volume[x] >>> 2;
-
-        channelSoA.virtualChannels.vol_l[x] = a;
-        channelSoA.virtualChannels.vol_r[x] = a;
     }
 }
 
