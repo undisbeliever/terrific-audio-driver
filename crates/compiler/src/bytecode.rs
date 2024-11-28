@@ -17,7 +17,8 @@ use crate::notes::{Note, LAST_NOTE_ID, N_NOTES};
 use crate::samples::note_range;
 use crate::time::{TickClock, TickCounter, TickCounterWithLoopFlag};
 use crate::value_newtypes::{
-    i8_value_newtype, u8_value_newtype, SignedValueNewType, UnsignedValueNewType,
+    i16_non_zero_value_newtype, i8_value_newtype, u8_value_newtype, SignedValueNewType,
+    UnsignedValueNewType,
 };
 
 use std::cmp::{max, min};
@@ -336,43 +337,19 @@ impl PlayNoteTicks {
     }
 }
 
-#[derive(Debug, Copy, Clone, PartialEq)]
-pub struct PortamentoVelocity(i16);
+i16_non_zero_value_newtype!(
+    PortamentoVelocity,
+    PortamentoVelocityOutOfRange,
+    NoPortamentoVelocity,
+    NoDirectionInPortamentoVelocity,
+    PortamentoVelocityZero,
+    -(u8::MAX as i16),
+    u8::MAX as i16
+);
 
 impl PortamentoVelocity {
-    pub const MIN: Self = Self(-Self::MAX.0);
-    pub const MAX: Self = Self(u8::MAX as i16);
-
-    pub fn is_negative(&self) -> bool {
-        self.0 < 0
-    }
     pub fn pitch_offset_per_tick(&self) -> u8 {
-        u8::try_from(self.0.abs()).unwrap()
-    }
-}
-
-impl SignedValueNewType for PortamentoVelocity {
-    type ValueType = i16;
-
-    const MISSING_ERROR: ValueError = ValueError::NoPortamentoVelocity;
-    const MISSING_SIGN_ERROR: ValueError = ValueError::NoDirectionInPortamentoVelocity;
-
-    fn value(&self) -> Self::ValueType {
-        self.0
-    }
-}
-
-impl TryFrom<i32> for PortamentoVelocity {
-    type Error = ValueError;
-
-    fn try_from(velocity: i32) -> Result<Self, Self::Error> {
-        if velocity == 0 {
-            Err(ValueError::PortamentoVelocityZero)
-        } else if velocity >= Self::MIN.0.into() && velocity <= Self::MAX.0.into() {
-            Ok(PortamentoVelocity(velocity.try_into().unwrap()))
-        } else {
-            Err(ValueError::PortamentoVelocityOutOfRange(velocity))
-        }
+        u8::try_from(self.0.unsigned_abs()).unwrap()
     }
 }
 
