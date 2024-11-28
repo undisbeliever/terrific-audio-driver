@@ -259,11 +259,6 @@ in zeropage {
         //  * Counts down from `vibrato_waveLengthInTicks` to 0.
         //  * If 0, there are 256 ticks remaining
         var vibrato_tickCounter : [u8 ; N_CHANNELS];
-
-
-        // Countdown ticks for volume effects
-        // (ticks)
-        var volEffect_counter : [u8 ; N_CHANNELS];
     }
 
 
@@ -326,6 +321,10 @@ in firstpage {
         //  * bit 0 clear - increment volume
         //  * bit 0 set - decrement volume
         var volEffect_direction : [u8 ; N_CHANNELS];
+
+        // Countdown ticks for volume effects
+        // (ticks)
+        var volEffect_counter : [u8 ; N_CHANNELS];
 
         // Volume offset per tick
         // (8.8 unsigned fixed point)
@@ -1311,18 +1310,29 @@ func __reset_channel(channelIndex : u8 in x, pan: u8 in a) {
 inline func _process_volume_effects__inline(channelIndex: u8 in x, direction: u8 in a) {
     // Warning spaghetti code: Optimised for code-size.
 
+    // Hack to allow access to volume effect variables with `direct_page = true`.
+    var _csv_subVolume @ &channelSoA.subVolume           as u8 : [u8 ; N_CHANNELS];
+    var _csv_direction @ &channelSoA.volEffect_direction as u8 : [u8 ; N_CHANNELS];
+    var _csv_counter   @ &channelSoA.volEffect_counter   as u8 : [u8 ; N_CHANNELS];
+    var _csv_offset_l  @ &channelSoA.volEffect_offset_l  as u8 : [u8 ; N_CHANNELS];
+    var _csv_offset_h  @ &channelSoA.volEffect_offset_h  as u8 : [u8 ; N_CHANNELS];
+
     a >>>= 1;
 
     y = channelSoA.volume[x];
-    a = channelSoA.subVolume[x];
+
+    direct_page = true;
+    // MUST NOT access zeropage variables until direct_page is false.
+
+    a = _csv_subVolume[x];
 
     goto Up if !carry;
         // down
         // carry set
-        a -#= channelSoA.volEffect_offset_l[x];
-        channelSoA.subVolume[x] = a;
+        a -#= _csv_offset_l[x];
+        _csv_subVolume[x] = a;
 
-        a = y -# channelSoA.volEffect_offset_h[x];
+        a = y -# _csv_offset_h[x];
 
         goto EndIf if carry;
             y = 0;
@@ -1335,23 +1345,25 @@ inline func _process_volume_effects__inline(channelIndex: u8 in x, direction: u8
     Up:
         // up
         // carry clear
-        a +#= channelSoA.volEffect_offset_l[x];
-        channelSoA.subVolume[x] = a;
+        a +#= _csv_offset_l[x];
+        _csv_subVolume[x] = a;
 
-        a = y +# channelSoA.volEffect_offset_h[x];
+        a = y +# _csv_offset_h[x];
 
         goto UpOverflow if carry;
 EndIf:
 
     y = a;
 
-    channelSoA.volEffect_counter[x]--;
+    _csv_counter[x]--;
     goto WriteVolume if !zero;
 
     DisableEffect:
-        channelSoA.volEffect_direction[x] = a = 0;
+        _csv_direction[x] = a = 0;
 
 WriteVolume:
+    direct_page = false;
+
     channelSoA.volume[x] = y;
 }
 
