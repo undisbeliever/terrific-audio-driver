@@ -9,7 +9,7 @@ A @1
 A v0 vs+16,60 c1 r4
 
 ; Volume slide down.  max to half
-A v16 vs-16,60 c1 r4
+A v16 vs-8,60 c1 r4
 
 ; Volume slide up stops on overflow
 A V192 Vs+200,80 c1 r4
