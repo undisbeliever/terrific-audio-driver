@@ -260,6 +260,18 @@ Numbers can be decimal, or hexadecimal when prefixed with `$` (ie, `$ff`)
     * Panning is disabled if the stereo flag is false (mono output).
  * `p-<1..128>` - Decrement pan (pan to the left)
  * `p+<1..128>` - Increment pan (pan to the right)
+
+<br/>
+
+ * `vs+<0..16>,<ticks>` - Volume slide up (coarse volume)
+    * Volume slide is disabled when the volume is set of adjusted.
+    * Volume slide is disabled on overflows and underflows.
+ * `vs-<0..16>,<ticks>` - Volume slide down (coarse volume)
+ * `Vs+<0..255>,<ticks>` - Volume slide up (fine volume)
+ * `Vs-<0..255>,<ticks>` - Volume slide down (fine volume)
+
+<br/>
+
  * `E` - Enable echo
  * `E1` - Enable echo
  * `E0` - Disable echo

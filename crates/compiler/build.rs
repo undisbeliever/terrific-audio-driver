@@ -65,6 +65,11 @@ const AUDIO_DRIVER_SYMBOLS: &[(&str, &str)] = &[
     ("channelSoA.earlyRelease_minTicks", "CHANNEL_EARLY_RELEASE_MIN_TICKS"),
     ("channelSoA.earlyRelease_gain", "CHANNEL_EARLY_RELEASE_GAIN"),
     ("channelSoA.volume", "CHANNEL_VOLUME"),
+    ("channelSoA.subVolume", "CHANNEL_SUB_VOLUME"),
+    ("channelSoA.volEffect_direction", "CHANNEL_VOL_EFFECT_DIRECTION"),
+    ("channelSoA.volEffect_offset_l", "CHANNEL_VOL_EFFECT_OFFSET_L"),
+    ("channelSoA.volEffect_offset_h", "CHANNEL_VOL_EFFECT_OFFSET_H"),
+    ("channelSoA.volEffect_counter", "CHANNEL_VOL_EFFECT_COUNTER"),
 ];
 
 fn find_wiz_binary() -> PathBuf {

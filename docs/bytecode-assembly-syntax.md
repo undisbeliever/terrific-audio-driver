@@ -61,6 +61,11 @@ Instructions
  * `adjust_pan <i8>` - Adjusts the channel's panning.
  * `set_pan_and_volume <pan> <volume>` - Sets the channel's panning and volume.
 
+ * `volume_slide <amount> <duration>` - Volume slide
+    * This instruction does not sleep and the effect runs in the background.
+    * Volume slide is disabled when the volume is set of adjusted.
+    * Volume slide is disabled on overflows and underflows.
+
  * `enable_echo` - Enable echo on this channel.
  * `disable_echo` - Disable echo on this channel.
 

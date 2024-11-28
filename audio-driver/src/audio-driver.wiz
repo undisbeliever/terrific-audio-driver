@@ -63,6 +63,10 @@ let FIRST_SFX_CHANNEL = LAST_MUSIC_CHANNEL + 1;
 let LAST_SFX_CHANNEL = N_CHANNELS - 1;
 
 
+let VOL_PAN_EFFECT_SLIDE_UP   = 0x80;
+let VOL_PAN_EFFECT_SLIDE_DOWN = 0x81;
+
+
 in zeropage {
     // Temporary variables
     var zpTmp : u8;
@@ -255,6 +259,11 @@ in zeropage {
         //  * Counts down from `vibrato_waveLengthInTicks` to 0.
         //  * If 0, there are 256 ticks remaining
         var vibrato_tickCounter : [u8 ; N_CHANNELS];
+
+
+        // Countdown ticks for volume effects
+        // (ticks)
+        var volEffect_counter : [u8 ; N_CHANNELS];
     }
 
 
@@ -307,6 +316,21 @@ in firstpage {
         // The address of the next bytecode to execute
         // (The high-byte of instructionPtr is in firstpage)
         var instructionPtr_l : [u8 ; N_CHANNELS];
+
+
+        // Fractional volume (used for volume effects)
+        var subVolume : [u8 ; N_CHANNELS];
+
+        // Volume effect direction.
+        //  * zero - volume effect disabled
+        //  * bit 0 clear - increment volume
+        //  * bit 0 set - decrement volume
+        var volEffect_direction : [u8 ; N_CHANNELS];
+
+        // Volume offset per tick
+        // (8.8 unsigned fixed point)
+        var volEffect_offset_l : [u8 ; N_CHANNELS];
+        var volEffect_offset_h : [u8 ; N_CHANNELS];
 
 
         // Channel pan (0-MAX_PAN)
@@ -911,6 +935,16 @@ var _afterFirstChannel : u8 in zpTmp2;
             }
         }
 
+        a = channelSoA.volEffect_direction[x];
+        if !zero {
+            _process_volume_effects__inline(x, a);
+
+            // Set S-DSP voice registers dirty bit
+            voiceChannelsDirty_tmp $ 7 = true;
+
+            volShadowDirty_tmp $ 7 = true;
+        }
+
         // Cannot do this after process_bytecode() for 2 reasons:
         //  1. Volume must be calculated on the first instruction of a sound-effect
         //  2. Volume/pan slide/vibrato
@@ -1249,6 +1283,9 @@ func __reset_channel(channelIndex : u8 in x, pan: u8 in a) {
     // Disable vibrato
     channelSoA.vibrato_pitchOffsetPerTick[x] = a;
 
+    // Disable volume effects
+    channelSoA.volEffect_direction[x] = a;
+
     // Immediately process bytecode on the next tick
     channelSoA.nextEventIsKeyOff[x] = a; // a = 0
     a++;
@@ -1264,6 +1301,59 @@ func __reset_channel(channelIndex : u8 in x, pan: u8 in a) {
 
 // Volume and Pan
 // ==============
+
+
+// Process volume effect
+//
+// CAUTION: Does not set `volShadowDirty_tmp`.
+//
+// KEEP: x
+inline func _process_volume_effects__inline(channelIndex: u8 in x, direction: u8 in a) {
+    // Warning spaghetti code: Optimised for code-size.
+
+    a >>>= 1;
+
+    y = channelSoA.volume[x];
+    a = channelSoA.subVolume[x];
+
+    goto Up if !carry;
+        // down
+        // carry set
+        a -#= channelSoA.volEffect_offset_l[x];
+        channelSoA.subVolume[x] = a;
+
+        a = y -# channelSoA.volEffect_offset_h[x];
+
+        goto EndIf if carry;
+            y = 0;
+            goto DisableEffect;
+
+        UpOverflow:
+            y = 0xff;
+            goto DisableEffect;
+
+    Up:
+        // up
+        // carry clear
+        a +#= channelSoA.volEffect_offset_l[x];
+        channelSoA.subVolume[x] = a;
+
+        a = y +# channelSoA.volEffect_offset_h[x];
+
+        goto UpOverflow if carry;
+EndIf:
+
+    y = a;
+
+    channelSoA.volEffect_counter[x]--;
+    goto WriteVolume if !zero;
+
+    DisableEffect:
+        channelSoA.volEffect_direction[x] = a = 0;
+
+WriteVolume:
+    channelSoA.volume[x] = y;
+}
 
 
 
@@ -1313,8 +1403,8 @@ inline func _update_vol_shadow__inline(channelIndex : u8 in x) {
 
 
 
-// Effects
-// =======
+// Pitch Effects
+// =============
 
 
 // KEEP: X
@@ -2171,8 +2261,51 @@ func set_volume(channelIndex : u8 in x, volume : u8 in a) {
 
     mark_vol_shadow_dirty__inline();
 
+    // Disable volume effects
+    // (Y is non-zero)
+    channelSoA.volEffect_direction[x] = a = 0;
+
     ^return process_next_bytecode(x);
 }
+
+
+// Y = 0
+// KEEP: x
+func volume_slide_up(channelIndex: u8 in x, ticks: u8 in a) {
+    channelSoA.volEffect_counter[x] = a;
+
+    return __volume_slide(x, VOL_PAN_EFFECT_SLIDE_UP);
+}
+
+
+// Y = 0
+// KEEP: x
+#[fallthrough]
+func volume_slide_down(channelIndex: u8 in x, ticks: u8 in a) {
+    channelSoA.volEffect_counter[x] = a;
+
+    a = VOL_PAN_EFFECT_SLIDE_DOWN;
+
+// Fallthrough into __volume_slide()
+}
+
+
+// Y = 0
+// KEEP: x
+func __volume_slide(channelIndex: u8 in x, direction: u8 in a) {
+    channelSoA.volEffect_direction[x] = a;
+
+    channelSoA.volEffect_offset_l[x] = a = instructionPtr[y];
+    instructionPtr++;
+    channelSoA.volEffect_offset_h[x] = a = instructionPtr[y];
+    instructionPtr++;
+
+    // Y = 0
+    channelSoA.subVolume[x] = a = y;
+
+    ^return process_next_bytecode(x);
+}
+
 
 
 // KEEP: x

@@ -70,7 +70,7 @@ macro_rules! u8_value_newtype {
             }
         }
     };
-    ($name:ident, $error:ident, $missing_error:ident, $min: expr, $max:expr) => {
+    ($name:ident, $error:ident, $missing_error:ident, $min:expr, $max:expr) => {
         #[derive(Debug, Copy, Clone, PartialEq)]
         pub struct $name(u8);
 
@@ -115,6 +115,48 @@ macro_rules! u8_value_newtype {
                     Ok(Self(u8::try_from(value).unwrap()))
                 } else {
                     Err(ValueError::$error(value))
+                }
+            }
+        }
+    };
+}
+
+macro_rules! u8_0_is_256_value_newtype {
+    ($name:ident, $error:ident, $missing_error:ident) => {
+        #[derive(Debug, Copy, Clone, PartialEq)]
+        pub struct $name(u8);
+
+        #[allow(dead_code)]
+        impl $name {
+            pub const MIN: Self = Self(1);
+            pub const MAX: Self = Self(0);
+
+            pub const fn driver_value(&self) -> u8 {
+                self.0
+            }
+        }
+
+        impl crate::value_newtypes::UnsignedValueNewType for $name {
+            type ValueType = u32;
+
+            const MISSING_ERROR: ValueError = ValueError::$missing_error;
+
+            fn value(&self) -> Self::ValueType {
+                match self.0 {
+                    0 => 256,
+                    v => v.into(),
+                }
+            }
+        }
+
+        impl TryFrom<u32> for $name {
+            type Error = ValueError;
+
+            fn try_from(value: u32) -> Result<Self, Self::Error> {
+                match value {
+                    1..=255 => Ok(Self(value.try_into().unwrap())),
+                    256 => Ok(Self(0)),
+                    _ => Err(ValueError::$error(value)),
                 }
             }
         }
@@ -209,4 +251,6 @@ macro_rules! i16_non_zero_value_newtype {
     };
 }
 
-pub(crate) use {i16_non_zero_value_newtype, i8_value_newtype, u8_value_newtype};
+pub(crate) use {
+    i16_non_zero_value_newtype, i8_value_newtype, u8_0_is_256_value_newtype, u8_value_newtype,
+};

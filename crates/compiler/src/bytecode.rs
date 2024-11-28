@@ -17,8 +17,8 @@ use crate::notes::{Note, LAST_NOTE_ID, N_NOTES};
 use crate::samples::note_range;
 use crate::time::{TickClock, TickCounter, TickCounterWithLoopFlag};
 use crate::value_newtypes::{
-    i16_non_zero_value_newtype, i8_value_newtype, u8_value_newtype, SignedValueNewType,
-    UnsignedValueNewType,
+    i16_non_zero_value_newtype, i8_value_newtype, u8_0_is_256_value_newtype, u8_value_newtype,
+    SignedValueNewType, UnsignedValueNewType,
 };
 
 use std::cmp::{max, min};
@@ -58,6 +58,21 @@ u8_value_newtype!(
     NoVibratoQuarterWavelength,
     1,
     64
+);
+
+i16_non_zero_value_newtype!(
+    VolumeSlideAmount,
+    VolumeSlideAmountOutOfRange,
+    NoVolumeSlideDirection,
+    NoVolumeSlideDirection,
+    VolumeSlideAmountZero,
+    -(Volume::MAX.as_u8() as i16),
+    Volume::MAX.as_u8() as i16
+);
+u8_0_is_256_value_newtype!(
+    VolumeSlideTicks,
+    VolumeSlideTicksOutOfRange,
+    NoVolumeSlideTicks
 );
 
 impl Pan {
@@ -114,6 +129,8 @@ pub mod opcodes {
         SET_PAN_AND_VOLUME,
         ADJUST_VOLUME,
         SET_VOLUME,
+        VOLUME_SLIDE_UP,
+        VOLUME_SLIDE_DOWN,
         SET_SONG_TICK_CLOCK,
         START_LOOP,
         SKIP_LAST_LOOP,
@@ -1124,6 +1141,26 @@ impl<'a> Bytecode<'a> {
             pan.as_u8(),
             volume.as_u8()
         );
+    }
+
+    pub fn volume_slide(&mut self, amount: VolumeSlideAmount, ticks: VolumeSlideTicks) {
+        let opcode = match amount.is_negative() {
+            false => opcodes::VOLUME_SLIDE_UP,
+            true => opcodes::VOLUME_SLIDE_DOWN,
+        };
+
+        let u16_ticks = u16::try_from(ticks.value()).unwrap();
+
+        let offset_per_tick = ((amount.value().unsigned_abs() << 8) | 0xff) / u16_ticks;
+        let arg_2 = offset_per_tick.to_le_bytes()[0];
+        let arg_3 = offset_per_tick.to_le_bytes()[1];
+
+        debug_assert_eq!(
+            offset_per_tick.wrapping_mul(u16_ticks).to_le_bytes()[1],
+            u8::try_from(amount.value().unsigned_abs()).unwrap()
+        );
+
+        emit_bytecode!(self, opcode, ticks.driver_value(), arg_2, arg_3);
     }
 
     pub fn enable_echo(&mut self) {

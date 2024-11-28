@@ -195,6 +195,16 @@ fn assert_bc_intrepreter_matches_emu(
     test_channel_soa(addresses::CHANNEL_INST_PITCH_OFFSET, "instPitchOffset");
 
     test_channel_soa(addresses::CHANNEL_VOLUME, "volume");
+    test_channel_soa(
+        addresses::CHANNEL_VOL_EFFECT_DIRECTION,
+        "volEffect_direction",
+    );
+    test_channel_soa(addresses::CHANNEL_VOL_EFFECT_OFFSET_L, "volEffect_offset_l");
+    test_channel_soa(addresses::CHANNEL_VOL_EFFECT_OFFSET_H, "volEffect_offset_h");
+
+    // Not testing subVolume, bc_iterpreter value is invalid on overflow
+    // Not testing counter, bc_interpreter counter is invalid on overflow
+
     test_channel_soa(addresses::CHANNEL_PAN, "pan");
 
     // Not testing portamento

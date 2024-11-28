@@ -49,6 +49,8 @@ pub enum Token<'a> {
     FineVolume,
     Pan,
     PxPan,
+    CoarseVolumeSlide,
+    FineVolumeSlide,
     Quantize,
     EarlyRelease,
     Transpose,
@@ -395,8 +397,6 @@ fn next_token<'a>(scanner: &mut Scanner<'a>) -> Option<TokenWithPosition<'a>> {
         b'o' => one_ascii_token!(Token::SetOctave),
         b'>' => one_ascii_token!(Token::IncrementOctave),
         b'<' => one_ascii_token!(Token::DecrementOctave),
-        b'v' => one_ascii_token!(Token::CoarseVolume),
-        b'V' => one_ascii_token!(Token::FineVolume),
         b'Q' => one_ascii_token!(Token::Quantize),
         b'q' => one_ascii_token!(Token::EarlyRelease),
         b'~' => one_ascii_token!(Token::ManualVibrato),
@@ -424,6 +424,16 @@ fn next_token<'a>(scanner: &mut Scanner<'a>) -> Option<TokenWithPosition<'a>> {
                 _ => one_ascii_token!(Token::Pan),
             }
         }
+
+        b'v' => match scanner.second_byte() {
+            Some(b's') => two_ascii_token!(Token::CoarseVolumeSlide),
+            _ => one_ascii_token!(Token::CoarseVolume),
+        },
+
+        b'V' => match scanner.second_byte() {
+            Some(b's') => two_ascii_token!(Token::FineVolumeSlide),
+            _ => one_ascii_token!(Token::FineVolume),
+        },
 
         // Gain might use 2 or 3 chacters
         b'G' => {

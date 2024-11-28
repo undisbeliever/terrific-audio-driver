@@ -3003,6 +3003,100 @@ fn test_large_adjust_pan() {
 }
 
 #[test]
+fn test_volume_slide() {
+    assert_line_matches_bytecode("vs+2,8", &["volume_slide +32 8"]);
+    assert_line_matches_bytecode("vs-4,16", &["volume_slide -$40 16"]);
+    assert_line_matches_bytecode("vs+16,20", &["volume_slide +255 20"]);
+    assert_line_matches_bytecode("vs-16,20", &["volume_slide -255 20"]);
+
+    assert_line_matches_bytecode("Vs+20,50", &["volume_slide +20 50"]);
+    assert_line_matches_bytecode("Vs-30,80", &["volume_slide -30 80"]);
+
+    // 0x10ff / 16 = 0x10f
+    assert_line_matches_bytecode_bytes("vs+1,16", &[opcodes::VOLUME_SLIDE_UP, 16, 0x0f, 0x01]);
+    // 0x30ff / 32 = 0x187
+    assert_line_matches_bytecode_bytes("vs+3,32", &[opcodes::VOLUME_SLIDE_UP, 32, 0x87, 0x01]);
+    // 0x31ff / 14 = 0x392
+    assert_line_matches_bytecode_bytes("Vs +49,14", &[opcodes::VOLUME_SLIDE_UP, 14, 0x92, 0x03]);
+    // (0x100 * 111 + 0xff) / 256 = 111
+    assert_line_matches_bytecode_bytes("Vs+111,256", &[opcodes::VOLUME_SLIDE_UP, 0, 111, 0]);
+
+    assert_line_matches_bytecode_bytes("vs-7,1", &[opcodes::VOLUME_SLIDE_DOWN, 1, 0xff, 0x70]);
+    // 0x80ff / 40 = 0x339
+    assert_line_matches_bytecode_bytes("vs-8,40", &[opcodes::VOLUME_SLIDE_DOWN, 40, 0x39, 0x03]);
+    // (0x100 * 200 + 0xff) / 140 = 0x16f
+    assert_line_matches_bytecode_bytes(
+        "Vs-200,140",
+        &[opcodes::VOLUME_SLIDE_DOWN, 140, 0x6f, 0x01],
+    );
+    // (0x100 * 222 + 0xff) / 256 = 222
+    assert_line_matches_bytecode_bytes("Vs -222,256", &[opcodes::VOLUME_SLIDE_DOWN, 0, 222, 0]);
+
+    assert_error_in_mml_line(
+        "vs+17,100",
+        1,
+        ValueError::CoarseVolumeSlideOutOfRange(17).into(),
+    );
+    assert_error_in_mml_line(
+        "Vs+256,100",
+        1,
+        ValueError::VolumeSlideAmountOutOfRange(256).into(),
+    );
+    assert_error_in_mml_line(
+        "vs-17,100",
+        1,
+        ValueError::CoarseVolumeSlideOutOfRange(-17).into(),
+    );
+    assert_error_in_mml_line(
+        "Vs-256,100",
+        1,
+        ValueError::VolumeSlideAmountOutOfRange(-256).into(),
+    );
+
+    assert_error_in_mml_line(
+        "vs+4,0",
+        6,
+        ValueError::VolumeSlideTicksOutOfRange(0).into(),
+    );
+    assert_error_in_mml_line(
+        "Vs+100,0",
+        8,
+        ValueError::VolumeSlideTicksOutOfRange(0).into(),
+    );
+    assert_error_in_mml_line(
+        "vs-4,0",
+        6,
+        ValueError::VolumeSlideTicksOutOfRange(0).into(),
+    );
+    assert_error_in_mml_line(
+        "Vs-100,0",
+        8,
+        ValueError::VolumeSlideTicksOutOfRange(0).into(),
+    );
+
+    assert_error_in_mml_line(
+        "vs+4,257",
+        6,
+        ValueError::VolumeSlideTicksOutOfRange(257).into(),
+    );
+    assert_error_in_mml_line(
+        "Vs+100,257",
+        8,
+        ValueError::VolumeSlideTicksOutOfRange(257).into(),
+    );
+    assert_error_in_mml_line(
+        "vs-4,257",
+        6,
+        ValueError::VolumeSlideTicksOutOfRange(257).into(),
+    );
+    assert_error_in_mml_line(
+        "Vs-100,257",
+        8,
+        ValueError::VolumeSlideTicksOutOfRange(257).into(),
+    );
+}
+
+#[test]
 fn test_set_instrument() {
     let mml = r##"
 @0 dummy_instrument
@@ -4980,6 +5074,22 @@ fn assert_line_matches_bytecode(mml_line: &str, bc_asm: &[&str]) {
         mml_bytecode(&mml),
         bc_asm,
         "Testing {mml_line:?} against bytecode"
+    );
+}
+
+fn assert_line_matches_bytecode_bytes(mml_line: &str, bc: &[u8]) {
+    let mml = ["@1 dummy_instrument\nA @1 o4\nA ", mml_line].concat();
+
+    let dd = dummy_data();
+    let mml = compile_mml(&mml, &dd);
+    let mml_bc = mml_bytecode(&mml);
+
+    assert_eq!(&mml_bc[..2], [opcodes::SET_INSTRUMENT, 0]);
+    assert_eq!(mml_bc.last(), Some(&opcodes::DISABLE_CHANNEL));
+    assert_eq!(
+        &mml_bc[2..(mml_bc.len() - 1)],
+        bc,
+        "Testing {mml_line:?} against bytecode bytes"
     );
 }
 

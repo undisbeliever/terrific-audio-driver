@@ -221,6 +221,10 @@
       "source": "mml-tests/test-bc-asm-in-mml.mml"
     },
     {
+      "name": "volume_slide",
+      "source": "mml-tests/volume-slide.mml"
+    },
+    {
       "name": "volume_pop_bug",
       "source": "bug-tests/volume-pop-bug.mml"
     },

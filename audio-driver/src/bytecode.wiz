@@ -232,6 +232,17 @@ let INSTRUCTIONS_WITH_ARGUMENTS = [
     set_volume,
 
 
+    // parameters: tttttttt oooooooo oooooooo
+    //      tttttttt          = number of ticks (0 is 256 ticks)
+    //      oooooooo oooooooo = offset per tick (8.8 unsigned fixed point)
+    volume_slide_up,
+
+    // parameters: tttttttt oooooooo oooooooo
+    //      tttttttt          = number of ticks (0 is 256 ticks)
+    //      oooooooo oooooooo = offset per tick (8.8 unsigned fixed point)
+    volume_slide_down,
+
+
     // parameter: u8 new timer0 value
     //
     // NOTE: Only sets the song timer (tempo).  The timer for the sound-effect channels is unchanged.

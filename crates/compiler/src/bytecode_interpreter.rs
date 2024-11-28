@@ -42,6 +42,16 @@ struct VirtualChannel {
 }
 
 #[derive(Clone)]
+struct ChannelSoAPanVol {
+    value: u8,
+    sub_value: u8,
+    direction: u8,
+    offset_l: u8,
+    offset_h: u8,
+    counter: u8,
+}
+
+#[derive(Clone)]
 struct ChannelSoA {
     countdown_timer: u8,
     next_event_is_key_off: u8,
@@ -52,7 +62,8 @@ struct ChannelSoA {
     loop_stack_pointer: u8,
 
     inst_pitch_offset: u8,
-    volume: u8,
+
+    volume: ChannelSoAPanVol,
     pan: u8,
 
     // Not emulating portamento
@@ -100,6 +111,160 @@ impl GlobalState {
     }
 }
 
+#[derive(Debug, Clone, Copy)]
+enum PanVolEffectDirection {
+    None = 0,
+    SlideUp = 0x80,
+    SlideDown = 0x81,
+}
+
+#[derive(Debug, Clone)]
+struct PanVolValue<const MAX: u8> {
+    tc: TickCounter,
+
+    value: u8,
+    sub_value: u8,
+    counter: u8,
+    direction: PanVolEffectDirection,
+
+    offset: u32,
+}
+
+impl<const M: u8> PanVolValue<M> {
+    const MAX: u8 = M;
+    const MAX_U32: u32 = ((Self::MAX as u32) << 8) | 0xff;
+
+    fn new(value: u8) -> Self {
+        Self {
+            tc: TickCounter::new(0),
+            value,
+            sub_value: 0,
+            counter: 0,
+            direction: PanVolEffectDirection::None,
+            offset: 0,
+        }
+    }
+
+    fn as_soa(&self) -> ChannelSoAPanVol {
+        ChannelSoAPanVol {
+            value: self.value,
+            sub_value: self.sub_value,
+            direction: self.direction as u8,
+            offset_l: self.offset.to_le_bytes()[0],
+            offset_h: self.offset.to_le_bytes()[1],
+            counter: self.counter,
+        }
+    }
+
+    pub(self) fn u8_0is256_to_tick_counter(t: u8) -> TickCounter {
+        match t {
+            0 => TickCounter::new(0x100),
+            t => TickCounter::new(u32::from(t)),
+        }
+    }
+
+    pub(self) fn slide_offset(&self, channel_ticks: TickCounter) -> (u8, u32) {
+        debug_assert!(self.tc < channel_ticks);
+
+        let slide_ticks = Self::u8_0is256_to_tick_counter(self.counter).value();
+
+        let elapsed = (channel_ticks.value() - self.tc.value()).min(slide_ticks);
+        let offset = self.offset * elapsed;
+
+        ((slide_ticks - elapsed).try_into().unwrap(), offset)
+    }
+
+    fn update(&mut self, channel_ticks: TickCounter) {
+        if self.tc == channel_ticks {
+            return;
+        }
+
+        match self.direction {
+            PanVolEffectDirection::None => (),
+
+            PanVolEffectDirection::SlideUp => {
+                let value = u32::from_le_bytes([self.sub_value, self.value, 0, 0]);
+
+                let (counter, offset) = self.slide_offset(channel_ticks);
+
+                let value = value.wrapping_add(offset);
+
+                if value <= Self::MAX_U32 {
+                    self.value = value.to_le_bytes()[1];
+                    self.sub_value = value.to_le_bytes()[0];
+                } else {
+                    self.value = Self::MAX;
+                    self.direction = PanVolEffectDirection::None;
+                }
+
+                self.counter = counter;
+                if counter == 0 {
+                    self.direction = PanVolEffectDirection::None;
+                }
+
+                self.tc = channel_ticks;
+            }
+
+            PanVolEffectDirection::SlideDown => {
+                let value = u32::from_le_bytes([self.sub_value, self.value, 0, 0]);
+
+                let (counter, offset) = self.slide_offset(channel_ticks);
+
+                let value = value.wrapping_sub(offset);
+
+                self.sub_value = value.to_le_bytes()[0];
+
+                if value <= Self::MAX_U32 {
+                    self.value = value.to_le_bytes()[1];
+                    self.sub_value = value.to_le_bytes()[0];
+                } else {
+                    self.value = 0;
+                    self.direction = PanVolEffectDirection::None;
+                }
+
+                self.counter = counter;
+                if counter == 0 {
+                    self.direction = PanVolEffectDirection::None;
+                }
+
+                self.tc = channel_ticks;
+            }
+        }
+    }
+
+    fn set_value(&mut self, value: u8) {
+        self.direction = PanVolEffectDirection::None;
+        self.value = value;
+    }
+
+    fn adjust_value(&mut self, amount: i8, tc: TickCounter) {
+        self.update(tc);
+
+        self.direction = PanVolEffectDirection::None;
+        self.value = self.value.saturating_add_signed(amount);
+    }
+
+    fn slide_up_instruction(&mut self, ticks: u8, o1: u8, o2: u8, tc: TickCounter) {
+        self.update(tc);
+
+        self.tc = tc;
+        self.counter = ticks;
+        self.direction = PanVolEffectDirection::SlideUp;
+        self.offset = u32::from_le_bytes([o1, o2, 0, 0]);
+        self.sub_value = 0;
+    }
+
+    fn slide_down_instruction(&mut self, ticks: u8, o1: u8, o2: u8, tc: TickCounter) {
+        self.update(tc);
+
+        self.tc = tc;
+        self.counter = ticks;
+        self.direction = PanVolEffectDirection::SlideDown;
+        self.offset = u32::from_le_bytes([o1, o2, 0, 0]);
+        self.sub_value = 0;
+    }
+}
+
 pub struct ChannelState {
     ticks: TickCounter,
     disabled: bool,
@@ -133,7 +298,7 @@ pub struct ChannelState {
     early_release_min_ticks: u8,
     early_release_gain: u8,
 
-    volume: u8,
+    volume: PanVolValue<0xff>,
     pan: u8,
 
     echo: bool,
@@ -165,7 +330,7 @@ impl ChannelState {
             early_release_cmp: 0,
             early_release_min_ticks: 0,
             early_release_gain: 0,
-            volume: STARTING_VOLUME,
+            volume: PanVolValue::new(STARTING_VOLUME),
             pan: Pan::MAX.as_u8() / 2,
             echo: false,
             vibrato_pitch_offset_per_tick: 0,
@@ -418,16 +583,34 @@ impl ChannelState {
                 let volume = read_pc();
 
                 self.pan = pan;
-                self.volume = volume;
+                self.volume.set_value(volume);
             }
             opcodes::ADJUST_VOLUME => {
-                let adjust = read_pc();
+                let v = i8::from_le_bytes([read_pc()]);
 
-                let v = i8::from_le_bytes([adjust]);
-                self.volume = self.volume.saturating_add_signed(v);
+                self.volume.adjust_value(v, self.ticks);
             }
             opcodes::SET_VOLUME => {
-                self.volume = read_pc();
+                let volume = read_pc();
+
+                self.volume.set_value(volume);
+            }
+
+            opcodes::VOLUME_SLIDE_UP => {
+                let ticks = read_pc();
+                let o1 = read_pc();
+                let o2 = read_pc();
+
+                self.volume.slide_up_instruction(ticks, o1, o2, self.ticks);
+            }
+
+            opcodes::VOLUME_SLIDE_DOWN => {
+                let ticks = read_pc();
+                let o1 = read_pc();
+                let o2 = read_pc();
+
+                self.volume
+                    .slide_down_instruction(ticks, o1, o2, self.ticks);
             }
 
             opcodes::SET_SONG_TICK_CLOCK => {
@@ -540,6 +723,11 @@ impl ChannelState {
         }
     }
 
+    /// MUST be called after processing the channel's bytecode
+    fn finalise(&mut self, target_ticks: TickCounter) {
+        self.volume.update(target_ticks);
+    }
+
     // Create a new song subroutine interpreter channel and process a mml-prefix.
     fn subroutine_prefix(
         song_ptr: u16,
@@ -568,6 +756,8 @@ impl ChannelState {
                 }
             }
         }
+
+        c.finalise(c.ticks);
 
         c.instruction_ptr = sub.bytecode_offset;
         c.disabled = false;
@@ -719,6 +909,10 @@ where
             }
         }
 
+        for c in self.channels.iter_mut().flatten() {
+            c.finalise(target_ticks);
+        }
+
         debug_assert!(self
             .channels
             .iter()
@@ -833,7 +1027,7 @@ fn build_channel(
         None => inst_adsr_or_gain,
     };
 
-    let volume = c.volume;
+    let volume_soa = c.volume.as_soa();
     let pan = c.pan;
 
     assert!(c.stack_pointer <= BC_CHANNEL_STACK_SIZE);
@@ -842,6 +1036,8 @@ fn build_channel(
     let stack_start = BC_CHANNEL_STACK_OFFSET + channel_index * BC_CHANNEL_STACK_SIZE;
     let stack_pointer = u8::try_from(stack_start + c.stack_pointer).unwrap();
     let loop_stack_index = u8::try_from(stack_start + c.loop_stack_pointer).unwrap();
+
+    let volume = volume_soa.value;
 
     Channel {
         soa: ChannelSoA {
@@ -858,7 +1054,7 @@ fn build_channel(
             stack_pointer,
             loop_stack_pointer: loop_stack_index,
             inst_pitch_offset,
-            volume,
+            volume: volume_soa,
             pan,
             vibrato_pitch_offset_per_tick: c.vibrato_pitch_offset_per_tick,
             vibrato_tick_counter_start: c.vibrato_quarter_wavelength_in_ticks,
@@ -903,7 +1099,14 @@ fn unused_channel(channel_index: usize) -> Channel {
             stack_pointer,
             loop_stack_pointer: stack_pointer - BC_STACK_BYTES_PER_LOOP as u8,
             inst_pitch_offset: 0,
-            volume: STARTING_VOLUME,
+            volume: ChannelSoAPanVol {
+                value: STARTING_VOLUME,
+                sub_value: 0,
+                direction: 0,
+                offset_l: 0,
+                offset_h: 0,
+                counter: 0,
+            },
             pan: Pan::CENTER.as_u8(),
             vibrato_pitch_offset_per_tick: 0,
             vibrato_tick_counter_start: 0,
@@ -1024,8 +1227,14 @@ impl InterpreterOutput {
                 );
 
                 soa_write_u8(addresses::CHANNEL_INST_PITCH_OFFSET, c.inst_pitch_offset);
-                soa_write_u8(addresses::CHANNEL_VOLUME, c.volume);
                 soa_write_u8(addresses::CHANNEL_PAN, c.pan);
+
+                soa_write_u8(addresses::CHANNEL_VOLUME, c.volume.value);
+                soa_write_u8(addresses::CHANNEL_SUB_VOLUME, c.volume.sub_value);
+                soa_write_u8(addresses::CHANNEL_VOL_EFFECT_DIRECTION, c.volume.direction);
+                soa_write_u8(addresses::CHANNEL_VOL_EFFECT_OFFSET_L, c.volume.offset_l);
+                soa_write_u8(addresses::CHANNEL_VOL_EFFECT_OFFSET_H, c.volume.offset_h);
+                soa_write_u8(addresses::CHANNEL_VOL_EFFECT_COUNTER, c.volume.counter);
 
                 // Not interpreting portamento
 

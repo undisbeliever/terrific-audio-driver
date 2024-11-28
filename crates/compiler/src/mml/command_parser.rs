@@ -12,7 +12,7 @@ use super::note_tracking::CursorTracker;
 
 use crate::bytecode::{
     EarlyReleaseMinTicks, EarlyReleaseTicks, LoopCount, Pan, PlayNoteTicks, SubroutineId,
-    VibratoPitchOffsetPerTick, Volume, KEY_OFF_TICK_DELAY,
+    VibratoPitchOffsetPerTick, Volume, VolumeSlideAmount, KEY_OFF_TICK_DELAY,
 };
 use crate::channel_bc_generator::{
     merge_pan_commands, merge_volumes_commands, relative_pan, relative_volume, Command,
@@ -958,6 +958,71 @@ fn merge_pan_or_volume(
     }
 }
 
+fn parse_coarse_volume_slide_amount(pos: FilePos, p: &mut Parser) -> Option<VolumeSlideAmount> {
+    const MIN: i32 = -(MAX_COARSE_VOLUME as i32);
+    const MAX: i32 = MAX_COARSE_VOLUME as i32;
+
+    match_next_token!(
+        p,
+
+        &Token::RelativeNumber(n) => {
+            match n {
+                MIN..=MAX => {
+                    match n {
+                        MIN => Some(VolumeSlideAmount::MIN),
+                        MAX => Some(VolumeSlideAmount::MAX),
+                        n => match n.saturating_mul(COARSE_VOLUME_MULTIPLIER as i32).try_into() {
+                            Ok(o) => Some(o),
+                            Err(e) => {
+                                p.add_error(pos, e.into());
+                                None
+                            }
+                        }
+                    }
+                }
+                _ => {
+                    p.add_error(pos, ValueError::CoarseVolumeSlideOutOfRange(n).into());
+                    None
+                }
+            }
+        },
+        &Token::Number(_) => {
+            p.add_error(pos, VolumeSlideAmount::MISSING_SIGN_ERROR.into());
+            None
+        },
+        #_ => {
+            p.add_error(pos, VolumeSlideAmount::MISSING_ERROR.into());
+            None
+        }
+    )
+}
+
+fn _parse_volume_slide(p: &mut Parser, amount: Option<VolumeSlideAmount>) -> Command {
+    let pos = p.peek_pos();
+    if !next_token_matches!(p, Token::Comma) {
+        p.add_error(pos, ValueError::NoVolumeSlideTicks.into());
+        return Command::None;
+    }
+
+    let pos = p.peek_pos();
+    let ticks = parse_unsigned_newtype(pos, p);
+
+    match (amount, ticks) {
+        (Some(amount), Some(ticks)) => Command::VolumeSlide(amount, ticks),
+        _ => Command::None,
+    }
+}
+
+fn parse_coarse_volume_slide(pos: FilePos, p: &mut Parser) -> Command {
+    let amount = parse_coarse_volume_slide_amount(pos, p);
+    _parse_volume_slide(p, amount)
+}
+
+fn parse_fine_volume_slide(pos: FilePos, p: &mut Parser) -> Command {
+    let amount = parse_signed_newtype::<VolumeSlideAmount>(pos, p);
+    _parse_volume_slide(p, amount)
+}
+
 // Assumes all ties have already been parsed.
 // Requires the previously parsed token send a key-off event.
 fn parse_rests_after_rest(p: &mut Parser) -> TickCounter {
@@ -1608,6 +1673,9 @@ fn parse_token(pos: FilePos, token: Token, p: &mut Parser) -> Command {
             let pan = parse_px_pan_value(pos, p);
             merge_pan_or_volume(pan, None, p)
         }
+
+        Token::CoarseVolumeSlide => parse_coarse_volume_slide(pos, p),
+        Token::FineVolumeSlide => parse_fine_volume_slide(pos, p),
 
         Token::Quantize => {
             parse_quantize(pos, p);

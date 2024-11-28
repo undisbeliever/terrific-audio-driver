@@ -5,12 +5,11 @@
 // SPDX-License-Identifier: MIT
 
 use crate::bytecode::{
-    BcTicks, BcTicksKeyOff, BcTicksNoKeyOff, Bytecode, BytecodeContext, IeState, InstrumentId,
-    PortamentoVelocity, RelativeVolume, SlurredNoteState, VibratoState, KEY_OFF_TICK_DELAY,
-};
-use crate::bytecode::{
-    EarlyReleaseMinTicks, EarlyReleaseTicks, LoopCount, Pan, PlayNoteTicks, RelativePan,
-    VibratoPitchOffsetPerTick, VibratoQuarterWavelengthInTicks, Volume,
+    BcTicks, BcTicksKeyOff, BcTicksNoKeyOff, Bytecode, BytecodeContext, EarlyReleaseMinTicks,
+    EarlyReleaseTicks, IeState, InstrumentId, LoopCount, Pan, PlayNoteTicks, PortamentoVelocity,
+    RelativePan, RelativeVolume, SlurredNoteState, VibratoPitchOffsetPerTick,
+    VibratoQuarterWavelengthInTicks, VibratoState, Volume, VolumeSlideAmount, VolumeSlideTicks,
+    KEY_OFF_TICK_DELAY,
 };
 use crate::bytecode_assembler::parse_asm_line;
 use crate::data::{self, UniqueNamesList};
@@ -244,6 +243,8 @@ pub(crate) enum Command {
     SetEarlyRelease(EarlyReleaseTicks, EarlyReleaseMinTicks, OptionalGain),
 
     ChangePanAndOrVolume(Option<PanCommand>, Option<VolumeCommand>),
+    VolumeSlide(VolumeSlideAmount, VolumeSlideTicks),
+
     SetEcho(bool),
 
     SetSongTempo(Bpm),
@@ -1316,6 +1317,10 @@ impl<'a> ChannelBcGenerator<'a> {
                     }
                 }
             },
+
+            &Command::VolumeSlide(amount, ticks) => {
+                self.bc.volume_slide(amount, ticks);
+            }
 
             &Command::SetEcho(e) => {
                 if e {

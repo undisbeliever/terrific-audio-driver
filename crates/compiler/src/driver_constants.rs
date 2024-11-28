@@ -63,6 +63,11 @@ pub mod addresses {
         CHANNEL_EARLY_RELEASE_MIN_TICKS,
         CHANNEL_EARLY_RELEASE_GAIN,
         CHANNEL_VOLUME,
+        CHANNEL_SUB_VOLUME,
+        CHANNEL_VOL_EFFECT_DIRECTION,
+        CHANNEL_VOL_EFFECT_OFFSET_L,
+        CHANNEL_VOL_EFFECT_OFFSET_H,
+        CHANNEL_VOL_EFFECT_COUNTER,
     );
 
     // MUST match `audio-driver/src/common_memmap.wiz`

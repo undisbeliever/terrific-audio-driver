@@ -120,6 +120,16 @@ where
     Ok((parse_uvnt(arg1)?, parse_uvnt(arg2)?))
 }
 
+fn svnt_and_uvnt_arguments<T, U>(args: &[&str]) -> Result<(T, U), ChannelError>
+where
+    T: SignedValueNewType,
+    U: UnsignedValueNewType,
+{
+    let (arg1, arg2) = two_arguments(args)?;
+
+    Ok((parse_svnt(arg1)?, parse_uvnt(arg2)?))
+}
+
 fn ticks_no_keyoff_argument(args: &[&str]) -> Result<BcTicksNoKeyOff, ChannelError> {
     let arg = one_argument(args)?;
 
@@ -418,6 +428,8 @@ pub fn parse_asm_line(bc: &mut Bytecode, line: &str) -> Result<(), ChannelError>
        adjust_pan 1 one_svnt_argument,
        set_pan 1 one_uvnt_argument,
        set_pan_and_volume 2 two_uvnt_arguments,
+
+       volume_slide 2 svnt_and_uvnt_arguments,
 
        enable_echo 0 no_arguments,
        disable_echo 0 no_arguments,

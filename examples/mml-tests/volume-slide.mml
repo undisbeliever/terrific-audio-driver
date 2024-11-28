@@ -1,0 +1,25 @@
+#Title Volume slide test
+#Tempo 120
+
+@1 square gain F127
+
+A @1
+
+; Volume slide up.  0 to max
+A v0 vs+16,60 c1 r4
+
+; Volume slide down.  max to half
+A v16 vs-16,60 c1 r4
+
+; Volume slide up stops on overflow
+A V192 Vs+200,80 c1 r4
+
+; Volume slide down stops on overflow
+A V128 Vs-200,80 c1 r4
+
+; Volume slide stops when volume changes
+A V128 Vs+200,80 c4 & V+0 c4 r4
+
+; Volume slide stops when volume changes
+A V128 Vs-200,80 c4 & V32 c4 r4
+

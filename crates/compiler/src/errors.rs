@@ -9,7 +9,7 @@ use relative_path::RelativeToError;
 use crate::bytecode::{
     BcTicks, BcTicksKeyOff, BcTicksNoKeyOff, EarlyReleaseMinTicks, EarlyReleaseTicks, InstrumentId,
     LoopCount, Pan, PortamentoVelocity, RelativePan, RelativeVolume, VibratoPitchOffsetPerTick,
-    VibratoQuarterWavelengthInTicks, Volume,
+    VibratoQuarterWavelengthInTicks, Volume, VolumeSlideAmount, VolumeSlideTicks,
 };
 use crate::channel_bc_generator::{
     FineQuantization, PortamentoSpeed, Quantization, MAX_BROKEN_CHORD_NOTES,
@@ -125,6 +125,12 @@ pub enum ValueError {
     RelativePanOutOfRange(i32),
     RelativeVolumeOutOfRange(i32),
 
+    NoVolumeSlideDirection,
+    CoarseVolumeSlideOutOfRange(i32),
+    VolumeSlideAmountOutOfRange(i32),
+    VolumeSlideAmountZero,
+    VolumeSlideTicksOutOfRange(u32),
+
     EarlyReleaseTicksOutOfRange(u32),
     EarlyReleaseMinTicksOutOfRange(u32),
     VibratoPitchOffsetPerTickOutOfRange(u32),
@@ -179,6 +185,8 @@ pub enum ValueError {
     NoPan,
     NoRelativeVolume,
     NoRelativePan,
+    NoVolumeSlideAmount,
+    NoVolumeSlideTicks,
     NoOctave,
     NoZenLen,
     NoTranspose,
@@ -773,6 +781,26 @@ impl Display for ValueError {
                 out_of_range!("relative volume", v, RelativeVolume)
             }
 
+            Self::NoVolumeSlideDirection => {
+                write!(f, "no volume slide direction (+ or -)")
+            }
+            Self::CoarseVolumeSlideOutOfRange(v) => {
+                write!(
+                    f,
+                    "coarse volume slide out of range ({}, expected {} - {})",
+                    v,
+                    -(MAX_COARSE_VOLUME as i32),
+                    MAX_COARSE_VOLUME
+                )
+            }
+            Self::VolumeSlideAmountOutOfRange(v) => {
+                out_of_range!("volume slide", v, VolumeSlideAmount)
+            }
+            Self::VolumeSlideAmountZero => write!(f, "volume slide cannot be 0"),
+            Self::VolumeSlideTicksOutOfRange(v) => {
+                out_of_range!("volume slide ticks", v, VolumeSlideTicks)
+            }
+
             Self::EarlyReleaseTicksOutOfRange(v) => {
                 out_of_range!("early-release ticks", v, EarlyReleaseTicks)
             }
@@ -886,6 +914,8 @@ impl Display for ValueError {
             Self::NoPan => write!(f, "no pan"),
             Self::NoRelativeVolume => write!(f, "no relative volume"),
             Self::NoRelativePan => write!(f, "no relative pan"),
+            Self::NoVolumeSlideAmount => write!(f, "no volume slide amount"),
+            Self::NoVolumeSlideTicks => write!(f, "no volume slide ticks"),
             Self::NoOctave => write!(f, "no octave"),
             Self::NoZenLen => write!(f, "no zenlen value"),
             Self::NoTranspose => write!(f, "no transpose value"),

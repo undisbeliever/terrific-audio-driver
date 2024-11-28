@@ -7,6 +7,7 @@ Version 0.0.14
 
 Audio driver changes:
  * SET_MUSIC_CHANNELS IO command now key-offs the disabled channels
+ * Added volume slides
 
 
 Bytecode assembly changes:
