@@ -3094,6 +3094,11 @@ fn test_volume_slide() {
         8,
         ValueError::VolumeSlideTicksOutOfRange(257).into(),
     );
+
+    assert_error_in_mml_line("vs+10", 1, ValueError::NoCommaVolumeSlideTicks.into());
+    assert_error_in_mml_line("vs-10", 1, ValueError::NoCommaVolumeSlideTicks.into());
+    assert_error_in_mml_line("Vs+10", 1, ValueError::NoCommaVolumeSlideTicks.into());
+    assert_error_in_mml_line("Vs-10", 1, ValueError::NoCommaVolumeSlideTicks.into());
 }
 
 #[test]

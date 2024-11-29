@@ -12,7 +12,8 @@ use super::note_tracking::CursorTracker;
 
 use crate::bytecode::{
     EarlyReleaseMinTicks, EarlyReleaseTicks, LoopCount, Pan, PlayNoteTicks, SubroutineId,
-    VibratoPitchOffsetPerTick, Volume, VolumeSlideAmount, KEY_OFF_TICK_DELAY,
+    VibratoPitchOffsetPerTick, VibratoQuarterWavelengthInTicks, Volume, VolumeSlideAmount,
+    VolumeSlideTicks, KEY_OFF_TICK_DELAY,
 };
 use crate::channel_bc_generator::{
     merge_pan_commands, merge_volumes_commands, relative_pan, relative_volume, Command,
@@ -387,6 +388,28 @@ where
             None
         }
     )
+}
+
+trait CommaTicks: UnsignedValueNewType {
+    const NO_COMMA_ERROR: ValueError;
+}
+
+impl CommaTicks for VibratoQuarterWavelengthInTicks {
+    const NO_COMMA_ERROR: ValueError = ValueError::NoCommaQuarterWavelength;
+}
+
+impl CommaTicks for VolumeSlideTicks {
+    const NO_COMMA_ERROR: ValueError = ValueError::NoCommaVolumeSlideTicks;
+}
+
+fn parse_comma_ticks<T: CommaTicks>(pos: FilePos, p: &mut Parser) -> Option<T> {
+    if next_token_matches!(p, Token::Comma) {
+        let pos = p.peek_pos();
+        parse_unsigned_newtype(pos, p)
+    } else {
+        p.add_error(pos, T::NO_COMMA_ERROR.into());
+        None
+    }
 }
 
 fn parse_dots_after_length(p: &mut Parser) -> u8 {
@@ -997,15 +1020,8 @@ fn parse_coarse_volume_slide_amount(pos: FilePos, p: &mut Parser) -> Option<Volu
     )
 }
 
-fn _parse_volume_slide(p: &mut Parser, amount: Option<VolumeSlideAmount>) -> Command {
-    let pos = p.peek_pos();
-    if !next_token_matches!(p, Token::Comma) {
-        p.add_error(pos, ValueError::NoVolumeSlideTicks.into());
-        return Command::None;
-    }
-
-    let pos = p.peek_pos();
-    let ticks = parse_unsigned_newtype(pos, p);
+fn _parse_volume_slide(pos: FilePos, p: &mut Parser, amount: Option<VolumeSlideAmount>) -> Command {
+    let ticks = parse_comma_ticks(pos, p);
 
     match (amount, ticks) {
         (Some(amount), Some(ticks)) => Command::VolumeSlide(amount, ticks),
@@ -1015,12 +1031,12 @@ fn _parse_volume_slide(p: &mut Parser, amount: Option<VolumeSlideAmount>) -> Com
 
 fn parse_coarse_volume_slide(pos: FilePos, p: &mut Parser) -> Command {
     let amount = parse_coarse_volume_slide_amount(pos, p);
-    _parse_volume_slide(p, amount)
+    _parse_volume_slide(pos, p, amount)
 }
 
 fn parse_fine_volume_slide(pos: FilePos, p: &mut Parser) -> Command {
     let amount = parse_signed_newtype::<VolumeSlideAmount>(pos, p);
-    _parse_volume_slide(p, amount)
+    _parse_volume_slide(pos, p, amount)
 }
 
 // Assumes all ties have already been parsed.
@@ -1422,15 +1438,10 @@ fn parse_mp_vibrato(pos: FilePos, p: &mut Parser) -> Option<MpVibrato> {
             None
         },
         &Token::Number(depth_in_cents) => {
-            if next_token_matches!(p, Token::Comma) {
-                parse_unsigned_newtype(pos, p).map(|qwt| MpVibrato {
-                    depth_in_cents,
-                    quarter_wavelength_ticks: qwt,
-                })
-            } else {
-                p.add_error(pos, ValueError::NoCommaQuarterWavelength.into());
-                None
-            }
+            parse_comma_ticks(pos, p).map(|qwt| MpVibrato {
+                depth_in_cents,
+                quarter_wavelength_ticks: qwt,
+            })
         },
         #_ => {
             p.add_error(pos, ValueError::NoMpDepth.into());
@@ -1448,14 +1459,11 @@ fn parse_manual_vibrato(pos: FilePos, p: &mut Parser) -> Option<ManualVibrato> {
     if pitch_offset_per_tick.as_u8() == 0 {
         // Disable MP Vibrato
         None
-    } else if next_token_matches!(p, Token::Comma) {
-        parse_unsigned_newtype(pos, p).map(|qwt| ManualVibrato {
+    } else {
+        parse_comma_ticks(pos, p).map(|qwt| ManualVibrato {
             pitch_offset_per_tick,
             quarter_wavelength_ticks: qwt,
         })
-    } else {
-        p.add_error(pos, ValueError::NoCommaQuarterWavelength.into());
-        None
     }
 }
 

@@ -200,7 +200,6 @@ pub enum ValueError {
     NoPortamentoVelocity,
     NoMpDepth,
     NoVibratoPitchOffsetPerTick,
-    NoCommaQuarterWavelength,
     NoVibratoQuarterWavelength,
     NoEchoEdl,
     NoInstrumentId,
@@ -210,6 +209,9 @@ pub enum ValueError {
     NoEarlyReleaseTicks,
     NoEarlyReleaseMinTicks,
     NoEarlyReleaseMinTicksOrGain,
+
+    NoCommaQuarterWavelength,
+    NoCommaVolumeSlideTicks,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -929,9 +931,6 @@ impl Display for ValueError {
             Self::NoPortamentoVelocity => write!(f, "no portamento velocity"),
             Self::NoMpDepth => write!(f, "no MP depth"),
             Self::NoVibratoPitchOffsetPerTick => write!(f, "no vibrato pitch-offset-per-tick"),
-            Self::NoCommaQuarterWavelength => {
-                write!(f, "cannot parse quarter-wavelength, expected a comma ','")
-            }
             Self::NoVibratoQuarterWavelength => write!(f, "no vibrato quarter-wavelength"),
             Self::NoEchoEdl => write!(f, "no echo EDL"),
             Self::NoInstrumentId => write!(f, "no instrument id"),
@@ -942,6 +941,13 @@ impl Display for ValueError {
             Self::NoEarlyReleaseMinTicks => write!(f, "no early-release minimum ticks"),
             Self::NoEarlyReleaseMinTicksOrGain => {
                 write!(f, "no early-release minimum ticks or GAIN (F, D, E, I, B)")
+            }
+
+            Self::NoCommaQuarterWavelength => {
+                write!(f, "cannot parse quarter-wavelength, expected a comma ','")
+            }
+            Self::NoCommaVolumeSlideTicks => {
+                write!(f, "cannot parse volume-slide ticks, expected a comma ','")
             }
         }
     }
