@@ -290,10 +290,6 @@ struct RestLoop {
     n_rest_instructions: u32,
 }
 
-const fn div_ceiling(a: u32, b: u32) -> u32 {
-    (a + b - 1) / b
-}
-
 #[inline]
 fn build_rest_loop<Loop, Rem, const ALLOW_ZERO_REM: bool>(ticks: TickCounter) -> RestLoop
 where
@@ -315,8 +311,8 @@ where
                     n_loops: l,
                     remainder: rem,
 
-                    n_rest_instructions: div_ceiling(div, Loop::MAX_TICKS)
-                        + div_ceiling(rem, Rem::MAX_TICKS),
+                    n_rest_instructions: div.div_ceil(Loop::MAX_TICKS)
+                        + rem.div_ceil(Rem::MAX_TICKS),
                 })
             } else {
                 None

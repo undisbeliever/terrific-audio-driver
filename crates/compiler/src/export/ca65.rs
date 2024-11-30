@@ -120,7 +120,7 @@ impl Exporter for Ca65Exporter {
         let n_data_items = bin_data.n_songs() + 1;
 
         let load_audio_data_size = Self::bin_data_offset(memory_map);
-        let n_banks = (load_audio_data_size + bin_data.data().len() + (bank_size - 1)) / bank_size;
+        let n_banks = (load_audio_data_size + bin_data.data().len()).div_ceil(bank_size);
 
         assert!(n_banks > 0);
         assert!(n_data_items < u8::MAX.into());

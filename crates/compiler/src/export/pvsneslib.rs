@@ -113,7 +113,7 @@ impl Exporter for PvExporter {
     ) -> Result<String, std::fmt::Error> {
         let incbin_path = &bin_include_path.0;
         let bank_size = memory_map.mode.bank_size();
-        let n_banks = (bin_data.data().len() + (bank_size - 1)) / bank_size;
+        let n_banks = bin_data.data().len().div_ceil(bank_size);
 
         let n_data_items = bin_data.n_songs() + 1;
 
