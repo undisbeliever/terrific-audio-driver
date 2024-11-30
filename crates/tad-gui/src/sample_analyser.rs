@@ -35,6 +35,7 @@ use fltk::widget::Widget;
 use fltk::window::Window;
 
 extern crate spectrum_analyzer;
+use spectrum_analyzer::windows::hann_window;
 use spectrum_analyzer::{samples_fft_to_spectrum, scaling, FrequencyLimit, FrequencySpectrum};
 
 const WAVEFORM_ZERO_COLOR: Color = Color::from_rgb(0, 0, 0);
@@ -47,7 +48,7 @@ const SPECTRUM_INST_FREQ_COLOR: Color = Color::from_rgb(128, 128, 128);
 /// Sample rate to decode BRR samples at (S-DSP sample rate)
 const BRR_SAMPLE_RATE: u32 = 32000;
 /// Minimum number of samples to render when decoding a looping BRR sample
-const MIN_LOOPING_SAMPLES: usize = 2048;
+const MIN_LOOPING_SAMPLES: usize = 4096;
 
 /// spectrum-analyzer crate panics if samples.len() > 16384 samples
 const MAX_SPECTRUM_SAMPLES: usize = 16384;
@@ -928,12 +929,14 @@ pub fn analyse_sample(
         .map(|&s| f32::from(s) / FLOAT_SCALE)
         .collect();
 
+    let windowed_samples = hann_window(match decoded_samples_f32.len() {
+        ..=MAX_SPECTRUM_SAMPLES => &decoded_samples_f32,
+        _ => &decoded_samples_f32[..MAX_SPECTRUM_SAMPLES],
+    });
+
     // Analyse spectrum
     let spectrum = samples_fft_to_spectrum(
-        match decoded_samples_f32.len() {
-            ..=MAX_SPECTRUM_SAMPLES => &decoded_samples_f32,
-            _ => &decoded_samples_f32[..MAX_SPECTRUM_SAMPLES],
-        },
+        &windowed_samples,
         BRR_SAMPLE_RATE,
         FrequencyLimit::Max(MAX_SPECTRUM_FREQ),
         Some(&scaling::divide_by_N_sqrt),
