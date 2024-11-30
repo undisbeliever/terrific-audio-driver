@@ -293,7 +293,7 @@ Numbers can be decimal, or hexadecimal when prefixed with `$` (ie, `$ff`)
     * For example: `[c : e r]4` will play `c e r   c e r   c e r   c`
  * `!<id>` - Call subroutine
     * A subroutine may change the instrument.
-    * Calling a subroutine disables manual vibrato.
+    * Calling a subroutine disables MP vibrato.
  * `L` - Set loop point
     * If a loop point is set, the channel will restart at the loop point when the channel has reached the end.
  * `;` - Comment.  The text between a `;` and a new line is ignored.
