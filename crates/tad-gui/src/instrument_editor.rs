@@ -125,8 +125,7 @@ impl InstrumentEditor {
         let envelope = SampleEnvelopeWidget::new(&mut form);
         let comment = form.add_input::<Input>("Comment:");
 
-        let form_height = 11 * form.row_height() + form.row_height() / 2;
-        let group = form.take_group_end();
+        let (group, form_height) = form.end();
 
         let (source, mut source_button) = source;
         let (freq, mut analyse_button) = freq;

@@ -248,6 +248,7 @@ pub struct InputForm {
 
     row_height: i32,
     left_column_width: i32,
+    n_rows: i32,
 }
 
 impl InputForm {
@@ -261,6 +262,7 @@ impl InputForm {
             group,
             left_column_width,
             row_height,
+            n_rows: 0,
         }
     }
 
@@ -268,15 +270,21 @@ impl InputForm {
         self.row_height
     }
 
-    pub fn take_group_end(self) -> Flex {
+    /// returns (Flex, form height)
+    pub fn end(self) -> (Flex, i32) {
+        let form_height = self.row_height * self.n_rows + self.group.pad() * (self.n_rows - 1);
+
         self.group.end();
-        self.group
+
+        (self.group, form_height)
     }
 
     #[allow(dead_code)]
     pub fn add_checkbox_left(&mut self, text: &str) -> CheckButton {
         let w = CheckButton::default().with_label(text);
         self.group.fixed(&w, self.row_height);
+
+        self.n_rows += 1;
 
         w
     }
@@ -294,6 +302,8 @@ impl InputForm {
 
         r.end();
 
+        self.n_rows += 1;
+
         w
     }
 
@@ -310,6 +320,8 @@ impl InputForm {
         let w = T::default();
 
         r.end();
+
+        self.n_rows += 1;
 
         w
     }
@@ -333,6 +345,8 @@ impl InputForm {
         let w2 = U::default();
 
         r.end();
+
+        self.n_rows += 1;
 
         (w1, w2)
     }
@@ -367,6 +381,8 @@ impl InputForm {
 
         r.end();
 
+        self.n_rows += 1;
+
         (w1, w2, w3)
     }
 
@@ -389,6 +405,8 @@ impl InputForm {
         r.fixed(&w2, w2_width);
 
         r.end();
+
+        self.n_rows += 1;
 
         (w1, w2)
     }

@@ -50,6 +50,7 @@ Compiler changes:
 GUI changes:
  * Fixed a panic in the Sample Analyser if the sample is longer than 16384 samples.
  * Sample Analyser now uses Hann window when calculating the spectrum.
+ * Fixed unable to click on the comment textbox in the sample editor.
  * Fixed rust bytecode interpreter going off the rails after a channel ends
  * Added a way to set the instrument and settings when previewing song subroutines
     * Click on the `!` button in the song toolbar and a new textbox will appear

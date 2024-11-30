@@ -208,8 +208,8 @@ impl SampleAnalyserDialog {
         let brr_settings_widget = BrrSettingsWidget::new(&mut form);
 
         let form_row_height = form.row_height();
-        let form_height = 4 * form.row_height() + margin;
-        bottom_column.fixed(&form.take_group_end(), ch(65));
+        let (form, form_height) = form.end();
+        bottom_column.fixed(&form, ch(65));
 
         let _empty_space = Widget::default();
 

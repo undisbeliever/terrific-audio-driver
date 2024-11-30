@@ -120,8 +120,7 @@ impl SampleEditor {
         let envelope = SampleEnvelopeWidget::new(&mut form);
         let comment = form.add_input::<Input>("Comment:");
 
-        let form_height = 9 * form.row_height();
-        let group = form.take_group_end();
+        let (group, form_height) = form.end();
 
         let (source, mut source_button) = source;
 

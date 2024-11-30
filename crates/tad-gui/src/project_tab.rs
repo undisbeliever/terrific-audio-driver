@@ -351,8 +351,8 @@ impl MemoryStats {
         let mut free_space_out = form.add_input::<Output>("Free space:");
         free_space_out.set_color(Color::Background);
 
-        let group = form.take_group_end();
-        parent.fixed(&group, (input_height(&group) + group.pad()) * 5);
+        let (group, form_height) = form.end();
+        parent.fixed(&group, form_height);
 
         Self {
             samples_out,
