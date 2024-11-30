@@ -29,8 +29,6 @@ pub(crate) struct MmlSfxLines<'a> {
     pub tokens: MmlTokens<'a>,
 }
 
-/// MML line splitter
-
 // Assumes `line` starts with a non-whitespace character
 // Assumes `mml_text` length is < i32::MAX
 fn split_idstr_and_line(line: Line) -> (&str, Line) {
