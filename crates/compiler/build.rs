@@ -134,7 +134,7 @@ impl Symbols<'_> {
     }
 
     fn last_addr(&self) -> u16 {
-        return self.symbols.values().max().cloned().unwrap_or(0);
+        self.symbols.values().max().cloned().unwrap_or(0)
     }
 }
 
