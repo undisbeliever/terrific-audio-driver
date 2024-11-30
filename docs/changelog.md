@@ -5,17 +5,19 @@ Terrific Audio Driver Changelog
 Version 0.0.14
 ==============
 
+**Known bugs**:
+ * Sample Analyser spectrum can only analyse the first 16384 samples in a long BRR sample.
+
+
 Audio driver changes:
  * SET_MUSIC_CHANNELS IO command now key-offs the disabled channels
  * Added volume slides
- * Added Tremolo
-
+ * Added tremolo
 
 Bytecode assembly changes:
  * Fixed maximum vibrato quarter wavelength value
  * Added `$` hexadecimal number parsing to bytecode assembly
  * Instructions with signed arguments (`adjust_volume` and `adjust_pan`) now require a + or - sign
-
 
 MML changes:
  * Fixed maximum vibrato quarter wavelength value
@@ -33,25 +35,7 @@ BRR changes:
  * Added gaussian overflow glitch detector (3 maximum-negative values in a row)
  * Added a gaussian overflow glitch penalty to the BRR encoder (Optional - on by default)
 
-Compiler changes:
- * Increased maximum common-audio-data size
- * Added `tad-compiler 64tass-enums` command
- * Added `tad-compiler 64tass-export` command
- * Added hexadecimal segment suffix to `tad-compiler ca65-export`
-   (using the `-x` or `-X` command line options)
- * Moved `ca65-export` `LoadAudioData` to the start of the first segment.
-
-65816 API changes:
- * Added a 64tass API (identical to the ca65 API)
- * Renamed `MAX_PAN` to `TAD_MAX_PAN`
- * Renamed `CENTER_PAN` to `TAD_CENTER_PAN`
- * Renamed `MIN_TICK_CLOCK` to `TAD_MIN_TICK_CLOCK`
-
 GUI changes:
- * Fixed a panic in the Sample Analyser if the sample is longer than 16384 samples.
- * Sample Analyser now uses Hann window when calculating the spectrum.
- * Fixed unable to click on the comment textbox in the sample editor.
- * Fixed rust bytecode interpreter going off the rails after a channel ends
  * Added a way to set the instrument and settings when previewing song subroutines
     * Click on the `!` button in the song toolbar and a new textbox will appear
     * Input (or paste) the MML you want to execute before the subroutine is played
@@ -66,10 +50,24 @@ GUI changes:
     * Pressing Shift + "set" or `Shift+F9` will also mute the other channels.
     * Pressing Shift + play-button or `Shift+F5` will play the song from the beginning
  * Shift clicking the channel buttons A-H will select only one channel (Ctrl+Shift 0-9).
+ * Fixed a panic in the Sample Analyser if the sample is longer than 16384 samples.
+ * Sample Analyser now uses Hann window when calculating the spectrum.
+ * Fixed unable to click on the comment textbox in the sample editor.
+ * Fixed rust bytecode interpreter going off the rails after a channel ends
 
+Compiler changes:
+ * Increased maximum common-audio-data size
+ * Added `tad-compiler 64tass-enums` command
+ * Added `tad-compiler 64tass-export` command
+ * Added hexadecimal segment suffix to `tad-compiler ca65-export`
+   (using the `-x` or `-X` command line options)
+ * Moved `ca65-export` `LoadAudioData` to the start of the first segment.
 
-**Known bugs**:
- * Sample Analyser spectrum can only analyse the first 16384 samples in a long BRR sample.
+65816 API changes:
+ * Added a 64tass API (identical to the ca65 API)
+ * Renamed `MAX_PAN` to `TAD_MAX_PAN`
+ * Renamed `CENTER_PAN` to `TAD_CENTER_PAN`
+ * Renamed `MIN_TICK_CLOCK` to `TAD_MIN_TICK_CLOCK`
 
 
 Version 0.0.13
