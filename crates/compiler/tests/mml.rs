@@ -3102,6 +3102,72 @@ fn test_volume_slide() {
 }
 
 #[test]
+fn test_tremolo() {
+    assert_line_matches_bytecode("v~2,4", &["tremolo 32 4"]);
+    assert_line_matches_bytecode("v~7,8", &["tremolo 112 8"]);
+    assert_line_matches_bytecode("v~8,8", &["tremolo 127 8"]);
+
+    assert_line_matches_bytecode("V~20,10", &["tremolo 20 10"]);
+    assert_line_matches_bytecode("V~30,20", &["tremolo 30 20"]);
+
+    // 0x10ff / 10 = 0x1b3
+    assert_line_matches_bytecode_bytes("v~1,10", &[opcodes::TREMOLO, 10, 0xb3, 0x01]);
+    // 0x30ff / 8 = 0x61f
+    assert_line_matches_bytecode_bytes("v~3,8", &[opcodes::TREMOLO, 8, 0x1f, 0x06]);
+
+    // 0x28ff / 6 = 0x6d5
+    assert_line_matches_bytecode_bytes("V~40,6", &[opcodes::TREMOLO, 6, 0xd5, 0x06]);
+    // 0x7fff / 127 = 0x102 (largest values)
+    assert_line_matches_bytecode_bytes("V~127,127", &[opcodes::TREMOLO, 127, 0x02, 0x01]);
+
+    assert_error_in_mml_line(
+        "v~0,10",
+        1,
+        ValueError::CoarseTremoloAmplitudeOutOfRange(0).into(),
+    );
+    assert_error_in_mml_line(
+        "v~9,10",
+        1,
+        ValueError::CoarseTremoloAmplitudeOutOfRange(9).into(),
+    );
+    assert_error_in_mml_line(
+        "V~0,10",
+        1,
+        ValueError::TremoloAmplitudeOutOfRange(0).into(),
+    );
+    assert_error_in_mml_line(
+        "V~128,10",
+        1,
+        ValueError::TremoloAmplitudeOutOfRange(128).into(),
+    );
+
+    assert_error_in_mml_line(
+        "v~4,0",
+        5,
+        ValueError::TremoloQuarterWavelengthTicksOutOfRange(0).into(),
+    );
+    assert_error_in_mml_line(
+        "V~100,0",
+        7,
+        ValueError::TremoloQuarterWavelengthTicksOutOfRange(0).into(),
+    );
+
+    assert_error_in_mml_line(
+        "v~4,128",
+        5,
+        ValueError::TremoloQuarterWavelengthTicksOutOfRange(128).into(),
+    );
+    assert_error_in_mml_line(
+        "V~100,128",
+        7,
+        ValueError::TremoloQuarterWavelengthTicksOutOfRange(128).into(),
+    );
+
+    assert_error_in_mml_line("v~3", 1, ValueError::NoCommaQuarterWavelength.into());
+    assert_error_in_mml_line("V~10", 1, ValueError::NoCommaQuarterWavelength.into());
+}
+
+#[test]
 fn test_set_instrument() {
     let mml = r##"
 @0 dummy_instrument

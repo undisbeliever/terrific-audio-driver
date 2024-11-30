@@ -75,6 +75,21 @@ u8_0_is_256_value_newtype!(
     NoVolumeSlideTicks
 );
 
+u8_value_newtype!(
+    TremoloAmplitude,
+    TremoloAmplitudeOutOfRange,
+    NoTremoloAmplitude,
+    1,
+    127
+);
+u8_value_newtype!(
+    TremoloQuarterWavelengthInTicks,
+    TremoloQuarterWavelengthTicksOutOfRange,
+    NoTremoloQuarterWavelengthTicks,
+    1,
+    127
+);
+
 impl Pan {
     pub const CENTER: Pan = Self(Self::MAX.0 / 2);
 }
@@ -131,6 +146,7 @@ pub mod opcodes {
         SET_VOLUME,
         VOLUME_SLIDE_UP,
         VOLUME_SLIDE_DOWN,
+        TREMOLO,
         SET_SONG_TICK_CLOCK,
         START_LOOP,
         SKIP_LAST_LOOP,
@@ -1161,6 +1177,31 @@ impl<'a> Bytecode<'a> {
         );
 
         emit_bytecode!(self, opcode, ticks.driver_value(), arg_2, arg_3);
+    }
+
+    pub fn tremolo(
+        &mut self,
+        amplitude: TremoloAmplitude,
+        quarter_wavelength_ticks: TremoloQuarterWavelengthInTicks,
+    ) {
+        let u16_ticks: u16 = quarter_wavelength_ticks.as_u8().into();
+
+        let offset_per_tick = ((u16::from(amplitude.as_u8()) << 8) | 0xff) / u16_ticks;
+        let arg_2 = offset_per_tick.to_le_bytes()[0];
+        let arg_3 = offset_per_tick.to_le_bytes()[1];
+
+        debug_assert_eq!(
+            offset_per_tick.wrapping_mul(u16_ticks).to_le_bytes()[1],
+            amplitude.as_u8()
+        );
+
+        emit_bytecode!(
+            self,
+            opcodes::TREMOLO,
+            quarter_wavelength_ticks.as_u8(),
+            arg_2,
+            arg_3
+        );
     }
 
     pub fn enable_echo(&mut self) {

@@ -63,8 +63,14 @@ Instructions
 
  * `volume_slide <amount> <duration>` - Volume slide
     * This instruction does not sleep and the effect runs in the background.
-    * Volume slide is disabled when the volume is set of adjusted.
+    * Volume slide is disabled when the volume is set or adjusted.
     * Volume slide is disabled on overflows and underflows.
+ * `tremolo <amplitude 1..127> <quarter_wavelength_in_ticks 1..127>` - Tremolo
+    * Tremolo will amplitude modulate the channel volume in a sawtooth pattern every tick.
+    * *amplitude* is the center-to-peak depth in volume units.
+    * *quarter_wavelength_in_ticks* controls the rate (speed) of the tremolo.
+    * Tremolo is disabled when the volume is set or adjusted.
+    * Tremolo is disabled on overflows and underflows.
 
  * `enable_echo` - Enable echo on this channel.
  * `disable_echo` - Disable echo on this channel.

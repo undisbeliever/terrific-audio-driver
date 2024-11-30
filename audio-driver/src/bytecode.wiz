@@ -242,6 +242,11 @@ let INSTRUCTIONS_WITH_ARGUMENTS = [
     //      oooooooo oooooooo = offset per tick (8.8 unsigned fixed point)
     volume_slide_down,
 
+    // parameters: qqqqqqqq oooooooo oooooooo
+    //      qqqqqqqq          = quarter-wavelength in ticks (1 - 127)
+    //      oooooooo oooooooo = offset per tick (8.8 unsigned fixed point)
+    tremolo,
+
 
     // parameter: u8 new timer0 value
     //

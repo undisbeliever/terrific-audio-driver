@@ -1,0 +1,20 @@
+#Title Tremolo test
+#Tempo 120
+
+@1 square gain F127
+
+A @1
+
+A v8 v~2,3 c1 r4
+
+A V128 V~80,40 [c8 d8]25 r4
+
+; Tremolo is disabled on overflow
+A V200 V~60,10 c4 r4
+
+; Tremolo is disabled on underflow
+A V40 V~80,10 c2
+
+; Changing volume disables tremolo
+A v4 c16
+

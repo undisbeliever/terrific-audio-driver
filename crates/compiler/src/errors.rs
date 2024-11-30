@@ -8,8 +8,9 @@ use relative_path::RelativeToError;
 
 use crate::bytecode::{
     BcTicks, BcTicksKeyOff, BcTicksNoKeyOff, EarlyReleaseMinTicks, EarlyReleaseTicks, InstrumentId,
-    LoopCount, Pan, PortamentoVelocity, RelativePan, RelativeVolume, VibratoPitchOffsetPerTick,
-    VibratoQuarterWavelengthInTicks, Volume, VolumeSlideAmount, VolumeSlideTicks,
+    LoopCount, Pan, PortamentoVelocity, RelativePan, RelativeVolume, TremoloAmplitude,
+    TremoloQuarterWavelengthInTicks, VibratoPitchOffsetPerTick, VibratoQuarterWavelengthInTicks,
+    Volume, VolumeSlideAmount, VolumeSlideTicks,
 };
 use crate::channel_bc_generator::{
     FineQuantization, PortamentoSpeed, Quantization, MAX_BROKEN_CHORD_NOTES,
@@ -23,7 +24,10 @@ use crate::driver_constants::{
 use crate::echo::{EchoEdl, EchoLength, MAX_FIR_ABS_SUM};
 use crate::envelope::Gain;
 use crate::file_pos::{FilePosRange, MAX_MML_TEXT_LENGTH};
-use crate::mml::command_parser::{Transpose, MAX_COARSE_VOLUME, PX_PAN_RANGE};
+use crate::mml::command_parser::{
+    Transpose, MAX_COARSE_TREMOLO_AMPLITUDE, MAX_COARSE_VOLUME, MIN_COARSE_TREMOLO_AMPLITUDE,
+    PX_PAN_RANGE,
+};
 use crate::mml::{MAX_MML_PREFIX_STR_LENGTH, MAX_MML_PREFIX_TICKS};
 use crate::notes::{MidiNote, Note, Octave};
 use crate::path::PathString;
@@ -131,6 +135,10 @@ pub enum ValueError {
     VolumeSlideAmountZero,
     VolumeSlideTicksOutOfRange(u32),
 
+    CoarseTremoloAmplitudeOutOfRange(u32),
+    TremoloAmplitudeOutOfRange(u32),
+    TremoloQuarterWavelengthTicksOutOfRange(u32),
+
     EarlyReleaseTicksOutOfRange(u32),
     EarlyReleaseMinTicksOutOfRange(u32),
     VibratoPitchOffsetPerTickOutOfRange(u32),
@@ -187,6 +195,8 @@ pub enum ValueError {
     NoRelativePan,
     NoVolumeSlideAmount,
     NoVolumeSlideTicks,
+    NoTremoloAmplitude,
+    NoTremoloQuarterWavelengthTicks,
     NoOctave,
     NoZenLen,
     NoTranspose,
@@ -803,6 +813,24 @@ impl Display for ValueError {
                 out_of_range!("volume slide ticks", v, VolumeSlideTicks)
             }
 
+            Self::CoarseTremoloAmplitudeOutOfRange(v) => {
+                write!(
+                    f,
+                    "coarse tremolo amplitude out of range ({}, expected {} - {})",
+                    v, MIN_COARSE_TREMOLO_AMPLITUDE, MAX_COARSE_TREMOLO_AMPLITUDE
+                )
+            }
+            Self::TremoloAmplitudeOutOfRange(v) => {
+                out_of_range!("tremolo amplitude", v, TremoloAmplitude)
+            }
+            Self::TremoloQuarterWavelengthTicksOutOfRange(v) => {
+                out_of_range!(
+                    "tremolo quarter-wavelength",
+                    v,
+                    TremoloQuarterWavelengthInTicks
+                )
+            }
+
             Self::EarlyReleaseTicksOutOfRange(v) => {
                 out_of_range!("early-release ticks", v, EarlyReleaseTicks)
             }
@@ -918,6 +946,10 @@ impl Display for ValueError {
             Self::NoRelativePan => write!(f, "no relative pan"),
             Self::NoVolumeSlideAmount => write!(f, "no volume slide amount"),
             Self::NoVolumeSlideTicks => write!(f, "no volume slide ticks"),
+            Self::NoTremoloAmplitude => write!(f, "no tremolo amplitude"),
+            Self::NoTremoloQuarterWavelengthTicks => {
+                write!(f, "no tremolo quarter-wavelength ticks")
+            }
             Self::NoOctave => write!(f, "no octave"),
             Self::NoZenLen => write!(f, "no zenlen value"),
             Self::NoTranspose => write!(f, "no transpose value"),

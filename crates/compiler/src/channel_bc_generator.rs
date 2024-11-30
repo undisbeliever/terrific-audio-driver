@@ -7,9 +7,9 @@
 use crate::bytecode::{
     BcTicks, BcTicksKeyOff, BcTicksNoKeyOff, Bytecode, BytecodeContext, EarlyReleaseMinTicks,
     EarlyReleaseTicks, IeState, InstrumentId, LoopCount, Pan, PlayNoteTicks, PortamentoVelocity,
-    RelativePan, RelativeVolume, SlurredNoteState, VibratoPitchOffsetPerTick,
-    VibratoQuarterWavelengthInTicks, VibratoState, Volume, VolumeSlideAmount, VolumeSlideTicks,
-    KEY_OFF_TICK_DELAY,
+    RelativePan, RelativeVolume, SlurredNoteState, TremoloAmplitude,
+    TremoloQuarterWavelengthInTicks, VibratoPitchOffsetPerTick, VibratoQuarterWavelengthInTicks,
+    VibratoState, Volume, VolumeSlideAmount, VolumeSlideTicks, KEY_OFF_TICK_DELAY,
 };
 use crate::bytecode_assembler::parse_asm_line;
 use crate::data::{self, UniqueNamesList};
@@ -244,6 +244,7 @@ pub(crate) enum Command {
 
     ChangePanAndOrVolume(Option<PanCommand>, Option<VolumeCommand>),
     VolumeSlide(VolumeSlideAmount, VolumeSlideTicks),
+    Tremolo(TremoloAmplitude, TremoloQuarterWavelengthInTicks),
 
     SetEcho(bool),
 
@@ -1320,6 +1321,10 @@ impl<'a> ChannelBcGenerator<'a> {
 
             &Command::VolumeSlide(amount, ticks) => {
                 self.bc.volume_slide(amount, ticks);
+            }
+
+            &Command::Tremolo(amplitude, quarter_wavelength_ticks) => {
+                self.bc.tremolo(amplitude, quarter_wavelength_ticks);
             }
 
             &Command::SetEcho(e) => {

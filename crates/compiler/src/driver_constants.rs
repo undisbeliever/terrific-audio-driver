@@ -68,6 +68,7 @@ pub mod addresses {
         CHANNEL_VOL_EFFECT_OFFSET_L,
         CHANNEL_VOL_EFFECT_OFFSET_H,
         CHANNEL_VOL_EFFECT_COUNTER,
+        CHANNEL_VOL_EFFECT_HALF_WAVELENGTH,
     );
 
     // MUST match `audio-driver/src/common_memmap.wiz`

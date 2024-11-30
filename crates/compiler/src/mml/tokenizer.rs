@@ -51,6 +51,8 @@ pub enum Token<'a> {
     PxPan,
     CoarseVolumeSlide,
     FineVolumeSlide,
+    CoarseTremolo,
+    FineTremolo,
     Quantize,
     EarlyRelease,
     Transpose,
@@ -427,11 +429,13 @@ fn next_token<'a>(scanner: &mut Scanner<'a>) -> Option<TokenWithPosition<'a>> {
 
         b'v' => match scanner.second_byte() {
             Some(b's') => two_ascii_token!(Token::CoarseVolumeSlide),
+            Some(b'~') => two_ascii_token!(Token::CoarseTremolo),
             _ => one_ascii_token!(Token::CoarseVolume),
         },
 
         b'V' => match scanner.second_byte() {
             Some(b's') => two_ascii_token!(Token::FineVolumeSlide),
+            Some(b'~') => two_ascii_token!(Token::FineTremolo),
             _ => one_ascii_token!(Token::FineVolume),
         },
 

@@ -213,6 +213,10 @@
       "source": "mml-tests/test-subroutine-play-at-cursor.mml"
     },
     {
+      "name": "tremolo",
+      "source": "mml-tests/tremolo.mml"
+    },
+    {
       "name": "test_vibrato",
       "source": "mml-tests/test-vibrato.mml"
     },

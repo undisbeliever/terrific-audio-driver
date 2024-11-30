@@ -201,6 +201,10 @@ fn assert_bc_intrepreter_matches_emu(
     );
     test_channel_soa(addresses::CHANNEL_VOL_EFFECT_OFFSET_L, "volEffect_offset_l");
     test_channel_soa(addresses::CHANNEL_VOL_EFFECT_OFFSET_H, "volEffect_offset_h");
+    test_channel_soa(
+        addresses::CHANNEL_VOL_EFFECT_HALF_WAVELENGTH,
+        "volEffect_halfWavelength",
+    );
 
     // Not testing subVolume, bc_iterpreter value is invalid on overflow
     // Not testing counter, bc_interpreter counter is invalid on overflow

@@ -49,6 +49,7 @@ struct ChannelSoAPanVol {
     offset_l: u8,
     offset_h: u8,
     counter: u8,
+    half_wavelength: u8,
 }
 
 #[derive(Clone)]
@@ -116,6 +117,8 @@ enum PanVolEffectDirection {
     None = 0,
     SlideUp = 0x80,
     SlideDown = 0x81,
+    TriangleUp = 0x40,
+    TriangleDown = 0x41,
 }
 
 #[derive(Debug, Clone)]
@@ -126,8 +129,11 @@ struct PanVolValue<const MAX: u8> {
     sub_value: u8,
     counter: u8,
     direction: PanVolEffectDirection,
+    half_wavelength: u8,
 
     offset: u32,
+
+    triangle_starting_value: u8,
 }
 
 impl<const M: u8> PanVolValue<M> {
@@ -142,6 +148,8 @@ impl<const M: u8> PanVolValue<M> {
             counter: 0,
             direction: PanVolEffectDirection::None,
             offset: 0,
+            half_wavelength: 0,
+            triangle_starting_value: 0,
         }
     }
 
@@ -153,6 +161,7 @@ impl<const M: u8> PanVolValue<M> {
             offset_l: self.offset.to_le_bytes()[0],
             offset_h: self.offset.to_le_bytes()[1],
             counter: self.counter,
+            half_wavelength: self.half_wavelength,
         }
     }
 
@@ -229,6 +238,79 @@ impl<const M: u8> PanVolValue<M> {
 
                 self.tc = channel_ticks;
             }
+
+            PanVolEffectDirection::TriangleUp | PanVolEffectDirection::TriangleDown => {
+                self.process_triangle(channel_ticks)
+            }
+        }
+    }
+
+    pub(self) fn process_triangle(&mut self, channel_ticks: TickCounter) {
+        let starting_value = u32::from(self.triangle_starting_value) << 8;
+
+        let wavelength = u32::from(self.half_wavelength) * 2;
+        let quarter_wavelength = wavelength / 4;
+
+        let elapsed = channel_ticks.value() - self.tc.value();
+
+        let position = elapsed % wavelength;
+        let quadrant = position / quarter_wavelength;
+
+        if elapsed >= wavelength || quadrant > 0 {
+            // Test for overflow
+            if starting_value + (quarter_wavelength * self.offset) > Self::MAX_U32 {
+                self.value = Self::MAX;
+                self.direction = PanVolEffectDirection::None;
+                return;
+            }
+        }
+
+        if elapsed >= wavelength || quadrant > 2 {
+            // Test for underflow
+            if quarter_wavelength * self.offset > starting_value {
+                self.value = 0;
+                self.direction = PanVolEffectDirection::None;
+                return;
+            }
+        }
+
+        let (value, direction) = match quadrant {
+            0 => (
+                starting_value.wrapping_add(position * self.offset),
+                PanVolEffectDirection::TriangleUp,
+            ),
+            1 => {
+                let p = u32::from(self.half_wavelength) - position;
+                (
+                    starting_value.wrapping_add(p * self.offset),
+                    PanVolEffectDirection::TriangleDown,
+                )
+            }
+            2 => {
+                let p = position - u32::from(self.half_wavelength);
+                (
+                    starting_value.wrapping_sub(p * self.offset),
+                    PanVolEffectDirection::TriangleDown,
+                )
+            }
+            3 => {
+                let p = wavelength - position;
+                (
+                    starting_value.wrapping_sub(p * self.offset),
+                    PanVolEffectDirection::TriangleUp,
+                )
+            }
+            _ => panic!("Wrong quadrant"),
+        };
+
+        if value <= Self::MAX_U32 {
+            self.value = value.to_le_bytes()[1];
+            self.sub_value = value.to_le_bytes()[0];
+            self.counter = (position + quarter_wavelength).to_le_bytes()[0] % self.half_wavelength;
+            self.direction = direction;
+        } else {
+            self.value = if quadrant < 2 { Self::MAX } else { 0 };
+            self.direction = PanVolEffectDirection::None;
         }
     }
 
@@ -249,6 +331,7 @@ impl<const M: u8> PanVolValue<M> {
 
         self.tc = tc;
         self.counter = ticks;
+        self.half_wavelength = 0;
         self.direction = PanVolEffectDirection::SlideUp;
         self.offset = u32::from_le_bytes([o1, o2, 0, 0]);
         self.sub_value = 0;
@@ -259,9 +342,23 @@ impl<const M: u8> PanVolValue<M> {
 
         self.tc = tc;
         self.counter = ticks;
+        self.half_wavelength = 0;
         self.direction = PanVolEffectDirection::SlideDown;
         self.offset = u32::from_le_bytes([o1, o2, 0, 0]);
         self.sub_value = 0;
+    }
+
+    fn tremolo_panbrello_instruction(&mut self, qwt: u8, o1: u8, o2: u8, tc: TickCounter) {
+        self.update(tc);
+
+        self.tc = tc;
+        self.counter = qwt;
+        self.half_wavelength = qwt.wrapping_mul(2);
+        self.direction = PanVolEffectDirection::TriangleUp;
+        self.offset = u32::from_le_bytes([o1, o2, 0, 0]);
+        self.sub_value = 0;
+
+        self.triangle_starting_value = self.value;
     }
 }
 
@@ -611,6 +708,15 @@ impl ChannelState {
 
                 self.volume
                     .slide_down_instruction(ticks, o1, o2, self.ticks);
+            }
+
+            opcodes::TREMOLO => {
+                let qwt = read_pc();
+                let o1 = read_pc();
+                let o2 = read_pc();
+
+                self.volume
+                    .tremolo_panbrello_instruction(qwt, o1, o2, self.ticks);
             }
 
             opcodes::SET_SONG_TICK_CLOCK => {
@@ -1106,6 +1212,7 @@ fn unused_channel(channel_index: usize) -> Channel {
                 offset_l: 0,
                 offset_h: 0,
                 counter: 0,
+                half_wavelength: 0,
             },
             pan: Pan::CENTER.as_u8(),
             vibrato_pitch_offset_per_tick: 0,
@@ -1235,6 +1342,10 @@ impl InterpreterOutput {
                 soa_write_u8(addresses::CHANNEL_VOL_EFFECT_OFFSET_L, c.volume.offset_l);
                 soa_write_u8(addresses::CHANNEL_VOL_EFFECT_OFFSET_H, c.volume.offset_h);
                 soa_write_u8(addresses::CHANNEL_VOL_EFFECT_COUNTER, c.volume.counter);
+                soa_write_u8(
+                    addresses::CHANNEL_VOL_EFFECT_HALF_WAVELENGTH,
+                    c.volume.half_wavelength,
+                );
 
                 // Not interpreting portamento
 

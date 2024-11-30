@@ -63,8 +63,12 @@ let FIRST_SFX_CHANNEL = LAST_MUSIC_CHANNEL + 1;
 let LAST_SFX_CHANNEL = N_CHANNELS - 1;
 
 
-let VOL_PAN_EFFECT_SLIDE_UP   = 0x80;
-let VOL_PAN_EFFECT_SLIDE_DOWN = 0x81;
+// Using separate values for slide and triangle to simplify the rust bytecode interpreter.
+// See: `channelSoA.volEffect_direction`
+let VOL_PAN_EFFECT_SLIDE_UP      = 0x80;
+let VOL_PAN_EFFECT_SLIDE_DOWN    = 0x81;
+let VOL_PAN_EFFECT_TRIANGLE_UP   = 0x40;
+let VOL_PAN_EFFECT_TRIANGLE_DOWN = 0x41;
 
 
 in zeropage {
@@ -330,6 +334,10 @@ in firstpage {
         // (8.8 unsigned fixed point)
         var volEffect_offset_l : [u8 ; N_CHANNELS];
         var volEffect_offset_h : [u8 ; N_CHANNELS];
+
+        // Tremolo half-wavelength in ticks.
+        // If 0, the volume effect is a volume slide.
+        var volEffect_halfWavelength : [u8 ; N_CHANNELS];
 
 
         // Channel pan (0-MAX_PAN)
@@ -1311,11 +1319,12 @@ inline func _process_volume_effects__inline(channelIndex: u8 in x, direction: u8
     // Warning spaghetti code: Optimised for code-size.
 
     // Hack to allow access to volume effect variables with `direct_page = true`.
-    var _csv_subVolume @ &channelSoA.subVolume           as u8 : [u8 ; N_CHANNELS];
-    var _csv_direction @ &channelSoA.volEffect_direction as u8 : [u8 ; N_CHANNELS];
-    var _csv_counter   @ &channelSoA.volEffect_counter   as u8 : [u8 ; N_CHANNELS];
-    var _csv_offset_l  @ &channelSoA.volEffect_offset_l  as u8 : [u8 ; N_CHANNELS];
-    var _csv_offset_h  @ &channelSoA.volEffect_offset_h  as u8 : [u8 ; N_CHANNELS];
+    var _csv_subVolume      @ &channelSoA.subVolume                 as u8 : [u8 ; N_CHANNELS];
+    var _csv_direction      @ &channelSoA.volEffect_direction       as u8 : [u8 ; N_CHANNELS];
+    var _csv_counter        @ &channelSoA.volEffect_counter         as u8 : [u8 ; N_CHANNELS];
+    var _csv_offset_l       @ &channelSoA.volEffect_offset_l        as u8 : [u8 ; N_CHANNELS];
+    var _csv_offset_h       @ &channelSoA.volEffect_offset_h        as u8 : [u8 ; N_CHANNELS];
+    var _csv_halfWavelength @ &channelSoA.volEffect_halfWavelength  as u8 : [u8 ; N_CHANNELS];
 
     a >>>= 1;
 
@@ -1340,7 +1349,9 @@ inline func _process_volume_effects__inline(channelIndex: u8 in x, direction: u8
 
         UpOverflow:
             y = 0xff;
-            goto DisableEffect;
+        DisableEffect:
+            a = 0;
+            goto WriteDirection;
 
     Up:
         // up
@@ -1358,8 +1369,15 @@ EndIf:
     _csv_counter[x]--;
     goto WriteVolume if !zero;
 
-    DisableEffect:
-        _csv_direction[x] = a = 0;
+        a = _csv_halfWavelength[x];
+        if !zero {
+            _csv_counter[x] = a;
+
+            // Change direction
+            a = _csv_direction[x] ^ 1;
+        }
+    WriteDirection:
+        _csv_direction[x] = a;
 
 WriteVolume:
     direct_page = false;
@@ -2304,9 +2322,18 @@ func volume_slide_down(channelIndex: u8 in x, ticks: u8 in a) {
 
 // Y = 0
 // KEEP: x
+#[fallthrough]
 func __volume_slide(channelIndex: u8 in x, direction: u8 in a) {
     channelSoA.volEffect_direction[x] = a;
 
+    // Y = 0
+    channelSoA.volEffect_halfWavelength[x] = a = y;
+
+// Fallthrough into __read_vol_effect_offset()
+}
+
+
+func __read_vol_effect_offset(channelIndex: u8 in x) {
     channelSoA.volEffect_offset_l[x] = a = instructionPtr[y];
     instructionPtr++;
     channelSoA.volEffect_offset_h[x] = a = instructionPtr[y];
@@ -2316,6 +2343,18 @@ func __volume_slide(channelIndex: u8 in x, direction: u8 in a) {
     channelSoA.subVolume[x] = a = y;
 
     ^return process_next_bytecode(x);
+}
+
+
+// Y = 0
+// KEEP: X
+func tremolo(channelIndex: u8 in x, quarter_wavelength: u8 in a) {
+    channelSoA.volEffect_counter[x] = a;
+    channelSoA.volEffect_halfWavelength[x] = a = a << 1;
+
+    channelSoA.volEffect_direction[x] = a = VOL_PAN_EFFECT_TRIANGLE_UP;
+
+    return __read_vol_effect_offset(x);
 }
 
 

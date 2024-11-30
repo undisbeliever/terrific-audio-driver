@@ -12,8 +12,9 @@ use super::note_tracking::CursorTracker;
 
 use crate::bytecode::{
     EarlyReleaseMinTicks, EarlyReleaseTicks, LoopCount, Pan, PlayNoteTicks, SubroutineId,
-    VibratoPitchOffsetPerTick, VibratoQuarterWavelengthInTicks, Volume, VolumeSlideAmount,
-    VolumeSlideTicks, KEY_OFF_TICK_DELAY,
+    TremoloAmplitude, TremoloQuarterWavelengthInTicks, VibratoPitchOffsetPerTick,
+    VibratoQuarterWavelengthInTicks, Volume, VolumeSlideAmount, VolumeSlideTicks,
+    KEY_OFF_TICK_DELAY,
 };
 use crate::channel_bc_generator::{
     merge_pan_commands, merge_volumes_commands, relative_pan, relative_volume, Command,
@@ -36,6 +37,10 @@ use std::collections::HashMap;
 pub const MAX_N_DOTS: u8 = 8;
 
 pub const MAX_COARSE_VOLUME: u32 = 16;
+
+pub const MIN_COARSE_TREMOLO_AMPLITUDE: u32 = 1;
+pub const MAX_COARSE_TREMOLO_AMPLITUDE: u32 = 8;
+
 pub const COARSE_VOLUME_MULTIPLIER: u8 = 16;
 
 pub const PX_PAN_RANGE: std::ops::RangeInclusive<i32> =
@@ -400,6 +405,10 @@ impl CommaTicks for VibratoQuarterWavelengthInTicks {
 
 impl CommaTicks for VolumeSlideTicks {
     const NO_COMMA_ERROR: ValueError = ValueError::NoCommaVolumeSlideTicks;
+}
+
+impl CommaTicks for TremoloQuarterWavelengthInTicks {
+    const NO_COMMA_ERROR: ValueError = ValueError::NoCommaQuarterWavelength;
 }
 
 fn parse_comma_ticks<T: CommaTicks>(pos: FilePos, p: &mut Parser) -> Option<T> {
@@ -1037,6 +1046,56 @@ fn parse_coarse_volume_slide(pos: FilePos, p: &mut Parser) -> Command {
 fn parse_fine_volume_slide(pos: FilePos, p: &mut Parser) -> Command {
     let amount = parse_signed_newtype::<VolumeSlideAmount>(pos, p);
     _parse_volume_slide(pos, p, amount)
+}
+
+fn parse_coarse_tremolo_amplitude(pos: FilePos, p: &mut Parser) -> Option<TremoloAmplitude> {
+    match_next_token!(
+        p,
+
+        &Token::Number(n) => {
+            match n {
+                MIN_COARSE_TREMOLO_AMPLITUDE..=MAX_COARSE_TREMOLO_AMPLITUDE => {
+                    match n {
+                        MAX_COARSE_TREMOLO_AMPLITUDE => Some(TremoloAmplitude::MAX),
+                        n => match n.saturating_mul(COARSE_VOLUME_MULTIPLIER.into()).try_into() {
+                            Ok(o) => Some(o),
+                            Err(e) => {
+                                p.add_error(pos, e.into());
+                                None
+                            }
+                        }
+                    }
+                }
+                _ => {
+                    p.add_error(pos, ValueError::CoarseTremoloAmplitudeOutOfRange(n).into());
+                    None
+                }
+            }
+        },
+        #_ => {
+            p.add_error(pos, TremoloAmplitude::MISSING_ERROR.into());
+            None
+        }
+    )
+}
+
+fn _parse_tremolo(pos: FilePos, p: &mut Parser, amount: Option<TremoloAmplitude>) -> Command {
+    let ticks = parse_comma_ticks(pos, p);
+
+    match (amount, ticks) {
+        (Some(amplitude), Some(qwl)) => Command::Tremolo(amplitude, qwl),
+        _ => Command::None,
+    }
+}
+
+fn parse_fine_tremolo(pos: FilePos, p: &mut Parser) -> Command {
+    let amplitude = parse_unsigned_newtype(pos, p);
+    _parse_tremolo(pos, p, amplitude)
+}
+
+fn parse_coarse_tremolo(pos: FilePos, p: &mut Parser) -> Command {
+    let amount = parse_coarse_tremolo_amplitude(pos, p);
+    _parse_tremolo(pos, p, amount)
 }
 
 // Assumes all ties have already been parsed.
@@ -1684,6 +1743,8 @@ fn parse_token(pos: FilePos, token: Token, p: &mut Parser) -> Command {
 
         Token::CoarseVolumeSlide => parse_coarse_volume_slide(pos, p),
         Token::FineVolumeSlide => parse_fine_volume_slide(pos, p),
+        Token::CoarseTremolo => parse_coarse_tremolo(pos, p),
+        Token::FineTremolo => parse_fine_tremolo(pos, p),
 
         Token::Quantize => {
             parse_quantize(pos, p);
