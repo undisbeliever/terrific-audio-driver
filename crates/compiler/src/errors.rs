@@ -202,7 +202,7 @@ pub enum ValueError {
     NoTranspose,
     NoLoopCount,
     NoQuantize,
-    NoFineQuantizate,
+    NoFineQuantize,
     NoTickClock,
     NoBpm,
     NoMidiNote,
@@ -676,7 +676,7 @@ impl Display for ProjectFileErrors {
 
 impl Display for InvalidAdsrError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "invalid adsr")?;
+        write!(f, "invalid ADSR")?;
 
         if !self.valid_a {
             write!(f, " attack")?;
@@ -713,7 +713,7 @@ impl Display for ValueError {
 
             Self::NoEnvelope => write!(f, "no envelope"),
             Self::UnknownEnvelopeType(s) => write!(f, "unknown envelope type: {}", s),
-            Self::AdsrNotFourValues => write!(f, "expected 4 adsr values"),
+            Self::AdsrNotFourValues => write!(f, "expected 4 ADSR values"),
             Self::InvalidAdsr(e) => e.fmt(f),
 
             Self::InvalidGainString(e) => e.fmt(f),
@@ -887,7 +887,7 @@ impl Display for ValueError {
 
             Self::ZenLenOutOfRange(v) => out_of_range!("zenlen", v, ZenLen),
             Self::TickClockOutOfRange(v) => out_of_range!("tick clock", v, TickClock),
-            Self::BpmOutOfRange(v) => out_of_range!("bpm", v, Bpm),
+            Self::BpmOutOfRange(v) => out_of_range!("BPM", v, Bpm),
 
             Self::MidiNoteNumberOutOfRange(v) => out_of_range!("MIDI note number", v, MidiNote),
             Self::CannotConvertMidiNote => {
@@ -907,7 +907,7 @@ impl Display for ValueError {
             Self::InvalidDefaultLength => write!(f, "invalid length"),
             Self::MissingDefaultLength => write!(f, "missing length"),
 
-            Self::CannotConvertBpmToTickClock => write!(f, "cannot convert bpm to tick clock"),
+            Self::CannotConvertBpmToTickClock => write!(f, "cannot convert BPM to tick clock"),
 
             Self::EchoEdlOutOfRange(v) => out_of_range!("echo EDL", v, EchoEdl),
             Self::EchoLengthNotMultiple => write!(
@@ -939,7 +939,7 @@ impl Display for ValueError {
                 abs_sum, MAX_FIR_ABS_SUM,
             ),
 
-            Self::NoHexDigits => write!(f, "no hexidecimal digits"),
+            Self::NoHexDigits => write!(f, "no hexadecimal digits"),
             Self::NoBool => write!(f, "no bool"),
             Self::NoNote => write!(f, "no note"),
             Self::NoVolume => write!(f, "no volume"),
@@ -957,7 +957,7 @@ impl Display for ValueError {
             Self::NoTranspose => write!(f, "no transpose value"),
             Self::NoLoopCount => write!(f, "no loop count"),
             Self::NoQuantize => write!(f, "no quantization value"),
-            Self::NoFineQuantizate => write!(f, "no fine quntization value"),
+            Self::NoFineQuantize => write!(f, "no fine quantization value"),
             Self::NoTickClock => write!(f, "no tick clock"),
             Self::NoBpm => write!(f, "no tempo bpm"),
             Self::NoMidiNote => write!(f, "no MIDI note number"),

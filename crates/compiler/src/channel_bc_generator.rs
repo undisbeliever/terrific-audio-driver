@@ -40,7 +40,7 @@ u8_value_newtype!(
 );
 
 u8_value_newtype!(Quantization, QuantizeOutOfRange, NoQuantize, 0, 8);
-u8_value_newtype!(FineQuantization, FineQuantizeOutOfRange, NoFineQuantizate);
+u8_value_newtype!(FineQuantization, FineQuantizeOutOfRange, NoFineQuantize);
 
 impl Quantization {
     pub const FINE_QUANTIZATION_SCALE: u8 = 32;
