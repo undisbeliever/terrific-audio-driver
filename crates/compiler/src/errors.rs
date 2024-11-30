@@ -244,6 +244,7 @@ pub enum BytecodeError {
     UnknownSubroutine(String),
     NotAllowedToCallSubroutine,
 
+    SubroutineCallInMmlPrefix,
     SubroutineCallInSoundEffect,
     ReturnInNonSubroutine,
 
@@ -481,6 +482,7 @@ pub enum ChannelError {
 
     NoTicksAfterLoopPoint,
 
+    CannotCallSubroutineInAnMmlPrefix,
     CannotCallSubroutineInASoundEffect,
     CannotCallSubroutineRecursion(String),
 
@@ -1035,6 +1037,9 @@ impl Display for BytecodeError {
             Self::UnknownSubroutine(s) => write!(f, "cannot find subroutine: {}", s),
             Self::NotAllowedToCallSubroutine => write!(f, "not allowed to call subroutine here"),
 
+            Self::SubroutineCallInMmlPrefix => {
+                write!(f, "cannot call subroutine in an MML prefix")
+            }
             Self::SubroutineCallInSoundEffect => {
                 write!(f, "cannot call subroutine in a sound effect")
             }
@@ -1314,6 +1319,9 @@ impl Display for ChannelError {
             Self::CannotFindSubroutine(name) => write!(f, "cannot find subroutine: !{}", name),
             Self::CannotFindInstrument(name) => write!(f, "cannot find instrument: {}", name),
 
+            Self::CannotCallSubroutineInAnMmlPrefix => {
+                write!(f, "cannot call subroutine in an MML prefix")
+            }
             Self::CannotCallSubroutineInASoundEffect => {
                 write!(f, "cannot call subroutine in a sound effect")
             }

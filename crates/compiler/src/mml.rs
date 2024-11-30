@@ -70,6 +70,7 @@ pub enum ChannelId {
     Channel(char),
     Subroutine(u8),
     SoundEffect,
+    MmlPrefix,
 }
 
 #[derive(Clone, Debug, PartialEq)]

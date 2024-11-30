@@ -5,7 +5,7 @@
 // SPDX-License-Identifier: MIT
 
 use super::tokenizer::{MmlTokens, PeekableTokenIterator, Token};
-use super::{IdentifierStr, Section};
+use super::{ChannelId, IdentifierStr, Section};
 
 #[cfg(feature = "mml_tracking")]
 use super::note_tracking::CursorTracker;
@@ -83,7 +83,6 @@ mod parser {
     use super::*;
 
     pub(crate) struct Parser<'a> {
-        #[allow(dead_code)]
         channel: ChannelId,
 
         tokens: PeekableTokenIterator<'a>,
@@ -161,6 +160,10 @@ mod parser {
 
             #[cfg(feature = "mml_tracking")]
             self.add_to_cursor_tracker();
+        }
+
+        pub(super) fn channel_id(&self) -> &ChannelId {
+            &self.channel
         }
 
         // Must ONLY be called by the parsing macros in this module.
@@ -1665,7 +1668,19 @@ fn parse_call_subroutine(
                 ),
             },
         },
-        None => invalid_token_error(p, pos, ChannelError::CannotCallSubroutineInASoundEffect),
+        None => match p.channel_id() {
+            ChannelId::Channel(_) | ChannelId::Subroutine(_) => invalid_token_error(
+                p,
+                pos,
+                ChannelError::CannotFindSubroutine(id.as_str().to_owned()),
+            ),
+            ChannelId::MmlPrefix => {
+                invalid_token_error(p, pos, ChannelError::CannotCallSubroutineInAnMmlPrefix)
+            }
+            ChannelId::SoundEffect => {
+                invalid_token_error(p, pos, ChannelError::CannotCallSubroutineInASoundEffect)
+            }
+        },
     }
 }
 

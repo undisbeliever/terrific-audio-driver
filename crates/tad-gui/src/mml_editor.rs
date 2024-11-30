@@ -715,7 +715,8 @@ impl MmlEditorState {
                             }
                         }
                     }
-                    ChannelId::SoundEffect => {}
+                    ChannelId::SoundEffect => (),
+                    ChannelId::MmlPrefix => (),
                 };
 
                 let ticks = c.ticks.ticks.value();

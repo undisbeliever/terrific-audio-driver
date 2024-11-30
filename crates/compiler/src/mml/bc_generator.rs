@@ -488,7 +488,7 @@ pub fn parse_and_compile_mml_prefix(
     let mut cursor_tracker = CursorTracker::new();
 
     let mut parser = Parser::new(
-        ChannelId::SoundEffect,
+        ChannelId::MmlPrefix,
         tokens,
         instruments_map,
         None,
@@ -506,7 +506,7 @@ pub fn parse_and_compile_mml_prefix(
         data_instruments,
         mml_instruments,
         None,
-        BytecodeContext::SoundEffect,
+        BytecodeContext::MmlPrefix,
     );
 
     while let Some(c) = parser.next() {

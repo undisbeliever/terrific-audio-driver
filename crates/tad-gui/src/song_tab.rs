@@ -538,6 +538,7 @@ impl State {
                 }
                 ChannelId::SoundEffect => (),
                 ChannelId::Subroutine(_) => (),
+                ChannelId::MmlPrefix => (),
             }
         }
     }

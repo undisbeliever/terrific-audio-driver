@@ -98,6 +98,7 @@ pub enum BytecodeContext {
     SongSubroutine,
     SongChannel,
     SoundEffect,
+    MmlPrefix,
 }
 
 pub mod opcodes {
@@ -731,6 +732,7 @@ impl<'a> Bytecode<'a> {
                     BytecodeContext::SoundEffect => VibratoState::Disabled,
                     BytecodeContext::SongChannel => VibratoState::Disabled,
                     BytecodeContext::SongSubroutine => VibratoState::Unchanged,
+                    BytecodeContext::MmlPrefix => VibratoState::Disabled,
                 },
                 prev_slurred_note: SlurredNoteState::Unchanged,
                 no_instrument_notes: Note::MAX..=Note::MIN,
@@ -742,6 +744,7 @@ impl<'a> Bytecode<'a> {
                 BytecodeContext::SoundEffect => true,
                 BytecodeContext::SongChannel => true,
                 BytecodeContext::SongSubroutine => false,
+                BytecodeContext::MmlPrefix => false,
             },
             context,
         }
@@ -1435,6 +1438,9 @@ impl<'a> Bytecode<'a> {
                                 ..=max(*sub_notes.end(), *self_notes.end())
                         };
                     }
+                    BytecodeContext::MmlPrefix => {
+                        return Err(BytecodeError::SubroutineCallInMmlPrefix)
+                    }
                 },
                 Some(old_note_range) => {
                     if !old_note_range.contains(sub_notes.start())
@@ -1462,6 +1468,7 @@ impl<'a> Bytecode<'a> {
             BytecodeContext::SongSubroutine => (),
             BytecodeContext::SongChannel => (),
             BytecodeContext::SoundEffect => return Err(BytecodeError::SubroutineCallInSoundEffect),
+            BytecodeContext::MmlPrefix => return Err(BytecodeError::SubroutineCallInMmlPrefix),
         }
 
         self._update_subtroutine_state_excluding_stack_depth(subroutine)?;
@@ -1513,7 +1520,9 @@ impl<'a> Bytecode<'a> {
             BytecodeContext::SoundEffect => {
                 return Err(BytecodeError::CannotChangeTickClockInASoundEffect)
             }
-            BytecodeContext::SongChannel | BytecodeContext::SongSubroutine => (),
+            BytecodeContext::SongChannel
+            | BytecodeContext::SongSubroutine
+            | BytecodeContext::MmlPrefix => (),
         }
 
         self.state
@@ -1532,6 +1541,7 @@ impl<'a> Bytecode<'a> {
             },
             None => match &self.context {
                 BytecodeContext::SoundEffect => Err(BytecodeError::SubroutineCallInSoundEffect),
+                BytecodeContext::MmlPrefix => Err(BytecodeError::SubroutineCallInMmlPrefix),
                 BytecodeContext::SongChannel | BytecodeContext::SongSubroutine => {
                     Err(BytecodeError::NotAllowedToCallSubroutine)
                 }
