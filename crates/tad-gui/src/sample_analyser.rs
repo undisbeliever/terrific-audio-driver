@@ -49,6 +49,9 @@ const BRR_SAMPLE_RATE: u32 = 32000;
 /// Minimum number of samples to render when decoding a looping BRR sample
 const MIN_LOOPING_SAMPLES: usize = 2048;
 
+/// spectrum-analyzer crate panics if samples.len() > 16384 samples
+const MAX_SPECTRUM_SAMPLES: usize = 16384;
+
 /// Minimum number of waveform samples to show in the waveform widget
 const MIN_WAVEFORM_WIDTH: usize = 192;
 /// Amount to scroll (in fractions of a screen) when scrolling the scroll wheel in the waveform widget
@@ -912,7 +915,10 @@ pub fn analyse_sample(
     } else {
         brr_sample.n_samples()
     };
-    let samples_to_decode = samples_to_decode.next_power_of_two();
+    let samples_to_decode = match samples_to_decode {
+        ..=MAX_SPECTRUM_SAMPLES => samples_to_decode.next_power_of_two(),
+        n => n,
+    };
 
     let mut decoded_samples = vec![0_i16; samples_to_decode];
     brr_sample.decode_into_buffer(&mut decoded_samples, 0, 0, 0);
@@ -924,7 +930,10 @@ pub fn analyse_sample(
 
     // Analyse spectrum
     let spectrum = samples_fft_to_spectrum(
-        &decoded_samples_f32,
+        match decoded_samples_f32.len() {
+            ..=MAX_SPECTRUM_SAMPLES => &decoded_samples_f32,
+            _ => &decoded_samples_f32[..MAX_SPECTRUM_SAMPLES],
+        },
         BRR_SAMPLE_RATE,
         FrequencyLimit::Max(MAX_SPECTRUM_FREQ),
         Some(&scaling::divide_by_N_sqrt),

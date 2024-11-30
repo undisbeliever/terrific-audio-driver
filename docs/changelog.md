@@ -48,6 +48,7 @@ Compiler changes:
  * Renamed `MIN_TICK_CLOCK` to `TAD_MIN_TICK_CLOCK`
 
 GUI changes:
+ * Fixed a panic in the Sample Analyser if the sample is longer than 16384 samples.
  * Fixed rust bytecode interpreter going off the rails after a channel ends
  * Added a way to set the instrument and settings when previewing song subroutines
     * Click on the `!` button in the song toolbar and a new textbox will appear
@@ -63,6 +64,10 @@ GUI changes:
     * Pressing Shift + "set" or `Shift+F9` will also mute the other channels.
     * Pressing Shift + play-button or `Shift+F5` will play the song from the beginning
  * Shift clicking the channel buttons A-H will select only one channel (Ctrl+Shift 0-9).
+
+
+**Known bugs**:
+ * Sample Analyser spectrum can only analyse the first 16384 samples in a long BRR sample.
 
 
 Version 0.0.13
