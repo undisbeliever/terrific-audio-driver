@@ -485,7 +485,7 @@ impl<'a> ChannelBcGenerator<'a> {
                     self.bc.play_note(note, pn_length)?;
                 } else {
                     self.bc
-                        .set_vibrato_depth_and_play_note(POPT, note, pn_length);
+                        .set_vibrato_depth_and_play_note(POPT, note, pn_length)?;
                 }
 
                 // Switching MpState to Manual to skip the `vibrato_disabled` checks on subsequent notes.
@@ -512,7 +512,7 @@ impl<'a> ChannelBcGenerator<'a> {
                             cv.pitch_offset_per_tick,
                             note,
                             pn_length,
-                        );
+                        )?;
                     }
                     _ => {
                         self.bc

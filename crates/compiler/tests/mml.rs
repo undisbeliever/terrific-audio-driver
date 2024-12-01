@@ -5062,6 +5062,22 @@ A \asm {
     );
 }
 
+// Test that a note out of range error does not emit a NoTicksInLoop nor NoTicksAfterLoopPoint error.
+#[test]
+fn test_only_one_error_for_out_of_range_note_in_loop() {
+    assert_error_in_mml_line(
+        "[ o7 a ]2",
+        6,
+        BytecodeError::NoteOutOfRange(note("a7"), note("c2")..=note("b6")).into(),
+    );
+
+    assert_error_in_mml_line(
+        "[ c : o7 a ]2",
+        10,
+        BytecodeError::NoteOutOfRange(note("a7"), note("c2")..=note("b6")).into(),
+    );
+}
+
 #[test]
 fn test_utf8_in_mml() {
     assert_eq!("´".len(), 2);

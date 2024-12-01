@@ -914,7 +914,7 @@ impl<'a> Bytecode<'a> {
     }
 
     pub fn play_note(&mut self, note: Note, length: PlayNoteTicks) -> Result<(), BytecodeError> {
-        self._test_note_in_range(note)?;
+        let r = self._test_note_in_range(note);
 
         self.state.tick_counter += length.to_tick_count();
         self.state.prev_slurred_note = match length {
@@ -926,7 +926,7 @@ impl<'a> Bytecode<'a> {
 
         emit_bytecode!(self, opcode.opcode, length.bc_argument());
 
-        Ok(())
+        r
     }
 
     pub fn portamento(
@@ -935,7 +935,7 @@ impl<'a> Bytecode<'a> {
         velocity: PortamentoVelocity,
         length: PlayNoteTicks,
     ) -> Result<(), BytecodeError> {
-        self._test_note_in_range(note)?;
+        let r = self._test_note_in_range(note);
 
         self.state.tick_counter += length.to_tick_count();
 
@@ -949,7 +949,7 @@ impl<'a> Bytecode<'a> {
             emit_bytecode!(self, opcodes::PORTAMENTO_UP, speed, length, note_param);
         }
 
-        Ok(())
+        r
     }
 
     pub fn set_vibrato_depth_and_play_note(
@@ -957,7 +957,9 @@ impl<'a> Bytecode<'a> {
         pitch_offset_per_tick: VibratoPitchOffsetPerTick,
         note: Note,
         length: PlayNoteTicks,
-    ) {
+    ) -> Result<(), BytecodeError> {
+        let r = self._test_note_in_range(note);
+
         self.state.tick_counter += length.to_tick_count();
         self.state.vibrato.set_depth(pitch_offset_per_tick);
 
@@ -970,6 +972,8 @@ impl<'a> Bytecode<'a> {
             play_note_opcode,
             length.bc_argument()
         );
+
+        r
     }
 
     pub fn set_vibrato(
