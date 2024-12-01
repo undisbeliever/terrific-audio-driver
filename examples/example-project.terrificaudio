@@ -249,6 +249,10 @@
       "source": "bug-tests/portamento-first-tick-bugtest.mml"
     },
     {
+      "name": "tremolo_underflow_bug",
+      "source": "bug-tests/tremolo-underflow-bug.mml"
+    },
+    {
       "name": "volume_slide_down_bug",
       "source": "bug-tests/volume-slide-down-bug.mml"
     }

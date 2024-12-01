@@ -2383,7 +2383,9 @@ func tremolo(channelIndex: u8 in x, quarter_wavelength: u8 in a) {
 
     _csv_direction[x] = a = VOL_PAN_EFFECT_TRIANGLE_UP;
 
-    // Y (sub_volume) = 0
+    y--;
+    // Y (sub_volume) = 0xff
+
     return __read_vol_effect_offset__dp_true__(x, y);
 }
 

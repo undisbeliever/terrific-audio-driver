@@ -246,7 +246,7 @@ impl<const M: u8> PanVolValue<M> {
     }
 
     pub(self) fn process_triangle(&mut self, channel_ticks: TickCounter) {
-        let starting_value = u32::from(self.triangle_starting_value) << 8;
+        let starting_value = u32::from_le_bytes([0xff, self.triangle_starting_value, 0, 0]);
 
         let wavelength = u32::from(self.half_wavelength) * 2;
         let quarter_wavelength = wavelength / 4;
@@ -356,7 +356,7 @@ impl<const M: u8> PanVolValue<M> {
         self.half_wavelength = qwt.wrapping_mul(2);
         self.direction = PanVolEffectDirection::TriangleUp;
         self.offset = u32::from_le_bytes([o1, o2, 0, 0]);
-        self.sub_value = 0;
+        self.sub_value = 0xff;
 
         self.triangle_starting_value = self.value;
     }

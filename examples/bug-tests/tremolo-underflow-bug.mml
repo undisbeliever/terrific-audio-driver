@@ -1,0 +1,13 @@
+; This manual (audible) test is used to confirm tremolo with an
+; amplitude matching the current volume does not underflow.
+
+#Title Tremolo underflow bugtest
+#Tempo 120
+
+@1 square gain F127
+
+A @1
+
+A v4 v~4,3 c2 r8
+
+A V90 V~90,10 c1^1 r8
