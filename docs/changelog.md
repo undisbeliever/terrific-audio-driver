@@ -18,6 +18,7 @@ Bytecode assembly changes:
  * Fixed maximum vibrato quarter wavelength value
  * Added `$` hexadecimal number parsing to bytecode assembly
  * Instructions with signed arguments (`adjust_volume` and `adjust_pan`) now require a + or - sign
+ * Fixed note range after a loop with a `skip_last_loop` instruction
 
 MML changes:
  * Fixed maximum vibrato quarter wavelength value
@@ -32,6 +33,7 @@ MML changes:
      subroutine's no-instrument notes.
  * Fixed a panic with non-ASCII UTF-8 in MML
  * Fixed negative hexadecimal numbers in #FirFilter
+ * Fixed note range after a loop with a `:` skip-last-loop command
 
 BRR changes:
  * Added gaussian overflow glitch detector (3 maximum-negative values in a row)

@@ -655,6 +655,7 @@ pub struct State {
     pub(crate) vibrato: VibratoState,
     pub(crate) prev_slurred_note: SlurredNoteState,
 
+    note_range: Option<RangeInclusive<Note>>,
     no_instrument_notes: RangeInclusive<Note>,
 }
 
@@ -662,6 +663,8 @@ struct SkipLastLoop {
     tick_counter: TickCounter,
     // Location of the parameter of the `skip_last_loop` instruction inside `Bytecode::bytecode`.
     bc_parameter_position: usize,
+
+    note_range: Option<RangeInclusive<Note>>,
 
     instrument: IeState<InstrumentId>,
     envelope: IeState<Envelope>,
@@ -694,7 +697,6 @@ pub struct Bytecode<'a> {
     /// The loop_stack len() (NOT depth) at the start of a `\asm` MML block
     asm_block_stack_len: usize,
 
-    note_range: Option<RangeInclusive<Note>>,
     show_missing_set_instrument_error: bool,
 }
 
@@ -735,11 +737,11 @@ impl<'a> Bytecode<'a> {
                     BytecodeContext::MmlPrefix => VibratoState::Disabled,
                 },
                 prev_slurred_note: SlurredNoteState::Unchanged,
+                note_range: None,
                 no_instrument_notes: Note::MAX..=Note::MIN,
             },
             loop_stack: Vec::new(),
             asm_block_stack_len: 0,
-            note_range: None,
             show_missing_set_instrument_error: match &context {
                 BytecodeContext::SoundEffect => true,
                 BytecodeContext::SongChannel => true,
@@ -872,7 +874,7 @@ impl<'a> Bytecode<'a> {
     }
 
     fn _test_note_in_range(&mut self, note: Note) -> Result<(), BytecodeError> {
-        match &self.note_range {
+        match &self.state.note_range {
             Some(note_range) => {
                 if note_range.contains(&note) {
                     Ok(())
@@ -998,7 +1000,7 @@ impl<'a> Bytecode<'a> {
     }
 
     fn _set_state_instrument_and_note_range(&mut self, instrument: InstrumentId) {
-        self.note_range = self
+        self.state.note_range = self
             .instruments
             .get_index(instrument.as_u8().into())
             .map(note_range);
@@ -1272,6 +1274,7 @@ impl<'a> Bytecode<'a> {
         loop_state.skip_last_loop = Some(SkipLastLoop {
             tick_counter: self.state.tick_counter,
             bc_parameter_position: self.bytecode.len() + 1,
+            note_range: self.state.note_range.clone(),
             instrument: self.state.instrument,
             envelope: self.state.envelope,
             prev_temp_gain: self.state.prev_temp_gain,
@@ -1343,6 +1346,7 @@ impl<'a> Bytecode<'a> {
 
         if let Some(skip_last_loop) = loop_state.skip_last_loop {
             self.state.instrument = skip_last_loop.instrument;
+            self.state.note_range = skip_last_loop.note_range;
             self.state.envelope = skip_last_loop.envelope;
             self.state.prev_temp_gain = skip_last_loop.prev_temp_gain;
             self.state.early_release = skip_last_loop.early_release;
@@ -1390,10 +1394,15 @@ impl<'a> Bytecode<'a> {
     ) -> Result<(), BytecodeError> {
         self.state.tick_counter += subroutine.state.tick_counter;
 
-        let old_note_range = self.note_range.clone();
+        let old_note_range = self.state.note_range.clone();
 
         match subroutine.state.instrument {
-            IeState::Known(i) => self._set_state_instrument_and_note_range(i),
+            IeState::Known(i) => {
+                assert!(subroutine.state.note_range.is_some());
+
+                self.state.instrument = IeState::Known(i);
+                self.state.note_range = subroutine.state.note_range.clone();
+            }
             IeState::Maybe(_) => panic!("unexpected maybe instrument"),
             IeState::Unknown => (),
         }

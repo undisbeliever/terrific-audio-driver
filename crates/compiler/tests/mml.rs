@@ -4769,6 +4769,55 @@ A !s
 }
 
 #[test]
+fn test_note_range_after_skip_last_loop_bugfix() {
+    assert_err_in_channel_a_mml(
+        r##"
+@d dummy_instrument
+@oof only_octave_four
+
+A [ @oof c : @d d]2 o6 e
+"##,
+        24,
+        BytecodeError::NoteOutOfRange(note("e6"), note("c4")..=note("b4")).into(),
+    );
+
+    assert_mml_channel_a_matches_bytecode(
+        r##"
+@d dummy_instrument
+@oof only_octave_four
+
+A [ @d c : @oof d]2 o6 e
+"##,
+        &[
+            "start_loop",
+            "set_instrument dummy_instrument",
+            "play_note c4 24",
+            "skip_last_loop",
+            "set_instrument only_octave_four",
+            "play_note d4 24",
+            "end_loop 2",
+            "play_note e6 24",
+        ],
+    );
+}
+
+#[test]
+fn test_note_range_after_subroutine_call() {
+    assert_err_in_channel_a_mml(
+        r##"
+@d dummy_instrument
+@oof only_octave_four
+
+!s @oof c4a
+
+A @d o6c !s o4c o6d o4e
+"##,
+        19,
+        BytecodeError::NoteOutOfRange(note("d6"), note("c4")..=note("b4")).into(),
+    );
+}
+
+#[test]
 fn test_bc_asm_in_mml_loop() {
     assert_line_matches_bytecode(
         r"[ \asm { play_note d4 10 | play_note e4 20 } ]5",
@@ -5416,6 +5465,7 @@ fn dummy_data() -> DummyData {
         dummy_instrument("dummy_instrument_2", SF, 2, 6, Envelope::Gain(Gain::new(0))),
         dummy_instrument("inst_with_adsr",   SF, 2, 6, Envelope::Adsr(EXAMPLE_ADSR)),
         dummy_instrument("inst_with_gain",   SF, 2, 6, Envelope::Gain(EXAMPLE_GAIN)),
+        dummy_instrument("only_octave_four", SF, 4, 4, Envelope::Gain(Gain::new(0))),
     ].iter(),
         [
             data::Sample{
