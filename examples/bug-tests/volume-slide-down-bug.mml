@@ -1,0 +1,16 @@
+; This manual (audible) test is used to confirm volume-slide down
+; does not overshoot and finishes at the correct volume.
+
+#Title Volume slide down bugtest
+#Tempo 120
+
+@1 square gain F127
+
+A @1
+
+; These two notes should end with the same volume
+; (using V4 as that is the smallest audible centered value)
+A V50 Vs-46,10 d2 r8 | V4 d2 r8
+
+; These two notes should end with the same volume
+A V20 Vs+80,20 e3 r8 | V100 e3 r8

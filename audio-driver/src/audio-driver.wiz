@@ -2308,7 +2308,8 @@ func volume_slide_up(channelIndex: u8 in x, ticks: u8 in a) {
 
     _csv_counter[x] = a;
 
-    return __volume_slide__dp_true__(x, VOL_PAN_EFFECT_SLIDE_UP);
+    // Y (sub_volume) = 0
+    return __volume_slide__dp_true__(x, VOL_PAN_EFFECT_SLIDE_UP, y);
 }
 
 
@@ -2324,6 +2325,9 @@ func volume_slide_down(channelIndex: u8 in x, ticks: u8 in a) {
 
     a = VOL_PAN_EFFECT_SLIDE_DOWN;
 
+    y--;
+    // Y (sub_volume) = 0xff
+
 // Fallthrough into __volume_slide__dp_true__()
 }
 
@@ -2332,14 +2336,13 @@ func volume_slide_down(channelIndex: u8 in x, ticks: u8 in a) {
 // direct_page = true
 // KEEP: x
 #[fallthrough]
-func __volume_slide__dp_true__(channelIndex: u8 in x, direction: u8 in a) {
+func __volume_slide__dp_true__(channelIndex: u8 in x, direction: u8 in a, subVolume: u8 in y) {
     var _csv_direction      @ &channelSoA.volEffect_direction       as u8 : [u8 ; N_CHANNELS];
     var _csv_halfWavelength @ &channelSoA.volEffect_halfWavelength  as u8 : [u8 ; N_CHANNELS];
 
     _csv_direction[x] = a;
 
-    // Y = 0
-    _csv_halfWavelength[x] = y;
+    _csv_halfWavelength[x] = a = 0;
 
 // Fallthrough into __read_vol_effect_offset__dp_true__()
 }
@@ -2349,14 +2352,14 @@ func __volume_slide__dp_true__(channelIndex: u8 in x, direction: u8 in a) {
 // direct_page = true
 // KEEP: x
 // OUT: direct_page = false
-func __read_vol_effect_offset__dp_true__(channelIndex: u8 in x) {
+func __read_vol_effect_offset__dp_true__(channelIndex: u8 in x, subVolume: u8 in y) {
     var _csv_subVolume      @ &channelSoA.subVolume                 as u8 : [u8 ; N_CHANNELS];
 
-    // Y = 0
     _csv_subVolume[x] = y;
 
     direct_page = false;
 
+    y = 0;
     channelSoA.volEffect_offset_l[x] = a = instructionPtr[y];
     instructionPtr++;
     channelSoA.volEffect_offset_h[x] = a = instructionPtr[y];
@@ -2380,7 +2383,8 @@ func tremolo(channelIndex: u8 in x, quarter_wavelength: u8 in a) {
 
     _csv_direction[x] = a = VOL_PAN_EFFECT_TRIANGLE_UP;
 
-    return __read_vol_effect_offset__dp_true__(x);
+    // Y (sub_volume) = 0
+    return __read_vol_effect_offset__dp_true__(x, y);
 }
 
 

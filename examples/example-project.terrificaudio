@@ -247,6 +247,10 @@
     {
       "name": "portamento_first_tick_bugtest",
       "source": "bug-tests/portamento-first-tick-bugtest.mml"
+    },
+    {
+      "name": "volume_slide_down_bug",
+      "source": "bug-tests/volume-slide-down-bug.mml"
     }
   ]
 }

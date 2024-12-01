@@ -345,7 +345,7 @@ impl<const M: u8> PanVolValue<M> {
         self.half_wavelength = 0;
         self.direction = PanVolEffectDirection::SlideDown;
         self.offset = u32::from_le_bytes([o1, o2, 0, 0]);
-        self.sub_value = 0;
+        self.sub_value = 0xff;
     }
 
     fn tremolo_panbrello_instruction(&mut self, qwt: u8, o1: u8, o2: u8, tc: TickCounter) {
