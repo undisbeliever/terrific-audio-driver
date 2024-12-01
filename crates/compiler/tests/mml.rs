@@ -5062,6 +5062,23 @@ A \asm {
     );
 }
 
+#[test]
+fn test_utf8_in_mml() {
+    assert_eq!("´".len(), 2);
+    assert_error_in_mml_line("´", 1, ChannelError::UnknownCharacters(1));
+
+    assert_error_in_mml_line("´´´´´", 1, ChannelError::UnknownCharacters(5));
+
+    // Google translate for "this is an error"
+    assert_error_in_mml_line("これはエラーです", 1, ChannelError::UnknownCharacters(8));
+
+    assert_eq!("⚠".len(), 3);
+    assert_error_in_mml_line("⚠☹⛔", 1, ChannelError::UnknownCharacters(3));
+
+    assert_eq!("𝅘𝅥𝅮".len(), 4);
+    assert_error_in_mml_line("𝅘𝅥𝅮𝅘𝅥𝅮𝅘𝅥𝅮𝅗𝅥𝅗𝅥𝅘𝅥𝅮𝅘𝅥𝅮𝅘𝅥𝅮", 1, ChannelError::UnknownCharacters(8));
+}
+
 // ----------------------------------------------------------------------------------------------
 
 /// Tests MML commands will still be merged if there are a change MML state command in between

@@ -152,27 +152,6 @@ impl<'a> Scanner<'a> {
         s
     }
 
-    fn skip_while_u8(&mut self, pattern: impl Fn(u8) -> bool) -> u32 {
-        let mut char_count = 0;
-
-        for (index, c) in self.to_process.bytes().enumerate() {
-            if !pattern(c) {
-                self.pos.line_char += char_count;
-                self.pos.char_index += index.try_into().unwrap_or(0);
-                self.to_process = &self.to_process[index..];
-                return char_count;
-            }
-            char_count += 1;
-        }
-
-        // All characters match pattern
-        self.pos.line_char += char_count;
-        self.pos.char_index += self.to_process.len().try_into().unwrap_or(0);
-        self.to_process = "";
-
-        char_count
-    }
-
     fn skip_while_char(&mut self, pattern: impl Fn(char) -> bool) -> u32 {
         let mut char_count = 0;
 
@@ -197,7 +176,7 @@ impl<'a> Scanner<'a> {
     // Assumes `self.current_line[0]` is '@' or '!'
     fn identifier_token(&mut self) -> Option<IdentifierStr<'a>> {
         // Advance the '@' or '!' token
-        self.advance_one();
+        self.advance_one_ascii();
 
         let c = self.to_process.bytes().next();
         match c {
@@ -219,22 +198,34 @@ impl<'a> Scanner<'a> {
         }
     }
 
-    fn advance_one(&mut self) {
+    fn advance_one_ascii(&mut self) {
         self.pos.line_char += 1;
         self.pos.char_index += 1;
         self.to_process = &self.to_process[1..];
     }
 
-    fn advance_two(&mut self) {
+    fn advance_two_ascii(&mut self) {
         self.pos.line_char += 2;
         self.pos.char_index += 2;
         self.to_process = &self.to_process[2..];
     }
 
-    fn advance_three(&mut self) {
+    fn advance_three_ascii(&mut self) {
         self.pos.line_char += 3;
         self.pos.char_index += 3;
         self.to_process = &self.to_process[3..];
+    }
+
+    fn advance_one_char(&mut self) {
+        let mut c = self.to_process.char_indices();
+
+        if c.next().is_some() {
+            let i = c.offset();
+
+            self.pos.line_char += 1;
+            self.pos.char_index += u32::try_from(i).unwrap();
+            self.to_process = &self.to_process[i..];
+        }
     }
 
     fn skip_whitespace(&mut self) {
@@ -262,40 +253,32 @@ fn is_unknown_u8(c: u8) -> bool {
 
 fn parse_unknown_chars<'a>(scanner: &mut Scanner<'a>) -> Token<'a> {
     // Required to skip an unknown "M" character
-    scanner.advance_one();
+    scanner.advance_one_char();
 
-    let mut n_chars = 1;
+    let n_chars = scanner.skip_while_char(|c| match c.try_into() {
+        Ok(b) => is_unknown_u8(b),
+        Err(_) => true,
+    });
 
-    n_chars += scanner.skip_while_u8(is_unknown_u8);
-    while scanner.starts_with(|c: char| c.is_ascii_whitespace()) {
-        let whitespace_chars = scanner.skip_while_char(|c| c.is_ascii_whitespace());
-        let unknown_chars = scanner.skip_while_u8(is_unknown_u8);
-
-        if unknown_chars > 0 {
-            n_chars += whitespace_chars;
-            n_chars += unknown_chars;
-        }
-    }
-
-    Token::Error(ChannelError::UnknownCharacters(n_chars))
+    Token::Error(ChannelError::UnknownCharacters(n_chars + 1))
 }
 
 fn next_token<'a>(scanner: &mut Scanner<'a>) -> Option<TokenWithPosition<'a>> {
     macro_rules! one_ascii_token {
         ($t:expr) => {{
-            scanner.advance_one();
+            scanner.advance_one_ascii();
             $t
         }};
     }
     macro_rules! two_ascii_token {
         ($t:expr) => {{
-            scanner.advance_two();
+            scanner.advance_two_ascii();
             $t
         }};
     }
     macro_rules! three_ascii_token {
         ($t:expr) => {{
-            scanner.advance_three();
+            scanner.advance_three_ascii();
             $t
         }};
     }
@@ -321,7 +304,7 @@ fn next_token<'a>(scanner: &mut Scanner<'a>) -> Option<TokenWithPosition<'a>> {
         }
         b'$' => {
             // Skip '$'
-            scanner.advance_one();
+            scanner.advance_one_ascii();
 
             let num = scanner.read_while(|c| c.is_ascii_hexdigit());
             if !num.is_empty() {
@@ -338,7 +321,7 @@ fn next_token<'a>(scanner: &mut Scanner<'a>) -> Option<TokenWithPosition<'a>> {
             let pitch = parse_pitch_char(pitch).unwrap();
 
             // skip pitch character
-            scanner.advance_one();
+            scanner.advance_one_ascii();
 
             let mut semitone_offset: i8 = 0;
             let offset_str = scanner.read_while(|c| c == b'-' || c == b'+');
@@ -365,7 +348,7 @@ fn next_token<'a>(scanner: &mut Scanner<'a>) -> Option<TokenWithPosition<'a>> {
 
         b'+' => {
             // skip '+'
-            scanner.advance_one();
+            scanner.advance_one_ascii();
             let num = scanner.read_while(|c| c.is_ascii_digit());
             match num.parse() {
                 Ok(i) => Token::RelativeNumber(i),
@@ -474,7 +457,7 @@ fn next_token<'a>(scanner: &mut Scanner<'a>) -> Option<TokenWithPosition<'a>> {
         }
 
         b'\\' => {
-            scanner.advance_one();
+            scanner.advance_one_ascii();
 
             match scanner.read_while(|b: u8| b.is_ascii_alphabetic()) {
                 "asm" => Token::StartBytecodeAsm,
@@ -509,7 +492,7 @@ fn parse_bytecode_asm<'a>(
 
         return;
     }
-    scanner.advance_one();
+    scanner.advance_one_ascii();
 
     tokens.push(TokenWithPosition {
         pos: scanner.pos(),
@@ -546,7 +529,7 @@ fn parse_bytecode_asm<'a>(
             },
             Some(b'}') => {
                 let pos = scanner.pos();
-                scanner.advance_one();
+                scanner.advance_one_ascii();
 
                 tokens.push(TokenWithPosition {
                     pos,
@@ -556,7 +539,7 @@ fn parse_bytecode_asm<'a>(
                 return;
             }
             Some(b'|') => {
-                scanner.advance_one();
+                scanner.advance_one_ascii();
             }
             _ => {
                 let pos = scanner.pos();
@@ -581,7 +564,7 @@ fn parse_bytecode_asm<'a>(
                     });
 
                     if scanner.first_byte() == Some(b'|') {
-                        scanner.advance_one();
+                        scanner.advance_one_ascii();
                     }
                 }
             }
