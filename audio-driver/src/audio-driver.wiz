@@ -2342,7 +2342,8 @@ func __volume_slide__dp_true__(channelIndex: u8 in x, direction: u8 in a, subVol
 
     _csv_direction[x] = a;
 
-    _csv_halfWavelength[x] = a = 0;
+    // halfWavelength
+    a = 0;
 
 // Fallthrough into __read_vol_effect_offset__dp_true__()
 }
@@ -2352,9 +2353,11 @@ func __volume_slide__dp_true__(channelIndex: u8 in x, direction: u8 in a, subVol
 // direct_page = true
 // KEEP: x
 // OUT: direct_page = false
-func __read_vol_effect_offset__dp_true__(channelIndex: u8 in x, subVolume: u8 in y) {
+func __read_vol_effect_offset__dp_true__(channelIndex: u8 in x, halfWavelength: u8 in a, subVolume: u8 in y) {
+    var _csv_halfWavelength @ &channelSoA.volEffect_halfWavelength  as u8 : [u8 ; N_CHANNELS];
     var _csv_subVolume      @ &channelSoA.subVolume                 as u8 : [u8 ; N_CHANNELS];
 
+    _csv_halfWavelength[x] = a;
     _csv_subVolume[x] = y;
 
     direct_page = false;
@@ -2374,19 +2377,19 @@ func __read_vol_effect_offset__dp_true__(channelIndex: u8 in x, subVolume: u8 in
 func tremolo(channelIndex: u8 in x, quarter_wavelength: u8 in a) {
     var _csv_counter        @ &channelSoA.volEffect_counter         as u8 : [u8 ; N_CHANNELS];
     var _csv_direction      @ &channelSoA.volEffect_direction       as u8 : [u8 ; N_CHANNELS];
-    var _csv_halfWavelength @ &channelSoA.volEffect_halfWavelength  as u8 : [u8 ; N_CHANNELS];
 
     direct_page = true;
 
+    _csv_direction[x] = y = VOL_PAN_EFFECT_TRIANGLE_UP;
+
     _csv_counter[x] = a;
-    _csv_halfWavelength[x] = a = a << 1;
 
-    _csv_direction[x] = a = VOL_PAN_EFFECT_TRIANGLE_UP;
+    // halfWavelength
+    a = a << 1;
 
-    y--;
-    // Y (sub_volume) = 0xff
-
-    return __read_vol_effect_offset__dp_true__(x, y);
+    // subVolume
+    y = 0xff;
+    return __read_vol_effect_offset__dp_true__(x, a, y);
 }
 
 
