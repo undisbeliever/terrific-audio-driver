@@ -2302,9 +2302,13 @@ func set_volume(channelIndex : u8 in x, volume : u8 in a) {
 // Y = 0
 // KEEP: x
 func volume_slide_up(channelIndex: u8 in x, ticks: u8 in a) {
-    channelSoA.volEffect_counter[x] = a;
+    var _csv_counter        @ &channelSoA.volEffect_counter         as u8 : [u8 ; N_CHANNELS];
 
-    return __volume_slide(x, VOL_PAN_EFFECT_SLIDE_UP);
+    direct_page = true;
+
+    _csv_counter[x] = a;
+
+    return __volume_slide__dp_true__(x, VOL_PAN_EFFECT_SLIDE_UP);
 }
 
 
@@ -2312,35 +2316,51 @@ func volume_slide_up(channelIndex: u8 in x, ticks: u8 in a) {
 // KEEP: x
 #[fallthrough]
 func volume_slide_down(channelIndex: u8 in x, ticks: u8 in a) {
-    channelSoA.volEffect_counter[x] = a;
+    var _csv_counter        @ &channelSoA.volEffect_counter         as u8 : [u8 ; N_CHANNELS];
+
+    direct_page = true;
+
+    _csv_counter[x] = a;
 
     a = VOL_PAN_EFFECT_SLIDE_DOWN;
 
-// Fallthrough into __volume_slide()
+// Fallthrough into __volume_slide__dp_true__()
 }
 
 
 // Y = 0
+// direct_page = true
 // KEEP: x
 #[fallthrough]
-func __volume_slide(channelIndex: u8 in x, direction: u8 in a) {
-    channelSoA.volEffect_direction[x] = a;
+func __volume_slide__dp_true__(channelIndex: u8 in x, direction: u8 in a) {
+    var _csv_direction      @ &channelSoA.volEffect_direction       as u8 : [u8 ; N_CHANNELS];
+    var _csv_halfWavelength @ &channelSoA.volEffect_halfWavelength  as u8 : [u8 ; N_CHANNELS];
+
+    _csv_direction[x] = a;
 
     // Y = 0
-    channelSoA.volEffect_halfWavelength[x] = a = y;
+    _csv_halfWavelength[x] = y;
 
-// Fallthrough into __read_vol_effect_offset()
+// Fallthrough into __read_vol_effect_offset__dp_true__()
 }
 
 
-func __read_vol_effect_offset(channelIndex: u8 in x) {
+// Y = 0
+// direct_page = true
+// KEEP: x
+// OUT: direct_page = false
+func __read_vol_effect_offset__dp_true__(channelIndex: u8 in x) {
+    var _csv_subVolume      @ &channelSoA.subVolume                 as u8 : [u8 ; N_CHANNELS];
+
+    // Y = 0
+    _csv_subVolume[x] = y;
+
+    direct_page = false;
+
     channelSoA.volEffect_offset_l[x] = a = instructionPtr[y];
     instructionPtr++;
     channelSoA.volEffect_offset_h[x] = a = instructionPtr[y];
     instructionPtr++;
-
-    // Y = 0
-    channelSoA.subVolume[x] = a = y;
 
     ^return process_next_bytecode(x);
 }
@@ -2349,12 +2369,18 @@ func __read_vol_effect_offset(channelIndex: u8 in x) {
 // Y = 0
 // KEEP: X
 func tremolo(channelIndex: u8 in x, quarter_wavelength: u8 in a) {
-    channelSoA.volEffect_counter[x] = a;
-    channelSoA.volEffect_halfWavelength[x] = a = a << 1;
+    var _csv_counter        @ &channelSoA.volEffect_counter         as u8 : [u8 ; N_CHANNELS];
+    var _csv_direction      @ &channelSoA.volEffect_direction       as u8 : [u8 ; N_CHANNELS];
+    var _csv_halfWavelength @ &channelSoA.volEffect_halfWavelength  as u8 : [u8 ; N_CHANNELS];
 
-    channelSoA.volEffect_direction[x] = a = VOL_PAN_EFFECT_TRIANGLE_UP;
+    direct_page = true;
 
-    return __read_vol_effect_offset(x);
+    _csv_counter[x] = a;
+    _csv_halfWavelength[x] = a = a << 1;
+
+    _csv_direction[x] = a = VOL_PAN_EFFECT_TRIANGLE_UP;
+
+    return __read_vol_effect_offset__dp_true__(x);
 }
 
 
