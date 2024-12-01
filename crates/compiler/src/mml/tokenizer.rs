@@ -220,11 +220,12 @@ impl<'a> Scanner<'a> {
         let mut c = self.to_process.char_indices();
 
         if c.next().is_some() {
-            let i = c.offset();
+            let s = c.as_str();
+            let i = self.to_process.len() - s.len();
 
             self.pos.line_char += 1;
             self.pos.char_index += u32::try_from(i).unwrap();
-            self.to_process = &self.to_process[i..];
+            self.to_process = s;
         }
     }
 

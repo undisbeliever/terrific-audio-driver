@@ -226,7 +226,12 @@ enum SegmentPrefix {
 
 impl SegmentPrefix {
     fn split_hex(s: &str, hex_match: fn(u8) -> bool) -> Result<(String, usize), ()> {
-        match s.len().checked_sub(2).and_then(|i| s.split_at_checked(i)) {
+        match s
+            .len()
+            .checked_sub(2)
+            .filter(|&i| s.is_char_boundary(i))
+            .map(|i| s.split_at(i))
+        {
             Some((prefix, hex)) => {
                 if !hex.bytes().all(hex_match) {
                     return Err(());
