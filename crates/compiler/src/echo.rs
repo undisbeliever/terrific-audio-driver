@@ -112,8 +112,8 @@ pub fn parse_fir_filter_string(s: &str) -> Result<[i8; FIR_FILTER_SIZE], ValueEr
 
     for (o, s) in out.iter_mut().zip(input.iter()) {
         *o = match s.as_bytes().first() {
-            Some(b'$') => match i8::from_str_radix(&s[1..], 16) {
-                Ok(i) => i,
+            Some(b'$') => match u8::from_str_radix(&s[1..], 16) {
+                Ok(i) => i8::from_le_bytes([i]),
                 Err(_) => return Err(ValueError::InvalidFirFilter),
             },
             Some(_) => match s.parse::<i8>() {
@@ -134,5 +134,26 @@ pub fn test_fir_filter_gain(fir: &[i8; FIR_FILTER_SIZE]) -> Result<(), ValueErro
         Ok(())
     } else {
         Err(ValueError::InvalidFirFilterGain { abs_sum })
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_fir_filter_decimal() {
+        assert_eq!(
+            parse_fir_filter_string("8 6 12 100 -63 -128 127 0"),
+            Ok([8, 6, 12, 100, -63, -128, 127, 0])
+        );
+    }
+
+    #[test]
+    fn test_fir_filter_hex() {
+        assert_eq!(
+            parse_fir_filter_string("$50 $32 $64 $7F $00 $Ff $9c $80"),
+            Ok([80, 50, 100, 127, 0, -1, -100, -128])
+        );
     }
 }

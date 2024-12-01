@@ -31,6 +31,7 @@ MML changes:
    * The GUI's subroutine playback will now use the first MML instrument that can play all of the
      subroutine's no-instrument notes.
  * Fixed a panic with non-ASCII UTF-8 in MML
+ * Fixed negative hexadecimal numbers in #FirFilter
 
 BRR changes:
  * Added gaussian overflow glitch detector (3 maximum-negative values in a row)
