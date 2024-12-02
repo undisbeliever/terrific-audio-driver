@@ -4,6 +4,7 @@ name = "shvc-sound-emu"
 license = "ISC"
 
 edition = "2021"
+rust-version.workspace = true
 
 publish = false
 

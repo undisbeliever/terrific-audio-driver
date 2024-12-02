@@ -28,6 +28,8 @@ opt-level = 3
 
 
 [workspace.package]
+rust-version = "1.75"
+
 version = "0.0.13"
 
 publish = false

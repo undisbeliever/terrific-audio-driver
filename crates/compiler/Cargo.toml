@@ -4,6 +4,7 @@ name = "compiler"
 license = "MIT"
 
 edition = "2021"
+rust-version.workspace = true
 
 publish = false
 
