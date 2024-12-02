@@ -18,3 +18,6 @@ A V40 V~80,10 c2
 ; Changing volume disables tremolo
 A v4 c16
 
+; Test set_pan_and_volume disables tremolo
+A v8 v~5,10 c2 \asm { set_pan_and_volume 64 128 } c4 r4
+

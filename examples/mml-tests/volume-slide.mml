@@ -23,3 +23,6 @@ A V128 Vs+200,80 c4 & V+0 c4 r4
 ; Volume slide stops when volume changes
 A V128 Vs-200,80 c4 & V32 c4 r4
 
+; Test set_pan_and_volume disables volume slide
+A V50 Vs+200,200 c2 \asm { set_pan_and_volume 64 40 } c4 r4
+
