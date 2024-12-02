@@ -263,19 +263,19 @@ Numbers can be decimal, or hexadecimal when prefixed with `$` (ie, `$ff`)
 
 <br/>
 
- * `vs+<0..16>,<ticks>` - Volume slide up (coarse volume)
+ * `vs+<1..16>,<ticks>` - Volume slide up (coarse volume)
     * Volume slide is disabled when the volume is set or adjusted.
     * Volume slide is disabled on overflows and underflows.
- * `vs-<0..16>,<ticks>` - Volume slide down (coarse volume)
- * `Vs+<0..255>,<ticks>` - Volume slide up (fine volume)
- * `Vs-<0..255>,<ticks>` - Volume slide down (fine volume)
- * `v~<0..8>,<quarter_wavelength_in_ticks>` - Tremolo (coarse volume)
+ * `vs-<1..16>,<ticks>` - Volume slide down (coarse volume)
+ * `Vs+<1..255>,<ticks>` - Volume slide up (fine volume)
+ * `Vs-<1..255>,<ticks>` - Volume slide down (fine volume)
+ * `v~<1..8>,<quarter_wavelength_in_ticks>` - Tremolo (coarse volume)
     * Tremolo will amplitude modulate the channel volume in a sawtooth pattern every tick.
     * The first parameter is the center-to-peak depth in volume units.
     * *quarter_wavelength_in_ticks* controls the rate (speed) of the tremolo.
     * Tremolo is disabled when the volume is set or adjusted.
     * Tremolo is disabled on overflows and underflows.
- * `V~<0..127>,<quarter_wavelength_in_ticks>` - Tremolo (fine volume)
+ * `V~<1..127>,<quarter_wavelength_in_ticks>` - Tremolo (fine volume)
 
 <br/>
 
