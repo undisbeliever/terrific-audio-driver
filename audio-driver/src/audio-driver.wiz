@@ -34,7 +34,7 @@ config {
 }
 
 bank code           @ CODE_ADDR             : [constdata; CODE_SIZE];
-bank bytecode_stack @ CODE_ADDR + CODE_SIZE : [vardata; BC_TOTAL_STACK_SIZE];
+bank lastvarpage    @ CODE_ADDR + CODE_SIZE : [vardata; LAST_VAR_PAGE_SIZE];
 
 
 extern const commonDataHeader @ COMMON_DATA_ADDR : CommonDataHeader;
@@ -352,8 +352,12 @@ in firstpage {
 
         // The previous temp-GAIN used by the channel.
         var prevTempGain : [u8 ; N_CHANNELS];
+    }
+}
 
 
+in lastvarpage {
+    namespace channelSoA {
         // set_early_release instruction arguments
         var earlyRelease_cmp : [u8 ; N_CHANNELS];
         var earlyRelease_minTicks : [u8 ; N_CHANNELS];
@@ -363,6 +367,12 @@ in firstpage {
         // ::TODO move to zeropage::
         var ticksAfterNote : [u8 ; N_CHANNELS];
     }
+
+    // The bytecode stack
+    //
+    // CAUTION: `bcStack` is offset by BC_CHANNEL_STACK_OFFSET to eliminate signed comparisons.
+    var __bcStack : [u8 ; BC_CHANNEL_STACK_SIZE * N_CHANNELS];
+        var bcStack @ (&__bcStack as u16) - BC_CHANNEL_STACK_OFFSET : [u8 ; BC_CHANNEL_STACK_SIZE * N_CHANNELS + BC_CHANNEL_STACK_OFFSET];
 }
 
 
@@ -2534,14 +2544,6 @@ in code {
     // Used to determine if `loopStackPointer` is valid.
     // Equal to `BcStackIndexesEnd[x] - 3 + 1` (+1 for < comparison)
     const ValidLoopStackPointerTable : [u8; N_CHANNELS] = [ __BC_STACK_INDEXES[i + 1] - 3 + 1 for let i in 0..(N_CHANNELS - 1)];
-}
-
-in bytecode_stack {
-    // The bytecode stack
-    //
-    // CAUTION: `bcStack` is offset by BC_CHANNEL_STACK_OFFSET to eliminate signed comparisons.
-    var __bcStack : [u8 ; BC_CHANNEL_STACK_SIZE * N_CHANNELS];
-        var bcStack @ (&__bcStack as u16) - BC_CHANNEL_STACK_OFFSET : [u8 ; BC_CHANNEL_STACK_SIZE * N_CHANNELS + BC_CHANNEL_STACK_OFFSET];
 }
 
 import "bytecode";
