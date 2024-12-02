@@ -28,11 +28,11 @@
 let LOADER_ADDR = 0x200;
 let LOADER_SIZE =  116;     // MUST be even
 
-// ::TODO confirm stack size is large enough::
+// ::TODO shrink stack::
 let STACK_SIZE = 0x20;
 let STACK_BOTTOM_ADDR = 0x200 - STACK_SIZE;
 
-let FIRSTPAGE_SIZE = 0x200 - STACK_SIZE;
+let FIRSTPAGE_SIZE = 0x100 - STACK_SIZE;
 
 let BC_CHANNEL_STACK_SIZE = 21;
 let BC_CHANNEL_STACK_OFFSET = 6;
