@@ -13,6 +13,8 @@ Audio driver changes:
  * SET_MUSIC_CHANNELS IO command now key-offs the disabled channels
  * Added volume slides
  * Added tremolo
+ * Added pan slides
+ * Added panbrello
 
 Bytecode assembly changes:
  * Fixed maximum vibrato quarter wavelength value

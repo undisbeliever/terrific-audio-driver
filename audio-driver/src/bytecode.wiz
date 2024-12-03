@@ -247,6 +247,21 @@ let INSTRUCTIONS_WITH_ARGUMENTS = [
     //      oooooooo oooooooo = offset per tick (8.8 unsigned fixed point)
     tremolo,
 
+    // parameters: tttttttt oooooooo oooooooo
+    //      tttttttt          = number of ticks (0 is 256 ticks)
+    //      oooooooo oooooooo = offset per tick (8.8 unsigned fixed point)
+    pan_slide_up,
+
+    // parameters: tttttttt oooooooo oooooooo
+    //      tttttttt          = number of ticks (0 is 256 ticks)
+    //      oooooooo oooooooo = offset per tick (8.8 unsigned fixed point)
+    pan_slide_down,
+
+    // parameters: qqqqqqqq oooooooo oooooooo
+    //      qqqqqqqq          = quarter-wavelength in ticks (1 - 127)
+    //      oooooooo oooooooo = offset per tick (8.8 unsigned fixed point)
+    panbrello,
+
 
     // parameter: u8 new timer0 value
     //

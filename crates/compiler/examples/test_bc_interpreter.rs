@@ -205,11 +205,22 @@ fn assert_bc_intrepreter_matches_emu(
         addresses::CHANNEL_VOL_EFFECT_HALF_WAVELENGTH,
         "volEffect_halfWavelength",
     );
-
     // Not testing subVolume, bc_iterpreter value is invalid on overflow
-    // Not testing counter, bc_interpreter counter is invalid on overflow
+    // Not testing volEffect_counter, bc_interpreter counter is invalid on overflow
 
     test_channel_soa(addresses::CHANNEL_PAN, "pan");
+    test_channel_soa(
+        addresses::CHANNEL_PAN_EFFECT_DIRECTION,
+        "panEffect_direction",
+    );
+    test_channel_soa(addresses::CHANNEL_PAN_EFFECT_OFFSET_L, "panEffect_offset_l");
+    test_channel_soa(addresses::CHANNEL_PAN_EFFECT_OFFSET_H, "panEffect_offset_h");
+    test_channel_soa(
+        addresses::CHANNEL_PAN_EFFECT_HALF_WAVELENGTH,
+        "panEffect_halfWavelength",
+    );
+    // Not testing subPan, bc_iterpreter value is invalid on overflow
+    // Not testing panEffect_counter, bc_interpreter counter is invalid on overflow
 
     // Not testing portamento
 

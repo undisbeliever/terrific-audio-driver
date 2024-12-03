@@ -11,10 +11,10 @@ use super::{ChannelId, IdentifierStr, Section};
 use super::note_tracking::CursorTracker;
 
 use crate::bytecode::{
-    EarlyReleaseMinTicks, EarlyReleaseTicks, LoopCount, Pan, PlayNoteTicks, SubroutineId,
-    TremoloAmplitude, TremoloQuarterWavelengthInTicks, VibratoPitchOffsetPerTick,
-    VibratoQuarterWavelengthInTicks, Volume, VolumeSlideAmount, VolumeSlideTicks,
-    KEY_OFF_TICK_DELAY,
+    EarlyReleaseMinTicks, EarlyReleaseTicks, LoopCount, Pan, PanSlideTicks,
+    PanbrelloQuarterWavelengthInTicks, PlayNoteTicks, SubroutineId, TremoloAmplitude,
+    TremoloQuarterWavelengthInTicks, VibratoPitchOffsetPerTick, VibratoQuarterWavelengthInTicks,
+    Volume, VolumeSlideAmount, VolumeSlideTicks, KEY_OFF_TICK_DELAY,
 };
 use crate::channel_bc_generator::{
     merge_pan_commands, merge_volumes_commands, relative_pan, relative_volume, Command,
@@ -411,6 +411,14 @@ impl CommaTicks for VolumeSlideTicks {
 }
 
 impl CommaTicks for TremoloQuarterWavelengthInTicks {
+    const NO_COMMA_ERROR: ValueError = ValueError::NoCommaQuarterWavelength;
+}
+
+impl CommaTicks for PanSlideTicks {
+    const NO_COMMA_ERROR: ValueError = ValueError::NoCommaPanSlideTicks;
+}
+
+impl CommaTicks for PanbrelloQuarterWavelengthInTicks {
     const NO_COMMA_ERROR: ValueError = ValueError::NoCommaQuarterWavelength;
 }
 
@@ -1101,6 +1109,26 @@ fn parse_coarse_tremolo(pos: FilePos, p: &mut Parser) -> Command {
     _parse_tremolo(pos, p, amount)
 }
 
+fn parse_pan_slide(pos: FilePos, p: &mut Parser) -> Command {
+    let amount = parse_signed_newtype(pos, p);
+    let ticks = parse_comma_ticks(pos, p);
+
+    match (amount, ticks) {
+        (Some(amount), Some(ticks)) => Command::PanSlide(amount, ticks),
+        _ => Command::None,
+    }
+}
+
+fn parse_panbrello(pos: FilePos, p: &mut Parser) -> Command {
+    let amplitude = parse_unsigned_newtype(pos, p);
+    let qwt = parse_comma_ticks(pos, p);
+
+    match (amplitude, qwt) {
+        (Some(amplitude), Some(qwl)) => Command::Panbrello(amplitude, qwl),
+        _ => Command::None,
+    }
+}
+
 // Assumes all ties have already been parsed.
 // Requires the previously parsed token send a key-off event.
 fn parse_rests_after_rest(p: &mut Parser) -> TickCounter {
@@ -1760,6 +1788,9 @@ fn parse_token(pos: FilePos, token: Token, p: &mut Parser) -> Command {
         Token::FineVolumeSlide => parse_fine_volume_slide(pos, p),
         Token::CoarseTremolo => parse_coarse_tremolo(pos, p),
         Token::FineTremolo => parse_fine_tremolo(pos, p),
+
+        Token::PanSlide => parse_pan_slide(pos, p),
+        Token::Panbrello => parse_panbrello(pos, p),
 
         Token::Quantize => {
             parse_quantize(pos, p);

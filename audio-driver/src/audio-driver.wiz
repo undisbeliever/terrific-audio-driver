@@ -343,6 +343,14 @@ in firstpage {
         // Channel pan (0-MAX_PAN)
         var pan : [u8 ; N_CHANNELS];
 
+        // See volEffect variables
+        var subPan : [u8 ; N_CHANNELS];
+        var panEffect_direction : [u8 ; N_CHANNELS];
+        var panEffect_counter : [u8 ; N_CHANNELS];
+        var panEffect_offset_l : [u8 ; N_CHANNELS];
+        var panEffect_offset_h : [u8 ; N_CHANNELS];
+        var panEffect_halfWavelength : [u8 ; N_CHANNELS];
+
 
         // Offset between the note to play and the pitch table.
         //
@@ -956,11 +964,24 @@ var _afterFirstChannel : u8 in zpTmp2;
         if !zero {
             _process_volume_effects__inline(x, a);
 
+            // ::TODO optimise::
             // Set S-DSP voice registers dirty bit
             voiceChannelsDirty_tmp $ 7 = true;
 
             volShadowDirty_tmp $ 7 = true;
         }
+
+        a = channelSoA.panEffect_direction[x];
+        if !zero {
+            _process_pan_effects__inline(x, a);
+
+            // ::TODO optimise::
+            // Set S-DSP voice registers dirty bit
+            voiceChannelsDirty_tmp $ 7 = true;
+
+            volShadowDirty_tmp $ 7 = true;
+        }
+
 
         // Cannot do this after process_bytecode() for 2 reasons:
         //  1. Volume must be calculated on the first instruction of a sound-effect
@@ -1395,6 +1416,82 @@ WriteVolume:
     channelSoA.volume[x] = y;
 }
 
+
+// Process pan effect
+//
+// CAUTION: Does not set `volShadowDirty_tmp`.
+//
+// KEEP: x
+inline func _process_pan_effects__inline(channelIndex: u8 in x, direction: u8 in a) {
+    // Warning spaghetti code: Optimised for code-size.
+
+    // Hack to allow access to pan effect variables with `direct_page = true`.
+    var _csp_pan            @ &channelSoA.pan                       as u8 : [u8 ; N_CHANNELS];
+    var _csp_subPan         @ &channelSoA.subPan                    as u8 : [u8 ; N_CHANNELS];
+    var _csp_direction      @ &channelSoA.panEffect_direction       as u8 : [u8 ; N_CHANNELS];
+    var _csp_counter        @ &channelSoA.panEffect_counter         as u8 : [u8 ; N_CHANNELS];
+    var _csp_offset_l       @ &channelSoA.panEffect_offset_l        as u8 : [u8 ; N_CHANNELS];
+    var _csp_offset_h       @ &channelSoA.panEffect_offset_h        as u8 : [u8 ; N_CHANNELS];
+    var _csp_halfWavelength @ &channelSoA.panEffect_halfWavelength  as u8 : [u8 ; N_CHANNELS];
+
+    direct_page = true;
+    // MUST NOT access zeropage variables until direct_page is false.
+
+    a >>>= 1;
+
+    y = _csp_pan[x];
+
+    a = _csp_subPan[x];
+
+    goto Up if !carry;
+        // down
+        // carry set
+        a -#= _csp_offset_l[x];
+        _csp_subPan[x] = a;
+
+        a = y -# _csp_offset_h[x];
+
+        goto EndIf if carry;
+            y = 0;
+            goto DisableEffect;
+
+        UpOverflow:
+            y = MAX_PAN;
+        DisableEffect:
+            a = 0;
+            goto WriteDirection;
+
+    Up:
+        // up
+        // carry clear
+        a +#= _csp_offset_l[x];
+        _csp_subPan[x] = a;
+
+        a = y +# _csp_offset_h[x];
+
+        goto UpOverflow if carry || a >= (MAX_PAN + 1);
+EndIf:
+
+    y = a;
+
+    _csp_counter[x]--;
+    goto WritePan if !zero;
+
+        a = _csp_halfWavelength[x];
+        if !zero {
+            _csp_counter[x] = a;
+
+            // Change direction
+            a = _csp_direction[x] ^ 1;
+        }
+    WriteDirection:
+        _csp_direction[x] = a;
+
+WritePan:
+    _csp_pan[x] = y;
+
+    direct_page = false;
+}
 
 
 // Updates vol_l and vol_r shadow variables.
@@ -2248,6 +2345,10 @@ func adjust_pan(channelIndex : u8 in x, detla : i8 in a) {
 func set_pan(channelIndex : u8 in x, pan : u8 in a) {
     channelSoA.pan[x] = a;
 
+    // Disable pan effects
+    // (Y is non-zero)
+    channelSoA.panEffect_direction[x] = a = 0;
+
     mark_vol_shadow_dirty__inline();
 
     ^return process_next_bytecode(x);
@@ -2261,6 +2362,10 @@ func set_pan_and_volume(channelIndex : u8 in x, pan : u8 in a) {
     // Y is 0
 
     channelSoA.pan[x] = a;
+
+    // Disable pan effects
+    // Y = 0
+    channelSoA.panEffect_direction[x] = a = y;
 
     a = instructionPtr[y];
     instructionPtr++;
@@ -2400,6 +2505,100 @@ func tremolo(channelIndex: u8 in x, quarter_wavelength: u8 in a) {
     // subVolume
     y = 0xff;
     return __read_vol_effect_offset__dp_true__(x, a, y);
+}
+
+
+// Y = 0
+// KEEP: x
+func pan_slide_up(channelIndex: u8 in x, ticks: u8 in a) {
+    var _csp_counter        @ &channelSoA.panEffect_counter         as u8 : [u8 ; N_CHANNELS];
+
+    direct_page = true;
+
+    _csp_counter[x] = a;
+
+    // Y (subPan) = 0
+    return __pan_slide__dp_true__(x, VOL_PAN_EFFECT_SLIDE_UP, y);
+}
+
+
+// Y = 0
+// KEEP: x
+#[fallthrough]
+func pan_slide_down(channelIndex: u8 in x, ticks: u8 in a) {
+    var _csp_counter        @ &channelSoA.panEffect_counter         as u8 : [u8 ; N_CHANNELS];
+
+    direct_page = true;
+
+    _csp_counter[x] = a;
+
+    a = VOL_PAN_EFFECT_SLIDE_DOWN;
+
+    y--;
+    // Y (subPan) = 0xff
+
+// Fallthrough into __pan_slide__dp_true__()
+}
+
+
+// Y = 0
+// direct_page = true
+// KEEP: x
+#[fallthrough]
+func __pan_slide__dp_true__(channelIndex: u8 in x, direction: u8 in a, subPan: u8 in y) {
+    var _csp_direction      @ &channelSoA.panEffect_direction       as u8 : [u8 ; N_CHANNELS];
+    var _csp_halfWavelength @ &channelSoA.panEffect_halfWavelength  as u8 : [u8 ; N_CHANNELS];
+
+    _csp_direction[x] = a;
+
+    // halfWavelength
+    a = 0;
+
+// Fallthrough into __read_pan_effect_offset__dp_true__()
+}
+
+
+// Y = 0
+// direct_page = true
+// KEEP: x
+// OUT: direct_page = false
+func __read_pan_effect_offset__dp_true__(channelIndex: u8 in x, halfWavelength: u8 in a, subPan: u8 in y) {
+    var _csp_halfWavelength @ &channelSoA.panEffect_halfWavelength  as u8 : [u8 ; N_CHANNELS];
+    var _csp_subPan         @ &channelSoA.subPan                    as u8 : [u8 ; N_CHANNELS];
+
+    _csp_halfWavelength[x] = a;
+    _csp_subPan[x] = y;
+
+    direct_page = false;
+
+    y = 0;
+    channelSoA.panEffect_offset_l[x] = a = instructionPtr[y];
+    instructionPtr++;
+    channelSoA.panEffect_offset_h[x] = a = instructionPtr[y];
+    instructionPtr++;
+
+    ^return process_next_bytecode(x);
+}
+
+
+// Y = 0
+// KEEP: X
+func panbrello(channelIndex: u8 in x, quarter_wavelength: u8 in a) {
+    var _csp_counter        @ &channelSoA.panEffect_counter         as u8 : [u8 ; N_CHANNELS];
+    var _csp_direction      @ &channelSoA.panEffect_direction       as u8 : [u8 ; N_CHANNELS];
+
+    direct_page = true;
+
+    _csp_direction[x] = y = VOL_PAN_EFFECT_TRIANGLE_UP;
+
+    _csp_counter[x] = a;
+
+    // halfWavelength
+    a = a << 1;
+
+    // subPan
+    y = 0xff;
+    return __read_pan_effect_offset__dp_true__(x, a, y);
 }
 
 

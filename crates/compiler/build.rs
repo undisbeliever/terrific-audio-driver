@@ -53,7 +53,6 @@ const AUDIO_DRIVER_SYMBOLS: &[(&str, &str)] = &[
     ("channelSoA.stackPointer", "CHANNEL_STACK_POINTER"),
     ("channelSoA.loopStackPointer", "CHANNEL_LOOP_STACK_POINTER"),
     ("channelSoA.nextEventIsKeyOff", "CHANNEL_NEXT_EVENT_IS_KEY_OFF"),
-    ("channelSoA.pan", "CHANNEL_PAN"),
     ("channelSoA.portamento_direction", "CHANNEL_DIRECTION"),
     ("channelSoA.vibrato_pitchOffsetPerTick", "CHANNEL_VIBRATO_PITCH_OFFSET_PER_TICK"),
     ("channelSoA.vibrato_directionComparator", "CHANNEL_VIBRATO_DIRECTION_COMPARATOR"),
@@ -71,6 +70,13 @@ const AUDIO_DRIVER_SYMBOLS: &[(&str, &str)] = &[
     ("channelSoA.volEffect_offset_h", "CHANNEL_VOL_EFFECT_OFFSET_H"),
     ("channelSoA.volEffect_counter", "CHANNEL_VOL_EFFECT_COUNTER"),
     ("channelSoA.volEffect_halfWavelength", "CHANNEL_VOL_EFFECT_HALF_WAVELENGTH"),
+    ("channelSoA.pan", "CHANNEL_PAN"),
+    ("channelSoA.subPan", "CHANNEL_SUB_PAN"),
+    ("channelSoA.panEffect_direction", "CHANNEL_PAN_EFFECT_DIRECTION"),
+    ("channelSoA.panEffect_offset_l", "CHANNEL_PAN_EFFECT_OFFSET_L"),
+    ("channelSoA.panEffect_offset_h", "CHANNEL_PAN_EFFECT_OFFSET_H"),
+    ("channelSoA.panEffect_counter", "CHANNEL_PAN_EFFECT_COUNTER"),
+    ("channelSoA.panEffect_halfWavelength", "CHANNEL_PAN_EFFECT_HALF_WAVELENGTH"),
 ];
 
 fn find_wiz_binary() -> PathBuf {

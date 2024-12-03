@@ -431,6 +431,8 @@ pub fn parse_asm_line(bc: &mut Bytecode, line: &str) -> Result<(), ChannelError>
 
        volume_slide 2 svnt_and_uvnt_arguments,
        tremolo 2 two_uvnt_arguments,
+       pan_slide 2 svnt_and_uvnt_arguments,
+       panbrello 2 two_uvnt_arguments,
 
        enable_echo 0 no_arguments,
        disable_echo 0 no_arguments,

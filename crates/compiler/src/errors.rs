@@ -8,9 +8,10 @@ use relative_path::RelativeToError;
 
 use crate::bytecode::{
     BcTicks, BcTicksKeyOff, BcTicksNoKeyOff, EarlyReleaseMinTicks, EarlyReleaseTicks, InstrumentId,
-    LoopCount, Pan, PortamentoVelocity, RelativePan, RelativeVolume, TremoloAmplitude,
-    TremoloQuarterWavelengthInTicks, VibratoPitchOffsetPerTick, VibratoQuarterWavelengthInTicks,
-    Volume, VolumeSlideAmount, VolumeSlideTicks,
+    LoopCount, Pan, PanSlideAmount, PanSlideTicks, PanbrelloAmplitude,
+    PanbrelloQuarterWavelengthInTicks, PortamentoVelocity, RelativePan, RelativeVolume,
+    TremoloAmplitude, TremoloQuarterWavelengthInTicks, VibratoPitchOffsetPerTick,
+    VibratoQuarterWavelengthInTicks, Volume, VolumeSlideAmount, VolumeSlideTicks,
 };
 use crate::channel_bc_generator::{
     FineQuantization, PortamentoSpeed, Quantization, MAX_BROKEN_CHORD_NOTES,
@@ -139,6 +140,14 @@ pub enum ValueError {
     TremoloAmplitudeOutOfRange(u32),
     TremoloQuarterWavelengthTicksOutOfRange(u32),
 
+    NoPanSlideDirection,
+    PanSlideAmountOutOfRange(i32),
+    PanSlideAmountZero,
+    PanSlideTicksOutOfRange(u32),
+
+    PanbrelloAmplitudeOutOfRange(u32),
+    PanbrelloQuarterWavelengthTicksOutOfRange(u32),
+
     EarlyReleaseTicksOutOfRange(u32),
     EarlyReleaseMinTicksOutOfRange(u32),
     VibratoPitchOffsetPerTickOutOfRange(u32),
@@ -197,6 +206,10 @@ pub enum ValueError {
     NoVolumeSlideTicks,
     NoTremoloAmplitude,
     NoTremoloQuarterWavelengthTicks,
+    NoPanSlideAmount,
+    NoPanSlideTicks,
+    NoPanbrelloAmplitude,
+    NoPanbrelloQuarterWavelengthTicks,
     NoOctave,
     NoZenLen,
     NoTranspose,
@@ -222,6 +235,7 @@ pub enum ValueError {
 
     NoCommaQuarterWavelength,
     NoCommaVolumeSlideTicks,
+    NoCommaPanSlideTicks,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -833,6 +847,28 @@ impl Display for ValueError {
                 )
             }
 
+            Self::NoPanSlideDirection => {
+                write!(f, "no pan slide direction (+ or -)")
+            }
+            Self::PanSlideAmountOutOfRange(v) => {
+                out_of_range!("pan slide", v, PanSlideAmount)
+            }
+            Self::PanSlideAmountZero => write!(f, "pan slide cannot be 0"),
+            Self::PanSlideTicksOutOfRange(v) => {
+                out_of_range!("pan slide ticks", v, PanSlideTicks)
+            }
+
+            Self::PanbrelloAmplitudeOutOfRange(v) => {
+                out_of_range!("panbrello amplitude", v, PanbrelloAmplitude)
+            }
+            Self::PanbrelloQuarterWavelengthTicksOutOfRange(v) => {
+                out_of_range!(
+                    "panbrello quarter-wavelength",
+                    v,
+                    PanbrelloQuarterWavelengthInTicks
+                )
+            }
+
             Self::EarlyReleaseTicksOutOfRange(v) => {
                 out_of_range!("early-release ticks", v, EarlyReleaseTicks)
             }
@@ -952,6 +988,12 @@ impl Display for ValueError {
             Self::NoTremoloQuarterWavelengthTicks => {
                 write!(f, "no tremolo quarter-wavelength ticks")
             }
+            Self::NoPanSlideAmount => write!(f, "no pan slide amount"),
+            Self::NoPanSlideTicks => write!(f, "no pan slide ticks"),
+            Self::NoPanbrelloAmplitude => write!(f, "no panbrello amplitude"),
+            Self::NoPanbrelloQuarterWavelengthTicks => {
+                write!(f, "no panbrello quarter-wavelength ticks")
+            }
             Self::NoOctave => write!(f, "no octave"),
             Self::NoZenLen => write!(f, "no zenlen value"),
             Self::NoTranspose => write!(f, "no transpose value"),
@@ -982,6 +1024,9 @@ impl Display for ValueError {
             }
             Self::NoCommaVolumeSlideTicks => {
                 write!(f, "cannot parse volume-slide ticks, expected a comma ','")
+            }
+            Self::NoCommaPanSlideTicks => {
+                write!(f, "cannot parse pan-slide ticks, expected a comma ','")
             }
         }
     }

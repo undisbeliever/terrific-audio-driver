@@ -90,6 +90,33 @@ u8_value_newtype!(
     127
 );
 
+i16_non_zero_value_newtype!(
+    PanSlideAmount,
+    PanSlideAmountOutOfRange,
+    NoPanSlideDirection,
+    NoPanSlideDirection,
+    PanSlideAmountZero,
+    -(Pan::MAX.as_u8() as i16),
+    Pan::MAX.as_u8() as i16
+);
+u8_0_is_256_value_newtype!(PanSlideTicks, PanSlideTicksOutOfRange, NoPanSlideTicks);
+
+u8_value_newtype!(
+    PanbrelloAmplitude,
+    PanbrelloAmplitudeOutOfRange,
+    NoPanbrelloAmplitude,
+    1,
+    // A `px0 p~64` overflows
+    Pan::MAX.as_u8() / 2 - 1
+);
+u8_value_newtype!(
+    PanbrelloQuarterWavelengthInTicks,
+    PanbrelloQuarterWavelengthTicksOutOfRange,
+    NoPanbrelloQuarterWavelengthTicks,
+    1,
+    127
+);
+
 impl Pan {
     pub const CENTER: Pan = Self(Self::MAX.0 / 2);
 }
@@ -148,6 +175,9 @@ pub mod opcodes {
         VOLUME_SLIDE_UP,
         VOLUME_SLIDE_DOWN,
         TREMOLO,
+        PAN_SLIDE_UP,
+        PAN_SLIDE_DOWN,
+        PANBRELLO,
         SET_SONG_TICK_CLOCK,
         START_LOOP,
         SKIP_LAST_LOOP,
@@ -1168,24 +1198,62 @@ impl<'a> Bytecode<'a> {
         );
     }
 
-    pub fn volume_slide(&mut self, amount: VolumeSlideAmount, ticks: VolumeSlideTicks) {
-        let opcode = match amount.is_negative() {
-            false => opcodes::VOLUME_SLIDE_UP,
-            true => opcodes::VOLUME_SLIDE_DOWN,
-        };
-
+    fn _pan_vol_slide_offset_per_tick<A, T>(&mut self, amount: A, ticks: T) -> (u8, u8)
+    where
+        A: SignedValueNewType<ValueType = i16>,
+        T: UnsignedValueNewType<ValueType = u32>,
+    {
         let u16_ticks = u16::try_from(ticks.value()).unwrap();
 
         let offset_per_tick = ((amount.value().unsigned_abs() << 8) | 0xff) / u16_ticks;
-        let arg_2 = offset_per_tick.to_le_bytes()[0];
-        let arg_3 = offset_per_tick.to_le_bytes()[1];
 
         debug_assert_eq!(
             offset_per_tick.wrapping_mul(u16_ticks).to_le_bytes()[1],
             u8::try_from(amount.value().unsigned_abs()).unwrap()
         );
 
-        emit_bytecode!(self, opcode, ticks.driver_value(), arg_2, arg_3);
+        offset_per_tick.to_le_bytes().into()
+    }
+
+    pub fn volume_slide(&mut self, amount: VolumeSlideAmount, ticks: VolumeSlideTicks) {
+        let opt = self._pan_vol_slide_offset_per_tick(amount, ticks);
+
+        let opcode = match amount.is_negative() {
+            false => opcodes::VOLUME_SLIDE_UP,
+            true => opcodes::VOLUME_SLIDE_DOWN,
+        };
+
+        emit_bytecode!(self, opcode, ticks.driver_value(), opt.0, opt.1);
+    }
+
+    pub fn pan_slide(&mut self, amount: PanSlideAmount, ticks: PanSlideTicks) {
+        let opt = self._pan_vol_slide_offset_per_tick(amount, ticks);
+
+        let opcode = match amount.is_negative() {
+            false => opcodes::PAN_SLIDE_UP,
+            true => opcodes::PAN_SLIDE_DOWN,
+        };
+
+        emit_bytecode!(self, opcode, ticks.driver_value(), opt.0, opt.1);
+    }
+
+    fn _tremolo_panbrello<A, T>(&mut self, opcode: u8, amplitude: A, quarter_wavelength_ticks: T)
+    where
+        A: UnsignedValueNewType<ValueType = u8>,
+        T: UnsignedValueNewType<ValueType = u8>,
+    {
+        let u16_ticks: u16 = quarter_wavelength_ticks.value().into();
+
+        let offset_per_tick = ((u16::from(amplitude.value()) << 8) | 0xff) / u16_ticks;
+        let arg_2 = offset_per_tick.to_le_bytes()[0];
+        let arg_3 = offset_per_tick.to_le_bytes()[1];
+
+        debug_assert_eq!(
+            offset_per_tick.wrapping_mul(u16_ticks).to_le_bytes()[1],
+            amplitude.value()
+        );
+
+        emit_bytecode!(self, opcode, quarter_wavelength_ticks.value(), arg_2, arg_3);
     }
 
     pub fn tremolo(
@@ -1193,24 +1261,15 @@ impl<'a> Bytecode<'a> {
         amplitude: TremoloAmplitude,
         quarter_wavelength_ticks: TremoloQuarterWavelengthInTicks,
     ) {
-        let u16_ticks: u16 = quarter_wavelength_ticks.as_u8().into();
+        self._tremolo_panbrello(opcodes::TREMOLO, amplitude, quarter_wavelength_ticks);
+    }
 
-        let offset_per_tick = ((u16::from(amplitude.as_u8()) << 8) | 0xff) / u16_ticks;
-        let arg_2 = offset_per_tick.to_le_bytes()[0];
-        let arg_3 = offset_per_tick.to_le_bytes()[1];
-
-        debug_assert_eq!(
-            offset_per_tick.wrapping_mul(u16_ticks).to_le_bytes()[1],
-            amplitude.as_u8()
-        );
-
-        emit_bytecode!(
-            self,
-            opcodes::TREMOLO,
-            quarter_wavelength_ticks.as_u8(),
-            arg_2,
-            arg_3
-        );
+    pub fn panbrello(
+        &mut self,
+        amplitude: PanbrelloAmplitude,
+        quarter_wavelength_ticks: PanbrelloQuarterWavelengthInTicks,
+    ) {
+        self._tremolo_panbrello(opcodes::PANBRELLO, amplitude, quarter_wavelength_ticks);
     }
 
     pub fn enable_echo(&mut self) {

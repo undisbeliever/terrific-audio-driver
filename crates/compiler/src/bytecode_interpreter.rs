@@ -24,6 +24,8 @@ use crate::time::TickCounter;
 use std::cmp::min;
 use std::ops::Deref;
 
+const MAX_PAN: u8 = Pan::MAX.as_u8();
+
 /// Error advancing subroutine to the end of the pointer
 #[derive(Debug)]
 pub struct SongSubroutineError;
@@ -65,7 +67,7 @@ struct ChannelSoA {
     inst_pitch_offset: u8,
 
     volume: ChannelSoAPanVol,
-    pan: u8,
+    pan: ChannelSoAPanVol,
 
     // Not emulating portamento
 
@@ -323,7 +325,7 @@ impl<const M: u8> PanVolValue<M> {
         self.update(tc);
 
         self.direction = PanVolEffectDirection::None;
-        self.value = self.value.saturating_add_signed(amount);
+        self.value = self.value.saturating_add_signed(amount).clamp(0, Self::MAX);
     }
 
     fn slide_up_instruction(&mut self, ticks: u8, o1: u8, o2: u8, tc: TickCounter) {
@@ -396,7 +398,7 @@ pub struct ChannelState {
     early_release_gain: u8,
 
     volume: PanVolValue<0xff>,
-    pan: u8,
+    pan: PanVolValue<MAX_PAN>,
 
     echo: bool,
 
@@ -428,7 +430,7 @@ impl ChannelState {
             early_release_min_ticks: 0,
             early_release_gain: 0,
             volume: PanVolValue::new(STARTING_VOLUME),
-            pan: Pan::MAX.as_u8() / 2,
+            pan: PanVolValue::new(Pan::CENTER.as_u8()),
             echo: false,
             vibrato_pitch_offset_per_tick: 0,
             vibrato_quarter_wavelength_in_ticks: 0,
@@ -667,19 +669,20 @@ impl ChannelState {
             }
 
             opcodes::ADJUST_PAN => {
-                let adjust = read_pc();
+                let p = i8::from_le_bytes([read_pc()]);
 
-                let p = i8::from_le_bytes([adjust]);
-                self.pan = self.pan.saturating_add_signed(p).clamp(0, Pan::MAX.as_u8());
+                self.pan.adjust_value(p, self.ticks);
             }
             opcodes::SET_PAN => {
-                self.pan = read_pc();
+                let pan = read_pc();
+
+                self.pan.set_value(pan);
             }
             opcodes::SET_PAN_AND_VOLUME => {
                 let pan = read_pc();
                 let volume = read_pc();
 
-                self.pan = pan;
+                self.pan.set_value(pan);
                 self.volume.set_value(volume);
             }
             opcodes::ADJUST_VOLUME => {
@@ -716,6 +719,31 @@ impl ChannelState {
                 let o2 = read_pc();
 
                 self.volume
+                    .tremolo_panbrello_instruction(qwt, o1, o2, self.ticks);
+            }
+
+            opcodes::PAN_SLIDE_UP => {
+                let ticks = read_pc();
+                let o1 = read_pc();
+                let o2 = read_pc();
+
+                self.pan.slide_up_instruction(ticks, o1, o2, self.ticks);
+            }
+
+            opcodes::PAN_SLIDE_DOWN => {
+                let ticks = read_pc();
+                let o1 = read_pc();
+                let o2 = read_pc();
+
+                self.pan.slide_down_instruction(ticks, o1, o2, self.ticks);
+            }
+
+            opcodes::PANBRELLO => {
+                let qwt = read_pc();
+                let o1 = read_pc();
+                let o2 = read_pc();
+
+                self.pan
                     .tremolo_panbrello_instruction(qwt, o1, o2, self.ticks);
             }
 
@@ -832,6 +860,7 @@ impl ChannelState {
     /// MUST be called after processing the channel's bytecode
     fn finalise(&mut self, target_ticks: TickCounter) {
         self.volume.update(target_ticks);
+        self.pan.update(target_ticks);
     }
 
     // Create a new song subroutine interpreter channel and process a mml-prefix.
@@ -1096,8 +1125,6 @@ fn build_channel(
     target_ticks: TickCounter,
     common: &CommonAudioDataSoA,
 ) -> Channel {
-    assert!(Pan::try_from(c.pan).is_ok());
-
     assert_eq!(c.song_ptr, common.song_data_addr);
 
     assert!(c.ticks >= target_ticks);
@@ -1134,7 +1161,7 @@ fn build_channel(
     };
 
     let volume_soa = c.volume.as_soa();
-    let pan = c.pan;
+    let pan_soa = c.pan.as_soa();
 
     assert!(c.stack_pointer <= BC_CHANNEL_STACK_SIZE);
     assert!(c.loop_stack_pointer + BC_STACK_BYTES_PER_LOOP <= BC_CHANNEL_STACK_SIZE);
@@ -1144,6 +1171,9 @@ fn build_channel(
     let loop_stack_index = u8::try_from(stack_start + c.loop_stack_pointer).unwrap();
 
     let volume = volume_soa.value;
+    let pan = pan_soa.value;
+
+    assert!(Pan::try_from(pan).is_ok());
 
     Channel {
         soa: ChannelSoA {
@@ -1161,7 +1191,7 @@ fn build_channel(
             loop_stack_pointer: loop_stack_index,
             inst_pitch_offset,
             volume: volume_soa,
-            pan,
+            pan: pan_soa,
             vibrato_pitch_offset_per_tick: c.vibrato_pitch_offset_per_tick,
             vibrato_tick_counter_start: c.vibrato_quarter_wavelength_in_ticks,
             vibrato_tick_counter: c.vibrato_quarter_wavelength_in_ticks,
@@ -1214,7 +1244,15 @@ fn unused_channel(channel_index: usize) -> Channel {
                 counter: 0,
                 half_wavelength: 0,
             },
-            pan: Pan::CENTER.as_u8(),
+            pan: ChannelSoAPanVol {
+                value: Pan::CENTER.as_u8(),
+                sub_value: 0,
+                direction: 0,
+                offset_l: 0,
+                offset_h: 0,
+                counter: 0,
+                half_wavelength: 0,
+            },
             vibrato_pitch_offset_per_tick: 0,
             vibrato_tick_counter_start: 0,
             vibrato_tick_counter: 0,
@@ -1334,7 +1372,6 @@ impl InterpreterOutput {
                 );
 
                 soa_write_u8(addresses::CHANNEL_INST_PITCH_OFFSET, c.inst_pitch_offset);
-                soa_write_u8(addresses::CHANNEL_PAN, c.pan);
 
                 soa_write_u8(addresses::CHANNEL_VOLUME, c.volume.value);
                 soa_write_u8(addresses::CHANNEL_SUB_VOLUME, c.volume.sub_value);
@@ -1345,6 +1382,17 @@ impl InterpreterOutput {
                 soa_write_u8(
                     addresses::CHANNEL_VOL_EFFECT_HALF_WAVELENGTH,
                     c.volume.half_wavelength,
+                );
+
+                soa_write_u8(addresses::CHANNEL_PAN, c.pan.value);
+                soa_write_u8(addresses::CHANNEL_SUB_PAN, c.pan.sub_value);
+                soa_write_u8(addresses::CHANNEL_PAN_EFFECT_DIRECTION, c.pan.direction);
+                soa_write_u8(addresses::CHANNEL_PAN_EFFECT_OFFSET_L, c.pan.offset_l);
+                soa_write_u8(addresses::CHANNEL_PAN_EFFECT_OFFSET_H, c.pan.offset_h);
+                soa_write_u8(addresses::CHANNEL_PAN_EFFECT_COUNTER, c.pan.counter);
+                soa_write_u8(
+                    addresses::CHANNEL_PAN_EFFECT_HALF_WAVELENGTH,
+                    c.pan.half_wavelength,
                 );
 
                 // Not interpreting portamento

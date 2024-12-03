@@ -1,0 +1,27 @@
+#Title Pan slide test
+#Tempo 120
+
+@1 square gain F127
+
+A @1
+
+; Pan slide up.  left to right
+A p0 ps+128,60 c1 r4
+
+; Pan slide down.  right to center
+A    ps-64,60 c1 r4
+
+; Pan slide up stops on overflow
+A px+48 ps+64,80 c1 r4
+
+; Pan slide down stops on underflow
+A px-48 ps-64,80 c1 r4
+
+; Pan slide stops when pan changes
+A px-64 ps+128,100 c4 & px0 c4 r4
+
+A px-64 ps+128,100 c4 & p+1 c4 r4
+
+; Test set_pan_and_volume disables pan slide
+A px0 ps+100,200 c2 \asm { set_pan_and_volume 32 128 } c4 r4
+

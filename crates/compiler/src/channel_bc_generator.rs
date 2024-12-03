@@ -6,7 +6,8 @@
 
 use crate::bytecode::{
     BcTicks, BcTicksKeyOff, BcTicksNoKeyOff, Bytecode, BytecodeContext, EarlyReleaseMinTicks,
-    EarlyReleaseTicks, IeState, InstrumentId, LoopCount, Pan, PlayNoteTicks, PortamentoVelocity,
+    EarlyReleaseTicks, IeState, InstrumentId, LoopCount, Pan, PanSlideAmount, PanSlideTicks,
+    PanbrelloAmplitude, PanbrelloQuarterWavelengthInTicks, PlayNoteTicks, PortamentoVelocity,
     RelativePan, RelativeVolume, SlurredNoteState, TremoloAmplitude,
     TremoloQuarterWavelengthInTicks, VibratoPitchOffsetPerTick, VibratoQuarterWavelengthInTicks,
     VibratoState, Volume, VolumeSlideAmount, VolumeSlideTicks, KEY_OFF_TICK_DELAY,
@@ -243,8 +244,11 @@ pub(crate) enum Command {
     SetEarlyRelease(EarlyReleaseTicks, EarlyReleaseMinTicks, OptionalGain),
 
     ChangePanAndOrVolume(Option<PanCommand>, Option<VolumeCommand>),
+
     VolumeSlide(VolumeSlideAmount, VolumeSlideTicks),
     Tremolo(TremoloAmplitude, TremoloQuarterWavelengthInTicks),
+    PanSlide(PanSlideAmount, PanSlideTicks),
+    Panbrello(PanbrelloAmplitude, PanbrelloQuarterWavelengthInTicks),
 
     SetEcho(bool),
 
@@ -1322,6 +1326,14 @@ impl<'a> ChannelBcGenerator<'a> {
 
             &Command::Tremolo(amplitude, quarter_wavelength_ticks) => {
                 self.bc.tremolo(amplitude, quarter_wavelength_ticks);
+            }
+
+            &Command::PanSlide(amount, ticks) => {
+                self.bc.pan_slide(amount, ticks);
+            }
+
+            &Command::Panbrello(amplitude, quarter_wavelength_ticks) => {
+                self.bc.panbrello(amplitude, quarter_wavelength_ticks);
             }
 
             &Command::SetEcho(e) => {

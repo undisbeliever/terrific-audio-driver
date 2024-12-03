@@ -225,6 +225,14 @@
       "source": "mml-tests/test-bc-asm-in-mml.mml"
     },
     {
+      "name": "pan_slide",
+      "source": "mml-tests/pan-slide.mml"
+    },
+    {
+      "name": "panbrello",
+      "source": "mml-tests/panbrello.mml"
+    },
+    {
       "name": "volume_slide",
       "source": "mml-tests/volume-slide.mml"
     },

@@ -3168,6 +3168,91 @@ fn test_tremolo() {
 }
 
 #[test]
+fn test_pan_slide() {
+    assert_line_matches_bytecode("ps+15,8", &["pan_slide +15 8"]);
+    assert_line_matches_bytecode("ps-30,16", &["pan_slide -30 16"]);
+
+    assert_line_matches_bytecode("ps+128,50", &["pan_slide +128 50"]);
+    assert_line_matches_bytecode("ps-128,256", &["pan_slide -128 256"]);
+
+    // 0x14ff / 14 = 0x17f
+    assert_line_matches_bytecode_bytes("ps +20,14", &[opcodes::PAN_SLIDE_UP, 14, 0x7f, 0x01]);
+    // 0x80ff / 60 = 0x226
+    assert_line_matches_bytecode_bytes("ps +128,60", &[opcodes::PAN_SLIDE_UP, 60, 0x26, 0x02]);
+    // (0x100 * 64 + 0xff) / 256 = 64
+    assert_line_matches_bytecode_bytes("ps+64,256", &[opcodes::PAN_SLIDE_UP, 0, 64, 0]);
+
+    // 0x37ff / 10 = 0x599
+    assert_line_matches_bytecode_bytes("ps-55,10", &[opcodes::PAN_SLIDE_DOWN, 10, 0x99, 0x05]);
+    // (0x100 * 30 + 0xff) / 256 = 30
+    assert_line_matches_bytecode_bytes("ps -30,256", &[opcodes::PAN_SLIDE_DOWN, 0, 30, 0]);
+
+    assert_error_in_mml_line(
+        "ps+129,100",
+        1,
+        ValueError::PanSlideAmountOutOfRange(129).into(),
+    );
+    assert_error_in_mml_line(
+        "ps-129,100",
+        1,
+        ValueError::PanSlideAmountOutOfRange(-129).into(),
+    );
+
+    assert_error_in_mml_line("ps+20,0", 7, ValueError::PanSlideTicksOutOfRange(0).into());
+    assert_error_in_mml_line("ps-40,0", 7, ValueError::PanSlideTicksOutOfRange(0).into());
+
+    assert_error_in_mml_line(
+        "ps+50,257",
+        7,
+        ValueError::PanSlideTicksOutOfRange(257).into(),
+    );
+    assert_error_in_mml_line(
+        "ps-60,257",
+        7,
+        ValueError::PanSlideTicksOutOfRange(257).into(),
+    );
+
+    assert_error_in_mml_line("ps+10", 1, ValueError::NoCommaPanSlideTicks.into());
+    assert_error_in_mml_line("ps-10", 1, ValueError::NoCommaPanSlideTicks.into());
+}
+
+#[test]
+fn test_panbrello() {
+    assert_line_matches_bytecode("p~20,10", &["panbrello 20 10"]);
+    assert_line_matches_bytecode("p~30,20", &["panbrello 30 20"]);
+
+    // 0x3cff / 5 = 0xc33
+    assert_line_matches_bytecode_bytes("p~60,5", &[opcodes::PANBRELLO, 5, 0x33, 0x0c]);
+    // 0x3fff / 127 = 0x81 (largest values)
+    assert_line_matches_bytecode_bytes("p~63,127", &[opcodes::PANBRELLO, 127, 0x81, 0x00]);
+
+    assert_error_in_mml_line(
+        "p~0,10",
+        1,
+        ValueError::PanbrelloAmplitudeOutOfRange(0).into(),
+    );
+    assert_error_in_mml_line(
+        "p~64,10",
+        1,
+        ValueError::PanbrelloAmplitudeOutOfRange(64).into(),
+    );
+
+    assert_error_in_mml_line(
+        "p~10,0",
+        6,
+        ValueError::PanbrelloQuarterWavelengthTicksOutOfRange(0).into(),
+    );
+
+    assert_error_in_mml_line(
+        "p~20,128",
+        6,
+        ValueError::PanbrelloQuarterWavelengthTicksOutOfRange(128).into(),
+    );
+
+    assert_error_in_mml_line("p~10", 1, ValueError::NoCommaQuarterWavelength.into());
+}
+
+#[test]
 fn test_set_instrument() {
     let mml = r##"
 @0 dummy_instrument

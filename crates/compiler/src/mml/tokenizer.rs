@@ -53,6 +53,8 @@ pub enum Token<'a> {
     FineVolumeSlide,
     CoarseTremolo,
     FineTremolo,
+    PanSlide,
+    Panbrello,
     Quantize,
     EarlyRelease,
     Transpose,
@@ -407,6 +409,8 @@ fn next_token<'a>(scanner: &mut Scanner<'a>) -> Option<TokenWithPosition<'a>> {
 
             match c2 {
                 Some(b'x') => two_ascii_token!(Token::PxPan),
+                Some(b's') => two_ascii_token!(Token::PanSlide),
+                Some(b'~') => two_ascii_token!(Token::Panbrello),
                 _ => one_ascii_token!(Token::Pan),
             }
         }

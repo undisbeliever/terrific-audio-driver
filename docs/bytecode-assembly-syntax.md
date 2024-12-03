@@ -72,6 +72,18 @@ Instructions
     * Tremolo is disabled when the volume is set or adjusted.
     * Tremolo is disabled on overflows and underflows.
 
+ * `pan_slide <amount> <duration>` - Pan slide
+    * This instruction does not sleep and the effect runs in the background.
+    * Pan slide is disabled when the pan is set or adjusted.
+    * Pan slide is disabled on overflows and underflows.
+ * `panbrello <amplitude 1..63> <quarter_wavelength_in_ticks 1..127>` - Tremolo
+    * Panbrello will amplitude modulate the pan in a sawtooth pattern every tick.
+    * The first parameter is the center-to-peak depth in pan units.
+    * *amplitude* is the center-to-peak depth in pan units.
+    * *quarter_wavelength_in_ticks* controls the rate (speed) of the tremolo.
+    * Panbrello is disabled when the pan is set or adjusted.
+    * Panbrello is disabled on overflows and underflows.
+
  * `enable_echo` - Enable echo on this channel.
  * `disable_echo` - Disable echo on this channel.
 
