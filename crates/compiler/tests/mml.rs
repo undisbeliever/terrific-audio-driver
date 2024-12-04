@@ -3110,15 +3110,16 @@ fn test_tremolo() {
     assert_line_matches_bytecode("V~20,10", &["tremolo 20 10"]);
     assert_line_matches_bytecode("V~30,20", &["tremolo 30 20"]);
 
-    // 0x10ff / 10 = 0x1b3
-    assert_line_matches_bytecode_bytes("v~1,10", &[opcodes::TREMOLO, 10, 0xb3, 0x01]);
-    // 0x30ff / 8 = 0x61f
-    assert_line_matches_bytecode_bytes("v~3,8", &[opcodes::TREMOLO, 8, 0x1f, 0x06]);
+    // 0x107f / 10 = 0x1a6
+    assert_line_matches_bytecode_bytes("v~1,10", &[opcodes::TREMOLO, 10, 0xa6, 0x01]);
+    // 0x307f / 8 = 0x60f
+    assert_line_matches_bytecode_bytes("v~3,8", &[opcodes::TREMOLO, 8, 0x0f, 0x06]);
 
-    // 0x28ff / 6 = 0x6d5
-    assert_line_matches_bytecode_bytes("V~40,6", &[opcodes::TREMOLO, 6, 0xd5, 0x06]);
-    // 0x7fff / 127 = 0x102 (largest values)
-    assert_line_matches_bytecode_bytes("V~127,127", &[opcodes::TREMOLO, 127, 0x02, 0x01]);
+    // 0x287f / 6 = 0x6bf
+    assert_line_matches_bytecode_bytes("V~40,6", &[opcodes::TREMOLO, 6, 0xbf, 0x06]);
+
+    // 0x7f7f / 127 = 0x101 (largest values)
+    assert_line_matches_bytecode_bytes("V~127,127", &[opcodes::TREMOLO, 127, 0x01, 0x01]);
 
     assert_error_in_mml_line(
         "v~0,10",
@@ -3221,10 +3222,14 @@ fn test_panbrello() {
     assert_line_matches_bytecode("p~20,10", &["panbrello 20 10"]);
     assert_line_matches_bytecode("p~30,20", &["panbrello 30 20"]);
 
-    // 0x3cff / 5 = 0xc33
-    assert_line_matches_bytecode_bytes("p~60,5", &[opcodes::PANBRELLO, 5, 0x33, 0x0c]);
-    // 0x3fff / 127 = 0x81 (largest values)
-    assert_line_matches_bytecode_bytes("p~63,127", &[opcodes::PANBRELLO, 127, 0x81, 0x00]);
+    // 0x3c7f / 5 = 0xc19
+    assert_line_matches_bytecode_bytes("p~60,5", &[opcodes::PANBRELLO, 5, 0x19, 0x0c]);
+
+    // 0x177f / 17 = 0x161
+    assert_line_matches_bytecode_bytes("p~23,17", &[opcodes::PANBRELLO, 17, 0x61, 0x01]);
+
+    // 0x407f / 127 = 0x82 (largest values)
+    assert_line_matches_bytecode_bytes("p~64,127", &[opcodes::PANBRELLO, 127, 0x82, 0x00]);
 
     assert_error_in_mml_line(
         "p~0,10",
@@ -3232,9 +3237,9 @@ fn test_panbrello() {
         ValueError::PanbrelloAmplitudeOutOfRange(0).into(),
     );
     assert_error_in_mml_line(
-        "p~64,10",
+        "p~65,10",
         1,
-        ValueError::PanbrelloAmplitudeOutOfRange(64).into(),
+        ValueError::PanbrelloAmplitudeOutOfRange(65).into(),
     );
 
     assert_error_in_mml_line(

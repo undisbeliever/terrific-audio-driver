@@ -7,7 +7,7 @@ A @1
 
 A p~50,10 c1 r4
 
-A px0 p~63,50 [c8 d8]25 r4
+A px0 p~64,50 [c8 d8]25 r4
 
 ; Panbrello is disabled on overflow
 A px+50 p~15,10 c4 r4

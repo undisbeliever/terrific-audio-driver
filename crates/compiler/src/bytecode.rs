@@ -87,7 +87,7 @@ u8_value_newtype!(
     TremoloQuarterWavelengthTicksOutOfRange,
     NoTremoloQuarterWavelengthTicks,
     1,
-    127
+    Volume::MAX.as_u8() / 2
 );
 
 i16_non_zero_value_newtype!(
@@ -106,8 +106,7 @@ u8_value_newtype!(
     PanbrelloAmplitudeOutOfRange,
     NoPanbrelloAmplitude,
     1,
-    // A `px0 p~64` overflows
-    Pan::MAX.as_u8() / 2 - 1
+    Pan::MAX.as_u8() / 2
 );
 u8_value_newtype!(
     PanbrelloQuarterWavelengthInTicks,
@@ -1207,9 +1206,18 @@ impl<'a> Bytecode<'a> {
 
         let offset_per_tick = ((amount.value().unsigned_abs() << 8) | 0xff) / u16_ticks;
 
+        // slide up
         debug_assert_eq!(
             offset_per_tick.wrapping_mul(u16_ticks).to_le_bytes()[1],
             u8::try_from(amount.value().unsigned_abs()).unwrap()
+        );
+
+        // slide down
+        debug_assert_eq!(
+            u16::MAX
+                .wrapping_sub(offset_per_tick.wrapping_mul(u16_ticks))
+                .to_le_bytes()[1],
+            u8::MAX - u8::try_from(amount.value().unsigned_abs()).unwrap()
         );
 
         offset_per_tick.to_le_bytes().into()
@@ -1242,15 +1250,26 @@ impl<'a> Bytecode<'a> {
         A: UnsignedValueNewType<ValueType = u8>,
         T: UnsignedValueNewType<ValueType = u8>,
     {
+        const SUB_VALUE: u16 = 0x7f;
+
         let u16_ticks: u16 = quarter_wavelength_ticks.value().into();
 
-        let offset_per_tick = ((u16::from(amplitude.value()) << 8) | 0xff) / u16_ticks;
+        let offset_per_tick = ((u16::from(amplitude.value()) << 8) | SUB_VALUE) / u16_ticks;
         let arg_2 = offset_per_tick.to_le_bytes()[0];
         let arg_3 = offset_per_tick.to_le_bytes()[1];
 
         debug_assert_eq!(
-            offset_per_tick.wrapping_mul(u16_ticks).to_le_bytes()[1],
-            amplitude.value()
+            u16::from_le_bytes([SUB_VALUE as u8, 127])
+                .wrapping_add(offset_per_tick.wrapping_mul(u16_ticks))
+                .to_le_bytes()[1],
+            127 + amplitude.value()
+        );
+        debug_assert_eq!(
+            u16::from_le_bytes([SUB_VALUE as u8, 127])
+                .wrapping_add(offset_per_tick.wrapping_mul(u16_ticks))
+                .wrapping_sub(offset_per_tick.wrapping_mul(u16_ticks * 2))
+                .to_le_bytes()[1],
+            127 - amplitude.value()
         );
 
         emit_bytecode!(self, opcode, quarter_wavelength_ticks.value(), arg_2, arg_3);

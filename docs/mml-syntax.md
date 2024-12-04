@@ -281,7 +281,7 @@ Numbers can be decimal, or hexadecimal when prefixed with `$` (ie, `$ff`)
     * Pan slide is disabled when the pan is set or adjusted.
     * Pan slide is disabled on overflows and underflows.
  * `ps-<1..128>,<ticks>` - Pan slide down
- * `p~<1..63>,<quarter_wavelength_in_ticks>` - Panbrello
+ * `p~<1..64>,<quarter_wavelength_in_ticks>` - Panbrello
     * Panbrello will amplitude modulate the pan in a sawtooth pattern every tick.
     * The first parameter is the center-to-peak depth in pan units.
     * *quarter_wavelength_in_ticks* controls the rate (speed) of the panbrello.

@@ -76,7 +76,7 @@ Instructions
     * This instruction does not sleep and the effect runs in the background.
     * Pan slide is disabled when the pan is set or adjusted.
     * Pan slide is disabled on overflows and underflows.
- * `panbrello <amplitude 1..63> <quarter_wavelength_in_ticks 1..127>` - Tremolo
+ * `panbrello <amplitude 1..64> <quarter_wavelength_in_ticks 1..127>` - Tremolo
     * Panbrello will amplitude modulate the pan in a sawtooth pattern every tick.
     * The first parameter is the center-to-peak depth in pan units.
     * *amplitude* is the center-to-peak depth in pan units.

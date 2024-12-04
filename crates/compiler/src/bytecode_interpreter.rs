@@ -247,8 +247,11 @@ impl<const M: u8> PanVolValue<M> {
         }
     }
 
+    const TRIANGLE_SUB_START: u8 = u8::MAX / 2;
+
     pub(self) fn process_triangle(&mut self, channel_ticks: TickCounter) {
-        let starting_value = u32::from_le_bytes([0xff, self.triangle_starting_value, 0, 0]);
+        let starting_value =
+            u32::from_le_bytes([Self::TRIANGLE_SUB_START, self.triangle_starting_value, 0, 0]);
 
         let wavelength = u32::from(self.half_wavelength) * 2;
         let quarter_wavelength = wavelength / 4;
@@ -347,7 +350,7 @@ impl<const M: u8> PanVolValue<M> {
         self.half_wavelength = 0;
         self.direction = PanVolEffectDirection::SlideDown;
         self.offset = u32::from_le_bytes([o1, o2, 0, 0]);
-        self.sub_value = 0xff;
+        self.sub_value = u8::MAX;
     }
 
     fn tremolo_panbrello_instruction(&mut self, qwt: u8, o1: u8, o2: u8, tc: TickCounter) {
@@ -358,7 +361,7 @@ impl<const M: u8> PanVolValue<M> {
         self.half_wavelength = qwt.wrapping_mul(2);
         self.direction = PanVolEffectDirection::TriangleUp;
         self.offset = u32::from_le_bytes([o1, o2, 0, 0]);
-        self.sub_value = 0xff;
+        self.sub_value = Self::TRIANGLE_SUB_START;
 
         self.triangle_starting_value = self.value;
     }

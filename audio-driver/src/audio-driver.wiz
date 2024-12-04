@@ -2503,7 +2503,7 @@ func tremolo(channelIndex: u8 in x, quarter_wavelength: u8 in a) {
     a = a << 1;
 
     // subVolume
-    y = 0xff;
+    y = 0x7f;
     return __read_vol_effect_offset__dp_true__(x, a, y);
 }
 
@@ -2597,7 +2597,7 @@ func panbrello(channelIndex: u8 in x, quarter_wavelength: u8 in a) {
     a = a << 1;
 
     // subPan
-    y = 0xff;
+    y = 0x7f;
     return __read_pan_effect_offset__dp_true__(x, a, y);
 }
 
