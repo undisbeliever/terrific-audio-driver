@@ -496,9 +496,9 @@ DEALINGS IN THE SOFTWARE.
 ## MIT License
 
 Used by:
-  * [cc 1.2.1](https://github.com/rust-lang/cc-rs)
+  * [cc 1.2.2](https://github.com/rust-lang/cc-rs)
   * [cfg-if 1.0.0](https://github.com/alexcrichton/cfg-if)
-  * [cmake 0.1.51](https://github.com/rust-lang/cmake-rs)
+  * [cmake 0.1.52](https://github.com/rust-lang/cmake-rs)
 
 ```
 Copyright (c) 2014 Alex Crichton
@@ -603,7 +603,7 @@ IN THE SOFTWARE.
 ## MIT License
 
 Used by:
-  * [libc 0.2.164](https://github.com/rust-lang/libc)
+  * [libc 0.2.167](https://github.com/rust-lang/libc)
 
 ```
 Copyright (c) 2014-2020 The Rust Project Developers
@@ -839,7 +839,7 @@ DEALINGS IN THE SOFTWARE.
 ## MIT License
 
 Used by:
-  * [ttf-parser 0.25.0](https://github.com/RazrFalcon/ttf-parser)
+  * [ttf-parser 0.25.1](https://github.com/harfbuzz/ttf-parser)
 
 ```
 Copyright (c) 2018 Yevhenii Reizner
@@ -900,7 +900,7 @@ SOFTWARE.
 Used by:
   * [anstream 0.6.18](https://github.com/rust-cli/anstyle.git)
   * [anstyle-query 1.1.2](https://github.com/rust-cli/anstyle.git)
-  * [clap 4.5.21](https://github.com/clap-rs/clap)
+  * [clap 4.5.22](https://github.com/clap-rs/clap)
   * [colorchoice 1.0.3](https://github.com/rust-cli/anstyle.git)
   * [is_terminal_polyfill 1.70.1](https://github.com/polyfill-rs/is_terminal_polyfill)
 
@@ -1157,11 +1157,11 @@ SOFTWARE.
 ## MIT License
 
 Used by:
-  * [cxx-build 1.0.131](https://github.com/dtolnay/cxx)
-  * [cxx 1.0.131](https://github.com/dtolnay/cxx)
-  * [cxxbridge-flags 1.0.131](https://github.com/dtolnay/cxx)
-  * [cxxbridge-macro 1.0.131](https://github.com/dtolnay/cxx)
-  * [itoa 1.0.13](https://github.com/dtolnay/itoa)
+  * [cxx-build 1.0.133](https://github.com/dtolnay/cxx)
+  * [cxx 1.0.133](https://github.com/dtolnay/cxx)
+  * [cxxbridge-flags 1.0.133](https://github.com/dtolnay/cxx)
+  * [cxxbridge-macro 1.0.133](https://github.com/dtolnay/cxx)
+  * [itoa 1.0.14](https://github.com/dtolnay/itoa)
   * [link-cplusplus 1.0.9](https://github.com/dtolnay/link-cplusplus)
   * [once_cell 1.20.2](https://github.com/matklad/once_cell)
   * [paste 1.0.15](https://github.com/dtolnay/paste)
@@ -1172,7 +1172,7 @@ Used by:
   * [serde 1.0.215](https://github.com/serde-rs/serde)
   * [serde_derive 1.0.215](https://github.com/serde-rs/serde)
   * [serde_json 1.0.133](https://github.com/serde-rs/json)
-  * [syn 2.0.89](https://github.com/dtolnay/syn)
+  * [syn 2.0.90](https://github.com/dtolnay/syn)
   * [unicode-ident 1.0.14](https://github.com/dtolnay/unicode-ident)
 
 ```
@@ -1333,7 +1333,7 @@ THE SOFTWARE.
 ## MIT License
 
 Used by:
-  * [clap_builder 4.5.21](https://github.com/clap-rs/clap)
+  * [clap_builder 4.5.22](https://github.com/clap-rs/clap)
   * [clap_derive 4.5.18](https://github.com/clap-rs/clap)
   * [clap_lex 0.7.3](https://github.com/clap-rs/clap)
 
