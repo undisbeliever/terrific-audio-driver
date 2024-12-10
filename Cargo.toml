@@ -54,7 +54,7 @@ relative-path = { version="1.9.0", features=[ "serde" ] }
 sdl2 = { version="0.37.0", features=[] }
 spectrum-analyzer = { version="1.5.0" }
 
-fltk = { version="1.5.0", features = ["use-ninja"] }
+fltk = { version="1.5.1", features = ["use-ninja"] }
 
 cxx = { version="1.0.107" }
 
