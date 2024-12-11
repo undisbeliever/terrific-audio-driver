@@ -752,7 +752,7 @@ impl MmlEditorState {
                     Ordering::Equal => {}
                 }
 
-                if let Some((q, _)) = c.state.quantize {
+                if let Some(q) = c.state.quantize {
                     let q = q.as_u8();
                     if q % Quantization::FINE_QUANTIZATION_SCALE == 0 {
                         let _ = write!(s, "  Q{}", q / Quantization::FINE_QUANTIZATION_SCALE);

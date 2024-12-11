@@ -40,30 +40,6 @@ u8_value_newtype!(
     NoPortamentoSpeed
 );
 
-u8_value_newtype!(Quantization, QuantizeOutOfRange, NoQuantize, 0, 8);
-u8_value_newtype!(FineQuantization, FineQuantizeOutOfRange, NoFineQuantize);
-
-impl Quantization {
-    pub const FINE_QUANTIZATION_SCALE: u8 = 32;
-
-    pub fn to_fine(self) -> Option<FineQuantization> {
-        if self.0 < 8 {
-            Some(FineQuantization(self.0 * Self::FINE_QUANTIZATION_SCALE))
-        } else {
-            None
-        }
-    }
-}
-
-impl FineQuantization {
-    pub const UNITS: u32 = 256;
-
-    pub fn quantize(&self, l: u32) -> u32 {
-        let q = u32::from(self.0);
-        std::cmp::max((l * q) / Self::UNITS, 1)
-    }
-}
-
 #[derive(Debug, Copy, Clone)]
 pub enum VolumeCommand {
     Absolute(Volume),
@@ -149,6 +125,40 @@ pub struct ManualVibrato {
     pub quarter_wavelength_ticks: VibratoQuarterWavelengthInTicks,
 }
 
+u8_value_newtype!(Quantization, QuantizeOutOfRange, NoQuantize, 0, 8);
+u8_value_newtype!(FineQuantization, FineQuantizeOutOfRange, NoFineQuantize);
+
+impl Quantization {
+    pub const FINE_QUANTIZATION_SCALE: u8 = 32;
+
+    pub fn to_fine(self) -> Option<FineQuantization> {
+        if self.0 < 8 {
+            Some(FineQuantization(self.0 * Self::FINE_QUANTIZATION_SCALE))
+        } else {
+            None
+        }
+    }
+}
+
+impl FineQuantization {
+    pub const UNITS: u32 = 256;
+
+    pub fn quantize(&self, l: u32) -> u32 {
+        let q = u32::from(self.0);
+        std::cmp::max((l * q) / Self::UNITS, 1)
+    }
+}
+
+#[derive(Clone, Copy)]
+pub enum Quantize {
+    None,
+    Rest(FineQuantization),
+    WithTempGain(FineQuantization, TempGain),
+}
+
+#[derive(Clone, Copy)]
+pub struct RestTicksAfterNote(pub TickCounter);
+
 #[derive(Debug, Clone, Copy)]
 pub enum SubroutineCallType {
     Mml,
@@ -163,6 +173,7 @@ pub(crate) enum Command {
 
     SetManualVibrato(Option<ManualVibrato>),
     SetMpVibrato(Option<MpVibrato>),
+    SetQuantize(Quantize),
 
     Rest {
         /// Length of the first rest
@@ -180,15 +191,7 @@ pub(crate) enum Command {
         note: Note,
         length: TickCounter,
         is_slur: bool,
-    },
-    PlayQuantizedNote {
-        note: Note,
-        length: TickCounter,
-        key_on_length: TickCounter,
-        temp_gain: TempGain,
-        /// Combined length of all rests after the note
-        /// (keyoff already sent, it does not matter if these rests keyoff or not)
-        rest_ticks_after_note: TickCounter,
+        rest_after_note: RestTicksAfterNote,
     },
     Portamento {
         note1: Note,
@@ -201,19 +204,7 @@ pub(crate) enum Command {
         slide_length: TickCounter,
         /// Number of ticks to hold the pitch at note2
         tie_length: TickCounter,
-    },
-    QuantizedPortamento {
-        note1: Note,
-        note2: Note,
-        speed_override: Option<PortamentoSpeed>,
-        delay_length: TickCounter,
-        slide_length: TickCounter,
-        tie_length: TickCounter,
-        temp_gain: TempGain,
-        rest: TickCounter,
-        /// Combined length of all rests after the portamento
-        /// (keyoff already sent, it does not matter if these rests keyoff or not)
-        rest_ticks_after_note: TickCounter,
+        rest_after_note: RestTicksAfterNote,
     },
     BrokenChord {
         notes: Vec<Note>,
@@ -326,6 +317,24 @@ where
         .unwrap()
 }
 
+/// Waits and rests after a play-note/portamento/etc instructions
+enum AfterPlayNote {
+    Wait {
+        wait: TickCounter,
+        rest: TickCounter,
+    },
+    KeyOff {
+        wait: TickCounter,
+        ticks_after_keyoff: TickCounter,
+    },
+    TempGain {
+        wait: TickCounter,
+        temp_gain: TempGain,
+        ticks_until_keyoff: TickCounter,
+        ticks_after_keyoff: TickCounter,
+    },
+}
+
 pub(crate) struct ChannelBcGenerator<'a> {
     pitch_table: &'a PitchTable,
     mml_file: &'a str,
@@ -335,6 +344,7 @@ pub(crate) struct ChannelBcGenerator<'a> {
     bc: Bytecode<'a>,
 
     mp: MpState,
+    quantize: Quantize,
 
     loop_point: Option<LoopPoint>,
 }
@@ -357,6 +367,7 @@ impl<'a> ChannelBcGenerator<'a> {
             // Using None for subroutines to forbid subroutine calls in bytecode assembly
             bc: Bytecode::new_append_to_vec(bc_data, context, data_instruments, None),
             mp: MpState::Manual,
+            quantize: Quantize::None,
             loop_point: None,
         }
     }
@@ -412,7 +423,7 @@ impl<'a> ChannelBcGenerator<'a> {
         Ok((bc, TickCounter::new(l - bc.ticks())))
     }
 
-    fn split_play_note_length(
+    fn split_note_length(
         length: TickCounter,
         is_slur: bool,
     ) -> Result<(PlayNoteTicks, TickCounter), ValueError> {
@@ -461,19 +472,127 @@ impl<'a> ChannelBcGenerator<'a> {
         }
     }
 
+    fn split_play_note_length(
+        &self,
+        length: TickCounter,
+        is_slur: bool,
+        rest_after_note: RestTicksAfterNote,
+    ) -> Result<(PlayNoteTicks, AfterPlayNote), ValueError> {
+        let rest_after_note = rest_after_note.0;
+
+        let no_quantize_or_slur = || {
+            let (pn_ticks, wait) = Self::split_note_length(length, false)?;
+            Ok((
+                pn_ticks,
+                AfterPlayNote::KeyOff {
+                    wait,
+                    ticks_after_keyoff: rest_after_note,
+                },
+            ))
+        };
+
+        match (is_slur, &self.quantize) {
+            (true, _) => {
+                let (pn_ticks, wait) = Self::split_note_length(length, true)?;
+                Ok((
+                    pn_ticks,
+                    AfterPlayNote::Wait {
+                        wait,
+                        rest: rest_after_note,
+                    },
+                ))
+            }
+            (false, Quantize::None) => no_quantize_or_slur(),
+            (false, &Quantize::Rest(q)) => {
+                let l = length.value();
+                let note_length = q.quantize(l) + KEY_OFF_TICK_DELAY;
+
+                if note_length < l {
+                    let note_length = TickCounter::new(note_length);
+                    let ticks_after_keyoff =
+                        TickCounter::new(l - note_length.value()) + rest_after_note;
+                    let (pn_ticks, wait) = Self::split_note_length(note_length, false)?;
+                    Ok((
+                        pn_ticks,
+                        AfterPlayNote::KeyOff {
+                            wait,
+                            ticks_after_keyoff,
+                        },
+                    ))
+                } else {
+                    // Note is too short to be quantized
+                    no_quantize_or_slur()
+                }
+            }
+            (false, &Quantize::WithTempGain(q, temp_gain)) => {
+                let l = length.value();
+                let pn_length = q.quantize(l);
+
+                if pn_length + KEY_OFF_TICK_DELAY < l {
+                    let note_length = TickCounter::new(pn_length);
+                    let ticks_until_keyoff = TickCounter::new(l - note_length.value());
+                    let (pn_ticks, wait) = Self::split_note_length(note_length, true)?;
+                    Ok((
+                        pn_ticks,
+                        AfterPlayNote::TempGain {
+                            wait,
+                            temp_gain,
+                            ticks_until_keyoff,
+                            ticks_after_keyoff: rest_after_note,
+                        },
+                    ))
+                } else {
+                    // Note is too short to be quantized
+                    no_quantize_or_slur()
+                }
+            }
+        }
+    }
+
+    fn after_note(&mut self, after: AfterPlayNote) -> Result<(), ChannelError> {
+        match after {
+            AfterPlayNote::Wait { wait, rest } => {
+                if !wait.is_zero() {
+                    self.wait(wait)?;
+                }
+                self.rest_one_keyoff(rest)
+            }
+            AfterPlayNote::KeyOff {
+                wait,
+                ticks_after_keyoff,
+            } => {
+                if !wait.is_zero() {
+                    self.rest_one_keyoff(wait)?;
+                }
+                match ticks_after_keyoff.value() {
+                    1 => self.wait(ticks_after_keyoff),
+                    _ => self.rest_many_keyoffs(ticks_after_keyoff),
+                }
+            }
+            AfterPlayNote::TempGain {
+                wait,
+                temp_gain,
+                ticks_until_keyoff,
+                ticks_after_keyoff,
+            } => {
+                if !wait.is_zero() {
+                    self.wait(wait)?;
+                }
+                self.temp_gain_and_rest(Some(temp_gain), ticks_until_keyoff, ticks_after_keyoff)
+            }
+        }
+    }
+
     fn play_note_with_mp(
         &mut self,
         note: Note,
-        length: TickCounter,
-        is_slur: bool,
+        pn_ticks: PlayNoteTicks,
     ) -> Result<(), ChannelError> {
-        let (pn_length, rest) = Self::split_play_note_length(length, is_slur)?;
-
         let vibrato = self.bc.get_state().vibrato;
 
         match &self.mp {
             MpState::Manual => {
-                self.bc.play_note(note, pn_length)?;
+                self.bc.play_note(note, pn_ticks)?;
             }
             MpState::Disabled => {
                 const POPT: VibratoPitchOffsetPerTick = VibratoPitchOffsetPerTick::new(0);
@@ -486,10 +605,10 @@ impl<'a> ChannelBcGenerator<'a> {
                 };
 
                 if vibrato_disabled {
-                    self.bc.play_note(note, pn_length)?;
+                    self.bc.play_note(note, pn_ticks)?;
                 } else {
                     self.bc
-                        .set_vibrato_depth_and_play_note(POPT, note, pn_length)?;
+                        .set_vibrato_depth_and_play_note(POPT, note, pn_ticks)?;
                 }
 
                 // Switching MpState to Manual to skip the `vibrato_disabled` checks on subsequent notes.
@@ -509,41 +628,24 @@ impl<'a> ChannelBcGenerator<'a> {
                             cv.quarter_wavelength_ticks,
                         ) =>
                     {
-                        self.bc.play_note(note, pn_length)?;
+                        self.bc.play_note(note, pn_ticks)?;
                     }
                     VibratoState::Set(_, qwt) if qwt == cv.quarter_wavelength_ticks => {
                         self.bc.set_vibrato_depth_and_play_note(
                             cv.pitch_offset_per_tick,
                             note,
-                            pn_length,
+                            pn_ticks,
                         )?;
                     }
                     _ => {
                         self.bc
                             .set_vibrato(cv.pitch_offset_per_tick, cv.quarter_wavelength_ticks);
-                        self.bc.play_note(note, pn_length)?;
+                        self.bc.play_note(note, pn_ticks)?;
                     }
                 }
             }
         }
-
-        self.rest_after_play_note(rest, is_slur)
-    }
-
-    fn rest_after_play_note(
-        &mut self,
-        length: TickCounter,
-        is_slur: bool,
-    ) -> Result<(), ChannelError> {
-        if length.is_zero() {
-            Ok(())
-        } else if is_slur {
-            // no keyoff event
-            self.wait(length)
-        } else {
-            debug_assert!(length.value() >= BcTicksKeyOff::MAX_TICKS);
-            self.rest_one_keyoff(length)
-        }
+        Ok(())
     }
 
     // Rest that can send multiple `rest_keyoff` instructions
@@ -668,10 +770,14 @@ impl<'a> ChannelBcGenerator<'a> {
         delay_length: TickCounter,
         slide_length: TickCounter,
         tie_length: TickCounter,
+        rest_after_note: RestTicksAfterNote,
     ) -> Result<(), ChannelError> {
         #[cfg(debug_assertions)]
-        let expected_tick_counter =
-            self.bc.get_tick_counter() + delay_length + slide_length + tie_length;
+        let expected_tick_counter = self.bc.get_tick_counter()
+            + delay_length
+            + slide_length
+            + tie_length
+            + rest_after_note.0;
 
         let play_note1 = self.bc.get_state().prev_slurred_note != SlurredNoteState::Slurred(note1);
 
@@ -686,10 +792,13 @@ impl<'a> ChannelBcGenerator<'a> {
                 TickCounter::new(slide_length.value().saturating_sub(1))
             }
             (true, _) => {
-                let (pn_length, rest) = Self::split_play_note_length(delay_length, true)?;
+                let (pn_length, wait) = Self::split_note_length(delay_length, true)?;
 
                 self.bc.play_note(note1, pn_length)?;
-                self.rest_after_play_note(rest, true)?;
+                if !wait.is_zero() {
+                    // no keyoff event
+                    self.wait(wait)?;
+                }
 
                 slide_length
             }
@@ -758,10 +867,13 @@ impl<'a> ChannelBcGenerator<'a> {
         };
         let velocity = PortamentoVelocity::try_from(velocity)?;
 
-        let (p_length, p_rest) = Self::split_play_note_length(slide_length + tie_length, is_slur)?;
+        // In PMDMML only the portamento slide is quantized, delay_length is not.
+        let (p_length, after) =
+            self.split_play_note_length(slide_length + tie_length, is_slur, rest_after_note)?;
+
         self.bc.portamento(note2, velocity, p_length)?;
 
-        self.rest_after_play_note(p_rest, is_slur)?;
+        self.after_note(after)?;
 
         #[cfg(debug_assertions)]
         debug_assert_eq!(self.bc.get_tick_counter(), expected_tick_counter);
@@ -1113,6 +1225,10 @@ impl<'a> ChannelBcGenerator<'a> {
                 };
             }
 
+            &Command::SetQuantize(q) => {
+                self.quantize = q;
+            }
+
             &Command::Rest {
                 ticks_until_keyoff,
                 ticks_after_keyoff,
@@ -1158,41 +1274,13 @@ impl<'a> ChannelBcGenerator<'a> {
                 note,
                 length,
                 is_slur,
+                rest_after_note,
             } => {
-                self.play_note_with_mp(note, length, is_slur)?;
-            }
+                let (pn_ticks, after) =
+                    self.split_play_note_length(length, is_slur, rest_after_note)?;
 
-            &Command::PlayQuantizedNote {
-                note,
-                length,
-                key_on_length,
-                temp_gain,
-                rest_ticks_after_note,
-            } => {
-                assert!(length.value() > key_on_length.value() + KEY_OFF_TICK_DELAY);
-
-                if temp_gain.is_disabled() {
-                    let note_length = TickCounter::new(key_on_length.value() + KEY_OFF_TICK_DELAY);
-                    let rest = TickCounter::new(
-                        length.value() - note_length.value() + rest_ticks_after_note.value(),
-                    );
-
-                    self.play_note_with_mp(note, note_length, false)?;
-                    // can `wait` here, `play_note_with_mp()` sends a key-off event
-                    match rest.value() {
-                        1 => self.wait(rest)?,
-                        _ => self.rest_many_keyoffs(rest)?,
-                    }
-                } else {
-                    let temp_gain_ticks = TickCounter::new(length.value() - key_on_length.value());
-
-                    self.play_note_with_mp(note, key_on_length, true)?;
-                    self.temp_gain_and_rest(
-                        Some(temp_gain),
-                        temp_gain_ticks,
-                        rest_ticks_after_note,
-                    )?;
-                }
+                self.play_note_with_mp(note, pn_ticks)?;
+                self.after_note(after)?;
             }
 
             &Command::Portamento {
@@ -1203,6 +1291,7 @@ impl<'a> ChannelBcGenerator<'a> {
                 delay_length,
                 slide_length,
                 tie_length,
+                rest_after_note,
             } => {
                 self.portamento(
                     note1,
@@ -1212,54 +1301,8 @@ impl<'a> ChannelBcGenerator<'a> {
                     delay_length,
                     slide_length,
                     tie_length,
+                    rest_after_note,
                 )?;
-            }
-
-            &Command::QuantizedPortamento {
-                note1,
-                note2,
-                speed_override,
-                delay_length,
-                slide_length,
-                tie_length,
-                temp_gain,
-                rest,
-                rest_ticks_after_note,
-            } => {
-                if temp_gain.is_disabled() {
-                    assert!(rest.value() > KEY_OFF_TICK_DELAY);
-                    let slide_length = TickCounter::new(slide_length.value() + KEY_OFF_TICK_DELAY);
-                    let rest = TickCounter::new(
-                        rest.value() - KEY_OFF_TICK_DELAY + rest_ticks_after_note.value(),
-                    );
-
-                    self.portamento(
-                        note1,
-                        note2,
-                        false,
-                        speed_override,
-                        delay_length,
-                        slide_length,
-                        tie_length,
-                    )?;
-                    // can `wait` here, `portamento` will emit a key-off event
-                    match rest.value() {
-                        1 => self.wait(rest)?,
-                        _ => self.rest_many_keyoffs(rest)?,
-                    }
-                } else {
-                    self.portamento(
-                        note1,
-                        note2,
-                        true,
-                        speed_override,
-                        delay_length,
-                        slide_length,
-                        tie_length,
-                    )?;
-
-                    self.temp_gain_and_rest(Some(temp_gain), rest, rest_ticks_after_note)?;
-                }
             }
 
             Command::BrokenChord {

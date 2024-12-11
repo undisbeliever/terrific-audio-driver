@@ -301,6 +301,118 @@ fn test_tie() {
 }
 
 #[test]
+fn test_rest_after_keyoff_note() {
+    assert_line_matches_bytecode("a r", &["play_note a4 24", "rest 24"]);
+    assert_line_matches_bytecode("a r r", &["play_note a4 24", "rest 48"]);
+    assert_line_matches_bytecode("a w r", &["play_note a4 24", "wait 24", "rest 24"]);
+
+    merge_mml_commands_test("a r8 || ^8^8", &["play_note a4 24", "rest 36"]);
+
+    assert_line_matches_bytecode(
+        "a2 b3 r8 r16 c32",
+        &[
+            "play_note a4 48",
+            "play_note b4 32",
+            "rest 18",
+            "play_note c4 3",
+        ],
+    );
+
+    assert_line_matches_bytecode("a r%1", &["play_note a4 24", "wait 1"]);
+    assert_line_matches_bytecode("a r%2", &["play_note a4 24", "rest 2"]);
+
+    assert_line_matches_bytecode("a%50 r%500", &["play_note a4 50", "rest 257", "rest 243"]);
+
+    assert_line_matches_bytecode(
+        "a%600 r%600",
+        &[
+            "play_note a4 no_keyoff 256",
+            "wait 87",
+            "rest 257",
+            // rest
+            "rest 257",
+            "rest 257",
+            "rest 86",
+        ],
+    );
+
+    assert_line_matches_bytecode(
+        "a%2561 r%2570",
+        &[
+            "play_note a4 no_keyoff 256",
+            "start_loop 8",
+            "wait 256",
+            "end_loop",
+            "rest 257",
+            // rest
+            "start_loop 10",
+            "rest 257",
+            "end_loop",
+        ],
+    );
+}
+
+// The rest after a slurred note must not be merged with successive rests
+#[test]
+fn test_rest_after_surred_note() {
+    assert_line_matches_bytecode("a & r", &["play_note a4 no_keyoff 24", "rest 24"]);
+
+    assert_line_matches_bytecode(
+        "a & r r",
+        &["play_note a4 no_keyoff 24", "rest 24", "rest 24"],
+    );
+
+    merge_mml_commands_test("a & r8 || ^8^8", &["play_note a4 no_keyoff 24", "rest 36"]);
+
+    assert_line_matches_bytecode(
+        "a & r%2 r%2",
+        &["play_note a4 no_keyoff 24", "rest 2", "rest 2"],
+    );
+
+    assert_line_matches_bytecode(
+        "a%50 & r%500",
+        &["play_note a4 no_keyoff 50", "wait 243", "rest 257"],
+    );
+
+    assert_line_matches_bytecode(
+        "a%600 & r%600 r%600",
+        &[
+            "play_note a4 no_keyoff 256",
+            "wait 256",
+            "wait 88",
+            // rest 1
+            "wait 256",
+            "wait 87",
+            "rest 257",
+            // rest 2
+            "wait 256",
+            "wait 87",
+            "rest 257",
+        ],
+    );
+
+    assert_line_matches_bytecode(
+        "a%2560 & r%2561 r%2561",
+        &[
+            "play_note a4 no_keyoff 256",
+            "start_loop 9",
+            "wait 256",
+            "end_loop",
+            // rest 1
+            "start_loop 9",
+            "wait 256",
+            "end_loop",
+            "rest 257",
+            // rest 2
+            "start_loop 9",
+            "wait 256",
+            "end_loop",
+            "rest 257",
+        ],
+    );
+}
+
+#[test]
 fn test_quantization() {
     // Cannot use `assert_mml_matches_mml`.
     // There is a single rest tick at the end of a play_note instruction

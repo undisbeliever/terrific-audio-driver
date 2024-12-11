@@ -18,7 +18,8 @@ use crate::bytecode::{
 };
 use crate::channel_bc_generator::{
     merge_pan_commands, merge_volumes_commands, relative_pan, relative_volume, Command,
-    FineQuantization, ManualVibrato, MpVibrato, PanCommand, SubroutineCallType, VolumeCommand,
+    FineQuantization, ManualVibrato, MpVibrato, PanCommand, Quantize, RestTicksAfterNote,
+    SubroutineCallType, VolumeCommand,
 };
 use crate::envelope::{Gain, GainMode, OptionalGain, TempGain};
 use crate::errors::{ChannelError, ErrorWithPos, ValueError};
@@ -69,7 +70,8 @@ pub struct State {
     pub default_length: MmlDefaultLength,
     pub octave: Octave,
     pub semitone_offset: i8,
-    pub quantize: Option<(FineQuantization, TempGain)>,
+    // Used by tad-gui statusbar
+    pub quantize: Option<FineQuantization>,
 }
 
 type SubroutineMaps<'a> = (
@@ -590,44 +592,35 @@ fn parse_quantize_optional_comma_optional_gain(p: &mut Parser) -> OptionalGain {
     }
 }
 
-fn parse_quantize(pos: FilePos, p: &mut Parser) {
-    match_next_token!(
+fn parse_quantize(pos: FilePos, p: &mut Parser) -> Command {
+    let (q, g) = match_next_token!(
         p,
 
         Token::PercentSign => {
-            let q = parse_unsigned_newtype(pos, p);
+            let q = parse_unsigned_newtype::<FineQuantization>(pos, p);
             let g = parse_quantize_optional_comma_optional_gain(p);
 
-            if let Some(q) = q {
-                p.set_state(State {
-                    quantize: Some((q, g.into())),
-                    ..p.state().clone()
-                });
-            }
+            (q, g)
         },
 
         #_ => {
             let q = parse_unsigned_newtype::<Quantization>(pos, p);
             let g = parse_quantize_optional_comma_optional_gain(p);
 
-            if let Some(q) = q {
-                match q.to_fine() {
-                    Some(q) => {
-                        p.set_state(State {
-                            quantize: Some((q, g.into())),
-                            ..p.state().clone()
-                        });
-                    }
-                    None => {
-                        p.set_state(State {
-                            quantize: None,
-                            ..p.state().clone()
-                        });
-                    }
-                }
-            }
+            (q.and_then(|q| q.to_fine()), g)
         }
     );
+
+    p.set_state(State {
+        quantize: q,
+        ..p.state().clone()
+    });
+
+    match (q, g.is_none()) {
+        (None, _) => Command::SetQuantize(Quantize::None),
+        (Some(q), true) => Command::SetQuantize(Quantize::Rest(q)),
+        (Some(q), false) => Command::SetQuantize(Quantize::WithTempGain(q, g.into())),
+    }
 }
 
 fn parse_early_release_gain_argument(comma_pos: FilePos, p: &mut Parser) -> OptionalGain {
@@ -1159,6 +1152,19 @@ fn parse_rests_after_rest(p: &mut Parser) -> TickCounter {
     ticks
 }
 
+fn parse_rest_ticks_after_note(is_slur: bool, p: &mut Parser) -> RestTicksAfterNote {
+    match is_slur {
+        false => RestTicksAfterNote(parse_rests_after_rest(p)),
+        true => {
+            if next_token_matches!(p, Token::Rest) {
+                RestTicksAfterNote(parse_tracked_length(p) + parse_ties(p))
+            } else {
+                RestTicksAfterNote(TickCounter::new(0))
+            }
+        }
+    }
+}
+
 fn parse_ties(p: &mut Parser) -> TickCounter {
     let mut ticks = TickCounter::default();
 
@@ -1260,39 +1266,13 @@ fn play_note(pos: FilePos, note: Note, length: TickCounter, p: &mut Parser) -> C
         return invalid_token_error(p, pos, ChannelError::NoteIsTooShort);
     }
 
-    let q = p.state().quantize;
+    let rest_after_note = parse_rest_ticks_after_note(is_slur, p);
 
-    if is_slur || q.is_none() {
-        Command::PlayNote {
-            note,
-            length,
-            is_slur,
-        }
-    } else {
-        // Note is quantized
-        let (q, temp_gain) = q.unwrap();
-
-        let l = length.value();
-        let key_on_length = q.quantize(l);
-
-        if key_on_length + KEY_OFF_TICK_DELAY < l {
-            let rest_ticks_after_note = parse_rests_after_rest(p);
-
-            Command::PlayQuantizedNote {
-                note,
-                length,
-                key_on_length: TickCounter::new(key_on_length),
-                temp_gain,
-                rest_ticks_after_note,
-            }
-        } else {
-            // Note is too short to be quantized
-            Command::PlayNote {
-                note,
-                length,
-                is_slur,
-            }
-        }
+    Command::PlayNote {
+        note,
+        length,
+        is_slur,
+        rest_after_note,
     }
 }
 
@@ -1404,71 +1384,17 @@ fn parse_portamento(pos: FilePos, p: &mut Parser) -> Command {
 
     let (tie_length, is_slur) = parse_ties_and_slur(p);
 
-    if notes.len() == 2 {
-        let q = p.state().quantize;
+    let rest_after_note = parse_rest_ticks_after_note(is_slur, p);
 
-        if is_slur || q.is_none() {
-            Command::Portamento {
-                note1: notes[0],
-                note2: notes[1],
-                is_slur,
-                speed_override,
-                delay_length,
-                slide_length,
-                tie_length,
-            }
-        } else {
-            // Portamento is quantized
-            // In PMDMML only the portamento slide is quantized, delay_length is not.
-
-            let (q, temp_gain) = q.unwrap();
-
-            let note2_length = slide_length.value() + tie_length.value();
-            let key_on_length = q.quantize(note2_length);
-
-            if key_on_length + KEY_OFF_TICK_DELAY < note2_length {
-                let rest_ticks_after_note = parse_rests_after_rest(p);
-
-                let (slide_length, tie_length) = if key_on_length <= slide_length.value() {
-                    (TickCounter::new(key_on_length), TickCounter::new(0))
-                } else {
-                    (
-                        slide_length,
-                        TickCounter::new(note2_length - key_on_length - slide_length.value()),
-                    )
-                };
-                let rest = TickCounter::new(note2_length - key_on_length);
-
-                debug_assert!(
-                    slide_length.value() + tie_length.value() + rest.value() == note2_length
-                );
-
-                Command::QuantizedPortamento {
-                    note1: notes[0],
-                    note2: notes[1],
-                    speed_override,
-                    slide_length,
-                    delay_length,
-                    tie_length,
-                    temp_gain,
-                    rest,
-                    rest_ticks_after_note,
-                }
-            } else {
-                // Note is too short for Quanization
-                Command::Portamento {
-                    note1: notes[0],
-                    note2: notes[1],
-                    is_slur,
-                    speed_override,
-                    delay_length,
-                    slide_length,
-                    tie_length,
-                }
-            }
-        }
-    } else {
-        Command::None
+    Command::Portamento {
+        note1: notes[0],
+        note2: notes[1],
+        is_slur,
+        speed_override,
+        delay_length,
+        slide_length,
+        tie_length,
+        rest_after_note,
     }
 }
 
@@ -1792,10 +1718,7 @@ fn parse_token(pos: FilePos, token: Token, p: &mut Parser) -> Command {
         Token::PanSlide => parse_pan_slide(pos, p),
         Token::Panbrello => parse_panbrello(pos, p),
 
-        Token::Quantize => {
-            parse_quantize(pos, p);
-            Command::None
-        }
+        Token::Quantize => parse_quantize(pos, p),
         Token::EarlyRelease => parse_set_early_release(pos, p),
         Token::SetDefaultLength => {
             parse_set_default_length(pos, p);
