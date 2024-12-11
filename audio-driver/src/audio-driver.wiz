@@ -1805,6 +1805,7 @@ func set_vibrato_depth_and_play_note(channelIndex : u8 in x, pitchOffsetPerTick:
 
 // Y unknown
 // KEEP: x
+#[fallthrough]
 func _play_note(channelIndex : u8 in x, noteAndKeyOffBit : u8 in a) {
     // carry = key-off after note ends bit
     a >>>= 1;
@@ -1817,8 +1818,16 @@ func _play_note(channelIndex : u8 in x, noteAndKeyOffBit : u8 in a) {
 
     // Set voice pitch
     channelSoA.virtualChannels.pitch_l[x] = a = commonData.pitchTable_l[y];
-    channelSoA.virtualChannels.pitch_h[x] = a = commonData.pitchTable_h[y];
+    a = commonData.pitchTable_h[y];
 
+// Fallthough into __play_note_set_pitch_h();
+}
+
+
+// Y unknown
+// KEEP: X
+func __play_note_set_pitch_h(channelIndex: u8 in x, pitch_h: u8 in a) {
+    channelSoA.virtualChannels.pitch_h[x] = a;
 
     // Get note length from the next byte in the instructionPtr
     y = 0;
@@ -1857,6 +1866,23 @@ func _play_note(channelIndex : u8 in x, noteAndKeyOffBit : u8 in a) {
 
     // Disable KON the next time the note is played (slur the note)
     test_and_clear(a, keyOnMask_music);
+}
+
+
+// IN: Y = 0
+// KEEP: X
+func play_pitch(channelIndex: u8 in x, pitch_l : u8 in a) {
+    channelSoA.virtualChannels.pitch_l[x] = a;
+
+    // Y = 0
+    a = instructionPtr[y];  // pitch_h and key-off flag
+    instructionPtr++;
+
+    a >>>= 1;
+    // Set MSB of nextEventIsKeyOff from carry
+    channelSoA.nextEventIsKeyOff[x] >>>>#= 1;
+
+    return __play_note_set_pitch_h(x, a);
 }
 
 

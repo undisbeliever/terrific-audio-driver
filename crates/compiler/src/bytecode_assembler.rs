@@ -6,7 +6,8 @@
 
 use crate::bytecode::{
     BcTicksKeyOff, BcTicksNoKeyOff, Bytecode, EarlyReleaseMinTicks, EarlyReleaseTicks, LoopCount,
-    PlayNoteTicks, PortamentoVelocity, State, SubroutineId, VibratoPitchOffsetPerTick,
+    PlayNoteTicks, PlayPitchPitch, PortamentoVelocity, State, SubroutineId,
+    VibratoPitchOffsetPerTick,
 };
 use crate::data::{InstrumentOrSample, UniqueNamesList};
 use crate::envelope::{Adsr, Gain, OptionalGain, TempGain};
@@ -152,6 +153,18 @@ fn play_note_argument(args: &[&str]) -> Result<(Note, PlayNoteTicks), ChannelErr
     let ticks = parse_play_note_ticks(ticks, key_off)?;
 
     Ok((note, ticks))
+}
+
+fn play_pitch_argument(args: &[&str]) -> Result<(PlayPitchPitch, PlayNoteTicks), ChannelError> {
+    let (pitch, key_off, ticks) = match args.len() {
+        2 => (args[0], "", args[1]),
+        3 => (args[0], args[1], args[2]),
+        _ => return Err(ChannelError::InvalidNumberOfArgumentsRange(2, 3)),
+    };
+    let pitch = parse_uvnt(pitch)?;
+    let ticks = parse_play_note_ticks(ticks, key_off)?;
+
+    Ok((pitch, ticks))
 }
 
 fn vibrato_depth_and_play_note_argument(
@@ -399,6 +412,8 @@ pub fn parse_asm_line(bc: &mut Bytecode, line: &str) -> Result<(), ChannelError>
        rest 1 ticks_keyoff_argument,
 
        play_note 2 play_note_argument,
+       play_pitch 2 play_pitch_argument,
+
        portamento 3 portamento_argument,
        set_vibrato_depth_and_play_note 3 vibrato_depth_and_play_note_argument,
 

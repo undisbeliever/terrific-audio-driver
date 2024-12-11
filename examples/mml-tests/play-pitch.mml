@@ -1,0 +1,19 @@
+#Title Play Pitch test
+
+@1 square
+
+A @1
+
+; Play at native sample rate
+A P$1000 P$1000,8 P$1000,8 P$1000,8 r8
+
+; Play at double native sample rate
+A P$2000 P$2000,8 P$2000,8 P$2000,8 r8
+
+; Play at quarter native sample rate
+A P$400 P$400,8 P$400,8 P$400,8 r8
+
+; Quantization can be applied to play-pitch
+A Q4     P$800,2 P$800,4 r8
+A Q4,E18 P$800,2 P$800,4 r8
+

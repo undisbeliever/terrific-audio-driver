@@ -17,8 +17,8 @@ use crate::notes::{Note, LAST_NOTE_ID, N_NOTES};
 use crate::samples::note_range;
 use crate::time::{TickClock, TickCounter, TickCounterWithLoopFlag};
 use crate::value_newtypes::{
-    i16_non_zero_value_newtype, i8_value_newtype, u8_0_is_256_value_newtype, u8_value_newtype,
-    SignedValueNewType, UnsignedValueNewType,
+    i16_non_zero_value_newtype, i8_value_newtype, u16_value_newtype, u8_0_is_256_value_newtype,
+    u8_value_newtype, SignedValueNewType, UnsignedValueNewType,
 };
 
 use std::cmp::{max, min};
@@ -116,6 +116,18 @@ u8_value_newtype!(
     127
 );
 
+u16_value_newtype!(
+    PlayPitchPitch,
+    PlayPitchPitchOutOfRange,
+    NoPlayPitchPitch,
+    0,
+    (1 << 14) - 1
+);
+
+impl PlayPitchPitch {
+    pub const NATIVE: Self = Self(0x1000);
+}
+
 impl Pan {
     pub const CENTER: Pan = Self(Self::MAX.0 / 2);
 }
@@ -153,6 +165,7 @@ pub mod opcodes {
         PORTAMENTO_UP,
         SET_VIBRATO,
         SET_VIBRATO_DEPTH_AND_PLAY_NOTE,
+        PLAY_PITCH,
         WAIT,
         REST,
         SET_INSTRUMENT,
@@ -658,6 +671,7 @@ pub enum SlurredNoteState {
     Unchanged,
     None,
     Slurred(Note),
+    SlurredPitch,
 }
 
 impl SlurredNoteState {
@@ -666,6 +680,7 @@ impl SlurredNoteState {
             SlurredNoteState::Unchanged => (),
             SlurredNoteState::None => *self = SlurredNoteState::None,
             SlurredNoteState::Slurred(n) => *self = SlurredNoteState::Slurred(*n),
+            SlurredNoteState::SlurredPitch => *self = SlurredNoteState::SlurredPitch,
         }
     }
 }
@@ -942,6 +957,25 @@ impl<'a> Bytecode<'a> {
         self.state.prev_slurred_note = SlurredNoteState::None;
 
         emit_bytecode!(self, opcodes::REST, length.bc_argument);
+    }
+
+    pub fn play_pitch(&mut self, pitch: PlayPitchPitch, length: PlayNoteTicks) {
+        self.state.tick_counter += length.to_tick_count();
+        self.state.prev_slurred_note = match length {
+            PlayNoteTicks::KeyOff(_) => SlurredNoteState::None,
+            PlayNoteTicks::NoKeyOff(_) => SlurredNoteState::SlurredPitch,
+        };
+
+        let key_off_bit = match length {
+            PlayNoteTicks::NoKeyOff(_) => 0,
+            PlayNoteTicks::KeyOff(_) => 1,
+        };
+
+        let pitch = pitch.as_u16().to_le_bytes();
+        let arg1 = pitch[0];
+        let arg2 = (pitch[1] << 1) | key_off_bit;
+
+        emit_bytecode!(self, opcodes::PLAY_PITCH, arg1, arg2, length.bc_argument());
     }
 
     pub fn play_note(&mut self, note: Note, length: PlayNoteTicks) -> Result<(), BytecodeError> {

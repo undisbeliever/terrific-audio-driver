@@ -42,6 +42,7 @@ pub enum Token<'a> {
     SetDefaultLength,
     Rest,
     Wait,
+    PlayPitch,
     SetOctave,
     IncrementOctave,
     DecrementOctave,
@@ -247,7 +248,7 @@ fn is_unknown_u8(c: u8) -> bool {
         b'!' | b'@' | b'+' | b'-' | b'[' | b':' | b']' | b'^' | b'&' | b'C' | b's' | b'n'
         | b'l' | b'r' | b'w' | b'o' | b'>' | b'<' | b'v' | b'V' | b'p' | b'Q' | b'q' | b'~'
         | b'A' | b'G' | b'E' | b't' | b'T' | b'L' | b'%' | b'.' | b',' | b'|' | b'_' | b'{'
-        | b'}' | b'B' | b'D' | b'F' | b'I' | b'M' => false,
+        | b'}' | b'B' | b'D' | b'F' | b'I' | b'M' | b'P' => false,
         b'\\' => false,
         c if c.is_ascii_whitespace() => false,
         _ => true,
@@ -402,6 +403,8 @@ fn next_token<'a>(scanner: &mut Scanner<'a>) -> Option<TokenWithPosition<'a>> {
         b'D' => one_ascii_token!(Token::GainModeD),
         b'F' => one_ascii_token!(Token::GainModeF),
         b'I' => one_ascii_token!(Token::GainModeI),
+
+        b'P' => one_ascii_token!(Token::PlayPitch),
 
         // Pan might be 1 or 2 characters
         b'p' => {

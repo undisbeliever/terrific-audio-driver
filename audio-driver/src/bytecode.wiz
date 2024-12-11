@@ -113,6 +113,13 @@ let INSTRUCTIONS_WITH_ARGUMENTS = [
     set_vibrato_depth_and_play_note,
 
 
+    // parameters: pppppppp pppppppO llllllll
+    //      ppppppp- pppppppp = VxPITCH register value (be aware of the key-off bit in the high byte)
+    //                      O = key-off after note ends
+    //               llllllll = note length
+    play_pitch,
+
+
     // parameter = number of ticks to wait.
     // NOTE: Does not key-off the channel.
     wait,

@@ -7,8 +7,8 @@
 use crate::bytecode::{
     BcTicks, BcTicksKeyOff, BcTicksNoKeyOff, Bytecode, BytecodeContext, EarlyReleaseMinTicks,
     EarlyReleaseTicks, IeState, InstrumentId, LoopCount, Pan, PanSlideAmount, PanSlideTicks,
-    PanbrelloAmplitude, PanbrelloQuarterWavelengthInTicks, PlayNoteTicks, PortamentoVelocity,
-    RelativePan, RelativeVolume, SlurredNoteState, TremoloAmplitude,
+    PanbrelloAmplitude, PanbrelloQuarterWavelengthInTicks, PlayNoteTicks, PlayPitchPitch,
+    PortamentoVelocity, RelativePan, RelativeVolume, SlurredNoteState, TremoloAmplitude,
     TremoloQuarterWavelengthInTicks, VibratoPitchOffsetPerTick, VibratoQuarterWavelengthInTicks,
     VibratoState, Volume, VolumeSlideAmount, VolumeSlideTicks, KEY_OFF_TICK_DELAY,
 };
@@ -189,6 +189,12 @@ pub(crate) enum Command {
 
     PlayNote {
         note: Note,
+        length: TickCounter,
+        is_slur: bool,
+        rest_after_note: RestTicksAfterNote,
+    },
+    PlayPitch {
+        pitch: PlayPitchPitch,
         length: TickCounter,
         is_slur: bool,
         rest_after_note: RestTicksAfterNote,
@@ -1280,6 +1286,19 @@ impl<'a> ChannelBcGenerator<'a> {
                     self.split_play_note_length(length, is_slur, rest_after_note)?;
 
                 self.play_note_with_mp(note, pn_ticks)?;
+                self.after_note(after)?;
+            }
+
+            &Command::PlayPitch {
+                pitch,
+                length,
+                is_slur,
+                rest_after_note,
+            } => {
+                let (pp_length, after) =
+                    self.split_play_note_length(length, is_slur, rest_after_note)?;
+
+                self.bc.play_pitch(pitch, pp_length);
                 self.after_note(after)?;
             }
 

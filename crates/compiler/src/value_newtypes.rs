@@ -121,6 +121,58 @@ macro_rules! u8_value_newtype {
     };
 }
 
+macro_rules! u16_value_newtype {
+    ($name:ident, $error:ident, $missing_error:ident, $min:expr, $max:expr) => {
+        #[derive(Debug, Copy, Clone, PartialEq)]
+        pub struct $name(u16);
+
+        #[allow(dead_code)]
+        impl $name {
+            pub const MIN: Self = Self($min);
+            pub const MAX: Self = Self($max);
+
+            pub const fn as_u16(&self) -> u16 {
+                self.0
+            }
+        }
+
+        impl crate::value_newtypes::UnsignedValueNewType for $name {
+            type ValueType = u16;
+
+            const MISSING_ERROR: ValueError = ValueError::$missing_error;
+
+            fn value(&self) -> Self::ValueType {
+                self.0
+            }
+        }
+
+        impl TryFrom<u16> for $name {
+            type Error = ValueError;
+
+            #[allow(clippy::manual_range_contains)]
+            fn try_from(value: u16) -> Result<Self, Self::Error> {
+                if value >= Self::MIN.0 && value <= Self::MAX.0 {
+                    Ok(Self(value))
+                } else {
+                    Err(ValueError::$error(u32::from(value)))
+                }
+            }
+        }
+
+        impl TryFrom<u32> for $name {
+            type Error = ValueError;
+
+            fn try_from(value: u32) -> Result<Self, Self::Error> {
+                if value >= Self::MIN.0.into() && value <= Self::MAX.0.into() {
+                    Ok(Self(u16::try_from(value).unwrap()))
+                } else {
+                    Err(ValueError::$error(value))
+                }
+            }
+        }
+    };
+}
+
 macro_rules! u8_0_is_256_value_newtype {
     ($name:ident, $error:ident, $missing_error:ident) => {
         #[derive(Debug, Copy, Clone, PartialEq)]
@@ -252,5 +304,6 @@ macro_rules! i16_non_zero_value_newtype {
 }
 
 pub(crate) use {
-    i16_non_zero_value_newtype, i8_value_newtype, u8_0_is_256_value_newtype, u8_value_newtype,
+    i16_non_zero_value_newtype, i8_value_newtype, u16_value_newtype, u8_0_is_256_value_newtype,
+    u8_value_newtype,
 };

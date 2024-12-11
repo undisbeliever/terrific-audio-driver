@@ -57,6 +57,73 @@ fn test_play_midi_note_number() {
 }
 
 #[test]
+fn test_play_pitch() {
+    assert_line_matches_bytecode("P$1000", &["play_pitch $1000 keyoff 24"]);
+    assert_line_matches_bytecode("l8 P$2000", &["play_pitch $2000 keyoff 12"]);
+
+    assert_line_matches_bytecode("P256 &", &["play_pitch 256 no_keyoff 24"]);
+
+    assert_line_matches_bytecode("P600,1", &["play_pitch 600 96"]);
+    assert_line_matches_bytecode("P200,16", &["play_pitch 200 6"]);
+
+    assert_line_matches_bytecode("P20,4..", &["play_pitch 20 42"]);
+    assert_line_matches_bytecode("P20,4...", &["play_pitch 20 45"]);
+    assert_line_matches_bytecode("P20...", &["play_pitch 20 45"]);
+
+    assert_line_matches_bytecode(
+        "P$1000,%600",
+        &["play_pitch $1000 no_keyoff 256", "wait 87", "rest 257"],
+    );
+    assert_line_matches_bytecode(
+        "P$1000,%600 &",
+        &["play_pitch $1000 no_keyoff 256", "wait 256", "wait 88"],
+    );
+
+    assert_line_matches_bytecode("P$1000 r r r", &["play_pitch $1000 keyoff 24", "rest 72"]);
+    assert_line_matches_bytecode(
+        "P$1000 & r r",
+        &["play_pitch $1000 no_keyoff 24", "rest 24", "rest 24"],
+    );
+
+    assert_line_matches_bytecode("Q3 P$1000,%80", &["play_pitch $1000 keyoff 31", "rest 49"]);
+
+    assert_line_matches_bytecode(
+        "Q3 P$1000,%80 r%50 r%50",
+        &["play_pitch $1000 keyoff 31", "rest 149"],
+    );
+
+    assert_line_matches_bytecode(
+        "Q3,D8 P$1000,%80 r%10 r%20",
+        &[
+            "play_pitch $1000 no_keyoff 30",
+            "set_temp_gain_and_rest D8 50",
+            "rest 30",
+        ],
+    );
+
+    // Q not applied to slurred notes
+    assert_line_matches_bytecode(
+        "Q3 P$1000,%80 & r%10 r%20",
+        &["play_pitch $1000 no_keyoff 80", "rest 10", "rest 20"],
+    );
+
+    assert_line_matches_bytecode("P0", &["play_pitch 0 keyoff 24"]);
+    assert_line_matches_bytecode("P$3fff", &["play_pitch 16383 keyoff 24"]);
+
+    assert_error_in_mml_line(
+        "P$4000",
+        1,
+        ValueError::PlayPitchPitchOutOfRange(0x4000).into(),
+    );
+
+    assert_error_in_mml_line("P,4", 1, ValueError::NoPlayPitchPitch.into());
+
+    assert_error_in_mml_line("P c", 1, ValueError::NoPlayPitchPitch.into());
+
+    assert_error_in_mml_line("P$1000,", 7, ChannelError::NoLengthAfterComma);
+}
+
+#[test]
 fn test_play_sample() {
     assert_mml_channel_a_matches_bytecode(
         r##"

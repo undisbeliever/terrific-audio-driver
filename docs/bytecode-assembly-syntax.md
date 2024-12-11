@@ -13,6 +13,7 @@ Instructions
 
  * `play_note <note> <duration>` - Play *note* for *duration* ticks then key-off the note
  * `play_note <note> <ko> <duration>` - Play *note* for *duration* ticks
+ * `play_pitch <pitch> [ko] <duration>` - Set `VxPITCH` to *pitch* for *duration* ticks
  * `portamento <note> <ko> <pitch_velocity> <duration>` - Extend a slur into a portamento
     * Portamento instructions do not emit a key-on event.  You will need to slur the previous note before a portamento instruction.
 

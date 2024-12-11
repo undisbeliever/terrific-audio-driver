@@ -9,8 +9,8 @@ use relative_path::RelativeToError;
 use crate::bytecode::{
     BcTicks, BcTicksKeyOff, BcTicksNoKeyOff, EarlyReleaseMinTicks, EarlyReleaseTicks, InstrumentId,
     LoopCount, Pan, PanSlideAmount, PanSlideTicks, PanbrelloAmplitude,
-    PanbrelloQuarterWavelengthInTicks, PortamentoVelocity, RelativePan, RelativeVolume,
-    TremoloAmplitude, TremoloQuarterWavelengthInTicks, VibratoPitchOffsetPerTick,
+    PanbrelloQuarterWavelengthInTicks, PlayPitchPitch, PortamentoVelocity, RelativePan,
+    RelativeVolume, TremoloAmplitude, TremoloQuarterWavelengthInTicks, VibratoPitchOffsetPerTick,
     VibratoQuarterWavelengthInTicks, Volume, VolumeSlideAmount, VolumeSlideTicks,
 };
 use crate::channel_bc_generator::{
@@ -122,6 +122,8 @@ pub enum ValueError {
     BcTicksKeyOffOutOfRange(u32),
     BcTicksNoKeyOffOutOfRange(u32),
 
+    PlayPitchPitchOutOfRange(u32),
+
     PxPanOutOfRange(i32),
     PanOutOfRange(u32),
     VolumeOutOfRange(u32),
@@ -198,6 +200,7 @@ pub enum ValueError {
     NoHexDigits,
     NoBool,
     NoNote,
+    NoPlayPitchPitch,
     NoVolume,
     NoPan,
     NoRelativeVolume,
@@ -452,6 +455,7 @@ pub enum ChannelError {
     MissingEndAsm,
 
     NoteIsTooShort,
+    NoLengthAfterComma,
 
     NoSubroutine,
     NoInstrument,
@@ -787,6 +791,10 @@ impl Display for ValueError {
                 BcTicksNoKeyOff::MAX_TICKS
             ),
 
+            Self::PlayPitchPitchOutOfRange(v) => {
+                out_of_range!("pitch register", v, PlayPitchPitch)
+            }
+
             Self::PxPanOutOfRange(v) => write!(
                 f,
                 "px pan out of bounds ({}, expected {} - {})",
@@ -978,6 +986,7 @@ impl Display for ValueError {
             Self::NoHexDigits => write!(f, "no hexadecimal digits"),
             Self::NoBool => write!(f, "no bool"),
             Self::NoNote => write!(f, "no note"),
+            Self::NoPlayPitchPitch => write!(f, "no pitch register value"),
             Self::NoVolume => write!(f, "no volume"),
             Self::NoPan => write!(f, "no pan"),
             Self::NoRelativeVolume => write!(f, "no relative volume"),
@@ -1357,6 +1366,7 @@ impl Display for ChannelError {
                 f,
                 "note is too short (2 ticks are required for a key-off note)"
             ),
+            Self::NoLengthAfterComma => write!(f, "missing length after comma"),
 
             Self::NoSubroutine => write!(f, "no subroutine"),
             Self::NoInstrument => write!(f, "no instrument"),

@@ -1,7 +1,7 @@
 {
   "_about": {
     "file_type": "Terrific Audio Driver project file",
-    "version": "0.0.13"
+    "version": "0.0.14"
   },
   "instruments": [
     {
@@ -231,6 +231,10 @@
     {
       "name": "panbrello",
       "source": "mml-tests/panbrello.mml"
+    },
+    {
+      "name": "play_pitch",
+      "source": "mml-tests/play-pitch.mml"
     },
     {
       "name": "volume_slide",

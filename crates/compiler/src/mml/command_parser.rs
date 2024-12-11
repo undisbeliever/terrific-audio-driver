@@ -12,9 +12,10 @@ use super::note_tracking::CursorTracker;
 
 use crate::bytecode::{
     EarlyReleaseMinTicks, EarlyReleaseTicks, LoopCount, Pan, PanSlideTicks,
-    PanbrelloQuarterWavelengthInTicks, PlayNoteTicks, SubroutineId, TremoloAmplitude,
-    TremoloQuarterWavelengthInTicks, VibratoPitchOffsetPerTick, VibratoQuarterWavelengthInTicks,
-    Volume, VolumeSlideAmount, VolumeSlideTicks, KEY_OFF_TICK_DELAY,
+    PanbrelloQuarterWavelengthInTicks, PlayNoteTicks, PlayPitchPitch, SubroutineId,
+    TremoloAmplitude, TremoloQuarterWavelengthInTicks, VibratoPitchOffsetPerTick,
+    VibratoQuarterWavelengthInTicks, Volume, VolumeSlideAmount, VolumeSlideTicks,
+    KEY_OFF_TICK_DELAY,
 };
 use crate::channel_bc_generator::{
     merge_pan_commands, merge_volumes_commands, relative_pan, relative_volume, Command,
@@ -786,6 +787,45 @@ fn parse_tracked_length(p: &mut Parser) -> TickCounter {
     length
 }
 
+// Assumes comman-length is at the end of the command
+fn parse_tracked_comma_length(p: &mut Parser) -> TickCounter {
+    let pos = p.peek_pos();
+
+    let (length_in_ticks, length) = match_next_token!(p,
+        Token::Comma => {
+            let length_in_ticks = next_token_matches!(p, Token::PercentSign);
+            let length = match_next_token!(
+                p,
+                &Token::Number(n) => Some(n),
+                #_ => {
+                    p.add_error(pos, ChannelError::NoLengthAfterComma);
+                    None
+                }
+            );
+            (length_in_ticks, length)
+        },
+        #_ => {
+            (false, None)
+        }
+    );
+
+    let number_of_dots = parse_dots_after_length(p);
+
+    let note_length = MmlLength::new(length, length_in_ticks, number_of_dots);
+
+    let length = match note_length.to_tick_count(p.default_length(), p.state().zenlen) {
+        Ok(tc) => tc,
+        Err(e) => {
+            p.add_error(pos, e.into());
+            p.default_length()
+        }
+    };
+
+    p.increment_tick_counter(length);
+
+    length
+}
+
 fn parse_tracked_optional_length(p: &mut Parser) -> Option<TickCounter> {
     let length = parse_untracked_optional_length(p);
     if let Some(tc) = length {
@@ -1322,6 +1362,23 @@ fn parse_play_sample(pos: FilePos, p: &mut Parser) -> Command {
     }
 }
 
+fn parse_play_pitch(pos: FilePos, p: &mut Parser) -> Command {
+    let pitch = parse_unsigned_newtype(pos, p).unwrap_or(PlayPitchPitch::NATIVE);
+    let p_length = parse_tracked_comma_length(p);
+
+    let (tie_length, is_slur) = parse_ties_and_slur(p);
+    let length = p_length + tie_length;
+
+    let rest_after_note = parse_rest_ticks_after_note(is_slur, p);
+
+    Command::PlayPitch {
+        pitch,
+        length,
+        is_slur,
+        rest_after_note,
+    }
+}
+
 fn parse_play_midi_note_number(pos: FilePos, p: &mut Parser) -> Command {
     let length = p.default_length();
     p.increment_tick_counter(length);
@@ -1653,6 +1710,7 @@ fn parse_token(pos: FilePos, token: Token, p: &mut Parser) -> Command {
         }
 
         Token::Pitch(pitch) => parse_pitch(pos, pitch, p),
+        Token::PlayPitch => parse_play_pitch(pos, p),
         Token::PlaySample => parse_play_sample(pos, p),
         Token::PlayMidiNoteNumber => parse_play_midi_note_number(pos, p),
         Token::Rest => parse_rest(p),

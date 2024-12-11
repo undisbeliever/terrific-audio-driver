@@ -187,6 +187,8 @@ Numbers can be decimal, or hexadecimal when prefixed with `$` (ie, `$ff`)
     * `-` adds a flat.
     * Multiple `+` and `-` can be used to increase/decrease the pitch by a semitone.
     * A optional *length* can be added after the note.  If there is no length, the default length (`l`) will be used.
+ * `P<pitch>[,length]` - Play pitch
+    * Sets the `VxPITCH` register to *pitch* and plays a note.  For example, `P$1000` will play the BRR sample at the native sample rate.
  * `s[number][,length]` - Play sample
     * If this command is used with a sample, `number` is the sample-rate list index (default is 0).
     * If this command is used with an instrument, `number` is the note-id.

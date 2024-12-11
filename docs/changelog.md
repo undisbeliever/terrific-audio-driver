@@ -2,6 +2,17 @@ Terrific Audio Driver Changelog
 ===============================
 
 
+Version 0.0.15
+==============
+
+**Known bugs**:
+ * Sample Analyser spectrum can only analyse the first 16384 samples in a long BRR sample.
+
+Audio driver changes:
+ * Added `play_pitch` instruction (`P` MML command)
+
+
+
 Version 0.0.14
 ==============
 

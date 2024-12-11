@@ -581,6 +581,16 @@ impl ChannelState {
                 self.temp_gain = 0;
             }
 
+            opcodes::PLAY_PITCH => {
+                let _pitch_l = read_pc();
+                let pitch_h_and_keyoff = read_pc();
+                let length = read_pc();
+
+                let key_off = (pitch_h_and_keyoff & 1) == 1;
+
+                self.ticks += Self::to_tick_count(length, key_off);
+            }
+
             opcodes::SET_INSTRUMENT => {
                 self.instrument = Some(read_pc());
                 self.adsr_or_gain_override = None;
