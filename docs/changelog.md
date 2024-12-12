@@ -15,8 +15,7 @@ Audio driver changes:
  * Fixed EON when channels G & H are ducked and unducked
 
 MML changes:
- * Allow 0 ticks before and after a `:` skip last loop MML command.
-    * Useful repeating a series of notes with a different instrument or setting, e.g. `@1 [ ceg : @2 ]2`
+ * Allow 0 ticks before and after a `:` skip last loop MML command.  For example: `[ ceg : v+2 ]4`
 
 Bytecode assembly changes:
  * Allow 0 ticks before and after `skip_last_loop` instruction
