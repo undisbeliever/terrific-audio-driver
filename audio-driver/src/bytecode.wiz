@@ -120,6 +120,13 @@ let INSTRUCTIONS_WITH_ARGUMENTS = [
     play_pitch,
 
 
+    // parameters: --fffffO llllllll
+    //         fffff = noise frequency
+    //             O = key-off after note ends
+    //      llllllll = note length
+    play_noise,
+
+
     // parameter = number of ticks to wait.
     // NOTE: Does not key-off the channel.
     wait,
@@ -325,6 +332,9 @@ let NO_ARGUMENT_INSTRUCTIONS = [
     // Return from a call instruction
     return_from_subroutine,
 
+
+    // Disable noise on this channel
+    disable_noise,
 
     // Enable echo on this channel
     enable_echo,

@@ -11,7 +11,7 @@ use super::{ChannelId, IdentifierStr, Section};
 use super::note_tracking::CursorTracker;
 
 use crate::bytecode::{
-    EarlyReleaseMinTicks, EarlyReleaseTicks, LoopCount, Pan, PanSlideTicks,
+    EarlyReleaseMinTicks, EarlyReleaseTicks, LoopCount, NoiseFrequency, Pan, PanSlideTicks,
     PanbrelloQuarterWavelengthInTicks, PlayNoteTicks, PlayPitchPitch, SubroutineId,
     TremoloAmplitude, TremoloQuarterWavelengthInTicks, VibratoPitchOffsetPerTick,
     VibratoQuarterWavelengthInTicks, Volume, VolumeSlideAmount, VolumeSlideTicks,
@@ -1379,6 +1379,23 @@ fn parse_play_pitch(pos: FilePos, p: &mut Parser) -> Command {
     }
 }
 
+fn parse_play_noise(pos: FilePos, p: &mut Parser) -> Command {
+    let frequency = parse_unsigned_newtype(pos, p).unwrap_or(NoiseFrequency::MIN);
+    let p_length = parse_tracked_comma_length(p);
+
+    let (tie_length, is_slur) = parse_ties_and_slur(p);
+    let length = p_length + tie_length;
+
+    let rest_after_note = parse_rest_ticks_after_note(is_slur, p);
+
+    Command::PlayNoise {
+        frequency,
+        length,
+        is_slur,
+        rest_after_note,
+    }
+}
+
 fn parse_play_midi_note_number(pos: FilePos, p: &mut Parser) -> Command {
     let length = p.default_length();
     p.increment_tick_counter(length);
@@ -1711,12 +1728,15 @@ fn parse_token(pos: FilePos, token: Token, p: &mut Parser) -> Command {
 
         Token::Pitch(pitch) => parse_pitch(pos, pitch, p),
         Token::PlayPitch => parse_play_pitch(pos, p),
+        Token::PlayNoise => parse_play_noise(pos, p),
         Token::PlaySample => parse_play_sample(pos, p),
         Token::PlayMidiNoteNumber => parse_play_midi_note_number(pos, p),
         Token::Rest => parse_rest(p),
         Token::Wait => parse_wait(p),
         Token::StartPortamento => parse_portamento(pos, p),
         Token::StartBrokenChord => parse_broken_chord(p),
+
+        Token::DisableNoise => Command::DisableNoise,
 
         Token::MpVibrato => Command::SetMpVibrato(parse_mp_vibrato(pos, p)),
         Token::ManualVibrato => Command::SetManualVibrato(parse_manual_vibrato(pos, p)),

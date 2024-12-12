@@ -17,6 +17,15 @@ Instructions
  * `portamento <note> <ko> <pitch_velocity> <duration>` - Extend a slur into a portamento
     * Portamento instructions do not emit a key-on event.  You will need to slur the previous note before a portamento instruction.
 
+ * `play_noise <0-31> [ko] <duration>` - play noise
+    * Noise is disabled on the next `play_note` or `play_pitch` instruction
+    * CAUTION: There is only 1 noise generator.  
+      This instruction will change the noise frequency on all channels playing noise.
+    * CAUTION: The instrument is used to determine the length of the noise.
+       * If the instrument does not loop, the noise is played for the length of the instrument's sample.
+       * If the instrument loops, the noise is played until key-off.
+ * `disable_noise` - disable noise
+
  * `disable_vibrato` - disable vibrato
  * `set_vibrato <pitch_offset_per_tick> <quarter_wavelength>` - Enable vibrato
     * Vibrato will add or subtract *pitch_offset_per_tick* value to the S-DSP PITCH register in a sawtooth pattern on every tick.

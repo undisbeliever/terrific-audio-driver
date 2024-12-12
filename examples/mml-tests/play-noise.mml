@@ -1,0 +1,25 @@
+#Title Play Noise test
+
+@1 sine gain F127
+
+; Must set an instrument before using noise
+ABCDEFGH @1
+
+A N 0 N 1 N 2 N 3 N 4 N 5 N 6 N 7
+A N 8 N 9 N10 N11 N12 N13 N14 N15
+A N16 N17 N18 N19 N20 N21 N22 N23
+A N24 N25 N26 N27 N28 N29 N30 N31
+A r
+
+; Noise with length
+A N$10,4 N$15,8 N$1a,16 N$1f,24 r
+
+; Noise stops when a note is played
+A N16 c d r
+
+; Noise can be slurred like a regular note
+A N15,8 & N16,8 & N17,8 & N18,8 N19,8
+
+; N- disables noise
+A d4 & N16,2 & N- w4 r
+

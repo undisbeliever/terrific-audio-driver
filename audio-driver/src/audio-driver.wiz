@@ -276,6 +276,16 @@ in zeropage {
     // CAUTION: bits 6 & 7 are swapped from other the other *_sfx bitsets
     // (bitfield)
     var volShadowDirty_sfx : u8;
+
+
+    // NON DSP register shadow
+    var nonShadow_music : u8;
+    var nonShadow_sfx : u8;
+
+    // noise frequency register shadow variables
+    // (Value is only written to the flag register if MSB clear)
+    var noiseFreq_music : u8;
+    var noiseFreq_sfx : u8;
 }
 
 
@@ -545,6 +555,9 @@ func main() {
     io_musicChannelsMask = a;
     musicSfxChannelMask = a;
     keyOnMask_music = a;
+    noiseFreq_music = a;
+    noiseFreq_sfx = a;
+
     inline for let _I in 0..(N_SFX_CHANNELS - 1) {
         sfx_oneChannelSfxId[_I] = a;
     }
@@ -726,6 +739,13 @@ inline func _process_music_channels__inline() {
     y = a = keyOffShadow_music & musicSfxChannelMask;
     write_dsp(GlobalDspAddr.KOFF, y);
 
+    y = noiseFreq_music;
+    if !negative {
+        // Assumes noiseFreq_music is <= dsp.FLG__NOISE_FREQ_MASK.
+        write_dsp(GlobalDspAddr.FLG, y);
+        noiseFreq_music $ 7 = true;
+    }
+
     zpTmp = a = keyOnShadow_music & musicSfxChannelMask & io_musicChannelsMask;
 
     a = 0;
@@ -752,6 +772,13 @@ inline func _process_sfx_channels__inline() {
     musicSfxChannelMask = a = (activeSoundEffects | keyOffShadow_sfx) ^ 0xff;
 
     write_dsp(GlobalDspAddr.KOFF, keyOffShadow_sfx);
+
+    y = noiseFreq_sfx;
+    if !negative {
+        // Assumes noiseFreq_sfx is <= dsp.FLG__NOISE_FREQ_MASK.
+        write_dsp(GlobalDspAddr.FLG, y);
+        noiseFreq_sfx $ 7 = true;
+    }
 
     zpTmp = keyOnShadow_sfx;
     volShadowDirty_tmp = volShadowDirty_sfx;
@@ -858,6 +885,10 @@ var _afterFirstChannel : u8 in zpTmp2;
     // ASSUMES `eonShadow_sfx` only set for active sfx channels
     y = a = (eonShadow_music & musicSfxChannelMask) | eonShadow_sfx;
     write_dsp(GlobalDspAddr.EON, y);
+
+    // ASSUMES `nonShadow_sfx` only set for active sfx channels
+    y = a = (nonShadow_music & musicSfxChannelMask) | nonShadow_sfx;
+    write_dsp(GlobalDspAddr.NON, y);
 
     write_dsp(GlobalDspAddr.KON, _konShadow);
 
@@ -1276,6 +1307,8 @@ func __play_sfx_on_channel(addrAndOneChannelFlag_h: u8 in a, channelIndex : u8 i
     test_and_set(a, keyOnMask_sfx);
     // Disable echo
     test_and_clear(a, eonShadow_sfx);
+    // Disable noise
+    test_and_clear(a, nonShadow_sfx);
 
     // Enable sfx channel.
     test_and_set(a, activeSoundEffects);
@@ -1300,6 +1333,7 @@ func __play_sfx_on_channel(addrAndOneChannelFlag_h: u8 in a, channelIndex : u8 i
 //  * virtual channels
 //  * keyOnMask
 //  * eonShadow
+//  * nonShadow
 //
 // KEEP: X
 func __reset_channel(channelIndex : u8 in x, pan: u8 in a) {
@@ -1852,6 +1886,9 @@ func __play_note_set_pitch_h(channelIndex: u8 in x, pitch_h: u8 in a) {
     // queue KON if the previous note has been KOFFed
     a = ChannelVoiceBit[x];
     if x >= FIRST_SFX_CHANNEL {
+        // Disable noise
+        test_and_clear(a, nonShadow_sfx);
+
         a &= keyOnMask_sfx;
         test_and_set(a, keyOnShadow_sfx);
 
@@ -1860,6 +1897,9 @@ func __play_note_set_pitch_h(channelIndex: u8 in x, pitch_h: u8 in a) {
 
         return;
     }
+
+    // Disable noise
+    test_and_clear(a, nonShadow_music);
 
     a &= keyOnMask_music;
     test_and_set(a, keyOnShadow_music);
@@ -1885,6 +1925,75 @@ func play_pitch(channelIndex: u8 in x, pitch_l : u8 in a) {
     return __play_note_set_pitch_h(x, a);
 }
 
+
+// IN: Y = 0
+// KEEP: X
+func play_noise(channelIndex: u8 in x, freq_and_keyoff : u8 in a) {
+    a >>>= 1;
+    // Set MSB of nextEventIsKeyOff from carry
+    channelSoA.nextEventIsKeyOff[x] >>>>#= 1;
+
+    a &= dsp.FLG__NOISE_FREQ_MASK;
+    push(a);
+
+    // Wait length
+    // Y = 0
+    a = instructionPtr[y];
+    instructionPtr++;
+
+    channelSoA.countdownTimer[x] = a;
+
+    // Reset early release min-tick counter.
+    // Y = 0
+    a = y;
+    channelSoA.ticksAfterNote[x] = a;
+
+    y = pop();
+
+    // queue KON if the previous note has been KOFFed
+    a = ChannelVoiceBit[x];
+    if x >= FIRST_SFX_CHANNEL {
+        noiseFreq_sfx = y;
+
+        a = ChannelVoiceBit[x];
+        test_and_set(a, nonShadow_sfx);
+
+
+        a &= keyOnMask_sfx;
+        test_and_set(a, keyOnShadow_sfx);
+
+        // Disable KON the next time the note is played (slur the note)
+        test_and_clear(a, keyOnMask_sfx);
+
+        return;
+    }
+
+    noiseFreq_music = y;
+
+    test_and_set(a, nonShadow_music);
+
+
+    a &= keyOnMask_music;
+    test_and_set(a, keyOnShadow_music);
+
+    // Disable KON the next time the note is played (slur the note)
+    test_and_clear(a, keyOnMask_music);
+}
+
+
+// KEEP: X
+func disable_noise(channelIndex: u8 in x) {
+    a = ChannelVoiceBit[x];
+    if x >= FIRST_SFX_CHANNEL {
+        test_and_clear(a, nonShadow_sfx);
+
+        ^return process_next_bytecode(x);
+    }
+
+    test_and_clear(a, nonShadow_music);
+
+    ^return process_next_bytecode(x);
+}
 
 
 // IN: Y = 0
@@ -2084,6 +2193,9 @@ func disable_channel(channelIndex : u8 in x) {
 
         // Disable echo
         test_and_clear(a, eonShadow_sfx);
+
+        // Disable noise
+        test_and_clear(a, nonShadow_sfx);
 
         // Disable sfx S-DSP writes.
         test_and_clear(a, activeSoundEffects);

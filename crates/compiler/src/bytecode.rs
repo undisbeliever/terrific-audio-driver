@@ -128,6 +128,18 @@ impl PlayPitchPitch {
     pub const NATIVE: Self = Self(0x1000);
 }
 
+u8_value_newtype!(
+    NoiseFrequency,
+    NoiseFrequencyOutOfRange,
+    NoNoiseFrequency,
+    0,
+    (1 << 5) - 1
+);
+
+impl NoiseFrequency {
+    pub const MASK: u8 = (1 << 5) - 1;
+}
+
 impl Pan {
     pub const CENTER: Pan = Self(Self::MAX.0 / 2);
 }
@@ -166,6 +178,7 @@ pub mod opcodes {
         SET_VIBRATO,
         SET_VIBRATO_DEPTH_AND_PLAY_NOTE,
         PLAY_PITCH,
+        PLAY_NOISE,
         WAIT,
         REST,
         SET_INSTRUMENT,
@@ -199,6 +212,7 @@ pub mod opcodes {
         END_LOOP,
         RETURN_FROM_SUBROUTINE_AND_DISABLE_VIBRATO,
         RETURN_FROM_SUBROUTINE,
+        DISABLE_NOISE,
         ENABLE_ECHO,
         DISABLE_ECHO,
         REUSE_TEMP_GAIN,
@@ -672,6 +686,7 @@ pub enum SlurredNoteState {
     None,
     Slurred(Note),
     SlurredPitch,
+    SlurredNoise,
 }
 
 impl SlurredNoteState {
@@ -681,6 +696,7 @@ impl SlurredNoteState {
             SlurredNoteState::None => *self = SlurredNoteState::None,
             SlurredNoteState::Slurred(n) => *self = SlurredNoteState::Slurred(*n),
             SlurredNoteState::SlurredPitch => *self = SlurredNoteState::SlurredPitch,
+            SlurredNoteState::SlurredNoise => *self = SlurredNoteState::SlurredNoise,
         }
     }
 }
@@ -976,6 +992,27 @@ impl<'a> Bytecode<'a> {
         let arg2 = (pitch[1] << 1) | key_off_bit;
 
         emit_bytecode!(self, opcodes::PLAY_PITCH, arg1, arg2, length.bc_argument());
+    }
+
+    pub fn play_noise(&mut self, frequency: NoiseFrequency, length: PlayNoteTicks) {
+        self.state.tick_counter += length.to_tick_count();
+        self.state.prev_slurred_note = match length {
+            PlayNoteTicks::KeyOff(_) => SlurredNoteState::None,
+            PlayNoteTicks::NoKeyOff(_) => SlurredNoteState::SlurredNoise,
+        };
+
+        let key_off_bit = match length {
+            PlayNoteTicks::NoKeyOff(_) => 0,
+            PlayNoteTicks::KeyOff(_) => 1,
+        };
+
+        let arg = (frequency.as_u8() << 1) | key_off_bit;
+
+        emit_bytecode!(self, opcodes::PLAY_NOISE, arg, length.bc_argument());
+    }
+
+    pub fn disable_noise(&mut self) {
+        emit_bytecode!(self, opcodes::DISABLE_NOISE);
     }
 
     pub fn play_note(&mut self, note: Note, length: PlayNoteTicks) -> Result<(), BytecodeError> {

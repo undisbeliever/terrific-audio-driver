@@ -8,7 +8,7 @@ use relative_path::RelativeToError;
 
 use crate::bytecode::{
     BcTicks, BcTicksKeyOff, BcTicksNoKeyOff, EarlyReleaseMinTicks, EarlyReleaseTicks, InstrumentId,
-    LoopCount, Pan, PanSlideAmount, PanSlideTicks, PanbrelloAmplitude,
+    LoopCount, NoiseFrequency, Pan, PanSlideAmount, PanSlideTicks, PanbrelloAmplitude,
     PanbrelloQuarterWavelengthInTicks, PlayPitchPitch, PortamentoVelocity, RelativePan,
     RelativeVolume, TremoloAmplitude, TremoloQuarterWavelengthInTicks, VibratoPitchOffsetPerTick,
     VibratoQuarterWavelengthInTicks, Volume, VolumeSlideAmount, VolumeSlideTicks,
@@ -123,6 +123,7 @@ pub enum ValueError {
     BcTicksNoKeyOffOutOfRange(u32),
 
     PlayPitchPitchOutOfRange(u32),
+    NoiseFrequencyOutOfRange(u32),
 
     PxPanOutOfRange(i32),
     PanOutOfRange(u32),
@@ -201,6 +202,7 @@ pub enum ValueError {
     NoBool,
     NoNote,
     NoPlayPitchPitch,
+    NoNoiseFrequency,
     NoVolume,
     NoPan,
     NoRelativeVolume,
@@ -794,6 +796,9 @@ impl Display for ValueError {
             Self::PlayPitchPitchOutOfRange(v) => {
                 out_of_range!("pitch register", v, PlayPitchPitch)
             }
+            Self::NoiseFrequencyOutOfRange(v) => {
+                out_of_range!("noise frequency", v, NoiseFrequency)
+            }
 
             Self::PxPanOutOfRange(v) => write!(
                 f,
@@ -987,6 +992,7 @@ impl Display for ValueError {
             Self::NoBool => write!(f, "no bool"),
             Self::NoNote => write!(f, "no note"),
             Self::NoPlayPitchPitch => write!(f, "no pitch register value"),
+            Self::NoNoiseFrequency => write!(f, "no noise frequency"),
             Self::NoVolume => write!(f, "no volume"),
             Self::NoPan => write!(f, "no pan"),
             Self::NoRelativeVolume => write!(f, "no relative volume"),

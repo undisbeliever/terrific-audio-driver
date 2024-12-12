@@ -233,12 +233,20 @@
       "source": "mml-tests/panbrello.mml"
     },
     {
+      "name": "play_noise",
+      "source": "mml-tests/play-noise.mml"
+    },
+    {
       "name": "play_pitch",
       "source": "mml-tests/play-pitch.mml"
     },
     {
       "name": "volume_slide",
       "source": "mml-tests/volume-slide.mml"
+    },
+    {
+      "name": "multi_channel_noise",
+      "source": "mml-tests/multi-channel-noise.mml"
     },
     {
       "name": "volume_pop_bug",

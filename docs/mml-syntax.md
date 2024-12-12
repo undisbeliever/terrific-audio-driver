@@ -206,6 +206,15 @@ Numbers can be decimal, or hexadecimal when prefixed with `$` (ie, `$ff`)
     * Multiple `w` wait commands will be merged by the MML parser. For example, `w4 w8 w8` will be merged into a single `w2` command.
     * Very long `w` waits will be optimised into a loop.  For example, when Whole Note Length is 96, `w1 w1 w1 w1 w1 w1 w1 w1 w1 w1` will be converted to `[w%240]4`.
 
+ * `N<0-31>[,length]` - play noise
+    * Noise is disabled on the next note or `P` play-pitch command
+    * CAUTION: There is only 1 noise generator.  
+      This command will change the noise frequency on all channels playing noise.
+    * CAUTION: The instrument is used to determine the length of the noise.
+       * If the instrument does not loop, the noise is played for the length of the instrument's sample.
+       * If the instrument loops, the noise is played until key-off.
+ * `disable_noise` - disable noise
+
 <br/>
 
  * `@<id>` - Set instrument

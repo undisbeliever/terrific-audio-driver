@@ -6,11 +6,12 @@
 
 use crate::bytecode::{
     BcTicks, BcTicksKeyOff, BcTicksNoKeyOff, Bytecode, BytecodeContext, EarlyReleaseMinTicks,
-    EarlyReleaseTicks, IeState, InstrumentId, LoopCount, Pan, PanSlideAmount, PanSlideTicks,
-    PanbrelloAmplitude, PanbrelloQuarterWavelengthInTicks, PlayNoteTicks, PlayPitchPitch,
-    PortamentoVelocity, RelativePan, RelativeVolume, SlurredNoteState, TremoloAmplitude,
-    TremoloQuarterWavelengthInTicks, VibratoPitchOffsetPerTick, VibratoQuarterWavelengthInTicks,
-    VibratoState, Volume, VolumeSlideAmount, VolumeSlideTicks, KEY_OFF_TICK_DELAY,
+    EarlyReleaseTicks, IeState, InstrumentId, LoopCount, NoiseFrequency, Pan, PanSlideAmount,
+    PanSlideTicks, PanbrelloAmplitude, PanbrelloQuarterWavelengthInTicks, PlayNoteTicks,
+    PlayPitchPitch, PortamentoVelocity, RelativePan, RelativeVolume, SlurredNoteState,
+    TremoloAmplitude, TremoloQuarterWavelengthInTicks, VibratoPitchOffsetPerTick,
+    VibratoQuarterWavelengthInTicks, VibratoState, Volume, VolumeSlideAmount, VolumeSlideTicks,
+    KEY_OFF_TICK_DELAY,
 };
 use crate::bytecode_assembler::parse_asm_line;
 use crate::data::{self, UniqueNamesList};
@@ -199,6 +200,12 @@ pub(crate) enum Command {
         is_slur: bool,
         rest_after_note: RestTicksAfterNote,
     },
+    PlayNoise {
+        frequency: NoiseFrequency,
+        length: TickCounter,
+        is_slur: bool,
+        rest_after_note: RestTicksAfterNote,
+    },
     Portamento {
         note1: Note,
         note2: Note,
@@ -217,6 +224,8 @@ pub(crate) enum Command {
         total_length: TickCounter,
         note_length: PlayNoteTicks,
     },
+
+    DisableNoise,
 
     CallSubroutine(usize, SubroutineCallType),
     StartLoop,
@@ -1302,6 +1311,19 @@ impl<'a> ChannelBcGenerator<'a> {
                 self.after_note(after)?;
             }
 
+            &Command::PlayNoise {
+                frequency,
+                length,
+                is_slur,
+                rest_after_note,
+            } => {
+                let (pp_length, after) =
+                    self.split_play_note_length(length, is_slur, rest_after_note)?;
+
+                self.bc.play_noise(frequency, pp_length);
+                self.after_note(after)?;
+            }
+
             &Command::Portamento {
                 note1,
                 note2,
@@ -1330,6 +1352,10 @@ impl<'a> ChannelBcGenerator<'a> {
                 note_length,
             } => {
                 self.broken_chord(notes, *total_length, *note_length)?;
+            }
+
+            Command::DisableNoise => {
+                self.bc.disable_noise();
             }
 
             Command::StartLoop => {

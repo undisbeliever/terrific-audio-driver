@@ -1,0 +1,18 @@
+#Title Multi-channel noise test
+#Tempo 90
+
+@1 sine gain F127
+
+ABCDEFGH @1
+
+; There is only 1 noise generator.
+; A play-noise command will change the noise frequency on all channels playing noise.
+A w N16,1 c
+B w w N20,1 c
+C w w w N24,1 c
+D w w w w N28,1 c
+E w w w w w N24,1 c
+F w w w w w w N20,1 c
+G w w w w w w w N16,1 c
+H w w w w w w w w N12,1 c
+

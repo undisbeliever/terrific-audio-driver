@@ -591,6 +591,17 @@ impl ChannelState {
                 self.ticks += Self::to_tick_count(length, key_off);
             }
 
+            opcodes::PLAY_NOISE => {
+                let freq_and_keyoff = read_pc();
+                let length = read_pc();
+
+                let key_off = (freq_and_keyoff & 1) == 1;
+
+                self.ticks += Self::to_tick_count(length, key_off);
+            }
+
+            opcodes::DISABLE_NOISE => {}
+
             opcodes::SET_INSTRUMENT => {
                 self.instrument = Some(read_pc());
                 self.adsr_or_gain_override = None;
