@@ -122,3 +122,8 @@ A o5 {e- g}6
 @1 square adsr 14 7 7 22
 
 A @1 o5 [c c c r]4
+
+=== noise === one interruptible
+	set_instrument_and_gain sine F127
+
+	play_noise 31 12

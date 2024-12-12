@@ -140,7 +140,8 @@
     "robot_notices_player",
     "robot_ascend",
     "robot_fires_laser",
-    "fire_arrow"
+    "fire_arrow",
+    "noise"
   ],
   "low_priority_sound_effects": [
     "low_priority_beep",

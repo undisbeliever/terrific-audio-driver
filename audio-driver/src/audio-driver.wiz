@@ -1307,8 +1307,10 @@ func __play_sfx_on_channel(addrAndOneChannelFlag_h: u8 in a, channelIndex : u8 i
     test_and_set(a, keyOnMask_sfx);
     // Disable echo
     test_and_clear(a, eonShadow_sfx);
-    // Disable noise
-    test_and_clear(a, nonShadow_sfx);
+
+    // Not disabling noise.
+    // Clearing nonShadow_sfx would disable noise in the middle of the release envelope.
+    // Noise is disabled on `play_note` and `play_pitch`.
 
     // Enable sfx channel.
     test_and_set(a, activeSoundEffects);
@@ -2194,8 +2196,8 @@ func disable_channel(channelIndex : u8 in x) {
         // Disable echo
         test_and_clear(a, eonShadow_sfx);
 
-        // Disable noise
-        test_and_clear(a, nonShadow_sfx);
+        // Not disabling noise.
+        // Clearing nonShadow_sfx would disable noise in the middle of the release envelope.
 
         // Disable sfx S-DSP writes.
         test_and_clear(a, activeSoundEffects);
