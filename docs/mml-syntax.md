@@ -18,7 +18,6 @@ Song metadata:
  * `#Date`
  * `#License`
 
-* Added `px` Pan command
 <br/>
 
 The song tempo can be set with either `#Tempo` or `#Timer`:
