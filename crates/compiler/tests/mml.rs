@@ -1385,6 +1385,50 @@ fn test_loops() {
 }
 
 #[test]
+fn test_no_tick_instructions_and_skip_last_loop() {
+    assert_line_matches_bytecode(
+        "[a : V-5 ]6",
+        &[
+            "start_loop",
+            "play_note a4 24",
+            "skip_last_loop",
+            "adjust_volume -5",
+            "end_loop 6",
+        ],
+    );
+
+    assert_line_matches_bytecode(
+        "[V+5 : b ]6",
+        &[
+            "start_loop",
+            "adjust_volume +5",
+            "skip_last_loop",
+            "play_note b4 24",
+            "end_loop 6",
+        ],
+    );
+}
+
+#[test]
+fn test_loop_errors() {
+    assert_error_in_mml_line("[ ]3", 3, BytecodeError::NoTicksInLoop.into());
+    assert_error_in_mml_line("[ V+5 ]3", 7, BytecodeError::NoTicksInLoop.into());
+    assert_error_in_mml_line("[ V+5 : V-5 ]3", 13, BytecodeError::NoTicksInLoop.into());
+
+    assert_error_in_mml_line(
+        "[ : c ]3",
+        3,
+        BytecodeError::NoInstructionsBeforeSkipLastLoop.into(),
+    );
+
+    assert_error_in_mml_line(
+        "[ c : ]3",
+        7,
+        BytecodeError::NoInstructionsAfterSkipLastLoop.into(),
+    );
+}
+
+#[test]
 fn test_max_loops() {
     assert_line_matches_bytecode(
         "[[[[[[[a]11]12]13]14]15]16]17",

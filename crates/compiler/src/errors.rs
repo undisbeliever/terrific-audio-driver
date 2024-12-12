@@ -250,8 +250,8 @@ pub enum BytecodeError {
     MissingLoopCount,
     CannotHaveLoopCountAtStartAndEndLoop,
     MultipleSkipLastLoopInstructions,
-    NoTicksBeforeSkipLastLoop,
-    NoTicksAfterSkipLastLoop,
+    NoInstructionsBeforeSkipLastLoop,
+    NoInstructionsAfterSkipLastLoop,
     NoTicksInLoop,
     SkipLastLoopOutOfBounds(usize),
 
@@ -1059,11 +1059,11 @@ impl Display for BytecodeError {
             Self::MultipleSkipLastLoopInstructions => {
                 write!(f, "multiple skip_last_loop instructions in a single loop")
             }
-            Self::NoTicksBeforeSkipLastLoop => {
-                write!(f, "no ticks before skip_last_loop instruction")
+            Self::NoInstructionsBeforeSkipLastLoop => {
+                write!(f, "no instructions before skip_last_loop instruction")
             }
-            Self::NoTicksAfterSkipLastLoop => {
-                write!(f, "no ticks after skip_last_loop instruction")
+            Self::NoInstructionsAfterSkipLastLoop => {
+                write!(f, "no instructions after skip_last_loop instruction")
             }
             Self::NoTicksInLoop => write!(f, "no ticks in loop"),
             Self::SkipLastLoopOutOfBounds(to_skip) => {

@@ -14,6 +14,12 @@ Audio driver changes:
  * Added `disable_noise` instruction (`N-` MML command)
  * Fixed EON when channels G & H are ducked and unducked
 
+MML changes:
+ * Allow 0 ticks before and after a `:` skip last loop MML command.
+    * Useful repeating a series of notes with a different instrument or setting, e.g. `@1 [ ceg : @2 ]2`
+
+Bytecode assembly changes:
+ * Allow 0 ticks before and after `skip_last_loop` instruction
 
 
 Version 0.0.14

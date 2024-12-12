@@ -1406,6 +1406,9 @@ impl<'a> Bytecode<'a> {
         }
     }
 
+    const START_LOOP_INST_SIZE: usize = 2;
+    const SKIP_LAST_LOOP_INST_SIZE: usize = 2;
+
     pub fn skip_last_loop(&mut self) -> Result<(), BytecodeError> {
         let loop_state = match self.loop_stack.last_mut() {
             Some(l) => l,
@@ -1416,8 +1419,8 @@ impl<'a> Bytecode<'a> {
             return Err(BytecodeError::MultipleSkipLastLoopInstructions);
         }
 
-        if loop_state.tick_counter_at_start_of_loop == self.state.tick_counter {
-            return Err(BytecodeError::NoTicksBeforeSkipLastLoop);
+        if loop_state.start_loop_pos + Self::START_LOOP_INST_SIZE == self.bytecode.len() {
+            return Err(BytecodeError::NoInstructionsBeforeSkipLastLoop);
         }
 
         loop_state.skip_last_loop = Some(SkipLastLoop {
@@ -1465,15 +1468,17 @@ impl<'a> Bytecode<'a> {
 
             let ticks_skipped_in_last_loop = match &loop_state.skip_last_loop {
                 Some(s) => {
-                    if self.state.tick_counter == s.tick_counter {
-                        return Err(BytecodeError::NoTicksAfterSkipLastLoop);
+                    if s.bc_parameter_position - 1 + Self::SKIP_LAST_LOOP_INST_SIZE
+                        == self.bytecode.len()
+                    {
+                        return Err(BytecodeError::NoInstructionsAfterSkipLastLoop);
                     }
                     self.state.tick_counter.value() - s.tick_counter.value()
                 }
                 None => 0,
             };
 
-            assert!(ticks_skipped_in_last_loop < ticks_in_loop);
+            assert!(ticks_skipped_in_last_loop <= ticks_in_loop);
 
             let ticks_to_add = ticks_in_loop
                 .checked_mul(loop_count_u32 - 1)
