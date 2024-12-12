@@ -111,10 +111,19 @@ in zeropage {
     // MUST ONLY be modified by `_process_sfx_channels__inline()`.
     var musicSfxChannelMask : u8;
 
+    // bitmask - Set if S-DSP voice channel is sfx, clear if music
+    //           (opposite to `musicSfxChannelMask`).
+    // Used to enabled/disable noise and echo when sound effects channels are active.
+    // MUST ONLY be modified by `_process_sfx_channels__inline()`.
+    var sfxMusicEchoNoiseMask : u8;
+
     // bitmask - Set if S-DSP voice channel is sfx.
     // Used to disable S-DSP voice register writes for unused sfx channels.
     // Used to determine the next available sound effect channel.
     var activeSoundEffects : u8;
+
+    // The `activeSoundEffects` value in the previous sfx tick.
+    var prevActiveSoundEffects : u8;
 
     // bitmask - Set if the sound effect is interruptible
     // (only uses bits 6 & 7)
@@ -766,10 +775,16 @@ inline func _process_sfx_channels__inline() {
     // No need to mask sfx keyOff/keyOn events.
     // The sfx channels do not emit key-off or key-on events when disabled.
 
+    // Delay echo and noise changes 1 tick to prevent noise/echo changing in
+    // the middle of the release envelope the channel is ducked or un-ducked.
+    sfxMusicEchoNoiseMask = prevActiveSoundEffects;
+
+    prevActiveSoundEffects = a = activeSoundEffects;
+
     // Update `musicSfxChannelMask`.
     // Music channels can only write to the S-DSP when the sound effect is disabled AND there is no key-off event.
     // Prevents an audio glitch when a music channel writes to a voice channel in the middle of the key-off release envelope.
-    musicSfxChannelMask = a = (activeSoundEffects | keyOffShadow_sfx) ^ 0xff;
+    musicSfxChannelMask = a = (a | keyOffShadow_sfx) ^ 0xff;
 
     write_dsp(GlobalDspAddr.KOFF, keyOffShadow_sfx);
 
@@ -882,13 +897,12 @@ var _afterFirstChannel : u8 in zpTmp2;
     } while x >= _afterFirstChannel;
 
 
-    // ASSUMES `eonShadow_sfx` only set for active sfx channels
-    y = a = (eonShadow_music & musicSfxChannelMask) | eonShadow_sfx;
+    y = a = ((eonShadow_music ^ eonShadow_sfx) & sfxMusicEchoNoiseMask) ^ eonShadow_music;
     write_dsp(GlobalDspAddr.EON, y);
 
-    // ASSUMES `nonShadow_sfx` only set for active sfx channels
-    y = a = (nonShadow_music & musicSfxChannelMask) | nonShadow_sfx;
+    y = a = ((nonShadow_music ^ nonShadow_sfx) & sfxMusicEchoNoiseMask) ^ nonShadow_music;
     write_dsp(GlobalDspAddr.NON, y);
+
 
     write_dsp(GlobalDspAddr.KON, _konShadow);
 

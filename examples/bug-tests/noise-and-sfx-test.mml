@@ -1,0 +1,23 @@
+; Manual test to confirm the NON register is cleared after the sound effect starts playing.
+;
+; To test:
+;   * Record tad-gui audio output
+;   * Play this song in the sound effects tab, starting at tick 0
+;      * Must start at tick 0
+;   * Select a long sound effect
+;   * Rapidly hit the Play Sound effect (F5) button
+;      * Panning the sound effect to a single speaker improves analysis
+;      * Holding F5 will use the STOP_SOUND_EFFECTS IO command
+;   * Verify channel ducking key-off release envelopes are correct
+;      * No sine wave in song channel H key-off release
+;      * No noise in sound effect key-off release
+;
+
+#Title Noise and Sound effect test
+; Deliberately misaligned with SFX timer
+#Timer 65
+
+@1 sine gain F127
+
+H @1 o6 v16 c8 [ N31 ]150
+

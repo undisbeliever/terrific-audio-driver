@@ -12,6 +12,7 @@ Audio driver changes:
  * Added `play_pitch` instruction (`P` MML command)
  * Added `play_noise` instruction (`N` MML command)
  * Added `disable_noise` instruction (`N-` MML command)
+ * Fixed EON when channels G & H are ducked and unducked
 
 
 

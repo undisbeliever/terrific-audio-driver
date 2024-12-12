@@ -276,6 +276,10 @@
     {
       "name": "volume_slide_down_bug",
       "source": "bug-tests/volume-slide-down-bug.mml"
+    },
+    {
+      "name": "noise_and_sfx_test",
+      "source": "bug-tests/noise-and-sfx-test.mml"
     }
   ]
 }
