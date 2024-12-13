@@ -309,9 +309,12 @@ impl<const M: u8> PanVolValue<M> {
         };
 
         if value <= Self::MAX_U32 {
+            let half_wavelength = u32::from(self.half_wavelength);
+
             self.value = value.to_le_bytes()[1];
             self.sub_value = value.to_le_bytes()[0];
-            self.counter = (position + quarter_wavelength).to_le_bytes()[0] % self.half_wavelength;
+            self.counter = (half_wavelength - (position + quarter_wavelength) % half_wavelength)
+                .to_le_bytes()[0];
             self.direction = direction;
         } else {
             self.value = if quadrant < 2 { Self::MAX } else { 0 };

@@ -20,6 +20,9 @@ MML changes:
 Bytecode assembly changes:
  * Allow 0 ticks before and after `skip_last_loop` instruction
 
+GUI changes:
+ * Fixed tremolo or panbrello when starting playback in the middle of a tremolo/panbrello effect
+
 
 Version 0.0.14
 ==============

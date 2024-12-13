@@ -95,6 +95,13 @@ impl bytecode_interpreter::Emulator for DummyEmu {
     }
 }
 
+fn mask_channel_soa(apuram: &[u8; 0x10000], addr: u16, mask: u16) -> [Option<u8>; N_CHANNELS] {
+    std::array::from_fn(|i| match apuram[usize::from(mask) + i] {
+        0 => None,
+        _ => Some(apuram[usize::from(addr) + i]),
+    })
+}
+
 fn assert_bc_intrepreter_matches_emu(
     to_test: &SongInterpreter<&CommonAudioData, &SongData>,
     dummy: &DummyEmu,
@@ -139,6 +146,13 @@ fn assert_bc_intrepreter_matches_emu(
         assert_eq!(
             int_apuram[range.clone()],
             emu_apuram[range],
+            "channelsSoA.{name} mismatch (tick_count: {tick_count})"
+        );
+    };
+    let test_masked_channel_soa = |addr: u16, name: &'static str, mask: u16| {
+        assert_eq!(
+            mask_channel_soa(int_apuram, addr, mask),
+            mask_channel_soa(emu_apuram, addr, mask),
             "channelsSoA.{name} mismatch (tick_count: {tick_count})"
         );
     };
@@ -205,8 +219,16 @@ fn assert_bc_intrepreter_matches_emu(
         addresses::CHANNEL_VOL_EFFECT_HALF_WAVELENGTH,
         "volEffect_halfWavelength",
     );
-    // Not testing subVolume, bc_iterpreter value is invalid on overflow
-    // Not testing volEffect_counter, bc_interpreter counter is invalid on overflow
+    test_masked_channel_soa(
+        addresses::CHANNEL_VOL_EFFECT_COUNTER,
+        "volEffect_counter",
+        addresses::CHANNEL_VOL_EFFECT_DIRECTION,
+    );
+    test_masked_channel_soa(
+        addresses::CHANNEL_SUB_VOLUME,
+        "subVolume",
+        addresses::CHANNEL_VOL_EFFECT_DIRECTION,
+    );
 
     test_channel_soa(addresses::CHANNEL_PAN, "pan");
     test_channel_soa(
@@ -219,8 +241,16 @@ fn assert_bc_intrepreter_matches_emu(
         addresses::CHANNEL_PAN_EFFECT_HALF_WAVELENGTH,
         "panEffect_halfWavelength",
     );
-    // Not testing subPan, bc_iterpreter value is invalid on overflow
-    // Not testing panEffect_counter, bc_interpreter counter is invalid on overflow
+    test_masked_channel_soa(
+        addresses::CHANNEL_PAN_EFFECT_COUNTER,
+        "panEffect_counter",
+        addresses::CHANNEL_PAN_EFFECT_DIRECTION,
+    );
+    test_masked_channel_soa(
+        addresses::CHANNEL_SUB_PAN,
+        "subPan",
+        addresses::CHANNEL_PAN_EFFECT_DIRECTION,
+    );
 
     // Not testing portamento
 
