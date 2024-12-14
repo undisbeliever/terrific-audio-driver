@@ -234,6 +234,10 @@
       "source": "mml-tests/panbrello.mml"
     },
     {
+      "name": "pitch_modulation",
+      "source": "mml-tests/pitch-modulation.mml"
+    },
+    {
       "name": "play_noise",
       "source": "mml-tests/play-noise.mml"
     },

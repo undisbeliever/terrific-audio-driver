@@ -135,6 +135,12 @@ fn assert_bc_intrepreter_matches_emu(
     );
 
     assert_eq!(
+        int_apuram[usize::from(addresses::PMON_SHADOW)],
+        emu_apuram[usize::from(addresses::PMON_SHADOW)],
+        "pmonShadow (tick_count: {tick_count})"
+    );
+
+    assert_eq!(
         int_apuram[usize::from(addresses::EON_SHADOW_MUSIC)],
         emu_apuram[usize::from(addresses::EON_SHADOW_MUSIC)],
         "eonShadow_music (tick_count: {tick_count})"

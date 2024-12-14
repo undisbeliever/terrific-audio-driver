@@ -94,6 +94,11 @@ Instructions
     * Panbrello is disabled when the pan is set or adjusted.
     * Panbrello is disabled on overflows and underflows.
 
+ * `enable_pmod` - Enable pitch modulation on this channel.
+   * Only channels B to F can be pitch modulated.
+   * Channels G & H cannot be pitch-modulated as they would conflict with sound-effect channel ducking.
+ * `disable_pmod` - Disable pitch modulation on this channel.
+
  * `enable_echo` - Enable echo on this channel.
  * `disable_echo` - Disable echo on this channel.
 

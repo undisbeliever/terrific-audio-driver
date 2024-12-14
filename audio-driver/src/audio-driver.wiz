@@ -153,6 +153,9 @@ in zeropage {
     var keyOnShadow_music : u8;
     var keyOnShadow_sfx : u8;
 
+    // Shadow variable for the PMON S-DSP register
+    var pmonShadow : u8;
+
     // Shadow variable for the EON S-DSP register
     var eonShadow_music : u8;
     var eonShadow_sfx : u8;
@@ -747,6 +750,8 @@ inline func __clear_echo_buffer__inline(esa : u8 in x) {
 inline func _process_music_channels__inline() {
     y = a = keyOffShadow_music & musicSfxChannelMask;
     write_dsp(GlobalDspAddr.KOFF, y);
+
+    write_dsp(GlobalDspAddr.PMON, pmonShadow);
 
     y = noiseFreq_music;
     if !negative {
@@ -2317,6 +2322,26 @@ func return_from_subroutine(channelIndex : u8 in x) {
     y = a;
     <:instructionPtr = a = (&bcStack[-2])[y];
     >:instructionPtr = a = (&bcStack[-1])[y];
+
+    ^return process_next_bytecode(x);
+}
+
+
+
+// KEEP: X
+func enable_pmod(channelIndex : u8 in x) {
+    a = ChannelVoiceBit[x] & ENABLE_PMOD_MASK;
+    test_and_set(a, pmonShadow);
+
+    ^return process_next_bytecode(x);
+}
+
+
+
+// KEEP: X
+func disable_pmod(channelIndex : u8 in x) {
+    a = ChannelVoiceBit[x];
+    test_and_clear(a, pmonShadow);
 
     ^return process_next_bytecode(x);
 }

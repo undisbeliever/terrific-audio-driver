@@ -6,7 +6,7 @@
 
 #![allow(clippy::assertions_on_constants)]
 
-use compiler::bytecode_assembler::BcTerminator;
+use compiler::bytecode_assembler::{BcTerminator, BytecodeContext};
 use compiler::data;
 use compiler::data::{Name, TextFile, UniqueNamesList};
 use compiler::driver_constants::{
@@ -4124,6 +4124,54 @@ A @1 GI5 @1
 }
 
 #[test]
+fn test_enable_pitch_mod() {
+    assert_channel_b_line_matches_bytecode("PM", &["enable_pmod"]);
+
+    assert_one_err_in_mml(
+        "A PM",
+        "A",
+        3,
+        BytecodeError::PmodNotAllowedInChannelA.into(),
+    );
+    assert_one_err_in_mml(
+        "G PM",
+        "G",
+        3,
+        BytecodeError::PmodNotAllowedInChannelsGH.into(),
+    );
+    assert_one_err_in_mml(
+        "H PM",
+        "H",
+        3,
+        BytecodeError::PmodNotAllowedInChannelsGH.into(),
+    );
+}
+
+#[test]
+fn test_disable_pitch_mod() {
+    assert_channel_b_line_matches_bytecode("PM0", &["disable_pmod"]);
+
+    assert_one_err_in_mml(
+        "A PM0",
+        "A",
+        3,
+        BytecodeError::PmodNotAllowedInChannelA.into(),
+    );
+    assert_one_err_in_mml(
+        "G PM0",
+        "G",
+        3,
+        BytecodeError::PmodNotAllowedInChannelsGH.into(),
+    );
+    assert_one_err_in_mml(
+        "H PM0",
+        "H",
+        3,
+        BytecodeError::PmodNotAllowedInChannelsGH.into(),
+    );
+}
+
+#[test]
 fn test_echo() {
     assert_line_matches_bytecode("E", &["enable_echo"]);
     assert_line_matches_bytecode("E1", &["enable_echo"]);
@@ -5004,6 +5052,7 @@ ADEF @0 a
         &dummy_data.instruments_and_samples,
         mml.subroutines(),
         BcTerminator::DisableChannel,
+        BytecodeContext::SongChannel(0),
     )
     .repeat(4);
 
@@ -5295,6 +5344,7 @@ ADEF \asm { set_instrument dummy_instrument | play_note a4 24 }
         &dummy_data.instruments_and_samples,
         mml.subroutines(),
         BcTerminator::DisableChannel,
+        BytecodeContext::SongChannel(0),
     )
     .repeat(4);
 
@@ -5586,6 +5636,19 @@ fn mml_bytecode(mml: &SongData) -> &[u8] {
     &song_data[start..end]
 }
 
+fn mml_channel_b_bytecode(mml: &SongData) -> &[u8] {
+    let song_data = mml.data();
+
+    let start: usize = mml.channels()[1].as_ref().unwrap().bytecode_offset.into();
+
+    let end = match &mml.channels()[2] {
+        Some(c) => c.bytecode_offset.into(),
+        None => song_data.len(),
+    };
+
+    &song_data[start..end]
+}
+
 fn assert_line_matches_bytecode(mml_line: &str, bc_asm: &[&str]) {
     let mml = ["@1 dummy_instrument\nA @1 o4\nA ", mml_line].concat();
     let bc_asm = [&["set_instrument dummy_instrument"], bc_asm].concat();
@@ -5598,10 +5661,33 @@ fn assert_line_matches_bytecode(mml_line: &str, bc_asm: &[&str]) {
         &dd.instruments_and_samples,
         &[],
         BcTerminator::DisableChannel,
+        BytecodeContext::SongChannel(0),
     );
 
     assert_eq!(
         mml_bytecode(&mml),
+        bc_asm,
+        "Testing {mml_line:?} against bytecode"
+    );
+}
+
+fn assert_channel_b_line_matches_bytecode(mml_line: &str, bc_asm: &[&str]) {
+    let mml = ["@1 dummy_instrument\nB @1 o4\nB ", mml_line].concat();
+    let bc_asm = [&["set_instrument dummy_instrument"], bc_asm].concat();
+
+    let dd = dummy_data();
+
+    let mml = compile_mml(&mml, &dd);
+    let bc_asm = assemble_channel_bytecode(
+        &bc_asm,
+        &dd.instruments_and_samples,
+        &[],
+        BcTerminator::DisableChannel,
+        BytecodeContext::SongChannel(1),
+    );
+
+    assert_eq!(
+        mml_channel_b_bytecode(&mml),
         bc_asm,
         "Testing {mml_line:?} against bytecode"
     );
@@ -5662,6 +5748,7 @@ fn assert_line_matches_line_and_bytecode(mml_line1: &str, mml_line2: &str, bc_as
         &dd.instruments_and_samples,
         &[],
         BcTerminator::DisableChannel,
+        BytecodeContext::SongChannel(0),
     );
 
     assert_eq!(mml1_bc, bc_asm, "Testing {mml_line1:?} against bytecode");
@@ -5677,6 +5764,7 @@ fn assert_mml_channel_a_matches_bytecode(mml: &str, bc_asm: &[&str]) {
         &dummy_data.instruments_and_samples,
         mml.subroutines(),
         BcTerminator::DisableChannel,
+        BytecodeContext::SongChannel(0),
     );
 
     assert_eq!(mml_bytecode(&mml), bc_asm);
@@ -5699,6 +5787,7 @@ fn assert_mml_channel_a_matches_looping_bytecode(mml: &str, bc_asm: &[&str]) {
         &dummy_data.instruments_and_samples,
         mml.subroutines(),
         BcTerminator::Goto(loop_point),
+        BytecodeContext::SongChannel(0),
     );
 
     assert_eq!(mml_bytecode(&mml), bc_asm);
@@ -5710,6 +5799,15 @@ fn assert_error_in_mml_line(mml_line: &str, line_char: u32, expected_error: Chan
 }
 
 fn assert_err_in_channel_a_mml(mml: &str, line_char: u32, expected_error: ChannelError) {
+    assert_one_err_in_mml(mml, "A", line_char, expected_error)
+}
+
+fn assert_one_err_in_mml(
+    mml: &str,
+    identifier: &str,
+    line_char: u32,
+    expected_error: ChannelError,
+) {
     let dummy_data = dummy_data();
 
     let r = mml::compile_mml(
@@ -5733,7 +5831,9 @@ fn assert_err_in_channel_a_mml(mml: &str, line_char: u32, expected_error: Channe
                 match c.errors.len() {
                     1 => {
                         let e = c.errors.first().unwrap();
-                        e.0.line_char() == line_char && e.1 == expected_error
+                        c.identifier.as_str() == identifier
+                            && e.0.line_char() == line_char
+                            && e.1 == expected_error
                     }
                     _ => false,
                 }
@@ -5745,7 +5845,7 @@ fn assert_err_in_channel_a_mml(mml: &str, line_char: u32, expected_error: Channe
     };
 
     if !valid {
-        panic!("expected a single {expected_error:?} error on line_char {line_char}\nInput: {mml:?}\nResult: {r:?}")
+        panic!("expected a single {expected_error:?} error on {identifier}, line_char {line_char}\nInput: {mml:?}\nResult: {r:?}")
     }
 }
 
@@ -5809,17 +5909,14 @@ fn assemble_channel_bytecode(
     inst_map: &UniqueNamesList<data::InstrumentOrSample>,
     subroutines: &[Subroutine],
     terminator: BcTerminator,
+    context: BytecodeContext,
 ) -> Vec<u8> {
     let subroutines = subroutines
         .iter()
         .map(|s| (s.identifier.as_str(), s.subroutine_id.clone()))
         .collect();
 
-    let mut bc = bytecode_assembler::BytecodeAssembler::new(
-        inst_map,
-        Some(&subroutines),
-        bytecode_assembler::BytecodeContext::SongChannel,
-    );
+    let mut bc = bytecode_assembler::BytecodeAssembler::new(inst_map, Some(&subroutines), context);
 
     for line in bc_asm {
         bc.parse_line(line).unwrap();

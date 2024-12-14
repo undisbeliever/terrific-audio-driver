@@ -215,7 +215,7 @@ pub fn test_sample_song(
     envelope: Option<Envelope>,
 ) -> Result<SongData, ChannelError> {
     let mut bc = Bytecode::new(
-        crate::bytecode::BytecodeContext::SongChannel,
+        crate::bytecode::BytecodeContext::SongChannel(0),
         sample_song_fake_instruments(),
         None,
     );

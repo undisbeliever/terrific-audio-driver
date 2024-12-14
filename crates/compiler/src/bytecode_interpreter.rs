@@ -25,6 +25,7 @@ use std::cmp::min;
 use std::ops::Deref;
 
 const MAX_PAN: u8 = Pan::MAX.as_u8();
+const PITCH_MOD_MASK: u8 = 0b00111110;
 
 /// Error advancing subroutine to the end of the pointer
 #[derive(Debug)]
@@ -41,6 +42,7 @@ struct VirtualChannel {
     temp_gain: u8,
 
     echo: bool,
+    pitch_mod: bool,
 }
 
 #[derive(Clone)]
@@ -407,6 +409,7 @@ pub struct ChannelState {
     pan: PanVolValue<MAX_PAN>,
 
     echo: bool,
+    pitch_mod: bool,
 
     // Not emulating pitch
     // Not emulating portamento
@@ -438,6 +441,7 @@ impl ChannelState {
             volume: PanVolValue::new(STARTING_VOLUME),
             pan: PanVolValue::new(Pan::CENTER.as_u8()),
             echo: false,
+            pitch_mod: false,
             vibrato_pitch_offset_per_tick: 0,
             vibrato_quarter_wavelength_in_ticks: 0,
         }
@@ -878,6 +882,9 @@ impl ChannelState {
             opcodes::ENABLE_ECHO => self.echo = true,
             opcodes::DISABLE_ECHO => self.echo = false,
 
+            opcodes::ENABLE_PMOD => self.pitch_mod = true,
+            opcodes::DISABLE_PMOD => self.pitch_mod = false,
+
             opcodes::DISABLE_CHANNEL => self.disable_channel(),
 
             _ => self.disable_channel(),
@@ -1258,6 +1265,7 @@ fn build_channel(
             adsr2_or_gain,
             temp_gain: c.temp_gain,
             echo: c.echo,
+            pitch_mod: c.pitch_mod,
         },
     }
 }
@@ -1313,6 +1321,7 @@ fn unused_channel(channel_index: usize) -> Channel {
             adsr2_or_gain: 0,
             temp_gain: 0,
             echo: false,
+            pitch_mod: false,
         },
     }
 }
@@ -1333,12 +1342,18 @@ pub trait Emulator {
 /// SAFETY: panics if the audio driver is not the paused state
 impl InterpreterOutput {
     fn write_to_emulator(&self, emu: &mut impl Emulator) {
+        let pmon_shadow: u8 = PITCH_MOD_MASK
+            & self
+                .channels
+                .iter()
+                .enumerate()
+                .fold(0, |acc, (i, c)| acc | (u8::from(c.dsp.pitch_mod) << i));
+
         let eon_shadow: u8 = self
             .channels
             .iter()
             .enumerate()
-            .map(|(i, c)| u8::from(c.dsp.echo) << i)
-            .sum();
+            .fold(0, |acc, (i, c)| acc | (u8::from(c.dsp.echo) << i));
 
         // write to apuram
         {
@@ -1379,6 +1394,7 @@ impl InterpreterOutput {
                 .driver_value(),
             );
 
+            apu_write(addresses::PMON_SHADOW, pmon_shadow);
             apu_write(addresses::EON_SHADOW_MUSIC, eon_shadow);
 
             for (channel_index, c) in self.channels.iter().enumerate() {

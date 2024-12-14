@@ -71,6 +71,7 @@ pub enum Token<'a> {
     SetAdsr,
     SetGain(GainMode),
     TempGain(GainMode),
+    PitchMod,
     Echo,
     SetSongTempo,
     SetSongTickClock,
@@ -406,7 +407,10 @@ fn next_token<'a>(scanner: &mut Scanner<'a>) -> Option<TokenWithPosition<'a>> {
         b'F' => one_ascii_token!(Token::GainModeF),
         b'I' => one_ascii_token!(Token::GainModeI),
 
-        b'P' => one_ascii_token!(Token::PlayPitch),
+        b'P' => match scanner.second_byte() {
+            Some(b'M') => two_ascii_token!(Token::PitchMod),
+            _ => one_ascii_token!(Token::PlayPitch),
+        },
 
         b'N' => {
             let c2 = scanner.second_byte();

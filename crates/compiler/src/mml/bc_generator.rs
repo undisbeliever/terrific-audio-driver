@@ -7,7 +7,7 @@
 use super::command_parser::{MmlCommandWithPos, Parser};
 use super::identifier::IdentifierStr;
 use super::tokenizer::MmlTokens;
-use super::{ChannelId, MmlSoundEffect, Section};
+use super::{ChannelId, MmlSoundEffect, Section, CHANNEL_NAMES};
 
 #[cfg(feature = "mml_tracking")]
 use super::note_tracking::CursorTracker;
@@ -311,10 +311,12 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
     pub fn parse_and_compile_song_channel(
         &mut self,
         tokens: MmlTokens,
-        identifier: IdentifierStr<'a>,
+        channel_index: usize,
     ) -> Result<Channel, MmlChannelError> {
+        let identifier = IdentifierStr::try_from_name(CHANNEL_NAMES[channel_index]).unwrap();
         assert!(identifier.as_str().len() == 1);
         let channel_char = identifier.as_str().chars().next().unwrap();
+        let channel_index = channel_index.try_into().unwrap();
 
         let song_data = std::mem::take(&mut self.song_data);
         let sd_start_index = song_data.len();
@@ -342,7 +344,7 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
             self.data_instruments,
             self.mml_instruments,
             Some(&self.subroutines),
-            BytecodeContext::SongChannel,
+            BytecodeContext::SongChannel(channel_index),
         );
 
         Self::parse_and_compile(

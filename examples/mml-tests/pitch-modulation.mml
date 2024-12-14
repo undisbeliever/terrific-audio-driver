@@ -1,0 +1,37 @@
+#Title Pitch Modulation Test
+#Tempo 120
+#ZenLen 192
+
+; All sounds in this example are made from the sine sample
+@sine sine adsr 13 2 5 5
+
+
+;; Example 1
+
+; Pitch modulation source.
+; OUTX (sample output * envelope) the modulation source for the next channel.
+; Changing Envelope adjusts the depth of the modulation.
+; Volume is set to 0 so channel A is not audible.
+A @sine GF50 v0      P$500,%480
+
+B @sine v16
+B @sine    c f e g r   ; without pitch mod
+B @sine PM c f e g r   ; with pitch mod
+C w%480
+
+
+;; Example 2
+;
+; Pitch-mod with linear increase envelope
+A @sine GI15   v0     o3 g & c & f & e & r
+B @sine       v16 PM  o4 c   f   e   g  r
+C w%240
+
+
+;; Example 3
+;
+; A pitch modulated channel can be used as a pitch modulation source
+A @sine GF40   v0    o2 c   ^   ^   ^   r
+B @sine GF80   v0 PM o5 g & c & f & e & r
+C @sine       v16 PM o4 c   f   e   g   r
+

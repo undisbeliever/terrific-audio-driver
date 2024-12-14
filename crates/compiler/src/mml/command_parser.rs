@@ -1647,6 +1647,15 @@ fn parse_temp_gain(pos: FilePos, mode: GainMode, p: &mut Parser) -> Command {
     }
 }
 
+fn parse_pitch_mod(pos: FilePos, p: &mut Parser) -> Command {
+    match_next_token!(p,
+        Token::Number(0) => Command::DisablePitchMod,
+        Token::Number(1) => Command::EnablePitchMod,
+        Token::Number(_) => invalid_token_error(p, pos, ValueError::InvalidMmlBool.into()),
+        #_ => Command::EnablePitchMod
+    )
+}
+
 fn parse_echo(pos: FilePos, p: &mut Parser) -> Command {
     match_next_token!(p,
         Token::Number(0) => Command::SetEcho(false),
@@ -1760,6 +1769,7 @@ fn parse_token(pos: FilePos, token: Token, p: &mut Parser) -> Command {
 
         Token::SetLoopPoint => Command::SetLoopPoint,
 
+        Token::PitchMod => parse_pitch_mod(pos, p),
         Token::Echo => parse_echo(pos, p),
 
         Token::SetSongTempo => match parse_unsigned_newtype(pos, p) {

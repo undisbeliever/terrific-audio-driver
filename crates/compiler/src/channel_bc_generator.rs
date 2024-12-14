@@ -256,6 +256,8 @@ pub(crate) enum Command {
     PanSlide(PanSlideAmount, PanSlideTicks),
     Panbrello(PanbrelloAmplitude, PanbrelloQuarterWavelengthInTicks),
 
+    EnablePitchMod,
+    DisablePitchMod,
     SetEcho(bool),
 
     SetSongTempo(Bpm),
@@ -1193,7 +1195,7 @@ impl<'a> ChannelBcGenerator<'a> {
             Command::None => (),
 
             &Command::SetLoopPoint => match self.bc.get_context() {
-                BytecodeContext::SongChannel => {
+                BytecodeContext::SongChannel(_) => {
                     if self.loop_point.is_some() {
                         return Err(ChannelError::LoopPointAlreadySet);
                     }
@@ -1422,6 +1424,13 @@ impl<'a> ChannelBcGenerator<'a> {
 
             &Command::Panbrello(amplitude, quarter_wavelength_ticks) => {
                 self.bc.panbrello(amplitude, quarter_wavelength_ticks);
+            }
+
+            Command::EnablePitchMod => {
+                self.bc.enable_pmod()?;
+            }
+            Command::DisablePitchMod => {
+                self.bc.disable_pmod()?;
             }
 
             &Command::SetEcho(e) => {

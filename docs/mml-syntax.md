@@ -411,6 +411,16 @@ Numbers can be decimal, or hexadecimal when prefixed with `$` (ie, `$ff`)
 
 <br/>
 
+ * `PM` - enable pitch modulation
+   * The previous channel's OUTX (sample * envelope) value is used as the pitch modulation source.
+   * Only channels B to F can be pitch modulated.
+   * Channels G & H cannot be pitch-modulated as they would conflict with sound-effect channel ducking.
+   * CAUTION: tad-gui's Play song from cursor feature cannot accurately emulate pmod.
+     (The rust bytecode interpreter does not emulate key-on or envelopes.)
+ * `PM0` - disable pitch modulation
+
+<br/>
+
  * `\asm { <asm_code> }` - bytecode assembly
     * Instructions can be separated by `|` dividers or newlines.
     * Loops inside `\asm` blocks must be self-contained.

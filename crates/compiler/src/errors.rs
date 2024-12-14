@@ -283,6 +283,10 @@ pub enum BytecodeError {
     MissingEndLoopInAsmBlock,
     CannotModifyLoopOutsideAsmBlock,
     MissingStartLoopInAsmBlock,
+
+    PmodNotAllowedInChannelA,
+    PmodNotAllowedInChannelsGH,
+    PmodNotAllowedInSoundEffect,
 }
 
 #[derive(Debug)]
@@ -1172,6 +1176,14 @@ impl Display for BytecodeError {
                     f,
                     r"missing start_loop in \asm block (loops inside \asm blocks must be self-contained)"
                 )
+            }
+
+            Self::PmodNotAllowedInChannelA => write!(f, "cannot enable pitch mod on channel A"),
+            Self::PmodNotAllowedInChannelsGH => {
+                write!(f, "cannot enable pitch mod on channels G or H")
+            }
+            Self::PmodNotAllowedInSoundEffect => {
+                write!(f, "pitch mod is not allowed in a sound effect")
             }
         }
     }

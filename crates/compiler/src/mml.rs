@@ -194,9 +194,7 @@ pub fn compile_mml(
     let channels = std::array::from_fn(|c_index| {
         let tokens = channels_iter.next().unwrap();
         if !tokens.is_empty() {
-            let c_id = IdentifierStr::try_from_name(CHANNEL_NAMES[c_index]).unwrap();
-
-            match compiler.parse_and_compile_song_channel(tokens, c_id) {
+            match compiler.parse_and_compile_song_channel(tokens, c_index) {
                 Ok(data) => Some(data),
                 Err(e) => {
                     errors.channel_errors.push(e);
