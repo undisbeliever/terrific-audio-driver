@@ -1,0 +1,7 @@
+; Minimal repoducable bugtest of a rust bytecode interpreter
+; timer mismatch when 2 channels want to change the timer.
+;
+; Reported by KungFuFurby
+
+A r4 t150 r1
+B r8 t110 r1

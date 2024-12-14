@@ -1024,27 +1024,41 @@ where
         &self.channels
     }
 
-    /// Return the channel with the smallest tick-counter and the tick-counter of the next smallest channel
+    /// Return the channel with the smallest tick-counter and the tick-counter to execute to
     fn next_channel_to_process(
         channels: &mut [Option<ChannelState>; N_MUSIC_CHANNELS],
         target_ticks: TickCounter,
     ) -> Option<(&mut ChannelState, TickCounter)> {
-        // ::SHOULDDO optimise (profile before and after)::
+        // ::TODO optimise (profile before and after)::
 
-        let mut out = None;
+        let mut iter = channels.iter_mut().flatten();
 
-        for c in channels.iter_mut().flatten() {
-            match out {
-                None => out = Some((c, TickCounter::MAX)),
-                Some(ref o) => {
-                    if c.ticks < o.0.ticks {
-                        out = Some((c, o.0.ticks))
-                    }
-                }
+        let mut smallest = iter.next()?;
+        let mut second_smallest_ticks = TickCounter::new(u32::MAX - 1);
+
+        if let Some(c) = iter.next() {
+            second_smallest_ticks = c.ticks;
+            if c.ticks < smallest.ticks {
+                second_smallest_ticks = smallest.ticks;
+                smallest = c;
             }
         }
 
-        out.filter(|c| c.0.ticks < target_ticks)
+        for c in iter {
+            if c.ticks < smallest.ticks {
+                second_smallest_ticks = smallest.ticks;
+                smallest = c;
+            }
+        }
+
+        if smallest.ticks < target_ticks {
+            Some((
+                smallest,
+                min(second_smallest_ticks + TickCounter::new(1), target_ticks),
+            ))
+        } else {
+            None
+        }
     }
 
     /// Returns false if there was a timeout
@@ -1059,7 +1073,7 @@ where
         while let Some((c, next_channel_ticks)) =
             Self::next_channel_to_process(&mut self.channels, target_ticks)
         {
-            let next_channel_ticks = min(next_channel_ticks, target_ticks);
+            debug_assert!(next_channel_ticks <= target_ticks);
 
             while c.ticks < next_channel_ticks {
                 c.process_next_bytecode(&mut self.global, song_data);
