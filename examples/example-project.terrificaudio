@@ -288,6 +288,10 @@
     {
       "name": "two_channels_modify_timer",
       "source": "bug-tests/two-channels-modify-timer.mml"
+    },
+    {
+      "name": "early_release_and_temp_gain",
+      "source": "bc-interpreter-tests/early-release-and-temp-gain.mml"
     }
   ]
 }

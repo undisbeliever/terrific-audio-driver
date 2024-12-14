@@ -179,26 +179,7 @@ fn assert_bc_intrepreter_matches_emu(
         addresses::CHANNEL_VC_ADSR2_OR_GAIN,
         "virtualChannels.adsr2OrGain",
     );
-
-    // Bytecode intrepreter clears temp gain **at the start** of the rest instructions.
-    // Only testing temp-gain if the interpreter data is non-zero.
-    {
-        let addr = usize::from(addresses::CHANNEL_VC_TEMP_GAIN);
-        let range = addr..addr + N_CHANNELS;
-
-        let mut int_data: [u8; N_CHANNELS] = int_apuram[range.clone()].try_into().unwrap();
-        let emu_data: [u8; N_CHANNELS] = emu_apuram[range].try_into().unwrap();
-
-        for i in 0..N_CHANNELS {
-            if int_data[i] == 0 {
-                int_data[i] = emu_data[i]
-            }
-        }
-        assert_eq!(
-            int_data, emu_data,
-            "channelsSoA.virtualChannels.tempGain mismatch (tick_count: {tick_count})"
-        );
-    }
+    test_channel_soa(addresses::CHANNEL_VC_TEMP_GAIN, "virtualChannels.tempGain");
 
     test_channel_soa_ptrs(
         addresses::CHANNEL_INSTRUCTION_PTR_L,

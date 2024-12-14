@@ -372,6 +372,7 @@ impl<const M: u8> PanVolValue<M> {
     }
 }
 
+#[derive(Debug)]
 pub struct ChannelState {
     ticks: TickCounter,
     disabled: bool,
@@ -405,6 +406,9 @@ pub struct ChannelState {
     early_release_min_ticks: u8,
     early_release_gain: u8,
 
+    next_event_is_key_off: bool,
+    note_time: TickCounter,
+
     volume: PanVolValue<0xff>,
     pan: PanVolValue<MAX_PAN>,
 
@@ -432,6 +436,8 @@ impl ChannelState {
             loop_stack_pointer: BC_CHANNEL_STACK_SIZE - BC_STACK_BYTES_PER_LOOP,
             bc_stack: Default::default(),
             instrument: None,
+            next_event_is_key_off: false,
+            note_time: TickCounter::new(0),
             adsr_or_gain_override: Some((0, 0)),
             temp_gain: 0,
             prev_temp_gain: 0,
@@ -459,11 +465,13 @@ impl ChannelState {
         u16::from_le_bytes([l, h])
     }
 
-    fn to_tick_count(length: u8, key_off: bool) -> TickCounter {
+    fn increment_tick_count(&mut self, length: u8, key_off: bool) {
+        self.next_event_is_key_off = key_off;
+
         if length > 0 {
-            TickCounter::new(u32::from(length) + u32::from(key_off))
+            self.ticks += TickCounter::new(u32::from(length) + u32::from(key_off));
         } else {
-            TickCounter::new(0x100 + u32::from(key_off))
+            self.ticks += TickCounter::new(0x100 + u32::from(key_off));
         }
     }
 
@@ -478,11 +486,8 @@ impl ChannelState {
     fn play_note(&mut self, note_and_key_off_bit: u8, length: u8) {
         let key_off = note_and_key_off_bit & 1 == 1;
 
-        self.ticks += Self::to_tick_count(length, key_off);
-
-        if key_off {
-            self.temp_gain = 0;
-        }
+        self.note_time = self.ticks;
+        self.increment_tick_count(length, key_off);
     }
 
     fn call_subroutine(&mut self, s_id: u8, song_data: &[u8]) {
@@ -534,6 +539,13 @@ impl ChannelState {
     }
 
     fn process_next_bytecode(&mut self, global: &mut GlobalState, song_data: &[u8]) {
+        if self.next_event_is_key_off {
+            // Temp gain is reset on key-off
+            self.temp_gain = 0;
+
+            self.next_event_is_key_off = false;
+        }
+
         let mut read_pc = || match song_data.get(usize::from(self.instruction_ptr)) {
             Some(b) => {
                 self.instruction_ptr += 1;
@@ -580,12 +592,11 @@ impl ChannelState {
 
             opcodes::WAIT => {
                 let to_rest = read_pc();
-                self.ticks += Self::to_tick_count(to_rest, false);
+                self.increment_tick_count(to_rest, false);
             }
             opcodes::REST => {
                 let to_rest = read_pc();
-                self.ticks += Self::to_tick_count(to_rest, true);
-                self.temp_gain = 0;
+                self.increment_tick_count(to_rest, true);
             }
 
             opcodes::PLAY_PITCH => {
@@ -595,7 +606,7 @@ impl ChannelState {
 
                 let key_off = (pitch_h_and_keyoff & 1) == 1;
 
-                self.ticks += Self::to_tick_count(length, key_off);
+                self.increment_tick_count(length, key_off);
             }
 
             opcodes::PLAY_NOISE => {
@@ -604,7 +615,7 @@ impl ChannelState {
 
                 let key_off = (freq_and_keyoff & 1) == 1;
 
-                self.ticks += Self::to_tick_count(length, key_off);
+                self.increment_tick_count(length, key_off);
             }
 
             opcodes::DISABLE_NOISE => {}
@@ -648,10 +659,9 @@ impl ChannelState {
                 let temp_gain = read_pc();
                 let to_rest = read_pc();
 
+                self.temp_gain = temp_gain;
                 self.prev_temp_gain = temp_gain;
-                self.ticks += Self::to_tick_count(to_rest, true);
-                // Temp gain is reset on key-off
-                self.temp_gain = 0;
+                self.increment_tick_count(to_rest, true);
             }
 
             opcodes::SET_TEMP_GAIN_AND_WAIT => {
@@ -660,7 +670,7 @@ impl ChannelState {
 
                 self.temp_gain = temp_gain;
                 self.prev_temp_gain = temp_gain;
-                self.ticks += Self::to_tick_count(to_rest, false);
+                self.increment_tick_count(to_rest, false);
             }
 
             opcodes::REUSE_TEMP_GAIN => {
@@ -669,15 +679,14 @@ impl ChannelState {
             opcodes::REUSE_TEMP_GAIN_AND_REST => {
                 let to_rest = read_pc();
 
-                self.ticks += Self::to_tick_count(to_rest, true);
-                // Temp gain is reset on key-off
-                self.temp_gain = 0;
+                self.temp_gain = self.prev_temp_gain;
+                self.increment_tick_count(to_rest, true);
             }
             opcodes::REUSE_TEMP_GAIN_AND_WAIT => {
                 let to_rest = read_pc();
 
                 self.temp_gain = self.prev_temp_gain;
-                self.ticks += Self::to_tick_count(to_rest, false);
+                self.increment_tick_count(to_rest, false);
             }
 
             opcodes::SET_EARLY_RELEASE => {
@@ -1181,11 +1190,13 @@ fn build_channel(
         false => c.ticks.value() - target_ticks.value(),
     };
 
-    let (countdown_timer, next_event_is_key_off) = match delay {
-        0..=0xfe => (u8::try_from(delay + 1).unwrap(), 0),
-        0xff => (0, 0),
-        0x100 => (0, 0xff),
-        _ => panic!("Invalid ChannelInterpreter.ticks value (delay: {})", delay),
+    let (countdown_timer, next_event_is_key_off) = match (c.next_event_is_key_off, delay) {
+        (_, 0) => (1, 0),
+        (false, 1..=0xfe) => (u8::try_from(delay + 1).unwrap(), 0),
+        (false, 0xff) => (0, 0),
+        (true, 1..=0xff) => (u8::try_from(delay).unwrap(), 0xff),
+        (true, 0x100) => (0, 0xff),
+        _ => panic!("Invalid ChannelState.ticks value (delay: {})", delay),
     };
 
     let (inst_pitch_offset, scrn, inst_adsr_or_gain) = match c.instrument {
@@ -1206,6 +1217,18 @@ fn build_channel(
     let (adsr1, adsr2_or_gain) = match c.adsr_or_gain_override {
         Some((a1, a2)) => (a1, a2),
         None => inst_adsr_or_gain,
+    };
+
+    let temp_gain = if delay == 0 && c.next_event_is_key_off {
+        0
+    } else if c.early_release_gain != 0
+        && c.next_event_is_key_off
+        && (target_ticks.value() - c.note_time.value()) > u32::from(c.early_release_min_ticks)
+        && delay < u32::from(c.early_release_cmp)
+    {
+        c.early_release_gain
+    } else {
+        c.temp_gain
     };
 
     let volume_soa = c.volume.as_soa();
@@ -1263,7 +1286,7 @@ fn build_channel(
             scrn,
             adsr1,
             adsr2_or_gain,
-            temp_gain: c.temp_gain,
+            temp_gain,
             echo: c.echo,
             pitch_mod: c.pitch_mod,
         },

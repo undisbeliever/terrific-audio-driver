@@ -1,0 +1,29 @@
+; bc_interpreter test for early release and temp gain
+
+#Timer 64
+#ZenLen 192
+
+@1 square adsr 10 2 4 5
+
+A @1 o4
+
+; Testing early-release and temp-gain is handled correctly
+A q48         GIT15 c%64
+A q48,D5      GIT15 c%64
+A q200,200,D5 GIT15 c%64 c%250
+
+; Testing early-release on long notes
+A q48         GET20 c%512
+A q48,D5      GET20 c%512
+A q200,200,D5 GET20 c%300 c%900
+
+; Testing early-release and temp-gain is handled correctly for long notes
+A q48         GIT25 c%512
+A q48,D5      GIT25 c%512
+A q200,200,D5 GIT25 c%300 c%900
+
+; Testing early-release and temp-gain is handled correctly for long notes
+A q48         GET30 c%512
+A q48,D5      GET30 c%512
+A q200,200,D5 GET30 c%300 c%900
+
