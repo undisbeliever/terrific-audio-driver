@@ -35,11 +35,16 @@ pub struct SongSubroutineError;
 struct VirtualChannel {
     vol_l: u8,
     vol_r: u8,
-    // Not emulating pitch (all key-on bytecode instructions set the pitch)
+    // pitch is not fully emulated
+    pitch_l: u8,
+    pitch_h: u8,
     scrn: u8,
     adsr1: u8,
     adsr2_or_gain: u8,
     temp_gain: u8,
+
+    /// Only set if the channel is a PMON source.
+    key_on: bool,
 
     echo: bool,
     pitch_mod: bool,
@@ -373,6 +378,23 @@ impl<const M: u8> PanVolValue<M> {
 }
 
 #[derive(Debug)]
+enum ChannelNote {
+    None,
+    PlayNote {
+        note_opcode: u8,
+        instrument: Option<u8>,
+    },
+    PlayPitch(u16),
+
+    // Not emulating pitch-effects
+    // It's too much work (effort and CPU time) for very little gain.
+    Portamento {
+        target_opcode: u8,
+        instrument: Option<u8>,
+    },
+}
+
+#[derive(Debug)]
 pub struct ChannelState {
     ticks: TickCounter,
     disabled: bool,
@@ -407,6 +429,7 @@ pub struct ChannelState {
     early_release_gain: u8,
 
     next_event_is_key_off: bool,
+    note: ChannelNote,
     note_time: TickCounter,
 
     volume: PanVolValue<0xff>,
@@ -437,6 +460,7 @@ impl ChannelState {
             bc_stack: Default::default(),
             instrument: None,
             next_event_is_key_off: false,
+            note: ChannelNote::None,
             note_time: TickCounter::new(0),
             adsr_or_gain_override: Some((0, 0)),
             temp_gain: 0,
@@ -540,6 +564,8 @@ impl ChannelState {
 
     fn process_next_bytecode(&mut self, global: &mut GlobalState, song_data: &[u8]) {
         if self.next_event_is_key_off {
+            self.note = ChannelNote::None;
+
             // Temp gain is reset on key-off
             self.temp_gain = 0;
 
@@ -560,8 +586,12 @@ impl ChannelState {
         let opcode: u8 = read_pc();
 
         match opcode {
-            opcodes::FIRST_PLAY_NOTE_INSTRUCTION.. => {
+            note_opcode @ opcodes::FIRST_PLAY_NOTE_INSTRUCTION.. => {
                 let length = read_pc();
+                self.note = ChannelNote::PlayNote {
+                    note_opcode,
+                    instrument: self.instrument,
+                };
                 self.play_note(opcode, length);
             }
 
@@ -570,6 +600,11 @@ impl ChannelState {
                 let _portamento_speed = read_pc();
                 let wait_length = read_pc();
                 let note_and_key_off_bit = read_pc();
+
+                self.note = ChannelNote::Portamento {
+                    target_opcode: note_and_key_off_bit,
+                    instrument: self.instrument,
+                };
 
                 self.play_note(note_and_key_off_bit, wait_length);
             }
@@ -583,11 +618,16 @@ impl ChannelState {
             }
             opcodes::SET_VIBRATO_DEPTH_AND_PLAY_NOTE => {
                 let depth = read_pc();
-                let note = read_pc();
+                let note_opcode = read_pc();
                 let length = read_pc();
 
+                self.note = ChannelNote::PlayNote {
+                    note_opcode,
+                    instrument: self.instrument,
+                };
+
                 self.vibrato_pitch_offset_per_tick = depth;
-                self.play_note(note, length);
+                self.play_note(note_opcode, length);
             }
 
             opcodes::WAIT => {
@@ -600,11 +640,14 @@ impl ChannelState {
             }
 
             opcodes::PLAY_PITCH => {
-                let _pitch_l = read_pc();
+                let pitch_l = read_pc();
                 let pitch_h_and_keyoff = read_pc();
                 let length = read_pc();
 
                 let key_off = (pitch_h_and_keyoff & 1) == 1;
+
+                self.note =
+                    ChannelNote::PlayPitch(u16::from_le_bytes([pitch_l, pitch_h_and_keyoff >> 1]));
 
                 self.increment_tick_count(length, key_off);
             }
@@ -943,6 +986,77 @@ impl ChannelState {
 
         Some(c)
     }
+
+    /// Returns instruction_size if instruction does not sleep, branch or disable the channel.
+    fn instruction_size_if_not_sleep_nor_branch(opcode: u8) -> Option<usize> {
+        match opcode {
+            opcodes::FIRST_PLAY_NOTE_INSTRUCTION.. => None,
+            opcodes::PORTAMENTO_DOWN | opcodes::PORTAMENTO_UP => None,
+            opcodes::SET_VIBRATO => Some(3),
+            opcodes::SET_VIBRATO_DEPTH_AND_PLAY_NOTE => None,
+            opcodes::WAIT => None,
+            opcodes::REST => None,
+            opcodes::PLAY_PITCH => None,
+            opcodes::PLAY_NOISE => None,
+            opcodes::DISABLE_NOISE => Some(1),
+            opcodes::SET_INSTRUMENT => Some(2),
+            opcodes::SET_INSTRUMENT_AND_ADSR_OR_GAIN => Some(4),
+            opcodes::SET_ADSR => Some(3),
+            opcodes::SET_GAIN => Some(2),
+            opcodes::SET_TEMP_GAIN => Some(2),
+            opcodes::SET_TEMP_GAIN_AND_REST => None,
+            opcodes::SET_TEMP_GAIN_AND_WAIT => None,
+            opcodes::REUSE_TEMP_GAIN => Some(1),
+            opcodes::REUSE_TEMP_GAIN_AND_REST => None,
+            opcodes::REUSE_TEMP_GAIN_AND_WAIT => None,
+            opcodes::SET_EARLY_RELEASE => Some(4),
+            opcodes::SET_EARLY_RELEASE_NO_MINIMUM => Some(3),
+            opcodes::ADJUST_PAN => Some(2),
+            opcodes::SET_PAN => Some(2),
+            opcodes::SET_PAN_AND_VOLUME => Some(3),
+            opcodes::ADJUST_VOLUME => Some(2),
+            opcodes::SET_VOLUME => Some(2),
+            opcodes::VOLUME_SLIDE_UP => Some(4),
+            opcodes::VOLUME_SLIDE_DOWN => Some(4),
+            opcodes::TREMOLO => Some(4),
+            opcodes::PAN_SLIDE_UP => Some(4),
+            opcodes::PAN_SLIDE_DOWN => Some(4),
+            opcodes::PANBRELLO => Some(4),
+            opcodes::SET_SONG_TICK_CLOCK => Some(2),
+            opcodes::GOTO_RELATIVE => None,
+            opcodes::START_LOOP => Some(2),
+            opcodes::SKIP_LAST_LOOP => Some(2),
+            opcodes::END_LOOP => None,
+            opcodes::CALL_SUBROUTINE_AND_DISABLE_VIBRATO => None,
+            opcodes::CALL_SUBROUTINE => None,
+            opcodes::RETURN_FROM_SUBROUTINE_AND_DISABLE_VIBRATO => None,
+            opcodes::ENABLE_ECHO => Some(1),
+            opcodes::DISABLE_ECHO => Some(1),
+            opcodes::ENABLE_PMOD => Some(1),
+            opcodes::DISABLE_PMOD => Some(1),
+            opcodes::DISABLE_CHANNEL => None,
+
+            _ => None,
+        }
+    }
+
+    fn is_pitch_mod(&self, song_data: &[u8]) -> bool {
+        let mut instruction_ptr: usize = self.instruction_ptr.into();
+
+        loop {
+            let next_instruction = song_data.get(instruction_ptr).copied();
+
+            match next_instruction {
+                Some(opcodes::ENABLE_PMOD) => return true,
+                Some(opcodes::DISABLE_PMOD) => return false,
+                Some(opcode) => match Self::instruction_size_if_not_sleep_nor_branch(opcode) {
+                    Some(length) => instruction_ptr += length,
+                    None => return self.pitch_mod,
+                },
+                None => return self.pitch_mod,
+            }
+        }
+    }
 }
 
 pub struct SongInterpreter<CAD, SD>
@@ -1125,7 +1239,14 @@ where
 
         let o = InterpreterOutput {
             channels: std::array::from_fn(|i| match &self.channels[i] {
-                Some(c) => build_channel(i, c, self.tick_counter, &common),
+                Some(c) => {
+                    let pmon_source = match self.channels.get(i + 1) {
+                        Some(Some(c)) => c.is_pitch_mod(self.song_data.data()),
+                        _ => false,
+                    };
+
+                    build_channel(i, c, self.tick_counter, &common, pmon_source)
+                }
                 None => unused_channel(i),
             }),
             tick_clock: self.global.timer_register,
@@ -1148,6 +1269,9 @@ struct CommonAudioDataSoA<'a> {
     instruments_pitch_offset: &'a [u8],
     instruments_adsr1: &'a [u8],
     instruments_adsr2_or_gain: &'a [u8],
+
+    pitch_table_l: &'a [u8],
+    pitch_table_h: &'a [u8],
 }
 
 impl CommonAudioDataSoA<'_> {
@@ -1162,6 +1286,8 @@ impl CommonAudioDataSoA<'_> {
             &c.instruments_soa_data()[start..end]
         };
 
+        let pitch_table = c.pitch_table_data();
+
         let n_instruments = c.n_instruments_and_samples().try_into().unwrap();
 
         CommonAudioDataSoA {
@@ -1172,6 +1298,27 @@ impl CommonAudioDataSoA<'_> {
             instruments_pitch_offset: inst_soa_data(1),
             instruments_adsr1: inst_soa_data(2),
             instruments_adsr2_or_gain: inst_soa_data(3),
+            pitch_table_l: pitch_table.0,
+            pitch_table_h: pitch_table.1,
+        }
+    }
+
+    fn pitch_table_entry(&self, note_opcode: u8, instrument: Option<u8>) -> (u8, u8) {
+        match instrument {
+            Some(i) => {
+                let i: usize = self
+                    .instruments_pitch_offset
+                    .get(usize::from(i))
+                    .copied()
+                    .unwrap_or(0)
+                    .wrapping_add(note_opcode >> 1)
+                    .into();
+                (
+                    self.pitch_table_l.get(i).copied().unwrap_or(0),
+                    self.pitch_table_h.get(i).copied().unwrap_or(0),
+                )
+            }
+            None => (0, 0),
         }
     }
 }
@@ -1181,6 +1328,7 @@ fn build_channel(
     c: &ChannelState,
     target_ticks: TickCounter,
     common: &CommonAudioDataSoA,
+    pmon_source: bool,
 ) -> Channel {
     assert_eq!(c.song_ptr, common.song_data_addr);
 
@@ -1212,6 +1360,39 @@ fn build_channel(
             )
         }
         None => (0, 0, (0, 0)),
+    };
+
+    let (pitch_l, pitch_h) = match c.note {
+        ChannelNote::None => (0, 0),
+        ChannelNote::PlayNote {
+            instrument: None, ..
+        } => (0, 0),
+        ChannelNote::PlayNote {
+            note_opcode,
+            instrument,
+        } => common.pitch_table_entry(note_opcode, instrument),
+        ChannelNote::Portamento {
+            target_opcode,
+            instrument,
+        } => common.pitch_table_entry(target_opcode, instrument),
+        ChannelNote::PlayPitch(p) => p.to_le_bytes().into(),
+    };
+
+    let key_on = if pmon_source {
+        match c.note {
+            ChannelNote::None => false,
+            ChannelNote::PlayNote { .. }
+            | ChannelNote::PlayPitch(..)
+            | ChannelNote::Portamento { .. } => {
+                if c.next_event_is_key_off {
+                    delay > 1
+                } else {
+                    true
+                }
+            }
+        }
+    } else {
+        false
     };
 
     let (adsr1, adsr2_or_gain) = match c.adsr_or_gain_override {
@@ -1283,10 +1464,13 @@ fn build_channel(
                 true => (u16::from(volume) * u16::from(pan)).to_le_bytes()[1],
                 false => volume >> 2,
             },
+            pitch_l,
+            pitch_h,
             scrn,
             adsr1,
             adsr2_or_gain,
             temp_gain,
+            key_on,
             echo: c.echo,
             pitch_mod: c.pitch_mod,
         },
@@ -1339,10 +1523,13 @@ fn unused_channel(channel_index: usize) -> Channel {
         dsp: VirtualChannel {
             vol_l: STARTING_VOLUME >> 2,
             vol_r: STARTING_VOLUME >> 2,
+            pitch_l: 0,
+            pitch_h: 0,
             scrn: 0,
             adsr1: 0,
             adsr2_or_gain: 0,
             temp_gain: 0,
+            key_on: false,
             echo: false,
             pitch_mod: false,
         },
@@ -1365,12 +1552,18 @@ pub trait Emulator {
 /// SAFETY: panics if the audio driver is not the paused state
 impl InterpreterOutput {
     fn write_to_emulator(&self, emu: &mut impl Emulator) {
-        let pmon_shadow: u8 = PITCH_MOD_MASK
-            & self
-                .channels
-                .iter()
-                .enumerate()
-                .fold(0, |acc, (i, c)| acc | (u8::from(c.dsp.pitch_mod) << i));
+        let key_on_shadow: u8 = self
+            .channels
+            .iter()
+            .enumerate()
+            .fold(0, |acc, (i, c)| acc | (u8::from(c.dsp.key_on) << i));
+
+        let pmon_shadow: u8 = self
+            .channels
+            .iter()
+            .enumerate()
+            .fold(0, |acc, (i, c)| acc | (u8::from(c.dsp.pitch_mod) << i))
+            & PITCH_MOD_MASK;
 
         let eon_shadow: u8 = self
             .channels
@@ -1417,6 +1610,9 @@ impl InterpreterOutput {
                 .driver_value(),
             );
 
+            apu_write(addresses::VOICE_CHANNELS_DIRTY_MUSIC, 0xff);
+
+            apu_write(addresses::KEYON_SHADOW_MUSIC, key_on_shadow);
             apu_write(addresses::PMON_SHADOW, pmon_shadow);
             apu_write(addresses::EON_SHADOW_MUSIC, eon_shadow);
 
@@ -1508,7 +1704,8 @@ impl InterpreterOutput {
                 // Virtual channels
                 soa_write_u8(addresses::CHANNEL_VC_VOL_L, vc.vol_l);
                 soa_write_u8(addresses::CHANNEL_VC_VOL_R, vc.vol_r);
-                // Not interpreting pitch
+                soa_write_u8(addresses::CHANNEL_VC_PITCH_L, vc.pitch_l);
+                soa_write_u8(addresses::CHANNEL_VC_PITCH_H, vc.pitch_h);
                 soa_write_u8(addresses::CHANNEL_VC_SCRN, vc.scrn);
                 soa_write_u8(addresses::CHANNEL_VC_ADSR1, vc.adsr1);
                 soa_write_u8(addresses::CHANNEL_VC_ADSR2_OR_GAIN, vc.adsr2_or_gain);
@@ -1531,5 +1728,48 @@ impl InterpreterOutput {
         }
 
         emu.write_smp_register(S_SMP_TIMER_0_REGISTER, self.tick_clock);
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::{ChannelState, GlobalState};
+    use crate::{
+        driver_constants::SONG_HEADER_SIZE,
+        time::{TickClock, TickCounter},
+    };
+
+    #[test]
+    fn test_instruction_size_if_not_sleep_nor_branch() {
+        let mut bytecode = [128; 32];
+        assert!(bytecode.len() > SONG_HEADER_SIZE);
+
+        for opcode in u8::MIN..u8::MAX {
+            bytecode[0] = opcode;
+
+            let mut global = GlobalState::new(TickClock::MAX);
+            let mut cs = ChannelState::new(None, 0);
+            cs.ticks = TickCounter::new(0);
+            cs.instruction_ptr = 0;
+            // Set stack counter to force a branch outside `bytecode` for the `end_loop` instruction
+            cs.bc_stack.iter_mut().for_each(|s| *s = 10);
+
+            cs.process_next_bytecode(&mut global, &bytecode);
+
+            let expected = if cs.ticks.is_zero() && !cs.disabled {
+                let s = usize::from(cs.instruction_ptr);
+
+                if s < bytecode.len() {
+                    Some(s)
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
+
+            let o = ChannelState::instruction_size_if_not_sleep_nor_branch(opcode);
+            assert_eq!(o, expected, "opocde: {opcode}");
+        }
     }
 }

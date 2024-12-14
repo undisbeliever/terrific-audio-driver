@@ -31,6 +31,7 @@ const AUDIO_DRIVER_SYMBOLS: &[(&str, &str)] = &[
     ("__loader_songPtr", "SONG_PTR"),
     ("__loader_dataType", "LOADER_DATA_TYPE"),
     ("songTickCounter", "SONG_TICK_COUNTER"),
+    ("keyOnShadow_music", "KEYON_SHADOW_MUSIC"),
     ("keyOffShadow_music", "KEYOFF_SHADOW_MUSIC"),
     ("pmonShadow", "PMON_SHADOW"),
     ("eonShadow_music", "EON_SHADOW_MUSIC"),
@@ -38,6 +39,7 @@ const AUDIO_DRIVER_SYMBOLS: &[(&str, &str)] = &[
     ("io_musicChannelsMask", "IO_MUSIC_CHANNELS_MASK"),
     ("__bcStack", "BYTECODE_STACK"),
 
+    ("voiceChannelsDirty_music", "VOICE_CHANNELS_DIRTY_MUSIC"),
     ("channelSoA.virtualChannels.vol_l", "CHANNEL_VC_VOL_L"),
     ("channelSoA.virtualChannels.vol_r", "CHANNEL_VC_VOL_R"),
     ("channelSoA.virtualChannels.pitch_l", "CHANNEL_VC_PITCH_L"),

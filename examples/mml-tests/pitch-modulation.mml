@@ -24,7 +24,7 @@ C w%480
 ;
 ; Pitch-mod with linear increase envelope
 A @sine GI15   v0     o3 g & c & f & e & r
-B @sine       v16 PM  o4 c   f   e   g  r
+B @sine       v16 PM  o4 c   f   e   g   r
 C w%240
 
 

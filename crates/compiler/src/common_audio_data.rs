@@ -140,6 +140,15 @@ impl CommonAudioData {
         .map(|(&l, &h)| u16::from_le_bytes([l, h]) & 0x7fff)
         .collect()
     }
+
+    pub fn pitch_table_data(&self) -> (&[u8], &[u8]) {
+        let r = self.pitch_table_addr_range();
+        let start: usize = (r.start - addresses::COMMON_DATA).into();
+        let end: usize = (r.end - addresses::COMMON_DATA).into();
+        let mid = (start + end) / 2;
+
+        (&self.data[start..mid], &self.data[mid..end])
+    }
 }
 
 pub fn build_common_audio_data(

@@ -415,8 +415,9 @@ Numbers can be decimal, or hexadecimal when prefixed with `$` (ie, `$ff`)
    * The previous channel's OUTX (sample * envelope) value is used as the pitch modulation source.
    * Only channels B to F can be pitch modulated.
    * Channels G & H cannot be pitch-modulated as they would conflict with sound-effect channel ducking.
-   * CAUTION: tad-gui's Play song from cursor feature cannot accurately emulate pmod.
-     (The rust bytecode interpreter does not emulate key-on or envelopes.)
+   * CAUTION: tad-gui's Play song from cursor feature cannot accurately emulate pitch-modulation.
+      * The rust bytecode interpreter does not fully emulate key-on, portamento, vibrato or envelopes.
+      * A pitch-modulation source will only key-on if pitch-modulation is on when playback starts.
  * `PM0` - disable pitch modulation
 
 <br/>
