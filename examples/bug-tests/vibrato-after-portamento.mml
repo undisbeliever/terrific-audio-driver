@@ -1,0 +1,18 @@
+; Vibrato after portamento bugfix test
+;
+; If vibrato is active and a portamento ends without a new play_note
+; instruction the resumed vibrato was not reset and vibrato's mid-point
+; was not the intended pitch.
+;
+; Manually tested using Tenacity's spectrogram viewer.
+
+#Tempo 120
+#ZenLen 192
+
+@1 triangle gain F127
+
+A @1 v16 l4
+
+; The r2 and b2 should sound the same
+A ~80,7 c & {cb}3 & r2 | b2
+

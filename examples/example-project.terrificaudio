@@ -296,6 +296,10 @@
     {
       "name": "unbalanced_vibrato_bug",
       "source": "bug-tests/unbalanced-vibrato-bug.mml"
+    },
+    {
+      "name": "vibrato_after_portamento",
+      "source": "bug-tests/vibrato-after-portamento.mml"
     }
   ]
 }

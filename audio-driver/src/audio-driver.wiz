@@ -1713,6 +1713,11 @@ var _target_h : u8 in zpTmp;
         a = 0;
         channelSoA.portamento_direction[x] = a as i8;
 
+        // Restart vibrato (if active)
+        // A = 0
+        channelSoA.vibrato_direction[x] = a;
+        channelSoA.vibrato_tickCounter[x] = a = channelSoA.vibrato_tickCounterStart[x];
+
         a = channelSoA.portamento_target_l[x];
         y = _target_h;
 
@@ -1905,7 +1910,7 @@ func __play_note_set_pitch_h(channelIndex: u8 in x, pitch_h: u8 in a) {
     a = y;
     channelSoA.ticksAfterNote[x] = a;
 
-    // Restart vibrato
+    // Restart vibrato (if active)
     // Y = 0
     channelSoA.vibrato_direction[x] = y;
     channelSoA.vibrato_tickCounter[x] = a = channelSoA.vibrato_tickCounterStart[x];
