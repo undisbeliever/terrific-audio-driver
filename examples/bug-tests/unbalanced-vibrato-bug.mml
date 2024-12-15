@@ -1,5 +1,5 @@
-; Quick test to confirm vibrato is balanced when with
-; a maximim quarter-wavelength value.
+; Quick test to confirm vibrato is balanced with
+; a maximum quarter-wavelength value.
 
 #SpcSongLength 960
 #Timer 64
@@ -9,4 +9,7 @@
 
 A @1 v16 l4
 
-A ~12,128 a%4000 & L w%4000
+; Using L song-loop to extend the vibrato
+; so reduce test_bc_interpreter processing time.
+; (this is a manual test)
+A ~12,128 a & L w
