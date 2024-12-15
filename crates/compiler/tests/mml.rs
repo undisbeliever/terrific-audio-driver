@@ -5571,6 +5571,13 @@ fn test_utf8_in_mml() {
     assert_error_in_mml_line("𝅘𝅥𝅮𝅘𝅥𝅮𝅘𝅥𝅮𝅗𝅥𝅗𝅥𝅘𝅥𝅮𝅘𝅥𝅮𝅘𝅥𝅮", 1, ChannelError::UnknownCharacters(8));
 }
 
+#[test]
+fn portamento_panic_bugfix() {
+    assert_error_in_mml_line("{c}3", 1, ChannelError::PortamentoRequiresTwoPitches);
+
+    assert_error_in_mml_line("{}", 1, ChannelError::PortamentoRequiresTwoPitches);
+}
+
 // ----------------------------------------------------------------------------------------------
 
 /// Tests MML commands will still be merged if there are a change MML state command in between

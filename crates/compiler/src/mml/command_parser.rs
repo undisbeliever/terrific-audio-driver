@@ -1432,12 +1432,14 @@ fn parse_portamento(pos: FilePos, p: &mut Parser) -> Command {
         return invalid_token_error(p, end_pos, ChannelError::MissingEndPortamento);
     }
 
+    // This error should be first
     if notes.len() != 2 {
         p.add_error(pos, ChannelError::PortamentoRequiresTwoPitches);
     }
 
-    let mut slide_length = parse_tracked_length(p);
+    let portamento_length = parse_tracked_length(p);
 
+    let mut slide_length = portamento_length;
     let mut delay_length = TickCounter::new(0);
     let mut speed_override = None;
 
@@ -1460,15 +1462,23 @@ fn parse_portamento(pos: FilePos, p: &mut Parser) -> Command {
 
     let rest_after_note = parse_rest_ticks_after_note(is_slur, p);
 
-    Command::Portamento {
-        note1: notes[0],
-        note2: notes[1],
-        is_slur,
-        speed_override,
-        delay_length,
-        slide_length,
-        tie_length,
-        rest_after_note,
+    if notes.len() == 2 {
+        Command::Portamento {
+            note1: notes[0],
+            note2: notes[1],
+            is_slur,
+            speed_override,
+            delay_length,
+            slide_length,
+            tie_length,
+            rest_after_note,
+        }
+    } else {
+        // Output a rest (so tick-counter is correct)
+        Command::Rest {
+            ticks_until_keyoff: portamento_length,
+            ticks_after_keyoff: rest_after_note.0,
+        }
     }
 }
 
