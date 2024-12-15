@@ -80,14 +80,14 @@ u8_value_newtype!(
     TremoloAmplitudeOutOfRange,
     NoTremoloAmplitude,
     1,
-    127
+    Volume::MAX.as_u8() / 2
 );
 u8_value_newtype!(
     TremoloQuarterWavelengthInTicks,
     TremoloQuarterWavelengthTicksOutOfRange,
     NoTremoloQuarterWavelengthTicks,
     1,
-    Volume::MAX.as_u8() / 2
+    127
 );
 
 i16_non_zero_value_newtype!(
