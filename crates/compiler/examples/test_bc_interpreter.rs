@@ -245,18 +245,15 @@ fn assert_bc_intrepreter_matches_emu(
         addresses::CHANNEL_VIBRATO_PITCH_OFFSET_PER_TICK,
         "vibrato_pitchOffsetPerTick",
     );
-    test_channel_soa(
-        addresses::CHANNEL_VIBRATO_DIRECTION_COMPARATOR,
-        "vibrato_directionComparator",
-    );
-    // Not testing `vibrato_tickCounter`
+    // Not testing `vibrato_tickCounter` - bc_interpreter does not emulate vibrato
+    // Not testing `vibrato_direction` - bc_interpreter does not emulate vibrato
     test_channel_soa(
         addresses::CHANNEL_VIBRATO_TICK_COUNTER_START,
         "vibrato_tickCounterStart",
     );
     test_channel_soa(
-        addresses::CHANNEL_VIBRATO_WAVELENGTH_IN_TICKS,
-        "vibrato_waveLengthInTicks",
+        addresses::CHANNEL_VIBRATO_HALF_WAVELENGTH,
+        "vibrato_halfWaveLengthInTicks",
     );
     test_channel_soa(addresses::CHANNEL_PREV_TEMP_GAIN, "prevTempGain");
     test_channel_soa(addresses::CHANNEL_EARLY_RELEASE_CMP, "earlyRelease_cmp");

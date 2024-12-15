@@ -270,11 +270,9 @@ in zeropage {
         // (pitch change/tick)
         var vibrato_pitchOffsetPerTick : [u8 ; N_CHANNELS];
 
-        // Vibrato tick counter
-        //  * Starts at `vibrato_tickCounterStart` to offset the vibrato pitch-shift
-        //  * Counts down from `vibrato_waveLengthInTicks` to 0.
-        //  * If 0, there are 256 ticks remaining
-        var vibrato_tickCounter : [u8 ; N_CHANNELS];
+        // Vibrato direction.
+        // The lsb controls the vibrato direction.
+        var vibrato_direction : [u8 ; N_CHANNELS];
     }
 
 
@@ -316,19 +314,15 @@ in firstpage {
         // Used to determine the vibrato pitch shift direction for the current vibrato tick counter.
         //
         // This variable is equal to `vibrato_waveLengthInTicks / 2`
-        var vibrato_directionComparator : [u8 ; N_CHANNELS];
+        var vibrato_tickCounter : [u8 ; N_CHANNELS];
 
-        // The length of the vibrato wavelength in ticks.
-        //
-        // If this value is 0. The wavelength is 256 ticks.
-        //
-        // This variable is equal to `4 * vibrato_tickCounterStart`
-        var vibrato_waveLengthInTicks : [u8 ; N_CHANNELS];
+        // The vibrato tickCounter to reset to when changing direction (`quarterWavelengthInTicks*2`).
+        // If 0, the half-wavelength is 128 ticks.
+        var vibrato_halfWavelength : [u8 ; N_CHANNELS];
 
         // The value to reset the tick counter to when playing a note or starting a vibrato.
         //
         // This variable is equal to the `quarterWavelengthInTicks` parameter of the `set_vibrato` instruction
-        // This variable is equal to `vibrato_waveLengthInTicks / 4`
         //
         // Offsetting the start of the vibrato allows me to save a comparison in `_process_vibrato__inline()`.
         var vibrato_tickCounterStart : [u8 ; N_CHANNELS];
@@ -1601,15 +1595,19 @@ inline func _update_vol_shadow__inline(channelIndex : u8 in x) {
 
 // KEEP: X
 inline func _process_vibrato__inline(channelIndex : u8 in x) {
+    // Hack to allow access to volume effect variables with `direct_page = true`.
+    var _dp_csv_tickCounter      @ &channelSoA.vibrato_tickCounter    as u8 : [u8 ; N_CHANNELS];
+    var _dp_csv_halfWavelength   @ &channelSoA.vibrato_halfWavelength as u8 : [u8 ; N_CHANNELS];
+
 
     // (vibrato is not active during portamento)
     y = channelSoA.portamento_direction[x] as u8;
     if zero {
+        // Vibrato is disabled if pitch-offset-per-tick is 0
         y = channelSoA.vibrato_pitchOffsetPerTick[x];
         if !zero {
-            // Determine the vibrato direction
-            a = channelSoA.vibrato_directionComparator[x];
-            cmp(a, channelSoA.vibrato_tickCounter[x]);
+            a = channelSoA.vibrato_direction[x] as u8;
+            a >>>= 1;
 
             if !carry {
                 // Add Y to pitch_l
@@ -1631,10 +1629,17 @@ inline func _process_vibrato__inline(channelIndex : u8 in x) {
 
             channelSoA.virtualChannels.pitch_l[x] = a;
 
-            channelSoA.vibrato_tickCounter[x]--;
+            direct_page = true;
+
+            _dp_csv_tickCounter[x]--;
             if zero {
-                channelSoA.vibrato_tickCounter[x] = a = channelSoA.vibrato_waveLengthInTicks[x];
+                _dp_csv_tickCounter[x] = a = _dp_csv_halfWavelength[x];
+
+                direct_page = false;
+
+                channelSoA.vibrato_direction[x]++;
             }
+            direct_page = false;
 
             // Set S-DSP voice registers dirty bit
             voiceChannelsDirty_tmp $ 7 = true;
@@ -1901,6 +1906,8 @@ func __play_note_set_pitch_h(channelIndex: u8 in x, pitch_h: u8 in a) {
     channelSoA.ticksAfterNote[x] = a;
 
     // Restart vibrato
+    // Y = 0
+    channelSoA.vibrato_direction[x] = y;
     channelSoA.vibrato_tickCounter[x] = a = channelSoA.vibrato_tickCounterStart[x];
 
 
@@ -2093,14 +2100,15 @@ func set_vibrato(channelIndex : u8 in x, pitchOffsetPerTick: u8 in a) {
     a = instructionPtr[y];
     instructionPtr++;
 
+    // Rest vibrato direction
+    // Y = 0
+    channelSoA.vibrato_direction[x] = y;
+
     channelSoA.vibrato_tickCounterStart[x] = a;
     channelSoA.vibrato_tickCounter[x] = a;
 
     a <<<= 1;
-    channelSoA.vibrato_directionComparator[x] = a;
-
-    a <<<= 1;
-    channelSoA.vibrato_waveLengthInTicks[x] = a;
+    channelSoA.vibrato_halfWavelength[x] = a;
 
     ^return process_next_bytecode(x);
 }

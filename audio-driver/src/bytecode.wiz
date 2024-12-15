@@ -83,16 +83,15 @@ let INSTRUCTIONS_WITH_ARGUMENTS = [
     portamento_up,
 
 
-    // parameters: pppppppp 0ttttttt
+    // parameters: pppppppp tttttttt
     //      pppppppp = pitch offset per tick.
-    //       ttttttt = quarter wavelength ticks.  MUST BE >= 1 and <= 64.
+    //      tttttttt = quarter wavelength ticks.  MUST BE >= 1 and <= 128.
     //
     // If pppppppp is 0, vibrato is disabled.
     //
     // NOTES:
-    //  * The total wavelength of the vibrato is `ttttttt * 4`.
-    //  * If `ttttttt` is 0, the vibrato is unbalanced and will slowly increment the PITCH.
-    //  * If `ttttttt` is > 64, the vibrato is unbalanced and will slowly decrement the PITCH.
+    //  * The total wavelength of the vibrato is `tttttttt * 4`.
+    //  * If `tttttttt` is > 128, the vibrato is unbalanced.
     //  * Vibrato has no range checking and may overflow or underflow the PITCH register.
     //  * Portamento overrides vibrato
     //  * Vibrato is disabled when calling or returning from a subroutine

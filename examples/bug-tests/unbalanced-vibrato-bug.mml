@@ -1,0 +1,12 @@
+; Quick test to confirm vibrato is balanced when with
+; a maximim quarter-wavelength value.
+
+#SpcSongLength 960
+#Timer 64
+#ZenLen 192
+
+@1 sine adsr 14 7 7 0
+
+A @1 v16 l4
+
+A ~12,128 a%4000 & L w%4000

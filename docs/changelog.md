@@ -14,6 +14,8 @@ Audio driver changes:
  * Added `disable_noise` instruction (`N-` MML command)
  * Added pitch modulation (`enable_pmod`, `disable_pmod` instructions) (`PM` and `PM0` MML commands)
  * Fixed EON when channels G & H are ducked and unducked
+ * Fixed unbalanced vibrato with a quarter-wavelength of 64 ticks.
+ * Incremented maximum vibrato quarter-wavelength to 128 ticks.
 
 MML changes:
  * Allow 0 ticks before and after a `:` skip last loop MML command.  For example: `[ ceg : v+2 ]4`

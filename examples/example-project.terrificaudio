@@ -292,6 +292,10 @@
     {
       "name": "early_release_and_temp_gain",
       "source": "bc-interpreter-tests/early-release-and-temp-gain.mml"
+    },
+    {
+      "name": "unbalanced_vibrato_bug",
+      "source": "bug-tests/unbalanced-vibrato-bug.mml"
     }
   ]
 }

@@ -57,7 +57,7 @@ u8_value_newtype!(
     VibratoQuarterWavelengthOutOfRange,
     NoVibratoQuarterWavelength,
     1,
-    64
+    128
 );
 
 i16_non_zero_value_newtype!(

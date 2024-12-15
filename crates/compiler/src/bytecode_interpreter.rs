@@ -83,9 +83,8 @@ struct ChannelSoA {
     vibrato_tick_counter: u8,
 
     vibrato_pitch_offset_per_tick: u8,
-    vibrato_direction_comparator: u8,
     vibrato_tick_counter_start: u8,
-    vibrato_wavelength_in_ticks: u8,
+    vibrato_half_wavelength: u8,
 
     prev_temp_gain: u8,
 
@@ -1445,10 +1444,9 @@ fn build_channel(
             volume: volume_soa,
             pan: pan_soa,
             vibrato_pitch_offset_per_tick: c.vibrato_pitch_offset_per_tick,
-            vibrato_tick_counter_start: c.vibrato_quarter_wavelength_in_ticks,
             vibrato_tick_counter: c.vibrato_quarter_wavelength_in_ticks,
-            vibrato_direction_comparator: c.vibrato_quarter_wavelength_in_ticks << 1,
-            vibrato_wavelength_in_ticks: c.vibrato_quarter_wavelength_in_ticks << 2,
+            vibrato_tick_counter_start: c.vibrato_quarter_wavelength_in_ticks,
+            vibrato_half_wavelength: c.vibrato_quarter_wavelength_in_ticks << 1,
             prev_temp_gain: c.prev_temp_gain,
             early_release_cmp: c.early_release_cmp,
             early_release_min_ticks: c.early_release_min_ticks,
@@ -1510,10 +1508,9 @@ fn unused_channel(channel_index: usize) -> Channel {
                 half_wavelength: 0,
             },
             vibrato_pitch_offset_per_tick: 0,
-            vibrato_tick_counter_start: 0,
             vibrato_tick_counter: 0,
-            vibrato_direction_comparator: 0,
-            vibrato_wavelength_in_ticks: 0,
+            vibrato_tick_counter_start: 0,
+            vibrato_half_wavelength: 0,
             prev_temp_gain: 0,
             early_release_cmp: 0,
             early_release_min_ticks: 0,
@@ -1677,10 +1674,8 @@ impl InterpreterOutput {
                     addresses::CHANNEL_VIBRATO_PITCH_OFFSET_PER_TICK,
                     c.vibrato_pitch_offset_per_tick,
                 );
-                soa_write_u8(
-                    addresses::CHANNEL_VIBRATO_DIRECTION_COMPARATOR,
-                    c.vibrato_direction_comparator,
-                );
+                // Fixed vibrato direction
+                soa_write_u8(addresses::CHANNEL_VIBRATO_DIRECTION, 0);
                 soa_write_u8(
                     addresses::CHANNEL_VIBRATO_TICK_COUNTER,
                     c.vibrato_tick_counter,
@@ -1690,8 +1685,8 @@ impl InterpreterOutput {
                     c.vibrato_tick_counter_start,
                 );
                 soa_write_u8(
-                    addresses::CHANNEL_VIBRATO_WAVELENGTH_IN_TICKS,
-                    c.vibrato_wavelength_in_ticks,
+                    addresses::CHANNEL_VIBRATO_HALF_WAVELENGTH,
+                    c.vibrato_half_wavelength,
                 );
                 soa_write_u8(addresses::CHANNEL_PREV_TEMP_GAIN, c.prev_temp_gain);
                 soa_write_u8(addresses::CHANNEL_EARLY_RELEASE_CMP, c.early_release_cmp);
