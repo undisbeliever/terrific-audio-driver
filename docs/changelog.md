@@ -18,6 +18,7 @@ Audio driver changes:
  * Fixed unbalanced vibrato with a quarter-wavelength of 64 ticks.
  * Incremented maximum vibrato quarter-wavelength to 128 ticks.
  * Fixed vibrato mid-point after a slurred portamento.
+ * Fixed panbrello unintentionally active when a song or sound effect starts
 
 MML changes:
  * Allow 0 ticks before and after a `:` skip last loop MML command.  For example: `[ ceg : v+2 ]4`
