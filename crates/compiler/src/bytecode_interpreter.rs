@@ -24,6 +24,8 @@ use crate::time::TickCounter;
 use std::cmp::min;
 use std::ops::Deref;
 
+pub const UNINITIALISED: u8 = 0xaa;
+
 const MAX_PAN: u8 = Pan::MAX.as_u8();
 const PITCH_MOD_MASK: u8 = 0b00111110;
 
@@ -152,12 +154,12 @@ impl<const M: u8> PanVolValue<M> {
         Self {
             tc: TickCounter::new(0),
             value,
-            sub_value: 0,
-            counter: 0,
+            sub_value: UNINITIALISED,
+            counter: UNINITIALISED,
             direction: PanVolEffectDirection::None,
-            offset: 0,
-            half_wavelength: 0,
-            triangle_starting_value: 0,
+            offset: u32::from_le_bytes([UNINITIALISED, UNINITIALISED, 0, 0]),
+            half_wavelength: UNINITIALISED,
+            triangle_starting_value: UNINITIALISED,
         }
     }
 
@@ -442,7 +444,7 @@ pub struct ChannelState {
 
     // Partially emulating vibrato
     vibrato_pitch_offset_per_tick: u8,
-    vibrato_quarter_wavelength_in_ticks: u8,
+    vibrato_quarter_wavelength_in_ticks: Option<u8>,
 }
 
 impl ChannelState {
@@ -456,23 +458,23 @@ impl ChannelState {
             call_stack_depth: 0,
             stack_pointer: BC_CHANNEL_STACK_SIZE,
             loop_stack_pointer: BC_CHANNEL_STACK_SIZE - BC_STACK_BYTES_PER_LOOP,
-            bc_stack: Default::default(),
+            bc_stack: [UNINITIALISED; BC_CHANNEL_STACK_SIZE],
             instrument: None,
             next_event_is_key_off: false,
             note: ChannelNote::None,
             note_time: TickCounter::new(0),
             adsr_or_gain_override: Some((0, 0)),
             temp_gain: 0,
-            prev_temp_gain: 0,
+            prev_temp_gain: UNINITIALISED,
             early_release_cmp: 0,
-            early_release_min_ticks: 0,
-            early_release_gain: 0,
+            early_release_min_ticks: UNINITIALISED,
+            early_release_gain: UNINITIALISED,
             volume: PanVolValue::new(STARTING_VOLUME),
             pan: PanVolValue::new(Pan::CENTER.as_u8()),
             echo: false,
             pitch_mod: false,
             vibrato_pitch_offset_per_tick: 0,
-            vibrato_quarter_wavelength_in_ticks: 0,
+            vibrato_quarter_wavelength_in_ticks: None,
         }
     }
 
@@ -613,7 +615,7 @@ impl ChannelState {
                 let wavelength = read_pc();
 
                 self.vibrato_pitch_offset_per_tick = depth;
-                self.vibrato_quarter_wavelength_in_ticks = wavelength;
+                self.vibrato_quarter_wavelength_in_ticks = Some(wavelength);
             }
             opcodes::SET_VIBRATO_DEPTH_AND_PLAY_NOTE => {
                 let depth = read_pc();
@@ -1358,7 +1360,7 @@ fn build_channel(
                 ),
             )
         }
-        None => (0, 0, (0, 0)),
+        None => (UNINITIALISED, 0, (0, 0)),
     };
 
     let (pitch_l, pitch_h) = match c.note {
@@ -1424,6 +1426,12 @@ fn build_channel(
     let volume = volume_soa.value;
     let pan = pan_soa.value;
 
+    let (vibrato_tick_counter_start, vibrato_half_wavelength) =
+        match c.vibrato_quarter_wavelength_in_ticks {
+            Some(v) => (v, v.wrapping_shl(1)),
+            None => (UNINITIALISED, UNINITIALISED),
+        };
+
     assert!(Pan::try_from(pan).is_ok());
 
     Channel {
@@ -1444,9 +1452,9 @@ fn build_channel(
             volume: volume_soa,
             pan: pan_soa,
             vibrato_pitch_offset_per_tick: c.vibrato_pitch_offset_per_tick,
-            vibrato_tick_counter: c.vibrato_quarter_wavelength_in_ticks,
-            vibrato_tick_counter_start: c.vibrato_quarter_wavelength_in_ticks,
-            vibrato_half_wavelength: c.vibrato_quarter_wavelength_in_ticks << 1,
+            vibrato_tick_counter: vibrato_tick_counter_start,
+            vibrato_tick_counter_start,
+            vibrato_half_wavelength,
             prev_temp_gain: c.prev_temp_gain,
             early_release_cmp: c.early_release_cmp,
             early_release_min_ticks: c.early_release_min_ticks,
@@ -1488,35 +1496,45 @@ fn unused_channel(channel_index: usize) -> Channel {
             instruction_ptr: 0,
             stack_pointer,
             loop_stack_pointer: stack_pointer - BC_STACK_BYTES_PER_LOOP as u8,
-            inst_pitch_offset: 0,
+
+            inst_pitch_offset: UNINITIALISED,
+
             volume: ChannelSoAPanVol {
                 value: STARTING_VOLUME,
-                sub_value: 0,
+                sub_value: UNINITIALISED,
                 direction: 0,
-                offset_l: 0,
-                offset_h: 0,
-                counter: 0,
-                half_wavelength: 0,
+                offset_l: UNINITIALISED,
+                offset_h: UNINITIALISED,
+                counter: UNINITIALISED,
+                half_wavelength: UNINITIALISED,
             },
             pan: ChannelSoAPanVol {
                 value: Pan::CENTER.as_u8(),
-                sub_value: 0,
+                sub_value: UNINITIALISED,
                 direction: 0,
-                offset_l: 0,
-                offset_h: 0,
-                counter: 0,
-                half_wavelength: 0,
+                offset_l: UNINITIALISED,
+                offset_h: UNINITIALISED,
+                counter: UNINITIALISED,
+                half_wavelength: UNINITIALISED,
             },
             vibrato_pitch_offset_per_tick: 0,
-            vibrato_tick_counter: 0,
-            vibrato_tick_counter_start: 0,
-            vibrato_half_wavelength: 0,
-            prev_temp_gain: 0,
+            vibrato_tick_counter: UNINITIALISED,
+            vibrato_tick_counter_start: UNINITIALISED,
+            vibrato_half_wavelength: UNINITIALISED,
+
+            prev_temp_gain: UNINITIALISED,
+
             early_release_cmp: 0,
-            early_release_min_ticks: 0,
-            early_release_gain: 0,
+            // No need to reset `earlyRelease_minTicks`
+            // (early release is not active if `earlyRelease_cmp == 0`).
+            early_release_min_ticks: UNINITIALISED,
+            early_release_gain: UNINITIALISED,
         },
-        bc_stack: [0; BC_CHANNEL_STACK_SIZE],
+        bc_stack: [UNINITIALISED; BC_CHANNEL_STACK_SIZE],
+
+        // Not initialised by `__reset_channel()`, these variables are zeroed by zero-page clear.
+        // Does not cause an issue with sound effects as they are only written
+        // to the S-DSP when voice channels are marked dirty.
         dsp: VirtualChannel {
             vol_l: STARTING_VOLUME >> 2,
             vol_r: STARTING_VOLUME >> 2,

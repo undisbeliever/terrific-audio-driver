@@ -42,6 +42,8 @@ fn load_song(
 
     let apuram = emu.apuram_mut();
 
+    apuram.fill(bytecode_interpreter::UNINITIALISED);
+
     let mut write_spc_ram = |addr: u16, data: &[u8]| {
         let addr = usize::from(addr);
         apuram[addr..addr + data.len()].copy_from_slice(data);
