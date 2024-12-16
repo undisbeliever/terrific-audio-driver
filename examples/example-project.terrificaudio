@@ -254,6 +254,10 @@
       "source": "mml-tests/multi-channel-noise.mml"
     },
     {
+      "name": "detune",
+      "source": "mml-tests/detune.mml"
+    },
+    {
       "name": "volume_pop_bug",
       "source": "bug-tests/volume-pop-bug.mml"
     },

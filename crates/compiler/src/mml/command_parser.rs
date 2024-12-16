@@ -11,8 +11,8 @@ use super::{ChannelId, IdentifierStr, Section};
 use super::note_tracking::CursorTracker;
 
 use crate::bytecode::{
-    EarlyReleaseMinTicks, EarlyReleaseTicks, LoopCount, NoiseFrequency, Pan, PanSlideTicks,
-    PanbrelloQuarterWavelengthInTicks, PlayNoteTicks, PlayPitchPitch, SubroutineId,
+    DetuneValue, EarlyReleaseMinTicks, EarlyReleaseTicks, LoopCount, NoiseFrequency, Pan,
+    PanSlideTicks, PanbrelloQuarterWavelengthInTicks, PlayNoteTicks, PlayPitchPitch, SubroutineId,
     TremoloAmplitude, TremoloQuarterWavelengthInTicks, VibratoPitchOffsetPerTick,
     VibratoQuarterWavelengthInTicks, Volume, VolumeSlideAmount, VolumeSlideTicks,
     KEY_OFF_TICK_DELAY,
@@ -401,6 +401,42 @@ where
     )
 }
 
+fn parse_signed_newtype_allow_zero<T>(pos: FilePos, p: &mut Parser) -> Option<T>
+where
+    T: SignedValueNewType,
+{
+    match_next_token!(
+        p,
+
+        &Token::RelativeNumber(n) => {
+            match n.try_into() {
+                Ok(o) => Some(o),
+                Err(e) => {
+                    p.add_error(pos, e.into());
+                    None
+                }
+            }
+        },
+        &Token::Number(0) => {
+            match 0.try_into() {
+                Ok(o) => Some(o),
+                Err(e) => {
+                    p.add_error(pos, e.into());
+                    None
+                }
+            }
+        },
+        &Token::Number(_) => {
+            p.add_error(pos, T::MISSING_SIGN_ERROR.into());
+            None
+        },
+        #_ => {
+            p.add_error(pos, T::MISSING_ERROR.into());
+            None
+        }
+    )
+}
+
 trait CommaTicks: UnsignedValueNewType {
     const NO_COMMA_ERROR: ValueError;
 }
@@ -579,7 +615,7 @@ fn parse_quantize_optional_comma_optional_gain(p: &mut Parser) -> OptionalGain {
             p,
 
             Token::GainModeF => GainMode::Fixed,
-            Token::GainModeD => GainMode::LinearDecrease,
+            Token::DetuneOrGainModeD => GainMode::LinearDecrease,
             Token::Echo => GainMode::ExponentialDecrease,
             Token::GainModeI => GainMode::LinearIncrease,
             Token::GainModeB => GainMode::BentIncrease,
@@ -630,7 +666,7 @@ fn parse_early_release_gain_argument(comma_pos: FilePos, p: &mut Parser) -> Opti
         p,
 
         Token::GainModeF => parse_optional_gain_value(pos, p, GainMode::Fixed),
-        Token::GainModeD => parse_optional_gain_value(pos, p, GainMode::LinearDecrease),
+        Token::DetuneOrGainModeD => parse_optional_gain_value(pos, p, GainMode::LinearDecrease),
         Token::Echo => parse_optional_gain_value(pos, p, GainMode::ExponentialDecrease),
         Token::GainModeI => parse_optional_gain_value(pos, p, GainMode::LinearIncrease),
         Token::GainModeB => parse_optional_gain_value(pos, p, GainMode::BentIncrease),
@@ -654,7 +690,7 @@ fn parse_set_early_release_arguments(p: &mut Parser) -> (EarlyReleaseMinTicks, O
             p,
 
             Token::GainModeF => (min, parse_optional_gain_value(pos, p, GainMode::Fixed)),
-            Token::GainModeD => (min, parse_optional_gain_value(pos, p, GainMode::LinearDecrease)),
+            Token::DetuneOrGainModeD => (min, parse_optional_gain_value(pos, p, GainMode::LinearDecrease)),
             Token::Echo => (min, parse_optional_gain_value(pos, p, GainMode::ExponentialDecrease)),
             Token::GainModeI => (min, parse_optional_gain_value(pos, p, GainMode::LinearIncrease)),
             Token::GainModeB => (min, parse_optional_gain_value(pos, p, GainMode::BentIncrease)),
@@ -709,6 +745,10 @@ fn parse_set_early_release(pos: FilePos, p: &mut Parser) -> Command {
             Command::None
         }
     }
+}
+
+fn parse_detune(pos: FilePos, p: &mut Parser) -> Command {
+    Command::SetDetune(parse_signed_newtype_allow_zero(pos, p).unwrap_or(DetuneValue::ZERO))
 }
 
 // Returns true if the token was recognised and processed
@@ -1818,6 +1858,9 @@ fn parse_token(pos: FilePos, token: Token, p: &mut Parser) -> Command {
 
         Token::Quantize => parse_quantize(pos, p),
         Token::EarlyRelease => parse_set_early_release(pos, p),
+
+        Token::DetuneOrGainModeD => parse_detune(pos, p),
+
         Token::SetDefaultLength => {
             parse_set_default_length(pos, p);
             Command::None
@@ -1863,7 +1906,7 @@ fn parse_token(pos: FilePos, token: Token, p: &mut Parser) -> Command {
         Token::Number(_) => invalid_token_error(p, pos, ChannelError::UnexpectedNumber),
         Token::RelativeNumber(_) => invalid_token_error(p, pos, ChannelError::UnexpectedNumber),
 
-        Token::GainModeB | Token::GainModeD | Token::GainModeF | Token::GainModeI => {
+        Token::GainModeB | Token::GainModeF | Token::GainModeI => {
             invalid_token_error(p, pos, ChannelError::CannotParseGainMode)
         }
 

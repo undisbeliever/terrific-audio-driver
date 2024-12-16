@@ -5,11 +5,11 @@
 // SPDX-License-Identifier: MIT
 
 use crate::bytecode::{
-    BcTicks, BcTicksKeyOff, BcTicksNoKeyOff, Bytecode, BytecodeContext, EarlyReleaseMinTicks,
-    EarlyReleaseTicks, IeState, InstrumentId, LoopCount, NoiseFrequency, Pan, PanSlideAmount,
-    PanSlideTicks, PanbrelloAmplitude, PanbrelloQuarterWavelengthInTicks, PlayNoteTicks,
-    PlayPitchPitch, PortamentoVelocity, RelativePan, RelativeVolume, SlurredNoteState,
-    TremoloAmplitude, TremoloQuarterWavelengthInTicks, VibratoPitchOffsetPerTick,
+    BcTicks, BcTicksKeyOff, BcTicksNoKeyOff, Bytecode, BytecodeContext, DetuneValue,
+    EarlyReleaseMinTicks, EarlyReleaseTicks, IeState, InstrumentId, LoopCount, NoiseFrequency, Pan,
+    PanSlideAmount, PanSlideTicks, PanbrelloAmplitude, PanbrelloQuarterWavelengthInTicks,
+    PlayNoteTicks, PlayPitchPitch, PortamentoVelocity, RelativePan, RelativeVolume,
+    SlurredNoteState, TremoloAmplitude, TremoloQuarterWavelengthInTicks, VibratoPitchOffsetPerTick,
     VibratoQuarterWavelengthInTicks, VibratoState, Volume, VolumeSlideAmount, VolumeSlideTicks,
     KEY_OFF_TICK_DELAY,
 };
@@ -248,6 +248,8 @@ pub(crate) enum Command {
 
     DisableEarlyRelease,
     SetEarlyRelease(EarlyReleaseTicks, EarlyReleaseMinTicks, OptionalGain),
+
+    SetDetune(DetuneValue),
 
     ChangePanAndOrVolume(Option<PanCommand>, Option<VolumeCommand>),
 
@@ -1284,6 +1286,13 @@ impl<'a> ChannelBcGenerator<'a> {
                     .is_known_and_eq(&Some((ticks, min, gain)))
                 {
                     self.bc.set_early_release(ticks, min, gain);
+                }
+            }
+
+            &Command::SetDetune(detune) => {
+                let state = self.bc.get_state();
+                if !state.detune.is_known_and_eq(&detune) {
+                    self.bc.set_detune(detune);
                 }
             }
 

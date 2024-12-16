@@ -84,7 +84,7 @@ pub enum Token<'a> {
     // Temp GAIN after quantization tokens
     // (GainModeE is the Echo token)
     GainModeB,
-    GainModeD,
+    DetuneOrGainModeD,
     GainModeF,
     GainModeI,
 
@@ -403,9 +403,10 @@ fn next_token<'a>(scanner: &mut Scanner<'a>) -> Option<TokenWithPosition<'a>> {
         b'|' => one_ascii_token!(Token::Divider),
 
         b'B' => one_ascii_token!(Token::GainModeB),
-        b'D' => one_ascii_token!(Token::GainModeD),
         b'F' => one_ascii_token!(Token::GainModeF),
         b'I' => one_ascii_token!(Token::GainModeI),
+
+        b'D' => one_ascii_token!(Token::DetuneOrGainModeD),
 
         b'P' => match scanner.second_byte() {
             Some(b'M') => two_ascii_token!(Token::PitchMod),

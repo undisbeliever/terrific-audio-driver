@@ -1,0 +1,25 @@
+#Title Detune test
+
+@1 sine adsr 12 7 7 0
+
+A @1 v14
+
+; The `D` detune MML command adds a fixed VxPITCH offset to all
+; subsequent play-note and portamento instructions.
+; `D0` disables detune.
+
+A D0   c r16
+A D+80 c r16
+A D-80 c r16
+A r
+
+A D0    {eg} r16
+A D+100 {eg} r16
+A D-100 {eg} r16
+A r
+
+; `P` play pitch MML commands are unaffected by detune
+; (these two notes will sound the same)
+A D0      P$1000 r16
+A D+1000  P$1000 r16
+

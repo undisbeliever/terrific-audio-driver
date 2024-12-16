@@ -66,6 +66,8 @@ const AUDIO_DRIVER_SYMBOLS: &[(&str, &str)] = &[
     ("channelSoA.earlyRelease_cmp", "CHANNEL_EARLY_RELEASE_CMP"),
     ("channelSoA.earlyRelease_minTicks", "CHANNEL_EARLY_RELEASE_MIN_TICKS"),
     ("channelSoA.earlyRelease_gain", "CHANNEL_EARLY_RELEASE_GAIN"),
+    ("channelSoA.detune_l", "CHANNEL_DETUNE_L"),
+    ("channelSoA.detune_h", "CHANNEL_DETUNE_H"),
     ("channelSoA.volume", "CHANNEL_VOLUME"),
     ("channelSoA.subVolume", "CHANNEL_SUB_VOLUME"),
     ("channelSoA.volEffect_direction", "CHANNEL_VOL_EFFECT_DIRECTION"),

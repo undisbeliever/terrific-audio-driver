@@ -17,8 +17,8 @@ use crate::notes::{Note, LAST_NOTE_ID, N_NOTES};
 use crate::samples::note_range;
 use crate::time::{TickClock, TickCounter, TickCounterWithLoopFlag};
 use crate::value_newtypes::{
-    i16_non_zero_value_newtype, i8_value_newtype, u16_value_newtype, u8_0_is_256_value_newtype,
-    u8_value_newtype, SignedValueNewType, UnsignedValueNewType,
+    i16_non_zero_value_newtype, i16_value_newtype, i8_value_newtype, u16_value_newtype,
+    u8_0_is_256_value_newtype, u8_value_newtype, SignedValueNewType, UnsignedValueNewType,
 };
 
 use std::cmp::{max, min};
@@ -128,6 +128,19 @@ impl PlayPitchPitch {
     pub const NATIVE: Self = Self(0x1000);
 }
 
+i16_value_newtype!(
+    DetuneValue,
+    DetuneValueOutOfRange,
+    NoDetuneValue,
+    NoDetuneValueSign,
+    -((1 << 14) - 1),
+    (1 << 14) - 1
+);
+
+impl DetuneValue {
+    pub const ZERO: Self = Self(0);
+}
+
 u8_value_newtype!(
     NoiseFrequency,
     NoiseFrequencyOutOfRange,
@@ -192,6 +205,9 @@ pub mod opcodes {
         REUSE_TEMP_GAIN_AND_REST,
         SET_EARLY_RELEASE,
         SET_EARLY_RELEASE_NO_MINIMUM,
+        SET_DETUNE_I16,
+        SET_DETUNE_P8,
+        SET_DETUNE_N8,
         ADJUST_PAN,
         SET_PAN,
         SET_PAN_AND_VOLUME,
@@ -714,6 +730,7 @@ pub struct State {
     pub(crate) prev_temp_gain: IeState<TempGain>,
     pub(crate) early_release:
         IeState<Option<(EarlyReleaseTicks, EarlyReleaseMinTicks, OptionalGain)>>,
+    pub(crate) detune: IeState<DetuneValue>,
     pub(crate) vibrato: VibratoState,
     pub(crate) prev_slurred_note: SlurredNoteState,
 
@@ -732,6 +749,7 @@ struct SkipLastLoop {
     envelope: IeState<Envelope>,
     prev_temp_gain: IeState<TempGain>,
     early_release: IeState<Option<(EarlyReleaseTicks, EarlyReleaseMinTicks, OptionalGain)>>,
+    detune: IeState<DetuneValue>,
     vibrato: VibratoState,
     prev_slurred_note: SlurredNoteState,
 }
@@ -792,6 +810,12 @@ impl<'a> Bytecode<'a> {
                 envelope: IeState::Unknown,
                 prev_temp_gain: IeState::Unknown,
                 early_release: IeState::Unknown,
+                detune: match &context {
+                    BytecodeContext::SoundEffect => IeState::Known(DetuneValue::ZERO),
+                    BytecodeContext::SongChannel(_) => IeState::Known(DetuneValue::ZERO),
+                    BytecodeContext::SongSubroutine => IeState::Unknown,
+                    BytecodeContext::MmlPrefix => IeState::Unknown,
+                },
                 vibrato: match &context {
                     BytecodeContext::SoundEffect => VibratoState::Disabled,
                     BytecodeContext::SongChannel(_) => VibratoState::Disabled,
@@ -863,6 +887,7 @@ impl<'a> Bytecode<'a> {
         self.state.envelope = self.state.envelope.demote_to_maybe();
         self.state.prev_temp_gain = self.state.prev_temp_gain.demote_to_maybe();
         self.state.early_release = self.state.early_release.demote_to_maybe();
+        self.state.detune = self.state.detune.demote_to_maybe();
 
         self.state.vibrato = VibratoState::Unknown;
     }
@@ -1245,6 +1270,22 @@ impl<'a> Bytecode<'a> {
         }
     }
 
+    pub fn set_detune(&mut self, v: DetuneValue) {
+        self.state.detune = IeState::Known(v);
+
+        let (arg1, arg2) = v.as_i16().to_le_bytes().into();
+
+        match arg2 {
+            0x00 => emit_bytecode!(self, opcodes::SET_DETUNE_P8, arg1),
+            0xff => emit_bytecode!(self, opcodes::SET_DETUNE_N8, arg1),
+            _ => emit_bytecode!(self, opcodes::SET_DETUNE_I16, arg1, arg2),
+        }
+    }
+
+    pub fn disable_detune(&mut self) {
+        self.set_detune(DetuneValue::ZERO);
+    }
+
     pub fn adjust_volume(&mut self, v: RelativeVolume) {
         emit_bytecode!(self, opcodes::ADJUST_VOLUME, v.as_i8());
     }
@@ -1404,6 +1445,7 @@ impl<'a> Bytecode<'a> {
         self.state.envelope = self.state.envelope.demote_to_maybe();
         self.state.prev_temp_gain = self.state.prev_temp_gain.demote_to_maybe();
         self.state.early_release = self.state.early_release.demote_to_maybe();
+        self.state.detune = self.state.detune.demote_to_maybe();
         self.state.vibrato = VibratoState::Unknown;
 
         // Loop might end on a note that is not slurred and matching `prev_slurred_note`.
@@ -1458,6 +1500,7 @@ impl<'a> Bytecode<'a> {
             envelope: self.state.envelope,
             prev_temp_gain: self.state.prev_temp_gain,
             early_release: self.state.early_release,
+            detune: self.state.detune,
             vibrato: self.state.vibrato,
             prev_slurred_note: self.state.prev_slurred_note.clone(),
         });
@@ -1531,6 +1574,7 @@ impl<'a> Bytecode<'a> {
             self.state.envelope = skip_last_loop.envelope;
             self.state.prev_temp_gain = skip_last_loop.prev_temp_gain;
             self.state.early_release = skip_last_loop.early_release;
+            self.state.detune = skip_last_loop.detune;
             self.state.vibrato = skip_last_loop.vibrato;
             self.state
                 .prev_slurred_note
@@ -1558,6 +1602,7 @@ impl<'a> Bytecode<'a> {
             self.state.envelope = self.state.envelope.promote_to_known();
             self.state.prev_temp_gain = self.state.prev_temp_gain.promote_to_known();
             self.state.early_release = self.state.early_release.promote_to_known();
+            self.state.detune = self.state.detune.promote_to_known();
         }
 
         emit_bytecode!(self, opcodes::END_LOOP);
@@ -1601,6 +1646,11 @@ impl<'a> Bytecode<'a> {
         match subroutine.state.early_release {
             IeState::Known(e) => self.state.early_release = IeState::Known(e),
             IeState::Maybe(_) => panic!("unexpected maybe early_release"),
+            IeState::Unknown => (),
+        }
+        match subroutine.state.detune {
+            IeState::Known(e) => self.state.detune = IeState::Known(e),
+            IeState::Maybe(_) => panic!("unexpected maybe detune"),
             IeState::Unknown => (),
         }
         match &subroutine.state.vibrato {

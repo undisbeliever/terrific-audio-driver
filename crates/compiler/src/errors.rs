@@ -7,11 +7,12 @@
 use relative_path::RelativeToError;
 
 use crate::bytecode::{
-    BcTicks, BcTicksKeyOff, BcTicksNoKeyOff, EarlyReleaseMinTicks, EarlyReleaseTicks, InstrumentId,
-    LoopCount, NoiseFrequency, Pan, PanSlideAmount, PanSlideTicks, PanbrelloAmplitude,
-    PanbrelloQuarterWavelengthInTicks, PlayPitchPitch, PortamentoVelocity, RelativePan,
-    RelativeVolume, TremoloAmplitude, TremoloQuarterWavelengthInTicks, VibratoPitchOffsetPerTick,
-    VibratoQuarterWavelengthInTicks, Volume, VolumeSlideAmount, VolumeSlideTicks,
+    BcTicks, BcTicksKeyOff, BcTicksNoKeyOff, DetuneValue, EarlyReleaseMinTicks, EarlyReleaseTicks,
+    InstrumentId, LoopCount, NoiseFrequency, Pan, PanSlideAmount, PanSlideTicks,
+    PanbrelloAmplitude, PanbrelloQuarterWavelengthInTicks, PlayPitchPitch, PortamentoVelocity,
+    RelativePan, RelativeVolume, TremoloAmplitude, TremoloQuarterWavelengthInTicks,
+    VibratoPitchOffsetPerTick, VibratoQuarterWavelengthInTicks, Volume, VolumeSlideAmount,
+    VolumeSlideTicks,
 };
 use crate::channel_bc_generator::{
     FineQuantization, PortamentoSpeed, Quantization, MAX_BROKEN_CHORD_NOTES,
@@ -156,11 +157,14 @@ pub enum ValueError {
     VibratoPitchOffsetPerTickOutOfRange(u32),
     VibratoQuarterWavelengthOutOfRange(u32),
 
+    DetuneValueOutOfRange(i32),
+
     NoPxPanSign,
     NoRelativeVolumeSign,
     NoRelativePanSign,
     NoDirectionInPortamentoVelocity,
     NoTransposeSign,
+    NoDetuneValueSign,
 
     PortamentoVelocityZero,
     PortamentoVelocityOutOfRange(i32),
@@ -237,6 +241,7 @@ pub enum ValueError {
     NoEarlyReleaseTicks,
     NoEarlyReleaseMinTicks,
     NoEarlyReleaseMinTicksOrGain,
+    NoDetuneValue,
 
     NoCommaQuarterWavelength,
     NoCommaVolumeSlideTicks,
@@ -906,6 +911,9 @@ impl Display for ValueError {
                     VibratoQuarterWavelengthInTicks
                 )
             }
+            Self::DetuneValueOutOfRange(v) => {
+                out_of_range!("detune", v, DetuneValue)
+            }
 
             Self::NoPxPanSign => {
                 write!(f, "missing + or - in px pan")
@@ -921,6 +929,9 @@ impl Display for ValueError {
             }
             Self::NoTransposeSign => {
                 write!(f, "missing + or - in transpose value")
+            }
+            Self::NoDetuneValueSign => {
+                write!(f, "missing + or - in detune value")
             }
 
             Self::PortamentoVelocityZero => write!(f, "portamento velocity cannot be 0"),
@@ -1037,6 +1048,7 @@ impl Display for ValueError {
             Self::NoEarlyReleaseMinTicksOrGain => {
                 write!(f, "no early-release minimum ticks or GAIN (F, D, E, I, B)")
             }
+            Self::NoDetuneValue => write!(f, "no detune value"),
 
             Self::NoCommaQuarterWavelength => {
                 write!(f, "cannot parse quarter-wavelength, expected a comma ','")

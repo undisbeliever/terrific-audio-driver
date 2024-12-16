@@ -411,6 +411,15 @@ Numbers can be decimal, or hexadecimal when prefixed with `$` (ie, `$ff`)
 
 <br/>
 
+ * `D<-16383..+16383>` - detune
+    * Adds an offset to the `VxPITCH` register in all play-note and portamento instructions.
+    * CAUTION: `P` play pitch command is unaffected by detune.
+    * CAUTION: detune is not disabled when the instrument is changed.
+    * CAUTION: detune persists across subroutine calls
+ * `D0` - disable detune
+
+<br/>
+
  * `PM` - enable pitch modulation
    * The previous channel's OUTX (sample * envelope) value is used as the pitch modulation source.
    * Only channels B to F can be pitch modulated.

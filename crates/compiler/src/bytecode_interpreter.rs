@@ -93,6 +93,9 @@ struct ChannelSoA {
     early_release_cmp: u8,
     early_release_min_ticks: u8,
     early_release_gain: u8,
+
+    detune_l: u8,
+    detune_h: u8,
 }
 
 #[derive(Clone)]
@@ -384,6 +387,7 @@ enum ChannelNote {
     PlayNote {
         note_opcode: u8,
         instrument: Option<u8>,
+        detune: i16,
     },
     PlayPitch(u16),
 
@@ -392,6 +396,7 @@ enum ChannelNote {
     Portamento {
         target_opcode: u8,
         instrument: Option<u8>,
+        detune: i16,
     },
 }
 
@@ -428,6 +433,8 @@ pub struct ChannelState {
     early_release_cmp: u8,
     early_release_min_ticks: u8,
     early_release_gain: u8,
+
+    detune: i16,
 
     next_event_is_key_off: bool,
     note: ChannelNote,
@@ -469,6 +476,7 @@ impl ChannelState {
             early_release_cmp: 0,
             early_release_min_ticks: UNINITIALISED,
             early_release_gain: UNINITIALISED,
+            detune: 0,
             volume: PanVolValue::new(STARTING_VOLUME),
             pan: PanVolValue::new(Pan::CENTER.as_u8()),
             echo: false,
@@ -592,6 +600,7 @@ impl ChannelState {
                 self.note = ChannelNote::PlayNote {
                     note_opcode,
                     instrument: self.instrument,
+                    detune: self.detune,
                 };
                 self.play_note(opcode, length);
             }
@@ -605,6 +614,7 @@ impl ChannelState {
                 self.note = ChannelNote::Portamento {
                     target_opcode: note_and_key_off_bit,
                     instrument: self.instrument,
+                    detune: self.detune,
                 };
 
                 self.play_note(note_and_key_off_bit, wait_length);
@@ -625,6 +635,7 @@ impl ChannelState {
                 self.note = ChannelNote::PlayNote {
                     note_opcode,
                     instrument: self.instrument,
+                    detune: self.detune,
                 };
 
                 self.vibrato_pitch_offset_per_tick = depth;
@@ -750,6 +761,23 @@ impl ChannelState {
                 self.early_release_cmp = cmp;
                 self.early_release_min_ticks = 0;
                 self.early_release_gain = gain;
+            }
+
+            opcodes::SET_DETUNE_I16 => {
+                let l = read_pc();
+                let h = read_pc();
+
+                self.detune = i16::from_le_bytes([l, h]);
+            }
+            opcodes::SET_DETUNE_P8 => {
+                let l = read_pc();
+
+                self.detune = i16::from_le_bytes([l, 0x00]);
+            }
+            opcodes::SET_DETUNE_N8 => {
+                let l = read_pc();
+
+                self.detune = i16::from_le_bytes([l, 0xff]);
             }
 
             opcodes::ADJUST_PAN => {
@@ -1012,6 +1040,9 @@ impl ChannelState {
             opcodes::REUSE_TEMP_GAIN_AND_WAIT => None,
             opcodes::SET_EARLY_RELEASE => Some(4),
             opcodes::SET_EARLY_RELEASE_NO_MINIMUM => Some(3),
+            opcodes::SET_DETUNE_I16 => Some(3),
+            opcodes::SET_DETUNE_P8 => Some(2),
+            opcodes::SET_DETUNE_N8 => Some(2),
             opcodes::ADJUST_PAN => Some(2),
             opcodes::SET_PAN => Some(2),
             opcodes::SET_PAN_AND_VOLUME => Some(3),
@@ -1304,7 +1335,7 @@ impl CommonAudioDataSoA<'_> {
         }
     }
 
-    fn pitch_table_entry(&self, note_opcode: u8, instrument: Option<u8>) -> (u8, u8) {
+    fn pitch_table_entry(&self, note_opcode: u8, instrument: Option<u8>, detune: i16) -> (u8, u8) {
         match instrument {
             Some(i) => {
                 let i: usize = self
@@ -1314,10 +1345,13 @@ impl CommonAudioDataSoA<'_> {
                     .unwrap_or(0)
                     .wrapping_add(note_opcode >> 1)
                     .into();
-                (
+
+                let pitch = u16::from_le_bytes([
                     self.pitch_table_l.get(i).copied().unwrap_or(0),
                     self.pitch_table_h.get(i).copied().unwrap_or(0),
-                )
+                ]);
+
+                pitch.wrapping_add_signed(detune).to_le_bytes().into()
             }
             None => (0, 0),
         }
@@ -1371,11 +1405,13 @@ fn build_channel(
         ChannelNote::PlayNote {
             note_opcode,
             instrument,
-        } => common.pitch_table_entry(note_opcode, instrument),
+            detune,
+        } => common.pitch_table_entry(note_opcode, instrument, detune),
         ChannelNote::Portamento {
             target_opcode,
             instrument,
-        } => common.pitch_table_entry(target_opcode, instrument),
+            detune,
+        } => common.pitch_table_entry(target_opcode, instrument, detune),
         ChannelNote::PlayPitch(p) => p.to_le_bytes().into(),
     };
 
@@ -1459,6 +1495,8 @@ fn build_channel(
             early_release_cmp: c.early_release_cmp,
             early_release_min_ticks: c.early_release_min_ticks,
             early_release_gain: c.early_release_gain,
+            detune_l: c.detune.to_le_bytes()[0],
+            detune_h: c.detune.to_le_bytes()[1],
         },
         bc_stack: c.bc_stack,
         dsp: VirtualChannel {
@@ -1529,6 +1567,9 @@ fn unused_channel(channel_index: usize) -> Channel {
             // (early release is not active if `earlyRelease_cmp == 0`).
             early_release_min_ticks: UNINITIALISED,
             early_release_gain: UNINITIALISED,
+
+            detune_l: 0,
+            detune_h: 0,
         },
         bc_stack: [UNINITIALISED; BC_CHANNEL_STACK_SIZE],
 
@@ -1713,6 +1754,9 @@ impl InterpreterOutput {
                     c.early_release_min_ticks,
                 );
                 soa_write_u8(addresses::CHANNEL_EARLY_RELEASE_GAIN, c.early_release_gain);
+
+                soa_write_u8(addresses::CHANNEL_DETUNE_L, c.detune_l);
+                soa_write_u8(addresses::CHANNEL_DETUNE_H, c.detune_h);
 
                 // Virtual channels
                 soa_write_u8(addresses::CHANNEL_VC_VOL_L, vc.vol_l);

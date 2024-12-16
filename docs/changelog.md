@@ -13,6 +13,7 @@ Audio driver changes:
  * Added `play_noise` instruction (`N` MML command)
  * Added `disable_noise` instruction (`N-` MML command)
  * Added pitch modulation (`enable_pmod`, `disable_pmod` instructions) (`PM` and `PM0` MML commands)
+ * Added VxPITCH detune (`set_detune`, `disable_detune` instructions and `D` MML command)
  * Fixed EON when channels G & H are ducked and unducked
  * Fixed unbalanced vibrato with a quarter-wavelength of 64 ticks.
  * Incremented maximum vibrato quarter-wavelength to 128 ticks.

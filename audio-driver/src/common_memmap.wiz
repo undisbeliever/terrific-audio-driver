@@ -37,7 +37,7 @@ let FIRSTPAGE_SIZE = 0x100 - STACK_SIZE;
 let BC_CHANNEL_STACK_SIZE = 21;
 let BC_CHANNEL_STACK_OFFSET = 6;
 
-let LAST_VAR_PAGE_SIZE = (BC_CHANNEL_STACK_SIZE + 4) * 10;
+let LAST_VAR_PAGE_SIZE = (BC_CHANNEL_STACK_SIZE + 6) * 10;
 
 // The -24 ensures the pitch-table and BRR directory is page aligned
 // `COMMON_DATA_ADDR` MUST be an even address (The loader only works with even addresses).

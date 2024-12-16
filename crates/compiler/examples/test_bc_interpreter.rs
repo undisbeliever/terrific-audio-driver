@@ -269,6 +269,9 @@ fn assert_bc_intrepreter_matches_emu(
     );
     test_channel_soa(addresses::CHANNEL_EARLY_RELEASE_GAIN, "earlyRelease_gain");
 
+    test_channel_soa(addresses::CHANNEL_DETUNE_L, "detune_l");
+    test_channel_soa(addresses::CHANNEL_DETUNE_H, "detune_h");
+
     for v in 0..N_MUSIC_CHANNELS {
         assert_eq!(
             read_ticks_until_next_bytecode(int_apuram, v),

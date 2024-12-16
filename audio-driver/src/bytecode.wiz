@@ -116,6 +116,8 @@ let INSTRUCTIONS_WITH_ARGUMENTS = [
     //      ppppppp- pppppppp = VxPITCH register value (be aware of the key-off bit in the high byte)
     //                      O = key-off after note ends
     //               llllllll = note length
+    //
+    // CAUTION: Detune has no effect on play_pitch instructions.
     play_pitch,
 
 
@@ -221,6 +223,18 @@ let INSTRUCTIONS_WITH_ARGUMENTS = [
     //
     // This instruction is `set_early_release cmp, 0, gain`.
     set_early_release_no_minimum,
+
+
+    // parameter: i16 VxPITCH offset
+    set_detune_i16,
+
+    // parameter: low byte of VxPITCH offset
+    // High byte of pitch_offset will be 0
+    set_detune_p8,
+
+    // parameter: low byte of VxPITCH offset
+    // High byte of pitch_offset will be 0xff
+    set_detune_n8,
 
 
     // parameter = i8 pan adjustment
