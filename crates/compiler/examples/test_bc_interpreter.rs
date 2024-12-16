@@ -13,7 +13,7 @@ use compiler::{
     common_audio_data::{build_common_audio_data, CommonAudioData},
     data::{load_project_file, load_text_file_with_limit, validate_project_file_names},
     driver_constants::{
-        addresses, io_commands, LoaderDataType, BC_TOTAL_STACK_SIZE, N_CHANNELS,
+        addresses, io_commands, LoaderDataType, BC_TOTAL_STACK_SIZE, N_MUSIC_CHANNELS,
         S_DSP_EON_REGISTER, S_SMP_TIMER_0_REGISTER,
     },
     mml::compile_mml,
@@ -95,7 +95,11 @@ impl bytecode_interpreter::Emulator for DummyEmu {
     }
 }
 
-fn mask_channel_soa(apuram: &[u8; 0x10000], addr: u16, mask: u16) -> [Option<u8>; N_CHANNELS] {
+fn mask_channel_soa(
+    apuram: &[u8; 0x10000],
+    addr: u16,
+    mask: u16,
+) -> [Option<u8>; N_MUSIC_CHANNELS] {
     std::array::from_fn(|i| match apuram[usize::from(mask) + i] {
         0 => None,
         _ => Some(apuram[usize::from(addr) + i]),
@@ -148,7 +152,7 @@ fn assert_bc_intrepreter_matches_emu(
 
     let test_channel_soa = |addr: u16, name: &'static str| {
         let addr = usize::from(addr);
-        let range = addr..addr + N_CHANNELS;
+        let range = addr..addr + N_MUSIC_CHANNELS;
         assert_eq!(
             int_apuram[range.clone()],
             emu_apuram[range],
@@ -263,7 +267,7 @@ fn assert_bc_intrepreter_matches_emu(
     );
     test_channel_soa(addresses::CHANNEL_EARLY_RELEASE_GAIN, "earlyRelease_gain");
 
-    for v in 0..N_CHANNELS {
+    for v in 0..N_MUSIC_CHANNELS {
         assert_eq!(
             read_ticks_until_next_bytecode(int_apuram, v),
             read_ticks_until_next_bytecode(emu_apuram, v),
@@ -282,7 +286,7 @@ fn assert_bc_intrepreter_matches_emu(
     }
 }
 
-fn read_ptrs(apuram: &[u8; 0x10000], addr_l: u16, addr_h: u16) -> [Option<u16>; N_CHANNELS] {
+fn read_ptrs(apuram: &[u8; 0x10000], addr_l: u16, addr_h: u16) -> [Option<u16>; N_MUSIC_CHANNELS] {
     std::array::from_fn(|i| {
         let h = apuram[usize::from(addr_h) + i];
         if h != 0 {
@@ -296,7 +300,7 @@ fn read_ptrs(apuram: &[u8; 0x10000], addr_l: u16, addr_h: u16) -> [Option<u16>; 
 
 // returns u32::MAX if the channel is disabled
 fn read_ticks_until_next_bytecode(apuram: &[u8; 0x10000], v: usize) -> u32 {
-    assert!(v < N_CHANNELS);
+    assert!(v < N_MUSIC_CHANNELS);
     let read = |addr: u16| apuram[usize::from(addr) + v];
 
     if read(addresses::CHANNEL_INSTRUCTION_PTR_H) > addresses::COMMON_DATA.to_le_bytes()[1] {
