@@ -6,7 +6,7 @@ Version 0.0.15
 ==============
 
 **Known bugs**:
- * Sample Analyser spectrum can only analyse the first 16384 samples in a long BRR sample.
+ * Sample Analyser spectrum can only analyse the first 16384 samples in a long BRR sample
 
 Audio driver changes:
  * Added `play_pitch` instruction (`P` MML command)
@@ -15,9 +15,9 @@ Audio driver changes:
  * Added pitch modulation (`enable_pmod`, `disable_pmod` instructions) (`PM` and `PM0` MML commands)
  * Added VxPITCH detune (`set_detune`, `disable_detune` instructions and `D` MML command)
  * Fixed EON when channels G & H are ducked and unducked
- * Fixed unbalanced vibrato with a quarter-wavelength of 64 ticks.
- * Incremented maximum vibrato quarter-wavelength to 128 ticks.
- * Fixed vibrato mid-point after a slurred portamento.
+ * Fixed unbalanced vibrato with a quarter-wavelength of 64 ticks
+ * Incremented maximum vibrato quarter-wavelength to 128 ticks
+ * Fixed vibrato mid-point after a slurred portamento
  * Fixed panbrello unintentionally active when a song or sound effect starts
 
 MML changes:
