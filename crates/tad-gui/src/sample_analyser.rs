@@ -50,8 +50,8 @@ const BRR_SAMPLE_RATE: u32 = 32000;
 /// Minimum number of samples to render when decoding a looping BRR sample
 const MIN_LOOPING_SAMPLES: usize = 4096;
 
-/// spectrum-analyzer crate panics if samples.len() > 16384 samples
-const MAX_SPECTRUM_SAMPLES: usize = 16384;
+/// spectrum-analyzer crate panics if samples.len() > 32768 samples
+const MAX_SPECTRUM_SAMPLES: usize = 32768;
 
 /// Minimum number of waveform samples to show in the waveform widget
 const MIN_WAVEFORM_WIDTH: usize = 192;
