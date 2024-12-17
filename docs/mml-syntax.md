@@ -413,7 +413,7 @@ Numbers can be decimal, or hexadecimal when prefixed with `$` (ie, `$ff`)
 <br/>
 
  * `D<-16383..+16383>` - detune
-    * Adds an offset to the `VxPITCH` register in all play-note and portamento instructions.
+    * Adds an offset to the `VxPITCH` register in play-note and portamento instructions.
     * CAUTION: `P` play pitch command is unaffected by detune.
     * CAUTION: detune is not disabled when the instrument is changed.
     * CAUTION: detune persists across subroutine calls
@@ -422,7 +422,7 @@ Numbers can be decimal, or hexadecimal when prefixed with `$` (ie, `$ff`)
     * Detunes play-note and portamento commands by a given number of cents.
     * `MD` automatically calculates the `VxPITCH` detune and adds a `D` detune command before each note.
       For example, `MD+20 c d e` would expand to  `D+25 c D+28 d D+31 e`.
-    * CAUTION: Add 2 or 3 bytes per note to the song data size.
+    * CAUTION: `MD` increases the song data by 2 or 3 bytes per note.
       If you have a lot of notes with a fixed `MD` cents, you could clone and detune the instrument instead.
  * `MD0` - disable automatic detune
     * CAUTION: Also disables `D` detune

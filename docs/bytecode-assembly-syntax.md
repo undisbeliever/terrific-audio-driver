@@ -65,7 +65,7 @@ Instructions
     * CAUTION: the GAIN rate may need to be changed if the song's tempo changes.
  * `disable_early_release` - disables early-release.
 
- * `set_detune <i16>` - Adds an offset to the `VxPITCH` register in all play-note and portamento instructions.
+ * `set_detune <i16>` - Adds an offset to the `VxPITCH` register in play-note and portamento instructions.
     * CAUTION: `play_pitch` instructions are unaffected by detune.
     * CAUTION: detune is not disabled when the instrument is changed.
     * CAUTION: detune persists across subroutine calls
