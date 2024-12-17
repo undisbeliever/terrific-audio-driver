@@ -29,6 +29,7 @@ Bytecode assembly changes:
 
 GUI changes:
  * Fixed tremolo or panbrello when starting playback in the middle of a tremolo/panbrello effect
+ * Fixed rust bytecode interpreter TIMER0 register mismatch
 
 
 Version 0.0.14
