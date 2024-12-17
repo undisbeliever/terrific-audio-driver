@@ -19,8 +19,8 @@ use crate::bytecode::{
 };
 use crate::channel_bc_generator::{
     merge_pan_commands, merge_volumes_commands, relative_pan, relative_volume, Command,
-    FineQuantization, ManualVibrato, MpVibrato, PanCommand, Quantize, RestTicksAfterNote,
-    SubroutineCallType, VolumeCommand,
+    DetuneCents, FineQuantization, ManualVibrato, MpVibrato, PanCommand, Quantize,
+    RestTicksAfterNote, SubroutineCallType, VolumeCommand,
 };
 use crate::envelope::{Gain, GainMode, OptionalGain, TempGain};
 use crate::errors::{ChannelError, ErrorWithPos, ValueError};
@@ -749,6 +749,10 @@ fn parse_set_early_release(pos: FilePos, p: &mut Parser) -> Command {
 
 fn parse_detune(pos: FilePos, p: &mut Parser) -> Command {
     Command::SetDetune(parse_signed_newtype_allow_zero(pos, p).unwrap_or(DetuneValue::ZERO))
+}
+
+fn parse_detune_cents(pos: FilePos, p: &mut Parser) -> Command {
+    Command::SetDetuneCents(parse_signed_newtype_allow_zero(pos, p).unwrap_or(DetuneCents::ZERO))
 }
 
 // Returns true if the token was recognised and processed
@@ -1860,6 +1864,7 @@ fn parse_token(pos: FilePos, token: Token, p: &mut Parser) -> Command {
         Token::EarlyRelease => parse_set_early_release(pos, p),
 
         Token::DetuneOrGainModeD => parse_detune(pos, p),
+        Token::DetuneCents => parse_detune_cents(pos, p),
 
         Token::SetDefaultLength => {
             parse_set_default_length(pos, p);

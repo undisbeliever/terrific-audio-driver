@@ -23,7 +23,7 @@ use crate::notes::SEMITONES_PER_OCTAVE;
 use crate::pitch_table::{PitchTable, PITCH_REGISTER_MAX};
 use crate::songs::{LoopPoint, Subroutine};
 use crate::time::{Bpm, TickClock, TickCounter};
-use crate::value_newtypes::u8_value_newtype;
+use crate::value_newtypes::{i16_value_newtype, u8_value_newtype, SignedValueNewType};
 use crate::FilePosRange;
 
 use std::cmp::min;
@@ -160,6 +160,28 @@ pub enum Quantize {
 #[derive(Clone, Copy)]
 pub struct RestTicksAfterNote(pub TickCounter);
 
+i16_value_newtype!(
+    DetuneCents,
+    DetuneCentsOutOfRange,
+    NoDetuneCents,
+    NoDetuneCentsSign,
+    -600,
+    600
+);
+
+impl DetuneCents {
+    pub const ZERO: Self = Self(0);
+}
+
+#[derive(Clone, Copy)]
+struct DetuneCentsOutput(DetuneValue);
+
+impl DetuneCentsOutput {
+    fn as_i16(&self) -> i16 {
+        self.0.as_i16()
+    }
+}
+
 #[derive(Debug, Clone, Copy)]
 pub enum SubroutineCallType {
     Mml,
@@ -250,6 +272,7 @@ pub(crate) enum Command {
     SetEarlyRelease(EarlyReleaseTicks, EarlyReleaseMinTicks, OptionalGain),
 
     SetDetune(DetuneValue),
+    SetDetuneCents(DetuneCents),
 
     ChangePanAndOrVolume(Option<PanCommand>, Option<VolumeCommand>),
 
@@ -362,6 +385,7 @@ pub(crate) struct ChannelBcGenerator<'a> {
 
     bc: Bytecode<'a>,
 
+    detune_cents: DetuneCents,
     mp: MpState,
     quantize: Quantize,
 
@@ -386,6 +410,7 @@ impl<'a> ChannelBcGenerator<'a> {
             // Using None for subroutines to forbid subroutine calls in bytecode assembly
             bc: Bytecode::new_append_to_vec(bc_data, context, data_instruments, None),
             mp: MpState::Manual,
+            detune_cents: DetuneCents::ZERO,
             quantize: Quantize::None,
             loop_point: None,
         }
@@ -395,6 +420,7 @@ impl<'a> ChannelBcGenerator<'a> {
         &self,
         mp: &MpVibrato,
         note: Note,
+        detune: DetuneCentsOutput,
     ) -> Result<ManualVibrato, ChannelError> {
         if mp.depth_in_cents == 0 {
             return Err(ChannelError::MpDepthZero);
@@ -404,7 +430,10 @@ impl<'a> ChannelBcGenerator<'a> {
             IeState::Unknown => return Err(ChannelError::CannotUseMpWithoutInstrument),
         };
 
-        let pitch = self.pitch_table.pitch_for_note(instrument_id, note);
+        let pitch = self
+            .pitch_table
+            .pitch_for_note(instrument_id, note)
+            .wrapping_add_signed(detune.as_i16());
 
         // Calculate the minimum and maximum pitches of the vibrato.
         // This produces more accurate results when cents is very large (ie, 400)
@@ -429,6 +458,59 @@ impl<'a> ChannelBcGenerator<'a> {
             }),
             Err(_) => Err(ChannelError::MpPitchOffsetTooLarge(po_per_tick)),
         }
+    }
+
+    fn calculate_detune_for_note(&self, note: Note) -> Result<DetuneCentsOutput, ChannelError> {
+        match self.detune_cents.as_i16() {
+            0 => Ok(DetuneCentsOutput(DetuneValue::ZERO)),
+            cents => {
+                let instrument_id = match self.bc.get_state().instrument {
+                    IeState::Known(i) | IeState::Maybe(i) => i,
+                    IeState::Unknown => {
+                        return Err(ChannelError::CannotUseDetuneCentsWithoutInstrument)
+                    }
+                };
+                let pitch = self.pitch_table.pitch_for_note(instrument_id, note);
+                let pow = f64::from(cents) / f64::from(SEMITONES_PER_OCTAVE as u32 * 100);
+                let d = f64::round(f64::from(pitch) * 2.0_f64.powf(pow) - f64::from(pitch));
+
+                if d < i32::MIN.into() || d > i32::MAX.into() {
+                    return Err(ChannelError::DetuneCentsTooLargeForNote(i32::MAX));
+                }
+                let d = d as i32;
+
+                match d.try_into() {
+                    Ok(d) => Ok(DetuneCentsOutput(d)),
+                    Err(_) => Err(ChannelError::DetuneCentsTooLargeForNote(d)),
+                }
+            }
+        }
+    }
+
+    fn emit_detune_output(&mut self, detune: DetuneCentsOutput) {
+        let detune = detune.0;
+
+        if detune != DetuneValue::ZERO {
+            self.set_detune_if_changed(detune);
+        }
+    }
+
+    fn set_detune_if_changed(&mut self, detune: DetuneValue) {
+        let state = self.bc.get_state();
+        if !state.detune.is_known_and_eq(&detune) {
+            self.bc.set_detune(detune);
+        }
+    }
+
+    fn play_note_with_detune(
+        &mut self,
+        note: Note,
+        length: PlayNoteTicks,
+    ) -> Result<(), ChannelError> {
+        self.emit_detune_output(self.calculate_detune_for_note(note)?);
+        self.bc.play_note(note, length)?;
+
+        Ok(())
     }
 
     fn split_wait_length(
@@ -602,11 +684,14 @@ impl<'a> ChannelBcGenerator<'a> {
         }
     }
 
-    fn play_note_with_mp(
+    fn play_note_with_mp_and_detune_cents(
         &mut self,
         note: Note,
         pn_ticks: PlayNoteTicks,
     ) -> Result<(), ChannelError> {
+        let detune = self.calculate_detune_for_note(note)?;
+        self.emit_detune_output(detune);
+
         let vibrato = self.bc.get_state().vibrato;
 
         match &self.mp {
@@ -638,7 +723,7 @@ impl<'a> ChannelBcGenerator<'a> {
                 }
             }
             MpState::Mp(mp) => {
-                let cv = self.calculate_vibrato_for_note(mp, note)?;
+                let cv = self.calculate_vibrato_for_note(mp, note, detune)?;
 
                 match vibrato {
                     v if v
@@ -798,6 +883,9 @@ impl<'a> ChannelBcGenerator<'a> {
             + tie_length
             + rest_after_note.0;
 
+        let detune_note1 = self.calculate_detune_for_note(note1)?;
+        let detune_note2 = self.calculate_detune_for_note(note2)?;
+
         let play_note1 = self.bc.get_state().prev_slurred_note != SlurredNoteState::Slurred(note1);
 
         // Play note1 (if required)
@@ -805,6 +893,7 @@ impl<'a> ChannelBcGenerator<'a> {
             (true, 0) => {
                 // Play note1 for a single tick
                 let t = PlayNoteTicks::NoKeyOff(BcTicksNoKeyOff::try_from(1).unwrap());
+                self.emit_detune_output(detune_note1);
                 self.bc.play_note(note1, t)?;
 
                 // subtract 1 tick from slide_length
@@ -813,6 +902,7 @@ impl<'a> ChannelBcGenerator<'a> {
             (true, _) => {
                 let (pn_length, wait) = Self::split_note_length(delay_length, true)?;
 
+                self.emit_detune_output(detune_note1);
                 self.bc.play_note(note1, pn_length)?;
                 if !wait.is_zero() {
                     // no keyoff event
@@ -869,8 +959,16 @@ impl<'a> ChannelBcGenerator<'a> {
                     IeState::Known(i) | IeState::Maybe(i) => i,
                     IeState::Unknown => return Err(ChannelError::PortamentoRequiresInstrument),
                 };
-                let p1: i32 = self.pitch_table.pitch_for_note(instrument_id, note1).into();
-                let p2: i32 = self.pitch_table.pitch_for_note(instrument_id, note2).into();
+                let p1: i32 = self
+                    .pitch_table
+                    .pitch_for_note(instrument_id, note1)
+                    .wrapping_add_signed(detune_note1.as_i16())
+                    .into();
+                let p2: i32 = self
+                    .pitch_table
+                    .pitch_for_note(instrument_id, note2)
+                    .wrapping_add_signed(detune_note2.as_i16())
+                    .into();
                 let delta = p2 - p1;
 
                 let ticks = i32::try_from(slide_length.value()).unwrap();
@@ -890,6 +988,7 @@ impl<'a> ChannelBcGenerator<'a> {
         let (p_length, after) =
             self.split_play_note_length(slide_length + tie_length, is_slur, rest_after_note)?;
 
+        self.emit_detune_output(detune_note2);
         self.bc.portamento(note2, velocity, p_length)?;
 
         self.after_note(after)?;
@@ -949,16 +1048,17 @@ impl<'a> ChannelBcGenerator<'a> {
 
         self.bc.start_loop(Some(n_loops))?;
 
-        for (i, n) in notes.iter().enumerate() {
+        for (i, &n) in notes.iter().enumerate() {
             if i == break_point && i != 0 {
                 self.bc.skip_last_loop()?;
             }
-            match self.bc.play_note(*n, note_length) {
+
+            match self.play_note_with_detune(n, note_length) {
                 Ok(()) => (),
                 Err(e) => {
                     // Hides an unneeded "loop stack not empty" (or end_loop) error
                     let _ = self.bc.end_loop(None);
-                    return Err(e.into());
+                    return Err(e);
                 }
             }
         }
@@ -967,7 +1067,7 @@ impl<'a> ChannelBcGenerator<'a> {
 
         if last_note_ticks > 0 {
             // The last note to play is always a keyoff note.
-            self.bc.play_note(
+            self.play_note_with_detune(
                 notes[break_point],
                 PlayNoteTicks::KeyOff(BcTicksKeyOff::try_from(last_note_ticks)?),
             )?;
@@ -1290,9 +1390,15 @@ impl<'a> ChannelBcGenerator<'a> {
             }
 
             &Command::SetDetune(detune) => {
-                let state = self.bc.get_state();
-                if !state.detune.is_known_and_eq(&detune) {
-                    self.bc.set_detune(detune);
+                self.set_detune_if_changed(detune);
+                self.detune_cents = DetuneCents::ZERO;
+            }
+
+            &Command::SetDetuneCents(detune_cents) => {
+                self.detune_cents = detune_cents;
+
+                if detune_cents == DetuneCents::ZERO {
+                    self.set_detune_if_changed(DetuneValue::ZERO);
                 }
             }
 
@@ -1305,7 +1411,7 @@ impl<'a> ChannelBcGenerator<'a> {
                 let (pn_ticks, after) =
                     self.split_play_note_length(length, is_slur, rest_after_note)?;
 
-                self.play_note_with_mp(note, pn_ticks)?;
+                self.play_note_with_mp_and_detune_cents(note, pn_ticks)?;
                 self.after_note(after)?;
             }
 

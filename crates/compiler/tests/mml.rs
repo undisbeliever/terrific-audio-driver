@@ -995,6 +995,131 @@ A @1 D+30 !s D+30 a
 }
 
 #[test]
+fn test_detune_cents() {
+    assert_line_matches_bytecode("MD+50 a", &["set_detune +106", "play_note a4 24"]);
+
+    // Test deduplication
+    assert_line_matches_bytecode(
+        "MD-50 a a",
+        &["set_detune -103", "play_note a4 24", "play_note a4 24"],
+    );
+
+    // From mml-syntax.md
+    assert_line_matches_line("MD+20 c d e", "D+25 c D+28 d D+31 e");
+
+    assert_line_matches_bytecode(
+        "MD+25 a > a > a",
+        &[
+            "set_detune +52",
+            "play_note a4 24",
+            "set_detune +105",
+            "play_note a5 24",
+            "set_detune +210",
+            "play_note a6 24",
+        ],
+    );
+
+    assert_line_matches_bytecode(
+        "MD-5 a > a > a",
+        &[
+            "set_detune -10",
+            "play_note a4 24",
+            "set_detune -21",
+            "play_note a5 24",
+            "set_detune -42",
+            "play_note a6 24",
+        ],
+    );
+
+    // MD affects portamento
+    assert_line_matches_bytecode(
+        "MD-30 o5 {dg}2",
+        &[
+            "set_detune -83",
+            "play_note d5 no_keyoff 1",
+            "set_detune -110",
+            "portamento g5 keyoff +34 47",
+        ],
+    );
+
+    // MD affects broken chords
+    assert_line_matches_line_and_bytecode(
+        "MD+25 {{dgf}}",
+        "[D+35 d%1 & : D+47 g%1 & D+42 f%1 &]8 D+47 g%2",
+        &[
+            "start_loop 8",
+            "set_detune +35",
+            "play_note d4 no_keyoff 1",
+            "skip_last_loop",
+            "set_detune +47",
+            "play_note g4 no_keyoff 1",
+            "set_detune +42",
+            "play_note f4 no_keyoff 1",
+            "end_loop",
+            "set_detune +47",
+            "play_note g4 keyoff 2",
+        ],
+    );
+
+    // MD0 disables manual detune immediatley
+    assert_line_matches_bytecode(
+        "D+22 c MD0 r d",
+        &[
+            "set_detune +22",
+            "play_note c4 24",
+            "disable_detune",
+            "rest 24",
+            "play_note d4 24",
+        ],
+    );
+
+    // MD0 disables detune immediatley
+    assert_line_matches_bytecode(
+        "MD+75 c MD0 r d",
+        &[
+            "set_detune +95",
+            "play_note c4 24",
+            "disable_detune",
+            "rest 24",
+            "play_note d4 24",
+        ],
+    );
+
+    // `D0` disables detune_cents
+    assert_line_matches_bytecode(
+        "MD-75 c D0 r d",
+        &[
+            "set_detune -91",
+            "play_note c4 24",
+            "disable_detune",
+            "rest 24",
+            "play_note d4 24",
+        ],
+    );
+
+    // `D` disables detune_cents
+    assert_line_matches_bytecode(
+        "MD-75 c D+80 r d",
+        &[
+            "set_detune -91",
+            "play_note c4 24",
+            "set_detune +80",
+            "rest 24",
+            "play_note d4 24",
+        ],
+    );
+
+    // Test limits
+    assert_line_matches_bytecode("MD+600", &[]);
+    assert_line_matches_bytecode("MD-600", &[]);
+    assert_error_in_mml_line("MD+601", 1, ValueError::DetuneCentsOutOfRange(601).into());
+    assert_error_in_mml_line("MD-601", 1, ValueError::DetuneCentsOutOfRange(-601).into());
+
+    assert_error_in_mml_line("MD", 1, ValueError::NoDetuneCents.into());
+    assert_error_in_mml_line("MD100", 1, ValueError::NoDetuneCentsSign.into());
+}
+
+#[test]
 fn play_long_note() {
     // `wait` can rest for 1 to 256 ticks.
     // `rest` can rest for 2 to 257 tick.

@@ -68,6 +68,7 @@ pub enum Token<'a> {
     EndPortamento,
     ManualVibrato,
     MpVibrato,
+    DetuneCents,
     SetAdsr,
     SetGain(GainMode),
     TempGain(GainMode),
@@ -470,6 +471,7 @@ fn next_token<'a>(scanner: &mut Scanner<'a>) -> Option<TokenWithPosition<'a>> {
                 (b'{', Some(b'{')) => two_ascii_token!(Token::StartBrokenChord),
                 (b'}', Some(b'}')) => two_ascii_token!(Token::EndBrokenChord),
                 (b'M', Some(b'P')) => two_ascii_token!(Token::MpVibrato),
+                (b'M', Some(b'D')) => two_ascii_token!(Token::DetuneCents),
 
                 (b'_', _) => one_ascii_token!(Token::Transpose),
                 (b'{', _) => one_ascii_token!(Token::StartPortamento),

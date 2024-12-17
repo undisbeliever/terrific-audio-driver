@@ -22,6 +22,7 @@ Audio driver changes:
 
 MML changes:
  * Allow 0 ticks before and after a `:` skip last loop MML command.  For example: `[ ceg : v+2 ]4`
+ * Added `MD` automatic detune by cents MML command
 
 Bytecode assembly changes:
  * Allow 0 ticks before and after `skip_last_loop` instruction

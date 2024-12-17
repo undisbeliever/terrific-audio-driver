@@ -15,7 +15,7 @@ use crate::bytecode::{
     VolumeSlideTicks,
 };
 use crate::channel_bc_generator::{
-    FineQuantization, PortamentoSpeed, Quantization, MAX_BROKEN_CHORD_NOTES,
+    DetuneCents, FineQuantization, PortamentoSpeed, Quantization, MAX_BROKEN_CHORD_NOTES,
 };
 use crate::data::{LoopSetting, Name};
 use crate::driver_constants::{
@@ -158,6 +158,7 @@ pub enum ValueError {
     VibratoQuarterWavelengthOutOfRange(u32),
 
     DetuneValueOutOfRange(i32),
+    DetuneCentsOutOfRange(i32),
 
     NoPxPanSign,
     NoRelativeVolumeSign,
@@ -165,6 +166,7 @@ pub enum ValueError {
     NoDirectionInPortamentoVelocity,
     NoTransposeSign,
     NoDetuneValueSign,
+    NoDetuneCentsSign,
 
     PortamentoVelocityZero,
     PortamentoVelocityOutOfRange(i32),
@@ -242,6 +244,7 @@ pub enum ValueError {
     NoEarlyReleaseMinTicks,
     NoEarlyReleaseMinTicksOrGain,
     NoDetuneValue,
+    NoDetuneCents,
 
     NoCommaQuarterWavelength,
     NoCommaVolumeSlideTicks,
@@ -498,6 +501,8 @@ pub enum ChannelError {
     CannotUseMpWithoutInstrument,
     MpPitchOffsetTooLarge(u32),
     MpDepthZero,
+    CannotUseDetuneCentsWithoutInstrument,
+    DetuneCentsTooLargeForNote(i32),
 
     PortamentoTooShort,
     PortamentoTooLong,
@@ -914,6 +919,9 @@ impl Display for ValueError {
             Self::DetuneValueOutOfRange(v) => {
                 out_of_range!("detune", v, DetuneValue)
             }
+            Self::DetuneCentsOutOfRange(v) => {
+                out_of_range!("detune cents", v, DetuneCents)
+            }
 
             Self::NoPxPanSign => {
                 write!(f, "missing + or - in px pan")
@@ -932,6 +940,9 @@ impl Display for ValueError {
             }
             Self::NoDetuneValueSign => {
                 write!(f, "missing + or - in detune value")
+            }
+            Self::NoDetuneCentsSign => {
+                write!(f, "missing + or - in detune cents")
             }
 
             Self::PortamentoVelocityZero => write!(f, "portamento velocity cannot be 0"),
@@ -1049,6 +1060,7 @@ impl Display for ValueError {
                 write!(f, "no early-release minimum ticks or GAIN (F, D, E, I, B)")
             }
             Self::NoDetuneValue => write!(f, "no detune value"),
+            Self::NoDetuneCents => write!(f, "no detune cents"),
 
             Self::NoCommaQuarterWavelength => {
                 write!(f, "cannot parse quarter-wavelength, expected a comma ','")
@@ -1449,6 +1461,19 @@ impl Display for ChannelError {
                     "cannot MP vibrato note.  Pitch offset per tick too large ({}, max: {})",
                     po,
                     VibratoPitchOffsetPerTick::MAX.value()
+                )
+            }
+
+            Self::CannotUseDetuneCentsWithoutInstrument => {
+                write!(f, "cannot use MD without setting an instrument")
+            }
+            Self::DetuneCentsTooLargeForNote(d) => {
+                write!(
+                    f,
+                    "cannot detune note.  Detune cents is too large ({}, expected: {} - {})",
+                    d,
+                    DetuneValue::MIN.as_i16(),
+                    DetuneValue::MAX.as_i16(),
                 )
             }
             Self::MpDepthZero => write!(f, "MP vibrato depth cannot be 0"),
