@@ -118,7 +118,7 @@ Please see the included [licenses file](licenses.md) for the full third party li
   * [windows_x86_64_msvc 0.52.6](https://github.com/microsoft/windows-rs), MIT License
   * [markdown 1.0.0-alpha.21](https://github.com/wooorm/markdown-rs), MIT License
   * [lazy_static 1.5.0](https://github.com/rust-lang-nursery/lazy-static.rs), MIT License
-  * [cc 1.2.3](https://github.com/rust-lang/cc-rs), MIT License
+  * [cc 1.2.4](https://github.com/rust-lang/cc-rs), MIT License
   * [cfg-if 1.0.0](https://github.com/alexcrichton/cfg-if), MIT License
   * [cmake 0.1.52](https://github.com/rust-lang/cmake-rs), MIT License
   * [bitflags 1.3.2](https://github.com/bitflags/bitflags), MIT License
@@ -155,11 +155,11 @@ Please see the included [licenses file](licenses.md) for the full third party li
   * [relative-path 1.9.3](https://github.com/udoprog/relative-path), MIT License
   * [sdl2-sys 0.37.0](https://github.com/rust-sdl2/rust-sdl2), MIT License
   * [fltk-sys 1.5.0](https://github.com/fltk-rs/fltk-rs), MIT License
-  * [fltk 1.5.0](https://github.com/fltk-rs/fltk-rs), MIT License
-  * [cxx-build 1.0.133](https://github.com/dtolnay/cxx), MIT License
-  * [cxx 1.0.133](https://github.com/dtolnay/cxx), MIT License
-  * [cxxbridge-flags 1.0.133](https://github.com/dtolnay/cxx), MIT License
-  * [cxxbridge-macro 1.0.133](https://github.com/dtolnay/cxx), MIT License
+  * [fltk 1.5.1](https://github.com/fltk-rs/fltk-rs), MIT License
+  * [cxx-build 1.0.134](https://github.com/dtolnay/cxx), MIT License
+  * [cxx 1.0.134](https://github.com/dtolnay/cxx), MIT License
+  * [cxxbridge-flags 1.0.134](https://github.com/dtolnay/cxx), MIT License
+  * [cxxbridge-macro 1.0.134](https://github.com/dtolnay/cxx), MIT License
   * [itoa 1.0.14](https://github.com/dtolnay/itoa), MIT License
   * [link-cplusplus 1.0.9](https://github.com/dtolnay/link-cplusplus), MIT License
   * [once_cell 1.20.2](https://github.com/matklad/once_cell), MIT License
@@ -168,8 +168,8 @@ Please see the included [licenses file](licenses.md) for the full third party li
   * [quote 1.0.37](https://github.com/dtolnay/quote), MIT License
   * [rustversion 1.0.18](https://github.com/dtolnay/rustversion), MIT License
   * [scratch 1.0.7](https://github.com/dtolnay/scratch), MIT License
-  * [serde 1.0.215](https://github.com/serde-rs/serde), MIT License
-  * [serde_derive 1.0.215](https://github.com/serde-rs/serde), MIT License
+  * [serde 1.0.216](https://github.com/serde-rs/serde), MIT License
+  * [serde_derive 1.0.216](https://github.com/serde-rs/serde), MIT License
   * [serde_json 1.0.133](https://github.com/serde-rs/json), MIT License
   * [syn 2.0.90](https://github.com/dtolnay/syn), MIT License
   * [unicode-ident 1.0.14](https://github.com/dtolnay/unicode-ident), MIT License
@@ -183,8 +183,8 @@ Please see the included [licenses file](licenses.md) for the full third party li
   * [clap_derive 4.5.18](https://github.com/clap-rs/clap), MIT License
   * [clap_lex 0.7.4](https://github.com/clap-rs/clap), MIT License
   * [winapi-util 0.1.9](https://github.com/BurntSushi/winapi-util), MIT License
-  * [crossbeam-channel 0.5.13](https://github.com/crossbeam-rs/crossbeam), MIT License
-  * [crossbeam-utils 0.8.20](https://github.com/crossbeam-rs/crossbeam), MIT License
+  * [crossbeam-channel 0.5.14](https://github.com/crossbeam-rs/crossbeam), MIT License
+  * [crossbeam-utils 0.8.21](https://github.com/crossbeam-rs/crossbeam), MIT License
   * [aho-corasick 1.1.3](https://github.com/BurntSushi/aho-corasick), MIT License
   * [memchr 2.7.4](https://github.com/BurntSushi/memchr), MIT License
   * [termcolor 1.4.1](https://github.com/BurntSushi/termcolor), MIT License

@@ -496,7 +496,7 @@ DEALINGS IN THE SOFTWARE.
 ## MIT License
 
 Used by:
-  * [cc 1.2.3](https://github.com/rust-lang/cc-rs)
+  * [cc 1.2.4](https://github.com/rust-lang/cc-rs)
   * [cfg-if 1.0.0](https://github.com/alexcrichton/cfg-if)
   * [cmake 0.1.52](https://github.com/rust-lang/cmake-rs)
 
@@ -1096,7 +1096,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 Used by:
   * [fltk-sys 1.5.0](https://github.com/fltk-rs/fltk-rs)
-  * [fltk 1.5.0](https://github.com/fltk-rs/fltk-rs)
+  * [fltk 1.5.1](https://github.com/fltk-rs/fltk-rs)
 
 ```
 MIT License
@@ -1127,10 +1127,10 @@ SOFTWARE.
 ## MIT License
 
 Used by:
-  * [cxx-build 1.0.133](https://github.com/dtolnay/cxx)
-  * [cxx 1.0.133](https://github.com/dtolnay/cxx)
-  * [cxxbridge-flags 1.0.133](https://github.com/dtolnay/cxx)
-  * [cxxbridge-macro 1.0.133](https://github.com/dtolnay/cxx)
+  * [cxx-build 1.0.134](https://github.com/dtolnay/cxx)
+  * [cxx 1.0.134](https://github.com/dtolnay/cxx)
+  * [cxxbridge-flags 1.0.134](https://github.com/dtolnay/cxx)
+  * [cxxbridge-macro 1.0.134](https://github.com/dtolnay/cxx)
   * [itoa 1.0.14](https://github.com/dtolnay/itoa)
   * [link-cplusplus 1.0.9](https://github.com/dtolnay/link-cplusplus)
   * [once_cell 1.20.2](https://github.com/matklad/once_cell)
@@ -1139,8 +1139,8 @@ Used by:
   * [quote 1.0.37](https://github.com/dtolnay/quote)
   * [rustversion 1.0.18](https://github.com/dtolnay/rustversion)
   * [scratch 1.0.7](https://github.com/dtolnay/scratch)
-  * [serde 1.0.215](https://github.com/serde-rs/serde)
-  * [serde_derive 1.0.215](https://github.com/serde-rs/serde)
+  * [serde 1.0.216](https://github.com/serde-rs/serde)
+  * [serde_derive 1.0.216](https://github.com/serde-rs/serde)
   * [serde_json 1.0.133](https://github.com/serde-rs/json)
   * [syn 2.0.90](https://github.com/dtolnay/syn)
   * [unicode-ident 1.0.14](https://github.com/dtolnay/unicode-ident)
@@ -1367,8 +1367,8 @@ THE SOFTWARE.
 ## MIT License
 
 Used by:
-  * [crossbeam-channel 0.5.13](https://github.com/crossbeam-rs/crossbeam)
-  * [crossbeam-utils 0.8.20](https://github.com/crossbeam-rs/crossbeam)
+  * [crossbeam-channel 0.5.14](https://github.com/crossbeam-rs/crossbeam)
+  * [crossbeam-utils 0.8.21](https://github.com/crossbeam-rs/crossbeam)
 
 ```
 The MIT License (MIT)
