@@ -69,6 +69,7 @@ Instructions
     * CAUTION: `play_pitch` instructions are unaffected by detune.
     * CAUTION: detune is not disabled when the instrument is changed.
     * CAUTION: detune persists across subroutine calls
+ * `disable_detune` - Resets detune to 0.
 
  * `set_volume <volume>` - Set the channel's volume (0-255).
  * `adjust_volume <i8>` - Adjusts the channel's volume.
