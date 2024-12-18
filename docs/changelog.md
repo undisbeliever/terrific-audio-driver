@@ -1,6 +1,14 @@
 Terrific Audio Driver Changelog
 ===============================
 
+Version 0.0.16
+==============
+
+**Known bugs**:
+ * Sample Analyser spectrum can only analyse the first 32768 samples in a long BRR sample
+
+GUI changes:
+ * Sample Analyser can now analyse samples up to a length of 32768.
 
 Version 0.0.15
 ==============
