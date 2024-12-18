@@ -3022,6 +3022,35 @@ fn test_portamento_err() {
 }
 
 #[test]
+fn test_portamento_note_tracking_bugfix_1() {
+    // Confirm a note tracking buf that caused the 2nd and 3rd portamento to not key-on is fixed
+    assert_line_matches_bytecode(
+        "{cd} {cf} {cg}",
+        &[
+            "play_note c4 no_keyoff 1",
+            "portamento d4 keyoff +12 23",
+            "play_note c4 no_keyoff 1",
+            "portamento f4 keyoff +33 23",
+            "play_note c4 no_keyoff 1",
+            "portamento g4 keyoff +49 23",
+        ],
+    );
+}
+
+#[test]
+fn test_portamento_note_tracking_bugfix_2() {
+    assert_line_matches_bytecode(
+        "{cd} & {df} & {fg}",
+        &[
+            "play_note c4 no_keyoff 1",
+            "portamento d4 no_keyoff +11 23",
+            "portamento f4 no_keyoff +19 24",
+            "portamento g4 keyoff +15 24",
+        ],
+    );
+}
+
+#[test]
 fn test_vibrato() {
     assert_line_matches_bytecode(
         "~23,4 a ~0",

@@ -1067,6 +1067,10 @@ impl<'a> Bytecode<'a> {
         let r = self._test_note_in_range(note);
 
         self.state.tick_counter += length.to_tick_count();
+        self.state.prev_slurred_note = match length {
+            PlayNoteTicks::KeyOff(_) => SlurredNoteState::None,
+            PlayNoteTicks::NoKeyOff(_) => SlurredNoteState::Slurred(note),
+        };
 
         let speed = velocity.pitch_offset_per_tick();
         let note_param = NoteOpcode::new(note, &length);

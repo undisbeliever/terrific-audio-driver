@@ -7,6 +7,10 @@ Version 0.0.16
 **Known bugs**:
  * Sample Analyser spectrum can only analyse the first 32768 samples in a long BRR sample
 
+MML changes:
+ * Fixed a note tracking bug that can cause successive `{}` portamentos to not key-on.
+   For example, `{cd} {cf} {cg}` will only play a single portamento.
+
 GUI changes:
  * Sample Analyser can now analyse samples up to a length of 32768.
 
