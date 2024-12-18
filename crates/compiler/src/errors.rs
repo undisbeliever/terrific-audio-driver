@@ -33,6 +33,7 @@ use crate::mml::command_parser::{
 use crate::mml::{MAX_MML_PREFIX_STR_LENGTH, MAX_MML_PREFIX_TICKS};
 use crate::notes::{MidiNote, Note, Octave};
 use crate::path::PathString;
+use crate::pitch_table::InstrumentHintFreq;
 use crate::sound_effects::MAX_SFX_TICKS;
 use crate::time::{Bpm, TickClock, TickCounter, ZenLen};
 use crate::value_newtypes::{SignedValueNewType, UnsignedValueNewType};
@@ -287,6 +288,12 @@ pub enum BytecodeError {
         subroutine_range: RangeInclusive<Note>,
         inst_range: RangeInclusive<Note>,
     },
+    SubroutineInstrumentHintFrequencyMismatch {
+        subroutine: InstrumentHintFreq,
+        instrument: InstrumentHintFreq,
+    },
+    SubroutineInstrumentHintSampleMismatch,
+    SubroutineInstrumentHintNoInstrumentSet,
 
     MissingEndLoopInAsmBlock,
     CannotModifyLoopOutsideAsmBlock,
@@ -522,6 +529,13 @@ pub enum ChannelError {
 
     TooManySfxTicks(TickCounter),
     TooManyTicksInMmlPrefix(TickCounter),
+
+    NoInstrumentHint,
+    InstrumentHintAlreadySet,
+    InstrumentHintOnlyAllowedInSubroutines,
+    InstrumentHintInstrumentAlreadySet,
+    CannotSetInstrumentHintForSample,
+    CannotSetInstrumentHintForUnknown,
 
     // Bytecode assembler errors
     UnknownInstruction(String),
@@ -1185,6 +1199,20 @@ impl Display for BytecodeError {
                     )
                 }
             }
+            Self::SubroutineInstrumentHintFrequencyMismatch {
+                subroutine: sub_freq,
+                instrument: inst_freq,
+            } => {
+                write!(f, "subroutine instrument hint frequency ({sub_freq}) does not match current instrument ({inst_freq})")
+            }
+            Self::SubroutineInstrumentHintSampleMismatch => write!(
+                f,
+                "subroutine has an instrument hint and the current instrument is a sample"
+            ),
+            Self::SubroutineInstrumentHintNoInstrumentSet => write!(
+                f,
+                "subroutine has an instrument hint and no instrument is set"
+            ),
 
             Self::MissingEndLoopInAsmBlock => {
                 write!(
@@ -1527,6 +1555,26 @@ impl Display for ChannelError {
                 t.value(),
                 MAX_MML_PREFIX_TICKS.value()
             ),
+
+            Self::NoInstrumentHint => write!(f, "no instrument hint"),
+            Self::InstrumentHintOnlyAllowedInSubroutines => {
+                write!(
+                    f,
+                    "cannot set instrument hint: hints are only allowed in subroutines"
+                )
+            }
+            Self::InstrumentHintAlreadySet => {
+                write!(f, "cannot set instrument hint: hint already set")
+            }
+            Self::InstrumentHintInstrumentAlreadySet => {
+                write!(f, "cannot set instrument hint: instrument already set")
+            }
+            Self::CannotSetInstrumentHintForSample => {
+                write!(f, "cannot set instrument hint: not an instrument")
+            }
+            Self::CannotSetInstrumentHintForUnknown => {
+                write!(f, "cannot set instrument hint: unknown instrument")
+            }
 
             // Bytecode assembler errors
             Self::UnknownInstruction(s) => write!(f, "unknown instruction {}", s),

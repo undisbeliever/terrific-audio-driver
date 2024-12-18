@@ -893,6 +893,7 @@ struct MmlColors {
     metadata_values: Color,
 
     instruments: Color,
+    instrument_hints: Color,
     subroutines: Color,
 
     channel_names: Color,
@@ -913,6 +914,8 @@ const MML_COLORS: MmlColors = MmlColors {
     metadata: Color::DarkRed,
     metadata_values: Color::DarkRed,
     instruments: Color::DarkGreen,
+    // ::TODO slightly different green for instrument hint::
+    instrument_hints: Color::DarkGreen,
     mml_bc_asm: Color::DarkGreen,
 
     subroutines: Color::from_rgb(0xcc, 0x55, 0x00), // hsl(25, 100, 40)
@@ -963,6 +966,11 @@ enum Style {
     BytecodeAsmComment,
     BytecodeAsmSeparator,
 
+    InstrumentHintQuestionMark,
+    InstrumentHint,
+    InstrumentHintNumber,
+    InstrumentHintName,
+
     Error,
     BytecodeError,
 
@@ -984,6 +992,7 @@ impl Style {
 
             b'F' => Style::InstrumentLineDefinition,
             b'G' => Style::InstrumentLine,
+
             b'H' => Style::Instrument,
             b'I' => Style::InstrumentNumber,
             b'J' => Style::InstrumentName,
@@ -1005,17 +1014,22 @@ impl Style {
             b'V' => Style::BytecodeAsmComment,
             b'W' => Style::BytecodeAsmSeparator,
 
-            b'X' => Style::Error,
-            b'Y' => Style::BytecodeError,
+            b'X' => Style::InstrumentHintQuestionMark,
+            b'Y' => Style::InstrumentHint,
+            b'Z' => Style::InstrumentHintNumber,
+            b'[' => Style::InstrumentHintName,
+
+            b'\\' => Style::Error,
+            b']' => Style::BytecodeError,
 
             // MUST edit `NOTE_TRACKER_STR` when this character changes
-            b'Z' => Style::NoteTracking,
+            b'^' => Style::NoteTracking,
 
             _ => Style::Unknown,
         }
     }
 
-    const NOTE_TRACKER_STR: &'static str = "Z";
+    const NOTE_TRACKER_STR: &'static str = "^";
 
     const fn to_u8_char(self) -> u8 {
         b'A' + (self as u8)
@@ -1067,6 +1081,10 @@ fn highlight_data(mml_colors: &MmlColors, font_size: i32) -> Vec<StyleTableEntry
         courier(mml_colors.mml_bc_asm),
         courier(mml_colors.comments),
         courier(mml_colors.normal),
+        courier_bold(mml_colors.instrument_hints),
+        courier_bold(mml_colors.instrument_hints),
+        courier(mml_colors.instrument_hints),
+        courier(mml_colors.instrument_hints),
         bg_bold(mml_colors.error_bg),
         courier_bold(mml_colors.bytecode_error),
         bg_bold(mml_colors.tracker_bg),
@@ -1145,6 +1163,23 @@ fn next_style_mml(current: Style, c: u8) -> Style {
             _ => Style::InstrumentName,
         },
 
+        Style::InstrumentHintQuestionMark => match c {
+            b'@' => Style::InstrumentHint,
+            _ => Style::InstrumentName,
+        },
+        Style::InstrumentHint => match c {
+            c if c.is_ascii_digit() => Style::InstrumentHintNumber,
+            _ => Style::InstrumentHintName,
+        },
+        Style::InstrumentHintNumber => match c {
+            c if c.is_ascii_digit() => Style::InstrumentHintNumber,
+            _ => channel_or_subroutine_style(c),
+        },
+        Style::InstrumentHintName => match c {
+            b' ' => Style::Normal,
+            _ => Style::InstrumentHintName,
+        },
+
         Style::Subroutine => match c {
             c if c.is_ascii_digit() => Style::SubroutineNumber,
             _ => Style::SubroutineName,
@@ -1197,6 +1232,7 @@ fn next_style_mml(current: Style, c: u8) -> Style {
 fn channel_or_subroutine_style(c: u8) -> Style {
     match c {
         b'@' => Style::Instrument,
+        b'?' => Style::InstrumentHintQuestionMark,
         b'!' => Style::Subroutine,
         b'\\' => Style::SlashAsm0,
         _ => Style::Normal,

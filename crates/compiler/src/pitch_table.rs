@@ -413,3 +413,31 @@ impl PitchTable {
         &self.table_data_h[..self.n_pitches]
     }
 }
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct InstrumentHintFreq(u32);
+
+impl InstrumentHintFreq {
+    // Determines accuracy when comparing instrument hints
+    const FRACTIONAL_UNITS: u32 = 100;
+
+    pub fn from_freq(frequency: f64) -> Self {
+        let f = (frequency * Self::FRACTIONAL_UNITS as f64).round();
+        Self(f as u32)
+    }
+
+    pub fn from_instrument(inst: &Instrument) -> Self {
+        Self::from_freq(inst.freq)
+    }
+}
+
+impl std::fmt::Display for InstrumentHintFreq {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}.{} Hz",
+            self.0 / Self::FRACTIONAL_UNITS,
+            self.0 % Self::FRACTIONAL_UNITS
+        )
+    }
+}

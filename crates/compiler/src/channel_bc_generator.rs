@@ -6,12 +6,12 @@
 
 use crate::bytecode::{
     BcTicks, BcTicksKeyOff, BcTicksNoKeyOff, Bytecode, BytecodeContext, DetuneValue,
-    EarlyReleaseMinTicks, EarlyReleaseTicks, IeState, InstrumentId, LoopCount, NoiseFrequency, Pan,
-    PanSlideAmount, PanSlideTicks, PanbrelloAmplitude, PanbrelloQuarterWavelengthInTicks,
-    PlayNoteTicks, PlayPitchPitch, PortamentoVelocity, RelativePan, RelativeVolume,
-    SlurredNoteState, TremoloAmplitude, TremoloQuarterWavelengthInTicks, VibratoPitchOffsetPerTick,
-    VibratoQuarterWavelengthInTicks, VibratoState, Volume, VolumeSlideAmount, VolumeSlideTicks,
-    KEY_OFF_TICK_DELAY,
+    EarlyReleaseMinTicks, EarlyReleaseTicks, InstrumentId, InstrumentState, LoopCount,
+    NoiseFrequency, Pan, PanSlideAmount, PanSlideTicks, PanbrelloAmplitude,
+    PanbrelloQuarterWavelengthInTicks, PlayNoteTicks, PlayPitchPitch, PortamentoVelocity,
+    RelativePan, RelativeVolume, SlurredNoteState, TremoloAmplitude,
+    TremoloQuarterWavelengthInTicks, VibratoPitchOffsetPerTick, VibratoQuarterWavelengthInTicks,
+    VibratoState, Volume, VolumeSlideAmount, VolumeSlideTicks, KEY_OFF_TICK_DELAY,
 };
 use crate::bytecode_assembler::parse_asm_line;
 use crate::data::{self, UniqueNamesList};
@@ -254,7 +254,10 @@ pub(crate) enum Command {
     SkipLastLoop,
     EndLoop(LoopCount),
 
-    // index into Vec<ChannelData>.
+    // index into Vec<MmlInstrument>.
+    SetSubroutineInstrumentHint(usize),
+
+    // index into Vec<MmlInstrument>.
     SetInstrument(usize),
     SetAdsr(Adsr),
     SetGain(Gain),
@@ -426,8 +429,10 @@ impl<'a> ChannelBcGenerator<'a> {
             return Err(ChannelError::MpDepthZero);
         }
         let instrument_id = match self.bc.get_state().instrument {
-            IeState::Known(i) | IeState::Maybe(i) => i,
-            IeState::Unknown => return Err(ChannelError::CannotUseMpWithoutInstrument),
+            InstrumentState::Known(i) | InstrumentState::Maybe(i) | InstrumentState::Hint(i) => i,
+            InstrumentState::Unknown | InstrumentState::Unset => {
+                return Err(ChannelError::CannotUseMpWithoutInstrument)
+            }
         };
 
         let pitch = self
@@ -465,8 +470,10 @@ impl<'a> ChannelBcGenerator<'a> {
             0 => Ok(DetuneCentsOutput(DetuneValue::ZERO)),
             cents => {
                 let instrument_id = match self.bc.get_state().instrument {
-                    IeState::Known(i) | IeState::Maybe(i) => i,
-                    IeState::Unknown => {
+                    InstrumentState::Known(i)
+                    | InstrumentState::Maybe(i)
+                    | InstrumentState::Hint(i) => i,
+                    InstrumentState::Unknown | InstrumentState::Unset => {
                         return Err(ChannelError::CannotUseDetuneCentsWithoutInstrument)
                     }
                 };
@@ -956,8 +963,12 @@ impl<'a> ChannelBcGenerator<'a> {
             }
             None => {
                 let instrument_id = match self.bc.get_state().instrument {
-                    IeState::Known(i) | IeState::Maybe(i) => i,
-                    IeState::Unknown => return Err(ChannelError::PortamentoRequiresInstrument),
+                    InstrumentState::Known(i)
+                    | InstrumentState::Maybe(i)
+                    | InstrumentState::Hint(i) => i,
+                    InstrumentState::Unknown | InstrumentState::Unset => {
+                        return Err(ChannelError::PortamentoRequiresInstrument)
+                    }
                 };
                 let p1: i32 = self
                     .pitch_table
@@ -1315,6 +1326,14 @@ impl<'a> ChannelBcGenerator<'a> {
                 | BytecodeContext::SoundEffect
                 | BytecodeContext::MmlPrefix => return Err(ChannelError::CannotSetLoopPoint),
             },
+
+            &Command::SetSubroutineInstrumentHint(inst_index) => {
+                let inst = self
+                    .instruments
+                    .get(inst_index)
+                    .expect("invalid instrument index");
+                self.bc.set_subroutine_instrument_hint(inst)?;
+            }
 
             &Command::SetInstrument(inst_index) => {
                 self.set_instrument(inst_index)?;

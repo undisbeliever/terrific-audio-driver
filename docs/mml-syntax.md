@@ -220,6 +220,12 @@ Numbers can be decimal, or hexadecimal when prefixed with `$` (ie, `$ff`)
 
  * `@<id>` - Set instrument
     * The instrument should not be changed in the middle of a slur.
+ * `?@<id>` - Set subroutine instrument hint
+    * Sets an instrument hint for `{}` portamento, `MP` and `MD` commands without emitting an
+      `set_instrument` instruction.
+    * The `?@` command can only be used in subroutines.
+    * CAUTION: A subroutine with a `?@` hint can only be called if the instrument source frequency
+      matches the `?@` hint.
  * `A<attack>,<decay>,<sustain_level>,<sustain_rate>` - Set the channel's ADSR register
  * `G` - Set the channel's GAIN register (disables ADSR)
      * `G<gain>` - write the raw 8 bit value to the GAIN register

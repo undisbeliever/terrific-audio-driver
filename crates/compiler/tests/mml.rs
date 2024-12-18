@@ -17,7 +17,7 @@ use compiler::envelope::{Adsr, Envelope, Gain};
 use compiler::errors::{BytecodeError, ChannelError, SongError, ValueError};
 use compiler::mml;
 use compiler::notes::{Note, Octave};
-use compiler::pitch_table::{build_pitch_table, PitchTable};
+use compiler::pitch_table::{build_pitch_table, InstrumentHintFreq, PitchTable};
 use compiler::songs::{SongData, Subroutine};
 use compiler::{bytecode_assembler, opcodes};
 
@@ -2650,6 +2650,441 @@ fn test_nested_subroutine_no_instrument_bug() {
 A !s
 "##,
         &["call_subroutine s"],
+    );
+}
+
+#[test]
+fn test_subroutine_instrument_hint_1() {
+    // Test MML with instrument hint has identical bytecode to MML with instrument set
+    let mml = r#"
+@1 f1000_o4
+
+!s ?@1 c d & {dg} {dg} MP50,10 c ~6,4 MD+60 c D0
+!s  @1 c d & {dg} {dg} MP50,10 c ~6,4 MD+60 c D0
+
+A @1 !s
+"#;
+
+    let bc_asm: &[&str] = &[
+        "play_note c4 keyoff 24",
+        "play_note d4 no_keyoff 24",
+        "portamento g4 keyoff +18 24",
+        "play_note d4 no_keyoff 1",
+        "portamento g4 keyoff +18 23",
+        "set_vibrato 3 10",
+        "play_note c4 keyoff 24",
+        "set_vibrato 6 4",
+        "set_detune +38",
+        "play_note c4 keyoff 24",
+        "disable_detune",
+    ];
+    let bc_asm = [bc_asm, &["set_instrument f1000_o4"], bc_asm].concat();
+
+    assert_mml_subroutine_matches_bytecode(mml, 0, &bc_asm);
+}
+
+#[test]
+fn test_subroutine_instrument_hint_2() {
+    // Tests different instruments are accepted
+    assert_mml_subroutine_matches_bytecode(
+        r#"
+@1 f1000_o4
+@2 f1000_o3_o5
+
+!s ?@1 {dg}
+
+A @1 !s @2 !s
+"#,
+        0,
+        &["play_note d4 no_keyoff 1", "portamento g4 keyoff +18 23"],
+    );
+
+    // Test MML instruments with ADSR/GAIN are accepted
+    assert_mml_subroutine_matches_bytecode(
+        r#"
+@1 dummy_instrument adsr 10 2 2 20
+@2 dummy_instrument gain F127
+
+!s ?@1 c
+
+A @1 !s @2 !s
+"#,
+        0,
+        &["play_note c4 24"],
+    );
+
+    // Test nested subroutines
+    // Also tests subroutine changes instrument
+    assert_mml_subroutine_matches_bytecode(
+        r#"
+@1 f1000_o4
+@2 f1000_o3_o5
+@3 f2000_o4
+
+!s1 ?@1 c
+!s2 !s1 {ge} @3 {fe}
+
+A @1 !s1 @2 !s1
+"#,
+        1,
+        &[
+            "call_subroutine s1",
+            "play_note g4 no_keyoff 1",
+            "portamento e4 keyoff -12 23",
+            "set_instrument f2000_o4",
+            "play_note f4 no_keyoff 1",
+            "portamento e4 keyoff -2 23",
+        ],
+    );
+}
+
+#[test]
+fn test_set_subroutine_instrument_hint_errors() {
+    assert_error_in_mml_line(
+        "?@1",
+        1,
+        ChannelError::InstrumentHintOnlyAllowedInSubroutines,
+    );
+
+    assert_one_subroutine_err_in_mml(
+        r#"
+@1 dummy_instrument
+
+!s ?@ c
+
+A @1 !s
+"#,
+        "!s",
+        4,
+        ChannelError::NoInstrumentHint,
+    );
+
+    assert_one_subroutine_err_in_mml(
+        r#"
+@1 dummy_instrument
+
+!s ?@unknown c
+
+A @1 !s
+"#,
+        "!s",
+        4,
+        ChannelError::CannotFindInstrument("unknown".to_owned()),
+    );
+
+    assert_one_subroutine_err_in_mml(
+        r#"
+@1 dummy_instrument
+
+!s ?@1 ?@1
+
+A @1 !s
+"#,
+        "!s",
+        8,
+        ChannelError::InstrumentHintAlreadySet,
+    );
+
+    assert_one_subroutine_err_in_mml(
+        r#"
+@1 dummy_instrument
+
+!s1 ?@1
+!s2 !s1 ?@1
+
+A @1 !s2
+"#,
+        "!s2",
+        9,
+        ChannelError::InstrumentHintAlreadySet,
+    );
+
+    assert_one_subroutine_err_in_mml(
+        r#"
+@1 dummy_instrument
+
+!s @1 ?@1
+
+A @1 !s
+"#,
+        "!s",
+        7,
+        ChannelError::InstrumentHintInstrumentAlreadySet,
+    );
+
+    assert_one_subroutine_err_in_mml(
+        r#"
+@1 dummy_instrument
+
+!s1 @1
+!s2 !s1 ?@1
+
+
+A @1 !s2
+"#,
+        "!s2",
+        9,
+        ChannelError::InstrumentHintInstrumentAlreadySet,
+    );
+
+    assert_one_subroutine_err_in_mml(
+        r#"
+@1 f1000_o4
+@sample sample
+
+!s ?@sample s0
+
+A @sample !s
+"#,
+        "!s",
+        4,
+        ChannelError::CannotSetInstrumentHintForSample,
+    );
+
+    assert_one_err_in_mml(
+        r#"
+@1 dummy_instrument
+
+!s ?@1
+
+A !s
+"#,
+        "A",
+        3,
+        BytecodeError::SubroutineInstrumentHintNoInstrumentSet.into(),
+    );
+
+    assert_one_err_in_mml(
+        r#"
+@1 dummy_instrument
+@2 sample
+
+!s ?@1
+
+A @2 !s
+"#,
+        "A",
+        6,
+        BytecodeError::SubroutineInstrumentHintSampleMismatch.into(),
+    );
+}
+
+#[test]
+fn test_subroutine_instrument_hint_freq_errors() {
+    assert_one_err_in_mml(
+        r#"
+@1 f1000_o4
+@2 f2000_o4
+
+!s ?@1 o4 {cd}
+
+A @2 !s o4 g
+"#,
+        "A",
+        6,
+        BytecodeError::SubroutineInstrumentHintFrequencyMismatch {
+            subroutine: InstrumentHintFreq::from_freq(1000.0),
+            instrument: InstrumentHintFreq::from_freq(2000.0),
+        }
+        .into(),
+    );
+
+    assert_one_err_in_mml(
+        r#"
+@1 f1000_o4
+@2 f2000_o4
+
+!s ?@1 o4 c @2 d e
+
+A @2 !s o4 c d e
+"#,
+        "A",
+        6,
+        BytecodeError::SubroutineInstrumentHintFrequencyMismatch {
+            subroutine: InstrumentHintFreq::from_freq(1000.0),
+            instrument: InstrumentHintFreq::from_freq(2000.0),
+        }
+        .into(),
+    );
+
+    assert_one_err_in_mml(
+        r#"
+@1 f1000_o4
+@2 f2000_o4
+
+!sc ?@1 o4 c
+!sp !sc {cd} @2
+
+A @2 !sp
+"#,
+        "A",
+        6,
+        BytecodeError::SubroutineInstrumentHintFrequencyMismatch {
+            subroutine: InstrumentHintFreq::from_freq(1000.0),
+            instrument: InstrumentHintFreq::from_freq(2000.0),
+        }
+        .into(),
+    );
+
+    assert_one_subroutine_err_in_mml(
+        r#"
+@1 f1000_o4
+@2 f2000_o4
+
+!s1 ?@2 o4 c
+!s2 @1 !s1
+
+A !s2 !s1
+"#,
+        "!s2",
+        11,
+        BytecodeError::SubroutineInstrumentHintFrequencyMismatch {
+            subroutine: InstrumentHintFreq::from_freq(2000.0),
+            instrument: InstrumentHintFreq::from_freq(1000.0),
+        }
+        .into(),
+    );
+}
+
+#[test]
+fn test_subroutine_instrument_hint_note_range() {
+    assert_one_err_in_mml(
+        r#"
+@1 f1000_o4
+@2 f1000_o5
+
+!s ?@1 o4 d e f
+
+A @2 !s o5 f
+"#,
+        "A",
+        6,
+        BytecodeError::SubroutineNotesOutOfRange {
+            subroutine_range: note("d4")..=note("f4"),
+            inst_range: note("c5")..=note("b5"),
+        }
+        .into(),
+    );
+
+    assert_one_err_in_mml(
+        r#"
+@1 f1000_o4
+@2 f1000_o5
+
+!s ?@1 o4 d @2 o5 e f
+
+A @2 !s o5 f
+"#,
+        "A",
+        6,
+        BytecodeError::SubroutineNotesOutOfRange {
+            subroutine_range: note("d4")..=note("d4"),
+            inst_range: note("c5")..=note("b5"),
+        }
+        .into(),
+    );
+
+    assert_one_err_in_mml(
+        r#"
+@1 f1000_o4
+@2 f1000_o5
+
+!sc ?@1 o4 d
+!sp !sc {fg} @2
+
+A @2 !sp
+"#,
+        "A",
+        6,
+        BytecodeError::SubroutineNotesOutOfRange {
+            subroutine_range: note("d4")..=note("g4"),
+            inst_range: note("c5")..=note("b5"),
+        }
+        .into(),
+    );
+
+    assert_one_subroutine_err_in_mml(
+        r#"
+@1 f1000_o4
+@2 f1000_o5
+
+!s1 ?@2 o5 {ef}
+!s2 @1 !s1 {ef}
+
+A !s2 !s1
+"#,
+        "!s2",
+        8,
+        BytecodeError::SubroutineNotesOutOfRange {
+            subroutine_range: note("e5")..=note("f5"),
+            inst_range: note("c4")..=note("b4"),
+        }
+        .into(),
+    );
+}
+
+#[test]
+fn test_subroutine_instrument_hint_and_loop() {
+    assert_mml_channel_a_matches_bytecode(
+        r#"
+@1 f1000_o4
+
+!s ?@1 {eg}
+
+A [v+5 : @1 c]6 !s
+"#,
+        &[
+            "start_loop",
+            "adjust_volume +5",
+            "skip_last_loop",
+            "set_instrument f1000_o4",
+            "play_note c4 24",
+            "end_loop 6",
+            "call_subroutine s",
+        ],
+    );
+
+    assert_mml_channel_a_matches_bytecode(
+        r#"
+@1 f1000_o4
+@2 f2000_o4
+
+!s ?@1 {eg}
+
+A [@1 c : @2 d]6 !s
+"#,
+        &[
+            "start_loop",
+            "adjust_volume +5",
+            "set_instrument f1000_o4",
+            "play_note c4 24",
+            "skip_last_loop",
+            "set_instrument f2000_o4",
+            "play_note d4 24",
+            "end_loop 6",
+            "call_subroutine s",
+        ],
+    );
+
+    assert_mml_channel_a_matches_bytecode(
+        r#"
+@1 f1000_o4
+@2 f2000_o4
+
+!s ?@1 {eg}
+
+A [@1 !s : @2 c]6
+"#,
+        &[
+            "start_loop",
+            "adjust_volume +5",
+            "set_instrument f1000_o4",
+            "call_subroutine s",
+            "skip_last_loop",
+            "set_instrument f2000_o4",
+            "play_note c4 24",
+            "end_loop 6",
+        ],
     );
 }
 
@@ -5995,6 +6430,22 @@ fn mml_channel_b_bytecode(mml: &SongData) -> &[u8] {
     &song_data[start..end]
 }
 
+fn subroutine_bytecode(mml: &SongData, index: usize) -> &[u8] {
+    let song_data = mml.data();
+
+    let start: usize = mml.subroutines()[index].bytecode_offset.into();
+
+    let end = match &mml.subroutines().get(index + 1) {
+        Some(s) => s.bytecode_offset.into(),
+        None => match &mml.channels().iter().flatten().next() {
+            Some(c) => c.bytecode_offset.into(),
+            None => panic!("no channel data"),
+        },
+    };
+
+    &song_data[start..end]
+}
+
 fn assert_line_matches_bytecode(mml_line: &str, bc_asm: &[&str]) {
     let mml = ["@1 dummy_instrument\nA @1 o4\nA ", mml_line].concat();
     let bc_asm = [&["set_instrument dummy_instrument"], bc_asm].concat();
@@ -6139,6 +6590,22 @@ fn assert_mml_channel_a_matches_looping_bytecode(mml: &str, bc_asm: &[&str]) {
     assert_eq!(mml_bytecode(&mml), bc_asm);
 }
 
+fn assert_mml_subroutine_matches_bytecode(mml: &str, subroutine_index: usize, bc_asm: &[&str]) {
+    let dummy_data = dummy_data();
+
+    let mml = compile_mml(mml, &dummy_data);
+
+    let bc_asm = assemble_channel_bytecode(
+        bc_asm,
+        &dummy_data.instruments_and_samples,
+        mml.subroutines(),
+        BcTerminator::ReturnFromSubroutine,
+        BytecodeContext::SongSubroutine,
+    );
+
+    assert_eq!(subroutine_bytecode(&mml, subroutine_index), bc_asm);
+}
+
 fn assert_error_in_mml_line(mml_line: &str, line_char: u32, expected_error: ChannelError) {
     let mml = ["@1 dummy_instrument\nA @1 o4\nA ", mml_line].concat();
     assert_err_in_channel_a_mml(&mml, line_char + 2, expected_error);
@@ -6178,6 +6645,57 @@ fn assert_one_err_in_mml(
                     1 => {
                         let e = c.errors.first().unwrap();
                         c.identifier.as_str() == identifier
+                            && e.0.line_char() == line_char
+                            && e.1 == expected_error
+                    }
+                    _ => false,
+                }
+            } else {
+                false
+            }
+        }
+        _ => false,
+    };
+
+    if !valid {
+        panic!("expected a single {expected_error:?} error on {identifier}, line_char {line_char}\nInput: {mml:?}\nResult: {r:?}")
+    }
+}
+
+fn assert_one_subroutine_err_in_mml(
+    mml: &str,
+    identifier: &str,
+    line_char: u32,
+    expected_error: ChannelError,
+) {
+    let dummy_data = dummy_data();
+
+    let id_str = identifier
+        .strip_prefix("!")
+        .expect("identifier must start with !");
+
+    let r = mml::compile_mml(
+        &TextFile {
+            contents: mml.to_string(),
+            path: None,
+            file_name: "".to_owned(),
+        },
+        None,
+        &dummy_data.instruments_and_samples,
+        &dummy_data.pitch_table,
+    );
+
+    let valid = match &r {
+        Err(SongError::MmlError(e)) => {
+            if e.subroutine_errors.len() == 1
+                && e.line_errors.is_empty()
+                && e.channel_errors.is_empty()
+            {
+                let c = e.subroutine_errors.first().unwrap();
+                match c.errors.len() {
+                    1 => {
+                        let e = c.errors.first().unwrap();
+                        c.identifier.as_str() == id_str
                             && e.0.line_char() == line_char
                             && e.1 == expected_error
                     }
@@ -6286,6 +6804,10 @@ fn dummy_data() -> DummyData {
         dummy_instrument("inst_with_adsr",   SF, 2, 6, Envelope::Adsr(EXAMPLE_ADSR)),
         dummy_instrument("inst_with_gain",   SF, 2, 6, Envelope::Gain(EXAMPLE_GAIN)),
         dummy_instrument("only_octave_four", SF, 4, 4, Envelope::Gain(Gain::new(0))),
+        dummy_instrument("f1000_o4", 1000.0, 4, 4, Envelope::Gain(Gain::new(0))),
+        dummy_instrument("f1000_o5", 1000.0, 5, 5, Envelope::Gain(Gain::new(0))),
+        dummy_instrument("f2000_o4", 2000.0, 4, 4, Envelope::Gain(Gain::new(0))),
+        dummy_instrument("f1000_o3_o5", 1000.0, 3, 5, Envelope::Gain(Gain::new(0))),
     ].iter(),
         [
             data::Sample{

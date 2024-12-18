@@ -6,14 +6,16 @@
 
 #![allow(clippy::assertions_on_constants)]
 
-use crate::data::{self, UniqueNamesList};
+use crate::channel_bc_generator::MmlInstrument;
+use crate::data::{self, InstrumentOrSample, UniqueNamesList};
 use crate::driver_constants::{
     BC_CHANNEL_STACK_SIZE, BC_STACK_BYTES_PER_LOOP, BC_STACK_BYTES_PER_SUBROUTINE_CALL,
     MAX_INSTRUMENTS_AND_SAMPLES,
 };
 use crate::envelope::{Adsr, Envelope, Gain, OptionalGain, TempGain};
-use crate::errors::{BytecodeError, ValueError};
+use crate::errors::{BytecodeError, ChannelError, ValueError};
 use crate::notes::{Note, LAST_NOTE_ID, N_NOTES};
+use crate::pitch_table::InstrumentHintFreq;
 use crate::samples::note_range;
 use crate::time::{TickClock, TickCounter, TickCounterWithLoopFlag};
 use crate::value_newtypes::{
@@ -616,7 +618,45 @@ mod emit_bytecode {
     }
 }
 
-// Instrument or envelope state
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub(crate) enum InstrumentState {
+    Unset,
+    Known(InstrumentId),
+    Maybe(InstrumentId),
+    Hint(InstrumentId),
+    Unknown,
+}
+
+impl InstrumentState {
+    pub fn is_known_and_eq(&self, o: &InstrumentId) -> bool {
+        match self {
+            Self::Unset => false,
+            Self::Known(i) | Self::Hint(i) => o == i,
+            Self::Maybe(_) => false,
+            Self::Unknown => false,
+        }
+    }
+    fn promote_to_known(&self) -> Self {
+        match self {
+            Self::Unset => Self::Unset,
+            Self::Known(i) => Self::Known(*i),
+            Self::Maybe(i) => Self::Known(*i),
+            Self::Hint(i) => Self::Hint(*i),
+            Self::Unknown => Self::Unknown,
+        }
+    }
+    fn demote_to_maybe(&self) -> Self {
+        match self {
+            Self::Unset => Self::Unset,
+            Self::Known(i) => Self::Maybe(*i),
+            Self::Maybe(i) => Self::Maybe(*i),
+            Self::Hint(i) => Self::Hint(*i),
+            Self::Unknown => Self::Unknown,
+        }
+    }
+}
+
+// Audio driver state
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub(crate) enum IeState<T>
 where
@@ -725,7 +765,7 @@ pub struct State {
     pub max_stack_depth: StackDepth,
     pub tempo_changes: Vec<(TickCounter, TickClock)>,
 
-    pub(crate) instrument: IeState<InstrumentId>,
+    pub(crate) instrument: InstrumentState,
     pub(crate) envelope: IeState<Envelope>,
     pub(crate) prev_temp_gain: IeState<TempGain>,
     pub(crate) early_release:
@@ -735,6 +775,7 @@ pub struct State {
     pub(crate) prev_slurred_note: SlurredNoteState,
 
     note_range: Option<RangeInclusive<Note>>,
+    instrument_hint: Option<InstrumentHintFreq>,
     no_instrument_notes: RangeInclusive<Note>,
 }
 
@@ -745,7 +786,7 @@ struct SkipLastLoop {
 
     note_range: Option<RangeInclusive<Note>>,
 
-    instrument: IeState<InstrumentId>,
+    instrument: InstrumentState,
     envelope: IeState<Envelope>,
     prev_temp_gain: IeState<TempGain>,
     early_release: IeState<Option<(EarlyReleaseTicks, EarlyReleaseMinTicks, OptionalGain)>>,
@@ -806,7 +847,7 @@ impl<'a> Bytecode<'a> {
                 tick_counter: TickCounter::new(0),
                 max_stack_depth: StackDepth(0),
                 tempo_changes: Vec::new(),
-                instrument: IeState::Unknown,
+                instrument: InstrumentState::Unset,
                 envelope: IeState::Unknown,
                 prev_temp_gain: IeState::Unknown,
                 early_release: IeState::Unknown,
@@ -823,6 +864,7 @@ impl<'a> Bytecode<'a> {
                     BytecodeContext::MmlPrefix => VibratoState::Disabled,
                 },
                 prev_slurred_note: SlurredNoteState::Unchanged,
+                instrument_hint: None,
                 note_range: None,
                 no_instrument_notes: Note::MAX..=Note::MIN,
             },
@@ -961,6 +1003,20 @@ impl<'a> Bytecode<'a> {
     }
 
     fn _test_note_in_range(&mut self, note: Note) -> Result<(), BytecodeError> {
+        match self.state.instrument {
+            InstrumentState::Hint(_) | InstrumentState::Unknown | InstrumentState::Unset => {
+                let s = &mut self.state;
+                if s.no_instrument_notes.is_empty() {
+                    s.no_instrument_notes = note..=note;
+                } else if note < *s.no_instrument_notes.start() {
+                    s.no_instrument_notes = note..=*(s.no_instrument_notes.end());
+                } else if note > *s.no_instrument_notes.end() {
+                    s.no_instrument_notes = *(s.no_instrument_notes.start())..=note;
+                }
+            }
+            InstrumentState::Known(_) | InstrumentState::Maybe(_) => (),
+        }
+
         match &self.state.note_range {
             Some(note_range) => {
                 if note_range.contains(&note) {
@@ -970,15 +1026,6 @@ impl<'a> Bytecode<'a> {
                 }
             }
             None => {
-                let s = &mut self.state;
-                if s.no_instrument_notes.is_empty() {
-                    s.no_instrument_notes = note..=note;
-                } else if note < *s.no_instrument_notes.start() {
-                    s.no_instrument_notes = note..=*(s.no_instrument_notes.end());
-                } else if note > *s.no_instrument_notes.end() {
-                    s.no_instrument_notes = *(s.no_instrument_notes.start())..=note;
-                }
-
                 if self.show_missing_set_instrument_error {
                     self.show_missing_set_instrument_error = false;
                     Err(BytecodeError::CannotPlayNoteBeforeSettingInstrument)
@@ -1130,12 +1177,56 @@ impl<'a> Bytecode<'a> {
         emit_bytecode!(self, opcodes::SET_VIBRATO, 0u8, 0u8);
     }
 
+    // Not a bytecode instruction
+    pub(crate) fn set_subroutine_instrument_hint(
+        &mut self,
+        instrument: &MmlInstrument,
+    ) -> Result<(), ChannelError> {
+        let id = instrument.instrument_id;
+
+        if self.state.instrument_hint.is_some() {
+            return Err(ChannelError::InstrumentHintAlreadySet);
+        }
+
+        match self.context {
+            BytecodeContext::SongSubroutine => (),
+            BytecodeContext::MmlPrefix
+            | BytecodeContext::SongChannel(_)
+            | BytecodeContext::SoundEffect => {
+                return Err(ChannelError::InstrumentHintOnlyAllowedInSubroutines)
+            }
+        }
+
+        match &self.state.instrument {
+            InstrumentState::Unset => (),
+
+            InstrumentState::Unknown | InstrumentState::Hint(_) => (),
+            InstrumentState::Known(_) | InstrumentState::Maybe(_) => {
+                return Err(ChannelError::InstrumentHintInstrumentAlreadySet)
+            }
+        }
+
+        match self.instruments.get_index(id.as_u8().into()) {
+            Some(InstrumentOrSample::Instrument(i)) => {
+                self.state.instrument = InstrumentState::Hint(id);
+                self.state.instrument_hint = Some(InstrumentHintFreq::from_instrument(i));
+                self.state.note_range = Some(instrument.note_range.clone());
+                self.state.instrument = InstrumentState::Hint(id);
+                Ok(())
+            }
+            Some(InstrumentOrSample::Sample(_)) => {
+                Err(ChannelError::CannotSetInstrumentHintForSample)
+            }
+            None => Err(ChannelError::CannotSetInstrumentHintForUnknown),
+        }
+    }
+
     fn _set_state_instrument_and_note_range(&mut self, instrument: InstrumentId) {
         self.state.note_range = self
             .instruments
             .get_index(instrument.as_u8().into())
             .map(note_range);
-        self.state.instrument = IeState::Known(instrument);
+        self.state.instrument = InstrumentState::Known(instrument);
     }
 
     pub fn set_instrument(&mut self, instrument: InstrumentId) {
@@ -1624,17 +1715,33 @@ impl<'a> Bytecode<'a> {
     ) -> Result<(), BytecodeError> {
         self.state.tick_counter += subroutine.state.tick_counter;
 
+        let old_instrument = self.state.instrument;
         let old_note_range = self.state.note_range.clone();
 
         match subroutine.state.instrument {
-            IeState::Known(i) => {
+            InstrumentState::Known(i) => {
                 assert!(subroutine.state.note_range.is_some());
 
-                self.state.instrument = IeState::Known(i);
+                self.state.instrument = InstrumentState::Known(i);
                 self.state.note_range = subroutine.state.note_range.clone();
             }
-            IeState::Maybe(_) => panic!("unexpected maybe instrument"),
-            IeState::Unknown => (),
+            InstrumentState::Hint(i) => {
+                assert!(subroutine.state.note_range.is_some());
+
+                match self.state.instrument {
+                    InstrumentState::Unset => {
+                        self.state.instrument = InstrumentState::Hint(i);
+                        self.state.note_range = subroutine.state.note_range.clone();
+                    }
+                    InstrumentState::Hint(_)
+                    | InstrumentState::Unknown
+                    | InstrumentState::Known(_)
+                    | InstrumentState::Maybe(_) => (),
+                }
+            }
+            InstrumentState::Maybe(_) => panic!("unexpected maybe instrument"),
+            InstrumentState::Unknown => (),
+            InstrumentState::Unset => (),
         }
 
         match subroutine.state.envelope {
@@ -1666,6 +1773,44 @@ impl<'a> Bytecode<'a> {
         self.state
             .prev_slurred_note
             .merge(&subroutine.state.prev_slurred_note);
+
+        if let Some(sub_hint_freq) = subroutine.state.instrument_hint {
+            match old_instrument {
+                InstrumentState::Known(id)
+                | InstrumentState::Hint(id)
+                | InstrumentState::Maybe(id) => {
+                    match self.instruments.get_index(id.as_u8().into()) {
+                        Some(InstrumentOrSample::Instrument(i)) => {
+                            let inst_freq = InstrumentHintFreq::from_instrument(i);
+                            if sub_hint_freq != inst_freq {
+                                return Err(
+                                    BytecodeError::SubroutineInstrumentHintFrequencyMismatch {
+                                        subroutine: sub_hint_freq,
+                                        instrument: inst_freq,
+                                    },
+                                );
+                            }
+                        }
+                        Some(InstrumentOrSample::Sample(_)) => {
+                            return Err(BytecodeError::SubroutineInstrumentHintSampleMismatch);
+                        }
+                        None => return Err(BytecodeError::SubroutineInstrumentHintNoInstrumentSet),
+                    }
+                }
+
+                InstrumentState::Unknown | InstrumentState::Unset => match self.context {
+                    BytecodeContext::SongSubroutine => {
+                        self.state.instrument_hint = Some(sub_hint_freq);
+                    }
+
+                    BytecodeContext::SongChannel(_)
+                    | BytecodeContext::SoundEffect
+                    | BytecodeContext::MmlPrefix => {
+                        return Err(BytecodeError::SubroutineInstrumentHintNoInstrumentSet)
+                    }
+                },
+            }
+        }
 
         if !subroutine.state.no_instrument_notes.is_empty() {
             // Subroutine plays a note without an instrument

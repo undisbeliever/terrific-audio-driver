@@ -1730,6 +1730,17 @@ fn parse_set_instrument(pos: FilePos, id: IdentifierStr, p: &mut Parser) -> Comm
     }
 }
 
+fn parse_set_instrument_hint(pos: FilePos, id: IdentifierStr, p: &mut Parser) -> Command {
+    match p.instruments_map().get(&id) {
+        Some(inst) => Command::SetSubroutineInstrumentHint(*inst),
+        None => invalid_token_error(
+            p,
+            pos,
+            ChannelError::CannotFindInstrument(id.as_str().to_owned()),
+        ),
+    }
+}
+
 fn parse_call_subroutine(
     pos: FilePos,
     id: IdentifierStr,
@@ -1809,6 +1820,7 @@ fn parse_token(pos: FilePos, token: Token, p: &mut Parser) -> Command {
         Token::TempGain(mode) => parse_temp_gain(pos, mode, p),
 
         Token::SetInstrument(id) => parse_set_instrument(pos, id, p),
+        Token::SetSubroutineInstrumentHint(id) => parse_set_instrument_hint(pos, id, p),
         Token::CallSubroutine(id, d) => parse_call_subroutine(pos, id, d, p),
 
         Token::StartLoop => {

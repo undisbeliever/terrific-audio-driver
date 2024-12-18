@@ -27,6 +27,7 @@ pub enum Token<'a> {
 
     CallSubroutine(IdentifierStr<'a>, SubroutineCallType),
     SetInstrument(IdentifierStr<'a>),
+    SetSubroutineInstrumentHint(IdentifierStr<'a>),
 
     Number(u32),
     RelativeNumber(i32),
@@ -180,11 +181,8 @@ impl<'a> Scanner<'a> {
         char_count
     }
 
-    // Assumes `self.current_line[0]` is '@' or '!'
+    // Assumes `@` and `!` and `?@` token have been advanced
     fn identifier_token(&mut self) -> Option<IdentifierStr<'a>> {
-        // Advance the '@' or '!' token
-        self.advance_one_ascii();
-
         let c = self.to_process.bytes().next();
         match c {
             Some(c) if c.is_ascii_digit() => {
@@ -252,7 +250,7 @@ fn is_unknown_u8(c: u8) -> bool {
         b'!' | b'@' | b'+' | b'-' | b'[' | b':' | b']' | b'^' | b'&' | b'C' | b's' | b'n'
         | b'l' | b'r' | b'w' | b'o' | b'>' | b'<' | b'v' | b'V' | b'p' | b'Q' | b'q' | b'~'
         | b'A' | b'G' | b'E' | b't' | b'T' | b'L' | b'%' | b'.' | b',' | b'|' | b'_' | b'{'
-        | b'}' | b'B' | b'D' | b'F' | b'I' | b'M' | b'P' | b'N' => false,
+        | b'}' | b'B' | b'D' | b'F' | b'I' | b'M' | b'P' | b'N' | b'?' => false,
         b'\\' => false,
         c if c.is_ascii_whitespace() => false,
         _ => true,
@@ -344,14 +342,32 @@ fn next_token<'a>(scanner: &mut Scanner<'a>) -> Option<TokenWithPosition<'a>> {
             Token::Pitch(MmlPitch::new(pitch, semitone_offset))
         }
 
-        b'!' => match scanner.identifier_token() {
-            Some(id) => Token::CallSubroutine(id, SubroutineCallType::Mml),
-            None => Token::Error(ChannelError::NoSubroutine),
-        },
+        b'!' => {
+            scanner.advance_one_ascii();
+            match scanner.identifier_token() {
+                Some(id) => Token::CallSubroutine(id, SubroutineCallType::Mml),
+                None => Token::Error(ChannelError::NoSubroutine),
+            }
+        }
 
-        b'@' => match scanner.identifier_token() {
-            Some(id) => Token::SetInstrument(id),
-            None => Token::Error(ChannelError::NoInstrument),
+        b'@' => {
+            scanner.advance_one_ascii();
+
+            match scanner.identifier_token() {
+                Some(id) => Token::SetInstrument(id),
+                None => Token::Error(ChannelError::NoInstrument),
+            }
+        }
+
+        b'?' => match scanner.second_byte() {
+            Some(b'@') => {
+                scanner.advance_two_ascii();
+                match scanner.identifier_token() {
+                    Some(id) => Token::SetSubroutineInstrumentHint(id),
+                    None => Token::Error(ChannelError::NoInstrumentHint),
+                }
+            }
+            _ => parse_unknown_chars(scanner),
         },
 
         b'+' => {
@@ -808,7 +824,7 @@ mod tests {
     fn test_is_unknown_u8() {
         // List of starting chars in a two-character token where first character is NOT a token.
         // ie, "MP" is a token while "M" is not a token.
-        const SPECIAL_CHARS: [u8; 1] = [b'M'];
+        const SPECIAL_CHARS: [u8; 2] = [b'M', b'?'];
 
         for c in 0..127_u8 {
             let s = [c];
