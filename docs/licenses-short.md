@@ -128,7 +128,7 @@ Please see the included [licenses file](licenses.md) for the full third party li
   * [regex-automata 0.4.9](https://github.com/rust-lang/regex/tree/master/regex-automata), MIT License
   * [regex-syntax 0.8.5](https://github.com/rust-lang/regex/tree/master/regex-syntax), MIT License
   * [regex 1.11.1](https://github.com/rust-lang/regex), MIT License
-  * [float-cmp 0.9.0](https://github.com/mikedilger/float-cmp), MIT License
+  * [float-cmp 0.10.0](https://github.com/mikedilger/float-cmp), MIT License
   * [libc 0.2.168](https://github.com/rust-lang/libc), MIT License
   * [anstyle-wincon 3.0.6](https://github.com/rust-cli/anstyle.git), MIT License
   * [heck 0.5.0](https://github.com/withoutboats/heck), MIT License
@@ -148,18 +148,18 @@ Please see the included [licenses file](licenses.md) for the full third party li
   * [unicode-id 0.3.5](https://github.com/Boshen/unicode-id), MIT License
   * [unicode-width 0.1.14](https://github.com/unicode-rs/unicode-width), MIT License
   * [static_assertions 1.1.0](https://github.com/nvzqz/static-assertions-rs), MIT License
-  * [microfft 0.5.1](https://gitlab.com/teskje/microfft-rs), MIT License
-  * [spectrum-analyzer 1.5.0](https://github.com/phip1611/spectrum-analyzer), MIT License
+  * [microfft 0.6.0](https://gitlab.com/teskje/microfft-rs), MIT License
+  * [spectrum-analyzer 1.6.0](https://github.com/phip1611/spectrum-analyzer), MIT License
   * [cmk 0.1.2](https://github.com/MoAlyousef/cmk), MIT License
   * [libm 0.2.11](https://github.com/rust-lang/libm), MIT License
   * [relative-path 1.9.3](https://github.com/udoprog/relative-path), MIT License
   * [sdl2-sys 0.37.0](https://github.com/rust-sdl2/rust-sdl2), MIT License
   * [fltk-sys 1.5.0](https://github.com/fltk-rs/fltk-rs), MIT License
   * [fltk 1.5.1](https://github.com/fltk-rs/fltk-rs), MIT License
-  * [cxx-build 1.0.134](https://github.com/dtolnay/cxx), MIT License
-  * [cxx 1.0.134](https://github.com/dtolnay/cxx), MIT License
-  * [cxxbridge-flags 1.0.134](https://github.com/dtolnay/cxx), MIT License
-  * [cxxbridge-macro 1.0.134](https://github.com/dtolnay/cxx), MIT License
+  * [cxx-build 1.0.135](https://github.com/dtolnay/cxx), MIT License
+  * [cxx 1.0.135](https://github.com/dtolnay/cxx), MIT License
+  * [cxxbridge-flags 1.0.135](https://github.com/dtolnay/cxx), MIT License
+  * [cxxbridge-macro 1.0.135](https://github.com/dtolnay/cxx), MIT License
   * [itoa 1.0.14](https://github.com/dtolnay/itoa), MIT License
   * [link-cplusplus 1.0.9](https://github.com/dtolnay/link-cplusplus), MIT License
   * [once_cell 1.20.2](https://github.com/matklad/once_cell), MIT License

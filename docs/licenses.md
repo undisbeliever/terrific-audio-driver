@@ -574,7 +574,7 @@ DEALINGS IN THE SOFTWARE.
 ## MIT License
 
 Used by:
-  * [float-cmp 0.9.0](https://github.com/mikedilger/float-cmp)
+  * [float-cmp 0.10.0](https://github.com/mikedilger/float-cmp)
 
 ```
 Copyright (c) 2014-2020 Optimal Computing (NZ) Ltd
@@ -980,12 +980,12 @@ SOFTWARE.
 ## MIT License
 
 Used by:
-  * [microfft 0.5.1](https://gitlab.com/teskje/microfft-rs)
+  * [microfft 0.6.0](https://gitlab.com/teskje/microfft-rs)
 
 ```
 MIT License
 
-Copyright (c) 2020-2022 Jan Teske
+Copyright (c) 2020-2024 Jan Teske
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -1011,7 +1011,7 @@ SOFTWARE.
 ## MIT License
 
 Used by:
-  * [spectrum-analyzer 1.5.0](https://github.com/phip1611/spectrum-analyzer)
+  * [spectrum-analyzer 1.6.0](https://github.com/phip1611/spectrum-analyzer)
 
 ```
 MIT License
@@ -1127,10 +1127,10 @@ SOFTWARE.
 ## MIT License
 
 Used by:
-  * [cxx-build 1.0.134](https://github.com/dtolnay/cxx)
-  * [cxx 1.0.134](https://github.com/dtolnay/cxx)
-  * [cxxbridge-flags 1.0.134](https://github.com/dtolnay/cxx)
-  * [cxxbridge-macro 1.0.134](https://github.com/dtolnay/cxx)
+  * [cxx-build 1.0.135](https://github.com/dtolnay/cxx)
+  * [cxx 1.0.135](https://github.com/dtolnay/cxx)
+  * [cxxbridge-flags 1.0.135](https://github.com/dtolnay/cxx)
+  * [cxxbridge-macro 1.0.135](https://github.com/dtolnay/cxx)
   * [itoa 1.0.14](https://github.com/dtolnay/itoa)
   * [link-cplusplus 1.0.9](https://github.com/dtolnay/link-cplusplus)
   * [once_cell 1.20.2](https://github.com/matklad/once_cell)
