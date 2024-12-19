@@ -5870,6 +5870,145 @@ A @0 a GE24 b L GE24 c GE24 d GF127 e
 }
 
 #[test]
+fn test_set_instrument_after_song_loop_point_and_loop() {
+    assert_mml_channel_a_matches_looping_bytecode(
+        r###"
+@0 dummy_instrument
+@1 dummy_instrument_2
+
+A @0 a @0 b L [c]2 @0 c @0 d @1 e
+"###,
+        &[
+            "set_instrument dummy_instrument",
+            "play_note a4 24",
+            // @0 optimised out
+            "play_note b4 24",
+            // `L` set song loop point
+            "start_loop",
+            "play_note c4 24",
+            "end_loop 2",
+            "set_instrument dummy_instrument",
+            "play_note c4 24",
+            // @0 optimised out
+            "play_note d4 24",
+            "set_instrument dummy_instrument_2",
+            "play_note e4 24",
+        ],
+    );
+
+    assert_mml_channel_a_matches_looping_bytecode(
+        r###"
+@0 dummy_instrument
+@1 dummy_instrument_2
+
+A @0 c @0 L [d : e]2 @0 f @0 g
+"###,
+        &[
+            "set_instrument dummy_instrument",
+            "play_note c4 24",
+            // @0 optimised out
+            // `L` set song loop point
+            "start_loop",
+            "play_note d4 24",
+            "skip_last_loop",
+            "play_note e4 24",
+            "end_loop 2",
+            "set_instrument dummy_instrument",
+            "play_note f4 24",
+            // @0 optimised out
+            "play_note g4 24",
+        ],
+    );
+
+    assert_mml_channel_a_matches_looping_bytecode(
+        r###"
+@0 dummy_instrument
+
+A @0 c L [@0 d]2 @0 e
+"###,
+        &[
+            "set_instrument dummy_instrument",
+            "play_note c4 24",
+            // `L` set song loop point
+            "start_loop",
+            "set_instrument dummy_instrument",
+            "play_note d4 24",
+            "end_loop 2",
+            // @0 optimised out
+            "play_note e4 24",
+        ],
+    );
+
+    assert_mml_channel_a_matches_looping_bytecode(
+        r###"
+@0 dummy_instrument
+@1 dummy_instrument_2
+
+A @0 c L [@0 d : @1 e]2 @0 f
+"###,
+        &[
+            "set_instrument dummy_instrument",
+            "play_note c4 24",
+            // `L` set song loop point
+            "start_loop",
+            "set_instrument dummy_instrument",
+            "play_note d4 24",
+            "skip_last_loop",
+            "set_instrument dummy_instrument_2",
+            "play_note e4 24",
+            "end_loop 2",
+            // @0 optimised out
+            "play_note f4 24",
+        ],
+    );
+}
+
+#[test]
+fn test_envelope_after_song_loop_point_and_loop() {
+    assert_mml_channel_a_matches_looping_bytecode(
+        r###"
+@0 dummy_instrument gain F80
+
+A @0 c GF80 d L [e]2 GF80 f
+"###,
+        &[
+            "set_instrument_and_gain dummy_instrument F80",
+            "play_note c4 24",
+            // F80 optimised out
+            "play_note d4 24",
+            // `L` set song loop point
+            "start_loop",
+            "play_note e4 24",
+            "end_loop 2",
+            "set_gain F80",
+            "play_note f4 24",
+        ],
+    );
+
+    assert_mml_channel_a_matches_looping_bytecode(
+        r###"
+@0 dummy_instrument gain F80
+
+A @0 c GF80 d L [e : f]2 GF80 g
+"###,
+        &[
+            "set_instrument_and_gain dummy_instrument F80",
+            "play_note c4 24",
+            // F80 optimised out
+            "play_note d4 24",
+            // `L` set song loop point
+            "start_loop",
+            "play_note e4 24",
+            "skip_last_loop",
+            "play_note f4 24",
+            "end_loop 2",
+            "set_gain F80",
+            "play_note g4 24",
+        ],
+    );
+}
+
+#[test]
 fn test_set_loop_point_in_loop_is_err() {
     assert_error_in_mml_line("[a b L c]5", 6, ChannelError::CannotSetLoopPointInALoop);
 }
