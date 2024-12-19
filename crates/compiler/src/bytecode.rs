@@ -835,6 +835,64 @@ pub struct State {
     no_instrument_notes: RangeInclusive<Note>,
 }
 
+impl State {
+    fn demote_to_maybe(&mut self) {
+        self.instrument.demote_to_maybe();
+        self.envelope.demote_to_maybe();
+        self.prev_temp_gain.demote_to_maybe();
+        self.early_release.demote_to_maybe();
+        self.detune.demote_to_maybe();
+
+        self.vibrato = VibratoState::Unknown;
+
+        // Loop might end on a note that is not slurred and matching `prev_slurred_note`.
+        self.prev_slurred_note = SlurredNoteState::Unchanged;
+    }
+
+    fn merge_skip_last_loop(&mut self, s: SkipLastLoop) {
+        self.instrument.merge_skip_last_loop(s.instrument);
+        self.envelope.merge_skip_last_loop(s.envelope);
+        self.prev_temp_gain.merge_skip_last_loop(s.prev_temp_gain);
+        self.early_release.merge_skip_last_loop(s.early_release);
+        self.detune.merge_skip_last_loop(s.detune);
+
+        // Ok - vibrato state is unknown at the start of the loop
+        self.vibrato = s.vibrato;
+
+        self.prev_slurred_note.merge(&s.prev_slurred_note);
+    }
+
+    fn loop_stack_empty(&mut self) {
+        self.instrument.promote_to_known();
+        self.envelope.promote_to_known();
+        self.prev_temp_gain.promote_to_known();
+        self.early_release.promote_to_known();
+        self.detune.promote_to_known();
+
+        // No maybe vibrato state
+        // No maybe prev_slurred_note state
+    }
+
+    fn merge_subroutine(&mut self, subroutine: &SubroutineId) {
+        let s: &Self = &subroutine.state;
+
+        self.instrument.merge_subroutine(&s.instrument);
+        self.envelope.merge_subroutine(&s.envelope);
+        self.prev_temp_gain.merge_subroutine(&s.prev_temp_gain);
+        self.early_release.merge_subroutine(&s.early_release);
+        self.detune.merge_subroutine(&s.detune);
+
+        match &s.vibrato {
+            VibratoState::Unchanged => (),
+            VibratoState::Unknown => self.vibrato = VibratoState::Unknown,
+            VibratoState::Disabled => self.vibrato = VibratoState::Disabled,
+            v @ VibratoState::Set(..) => self.vibrato = *v,
+        }
+
+        self.prev_slurred_note.merge(&s.prev_slurred_note);
+    }
+}
+
 struct SkipLastLoop {
     tick_counter: TickCounter,
     // Location of the parameter of the `skip_last_loop` instruction inside `Bytecode::bytecode`.
@@ -977,14 +1035,7 @@ impl<'a> Bytecode<'a> {
         assert!(matches!(self.context, BytecodeContext::SongChannel(_)));
         assert_eq!(self.get_stack_depth(), StackDepth(0));
 
-        // The instrument or envelope may have changed when the song loops.
-        self.state.instrument.demote_to_maybe();
-        self.state.envelope.demote_to_maybe();
-        self.state.prev_temp_gain.demote_to_maybe();
-        self.state.early_release.demote_to_maybe();
-        self.state.detune.demote_to_maybe();
-
-        self.state.vibrato = VibratoState::Unknown;
+        self.state.demote_to_maybe();
     }
 
     pub fn _start_asm_block(&mut self) {
@@ -1588,15 +1639,7 @@ impl<'a> Bytecode<'a> {
     pub fn start_loop(&mut self, loop_count: Option<LoopCount>) -> Result<(), BytecodeError> {
         // The loop might change the instrument and evelope.
         // When the loop loops, the instrument/envelope might have changed.
-        self.state.instrument.demote_to_maybe();
-        self.state.envelope.demote_to_maybe();
-        self.state.prev_temp_gain.demote_to_maybe();
-        self.state.early_release.demote_to_maybe();
-        self.state.detune.demote_to_maybe();
-        self.state.vibrato = VibratoState::Unknown;
-
-        // Loop might end on a note that is not slurred and matching `prev_slurred_note`.
-        self.state.prev_slurred_note = SlurredNoteState::Unchanged;
+        self.state.demote_to_maybe();
 
         self.loop_stack.push(LoopState {
             start_loop_count: loop_count,
@@ -1715,32 +1758,10 @@ impl<'a> Bytecode<'a> {
         }
 
         if let Some(skip_last_loop) = loop_state.skip_last_loop {
-            self.state
-                .instrument
-                .merge_skip_last_loop(skip_last_loop.instrument);
-
-            self.state
-                .envelope
-                .merge_skip_last_loop(skip_last_loop.envelope);
-            self.state
-                .prev_temp_gain
-                .merge_skip_last_loop(skip_last_loop.prev_temp_gain);
-            self.state
-                .early_release
-                .merge_skip_last_loop(skip_last_loop.early_release);
-            self.state
-                .detune
-                .merge_skip_last_loop(skip_last_loop.detune);
-
-            // Ok - vibrato state is unknown at the start of the loop
-            self.state.vibrato = skip_last_loop.vibrato;
-
-            self.state
-                .prev_slurred_note
-                .merge(&skip_last_loop.prev_slurred_note);
-
             // Write the parameter for the skip_last_loop instruction (if required)
             let sll_param_pos = skip_last_loop.bc_parameter_position;
+
+            self.state.merge_skip_last_loop(skip_last_loop);
 
             assert_eq!(self.bytecode[sll_param_pos - 1], opcodes::SKIP_LAST_LOOP);
 
@@ -1757,11 +1778,7 @@ impl<'a> Bytecode<'a> {
         }
 
         if self.loop_stack.is_empty() {
-            self.state.instrument.promote_to_known();
-            self.state.envelope.promote_to_known();
-            self.state.prev_temp_gain.promote_to_known();
-            self.state.early_release.promote_to_known();
-            self.state.detune.promote_to_known();
+            self.state.loop_stack_empty();
         }
 
         emit_bytecode!(self, opcodes::END_LOOP);
@@ -1781,30 +1798,7 @@ impl<'a> Bytecode<'a> {
 
         let old_instrument = self.state.instrument.clone();
 
-        self.state
-            .instrument
-            .merge_subroutine(&subroutine.state.instrument);
-
-        self.state
-            .envelope
-            .merge_subroutine(&subroutine.state.envelope);
-        self.state
-            .prev_temp_gain
-            .merge_subroutine(&subroutine.state.prev_temp_gain);
-        self.state
-            .early_release
-            .merge_subroutine(&subroutine.state.early_release);
-        self.state.detune.merge_subroutine(&subroutine.state.detune);
-
-        match &subroutine.state.vibrato {
-            VibratoState::Unchanged => (),
-            VibratoState::Unknown => self.state.vibrato = VibratoState::Unknown,
-            VibratoState::Disabled => self.state.vibrato = VibratoState::Disabled,
-            v @ VibratoState::Set(..) => self.state.vibrato = *v,
-        }
-        self.state
-            .prev_slurred_note
-            .merge(&subroutine.state.prev_slurred_note);
+        self.state.merge_subroutine(subroutine);
 
         if let Some(sub_hint_freq) = subroutine.state.instrument_hint {
             match old_instrument {
