@@ -628,6 +628,7 @@ pub(crate) enum InstrumentState {
 }
 
 impl InstrumentState {
+    /// CAUTION: Includes Maybe and Hint instruments
     pub fn instrument_id(&self) -> Option<InstrumentId> {
         match self {
             Self::Known(i, _) => Some(*i),
@@ -641,7 +642,8 @@ impl InstrumentState {
     pub fn is_known_and_eq(&self, o: &InstrumentId) -> bool {
         match self {
             Self::Unset => false,
-            Self::Known(i, _) | Self::Hint(i, _) => o == i,
+            Self::Known(i, _) => o == i,
+            Self::Hint(..) => false,
             Self::Maybe(..) => false,
             Self::Unknown => false,
         }

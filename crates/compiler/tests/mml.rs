@@ -2739,6 +2739,71 @@ A @1 !s1 @2 !s1
 }
 
 #[test]
+fn test_subroutine_instrument_hint_then_set_same_instrument() {
+    assert_mml_subroutine_matches_bytecode(
+        r#"
+@1 f1000_o4
+
+!s ?@1 {dg} @1 {gd}
+
+A @1 !s
+"#,
+        0,
+        &[
+            "play_note d4 no_keyoff 1",
+            "portamento g4 keyoff +18 23",
+            "set_instrument f1000_o4",
+            "play_note g4 no_keyoff 1",
+            "portamento d4 keyoff -18 23",
+        ],
+    );
+
+    // The previous test was passing because the envelope was unset.
+    // This time the envelope is set to match the `f1000_o4`
+    // envelope before the `@1` command.
+
+    assert_mml_subroutine_matches_bytecode(
+        r#"
+; Default gain for `f1000_o4` is F0
+@1 f1000_o4 gain F0
+
+!s ?@1 GF0 {dg} @1 {gd}
+
+A @1 !s
+"#,
+        0,
+        &[
+            "set_gain F0",
+            "play_note d4 no_keyoff 1",
+            "portamento g4 keyoff +18 23",
+            "set_instrument f1000_o4",
+            "play_note g4 no_keyoff 1",
+            "portamento d4 keyoff -18 23",
+        ],
+    );
+
+    // Repeat the test with a custom @ instrument envelope.
+    assert_mml_subroutine_matches_bytecode(
+        r#"
+@1 f1000_o4 gain I15
+
+!s ?@1 GI15 {dg} @1 {gd}
+
+A @1 !s
+"#,
+        0,
+        &[
+            "set_gain I15",
+            "play_note d4 no_keyoff 1",
+            "portamento g4 keyoff +18 23",
+            "set_instrument_and_gain f1000_o4 I15",
+            "play_note g4 no_keyoff 1",
+            "portamento d4 keyoff -18 23",
+        ],
+    );
+}
+
+#[test]
 fn test_set_subroutine_instrument_hint_errors() {
     assert_error_in_mml_line(
         "?@1",
