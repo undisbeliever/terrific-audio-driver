@@ -2051,7 +2051,7 @@ let portamento_up = __portamento as func(u8 in x, u8 in a);
 // IN: Y = 0
 // KEEP: X
 #[fallthrough]
-func portamento_down(channelIndex : u8 in x, speed : u8 in a) {
+func portamento_down(channelIndex : u8 in x, noteAndKeyoffFlag : u8 in a) {
     y = -2 as u8;
 
 // Fallthrough into __portamento()
@@ -2062,30 +2062,10 @@ func portamento_down(channelIndex : u8 in x, speed : u8 in a) {
 //
 // IN: Y = 0 or -2
 // KEEP: X
-func __portamento(channelIndex : u8 in x, speed : u8 in a, direction_minus_one : u8 in y) {
-    channelSoA.portamento_speed[x] = a;
-
+func __portamento(channelIndex : u8 in x, noteAndKeyoffFlag : u8 in a, direction_minus_one : u8 in y) {
     y++;
     // Y = 1 or -1
     channelSoA.portamento_direction[x] = y as i8;
-
-    // Wait length
-    // Y = 0
-    y = 0;
-    a = instructionPtr[y];
-    instructionPtr++;
-
-    channelSoA.countdownTimer[x] = a;
-
-    // Reset early release min-tick counter.
-    // Y = 0
-    a = y;
-    channelSoA.ticksAfterNote[x] = a;
-
-    // Read note target and key-off bit
-    // Y = 0
-    a = instructionPtr[y];
-    instructionPtr++;
 
     // carry = key-off after note ends bit
     a >>>= 1;
@@ -2097,6 +2077,25 @@ func __portamento(channelIndex : u8 in x, speed : u8 in a, direction_minus_one :
 
     channelSoA.portamento_target_l[x] = a = commonData.pitchTable_l[y] + channelSoA.detune_l[x];
     channelSoA.portamento_target_h[x] = a = commonData.pitchTable_h[y] +# channelSoA.detune_h[x];
+
+
+    // Speed
+    y = 0;
+    a = instructionPtr[y];
+    instructionPtr++;
+    channelSoA.portamento_speed[x] = a;
+
+    // Wait length
+    // Y = 0
+    a = instructionPtr[y];
+    instructionPtr++;
+    channelSoA.countdownTimer[x] = a;
+
+
+    // Reset early release min-tick counter.
+    // Y = 0
+    a = y;
+    channelSoA.ticksAfterNote[x] = a;
 
 
     // return (do not execute the next bytecode and sleep)

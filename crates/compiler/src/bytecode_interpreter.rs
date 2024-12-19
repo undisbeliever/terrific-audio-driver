@@ -606,11 +606,11 @@ impl ChannelState {
             }
 
             opcodes::PORTAMENTO_DOWN | opcodes::PORTAMENTO_UP => {
-                // Ignore portamento state
+                let note_and_key_off_bit = read_pc();
                 let _portamento_speed = read_pc();
                 let wait_length = read_pc();
-                let note_and_key_off_bit = read_pc();
 
+                // Ignoring portamento speed and direction
                 self.note = ChannelNote::Portamento {
                     target_opcode: note_and_key_off_bit,
                     instrument: self.instrument,

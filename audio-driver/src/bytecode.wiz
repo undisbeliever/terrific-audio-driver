@@ -64,20 +64,20 @@ let DISABLE_CHANNEL_BYTECODE = FIRST_PLAY_NOTE_INSTRUCTION - 1;
 
 // These bytecodes do have parameters
 let INSTRUCTIONS_WITH_ARGUMENTS = [
-    // parameters: ssssssss llllllll nnnnnnnO
-    //     ssssssss = u8 speed (PITCH change per tick)
-    //     llllllll = note length
+    // parameters: nnnnnnnO ssssssss llllllll
     //      nnnnnnn = note to play (same note format as a play-note instruction)
     //            O = key-off after note ends
+    //     ssssssss = u8 speed (PITCH change per tick)
+    //     llllllll = note length
     //
     // NOTE: portamento does not emit a KON event
     portamento_down,
 
-    // parameters: ssssssss llllllll nnnnnnnO
-    //     ssssssss = u8 speed (PITCH change per tick)
-    //     llllllll = note length
+    // parameters: nnnnnnnO ssssssss llllllll
     //      nnnnnnn = note to play (same note format as a play-note instruction)
     //            O = key-off after note ends
+    //     ssssssss = u8 speed (PITCH change per tick)
+    //     llllllll = note length
     //
     // NOTE: portamento does not emit a KON event
     portamento_up,

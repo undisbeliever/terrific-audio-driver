@@ -1274,9 +1274,9 @@ impl<'a> Bytecode<'a> {
         let length = length.bc_argument();
 
         if velocity.is_negative() {
-            emit_bytecode!(self, opcodes::PORTAMENTO_DOWN, speed, length, note_param);
+            emit_bytecode!(self, opcodes::PORTAMENTO_DOWN, note_param, speed, length);
         } else {
-            emit_bytecode!(self, opcodes::PORTAMENTO_UP, speed, length, note_param);
+            emit_bytecode!(self, opcodes::PORTAMENTO_UP, note_param, speed, length);
         }
 
         r
