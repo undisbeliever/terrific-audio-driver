@@ -699,6 +699,7 @@ pub(crate) enum IeState<T>
 where
     T: Copy + PartialEq,
 {
+    Unset,
     Known(T),
     Maybe(T),
     Unknown,
@@ -713,22 +714,41 @@ where
             Self::Known(v) => o == v,
             Self::Maybe(_) => false,
             Self::Unknown => false,
+            Self::Unset => false,
         }
     }
 
-    fn promote_to_known(&self) -> Self {
+    fn promote_to_known(&mut self) {
         match self {
-            Self::Known(v) => Self::Known(*v),
-            Self::Maybe(v) => Self::Known(*v),
-            Self::Unknown => Self::Unknown,
+            Self::Unset => (),
+            Self::Known(v) => *self = Self::Known(*v),
+            Self::Maybe(v) => *self = Self::Known(*v),
+            Self::Unknown => (),
         }
     }
 
-    fn demote_to_maybe(&self) -> Self {
+    fn demote_to_maybe(&mut self) {
         match self {
-            Self::Known(v) => Self::Maybe(*v),
-            Self::Maybe(v) => Self::Maybe(*v),
-            Self::Unknown => Self::Unknown,
+            Self::Unset => (),
+            Self::Known(v) => *self = Self::Maybe(*v),
+            Self::Maybe(_) => (),
+            Self::Unknown => (),
+        }
+    }
+
+    fn merge_skip_last_loop(&mut self, skip_last_loop: Self) {
+        match &skip_last_loop {
+            Self::Unset | Self::Maybe(_) => (),
+
+            Self::Known(_) | Self::Unknown => *self = skip_last_loop,
+        }
+    }
+
+    fn merge_subroutine(&mut self, subroutine: &Self) {
+        match &subroutine {
+            Self::Unset => (),
+            Self::Known(..) | Self::Unknown => *self = *subroutine,
+            Self::Maybe(..) => panic!("unexpected maybe instrument"),
         }
     }
 }
@@ -882,14 +902,14 @@ impl<'a> Bytecode<'a> {
                 max_stack_depth: StackDepth(0),
                 tempo_changes: Vec::new(),
                 instrument: InstrumentState::Unset,
-                envelope: IeState::Unknown,
-                prev_temp_gain: IeState::Unknown,
-                early_release: IeState::Unknown,
+                envelope: IeState::Unset,
+                prev_temp_gain: IeState::Unset,
+                early_release: IeState::Unset,
                 detune: match &context {
                     BytecodeContext::SoundEffect => IeState::Known(DetuneValue::ZERO),
                     BytecodeContext::SongChannel(_) => IeState::Known(DetuneValue::ZERO),
-                    BytecodeContext::SongSubroutine => IeState::Unknown,
-                    BytecodeContext::MmlPrefix => IeState::Unknown,
+                    BytecodeContext::SongSubroutine => IeState::Unset,
+                    BytecodeContext::MmlPrefix => IeState::Unset,
                 },
                 vibrato: match &context {
                     BytecodeContext::SoundEffect => VibratoState::Disabled,
@@ -959,10 +979,10 @@ impl<'a> Bytecode<'a> {
 
         // The instrument or envelope may have changed when the song loops.
         self.state.instrument.demote_to_maybe();
-        self.state.envelope = self.state.envelope.demote_to_maybe();
-        self.state.prev_temp_gain = self.state.prev_temp_gain.demote_to_maybe();
-        self.state.early_release = self.state.early_release.demote_to_maybe();
-        self.state.detune = self.state.detune.demote_to_maybe();
+        self.state.envelope.demote_to_maybe();
+        self.state.prev_temp_gain.demote_to_maybe();
+        self.state.early_release.demote_to_maybe();
+        self.state.detune.demote_to_maybe();
 
         self.state.vibrato = VibratoState::Unknown;
     }
@@ -1569,10 +1589,10 @@ impl<'a> Bytecode<'a> {
         // The loop might change the instrument and evelope.
         // When the loop loops, the instrument/envelope might have changed.
         self.state.instrument.demote_to_maybe();
-        self.state.envelope = self.state.envelope.demote_to_maybe();
-        self.state.prev_temp_gain = self.state.prev_temp_gain.demote_to_maybe();
-        self.state.early_release = self.state.early_release.demote_to_maybe();
-        self.state.detune = self.state.detune.demote_to_maybe();
+        self.state.envelope.demote_to_maybe();
+        self.state.prev_temp_gain.demote_to_maybe();
+        self.state.early_release.demote_to_maybe();
+        self.state.detune.demote_to_maybe();
         self.state.vibrato = VibratoState::Unknown;
 
         // Loop might end on a note that is not slurred and matching `prev_slurred_note`.
@@ -1699,11 +1719,22 @@ impl<'a> Bytecode<'a> {
                 .instrument
                 .merge_skip_last_loop(skip_last_loop.instrument);
 
-            self.state.envelope = skip_last_loop.envelope;
-            self.state.prev_temp_gain = skip_last_loop.prev_temp_gain;
-            self.state.early_release = skip_last_loop.early_release;
-            self.state.detune = skip_last_loop.detune;
+            self.state
+                .envelope
+                .merge_skip_last_loop(skip_last_loop.envelope);
+            self.state
+                .prev_temp_gain
+                .merge_skip_last_loop(skip_last_loop.prev_temp_gain);
+            self.state
+                .early_release
+                .merge_skip_last_loop(skip_last_loop.early_release);
+            self.state
+                .detune
+                .merge_skip_last_loop(skip_last_loop.detune);
+
+            // Ok - vibrato state is unknown at the start of the loop
             self.state.vibrato = skip_last_loop.vibrato;
+
             self.state
                 .prev_slurred_note
                 .merge(&skip_last_loop.prev_slurred_note);
@@ -1727,10 +1758,10 @@ impl<'a> Bytecode<'a> {
 
         if self.loop_stack.is_empty() {
             self.state.instrument.promote_to_known();
-            self.state.envelope = self.state.envelope.promote_to_known();
-            self.state.prev_temp_gain = self.state.prev_temp_gain.promote_to_known();
-            self.state.early_release = self.state.early_release.promote_to_known();
-            self.state.detune = self.state.detune.promote_to_known();
+            self.state.envelope.promote_to_known();
+            self.state.prev_temp_gain.promote_to_known();
+            self.state.early_release.promote_to_known();
+            self.state.detune.promote_to_known();
         }
 
         emit_bytecode!(self, opcodes::END_LOOP);
@@ -1754,26 +1785,17 @@ impl<'a> Bytecode<'a> {
             .instrument
             .merge_subroutine(&subroutine.state.instrument);
 
-        match subroutine.state.envelope {
-            IeState::Known(e) => self.state.envelope = IeState::Known(e),
-            IeState::Maybe(_) => panic!("unexpected maybe envelope"),
-            IeState::Unknown => (),
-        }
-        match subroutine.state.prev_temp_gain {
-            IeState::Known(e) => self.state.prev_temp_gain = IeState::Known(e),
-            IeState::Maybe(_) => panic!("unexpected maybe prevTempGain"),
-            IeState::Unknown => (),
-        }
-        match subroutine.state.early_release {
-            IeState::Known(e) => self.state.early_release = IeState::Known(e),
-            IeState::Maybe(_) => panic!("unexpected maybe early_release"),
-            IeState::Unknown => (),
-        }
-        match subroutine.state.detune {
-            IeState::Known(e) => self.state.detune = IeState::Known(e),
-            IeState::Maybe(_) => panic!("unexpected maybe detune"),
-            IeState::Unknown => (),
-        }
+        self.state
+            .envelope
+            .merge_subroutine(&subroutine.state.envelope);
+        self.state
+            .prev_temp_gain
+            .merge_subroutine(&subroutine.state.prev_temp_gain);
+        self.state
+            .early_release
+            .merge_subroutine(&subroutine.state.early_release);
+        self.state.detune.merge_subroutine(&subroutine.state.detune);
+
         match &subroutine.state.vibrato {
             VibratoState::Unchanged => (),
             VibratoState::Unknown => self.state.vibrato = VibratoState::Unknown,
