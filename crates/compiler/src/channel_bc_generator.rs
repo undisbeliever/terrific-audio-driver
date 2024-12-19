@@ -6,12 +6,12 @@
 
 use crate::bytecode::{
     BcTicks, BcTicksKeyOff, BcTicksNoKeyOff, Bytecode, BytecodeContext, DetuneValue,
-    EarlyReleaseMinTicks, EarlyReleaseTicks, InstrumentId, InstrumentState, LoopCount,
-    NoiseFrequency, Pan, PanSlideAmount, PanSlideTicks, PanbrelloAmplitude,
-    PanbrelloQuarterWavelengthInTicks, PlayNoteTicks, PlayPitchPitch, PortamentoVelocity,
-    RelativePan, RelativeVolume, SlurredNoteState, TremoloAmplitude,
-    TremoloQuarterWavelengthInTicks, VibratoPitchOffsetPerTick, VibratoQuarterWavelengthInTicks,
-    VibratoState, Volume, VolumeSlideAmount, VolumeSlideTicks, KEY_OFF_TICK_DELAY,
+    EarlyReleaseMinTicks, EarlyReleaseTicks, InstrumentId, LoopCount, NoiseFrequency, Pan,
+    PanSlideAmount, PanSlideTicks, PanbrelloAmplitude, PanbrelloQuarterWavelengthInTicks,
+    PlayNoteTicks, PlayPitchPitch, PortamentoVelocity, RelativePan, RelativeVolume,
+    SlurredNoteState, TremoloAmplitude, TremoloQuarterWavelengthInTicks, VibratoPitchOffsetPerTick,
+    VibratoQuarterWavelengthInTicks, VibratoState, Volume, VolumeSlideAmount, VolumeSlideTicks,
+    KEY_OFF_TICK_DELAY,
 };
 use crate::bytecode_assembler::parse_asm_line;
 use crate::data::{self, UniqueNamesList};
@@ -428,11 +428,9 @@ impl<'a> ChannelBcGenerator<'a> {
         if mp.depth_in_cents == 0 {
             return Err(ChannelError::MpDepthZero);
         }
-        let instrument_id = match self.bc.get_state().instrument {
-            InstrumentState::Known(i) | InstrumentState::Maybe(i) | InstrumentState::Hint(i) => i,
-            InstrumentState::Unknown | InstrumentState::Unset => {
-                return Err(ChannelError::CannotUseMpWithoutInstrument)
-            }
+        let instrument_id = match self.bc.get_state().instrument.instrument_id() {
+            Some(i) => i,
+            None => return Err(ChannelError::CannotUseMpWithoutInstrument),
         };
 
         let pitch = self
@@ -469,13 +467,9 @@ impl<'a> ChannelBcGenerator<'a> {
         match self.detune_cents.as_i16() {
             0 => Ok(DetuneCentsOutput(DetuneValue::ZERO)),
             cents => {
-                let instrument_id = match self.bc.get_state().instrument {
-                    InstrumentState::Known(i)
-                    | InstrumentState::Maybe(i)
-                    | InstrumentState::Hint(i) => i,
-                    InstrumentState::Unknown | InstrumentState::Unset => {
-                        return Err(ChannelError::CannotUseDetuneCentsWithoutInstrument)
-                    }
+                let instrument_id = match self.bc.get_state().instrument.instrument_id() {
+                    Some(i) => i,
+                    None => return Err(ChannelError::CannotUseDetuneCentsWithoutInstrument),
                 };
                 let pitch = self.pitch_table.pitch_for_note(instrument_id, note);
                 let pow = f64::from(cents) / f64::from(SEMITONES_PER_OCTAVE as u32 * 100);
@@ -962,13 +956,9 @@ impl<'a> ChannelBcGenerator<'a> {
                 }
             }
             None => {
-                let instrument_id = match self.bc.get_state().instrument {
-                    InstrumentState::Known(i)
-                    | InstrumentState::Maybe(i)
-                    | InstrumentState::Hint(i) => i,
-                    InstrumentState::Unknown | InstrumentState::Unset => {
-                        return Err(ChannelError::PortamentoRequiresInstrument)
-                    }
+                let instrument_id = match self.bc.get_state().instrument.instrument_id() {
+                    Some(i) => i,
+                    None => return Err(ChannelError::PortamentoRequiresInstrument),
                 };
                 let p1: i32 = self
                     .pitch_table
@@ -1100,8 +1090,8 @@ impl<'a> ChannelBcGenerator<'a> {
             None => panic!("invalid instrument index"),
         };
 
-        let old_inst = self.bc.get_state().instrument;
-        let old_envelope = self.bc.get_state().envelope;
+        let old_inst = &self.bc.get_state().instrument;
+        let old_envelope = &self.bc.get_state().envelope;
 
         let i_id = inst.instrument_id;
         let envelope = inst.envelope;

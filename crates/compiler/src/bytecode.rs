@@ -618,40 +618,75 @@ mod emit_bytecode {
     }
 }
 
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub(crate) enum InstrumentState {
     Unset,
-    Known(InstrumentId),
-    Maybe(InstrumentId),
-    Hint(InstrumentId),
+    Known(InstrumentId, RangeInclusive<Note>),
+    Maybe(InstrumentId, RangeInclusive<Note>),
+    Hint(InstrumentId, RangeInclusive<Note>),
     Unknown,
 }
 
 impl InstrumentState {
+    pub fn instrument_id(&self) -> Option<InstrumentId> {
+        match self {
+            Self::Known(i, _) => Some(*i),
+            Self::Maybe(i, _) => Some(*i),
+            Self::Hint(i, _) => Some(*i),
+            Self::Unset => None,
+            Self::Unknown => None,
+        }
+    }
+
     pub fn is_known_and_eq(&self, o: &InstrumentId) -> bool {
         match self {
             Self::Unset => false,
-            Self::Known(i) | Self::Hint(i) => o == i,
-            Self::Maybe(_) => false,
+            Self::Known(i, _) | Self::Hint(i, _) => o == i,
+            Self::Maybe(..) => false,
             Self::Unknown => false,
         }
     }
-    fn promote_to_known(&self) -> Self {
+    fn promote_to_known(&mut self) {
         match self {
-            Self::Unset => Self::Unset,
-            Self::Known(i) => Self::Known(*i),
-            Self::Maybe(i) => Self::Known(*i),
-            Self::Hint(i) => Self::Hint(*i),
-            Self::Unknown => Self::Unknown,
+            Self::Unset => (),
+            Self::Known(i, r) => *self = Self::Known(*i, r.clone()),
+            Self::Maybe(i, r) => *self = Self::Known(*i, r.clone()),
+            Self::Hint(..) => (),
+            Self::Unknown => (),
         }
     }
-    fn demote_to_maybe(&self) -> Self {
+    fn demote_to_maybe(&mut self) {
         match self {
-            Self::Unset => Self::Unset,
-            Self::Known(i) => Self::Maybe(*i),
-            Self::Maybe(i) => Self::Maybe(*i),
-            Self::Hint(i) => Self::Hint(*i),
-            Self::Unknown => Self::Unknown,
+            Self::Unset => (),
+            Self::Known(i, r) => *self = Self::Maybe(*i, r.clone()),
+            Self::Maybe(..) => (),
+            Self::Hint(..) => (),
+            Self::Unknown => (),
+        }
+    }
+
+    fn merge_skip_last_loop(&mut self, skip_last_loop: Self) {
+        match &skip_last_loop {
+            Self::Unset | Self::Hint(..) | Self::Maybe(..) => (),
+
+            Self::Known(..) | Self::Unknown => *self = skip_last_loop,
+        }
+    }
+
+    fn merge_subroutine(&mut self, subroutine: &Self) {
+        match &subroutine {
+            Self::Unset => (),
+            Self::Known(..) | Self::Unknown => *self = subroutine.clone(),
+
+            Self::Hint(..) => match self {
+                InstrumentState::Unset => *self = subroutine.clone(),
+
+                InstrumentState::Hint(..)
+                | InstrumentState::Unknown
+                | InstrumentState::Known(..)
+                | InstrumentState::Maybe(..) => (),
+            },
+            Self::Maybe(..) => panic!("unexpected maybe instrument"),
         }
     }
 }
@@ -774,7 +809,6 @@ pub struct State {
     pub(crate) vibrato: VibratoState,
     pub(crate) prev_slurred_note: SlurredNoteState,
 
-    note_range: Option<RangeInclusive<Note>>,
     instrument_hint: Option<InstrumentHintFreq>,
     no_instrument_notes: RangeInclusive<Note>,
 }
@@ -783,8 +817,6 @@ struct SkipLastLoop {
     tick_counter: TickCounter,
     // Location of the parameter of the `skip_last_loop` instruction inside `Bytecode::bytecode`.
     bc_parameter_position: usize,
-
-    note_range: Option<RangeInclusive<Note>>,
 
     instrument: InstrumentState,
     envelope: IeState<Envelope>,
@@ -865,7 +897,6 @@ impl<'a> Bytecode<'a> {
                 },
                 prev_slurred_note: SlurredNoteState::Unchanged,
                 instrument_hint: None,
-                note_range: None,
                 no_instrument_notes: Note::MAX..=Note::MIN,
             },
             loop_stack: Vec::new(),
@@ -925,7 +956,7 @@ impl<'a> Bytecode<'a> {
         assert_eq!(self.get_stack_depth(), StackDepth(0));
 
         // The instrument or envelope may have changed when the song loops.
-        self.state.instrument = self.state.instrument.demote_to_maybe();
+        self.state.instrument.demote_to_maybe();
         self.state.envelope = self.state.envelope.demote_to_maybe();
         self.state.prev_temp_gain = self.state.prev_temp_gain.demote_to_maybe();
         self.state.early_release = self.state.early_release.demote_to_maybe();
@@ -1004,7 +1035,7 @@ impl<'a> Bytecode<'a> {
 
     fn _test_note_in_range(&mut self, note: Note) -> Result<(), BytecodeError> {
         match self.state.instrument {
-            InstrumentState::Hint(_) | InstrumentState::Unknown | InstrumentState::Unset => {
+            InstrumentState::Hint(..) | InstrumentState::Unknown | InstrumentState::Unset => {
                 let s = &mut self.state;
                 if s.no_instrument_notes.is_empty() {
                     s.no_instrument_notes = note..=note;
@@ -1014,18 +1045,20 @@ impl<'a> Bytecode<'a> {
                     s.no_instrument_notes = *(s.no_instrument_notes.start())..=note;
                 }
             }
-            InstrumentState::Known(_) | InstrumentState::Maybe(_) => (),
+            InstrumentState::Known(..) | InstrumentState::Maybe(..) => (),
         }
 
-        match &self.state.note_range {
-            Some(note_range) => {
+        match &self.state.instrument {
+            InstrumentState::Known(_, note_range)
+            | InstrumentState::Maybe(_, note_range)
+            | InstrumentState::Hint(_, note_range) => {
                 if note_range.contains(&note) {
                     Ok(())
                 } else {
                     Err(BytecodeError::NoteOutOfRange(note, note_range.clone()))
                 }
             }
-            None => {
+            InstrumentState::Unknown | InstrumentState::Unset => {
                 if self.show_missing_set_instrument_error {
                     self.show_missing_set_instrument_error = false;
                     Err(BytecodeError::CannotPlayNoteBeforeSettingInstrument)
@@ -1200,18 +1233,16 @@ impl<'a> Bytecode<'a> {
         match &self.state.instrument {
             InstrumentState::Unset => (),
 
-            InstrumentState::Unknown | InstrumentState::Hint(_) => (),
-            InstrumentState::Known(_) | InstrumentState::Maybe(_) => {
+            InstrumentState::Unknown | InstrumentState::Hint(..) => (),
+            InstrumentState::Known(..) | InstrumentState::Maybe(..) => {
                 return Err(ChannelError::InstrumentHintInstrumentAlreadySet)
             }
         }
 
         match self.instruments.get_index(id.as_u8().into()) {
             Some(InstrumentOrSample::Instrument(i)) => {
-                self.state.instrument = InstrumentState::Hint(id);
+                self.state.instrument = InstrumentState::Hint(id, instrument.note_range.clone());
                 self.state.instrument_hint = Some(InstrumentHintFreq::from_instrument(i));
-                self.state.note_range = Some(instrument.note_range.clone());
-                self.state.instrument = InstrumentState::Hint(id);
                 Ok(())
             }
             Some(InstrumentOrSample::Sample(_)) => {
@@ -1222,11 +1253,10 @@ impl<'a> Bytecode<'a> {
     }
 
     fn _set_state_instrument_and_note_range(&mut self, instrument: InstrumentId) {
-        self.state.note_range = self
-            .instruments
-            .get_index(instrument.as_u8().into())
-            .map(note_range);
-        self.state.instrument = InstrumentState::Known(instrument);
+        self.state.instrument = match self.instruments.get_index(instrument.as_u8().into()) {
+            Some(i) => InstrumentState::Known(instrument, note_range(i)),
+            None => InstrumentState::Unknown,
+        };
     }
 
     pub fn set_instrument(&mut self, instrument: InstrumentId) {
@@ -1536,7 +1566,7 @@ impl<'a> Bytecode<'a> {
     pub fn start_loop(&mut self, loop_count: Option<LoopCount>) -> Result<(), BytecodeError> {
         // The loop might change the instrument and evelope.
         // When the loop loops, the instrument/envelope might have changed.
-        self.state.instrument = self.state.instrument.demote_to_maybe();
+        self.state.instrument.demote_to_maybe();
         self.state.envelope = self.state.envelope.demote_to_maybe();
         self.state.prev_temp_gain = self.state.prev_temp_gain.demote_to_maybe();
         self.state.early_release = self.state.early_release.demote_to_maybe();
@@ -1590,8 +1620,7 @@ impl<'a> Bytecode<'a> {
         loop_state.skip_last_loop = Some(SkipLastLoop {
             tick_counter: self.state.tick_counter,
             bc_parameter_position: self.bytecode.len() + 1,
-            note_range: self.state.note_range.clone(),
-            instrument: self.state.instrument,
+            instrument: self.state.instrument.clone(),
             envelope: self.state.envelope,
             prev_temp_gain: self.state.prev_temp_gain,
             early_release: self.state.early_release,
@@ -1664,8 +1693,10 @@ impl<'a> Bytecode<'a> {
         }
 
         if let Some(skip_last_loop) = loop_state.skip_last_loop {
-            self.state.instrument = skip_last_loop.instrument;
-            self.state.note_range = skip_last_loop.note_range;
+            self.state
+                .instrument
+                .merge_skip_last_loop(skip_last_loop.instrument);
+
             self.state.envelope = skip_last_loop.envelope;
             self.state.prev_temp_gain = skip_last_loop.prev_temp_gain;
             self.state.early_release = skip_last_loop.early_release;
@@ -1693,7 +1724,7 @@ impl<'a> Bytecode<'a> {
         }
 
         if self.loop_stack.is_empty() {
-            self.state.instrument = self.state.instrument.promote_to_known();
+            self.state.instrument.promote_to_known();
             self.state.envelope = self.state.envelope.promote_to_known();
             self.state.prev_temp_gain = self.state.prev_temp_gain.promote_to_known();
             self.state.early_release = self.state.early_release.promote_to_known();
@@ -1715,34 +1746,11 @@ impl<'a> Bytecode<'a> {
     ) -> Result<(), BytecodeError> {
         self.state.tick_counter += subroutine.state.tick_counter;
 
-        let old_instrument = self.state.instrument;
-        let old_note_range = self.state.note_range.clone();
+        let old_instrument = self.state.instrument.clone();
 
-        match subroutine.state.instrument {
-            InstrumentState::Known(i) => {
-                assert!(subroutine.state.note_range.is_some());
-
-                self.state.instrument = InstrumentState::Known(i);
-                self.state.note_range = subroutine.state.note_range.clone();
-            }
-            InstrumentState::Hint(i) => {
-                assert!(subroutine.state.note_range.is_some());
-
-                match self.state.instrument {
-                    InstrumentState::Unset => {
-                        self.state.instrument = InstrumentState::Hint(i);
-                        self.state.note_range = subroutine.state.note_range.clone();
-                    }
-                    InstrumentState::Hint(_)
-                    | InstrumentState::Unknown
-                    | InstrumentState::Known(_)
-                    | InstrumentState::Maybe(_) => (),
-                }
-            }
-            InstrumentState::Maybe(_) => panic!("unexpected maybe instrument"),
-            InstrumentState::Unknown => (),
-            InstrumentState::Unset => (),
-        }
+        self.state
+            .instrument
+            .merge_subroutine(&subroutine.state.instrument);
 
         match subroutine.state.envelope {
             IeState::Known(e) => self.state.envelope = IeState::Known(e),
@@ -1776,9 +1784,9 @@ impl<'a> Bytecode<'a> {
 
         if let Some(sub_hint_freq) = subroutine.state.instrument_hint {
             match old_instrument {
-                InstrumentState::Known(id)
-                | InstrumentState::Hint(id)
-                | InstrumentState::Maybe(id) => {
+                InstrumentState::Known(id, _)
+                | InstrumentState::Hint(id, _)
+                | InstrumentState::Maybe(id, _) => {
                     match self.instruments.get_index(id.as_u8().into()) {
                         Some(InstrumentOrSample::Instrument(i)) => {
                             let inst_freq = InstrumentHintFreq::from_instrument(i);
@@ -1818,8 +1826,8 @@ impl<'a> Bytecode<'a> {
             let self_notes = &self.state.no_instrument_notes;
             let sub_notes = &subroutine.state.no_instrument_notes;
 
-            match old_note_range {
-                None => match self.context {
+            match old_instrument {
+                InstrumentState::Unknown | InstrumentState::Unset => match self.context {
                     BytecodeContext::SongChannel(_) | BytecodeContext::SoundEffect => {
                         return Err(BytecodeError::SubroutinePlaysNotesWithNoInstrument)
                     }
@@ -1835,7 +1843,10 @@ impl<'a> Bytecode<'a> {
                         return Err(BytecodeError::SubroutineCallInMmlPrefix)
                     }
                 },
-                Some(old_note_range) => {
+
+                InstrumentState::Known(_, old_note_range)
+                | InstrumentState::Hint(_, old_note_range)
+                | InstrumentState::Maybe(_, old_note_range) => {
                     if !old_note_range.contains(sub_notes.start())
                         || !old_note_range.contains(sub_notes.end())
                     {

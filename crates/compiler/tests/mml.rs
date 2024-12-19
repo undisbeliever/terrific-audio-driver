@@ -3031,7 +3031,7 @@ fn test_subroutine_instrument_hint_and_loop() {
 
 !s ?@1 {eg}
 
-A [v+5 : @1 c]6 !s
+A [V+5 : @1 c]6 !s
 "#,
         &[
             "start_loop",
@@ -3055,7 +3055,6 @@ A [@1 c : @2 d]6 !s
 "#,
         &[
             "start_loop",
-            "adjust_volume +5",
             "set_instrument f1000_o4",
             "play_note c4 24",
             "skip_last_loop",
@@ -3077,13 +3076,48 @@ A [@1 !s : @2 c]6
 "#,
         &[
             "start_loop",
-            "adjust_volume +5",
             "set_instrument f1000_o4",
             "call_subroutine s",
             "skip_last_loop",
             "set_instrument f2000_o4",
             "play_note c4 24",
             "end_loop 6",
+        ],
+    );
+
+    assert_mml_channel_a_matches_bytecode(
+        r#"
+@1 f1000_o4
+@2 f2000_o4
+
+!s1 ?@1 {eg}
+!s2 ?@2 {eg}
+
+A [ @1 c : [ V+5 [@1 !s1 : @2 c]6 !s1 @2 ]4 !s2 ]2 !s1
+"#,
+        &[
+            "start_loop",
+            "set_instrument f1000_o4",
+            "play_note c4 24",
+            "skip_last_loop",
+            "start_loop",
+            "adjust_volume +5",
+            "start_loop",
+            "set_instrument f1000_o4",
+            "call_subroutine s1",
+            "skip_last_loop",
+            "set_instrument f2000_o4",
+            "play_note c4 24",
+            "end_loop 6",
+            // instrument is @1 here (due to skip_last_loop)
+            "call_subroutine s1",
+            "set_instrument f2000_o4",
+            "end_loop 4",
+            // instrument is @2 here (no skip_last_loop)
+            "call_subroutine s2",
+            "end_loop 2",
+            // instrument is @1 here (skip_last_loop)
+            "call_subroutine s1",
         ],
     );
 }
