@@ -2046,38 +2046,32 @@ func disable_noise(channelIndex: u8 in x) {
 }
 
 
-// IN: Y = 0
-// KEEP: X
-func portamento_down(channelIndex : u8 in x, speed : u8 in a) {
-    channelSoA.portamento_speed[x] = a;
-
-    return __portamento(channelIndex, -1 as u8);
-}
-
-
+let portamento_up = __portamento as func(u8 in x, u8 in a);
 
 // IN: Y = 0
 // KEEP: X
 #[fallthrough]
-func portamento_up(channelIndex : u8 in x, speed : u8 in a) {
-    channelSoA.portamento_speed[x] = a;
+func portamento_down(channelIndex : u8 in x, speed : u8 in a) {
+    y = -2 as u8;
 
-    // direction
-    a = 1;
-
-// Fallthrough
+// Fallthrough into __portamento()
 }
 
 
 // Assumes portamento_speed already set
 //
-// IN: Y = 0
+// IN: Y = 0 or -2
 // KEEP: X
-func __portamento(channelIndex : u8 in x, direction : u8 in a) {
-    channelSoA.portamento_direction[x] = a as i8;
+func __portamento(channelIndex : u8 in x, speed : u8 in a, direction_minus_one : u8 in y) {
+    channelSoA.portamento_speed[x] = a;
+
+    y++;
+    // Y = 1 or -1
+    channelSoA.portamento_direction[x] = y as i8;
 
     // Wait length
     // Y = 0
+    y = 0;
     a = instructionPtr[y];
     instructionPtr++;
 

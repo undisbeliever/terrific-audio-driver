@@ -14,5 +14,5 @@ A {df}4,,100 r
 
 A {a > c}2 r
 
-A {o3 c o4 c}2 r
+A {o3 c o4 c}2 & w {o4 c o3 c}2 & w r
 
