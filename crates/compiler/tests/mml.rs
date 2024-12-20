@@ -1135,6 +1135,34 @@ fn test_small_detune_cents() {
     );
 }
 
+/// Tests detune changes MP vibrato
+#[test]
+fn test_detune_with_mp() {
+    assert_line_matches_bytecode("MP200,6 c", &["set_vibrato 41 6", "play_note c4 24"]);
+
+    assert_line_matches_bytecode(
+        "D+200 MP200,6 c",
+        &["set_detune +200", "set_vibrato 45 6", "play_note c4 24"],
+    );
+    assert_line_matches_bytecode(
+        "D-200 MP200,6 c",
+        &["set_detune -200", "set_vibrato 37 6", "play_note c4 24"],
+    );
+}
+
+/// Tests detune-cents changes MP vibrato
+#[test]
+fn test_detune_cents_with_mp() {
+    assert_line_matches_bytecode(
+        "MD+600 MP200,6 c",
+        &["set_detune +888", "set_vibrato 58 6", "play_note c4 24"],
+    );
+    assert_line_matches_bytecode(
+        "MD-600 MP200,6 c",
+        &["set_detune -628", "set_vibrato 29 6", "play_note c4 24"],
+    );
+}
+
 #[test]
 fn play_long_note() {
     // `wait` can rest for 1 to 256 ticks.
@@ -3377,6 +3405,67 @@ fn test_portamento_pitch() {
     assert_line_matches_bytecode(
         "{P$500 g}",
         &["play_pitch $500 no_keyoff 1", "portamento g4 keyoff +88 23"],
+    );
+}
+
+#[test]
+fn test_portamento_pitch_and_detune() {
+    const A4_PITCH: u32 = 0x0e14;
+
+    assert_line_matches_bytecode(
+        "D+80 P1000 & {P1000 P1500}",
+        &[
+            "set_detune +80",
+            "play_pitch 1000 no_keyoff 24",
+            "portamento_pitch 1500 keyoff +22 24",
+        ],
+    );
+
+    // MD does not affect P
+    assert_line_matches_bytecode(
+        "MD+80 P1000 & {P1000 P1500}",
+        &[
+            "play_pitch 1000 no_keyoff 24",
+            "portamento_pitch 1500 keyoff +22 24",
+        ],
+    );
+
+    // MD affects note, not pitch
+    assert_eq!((A4_PITCH - 52) + 50 * (12 - 2), 4052);
+    assert_line_matches_bytecode(
+        "MD-25 {a P4052}%12",
+        &[
+            "set_detune -52",
+            "play_note a4 no_keyoff 1",
+            "portamento_pitch 4052 keyoff +50 11",
+        ],
+    );
+    assert_line_matches_bytecode(
+        "MD-25 {P4052 a}%12",
+        &[
+            "play_pitch 4052 no_keyoff 1",
+            "set_detune -52",
+            "portamento a4 keyoff -50 11",
+        ],
+    );
+
+    // D affects note, not pitch
+    assert_eq!((A4_PITCH + 80) - 60 * (12 - 2), 3084);
+    assert_line_matches_bytecode(
+        "D+80 {a P3084}%12",
+        &[
+            "set_detune +80",
+            "play_note a4 no_keyoff 1",
+            "portamento_pitch 3084 keyoff -60 11",
+        ],
+    );
+    assert_line_matches_bytecode(
+        "D+80 {P3084 a}%12",
+        &[
+            "set_detune +80",
+            "play_pitch 3084 no_keyoff 1",
+            "portamento a4 keyoff +60 11",
+        ],
     );
 }
 

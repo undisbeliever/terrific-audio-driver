@@ -5,8 +5,8 @@
 // SPDX-License-Identifier: MIT
 
 use crate::bytecode::{
-    BcTicks, BcTicksKeyOff, BcTicksNoKeyOff, Bytecode, BytecodeContext, DetuneValue,
-    EarlyReleaseMinTicks, EarlyReleaseTicks, InstrumentId, LoopCount, NoiseFrequency, Pan,
+    self, BcTicks, BcTicksKeyOff, BcTicksNoKeyOff, Bytecode, BytecodeContext, DetuneValue,
+    EarlyReleaseMinTicks, EarlyReleaseTicks, IeState, InstrumentId, LoopCount, NoiseFrequency, Pan,
     PanSlideAmount, PanSlideTicks, PanbrelloAmplitude, PanbrelloQuarterWavelengthInTicks,
     PlayNoteTicks, PlayPitchPitch, PortamentoVelocity, RelativePan, RelativeVolume,
     SlurredNoteState, TremoloAmplitude, TremoloQuarterWavelengthInTicks, VibratoPitchOffsetPerTick,
@@ -47,6 +47,7 @@ pub enum NoteOrPitch {
     Pitch(PlayPitchPitch),
 }
 
+#[derive(Debug)]
 enum NoteOrPitchOut {
     Note(DetuneCentsOutput, Note),
     Pitch(PlayPitchPitch),
@@ -184,17 +185,23 @@ impl DetuneCents {
     pub const ZERO: Self = Self(0);
 }
 
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 enum DetuneCentsOutput {
     Manual,
     Automatic(DetuneValue),
 }
 
 impl DetuneCentsOutput {
-    fn detune_i16(&self) -> i16 {
+    fn detune_value(&self, bc_state: &bytecode::State) -> DetuneValue {
         match self {
-            Self::Manual => 0,
-            Self::Automatic(d) => d.as_i16(),
+            Self::Automatic(d) => *d,
+            Self::Manual => match bc_state.detune {
+                IeState::Unset => DetuneValue::ZERO,
+                IeState::Known(d) => d,
+                IeState::Maybe(d) => d,
+                // ::TODO remove and make looping with changed detune invalid::
+                IeState::Unknown => DetuneValue::ZERO,
+            },
         }
     }
 }
@@ -450,10 +457,12 @@ impl<'a> ChannelBcGenerator<'a> {
             None => return Err(ChannelError::CannotUseMpWithoutInstrument),
         };
 
+        let detune = detune.detune_value(self.bc.get_state());
+
         let pitch = self
             .pitch_table
             .pitch_for_note(instrument_id, note)
-            .wrapping_add_signed(detune.detune_i16());
+            .wrapping_add_signed(detune.as_i16());
 
         // Calculate the minimum and maximum pitches of the vibrato.
         // This produces more accurate results when cents is very large (ie, 400)
@@ -890,18 +899,20 @@ impl<'a> ChannelBcGenerator<'a> {
     ) -> Result<(Option<u16>, NoteOrPitchOut), ChannelError> {
         match note {
             NoteOrPitch::Note(note) => {
-                let detune = self.calculate_detune_for_note(note)?;
+                let detune_output = self.calculate_detune_for_note(note)?;
+
+                let detune = detune_output.detune_value(self.bc.get_state());
 
                 match instrument {
                     Some(instrument) => {
                         let pitch = self
                             .pitch_table
                             .pitch_for_note(instrument, note)
-                            .wrapping_add_signed(detune.detune_i16());
+                            .wrapping_add_signed(detune.as_i16());
 
-                        Ok((Some(pitch), NoteOrPitchOut::Note(detune, note)))
+                        Ok((Some(pitch), NoteOrPitchOut::Note(detune_output, note)))
                     }
-                    None => Ok((None, NoteOrPitchOut::Note(detune, note))),
+                    None => Ok((None, NoteOrPitchOut::Note(detune_output, note))),
                 }
             }
             NoteOrPitch::Pitch(p) => Ok((Some(p.as_u16()), NoteOrPitchOut::Pitch(p))),
