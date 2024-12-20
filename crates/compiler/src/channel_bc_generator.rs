@@ -49,7 +49,7 @@ pub enum NoteOrPitch {
 
 #[derive(Debug)]
 enum NoteOrPitchOut {
-    Note(DetuneCentsOutput, Note),
+    Note(DetuneCentsOutput, Note, DetuneValue),
     Pitch(PlayPitchPitch),
 }
 
@@ -910,9 +910,12 @@ impl<'a> ChannelBcGenerator<'a> {
                             .pitch_for_note(instrument, note)
                             .wrapping_add_signed(detune.as_i16());
 
-                        Ok((Some(pitch), NoteOrPitchOut::Note(detune_output, note)))
+                        Ok((
+                            Some(pitch),
+                            NoteOrPitchOut::Note(detune_output, note, detune),
+                        ))
                     }
-                    None => Ok((None, NoteOrPitchOut::Note(detune_output, note))),
+                    None => Ok((None, NoteOrPitchOut::Note(detune_output, note, detune))),
                 }
             }
             NoteOrPitch::Pitch(p) => Ok((Some(p.as_u16()), NoteOrPitchOut::Pitch(p))),
@@ -925,8 +928,8 @@ impl<'a> ChannelBcGenerator<'a> {
         t: PlayNoteTicks,
     ) -> Result<(), ChannelError> {
         match note {
-            NoteOrPitchOut::Note(d, n) => {
-                self.emit_detune_output(d);
+            NoteOrPitchOut::Note(dco, n, _) => {
+                self.emit_detune_output(dco);
                 self.bc.play_note(n, t)?;
             }
             NoteOrPitchOut::Pitch(p) => {
@@ -961,8 +964,8 @@ impl<'a> ChannelBcGenerator<'a> {
         let (note2_pitch, pn2) = self.portamento_note_pitch(note2, instrument)?;
 
         let play_note1 = match pn1 {
-            NoteOrPitchOut::Note(_, n) => {
-                self.bc.get_state().prev_slurred_note != SlurredNoteState::Slurred(n)
+            NoteOrPitchOut::Note(_, n, d) => {
+                self.bc.get_state().prev_slurred_note != SlurredNoteState::Slurred(n, d)
             }
             NoteOrPitchOut::Pitch(p) => {
                 self.bc.get_state().prev_slurred_note != SlurredNoteState::SlurredPitch(p)
@@ -1069,8 +1072,8 @@ impl<'a> ChannelBcGenerator<'a> {
             self.split_play_note_length(slide_length + tie_length, is_slur, rest_after_note)?;
 
         match pn2 {
-            NoteOrPitchOut::Note(d, n) => {
-                self.emit_detune_output(d);
+            NoteOrPitchOut::Note(dco, n, _) => {
+                self.emit_detune_output(dco);
                 self.bc.portamento(n, velocity, p_length)?;
             }
             NoteOrPitchOut::Pitch(p) => {

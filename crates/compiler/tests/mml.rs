@@ -3409,6 +3409,52 @@ fn test_portamento_pitch() {
 }
 
 #[test]
+fn test_slurred_note_detune_then_portamento() {
+    assert_line_matches_bytecode(
+        "c & D+80 {c g}",
+        &[
+            "play_note c4 no_keyoff 24",
+            // Must play a new note, the detune changed
+            "set_detune +80",
+            "play_note c4 no_keyoff 1",
+            "portamento g4 keyoff +49 23",
+        ],
+    );
+
+    assert_line_matches_bytecode(
+        "MD+25 c & MD+50 {c g}",
+        &[
+            "set_detune +31",
+            "play_note c4 no_keyoff 24",
+            // Must play a new note, the detune changed
+            "set_detune +63",
+            "play_note c4 no_keyoff 1",
+            "set_detune +94",
+            "portamento g4 keyoff +50 23",
+        ],
+    );
+
+    // D does not affect P
+    assert_line_matches_bytecode(
+        "P1000 & D+1000 {P1000 P1500}",
+        &[
+            "play_pitch 1000 no_keyoff 24",
+            "set_detune +1000",
+            "portamento_pitch 1500 keyoff +22 24",
+        ],
+    );
+
+    // MD does not affect P
+    assert_line_matches_bytecode(
+        "P1000 & MD+20 {P1000 P1500}",
+        &[
+            "play_pitch 1000 no_keyoff 24",
+            "portamento_pitch 1500 keyoff +22 24",
+        ],
+    );
+}
+
+#[test]
 fn test_portamento_pitch_and_detune() {
     const A4_PITCH: u32 = 0x0e14;
 

@@ -18,6 +18,7 @@ MML changes:
  * Fixed a state tracking bug involving loops that can cause dropped instructions.
  * Fixed missing `set_detune 0` instruction when `MD` value is small
  * Fixed MP and portamento not accounting for manual `D` detune
+ * Fixed portamento not testing if detune was changed after the previous note
 
 GUI changes:
  * Sample Analyser can now analyse samples up to a length of 32768.

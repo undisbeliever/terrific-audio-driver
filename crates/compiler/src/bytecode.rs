@@ -823,7 +823,7 @@ pub enum SlurredNoteState {
     Unchanged,
     Unknown,
     None,
-    Slurred(Note),
+    Slurred(Note, DetuneValue),
     SlurredPitch(PlayPitchPitch),
     SlurredNoise,
 }
@@ -834,7 +834,7 @@ impl SlurredNoteState {
             SlurredNoteState::Unchanged => (),
             SlurredNoteState::Unknown => (),
             SlurredNoteState::None => *self = SlurredNoteState::None,
-            SlurredNoteState::Slurred(n) => *self = SlurredNoteState::Slurred(*n),
+            SlurredNoteState::Slurred(n, d) => *self = SlurredNoteState::Slurred(*n, *d),
             SlurredNoteState::SlurredPitch(p) => *self = SlurredNoteState::SlurredPitch(*p),
             SlurredNoteState::SlurredNoise => *self = SlurredNoteState::SlurredNoise,
         }
@@ -861,6 +861,20 @@ pub struct State {
 }
 
 impl State {
+    fn set_prev_slurred_note(&mut self, note: Note, length: PlayNoteTicks) {
+        self.prev_slurred_note = match length {
+            PlayNoteTicks::KeyOff(_) => SlurredNoteState::None,
+
+            PlayNoteTicks::NoKeyOff(_) => match self.detune {
+                IeState::Unset => SlurredNoteState::Slurred(note, DetuneValue::ZERO),
+                IeState::Known(d) => SlurredNoteState::Slurred(note, d),
+                // ::TODO emit a warning if detune was changed in a loop and this value is used::
+                IeState::Maybe(d) => SlurredNoteState::Slurred(note, d),
+                IeState::Unknown => SlurredNoteState::None,
+            },
+        };
+    }
+
     fn song_loop(&mut self) {
         self.instrument.demote_to_song_loop();
 
@@ -1245,10 +1259,7 @@ impl<'a> Bytecode<'a> {
         let r = self._test_note_in_range(note);
 
         self.state.tick_counter += length.to_tick_count();
-        self.state.prev_slurred_note = match length {
-            PlayNoteTicks::KeyOff(_) => SlurredNoteState::None,
-            PlayNoteTicks::NoKeyOff(_) => SlurredNoteState::Slurred(note),
-        };
+        self.state.set_prev_slurred_note(note, length);
 
         let opcode = NoteOpcode::new(note, &length);
 
@@ -1266,10 +1277,7 @@ impl<'a> Bytecode<'a> {
         let r = self._test_note_in_range(note);
 
         self.state.tick_counter += length.to_tick_count();
-        self.state.prev_slurred_note = match length {
-            PlayNoteTicks::KeyOff(_) => SlurredNoteState::None,
-            PlayNoteTicks::NoKeyOff(_) => SlurredNoteState::Slurred(note),
-        };
+        self.state.set_prev_slurred_note(note, length);
 
         let speed = velocity.pitch_offset_per_tick();
         let note_param = NoteOpcode::new(note, &length);
