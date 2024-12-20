@@ -3204,6 +3204,17 @@ fn test_broken_chord() {
 }
 
 #[test]
+fn test_broken_chord_pitch_errors() {
+    assert_error_in_mml_line("{{   ", 6, ChannelError::MissingEndBrokenChord);
+
+    assert_error_in_mml_line("{{  }", 5, ChannelError::MissingEndBrokenChord);
+
+    assert_error_in_mml_line("{{ [ a b }}", 4, ChannelError::InvalidPitchListSymbol);
+}
+
+// ::TODO broken chord argument error tests::
+
+#[test]
 fn test_portamento() {
     // Only testing portamento with a speed override
 
@@ -3275,6 +3286,33 @@ fn test_portamento() {
     assert_line_matches_line("{a > c}2", "{a _+12 c}2");
     assert_line_matches_line("{o3 c o4 c}2", "{< c > c}2");
 }
+
+#[test]
+fn test_portamento_pitch_errors() {
+    assert_error_in_mml_line("{   ", 5, ChannelError::MissingEndPortamento);
+
+    assert_error_in_mml_line("{ }}", 3, ChannelError::MissingEndPortamento);
+
+    assert_error_in_mml_line("{ [ a b }", 3, ChannelError::InvalidPitchListSymbol);
+
+    assert_error_in_mml_line("{ a }", 1, ChannelError::PortamentoRequiresTwoPitches);
+    assert_error_in_mml_line("{ a b c }", 1, ChannelError::PortamentoRequiresTwoPitches);
+    assert_error_in_mml_line("{ a b c d }", 1, ChannelError::PortamentoRequiresTwoPitches);
+
+    assert_error_in_mml_line("{ a a }", 1, ValueError::PortamentoVelocityZero.into());
+    assert_error_in_mml_line(
+        "{ o5 a o5 a }",
+        1,
+        ValueError::PortamentoVelocityZero.into(),
+    );
+    assert_error_in_mml_line(
+        "{ o5 a o3 >> a }",
+        1,
+        ValueError::PortamentoVelocityZero.into(),
+    );
+}
+
+// ::TODO add portamento length error tests::
 
 #[test]
 fn test_quantized_portamento() {

@@ -910,22 +910,37 @@ fn parse_untracked_optional_length(p: &mut Parser) -> Option<TickCounter> {
     Some(tc)
 }
 
-fn parse_pitch_list<'a>(p: &mut Parser<'a>) -> (Vec<Note>, FilePos, Token<'a>) {
+fn parse_pitch_list_state_change_token(token: Token, pos: FilePos, p: &mut Parser) {
+    match token {
+        Token::SetOctave => parse_set_octave(pos, p),
+        Token::IncrementOctave => parse_increment_octave(p),
+        Token::DecrementOctave => parse_decrement_octave(p),
+        Token::Transpose => parse_transpose(pos, p),
+        Token::RelativeTranspose => parse_relative_transpose(pos, p),
+
+        _ => p.add_error(pos, ChannelError::InvalidPitchListSymbol),
+    }
+}
+
+fn parse_broken_chord_pitches(p: &mut Parser) -> Option<(Vec<Note>, FilePos)> {
     let mut out = Vec::new();
 
     loop {
         let (pos, token) = p.peek_and_next();
 
         match token {
-            Token::EndPortamento | Token::EndBrokenChord => {
-                return (out, pos, token);
+            Token::EndBrokenChord => {
+                return Some((out, pos));
+            }
+
+            Token::EndPortamento | Token::End => {
+                p.add_error(pos, ChannelError::MissingEndBrokenChord);
+                return None;
             }
             Token::NewLine(r) => {
+                p.add_error(pos, ChannelError::MissingEndBrokenChord);
                 p.process_new_line(r);
-                return (out, pos, token);
-            }
-            Token::End => {
-                return (out, pos, token);
+                return None;
             }
 
             Token::Pitch(pitch) => {
@@ -935,13 +950,107 @@ fn parse_pitch_list<'a>(p: &mut Parser<'a>) -> (Vec<Note>, FilePos, Token<'a>) {
                 }
             }
 
-            Token::SetOctave => parse_set_octave(pos, p),
-            Token::IncrementOctave => parse_increment_octave(p),
-            Token::DecrementOctave => parse_decrement_octave(p),
-            Token::Transpose => parse_transpose(pos, p),
-            Token::RelativeTranspose => parse_relative_transpose(pos, p),
+            _ => {
+                parse_pitch_list_state_change_token(token, pos, p);
+            }
+        }
+    }
+}
 
-            _ => p.add_error(pos, ChannelError::InvalidPitchListSymbol),
+enum PortamentoPitch {
+    Ok(Note),
+    End,
+    MissingEnd,
+}
+
+fn parse_portamento_pitch(p: &mut Parser) -> PortamentoPitch {
+    loop {
+        let (pos, token) = p.peek_and_next();
+
+        match token {
+            Token::EndPortamento => {
+                return PortamentoPitch::End;
+            }
+
+            Token::EndBrokenChord | Token::End => {
+                p.add_error(pos, ChannelError::MissingEndPortamento);
+                return PortamentoPitch::MissingEnd;
+            }
+            Token::NewLine(r) => {
+                p.add_error(pos, ChannelError::MissingEndPortamento);
+                p.process_new_line(r);
+                return PortamentoPitch::MissingEnd;
+            }
+
+            Token::Pitch(pitch) => {
+                match Note::from_mml_pitch(pitch, p.state().octave, p.state().semitone_offset) {
+                    Ok(note) => return PortamentoPitch::Ok(note),
+                    Err(e) => p.add_error(pos, e.into()),
+                }
+            }
+
+            _ => {
+                parse_pitch_list_state_change_token(token, pos, p);
+            }
+        }
+    }
+}
+
+enum PortamentoPitchError {
+    WrongCount,
+    MissingEnd,
+}
+
+fn parse_portamento_pitches(
+    start_pos: FilePos,
+    p: &mut Parser,
+) -> Result<(Note, Note), PortamentoPitchError> {
+    let note1 = match parse_portamento_pitch(p) {
+        PortamentoPitch::Ok(n) => n,
+
+        PortamentoPitch::End => {
+            p.add_error(start_pos, ChannelError::PortamentoRequiresTwoPitches);
+            return Err(PortamentoPitchError::WrongCount);
+        }
+
+        PortamentoPitch::MissingEnd => {
+            return Err(PortamentoPitchError::MissingEnd);
+        }
+    };
+
+    let note2 = match parse_portamento_pitch(p) {
+        PortamentoPitch::Ok(n) => n,
+
+        PortamentoPitch::End => {
+            p.add_error(start_pos, ChannelError::PortamentoRequiresTwoPitches);
+            return Err(PortamentoPitchError::WrongCount);
+        }
+
+        PortamentoPitch::MissingEnd => {
+            return Err(PortamentoPitchError::MissingEnd);
+        }
+    };
+
+    match parse_portamento_pitch(p) {
+        PortamentoPitch::End => Ok((note1, note2)),
+
+        PortamentoPitch::MissingEnd => Err(PortamentoPitchError::MissingEnd),
+
+        PortamentoPitch::Ok(_) => {
+            // more than 2 notes
+            loop {
+                match parse_portamento_pitch(p) {
+                    PortamentoPitch::End => {
+                        p.add_error(start_pos, ChannelError::PortamentoRequiresTwoPitches);
+                        return Err(PortamentoPitchError::WrongCount);
+                    }
+                    PortamentoPitch::MissingEnd => {
+                        return Err(PortamentoPitchError::MissingEnd);
+                    }
+                    // Skip extra pitches
+                    PortamentoPitch::Ok(_) => {}
+                }
+            }
         }
     }
 }
@@ -1470,15 +1579,10 @@ fn parse_play_midi_note_number(pos: FilePos, p: &mut Parser) -> Command {
 }
 
 fn parse_portamento(pos: FilePos, p: &mut Parser) -> Command {
-    let (notes, end_pos, end_token) = parse_pitch_list(p);
+    let notes = parse_portamento_pitches(pos, p);
 
-    if !matches!(end_token, Token::EndPortamento) {
-        return invalid_token_error(p, end_pos, ChannelError::MissingEndPortamento);
-    }
-
-    // This error should be first
-    if notes.len() != 2 {
-        p.add_error(pos, ChannelError::PortamentoRequiresTwoPitches);
+    if matches!(notes, Err(PortamentoPitchError::MissingEnd)) {
+        return Command::None;
     }
 
     let portamento_length = parse_tracked_length(p);
@@ -1506,32 +1610,32 @@ fn parse_portamento(pos: FilePos, p: &mut Parser) -> Command {
 
     let rest_after_note = parse_rest_ticks_after_note(is_slur, p);
 
-    if notes.len() == 2 {
-        Command::Portamento {
-            note1: notes[0],
-            note2: notes[1],
+    match notes {
+        Ok((note1, note2)) => Command::Portamento {
+            note1,
+            note2,
             is_slur,
             speed_override,
             delay_length,
             slide_length,
             tie_length,
             rest_after_note,
-        }
-    } else {
-        // Output a rest (so tick-counter is correct)
-        Command::Rest {
-            ticks_until_keyoff: portamento_length,
-            ticks_after_keyoff: rest_after_note.0,
+        },
+        Err(_) => {
+            // Output a rest (so tick-counter is correct)
+            Command::Rest {
+                ticks_until_keyoff: portamento_length,
+                ticks_after_keyoff: rest_after_note.0,
+            }
         }
     }
 }
 
 fn parse_broken_chord(p: &mut Parser) -> Command {
-    let (notes, end_pos, end_token) = parse_pitch_list(p);
-
-    if !matches!(end_token, Token::EndBrokenChord) {
-        return invalid_token_error(p, end_pos, ChannelError::MissingEndBrokenChord);
-    }
+    let (notes, end_pos) = match parse_broken_chord_pitches(p) {
+        Some(s) => s,
+        None => return Command::None,
+    };
 
     let mut note_length_pos = end_pos;
 
