@@ -1120,6 +1120,22 @@ fn test_detune_cents() {
 }
 
 #[test]
+fn test_small_detune_cents() {
+    assert_line_matches_bytecode(
+        "MD+1 o4 c o2 d e o3 f",
+        &[
+            "set_detune +1",
+            "play_note c4 24",
+            "set_detune 0",
+            "play_note d2 24",
+            "play_note e2 24",
+            "set_detune +1",
+            "play_note f3 24",
+        ],
+    );
+}
+
+#[test]
 fn play_long_note() {
     // `wait` can rest for 1 to 256 ticks.
     // `rest` can rest for 2 to 257 tick.

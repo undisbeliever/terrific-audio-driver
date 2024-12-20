@@ -16,6 +16,7 @@ MML changes:
  * Added the `?@` subroutine instrument hint command.
  * Added `P` pitches to portamento
  * Fixed a state tracking bug involving loops that can cause dropped instructions.
+ * Fixed missing `set_detune 0` instruction when `MD` value is small
 
 GUI changes:
  * Sample Analyser can now analyse samples up to a length of 32768.

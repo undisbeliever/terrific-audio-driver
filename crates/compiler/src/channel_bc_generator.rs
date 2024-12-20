@@ -185,11 +185,17 @@ impl DetuneCents {
 }
 
 #[derive(Clone, Copy)]
-struct DetuneCentsOutput(DetuneValue);
+enum DetuneCentsOutput {
+    Manual,
+    Automatic(DetuneValue),
+}
 
 impl DetuneCentsOutput {
-    fn as_i16(&self) -> i16 {
-        self.0.as_i16()
+    fn detune_i16(&self) -> i16 {
+        match self {
+            Self::Manual => 0,
+            Self::Automatic(d) => d.as_i16(),
+        }
     }
 }
 
@@ -447,7 +453,7 @@ impl<'a> ChannelBcGenerator<'a> {
         let pitch = self
             .pitch_table
             .pitch_for_note(instrument_id, note)
-            .wrapping_add_signed(detune.as_i16());
+            .wrapping_add_signed(detune.detune_i16());
 
         // Calculate the minimum and maximum pitches of the vibrato.
         // This produces more accurate results when cents is very large (ie, 400)
@@ -476,7 +482,7 @@ impl<'a> ChannelBcGenerator<'a> {
 
     fn calculate_detune_for_note(&self, note: Note) -> Result<DetuneCentsOutput, ChannelError> {
         match self.detune_cents.as_i16() {
-            0 => Ok(DetuneCentsOutput(DetuneValue::ZERO)),
+            0 => Ok(DetuneCentsOutput::Manual),
             cents => {
                 let instrument_id = match self.bc.get_state().instrument.instrument_id() {
                     Some(i) => i,
@@ -492,7 +498,7 @@ impl<'a> ChannelBcGenerator<'a> {
                 let d = d as i32;
 
                 match d.try_into() {
-                    Ok(d) => Ok(DetuneCentsOutput(d)),
+                    Ok(d) => Ok(DetuneCentsOutput::Automatic(d)),
                     Err(_) => Err(ChannelError::DetuneCentsTooLargeForNote(d)),
                 }
             }
@@ -500,10 +506,11 @@ impl<'a> ChannelBcGenerator<'a> {
     }
 
     fn emit_detune_output(&mut self, detune: DetuneCentsOutput) {
-        let detune = detune.0;
-
-        if detune != DetuneValue::ZERO {
-            self.set_detune_if_changed(detune);
+        match detune {
+            DetuneCentsOutput::Manual => (),
+            DetuneCentsOutput::Automatic(d) => {
+                self.set_detune_if_changed(d);
+            }
         }
     }
 
@@ -890,7 +897,7 @@ impl<'a> ChannelBcGenerator<'a> {
                         let pitch = self
                             .pitch_table
                             .pitch_for_note(instrument, note)
-                            .wrapping_add_signed(detune.as_i16());
+                            .wrapping_add_signed(detune.detune_i16());
 
                         Ok((Some(pitch), NoteOrPitchOut::Note(detune, note)))
                     }
