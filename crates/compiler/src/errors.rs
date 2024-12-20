@@ -514,6 +514,7 @@ pub enum ChannelError {
     PortamentoTooShort,
     PortamentoTooLong,
     PortamentoRequiresInstrument,
+    PortamentoNoteAndPitchWithoutInstrument,
 
     NoNotesInBrokenChord,
     TooManyNotesInBrokenChord(usize),
@@ -1513,6 +1514,9 @@ impl Display for ChannelError {
                     f,
                     "cannot calculate portamento velocity without setting instrument"
                 )
+            }
+            Self::PortamentoNoteAndPitchWithoutInstrument => {
+                write!(f, "cannot compare a note and a pitch without an instrument")
             }
 
             Self::NoNotesInBrokenChord => write!(f, "no notes in broken chord"),

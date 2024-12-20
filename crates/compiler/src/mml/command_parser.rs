@@ -19,7 +19,7 @@ use crate::bytecode::{
 };
 use crate::channel_bc_generator::{
     merge_pan_commands, merge_volumes_commands, relative_pan, relative_volume, Command,
-    DetuneCents, FineQuantization, ManualVibrato, MpVibrato, PanCommand, Quantize,
+    DetuneCents, FineQuantization, ManualVibrato, MpVibrato, NoteOrPitch, PanCommand, Quantize,
     RestTicksAfterNote, SubroutineCallType, VolumeCommand,
 };
 use crate::envelope::{Gain, GainMode, OptionalGain, TempGain};
@@ -958,7 +958,7 @@ fn parse_broken_chord_pitches(p: &mut Parser) -> Option<(Vec<Note>, FilePos)> {
 }
 
 enum PortamentoPitch {
-    Ok(Note),
+    Ok(NoteOrPitch),
     End,
     MissingEnd,
 }
@@ -984,8 +984,14 @@ fn parse_portamento_pitch(p: &mut Parser) -> PortamentoPitch {
 
             Token::Pitch(pitch) => {
                 match Note::from_mml_pitch(pitch, p.state().octave, p.state().semitone_offset) {
-                    Ok(note) => return PortamentoPitch::Ok(note),
+                    Ok(n) => return PortamentoPitch::Ok(NoteOrPitch::Note(n)),
                     Err(e) => p.add_error(pos, e.into()),
+                }
+            }
+
+            Token::PlayPitch => {
+                if let Some(p) = parse_unsigned_newtype(pos, p) {
+                    return PortamentoPitch::Ok(NoteOrPitch::Pitch(p));
                 }
             }
 
@@ -1004,7 +1010,7 @@ enum PortamentoPitchError {
 fn parse_portamento_pitches(
     start_pos: FilePos,
     p: &mut Parser,
-) -> Result<(Note, Note), PortamentoPitchError> {
+) -> Result<(NoteOrPitch, NoteOrPitch), PortamentoPitchError> {
     let note1 = match parse_portamento_pitch(p) {
         PortamentoPitch::Ok(n) => n,
 

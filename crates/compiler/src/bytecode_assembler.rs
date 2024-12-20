@@ -6,7 +6,8 @@
 
 use crate::bytecode::{
     BcTicksKeyOff, BcTicksNoKeyOff, Bytecode, EarlyReleaseMinTicks, EarlyReleaseTicks, LoopCount,
-    PlayNoteTicks, PortamentoVelocity, State, SubroutineId, VibratoPitchOffsetPerTick,
+    PlayNoteTicks, PlayPitchPitch, PortamentoVelocity, State, SubroutineId,
+    VibratoPitchOffsetPerTick,
 };
 use crate::data::{InstrumentOrSample, UniqueNamesList};
 use crate::envelope::{Adsr, Gain, OptionalGain, TempGain};
@@ -204,6 +205,19 @@ fn portamento_argument(
     let velocity = parse_svnt(velocity)?;
 
     Ok((note, velocity, ticks))
+}
+
+fn portamento_pitch_argument(
+    args: &[&str],
+) -> Result<(PlayPitchPitch, PortamentoVelocity, PlayNoteTicks), ChannelError> {
+    let (target, key_off, velocity, ticks) = four_arguments(args)?;
+
+    let target = parse_uvnt(target)?;
+    let ticks = parse_play_note_ticks(ticks, key_off)?;
+
+    let velocity = parse_svnt(velocity)?;
+
+    Ok((target, velocity, ticks))
 }
 
 fn adsr_argument(args: &[&str]) -> Result<Adsr, ChannelError> {
@@ -460,6 +474,7 @@ pub fn parse_asm_line(bc: &mut Bytecode, line: &str) -> Result<(), ChannelError>
        disable_noise 0 no_arguments,
 
        portamento 3 portamento_argument,
+       portamento_pitch 3 portamento_pitch_argument,
        set_vibrato_depth_and_play_note 3 vibrato_depth_and_play_note_argument,
 
        set_vibrato 2 two_uvnt_arguments,

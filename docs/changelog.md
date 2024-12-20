@@ -7,10 +7,14 @@ Version 0.0.16
 **Known bugs**:
  * Sample Analyser spectrum can only analyse the first 32768 samples in a long BRR sample
 
+Audio driver changes:
+ * Added `portamento_pitch` instruction
+
 MML changes:
  * Fixed a note tracking bug that can cause successive `{}` portamentos to not key-on.
    For example, `{cd} {cf} {cg}` will only play a single portamento.
  * Added the `?@` subroutine instrument hint command.
+ * Added `P` pitches to portamento
  * Fixed a state tracking bug involving loops that can cause dropped instructions.
 
 GUI changes:

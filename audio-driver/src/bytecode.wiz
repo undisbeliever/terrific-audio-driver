@@ -83,6 +83,17 @@ let INSTRUCTIONS_WITH_ARGUMENTS = [
     portamento_up,
 
 
+    // parameters: pppppppp pppppppD ssssssss llllllll
+    //     -pppppp- pppppppp = target VxPITCH (lower bit in the high byte is not pitch)
+    //                     O = key-off after note ends
+    //              ssssssss = u8 speed (PITCH change per tick)
+    //              llllllll = note length
+    //
+    // CAUTION: Detune has no effect on portamento_pitch instructions.
+    portamento_pitch_down,
+    portamento_pitch_up,
+
+
     // parameters: pppppppp tttttttt
     //      pppppppp = pitch offset per tick.
     //      tttttttt = quarter wavelength ticks.  MUST BE >= 1 and <= 128.

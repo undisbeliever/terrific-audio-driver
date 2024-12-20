@@ -42,6 +42,17 @@ u8_value_newtype!(
 );
 
 #[derive(Debug, Copy, Clone)]
+pub enum NoteOrPitch {
+    Note(Note),
+    Pitch(PlayPitchPitch),
+}
+
+enum NoteOrPitchOut {
+    Note(DetuneCentsOutput, Note),
+    Pitch(PlayPitchPitch),
+}
+
+#[derive(Debug, Copy, Clone)]
 pub enum VolumeCommand {
     Absolute(Volume),
     Relative(i32),
@@ -229,8 +240,8 @@ pub(crate) enum Command {
         rest_after_note: RestTicksAfterNote,
     },
     Portamento {
-        note1: Note,
-        note2: Note,
+        note1: NoteOrPitch,
+        note2: NoteOrPitch,
         is_slur: bool,
         speed_override: Option<PortamentoSpeed>,
         /// Number of ticks to hold the pitch at note1 before the pitch slide
@@ -865,11 +876,53 @@ impl<'a> ChannelBcGenerator<'a> {
         }
     }
 
+    fn portamento_note_pitch(
+        &self,
+        note: NoteOrPitch,
+        instrument: Option<InstrumentId>,
+    ) -> Result<(Option<u16>, NoteOrPitchOut), ChannelError> {
+        match note {
+            NoteOrPitch::Note(note) => {
+                let detune = self.calculate_detune_for_note(note)?;
+
+                match instrument {
+                    Some(instrument) => {
+                        let pitch = self
+                            .pitch_table
+                            .pitch_for_note(instrument, note)
+                            .wrapping_add_signed(detune.as_i16());
+
+                        Ok((Some(pitch), NoteOrPitchOut::Note(detune, note)))
+                    }
+                    None => Ok((None, NoteOrPitchOut::Note(detune, note))),
+                }
+            }
+            NoteOrPitch::Pitch(p) => Ok((Some(p.as_u16()), NoteOrPitchOut::Pitch(p))),
+        }
+    }
+
+    fn portamento_play_pn_note_out(
+        &mut self,
+        note: NoteOrPitchOut,
+        t: PlayNoteTicks,
+    ) -> Result<(), ChannelError> {
+        match note {
+            NoteOrPitchOut::Note(d, n) => {
+                self.emit_detune_output(d);
+                self.bc.play_note(n, t)?;
+            }
+            NoteOrPitchOut::Pitch(p) => {
+                self.bc.play_pitch(p, t);
+            }
+        }
+        Ok(())
+    }
+
     #[allow(clippy::too_many_arguments)]
     fn portamento(
         &mut self,
-        note1: Note,
-        note2: Note,
+        note1: NoteOrPitch,
+        note2: NoteOrPitch,
         is_slur: bool,
         speed_override: Option<PortamentoSpeed>,
         delay_length: TickCounter,
@@ -884,18 +937,27 @@ impl<'a> ChannelBcGenerator<'a> {
             + tie_length
             + rest_after_note.0;
 
-        let detune_note1 = self.calculate_detune_for_note(note1)?;
-        let detune_note2 = self.calculate_detune_for_note(note2)?;
+        let instrument = self.bc.get_state().instrument.instrument_id();
 
-        let play_note1 = self.bc.get_state().prev_slurred_note != SlurredNoteState::Slurred(note1);
+        let (note1_pitch, pn1) = self.portamento_note_pitch(note1, instrument)?;
+        let (note2_pitch, pn2) = self.portamento_note_pitch(note2, instrument)?;
+
+        let play_note1 = match pn1 {
+            NoteOrPitchOut::Note(_, n) => {
+                self.bc.get_state().prev_slurred_note != SlurredNoteState::Slurred(n)
+            }
+            NoteOrPitchOut::Pitch(p) => {
+                self.bc.get_state().prev_slurred_note != SlurredNoteState::SlurredPitch(p)
+            }
+        };
 
         // Play note1 (if required)
         let slide_length = match (play_note1, delay_length.value()) {
             (true, 0) => {
                 // Play note1 for a single tick
                 let t = PlayNoteTicks::NoKeyOff(BcTicksNoKeyOff::try_from(1).unwrap());
-                self.emit_detune_output(detune_note1);
-                self.bc.play_note(note1, t)?;
+
+                self.portamento_play_pn_note_out(pn1, t)?;
 
                 // subtract 1 tick from slide_length
                 TickCounter::new(slide_length.value().saturating_sub(1))
@@ -903,8 +965,8 @@ impl<'a> ChannelBcGenerator<'a> {
             (true, _) => {
                 let (pn_length, wait) = Self::split_note_length(delay_length, true)?;
 
-                self.emit_detune_output(detune_note1);
-                self.bc.play_note(note1, pn_length)?;
+                self.portamento_play_pn_note_out(pn1, pn_length)?;
+
                 if !wait.is_zero() {
                     // no keyoff event
                     self.wait(wait)?;
@@ -949,37 +1011,36 @@ impl<'a> ChannelBcGenerator<'a> {
 
         let velocity = match speed_override {
             Some(speed) => {
-                if note1 < note2 {
+                let direction = if let (Some(p1), Some(p2)) = (note1_pitch, note2_pitch) {
+                    p1 < p2
+                } else if let (NoteOrPitch::Note(n1), NoteOrPitch::Note(n2)) = (note1, note2) {
+                    n1 < n2
+                } else {
+                    return Err(ChannelError::PortamentoNoteAndPitchWithoutInstrument);
+                };
+
+                if direction {
                     i32::from(speed.as_u8())
                 } else {
                     -i32::from(speed.as_u8())
                 }
             }
             None => {
-                let instrument_id = match self.bc.get_state().instrument.instrument_id() {
-                    Some(i) => i,
-                    None => return Err(ChannelError::PortamentoRequiresInstrument),
-                };
-                let p1: i32 = self
-                    .pitch_table
-                    .pitch_for_note(instrument_id, note1)
-                    .wrapping_add_signed(detune_note1.as_i16())
-                    .into();
-                let p2: i32 = self
-                    .pitch_table
-                    .pitch_for_note(instrument_id, note2)
-                    .wrapping_add_signed(detune_note2.as_i16())
-                    .into();
-                let delta = p2 - p1;
+                match (note1_pitch, note2_pitch) {
+                    (Some(note1_pitch), Some(note2_pitch)) => {
+                        let delta = i32::from(note2_pitch) - i32::from(note1_pitch);
 
-                let ticks = i32::try_from(slide_length.value()).unwrap();
-                assert!(ticks > 0);
+                        let ticks = i32::try_from(slide_length.value()).unwrap();
+                        assert!(ticks > 0);
 
-                // division with rounding
-                if delta > 0 {
-                    (delta + (ticks / 2)) / ticks
-                } else {
-                    (delta - (ticks / 2)) / ticks
+                        // division with rounding
+                        if delta > 0 {
+                            (delta + (ticks / 2)) / ticks
+                        } else {
+                            (delta - (ticks / 2)) / ticks
+                        }
+                    }
+                    _ => return Err(ChannelError::PortamentoRequiresInstrument),
                 }
             }
         };
@@ -989,8 +1050,15 @@ impl<'a> ChannelBcGenerator<'a> {
         let (p_length, after) =
             self.split_play_note_length(slide_length + tie_length, is_slur, rest_after_note)?;
 
-        self.emit_detune_output(detune_note2);
-        self.bc.portamento(note2, velocity, p_length)?;
+        match pn2 {
+            NoteOrPitchOut::Note(d, n) => {
+                self.emit_detune_output(d);
+                self.bc.portamento(n, velocity, p_length)?;
+            }
+            NoteOrPitchOut::Pitch(p) => {
+                self.bc.portamento_pitch(p, velocity, p_length);
+            }
+        }
 
         self.after_note(after)?;
 

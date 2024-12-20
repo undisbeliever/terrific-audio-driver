@@ -16,6 +16,7 @@ Instructions
  * `play_pitch <pitch> [ko] <duration>` - Set `VxPITCH` to *pitch* for *duration* ticks
  * `portamento <note> <ko> <pitch_velocity> <duration>` - Extend a slur into a portamento
     * Portamento instructions do not emit a key-on event.  You will need to slur the previous note before a portamento instruction.
+ * `portamento_pitch <pitch> <ko> <pitch_velocity> <duration>` - Extend a slur into a portamento with a target `VxPITCH` register value
 
  * `play_noise <0-31> [ko] <duration>` - play noise
     * Noise is disabled on the next `play_note` or `play_pitch` instruction

@@ -3288,7 +3288,99 @@ fn test_portamento() {
 }
 
 #[test]
-fn test_portamento_pitch_errors() {
+fn test_portamento_pitch() {
+    assert_line_matches_bytecode(
+        "{P1000 P1230}",
+        &[
+            "play_pitch 1000 no_keyoff 1",
+            "portamento_pitch 1230 keyoff +10 23",
+        ],
+    );
+
+    assert_line_matches_bytecode(
+        "g {P$1500 P$1000}2,,20",
+        &[
+            "play_note g4 keyoff 24",
+            "play_pitch $1500 no_keyoff 1",
+            "portamento_pitch $1000 keyoff -20 47",
+        ],
+    );
+
+    assert_line_matches_bytecode(
+        "g & {P$1500 P$1000}2,,20",
+        &[
+            "play_note g4 no_keyoff 24",
+            "play_pitch $1500 no_keyoff 1",
+            "portamento_pitch $1000 keyoff -20 47",
+        ],
+    );
+
+    assert_line_matches_bytecode(
+        "P$1000 {P$1000 P$1300},,25",
+        &[
+            "play_pitch $1000 keyoff 24",
+            "play_pitch $1000 no_keyoff 1",
+            "portamento_pitch $1300 keyoff +25 23",
+        ],
+    );
+
+    assert_line_matches_bytecode(
+        "P$1000 & {P$1000 P$1300},,25",
+        &[
+            "play_pitch $1000 no_keyoff 24",
+            "portamento_pitch $1300 keyoff +25 24",
+        ],
+    );
+
+    assert_line_matches_bytecode(
+        "P$1000 & {P$2000 P$2200}2,8",
+        &[
+            "play_pitch $1000 no_keyoff 24",
+            "play_pitch $2000 no_keyoff 12",
+            "portamento_pitch $2200 keyoff +15 36",
+        ],
+    );
+
+    assert_line_matches_bytecode(
+        "P$2000 & {P$2000 P$2200}2,8",
+        &[
+            "play_pitch $2000 no_keyoff 24",
+            "wait 12",
+            "portamento_pitch $2200 keyoff +15 36",
+        ],
+    );
+
+    assert_line_matches_bytecode(
+        "{g P$500}",
+        &[
+            "play_note g4 no_keyoff 1",
+            "portamento_pitch $500 keyoff -88 23",
+        ],
+    );
+
+    assert_line_matches_bytecode(
+        "{P$500 g}",
+        &["play_pitch $500 no_keyoff 1", "portamento g4 keyoff +88 23"],
+    );
+}
+
+#[test]
+fn test_portamento_pitch_with_slurred_note() {
+    const _A4_PITCH: u32 = 0x0e14;
+
+    // Test that a slurred `play_note` and `play_pitch` are not merged together
+    assert_line_matches_bytecode(
+        "a & {P$0e14 P$1000}",
+        &[
+            "play_note a4 no_keyoff 24",
+            "play_pitch $e14 no_keyoff 1",
+            "portamento_pitch $1000 keyoff +22 23",
+        ],
+    );
+}
+
+#[test]
+fn test_portamento_pitch_list_errors() {
     assert_error_in_mml_line("{   ", 5, ChannelError::MissingEndPortamento);
 
     assert_error_in_mml_line("{ }}", 3, ChannelError::MissingEndPortamento);
@@ -3299,6 +3391,13 @@ fn test_portamento_pitch_errors() {
     assert_error_in_mml_line("{ a b c }", 1, ChannelError::PortamentoRequiresTwoPitches);
     assert_error_in_mml_line("{ a b c d }", 1, ChannelError::PortamentoRequiresTwoPitches);
 
+    assert_error_in_mml_line("{ P2000 }", 1, ChannelError::PortamentoRequiresTwoPitches);
+    assert_error_in_mml_line(
+        "{ P2000 P1000 P500 }",
+        1,
+        ChannelError::PortamentoRequiresTwoPitches,
+    );
+
     assert_error_in_mml_line("{ a a }", 1, ValueError::PortamentoVelocityZero.into());
     assert_error_in_mml_line(
         "{ o5 a o5 a }",
@@ -3307,6 +3406,11 @@ fn test_portamento_pitch_errors() {
     );
     assert_error_in_mml_line(
         "{ o5 a o3 >> a }",
+        1,
+        ValueError::PortamentoVelocityZero.into(),
+    );
+    assert_error_in_mml_line(
+        "{ P512 P512 }",
         1,
         ValueError::PortamentoVelocityZero.into(),
     );
@@ -3565,6 +3669,33 @@ fn test_portamento_speed() {
 }
 
 #[test]
+fn test_portamento_with_speed_and_no_instrument() {
+    assert_mml_subroutine_matches_bytecode(
+        r#"
+@1 dummy_instrument
+
+!s o4 {c g},,50
+
+A @1 !s
+"#,
+        0,
+        &["play_note c4 no_keyoff 1", "portamento g4 keyoff +50 23"],
+    );
+
+    assert_mml_subroutine_matches_bytecode(
+        r#"
+@1 dummy_instrument
+
+!s o4 {g c},,50
+
+A @1 !s
+"#,
+        0,
+        &["play_note g4 no_keyoff 1", "portamento c4 keyoff -50 23"],
+    );
+}
+
+#[test]
 fn test_portamento_err() {
     assert_error_in_mml_line("{c g}4,4", 8, ChannelError::InvalidPortamentoDelay);
     assert_error_in_mml_line("l2 {c g},2", 10, ChannelError::InvalidPortamentoDelay);
@@ -3594,6 +3725,35 @@ fn test_portamento_err() {
 }
 
 #[test]
+fn test_portamento_note_and_pitch_without_instrument_err() {
+    assert_one_subroutine_err_in_mml(
+        r#"
+@1 dummy_instrument
+
+!s o4 {c P500},,50
+
+A @1 !s
+"#,
+        "!s",
+        7,
+        ChannelError::PortamentoNoteAndPitchWithoutInstrument,
+    );
+
+    assert_one_subroutine_err_in_mml(
+        r#"
+@1 dummy_instrument
+
+!s o4 {P500 c},,50
+
+A @1 !s
+"#,
+        "!s",
+        7,
+        ChannelError::PortamentoNoteAndPitchWithoutInstrument,
+    );
+}
+
+#[test]
 fn test_portamento_note_tracking_bugfix_1() {
     // Confirm a note tracking buf that caused the 2nd and 3rd portamento to not key-on is fixed
     assert_line_matches_bytecode(
@@ -3607,6 +3767,19 @@ fn test_portamento_note_tracking_bugfix_1() {
             "portamento g4 keyoff +49 23",
         ],
     );
+
+    assert_eq!(4608, 0x1200);
+    assert_line_matches_bytecode(
+        "{P500 P4608} {P$1200 P$1800} {P$1800 P$1000}",
+        &[
+            "play_pitch 500 no_keyoff 1",
+            "portamento_pitch 4608 keyoff +187 23",
+            "play_pitch $1200 no_keyoff 1",
+            "portamento_pitch $1800 keyoff +70 23",
+            "play_pitch $1800 no_keyoff 1",
+            "portamento_pitch $1000 keyoff -93 23",
+        ],
+    );
 }
 
 #[test]
@@ -3618,6 +3791,17 @@ fn test_portamento_note_tracking_bugfix_2() {
             "portamento d4 no_keyoff +11 23",
             "portamento f4 no_keyoff +19 24",
             "portamento g4 keyoff +15 24",
+        ],
+    );
+
+    assert_eq!(4608, 0x1200);
+    assert_line_matches_bytecode(
+        "{P500 P4608} & {P$1200 P$1800} & {P$1800 P$1000}",
+        &[
+            "play_pitch 500 no_keyoff 1",
+            "portamento_pitch 4608 no_keyoff +179 23",
+            "portamento_pitch $1800 no_keyoff +64 24",
+            "portamento_pitch $1000 keyoff -89 24",
         ],
     );
 }

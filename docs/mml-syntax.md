@@ -338,6 +338,7 @@ Numbers can be decimal, or hexadecimal when prefixed with `$` (ie, `$ff`)
        * `portamento_speed` can be set without setting `delay_length`, ie: `{df}4,,50`
     * Can be tied (`^`) and slurred (`&`) like a regular note
     * The octave can be changed inside the braces.  For example: `{a > c}2` and `{o3 c o4 c}2`
+    * The pitches can be `P` play-pitch commands
 
  * `{{<pitch list>}} [total_length] [, note_length] [, tie]` - Broken Chord
     * Quickly cycle through the pitches for a given duration (`length`).

@@ -398,6 +398,9 @@ enum ChannelNote {
         instrument: Option<u8>,
         detune: i16,
     },
+    PortamentoPitch {
+        target_pitch: u16,
+    },
 }
 
 #[derive(Debug)]
@@ -618,6 +621,22 @@ impl ChannelState {
                 };
 
                 self.play_note(note_and_key_off_bit, wait_length);
+            }
+
+            opcodes::PORTAMENTO_PITCH_DOWN | opcodes::PORTAMENTO_PITCH_UP => {
+                let pitch_l = read_pc();
+                let pitch_h_and_keyoff = read_pc();
+                let _portamento_speed = read_pc();
+                let length = read_pc();
+
+                let key_off = (pitch_h_and_keyoff & 1) == 1;
+
+                // Ignoring portamento speed and direction
+                self.note = ChannelNote::PortamentoPitch {
+                    target_pitch: u16::from_le_bytes([pitch_l, pitch_h_and_keyoff >> 1]),
+                };
+
+                self.increment_tick_count(length, key_off);
             }
 
             opcodes::SET_VIBRATO => {
@@ -1021,6 +1040,7 @@ impl ChannelState {
         match opcode {
             opcodes::FIRST_PLAY_NOTE_INSTRUCTION.. => None,
             opcodes::PORTAMENTO_DOWN | opcodes::PORTAMENTO_UP => None,
+            opcodes::PORTAMENTO_PITCH_DOWN | opcodes::PORTAMENTO_PITCH_UP => None,
             opcodes::SET_VIBRATO => Some(3),
             opcodes::SET_VIBRATO_DEPTH_AND_PLAY_NOTE => None,
             opcodes::WAIT => None,
@@ -1413,6 +1433,7 @@ fn build_channel(
             detune,
         } => common.pitch_table_entry(target_opcode, instrument, detune),
         ChannelNote::PlayPitch(p) => p.to_le_bytes().into(),
+        ChannelNote::PortamentoPitch { target_pitch } => target_pitch.to_le_bytes().into(),
     };
 
     let key_on = if pmon_source {
@@ -1420,7 +1441,8 @@ fn build_channel(
             ChannelNote::None => false,
             ChannelNote::PlayNote { .. }
             | ChannelNote::PlayPitch(..)
-            | ChannelNote::Portamento { .. } => {
+            | ChannelNote::Portamento { .. }
+            | ChannelNote::PortamentoPitch { .. } => {
                 if c.next_event_is_key_off {
                     delay > 1
                 } else {

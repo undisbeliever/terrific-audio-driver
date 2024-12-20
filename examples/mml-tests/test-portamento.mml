@@ -16,3 +16,11 @@ A {a > c}2 r
 
 A {o3 c o4 c}2 & w {o4 c o3 c}2 & w r
 
+
+; `P` play-pitch can be used in portamento
+A {P$1000 P$2000}2 & w {P$2000 P$1000}2 & w r
+
+A {P$1000 o4 g}8. & w8 r
+A {P$0200 o4 c}8. & w8 r
+A {c P$1000}8. & w8
+

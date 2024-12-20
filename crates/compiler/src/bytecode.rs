@@ -190,6 +190,8 @@ pub mod opcodes {
     declare_opcodes!(
         PORTAMENTO_DOWN,
         PORTAMENTO_UP,
+        PORTAMENTO_PITCH_DOWN,
+        PORTAMENTO_PITCH_UP,
         SET_VIBRATO,
         SET_VIBRATO_DEPTH_AND_PLAY_NOTE,
         PLAY_PITCH,
@@ -822,7 +824,7 @@ pub enum SlurredNoteState {
     Unknown,
     None,
     Slurred(Note),
-    SlurredPitch,
+    SlurredPitch(PlayPitchPitch),
     SlurredNoise,
 }
 
@@ -833,7 +835,7 @@ impl SlurredNoteState {
             SlurredNoteState::Unknown => (),
             SlurredNoteState::None => *self = SlurredNoteState::None,
             SlurredNoteState::Slurred(n) => *self = SlurredNoteState::Slurred(*n),
-            SlurredNoteState::SlurredPitch => *self = SlurredNoteState::SlurredPitch,
+            SlurredNoteState::SlurredPitch(p) => *self = SlurredNoteState::SlurredPitch(*p),
             SlurredNoteState::SlurredNoise => *self = SlurredNoteState::SlurredNoise,
         }
     }
@@ -1203,7 +1205,7 @@ impl<'a> Bytecode<'a> {
         self.state.tick_counter += length.to_tick_count();
         self.state.prev_slurred_note = match length {
             PlayNoteTicks::KeyOff(_) => SlurredNoteState::None,
-            PlayNoteTicks::NoKeyOff(_) => SlurredNoteState::SlurredPitch,
+            PlayNoteTicks::NoKeyOff(_) => SlurredNoteState::SlurredPitch(pitch),
         };
 
         let key_off_bit = match length {
@@ -1280,6 +1282,39 @@ impl<'a> Bytecode<'a> {
         }
 
         r
+    }
+
+    pub fn portamento_pitch(
+        &mut self,
+        target: PlayPitchPitch,
+        velocity: PortamentoVelocity,
+        length: PlayNoteTicks,
+    ) {
+        self.state.tick_counter += length.to_tick_count();
+        self.state.prev_slurred_note = match length {
+            PlayNoteTicks::KeyOff(_) => SlurredNoteState::None,
+            PlayNoteTicks::NoKeyOff(_) => SlurredNoteState::SlurredPitch(target),
+        };
+
+        let key_off_bit = match length {
+            PlayNoteTicks::NoKeyOff(_) => 0,
+            PlayNoteTicks::KeyOff(_) => 1,
+        };
+
+        let opcode = if velocity.is_negative() {
+            opcodes::PORTAMENTO_PITCH_DOWN
+        } else {
+            opcodes::PORTAMENTO_PITCH_UP
+        };
+
+        let target = target.as_u16().to_le_bytes();
+        let arg1 = target[0];
+        let arg2 = (target[1] << 1) | key_off_bit;
+
+        let speed = velocity.pitch_offset_per_tick();
+        let length = length.bc_argument();
+
+        emit_bytecode!(self, opcode, arg1, arg2, speed, length);
     }
 
     pub fn set_vibrato_depth_and_play_note(

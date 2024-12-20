@@ -2046,7 +2046,7 @@ func disable_noise(channelIndex: u8 in x) {
 }
 
 
-let portamento_up = __portamento as func(u8 in x, u8 in a);
+let portamento_up = __portamento_note as func(u8 in x, u8 in a);
 
 // IN: Y = 0
 // KEEP: X
@@ -2054,15 +2054,14 @@ let portamento_up = __portamento as func(u8 in x, u8 in a);
 func portamento_down(channelIndex : u8 in x, noteAndKeyoffFlag : u8 in a) {
     y = -2 as u8;
 
-// Fallthrough into __portamento()
+// Fallthrough into __portamento_note()
 }
 
 
-// Assumes portamento_speed already set
-//
 // IN: Y = 0 or -2
 // KEEP: X
-func __portamento(channelIndex : u8 in x, noteAndKeyoffFlag : u8 in a, direction_minus_one : u8 in y) {
+#[fallthrough]
+func __portamento_note(channelIndex : u8 in x, noteAndKeyoffFlag : u8 in a, direction_minus_one : u8 in y) {
     y++;
     // Y = 1 or -1
     channelSoA.portamento_direction[x] = y as i8;
@@ -2075,12 +2074,25 @@ func __portamento(channelIndex : u8 in x, noteAndKeyoffFlag : u8 in a, direction
     // calculate pitch table index
     y = a = a + channelSoA.instPitchOffset[x];
 
-    channelSoA.portamento_target_l[x] = a = commonData.pitchTable_l[y] + channelSoA.detune_l[x];
-    channelSoA.portamento_target_h[x] = a = commonData.pitchTable_h[y] +# channelSoA.detune_h[x];
+    a = commonData.pitchTable_l[y] + channelSoA.detune_l[x];
+    channelSoA.portamento_target_l[x] = a;
+    a = commonData.pitchTable_h[y] +# channelSoA.detune_h[x];
 
+    y = 0;
+
+// fallthrough into __portamento_read_speed_length()
+}
+
+
+// Assumes portamento_direction and portamento_target_l set
+//
+// IN: Y = 0
+// KEEP: X
+func __portamento_read_speed_length(channelIndex : u8 in x, target_h : u8 in a) {
+    channelSoA.portamento_target_h[x] = a;
 
     // Speed
-    y = 0;
+    // Y = 0
     a = instructionPtr[y];
     instructionPtr++;
     channelSoA.portamento_speed[x] = a;
@@ -2100,6 +2112,43 @@ func __portamento(channelIndex : u8 in x, noteAndKeyoffFlag : u8 in a, direction
 
     // return (do not execute the next bytecode and sleep)
     return;
+}
+
+
+let portamento_pitch_up = __portamento_pitch as func(u8 in x, u8 in a);
+
+// IN: Y = 0
+// KEEP: X
+#[fallthrough]
+func portamento_pitch_down(channelIndex : u8 in x, targetPitch_l : u8 in a) {
+    y = -2 as u8;
+
+// Fallthrough into __portamento_pitch()
+}
+
+
+// IN: Y = 0 or -2
+// KEEP: X
+func __portamento_pitch(channelIndex : u8 in x, targetPitch_l : u8 in a, direction_minus_one : u8 in y) {
+    y++;
+    // Y = 1 or -1
+    channelSoA.portamento_direction[x] = y as i8;
+
+    channelSoA.portamento_target_l[x] = a;
+
+    // target_h and key-off flag
+    y = 0;
+    a = instructionPtr[y];
+    instructionPtr++;
+
+    a >>>= 1;
+    // Set MSB of nextEventIsKeyOff from carry
+    channelSoA.nextEventIsKeyOff[x] >>>>#= 1;
+
+    // a = target_h
+    // y = 0 (required)
+
+    return __portamento_read_speed_length(x, a);
 }
 
 
