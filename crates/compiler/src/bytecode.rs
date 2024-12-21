@@ -823,18 +823,46 @@ pub enum SlurredNoteState {
     Unchanged,
     Unknown,
     None,
-    Slurred(Note, DetuneValue),
+    // CAUTION: includes Maybe detune and Maybe/Hint instrument
+    Slurred(Note, DetuneValue, Option<InstrumentId>),
     SlurredPitch(PlayPitchPitch),
     SlurredNoise,
 }
 
 impl SlurredNoteState {
-    fn merge(&mut self, o: &Self) {
+    fn merge_skip_last_loop(&mut self, o: &Self) {
         match o {
             SlurredNoteState::Unchanged => (),
             SlurredNoteState::Unknown => (),
             SlurredNoteState::None => *self = SlurredNoteState::None,
-            SlurredNoteState::Slurred(n, d) => *self = SlurredNoteState::Slurred(*n, *d),
+            SlurredNoteState::Slurred(n, d, i) => *self = SlurredNoteState::Slurred(*n, *d, *i),
+            SlurredNoteState::SlurredPitch(p) => *self = SlurredNoteState::SlurredPitch(*p),
+            SlurredNoteState::SlurredNoise => *self = SlurredNoteState::SlurredNoise,
+        }
+    }
+
+    fn merge_subroutine(
+        &mut self,
+        o: &Self,
+        sub_inst: &InstrumentState,
+        caller_inst: &InstrumentState,
+    ) {
+        match o {
+            SlurredNoteState::Unchanged => (),
+            SlurredNoteState::Unknown => (),
+            SlurredNoteState::None => *self = SlurredNoteState::None,
+            SlurredNoteState::Slurred(n, d, i) => match i {
+                Some(i) => *self = SlurredNoteState::Slurred(*n, *d, Some(*i)),
+                None => {
+                    // Test why it is None (sub_inst could be unset or it could be unknown)
+                    match sub_inst {
+                        InstrumentState::Unset => {
+                            *self = SlurredNoteState::Slurred(*n, *d, caller_inst.instrument_id());
+                        }
+                        _ => *self = SlurredNoteState::None,
+                    }
+                }
+            },
             SlurredNoteState::SlurredPitch(p) => *self = SlurredNoteState::SlurredPitch(*p),
             SlurredNoteState::SlurredNoise => *self = SlurredNoteState::SlurredNoise,
         }
@@ -865,13 +893,18 @@ impl State {
         self.prev_slurred_note = match length {
             PlayNoteTicks::KeyOff(_) => SlurredNoteState::None,
 
-            PlayNoteTicks::NoKeyOff(_) => match self.detune {
-                IeState::Unset => SlurredNoteState::Slurred(note, DetuneValue::ZERO),
-                IeState::Known(d) => SlurredNoteState::Slurred(note, d),
-                // ::TODO emit a warning if detune was changed in a loop and this value is used::
-                IeState::Maybe(d) => SlurredNoteState::Slurred(note, d),
-                IeState::Unknown => SlurredNoteState::None,
-            },
+            PlayNoteTicks::NoKeyOff(_) => {
+                // ::TODO emit a warning if this instrument was used in a loop and was changed with a different source frequency::
+                let inst_id = self.instrument.instrument_id();
+
+                match self.detune {
+                    IeState::Unset => SlurredNoteState::Slurred(note, DetuneValue::ZERO, inst_id),
+                    IeState::Known(d) => SlurredNoteState::Slurred(note, d, inst_id),
+                    // ::TODO emit a warning if detune was changed in a loop and this value is used::
+                    IeState::Maybe(d) => SlurredNoteState::Slurred(note, d, inst_id),
+                    IeState::Unknown => SlurredNoteState::None,
+                }
+            }
         };
     }
 
@@ -914,7 +947,8 @@ impl State {
         // Ok - vibrato state is unknown at the start of the loop
         self.vibrato = s.vibrato;
 
-        self.prev_slurred_note.merge(&s.prev_slurred_note);
+        self.prev_slurred_note
+            .merge_skip_last_loop(&s.prev_slurred_note);
     }
 
     fn loop_stack_empty(&mut self) {
@@ -944,7 +978,11 @@ impl State {
             v @ VibratoState::Set(..) => self.vibrato = *v,
         }
 
-        self.prev_slurred_note.merge(&s.prev_slurred_note);
+        self.prev_slurred_note.merge_subroutine(
+            &s.prev_slurred_note,
+            &s.instrument,
+            &self.instrument,
+        );
     }
 }
 

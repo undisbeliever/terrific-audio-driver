@@ -939,6 +939,45 @@ impl<'a> ChannelBcGenerator<'a> {
         Ok(())
     }
 
+    fn portamento_prev_note_matches(
+        &self,
+        note1_pitch: Option<u16>,
+        note1: &NoteOrPitchOut,
+    ) -> bool {
+        match self.bc.get_state().prev_slurred_note {
+            SlurredNoteState::Slurred(prev_note, prev_detune, prev_inst) => {
+                match (prev_inst, note1_pitch) {
+                    // Previous and current VxPITCH is known
+                    (Some(prev_inst), Some(note1_pitch)) => {
+                        let prev_pitch = self
+                            .pitch_table
+                            .pitch_for_note(prev_inst, prev_note)
+                            .wrapping_add_signed(prev_detune.as_i16());
+
+                        note1_pitch == prev_pitch
+                    }
+                    // No instrument set on both notes.  Only accepted if poramento speed set.
+                    (None, None) => match note1 {
+                        &NoteOrPitchOut::Note(_, n1_note, n1_detune) => {
+                            (n1_note, n1_detune) == (prev_note, prev_detune)
+                        }
+                        NoteOrPitchOut::Pitch(_) => false,
+                    },
+                    // Invalid instrument after previous note
+                    (Some(_), None) => false,
+                    // Instrument set after previous note
+                    (None, Some(_)) => false,
+                }
+            }
+            SlurredNoteState::SlurredPitch(prev) => Some(prev.as_u16()) == note1_pitch,
+
+            SlurredNoteState::Unchanged => false,
+            SlurredNoteState::Unknown => false,
+            SlurredNoteState::None => false,
+            SlurredNoteState::SlurredNoise => false,
+        }
+    }
+
     #[allow(clippy::too_many_arguments)]
     fn portamento(
         &mut self,
@@ -963,14 +1002,7 @@ impl<'a> ChannelBcGenerator<'a> {
         let (note1_pitch, pn1) = self.portamento_note_pitch(note1, instrument)?;
         let (note2_pitch, pn2) = self.portamento_note_pitch(note2, instrument)?;
 
-        let play_note1 = match pn1 {
-            NoteOrPitchOut::Note(_, n, d) => {
-                self.bc.get_state().prev_slurred_note != SlurredNoteState::Slurred(n, d)
-            }
-            NoteOrPitchOut::Pitch(p) => {
-                self.bc.get_state().prev_slurred_note != SlurredNoteState::SlurredPitch(p)
-            }
-        };
+        let play_note1 = !self.portamento_prev_note_matches(note1_pitch, &pn1);
 
         // Play note1 (if required)
         let slide_length = match (play_note1, delay_length.value()) {

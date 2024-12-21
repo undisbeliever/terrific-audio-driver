@@ -2298,6 +2298,121 @@ A @0 a& !s {ab},,10
 }
 
 #[test]
+fn test_prev_slurred_note_after_nested_subroutine_call() {
+    // see `test_skip_last_loop_prev_slurred_note()`
+
+    assert_mml_channel_a_matches_bytecode(
+        r##"
+@0 dummy_instrument
+
+!s1 a
+!s2 !s1 w
+
+A @0
+A a& !s1 {ab},,10
+A a& !s2 {ab},,10
+"##,
+        &[
+            "set_instrument dummy_instrument",
+            // newline
+            "play_note a4 no_keyoff 24",
+            "call_subroutine s1",
+            // Previous note is a4 and NOT slurred
+            "play_note a4 no_keyoff 1",
+            "portamento b4 keyoff +10 23",
+            // newline
+            "play_note a4 no_keyoff 24",
+            "call_subroutine s2",
+            // Previous note is a4 and NOT slurred
+            "play_note a4 no_keyoff 1",
+            "portamento b4 keyoff +10 23",
+        ],
+    );
+
+    assert_mml_channel_a_matches_bytecode(
+        r##"
+@0 dummy_instrument
+
+!s1 a&
+!s2 !s1 w
+
+A @0 g !s1 {ab},,10
+A @0 g !s2 {ab},,10
+"##,
+        &[
+            // newline
+            "set_instrument dummy_instrument",
+            "play_note g4 24",
+            "call_subroutine s1",
+            // Previous slurred note is a4
+            "portamento b4 keyoff +10 24",
+            // newline
+            // instument unchanged
+            "play_note g4 24",
+            "call_subroutine s2",
+            // Previous slurred note is a4
+            "portamento b4 keyoff +10 24",
+        ],
+    );
+
+    assert_mml_channel_a_matches_bytecode(
+        r##"
+@0 dummy_instrument
+
+!s1 r10
+!s2 !s1 w
+
+A @0 a& !s1 {ab},,10
+A @0 a& !s2 {ab},,10
+"##,
+        &[
+            // newline
+            "set_instrument dummy_instrument",
+            "play_note a4 no_keyoff 24",
+            "call_subroutine s1",
+            // s1 will rest and key-off
+            "play_note a4 no_keyoff 1",
+            "portamento b4 keyoff +10 23",
+            // newline
+            // instrument unchanged
+            "play_note a4 no_keyoff 24",
+            "call_subroutine s2",
+            // s2 will rest and key-off
+            "play_note a4 no_keyoff 1",
+            "portamento b4 keyoff +10 23",
+        ],
+    );
+
+    assert_mml_channel_a_matches_bytecode(
+        r##"
+@0 dummy_instrument
+
+!s1 w1
+!s2 w2
+
+A @0
+A a& !s1 {ab},,10
+A a& !s2 {ab},,10
+"##,
+        &[
+            "set_instrument dummy_instrument",
+            // newline
+            "play_note a4 no_keyoff 24",
+            "call_subroutine s1",
+            // s1 does not key-off and does not play a note
+            // Previous slurred note is still a4
+            "portamento b4 keyoff +10 24",
+            // newline
+            "play_note a4 no_keyoff 24",
+            "call_subroutine s2",
+            // s2 does not key-off and does not play a note
+            // Previous slurred note is still a4
+            "portamento b4 keyoff +10 24",
+        ],
+    );
+}
+
+#[test]
 fn test_nested_subroutines() {
     // Cannot test with asm, no easy way to implement a "call_subroutine s" bytecode.
     // Instead, this test will confirm it compiles with no errors and the correct stack depth
@@ -3516,16 +3631,253 @@ fn test_portamento_pitch_and_detune() {
 }
 
 #[test]
-fn test_portamento_pitch_with_slurred_note() {
+fn test_portamento_prev_slurred_note_and_pitch() {
     const _A4_PITCH: u32 = 0x0e14;
 
-    // Test that a slurred `play_note` and `play_pitch` are not merged together
     assert_line_matches_bytecode(
         "a & {P$0e14 P$1000}",
         &[
             "play_note a4 no_keyoff 24",
-            "play_pitch $e14 no_keyoff 1",
-            "portamento_pitch $1000 keyoff +22 23",
+            "portamento_pitch $1000 keyoff +21 24",
+        ],
+    );
+
+    assert_line_matches_bytecode(
+        "P$0e14 & {a P$1000}",
+        &[
+            "play_pitch $e14 no_keyoff 24",
+            "portamento_pitch $1000 keyoff +21 24",
+        ],
+    );
+
+    assert_line_matches_bytecode(
+        "a & {P$0e14 P$1000}2,8",
+        &[
+            "play_note a4 no_keyoff 24",
+            "wait 12",
+            "portamento_pitch $1000 keyoff +14 36",
+        ],
+    );
+
+    assert_line_matches_bytecode(
+        "P$0e14 & {a P$1000}2,8",
+        &[
+            "play_pitch $e14 no_keyoff 24",
+            "wait 12",
+            "portamento_pitch $1000 keyoff +14 36",
+        ],
+    );
+}
+
+#[test]
+fn test_portamento_prev_slurred_instrument() {
+    assert_mml_channel_a_matches_bytecode(
+        r##"
+@f1000_o4 f1000_o4
+@f2000_o4 f2000_o4
+
+@f1000_o3_o5 f1000_o3_o5
+@f2000_o3_o5 f2000_o3_o5
+
+A @f1000_o4 a & @f1000_o3_o5 {ae}
+A @f2000_o4 a & @f2000_o3_o5 {ae}
+A @f1000_o4 a & @f2000_o4    {ae}
+"##,
+        &[
+            "set_instrument f1000_o4",
+            "play_note a4 no_keyoff 24",
+            "set_instrument f1000_o3_o5",
+            // Previous slurred note is a4 @f1000_o4 - same instrument tuning
+            "portamento e4 keyoff -20 24",
+            //
+            // newline
+            "set_instrument f2000_o4",
+            "play_note a4 no_keyoff 24",
+            "set_instrument f2000_o3_o5",
+            // previous slurred note instruement is a4 @f2000_o4 - same instrument tuning
+            "portamento e4 keyoff -10 24",
+            //
+            // newline
+            "set_instrument f1000_o4",
+            "play_note a4 no_keyoff 24",
+            "set_instrument f2000_o4",
+            // previous slurred note instruement has a different frequency
+            "play_note a4 no_keyoff 1",
+            "portamento e4 keyoff -10 23",
+        ],
+    );
+
+    // Test without slurs
+    assert_mml_channel_a_matches_bytecode(
+        r##"
+@f1000_o4 f1000_o4
+@f2000_o4 f2000_o4
+
+@f1000_o3_o5 f1000_o3_o5
+@f2000_o3_o5 f2000_o3_o5
+
+A @f1000_o4 a @f1000_o3_o5 {ae}
+A @f2000_o4 a @f2000_o3_o5 {ae}
+A @f1000_o4 a @f2000_o4    {ae}
+"##,
+        &[
+            "set_instrument f1000_o4",
+            "play_note a4 keyoff 24",
+            "set_instrument f1000_o3_o5",
+            // Previous note is not slurred
+            "play_note a4 no_keyoff 1",
+            "portamento e4 keyoff -21 23",
+            //
+            // newline
+            "set_instrument f2000_o4",
+            "play_note a4 keyoff 24",
+            "set_instrument f2000_o3_o5",
+            // Previous note is not slurred
+            "play_note a4 no_keyoff 1",
+            "portamento e4 keyoff -10 23",
+            //
+            // newline
+            "set_instrument f1000_o4",
+            "play_note a4 keyoff 24",
+            "set_instrument f2000_o4",
+            // previous note instruement has a different frequency
+            "play_note a4 no_keyoff 1",
+            "portamento e4 keyoff -10 23",
+        ],
+    );
+}
+
+// Test instrument is ignored if first portamento parameter is a P pitch
+#[test]
+fn test_portamento_previous_slurred_note_pitch_instrument_ignored() {
+    assert_eq!(0x1800 - 45 * 23, 0x13f5);
+    assert_mml_channel_a_matches_bytecode(
+        r##"
+@f1000_o4 f1000_o4
+@f2000_o4 f2000_o4
+
+A @f1000_o4 P$1800 & @f2000_o4 { P$1800 P$13f5 }
+"##,
+        &[
+            "set_instrument f1000_o4",
+            "play_pitch $1800 no_keyoff 24",
+            "set_instrument f2000_o4",
+            // pitch matches, instrument not checked
+            "portamento_pitch $13f5 keyoff -45 24",
+        ],
+    );
+
+    assert_mml_channel_a_matches_bytecode(
+        r##"
+@f1000_o4 f1000_o4
+@f2000_o4 f2000_o4
+
+A @f1000_o4 P$1500 & @f2000_o4 { P$1500 g }
+"##,
+        &[
+            "set_instrument f1000_o4",
+            "play_pitch $1500 no_keyoff 24",
+            "set_instrument f2000_o4",
+            // pitch matches, instrument not checked
+            "portamento g4 keyoff -199 24",
+        ],
+    );
+
+    const _A4_PITCH: u32 = 0x070a;
+    assert_mml_channel_a_matches_bytecode(
+        r##"
+@f1000_o4 f1000_o4
+@f2000_o4 f2000_o4
+
+A @f1000_o4 a & @f2000_o4 { P$70a g }
+"##,
+        &[
+            "set_instrument f1000_o4",
+            "play_note a4 no_keyoff 24",
+            "set_instrument f2000_o4",
+            // pitch matches, instrument not checked
+            "portamento g4 keyoff -43 24",
+        ],
+    );
+
+    // Also test detune
+    assert_eq!(_A4_PITCH - 50, 0x6d8);
+    assert_mml_channel_a_matches_bytecode(
+        r##"
+@f1000_o4 f1000_o4
+@f2000_o4 f2000_o4
+
+A D-50 @f1000_o4 a & @f2000_o4 { P$6d8 g }
+"##,
+        &[
+            "set_detune -50",
+            "set_instrument f1000_o4",
+            "play_note a4 no_keyoff 24",
+            "set_instrument f2000_o4",
+            // pitch matches, instrument not checked
+            "portamento g4 keyoff -43 24",
+        ],
+    );
+}
+
+#[test]
+fn test_portamento_prev_slurred_instrument_after_subroutine_call() {
+    assert_mml_channel_a_matches_bytecode(
+        r##"
+@f1000_o4 f1000_o4
+@f2000_o4 f2000_o4
+
+@f1000_o3_o5 f1000_o3_o5
+@f2000_o3_o5 f2000_o3_o5
+
+!sc a&
+
+!s1           !sc w
+!s2 @f2000_o4 !sc w
+
+A @f1000_o4 g !s1 @f1000_o4 {ae}
+A @f1000_o4 g !s2 @f1000_o4 {ae}
+
+; Different instruments with instrument source frequencies
+A @f1000_o4 g !s1 @f1000_o3_o5 {ae}
+A @f1000_o4 g !s2 @f2000_o3_o5 {ae}
+"##,
+        &[
+            "set_instrument f1000_o4",
+            "play_note g4 24",
+            "call_subroutine s1",
+            // Previous slurred note is a4 f1000_o4
+            // previous instruement is f1000_o4
+            "portamento e4 keyoff -20 24",
+            //
+            // newline
+            // previous instruement is f1000_o4
+            "play_note g4 24",
+            "call_subroutine s2",
+            // previous instruement is f2000_o4
+            "set_instrument f1000_o4",
+            // Previous slurred note is a4 f2000_o4 (instrument frequency does not match)
+            "play_note a4 no_keyoff 1",
+            "portamento e4 keyoff -21 23",
+            //
+            // newline
+            // previous instruement is f1000_o4
+            "play_note g4 24",
+            "call_subroutine s1",
+            // previous instruement is f1000_o4
+            "set_instrument f1000_o3_o5",
+            // Previous slurred note is a4 f1000_o4 (instrument frequency matches)
+            "portamento e4 keyoff -20 24",
+            //
+            // newline
+            // previous instruement is f1000_o3_i5
+            "set_instrument f1000_o4",
+            "play_note g4 24",
+            "call_subroutine s2",
+            // previous instruement is f2000_o4
+            "set_instrument f2000_o3_o5",
+            // Previous slurred note is a4 f2000_o4 (instrument frequency matches)
+            "portamento e4 keyoff -10 24",
         ],
     );
 }
@@ -7419,6 +7771,7 @@ fn dummy_data() -> DummyData {
         dummy_instrument("f1000_o5", 1000.0, 5, 5, Envelope::Gain(Gain::new(0))),
         dummy_instrument("f2000_o4", 2000.0, 4, 4, Envelope::Gain(Gain::new(0))),
         dummy_instrument("f1000_o3_o5", 1000.0, 3, 5, Envelope::Gain(Gain::new(0))),
+        dummy_instrument("f2000_o3_o5", 2000.0, 3, 5, Envelope::Gain(Gain::new(0))),
     ].iter(),
         [
             data::Sample{
