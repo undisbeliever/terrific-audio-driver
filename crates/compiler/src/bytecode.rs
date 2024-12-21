@@ -934,7 +934,7 @@ impl State {
         self.vibrato = VibratoState::Unknown;
 
         // Loop might end on a note that is not slurred and matching `prev_slurred_note`.
-        self.prev_slurred_note = SlurredNoteState::Unchanged;
+        self.prev_slurred_note = SlurredNoteState::Unknown;
     }
 
     fn merge_skip_last_loop(&mut self, s: SkipLastLoop) {
