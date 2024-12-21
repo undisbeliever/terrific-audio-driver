@@ -33,7 +33,7 @@ use crate::mml::command_parser::{
 use crate::mml::{MAX_MML_PREFIX_STR_LENGTH, MAX_MML_PREFIX_TICKS};
 use crate::notes::{MidiNote, Note, Octave};
 use crate::path::PathString;
-use crate::pitch_table::InstrumentHintFreq;
+use crate::pitch_table::{InstrumentHintFreq, PlayPitchSampleRate};
 use crate::sound_effects::MAX_SFX_TICKS;
 use crate::time::{Bpm, TickClock, TickCounter, ZenLen};
 use crate::value_newtypes::{SignedValueNewType, UnsignedValueNewType};
@@ -125,6 +125,7 @@ pub enum ValueError {
     BcTicksNoKeyOffOutOfRange(u32),
 
     PlayPitchPitchOutOfRange(u32),
+    PlayPitchSampleRateOutOfRange(u32),
     NoiseFrequencyOutOfRange(u32),
 
     PxPanOutOfRange(i32),
@@ -209,6 +210,7 @@ pub enum ValueError {
     NoBool,
     NoNote,
     NoPlayPitchPitch,
+    NoPlayPitchSampleRate,
     NoNoiseFrequency,
     NoVolume,
     NoPan,
@@ -829,6 +831,9 @@ impl Display for ValueError {
             Self::PlayPitchPitchOutOfRange(v) => {
                 out_of_range!("pitch register", v, PlayPitchPitch)
             }
+            Self::PlayPitchSampleRateOutOfRange(v) => {
+                out_of_range!("play pitch sample rate", v, PlayPitchSampleRate)
+            }
             Self::NoiseFrequencyOutOfRange(v) => {
                 out_of_range!("noise frequency", v, NoiseFrequency)
             }
@@ -1037,6 +1042,7 @@ impl Display for ValueError {
             Self::NoBool => write!(f, "no bool"),
             Self::NoNote => write!(f, "no note"),
             Self::NoPlayPitchPitch => write!(f, "no pitch register value"),
+            Self::NoPlayPitchSampleRate => write!(f, "no play pitch sample rate"),
             Self::NoNoiseFrequency => write!(f, "no noise frequency"),
             Self::NoVolume => write!(f, "no volume"),
             Self::NoPan => write!(f, "no pan"),

@@ -189,6 +189,10 @@ Numbers can be decimal, or hexadecimal when prefixed with `$` (ie, `$ff`)
     * A optional *length* can be added after the note.  If there is no length, the default length (`l`) will be used.
  * `P<pitch>[,length]` - Play pitch
     * Sets the `VxPITCH` register to *pitch* and plays a note.  For example, `P$1000` will play the BRR sample at the native sample rate.
+ * `PH<sample_rate>[,length]` - Play BRR sample at a given sample rate (in Hertz)
+    * Sets the `VxPITCH` register to play the current BRR sample at the given sample rate.
+    * For example: `PH32000` will play the BRR sample at the native 32KHz sample rate (`P$1000`)
+      and `PH16000` will it at 16Khz sample rate (`P$0800`).
  * `s[number][,length]` - Play sample
     * If this command is used with a sample, `number` is the sample-rate list index (default is 0).
     * If this command is used with an instrument, `number` is the note-id.
@@ -338,7 +342,7 @@ Numbers can be decimal, or hexadecimal when prefixed with `$` (ie, `$ff`)
        * `portamento_speed` can be set without setting `delay_length`, ie: `{df}4,,50`
     * Can be tied (`^`) and slurred (`&`) like a regular note
     * The octave can be changed inside the braces.  For example: `{a > c}2` and `{o3 c o4 c}2`
-    * The pitches can be `P` play-pitch commands
+    * The pitches can be `P` and `PH` play-pitch commands
     * `pitch1` is optional if the previous note is slurred and known (ie, not at the start of a loop)
 
  * `{{<pitch list>}} [total_length] [, note_length] [, tie]` - Broken Chord

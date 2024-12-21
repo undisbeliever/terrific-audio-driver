@@ -124,6 +124,29 @@ fn test_play_pitch() {
 }
 
 #[test]
+fn test_play_pitch_sample_rate() {
+    assert_line_matches_line_and_bytecode(
+        "PH32000 PH16000 PH64000 PH28000",
+        "P$1000 P$0800 P$2000 P$0e00",
+        &[
+            "play_pitch $1000 keyoff 24",
+            "play_pitch $0800 keyoff 24",
+            "play_pitch $2000 keyoff 24",
+            "play_pitch $0e00 keyoff 24",
+        ],
+    );
+
+    assert_line_matches_line_and_bytecode("PH0", "P0", &["play_pitch 0 24"]);
+    assert_line_matches_line_and_bytecode("PH127999", "P$3fff", &["play_pitch $3fff 24"]);
+
+    assert_error_in_mml_line(
+        "PH128000",
+        1,
+        ValueError::PlayPitchSampleRateOutOfRange(128000).into(),
+    );
+}
+
+#[test]
 fn test_play_noise() {
     assert_line_matches_bytecode("N15", &["play_noise 15 keyoff 24"]);
     assert_line_matches_bytecode("N15 &", &["play_noise 15 no_keyoff 24"]);
@@ -3520,6 +3543,35 @@ fn test_portamento_pitch() {
     assert_line_matches_bytecode(
         "{P$500 g}",
         &["play_pitch $500 no_keyoff 1", "portamento g4 keyoff +88 23"],
+    );
+}
+
+#[test]
+fn test_portamento_pitch_sample_rate() {
+    assert_line_matches_line_and_bytecode(
+        "{PH32000 PH16000}",
+        "{P$1000 P$0800}",
+        &[
+            "play_pitch $1000 no_keyoff 1",
+            "portamento_pitch $0800 keyoff -93 23",
+        ],
+    );
+
+    assert_line_matches_line_and_bytecode(
+        "{PH64000 PH28000}",
+        "{P$2000 P$0e00}",
+        &[
+            "play_pitch $2000 no_keyoff 1",
+            "portamento_pitch $0e00 keyoff -209 23",
+        ],
+    );
+
+    assert_line_matches_line("{PH0 PH127999}%1000", "{P0 P$3fff}%1000");
+
+    assert_error_in_mml_line(
+        "{PH128000 PH0}",
+        2,
+        ValueError::PlayPitchSampleRateOutOfRange(128000).into(),
     );
 }
 

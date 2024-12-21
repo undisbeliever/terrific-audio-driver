@@ -6,10 +6,13 @@
 
 use crate::bytecode::opcodes;
 use crate::bytecode::InstrumentId;
+use crate::bytecode::PlayPitchPitch;
 use crate::data::{Instrument, InstrumentOrSample, Sample, UniqueNamesList};
 use crate::driver_constants::{MAX_INSTRUMENTS_AND_SAMPLES, MAX_N_PITCHES};
+use crate::errors::ValueError;
 use crate::errors::{PitchError, PitchTableError};
 use crate::notes::{self, Note, Octave};
+use crate::value_newtypes::u32_value_newtype;
 
 const SEMITONES_PER_OCTAVE: i32 = notes::SEMITONES_PER_OCTAVE as i32;
 const PITCH_TABLE_OFFSET: u8 = opcodes::FIRST_PLAY_NOTE_INSTRUCTION / 2;
@@ -411,6 +414,29 @@ impl PitchTable {
 
     pub(crate) fn pitch_table_h(&self) -> &[u8] {
         &self.table_data_h[..self.n_pitches]
+    }
+}
+
+u32_value_newtype!(
+    PlayPitchSampleRate,
+    PlayPitchSampleRateOutOfRange,
+    NoPlayPitchSampleRate,
+    0,
+    127999
+);
+
+impl PlayPitchSampleRate {
+    pub fn to_vxpitch(self) -> PlayPitchPitch {
+        const _: () = assert!(
+            (PlayPitchSampleRate::MAX.as_u32() as u64) * (PITCH_REGISTER_FP_SCALE as u64)
+                / (SPC_SAMPLE_RATE as u64)
+                <= PlayPitchPitch::MAX.as_u16() as u64
+        );
+
+        let pitch =
+            u64::from(self.0) * u64::from(PITCH_REGISTER_FP_SCALE) / u64::from(SPC_SAMPLE_RATE);
+
+        u32::try_from(pitch).unwrap().try_into().unwrap()
     }
 }
 

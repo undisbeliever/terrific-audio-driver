@@ -26,6 +26,7 @@ use crate::envelope::{Gain, GainMode, OptionalGain, TempGain};
 use crate::errors::{ChannelError, ErrorWithPos, ValueError};
 use crate::file_pos::{FilePos, FilePosRange};
 use crate::notes::{MidiNote, MmlPitch, Note, Octave, STARTING_OCTAVE};
+use crate::pitch_table::PlayPitchSampleRate;
 use crate::time::{
     MmlDefaultLength, MmlLength, TickCounter, TickCounterWithLoopFlag, ZenLen, STARTING_MML_LENGTH,
 };
@@ -468,6 +469,13 @@ fn parse_comma_ticks<T: CommaTicks>(pos: FilePos, p: &mut Parser) -> Option<T> {
     } else {
         p.add_error(pos, T::NO_COMMA_ERROR.into());
         None
+    }
+}
+
+fn parse_play_pitch_sample_rate_value(pos: FilePos, p: &mut Parser) -> PlayPitchPitch {
+    match parse_unsigned_newtype::<PlayPitchSampleRate>(pos, p) {
+        Some(sr) => sr.to_vxpitch(),
+        None => PlayPitchPitch::NATIVE,
     }
 }
 
@@ -995,6 +1003,11 @@ fn parse_portamento_pitch(p: &mut Parser) -> PortamentoPitch {
                 }
             }
 
+            Token::PlayPitchSampleRate => {
+                let p = parse_play_pitch_sample_rate_value(pos, p);
+                return PortamentoPitch::Ok(NoteOrPitch::Pitch(p));
+            }
+
             _ => {
                 parse_pitch_list_state_change_token(token, pos, p);
             }
@@ -1518,8 +1531,7 @@ fn parse_play_sample(pos: FilePos, p: &mut Parser) -> Command {
     }
 }
 
-fn parse_play_pitch(pos: FilePos, p: &mut Parser) -> Command {
-    let pitch = parse_unsigned_newtype(pos, p).unwrap_or(PlayPitchPitch::NATIVE);
+fn parse_after_play_pitch(pitch: PlayPitchPitch, p: &mut Parser) -> Command {
     let p_length = parse_tracked_comma_length(p);
 
     let (tie_length, is_slur) = parse_ties_and_slur(p);
@@ -1533,6 +1545,16 @@ fn parse_play_pitch(pos: FilePos, p: &mut Parser) -> Command {
         is_slur,
         rest_after_note,
     }
+}
+
+fn parse_play_pitch(pos: FilePos, p: &mut Parser) -> Command {
+    let pitch = parse_unsigned_newtype(pos, p).unwrap_or(PlayPitchPitch::NATIVE);
+    parse_after_play_pitch(pitch, p)
+}
+
+fn parse_play_pitch_sample_rate(pos: FilePos, p: &mut Parser) -> Command {
+    let pitch = parse_play_pitch_sample_rate_value(pos, p);
+    parse_after_play_pitch(pitch, p)
 }
 
 fn parse_play_noise(pos: FilePos, p: &mut Parser) -> Command {
@@ -1909,6 +1931,7 @@ fn parse_token(pos: FilePos, token: Token, p: &mut Parser) -> Command {
 
         Token::Pitch(pitch) => parse_pitch(pos, pitch, p),
         Token::PlayPitch => parse_play_pitch(pos, p),
+        Token::PlayPitchSampleRate => parse_play_pitch_sample_rate(pos, p),
         Token::PlayNoise => parse_play_noise(pos, p),
         Token::PlaySample => parse_play_sample(pos, p),
         Token::PlayMidiNoteNumber => parse_play_midi_note_number(pos, p),
