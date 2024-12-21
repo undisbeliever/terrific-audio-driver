@@ -126,7 +126,7 @@ fn test_play_pitch() {
 #[test]
 fn test_play_pitch_sample_rate() {
     assert_line_matches_line_and_bytecode(
-        "PH32000 PH16000 PH64000 PH28000",
+        "PR32000 PR16000 PR64000 PR28000",
         "P$1000 P$0800 P$2000 P$0e00",
         &[
             "play_pitch $1000 keyoff 24",
@@ -136,11 +136,11 @@ fn test_play_pitch_sample_rate() {
         ],
     );
 
-    assert_line_matches_line_and_bytecode("PH0", "P0", &["play_pitch 0 24"]);
-    assert_line_matches_line_and_bytecode("PH127999", "P$3fff", &["play_pitch $3fff 24"]);
+    assert_line_matches_line_and_bytecode("PR0", "P0", &["play_pitch 0 24"]);
+    assert_line_matches_line_and_bytecode("PR127999", "P$3fff", &["play_pitch $3fff 24"]);
 
     assert_error_in_mml_line(
-        "PH128000",
+        "PR128000",
         1,
         ValueError::PlayPitchSampleRateOutOfRange(128000).into(),
     );
@@ -3394,7 +3394,7 @@ fn test_broken_chord_play_pitch() {
 
     assert_line_matches_line("{{d P5678}}4,,0", "[d%2 P5678,%2]6");
 
-    assert_line_matches_line("{{PH12000 PH18000}}4,16,0", "[PH12000,16 PH18000,16]2");
+    assert_line_matches_line("{{PR12000 PR18000}}4,16,0", "[PR12000,16 PR18000,16]2");
 
     assert_line_matches_line("{{P$3fff}},,0", "[P$3fff,%2]12");
     assert_error_in_mml_line(
@@ -3403,9 +3403,9 @@ fn test_broken_chord_play_pitch() {
         ValueError::PlayPitchPitchOutOfRange(0x4000).into(),
     );
 
-    assert_line_matches_line("{{PH127999}},,0", "[PH127999,%2]12");
+    assert_line_matches_line("{{PR127999}},,0", "[PR127999,%2]12");
     assert_error_in_mml_line(
-        "{{PH128000 c}}",
+        "{{PR128000 c}}",
         3,
         ValueError::PlayPitchSampleRateOutOfRange(128000).into(),
     );
@@ -3575,7 +3575,7 @@ fn test_portamento_pitch() {
 #[test]
 fn test_portamento_pitch_sample_rate() {
     assert_line_matches_line_and_bytecode(
-        "{PH32000 PH16000}",
+        "{PR32000 PR16000}",
         "{P$1000 P$0800}",
         &[
             "play_pitch $1000 no_keyoff 1",
@@ -3584,7 +3584,7 @@ fn test_portamento_pitch_sample_rate() {
     );
 
     assert_line_matches_line_and_bytecode(
-        "{PH64000 PH28000}",
+        "{PR64000 PR28000}",
         "{P$2000 P$0e00}",
         &[
             "play_pitch $2000 no_keyoff 1",
@@ -3592,10 +3592,10 @@ fn test_portamento_pitch_sample_rate() {
         ],
     );
 
-    assert_line_matches_line("{PH0 PH127999}%1000", "{P0 P$3fff}%1000");
+    assert_line_matches_line("{PR0 PR127999}%1000", "{P0 P$3fff}%1000");
 
     assert_error_in_mml_line(
-        "{PH128000 PH0}",
+        "{PR128000 PR0}",
         2,
         ValueError::PlayPitchSampleRateOutOfRange(128000).into(),
     );

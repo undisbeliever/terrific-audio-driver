@@ -428,7 +428,7 @@ fn next_token<'a>(scanner: &mut Scanner<'a>) -> Option<TokenWithPosition<'a>> {
 
         b'P' => match scanner.second_byte() {
             Some(b'M') => two_ascii_token!(Token::PitchMod),
-            Some(b'H') => two_ascii_token!(Token::PlayPitchSampleRate),
+            Some(b'R') => two_ascii_token!(Token::PlayPitchSampleRate),
             _ => one_ascii_token!(Token::PlayPitch),
         },
 
