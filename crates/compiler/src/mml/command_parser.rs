@@ -1010,7 +1010,7 @@ enum PortamentoPitchError {
 fn parse_portamento_pitches(
     start_pos: FilePos,
     p: &mut Parser,
-) -> Result<(NoteOrPitch, NoteOrPitch), PortamentoPitchError> {
+) -> Result<(Option<NoteOrPitch>, NoteOrPitch), PortamentoPitchError> {
     let note1 = match parse_portamento_pitch(p) {
         PortamentoPitch::Ok(n) => n,
 
@@ -1027,10 +1027,7 @@ fn parse_portamento_pitches(
     let note2 = match parse_portamento_pitch(p) {
         PortamentoPitch::Ok(n) => n,
 
-        PortamentoPitch::End => {
-            p.add_error(start_pos, ChannelError::PortamentoRequiresTwoPitches);
-            return Err(PortamentoPitchError::WrongCount);
-        }
+        PortamentoPitch::End => return Ok((None, note1)),
 
         PortamentoPitch::MissingEnd => {
             return Err(PortamentoPitchError::MissingEnd);
@@ -1038,7 +1035,7 @@ fn parse_portamento_pitches(
     };
 
     match parse_portamento_pitch(p) {
-        PortamentoPitch::End => Ok((note1, note2)),
+        PortamentoPitch::End => Ok((Some(note1), note2)),
 
         PortamentoPitch::MissingEnd => Err(PortamentoPitchError::MissingEnd),
 

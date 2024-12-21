@@ -3883,6 +3883,158 @@ A @f1000_o4 g !s2 @f2000_o3_o5 {ae}
 }
 
 #[test]
+fn test_one_pitch_portamento() {
+    const _A4_PITCH: u32 = 0x0e14;
+
+    assert_line_matches_bytecode(
+        "a & {e}",
+        &["play_note a4 no_keyoff 24", "portamento e4 keyoff -39 24"],
+    );
+
+    assert_line_matches_bytecode(
+        "a & {e}8",
+        &["play_note a4 no_keyoff 24", "portamento e4 keyoff -82 12"],
+    );
+
+    assert_line_matches_bytecode(
+        "a & {e}3,8",
+        &[
+            "play_note a4 no_keyoff 24",
+            "wait 12",
+            "portamento e4 keyoff -48 20",
+        ],
+    );
+
+    assert_line_matches_bytecode(
+        "e & w2 {a}3,8",
+        &[
+            "play_note e4 no_keyoff 24",
+            "wait 48",
+            // portamento
+            "wait 12",
+            "portamento a4 keyoff +48 20",
+        ],
+    );
+
+    assert_line_matches_bytecode(
+        "a & {e}3 & {a}6 & {g}3",
+        &[
+            "play_note a4 no_keyoff 24",
+            "portamento e4 no_keyoff -28 32",
+            "portamento a4 no_keyoff +57 16",
+            "portamento g4 keyoff -13 32",
+        ],
+    );
+
+    assert_mml_subroutine_matches_bytecode(
+        r#"
+@1 dummy_instrument
+
+!s ?@1 e & {a}
+A @1 !s
+"#,
+        0,
+        &["play_note e4 no_keyoff 24", "portamento a4 keyoff +39 24"],
+    );
+
+    assert_mml_subroutine_matches_bytecode(
+        r#"
+@1 dummy_instrument
+
+!s a & {e},,50
+A @1 !s
+"#,
+        0,
+        &["play_note a4 no_keyoff 24", "portamento e4 keyoff -50 24"],
+    );
+
+    assert_mml_subroutine_matches_bytecode(
+        r#"
+@1 dummy_instrument
+
+!s e & {a},,50
+A @1 !s
+"#,
+        0,
+        &["play_note e4 no_keyoff 24", "portamento a4 keyoff +50 24"],
+    );
+
+    assert_mml_subroutine_matches_bytecode(
+        r#"
+@1 dummy_instrument
+
+!s P$1000 & {P$2000}2
+A @1 !s
+"#,
+        0,
+        &[
+            "play_pitch $1000 no_keyoff 24",
+            "portamento_pitch $2000 keyoff +87 48",
+        ],
+    );
+
+    assert_mml_subroutine_matches_bytecode(
+        r#"
+@1 dummy_instrument
+
+!s P$1000 & {P$2000}2,8
+A @1 !s
+"#,
+        0,
+        &[
+            "play_pitch $1000 no_keyoff 24",
+            "wait 12",
+            "portamento_pitch $2000 keyoff +117 36",
+        ],
+    );
+}
+
+#[test]
+fn test_one_pitch_portamento_errors() {
+    assert_error_in_mml_line("{e}", 1, ChannelError::OneNotePortamentoNoPreviousNote);
+
+    // Note is unknown at the start of a loop
+    assert_error_in_mml_line(
+        "a {e}3,8",
+        3,
+        ChannelError::OneNotePortamentoPreviousNoteIsNotSlurred,
+    );
+
+    // Previous note is noise
+    assert_error_in_mml_line(
+        "N10 & {e}",
+        7,
+        ChannelError::OneNotePortamentoPreviousNoteIsNoise,
+    );
+
+    // Previous note is unknown at the start of a loop
+    assert_error_in_mml_line(
+        "a & [{e} a&]3",
+        6,
+        ChannelError::OneNotePortamentoPreviousNoteIsUnknown,
+    );
+
+    // Previous note is unknown at the start of a loop
+    assert_error_in_mml_line(
+        "a & L {e} c",
+        7,
+        ChannelError::OneNotePortamentoPreviousNoteIsUnknown,
+    );
+
+    assert_one_subroutine_err_in_mml(
+        r#"
+@1 dummy_instrument
+
+!s {e},,35
+A @1 !s
+"#,
+        "!s",
+        4,
+        ChannelError::OneNotePortamentoNoPreviousNote,
+    );
+}
+
+#[test]
 fn test_portamento_pitch_list_errors() {
     assert_error_in_mml_line("{   ", 5, ChannelError::MissingEndPortamento);
 
@@ -3890,11 +4042,15 @@ fn test_portamento_pitch_list_errors() {
 
     assert_error_in_mml_line("{ [ a b }", 3, ChannelError::InvalidPitchListSymbol);
 
-    assert_error_in_mml_line("{ a }", 1, ChannelError::PortamentoRequiresTwoPitches);
+    assert_error_in_mml_line("{ a }", 1, ChannelError::OneNotePortamentoNoPreviousNote);
     assert_error_in_mml_line("{ a b c }", 1, ChannelError::PortamentoRequiresTwoPitches);
     assert_error_in_mml_line("{ a b c d }", 1, ChannelError::PortamentoRequiresTwoPitches);
 
-    assert_error_in_mml_line("{ P2000 }", 1, ChannelError::PortamentoRequiresTwoPitches);
+    assert_error_in_mml_line(
+        "{ P2000 }",
+        1,
+        ChannelError::OneNotePortamentoNoPreviousNote,
+    );
     assert_error_in_mml_line(
         "{ P2000 P1000 P500 }",
         1,
@@ -7310,7 +7466,7 @@ fn test_utf8_in_mml() {
 
 #[test]
 fn portamento_panic_bugfix() {
-    assert_error_in_mml_line("{c}3", 1, ChannelError::PortamentoRequiresTwoPitches);
+    assert_error_in_mml_line("{c}3", 1, ChannelError::OneNotePortamentoNoPreviousNote);
 
     assert_error_in_mml_line("{}", 1, ChannelError::PortamentoRequiresTwoPitches);
 }

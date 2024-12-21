@@ -515,6 +515,10 @@ pub enum ChannelError {
     PortamentoTooLong,
     PortamentoRequiresInstrument,
     PortamentoNoteAndPitchWithoutInstrument,
+    OneNotePortamentoPreviousNoteIsNotSlurred,
+    OneNotePortamentoNoPreviousNote,
+    OneNotePortamentoPreviousNoteIsUnknown,
+    OneNotePortamentoPreviousNoteIsNoise,
 
     NoNotesInBrokenChord,
     TooManyNotesInBrokenChord(usize),
@@ -1517,6 +1521,19 @@ impl Display for ChannelError {
             }
             Self::PortamentoNoteAndPitchWithoutInstrument => {
                 write!(f, "cannot compare a note and a pitch without an instrument")
+            }
+
+            Self::OneNotePortamentoPreviousNoteIsNotSlurred => {
+                write!(f, "cannot portamento: the previous note must be slurred")
+            }
+            Self::OneNotePortamentoNoPreviousNote => {
+                write!(f, "cannot portamento: no previous note")
+            }
+            Self::OneNotePortamentoPreviousNoteIsUnknown => {
+                write!(f, "cannot portamento: the previous note is unknown")
+            }
+            Self::OneNotePortamentoPreviousNoteIsNoise => {
+                write!(f, "cannot portamento: the previous note is N noise")
             }
 
             Self::NoNotesInBrokenChord => write!(f, "no notes in broken chord"),

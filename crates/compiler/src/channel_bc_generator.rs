@@ -253,7 +253,7 @@ pub(crate) enum Command {
         rest_after_note: RestTicksAfterNote,
     },
     Portamento {
-        note1: NoteOrPitch,
+        note1: Option<NoteOrPitch>,
         note2: NoteOrPitch,
         is_slur: bool,
         speed_override: Option<PortamentoSpeed>,
@@ -939,6 +939,34 @@ impl<'a> ChannelBcGenerator<'a> {
         Ok(())
     }
 
+    fn portamento_get_prev_note_and_pitch(
+        &self,
+    ) -> Result<(NoteOrPitch, Option<u16>), ChannelError> {
+        match self.bc.get_state().prev_slurred_note {
+            SlurredNoteState::Slurred(prev_note, prev_detune, prev_inst) => match prev_inst {
+                Some(prev_inst) => {
+                    let prev_pitch = self
+                        .pitch_table
+                        .pitch_for_note(prev_inst, prev_note)
+                        .wrapping_add_signed(prev_detune.as_i16());
+
+                    Ok((NoteOrPitch::Note(prev_note), Some(prev_pitch)))
+                }
+                None => Ok((NoteOrPitch::Note(prev_note), None)),
+            },
+            SlurredNoteState::SlurredPitch(prev) => {
+                Ok((NoteOrPitch::Pitch(prev), Some(prev.as_u16())))
+            }
+
+            SlurredNoteState::Unchanged => Err(ChannelError::OneNotePortamentoNoPreviousNote),
+            SlurredNoteState::Unknown => Err(ChannelError::OneNotePortamentoPreviousNoteIsUnknown),
+            SlurredNoteState::None => Err(ChannelError::OneNotePortamentoPreviousNoteIsNotSlurred),
+            SlurredNoteState::SlurredNoise => {
+                Err(ChannelError::OneNotePortamentoPreviousNoteIsNoise)
+            }
+        }
+    }
+
     fn portamento_prev_note_matches(
         &self,
         note1_pitch: Option<u16>,
@@ -978,29 +1006,16 @@ impl<'a> ChannelBcGenerator<'a> {
         }
     }
 
-    #[allow(clippy::too_many_arguments)]
-    fn portamento(
+    // Returns new slide_length
+    // A tick from the slide_length may be removed if a key-on is required and delay = 0
+    fn portamento_play_note1_delay_if_required(
         &mut self,
         note1: NoteOrPitch,
-        note2: NoteOrPitch,
-        is_slur: bool,
-        speed_override: Option<PortamentoSpeed>,
+        instrument: Option<InstrumentId>,
         delay_length: TickCounter,
         slide_length: TickCounter,
-        tie_length: TickCounter,
-        rest_after_note: RestTicksAfterNote,
-    ) -> Result<(), ChannelError> {
-        #[cfg(debug_assertions)]
-        let expected_tick_counter = self.bc.get_tick_counter()
-            + delay_length
-            + slide_length
-            + tie_length
-            + rest_after_note.0;
-
-        let instrument = self.bc.get_state().instrument.instrument_id();
-
+    ) -> Result<(Option<u16>, TickCounter), ChannelError> {
         let (note1_pitch, pn1) = self.portamento_note_pitch(note1, instrument)?;
-        let (note2_pitch, pn2) = self.portamento_note_pitch(note2, instrument)?;
 
         let play_note1 = !self.portamento_prev_note_matches(note1_pitch, &pn1);
 
@@ -1037,6 +1052,51 @@ impl<'a> ChannelBcGenerator<'a> {
                 slide_length
             }
         };
+
+        Ok((note1_pitch, slide_length))
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn portamento(
+        &mut self,
+        note1: Option<NoteOrPitch>,
+        note2: NoteOrPitch,
+        is_slur: bool,
+        speed_override: Option<PortamentoSpeed>,
+        delay_length: TickCounter,
+        slide_length: TickCounter,
+        tie_length: TickCounter,
+        rest_after_note: RestTicksAfterNote,
+    ) -> Result<(), ChannelError> {
+        #[cfg(debug_assertions)]
+        let expected_tick_counter = self.bc.get_tick_counter()
+            + delay_length
+            + slide_length
+            + tie_length
+            + rest_after_note.0;
+
+        let instrument = self.bc.get_state().instrument.instrument_id();
+
+        let (note1, note1_pitch, slide_length) = match note1 {
+            None => {
+                let (n, p) = self.portamento_get_prev_note_and_pitch()?;
+                if !delay_length.is_zero() {
+                    self.wait(delay_length)?;
+                }
+                (n, p, slide_length)
+            }
+            Some(note1) => {
+                let (p, s) = self.portamento_play_note1_delay_if_required(
+                    note1,
+                    instrument,
+                    delay_length,
+                    slide_length,
+                )?;
+                (note1, p, s)
+            }
+        };
+
+        let (note2_pitch, pn2) = self.portamento_note_pitch(note2, instrument)?;
 
         // slide_length: number of ticks in the pitch-slide.  Does NOT include the key-off tick.
         // tie_length: number of ticks after pitch-slide reaches note2, includes the key-off tick (as required).

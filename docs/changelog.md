@@ -15,6 +15,8 @@ MML changes:
    For example, `{cd} {cf} {cg}` will only play a single portamento.
  * Added the `?@` subroutine instrument hint command.
  * Added `P` pitches to portamento
+ * Portamento pitch1 is now optional if the previous note is slurred and known (ie, not at the start of a loop).
+   `c & {d}` is now allowed.
  * Fixed a state tracking bug involving loops that can cause dropped instructions.
  * Fixed missing `set_detune 0` instruction when `MD` value is small
  * Fixed MP and portamento not accounting for manual `D` detune

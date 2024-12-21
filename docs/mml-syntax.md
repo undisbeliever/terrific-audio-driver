@@ -329,7 +329,7 @@ Numbers can be decimal, or hexadecimal when prefixed with `$` (ie, `$ff`)
 
 <br/>
 
- * `{<pitch1> <pitch2>} [total_length] [, delay_length] [, portamento_speed]` - Portamento
+ * `{[pitch1] <pitch2>} [total_length] [, delay_length] [, portamento_speed]` - Portamento
     * Smoothly transition between two pitches.
     * If `delay_length` is set, there will be a delay between `pitch1` key-on and the pitch-shift.  For example: `{df}4,8` will delay the portamento by a eighth note (`d8 & {df}8`).
         * If `delay_length` is set, it must be less than `total_length`.
@@ -339,6 +339,7 @@ Numbers can be decimal, or hexadecimal when prefixed with `$` (ie, `$ff`)
     * Can be tied (`^`) and slurred (`&`) like a regular note
     * The octave can be changed inside the braces.  For example: `{a > c}2` and `{o3 c o4 c}2`
     * The pitches can be `P` play-pitch commands
+    * `pitch1` is optional if the previous note is slurred and known (ie, not at the start of a loop)
 
  * `{{<pitch list>}} [total_length] [, note_length] [, tie]` - Broken Chord
     * Quickly cycle through the pitches for a given duration (`length`).
