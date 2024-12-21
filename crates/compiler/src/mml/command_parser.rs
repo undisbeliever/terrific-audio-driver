@@ -930,7 +930,7 @@ fn parse_pitch_list_state_change_token(token: Token, pos: FilePos, p: &mut Parse
     }
 }
 
-fn parse_broken_chord_pitches(p: &mut Parser) -> Option<(Vec<Note>, FilePos)> {
+fn parse_broken_chord_pitches(p: &mut Parser) -> Option<(Vec<NoteOrPitch>, FilePos)> {
     let mut out = Vec::new();
 
     loop {
@@ -953,9 +953,20 @@ fn parse_broken_chord_pitches(p: &mut Parser) -> Option<(Vec<Note>, FilePos)> {
 
             Token::Pitch(pitch) => {
                 match Note::from_mml_pitch(pitch, p.state().octave, p.state().semitone_offset) {
-                    Ok(note) => out.push(note),
+                    Ok(note) => out.push(NoteOrPitch::Note(note)),
                     Err(e) => p.add_error(pos, e.into()),
                 }
+            }
+
+            Token::PlayPitch => {
+                if let Some(p) = parse_unsigned_newtype(pos, p) {
+                    out.push(NoteOrPitch::Pitch(p));
+                }
+            }
+
+            Token::PlayPitchSampleRate => {
+                let p = parse_play_pitch_sample_rate_value(pos, p);
+                out.push(NoteOrPitch::Pitch(p));
             }
 
             _ => {

@@ -14,8 +14,8 @@ MML changes:
  * Fixed a note tracking bug that can cause successive `{}` portamentos to not key-on.
    For example, `{cd} {cf} {cg}` will only play a single portamento.
  * Added the `?@` subroutine instrument hint command.
- * Added `P` pitches to portamento
  * Added `PH` MML command
+ * Added `P` and `PH` pitches to portamento and broken chord.
  * Portamento pitch1 is now optional if the previous note is slurred and known (ie, not at the start of a loop).
    `c & {d}` is now allowed.
  * Fixed a state tracking bug involving loops that can cause dropped instructions.

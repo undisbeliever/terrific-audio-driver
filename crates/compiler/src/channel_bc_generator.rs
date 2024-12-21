@@ -266,7 +266,7 @@ pub(crate) enum Command {
         rest_after_note: RestTicksAfterNote,
     },
     BrokenChord {
-        notes: Vec<Note>,
+        notes: Vec<NoteOrPitch>,
         total_length: TickCounter,
         note_length: PlayNoteTicks,
     },
@@ -530,13 +530,21 @@ impl<'a> ChannelBcGenerator<'a> {
         }
     }
 
-    fn play_note_with_detune(
+    fn play_note_or_pitch_with_detune(
         &mut self,
-        note: Note,
+        note: NoteOrPitch,
         length: PlayNoteTicks,
     ) -> Result<(), ChannelError> {
-        self.emit_detune_output(self.calculate_detune_for_note(note)?);
-        self.bc.play_note(note, length)?;
+        match note {
+            NoteOrPitch::Note(n) => {
+                self.emit_detune_output(self.calculate_detune_for_note(n)?);
+                self.bc.play_note(n, length)?;
+            }
+            NoteOrPitch::Pitch(p) => {
+                // Pitch is not detuned
+                self.bc.play_pitch(p, length);
+            }
+        }
 
         Ok(())
     }
@@ -1183,7 +1191,7 @@ impl<'a> ChannelBcGenerator<'a> {
 
     fn broken_chord(
         &mut self,
-        notes: &[Note],
+        notes: &[NoteOrPitch],
         total_length: TickCounter,
         note_length: PlayNoteTicks,
     ) -> Result<(), ChannelError> {
@@ -1235,7 +1243,7 @@ impl<'a> ChannelBcGenerator<'a> {
                 self.bc.skip_last_loop()?;
             }
 
-            match self.play_note_with_detune(n, note_length) {
+            match self.play_note_or_pitch_with_detune(n, note_length) {
                 Ok(()) => (),
                 Err(e) => {
                     // Hides an unneeded "loop stack not empty" (or end_loop) error
@@ -1249,7 +1257,7 @@ impl<'a> ChannelBcGenerator<'a> {
 
         if last_note_ticks > 0 {
             // The last note to play is always a keyoff note.
-            self.play_note_with_detune(
+            self.play_note_or_pitch_with_detune(
                 notes[break_point],
                 PlayNoteTicks::KeyOff(BcTicksKeyOff::try_from(last_note_ticks)?),
             )?;

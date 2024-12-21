@@ -355,6 +355,7 @@ Numbers can be decimal, or hexadecimal when prefixed with `$` (ie, `$ff`)
        * If `1` (default), the pitches will be tied, a single key-on event and key-off event will be emitted.
        * If `0`, There will be a key-on and key-off event for each pitch.
     * The octave can be changed inside the braces (like portamento).
+    * The pitches can be `P` and `PH` play-pitch commands
     * This command consumes a loop.
     * Examples (Whole Note Length is 96, default `l` is 4):
         * `{{ceg}}` expands to `[c%1 & : e%1 & g%1 &]8 e%2`
