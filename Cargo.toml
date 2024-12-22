@@ -30,7 +30,7 @@ opt-level = 3
 [workspace.package]
 rust-version = "1.75"
 
-version = "0.0.15"
+version = "0.0.16"
 
 publish = false
 
