@@ -476,7 +476,8 @@ impl PlayPitchFrequency {
 pub struct InstrumentHintFreq(u32);
 
 impl InstrumentHintFreq {
-    // Determines accuracy when comparing instrument hints
+    // Store frequency in fractional (fixed-point) units so frequency can be == compared
+    // ::TODO confirm 2 decimal units is enough accuracy::
     const FRACTIONAL_UNITS: u32 = 100;
 
     pub fn from_freq(frequency: f64) -> Self {
@@ -491,9 +492,10 @@ impl InstrumentHintFreq {
 
 impl std::fmt::Display for InstrumentHintFreq {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        const _: () = assert!(InstrumentHintFreq::FRACTIONAL_UNITS == 100);
         write!(
             f,
-            "{}.{} Hz",
+            "{}.{:02} Hz",
             self.0 / Self::FRACTIONAL_UNITS,
             self.0 % Self::FRACTIONAL_UNITS
         )
