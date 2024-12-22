@@ -231,6 +231,7 @@ Numbers can be decimal, or hexadecimal when prefixed with `$` (ie, `$ff`)
     * Sets an instrument hint for `{}` portamento, `MP` and `MD` commands without emitting an
       `set_instrument` instruction.
     * The `?@` command can only be used in subroutines.
+    * The `?@` hint will be used when previewing subroutines in the GUI.
     * CAUTION: A subroutine with a `?@` hint can only be called if the instrument source frequency
       matches the `?@` hint.
  * `A<attack>,<decay>,<sustain_level>,<sustain_rate>` - Set the channel's ADSR register

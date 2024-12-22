@@ -4,10 +4,16 @@
 
 @1 square
 
-!1 l8 cd !2 ab
-!2 l8 efg
-!3 l8 ba !4 dc
-!4 l8 gfe
+; Used to test `?@` instrument hint preview
+@2 sine
+@3 triangle
+@4 sawtooth
+
+
+!1     l8 cd !2 ab
+!2 ?@2 l8 efg
+!3 ?@3 l8 ba !4 dc
+!4 ?@4 l8 gfe
 
 A @1 l8 v16
 A !1 !2 r !3 !4 r !1 !2 r !3 !4 r !1 !2 r !3 !4 r

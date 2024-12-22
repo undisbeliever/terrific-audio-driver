@@ -14,6 +14,7 @@ MML changes:
  * Fixed a note tracking bug that can cause successive `{}` portamentos to not key-on.
    For example, `{cd} {cf} {cg}` will only play a single portamento.
  * Added the `?@` subroutine instrument hint command.
+    * The `?@` hint will be used when previewing subroutines in the GUI.
  * Added `PR` play sample rate MML command
  * Added `PF` play instrument at frequency MML command
  * Added `P` and `PR` pitches to portamento and broken chord.
@@ -27,6 +28,7 @@ MML changes:
 
 GUI changes:
  * Sample Analyser can now analyse samples up to a length of 32768.
+
 
 Version 0.0.15
 ==============

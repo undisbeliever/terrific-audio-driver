@@ -286,6 +286,14 @@ impl SubroutineId {
     pub fn no_instrument_notes(&self) -> &RangeInclusive<Note> {
         &self.state.no_instrument_notes
     }
+
+    pub fn instrument_hint(&self) -> Option<(InstrumentId, Envelope)> {
+        self.state.instrument_hint.map(|(i, e, _)| (i, e))
+    }
+
+    pub fn instrument_hint_freq(&self) -> Option<InstrumentHintFreq> {
+        self.state.instrument_hint.map(|(_, _, f)| f)
+    }
 }
 
 impl StackDepth {
@@ -884,7 +892,7 @@ pub struct State {
     pub(crate) vibrato: VibratoState,
     pub(crate) prev_slurred_note: SlurredNoteState,
 
-    instrument_hint: Option<InstrumentHintFreq>,
+    instrument_hint: Option<(InstrumentId, Envelope, InstrumentHintFreq)>,
     no_instrument_notes: RangeInclusive<Note>,
 }
 
@@ -1450,7 +1458,11 @@ impl<'a> Bytecode<'a> {
         match self.instruments.get_index(id.as_u8().into()) {
             Some(InstrumentOrSample::Instrument(i)) => {
                 self.state.instrument = InstrumentState::Hint(id, instrument.note_range.clone());
-                self.state.instrument_hint = Some(InstrumentHintFreq::from_instrument(i));
+                self.state.instrument_hint = Some((
+                    id,
+                    instrument.envelope,
+                    InstrumentHintFreq::from_instrument(i),
+                ));
                 Ok(())
             }
             Some(InstrumentOrSample::Sample(_)) => {
@@ -1933,7 +1945,7 @@ impl<'a> Bytecode<'a> {
 
         self.state.merge_subroutine(subroutine);
 
-        if let Some(sub_hint_freq) = subroutine.state.instrument_hint {
+        if let Some(sub_hint_freq) = subroutine.instrument_hint_freq() {
             match old_instrument {
                 InstrumentState::Known(id, _)
                 | InstrumentState::Hint(id, _)
@@ -1960,7 +1972,7 @@ impl<'a> Bytecode<'a> {
 
                 InstrumentState::Unknown | InstrumentState::Unset => match self.context {
                     BytecodeContext::SongSubroutine => {
-                        self.state.instrument_hint = Some(sub_hint_freq);
+                        self.state.instrument_hint = subroutine.state.instrument_hint;
                     }
 
                     BytecodeContext::SongChannel(_)

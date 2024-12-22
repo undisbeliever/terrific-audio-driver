@@ -5,8 +5,8 @@
 // SPDX-License-Identifier: MIT
 
 use crate::bytecode::opcodes;
+use crate::bytecode::InstrumentId;
 use crate::bytecode::Pan;
-use crate::channel_bc_generator::MmlInstrument;
 use crate::common_audio_data::CommonAudioData;
 use crate::driver_constants::{
     addresses, LoaderDataType, BC_CHANNEL_STACK_OFFSET, BC_CHANNEL_STACK_SIZE,
@@ -14,6 +14,7 @@ use crate::driver_constants::{
     SONG_HEADER_N_SUBROUTINES_OFFSET, SONG_HEADER_SIZE, STARTING_VOLUME, S_DSP_EON_REGISTER,
     S_SMP_TIMER_0_REGISTER,
 };
+use crate::envelope::Envelope;
 use crate::mml::MmlPrefixData;
 use crate::songs::Channel as SongChannel;
 use crate::songs::SongData;
@@ -1000,15 +1001,16 @@ impl ChannelState {
     // Create a new song subroutine interpreter channel and process a mml-prefix.
     fn subroutine_prefix(
         song_ptr: u16,
-        inst: &MmlInstrument,
+        instrument_id: InstrumentId,
+        envelope: Envelope,
         prefix: Option<MmlPrefixData>,
         sub: &Subroutine,
         global: &mut GlobalState,
     ) -> Option<Self> {
         let mut c = Self::new(None, song_ptr);
 
-        c.instrument = Some(inst.instrument_id.as_u8());
-        c.adsr_or_gain_override = Some(inst.envelope.engine_value());
+        c.instrument = Some(instrument_id.as_u8());
+        c.adsr_or_gain_override = Some(envelope.engine_value());
 
         if let Some(prefix) = prefix {
             // Prevent infinite loops by limiting the number of processed instructions
@@ -1170,30 +1172,34 @@ where
             None => return Err(SongSubroutineError),
         };
 
-        // Subroutine might not set an instrument before the play_note instructions.
-        //
-        // Find the first instrument that can play all notes in the subroutine.
-        // If no instrument can be found, use the first instrument in the MML file.
-        let inst = {
-            let instruments = out.song_data.instruments();
-            let notes = sub.subroutine_id.no_instrument_notes();
+        let (inst, envelope) = match sub.subroutine_id.instrument_hint() {
+            Some((i, e)) => (i, e),
+            None => {
+                // Subroutine might not set an instrument before the play_note instructions.
+                //
+                // Find the first instrument that can play all notes in the subroutine.
+                // If no instrument can be found, use the first instrument in the MML file.
+                let instruments = out.song_data.instruments();
+                let notes = sub.subroutine_id.no_instrument_notes();
 
-            let i = match notes.is_empty() {
-                true => instruments.first(),
-                false => instruments.iter().find(|i| {
-                    i.note_range.contains(notes.start()) && i.note_range.contains(notes.end())
-                }),
-            };
+                let i = match notes.is_empty() {
+                    true => instruments.first(),
+                    false => instruments.iter().find(|i| {
+                        i.note_range.contains(notes.start()) && i.note_range.contains(notes.end())
+                    }),
+                };
 
-            match i {
-                Some(i) => i,
-                None => return Err(SongSubroutineError),
+                match i {
+                    Some(i) => (i.instrument_id, i.envelope),
+                    None => return Err(SongSubroutineError),
+                }
             }
         };
 
         out.channels[0] = ChannelState::subroutine_prefix(
             out.common_audio_data.song_data_addr(),
             inst,
+            envelope,
             prefix,
             sub,
             &mut out.global,
