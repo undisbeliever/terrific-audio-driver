@@ -1092,6 +1092,13 @@ impl<'a> Bytecode<'a> {
         &self.state
     }
 
+    pub fn get_instrument(&self) -> Option<&InstrumentOrSample> {
+        self.state
+            .instrument
+            .instrument_id()
+            .and_then(|i| self.instruments.get_index(i.as_u8().into()))
+    }
+
     pub fn get_tick_counter(&self) -> TickCounter {
         self.state.tick_counter
     }

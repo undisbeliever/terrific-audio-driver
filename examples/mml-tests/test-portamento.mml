@@ -26,5 +26,8 @@ A {c P$1000}8. & w8 r
 
 
 ; pitch1 is optional if the previous note is slurred and known
-A o3 d & {g}4 & {c}4 & {f}6 & {g}6 & {d}8
+A o3 d & {g}4 & {c}4 & {f}6 & {g}6 & {d}8 r
+
+; PF in portamento test
+A {PF200 PF800}2,8 & r8 r
 

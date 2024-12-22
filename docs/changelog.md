@@ -15,6 +15,7 @@ MML changes:
    For example, `{cd} {cf} {cg}` will only play a single portamento.
  * Added the `?@` subroutine instrument hint command.
  * Added `PR` play sample rate MML command
+ * Added `PF` play instrument at frequency MML command
  * Added `P` and `PR` pitches to portamento and broken chord.
  * Portamento pitch1 is now optional if the previous note is slurred and known (ie, not at the start of a loop).
    `c & {d}` is now allowed.

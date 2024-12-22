@@ -33,7 +33,7 @@ use crate::mml::command_parser::{
 use crate::mml::{MAX_MML_PREFIX_STR_LENGTH, MAX_MML_PREFIX_TICKS};
 use crate::notes::{MidiNote, Note, Octave};
 use crate::path::PathString;
-use crate::pitch_table::{InstrumentHintFreq, PlayPitchSampleRate};
+use crate::pitch_table::{InstrumentHintFreq, PlayPitchFrequency, PlayPitchSampleRate};
 use crate::sound_effects::MAX_SFX_TICKS;
 use crate::time::{Bpm, TickClock, TickCounter, ZenLen};
 use crate::value_newtypes::{SignedValueNewType, UnsignedValueNewType};
@@ -126,7 +126,12 @@ pub enum ValueError {
 
     PlayPitchPitchOutOfRange(u32),
     PlayPitchSampleRateOutOfRange(u32),
+    PlayPitchFrequencyOutOfRange(u32),
     NoiseFrequencyOutOfRange(u32),
+
+    CannotConvertPitchFrequency(PlayPitchFrequency, u32),
+    CannotConvertPitchFrequencySample,
+    CannotConvertPitchFrequencyUnknownInstrument,
 
     PxPanOutOfRange(i32),
     PanOutOfRange(u32),
@@ -211,6 +216,7 @@ pub enum ValueError {
     NoNote,
     NoPlayPitchPitch,
     NoPlayPitchSampleRate,
+    NoPlayPitchFrequency,
     NoNoiseFrequency,
     NoVolume,
     NoPan,
@@ -834,8 +840,27 @@ impl Display for ValueError {
             Self::PlayPitchSampleRateOutOfRange(v) => {
                 out_of_range!("play pitch sample rate", v, PlayPitchSampleRate)
             }
+            Self::PlayPitchFrequencyOutOfRange(v) => {
+                out_of_range!("play pitch frequency", v, PlayPitchFrequency)
+            }
             Self::NoiseFrequencyOutOfRange(v) => {
                 out_of_range!("noise frequency", v, NoiseFrequency)
+            }
+
+            Self::CannotConvertPitchFrequency(freq, p) => {
+                write!(
+                    f,
+                    "cannot convert frequency {}Hz to VxPITCH ({}, max is {})",
+                    freq.value(),
+                    p,
+                    PlayPitchPitch::MAX.value()
+                )
+            }
+            Self::CannotConvertPitchFrequencySample => {
+                write!(f, "cannot convert frequency to VxPITCH: @ is a sample")
+            }
+            Self::CannotConvertPitchFrequencyUnknownInstrument => {
+                write!(f, "cannot convert frequency to VxPITCH: unknown instrument")
             }
 
             Self::PxPanOutOfRange(v) => write!(
@@ -1043,6 +1068,7 @@ impl Display for ValueError {
             Self::NoNote => write!(f, "no note"),
             Self::NoPlayPitchPitch => write!(f, "no pitch register value"),
             Self::NoPlayPitchSampleRate => write!(f, "no play pitch sample rate"),
+            Self::NoPlayPitchFrequency => write!(f, "no play pitch frequency"),
             Self::NoNoiseFrequency => write!(f, "no noise frequency"),
             Self::NoVolume => write!(f, "no volume"),
             Self::NoPan => write!(f, "no pan"),

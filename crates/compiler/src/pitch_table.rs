@@ -12,6 +12,7 @@ use crate::driver_constants::{MAX_INSTRUMENTS_AND_SAMPLES, MAX_N_PITCHES};
 use crate::errors::ValueError;
 use crate::errors::{PitchError, PitchTableError};
 use crate::notes::{self, Note, Octave};
+use crate::value_newtypes::u16_value_newtype;
 use crate::value_newtypes::u32_value_newtype;
 
 const SEMITONES_PER_OCTAVE: i32 = notes::SEMITONES_PER_OCTAVE as i32;
@@ -437,6 +438,37 @@ impl PlayPitchSampleRate {
             u64::from(self.0) * u64::from(PITCH_REGISTER_FP_SCALE) / u64::from(SPC_SAMPLE_RATE);
 
         u32::try_from(pitch).unwrap().try_into().unwrap()
+    }
+}
+
+u16_value_newtype!(
+    PlayPitchFrequency,
+    PlayPitchFrequencyOutOfRange,
+    NoPlayPitchFrequency,
+    0,
+    16000
+);
+
+impl PlayPitchFrequency {
+    pub fn to_vxpitch(
+        self,
+        instrument: Option<&InstrumentOrSample>,
+    ) -> Result<PlayPitchPitch, ValueError> {
+        match instrument {
+            Some(InstrumentOrSample::Instrument(i)) => {
+                let pitch = f64::from(self.as_u16()) / i.freq * f64::from(PITCH_REGISTER_FP_SCALE);
+                let pitch = pitch.round() as u32;
+
+                match PlayPitchPitch::try_from(pitch) {
+                    Ok(p) => Ok(p),
+                    Err(_) => Err(ValueError::CannotConvertPitchFrequency(self, pitch)),
+                }
+            }
+            Some(InstrumentOrSample::Sample(_)) => {
+                Err(ValueError::CannotConvertPitchFrequencySample)
+            }
+            None => Err(ValueError::CannotConvertPitchFrequencyUnknownInstrument),
+        }
     }
 }
 

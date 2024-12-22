@@ -17,3 +17,8 @@ A P$400 P$400,8 P$400,8 P$400,8 r8
 A Q4     P$800,2 P$800,4 r8
 A Q4,E18 P$800,2 P$800,4 r8
 
+
+; PF plays an instrument at a given frequency (in Hertz)
+A GF127 Q8
+A PF600,2 r8
+

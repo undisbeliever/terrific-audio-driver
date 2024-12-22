@@ -969,6 +969,12 @@ fn parse_broken_chord_pitches(p: &mut Parser) -> Option<(Vec<NoteOrPitch>, FileP
                 out.push(NoteOrPitch::Pitch(p));
             }
 
+            Token::PlayPitchFrequency => {
+                if let Some(p) = parse_unsigned_newtype(pos, p) {
+                    out.push(NoteOrPitch::PitchFrequency(p));
+                }
+            }
+
             _ => {
                 parse_pitch_list_state_change_token(token, pos, p);
             }
@@ -1017,6 +1023,12 @@ fn parse_portamento_pitch(p: &mut Parser) -> PortamentoPitch {
             Token::PlayPitchSampleRate => {
                 let p = parse_play_pitch_sample_rate_value(pos, p);
                 return PortamentoPitch::Ok(NoteOrPitch::Pitch(p));
+            }
+
+            Token::PlayPitchFrequency => {
+                if let Some(p) = parse_unsigned_newtype(pos, p) {
+                    return PortamentoPitch::Ok(NoteOrPitch::PitchFrequency(p));
+                }
             }
 
             _ => {
@@ -1568,6 +1580,32 @@ fn parse_play_pitch_sample_rate(pos: FilePos, p: &mut Parser) -> Command {
     parse_after_play_pitch(pitch, p)
 }
 
+fn parse_play_pitch_frequency(pos: FilePos, p: &mut Parser) -> Command {
+    let frequency = parse_unsigned_newtype(pos, p);
+    let p_length = parse_tracked_comma_length(p);
+
+    let (tie_length, is_slur) = parse_ties_and_slur(p);
+    let length = p_length + tie_length;
+
+    let rest_after_note = parse_rest_ticks_after_note(is_slur, p);
+
+    match frequency {
+        Some(frequency) => Command::PlayPitchFrequency {
+            frequency,
+            length,
+            is_slur,
+            rest_after_note,
+        },
+        None => {
+            // Output a rest (so tick-counter is correct)
+            Command::Rest {
+                ticks_until_keyoff: p_length,
+                ticks_after_keyoff: rest_after_note.0,
+            }
+        }
+    }
+}
+
 fn parse_play_noise(pos: FilePos, p: &mut Parser) -> Command {
     let frequency = parse_unsigned_newtype(pos, p).unwrap_or(NoiseFrequency::MIN);
     let p_length = parse_tracked_comma_length(p);
@@ -1943,6 +1981,7 @@ fn parse_token(pos: FilePos, token: Token, p: &mut Parser) -> Command {
         Token::Pitch(pitch) => parse_pitch(pos, pitch, p),
         Token::PlayPitch => parse_play_pitch(pos, p),
         Token::PlayPitchSampleRate => parse_play_pitch_sample_rate(pos, p),
+        Token::PlayPitchFrequency => parse_play_pitch_frequency(pos, p),
         Token::PlayNoise => parse_play_noise(pos, p),
         Token::PlaySample => parse_play_sample(pos, p),
         Token::PlayMidiNoteNumber => parse_play_midi_note_number(pos, p),

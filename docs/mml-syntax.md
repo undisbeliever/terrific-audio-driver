@@ -193,7 +193,10 @@ Numbers can be decimal, or hexadecimal when prefixed with `$` (ie, `$ff`)
     * Sets the `VxPITCH` register to play the current BRR sample at the given sample rate.
     * For example: `PR32000` will play the BRR sample at the native 32KHz sample rate (`P$1000`)
       and `PR16000` will it at 16Khz sample rate (`P$0800`).
- * `s[number][,length]` - Play sample
+ * `PF<freq>[,length]` - Play instrument a given frequency (in Hertz)
+    * Uses the instrument frequency to generate a play-pitch instruction
+    * Cannot be used on samples
+ * `s[number][,length]` - Play samplelf.
     * If this command is used with a sample, `number` is the sample-rate list index (default is 0).
     * If this command is used with an instrument, `number` is the note-id.
  * `n<number>` - Play the integer MIDI note at the default length
@@ -342,7 +345,7 @@ Numbers can be decimal, or hexadecimal when prefixed with `$` (ie, `$ff`)
        * `portamento_speed` can be set without setting `delay_length`, ie: `{df}4,,50`
     * Can be tied (`^`) and slurred (`&`) like a regular note
     * The octave can be changed inside the braces.  For example: `{a > c}2` and `{o3 c o4 c}2`
-    * The pitches can be `P` or `PR` commands
+    * The pitches can be `P`, `PR` or `PF` commands
     * `pitch1` is optional if the previous note is slurred and known (ie, not at the start of a loop)
 
  * `{{<pitch list>}} [total_length] [, note_length] [, tie]` - Broken Chord
@@ -355,7 +358,7 @@ Numbers can be decimal, or hexadecimal when prefixed with `$` (ie, `$ff`)
        * If `1` (default), the pitches will be tied, a single key-on event and key-off event will be emitted.
        * If `0`, There will be a key-on and key-off event for each pitch.
     * The octave can be changed inside the braces (like portamento).
-    * The pitches can be `P` and `PR` play-pitch commands
+    * The pitches can be `P`, `PR` or `PF` play-pitch commands
     * This command consumes a loop.
     * Examples (Whole Note Length is 96, default `l` is 4):
         * `{{ceg}}` expands to `[c%1 & : e%1 & g%1 &]8 e%2`

@@ -20,7 +20,7 @@ use crate::errors::{ChannelError, ValueError};
 use crate::mml::IdentifierBuf;
 use crate::notes::Note;
 use crate::notes::SEMITONES_PER_OCTAVE;
-use crate::pitch_table::{PitchTable, PITCH_REGISTER_MAX};
+use crate::pitch_table::{PitchTable, PlayPitchFrequency, PITCH_REGISTER_MAX};
 use crate::songs::{LoopPoint, Subroutine};
 use crate::time::{Bpm, TickClock, TickCounter};
 use crate::value_newtypes::{i16_value_newtype, u8_value_newtype, SignedValueNewType};
@@ -45,6 +45,7 @@ u8_value_newtype!(
 pub enum NoteOrPitch {
     Note(Note),
     Pitch(PlayPitchPitch),
+    PitchFrequency(PlayPitchFrequency),
 }
 
 #[derive(Debug)]
@@ -242,6 +243,12 @@ pub(crate) enum Command {
     },
     PlayPitch {
         pitch: PlayPitchPitch,
+        length: TickCounter,
+        is_slur: bool,
+        rest_after_note: RestTicksAfterNote,
+    },
+    PlayPitchFrequency {
+        frequency: PlayPitchFrequency,
         length: TickCounter,
         is_slur: bool,
         rest_after_note: RestTicksAfterNote,
@@ -542,6 +549,11 @@ impl<'a> ChannelBcGenerator<'a> {
             }
             NoteOrPitch::Pitch(p) => {
                 // Pitch is not detuned
+                self.bc.play_pitch(p, length);
+            }
+            NoteOrPitch::PitchFrequency(f) => {
+                // Pitch is not detuned
+                let p = f.to_vxpitch(self.bc.get_instrument())?;
                 self.bc.play_pitch(p, length);
             }
         }
@@ -927,6 +939,10 @@ impl<'a> ChannelBcGenerator<'a> {
                 }
             }
             NoteOrPitch::Pitch(p) => Ok((Some(p.as_u16()), NoteOrPitchOut::Pitch(p))),
+            NoteOrPitch::PitchFrequency(f) => {
+                let p = f.to_vxpitch(self.bc.get_instrument())?;
+                Ok((Some(p.as_u16()), NoteOrPitchOut::Pitch(p)))
+            }
         }
     }
 
@@ -1619,6 +1635,21 @@ impl<'a> ChannelBcGenerator<'a> {
                 is_slur,
                 rest_after_note,
             } => {
+                let (pp_length, after) =
+                    self.split_play_note_length(length, is_slur, rest_after_note)?;
+
+                self.bc.play_pitch(pitch, pp_length);
+                self.after_note(after)?;
+            }
+
+            &Command::PlayPitchFrequency {
+                frequency,
+                length,
+                is_slur,
+                rest_after_note,
+            } => {
+                let pitch = frequency.to_vxpitch(self.bc.get_instrument())?;
+
                 let (pp_length, after) =
                     self.split_play_note_length(length, is_slur, rest_after_note)?;
 

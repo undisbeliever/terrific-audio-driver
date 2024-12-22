@@ -17,7 +17,9 @@ use compiler::envelope::{Adsr, Envelope, Gain};
 use compiler::errors::{BytecodeError, ChannelError, SongError, ValueError};
 use compiler::mml;
 use compiler::notes::{Note, Octave};
-use compiler::pitch_table::{build_pitch_table, InstrumentHintFreq, PitchTable};
+use compiler::pitch_table::{
+    build_pitch_table, InstrumentHintFreq, PitchTable, PlayPitchFrequency,
+};
 use compiler::songs::{SongData, Subroutine};
 use compiler::{bytecode_assembler, opcodes};
 
@@ -143,6 +145,96 @@ fn test_play_pitch_sample_rate() {
         "PR128000",
         1,
         ValueError::PlayPitchSampleRateOutOfRange(128000).into(),
+    );
+}
+
+#[test]
+fn test_play_pitch_freq() {
+    assert_eq!(0x1000 * 600 / 500, 4915);
+    assert_line_matches_line_and_bytecode("PF600", "P4915", &["play_pitch 4915 keyoff 24"]);
+
+    assert_line_matches_line_and_bytecode("PF 0", "P 0", &["play_pitch 0 24"]);
+
+    assert_line_matches_line("PF$123,%$30", "PF291,%48");
+
+    assert_line_matches_line_and_bytecode(
+        "PF500, %40 & PF1000,8.",
+        "P 4096,%40 & P 8192,8.",
+        &["play_pitch 4096 no_keyoff 40", "play_pitch 8192 18"],
+    );
+
+    assert_mml_channel_a_matches_bytecode(
+        r#"
+@1 f1000_o4
+@2 f2000_o4
+
+A @1 PF500 PF750 PF1000 PF2000 PF$0aaa
+A @2 PF500 PF750 PF1000 PF2000 PF$0aaa
+"#,
+        &[
+            "set_instrument f1000_o4",
+            "play_pitch $0800 24",
+            "play_pitch $0c00 24",
+            "play_pitch $1000 24",
+            "play_pitch $2000 24",
+            "play_pitch $2bae 24",
+            "set_instrument f2000_o4",
+            "play_pitch $0400 24",
+            "play_pitch $0600 24",
+            "play_pitch $0800 24",
+            "play_pitch $1000 24",
+            "play_pitch $15d7 24",
+        ],
+    );
+
+    assert_line_matches_line_and_bytecode("PF1999", "P$3ff8", &["play_pitch $3ff8 24"]);
+    assert_error_in_mml_line(
+        "PF2000",
+        1,
+        ValueError::CannotConvertPitchFrequency(
+            PlayPitchFrequency::try_from(2000u32).unwrap(),
+            0x4000,
+        )
+        .into(),
+    );
+
+    assert_error_in_mml_line(
+        "PF16000",
+        1,
+        ValueError::CannotConvertPitchFrequency(
+            PlayPitchFrequency::try_from(16000u32).unwrap(),
+            0x20000,
+        )
+        .into(),
+    );
+    assert_error_in_mml_line(
+        "PF16001",
+        1,
+        ValueError::PlayPitchFrequencyOutOfRange(16001).into(),
+    );
+
+    assert_error_in_mml_line("PF c", 1, ValueError::NoPlayPitchFrequency.into());
+
+    assert_err_in_channel_a_mml(
+        r#"
+@s sample
+
+A @s PF500
+"#,
+        6,
+        ValueError::CannotConvertPitchFrequencySample.into(),
+    );
+
+    assert_one_subroutine_err_in_mml(
+        r#"
+@1 dummy_instrument
+
+!s PF500
+A @1 !s
+"#,
+        "!s",
+        4,
+        ValueError::CannotConvertPitchFrequencyUnknownInstrument.into(),
     );
 }
 
@@ -3412,6 +3504,26 @@ fn test_broken_chord_play_pitch() {
 }
 
 #[test]
+fn test_broken_chord_play_pitch_freq() {
+    assert_line_matches_line("{{PF700 PF1000}}4,16,0", "[PF700,16 PF1000,16]2");
+
+    assert_error_in_mml_line(
+        "{{PF16000}}",
+        1,
+        ValueError::CannotConvertPitchFrequency(
+            PlayPitchFrequency::try_from(16000u32).unwrap(),
+            0x20000,
+        )
+        .into(),
+    );
+    assert_error_in_mml_line(
+        "{{PF16001 c}}",
+        3,
+        ValueError::PlayPitchFrequencyOutOfRange(16001).into(),
+    );
+}
+
+#[test]
 fn test_broken_chord_pitch_errors() {
     assert_error_in_mml_line("{{   ", 6, ChannelError::MissingEndBrokenChord);
 
@@ -3598,6 +3710,45 @@ fn test_portamento_pitch_sample_rate() {
         "{PR128000 PR0}",
         2,
         ValueError::PlayPitchSampleRateOutOfRange(128000).into(),
+    );
+}
+
+#[test]
+fn test_portamento_pitch_freq() {
+    assert_eq!((0x2000 - 0x1333 + 22 / 2) / 22, 149);
+    assert_line_matches_line_and_bytecode(
+        "{PF600 PF1000}",
+        "{P$1333 P$2000}",
+        &[
+            "play_pitch $1333 no_keyoff 1",
+            "portamento_pitch $2000 keyoff +149 23",
+        ],
+    );
+
+    assert_eq!((0x199a - 0x2666 - 22 / 2) / 22, -149);
+    assert_line_matches_line_and_bytecode(
+        "{PF1200 PF800}",
+        "{P$2666 P$199a}",
+        &[
+            "play_pitch $2666 no_keyoff 1",
+            "portamento_pitch $199a keyoff -149 23",
+        ],
+    );
+
+    assert_error_in_mml_line(
+        "{PF0 PF16000}%1000",
+        1,
+        ValueError::CannotConvertPitchFrequency(
+            PlayPitchFrequency::try_from(16000u32).unwrap(),
+            0x20000,
+        )
+        .into(),
+    );
+
+    assert_error_in_mml_line(
+        "c & {PF0 PF16001}",
+        10,
+        ValueError::PlayPitchFrequencyOutOfRange(16001).into(),
     );
 }
 
