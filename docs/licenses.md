@@ -496,7 +496,7 @@ DEALINGS IN THE SOFTWARE.
 ## MIT License
 
 Used by:
-  * [cc 1.2.4](https://github.com/rust-lang/cc-rs)
+  * [cc 1.2.5](https://github.com/rust-lang/cc-rs)
   * [cfg-if 1.0.0](https://github.com/alexcrichton/cfg-if)
   * [cmake 0.1.52](https://github.com/rust-lang/cmake-rs)
 
@@ -603,7 +603,7 @@ IN THE SOFTWARE.
 ## MIT License
 
 Used by:
-  * [libc 0.2.168](https://github.com/rust-lang/libc)
+  * [libc 0.2.169](https://github.com/rust-lang/libc)
 
 ```
 Copyright (c) 2014-2020 The Rust Project Developers
@@ -1141,8 +1141,8 @@ Used by:
   * [scratch 1.0.7](https://github.com/dtolnay/scratch)
   * [serde 1.0.216](https://github.com/serde-rs/serde)
   * [serde_derive 1.0.216](https://github.com/serde-rs/serde)
-  * [serde_json 1.0.133](https://github.com/serde-rs/json)
-  * [syn 2.0.90](https://github.com/dtolnay/syn)
+  * [serde_json 1.0.134](https://github.com/serde-rs/json)
+  * [syn 2.0.91](https://github.com/dtolnay/syn)
   * [unicode-ident 1.0.14](https://github.com/dtolnay/unicode-ident)
 
 ```
@@ -1419,6 +1419,8 @@ You may use this code under the terms of either license.
 
 
 ## Unicode License v3
+  
+  (synthesized by cargo-about)
 
 Used by:
   * [unicode-ident 1.0.14](https://github.com/dtolnay/unicode-ident)
@@ -1527,7 +1529,7 @@ freely, subject to the following restrictions:
 ## zlib License
 
 Used by:
-  * [foldhash 0.1.3](https://github.com/orlp/foldhash)
+  * [foldhash 0.1.4](https://github.com/orlp/foldhash)
 
 ```
 Copyright (c) 2024 Orson Peters

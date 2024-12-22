@@ -118,7 +118,7 @@ Please see the included [licenses file](licenses.md) for the full third party li
   * [windows_x86_64_msvc 0.52.6](https://github.com/microsoft/windows-rs), MIT License
   * [markdown 1.0.0-alpha.21](https://github.com/wooorm/markdown-rs), MIT License
   * [lazy_static 1.5.0](https://github.com/rust-lang-nursery/lazy-static.rs), MIT License
-  * [cc 1.2.4](https://github.com/rust-lang/cc-rs), MIT License
+  * [cc 1.2.5](https://github.com/rust-lang/cc-rs), MIT License
   * [cfg-if 1.0.0](https://github.com/alexcrichton/cfg-if), MIT License
   * [cmake 0.1.52](https://github.com/rust-lang/cmake-rs), MIT License
   * [bitflags 1.3.2](https://github.com/bitflags/bitflags), MIT License
@@ -129,7 +129,7 @@ Please see the included [licenses file](licenses.md) for the full third party li
   * [regex-syntax 0.8.5](https://github.com/rust-lang/regex/tree/master/regex-syntax), MIT License
   * [regex 1.11.1](https://github.com/rust-lang/regex), MIT License
   * [float-cmp 0.10.0](https://github.com/mikedilger/float-cmp), MIT License
-  * [libc 0.2.168](https://github.com/rust-lang/libc), MIT License
+  * [libc 0.2.169](https://github.com/rust-lang/libc), MIT License
   * [anstyle-wincon 3.0.6](https://github.com/rust-cli/anstyle.git), MIT License
   * [heck 0.5.0](https://github.com/withoutboats/heck), MIT License
   * [unicode-id 0.3.5](https://github.com/Boshen/unicode-id), MIT License
@@ -170,8 +170,8 @@ Please see the included [licenses file](licenses.md) for the full third party li
   * [scratch 1.0.7](https://github.com/dtolnay/scratch), MIT License
   * [serde 1.0.216](https://github.com/serde-rs/serde), MIT License
   * [serde_derive 1.0.216](https://github.com/serde-rs/serde), MIT License
-  * [serde_json 1.0.133](https://github.com/serde-rs/json), MIT License
-  * [syn 2.0.90](https://github.com/dtolnay/syn), MIT License
+  * [serde_json 1.0.134](https://github.com/serde-rs/json), MIT License
+  * [syn 2.0.91](https://github.com/dtolnay/syn), MIT License
   * [unicode-ident 1.0.14](https://github.com/dtolnay/unicode-ident), MIT License
   * [sdl2 0.37.0](https://github.com/Rust-SDL2/rust-sdl2), MIT License
   * [aho-corasick 1.1.3](https://github.com/BurntSushi/aho-corasick), MIT License
@@ -192,7 +192,7 @@ Please see the included [licenses file](licenses.md) for the full third party li
   * [unicode-ident 1.0.14](https://github.com/dtolnay/unicode-ident), Unicode License v3
   * [sdl2-sys 0.37.0](https://github.com/rust-sdl2/rust-sdl2), zlib License
   * [sdl2-sys 0.37.0](https://github.com/rust-sdl2/rust-sdl2), zlib License
-  * [foldhash 0.1.3](https://github.com/orlp/foldhash), zlib License
+  * [foldhash 0.1.4](https://github.com/orlp/foldhash), zlib License
   * [FLTK](https://www.fltk.org/), [FLTK license](https://www.fltk.org/doc-1.4/license.html)
   * [SDL2](https://libsdl.org/), [zlib license](https://www.libsdl.org/license.php)
 
