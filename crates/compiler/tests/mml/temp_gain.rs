@@ -5,7 +5,7 @@
 use crate::*;
 
 #[test]
-fn test_temp_gain() {
+fn set_temp_gain() {
     assert_line_matches_bytecode("GFT$12", &["set_temp_gain 18"]);
     assert_line_matches_bytecode("GT0", &["set_temp_gain 0"]);
 
@@ -32,12 +32,12 @@ fn test_temp_gain() {
 }
 
 #[test]
-fn test_gft0_is_err() {
+fn gft0_is_error() {
     assert_error_in_mml_line("GFT0", 1, ValueError::F0TempGain.into());
 }
 
 #[test]
-fn test_temp_gain_rest() {
+fn set_temp_gain_and_rest() {
     assert_line_matches_bytecode("GDT12 r", &["set_temp_gain_and_rest D12 24"]);
 
     merge_mml_commands_test("GDT12 || r8", &["set_temp_gain_and_rest D12 12"]);
@@ -112,7 +112,7 @@ fn test_temp_gain_rest() {
 }
 
 #[test]
-fn test_temp_gain_wait() {
+fn set_temp_gain_and_wait() {
     assert_line_matches_bytecode("GDT12 w", &["set_temp_gain_and_wait D12 24"]);
 
     merge_mml_commands_test("GDT12 || w8", &["set_temp_gain_and_wait D12 12"]);
@@ -158,7 +158,7 @@ fn test_temp_gain_wait() {
 }
 
 #[test]
-fn test_reuse_temp_gain() {
+fn reuse_temp_gain() {
     assert_line_matches_bytecode(
         "GT100 a GT b",
         &[
@@ -181,7 +181,7 @@ fn test_reuse_temp_gain() {
 }
 
 #[test]
-fn test_set_gain_does_not_affect_temp_gain_reuse() {
+fn set_gain_does_not_affect_temp_gain_reuse() {
     assert_line_matches_bytecode(
         "GIT10 c GI20 d GIT10 e",
         &[
@@ -196,7 +196,7 @@ fn test_set_gain_does_not_affect_temp_gain_reuse() {
 }
 
 #[test]
-fn test_reuse_temp_gain_and_wait() {
+fn reuse_temp_gain_and_wait() {
     assert_line_matches_bytecode(
         "a & GT100 w | b & GT w",
         &[
@@ -219,7 +219,7 @@ fn test_reuse_temp_gain_and_wait() {
 }
 
 #[test]
-fn test_reuse_temp_gain_and_rest() {
+fn reuse_temp_gain_and_rest() {
     assert_line_matches_bytecode(
         "a & GT100 r | b & GT r",
         &[
@@ -242,7 +242,7 @@ fn test_reuse_temp_gain_and_rest() {
 }
 
 #[test]
-fn test_reuse_temp_gain_loop() {
+fn reuse_temp_gain_after_loop() {
     assert_line_matches_bytecode(
         "[GIT10 c : GIT20 d]3 GIT10 e",
         &[
@@ -304,7 +304,7 @@ fn test_reuse_temp_gain_loop() {
 }
 
 #[test]
-fn test_reuse_temp_gain_after_call_subroutine() {
+fn reuse_temp_gain_after_call_subroutine() {
     assert_mml_channel_a_matches_bytecode(
         r##"
 @1 dummy_instrument

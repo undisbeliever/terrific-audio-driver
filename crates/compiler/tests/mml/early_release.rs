@@ -5,14 +5,14 @@
 use crate::*;
 
 #[test]
-fn test_early_release() {
+fn early_release() {
     assert_line_matches_bytecode("q0", &["disable_early_release"]);
     assert_line_matches_bytecode("q10", &["set_early_release 10 1"]);
     assert_line_matches_bytecode("q16,D15", &["set_early_release 16 1 D15"]);
 }
 
 #[test]
-fn test_early_release_deduplication() {
+fn early_release_deduplication() {
     assert_line_matches_line("q0 q0 q0", "q0");
 
     assert_line_matches_line(
@@ -106,18 +106,18 @@ A @1 !s q8,E20 a
 }
 
 #[test]
-fn test_early_release_with_blank_min_ticks() {
+fn blank_min_ticks() {
     assert_line_matches_bytecode("q10,,D15", &["set_early_release 10 1 D15"]);
 }
 
 #[test]
-fn test_early_release_with_min_ticks() {
+fn with_min_ticks() {
     assert_line_matches_bytecode("q10,6", &["set_early_release 10 6"]);
     assert_line_matches_bytecode("q16,6,D15", &["set_early_release 16 6 D15"]);
 }
 
 #[test]
-fn test_early_release_with_min_ticks_deduplication() {
+fn min_ticks_deduplication() {
     assert_line_matches_line("q10,6 q10,6 q10,6", "q10,6");
     assert_line_matches_line("q20,8,D15 q20,8,D15 q20,8,D15", "q20,8,D15");
 
@@ -129,13 +129,13 @@ fn test_early_release_with_min_ticks_deduplication() {
 }
 
 #[test]
-fn test_early_release_raw_gain_is_err() {
+fn early_release_raw_gain_is_error() {
     assert_error_in_mml_line("q10,,15", 5, ValueError::NoOptionalGainMode.into());
     assert_error_in_mml_line("q10,2,15", 6, ValueError::NoOptionalGainMode.into());
 }
 
 #[test]
-fn test_early_release_comma_f0_gain_is_err() {
+fn early_release_comma_f0_gain_is_error() {
     assert_error_in_mml_line("q10,F0", 5, ValueError::OptionalGainCannotBeZero.into());
     assert_error_in_mml_line("q10,2,F0", 7, ValueError::OptionalGainCannotBeZero.into());
 }

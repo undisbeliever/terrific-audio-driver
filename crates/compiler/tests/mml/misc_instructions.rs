@@ -5,7 +5,7 @@
 use crate::*;
 
 #[test]
-fn test_play_noise() {
+fn play_noise() {
     assert_line_matches_bytecode("N15", &["play_noise 15 keyoff 24"]);
     assert_line_matches_bytecode("N15 &", &["play_noise 15 no_keyoff 24"]);
 
@@ -69,7 +69,7 @@ fn test_play_noise() {
 }
 
 #[test]
-fn test_enable_pitch_mod() {
+fn enable_pitch_mod() {
     assert_channel_b_line_matches_bytecode("PM", &["enable_pmod"]);
 
     assert_one_err_in_mml(
@@ -93,7 +93,7 @@ fn test_enable_pitch_mod() {
 }
 
 #[test]
-fn test_disable_pitch_mod() {
+fn disable_pitch_mod() {
     assert_channel_b_line_matches_bytecode("PM0", &["disable_pmod"]);
 
     assert_one_err_in_mml(
@@ -117,7 +117,7 @@ fn test_disable_pitch_mod() {
 }
 
 #[test]
-fn test_set_song_tempo() {
+fn set_song_tempo() {
     let tc = f64::round(8000.0 * 60.0 / f64::from(48 * 80)) as u32;
     let bc = format!("set_song_tick_clock {tc}");
 
@@ -125,7 +125,7 @@ fn test_set_song_tempo() {
 }
 
 #[test]
-fn test_set_song_tick_clock() {
+fn set_song_tick_clock() {
     assert_line_matches_bytecode("T64", &["set_song_tick_clock 64"]);
     assert_line_matches_bytecode("T255", &["set_song_tick_clock 255"]);
     assert_line_matches_bytecode("T90", &["set_song_tick_clock 90"]);

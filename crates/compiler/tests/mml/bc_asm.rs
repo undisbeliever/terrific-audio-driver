@@ -5,7 +5,7 @@
 use crate::*;
 
 #[test]
-fn test_bc_asm_in_mml_oneline() {
+fn two_bc_asm_in_one_mml_line() {
     assert_line_matches_bytecode(
         r"c \asm { play_note d4 10 | play_note e4 20 } f g",
         &[
@@ -19,7 +19,7 @@ fn test_bc_asm_in_mml_oneline() {
 }
 
 #[test]
-fn test_bc_asm_in_mml_multiline() {
+fn two_bc_asm_on_multiple_lines() {
     assert_mml_channel_a_matches_bytecode(
         r###"
 A \asm {
@@ -36,7 +36,7 @@ A \asm {
 }
 
 #[test]
-fn test_multiline_asm_then_comments() {
+fn multiline_asm_then_comments() {
     assert_mml_channel_a_matches_bytecode(
         r###"
 A \asm {
@@ -53,7 +53,7 @@ A \asm {
 }
 
 #[test]
-fn test_bc_asm_call_subroutine_in_subroutine() {
+fn bc_asm_call_subroutine_in_subroutine() {
     let sd = compile_mml(
         r##"
 !s \asm { call_subroutine    t } r ; No tail call optimisation
@@ -87,7 +87,7 @@ A !s
 //
 // ::TODO find a way to add tail call optimsation to subrotuines that end in `\asm { call_subroutine <name> }`::
 #[test]
-fn test_bc_asm_no_tail_call_optimsation() {
+fn bc_asm_no_tail_call_optimsation() {
     let sd = compile_mml(
         r##"
 !s \asm { call_subroutine    t }
@@ -111,7 +111,7 @@ A !s
 }
 
 #[test]
-fn test_bc_asm_call_subroutine_and_disable_vibrato_in_subroutine() {
+fn bc_asm_call_subroutine_and_disable_vibrato_in_subroutine() {
     let sd = compile_mml(
         r##"
 !s \asm { call_subroutine_and_disable_vibrato    t }
@@ -140,7 +140,7 @@ A !s
 }
 
 #[test]
-fn test_bc_asm_in_mml_loop() {
+fn bc_asm_in_mml_loop() {
     assert_line_matches_bytecode(
         r"[ \asm { play_note d4 10 | play_note e4 20 } ]5",
         &[
@@ -153,7 +153,7 @@ fn test_bc_asm_in_mml_loop() {
 }
 
 #[test]
-fn test_bc_asm_loop() {
+fn bc_asm_in_asm_loop() {
     assert_line_matches_bytecode(
         r"c \asm { start_loop 3 | play_note d5 10 | end_loop } e",
         &[
@@ -167,7 +167,7 @@ fn test_bc_asm_loop() {
 }
 
 #[test]
-fn test_bc_asm_skip_last_loop() {
+fn asm_skip_last_loop() {
     assert_line_matches_bytecode(
         r"c \asm { start_loop 3 | play_note d5 10 | skip_last_loop | play_note e5 20 | end_loop } f",
         &[
@@ -183,7 +183,7 @@ fn test_bc_asm_skip_last_loop() {
 }
 
 #[test]
-fn test_missing_end_loop_in_bc_asm_err() {
+fn missing_end_loop_in_bc_asm_error() {
     assert_error_in_mml_line(
         r"\asm{start_loop} a ]2",
         16,
@@ -192,7 +192,7 @@ fn test_missing_end_loop_in_bc_asm_err() {
 }
 
 #[test]
-fn test_missing_start_loop_in_bc_asm_err() {
+fn missing_start_loop_in_bc_asm_error() {
     assert_error_in_mml_line(
         r"[ a \asm{ end_loop 2}",
         11,
@@ -201,7 +201,7 @@ fn test_missing_start_loop_in_bc_asm_err() {
 }
 
 #[test]
-fn test_skip_last_loop_outside_asm_loop_err() {
+fn skip_last_loop_outside_asm_loop_error() {
     assert_error_in_mml_line(
         r"[ c \asm{ skip_last_loop } c ]2",
         11,
@@ -210,7 +210,7 @@ fn test_skip_last_loop_outside_asm_loop_err() {
 }
 
 #[test]
-fn test_mml_bc_asm_repeated_channel_is_only_processed_once() {
+fn repeated_mml_channel_with_mml_bc_asm_is_only_processed_once() {
     assert_mml_channel_a_matches_bytecode(
         r###"
 @0 dummy_instrument
@@ -223,7 +223,7 @@ AAAAAAAAAAA \asm { set_instrument dummy_instrument | play_note a4 24 }
 
 /// Test the bytecode is repeated 4 times if there are 4 different channels on a single MML line
 #[test]
-fn test_mml_bc_asm_with_multiple_channels_on_one_line() {
+fn multiple_mml_channels_on_one_line() {
     let mml = r###"
 @0 dummy_instrument
 
@@ -248,7 +248,7 @@ ADEF \asm { set_instrument dummy_instrument | play_note a4 24 }
 }
 
 #[test]
-fn test_set_instrument_after_bc_asm() {
+fn mml_set_instrument_after_asm_set_instrument() {
     assert_mml_channel_a_matches_bytecode(
         r##"
 @0 dummy_instrument
@@ -282,7 +282,7 @@ A \asm { set_instrument dummy_instrument } b @0 c
 }
 
 #[test]
-fn test_adsr_after_bc_asm() {
+fn mml_set_adsr_after_asm_set_adsr() {
     assert_mml_channel_a_matches_bytecode(
         r##"
 @0 dummy_instrument
@@ -328,7 +328,7 @@ A @0 \asm { set_adsr 2 2 2 2 } b A3,3,3,3 c
 }
 
 #[test]
-fn test_gain_after_bc_asm() {
+fn mml_set_gain_after_asm_set_gain() {
     assert_mml_channel_a_matches_bytecode(
         r##"
 @0 dummy_instrument
@@ -374,7 +374,7 @@ A @0 \asm { set_gain 10 } b G20 c
 }
 
 #[test]
-fn test_prev_slurred_note_after_bc_asm() {
+fn prev_slurred_note_after_bc_asm() {
     // see `test_skip_last_loop_prev_slurred_note()`
 
     assert_line_matches_bytecode(
@@ -398,7 +398,7 @@ fn test_prev_slurred_note_after_bc_asm() {
 }
 
 #[test]
-fn test_hexadecimal_in_mml_bc_asm() {
+fn hexadecimal_asm_arguments() {
     assert_mml_channel_a_matches_bytecode(
         r##"
 A \asm {

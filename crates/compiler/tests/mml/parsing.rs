@@ -5,7 +5,7 @@
 use crate::*;
 
 #[test]
-fn test_parse_hex() {
+fn hexadecimal_numbers() {
     assert!(96 / 0xc == 8);
     assert_line_matches_bytecode("c$c", &["play_note c4 8"]);
     assert_line_matches_bytecode("c$c.", &["play_note c4 12"]);
@@ -15,7 +15,7 @@ fn test_parse_hex() {
 }
 
 #[test]
-fn test_change_whole_note_length_command() {
+fn change_whole_note_length_command() {
     assert_line_matches_bytecode(
         "c d16 C192 c d16",
         &[
@@ -28,7 +28,7 @@ fn test_change_whole_note_length_command() {
 }
 
 #[test]
-fn test_mml_repeated_channel_is_only_processed_once() {
+fn mml_repeated_channel_is_only_processed_once() {
     assert_mml_channel_a_matches_bytecode(
         r###"
 @0 dummy_instrument
@@ -41,7 +41,7 @@ AAAAAAAAAAA @0 a
 
 /// Test the bytecode is repeated 4 times if there are 4 different channels on a single MML line
 #[test]
-fn test_mml_with_multiple_channels_on_one_line() {
+fn mml_with_multiple_channels_on_one_line() {
     let mml = r###"
 @0 dummy_instrument
 
@@ -66,7 +66,7 @@ ADEF @0 a
 }
 
 #[test]
-fn test_utf8_in_mml() {
+fn utf8_in_mml() {
     assert_eq!("´".len(), 2);
     assert_error_in_mml_line("´", 1, ChannelError::UnknownCharacters(1));
 

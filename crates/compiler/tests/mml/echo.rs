@@ -5,7 +5,7 @@
 use crate::*;
 
 #[test]
-fn test_echo() {
+fn echo() {
     assert_line_matches_bytecode("E", &["enable_echo"]);
     assert_line_matches_bytecode("E1", &["enable_echo"]);
     assert_line_matches_bytecode("E0", &["disable_echo"]);

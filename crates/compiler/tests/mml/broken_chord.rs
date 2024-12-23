@@ -5,7 +5,7 @@
 use crate::*;
 
 #[test]
-fn test_broken_chord() {
+fn broken_chord() {
     // From mml_symtax.md
     assert_line_matches_line("{{ceg}}", "[c%1 & : e%1 & g%1 &]8 e%2");
     assert_line_matches_line("{{ce-g}}2,32", "[c32 & e-32 & g32 &]5 c32");
@@ -21,7 +21,7 @@ fn test_broken_chord() {
 }
 
 #[test]
-fn test_broken_chord_play_pitch() {
+fn play_pitch() {
     assert_line_matches_line(
         "{{P$1100 P$1200 P$1300}}",
         "[P$1100,%1 & : P$1200,%1 & P$1300,%1 &]8 P$1200,%2",
@@ -47,7 +47,7 @@ fn test_broken_chord_play_pitch() {
 }
 
 #[test]
-fn test_broken_chord_play_pitch_freq() {
+fn play_pitch_freq() {
     assert_line_matches_line("{{PF700 PF1000}}4,16,0", "[PF700,16 PF1000,16]2");
 
     assert_error_in_mml_line(
@@ -67,7 +67,7 @@ fn test_broken_chord_play_pitch_freq() {
 }
 
 #[test]
-fn test_broken_chord_pitch_errors() {
+fn pitch_list_errors() {
     assert_error_in_mml_line("{{   ", 6, ChannelError::MissingEndBrokenChord);
 
     assert_error_in_mml_line("{{  }", 5, ChannelError::MissingEndBrokenChord);

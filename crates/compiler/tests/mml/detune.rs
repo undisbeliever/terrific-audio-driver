@@ -5,7 +5,7 @@
 use crate::*;
 
 #[test]
-fn test_detune() {
+fn manual_detune() {
     assert_line_matches_bytecode("D+1 D0", &["set_detune +1", "disable_detune"]);
     // Testing `set_detune 0` is allowed in bytecode assembly
     assert_line_matches_bytecode("D+1 D0", &["set_detune +1", "set_detune 0"]);
@@ -44,7 +44,7 @@ fn test_detune() {
 }
 
 #[test]
-fn test_detune_deduplication() {
+fn detune_deduplication() {
     // Channel starts with detune set to 0
     assert_line_matches_line("D0 D0 D0", "");
 
@@ -190,7 +190,7 @@ A @1 D+30 !s D+30 a
 }
 
 #[test]
-fn test_detune_cents() {
+fn detune_cents() {
     assert_line_matches_bytecode("MD+50 a", &["set_detune +106", "play_note a4 24"]);
 
     // Test deduplication
@@ -315,7 +315,7 @@ fn test_detune_cents() {
 }
 
 #[test]
-fn test_small_detune_cents() {
+fn small_detune_cents() {
     assert_line_matches_bytecode(
         "MD+1 o4 c o2 d e o3 f",
         &[
@@ -332,7 +332,7 @@ fn test_small_detune_cents() {
 
 /// Tests detune changes MP vibrato
 #[test]
-fn test_detune_with_mp() {
+fn manual_detune_with_mp() {
     assert_line_matches_bytecode("MP200,6 c", &["set_vibrato 41 6", "play_note c4 24"]);
 
     assert_line_matches_bytecode(
@@ -347,7 +347,7 @@ fn test_detune_with_mp() {
 
 /// Tests detune-cents changes MP vibrato
 #[test]
-fn test_detune_cents_with_mp() {
+fn detune_cents_with_mp() {
     assert_line_matches_bytecode(
         "MD+600 MP200,6 c",
         &["set_detune +888", "set_vibrato 58 6", "play_note c4 24"],

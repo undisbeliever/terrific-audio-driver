@@ -5,7 +5,7 @@
 use crate::*;
 
 #[test]
-fn test_play_pitch() {
+fn play_pitch() {
     assert_line_matches_bytecode("P$1000", &["play_pitch $1000 keyoff 24"]);
     assert_line_matches_bytecode("l8 P$2000", &["play_pitch $2000 keyoff 12"]);
 
@@ -72,7 +72,7 @@ fn test_play_pitch() {
 }
 
 #[test]
-fn test_play_pitch_sample_rate() {
+fn play_pitch_sample_rate() {
     assert_line_matches_line_and_bytecode(
         "PR32000 PR16000 PR64000 PR28000",
         "P$1000 P$0800 P$2000 P$0e00",
@@ -95,7 +95,7 @@ fn test_play_pitch_sample_rate() {
 }
 
 #[test]
-fn test_play_pitch_freq() {
+fn play_pitch_freq() {
     assert_eq!(0x1000 * 600 / 500, 4915);
     assert_line_matches_line_and_bytecode("PF600", "P4915", &["play_pitch 4915 keyoff 24"]);
 

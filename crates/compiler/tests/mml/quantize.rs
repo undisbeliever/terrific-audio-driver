@@ -5,7 +5,7 @@
 use crate::*;
 
 #[test]
-fn test_quantization() {
+fn coarse_quantization() {
     // Cannot use `assert_mml_matches_mml`.
     // There is a single rest tick at the end of a play_note instruction
     assert_line_matches_bytecode("Q1 c%80", &["play_note c4 11", "rest 69"]);
@@ -58,7 +58,7 @@ fn test_quantization() {
 }
 
 #[test]
-fn test_fine_quantisation() {
+fn fine_quantisation() {
     // Cannot use `assert_mml_matches_mml`.
     // There is a single rest tick at the end of a play_note instruction
 
@@ -78,7 +78,7 @@ fn test_fine_quantisation() {
 }
 
 #[test]
-fn bugfix_quantization_of_short_note_then_rest() {
+fn quantization_of_short_note_then_rest_bugfix() {
     // The rest notes were erroniously dropped and ignored
 
     assert_line_matches_bytecode("Q8 c%6 r%6", &["play_note c4 6", "rest 6"]);
@@ -87,12 +87,12 @@ fn bugfix_quantization_of_short_note_then_rest() {
 }
 
 #[test]
-fn bugfix_quantization_of_1_tick_note_panic() {
+fn quantization_of_1_tick_note_panic_bugfix() {
     assert_error_in_mml_line("Q4 c%1", 4, ChannelError::NoteIsTooShort);
 }
 
 #[test]
-fn test_quantize_with_temp_gain() {
+fn quantize_with_temp_gain() {
     assert_line_matches_line("Q4,$84 c", "c8 & GT$84 r8");
 
     assert_line_matches_line("Q4,F12 c", "c8 & GFT12 r8");
@@ -129,13 +129,13 @@ fn test_quantize_with_temp_gain() {
 }
 
 #[test]
-fn test_quantise_comma_0_gain_is_err() {
+fn quantise_comma_0_gain_is_error() {
     assert_error_in_mml_line("Q2,0", 4, ValueError::OptionalGainCannotBeZero.into());
     assert_error_in_mml_line("Q2,F0", 4, ValueError::OptionalGainCannotBeZero.into());
 }
 
 #[test]
-fn test_quantized_portamento() {
+fn quantized_portamento() {
     // Only testing portamento with a speed override
 
     assert_line_matches_bytecode(

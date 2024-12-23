@@ -5,7 +5,7 @@
 use crate::*;
 
 #[test]
-fn test_rests() {
+fn rest() {
     // The last rest in a wait-rest chain must be 257 ticks to prevent interference with early-release
 
     assert_line_matches_bytecode("r", &["rest 24"]);
@@ -49,7 +49,7 @@ fn test_rests() {
 }
 
 #[test]
-fn test_rest_tie() {
+fn rest_tie() {
     // used by midi2smw.
 
     assert_line_matches_bytecode("r^^^", &["rest 96"]);
@@ -66,7 +66,7 @@ fn test_rest_tie() {
 }
 
 #[test]
-fn test_waits() {
+fn wait() {
     assert_line_matches_bytecode("w", &["wait 24"]);
     assert_line_matches_bytecode("w.", &["wait 36"]);
     assert_line_matches_bytecode("w8", &["wait 12"]);
@@ -88,7 +88,7 @@ fn test_waits() {
 }
 
 #[test]
-fn test_wait_tie() {
+fn wait_tie() {
     assert_line_matches_bytecode("w^^^", &["wait 96"]);
 
     assert_line_matches_bytecode("w^8", &["wait 36"]);
@@ -103,7 +103,7 @@ fn test_wait_tie() {
 }
 
 #[test]
-fn test_wait_loop() {
+fn large_wait_is_looped() {
     // Test wait tick-counter threashold
     assert_line_matches_bytecode("w%768", &["wait 256", "wait 256", "wait 256"]);
 
@@ -176,7 +176,7 @@ fn test_wait_loop() {
 }
 
 #[test]
-fn test_rest_loop() {
+fn large_rest_is_looped() {
     // Test rest tick-counter threashold
     assert_line_matches_bytecode("r%1024", &["wait 256", "wait 256", "wait 255", "rest 257"]);
     assert_line_matches_bytecode("r%1025", &["wait 256", "wait 256", "wait 256", "rest 257"]);
@@ -295,7 +295,7 @@ fn test_rest_loop() {
 }
 
 #[test]
-fn test_merged_rest_loop() {
+fn merged_rests_are_looped() {
     // Test rest tick-counter threashold
     assert_line_matches_bytecode(
         "r%2 r%771",
@@ -475,7 +475,7 @@ fn test_merged_rest_loop() {
 }
 
 #[test]
-fn test_rest_after_keyoff_note() {
+fn rest_after_keyoff_note() {
     assert_line_matches_bytecode("a r", &["play_note a4 24", "rest 24"]);
     assert_line_matches_bytecode("a r r", &["play_note a4 24", "rest 48"]);
     assert_line_matches_bytecode("a w r", &["play_note a4 24", "wait 24", "rest 24"]);
@@ -528,7 +528,7 @@ fn test_rest_after_keyoff_note() {
 
 // The rest after a slurred note must not be merged with successive rests
 #[test]
-fn test_rest_after_surred_note() {
+fn rest_after_surred_note() {
     assert_line_matches_bytecode("a & r", &["play_note a4 no_keyoff 24", "rest 24"]);
 
     assert_line_matches_bytecode(
@@ -587,7 +587,7 @@ fn test_rest_after_surred_note() {
 }
 
 #[test]
-fn test_merge_rests_newlines() {
+fn merge_rests_newlines() {
     let mml = r##"
 @0 dummy_instrument
 

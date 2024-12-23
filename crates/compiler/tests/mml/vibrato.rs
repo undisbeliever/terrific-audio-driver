@@ -5,7 +5,7 @@
 use crate::*;
 
 #[test]
-fn test_vibrato() {
+fn set_vibrato() {
     assert_line_matches_bytecode(
         "~23,4 a ~0",
         &["set_vibrato 23 4", "play_note a4 24", "disable_vibrato"],
@@ -13,7 +13,7 @@ fn test_vibrato() {
 }
 
 #[test]
-fn test_mp_vibrato() {
+fn mp_vibrato() {
     assert_line_matches_bytecode(
         "MP2,4 a b MP0 c",
         &[
@@ -26,7 +26,7 @@ fn test_mp_vibrato() {
 }
 
 #[test]
-fn test_mp_vibrato_start_of_loop() {
+fn mp_vibrato_after_start_of_loop() {
     assert_line_matches_bytecode(
         "MP40,2 a [a a b MP30,5 c]4",
         &[
@@ -48,7 +48,7 @@ fn test_mp_vibrato_start_of_loop() {
 
 /// Test that the vibrato state is correctly tracked after a *skip last loop* command.
 #[test]
-fn test_mp0_after_skip_last_loop() {
+fn mp0_after_skip_last_loop() {
     assert_line_matches_bytecode(
         "[MP2,4 a b : MP0 c]4 d",
         &[
@@ -83,7 +83,7 @@ fn test_mp0_after_skip_last_loop() {
 }
 
 #[test]
-fn test_subroutine_vibrato_bugfix() {
+fn subroutine_vibrato_bugfix() {
     assert_mml_channel_a_matches_bytecode(
         r##"
 @1 dummy_instrument
@@ -101,7 +101,7 @@ A @1 c !s d e
 }
 
 #[test]
-fn test_vibrato_before_subroutine_call() {
+fn vibrato_before_subroutine_call() {
     assert_mml_channel_a_matches_bytecode(
         r##"
 @1 dummy_instrument
@@ -119,7 +119,7 @@ A @1 c ~50,4 !s d
 }
 
 #[test]
-fn test_vibrato_after_subroutine_call() {
+fn vibrato_after_subroutine_call() {
     assert_mml_channel_a_matches_bytecode(
         r##"
 @1 dummy_instrument
@@ -139,7 +139,7 @@ A @1 c !s ~50,4 d
 }
 
 #[test]
-fn test_mp_vibrato_before_subroutine_call() {
+fn mp_vibrato_before_subroutine_call() {
     assert_mml_channel_a_matches_bytecode(
         r##"
 @1 dummy_instrument
@@ -258,7 +258,7 @@ A @1 MP20,4 c !s d
 }
 
 #[test]
-fn test_mp_vibrato_after_subroutine_call() {
+fn mp_vibrato_after_subroutine_call() {
     assert_mml_channel_a_matches_bytecode(
         r##"
 @1 dummy_instrument
@@ -372,7 +372,7 @@ A @1 c !s MP20,4 d
 }
 
 #[test]
-fn test_mp0_before_subroutine_call() {
+fn mp0_before_subroutine_call() {
     assert_mml_channel_a_matches_bytecode(
         r##"
 @1 dummy_instrument
@@ -391,7 +391,7 @@ A @1 MP0 c !s d
 }
 
 #[test]
-fn test_mp0_after_subroutine_call() {
+fn mp0_after_subroutine_call() {
     assert_mml_channel_a_matches_bytecode(
         r##"
 @1 dummy_instrument
@@ -409,7 +409,7 @@ A @1 c !s MP0 d
 }
 
 #[test]
-fn test_mp0_at_end_of_subroutine_call() {
+fn mp0_at_end_of_subroutine_call() {
     assert_mml_channel_a_matches_bytecode(
         r##"
 @1 dummy_instrument

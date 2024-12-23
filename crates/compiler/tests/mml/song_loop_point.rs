@@ -6,7 +6,7 @@ use crate::*;
 
 /// Tests the merge instrument/envelope optimisation is disabled after a `L` set-loop-point command
 #[test]
-fn test_set_instrument_after_set_loop_point() {
+fn set_instrument_after_set_loop_point() {
     assert_mml_channel_a_matches_looping_bytecode(
         r###"
 @0 dummy_instrument
@@ -174,7 +174,7 @@ A @0 a @0 b L GI10 c @1 d @1 e @2 f
 
 /// Tests the merge ADSR envelope optimisation is disabled after a `L` set-loop-point command
 #[test]
-fn test_set_adsr_after_set_loop_point() {
+fn set_adsr_after_set_loop_point() {
     assert_mml_channel_a_matches_looping_bytecode(
         r###"
 @0 dummy_instrument adsr 1 2 3 4
@@ -199,7 +199,7 @@ A @0 a A1,2,3,4 b L A1,2,3,4 c A1,2,3,4 d A5,6,7,8 e
 
 /// Tests the merge GAIN envelope optimisation is disabled after a `L` set-loop-point command
 #[test]
-fn test_set_gain_after_set_loop_point() {
+fn set_gain_after_set_loop_point() {
     assert_mml_channel_a_matches_looping_bytecode(
         r###"
 @0 dummy_instrument gain E24
@@ -223,7 +223,7 @@ A @0 a GE24 b L GE24 c GE24 d GF127 e
 }
 
 #[test]
-fn test_set_instrument_after_song_loop_point_and_loop() {
+fn set_instrument_after_song_loop_point_and_loop() {
     assert_mml_channel_a_matches_looping_bytecode(
         r###"
 @0 dummy_instrument
@@ -317,7 +317,7 @@ A @0 c L [@0 d : @1 e]2 @0 f
 }
 
 #[test]
-fn test_envelope_after_song_loop_point_and_loop() {
+fn envelope_after_song_loop_point_and_loop() {
     assert_mml_channel_a_matches_looping_bytecode(
         r###"
 @0 dummy_instrument gain F80
@@ -362,12 +362,12 @@ A @0 c GF80 d L [e : f]2 GF80 g
 }
 
 #[test]
-fn test_set_loop_point_in_loop_is_err() {
+fn set_loop_point_in_loop_is_error() {
     assert_error_in_mml_line("[a b L c]5", 6, ChannelError::CannotSetLoopPointInALoop);
 }
 
 #[test]
-fn test_mp_vibrato_with_set_loop_point() {
+fn mp_vibrato_before_set_loop_point() {
     assert_mml_channel_a_matches_looping_bytecode(
         r###"
 @0 dummy_instrument

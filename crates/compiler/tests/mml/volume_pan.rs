@@ -5,7 +5,7 @@
 use crate::*;
 
 #[test]
-fn test_volume() {
+fn volume() {
     assert_line_matches_bytecode("v1", &["set_volume 16"]);
     assert_line_matches_bytecode("v8", &["set_volume 128"]);
     assert_line_matches_bytecode("v16", &["set_volume 255"]);
@@ -28,7 +28,7 @@ fn test_volume() {
 }
 
 #[test]
-fn test_pan() {
+fn pan() {
     assert_line_matches_bytecode("p0", &["set_pan 0"]);
     assert_line_matches_bytecode("p64", &["set_pan 64"]);
     assert_line_matches_bytecode("p128", &["set_pan 128"]);
@@ -40,7 +40,7 @@ fn test_pan() {
 }
 
 #[test]
-fn test_merge_pan() {
+fn merge_pan_commands() {
     merge_mml_commands_test("p1 p2 || p3 p4", &["set_pan 4"]);
 
     merge_mml_commands_test("p0 || p+5 p+6", &["set_pan 11"]);
@@ -55,7 +55,7 @@ fn test_merge_pan() {
 }
 
 #[test]
-fn test_px_pan() {
+fn px_pan() {
     assert_line_matches_bytecode("px0", &["set_pan 64"]);
     assert_line_matches_bytecode("px-64", &["set_pan 0"]);
     assert_line_matches_bytecode("px+64", &["set_pan 128"]);
@@ -70,7 +70,7 @@ fn test_px_pan() {
 }
 
 #[test]
-fn test_merge_pan_px() {
+fn merge_px_pan() {
     merge_mml_commands_test("px+1 px-2 || px+3 px-4", &["set_pan 60"]);
     merge_mml_commands_test("px-1 px+2 || px-3 px+4", &["set_pan 68"]);
 
@@ -81,7 +81,7 @@ fn test_merge_pan_px() {
 }
 
 #[test]
-fn test_merge_coarse_volume() {
+fn merge_coarse_volume() {
     merge_mml_commands_test("v1 v2 || v3 v4", &["set_volume 64"]);
 
     merge_mml_commands_test("v0 v+5 || v+6", &["set_volume 176"]);
@@ -96,7 +96,7 @@ fn test_merge_coarse_volume() {
 }
 
 #[test]
-fn test_merge_fine_volume() {
+fn merge_fine_volume() {
     merge_mml_commands_test("V1 V2 || V3 V4", &["set_volume 4"]);
 
     merge_mml_commands_test("V0 V+5 || V+6", &["set_volume 11"]);
@@ -111,7 +111,7 @@ fn test_merge_fine_volume() {
 }
 
 #[test]
-fn test_merge_pan_and_volume() {
+fn merge_pan_and_volume() {
     merge_mml_commands_test("p0 || v5", &["set_pan_and_volume 0 80"]);
     merge_mml_commands_test("v6 || p128", &["set_pan_and_volume 128 96"]);
     merge_mml_commands_test("p30 || V40", &["set_pan_and_volume 30 40"]);
@@ -128,7 +128,7 @@ fn test_merge_pan_and_volume() {
 }
 
 #[test]
-fn test_large_adjust_volume() {
+fn large_adjust_volume() {
     assert_line_matches_bytecode("V+127", &["adjust_volume +127"]);
     assert_line_matches_bytecode("V+128", &["adjust_volume +127", "adjust_volume +1"]);
     assert_line_matches_bytecode("V+200", &["adjust_volume +127", "adjust_volume +73"]);
@@ -164,7 +164,7 @@ fn test_large_adjust_volume() {
 
 // Tests if a large relative pan command turns into an absolute pan command
 #[test]
-fn test_large_adjust_pan() {
+fn large_adjust_pan() {
     assert_line_matches_bytecode("p+127", &["adjust_pan +127"]);
     assert_line_matches_bytecode("p+128", &["set_pan 128"]);
     assert_line_matches_bytecode("p+200", &["set_pan 128"]);
@@ -180,7 +180,7 @@ fn test_large_adjust_pan() {
 }
 
 #[test]
-fn test_volume_slide() {
+fn volume_slide() {
     assert_line_matches_bytecode("vs+2,8", &["volume_slide +32 8"]);
     assert_line_matches_bytecode("vs-4,16", &["volume_slide -$40 16"]);
     assert_line_matches_bytecode("vs+16,20", &["volume_slide +255 20"]);
@@ -279,7 +279,7 @@ fn test_volume_slide() {
 }
 
 #[test]
-fn test_tremolo() {
+fn tremolo() {
     assert_line_matches_bytecode("v~2,4", &["tremolo 32 4"]);
     assert_line_matches_bytecode("v~7,8", &["tremolo 112 8"]);
     assert_line_matches_bytecode("v~8,8", &["tremolo 127 8"]);
@@ -346,7 +346,7 @@ fn test_tremolo() {
 }
 
 #[test]
-fn test_pan_slide() {
+fn pan_slide() {
     assert_line_matches_bytecode("ps+15,8", &["pan_slide +15 8"]);
     assert_line_matches_bytecode("ps-30,16", &["pan_slide -30 16"]);
 
@@ -395,7 +395,7 @@ fn test_pan_slide() {
 }
 
 #[test]
-fn test_panbrello() {
+fn panbrello() {
     assert_line_matches_bytecode("p~20,10", &["panbrello 20 10"]);
     assert_line_matches_bytecode("p~30,20", &["panbrello 30 20"]);
 

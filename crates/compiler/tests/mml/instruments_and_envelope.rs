@@ -5,7 +5,7 @@
 use crate::*;
 
 #[test]
-fn test_set_instrument() {
+fn set_instrument() {
     let mml = r##"
 @0 dummy_instrument
 @1 inst_with_adsr
@@ -27,7 +27,7 @@ A @0 @1 @2
 
 /// Test instruments with the same InstrumentId do not emit a set_instrument instruction
 #[test]
-fn test_set_instrument_merge_instrument_ids() {
+fn deduplicate_set_instrument_instrument_ids() {
     let mml = r##"
 @0 dummy_instrument
 @1 dummy_instrument
@@ -51,7 +51,7 @@ A @o @0 @1 @2
 }
 
 #[test]
-fn test_set_instrument_and_envelope() {
+fn set_instrument_and_envelope() {
     let mml = format!(
         r##"
 @0 dummy_instrument
@@ -101,7 +101,7 @@ A @0 @g1 @g2 @g3 @g1
 }
 
 #[test]
-fn test_set_adsr_and_set_gain() {
+fn set_adsr_and_set_gain() {
     assert_mml_channel_a_matches_bytecode(
         &format!(
             r##"
@@ -148,7 +148,7 @@ A @gg G48 G48 A5,6,7,8 G30
 }
 
 #[test]
-fn test_set_gain() {
+fn set_gain() {
     assert_mml_channel_a_matches_bytecode(
         r##"
 @g inst_with_gain
@@ -181,7 +181,7 @@ A G$20 GF6 GD7 GE8 GI9 GB10
 }
 
 #[test]
-fn test_instrument_envelope_hex() {
+fn hexadecimal_in_mml_instrument_envelope() {
     assert_mml_channel_a_matches_bytecode(
         r##"
 @a1 dummy_instrument adsr $f $7 $7 $1f
@@ -206,7 +206,7 @@ A @a1 @a2 @a3 @g1 @g2 @g3
 }
 
 #[test]
-fn test_set_instrument_after_set_adsr() {
+fn set_instrument_after_set_adsr() {
     assert_mml_channel_a_matches_bytecode(
         r##"
 @1 inst_with_adsr
@@ -222,7 +222,7 @@ A @1 A1,2,3,4 @1
 }
 
 #[test]
-fn test_set_instrument_after_set_gain() {
+fn set_instrument_after_set_gain() {
     assert_mml_channel_a_matches_bytecode(
         r##"
 @1 inst_with_gain
@@ -240,7 +240,7 @@ A @1 GI5 @1
 /// Test instrument is is correctly tracked after a *skip last loop* command.
 /// Assumes `test_set_instrument_merge_instrument_ids()` passes
 #[test]
-fn test_skip_last_loop_set_instrument_merge_1() {
+fn set_instrument_deduplication_after_skip_last_loop_1() {
     let mml = r##"
 @d dummy_instrument
 @a inst_with_adsr
@@ -290,7 +290,7 @@ A [ @a a : [ @d b : c]2 ]3 @d
 /// Test instrument is is correctly tracked after a *skip last loop* command.
 /// Assumes `test_set_instrument_merge_instrument_ids()` passes
 #[test]
-fn test_skip_last_loop_set_instrument_merge_2() {
+fn set_instrument_deduplication_after_skip_last_loop_2() {
     let mml = r##"
 @d dummy_instrument
 @a inst_with_adsr
@@ -337,7 +337,7 @@ A [ @a a : [ @d b : c ]2 ] 3 @a
 
 /// Test ADSR envelope is correctly tracked across loops
 #[test]
-fn test_skip_last_loop_set_adsr() {
+fn set_adsr_dedeuplication_after_skip_last_loop() {
     assert_mml_channel_a_matches_bytecode(
         r##"
 @i inst_with_adsr
@@ -387,7 +387,7 @@ A [ @i a A 5,6,7,8 b : [ A 15,7,7,31 c : d]2 ]3 A 5,6,7,8 e
 
 /// Test GAIN envelope is correctly tracked across loops
 #[test]
-fn test_skip_last_loop_set_gain() {
+fn set_gain_dedeuplication_after_skip_last_loop() {
     assert_mml_channel_a_matches_bytecode(
         r##"
 @i inst_with_adsr
@@ -436,7 +436,7 @@ A [ @i a G10 b : [ G20 c : d ]2 ]3 G10 e
 }
 
 #[test]
-fn test_set_instrument_start_of_loop() {
+fn set_instrument_after_start_of_loop() {
     assert_mml_channel_a_matches_bytecode(
         r##"
 @1 dummy_instrument
@@ -518,7 +518,7 @@ A @1 [[@1 a]2 @1 b @2 c]3
 }
 
 #[test]
-fn test_set_adsr_start_of_loop() {
+fn set_adsr_after_start_of_loop() {
     assert_line_matches_bytecode(
         "A1,2,3,4 [A1,2,3,4 a]3 b",
         &[
@@ -579,7 +579,7 @@ fn test_set_adsr_start_of_loop() {
 }
 
 #[test]
-fn test_set_gain_start_of_loop() {
+fn set_gain_after_start_of_loop() {
     assert_line_matches_bytecode(
         "G10 [G10 a]3 b",
         &[
@@ -640,7 +640,7 @@ fn test_set_gain_start_of_loop() {
 }
 
 #[test]
-fn test_set_instrument_after_call_subroutine() {
+fn set_instrument_after_call_subroutine() {
     assert_mml_channel_a_matches_bytecode(
         r##"
 @0 dummy_instrument
@@ -677,7 +677,7 @@ A !s b @0 c
 }
 
 #[test]
-fn test_adsr_after_call_subroutine() {
+fn set_adsr_after_call_subroutine() {
     assert_mml_channel_a_matches_bytecode(
         r##"
 @0 dummy_instrument adsr 1 1 1 1
@@ -712,7 +712,7 @@ A !s b A2,2,2,2 c
 }
 
 #[test]
-fn test_gain_after_call_subroutine() {
+fn set_gain_after_call_subroutine() {
     assert_mml_channel_a_matches_bytecode(
         r##"
 @0 dummy_instrument gain F100

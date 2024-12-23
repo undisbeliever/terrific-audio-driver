@@ -5,7 +5,7 @@
 use crate::*;
 
 #[test]
-fn test_c_major_scale() {
+fn c_major_scale() {
     assert_line_matches_bytecode(
         "c d e f g a b",
         &[
@@ -21,12 +21,12 @@ fn test_c_major_scale() {
 }
 
 #[test]
-fn test_play_midi_note_number() {
+fn play_midi_note_number() {
     assert_line_matches_line("c d e f g a b", "n60 n62 n64 n65 n67 n69 n71");
 }
 
 #[test]
-fn test_play_sample() {
+fn play_sample() {
     assert_mml_channel_a_matches_bytecode(
         r##"
 @sample sample
@@ -71,7 +71,7 @@ A s2,16^8 s2,16 &
 
 #[test]
 #[rustfmt::skip]
-fn test_octave() {
+fn set_octave() {
     assert_line_matches_bytecode("a",             &["play_note a4 24"]);
     assert_line_matches_bytecode("o2 o5 b",       &["play_note b5 24"]);
     assert_line_matches_bytecode("o6 c < c << c", &["play_note c6 24", "play_note c5 24", "play_note c3 24"]);
@@ -79,13 +79,13 @@ fn test_octave() {
 }
 
 #[test]
-fn test_accidentals_against_midi_note_numbers() {
+fn compare_accidentals_with_midi_note_numbers() {
     assert_line_matches_line("o4 e e- e-- e--- e----", "n64 n63 n62 n61 n60");
     assert_line_matches_line("o4 e e+ e++ e+++ e++++", "n64 n65 n66 n67 n68");
 }
 
 #[test]
-fn test_too_many_accidentals() {
+fn too_many_accidentals() {
     let lots_of_plusses = "+".repeat(1024);
     let lots_of_minuses = "+".repeat(1024);
 
@@ -110,7 +110,7 @@ fn test_too_many_accidentals() {
 
 #[test]
 #[rustfmt::skip]
-fn test_note_length() {
+fn note_length() {
     assert_line_matches_bytecode("a", &["play_note a4 24"]);
     assert_line_matches_bytecode(
         "a1 b3 c4 d8 e16",
@@ -140,7 +140,7 @@ fn test_note_length() {
 }
 
 #[test]
-fn test_lots_of_dots_in_length() {
+fn lots_of_dots_in_length() {
     // Test "attempt to add with overflow" panic is fixed
     let lots_of_dots = ".".repeat(512);
     assert_line_matches_line(&format!("l1{lots_of_dots} a"), "a%190");
@@ -192,7 +192,7 @@ fn test_lots_of_dots_in_length() {
 
 #[test]
 #[rustfmt::skip]
-fn test_transpose() {
+fn transpose() {
     assert_line_matches_line("_+2 d e f", "e f+ g");
     assert_line_matches_line("_-2 d e f", "c d d+");
 
@@ -218,7 +218,7 @@ fn test_transpose() {
 }
 
 #[test]
-fn test_slur() {
+fn slur() {
     assert_line_matches_bytecode(
         "a & b",
         &["play_note a4 no_keyoff 24", "play_note b4 keyoff 24"],
@@ -256,7 +256,7 @@ fn test_slur() {
 }
 
 #[test]
-fn test_tie() {
+fn tie() {
     assert_line_matches_bytecode("a^ b", &["play_note a4 48", "play_note b4 24"]);
     assert_line_matches_bytecode("a^2 b", &["play_note a4 72", "play_note b4 24"]);
     assert_line_matches_bytecode("a^%1 b", &["play_note a4 25", "play_note b4 24"]);
@@ -270,7 +270,7 @@ fn test_tie() {
 }
 
 #[test]
-fn play_long_note() {
+fn long_note() {
     // `wait` can rest for 1 to 256 ticks.
     // `rest` can rest for 2 to 257 tick.
     // The last rest in a wait-rest chain must be 257 ticks to prevent interference with early-release
@@ -294,7 +294,7 @@ fn play_long_note() {
 }
 
 #[test]
-fn play_long_slurred_note() {
+fn long_slurred_note() {
     // `wait` can rest for 1 to 256 ticks.
 
     assert_line_matches_bytecode("a%256 &", &["play_note a4 no_keyoff 256"]);

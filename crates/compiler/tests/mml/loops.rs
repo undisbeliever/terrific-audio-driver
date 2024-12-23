@@ -5,7 +5,7 @@
 use crate::*;
 
 #[test]
-fn test_loops() {
+fn loops() {
     assert_line_matches_bytecode("[a]4", &["start_loop 4", "play_note a4 24", "end_loop"]);
 
     assert_line_matches_bytecode(
@@ -62,7 +62,7 @@ fn test_loops() {
 }
 
 #[test]
-fn test_no_tick_instructions_and_skip_last_loop() {
+fn no_tick_instructions_allowed_with_skip_last_loop() {
     assert_line_matches_bytecode(
         "[a : V-5 ]6",
         &[
@@ -87,7 +87,7 @@ fn test_no_tick_instructions_and_skip_last_loop() {
 }
 
 #[test]
-fn test_note_range_after_skip_last_loop_bugfix() {
+fn note_range_after_skip_last_loop_bugfix() {
     assert_err_in_channel_a_mml(
         r##"
 @d dummy_instrument
@@ -120,7 +120,7 @@ A [ @d c : @oof d]2 o6 e
 }
 
 #[test]
-fn test_loop_errors() {
+fn loop_errors() {
     assert_error_in_mml_line("[ ]3", 3, BytecodeError::NoTicksInLoop.into());
     assert_error_in_mml_line("[ V+5 ]3", 7, BytecodeError::NoTicksInLoop.into());
     assert_error_in_mml_line("[ V+5 : V-5 ]3", 13, BytecodeError::NoTicksInLoop.into());
@@ -139,7 +139,7 @@ fn test_loop_errors() {
 }
 
 #[test]
-fn test_max_loops() {
+fn max_loops() {
     assert_line_matches_bytecode(
         "[[[[[[[a]11]12]13]14]15]16]17",
         &[
@@ -163,7 +163,7 @@ fn test_max_loops() {
 }
 
 #[test]
-fn test_too_many_loops() {
+fn too_many_loops() {
     assert_error_in_mml_line(
         "[[[[[[[[a]11]12]13]14]15]16]17]18",
         8,
@@ -173,7 +173,7 @@ fn test_too_many_loops() {
 
 // Test that a note out of range error does not emit a NoTicksInLoop nor NoTicksAfterLoopPoint error.
 #[test]
-fn test_only_one_error_for_out_of_range_note_in_loop() {
+fn only_one_error_for_out_of_range_note_in_loop() {
     assert_error_in_mml_line(
         "[ o7 a ]2",
         6,

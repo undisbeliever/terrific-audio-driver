@@ -5,7 +5,7 @@
 use crate::*;
 
 #[test]
-fn test_portamento() {
+fn portamento() {
     // Only testing portamento with a speed override
 
     assert_line_matches_bytecode(
@@ -78,7 +78,7 @@ fn test_portamento() {
 }
 
 #[test]
-fn test_portamento_speed() {
+fn portamento_speed() {
     // Calculate pitch velocity for an `{o4 a o5 a}` portamento slide.
     // `pitch_slide_ticks` does NOT include the key-off tick
     // Using floats to ensure the i32 rounding in bc_generator is correct.
@@ -216,7 +216,7 @@ fn test_portamento_speed() {
 }
 
 #[test]
-fn test_portamento_with_speed_and_no_instrument() {
+fn portamento_with_speed_and_no_instrument() {
     assert_mml_subroutine_matches_bytecode(
         r#"
 @1 dummy_instrument
@@ -243,7 +243,7 @@ A @1 !s
 }
 
 #[test]
-fn test_portamento_err() {
+fn portamento_errors() {
     assert_error_in_mml_line("{c g}4,4", 8, ChannelError::InvalidPortamentoDelay);
     assert_error_in_mml_line("l2 {c g},2", 10, ChannelError::InvalidPortamentoDelay);
 
@@ -272,7 +272,7 @@ fn test_portamento_err() {
 }
 
 #[test]
-fn test_portamento_note_and_pitch_without_instrument_err() {
+fn portamento_note_and_pitch_without_instrument_error() {
     assert_one_subroutine_err_in_mml(
         r#"
 @1 dummy_instrument
@@ -301,7 +301,7 @@ A @1 !s
 }
 
 #[test]
-fn test_portamento_pitch() {
+fn portamento_pitch() {
     assert_line_matches_bytecode(
         "{P1000 P1230}",
         &[
@@ -378,7 +378,7 @@ fn test_portamento_pitch() {
 }
 
 #[test]
-fn test_portamento_pitch_sample_rate() {
+fn portamento_pitch_sample_rate() {
     assert_line_matches_line_and_bytecode(
         "{PR32000 PR16000}",
         "{P$1000 P$0800}",
@@ -407,7 +407,7 @@ fn test_portamento_pitch_sample_rate() {
 }
 
 #[test]
-fn test_portamento_pitch_freq() {
+fn portamento_pitch_freq() {
     assert_eq!((0x2000 - 0x1333 + 22 / 2) / 22, 149);
     assert_line_matches_line_and_bytecode(
         "{PF600 PF1000}",
@@ -446,7 +446,7 @@ fn test_portamento_pitch_freq() {
 }
 
 #[test]
-fn test_slurred_note_detune_then_portamento() {
+fn slurred_note_detune_then_portamento() {
     assert_line_matches_bytecode(
         "c & D+80 {c g}",
         &[
@@ -492,7 +492,7 @@ fn test_slurred_note_detune_then_portamento() {
 }
 
 #[test]
-fn test_portamento_pitch_and_detune() {
+fn pitch_and_detune() {
     const A4_PITCH: u32 = 0x0e14;
 
     assert_line_matches_bytecode(
@@ -553,7 +553,7 @@ fn test_portamento_pitch_and_detune() {
 }
 
 #[test]
-fn test_portamento_prev_slurred_note_and_pitch() {
+fn previous_slurred_note_and_pitch() {
     const _A4_PITCH: u32 = 0x0e14;
 
     assert_line_matches_bytecode(
@@ -592,7 +592,7 @@ fn test_portamento_prev_slurred_note_and_pitch() {
 }
 
 #[test]
-fn test_portamento_prev_slurred_instrument() {
+fn previous_slurred_note_has_different_instrument() {
     assert_mml_channel_a_matches_bytecode(
         r##"
 @f1000_o4 f1000_o4
@@ -671,7 +671,7 @@ A @f1000_o4 a @f2000_o4    {ae}
 
 // Test instrument is ignored if first portamento parameter is a P pitch
 #[test]
-fn test_portamento_previous_slurred_note_pitch_instrument_ignored() {
+fn previous_slurred_instrument_ignored_if_note1_is_pitch() {
     assert_eq!(0x1800 - 45 * 23, 0x13f5);
     assert_mml_channel_a_matches_bytecode(
         r##"
@@ -745,7 +745,7 @@ A D-50 @f1000_o4 a & @f2000_o4 { P$6d8 g }
 /// Test if `last_slurred_note` is correctly tracked after a *skip last loop* command.
 /// Assumes `test_portamento()` passes
 #[test]
-fn test_skip_last_loop_prev_slurred_note() {
+fn previous_slurred_note_after_skip_last_loop_1() {
     assert_line_matches_bytecode(
         "[d& : b]4 {df},,10",
         &[
@@ -780,7 +780,7 @@ fn test_skip_last_loop_prev_slurred_note() {
 /// Test if `last_slurred_note` is correctly tracked after a *skip last loop* command.
 /// Assumes `test_portamento()` passes
 #[test]
-fn test_skip_last_loop_prev_slurred_note_2() {
+fn previous_slurred_loop_after_skip_last_loop_2() {
     assert_line_matches_bytecode(
         "[w16 : d&]4 {df},,10",
         &[
@@ -815,7 +815,7 @@ fn test_skip_last_loop_prev_slurred_note_2() {
 /// Test the first portamento after a `start_loop` does not use prev_slurred_note
 /// Assumes `test_portamento()` passes
 #[test]
-fn test_prev_slurred_note_after_start_loop() {
+fn previous_slurred_note_after_start_loop() {
     assert_line_matches_bytecode(
         "d& [{df},,10 c]3",
         &[
@@ -859,7 +859,7 @@ fn test_prev_slurred_note_after_start_loop() {
 }
 
 #[test]
-fn test_portamento_prev_slurred_instrument_after_subroutine_call() {
+fn previous_slurred_instrument_after_subroutine_call() {
     assert_mml_channel_a_matches_bytecode(
         r##"
 @f1000_o4 f1000_o4
@@ -921,7 +921,7 @@ A @f1000_o4 g !s2 @f2000_o3_o5 {ae}
 }
 
 #[test]
-fn test_prev_slurred_note_after_subroutine_call() {
+fn previous_slurred_note_after_subroutine_call() {
     // see `test_skip_last_loop_prev_slurred_note()`
 
     assert_mml_channel_a_matches_bytecode(
@@ -995,7 +995,7 @@ A @0 a& !s {ab},,10
 }
 
 #[test]
-fn test_prev_slurred_note_after_nested_subroutine_call() {
+fn previous_slurred_note_after_nested_subroutine_call() {
     // see `test_skip_last_loop_prev_slurred_note()`
 
     assert_mml_channel_a_matches_bytecode(
@@ -1110,7 +1110,7 @@ A a& !s2 {ab},,10
 }
 
 #[test]
-fn test_one_pitch_portamento() {
+fn one_pitch_portamento() {
     const _A4_PITCH: u32 = 0x0e14;
 
     assert_line_matches_bytecode(
@@ -1217,7 +1217,7 @@ A @1 !s
 }
 
 #[test]
-fn test_one_pitch_portamento_errors() {
+fn one_pitch_portamento_errors() {
     assert_error_in_mml_line("{e}", 1, ChannelError::OneNotePortamentoNoPreviousNote);
 
     // Note is unknown at the start of a loop
@@ -1262,7 +1262,7 @@ A @1 !s
 }
 
 #[test]
-fn test_portamento_pitch_list_errors() {
+fn portamento_pitch_list_errors() {
     assert_error_in_mml_line("{   ", 5, ChannelError::MissingEndPortamento);
 
     assert_error_in_mml_line("{ }}", 3, ChannelError::MissingEndPortamento);
@@ -1305,7 +1305,7 @@ fn test_portamento_pitch_list_errors() {
 // ::TODO add portamento length error tests::
 
 #[test]
-fn test_portamento_note_tracking_bugfix_1() {
+fn portamento_note_tracking_bugfix_1() {
     // Confirm a note tracking buf that caused the 2nd and 3rd portamento to not key-on is fixed
     assert_line_matches_bytecode(
         "{cd} {cf} {cg}",
@@ -1334,7 +1334,7 @@ fn test_portamento_note_tracking_bugfix_1() {
 }
 
 #[test]
-fn test_portamento_note_tracking_bugfix_2() {
+fn portamento_note_tracking_bugfix_2() {
     assert_line_matches_bytecode(
         "{cd} & {df} & {fg}",
         &[

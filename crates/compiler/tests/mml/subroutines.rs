@@ -5,7 +5,7 @@
 use crate::*;
 
 #[test]
-fn test_call_subroutine() {
+fn call_subroutine() {
     assert_mml_channel_a_matches_bytecode(
         r##"
 @0 dummy_instrument
@@ -26,7 +26,7 @@ A @0 !s1 !s2 !s3
 }
 
 #[test]
-fn test_max_loops_with_subroutine() {
+fn max_loops_with_subroutine() {
     let subroutine_stack_depth = 3 * BC_STACK_BYTES_PER_LOOP;
     let channel_a_stack_depth =
         subroutine_stack_depth + BC_STACK_BYTES_PER_SUBROUTINE_CALL + 3 * BC_STACK_BYTES_PER_LOOP;
@@ -65,7 +65,7 @@ A [[[ !s ]14]15]16
 }
 
 #[test]
-fn test_too_many_loops_with_subroutine_call() {
+fn too_many_loops_with_subroutine_call() {
     assert_err_in_channel_a_mml(
         r##"
 @0 dummy_instrument
@@ -116,7 +116,7 @@ A [[[[[ !s ]14]15]16]17]18
 }
 
 #[test]
-fn test_max_subroutines() {
+fn max_subroutines() {
     const N_SUBROUTINES: u32 = MAX_SUBROUTINES as u32;
 
     let mut mml = String::new();
@@ -144,7 +144,7 @@ fn test_max_subroutines() {
 }
 
 #[test]
-fn test_max_subroutines_with_nesting() {
+fn max_subroutines_with_nesting() {
     const N_SUBROUTINES: u32 = MAX_SUBROUTINES as u32;
 
     let mut mml = String::new();
@@ -196,7 +196,7 @@ fn test_max_subroutines_with_nesting() {
 
 /// Testing for tail call optimisation by checking stack depth
 #[test]
-fn test_tail_call_1() {
+fn tail_call_1() {
     let sd = compile_mml(
         r##"
 @0 dummy_instrument
@@ -220,7 +220,7 @@ A @0 !s
 
 /// Testing for tail call optimisation by checking stack depth
 #[test]
-fn test_tail_call_2() {
+fn tail_call_2() {
     let sd = compile_mml(
         r##"
 @0 dummy_instrument
@@ -258,7 +258,7 @@ A @0 !tco !no_tco
 ///
 /// Testing for the existance of tail call optimisation by checking stack depth.
 #[test]
-fn test_tail_call_mp() {
+fn tail_call_mp() {
     let sd = compile_mml(
         r##"
 @0 dummy_instrument
@@ -285,7 +285,7 @@ A @0 !s
 ///
 /// Testing for the existance of tail call optimisation by checking stack depth.
 #[test]
-fn test_tail_call_manual_vibrato() {
+fn tail_call_manual_vibrato() {
     let sd = compile_mml(
         r##"
 @0 dummy_instrument
@@ -307,7 +307,7 @@ A @0 !s
 }
 
 #[test]
-fn test_nested_subroutines() {
+fn nested_subroutines() {
     // Cannot test with asm, no easy way to implement a "call_subroutine s" bytecode.
     // Instead, this test will confirm it compiles with no errors and the correct stack depth
 
@@ -359,7 +359,7 @@ A @0 !s1
 }
 
 #[test]
-fn test_nested_subroutines_recursion() {
+fn nested_subroutines_recursion_1() {
     assert_subroutine_err_in_mml(
         r##"
 @0 dummy_instrument
@@ -376,7 +376,7 @@ A @0 !s
 }
 
 #[test]
-fn test_nested_subroutines_recursion2() {
+fn nested_subroutines_recursion_2() {
     assert_subroutine_err_in_mml(
         r##"
 @0 dummy_instrument
@@ -402,7 +402,7 @@ A @0 !s1
 }
 
 #[test]
-fn test_nested_subroutines_with_missing1() {
+fn nested_subroutines_with_missing_1() {
     assert_subroutine_err_in_mml(
         r##"
 @0 dummy_instrument
@@ -416,7 +416,7 @@ A @0 !s
 }
 
 #[test]
-fn test_nested_subroutines_with_missing2() {
+fn nested_subroutines_with_missing_2() {
     assert_subroutine_err_in_mml(
         r##"
 @0 dummy_instrument
@@ -436,7 +436,7 @@ A @0 !s1 !s3
 }
 
 #[test]
-fn test_nested_subroutines_stack_depth_limit() {
+fn nested_subroutines_stack_depth_limit() {
     let channel_a_stack_depth =
         3 * BC_STACK_BYTES_PER_LOOP + 6 * BC_STACK_BYTES_PER_SUBROUTINE_CALL;
     assert_eq!(channel_a_stack_depth, BC_CHANNEL_STACK_SIZE);
@@ -490,7 +490,7 @@ A @0 !s1
 }
 
 #[test]
-fn test_nested_subroutines_stack_overflow() {
+fn nested_subroutines_stack_overflow() {
     let stack_depth = 11 * BC_STACK_BYTES_PER_SUBROUTINE_CALL as u32;
     assert!(stack_depth > BC_CHANNEL_STACK_SIZE as u32);
 
@@ -521,7 +521,7 @@ A @0 !s1
 }
 
 #[test]
-fn test_subroutine_call_no_instrument_err() {
+fn subroutine_call_no_instrument_error() {
     assert_err_in_channel_a_mml(
         r##"
 !s c d e f
@@ -583,7 +583,7 @@ A !s2
 }
 
 #[test]
-fn test_subroutine_call_note_range_errors() {
+fn subroutine_call_note_range_errors() {
     let inst_range = Note::first_note_for_octave(Octave::try_from(2).unwrap())
         ..=Note::last_note_for_octave(Octave::try_from(6).unwrap());
 
@@ -690,7 +690,7 @@ A @0 !s1
 }
 
 #[test]
-fn test_nested_subroutine_no_instrument_bug() {
+fn nested_subroutine_no_instrument_bugfix() {
     assert_mml_channel_a_matches_bytecode(
         r##"
 @0 dummy_instrument
@@ -707,7 +707,7 @@ A !s
 }
 
 #[test]
-fn test_subroutine_instrument_hint_1() {
+fn subroutine_instrument_hint_1() {
     // Test MML with instrument hint has identical bytecode to MML with instrument set
     let mml = r#"
 @1 f1000_o4
@@ -737,7 +737,7 @@ A @1 !s
 }
 
 #[test]
-fn test_subroutine_instrument_hint_2() {
+fn subroutine_instrument_hint_2() {
     // Tests different instruments are accepted
     assert_mml_subroutine_matches_bytecode(
         r#"
@@ -792,7 +792,7 @@ A @1 !s1 @2 !s1
 }
 
 #[test]
-fn test_subroutine_instrument_hint_then_set_same_instrument() {
+fn subroutine_instrument_hint_then_set_same_instrument() {
     assert_mml_subroutine_matches_bytecode(
         r#"
 @1 f1000_o4
@@ -857,7 +857,7 @@ A @1 !s
 }
 
 #[test]
-fn test_set_subroutine_instrument_hint_errors() {
+fn set_subroutine_instrument_hint_errors() {
     assert_error_in_mml_line(
         "?@1",
         1,
@@ -988,7 +988,7 @@ A @2 !s
 }
 
 #[test]
-fn test_subroutine_instrument_hint_freq_errors() {
+fn subroutine_instrument_hint_freq_errors() {
     assert_one_err_in_mml(
         r#"
 @1 f1000_o4
@@ -1065,7 +1065,7 @@ A !s2 !s1
 }
 
 #[test]
-fn test_subroutine_instrument_hint_note_range() {
+fn subroutine_instrument_hint_note_range_errors() {
     assert_one_err_in_mml(
         r#"
 @1 f1000_o4
@@ -1142,7 +1142,7 @@ A !s2 !s1
 }
 
 #[test]
-fn test_subroutine_instrument_hint_and_loop() {
+fn subroutine_instrument_hint_and_loop() {
     assert_mml_channel_a_matches_bytecode(
         r#"
 @1 f1000_o4
@@ -1241,7 +1241,7 @@ A [ @1 c : [ V+5 [@1 !s1 : @2 c]6 !s1 @2 ]4 !s2 ]2 !s1
 }
 
 #[test]
-fn test_note_range_after_subroutine_call() {
+fn note_range_after_subroutine_call() {
     assert_err_in_channel_a_mml(
         r##"
 @d dummy_instrument
