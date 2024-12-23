@@ -88,7 +88,7 @@ fn quantization_of_short_note_then_rest_bugfix() {
 
 #[test]
 fn quantization_of_1_tick_note_panic_bugfix() {
-    assert_error_in_mml_line("Q4 c%1", 4, ChannelError::NoteIsTooShort);
+    assert_one_error_in_mml_line("Q4 c%1", 4, ChannelError::NoteIsTooShort);
 }
 
 #[test]
@@ -130,8 +130,8 @@ fn quantize_with_temp_gain() {
 
 #[test]
 fn quantise_comma_0_gain_is_error() {
-    assert_error_in_mml_line("Q2,0", 4, ValueError::OptionalGainCannotBeZero.into());
-    assert_error_in_mml_line("Q2,F0", 4, ValueError::OptionalGainCannotBeZero.into());
+    assert_one_error_in_mml_line("Q2,0", 4, ValueError::OptionalGainCannotBeZero.into());
+    assert_one_error_in_mml_line("Q2,F0", 4, ValueError::OptionalGainCannotBeZero.into());
 }
 
 #[test]

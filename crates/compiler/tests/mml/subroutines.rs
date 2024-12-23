@@ -66,7 +66,7 @@ A [[[ !s ]14]15]16
 
 #[test]
 fn too_many_loops_with_subroutine_call() {
-    assert_err_in_channel_a_mml(
+    assert_one_error_in_channel_a_mml(
         r##"
 @0 dummy_instrument
 
@@ -82,7 +82,7 @@ A !s
         )),
     );
 
-    assert_err_in_channel_a_mml(
+    assert_one_error_in_channel_a_mml(
         r##"
 @0 dummy_instrument
 
@@ -98,7 +98,7 @@ A [[[[[[[ !s ]11]12]13]14]15]16]17
         )),
     );
 
-    assert_err_in_channel_a_mml(
+    assert_one_error_in_channel_a_mml(
         r##"
 @0 dummy_instrument
 
@@ -360,7 +360,7 @@ A @0 !s1
 
 #[test]
 fn nested_subroutines_recursion_1() {
-    assert_subroutine_err_in_mml(
+    assert_subroutine_errors_in_mml(
         r##"
 @0 dummy_instrument
 
@@ -377,7 +377,7 @@ A @0 !s
 
 #[test]
 fn nested_subroutines_recursion_2() {
-    assert_subroutine_err_in_mml(
+    assert_subroutine_errors_in_mml(
         r##"
 @0 dummy_instrument
 
@@ -403,7 +403,7 @@ A @0 !s1
 
 #[test]
 fn nested_subroutines_with_missing_1() {
-    assert_subroutine_err_in_mml(
+    assert_subroutine_errors_in_mml(
         r##"
 @0 dummy_instrument
 
@@ -417,7 +417,7 @@ A @0 !s
 
 #[test]
 fn nested_subroutines_with_missing_2() {
-    assert_subroutine_err_in_mml(
+    assert_subroutine_errors_in_mml(
         r##"
 @0 dummy_instrument
 
@@ -494,7 +494,7 @@ fn nested_subroutines_stack_overflow() {
     let stack_depth = 11 * BC_STACK_BYTES_PER_SUBROUTINE_CALL as u32;
     assert!(stack_depth > BC_CHANNEL_STACK_SIZE as u32);
 
-    assert_err_in_channel_a_mml(
+    assert_one_error_in_channel_a_mml(
         r##"
 @0 dummy_instrument
 
@@ -522,7 +522,7 @@ A @0 !s1
 
 #[test]
 fn subroutine_call_no_instrument_error() {
-    assert_err_in_channel_a_mml(
+    assert_one_error_in_channel_a_mml(
         r##"
 !s c d e f
 
@@ -532,7 +532,7 @@ A !s
         BytecodeError::SubroutinePlaysNotesWithNoInstrument.into(),
     );
 
-    assert_err_in_channel_a_mml(
+    assert_one_error_in_channel_a_mml(
         r##"
 !s c d e f
 
@@ -542,7 +542,7 @@ A !s
         BytecodeError::SubroutinePlaysNotesWithNoInstrument.into(),
     );
 
-    assert_err_in_channel_a_mml(
+    assert_one_error_in_channel_a_mml(
         r##"
 @0 dummy_instrument
 
@@ -554,7 +554,7 @@ A !s
         BytecodeError::SubroutinePlaysNotesWithNoInstrument.into(),
     );
 
-    assert_err_in_channel_a_mml(
+    assert_one_error_in_channel_a_mml(
         r##"
 @0 dummy_instrument
 
@@ -568,7 +568,7 @@ A !s2
     );
 
     // test tail call
-    assert_err_in_channel_a_mml(
+    assert_one_error_in_channel_a_mml(
         r##"
 @0 dummy_instrument
 
@@ -587,7 +587,7 @@ fn subroutine_call_note_range_errors() {
     let inst_range = Note::first_note_for_octave(Octave::try_from(2).unwrap())
         ..=Note::last_note_for_octave(Octave::try_from(6).unwrap());
 
-    assert_err_in_channel_a_mml(
+    assert_one_error_in_channel_a_mml(
         r##"
 @0 dummy_instrument
 
@@ -603,7 +603,7 @@ A @0 !s
         .into(),
     );
 
-    assert_err_in_channel_a_mml(
+    assert_one_error_in_channel_a_mml(
         r##"
 @0 dummy_instrument
 
@@ -619,7 +619,7 @@ A @0 !s
         .into(),
     );
 
-    assert_err_in_channel_a_mml(
+    assert_one_error_in_channel_a_mml(
         r##"
 @0 dummy_instrument
 
@@ -635,7 +635,7 @@ A @0 !s
         .into(),
     );
 
-    assert_err_in_channel_a_mml(
+    assert_one_error_in_channel_a_mml(
         r##"
 @0 dummy_instrument
 
@@ -652,7 +652,7 @@ A @0 !s1
         .into(),
     );
 
-    assert_err_in_channel_a_mml(
+    assert_one_error_in_channel_a_mml(
         r##"
 @0 dummy_instrument
 
@@ -671,7 +671,7 @@ A @0 !s1
     );
 
     // Test tail call
-    assert_err_in_channel_a_mml(
+    assert_one_error_in_channel_a_mml(
         r##"
 @0 dummy_instrument
 
@@ -858,13 +858,13 @@ A @1 !s
 
 #[test]
 fn set_subroutine_instrument_hint_errors() {
-    assert_error_in_mml_line(
+    assert_one_error_in_mml_line(
         "?@1",
         1,
         ChannelError::InstrumentHintOnlyAllowedInSubroutines,
     );
 
-    assert_one_subroutine_err_in_mml(
+    assert_one_subroutine_error_in_mml(
         r#"
 @1 dummy_instrument
 
@@ -877,7 +877,7 @@ A @1 !s
         ChannelError::NoInstrumentHint,
     );
 
-    assert_one_subroutine_err_in_mml(
+    assert_one_subroutine_error_in_mml(
         r#"
 @1 dummy_instrument
 
@@ -890,7 +890,7 @@ A @1 !s
         ChannelError::CannotFindInstrument("unknown".to_owned()),
     );
 
-    assert_one_subroutine_err_in_mml(
+    assert_one_subroutine_error_in_mml(
         r#"
 @1 dummy_instrument
 
@@ -903,7 +903,7 @@ A @1 !s
         ChannelError::InstrumentHintAlreadySet,
     );
 
-    assert_one_subroutine_err_in_mml(
+    assert_one_subroutine_error_in_mml(
         r#"
 @1 dummy_instrument
 
@@ -917,7 +917,7 @@ A @1 !s2
         ChannelError::InstrumentHintAlreadySet,
     );
 
-    assert_one_subroutine_err_in_mml(
+    assert_one_subroutine_error_in_mml(
         r#"
 @1 dummy_instrument
 
@@ -930,7 +930,7 @@ A @1 !s
         ChannelError::InstrumentHintInstrumentAlreadySet,
     );
 
-    assert_one_subroutine_err_in_mml(
+    assert_one_subroutine_error_in_mml(
         r#"
 @1 dummy_instrument
 
@@ -945,7 +945,7 @@ A @1 !s2
         ChannelError::InstrumentHintInstrumentAlreadySet,
     );
 
-    assert_one_subroutine_err_in_mml(
+    assert_one_subroutine_error_in_mml(
         r#"
 @1 f1000_o4
 @sample sample
@@ -959,7 +959,7 @@ A @sample !s
         ChannelError::CannotSetInstrumentHintForSample,
     );
 
-    assert_one_err_in_mml(
+    assert_one_channel_error_in_mml(
         r#"
 @1 dummy_instrument
 
@@ -972,7 +972,7 @@ A !s
         BytecodeError::SubroutineInstrumentHintNoInstrumentSet.into(),
     );
 
-    assert_one_err_in_mml(
+    assert_one_channel_error_in_mml(
         r#"
 @1 dummy_instrument
 @2 sample
@@ -989,7 +989,7 @@ A @2 !s
 
 #[test]
 fn subroutine_instrument_hint_freq_errors() {
-    assert_one_err_in_mml(
+    assert_one_channel_error_in_mml(
         r#"
 @1 f1000_o4
 @2 f2000_o4
@@ -1007,7 +1007,7 @@ A @2 !s o4 g
         .into(),
     );
 
-    assert_one_err_in_mml(
+    assert_one_channel_error_in_mml(
         r#"
 @1 f1000_o4
 @2 f2000_o4
@@ -1025,7 +1025,7 @@ A @2 !s o4 c d e
         .into(),
     );
 
-    assert_one_err_in_mml(
+    assert_one_channel_error_in_mml(
         r#"
 @1 f1000_o4
 @2 f2000_o4
@@ -1044,7 +1044,7 @@ A @2 !sp
         .into(),
     );
 
-    assert_one_subroutine_err_in_mml(
+    assert_one_subroutine_error_in_mml(
         r#"
 @1 f1000_o4
 @2 f2000_o4
@@ -1066,7 +1066,7 @@ A !s2 !s1
 
 #[test]
 fn subroutine_instrument_hint_note_range_errors() {
-    assert_one_err_in_mml(
+    assert_one_channel_error_in_mml(
         r#"
 @1 f1000_o4
 @2 f1000_o5
@@ -1084,7 +1084,7 @@ A @2 !s o5 f
         .into(),
     );
 
-    assert_one_err_in_mml(
+    assert_one_channel_error_in_mml(
         r#"
 @1 f1000_o4
 @2 f1000_o5
@@ -1102,7 +1102,7 @@ A @2 !s o5 f
         .into(),
     );
 
-    assert_one_err_in_mml(
+    assert_one_channel_error_in_mml(
         r#"
 @1 f1000_o4
 @2 f1000_o5
@@ -1121,7 +1121,7 @@ A @2 !sp
         .into(),
     );
 
-    assert_one_subroutine_err_in_mml(
+    assert_one_subroutine_error_in_mml(
         r#"
 @1 f1000_o4
 @2 f1000_o5
@@ -1242,7 +1242,7 @@ A [ @1 c : [ V+5 [@1 !s1 : @2 c]6 !s1 @2 ]4 !s2 ]2 !s1
 
 #[test]
 fn note_range_after_subroutine_call() {
-    assert_err_in_channel_a_mml(
+    assert_one_error_in_channel_a_mml(
         r##"
 @d dummy_instrument
 @oof only_octave_four

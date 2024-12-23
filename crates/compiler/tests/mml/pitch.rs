@@ -58,17 +58,17 @@ fn play_pitch() {
     assert_line_matches_bytecode("P0", &["play_pitch 0 keyoff 24"]);
     assert_line_matches_bytecode("P$3fff", &["play_pitch 16383 keyoff 24"]);
 
-    assert_error_in_mml_line(
+    assert_one_error_in_mml_line(
         "P$4000",
         1,
         ValueError::PlayPitchPitchOutOfRange(0x4000).into(),
     );
 
-    assert_error_in_mml_line("P,4", 1, ValueError::NoPlayPitchPitch.into());
+    assert_one_error_in_mml_line("P,4", 1, ValueError::NoPlayPitchPitch.into());
 
-    assert_error_in_mml_line("P c", 1, ValueError::NoPlayPitchPitch.into());
+    assert_one_error_in_mml_line("P c", 1, ValueError::NoPlayPitchPitch.into());
 
-    assert_error_in_mml_line("P$1000,", 7, ChannelError::NoLengthAfterComma);
+    assert_one_error_in_mml_line("P$1000,", 7, ChannelError::NoLengthAfterComma);
 }
 
 #[test]
@@ -87,7 +87,7 @@ fn play_pitch_sample_rate() {
     assert_line_matches_line_and_bytecode("PR0", "P0", &["play_pitch 0 24"]);
     assert_line_matches_line_and_bytecode("PR127999", "P$3fff", &["play_pitch $3fff 24"]);
 
-    assert_error_in_mml_line(
+    assert_one_error_in_mml_line(
         "PR128000",
         1,
         ValueError::PlayPitchSampleRateOutOfRange(128000).into(),
@@ -134,7 +134,7 @@ A @2 PF500 PF750 PF1000 PF2000 PF$0aaa
     );
 
     assert_line_matches_line_and_bytecode("PF1999", "P$3ff8", &["play_pitch $3ff8 24"]);
-    assert_error_in_mml_line(
+    assert_one_error_in_mml_line(
         "PF2000",
         1,
         ValueError::CannotConvertPitchFrequency(
@@ -144,7 +144,7 @@ A @2 PF500 PF750 PF1000 PF2000 PF$0aaa
         .into(),
     );
 
-    assert_error_in_mml_line(
+    assert_one_error_in_mml_line(
         "PF16000",
         1,
         ValueError::CannotConvertPitchFrequency(
@@ -153,15 +153,15 @@ A @2 PF500 PF750 PF1000 PF2000 PF$0aaa
         )
         .into(),
     );
-    assert_error_in_mml_line(
+    assert_one_error_in_mml_line(
         "PF16001",
         1,
         ValueError::PlayPitchFrequencyOutOfRange(16001).into(),
     );
 
-    assert_error_in_mml_line("PF c", 1, ValueError::NoPlayPitchFrequency.into());
+    assert_one_error_in_mml_line("PF c", 1, ValueError::NoPlayPitchFrequency.into());
 
-    assert_err_in_channel_a_mml(
+    assert_one_error_in_channel_a_mml(
         r#"
 @s sample
 
@@ -171,7 +171,7 @@ A @s PF500
         ValueError::CannotConvertPitchFrequencySample.into(),
     );
 
-    assert_one_subroutine_err_in_mml(
+    assert_one_subroutine_error_in_mml(
         r#"
 @1 dummy_instrument
 

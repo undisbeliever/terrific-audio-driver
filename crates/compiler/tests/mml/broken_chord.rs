@@ -32,14 +32,14 @@ fn play_pitch() {
     assert_line_matches_line("{{PR12000 PR18000}}4,16,0", "[PR12000,16 PR18000,16]2");
 
     assert_line_matches_line("{{P$3fff}},,0", "[P$3fff,%2]12");
-    assert_error_in_mml_line(
+    assert_one_error_in_mml_line(
         "{{P$4000 c}}",
         3,
         ValueError::PlayPitchPitchOutOfRange(0x4000).into(),
     );
 
     assert_line_matches_line("{{PR127999}},,0", "[PR127999,%2]12");
-    assert_error_in_mml_line(
+    assert_one_error_in_mml_line(
         "{{PR128000 c}}",
         3,
         ValueError::PlayPitchSampleRateOutOfRange(128000).into(),
@@ -50,7 +50,7 @@ fn play_pitch() {
 fn play_pitch_freq() {
     assert_line_matches_line("{{PF700 PF1000}}4,16,0", "[PF700,16 PF1000,16]2");
 
-    assert_error_in_mml_line(
+    assert_one_error_in_mml_line(
         "{{PF16000}}",
         1,
         ValueError::CannotConvertPitchFrequency(
@@ -59,7 +59,7 @@ fn play_pitch_freq() {
         )
         .into(),
     );
-    assert_error_in_mml_line(
+    assert_one_error_in_mml_line(
         "{{PF16001 c}}",
         3,
         ValueError::PlayPitchFrequencyOutOfRange(16001).into(),
@@ -68,11 +68,11 @@ fn play_pitch_freq() {
 
 #[test]
 fn pitch_list_errors() {
-    assert_error_in_mml_line("{{   ", 6, ChannelError::MissingEndBrokenChord);
+    assert_one_error_in_mml_line("{{   ", 6, ChannelError::MissingEndBrokenChord);
 
-    assert_error_in_mml_line("{{  }", 5, ChannelError::MissingEndBrokenChord);
+    assert_one_error_in_mml_line("{{  }", 5, ChannelError::MissingEndBrokenChord);
 
-    assert_error_in_mml_line("{{ [ a b }}", 4, ChannelError::InvalidPitchListSymbol);
+    assert_one_error_in_mml_line("{{ [ a b }}", 4, ChannelError::InvalidPitchListSymbol);
 }
 
 // ::TODO broken chord argument error tests::

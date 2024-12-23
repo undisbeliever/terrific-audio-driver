@@ -28,19 +28,19 @@ fn manual_detune() {
     // Test limits
     assert_line_matches_bytecode("D+16383", &["set_detune +$3fff"]);
     assert_line_matches_bytecode("D-16383", &["set_detune -$3fff"]);
-    assert_error_in_mml_line(
+    assert_one_error_in_mml_line(
         "D+16384",
         1,
         ValueError::DetuneValueOutOfRange(16384).into(),
     );
-    assert_error_in_mml_line(
+    assert_one_error_in_mml_line(
         "D-16384",
         1,
         ValueError::DetuneValueOutOfRange(-16384).into(),
     );
 
-    assert_error_in_mml_line("D", 1, ValueError::NoDetuneValue.into());
-    assert_error_in_mml_line("D8", 1, ValueError::NoDetuneValueSign.into());
+    assert_one_error_in_mml_line("D", 1, ValueError::NoDetuneValue.into());
+    assert_one_error_in_mml_line("D8", 1, ValueError::NoDetuneValueSign.into());
 }
 
 #[test]
@@ -307,11 +307,11 @@ fn detune_cents() {
     // Test limits
     assert_line_matches_bytecode("MD+600", &[]);
     assert_line_matches_bytecode("MD-600", &[]);
-    assert_error_in_mml_line("MD+601", 1, ValueError::DetuneCentsOutOfRange(601).into());
-    assert_error_in_mml_line("MD-601", 1, ValueError::DetuneCentsOutOfRange(-601).into());
+    assert_one_error_in_mml_line("MD+601", 1, ValueError::DetuneCentsOutOfRange(601).into());
+    assert_one_error_in_mml_line("MD-601", 1, ValueError::DetuneCentsOutOfRange(-601).into());
 
-    assert_error_in_mml_line("MD", 1, ValueError::NoDetuneCents.into());
-    assert_error_in_mml_line("MD100", 1, ValueError::NoDetuneCentsSign.into());
+    assert_one_error_in_mml_line("MD", 1, ValueError::NoDetuneCents.into());
+    assert_one_error_in_mml_line("MD100", 1, ValueError::NoDetuneCentsSign.into());
 }
 
 #[test]

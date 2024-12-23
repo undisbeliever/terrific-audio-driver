@@ -66,8 +66,8 @@ fn px_pan() {
     assert_line_matches_bytecode("px-64", &["set_pan 0"]);
     assert_line_matches_bytecode("px+64", &["set_pan 128"]);
 
-    assert_error_in_mml_line("px-65", 1, ValueError::PxPanOutOfRange(-65).into());
-    assert_error_in_mml_line("px+65", 1, ValueError::PxPanOutOfRange(65).into());
+    assert_one_error_in_mml_line("px-65", 1, ValueError::PxPanOutOfRange(-65).into());
+    assert_one_error_in_mml_line("px+65", 1, ValueError::PxPanOutOfRange(65).into());
 
     assert_line_matches_bytecode("px+16", &["set_pan 80"]);
     assert_line_matches_bytecode("px+32", &["set_pan 96"]);
@@ -215,73 +215,73 @@ fn volume_slide() {
     // (0x100 * 222 + 0xff) / 256 = 222
     assert_line_matches_bytecode_bytes("Vs -222,256", &[opcodes::VOLUME_SLIDE_DOWN, 0, 222, 0]);
 
-    assert_error_in_mml_line(
+    assert_one_error_in_mml_line(
         "vs+17,100",
         1,
         ValueError::CoarseVolumeSlideOutOfRange(17).into(),
     );
-    assert_error_in_mml_line(
+    assert_one_error_in_mml_line(
         "Vs+256,100",
         1,
         ValueError::VolumeSlideAmountOutOfRange(256).into(),
     );
-    assert_error_in_mml_line(
+    assert_one_error_in_mml_line(
         "vs-17,100",
         1,
         ValueError::CoarseVolumeSlideOutOfRange(-17).into(),
     );
-    assert_error_in_mml_line(
+    assert_one_error_in_mml_line(
         "Vs-256,100",
         1,
         ValueError::VolumeSlideAmountOutOfRange(-256).into(),
     );
 
-    assert_error_in_mml_line(
+    assert_one_error_in_mml_line(
         "vs+4,0",
         6,
         ValueError::VolumeSlideTicksOutOfRange(0).into(),
     );
-    assert_error_in_mml_line(
+    assert_one_error_in_mml_line(
         "Vs+100,0",
         8,
         ValueError::VolumeSlideTicksOutOfRange(0).into(),
     );
-    assert_error_in_mml_line(
+    assert_one_error_in_mml_line(
         "vs-4,0",
         6,
         ValueError::VolumeSlideTicksOutOfRange(0).into(),
     );
-    assert_error_in_mml_line(
+    assert_one_error_in_mml_line(
         "Vs-100,0",
         8,
         ValueError::VolumeSlideTicksOutOfRange(0).into(),
     );
 
-    assert_error_in_mml_line(
+    assert_one_error_in_mml_line(
         "vs+4,257",
         6,
         ValueError::VolumeSlideTicksOutOfRange(257).into(),
     );
-    assert_error_in_mml_line(
+    assert_one_error_in_mml_line(
         "Vs+100,257",
         8,
         ValueError::VolumeSlideTicksOutOfRange(257).into(),
     );
-    assert_error_in_mml_line(
+    assert_one_error_in_mml_line(
         "vs-4,257",
         6,
         ValueError::VolumeSlideTicksOutOfRange(257).into(),
     );
-    assert_error_in_mml_line(
+    assert_one_error_in_mml_line(
         "Vs-100,257",
         8,
         ValueError::VolumeSlideTicksOutOfRange(257).into(),
     );
 
-    assert_error_in_mml_line("vs+10", 1, ValueError::NoCommaVolumeSlideTicks.into());
-    assert_error_in_mml_line("vs-10", 1, ValueError::NoCommaVolumeSlideTicks.into());
-    assert_error_in_mml_line("Vs+10", 1, ValueError::NoCommaVolumeSlideTicks.into());
-    assert_error_in_mml_line("Vs-10", 1, ValueError::NoCommaVolumeSlideTicks.into());
+    assert_one_error_in_mml_line("vs+10", 1, ValueError::NoCommaVolumeSlideTicks.into());
+    assert_one_error_in_mml_line("vs-10", 1, ValueError::NoCommaVolumeSlideTicks.into());
+    assert_one_error_in_mml_line("Vs+10", 1, ValueError::NoCommaVolumeSlideTicks.into());
+    assert_one_error_in_mml_line("Vs-10", 1, ValueError::NoCommaVolumeSlideTicks.into());
 }
 
 #[test]
@@ -304,51 +304,51 @@ fn tremolo() {
     // 0x7f7f / 127 = 0x101 (largest values)
     assert_line_matches_bytecode_bytes("V~127,127", &[opcodes::TREMOLO, 127, 0x01, 0x01]);
 
-    assert_error_in_mml_line(
+    assert_one_error_in_mml_line(
         "v~0,10",
         1,
         ValueError::CoarseTremoloAmplitudeOutOfRange(0).into(),
     );
-    assert_error_in_mml_line(
+    assert_one_error_in_mml_line(
         "v~9,10",
         1,
         ValueError::CoarseTremoloAmplitudeOutOfRange(9).into(),
     );
-    assert_error_in_mml_line(
+    assert_one_error_in_mml_line(
         "V~0,10",
         1,
         ValueError::TremoloAmplitudeOutOfRange(0).into(),
     );
-    assert_error_in_mml_line(
+    assert_one_error_in_mml_line(
         "V~128,10",
         1,
         ValueError::TremoloAmplitudeOutOfRange(128).into(),
     );
 
-    assert_error_in_mml_line(
+    assert_one_error_in_mml_line(
         "v~4,0",
         5,
         ValueError::TremoloQuarterWavelengthTicksOutOfRange(0).into(),
     );
-    assert_error_in_mml_line(
+    assert_one_error_in_mml_line(
         "V~100,0",
         7,
         ValueError::TremoloQuarterWavelengthTicksOutOfRange(0).into(),
     );
 
-    assert_error_in_mml_line(
+    assert_one_error_in_mml_line(
         "v~4,128",
         5,
         ValueError::TremoloQuarterWavelengthTicksOutOfRange(128).into(),
     );
-    assert_error_in_mml_line(
+    assert_one_error_in_mml_line(
         "V~100,128",
         7,
         ValueError::TremoloQuarterWavelengthTicksOutOfRange(128).into(),
     );
 
-    assert_error_in_mml_line("v~3", 1, ValueError::NoCommaQuarterWavelength.into());
-    assert_error_in_mml_line("V~10", 1, ValueError::NoCommaQuarterWavelength.into());
+    assert_one_error_in_mml_line("v~3", 1, ValueError::NoCommaQuarterWavelength.into());
+    assert_one_error_in_mml_line("V~10", 1, ValueError::NoCommaQuarterWavelength.into());
 }
 
 #[test]
@@ -371,33 +371,33 @@ fn pan_slide() {
     // (0x100 * 30 + 0xff) / 256 = 30
     assert_line_matches_bytecode_bytes("ps -30,256", &[opcodes::PAN_SLIDE_DOWN, 0, 30, 0]);
 
-    assert_error_in_mml_line(
+    assert_one_error_in_mml_line(
         "ps+129,100",
         1,
         ValueError::PanSlideAmountOutOfRange(129).into(),
     );
-    assert_error_in_mml_line(
+    assert_one_error_in_mml_line(
         "ps-129,100",
         1,
         ValueError::PanSlideAmountOutOfRange(-129).into(),
     );
 
-    assert_error_in_mml_line("ps+20,0", 7, ValueError::PanSlideTicksOutOfRange(0).into());
-    assert_error_in_mml_line("ps-40,0", 7, ValueError::PanSlideTicksOutOfRange(0).into());
+    assert_one_error_in_mml_line("ps+20,0", 7, ValueError::PanSlideTicksOutOfRange(0).into());
+    assert_one_error_in_mml_line("ps-40,0", 7, ValueError::PanSlideTicksOutOfRange(0).into());
 
-    assert_error_in_mml_line(
+    assert_one_error_in_mml_line(
         "ps+50,257",
         7,
         ValueError::PanSlideTicksOutOfRange(257).into(),
     );
-    assert_error_in_mml_line(
+    assert_one_error_in_mml_line(
         "ps-60,257",
         7,
         ValueError::PanSlideTicksOutOfRange(257).into(),
     );
 
-    assert_error_in_mml_line("ps+10", 1, ValueError::NoCommaPanSlideTicks.into());
-    assert_error_in_mml_line("ps-10", 1, ValueError::NoCommaPanSlideTicks.into());
+    assert_one_error_in_mml_line("ps+10", 1, ValueError::NoCommaPanSlideTicks.into());
+    assert_one_error_in_mml_line("ps-10", 1, ValueError::NoCommaPanSlideTicks.into());
 }
 
 #[test]
@@ -414,28 +414,28 @@ fn panbrello() {
     // 0x407f / 127 = 0x82 (largest values)
     assert_line_matches_bytecode_bytes("p~64,127", &[opcodes::PANBRELLO, 127, 0x82, 0x00]);
 
-    assert_error_in_mml_line(
+    assert_one_error_in_mml_line(
         "p~0,10",
         1,
         ValueError::PanbrelloAmplitudeOutOfRange(0).into(),
     );
-    assert_error_in_mml_line(
+    assert_one_error_in_mml_line(
         "p~65,10",
         1,
         ValueError::PanbrelloAmplitudeOutOfRange(65).into(),
     );
 
-    assert_error_in_mml_line(
+    assert_one_error_in_mml_line(
         "p~10,0",
         6,
         ValueError::PanbrelloQuarterWavelengthTicksOutOfRange(0).into(),
     );
 
-    assert_error_in_mml_line(
+    assert_one_error_in_mml_line(
         "p~20,128",
         6,
         ValueError::PanbrelloQuarterWavelengthTicksOutOfRange(128).into(),
     );
 
-    assert_error_in_mml_line("p~10", 1, ValueError::NoCommaQuarterWavelength.into());
+    assert_one_error_in_mml_line("p~10", 1, ValueError::NoCommaQuarterWavelength.into());
 }

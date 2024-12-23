@@ -307,16 +307,16 @@ fn assert_mml_subroutine_matches_bytecode(mml: &str, subroutine_index: usize, bc
     assert_eq!(subroutine_bytecode(&mml, subroutine_index), bc_asm);
 }
 
-fn assert_error_in_mml_line(mml_line: &str, line_char: u32, expected_error: ChannelError) {
+fn assert_one_error_in_mml_line(mml_line: &str, line_char: u32, expected_error: ChannelError) {
     let mml = ["@1 dummy_instrument\nA @1 o4\nA ", mml_line].concat();
-    assert_err_in_channel_a_mml(&mml, line_char + 2, expected_error);
+    assert_one_error_in_channel_a_mml(&mml, line_char + 2, expected_error);
 }
 
-fn assert_err_in_channel_a_mml(mml: &str, line_char: u32, expected_error: ChannelError) {
-    assert_one_err_in_mml(mml, "A", line_char, expected_error)
+fn assert_one_error_in_channel_a_mml(mml: &str, line_char: u32, expected_error: ChannelError) {
+    assert_one_channel_error_in_mml(mml, "A", line_char, expected_error)
 }
 
-fn assert_one_err_in_mml(
+fn assert_one_channel_error_in_mml(
     mml: &str,
     identifier: &str,
     line_char: u32,
@@ -363,7 +363,7 @@ fn assert_one_err_in_mml(
     }
 }
 
-fn assert_one_subroutine_err_in_mml(
+fn assert_one_subroutine_error_in_mml(
     mml: &str,
     identifier: &str,
     line_char: u32,
@@ -414,7 +414,7 @@ fn assert_one_subroutine_err_in_mml(
     }
 }
 
-fn assert_subroutine_err_in_mml(mml: &str, expected_errors: &[(&str, &[ChannelError])]) {
+fn assert_subroutine_errors_in_mml(mml: &str, expected_errors: &[(&str, &[ChannelError])]) {
     let dummy_data = dummy_data();
 
     let r = mml::compile_mml(

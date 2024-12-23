@@ -363,7 +363,7 @@ A @0 c GF80 d L [e : f]2 GF80 g
 
 #[test]
 fn set_loop_point_in_loop_is_error() {
-    assert_error_in_mml_line("[a b L c]5", 6, ChannelError::CannotSetLoopPointInALoop);
+    assert_one_error_in_mml_line("[a b L c]5", 6, ChannelError::CannotSetLoopPointInALoop);
 }
 
 #[test]

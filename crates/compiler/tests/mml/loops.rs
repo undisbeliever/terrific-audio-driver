@@ -88,7 +88,7 @@ fn no_tick_instructions_allowed_with_skip_last_loop() {
 
 #[test]
 fn note_range_after_skip_last_loop_bugfix() {
-    assert_err_in_channel_a_mml(
+    assert_one_error_in_channel_a_mml(
         r##"
 @d dummy_instrument
 @oof only_octave_four
@@ -121,17 +121,17 @@ A [ @d c : @oof d]2 o6 e
 
 #[test]
 fn loop_errors() {
-    assert_error_in_mml_line("[ ]3", 3, BytecodeError::NoTicksInLoop.into());
-    assert_error_in_mml_line("[ V+5 ]3", 7, BytecodeError::NoTicksInLoop.into());
-    assert_error_in_mml_line("[ V+5 : V-5 ]3", 13, BytecodeError::NoTicksInLoop.into());
+    assert_one_error_in_mml_line("[ ]3", 3, BytecodeError::NoTicksInLoop.into());
+    assert_one_error_in_mml_line("[ V+5 ]3", 7, BytecodeError::NoTicksInLoop.into());
+    assert_one_error_in_mml_line("[ V+5 : V-5 ]3", 13, BytecodeError::NoTicksInLoop.into());
 
-    assert_error_in_mml_line(
+    assert_one_error_in_mml_line(
         "[ : c ]3",
         3,
         BytecodeError::NoInstructionsBeforeSkipLastLoop.into(),
     );
 
-    assert_error_in_mml_line(
+    assert_one_error_in_mml_line(
         "[ c : ]3",
         7,
         BytecodeError::NoInstructionsAfterSkipLastLoop.into(),
@@ -164,7 +164,7 @@ fn max_loops() {
 
 #[test]
 fn too_many_loops() {
-    assert_error_in_mml_line(
+    assert_one_error_in_mml_line(
         "[[[[[[[[a]11]12]13]14]15]16]17]18",
         8,
         ChannelError::BytecodeError(BytecodeError::StackOverflowInStartLoop(8 * 3)),
@@ -174,13 +174,13 @@ fn too_many_loops() {
 // Test that a note out of range error does not emit a NoTicksInLoop nor NoTicksAfterLoopPoint error.
 #[test]
 fn only_one_error_for_out_of_range_note_in_loop() {
-    assert_error_in_mml_line(
+    assert_one_error_in_mml_line(
         "[ o7 a ]2",
         6,
         BytecodeError::NoteOutOfRange(note("a7"), note("c2")..=note("b6")).into(),
     );
 
-    assert_error_in_mml_line(
+    assert_one_error_in_mml_line(
         "[ c : o7 a ]2",
         10,
         BytecodeError::NoteOutOfRange(note("a7"), note("c2")..=note("b6")).into(),

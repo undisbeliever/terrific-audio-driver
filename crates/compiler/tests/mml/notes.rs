@@ -89,19 +89,19 @@ fn too_many_accidentals() {
     let lots_of_plusses = "+".repeat(1024);
     let lots_of_minuses = "+".repeat(1024);
 
-    assert_error_in_mml_line(
+    assert_one_error_in_mml_line(
         &format!("c{lots_of_plusses}"),
         1,
         ValueError::InvalidNote.into(),
     );
 
-    assert_error_in_mml_line(
+    assert_one_error_in_mml_line(
         &format!("c{lots_of_minuses}"),
         1,
         ValueError::InvalidNote.into(),
     );
 
-    assert_error_in_mml_line(
+    assert_one_error_in_mml_line(
         &format!("c{lots_of_plusses}{lots_of_minuses}"),
         1,
         ValueError::InvalidNote.into(),
@@ -159,7 +159,7 @@ fn lots_of_dots_in_length() {
     );
 
     // Confirm %255 the largest default length in ticks
-    assert_error_in_mml_line("l%256", 1, ValueError::InvalidDefaultLength.into());
+    assert_one_error_in_mml_line("l%256", 1, ValueError::InvalidDefaultLength.into());
 
     assert_line_matches_line(
         "l%255 a...................................................................................",
@@ -167,7 +167,7 @@ fn lots_of_dots_in_length() {
     );
 
     // Confirm 255 is the largest ZenLen
-    assert_error_in_mml_line("C256", 1, ValueError::ZenLenOutOfRange(256).into());
+    assert_one_error_in_mml_line("C256", 1, ValueError::ZenLenOutOfRange(256).into());
 
     assert_line_matches_line(
         "C255 a1...................................................................................",

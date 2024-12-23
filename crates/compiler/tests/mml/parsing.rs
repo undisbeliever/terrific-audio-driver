@@ -68,16 +68,16 @@ ADEF @0 a
 #[test]
 fn utf8_in_mml() {
     assert_eq!("´".len(), 2);
-    assert_error_in_mml_line("´", 1, ChannelError::UnknownCharacters(1));
+    assert_one_error_in_mml_line("´", 1, ChannelError::UnknownCharacters(1));
 
-    assert_error_in_mml_line("´´´´´", 1, ChannelError::UnknownCharacters(5));
+    assert_one_error_in_mml_line("´´´´´", 1, ChannelError::UnknownCharacters(5));
 
     // Google translate for "this is an error"
-    assert_error_in_mml_line("これはエラーです", 1, ChannelError::UnknownCharacters(8));
+    assert_one_error_in_mml_line("これはエラーです", 1, ChannelError::UnknownCharacters(8));
 
     assert_eq!("⚠".len(), 3);
-    assert_error_in_mml_line("⚠☹⛔", 1, ChannelError::UnknownCharacters(3));
+    assert_one_error_in_mml_line("⚠☹⛔", 1, ChannelError::UnknownCharacters(3));
 
     assert_eq!("𝅘𝅥𝅮".len(), 4);
-    assert_error_in_mml_line("𝅘𝅥𝅮𝅘𝅥𝅮𝅘𝅥𝅮𝅗𝅥𝅗𝅥𝅘𝅥𝅮𝅘𝅥𝅮𝅘𝅥𝅮", 1, ChannelError::UnknownCharacters(8));
+    assert_one_error_in_mml_line("𝅘𝅥𝅮𝅘𝅥𝅮𝅘𝅥𝅮𝅗𝅥𝅗𝅥𝅘𝅥𝅮𝅘𝅥𝅮𝅘𝅥𝅮", 1, ChannelError::UnknownCharacters(8));
 }

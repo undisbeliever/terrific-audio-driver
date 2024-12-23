@@ -33,7 +33,7 @@ fn set_temp_gain() {
 
 #[test]
 fn gft0_is_error() {
-    assert_error_in_mml_line("GFT0", 1, ValueError::F0TempGain.into());
+    assert_one_error_in_mml_line("GFT0", 1, ValueError::F0TempGain.into());
 }
 
 #[test]

@@ -244,36 +244,36 @@ A @1 !s
 
 #[test]
 fn portamento_errors() {
-    assert_error_in_mml_line("{c g}4,4", 8, ChannelError::InvalidPortamentoDelay);
-    assert_error_in_mml_line("l2 {c g},2", 10, ChannelError::InvalidPortamentoDelay);
+    assert_one_error_in_mml_line("{c g}4,4", 8, ChannelError::InvalidPortamentoDelay);
+    assert_one_error_in_mml_line("l2 {c g},2", 10, ChannelError::InvalidPortamentoDelay);
 
-    assert_error_in_mml_line("{c g}4,,0", 1, ValueError::PortamentoVelocityZero.into());
-    assert_error_in_mml_line(
+    assert_one_error_in_mml_line("{c g}4,,0", 1, ValueError::PortamentoVelocityZero.into());
+    assert_one_error_in_mml_line(
         "{c g}4,,800",
         9,
         ValueError::PortamentoSpeedOutOfRange(800).into(),
     );
 
-    assert_error_in_mml_line("{c g}%0", 1, ChannelError::PortamentoTooShort);
-    assert_error_in_mml_line("{c g}%1", 1, ChannelError::PortamentoTooShort);
-    assert_error_in_mml_line("{c g}%10,%9", 1, ChannelError::PortamentoTooShort);
+    assert_one_error_in_mml_line("{c g}%0", 1, ChannelError::PortamentoTooShort);
+    assert_one_error_in_mml_line("{c g}%1", 1, ChannelError::PortamentoTooShort);
+    assert_one_error_in_mml_line("{c g}%10,%9", 1, ChannelError::PortamentoTooShort);
 
-    assert_error_in_mml_line("{c c}4", 1, ValueError::PortamentoVelocityZero.into());
-    assert_error_in_mml_line(
+    assert_one_error_in_mml_line("{c c}4", 1, ValueError::PortamentoVelocityZero.into());
+    assert_one_error_in_mml_line(
         "{c > c}16",
         1,
         ValueError::PortamentoVelocityOutOfRange(536).into(),
     );
 
     // Tests if the TryFromIntError panic in ChannelBcGenerator::portamento() has been fixed
-    assert_error_in_mml_line("{c g}%$ffffffff", 1, ChannelError::PortamentoTooLong);
-    assert_error_in_mml_line("{c g}%16387", 1, ChannelError::PortamentoTooLong);
-    assert_error_in_mml_line("c & {c g}%16385 & a", 5, ChannelError::PortamentoTooLong);
+    assert_one_error_in_mml_line("{c g}%$ffffffff", 1, ChannelError::PortamentoTooLong);
+    assert_one_error_in_mml_line("{c g}%16387", 1, ChannelError::PortamentoTooLong);
+    assert_one_error_in_mml_line("c & {c g}%16385 & a", 5, ChannelError::PortamentoTooLong);
 }
 
 #[test]
 fn portamento_note_and_pitch_without_instrument_error() {
-    assert_one_subroutine_err_in_mml(
+    assert_one_subroutine_error_in_mml(
         r#"
 @1 dummy_instrument
 
@@ -286,7 +286,7 @@ A @1 !s
         ChannelError::PortamentoNoteAndPitchWithoutInstrument,
     );
 
-    assert_one_subroutine_err_in_mml(
+    assert_one_subroutine_error_in_mml(
         r#"
 @1 dummy_instrument
 
@@ -399,7 +399,7 @@ fn portamento_pitch_sample_rate() {
 
     assert_line_matches_line("{PR0 PR127999}%1000", "{P0 P$3fff}%1000");
 
-    assert_error_in_mml_line(
+    assert_one_error_in_mml_line(
         "{PR128000 PR0}",
         2,
         ValueError::PlayPitchSampleRateOutOfRange(128000).into(),
@@ -428,7 +428,7 @@ fn portamento_pitch_freq() {
         ],
     );
 
-    assert_error_in_mml_line(
+    assert_one_error_in_mml_line(
         "{PF0 PF16000}%1000",
         1,
         ValueError::CannotConvertPitchFrequency(
@@ -438,7 +438,7 @@ fn portamento_pitch_freq() {
         .into(),
     );
 
-    assert_error_in_mml_line(
+    assert_one_error_in_mml_line(
         "c & {PF0 PF16001}",
         10,
         ValueError::PlayPitchFrequencyOutOfRange(16001).into(),
@@ -1218,37 +1218,37 @@ A @1 !s
 
 #[test]
 fn one_pitch_portamento_errors() {
-    assert_error_in_mml_line("{e}", 1, ChannelError::OneNotePortamentoNoPreviousNote);
+    assert_one_error_in_mml_line("{e}", 1, ChannelError::OneNotePortamentoNoPreviousNote);
 
     // Note is unknown at the start of a loop
-    assert_error_in_mml_line(
+    assert_one_error_in_mml_line(
         "a {e}3,8",
         3,
         ChannelError::OneNotePortamentoPreviousNoteIsNotSlurred,
     );
 
     // Previous note is noise
-    assert_error_in_mml_line(
+    assert_one_error_in_mml_line(
         "N10 & {e}",
         7,
         ChannelError::OneNotePortamentoPreviousNoteIsNoise,
     );
 
     // Previous note is unknown at the start of a loop
-    assert_error_in_mml_line(
+    assert_one_error_in_mml_line(
         "a & [{e} a&]3",
         6,
         ChannelError::OneNotePortamentoPreviousNoteIsUnknown,
     );
 
     // Previous note is unknown at the start of a loop
-    assert_error_in_mml_line(
+    assert_one_error_in_mml_line(
         "a & L {e} c",
         7,
         ChannelError::OneNotePortamentoPreviousNoteIsUnknown,
     );
 
-    assert_one_subroutine_err_in_mml(
+    assert_one_subroutine_error_in_mml(
         r#"
 @1 dummy_instrument
 
@@ -1263,39 +1263,39 @@ A @1 !s
 
 #[test]
 fn portamento_pitch_list_errors() {
-    assert_error_in_mml_line("{   ", 5, ChannelError::MissingEndPortamento);
+    assert_one_error_in_mml_line("{   ", 5, ChannelError::MissingEndPortamento);
 
-    assert_error_in_mml_line("{ }}", 3, ChannelError::MissingEndPortamento);
+    assert_one_error_in_mml_line("{ }}", 3, ChannelError::MissingEndPortamento);
 
-    assert_error_in_mml_line("{ [ a b }", 3, ChannelError::InvalidPitchListSymbol);
+    assert_one_error_in_mml_line("{ [ a b }", 3, ChannelError::InvalidPitchListSymbol);
 
-    assert_error_in_mml_line("{ a }", 1, ChannelError::OneNotePortamentoNoPreviousNote);
-    assert_error_in_mml_line("{ a b c }", 1, ChannelError::PortamentoRequiresTwoPitches);
-    assert_error_in_mml_line("{ a b c d }", 1, ChannelError::PortamentoRequiresTwoPitches);
+    assert_one_error_in_mml_line("{ a }", 1, ChannelError::OneNotePortamentoNoPreviousNote);
+    assert_one_error_in_mml_line("{ a b c }", 1, ChannelError::PortamentoRequiresTwoPitches);
+    assert_one_error_in_mml_line("{ a b c d }", 1, ChannelError::PortamentoRequiresTwoPitches);
 
-    assert_error_in_mml_line(
+    assert_one_error_in_mml_line(
         "{ P2000 }",
         1,
         ChannelError::OneNotePortamentoNoPreviousNote,
     );
-    assert_error_in_mml_line(
+    assert_one_error_in_mml_line(
         "{ P2000 P1000 P500 }",
         1,
         ChannelError::PortamentoRequiresTwoPitches,
     );
 
-    assert_error_in_mml_line("{ a a }", 1, ValueError::PortamentoVelocityZero.into());
-    assert_error_in_mml_line(
+    assert_one_error_in_mml_line("{ a a }", 1, ValueError::PortamentoVelocityZero.into());
+    assert_one_error_in_mml_line(
         "{ o5 a o5 a }",
         1,
         ValueError::PortamentoVelocityZero.into(),
     );
-    assert_error_in_mml_line(
+    assert_one_error_in_mml_line(
         "{ o5 a o3 >> a }",
         1,
         ValueError::PortamentoVelocityZero.into(),
     );
-    assert_error_in_mml_line(
+    assert_one_error_in_mml_line(
         "{ P512 P512 }",
         1,
         ValueError::PortamentoVelocityZero.into(),
@@ -1359,7 +1359,7 @@ fn portamento_note_tracking_bugfix_2() {
 
 #[test]
 fn portamento_panic_bugfix() {
-    assert_error_in_mml_line("{c}3", 1, ChannelError::OneNotePortamentoNoPreviousNote);
+    assert_one_error_in_mml_line("{c}3", 1, ChannelError::OneNotePortamentoNoPreviousNote);
 
-    assert_error_in_mml_line("{}", 1, ChannelError::PortamentoRequiresTwoPitches);
+    assert_one_error_in_mml_line("{}", 1, ChannelError::PortamentoRequiresTwoPitches);
 }

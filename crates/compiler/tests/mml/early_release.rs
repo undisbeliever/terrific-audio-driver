@@ -130,12 +130,12 @@ fn min_ticks_deduplication() {
 
 #[test]
 fn early_release_raw_gain_is_error() {
-    assert_error_in_mml_line("q10,,15", 5, ValueError::NoOptionalGainMode.into());
-    assert_error_in_mml_line("q10,2,15", 6, ValueError::NoOptionalGainMode.into());
+    assert_one_error_in_mml_line("q10,,15", 5, ValueError::NoOptionalGainMode.into());
+    assert_one_error_in_mml_line("q10,2,15", 6, ValueError::NoOptionalGainMode.into());
 }
 
 #[test]
 fn early_release_comma_f0_gain_is_error() {
-    assert_error_in_mml_line("q10,F0", 5, ValueError::OptionalGainCannotBeZero.into());
-    assert_error_in_mml_line("q10,2,F0", 7, ValueError::OptionalGainCannotBeZero.into());
+    assert_one_error_in_mml_line("q10,F0", 5, ValueError::OptionalGainCannotBeZero.into());
+    assert_one_error_in_mml_line("q10,2,F0", 7, ValueError::OptionalGainCannotBeZero.into());
 }

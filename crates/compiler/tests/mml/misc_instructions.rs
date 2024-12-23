@@ -59,32 +59,32 @@ fn play_noise() {
     assert_line_matches_bytecode("N0", &["play_noise 0 keyoff 24"]);
     assert_line_matches_bytecode("N31", &["play_noise 31 keyoff 24"]);
 
-    assert_error_in_mml_line("N32", 1, ValueError::NoiseFrequencyOutOfRange(32).into());
+    assert_one_error_in_mml_line("N32", 1, ValueError::NoiseFrequencyOutOfRange(32).into());
 
-    assert_error_in_mml_line("N,4", 1, ValueError::NoNoiseFrequency.into());
+    assert_one_error_in_mml_line("N,4", 1, ValueError::NoNoiseFrequency.into());
 
-    assert_error_in_mml_line("N c", 1, ValueError::NoNoiseFrequency.into());
+    assert_one_error_in_mml_line("N c", 1, ValueError::NoNoiseFrequency.into());
 
-    assert_error_in_mml_line("N5,", 3, ChannelError::NoLengthAfterComma);
+    assert_one_error_in_mml_line("N5,", 3, ChannelError::NoLengthAfterComma);
 }
 
 #[test]
 fn enable_pitch_mod() {
     assert_channel_b_line_matches_bytecode("PM", &["enable_pmod"]);
 
-    assert_one_err_in_mml(
+    assert_one_channel_error_in_mml(
         "A PM",
         "A",
         3,
         BytecodeError::PmodNotAllowedInChannelA.into(),
     );
-    assert_one_err_in_mml(
+    assert_one_channel_error_in_mml(
         "G PM",
         "G",
         3,
         BytecodeError::PmodNotAllowedInChannelsGH.into(),
     );
-    assert_one_err_in_mml(
+    assert_one_channel_error_in_mml(
         "H PM",
         "H",
         3,
@@ -96,19 +96,19 @@ fn enable_pitch_mod() {
 fn disable_pitch_mod() {
     assert_channel_b_line_matches_bytecode("PM0", &["disable_pmod"]);
 
-    assert_one_err_in_mml(
+    assert_one_channel_error_in_mml(
         "A PM0",
         "A",
         3,
         BytecodeError::PmodNotAllowedInChannelA.into(),
     );
-    assert_one_err_in_mml(
+    assert_one_channel_error_in_mml(
         "G PM0",
         "G",
         3,
         BytecodeError::PmodNotAllowedInChannelsGH.into(),
     );
-    assert_one_err_in_mml(
+    assert_one_channel_error_in_mml(
         "H PM0",
         "H",
         3,
