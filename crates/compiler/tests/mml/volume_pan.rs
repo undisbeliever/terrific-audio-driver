@@ -5,21 +5,24 @@
 use crate::*;
 
 #[test]
-fn volume() {
+fn set_volume() {
     assert_line_matches_bytecode("v1", &["set_volume 16"]);
     assert_line_matches_bytecode("v8", &["set_volume 128"]);
     assert_line_matches_bytecode("v16", &["set_volume 255"]);
 
+    assert_line_matches_bytecode("V0", &["set_volume 0"]);
+    assert_line_matches_bytecode("V42", &["set_volume 42"]);
+    assert_line_matches_bytecode("V255", &["set_volume 255"]);
+}
+
+#[test]
+fn adjust_volume() {
     assert_line_matches_bytecode("v+1", &["adjust_volume +16"]);
     assert_line_matches_bytecode("v+2", &["adjust_volume +32"]);
     assert_line_matches_bytecode("v+7", &["adjust_volume +112"]);
     assert_line_matches_bytecode("v-3", &["adjust_volume -48"]);
     assert_line_matches_bytecode("v-4", &["adjust_volume -64"]);
     assert_line_matches_bytecode("v-8", &["adjust_volume -128"]);
-
-    assert_line_matches_bytecode("V0", &["set_volume 0"]);
-    assert_line_matches_bytecode("V42", &["set_volume 42"]);
-    assert_line_matches_bytecode("V255", &["set_volume 255"]);
 
     assert_line_matches_bytecode("V-20", &["adjust_volume -20"]);
     assert_line_matches_bytecode("V-40", &["adjust_volume -40"]);
@@ -28,11 +31,14 @@ fn volume() {
 }
 
 #[test]
-fn pan() {
+fn set_pan() {
     assert_line_matches_bytecode("p0", &["set_pan 0"]);
     assert_line_matches_bytecode("p64", &["set_pan 64"]);
     assert_line_matches_bytecode("p128", &["set_pan 128"]);
+}
 
+#[test]
+fn adjust_pan() {
     assert_line_matches_bytecode("p+16", &["adjust_pan +16"]);
     assert_line_matches_bytecode("p+32", &["adjust_pan +32"]);
     assert_line_matches_bytecode("p-48", &["adjust_pan -48"]);
