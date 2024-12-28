@@ -443,6 +443,7 @@ inline func mul(u8a : u8 in a, u8b : u8 in y) : u16 in ya {
 in code {
 
 // MUST be the first thing in the `code` bank (so the starting address is consistent across builds).
+#[fallthrough]
 func main() {
     sp = x = 0xff;
     direct_page = false;
@@ -661,7 +662,11 @@ func main() {
 
     io_commands.init__inline();
 
+// Fallthrough into mainloop()
+}
 
+
+func mainloop() {
     // Reset counters to ensure `maxTimerCounter` is accurate
     // Timers and counters reset when the timer control bits transition from 0 to 1
     smp.control = 0;
@@ -672,31 +677,37 @@ func main() {
         smp.control = smp.CONTROL__ENABLE_TIMER_0 | smp.CONTROL__ENABLE_TIMER_1;
     }
 
-    ^while true {
+    // Process first song tick immediately
+    // So echo registers are setup before the first sfx tick
+    goto ProcessMusicChannel;
+
+    Loop:
         io_commands.process_io_ports__inline();
 
         // Song tick timer
         a = smp.counter_0;
-        if !zero {
+        goto SkipMusicTick if zero;
             if a >= maxTimerCounter {
                 maxTimerCounter = a;
             }
 
+        ProcessMusicChannel:
             songTickCounter++;
-
             _process_music_channels__inline();
-        }
+    SkipMusicTick:
 
         // SFX tick timer
         a = smp.counter_1;
-        if !zero {
+        goto SkipSfxTick if zero;
             if a >= maxTimerCounter {
                 maxTimerCounter = a;
             }
 
             _process_sfx_channels__inline();
-        }
-    }
+    SkipSfxTick:
+
+        // Loop forever
+        ^goto Loop;
 }
 
 
