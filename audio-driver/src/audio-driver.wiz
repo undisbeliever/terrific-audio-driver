@@ -283,6 +283,24 @@ in zeropage {
     // (Value is only written to the flag register if MSB clear)
     var noiseFreq_music : u8;
     var noiseFreq_sfx : u8;
+
+
+// --- All zeropage variables after `echo` are not cleared in main() ---
+
+    // Echo buffer settings
+    //
+    // MUST be last, used to determine when zeropage is cleared.
+    var echo : EchoBufferSettings;
+
+    // Used to determine if the S-DSP echo registers need updating.
+    //
+    // The address of this variable is also used by rust code to determine size of `echo`.
+    // (bit field)
+    var echoDirty : u8;
+        let ECHO_DIRTY__FIR_FILTER_BIT = 7;
+        let ECHO_DIRTY__CLEAR_FIR_BIT = 0;  // Clear FIR filter before writing FIR filter
+        let ECHO_DIRTY__VOLUME_BIT = 6;
+        let ECHO_DIRTY__FEEDBACK_BIT = 5;
 }
 
 
@@ -444,11 +462,18 @@ func main() {
     {
         // Assumes ECHO write is disabled.
 
+        // Copy song echo data to `echo`.
         y = offsetof(SongHeader, echo);
+        do {
+            a = songPtr[y];
+            ((&echo as u8 - offsetof(SongHeader, echo)) as *u8)[y] = a;
+            y++;
+        } while y < offsetof(SongHeader, echo) + sizeof(typeof(echo));
 
-        // EchoBufferSettings.edl (mask for safety)
-        a = songPtr[y] & 0xf;
-        y++;
+
+        // Mask and read EDL
+        echo.edl &= 0xf;
+        a = echo.edl;
 
         // Set EDL
         smp.dsp_addr = GlobalDspAddr.EDL as u8;
@@ -456,6 +481,7 @@ func main() {
 
 
         // Calculate echo address
+        // a = echo.edl
 
         // a = 0x100 - a * (2048 / 256)
 
@@ -498,38 +524,6 @@ func main() {
         // Reset and enable timer 0 (timers are reset on a transition from 0 to 1)
         smp.control = 0;
         smp.control = smp.CONTROL__ENABLE_TIMER_0;
-
-
-        // Copy FIR filter from header to C0-C7
-        smp.dsp_addr = GlobalDspAddr.C0 as u8;
-        do {
-            // EchoBufferSettings.firFilter
-            smp.dsp_data = a = songPtr[y];
-            y++;
-
-            // Assumes GlobalDspAddr.C1 - GlobalDspAddr.C0 == 0x10
-            // Assumes GlobalDspAddr.C7 + 0x10 >= 0x80
-            smp.dsp_addr += 0x10;
-        } while !negative;
-
-
-        // EchoBufferSettings.echoFeedback
-        a = songPtr[y];
-        y++;
-
-        smp.dsp_addr = GlobalDspAddr.EFB as u8;
-        smp.dsp_data = a;
-
-
-        // EchoBufferSettings.echoVolume
-        a = songPtr[y];
-
-        smp.dsp_addr = GlobalDspAddr.EVOL_L as u8;
-        smp.dsp_data = a;
-
-        // Assumes GlobalDspAddr.EVOL_R = GlobalDspAddr.EVOL_L | 0x10
-        smp.dsp_addr $ 4 = true;
-        smp.dsp_data = a;
     }
 
     // A copy of S-DSP `ESA` is on the stack.
@@ -550,10 +544,10 @@ func main() {
     write_dsp(GlobalDspAddr.DIR, >:COMMON_DATA_HEADER_END_ADDR);
 
 
-    // Clear all zero-page variables before `songPtr`.
+    // Clear all zero-page variables before `echo` variables
     // Assumes `songPtr` and `loaderDataType` is AFTER `zeropage` bank.
     a = 0;
-    x = &songPtr as u8;
+    x = &echo as u8;
     do {
         x--;
         *(x as *u8) = a;
@@ -561,6 +555,7 @@ func main() {
 
 
     a = 0xff;
+    echoDirty = a;
     io_musicChannelsMask = a;
     musicSfxChannelMask = a;
     keyOnMask_music = a;
@@ -748,6 +743,8 @@ inline func _process_music_channels__inline() {
     y = a = keyOffShadow_music & musicSfxChannelMask;
     write_dsp(GlobalDspAddr.KOFF, y);
 
+    _process_echo_registers__inline();
+
     write_dsp(GlobalDspAddr.PMON, pmonShadow);
 
     y = noiseFreq_music;
@@ -909,6 +906,7 @@ var _afterFirstChannel : u8 in zpTmp2;
     write_dsp(GlobalDspAddr.KON, _konShadow);
 
 
+    // X = _afterFirstChannel
     ^do {
         // MUST NOT use `_konShadow` and `_afterFirstChannel` in this loop.
         // The are clobbered by pitch effects and bytecode.
@@ -1044,6 +1042,67 @@ var _afterFirstChannel : u8 in zpTmp2;
 
         x++;
     } while x < channelIndexEndLoop;
+}
+
+
+// Write echo variables to the S-DSP echo registers if the `echoDirty` bits are set
+inline func _process_echo_registers__inline() {
+    a = echoDirty;
+    if !zero {
+        // assumes ECHO_DIRTY__FIR_FILTER_BIT == 7
+        if negative {
+            y = 0;
+
+            // assumes ECHO_DIRTY__CLEAR_FIR_BIT == 0
+            a >>>= 1;
+            if carry {
+                // Clear FIR filter
+                carry = false;
+                a = GlobalDspAddr.C0 as u8;
+                do {
+                    // Y = 0
+                    write_dsp(a as GlobalDspAddr, y);
+
+                    // Assumes GlobalDspAddr.C1 - GlobalDspAddr.C0 == 0x10
+                    // Assumes GlobalDspAddr.C7 + 0x10 >= 0x80
+                    a +#= 0x10;
+                } while !negative;
+            }
+
+            smp.dsp_addr = GlobalDspAddr.C0 as u8;
+            // carry clear
+            // Y = 0
+            do {
+                // EchoBufferSettings.firFilter
+                smp.dsp_data = a = echo.firFilter[y] as u8;
+                y++;
+
+                // Assumes GlobalDspAddr.C1 - GlobalDspAddr.C0 == 0x10
+                // Assumes GlobalDspAddr.C7 + 0x10 >= 0x80
+                smp.dsp_addr += 0x10;
+            } while !negative;
+
+            a = echoDirty;
+        }
+
+        // Assumes ECHO_DIRTY__VOLUME_BIT == 6
+        a <<<= 1;
+        if negative {
+            a = echo.echoVolume as u8;
+            smp.dsp_addr = GlobalDspAddr.EVOL_L as u8;
+            smp.dsp_data = a;
+
+            // Assumes GlobalDspAddr.EVOL_R = GlobalDspAddr.EVOL_L | 0x10
+            smp.dsp_addr $ 4 = true;
+            smp.dsp_data = a;
+        }
+
+        // Always update echo feedback
+        smp.dsp_addr = GlobalDspAddr.EFB as u8;
+        smp.dsp_data = echo.echoFeedback as u8;
+
+        echoDirty = 0;
+    }
 }
 
 

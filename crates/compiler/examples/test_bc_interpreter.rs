@@ -13,8 +13,8 @@ use compiler::{
     common_audio_data::{build_common_audio_data, CommonAudioData},
     data::{load_project_file, load_text_file_with_limit, validate_project_file_names},
     driver_constants::{
-        addresses, io_commands, LoaderDataType, BC_TOTAL_STACK_SIZE, N_MUSIC_CHANNELS,
-        S_DSP_EON_REGISTER, S_SMP_TIMER_0_REGISTER,
+        addresses, io_commands, LoaderDataType, BC_TOTAL_STACK_SIZE, ECHO_VARIABLES_SIZE,
+        N_MUSIC_CHANNELS, S_DSP_EON_REGISTER, S_SMP_TIMER_0_REGISTER,
     },
     mml::compile_mml,
     samples::build_sample_and_instrument_data,
@@ -152,6 +152,15 @@ fn assert_bc_intrepreter_matches_emu(
         "eonShadow_music (tick_count: {tick_count})"
     );
 
+    let test_range = |addr: u16, size: usize, name: &'static str| {
+        let addr = usize::from(addr);
+        let range = addr..addr + size;
+        assert_eq!(
+            int_apuram[range.clone()],
+            emu_apuram[range],
+            "{name} mismatch (tick_count: {tick_count})"
+        );
+    };
     let test_channel_soa = |addr: u16, name: &'static str| {
         let addr = usize::from(addr);
         let range = addr..addr + N_MUSIC_CHANNELS;
@@ -280,15 +289,12 @@ fn assert_bc_intrepreter_matches_emu(
         );
     }
 
-    {
-        let addr = usize::from(addresses::BYTECODE_STACK);
-        let range = addr..addr + BC_TOTAL_STACK_SIZE;
-        assert_eq!(
-            int_apuram[range.clone()],
-            emu_apuram[range],
-            "bytecode stack mismatch (tick_count: {tick_count})"
-        );
-    }
+    test_range(
+        addresses::BYTECODE_STACK,
+        BC_TOTAL_STACK_SIZE,
+        "bytecode stack",
+    );
+    test_range(addresses::ECHO_VARIABLES, ECHO_VARIABLES_SIZE, "echo");
 }
 
 fn read_ptrs(apuram: &[u8; 0x10000], addr_l: u16, addr_h: u16) -> [Option<u16>; N_MUSIC_CHANNELS] {

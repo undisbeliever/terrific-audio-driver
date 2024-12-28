@@ -8,6 +8,7 @@ use crate::bytecode::opcodes;
 use crate::bytecode::InstrumentId;
 use crate::bytecode::Pan;
 use crate::common_audio_data::CommonAudioData;
+use crate::driver_constants::ECHO_VARIABLES_SIZE;
 use crate::driver_constants::{
     addresses, LoaderDataType, BC_CHANNEL_STACK_OFFSET, BC_CHANNEL_STACK_SIZE,
     BC_STACK_BYTES_PER_LOOP, COMMON_DATA_BYTES_PER_INSTRUMENT, N_MUSIC_CHANNELS,
@@ -106,22 +107,60 @@ struct Channel {
     dsp: VirtualChannel,
 }
 
+#[derive(Clone)]
+struct EchoVariables {
+    edl: u8,
+    fir_filter: [i8; 8],
+    feedback: i8,
+    volume: i8,
+}
+
+impl EchoVariables {
+    // Using raw numbers, not constant for data size so I have a compile error
+    // when audio-driver echo variable size changes.
+    fn to_driver_data(&self) -> [u8; 11] {
+        let to_u8 = |i: i8| i.to_le_bytes()[0];
+
+        let mut out = [0; 11];
+
+        out[0] = self.edl;
+        for (i, &f) in self.fir_filter.iter().enumerate() {
+            out[i + 1] = to_u8(f);
+        }
+        out[9] = to_u8(self.feedback);
+        out[10] = to_u8(self.volume);
+
+        out
+    }
+}
+
 struct InterpreterOutput {
     channels: [Channel; N_MUSIC_CHANNELS],
     song_data_addr: u16,
     stereo_flag: bool,
     song_tick_counter: u16,
     tick_clock: u8,
+
+    echo: EchoVariables,
 }
 
 struct GlobalState {
     timer_register: u8,
+    echo: EchoVariables,
 }
 
 impl GlobalState {
-    fn new(tick_clock: TickClock) -> Self {
+    fn new(tick_clock: TickClock, song_data: &SongData) -> Self {
+        let echo = &song_data.metadata().echo_buffer;
+
         Self {
             timer_register: tick_clock.as_u8(),
+            echo: EchoVariables {
+                edl: echo.edl.as_u8(),
+                fir_filter: echo.fir,
+                feedback: echo.feedback,
+                volume: echo.echo_volume,
+            },
         }
     }
 }
@@ -1140,7 +1179,7 @@ where
                     .map(|c| ChannelState::new(Some(c), common_audio_data.song_data_addr()))
             }),
             tick_counter: TickCounter::default(),
-            global: GlobalState::new(song_data.metadata().tick_clock),
+            global: GlobalState::new(song_data.metadata().tick_clock, &song_data),
             stereo_flag,
             song_data,
             common_audio_data,
@@ -1157,7 +1196,7 @@ where
         let mut out = Self {
             channels: Default::default(),
             tick_counter: TickCounter::default(),
-            global: GlobalState::new(song_data.metadata().tick_clock),
+            global: GlobalState::new(song_data.metadata().tick_clock, &song_data),
             stereo_flag,
             song_data,
             common_audio_data,
@@ -1311,6 +1350,7 @@ where
             song_tick_counter: (self.tick_counter.value() & 0xffff).try_into().unwrap(),
             song_data_addr: self.common_audio_data.song_data_addr(),
             stereo_flag: self.stereo_flag,
+            echo: self.global.echo.clone(),
         };
 
         o.write_to_emulator(emu);
@@ -1802,6 +1842,17 @@ impl InterpreterOutput {
                     usize::from(addresses::BYTECODE_STACK) + BC_CHANNEL_STACK_SIZE * channel_index;
                 apuram[addr..addr + BC_CHANNEL_STACK_SIZE].copy_from_slice(&c.bc_stack);
             }
+
+            {
+                let echo_addr = usize::from(addresses::ECHO_VARIABLES);
+                let echo_dirty = usize::from(addresses::ECHO_DIRTY);
+
+                let echo_variables: [u8; ECHO_VARIABLES_SIZE] = self.echo.to_driver_data();
+                apuram[echo_addr..echo_addr + ECHO_VARIABLES_SIZE].copy_from_slice(&echo_variables);
+
+                // mark echo DSP registers out of date
+                apuram[echo_dirty] = 0xff;
+            }
         }
 
         // write dsp registers
@@ -1818,11 +1869,21 @@ impl InterpreterOutput {
 
 #[cfg(test)]
 mod test {
-    use super::{ChannelState, GlobalState};
-    use crate::{
-        driver_constants::SONG_HEADER_SIZE,
-        time::{TickClock, TickCounter},
-    };
+    use super::{ChannelState, EchoVariables, GlobalState};
+    use crate::driver_constants::{IDENTITY_FILTER, SONG_HEADER_SIZE};
+    use crate::time::{TickCounter, MIN_TICK_TIMER};
+
+    fn blank_global_state() -> GlobalState {
+        GlobalState {
+            timer_register: MIN_TICK_TIMER,
+            echo: EchoVariables {
+                edl: 0,
+                fir_filter: IDENTITY_FILTER,
+                feedback: 0,
+                volume: 0,
+            },
+        }
+    }
 
     #[test]
     fn test_instruction_size_if_not_sleep_nor_branch() {
@@ -1832,7 +1893,7 @@ mod test {
         for opcode in u8::MIN..u8::MAX {
             bytecode[0] = opcode;
 
-            let mut global = GlobalState::new(TickClock::MAX);
+            let mut global = blank_global_state();
             let mut cs = ChannelState::new(None, 0);
             cs.ticks = TickCounter::new(0);
             cs.instruction_ptr = 0;

@@ -80,6 +80,8 @@ pub mod addresses {
         CHANNEL_PAN_EFFECT_OFFSET_H,
         CHANNEL_PAN_EFFECT_COUNTER,
         CHANNEL_PAN_EFFECT_HALF_WAVELENGTH,
+        ECHO_VARIABLES,
+        ECHO_DIRTY,
     );
 
     // MUST match `audio-driver/src/common_memmap.wiz`
@@ -108,6 +110,8 @@ pub mod addresses {
         "BRR directory is not page aligned"
     );
 }
+
+pub const ECHO_VARIABLES_SIZE: usize = (addresses::ECHO_DIRTY - addresses::ECHO_VARIABLES) as usize;
 
 pub const TAD_IO_VERSION: usize = _symbols::TAD_IO_VERSION;
 

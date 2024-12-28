@@ -82,6 +82,9 @@ const AUDIO_DRIVER_SYMBOLS: &[(&str, &str)] = &[
     ("channelSoA.panEffect_offset_h", "CHANNEL_PAN_EFFECT_OFFSET_H"),
     ("channelSoA.panEffect_counter", "CHANNEL_PAN_EFFECT_COUNTER"),
     ("channelSoA.panEffect_halfWavelength", "CHANNEL_PAN_EFFECT_HALF_WAVELENGTH"),
+
+    ("echo", "ECHO_VARIABLES"),
+    ("echoDirty", "ECHO_DIRTY"),
 ];
 
 fn find_wiz_binary() -> PathBuf {
