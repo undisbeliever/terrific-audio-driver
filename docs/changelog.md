@@ -15,6 +15,9 @@ MML changes:
  * `#EchoVolume` now accepts a stereo input
  * `#EchoVolume` only accepts unsigned (0 - 127) values
 
+GUI changes:
+ * Fixed a rust bytecode interpreter desync caused global instructions to be executed in the wrong order.
+
 
 Version 0.0.16
 ==============

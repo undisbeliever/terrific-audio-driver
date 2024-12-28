@@ -1278,14 +1278,13 @@ where
             if c.ticks < smallest.ticks {
                 second_smallest_ticks = smallest.ticks;
                 smallest = c;
+            } else if c.ticks < second_smallest_ticks {
+                second_smallest_ticks = c.ticks;
             }
         }
 
         if smallest.ticks < target_ticks {
-            Some((
-                smallest,
-                min(second_smallest_ticks + TickCounter::new(1), target_ticks),
-            ))
+            Some((smallest, min(second_smallest_ticks, target_ticks)))
         } else {
             None
         }
@@ -1303,7 +1302,14 @@ where
         while let Some((c, next_channel_ticks)) =
             Self::next_channel_to_process(&mut self.channels, target_ticks)
         {
+            debug_assert!(next_channel_ticks >= c.ticks);
             debug_assert!(next_channel_ticks <= target_ticks);
+
+            c.process_next_bytecode(&mut self.global, song_data);
+            watchdog_counter -= 1;
+            if watchdog_counter == 0 {
+                return false;
+            }
 
             while c.ticks < next_channel_ticks {
                 c.process_next_bytecode(&mut self.global, song_data);
