@@ -11,6 +11,7 @@ mod broken_chord;
 mod detune;
 mod early_release;
 mod echo;
+mod header;
 mod instruments_and_envelope;
 mod loops;
 mod misc_instructions;
@@ -34,7 +35,7 @@ use compiler::driver_constants::{
     BC_STACK_BYTES_PER_SUBROUTINE_CALL, MAX_SUBROUTINES,
 };
 use compiler::envelope::{Adsr, Envelope, Gain};
-use compiler::errors::{BytecodeError, ChannelError, SongError, ValueError};
+use compiler::errors::{BytecodeError, ChannelError, MmlLineError, SongError, ValueError};
 use compiler::mml;
 use compiler::notes::{Note, Octave};
 use compiler::pitch_table::{
@@ -452,6 +453,41 @@ fn assert_subroutine_errors_in_mml(mml: &str, expected_errors: &[(&str, &[Channe
 
     if !matches_err {
         panic!("Subroutine error mismatch:\nInput: {mml:?}\nExpected: {expected_errors:?}\nResult: {r:?}")
+    }
+}
+
+fn assert_one_header_error_in_mml(mml: &str, line_number: u32, expected_error: MmlLineError) {
+    let dummy_data = dummy_data();
+
+    let r = mml::compile_mml(
+        &TextFile {
+            contents: mml.to_string(),
+            path: None,
+            file_name: "".to_owned(),
+        },
+        None,
+        &dummy_data.instruments_and_samples,
+        &dummy_data.pitch_table,
+    );
+
+    let valid = match &r {
+        Err(SongError::MmlError(e)) => {
+            if e.line_errors.len() == 1
+                && e.channel_errors.is_empty()
+                && e.subroutine_errors.is_empty()
+            {
+                let e = e.line_errors.first().unwrap();
+
+                e.0.line_number() == line_number && e.1 == expected_error
+            } else {
+                false
+            }
+        }
+        _ => false,
+    };
+
+    if !valid {
+        panic!("expected a single {expected_error:?} error on line {line_number}\nInput: {mml:?}\nResult: {r:?}")
     }
 }
 

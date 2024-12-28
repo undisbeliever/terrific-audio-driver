@@ -1,0 +1,24 @@
+#Title bc_interpreter echo stress test
+
+#EchoLength   240
+#EchoFeedback  80
+; Test stereo echo
+#EchoVolume    40  80
+
+#Timer 64
+
+@1 square
+
+; ::TODO add echo instructions::
+
+A @1 v16 l8 o4
+
+A E1
+A cdefg r1
+
+A E0
+A cdefg r1
+
+A E1
+A cdefg r1
+

@@ -63,6 +63,6 @@ TadSubroutines:
 
 .export Tad_Loader_SIZE         =  116
 .export Tad_AudioDriver_SIZE    = 2048
-.export Tad_BlankSong_SIZE      =   29
+.export Tad_BlankSong_SIZE      =   30
 
 

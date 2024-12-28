@@ -70,6 +70,9 @@ pub struct FilePosRange {
 }
 
 impl FilePosRange {
+    pub fn line_number(&self) -> u32 {
+        self.line_number
+    }
     pub fn line_char(&self) -> u32 {
         self.line_char
     }

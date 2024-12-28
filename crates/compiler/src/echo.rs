@@ -21,6 +21,12 @@ u8_value_newtype!(
     ECHO_BUFFER_MAX_EDL
 );
 
+u8_value_newtype!(EchoVolume, EchoVolumeOutOfRange, NoEchoVolume, 0, 127);
+
+impl EchoVolume {
+    pub const ZERO: Self = Self(0);
+}
+
 // Source: SnesLab https://sneslab.net/wiki/FIR_Filter
 pub const MAX_FIR_ABS_SUM: i32 = 128;
 
@@ -92,7 +98,8 @@ pub struct EchoBuffer {
     pub edl: EchoEdl,
     pub fir: [i8; FIR_FILTER_SIZE],
     pub feedback: i8,
-    pub echo_volume: i8,
+    pub echo_volume_l: EchoVolume,
+    pub echo_volume_r: EchoVolume,
 }
 
 impl EchoBuffer {

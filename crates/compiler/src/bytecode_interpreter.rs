@@ -112,23 +112,25 @@ struct EchoVariables {
     edl: u8,
     fir_filter: [i8; 8],
     feedback: i8,
-    volume: i8,
+    volume_l: u8,
+    volume_r: u8,
 }
 
 impl EchoVariables {
     // Using raw numbers, not constant for data size so I have a compile error
     // when audio-driver echo variable size changes.
-    fn to_driver_data(&self) -> [u8; 11] {
+    fn to_driver_data(&self) -> [u8; 12] {
         let to_u8 = |i: i8| i.to_le_bytes()[0];
 
-        let mut out = [0; 11];
+        let mut out = [0; 12];
 
         out[0] = self.edl;
         for (i, &f) in self.fir_filter.iter().enumerate() {
             out[i + 1] = to_u8(f);
         }
         out[9] = to_u8(self.feedback);
-        out[10] = to_u8(self.volume);
+        out[10] = self.volume_l;
+        out[11] = self.volume_r;
 
         out
     }
@@ -159,7 +161,8 @@ impl GlobalState {
                 edl: echo.edl.as_u8(),
                 fir_filter: echo.fir,
                 feedback: echo.feedback,
-                volume: echo.echo_volume,
+                volume_l: echo.echo_volume_l.as_u8(),
+                volume_r: echo.echo_volume_r.as_u8(),
             },
         }
     }
@@ -1880,7 +1883,8 @@ mod test {
                 edl: 0,
                 fir_filter: IDENTITY_FILTER,
                 feedback: 0,
-                volume: 0,
+                volume_l: 0,
+                volume_r: 0,
             },
         }
     }

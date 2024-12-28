@@ -117,6 +117,6 @@ LoadAudioData           = $80def0
 
 Tad_Loader_SIZE         =  116
 Tad_AudioDriver_SIZE    = 2048
-Tad_BlankSong_SIZE      =   29
+Tad_BlankSong_SIZE      =   30
 
 

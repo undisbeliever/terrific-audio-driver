@@ -41,7 +41,8 @@ const BlankSong = SongHeader{
         edl = 0,
         firFilter = [0x7f, 0 , 0 , 0 , 0 , 0 , 0 , 0], // Identity FIR filter
         echoFeedback = 0,
-        echoVolume = 0,
+        echoVolume_l = 0,
+        echoVolume_r = 0,
     },
 
     // Maximum tick timer

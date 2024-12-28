@@ -686,7 +686,7 @@ func mainloop() {
 
         // Song tick timer
         a = smp.counter_0;
-        goto SkipMusicTick if zero;
+        ^goto SkipMusicTick if zero;
             if a >= maxTimerCounter {
                 maxTimerCounter = a;
             }
@@ -1099,13 +1099,25 @@ inline func _process_echo_registers__inline() {
         // Assumes ECHO_DIRTY__VOLUME_BIT == 6
         a <<<= 1;
         if negative {
-            a = echo.echoVolume as u8;
+            a = echo.echoVolume_l;
+            y = echo.echoVolume_r;  // faster than loading Y in else branch
+
+            // Reading carry here saves a `CLC` instruction when averaging echo volumes
+            carry = loaderDataType $ LoaderDataType.STEREO_FLAG_BIT;
+            if !carry {
+                // Mono
+
+                // Calculate average echo volume.
+                // Assumes echoVolume_l and echoVolume_r are both > 127.
+                y = a = (a +# echo.echoVolume_r) >>> 1;
+            }
+
             smp.dsp_addr = GlobalDspAddr.EVOL_L as u8;
             smp.dsp_data = a;
 
             // Assumes GlobalDspAddr.EVOL_R = GlobalDspAddr.EVOL_L | 0x10
             smp.dsp_addr $ 4 = true;
-            smp.dsp_data = a;
+            smp.dsp_data = y;
         }
 
         // Always update echo feedback

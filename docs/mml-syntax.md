@@ -53,7 +53,8 @@ Echo values:
     * **WARNING:** This value is copied to the `EFB` S-DSP register without any overflow checks.<br/>
       Excessive echo feedback will continue to get louder and louder, exploding your song.<br/>
       Headphone users should turn down their volume when playing with echo filters/feedback.
- * `#EchoVolume` - Echo volume (-128 to 127) (`EVOL` S-DSP registers)
+ * `#EchoVolume` - 1 or 2 echo volume arguments (0 to 127)
+    * If only 1 value is given, it will used for both channels
 
 <br/>
 

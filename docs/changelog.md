@@ -1,6 +1,21 @@
 Terrific Audio Driver Changelog
 ===============================
 
+Version 0.1.0
+=============
+
+**Known bugs**:
+ * Sample Analyser spectrum can only analyse the first 32768 samples in a long BRR sample
+
+Audio driver changes:
+ * Stereo echo volume
+    * If audio mode is mono, the two channels will be averaged together
+
+MML changes:
+ * `#EchoVolume` now accepts a stereo input
+ * `#EchoVolume` only accepts unsigned (0 - 127) values
+
+
 Version 0.0.16
 ==============
 

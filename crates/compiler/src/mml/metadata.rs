@@ -7,7 +7,7 @@
 use std::collections::HashMap;
 
 use crate::driver_constants::{IDENTITY_FILTER, SFX_TICK_CLOCK};
-use crate::echo::{parse_fir_filter_string, EchoBuffer, EchoLength, DEFAULT_EDL};
+use crate::echo::{parse_fir_filter_string, EchoBuffer, EchoLength, EchoVolume, DEFAULT_EDL};
 use crate::errors::{ErrorWithPos, MmlLineError, ValueError};
 use crate::file_pos::{blank_file_range, Line};
 use crate::time::{Bpm, TickClock, ZenLen, DEFAULT_BPM, DEFAULT_ZENLEN};
@@ -65,6 +65,23 @@ fn parse_u32(s: &str) -> Result<u32, ValueError> {
     }
 }
 
+fn parse_echo_volume(s: &str) -> Result<(EchoVolume, EchoVolume), MmlLineError> {
+    let arguments: Vec<&str> = s.split_ascii_whitespace().collect();
+
+    match arguments.len() {
+        1 => {
+            let v = parse_u32(arguments[0])?.try_into()?;
+            Ok((v, v))
+        }
+        2 => {
+            let l = parse_u32(arguments[0])?.try_into()?;
+            let r = parse_u32(arguments[1])?.try_into()?;
+            Ok((l, r))
+        }
+        _ => Err(MmlLineError::InvalidNumberOfEchoVolumeArguments),
+    }
+}
+
 impl MetaData {
     fn new() -> Self {
         Self {
@@ -79,7 +96,8 @@ impl MetaData {
                 edl: DEFAULT_EDL,
                 fir: IDENTITY_FILTER,
                 feedback: 0,
-                echo_volume: 0,
+                echo_volume_l: EchoVolume::ZERO,
+                echo_volume_r: EchoVolume::ZERO,
             },
             tick_clock: DEFAULT_BPM.to_tick_clock().unwrap(),
             zenlen: DEFAULT_ZENLEN,
@@ -156,10 +174,11 @@ impl HeaderState {
                 Err(_) => return Err(MmlLineError::InvalidEchoFeedback),
             },
 
-            "#EchoVolume" => match value.parse() {
-                Ok(i) => self.metadata.echo_buffer.echo_volume = i,
-                Err(_) => return Err(MmlLineError::InvalidEchoVolume),
-            },
+            "#EchoVolume" => {
+                let (l, r) = parse_echo_volume(value)?;
+                self.metadata.echo_buffer.echo_volume_l = l;
+                self.metadata.echo_buffer.echo_volume_r = r;
+            }
 
             "#Tempo" => {
                 if self.tempo_set {

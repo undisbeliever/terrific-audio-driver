@@ -23,7 +23,7 @@ use crate::driver_constants::{
     MAX_DIR_ITEMS, MAX_INSTRUMENTS_AND_SAMPLES, MAX_N_PITCHES, MAX_N_SONGS, MAX_SONG_DATA_SIZE,
     MAX_SOUND_EFFECTS, MAX_SUBROUTINES,
 };
-use crate::echo::{EchoEdl, EchoLength, MAX_FIR_ABS_SUM};
+use crate::echo::{EchoEdl, EchoLength, EchoVolume, MAX_FIR_ABS_SUM};
 use crate::envelope::Gain;
 use crate::file_pos::{FilePosRange, MAX_MML_TEXT_LENGTH};
 use crate::mml::command_parser::{
@@ -204,6 +204,7 @@ pub enum ValueError {
     CannotConvertBpmToTickClock,
 
     EchoEdlOutOfRange(u32),
+    EchoVolumeOutOfRange(u32),
     EchoLengthNotMultiple,
     EchoBufferTooLarge,
 
@@ -245,6 +246,7 @@ pub enum ValueError {
     NoVibratoPitchOffsetPerTick,
     NoVibratoQuarterWavelength,
     NoEchoEdl,
+    NoEchoVolume,
     NoInstrumentId,
     NoGain,
     NoOptionalGainMode,
@@ -421,14 +423,14 @@ pub enum PitchTableError {
     InstrumentErrors(Vec<(usize, Name, PitchError)>),
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum IdentifierError {
     Empty,
     InvalidName(String),
     InvalidNumber(String),
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum MmlLineError {
     ValueError(ValueError),
 
@@ -452,7 +454,7 @@ pub enum MmlLineError {
     DuplicateHeader(String),
 
     InvalidEchoFeedback,
-    InvalidEchoVolume,
+    InvalidNumberOfEchoVolumeArguments,
     CannotSetTempo,
     CannotSetTimer,
     InvalidSpcSongLength,
@@ -1034,6 +1036,7 @@ impl Display for ValueError {
             Self::CannotConvertBpmToTickClock => write!(f, "cannot convert BPM to tick clock"),
 
             Self::EchoEdlOutOfRange(v) => out_of_range!("echo EDL", v, EchoEdl),
+            Self::EchoVolumeOutOfRange(v) => out_of_range!("echo volume", v, EchoVolume),
             Self::EchoLengthNotMultiple => write!(
                 f,
                 "echo length is not a multiple of {}ms",
@@ -1101,6 +1104,7 @@ impl Display for ValueError {
             Self::NoVibratoPitchOffsetPerTick => write!(f, "no vibrato pitch-offset-per-tick"),
             Self::NoVibratoQuarterWavelength => write!(f, "no vibrato quarter-wavelength"),
             Self::NoEchoEdl => write!(f, "no echo EDL"),
+            Self::NoEchoVolume => write!(f, "no echo volume value"),
             Self::NoInstrumentId => write!(f, "no instrument id"),
             Self::NoGain => write!(f, "no gain"),
             Self::NoOptionalGainMode => write!(f, "no optional GAIN mode (F, D, E, I, B)"),
@@ -1428,7 +1432,10 @@ impl Display for MmlLineError {
             Self::DuplicateHeader(name) => write!(f, "duplicate header: {}", name),
 
             Self::InvalidEchoFeedback => write!(f, "invalid echo feedback"),
-            Self::InvalidEchoVolume => write!(f, "invalid echo volume"),
+            Self::InvalidNumberOfEchoVolumeArguments => write!(
+                f,
+                "invalid number of echo volume arguments (expected 1 or 2 values)"
+            ),
             Self::CannotSetTempo => write!(f, "tick clock already set by #Timer"),
             Self::CannotSetTimer => write!(f, "tick clock already set by #Tempo"),
             Self::InvalidSpcSongLength => write!(

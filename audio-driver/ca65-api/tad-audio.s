@@ -124,7 +124,7 @@
 .assert Tad_AudioDriver_SIZE > $600 && Tad_AudioDriver_SIZE < $a00, lderror, "Invalid Tad_AudioDriver_Bin size"
 ; `Tad_AudioDriver_Bin` can cross bank boundaries
 
-.assert Tad_BlankSong_SIZE = 29, lderror, "Invalid Tad_BlankSong_Bin size"
+.assert Tad_BlankSong_SIZE = 30, lderror, "Invalid Tad_BlankSong_Bin size"
 ; `Tad_BlankSong_Bin` can cross bank boundaries
 
 

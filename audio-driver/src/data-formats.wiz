@@ -146,8 +146,13 @@ struct EchoBufferSettings {
     // Echo feedback.  Written to the `EFB` S-DSP register.
     echoFeedback : i8,
 
-    // Echo volume.  Written to the `EVOL_L` and `EVOL_R` S-DSP registers.
-    echoVolume : i8,
+    // Echo volume.
+    // Must be in the range 0-127.
+    // If in mono mode, the average of the left and right channels will be used.
+    echoVolume_l : u8,
+    echoVolume_r : u8,
+
+    // ::TODO add invertFlags ::
 }
 
 // Size MUST match `audio/driver_constants.py`

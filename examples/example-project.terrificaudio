@@ -1,7 +1,7 @@
 {
   "_about": {
     "file_type": "Terrific Audio Driver project file",
-    "version": "0.0.14"
+    "version": "0.0.16"
   },
   "instruments": [
     {
@@ -296,6 +296,10 @@
     {
       "name": "early_release_and_temp_gain",
       "source": "bc-interpreter-tests/early-release-and-temp-gain.mml"
+    },
+    {
+      "name": "echo_stress_test",
+      "source": "bc-interpreter-tests/echo-stress-test.mml"
     },
     {
       "name": "unbalanced_vibrato_bug",

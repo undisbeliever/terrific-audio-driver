@@ -353,9 +353,10 @@ fn write_song_header(
         header[EBS + 1 + i] = f.to_le_bytes()[0];
     }
     header[EBS + 9] = echo_buffer.feedback.to_le_bytes()[0];
-    header[EBS + 10] = echo_buffer.echo_volume.to_le_bytes()[0];
+    header[EBS + 10] = echo_buffer.echo_volume_l.as_u8();
+    header[EBS + 11] = echo_buffer.echo_volume_r.as_u8();
 
-    const _: () = assert!(EBS + 11 == SONG_HEADER_TICK_TIMER_OFFSET);
+    const _: () = assert!(EBS + 12 == SONG_HEADER_TICK_TIMER_OFFSET);
 
     // Tick timer
     header[SONG_HEADER_TICK_TIMER_OFFSET] = metadata.tick_clock.as_u8();

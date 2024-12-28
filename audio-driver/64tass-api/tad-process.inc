@@ -47,7 +47,7 @@ TAD_DB_REGISTERS   = 0
 .cerror Tad_AudioDriver_SIZE < $600 || Tad_AudioDriver_SIZE > $a00, "Invalid Tad_AudioDriver_Bin size"
 ; `Tad_AudioDriver_Bin` can cross bank boundaries
 
-.cerror Tad_BlankSong_SIZE != 29,"Invalid Tad_BlankSong_Bin size"
+.cerror Tad_BlankSong_SIZE != 30,"Invalid Tad_BlankSong_Bin size"
 ; `Tad_BlankSong_Bin` can cross bank boundaries
 
 
