@@ -3079,6 +3079,97 @@ func set_song_tick_clock(channelIndex : u8 in x, timer_clock: u8 in a) {
 }
 
 
+// KEEP: x
+func set_echo_volume(channelIndex : u8 in x, volume: u8 in a) {
+    a &= 0x7f;
+    echo.echoVolume_l = a;
+
+    return __set_stereo_echo_volume_r(x, a);
+}
+
+
+// IN: Y
+// KEEP: x
+#[fallthrough]
+func set_stereo_echo_volume(channelIndex : u8 in x, left: u8 in a) {
+    a &= 0x7f;
+    echo.echoVolume_l = a;
+
+    // Y = 0
+    a = instructionPtr[y];
+    instructionPtr++;
+
+    a &= 0x7f;
+// Fallthrough into __set_stereo_echo_volume_r
+}
+
+
+// CAUTION: right is unchecked
+// KEEP: x
+func __set_stereo_echo_volume_r(channelIndex : u8 in x, right: u8 in a) {
+    echo.echoVolume_r = a;
+
+    echoDirty $ ECHO_DIRTY__VOLUME_BIT = true;
+
+    ^return process_next_bytecode(x);
+}
+
+
+// KEEP: x
+func adjust_echo_volume(channelIndex : u8 in x, adjust: i8 in a) {
+    push(a);
+
+    // Y = 0
+    __adjust_echo_volume_channel(a as i8, y);
+
+    a = pop();
+    return __adjust_stereo_echo_volume_r(x, a as i8);
+}
+
+
+// IN: Y = 0
+// KEEP: X
+#[fallthrough]
+func adjust_stereo_echo_volume(channelIndex : u8 in x, left_adjust: i8 in a) {
+    __adjust_echo_volume_channel(a as i8, y);
+
+    // Y = 0
+    a = instructionPtr[y];
+    instructionPtr++;
+
+// Fallthrough into __adjust_stereo_echo_volume_r(x, a)
+}
+
+
+// IN: Y = 0
+// KEEP: X
+func __adjust_stereo_echo_volume_r(channelIndex : u8 in x, right_adjust: i8 in a) {
+    y++;
+    __adjust_echo_volume_channel(a as i8, y);
+
+    echoDirty $ ECHO_DIRTY__VOLUME_BIT = true;
+
+    ^return process_next_bytecode(x);
+}
+
+
+// KEEP: Y
+// KEEP: X
+func __adjust_echo_volume_channel(adjust: i8 in a, evolChannel: u8 in y) {
+    var _evol @ &echo.echoVolume_l as u8 : [u8 ; 2];
+
+    // Assumes _evol[y] is <= 127
+    a += _evol[y];
+    if negative {
+        a = 0;
+        if overflow {
+            a = 127;
+        }
+    }
+    _evol[y] = a;
+}
+
+
 const InstructionTable : [u16 ; 64] = [ f as u16 for let f in INSTRUCTIONS_WITH_ARGUMENTS ]
                                     ~ [ f as u16 for let f in NO_ARGUMENT_INSTRUCTIONS ]
                                     ~ [ disable_channel as u16 ; N_PADDING_INSTRUCTIONS ]

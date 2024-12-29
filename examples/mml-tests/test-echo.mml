@@ -6,13 +6,21 @@
 
 @1 square
 
+AH l8
+
 A @1 v16 l8 o4
 
 A E1
 A cdefg r1
+H wwwww w1
 
-A E0
+; Incrementing echo volume over multiple ticks
+; Using channel H so it can be ducked by sfx without ducking notes (H is silent)
 A cdefg r1
+H \evol 0 [ w%1 \evol +1]120 w%36
 
-A E1
+; Moving echo
+; (This echo is constant in mono)
 A cdefg r1
+H \evol 120,0 w%36 [ w%1 \evol -2,+2]60 w%60
+

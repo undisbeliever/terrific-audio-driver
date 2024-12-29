@@ -10,9 +10,9 @@ use crate::bytecode::{
     BcTicks, BcTicksKeyOff, BcTicksNoKeyOff, DetuneValue, EarlyReleaseMinTicks, EarlyReleaseTicks,
     InstrumentId, LoopCount, NoiseFrequency, Pan, PanSlideAmount, PanSlideTicks,
     PanbrelloAmplitude, PanbrelloQuarterWavelengthInTicks, PlayPitchPitch, PortamentoVelocity,
-    RelativePan, RelativeVolume, TremoloAmplitude, TremoloQuarterWavelengthInTicks,
-    VibratoPitchOffsetPerTick, VibratoQuarterWavelengthInTicks, Volume, VolumeSlideAmount,
-    VolumeSlideTicks,
+    RelativeEchoVolume, RelativePan, RelativeVolume, TremoloAmplitude,
+    TremoloQuarterWavelengthInTicks, VibratoPitchOffsetPerTick, VibratoQuarterWavelengthInTicks,
+    Volume, VolumeSlideAmount, VolumeSlideTicks,
 };
 use crate::channel_bc_generator::{
     DetuneCents, FineQuantization, PortamentoSpeed, Quantization, MAX_BROKEN_CHORD_NOTES,
@@ -174,6 +174,7 @@ pub enum ValueError {
     NoTransposeSign,
     NoDetuneValueSign,
     NoDetuneCentsSign,
+    NoRelativeEchoVolumeSign,
 
     PortamentoVelocityZero,
     PortamentoVelocityOutOfRange(i32),
@@ -205,6 +206,7 @@ pub enum ValueError {
 
     EchoEdlOutOfRange(u32),
     EchoVolumeOutOfRange(u32),
+    RelativeEchoVolumeOutOfRange(i32),
     EchoLengthNotMultiple,
     EchoBufferTooLarge,
 
@@ -247,6 +249,7 @@ pub enum ValueError {
     NoVibratoQuarterWavelength,
     NoEchoEdl,
     NoEchoVolume,
+    NoRelativeEchoVolume,
     NoInstrumentId,
     NoGain,
     NoOptionalGainMode,
@@ -511,6 +514,9 @@ pub enum ChannelError {
     UnexpectedNumber,
 
     InvalidPitchListSymbol,
+    NoEvolValue,
+    SetAndRelativeStereoEchoVolume,
+    RelativeAndSetStereoEchoVolume,
 
     LoopPointAlreadySet,
     CannotSetLoopPoint,
@@ -995,6 +1001,9 @@ impl Display for ValueError {
             Self::NoDetuneCentsSign => {
                 write!(f, "missing + or - in detune cents")
             }
+            Self::NoRelativeEchoVolumeSign => {
+                write!(f, "missing + or - in relative echo volume")
+            }
 
             Self::PortamentoVelocityZero => write!(f, "portamento velocity cannot be 0"),
             Self::PortamentoVelocityOutOfRange(v) => {
@@ -1037,6 +1046,9 @@ impl Display for ValueError {
 
             Self::EchoEdlOutOfRange(v) => out_of_range!("echo EDL", v, EchoEdl),
             Self::EchoVolumeOutOfRange(v) => out_of_range!("echo volume", v, EchoVolume),
+            Self::RelativeEchoVolumeOutOfRange(v) => {
+                out_of_range!("relative echo volume", v, RelativeEchoVolume)
+            }
             Self::EchoLengthNotMultiple => write!(
                 f,
                 "echo length is not a multiple of {}ms",
@@ -1105,6 +1117,7 @@ impl Display for ValueError {
             Self::NoVibratoQuarterWavelength => write!(f, "no vibrato quarter-wavelength"),
             Self::NoEchoEdl => write!(f, "no echo EDL"),
             Self::NoEchoVolume => write!(f, "no echo volume value"),
+            Self::NoRelativeEchoVolume => write!(f, "no relative echo volume"),
             Self::NoInstrumentId => write!(f, "no instrument id"),
             Self::NoGain => write!(f, "no gain"),
             Self::NoOptionalGainMode => write!(f, "no optional GAIN mode (F, D, E, I, B)"),
@@ -1520,6 +1533,13 @@ impl Display for ChannelError {
             Self::UnexpectedNumber => write!(f, "unexpected number"),
 
             Self::InvalidPitchListSymbol => write!(f, "invalid pitch list symbol"),
+            Self::NoEvolValue => write!(f, "no echo volume or relative echo volume"),
+            Self::SetAndRelativeStereoEchoVolume => {
+                write!(f, "cannot set left and adjust right echo volume")
+            }
+            Self::RelativeAndSetStereoEchoVolume => {
+                write!(f, "cannot adjust left and set right echo volume")
+            }
 
             Self::LoopPointAlreadySet => write!(f, "loop point already set"),
             Self::CannotSetLoopPoint => write!(f, "cannot set loop point"),

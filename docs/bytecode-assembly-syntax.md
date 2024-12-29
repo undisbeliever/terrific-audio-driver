@@ -122,9 +122,22 @@ Instructions
     * Disables vibrato before the subroutine call.
     * Not available in sound effects.
 
+
+Global instructions
+===================
+These instructions will affect all channels.
+
+The echo instructions can be used in sound effects to control echo using S-CPU 65816 code.
+
+
  * `set_song_tick_clock <tick_clock>` - Set the tick TIMER0 clock register to *tick_clock*
     * `tick_clock` must be >= 64 and <= 255.
     * Not available in sound effects.
+
+ * `set_echo_volume <0..127>` - Sets the left and right echo volume to the same value (`EVOL` registers)
+ * `set_stereo_echo_volume <left 0..127> <right 0..127>` - Set the left and right echo volume (`EVOL` registers)
+ * `adjust_echo_volume <-127..+127>` - Adds the parameter to the left and right echo volumes
+ * `set_stereo_echo_volume <left -127..+127> <right -127..+127>` - Adds the stereo parameters the left and right echo volumes
 
 
 Parameters

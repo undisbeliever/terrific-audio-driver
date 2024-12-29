@@ -339,6 +339,22 @@ let INSTRUCTIONS_WITH_ARGUMENTS = [
     //
     // CAUTION: Not bounds checked
     goto_relative,
+
+
+    // parameter = u8 value
+    // value will be masked and used for both channels
+    set_echo_volume,
+
+    // parameter = u8 left, u8 right
+    // Both channels will be masked
+    set_stereo_echo_volume,
+
+
+    // parameter = i8 adjust
+    adjust_echo_volume,
+
+    // parameter = i8 left, i8 right
+    adjust_stereo_echo_volume,
 ];
 
 

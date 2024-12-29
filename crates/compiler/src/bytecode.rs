@@ -12,6 +12,7 @@ use crate::driver_constants::{
     BC_CHANNEL_STACK_SIZE, BC_STACK_BYTES_PER_LOOP, BC_STACK_BYTES_PER_SUBROUTINE_CALL,
     MAX_INSTRUMENTS_AND_SAMPLES,
 };
+use crate::echo::EchoVolume;
 use crate::envelope::{Adsr, Envelope, Gain, OptionalGain, TempGain};
 use crate::errors::{BytecodeError, ChannelError, ValueError};
 use crate::notes::{Note, LAST_NOTE_ID, N_NOTES};
@@ -159,6 +160,15 @@ impl Pan {
     pub const CENTER: Pan = Self(Self::MAX.0 / 2);
 }
 
+i8_value_newtype!(
+    RelativeEchoVolume,
+    RelativeEchoVolumeOutOfRange,
+    NoRelativeEchoVolume,
+    NoRelativeEchoVolumeSign,
+    -(EchoVolume::MAX.as_u8() as i8),
+    EchoVolume::MAX.as_u8() as i8
+);
+
 pub enum BytecodeContext {
     SongSubroutine,
     SongChannel(u8),
@@ -229,6 +239,10 @@ pub mod opcodes {
         CALL_SUBROUTINE_AND_DISABLE_VIBRATO,
         CALL_SUBROUTINE,
         GOTO_RELATIVE,
+        SET_ECHO_VOLUME,
+        SET_STEREO_ECHO_VOLUME,
+        ADJUST_ECHO_VOLUME,
+        ADJUST_STEREO_ECHO_VOLUME,
         END_LOOP,
         RETURN_FROM_SUBROUTINE_AND_DISABLE_VIBRATO,
         RETURN_FROM_SUBROUTINE,
@@ -2160,5 +2174,45 @@ impl<'a> Bytecode<'a> {
     ) -> Result<(), BytecodeError> {
         self.set_instrument_and_gain(self._find_instrument(name)?, gain);
         Ok(())
+    }
+
+    pub fn set_echo_volume(&mut self, evol: EchoVolume) {
+        emit_bytecode!(self, opcodes::SET_ECHO_VOLUME, evol.as_u8());
+    }
+
+    pub fn set_stereo_echo_volume(&mut self, left: EchoVolume, right: EchoVolume) {
+        if left == right {
+            self.set_echo_volume(left);
+        } else {
+            emit_bytecode!(
+                self,
+                opcodes::SET_STEREO_ECHO_VOLUME,
+                left.as_u8(),
+                right.as_u8()
+            );
+        }
+    }
+
+    pub fn adjust_echo_volume(&mut self, relative: RelativeEchoVolume) {
+        if relative.as_i8() != 0 {
+            emit_bytecode!(self, opcodes::ADJUST_ECHO_VOLUME, relative.as_i8());
+        }
+    }
+
+    pub fn adjust_stereo_echo_volume(
+        &mut self,
+        left: RelativeEchoVolume,
+        right: RelativeEchoVolume,
+    ) {
+        if left == right {
+            self.adjust_echo_volume(left);
+        } else {
+            emit_bytecode!(
+                self,
+                opcodes::ADJUST_STEREO_ECHO_VOLUME,
+                left.as_i8(),
+                right.as_i8()
+            );
+        }
     }
 }

@@ -472,6 +472,15 @@ The Following commands affect **all channels**:
  * `t<bpm>` - Set song tempo (see `#Tempo` for the *bpm* format)
  * `T<64-255>` - Set song tick-clock  (see `#Timer` for the parameter format)
 
+<br/>
+
+`EVOL` echo volume commands:
+
+ * `\evol <0..127>` - Set the left and right global echo volume to the same value
+ * `\evol <left 0..127>,<right 0..127>` - Set the left and right global echo volume
+ * `\evol <-127..+127>` - Adds the parameter to the left and right global echo volume
+ * `\evol <left -127..+127>,<right -127..+127>` - Adds the stereo parameters to the left and right global echo volumes
+
 
 Engine Limitations
 ==================

@@ -2,7 +2,7 @@
 
 #EchoLength   240
 #EchoFeedback  80
-; Test stereo echo
+; Test starting stereo echo
 #EchoVolume    40  80
 
 #Timer 64
@@ -11,14 +11,19 @@
 
 ; ::TODO add echo instructions::
 
-A @1 v16 l8 o4
+A @1 v8 l8 o4
 
 A E1
-A cdefg r1
+A [cdefg r1]3
 
-A E0
-A cdefg r1
+; These lines caused a error in test_bc_interpreter
+B w8 \evol 50 w8 \evol +18,+20 w8 \evol 20,20 w
+C w8          w8 \evol -20,+48 w8 \evol +2,+8 w
+D w%60
 
-A E1
-A cdefg r1
+
+; Test modifying echo volume in multiple channels
+B w%12 [w%3 \evol +11,-7 w%3 \evol -11,-7]51 w
+C w%18 [w%5 \evol +23    w%5 \evol -31   ]30 w
+D w%61 \evol 64  w%97 \evol 60,60 w%101 \evol 90 w%83
 

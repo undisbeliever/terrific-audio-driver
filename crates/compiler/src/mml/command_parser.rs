@@ -12,16 +12,17 @@ use super::note_tracking::CursorTracker;
 
 use crate::bytecode::{
     DetuneValue, EarlyReleaseMinTicks, EarlyReleaseTicks, LoopCount, NoiseFrequency, Pan,
-    PanSlideTicks, PanbrelloQuarterWavelengthInTicks, PlayNoteTicks, PlayPitchPitch, SubroutineId,
-    TremoloAmplitude, TremoloQuarterWavelengthInTicks, VibratoPitchOffsetPerTick,
-    VibratoQuarterWavelengthInTicks, Volume, VolumeSlideAmount, VolumeSlideTicks,
-    KEY_OFF_TICK_DELAY,
+    PanSlideTicks, PanbrelloQuarterWavelengthInTicks, PlayNoteTicks, PlayPitchPitch,
+    RelativeEchoVolume, SubroutineId, TremoloAmplitude, TremoloQuarterWavelengthInTicks,
+    VibratoPitchOffsetPerTick, VibratoQuarterWavelengthInTicks, Volume, VolumeSlideAmount,
+    VolumeSlideTicks, KEY_OFF_TICK_DELAY,
 };
 use crate::channel_bc_generator::{
     merge_pan_commands, merge_volumes_commands, relative_pan, relative_volume, Command,
     DetuneCents, FineQuantization, ManualVibrato, MpVibrato, NoteOrPitch, PanCommand, Quantize,
     RestTicksAfterNote, SubroutineCallType, VolumeCommand,
 };
+use crate::echo::EchoVolume;
 use crate::envelope::{Gain, GainMode, OptionalGain, TempGain};
 use crate::errors::{ChannelError, ErrorWithPos, ValueError};
 use crate::file_pos::{FilePos, FilePosRange};
@@ -1964,6 +1965,76 @@ fn parse_call_subroutine(
     }
 }
 
+fn echo_volume_or_min(n: u32, pos: FilePos, p: &mut Parser) -> EchoVolume {
+    match n.try_into() {
+        Ok(o) => o,
+        Err(e) => {
+            p.add_error(pos, e.into());
+            EchoVolume::MIN
+        }
+    }
+}
+
+fn relative_echo_volume_or_min(n: i32, pos: FilePos, p: &mut Parser) -> RelativeEchoVolume {
+    match n.try_into() {
+        Ok(o) => o,
+        Err(e) => {
+            p.add_error(pos, e.into());
+            RelativeEchoVolume::MIN
+        }
+    }
+}
+
+fn parse_evol(pos: FilePos, p: &mut Parser) -> Command {
+    let first_pos = p.peek_pos();
+
+    match_next_token!(p,
+        &Token::Number(v1) => {
+            let v1 = echo_volume_or_min(v1, first_pos, p);
+            if next_token_matches!(p, Token::Comma) {
+                let second_pos = p.peek_pos();
+                match_next_token!(p,
+                    &Token::Number(v2) => {
+                        let v2 = echo_volume_or_min(v2, second_pos, p);
+                        Command::SetStereoEchoVolume(v1, v2)
+                    },
+                    &Token::RelativeNumber(_) => {
+                        invalid_token_error(p, pos, ChannelError::SetAndRelativeStereoEchoVolume)
+                    },
+                    #_ => {
+                        invalid_token_error(p, pos, ValueError::NoEchoVolume.into())
+                    }
+                )
+            }
+            else {
+                Command::SetEchoVolume(v1)
+            }
+        },
+        &Token::RelativeNumber(r1) => {
+            let r1 = relative_echo_volume_or_min(r1, first_pos, p);
+            if next_token_matches!(p, Token::Comma) {
+                let second_pos = p.peek_pos();
+                match_next_token!(p,
+                    &Token::RelativeNumber(r2) => {
+                        let r2 = relative_echo_volume_or_min(r2, second_pos, p);
+                        Command::RelativeStereoEchoVolume(r1, r2)
+                    },
+                    &Token::Number(_) => {
+                        invalid_token_error(p, pos, ChannelError::RelativeAndSetStereoEchoVolume)
+                    },
+                    #_ => {
+                        invalid_token_error(p, pos, ValueError::NoEchoVolume.into())
+                    }
+                )
+            }
+            else {
+                Command::RelativeEchoVolume(r1)
+            }
+        },
+        #_ => invalid_token_error(p, pos, ChannelError::NoEvolValue)
+    )
+}
+
 fn invalid_token_error(p: &mut Parser, pos: FilePos, e: ChannelError) -> Command {
     p.add_error(pos, e);
     Command::None
@@ -2087,6 +2158,8 @@ fn parse_token(pos: FilePos, token: Token, p: &mut Parser) -> Command {
             Command::None
         }
         Token::Divider => Command::None,
+
+        Token::Evol => parse_evol(pos, p),
 
         Token::StartBytecodeAsm => Command::StartBytecodeAsm,
         Token::EndBytecodeAsm => Command::EndBytecodeAsm,

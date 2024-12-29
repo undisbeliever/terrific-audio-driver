@@ -8,13 +8,14 @@ use crate::bytecode::{
     self, BcTicks, BcTicksKeyOff, BcTicksNoKeyOff, Bytecode, BytecodeContext, DetuneValue,
     EarlyReleaseMinTicks, EarlyReleaseTicks, IeState, InstrumentId, LoopCount, NoiseFrequency, Pan,
     PanSlideAmount, PanSlideTicks, PanbrelloAmplitude, PanbrelloQuarterWavelengthInTicks,
-    PlayNoteTicks, PlayPitchPitch, PortamentoVelocity, RelativePan, RelativeVolume,
-    SlurredNoteState, TremoloAmplitude, TremoloQuarterWavelengthInTicks, VibratoPitchOffsetPerTick,
-    VibratoQuarterWavelengthInTicks, VibratoState, Volume, VolumeSlideAmount, VolumeSlideTicks,
-    KEY_OFF_TICK_DELAY,
+    PlayNoteTicks, PlayPitchPitch, PortamentoVelocity, RelativeEchoVolume, RelativePan,
+    RelativeVolume, SlurredNoteState, TremoloAmplitude, TremoloQuarterWavelengthInTicks,
+    VibratoPitchOffsetPerTick, VibratoQuarterWavelengthInTicks, VibratoState, Volume,
+    VolumeSlideAmount, VolumeSlideTicks, KEY_OFF_TICK_DELAY,
 };
 use crate::bytecode_assembler::parse_asm_line;
 use crate::data::{self, UniqueNamesList};
+use crate::echo::EchoVolume;
 use crate::envelope::{Adsr, Envelope, Gain, OptionalGain, TempGain};
 use crate::errors::{ChannelError, ValueError};
 use crate::mml::IdentifierBuf;
@@ -321,6 +322,11 @@ pub(crate) enum Command {
 
     SetSongTempo(Bpm),
     SetSongTickClock(TickClock),
+
+    SetEchoVolume(EchoVolume),
+    SetStereoEchoVolume(EchoVolume, EchoVolume),
+    RelativeEchoVolume(RelativeEchoVolume),
+    RelativeStereoEchoVolume(RelativeEchoVolume, RelativeEchoVolume),
 
     StartBytecodeAsm,
     EndBytecodeAsm,
@@ -1790,6 +1796,15 @@ impl<'a> ChannelBcGenerator<'a> {
             }
             &Command::SetSongTickClock(tick_clock) => {
                 self.set_song_tick_clock(tick_clock)?;
+            }
+
+            &Command::SetEchoVolume(evol) => self.bc.set_echo_volume(evol),
+            &Command::SetStereoEchoVolume(left, right) => {
+                self.bc.set_stereo_echo_volume(left, right)
+            }
+            &Command::RelativeEchoVolume(relative) => self.bc.adjust_echo_volume(relative),
+            &Command::RelativeStereoEchoVolume(left, right) => {
+                self.bc.adjust_stereo_echo_volume(left, right)
             }
 
             Command::StartBytecodeAsm => {

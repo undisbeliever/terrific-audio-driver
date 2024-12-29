@@ -85,6 +85,8 @@ pub enum Token<'a> {
     Comma,
     Divider,
 
+    Evol,
+
     // Temp GAIN after quantization tokens
     // (GainModeE is the Echo token)
     GainModeB,
@@ -507,6 +509,7 @@ fn next_token<'a>(scanner: &mut Scanner<'a>) -> Option<TokenWithPosition<'a>> {
 
             match scanner.read_while(|b: u8| b.is_ascii_alphabetic()) {
                 "asm" => Token::StartBytecodeAsm,
+                "evol" => Token::Evol,
                 "" => Token::Error(ChannelError::NoSlashCommand),
                 s => Token::Error(ChannelError::InvalidSlashCommand(s.to_owned())),
             }

@@ -294,6 +294,57 @@ macro_rules! i8_value_newtype {
             }
         }
     };
+
+    ($name:ident, $error:ident, $missing_error:ident, $missing_sign_error:ident, $min:expr, $max:expr) => {
+        #[derive(Debug, Copy, Clone, PartialEq)]
+        pub struct $name(i8);
+
+        #[allow(dead_code)]
+        impl $name {
+            pub const MIN: Self = Self($min);
+            pub const MAX: Self = Self($max);
+
+            pub const fn as_i8(&self) -> i8 {
+                self.0
+            }
+        }
+
+        impl crate::value_newtypes::SignedValueNewType for $name {
+            type ValueType = i8;
+
+            const MISSING_ERROR: ValueError = ValueError::$missing_error;
+            const MISSING_SIGN_ERROR: ValueError = ValueError::$missing_sign_error;
+
+            fn value(&self) -> Self::ValueType {
+                self.0
+            }
+        }
+
+        impl TryFrom<i8> for $name {
+            type Error = ValueError;
+
+            #[allow(clippy::manual_range_contains)]
+            fn try_from(value: i8) -> Result<Self, Self::Error> {
+                if value >= Self::MIN.0 && value <= Self::MAX.0 {
+                    Ok(Self(value))
+                } else {
+                    Err(ValueError::$error(i32::from(value)))
+                }
+            }
+        }
+
+        impl TryFrom<i32> for $name {
+            type Error = ValueError;
+
+            fn try_from(value: i32) -> Result<Self, Self::Error> {
+                if value >= Self::MIN.0.into() && value <= Self::MAX.0.into() {
+                    Ok(Self(i8::try_from(value).unwrap()))
+                } else {
+                    Err(ValueError::$error(value))
+                }
+            }
+        }
+    };
 }
 
 macro_rules! i16_value_newtype {

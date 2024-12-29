@@ -15,6 +15,7 @@ use crate::driver_constants::{
     SONG_HEADER_N_SUBROUTINES_OFFSET, SONG_HEADER_SIZE, STARTING_VOLUME, S_DSP_EON_REGISTER,
     S_SMP_TIMER_0_REGISTER,
 };
+use crate::echo::EchoVolume;
 use crate::envelope::Envelope;
 use crate::mml::MmlPrefixData;
 use crate::songs::Channel as SongChannel;
@@ -30,6 +31,7 @@ pub const UNINITIALISED: u8 = 0xaa;
 
 const MAX_PAN: u8 = Pan::MAX.as_u8();
 const PITCH_MOD_MASK: u8 = 0b00111110;
+const ECHO_VOLUME_MASK: u8 = EchoVolume::MAX.as_u8();
 
 /// Error advancing subroutine to the end of the pointer
 #[derive(Debug)]
@@ -1028,6 +1030,49 @@ impl ChannelState {
             opcodes::ENABLE_PMOD => self.pitch_mod = true,
             opcodes::DISABLE_PMOD => self.pitch_mod = false,
 
+            opcodes::SET_ECHO_VOLUME => {
+                let v = read_pc();
+
+                global.echo.volume_l = v & ECHO_VOLUME_MASK;
+                global.echo.volume_r = v & ECHO_VOLUME_MASK;
+            }
+            opcodes::SET_STEREO_ECHO_VOLUME => {
+                let l = read_pc();
+                let r = read_pc();
+
+                global.echo.volume_l = l & ECHO_VOLUME_MASK;
+                global.echo.volume_r = r & ECHO_VOLUME_MASK;
+            }
+            opcodes::ADJUST_ECHO_VOLUME => {
+                let a = i8::from_le_bytes([read_pc()]);
+
+                global.echo.volume_l = global
+                    .echo
+                    .volume_l
+                    .saturating_add_signed(a)
+                    .clamp(0, EchoVolume::MAX.as_u8());
+                global.echo.volume_r = global
+                    .echo
+                    .volume_r
+                    .saturating_add_signed(a)
+                    .clamp(0, EchoVolume::MAX.as_u8());
+            }
+            opcodes::ADJUST_STEREO_ECHO_VOLUME => {
+                let l = i8::from_le_bytes([read_pc()]);
+                let r = i8::from_le_bytes([read_pc()]);
+
+                global.echo.volume_l = global
+                    .echo
+                    .volume_l
+                    .saturating_add_signed(l)
+                    .clamp(0, EchoVolume::MAX.as_u8());
+                global.echo.volume_r = global
+                    .echo
+                    .volume_r
+                    .saturating_add_signed(r)
+                    .clamp(0, EchoVolume::MAX.as_u8());
+            }
+
             opcodes::DISABLE_CHANNEL => self.disable_channel(),
 
             _ => self.disable_channel(),
@@ -1130,6 +1175,12 @@ impl ChannelState {
             opcodes::DISABLE_ECHO => Some(1),
             opcodes::ENABLE_PMOD => Some(1),
             opcodes::DISABLE_PMOD => Some(1),
+
+            opcodes::SET_ECHO_VOLUME => Some(2),
+            opcodes::SET_STEREO_ECHO_VOLUME => Some(3),
+            opcodes::ADJUST_ECHO_VOLUME => Some(2),
+            opcodes::ADJUST_STEREO_ECHO_VOLUME => Some(3),
+
             opcodes::DISABLE_CHANNEL => None,
 
             _ => None,

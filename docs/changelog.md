@@ -10,10 +10,13 @@ Version 0.1.0
 Audio driver changes:
  * Stereo echo volume
     * If audio mode is mono, the two channels will be averaged together
+ * Added set echo volume instructions
+ * Added adjust echo volume instructions
 
 MML changes:
  * `#EchoVolume` now accepts a stereo input
  * `#EchoVolume` only accepts unsigned (0 - 127) values
+ * Added global echo commands
 
 GUI changes:
  * Fixed a rust bytecode interpreter desync caused global instructions to be executed in the wrong order.

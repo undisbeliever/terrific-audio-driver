@@ -129,6 +129,16 @@ where
     Ok((parse_uvnt(arg1)?, parse_uvnt(arg2)?))
 }
 
+fn two_svnt_arguments<T, U>(args: &[&str]) -> Result<(T, U), ChannelError>
+where
+    T: SignedValueNewType,
+    U: SignedValueNewType,
+{
+    let (arg1, arg2) = two_arguments(args)?;
+
+    Ok((parse_svnt(arg1)?, parse_svnt(arg2)?))
+}
+
 fn svnt_and_uvnt_arguments<T, U>(args: &[&str]) -> Result<(T, U), ChannelError>
 where
     T: SignedValueNewType,
@@ -526,6 +536,11 @@ pub fn parse_asm_line(bc: &mut Bytecode, line: &str) -> Result<(), ChannelError>
        call_subroutine 1 one_argument call_subroutine_str,
 
        set_song_tick_clock 1 one_uvnt_argument,
+
+       set_echo_volume 1 one_uvnt_argument,
+       set_stereo_echo_volume 2 two_uvnt_arguments,
+       adjust_echo_volume 1 one_svnt_argument,
+       adjust_stereo_echo_volume 2 two_svnt_arguments,
     )
 }
 
