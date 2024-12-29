@@ -456,22 +456,20 @@ fn create_and_process_song_interpreter(
         SongSkip::None => Ok(Some(SongInterpreter::new(cad, sd, stereo_flag))),
         SongSkip::Song(ticks) => {
             let mut si = SongInterpreter::new(cad, sd, stereo_flag);
-            if !ticks.is_zero() {
-                let valid = si.process_ticks(ticks);
-                if valid {
-                    si.write_to_emulator(&mut EmulatorWrapper(emu));
-                }
+            if si.process_song_skip_ticks(ticks, &mut EmulatorWrapper(emu)) {
+                Ok(Some(si))
+            } else {
+                Ok(None)
             }
-            Ok(Some(si))
         }
         SongSkip::Subroutine(prefix, si, ticks) => {
             match SongInterpreter::new_song_subroutine(cad, sd, prefix, si, stereo_flag) {
                 Ok(mut si) => {
-                    if !ticks.is_zero() {
-                        si.process_ticks(ticks);
+                    if si.process_song_skip_ticks(ticks, &mut EmulatorWrapper(emu)) {
+                        Ok(Some(si))
+                    } else {
+                        Ok(None)
                     }
-                    si.write_to_emulator(&mut EmulatorWrapper(emu));
-                    Ok(Some(si))
                 }
                 Err(_) => Err(()),
             }

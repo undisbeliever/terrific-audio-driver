@@ -1336,6 +1336,22 @@ where
         true
     }
 
+    #[must_use]
+    pub fn process_song_skip_ticks(&mut self, ticks: TickCounter, emu: &mut impl Emulator) -> bool {
+        assert!(self.tick_counter.is_zero());
+
+        if ticks.value() > 2 {
+            let ticks = TickCounter::new(ticks.value() - 1);
+            let valid = self.process_ticks(ticks);
+            if valid {
+                self.write_to_emulator(emu);
+            }
+            valid
+        } else {
+            true
+        }
+    }
+
     pub fn tick_counter(&self) -> TickCounter {
         self.tick_counter
     }

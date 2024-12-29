@@ -17,6 +17,7 @@ MML changes:
 
 GUI changes:
  * Fixed a rust bytecode interpreter desync caused global instructions to be executed in the wrong order.
+ * Fixed play-from-cursor not playing the note immediately after the cursor
 
 
 Version 0.0.16
