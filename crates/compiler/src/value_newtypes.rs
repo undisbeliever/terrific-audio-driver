@@ -347,6 +347,51 @@ macro_rules! i8_value_newtype {
     };
 }
 
+macro_rules! i8_value_newtype_allow_no_sign {
+    ($name:ident, $error:ident, $error_u32:ident, $missing_error:ident) => {
+        #[derive(Debug, Copy, Clone, PartialEq)]
+        pub struct $name(i8);
+
+        #[allow(dead_code)]
+        impl $name {
+            pub const MIN: Self = Self(i8::MIN);
+            pub const MAX: Self = Self(i8::MAX);
+
+            pub const fn new(p: i8) -> Self {
+                Self(p)
+            }
+            pub const fn as_i8(&self) -> i8 {
+                self.0
+            }
+            pub const fn value(&self) -> i8 {
+                self.0
+            }
+        }
+
+        impl TryFrom<i32> for $name {
+            type Error = ValueError;
+
+            fn try_from(value: i32) -> Result<Self, Self::Error> {
+                match value.try_into() {
+                    Ok(v) => Ok($name(v)),
+                    Err(_) => Err(ValueError::$error(value)),
+                }
+            }
+        }
+
+        impl TryFrom<u32> for $name {
+            type Error = ValueError;
+
+            fn try_from(value: u32) -> Result<Self, Self::Error> {
+                match value.try_into() {
+                    Ok(v) => Ok($name(v)),
+                    Err(_) => Err(ValueError::$error_u32(value)),
+                }
+            }
+        }
+    };
+}
+
 macro_rules! i16_value_newtype {
     ($name:ident, $range_error:ident, $missing_error:ident, $missing_sign_error:ident, $min:expr, $max:expr) => {
         #[derive(Debug, Copy, Clone, PartialEq)]
@@ -438,6 +483,7 @@ macro_rules! i16_non_zero_value_newtype {
 }
 
 pub(crate) use {
-    i16_non_zero_value_newtype, i16_value_newtype, i8_value_newtype, u16_value_newtype,
-    u32_value_newtype, u8_0_is_256_value_newtype, u8_value_newtype,
+    i16_non_zero_value_newtype, i16_value_newtype, i8_value_newtype,
+    i8_value_newtype_allow_no_sign, u16_value_newtype, u32_value_newtype,
+    u8_0_is_256_value_newtype, u8_value_newtype,
 };

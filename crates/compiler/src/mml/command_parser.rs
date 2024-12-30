@@ -2035,6 +2035,61 @@ fn parse_evol(pos: FilePos, p: &mut Parser) -> Command {
     )
 }
 
+fn parse_efb(pos: FilePos, p: &mut Parser) -> Command {
+    let value_pos = p.peek_pos();
+
+    match_next_token!(p,
+        &Token::Number(n) => {
+            match n.try_into() {
+                Ok(n) => Command::SetEchoFeedback(n),
+                Err(e) => invalid_token_error(p, value_pos, e.into())
+            }
+        },
+        &Token::RelativeNumber(n) => {
+            match n.try_into() {
+                Ok(n) => Command::SetEchoFeedback(n),
+                Err(e) => invalid_token_error(p, value_pos, e.into())
+            }
+        },
+        #_ => invalid_token_error(p, pos, ValueError::NoEchoFeedback.into())
+    )
+}
+
+fn parse_efb_plus(pos: FilePos, p: &mut Parser) -> Command {
+    let value_pos = p.peek_pos();
+
+    match_next_token!(p,
+        &Token::Number(n) => {
+            match i32::try_from(n) {
+                Ok(i) => match i.try_into() {
+                    Ok(i) => Command::RelativeEchoFeedback(i),
+                    Err(e) => invalid_token_error(p, value_pos, e.into())
+                },
+                Err(_) => invalid_token_error(p, value_pos, ValueError::RelativeEchoFeedbackOutOfRangeU32(n).into())
+            }
+        },
+        #_ => invalid_token_error(p, pos, ValueError::NoRelativeEchoFeedback.into())
+    )
+}
+
+fn parse_efb_minus(pos: FilePos, p: &mut Parser) -> Command {
+    let value_pos = p.peek_pos();
+
+    match_next_token!(p,
+        &Token::Number(n) => {
+            match i32::try_from(n) {
+                // `-i`` is safe, `-i32::MAX` is in bounds
+                Ok(i) => match (-i).try_into() {
+                    Ok(i) => Command::RelativeEchoFeedback(i),
+                    Err(e) => invalid_token_error(p, value_pos, e.into())
+                },
+                Err(_) => invalid_token_error(p, value_pos, ValueError::RelativeEchoFeedbackOutOfRangeU32(n).into())
+            }
+        },
+        #_ => invalid_token_error(p, pos, ValueError::NoRelativeEchoFeedback.into())
+    )
+}
+
 fn invalid_token_error(p: &mut Parser, pos: FilePos, e: ChannelError) -> Command {
     p.add_error(pos, e);
     Command::None
@@ -2160,6 +2215,9 @@ fn parse_token(pos: FilePos, token: Token, p: &mut Parser) -> Command {
         Token::Divider => Command::None,
 
         Token::Evol => parse_evol(pos, p),
+        Token::Efb => parse_efb(pos, p),
+        Token::EfbPlus => parse_efb_plus(pos, p),
+        Token::EfbMinus => parse_efb_minus(pos, p),
 
         Token::StartBytecodeAsm => Command::StartBytecodeAsm,
         Token::EndBytecodeAsm => Command::EndBytecodeAsm,

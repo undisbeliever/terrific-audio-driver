@@ -10,6 +10,7 @@ use crate::bytecode::{
     VibratoPitchOffsetPerTick,
 };
 use crate::data::{InstrumentOrSample, UniqueNamesList};
+use crate::echo::EchoFeedback;
 use crate::envelope::{Adsr, Gain, OptionalGain, TempGain};
 use crate::errors::{BytecodeError, ChannelError, ValueError};
 use crate::notes::Note;
@@ -306,6 +307,11 @@ fn optional_loop_count_argument(args: &[&str]) -> Result<Option<LoopCount>, Chan
     }
 }
 
+fn echo_feedback_argument(args: &[&str]) -> Result<EchoFeedback, ChannelError> {
+    let feedback = one_argument(args)?;
+    Ok(parse_i32_allow_no_sign(feedback)?.try_into()?)
+}
+
 fn parse_play_note_ticks(ticks: &str, key_off: &str) -> Result<PlayNoteTicks, ChannelError> {
     let is_slur = match key_off {
         "" => false,
@@ -354,6 +360,30 @@ fn parse_i32(src: &str, missing_sign_err: &ValueError) -> Result<i32, ValueError
                 Err(_) => Err(ValueError::CannotParseSigned(src.to_owned())),
             },
             _ => Err(missing_sign_err.clone()),
+        }
+    }
+}
+
+fn parse_i32_allow_no_sign(src: &str) -> Result<i32, ValueError> {
+    if let Some(s) = src.strip_prefix("+$") {
+        match i32::from_str_radix(s, 16) {
+            Ok(i) => Ok(i),
+            Err(_) => Err(ValueError::CannotParseHex(src.to_owned())),
+        }
+    } else if let Some(s) = src.strip_prefix("-$") {
+        match i32::from_str_radix(s, 16) {
+            Ok(i) => Ok(-i),
+            Err(_) => Err(ValueError::CannotParseHex(src.to_owned())),
+        }
+    } else if let Some(s) = src.strip_prefix("$") {
+        match i32::from_str_radix(s, 16) {
+            Ok(i) => Ok(i),
+            Err(_) => Err(ValueError::CannotParseHex(src.to_owned())),
+        }
+    } else {
+        match src.parse() {
+            Ok(i) => Ok(i),
+            Err(_) => Err(ValueError::CannotParseSigned(src.to_owned())),
         }
     }
 }
@@ -541,6 +571,8 @@ pub fn parse_asm_line(bc: &mut Bytecode, line: &str) -> Result<(), ChannelError>
        set_stereo_echo_volume 2 two_uvnt_arguments,
        adjust_echo_volume 1 one_svnt_argument,
        adjust_stereo_echo_volume 2 two_svnt_arguments,
+       set_echo_feedback 1 echo_feedback_argument,
+       adjust_echo_feedback 1 one_svnt_argument,
     )
 }
 

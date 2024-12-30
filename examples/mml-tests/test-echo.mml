@@ -24,3 +24,10 @@ H \evol 0 [ w%1 \evol +1]120 w%36
 A cdefg r1
 H \evol 120,0 w%36 [ w%1 \evol -2,+2]60 w%60
 
+H \evol 80
+
+
+; Slowly decrease echo feedback
+A c^^^^ r1
+H \efb 100 w%12 [ w%1 \efb- 1]60 w%84
+

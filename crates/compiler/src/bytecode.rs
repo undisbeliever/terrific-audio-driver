@@ -12,7 +12,7 @@ use crate::driver_constants::{
     BC_CHANNEL_STACK_SIZE, BC_STACK_BYTES_PER_LOOP, BC_STACK_BYTES_PER_SUBROUTINE_CALL,
     MAX_INSTRUMENTS_AND_SAMPLES,
 };
-use crate::echo::EchoVolume;
+use crate::echo::{EchoFeedback, EchoVolume};
 use crate::envelope::{Adsr, Envelope, Gain, OptionalGain, TempGain};
 use crate::errors::{BytecodeError, ChannelError, ValueError};
 use crate::notes::{Note, LAST_NOTE_ID, N_NOTES};
@@ -169,6 +169,13 @@ i8_value_newtype!(
     EchoVolume::MAX.as_u8() as i8
 );
 
+i8_value_newtype!(
+    RelativeEchoFeedback,
+    RelativeEchoFeedbackOutOfRange,
+    NoRelativeEchoFeedback,
+    NoRelativeEchoFeedbackSign
+);
+
 pub enum BytecodeContext {
     SongSubroutine,
     SongChannel(u8),
@@ -243,6 +250,8 @@ pub mod opcodes {
         SET_STEREO_ECHO_VOLUME,
         ADJUST_ECHO_VOLUME,
         ADJUST_STEREO_ECHO_VOLUME,
+        SET_ECHO_FEEDBACK,
+        ADJUST_ECHO_FEEDBACK,
         END_LOOP,
         RETURN_FROM_SUBROUTINE_AND_DISABLE_VIBRATO,
         RETURN_FROM_SUBROUTINE,
@@ -2213,6 +2222,16 @@ impl<'a> Bytecode<'a> {
                 left.as_i8(),
                 right.as_i8()
             );
+        }
+    }
+
+    pub fn set_echo_feedback(&mut self, efb: EchoFeedback) {
+        emit_bytecode!(self, opcodes::SET_ECHO_FEEDBACK, efb.as_i8());
+    }
+
+    pub fn adjust_echo_feedback(&mut self, adjust: RelativeEchoFeedback) {
+        if adjust.value() != 0 {
+            emit_bytecode!(self, opcodes::ADJUST_ECHO_FEEDBACK, adjust.as_i8());
         }
     }
 }

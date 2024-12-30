@@ -10,7 +10,7 @@ use crate::bytecode::{
     BcTicks, BcTicksKeyOff, BcTicksNoKeyOff, DetuneValue, EarlyReleaseMinTicks, EarlyReleaseTicks,
     InstrumentId, LoopCount, NoiseFrequency, Pan, PanSlideAmount, PanSlideTicks,
     PanbrelloAmplitude, PanbrelloQuarterWavelengthInTicks, PlayPitchPitch, PortamentoVelocity,
-    RelativeEchoVolume, RelativePan, RelativeVolume, TremoloAmplitude,
+    RelativeEchoFeedback, RelativeEchoVolume, RelativePan, RelativeVolume, TremoloAmplitude,
     TremoloQuarterWavelengthInTicks, VibratoPitchOffsetPerTick, VibratoQuarterWavelengthInTicks,
     Volume, VolumeSlideAmount, VolumeSlideTicks,
 };
@@ -23,7 +23,7 @@ use crate::driver_constants::{
     MAX_DIR_ITEMS, MAX_INSTRUMENTS_AND_SAMPLES, MAX_N_PITCHES, MAX_N_SONGS, MAX_SONG_DATA_SIZE,
     MAX_SOUND_EFFECTS, MAX_SUBROUTINES,
 };
-use crate::echo::{EchoEdl, EchoLength, EchoVolume, MAX_FIR_ABS_SUM};
+use crate::echo::{EchoEdl, EchoFeedback, EchoLength, EchoVolume, MAX_FIR_ABS_SUM};
 use crate::envelope::Gain;
 use crate::file_pos::{FilePosRange, MAX_MML_TEXT_LENGTH};
 use crate::mml::command_parser::{
@@ -175,6 +175,7 @@ pub enum ValueError {
     NoDetuneValueSign,
     NoDetuneCentsSign,
     NoRelativeEchoVolumeSign,
+    NoRelativeEchoFeedbackSign,
 
     PortamentoVelocityZero,
     PortamentoVelocityOutOfRange(i32),
@@ -207,6 +208,10 @@ pub enum ValueError {
     EchoEdlOutOfRange(u32),
     EchoVolumeOutOfRange(u32),
     RelativeEchoVolumeOutOfRange(i32),
+    EchoFeedbackOutOfRange(i32),
+    EchoFeedbackOutOfRangeU32(u32),
+    RelativeEchoFeedbackOutOfRange(i32),
+    RelativeEchoFeedbackOutOfRangeU32(u32),
     EchoLengthNotMultiple,
     EchoBufferTooLarge,
 
@@ -250,6 +255,8 @@ pub enum ValueError {
     NoEchoEdl,
     NoEchoVolume,
     NoRelativeEchoVolume,
+    NoEchoFeedback,
+    NoRelativeEchoFeedback,
     NoInstrumentId,
     NoGain,
     NoOptionalGainMode,
@@ -1004,6 +1011,9 @@ impl Display for ValueError {
             Self::NoRelativeEchoVolumeSign => {
                 write!(f, "missing + or - in relative echo volume")
             }
+            Self::NoRelativeEchoFeedbackSign => {
+                write!(f, "missing + or - in relative echo feedback")
+            }
 
             Self::PortamentoVelocityZero => write!(f, "portamento velocity cannot be 0"),
             Self::PortamentoVelocityOutOfRange(v) => {
@@ -1049,6 +1059,15 @@ impl Display for ValueError {
             Self::RelativeEchoVolumeOutOfRange(v) => {
                 out_of_range!("relative echo volume", v, RelativeEchoVolume)
             }
+            Self::EchoFeedbackOutOfRange(v) => out_of_range!("echo feedback", v, EchoFeedback),
+            Self::EchoFeedbackOutOfRangeU32(v) => out_of_range!("echo feedback", v, EchoFeedback),
+            Self::RelativeEchoFeedbackOutOfRange(v) => {
+                out_of_range!("relative echo feedback", v, RelativeEchoFeedback)
+            }
+            Self::RelativeEchoFeedbackOutOfRangeU32(v) => {
+                out_of_range!("relative echo feedback", v, RelativeEchoFeedback)
+            }
+
             Self::EchoLengthNotMultiple => write!(
                 f,
                 "echo length is not a multiple of {}ms",
@@ -1118,6 +1137,8 @@ impl Display for ValueError {
             Self::NoEchoEdl => write!(f, "no echo EDL"),
             Self::NoEchoVolume => write!(f, "no echo volume value"),
             Self::NoRelativeEchoVolume => write!(f, "no relative echo volume"),
+            Self::NoEchoFeedback => write!(f, "no echo feedback value"),
+            Self::NoRelativeEchoFeedback => write!(f, "no relative echo feedback"),
             Self::NoInstrumentId => write!(f, "no instrument id"),
             Self::NoGain => write!(f, "no gain"),
             Self::NoOptionalGainMode => write!(f, "no optional GAIN mode (F, D, E, I, B)"),

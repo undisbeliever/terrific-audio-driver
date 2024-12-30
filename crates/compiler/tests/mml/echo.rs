@@ -145,3 +145,99 @@ fn forbid_set_and_adjust_stereo_echo_volume() {
         ChannelError::RelativeAndSetStereoEchoVolume,
     );
 }
+
+#[test]
+fn set_echo_feedback() {
+    assert_line_matches_bytecode(r"\efb 52", &["set_echo_feedback $34"]);
+    assert_line_matches_bytecode(r"\efb $34", &["set_echo_feedback 52"]);
+
+    assert_line_matches_bytecode(r"\efb 0", &["set_echo_feedback 0"]);
+
+    assert_line_matches_bytecode(r"\efb -128", &["set_echo_feedback -128"]);
+    assert_one_error_in_mml_line(
+        r"\efb -129",
+        6,
+        ValueError::EchoFeedbackOutOfRange(-129).into(),
+    );
+
+    assert_line_matches_bytecode(r"\efb 127", &["set_echo_feedback 127"]);
+    assert_one_error_in_mml_line(
+        r"\efb 128",
+        6,
+        ValueError::EchoFeedbackOutOfRangeU32(128).into(),
+    );
+
+    assert_line_matches_bytecode(r"\efb +127", &["set_echo_feedback +127"]);
+    assert_one_error_in_mml_line(
+        r"\efb +128",
+        6,
+        ValueError::EchoFeedbackOutOfRange(128).into(),
+    );
+
+    assert_one_error_in_mml_line(
+        r"\efb 2147483647",
+        6,
+        ValueError::EchoFeedbackOutOfRangeU32(i32::MAX.try_into().unwrap()).into(),
+    );
+    assert_one_error_in_mml_line(
+        r"\efb 2147483648",
+        6,
+        ValueError::EchoFeedbackOutOfRangeU32(u32::try_from(i32::MAX).unwrap() + 1).into(),
+    );
+
+    assert_one_error_in_mml_line(r"\efb", 1, ValueError::NoEchoFeedback.into());
+}
+
+#[test]
+fn increment_echo_feedback() {
+    assert_line_matches_bytecode(r"\efb+ 50", &["adjust_echo_feedback +50"]);
+
+    assert_line_matches_bytecode(r"\efb+ 0", &[]);
+
+    assert_line_matches_bytecode(r"\efb+ 127", &["adjust_echo_feedback +127"]);
+    assert_one_error_in_mml_line(
+        r"\efb+ 128",
+        7,
+        ValueError::RelativeEchoFeedbackOutOfRange(128).into(),
+    );
+
+    assert_one_error_in_mml_line(
+        r"\efb+ 2147483647",
+        7,
+        ValueError::RelativeEchoFeedbackOutOfRange(i32::MAX).into(),
+    );
+    assert_one_error_in_mml_line(
+        r"\efb+ 2147483648",
+        7,
+        ValueError::RelativeEchoFeedbackOutOfRangeU32(u32::try_from(i32::MAX).unwrap() + 1).into(),
+    );
+
+    assert_one_error_in_mml_line(r"\efb+", 1, ValueError::NoRelativeEchoFeedback.into());
+}
+
+#[test]
+fn decrement_echo_feedback() {
+    assert_line_matches_bytecode(r"\efb- 50", &["adjust_echo_feedback -50"]);
+
+    assert_line_matches_bytecode(r"\efb- 0", &[]);
+
+    assert_line_matches_bytecode(r"\efb- 128", &["adjust_echo_feedback -128"]);
+    assert_one_error_in_mml_line(
+        r"\efb- 129",
+        7,
+        ValueError::RelativeEchoFeedbackOutOfRange(-129).into(),
+    );
+
+    assert_one_error_in_mml_line(
+        r"\efb- 2147483647",
+        7,
+        ValueError::RelativeEchoFeedbackOutOfRange(-i32::MAX).into(),
+    );
+    assert_one_error_in_mml_line(
+        r"\efb- 2147483648",
+        7,
+        ValueError::RelativeEchoFeedbackOutOfRangeU32(u32::try_from(i32::MAX).unwrap() + 1).into(),
+    );
+
+    assert_one_error_in_mml_line(r"\efb-", 1, ValueError::NoRelativeEchoFeedback.into());
+}

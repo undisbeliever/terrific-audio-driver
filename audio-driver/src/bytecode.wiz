@@ -349,12 +349,18 @@ let INSTRUCTIONS_WITH_ARGUMENTS = [
     // Both channels will be masked
     set_stereo_echo_volume,
 
-
     // parameter = i8 adjust
     adjust_echo_volume,
 
     // parameter = i8 left, i8 right
     adjust_stereo_echo_volume,
+
+    // parameter = i8 EFB register value
+    set_echo_feedback,
+
+    // parameter = i8 adjust
+    // Saturation adds adjust to echo feedback
+    adjust_echo_feedback,
 ];
 
 

@@ -1072,6 +1072,16 @@ impl ChannelState {
                     .saturating_add_signed(r)
                     .clamp(0, EchoVolume::MAX.as_u8());
             }
+            opcodes::SET_ECHO_FEEDBACK => {
+                let v = i8::from_le_bytes([read_pc()]);
+
+                global.echo.feedback = v;
+            }
+            opcodes::ADJUST_ECHO_FEEDBACK => {
+                let a = i8::from_le_bytes([read_pc()]);
+
+                global.echo.feedback = global.echo.feedback.saturating_add(a)
+            }
 
             opcodes::DISABLE_CHANNEL => self.disable_channel(),
 
@@ -1180,6 +1190,8 @@ impl ChannelState {
             opcodes::SET_STEREO_ECHO_VOLUME => Some(3),
             opcodes::ADJUST_ECHO_VOLUME => Some(2),
             opcodes::ADJUST_STEREO_ECHO_VOLUME => Some(3),
+            opcodes::SET_ECHO_FEEDBACK => Some(2),
+            opcodes::ADJUST_ECHO_FEEDBACK => Some(2),
 
             opcodes::DISABLE_CHANNEL => None,
 

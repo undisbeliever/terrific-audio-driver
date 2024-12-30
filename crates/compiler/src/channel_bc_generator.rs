@@ -8,14 +8,14 @@ use crate::bytecode::{
     self, BcTicks, BcTicksKeyOff, BcTicksNoKeyOff, Bytecode, BytecodeContext, DetuneValue,
     EarlyReleaseMinTicks, EarlyReleaseTicks, IeState, InstrumentId, LoopCount, NoiseFrequency, Pan,
     PanSlideAmount, PanSlideTicks, PanbrelloAmplitude, PanbrelloQuarterWavelengthInTicks,
-    PlayNoteTicks, PlayPitchPitch, PortamentoVelocity, RelativeEchoVolume, RelativePan,
-    RelativeVolume, SlurredNoteState, TremoloAmplitude, TremoloQuarterWavelengthInTicks,
-    VibratoPitchOffsetPerTick, VibratoQuarterWavelengthInTicks, VibratoState, Volume,
-    VolumeSlideAmount, VolumeSlideTicks, KEY_OFF_TICK_DELAY,
+    PlayNoteTicks, PlayPitchPitch, PortamentoVelocity, RelativeEchoFeedback, RelativeEchoVolume,
+    RelativePan, RelativeVolume, SlurredNoteState, TremoloAmplitude,
+    TremoloQuarterWavelengthInTicks, VibratoPitchOffsetPerTick, VibratoQuarterWavelengthInTicks,
+    VibratoState, Volume, VolumeSlideAmount, VolumeSlideTicks, KEY_OFF_TICK_DELAY,
 };
 use crate::bytecode_assembler::parse_asm_line;
 use crate::data::{self, UniqueNamesList};
-use crate::echo::EchoVolume;
+use crate::echo::{EchoFeedback, EchoVolume};
 use crate::envelope::{Adsr, Envelope, Gain, OptionalGain, TempGain};
 use crate::errors::{ChannelError, ValueError};
 use crate::mml::IdentifierBuf;
@@ -327,6 +327,9 @@ pub(crate) enum Command {
     SetStereoEchoVolume(EchoVolume, EchoVolume),
     RelativeEchoVolume(RelativeEchoVolume),
     RelativeStereoEchoVolume(RelativeEchoVolume, RelativeEchoVolume),
+
+    SetEchoFeedback(EchoFeedback),
+    RelativeEchoFeedback(RelativeEchoFeedback),
 
     StartBytecodeAsm,
     EndBytecodeAsm,
@@ -1806,6 +1809,8 @@ impl<'a> ChannelBcGenerator<'a> {
             &Command::RelativeStereoEchoVolume(left, right) => {
                 self.bc.adjust_stereo_echo_volume(left, right)
             }
+            &Command::SetEchoFeedback(efb) => self.bc.set_echo_feedback(efb),
+            &Command::RelativeEchoFeedback(adjust) => self.bc.adjust_echo_feedback(adjust),
 
             Command::StartBytecodeAsm => {
                 self.bc._start_asm_block();

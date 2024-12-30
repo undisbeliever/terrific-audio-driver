@@ -86,6 +86,9 @@ pub enum Token<'a> {
     Divider,
 
     Evol,
+    Efb,
+    EfbPlus,
+    EfbMinus,
 
     // Temp GAIN after quantization tokens
     // (GainModeE is the Echo token)
@@ -510,6 +513,9 @@ fn next_token<'a>(scanner: &mut Scanner<'a>) -> Option<TokenWithPosition<'a>> {
             match scanner.read_while(|b: u8| !b.is_ascii_whitespace()) {
                 "asm" => Token::StartBytecodeAsm,
                 "evol" => Token::Evol,
+                "efb" => Token::Efb,
+                "efb+" => Token::EfbPlus,
+                "efb-" => Token::EfbMinus,
                 "" => Token::Error(ChannelError::NoSlashCommand),
                 s => Token::Error(ChannelError::InvalidSlashCommand(s.to_owned())),
             }

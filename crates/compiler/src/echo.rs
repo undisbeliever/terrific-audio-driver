@@ -11,7 +11,7 @@ use crate::driver_constants::{
     FIR_FILTER_SIZE,
 };
 use crate::errors::ValueError;
-use crate::value_newtypes::u8_value_newtype;
+use crate::value_newtypes::{i8_value_newtype_allow_no_sign, u8_value_newtype};
 
 u8_value_newtype!(
     EchoEdl,
@@ -24,6 +24,17 @@ u8_value_newtype!(
 u8_value_newtype!(EchoVolume, EchoVolumeOutOfRange, NoEchoVolume, 0, 127);
 
 impl EchoVolume {
+    pub const ZERO: Self = Self(0);
+}
+
+i8_value_newtype_allow_no_sign!(
+    EchoFeedback,
+    EchoFeedbackOutOfRange,
+    EchoFeedbackOutOfRangeU32,
+    NoEchoFeedback
+);
+
+impl EchoFeedback {
     pub const ZERO: Self = Self(0);
 }
 

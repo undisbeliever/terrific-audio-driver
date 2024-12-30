@@ -12,6 +12,7 @@ Audio driver changes:
     * If audio mode is mono, the two channels will be averaged together
  * Added set echo volume instructions
  * Added adjust echo volume instructions
+ * Added `set_echo_feedback` and `adjust_echo_feedback` instructions
 
 MML changes:
  * `#EchoVolume` now accepts a stereo input

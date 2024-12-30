@@ -480,6 +480,9 @@ The Following commands affect **all channels**:
  * `\evol <left 0..127>,<right 0..127>` - Set the left and right global echo volume
  * `\evol <-127..+127>` - Adds the parameter to the left and right global echo volume
  * `\evol <left -127..+127>,<right -127..+127>` - Adds the stereo parameters to the left and right global echo volumes
+ * `\efb <-128..127>` - Sets the echo feedback
+ * `\efb+ <1..127>` - Increment echo feedback
+ * `\efb- <1..128>` - Decrement echo feedback
 
 
 Engine Limitations

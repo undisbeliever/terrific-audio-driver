@@ -53,6 +53,9 @@ let EDL_SLEEP_COUNT   = smp.TIMER_0_HZ / 1000;
 // Assert EDL_SLEEP_COUNT < 12
 
 
+let I8_MIN = -128_i8;
+let I8_MAX = 127_i8;
+
 
 // Variables
 // =========
@@ -3168,6 +3171,34 @@ func __adjust_echo_volume_channel(adjust: i8 in a, evolChannel: u8 in y) {
     }
     _evol[y] = a;
 }
+
+
+// IN: Y = 0
+// KEEP: X
+#[fallthrough]
+func adjust_echo_feedback(channelIndex: u8 in x, adjust : i8 in a) {
+    a += echo.echoFeedback as u8;
+    if overflow {
+        a = I8_MIN as u8;
+        if !carry {
+            a = I8_MAX as u8;
+        }
+    }
+
+// Fallthrough into set_echo_feedback(x, a);
+}
+
+
+// IN: Y = 0
+// KEEP: X
+func set_echo_feedback(channelIndex: u8 in x, efb : i8 in a) {
+    echo.echoFeedback = a as i8;
+
+    echoDirty $ ECHO_DIRTY__FEEDBACK_BIT = true;
+
+    ^return process_next_bytecode(x);
+}
+
 
 
 const InstructionTable : [u16 ; 64] = [ f as u16 for let f in INSTRUCTIONS_WITH_ARGUMENTS ]

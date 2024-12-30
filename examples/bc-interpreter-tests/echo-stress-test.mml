@@ -27,3 +27,9 @@ B w%12 [w%3 \evol +11,-7 w%3 \evol -11,-7]51 w
 C w%18 [w%5 \evol +23    w%5 \evol -31   ]30 w
 D w%61 \evol 64  w%97 \evol 60,60 w%101 \evol 90 w%83
 
+
+; Test modifying echo feedback in multiple channels
+E w%13 [ r%5 \efb+ 86 r%6  \efb- 63 r%12 \efb+ 17 r%16 \efb+ 20 r%9 \efb- 32  r%11 \efb+ 108 r%11 \efb- 106 r%11 \efb+ 21 ]7
+F w%27 [ r%7 \efb- 37 r%11 \efb+ 12 r%7  \efb- 83 r%5  \efb- 7  r%6 \efb- 114 r%6  \efb+ 107 r%18 \efb- 19  r%8  \efb- 106]8
+G w%100 \efb 0 w%100 \efb 60 w%100 \efb -60 w%100 \efb +25 w%100  \efb -35
+
