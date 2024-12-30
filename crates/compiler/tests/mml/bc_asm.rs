@@ -185,8 +185,8 @@ fn asm_skip_last_loop() {
 #[test]
 fn missing_end_loop_in_bc_asm_error() {
     assert_one_error_in_mml_line(
-        r"\asm{start_loop} a ]2",
-        16,
+        r"\asm {start_loop} a ]2",
+        17,
         BytecodeError::MissingEndLoopInAsmBlock.into(),
     );
 }
@@ -194,8 +194,8 @@ fn missing_end_loop_in_bc_asm_error() {
 #[test]
 fn missing_start_loop_in_bc_asm_error() {
     assert_one_error_in_mml_line(
-        r"[ a \asm{ end_loop 2}",
-        11,
+        r"[ a \asm { end_loop 2}",
+        12,
         BytecodeError::MissingStartLoopInAsmBlock.into(),
     );
 }
@@ -203,8 +203,8 @@ fn missing_start_loop_in_bc_asm_error() {
 #[test]
 fn skip_last_loop_outside_asm_loop_error() {
     assert_one_error_in_mml_line(
-        r"[ c \asm{ skip_last_loop } c ]2",
-        11,
+        r"[ c \asm { skip_last_loop } c ]2",
+        12,
         BytecodeError::CannotModifyLoopOutsideAsmBlock.into(),
     );
 }

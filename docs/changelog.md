@@ -17,6 +17,7 @@ MML changes:
  * `#EchoVolume` now accepts a stereo input
  * `#EchoVolume` only accepts unsigned (0 - 127) values
  * Added global echo commands
+ * The `\asm` command requires a space after `\asm` (breaking change)
 
 GUI changes:
  * Fixed a rust bytecode interpreter desync caused global instructions to be executed in the wrong order.

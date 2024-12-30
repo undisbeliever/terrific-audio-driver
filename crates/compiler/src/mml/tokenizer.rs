@@ -507,7 +507,7 @@ fn next_token<'a>(scanner: &mut Scanner<'a>) -> Option<TokenWithPosition<'a>> {
         b'\\' => {
             scanner.advance_one_ascii();
 
-            match scanner.read_while(|b: u8| b.is_ascii_alphabetic()) {
+            match scanner.read_while(|b: u8| !b.is_ascii_whitespace()) {
                 "asm" => Token::StartBytecodeAsm,
                 "evol" => Token::Evol,
                 "" => Token::Error(ChannelError::NoSlashCommand),
