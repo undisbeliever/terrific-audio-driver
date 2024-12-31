@@ -44,7 +44,7 @@ TAD_DB_REGISTERS   = 0
 .cerror Tad_Loader_SIZE < 64 || Tad_Loader_SIZE > 128, "Invalid Tad_Loader_Bin size"
 .cerror (Tad_Loader_Bin >> 16) != ((Tad_Loader_Bin + Tad_Loader_SIZE) >> 16), "Tad_Loader_Bin does not fit inside a single bank"
 
-.cerror Tad_AudioDriver_SIZE < $600 || Tad_AudioDriver_SIZE > $a00, "Invalid Tad_AudioDriver_Bin size"
+.cerror Tad_AudioDriver_SIZE < $600 || Tad_AudioDriver_SIZE > $b80, "Invalid Tad_AudioDriver_Bin size"
 ; `Tad_AudioDriver_Bin` can cross bank boundaries
 
 .cerror Tad_BlankSong_SIZE != 30,"Invalid Tad_BlankSong_Bin size"
