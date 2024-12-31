@@ -15,6 +15,8 @@ mod _symbols {
 }
 
 pub mod addresses {
+    use std::ops::Range;
+
     use super::_symbols;
 
     macro_rules! declare_symbols {
@@ -27,6 +29,8 @@ pub mod addresses {
 
     declare_symbols!(
         DRIVER_CODE,
+        MAINLOOP_CODE,
+        PROCESS_MUSIC_CHANNELS_CODE,
         LOADER,
         SONG_PTR,
         LOADER_DATA_TYPE,
@@ -109,6 +113,12 @@ pub mod addresses {
         (COMMON_DATA as usize + super::COMMON_DATA_HEADER_SIZE) & 0xff == 0,
         "BRR directory is not page aligned"
     );
+
+    const _: () = assert!(
+        MAINLOOP_CODE < PROCESS_MUSIC_CHANNELS_CODE,
+        "mainloop() must be before process_music_channels()"
+    );
+    pub const MAIN_LOOP_CODE_RANGE: Range<u16> = MAINLOOP_CODE..PROCESS_MUSIC_CHANNELS_CODE;
 }
 
 pub const ECHO_VARIABLES_SIZE: usize = (addresses::ECHO_DIRTY - addresses::ECHO_VARIABLES) as usize;

@@ -28,6 +28,8 @@ const TAD_IO_VERSION: &str = "TAD_IO_VERSION";
 #[rustfmt::skip]
 const AUDIO_DRIVER_SYMBOLS: &[(&str, &str)] = &[
     ("main", "DRIVER_CODE"),
+    ("mainloop", "MAINLOOP_CODE"),
+    ("process_music_channels", "PROCESS_MUSIC_CHANNELS_CODE"),
     ("__loader_songPtr", "SONG_PTR"),
     ("__loader_dataType", "LOADER_DATA_TYPE"),
     ("songTickCounter", "SONG_TICK_COUNTER"),

@@ -689,14 +689,13 @@ func mainloop() {
 
         // Song tick timer
         a = smp.counter_0;
-        ^goto SkipMusicTick if zero;
+        goto SkipMusicTick if zero;
             if a >= maxTimerCounter {
                 maxTimerCounter = a;
             }
 
         ProcessMusicChannel:
-            songTickCounter++;
-            _process_music_channels__inline();
+            process_music_channels();
     SkipMusicTick:
 
         // SFX tick timer
@@ -753,7 +752,14 @@ inline func __clear_echo_buffer__inline(esa : u8 in x) {
 }
 
 
-inline func _process_music_channels__inline() {
+// Process music channels.
+//
+// Not inline for 2 reasons:
+//   1. Used by the GUI to determine if the audio driver is processing music channels.
+//   2. Will be required when I add loading ditties to the audio driver.
+func process_music_channels() {
+    songTickCounter++;
+
     y = a = keyOffShadow_music & musicSfxChannelMask;
     write_dsp(GlobalDspAddr.KOFF, y);
 

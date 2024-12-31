@@ -9,6 +9,7 @@
 use brr::{BrrSample, SAMPLES_PER_BLOCK};
 use compiler::audio_driver;
 use compiler::bytecode_interpreter;
+use compiler::bytecode_interpreter::Emulator;
 use compiler::bytecode_interpreter::SongInterpreter;
 use compiler::common_audio_data::CommonAudioData;
 use compiler::driver_constants::N_CHANNELS;
@@ -410,6 +411,10 @@ impl bytecode_interpreter::Emulator for EmulatorWrapper<'_> {
     fn write_smp_register(&mut self, addr: u8, value: u8) {
         self.0.write_smp_register(addr, value);
     }
+
+    fn program_counter(&self) -> u16 {
+        self.0.program_counter()
+    }
 }
 
 enum AudioDataState {
@@ -437,7 +442,7 @@ impl std::ops::Deref for SiCad {
 }
 
 fn create_and_process_song_interpreter(
-    emu: &mut ShvcSoundEmu,
+    emu: &mut EmulatorWrapper,
     audio_data: &AudioDataState,
     song_skip: SongSkip,
     stereo_flag: bool,
@@ -456,7 +461,7 @@ fn create_and_process_song_interpreter(
         SongSkip::None => Ok(Some(SongInterpreter::new(cad, sd, stereo_flag))),
         SongSkip::Song(ticks) => {
             let mut si = SongInterpreter::new(cad, sd, stereo_flag);
-            if si.process_song_skip_ticks(ticks, &mut EmulatorWrapper(emu)) {
+            if si.process_song_skip_ticks(ticks, emu) {
                 Ok(Some(si))
             } else {
                 Ok(None)
@@ -465,7 +470,7 @@ fn create_and_process_song_interpreter(
         SongSkip::Subroutine(prefix, si, ticks) => {
             match SongInterpreter::new_song_subroutine(cad, sd, prefix, si, stereo_flag) {
                 Ok(mut si) => {
-                    if si.process_song_skip_ticks(ticks, &mut EmulatorWrapper(emu)) {
+                    if si.process_song_skip_ticks(ticks, emu) {
                         Ok(Some(si))
                     } else {
                         Ok(None)
@@ -718,10 +723,13 @@ impl TadEmu {
             .set_spc_registers(addresses::DRIVER_CODE, 0, 0, 0, 0, 0xff);
 
         // Wait for the audio-driver to finish initialization
-        self.emu.emulate();
+        let mut emu_wrapper = EmulatorWrapper(&mut self.emu);
+        while !emu_wrapper.is_pc_in_mainloop() {
+            emu_wrapper.0.emulate();
+        }
 
         self.bc_interpreter = create_and_process_song_interpreter(
-            &mut self.emu,
+            &mut emu_wrapper,
             &data_state,
             song_skip,
             stereo_flag,

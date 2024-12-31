@@ -95,6 +95,11 @@ impl bytecode_interpreter::Emulator for DummyEmu {
     fn write_smp_register(&mut self, addr: u8, value: u8) {
         self.apuram[usize::from(addr)] = value;
     }
+
+    // HACK: Always return a mainloop() address
+    fn program_counter(&self) -> u16 {
+        addresses::MAINLOOP_CODE
+    }
 }
 
 fn mask_channel_soa(

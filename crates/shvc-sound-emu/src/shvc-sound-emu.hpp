@@ -50,6 +50,8 @@ struct ShvcSoundEmu {
 
   auto set_spc_registers(uint16_t pc, uint8_t a, uint8_t x, uint8_t y, uint8_t psw, uint8_t sp) -> void;
 
+  auto program_counter() const -> uint16_t;
+
   auto emulate() -> const std::array<int16_t, AUDIO_BUFFER_SIZE>&;
 
 private:

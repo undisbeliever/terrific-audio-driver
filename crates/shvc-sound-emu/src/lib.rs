@@ -40,6 +40,8 @@ mod ffi {
             sp: u8,
         );
 
+        fn program_counter(self: &ShvcSoundEmu) -> u16;
+
         fn emulate(self: Pin<&mut ShvcSoundEmu>) -> &[i16; 512];
     }
 }
@@ -107,6 +109,10 @@ impl ShvcSoundEmu {
 
     pub fn set_spc_registers(&mut self, pc: u16, a: u8, x: u8, y: u8, psw: u8, sp: u8) {
         self.emu.pin_mut().set_spc_registers(pc, a, x, y, psw, sp)
+    }
+
+    pub fn program_counter(self: &ShvcSoundEmu) -> u16 {
+        self.emu.program_counter()
     }
 
     pub fn emulate(&mut self) -> &[i16; Self::AUDIO_BUFFER_SIZE] {

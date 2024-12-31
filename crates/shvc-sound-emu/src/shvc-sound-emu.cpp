@@ -90,6 +90,10 @@ auto ShvcSoundEmu::set_spc_registers(uint16_t pc, uint8_t a, uint8_t x, uint8_t 
   smp.r.s = sp;
 }
 
+auto ShvcSoundEmu::program_counter() const -> uint16_t {
+  return smp.r.pc.w;
+}
+
 auto ShvcSoundEmu::emulate() -> const std::array<int16_t, AUDIO_BUFFER_SIZE>& {
   smp.dsp.sampleBuffer.reset();
 

@@ -1774,6 +1774,12 @@ pub trait Emulator {
     fn apuram_mut(&mut self) -> &mut [u8; 0x10000];
     fn write_dsp_register(&mut self, addr: u8, value: u8);
     fn write_smp_register(&mut self, addr: u8, value: u8);
+    fn program_counter(&self) -> u16;
+
+    // CAUTION: might return true when program_counter() at the start or end of _process_sfx_channels__inline().
+    fn is_pc_in_mainloop(&self) -> bool {
+        addresses::MAIN_LOOP_CODE_RANGE.contains(&self.program_counter())
+    }
 }
 
 /// Writes `InterpreterOutput` to the emulator.
@@ -1786,6 +1792,16 @@ pub trait Emulator {
 /// SAFETY: panics if the audio driver is not the paused state
 impl InterpreterOutput {
     fn write_to_emulator(&self, emu: &mut impl Emulator) {
+        // MUST NOT modify sound effect channels.
+        //
+        // (pc_in_mainloop() can return true if in `_process_sfx_channels__inline()`)
+
+        if !emu.is_pc_in_mainloop() {
+            panic!(
+                "audio driver is not paused (it might processing music channels or an IO command)"
+            );
+        }
+
         let key_on_shadow: u8 = self
             .channels
             .iter()
@@ -1819,8 +1835,6 @@ impl InterpreterOutput {
                 self.song_data_addr,
                 "songPtr does not match"
             );
-
-            // ::TODO find a way to determine if the audio driver is paused::
 
             let mut apu_write = |addr: u16, value: u8| {
                 apuram[usize::from(addr)] = value;
