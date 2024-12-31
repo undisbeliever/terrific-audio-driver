@@ -361,6 +361,15 @@ let INSTRUCTIONS_WITH_ARGUMENTS = [
     // parameter = i8 adjust
     // Saturation adds adjust to echo feedback
     adjust_echo_feedback,
+
+    // parameter = [i8 ; 8] FIR coefficients
+    set_fir_filter,
+
+    // parameter = u8 tap, i8 value
+    set_fir_tap,
+
+    // parameter = u8 tap, i8 adjust
+    adjust_fir_tap,
 ];
 
 
@@ -404,6 +413,8 @@ let N_PADDING_INSTRUCTIONS = 64 - 1 - INSTRUCTIONS_WITH_ARGUMENTS.len - NO_ARGUM
 
 // Do not enable PMOD on channels G & H to prevent conflicts with the sound-effect channels.
 let ENABLE_PMOD_MASK = 0b00111110;
+
+let FIR_TAP_MASK = 7;
 
 }
 

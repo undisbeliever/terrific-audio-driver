@@ -1,0 +1,41 @@
+#Title FIR Filter instruction test
+
+#EchoLength    128
+#EchoFeedback  80
+#EchoVolume    70
+
+#FirFilter 32 32 32 16 0 0 0 0
+
+@1 piano
+
+AG l8
+A @1 v16 o4
+
+
+;; Set FIR test
+A E
+A cd r fd r dc r1
+
+A \fir { 48 48 0 0 0 0 -32 -32 }
+A cd r fd r dc r1
+
+G w%384
+
+;; With echo disabled
+A E0
+A cd r fd r dc r1
+
+G \fir { 0 0 0 0 0 0 0 0 }
+G w%192
+
+
+;; Set FIR test
+A E1
+A cd r fd r dc r1
+; FIR is all zeros
+G \ftap 2,20 www \ftap 4,80 www ww w1
+
+;; Adjust FIR test
+A cd r fd r dc r1
+G [w%8 \ftap+ 0,4 \ftap- 3,1 ]20 w%32
+

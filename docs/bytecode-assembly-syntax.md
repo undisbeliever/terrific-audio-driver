@@ -141,6 +141,14 @@ The echo instructions can be used in sound effects to control echo using S-CPU 6
  * `set_echo_feedback <-128..127>` - Sets the echo feedback (`EFB` register)
  * `adjust_echo_feedback <-128..127>` - Adds the parameter to the echo feedback
 
+ * `set_fir_filter c0 c1 c2 c3 c4 c5 c6 c7` - Set all 8 FIR filter tap coefficients
+    * This instruction will zero the old FIR filter before writing the new filter to the S-DSP registers
+      to minimise FIR filter overflow glitches.
+ * `set_fir_tap <tap 0..7> <value -128..127>` - Set a single FIR filter tap
+    * This instruction does not clear the old FIR filter
+ * `adjust_fir_tap <tap 0..7> <rel -128..127>` - Saturation adds *rel* to a single FIR filter tap
+    * This instruction does not clear the old FIR filter
+
 
 Parameters
 ==========

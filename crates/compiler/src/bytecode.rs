@@ -10,9 +10,9 @@ use crate::channel_bc_generator::MmlInstrument;
 use crate::data::{self, InstrumentOrSample, UniqueNamesList};
 use crate::driver_constants::{
     BC_CHANNEL_STACK_SIZE, BC_STACK_BYTES_PER_LOOP, BC_STACK_BYTES_PER_SUBROUTINE_CALL,
-    MAX_INSTRUMENTS_AND_SAMPLES,
+    FIR_FILTER_SIZE, MAX_INSTRUMENTS_AND_SAMPLES,
 };
-use crate::echo::{EchoFeedback, EchoVolume};
+use crate::echo::{EchoFeedback, EchoVolume, FirCoefficient, FirTap};
 use crate::envelope::{Adsr, Envelope, Gain, OptionalGain, TempGain};
 use crate::errors::{BytecodeError, ChannelError, ValueError};
 use crate::notes::{Note, LAST_NOTE_ID, N_NOTES};
@@ -176,6 +176,13 @@ i8_value_newtype!(
     NoRelativeEchoFeedbackSign
 );
 
+i8_value_newtype!(
+    RelativeFirCoefficient,
+    RelativeFirCoefficientOutOfRange,
+    NoRelativeFirCoefficient,
+    NoRelativeFirCoefficientSign
+);
+
 pub enum BytecodeContext {
     SongSubroutine,
     SongChannel(u8),
@@ -252,6 +259,9 @@ pub mod opcodes {
         ADJUST_STEREO_ECHO_VOLUME,
         SET_ECHO_FEEDBACK,
         ADJUST_ECHO_FEEDBACK,
+        SET_FIR_FILTER,
+        SET_FIR_TAP,
+        ADJUST_FIR_TAP,
         END_LOOP,
         RETURN_FROM_SUBROUTINE_AND_DISABLE_VIBRATO,
         RETURN_FROM_SUBROUTINE,
@@ -623,9 +633,19 @@ macro_rules! emit_bytecode {
     }
 }
 
+macro_rules! emit_bytecode_array {
+    ($self:expr, $opcode:expr, $array:expr) => {
+        $self.bytecode.push($opcode);
+        $self.bytecode.extend(
+            $array
+                .into_iter()
+                .map(|i| emit_bytecode::Parameter::cast(i)),
+        );
+    };
+}
+
 mod emit_bytecode {
-    use super::NoteOpcode;
-    use crate::opcodes;
+    use super::{opcodes, FirCoefficient, NoteOpcode};
 
     pub trait Parameter {
         fn cast(self) -> u8;
@@ -647,6 +667,12 @@ mod emit_bytecode {
         fn cast(self) -> u8 {
             debug_assert!(self.opcode >= opcodes::FIRST_PLAY_NOTE_INSTRUCTION);
             self.opcode
+        }
+    }
+
+    impl Parameter for FirCoefficient {
+        fn cast(self) -> u8 {
+            self.as_i8().to_le_bytes()[0]
         }
     }
 }
@@ -2232,6 +2258,20 @@ impl<'a> Bytecode<'a> {
     pub fn adjust_echo_feedback(&mut self, adjust: RelativeEchoFeedback) {
         if adjust.value() != 0 {
             emit_bytecode!(self, opcodes::ADJUST_ECHO_FEEDBACK, adjust.as_i8());
+        }
+    }
+
+    pub fn set_fir_filter(&mut self, filter: [FirCoefficient; FIR_FILTER_SIZE]) {
+        emit_bytecode_array!(self, opcodes::SET_FIR_FILTER, filter);
+    }
+
+    pub fn set_fir_tap(&mut self, tap: FirTap, value: FirCoefficient) {
+        emit_bytecode!(self, opcodes::SET_FIR_TAP, tap.as_u8(), value.as_i8());
+    }
+
+    pub fn adjust_fir_tap(&mut self, tap: FirTap, adjust: RelativeFirCoefficient) {
+        if adjust.as_i8() != 0 {
+            emit_bytecode!(self, opcodes::ADJUST_FIR_TAP, tap.as_u8(), adjust.as_i8());
         }
     }
 }

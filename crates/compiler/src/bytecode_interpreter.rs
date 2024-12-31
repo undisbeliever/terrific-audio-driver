@@ -1082,6 +1082,25 @@ impl ChannelState {
 
                 global.echo.feedback = global.echo.feedback.saturating_add(a)
             }
+            opcodes::SET_FIR_FILTER => {
+                let filter = std::array::from_fn(|_i| i8::from_le_bytes([read_pc()]));
+
+                global.echo.fir_filter = filter;
+            }
+            opcodes::SET_FIR_TAP => {
+                let tap = read_pc();
+                let value = i8::from_le_bytes([read_pc()]);
+
+                let i = usize::from(tap & 7);
+                global.echo.fir_filter[i] = value;
+            }
+            opcodes::ADJUST_FIR_TAP => {
+                let tap = read_pc();
+                let adjust = i8::from_le_bytes([read_pc()]);
+
+                let i = usize::from(tap & 7);
+                global.echo.fir_filter[i] = global.echo.fir_filter[i].saturating_add(adjust);
+            }
 
             opcodes::DISABLE_CHANNEL => self.disable_channel(),
 
@@ -1192,6 +1211,9 @@ impl ChannelState {
             opcodes::ADJUST_STEREO_ECHO_VOLUME => Some(3),
             opcodes::SET_ECHO_FEEDBACK => Some(2),
             opcodes::ADJUST_ECHO_FEEDBACK => Some(2),
+            opcodes::SET_FIR_FILTER => Some(9),
+            opcodes::SET_FIR_TAP => Some(3),
+            opcodes::ADJUST_FIR_TAP => Some(3),
 
             opcodes::DISABLE_CHANNEL => None,
 

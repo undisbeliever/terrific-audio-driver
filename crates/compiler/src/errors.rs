@@ -10,9 +10,9 @@ use crate::bytecode::{
     BcTicks, BcTicksKeyOff, BcTicksNoKeyOff, DetuneValue, EarlyReleaseMinTicks, EarlyReleaseTicks,
     InstrumentId, LoopCount, NoiseFrequency, Pan, PanSlideAmount, PanSlideTicks,
     PanbrelloAmplitude, PanbrelloQuarterWavelengthInTicks, PlayPitchPitch, PortamentoVelocity,
-    RelativeEchoFeedback, RelativeEchoVolume, RelativePan, RelativeVolume, TremoloAmplitude,
-    TremoloQuarterWavelengthInTicks, VibratoPitchOffsetPerTick, VibratoQuarterWavelengthInTicks,
-    Volume, VolumeSlideAmount, VolumeSlideTicks,
+    RelativeEchoFeedback, RelativeEchoVolume, RelativeFirCoefficient, RelativePan, RelativeVolume,
+    TremoloAmplitude, TremoloQuarterWavelengthInTicks, VibratoPitchOffsetPerTick,
+    VibratoQuarterWavelengthInTicks, Volume, VolumeSlideAmount, VolumeSlideTicks,
 };
 use crate::channel_bc_generator::{
     DetuneCents, FineQuantization, PortamentoSpeed, Quantization, MAX_BROKEN_CHORD_NOTES,
@@ -23,7 +23,9 @@ use crate::driver_constants::{
     MAX_DIR_ITEMS, MAX_INSTRUMENTS_AND_SAMPLES, MAX_N_PITCHES, MAX_N_SONGS, MAX_SONG_DATA_SIZE,
     MAX_SOUND_EFFECTS, MAX_SUBROUTINES,
 };
-use crate::echo::{EchoEdl, EchoFeedback, EchoLength, EchoVolume, MAX_FIR_ABS_SUM};
+use crate::echo::{
+    EchoEdl, EchoFeedback, EchoLength, EchoVolume, FirCoefficient, FirTap, MAX_FIR_ABS_SUM,
+};
 use crate::envelope::Gain;
 use crate::file_pos::{FilePosRange, MAX_MML_TEXT_LENGTH};
 use crate::mml::command_parser::{
@@ -176,6 +178,7 @@ pub enum ValueError {
     NoDetuneCentsSign,
     NoRelativeEchoVolumeSign,
     NoRelativeEchoFeedbackSign,
+    NoRelativeFirCoefficientSign,
 
     PortamentoVelocityZero,
     PortamentoVelocityOutOfRange(i32),
@@ -212,6 +215,11 @@ pub enum ValueError {
     EchoFeedbackOutOfRangeU32(u32),
     RelativeEchoFeedbackOutOfRange(i32),
     RelativeEchoFeedbackOutOfRangeU32(u32),
+    FirTapOutOfRange(u32),
+    FirCoefficientOutOfRange(i32),
+    FirCoefficientOutOfRangeU32(u32),
+    RelativeFirCoefficientOutOfRange(i32),
+    RelativeFirCoefficientOutOfRangeU32(u32),
     EchoLengthNotMultiple,
     EchoBufferTooLarge,
 
@@ -256,7 +264,10 @@ pub enum ValueError {
     NoEchoVolume,
     NoRelativeEchoVolume,
     NoEchoFeedback,
+    NoFirTap,
     NoRelativeEchoFeedback,
+    NoFirCoefficient,
+    NoRelativeFirCoefficient,
     NoInstrumentId,
     NoGain,
     NoOptionalGainMode,
@@ -270,6 +281,8 @@ pub enum ValueError {
     NoCommaQuarterWavelength,
     NoCommaVolumeSlideTicks,
     NoCommaPanSlideTicks,
+    NoCommaFirCoefficient,
+    NoCommaRelativeFirCoefficient,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -546,6 +559,11 @@ pub enum ChannelError {
     NoNotesInBrokenChord,
     TooManyNotesInBrokenChord(usize),
     BrokenChordTotalLengthTooShort,
+
+    NoBraceAfterFirFilter,
+    MissingEndFirFilter,
+    UnknownTokenInFirFilter,
+    InvalidNumberOfFirCoefficients(usize),
 
     BrokenChordTickCountMismatch(TickCounter, TickCounter),
 
@@ -1014,6 +1032,9 @@ impl Display for ValueError {
             Self::NoRelativeEchoFeedbackSign => {
                 write!(f, "missing + or - in relative echo feedback")
             }
+            Self::NoRelativeFirCoefficientSign => {
+                write!(f, "missing + or - in relative fir coefficient")
+            }
 
             Self::PortamentoVelocityZero => write!(f, "portamento velocity cannot be 0"),
             Self::PortamentoVelocityOutOfRange(v) => {
@@ -1066,6 +1087,19 @@ impl Display for ValueError {
             }
             Self::RelativeEchoFeedbackOutOfRangeU32(v) => {
                 out_of_range!("relative echo feedback", v, RelativeEchoFeedback)
+            }
+            Self::FirTapOutOfRange(v) => out_of_range!("fir tap", v, FirTap),
+            Self::FirCoefficientOutOfRange(v) => {
+                out_of_range!("fir coefficient", v, FirCoefficient)
+            }
+            Self::FirCoefficientOutOfRangeU32(v) => {
+                out_of_range!("fir coefficient", v, FirCoefficient)
+            }
+            Self::RelativeFirCoefficientOutOfRange(v) => {
+                out_of_range!("relative fir coefficient", v, RelativeFirCoefficient)
+            }
+            Self::RelativeFirCoefficientOutOfRangeU32(v) => {
+                out_of_range!("relative fir coefficient", v, RelativeFirCoefficient)
             }
 
             Self::EchoLengthNotMultiple => write!(
@@ -1138,7 +1172,10 @@ impl Display for ValueError {
             Self::NoEchoVolume => write!(f, "no echo volume value"),
             Self::NoRelativeEchoVolume => write!(f, "no relative echo volume"),
             Self::NoEchoFeedback => write!(f, "no echo feedback value"),
+            Self::NoFirTap => write!(f, "no fir tap"),
             Self::NoRelativeEchoFeedback => write!(f, "no relative echo feedback"),
+            Self::NoFirCoefficient => write!(f, "no fir coefficient"),
+            Self::NoRelativeFirCoefficient => write!(f, "no relative fir coefficient"),
             Self::NoInstrumentId => write!(f, "no instrument id"),
             Self::NoGain => write!(f, "no gain"),
             Self::NoOptionalGainMode => write!(f, "no optional GAIN mode (F, D, E, I, B)"),
@@ -1160,6 +1197,13 @@ impl Display for ValueError {
             Self::NoCommaPanSlideTicks => {
                 write!(f, "cannot parse pan-slide ticks, expected a comma ','")
             }
+            Self::NoCommaFirCoefficient => {
+                write!(f, "cannot parse FIR coefficient: expected a comma ','")
+            }
+            Self::NoCommaRelativeFirCoefficient => write!(
+                f,
+                "cannot parse relative FIR coefficient: expected a comma ','"
+            ),
         }
     }
 }
@@ -1629,6 +1673,16 @@ impl Display for ChannelError {
                     f,
                     "broken chord total length too short (a minimum of {} loops are required)",
                     LoopCount::MIN_LOOPS
+                )
+            }
+
+            Self::NoBraceAfterFirFilter => write!(f, r"missing `{{` brace after \fir"),
+            Self::MissingEndFirFilter => write!(f, r"cannot find \fir end (no `}}`)"),
+            Self::UnknownTokenInFirFilter => write!(f, "not a FIR coefficient"),
+            Self::InvalidNumberOfFirCoefficients(c) => {
+                write!(
+                    f,
+                    "invalid number of FIR filter coefficients ({c}, expected {FIR_FILTER_SIZE})"
                 )
             }
 

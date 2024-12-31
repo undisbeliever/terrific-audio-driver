@@ -89,6 +89,10 @@ pub enum Token<'a> {
     Efb,
     EfbPlus,
     EfbMinus,
+    Fir,
+    Ftap,
+    FtapPlus,
+    FtapMinus,
 
     // Temp GAIN after quantization tokens
     // (GainModeE is the Echo token)
@@ -516,6 +520,10 @@ fn next_token<'a>(scanner: &mut Scanner<'a>) -> Option<TokenWithPosition<'a>> {
                 "efb" => Token::Efb,
                 "efb+" => Token::EfbPlus,
                 "efb-" => Token::EfbMinus,
+                "fir" => Token::Fir,
+                "ftap" => Token::Ftap,
+                "ftap+" => Token::FtapPlus,
+                "ftap-" => Token::FtapMinus,
                 "" => Token::Error(ChannelError::NoSlashCommand),
                 s => Token::Error(ChannelError::InvalidSlashCommand(s.to_owned())),
             }

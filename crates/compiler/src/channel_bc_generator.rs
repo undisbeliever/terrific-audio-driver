@@ -9,13 +9,14 @@ use crate::bytecode::{
     EarlyReleaseMinTicks, EarlyReleaseTicks, IeState, InstrumentId, LoopCount, NoiseFrequency, Pan,
     PanSlideAmount, PanSlideTicks, PanbrelloAmplitude, PanbrelloQuarterWavelengthInTicks,
     PlayNoteTicks, PlayPitchPitch, PortamentoVelocity, RelativeEchoFeedback, RelativeEchoVolume,
-    RelativePan, RelativeVolume, SlurredNoteState, TremoloAmplitude,
+    RelativeFirCoefficient, RelativePan, RelativeVolume, SlurredNoteState, TremoloAmplitude,
     TremoloQuarterWavelengthInTicks, VibratoPitchOffsetPerTick, VibratoQuarterWavelengthInTicks,
     VibratoState, Volume, VolumeSlideAmount, VolumeSlideTicks, KEY_OFF_TICK_DELAY,
 };
 use crate::bytecode_assembler::parse_asm_line;
 use crate::data::{self, UniqueNamesList};
-use crate::echo::{EchoFeedback, EchoVolume};
+use crate::driver_constants::FIR_FILTER_SIZE;
+use crate::echo::{EchoFeedback, EchoVolume, FirCoefficient, FirTap};
 use crate::envelope::{Adsr, Envelope, Gain, OptionalGain, TempGain};
 use crate::errors::{ChannelError, ValueError};
 use crate::mml::IdentifierBuf;
@@ -330,6 +331,9 @@ pub(crate) enum Command {
 
     SetEchoFeedback(EchoFeedback),
     RelativeEchoFeedback(RelativeEchoFeedback),
+    SetFirFilter([FirCoefficient; FIR_FILTER_SIZE]),
+    SetFirTap(FirTap, FirCoefficient),
+    AdjustFirTap(FirTap, RelativeFirCoefficient),
 
     StartBytecodeAsm,
     EndBytecodeAsm,
@@ -1811,6 +1815,9 @@ impl<'a> ChannelBcGenerator<'a> {
             }
             &Command::SetEchoFeedback(efb) => self.bc.set_echo_feedback(efb),
             &Command::RelativeEchoFeedback(adjust) => self.bc.adjust_echo_feedback(adjust),
+            &Command::SetFirFilter(filter) => self.bc.set_fir_filter(filter),
+            &Command::SetFirTap(tap, value) => self.bc.set_fir_tap(tap, value),
+            &Command::AdjustFirTap(tap, adjust) => self.bc.adjust_fir_tap(tap, adjust),
 
             Command::StartBytecodeAsm => {
                 self.bc._start_asm_block();

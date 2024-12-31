@@ -4,6 +4,8 @@
 
 use crate::*;
 
+const MIN_U32_TO_I32_ERROR: u32 = (i32::MAX as u32) + 1;
+
 #[test]
 fn enable_echo() {
     assert_line_matches_bytecode("E", &["enable_echo"]);
@@ -209,7 +211,7 @@ fn increment_echo_feedback() {
     assert_one_error_in_mml_line(
         r"\efb+ 2147483648",
         7,
-        ValueError::RelativeEchoFeedbackOutOfRangeU32(u32::try_from(i32::MAX).unwrap() + 1).into(),
+        ValueError::RelativeEchoFeedbackOutOfRangeU32(MIN_U32_TO_I32_ERROR).into(),
     );
 
     assert_one_error_in_mml_line(r"\efb+", 1, ValueError::NoRelativeEchoFeedback.into());
@@ -236,8 +238,217 @@ fn decrement_echo_feedback() {
     assert_one_error_in_mml_line(
         r"\efb- 2147483648",
         7,
-        ValueError::RelativeEchoFeedbackOutOfRangeU32(u32::try_from(i32::MAX).unwrap() + 1).into(),
+        ValueError::RelativeEchoFeedbackOutOfRangeU32(MIN_U32_TO_I32_ERROR).into(),
     );
 
     assert_one_error_in_mml_line(r"\efb-", 1, ValueError::NoRelativeEchoFeedback.into());
+}
+
+#[test]
+fn set_fir_filter() {
+    assert_line_matches_bytecode(
+        r"\fir { 1 2 3 4 5 6 7 8 }",
+        &["set_fir_filter 1 2 3 4 5 6 7 8"],
+    );
+    assert_line_matches_bytecode(
+        r"\fir { -1 -2 -3 -4 -5 -6 -7 -8 }",
+        &["set_fir_filter -1 -2 -3 -4 -5 -6 -7 -8"],
+    );
+    assert_line_matches_bytecode(
+        r"\fir { +1 +2 +3 +4 +5 +6 +7 +8 }",
+        &["set_fir_filter +1 +2 +3 +4 +5 +6 +7 +8"],
+    );
+
+    assert_line_matches_bytecode(
+        r"\fir { $00 $10 $20 $30 $40 $11 $12 $13 }",
+        &["set_fir_filter 0 16 32 $30 $40 17 18 19"],
+    );
+}
+
+#[test]
+fn set_fir_filter_errors() {
+    assert_one_error_in_mml_line(
+        r"\fir { 0 0 0 0 127 128 0 0 }",
+        20,
+        ValueError::FirCoefficientOutOfRangeU32(128).into(),
+    );
+    assert_one_error_in_mml_line(
+        r"\fir { 0 0 0 0 0 0 +127 +128 }",
+        25,
+        ValueError::FirCoefficientOutOfRange(128).into(),
+    );
+    assert_one_error_in_mml_line(
+        r"\fir { 0 0 -128 -129 0 0 0 0 }",
+        17,
+        ValueError::FirCoefficientOutOfRange(-129).into(),
+    );
+
+    assert_one_error_in_mml_line(
+        r"\fir { 2147483647 0 0 0 0 0 0 0 }",
+        8,
+        ValueError::FirCoefficientOutOfRangeU32(i32::MAX.try_into().unwrap()).into(),
+    );
+    assert_one_error_in_mml_line(
+        r"\fir { 2147483648 0 0 0 0 0 0 0 }",
+        8,
+        ValueError::FirCoefficientOutOfRangeU32(MIN_U32_TO_I32_ERROR).into(),
+    );
+
+    assert_one_error_in_mml_line(
+        r"\fir { }",
+        1,
+        ChannelError::InvalidNumberOfFirCoefficients(0),
+    );
+    assert_one_error_in_mml_line(
+        r"\fir { 0 }",
+        1,
+        ChannelError::InvalidNumberOfFirCoefficients(1),
+    );
+    assert_one_error_in_mml_line(
+        r"\fir { 0 0 0 0 0 0 0 }",
+        1,
+        ChannelError::InvalidNumberOfFirCoefficients(7),
+    );
+    assert_one_error_in_mml_line(
+        r"\fir { 0 0 0 0 0 0 0 0 0 }",
+        1,
+        ChannelError::InvalidNumberOfFirCoefficients(9),
+    );
+
+    assert_one_error_in_mml_line(r"\fir c", 1, ChannelError::NoBraceAfterFirFilter);
+    assert_one_error_in_mml_line(
+        r"\fir { 1 2 3 4 5 6 7 8",
+        1,
+        ChannelError::MissingEndFirFilter,
+    );
+    assert_one_error_in_mml_line(
+        r"\fir { c 1 2 3 4 5 6 7 8 }",
+        8,
+        ChannelError::UnknownTokenInFirFilter,
+    );
+    assert_one_error_in_mml_line(
+        r"\fir { 1 2 3 4 5 6 7 8 { }",
+        24,
+        ChannelError::UnknownTokenInFirFilter,
+    );
+}
+
+#[test]
+fn set_fir_tap() {
+    assert_line_matches_bytecode(r"\ftap 0,15", &["set_fir_tap 0 +15"]);
+    assert_line_matches_bytecode(r"\ftap 0,+15", &["set_fir_tap 0 15"]);
+    assert_line_matches_bytecode(r"\ftap 0,-15", &["set_fir_tap 0 -15"]);
+    assert_line_matches_bytecode(r"\ftap 0, $42", &["set_fir_tap 0 66"]);
+
+    assert_line_matches_bytecode(r"\ftap 3,45", &["set_fir_tap 3 45"]);
+
+    assert_line_matches_bytecode(r"\ftap 0,127", &["set_fir_tap 0 127"]);
+    assert_one_error_in_mml_line(
+        r"\ftap 0,128",
+        9,
+        ValueError::FirCoefficientOutOfRangeU32(128).into(),
+    );
+
+    assert_line_matches_bytecode(r"\ftap 0,+127", &["set_fir_tap 0 127"]);
+    assert_one_error_in_mml_line(
+        r"\ftap 0,+128",
+        9,
+        ValueError::FirCoefficientOutOfRange(128).into(),
+    );
+
+    assert_line_matches_bytecode(r"\ftap 0,-128", &["set_fir_tap 0 -128"]);
+    assert_one_error_in_mml_line(
+        r"\ftap 0,-129",
+        9,
+        ValueError::FirCoefficientOutOfRange(-129).into(),
+    );
+
+    assert_line_matches_bytecode(r"\ftap 7,27", &["set_fir_tap 7 27"]);
+    assert_one_error_in_mml_line(r"\ftap 8,27", 1, ValueError::FirTapOutOfRange(8).into());
+
+    assert_one_error_in_mml_line(r"\ftap ,0", 1, ValueError::NoFirTap.into());
+    assert_one_error_in_mml_line(r"\ftap 0,", 9, ValueError::NoFirCoefficient.into());
+    assert_one_error_in_mml_line(r"\ftap 0", 8, ValueError::NoCommaFirCoefficient.into());
+}
+
+#[test]
+fn increment_fir_tap() {
+    assert_line_matches_bytecode(r"\ftap+ 0,15", &["adjust_fir_tap 0 +15"]);
+    assert_line_matches_bytecode(r"\ftap+ 4,56", &["adjust_fir_tap 4 +56"]);
+
+    assert_line_matches_bytecode(r"\ftap+ 2,0", &[]);
+
+    assert_line_matches_bytecode(r"\ftap+ 0,127", &["adjust_fir_tap 0 +127"]);
+    assert_one_error_in_mml_line(
+        r"\ftap+ 0,128",
+        10,
+        ValueError::RelativeFirCoefficientOutOfRange(128).into(),
+    );
+
+    assert_one_error_in_mml_line(
+        r"\ftap+ 0,2147483647",
+        10,
+        ValueError::RelativeFirCoefficientOutOfRange(i32::MAX).into(),
+    );
+    assert_one_error_in_mml_line(
+        r"\ftap+ 0,2147483648",
+        10,
+        ValueError::RelativeFirCoefficientOutOfRangeU32(MIN_U32_TO_I32_ERROR).into(),
+    );
+
+    assert_line_matches_bytecode(r"\ftap+ 7,22", &["adjust_fir_tap 7 +22"]);
+    assert_one_error_in_mml_line(r"\ftap+ 8,22", 1, ValueError::FirTapOutOfRange(8).into());
+
+    assert_one_error_in_mml_line(r"\ftap+ ,20", 1, ValueError::NoFirTap.into());
+    assert_one_error_in_mml_line(
+        r"\ftap+ 0,",
+        10,
+        ValueError::NoRelativeFirCoefficient.into(),
+    );
+    assert_one_error_in_mml_line(
+        r"\ftap+ 0",
+        9,
+        ValueError::NoCommaRelativeFirCoefficient.into(),
+    );
+}
+
+#[test]
+fn decrement_fir_tap() {
+    assert_line_matches_bytecode(r"\ftap- 0,15", &["adjust_fir_tap 0 -15"]);
+    assert_line_matches_bytecode(r"\ftap- 4,56", &["adjust_fir_tap 4 -56"]);
+
+    assert_line_matches_bytecode(r"\ftap- 2,0", &[]);
+
+    assert_line_matches_bytecode(r"\ftap- 0,128", &["adjust_fir_tap 0 -128"]);
+    assert_one_error_in_mml_line(
+        r"\ftap- 0,129",
+        10,
+        ValueError::RelativeFirCoefficientOutOfRange(-129).into(),
+    );
+
+    assert_one_error_in_mml_line(
+        r"\ftap- 0,2147483647",
+        10,
+        ValueError::RelativeFirCoefficientOutOfRange(-i32::MAX).into(),
+    );
+    assert_one_error_in_mml_line(
+        r"\ftap- 0,2147483648",
+        10,
+        ValueError::RelativeFirCoefficientOutOfRangeU32(MIN_U32_TO_I32_ERROR).into(),
+    );
+
+    assert_line_matches_bytecode(r"\ftap- 7,22", &["adjust_fir_tap 7 -22"]);
+    assert_one_error_in_mml_line(r"\ftap- 8,22", 1, ValueError::FirTapOutOfRange(8).into());
+
+    assert_one_error_in_mml_line(r"\ftap- ,20", 1, ValueError::NoFirTap.into());
+    assert_one_error_in_mml_line(
+        r"\ftap- 0,",
+        10,
+        ValueError::NoRelativeFirCoefficient.into(),
+    );
+    assert_one_error_in_mml_line(
+        r"\ftap- 0",
+        9,
+        ValueError::NoCommaRelativeFirCoefficient.into(),
+    );
 }

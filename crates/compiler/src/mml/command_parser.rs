@@ -22,7 +22,8 @@ use crate::channel_bc_generator::{
     DetuneCents, FineQuantization, ManualVibrato, MpVibrato, NoteOrPitch, PanCommand, Quantize,
     RestTicksAfterNote, SubroutineCallType, VolumeCommand,
 };
-use crate::echo::EchoVolume;
+use crate::driver_constants::FIR_FILTER_SIZE;
+use crate::echo::{EchoVolume, FirCoefficient, FirTap};
 use crate::envelope::{Gain, GainMode, OptionalGain, TempGain};
 use crate::errors::{ChannelError, ErrorWithPos, ValueError};
 use crate::file_pos::{FilePos, FilePosRange};
@@ -2090,6 +2091,150 @@ fn parse_efb_minus(pos: FilePos, p: &mut Parser) -> Command {
     )
 }
 
+fn parse_ftap(pos: FilePos, p: &mut Parser) -> Command {
+    let tap = parse_unsigned_newtype(pos, p).unwrap_or(FirTap::MIN);
+
+    if next_token_matches!(p, Token::Comma) {
+        let value_pos = p.peek_pos();
+
+        match_next_token!(p,
+            &Token::Number(n) => {
+                match n.try_into() {
+                    Ok(i) => Command::SetFirTap(tap, i),
+                    Err(e) => invalid_token_error(p, value_pos, e.into())
+                }
+            },
+            &Token::RelativeNumber(n) => {
+                match n.try_into() {
+                    Ok(i) => Command::SetFirTap(tap, i),
+                    Err(e) => invalid_token_error(p, value_pos, e.into())
+                }
+            },
+            #_ => invalid_token_error(p, value_pos, ValueError::NoFirCoefficient.into())
+        )
+    } else {
+        invalid_token_error(p, p.peek_pos(), ValueError::NoCommaFirCoefficient.into())
+    }
+}
+
+fn parse_ftap_plus(pos: FilePos, p: &mut Parser) -> Command {
+    let tap = parse_unsigned_newtype(pos, p).unwrap_or(FirTap::MIN);
+
+    if next_token_matches!(p, Token::Comma) {
+        let value_pos = p.peek_pos();
+
+        match_next_token!(p,
+            &Token::Number(n) => {
+                match i32::try_from(n) {
+                    Ok(i) => match i.try_into() {
+                        Ok(i) => Command::AdjustFirTap(tap, i),
+                        Err(e) => invalid_token_error(p, value_pos, e.into())
+                    },
+                    Err(_) => invalid_token_error(p, value_pos, ValueError::RelativeFirCoefficientOutOfRangeU32(n).into())
+                }
+            },
+            #_ => invalid_token_error(p, value_pos, ValueError::NoRelativeFirCoefficient.into())
+        )
+    } else {
+        invalid_token_error(
+            p,
+            p.peek_pos(),
+            ValueError::NoCommaRelativeFirCoefficient.into(),
+        )
+    }
+}
+
+fn parse_ftap_minus(pos: FilePos, p: &mut Parser) -> Command {
+    let tap = parse_unsigned_newtype(pos, p).unwrap_or(FirTap::MIN);
+
+    if next_token_matches!(p, Token::Comma) {
+        let value_pos = p.peek_pos();
+
+        match_next_token!(p,
+            &Token::Number(n) => {
+                match i32::try_from(n) {
+                    // `-i`` is safe, `-i32::MAX` is in bounds
+                    Ok(i) => match (-i).try_into() {
+                        Ok(i) => Command::AdjustFirTap(tap, i),
+                        Err(e) => invalid_token_error(p, value_pos, e.into())
+                    },
+                    Err(_) => invalid_token_error(p, value_pos, ValueError::RelativeFirCoefficientOutOfRangeU32(n).into())
+                }
+            },
+            #_ => invalid_token_error(p, value_pos, ValueError::NoRelativeFirCoefficient.into())
+        )
+    } else {
+        invalid_token_error(
+            p,
+            p.peek_pos(),
+            ValueError::NoCommaRelativeFirCoefficient.into(),
+        )
+    }
+}
+
+fn parse_fir_filter(fir_pos: FilePos, p: &mut Parser) -> Command {
+    if !next_token_matches!(p, Token::StartPortamento) {
+        return invalid_token_error(p, fir_pos, ChannelError::NoBraceAfterFirFilter);
+    }
+
+    let mut filter = [FirCoefficient::ZERO; FIR_FILTER_SIZE];
+    let mut count = 0;
+
+    loop {
+        let (pos, token) = p.peek_and_next();
+
+        match token {
+            Token::EndPortamento => {
+                if count == filter.len() {
+                    return Command::SetFirFilter(filter);
+                } else {
+                    return invalid_token_error(
+                        p,
+                        fir_pos,
+                        ChannelError::InvalidNumberOfFirCoefficients(count),
+                    );
+                }
+            }
+
+            Token::EndBrokenChord | Token::End => {
+                return invalid_token_error(p, fir_pos, ChannelError::MissingEndFirFilter)
+            }
+            Token::NewLine(r) => {
+                p.add_error(pos, ChannelError::MissingEndFirFilter);
+                p.process_new_line(r);
+                return Command::None;
+            }
+
+            Token::Number(n) => {
+                match n.try_into() {
+                    Ok(value) => {
+                        if let Some(f) = filter.get_mut(count) {
+                            *f = value;
+                        }
+                    }
+                    Err(e) => p.add_error(pos, e.into()),
+                }
+                count += 1;
+            }
+            Token::RelativeNumber(n) => {
+                match n.try_into() {
+                    Ok(value) => {
+                        if let Some(f) = filter.get_mut(count) {
+                            *f = value;
+                        }
+                    }
+                    Err(e) => p.add_error(pos, e.into()),
+                }
+                count += 1;
+            }
+
+            _ => {
+                p.add_error(pos, ChannelError::UnknownTokenInFirFilter);
+            }
+        }
+    }
+}
+
 fn invalid_token_error(p: &mut Parser, pos: FilePos, e: ChannelError) -> Command {
     p.add_error(pos, e);
     Command::None
@@ -2218,6 +2363,10 @@ fn parse_token(pos: FilePos, token: Token, p: &mut Parser) -> Command {
         Token::Efb => parse_efb(pos, p),
         Token::EfbPlus => parse_efb_plus(pos, p),
         Token::EfbMinus => parse_efb_minus(pos, p),
+        Token::Fir => parse_fir_filter(pos, p),
+        Token::Ftap => parse_ftap(pos, p),
+        Token::FtapPlus => parse_ftap_plus(pos, p),
+        Token::FtapMinus => parse_ftap_minus(pos, p),
 
         Token::StartBytecodeAsm => Command::StartBytecodeAsm,
         Token::EndBytecodeAsm => Command::EndBytecodeAsm,

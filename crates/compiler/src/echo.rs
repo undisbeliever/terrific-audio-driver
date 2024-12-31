@@ -38,6 +38,19 @@ impl EchoFeedback {
     pub const ZERO: Self = Self(0);
 }
 
+u8_value_newtype!(FirTap, FirTapOutOfRange, NoFirTap, 0, 7);
+
+i8_value_newtype_allow_no_sign!(
+    FirCoefficient,
+    FirCoefficientOutOfRange,
+    FirCoefficientOutOfRangeU32,
+    NoFirCoefficient
+);
+
+impl FirCoefficient {
+    pub const ZERO: Self = Self(0);
+}
+
 // Source: SnesLab https://sneslab.net/wiki/FIR_Filter
 pub const MAX_FIR_ABS_SUM: i32 = 128;
 

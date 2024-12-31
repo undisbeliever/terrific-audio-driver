@@ -474,7 +474,14 @@ The Following commands affect **all channels**:
 
 <br/>
 
-`EVOL` echo volume commands:
+Global echo commands:
+
+**WARNING:** These commands modify the echo S-DSP registers without any checks.
+ * Excessive echo feedback will continue to get louder and louder, exploding your song.
+ * An overflowing FIR filter can pop.  Excessive filter feedback will continue to get louder and louder, exploding your song.
+ * Headphone users should turn down their volume when playing with echo filters/feedback.
+
+<br/>
 
  * `\evol <0..127>` - Set the left and right global echo volume to the same value
  * `\evol <left 0..127>,<right 0..127>` - Set the left and right global echo volume
@@ -483,6 +490,10 @@ The Following commands affect **all channels**:
  * `\efb <-128..127>` - Sets the echo feedback
  * `\efb+ <1..127>` - Increment echo feedback
  * `\efb- <1..128>` - Decrement echo feedback
+ * `\fir { c0 c1 c2 c3 c4 c5 c6 v7 }` - Set all 8 FIR filter tap coefficients
+ * `\ftap <tap 0-7>,<value -128..127>` - Set a single FIR filter tap to the given coefficient value
+ * `\ftap+ <tap 0-7>,<1..127>` - Increment a single FIR filter tap coefficient
+ * `\ftap- <tap 0-7>,<1..128>` - Decrement a single FIR filter tap coefficient
 
 
 Engine Limitations

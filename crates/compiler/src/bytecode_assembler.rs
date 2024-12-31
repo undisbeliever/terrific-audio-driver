@@ -10,7 +10,8 @@ use crate::bytecode::{
     VibratoPitchOffsetPerTick,
 };
 use crate::data::{InstrumentOrSample, UniqueNamesList};
-use crate::echo::EchoFeedback;
+use crate::driver_constants::FIR_FILTER_SIZE;
+use crate::echo::{EchoFeedback, FirCoefficient, FirTap};
 use crate::envelope::{Adsr, Gain, OptionalGain, TempGain};
 use crate::errors::{BytecodeError, ChannelError, ValueError};
 use crate::notes::Note;
@@ -148,6 +149,16 @@ where
     let (arg1, arg2) = two_arguments(args)?;
 
     Ok((parse_svnt(arg1)?, parse_uvnt(arg2)?))
+}
+
+fn uvnt_and_svnt_arguments<T, U>(args: &[&str]) -> Result<(T, U), ChannelError>
+where
+    T: UnsignedValueNewType,
+    U: SignedValueNewType,
+{
+    let (arg1, arg2) = two_arguments(args)?;
+
+    Ok((parse_uvnt(arg1)?, parse_svnt(arg2)?))
 }
 
 fn ticks_no_keyoff_argument(args: &[&str]) -> Result<BcTicksNoKeyOff, ChannelError> {
@@ -310,6 +321,30 @@ fn optional_loop_count_argument(args: &[&str]) -> Result<Option<LoopCount>, Chan
 fn echo_feedback_argument(args: &[&str]) -> Result<EchoFeedback, ChannelError> {
     let feedback = one_argument(args)?;
     Ok(parse_i32_allow_no_sign(feedback)?.try_into()?)
+}
+
+fn set_fir_tap_arguments(args: &[&str]) -> Result<(FirTap, FirCoefficient), ChannelError> {
+    let (tap, value) = two_arguments(args)?;
+
+    Ok((
+        parse_uvnt(tap)?,
+        parse_i32_allow_no_sign(value)?.try_into()?,
+    ))
+}
+
+fn fir_filter_argument(args: &[&str]) -> Result<[FirCoefficient; FIR_FILTER_SIZE], ChannelError> {
+    if args.len() == FIR_FILTER_SIZE {
+        let mut out = [FirCoefficient::ZERO; FIR_FILTER_SIZE];
+        assert_eq!(out.len(), args.len());
+        for (f, s) in out.iter_mut().zip(args.iter()) {
+            *f = parse_i32_allow_no_sign(s)?.try_into()?;
+        }
+        Ok(out)
+    } else {
+        Err(ChannelError::InvalidNumberOfArguments(
+            FIR_FILTER_SIZE as u8,
+        ))
+    }
 }
 
 fn parse_play_note_ticks(ticks: &str, key_off: &str) -> Result<PlayNoteTicks, ChannelError> {
@@ -573,6 +608,9 @@ pub fn parse_asm_line(bc: &mut Bytecode, line: &str) -> Result<(), ChannelError>
        adjust_stereo_echo_volume 2 two_svnt_arguments,
        set_echo_feedback 1 echo_feedback_argument,
        adjust_echo_feedback 1 one_svnt_argument,
+       set_fir_filter 1 fir_filter_argument,
+       set_fir_tap 2 set_fir_tap_arguments,
+       adjust_fir_tap 2 uvnt_and_svnt_arguments,
     )
 }
 

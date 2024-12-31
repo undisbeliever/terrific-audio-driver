@@ -182,6 +182,10 @@
       "source": "mml-tests/test-echo.mml"
     },
     {
+      "name": "test_fir",
+      "source": "mml-tests/test-fir.mml"
+    },
+    {
       "name": "test_envelope",
       "source": "mml-tests/test-envelope.mml"
     },
