@@ -1433,6 +1433,8 @@ where
             }
             valid
         } else {
+            // ticks can be 0 when playing a subroutine
+            self.write_to_emulator(emu);
             true
         }
     }
