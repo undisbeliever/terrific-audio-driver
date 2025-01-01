@@ -35,6 +35,7 @@ const AUDIO_DRIVER_SYMBOLS: &[(&str, &str)] = &[
     ("songTickCounter", "SONG_TICK_COUNTER"),
     ("keyOnShadow_music", "KEYON_SHADOW_MUSIC"),
     ("keyOffShadow_music", "KEYOFF_SHADOW_MUSIC"),
+    ("keyOnMask_music", "KEYON_MASK_MUSIC"),
     ("pmonShadow", "PMON_SHADOW"),
     ("eonShadow_music", "EON_SHADOW_MUSIC"),
     ("eonShadow_sfx", "EON_SHADOW_SFX"),

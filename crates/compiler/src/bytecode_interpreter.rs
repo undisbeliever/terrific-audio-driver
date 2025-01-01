@@ -1863,6 +1863,7 @@ impl InterpreterOutput {
             apu_write(addresses::VOICE_CHANNELS_DIRTY_MUSIC, 0xff);
 
             apu_write(addresses::KEYON_SHADOW_MUSIC, key_on_shadow);
+            apu_write(addresses::KEYON_MASK_MUSIC, !key_on_shadow);
             apu_write(addresses::PMON_SHADOW, pmon_shadow);
             apu_write(addresses::EON_SHADOW_MUSIC, eon_shadow);
 

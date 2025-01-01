@@ -36,6 +36,7 @@ pub mod addresses {
         LOADER_DATA_TYPE,
         KEYON_SHADOW_MUSIC,
         KEYOFF_SHADOW_MUSIC,
+        KEYON_MASK_MUSIC,
         PMON_SHADOW,
         EON_SHADOW_MUSIC,
         EON_SHADOW_SFX,
