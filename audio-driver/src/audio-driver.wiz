@@ -3181,33 +3181,6 @@ func __adjust_echo_volume_channel(adjust: i8 in a, evolChannel: u8 in y) {
 
 // IN: Y = 0
 // KEEP: X
-#[fallthrough]
-func adjust_echo_feedback(channelIndex: u8 in x, adjust : i8 in a) {
-    a += echo.echoFeedback as u8;
-    if overflow {
-        a = I8_MIN as u8;
-        if !carry {
-            a = I8_MAX as u8;
-        }
-    }
-
-// Fallthrough into set_echo_feedback(x, a);
-}
-
-
-// IN: Y = 0
-// KEEP: X
-func set_echo_feedback(channelIndex: u8 in x, efb : i8 in a) {
-    echo.echoFeedback = a as i8;
-
-    echoDirty $ ECHO_DIRTY__FEEDBACK_BIT = true;
-
-    ^return process_next_bytecode(x);
-}
-
-
-// IN: Y = 0
-// KEEP: X
 func set_fir_filter(channelIndex: u8 in x, fir0 : i8 in a) {
     echo.firFilter[0] = a as i8;
 
@@ -3231,27 +3204,46 @@ func set_fir_filter(channelIndex: u8 in x, fir0 : i8 in a) {
 
 // IN: Y = 0
 // KEEP: X
-func set_fir_tap(channelIndex: u8 in x, tap : u8 in a) {
-    push(x);
+#[fallthrough]
+func __set_echo_i8__out_of_bounds(channelIndex: u8 in x) {
+    a = ECHO_I8_EFB_INDEX;
 
-    x = a = a & FIR_TAP_MASK;
+// Fallthrough into adjust_echo_i8(x, a)
+}
+
+// IN: Y = 0
+// KEEP: X
+func set_echo_i8(channelIndex: u8 in x, echo_index : u8 in a) {
+    goto __set_echo_i8__out_of_bounds if a >= ECHO_I8_EFB_INDEX + 1;
+
+    push(x);
+    x = a;
 
     // Y = 0
     a = instructionPtr[y];
     instructionPtr++;
 
-
-    return __set_fir_tap__channel_index_on_stack(x, a as i8);
+    return __write_echo_i8__channel_index_on_stack(x, a as i8);
 }
 
 
 // IN: Y = 0
 // KEEP: X
 #[fallthrough]
-func adjust_fir_tap(channelIndex: u8 in x, efb : i8 in a) {
-    push(x);
+func __adjust_echo_i8__out_of_bounds(channelIndex: u8 in x) {
+    a = ECHO_I8_EFB_INDEX;
 
-    x = a = a & FIR_TAP_MASK;
+// Fallthrough into adjust_echo_i8(x, a)
+}
+
+// IN: Y = 0
+// KEEP: X
+#[fallthrough]
+func adjust_echo_i8(channelIndex: u8 in x, echo_index : i8 in a) {
+    goto __adjust_echo_i8__out_of_bounds if a >= ECHO_I8_EFB_INDEX + 1;
+
+    push(x);
+    x = a;
 
     // Y = 0
     a = instructionPtr[y];
@@ -3265,15 +3257,25 @@ func adjust_fir_tap(channelIndex: u8 in x, efb : i8 in a) {
         }
     }
 
-// Fallthrough into __set_fir_tap__channel_index_on_stack(x, a);
+// Fallthrough into __write_echo_i8__channel_index_on_stack(x, a)
 }
 
 
 // IN: channelIndex on stack
-func __set_fir_tap__channel_index_on_stack(tap: u8 in x, value: i8 in a) {
+// ASSUMES: echo_index < 9
+func __write_echo_i8__channel_index_on_stack(echo_index: u8 in x, value: i8 in a) {
+    // assumes echo echoFeedback directly after firFilter
     echo.firFilter[x] = a as i8;
 
-    echoDirty $ ECHO_DIRTY__FIR_FILTER_BIT = true;
+    if x < ECHO_I8_EFB_INDEX {
+        echoDirty $ ECHO_DIRTY__FIR_FILTER_BIT = true;
+
+        x = pop();
+        ^return process_next_bytecode(x);
+    }
+    // else
+
+    echoDirty $ ECHO_DIRTY__FEEDBACK_BIT = true;
 
     x = pop();
     ^return process_next_bytecode(x);

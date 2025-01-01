@@ -257,11 +257,9 @@ pub mod opcodes {
         SET_STEREO_ECHO_VOLUME,
         ADJUST_ECHO_VOLUME,
         ADJUST_STEREO_ECHO_VOLUME,
-        SET_ECHO_FEEDBACK,
-        ADJUST_ECHO_FEEDBACK,
         SET_FIR_FILTER,
-        SET_FIR_TAP,
-        ADJUST_FIR_TAP,
+        SET_ECHO_I8,
+        ADJUST_ECHO_I8,
         END_LOOP,
         RETURN_FROM_SUBROUTINE_AND_DISABLE_VIBRATO,
         RETURN_FROM_SUBROUTINE,
@@ -284,6 +282,10 @@ const _: () = assert!(
     opcodes::FIRST_PLAY_NOTE_INSTRUCTION as u32 + (N_NOTES * 2) as u32 == 0x100,
     "There are unaccounted bytecode opcodes"
 );
+
+const ECHO_I8_EFB_INDEX: u8 = 8;
+
+const _: () = assert!(FirTap::MAX.as_u8() < ECHO_I8_EFB_INDEX);
 
 u8_value_newtype!(
     InstrumentId,
@@ -2252,12 +2254,17 @@ impl<'a> Bytecode<'a> {
     }
 
     pub fn set_echo_feedback(&mut self, efb: EchoFeedback) {
-        emit_bytecode!(self, opcodes::SET_ECHO_FEEDBACK, efb.as_i8());
+        emit_bytecode!(self, opcodes::SET_ECHO_I8, ECHO_I8_EFB_INDEX, efb.as_i8());
     }
 
     pub fn adjust_echo_feedback(&mut self, adjust: RelativeEchoFeedback) {
         if adjust.value() != 0 {
-            emit_bytecode!(self, opcodes::ADJUST_ECHO_FEEDBACK, adjust.as_i8());
+            emit_bytecode!(
+                self,
+                opcodes::ADJUST_ECHO_I8,
+                ECHO_I8_EFB_INDEX,
+                adjust.as_i8()
+            );
         }
     }
 
@@ -2266,12 +2273,12 @@ impl<'a> Bytecode<'a> {
     }
 
     pub fn set_fir_tap(&mut self, tap: FirTap, value: FirCoefficient) {
-        emit_bytecode!(self, opcodes::SET_FIR_TAP, tap.as_u8(), value.as_i8());
+        emit_bytecode!(self, opcodes::SET_ECHO_I8, tap.as_u8(), value.as_i8());
     }
 
     pub fn adjust_fir_tap(&mut self, tap: FirTap, adjust: RelativeFirCoefficient) {
         if adjust.as_i8() != 0 {
-            emit_bytecode!(self, opcodes::ADJUST_FIR_TAP, tap.as_u8(), adjust.as_i8());
+            emit_bytecode!(self, opcodes::ADJUST_ECHO_I8, tap.as_u8(), adjust.as_i8());
         }
     }
 }

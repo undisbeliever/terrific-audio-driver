@@ -144,6 +144,7 @@ struct EchoBufferSettings {
     firFilter : [i8 ; 8],
 
     // Echo feedback.  Written to the `EFB` S-DSP register.
+    // MUST be directly after `firFilter`.
     echoFeedback : i8,
 
     // Echo volume.

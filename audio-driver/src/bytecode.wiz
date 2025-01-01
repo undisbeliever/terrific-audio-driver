@@ -355,21 +355,18 @@ let INSTRUCTIONS_WITH_ARGUMENTS = [
     // parameter = i8 left, i8 right
     adjust_stereo_echo_volume,
 
-    // parameter = i8 EFB register value
-    set_echo_feedback,
-
-    // parameter = i8 adjust
-    // Saturation adds adjust to echo feedback
-    adjust_echo_feedback,
-
     // parameter = [i8 ; 8] FIR coefficients
     set_fir_filter,
 
-    // parameter = u8 tap, i8 value
-    set_fir_tap,
+    // parameter = u8 index, i8 value
+    //   if index < 8: sets FIR filter tap
+    //   if index >= 8: sets echo feedback
+    set_echo_i8,
 
-    // parameter = u8 tap, i8 adjust
-    adjust_fir_tap,
+    // parameter = u8 index, i8 adjust
+    //   if index < 8: sets FIR filter tap
+    //   if index >= 8: sets echo feedback
+    adjust_echo_i8,
 ];
 
 
@@ -414,7 +411,7 @@ let N_PADDING_INSTRUCTIONS = 64 - 1 - INSTRUCTIONS_WITH_ARGUMENTS.len - NO_ARGUM
 // Do not enable PMOD on channels G & H to prevent conflicts with the sound-effect channels.
 let ENABLE_PMOD_MASK = 0b00111110;
 
-let FIR_TAP_MASK = 7;
+let ECHO_I8_EFB_INDEX = 8;
 
 }
 

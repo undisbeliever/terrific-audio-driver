@@ -1072,34 +1072,28 @@ impl ChannelState {
                     .saturating_add_signed(r)
                     .clamp(0, EchoVolume::MAX.as_u8());
             }
-            opcodes::SET_ECHO_FEEDBACK => {
-                let v = i8::from_le_bytes([read_pc()]);
-
-                global.echo.feedback = v;
-            }
-            opcodes::ADJUST_ECHO_FEEDBACK => {
-                let a = i8::from_le_bytes([read_pc()]);
-
-                global.echo.feedback = global.echo.feedback.saturating_add(a)
-            }
             opcodes::SET_FIR_FILTER => {
                 let filter = std::array::from_fn(|_i| i8::from_le_bytes([read_pc()]));
 
                 global.echo.fir_filter = filter;
             }
-            opcodes::SET_FIR_TAP => {
-                let tap = read_pc();
+            opcodes::SET_ECHO_I8 => {
+                let index = read_pc();
                 let value = i8::from_le_bytes([read_pc()]);
 
-                let i = usize::from(tap & 7);
-                global.echo.fir_filter[i] = value;
+                match global.echo.fir_filter.get_mut(usize::from(index)) {
+                    Some(e) => *e = value,
+                    None => global.echo.feedback = value,
+                }
             }
-            opcodes::ADJUST_FIR_TAP => {
-                let tap = read_pc();
+            opcodes::ADJUST_ECHO_I8 => {
+                let index = read_pc();
                 let adjust = i8::from_le_bytes([read_pc()]);
 
-                let i = usize::from(tap & 7);
-                global.echo.fir_filter[i] = global.echo.fir_filter[i].saturating_add(adjust);
+                match global.echo.fir_filter.get_mut(usize::from(index)) {
+                    Some(e) => *e = e.saturating_add(adjust),
+                    None => global.echo.feedback = global.echo.feedback.saturating_add(adjust),
+                }
             }
 
             opcodes::DISABLE_CHANNEL => self.disable_channel(),
@@ -1209,11 +1203,9 @@ impl ChannelState {
             opcodes::SET_STEREO_ECHO_VOLUME => Some(3),
             opcodes::ADJUST_ECHO_VOLUME => Some(2),
             opcodes::ADJUST_STEREO_ECHO_VOLUME => Some(3),
-            opcodes::SET_ECHO_FEEDBACK => Some(2),
-            opcodes::ADJUST_ECHO_FEEDBACK => Some(2),
             opcodes::SET_FIR_FILTER => Some(9),
-            opcodes::SET_FIR_TAP => Some(3),
-            opcodes::ADJUST_FIR_TAP => Some(3),
+            opcodes::SET_ECHO_I8 => Some(3),
+            opcodes::ADJUST_ECHO_I8 => Some(3),
 
             opcodes::DISABLE_CHANNEL => None,
 
