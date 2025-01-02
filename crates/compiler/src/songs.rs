@@ -350,9 +350,9 @@ fn write_song_header(
 
     header[EBS] = echo_buffer.edl.as_u8();
     for (i, f) in echo_buffer.fir.iter().enumerate() {
-        header[EBS + 1 + i] = f.to_le_bytes()[0];
+        header[EBS + 1 + i] = f.as_i8().to_le_bytes()[0];
     }
-    header[EBS + 9] = echo_buffer.feedback.to_le_bytes()[0];
+    header[EBS + 9] = echo_buffer.feedback.as_i8().to_le_bytes()[0];
     header[EBS + 10] = echo_buffer.echo_volume_l.as_u8();
     header[EBS + 11] = echo_buffer.echo_volume_r.as_u8();
 

@@ -161,8 +161,8 @@ impl GlobalState {
             timer_register: tick_clock.as_u8(),
             echo: EchoVariables {
                 edl: echo.edl.as_u8(),
-                fir_filter: echo.fir,
-                feedback: echo.feedback,
+                fir_filter: echo.fir.map(|c| c.as_i8()),
+                feedback: echo.feedback.as_i8(),
                 volume_l: echo.echo_volume_l.as_u8(),
                 volume_r: echo.echo_volume_r.as_u8(),
             },
@@ -2012,7 +2012,7 @@ impl InterpreterOutput {
 #[cfg(test)]
 mod test {
     use super::{ChannelState, EchoVariables, GlobalState};
-    use crate::driver_constants::{IDENTITY_FILTER, SONG_HEADER_SIZE};
+    use crate::driver_constants::SONG_HEADER_SIZE;
     use crate::time::{TickCounter, MIN_TICK_TIMER};
 
     fn blank_global_state() -> GlobalState {
@@ -2020,7 +2020,7 @@ mod test {
             timer_register: MIN_TICK_TIMER,
             echo: EchoVariables {
                 edl: 0,
-                fir_filter: IDENTITY_FILTER,
+                fir_filter: Default::default(),
                 feedback: 0,
                 volume_l: 0,
                 volume_r: 0,

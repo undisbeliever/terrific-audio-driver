@@ -211,7 +211,6 @@ pub const S_SMP_TIMER_0_REGISTER: u8 = 0xfa;
 pub const S_DSP_EON_REGISTER: u8 = 0x4d;
 
 pub const FIR_FILTER_SIZE: usize = 8;
-pub const IDENTITY_FILTER: [i8; FIR_FILTER_SIZE] = [127, 0, 0, 0, 0, 0, 0, 0];
 
 pub const ECHO_BUFFER_EDL_MS: u32 = 16;
 pub const ECHO_BUFFER_EDL_SIZE: usize = 2048;

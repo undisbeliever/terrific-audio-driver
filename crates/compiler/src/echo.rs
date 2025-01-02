@@ -11,7 +11,7 @@ use crate::driver_constants::{
     FIR_FILTER_SIZE,
 };
 use crate::errors::ValueError;
-use crate::value_newtypes::{i8_with_hex_byte_value_newtype, u8_value_newtype};
+use crate::value_newtypes::{i8_with_hex_byte_value_newtype, parse_i8wh, u8_value_newtype};
 
 u8_value_newtype!(
     EchoEdl,
@@ -49,6 +49,17 @@ i8_with_hex_byte_value_newtype!(
 pub const MAX_FIR_ABS_SUM: i32 = 128;
 
 pub const DEFAULT_EDL: EchoEdl = EchoEdl(0);
+
+pub const IDENTITY_FILTER: [FirCoefficient; FIR_FILTER_SIZE] = [
+    FirCoefficient(127),
+    FirCoefficient(0),
+    FirCoefficient(0),
+    FirCoefficient(0),
+    FirCoefficient(0),
+    FirCoefficient(0),
+    FirCoefficient(0),
+    FirCoefficient(0),
+];
 
 impl EchoEdl {
     pub fn buffer_size(&self) -> usize {
@@ -114,8 +125,8 @@ impl EchoLength {
 #[derive(Debug, Clone, PartialEq)]
 pub struct EchoBuffer {
     pub edl: EchoEdl,
-    pub fir: [i8; FIR_FILTER_SIZE],
-    pub feedback: i8,
+    pub fir: [FirCoefficient; FIR_FILTER_SIZE],
+    pub feedback: EchoFeedback,
     pub echo_volume_l: EchoVolume,
     pub echo_volume_r: EchoVolume,
 }
@@ -126,35 +137,24 @@ impl EchoBuffer {
     }
 }
 
-pub fn parse_fir_filter_string(s: &str) -> Result<[i8; FIR_FILTER_SIZE], ValueError> {
+pub fn parse_fir_filter_string(s: &str) -> Result<[FirCoefficient; FIR_FILTER_SIZE], ValueError> {
     let input: Vec<&str> = s.split_whitespace().collect();
 
     if input.len() != FIR_FILTER_SIZE {
         return Err(ValueError::InvalidFirFilterSize);
     }
 
-    let mut out = [0; FIR_FILTER_SIZE];
-
-    for (o, s) in out.iter_mut().zip(input.iter()) {
-        *o = match s.as_bytes().first() {
-            Some(b'$') => match u8::from_str_radix(&s[1..], 16) {
-                Ok(i) => i8::from_le_bytes([i]),
-                Err(_) => return Err(ValueError::InvalidFirFilter),
-            },
-            Some(_) => match s.parse::<i8>() {
-                Ok(i) => i,
-                Err(_) => return Err(ValueError::InvalidFirFilter),
-            },
-
-            None => return Err(ValueError::InvalidFirFilter),
-        };
+    let mut out = [FirCoefficient(0); FIR_FILTER_SIZE];
+    assert_eq!(out.len(), input.len());
+    for (f, s) in out.iter_mut().zip(input.iter()) {
+        *f = parse_i8wh(s)?;
     }
 
     Ok(out)
 }
 
-pub fn test_fir_filter_gain(fir: &[i8; FIR_FILTER_SIZE]) -> Result<(), ValueError> {
-    let abs_sum = fir.iter().map(|&i| i32::from(i).abs()).sum();
+pub fn test_fir_filter_gain(fir: &[FirCoefficient; FIR_FILTER_SIZE]) -> Result<(), ValueError> {
+    let abs_sum = fir.iter().map(|&i| i32::from(i.as_i8()).abs()).sum();
     if abs_sum <= MAX_FIR_ABS_SUM {
         Ok(())
     } else {
@@ -170,7 +170,7 @@ mod test {
     fn test_fir_filter_decimal() {
         assert_eq!(
             parse_fir_filter_string("8 6 12 100 -63 -128 127 0"),
-            Ok([8, 6, 12, 100, -63, -128, 127, 0])
+            Ok([8, 6, 12, 100, -63, -128, 127, 0].map(FirCoefficient))
         );
     }
 
@@ -178,7 +178,7 @@ mod test {
     fn test_fir_filter_hex() {
         assert_eq!(
             parse_fir_filter_string("$50 $32 $64 $7F $00 $Ff $9c $80"),
-            Ok([80, 50, 100, 127, 0, -1, -100, -128])
+            Ok([80, 50, 100, 127, 0, -1, -100, -128].map(FirCoefficient))
         );
     }
 }

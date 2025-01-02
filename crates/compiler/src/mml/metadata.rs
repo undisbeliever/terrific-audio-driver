@@ -6,11 +6,15 @@
 
 use std::collections::HashMap;
 
-use crate::driver_constants::{IDENTITY_FILTER, SFX_TICK_CLOCK};
-use crate::echo::{parse_fir_filter_string, EchoBuffer, EchoLength, EchoVolume, DEFAULT_EDL};
+use crate::driver_constants::SFX_TICK_CLOCK;
+use crate::echo::{
+    parse_fir_filter_string, EchoBuffer, EchoFeedback, EchoLength, EchoVolume, DEFAULT_EDL,
+    IDENTITY_FILTER,
+};
 use crate::errors::{ErrorWithPos, MmlLineError, ValueError};
 use crate::file_pos::{blank_file_range, Line};
 use crate::time::{Bpm, TickClock, ZenLen, DEFAULT_BPM, DEFAULT_ZENLEN};
+use crate::value_newtypes::{parse_i8wh, I8WithByteHexValueNewType};
 use crate::{spc_file_export, FilePosRange};
 
 #[derive(Debug, Clone, PartialEq)]
@@ -95,7 +99,7 @@ impl MetaData {
             echo_buffer: EchoBuffer {
                 edl: DEFAULT_EDL,
                 fir: IDENTITY_FILTER,
-                feedback: 0,
+                feedback: EchoFeedback::ZERO,
                 echo_volume_l: EchoVolume::ZERO,
                 echo_volume_r: EchoVolume::ZERO,
             },
@@ -169,7 +173,7 @@ impl HeaderState {
                 false => return Err(MmlLineError::UnexpectedHeaderValue),
             },
 
-            "#EchoFeedback" => match value.parse() {
+            "#EchoFeedback" => match parse_i8wh(value) {
                 Ok(i) => self.metadata.echo_buffer.feedback = i,
                 Err(_) => return Err(MmlLineError::InvalidEchoFeedback),
             },
