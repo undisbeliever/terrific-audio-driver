@@ -1,0 +1,106 @@
+#Title adjust_echo_i8_limit bc_interpreter test
+
+#EchoLength    48
+#EchoFeedback  80
+#EchoVolume    40  80
+#Timer 64
+
+AB l16
+B w32
+
+; underflow
+A w \efb 25    w \efb- 120
+B w \ftap 0,25 w \ftap- 0,120
+
+A w \efb -60    w \efb- 100
+B w \ftap 0,-60 w \ftap- 0,100
+
+; underflow with limit
+A w \efb -25    w \efb- 120,20
+B w \ftap 1,-25 w \ftap- 1,120,20
+
+A w \efb -50    w \efb- 120,-40
+B w \ftap 1,-50 w \ftap- 1,120,-40
+
+; overflow
+A w \efb 25    w \efb+ 120
+B w \ftap 2,25 w \ftap+ 2,120
+
+; overflow with limit
+A w \efb 25    w \efb+ 120,20
+B w \ftap 2,25 w \ftap+ 2,120,20
+
+A w \efb 25    w \efb+ 120,-40
+B w \ftap 2,25 w \ftap+ 2,120,-40
+
+
+; increment without passing limit
+A w \efb -50    w \efb+ 10,0
+B w \ftap 2,-50 w \ftap+ 2,10,0
+
+A w \efb 10    w \efb+ 10,60
+B w \ftap 2,10 w \ftap+ 2,10,60
+
+A w \efb -30    w \efb+ 10,-10
+B w \ftap 2,-30 w \ftap+ 2,10,-10
+
+
+; increment while passing limit
+A w \efb -50    w \efb+ 100,0
+B w \ftap 2,-50 w \ftap+ 2,100,0
+
+A w \efb -50    w \efb+ 100,-10
+B w \ftap 2,-50 w \ftap+ 2,100,-10
+
+A w \efb 30    w \efb+ 60,-10
+B w \ftap 2,30 w \ftap+ 2,60,-10
+
+A w \efb -30    w \efb+ 120,60
+B w \ftap 2,-30 w \ftap+ 2,120,60
+
+A w \efb 30    w \efb+ 50,60
+B w \ftap 2,30 w \ftap+ 2,50,60
+
+
+
+; decrement without passing limit
+A w \efb 30    w \efb- 10,0
+B w \ftap 2,30 w \ftap- 2,10,0
+
+A w \efb -50    w \efb- 10,-90
+B w \ftap 2,-50 w \ftap- 2,10,-90
+
+A w \efb 60    w \efb- 10,20
+B w \ftap 2,60 w \ftap- 2,10,20
+
+
+; decrement while passing limit
+A w \efb 50    w \efb- 100,0
+B w \ftap 3,50 w \ftap- 3,100,0
+
+A w \efb 50    w \efb- 100,-10
+B w \ftap 3,50 w \ftap- 3,100,-10
+
+A w \efb -30    w \efb- 60,-70
+B w \ftap 3,-30 w \ftap- 3,60,-70
+
+A w \efb 90    w \efb- 120,60
+B w \ftap 3,90 w \ftap- 3,120,60
+
+A w \efb -30    w \efb- 50,60
+B w \ftap 3,-30 w \ftap- 3,50,60
+
+
+; Test a few normal adjust with limit loops
+A [w \efb+ 10,+100 ]30
+B [w \ftap+ 4,10,+100 ]30
+
+A [w \efb- 10,0 ]30
+B [w \ftap- 4,10,0 ]30
+
+A [w \efb- 10,-100 ]30
+B [w \ftap- 4,10,-100 ]30
+
+A [w \efb+ 10,0 ]30
+B [w \ftap+ 4,10,0 ]30
+

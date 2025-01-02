@@ -6,8 +6,8 @@
 
 use crate::bytecode::{
     BcTicksKeyOff, BcTicksNoKeyOff, Bytecode, EarlyReleaseMinTicks, EarlyReleaseTicks, LoopCount,
-    PlayNoteTicks, PlayPitchPitch, PortamentoVelocity, State, SubroutineId,
-    VibratoPitchOffsetPerTick,
+    PlayNoteTicks, PlayPitchPitch, PortamentoVelocity, RelativeEchoFeedback,
+    RelativeFirCoefficient, State, SubroutineId, VibratoPitchOffsetPerTick,
 };
 use crate::data::{InstrumentOrSample, UniqueNamesList};
 use crate::driver_constants::FIR_FILTER_SIZE;
@@ -323,12 +323,33 @@ fn echo_feedback_argument(args: &[&str]) -> Result<EchoFeedback, ChannelError> {
     Ok(parse_i32_allow_no_sign(feedback)?.try_into()?)
 }
 
+fn adjust_echo_feedback_limit_arguments(
+    args: &[&str],
+) -> Result<(RelativeEchoFeedback, EchoFeedback), ChannelError> {
+    let (rel, limit) = two_arguments(args)?;
+    Ok((
+        parse_svnt(rel)?,
+        parse_i32_allow_no_sign(limit)?.try_into()?,
+    ))
+}
+
 fn set_fir_tap_arguments(args: &[&str]) -> Result<(FirTap, FirCoefficient), ChannelError> {
     let (tap, value) = two_arguments(args)?;
 
     Ok((
         parse_uvnt(tap)?,
         parse_i32_allow_no_sign(value)?.try_into()?,
+    ))
+}
+
+fn adjust_fir_tap_limit_arguments(
+    args: &[&str],
+) -> Result<(FirTap, RelativeFirCoefficient, FirCoefficient), ChannelError> {
+    let (tap, rel, limit) = three_arguments(args)?;
+    Ok((
+        parse_uvnt(tap)?,
+        parse_svnt(rel)?,
+        parse_i32_allow_no_sign(limit)?.try_into()?,
     ))
 }
 
@@ -608,9 +629,11 @@ pub fn parse_asm_line(bc: &mut Bytecode, line: &str) -> Result<(), ChannelError>
        adjust_stereo_echo_volume 2 two_svnt_arguments,
        set_echo_feedback 1 echo_feedback_argument,
        adjust_echo_feedback 1 one_svnt_argument,
+       adjust_echo_feedback_limit 2 adjust_echo_feedback_limit_arguments,
        set_fir_filter 1 fir_filter_argument,
        set_fir_tap 2 set_fir_tap_arguments,
        adjust_fir_tap 2 uvnt_and_svnt_arguments,
+       adjust_fir_tap_limit 3 adjust_fir_tap_limit_arguments,
     )
 }
 

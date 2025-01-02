@@ -14,6 +14,7 @@ Audio driver changes:
  * Added adjust echo volume instructions
  * Added `set_echo_feedback` and `adjust_echo_feedback` instructions
  * Added `set_fir_filter`, `set_fir_tap` and `adjust_fir_tap` instructions
+ * Added limit to adjust echo feedback and adjust FIR tap instructions
 
 MML changes:
  * `#EchoVolume` now accepts a stereo input

@@ -176,12 +176,20 @@ i8_value_newtype!(
     NoRelativeEchoFeedbackSign
 );
 
+impl RelativeEchoFeedback {
+    pub const ZERO: Self = Self(0);
+}
+
 i8_value_newtype!(
     RelativeFirCoefficient,
     RelativeFirCoefficientOutOfRange,
     NoRelativeFirCoefficient,
     NoRelativeFirCoefficientSign
 );
+
+impl RelativeFirCoefficient {
+    pub const ZERO: Self = Self(0);
+}
 
 pub enum BytecodeContext {
     SongSubroutine,
@@ -260,6 +268,7 @@ pub mod opcodes {
         SET_FIR_FILTER,
         SET_ECHO_I8,
         ADJUST_ECHO_I8,
+        ADJUST_ECHO_I8_LIMIT,
         END_LOOP,
         RETURN_FROM_SUBROUTINE_AND_DISABLE_VIBRATO,
         RETURN_FROM_SUBROUTINE,
@@ -2268,6 +2277,22 @@ impl<'a> Bytecode<'a> {
         }
     }
 
+    pub fn adjust_echo_feedback_limit(
+        &mut self,
+        adjust: RelativeEchoFeedback,
+        limit: EchoFeedback,
+    ) {
+        if adjust.as_i8() != 0 {
+            emit_bytecode!(
+                self,
+                opcodes::ADJUST_ECHO_I8_LIMIT,
+                ECHO_I8_EFB_INDEX,
+                adjust.as_i8(),
+                limit.as_i8()
+            );
+        }
+    }
+
     pub fn set_fir_filter(&mut self, filter: [FirCoefficient; FIR_FILTER_SIZE]) {
         emit_bytecode_array!(self, opcodes::SET_FIR_FILTER, filter);
     }
@@ -2279,6 +2304,23 @@ impl<'a> Bytecode<'a> {
     pub fn adjust_fir_tap(&mut self, tap: FirTap, adjust: RelativeFirCoefficient) {
         if adjust.as_i8() != 0 {
             emit_bytecode!(self, opcodes::ADJUST_ECHO_I8, tap.as_u8(), adjust.as_i8());
+        }
+    }
+
+    pub fn adjust_fir_tap_limit(
+        &mut self,
+        tap: FirTap,
+        adjust: RelativeFirCoefficient,
+        limit: FirCoefficient,
+    ) {
+        if adjust.as_i8() != 0 {
+            emit_bytecode!(
+                self,
+                opcodes::ADJUST_ECHO_I8_LIMIT,
+                tap.as_u8(),
+                adjust.as_i8(),
+                limit.as_i8()
+            );
         }
     }
 }

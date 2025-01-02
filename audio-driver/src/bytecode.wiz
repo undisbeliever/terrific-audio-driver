@@ -367,6 +367,12 @@ let INSTRUCTIONS_WITH_ARGUMENTS = [
     //   if index < 8: sets FIR filter tap
     //   if index >= 8: sets echo feedback
     adjust_echo_i8,
+
+    // parameter = u8 index, i8 adjust, i8 limit
+    //   if index < 8: sets FIR filter tap
+    //   if index >= 8: sets echo feedback
+    // comparison used will depend on the sign of adjust
+    adjust_echo_i8_limit,
 ];
 
 

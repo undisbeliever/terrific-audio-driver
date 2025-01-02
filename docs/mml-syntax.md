@@ -488,12 +488,16 @@ Global echo commands:
  * `\evol <-127..+127>` - Adds the parameter to the left and right global echo volume
  * `\evol <left -127..+127>,<right -127..+127>` - Adds the stereo parameters to the left and right global echo volumes
  * `\efb <-128..127>` - Sets the echo feedback
- * `\efb+ <1..127>` - Increment echo feedback
- * `\efb- <1..128>` - Decrement echo feedback
+ * `\efb+ <1..127>[,max]` - Increment echo feedback
+    * If `max` is set, the echo feedback be <= `max`.
+ * `\efb- <1..128>[,min]` - Decrement echo feedback
+    * If `min` is set, the echo feedback be >= `min`.
  * `\fir { c0 c1 c2 c3 c4 c5 c6 v7 }` - Set all 8 FIR filter tap coefficients
  * `\ftap <tap 0-7>,<value -128..127>` - Set a single FIR filter tap to the given coefficient value
- * `\ftap+ <tap 0-7>,<1..127>` - Increment a single FIR filter tap coefficient
- * `\ftap- <tap 0-7>,<1..128>` - Decrement a single FIR filter tap coefficient
+ * `\ftap+ <tap 0-7>,<1..127>[,max]` - Increment a single FIR filter tap coefficient
+    * If `max` is set, the FIR tap be <= `max`.
+ * `\ftap- <tap 0-7>,<1..128>[,min]` - Decrement a single FIR filter tap coefficient
+    * If `min` is set, the FIR tap be >= `min`.
 
 
 Engine Limitations

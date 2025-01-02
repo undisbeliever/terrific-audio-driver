@@ -331,9 +331,11 @@ pub(crate) enum Command {
 
     SetEchoFeedback(EchoFeedback),
     RelativeEchoFeedback(RelativeEchoFeedback),
+    RelativeEchoFeedbackWithLimit(RelativeEchoFeedback, EchoFeedback),
     SetFirFilter([FirCoefficient; FIR_FILTER_SIZE]),
     SetFirTap(FirTap, FirCoefficient),
     AdjustFirTap(FirTap, RelativeFirCoefficient),
+    AdjustFirTapWithLimit(FirTap, RelativeFirCoefficient, FirCoefficient),
 
     StartBytecodeAsm,
     EndBytecodeAsm,
@@ -1815,9 +1817,15 @@ impl<'a> ChannelBcGenerator<'a> {
             }
             &Command::SetEchoFeedback(efb) => self.bc.set_echo_feedback(efb),
             &Command::RelativeEchoFeedback(adjust) => self.bc.adjust_echo_feedback(adjust),
+            &Command::RelativeEchoFeedbackWithLimit(adjust, limit) => {
+                self.bc.adjust_echo_feedback_limit(adjust, limit)
+            }
             &Command::SetFirFilter(filter) => self.bc.set_fir_filter(filter),
             &Command::SetFirTap(tap, value) => self.bc.set_fir_tap(tap, value),
             &Command::AdjustFirTap(tap, adjust) => self.bc.adjust_fir_tap(tap, adjust),
+            &Command::AdjustFirTapWithLimit(tap, adjust, limit) => {
+                self.bc.adjust_fir_tap_limit(tap, adjust, limit)
+            }
 
             Command::StartBytecodeAsm => {
                 self.bc._start_asm_block();

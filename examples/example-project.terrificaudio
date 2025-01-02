@@ -306,6 +306,10 @@
       "source": "bc-interpreter-tests/echo-stress-test.mml"
     },
     {
+      "name": "adjust_echo_i8_limit",
+      "source": "bc-interpreter-tests/adjust-echo-i8-limit.mml"
+    },
+    {
       "name": "unbalanced_vibrato_bug",
       "source": "bug-tests/unbalanced-vibrato-bug.mml"
     },

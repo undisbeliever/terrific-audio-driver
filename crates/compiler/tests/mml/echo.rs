@@ -452,3 +452,119 @@ fn decrement_fir_tap() {
         ValueError::NoCommaRelativeFirCoefficient.into(),
     );
 }
+
+#[test]
+fn increment_echo_feedback_with_limit() {
+    assert_line_matches_bytecode(r"\efb+ 15,20", &["adjust_echo_feedback_limit +15 20"]);
+    assert_line_matches_bytecode(r"\efb+ 56,-80", &["adjust_echo_feedback_limit +56 -80"]);
+
+    assert_line_matches_bytecode(r"\efb+ 10,127", &["adjust_echo_feedback_limit +10 127"]);
+    assert_one_error_in_mml_line(
+        r"\efb+ 10,128",
+        10,
+        ValueError::EchoFeedbackOutOfRangeU32(128).into(),
+    );
+
+    assert_line_matches_bytecode(r"\efb+ 10,+127", &["adjust_echo_feedback_limit +10 127"]);
+    assert_one_error_in_mml_line(
+        r"\efb+ 10,+128",
+        10,
+        ValueError::EchoFeedbackOutOfRange(128).into(),
+    );
+
+    assert_line_matches_bytecode(r"\efb+ 10,-128", &["adjust_echo_feedback_limit +10 -128"]);
+    assert_one_error_in_mml_line(
+        r"\efb+ 10,-129",
+        10,
+        ValueError::EchoFeedbackOutOfRange(-129).into(),
+    );
+
+    assert_one_error_in_mml_line(r"\efb+ 10,", 9, ValueError::NoEchoFeedback.into());
+}
+
+#[test]
+fn decrement_echo_feedback_with_limit() {
+    assert_line_matches_bytecode(r"\efb- 15,20", &["adjust_echo_feedback_limit -15 20"]);
+    assert_line_matches_bytecode(r"\efb- 56,-80", &["adjust_echo_feedback_limit -56 -80"]);
+
+    assert_line_matches_bytecode(r"\efb- 10,127", &["adjust_echo_feedback_limit -10 127"]);
+    assert_one_error_in_mml_line(
+        r"\efb- 10,128",
+        10,
+        ValueError::EchoFeedbackOutOfRangeU32(128).into(),
+    );
+
+    assert_line_matches_bytecode(r"\efb- 10,+127", &["adjust_echo_feedback_limit -10 127"]);
+    assert_one_error_in_mml_line(
+        r"\efb- 10,+128",
+        10,
+        ValueError::EchoFeedbackOutOfRange(128).into(),
+    );
+
+    assert_line_matches_bytecode(r"\efb- 10,-128", &["adjust_echo_feedback_limit -10 -128"]);
+    assert_one_error_in_mml_line(
+        r"\efb- 10,-129",
+        10,
+        ValueError::EchoFeedbackOutOfRange(-129).into(),
+    );
+
+    assert_one_error_in_mml_line(r"\efb- 10,", 9, ValueError::NoEchoFeedback.into());
+}
+
+#[test]
+fn increment_fir_tap_with_limit() {
+    assert_line_matches_bytecode(r"\ftap+ 0,15,20", &["adjust_fir_tap_limit 0 +15 20"]);
+    assert_line_matches_bytecode(r"\ftap+ 4,56,-80", &["adjust_fir_tap_limit 4 +56 -80"]);
+
+    assert_line_matches_bytecode(r"\ftap+ 0,10,127", &["adjust_fir_tap_limit 0 +10 127"]);
+    assert_one_error_in_mml_line(
+        r"\ftap+ 0,10,128",
+        13,
+        ValueError::FirCoefficientOutOfRangeU32(128).into(),
+    );
+
+    assert_line_matches_bytecode(r"\ftap+ 0,10,+127", &["adjust_fir_tap_limit 0 +10 127"]);
+    assert_one_error_in_mml_line(
+        r"\ftap+ 0,10,+128",
+        13,
+        ValueError::FirCoefficientOutOfRange(128).into(),
+    );
+
+    assert_line_matches_bytecode(r"\ftap+ 0,10,-128", &["adjust_fir_tap_limit 0 +10 -128"]);
+    assert_one_error_in_mml_line(
+        r"\ftap+ 0,10,-129",
+        13,
+        ValueError::FirCoefficientOutOfRange(-129).into(),
+    );
+
+    assert_one_error_in_mml_line(r"\ftap+ 0,10,", 12, ValueError::NoFirCoefficient.into());
+}
+
+#[test]
+fn decrement_fir_tap_with_limit() {
+    assert_line_matches_bytecode(r"\ftap- 0,15,20", &["adjust_fir_tap_limit 0 -15 20"]);
+    assert_line_matches_bytecode(r"\ftap- 4,56,-80", &["adjust_fir_tap_limit 4 -56 -80"]);
+
+    assert_line_matches_bytecode(r"\ftap- 0,10,127", &["adjust_fir_tap_limit 0 -10 127"]);
+    assert_one_error_in_mml_line(
+        r"\ftap- 0,10,128",
+        13,
+        ValueError::FirCoefficientOutOfRangeU32(128).into(),
+    );
+
+    assert_line_matches_bytecode(r"\ftap- 0,10,+127", &["adjust_fir_tap_limit 0 -10 127"]);
+    assert_one_error_in_mml_line(
+        r"\ftap- 0,10,+128",
+        13,
+        ValueError::FirCoefficientOutOfRange(128).into(),
+    );
+
+    assert_line_matches_bytecode(r"\ftap- 0,10,-128", &["adjust_fir_tap_limit 0 -10 -128"]);
+    assert_one_error_in_mml_line(
+        r"\ftap- 0,10,-129",
+        13,
+        ValueError::FirCoefficientOutOfRange(-129).into(),
+    );
+
+    assert_one_error_in_mml_line(r"\ftap- 0,10,", 12, ValueError::NoFirCoefficient.into());
+}

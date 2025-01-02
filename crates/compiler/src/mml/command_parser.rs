@@ -13,9 +13,10 @@ use super::note_tracking::CursorTracker;
 use crate::bytecode::{
     DetuneValue, EarlyReleaseMinTicks, EarlyReleaseTicks, LoopCount, NoiseFrequency, Pan,
     PanSlideTicks, PanbrelloQuarterWavelengthInTicks, PlayNoteTicks, PlayPitchPitch,
-    RelativeEchoVolume, SubroutineId, TremoloAmplitude, TremoloQuarterWavelengthInTicks,
-    VibratoPitchOffsetPerTick, VibratoQuarterWavelengthInTicks, Volume, VolumeSlideAmount,
-    VolumeSlideTicks, KEY_OFF_TICK_DELAY,
+    RelativeEchoFeedback, RelativeEchoVolume, RelativeFirCoefficient, SubroutineId,
+    TremoloAmplitude, TremoloQuarterWavelengthInTicks, VibratoPitchOffsetPerTick,
+    VibratoQuarterWavelengthInTicks, Volume, VolumeSlideAmount, VolumeSlideTicks,
+    KEY_OFF_TICK_DELAY,
 };
 use crate::channel_bc_generator::{
     merge_pan_commands, merge_volumes_commands, relative_pan, relative_volume, Command,
@@ -23,7 +24,7 @@ use crate::channel_bc_generator::{
     RestTicksAfterNote, SubroutineCallType, VolumeCommand,
 };
 use crate::driver_constants::FIR_FILTER_SIZE;
-use crate::echo::{EchoVolume, FirCoefficient, FirTap};
+use crate::echo::{EchoFeedback, EchoVolume, FirCoefficient, FirTap};
 use crate::envelope::{Gain, GainMode, OptionalGain, TempGain};
 use crate::errors::{ChannelError, ErrorWithPos, ValueError};
 use crate::file_pos::{FilePos, FilePosRange};
@@ -2036,59 +2037,137 @@ fn parse_evol(pos: FilePos, p: &mut Parser) -> Command {
     )
 }
 
-fn parse_efb(pos: FilePos, p: &mut Parser) -> Command {
+fn parse_echo_feedback_value(pos: FilePos, p: &mut Parser) -> EchoFeedback {
     let value_pos = p.peek_pos();
 
     match_next_token!(p,
         &Token::Number(n) => {
             match n.try_into() {
-                Ok(n) => Command::SetEchoFeedback(n),
-                Err(e) => invalid_token_error(p, value_pos, e.into())
+                Ok(n) => n,
+                Err(e) => {
+                    p.add_error(value_pos, e.into());
+                    EchoFeedback::ZERO
+                }
             }
         },
         &Token::RelativeNumber(n) => {
             match n.try_into() {
-                Ok(n) => Command::SetEchoFeedback(n),
-                Err(e) => invalid_token_error(p, value_pos, e.into())
+                Ok(n) => n,
+                Err(e) => {
+                    p.add_error(value_pos, e.into());
+                    EchoFeedback::ZERO
+                }
             }
         },
-        #_ => invalid_token_error(p, pos, ValueError::NoEchoFeedback.into())
+        #_ => {
+            p.add_error(pos, ValueError::NoEchoFeedback.into());
+            EchoFeedback::ZERO
+        }
     )
+}
+
+fn parse_fir_coefficient_value(pos: FilePos, p: &mut Parser) -> FirCoefficient {
+    let value_pos = p.peek_pos();
+
+    match_next_token!(p,
+        &Token::Number(n) => {
+            match n.try_into() {
+                Ok(i) => i,
+                Err(e) => {
+                    p.add_error(value_pos, e.into());
+                    FirCoefficient::ZERO
+                }
+            }
+        },
+        &Token::RelativeNumber(n) => {
+            match n.try_into() {
+                Ok(i) => i,
+                Err(e) => {
+                    p.add_error(value_pos, e.into());
+                    FirCoefficient::ZERO
+                }
+            }
+        },
+        #_ => {
+            p.add_error(pos, ValueError::NoFirCoefficient.into());
+            FirCoefficient::ZERO
+        }
+    )
+}
+
+fn parse_efb(pos: FilePos, p: &mut Parser) -> Command {
+    Command::SetEchoFeedback(parse_echo_feedback_value(pos, p))
 }
 
 fn parse_efb_plus(pos: FilePos, p: &mut Parser) -> Command {
     let value_pos = p.peek_pos();
 
-    match_next_token!(p,
+    let rel: RelativeEchoFeedback = match_next_token!(p,
         &Token::Number(n) => {
             match i32::try_from(n) {
                 Ok(i) => match i.try_into() {
-                    Ok(i) => Command::RelativeEchoFeedback(i),
-                    Err(e) => invalid_token_error(p, value_pos, e.into())
+                    Ok(i) => i,
+                    Err(e) => {
+                        p.add_error(value_pos, e.into());
+                        RelativeEchoFeedback::ZERO
+                    }
                 },
-                Err(_) => invalid_token_error(p, value_pos, ValueError::RelativeEchoFeedbackOutOfRangeU32(n).into())
+                Err(_) => {
+                    p.add_error(value_pos, ValueError::RelativeEchoFeedbackOutOfRangeU32(n).into());
+                    RelativeEchoFeedback::ZERO
+                }
             }
         },
-        #_ => invalid_token_error(p, pos, ValueError::NoRelativeEchoFeedback.into())
-    )
+        #_ => {
+            p.add_error(pos, ValueError::NoRelativeEchoFeedback.into());
+            RelativeEchoFeedback::ZERO
+        }
+    );
+
+    let pos = p.peek_pos();
+
+    if next_token_matches!(p, Token::Comma) {
+        let limit = parse_echo_feedback_value(pos, p);
+        Command::RelativeEchoFeedbackWithLimit(rel, limit)
+    } else {
+        Command::RelativeEchoFeedback(rel)
+    }
 }
 
 fn parse_efb_minus(pos: FilePos, p: &mut Parser) -> Command {
     let value_pos = p.peek_pos();
 
-    match_next_token!(p,
+    let rel: RelativeEchoFeedback = match_next_token!(p,
         &Token::Number(n) => {
             match i32::try_from(n) {
                 // `-i`` is safe, `-i32::MAX` is in bounds
                 Ok(i) => match (-i).try_into() {
-                    Ok(i) => Command::RelativeEchoFeedback(i),
-                    Err(e) => invalid_token_error(p, value_pos, e.into())
+                    Ok(i) => i,
+                    Err(e) => {
+                        p.add_error(value_pos, e.into());
+                        RelativeEchoFeedback::ZERO
+                    }
                 },
-                Err(_) => invalid_token_error(p, value_pos, ValueError::RelativeEchoFeedbackOutOfRangeU32(n).into())
+                Err(_) => {
+                    p.add_error(value_pos, ValueError::RelativeEchoFeedbackOutOfRangeU32(n).into());
+                    RelativeEchoFeedback::ZERO
+                }
             }
         },
-        #_ => invalid_token_error(p, pos, ValueError::NoRelativeEchoFeedback.into())
-    )
+        #_ => {
+            p.add_error(pos, ValueError::NoRelativeEchoFeedback.into());
+            RelativeEchoFeedback::ZERO
+        }
+    );
+
+    let pos = p.peek_pos();
+
+    if next_token_matches!(p, Token::Comma) {
+        let limit = parse_echo_feedback_value(pos, p);
+        Command::RelativeEchoFeedbackWithLimit(rel, limit)
+    } else {
+        Command::RelativeEchoFeedback(rel)
+    }
 }
 
 fn parse_ftap(pos: FilePos, p: &mut Parser) -> Command {
@@ -2096,22 +2175,7 @@ fn parse_ftap(pos: FilePos, p: &mut Parser) -> Command {
 
     if next_token_matches!(p, Token::Comma) {
         let value_pos = p.peek_pos();
-
-        match_next_token!(p,
-            &Token::Number(n) => {
-                match n.try_into() {
-                    Ok(i) => Command::SetFirTap(tap, i),
-                    Err(e) => invalid_token_error(p, value_pos, e.into())
-                }
-            },
-            &Token::RelativeNumber(n) => {
-                match n.try_into() {
-                    Ok(i) => Command::SetFirTap(tap, i),
-                    Err(e) => invalid_token_error(p, value_pos, e.into())
-                }
-            },
-            #_ => invalid_token_error(p, value_pos, ValueError::NoFirCoefficient.into())
-        )
+        Command::SetFirTap(tap, parse_fir_coefficient_value(value_pos, p))
     } else {
         invalid_token_error(p, p.peek_pos(), ValueError::NoCommaFirCoefficient.into())
     }
@@ -2123,18 +2187,36 @@ fn parse_ftap_plus(pos: FilePos, p: &mut Parser) -> Command {
     if next_token_matches!(p, Token::Comma) {
         let value_pos = p.peek_pos();
 
-        match_next_token!(p,
+        let rel: RelativeFirCoefficient = match_next_token!(p,
             &Token::Number(n) => {
                 match i32::try_from(n) {
-                    Ok(i) => match i.try_into() {
-                        Ok(i) => Command::AdjustFirTap(tap, i),
-                        Err(e) => invalid_token_error(p, value_pos, e.into())
+                    Ok(i) => match (i).try_into() {
+                        Ok(i) => i,
+                        Err(e) => {
+                            p.add_error(value_pos, e.into());
+                            RelativeFirCoefficient::ZERO
+                        }
                     },
-                    Err(_) => invalid_token_error(p, value_pos, ValueError::RelativeFirCoefficientOutOfRangeU32(n).into())
+                    Err(_) => {
+                        p.add_error(value_pos, ValueError::RelativeFirCoefficientOutOfRangeU32(n).into());
+                        RelativeFirCoefficient::ZERO
+                    }
                 }
             },
-            #_ => invalid_token_error(p, value_pos, ValueError::NoRelativeFirCoefficient.into())
-        )
+            #_ => {
+                p.add_error(value_pos, ValueError::NoRelativeFirCoefficient.into());
+                RelativeFirCoefficient::ZERO
+            }
+        );
+
+        let pos = p.peek_pos();
+
+        if next_token_matches!(p, Token::Comma) {
+            let limit = parse_fir_coefficient_value(pos, p);
+            Command::AdjustFirTapWithLimit(tap, rel, limit)
+        } else {
+            Command::AdjustFirTap(tap, rel)
+        }
     } else {
         invalid_token_error(
             p,
@@ -2150,19 +2232,37 @@ fn parse_ftap_minus(pos: FilePos, p: &mut Parser) -> Command {
     if next_token_matches!(p, Token::Comma) {
         let value_pos = p.peek_pos();
 
-        match_next_token!(p,
+        let rel: RelativeFirCoefficient = match_next_token!(p,
             &Token::Number(n) => {
                 match i32::try_from(n) {
                     // `-i`` is safe, `-i32::MAX` is in bounds
                     Ok(i) => match (-i).try_into() {
-                        Ok(i) => Command::AdjustFirTap(tap, i),
-                        Err(e) => invalid_token_error(p, value_pos, e.into())
+                        Ok(i) => i,
+                        Err(e) => {
+                            p.add_error(value_pos, e.into());
+                            RelativeFirCoefficient::ZERO
+                        }
                     },
-                    Err(_) => invalid_token_error(p, value_pos, ValueError::RelativeFirCoefficientOutOfRangeU32(n).into())
+                    Err(_) => {
+                        p.add_error(value_pos, ValueError::RelativeFirCoefficientOutOfRangeU32(n).into());
+                        RelativeFirCoefficient::ZERO
+                    }
                 }
             },
-            #_ => invalid_token_error(p, value_pos, ValueError::NoRelativeFirCoefficient.into())
-        )
+            #_ => {
+                p.add_error(value_pos, ValueError::NoRelativeFirCoefficient.into());
+                RelativeFirCoefficient::ZERO
+            }
+        );
+
+        let pos = p.peek_pos();
+
+        if next_token_matches!(p, Token::Comma) {
+            let limit = parse_fir_coefficient_value(pos, p);
+            Command::AdjustFirTapWithLimit(tap, rel, limit)
+        } else {
+            Command::AdjustFirTap(tap, rel)
+        }
     } else {
         invalid_token_error(
             p,

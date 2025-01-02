@@ -619,6 +619,15 @@ impl ChannelState {
         }
     }
 
+    fn adjust_i8_limit(value: i8, adjust: i8, limit: i8) -> i8 {
+        let value = value.saturating_add(adjust);
+        if adjust < 0 {
+            value.clamp(limit, i8::MAX)
+        } else {
+            value.clamp(i8::MIN, limit)
+        }
+    }
+
     fn process_next_bytecode(&mut self, global: &mut GlobalState, song_data: &[u8]) {
         if self.next_event_is_key_off {
             self.note = ChannelNote::None;
@@ -1095,6 +1104,19 @@ impl ChannelState {
                     None => global.echo.feedback = global.echo.feedback.saturating_add(adjust),
                 }
             }
+            opcodes::ADJUST_ECHO_I8_LIMIT => {
+                let index = read_pc();
+                let adjust = i8::from_le_bytes([read_pc()]);
+                let limit = i8::from_le_bytes([read_pc()]);
+
+                match global.echo.fir_filter.get_mut(usize::from(index)) {
+                    Some(e) => *e = Self::adjust_i8_limit(*e, adjust, limit),
+                    None => {
+                        global.echo.feedback =
+                            Self::adjust_i8_limit(global.echo.feedback, adjust, limit)
+                    }
+                }
+            }
 
             opcodes::DISABLE_CHANNEL => self.disable_channel(),
 
@@ -1206,6 +1228,7 @@ impl ChannelState {
             opcodes::SET_FIR_FILTER => Some(9),
             opcodes::SET_ECHO_I8 => Some(3),
             opcodes::ADJUST_ECHO_I8 => Some(3),
+            opcodes::ADJUST_ECHO_I8_LIMIT => Some(4),
 
             opcodes::DISABLE_CHANNEL => None,
 

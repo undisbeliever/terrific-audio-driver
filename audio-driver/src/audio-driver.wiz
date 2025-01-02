@@ -3282,6 +3282,91 @@ func __write_echo_i8__channel_index_on_stack(echo_index: u8 in x, value: i8 in a
 }
 
 
+// IN: Y = 0
+// KEEP: X
+#[fallthrough]
+func __adjust_echo_i8_limit__out_of_bounds(channelIndex: u8 in x) {
+    a = ECHO_I8_EFB_INDEX;
+
+// Fallthrough into adjust_echo_i8(x, a)
+}
+
+// IN: Y = 0
+// KEEP: X
+#[fallthrough]
+func adjust_echo_i8_limit(channelIndex: u8 in x, echo_index : i8 in a) {
+    goto __adjust_echo_i8_limit__out_of_bounds if a >= ECHO_I8_EFB_INDEX + 1;
+
+    push(x);
+    x = a;
+
+    //   if adjust < 0 {
+    //      firFilter[x] = firFilter[x].saturating_add(adjust).max(limit);
+    //   } else {
+    //      firFilter[x] = firFilter[x].saturating_add(adjust).min(limit);
+    //   };
+
+    // Y = 0
+    a = instructionPtr[y];  // adjust
+    goto PositiveAdjust if !negative;
+        // A is negative
+        instructionPtr++;
+
+        a += echo.firFilter[x] as u8;
+        goto WriteLimit if overflow;
+
+        echo.firFilter[x] = a as i8;
+
+        carry = true;
+        a -#= instructionPtr[y]; // limit
+        goto LimitNegativeTest if !overflow;
+            a ^= 0xff;
+        goto LimitNegativeTest;
+
+    PositiveAdjust:
+        // A is positive
+        instructionPtr++;
+
+        a += echo.firFilter[x] as u8;
+        goto WriteLimit if overflow;
+
+        echo.firFilter[x] = a as i8;
+
+        // using clc for a > comparison
+        // (SOURCE: http://6502.org/tutorials/compare_beyond.html#5.1)
+        //
+        // Using `bvs` to invert the negative flag and use the same negative branch instruction
+        // for both positive and negative adjust code paths.
+        carry = false;
+        a -#= instructionPtr[y]; // limit
+        goto LimitNegativeTest if overflow;
+            a ^= 0xff;
+    LimitNegativeTest:
+        goto End if !negative;
+
+        WriteLimit:
+            a = instructionPtr[y]; // limit
+            echo.firFilter[x] = a as i8;
+    End:
+
+    instructionPtr++;
+
+
+    if x < ECHO_I8_EFB_INDEX {
+        echoDirty $ ECHO_DIRTY__FIR_FILTER_BIT = true;
+
+        x = pop();
+        ^return process_next_bytecode(x);
+    }
+    // else
+
+    echoDirty $ ECHO_DIRTY__FEEDBACK_BIT = true;
+
+    x = pop();
+    ^return process_next_bytecode(x);
+}
+
+
 
 const InstructionTable : [u16 ; 64] = [ f as u16 for let f in INSTRUCTIONS_WITH_ARGUMENTS ]
                                     ~ [ f as u16 for let f in NO_ARGUMENT_INSTRUCTIONS ]
