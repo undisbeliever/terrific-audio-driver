@@ -475,11 +475,11 @@ The Following commands affect **all channels**:
 <br/>
 
 Global echo commands:
-
-**WARNING:** These commands modify the echo S-DSP registers without any checks.
- * Excessive echo feedback will continue to get louder and louder, exploding your song.
- * An overflowing FIR filter can pop.  Excessive filter feedback will continue to get louder and louder, exploding your song.
- * Headphone users should turn down their volume when playing with echo filters/feedback.
+ * CAUTION: hexadecimal numbers in echo commands are byte values.  For example `\efb $c0` is the same as `\efb -64`.
+ * **WARNING:** These commands modify the echo S-DSP registers without any checks.
+   * Excessive echo feedback will continue to get louder and louder, exploding your song.
+   * An overflowing FIR filter can pop.  Excessive filter feedback will continue to get louder and louder, exploding your song.
+   * Headphone users should turn down their volume when playing with echo filters/feedback.
 
 <br/>
 

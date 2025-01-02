@@ -24,7 +24,7 @@ use crate::channel_bc_generator::{
     RestTicksAfterNote, SubroutineCallType, VolumeCommand,
 };
 use crate::driver_constants::FIR_FILTER_SIZE;
-use crate::echo::{EchoFeedback, EchoVolume, FirCoefficient, FirTap};
+use crate::echo::{EchoVolume, FirCoefficient, FirTap};
 use crate::envelope::{Gain, GainMode, OptionalGain, TempGain};
 use crate::errors::{ChannelError, ErrorWithPos, ValueError};
 use crate::file_pos::{FilePos, FilePosRange};
@@ -33,7 +33,9 @@ use crate::pitch_table::PlayPitchSampleRate;
 use crate::time::{
     MmlDefaultLength, MmlLength, TickCounter, TickCounterWithLoopFlag, ZenLen, STARTING_MML_LENGTH,
 };
-use crate::value_newtypes::{i8_value_newtype, SignedValueNewType, UnsignedValueNewType};
+use crate::value_newtypes::{
+    i8_value_newtype, I8WithByteHexValueNewType, SignedValueNewType, UnsignedValueNewType,
+};
 
 pub use crate::channel_bc_generator::Quantization;
 
@@ -374,6 +376,44 @@ where
         #_ => {
             p.add_error(pos, T::MISSING_ERROR.into());
             None
+        }
+    )
+}
+
+fn parse_i8wh_newtype<T: I8WithByteHexValueNewType>(pos: FilePos, p: &mut Parser) -> T {
+    let value_pos = p.peek_pos();
+
+    match_next_token!(p,
+        &Token::Number(n) => {
+            match n.try_into() {
+                Ok(n) => n,
+                Err(e) => {
+                    p.add_error(value_pos, e.into());
+                    T::ZERO
+                }
+            }
+        },
+        &Token::HexNumber(h) => {
+            match T::try_from_hex_byte(h) {
+                Ok(h) => h,
+                Err(e) => {
+                    p.add_error(value_pos, e.into());
+                    T::ZERO
+                }
+            }
+        },
+        &Token::RelativeNumber(n) => {
+            match n.try_into() {
+                Ok(n) => n,
+                Err(e) => {
+                    p.add_error(value_pos, e.into());
+                    T::ZERO
+                }
+            }
+        },
+        #_ => {
+            p.add_error(pos, T::MISSING_ERROR.into());
+            T::ZERO
         }
     )
 }
@@ -2037,66 +2077,8 @@ fn parse_evol(pos: FilePos, p: &mut Parser) -> Command {
     )
 }
 
-fn parse_echo_feedback_value(pos: FilePos, p: &mut Parser) -> EchoFeedback {
-    let value_pos = p.peek_pos();
-
-    match_next_token!(p,
-        &Token::Number(n) | &Token::HexNumber(n) => {
-            match n.try_into() {
-                Ok(n) => n,
-                Err(e) => {
-                    p.add_error(value_pos, e.into());
-                    EchoFeedback::ZERO
-                }
-            }
-        },
-        &Token::RelativeNumber(n) => {
-            match n.try_into() {
-                Ok(n) => n,
-                Err(e) => {
-                    p.add_error(value_pos, e.into());
-                    EchoFeedback::ZERO
-                }
-            }
-        },
-        #_ => {
-            p.add_error(pos, ValueError::NoEchoFeedback.into());
-            EchoFeedback::ZERO
-        }
-    )
-}
-
-fn parse_fir_coefficient_value(pos: FilePos, p: &mut Parser) -> FirCoefficient {
-    let value_pos = p.peek_pos();
-
-    match_next_token!(p,
-        &Token::Number(n) | &Token::HexNumber(n) => {
-            match n.try_into() {
-                Ok(i) => i,
-                Err(e) => {
-                    p.add_error(value_pos, e.into());
-                    FirCoefficient::ZERO
-                }
-            }
-        },
-        &Token::RelativeNumber(n) => {
-            match n.try_into() {
-                Ok(i) => i,
-                Err(e) => {
-                    p.add_error(value_pos, e.into());
-                    FirCoefficient::ZERO
-                }
-            }
-        },
-        #_ => {
-            p.add_error(pos, ValueError::NoFirCoefficient.into());
-            FirCoefficient::ZERO
-        }
-    )
-}
-
 fn parse_efb(pos: FilePos, p: &mut Parser) -> Command {
-    Command::SetEchoFeedback(parse_echo_feedback_value(pos, p))
+    Command::SetEchoFeedback(parse_i8wh_newtype(pos, p))
 }
 
 fn parse_efb_plus(pos: FilePos, p: &mut Parser) -> Command {
@@ -2127,7 +2109,7 @@ fn parse_efb_plus(pos: FilePos, p: &mut Parser) -> Command {
     let pos = p.peek_pos();
 
     if next_token_matches!(p, Token::Comma) {
-        let limit = parse_echo_feedback_value(pos, p);
+        let limit = parse_i8wh_newtype(pos, p);
         Command::RelativeEchoFeedbackWithLimit(rel, limit)
     } else {
         Command::RelativeEchoFeedback(rel)
@@ -2163,7 +2145,7 @@ fn parse_efb_minus(pos: FilePos, p: &mut Parser) -> Command {
     let pos = p.peek_pos();
 
     if next_token_matches!(p, Token::Comma) {
-        let limit = parse_echo_feedback_value(pos, p);
+        let limit = parse_i8wh_newtype(pos, p);
         Command::RelativeEchoFeedbackWithLimit(rel, limit)
     } else {
         Command::RelativeEchoFeedback(rel)
@@ -2175,7 +2157,7 @@ fn parse_ftap(pos: FilePos, p: &mut Parser) -> Command {
 
     if next_token_matches!(p, Token::Comma) {
         let value_pos = p.peek_pos();
-        Command::SetFirTap(tap, parse_fir_coefficient_value(value_pos, p))
+        Command::SetFirTap(tap, parse_i8wh_newtype(value_pos, p))
     } else {
         invalid_token_error(p, p.peek_pos(), ValueError::NoCommaFirCoefficient.into())
     }
@@ -2212,7 +2194,7 @@ fn parse_ftap_plus(pos: FilePos, p: &mut Parser) -> Command {
         let pos = p.peek_pos();
 
         if next_token_matches!(p, Token::Comma) {
-            let limit = parse_fir_coefficient_value(pos, p);
+            let limit = parse_i8wh_newtype(pos, p);
             Command::AdjustFirTapWithLimit(tap, rel, limit)
         } else {
             Command::AdjustFirTap(tap, rel)
@@ -2258,7 +2240,7 @@ fn parse_ftap_minus(pos: FilePos, p: &mut Parser) -> Command {
         let pos = p.peek_pos();
 
         if next_token_matches!(p, Token::Comma) {
-            let limit = parse_fir_coefficient_value(pos, p);
+            let limit = parse_i8wh_newtype(pos, p);
             Command::AdjustFirTapWithLimit(tap, rel, limit)
         } else {
             Command::AdjustFirTap(tap, rel)
@@ -2305,8 +2287,19 @@ fn parse_fir_filter(fir_pos: FilePos, p: &mut Parser) -> Command {
                 return Command::None;
             }
 
-            Token::Number(n) | Token::HexNumber(n) => {
+            Token::Number(n) => {
                 match n.try_into() {
+                    Ok(value) => {
+                        if let Some(f) = filter.get_mut(count) {
+                            *f = value;
+                        }
+                    }
+                    Err(e) => p.add_error(pos, e.into()),
+                }
+                count += 1;
+            }
+            Token::HexNumber(h) => {
+                match FirCoefficient::try_from_hex_byte(h) {
                     Ok(value) => {
                         if let Some(f) = filter.get_mut(count) {
                             *f = value;

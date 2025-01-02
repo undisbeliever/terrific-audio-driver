@@ -31,6 +31,19 @@ where
     fn value(&self) -> Self::ValueType;
 }
 
+pub trait I8WithByteHexValueNewType
+where
+    Self: TryFrom<i32, Error = ValueError> + TryFrom<u32, Error = ValueError>,
+{
+    const ZERO: Self;
+
+    const MISSING_ERROR: ValueError;
+
+    fn value(&self) -> i8;
+
+    fn try_from_hex_byte(hex: u32) -> Result<Self, ValueError>;
+}
+
 macro_rules! u8_value_newtype {
     ($name:ident, $error:ident, $missing_error:ident) => {
         #[derive(Debug, Copy, Clone, PartialEq)]
@@ -347,8 +360,8 @@ macro_rules! i8_value_newtype {
     };
 }
 
-macro_rules! i8_value_newtype_allow_no_sign {
-    ($name:ident, $error:ident, $error_u32:ident, $missing_error:ident) => {
+macro_rules! i8_with_hex_byte_value_newtype {
+    ($name:ident, $error:ident, $error_u32:ident, $error_hex:ident, $missing_error:ident) => {
         #[derive(Debug, Copy, Clone, PartialEq)]
         pub struct $name(i8);
 
@@ -361,9 +374,6 @@ macro_rules! i8_value_newtype_allow_no_sign {
                 Self(p)
             }
             pub const fn as_i8(&self) -> i8 {
-                self.0
-            }
-            pub const fn value(&self) -> i8 {
                 self.0
             }
         }
@@ -386,6 +396,23 @@ macro_rules! i8_value_newtype_allow_no_sign {
                 match value.try_into() {
                     Ok(v) => Ok($name(v)),
                     Err(_) => Err(ValueError::$error_u32(value)),
+                }
+            }
+        }
+
+        impl crate::value_newtypes::I8WithByteHexValueNewType for $name {
+            const ZERO: Self = Self(0);
+
+            const MISSING_ERROR: ValueError = ValueError::$missing_error;
+
+            fn value(&self) -> i8 {
+                self.0
+            }
+
+            fn try_from_hex_byte(hex: u32) -> Result<Self, ValueError> {
+                match u8::try_from(hex) {
+                    Ok(i) => Ok($name(i8::from_le_bytes([i]))),
+                    Err(_) => Err(ValueError::$error_hex(hex)),
                 }
             }
         }
@@ -484,6 +511,23 @@ macro_rules! i16_non_zero_value_newtype {
 
 pub(crate) use {
     i16_non_zero_value_newtype, i16_value_newtype, i8_value_newtype,
-    i8_value_newtype_allow_no_sign, u16_value_newtype, u32_value_newtype,
+    i8_with_hex_byte_value_newtype, u16_value_newtype, u32_value_newtype,
     u8_0_is_256_value_newtype, u8_value_newtype,
 };
+
+pub fn parse_i8wh<T: I8WithByteHexValueNewType>(s: &str) -> Result<T, ValueError> {
+    match s.bytes().next() {
+        None => Err(T::MISSING_ERROR),
+        Some(c) => match c {
+            b'0'..=b'9' | b'-' | b'+' => match s.parse::<i32>() {
+                Ok(i) => i.try_into(),
+                Err(_) => Err(ValueError::CannotParseSigned(s.to_owned())),
+            },
+            b'$' => match u32::from_str_radix(&s[1..], 16) {
+                Ok(h) => T::try_from_hex_byte(h),
+                Err(_) => Err(ValueError::CannotParseHex(s.to_owned())),
+            },
+            _ => Err(ValueError::CannotParseSigned(s.to_owned())),
+        },
+    }
+}

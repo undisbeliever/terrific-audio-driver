@@ -16,7 +16,9 @@ use crate::envelope::{Adsr, Gain, OptionalGain, TempGain};
 use crate::errors::{BytecodeError, ChannelError, ValueError};
 use crate::notes::Note;
 use crate::time::TickCounter;
-use crate::value_newtypes::{SignedValueNewType, UnsignedValueNewType};
+use crate::value_newtypes::{
+    parse_i8wh, I8WithByteHexValueNewType, SignedValueNewType, UnsignedValueNewType,
+};
 
 pub use crate::bytecode::{BcTerminator, BytecodeContext};
 
@@ -320,37 +322,28 @@ fn optional_loop_count_argument(args: &[&str]) -> Result<Option<LoopCount>, Chan
 
 fn echo_feedback_argument(args: &[&str]) -> Result<EchoFeedback, ChannelError> {
     let feedback = one_argument(args)?;
-    Ok(parse_i32_allow_no_sign(feedback)?.try_into()?)
+
+    Ok(parse_i8wh(feedback)?)
 }
 
 fn adjust_echo_feedback_limit_arguments(
     args: &[&str],
 ) -> Result<(RelativeEchoFeedback, EchoFeedback), ChannelError> {
     let (rel, limit) = two_arguments(args)?;
-    Ok((
-        parse_svnt(rel)?,
-        parse_i32_allow_no_sign(limit)?.try_into()?,
-    ))
+    Ok((parse_svnt(rel)?, parse_i8wh(limit)?))
 }
 
 fn set_fir_tap_arguments(args: &[&str]) -> Result<(FirTap, FirCoefficient), ChannelError> {
     let (tap, value) = two_arguments(args)?;
 
-    Ok((
-        parse_uvnt(tap)?,
-        parse_i32_allow_no_sign(value)?.try_into()?,
-    ))
+    Ok((parse_uvnt(tap)?, parse_i8wh(value)?))
 }
 
 fn adjust_fir_tap_limit_arguments(
     args: &[&str],
 ) -> Result<(FirTap, RelativeFirCoefficient, FirCoefficient), ChannelError> {
     let (tap, rel, limit) = three_arguments(args)?;
-    Ok((
-        parse_uvnt(tap)?,
-        parse_svnt(rel)?,
-        parse_i32_allow_no_sign(limit)?.try_into()?,
-    ))
+    Ok((parse_uvnt(tap)?, parse_svnt(rel)?, parse_i8wh(limit)?))
 }
 
 fn fir_filter_argument(args: &[&str]) -> Result<[FirCoefficient; FIR_FILTER_SIZE], ChannelError> {
@@ -358,7 +351,7 @@ fn fir_filter_argument(args: &[&str]) -> Result<[FirCoefficient; FIR_FILTER_SIZE
         let mut out = [FirCoefficient::ZERO; FIR_FILTER_SIZE];
         assert_eq!(out.len(), args.len());
         for (f, s) in out.iter_mut().zip(args.iter()) {
-            *f = parse_i32_allow_no_sign(s)?.try_into()?;
+            *f = parse_i8wh(s)?;
         }
         Ok(out)
     } else {
@@ -416,30 +409,6 @@ fn parse_i32(src: &str, missing_sign_err: &ValueError) -> Result<i32, ValueError
                 Err(_) => Err(ValueError::CannotParseSigned(src.to_owned())),
             },
             _ => Err(missing_sign_err.clone()),
-        }
-    }
-}
-
-fn parse_i32_allow_no_sign(src: &str) -> Result<i32, ValueError> {
-    if let Some(s) = src.strip_prefix("+$") {
-        match i32::from_str_radix(s, 16) {
-            Ok(i) => Ok(i),
-            Err(_) => Err(ValueError::CannotParseHex(src.to_owned())),
-        }
-    } else if let Some(s) = src.strip_prefix("-$") {
-        match i32::from_str_radix(s, 16) {
-            Ok(i) => Ok(-i),
-            Err(_) => Err(ValueError::CannotParseHex(src.to_owned())),
-        }
-    } else if let Some(s) = src.strip_prefix("$") {
-        match i32::from_str_radix(s, 16) {
-            Ok(i) => Ok(i),
-            Err(_) => Err(ValueError::CannotParseHex(src.to_owned())),
-        }
-    } else {
-        match src.parse() {
-            Ok(i) => Ok(i),
-            Err(_) => Err(ValueError::CannotParseSigned(src.to_owned())),
         }
     }
 }

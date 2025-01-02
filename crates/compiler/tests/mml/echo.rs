@@ -568,3 +568,86 @@ fn decrement_fir_tap_with_limit() {
 
     assert_one_error_in_mml_line(r"\ftap- 0,10,", 12, ValueError::NoFirCoefficient.into());
 }
+
+#[test]
+fn efb_tap_hex() {
+    assert_line_matches_line(r"\efb $00", r"\efb 0");
+    assert_line_matches_line(r"\efb $7f", r"\efb +127");
+    assert_line_matches_line(r"\efb $80", r"\efb -128");
+    assert_line_matches_line(r"\efb $c0", r"\efb -64");
+
+    assert_line_matches_bytecode(r"\efb -64", &["set_echo_feedback $c0"]);
+    assert_line_matches_bytecode(r"\efb+ 64,-64", &["adjust_echo_feedback_limit +64 $c0"]);
+
+    assert_line_matches_line(r"\efb $FF", r"\efb -1");
+    assert_one_error_in_mml_line(
+        r"\efb $100",
+        6,
+        ValueError::EchoFeedbackHexOutOfRange(0x100).into(),
+    );
+
+    assert_line_matches_line(r"\efb+ 20,$FF", r"\efb+ 20,-1");
+    assert_one_error_in_mml_line(
+        r"\efb+ 20,$100",
+        10,
+        ValueError::EchoFeedbackHexOutOfRange(0x100).into(),
+    );
+
+    assert_line_matches_line(r"\efb- 20,$FF", r"\efb- 20,-1");
+    assert_one_error_in_mml_line(
+        r"\efb- 20,$100",
+        10,
+        ValueError::EchoFeedbackHexOutOfRange(0x100).into(),
+    );
+}
+
+#[test]
+fn fir_tap_hex() {
+    assert_line_matches_line(r"\ftap 0,$00", r"\ftap 0,0");
+    assert_line_matches_line(r"\ftap 0,$7f", r"\ftap 0,+127");
+    assert_line_matches_line(r"\ftap 0,$80", r"\ftap 0,-128");
+    assert_line_matches_line(r"\ftap 0,$c0", r"\ftap 0,-64");
+
+    assert_line_matches_bytecode(r"\ftap 0,-64", &["set_fir_tap 0 $c0"]);
+    assert_line_matches_bytecode(r"\ftap+ 0,64,-64", &["adjust_fir_tap_limit 0 +64 $c0"]);
+
+    assert_line_matches_line(r"\ftap 0,$ff", r"\ftap 0,-1");
+    assert_one_error_in_mml_line(
+        r"\ftap 0,$100",
+        9,
+        ValueError::FirCoefficientHexOutOfRange(0x100).into(),
+    );
+
+    assert_line_matches_line(r"\ftap+ 0,20,$FF", r"\ftap+ 0,20,-1");
+    assert_one_error_in_mml_line(
+        r"\ftap+ 0,20,$100",
+        13,
+        ValueError::FirCoefficientHexOutOfRange(0x100).into(),
+    );
+
+    assert_line_matches_line(r"\ftap- 0,20,$FF", r"\ftap- 0,20,-1");
+    assert_one_error_in_mml_line(
+        r"\ftap- 0,20,$100",
+        13,
+        ValueError::FirCoefficientHexOutOfRange(0x100).into(),
+    );
+}
+
+#[test]
+fn fir_filter_hex() {
+    assert_line_matches_line(
+        r"\fir {$00 $20 $40 $7f  $80 $a0 $d0 $ff}",
+        r"\fir {  0  32  64 127 -128 -96 -48  -1}",
+    );
+
+    assert_line_matches_bytecode(
+        r"\fir { 0 32 64 127 -128 -96 -48 -1 }",
+        &["set_fir_filter $00 $20 $40 $7f $80 $a0 $d0 $ff"],
+    );
+
+    assert_one_error_in_mml_line(
+        r"\fir {$00 $00 $ff $100 $00 $00 $00 $00}",
+        19,
+        ValueError::FirCoefficientHexOutOfRange(0x100).into(),
+    );
+}

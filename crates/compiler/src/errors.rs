@@ -38,7 +38,7 @@ use crate::path::PathString;
 use crate::pitch_table::{InstrumentHintFreq, PlayPitchFrequency, PlayPitchSampleRate};
 use crate::sound_effects::MAX_SFX_TICKS;
 use crate::time::{Bpm, TickClock, TickCounter, ZenLen};
-use crate::value_newtypes::{SignedValueNewType, UnsignedValueNewType};
+use crate::value_newtypes::{I8WithByteHexValueNewType, SignedValueNewType, UnsignedValueNewType};
 use crate::{export, mml, spc_file_export};
 
 use std::fmt::Display;
@@ -213,11 +213,13 @@ pub enum ValueError {
     RelativeEchoVolumeOutOfRange(i32),
     EchoFeedbackOutOfRange(i32),
     EchoFeedbackOutOfRangeU32(u32),
+    EchoFeedbackHexOutOfRange(u32),
     RelativeEchoFeedbackOutOfRange(i32),
     RelativeEchoFeedbackOutOfRangeU32(u32),
     FirTapOutOfRange(u32),
     FirCoefficientOutOfRange(i32),
     FirCoefficientOutOfRangeU32(u32),
+    FirCoefficientHexOutOfRange(u32),
     RelativeFirCoefficientOutOfRange(i32),
     RelativeFirCoefficientOutOfRangeU32(u32),
     EchoLengthNotMultiple,
@@ -1082,6 +1084,9 @@ impl Display for ValueError {
             }
             Self::EchoFeedbackOutOfRange(v) => out_of_range!("echo feedback", v, EchoFeedback),
             Self::EchoFeedbackOutOfRangeU32(v) => out_of_range!("echo feedback", v, EchoFeedback),
+            Self::EchoFeedbackHexOutOfRange(v) => {
+                write!(f, "cannot parse echo feedback: ${v:x} is not a byte value")
+            }
             Self::RelativeEchoFeedbackOutOfRange(v) => {
                 out_of_range!("relative echo feedback", v, RelativeEchoFeedback)
             }
@@ -1095,6 +1100,10 @@ impl Display for ValueError {
             Self::FirCoefficientOutOfRangeU32(v) => {
                 out_of_range!("fir coefficient", v, FirCoefficient)
             }
+            Self::FirCoefficientHexOutOfRange(v) => write!(
+                f,
+                "cannot parse FIR coefficient: ${v:x} is not a byte value"
+            ),
             Self::RelativeFirCoefficientOutOfRange(v) => {
                 out_of_range!("relative fir coefficient", v, RelativeFirCoefficient)
             }

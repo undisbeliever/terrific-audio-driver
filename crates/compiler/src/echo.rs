@@ -11,7 +11,7 @@ use crate::driver_constants::{
     FIR_FILTER_SIZE,
 };
 use crate::errors::ValueError;
-use crate::value_newtypes::{i8_value_newtype_allow_no_sign, u8_value_newtype};
+use crate::value_newtypes::{i8_with_hex_byte_value_newtype, u8_value_newtype};
 
 u8_value_newtype!(
     EchoEdl,
@@ -27,29 +27,23 @@ impl EchoVolume {
     pub const ZERO: Self = Self(0);
 }
 
-i8_value_newtype_allow_no_sign!(
+i8_with_hex_byte_value_newtype!(
     EchoFeedback,
     EchoFeedbackOutOfRange,
     EchoFeedbackOutOfRangeU32,
+    EchoFeedbackHexOutOfRange,
     NoEchoFeedback
 );
 
-impl EchoFeedback {
-    pub const ZERO: Self = Self(0);
-}
-
 u8_value_newtype!(FirTap, FirTapOutOfRange, NoFirTap, 0, 7);
 
-i8_value_newtype_allow_no_sign!(
+i8_with_hex_byte_value_newtype!(
     FirCoefficient,
     FirCoefficientOutOfRange,
     FirCoefficientOutOfRangeU32,
+    FirCoefficientHexOutOfRange,
     NoFirCoefficient
 );
-
-impl FirCoefficient {
-    pub const ZERO: Self = Self(0);
-}
 
 // Source: SnesLab https://sneslab.net/wiki/FIR_Filter
 pub const MAX_FIR_ABS_SUM: i32 = 128;
