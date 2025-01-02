@@ -30,6 +30,7 @@ pub enum Token<'a> {
     SetSubroutineInstrumentHint(IdentifierStr<'a>),
 
     Number(u32),
+    HexNumber(u32),
     RelativeNumber(i32),
 
     StartLoop,
@@ -326,7 +327,7 @@ fn next_token<'a>(scanner: &mut Scanner<'a>) -> Option<TokenWithPosition<'a>> {
             let num = scanner.read_while(|c| c.is_ascii_hexdigit());
             if !num.is_empty() {
                 match u32::from_str_radix(num, 16) {
-                    Ok(i) => Token::Number(i),
+                    Ok(i) => Token::HexNumber(i),
                     Err(_) => Token::Error(ValueError::CannotParseHex(num.to_owned()).into()),
                 }
             } else {

@@ -350,7 +350,7 @@ fn next_token_number(p: &mut Parser) -> Option<u32> {
     match_next_token!(
         p,
 
-        &Token::Number(n) => Some(n),
+        &Token::Number(n) | &Token::HexNumber(n) => Some(n),
         #_ => None
     )
 }
@@ -362,7 +362,7 @@ where
     match_next_token!(
         p,
 
-        &Token::Number(n) => {
+        &Token::Number(n) | &Token::HexNumber(n) => {
             match n.try_into() {
                 Ok(o) => Some(o),
                 Err(e) => {
@@ -394,7 +394,7 @@ where
                 }
             }
         },
-        &Token::Number(_) => {
+        &Token::Number(_) | &Token::HexNumber(_) => {
             p.add_error(pos, T::MISSING_SIGN_ERROR.into());
             None
         },
@@ -421,7 +421,7 @@ where
                 }
             }
         },
-        &Token::Number(0) => {
+        &Token::Number(0) | &Token::HexNumber(0) => {
             match 0.try_into() {
                 Ok(o) => Some(o),
                 Err(e) => {
@@ -430,7 +430,7 @@ where
                 }
             }
         },
-        &Token::Number(_) => {
+        &Token::Number(_) | &Token::HexNumber(_) => {
             p.add_error(pos, T::MISSING_SIGN_ERROR.into());
             None
         },
@@ -497,7 +497,7 @@ fn parse_set_default_length(pos: FilePos, p: &mut Parser) {
     let length_in_ticks = next_token_matches!(p, Token::PercentSign);
     let length = match_next_token!(
         p,
-        &Token::Number(n) => match n.try_into() {
+        &Token::Number(n) | &Token::HexNumber(n) => match n.try_into() {
             Ok(n) => n,
             Err(_) => {
                 p.add_error(pos, ValueError::InvalidDefaultLength.into());
@@ -683,7 +683,7 @@ fn parse_early_release_gain_argument(comma_pos: FilePos, p: &mut Parser) -> Opti
         Token::GainModeB => parse_optional_gain_value(pos, p, GainMode::BentIncrease),
         #_ => {
             // Ignore raw GAIN number
-            let _ = next_token_matches!(p, Token::Number(_));
+            let _ = next_token_matches!(p, Token::Number(_) | Token::HexNumber(_));
             p.add_error(comma_pos, ValueError::NoOptionalGainMode.into());
             OptionalGain::NONE
         }
@@ -709,7 +709,7 @@ fn parse_set_early_release_arguments(p: &mut Parser) -> (EarlyReleaseMinTicks, O
             // min field is blank
             &Token::Comma => (min, parse_early_release_gain_argument(pos, p)),
 
-            &Token::Number(n) => {
+            &Token::Number(n) | &Token::HexNumber(n) => {
                 let min = match n.try_into() {
                     Ok(o) => o,
                     Err(e) => {
@@ -821,7 +821,7 @@ fn parse_tracked_length(p: &mut Parser) -> TickCounter {
 
     let length = match_next_token!(
         p,
-        &Token::Number(n) => Some(n),
+        &Token::Number(n) | &Token::HexNumber(n) => Some(n),
         #_ => None
     );
 
@@ -851,7 +851,7 @@ fn parse_tracked_comma_length(p: &mut Parser) -> TickCounter {
             let length_in_ticks = next_token_matches!(p, Token::PercentSign);
             let length = match_next_token!(
                 p,
-                &Token::Number(n) => Some(n),
+                &Token::Number(n) | &Token::HexNumber(n) => Some(n),
                 #_ => {
                     p.add_error(pos, ChannelError::NoLengthAfterComma);
                     None
@@ -894,7 +894,7 @@ fn parse_untracked_optional_mml_length(p: &mut Parser) -> Option<MmlLength> {
 
     let length = match_next_token!(
         p,
-        &Token::Number(n) => Some(n),
+        &Token::Number(n) | &Token::HexNumber(n) => Some(n),
         #_ => None
     );
 
@@ -1101,7 +1101,7 @@ fn parse_pan_value(pos: FilePos, p: &mut Parser) -> Option<PanCommand> {
     match_next_token!(
         p,
 
-        &Token::Number(n) => {
+        &Token::Number(n) | &Token::HexNumber(n) => {
             match n.try_into() {
                 Ok(v) => Some(PanCommand::Absolute(v)),
                 Err(e) => {
@@ -1121,7 +1121,7 @@ fn parse_px_pan_value(pos: FilePos, p: &mut Parser) -> Option<PanCommand> {
     match_next_token!(
         p,
 
-        &Token::Number(0) => {
+        &Token::Number(0) | &Token::HexNumber(0) => {
             Some(PanCommand::Absolute(Pan::CENTER))
         },
         &Token::RelativeNumber(n) => {
@@ -1134,7 +1134,7 @@ fn parse_px_pan_value(pos: FilePos, p: &mut Parser) -> Option<PanCommand> {
                 None
             }
         },
-        &Token::Number(_) => {
+        &Token::Number(_) | &Token::HexNumber(_) => {
             p.add_error(pos, ValueError::NoPxPanSign.into());
             None
         },
@@ -1146,7 +1146,7 @@ fn parse_fine_volume_value(pos: FilePos, p: &mut Parser) -> Option<VolumeCommand
     match_next_token!(
         p,
 
-        &Token::Number(n) => {
+        &Token::Number(n) | &Token::HexNumber(n) => {
             match n.try_into() {
                 Ok(v) => Some(VolumeCommand::Absolute(v)),
                 Err(e) => {
@@ -1166,7 +1166,7 @@ fn parse_coarse_volume_value(pos: FilePos, p: &mut Parser) -> Option<VolumeComma
     match_next_token!(
         p,
 
-        &Token::Number(v) => {
+        &Token::Number(v) | &Token::HexNumber(v) => {
             if v <= MAX_COARSE_VOLUME {
                 let v = u8::try_from(v).unwrap();
                 let v = v.saturating_mul(COARSE_VOLUME_MULTIPLIER);
@@ -1257,7 +1257,7 @@ fn parse_coarse_volume_slide_amount(pos: FilePos, p: &mut Parser) -> Option<Volu
                 }
             }
         },
-        &Token::Number(_) => {
+        &Token::Number(_) | &Token::HexNumber(_) => {
             p.add_error(pos, VolumeSlideAmount::MISSING_SIGN_ERROR.into());
             None
         },
@@ -1291,7 +1291,7 @@ fn parse_coarse_tremolo_amplitude(pos: FilePos, p: &mut Parser) -> Option<Tremol
     match_next_token!(
         p,
 
-        &Token::Number(n) => {
+        &Token::Number(n) | &Token::HexNumber(n) => {
             match n {
                 MIN_COARSE_TREMOLO_AMPLITUDE..=MAX_COARSE_TREMOLO_AMPLITUDE => {
                     match n {
@@ -1728,9 +1728,9 @@ fn parse_broken_chord(p: &mut Parser) -> Command {
             let tie_pos = p.peek_pos();
             match_next_token!(
                 p,
-                Token::Number(0) => tie = false,
-                Token::Number(1) => tie = true,
-                Token::Number(_) => p.add_error(tie_pos, ValueError::InvalidMmlBool.into()),
+                Token::Number(0) | Token::HexNumber(0) => tie = false,
+                Token::Number(1) | Token::HexNumber(1) => tie = true,
+                Token::Number(_) | Token::HexNumber(_) => p.add_error(tie_pos, ValueError::InvalidMmlBool.into()),
                 #_ => p.add_error(tie_pos, ValueError::NoBool.into())
             )
         }
@@ -1758,7 +1758,7 @@ fn parse_mp_vibrato(pos: FilePos, p: &mut Parser) -> Option<MpVibrato> {
     match_next_token!(
         p,
 
-        &Token::Number(0) => {
+        &Token::Number(0) | &Token::HexNumber(0) => {
             // Disable MP Vibrato
             None
         },
@@ -1884,18 +1884,18 @@ fn parse_temp_gain(pos: FilePos, mode: GainMode, p: &mut Parser) -> Command {
 
 fn parse_pitch_mod(pos: FilePos, p: &mut Parser) -> Command {
     match_next_token!(p,
-        Token::Number(0) => Command::DisablePitchMod,
-        Token::Number(1) => Command::EnablePitchMod,
-        Token::Number(_) => invalid_token_error(p, pos, ValueError::InvalidMmlBool.into()),
+        Token::Number(0) | Token::HexNumber(0) => Command::DisablePitchMod,
+        Token::Number(1) | Token::HexNumber(1) => Command::EnablePitchMod,
+        Token::Number(_) | Token::HexNumber(_) => invalid_token_error(p, pos, ValueError::InvalidMmlBool.into()),
         #_ => Command::EnablePitchMod
     )
 }
 
 fn parse_echo(pos: FilePos, p: &mut Parser) -> Command {
     match_next_token!(p,
-        Token::Number(0) => Command::SetEcho(false),
-        Token::Number(1) => Command::SetEcho(true),
-        Token::Number(_) => invalid_token_error(p, pos, ValueError::InvalidMmlBool.into()),
+        Token::Number(0) | Token::HexNumber(0) => Command::SetEcho(false),
+        Token::Number(1) | Token::HexNumber(1) => Command::SetEcho(true),
+        Token::Number(_) | Token::HexNumber(_) => invalid_token_error(p, pos, ValueError::InvalidMmlBool.into()),
         #_ => Command::SetEcho(true)
     )
 }
@@ -1991,12 +1991,12 @@ fn parse_evol(pos: FilePos, p: &mut Parser) -> Command {
     let first_pos = p.peek_pos();
 
     match_next_token!(p,
-        &Token::Number(v1) => {
+        &Token::Number(v1) | &Token::HexNumber(v1) => {
             let v1 = echo_volume_or_min(v1, first_pos, p);
             if next_token_matches!(p, Token::Comma) {
                 let second_pos = p.peek_pos();
                 match_next_token!(p,
-                    &Token::Number(v2) => {
+                    &Token::Number(v2) | &Token::HexNumber(v2) => {
                         let v2 = echo_volume_or_min(v2, second_pos, p);
                         Command::SetStereoEchoVolume(v1, v2)
                     },
@@ -2021,7 +2021,7 @@ fn parse_evol(pos: FilePos, p: &mut Parser) -> Command {
                         let r2 = relative_echo_volume_or_min(r2, second_pos, p);
                         Command::RelativeStereoEchoVolume(r1, r2)
                     },
-                    &Token::Number(_) => {
+                    &Token::Number(_) | &Token::HexNumber(_) => {
                         invalid_token_error(p, pos, ChannelError::RelativeAndSetStereoEchoVolume)
                     },
                     #_ => {
@@ -2041,7 +2041,7 @@ fn parse_echo_feedback_value(pos: FilePos, p: &mut Parser) -> EchoFeedback {
     let value_pos = p.peek_pos();
 
     match_next_token!(p,
-        &Token::Number(n) => {
+        &Token::Number(n) | &Token::HexNumber(n) => {
             match n.try_into() {
                 Ok(n) => n,
                 Err(e) => {
@@ -2070,7 +2070,7 @@ fn parse_fir_coefficient_value(pos: FilePos, p: &mut Parser) -> FirCoefficient {
     let value_pos = p.peek_pos();
 
     match_next_token!(p,
-        &Token::Number(n) => {
+        &Token::Number(n) | &Token::HexNumber(n) => {
             match n.try_into() {
                 Ok(i) => i,
                 Err(e) => {
@@ -2103,7 +2103,7 @@ fn parse_efb_plus(pos: FilePos, p: &mut Parser) -> Command {
     let value_pos = p.peek_pos();
 
     let rel: RelativeEchoFeedback = match_next_token!(p,
-        &Token::Number(n) => {
+        &Token::Number(n) | &Token::HexNumber(n) => {
             match i32::try_from(n) {
                 Ok(i) => match i.try_into() {
                     Ok(i) => i,
@@ -2138,7 +2138,7 @@ fn parse_efb_minus(pos: FilePos, p: &mut Parser) -> Command {
     let value_pos = p.peek_pos();
 
     let rel: RelativeEchoFeedback = match_next_token!(p,
-        &Token::Number(n) => {
+        &Token::Number(n) | &Token::HexNumber(n) => {
             match i32::try_from(n) {
                 // `-i`` is safe, `-i32::MAX` is in bounds
                 Ok(i) => match (-i).try_into() {
@@ -2188,7 +2188,7 @@ fn parse_ftap_plus(pos: FilePos, p: &mut Parser) -> Command {
         let value_pos = p.peek_pos();
 
         let rel: RelativeFirCoefficient = match_next_token!(p,
-            &Token::Number(n) => {
+            &Token::Number(n) | &Token::HexNumber(n) => {
                 match i32::try_from(n) {
                     Ok(i) => match (i).try_into() {
                         Ok(i) => i,
@@ -2233,7 +2233,7 @@ fn parse_ftap_minus(pos: FilePos, p: &mut Parser) -> Command {
         let value_pos = p.peek_pos();
 
         let rel: RelativeFirCoefficient = match_next_token!(p,
-            &Token::Number(n) => {
+            &Token::Number(n) | &Token::HexNumber(n) => {
                 match i32::try_from(n) {
                     // `-i`` is safe, `-i32::MAX` is in bounds
                     Ok(i) => match (-i).try_into() {
@@ -2305,7 +2305,7 @@ fn parse_fir_filter(fir_pos: FilePos, p: &mut Parser) -> Command {
                 return Command::None;
             }
 
-            Token::Number(n) => {
+            Token::Number(n) | Token::HexNumber(n) => {
                 match n.try_into() {
                     Ok(value) => {
                         if let Some(f) = filter.get_mut(count) {
@@ -2480,7 +2480,9 @@ fn parse_token(pos: FilePos, token: Token, p: &mut Parser) -> Command {
         Token::Comma => invalid_token_error(p, pos, ChannelError::CannotParseComma),
         Token::Dot => invalid_token_error(p, pos, ChannelError::CannotParseDot),
         Token::PercentSign => invalid_token_error(p, pos, ChannelError::CannotParsePercentSign),
-        Token::Number(_) => invalid_token_error(p, pos, ChannelError::UnexpectedNumber),
+        Token::Number(_) | Token::HexNumber(_) => {
+            invalid_token_error(p, pos, ChannelError::UnexpectedNumber)
+        }
         Token::RelativeNumber(_) => invalid_token_error(p, pos, ChannelError::UnexpectedNumber),
 
         Token::GainModeB | Token::GainModeF | Token::GainModeI => {
