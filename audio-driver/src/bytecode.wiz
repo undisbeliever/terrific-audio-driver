@@ -270,6 +270,13 @@ let INSTRUCTIONS_WITH_ARGUMENTS = [
     set_volume,
 
 
+    // parameter = rl00000m
+    //  r = invert right channel
+    //  l = invert left channel
+    //  m = invert both channels in mono mode
+    set_channel_invert,
+
+
     // parameters: tttttttt oooooooo oooooooo
     //      tttttttt          = number of ticks (0 is 256 ticks)
     //      oooooooo oooooooo = offset per tick (8.8 unsigned fixed point)

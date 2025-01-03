@@ -2408,6 +2408,8 @@ fn parse_token(pos: FilePos, token: Token, p: &mut Parser) -> Command {
             merge_pan_or_volume(pan, None, p)
         }
 
+        Token::SetChannelInvert(flags) => Command::SetChannelInvert(flags),
+
         Token::CoarseVolumeSlide => parse_coarse_volume_slide(pos, p),
         Token::FineVolumeSlide => parse_fine_volume_slide(pos, p),
         Token::CoarseTremolo => parse_coarse_tremolo(pos, p),

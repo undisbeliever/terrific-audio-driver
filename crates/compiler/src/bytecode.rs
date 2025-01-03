@@ -15,6 +15,7 @@ use crate::driver_constants::{
 use crate::echo::{EchoFeedback, EchoVolume, FirCoefficient, FirTap};
 use crate::envelope::{Adsr, Envelope, Gain, OptionalGain, TempGain};
 use crate::errors::{BytecodeError, ChannelError, ValueError};
+use crate::invert_flags::InvertFlags;
 use crate::notes::{Note, LAST_NOTE_ID, N_NOTES};
 use crate::pitch_table::InstrumentHintFreq;
 use crate::samples::note_range;
@@ -249,6 +250,7 @@ pub mod opcodes {
         SET_PAN_AND_VOLUME,
         ADJUST_VOLUME,
         SET_VOLUME,
+        SET_CHANNEL_INVERT,
         VOLUME_SLIDE_UP,
         VOLUME_SLIDE_DOWN,
         TREMOLO,
@@ -1714,6 +1716,10 @@ impl<'a> Bytecode<'a> {
             pan.as_u8(),
             volume.as_u8()
         );
+    }
+
+    pub fn set_channel_invert(&mut self, flags: InvertFlags) {
+        emit_bytecode!(self, opcodes::SET_CHANNEL_INVERT, flags.into_driver_value())
     }
 
     fn _pan_vol_slide_offset_per_tick<A, T>(&mut self, amount: A, ticks: T) -> (u8, u8)

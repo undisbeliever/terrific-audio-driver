@@ -17,6 +17,7 @@ use crate::driver_constants::{
 };
 use crate::echo::EchoVolume;
 use crate::envelope::Envelope;
+use crate::invert_flags::InvertFlags;
 use crate::mml::MmlPrefixData;
 use crate::songs::Channel as SongChannel;
 use crate::songs::SongData;
@@ -39,8 +40,8 @@ pub struct SongSubroutineError;
 
 #[derive(Clone)]
 struct VirtualChannel {
-    vol_l: u8,
-    vol_r: u8,
+    vol_l: i8,
+    vol_r: i8,
     // pitch is not fully emulated
     pitch_l: u8,
     pitch_h: u8,
@@ -81,6 +82,7 @@ struct ChannelSoA {
 
     volume: ChannelSoAPanVol,
     pan: ChannelSoAPanVol,
+    invert_flags: u8,
 
     // Not emulating portamento
 
@@ -491,6 +493,8 @@ pub struct ChannelState {
     volume: PanVolValue<0xff>,
     pan: PanVolValue<MAX_PAN>,
 
+    invert_flags: u8,
+
     echo: bool,
     pitch_mod: bool,
 
@@ -527,6 +531,7 @@ impl ChannelState {
             detune: 0,
             volume: PanVolValue::new(STARTING_VOLUME),
             pan: PanVolValue::new(Pan::CENTER.as_u8()),
+            invert_flags: 0,
             echo: false,
             pitch_mod: false,
             vibrato_pitch_offset_per_tick: 0,
@@ -881,6 +886,10 @@ impl ChannelState {
                 self.volume.set_value(volume);
             }
 
+            opcodes::SET_CHANNEL_INVERT => {
+                self.invert_flags = read_pc();
+            }
+
             opcodes::VOLUME_SLIDE_UP => {
                 let ticks = read_pc();
                 let o1 = read_pc();
@@ -1202,6 +1211,7 @@ impl ChannelState {
             opcodes::SET_PAN_AND_VOLUME => Some(3),
             opcodes::ADJUST_VOLUME => Some(2),
             opcodes::SET_VOLUME => Some(2),
+            opcodes::SET_CHANNEL_INVERT => Some(2),
             opcodes::VOLUME_SLIDE_UP => Some(4),
             opcodes::VOLUME_SLIDE_DOWN => Some(4),
             opcodes::TREMOLO => Some(4),
@@ -1551,6 +1561,16 @@ impl CommonAudioDataSoA<'_> {
     }
 }
 
+fn vol_invert(vol: u8, invert_flag: bool) -> i8 {
+    debug_assert!(vol < 0x80);
+    let vol = i8::from_le_bytes([vol]);
+
+    match invert_flag {
+        false => vol,
+        true => -vol,
+    }
+}
+
 fn build_channel(
     channel_index: usize,
     c: &ChannelState,
@@ -1656,6 +1676,7 @@ fn build_channel(
 
     let volume = volume_soa.value;
     let pan = pan_soa.value;
+    let invert_flags = InvertFlags::from_driver_value(c.invert_flags);
 
     let (vibrato_tick_counter_start, vibrato_half_wavelength) =
         match c.vibrato_quarter_wavelength_in_ticks {
@@ -1682,6 +1703,7 @@ fn build_channel(
             inst_pitch_offset,
             volume: volume_soa,
             pan: pan_soa,
+            invert_flags: c.invert_flags,
             vibrato_pitch_offset_per_tick: c.vibrato_pitch_offset_per_tick,
             vibrato_tick_counter: vibrato_tick_counter_start,
             vibrato_tick_counter_start,
@@ -1696,12 +1718,18 @@ fn build_channel(
         bc_stack: c.bc_stack,
         dsp: VirtualChannel {
             vol_l: match common.stereo_flag {
-                true => (u16::from(volume) * u16::from(Pan::MAX.as_u8() - pan)).to_le_bytes()[1],
-                false => volume >> 2,
+                true => vol_invert(
+                    (u16::from(volume) * u16::from(Pan::MAX.as_u8() - pan)).to_le_bytes()[1],
+                    invert_flags.left,
+                ),
+                false => vol_invert(volume >> 2, invert_flags.mono),
             },
             vol_r: match common.stereo_flag {
-                true => (u16::from(volume) * u16::from(pan)).to_le_bytes()[1],
-                false => volume >> 2,
+                true => vol_invert(
+                    (u16::from(volume) * u16::from(pan)).to_le_bytes()[1],
+                    invert_flags.right,
+                ),
+                false => vol_invert(volume >> 2, invert_flags.mono),
             },
             pitch_l,
             pitch_h,
@@ -1750,6 +1778,7 @@ fn unused_channel(channel_index: usize) -> Channel {
                 counter: UNINITIALISED,
                 half_wavelength: UNINITIALISED,
             },
+            invert_flags: 0,
             vibrato_pitch_offset_per_tick: 0,
             vibrato_tick_counter: UNINITIALISED,
             vibrato_tick_counter_start: UNINITIALISED,
@@ -1772,8 +1801,8 @@ fn unused_channel(channel_index: usize) -> Channel {
         // Does not cause an issue with sound effects as they are only written
         // to the S-DSP when voice channels are marked dirty.
         dsp: VirtualChannel {
-            vol_l: STARTING_VOLUME >> 2,
-            vol_r: STARTING_VOLUME >> 2,
+            vol_l: (STARTING_VOLUME >> 2) as i8,
+            vol_r: (STARTING_VOLUME >> 2) as i8,
             pitch_l: 0,
             pitch_h: 0,
             scrn: 0,
@@ -1937,6 +1966,8 @@ impl InterpreterOutput {
                     c.pan.half_wavelength,
                 );
 
+                soa_write_u8(addresses::CHANNEL_INVERT_FLAGS, c.invert_flags);
+
                 // Not interpreting portamento
 
                 soa_write_u8(
@@ -1969,8 +2000,8 @@ impl InterpreterOutput {
                 soa_write_u8(addresses::CHANNEL_DETUNE_H, c.detune_h);
 
                 // Virtual channels
-                soa_write_u8(addresses::CHANNEL_VC_VOL_L, vc.vol_l);
-                soa_write_u8(addresses::CHANNEL_VC_VOL_R, vc.vol_r);
+                soa_write_u8(addresses::CHANNEL_VC_VOL_L, vc.vol_l.to_le_bytes()[0]);
+                soa_write_u8(addresses::CHANNEL_VC_VOL_R, vc.vol_r.to_le_bytes()[0]);
                 soa_write_u8(addresses::CHANNEL_VC_PITCH_L, vc.pitch_l);
                 soa_write_u8(addresses::CHANNEL_VC_PITCH_H, vc.pitch_h);
                 soa_write_u8(addresses::CHANNEL_VC_SCRN, vc.scrn);

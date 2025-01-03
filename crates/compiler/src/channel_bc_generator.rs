@@ -19,6 +19,7 @@ use crate::driver_constants::FIR_FILTER_SIZE;
 use crate::echo::{EchoFeedback, EchoVolume, FirCoefficient, FirTap};
 use crate::envelope::{Adsr, Envelope, Gain, OptionalGain, TempGain};
 use crate::errors::{ChannelError, ValueError};
+use crate::invert_flags::InvertFlags;
 use crate::mml::IdentifierBuf;
 use crate::notes::Note;
 use crate::notes::SEMITONES_PER_OCTAVE;
@@ -311,6 +312,7 @@ pub(crate) enum Command {
     SetDetuneCents(DetuneCents),
 
     ChangePanAndOrVolume(Option<PanCommand>, Option<VolumeCommand>),
+    SetChannelInvert(InvertFlags),
 
     VolumeSlide(VolumeSlideAmount, VolumeSlideTicks),
     Tremolo(TremoloAmplitude, TremoloQuarterWavelengthInTicks),
@@ -1768,6 +1770,10 @@ impl<'a> ChannelBcGenerator<'a> {
                     }
                 }
             },
+
+            &Command::SetChannelInvert(flags) => {
+                self.bc.set_channel_invert(flags);
+            }
 
             &Command::VolumeSlide(amount, ticks) => {
                 self.bc.volume_slide(amount, ticks);

@@ -117,6 +117,133 @@ fn disable_pitch_mod() {
 }
 
 #[test]
+fn set_channel_invert() {
+    assert_line_matches_bytecode("i", &["set_channel_invert both"]);
+    assert_line_matches_bytecode("iB", &["set_channel_invert both"]);
+    assert_line_matches_bytecode("i0", &["set_channel_invert none"]);
+
+    assert_line_matches_bytecode(
+        "i0 iL iR iLR iM iML iMR iMLR",
+        &[
+            "set_channel_invert none",
+            "set_channel_invert left",
+            "set_channel_invert right",
+            "set_channel_invert left right",
+            "set_channel_invert mono",
+            "set_channel_invert mono left",
+            "set_channel_invert mono right",
+            "set_channel_invert mono left right",
+        ],
+    );
+
+    // B or 0 in multi-character invert is not allowed
+    assert_one_error_in_mml_line("i0L", 1, ValueError::InvalidMmlInvertFlags.into());
+    assert_one_error_in_mml_line("iR0", 1, ValueError::InvalidMmlInvertFlags.into());
+    assert_one_error_in_mml_line("i0M", 1, ValueError::InvalidMmlInvertFlags.into());
+    assert_one_error_in_mml_line("iBR", 1, ValueError::InvalidMmlInvertFlags.into());
+    assert_one_error_in_mml_line("iBM", 1, ValueError::InvalidMmlInvertFlags.into());
+    assert_one_error_in_mml_line("iRB", 1, ValueError::InvalidMmlInvertFlags.into());
+
+    // Repeating a L/R/M is not allowed
+    assert_one_error_in_mml_line("iLRL", 1, ValueError::DuplicateMmlInvertFlag.into());
+    assert_one_error_in_mml_line("iRRL", 1, ValueError::DuplicateMmlInvertFlag.into());
+    assert_one_error_in_mml_line("iMM", 1, ValueError::DuplicateMmlInvertFlag.into());
+
+    // There must be a space after invert
+    assert_one_error_in_mml_line("ic", 1, ValueError::InvalidMmlInvertFlags.into());
+    assert_line_matches_bytecode("i c", &["set_channel_invert both", "play_note c4 24"]);
+}
+
+#[test]
+fn set_channel_invert_asm() {
+    assert_line_matches_bytecode_bytes(
+        r"\asm { set_channel_invert none }",
+        &[opcodes::SET_CHANNEL_INVERT, 0x00],
+    );
+    assert_line_matches_bytecode_bytes(
+        r"\asm { set_channel_invert right }",
+        &[opcodes::SET_CHANNEL_INVERT, 0x80],
+    );
+    assert_line_matches_bytecode_bytes(
+        r"\asm { set_channel_invert left }",
+        &[opcodes::SET_CHANNEL_INVERT, 0x40],
+    );
+    assert_line_matches_bytecode_bytes(
+        r"\asm { set_channel_invert mono }",
+        &[opcodes::SET_CHANNEL_INVERT, 0x01],
+    );
+    assert_line_matches_bytecode_bytes(
+        r"\asm { set_channel_invert left right }",
+        &[opcodes::SET_CHANNEL_INVERT, 0xc0],
+    );
+    assert_line_matches_bytecode_bytes(
+        r"\asm { set_channel_invert right left }",
+        &[opcodes::SET_CHANNEL_INVERT, 0xc0],
+    );
+    assert_line_matches_bytecode_bytes(
+        r"\asm { set_channel_invert left right mono }",
+        &[opcodes::SET_CHANNEL_INVERT, 0xc1],
+    );
+    assert_line_matches_bytecode_bytes(
+        r"\asm { set_channel_invert both }",
+        &[opcodes::SET_CHANNEL_INVERT, 0xc1],
+    );
+
+    assert_line_matches_bytecode_bytes(
+        r"\asm { set_channel_invert 0 }",
+        &[opcodes::SET_CHANNEL_INVERT, 0x00],
+    );
+    assert_line_matches_bytecode_bytes(
+        r"\asm { set_channel_invert LR }",
+        &[opcodes::SET_CHANNEL_INVERT, 0xc0],
+    );
+
+    assert_one_error_in_mml_line(
+        r"\asm { set_channel_invert unknown }",
+        8,
+        ValueError::UnknownInvertFlagStr("unknown".to_owned()).into(),
+    );
+
+    assert_one_error_in_mml_line(
+        r"\asm { set_channel_invert left both }",
+        8,
+        ValueError::InvalidMultiArgInvertFlag("both").into(),
+    );
+    assert_one_error_in_mml_line(
+        r"\asm { set_channel_invert none right }",
+        8,
+        ValueError::InvalidMultiArgInvertFlag("none").into(),
+    );
+    assert_one_error_in_mml_line(
+        r"\asm { set_channel_invert none both }",
+        8,
+        ValueError::InvalidMultiArgInvertFlag("none").into(),
+    );
+
+    assert_one_error_in_mml_line(
+        r"\asm { set_channel_invert LRL }",
+        8,
+        ValueError::DuplicateMmlInvertFlag.into(),
+    );
+
+    assert_one_error_in_mml_line(
+        r"\asm { set_channel_invert right right }",
+        8,
+        ValueError::DuplicateInvertFlag.into(),
+    );
+    assert_one_error_in_mml_line(
+        r"\asm { set_channel_invert left mono left }",
+        8,
+        ValueError::DuplicateInvertFlag.into(),
+    );
+    assert_one_error_in_mml_line(
+        r"\asm { set_channel_invert mono mono }",
+        8,
+        ValueError::DuplicateInvertFlag.into(),
+    );
+}
+
+#[test]
 fn set_song_tempo() {
     let tc = f64::round(8000.0 * 60.0 / f64::from(48 * 80)) as u32;
     let bc = format!("set_song_tick_clock {tc}");

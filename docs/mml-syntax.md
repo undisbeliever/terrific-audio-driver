@@ -314,6 +314,22 @@ Numbers can be decimal, or hexadecimal when prefixed with `$` (ie, `$ff`)
     * Panbrello is disabled when the pan is set or adjusted.
     * Panbrello is disabled on overflows and underflows.
 
+<br>
+
+ * `i[L][R][M]` - Set channel phase invert
+    * `L` - invert left channel if in surround mode
+    * `R` - invert right channel if in surround mode
+    * `M` - invert both channels if in mono or stereo mode
+    * Multiple invert flags can be set at once.
+      For example, `iLR` will invert the left and right channels in surround mode
+      but no channels will be inverted in mono or stereo mode.
+    * If no `L`/`R`/`M` is given, all 3 flags will be set.
+    * CAUTION: There must be a space after the `i` command.
+    * CAUTION: `L` and `R` are ignored in stereo mode.
+ * `iB` - Phase invert with the left, right and mono invert-flags set
+ * `i0` - Disable phase invert
+
+
 <br/>
 
  * `E` - Enable echo

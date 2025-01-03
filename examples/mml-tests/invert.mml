@@ -1,0 +1,38 @@
+#Title Invert example
+
+@1 sine adsr 14 7 7 0
+
+AB @1 v14
+
+; Invert both channels on A and B
+A i  c r
+B i  c r
+
+; CAUTION: invert can cause destructive interference
+; (This example is silent)
+A i  c i0 c
+B i0 c i  c
+
+
+; Single character invert commands
+;   0 = disable invert
+;   B = invert both channels
+A i0  c
+A iB  c
+
+; Multiple character invert commands
+;   L = left
+;   R = right
+;   M = invert if in mono mode
+A i0   c
+A iL   c
+A i0   c
+A iR   c
+A i0   c
+A iLR  c
+A i0   c
+A iM   c
+A iLM  c
+A iRM  c
+A iLRM c
+

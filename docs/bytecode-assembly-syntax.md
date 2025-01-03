@@ -101,6 +101,13 @@ Instructions
     * Panbrello is disabled when the pan is set or adjusted.
     * Panbrello is disabled on overflows and underflows.
 
+ * `set_channel_invert <flag> [flag] [flag]` - set channel phase invert
+    * `left` - invert left channel if in surround mode
+    * `right` - invert right channel if in surround mode
+    * `mono` - invert both channels if in mono or stereo mode
+ * `set_channel_invert both` - Phase invert with the left, right and mono invert flags set
+ * `set_channel_invert none` - Disable channel phase invert
+
  * `enable_pmod` - Enable pitch modulation on this channel.
    * Only channels B to F can be pitch modulated.
    * Channels G & H cannot be pitch-modulated as they would conflict with sound-effect channel ducking.

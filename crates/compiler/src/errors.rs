@@ -229,6 +229,13 @@ pub enum ValueError {
     InvalidFirFilter,
     InvalidFirFilterGain { abs_sum: i32 },
 
+    InvalidMmlInvertFlags,
+    DuplicateMmlInvertFlag,
+    UnknownInvertFlagStr(String),
+    InvalidMultiArgInvertFlag(&'static str),
+    DuplicateInvertFlag,
+    NoInvertFlags,
+
     NoHexDigits,
     NoBool,
     NoNote,
@@ -1139,6 +1146,21 @@ impl Display for ValueError {
                 "invalid FIR filter gain (absolute sum is {}, max; {})",
                 abs_sum, MAX_FIR_ABS_SUM,
             ),
+
+            Self::InvalidMmlInvertFlags => write!(
+                f,
+                "invalid invert flags: expected `0`, `B` or `L/R/M` followed by a space"
+            ),
+            Self::DuplicateMmlInvertFlag => write!(
+                f,
+                "duplicate invert flags: expected one `L/R/M` followed by a space"
+            ),
+            Self::UnknownInvertFlagStr(s) => write!(f, "unknown invert flag: {s}"),
+            Self::InvalidMultiArgInvertFlag(s) => {
+                write!(f, "{s} is only allowed in single-argument invert flag")
+            }
+            Self::DuplicateInvertFlag => write!(f, "duplicate invert flag"),
+            Self::NoInvertFlags => write!(f, "no invert flags"),
 
             Self::NoHexDigits => write!(f, "no hexadecimal digits"),
             Self::NoBool => write!(f, "no bool"),

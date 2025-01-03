@@ -397,6 +397,13 @@ in lastvarpage {
         // (index into `bcStack`)
         var stackPointer : [u8 ; N_CHANNELS];
 
+        // Channel invert flags:
+        //      rl00000m
+        //      r = invert right channel
+        //      l = invert left channel
+        //      m = invert both channels in mono mode
+        var invertFlags : [u8 ; N_CHANNELS];
+
         // set_early_release instruction arguments
         var earlyRelease_cmp : [u8 ; N_CHANNELS];
         var earlyRelease_minTicks : [u8 ; N_CHANNELS];
@@ -1458,6 +1465,9 @@ func __reset_channel(channelIndex : u8 in x, pan: u8 in a) {
         // No need to reset `earlyRelease_minTicks`,
         // (Early release is not active if `earlyRelease_cmp == 0`)
 
+    // Disable channel invert
+    channelSoA.invertFlags[x] = a;
+
     // Reset detune
     channelSoA.detune_l[x] = a;
     channelSoA.detune_h[x] = a;
@@ -1659,10 +1669,20 @@ inline func _update_vol_shadow__inline(channelIndex : u8 in x) {
 
         // First shift converts 8-bit volume to 7-bit VOL
         // Second shift ensure mono vol has same combined amplitude as stereo vol
-        a >>>= 2;
+        y = a = a >>> 2;
 
-        channelSoA.virtualChannels.vol_l[x] = a;
-        channelSoA.virtualChannels.vol_r[x] = a;
+        // Test mono flag
+        a = channelSoA.invertFlags[x];
+        a >>>= 1;
+        if carry {
+            // Invert Y
+            a = y ^ 0xff;
+            a++;
+            y = a;
+        }
+
+        channelSoA.virtualChannels.vol_r[x] = y;
+        // vol_l set after if
     }
     else {
         // Stereo
@@ -1677,8 +1697,15 @@ inline func _update_vol_shadow__inline(channelIndex : u8 in x) {
 
         a = channelSoA.pan[x];
         ya = mul(a, y);
-        channelSoA.virtualChannels.vol_r[x] = y;
 
+        a = channelSoA.invertFlags[x];
+        if negative {
+            // Invert Y
+            a = y ^ 0xff;
+            a++;
+            y = a;
+        }
+        channelSoA.virtualChannels.vol_r[x] = y;
 
         // Calculate left volume
         // A pan value of `0` is 100% to the left.
@@ -1687,8 +1714,19 @@ inline func _update_vol_shadow__inline(channelIndex : u8 in x) {
         a = MAX_PAN -# channelSoA.pan[x];
         y = zpTmp;
         ya = mul(a, y);
-        channelSoA.virtualChannels.vol_l[x] = y;
+
+        a = channelSoA.invertFlags[x];
+        a <<<= 1;
+        if negative {
+            // Invert Y
+            // (have to invert Y, no 65816-style `bit invertFlags,x` instruction)
+            a = y ^ 0xff;
+            a++;
+            y = a;
+        }
     }
+
+    channelSoA.virtualChannels.vol_l[x] = y;
 }
 
 
@@ -2790,6 +2828,16 @@ func set_volume(channelIndex : u8 in x, volume : u8 in a) {
     // Disable volume effects
     // (Y is non-zero)
     channelSoA.volEffect_direction[x] = a = 0;
+
+    ^return process_next_bytecode(x);
+}
+
+
+// KEEP: X
+func set_channel_invert(channelIndex : u8 in x, flags : u8 in a) {
+    channelSoA.invertFlags[x] = a;
+
+    mark_vol_shadow_dirty__inline();
 
     ^return process_next_bytecode(x);
 }

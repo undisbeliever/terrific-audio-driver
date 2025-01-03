@@ -14,6 +14,7 @@ use crate::driver_constants::FIR_FILTER_SIZE;
 use crate::echo::{EchoFeedback, FirCoefficient, FirTap};
 use crate::envelope::{Adsr, Gain, OptionalGain, TempGain};
 use crate::errors::{BytecodeError, ChannelError, ValueError};
+use crate::invert_flags::parse_invert_flag_arguments;
 use crate::notes::Note;
 use crate::time::TickCounter;
 use crate::value_newtypes::{
@@ -571,6 +572,8 @@ pub fn parse_asm_line(bc: &mut Bytecode, line: &str) -> Result<(), ChannelError>
        adjust_pan 1 one_svnt_argument,
        set_pan 1 one_uvnt_argument,
        set_pan_and_volume 2 two_uvnt_arguments,
+
+       set_channel_invert 1 parse_invert_flag_arguments,
 
        volume_slide 2 svnt_and_uvnt_arguments,
        tremolo 2 two_uvnt_arguments,

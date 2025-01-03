@@ -178,6 +178,10 @@
       "source": "mml-tests/early-release.mml"
     },
     {
+      "name": "invert",
+      "source": "mml-tests/invert.mml"
+    },
+    {
       "name": "test_echo",
       "source": "mml-tests/test-echo.mml"
     },

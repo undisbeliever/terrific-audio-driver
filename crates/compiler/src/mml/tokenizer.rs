@@ -13,6 +13,7 @@ use crate::channel_bc_generator::SubroutineCallType;
 use crate::envelope::GainMode;
 use crate::errors::{ChannelError, ValueError};
 use crate::file_pos::{blank_line_splitter, FilePos, Line, LineIndexRange, LineSplitter};
+use crate::invert_flags::{parse_mml_invert_flags, InvertFlags};
 use crate::notes::{parse_pitch_char, MmlPitch};
 
 #[derive(Debug, Clone)]
@@ -56,6 +57,7 @@ pub enum Token<'a> {
     FineVolume,
     Pan,
     PxPan,
+    SetChannelInvert(InvertFlags),
     CoarseVolumeSlide,
     FineVolumeSlide,
     CoarseTremolo,
@@ -262,7 +264,7 @@ fn is_unknown_u8(c: u8) -> bool {
         b'!' | b'@' | b'+' | b'-' | b'[' | b':' | b']' | b'^' | b'&' | b'C' | b's' | b'n'
         | b'l' | b'r' | b'w' | b'o' | b'>' | b'<' | b'v' | b'V' | b'p' | b'Q' | b'q' | b'~'
         | b'A' | b'G' | b'E' | b't' | b'T' | b'L' | b'%' | b'.' | b',' | b'|' | b'_' | b'{'
-        | b'}' | b'B' | b'D' | b'F' | b'I' | b'M' | b'P' | b'N' | b'?' => false,
+        | b'}' | b'B' | b'D' | b'F' | b'I' | b'M' | b'P' | b'N' | b'i' | b'?' => false,
         b'\\' => false,
         c if c.is_ascii_whitespace() => false,
         _ => true,
@@ -509,6 +511,20 @@ fn next_token<'a>(scanner: &mut Scanner<'a>) -> Option<TokenWithPosition<'a>> {
 
                 // This should not happen
                 (_, _) => parse_unknown_chars(scanner),
+            }
+        }
+
+        b'i' => {
+            scanner.advance_one_ascii();
+
+            let flags = scanner.read_while(|b: u8| !b.is_ascii_whitespace());
+            if flags.is_empty() {
+                Token::SetChannelInvert(InvertFlags::BOTH)
+            } else {
+                match parse_mml_invert_flags(flags) {
+                    Ok(f) => Token::SetChannelInvert(f),
+                    Err(e) => Token::Error(e.into()),
+                }
             }
         }
 
