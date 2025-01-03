@@ -118,15 +118,16 @@ struct EchoVariables {
     feedback: i8,
     volume_l: u8,
     volume_r: u8,
+    invert_flags: u8,
 }
 
 impl EchoVariables {
     // Using raw numbers, not constant for data size so I have a compile error
     // when audio-driver echo variable size changes.
-    fn to_driver_data(&self) -> [u8; 12] {
+    fn to_driver_data(&self) -> [u8; 13] {
         let to_u8 = |i: i8| i.to_le_bytes()[0];
 
-        let mut out = [0; 12];
+        let mut out = [0; 13];
 
         out[0] = self.edl;
         for (i, &f) in self.fir_filter.iter().enumerate() {
@@ -135,6 +136,7 @@ impl EchoVariables {
         out[9] = to_u8(self.feedback);
         out[10] = self.volume_l;
         out[11] = self.volume_r;
+        out[12] = self.invert_flags;
 
         out
     }
@@ -167,6 +169,7 @@ impl GlobalState {
                 feedback: echo.feedback.as_i8(),
                 volume_l: echo.echo_volume_l.as_u8(),
                 volume_r: echo.echo_volume_r.as_u8(),
+                invert_flags: echo.invert.into_driver_value(),
             },
         }
     }
@@ -1126,6 +1129,9 @@ impl ChannelState {
                     }
                 }
             }
+            opcodes::SET_ECHO_INVERT => {
+                global.echo.invert_flags = read_pc();
+            }
 
             opcodes::DISABLE_CHANNEL => self.disable_channel(),
 
@@ -1239,6 +1245,7 @@ impl ChannelState {
             opcodes::SET_ECHO_I8 => Some(3),
             opcodes::ADJUST_ECHO_I8 => Some(3),
             opcodes::ADJUST_ECHO_I8_LIMIT => Some(4),
+            opcodes::SET_ECHO_INVERT => Some(2),
 
             opcodes::DISABLE_CHANNEL => None,
 
@@ -2055,6 +2062,7 @@ mod test {
                 feedback: 0,
                 volume_l: 0,
                 volume_r: 0,
+                invert_flags: 0,
             },
         }
     }

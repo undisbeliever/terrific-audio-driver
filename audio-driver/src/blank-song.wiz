@@ -43,6 +43,7 @@ const BlankSong = SongHeader{
         echoFeedback = 0,
         echoVolume_l = 0,
         echoVolume_r = 0,
+        invertFlags = 0,
     },
 
     // Maximum tick timer

@@ -380,6 +380,9 @@ let INSTRUCTIONS_WITH_ARGUMENTS = [
     //   if index >= 8: sets echo feedback
     // comparison used will depend on the sign of adjust
     adjust_echo_i8_limit,
+
+    // parameter = rl00000m (same parameter as `set_channel_invert`)
+    set_echo_invert,
 ];
 
 
@@ -426,6 +429,12 @@ let ENABLE_PMOD_MASK = 0b00111110;
 
 let ECHO_I8_EFB_INDEX = 8;
 
+}
+
+namespace INVERT_FLAGS {
+    let RIGHT_BIT = 7;
+    let LEFT_BIT = 6;
+    let MONO_BIT = 0;
 }
 
 

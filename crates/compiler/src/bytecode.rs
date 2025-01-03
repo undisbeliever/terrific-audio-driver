@@ -271,6 +271,7 @@ pub mod opcodes {
         SET_ECHO_I8,
         ADJUST_ECHO_I8,
         ADJUST_ECHO_I8_LIMIT,
+        SET_ECHO_INVERT,
         END_LOOP,
         RETURN_FROM_SUBROUTINE_AND_DISABLE_VIBRATO,
         RETURN_FROM_SUBROUTINE,
@@ -2328,5 +2329,9 @@ impl<'a> Bytecode<'a> {
                 limit.as_i8()
             );
         }
+    }
+
+    pub fn set_echo_invert(&mut self, flags: InvertFlags) {
+        emit_bytecode!(self, opcodes::SET_ECHO_INVERT, flags.into_driver_value())
     }
 }

@@ -230,6 +230,10 @@
       "source": "mml-tests/test-vibrato.mml"
     },
     {
+      "name": "test_echo_invert",
+      "source": "mml-tests/test-echo-invert.mml"
+    },
+    {
       "name": "test_bc_asm_in_mml",
       "source": "mml-tests/test-bc-asm-in-mml.mml"
     },

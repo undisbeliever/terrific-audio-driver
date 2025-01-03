@@ -160,6 +160,8 @@ The echo instructions can be used in sound effects to control echo using S-CPU 6
  * `adjust_fir_tap_limit <tap 0..7> <rel -128..127> <limit -128..127>`
     * If `rel` is positive: the FIR tap be <= `max`.
     * If `rel` is negative: the FIR tap be >= `min`.
+ * `set_echo_invert <flags>` - Set echo volume invert
+    * Uses the same argument as the `set_channel_invert` instruction
 
 
 Parameters

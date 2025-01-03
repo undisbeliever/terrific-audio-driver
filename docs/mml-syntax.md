@@ -55,6 +55,12 @@ Echo values:
       Headphone users should turn down their volume when playing with echo filters/feedback.
  * `#EchoVolume` - 1 or 2 echo volume arguments (0 to 127)
     * If only 1 value is given, it will used for both channels
+ * `#EchoInvert` - Invert echo volume
+    * `mono`, `left`, `right` - echo flags
+    * `both` - invert both left and right channels in all modes
+    * `none` - disable echo invert
+    * See `\ei` command for more details
+
 
 <br/>
 
@@ -514,6 +520,15 @@ Global echo commands:
     * If `max` is set, the FIR tap be <= `max`.
  * `\ftap- <tap 0-7>,<1..128>[,min]` - Decrement a single FIR filter tap coefficient
     * If `min` is set, the FIR tap be >= `min`.
+ * `\ei <flags>` - Invert echo volume
+    * `0` - disable echo invert
+    * `B` - invert both left and right channels in all modes
+    * `L` - invert left channel if in surround mode
+    * `R` - invert right channel if in surround mode
+    * `M` - invert both channels if in mono or stereo mode
+    * Multiple `L`/`R`/`M` flags can be set at once.
+      For example, `iLR` will invert the left and right channels in surround mode
+      but no channels will be inverted in mono or stereo mode.
 
 
 Engine Limitations

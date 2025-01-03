@@ -2,6 +2,8 @@
 //
 // SPDX-License-Identifier: MIT
 
+use compiler::invert_flags::InvertFlags;
+
 use crate::*;
 
 #[test]
@@ -98,5 +100,71 @@ A r
 "#,
         2,
         MmlLineError::InvalidNumberOfEchoVolumeArguments,
+    );
+}
+
+#[test]
+fn echo_invert() {
+    let dummy_data = dummy_data();
+
+    let s = compile_mml(
+        r#"
+#EchoInvert mono
+
+A r
+"#,
+        &dummy_data,
+    );
+    assert_eq!(
+        s.metadata().echo_buffer.invert,
+        InvertFlags {
+            right: false,
+            left: false,
+            mono: true
+        }
+    );
+
+    let s = compile_mml(
+        r#"
+#EchoInvert mono left
+
+A r
+"#,
+        &dummy_data,
+    );
+    assert_eq!(
+        s.metadata().echo_buffer.invert,
+        InvertFlags {
+            right: false,
+            left: true,
+            mono: true
+        }
+    );
+
+    let s = compile_mml(
+        r#"
+#EchoInvert LR
+
+A r
+"#,
+        &dummy_data,
+    );
+    assert_eq!(
+        s.metadata().echo_buffer.invert,
+        InvertFlags {
+            right: true,
+            left: true,
+            mono: false
+        }
+    );
+
+    assert_one_header_error_in_mml(
+        r#"
+#EchoInvert unknown
+
+A r
+"#,
+        2,
+        ValueError::UnknownInvertFlagStr("unknown".to_owned()).into(),
     );
 }

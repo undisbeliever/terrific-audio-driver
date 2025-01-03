@@ -338,6 +338,7 @@ pub(crate) enum Command {
     SetFirTap(FirTap, FirCoefficient),
     AdjustFirTap(FirTap, RelativeFirCoefficient),
     AdjustFirTapWithLimit(FirTap, RelativeFirCoefficient, FirCoefficient),
+    SetEchoInvert(InvertFlags),
 
     StartBytecodeAsm,
     EndBytecodeAsm,
@@ -1832,6 +1833,7 @@ impl<'a> ChannelBcGenerator<'a> {
             &Command::AdjustFirTapWithLimit(tap, adjust, limit) => {
                 self.bc.adjust_fir_tap_limit(tap, adjust, limit)
             }
+            &Command::SetEchoInvert(flags) => self.bc.set_echo_invert(flags),
 
             Command::StartBytecodeAsm => {
                 self.bc._start_asm_block();

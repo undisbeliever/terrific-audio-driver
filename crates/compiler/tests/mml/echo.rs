@@ -651,3 +651,23 @@ fn fir_filter_hex() {
         ValueError::FirCoefficientHexOutOfRange(0x100).into(),
     );
 }
+
+#[test]
+fn set_echo_invert() {
+    assert_line_matches_bytecode(r"\ei B", &["set_echo_invert both"]);
+    assert_line_matches_bytecode(r"\ei 0", &["set_echo_invert none"]);
+    assert_line_matches_bytecode(r"\ei L", &["set_echo_invert left"]);
+    assert_line_matches_bytecode(r"\ei R", &["set_echo_invert right"]);
+    assert_line_matches_bytecode(r"\ei M", &["set_echo_invert mono"]);
+    assert_line_matches_bytecode(r"\ei LR", &["set_echo_invert left right"]);
+    assert_line_matches_bytecode(r"\ei LMR", &["set_echo_invert left right mono"]);
+
+    // Repeating a L/R/M is not allowed
+    // Not testing all flags.
+    // (`set_echo_invert` uses the same parsing/errors `set_channel_invert`)
+    assert_one_error_in_mml_line(r"\ei LRL", 1, ValueError::DuplicateMmlInvertFlag.into());
+
+    // echo invert flags are required
+    assert_one_error_in_mml_line(r"\ei", 1, ValueError::NoInvertFlags.into());
+    assert_one_error_in_mml_line(r"\ei c", 1, ValueError::InvalidMmlInvertFlags.into());
+}

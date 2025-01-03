@@ -13,6 +13,7 @@ use crate::echo::{
 };
 use crate::errors::{ErrorWithPos, MmlLineError, ValueError};
 use crate::file_pos::{blank_file_range, Line};
+use crate::invert_flags::{parse_invert_flag_arguments, InvertFlags};
 use crate::time::{Bpm, TickClock, ZenLen, DEFAULT_BPM, DEFAULT_ZENLEN};
 use crate::value_newtypes::{parse_i8wh, I8WithByteHexValueNewType};
 use crate::{spc_file_export, FilePosRange};
@@ -102,6 +103,7 @@ impl MetaData {
                 feedback: EchoFeedback::ZERO,
                 echo_volume_l: EchoVolume::ZERO,
                 echo_volume_r: EchoVolume::ZERO,
+                invert: InvertFlags::default(),
             },
             tick_clock: DEFAULT_BPM.to_tick_clock().unwrap(),
             zenlen: DEFAULT_ZENLEN,
@@ -182,6 +184,11 @@ impl HeaderState {
                 let (l, r) = parse_echo_volume(value)?;
                 self.metadata.echo_buffer.echo_volume_l = l;
                 self.metadata.echo_buffer.echo_volume_r = r;
+            }
+
+            "#EchoInvert" => {
+                let args: Vec<_> = value.split_ascii_whitespace().collect();
+                self.metadata.echo_buffer.invert = parse_invert_flag_arguments(&args)?;
             }
 
             "#Tempo" => {

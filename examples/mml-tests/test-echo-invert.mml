@@ -1,0 +1,24 @@
+; This is a manual test, echo invert is confirmed using the Mesen register viewer
+#Title echo invert test
+
+#EchoLength    64
+#EchoFeedback  60
+#EchoVolume    70
+#EchoInvert    right
+
+@1 triangle
+
+A @1 l8
+A E1
+
+; echo invert is right
+A       c r
+
+A \ei B c r
+
+A \ei L c r
+
+A \ei R c r
+
+A \ei M c r
+

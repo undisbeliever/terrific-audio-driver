@@ -96,6 +96,7 @@ pub enum Token<'a> {
     Ftap,
     FtapPlus,
     FtapMinus,
+    SetEchoInvert(InvertFlags),
 
     // Temp GAIN after quantization tokens
     // (GainModeE is the Echo token)
@@ -541,6 +542,15 @@ fn next_token<'a>(scanner: &mut Scanner<'a>) -> Option<TokenWithPosition<'a>> {
                 "ftap" => Token::Ftap,
                 "ftap+" => Token::FtapPlus,
                 "ftap-" => Token::FtapMinus,
+                "ei" => {
+                    scanner.skip_whitespace();
+
+                    let flags = scanner.read_while(|b: u8| !b.is_ascii_whitespace());
+                    match parse_mml_invert_flags(flags) {
+                        Ok(f) => Token::SetEchoInvert(f),
+                        Err(e) => Token::Error(e.into()),
+                    }
+                }
                 "" => Token::Error(ChannelError::NoSlashCommand),
                 s => Token::Error(ChannelError::InvalidSlashCommand(s.to_owned())),
             }

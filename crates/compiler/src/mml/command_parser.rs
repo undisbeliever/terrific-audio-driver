@@ -2462,6 +2462,7 @@ fn parse_token(pos: FilePos, token: Token, p: &mut Parser) -> Command {
         Token::Ftap => parse_ftap(pos, p),
         Token::FtapPlus => parse_ftap_plus(pos, p),
         Token::FtapMinus => parse_ftap_minus(pos, p),
+        Token::SetEchoInvert(flags) => Command::SetEchoInvert(flags),
 
         Token::StartBytecodeAsm => Command::StartBytecodeAsm,
         Token::EndBytecodeAsm => Command::EndBytecodeAsm,

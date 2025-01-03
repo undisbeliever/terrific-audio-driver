@@ -11,6 +11,7 @@ use crate::driver_constants::{
     FIR_FILTER_SIZE,
 };
 use crate::errors::ValueError;
+use crate::invert_flags::InvertFlags;
 use crate::value_newtypes::{i8_with_hex_byte_value_newtype, parse_i8wh, u8_value_newtype};
 
 u8_value_newtype!(
@@ -129,6 +130,7 @@ pub struct EchoBuffer {
     pub feedback: EchoFeedback,
     pub echo_volume_l: EchoVolume,
     pub echo_volume_r: EchoVolume,
+    pub invert: InvertFlags,
 }
 
 impl EchoBuffer {

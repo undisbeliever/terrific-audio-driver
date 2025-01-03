@@ -13,9 +13,9 @@ use crate::bytecode::{
 use crate::channel_bc_generator::MmlInstrument;
 use crate::data::{self, single_item_unique_names_list, InstrumentOrSample, Name, UniqueNamesList};
 use crate::driver_constants::{
-    addresses, AUDIO_RAM_SIZE, ECHO_BUFFER_MIN_SIZE, MAX_SONG_DATA_SIZE, MAX_SUBROUTINES,
-    N_MUSIC_CHANNELS, SFX_TICK_CLOCK, SONG_HEADER_CHANNELS_SIZE, SONG_HEADER_N_SUBROUTINES_OFFSET,
-    SONG_HEADER_SIZE, SONG_HEADER_TICK_TIMER_OFFSET,
+    addresses, AUDIO_RAM_SIZE, ECHO_BUFFER_MIN_SIZE, ECHO_VARIABLES_SIZE, MAX_SONG_DATA_SIZE,
+    MAX_SUBROUTINES, N_MUSIC_CHANNELS, SFX_TICK_CLOCK, SONG_HEADER_CHANNELS_SIZE,
+    SONG_HEADER_N_SUBROUTINES_OFFSET, SONG_HEADER_SIZE, SONG_HEADER_TICK_TIMER_OFFSET,
 };
 use crate::envelope::{Envelope, Gain};
 use crate::errors::{ChannelError, SongError, SongTooLargeError};
@@ -355,8 +355,10 @@ fn write_song_header(
     header[EBS + 9] = echo_buffer.feedback.as_i8().to_le_bytes()[0];
     header[EBS + 10] = echo_buffer.echo_volume_l.as_u8();
     header[EBS + 11] = echo_buffer.echo_volume_r.as_u8();
+    header[EBS + 12] = echo_buffer.invert.into_driver_value();
 
-    const _: () = assert!(EBS + 12 == SONG_HEADER_TICK_TIMER_OFFSET);
+    const _: () = assert!(13 == ECHO_VARIABLES_SIZE);
+    const _: () = assert!(EBS + ECHO_VARIABLES_SIZE == SONG_HEADER_TICK_TIMER_OFFSET);
 
     // Tick timer
     header[SONG_HEADER_TICK_TIMER_OFFSET] = metadata.tick_clock.as_u8();

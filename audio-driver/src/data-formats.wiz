@@ -153,7 +153,9 @@ struct EchoBufferSettings {
     echoVolume_l : u8,
     echoVolume_r : u8,
 
-    // ::TODO add invertFlags ::
+    // Echo invert flags
+    // Uses the data format as the `set_echo_invert` and `set_channel_invert` instructions
+    invertFlags : u8,
 }
 
 // Size MUST match `audio/driver_constants.py`

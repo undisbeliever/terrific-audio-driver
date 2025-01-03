@@ -606,6 +606,7 @@ pub fn parse_asm_line(bc: &mut Bytecode, line: &str) -> Result<(), ChannelError>
        set_fir_tap 2 set_fir_tap_arguments,
        adjust_fir_tap 2 uvnt_and_svnt_arguments,
        adjust_fir_tap_limit 3 adjust_fir_tap_limit_arguments,
+       set_echo_invert 1 parse_invert_flag_arguments,
     )
 }
 

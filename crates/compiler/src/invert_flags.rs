@@ -6,7 +6,7 @@
 
 use crate::errors::ValueError;
 
-#[derive(Default, Debug, Clone, Copy)]
+#[derive(Default, Debug, Clone, Copy, PartialEq)]
 pub struct InvertFlags {
     pub right: bool,
     pub left: bool,
@@ -35,6 +35,7 @@ impl InvertFlags {
 
 pub fn parse_mml_invert_flags(s: &str) -> Result<InvertFlags, ValueError> {
     match s {
+        "" => Err(ValueError::NoInvertFlags),
         "0" => Ok(InvertFlags::default()),
         "B" => Ok(InvertFlags::BOTH),
         s => {
