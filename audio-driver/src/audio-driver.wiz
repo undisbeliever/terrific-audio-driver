@@ -241,10 +241,6 @@ in zeropage {
         var loopStackPointer : [u8 ; N_CHANNELS];
 
 
-        // Channel volume (0-255)
-        var volume : [u8 ; N_CHANNELS];
-
-
         // Portamento direction
         //  * zero - portamento disabled
         //  *  > 0 - increase pitch
@@ -341,6 +337,9 @@ in firstpage {
         var instructionPtr_l : [u8 ; N_CHANNELS];
 
 
+        // Channel volume (0-255)
+        var volume : [u8 ; N_CHANNELS];
+
         // Fractional volume (used for volume effects)
         var subVolume : [u8 ; N_CHANNELS];
 
@@ -380,10 +379,6 @@ in firstpage {
         //
         // NOTE: Adding `instPitchOffset` to the note to play is allowed to an can overflow.
         var instPitchOffset : [u8 ; N_CHANNELS];
-
-
-        // The previous temp-GAIN used by the channel.
-        var prevTempGain : [u8 ; N_CHANNELS];
     }
 }
 
@@ -406,6 +401,9 @@ in lastvarpage {
         var earlyRelease_cmp : [u8 ; N_CHANNELS];
         var earlyRelease_minTicks : [u8 ; N_CHANNELS];
         var earlyRelease_gain : [u8 ; N_CHANNELS];
+
+        // The previous temp-GAIN used by the channel.
+        var prevTempGain : [u8 ; N_CHANNELS];
 
         // i16 VxPITCH offset added to every play_note or portamento instruction
         var detune_l : [u8 ; N_CHANNELS];
@@ -1502,6 +1500,7 @@ inline func _process_volume_effects__inline(channelIndex: u8 in x, direction: u8
     // Warning spaghetti code: Optimised for code-size.
 
     // Hack to allow access to volume effect variables with `direct_page = true`.
+    var _csv_volume         @ &channelSoA.volume                    as u8 : [u8 ; N_CHANNELS];
     var _csv_subVolume      @ &channelSoA.subVolume                 as u8 : [u8 ; N_CHANNELS];
     var _csv_direction      @ &channelSoA.volEffect_direction       as u8 : [u8 ; N_CHANNELS];
     var _csv_counter        @ &channelSoA.volEffect_counter         as u8 : [u8 ; N_CHANNELS];
@@ -1511,12 +1510,11 @@ inline func _process_volume_effects__inline(channelIndex: u8 in x, direction: u8
 
     a >>>= 1;
 
-    y = channelSoA.volume[x];
-
     direct_page = true;
     // MUST NOT access zeropage variables until direct_page is false.
 
     a = _csv_subVolume[x];
+    y = _csv_volume[x];
 
     goto Up if !carry;
         // down
@@ -1563,9 +1561,9 @@ EndIf:
         _csv_direction[x] = a;
 
 WriteVolume:
-    direct_page = false;
+    _csv_volume[x] = y;
 
-    channelSoA.volume[x] = y;
+    direct_page = false;
 }
 
 
@@ -1648,10 +1646,11 @@ WritePan:
 
 // Updates vol_l and vol_r shadow variables.
 //
-// NOTE: Does not change `channelSoA.virtualChannels.updateState[x]`.
-//
 // KEEP: x
 inline func _update_vol_shadow__inline(channelIndex : u8 in x) {
+
+    // ::TODO add global music/sfx volume::
+    a = channelSoA.volume[x];
 
     // Reading carry here saves a `SEC` instruction when calculating VOL_R
     carry = loaderDataType $ LoaderDataType.STEREO_FLAG_BIT;
@@ -1660,7 +1659,7 @@ inline func _update_vol_shadow__inline(channelIndex : u8 in x) {
 
         // First shift converts 8-bit volume to 7-bit VOL
         // Second shift ensure mono vol has same combined amplitude as stereo vol
-        a = channelSoA.volume[x] >>> 2;
+        a >>>= 2;
 
         channelSoA.virtualChannels.vol_l[x] = a;
         channelSoA.virtualChannels.vol_r[x] = a;
@@ -1669,12 +1668,14 @@ inline func _update_vol_shadow__inline(channelIndex : u8 in x) {
         // Stereo
         // carry set
 
+        y = a;
+        zpTmp = y;
+
         // Calculate right volume
         // A pan value of `MAX_PAN` is 100% to the right.
         // (MUST NOT USE CARRY)
 
         a = channelSoA.pan[x];
-        y = channelSoA.volume[x];
         ya = mul(a, y);
         channelSoA.virtualChannels.vol_r[x] = y;
 
@@ -1684,7 +1685,7 @@ inline func _update_vol_shadow__inline(channelIndex : u8 in x) {
 
         // Carry set (MUL does not set carry)
         a = MAX_PAN -# channelSoA.pan[x];
-        y = channelSoA.volume[x];
+        y = zpTmp;
         ya = mul(a, y);
         channelSoA.virtualChannels.vol_l[x] = y;
     }
