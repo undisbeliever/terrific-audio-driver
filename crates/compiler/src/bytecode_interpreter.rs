@@ -1264,6 +1264,7 @@ impl ChannelState {
             opcodes::CALL_SUBROUTINE_AND_DISABLE_VIBRATO => None,
             opcodes::CALL_SUBROUTINE => None,
             opcodes::RETURN_FROM_SUBROUTINE_AND_DISABLE_VIBRATO => None,
+            opcodes::RETURN_FROM_SUBROUTINE => None,
             opcodes::ENABLE_ECHO => Some(1),
             opcodes::DISABLE_ECHO => Some(1),
             opcodes::ENABLE_PMOD => Some(1),
