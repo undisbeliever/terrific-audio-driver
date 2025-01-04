@@ -205,7 +205,7 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
             self.data_instruments,
             self.mml_instruments,
             Some(&self.subroutines),
-            BytecodeContext::SongSubroutine,
+            BytecodeContext::SongSubroutine {},
         );
 
         let tail_call = Self::parse_and_compile_tail_call(
@@ -344,7 +344,9 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
             self.data_instruments,
             self.mml_instruments,
             Some(&self.subroutines),
-            BytecodeContext::SongChannel(channel_index),
+            BytecodeContext::SongChannel {
+                index: channel_index,
+            },
         );
 
         Self::parse_and_compile(

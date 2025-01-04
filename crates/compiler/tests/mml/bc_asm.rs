@@ -240,7 +240,7 @@ ADEF \asm { set_instrument dummy_instrument | play_note a4 24 }
         &dummy_data.instruments_and_samples,
         mml.subroutines(),
         BcTerminator::DisableChannel,
-        BytecodeContext::SongChannel(0),
+        BytecodeContext::SongChannel { index: 0 },
     )
     .repeat(4);
 

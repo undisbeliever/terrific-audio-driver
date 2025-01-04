@@ -193,8 +193,8 @@ impl RelativeFirCoefficient {
 }
 
 pub enum BytecodeContext {
-    SongSubroutine,
-    SongChannel(u8),
+    SongSubroutine {},
+    SongChannel { index: u8 },
     SoundEffect,
     MmlPrefix,
 }
@@ -1129,14 +1129,14 @@ impl<'a> Bytecode<'a> {
                 early_release: IeState::Unset,
                 detune: match &context {
                     BytecodeContext::SoundEffect => IeState::Known(DetuneValue::ZERO),
-                    BytecodeContext::SongChannel(_) => IeState::Known(DetuneValue::ZERO),
-                    BytecodeContext::SongSubroutine => IeState::Unset,
+                    BytecodeContext::SongChannel { .. } => IeState::Known(DetuneValue::ZERO),
+                    BytecodeContext::SongSubroutine { .. } => IeState::Unset,
                     BytecodeContext::MmlPrefix => IeState::Unset,
                 },
                 vibrato: match &context {
                     BytecodeContext::SoundEffect => VibratoState::Disabled,
-                    BytecodeContext::SongChannel(_) => VibratoState::Disabled,
-                    BytecodeContext::SongSubroutine => VibratoState::Unchanged,
+                    BytecodeContext::SongChannel { .. } => VibratoState::Disabled,
+                    BytecodeContext::SongSubroutine { .. } => VibratoState::Unchanged,
                     BytecodeContext::MmlPrefix => VibratoState::Disabled,
                 },
                 prev_slurred_note: SlurredNoteState::Unchanged,
@@ -1147,8 +1147,8 @@ impl<'a> Bytecode<'a> {
             asm_block_stack_len: 0,
             show_missing_set_instrument_error: match &context {
                 BytecodeContext::SoundEffect => true,
-                BytecodeContext::SongChannel(_) => true,
-                BytecodeContext::SongSubroutine => false,
+                BytecodeContext::SongChannel { .. } => true,
+                BytecodeContext::SongSubroutine { .. } => false,
                 BytecodeContext::MmlPrefix => false,
             },
             context,
@@ -1203,7 +1203,7 @@ impl<'a> Bytecode<'a> {
 
     /// CAUTION: Does not emit bytecode
     pub fn _song_loop_point(&mut self) {
-        assert!(matches!(self.context, BytecodeContext::SongChannel(_)));
+        assert!(matches!(self.context, BytecodeContext::SongChannel { .. }));
         assert_eq!(self.get_stack_depth(), StackDepth(0));
 
         self.state.song_loop();
@@ -1238,7 +1238,8 @@ impl<'a> Bytecode<'a> {
             ));
         }
 
-        if terminator.is_return() && !matches!(self.context, BytecodeContext::SongSubroutine) {
+        if terminator.is_return() && !matches!(self.context, BytecodeContext::SongSubroutine { .. })
+        {
             return Err((BytecodeError::ReturnInNonSubroutine, self.bytecode));
         }
 
@@ -1498,9 +1499,9 @@ impl<'a> Bytecode<'a> {
         }
 
         match self.context {
-            BytecodeContext::SongSubroutine => (),
+            BytecodeContext::SongSubroutine { .. } => (),
             BytecodeContext::MmlPrefix
-            | BytecodeContext::SongChannel(_)
+            | BytecodeContext::SongChannel { .. }
             | BytecodeContext::SoundEffect => {
                 return Err(ChannelError::InstrumentHintOnlyAllowedInSubroutines)
             }
@@ -1819,18 +1820,23 @@ impl<'a> Bytecode<'a> {
 
     fn _pmod_instruction(&mut self, opcode: u8) -> Result<(), BytecodeError> {
         match self.context {
-            BytecodeContext::SongChannel(0) => Err(BytecodeError::PmodNotAllowedInChannelA),
-            BytecodeContext::SongChannel(6) | BytecodeContext::SongChannel(7) => {
-                Err(BytecodeError::PmodNotAllowedInChannelsGH)
-            }
-            BytecodeContext::SoundEffect => Err(BytecodeError::PmodNotAllowedInSoundEffect),
-
-            BytecodeContext::SongChannel(_)
-            | BytecodeContext::SongSubroutine
-            | BytecodeContext::MmlPrefix => {
+            BytecodeContext::SongChannel { index, .. } => match index {
+                0 => Err(BytecodeError::PmodNotAllowedInChannelA),
+                1..=5 => {
+                    emit_bytecode!(self, opcode);
+                    Ok(())
+                }
+                6 | 7 => Err(BytecodeError::PmodNotAllowedInChannelsGH),
+                8.. => {
+                    panic!("Invalid song channel");
+                }
+            },
+            BytecodeContext::SongSubroutine { .. } | BytecodeContext::MmlPrefix => {
                 emit_bytecode!(self, opcode);
                 Ok(())
             }
+
+            BytecodeContext::SoundEffect => Err(BytecodeError::PmodNotAllowedInSoundEffect),
         }
     }
 
@@ -2038,11 +2044,11 @@ impl<'a> Bytecode<'a> {
                 }
 
                 InstrumentState::Unknown | InstrumentState::Unset => match self.context {
-                    BytecodeContext::SongSubroutine => {
+                    BytecodeContext::SongSubroutine { .. } => {
                         self.state.instrument_hint = subroutine.state.instrument_hint;
                     }
 
-                    BytecodeContext::SongChannel(_)
+                    BytecodeContext::SongChannel { .. }
                     | BytecodeContext::SoundEffect
                     | BytecodeContext::MmlPrefix => {
                         return Err(BytecodeError::SubroutineInstrumentHintNoInstrumentSet)
@@ -2059,10 +2065,10 @@ impl<'a> Bytecode<'a> {
 
             match old_instrument {
                 InstrumentState::Unknown | InstrumentState::Unset => match self.context {
-                    BytecodeContext::SongChannel(_) | BytecodeContext::SoundEffect => {
+                    BytecodeContext::SongChannel { .. } | BytecodeContext::SoundEffect => {
                         return Err(BytecodeError::SubroutinePlaysNotesWithNoInstrument)
                     }
-                    BytecodeContext::SongSubroutine => {
+                    BytecodeContext::SongSubroutine { .. } => {
                         self.state.no_instrument_notes = if self_notes.is_empty() {
                             sub_notes.clone()
                         } else {
@@ -2101,8 +2107,8 @@ impl<'a> Bytecode<'a> {
         disable_vibraro: bool,
     ) -> Result<(), BytecodeError> {
         match self.context {
-            BytecodeContext::SongSubroutine => (),
-            BytecodeContext::SongChannel(_) => (),
+            BytecodeContext::SongSubroutine { .. } => (),
+            BytecodeContext::SongChannel { .. } => (),
             BytecodeContext::SoundEffect => return Err(BytecodeError::SubroutineCallInSoundEffect),
             BytecodeContext::MmlPrefix => return Err(BytecodeError::SubroutineCallInMmlPrefix),
         }
@@ -2156,8 +2162,8 @@ impl<'a> Bytecode<'a> {
             BytecodeContext::SoundEffect => {
                 return Err(BytecodeError::CannotChangeTickClockInASoundEffect)
             }
-            BytecodeContext::SongChannel(_)
-            | BytecodeContext::SongSubroutine
+            BytecodeContext::SongChannel { .. }
+            | BytecodeContext::SongSubroutine { .. }
             | BytecodeContext::MmlPrefix => (),
         }
 
@@ -2178,7 +2184,7 @@ impl<'a> Bytecode<'a> {
             None => match &self.context {
                 BytecodeContext::SoundEffect => Err(BytecodeError::SubroutineCallInSoundEffect),
                 BytecodeContext::MmlPrefix => Err(BytecodeError::SubroutineCallInMmlPrefix),
-                BytecodeContext::SongChannel(_) | BytecodeContext::SongSubroutine => {
+                BytecodeContext::SongChannel { .. } | BytecodeContext::SongSubroutine { .. } => {
                     Err(BytecodeError::NotAllowedToCallSubroutine)
                 }
             },

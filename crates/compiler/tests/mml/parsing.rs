@@ -58,7 +58,7 @@ ADEF @0 a
         &dummy_data.instruments_and_samples,
         mml.subroutines(),
         BcTerminator::DisableChannel,
-        BytecodeContext::SongChannel(0),
+        BytecodeContext::SongChannel { index: 0 },
     )
     .repeat(4);
 

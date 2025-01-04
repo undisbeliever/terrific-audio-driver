@@ -1521,7 +1521,7 @@ impl<'a> ChannelBcGenerator<'a> {
             Command::None => (),
 
             &Command::SetLoopPoint => match self.bc.get_context() {
-                BytecodeContext::SongChannel(_) => {
+                BytecodeContext::SongChannel { .. } => {
                     if self.loop_point.is_some() {
                         return Err(ChannelError::LoopPointAlreadySet);
                     }
@@ -1535,7 +1535,7 @@ impl<'a> ChannelBcGenerator<'a> {
 
                     self.bc._song_loop_point();
                 }
-                BytecodeContext::SongSubroutine
+                BytecodeContext::SongSubroutine { .. }
                 | BytecodeContext::SoundEffect
                 | BytecodeContext::MmlPrefix => return Err(ChannelError::CannotSetLoopPoint),
             },

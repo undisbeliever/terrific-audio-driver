@@ -7,8 +7,8 @@
 #![allow(clippy::assertions_on_constants)]
 
 use crate::bytecode::{
-    BcTerminator, BcTicks, BcTicksKeyOff, BcTicksNoKeyOff, Bytecode, InstrumentId, PlayNoteTicks,
-    StackDepth, SubroutineId, Volume,
+    BcTerminator, BcTicks, BcTicksKeyOff, BcTicksNoKeyOff, Bytecode, BytecodeContext, InstrumentId,
+    PlayNoteTicks, StackDepth, SubroutineId, Volume,
 };
 use crate::channel_bc_generator::MmlInstrument;
 use crate::data::{self, single_item_unique_names_list, InstrumentOrSample, Name, UniqueNamesList};
@@ -215,7 +215,7 @@ pub fn test_sample_song(
     envelope: Option<Envelope>,
 ) -> Result<SongData, ChannelError> {
     let mut bc = Bytecode::new(
-        crate::bytecode::BytecodeContext::SongChannel(0),
+        BytecodeContext::SongChannel { index: 0 },
         sample_song_fake_instruments(),
         None,
     );

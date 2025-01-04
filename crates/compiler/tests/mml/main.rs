@@ -160,7 +160,7 @@ fn assert_line_matches_bytecode(mml_line: &str, bc_asm: &[&str]) {
         &dd.instruments_and_samples,
         &[],
         BcTerminator::DisableChannel,
-        BytecodeContext::SongChannel(0),
+        BytecodeContext::SongChannel { index: 0 },
     );
 
     assert_eq!(
@@ -182,7 +182,7 @@ fn assert_channel_b_line_matches_bytecode(mml_line: &str, bc_asm: &[&str]) {
         &dd.instruments_and_samples,
         &[],
         BcTerminator::DisableChannel,
-        BytecodeContext::SongChannel(1),
+        BytecodeContext::SongChannel { index: 1 },
     );
 
     assert_eq!(
@@ -247,7 +247,7 @@ fn assert_line_matches_line_and_bytecode(mml_line1: &str, mml_line2: &str, bc_as
         &dd.instruments_and_samples,
         &[],
         BcTerminator::DisableChannel,
-        BytecodeContext::SongChannel(0),
+        BytecodeContext::SongChannel { index: 0 },
     );
 
     assert_eq!(mml1_bc, bc_asm, "Testing {mml_line1:?} against bytecode");
@@ -263,7 +263,7 @@ fn assert_mml_channel_a_matches_bytecode(mml: &str, bc_asm: &[&str]) {
         &dummy_data.instruments_and_samples,
         mml.subroutines(),
         BcTerminator::DisableChannel,
-        BytecodeContext::SongChannel(0),
+        BytecodeContext::SongChannel { index: 0 },
     );
 
     assert_eq!(mml_bytecode(&mml), bc_asm);
@@ -286,7 +286,7 @@ fn assert_mml_channel_a_matches_looping_bytecode(mml: &str, bc_asm: &[&str]) {
         &dummy_data.instruments_and_samples,
         mml.subroutines(),
         BcTerminator::Goto(loop_point),
-        BytecodeContext::SongChannel(0),
+        BytecodeContext::SongChannel { index: 0 },
     );
 
     assert_eq!(mml_bytecode(&mml), bc_asm);
@@ -302,7 +302,7 @@ fn assert_mml_subroutine_matches_bytecode(mml: &str, subroutine_index: usize, bc
         &dummy_data.instruments_and_samples,
         mml.subroutines(),
         BcTerminator::ReturnFromSubroutine,
-        BytecodeContext::SongSubroutine,
+        BytecodeContext::SongSubroutine {},
     );
 
     assert_eq!(subroutine_bytecode(&mml, subroutine_index), bc_asm);
