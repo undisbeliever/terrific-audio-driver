@@ -1,0 +1,24 @@
+; Tests skip_last_loop_u16
+
+#Timer 64
+
+@1 sine
+
+A @1
+A ; This skip last loop command requires a skip_last_loop_u16
+A [ g :
+A   ; This skip last loop command requires a skip_last_loop_u16
+A   [ c :
+A     ; This skip last loop command fits inside a skip_last_loop_u8
+A     [ d : e2
+A       \fir { 0 0 0 0 0 0 0 0 } \fir { 0 0 0 0 0 0 0 0 } \fir { 0 0 0 0 0 0 0 0 } \fir { 0 0 0 0 0 0 0 0 }
+A       \fir { 0 0 0 0 0 0 0 0 } \fir { 0 0 0 0 0 0 0 0 } \fir { 0 0 0 0 0 0 0 0 } \fir { 0 0 0 0 0 0 0 0 }
+A       \fir { 0 0 0 0 0 0 0 0 } \fir { 0 0 0 0 0 0 0 0 } \fir { 0 0 0 0 0 0 0 0 } \fir { 0 0 0 0 0 0 0 0 }
+A       \fir { 0 0 0 0 0 0 0 0 } \fir { 0 0 0 0 0 0 0 0 } \fir { 0 0 0 0 0 0 0 0 } \fir { 0 0 0 0 0 0 0 0 }
+A       \fir { 0 0 0 0 0 0 0 0 } \fir { 0 0 0 0 0 0 0 0 } \fir { 0 0 0 0 0 0 0 0 } \fir { 0 0 0 0 0 0 0 0 }
+A       \fir { 0 0 0 0 0 0 0 0 } \fir { 0 0 0 0 0 0 0 0 } \fir { 0 0 0 0 0 0 0 0 } \fir { 0 0 0 0 0 0 0 0 }
+A       \fir { 0 0 0 0 0 0 0 0 } \fir { 0 0 0 0 0 0 0 0 } \fir { 0 0 0 0 0 0 0 0 } \fir { 0 0 0 0 0 0 0 0 }
+A     ]3
+A   ]3
+A ]5
+

@@ -322,6 +322,10 @@
       "source": "bc-interpreter-tests/adjust-echo-i8-limit.mml"
     },
     {
+      "name": "large_skip_last_loop",
+      "source": "bc-interpreter-tests/large-skip-last-loop.mml"
+    },
+    {
       "name": "unbalanced_vibrato_bug",
       "source": "bug-tests/unbalanced-vibrato-bug.mml"
     },

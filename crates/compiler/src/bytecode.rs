@@ -259,7 +259,8 @@ pub mod opcodes {
         PANBRELLO,
         SET_SONG_TICK_CLOCK,
         START_LOOP,
-        SKIP_LAST_LOOP,
+        SKIP_LAST_LOOP_U8,
+        SKIP_LAST_LOOP_U16BE,
         CALL_SUBROUTINE_AND_DISABLE_VIBRATO,
         CALL_SUBROUTINE,
         GOTO_RELATIVE,
@@ -1913,7 +1914,7 @@ impl<'a> Bytecode<'a> {
             prev_slurred_note: self.state.prev_slurred_note.clone(),
         });
 
-        emit_bytecode!(self, opcodes::SKIP_LAST_LOOP, 0u8);
+        emit_bytecode!(self, opcodes::SKIP_LAST_LOOP_U8, 0u8);
 
         if self.loop_stack.len() > self.asm_block_stack_len {
             Ok(())
@@ -1982,18 +1983,30 @@ impl<'a> Bytecode<'a> {
 
             self.state.merge_skip_last_loop(skip_last_loop);
 
-            assert_eq!(self.bytecode[sll_param_pos - 1], opcodes::SKIP_LAST_LOOP);
+            assert_eq!(self.bytecode[sll_param_pos - 1], opcodes::SKIP_LAST_LOOP_U8);
 
-            let to_skip = self.bytecode.len() - sll_param_pos;
-            if to_skip < 1 {
-                return Err(BytecodeError::SkipLastLoopOutOfBounds(to_skip));
+            match self.bytecode.len() - sll_param_pos {
+                0 => {
+                    return Err(BytecodeError::InvalidSkipLastLoopParameter(0));
+                }
+                to_skip @ 1..=0xff => {
+                    self.bytecode[sll_param_pos] = u8::try_from(to_skip).unwrap();
+                }
+                to_skip @ 0x100..=0xffff => {
+                    let to_skip = u16::try_from(to_skip).unwrap();
+                    let (l, h) = to_skip.to_le_bytes().into();
+
+                    self.bytecode[sll_param_pos - 1] = opcodes::SKIP_LAST_LOOP_U16BE;
+                    self.bytecode.insert(sll_param_pos, h);
+                    self.bytecode[sll_param_pos + 1] = l;
+
+                    debug_assert!(self.loop_stack.iter().all(|c| match &c.skip_last_loop {
+                        Some(s) => s.bc_parameter_position < sll_param_pos,
+                        None => true,
+                    }));
+                }
+                err @ 0x1000.. => return Err(BytecodeError::InvalidSkipLastLoopParameter(err)),
             }
-            let to_skip = match u8::try_from(to_skip) {
-                Ok(i) => i,
-                Err(_) => return Err(BytecodeError::SkipLastLoopOutOfBounds(to_skip)),
-            };
-
-            self.bytecode[sll_param_pos] = to_skip;
         }
 
         if self.loop_stack.is_empty() {

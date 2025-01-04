@@ -76,8 +76,9 @@ let VOL_PAN_EFFECT_TRIANGLE_DOWN = 0x41;
 
 in zeropage {
     // Temporary variables
-    var zpTmp : u8;
-    var zpTmp2 : u8;
+    var zpTmpWord : u16;
+        var zpTmp  @ &<:zpTmpWord as u8 : u8;
+        var zpTmp2 @ &>:zpTmpWord as u8 : u8;
 
 
     // Common audio data pointers.
@@ -229,7 +230,7 @@ in zeropage {
         var instructionPtr_h : [u8 ; N_CHANNELS];
 
 
-        // The stack pointer to use in the `skip_last_loop` and `end_loop` instructions.
+        // The stack pointer to use in the `skip_last_loop_*` and `end_loop` instructions.
         //
         // Used to skip bounds checking when reading/modifying counter.
         //
@@ -2029,11 +2030,38 @@ inline func mark_vol_shadow_dirty__inline() {
 }
 
 
-
+// Y = 0
 // KEEP: X
-func skip_last_loop(channelIndex : u8 in x, bytesToSkip : u8 in a) {
+func skip_last_loop_u16be(channelIndex : u8 in x, bytesToSkip_h : u8 in a) {
+    >:zpTmpWord = a;
+
+    // Y = 0;
+    a = instructionPtr[y];
+    instructionPtr++;
+
+    return __skip_last_loop__bytesToSkip_l(x, a);
+}
+
+
+// Y = 0
+// KEEP: X
+#[fallthrough]
+func skip_last_loop_u8(channelIndex : u8 in x, bytesToSkip_l : u8 in a) {
+    // Zero high byte
+    >:zpTmpWord = 0;
+
+// Fallthrough into __skip_last_loop_()
+}
+
+
+// IN: A = low byte of skip-last-loop argument
+// IN: >:zpTmpWord = high byte of skip-last-loop argument
+// KEEP: X
+func __skip_last_loop__bytesToSkip_l(channelIndex : u8 in x, bytesToSkip_l : u8 in a) {
+    <:zpTmpWord = a;
+
     // `skip_last_loop` is here so I can `bne` to process_bytecode().
-    return __skip_last_loop__inline(x, a);
+    return __skip_last_loop__inline(x, zpTmpWord);
 }
 
 
@@ -2374,11 +2402,7 @@ func start_loop(channelIndex : u8 in x, loopCount : u8 in a) {
 
 
 // KEEP: X
-inline func __skip_last_loop__inline(channelIndex : u8 in x, bytesToSkip : u8 in a) {
-    var _bytesToSkip : u8 in  zpTmp;
-
-    _bytesToSkip = a;
-
+inline func __skip_last_loop__inline(channelIndex : u8 in x, bytesToSkip : u16 in zpTmpWord) {
     // No need to bounds check `loopStackPointer`, it is always in bounds.
     y = channelSoA.loopStackPointer[x];
 
@@ -2393,8 +2417,7 @@ inline func __skip_last_loop__inline(channelIndex : u8 in x, bytesToSkip : u8 in
         channelSoA.loopStackPointer[x] = a;
     }
 
-    a = _bytesToSkip;
-    y = 0;
+    ya = zpTmpWord;
     ya += instructionPtr as u16;
 
     ^return process_bytecode_with_loader_test(x, ya);

@@ -328,7 +328,10 @@ let INSTRUCTIONS_WITH_ARGUMENTS = [
     // parameter = number of bytes in the bytecode to skip if loop counter == 1.
     //
     // CAUTION: Must be used in a loop.
-    skip_last_loop,
+    skip_last_loop_u8,
+
+    // same as `skip_last_loop_u8`, except the parameter is a big endian u16
+    skip_last_loop_u16be,
 
 
     // parameter = subroutine ID

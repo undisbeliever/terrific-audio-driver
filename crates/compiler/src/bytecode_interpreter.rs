@@ -991,7 +991,7 @@ impl ChannelState {
                     None => self.disable_channel(),
                 }
             }
-            opcodes::SKIP_LAST_LOOP => {
+            opcodes::SKIP_LAST_LOOP_U8 => {
                 let bytes_to_skip = read_pc();
 
                 // No bounds testing required when reading counter
@@ -1000,6 +1000,26 @@ impl ChannelState {
                 let counter = self.bc_stack[sp];
                 if counter == 1 {
                     self.instruction_ptr += u16::from(bytes_to_skip);
+
+                    let sp = sp + 3;
+                    self.stack_pointer = sp;
+                    if sp <= BC_CHANNEL_STACK_SIZE - BC_STACK_BYTES_PER_LOOP {
+                        self.loop_stack_pointer = sp;
+                    }
+                }
+            }
+            opcodes::SKIP_LAST_LOOP_U16BE => {
+                let l = read_pc();
+                let h = read_pc();
+
+                let bytes_to_skip = u16::from_be_bytes([l, h]);
+
+                // No bounds testing required when reading counter
+                let sp = self.loop_stack_pointer;
+
+                let counter = self.bc_stack[sp];
+                if counter == 1 {
+                    self.instruction_ptr += bytes_to_skip;
 
                     let sp = sp + 3;
                     self.stack_pointer = sp;
@@ -1238,7 +1258,8 @@ impl ChannelState {
             opcodes::SET_SONG_TICK_CLOCK => Some(2),
             opcodes::GOTO_RELATIVE => None,
             opcodes::START_LOOP => Some(2),
-            opcodes::SKIP_LAST_LOOP => Some(2),
+            opcodes::SKIP_LAST_LOOP_U8 => Some(2),
+            opcodes::SKIP_LAST_LOOP_U16BE => Some(3),
             opcodes::END_LOOP => None,
             opcodes::CALL_SUBROUTINE_AND_DISABLE_VIBRATO => None,
             opcodes::CALL_SUBROUTINE => None,

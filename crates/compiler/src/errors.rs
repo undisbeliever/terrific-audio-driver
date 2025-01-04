@@ -306,7 +306,7 @@ pub enum BytecodeError {
     NoInstructionsBeforeSkipLastLoop,
     NoInstructionsAfterSkipLastLoop,
     NoTicksInLoop,
-    SkipLastLoopOutOfBounds(usize),
+    InvalidSkipLastLoopParameter(usize),
 
     StackOverflowInStartLoop(u32),
     StackOverflowInSubroutineCall(String, u32),
@@ -1276,13 +1276,8 @@ impl Display for BytecodeError {
                 write!(f, "no instructions after skip_last_loop instruction")
             }
             Self::NoTicksInLoop => write!(f, "no ticks in loop"),
-            Self::SkipLastLoopOutOfBounds(to_skip) => {
-                write!(
-                    f,
-                    "skip_last_loop out of bounds ({}, max: {}",
-                    to_skip,
-                    u8::MAX
-                )
+            Self::InvalidSkipLastLoopParameter(to_skip) => {
+                write!(f, "invalid skip_last_loop argument ({to_skip})",)
             }
 
             Self::StackOverflowInStartLoop(stack_depth) => {
