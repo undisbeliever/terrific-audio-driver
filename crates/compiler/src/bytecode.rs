@@ -298,7 +298,7 @@ const _: () = assert!(
     "There are unaccounted bytecode opcodes"
 );
 
-const _ : () = assert!(opcodes::RESERVED_FOR_CUSTOM_USE == 0);
+const _: () = assert!(opcodes::RESERVED_FOR_CUSTOM_USE == 0);
 
 const ECHO_I8_EFB_INDEX: u8 = 8;
 
