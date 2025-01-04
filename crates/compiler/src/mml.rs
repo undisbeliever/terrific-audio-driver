@@ -179,6 +179,7 @@ pub fn compile_mml(
         &instruments,
         instrument_map,
         &lines.subroutine_name_map,
+        metadata.echo_buffer.max_edl,
         song_header_size(lines.subroutines.len()),
     );
 

@@ -1,0 +1,27 @@
+; bc_interpreter echo test
+
+#MaxEchoLength 128
+#EchoFeedback   70
+#EchoVolume     60
+
+@1 square
+
+AH l8
+
+!restore_efb_evol \efb 70 \evol 60
+!change_edl_in_subroutine \evol 0 \efb 0 \edl 32 r1 !restore_efb_evol
+
+A @1 v16 l8 o4
+
+A E1
+A cdefg r
+
+A \evol 0 \efb 0 \edl 64 r1 !restore_efb_evol
+A cdefg r2
+
+A \evol 0 \efb 0 \edl 128 r1 !restore_efb_evol
+A cdefg r2
+
+A !change_edl_in_subroutine
+A cdefg r
+

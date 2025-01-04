@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: MIT
 
 use compiler::invert_flags::InvertFlags;
+use compiler::UnsignedValueNewType;
 
 use crate::*;
 

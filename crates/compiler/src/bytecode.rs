@@ -12,7 +12,7 @@ use crate::driver_constants::{
     BC_CHANNEL_STACK_SIZE, BC_STACK_BYTES_PER_LOOP, BC_STACK_BYTES_PER_SUBROUTINE_CALL,
     FIR_FILTER_SIZE, MAX_INSTRUMENTS_AND_SAMPLES,
 };
-use crate::echo::{EchoFeedback, EchoVolume, FirCoefficient, FirTap};
+use crate::echo::{EchoEdl, EchoFeedback, EchoLength, EchoVolume, FirCoefficient, FirTap};
 use crate::envelope::{Adsr, Envelope, Gain, OptionalGain, TempGain};
 use crate::errors::{BytecodeError, ChannelError, ValueError};
 use crate::invert_flags::InvertFlags;
@@ -193,8 +193,8 @@ impl RelativeFirCoefficient {
 }
 
 pub enum BytecodeContext {
-    SongSubroutine {},
-    SongChannel { index: u8 },
+    SongSubroutine { max_edl: EchoEdl },
+    SongChannel { index: u8, max_edl: EchoEdl },
     SoundEffect,
     MmlPrefix,
 }
@@ -272,6 +272,7 @@ pub mod opcodes {
         ADJUST_ECHO_I8,
         ADJUST_ECHO_I8_LIMIT,
         SET_ECHO_INVERT,
+        SET_ECHO_DELAY,
         END_LOOP,
         RETURN_FROM_SUBROUTINE_AND_DISABLE_VIBRATO,
         RETURN_FROM_SUBROUTINE,
@@ -2339,5 +2340,22 @@ impl<'a> Bytecode<'a> {
 
     pub fn set_echo_invert(&mut self, flags: InvertFlags) {
         emit_bytecode!(self, opcodes::SET_ECHO_INVERT, flags.into_driver_value())
+    }
+
+    pub fn set_echo_delay(&mut self, length: EchoLength) -> Result<(), BytecodeError> {
+        match self.context {
+            BytecodeContext::SongSubroutine { max_edl }
+            | BytecodeContext::SongChannel { max_edl, .. } => {
+                let edl = length.to_edl();
+                if edl.as_u8() <= max_edl.as_u8() {
+                    emit_bytecode!(self, opcodes::SET_ECHO_DELAY, edl.as_u8());
+                    Ok(())
+                } else {
+                    Err(BytecodeError::EchoLengthLargerThanMaxEdl { edl, max_edl })
+                }
+            }
+            BytecodeContext::SoundEffect => Err(BytecodeError::CannotSetEchoDelayInSoundEffect),
+            BytecodeContext::MmlPrefix => Err(BytecodeError::CannotSetEchoDelayInMmlPrefix),
+        }
     }
 }

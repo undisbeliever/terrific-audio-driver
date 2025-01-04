@@ -531,6 +531,17 @@ Global echo commands:
     * Multiple `L`/`R`/`M` flags can be set at once.
       For example, `iLR` will invert the left and right channels in surround mode
       but no channels will be inverted in mono or stereo mode.
+ * `\edl <delay>` - Change echo delay buffer length in milliseconds
+    * This value must be a multiple of 16 and cannot be greater than `#MaxEchoLength`
+    * CAUTION: changing the echo delay while echo is active will cause a glitch.
+      * Shrinking the echo buffer delay will drop a section of the echo buffer.
+      * Increasing the echo buffer delay will reveal and process uninitialized echo buffer memory.
+    * CAUTION: this command does not take effect immediately.
+      * `EDL` register writes only take effect when the S-DSP reaches the end of the echo buffer.
+      * Echo volume and feedback should be 0 when changing echo delay.
+      * Echo volume and feedback should be restored `old-EDL + new-EDL` milliseconds after the `\edl` command.
+        This wait will also clear the uninitialized portion of echo buffer.
+    * CAUTION: The play-from-cursor feature of the GUI cannot emulate the echo buffer position
 
 
 Engine Limitations

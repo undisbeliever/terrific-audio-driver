@@ -17,6 +17,7 @@ use crate::driver_constants::{
     MAX_SUBROUTINES, N_MUSIC_CHANNELS, SFX_TICK_CLOCK, SONG_HEADER_CHANNELS_SIZE,
     SONG_HEADER_N_SUBROUTINES_OFFSET, SONG_HEADER_SIZE, SONG_HEADER_TICK_TIMER_OFFSET,
 };
+use crate::echo::EchoEdl;
 use crate::envelope::{Envelope, Gain};
 use crate::errors::{ChannelError, SongError, SongTooLargeError};
 use crate::mml::{MetaData, Section};
@@ -215,7 +216,10 @@ pub fn test_sample_song(
     envelope: Option<Envelope>,
 ) -> Result<SongData, ChannelError> {
     let mut bc = Bytecode::new(
-        BytecodeContext::SongChannel { index: 0 },
+        BytecodeContext::SongChannel {
+            index: 0,
+            max_edl: EchoEdl::MIN,
+        },
         sample_song_fake_instruments(),
         None,
     );

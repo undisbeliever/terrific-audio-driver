@@ -186,6 +186,10 @@
       "source": "mml-tests/test-echo.mml"
     },
     {
+      "name": "test_set_echo_delay",
+      "source": "mml-tests/test-set-echo-delay.mml"
+    },
+    {
       "name": "test_fir",
       "source": "mml-tests/test-fir.mml"
     },

@@ -224,7 +224,7 @@ pub enum ValueError {
     RelativeFirCoefficientOutOfRange(i32),
     RelativeFirCoefficientOutOfRangeU32(u32),
     EchoLengthNotMultiple,
-    EchoBufferTooLarge,
+    EchoLengthTooLarge(u32),
 
     InvalidFirFilterSize,
     InvalidFirFilter,
@@ -270,6 +270,7 @@ pub enum ValueError {
     NoMpDepth,
     NoVibratoPitchOffsetPerTick,
     NoVibratoQuarterWavelength,
+    NoEchoLength,
     NoEchoEdl,
     NoEchoVolume,
     NoRelativeEchoVolume,
@@ -345,6 +346,13 @@ pub enum BytecodeError {
     PmodNotAllowedInChannelA,
     PmodNotAllowedInChannelsGH,
     PmodNotAllowedInSoundEffect,
+
+    CannotSetEchoDelayInSoundEffect,
+    CannotSetEchoDelayInMmlPrefix,
+    EchoLengthLargerThanMaxEdl {
+        edl: EchoEdl,
+        max_edl: EchoEdl,
+    },
 }
 
 #[derive(Debug)]
@@ -1132,10 +1140,10 @@ impl Display for ValueError {
                 "echo length is not a multiple of {}ms",
                 ECHO_BUFFER_EDL_MS
             ),
-            Self::EchoBufferTooLarge => {
+            Self::EchoLengthTooLarge(l) => {
                 write!(
                     f,
-                    "echo buffer too large (max {}ms)",
+                    "echo length too large ({l}, max {}ms)",
                     EchoLength::MAX.value()
                 )
             }
@@ -1208,6 +1216,7 @@ impl Display for ValueError {
             Self::NoMpDepth => write!(f, "no MP depth"),
             Self::NoVibratoPitchOffsetPerTick => write!(f, "no vibrato pitch-offset-per-tick"),
             Self::NoVibratoQuarterWavelength => write!(f, "no vibrato quarter-wavelength"),
+            Self::NoEchoLength => write!(f, "no echo length"),
             Self::NoEchoEdl => write!(f, "no echo EDL"),
             Self::NoEchoVolume => write!(f, "no echo volume value"),
             Self::NoRelativeEchoVolume => write!(f, "no relative echo volume"),
@@ -1395,6 +1404,23 @@ impl Display for BytecodeError {
             }
             Self::PmodNotAllowedInSoundEffect => {
                 write!(f, "pitch mod is not allowed in a sound effect")
+            }
+
+            Self::CannotSetEchoDelayInSoundEffect => write!(
+                f,
+                "cannot set echo delay in a sound effect (max echo length unknown"
+            ),
+            Self::CannotSetEchoDelayInMmlPrefix => {
+                write!(f, "cannot set echo delay in an MML prefix")
+            }
+
+            Self::EchoLengthLargerThanMaxEdl { edl, max_edl } => {
+                write!(
+                    f,
+                    "echo length is larger than max echo length ({}, max: {})",
+                    edl.to_length().value(),
+                    max_edl.to_length().value()
+                )
             }
         }
     }

@@ -383,6 +383,10 @@ let INSTRUCTIONS_WITH_ARGUMENTS = [
 
     // parameter = rl00000m (same parameter as `set_channel_invert`)
     set_echo_invert,
+
+    // parameter = u8 EDL echo delay value
+    // If the parameter > maxEdl, maxEdl will be used instead
+    set_echo_delay,
 ];
 
 

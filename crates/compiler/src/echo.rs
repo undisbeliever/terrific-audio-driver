@@ -13,7 +13,9 @@ use crate::driver_constants::{
 };
 use crate::errors::ValueError;
 use crate::invert_flags::InvertFlags;
-use crate::value_newtypes::{i8_with_hex_byte_value_newtype, parse_i8wh, u8_value_newtype};
+use crate::value_newtypes::{
+    i8_with_hex_byte_value_newtype, parse_i8wh, u8_value_newtype, UnsignedValueNewType,
+};
 
 u8_value_newtype!(
     EchoEdl,
@@ -64,6 +66,14 @@ pub const IDENTITY_FILTER: [FirCoefficient; FIR_FILTER_SIZE] = [
 impl EchoEdl {
     pub const ZERO: Self = Self(0);
 
+    pub fn buffer_size(&self) -> u16 {
+        if self.0 == 0 {
+            ECHO_BUFFER_MIN_SIZE as u16
+        } else {
+            u16::from(self.0) * (ECHO_BUFFER_EDL_SIZE as u16)
+        }
+    }
+
     pub fn to_duration(&self) -> Duration {
         Duration::from_millis(u64::from(self.as_u8()) * u64::from(ECHO_BUFFER_EDL_MS))
     }
@@ -73,17 +83,25 @@ impl EchoEdl {
     }
 }
 
+#[derive(Clone, Copy)]
 pub struct EchoLength(u8);
 
 impl EchoLength {
+    pub const MIN: Self = Self(0);
     pub const MAX: Self = Self((ECHO_BUFFER_EDL_MS * ECHO_BUFFER_MAX_EDL as u32) as u8);
-
-    pub fn value(&self) -> u8 {
-        self.0
-    }
 
     pub fn to_edl(&self) -> EchoEdl {
         EchoEdl(self.0 / (ECHO_BUFFER_EDL_MS as u8))
+    }
+}
+
+impl UnsignedValueNewType for EchoLength {
+    const MISSING_ERROR: ValueError = ValueError::NoEchoLength;
+
+    type ValueType = u8;
+
+    fn value(&self) -> u8 {
+        self.0
     }
 }
 
@@ -95,7 +113,7 @@ impl TryFrom<u32> for EchoLength {
             return Err(ValueError::EchoLengthNotMultiple);
         }
         if length_ms > Self::MAX.0.into() {
-            return Err(ValueError::EchoBufferTooLarge);
+            return Err(ValueError::EchoLengthTooLarge(length_ms));
         }
 
         Ok(EchoLength(length_ms.try_into().unwrap()))
@@ -123,13 +141,7 @@ impl EchoBuffer {
     }
 
     pub fn buffer_size_u16(&self) -> u16 {
-        let max_edl = self.max_edl.as_u8();
-
-        if max_edl == 0 {
-            ECHO_BUFFER_MIN_SIZE as u16
-        } else {
-            u16::from(max_edl) * (ECHO_BUFFER_EDL_SIZE as u16)
-        }
+        self.max_edl.buffer_size()
     }
 
     pub fn buffer_addr(&self) -> u16 {

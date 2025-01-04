@@ -404,6 +404,10 @@ impl bytecode_interpreter::Emulator for EmulatorWrapper<'_> {
         self.0.apuram_mut()
     }
 
+    fn set_echo_buffer_size(&mut self, esa: u8, edl: u8) {
+        self.0.set_echo_buffer_size(esa, edl);
+    }
+
     fn write_dsp_register(&mut self, addr: u8, value: u8) {
         self.0.write_dsp_register(addr, value);
     }

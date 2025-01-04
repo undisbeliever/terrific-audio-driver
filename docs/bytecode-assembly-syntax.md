@@ -162,6 +162,11 @@ The echo instructions can be used in sound effects to control echo using S-CPU 6
     * If `rel` is negative: the FIR tap be >= `min`.
  * `set_echo_invert <flags>` - Set echo volume invert
     * Uses the same argument as the `set_channel_invert` instruction
+ * `set_echo_delay <length>` - Set echo delay buffer length
+    * This value must be a multiple of 16 and cannot be greater than `#MaxEchoLength`
+    * CAUTION: changing the echo delay while echo is active will cause a glitch.
+    * CAUTION: this instruction does not take effect immediately.
+    * See `\edl` in [mml-syntax](mml-syntax.md) for more details
 
 
 Parameters

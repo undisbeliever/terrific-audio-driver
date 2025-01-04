@@ -37,6 +37,8 @@ pub use bytecode::opcodes;
 pub use bytecode::Pan;
 pub use file_pos::{FilePos, FilePosRange};
 
+pub use value_newtypes::{I8WithByteHexValueNewType, SignedValueNewType, UnsignedValueNewType};
+
 pub mod audio_driver {
     // SPDX-SnippetBegin
 

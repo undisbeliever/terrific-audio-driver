@@ -299,7 +299,11 @@ in zeropage {
         let ECHO_DIRTY__FIR_FILTER_BIT = 7;
         let ECHO_DIRTY__CLEAR_FIR_BIT = 0;  // Clear FIR filter before writing FIR filter
         let ECHO_DIRTY__VOLUME_BIT = 6;
+
+        // Not tested in `_process_echo_registers__inline()`
+        // Instead they will be written whenever echoDirty is non-zero
         let ECHO_DIRTY__FEEDBACK_BIT = 5;
+        let ECHO_DIRTY__EDL_BIT = 4;
 
     // The maximum echo delay in the song.
     // Used to determine the size and location of the echo buffer in Audio-RAM.
@@ -1172,6 +1176,10 @@ inline func _process_echo_registers__inline() {
         // Always update echo feedback
         smp.dsp_addr = GlobalDspAddr.EFB as u8;
         smp.dsp_data = echo.echoFeedback as u8;
+
+        // Always update echo delay
+        smp.dsp_addr = GlobalDspAddr.EDL as u8;
+        smp.dsp_data = echo.edl;
 
         echoDirty = 0;
     }
@@ -3460,6 +3468,18 @@ func set_echo_invert(channelIndex : u8 in x, flags: u8 in a) {
     ^return process_next_bytecode(x);
 }
 
+
+// KEEP: X
+func set_echo_delay(channelIndex : u8 in x, edl: u8 in a) {
+    if a > maxEdl {
+        a = maxEdl;
+    }
+    echo.edl = a;
+
+    echoDirty $ ECHO_DIRTY__EDL_BIT = true;
+
+    ^return process_next_bytecode(x);
+}
 
 
 const InstructionTable : [u16 ; 64] = [ f as u16 for let f in INSTRUCTIONS_WITH_ARGUMENTS ]

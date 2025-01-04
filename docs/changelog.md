@@ -18,6 +18,7 @@ Audio driver changes:
  * Added `set_channel_invert` instruction (`i` MML command)
  * Added `set_echo_invert` instruction (`\ei` MML command)
  * Added maximum echo delay to the driver
+ * Added `set_echo_delay` instruction (`\edl` MML command)
 
 MML changes:
  * `#EchoVolume` now accepts a stereo input

@@ -12,6 +12,7 @@ use super::{ChannelId, MmlSoundEffect, Section, CHANNEL_NAMES};
 #[cfg(feature = "mml_tracking")]
 use super::note_tracking::CursorTracker;
 use crate::data::{self, UniqueNamesList};
+use crate::echo::EchoEdl;
 use crate::mml::{MmlPrefixData, MAX_MML_PREFIX_TICKS};
 #[cfg(feature = "mml_tracking")]
 use crate::songs::{BytecodePos, SongBcTracking};
@@ -39,6 +40,8 @@ pub struct MmlSongBytecodeGenerator<'a> {
     mml_instruments: &'a Vec<MmlInstrument>,
     mml_instrument_map: HashMap<IdentifierStr<'a>, usize>,
 
+    max_edl: EchoEdl,
+
     subroutines: Vec<Subroutine>,
     subroutine_map: HashMap<IdentifierStr<'a>, Option<SubroutineId>>,
     subroutine_name_map: &'a HashMap<IdentifierStr<'a>, usize>,
@@ -62,6 +65,7 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
         instruments: &'a Vec<MmlInstrument>,
         instrument_map: HashMap<IdentifierStr<'a>, usize>,
         subroutine_name_map: &'a HashMap<IdentifierStr<'a>, usize>,
+        max_edl: EchoEdl,
         header_size: usize,
     ) -> Self {
         Self {
@@ -75,6 +79,7 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
             mml_instrument_map: instrument_map,
             subroutine_name_map,
 
+            max_edl,
             subroutines: Vec::new(),
             subroutine_map: HashMap::new(),
 
@@ -205,7 +210,9 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
             self.data_instruments,
             self.mml_instruments,
             Some(&self.subroutines),
-            BytecodeContext::SongSubroutine {},
+            BytecodeContext::SongSubroutine {
+                max_edl: self.max_edl,
+            },
         );
 
         let tail_call = Self::parse_and_compile_tail_call(
@@ -346,6 +353,7 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
             Some(&self.subroutines),
             BytecodeContext::SongChannel {
                 index: channel_index,
+                max_edl: self.max_edl,
             },
         );
 

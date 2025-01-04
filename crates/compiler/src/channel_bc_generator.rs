@@ -16,7 +16,7 @@ use crate::bytecode::{
 use crate::bytecode_assembler::parse_asm_line;
 use crate::data::{self, UniqueNamesList};
 use crate::driver_constants::FIR_FILTER_SIZE;
-use crate::echo::{EchoFeedback, EchoVolume, FirCoefficient, FirTap};
+use crate::echo::{EchoFeedback, EchoLength, EchoVolume, FirCoefficient, FirTap};
 use crate::envelope::{Adsr, Envelope, Gain, OptionalGain, TempGain};
 use crate::errors::{ChannelError, ValueError};
 use crate::invert_flags::InvertFlags;
@@ -339,6 +339,7 @@ pub(crate) enum Command {
     AdjustFirTap(FirTap, RelativeFirCoefficient),
     AdjustFirTapWithLimit(FirTap, RelativeFirCoefficient, FirCoefficient),
     SetEchoInvert(InvertFlags),
+    SetEchoDelay(EchoLength),
 
     StartBytecodeAsm,
     EndBytecodeAsm,
@@ -1834,6 +1835,7 @@ impl<'a> ChannelBcGenerator<'a> {
                 self.bc.adjust_fir_tap_limit(tap, adjust, limit)
             }
             &Command::SetEchoInvert(flags) => self.bc.set_echo_invert(flags),
+            &Command::SetEchoDelay(length) => self.bc.set_echo_delay(length)?,
 
             Command::StartBytecodeAsm => {
                 self.bc._start_asm_block();

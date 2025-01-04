@@ -2328,6 +2328,13 @@ fn parse_fir_filter(fir_pos: FilePos, p: &mut Parser) -> Command {
     }
 }
 
+fn parse_set_echo_delay(pos: FilePos, p: &mut Parser) -> Command {
+    match parse_unsigned_newtype(pos, p) {
+        Some(l) => Command::SetEchoDelay(l),
+        None => Command::None,
+    }
+}
+
 fn invalid_token_error(p: &mut Parser, pos: FilePos, e: ChannelError) -> Command {
     p.add_error(pos, e);
     Command::None
@@ -2463,6 +2470,7 @@ fn parse_token(pos: FilePos, token: Token, p: &mut Parser) -> Command {
         Token::FtapPlus => parse_ftap_plus(pos, p),
         Token::FtapMinus => parse_ftap_minus(pos, p),
         Token::SetEchoInvert(flags) => Command::SetEchoInvert(flags),
+        Token::SetEchoDelay => parse_set_echo_delay(pos, p),
 
         Token::StartBytecodeAsm => Command::StartBytecodeAsm,
         Token::EndBytecodeAsm => Command::EndBytecodeAsm,

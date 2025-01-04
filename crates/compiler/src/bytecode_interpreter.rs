@@ -1138,6 +1138,11 @@ impl ChannelState {
             opcodes::SET_ECHO_INVERT => {
                 global.echo.invert_flags = read_pc();
             }
+            opcodes::SET_ECHO_DELAY => {
+                let edl = read_pc();
+
+                global.echo.edl = min(edl, global.echo.max_edl);
+            }
 
             opcodes::DISABLE_CHANNEL => self.disable_channel(),
 
@@ -1252,6 +1257,7 @@ impl ChannelState {
             opcodes::ADJUST_ECHO_I8 => Some(3),
             opcodes::ADJUST_ECHO_I8_LIMIT => Some(4),
             opcodes::SET_ECHO_INVERT => Some(2),
+            opcodes::SET_ECHO_DELAY => Some(2),
 
             opcodes::DISABLE_CHANNEL => None,
 
@@ -1831,6 +1837,7 @@ fn unused_channel(channel_index: usize) -> Channel {
 
 pub trait Emulator {
     fn apuram_mut(&mut self) -> &mut [u8; 0x10000];
+    fn set_echo_buffer_size(&mut self, esa: u8, edl: u8);
     fn write_dsp_register(&mut self, addr: u8, value: u8);
     fn write_smp_register(&mut self, addr: u8, value: u8);
     fn program_counter(&self) -> u16;
@@ -2050,6 +2057,10 @@ impl InterpreterOutput {
             // The audio driver's virtual channels will write to the DSP for me.
 
             emu.write_dsp_register(S_DSP_EON_REGISTER, eon_shadow);
+
+            let echo_size = EchoEdl::try_from(self.echo.max_edl).unwrap().buffer_size();
+            let esa = (0xffff - echo_size + 1).to_le_bytes()[1];
+            emu.set_echo_buffer_size(esa, self.echo.edl);
         }
 
         emu.write_smp_register(S_SMP_TIMER_0_REGISTER, self.tick_clock);

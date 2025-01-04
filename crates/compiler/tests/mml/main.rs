@@ -34,6 +34,7 @@ use compiler::driver_constants::{
     BC_CHANNEL_STACK_OFFSET, BC_CHANNEL_STACK_SIZE, BC_STACK_BYTES_PER_LOOP,
     BC_STACK_BYTES_PER_SUBROUTINE_CALL, MAX_SUBROUTINES,
 };
+use compiler::echo::EchoEdl;
 use compiler::envelope::{Adsr, Envelope, Gain};
 use compiler::errors::{BytecodeError, ChannelError, MmlLineError, SongError, ValueError};
 use compiler::mml;
@@ -160,7 +161,10 @@ fn assert_line_matches_bytecode(mml_line: &str, bc_asm: &[&str]) {
         &dd.instruments_and_samples,
         &[],
         BcTerminator::DisableChannel,
-        BytecodeContext::SongChannel { index: 0 },
+        BytecodeContext::SongChannel {
+            index: 0,
+            max_edl: EchoEdl::MIN,
+        },
     );
 
     assert_eq!(
@@ -182,7 +186,10 @@ fn assert_channel_b_line_matches_bytecode(mml_line: &str, bc_asm: &[&str]) {
         &dd.instruments_and_samples,
         &[],
         BcTerminator::DisableChannel,
-        BytecodeContext::SongChannel { index: 1 },
+        BytecodeContext::SongChannel {
+            index: 1,
+            max_edl: EchoEdl::MIN,
+        },
     );
 
     assert_eq!(
@@ -247,13 +254,20 @@ fn assert_line_matches_line_and_bytecode(mml_line1: &str, mml_line2: &str, bc_as
         &dd.instruments_and_samples,
         &[],
         BcTerminator::DisableChannel,
-        BytecodeContext::SongChannel { index: 0 },
+        BytecodeContext::SongChannel {
+            index: 0,
+            max_edl: EchoEdl::MIN,
+        },
     );
 
     assert_eq!(mml1_bc, bc_asm, "Testing {mml_line1:?} against bytecode");
 }
 
 fn assert_mml_channel_a_matches_bytecode(mml: &str, bc_asm: &[&str]) {
+    assert_mml_channel_a_matches_bytecode_max_edl(mml, bc_asm, EchoEdl::MIN)
+}
+
+fn assert_mml_channel_a_matches_bytecode_max_edl(mml: &str, bc_asm: &[&str], max_edl: EchoEdl) {
     let dummy_data = dummy_data();
 
     let mml = compile_mml(mml, &dummy_data);
@@ -263,7 +277,7 @@ fn assert_mml_channel_a_matches_bytecode(mml: &str, bc_asm: &[&str]) {
         &dummy_data.instruments_and_samples,
         mml.subroutines(),
         BcTerminator::DisableChannel,
-        BytecodeContext::SongChannel { index: 0 },
+        BytecodeContext::SongChannel { index: 0, max_edl },
     );
 
     assert_eq!(mml_bytecode(&mml), bc_asm);
@@ -286,7 +300,10 @@ fn assert_mml_channel_a_matches_looping_bytecode(mml: &str, bc_asm: &[&str]) {
         &dummy_data.instruments_and_samples,
         mml.subroutines(),
         BcTerminator::Goto(loop_point),
-        BytecodeContext::SongChannel { index: 0 },
+        BytecodeContext::SongChannel {
+            index: 0,
+            max_edl: EchoEdl::MIN,
+        },
     );
 
     assert_eq!(mml_bytecode(&mml), bc_asm);
@@ -302,7 +319,9 @@ fn assert_mml_subroutine_matches_bytecode(mml: &str, subroutine_index: usize, bc
         &dummy_data.instruments_and_samples,
         mml.subroutines(),
         BcTerminator::ReturnFromSubroutine,
-        BytecodeContext::SongSubroutine {},
+        BytecodeContext::SongSubroutine {
+            max_edl: EchoEdl::MIN,
+        },
     );
 
     assert_eq!(subroutine_bytecode(&mml, subroutine_index), bc_asm);
