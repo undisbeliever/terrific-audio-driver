@@ -38,7 +38,7 @@ fn load_song(
     let common_data = common_audio_data.data();
     let song_data = song.data();
     let song_data_addr = common_audio_data.song_data_addr();
-    let edl = &song.metadata().echo_buffer.edl;
+    let echo_buffer = &song.metadata().echo_buffer;
 
     let apuram = emu.apuram_mut();
 
@@ -58,9 +58,9 @@ fn load_song(
     write_spc_ram(song_data_addr, song_data);
 
     // Reset echo buffer
-    let eb_start = usize::from(song.metadata().echo_buffer.edl.echo_buffer_addr());
-    let eb_end = eb_start + edl.buffer_size();
-    apuram[eb_start..eb_end].fill(0);
+    let eb_start = usize::from(echo_buffer.buffer_addr());
+    assert_eq!(eb_start + echo_buffer.buffer_size(), apuram.len());
+    apuram[eb_start..].fill(0);
 
     // Set loader flags
     apuram[LOADER_DATA_TYPE_ADDR] = LoaderDataType {
@@ -70,7 +70,7 @@ fn load_song(
     }
     .driver_value();
 
-    emu.set_echo_buffer_size(edl.esa_register(), edl.as_u8());
+    emu.set_echo_buffer_size(echo_buffer.esa_register(), echo_buffer.edl_register());
 
     emu.set_spc_registers(addresses::DRIVER_CODE, 0, 0, 0, 0, 0xff);
 
@@ -157,6 +157,13 @@ fn assert_bc_intrepreter_matches_emu(
         "eonShadow_music (tick_count: {tick_count})"
     );
 
+    let test_byte = |addr: u16, name: &'static str| {
+        let addr = usize::from(addr);
+        assert_eq!(
+            int_apuram[addr], emu_apuram[addr],
+            "{name} mismatch (tick_count: {tick_count})"
+        );
+    };
     let test_range = |addr: u16, size: usize, name: &'static str| {
         let addr = usize::from(addr);
         let range = addr..addr + size;
@@ -300,6 +307,8 @@ fn assert_bc_intrepreter_matches_emu(
         "bytecode stack",
     );
     test_range(addresses::ECHO_VARIABLES, ECHO_VARIABLES_SIZE, "echo");
+
+    test_byte(addresses::MAX_EDL, "maxEdl");
 }
 
 fn read_ptrs(apuram: &[u8; 0x10000], addr_l: u16, addr_h: u16) -> [Option<u16>; N_MUSIC_CHANNELS] {
@@ -354,6 +363,7 @@ fn test_bc_intrepreter(song: &SongData, common_audio_data: &CommonAudioData) {
     let mut emu = load_song(common_audio_data, song, STEREO_FLAG);
 
     // Wait for the audio-driver to finish initialization
+    emu.emulate();
     emu.emulate();
 
     let dummy_emu_init = Box::from(DummyEmu {

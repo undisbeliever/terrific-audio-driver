@@ -88,6 +88,7 @@ pub mod addresses {
         CHANNEL_INVERT_FLAGS,
         ECHO_VARIABLES,
         ECHO_DIRTY,
+        MAX_EDL,
     );
 
     // MUST match `audio-driver/src/common_memmap.wiz`

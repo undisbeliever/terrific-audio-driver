@@ -15,6 +15,7 @@ use crate::driver_constants::{
     SONG_HEADER_N_SUBROUTINES_OFFSET, SONG_HEADER_SIZE, STARTING_VOLUME, S_DSP_EON_REGISTER,
     S_SMP_TIMER_0_REGISTER,
 };
+use crate::echo::EchoEdl;
 use crate::echo::EchoVolume;
 use crate::envelope::Envelope;
 use crate::invert_flags::InvertFlags;
@@ -113,6 +114,7 @@ struct Channel {
 
 #[derive(Clone)]
 struct EchoVariables {
+    max_edl: u8,
     edl: u8,
     fir_filter: [i8; 8],
     feedback: i8,
@@ -122,10 +124,13 @@ struct EchoVariables {
 }
 
 impl EchoVariables {
-    // Using raw numbers, not constant for data size so I have a compile error
-    // when audio-driver echo variable size changes.
+    // Using raw numbers for array size so I get a compile error
+    // when the audio-driver echo variable size changes.
     fn to_driver_data(&self) -> [u8; 13] {
         let to_u8 = |i: i8| i.to_le_bytes()[0];
+
+        assert!(self.max_edl <= EchoEdl::MAX.as_u8());
+        assert!(self.edl <= self.max_edl);
 
         let mut out = [0; 13];
 
@@ -164,7 +169,8 @@ impl GlobalState {
         Self {
             timer_register: tick_clock.as_u8(),
             echo: EchoVariables {
-                edl: echo.edl.as_u8(),
+                max_edl: echo.max_edl.as_u8(),
+                edl: echo.edl_register(),
                 fir_filter: echo.fir.map(|c| c.as_i8()),
                 feedback: echo.feedback.as_i8(),
                 volume_l: echo.echo_volume_l.as_u8(),
@@ -2026,9 +2032,12 @@ impl InterpreterOutput {
             {
                 let echo_addr = usize::from(addresses::ECHO_VARIABLES);
                 let echo_dirty = usize::from(addresses::ECHO_DIRTY);
+                let max_edl_addr = usize::from(addresses::MAX_EDL);
 
                 let echo_variables: [u8; ECHO_VARIABLES_SIZE] = self.echo.to_driver_data();
                 apuram[echo_addr..echo_addr + ECHO_VARIABLES_SIZE].copy_from_slice(&echo_variables);
+
+                apuram[max_edl_addr] = self.echo.max_edl;
 
                 // mark echo DSP registers out of date
                 apuram[echo_dirty] = 0xff;
@@ -2057,6 +2066,7 @@ mod test {
         GlobalState {
             timer_register: MIN_TICK_TIMER,
             echo: EchoVariables {
+                max_edl: 0,
                 edl: 0,
                 fir_filter: Default::default(),
                 feedback: 0,

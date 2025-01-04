@@ -300,6 +300,10 @@ in zeropage {
         let ECHO_DIRTY__CLEAR_FIR_BIT = 0;  // Clear FIR filter before writing FIR filter
         let ECHO_DIRTY__VOLUME_BIT = 6;
         let ECHO_DIRTY__FEEDBACK_BIT = 5;
+
+    // The maximum echo delay in the song.
+    // Used to determine the size and location of the echo buffer in Audio-RAM.
+    var maxEdl : u8;
 }
 
 
@@ -479,21 +483,17 @@ func main() {
             y++;
         } while y < offsetof(SongHeader, echo) + sizeof(typeof(echo));
 
+        nop();
 
-        // Mask and read EDL
-        echo.edl &= 0xf;
+        // Extract maximum EDL from EchoBufferSettings
+        // and calculate echo start address
         a = echo.edl;
-
-        // Set EDL
-        smp.dsp_addr = GlobalDspAddr.EDL as u8;
-        smp.dsp_data = a;
-
-
-        // Calculate echo address
-        // a = echo.edl
+        swap_digits(a);
+        a &= 0xf;
+        maxEdl = a;
 
         // a = 0x100 - a * (2048 / 256)
-
+        //
         // Multiply by 8
         // (XCN is safe, A has been masked)
         swap_digits(a);
@@ -504,18 +504,30 @@ func main() {
         a++;
 
         if zero {
-            // Ensure echo buffer is at the end of audio-ram when EDL is 0
+            // Ensure echo buffer is at the end of audio-ram when EDL is 0.
             // When EDL is 0, the echo buffer is 4 bytes in size.
             a--;
         }
 
         // set ESA (Echo start address??)
-        // Assumes GlobalDspAddr.ESA | 0x10 = GlobalDspAddr.EDL
-        smp.dsp_addr $ 4 = false;
+        smp.dsp_addr = GlobalDspAddr.ESA as u8;
         smp.dsp_data = a;
 
         // Save S-DSP ESA for later.
         push(a);
+
+
+        // Mask and clamp EDL
+        a = echo.edl & 0xf;
+        if a >= maxEdl {
+            a = maxEdl;
+        }
+        echo.edl = a;
+
+        // Set EDL
+        // Assumes GlobalDspAddr.EDL = GlobalDspAddr.ESA | 0x10
+        smp.dsp_addr $ 4 = true;
+        smp.dsp_data = a;
 
 
         // `EDL` does not take affect immediately.
@@ -637,7 +649,8 @@ func main() {
 
     // Skip echo buffer clear and `EDL` sleep if the SKIP_ECHO_BUFFER_RESET_BIT bit is set
     //
-    // WARNING: Skipping the `EDL` sleep can corrupt memory when echo writes are enabled.
+    // WARNING: Skipping the `EDL` sleep can easily corrupt memory when echo writes are enabled.
+    //          This flag is MUST ONLY BE SET by the GUI, rust tests or spc export.
     //
     // (cannot use `bbs` instructions in wiz, using `mov1 c, addr, bit` instead)
     carry = loaderDataType $ LoaderDataType.SKIP_ECHO_BUFFER_RESET_BIT;

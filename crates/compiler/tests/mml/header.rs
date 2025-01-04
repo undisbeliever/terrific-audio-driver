@@ -168,3 +168,44 @@ A r
         ValueError::UnknownInvertFlagStr("unknown".to_owned()).into(),
     );
 }
+
+#[test]
+fn max_edl() {
+    let dummy_data = dummy_data();
+
+    let s = compile_mml(
+        r#"
+#MaxEchoLength 48
+
+A r
+"#,
+        &dummy_data,
+    );
+    assert_eq!(s.metadata().echo_buffer.max_edl.to_length().value(), 48);
+
+    // If MaxEchoLength is unused, use `#EchoLength`
+    let s = compile_mml(
+        r#"
+#EchoLength 96
+
+A r
+"#,
+        &dummy_data,
+    );
+    assert_eq!(s.metadata().echo_buffer.max_edl.to_length().value(), 96);
+
+    assert_one_header_error_in_mml(
+        r#"
+#EchoLength 96
+#MaxEchoLength 32
+
+A r
+"#,
+        2,
+        ValueError::EchoEdlLargerThanMaxEdl {
+            edl: 6u8.try_into().unwrap(),
+            max_edl: 2u8.try_into().unwrap(),
+        }
+        .into(),
+    );
+}

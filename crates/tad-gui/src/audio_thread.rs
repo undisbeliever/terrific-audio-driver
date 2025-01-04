@@ -679,7 +679,7 @@ impl TadEmu {
 
         let song_data = song.data();
         let common_data = common_audio_data.data();
-        let edl = &song.metadata().echo_buffer.edl;
+        let echo_buffer = &song.metadata().echo_buffer;
 
         let stereo_flag = match self.stereo_flag {
             StereoFlag::Stereo => true,
@@ -704,8 +704,8 @@ impl TadEmu {
         write_spc_ram(song_data_addr, song_data);
 
         // Reset echo buffer
-        let eb_start = usize::from(song.metadata().echo_buffer.edl.echo_buffer_addr());
-        let eb_end = eb_start + edl.buffer_size();
+        let eb_start = usize::from(echo_buffer.buffer_addr());
+        let eb_end = eb_start + echo_buffer.buffer_size();
         apuram[eb_start..eb_end].fill(0);
 
         // Set loader flags
@@ -717,7 +717,7 @@ impl TadEmu {
         .driver_value();
 
         self.emu
-            .set_echo_buffer_size(edl.esa_register(), edl.as_u8());
+            .set_echo_buffer_size(echo_buffer.esa_register(), echo_buffer.edl_register());
 
         self.emu
             .set_spc_registers(addresses::DRIVER_CODE, 0, 0, 0, 0, 0xff);

@@ -169,7 +169,7 @@ impl SongData {
 
         SongAramSize {
             data_size: data_size.try_into().unwrap_or(u16::MAX),
-            echo_buffer_size: self.metadata.echo_buffer.edl.buffer_size_u16(),
+            echo_buffer_size: self.metadata.echo_buffer.buffer_size_u16(),
         }
     }
 
@@ -348,7 +348,7 @@ fn write_song_header(
     const EBS: usize = SONG_HEADER_CHANNELS_SIZE;
     let echo_buffer = &metadata.echo_buffer;
 
-    header[EBS] = echo_buffer.edl.as_u8();
+    header[EBS] = (echo_buffer.max_edl.as_u8() << 4) | echo_buffer.edl.as_u8();
     for (i, f) in echo_buffer.fir.iter().enumerate() {
         header[EBS + 1 + i] = f.as_i8().to_le_bytes()[0];
     }
@@ -433,7 +433,7 @@ pub fn validate_song_size(
     common_data_size: usize,
 ) -> Result<(), SongTooLargeError> {
     let song_data_size = song.data().len();
-    let echo_buffer_size = song.metadata().echo_buffer.edl.buffer_size();
+    let echo_buffer_size = song.metadata().echo_buffer.buffer_size();
 
     // Loader can only transfer data that is a multiple of 2 bytes
     let common_data_size = common_data_size + (common_data_size % 2);

@@ -17,12 +17,14 @@ Audio driver changes:
  * Added limit to adjust echo feedback and adjust FIR tap instructions
  * Added `set_channel_invert` instruction (`i` MML command)
  * Added `set_echo_invert` instruction (`\ei` MML command)
+ * Added maximum echo delay to the driver
 
 MML changes:
  * `#EchoVolume` now accepts a stereo input
  * `#EchoVolume` only accepts unsigned (0 - 127) values
  * Added `#EchoInvert` header
  * Added global echo commands
+ * Added `#MaxEchoLength` header
  * The `\asm` command requires a space after `\asm` (breaking change)
 
 GUI changes:

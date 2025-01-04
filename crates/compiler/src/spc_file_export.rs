@@ -62,8 +62,8 @@ fn song_length(duration: Option<Duration>, metadata: &MetaData) -> u64 {
 
     match duration {
         Some(d) => {
-            let echo_edl = metadata.echo_buffer.edl;
-            let rounded_up = d + echo_edl.to_duration() + Duration::from_millis(999);
+            let max_edl = metadata.echo_buffer.max_edl;
+            let rounded_up = d + max_edl.to_duration() + Duration::from_millis(999);
             rounded_up.as_secs()
         }
         None => 0,
@@ -86,10 +86,10 @@ pub fn export_spc_file(
     let song_duration = song_data.duration();
     let song_data = song_data.data();
 
-    let echo_edl = metadata.echo_buffer.edl;
+    let echo_buffer = &metadata.echo_buffer;
 
     let song_end_addr = usize::from(song_data_addr) + song_data.len();
-    let echo_buffer_size = echo_edl.buffer_size();
+    let echo_buffer_size = echo_buffer.buffer_size();
 
     if song_end_addr + echo_buffer_size > AUDIO_RAM_SIZE {
         return Err(ExportSpcFileError::TooMuchData {
@@ -101,7 +101,7 @@ pub fn export_spc_file(
 
     // song_data_addr should be even, the loader will always transfer an even number of bytes.
     assert!(song_data_addr % 2 == 0);
-    assert!(song_end_addr <= echo_edl.echo_buffer_addr().into());
+    assert!(song_end_addr <= echo_buffer.buffer_addr().into());
 
     let mut out = vec![0; SPC_FILE_SIZE];
 
@@ -182,8 +182,8 @@ pub fn export_spc_file(
         dsp_registers[S_DSP_FLG_REGISTER] = S_DSP_FLG_RESET;
 
         // Setup the echo buffer
-        dsp_registers[S_DSP_ESA_REGISTER] = echo_edl.esa_register();
-        dsp_registers[S_DSP_EDL_REGISTER] = echo_edl.as_u8();
+        dsp_registers[S_DSP_ESA_REGISTER] = echo_buffer.esa_register();
+        dsp_registers[S_DSP_EDL_REGISTER] = echo_buffer.edl_register();
     }
 
     Ok(out)

@@ -40,6 +40,8 @@ Echo values:
     * The echo buffer is placed at the end of Audio-RAM.
     * An `EchoLength` of 0 does not disable the echo buffer.  When `EchoLength` is 0, 256 bytes of Audio-RAM will be allocated to the echo buffer and the echo buffer is 4 bytes in size.
     * The default `EchoLength` value is 0.
+ * `#MaxEchoLength` - Maximum echo buffer size in milliseconds.
+    * If `MaxEchoLength` is not supplied, `EchoLength` will be used.
  * `#FirFilter` - FIR filter (`C0` - `C7` S-DSP registers)
     * The FIR filter must contain 8 space separated values.
     * Values prefixed with a `$` are hexadecimal ($00-$FF)

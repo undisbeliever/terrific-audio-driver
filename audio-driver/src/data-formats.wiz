@@ -130,14 +130,23 @@ struct CommonDataHeader {
 
 struct EchoBufferSettings {
 
-    // 4-bit echo buffer size.
+    // Echo buffer size AND maximum echo buffer size.
     //
-    // The echo buffer is `2048 * edl` bytes in size and `16ms * edl` in length.
+    //      mmmmeeee
+    //      mmmm = maximum EDL
+    //      eeee = Starting EDL
+    //
+    // The maximum EDL determines the location of the echo-buffer in Audio-RAM
+    // (`ESA` S-DSP register)
+    //
+    // The echo buffer is `2048 * EDL` bytes in size and `16ms * EDL` in length.
     //
     // NOTE: An edl value of 0 allocates 2048 bytes of RAM to the echo buffer.
     //
     // NOTE: There is no echo buffer overflow checking.
     //       The echo buffer may clobber song/sample/sfx data if `edl` is too large.
+    //
+    // CAUTION: This field does not contain the maximum EDL when in zeropage.
     edl : u8,
 
     // FIR filter.  Written to the `C0`-`C7` S-DSP registers.

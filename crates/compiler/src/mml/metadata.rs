@@ -8,7 +8,7 @@ use std::collections::HashMap;
 
 use crate::driver_constants::SFX_TICK_CLOCK;
 use crate::echo::{
-    parse_fir_filter_string, EchoBuffer, EchoFeedback, EchoLength, EchoVolume, DEFAULT_EDL,
+    parse_fir_filter_string, EchoBuffer, EchoEdl, EchoFeedback, EchoLength, EchoVolume,
     IDENTITY_FILTER,
 };
 use crate::errors::{ErrorWithPos, MmlLineError, ValueError};
@@ -98,7 +98,8 @@ impl MetaData {
             copyright: None,
             license: None,
             echo_buffer: EchoBuffer {
-                edl: DEFAULT_EDL,
+                max_edl: EchoEdl::ZERO,
+                edl: EchoEdl::ZERO,
                 fir: IDENTITY_FILTER,
                 feedback: EchoFeedback::ZERO,
                 echo_volume_l: EchoVolume::ZERO,
@@ -125,6 +126,8 @@ struct HeaderState {
     tempo_set: bool,
     disable_fir_filter_limit: bool,
     fir_pos: FilePosRange,
+    max_edl_set: bool,
+    edl_pos: FilePosRange,
 }
 
 impl HeaderState {
@@ -133,6 +136,8 @@ impl HeaderState {
             tempo_set: false,
             disable_fir_filter_limit: false,
             fir_pos: blank_file_range(),
+            max_edl_set: false,
+            edl_pos: blank_file_range(),
             metadata: MetaData::new(),
         }
     }
@@ -161,9 +166,15 @@ impl HeaderState {
 
             "#ZenLen" => self.metadata.zenlen = parse_u32(value)?.try_into()?,
 
+            "#MaxEchoLength" => {
+                let echo_length = EchoLength::try_from(parse_u32(value)?)?;
+                self.metadata.echo_buffer.max_edl = echo_length.to_edl();
+                self.max_edl_set = true;
+            }
             "#EchoLength" => {
                 let echo_length = EchoLength::try_from(parse_u32(value)?)?;
                 self.metadata.echo_buffer.edl = echo_length.to_edl();
+                self.edl_pos = pos.clone();
             }
 
             "#FirFilter" => {
@@ -263,8 +274,25 @@ pub fn parse_headers(lines: Vec<Line>) -> Result<MetaData, Vec<ErrorWithPos<MmlL
         }
     }
 
+    let eb = &mut header_state.metadata.echo_buffer;
+
+    if header_state.max_edl_set {
+        if eb.edl.as_u8() > eb.max_edl.as_u8() {
+            errors.push(ErrorWithPos(
+                header_state.edl_pos,
+                ValueError::EchoEdlLargerThanMaxEdl {
+                    edl: eb.edl,
+                    max_edl: eb.max_edl,
+                }
+                .into(),
+            ));
+        }
+    } else {
+        eb.max_edl = eb.edl;
+    }
+
     if !header_state.disable_fir_filter_limit {
-        if let Err(e) = header_state.metadata.echo_buffer.test_fir_gain() {
+        if let Err(e) = eb.test_fir_gain() {
             errors.push(ErrorWithPos(header_state.fir_pos, e.into()));
         }
     }

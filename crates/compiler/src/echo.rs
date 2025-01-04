@@ -4,6 +4,7 @@
 //
 // SPDX-License-Identifier: MIT
 
+use std::cmp::min;
 use std::time::Duration;
 
 use crate::driver_constants::{
@@ -49,8 +50,6 @@ i8_with_hex_byte_value_newtype!(
 // Source: SnesLab https://sneslab.net/wiki/FIR_Filter
 pub const MAX_FIR_ABS_SUM: i32 = 128;
 
-pub const DEFAULT_EDL: EchoEdl = EchoEdl(0);
-
 pub const IDENTITY_FILTER: [FirCoefficient; FIR_FILTER_SIZE] = [
     FirCoefficient(127),
     FirCoefficient(0),
@@ -63,32 +62,14 @@ pub const IDENTITY_FILTER: [FirCoefficient; FIR_FILTER_SIZE] = [
 ];
 
 impl EchoEdl {
-    pub fn buffer_size(&self) -> usize {
-        if self.as_u8() == 0 {
-            ECHO_BUFFER_MIN_SIZE
-        } else {
-            usize::from(self.as_u8()) * ECHO_BUFFER_EDL_SIZE
-        }
-    }
-
-    pub fn buffer_size_u16(&self) -> u16 {
-        if self.as_u8() == 0 {
-            ECHO_BUFFER_MIN_SIZE as u16
-        } else {
-            u16::from(self.as_u8()) * (ECHO_BUFFER_EDL_SIZE as u16)
-        }
-    }
-
-    pub fn echo_buffer_addr(&self) -> u16 {
-        u16::try_from(0x10000 - self.buffer_size()).unwrap()
-    }
-
-    pub fn esa_register(&self) -> u8 {
-        self.echo_buffer_addr().to_le_bytes()[1]
-    }
+    pub const ZERO: Self = Self(0);
 
     pub fn to_duration(&self) -> Duration {
         Duration::from_millis(u64::from(self.as_u8()) * u64::from(ECHO_BUFFER_EDL_MS))
+    }
+
+    pub fn to_length(&self) -> EchoLength {
+        EchoLength(self.0 * (ECHO_BUFFER_EDL_MS as u8))
     }
 }
 
@@ -99,6 +80,10 @@ impl EchoLength {
 
     pub fn value(&self) -> u8 {
         self.0
+    }
+
+    pub fn to_edl(&self) -> EchoEdl {
+        EchoEdl(self.0 / (ECHO_BUFFER_EDL_MS as u8))
     }
 }
 
@@ -117,14 +102,9 @@ impl TryFrom<u32> for EchoLength {
     }
 }
 
-impl EchoLength {
-    pub fn to_edl(&self) -> EchoEdl {
-        EchoEdl(self.0 / (ECHO_BUFFER_EDL_MS as u8))
-    }
-}
-
 #[derive(Debug, Clone, PartialEq)]
 pub struct EchoBuffer {
+    pub max_edl: EchoEdl,
     pub edl: EchoEdl,
     pub fir: [FirCoefficient; FIR_FILTER_SIZE],
     pub feedback: EchoFeedback,
@@ -136,6 +116,32 @@ pub struct EchoBuffer {
 impl EchoBuffer {
     pub fn test_fir_gain(&self) -> Result<(), ValueError> {
         test_fir_filter_gain(&self.fir)
+    }
+
+    pub fn buffer_size(&self) -> usize {
+        self.buffer_size_u16().into()
+    }
+
+    pub fn buffer_size_u16(&self) -> u16 {
+        let max_edl = self.max_edl.as_u8();
+
+        if max_edl == 0 {
+            ECHO_BUFFER_MIN_SIZE as u16
+        } else {
+            u16::from(max_edl) * (ECHO_BUFFER_EDL_SIZE as u16)
+        }
+    }
+
+    pub fn buffer_addr(&self) -> u16 {
+        u16::try_from(0x10000 - self.buffer_size()).unwrap()
+    }
+
+    pub fn esa_register(&self) -> u8 {
+        self.buffer_addr().to_le_bytes()[1]
+    }
+
+    pub fn edl_register(&self) -> u8 {
+        min(self.max_edl.as_u8(), self.edl.as_u8())
     }
 }
 

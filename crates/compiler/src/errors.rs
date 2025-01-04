@@ -208,6 +208,7 @@ pub enum ValueError {
 
     CannotConvertBpmToTickClock,
 
+    EchoEdlLargerThanMaxEdl { edl: EchoEdl, max_edl: EchoEdl },
     EchoEdlOutOfRange(u32),
     EchoVolumeOutOfRange(u32),
     RelativeEchoVolumeOutOfRange(i32),
@@ -1084,6 +1085,14 @@ impl Display for ValueError {
 
             Self::CannotConvertBpmToTickClock => write!(f, "cannot convert BPM to tick clock"),
 
+            Self::EchoEdlLargerThanMaxEdl { edl, max_edl } => {
+                write!(
+                    f,
+                    "echo EDL is larger than max EDL ({}, max: {})",
+                    edl.to_length().value(),
+                    max_edl.to_length().value()
+                )
+            }
             Self::EchoEdlOutOfRange(v) => out_of_range!("echo EDL", v, EchoEdl),
             Self::EchoVolumeOutOfRange(v) => out_of_range!("echo volume", v, EchoVolume),
             Self::RelativeEchoVolumeOutOfRange(v) => {

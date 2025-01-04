@@ -89,6 +89,7 @@ const AUDIO_DRIVER_SYMBOLS: &[(&str, &str)] = &[
 
     ("echo", "ECHO_VARIABLES"),
     ("echoDirty", "ECHO_DIRTY"),
+    ("maxEdl", "MAX_EDL"),
 ];
 
 fn find_wiz_binary() -> PathBuf {
