@@ -221,6 +221,7 @@ pub mod opcodes {
 
     // Order MUST MATCH `audio-driver/src/bytecode.wiz`
     declare_opcodes!(
+        RESERVED_FOR_CUSTOM_USE,
         PORTAMENTO_DOWN,
         PORTAMENTO_UP,
         PORTAMENTO_PITCH_DOWN,
@@ -285,7 +286,7 @@ pub mod opcodes {
         REUSE_TEMP_GAIN,
     );
 
-    // Last not play-note opcode
+    // Last non play-note opcode
     pub const DISABLE_CHANNEL: u8 = FIRST_PLAY_NOTE_INSTRUCTION - 1;
 
     // Opcodes FIRST_PLAY_NOTE_INSTRUCTION.. are play note opcodes
@@ -296,6 +297,8 @@ const _: () = assert!(
     opcodes::FIRST_PLAY_NOTE_INSTRUCTION as u32 + (N_NOTES * 2) as u32 == 0x100,
     "There are unaccounted bytecode opcodes"
 );
+
+const _ : () = assert!(opcodes::RESERVED_FOR_CUSTOM_USE == 0);
 
 const ECHO_I8_EFB_INDEX: u8 = 8;
 

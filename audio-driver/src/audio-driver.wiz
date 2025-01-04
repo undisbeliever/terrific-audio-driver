@@ -3505,11 +3505,11 @@ func set_echo_delay(channelIndex : u8 in x, edl: u8 in a) {
 }
 
 
-const InstructionTable : [u16 ; 64] = [ f as u16 for let f in INSTRUCTIONS_WITH_ARGUMENTS ]
-                                    ~ [ f as u16 for let f in NO_ARGUMENT_INSTRUCTIONS ]
-                                    ~ [ disable_channel as u16 ; N_PADDING_INSTRUCTIONS ]
-                                    ~ [ disable_channel as u16, ];
+let reserved_for_custom_use = disable_channel as func(u8 in x, u8 in a);
 
+
+const InstructionTable : [u16 ; 64] = [ f as u16 for let f in INSTRUCTIONS_WITH_ARGUMENTS ]
+                                    ~ [ f as u16 for let f in NO_ARGUMENT_INSTRUCTIONS ];
 }
 
 }

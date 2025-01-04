@@ -1164,9 +1164,9 @@ impl ChannelState {
                 global.echo.edl = min(edl, global.echo.max_edl);
             }
 
-            opcodes::DISABLE_CHANNEL => self.disable_channel(),
+            opcodes::RESERVED_FOR_CUSTOM_USE => self.disable_channel(),
 
-            _ => self.disable_channel(),
+            opcodes::DISABLE_CHANNEL => self.disable_channel(),
         }
     }
 
@@ -1219,6 +1219,7 @@ impl ChannelState {
     fn instruction_size_if_not_sleep_nor_branch(opcode: u8) -> Option<usize> {
         match opcode {
             opcodes::FIRST_PLAY_NOTE_INSTRUCTION.. => None,
+
             opcodes::PORTAMENTO_DOWN | opcodes::PORTAMENTO_UP => None,
             opcodes::PORTAMENTO_PITCH_DOWN | opcodes::PORTAMENTO_PITCH_UP => None,
             opcodes::SET_VIBRATO => Some(3),
@@ -1281,9 +1282,8 @@ impl ChannelState {
             opcodes::SET_ECHO_INVERT => Some(2),
             opcodes::SET_ECHO_DELAY => Some(2),
 
+            opcodes::RESERVED_FOR_CUSTOM_USE => None,
             opcodes::DISABLE_CHANNEL => None,
-
-            _ => None,
         }
     }
 
