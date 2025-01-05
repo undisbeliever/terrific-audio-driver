@@ -127,10 +127,11 @@ auto DSP::echo30() -> void {
   echoWrite(1);
 }
 
+/// `resetEchoBuffer()` should only be called after ESA/EDL are written and before `ShvcSoundEmu::emulate()`.
 auto DSP::resetEchoBuffer() -> void {
-  // ::TODO confirm this is correct::
+  // ::TODO what should I do with _history and _historyOffset?::
   echo._page = echo.page;
-  echo._address = 0;
+  echo._address = (echo._page << 8);
   echo._offset = 0;
   echo._length = echo.delay << 11;
 }
