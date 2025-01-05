@@ -12,8 +12,7 @@ use crate::driver_constants::ECHO_VARIABLES_SIZE;
 use crate::driver_constants::{
     addresses, LoaderDataType, BC_CHANNEL_STACK_OFFSET, BC_CHANNEL_STACK_SIZE,
     BC_STACK_BYTES_PER_LOOP, COMMON_DATA_BYTES_PER_INSTRUMENT, N_MUSIC_CHANNELS,
-    SONG_HEADER_N_SUBROUTINES_OFFSET, SONG_HEADER_SIZE, STARTING_VOLUME, S_DSP_EON_REGISTER,
-    S_SMP_TIMER_0_REGISTER,
+    SONG_HEADER_N_SUBROUTINES_OFFSET, SONG_HEADER_SIZE, STARTING_VOLUME, S_SMP_TIMER_0_REGISTER,
 };
 use crate::echo::EchoEdl;
 use crate::echo::EchoVolume;
@@ -1877,7 +1876,6 @@ fn unused_channel(channel_index: usize) -> Channel {
 
 pub trait Emulator {
     fn apuram_mut(&mut self) -> &mut [u8; 0x10000];
-    fn write_dsp_register(&mut self, addr: u8, value: u8);
     fn write_smp_register(&mut self, addr: u8, value: u8);
     fn program_counter(&self) -> u16;
 
@@ -2088,14 +2086,6 @@ impl InterpreterOutput {
                 // mark echo DSP registers out of date
                 apuram[echo_dirty] = 0xff;
             }
-        }
-
-        // write dsp registers
-        {
-            // Not writing voice S-DSP registers
-            // The audio driver's virtual channels will write to the DSP for me.
-
-            emu.write_dsp_register(S_DSP_EON_REGISTER, eon_shadow);
         }
 
         emu.write_smp_register(S_SMP_TIMER_0_REGISTER, self.tick_clock);

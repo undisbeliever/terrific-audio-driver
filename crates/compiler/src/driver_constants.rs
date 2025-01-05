@@ -210,8 +210,6 @@ pub const S_SMP_TIMER_0_REGISTER: u8 = 0xfa;
 
 // S-DSP constants
 
-pub const S_DSP_EON_REGISTER: u8 = 0x4d;
-
 pub const FIR_FILTER_SIZE: usize = 8;
 
 pub const ECHO_BUFFER_EDL_MS: u32 = 16;

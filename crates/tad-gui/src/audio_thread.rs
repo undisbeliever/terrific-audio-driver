@@ -405,10 +405,6 @@ impl bytecode_interpreter::Emulator for EmulatorWrapper<'_> {
         self.0.apuram_mut()
     }
 
-    fn write_dsp_register(&mut self, addr: u8, value: u8) {
-        self.0.write_dsp_register(addr, value);
-    }
-
     fn write_smp_register(&mut self, addr: u8, value: u8) {
         self.0.write_smp_register(addr, value);
     }

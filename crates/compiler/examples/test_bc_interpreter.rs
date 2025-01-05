@@ -14,7 +14,7 @@ use compiler::{
     data::{load_project_file, load_text_file_with_limit, validate_project_file_names},
     driver_constants::{
         addresses, io_commands, LoaderDataType, BC_TOTAL_STACK_SIZE, ECHO_VARIABLES_SIZE,
-        N_MUSIC_CHANNELS, S_DSP_EON_REGISTER, S_SMP_TIMER_0_REGISTER,
+        N_MUSIC_CHANNELS, S_SMP_TIMER_0_REGISTER,
     },
     mml::compile_mml,
     samples::build_sample_and_instrument_data,
@@ -87,16 +87,11 @@ fn load_song(
 #[derive(Clone)]
 struct DummyEmu {
     apuram: [u8; 0x10000],
-    dsp_registers: [u8; 0x80],
 }
 
 impl bytecode_interpreter::Emulator for DummyEmu {
     fn apuram_mut(&mut self) -> &mut [u8; 0x10000] {
         &mut self.apuram
-    }
-
-    fn write_dsp_register(&mut self, addr: u8, value: u8) {
-        self.dsp_registers[usize::from(addr)] = value;
     }
 
     fn write_smp_register(&mut self, addr: u8, value: u8) {
@@ -136,12 +131,6 @@ fn assert_bc_intrepreter_matches_emu(
 
     // Not testing voice S-DSP registers.
     // (The S-DSP registers lag begind virtual registers by 1 tick)
-
-    assert_eq!(
-        intrepreter_memory.dsp_registers[usize::from(S_DSP_EON_REGISTER)],
-        emu.dsp_registers()[usize::from(S_DSP_EON_REGISTER)],
-        "EON S-DSP register mismatch (tick_count: {tick_count})"
-    );
 
     let int_apuram = &intrepreter_memory.apuram;
     let emu_apuram = emu.apuram();
@@ -375,7 +364,6 @@ fn test_bc_intrepreter(song: &SongData, common_audio_data: &CommonAudioData) {
 
     let dummy_emu_init = Box::from(DummyEmu {
         apuram: *emu.apuram(),
-        dsp_registers: *emu.dsp_registers(),
     });
 
     // Add a second limit, so it doesn't emulate a very very long (119 minute) song
