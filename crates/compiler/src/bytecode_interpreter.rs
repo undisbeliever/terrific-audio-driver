@@ -145,6 +145,13 @@ impl EchoVariables {
 
         out
     }
+
+    fn song_header_edl(&self) -> u8 {
+        assert!(self.max_edl <= EchoEdl::MAX.as_u8());
+        assert!(self.edl <= self.max_edl);
+
+        (self.max_edl << 4) | self.edl
+    }
 }
 
 struct InterpreterOutput {
@@ -1488,25 +1495,36 @@ where
     }
 
     #[must_use]
-    pub fn process_song_skip_ticks(&mut self, ticks: TickCounter, emu: &mut impl Emulator) -> bool {
+    pub fn process_song_skip_ticks(&mut self, ticks: TickCounter) -> bool {
         assert!(self.tick_counter.is_zero());
 
         if ticks.value() > 2 {
             let ticks = TickCounter::new(ticks.value() - 1);
-            let valid = self.process_ticks(ticks);
-            if valid {
-                self.write_to_emulator(emu);
-            }
-            valid
+            self.process_ticks(ticks)
         } else {
             // ticks can be 0 when playing a subroutine
-            self.write_to_emulator(emu);
             true
         }
     }
 
     pub fn tick_counter(&self) -> TickCounter {
         self.tick_counter
+    }
+
+    pub fn song_header_edl(&self) -> u8 {
+        self.global.echo.song_header_edl()
+    }
+
+    pub fn esa_register(&self) -> u8 {
+        let echo_size = EchoEdl::try_from(self.global.echo.max_edl)
+            .unwrap()
+            .buffer_size();
+
+        (0xffff - echo_size + 1).to_le_bytes()[1]
+    }
+
+    pub fn edl_register(&self) -> u8 {
+        self.global.echo.edl
     }
 
     pub fn write_to_emulator(&self, emu: &mut impl Emulator) {
@@ -1859,7 +1877,6 @@ fn unused_channel(channel_index: usize) -> Channel {
 
 pub trait Emulator {
     fn apuram_mut(&mut self) -> &mut [u8; 0x10000];
-    fn set_echo_buffer_size(&mut self, esa: u8, edl: u8);
     fn write_dsp_register(&mut self, addr: u8, value: u8);
     fn write_smp_register(&mut self, addr: u8, value: u8);
     fn program_counter(&self) -> u16;
@@ -2079,10 +2096,6 @@ impl InterpreterOutput {
             // The audio driver's virtual channels will write to the DSP for me.
 
             emu.write_dsp_register(S_DSP_EON_REGISTER, eon_shadow);
-
-            let echo_size = EchoEdl::try_from(self.echo.max_edl).unwrap().buffer_size();
-            let esa = (0xffff - echo_size + 1).to_le_bytes()[1];
-            emu.set_echo_buffer_size(esa, self.echo.edl);
         }
 
         emu.write_smp_register(S_SMP_TIMER_0_REGISTER, self.tick_clock);

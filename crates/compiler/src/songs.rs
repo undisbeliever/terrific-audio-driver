@@ -15,7 +15,8 @@ use crate::data::{self, single_item_unique_names_list, InstrumentOrSample, Name,
 use crate::driver_constants::{
     addresses, AUDIO_RAM_SIZE, ECHO_BUFFER_MIN_SIZE, ECHO_VARIABLES_SIZE, MAX_SONG_DATA_SIZE,
     MAX_SUBROUTINES, N_MUSIC_CHANNELS, SFX_TICK_CLOCK, SONG_HEADER_CHANNELS_SIZE,
-    SONG_HEADER_N_SUBROUTINES_OFFSET, SONG_HEADER_SIZE, SONG_HEADER_TICK_TIMER_OFFSET,
+    SONG_HEADER_ECHO_EDL, SONG_HEADER_N_SUBROUTINES_OFFSET, SONG_HEADER_SIZE,
+    SONG_HEADER_TICK_TIMER_OFFSET,
 };
 use crate::echo::EchoEdl;
 use crate::envelope::{Envelope, Gain};
@@ -352,6 +353,7 @@ fn write_song_header(
     const EBS: usize = SONG_HEADER_CHANNELS_SIZE;
     let echo_buffer = &metadata.echo_buffer;
 
+    const _: () = assert!(EBS == SONG_HEADER_ECHO_EDL);
     header[EBS] = (echo_buffer.max_edl.as_u8() << 4) | echo_buffer.edl.as_u8();
     for (i, f) in echo_buffer.fir.iter().enumerate() {
         header[EBS + 1 + i] = f.as_i8().to_le_bytes()[0];

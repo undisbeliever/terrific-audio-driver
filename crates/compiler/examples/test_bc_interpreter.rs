@@ -20,7 +20,6 @@ use compiler::{
     samples::build_sample_and_instrument_data,
     songs::SongData,
     sound_effects::blank_compiled_sound_effects,
-    spc_file_export::{S_DSP_EDL_REGISTER, S_DSP_ESA_REGISTER},
     time::TickCounter,
 };
 use shvc_sound_emu::ShvcSoundEmu;
@@ -89,11 +88,6 @@ impl bytecode_interpreter::Emulator for DummyEmu {
         &mut self.apuram
     }
 
-    fn set_echo_buffer_size(&mut self, esa: u8, edl: u8) {
-        self.write_dsp_register(S_DSP_ESA_REGISTER as u8, esa);
-        self.write_dsp_register(S_DSP_EDL_REGISTER as u8, edl);
-    }
-
     fn write_dsp_register(&mut self, addr: u8, value: u8) {
         self.dsp_registers[usize::from(addr)] = value;
     }
@@ -140,11 +134,6 @@ fn assert_bc_intrepreter_matches_emu(
         intrepreter_memory.dsp_registers[usize::from(S_DSP_EON_REGISTER)],
         emu.dsp_registers()[usize::from(S_DSP_EON_REGISTER)],
         "EON S-DSP register mismatch (tick_count: {tick_count})"
-    );
-    assert_eq!(
-        intrepreter_memory.dsp_registers[S_DSP_ESA_REGISTER],
-        emu.dsp_registers()[S_DSP_ESA_REGISTER],
-        "ESA S-DSP register mismatch (tick_count: {tick_count})"
     );
 
     let int_apuram = &intrepreter_memory.apuram;

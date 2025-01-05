@@ -147,6 +147,8 @@ struct EchoBufferSettings {
     //       The echo buffer may clobber song/sample/sfx data if `edl` is too large.
     //
     // CAUTION: This field does not contain the maximum EDL when in zeropage.
+    //
+    // MUST be first
     edl : u8,
 
     // FIR filter.  Written to the `C0`-`C7` S-DSP registers.

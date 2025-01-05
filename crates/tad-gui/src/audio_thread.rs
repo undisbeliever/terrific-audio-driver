@@ -15,6 +15,7 @@ use compiler::common_audio_data::CommonAudioData;
 use compiler::driver_constants::N_CHANNELS;
 use compiler::driver_constants::N_DSP_VOICES;
 use compiler::driver_constants::N_MUSIC_CHANNELS;
+use compiler::driver_constants::SONG_HEADER_ECHO_EDL;
 use compiler::driver_constants::{
     addresses, io_commands, LoaderDataType, FIRST_SFX_CHANNEL, IO_COMMAND_I_MASK, IO_COMMAND_MASK,
     N_SFX_CHANNELS,
@@ -404,10 +405,6 @@ impl bytecode_interpreter::Emulator for EmulatorWrapper<'_> {
         self.0.apuram_mut()
     }
 
-    fn set_echo_buffer_size(&mut self, esa: u8, edl: u8) {
-        self.0.set_echo_buffer_size(esa, edl);
-    }
-
     fn write_dsp_register(&mut self, addr: u8, value: u8) {
         self.0.write_dsp_register(addr, value);
     }
@@ -446,7 +443,6 @@ impl std::ops::Deref for SiCad {
 }
 
 fn create_and_process_song_interpreter(
-    emu: &mut EmulatorWrapper,
     audio_data: &AudioDataState,
     song_skip: SongSkip,
     stereo_flag: bool,
@@ -465,7 +461,7 @@ fn create_and_process_song_interpreter(
         SongSkip::None => Ok(Some(SongInterpreter::new(cad, sd, stereo_flag))),
         SongSkip::Song(ticks) => {
             let mut si = SongInterpreter::new(cad, sd, stereo_flag);
-            if si.process_song_skip_ticks(ticks, emu) {
+            if si.process_song_skip_ticks(ticks) {
                 Ok(Some(si))
             } else {
                 Ok(None)
@@ -474,7 +470,7 @@ fn create_and_process_song_interpreter(
         SongSkip::Subroutine(prefix, si, ticks) => {
             match SongInterpreter::new_song_subroutine(cad, sd, prefix, si, stereo_flag) {
                 Ok(mut si) => {
-                    if si.process_song_skip_ticks(ticks, emu) {
+                    if si.process_song_skip_ticks(ticks) {
                         Ok(Some(si))
                     } else {
                         Ok(None)
@@ -679,8 +675,6 @@ impl TadEmu {
             AudioDataState::SongWithSfxBuffer(cad, sd) => (&cad.0, sd.as_ref()),
         };
 
-        self.emu.power(true);
-
         let song_data = song.data();
         let common_data = common_audio_data.data();
         let echo_buffer = &song.metadata().echo_buffer;
@@ -689,6 +683,11 @@ impl TadEmu {
             StereoFlag::Stereo => true,
             StereoFlag::Mono => false,
         };
+
+        self.bc_interpreter =
+            create_and_process_song_interpreter(&data_state, song_skip, stereo_flag)?;
+
+        self.emu.power(true);
 
         let song_data_addr = common_audio_data.song_data_addr();
 
@@ -720,8 +719,20 @@ impl TadEmu {
         }
         .driver_value();
 
-        self.emu
-            .set_echo_buffer_size(echo_buffer.esa_register(), echo_buffer.edl_register());
+        // The echo buffer registers must be setup BEFORE the emulator processes instructions.
+        // Otherwise the audio sounds weird.
+        match &self.bc_interpreter {
+            Some(bci) => {
+                apuram[usize::from(song_data_addr) + SONG_HEADER_ECHO_EDL] = bci.song_header_edl();
+
+                self.emu
+                    .set_echo_buffer_size(bci.esa_register(), bci.edl_register());
+            }
+            None => {
+                self.emu
+                    .set_echo_buffer_size(echo_buffer.esa_register(), echo_buffer.edl_register());
+            }
+        }
 
         self.emu
             .set_spc_registers(addresses::DRIVER_CODE, 0, 0, 0, 0, 0xff);
@@ -732,12 +743,9 @@ impl TadEmu {
             emu_wrapper.0.emulate();
         }
 
-        self.bc_interpreter = create_and_process_song_interpreter(
-            &mut emu_wrapper,
-            &data_state,
-            song_skip,
-            stereo_flag,
-        )?;
+        if let Some(bci) = &self.bc_interpreter {
+            bci.write_to_emulator(&mut emu_wrapper);
+        }
 
         self.set_music_channels_mask(music_channels_mask);
 
