@@ -23,6 +23,8 @@ using namespace nall::primitives;
 
 namespace shvc_sound_emu {
 
+struct ResetRegisters;
+
 struct ShvcSoundEmu {
   constexpr static uint32_t AUDIO_BUFFER_SAMPLES = 256;
   constexpr static uint32_t AUDIO_BUFFER_SIZE = AUDIO_BUFFER_SAMPLES * 2;
@@ -30,7 +32,7 @@ struct ShvcSoundEmu {
   ShvcSoundEmu(const std::array<uint8_t, 64>& iplrom);
   ~ShvcSoundEmu();
 
-  auto power(bool reset) -> void;
+  auto reset(ResetRegisters r) -> void;
 
   auto iplrom() const -> const std::array<uint8_t, 64>&;
   auto iplrom_mut () -> std::array<uint8_t, 64>&;
@@ -40,15 +42,11 @@ struct ShvcSoundEmu {
 
   auto dsp_registers() const -> const std::array<uint8_t, 128>&;
 
-  auto set_echo_buffer_size(uint8_t esa, uint8_t edl) -> void;
-
   auto write_dsp_register(uint8_t addr, uint8_t value) -> void;
   auto write_smp_register(uint8_t addr, uint8_t value) -> void;
 
   auto read_io_ports() const -> std::array<uint8_t, 4>;
   auto write_io_ports(std::array<uint8_t, 4> ports) -> void;
-
-  auto set_spc_registers(uint16_t pc, uint8_t a, uint8_t x, uint8_t y, uint8_t psw, uint8_t sp) -> void;
 
   auto program_counter() const -> uint16_t;
 

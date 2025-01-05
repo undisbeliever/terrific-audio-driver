@@ -70,9 +70,16 @@ fn load_song(
     }
     .driver_value();
 
-    emu.set_echo_buffer_size(echo_buffer.esa_register(), echo_buffer.edl_register());
-
-    emu.set_spc_registers(addresses::DRIVER_CODE, 0, 0, 0, 0, 0xff);
+    emu.reset(shvc_sound_emu::ResetRegisters {
+        pc: addresses::DRIVER_CODE,
+        a: 0,
+        x: 0,
+        y: 0,
+        psw: 0,
+        sp: 0xff,
+        esa: echo_buffer.esa_register(),
+        edl: echo_buffer.edl_register(),
+    });
 
     emu
 }

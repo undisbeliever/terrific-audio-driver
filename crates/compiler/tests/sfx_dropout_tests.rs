@@ -437,7 +437,16 @@ impl Emu {
         }
         .driver_value();
 
-        emu.set_spc_registers(addresses::DRIVER_CODE, 0, 0, 0, 0, 0xff);
+        emu.reset(shvc_sound_emu::ResetRegisters {
+            pc: addresses::DRIVER_CODE,
+            a: 0,
+            x: 0,
+            y: 0,
+            psw: 0,
+            sp: 0xff,
+            esa: 0xff,
+            edl: 0,
+        });
 
         let mut sfx_addrs = common_audio_data.sound_effect_addresses();
         sfx_addrs.push(common_audio_data.sfx_bytecode_addr_range().end);

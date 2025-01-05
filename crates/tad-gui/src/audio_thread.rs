@@ -687,8 +687,6 @@ impl TadEmu {
         self.bc_interpreter =
             create_and_process_song_interpreter(&data_state, song_skip, stereo_flag)?;
 
-        self.emu.power(true);
-
         let song_data_addr = common_audio_data.song_data_addr();
 
         let apuram = self.emu.apuram_mut();
@@ -721,21 +719,25 @@ impl TadEmu {
 
         // The echo buffer registers must be setup BEFORE the emulator processes instructions.
         // Otherwise the audio sounds weird.
-        match &self.bc_interpreter {
+        let (esa, edl) = match &self.bc_interpreter {
             Some(bci) => {
                 apuram[usize::from(song_data_addr) + SONG_HEADER_ECHO_EDL] = bci.song_header_edl();
 
-                self.emu
-                    .set_echo_buffer_size(bci.esa_register(), bci.edl_register());
+                (bci.esa_register(), bci.edl_register())
             }
-            None => {
-                self.emu
-                    .set_echo_buffer_size(echo_buffer.esa_register(), echo_buffer.edl_register());
-            }
-        }
+            None => (echo_buffer.esa_register(), echo_buffer.edl_register()),
+        };
 
-        self.emu
-            .set_spc_registers(addresses::DRIVER_CODE, 0, 0, 0, 0, 0xff);
+        self.emu.reset(shvc_sound_emu::ResetRegisters {
+            pc: addresses::DRIVER_CODE,
+            a: 0,
+            x: 0,
+            y: 0,
+            psw: 0,
+            sp: 0xff,
+            esa,
+            edl,
+        });
 
         // Wait for the audio-driver to finish initialization
         let mut emu_wrapper = EmulatorWrapper(&mut self.emu);

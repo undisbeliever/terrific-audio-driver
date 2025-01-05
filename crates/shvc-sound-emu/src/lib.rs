@@ -5,6 +5,19 @@ use cxx::UniquePtr;
 
 #[cxx::bridge(namespace = "shvc_sound_emu")]
 mod ffi {
+    pub struct ResetRegisters {
+        pub pc: u16,
+        pub a: u8,
+        pub x: u8,
+        pub y: u8,
+        pub psw: u8,
+        pub sp: u8,
+        /// S-DSP Echo Start Address register
+        pub esa: u8,
+        /// S-DSP Echo Delay register
+        pub edl: u8,
+    }
+
     unsafe extern "C++" {
         include!("shvc-sound-emu.hpp");
 
@@ -12,7 +25,7 @@ mod ffi {
 
         fn new_emulator(iplrom: &[u8; 64]) -> UniquePtr<ShvcSoundEmu>;
 
-        fn power(self: Pin<&mut ShvcSoundEmu>, reset: bool);
+        fn reset(self: Pin<&mut ShvcSoundEmu>, registers: ResetRegisters);
 
         fn iplrom(self: &ShvcSoundEmu) -> &[u8; 64];
         fn iplrom_mut(self: Pin<&mut ShvcSoundEmu>) -> &mut [u8; 64];
@@ -22,29 +35,19 @@ mod ffi {
 
         fn dsp_registers(self: &ShvcSoundEmu) -> &[u8; 128];
 
-        fn set_echo_buffer_size(self: Pin<&mut ShvcSoundEmu>, esa: u8, edl: u8);
-
         fn write_dsp_register(self: Pin<&mut ShvcSoundEmu>, addr: u8, value: u8);
         fn write_smp_register(self: Pin<&mut ShvcSoundEmu>, addr: u8, value: u8);
 
         fn read_io_ports(self: &ShvcSoundEmu) -> [u8; 4];
         fn write_io_ports(self: Pin<&mut ShvcSoundEmu>, ports: [u8; 4]);
 
-        fn set_spc_registers(
-            self: Pin<&mut ShvcSoundEmu>,
-            pc: u16,
-            a: u8,
-            x: u8,
-            y: u8,
-            psw: u8,
-            sp: u8,
-        );
-
         fn program_counter(self: &ShvcSoundEmu) -> u16;
 
         fn emulate(self: Pin<&mut ShvcSoundEmu>) -> &[i16; 512];
     }
 }
+
+pub use ffi::ResetRegisters;
 
 pub struct ShvcSoundEmu {
     emu: UniquePtr<ffi::ShvcSoundEmu>,
@@ -63,8 +66,9 @@ impl ShvcSoundEmu {
         Self { emu }
     }
 
-    pub fn power(&mut self, reset: bool) {
-        self.emu.pin_mut().power(reset)
+    /// CAUTION: also resets S-DSP and S-SMP registers
+    pub fn reset(&mut self, registers: ResetRegisters) {
+        self.emu.pin_mut().reset(registers);
     }
 
     pub fn iplrom(&self) -> &[u8; 64] {
@@ -85,12 +89,7 @@ impl ShvcSoundEmu {
         self.emu.dsp_registers()
     }
 
-    pub fn set_echo_buffer_size(&mut self, esa: u8, edl: u8) {
-        self.emu.pin_mut().set_echo_buffer_size(esa, edl)
-    }
-
-    /// This method is not reccomended to the `ESA` and `EDL` registers.
-    /// Use `set_echo_buffer_size()` instead.
+    /// This method is not reccomended for the `ESA` and `EDL` registers.
     pub fn write_dsp_register(self: &mut ShvcSoundEmu, addr: u8, value: u8) {
         self.emu.pin_mut().write_dsp_register(addr, value)
     }
@@ -105,10 +104,6 @@ impl ShvcSoundEmu {
 
     pub fn write_io_ports(&mut self, ports: [u8; 4]) {
         self.emu.pin_mut().write_io_ports(ports)
-    }
-
-    pub fn set_spc_registers(&mut self, pc: u16, a: u8, x: u8, y: u8, psw: u8, sp: u8) {
-        self.emu.pin_mut().set_spc_registers(pc, a, x, y, psw, sp)
     }
 
     pub fn program_counter(self: &ShvcSoundEmu) -> u16 {
