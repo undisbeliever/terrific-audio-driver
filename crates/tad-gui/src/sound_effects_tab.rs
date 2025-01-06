@@ -132,6 +132,8 @@ struct SongChoice {
 pub struct State {
     sender: app::Sender<GuiMessage>,
 
+    sfx_file_loaded: bool,
+
     pan: HorNiceSlider,
     song_choice: SongChoice,
     song_start_ticks: IntInput,
@@ -321,6 +323,8 @@ impl SoundEffectsTab {
         let state = Rc::new(RefCell::from(State {
             sender: sender.clone(),
 
+            sfx_file_loaded: false,
+
             pan,
             song_choice,
             song_start_ticks,
@@ -491,6 +495,8 @@ impl SoundEffectsTab {
         header: &str,
         sfx_list: &ListWithCompilerOutput<SoundEffectInput, SoundEffectOutput>,
     ) {
+        self.state.borrow_mut().sfx_file_loaded = false;
+
         self.disable_editor();
         self.state.borrow_mut().editor.set_text(header);
 
@@ -506,6 +512,8 @@ impl SoundEffectsTab {
 
         self.sidebar.activate();
         self.main_group.activate();
+
+        self.state.borrow_mut().sfx_file_loaded = true;
     }
 
     pub fn header_text(&self) -> String {
@@ -754,49 +762,53 @@ impl State {
     }
 
     fn text_changed(&self, buffer: &EditorBuffer) {
-        if let Some(id) = self.selected_id {
-            let sfx = SoundEffectInput {
-                name: self.old_name.clone(),
-                flags: self.old_flags.clone(),
-                sfx: match SoundEffectTypeChoice::read_widget(&self.sound_effect_type) {
-                    SoundEffectTypeChoice::BytecodeAssembly => {
-                        SoundEffectText::BytecodeAssembly(buffer.text())
-                    }
-                    SoundEffectTypeChoice::Mml => SoundEffectText::Mml(buffer.text()),
-                },
-            };
-            self.sender.send(GuiMessage::EditSoundEffect(id, sfx));
-        } else {
-            // Header
-            self.sender.send(GuiMessage::SfxFileHeaderChanged);
+        if self.sfx_file_loaded {
+            if let Some(id) = self.selected_id {
+                let sfx = SoundEffectInput {
+                    name: self.old_name.clone(),
+                    flags: self.old_flags.clone(),
+                    sfx: match SoundEffectTypeChoice::read_widget(&self.sound_effect_type) {
+                        SoundEffectTypeChoice::BytecodeAssembly => {
+                            SoundEffectText::BytecodeAssembly(buffer.text())
+                        }
+                        SoundEffectTypeChoice::Mml => SoundEffectText::Mml(buffer.text()),
+                    },
+                };
+                self.sender.send(GuiMessage::EditSoundEffect(id, sfx));
+            } else {
+                // Header
+                self.sender.send(GuiMessage::SfxFileHeaderChanged);
+            }
         }
     }
 
     fn commit_sfx(&mut self) {
-        if let Some(id) = self.selected_id {
-            let text = self.editor.text();
+        if self.sfx_file_loaded {
+            if let Some(id) = self.selected_id {
+                let text = self.editor.text();
 
-            if let Some(n) = Name::try_new_lossy(self.name.value()) {
-                self.name.set_value(n.as_str());
-                self.old_name = n;
-            };
+                if let Some(n) = Name::try_new_lossy(self.name.value()) {
+                    self.name.set_value(n.as_str());
+                    self.old_name = n;
+                };
 
-            self.old_flags = SfxFlags {
-                one_channel: self.one_channel_flag.value(),
-                interruptible: self.interruptible_flag.value(),
-            };
+                self.old_flags = SfxFlags {
+                    one_channel: self.one_channel_flag.value(),
+                    interruptible: self.interruptible_flag.value(),
+                };
 
-            let sfx = SoundEffectInput {
-                name: self.old_name.clone(),
-                flags: self.old_flags.clone(),
-                sfx: match SoundEffectTypeChoice::read_widget(&self.sound_effect_type) {
-                    SoundEffectTypeChoice::BytecodeAssembly => {
-                        SoundEffectText::BytecodeAssembly(text)
-                    }
-                    SoundEffectTypeChoice::Mml => SoundEffectText::Mml(text),
-                },
-            };
-            self.sender.send(GuiMessage::EditSoundEffect(id, sfx));
+                let sfx = SoundEffectInput {
+                    name: self.old_name.clone(),
+                    flags: self.old_flags.clone(),
+                    sfx: match SoundEffectTypeChoice::read_widget(&self.sound_effect_type) {
+                        SoundEffectTypeChoice::BytecodeAssembly => {
+                            SoundEffectText::BytecodeAssembly(text)
+                        }
+                        SoundEffectTypeChoice::Mml => SoundEffectText::Mml(text),
+                    },
+                };
+                self.sender.send(GuiMessage::EditSoundEffect(id, sfx));
+            }
         }
     }
 
