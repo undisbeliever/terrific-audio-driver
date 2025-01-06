@@ -30,6 +30,7 @@ pub mod sfx_file;
 pub mod songs;
 pub mod sound_effects;
 pub mod spc_file_export;
+pub mod subroutines;
 pub mod time;
 
 pub use bytecode::opcodes;

@@ -28,7 +28,6 @@ mod vibrato;
 mod volume_pan;
 
 use compiler::bytecode_assembler::{BcTerminator, BytecodeContext};
-use compiler::data;
 use compiler::data::{Name, TextFile, UniqueNamesList};
 use compiler::driver_constants::{
     BC_CHANNEL_STACK_OFFSET, BC_CHANNEL_STACK_SIZE, BC_STACK_BYTES_PER_LOOP,
@@ -42,9 +41,11 @@ use compiler::notes::{Note, Octave};
 use compiler::pitch_table::{
     build_pitch_table, InstrumentHintFreq, PitchTable, PlayPitchFrequency,
 };
-use compiler::songs::{SongData, Subroutine};
-use compiler::{bytecode_assembler, opcodes};
+use compiler::songs::SongData;
+use compiler::subroutines::{FindSubroutineResult, Subroutine, SubroutineId, SubroutineStore};
+use compiler::{bytecode_assembler, data, opcodes};
 
+use std::collections::HashMap;
 use std::fmt::Write;
 
 const SAMPLE_FREQ: f64 = 500.0;
@@ -524,6 +525,24 @@ fn compile_mml(mml: &str, dummy_data: &DummyData) -> SongData {
     .unwrap()
 }
 
+struct SongSubroutinesMap<'a>(HashMap<&'a str, &'a SubroutineId>);
+
+impl SubroutineStore for SongSubroutinesMap<'_> {
+    fn get(&self, _: usize) -> Option<&compiler::subroutines::Subroutine> {
+        panic!("not implemented")
+    }
+
+    fn find_subroutine<'a, 'b>(&'a self, name: &'b str) -> FindSubroutineResult<'b>
+    where
+        'a: 'b,
+    {
+        match self.0.get(name) {
+            Some(s) => FindSubroutineResult::Found(s),
+            None => FindSubroutineResult::NotFound,
+        }
+    }
+}
+
 fn assemble_channel_bytecode(
     bc_asm: &[&str],
     inst_map: &UniqueNamesList<data::InstrumentOrSample>,
@@ -531,12 +550,14 @@ fn assemble_channel_bytecode(
     terminator: BcTerminator,
     context: BytecodeContext,
 ) -> Vec<u8> {
-    let subroutines = subroutines
-        .iter()
-        .map(|s| (s.identifier.as_str(), s.subroutine_id.clone()))
-        .collect();
+    let subroutines = SongSubroutinesMap(
+        subroutines
+            .iter()
+            .map(|s| (s.identifier.as_str(), &s.subroutine_id))
+            .collect(),
+    );
 
-    let mut bc = bytecode_assembler::BytecodeAssembler::new(inst_map, Some(&subroutines), context);
+    let mut bc = bytecode_assembler::BytecodeAssembler::new(inst_map, &subroutines, context);
 
     for line in bc_asm {
         bc.parse_line(line).unwrap();

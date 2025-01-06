@@ -18,6 +18,7 @@ use crate::file_pos::{blank_file_range, split_lines};
 use crate::mml;
 use crate::pitch_table::PitchTable;
 use crate::sfx_file::SoundEffectsFile;
+use crate::subroutines::NoSubroutines;
 use crate::time::{TickClock, TickCounter};
 
 use std::collections::HashMap;
@@ -99,7 +100,8 @@ fn compile_bytecode_sound_effect(
 ) -> Result<CompiledSoundEffect, SoundEffectErrorList> {
     let mut errors = Vec::new();
 
-    let mut bc = BytecodeAssembler::new(instruments, None, BytecodeContext::SoundEffect);
+    let mut bc =
+        BytecodeAssembler::new(instruments, &NoSubroutines(), BytecodeContext::SoundEffect);
 
     let mut last_line_range = blank_file_range();
 

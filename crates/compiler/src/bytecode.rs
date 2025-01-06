@@ -19,6 +19,7 @@ use crate::invert_flags::InvertFlags;
 use crate::notes::{Note, LAST_NOTE_ID, N_NOTES};
 use crate::pitch_table::InstrumentHintFreq;
 use crate::samples::note_range;
+use crate::subroutines::{FindSubroutineResult, SubroutineStore};
 use crate::time::{TickClock, TickCounter, TickCounterWithLoopFlag};
 use crate::value_newtypes::{
     i16_non_zero_value_newtype, i16_value_newtype, i8_value_newtype, u16_value_newtype,
@@ -26,7 +27,6 @@ use crate::value_newtypes::{
 };
 
 use std::cmp::{max, min};
-use std::collections::HashMap;
 use std::ops::RangeInclusive;
 
 pub const KEY_OFF_TICK_DELAY: u32 = 1;
@@ -1090,7 +1090,7 @@ pub struct Bytecode<'a> {
     bytecode: Vec<u8>,
 
     instruments: &'a UniqueNamesList<data::InstrumentOrSample>,
-    subroutines: Option<&'a HashMap<&'a str, SubroutineId>>,
+    subroutines: &'a dyn SubroutineStore,
 
     state: State,
 
@@ -1106,7 +1106,7 @@ impl<'a> Bytecode<'a> {
     pub fn new(
         context: BytecodeContext,
         instruments: &'a UniqueNamesList<data::InstrumentOrSample>,
-        subroutines: Option<&'a HashMap<&'a str, SubroutineId>>,
+        subroutines: &'a dyn SubroutineStore,
     ) -> Bytecode<'a> {
         Self::new_append_to_vec(Vec::new(), context, instruments, subroutines)
     }
@@ -1118,7 +1118,7 @@ impl<'a> Bytecode<'a> {
         vec: Vec<u8>,
         context: BytecodeContext,
         instruments: &'a UniqueNamesList<data::InstrumentOrSample>,
-        subroutines: Option<&'a HashMap<&'a str, SubroutineId>>,
+        subroutines: &'a dyn SubroutineStore,
     ) -> Bytecode<'a> {
         Bytecode {
             bytecode: vec,
@@ -2192,19 +2192,20 @@ impl<'a> Bytecode<'a> {
         Ok(())
     }
 
-    fn _find_subroutine(&self, name: &str) -> Result<&'a SubroutineId, BytecodeError> {
-        match self.subroutines {
-            Some(s) => match s.get(name) {
-                Some(s) => Ok(s),
-                None => Err(BytecodeError::UnknownSubroutine(name.to_owned())),
-            },
-            None => match &self.context {
-                BytecodeContext::SoundEffect => Err(BytecodeError::SubroutineCallInSoundEffect),
-                BytecodeContext::MmlPrefix => Err(BytecodeError::SubroutineCallInMmlPrefix),
-                BytecodeContext::SongChannel { .. } | BytecodeContext::SongSubroutine { .. } => {
-                    Err(BytecodeError::NotAllowedToCallSubroutine)
-                }
-            },
+    fn _find_subroutine(&self, name: &'a str) -> Result<&'a SubroutineId, BytecodeError> {
+        match self.subroutines.find_subroutine(name) {
+            FindSubroutineResult::Found(s) => Ok(s),
+            FindSubroutineResult::NotCompiled => {
+                // Subroutine has been compiled, but it contains an error
+                Err(BytecodeError::SubroutineHasError(name.to_owned()))
+            }
+            FindSubroutineResult::Recussion => {
+                Err(BytecodeError::SubroutineRecursion(name.to_owned()))
+            }
+            FindSubroutineResult::NotFound => {
+                Err(BytecodeError::UnknownSubroutine(name.to_owned()))
+            }
+            FindSubroutineResult::NotAllowed => Err(BytecodeError::NotAllowedToCallSubroutine),
         }
     }
 

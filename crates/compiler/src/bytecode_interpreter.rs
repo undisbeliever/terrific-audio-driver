@@ -21,7 +21,7 @@ use crate::invert_flags::InvertFlags;
 use crate::mml::MmlPrefixData;
 use crate::songs::Channel as SongChannel;
 use crate::songs::SongData;
-use crate::songs::Subroutine;
+use crate::subroutines::Subroutine;
 use crate::time::TickClock;
 use crate::time::TickCounter;
 

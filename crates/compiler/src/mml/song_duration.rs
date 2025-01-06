@@ -7,7 +7,8 @@
 use super::MetaData;
 
 use crate::driver_constants::N_MUSIC_CHANNELS;
-use crate::songs::{Channel, Subroutine};
+use crate::songs::Channel;
+use crate::subroutines::Subroutine;
 use crate::time::{TickClock, TickCounter, TIMER_HZ};
 
 use std::time::Duration;

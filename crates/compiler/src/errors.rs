@@ -314,6 +314,8 @@ pub enum BytecodeError {
     UnknownInstrument(String),
     InvalidInstrumentId,
     UnknownSubroutine(String),
+    SubroutineRecursion(String),
+    SubroutineHasError(String),
     NotAllowedToCallSubroutine,
 
     SubroutineCallInMmlPrefix,
@@ -1300,6 +1302,12 @@ impl Display for BytecodeError {
             Self::UnknownInstrument(s) => write!(f, "cannot find instrument: {}", s),
             Self::InvalidInstrumentId => write!(f, "invalid instrument id"),
             Self::UnknownSubroutine(s) => write!(f, "cannot find subroutine: {}", s),
+            Self::SubroutineRecursion(s) => {
+                write!(f, "cannot call subroutine {s}: recursion detected")
+            }
+            Self::SubroutineHasError(s) => {
+                write!(f, "cannot call subroutine {s}: error in subroutine")
+            }
             Self::NotAllowedToCallSubroutine => write!(f, "not allowed to call subroutine here"),
 
             Self::SubroutineCallInMmlPrefix => {

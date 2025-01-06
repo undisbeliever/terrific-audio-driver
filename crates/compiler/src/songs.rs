@@ -8,7 +8,7 @@
 
 use crate::bytecode::{
     BcTerminator, BcTicks, BcTicksKeyOff, BcTicksNoKeyOff, Bytecode, BytecodeContext, InstrumentId,
-    PlayNoteTicks, StackDepth, SubroutineId, Volume,
+    PlayNoteTicks, StackDepth, Volume,
 };
 use crate::channel_bc_generator::MmlInstrument;
 use crate::data::{self, single_item_unique_names_list, InstrumentOrSample, Name, UniqueNamesList};
@@ -24,6 +24,7 @@ use crate::errors::{ChannelError, SongError, SongTooLargeError};
 use crate::mml::{MetaData, Section};
 use crate::notes::{Note, Octave};
 use crate::sound_effects::CompiledSoundEffect;
+use crate::subroutines::{NoSubroutines, Subroutine};
 use crate::time::{TickClock, TickCounter, TickCounterWithLoopFlag};
 use crate::{audio_driver, mml};
 
@@ -70,14 +71,6 @@ pub struct SongBcTracking {
     /// Used to determine if a bytecode offset is in a subroutine or not.
     /// `bc_offset` is in a subroutine if `bc_offset < firt_channel_bc_offset`.
     pub first_channel_bc_offset: u16,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct Subroutine {
-    pub identifier: mml::IdentifierBuf,
-    pub subroutine_id: SubroutineId,
-    pub bytecode_offset: u16,
-    pub changes_song_tempo: bool,
 }
 
 #[derive(Debug, Copy, Clone, PartialEq)]
@@ -222,7 +215,7 @@ pub fn test_sample_song(
             max_edl: EchoEdl::MIN,
         },
         sample_song_fake_instruments(),
-        None,
+        &NoSubroutines(),
     );
 
     let inst = InstrumentId::try_from(instrument)?;

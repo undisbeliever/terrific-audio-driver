@@ -24,7 +24,8 @@ use crate::mml::IdentifierBuf;
 use crate::notes::Note;
 use crate::notes::SEMITONES_PER_OCTAVE;
 use crate::pitch_table::{PitchTable, PlayPitchFrequency, PITCH_REGISTER_MAX};
-use crate::songs::{LoopPoint, Subroutine};
+use crate::songs::LoopPoint;
+use crate::subroutines::{NoSubroutines, SubroutineStore};
 use crate::time::{Bpm, TickClock, TickCounter};
 use crate::value_newtypes::{i16_value_newtype, u8_value_newtype, SignedValueNewType};
 use crate::FilePosRange;
@@ -434,7 +435,7 @@ pub(crate) struct ChannelBcGenerator<'a> {
     pitch_table: &'a PitchTable,
     mml_file: &'a str,
     instruments: &'a [MmlInstrument],
-    subroutines: Option<&'a Vec<Subroutine>>,
+    subroutines: &'a dyn SubroutineStore,
 
     bc: Bytecode<'a>,
 
@@ -452,7 +453,7 @@ impl<'a> ChannelBcGenerator<'a> {
         mml_file: &'a str,
         data_instruments: &'a UniqueNamesList<data::InstrumentOrSample>,
         mml_instruments: &'a [MmlInstrument],
-        subroutines: Option<&'a Vec<Subroutine>>,
+        subroutines: &'a dyn SubroutineStore,
         context: BytecodeContext,
     ) -> ChannelBcGenerator<'a> {
         ChannelBcGenerator {
@@ -460,8 +461,9 @@ impl<'a> ChannelBcGenerator<'a> {
             mml_file,
             instruments: mml_instruments,
             subroutines,
-            // Using None for subroutines to forbid subroutine calls in bytecode assembly
-            bc: Bytecode::new_append_to_vec(bc_data, context, data_instruments, None),
+            // Using NoSubroutines here to forbid direct subroutine calls in bytecode assembly
+            // (\asm subroutine calls must go through `Self::call_subroutine()`)
+            bc: Bytecode::new_append_to_vec(bc_data, context, data_instruments, &NoSubroutines()),
             mp: MpState::Manual,
             detune_cents: DetuneCents::ZERO,
             quantize: Quantize::None,
@@ -1458,12 +1460,9 @@ impl<'a> ChannelBcGenerator<'a> {
     ) -> Result<(), ChannelError> {
         // CallSubroutine commands should only be created if the channel can call a subroutine.
         // `s_id` should always be valid
-        let sub = match self.subroutines {
-            Some(s) => match s.get(index) {
-                Some(s) => s,
-                None => panic!("invalid SubroutineId"),
-            },
-            None => panic!("subroutines is None"),
+        let sub = match self.subroutines.get(index) {
+            Some(s) => s,
+            None => panic!("invalid SubroutineId"),
         };
 
         match (disable_vibrato, &self.mp) {

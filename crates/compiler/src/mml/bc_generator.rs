@@ -23,11 +23,43 @@ use crate::channel_bc_generator::{
 };
 use crate::errors::{ChannelError, ErrorWithPos, MmlChannelError};
 use crate::pitch_table::PitchTable;
-use crate::songs::{Channel, Subroutine};
+use crate::songs::Channel;
 use crate::sound_effects::MAX_SFX_TICKS;
+use crate::subroutines::{FindSubroutineResult, NoSubroutines, Subroutine, SubroutineStore};
 use crate::time::{ZenLen, DEFAULT_ZENLEN};
 
 use std::collections::HashMap;
+
+struct SongSubroutines<'a> {
+    vec: Vec<Subroutine>,
+    id_map: HashMap<IdentifierStr<'a>, Option<SubroutineId>>,
+    name_map: &'a HashMap<IdentifierStr<'a>, usize>,
+}
+
+impl SubroutineStore for SongSubroutines<'_> {
+    fn get(&self, index: usize) -> Option<&Subroutine> {
+        self.vec.get(index)
+    }
+
+    fn find_subroutine<'a, 'b>(&'a self, name: &'b str) -> FindSubroutineResult<'b>
+    where
+        'a: 'b,
+    {
+        let name = IdentifierStr::from_str(name);
+
+        match self.id_map.get(&name) {
+            Some(Some(s)) => FindSubroutineResult::Found(s),
+            Some(None) => {
+                // Subroutine has been compiled, but it contains an error
+                FindSubroutineResult::NotCompiled
+            }
+            None => match self.name_map.get(&name) {
+                Some(_) => FindSubroutineResult::Recussion,
+                None => FindSubroutineResult::NotFound,
+            },
+        }
+    }
+}
 
 pub struct MmlSongBytecodeGenerator<'a> {
     song_data: Vec<u8>,
@@ -42,9 +74,7 @@ pub struct MmlSongBytecodeGenerator<'a> {
 
     max_edl: EchoEdl,
 
-    subroutines: Vec<Subroutine>,
-    subroutine_map: HashMap<IdentifierStr<'a>, Option<SubroutineId>>,
-    subroutine_name_map: &'a HashMap<IdentifierStr<'a>, usize>,
+    subroutines: SongSubroutines<'a>,
 
     #[cfg(feature = "mml_tracking")]
     first_channel_bc_offset: Option<u16>,
@@ -77,11 +107,13 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
             sections,
             mml_instruments: instruments,
             mml_instrument_map: instrument_map,
-            subroutine_name_map,
 
             max_edl,
-            subroutines: Vec::new(),
-            subroutine_map: HashMap::new(),
+            subroutines: SongSubroutines {
+                vec: Vec::new(),
+                id_map: HashMap::new(),
+                name_map: subroutine_name_map,
+            },
 
             #[cfg(feature = "mml_tracking")]
             first_channel_bc_offset: None,
@@ -96,7 +128,7 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
     pub(crate) fn take_data(self) -> (Vec<u8>, Vec<Subroutine>, SongBcTracking) {
         (
             self.song_data,
-            self.subroutines,
+            self.subroutines.vec,
             SongBcTracking {
                 bytecode: self.bytecode_tracker,
                 cursor_tracker: self.cursor_tracker,
@@ -107,7 +139,7 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
 
     #[cfg(not(feature = "mml_tracking"))]
     pub(crate) fn take_data(self) -> (Vec<u8>, Vec<Subroutine>) {
-        (self.song_data, self.subroutines)
+        (self.song_data, self.subroutines.vec)
     }
 
     fn parse_and_compile_tail_call(
@@ -187,7 +219,7 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
         tokens: MmlTokens,
     ) -> Result<(), MmlChannelError> {
         // Index in SongData, not mml file
-        let song_subroutine_index = self.subroutines.len().try_into().unwrap();
+        let song_subroutine_index = self.subroutines.vec.len().try_into().unwrap();
 
         let song_data = std::mem::take(&mut self.song_data);
         let sd_start_index = song_data.len();
@@ -196,7 +228,7 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
             ChannelId::Subroutine(song_subroutine_index),
             tokens,
             &self.mml_instrument_map,
-            Some((&self.subroutine_map, self.subroutine_name_map)),
+            &self.subroutines,
             self.default_zenlen,
             None, // No sections in subroutines
             #[cfg(feature = "mml_tracking")]
@@ -209,7 +241,7 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
             self.mml_file,
             self.data_instruments,
             self.mml_instruments,
-            Some(&self.subroutines),
+            &self.subroutines,
             BytecodeContext::SongSubroutine {
                 max_edl: self.max_edl,
             },
@@ -248,7 +280,7 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
                             s,
                             SubroutineCallType::Mml | SubroutineCallType::Asm,
                         ) => {
-                            let sub = self.subroutines.get(*s).unwrap();
+                            let sub = self.subroutines.vec.get(*s).unwrap();
                             BcTerminator::TailSubroutineCall(
                                 sub.bytecode_offset.into(),
                                 &sub.subroutine_id,
@@ -294,10 +326,11 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
             let changes_song_tempo = !bc_state.tempo_changes.is_empty();
             let subroutine_id = SubroutineId::new(song_subroutine_index, bc_state);
 
-            self.subroutine_map
+            self.subroutines
+                .id_map
                 .insert(identifier, Some(subroutine_id.clone()));
 
-            self.subroutines.push(Subroutine {
+            self.subroutines.vec.push(Subroutine {
                 identifier: identifier.to_owned(),
                 bytecode_offset: sd_start_index.try_into().unwrap_or(u16::MAX),
                 subroutine_id,
@@ -306,7 +339,7 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
 
             Ok(())
         } else {
-            self.subroutine_map.insert(identifier, None);
+            self.subroutines.id_map.insert(identifier, None);
 
             Err(MmlChannelError {
                 identifier: identifier.to_owned(),
@@ -337,7 +370,7 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
             ChannelId::Channel(channel_char),
             tokens,
             &self.mml_instrument_map,
-            Some((&self.subroutine_map, self.subroutine_name_map)),
+            &self.subroutines,
             self.default_zenlen,
             Some(self.sections),
             #[cfg(feature = "mml_tracking")]
@@ -350,7 +383,7 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
             self.mml_file,
             self.data_instruments,
             self.mml_instruments,
-            Some(&self.subroutines),
+            &self.subroutines,
             BytecodeContext::SongChannel {
                 index: channel_index,
                 max_edl: self.max_edl,
@@ -426,7 +459,7 @@ pub fn parse_and_compile_sound_effect(
         ChannelId::SoundEffect,
         tokens,
         instruments_map,
-        None,
+        &NoSubroutines(),
         DEFAULT_ZENLEN,
         None, // No sections in sound effect
         #[cfg(feature = "mml_tracking")]
@@ -439,7 +472,7 @@ pub fn parse_and_compile_sound_effect(
         mml_file,
         data_instruments,
         mml_instruments,
-        None,
+        &NoSubroutines(),
         BytecodeContext::SoundEffect,
     );
 
@@ -503,7 +536,7 @@ pub fn parse_and_compile_mml_prefix(
         ChannelId::MmlPrefix,
         tokens,
         instruments_map,
-        None,
+        &NoSubroutines(),
         DEFAULT_ZENLEN,
         None, // No sections in sound effect
         // ::TODO remove cursor tracker here::
@@ -517,7 +550,7 @@ pub fn parse_and_compile_mml_prefix(
         mml_prefix,
         data_instruments,
         mml_instruments,
-        None,
+        &NoSubroutines(),
         BytecodeContext::MmlPrefix,
     );
 

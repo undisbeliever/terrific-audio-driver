@@ -13,10 +13,9 @@ use super::note_tracking::CursorTracker;
 use crate::bytecode::{
     DetuneValue, EarlyReleaseMinTicks, EarlyReleaseTicks, LoopCount, NoiseFrequency, Pan,
     PanSlideTicks, PanbrelloQuarterWavelengthInTicks, PlayNoteTicks, PlayPitchPitch,
-    RelativeEchoFeedback, RelativeEchoVolume, RelativeFirCoefficient, SubroutineId,
-    TremoloAmplitude, TremoloQuarterWavelengthInTicks, VibratoPitchOffsetPerTick,
-    VibratoQuarterWavelengthInTicks, Volume, VolumeSlideAmount, VolumeSlideTicks,
-    KEY_OFF_TICK_DELAY,
+    RelativeEchoFeedback, RelativeEchoVolume, RelativeFirCoefficient, TremoloAmplitude,
+    TremoloQuarterWavelengthInTicks, VibratoPitchOffsetPerTick, VibratoQuarterWavelengthInTicks,
+    Volume, VolumeSlideAmount, VolumeSlideTicks, KEY_OFF_TICK_DELAY,
 };
 use crate::channel_bc_generator::{
     merge_pan_commands, merge_volumes_commands, relative_pan, relative_volume, Command,
@@ -30,6 +29,7 @@ use crate::errors::{ChannelError, ErrorWithPos, ValueError};
 use crate::file_pos::{FilePos, FilePosRange};
 use crate::notes::{MidiNote, MmlPitch, Note, Octave, STARTING_OCTAVE};
 use crate::pitch_table::PlayPitchSampleRate;
+use crate::subroutines::{FindSubroutineResult, SubroutineStore};
 use crate::time::{
     MmlDefaultLength, MmlLength, TickCounter, TickCounterWithLoopFlag, ZenLen, STARTING_MML_LENGTH,
 };
@@ -81,11 +81,6 @@ pub struct State {
     pub quantize: Option<FineQuantization>,
 }
 
-type SubroutineMaps<'a> = (
-    &'a HashMap<IdentifierStr<'a>, Option<SubroutineId>>,
-    &'a HashMap<IdentifierStr<'a>, usize>,
-);
-
 mod parser {
     use crate::{file_pos::LineIndexRange, mml::ChannelId};
 
@@ -106,7 +101,7 @@ mod parser {
         pending_sections: Option<&'a [Section]>,
 
         instruments_map: &'a HashMap<IdentifierStr<'a>, usize>,
-        subroutine_maps: Option<SubroutineMaps<'a>>,
+        subroutines: &'a dyn SubroutineStore,
 
         #[cfg(feature = "mml_tracking")]
         cursor_tracker: &'a mut CursorTracker,
@@ -117,7 +112,7 @@ mod parser {
             channel: ChannelId,
             tokens: MmlTokens<'a>,
             instruments_map: &'a HashMap<IdentifierStr, usize>,
-            subroutine_maps: Option<SubroutineMaps<'a>>,
+            subroutines: &'a dyn SubroutineStore,
             zenlen: ZenLen,
             sections: Option<&'a [Section]>,
 
@@ -153,7 +148,7 @@ mod parser {
                 pending_sections,
 
                 instruments_map,
-                subroutine_maps,
+                subroutines,
 
                 #[cfg(feature = "mml_tracking")]
                 cursor_tracker: cursor_tracking,
@@ -210,8 +205,11 @@ mod parser {
             self.instruments_map
         }
 
-        pub fn subroutine_maps(&self) -> Option<SubroutineMaps<'a>> {
-            self.subroutine_maps
+        pub fn find_subroutine<'b>(&self, name: &'b str) -> FindSubroutineResult<'b>
+        where
+            'a: 'b,
+        {
+            self.subroutines.find_subroutine(name)
         }
 
         pub fn set_tick_counter(&mut self, tc: TickCounterWithLoopFlag) {
@@ -1968,30 +1966,28 @@ fn parse_call_subroutine(
     d: SubroutineCallType,
     p: &mut Parser,
 ) -> Command {
-    match p.subroutine_maps() {
-        Some((id_map, name_map)) => match id_map.get(&id) {
-            Some(Some(s)) => {
-                p.increment_tick_counter(s.tick_counter());
-                Command::CallSubroutine(s.as_usize(), d)
-            }
-            Some(None) => {
-                // Subroutine has been compiled, but it contains an error
-                Command::None
-            }
-            None => match name_map.get(&id) {
-                Some(_) => invalid_token_error(
-                    p,
-                    pos,
-                    ChannelError::CannotCallSubroutineRecursion(id.as_str().to_owned()),
-                ),
-                None => invalid_token_error(
-                    p,
-                    pos,
-                    ChannelError::CannotFindSubroutine(id.as_str().to_owned()),
-                ),
-            },
-        },
-        None => match p.channel_id() {
+    match p.find_subroutine(id.as_str()) {
+        FindSubroutineResult::Found(s) => {
+            let index = s.as_usize();
+
+            p.increment_tick_counter(s.tick_counter());
+            Command::CallSubroutine(index, d)
+        }
+        FindSubroutineResult::NotCompiled => {
+            // Subroutine has been compiled, but it contains an error
+            Command::None
+        }
+        FindSubroutineResult::Recussion => invalid_token_error(
+            p,
+            pos,
+            ChannelError::CannotCallSubroutineRecursion(id.as_str().to_owned()),
+        ),
+        FindSubroutineResult::NotFound => invalid_token_error(
+            p,
+            pos,
+            ChannelError::CannotFindSubroutine(id.as_str().to_owned()),
+        ),
+        FindSubroutineResult::NotAllowed => match p.channel_id() {
             ChannelId::Channel(_) | ChannelId::Subroutine(_) => invalid_token_error(
                 p,
                 pos,

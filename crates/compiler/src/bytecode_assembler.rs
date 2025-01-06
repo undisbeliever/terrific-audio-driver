@@ -7,7 +7,7 @@
 use crate::bytecode::{
     BcTicksKeyOff, BcTicksNoKeyOff, Bytecode, EarlyReleaseMinTicks, EarlyReleaseTicks, LoopCount,
     PlayNoteTicks, PlayPitchPitch, PortamentoVelocity, RelativeEchoFeedback,
-    RelativeFirCoefficient, State, SubroutineId, VibratoPitchOffsetPerTick,
+    RelativeFirCoefficient, State, VibratoPitchOffsetPerTick,
 };
 use crate::data::{InstrumentOrSample, UniqueNamesList};
 use crate::driver_constants::FIR_FILTER_SIZE;
@@ -16,14 +16,13 @@ use crate::envelope::{Adsr, Gain, OptionalGain, TempGain};
 use crate::errors::{BytecodeError, ChannelError, ValueError};
 use crate::invert_flags::parse_invert_flag_arguments;
 use crate::notes::Note;
+use crate::subroutines::SubroutineStore;
 use crate::time::TickCounter;
 use crate::value_newtypes::{
     parse_i8wh, I8WithByteHexValueNewType, SignedValueNewType, UnsignedValueNewType,
 };
 
 pub use crate::bytecode::{BcTerminator, BytecodeContext};
-
-use std::collections::HashMap;
 
 // Some `Bytecode` methods do not return a Result.
 // The macro in `BytecodeAssembler::parse_line()` cannot determine the method's value.
@@ -621,7 +620,7 @@ pub struct BytecodeAssembler<'a> {
 impl BytecodeAssembler<'_> {
     pub fn new<'a>(
         inst_map: &'a UniqueNamesList<InstrumentOrSample>,
-        subroutines: Option<&'a HashMap<&'a str, SubroutineId>>,
+        subroutines: &'a dyn SubroutineStore,
         context: BytecodeContext,
     ) -> BytecodeAssembler<'a> {
         BytecodeAssembler {
