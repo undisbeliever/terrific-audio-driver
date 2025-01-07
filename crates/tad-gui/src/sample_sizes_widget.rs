@@ -209,6 +209,9 @@ impl SampleSizesWidget {
             CadOutput::NoSfx(cad, names) => {
                 self.update_table(&cad.0, names, false);
             }
+            CadOutput::SfxBuffer(cad, names) => {
+                self.update_table(&cad.0, names, false);
+            }
             CadOutput::WithSfx(cad, names) => {
                 self.update_table(&cad.common_audio_data, names, true);
             }
@@ -242,7 +245,7 @@ impl SampleSizesWidget {
     fn update_table(&mut self, cad: &CommonAudioData, names: &Arc<Vec<Name>>, sfx_valid: bool) {
         self.graph_data = Some(GraphData {
             dir_table_range: cad.dir_addr_range(),
-            sfx_range: cad.sfx_bc_and_table_addr_range(),
+            sfx_range: cad.sfx_data_and_tables_range(),
             pitch_table: cad.pitch_table_addr_range(),
             instruments_samples_range: Range {
                 start: cad.instruments_soa_addr_range().start,

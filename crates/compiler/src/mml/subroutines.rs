@@ -126,7 +126,7 @@ pub fn compile_subroutines<'a>(
                 let mut tokens = Default::default();
                 std::mem::swap(&mut tokens, &mut s.tokens);
 
-                let r = bc_generator.parse_and_compile_song_subroutione(s.identifier, tokens);
+                let r = bc_generator.parse_and_compile_subroutione(s.identifier, tokens);
                 if let Err(e) = r {
                     errors.push(e);
                 }
@@ -145,7 +145,7 @@ pub fn compile_subroutines<'a>(
     }
 
     for s in to_process {
-        let r = bc_generator.parse_and_compile_song_subroutione(s.identifier, s.tokens);
+        let r = bc_generator.parse_and_compile_subroutione(s.identifier, s.tokens);
         if let Err(e) = r {
             errors.push(e);
         }

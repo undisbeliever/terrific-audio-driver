@@ -195,8 +195,21 @@ impl RelativeFirCoefficient {
 pub enum BytecodeContext {
     SongSubroutine { max_edl: EchoEdl },
     SongChannel { index: u8, max_edl: EchoEdl },
+    SfxSubroutine,
     SoundEffect,
     MmlPrefix,
+}
+
+impl BytecodeContext {
+    fn is_subroutine(&self) -> bool {
+        match self {
+            Self::SongSubroutine { .. } => true,
+            Self::SfxSubroutine => true,
+            Self::SongChannel { .. } => false,
+            Self::SoundEffect => false,
+            Self::MmlPrefix => false,
+        }
+    }
 }
 
 pub mod opcodes {
@@ -1136,12 +1149,14 @@ impl<'a> Bytecode<'a> {
                     BytecodeContext::SoundEffect => IeState::Known(DetuneValue::ZERO),
                     BytecodeContext::SongChannel { .. } => IeState::Known(DetuneValue::ZERO),
                     BytecodeContext::SongSubroutine { .. } => IeState::Unset,
+                    BytecodeContext::SfxSubroutine => IeState::Unset,
                     BytecodeContext::MmlPrefix => IeState::Unset,
                 },
                 vibrato: match &context {
                     BytecodeContext::SoundEffect => VibratoState::Disabled,
                     BytecodeContext::SongChannel { .. } => VibratoState::Disabled,
                     BytecodeContext::SongSubroutine { .. } => VibratoState::Unchanged,
+                    BytecodeContext::SfxSubroutine => VibratoState::Unchanged,
                     BytecodeContext::MmlPrefix => VibratoState::Disabled,
                 },
                 prev_slurred_note: SlurredNoteState::Unchanged,
@@ -1154,6 +1169,7 @@ impl<'a> Bytecode<'a> {
                 BytecodeContext::SoundEffect => true,
                 BytecodeContext::SongChannel { .. } => true,
                 BytecodeContext::SongSubroutine { .. } => false,
+                BytecodeContext::SfxSubroutine { .. } => false,
                 BytecodeContext::MmlPrefix => false,
             },
             context,
@@ -1243,8 +1259,7 @@ impl<'a> Bytecode<'a> {
             ));
         }
 
-        if terminator.is_return() && !matches!(self.context, BytecodeContext::SongSubroutine { .. })
-        {
+        if terminator.is_return() && !self.context.is_subroutine() {
             return Err((BytecodeError::ReturnInNonSubroutine, self.bytecode));
         }
 
@@ -1504,7 +1519,7 @@ impl<'a> Bytecode<'a> {
         }
 
         match self.context {
-            BytecodeContext::SongSubroutine { .. } => (),
+            BytecodeContext::SongSubroutine { .. } | BytecodeContext::SfxSubroutine { .. } => (),
             BytecodeContext::MmlPrefix
             | BytecodeContext::SongChannel { .. }
             | BytecodeContext::SoundEffect => {
@@ -1840,8 +1855,9 @@ impl<'a> Bytecode<'a> {
                 emit_bytecode!(self, opcode);
                 Ok(())
             }
-
-            BytecodeContext::SoundEffect => Err(BytecodeError::PmodNotAllowedInSoundEffect),
+            BytecodeContext::SfxSubroutine | BytecodeContext::SoundEffect => {
+                Err(BytecodeError::PmodNotAllowedInSoundEffect)
+            }
         }
     }
 
@@ -2061,7 +2077,7 @@ impl<'a> Bytecode<'a> {
                 }
 
                 InstrumentState::Unknown | InstrumentState::Unset => match self.context {
-                    BytecodeContext::SongSubroutine { .. } => {
+                    BytecodeContext::SongSubroutine { .. } | BytecodeContext::SfxSubroutine => {
                         self.state.instrument_hint = subroutine.state.instrument_hint;
                     }
 
@@ -2085,7 +2101,7 @@ impl<'a> Bytecode<'a> {
                     BytecodeContext::SongChannel { .. } | BytecodeContext::SoundEffect => {
                         return Err(BytecodeError::SubroutinePlaysNotesWithNoInstrument)
                     }
-                    BytecodeContext::SongSubroutine { .. } => {
+                    BytecodeContext::SongSubroutine { .. } | BytecodeContext::SfxSubroutine => {
                         self.state.no_instrument_notes = if self_notes.is_empty() {
                             sub_notes.clone()
                         } else {
@@ -2126,7 +2142,8 @@ impl<'a> Bytecode<'a> {
         match self.context {
             BytecodeContext::SongSubroutine { .. } => (),
             BytecodeContext::SongChannel { .. } => (),
-            BytecodeContext::SoundEffect => return Err(BytecodeError::SubroutineCallInSoundEffect),
+            BytecodeContext::SoundEffect => (),
+            BytecodeContext::SfxSubroutine => (),
             BytecodeContext::MmlPrefix => return Err(BytecodeError::SubroutineCallInMmlPrefix),
         }
 
@@ -2176,7 +2193,7 @@ impl<'a> Bytecode<'a> {
 
     pub fn set_song_tick_clock(&mut self, tick_clock: TickClock) -> Result<(), BytecodeError> {
         match self.context {
-            BytecodeContext::SoundEffect => {
+            BytecodeContext::SoundEffect | BytecodeContext::SfxSubroutine => {
                 return Err(BytecodeError::CannotChangeTickClockInASoundEffect)
             }
             BytecodeContext::SongChannel { .. }
@@ -2371,7 +2388,9 @@ impl<'a> Bytecode<'a> {
                     Err(BytecodeError::EchoLengthLargerThanMaxEdl { edl, max_edl })
                 }
             }
-            BytecodeContext::SoundEffect => Err(BytecodeError::CannotSetEchoDelayInSoundEffect),
+            BytecodeContext::SoundEffect | BytecodeContext::SfxSubroutine => {
+                Err(BytecodeError::CannotSetEchoDelayInSoundEffect)
+            }
             BytecodeContext::MmlPrefix => Err(BytecodeError::CannotSetEchoDelayInMmlPrefix),
         }
     }

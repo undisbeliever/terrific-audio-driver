@@ -141,7 +141,9 @@
     "robot_ascend",
     "robot_fires_laser",
     "fire_arrow",
-    "noise"
+    "noise",
+    "sfx_calling_subroutine_asm",
+    "sfx_calling_subroutine_mml"
   ],
   "low_priority_sound_effects": [
     "low_priority_beep",

@@ -20,8 +20,8 @@ use crate::channel_bc_generator::{
 use crate::data::{LoopSetting, Name};
 use crate::driver_constants::{
     addresses, BC_CHANNEL_STACK_SIZE, ECHO_BUFFER_EDL_MS, FIR_FILTER_SIZE, MAX_COMMON_DATA_SIZE,
-    MAX_DIR_ITEMS, MAX_INSTRUMENTS_AND_SAMPLES, MAX_N_PITCHES, MAX_N_SONGS, MAX_SONG_DATA_SIZE,
-    MAX_SOUND_EFFECTS, MAX_SUBROUTINES,
+    MAX_DIR_ITEMS, MAX_INSTRUMENTS_AND_SAMPLES, MAX_N_PITCHES, MAX_N_SONGS, MAX_SFX_SUBROUTINES,
+    MAX_SONG_DATA_SIZE, MAX_SOUND_EFFECTS, MAX_SUBROUTINES,
 };
 use crate::echo::{
     EchoEdl, EchoFeedback, EchoLength, EchoVolume, FirCoefficient, FirTap, MAX_FIR_ABS_SUM,
@@ -319,7 +319,6 @@ pub enum BytecodeError {
     NotAllowedToCallSubroutine,
 
     SubroutineCallInMmlPrefix,
-    SubroutineCallInSoundEffect,
     ReturnInNonSubroutine,
 
     CannotChangeTickClockInASoundEffect,
@@ -380,10 +379,18 @@ pub struct SoundEffectError {
 }
 
 #[derive(Debug)]
+pub enum SfxSubroutineErrors {
+    LineErrors(Vec<ErrorWithPos<MmlLineError>>),
+    SubroutineErrors(Vec<MmlChannelError>),
+    TooManySfxSubroutines(usize),
+}
+
+#[derive(Debug)]
 pub struct SoundEffectsFileError {
     pub path: Option<PathBuf>,
     pub file_name: String,
 
+    pub subroutine_errors: Option<SfxSubroutineErrors>,
     pub errors: Vec<SoundEffectError>,
 }
 
@@ -436,6 +443,7 @@ pub struct SampleAndInstrumentDataError {
 pub enum CommonAudioDataError {
     TooManyInstrumentsAndSamples(usize),
     TooManyBrrSamples(usize),
+    TooManySfxSubroutines(usize),
     TooManySoundEffects(usize),
     CommonAudioDataTooLarge(usize),
     SoundEffectDataTooLarge { by: usize },
@@ -510,7 +518,8 @@ pub enum MmlLineError {
 
     // Sound effect errors
     HeaderInSoundEffect,
-    SubroutineInSoundEffect,
+    ChannelInSfxSubroutineHeader,
+    SubroutineDefinitionInSoundEffect,
     InvalidSoundEffectChannel,
 }
 
@@ -1313,9 +1322,6 @@ impl Display for BytecodeError {
             Self::SubroutineCallInMmlPrefix => {
                 write!(f, "cannot call subroutine in an MML prefix")
             }
-            Self::SubroutineCallInSoundEffect => {
-                write!(f, "cannot call subroutine in a sound effect")
-            }
             Self::ReturnInNonSubroutine => {
                 write!(f, "return_from_subroutine instruction in a non-subroutine")
             }
@@ -1444,6 +1450,21 @@ impl Display for SoundEffectError {
     }
 }
 
+impl Display for SfxSubroutineErrors {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            Self::LineErrors(e) => std::fmt::Debug::fmt(e, f),
+            Self::SubroutineErrors(e) => std::fmt::Debug::fmt(e, f),
+            Self::TooManySfxSubroutines(n) => {
+                write!(
+                    f,
+                    "too many sfx subroutines ({n}, max: {MAX_SFX_SUBROUTINES})"
+                )
+            }
+        }
+    }
+}
+
 impl Display for CombineSoundEffectsError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
@@ -1503,6 +1524,10 @@ impl Display for CommonAudioDataError {
             Self::TooManyBrrSamples(len) => {
                 write!(f, "too many BRR samples ({}, max: {})", len, MAX_DIR_ITEMS)
             }
+            Self::TooManySfxSubroutines(n) => write!(
+                f,
+                "too many SFX subroutines ({n}, max: {MAX_SFX_SUBROUTINES}"
+            ),
             Self::TooManySoundEffects(len) => write!(
                 f,
                 "too many sound effects ({}, max: {})",
@@ -1601,7 +1626,13 @@ impl Display for MmlLineError {
             Self::DuplicateInstrumentName(s) => write!(f, "duplicate instrument name: {}", s),
 
             Self::HeaderInSoundEffect => write!(f, "# headers not allowed in sound effects"),
-            Self::SubroutineInSoundEffect => write!(f, "subroutines not allowed in sound effects"),
+            Self::ChannelInSfxSubroutineHeader => {
+                write!(f, "channels are not allowed in the SFX header")
+            }
+            Self::SubroutineDefinitionInSoundEffect => write!(
+                f,
+                "subroutines cannot be defined here, add the subroutine to the SFX header"
+            ),
             Self::InvalidSoundEffectChannel => write!(
                 f,
                 "invalid channel (sound effects have only 1 single channel)"
@@ -1975,6 +2006,10 @@ impl Display for SoundEffectsFileErrorIndentedDisplay<'_> {
             None => writeln!(f, "Error compiling sound effects file")?,
         }
 
+        if let Some(e) = &error.subroutine_errors {
+            fmt_indented_sfx_subroutine_errors(f, e, &error.file_name)?;
+        }
+
         for (i, e) in error.errors.iter().enumerate() {
             if i != 0 {
                 writeln!(f)?;
@@ -1984,6 +2019,23 @@ impl Display for SoundEffectsFileErrorIndentedDisplay<'_> {
         }
 
         Ok(())
+    }
+}
+
+pub struct SfxSubroutineErrorsIndentedDisplay<'a>(&'a SfxSubroutineErrors, &'a str);
+
+impl SfxSubroutineErrors {
+    pub fn multiline_display<'a>(
+        &'a self,
+        file_name: &'a str,
+    ) -> SfxSubroutineErrorsIndentedDisplay<'a> {
+        SfxSubroutineErrorsIndentedDisplay(self, file_name)
+    }
+}
+
+impl Display for SfxSubroutineErrorsIndentedDisplay<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        fmt_indented_sfx_subroutine_errors(f, self.0, self.1)
     }
 }
 
@@ -2002,6 +2054,34 @@ impl Display for SoundEffectErrorIndentedDisplay<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         fmt_indented_sound_effect_error(f, self.0, "Error compiling ", self.1)
     }
+}
+
+#[rustfmt::skip::macros(writeln)]
+fn fmt_indented_sfx_subroutine_errors(
+    f: &mut std::fmt::Formatter,
+    error: &SfxSubroutineErrors,
+    file_name: &str,
+) -> std::fmt::Result {
+    writeln!(f, "Error compiling SFX subroutines:")?;
+
+    match error {
+        SfxSubroutineErrors::LineErrors(errors) => {
+            for e in errors.iter().take(SFX_MML_ERROR_LIMIT) {
+                writeln!(f, "    {}:{}:{} {}", file_name, e.0.line_number, e.0.line_char, e.1)?;
+            }
+            plus_more_errors_line(f, "    ", errors.len())?;
+        }
+        SfxSubroutineErrors::SubroutineErrors(errors) => {
+            for e in errors {
+                fmt_indented_channel_errors(f, e, file_name, true)?;
+            }
+        }
+        e => {
+            writeln!(f, "    {}", e)?;
+        }
+    }
+
+    Ok(())
 }
 
 #[rustfmt::skip::macros(writeln)]

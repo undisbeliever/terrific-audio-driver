@@ -4,7 +4,9 @@
 //
 // SPDX-License-Identifier: MIT
 
-use crate::compiler_thread::{ItemId, SfxError, SoundEffectOutput};
+use crate::compiler_thread::{
+    ItemId, SfxError, SfxSubroutineOutput, SfxSubroutinesError, SoundEffectOutput,
+};
 use crate::list_editor::{
     ListAction, ListEditorTable, ListMessage, ListWithCompilerOutput, ListWithCompilerOutputEditor,
     TableCompilerOutput, TableMapping,
@@ -18,12 +20,14 @@ use crate::{GuiMessage, ProjectData, SoundEffectsData};
 use compiler::data::{DefaultSfxFlags, Name};
 use compiler::errors::SfxErrorLines;
 use compiler::sfx_file::SoundEffectsFile;
-use compiler::sound_effects::{SfxExportOrder, SfxFlags, SoundEffectInput, SoundEffectText};
+use compiler::sound_effects::{
+    SfxExportOrder, SfxFlags, SfxSubroutinesMml, SoundEffectInput, SoundEffectText,
+};
 use compiler::Pan;
 
 use compiler::time::TickCounter;
 use fltk::app::{self, event_key};
-use fltk::button::{Button, RadioRoundButton};
+use fltk::button::{Button, CheckButton, RadioRoundButton};
 use fltk::enums::{Color, Event, Font, Key};
 use fltk::frame::Frame;
 use fltk::group::{Flex, Pack, PackType};
@@ -67,7 +71,7 @@ pub fn blank_sfx_file() -> SoundEffectsFile {
     SoundEffectsFile {
         path: None,
         file_name: "new_file.txt".into(),
-        header: String::new(),
+        subroutines: SfxSubroutinesMml(String::new()),
         sound_effects: Vec::new(),
     }
 }
@@ -134,6 +138,13 @@ pub struct State {
 
     sfx_file_loaded: bool,
 
+    main_group: Flex,
+
+    show_subroutines: CheckButton,
+    subroutines_group: Flex,
+    subroutines_editor: MmlEditor,
+    subroutine_output: Option<SfxSubroutineOutput>,
+
     pan: HorNiceSlider,
     song_choice: SongChoice,
     song_start_ticks: IntInput,
@@ -157,7 +168,7 @@ pub struct State {
 pub struct SoundEffectsTab {
     state: Rc<RefCell<State>>,
 
-    header_buffer: Rc<RefCell<EditorBuffer>>,
+    no_sfx_buffer: Rc<RefCell<EditorBuffer>>,
 
     // Each sound effect gets it own buffer so they have their own undo/redo stack.
     sfx_buffers: HashMap<ItemId, Rc<RefCell<EditorBuffer>>>,
@@ -200,6 +211,9 @@ impl SoundEffectsTab {
         let mut sidebar = Flex::default().column();
         group.fixed(&sidebar, ch_units_to_width(&sidebar, 30));
 
+        let show_subroutines = CheckButton::default().with_label("Show subroutines");
+        sidebar.fixed(&show_subroutines, input_height(&show_subroutines));
+
         let sfx_table = ListEditorTable::new(&mut sidebar, sender.clone());
 
         let mut add_missing_sfx_button = Button::default().with_label("Add missing sound effects");
@@ -214,6 +228,22 @@ impl SoundEffectsTab {
 
         let mut main_group = Flex::default().column();
         main_group.hide();
+
+        let mut subroutines_group = Flex::default().column();
+        subroutines_group.hide();
+
+        let l = label_packed("SFX Subroutines:");
+        subroutines_group.fixed(&l, l.height());
+
+        let mut subroutines_editor = MmlEditor::new("", TextFormat::Mml);
+        let text_size = subroutines_editor.widget().text_size() * 12 / 10;
+        subroutines_editor.set_text_size(text_size);
+        subroutines_group.fixed(
+            subroutines_editor.status_bar(),
+            input_height(subroutines_editor.status_bar()),
+        );
+
+        subroutines_group.end();
 
         let button_size = ch_units_to_width(&main_group, 5);
 
@@ -287,11 +317,11 @@ impl SoundEffectsTab {
 
         sfx_group.end();
 
-        let mut editor = MmlEditor::new("", TextFormat::SoundEffectHeader);
-        editor.set_text_size(editor.widget().text_size() * 12 / 10);
+        let mut editor = MmlEditor::new("", TextFormat::Bytecode);
+        editor.set_text_size(text_size);
 
         let mut console = TextDisplay::default();
-        main_group.fixed(&console, ch_units_to_width(&console, 15));
+        main_group.fixed(&console, ch_units_to_width(&console, 10));
 
         main_group.add(editor.status_bar());
         main_group.fixed(editor.status_bar(), input_height(editor.status_bar()));
@@ -324,6 +354,13 @@ impl SoundEffectsTab {
             sender: sender.clone(),
 
             sfx_file_loaded: false,
+
+            main_group: main_group.clone(),
+
+            show_subroutines,
+            subroutines_group,
+            subroutines_editor,
+            subroutine_output: None,
 
             pan,
             song_choice,
@@ -412,6 +449,27 @@ impl SoundEffectsTab {
         {
             let mut s = state.borrow_mut();
 
+            s.show_subroutines.set_callback({
+                let s = state.clone();
+                move |cb| {
+                    if let Ok(mut s) = s.try_borrow_mut() {
+                        match cb.value() {
+                            true => s.show_subroutines(),
+                            false => s.hide_subroutines(),
+                        }
+                    }
+                }
+            });
+
+            s.subroutines_editor.set_changed_callback({
+                let s = state.clone();
+                move |buffer| {
+                    if let Ok(s) = s.try_borrow() {
+                        s.subroutines_changed(buffer);
+                    }
+                }
+            });
+
             s.default_sfx_flags_changed(sfx_flags);
 
             s.sound_effect_type.set_callback({
@@ -427,7 +485,7 @@ impl SoundEffectsTab {
                 let s = state.clone();
                 move |buffer| {
                     if let Ok(s) = s.try_borrow() {
-                        s.text_changed(buffer)
+                        s.sfx_text_changed(buffer)
                     }
                 }
             });
@@ -471,7 +529,7 @@ impl SoundEffectsTab {
         let mut s = Self {
             state,
 
-            header_buffer,
+            no_sfx_buffer: header_buffer,
             sfx_buffers: HashMap::new(),
 
             group,
@@ -492,14 +550,17 @@ impl SoundEffectsTab {
 
     pub fn replace_sfx_file(
         &mut self,
-        header: &str,
+        subroutines: &SfxSubroutinesMml,
         sfx_list: &ListWithCompilerOutput<SoundEffectInput, SoundEffectOutput>,
     ) {
         self.state.borrow_mut().sfx_file_loaded = false;
 
-        self.disable_editor();
-        self.state.borrow_mut().editor.set_text(header);
+        self.state
+            .borrow_mut()
+            .subroutines_editor
+            .set_text(&subroutines.0);
 
+        self.disable_editor();
         self.sfx_table.replace(sfx_list);
 
         // ::TODO save old buffers::
@@ -516,8 +577,8 @@ impl SoundEffectsTab {
         self.state.borrow_mut().sfx_file_loaded = true;
     }
 
-    pub fn header_text(&self) -> String {
-        self.header_buffer.borrow().text()
+    pub fn sfx_subroutines_mml(&self) -> SfxSubroutinesMml {
+        SfxSubroutinesMml(self.state.borrow().subroutines_editor.text())
     }
 
     pub fn is_missing_sfx(&mut self) -> bool {
@@ -553,14 +614,19 @@ impl SoundEffectsTab {
         state.commit_sfx();
 
         state.selected_id = None;
-        state.name.set_value("Header (not a sound effect)");
+        state.name.set_value("");
         state.sound_effect_type.set_value(-1);
 
         state.one_channel_flag.clear_value();
         state.interruptible_flag.clear_value();
 
-        state.editor.set_buffer(self.header_buffer.clone());
+        state.editor.set_buffer(self.no_sfx_buffer.clone());
 
+        if let Some(Ok(_)) = &state.subroutine_output {
+            state.console_buffer.set_text("");
+        }
+
+        state.editor.deactivate();
         self.sfx_group.deactivate();
     }
 
@@ -601,8 +667,13 @@ impl SoundEffectsTab {
 
         state.selected_compiler_output_changed(co);
 
+        state.editor.activate();
         self.sfx_group.activate();
         self.main_group.activate();
+    }
+
+    pub fn set_sfx_subroutine_compiler_output(&mut self, co: SfxSubroutineOutput) {
+        self.state.borrow_mut().set_subroutine_compiler_output(co);
     }
 }
 
@@ -761,7 +832,16 @@ impl State {
         self.commit_sfx();
     }
 
-    fn text_changed(&self, buffer: &EditorBuffer) {
+    fn subroutines_changed(&self, buffer: &EditorBuffer) {
+        if self.sfx_file_loaded {
+            self.sender
+                .send(GuiMessage::SfxSubroutinesChanged(SfxSubroutinesMml(
+                    buffer.text(),
+                )));
+        }
+    }
+
+    fn sfx_text_changed(&self, buffer: &EditorBuffer) {
         if self.sfx_file_loaded {
             if let Some(id) = self.selected_id {
                 let sfx = SoundEffectInput {
@@ -775,9 +855,6 @@ impl State {
                     },
                 };
                 self.sender.send(GuiMessage::EditSoundEffect(id, sfx));
-            } else {
-                // Header
-                self.sender.send(GuiMessage::SfxFileHeaderChanged);
             }
         }
     }
@@ -829,6 +906,60 @@ impl State {
         }
     }
 
+    fn show_subroutines(&mut self) {
+        self.show_subroutines.set_checked(true);
+        self.subroutines_group.show();
+        self.main_group.layout();
+    }
+
+    fn hide_subroutines(&mut self) {
+        match self.subroutine_output {
+            Some(Err(_)) => {
+                self.show_subroutines.set_checked(true);
+            }
+            Some(Ok(_)) | None => {
+                self.show_subroutines.set_checked(false);
+                self.subroutines_group.hide();
+
+                self.main_group.layout();
+            }
+        }
+    }
+
+    fn set_subroutine_compiler_output(&mut self, co: SfxSubroutineOutput) {
+        match &co {
+            Ok(o) => {
+                if self.selected_id.is_none() {
+                    self.console_buffer.set_text("");
+                }
+
+                self.subroutines_editor
+                    .set_compiled_data(CompiledEditorData::SfxSubroutines(o.clone()));
+            }
+            Err(e) => {
+                self.editor.clear_compiled_data();
+
+                let error_text = match e {
+                    SfxSubroutinesError::Error(e) => format!("{}", e.multiline_display("line ")),
+                    SfxSubroutinesError::DependencyInstruments => e.to_string(),
+                };
+                self.console_buffer.set_text(&error_text);
+                self.console.set_text_color(Color::Red);
+
+                self.error_lines = None;
+
+                self.show_subroutines();
+            }
+        }
+
+        self.subroutines_editor.highlight_errors(match &co {
+            Err(SfxSubroutinesError::Error(e)) => Some(TextErrorRef::SfxSubroutines(e)),
+            _ => None,
+        });
+
+        self.subroutine_output = Some(co);
+    }
+
     fn selected_compiler_output_changed(&mut self, compiler_output: &Option<SoundEffectOutput>) {
         match compiler_output {
             None => self.console_buffer.set_text(""),
@@ -853,17 +984,18 @@ impl State {
             Some(Err(e)) => {
                 self.editor.clear_compiled_data();
 
-                let (error_lines, text) = match e {
-                    SfxError::Error(e) => (
-                        Some(e.error_lines()),
-                        format!("{}", e.multiline_display("line ")),
-                    ),
-                    SfxError::Dependency => (None, e.to_string()),
-                };
-                self.error_lines = error_lines;
-
-                self.console_buffer.set_text(&text);
-                self.console.set_text_color(Color::Red);
+                match e {
+                    SfxError::Error(e) => {
+                        self.error_lines = Some(e.error_lines());
+                        self.console_buffer
+                            .set_text(&format!("{}", e.multiline_display("line ")));
+                        self.console.set_text_color(Color::Red);
+                    }
+                    SfxError::DependencyInstruments | SfxError::DependencySfxSubroutines => {
+                        // Error in MML subroutines
+                        self.error_lines = None;
+                    }
+                }
             }
         }
 

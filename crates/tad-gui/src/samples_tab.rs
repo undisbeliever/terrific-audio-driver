@@ -221,7 +221,7 @@ impl SamplesTab {
                     }
                 }
             }
-            CadOutput::NoSfx(..) | CadOutput::WithSfx(..) => {
+            CadOutput::NoSfx(..) | CadOutput::SfxBuffer(..) | CadOutput::WithSfx(..) => {
                 self.sample_sizes_button.set_label("All OK");
                 self.sample_sizes_button.set_label_color(Color::Foreground);
             }
@@ -266,7 +266,10 @@ impl SamplesTab {
             .cad_changed(&self.cad_output);
 
         match &self.cad_output {
-            CadOutput::None | CadOutput::NoSfx(..) | CadOutput::WithSfx(..) => {
+            CadOutput::None
+            | &CadOutput::NoSfx(..)
+            | CadOutput::SfxBuffer(..)
+            | CadOutput::WithSfx(..) => {
                 self.console_buffer.set_text("");
             }
             CadOutput::Err(e) => {

@@ -10,7 +10,8 @@ use crate::sfx_export_order::{GuiSfxExportOrder, SfxExportOrderAction};
 use crate::GuiMessage;
 
 use crate::audio_thread::{
-    AudioMessage, CommonAudioDataWithSfxBuffer, MusicChannelsMask, SFX_BUFFER_SIZE,
+    AudioMessage, CommonAudioDataNoSfx, CommonAudioDataWithSfxBuffer, MusicChannelsMask,
+    SFX_BUFFER_SIZE,
 };
 
 use std::collections::hash_map::Entry;
@@ -37,12 +38,11 @@ use compiler::samples::{
     load_sample_for_instrument, load_sample_for_sample, CompiledDataList, InstrumentSampleData,
     SampleAndInstrumentData, SampleFileCache, SampleSampleData, WAV_EXTENSION,
 };
-use compiler::songs::{
-    sound_effect_to_song, test_sample_song, SongAramSize, SongData, BLANK_SONG_ARAM_SIZE,
-};
+use compiler::songs::{test_sample_song, SongAramSize, SongData, BLANK_SONG_ARAM_SIZE};
 use compiler::sound_effects::{
     blank_compiled_sound_effects, combine_sound_effects, tad_gui_sfx_data,
-    CombinedSoundEffectsData, CompiledSfxMap, SfxExportOrder,
+    CombinedSoundEffectsData, CompiledSfxMap, CompiledSfxSubroutines, SfxExportOrder,
+    SfxSubroutinesMml,
 };
 use compiler::sound_effects::{compile_sound_effect_input, CompiledSoundEffect, SoundEffectInput};
 use compiler::spc_file_export::export_spc_file;
@@ -102,6 +102,12 @@ pub struct ProjectToCompiler {
 }
 
 #[derive(Debug)]
+pub struct SfxToCompiler {
+    pub subroutines: SfxSubroutinesMml,
+    pub sound_effects: ReplaceAllVec<SoundEffectInput>,
+}
+
+#[derive(Debug)]
 pub enum ItemChanged<T> {
     AddedOrEdited(ItemId, T),
     MultipleAddedOrEdited(Vec<(ItemId, T)>),
@@ -111,7 +117,7 @@ pub enum ItemChanged<T> {
 #[derive(Debug)]
 pub enum ToCompiler {
     LoadProject(ProjectToCompiler),
-    LoadSoundEffects(ReplaceAllVec<SoundEffectInput>),
+    LoadSoundEffects(SfxToCompiler),
 
     ClearSampleCacheAndRebuild,
 
@@ -129,6 +135,7 @@ pub enum ToCompiler {
     // (sent when the user deselects the sound effects tab in the GUI)
     FinishedEditingSoundEffects,
 
+    CompileSoundEffectSubroutines(SfxSubroutinesMml),
     SoundEffects(ItemChanged<SoundEffectInput>),
     PlaySongWithSfxBuffer(ItemId, TickCounter),
     PlaySfxUsingSfxBuffer(ItemId, Pan),
@@ -154,6 +161,7 @@ pub struct SampleSize(pub usize);
 
 pub type InstrumentOutput = Result<InstrumentSize, errors::SampleError>;
 pub type SampleOutput = Result<SampleSize, errors::SampleError>;
+pub type SfxSubroutineOutput = Result<Arc<CompiledSfxSubroutines>, SfxSubroutinesError>;
 pub type SoundEffectOutput = Result<Arc<CompiledSoundEffect>, SfxError>;
 pub type SongOutput = Result<Arc<SongData>, SongError>;
 
@@ -166,6 +174,7 @@ pub enum CompilerOutput {
 
     CommonAudioData(CadOutput),
 
+    SfxSubroutines(SfxSubroutineOutput),
     SoundEffect(ItemId, SoundEffectOutput),
 
     Song(ItemId, SongOutput),
@@ -191,7 +200,8 @@ pub struct CommonAudioDataWithSfx {
 pub enum CadOutput {
     None,
     Err(CombineSamplesError),
-    NoSfx(Arc<CommonAudioDataWithSfxBuffer>, Arc<Vec<data::Name>>),
+    NoSfx(Arc<CommonAudioDataNoSfx>, Arc<Vec<data::Name>>),
+    SfxBuffer(Arc<CommonAudioDataWithSfxBuffer>, Arc<Vec<data::Name>>),
     WithSfx(Arc<CommonAudioDataWithSfx>, Arc<Vec<data::Name>>),
 }
 
@@ -199,7 +209,7 @@ impl CadOutput {
     pub fn is_ok_or_none(&self) -> bool {
         match self {
             Self::Err(..) => false,
-            Self::None | Self::NoSfx(..) | Self::WithSfx(..) => true,
+            Self::None | Self::NoSfx(..) | Self::SfxBuffer(..) | Self::WithSfx(..) => true,
         }
     }
 }
@@ -241,14 +251,37 @@ impl std::fmt::Display for CombineSamplesError {
 
 #[derive(Debug)]
 pub enum SfxError {
-    Dependency,
+    DependencyInstruments,
+    DependencySfxSubroutines,
     Error(errors::SoundEffectError),
 }
 
 impl Display for SfxError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Dependency => writeln!(f, "dependency error"),
+            Self::DependencyInstruments => {
+                writeln!(f, "dependency error: error an in instrument or sample")
+            }
+            Self::DependencySfxSubroutines => {
+                writeln!(f, "dependency error: error in a SFX subroutine")
+            }
+            Self::Error(e) => e.fmt(f),
+        }
+    }
+}
+
+#[derive(Debug)]
+pub enum SfxSubroutinesError {
+    DependencyInstruments,
+    Error(errors::SfxSubroutineErrors),
+}
+
+impl Display for SfxSubroutinesError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::DependencyInstruments => {
+                writeln!(f, "dependency error: error an in instrument or sample")
+            }
             Self::Error(e) => e.fmt(f),
         }
     }
@@ -645,7 +678,9 @@ fn build_play_instrument_data(
     }
 
     let blank_sfx = blank_compiled_sound_effects();
-    let common_audio_data = build_common_audio_data(&sample_data, &blank_sfx).ok()?;
+    let blank_sfx_subroutines = CompiledSfxSubroutines::blank();
+    let common_audio_data =
+        build_common_audio_data(&sample_data, &blank_sfx_subroutines, &blank_sfx).ok()?;
     let song_data = test_sample_song(0, args.note, args.note_length, args.envelope).ok()?;
 
     Some((common_audio_data, song_data))
@@ -664,7 +699,9 @@ fn build_play_sample_data(
     let sample_data = combine_samples([].as_slice(), [sample].as_slice()).ok()?;
 
     let blank_sfx = blank_compiled_sound_effects();
-    let common_audio_data = build_common_audio_data(&sample_data, &blank_sfx).ok()?;
+    let blank_sfx_subroutines = CompiledSfxSubroutines::blank();
+    let common_audio_data =
+        build_common_audio_data(&sample_data, &blank_sfx_subroutines, &blank_sfx).ok()?;
     let song_data = test_sample_song(0, args.note, args.note_length, args.envelope).ok()?;
 
     Some((common_audio_data, song_data))
@@ -680,19 +717,72 @@ fn instrument_and_sample_names(
     Arc::new(i_names.chain(s_names).collect())
 }
 
+fn compile_sfx_subroutines(
+    dependencies: &Option<SongDependencies>,
+    mml: &SfxSubroutinesMml,
+    sender: &Sender,
+) -> Option<Arc<CompiledSfxSubroutines>> {
+    let dep = match dependencies.as_ref() {
+        Some(d) => d,
+        None => {
+            sender.send(CompilerOutput::SfxSubroutines(Err(
+                SfxSubroutinesError::DependencyInstruments,
+            )));
+            return None;
+        }
+    };
+
+    match compiler::sound_effects::compile_sfx_subroutines(
+        mml,
+        &dep.inst_map,
+        dep.combined_samples.pitch_table(),
+    ) {
+        Ok(s) => {
+            let s = Arc::new(s);
+            sender.send(CompilerOutput::SfxSubroutines(Ok(s.clone())));
+            Some(s)
+        }
+        Err(e) => {
+            sender.send(CompilerOutput::SfxSubroutines(Err(
+                SfxSubroutinesError::Error(e),
+            )));
+            None
+        }
+    }
+}
+
 fn create_sfx_compiler<'a>(
     dependencies: &'a Option<SongDependencies>,
+    sfx_subroutines: &'a Option<Arc<CompiledSfxSubroutines>>,
     sender: &'a Sender,
 ) -> impl (Fn(ItemId, &SoundEffectInput) -> Option<Arc<CompiledSoundEffect>>) + 'a {
     move |id, sfx| {
         let dep = match dependencies.as_ref() {
             Some(d) => d,
             None => {
-                sender.send(CompilerOutput::SoundEffect(id, Err(SfxError::Dependency)));
+                sender.send(CompilerOutput::SoundEffect(
+                    id,
+                    Err(SfxError::DependencyInstruments),
+                ));
                 return None;
             }
         };
-        match compile_sound_effect_input(sfx, &dep.inst_map, dep.combined_samples.pitch_table()) {
+        let sfx_subroutines = match sfx_subroutines.as_ref() {
+            Some(s) => s,
+            None => {
+                sender.send(CompilerOutput::SoundEffect(
+                    id,
+                    Err(SfxError::DependencySfxSubroutines),
+                ));
+                return None;
+            }
+        };
+        match compile_sound_effect_input(
+            sfx,
+            &dep.inst_map,
+            dep.combined_samples.pitch_table(),
+            sfx_subroutines,
+        ) {
             Ok(sfx) => {
                 let sfx = Arc::from(sfx);
                 sender.send(CompilerOutput::SoundEffect(id, Ok(sfx.clone())));
@@ -728,6 +818,7 @@ fn count_missing_sfx(
 
 fn calc_sfx_data_size(
     sfx_export_order: &GuiSfxExportOrder,
+    sfx_subroutines: &Option<Arc<CompiledSfxSubroutines>>,
     sound_effects: &CList<SoundEffectInput, Option<Arc<CompiledSoundEffect>>>,
 ) -> usize {
     let sfx_size: usize = sfx_export_order
@@ -738,9 +829,14 @@ fn calc_sfx_data_size(
         .map(|o| o.bytecode().len())
         .sum();
 
-    let table_size = sfx_export_order.n_sound_effects() * COMMON_DATA_BYTES_PER_SOUND_EFFECT;
+    let sfx_table_size = sfx_export_order.n_sound_effects() * COMMON_DATA_BYTES_PER_SOUND_EFFECT;
 
-    table_size + sfx_size
+    let sfx_subroutines = match sfx_subroutines {
+        Some(s) => s.cad_data_len(),
+        None => 0,
+    };
+
+    sfx_table_size + sfx_size + sfx_subroutines
 }
 
 struct SongDependencies {
@@ -756,13 +852,13 @@ impl SongDependencies {
     }
 }
 
-fn build_common_data_no_sfx_and_song_dependencies(
+fn build_cad_no_sfx_and_song_dependencies(
     instruments: &CList<data::Instrument, Option<InstrumentSampleData>>,
     samples: &CList<data::Sample, Option<SampleSampleData>>,
     sfx_export_order: &GuiSfxExportOrder,
+    sfx_subroutines: &Option<Arc<CompiledSfxSubroutines>>,
     sound_effects: &CList<SoundEffectInput, Option<Arc<CompiledSoundEffect>>>,
-    blank_sfx_data: &CombinedSoundEffectsData,
-) -> Result<(Arc<CommonAudioDataWithSfxBuffer>, SongDependencies), CombineSamplesError> {
+) -> Result<(Arc<CommonAudioDataNoSfx>, SongDependencies), CombineSamplesError> {
     // Test all instruments and samples are compiled
     let n_instrument_errors = instruments.count_errors();
     let n_sample_errors = samples.count_errors();
@@ -780,8 +876,12 @@ fn build_common_data_no_sfx_and_song_dependencies(
         }
     };
 
-    let cad = match build_common_audio_data(&combined_samples, blank_sfx_data) {
-        Ok(common) => common,
+    let cad = match build_common_audio_data(
+        &combined_samples,
+        &CompiledSfxSubroutines::blank(),
+        &blank_compiled_sound_effects(),
+    ) {
+        Ok(c) => c,
         Err(e) => return Err(CombineSamplesError::CommonAudioData(e)),
     };
 
@@ -793,12 +893,32 @@ fn build_common_data_no_sfx_and_song_dependencies(
             let sd = SongDependencies {
                 inst_map: instruments,
                 combined_samples,
-                common_data_no_sfx_size: cad.data().len() - blank_sfx_data.sfx_data_size(),
-                sfx_data_size: calc_sfx_data_size(sfx_export_order, sound_effects),
+                common_data_no_sfx_size: cad.data().len(),
+                sfx_data_size: calc_sfx_data_size(sfx_export_order, sfx_subroutines, sound_effects),
             };
-            Ok((Arc::new(CommonAudioDataWithSfxBuffer(cad)), sd))
+            Ok((Arc::new(CommonAudioDataNoSfx(cad)), sd))
         }
         Err(e) => Err(CombineSamplesError::UniqueNamesError(e)),
+    }
+}
+
+fn build_common_data_with_sfx_buffer(
+    dep: &Option<SongDependencies>,
+    sfx_subroutines: &Option<Arc<CompiledSfxSubroutines>>,
+    blank_sfx_data: &CombinedSoundEffectsData,
+) -> Option<Result<Arc<CommonAudioDataWithSfxBuffer>, CombineSamplesError>> {
+    let combined_samples = match dep {
+        Some(d) => &d.combined_samples,
+        None => return None,
+    };
+    let sfx_subroutines = match sfx_subroutines {
+        Some(sfx) => sfx,
+        None => return None,
+    };
+
+    match build_common_audio_data(combined_samples, sfx_subroutines, blank_sfx_data) {
+        Ok(cad) => Some(Ok(Arc::new(CommonAudioDataWithSfxBuffer(cad)))),
+        Err(e) => Some(Err(CombineSamplesError::CommonAudioData(e))),
     }
 }
 
@@ -816,6 +936,7 @@ impl CompiledSfxMap for CList<SoundEffectInput, Option<Arc<CompiledSoundEffect>>
 fn build_common_audio_data_with_sfx(
     dep: &Option<SongDependencies>,
     sfx_export_order: &Arc<GuiSfxExportOrder>,
+    sfx_subroutines: &Option<Arc<CompiledSfxSubroutines>>,
     sound_effects: &CList<SoundEffectInput, Option<Arc<CompiledSoundEffect>>>,
     default_sfx_flags: DefaultSfxFlags,
 ) -> (Option<Arc<CommonAudioDataWithSfx>>, usize) {
@@ -825,17 +946,19 @@ fn build_common_audio_data_with_sfx(
     // Always try to calculate sfx_data size (to keep song size checks and Project tab up-to-date)
     let sfx_data_size = match &sfx_data {
         Ok(s) => s.sfx_data_size(),
-        Err(_) => calc_sfx_data_size(sfx_export_order, sound_effects),
+        _ => calc_sfx_data_size(sfx_export_order, sfx_subroutines, sound_effects),
     };
 
-    let cad = match (&dep, &sfx_data) {
-        (Some(dep), Ok(sd)) => match build_common_audio_data(&dep.combined_samples, sd) {
-            Ok(cad) => Some(Arc::new(CommonAudioDataWithSfx {
-                common_audio_data: cad,
-                sfx_export_order: sfx_export_order.clone(),
-            })),
-            Err(_) => None,
-        },
+    let cad = match (&dep, sfx_subroutines, &sfx_data) {
+        (Some(dep), Some(sfx_sub), Ok(sd)) => {
+            match build_common_audio_data(&dep.combined_samples, sfx_sub, sd) {
+                Ok(cad) => Some(Arc::new(CommonAudioDataWithSfx {
+                    common_audio_data: cad,
+                    sfx_export_order: sfx_export_order.clone(),
+                })),
+                Err(_) => None,
+            }
+        }
         _ => None,
     };
 
@@ -1094,8 +1217,11 @@ impl SongCompiler {
         let common_audio_data = match sd {
             None => return Err(SpcFileError::NoSamples),
             Some(sd) => {
-                match build_common_audio_data(&sd.combined_samples, &blank_compiled_sound_effects())
-                {
+                match build_common_audio_data(
+                    &sd.combined_samples,
+                    &CompiledSfxSubroutines::blank(),
+                    &blank_compiled_sound_effects(),
+                ) {
                     Ok(cad) => cad,
                     Err(e) => return Err(SpcFileError::CommonAudioDataError(e)),
                 }
@@ -1188,6 +1314,8 @@ fn bg_thread(
     let mut pf_songs = IList::new();
     let mut instruments = CList::new();
     let mut samples = CList::new();
+    let mut sfx_subroutines_mml = SfxSubroutinesMml(String::new());
+    let mut sfx_subroutines = None;
     let mut sound_effects = CList::new();
     let mut songs = SongCompiler::new(parent_path.clone());
 
@@ -1195,6 +1323,7 @@ fn bg_thread(
 
     let mut song_dependencies = None;
     let mut cad_with_sfx_buffer: Option<Arc<CommonAudioDataWithSfxBuffer>> = None;
+    let mut cad_no_sfx: Option<Arc<CommonAudioDataNoSfx>> = None;
 
     let mut inst_sample_names = Arc::default();
 
@@ -1232,7 +1361,9 @@ fn bg_thread(
                 pending_compile_all_songs = true;
             }
             ToCompiler::LoadSoundEffects(sfx) => {
-                sound_effects.replace_all(sfx);
+                sfx_subroutines_mml = sfx.subroutines;
+
+                sound_effects.replace_all(sfx.sound_effects);
                 count_missing_sfx(&sfx_export_order, &sound_effects, &sender);
                 pending_compile_all_sfx = true;
             }
@@ -1300,10 +1431,14 @@ fn bg_thread(
                 pending_combine_samples = true;
             }
 
+            ToCompiler::CompileSoundEffectSubroutines(m) => {
+                sfx_subroutines_mml = m;
+                pending_compile_all_sfx = true;
+            }
             ToCompiler::SoundEffects(m) => {
                 let name_changed = sound_effects.item_changes_name(&m);
 
-                let c = create_sfx_compiler(&song_dependencies, &sender);
+                let c = create_sfx_compiler(&song_dependencies, &sfx_subroutines, &sender);
                 sound_effects.process_message(m, c);
 
                 if name_changed {
@@ -1319,6 +1454,7 @@ fn bg_thread(
                     pending_build_cad_with_sfx = true;
                 }
             }
+
             ToCompiler::PlaySongWithSfxBuffer(id, ticks) => {
                 if let Some(song) = songs.get_song_data(&id) {
                     let song_ticks = song.max_tick_count();
@@ -1338,18 +1474,11 @@ fn bg_thread(
                 }
             }
             ToCompiler::PlaySfxUsingSfxBuffer(id, pan) => {
+                // ::TODO fix unable to play large sfx::
                 if let Some(Some(sfx_data)) = sound_effects.get_output_for_id(&id) {
                     if sfx_data.bytecode().len() <= SFX_BUFFER_SIZE {
                         sender
                             .send_audio(AudioMessage::PlaySfxUsingSfxBuffer(sfx_data.clone(), pan));
-                    } else {
-                        let s = Arc::new(sound_effect_to_song(sfx_data));
-                        sender.send_audio(AudioMessage::PlaySong(
-                            id,
-                            s,
-                            TickCounter::new(0),
-                            MusicChannelsMask::ALL,
-                        ));
                     }
                 }
             }
@@ -1446,31 +1575,29 @@ fn bg_thread(
         if pending_combine_samples {
             pending_combine_samples = false;
 
-            match build_common_data_no_sfx_and_song_dependencies(
+            match build_cad_no_sfx_and_song_dependencies(
                 &instruments,
                 &samples,
                 &sfx_export_order,
+                &sfx_subroutines,
                 &sound_effects,
-                &blank_sfx_data,
             ) {
-                Ok((cd, sd)) => {
-                    pending_cad_output = CadOutput::NoSfx(cd.clone(), inst_sample_names.clone());
+                Ok((cad, sd)) => {
+                    cad_no_sfx = Some(cad.clone());
 
-                    cad_with_sfx_buffer = Some(cd);
+                    pending_cad_output = CadOutput::NoSfx(cad, inst_sample_names.clone());
                     song_dependencies = Some(sd);
                 }
                 Err(e) => {
+                    cad_no_sfx = None;
                     pending_cad_output = CadOutput::Err(e);
-
-                    cad_with_sfx_buffer = None;
                     song_dependencies = None;
                 }
             }
 
-            sender.send_audio(AudioMessage::CommonAudioDataChanged(
-                cad_with_sfx_buffer.clone(),
-            ));
+            sender.send_audio(AudioMessage::CommonAudioDataChanged(cad_no_sfx.clone()));
 
+            cad_with_sfx_buffer = None;
             pending_compile_all_sfx = true;
             pending_build_cad_with_sfx = true;
             pending_compile_all_songs = true;
@@ -1479,8 +1606,34 @@ fn bg_thread(
         if pending_compile_all_sfx {
             pending_compile_all_sfx = false;
 
-            let c = create_sfx_compiler(&song_dependencies, &sender);
+            sfx_subroutines =
+                compile_sfx_subroutines(&song_dependencies, &sfx_subroutines_mml, &sender);
+
+            let c = create_sfx_compiler(&song_dependencies, &sfx_subroutines, &sender);
             sound_effects.recompile_all(c);
+
+            match build_common_data_with_sfx_buffer(
+                &song_dependencies,
+                &sfx_subroutines,
+                &blank_sfx_data,
+            ) {
+                Some(Ok(c)) => {
+                    pending_cad_output = CadOutput::SfxBuffer(c.clone(), inst_sample_names.clone());
+
+                    cad_with_sfx_buffer = Some(c);
+                }
+                Some(Err(e)) => {
+                    pending_cad_output = CadOutput::Err(e);
+                    cad_with_sfx_buffer = None;
+                }
+                None => {
+                    cad_with_sfx_buffer = None;
+                }
+            }
+
+            sender.send_audio(AudioMessage::CommonAudioDataSfxBufferChanged(
+                cad_with_sfx_buffer.clone(),
+            ));
 
             pending_build_cad_with_sfx = true;
         }
@@ -1491,6 +1644,7 @@ fn bg_thread(
             let (cad, sfx_data_size) = build_common_audio_data_with_sfx(
                 &song_dependencies,
                 &sfx_export_order,
+                &sfx_subroutines,
                 &sound_effects,
                 default_sfx_flags,
             );
@@ -1509,6 +1663,8 @@ fn bg_thread(
                 pending_cad_output = CadOutput::WithSfx(c.clone(), inst_sample_names.clone());
             } else if let Some(c) = &cad_with_sfx_buffer {
                 // Restores CadOutput to NoSfx if there is an sfx error and the instrument/samples are OK
+                pending_cad_output = CadOutput::SfxBuffer(c.clone(), inst_sample_names.clone());
+            } else if let Some(c) = &cad_no_sfx {
                 pending_cad_output = CadOutput::NoSfx(c.clone(), inst_sample_names.clone());
             }
 

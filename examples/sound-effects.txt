@@ -1,3 +1,10 @@
+
+; ::TODO write a more realistic example::
+
+!tail_call d d
+!child_subroutine c d
+!recursive_test !child_subroutine f r e !tail_call
+
 === menu_cursor ===
     set_instrument_and_gain square F127
     set_volume          25
@@ -127,3 +134,14 @@ A @1 o5 [c c c r]4
 	set_instrument_and_gain sine F127
 
 	play_noise 31 12
+
+=== sfx_calling_subroutine_asm ===
+
+	set_instrument square
+	call_subroutine recursive_test
+
+=== sfx_calling_subroutine_mml === mml
+
+@1 sawtooth
+
+A @1 !recursive_test

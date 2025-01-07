@@ -8,11 +8,13 @@ use crate::audio_thread::AudioMonitorData;
 use crate::helpers::ch_units_to_width;
 
 use compiler::driver_constants::N_MUSIC_CHANNELS;
-use compiler::errors::{MmlChannelError, MmlCompileErrors, SoundEffectError, SoundEffectErrorList};
+use compiler::errors::{
+    MmlChannelError, MmlCompileErrors, SfxSubroutineErrors, SoundEffectError, SoundEffectErrorList,
+};
 use compiler::mml::command_parser::Quantization;
 use compiler::mml::{ChannelId, CursorTracker, FIRST_MUSIC_CHANNEL, LAST_MUSIC_CHANNEL};
 use compiler::songs::{BytecodePos, SongBcTracking, SongData};
-use compiler::sound_effects::CompiledSoundEffect;
+use compiler::sound_effects::{CompiledSfxSubroutines, CompiledSoundEffect};
 use compiler::time::{TickCounter, ZenLen, DEFAULT_ZENLEN};
 use compiler::FilePosRange;
 
@@ -30,6 +32,7 @@ use fltk::text::{StyleTableEntryExt, TextAttr, TextBuffer, TextEditor, WrapMode}
 
 pub enum TextErrorRef<'a> {
     Song(&'a MmlCompileErrors),
+    SfxSubroutines(&'a SfxSubroutineErrors),
     SoundEffect(&'a SoundEffectError),
 }
 
@@ -37,11 +40,11 @@ pub enum TextErrorRef<'a> {
 pub enum TextFormat {
     Mml,
     Bytecode,
-    SoundEffectHeader,
 }
 
 pub enum CompiledEditorData {
     Song(Arc<SongData>),
+    SfxSubroutines(Arc<CompiledSfxSubroutines>),
     SoundEffect(Arc<CompiledSoundEffect>),
 }
 
@@ -49,6 +52,7 @@ impl CompiledEditorData {
     fn cursor_tracker(&self) -> Option<&CursorTracker> {
         match self {
             Self::Song(d) => d.tracking().map(|t| &t.cursor_tracker),
+            Self::SfxSubroutines(d) => Some(d.cursor_tracker()),
             Self::SoundEffect(d) => d.cursor_tracker(),
         }
     }
@@ -56,6 +60,7 @@ impl CompiledEditorData {
     fn zenlen(&self) -> ZenLen {
         match self {
             Self::Song(sd) => sd.metadata().zenlen,
+            Self::SfxSubroutines(_) => DEFAULT_ZENLEN,
             Self::SoundEffect(_) => DEFAULT_ZENLEN,
         }
     }
@@ -232,6 +237,14 @@ impl MmlEditor {
         // Make a copy of the TextBuffer to prevent a `BorrowError` panic in `MmlEditorState::buffer_modified()`.
         let mut tb = self.state.borrow().buffer.borrow().text_buffer.clone();
         tb.set_text(txt)
+    }
+
+    pub fn activate(&mut self) {
+        self.widget.activate();
+    }
+
+    pub fn deactivate(&mut self) {
+        self.widget.deactivate();
     }
 
     pub fn set_text_size(&mut self, text_size: i32) {
@@ -468,7 +481,6 @@ impl MmlEditorState {
             Some(s) => match format {
                 TextFormat::Mml => Self::populate_mml_style(to_style, &s, prev_style_char),
                 TextFormat::Bytecode => Self::populate_bc_style(to_style, &s, prev_style_char),
-                TextFormat::SoundEffectHeader => to_style.fill(Style::Comment.to_u8_char()),
             },
             None => {
                 to_style.fill(Style::Unknown.to_u8_char());
@@ -545,6 +557,21 @@ impl MmlEditorState {
                     parse_channel_error(e);
                 }
             }
+            TextErrorRef::SfxSubroutines(errors) => match errors {
+                SfxSubroutineErrors::LineErrors(errors) => {
+                    for e in errors {
+                        highlight_error(&e.0, Style::Error);
+                    }
+                }
+                SfxSubroutineErrors::SubroutineErrors(errors) => {
+                    for cerror in errors {
+                        for e in &cerror.errors {
+                            highlight_error(&e.0, Style::Error);
+                        }
+                    }
+                }
+                SfxSubroutineErrors::TooManySfxSubroutines(_) => (),
+            },
             TextErrorRef::SoundEffect(errors) => match &errors.errors {
                 SoundEffectErrorList::BytecodeErrors(errors) => {
                     for e in errors {
@@ -708,13 +735,19 @@ impl MmlEditorState {
                     ChannelId::Channel(c) => {
                         let _ = write!(s, "{} ", c);
                     }
-                    ChannelId::Subroutine(si) => {
-                        if let CompiledEditorData::Song(sd) = &compiled_data {
+                    ChannelId::Subroutine(si) => match &compiled_data {
+                        CompiledEditorData::Song(sd) => {
                             if let Some(subroutine) = sd.subroutines().get(usize::from(si)) {
                                 let _ = write!(s, "!{} ", subroutine.identifier.as_str());
                             }
                         }
-                    }
+                        CompiledEditorData::SfxSubroutines(sfx_data) => {
+                            if let Some(subroutine) = sfx_data.subroutines().get(usize::from(si)) {
+                                let _ = write!(s, "!{} ", subroutine.identifier.as_str());
+                            }
+                        }
+                        CompiledEditorData::SoundEffect(_) => (),
+                    },
                     ChannelId::SoundEffect => (),
                     ChannelId::MmlPrefix => (),
                 };

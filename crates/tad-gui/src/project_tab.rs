@@ -431,10 +431,16 @@ impl MemoryStats {
                 self.sfx_data_size = 0;
                 self.show_sfx_error_message();
             }
+            CadOutput::SfxBuffer(cad, _) => {
+                valid_samples(&cad.0);
+
+                self.sfx_data_size = 0;
+                self.show_sfx_error_message();
+            }
             CadOutput::WithSfx(cad, _) => {
                 valid_samples(&cad.common_audio_data);
 
-                self.sfx_data_size = cad.common_audio_data.sfx_bc_and_table_addr_range().len();
+                self.sfx_data_size = cad.common_audio_data.sfx_data_and_tables_range().len();
                 Self::output_bytes(&mut self.sfx_out, self.sfx_data_size);
             }
         }

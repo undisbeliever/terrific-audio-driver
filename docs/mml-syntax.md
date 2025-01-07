@@ -134,8 +134,6 @@ Would play `a b c  d e  a b c` on channel A.
 <br/>
 The subroutine id can be a decimal or alphanumeric.
 
-Subroutines cannot be called inside subroutines.
-
 Subroutines can expand across multiple lines:
 ```
 !a a

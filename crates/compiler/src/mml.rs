@@ -27,16 +27,21 @@ use self::line_splitter::{split_mml_song_lines, split_mml_sound_effect_lines};
 use self::metadata::parse_headers;
 use bc_generator::parse_and_compile_mml_prefix;
 pub(crate) use identifier::{IdentifierBuf, IdentifierStr};
+use line_splitter::split_mml_sfx_subroutines_header_lines;
 use tokenizer::MmlTokens;
 
 use crate::data::{self, TextFile, UniqueNamesList};
-use crate::driver_constants::N_MUSIC_CHANNELS;
-use crate::errors::{MmlCompileErrors, MmlPrefixError, SongError, SoundEffectErrorList};
+use crate::driver_constants::{MAX_SFX_SUBROUTINES, N_MUSIC_CHANNELS};
+use crate::echo::EchoEdl;
+use crate::errors::{
+    MmlCompileErrors, MmlPrefixError, SfxSubroutineErrors, SongError, SoundEffectErrorList,
+};
 use crate::mml::song_duration::calc_song_duration;
 use crate::mml::subroutines::compile_subroutines;
 use crate::pitch_table::PitchTable;
 use crate::songs::{mml_to_song, song_header_size, SongData};
-use crate::time::TickCounter;
+use crate::sound_effects::CompiledSfxSubroutines;
+use crate::time::{TickCounter, DEFAULT_ZENLEN};
 
 use std::collections::HashMap;
 use std::ops::RangeInclusive;
@@ -181,6 +186,7 @@ pub fn compile_mml(
         &lines.subroutine_name_map,
         metadata.echo_buffer.max_edl,
         song_header_size(lines.subroutines.len()),
+        true,
     );
 
     errors.subroutine_errors =
@@ -233,10 +239,67 @@ pub fn compile_mml(
     )
 }
 
+pub(crate) fn compile_sfx_subroutines(
+    sfx: &str,
+    data_instruments: &UniqueNamesList<data::InstrumentOrSample>,
+    pitch_table: &PitchTable,
+) -> Result<CompiledSfxSubroutines, SfxSubroutineErrors> {
+    let lines = match split_mml_sfx_subroutines_header_lines(sfx) {
+        Ok(l) => l,
+        Err(e) => return Err(SfxSubroutineErrors::LineErrors(e)),
+    };
+
+    if lines.subroutines.len() > MAX_SFX_SUBROUTINES.into() {
+        return Err(SfxSubroutineErrors::TooManySfxSubroutines(
+            lines.subroutines.len(),
+        ));
+    }
+
+    let (instruments, inst_errors) = parse_instruments(lines.instruments, data_instruments);
+    let mut line_errors = inst_errors;
+
+    let instrument_map = match build_instrument_map(&instruments) {
+        Ok(map) => map,
+        Err(e) => {
+            line_errors.extend(e);
+            HashMap::new()
+        }
+    };
+
+    if !line_errors.is_empty() {
+        return Err(SfxSubroutineErrors::LineErrors(line_errors));
+    }
+    drop(line_errors);
+
+    assert!(lines.subroutines.len() <= u8::MAX.into());
+    let mut compiler = MmlSongBytecodeGenerator::new(
+        DEFAULT_ZENLEN,
+        pitch_table,
+        sfx,
+        data_instruments,
+        &[],
+        &instruments,
+        instrument_map,
+        &lines.subroutine_name_map,
+        EchoEdl::MIN,
+        0,
+        false,
+    );
+
+    let errors = compile_subroutines(&mut compiler, lines.subroutines, &lines.subroutine_name_map);
+
+    if errors.is_empty() {
+        Ok(compiler.take_sfx_subroutine_data())
+    } else {
+        Err(SfxSubroutineErrors::SubroutineErrors(errors))
+    }
+}
+
 pub fn compile_sound_effect(
     sfx: &str,
     data_instruments: &UniqueNamesList<data::InstrumentOrSample>,
     pitch_table: &PitchTable,
+    subroutines: &CompiledSfxSubroutines,
 ) -> Result<MmlSoundEffect, SoundEffectErrorList> {
     let lines = match split_mml_sound_effect_lines(sfx) {
         Ok(l) => l,
@@ -266,6 +329,7 @@ pub fn compile_sound_effect(
         &instruments,
         data_instruments,
         &instruments_map,
+        subroutines,
     ) {
         Ok(o) => Ok(o),
         Err(e) => Err(SoundEffectErrorList::MmlErrors(e)),

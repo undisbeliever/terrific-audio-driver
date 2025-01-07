@@ -290,7 +290,10 @@ impl SfxTable {
                     self.table.redraw();
                 }
             }
-            CadOutput::Err(..) | CadOutput::NoSfx(..) | CadOutput::None => {
+            CadOutput::Err(..)
+            | CadOutput::NoSfx(..)
+            | CadOutput::SfxBuffer(..)
+            | CadOutput::None => {
                 let changed = self.export_order.is_some();
 
                 self.export_order = None;

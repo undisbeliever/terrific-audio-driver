@@ -86,6 +86,13 @@ struct CommonDataPointers {
     instruments_adsr2OrGain : *u8,
 
 
+    // sfx subroutines
+
+    // u16 address for sound effect subroutines
+    sfxSubroutines_l : *u8,
+    sfxSubroutines_h : *u8,
+
+
     // Sound Effects SoA
 
     // oaaaaaaa aaaaaaaa

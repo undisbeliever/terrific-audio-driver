@@ -91,6 +91,9 @@ enum SongSkip {
 }
 
 #[derive(Debug)]
+pub struct CommonAudioDataNoSfx(pub CommonAudioData);
+
+#[derive(Debug)]
 pub struct CommonAudioDataWithSfxBuffer(pub CommonAudioData);
 
 pub enum AudioMessage {
@@ -108,7 +111,8 @@ pub enum AudioMessage {
     PauseResume(ItemId),
     SetMusicChannels(ItemId, MusicChannelsMask),
 
-    CommonAudioDataChanged(Option<Arc<CommonAudioDataWithSfxBuffer>>),
+    CommonAudioDataChanged(Option<Arc<CommonAudioDataNoSfx>>),
+    CommonAudioDataSfxBufferChanged(Option<Arc<CommonAudioDataWithSfxBuffer>>),
     CommandAudioDataWithSfxChanged(Option<Arc<CommonAudioDataWithSfx>>),
 
     PlaySong(ItemId, Arc<SongData>, TickCounter, MusicChannelsMask),
@@ -418,13 +422,15 @@ enum AudioDataState {
     NotLoaded,
     CommonDataOutOfDate, // Audio is still platying
     Sample(CommonAudioData, Box<SongData>),
+    SongNoSfx(Arc<CommonAudioDataNoSfx>, Arc<SongData>),
     SongAndSfx(Arc<CommonAudioDataWithSfx>, Arc<SongData>),
     SongWithSfxBuffer(Arc<CommonAudioDataWithSfxBuffer>, Arc<SongData>),
 }
 
 enum SiCad {
-    SongAndSfx(Arc<CommonAudioDataWithSfx>),
-    SongWithSfxBuffer(Arc<CommonAudioDataWithSfxBuffer>),
+    NoSfx(Arc<CommonAudioDataNoSfx>),
+    SfxBuffer(Arc<CommonAudioDataWithSfxBuffer>),
+    WithSfx(Arc<CommonAudioDataWithSfx>),
 }
 
 impl std::ops::Deref for SiCad {
@@ -432,8 +438,9 @@ impl std::ops::Deref for SiCad {
 
     fn deref(&self) -> &Self::Target {
         match self {
-            Self::SongAndSfx(c) => &c.common_audio_data,
-            Self::SongWithSfxBuffer(c) => &c.0,
+            Self::NoSfx(c) => &c.0,
+            Self::WithSfx(c) => &c.common_audio_data,
+            Self::SfxBuffer(c) => &c.0,
         }
     }
 }
@@ -447,10 +454,9 @@ fn create_and_process_song_interpreter(
         AudioDataState::NotLoaded => return Ok(None),
         AudioDataState::CommonDataOutOfDate => return Ok(None),
         AudioDataState::Sample(..) => return Ok(None),
-        AudioDataState::SongAndSfx(cad, sd) => (SiCad::SongAndSfx(cad.clone()), sd.clone()),
-        AudioDataState::SongWithSfxBuffer(cad, sd) => {
-            (SiCad::SongWithSfxBuffer(cad.clone()), sd.clone())
-        }
+        AudioDataState::SongNoSfx(cad, sd) => (SiCad::NoSfx(cad.clone()), sd.clone()),
+        AudioDataState::SongAndSfx(cad, sd) => (SiCad::WithSfx(cad.clone()), sd.clone()),
+        AudioDataState::SongWithSfxBuffer(cad, sd) => (SiCad::SfxBuffer(cad.clone()), sd.clone()),
     };
 
     match song_skip {
@@ -490,6 +496,7 @@ struct TadEmu {
     blank_song: Arc<SongData>,
 
     stereo_flag: StereoFlag,
+    cad_no_sfx: Option<Arc<CommonAudioDataNoSfx>>,
     cad_with_sfx_buffer: Option<Arc<CommonAudioDataWithSfxBuffer>>,
     cad_with_sfx: Option<Arc<CommonAudioDataWithSfx>>,
 
@@ -510,6 +517,7 @@ impl TadEmu {
             emu: ShvcSoundEmu::new(&iplrom),
             blank_song: Arc::new(blank_song()),
             stereo_flag: StereoFlag::Stereo,
+            cad_no_sfx: None,
             cad_with_sfx_buffer: None,
             cad_with_sfx: None,
             data_state: AudioDataState::NotLoaded,
@@ -526,6 +534,7 @@ impl TadEmu {
 
             AudioDataState::CommonDataOutOfDate
             | AudioDataState::Sample(..)
+            | AudioDataState::SongNoSfx(..)
             | AudioDataState::SongAndSfx(..)
             | AudioDataState::SongWithSfxBuffer(..) => true,
         }
@@ -537,6 +546,13 @@ impl TadEmu {
 
     fn set_stereo_flag(&mut self, stereo_flag: StereoFlag) {
         self.stereo_flag = stereo_flag;
+    }
+
+    fn load_cad_no_sfx(&mut self, cad: Option<Arc<CommonAudioDataNoSfx>>) {
+        self.cad_no_sfx = cad;
+        if matches!(self.data_state, AudioDataState::SongWithSfxBuffer(..)) {
+            self.data_state = AudioDataState::CommonDataOutOfDate;
+        }
     }
 
     fn load_cad_with_sfx_buffer(&mut self, cad: Option<Arc<CommonAudioDataWithSfxBuffer>>) {
@@ -565,10 +581,15 @@ impl TadEmu {
         skip: TickCounter,
         music_channels_mask: MusicChannelsMask,
     ) -> Result<(), ()> {
-        let data = match (&self.cad_with_sfx, &self.cad_with_sfx_buffer) {
-            (Some(c), _) => AudioDataState::SongAndSfx(c.clone(), song),
-            (None, Some(c)) => AudioDataState::SongWithSfxBuffer(c.clone(), song),
-            (None, None) => return Err(()),
+        let data = match (
+            &self.cad_with_sfx,
+            &self.cad_with_sfx_buffer,
+            &self.cad_no_sfx,
+        ) {
+            (Some(c), _, _) => AudioDataState::SongAndSfx(c.clone(), song),
+            (None, Some(c), _) => AudioDataState::SongWithSfxBuffer(c.clone(), song),
+            (None, None, Some(c)) => AudioDataState::SongNoSfx(c.clone(), song),
+            (None, None, None) => return Err(()),
         };
         self._load_song_into_memory(
             Some(song_id),
@@ -667,6 +688,7 @@ impl TadEmu {
             AudioDataState::NotLoaded => return Err(()),
             AudioDataState::CommonDataOutOfDate => return Err(()),
             AudioDataState::Sample(cad, sd) => (cad, sd.as_ref()),
+            AudioDataState::SongNoSfx(cad, sd) => (&cad.0, sd.as_ref()),
             AudioDataState::SongAndSfx(cad, sd) => (&cad.common_audio_data, sd.as_ref()),
             AudioDataState::SongWithSfxBuffer(cad, sd) => (&cad.0, sd.as_ref()),
         };
@@ -1041,6 +1063,9 @@ impl AudioThread {
 
         match msg {
             AudioMessage::CommonAudioDataChanged(data) => {
+                self.tad.load_cad_no_sfx(data);
+            }
+            AudioMessage::CommonAudioDataSfxBufferChanged(data) => {
                 self.tad.load_cad_with_sfx_buffer(data);
             }
             AudioMessage::CommandAudioDataWithSfxChanged(d) => {
@@ -1202,7 +1227,8 @@ impl AudioThread {
                     }
                 }
 
-                AudioMessage::CommonAudioDataChanged(data) => {
+                AudioMessage::CommonAudioDataChanged(data) => self.tad.load_cad_no_sfx(data),
+                AudioMessage::CommonAudioDataSfxBufferChanged(data) => {
                     self.tad.load_cad_with_sfx_buffer(data)
                 }
                 AudioMessage::CommandAudioDataWithSfxChanged(data) => {

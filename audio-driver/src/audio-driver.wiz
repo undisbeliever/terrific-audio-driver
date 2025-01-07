@@ -2553,8 +2553,18 @@ var _subroutineId : u8 in zpTmp;
 
     // Add songPtr to subroutineTable[y] to get the subroutine address
     y = _subroutineId;
-    <:instructionPtr = a = (subroutineTable_l as *u8)[y] + <:songPtr;
-    >:instructionPtr = a = (subroutineTable_h as *u8)[y] +# >:songPtr;
+
+    if x < FIRST_SFX_CHANNEL {
+        // carry clear
+        <:instructionPtr = a = (subroutineTable_l as *u8)[y] +# <:songPtr;
+        >:instructionPtr = a = (subroutineTable_h as *u8)[y] +# >:songPtr;
+
+        ^return process_next_bytecode(x);
+    }
+
+    // SFX subroutine
+    <:instructionPtr = a = commonData.sfxSubroutines_l[y];
+    >:instructionPtr = a = commonData.sfxSubroutines_h[y];
 
     ^return process_next_bytecode(x);
 }

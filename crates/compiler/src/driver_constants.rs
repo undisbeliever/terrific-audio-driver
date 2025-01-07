@@ -92,7 +92,7 @@ pub mod addresses {
     );
 
     // MUST match `audio-driver/src/common_memmap.wiz`
-    pub const COMMON_DATA: u16 = 0xF00 - 24;
+    pub const COMMON_DATA: u16 = 0xF00 - 28;
 
     const _: () = assert!(
         _symbols::_LAST_LOADER_SYMBOL < DRIVER_CODE,
@@ -155,7 +155,7 @@ pub const MAX_SOUND_EFFECTS: usize = 254;
 
 pub const MAX_N_PITCHES: usize = 256;
 
-pub const COMMON_DATA_POINTERS_SIZE: usize = 10 * 2;
+pub const COMMON_DATA_POINTERS_SIZE: usize = 12 * 2;
 pub const COMMON_DATA_HEADER_SIZE: usize = COMMON_DATA_POINTERS_SIZE + 4;
 
 pub const COMMON_DATA_PITCH_TABLE_OFFSET: usize = 20;
@@ -165,6 +165,7 @@ pub const COMMON_DATA_BYTES_PER_DIR: usize = 4;
 pub const COMMON_DATA_BYTES_PER_PITCH: usize = 2;
 pub const COMMON_DATA_BYTES_PER_INSTRUMENT: usize = 4;
 pub const COMMON_DATA_BYTES_PER_SOUND_EFFECT: usize = 4;
+pub const COMMON_DATA_BYTES_PER_SFX_SUBROUTINE: usize = 2;
 
 // The largest valid sound effect address.
 // Bit 15 of the address is used as a flag.
@@ -219,6 +220,7 @@ pub const ECHO_BUFFER_MAX_EDL: u8 = 15;
 
 // Song constants
 pub const MAX_SUBROUTINES: usize = 255;
+pub const MAX_SFX_SUBROUTINES: u8 = 255;
 
 pub const SONG_HEADER_SIZE: usize = N_MUSIC_CHANNELS * 2 + 15;
 pub const SONG_HEADER_CHANNELS_SIZE: usize = N_MUSIC_CHANNELS * 2;

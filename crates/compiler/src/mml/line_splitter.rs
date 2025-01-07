@@ -24,6 +24,12 @@ pub(crate) struct MmlLines<'a> {
     pub sections: Vec<Section>,
 }
 
+pub(crate) struct MmlSfxSubroutineHeaderLines<'a> {
+    pub instruments: Vec<(IdentifierStr<'a>, Line<'a>)>,
+    pub subroutines: Vec<(IdentifierStr<'a>, MmlTokens<'a>)>,
+    pub subroutine_name_map: HashMap<IdentifierStr<'a>, usize>,
+}
+
 pub(crate) struct MmlSfxLines<'a> {
     pub instruments: Vec<(IdentifierStr<'a>, Line<'a>)>,
     pub tokens: MmlTokens<'a>,
@@ -271,6 +277,94 @@ pub(super) fn split_mml_song_lines(
     }
 }
 
+pub(super) fn split_mml_sfx_subroutines_header_lines(
+    mml_text: &str,
+) -> Result<MmlSfxSubroutineHeaderLines, Vec<ErrorWithPos<MmlLineError>>> {
+    let mut errors = Vec::new();
+
+    if mml_text.len() > MAX_MML_TEXT_LENGTH {
+        errors.push(ErrorWithPos(
+            blank_file_range(),
+            MmlLineError::MmlTooLarge(mml_text.len()),
+        ));
+        return Err(errors);
+    }
+
+    let mut instruments = Vec::new();
+    let mut subroutines: Vec<(IdentifierStr, MmlTokens)> = Vec::new();
+
+    let mut subroutine_name_map: HashMap<IdentifierStr, usize> = HashMap::new();
+
+    let mut line_splitter = split_lines(mml_text);
+
+    while let Some(entire_line) = line_splitter.next() {
+        let line = match entire_line.text.split_once(COMMENT_CHAR) {
+            Some((l, _comment)) => Line {
+                text: l,
+                ..entire_line
+            },
+            None => entire_line.clone(),
+        };
+
+        match line.text.chars().next() {
+            Some('#') => errors.push(ErrorWithPos(
+                line.range(),
+                MmlLineError::HeaderInSoundEffect,
+            )),
+            Some('!') => {
+                // SFX Subroutine
+                match split_id_and_line(line, '!') {
+                    Ok((id, line)) => match subroutine_name_map.get(&id) {
+                        Some(index) => subroutines[*index].1.parse_line(
+                            line,
+                            entire_line.index_range(),
+                            &mut line_splitter,
+                        ),
+                        None => {
+                            subroutine_name_map.insert(id, subroutines.len());
+                            subroutines.push((
+                                id,
+                                MmlTokens::new_with_line(
+                                    line,
+                                    entire_line.index_range(),
+                                    &mut line_splitter,
+                                ),
+                            ));
+                        }
+                    },
+                    Err(e) => errors.push(e),
+                }
+            }
+            Some('@') => {
+                // instruments
+                match split_id_and_line(line, '@') {
+                    Ok((id, line)) => instruments.push((id, line)),
+                    Err(e) => errors.push(e),
+                }
+            }
+            Some(c) if c.is_ascii_alphabetic() => {
+                errors.push(ErrorWithPos(
+                    line.range(),
+                    MmlLineError::ChannelInSfxSubroutineHeader,
+                ));
+            }
+            Some(_) => errors.push(ErrorWithPos(line.range(), MmlLineError::CannotParseLine)),
+
+            None => (),
+        }
+    }
+
+    if errors.is_empty() {
+        Ok(MmlSfxSubroutineHeaderLines {
+            instruments,
+            subroutines,
+            subroutine_name_map,
+        })
+    } else {
+        Err(errors)
+    }
+}
+
 pub(super) fn split_mml_sound_effect_lines(
     mml_text: &str,
 ) -> Result<MmlSfxLines, Vec<ErrorWithPos<MmlLineError>>> {
@@ -307,7 +401,7 @@ pub(super) fn split_mml_sound_effect_lines(
             )),
             Some('!') => errors.push(ErrorWithPos(
                 line.range(),
-                MmlLineError::SubroutineInSoundEffect,
+                MmlLineError::SubroutineDefinitionInSoundEffect,
             )),
             Some('@') => {
                 // instruments

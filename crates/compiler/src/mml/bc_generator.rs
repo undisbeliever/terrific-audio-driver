@@ -24,7 +24,7 @@ use crate::channel_bc_generator::{
 use crate::errors::{ChannelError, ErrorWithPos, MmlChannelError};
 use crate::pitch_table::PitchTable;
 use crate::songs::Channel;
-use crate::sound_effects::MAX_SFX_TICKS;
+use crate::sound_effects::{CompiledSfxSubroutines, MAX_SFX_TICKS};
 use crate::subroutines::{FindSubroutineResult, NoSubroutines, Subroutine, SubroutineStore};
 use crate::time::{ZenLen, DEFAULT_ZENLEN};
 
@@ -76,6 +76,8 @@ pub struct MmlSongBytecodeGenerator<'a> {
 
     subroutines: SongSubroutines<'a>,
 
+    is_song: bool,
+
     #[cfg(feature = "mml_tracking")]
     first_channel_bc_offset: Option<u16>,
     #[cfg(feature = "mml_tracking")]
@@ -97,6 +99,7 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
         subroutine_name_map: &'a HashMap<IdentifierStr<'a>, usize>,
         max_edl: EchoEdl,
         header_size: usize,
+        is_song: bool,
     ) -> Self {
         Self {
             song_data: vec![0; header_size],
@@ -107,6 +110,8 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
             sections,
             mml_instruments: instruments,
             mml_instrument_map: instrument_map,
+
+            is_song,
 
             max_edl,
             subroutines: SongSubroutines {
@@ -124,8 +129,21 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
         }
     }
 
+    pub(crate) fn take_sfx_subroutine_data(self) -> CompiledSfxSubroutines {
+        assert!(!self.is_song);
+
+        CompiledSfxSubroutines::new(
+            self.song_data,
+            self.subroutines.vec,
+            #[cfg(feature = "mml_tracking")]
+            self.cursor_tracker,
+        )
+    }
+
     #[cfg(feature = "mml_tracking")]
     pub(crate) fn take_data(self) -> (Vec<u8>, Vec<Subroutine>, SongBcTracking) {
+        assert!(self.is_song);
+
         (
             self.song_data,
             self.subroutines.vec,
@@ -139,6 +157,8 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
 
     #[cfg(not(feature = "mml_tracking"))]
     pub(crate) fn take_data(self) -> (Vec<u8>, Vec<Subroutine>) {
+        assert!(self.is_song);
+
         (self.song_data, self.subroutines.vec)
     }
 
@@ -213,7 +233,7 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
         });
     }
 
-    pub fn parse_and_compile_song_subroutione(
+    pub fn parse_and_compile_subroutione(
         &mut self,
         identifier: IdentifierStr<'a>,
         tokens: MmlTokens,
@@ -242,8 +262,11 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
             self.data_instruments,
             self.mml_instruments,
             &self.subroutines,
-            BytecodeContext::SongSubroutine {
-                max_edl: self.max_edl,
+            match self.is_song {
+                true => BytecodeContext::SongSubroutine {
+                    max_edl: self.max_edl,
+                },
+                false => BytecodeContext::SfxSubroutine,
             },
         );
 
@@ -353,6 +376,8 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
         tokens: MmlTokens,
         channel_index: usize,
     ) -> Result<Channel, MmlChannelError> {
+        assert!(self.is_song);
+
         let identifier = IdentifierStr::try_from_name(CHANNEL_NAMES[channel_index]).unwrap();
         assert!(identifier.as_str().len() == 1);
         let channel_char = identifier.as_str().chars().next().unwrap();
@@ -451,6 +476,7 @@ pub fn parse_and_compile_sound_effect(
     mml_instruments: &[MmlInstrument],
     data_instruments: &UniqueNamesList<data::InstrumentOrSample>,
     instruments_map: &HashMap<IdentifierStr, usize>,
+    sfx_subroutines: &CompiledSfxSubroutines,
 ) -> Result<MmlSoundEffect, Vec<ErrorWithPos<ChannelError>>> {
     #[cfg(feature = "mml_tracking")]
     let mut cursor_tracker = CursorTracker::new();
@@ -459,7 +485,7 @@ pub fn parse_and_compile_sound_effect(
         ChannelId::SoundEffect,
         tokens,
         instruments_map,
-        &NoSubroutines(),
+        sfx_subroutines,
         DEFAULT_ZENLEN,
         None, // No sections in sound effect
         #[cfg(feature = "mml_tracking")]
@@ -472,7 +498,7 @@ pub fn parse_and_compile_sound_effect(
         mml_file,
         data_instruments,
         mml_instruments,
-        &NoSubroutines(),
+        sfx_subroutines,
         BytecodeContext::SoundEffect,
     );
 

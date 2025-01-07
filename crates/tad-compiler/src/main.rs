@@ -23,11 +23,10 @@ use compiler::{
     samples::build_sample_and_instrument_data,
     sfx_file,
     songs::{song_duration_string, validate_song_size, SongData},
-    sound_effects::{self, SfxExportOrder},
+    sound_effects::{self, blank_compiled_sound_effects, CompiledSfxSubroutines, SfxExportOrder},
     spc_file_export::export_spc_file,
 };
 
-use std::collections::HashMap;
 use std::ffi::{OsStr, OsString};
 use std::path::{Path, PathBuf};
 
@@ -109,16 +108,28 @@ struct CompileCommonDataArgs {
     project_file: PathBuf,
 }
 
+type CompiledSfx = (
+    sound_effects::CompiledSfxSubroutines,
+    sound_effects::CombinedSoundEffectsData,
+);
+
+fn blank_sfx() -> CompiledSfx {
+    (
+        CompiledSfxSubroutines::blank(),
+        blank_compiled_sound_effects(),
+    )
+}
+
 fn compile_sound_effects(
     pf: &UniqueNamesProjectFile,
     pitch_table: &PitchTable,
-) -> Result<sound_effects::CombinedSoundEffectsData, ()> {
-    let sound_effects = match &pf.sound_effect_file {
+) -> Result<CompiledSfx, ()> {
+    match &pf.sound_effect_file {
         Some(sfx_file_source) => {
             match sfx_file::load_sound_effects_file(sfx_file_source, &pf.parent_path) {
                 Err(e) => {
                     eprintln!("{}", e);
-                    return Err(());
+                    Err(())
                 }
                 Ok(sfx_file) => {
                     match sound_effects::compile_sound_effects_file(
@@ -128,32 +139,32 @@ fn compile_sound_effects(
                     ) {
                         Err(e) => {
                             eprintln!("{}", e.multiline_display());
-                            return Err(());
+                            Err(())
                         }
-                        Ok(v) => v,
+                        Ok((sub, sfx)) => {
+                            match sound_effects::combine_sound_effects(
+                                &sfx,
+                                &pf.sfx_export_order,
+                                pf.default_sfx_flags,
+                            ) {
+                                Ok(sfx) => Ok((sub, sfx)),
+                                Err(e) => {
+                                    eprintln!("Error compiling sound effects: {}", e);
+                                    Err(())
+                                }
+                            }
+                        }
                     }
                 }
             }
         }
         None => {
             if pf.sfx_export_order.n_sound_effects() == 0 {
-                HashMap::new()
+                Ok(blank_sfx())
             } else {
                 eprintln!("No sound effect file in {}", pf.file_name);
-                return Err(());
+                Err(())
             }
-        }
-    };
-
-    match sound_effects::combine_sound_effects(
-        &sound_effects,
-        &pf.sfx_export_order,
-        pf.default_sfx_flags,
-    ) {
-        Ok(sfx) => Ok(sfx),
-        Err(e) => {
-            eprintln!("Error compiling sound effects: {}", e);
-            Err(())
         }
     }
 }
@@ -175,7 +186,7 @@ fn compile_common_data(args: CompileCommonDataArgs) {
         Err(()) => error!("Error compiling sound effects"),
     };
 
-    let cad = match build_common_audio_data(&samples, &sfx) {
+    let cad = match build_common_audio_data(&samples, &sfx.0, &sfx.1) {
         Ok(data) => data,
         Err(e) => error!("{}", e.multiline_display()),
     };
@@ -328,7 +339,7 @@ fn export_song_to_spc_file(args: Song2SpcArgs) {
             Err(()) => error!("Error compiling sound effects"),
         }
     } else {
-        sound_effects::blank_compiled_sound_effects()
+        blank_sfx()
     };
 
     let song_data = compile_song(
@@ -339,7 +350,7 @@ fn export_song_to_spc_file(args: Song2SpcArgs) {
         samples.pitch_table(),
     );
 
-    let common_audio_data = match build_common_audio_data(&samples, &sfx) {
+    let common_audio_data = match build_common_audio_data(&samples, &sfx.0, &sfx.1) {
         Ok(data) => data,
         Err(e) => error!("{}", e.multiline_display()),
     };
@@ -553,7 +564,7 @@ fn compile_project(pf: &UniqueNamesProjectFile) -> (CommonAudioData, Vec<SongDat
         _ => error!("Error compiling common audio data"),
     };
 
-    let common_audio_data = match build_common_audio_data(&samples, &sfx) {
+    let common_audio_data = match build_common_audio_data(&samples, &sfx.0, &sfx.1) {
         Ok(data) => data,
         Err(e) => error!("{}", e.multiline_display()),
     };

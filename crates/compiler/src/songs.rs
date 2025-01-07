@@ -23,7 +23,6 @@ use crate::envelope::{Envelope, Gain};
 use crate::errors::{ChannelError, SongError, SongTooLargeError};
 use crate::mml::{MetaData, Section};
 use crate::notes::{Note, Octave};
-use crate::sound_effects::CompiledSoundEffect;
 use crate::subroutines::{NoSubroutines, Subroutine};
 use crate::time::{TickClock, TickCounter, TickCounterWithLoopFlag};
 use crate::{audio_driver, mml};
@@ -262,10 +261,6 @@ pub fn blank_song() -> SongData {
         #[cfg(feature = "mml_tracking")]
         tracking: None,
     }
-}
-
-pub fn sound_effect_to_song(sfx: &CompiledSoundEffect) -> SongData {
-    sfx_bytecode_to_song(sfx.bytecode())
 }
 
 fn sfx_bytecode_to_song(bytecode: &[u8]) -> SongData {

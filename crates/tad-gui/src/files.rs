@@ -639,7 +639,7 @@ impl Serializer for SoundEffectsData {
     const DIALOG_FILTER: Option<&'static str> = Some(SOUND_EFFECTS_FILTER);
 
     fn serialize(data: &SoundEffectsData) -> Result<Vec<u8>, String> {
-        Ok(build_sound_effects_file(data.header(), data.sound_effects_iter()).into())
+        Ok(build_sound_effects_file(data.subroutines(), data.sound_effects_iter()).into())
     }
 }
 

@@ -69,11 +69,11 @@ use compiler::driver_constants;
 use compiler::path::{ParentPathBuf, SourcePathBuf};
 use compiler::sfx_file::{convert_sfx_inputs_lossy, SoundEffectsFile};
 use compiler::songs::SongData;
-use compiler::sound_effects::SoundEffectInput;
+use compiler::sound_effects::{SfxSubroutinesMml, SoundEffectInput};
 use compiler::Pan;
 
 use compiler::time::TickCounter;
-use compiler_thread::{PlaySampleArgs, SampleOutput, ShortSongError};
+use compiler_thread::{PlaySampleArgs, SampleOutput, SfxToCompiler, ShortSongError};
 use files::{
     new_project_dialog, open_instrument_sample_dialog, open_project_dialog,
     open_sample_sample_dialog, song_name_from_path,
@@ -146,10 +146,10 @@ pub enum GuiMessage {
 
     RecompileEverything,
 
+    SfxSubroutinesChanged(SfxSubroutinesMml),
     EditSoundEffectList(ListMessage<SoundEffectInput>),
     EditSoundEffect(ItemId, SoundEffectInput),
     UserChangesSelectedSoundEffect,
-    SfxFileHeaderChanged,
     AddMissingSoundEffects,
 
     AddSongToProjectDialog,
@@ -233,7 +233,7 @@ impl ProjectData {
 }
 
 pub struct SoundEffectsData {
-    header: String,
+    subroutines: SfxSubroutinesMml,
     sound_effects: ListWithCompilerOutput<SoundEffectInput, SoundEffectOutput>,
 }
 
@@ -476,6 +476,18 @@ impl Project {
                 }
             }
 
+            GuiMessage::SfxSubroutinesChanged(mml) => {
+                if let Some(sfx_data) = &mut self.sfx_data {
+                    if sfx_data.subroutines != mml {
+                        sfx_data.subroutines = mml.clone();
+
+                        self.tab_manager.mark_unsaved(FileType::SoundEffects);
+                        let _ = self
+                            .compiler_sender
+                            .send(ToCompiler::CompileSoundEffectSubroutines(mml));
+                    }
+                }
+            }
             GuiMessage::EditSoundEffectList(m) => {
                 if let Some(sfx_data) = &mut self.sfx_data {
                     let (changed, c) = sfx_data
@@ -510,9 +522,6 @@ impl Project {
                     self.sound_effects_tab
                         .selected_item_changed(&sfx_data.sound_effects)
                 }
-            }
-            GuiMessage::SfxFileHeaderChanged => {
-                self.tab_manager.mark_unsaved(FileType::SoundEffects);
             }
             GuiMessage::AddMissingSoundEffects => {
                 if let Some(sfx_data) = &self.sfx_data {
@@ -819,6 +828,10 @@ impl Project {
                     &mut self.samples_tab,
                 );
             }
+            CompilerOutput::SfxSubroutines(co) => {
+                self.sound_effects_tab
+                    .set_sfx_subroutine_compiler_output(co);
+            }
             CompilerOutput::SoundEffect(id, co) => {
                 if let Some(sfx_data) = &mut self.sfx_data {
                     sfx_data
@@ -896,9 +909,12 @@ impl Project {
 
         // Combine samples after they have been compiled
         if let Some(sfx_data) = &self.sfx_data {
-            let _ = self.compiler_sender.send(ToCompiler::LoadSoundEffects(
-                sfx_data.sound_effects.replace_all_vec(),
-            ));
+            let _ = self
+                .compiler_sender
+                .send(ToCompiler::LoadSoundEffects(SfxToCompiler {
+                    subroutines: sfx_data.subroutines.clone(),
+                    sound_effects: sfx_data.sound_effects.replace_all_vec(),
+                }));
         }
     }
 
@@ -946,19 +962,23 @@ impl Project {
         let sound_effects = ListWithCompilerOutput::new(sfx, MAX_SFX_FILE_SOUND_EFFECTS);
 
         self.sound_effects_tab
-            .replace_sfx_file(&sfx_file.header, &sound_effects);
+            .replace_sfx_file(&sfx_file.subroutines, &sound_effects);
+
         self.tab_manager.add_or_modify(
             &self.sound_effects_tab,
             sfx_file.path,
             Some("Sound Effects"),
         );
 
-        let _ = self.compiler_sender.send(ToCompiler::LoadSoundEffects(
-            sound_effects.replace_all_vec(),
-        ));
+        let _ = self
+            .compiler_sender
+            .send(ToCompiler::LoadSoundEffects(SfxToCompiler {
+                subroutines: sfx_file.subroutines.clone(),
+                sound_effects: sound_effects.replace_all_vec(),
+            }));
 
         self.sfx_data = Some(SoundEffectsData {
-            header: sfx_file.header,
+            subroutines: sfx_file.subroutines,
             sound_effects,
         });
     }
@@ -1101,7 +1121,7 @@ impl Project {
             }
             FileType::SoundEffects => match &mut self.sfx_data {
                 Some(sfx_data) => {
-                    sfx_data.header = self.sound_effects_tab.header_text();
+                    sfx_data.subroutines = self.sound_effects_tab.sfx_subroutines_mml();
 
                     match self
                         .tab_manager
@@ -1220,8 +1240,8 @@ impl ProjectData {
 }
 
 impl SoundEffectsData {
-    pub fn header(&self) -> &str {
-        &self.header
+    pub fn subroutines(&self) -> &SfxSubroutinesMml {
+        &self.subroutines
     }
 
     pub fn sound_effects_iter(&self) -> impl Iterator<Item = &SoundEffectInput> {

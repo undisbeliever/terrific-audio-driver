@@ -7,7 +7,7 @@
 use crate::data::{load_text_file_with_limit, Name, TextFile};
 use crate::errors::FileError;
 use crate::path::{ParentPathBuf, SourcePathBuf};
-use crate::sound_effects::{SfxFlags, SoundEffectInput, SoundEffectText};
+use crate::sound_effects::{SfxFlags, SfxSubroutinesMml, SoundEffectInput, SoundEffectText};
 
 use std::path::PathBuf;
 
@@ -37,7 +37,7 @@ pub struct SoundEffectsFile {
     pub path: Option<PathBuf>,
     pub file_name: String,
 
-    pub header: String,
+    pub subroutines: SfxSubroutinesMml,
 
     pub sound_effects: Vec<SoundEffectFileSfx>,
 }
@@ -148,7 +148,7 @@ fn sfx_file_from_text_file(tf: TextFile) -> SoundEffectsFile {
     SoundEffectsFile {
         path: tf.path,
         file_name: tf.file_name,
-        header,
+        subroutines: SfxSubroutinesMml(header),
         sound_effects,
     }
 }
@@ -162,12 +162,12 @@ pub fn load_sound_effects_file(
 }
 
 pub fn build_sound_effects_file<'a>(
-    header: &'a str,
+    subroutines: &'a SfxSubroutinesMml,
     sound_effects: impl Iterator<Item = &'a SoundEffectInput>,
 ) -> String {
     let mut out = String::with_capacity(32 * 1024);
 
-    out.push_str(header);
+    out.push_str(&subroutines.0);
 
     for (i, sfx) in sound_effects.enumerate() {
         let (sfx_lines, is_mml) = match &sfx.sfx {
@@ -175,7 +175,7 @@ pub fn build_sound_effects_file<'a>(
             SoundEffectText::Mml(s) => (s, true),
         };
 
-        if i == 0 && header.is_empty() {
+        if i == 0 && subroutines.0.is_empty() {
             out.push_str("=== ");
         } else {
             out.push_str("\n=== ");
@@ -249,7 +249,7 @@ MML
             SoundEffectsFile {
                 path: None,
                 file_name,
-                header: "".to_owned(),
+                subroutines: SfxSubroutinesMml("".to_owned()),
                 sound_effects: vec![
                     SoundEffectFileSfx {
                         name: "test_first".to_owned(),
@@ -294,7 +294,7 @@ MML
 
     #[test]
     fn sfx_old_file_format_from_string_2() {
-        const INPUT: &str = r##"; This is a header
+        const INPUT: &str = r##"; This is a SFX subroutine header
 ; With multiple lines
 
 === test_first
@@ -326,7 +326,9 @@ c
             SoundEffectsFile {
                 path: Some(path),
                 file_name,
-                header: "; This is a header\n; With multiple lines\n".to_owned(),
+                subroutines: SfxSubroutinesMml(
+                    "; This is a SFX subroutine header\n; With multiple lines\n".to_owned()
+                ),
                 sound_effects: vec![
                     SoundEffectFileSfx {
                         name: "test_first".to_owned(),
@@ -389,7 +391,7 @@ e
             SoundEffectsFile {
                 path: None,
                 file_name,
-                header: "".to_owned(),
+                subroutines: SfxSubroutinesMml("".to_owned()),
                 sound_effects: vec![
                     SoundEffectFileSfx {
                         name: "test_first".to_owned(),
@@ -434,7 +436,7 @@ e
 
     #[test]
     fn sfx_new_file_format_from_string_2() {
-        const INPUT: &str = r##"; This is a header
+        const INPUT: &str = r##"; This is a sfx subroutines header
 ; With multiple lines
 
 === test_first
@@ -465,7 +467,9 @@ c
             SoundEffectsFile {
                 path: Some(path),
                 file_name,
-                header: "; This is a header\n; With multiple lines\n".to_owned(),
+                subroutines: SfxSubroutinesMml(
+                    "; This is a sfx subroutines header\n; With multiple lines\n".to_owned()
+                ),
                 sound_effects: vec![
                     SoundEffectFileSfx {
                         name: "test_first".to_owned(),
@@ -517,7 +521,7 @@ c
             SoundEffectsFile {
                 path: Default::default(),
                 file_name: Default::default(),
-                header: String::new(),
+                subroutines: SfxSubroutinesMml(String::new()),
                 sound_effects: vec![
                     SoundEffectFileSfx {
                         name: "name1".to_owned(),
@@ -559,7 +563,7 @@ c
             SoundEffectsFile {
                 path: Default::default(),
                 file_name: Default::default(),
-                header: String::new(),
+                subroutines: SfxSubroutinesMml(String::new()),
                 sound_effects: vec![SoundEffectFileSfx {
                     name: "name".to_owned(),
                     line_no: 1,
@@ -587,7 +591,7 @@ c
             SoundEffectsFile {
                 path: Default::default(),
                 file_name: Default::default(),
-                header: String::new(),
+                subroutines: SfxSubroutinesMml(String::new()),
                 sound_effects: vec![SoundEffectFileSfx {
                     name: "name unknown".to_owned(),
                     line_no: 1,
@@ -619,7 +623,7 @@ c
             SoundEffectsFile {
                 path: Default::default(),
                 file_name: Default::default(),
-                header: String::new(),
+                subroutines: SfxSubroutinesMml(String::new()),
                 sound_effects: vec![
                     SoundEffectFileSfx {
                         name: "name".to_owned(),
@@ -662,7 +666,7 @@ c
             SoundEffectsFile {
                 path: Default::default(),
                 file_name: Default::default(),
-                header: String::new(),
+                subroutines: SfxSubroutinesMml(String::new()),
                 sound_effects: vec![SoundEffectFileSfx {
                     name: "name".to_owned(),
                     line_no: 1,
@@ -773,7 +777,8 @@ c
     }
     #[test]
     fn test_save_and_load() {
-        let header = "This is the file header\nHello === World ===\n\n";
+        let subroutines =
+            SfxSubroutinesMml("This is the file header\nHello === World ===\n\n".to_owned());
         let sound_effects = vec![
             SoundEffectInput {
                 name: Name::new_lossy("".to_owned()),
@@ -851,7 +856,7 @@ c
             },
         ];
 
-        let sfx_file = build_sound_effects_file(header, sound_effects.iter());
+        let sfx_file = build_sound_effects_file(&subroutines, sound_effects.iter());
 
         let read_sfx = sfx_file_from_text_file(TextFile {
             path: Default::default(),
@@ -859,7 +864,7 @@ c
             contents: sfx_file,
         });
 
-        assert_eq!(read_sfx.header, header);
+        assert_eq!(read_sfx.subroutines, subroutines);
         assert_eq!(
             convert_sfx_inputs_lossy(read_sfx.sound_effects),
             sound_effects

@@ -123,11 +123,9 @@ Instructions
     * The `loop_count` instruction is optional if the *loop_count* is set in `start_loop`.
 
  * `call_subroutine <name>` - Call the subroutine *name*.
-    * Not available in sound effects.
 
  * `call_subroutine_and_disable_vibrato <name>` - Disable vibrato and call the subroutine *name*.
     * Disables vibrato before the subroutine call.
-    * Not available in sound effects.
 
 
 Global instructions

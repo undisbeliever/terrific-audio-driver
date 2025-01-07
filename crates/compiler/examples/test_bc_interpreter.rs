@@ -19,7 +19,7 @@ use compiler::{
     mml::compile_mml,
     samples::build_sample_and_instrument_data,
     songs::SongData,
-    sound_effects::blank_compiled_sound_effects,
+    sound_effects::{blank_compiled_sound_effects, CompiledSfxSubroutines},
     time::TickCounter,
 };
 use shvc_sound_emu::ShvcSoundEmu;
@@ -414,9 +414,10 @@ fn main() {
 
     let samples = build_sample_and_instrument_data(&project).unwrap();
 
+    let sfx_subs = CompiledSfxSubroutines::blank();
     let sfx = blank_compiled_sound_effects();
 
-    let common_audio_data = build_common_audio_data(&samples, &sfx).unwrap();
+    let common_audio_data = build_common_audio_data(&samples, &sfx_subs, &sfx).unwrap();
 
     for song in project.songs.list() {
         println!("Testing song: {}", song.name);

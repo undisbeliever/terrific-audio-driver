@@ -1536,6 +1536,7 @@ impl<'a> ChannelBcGenerator<'a> {
                     self.bc._song_loop_point();
                 }
                 BytecodeContext::SongSubroutine { .. }
+                | BytecodeContext::SfxSubroutine
                 | BytecodeContext::SoundEffect
                 | BytecodeContext::MmlPrefix => return Err(ChannelError::CannotSetLoopPoint),
             },

@@ -9,17 +9,23 @@ use crate::bytecode_assembler::BytecodeAssembler;
 use crate::data::{
     DefaultSfxFlags, InstrumentOrSample, Name, UniqueNamesList, UniqueSoundEffectExportOrder,
 };
-use crate::driver_constants::{COMMON_DATA_BYTES_PER_SOUND_EFFECT, SFX_TICK_CLOCK};
+use crate::driver_constants::{
+    COMMON_DATA_BYTES_PER_SFX_SUBROUTINE, COMMON_DATA_BYTES_PER_SOUND_EFFECT, MAX_COMMON_DATA_SIZE,
+    SFX_TICK_CLOCK,
+};
 use crate::errors::{
-    ChannelError, CombineSoundEffectsError, ErrorWithPos, OtherSfxError, SoundEffectError,
-    SoundEffectErrorList, SoundEffectsFileError,
+    ChannelError, CombineSoundEffectsError, ErrorWithPos, OtherSfxError, SfxSubroutineErrors,
+    SoundEffectError, SoundEffectErrorList, SoundEffectsFileError,
 };
 use crate::file_pos::{blank_file_range, split_lines};
 use crate::mml;
 use crate::pitch_table::PitchTable;
 use crate::sfx_file::SoundEffectsFile;
-use crate::subroutines::NoSubroutines;
+use crate::subroutines::{FindSubroutineResult, Subroutine, SubroutineStore};
 use crate::time::{TickClock, TickCounter};
+
+#[cfg(feature = "mml_tracking")]
+use crate::mml::note_tracking::CursorTracker;
 
 use std::collections::HashMap;
 use std::time::Duration;
@@ -31,6 +37,105 @@ const SFX_HEADER_DURATION_OFFSET: u32 = 32;
 pub const MAX_SFX_TICKS: TickCounter = TickCounter::new(0x7fff - SFX_HEADER_DURATION_OFFSET);
 
 const COMMENT_CHAR: char = ';';
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct SfxSubroutinesMml(pub String);
+
+#[derive(Debug)]
+pub struct CompiledSfxSubroutines {
+    data: Vec<u8>,
+
+    subroutines: Vec<Subroutine>,
+    name_map: HashMap<String, usize>,
+
+    #[cfg(feature = "mml_tracking")]
+    cursor_tracker: CursorTracker,
+}
+
+impl CompiledSfxSubroutines {
+    pub(crate) fn new(
+        data: Vec<u8>,
+        subroutines: Vec<Subroutine>,
+        #[cfg(feature = "mml_tracking")] cursor_tracker: CursorTracker,
+    ) -> Self {
+        Self {
+            data,
+            name_map: subroutines
+                .iter()
+                .enumerate()
+                .map(|(i, s)| (s.identifier.as_str().to_owned(), i))
+                .collect(),
+            subroutines,
+            #[cfg(feature = "mml_tracking")]
+            cursor_tracker,
+        }
+    }
+
+    pub fn blank() -> Self {
+        Self {
+            data: Vec::new(),
+            subroutines: Vec::new(),
+            name_map: HashMap::new(),
+            #[cfg(feature = "mml_tracking")]
+            cursor_tracker: CursorTracker::new(),
+        }
+    }
+
+    pub fn subroutines(&self) -> &[Subroutine] {
+        &self.subroutines
+    }
+
+    pub fn cad_data_len(&self) -> usize {
+        self.data.len() + self.subroutines.len() * COMMON_DATA_BYTES_PER_SFX_SUBROUTINE
+    }
+
+    #[cfg(feature = "mml_tracking")]
+    pub fn cursor_tracker(&self) -> &CursorTracker {
+        &self.cursor_tracker
+    }
+
+    pub(crate) fn bytecode_data(&self) -> &[u8] {
+        &self.data
+    }
+
+    fn bytecode_addr_table_iter(&self, addr: u16) -> impl Iterator<Item = u16> + '_ {
+        assert!(self.data.len() + usize::from(addr) < MAX_COMMON_DATA_SIZE);
+
+        self.subroutines
+            .iter()
+            .map(move |s| s.bytecode_offset + addr)
+    }
+
+    pub(crate) fn sfx_subroutines_l_iter(&self, addr: u16) -> impl Iterator<Item = u8> + '_ {
+        self.bytecode_addr_table_iter(addr)
+            .map(|o| o.to_le_bytes()[0])
+    }
+
+    pub(crate) fn sfx_subroutines_h_iter(&self, addr: u16) -> impl Iterator<Item = u8> + '_ {
+        self.bytecode_addr_table_iter(addr)
+            .map(|o| o.to_le_bytes()[1])
+    }
+}
+
+impl SubroutineStore for CompiledSfxSubroutines {
+    fn get(&self, index: usize) -> Option<&Subroutine> {
+        self.subroutines.get(index)
+    }
+
+    fn find_subroutine<'a, 'b>(&'a self, name: &'b str) -> FindSubroutineResult<'b>
+    where
+        'a: 'b,
+    {
+        match self
+            .name_map
+            .get(name)
+            .and_then(|i| self.subroutines.get(*i))
+        {
+            Some(s) => FindSubroutineResult::Found(&s.subroutine_id),
+            None => FindSubroutineResult::NotFound,
+        }
+    }
+}
 
 #[derive(Debug)]
 enum SfxData {
@@ -81,9 +186,10 @@ fn compile_mml_sound_effect(
     sfx: &str,
     inst_map: &UniqueNamesList<InstrumentOrSample>,
     pitch_table: &PitchTable,
+    subroutines: &CompiledSfxSubroutines,
     flags: SfxFlags,
 ) -> Result<CompiledSoundEffect, SoundEffectErrorList> {
-    match mml::compile_sound_effect(sfx, inst_map, pitch_table) {
+    match mml::compile_sound_effect(sfx, inst_map, pitch_table, subroutines) {
         Ok(o) => Ok(CompiledSoundEffect {
             tick_counter: o.tick_counter(),
             flags,
@@ -96,12 +202,12 @@ fn compile_mml_sound_effect(
 fn compile_bytecode_sound_effect(
     sfx: &str,
     instruments: &UniqueNamesList<InstrumentOrSample>,
+    subroutines: &CompiledSfxSubroutines,
     flags: SfxFlags,
 ) -> Result<CompiledSoundEffect, SoundEffectErrorList> {
     let mut errors = Vec::new();
 
-    let mut bc =
-        BytecodeAssembler::new(instruments, &NoSubroutines(), BytecodeContext::SoundEffect);
+    let mut bc = BytecodeAssembler::new(instruments, subroutines, BytecodeContext::SoundEffect);
 
     let mut last_line_range = blank_file_range();
 
@@ -155,11 +261,31 @@ fn compile_bytecode_sound_effect(
     }
 }
 
+pub fn compile_sfx_subroutines(
+    subroutines: &SfxSubroutinesMml,
+    inst_map: &UniqueNamesList<InstrumentOrSample>,
+    pitch_table: &PitchTable,
+) -> Result<CompiledSfxSubroutines, SfxSubroutineErrors> {
+    mml::compile_sfx_subroutines(&subroutines.0, inst_map, pitch_table)
+}
+
 pub fn compile_sound_effects_file(
     sfx_file: &SoundEffectsFile,
     inst_map: &UniqueNamesList<InstrumentOrSample>,
     pitch_table: &PitchTable,
-) -> Result<HashMap<Name, CompiledSoundEffect>, SoundEffectsFileError> {
+) -> Result<(CompiledSfxSubroutines, HashMap<Name, CompiledSoundEffect>), SoundEffectsFileError> {
+    let subroutines = match compile_sfx_subroutines(&sfx_file.subroutines, inst_map, pitch_table) {
+        Ok(s) => s,
+        Err(e) => {
+            return Err(SoundEffectsFileError {
+                path: sfx_file.path.clone(),
+                file_name: sfx_file.file_name.clone(),
+                subroutine_errors: Some(e),
+                errors: Vec::new(),
+            })
+        }
+    };
+
     let mut sound_effects = HashMap::with_capacity(sfx_file.sound_effects.len());
 
     let mut errors = Vec::new();
@@ -182,11 +308,15 @@ pub fn compile_sound_effects_file(
 
         let r = match &sfx.sfx {
             SoundEffectText::BytecodeAssembly(text) => {
-                compile_bytecode_sound_effect(text, inst_map, sfx.flags.clone())
+                compile_bytecode_sound_effect(text, inst_map, &subroutines, sfx.flags.clone())
             }
-            SoundEffectText::Mml(text) => {
-                compile_mml_sound_effect(text, inst_map, pitch_table, sfx.flags.clone())
-            }
+            SoundEffectText::Mml(text) => compile_mml_sound_effect(
+                text,
+                inst_map,
+                pitch_table,
+                &subroutines,
+                sfx.flags.clone(),
+            ),
         };
         match r {
             Ok(s) => {
@@ -204,11 +334,12 @@ pub fn compile_sound_effects_file(
     }
 
     if errors.is_empty() {
-        Ok(sound_effects)
+        Ok((subroutines, sound_effects))
     } else {
         Err(SoundEffectsFileError {
             path: sfx_file.path.clone(),
             file_name: sfx_file.file_name.clone(),
+            subroutine_errors: None,
             errors,
         })
     }
@@ -437,14 +568,19 @@ pub fn compile_sound_effect_input(
     input: &SoundEffectInput,
     inst_map: &UniqueNamesList<InstrumentOrSample>,
     pitch_table: &PitchTable,
+    subroutines: &CompiledSfxSubroutines,
 ) -> Result<CompiledSoundEffect, SoundEffectError> {
     let r = match &input.sfx {
         SoundEffectText::BytecodeAssembly(text) => {
-            compile_bytecode_sound_effect(text, inst_map, input.flags.clone())
+            compile_bytecode_sound_effect(text, inst_map, subroutines, input.flags.clone())
         }
-        SoundEffectText::Mml(text) => {
-            compile_mml_sound_effect(text, inst_map, pitch_table, input.flags.clone())
-        }
+        SoundEffectText::Mml(text) => compile_mml_sound_effect(
+            text,
+            inst_map,
+            pitch_table,
+            subroutines,
+            input.flags.clone(),
+        ),
     };
     match r {
         Ok(o) => Ok(o),

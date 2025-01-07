@@ -21,7 +21,8 @@ use compiler::envelope::{Envelope, Gain};
 use compiler::notes::Octave;
 use compiler::samples::combine_samples;
 use compiler::sound_effects::{
-    combine_sound_effects, compile_sound_effect_input, SfxFlags, SoundEffectInput, SoundEffectText,
+    combine_sound_effects, compile_sfx_subroutines, compile_sound_effect_input, SfxFlags,
+    SfxSubroutinesMml, SoundEffectInput, SoundEffectText,
 };
 use compiler::Pan;
 
@@ -573,6 +574,13 @@ fn _build_test_common_audio_data() -> CommonAudioData {
         data::validate_instrument_and_sample_names([dummy_instrument].iter(), std::iter::empty())
             .unwrap();
 
+    let subroutines = compile_sfx_subroutines(
+        &SfxSubroutinesMml(String::new()),
+        &instruments_and_samples,
+        pitch_table,
+    )
+    .unwrap();
+
     let sfx_map: HashMap<_, _> = [HIGH_PRIORITY_SFX, NORMAL_PRIORITY_SFX, LOW_PRIORITY_SFX]
         .concat()
         .iter()
@@ -585,8 +593,13 @@ fn _build_test_common_audio_data() -> CommonAudioData {
                     one_channel: Some(s.one_channel),
                 },
             };
-            let compiled_sfx =
-                compile_sound_effect_input(&sfx, &instruments_and_samples, pitch_table).unwrap();
+            let compiled_sfx = compile_sound_effect_input(
+                &sfx,
+                &instruments_and_samples,
+                pitch_table,
+                &subroutines,
+            )
+            .unwrap();
 
             (sfx.name, compiled_sfx)
         })
@@ -609,5 +622,5 @@ fn _build_test_common_audio_data() -> CommonAudioData {
 
     let sfx = combine_sound_effects(&sfx_map, &export_order, default_flags).unwrap();
 
-    build_common_audio_data(&samples, &sfx).unwrap()
+    build_common_audio_data(&samples, &subroutines, &sfx).unwrap()
 }
