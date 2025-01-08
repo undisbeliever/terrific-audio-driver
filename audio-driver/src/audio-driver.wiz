@@ -790,11 +790,14 @@ func process_music_channels() {
 
     write_dsp(GlobalDspAddr.PMON, pmonShadow);
 
-    y = noiseFreq_music;
-    if !negative {
-        // Assumes noiseFreq_music is <= dsp.FLG__NOISE_FREQ_MASK.
-        write_dsp(GlobalDspAddr.FLG, y);
-        noiseFreq_music $ 7 = true;
+    a = activeSoundEffects & nonShadow_sfx;
+    if zero {
+        y = noiseFreq_music;
+        if !negative {
+            // Assumes noiseFreq_music is <= dsp.FLG__NOISE_FREQ_MASK.
+            write_dsp(GlobalDspAddr.FLG, y);
+            noiseFreq_music $ 7 = true;
+        }
     }
 
     zpTmp = a = keyOnShadow_music & musicSfxChannelMask & io_musicChannelsMask;
