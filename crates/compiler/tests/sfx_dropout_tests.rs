@@ -413,7 +413,7 @@ impl Emu {
 
         let common_data = common_audio_data.data();
         let song_data = audio_driver::BLANK_SONG;
-        let song_data_addr = common_audio_data.song_data_addr();
+        let song_data_addr = common_audio_data.min_song_data_addr();
 
         let apuram = emu.apuram_mut();
 

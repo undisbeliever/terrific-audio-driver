@@ -1319,6 +1319,7 @@ where
 {
     common_audio_data: CAD,
     song_data: SD,
+    song_addr: u16,
 
     global: GlobalState,
     channels: [Option<ChannelState>; N_MUSIC_CHANNELS],
@@ -1331,17 +1332,18 @@ where
     CAD: Deref<Target = CommonAudioData>,
     SD: Deref<Target = SongData>,
 {
-    pub fn new(common_audio_data: CAD, song_data: SD, stereo_flag: bool) -> Self {
+    pub fn new(common_audio_data: CAD, song_data: SD, song_addr: u16, stereo_flag: bool) -> Self {
         Self {
             channels: std::array::from_fn(|i| {
                 song_data.channels()[i]
                     .as_ref()
-                    .map(|c| ChannelState::new(Some(c), common_audio_data.song_data_addr()))
+                    .map(|c| ChannelState::new(Some(c), song_addr))
             }),
             tick_counter: TickCounter::default(),
             global: GlobalState::new(song_data.metadata().tick_clock, &song_data),
             stereo_flag,
             song_data,
+            song_addr,
             common_audio_data,
         }
     }
@@ -1349,6 +1351,7 @@ where
     pub fn new_song_subroutine(
         common_audio_data: CAD,
         song_data: SD,
+        song_addr: u16,
         prefix: Option<MmlPrefixData>,
         subroutine_index: u8,
         stereo_flag: bool,
@@ -1359,6 +1362,7 @@ where
             global: GlobalState::new(song_data.metadata().tick_clock, &song_data),
             stereo_flag,
             song_data,
+            song_addr,
             common_audio_data,
         };
 
@@ -1396,7 +1400,7 @@ where
         };
 
         out.channels[0] = ChannelState::subroutine_prefix(
-            out.common_audio_data.song_data_addr(),
+            song_addr,
             inst,
             envelope,
             prefix,
@@ -1527,7 +1531,8 @@ where
     }
 
     pub fn write_to_emulator(&self, emu: &mut impl Emulator) {
-        let common = CommonAudioDataSoA::new(&self.common_audio_data, self.stereo_flag);
+        let common =
+            CommonAudioDataSoA::new(&self.common_audio_data, self.song_addr, self.stereo_flag);
 
         let o = InterpreterOutput {
             channels: std::array::from_fn(|i| match &self.channels[i] {
@@ -1543,7 +1548,7 @@ where
             }),
             tick_clock: self.global.timer_register,
             song_tick_counter: (self.tick_counter.value() & 0xffff).try_into().unwrap(),
-            song_data_addr: self.common_audio_data.song_data_addr(),
+            song_data_addr: self.song_addr,
             stereo_flag: self.stereo_flag,
             echo: self.global.echo.clone(),
         };
@@ -1568,7 +1573,7 @@ struct CommonAudioDataSoA<'a> {
 }
 
 impl CommonAudioDataSoA<'_> {
-    fn new(c: &CommonAudioData, stereo_flag: bool) -> CommonAudioDataSoA {
+    fn new(c: &CommonAudioData, song_data_addr: u16, stereo_flag: bool) -> CommonAudioDataSoA {
         let inst_soa_data = |i| {
             assert!(i < COMMON_DATA_BYTES_PER_INSTRUMENT);
 
@@ -1585,7 +1590,7 @@ impl CommonAudioDataSoA<'_> {
 
         CommonAudioDataSoA {
             stereo_flag,
-            song_data_addr: c.song_data_addr(),
+            song_data_addr,
             n_instruments,
             instruments_scrn: inst_soa_data(0),
             instruments_pitch_offset: inst_soa_data(1),
