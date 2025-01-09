@@ -282,8 +282,11 @@ in zeropage {
     // noise frequency register shadow variables
     // (Value is only written to the flag register if MSB clear)
     var noiseFreq_music : u8;
-    var noiseFreq_sfx : u8;
+    var noiseFreq_sfx : [u8 ; N_SFX_CHANNELS];
 
+    // Current voice ID for SFX that is using noise.
+    // If MSB is set, then no SFX voices are using noise.
+    var noiseFreq_sfxVoiceId : u8;
 
 // --- All zeropage variables after `echo` are not cleared in main() ---
 
@@ -586,10 +589,11 @@ func main() {
     musicSfxChannelMask = a;
     keyOnMask_music = a;
     noiseFreq_music = a;
-    noiseFreq_sfx = a;
+    noiseFreq_sfxVoiceId = a;
 
     inline for let _I in 0..(N_SFX_CHANNELS - 1) {
         sfx_oneChannelSfxId[_I] = a;
+        noiseFreq_sfx[_I] = a;
     }
 
 
@@ -833,11 +837,15 @@ inline func _process_sfx_channels__inline() {
 
     write_dsp(GlobalDspAddr.KOFF, keyOffShadow_sfx);
 
-    y = noiseFreq_sfx;
+    x = noiseFreq_sfxVoiceId;
     if !negative {
-        // Assumes noiseFreq_sfx is <= dsp.FLG__NOISE_FREQ_MASK.
-        write_dsp(GlobalDspAddr.FLG, y);
-        noiseFreq_sfx $ 7 = true;
+        y = (&noiseFreq_sfx[-N_MUSIC_CHANNELS])[x];
+        if !negative {
+            // Assumes noiseFreq_sfx is <= dsp.FLG__NOISE_FREQ_MASK.
+            write_dsp(GlobalDspAddr.FLG, y);
+            a = y | 0b10000000;
+            (&noiseFreq_sfx[-N_MUSIC_CHANNELS])[x] = a;
+        }
     }
 
     zpTmp = keyOnShadow_sfx;
@@ -2206,7 +2214,7 @@ func play_noise(channelIndex: u8 in x, freq_and_keyoff : u8 in a) {
     // queue KON if the previous note has been KOFFed
     a = ChannelVoiceBit[x];
     if x >= FIRST_SFX_CHANNEL {
-        noiseFreq_sfx = y;
+        (&noiseFreq_sfx[-N_MUSIC_CHANNELS])[x] = y;
 
         a = ChannelVoiceBit[x];
         test_and_set(a, nonShadow_sfx);
@@ -2218,7 +2226,17 @@ func play_noise(channelIndex: u8 in x, freq_and_keyoff : u8 in a) {
         // Disable KON the next time the note is played (slur the note)
         test_and_clear(a, keyOnMask_sfx);
 
-        return;
+        a = noiseFreq_sfxVoiceId;
+        if !negative {
+            goto PlayNoiseSFXReturn if x == noiseFreq_sfxVoiceId;
+            a = sfx_interruptibleFlags & ChannelVoiceBit[x];
+            goto PlayNoiseSFXReturn if !zero;
+        }
+
+        noiseFreq_sfxVoiceId = x;
+        //TODO zero out VxVOL of conflicting music/SFX voice(s)
+        PlayNoiseSFXReturn:
+            return;
     }
 
     noiseFreq_music = y;
@@ -2233,13 +2251,34 @@ func play_noise(channelIndex: u8 in x, freq_and_keyoff : u8 in a) {
     test_and_clear(a, keyOnMask_music);
 }
 
+// KEEP: X
+//Called in bytecode when either noise is disabled or when a SFX channel is disabled
+func set_noise_freq_sfx_voice_id(channelIndex: u8 in x) {
+    if x == noiseFreq_sfxVoiceId {
+        a = activeSoundEffects & nonShadow_sfx;
+        if zero {
+            noiseFreq_sfxVoiceId $ 7 = true;
+            noiseFreq_music $ 7 = false; //Prepare music noise frequency for restoration
+            //TODO music VxVOL restoration
+            return;
+        }
+        //Set the SFX voice ID that uses noise to the other one
+        noiseFreq_sfxVoiceId ^= FIRST_SFX_CHANNEL ^ LAST_SFX_CHANNEL;
+	y = noiseFreq_sfxVoiceId; //Prepare SFX noise frequency for restoration
+        a = (&noiseFreq_sfx[-N_MUSIC_CHANNELS])[y];
+	a &= 0b01111111;
+        (&noiseFreq_sfx[-N_MUSIC_CHANNELS])[y] = a;
+        //TODO SFX VxVOL restoration
+    } 
+}
+
 
 // KEEP: X
 func disable_noise(channelIndex: u8 in x) {
     a = ChannelVoiceBit[x];
     if x >= FIRST_SFX_CHANNEL {
         test_and_clear(a, nonShadow_sfx);
-
+        set_noise_freq_sfx_voice_id(x);
         ^return process_next_bytecode(x);
     }
 
@@ -2490,6 +2529,9 @@ func disable_channel(channelIndex : u8 in x) {
 
         // Disable sfx S-DSP writes.
         test_and_clear(a, activeSoundEffects);
+
+        // Update the channel ID that uses a SFX noise frequency.
+	set_noise_freq_sfx_voice_id(x);
 
         // Clear `sfx_oneChannelSfxId` so the sfx can be restarted if it is not interruptible.
         (&sfx_oneChannelSfxId[-N_MUSIC_CHANNELS])[x] = a = 0xff;
