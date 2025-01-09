@@ -252,7 +252,7 @@ impl SampleSizesWidget {
                 end: cad.brr_addr_range().end,
             },
             brr_start_addrs: cad.dir_table_start_iter().collect(),
-            song_start: cad.song_data_addr(),
+            song_start: cad.min_song_data_addr(),
         });
         let d = self.graph_data.as_ref().unwrap();
 

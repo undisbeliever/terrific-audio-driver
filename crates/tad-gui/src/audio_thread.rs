@@ -12,6 +12,7 @@ use compiler::bytecode_interpreter;
 use compiler::bytecode_interpreter::Emulator;
 use compiler::bytecode_interpreter::SongInterpreter;
 use compiler::common_audio_data::CommonAudioData;
+use compiler::driver_constants::AUDIO_RAM_SIZE;
 use compiler::driver_constants::N_CHANNELS;
 use compiler::driver_constants::N_DSP_VOICES;
 use compiler::driver_constants::N_MUSIC_CHANNELS;
@@ -447,6 +448,7 @@ impl std::ops::Deref for SiCad {
 
 fn create_and_process_song_interpreter(
     audio_data: &AudioDataState,
+    song_addr: u16,
     song_skip: SongSkip,
     stereo_flag: bool,
 ) -> Result<Option<SongInterpreter<SiCad, Arc<SongData>>>, ()> {
@@ -460,9 +462,9 @@ fn create_and_process_song_interpreter(
     };
 
     match song_skip {
-        SongSkip::None => Ok(Some(SongInterpreter::new(cad, sd, stereo_flag))),
+        SongSkip::None => Ok(Some(SongInterpreter::new(cad, sd, song_addr, stereo_flag))),
         SongSkip::Song(ticks) => {
-            let mut si = SongInterpreter::new(cad, sd, stereo_flag);
+            let mut si = SongInterpreter::new(cad, sd, song_addr, stereo_flag);
             if si.process_song_skip_ticks(ticks) {
                 Ok(Some(si))
             } else {
@@ -470,7 +472,8 @@ fn create_and_process_song_interpreter(
             }
         }
         SongSkip::Subroutine(prefix, si, ticks) => {
-            match SongInterpreter::new_song_subroutine(cad, sd, prefix, si, stereo_flag) {
+            match SongInterpreter::new_song_subroutine(cad, sd, song_addr, prefix, si, stereo_flag)
+            {
                 Ok(mut si) => {
                     if si.process_song_skip_ticks(ticks) {
                         Ok(Some(si))
@@ -502,6 +505,7 @@ struct TadEmu {
 
     data_state: AudioDataState,
     song_id: Option<ItemId>,
+    song_data_addr: Option<u16>,
     bc_interpreter: Option<SongInterpreter<SiCad, Arc<SongData>>>,
 
     previous_command: u8,
@@ -523,6 +527,7 @@ impl TadEmu {
             data_state: AudioDataState::NotLoaded,
             bc_interpreter: None,
             song_id: None,
+            song_data_addr: None,
             previous_command: 0,
             sfx_queue: SfxQueue::None,
         }
@@ -680,6 +685,7 @@ impl TadEmu {
 
         self.data_state = AudioDataState::NotLoaded;
         self.song_id = None;
+        self.song_data_addr = None;
         self.bc_interpreter = None;
 
         self.sfx_queue = SfxQueue::None;
@@ -702,10 +708,22 @@ impl TadEmu {
             StereoFlag::Mono => false,
         };
 
-        self.bc_interpreter =
-            create_and_process_song_interpreter(&data_state, song_skip, stereo_flag)?;
+        // Store song data at the end of the audio-RAM
+        let song_size = song.song_aram_size().total_size();
+        let song_data_addr = match AUDIO_RAM_SIZE.checked_sub(song_size) {
+            Some(s) => s.try_into().unwrap(),
+            None => return Err(()),
+        };
+        if song_data_addr < common_audio_data.min_song_data_addr() {
+            return Err(());
+        }
 
-        let song_data_addr = common_audio_data.song_data_addr();
+        self.bc_interpreter = create_and_process_song_interpreter(
+            &data_state,
+            song_data_addr,
+            song_skip,
+            stereo_flag,
+        )?;
 
         let apuram = self.emu.apuram_mut();
 
@@ -776,6 +794,7 @@ impl TadEmu {
 
         self.data_state = data_state;
         self.song_id = song_id;
+        self.song_data_addr = Some(song_data_addr);
 
         Ok(())
     }
@@ -905,16 +924,9 @@ impl TadEmu {
         };
         const COMMON_DATA_ADDR_H: u8 = (addresses::COMMON_DATA >> 8) as u8;
 
-        if !self.song_loaded() {
-            return None;
-        }
+        let song_addr = self.song_data_addr?;
 
         let apuram = self.emu.apuram();
-
-        let song_addr = u16::from_le_bytes([
-            apuram[usize::from(addresses::SONG_PTR)],
-            apuram[usize::from(addresses::SONG_PTR) + 1],
-        ]);
 
         let music_channels_mask = apuram[addresses::IO_MUSIC_CHANNELS_MASK as usize];
 

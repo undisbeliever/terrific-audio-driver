@@ -31,7 +31,7 @@ pub struct CommonAudioData {
     pitch_table_addr: u16,
     instruments_soa_addr: u16,
     brr_data_addr: u16,
-    song_data_addr: u16,
+    min_song_data_addr: u16,
 }
 
 impl std::fmt::Debug for CommonAudioData {
@@ -70,15 +70,15 @@ impl CommonAudioData {
 
     /// Caution: Includes padding byte
     pub fn brr_addr_range(&self) -> Range<u16> {
-        self.brr_data_addr..self.song_data_addr
+        self.brr_data_addr..self.min_song_data_addr
     }
 
-    pub fn song_data_addr(&self) -> u16 {
-        self.song_data_addr
+    pub fn min_song_data_addr(&self) -> u16 {
+        self.min_song_data_addr
     }
 
     pub fn aram_size(&self) -> u16 {
-        self.song_data_addr - addresses::COMMON_DATA
+        self.min_song_data_addr - addresses::COMMON_DATA
     }
 
     pub fn instruments_and_samples_size(&self) -> u16 {
@@ -344,6 +344,6 @@ pub fn build_common_audio_data(
         pitch_table_addr,
         instruments_soa_addr,
         brr_data_addr,
-        song_data_addr,
+        min_song_data_addr: song_data_addr,
     })
 }

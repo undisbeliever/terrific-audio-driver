@@ -79,7 +79,7 @@ pub fn export_spc_file(
     common_audio_data: &CommonAudioData,
     song_data: &SongData,
 ) -> Result<Vec<u8>, ExportSpcFileError> {
-    let song_data_addr = common_audio_data.song_data_addr();
+    let song_data_addr = common_audio_data.min_song_data_addr();
 
     let common_audio_data = common_audio_data.data();
     let metadata = song_data.metadata();

@@ -268,6 +268,13 @@ in zeropage {
     // (bitfield)
     var volShadowDirty_tmp : u8;
 
+    // Used to determine if all music channels should be updated.
+    //
+    // Must only contain 0x00 or 0xff.
+    //
+    // CAUTION: These bits are in reverse order, compared to other *_music bit-arrays.
+    var volShadowDirty_music : u8;
+
     // The sound effects with invalid vol_l and vol_r shadow variables.
     // Set in the PLAY_SOUND_EFFECT command.
     // CAUTION: bits 6 & 7 are swapped from other the other *_sfx bitsets
@@ -491,8 +498,6 @@ func main() {
             y++;
         } while y < offsetof(SongHeader, echo) + sizeof(typeof(echo));
 
-        nop();
-
         // Extract maximum EDL from EchoBufferSettings
         // and calculate echo start address
         a = echo.edl;
@@ -587,6 +592,7 @@ func main() {
     echoDirty = a;
     io_musicChannelsMask = a;
     musicSfxChannelMask = a;
+    volShadowDirty_music = a;
     keyOnMask_music = a;
     noiseFreq_music = a;
     noiseFreq_sfxVoiceId = a;
@@ -639,10 +645,6 @@ func main() {
         channelSoA.instructionPtr_h[x] = a;
 
         __reset_channel(x, MAX_PAN / 2);
-
-        a = STARTING_VOLUME >> 2;
-        channelSoA.virtualChannels.vol_l[x] = a;
-        channelSoA.virtualChannels.vol_r[x] = a;
 
         x--;
     } while !negative;
@@ -806,12 +808,12 @@ func process_music_channels() {
 
     zpTmp = a = keyOnShadow_music & musicSfxChannelMask & io_musicChannelsMask;
 
-    a = 0;
-    // Music channel volume can only be modified by bytecode, never externally
-    volShadowDirty_tmp = a;
+    volShadowDirty_tmp = volShadowDirty_music;
 
+    a = 0;
     keyOnShadow_music = a;
     keyOffShadow_music = a;
+    volShadowDirty_music = a;
 
     a = voiceChannelsDirty_music & musicSfxChannelMask;
     __process_channels(a, zpTmp, volShadowDirty_tmp, FIRST_MUSIC_CHANNEL + 1, LAST_MUSIC_CHANNEL + 1);

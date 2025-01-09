@@ -29,6 +29,7 @@ use std::path::PathBuf;
 fn load_song(
     common_audio_data: &CommonAudioData,
     song: &SongData,
+    song_data_addr: u16,
     stereo_flag: bool,
 ) -> ShvcSoundEmu {
     const LOADER_DATA_TYPE_ADDR: usize = addresses::LOADER_DATA_TYPE as usize;
@@ -37,7 +38,6 @@ fn load_song(
 
     let common_data = common_audio_data.data();
     let song_data = song.data();
-    let song_data_addr = common_audio_data.song_data_addr();
     let echo_buffer = &song.metadata().echo_buffer;
 
     let apuram = emu.apuram_mut();
@@ -351,12 +351,14 @@ fn song_ticks(song: &SongData) -> TickCounter {
 fn test_bc_intrepreter(song: &SongData, common_audio_data: &CommonAudioData) {
     const STEREO_FLAG: bool = true;
 
+    let song_addr = common_audio_data.min_song_data_addr();
+
     // Clamp to ensure 16 bit tick_counter does not overflow
     // +30 ticks to test for song looping
     let ticks_to_test = song_ticks(song).clamp(TickCounter::new(192), TickCounter::new(0x8000))
         + TickCounter::new(30);
 
-    let mut emu = load_song(common_audio_data, song, STEREO_FLAG);
+    let mut emu = load_song(common_audio_data, song, song_addr, STEREO_FLAG);
 
     // Wait for the audio-driver to finish initialization
     emu.emulate();
@@ -390,7 +392,7 @@ fn test_bc_intrepreter(song: &SongData, common_audio_data: &CommonAudioData) {
 
         let tick_count = TickCounter::new(tick_count.into());
 
-        let mut interpreter = SongInterpreter::new(common_audio_data, song, STEREO_FLAG);
+        let mut interpreter = SongInterpreter::new(common_audio_data, song, song_addr, STEREO_FLAG);
         let valid = interpreter.process_ticks(tick_count);
         assert!(valid, "SongIntreperter time out");
         assert_bc_intrepreter_matches_emu(&interpreter, &dummy_emu_init, &emu, tick_count);
