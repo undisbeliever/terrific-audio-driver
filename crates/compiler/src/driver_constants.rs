@@ -92,7 +92,7 @@ pub mod addresses {
     );
 
     // MUST match `audio-driver/src/common_memmap.wiz`
-    pub const COMMON_DATA: u16 = 0xF00 - 28;
+    pub const COMMON_DATA: u16 = 0x1000 - 28;
 
     const _: () = assert!(
         _symbols::_LAST_LOADER_SYMBOL < DRIVER_CODE,
