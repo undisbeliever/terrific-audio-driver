@@ -432,7 +432,7 @@ impl MemoryStats {
                 self.show_sfx_error_message();
             }
             CadOutput::SfxBuffer(cad, _) => {
-                valid_samples(&cad.0);
+                valid_samples(cad.common_data());
 
                 self.sfx_data_size = 0;
                 self.show_sfx_error_message();

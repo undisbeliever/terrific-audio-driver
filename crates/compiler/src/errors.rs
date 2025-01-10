@@ -455,6 +455,9 @@ pub struct CommonAudioDataErrors {
 }
 
 #[derive(Debug)]
+pub struct SfxCannotFitInSfxBuffer();
+
+#[derive(Debug)]
 pub enum PitchError {
     SampleRateTooHigh,
     SampleRateTooLow,
@@ -1542,6 +1545,12 @@ impl Display for CommonAudioDataError {
                 write!(f, "sound effect data is too large (by {} bytes)", by)
             }
         }
+    }
+}
+
+impl Display for SfxCannotFitInSfxBuffer {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "sound effect cannot fit in audio RAM")
     }
 }
 

@@ -210,7 +210,7 @@ impl SampleSizesWidget {
                 self.update_table(&cad.0, names, false);
             }
             CadOutput::SfxBuffer(cad, names) => {
-                self.update_table(&cad.0, names, false);
+                self.update_table(cad.common_data(), names, false);
             }
             CadOutput::WithSfx(cad, names) => {
                 self.update_table(&cad.common_audio_data, names, true);

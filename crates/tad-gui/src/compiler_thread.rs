@@ -4,15 +4,11 @@
 //
 // SPDX-License-Identifier: MIT
 
+use crate::audio_thread::{AudioMessage, CommonAudioDataNoSfx, MusicChannelsMask};
 use crate::names::NameGetter;
 use crate::sample_analyser::{self, SampleAnalysis};
 use crate::sfx_export_order::{GuiSfxExportOrder, SfxExportOrderAction};
 use crate::GuiMessage;
-
-use crate::audio_thread::{
-    AudioMessage, CommonAudioDataNoSfx, CommonAudioDataWithSfxBuffer, MusicChannelsMask,
-    SFX_BUFFER_SIZE,
-};
 
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
@@ -21,7 +17,10 @@ use std::ops::Deref;
 use std::sync::{mpsc, Arc};
 use std::thread;
 
-use compiler::common_audio_data::{build_common_audio_data, CommonAudioData};
+use compiler::common_audio_data::{
+    build_cad_with_sfx_buffer, build_common_audio_data, CommonAudioData,
+    CommonAudioDataWithSfxBuffer,
+};
 use compiler::data::{self, BrrEvaluator};
 use compiler::data::{load_text_file_with_limit, DefaultSfxFlags, LoopSetting, TextFile};
 use compiler::driver_constants::COMMON_DATA_BYTES_PER_SOUND_EFFECT;
@@ -40,9 +39,8 @@ use compiler::samples::{
 };
 use compiler::songs::{test_sample_song, SongAramSize, SongData, BLANK_SONG_ARAM_SIZE};
 use compiler::sound_effects::{
-    blank_compiled_sound_effects, combine_sound_effects, tad_gui_sfx_data,
-    CombinedSoundEffectsData, CompiledSfxMap, CompiledSfxSubroutines, SfxExportOrder,
-    SfxSubroutinesMml,
+    blank_compiled_sound_effects, combine_sound_effects, CompiledSfxMap, CompiledSfxSubroutines,
+    SfxExportOrder, SfxSubroutinesMml,
 };
 use compiler::sound_effects::{compile_sound_effect_input, CompiledSoundEffect, SoundEffectInput};
 use compiler::spc_file_export::export_spc_file;
@@ -905,7 +903,6 @@ fn build_cad_no_sfx_and_song_dependencies(
 fn build_common_data_with_sfx_buffer(
     dep: &Option<SongDependencies>,
     sfx_subroutines: &Option<Arc<CompiledSfxSubroutines>>,
-    blank_sfx_data: &CombinedSoundEffectsData,
 ) -> Option<Result<Arc<CommonAudioDataWithSfxBuffer>, CombineSamplesError>> {
     let combined_samples = match dep {
         Some(d) => &d.combined_samples,
@@ -916,8 +913,8 @@ fn build_common_data_with_sfx_buffer(
         None => return None,
     };
 
-    match build_common_audio_data(combined_samples, sfx_subroutines, blank_sfx_data) {
-        Ok(cad) => Some(Ok(Arc::new(CommonAudioDataWithSfxBuffer(cad)))),
+    match build_cad_with_sfx_buffer(combined_samples, sfx_subroutines) {
+        Ok(cad) => Some(Ok(Arc::new(cad))),
         Err(e) => Some(Err(CombineSamplesError::CommonAudioData(e))),
     }
 }
@@ -1300,8 +1297,6 @@ fn bg_thread(
         audio_sender,
     };
 
-    let blank_sfx_data = tad_gui_sfx_data(SFX_BUFFER_SIZE);
-
     let mut default_sfx_flags = DefaultSfxFlags::default();
 
     // Editable sfx export order
@@ -1474,12 +1469,8 @@ fn bg_thread(
                 }
             }
             ToCompiler::PlaySfxUsingSfxBuffer(id, pan) => {
-                // ::TODO fix unable to play large sfx::
                 if let Some(Some(sfx_data)) = sound_effects.get_output_for_id(&id) {
-                    if sfx_data.bytecode().len() <= SFX_BUFFER_SIZE {
-                        sender
-                            .send_audio(AudioMessage::PlaySfxUsingSfxBuffer(sfx_data.clone(), pan));
-                    }
+                    sender.send_audio(AudioMessage::PlaySfxUsingSfxBuffer(sfx_data.clone(), pan));
                 }
             }
 
@@ -1612,11 +1603,7 @@ fn bg_thread(
             let c = create_sfx_compiler(&song_dependencies, &sfx_subroutines, &sender);
             sound_effects.recompile_all(c);
 
-            match build_common_data_with_sfx_buffer(
-                &song_dependencies,
-                &sfx_subroutines,
-                &blank_sfx_data,
-            ) {
+            match build_common_data_with_sfx_buffer(&song_dependencies, &sfx_subroutines) {
                 Some(Ok(c)) => {
                     pending_cad_output = CadOutput::SfxBuffer(c.clone(), inst_sample_names.clone());
 

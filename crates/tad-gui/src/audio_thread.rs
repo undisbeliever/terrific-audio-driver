@@ -11,7 +11,9 @@ use compiler::audio_driver;
 use compiler::bytecode_interpreter;
 use compiler::bytecode_interpreter::Emulator;
 use compiler::bytecode_interpreter::SongInterpreter;
+use compiler::common_audio_data::ArcCadWithSfxBufferInAram;
 use compiler::common_audio_data::CommonAudioData;
+use compiler::common_audio_data::CommonAudioDataWithSfxBuffer;
 use compiler::driver_constants::AUDIO_RAM_SIZE;
 use compiler::driver_constants::N_CHANNELS;
 use compiler::driver_constants::N_DSP_VOICES;
@@ -52,9 +54,6 @@ const BRR_SAMPLE_RATE: i32 = 32000;
 /// Approximate number of samples to play a looping BRR sample for
 const LOOPING_BRR_SAMPLE_SAMPLES: usize = 24000;
 
-// Amount of Audio-RAM (in common-audio-data) to allocate to sound effects
-pub const SFX_BUFFER_SIZE: usize = 128;
-
 #[derive(Debug, Clone, Copy)]
 pub struct MusicChannelsMask(pub u8);
 
@@ -93,9 +92,6 @@ enum SongSkip {
 
 #[derive(Debug)]
 pub struct CommonAudioDataNoSfx(pub CommonAudioData);
-
-#[derive(Debug)]
-pub struct CommonAudioDataWithSfxBuffer(pub CommonAudioData);
 
 pub enum AudioMessage {
     RingBufferConsumed(PrivateToken),
@@ -425,7 +421,7 @@ enum AudioDataState {
     Sample(CommonAudioData, Box<SongData>),
     SongNoSfx(Arc<CommonAudioDataNoSfx>, Arc<SongData>),
     SongAndSfx(Arc<CommonAudioDataWithSfx>, Arc<SongData>),
-    SongWithSfxBuffer(Arc<CommonAudioDataWithSfxBuffer>, Arc<SongData>),
+    SongWithSfxBuffer(ArcCadWithSfxBufferInAram, Arc<SongData>),
 }
 
 enum SiCad {
@@ -441,7 +437,7 @@ impl std::ops::Deref for SiCad {
         match self {
             Self::NoSfx(c) => &c.0,
             Self::WithSfx(c) => &c.common_audio_data,
-            Self::SfxBuffer(c) => &c.0,
+            Self::SfxBuffer(c) => c.common_data(),
         }
     }
 }
@@ -458,7 +454,9 @@ fn create_and_process_song_interpreter(
         AudioDataState::Sample(..) => return Ok(None),
         AudioDataState::SongNoSfx(cad, sd) => (SiCad::NoSfx(cad.clone()), sd.clone()),
         AudioDataState::SongAndSfx(cad, sd) => (SiCad::WithSfx(cad.clone()), sd.clone()),
-        AudioDataState::SongWithSfxBuffer(cad, sd) => (SiCad::SfxBuffer(cad.clone()), sd.clone()),
+        AudioDataState::SongWithSfxBuffer(cad, sd) => {
+            (SiCad::SfxBuffer(cad.common_data().clone()), sd.clone())
+        }
     };
 
     match song_skip {
@@ -592,7 +590,7 @@ impl TadEmu {
             &self.cad_no_sfx,
         ) {
             (Some(c), _, _) => AudioDataState::SongAndSfx(c.clone(), song),
-            (None, Some(c), _) => AudioDataState::SongWithSfxBuffer(c.clone(), song),
+            (None, Some(c), _) => Self::audio_state_sfx_buffer(c.clone(), song)?,
             (None, None, Some(c)) => AudioDataState::SongNoSfx(c.clone(), song),
             (None, None, None) => return Err(()),
         };
@@ -614,7 +612,7 @@ impl TadEmu {
     ) -> Result<(), ()> {
         let data = match (&self.cad_with_sfx, &self.cad_with_sfx_buffer) {
             (Some(c), _) => AudioDataState::SongAndSfx(c.clone(), song),
-            (None, Some(c)) => AudioDataState::SongWithSfxBuffer(c.clone(), song),
+            (None, Some(c)) => Self::audio_state_sfx_buffer(c.clone(), song)?,
             (None, None) => return Err(()),
         };
         self._load_song_into_memory(
@@ -629,7 +627,7 @@ impl TadEmu {
         let blank_song = &self.blank_song;
         let data = match (&self.cad_with_sfx, &self.cad_with_sfx_buffer) {
             (Some(c), _) => AudioDataState::SongAndSfx(c.clone(), blank_song.clone()),
-            (None, Some(c)) => AudioDataState::SongWithSfxBuffer(c.clone(), blank_song.clone()),
+            (None, Some(c)) => Self::audio_state_sfx_buffer(c.clone(), blank_song.clone())?,
             (None, None) => return Err(()),
         };
         self._load_song_into_memory(None, data, SongSkip::None, MusicChannelsMask::ALL)
@@ -642,7 +640,7 @@ impl TadEmu {
         skip: TickCounter,
     ) -> Result<(), ()> {
         let data = match &self.cad_with_sfx_buffer {
-            Some(c) => AudioDataState::SongWithSfxBuffer(c.clone(), song),
+            Some(c) => Self::audio_state_sfx_buffer(c.clone(), song)?,
             None => return Err(()),
         };
         self._load_song_into_memory(
@@ -655,7 +653,7 @@ impl TadEmu {
 
     fn load_blank_song_with_sfx_buffer(&mut self) -> Result<(), ()> {
         let data = match &self.cad_with_sfx_buffer {
-            Some(c) => AudioDataState::SongWithSfxBuffer(c.clone(), self.blank_song.clone()),
+            Some(c) => Self::audio_state_sfx_buffer(c.clone(), self.blank_song.clone())?,
             None => return Err(()),
         };
         self._load_song_into_memory(None, data, SongSkip::None, MusicChannelsMask::ALL)
@@ -672,6 +670,25 @@ impl TadEmu {
             SongSkip::None,
             MusicChannelsMask::ALL,
         )
+    }
+
+    fn audio_state_sfx_buffer(
+        cad: Arc<CommonAudioDataWithSfxBuffer>,
+        song: Arc<SongData>,
+    ) -> Result<AudioDataState, ()> {
+        match ArcCadWithSfxBufferInAram::new(cad, Self::calc_song_addr(&song)?) {
+            Ok(o) => Ok(AudioDataState::SongWithSfxBuffer(o, song)),
+            Err(_) => Err(()),
+        }
+    }
+
+    fn calc_song_addr(song: &SongData) -> Result<u16, ()> {
+        let song_size = song.song_aram_size().total_size();
+
+        match AUDIO_RAM_SIZE.checked_sub(song_size) {
+            Some(s) => Ok(s.try_into().unwrap()),
+            None => Err(()),
+        }
     }
 
     fn _load_song_into_memory(
@@ -696,7 +713,7 @@ impl TadEmu {
             AudioDataState::Sample(cad, sd) => (cad, sd.as_ref()),
             AudioDataState::SongNoSfx(cad, sd) => (&cad.0, sd.as_ref()),
             AudioDataState::SongAndSfx(cad, sd) => (&cad.common_audio_data, sd.as_ref()),
-            AudioDataState::SongWithSfxBuffer(cad, sd) => (&cad.0, sd.as_ref()),
+            AudioDataState::SongWithSfxBuffer(cad, sd) => (cad.common_data_ref(), sd.as_ref()),
         };
 
         let song_data = song.data();
@@ -709,11 +726,7 @@ impl TadEmu {
         };
 
         // Store song data at the end of the audio-RAM
-        let song_size = song.song_aram_size().total_size();
-        let song_data_addr = match AUDIO_RAM_SIZE.checked_sub(song_size) {
-            Some(s) => s.try_into().unwrap(),
-            None => return Err(()),
-        };
+        let song_data_addr = Self::calc_song_addr(song)?;
         if song_data_addr < common_audio_data.min_song_data_addr() {
             return Err(());
         }
@@ -864,7 +877,7 @@ impl TadEmu {
             }
             SfxQueue::TestSfx(sfx, pan) => {
                 let common_data = match &self.data_state {
-                    AudioDataState::SongWithSfxBuffer(cad, _) => cad.as_ref(),
+                    AudioDataState::SongWithSfxBuffer(cad, _) => cad,
                     _ => {
                         self.sfx_queue = SfxQueue::None;
                         return;
@@ -872,11 +885,6 @@ impl TadEmu {
                 };
 
                 if !self.is_io_command_acknowledged() {
-                    return;
-                }
-
-                if sfx.bytecode().len() >= SFX_BUFFER_SIZE {
-                    self.sfx_queue = SfxQueue::None;
                     return;
                 }
 
@@ -890,14 +898,9 @@ impl TadEmu {
                     // sfx_buffer can only onld one sound effect at a time
                     self.try_send_io_command(io_commands::STOP_SOUND_EFFECTS, 0, pan.as_u8());
                 } else {
-                    let bc_addr_range = common_data.0.sfx_bytecode_addr_range();
-                    let bc_addr_range = bc_addr_range.start.into()..bc_addr_range.end.into();
-
-                    let bc = sfx.bytecode();
-                    let sfx_buffer = &mut apuram[bc_addr_range];
-                    sfx_buffer[..bc.len()].copy_from_slice(bc);
-
-                    self.try_send_io_command(io_commands::PLAY_SOUND_EFFECT, 0, pan.as_u8());
+                    if common_data.load_sfx(sfx, apuram).is_ok() {
+                        self.try_send_io_command(io_commands::PLAY_SOUND_EFFECT, 0, pan.as_u8());
+                    }
                     self.sfx_queue = SfxQueue::None;
                 }
             }

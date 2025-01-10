@@ -535,7 +535,7 @@ pub fn blank_compiled_sound_effects() -> CombinedSoundEffectsData {
 
 /// Create a `CombinedSoundEffectsData` that contains a single blank sound-effect.
 /// Used by the GUI to allocate a block of Audio-RAM that the audio-thread can write sound-effect bytecode to.
-pub fn tad_gui_sfx_data(buffer_size: usize) -> CombinedSoundEffectsData {
+pub(crate) fn tad_gui_sfx_buffer(buffer_size: usize) -> CombinedSoundEffectsData {
     CombinedSoundEffectsData {
         n_high_priority_sfx: 0,
         low_priority_index: u8::MAX,

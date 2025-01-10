@@ -145,3 +145,38 @@ A @1 o5 [c c c r]4
 @1 sawtooth
 
 A @1 !recursive_test
+
+=== large_sfx_calling_subroutine === mml
+
+; Use to test that tad-gui can play a sound effect that uses
+; a lot of audio-RAM while also playing a song
+
+@1 square
+
+A @1 l8 v6
+A {{c e g}} {{g f d}} r16
+A {{c e g}} {{g f d}} r16
+
+A @1 !recursive_test
+
+A v2
+A {{c e g}} {{g f d}} r16
+A {{c e g}} {{g f d}} r16
+A {{c e g}} {{g f d}} r16
+A {{c e g}} {{g f d}} r16
+A {{c e g}} {{g f d}} r16
+A {{c e g}} {{g f d}} r16
+A {{c e g}} {{g f d}} r16
+A {{c e g}} {{g f d}} r16
+A {{c e g}} {{g f d}} r16
+A {{c e g}} {{g f d}} r16
+A {{c e g}} {{g f d}} r16
+A {{c e g}} {{g f d}} r16
+A {{c e g}} {{g f d}} r16
+A {{c e g}} {{g f d}} r16
+A {{c e g}} {{g f d}} r16
+A {{c e g}} {{g f d}} r16
+A {{c e g}} {{g f d}} r16
+A {{c e g}} {{g f d}} r16
+A {{c e g}} {{g f d}} r16
+A {{c e g}} {{g f d}} r16

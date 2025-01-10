@@ -4,18 +4,23 @@
 //
 // SPDX-License-Identifier: MIT
 
+use crate::bytecode::GOTO_RELATIVE_INSTRUCTION_SIZE;
 use crate::driver_constants::{
-    addresses, COMMON_DATA_BYTES_PER_DIR, COMMON_DATA_BYTES_PER_INSTRUMENT,
+    addresses, AUDIO_RAM_SIZE, COMMON_DATA_BYTES_PER_DIR, COMMON_DATA_BYTES_PER_INSTRUMENT,
     COMMON_DATA_BYTES_PER_PITCH, COMMON_DATA_BYTES_PER_SFX_SUBROUTINE,
     COMMON_DATA_BYTES_PER_SOUND_EFFECT, COMMON_DATA_DIR_TABLE_OFFSET, COMMON_DATA_HEADER_SIZE,
     MAX_COMMON_DATA_SIZE, MAX_DIR_ITEMS, MAX_INSTRUMENTS_AND_SAMPLES, MAX_N_PITCHES,
     MAX_SFX_DATA_ADDR, MAX_SFX_SUBROUTINES, MAX_SOUND_EFFECTS,
 };
-use crate::errors::{CommonAudioDataError, CommonAudioDataErrors};
+use crate::errors::{CommonAudioDataError, CommonAudioDataErrors, SfxCannotFitInSfxBuffer};
+use crate::opcodes;
 use crate::samples::SampleAndInstrumentData;
-use crate::sound_effects::{CombinedSoundEffectsData, CompiledSfxSubroutines};
+use crate::sound_effects::{
+    tad_gui_sfx_buffer, CombinedSoundEffectsData, CompiledSfxSubroutines, CompiledSoundEffect,
+};
 
 use std::ops::Range;
+use std::sync::{Arc, OnceLock};
 
 #[derive(Clone)]
 pub struct CommonAudioData {
@@ -351,4 +356,115 @@ pub fn build_common_audio_data(
         brr_data_addr,
         min_song_data_addr: song_data_addr,
     })
+}
+
+/// Common audio data with samples and sfx_subroutines but without compiled sound effect bytecode.
+/// Intended to be used in the GUI and allow the GUI to insert sound-effect bytecode into
+/// Audio-RAM without interrupting the currently playing song.
+///
+/// The sfx bytecode is stored in between the common-audio-data and the song-data in Audio-RAM.
+///
+/// Because the audio driver forbids sfx addresses >= 0x8000, a `goto_relative` instruction is
+/// used to jump outside the common-audio-data.
+///
+/// To ensure a `play_sound_effect` IO command will never play an uninitialised Audio-RAM, the
+/// `goto_relative` instruction will be inserted when the CompiledSoundEffect is loaded into
+/// audio-RAM using [`ArcCadWithSfxBufferInAram::load_sfx()`].
+#[derive(Debug)]
+pub struct CommonAudioDataWithSfxBuffer(CommonAudioData);
+
+impl CommonAudioDataWithSfxBuffer {
+    pub fn common_data(&self) -> &CommonAudioData {
+        &self.0
+    }
+}
+
+pub fn build_cad_with_sfx_buffer(
+    samples_and_instruments: &SampleAndInstrumentData,
+    sfx_subroutines: &CompiledSfxSubroutines,
+) -> Result<CommonAudioDataWithSfxBuffer, CommonAudioDataErrors> {
+    static SFX_DATA: OnceLock<CombinedSoundEffectsData> = OnceLock::new();
+    let sound_effects = SFX_DATA.get_or_init(|| tad_gui_sfx_buffer(GOTO_RELATIVE_INSTRUCTION_SIZE));
+
+    Ok(CommonAudioDataWithSfxBuffer(build_common_audio_data(
+        samples_and_instruments,
+        sfx_subroutines,
+        sound_effects,
+    )?))
+}
+
+pub struct ArcCadWithSfxBufferInAram {
+    cad: Arc<CommonAudioDataWithSfxBuffer>,
+    sfx_bc: Range<u16>,
+}
+
+impl ArcCadWithSfxBufferInAram {
+    pub fn new(
+        cad: Arc<CommonAudioDataWithSfxBuffer>,
+        song_addr: u16,
+    ) -> Result<Self, SfxCannotFitInSfxBuffer> {
+        let end_addr = cad.0.min_song_data_addr();
+
+        if end_addr < song_addr {
+            Ok(Self {
+                cad,
+                sfx_bc: end_addr..song_addr,
+            })
+        } else {
+            Err(SfxCannotFitInSfxBuffer())
+        }
+    }
+
+    pub fn common_data(&self) -> &Arc<CommonAudioDataWithSfxBuffer> {
+        &self.cad
+    }
+
+    pub fn common_data_ref(&self) -> &CommonAudioData {
+        &self.cad.0
+    }
+
+    pub fn test_sfx_fits_in_apuram(&self, sfx: &CompiledSoundEffect) -> bool {
+        sfx.bytecode().len() < self.sfx_bc.len()
+    }
+
+    pub fn load_sfx(
+        &self,
+        sfx: &CompiledSoundEffect,
+        apuram: &mut [u8; AUDIO_RAM_SIZE],
+    ) -> Result<(), SfxCannotFitInSfxBuffer> {
+        // Address of the 3 byte `goto_relative` instruction in common-audio-data
+        let cad_sfx_addr = self.cad.0.sfx_bytecode_addr_range();
+        let cad_sfx_addr_usize = usize::from(cad_sfx_addr.start)..usize::from(cad_sfx_addr.end);
+
+        let bc = sfx.bytecode();
+
+        if bc.len() < self.sfx_bc.len() {
+            // Write `goto_relative` instruction.
+            {
+                let goto_addr = cad_sfx_addr.start;
+                let bc_addr = self.sfx_bc.start;
+
+                let offset = bc_addr.wrapping_sub(goto_addr).wrapping_sub(2);
+                let goto_instruction: [u8; GOTO_RELATIVE_INSTRUCTION_SIZE] = [
+                    opcodes::GOTO_RELATIVE,
+                    offset.to_le_bytes()[0],
+                    offset.to_le_bytes()[1],
+                ];
+
+                apuram[cad_sfx_addr_usize].copy_from_slice(&goto_instruction);
+            }
+
+            let bc_addr = usize::from(self.sfx_bc.start);
+            apuram[bc_addr..bc_addr + bc.len()].copy_from_slice(bc);
+
+            Ok(())
+        } else {
+            // Replace cad sfx bytecode with `disable_channel` instructions,
+            // to prevent ensure the old sfx bytecode from playing.
+            apuram[cad_sfx_addr_usize]
+                .copy_from_slice(&[opcodes::DISABLE_CHANNEL; GOTO_RELATIVE_INSTRUCTION_SIZE]);
+
+            Err(SfxCannotFitInSfxBuffer())
+        }
+    }
 }

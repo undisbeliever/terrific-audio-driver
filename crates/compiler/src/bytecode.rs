@@ -317,6 +317,8 @@ const ECHO_I8_EFB_INDEX: u8 = 8;
 
 const _: () = assert!(FirTap::MAX.as_u8() < ECHO_I8_EFB_INDEX);
 
+pub(crate) const GOTO_RELATIVE_INSTRUCTION_SIZE: usize = 3;
+
 u8_value_newtype!(
     InstrumentId,
     InstrumentIdOutOfRange,
