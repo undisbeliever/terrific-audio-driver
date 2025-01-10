@@ -207,6 +207,16 @@ pub fn split_lines(s: &str) -> LineSplitter {
     }
 }
 
+impl LineSplitter<'_> {
+    pub fn file_pos(&self) -> FilePos {
+        FilePos {
+            line_number: self.line_no,
+            line_char: 0,
+            char_index: self.char_index,
+        }
+    }
+}
+
 impl<'a> Iterator for LineSplitter<'a> {
     type Item = Line<'a>;
 

@@ -428,6 +428,13 @@ pub(super) fn split_mml_sound_effect_lines(
         }
     }
 
+    if mml.is_empty() {
+        errors.push(ErrorWithPos(
+            line_splitter.file_pos().to_range(0),
+            MmlLineError::NoChannelAInSoundEffect,
+        ));
+    }
+
     if errors.is_empty() {
         Ok(MmlSfxLines {
             instruments,

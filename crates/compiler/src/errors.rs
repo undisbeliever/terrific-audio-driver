@@ -524,6 +524,7 @@ pub enum MmlLineError {
     ChannelInSfxSubroutineHeader,
     SubroutineDefinitionInSoundEffect,
     InvalidSoundEffectChannel,
+    NoChannelAInSoundEffect,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -1646,6 +1647,7 @@ impl Display for MmlLineError {
                 f,
                 "invalid channel (sound effects have only 1 single channel)"
             ),
+            Self::NoChannelAInSoundEffect => write!(f, "no channel A lines in sound effect MML"),
         }
     }
 }
