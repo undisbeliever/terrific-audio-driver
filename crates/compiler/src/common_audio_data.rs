@@ -200,11 +200,15 @@ pub fn build_common_audio_data(
         ));
     }
 
-    let sfx_sub_bc_addr = CAD_ADDR + header_size;
-    let sfx_sub_table_addr = sfx_sub_bc_addr + sfx_subroutine_data.len();
-    let sfx_bc_addr = sfx_sub_table_addr + n_sfx_subroutines * COMMON_DATA_BYTES_PER_SFX_SUBROUTINE;
-    let sfx_soa_addr = sfx_bc_addr + sound_effects.sfx_data.len();
-    let pitch_table_addr = sfx_soa_addr + n_sound_effects * COMMON_DATA_BYTES_PER_SOUND_EFFECT;
+    // Sound effect bytecode should be immediately after the BRR directory
+    // as the MSB of `soundEffects_addrAndOneChannelFlag_l` is used as a flag
+    // and all SFX addresses must be <= MAX_SFX_DATA_ADDR.
+    let sfx_bc_addr = CAD_ADDR + header_size;
+    let sfx_sub_bc_addr = sfx_bc_addr + sound_effects.sfx_data.len();
+    let sfx_soa_addr = sfx_sub_bc_addr + sfx_subroutine_data.len();
+    let sfx_sub_table_addr = sfx_soa_addr + n_sound_effects * COMMON_DATA_BYTES_PER_SOUND_EFFECT;
+    let pitch_table_addr =
+        sfx_sub_table_addr + n_sfx_subroutines * COMMON_DATA_BYTES_PER_SFX_SUBROUTINE;
     let instruments_soa_addr = pitch_table_addr + n_pitches * COMMON_DATA_BYTES_PER_PITCH;
     let brr_data_addr =
         instruments_soa_addr + n_instruments_and_samples * COMMON_DATA_BYTES_PER_INSTRUMENT;
@@ -226,7 +230,7 @@ pub fn build_common_audio_data(
     if !errors.is_empty() {
         return Err(CommonAudioDataErrors { errors });
     }
-    let _disable_errors = errors;
+    drop(errors);
 
     const _: () = assert!(MAX_COMMON_DATA_SIZE < u16::MAX as usize);
     assert!(CAD_ADDR + common_data_size < u16::MAX.into());
@@ -272,14 +276,14 @@ pub fn build_common_audio_data(
 
     let brr_data_addr = u16::try_from(brr_data_addr).unwrap();
 
-    let sfx_sub_bc_addr = u16::try_from(sfx_sub_bc_addr).unwrap();
     // sfx table
     let sfx_bc_addr = u16::try_from(sfx_bc_addr).unwrap();
+    let sfx_sub_bc_addr = u16::try_from(sfx_sub_bc_addr).unwrap();
     let sfx_soa_addr = u16::try_from(sfx_soa_addr).unwrap();
     let pitch_table_addr = u16::try_from(pitch_table_addr).unwrap();
 
-    let sfx_data_and_tables = sfx_sub_bc_addr..pitch_table_addr;
-    let sfx_bc_data = sfx_bc_addr..sfx_soa_addr;
+    let sfx_data_and_tables = sfx_bc_addr..pitch_table_addr;
+    let sfx_bc_data = sfx_bc_addr..sfx_sub_bc_addr;
     let sfx_soa = sfx_soa_addr..pitch_table_addr;
 
     assert_eq!(out.len(), COMMON_DATA_HEADER_SIZE);
@@ -289,15 +293,11 @@ pub fn build_common_audio_data(
         out.extend((o.loop_point + brr_data_addr).to_le_bytes());
     }
 
-    assert_eq!(out.len() + CAD_ADDR, usize::from(sfx_sub_bc_addr));
-    out.extend(sfx_subroutine_data);
-
-    assert_eq!(out.len() + CAD_ADDR, sfx_sub_table_addr);
-    out.extend(sfx_subroutines.sfx_subroutines_l_iter(sfx_sub_bc_addr));
-    out.extend(sfx_subroutines.sfx_subroutines_h_iter(sfx_sub_bc_addr));
-
     assert_eq!(out.len() + CAD_ADDR, usize::from(sfx_bc_addr));
     out.extend(&sound_effects.sfx_data);
+
+    assert_eq!(out.len() + CAD_ADDR, usize::from(sfx_sub_bc_addr));
+    out.extend(sfx_subroutine_data);
 
     // soundEffects SoA
     assert_eq!(out.len() + CAD_ADDR, usize::from(sfx_soa_addr));
@@ -305,6 +305,11 @@ pub fn build_common_audio_data(
     out.extend(sound_effects.sfx_header_addr_and_one_channel_flag_h_iter(sfx_bc_addr));
     out.extend(sound_effects.sfx_header_duration_and_interrupt_flag_l_iter());
     out.extend(sound_effects.sfx_header_duration_and_interrupt_flag_h_iter());
+
+    // SFX subroutine table
+    assert_eq!(out.len() + CAD_ADDR, sfx_sub_table_addr);
+    out.extend(sfx_subroutines.sfx_subroutines_l_iter(sfx_sub_bc_addr));
+    out.extend(sfx_subroutines.sfx_subroutines_h_iter(sfx_sub_bc_addr));
 
     // pitch table
     assert!(n_pitches <= MAX_N_PITCHES);
