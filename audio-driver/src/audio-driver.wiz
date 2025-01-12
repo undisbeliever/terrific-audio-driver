@@ -958,6 +958,34 @@ var _afterFirstChannel : u8 in zpTmp2;
     y = a = ((nonShadow_music ^ nonShadow_sfx) & sfxMusicEchoNoiseMask) ^ nonShadow_music;
     write_dsp(GlobalDspAddr.NON, y);
 
+    //Prepare to immediately zero out the VxVOL DSP registers of all voices that don't have noise frequency priority if SFX is running.
+    //Trying to do this later could result in the volume stacking up until the next music tempo tick and/or not mute at all
+    //due to the order that the dirty bits are handled, as well as the dirty bit handling being delayed until the next tick.
+    //`_afterFirstChannel`'s purpose is done here and thus is subject to clobbering.
+    //X will remain set to _afterFirstChannel while the clearing is being done, as it is used in the upcoming loop.
+    y = noiseFreq_sfxVoiceId;
+    if !negative {
+        a = (activeSoundEffects ^ 0b11111111) & nonShadow_music;
+        zpTmp2 = a;
+        a = (ChannelVoiceBit[y] ^ 0b11000000) & nonShadow_sfx & activeSoundEffects;
+        test_and_set(a, zpTmp2);
+        a = 0;
+        y = a;
+        do {
+            zpTmp2 >>>= 1;
+            push(psw);
+            if carry {
+                smp.dsp_addr_and_data = ya; //Zero out VxVOLL.
+                a++;
+                smp.dsp_addr_and_data = ya; //Zero out VxVOLR.
+            }
+            psw = pop();
+            goto ExitNoiseVOLDSPClearLoop if zero;
+            a &= 0xf0;
+            a += 0x10;
+        } while !negative;
+        ExitNoiseVOLDSPClearLoop:
+    }
 
     write_dsp(GlobalDspAddr.KON, _konShadow);
 
@@ -1065,20 +1093,12 @@ var _afterFirstChannel : u8 in zpTmp2;
         if !zero {
             _process_volume_effects__inline(x, a);
 
-            // ::TODO optimise::
-            // Set S-DSP voice registers dirty bit
-            voiceChannelsDirty_tmp $ 7 = true;
-
             volShadowDirty_tmp $ 7 = true;
         }
 
         a = channelSoA.panEffect_direction[x];
         if !zero {
             _process_pan_effects__inline(x, a);
-
-            // ::TODO optimise::
-            // Set S-DSP voice registers dirty bit
-            voiceChannelsDirty_tmp $ 7 = true;
 
             volShadowDirty_tmp $ 7 = true;
         }
@@ -1716,8 +1736,23 @@ WritePan:
 // KEEP: x
 inline func _update_vol_shadow__inline(channelIndex : u8 in x) {
 
-    // ::TODO add global music/sfx volume::
-    a = channelSoA.volume[x];
+    a = (activeSoundEffects ^ 0b11111111) & nonShadow_music;
+    a |= nonShadow_sfx;
+    a &= ChannelVoiceBit[x];
+    cmp(a,1); //Set carry to whether this voice is using noise or not
+    a = activeSoundEffects & nonShadow_sfx;
+    if (carry && !zero) && ((x < FIRST_SFX_CHANNEL) || (x != noiseFreq_sfxVoiceId)) {
+        //This channel is using noise, but is either used in music or in a SFX voice
+        //that isn't the one currently controlling the hardware noise frequency.
+        //Due to hardware limitations, only one frequency can be running at a time.
+        //All other channels with non-zero volumes will instead stack up and make the noise louder than intended.
+        //Therefore, the volume value must be zeroed out instead.
+        a = 0;
+    }
+    else {
+        // ::TODO add global music/sfx volume::
+        a = channelSoA.volume[x];
+    }
 
     // Reading carry here saves a `SEC` instruction when calculating VOL_R
     carry = loaderDataType $ LoaderDataType.STEREO_FLAG_BIT;
@@ -1784,6 +1819,8 @@ inline func _update_vol_shadow__inline(channelIndex : u8 in x) {
     }
 
     channelSoA.virtualChannels.vol_l[x] = y;
+    // Set S-DSP voice registers dirty bit
+    voiceChannelsDirty_tmp $ 7 = true;
 }
 
 
@@ -2155,7 +2192,8 @@ func __play_note_set_pitch_h(channelIndex: u8 in x, pitch_h: u8 in a) {
         // Disable KON the next time the note is played (slur the note)
         test_and_clear(a, keyOnMask_sfx);
 
-        return;
+        // Because noise was disabled, update the frequency and volume settings.
+        ^return set_noise_freq_sfx_voice_id(x);
     }
 
     // Disable noise
@@ -2218,7 +2256,6 @@ func play_noise(channelIndex: u8 in x, freq_and_keyoff : u8 in a) {
     if x >= FIRST_SFX_CHANNEL {
         (&noiseFreq_sfx[-N_MUSIC_CHANNELS])[x] = y;
 
-        a = ChannelVoiceBit[x];
         test_and_set(a, nonShadow_sfx);
 
 
@@ -2228,17 +2265,44 @@ func play_noise(channelIndex: u8 in x, freq_and_keyoff : u8 in a) {
         // Disable KON the next time the note is played (slur the note)
         test_and_clear(a, keyOnMask_sfx);
 
+        //Set volShadowDirty_music channel bits for each music channel that uses noise.
+        //These channels will have their volumes zeroed out by _update_vol_shadow.
+        set_voice_ch_dirty_music_to_non(x);
+
         a = noiseFreq_sfxVoiceId;
         if !negative {
-            goto PlayNoiseSFXReturn if x == noiseFreq_sfxVoiceId;
-            a = sfx_interruptibleFlags & ChannelVoiceBit[x];
-            goto PlayNoiseSFXReturn if !zero;
+            goto PlayNoiseReturn if x == noiseFreq_sfxVoiceId;
+            //Check the interruptible flag of the SFX instance currently handling the noise frequency.
+            //If the SFX instance is interruptible, the noise frequency is overwritten.
+            a = x;
+            a ^= 1;
+            y = a;
+            a = sfx_interruptibleFlags & ChannelVoiceBit[y];
+            goto PlayNoiseSFXReturn if zero;
         }
 
         noiseFreq_sfxVoiceId = x;
-        //TODO zero out VxVOL of conflicting music/SFX voice(s)
+
         PlayNoiseSFXReturn:
-            return;
+            a = ChannelVoiceBit[x];
+            a ^= 0b11111111;
+            a = a & activeSoundEffects & nonShadow_sfx;
+            if !zero {
+                //Zero out the VxVOL mirror of the SFX voice using noise but without noise frequency priority
+                //to avoid an edge case writing to the DSP registers when a voiceChannelsDirty bit is set.
+                a = x;
+                if x == noiseFreq_sfxVoiceId {
+                    a ^= 1;
+                }
+                y = a;
+                a = 0;
+                channelSoA.virtualChannels.vol_l[y] = a;
+                channelSoA.virtualChannels.vol_r[y] = a;
+            }
+            
+            //Set the corresponding volShadowDirty_sfx bits.
+            //These channels will have their volumes zeroed out or restored by _update_vol_shadow.
+            ^return set_voice_ch_dirty_sfx_to_non(x);
     }
 
     noiseFreq_music = y;
@@ -2251,18 +2315,21 @@ func play_noise(channelIndex: u8 in x, freq_and_keyoff : u8 in a) {
 
     // Disable KON the next time the note is played (slur the note)
     test_and_clear(a, keyOnMask_music);
+
+PlayNoiseReturn:
 }
 
 // KEEP: X
 //Called in bytecode when either noise is disabled or when a SFX channel is disabled
+#[fallthrough]
 func set_noise_freq_sfx_voice_id(channelIndex: u8 in x) {
     if x == noiseFreq_sfxVoiceId {
         a = activeSoundEffects & nonShadow_sfx;
         if zero {
             noiseFreq_sfxVoiceId $ 7 = true;
             noiseFreq_music $ 7 = false; //Prepare music noise frequency for restoration
-            //TODO music VxVOL restoration
-            return;
+            //Setting dirty bits will restore the music volume
+            goto NoiseFreqSetDirtyVolShadowBits;
         }
         //Set the SFX voice ID that uses noise to the other one
         noiseFreq_sfxVoiceId ^= FIRST_SFX_CHANNEL ^ LAST_SFX_CHANNEL;
@@ -2270,10 +2337,42 @@ func set_noise_freq_sfx_voice_id(channelIndex: u8 in x) {
         a = (&noiseFreq_sfx[-N_MUSIC_CHANNELS])[y];
 	a &= 0b01111111;
         (&noiseFreq_sfx[-N_MUSIC_CHANNELS])[y] = a;
-        //TODO SFX VxVOL restoration
-    } 
+        //Setting dirty bits will restore the SFX volume
+    }
+    NoiseFreqSetDirtyVolShadowBits:
+        set_voice_ch_dirty_music_to_non(x);
+        //(fallthrough to set_voice_ch_dirty_sfx_to_non)
 }
 
+// KEEP: X
+//Called in bytecode to modify the volume for SFX channels after modifying SFX noise parameters.
+func set_voice_ch_dirty_sfx_to_non(channelIndex: u8 in x) {
+    //Always mark all SFX channels using noise as dirty, as well as the one currently being processed.
+    a = nonShadow_sfx & activeSoundEffects; //Set all active SFX voice bits that use noise as dirty.
+    a |= ChannelVoiceBit[x]; //Always set the current voice bit as dirty as well.
+    if a != 0b11000000 {
+      //Swap bits around via an EOR due to volShadowDirty using opposite bit ordering.
+      a ^= 0b11000000;
+    }
+    test_and_set(a, volShadowDirty_sfx);
+}
+
+// KEEP: X
+//Called in bytecode to modify the volume for music channels after modifying SFX noise parameters.
+func set_voice_ch_dirty_music_to_non(channelIndex: u8 in x) {
+    //Always mark all music channels using noise as dirty, as well as the one currently being processed.
+    a = nonShadow_music;
+    a |= ChannelVoiceBit[x];
+
+    //volShadowDirty_music's bits are represented in reverse order compared to nonShadow_music.
+    //Subsequently, we use zpTmp, then set them from there.
+    y = 8;
+    do {
+        a >>>= 1;
+        zpTmp <<<<#= 1;
+    } while --y != 0;
+    volShadowDirty_music |= zpTmp;
+}
 
 // KEEP: X
 func disable_noise(channelIndex: u8 in x) {
