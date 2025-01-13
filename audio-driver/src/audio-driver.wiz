@@ -588,17 +588,21 @@ func main() {
     } while !zero;
 
 
-    a = 0xff;
+    a--; //Decrement A from zero so that it is now 0xff.
     echoDirty = a;
     io_musicChannelsMask = a;
     musicSfxChannelMask = a;
     volShadowDirty_music = a;
     keyOnMask_music = a;
-    noiseFreq_music = a;
     noiseFreq_sfxVoiceId = a;
 
     inline for let _I in 0..(N_SFX_CHANNELS - 1) {
         sfx_oneChannelSfxId[_I] = a;
+    }
+
+    a = 0x80;
+    noiseFreq_music = a; //Set noise frequencies to zero with MSB set.
+    inline for let _I in 0..(N_SFX_CHANNELS - 1) {
         noiseFreq_sfx[_I] = a;
     }
 
@@ -2327,7 +2331,7 @@ func set_noise_freq_sfx_voice_id(channelIndex: u8 in x) {
         a = activeSoundEffects & nonShadow_sfx;
         if zero {
             noiseFreq_sfxVoiceId $ 7 = true;
-            noiseFreq_music $ 7 = false; //Prepare music noise frequency for restoration
+            noiseFreq_music &= dsp.FLG__NOISE_FREQ_MASK; //Prepare music noise frequency for restoration
             //Setting dirty bits will restore the music volume
             goto NoiseFreqSetDirtyVolShadowBits;
         }
@@ -2335,7 +2339,7 @@ func set_noise_freq_sfx_voice_id(channelIndex: u8 in x) {
         noiseFreq_sfxVoiceId ^= FIRST_SFX_CHANNEL ^ LAST_SFX_CHANNEL;
 	y = noiseFreq_sfxVoiceId; //Prepare SFX noise frequency for restoration
         a = (&noiseFreq_sfx[-N_MUSIC_CHANNELS])[y];
-	a &= 0b01111111;
+	a &= dsp.FLG__NOISE_FREQ_MASK;
         (&noiseFreq_sfx[-N_MUSIC_CHANNELS])[y] = a;
         //Setting dirty bits will restore the SFX volume
     }
