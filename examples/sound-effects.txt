@@ -135,7 +135,7 @@ A @1 o5 [c c c r]4
 
 	play_noise 31 12
 
-=== noise_and_rest === one interruptible
+=== noise_and_rest === both uninterruptible
 ; Bugfix test
 ; Used to test if noise is disabled on key-off
 

@@ -264,20 +264,22 @@ in zeropage {
 
 
     // Used to determine if vol_l and vol_r need recalculating.
-    // In the `__process_channels()` loop, bit 7 is left-shifted out and the volume is updated if set.
+    // In the `__process_channels()` loop, bit 0 is right-shifted out and the volume is updated if set.
     // (bitfield)
     var volShadowDirty_tmp : u8;
 
     // Used to determine if all music channels should be updated.
-    //
-    // Must only contain 0x00 or 0xff.
-    //
-    // CAUTION: These bits are in reverse order, compared to other *_music bit-arrays.
+    // (bitfield - same order as the other *Shadow_music variables)
     var volShadowDirty_music : u8;
 
     // The sound effects with invalid vol_l and vol_r shadow variables.
-    // Set in the PLAY_SOUND_EFFECT command.
-    // CAUTION: bits 6 & 7 are swapped from other the other *_sfx bitsets
+    // Set in the PLAY_SOUND_EFFECT command and when noise is changed.
+    //
+    // CAUTION: Not in the same bit order as the other *_sfx bitfields.
+    //      ------ba
+    //       a = sfx channel 8
+    //       b = sfx channel 9
+    //
     // (bitfield)
     var volShadowDirty_sfx : u8;
 
@@ -1099,21 +1101,21 @@ var _afterFirstChannel : u8 in zpTmp2;
         if !zero {
             _process_volume_effects__inline(x, a);
 
-            volShadowDirty_tmp $ 7 = true;
+            volShadowDirty_tmp $ 0 = true;
         }
 
         a = channelSoA.panEffect_direction[x];
         if !zero {
             _process_pan_effects__inline(x, a);
 
-            volShadowDirty_tmp $ 7 = true;
+            volShadowDirty_tmp $ 0 = true;
         }
 
 
         // Cannot do this after process_bytecode() for 2 reasons:
         //  1. Volume must be calculated on the first instruction of a sound-effect
         //  2. Volume/pan slide/vibrato
-        volShadowDirty_tmp <<<= 1;
+        volShadowDirty_tmp >>>= 1;
         if carry {
             _update_vol_shadow__inline(x);
         }
@@ -1436,6 +1438,10 @@ inline func __play_sfx__inline(let _I : u8, sfx_id : u8 in y) : u8 in a {
     a <<<= 1;
     sfx_interruptibleFlags $ BIT = carry;
 
+    // Mark sfx channel volume dirty
+    // (volShadowDirty_sfx starts at the least-significant bit)
+    volShadowDirty_sfx $ _I = true;
+
 
     sfx_oneChannelSfxId[_I] = y;
 
@@ -1509,11 +1515,6 @@ func __play_sfx_on_channel(addrAndOneChannelFlag_h: u8 in a, channelIndex : u8 i
 
     // Enable sfx channel.
     test_and_set(a, activeSoundEffects);
-
-    // Mark sfx channel volume dirty
-    // eor used to swap bits 6 & 7 (since only 1 bit is set)
-    a ^= 0b11_000000;
-    test_and_set(a, volShadowDirty_sfx);
 
 
     // pan
@@ -2082,7 +2083,7 @@ namespace bytecode {
 // ASSUMES: in the channel process loop
 // KEEP: x
 inline func mark_vol_shadow_dirty__inline() {
-    volShadowDirty_tmp $ 7 = true;
+    volShadowDirty_tmp $ 0 = true;
 }
 
 
@@ -2366,10 +2367,10 @@ func set_voice_ch_dirty_sfx_to_non(channelIndex: u8 in x) {
     //Always mark all SFX channels using noise as dirty, as well as the one currently being processed.
     a = nonShadow_sfx & activeSoundEffects; //Set all active SFX voice bits that use noise as dirty.
     a |= ChannelVoiceBit[x]; //Always set the current voice bit as dirty as well.
-    if a != 0b11000000 {
-      //Swap bits around via an EOR due to volShadowDirty using opposite bit ordering.
-      a ^= 0b11000000;
-    }
+
+    // Move the 2 most significant bits to the least significant bits
+    // due to `volShadowDirty_sfx` starting at the LSB.
+    a <<<<#= 3;
     test_and_set(a, volShadowDirty_sfx);
 }
 
@@ -2380,14 +2381,7 @@ func set_voice_ch_dirty_music_to_non(channelIndex: u8 in x) {
     a = nonShadow_music;
     a |= ChannelVoiceBit[x];
 
-    //volShadowDirty_music's bits are represented in reverse order compared to nonShadow_music.
-    //Subsequently, we use zpTmp, then set them from there.
-    y = 8;
-    do {
-        a >>>= 1;
-        zpTmp <<<<#= 1;
-    } while --y != 0;
-    volShadowDirty_music |= zpTmp;
+    test_and_set(a, volShadowDirty_music);
 }
 
 
