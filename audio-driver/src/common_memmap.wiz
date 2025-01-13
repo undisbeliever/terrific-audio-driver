@@ -41,6 +41,9 @@ let LAST_VAR_PAGE_SIZE = (BC_CHANNEL_STACK_SIZE + 9) * 10;
 
 // The -28 ensures the pitch-table and BRR directory is page aligned
 // `COMMON_DATA_ADDR` MUST be an even address (The loader only works with even addresses).
+//
+// If this value is changed, the Tad_loader_Bin assert in `ca65-api/tad-audio.s` and
+// `64tass-api/tad-process.inc` should also be updated.
 let COMMON_DATA_ADDR = 0x1000 - 28;
 
 // `CODE_ADDR` MUST be an even address (The loader only works with even addresses)
