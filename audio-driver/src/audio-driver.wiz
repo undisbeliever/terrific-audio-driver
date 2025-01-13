@@ -958,17 +958,14 @@ var _afterFirstChannel : u8 in zpTmp2;
     } while x >= _afterFirstChannel;
 
 
-    y = a = ((eonShadow_music ^ eonShadow_sfx) & sfxMusicEchoNoiseMask) ^ eonShadow_music;
-    write_dsp(GlobalDspAddr.EON, y);
-
-    y = a = ((nonShadow_music ^ nonShadow_sfx) & sfxMusicEchoNoiseMask) ^ nonShadow_music;
-    write_dsp(GlobalDspAddr.NON, y);
 
     //Prepare to immediately zero out the VxVOL DSP registers of all voices that don't have noise frequency priority if SFX is running.
     //Trying to do this later could result in the volume stacking up until the next music tempo tick and/or not mute at all
     //due to the order that the dirty bits are handled, as well as the dirty bit handling being delayed until the next tick.
     //`_afterFirstChannel`'s purpose is done here and thus is subject to clobbering.
     //X will remain set to _afterFirstChannel while the clearing is being done, as it is used in the upcoming loop.
+    //
+    //This is done before the EON write to ensure only one noise playing voice outputs noise.
     y = noiseFreq_sfxVoiceId;
     if !negative {
         a = (activeSoundEffects ^ 0b11111111) & nonShadow_music;
@@ -992,6 +989,14 @@ var _afterFirstChannel : u8 in zpTmp2;
         } while !negative;
         ExitNoiseVOLDSPClearLoop:
     }
+
+
+    y = a = ((eonShadow_music ^ eonShadow_sfx) & sfxMusicEchoNoiseMask) ^ eonShadow_music;
+    write_dsp(GlobalDspAddr.EON, y);
+
+    y = a = ((nonShadow_music ^ nonShadow_sfx) & sfxMusicEchoNoiseMask) ^ nonShadow_music;
+    write_dsp(GlobalDspAddr.NON, y);
+
 
     write_dsp(GlobalDspAddr.KON, _konShadow);
 
