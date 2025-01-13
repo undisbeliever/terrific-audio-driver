@@ -1039,6 +1039,7 @@ var _afterFirstChannel : u8 in zpTmp2;
                             if x >= FIRST_SFX_CHANNEL {
                                 test_and_set(a, keyOffShadow_sfx);
                                 test_and_set(a, keyOnMask_sfx);
+                                bytecode._disable_sfx_noise(x, a);
                             }
                             else {
                                 test_and_set(a, keyOffShadow_music);
@@ -1057,6 +1058,7 @@ var _afterFirstChannel : u8 in zpTmp2;
                 if x >= FIRST_SFX_CHANNEL {
                     test_and_set(a, keyOffShadow_sfx);
                     test_and_set(a, keyOnMask_sfx);
+                    bytecode._disable_sfx_noise(x, a);
                 }
                 else {
                     test_and_set(a, keyOffShadow_music);
@@ -2323,6 +2325,16 @@ func play_noise(channelIndex: u8 in x, freq_and_keyoff : u8 in a) {
 PlayNoiseReturn:
 }
 
+
+// KEEP: X
+#[fallthrough]
+func _disable_sfx_noise(channelIndex: u8 in x, voiceBit: u8 in a) {
+    test_and_clear(a, nonShadow_sfx);
+
+// Fallthrough into set_noise_freq_sfx_voice_id();
+}
+
+
 // KEEP: X
 //Called in bytecode when either noise is disabled or when a SFX channel is disabled
 #[fallthrough]
@@ -2378,12 +2390,12 @@ func set_voice_ch_dirty_music_to_non(channelIndex: u8 in x) {
     volShadowDirty_music |= zpTmp;
 }
 
+
 // KEEP: X
 func disable_noise(channelIndex: u8 in x) {
     a = ChannelVoiceBit[x];
     if x >= FIRST_SFX_CHANNEL {
-        test_and_clear(a, nonShadow_sfx);
-        set_noise_freq_sfx_voice_id(x);
+        _disable_sfx_noise(x, a);
         ^return process_next_bytecode(x);
     }
 

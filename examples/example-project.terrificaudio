@@ -142,6 +142,7 @@
     "robot_fires_laser",
     "fire_arrow",
     "noise",
+    "noise_and_rest",
     "sfx_calling_subroutine_asm",
     "sfx_calling_subroutine_mml"
   ],
