@@ -1,0 +1,10 @@
+; BUGFIX test for: cursor position in MML subroutine not correct after end-loop command
+
+; These three lines must have the same MML status bar tick count for each line char position
+!s1 @1 [a]2 !c \asm { play_note d4 24 } [ !c : !c ]2 [ !c \asm { play_note f4 12 | play_note g4 12 } ]2 !c q8,D8
+!s2 @1 [a]2 !c \asm { play_note d4 24 } [ !c : !c ]2 [ !c \asm { play_note f4 12 | play_note g4 12 } ]2 !c
+A   @1 [a]2 !c \asm { play_note d4 24 } [ !c : !c ]2 [ !c \asm { play_note f4 12 | play_note g4 12 } ]2 !c
+
+@1 sine
+!c c
+A !s1 !s2

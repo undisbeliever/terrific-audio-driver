@@ -167,24 +167,43 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
         gen: &mut ChannelBcGenerator,
         #[cfg(feature = "mml_tracking")] bytecode_tracker: &mut Vec<BytecodePos>,
     ) -> Option<MmlCommandWithPos> {
-        // ::TODO refactor to remove this hack::
-        // ::HACK to peek into parser tokens without a mutable borrow::
         let mut next = parser.next();
 
         while let Some(c) = next {
-            next = parser.next();
+            // Must process the command immediately or else the mml_tracking
+            // after an end-loop or bytecode-asm MmlCommand will be incorrect.
 
-            if next.is_none() && matches!(c.command(), Command::CallSubroutine(_, _)) {
-                return Some(c);
+            match &c.command() {
+                Command::CallSubroutine(..) => {
+                    let after = parser.next();
+
+                    if after.is_none() {
+                        return Some(c);
+                    } else {
+                        Self::_compile_command(
+                            c,
+                            parser,
+                            gen,
+                            #[cfg(feature = "mml_tracking")]
+                            bytecode_tracker,
+                        );
+                    }
+                    next = after;
+                }
+                _ => {
+                    Self::_compile_command(
+                        c,
+                        parser,
+                        gen,
+                        #[cfg(feature = "mml_tracking")]
+                        bytecode_tracker,
+                    );
+
+                    next = parser.next();
+                }
             }
-            Self::_compile_command(
-                c,
-                parser,
-                gen,
-                #[cfg(feature = "mml_tracking")]
-                bytecode_tracker,
-            );
         }
+
         None
     }
 

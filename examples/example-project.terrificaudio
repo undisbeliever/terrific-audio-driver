@@ -312,6 +312,10 @@
       "source": "bug-tests/two-channels-modify-timer.mml"
     },
     {
+      "name": "subroutine_cursor_tick_count_bug",
+      "source": "bug-tests/subroutine-cursor-tick-count-bug.mml"
+    },
+    {
       "name": "early_release_and_temp_gain",
       "source": "bc-interpreter-tests/early-release-and-temp-gain.mml"
     },
