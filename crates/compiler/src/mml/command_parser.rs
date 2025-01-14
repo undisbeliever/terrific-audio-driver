@@ -1814,10 +1814,7 @@ fn parse_mp_vibrato(pos: FilePos, p: &mut Parser) -> Option<MpVibrato> {
 }
 
 fn parse_manual_vibrato(pos: FilePos, p: &mut Parser) -> Option<ManualVibrato> {
-    let pitch_offset_per_tick: VibratoPitchOffsetPerTick = match parse_unsigned_newtype(pos, p) {
-        Some(v) => v,
-        None => return None,
-    };
+    let pitch_offset_per_tick: VibratoPitchOffsetPerTick = parse_unsigned_newtype(pos, p)?;
 
     if pitch_offset_per_tick.as_u8() == 0 {
         // Disable MP Vibrato

@@ -254,11 +254,7 @@ impl<'a> Iterator for MstIterator<'a> {
     fn next(&mut self) -> Option<Self::Item> {
         let r = self.remaining;
 
-        let first = match r.first() {
-            Some(ip) => ip,
-            None => return None,
-        };
-        let mst = first.1.microsemitones_above_c;
+        let mst = r.first()?.1.microsemitones_above_c;
 
         let p = r.partition_point(|(_, ip)| ip.microsemitones_above_c == mst);
 

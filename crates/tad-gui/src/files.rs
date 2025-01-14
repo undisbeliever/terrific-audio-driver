@@ -386,10 +386,7 @@ pub fn open_project_dialog() -> Option<ProjectFile> {
 }
 
 pub fn new_project_dialog() -> Option<ProjectFile> {
-    let path = match save_file_dialog("New Project", PROJECT_FILTER, data::PROJECT_FILE_EXTENSION) {
-        Some(p) => p,
-        None => return None,
-    };
+    let path = save_file_dialog("New Project", PROJECT_FILTER, data::PROJECT_FILE_EXTENSION)?;
 
     if path.try_exists().ok() == Some(true) {
         dialog::message_title("Cannot create a new project");
@@ -675,16 +672,10 @@ pub fn save_data_with_save_as_dialog<S>(
 where
     S: Serializer,
 {
-    let filter = match S::DIALOG_FILTER {
-        Some(s) => s,
-        None => return None,
-    };
+    let filter = S::DIALOG_FILTER?;
     let dialog_title = format!("Save {} as", S::FILE_TYPE);
 
-    let p = match pf_save_file_dialog(pd, path, &dialog_title, filter, S::FILE_EXTENSION) {
-        Some(p) => p,
-        None => return None,
-    };
+    let p = pf_save_file_dialog(pd, path, &dialog_title, filter, S::FILE_EXTENSION)?;
 
     if save_data(data, &p.full_path) {
         Some(p)

@@ -880,10 +880,7 @@ impl NoteTrackingState {
 
         let starting_index = prev_pos.index;
         let to_find_range = starting_index..min(starting_index + TO_SEARCH, bc_tracking.len());
-        let to_find = match bc_tracking.get(to_find_range) {
-            Some(s) => s,
-            None => return None,
-        };
+        let to_find = bc_tracking.get(to_find_range)?;
 
         if voice_pos < to_find.first().unwrap().bc_end_pos
             || voice_pos > to_find.last().unwrap().bc_end_pos
