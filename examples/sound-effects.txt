@@ -144,6 +144,24 @@ A @1 o5 [c c c r]4
 	play_noise 31 keyoff 12
 	rest 250
 
+=== beep_and_noise ===
+; Bugtest
+; Test play_noise release envelope keeps the noise bit set
+
+    set_instrument_and_gain sine F127
+    set_volume 255
+    play_note a4 8
+    play_noise 31 keyoff 12
+
+=== noise_nokeyoff_release_test ===
+; Bugtest
+; Test play_noise release envelope when channel is disabled
+
+    set_instrument_and_gain sine F127
+    set_volume 255
+    play_note a4 8
+    play_noise 31 no_keyoff 12
+
 === sfx_calling_subroutine_asm ===
 
 	set_instrument square

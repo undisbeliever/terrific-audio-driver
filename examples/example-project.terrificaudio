@@ -143,6 +143,8 @@
     "fire_arrow",
     "noise",
     "noise_and_rest",
+    "beep_and_noise",
+    "noise_nokeyoff_release_test",
     "sfx_calling_subroutine_asm",
     "sfx_calling_subroutine_mml"
   ],
