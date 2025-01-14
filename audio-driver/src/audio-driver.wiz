@@ -832,11 +832,6 @@ inline func _process_sfx_channels__inline() {
     // No need to mask sfx keyOff/keyOn events.
     // The sfx channels do not emit key-off or key-on events when disabled.
 
-
-    // Clear EON bits for disabled sfx channels here so EON is cleared after disable-channel key-off release tick.
-    eonShadow_sfx &= prevActiveSoundEffects;
-
-
     // Delay echo and noise changes 1 tick to prevent noise/echo changing in
     // the middle of the release envelope the channel is ducked or un-ducked.
     sfxMusicEchoNoiseMask = prevActiveSoundEffects;
@@ -847,7 +842,6 @@ inline func _process_sfx_channels__inline() {
     // Music channels can only write to the S-DSP when the sound effect is disabled AND there is no key-off event.
     // Prevents an audio glitch when a music channel writes to a voice channel in the middle of the key-off release envelope.
     musicSfxChannelMask = a = (a | keyOffShadow_sfx) ^ 0xff;
-
 
     write_dsp(GlobalDspAddr.KOFF, keyOffShadow_sfx);
 
@@ -997,7 +991,7 @@ var _afterFirstChannel : u8 in zpTmp2;
     }
 
 
-    y = a = (musicSfxChannelMask & eonShadow_music) | eonShadow_sfx;
+    y = a = ((eonShadow_music ^ eonShadow_sfx) & sfxMusicEchoNoiseMask) ^ eonShadow_music;
     write_dsp(GlobalDspAddr.EON, y);
 
     y = a = ((nonShadow_music ^ nonShadow_sfx) & sfxMusicEchoNoiseMask) ^ nonShadow_music;
