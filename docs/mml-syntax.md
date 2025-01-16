@@ -228,7 +228,7 @@ Numbers can be decimal, or hexadecimal when prefixed with `$` (ie, `$ff`)
     * CAUTION: The instrument is used to determine the length of the noise.
        * If the instrument does not loop, the noise is played for the length of the instrument's sample.
        * If the instrument loops, the noise is played until key-off.
- * `disable_noise` - disable noise
+ * `N-` - disable noise
 
 <br/>
 
