@@ -1005,7 +1005,9 @@ impl State {
         self.envelope = IeState::Unknown;
         self.prev_temp_gain = IeState::Unknown;
         self.early_release = IeState::Unknown;
-        self.detune = IeState::Unknown;
+
+        // Fixes erroneous OneNotePortamentoPreviousNoteIsNotSlurred in single pitch portamento after song-loop
+        self.detune.demote_to_maybe();
 
         self.vibrato = VibratoState::Unknown;
 

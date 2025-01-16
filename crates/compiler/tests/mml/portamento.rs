@@ -1363,3 +1363,23 @@ fn portamento_panic_bugfix() {
 
     assert_one_error_in_mml_line("{}", 1, ChannelError::PortamentoRequiresTwoPitches);
 }
+
+#[test]
+fn single_pitch_portamento_after_songloop_bugfix() {
+    assert_mml_channel_a_matches_looping_bytecode(
+        r##"
+@1 dummy_instrument
+
+A @1 c& {d} L c& {d} c& {d}"##,
+        &[
+            "set_instrument dummy_instrument",
+            "play_note c4 no_keyoff 24",
+            "portamento d4 keyoff +11 24",
+            // Song loop point
+            "play_note c4 no_keyoff 24",
+            "portamento d4 keyoff +11 24",
+            "play_note c4 no_keyoff 24",
+            "portamento d4 keyoff +11 24",
+        ],
+    );
+}
