@@ -69,6 +69,11 @@ fn play_noise() {
 }
 
 #[test]
+fn disable_noise() {
+    assert_line_matches_bytecode("N-", &["disable_noise"]);
+}
+
+#[test]
 fn enable_pitch_mod() {
     assert_channel_b_line_matches_bytecode("PM", &["enable_pmod"]);
 
