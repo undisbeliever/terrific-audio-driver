@@ -745,3 +745,133 @@ A !s b GF100 c
         ],
     );
 }
+
+#[test]
+fn nested_loops_and_envelope_bugfig() {
+    assert_line_matches_bytecode(
+        "[A15,7,7,31 c [ d ]2 : GF127 ]3 GF127",
+        &[
+            "start_loop",
+            "set_adsr 15 7 7 31",
+            "play_note c4 24",
+            "start_loop",
+            "play_note d4 24",
+            "end_loop 2",
+            "skip_last_loop",
+            "set_gain F127",
+            "end_loop 3",
+            // envelope is ADSR at end of loop
+            "set_gain F127",
+        ],
+    );
+}
+
+#[test]
+fn nested_loops_and_envelope_2() {
+    assert_line_matches_bytecode(
+        "A15,7,7,31 [[d]2 A15,7,7,31 c : GF127 ]3 GF127",
+        &[
+            "set_adsr 15 7 7 31",
+            "start_loop",
+            "start_loop",
+            "play_note d4 24",
+            "end_loop 2",
+            // envelope is unknown
+            "set_adsr 15 7 7 31",
+            "play_note c4 24",
+            "skip_last_loop",
+            "set_gain F127",
+            "end_loop 3",
+            // envelope is ADSR at end of loop
+            "set_gain F127",
+        ],
+    );
+}
+
+#[test]
+fn nested_loops_and_envelope_3() {
+    assert_line_matches_bytecode(
+        "GF127 [GF127 [d]2 GF127 c : GF64 ]3 GF64",
+        &[
+            "set_gain F127",
+            "start_loop",
+            // Gain is unknown
+            "set_gain F127",
+            "start_loop",
+            "play_note d4 24",
+            "end_loop 2",
+            // skip GF127, envelope is known
+            "play_note c4 24",
+            "skip_last_loop",
+            "set_gain F64",
+            "end_loop 3",
+            // envelope is G127 at end of loop
+            "set_gain F64",
+        ],
+    );
+
+    assert_line_matches_bytecode(
+        "GF127 [GF127 [d]2 GF127 c : GF64 ]3 GF127",
+        &[
+            "set_gain F127",
+            "start_loop",
+            // Gain is unknown
+            "set_gain F127",
+            "start_loop",
+            "play_note d4 24",
+            "end_loop 2",
+            // skip GF127, envelope is known
+            "play_note c4 24",
+            "skip_last_loop",
+            "set_gain F64",
+            "end_loop 3",
+            // skip GF127, envelope is G127 at end of loop
+        ],
+    );
+}
+
+#[test]
+fn nested_loops_and_envelope_4() {
+    assert_line_matches_bytecode(
+        "GF127 [GF127 [d : e]2 GF127 f : GF64 ]3 GF64",
+        &[
+            "set_gain F127",
+            "start_loop",
+            // Gain is unknown
+            "set_gain F127",
+            "start_loop",
+            "play_note d4 24",
+            "skip_last_loop",
+            "play_note e4 24",
+            "end_loop 2",
+            // skip GF127, envelope is known
+            "play_note f4 24",
+            "skip_last_loop",
+            "set_gain F64",
+            "end_loop 3",
+            // envelope is G127 at end of loop
+            "set_gain F64",
+        ],
+    );
+
+    assert_line_matches_bytecode(
+        "GF127 [GF127 [d : e]2 GF127 f : GF64 ]3 GF127",
+        &[
+            "set_gain F127",
+            "start_loop",
+            // Gain is unknown
+            "set_gain F127",
+            "start_loop",
+            "play_note d4 24",
+            "skip_last_loop",
+            "play_note e4 24",
+            "end_loop 2",
+            // skip GF127, envelope is known
+            "play_note f4 24",
+            "skip_last_loop",
+            "set_gain F64",
+            "end_loop 3",
+            // skip GF127, envelope is G127 at end of loop
+        ],
+    );
+}

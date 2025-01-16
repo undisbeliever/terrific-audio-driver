@@ -715,7 +715,8 @@ mod emit_bytecode {
 pub(crate) enum InstrumentState {
     Unset,
     Known(InstrumentId, RangeInclusive<Note>),
-    Maybe(InstrumentId, RangeInclusive<Note>),
+    // u8 is stack depth
+    MaybeInLoop(InstrumentId, RangeInclusive<Note>, u8),
     Hint(InstrumentId, RangeInclusive<Note>),
     // After a `L` Song Loop command, before a `@` command
     SongLoop(InstrumentId, RangeInclusive<Note>),
@@ -727,7 +728,7 @@ impl InstrumentState {
     pub fn instrument_id(&self) -> Option<InstrumentId> {
         match self {
             Self::Known(i, _) => Some(*i),
-            Self::Maybe(i, _) => Some(*i),
+            Self::MaybeInLoop(i, _, _) => Some(*i),
             Self::Hint(i, _) => Some(*i),
             Self::SongLoop(i, _) => Some(*i),
             Self::Unset => None,
@@ -739,32 +740,10 @@ impl InstrumentState {
         match self {
             Self::Unset => false,
             Self::Known(i, _) => o == i,
-            Self::Maybe(..) => false,
+            Self::MaybeInLoop(..) => false,
             Self::Hint(..) => false,
             Self::SongLoop(..) => false,
             Self::Unknown => false,
-        }
-    }
-
-    fn promote_to_known(&mut self) {
-        match self {
-            Self::Unset => (),
-            Self::Known(i, r) => *self = Self::Known(*i, r.clone()),
-            Self::Maybe(i, r) => *self = Self::Known(*i, r.clone()),
-            Self::SongLoop(..) => (),
-            Self::Hint(..) => (),
-            Self::Unknown => (),
-        }
-    }
-
-    fn demote_to_maybe(&mut self) {
-        match self {
-            Self::Unset => (),
-            Self::Known(i, r) => *self = Self::Maybe(*i, r.clone()),
-            Self::Maybe(..) => (),
-            Self::SongLoop(..) => (),
-            Self::Hint(..) => (),
-            Self::Unknown => (),
         }
     }
 
@@ -772,18 +751,44 @@ impl InstrumentState {
         match self {
             Self::Unset => (),
             Self::Known(i, r) => *self = Self::SongLoop(*i, r.clone()),
-            Self::Maybe(..) => panic!("song-loop in loop"),
+            Self::MaybeInLoop(..) => panic!("song-loop in loop"),
             Self::SongLoop(..) => panic!("multiple song loops"),
             Self::Hint(..) => panic!("hint in song-loop"),
             Self::Unknown => (),
         }
     }
 
+    fn start_loop(&mut self, stack_depth: u8) {
+        match self {
+            Self::Unset => (),
+            Self::Known(i, r) => *self = Self::MaybeInLoop(*i, r.clone(), stack_depth),
+            Self::MaybeInLoop(..) => (),
+            Self::SongLoop(..) => (),
+            Self::Hint(..) => (),
+            Self::Unknown => (),
+        }
+    }
+
     fn merge_skip_last_loop(&mut self, skip_last_loop: Self) {
         match &skip_last_loop {
-            Self::Unset | Self::Hint(..) | Self::Maybe(..) | Self::SongLoop(..) => (),
+            Self::Unset | Self::Hint(..) | Self::MaybeInLoop(..) | Self::SongLoop(..) => (),
 
             Self::Known(..) | Self::Unknown => *self = skip_last_loop,
+        }
+    }
+
+    fn end_loop(&mut self, stack_depth: u8) {
+        match self {
+            Self::Unset => (),
+            Self::Known(..) => (),
+            Self::MaybeInLoop(i, r, d) => {
+                if *d == stack_depth {
+                    *self = Self::Known(*i, r.clone())
+                }
+            }
+            Self::SongLoop(..) => (),
+            Self::Hint(..) => (),
+            Self::Unknown => (),
         }
     }
 
@@ -798,10 +803,10 @@ impl InstrumentState {
                 InstrumentState::Hint(..)
                 | InstrumentState::Unknown
                 | InstrumentState::Known(..)
-                | InstrumentState::Maybe(..)
+                | InstrumentState::MaybeInLoop(..)
                 | InstrumentState::SongLoop(..) => (),
             },
-            Self::Maybe(..) => panic!("unexpected maybe instrument"),
+            Self::MaybeInLoop(..) => panic!("unexpected maybe instrument"),
             Self::SongLoop(..) => panic!("Song Loop inside subroutine"),
         }
     }
@@ -815,7 +820,8 @@ where
 {
     Unset,
     Known(T),
-    Maybe(T),
+    // u8 = stack depth
+    MaybeInLoop(T, u8),
     Unknown,
 }
 
@@ -826,35 +832,39 @@ where
     pub fn is_known_and_eq(&self, o: &T) -> bool {
         match self {
             Self::Known(v) => o == v,
-            Self::Maybe(_) => false,
+            Self::MaybeInLoop(..) => false,
             Self::Unknown => false,
             Self::Unset => false,
         }
     }
 
-    fn promote_to_known(&mut self) {
+    fn start_loop(&mut self, stack_depth: u8) {
         match self {
             Self::Unset => (),
-            Self::Known(v) => *self = Self::Known(*v),
-            Self::Maybe(v) => *self = Self::Known(*v),
-            Self::Unknown => (),
-        }
-    }
-
-    fn demote_to_maybe(&mut self) {
-        match self {
-            Self::Unset => (),
-            Self::Known(v) => *self = Self::Maybe(*v),
-            Self::Maybe(_) => (),
+            Self::Known(v) => *self = Self::MaybeInLoop(*v, stack_depth),
+            Self::MaybeInLoop(..) => (),
             Self::Unknown => (),
         }
     }
 
     fn merge_skip_last_loop(&mut self, skip_last_loop: Self) {
         match &skip_last_loop {
-            Self::Unset | Self::Maybe(_) => (),
+            Self::Unset | Self::MaybeInLoop(..) => (),
 
             Self::Known(_) | Self::Unknown => *self = skip_last_loop,
+        }
+    }
+
+    fn end_loop(&mut self, stack_depth: u8) {
+        match self {
+            Self::Unset => (),
+            Self::Known(..) => (),
+            Self::MaybeInLoop(v, d) => {
+                if *d == stack_depth {
+                    *self = Self::Known(*v)
+                }
+            }
+            Self::Unknown => (),
         }
     }
 
@@ -862,7 +872,7 @@ where
         match &subroutine {
             Self::Unset => (),
             Self::Known(..) | Self::Unknown => *self = *subroutine,
-            Self::Maybe(..) => panic!("unexpected maybe instrument"),
+            Self::MaybeInLoop(..) => panic!("unexpected maybe instrument"),
         }
     }
 }
@@ -992,7 +1002,7 @@ impl State {
                     IeState::Unset => SlurredNoteState::Slurred(note, DetuneValue::ZERO, inst_id),
                     IeState::Known(d) => SlurredNoteState::Slurred(note, d, inst_id),
                     // ::TODO emit a warning if detune was changed in a loop and this value is used::
-                    IeState::Maybe(d) => SlurredNoteState::Slurred(note, d, inst_id),
+                    IeState::MaybeInLoop(d, _) => SlurredNoteState::Slurred(note, d, inst_id),
                     IeState::Unknown => SlurredNoteState::None,
                 }
             }
@@ -1007,7 +1017,7 @@ impl State {
         self.early_release = IeState::Unknown;
 
         // Fixes erroneous OneNotePortamentoPreviousNoteIsNotSlurred in single pitch portamento after song-loop
-        self.detune.demote_to_maybe();
+        self.detune.start_loop(u8::MAX);
 
         self.vibrato = VibratoState::Unknown;
 
@@ -1017,12 +1027,14 @@ impl State {
 
     // The loop might change the instrument and evelope.
     // When the loop loops, the instrument/envelope might have changed.
-    fn start_loop(&mut self) {
-        self.instrument.demote_to_maybe();
-        self.envelope.demote_to_maybe();
-        self.prev_temp_gain.demote_to_maybe();
-        self.early_release.demote_to_maybe();
-        self.detune.demote_to_maybe();
+    fn start_loop(&mut self, stack_depth: usize) {
+        let stack_depth = u8::try_from(stack_depth).unwrap_or(u8::MAX);
+
+        self.instrument.start_loop(stack_depth);
+        self.envelope.start_loop(stack_depth);
+        self.prev_temp_gain.start_loop(stack_depth);
+        self.early_release.start_loop(stack_depth);
+        self.detune.start_loop(stack_depth);
 
         self.vibrato = VibratoState::Unknown;
 
@@ -1044,12 +1056,14 @@ impl State {
             .merge_skip_last_loop(&s.prev_slurred_note);
     }
 
-    fn loop_stack_empty(&mut self) {
-        self.instrument.promote_to_known();
-        self.envelope.promote_to_known();
-        self.prev_temp_gain.promote_to_known();
-        self.early_release.promote_to_known();
-        self.detune.promote_to_known();
+    fn end_loop(&mut self, stack_depth: usize) {
+        let stack_depth = u8::try_from(stack_depth).unwrap_or(u8::MAX);
+
+        self.instrument.end_loop(stack_depth);
+        self.envelope.end_loop(stack_depth);
+        self.prev_temp_gain.end_loop(stack_depth);
+        self.early_release.end_loop(stack_depth);
+        self.detune.end_loop(stack_depth);
 
         // No maybe vibrato state
         // No maybe prev_slurred_note state
@@ -1317,13 +1331,13 @@ impl<'a> Bytecode<'a> {
                 }
             }
             InstrumentState::Known(..)
-            | InstrumentState::Maybe(..)
+            | InstrumentState::MaybeInLoop(..)
             | InstrumentState::SongLoop(..) => (),
         }
 
         match &self.state.instrument {
             InstrumentState::Known(_, note_range)
-            | InstrumentState::Maybe(_, note_range)
+            | InstrumentState::MaybeInLoop(_, note_range, _)
             | InstrumentState::Hint(_, note_range)
             | InstrumentState::SongLoop(_, note_range) => {
                 if note_range.contains(&note) {
@@ -1537,7 +1551,7 @@ impl<'a> Bytecode<'a> {
             InstrumentState::Unknown | InstrumentState::Hint(..) => (),
 
             InstrumentState::Known(..)
-            | InstrumentState::Maybe(..)
+            | InstrumentState::MaybeInLoop(..)
             | InstrumentState::SongLoop(..) => {
                 return Err(ChannelError::InstrumentHintInstrumentAlreadySet)
             }
@@ -1882,7 +1896,7 @@ impl<'a> Bytecode<'a> {
     }
 
     pub fn start_loop(&mut self, loop_count: Option<LoopCount>) -> Result<(), BytecodeError> {
-        self.state.start_loop();
+        self.state.start_loop(self.loop_stack.len());
 
         self.loop_stack.push(LoopState {
             start_loop_count: loop_count,
@@ -2032,9 +2046,7 @@ impl<'a> Bytecode<'a> {
             }
         }
 
-        if self.loop_stack.is_empty() {
-            self.state.loop_stack_empty();
-        }
+        self.state.end_loop(self.loop_stack.len());
 
         emit_bytecode!(self, opcodes::END_LOOP);
 
@@ -2059,7 +2071,7 @@ impl<'a> Bytecode<'a> {
             match old_instrument {
                 InstrumentState::Known(id, _)
                 | InstrumentState::Hint(id, _)
-                | InstrumentState::Maybe(id, _)
+                | InstrumentState::MaybeInLoop(id, _, _)
                 | InstrumentState::SongLoop(id, _) => {
                     match self.instruments.get_index(id.as_u8().into()) {
                         Some(InstrumentOrSample::Instrument(i)) => {
@@ -2120,7 +2132,7 @@ impl<'a> Bytecode<'a> {
 
                 InstrumentState::Known(_, old_note_range)
                 | InstrumentState::Hint(_, old_note_range)
-                | InstrumentState::Maybe(_, old_note_range)
+                | InstrumentState::MaybeInLoop(_, old_note_range, _)
                 | InstrumentState::SongLoop(_, old_note_range) => {
                     if !old_note_range.contains(sub_notes.start())
                         || !old_note_range.contains(sub_notes.end())

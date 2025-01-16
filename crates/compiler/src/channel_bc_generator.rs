@@ -203,7 +203,7 @@ impl DetuneCentsOutput {
             Self::Manual => match bc_state.detune {
                 IeState::Unset => DetuneValue::ZERO,
                 IeState::Known(d) => d,
-                IeState::Maybe(d) => d,
+                IeState::MaybeInLoop(d, _) => d,
                 // ::TODO remove and make looping with changed detune invalid::
                 IeState::Unknown => DetuneValue::ZERO,
             },
