@@ -1,0 +1,23 @@
+#Title Noise timing test (channel A)
+
+#Timer 96
+
+; Test instructions
+;
+; 1. Record tad-gui audio output
+; 2. Play sine-noise-loop.mml
+; 3. Use the Sound Effects window to play the following sound effects:
+;    * sine_noise_loop
+;    * noise
+;    * noise_no_keyoff
+; 4. Review the tad-gui audio output to verify:
+;    * The sine/noise wave is unchanged during the key-on GI envelope
+;    * The sine/noise wave is unchanged during the key-off release envelope
+
+@1 sine
+
+; music is on the right
+; sfx is on the left
+A px+64
+
+A @1 GI24 l8 [c N28]25

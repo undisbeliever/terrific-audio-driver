@@ -1,0 +1,22 @@
+=== sine_noise_loop === mml
+
+@1 sine
+
+; noise sfx is on the left
+A px-64
+
+A @1 GI24 l8 [c N28]16
+
+=== noise ===
+
+  ; noise sfx is on the left
+  set_pan 0
+  set_instrument sine
+  play_noise 31 keyoff 24
+
+=== noise_no_keyoff ===
+
+  ; noise sfx is on the left
+  set_pan 0
+  set_instrument sine
+  play_noise 31 no_keyoff 24

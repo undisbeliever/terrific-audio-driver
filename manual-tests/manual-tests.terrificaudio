@@ -1,0 +1,40 @@
+{
+  "_about": {
+    "file_type": "Terrific Audio Driver project file",
+    "version": "0.0.16"
+  },
+  "instruments": [
+    {
+      "name": "sine",
+      "source": "samples/sine.wav",
+      "freq": 500.0,
+      "loop": "dupe_block_hack",
+      "loop_setting": 2,
+      "evaluator": "default",
+      "ignore_gaussian_overflow": false,
+      "first_octave": 4,
+      "last_octave": 4,
+      "envelope": "gain F127",
+      "comment": null
+    }
+  ],
+  "samples": [],
+  "default_sfx_flags": {
+    "one_channel": true,
+    "interruptible": true
+  },
+  "high_priority_sound_effects": [],
+  "sound_effects": [
+    "sine_noise_loop",
+    "noise",
+    "noise_no_keyoff"
+  ],
+  "low_priority_sound_effects": [],
+  "sound_effect_file": "sound-effects.txt",
+  "songs": [
+    {
+      "name": "noise_timing_test_a",
+      "source": "mml/noise-timing-test-a.mml"
+    }
+  ]
+}
