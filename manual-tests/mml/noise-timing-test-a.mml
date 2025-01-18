@@ -10,6 +10,7 @@
 ;    * sine_noise_loop
 ;    * noise
 ;    * noise_no_keyoff
+;    * noise, then beep_beep (after noise has finished)
 ; 4. Review the tad-gui audio output to verify:
 ;    * The sine/noise wave is unchanged during the key-on GI envelope
 ;    * The sine/noise wave is unchanged during the key-off release envelope
@@ -20,4 +21,10 @@
 ; sfx is on the left
 A px+64
 
-A @1 GI24 l8 [c N28]25
+A @1 GI24 l8 [c N28,16 N28,16]25
+
+; NOTES:
+;  * `N28,16 c N28,16` test NON is correct when
+;    switching between play_noise and play_note.
+;  * `N28,16 N28,16` tests if NON clear after key-off
+;    does not disable NON on the key-on tick

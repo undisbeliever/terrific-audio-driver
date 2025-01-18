@@ -5,7 +5,7 @@
 ; noise sfx is on the left
 A px-64
 
-A @1 GI24 l8 [c N28]16
+A @1 GI24 l8 [c N28,16 N28,16]25
 
 === noise ===
 
@@ -20,3 +20,11 @@ A @1 GI24 l8 [c N28]16
   set_pan 0
   set_instrument sine
   play_noise 31 no_keyoff 24
+
+=== beep_beep ===
+
+  ; noise sfx is on the left
+  set_pan 0
+  set_instrument sine
+  play_note a4 18
+  play_note a4 18

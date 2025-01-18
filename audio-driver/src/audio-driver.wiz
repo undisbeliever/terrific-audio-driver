@@ -802,14 +802,18 @@ inline func __clear_echo_buffer__inline(esa : u8 in x) {
 func process_music_channels() {
     songTickCounter++;
 
-    y = a = keyOffShadow_music & musicSfxChannelMask;
+    nonShadow_music = a = pendingNon_music;
+
+    // Clears NON on the tick after key-off
+    a = keyOffShadow_music;
+    test_and_clear(a, pendingNon_music);
+
+    y = a = a & musicSfxChannelMask;
     write_dsp(GlobalDspAddr.KOFF, y);
 
     _process_echo_registers__inline();
 
     write_dsp(GlobalDspAddr.PMON, pmonShadow);
-
-    nonShadow_music = a = pendingNon_music;
 
     y = noiseFreq_music;
     if !negative {
@@ -853,6 +857,11 @@ inline func _process_sfx_channels__inline() {
 
 
     nonShadow_sfx = a = pendingNon_sfx;
+
+    // Clears NON on the tick after key-off
+    a = keyOffShadow_sfx;
+    test_and_clear(a, pendingNon_sfx);
+
 
     y = noiseFreq_sfx;
     if !negative {
@@ -1491,7 +1500,7 @@ func __play_sfx_on_channel(addrAndOneChannelFlag_h: u8 in a, channelIndex : u8 i
 
     // Not disabling noise.
     // Clearing pendingNon_sfx would disable noise in the middle of the release envelope.
-    // Noise is disabled on `play_note` and `play_pitch`.
+    // Noise will be disabled after the key-off release envelope.
 
     // Enable sfx channel.
     test_and_set(a, activeSoundEffects);
@@ -2508,7 +2517,7 @@ func disable_channel(channelIndex : u8 in x) {
         test_and_clear(a, eonShadow_sfx);
 
         // Not disabling noise.
-        // Clearing pendingNon_sfx would disable noise in the middle of the release envelope.
+        // `pendingNon_sfx` will be cleared on the tick after Key-Off
 
         // Disable sfx S-DSP writes.
         test_and_clear(a, activeSoundEffects);
