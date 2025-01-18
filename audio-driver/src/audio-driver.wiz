@@ -976,7 +976,7 @@ var _afterFirstChannel : u8 in zpTmp2;
     y = a = ((eonShadow_music ^ eonShadow_sfx) & sfxMusicEchoNoiseMask) ^ eonShadow_music;
     write_dsp(GlobalDspAddr.EON, y);
 
-    y = a = ((nonShadow_music ^ nonShadow_sfx) & sfxMusicEchoNoiseMask) ^ nonShadow_music;
+    y = a = (nonShadow_music & musicSfxChannelMask) | nonShadow_sfx;
     write_dsp(GlobalDspAddr.NON, y);
 
 

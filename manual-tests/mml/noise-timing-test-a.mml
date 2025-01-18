@@ -11,6 +11,7 @@
 ;    * noise
 ;    * noise_no_keyoff
 ;    * noise, then beep_beep (after noise has finished)
+;    * beep_beep, then noise (after beep_beep has finished)
 ; 4. Review the tad-gui audio output to verify:
 ;    * The sine/noise wave is unchanged during the key-on GI envelope
 ;    * The sine/noise wave is unchanged during the key-off release envelope
