@@ -97,10 +97,6 @@ in zeropage {
     var io_musicChannelsMask : u8;
 
 
-    // The previous IO port command
-    var previousCommand : u8;
-
-
     // The table of subroutine offsets
     var subroutineTable_l : *const u8;
     var subroutineTable_h : *const u8;
@@ -346,7 +342,6 @@ in zeropage {
 
 
 in firstpage {
-
     // Pending NON shadow variable changes.
     //
     // This value will be written to `nonShadow_*` at the start of the next tick.
@@ -432,6 +427,9 @@ in firstpage {
         // NOTE: Adding `instPitchOffset` to the note to play is allowed to an can overflow.
         var instPitchOffset : [u8 ; N_CHANNELS];
     }
+
+    // The previous IO port command
+    var previousCommand : u8;
 }
 
 
@@ -1308,6 +1306,8 @@ inline func process_io_ports__inline() {
     a = IO.ToDriver.command;
     if a != previousCommand {
         if a == IO.ToDriver.command {
+            push(a);
+
             // MUST set previousCommand before executing command
             // (`pause()` changes previousCommand)
             previousCommand = a;
@@ -1316,7 +1316,8 @@ inline func process_io_ports__inline() {
             __call_command(a, y);
 
             // Acknowledge command
-            IO.ToScpu.command_ack = previousCommand;
+            a = pop();
+            IO.ToScpu.command_ack = a;
         }
     }
 
