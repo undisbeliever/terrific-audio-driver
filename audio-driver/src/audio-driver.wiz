@@ -760,16 +760,16 @@ func mainloop() {
 
         // SFX tick timer
         a = smp.counter_1;
-        goto SkipSfxTick if zero;
+        goto Loop if zero;
+
             if a >= maxTimerCounter {
                 maxTimerCounter = a;
             }
 
             _process_sfx_channels__inline();
-    SkipSfxTick:
 
-        // Loop forever
-        ^goto Loop;
+            // Loop forever
+            ^goto Loop;
 }
 
 
