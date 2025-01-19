@@ -13,6 +13,8 @@
 ;    * noise_freq_test_left then uninterruptable_noise_right
 ;    * uninterruptable_noise_right then noise_freq_test_left
 ;    * uninterruptable_noise_left and uninterruptable_noise_right
+;    * noise_freq_test_left then uninterruptable_noise_left
+;    * noise_freq_test_right then uninterruptable_noise_right
 ; 5. Review the tad-gui audio output to verify:
 ;    * When 0 or 2 sfx is uninterruptible, the newest play_noise instruction has priority
 ;    * When only 1 sfx is uninterruptible, the uninterruptible has priority

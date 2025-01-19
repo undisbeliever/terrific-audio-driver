@@ -79,6 +79,7 @@ in zeropage {
     var zpTmpWord : u16;
         var zpTmp  @ &<:zpTmpWord as u8 : u8;
         var zpTmp2 @ &>:zpTmpWord as u8 : u8;
+    var zpTmp3 : u8;
 
 
     // Common audio data pointers.
@@ -350,6 +351,9 @@ in firstpage {
     var pendingNon_music : u8;
     var pendingNon_sfx : u8;
 
+    // Cached SFX mutedChannels parameter for `__process_channels()`.
+    var sfxMutedChannels : u8;
+
 
     // Channel variables that do not fit in zeropage
     namespace channelSoA {
@@ -620,6 +624,7 @@ func main() {
 
     pendingNon_sfx = a;
     pendingNon_music = a;
+    sfxMutedChannels = a;
 
 
     a = 0xff;
@@ -724,6 +729,11 @@ func main() {
 
 
     io_commands.init__inline();
+
+
+    // ::TODO remove::
+    nop();
+    nop();
 
 // Fallthrough into mainloop()
 }
@@ -843,13 +853,19 @@ func process_music_channels() {
 
     volShadowDirty_tmp = volShadowDirty_music;
 
-    a = 0;
-    keyOnShadow_music = a;
-    keyOffShadow_music = a;
-    volShadowDirty_music = a;
+    y = 0;
+    keyOnShadow_music = y;
+    keyOffShadow_music = y;
+    volShadowDirty_music = y;
+
+    // Y = 0
+    a = noiseLock;
+    if !zero {
+        y = nonShadow_music;
+    }
 
     a = voiceChannelsDirty_music & musicSfxChannelMask;
-    __process_channels(a, zpTmp, volShadowDirty_tmp, FIRST_MUSIC_CHANNEL + 1, LAST_MUSIC_CHANNEL + 1);
+    __process_channels(a, y, zpTmp, volShadowDirty_tmp, FIRST_MUSIC_CHANNEL + 1, LAST_MUSIC_CHANNEL + 1);
 
     voiceChannelsDirty_music = voiceChannelsDirty_tmp;
 }
@@ -876,14 +892,70 @@ inline func _process_sfx_channels__inline() {
     write_dsp(GlobalDspAddr.KOFF, keyOffShadow_sfx);
 
 
-    a = pendingNon_sfx;
-    if a != nonShadow_sfx {
+    y = pendingNon_sfx;
+    if y != nonShadow_sfx {
         // SFX noise changed
 
-        nonShadow_sfx = a;
+        nonShadow_sfx = y;
 
-        {
-            if a >= BOTH_SFX_ACTIVE {
+        a = y;
+        if zero {
+            // Restore muted music channels on the next music tick when noiseLock is 0.
+            voiceChannelsDirty_music |= nonShadow_music;
+        }
+        else {
+            // A Sound effect wants to play noise but a music voice is also playing noise
+            // and there is only one noise generator.
+            //
+            // To prevent a noise channel that doesn't have noiseLock from amplifying the
+            // noiseLock channel's noise, all channels that do not own the noiseLock will
+            // have their VxVOL zeroed.
+            //
+            // This is done in two places:
+            //   1. At the start of `_process_sfx_channels__inline()` when a sound-effect
+            //      wants to play noise, muting music noise before SFX noise starts.
+            //      As an optimisation, this is only done if the previous SFX tick was not
+            //      playing noise.
+            //   2. When channelSoA.virtualChannels are written to the S-DSP.
+            //      `sfxMutedChannels` mutes SFX channels and
+            //      `nonShadow_music` mutes music channels (if `noiseLock` is non-zero).
+            //
+            //      This is required to:
+            //        * Mute any future play_noise instructions.
+            //        * Ignore any future volume changes
+            //      on channels that do not have the `noiseLock`.
+            x = noiseLock;
+            if zero {
+                a = nonShadow_music & musicSfxChannelMask;
+                if !zero {
+                    zpTmp = a;
+
+                    // Assumes VoiceDspAddr.VOL_L == 0
+                    // X = 0
+                    y = a = x;
+
+                    // Write 0 to VxVOLL and VxVOLR on all channels with `zpTmp` bit set.
+                    do {
+                        zpTmp >>>= 1;
+                        if carry {
+                            smp.dsp_addr_and_data = ya;
+                            a++;
+                            smp.dsp_addr_and_data = ya;
+                            a--;
+
+                            carry = false;
+                        }
+                        a +#= 0x10;
+
+                        x = zpTmp;
+                    } while !zero;
+
+                    y = pendingNon_sfx;
+                }
+            }
+
+            a = 0;
+            if y >= BOTH_SFX_ACTIVE {
                 // Both channels want to play noise but there's only 1 noise channel
                 //
                 // Decide which channel plays noise using the interruptible flag
@@ -900,9 +972,21 @@ inline func _process_sfx_channels__inline() {
                             // Use the SFX channel that last encountered a play_noise instruction.
                             a = lastSfxPlayNoiseChannel;
                 EndIf:
+
+                y = a;
+
+                // Mute the other sfx channel
+                // (eor used to swap bits 6 & 7 (since only 1 bit is set)
+                a ^= BOTH_SFX_ACTIVE;
             }
         }
-        noiseLock = a;
+
+        // ::TODO replace with a MOVW write (If I can free 1 byte of zeropage)::
+        noiseLock = y;
+        sfxMutedChannels = a;
+
+        // Mark muted SFX channel dirty to update VxVOL
+        test_and_set(a, voiceChannelsDirty_sfx);
     }
 
     // Clears NON on the tick after key-off
@@ -933,7 +1017,8 @@ inline func _process_sfx_channels__inline() {
 
     // DSP voice register writes must be masked
     a = voiceChannelsDirty_sfx & activeSoundEffects;
-    __process_channels(a, zpTmp, volShadowDirty_tmp, FIRST_SFX_CHANNEL + 1, LAST_SFX_CHANNEL + 1);
+    y = sfxMutedChannels;
+    __process_channels(a, y, zpTmp, volShadowDirty_tmp, FIRST_SFX_CHANNEL + 1, LAST_SFX_CHANNEL + 1);
 
     voiceChannelsDirty_sfx = voiceChannelsDirty_tmp;
 
@@ -945,16 +1030,23 @@ inline func _process_sfx_channels__inline() {
 
 // Update the DSP voice registers, write to EON & KON, then execute channel bytecode.
 //
+// If a voice's `mutedChannels` and `voiceChannelsDirty` bit are both set, then
+// 0 will be written to VxVOL.
+//
 // CAUTION: This function DOES NOT write to the `KOFF` S-DSP register.
-func __process_channels(validChannels : u8 in a,
+func __process_channels(voiceChannelsDirty : u8 in a,
+                        mutedChannels : u8 in y,
                         konShadow: u8 in zpTmp,
                         _volShadowDirty_tmp: u8 in volShadowDirty_tmp,
                         afterFirstChannel: u8 in zpTmp2,
                         afterLastChannel: u8 in x) {
 var _konShadow : u8 in zpTmp;
 var _afterFirstChannel : u8 in zpTmp2;
+var _mutedChannels : u8 in zpTmp3;
+
 
     channelIndexEndLoop = x;
+    _mutedChannels = y;
 
     // This loop MUST read the channels (and voiceChannelsDirty_tmp) in the opposite order
     // to the loop below this one.
@@ -1014,14 +1106,24 @@ var _afterFirstChannel : u8 in zpTmp2;
             y = channelSoA.virtualChannels.pitch_l[x];
             smp.dsp_addr_and_data = ya;
 
+            // Set VxVOL to 0 if _mutedChannels bit is set
             a--;
-            y = channelSoA.virtualChannels.vol_r[x];
-            smp.dsp_addr_and_data = ya;
+            y = _mutedChannels;
+            if negative {
+                y = 0;
+                smp.dsp_addr_and_data = ya;
+            }
+            else {
+                y = channelSoA.virtualChannels.vol_r[x];
+                smp.dsp_addr_and_data = ya;
 
+                y = channelSoA.virtualChannels.vol_l[x];
+            }
             a--;
-            y = channelSoA.virtualChannels.vol_l[x];
             smp.dsp_addr_and_data = ya;
         }
+
+        _mutedChannels <<<= 1;
     } while x >= _afterFirstChannel;
 
 

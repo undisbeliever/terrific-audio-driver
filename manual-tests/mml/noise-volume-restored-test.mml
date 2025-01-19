@@ -1,0 +1,27 @@
+#Title Noise timing test (channel A)
+
+#Timer 96
+
+; Test instructions
+;
+; 1. Record tad-gui audio output
+; 2. Play this song in the GUI
+; 3. Use the Sound Effects window to play the following sound effects:
+;    * noise
+;    * noise_no_keyoff
+;    * noise_rest
+; 4. Review the tad-gui audio output to verify:
+;	 * Music noise is restored shortly after the sound effect stops
+;      playing noise.
+;    * The music noise volume before and after the SFX is the same
+
+
+@1 sine
+
+; music is on the right
+; sfx is on the left
+BDE px+64
+
+; 3 channels all playing noise
+BDE @1 v2 N22,%600
+

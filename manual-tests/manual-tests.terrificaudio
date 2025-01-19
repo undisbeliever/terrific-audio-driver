@@ -28,6 +28,7 @@
     "sine_noise_loop",
     "noise",
     "noise_no_keyoff",
+    "noise_rest",
     "beep_beep",
     "noise_freq_test_left",
     "noise_freq_test_right",
@@ -44,6 +45,10 @@
     {
       "name": "noise_priority_test",
       "source": "mml/noise-priority-test.mml"
+    },
+    {
+      "name": "noise_volume_restored_test",
+      "source": "mml/noise-volume-restored-test.mml"
     }
   ]
 }

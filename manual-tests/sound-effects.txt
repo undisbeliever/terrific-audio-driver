@@ -21,6 +21,14 @@ A @1 GI24 l8 [c N28,16 N28,16]25
   set_instrument sine
   play_noise 31 no_keyoff 24
 
+=== noise_rest === one interruptible
+
+  ; noise sfx is on the left
+  set_pan 0
+  set_instrument sine
+  play_noise 31 keyoff 24
+  rest 24
+
 === beep_beep === one uninterruptible
 
   ; noise sfx is on the left
