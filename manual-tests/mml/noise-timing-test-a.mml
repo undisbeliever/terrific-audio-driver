@@ -5,13 +5,16 @@
 ; Test instructions
 ;
 ; 1. Record tad-gui audio output
-; 2. Play sine-noise-loop.mml
+; 2. Play this song in the GUI
 ; 3. Use the Sound Effects window to play the following sound effects:
 ;    * sine_noise_loop
 ;    * noise
 ;    * noise_no_keyoff
 ;    * noise, then beep_beep (after noise has finished)
 ;    * beep_beep, then noise (after beep_beep has finished)
+;    * noise_freq_test_left
+;    * noise_freq_test_left then uninterruptable_noise_left
+;    * uninterruptable_noise_left then noise_freq_test_left
 ; 4. Review the tad-gui audio output to verify:
 ;    * The sine/noise wave is unchanged during the key-on GI envelope
 ;    * The sine/noise wave is unchanged during the key-off release envelope

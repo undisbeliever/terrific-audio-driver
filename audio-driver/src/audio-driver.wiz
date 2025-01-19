@@ -282,18 +282,40 @@ in zeropage {
     var volShadowDirty_sfx : u8;
 
 
+    // Controls which channel has ownership if the noise frequency
+    //
+    // VALUES:
+    //   * 0    = music channels
+    //   * 0x80 = sfx channel 9
+    //   * 0x40 = sfx channel 8
+    //
+    // This variable MUST not have bits 6 & 7 set at the same time
+    //
+    // To simplify timing, this variable is set at the start of `_process_sfx_channels__inline()`.
+    var noiseLock : u8;
+
+    // The last SFX voice-bit that encountered a `play_noise` instruction.
+    //
+    // VALUES:
+    //   * 0x80 = sfx channel 9
+    //   * 0x40 = sfx channel 8
+    //
+    // This variable MUST not have bits 6 & 7 set at the same time
+    var lastSfxPlayNoiseChannel : u8;
+
+    // noise frequency register shadow variables
+    //
+    // These variables MUST ALWAYS be `<= dsp.FLG__NOISE_FREQ_MASK`.
+    var noiseFreq_music : u8;
+    var noiseFreq_sfx : [u8; N_SFX_CHANNELS];
+
+
     // NON DSP register shadow variables.
     //
     // Must only be edited by `_process_*_channels()`.
     // Edit `pendingNon_*` instead.
     var nonShadow_music : u8;
     var nonShadow_sfx : u8;
-
-
-    // noise frequency register shadow variables
-    // (Value is only written to the flag register if MSB clear)
-    var noiseFreq_music : u8;
-    var noiseFreq_sfx : u8;
 
 
 // --- All zeropage variables after `echo` are not cleared in main() ---
@@ -608,8 +630,6 @@ func main() {
     musicSfxChannelMask = a;
     volShadowDirty_music = a;
     keyOnMask_music = a;
-    noiseFreq_music = a;
-    noiseFreq_sfx = a;
 
     inline for let _I in 0..(N_SFX_CHANNELS - 1) {
         sfx_oneChannelSfxId[_I] = a;
@@ -815,11 +835,10 @@ func process_music_channels() {
 
     write_dsp(GlobalDspAddr.PMON, pmonShadow);
 
-    y = noiseFreq_music;
-    if !negative {
+    a = noiseLock;
+    if zero {
         // Assumes noiseFreq_music is <= dsp.FLG__NOISE_FREQ_MASK.
-        write_dsp(GlobalDspAddr.FLG, y);
-        noiseFreq_music $ 7 = true;
+        write_dsp(GlobalDspAddr.FLG, noiseFreq_music);
     }
 
     zpTmp = a = keyOnShadow_music & musicSfxChannelMask & io_musicChannelsMask;
@@ -839,6 +858,9 @@ func process_music_channels() {
 
 
 inline func _process_sfx_channels__inline() {
+    let BOTH_SFX_ACTIVE = (1 << 7) | (1 << 6);
+
+
     // No need to mask sfx keyOff/keyOn events.
     // The sfx channels do not emit key-off or key-on events when disabled.
 
@@ -856,18 +878,50 @@ inline func _process_sfx_channels__inline() {
     write_dsp(GlobalDspAddr.KOFF, keyOffShadow_sfx);
 
 
-    nonShadow_sfx = a = pendingNon_sfx;
+    a = pendingNon_sfx;
+    if a != nonShadow_sfx {
+        // SFX noise changed
+
+        nonShadow_sfx = a;
+
+        {
+            if a >= BOTH_SFX_ACTIVE {
+                // Both channels want to play noise but there's only 1 noise channel
+                //
+                // Decide which channel plays noise using the interruptible flag
+                // and last SFX play_noise instruction.
+                a = sfx_interruptibleFlags;
+                goto UseLastPlayNoiseChannel if zero;
+                    // 1 or 2 channels are interruptible.
+                    // Invert interruptible flags
+                    a ^= BOTH_SFX_ACTIVE;
+                    // Test if both channels are uninterruptible
+                    goto EndIf if !zero;
+                        UseLastPlayNoiseChannel:
+                            // Both channels are interruptible or uninterruptible.
+                            // Use the SFX channel that last encountered a play_noise instruction.
+                            a = lastSfxPlayNoiseChannel;
+                EndIf:
+            }
+        }
+        noiseLock = a;
+    }
 
     // Clears NON on the tick after key-off
     a = keyOffShadow_sfx;
     test_and_clear(a, pendingNon_sfx);
 
 
-    y = noiseFreq_sfx;
-    if !negative {
+    a = noiseLock;
+    if !zero {
+        if negative {
+            y = noiseFreq_sfx[1];
+        }
+        else {
+            y = noiseFreq_sfx[0];
+        }
         // Assumes noiseFreq_sfx is <= dsp.FLG__NOISE_FREQ_MASK.
         write_dsp(GlobalDspAddr.FLG, y);
-        noiseFreq_sfx $ 7 = true;
     }
 
 
@@ -2237,11 +2291,12 @@ func play_noise(channelIndex: u8 in x, freq_and_keyoff : u8 in a) {
     // queue KON if the previous note has been KOFFed
     a = ChannelVoiceBit[x];
     if x >= FIRST_SFX_CHANNEL {
-        noiseFreq_sfx = y;
-
         a = ChannelVoiceBit[x];
-        test_and_set(a, pendingNon_sfx);
 
+        (&noiseFreq_sfx[-FIRST_SFX_CHANNEL])[x] = y;
+
+        lastSfxPlayNoiseChannel = a;
+        test_and_set(a, pendingNon_sfx);
 
         a &= keyOnMask_sfx;
         test_and_set(a, keyOnShadow_sfx);

@@ -28,7 +28,11 @@
     "sine_noise_loop",
     "noise",
     "noise_no_keyoff",
-    "beep_beep"
+    "beep_beep",
+    "noise_freq_test_left",
+    "noise_freq_test_right",
+    "uninterruptable_noise_left",
+    "uninterruptable_noise_right"
   ],
   "low_priority_sound_effects": [],
   "sound_effect_file": "sound-effects.txt",
@@ -36,6 +40,10 @@
     {
       "name": "noise_timing_test_a",
       "source": "mml/noise-timing-test-a.mml"
+    },
+    {
+      "name": "noise_priority_test",
+      "source": "mml/noise-priority-test.mml"
     }
   ]
 }

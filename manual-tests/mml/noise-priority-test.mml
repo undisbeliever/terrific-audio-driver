@@ -1,0 +1,26 @@
+#Title Noise priority test
+
+#Timer 96
+
+; Test instructions
+;
+; 1. Record tad-gui audio output
+; 2. Play this MML file
+; 3. Use the Sound Effects window to play the following sound effects:
+;    * noise_freq_test_left
+;    * noise_freq_test_left then noise_freq_test_right
+;    * noise_freq_test_right then noise_freq_test_left
+;    * noise_freq_test_left then uninterruptable_noise_right
+;    * uninterruptable_noise_right then noise_freq_test_left
+;    * uninterruptable_noise_left and uninterruptable_noise_right
+; 5. Review the tad-gui audio output to verify:
+;    * When 0 or 2 sfx is uninterruptible, the newest play_noise instruction has priority
+;    * When only 1 sfx is uninterruptible, the uninterruptible has priority
+
+@1 sine
+
+; music noise is on the right
+AB px+64
+
+A @1 v4 l8 [N28 r  ]25
+B @1 v4 l8 [r   N28]25

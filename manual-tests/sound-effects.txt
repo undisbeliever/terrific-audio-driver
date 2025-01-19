@@ -1,4 +1,4 @@
-=== sine_noise_loop === mml
+=== sine_noise_loop === mml one interruptible
 
 @1 sine
 
@@ -7,24 +7,74 @@ A px-64
 
 A @1 GI24 l8 [c N28,16 N28,16]25
 
-=== noise ===
+=== noise === one interruptible
 
   ; noise sfx is on the left
   set_pan 0
   set_instrument sine
   play_noise 31 keyoff 24
 
-=== noise_no_keyoff ===
+=== noise_no_keyoff === one interruptible
 
   ; noise sfx is on the left
   set_pan 0
   set_instrument sine
   play_noise 31 no_keyoff 24
 
-=== beep_beep ===
+=== beep_beep === one uninterruptible
 
   ; noise sfx is on the left
   set_pan 0
   set_instrument sine
   play_note a4 18
   play_note a4 18
+
+=== noise_freq_test_left === mml both interruptible
+
+@1 sine
+
+A px-64
+
+A @1 GF127 l%10
+
+A [
+A   N20                 ; Normal noise
+A   N20 & c             ; Slurred noise into note
+A   N20 & N20           ; Slurred noise into noise
+A   N20 r16             ; Noise then rest
+A   r16 q8 N20 N20 q0   ; Test other noise freq restored after early release key-off
+A   r%5
+A ]13
+
+=== noise_freq_test_right === mml both interruptible
+
+@1 sine
+
+A px+64
+
+A @1 GF127 l%13
+
+A [
+A   N31                 ; Normal noise
+A   N31 & c             ; Slurred noise into note
+A   N31 & N31           ; Slurred noise into noise
+A   N31 r16             ; Noise then rest
+A   r16 q8 N31 N31 q0   ; Test other noise freq restored after early release key-off
+A   r%5
+A ]10
+
+=== uninterruptable_noise_left === mml one uninterruptible
+
+@1 sine
+
+A px-64
+
+A @1 GF127 [N28,%5 r%6 N28,%9 c%8]22
+
+=== uninterruptable_noise_right === mml one uninterruptible
+
+@1 sine
+
+A px+64
+
+A @1 GF127 [N18,%7 r%7 N18,%7 a%4]24
