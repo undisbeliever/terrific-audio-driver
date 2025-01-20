@@ -80,6 +80,7 @@ in zeropage {
         var zpTmp  @ &<:zpTmpWord as u8 : u8;
         var zpTmp2 @ &>:zpTmpWord as u8 : u8;
 
+    var _padding : u8;
 
     // Common audio data pointers.
     // See `data-formats.wiz` for more details about these variables.
@@ -180,13 +181,6 @@ in zeropage {
     //
     // MUST ONLY be written to in `__process_channels()`.
     var voiceChannelsDirty_tmp  : u8;
-
-    // The one-past-the-end index when looping through the channels.
-    //
-    // Used to deduplicate code when processing music and sound effects.
-    //
-    // MUST ONLY BE USED IN `__process_channels()`.
-    var channelIndexEndLoop : u8;
 
 
     namespace channelSoA {
@@ -1014,23 +1008,26 @@ inline func _process_sfx_channels__inline() {
 // 0 will be written to VxVOL.
 //
 // CAUTION: This function DOES NOT write to the `KOFF` S-DSP register.
+//
+// WARNING: self modifying code
 func __process_channels(voiceChannelsDirty : u8 in a,
                         mutedChannels : u8 in zpTmp,
                         _volShadowDirty_tmp: u8 in volShadowDirty_tmp,
                         afterFirstChannel: u8 in y,
                         afterLastChannel: u8 in x) {
 var _mutedChannels : u8 in zpTmp;
-var _afterFirstChannel : u8 in zpTmp2;
 
+    // Modify the `CMP X, #` instruction argument for the two do-while loops
+    // (faster and saves a byte of zeropage)
+    (&_VoiceChannelLoop_cpx      as *u8)[1] = y;    // afterFirstChannel
+    (&_BytecodeAndEffectLoop_cpx as *u8)[1] = x;    // afterLastChannel
 
-    channelIndexEndLoop = x;
-    _afterFirstChannel = y;
+    voiceChannelsDirty_tmp = a;
 
     // This loop MUST read the channels (and voiceChannelsDirty_tmp) in the opposite order
     // to the loop below this one.
     // That way I can populate `_voiceChannelsDirty_tmp` using `ROR` and read it with `ASL`.
-    voiceChannelsDirty_tmp = a;
-    do {
+    VoiceChannelLoop:
         x--;
 
         voiceChannelsDirty_tmp <<<= 1;
@@ -1102,7 +1099,13 @@ var _afterFirstChannel : u8 in zpTmp2;
         }
 
         _mutedChannels <<<= 1;
-    } while x >= _afterFirstChannel;
+
+        // while x >= afterFirstChannel
+    _VoiceChannelLoop_cpx:
+        cmp(x, 0);
+        goto VoiceChannelLoop if carry;
+
+    // X = 0 or 8 (first channel index)
 
 
     y = a = ((eonShadow_music ^ eonShadow_sfx) & sfxMusicEchoNoiseMask) ^ eonShadow_music;
@@ -1152,8 +1155,8 @@ var _afterFirstChannel : u8 in zpTmp2;
     write_dsp(GlobalDspAddr.KON, y);
 
 
-    // X = _afterFirstChannel
-    ^do {
+    // X = 0 or 8
+    BytecodeAndEffectLoop:
         // MUST NOT use `_konShadow` and `_afterFirstChannel` in this loop.
         // The are clobbered by pitch effects and bytecode.
 
@@ -1287,7 +1290,10 @@ var _afterFirstChannel : u8 in zpTmp2;
         _process_portamento__inline(x);
 
         x++;
-    } while x < channelIndexEndLoop;
+        // while x < afterLastChannel
+    _BytecodeAndEffectLoop_cpx:
+        cmp(x, 0);
+        ^goto BytecodeAndEffectLoop if !carry;
 }
 
 
