@@ -843,11 +843,6 @@ func process_music_channels() {
 
     write_dsp(GlobalDspAddr.PMON, pmonShadow);
 
-    a = noiseLock;
-    if zero {
-        // Assumes noiseFreq_music is <= dsp.FLG__NOISE_FREQ_MASK.
-        write_dsp(GlobalDspAddr.FLG, noiseFreq_music);
-    }
 
     zpTmp = a = keyOnShadow_music & musicSfxChannelMask & io_musicChannelsMask;
 
@@ -994,19 +989,6 @@ inline func _process_sfx_channels__inline() {
     test_and_clear(a, pendingNon_sfx);
 
 
-    a = noiseLock;
-    if !zero {
-        if negative {
-            y = noiseFreq_sfx[1];
-        }
-        else {
-            y = noiseFreq_sfx[0];
-        }
-        // Assumes noiseFreq_sfx is <= dsp.FLG__NOISE_FREQ_MASK.
-        write_dsp(GlobalDspAddr.FLG, y);
-    }
-
-
     zpTmp = keyOnShadow_sfx;
     volShadowDirty_tmp = volShadowDirty_sfx;
 
@@ -1133,6 +1115,36 @@ var _mutedChannels : u8 in zpTmp3;
     y = a = (nonShadow_music & musicSfxChannelMask) | nonShadow_sfx;
     write_dsp(GlobalDspAddr.NON, y);
 
+
+    // Setting noise frequency after voice registers are written
+    // so SFX noise frequency is set after SFX VxVOL is zeroed or restored.
+    //
+    // Comparing X with 0 is faster then splitting `__process_channels()` into two separate functions
+    a = x;
+    if zero {
+        // processing music channels
+
+        a = noiseLock;
+        if zero {
+            // Assumes noiseFreq_music is <= dsp.FLG__NOISE_FREQ_MASK.
+            write_dsp(GlobalDspAddr.FLG, noiseFreq_music);
+        }
+    }
+    else {
+        // processing sound-effect channels
+
+        a = noiseLock;
+        if !zero {
+            if negative {
+                y = noiseFreq_sfx[1];
+            }
+            else {
+                y = noiseFreq_sfx[0];
+            }
+            // Assumes noiseFreq_sfx is <= dsp.FLG__NOISE_FREQ_MASK.
+            write_dsp(GlobalDspAddr.FLG, y);
+        }
+    }
 
     write_dsp(GlobalDspAddr.KON, _konShadow);
 
