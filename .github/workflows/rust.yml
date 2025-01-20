@@ -57,6 +57,7 @@ jobs:
             log 'info' 'Cargo Test'
             cargo test --quiet
             cargo run --example test_bc_interpreter examples/example-project.terrificaudio
+            cargo run --example test_bc_interpreter manual-tests/manual-tests.terrificaudio
             log 'info' 'Cargo Build'
             cargo build --quiet
         fi > /dev/null
