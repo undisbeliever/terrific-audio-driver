@@ -79,7 +79,6 @@ in zeropage {
     var zpTmpWord : u16;
         var zpTmp  @ &<:zpTmpWord as u8 : u8;
         var zpTmp2 @ &>:zpTmpWord as u8 : u8;
-    var zpTmp3 : u8;
 
 
     // Common audio data pointers.
@@ -844,12 +843,9 @@ func process_music_channels() {
     write_dsp(GlobalDspAddr.PMON, pmonShadow);
 
 
-    zpTmp = a = keyOnShadow_music & musicSfxChannelMask & io_musicChannelsMask;
-
     volShadowDirty_tmp = volShadowDirty_music;
 
     y = 0;
-    keyOnShadow_music = y;
     keyOffShadow_music = y;
     volShadowDirty_music = y;
 
@@ -860,7 +856,7 @@ func process_music_channels() {
     }
 
     a = voiceChannelsDirty_music & musicSfxChannelMask;
-    __process_channels(a, y, zpTmp, volShadowDirty_tmp, FIRST_MUSIC_CHANNEL + 1, LAST_MUSIC_CHANNEL + 1);
+    __process_channels(a, y, volShadowDirty_tmp, FIRST_MUSIC_CHANNEL + 1, LAST_MUSIC_CHANNEL + 1);
 
     voiceChannelsDirty_music = voiceChannelsDirty_tmp;
 }
@@ -989,18 +985,16 @@ inline func _process_sfx_channels__inline() {
     test_and_clear(a, pendingNon_sfx);
 
 
-    zpTmp = keyOnShadow_sfx;
     volShadowDirty_tmp = volShadowDirty_sfx;
 
     a = 0;
-    keyOnShadow_sfx = a;
     keyOffShadow_sfx = a;
     volShadowDirty_sfx = a;
 
     // DSP voice register writes must be masked
     a = voiceChannelsDirty_sfx & activeSoundEffects;
     y = sfxMutedChannels;
-    __process_channels(a, y, zpTmp, volShadowDirty_tmp, FIRST_SFX_CHANNEL + 1, LAST_SFX_CHANNEL + 1);
+    __process_channels(a, y, volShadowDirty_tmp, FIRST_SFX_CHANNEL + 1, LAST_SFX_CHANNEL + 1);
 
     voiceChannelsDirty_sfx = voiceChannelsDirty_tmp;
 
@@ -1018,13 +1012,11 @@ inline func _process_sfx_channels__inline() {
 // CAUTION: This function DOES NOT write to the `KOFF` S-DSP register.
 func __process_channels(voiceChannelsDirty : u8 in a,
                         mutedChannels : u8 in y,
-                        konShadow: u8 in zpTmp,
                         _volShadowDirty_tmp: u8 in volShadowDirty_tmp,
-                        afterFirstChannel: u8 in zpTmp2,
+                        afterFirstChannel: u8 in zpTmp,
                         afterLastChannel: u8 in x) {
-var _konShadow : u8 in zpTmp;
-var _afterFirstChannel : u8 in zpTmp2;
-var _mutedChannels : u8 in zpTmp3;
+var _afterFirstChannel : u8 in zpTmp;
+var _mutedChannels : u8 in zpTmp2;
 
 
     channelIndexEndLoop = x;
@@ -1129,6 +1121,11 @@ var _mutedChannels : u8 in zpTmp3;
             // Assumes noiseFreq_music is <= dsp.FLG__NOISE_FREQ_MASK.
             write_dsp(GlobalDspAddr.FLG, noiseFreq_music);
         }
+
+        y = a = keyOnShadow_music & musicSfxChannelMask & io_musicChannelsMask;
+
+        // X = 0
+        keyOnShadow_music = x;
     }
     else {
         // processing sound-effect channels
@@ -1144,9 +1141,11 @@ var _mutedChannels : u8 in zpTmp3;
             // Assumes noiseFreq_sfx is <= dsp.FLG__NOISE_FREQ_MASK.
             write_dsp(GlobalDspAddr.FLG, y);
         }
-    }
 
-    write_dsp(GlobalDspAddr.KON, _konShadow);
+        y = keyOnShadow_sfx;
+        keyOnShadow_sfx = 0;
+    }
+    write_dsp(GlobalDspAddr.KON, y);
 
 
     // X = _afterFirstChannel
