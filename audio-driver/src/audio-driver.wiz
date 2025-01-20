@@ -849,14 +849,16 @@ func process_music_channels() {
     keyOffShadow_music = y;
     volShadowDirty_music = y;
 
+    // Set mutedChannels if SFX is playing noise
     // Y = 0
     a = noiseLock;
     if !zero {
         y = nonShadow_music;
     }
+    zpTmp = y;
 
     a = voiceChannelsDirty_music & musicSfxChannelMask;
-    __process_channels(a, y, volShadowDirty_tmp, FIRST_MUSIC_CHANNEL + 1, LAST_MUSIC_CHANNEL + 1);
+    __process_channels(a, zpTmp, volShadowDirty_tmp, FIRST_MUSIC_CHANNEL + 1, LAST_MUSIC_CHANNEL + 1);
 
     voiceChannelsDirty_music = voiceChannelsDirty_tmp;
 }
@@ -991,10 +993,12 @@ inline func _process_sfx_channels__inline() {
     keyOffShadow_sfx = a;
     volShadowDirty_sfx = a;
 
+    zpTmp = a = sfxMutedChannels;
+
     // DSP voice register writes must be masked
     a = voiceChannelsDirty_sfx & activeSoundEffects;
-    y = sfxMutedChannels;
-    __process_channels(a, y, volShadowDirty_tmp, FIRST_SFX_CHANNEL + 1, LAST_SFX_CHANNEL + 1);
+
+    __process_channels(a, zpTmp, volShadowDirty_tmp, FIRST_SFX_CHANNEL + 1, LAST_SFX_CHANNEL + 1);
 
     voiceChannelsDirty_sfx = voiceChannelsDirty_tmp;
 
@@ -1011,16 +1015,16 @@ inline func _process_sfx_channels__inline() {
 //
 // CAUTION: This function DOES NOT write to the `KOFF` S-DSP register.
 func __process_channels(voiceChannelsDirty : u8 in a,
-                        mutedChannels : u8 in y,
+                        mutedChannels : u8 in zpTmp,
                         _volShadowDirty_tmp: u8 in volShadowDirty_tmp,
-                        afterFirstChannel: u8 in zpTmp,
+                        afterFirstChannel: u8 in y,
                         afterLastChannel: u8 in x) {
-var _afterFirstChannel : u8 in zpTmp;
-var _mutedChannels : u8 in zpTmp2;
+var _mutedChannels : u8 in zpTmp;
+var _afterFirstChannel : u8 in zpTmp2;
 
 
     channelIndexEndLoop = x;
-    _mutedChannels = y;
+    _afterFirstChannel = y;
 
     // This loop MUST read the channels (and voiceChannelsDirty_tmp) in the opposite order
     // to the loop below this one.
