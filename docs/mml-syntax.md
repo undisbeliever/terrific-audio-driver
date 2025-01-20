@@ -203,7 +203,7 @@ Numbers can be decimal, or hexadecimal when prefixed with `$` (ie, `$ff`)
  * `PF<freq>[,length]` - Play instrument a given frequency (in Hertz)
     * Uses the instrument frequency to generate a play-pitch instruction
     * Cannot be used on samples
- * `s[number][,length]` - Play samplelf.
+ * `s[number][,length]` - Play sample.
     * If this command is used with a sample, `number` is the sample-rate list index (default is 0).
     * If this command is used with an instrument, `number` is the note-id.
  * `n<number>` - Play the integer MIDI note at the default length
