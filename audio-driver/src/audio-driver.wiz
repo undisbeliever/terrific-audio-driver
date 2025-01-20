@@ -834,8 +834,6 @@ func process_music_channels() {
 
     _process_echo_registers__inline();
 
-    write_dsp(GlobalDspAddr.PMON, pmonShadow);
-
 
     volShadowDirty_tmp = volShadowDirty_music;
 
@@ -1122,6 +1120,8 @@ var _mutedChannels : u8 in zpTmp;
     a = x;
     if zero {
         // processing music channels
+
+        write_dsp(GlobalDspAddr.PMON, pmonShadow);
 
         a = noiseLock;
         if zero {
