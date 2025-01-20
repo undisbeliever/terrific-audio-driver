@@ -80,7 +80,6 @@ in zeropage {
         var zpTmp  @ &<:zpTmpWord as u8 : u8;
         var zpTmp2 @ &>:zpTmpWord as u8 : u8;
 
-    var _padding : u8;
 
     // Common audio data pointers.
     // See `data-formats.wiz` for more details about these variables.
@@ -592,8 +591,6 @@ func main() {
 
 
     y = 0;
-    write_dsp(GlobalDspAddr.PMON,   y);     // No pitch modulation
-    write_dsp(GlobalDspAddr.NON,    y);     // No noise
     write_dsp(GlobalDspAddr.EON,    y);     // No echo
 
 
@@ -723,10 +720,6 @@ func main() {
 
     io_commands.init__inline();
 
-
-    // ::TODO remove::
-    nop();
-    nop();
 
 // Fallthrough into mainloop()
 }
