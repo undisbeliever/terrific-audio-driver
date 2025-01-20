@@ -24,6 +24,7 @@ Audio driver changes:
  * Added `set_echo_delay` instruction (`\edl` MML command)
  * The `:` `skip_last_loop` can now jump more than 256 bytes
  * Added sound effect subroutines
+ * Sound effects playing noise will mute music noise.
 
 MML changes:
  * `#EchoVolume` now accepts a stereo input

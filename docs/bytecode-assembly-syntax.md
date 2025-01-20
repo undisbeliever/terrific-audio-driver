@@ -20,11 +20,13 @@ Instructions
 
  * `play_noise <0-31> [ko] <duration>` - play noise
     * Noise is disabled on the next `play_note` or `play_pitch` instruction
-    * CAUTION: There is only 1 noise generator.  
-      This instruction will change the noise frequency on all channels playing noise.
+    * CAUTION: There is only 1 noise generator.
+       * In a song, this command will change the noise frequency on all song channels playing noise.
     * CAUTION: The instrument is used to determine the length of the noise.
        * If the instrument does not loop, the noise is played for the length of the instrument's sample.
        * If the instrument loops, the noise is played until key-off.
+    * If a song channel plays noise at the same time a sound effect plays noise, the song noise will be muted.
+    * If both sound effect channels play noise at the same time, an uninterruptible sound effect will have priority.
  * `disable_noise` - disable noise
 
  * `disable_vibrato` - disable vibrato

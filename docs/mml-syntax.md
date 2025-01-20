@@ -223,11 +223,13 @@ Numbers can be decimal, or hexadecimal when prefixed with `$` (ie, `$ff`)
 
  * `N<0-31>[,length]` - play noise
     * Noise is disabled on the next note or `P` play-pitch command
-    * CAUTION: There is only 1 noise generator.  
-      This command will change the noise frequency on all channels playing noise.
+    * CAUTION: There is only 1 noise generator.
+       * In a song, this command will change the noise frequency on all song channels playing noise.
     * CAUTION: The instrument is used to determine the length of the noise.
        * If the instrument does not loop, the noise is played for the length of the instrument's sample.
        * If the instrument loops, the noise is played until key-off.
+    * If a song channel plays noise at the same time a sound effect plays noise, the song noise will be muted.
+    * If both sound effect channels play noise at the same time, an uninterruptible sound effect will have priority.
  * `N-` - disable noise
 
 <br/>
