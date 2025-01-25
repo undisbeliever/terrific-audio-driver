@@ -33,5 +33,5 @@ regex.workspace = true
 
 
 [dev-dependencies]
-shvc-sound-emu.workspace = true
+tad-emu.workspace = true
 

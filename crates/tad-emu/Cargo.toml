@@ -1,0 +1,20 @@
+[package]
+name = "tad-emu"
+description = "TAD audio driver emulator"
+license = "MIT"
+
+edition = "2021"
+rust-version.workspace = true
+
+publish = false
+
+# This is a private internal crate.
+# Using version "0.0.0" as I do not care about breaking changes.
+version = "0.0.0"
+
+
+[dependencies]
+# Local crates
+compiler.workspace = true
+shvc-sound-emu.workspace = true
+

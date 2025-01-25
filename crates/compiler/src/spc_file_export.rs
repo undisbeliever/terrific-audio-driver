@@ -6,12 +6,12 @@
 
 use std::time::Duration;
 
-use crate::audio_driver;
 use crate::common_audio_data::CommonAudioData;
-use crate::driver_constants::{addresses, LoaderDataType};
-use crate::errors::ExportSpcFileError;
+use crate::driver_constants::LoaderDataType;
+use crate::errors::LoadSongError;
 use crate::mml::MetaData;
 use crate::songs::SongData;
+use crate::tad_apu::{load_song_to_apu, ApuEmulator};
 
 const SPC_FILE_SIZE: usize = 0x10200;
 
@@ -70,44 +70,54 @@ fn song_length(duration: Option<Duration>, metadata: &MetaData) -> u64 {
     }
 }
 
-const _: () = assert!(
-    audio_driver::AUDIO_DRIVER.len() + (addresses::DRIVER_CODE as usize)
-        <= (addresses::COMMON_DATA as usize)
-);
+struct SpcFile(Box<[u8; SPC_FILE_SIZE]>);
+
+impl ApuEmulator for SpcFile {
+    fn apuram_mut(&mut self) -> &mut [u8; AUDIO_RAM_SIZE] {
+        (&mut self.0[0x100..0x10100]).try_into().unwrap()
+    }
+
+    fn reset(&mut self, registers: crate::tad_apu::ResetRegisters) {
+        self.0[0x25..0x27].copy_from_slice(&registers.pc.to_le_bytes());
+        self.0[0x27] = registers.a;
+        self.0[0x28] = registers.x;
+        self.0[0x29] = registers.y;
+        self.0[0x2a] = registers.psw;
+        self.0[0x2b] = registers.sp;
+
+        // Disable echo writes
+        self.0[0x10100 + S_DSP_FLG_REGISTER] = S_DSP_FLG_RESET;
+
+        self.0[0x10100 + S_DSP_ESA_REGISTER] = registers.esa;
+        self.0[0x10100 + S_DSP_EDL_REGISTER] = registers.edl;
+    }
+
+    // Unused functions
+
+    fn apuram(&self) -> &[u8; AUDIO_RAM_SIZE] {
+        unimplemented!()
+    }
+
+    fn program_counter(&self) -> u16 {
+        unimplemented!()
+    }
+
+    fn write_smp_register(&mut self, _addr: u8, _value: u8) {
+        unimplemented!()
+    }
+}
 
 pub fn export_spc_file(
     common_audio_data: &CommonAudioData,
     song_data: &SongData,
-) -> Result<Vec<u8>, ExportSpcFileError> {
-    let song_data_addr = common_audio_data.min_song_data_addr();
+) -> Result<Box<[u8]>, LoadSongError> {
+    let mut spc_file = SpcFile(Box::new([0; SPC_FILE_SIZE]));
 
-    let common_audio_data = common_audio_data.data();
-    let metadata = song_data.metadata();
-    let song_duration = song_data.duration();
-    let song_data = song_data.data();
-
-    let echo_buffer = &metadata.echo_buffer;
-
-    let song_end_addr = usize::from(song_data_addr) + song_data.len();
-    let echo_buffer_size = echo_buffer.buffer_size();
-
-    if song_end_addr + echo_buffer_size > AUDIO_RAM_SIZE {
-        return Err(ExportSpcFileError::TooMuchData {
-            common: common_audio_data.len(),
-            song: song_data.len(),
-            echo: echo_buffer_size,
-        });
-    }
-
-    // song_data_addr should be even, the loader will always transfer an even number of bytes.
-    assert!(song_data_addr % 2 == 0);
-    assert!(song_end_addr <= echo_buffer.buffer_addr().into());
-
-    let mut out = vec![0; SPC_FILE_SIZE];
-
-    // Header
+    // Update Header
     {
-        let header = &mut out[0..0x100];
+        let header = &mut spc_file.0[0..0x100];
+        let metadata = song_data.metadata();
+        let song_duration = song_data.duration();
 
         header[0..33].copy_from_slice(b"SNES-SPC700 Sound File Data v0.30");
         header[0x21] = 26;
@@ -115,16 +125,7 @@ pub fn export_spc_file(
         header[0x23] = 26; // ID666 tag
         header[0x24] = 30; // file version
 
-        // SPC700 Registers
-        // PC
-        header[0x25..0x27].copy_from_slice(&addresses::DRIVER_CODE.to_le_bytes());
-        // SP
-        header[0x2b] = 0xff;
-        // Ignoring remaining registers
-
-        // ID666 tags
-        // ::TODO add more ID666 tags::
-        // ::TODO parse date from `metadata`::
+        // SPC700 and DSP registers set in `load_song_to_apu` via `SpcFile::reset()`
 
         // Title of song
         write_id666_tag(header, 0x2e, 0x20, metadata.title.as_deref());
@@ -145,46 +146,17 @@ pub fn export_spc_file(
         write_id666_number_safe(header, 0xac, 5, fadeout_length);
     }
 
-    // Audio-RAM contents
-    {
-        const LOADER_DATA_TYPE_ADDR: usize = addresses::LOADER_DATA_TYPE as usize;
-
-        let spc_ram = &mut out[0x100..0x10100];
-        let mut write_spc_ram = |addr: u16, data: &[u8]| {
-            let addr = usize::from(addr);
-            spc_ram[addr..addr + data.len()].copy_from_slice(data);
-        };
-
-        write_spc_ram(addresses::DRIVER_CODE, audio_driver::AUDIO_DRIVER);
-        write_spc_ram(addresses::COMMON_DATA, common_audio_data);
-
-        write_spc_ram(song_data_addr, song_data);
-
-        write_spc_ram(addresses::SONG_PTR, &song_data_addr.to_le_bytes());
-
-        // Set the loader flags
-        spc_ram[LOADER_DATA_TYPE_ADDR] = LoaderDataType {
-            stereo_flag: true,
+    load_song_to_apu(
+        &mut spc_file,
+        common_audio_data,
+        song_data,
+        common_audio_data.min_song_data_addr(),
+        LoaderDataType {
             play_song: true,
+            stereo_flag: true,
             skip_echo_buffer_reset: true,
-        }
-        .driver_value();
+        },
+    )?;
 
-        // Replace loader with a `STOP` instructions
-        spc_ram[usize::from(addresses::LOADER)] = 0xff;
-    }
-
-    // S-DSP registers
-    {
-        let dsp_registers = &mut out[0x10100..0x10180];
-
-        // Disable echo writes
-        dsp_registers[S_DSP_FLG_REGISTER] = S_DSP_FLG_RESET;
-
-        // Setup the echo buffer
-        dsp_registers[S_DSP_ESA_REGISTER] = echo_buffer.esa_register();
-        dsp_registers[S_DSP_EDL_REGISTER] = echo_buffer.edl_register();
-    }
-
-    Ok(out)
+    Ok(spc_file.0)
 }

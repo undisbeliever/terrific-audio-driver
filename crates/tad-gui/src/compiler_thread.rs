@@ -26,7 +26,7 @@ use compiler::data::{load_text_file_with_limit, DefaultSfxFlags, LoopSetting, Te
 use compiler::driver_constants::COMMON_DATA_BYTES_PER_SOUND_EFFECT;
 use compiler::envelope::Envelope;
 use compiler::errors::{
-    self, BrrError, CommonAudioDataErrors, ExportSpcFileError, MmlPrefixError, ProjectFileErrors,
+    self, BrrError, CommonAudioDataErrors, LoadSongError, MmlPrefixError, ProjectFileErrors,
     SongTooLargeError,
 };
 use compiler::mml::compile_mml_prefix;
@@ -183,7 +183,7 @@ pub enum CompilerOutput {
     LargestSongSize(SongAramSize),
 
     // The result of the last `ToCompiler::ExportSongToSpcFile` operation
-    SpcFileResult(Result<(String, Vec<u8>), SpcFileError>),
+    SpcFileResult(Result<(String, Box<[u8]>), SpcFileError>),
 
     SampleAnalysis(Result<SampleAnalysis, BrrError>),
 }
@@ -325,7 +325,7 @@ pub enum SpcFileError {
     InvalidSong,
     NoSamples,
     CommonAudioDataError(CommonAudioDataErrors),
-    Spc(ExportSpcFileError),
+    Spc(LoadSongError),
 }
 
 impl std::fmt::Display for SpcFileError {
@@ -1210,7 +1210,7 @@ impl SongCompiler {
         id: ItemId,
         pf_songs: &IList<data::Song>,
         sd: &Option<SongDependencies>,
-    ) -> Result<(String, Vec<u8>), SpcFileError> {
+    ) -> Result<(String, Box<[u8]>), SpcFileError> {
         let common_audio_data = match sd {
             None => return Err(SpcFileError::NoSamples),
             Some(sd) => {

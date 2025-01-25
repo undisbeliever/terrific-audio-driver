@@ -22,6 +22,7 @@ use crate::mml::MmlPrefixData;
 use crate::songs::Channel as SongChannel;
 use crate::songs::SongData;
 use crate::subroutines::Subroutine;
+use crate::tad_apu::ApuEmulator;
 use crate::time::TickClock;
 use crate::time::TickCounter;
 
@@ -1530,7 +1531,7 @@ where
         self.global.echo.edl
     }
 
-    pub fn write_to_emulator(&self, emu: &mut impl Emulator) {
+    pub fn write_to_emulator(&self, emu: &mut impl ApuEmulator) {
         let common =
             CommonAudioDataSoA::new(&self.common_audio_data, self.song_addr, self.stereo_flag);
 
@@ -1879,15 +1880,9 @@ fn unused_channel(channel_index: usize) -> Channel {
     }
 }
 
-pub trait Emulator {
-    fn apuram_mut(&mut self) -> &mut [u8; 0x10000];
-    fn write_smp_register(&mut self, addr: u8, value: u8);
-    fn program_counter(&self) -> u16;
-
-    // CAUTION: might return true when program_counter() at the start or end of _process_sfx_channels__inline().
-    fn is_pc_in_mainloop(&self) -> bool {
-        addresses::MAIN_LOOP_CODE_RANGE.contains(&self.program_counter())
-    }
+// CAUTION: might return true when program_counter() at the start or end of _process_sfx_channels__inline().
+fn is_emu_pc_in_mainloop(emu: &mut impl ApuEmulator) -> bool {
+    addresses::MAIN_LOOP_CODE_RANGE.contains(&emu.program_counter())
 }
 
 /// Writes `InterpreterOutput` to the emulator.
@@ -1899,12 +1894,12 @@ pub trait Emulator {
 ///
 /// SAFETY: panics if the audio driver is not the paused state
 impl InterpreterOutput {
-    fn write_to_emulator(&self, emu: &mut impl Emulator) {
+    fn write_to_emulator(&self, emu: &mut impl ApuEmulator) {
         // MUST NOT modify sound effect channels.
         //
-        // (pc_in_mainloop() can return true if in `_process_sfx_channels__inline()`)
+        // (is_emu_pc_in_mainloop() can return true if in `_process_sfx_channels__inline()`)
 
-        if !emu.is_pc_in_mainloop() {
+        if !is_emu_pc_in_mainloop(emu) {
             panic!(
                 "audio driver is not paused (it might processing music channels or an IO command)"
             );

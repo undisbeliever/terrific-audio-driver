@@ -7,35 +7,21 @@
 #![allow(clippy::assertions_on_constants)]
 
 use brr::{BrrSample, SAMPLES_PER_BLOCK};
-use compiler::audio_driver;
-use compiler::bytecode_interpreter;
-use compiler::bytecode_interpreter::Emulator;
 use compiler::bytecode_interpreter::SongInterpreter;
 use compiler::common_audio_data::ArcCadWithSfxBufferInAram;
 use compiler::common_audio_data::CommonAudioData;
 use compiler::common_audio_data::CommonAudioDataWithSfxBuffer;
-use compiler::driver_constants::AUDIO_RAM_SIZE;
-use compiler::driver_constants::N_CHANNELS;
-use compiler::driver_constants::N_DSP_VOICES;
-use compiler::driver_constants::N_MUSIC_CHANNELS;
-use compiler::driver_constants::SONG_HEADER_ECHO_EDL;
-use compiler::driver_constants::{
-    addresses, io_commands, LoaderDataType, FIRST_SFX_CHANNEL, IO_COMMAND_I_MASK, IO_COMMAND_MASK,
-    N_SFX_CHANNELS,
-};
+use compiler::driver_constants::{io_commands, AUDIO_RAM_SIZE, N_DSP_VOICES, N_MUSIC_CHANNELS};
 use compiler::mml::MmlPrefixData;
 use compiler::songs::{blank_song, SongData};
 use compiler::sound_effects::CompiledSoundEffect;
 use compiler::time::TickCounter;
 use compiler::Pan;
 
-use sdl2::Sdl;
-use shvc_sound_emu::ShvcSoundEmu;
-
 extern crate sdl2;
 use sdl2::audio::{AudioCallback, AudioDevice, AudioSpecDesired};
+use sdl2::Sdl;
 
-use std::ops::Range;
 use std::sync::{mpsc, Arc, Mutex};
 use std::thread;
 use std::time::Duration;
@@ -198,7 +184,7 @@ struct RingBuffer {
 
 impl RingBuffer {
     const SDL_BUFFER_SAMPLES: usize = 2048;
-    const EMU_BUFFER_SAMPLES: usize = ShvcSoundEmu::AUDIO_BUFFER_SAMPLES;
+    const EMU_BUFFER_SAMPLES: usize = tad_emu::TadEmulator::AUDIO_BUFFER_SAMPLES;
     const BUFFER_SAMPLES: usize = Self::SDL_BUFFER_SAMPLES + Self::EMU_BUFFER_SAMPLES * 2;
 
     const BUFFER_SIZE: usize = Self::BUFFER_SAMPLES * 2;
@@ -303,7 +289,7 @@ impl AudioCallback for RingBuffer {
 }
 
 // Returns true if any sound is output by the emulator
-fn fill_ring_buffer_emu(emu: &mut TadEmu, playback: &mut AudioDevice<RingBuffer>) -> bool {
+fn fill_ring_buffer_emu(emu: &mut TadState, playback: &mut AudioDevice<RingBuffer>) -> bool {
     // Do not emulate the next audio chunk if the ring buffer is full,
     // which can happen if an SDL audio callback occurs in the middle of the last `fill_ring_buffer()` call.
     //
@@ -400,21 +386,6 @@ impl<'a> BrrSampleDecoder<'a> {
     }
 }
 
-struct EmulatorWrapper<'a>(&'a mut ShvcSoundEmu);
-impl bytecode_interpreter::Emulator for EmulatorWrapper<'_> {
-    fn apuram_mut(&mut self) -> &mut [u8; 0x10000] {
-        self.0.apuram_mut()
-    }
-
-    fn write_smp_register(&mut self, addr: u8, value: u8) {
-        self.0.write_smp_register(addr, value);
-    }
-
-    fn program_counter(&self) -> u16 {
-        self.0.program_counter()
-    }
-}
-
 enum AudioDataState {
     NotLoaded,
     CommonDataOutOfDate, // Audio is still platying
@@ -491,8 +462,8 @@ enum SfxQueue {
     PlaySfx(SfxId, Pan),
 }
 
-struct TadEmu {
-    emu: ShvcSoundEmu,
+struct TadState {
+    emu: tad_emu::TadEmulator,
 
     blank_song: Arc<SongData>,
 
@@ -503,20 +474,15 @@ struct TadEmu {
 
     data_state: AudioDataState,
     song_id: Option<ItemId>,
-    song_data_addr: Option<u16>,
     bc_interpreter: Option<SongInterpreter<SiCad, Arc<SongData>>>,
 
-    previous_command: u8,
     sfx_queue: SfxQueue,
 }
 
-impl TadEmu {
+impl TadState {
     fn new() -> Self {
-        // No IPL ROM
-        let iplrom = [0; 64];
-
         Self {
-            emu: ShvcSoundEmu::new(&iplrom),
+            emu: tad_emu::TadEmulator::new(),
             blank_song: Arc::new(blank_song()),
             stereo_flag: StereoFlag::Stereo,
             cad_no_sfx: None,
@@ -525,8 +491,6 @@ impl TadEmu {
             data_state: AudioDataState::NotLoaded,
             bc_interpreter: None,
             song_id: None,
-            song_data_addr: None,
-            previous_command: 0,
             sfx_queue: SfxQueue::None,
         }
     }
@@ -698,11 +662,8 @@ impl TadEmu {
         song_skip: SongSkip,
         music_channels_mask: MusicChannelsMask,
     ) -> Result<(), ()> {
-        const LOADER_DATA_TYPE_ADDR: usize = addresses::LOADER_DATA_TYPE as usize;
-
         self.data_state = AudioDataState::NotLoaded;
         self.song_id = None;
-        self.song_data_addr = None;
         self.bc_interpreter = None;
 
         self.sfx_queue = SfxQueue::None;
@@ -715,10 +676,6 @@ impl TadEmu {
             AudioDataState::SongAndSfx(cad, sd) => (&cad.common_audio_data, sd.as_ref()),
             AudioDataState::SongWithSfxBuffer(cad, sd) => (cad.common_data_ref(), sd.as_ref()),
         };
-
-        let song_data = song.data();
-        let common_data = common_audio_data.data();
-        let echo_buffer = &song.metadata().echo_buffer;
 
         let stereo_flag = match self.stereo_flag {
             StereoFlag::Stereo => true,
@@ -738,100 +695,25 @@ impl TadEmu {
             stereo_flag,
         )?;
 
-        let apuram = self.emu.apuram_mut();
-
-        let mut write_spc_ram = |addr: u16, data: &[u8]| {
-            let addr = usize::from(addr);
-            apuram[addr..addr + data.len()].copy_from_slice(data);
-        };
-
-        // Load driver
-        write_spc_ram(addresses::LOADER, audio_driver::LOADER);
-        write_spc_ram(addresses::DRIVER_CODE, audio_driver::AUDIO_DRIVER);
-
-        write_spc_ram(addresses::COMMON_DATA, common_data);
-        write_spc_ram(addresses::SONG_PTR, &song_data_addr.to_le_bytes());
-        write_spc_ram(song_data_addr, song_data);
-
-        // Reset echo buffer
-        let eb_start = usize::from(echo_buffer.buffer_addr());
-        let eb_end = eb_start + echo_buffer.buffer_size();
-        apuram[eb_start..eb_end].fill(0);
-
-        // Set loader flags
-        apuram[LOADER_DATA_TYPE_ADDR] = LoaderDataType {
-            stereo_flag,
-            play_song: false,
-            skip_echo_buffer_reset: true,
-        }
-        .driver_value();
-
-        // The echo buffer registers must be setup BEFORE the emulator processes instructions.
-        // Otherwise the audio sounds weird.
-        let (esa, edl) = match &self.bc_interpreter {
-            Some(bci) => {
-                apuram[usize::from(song_data_addr) + SONG_HEADER_ECHO_EDL] = bci.song_header_edl();
-
-                (bci.esa_register(), bci.edl_register())
-            }
-            None => (echo_buffer.esa_register(), echo_buffer.edl_register()),
-        };
-
-        self.emu.reset(shvc_sound_emu::ResetRegisters {
-            pc: addresses::DRIVER_CODE,
-            a: 0,
-            x: 0,
-            y: 0,
-            psw: 0,
-            sp: 0xff,
-            esa,
-            edl,
-        });
-
-        // Wait for the audio-driver to finish initialization
-        let mut emu_wrapper = EmulatorWrapper(&mut self.emu);
-        while !emu_wrapper.is_pc_in_mainloop() {
-            emu_wrapper.0.emulate();
-        }
-
-        if let Some(bci) = &self.bc_interpreter {
-            bci.write_to_emulator(&mut emu_wrapper);
-        }
-
-        self.set_music_channels_mask(music_channels_mask);
-
-        // Unpause the audio driver
-        self.emu.write_io_ports([io_commands::UNPAUSE, 0, 0, 0]);
-
-        self.previous_command = io_commands::UNPAUSE;
+        self.emu
+            .load_song_skip(
+                common_audio_data,
+                song,
+                song_data_addr,
+                stereo_flag,
+                &self.bc_interpreter,
+                music_channels_mask.0,
+            )
+            .map_err(|_| ())?;
 
         self.data_state = data_state;
         self.song_id = song_id;
-        self.song_data_addr = Some(song_data_addr);
 
         Ok(())
     }
 
-    fn is_io_command_acknowledged(&self) -> bool {
-        self.emu.read_io_ports()[0] == self.previous_command
-    }
-
-    fn try_send_io_command(&mut self, command: u8, param1: u8, param2: u8) {
-        if self.is_io_command_acknowledged() {
-            let command = ((self.previous_command ^ u8::MAX) & IO_COMMAND_I_MASK)
-                | (command & IO_COMMAND_MASK);
-
-            self.emu.write_io_ports([command, param1, param2, 0]);
-            self.previous_command = command;
-        }
-    }
-
     fn set_music_channels_mask(&mut self, mask: MusicChannelsMask) {
-        let apuram = self.emu.apuram_mut();
-
-        apuram[addresses::IO_MUSIC_CHANNELS_MASK as usize] = mask.0;
-        // Keyoff muted channels
-        apuram[addresses::KEYOFF_SHADOW_MUSIC as usize] |= mask.0 ^ 0xff;
+        self.emu.set_music_channels_mask(mask.0);
     }
 
     fn queue_sound_effect(&mut self, sfx_id: SfxId, pan: Pan) {
@@ -857,17 +739,11 @@ impl TadEmu {
     }
 
     fn process_sfx_queue(&mut self) {
-        const COMMON_DATA_ADDR_H: u8 = (addresses::COMMON_DATA >> 8) as u8;
-        const SFX_SOA_INSTRUCTION_PTR_H: Range<usize> = Range {
-            start: addresses::CHANNEL_INSTRUCTION_PTR_H as usize + FIRST_SFX_CHANNEL,
-            end: addresses::CHANNEL_INSTRUCTION_PTR_H as usize + FIRST_SFX_CHANNEL + N_SFX_CHANNELS,
-        };
-
         match &self.sfx_queue {
             SfxQueue::None => (),
             SfxQueue::PlaySfx(sfx_id, pan) => {
-                if self.is_io_command_acknowledged() {
-                    self.try_send_io_command(
+                if self.emu.is_io_command_acknowledged() {
+                    self.emu.try_send_io_command(
                         io_commands::PLAY_SOUND_EFFECT,
                         sfx_id.value(),
                         pan.as_u8(),
@@ -884,23 +760,10 @@ impl TadEmu {
                     }
                 };
 
-                if !self.is_io_command_acknowledged() {
-                    return;
-                }
-
-                let apuram = self.emu.apuram_mut();
-
-                let active_sfx_channels = apuram[SFX_SOA_INSTRUCTION_PTR_H]
-                    .iter()
-                    .any(|&pc_h| pc_h > COMMON_DATA_ADDR_H);
-
-                if active_sfx_channels {
-                    // sfx_buffer can only onld one sound effect at a time
-                    self.try_send_io_command(io_commands::STOP_SOUND_EFFECTS, 0, pan.as_u8());
-                } else {
-                    if common_data.load_sfx(sfx, apuram).is_ok() {
-                        self.try_send_io_command(io_commands::PLAY_SOUND_EFFECT, 0, pan.as_u8());
-                    }
+                if self
+                    .emu
+                    .try_load_sfx_buffer_and_play_sfx(common_data, sfx, *pan)
+                {
                     self.sfx_queue = SfxQueue::None;
                 }
             }
@@ -921,46 +784,13 @@ impl TadEmu {
 
     /// Returns None if the song and sound effects have finished
     fn read_voice_positions(&mut self) -> Option<AudioMonitorData> {
-        const ALL_CHANNELS_INSTRUCTION_PTR_H_RANGE: Range<usize> = Range {
-            start: addresses::CHANNEL_INSTRUCTION_PTR_H as usize,
-            end: addresses::CHANNEL_INSTRUCTION_PTR_H as usize + N_CHANNELS,
-        };
-        const COMMON_DATA_ADDR_H: u8 = (addresses::COMMON_DATA >> 8) as u8;
-
-        let song_addr = self.song_data_addr?;
-
-        let apuram = self.emu.apuram();
-
-        let music_channels_mask = apuram[addresses::IO_MUSIC_CHANNELS_MASK as usize];
-
-        let read_offsets = |addr_l: u16, addr_h: u16| -> [Option<u16>; N_MUSIC_CHANNELS] {
-            std::array::from_fn(|i| {
-                const _: () = assert!(N_MUSIC_CHANNELS <= 8);
-
-                if music_channels_mask & (1 << i) != 0 {
-                    let word = u16::from_le_bytes([
-                        apuram[usize::from(addr_l) + i],
-                        apuram[usize::from(addr_h) + i],
-                    ]);
-                    word.checked_sub(song_addr)
-                } else {
-                    None
-                }
-            })
-        };
-
-        let voice_instruction_ptrs = read_offsets(
-            addresses::CHANNEL_INSTRUCTION_PTR_L,
-            addresses::CHANNEL_INSTRUCTION_PTR_H,
-        );
+        let s = self.emu.get_music_state()?;
 
         let voice_return_inst_ptrs = match &mut self.bc_interpreter {
             Some(b) => {
-                const STC: usize = addresses::SONG_TICK_COUNTER as usize;
-
                 // Assumes number of ticks since the last read was < 256;
                 let bc_tick_counter_l = b.tick_counter().value().to_le_bytes()[0];
-                let emu_tick_counter_l = apuram[STC];
+                let emu_tick_counter_l = s.song_tick_counter.to_le_bytes()[0];
 
                 let ticks_passed = emu_tick_counter_l.wrapping_sub(bc_tick_counter_l);
                 if ticks_passed > 0 {
@@ -969,7 +799,7 @@ impl TadEmu {
                 }
                 debug_assert_eq!(
                     b.tick_counter().value() as u16,
-                    u16::from_le_bytes(apuram[STC..STC + 2].try_into().unwrap()),
+                    s.song_tick_counter,
                     "Bytecode interpreter desync"
                 );
 
@@ -980,19 +810,11 @@ impl TadEmu {
             None => Default::default(),
         };
 
-        let any_channels_active = apuram[ALL_CHANNELS_INSTRUCTION_PTR_H_RANGE]
-            .iter()
-            .any(|&inst_ptr_h| inst_ptr_h > COMMON_DATA_ADDR_H);
-
-        if any_channels_active {
-            Some(AudioMonitorData {
-                song_id: self.song_id,
-                voice_instruction_ptrs,
-                voice_return_inst_ptrs,
-            })
-        } else {
-            None
-        }
+        Some(AudioMonitorData {
+            song_id: self.song_id,
+            voice_instruction_ptrs: s.voice_instruction_ptrs,
+            voice_return_inst_ptrs,
+        })
     }
 }
 
@@ -1022,7 +844,7 @@ struct AudioThread {
 
     sdl_context: Sdl,
 
-    tad: TadEmu,
+    tad: TadState,
 }
 
 impl AudioThread {
@@ -1039,7 +861,7 @@ impl AudioThread {
             monitor,
             sdl_context: sdl2::init().unwrap(),
 
-            tad: TadEmu::new(),
+            tad: TadState::new(),
         }
     }
 

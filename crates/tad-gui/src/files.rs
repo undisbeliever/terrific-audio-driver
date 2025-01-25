@@ -598,7 +598,7 @@ pub fn open_sample_sample_dialog(
     }
 }
 
-pub fn save_spc_file_dialog(name: String, data: Vec<u8>) {
+pub fn save_spc_file_dialog(name: String, data: Box<[u8]>) {
     let path = save_file_dialog(
         &format!("Export {} to an .spc file", name),
         SPC_FILTER,

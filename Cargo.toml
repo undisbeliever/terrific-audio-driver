@@ -5,6 +5,7 @@ members = [
     "crates/brr",
     "crates/compiler",
     "crates/shvc-sound-emu",
+    "crates/tad-emu",
 
     "crates/tad-compiler",
     "crates/tad-gui",
@@ -40,6 +41,7 @@ publish = false
 brr = { path = "./crates/brr", version = "0.0.0" }
 compiler = { path = "./crates/compiler", version = "0.0.0", features = [] }
 shvc-sound-emu = { path = "./crates/shvc-sound-emu", version = "0.0.0" }
+tad-emu = { path = "./crates/tad-emu", version = "0.0.0" }
 
 # Local binary crates
 tad-compiler = { path = "./crates/tad-compiler", version = "0.0.0" }

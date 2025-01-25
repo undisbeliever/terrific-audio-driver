@@ -9,14 +9,10 @@ use std::ops::Range;
 use std::str::FromStr;
 use std::sync::OnceLock;
 
-use compiler::audio_driver;
 use compiler::common_audio_data::{build_common_audio_data, CommonAudioData};
 use compiler::data;
 use compiler::data::{validate_sfx_export_order, DefaultSfxFlags, Instrument, Name};
-use compiler::driver_constants::{
-    addresses, io_commands, LoaderDataType, FIRST_SFX_CHANNEL, IO_COMMAND_I_MASK, IO_COMMAND_MASK,
-    N_SFX_CHANNELS,
-};
+use compiler::driver_constants::{addresses, io_commands, FIRST_SFX_CHANNEL, N_SFX_CHANNELS};
 use compiler::envelope::{Envelope, Gain};
 use compiler::notes::Octave;
 use compiler::samples::combine_samples;
@@ -26,7 +22,7 @@ use compiler::sound_effects::{
 };
 use compiler::Pan;
 
-use shvc_sound_emu::ShvcSoundEmu;
+use tad_emu::TadEmulator;
 
 #[derive(Clone)]
 struct TestSoundEffect {
@@ -398,56 +394,18 @@ fn low_priority_one_channel_uninterruptible() {
 
 /// Audio driver emulator
 struct Emu {
-    emu: ShvcSoundEmu,
+    emu: TadEmulator,
     sfx_addrs: Vec<u16>,
-    previous_command: u8,
 }
 
 impl Emu {
     const STEREO_FLAG: bool = true;
 
     pub fn new(common_audio_data: &CommonAudioData) -> Emu {
-        const LOADER_DATA_TYPE_ADDR: usize = addresses::LOADER_DATA_TYPE as usize;
+        let mut emu = TadEmulator::new();
 
-        let mut emu = ShvcSoundEmu::new(&[0; 64]);
-
-        let common_data = common_audio_data.data();
-        let song_data = audio_driver::BLANK_SONG;
-        let song_data_addr = common_audio_data.min_song_data_addr();
-
-        let apuram = emu.apuram_mut();
-
-        let mut write_spc_ram = |addr: u16, data: &[u8]| {
-            let addr = usize::from(addr);
-            apuram[addr..addr + data.len()].copy_from_slice(data);
-        };
-
-        // Load driver
-        write_spc_ram(addresses::LOADER, audio_driver::LOADER);
-        write_spc_ram(addresses::DRIVER_CODE, audio_driver::AUDIO_DRIVER);
-
-        write_spc_ram(addresses::COMMON_DATA, common_data);
-        write_spc_ram(addresses::SONG_PTR, &song_data_addr.to_le_bytes());
-        write_spc_ram(song_data_addr, song_data);
-
-        // Set loader flags
-        apuram[LOADER_DATA_TYPE_ADDR] = LoaderDataType {
-            stereo_flag: Self::STEREO_FLAG,
-            play_song: true,
-            skip_echo_buffer_reset: true,
-        }
-        .driver_value();
-
-        emu.reset(shvc_sound_emu::ResetRegisters {
-            pc: addresses::DRIVER_CODE,
-            a: 0,
-            x: 0,
-            y: 0,
-            psw: 0,
-            sp: 0xff,
-            esa: 0xff,
-            edl: 0,
-        });
+        emu.load_cad_and_blank_song(common_audio_data, None, Self::STEREO_FLAG)
+            .unwrap();
 
         let mut sfx_addrs = common_audio_data.sound_effect_addresses();
         sfx_addrs.push(common_audio_data.sfx_bytecode_addr_range().end);
@@ -455,11 +413,7 @@ impl Emu {
         // Assert `sfx_addrs` sorted
         assert!(sfx_addrs.windows(2).all(|w| w[0] <= w[1]));
 
-        Emu {
-            emu,
-            sfx_addrs,
-            previous_command: 0,
-        }
+        Emu { emu, sfx_addrs }
     }
 
     pub fn sfx_channel_instruction_ptr(&self, i: usize) -> u16 {
@@ -511,22 +465,12 @@ impl Emu {
         }
     }
 
-    fn is_io_command_acknowledged(&self) -> bool {
-        self.emu.read_io_ports()[0] == self.previous_command
-    }
-
     fn emu_and_send_command(&mut self, command: u8, param1: u8, param2: u8) {
-        while !self.is_io_command_acknowledged() {
+        while !self.emu.try_send_io_command(command, param1, param2) {
             self.emu.emulate();
         }
 
-        let command =
-            ((self.previous_command ^ u8::MAX) & IO_COMMAND_I_MASK) | (command & IO_COMMAND_MASK);
-
-        self.emu.write_io_ports([command, param1, param2, 0]);
-        self.previous_command = command;
-
-        while !self.is_io_command_acknowledged() {
+        while !self.emu.is_io_command_acknowledged() {
             self.emu.emulate();
         }
     }

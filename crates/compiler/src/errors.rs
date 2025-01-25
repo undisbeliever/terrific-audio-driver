@@ -670,12 +670,13 @@ pub struct SongTooLargeError {
 }
 
 #[derive(Debug)]
-pub enum ExportSpcFileError {
+pub enum LoadSongError {
     TooMuchData {
         common: usize,
         song: usize,
         echo: usize,
     },
+    InvalidSongAddress,
 }
 
 #[derive(Debug, PartialEq)]
@@ -1898,12 +1899,13 @@ impl Display for SongTooLargeError {
     }
 }
 
-impl Display for ExportSpcFileError {
+impl Display for LoadSongError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
             Self::TooMuchData { common, song, echo } => {
                 write!(f, "cannot fit data in audio-ram (driver: {} bytes, common_audio_data: {} bytes, song data: {} bytes, echo buffer: {} bytes", addresses::COMMON_DATA, common, song, echo)
             }
+            Self::InvalidSongAddress => write!(f, "cannot load song: invalid song address"),
         }
     }
 }

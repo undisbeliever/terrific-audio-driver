@@ -8,88 +8,34 @@
 //!    * test_bc_interpreter is slow and thorough, emulating the first few minutes of every song in the project file.
 
 use compiler::{
-    audio_driver,
     bytecode_interpreter::{self, SongInterpreter},
     common_audio_data::{build_common_audio_data, CommonAudioData},
     data::{load_project_file, load_text_file_with_limit, validate_project_file_names},
     driver_constants::{
-        addresses, io_commands, LoaderDataType, BC_TOTAL_STACK_SIZE, ECHO_VARIABLES_SIZE,
-        N_MUSIC_CHANNELS, S_SMP_TIMER_0_REGISTER,
+        addresses, io_commands, BC_TOTAL_STACK_SIZE, ECHO_VARIABLES_SIZE, N_MUSIC_CHANNELS,
+        S_SMP_TIMER_0_REGISTER,
     },
     mml::compile_mml,
     samples::build_sample_and_instrument_data,
     songs::SongData,
     sound_effects::{blank_compiled_sound_effects, CompiledSfxSubroutines},
+    tad_apu::ApuEmulator,
     time::TickCounter,
 };
-use shvc_sound_emu::ShvcSoundEmu;
+use tad_emu::TadEmulator;
 
 use std::path::PathBuf;
-
-fn load_song(
-    common_audio_data: &CommonAudioData,
-    song: &SongData,
-    song_data_addr: u16,
-    stereo_flag: bool,
-) -> ShvcSoundEmu {
-    const LOADER_DATA_TYPE_ADDR: usize = addresses::LOADER_DATA_TYPE as usize;
-
-    let mut emu = ShvcSoundEmu::new(&[0; 64]);
-
-    let common_data = common_audio_data.data();
-    let song_data = song.data();
-    let echo_buffer = &song.metadata().echo_buffer;
-
-    let apuram = emu.apuram_mut();
-
-    apuram.fill(bytecode_interpreter::UNINITIALISED);
-
-    let mut write_spc_ram = |addr: u16, data: &[u8]| {
-        let addr = usize::from(addr);
-        apuram[addr..addr + data.len()].copy_from_slice(data);
-    };
-
-    // Load driver
-    write_spc_ram(addresses::LOADER, audio_driver::LOADER);
-    write_spc_ram(addresses::DRIVER_CODE, audio_driver::AUDIO_DRIVER);
-
-    write_spc_ram(addresses::COMMON_DATA, common_data);
-    write_spc_ram(addresses::SONG_PTR, &song_data_addr.to_le_bytes());
-    write_spc_ram(song_data_addr, song_data);
-
-    // Reset echo buffer
-    let eb_start = usize::from(echo_buffer.buffer_addr());
-    assert_eq!(eb_start + echo_buffer.buffer_size(), apuram.len());
-    apuram[eb_start..].fill(0);
-
-    // Set loader flags
-    apuram[LOADER_DATA_TYPE_ADDR] = LoaderDataType {
-        stereo_flag,
-        play_song: false,
-        skip_echo_buffer_reset: true,
-    }
-    .driver_value();
-
-    emu.reset(shvc_sound_emu::ResetRegisters {
-        pc: addresses::DRIVER_CODE,
-        a: 0,
-        x: 0,
-        y: 0,
-        psw: 0,
-        sp: 0xff,
-        esa: echo_buffer.esa_register(),
-        edl: echo_buffer.edl_register(),
-    });
-
-    emu
-}
 
 #[derive(Clone)]
 struct DummyEmu {
     apuram: [u8; 0x10000],
 }
 
-impl bytecode_interpreter::Emulator for DummyEmu {
+impl ApuEmulator for DummyEmu {
+    fn apuram(&self) -> &[u8; compiler::driver_constants::AUDIO_RAM_SIZE] {
+        &self.apuram
+    }
+
     fn apuram_mut(&mut self) -> &mut [u8; 0x10000] {
         &mut self.apuram
     }
@@ -101,6 +47,10 @@ impl bytecode_interpreter::Emulator for DummyEmu {
     // HACK: Always return a mainloop() address
     fn program_counter(&self) -> u16 {
         addresses::MAINLOOP_CODE
+    }
+
+    fn reset(&mut self, _registers: compiler::tad_apu::ResetRegisters) {
+        unimplemented!()
     }
 }
 
@@ -118,7 +68,7 @@ fn mask_channel_soa(
 fn assert_bc_intrepreter_matches_emu(
     to_test: &SongInterpreter<&CommonAudioData, &SongData>,
     dummy: &DummyEmu,
-    emu: &ShvcSoundEmu,
+    emu: &TadEmulator,
     tick_count: TickCounter,
 ) {
     let tick_count = tick_count.value();
@@ -358,7 +308,10 @@ fn test_bc_intrepreter(song: &SongData, common_audio_data: &CommonAudioData) {
     let ticks_to_test = song_ticks(song).clamp(TickCounter::new(192), TickCounter::new(0x8000))
         + TickCounter::new(30);
 
-    let mut emu = load_song(common_audio_data, song, song_addr, STEREO_FLAG);
+    let mut emu = TadEmulator::new();
+    emu.fill_apuram(bytecode_interpreter::UNINITIALISED);
+    emu.load_song(common_audio_data, song, None, STEREO_FLAG)
+        .unwrap();
 
     // Wait for the audio-driver to finish initialization
     emu.emulate();
@@ -370,22 +323,19 @@ fn test_bc_intrepreter(song: &SongData, common_audio_data: &CommonAudioData) {
 
     // Add a second limit, so it doesn't emulate a very very long (119 minute) song
     for _ in 0..1000 {
-        emu.write_io_ports([io_commands::UNPAUSE, 0, 0, 0]);
+        emu.try_send_io_command(io_commands::UNPAUSE, 0, 0);
         for _ in 0..17 {
             emu.emulate();
         }
 
+        assert!(emu.is_io_command_acknowledged(), "audio driver not playing");
+
         // Pausing the emulator ensures all bytecode instructions have completed
-        emu.write_io_ports([io_commands::PAUSE, 0, 0, 0]);
+        emu.try_send_io_command(io_commands::PAUSE, 0, 0);
         emu.emulate();
         emu.emulate();
 
-        // Confirm previous command was acknowledged by the audio driver.
-        assert_eq!(
-            emu.read_io_ports()[0],
-            io_commands::PAUSE,
-            "audio driver not paused"
-        );
+        assert!(emu.is_io_command_acknowledged(), "audio driver not paused");
 
         const STC: usize = addresses::SONG_TICK_COUNTER as usize;
         let tick_count = u16::from_le_bytes(emu.apuram()[STC..STC + 2].try_into().unwrap());

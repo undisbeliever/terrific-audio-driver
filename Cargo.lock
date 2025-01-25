@@ -177,7 +177,7 @@ dependencies = [
  "relative-path",
  "serde",
  "serde_json",
- "shvc-sound-emu",
+ "tad-emu",
 ]
 
 [[package]]
@@ -581,6 +581,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "tad-emu"
+version = "0.0.0"
+dependencies = [
+ "compiler",
+ "shvc-sound-emu",
+]
+
+[[package]]
 name = "tad-gui"
 version = "0.0.16"
 dependencies = [
@@ -590,8 +598,8 @@ dependencies = [
  "markdown",
  "regex",
  "sdl2",
- "shvc-sound-emu",
  "spectrum-analyzer",
+ "tad-emu",
 ]
 
 [[package]]

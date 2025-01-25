@@ -16,7 +16,7 @@ version.workspace = true
 # Local crates
 compiler = { workspace = true, features = ["mml_tracking"] }
 brr.workspace = true
-shvc-sound-emu.workspace = true
+tad-emu.workspace = true
 
 # External crates
 fltk.workspace = true
