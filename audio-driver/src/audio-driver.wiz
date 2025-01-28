@@ -347,6 +347,10 @@ in firstpage {
     var sfxMutedChannels : u8;
 
 
+    // The previous IO port command
+    var previousCommand : u8;
+
+
     // Channel variables that do not fit in zeropage
     namespace channelSoA {
         // Portamento PITCH speed
@@ -423,9 +427,6 @@ in firstpage {
         // NOTE: Adding `instPitchOffset` to the note to play is allowed to an can overflow.
         var instPitchOffset : [u8 ; N_CHANNELS];
     }
-
-    // The previous IO port command
-    var previousCommand : u8;
 }
 
 
@@ -684,14 +685,12 @@ func main() {
     x = pop();
 
 
-    // Skip echo buffer clear and `EDL` sleep if the SKIP_ECHO_BUFFER_RESET_BIT bit is set
+    // Clear the echo buffer and wait until the echo buffer can be safely written to.
     //
-    // WARNING: Skipping the `EDL` sleep can easily corrupt memory when echo writes are enabled.
-    //          This flag is MUST ONLY BE SET by the GUI, rust tests or spc export.
-    //
-    // (cannot use `bbs` instructions in wiz, using `mov1 c, addr, bit` instead)
-    carry = loaderDataType $ LoaderDataType.SKIP_ECHO_BUFFER_RESET_BIT;
-    if !carry {
+    // In the GUI, spc-export and unit-tests this block of code is patched out
+    // and replaced with a `JMP ClearEchoBufferEnd ; NOP ...`.
+ClearEchoBufferStart:
+    {
         // Clear the echo buffer
         // X = S-DSP ESA
         __clear_echo_buffer__inline(x);
@@ -704,6 +703,8 @@ func main() {
             a -= smp.counter_0;
         } while carry;
     }
+ClearEchoBufferEnd:
+
 
     // Enable echo write and unmute the DSP
     write_dsp(GlobalDspAddr.FLG, 0);

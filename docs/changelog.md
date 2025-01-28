@@ -9,6 +9,7 @@ Version 0.1.0
 
 **Breaking Changes**:
  * Subroutine file header is now MML containing sound effect subroutines
+ * Removed `SKIP_ECHO_BUFFER_RESET_BIT` from `LoaderDataType`
 
 Audio driver changes:
  * Stereo echo volume

@@ -103,7 +103,6 @@ impl TadEmulator {
             LoaderDataType {
                 stereo_flag,
                 play_song: true,
-                skip_echo_buffer_reset: true,
             },
         )?;
 
@@ -132,7 +131,6 @@ impl TadEmulator {
             LoaderDataType {
                 stereo_flag,
                 play_song: true,
-                skip_echo_buffer_reset: true,
             },
         )?;
 
@@ -165,7 +163,6 @@ impl TadEmulator {
             LoaderDataType {
                 stereo_flag,
                 play_song: false,
-                skip_echo_buffer_reset: true,
             },
         )?;
 

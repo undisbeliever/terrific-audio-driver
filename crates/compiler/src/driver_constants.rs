@@ -89,6 +89,8 @@ pub mod addresses {
         ECHO_VARIABLES,
         ECHO_DIRTY,
         MAX_EDL,
+        MAIN_CLEAR_ECHO_BUFFER_START,
+        MAIN_CLEAR_ECHO_BUFFER_END,
     );
 
     // MUST match `audio-driver/src/common_memmap.wiz`
@@ -116,6 +118,10 @@ pub mod addresses {
         (COMMON_DATA as usize + super::COMMON_DATA_HEADER_SIZE) & 0xff == 0,
         "BRR directory is not page aligned"
     );
+
+    const _: () = assert!(MAIN_CLEAR_ECHO_BUFFER_START > DRIVER_CODE);
+    const _: () = assert!(MAIN_CLEAR_ECHO_BUFFER_END < MAINLOOP_CODE);
+    const _: () = assert!(MAIN_CLEAR_ECHO_BUFFER_END > MAIN_CLEAR_ECHO_BUFFER_START);
 
     const _: () = assert!(
         MAINLOOP_CODE < PROCESS_MUSIC_CHANNELS_CODE,
@@ -181,10 +187,6 @@ pub struct LoaderDataType {
     pub stereo_flag: bool,
 
     pub play_song: bool,
-
-    // NOTE: `SkipEchoBufferReset` can corrupt memory if the internal S-DSP echo buffer state
-    // does not match the song's echo EDL/ESA register values.
-    pub skip_echo_buffer_reset: bool,
 }
 
 impl LoaderDataType {
@@ -197,9 +199,6 @@ impl LoaderDataType {
         }
         if self.play_song {
             o |= 1 << 6;
-        }
-        if self.skip_echo_buffer_reset {
-            o |= 1 << 3;
         }
 
         o

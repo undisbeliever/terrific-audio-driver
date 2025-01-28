@@ -64,18 +64,6 @@ namespace LoaderDataType {
     //
     // MUST NOT be set when loading code or common-audio-data.
     let PLAY_SONG_BIT = 6;
-
-
-    // If this bit is set, the echo buffer clear and `EDL` sleep will be skipped.
-    //
-    // NOT RECOMMENDED.
-    // This flag MUST ONLY be set by the GUI, rust tests or spc export.
-    // Enabling this flag can easily corrupt memory.
-    // Only use this flag if the S-DSP internal echo buffer state is set to the correct values.
-    // (ESA is based `EchoBufferSettings.maxEdl`, EDL is based on `EchoBufferSettings.edl`)
-    //
-    // This flag is used to reduce startup lag in exported .SPC files and the audio-driver GUI.
-    let SKIP_ECHO_BUFFER_RESET_BIT = 3;
 }
 
 

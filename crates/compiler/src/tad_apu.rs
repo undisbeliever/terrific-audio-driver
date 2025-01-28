@@ -1,4 +1,6 @@
 //! Terrific Audio Driver APU loader
+//!
+//! CAUTION: This loader patches out the loader and the echo buffer clear code
 
 // SPDX-FileCopyrightText: © 2025 Marcus Rowe <undisbeliever@gmail.com>
 //
@@ -9,6 +11,11 @@ use crate::common_audio_data::CommonAudioData;
 use crate::driver_constants::{addresses, LoaderDataType, AUDIO_RAM_SIZE};
 use crate::errors::LoadSongError;
 use crate::songs::SongData;
+
+use std::ops::Range;
+
+const SPC700_JMP_INSTRUCTION: u8 = 0x5f;
+const SPC700_STOP_INSTRUCTION: u8 = 0xff;
 
 pub struct ResetRegisters {
     pub pc: u16,
@@ -30,6 +37,22 @@ pub trait ApuEmulator {
     fn apuram_mut(&mut self) -> &mut [u8; AUDIO_RAM_SIZE];
     fn write_smp_register(&mut self, addr: u8, value: u8);
     fn reset(&mut self, registers: ResetRegisters);
+}
+
+fn patch_out_code_block_with_jmp(
+    apuram: &mut [u8; AUDIO_RAM_SIZE],
+    block: Range<u16>,
+    jump_addr: u16,
+) {
+    assert!(block.len() > 3);
+
+    let jmp_range = usize::from(block.start)..usize::from(block.start + 3);
+    let stop_range = usize::from(block.start + 3)..usize::from(block.end);
+
+    let jmp_addr = jump_addr.to_le_bytes();
+    apuram[jmp_range].copy_from_slice(&[SPC700_JMP_INSTRUCTION, jmp_addr[0], jmp_addr[1]]);
+
+    apuram[stop_range].fill(SPC700_STOP_INSTRUCTION);
 }
 
 fn load_apu(
@@ -76,7 +99,14 @@ fn load_apu(
     spc_ram[LOADER_DATA_TYPE_ADDR] = flags.driver_value();
 
     // Replace loader with a `STOP` instructions
-    spc_ram[usize::from(addresses::LOADER)] = 0xff;
+    spc_ram[usize::from(addresses::LOADER)] = SPC700_STOP_INSTRUCTION;
+
+    // Patch out the echo buffer clear code
+    patch_out_code_block_with_jmp(
+        spc_ram,
+        addresses::MAIN_CLEAR_ECHO_BUFFER_START..addresses::MAIN_CLEAR_ECHO_BUFFER_END,
+        addresses::MAIN_CLEAR_ECHO_BUFFER_END,
+    );
 
     apu.reset(ResetRegisters {
         pc: addresses::DRIVER_CODE,

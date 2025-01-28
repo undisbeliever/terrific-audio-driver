@@ -154,7 +154,6 @@ pub fn export_spc_file(
         LoaderDataType {
             play_song: true,
             stereo_flag: true,
-            skip_echo_buffer_reset: true,
         },
     )?;
 

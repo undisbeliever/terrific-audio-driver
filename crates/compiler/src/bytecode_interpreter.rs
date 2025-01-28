@@ -1956,7 +1956,6 @@ impl InterpreterOutput {
                 LoaderDataType {
                     stereo_flag: self.stereo_flag,
                     play_song: false,
-                    skip_echo_buffer_reset: false,
                 }
                 .driver_value(),
             );
