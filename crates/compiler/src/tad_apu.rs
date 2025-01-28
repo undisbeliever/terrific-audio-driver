@@ -69,6 +69,9 @@ fn load_apu(
 
     write_spc_ram(addresses::SONG_PTR, &song_addr.to_le_bytes());
 
+    // Clear echo buffer
+    spc_ram[echo_addr..].fill(0);
+
     // Set the loader flags
     spc_ram[LOADER_DATA_TYPE_ADDR] = flags.driver_value();
 
