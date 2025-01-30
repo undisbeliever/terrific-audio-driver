@@ -130,7 +130,6 @@ impl Exporter for PvExporter {
 
         writeln!(out, "Tad_Loader_SIZE = {}", ExportedBinFile::LOADER_SIZE)?;
         writeln!(out, "Tad_AudioDriver_SIZE = {}", ExportedBinFile::AUDIO_DRIVER_SIZE)?;
-        writeln!(out, "Tad_BlankSong_SIZE = {}", ExportedBinFile::BLANK_SONG_SIZE)?;
         writeln!(out)?;
         writeln!(out, ";; {}", ExportedBinFile::DATA_TABLE_DOCSTRING)?;
         writeln!(out, ";; {}", ExportedBinFile::DATA_TABLE_FOOTER_DOCSTRING)?;
@@ -165,11 +164,6 @@ impl Exporter for PvExporter {
                 "Tad_AudioDriver_Bin",
                 ExportedBinFile::AUDIO_DRIVER_OFFSET,
                 ExportedBinFile::AUDIO_DRIVER_SIZE,
-            )?;
-            incbin_label(
-                "Tad_BlankSong_Bin",
-                ExportedBinFile::BLANK_SONG_OFFSET,
-                ExportedBinFile::BLANK_SONG_SIZE,
             )?;
             incbin_label(
                 "Tad_DataTable",

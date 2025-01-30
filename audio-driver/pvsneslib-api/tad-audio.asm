@@ -1085,9 +1085,12 @@ _tad_loader_gotoNextBank__:
     bcs     +
         ; `loadAudioData` returned data with a non-zero size
     @WFL_UseBlankSong:
-        lda     #:Tad_BlankSong_Bin
-        ldx     #Tad_BlankSong_Bin
-        ldy     #Tad_BlankSong_SIZE
+        ; The blank song is a single zero byte.
+        ; ::HACK use the 3rd byte of `ldy #1` (which is `0x00`) for the blank song data::
+        ldy     #1
+    @_AfterLdy:
+        lda     #:@_AfterLdy
+        ldx     #@_AfterLdy - 1
     +
 
     ; STACK holds next state

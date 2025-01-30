@@ -113,19 +113,12 @@
 ;; Terrific Audio Driver spc700 driver (audio-driver.bin)
 .import Tad_AudioDriver_Bin, Tad_AudioDriver_SIZE
 
-;; A blank song to play when `Tad_LoadSong` input is 0 or invalid (blank-song.bin)
-.import Tad_BlankSong_Bin
-.importzp Tad_BlankSong_SIZE
-
 
 .assert Tad_Loader_SIZE > 64 && Tad_Loader_SIZE < 128, lderror, "Invalid Tad_Loader_Bin size"
 .assert .bankbyte(Tad_Loader_Bin) = .bankbyte(Tad_Loader_Bin + Tad_Loader_SIZE), lderror, "Tad_Loader_Bin does not fit inside a single bank"
 
 .assert Tad_AudioDriver_SIZE > $600 && Tad_AudioDriver_SIZE < $d00, lderror, "Invalid Tad_AudioDriver_Bin size"
 ; `Tad_AudioDriver_Bin` can cross bank boundaries
-
-.assert Tad_BlankSong_SIZE = 1, lderror, "Invalid Tad_BlankSong_Bin size"
-; `Tad_BlankSong_Bin` can cross bank boundaries
 
 
 
@@ -1108,9 +1101,12 @@ ReturnFalse:
     bcs     :+
         ; LoadAudioData returned false
     @UseBlankSong:
-        lda     #.bankbyte(Tad_BlankSong_Bin)
-        ldx     #.loword(Tad_BlankSong_Bin)
-        ldy     #Tad_BlankSong_SIZE
+        ; The blank song is a single zero byte.
+        ; ::HACK use the 3rd byte of `ldy #1` (which is `0x00`) for the blank song data::
+        ldy     #1
+        @_BlankSongData = * - 1
+        lda     #.bankbyte(@_BlankSongData)
+        ldx     #.loword(@_BlankSongData)
     :
 
     ; STACK holds next state

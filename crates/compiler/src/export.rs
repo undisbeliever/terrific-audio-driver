@@ -67,9 +67,7 @@ impl ExportedBinFile {
     pub const LOADER_SIZE: usize = audio_driver::LOADER.len();
     pub const AUDIO_DRIVER_OFFSET: usize = Self::LOADER_OFFSET + Self::LOADER_SIZE;
     pub const AUDIO_DRIVER_SIZE: usize = audio_driver::AUDIO_DRIVER.len();
-    pub const BLANK_SONG_OFFSET: usize = Self::AUDIO_DRIVER_OFFSET + Self::AUDIO_DRIVER_SIZE;
-    pub const BLANK_SONG_SIZE: usize = audio_driver::BLANK_SONG.len();
-    pub const DATA_TABLE_OFFSET: usize = Self::BLANK_SONG_OFFSET + Self::BLANK_SONG_SIZE;
+    pub const DATA_TABLE_OFFSET: usize = Self::AUDIO_DRIVER_OFFSET + Self::AUDIO_DRIVER_SIZE;
     pub const DATA_TABLE_ELEMENT_SIZE: usize = 3;
     pub const DATA_TABLE_FOOTER_SIZE: usize = 2;
 
@@ -120,7 +118,6 @@ fn export_bin_file(
 
     bin_file.extend(audio_driver::LOADER);
     bin_file.extend(audio_driver::AUDIO_DRIVER);
-    bin_file.extend(audio_driver::BLANK_SONG);
 
     // Add space for the data table
     assert!(bin_file.len() == data_table_range.start);

@@ -57,12 +57,10 @@ TadSubroutines:
 
 
 .export Tad_Loader_Bin          =   $1234
-.export Tad_BlankSong_Bin       =   $5678
 .export Tad_AudioDriver_Bin     =   $9abc
 .export LoadAudioData           = $80def0
 
 .export Tad_Loader_SIZE         =  116
 .export Tad_AudioDriver_SIZE    = 2048
-.export Tad_BlankSong_SIZE      =    1
 
 

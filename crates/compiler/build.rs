@@ -15,7 +15,6 @@ use regex::Regex;
 
 const LOADER: &str = "loader";
 const AUDIO_DRIVER: &str = "audio-driver";
-const BLANK_SONG: &str = "blank-song";
 
 const COMMON_SYMBOLS: &[&str] = &["__loader_dataType", "__loader_songPtr"];
 
@@ -287,7 +286,6 @@ fn main() {
 
     wiz.compile(LOADER.as_ref());
     wiz.compile(AUDIO_DRIVER.as_ref());
-    wiz.compile(BLANK_SONG.as_ref());
 
     let loader_sym_file = wiz.load_sym_file(LOADER.as_ref());
     let driver_sym_file = wiz.load_sym_file(AUDIO_DRIVER.as_ref());

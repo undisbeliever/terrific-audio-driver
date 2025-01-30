@@ -107,11 +107,10 @@
  * To increase compatibility with existing resource subsystems, `tad-audio.asm` does not embed
  * the audio driver or audio data into the ROM.
  *
- * The audio driver is divided into 3 files (see `pvsneslib-api/api-tests/audio-data.asm`
+ * The audio driver is divided into 2 files (see `pvsneslib-api/api-tests/audio-data.asm`
  * for an example that adds these files to a program):
  *  * `loader.bin` - the custom spc700 loader.  Imported as `Tad_Loader_Bin`, size is read from `Tad_Loader_SIZE`.
  *  * `audio-driver.bin` - the spc700 audio driver.  Imported as `Tad_AudioDriver_Bin`, size is read from `Tad_AudioDriver_SIZE`.
- *  * `blank-song.bin` - a blank (silent) song.  Imported as `Tad_BlankSong_Bin`, size is read from `Tad_BlankSong_SIZE`.
  *
  * Audio data is loaded using the external callback loadAudioData().  loadAudioData() is
  * called when *Common Audio Data* or *Song Data* need to be loaded into Audio-RAM.

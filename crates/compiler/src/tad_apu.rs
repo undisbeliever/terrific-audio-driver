@@ -8,7 +8,7 @@
 
 use crate::audio_driver;
 use crate::common_audio_data::CommonAudioData;
-use crate::driver_constants::{addresses, LoaderDataType, AUDIO_RAM_SIZE};
+use crate::driver_constants::{addresses, LoaderDataType, AUDIO_RAM_SIZE, BLANK_SONG_BIN};
 use crate::errors::LoadSongError;
 use crate::songs::SongData;
 
@@ -131,7 +131,7 @@ pub fn load_cad_and_blank_song_to_apu(
     load_apu(
         apu,
         common_audio_data,
-        audio_driver::BLANK_SONG,
+        &BLANK_SONG_BIN,
         song_addr,
         0xff,
         0,

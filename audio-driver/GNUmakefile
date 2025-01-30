@@ -3,7 +3,7 @@ MAKEFLAGS += --no-builtin-rules --warn-undefined-variables
 .SUFFIXES:
 
 
-MAIN_FILES    := src/loader.wiz src/audio-driver.wiz src/blank-song.wiz
+MAIN_FILES    := src/loader.wiz src/audio-driver.wiz
 INCLUDE_FILES := $(filter-out $(MAIN_FILES), $(wildcard src/*.wiz))
 
 BIN_OUT       := $(patsubst src/%.wiz,%.bin,$(MAIN_FILES))

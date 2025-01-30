@@ -454,7 +454,7 @@ struct ExportWithAsmArgs {
         long,
         short = 'b',
         value_name = "BIN_FILE",
-        help = "Binary file output\n(contains the audio-driver, loader, blank-song, common-audio-data and songs)"
+        help = "Binary file output\n(contains the audio-driver, loader, common-audio-data and songs)"
     )]
     output_bin: PathBuf,
 

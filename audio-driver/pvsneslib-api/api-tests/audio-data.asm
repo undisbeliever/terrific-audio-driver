@@ -12,16 +12,14 @@
 .endif
 
 
-.export Tad_Loader_SIZE, Tad_AudioDriver_SIZE, Tad_BlankSong_SIZE
+.export Tad_Loader_SIZE, Tad_AudioDriver_SIZE
 
 .section "Tad_AudioDriverBin" SUPERFREE
     Tad_Loader_Bin: .incbin "../../loader.bin"
     Tad_AudioDriver_Bin: .incbin "../../audio-driver.bin"
-    Tad_BlankSong_Bin: .incbin "../../blank-song.bin"
 
     Tad_Loader_SIZE = _sizeof_Tad_Loader_Bin
     Tad_AudioDriver_SIZE = _sizeof_Tad_AudioDriver_Bin
-    Tad_BlankSong_SIZE = _sizeof_Tad_BlankSong_Bin
 .ends
 
 

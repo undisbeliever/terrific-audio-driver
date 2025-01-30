@@ -49,7 +49,5 @@ pub mod audio_driver {
     // SPDX-License-Identifier: Zlib
     pub const LOADER: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/loader.bin"));
     pub const AUDIO_DRIVER: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/audio-driver.bin"));
-    pub const BLANK_SONG: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/blank-song.bin"));
-
     // SPDX-SnippetEnd
 }

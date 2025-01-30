@@ -47,8 +47,6 @@ TAD_DB_REGISTERS   = 0
 .cerror Tad_AudioDriver_SIZE < $600 || Tad_AudioDriver_SIZE > $d00, "Invalid Tad_AudioDriver_Bin size"
 ; `Tad_AudioDriver_Bin` can cross bank boundaries
 
-.cerror Tad_BlankSong_SIZE != 1,"Invalid Tad_BlankSong_Bin size"
-; `Tad_BlankSong_Bin` can cross bank boundaries
 
 
 ; =========
@@ -861,9 +859,12 @@ _LoadData:
     bcs     +
         ; LoadAudioData returned false
     _UseBlankSong:
-        lda     #`Tad_BlankSong_Bin
-        ldx     #<>Tad_BlankSong_Bin
-        ldy     #Tad_BlankSong_SIZE
+        ; The blank song is a single zero byte.
+        ; ::HACK use the 3rd byte of `ldy #1` (which is `0x00`) for the blank song data::
+        ldy     #1
+        _BlankSongData: = * - 1
+        lda     #`_BlankSongData
+        ldx     #<>_BlankSongData
     +
 
     ; STACK holds next state

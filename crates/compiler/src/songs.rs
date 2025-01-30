@@ -13,19 +13,18 @@ use crate::bytecode::{
 use crate::channel_bc_generator::MmlInstrument;
 use crate::data::{self, single_item_unique_names_list, InstrumentOrSample, Name, UniqueNamesList};
 use crate::driver_constants::{
-    addresses, AUDIO_RAM_SIZE, ECHO_BUFFER_MIN_SIZE, ECHO_VARIABLES_SIZE, MAX_SONG_DATA_SIZE,
-    MAX_SUBROUTINES, N_MUSIC_CHANNELS, SFX_TICK_CLOCK, SONG_HEADER_ACTIVE_MUSIC_CHANNELS,
-    SONG_HEADER_ECHO, SONG_HEADER_ECHO_EDL, SONG_HEADER_N_SUBROUTINES_OFFSET, SONG_HEADER_SIZE,
-    SONG_HEADER_TICK_TIMER_OFFSET,
+    addresses, AUDIO_RAM_SIZE, BLANK_SONG_BIN, ECHO_BUFFER_MIN_SIZE, ECHO_VARIABLES_SIZE,
+    MAX_SONG_DATA_SIZE, MAX_SUBROUTINES, N_MUSIC_CHANNELS, SFX_TICK_CLOCK,
+    SONG_HEADER_ACTIVE_MUSIC_CHANNELS, SONG_HEADER_ECHO, SONG_HEADER_ECHO_EDL,
+    SONG_HEADER_N_SUBROUTINES_OFFSET, SONG_HEADER_SIZE, SONG_HEADER_TICK_TIMER_OFFSET,
 };
 use crate::echo::EchoEdl;
 use crate::envelope::{Envelope, Gain};
 use crate::errors::{ChannelError, SongError, SongTooLargeError};
-use crate::mml::{MetaData, Section};
+use crate::mml::{self, MetaData, Section};
 use crate::notes::{Note, Octave};
 use crate::subroutines::{NoSubroutines, Subroutine};
 use crate::time::{TickClock, TickCounter, TickCounterWithLoopFlag};
-use crate::{audio_driver, mml};
 
 use std::cmp::min;
 use std::fmt::Debug;
@@ -46,7 +45,7 @@ impl SongAramSize {
 }
 
 pub const BLANK_SONG_ARAM_SIZE: SongAramSize = SongAramSize {
-    data_size: audio_driver::BLANK_SONG.len() as u16,
+    data_size: BLANK_SONG_BIN.len() as u16,
     echo_buffer_size: ECHO_BUFFER_MIN_SIZE as u16,
 };
 

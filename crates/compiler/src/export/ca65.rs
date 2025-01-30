@@ -138,8 +138,6 @@ impl Exporter for Ca65Exporter {
         writeln!(out, ".export Tad_Loader_SIZE = {}", ExportedBinFile::LOADER_SIZE)?;
         writeln!(out, ".export Tad_AudioDriver_Bin := {} + {}", FIRST_BLOCK, ExportedBinFile::AUDIO_DRIVER_OFFSET)?;
         writeln!(out, ".export Tad_AudioDriver_SIZE = {}", ExportedBinFile::AUDIO_DRIVER_SIZE)?;
-        writeln!(out, ".export Tad_BlankSong_Bin := {} + {}", FIRST_BLOCK, ExportedBinFile::BLANK_SONG_OFFSET)?;
-        writeln!(out, ".export Tad_BlankSong_SIZE = {}", ExportedBinFile::BLANK_SONG_SIZE)?;
         writeln!(out)?;
         writeln!(out, ";; {}", ExportedBinFile::DATA_TABLE_DOCSTRING)?;
         writeln!(out, ";; {}", ExportedBinFile::DATA_TABLE_FOOTER_DOCSTRING)?;

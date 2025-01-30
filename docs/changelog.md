@@ -10,6 +10,9 @@ Version 0.1.0
 **Breaking Changes**:
  * Subroutine file header is now MML containing sound effect subroutines
  * Removed `SKIP_ECHO_BUFFER_RESET_BIT` from `LoaderDataType`
+ * Removed `blank-song.bin` (`Tad_BlankSong_Bin`).
+   The blank song is now a single zero byte embedded in the ca65/64tass/pvsneslib API code.
+ * The song data format has changed.
 
 Audio driver changes:
  * Stereo echo volume

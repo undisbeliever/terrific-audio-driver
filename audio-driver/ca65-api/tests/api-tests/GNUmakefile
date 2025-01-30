@@ -9,7 +9,7 @@ MODULES    := reset break-isr main tad-tests tad-audio
 
 DEPS       := $(wildcard src/*inc ../_common/*.inc) \
 	      ../../tad-audio.inc ../../tad-audio.s \
-	      ../../../loader.bin ../../../audio-driver.bin ../../../blank-song.bin
+	      ../../../loader.bin ../../../audio-driver.bin
 
 LOROM_CFG  := ../_common/lorom256k.cfg
 HIROM_CFG  := ../_common/hirom256k.cfg
