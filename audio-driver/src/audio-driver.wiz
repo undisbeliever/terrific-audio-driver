@@ -46,9 +46,9 @@ let COMMON_DATA_HEADER_END_ADDR = COMMON_DATA_ADDR + sizeof(CommonDataHeader);
 // Added a little extra to be safe.
 let EDL_SLEEP_MS = 250;
 
-// Instead of setting TIMER_0 register to 8 and counting `EDL_SLEEP_MS` clocks, we can set TIMER_0 to `EDL_SLEEP_MS` and wait 8 clocks.
-let EDL_SLEEP_TIMER_0 = EDL_SLEEP_MS;
-let EDL_SLEEP_COUNT   = smp.TIMER_0_HZ / 1000;
+// Instead of setting TIMER_1 register to 8 and counting `EDL_SLEEP_MS` clocks, we can set TIMER_1 to `EDL_SLEEP_MS` and wait 8 clocks.
+let EDL_SLEEP_TIMER_1 = EDL_SLEEP_MS;
+let EDL_SLEEP_COUNT   = smp.TIMER_1_HZ / 1000;
 
 // Assert EDL_SLEEP_COUNT < 12
 
@@ -581,11 +581,12 @@ func main() {
         //
         // Source: fullsnes https://problemkaputt.de/fullsnes.htm#snesapudspechoregisters
 
-        smp.timer_0 = EDL_SLEEP_TIMER_0;
+        // Using timer1 as timer0 is setup before echo buffer clear.
+        smp.timer_1 = EDL_SLEEP_TIMER_1;
 
         // Reset and enable timer 0 (timers are reset on a transition from 0 to 1)
         smp.control = 0;
-        smp.control = smp.CONTROL__ENABLE_TIMER_0;
+        smp.control = smp.CONTROL__ENABLE_TIMER_1;
     }
 
     // A copy of S-DSP `ESA` is on the stack.
@@ -697,10 +698,10 @@ ClearEchoBufferStart:
 
 
         // Wait until the echo buffer can be safely written to.
-        // (wait until `EDL_SLEEP_COUNT` ticks of TIMER_0)
+        // (wait until `EDL_SLEEP_COUNT` ticks of TIMER_1)
         a = EDL_SLEEP_COUNT - 1;
         do {
-            a -= smp.counter_0;
+            a -= smp.counter_1;
         } while carry;
     }
 ClearEchoBufferEnd:
