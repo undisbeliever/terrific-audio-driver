@@ -81,11 +81,6 @@ in zeropage {
         var zpTmp2 @ &>:zpTmpWord as u8 : u8;
 
 
-    // Common audio data pointers.
-    // See `data-formats.wiz` for more details about these variables.
-    var commonData : CommonDataPointers;
-
-
     // Increases once every song tick
     var songTickCounter : u16;
 
@@ -314,6 +309,13 @@ in zeropage {
     // MUST be last, used to determine when zeropage is cleared.
     var echo : EchoBufferSettings;
 
+    // Common audio data pointers.
+    // See `data-formats.wiz` for more details about these variables.
+    //
+    // Also used to temporally store SongHeader fields after `SongHeader.echo` in the start of `main()`
+    var commonData : CommonDataPointers;
+
+
     // Used to determine if the S-DSP echo registers need updating.
     //
     // The address of this variable is also used by rust code to determine size of `echo`.
@@ -345,10 +347,6 @@ in firstpage {
 
     // Cached SFX mutedChannels parameter for `__process_channels()`.
     var sfxMutedChannels : u8;
-
-
-    // The previous IO port command
-    var previousCommand : u8;
 
 
     // Channel variables that do not fit in zeropage
@@ -427,6 +425,10 @@ in firstpage {
         // NOTE: Adding `instPitchOffset` to the note to play is allowed to an can overflow.
         var instPitchOffset : [u8 ; N_CHANNELS];
     }
+
+
+    // The previous IO port command
+    var previousCommand : u8;
 }
 
 
@@ -512,19 +514,25 @@ func main() {
     write_dsp(GlobalDspAddr.KOFF,   0xff);  // all keys off
 
 
+    // Copy non-channel song header data to zeropage
+    y = offsetof(SongHeader, echo);
+    do {
+        a = songPtr[y];
+        ((&echo as u8 - offsetof(SongHeader, echo)) as *u8)[y] = a;
+        y++;
+    } while y < sizeof(SongHeader);
+
+    // Song header variables
+    // Valid until commonDataHeader is loaded into zeropage
+    var _songHeader_tickTimer    @ &echo as u8 - offsetof(SongHeader, echo) + offsetof(SongHeader, tickTimer) : u8;
+    var _songHeader_nSubroutines @ &echo as u8 - offsetof(SongHeader, echo) + offsetof(SongHeader, nSubroutines) : u8;
+
+
     // Setup echo.
     //
     // This is done as soon as possible as we need to wait a while after setting EDL and ESA.
     {
         // Assumes ECHO write is disabled.
-
-        // Copy song echo data to `echo`.
-        y = offsetof(SongHeader, echo);
-        do {
-            a = songPtr[y];
-            ((&echo as u8 - offsetof(SongHeader, echo)) as *u8)[y] = a;
-            y++;
-        } while y < offsetof(SongHeader, echo) + sizeof(typeof(echo));
 
         // Extract maximum EDL from EchoBufferSettings
         // and calculate echo start address
@@ -631,16 +639,6 @@ func main() {
     }
 
 
-    // Copy Common Audio Data pointers to zeropage
-    {
-        x = sizeof(typeof(commonData)) - 1;
-        do {
-            (&commonData as *u8)[x] = a = (&commonDataHeader.pointers as *u8)[x];
-            x--;
-        } while !negative;
-    }
-
-
     // Calculate `subroutineTable` addresses.
     // subroutineTable_l = songPtr + sizeof(SongHeader)
     a = sizeof(SongHeader);
@@ -649,8 +647,7 @@ func main() {
     subroutineTable_l = ya as *const u8;
 
     // subroutineTable_h = subroutineTable_l + nSubroutines
-    y = offsetof(SongHeader, nSubroutines);
-    a = songPtr[y];
+    a = _songHeader_nSubroutines;
     y = 0;
     ya += subroutineTable_l as u16;
     subroutineTable_h = ya as *const u8;
@@ -682,6 +679,19 @@ func main() {
     // The sfx channels are disabled as `instructionPtr_h` is 0.
 
 
+    smp.timer_0 = _songHeader_tickTimer;
+
+
+    // Copy Common Audio Data pointers to zeropage
+    {
+        x = sizeof(typeof(commonData)) - 1;
+        do {
+            (&commonData as *u8)[x] = a = (&commonDataHeader.pointers as *u8)[x];
+            x--;
+        } while !negative;
+    }
+
+
     // Pop ESA from the stack
     x = pop();
 
@@ -706,18 +716,14 @@ ClearEchoBufferStart:
     }
 ClearEchoBufferEnd:
 
-
-    // Enable echo write and unmute the DSP
-    write_dsp(GlobalDspAddr.FLG, 0);
-
-
-    // Setup and enable the timers
-    y = offsetof(SongHeader, tickTimer);
-    smp.timer_0 = a = songPtr[y];
-
+    // SFX timer
     smp.timer_1 = SFX_TICK_CLOCK;
 
     // Timers are enabled and reset in `io_commands.unpause()`
+
+
+    // Enable echo write and unmute the DSP
+    write_dsp(GlobalDspAddr.FLG, 0);
 
 
     io_commands.init__inline();
@@ -1702,6 +1708,9 @@ func __play_sfx_on_channel(addrAndOneChannelFlag_h: u8 in a, channelIndex : u8 i
 //
 // KEEP: X
 func __reset_channel(channelIndex : u8 in x, pan: u8 in a) {
+    // MUST NOT use `commonData`.
+    // (It contains song header data, not common-audio data)
+
     channelSoA.pan[x] = a = pan;
     channelSoA.volume[x] = a = STARTING_VOLUME;
 

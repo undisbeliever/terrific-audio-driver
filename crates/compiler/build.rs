@@ -88,6 +88,7 @@ const AUDIO_DRIVER_SYMBOLS: &[(&str, &str)] = &[
     ("channelSoA.invertFlags", "CHANNEL_INVERT_FLAGS"),
 
     ("echo", "ECHO_VARIABLES"),
+    ("commonData", "COMMON_DATA_POINTERS"),
     ("echoDirty", "ECHO_DIRTY"),
     ("maxEdl", "MAX_EDL"),
 ];

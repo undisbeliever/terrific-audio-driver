@@ -87,6 +87,7 @@ pub mod addresses {
         CHANNEL_PAN_EFFECT_HALF_WAVELENGTH,
         CHANNEL_INVERT_FLAGS,
         ECHO_VARIABLES,
+        COMMON_DATA_POINTERS,
         ECHO_DIRTY,
         MAX_EDL,
         MAIN_CLEAR_ECHO_BUFFER_START,
@@ -130,7 +131,8 @@ pub mod addresses {
     pub const MAIN_LOOP_CODE_RANGE: Range<u16> = MAINLOOP_CODE..PROCESS_MUSIC_CHANNELS_CODE;
 }
 
-pub const ECHO_VARIABLES_SIZE: usize = (addresses::ECHO_DIRTY - addresses::ECHO_VARIABLES) as usize;
+pub const ECHO_VARIABLES_SIZE: usize =
+    (addresses::COMMON_DATA_POINTERS - addresses::ECHO_VARIABLES) as usize;
 
 pub const TAD_IO_VERSION: usize = _symbols::TAD_IO_VERSION;
 
