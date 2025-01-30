@@ -34,23 +34,7 @@ bank rodata @ 0x0000 : [constdata;  0x40];
 
 in rodata {
 
-const BlankSong = SongHeader{
-    channels = [ 0xffff ; N_MUSIC_CHANNELS ],
-
-    echo = EchoBufferSettings{
-        edl = 0,
-        firFilter = [0x7f, 0 , 0 , 0 , 0 , 0 , 0 , 0], // Identity FIR filter
-        echoFeedback = 0,
-        echoVolume_l = 0,
-        echoVolume_r = 0,
-        invertFlags = 0,
-    },
-
-    // Maximum tick timer
-    tickTimer = 255,
-
-    nSubroutines = 0,
-};
+const BlankSong : [ u8 ; 1 ] = [0];
 
 }
 

@@ -11,8 +11,8 @@ use crate::common_audio_data::CommonAudioData;
 use crate::driver_constants::ECHO_VARIABLES_SIZE;
 use crate::driver_constants::{
     addresses, LoaderDataType, BC_CHANNEL_STACK_OFFSET, BC_CHANNEL_STACK_SIZE,
-    BC_STACK_BYTES_PER_LOOP, COMMON_DATA_BYTES_PER_INSTRUMENT, N_MUSIC_CHANNELS,
-    SONG_HEADER_N_SUBROUTINES_OFFSET, SONG_HEADER_SIZE, STARTING_VOLUME, S_SMP_TIMER_0_REGISTER,
+    BC_STACK_BYTES_PER_LOOP, COMMON_DATA_BYTES_PER_INSTRUMENT, N_MUSIC_CHANNELS, STARTING_VOLUME,
+    S_SMP_TIMER_0_REGISTER,
 };
 use crate::echo::EchoEdl;
 use crate::echo::EchoVolume;
@@ -472,6 +472,8 @@ pub struct ChannelState {
     disabled: bool,
 
     song_ptr: u16,
+    subroutine_table_l_addr: usize,
+    subroutine_table_h_addr: usize,
 
     pub instruction_ptr: u16,
 
@@ -523,11 +525,14 @@ pub struct ChannelState {
 }
 
 impl ChannelState {
-    fn new(channel: Option<&SongChannel>, song_ptr: u16) -> Self {
+    fn new(channel: Option<&SongChannel>, song_data: &SongData, song_ptr: u16) -> Self {
         Self {
             ticks: TickCounter::new(0),
             disabled: false,
             song_ptr,
+            subroutine_table_l_addr: usize::from(song_data.subroutine_table_l_addr()),
+            subroutine_table_h_addr: usize::from(song_data.subroutine_table_l_addr())
+                + song_data.subroutines().len(),
             instruction_ptr: channel.map(|c| c.bytecode_offset).unwrap_or(u16::MAX),
             topmost_return_pos: None,
             call_stack_depth: 0,
@@ -555,11 +560,9 @@ impl ChannelState {
         }
     }
 
-    fn read_subroutine_instruction_ptr(s_id: u8, song_data: &[u8]) -> u16 {
-        let n_subroutines = song_data[SONG_HEADER_N_SUBROUTINES_OFFSET];
-
-        let li = usize::from(s_id) + SONG_HEADER_SIZE;
-        let hi = li + usize::from(n_subroutines);
+    fn read_subroutine_instruction_ptr(&self, s_id: u8, song_data: &[u8]) -> u16 {
+        let li = self.subroutine_table_l_addr + usize::from(s_id);
+        let hi = self.subroutine_table_h_addr + usize::from(s_id);
 
         let l = song_data.get(li).copied().unwrap_or(0xff);
         let h = song_data.get(hi).copied().unwrap_or(0xff);
@@ -608,7 +611,7 @@ impl ChannelState {
                 self.bc_stack[sp] = inst_ptr[0];
                 self.bc_stack[sp + 1] = inst_ptr[1];
 
-                self.instruction_ptr = Self::read_subroutine_instruction_ptr(s_id, song_data);
+                self.instruction_ptr = self.read_subroutine_instruction_ptr(s_id, song_data);
             }
             None => self.disable_channel(),
         }
@@ -1189,10 +1192,11 @@ impl ChannelState {
         instrument_id: InstrumentId,
         envelope: Envelope,
         prefix: Option<MmlPrefixData>,
+        song_data: &SongData,
         sub: &Subroutine,
         global: &mut GlobalState,
     ) -> Option<Self> {
-        let mut c = Self::new(None, song_ptr);
+        let mut c = Self::new(None, song_data, song_ptr);
 
         c.instrument = Some(instrument_id.as_u8());
         c.adsr_or_gain_override = Some(envelope.engine_value());
@@ -1338,7 +1342,7 @@ where
             channels: std::array::from_fn(|i| {
                 song_data.channels()[i]
                     .as_ref()
-                    .map(|c| ChannelState::new(Some(c), song_addr))
+                    .map(|c| ChannelState::new(Some(c), &song_data, song_addr))
             }),
             tick_counter: TickCounter::default(),
             global: GlobalState::new(song_data.metadata().tick_clock, &song_data),
@@ -1405,6 +1409,7 @@ where
             inst,
             envelope,
             prefix,
+            &out.song_data,
             sub,
             &mut out.global,
         );
@@ -2095,6 +2100,7 @@ impl InterpreterOutput {
 mod test {
     use super::{ChannelState, EchoVariables, GlobalState};
     use crate::driver_constants::SONG_HEADER_SIZE;
+    use crate::songs::blank_song;
     use crate::time::{TickCounter, MIN_TICK_TIMER};
 
     fn blank_global_state() -> GlobalState {
@@ -2114,6 +2120,8 @@ mod test {
 
     #[test]
     fn test_instruction_size_if_not_sleep_nor_branch() {
+        let song = blank_song();
+
         let mut bytecode = [128; 32];
         assert!(bytecode.len() > SONG_HEADER_SIZE);
 
@@ -2121,7 +2129,7 @@ mod test {
             bytecode[0] = opcode;
 
             let mut global = blank_global_state();
-            let mut cs = ChannelState::new(None, 0);
+            let mut cs = ChannelState::new(None, &song, 0);
             cs.ticks = TickCounter::new(0);
             cs.instruction_ptr = 0;
             // Set stack counter to force a branch outside `bytecode` for the `end_loop` instruction

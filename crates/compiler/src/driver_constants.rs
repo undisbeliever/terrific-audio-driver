@@ -223,9 +223,10 @@ pub const ECHO_BUFFER_MAX_EDL: u8 = 15;
 pub const MAX_SUBROUTINES: usize = 255;
 pub const MAX_SFX_SUBROUTINES: u8 = 255;
 
-pub const SONG_HEADER_SIZE: usize = N_MUSIC_CHANNELS * 2 + 15;
-pub const SONG_HEADER_CHANNELS_SIZE: usize = N_MUSIC_CHANNELS * 2;
-pub const SONG_HEADER_ECHO_EDL: usize = SONG_HEADER_CHANNELS_SIZE;
+pub const SONG_HEADER_SIZE: usize = 16;
+pub const SONG_HEADER_ACTIVE_MUSIC_CHANNELS: usize = 0;
+pub const SONG_HEADER_ECHO: usize = 1;
+pub const SONG_HEADER_ECHO_EDL: usize = 1;
 pub const SONG_HEADER_TICK_TIMER_OFFSET: usize = SONG_HEADER_SIZE - 2;
 pub const SONG_HEADER_N_SUBROUTINES_OFFSET: usize = SONG_HEADER_SIZE - 1;
 

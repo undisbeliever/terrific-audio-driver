@@ -174,6 +174,8 @@ pub fn compile_mml(
     }
     let metadata = metadata.unwrap();
 
+    let n_active_channels = lines.channels.iter().filter(|t| !t.is_empty()).count();
+
     assert!(lines.subroutines.len() <= u8::MAX.into());
     let mut compiler = MmlSongBytecodeGenerator::new(
         metadata.zenlen,
@@ -185,7 +187,7 @@ pub fn compile_mml(
         instrument_map,
         &lines.subroutine_name_map,
         metadata.echo_buffer.max_edl,
-        song_header_size(lines.subroutines.len()),
+        song_header_size(n_active_channels, lines.subroutines.len()),
         true,
     );
 

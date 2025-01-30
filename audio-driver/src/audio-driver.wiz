@@ -302,24 +302,19 @@ in zeropage {
     var nonShadow_sfx : u8;
 
 
-// --- All zeropage variables after `echo` are not cleared in main() ---
+// --- All zeropage variables after this point are not cleared in main() ---
+let __EndZeropageClearAddr = &maxEdl as u8;
 
-    // Echo buffer settings
-    //
-    // MUST be last, used to determine when zeropage is cleared.
-    var echo : EchoBufferSettings;
-
-    // Common audio data pointers.
-    // See `data-formats.wiz` for more details about these variables.
-    //
-    // Also used to temporally store SongHeader fields after `SongHeader.echo` in the start of `main()`
-    var commonData : CommonDataPointers;
+    // The maximum echo delay in the song.
+    // Used to determine the size and location of the echo buffer in Audio-RAM.
+    var maxEdl : u8;
 
 
     // Used to determine if the S-DSP echo registers need updating.
     //
-    // The address of this variable is also used by rust code to determine size of `echo`.
     // (bit field)
+    //
+    // CAUTION: Also used to temporally store SongHeader.activeMusicChannels in the start of main()
     var echoDirty : u8;
         let ECHO_DIRTY__FIR_FILTER_BIT = 7;
         let ECHO_DIRTY__CLEAR_FIR_BIT = 0;  // Clear FIR filter before writing FIR filter
@@ -330,9 +325,18 @@ in zeropage {
         let ECHO_DIRTY__FEEDBACK_BIT = 5;
         let ECHO_DIRTY__EDL_BIT = 4;
 
-    // The maximum echo delay in the song.
-    // Used to determine the size and location of the echo buffer in Audio-RAM.
-    var maxEdl : u8;
+
+    // Echo buffer settings
+    //
+    // MUST be last, used to determine when zeropage is cleared.
+    var echo : EchoBufferSettings;
+
+
+    // Common audio data pointers.
+    // See `data-formats.wiz` for more details about these variables.
+    //
+    // Also used to temporally store SongHeader fields after `SongHeader.echo` in the start of `main()`
+    var commonData : CommonDataPointers;
 }
 
 
@@ -347,6 +351,10 @@ in firstpage {
 
     // Cached SFX mutedChannels parameter for `__process_channels()`.
     var sfxMutedChannels : u8;
+
+
+    // The previous IO port command
+    var previousCommand : u8;
 
 
     // Channel variables that do not fit in zeropage
@@ -425,10 +433,6 @@ in firstpage {
         // NOTE: Adding `instPitchOffset` to the note to play is allowed to an can overflow.
         var instPitchOffset : [u8 ; N_CHANNELS];
     }
-
-
-    // The previous IO port command
-    var previousCommand : u8;
 }
 
 
@@ -514,18 +518,25 @@ func main() {
     write_dsp(GlobalDspAddr.KOFF,   0xff);  // all keys off
 
 
-    // Copy non-channel song header data to zeropage
+    // Assumes offsetof(SongHeader, echo) == 1
+    // Assumes __EndZeropageClearAddr <= _songHeader
+    var _songHeader @ &echo as u8 - offsetof(SongHeader, echo) : SongHeader;
+
+    // Assumes `offset(SongHeader, activeMusicChannels) == 0`
+    y = 0;
+    _songHeader.activeMusicChannels = a = songPtr[y];
+
+    // Copy SongHeader data to zeropage
+    // If activeSoundEffects is 0, clear SongHeader in zeropage
     y = offsetof(SongHeader, echo);
     do {
-        a = songPtr[y];
-        ((&echo as u8 - offsetof(SongHeader, echo)) as *u8)[y] = a;
+        a = _songHeader.activeMusicChannels;
+        if !zero {
+            a = songPtr[y];
+        }
+        (&_songHeader as *u8)[y] = a;
         y++;
     } while y < sizeof(SongHeader);
-
-    // Song header variables
-    // Valid until commonDataHeader is loaded into zeropage
-    var _songHeader_tickTimer    @ &echo as u8 - offsetof(SongHeader, echo) + offsetof(SongHeader, tickTimer) : u8;
-    var _songHeader_nSubroutines @ &echo as u8 - offsetof(SongHeader, echo) + offsetof(SongHeader, nSubroutines) : u8;
 
 
     // Setup echo.
@@ -613,10 +624,10 @@ func main() {
     write_dsp(GlobalDspAddr.DIR, >:COMMON_DATA_HEADER_END_ADDR);
 
 
-    // Clear all zero-page variables before `echo` variables
+    // Clear all zero-page variables before `__EndZeropageClearAddr` variables
     // Assumes `songPtr` and `loaderDataType` is AFTER `zeropage` bank.
     a = 0;
-    x = &echo as u8;
+    x = __EndZeropageClearAddr;
     do {
         x--;
         *(x as *u8) = a;
@@ -627,59 +638,57 @@ func main() {
     sfxMutedChannels = a;
 
 
-    a = 0xff;
-    echoDirty = a;
-    io_musicChannelsMask = a;
-    musicSfxChannelMask = a;
-    volShadowDirty_music = a;
-    keyOnMask_music = a;
+    // Assumes N_MUSIC_CHANNELS == 8
+    x = N_MUSIC_CHANNELS - 1;
+    y = sizeof(SongHeader);
+    do {
+        _songHeader.activeMusicChannels <<<= 1;
+        if carry {
+            // Calculate instructionPtr (disabling the channel if the addition overflows)
+            channelSoA.instructionPtr_l[x] = a = songPtr[y] + <:songPtr;
+            y++;
 
-    inline for let _I in 0..(N_SFX_CHANNELS - 1) {
-        sfx_oneChannelSfxId[_I] = a;
-    }
+            a = songPtr[y] +# >:songPtr;
+            y++;
+
+            if carry {
+                // Disable channel
+                a = 0;
+            }
+            channelSoA.instructionPtr_h[x] = a;
+        }
+
+        push(y);
+
+        __reset_channel(x, MAX_PAN / 2);
+
+        y = pop();
+
+        x--;
+    } while !negative;
+
+    // Y = offset after songChannel addresses
 
 
     // Calculate `subroutineTable` addresses.
-    // subroutineTable_l = songPtr + sizeof(SongHeader)
-    a = sizeof(SongHeader);
+    // subroutineTable_l = songPtr + y
+    a = y;
     y = 0;
     ya += songPtr as u16;
     subroutineTable_l = ya as *const u8;
 
     // subroutineTable_h = subroutineTable_l + nSubroutines
-    a = _songHeader_nSubroutines;
+    a = _songHeader.nSubroutines;
     y = 0;
     ya += subroutineTable_l as u16;
     subroutineTable_h = ya as *const u8;
 
 
-    x = N_MUSIC_CHANNELS - 1;
-    do {
-        // ASSUMES offsetof(SongHeader, channels) == 0
-        // ASSUMES sizeof(SongHeader.channels[0]) == 2
-        y = a = x <<< 1;
-
-        // Calculate instructionPtr (disabling the channel if the addition overflows)
-        channelSoA.instructionPtr_l[x] = a = songPtr[y] + <:songPtr;
-        y++;
-        a = songPtr[y] +# >:songPtr;
-        if carry {
-            // Disable channel
-            a = 0;
-        }
-        channelSoA.instructionPtr_h[x] = a;
-
-        __reset_channel(x, MAX_PAN / 2);
-
-        x--;
-    } while !negative;
+    smp.timer_0 = _songHeader.tickTimer;
 
 
     // No need to reset SFX channels.
     // The sfx channels are disabled as `instructionPtr_h` is 0.
-
-
-    smp.timer_0 = _songHeader_tickTimer;
 
 
     // Copy Common Audio Data pointers to zeropage
@@ -689,6 +698,19 @@ func main() {
             (&commonData as *u8)[x] = a = (&commonDataHeader.pointers as *u8)[x];
             x--;
         } while !negative;
+    }
+
+
+    // Reset bit-masks
+    a = 0xff;
+    echoDirty = a;
+    io_musicChannelsMask = a;
+    musicSfxChannelMask = a;
+    volShadowDirty_music = a;
+    keyOnMask_music = a;
+
+    inline for let _I in 0..(N_SFX_CHANNELS - 1) {
+        sfx_oneChannelSfxId[_I] = a;
     }
 
 

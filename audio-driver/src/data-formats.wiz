@@ -176,12 +176,14 @@ struct EchoBufferSettings {
     invertFlags : u8,
 }
 
-// Size MUST match `audio/driver_constants.py`
+// Size MUST match `SONG_HEADER_SIZE` in `crates/compiler/src/driver_constants.rs`
 struct SongHeader {
-    // The starting offset of the channel bytecode (relative to the start of the song data).
+    // Active music channels.
     //
-    // If `offset+songPtr` overflows (ie, offset >= 0xff00), then the channel is disabled.
-    channels : [u16 ; N_MUSIC_CHANNELS],
+    // If this value is 0, all fields in SongHeader will be zeroed.
+    //
+    // bit-array
+    activeMusicChannels : u8,
 
 
     echo: EchoBufferSettings,
@@ -195,11 +197,19 @@ struct SongHeader {
     // Number of subroutines
     nSubroutines : u8,
 
+
+    // The starting offset of the channel bytecode (relative to the start of the song data).
+    //
+    // Repeated `popcount(activeMusicChannels)` times in REVERSE ORDER (channel 7 is first and channel 0 is last).
+    //
+    // If `offset+songPtr` overflows (ie, offset >= 0xff00), then the channel is disabled.
+    //
+    // songChannel : [ u16 ; popcount(activeMusicChannels)]
+
     // Immediately after this header is split-word-array containing the location of each subroutine
     // (relative to the start of the song data).
     //
     // subroutineTable_l[nSubroutines]
     // subroutineTable_h[nSubroutines]
 };
-
 
