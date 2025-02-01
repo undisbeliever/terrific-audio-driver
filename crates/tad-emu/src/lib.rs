@@ -9,8 +9,8 @@ use std::ops::{Deref, Range};
 use compiler::bytecode_interpreter::SongInterpreter;
 use compiler::common_audio_data::{ArcCadWithSfxBufferInAram, CommonAudioData};
 use compiler::driver_constants::{
-    addresses, io_commands, LoaderDataType, AUDIO_RAM_SIZE, FIRST_SFX_CHANNEL, IO_COMMAND_I_MASK,
-    IO_COMMAND_MASK, N_CHANNELS, N_MUSIC_CHANNELS, N_SFX_CHANNELS,
+    addresses, io_commands, AudioMode, LoaderDataType, AUDIO_RAM_SIZE, FIRST_SFX_CHANNEL,
+    IO_COMMAND_I_MASK, IO_COMMAND_MASK, N_CHANNELS, N_MUSIC_CHANNELS, N_SFX_CHANNELS,
 };
 use compiler::errors::LoadSongError;
 use compiler::songs::SongData;
@@ -90,7 +90,7 @@ impl TadEmulator {
         &mut self,
         cad: &CommonAudioData,
         song_addr: Option<u16>,
-        stereo_flag: bool,
+        audio_mode: AudioMode,
     ) -> Result<(), LoadSongError> {
         let song_addr = song_addr.unwrap_or_else(|| cad.min_song_data_addr());
 
@@ -101,7 +101,7 @@ impl TadEmulator {
             cad,
             song_addr,
             LoaderDataType {
-                stereo_flag,
+                audio_mode,
                 play_song: true,
             },
         )?;
@@ -117,7 +117,7 @@ impl TadEmulator {
         cad: &CommonAudioData,
         song: &SongData,
         song_addr: Option<u16>,
-        stereo_flag: bool,
+        audio_mode: AudioMode,
     ) -> Result<(), LoadSongError> {
         let song_addr = song_addr.unwrap_or_else(|| cad.min_song_data_addr());
 
@@ -129,7 +129,7 @@ impl TadEmulator {
             song,
             song_addr,
             LoaderDataType {
-                stereo_flag,
+                audio_mode,
                 play_song: true,
             },
         )?;
@@ -145,7 +145,7 @@ impl TadEmulator {
         cad: &CommonAudioData,
         song: &SongData,
         song_addr: u16,
-        stereo_flag: bool,
+        audio_mode: AudioMode,
         bc_interpreter: &Option<SongInterpreter<CAD, SD>>,
         music_channels_mask: u8,
     ) -> Result<(), LoadSongError>
@@ -161,7 +161,7 @@ impl TadEmulator {
             song,
             song_addr,
             LoaderDataType {
-                stereo_flag,
+                audio_mode,
                 play_song: false,
             },
         )?;

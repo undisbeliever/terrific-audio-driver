@@ -4,13 +4,14 @@
 //
 // SPDX-License-Identifier: MIT
 
-use crate::audio_thread::{AudioMessage, StereoFlag};
+use crate::audio_thread::AudioMessage;
 use crate::tabs::FileType;
 use crate::GuiMessage;
 
 use std::sync::mpsc;
 
 extern crate fltk;
+use compiler::driver_constants::AudioMode;
 use fltk::enums::{Key, Shortcut};
 use fltk::menu::{self, MenuFlag};
 use fltk::prelude::MenuExt;
@@ -141,13 +142,13 @@ impl Menu {
             AUDIO_MONO,
             Shortcut::None,
             fltk::menu::MenuFlag::Radio,
-            || AudioMessage::SetStereoFlag(StereoFlag::Mono),
+            || AudioMessage::SetAudioMode(AudioMode::Mono),
         );
         add_audio(
             AUDIO_STEREO,
             Shortcut::None,
             fltk::menu::MenuFlag::Radio | MenuFlag::Value,
-            || AudioMessage::SetStereoFlag(StereoFlag::Stereo),
+            || AudioMessage::SetAudioMode(AudioMode::Stereo),
         );
 
         add(

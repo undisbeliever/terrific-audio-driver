@@ -12,8 +12,8 @@ use compiler::{
     common_audio_data::{build_common_audio_data, CommonAudioData},
     data::{load_project_file, load_text_file_with_limit, validate_project_file_names},
     driver_constants::{
-        addresses, io_commands, BC_TOTAL_STACK_SIZE, ECHO_VARIABLES_SIZE, N_MUSIC_CHANNELS,
-        S_SMP_TIMER_0_REGISTER,
+        addresses, io_commands, AudioMode, BC_TOTAL_STACK_SIZE, ECHO_VARIABLES_SIZE,
+        N_MUSIC_CHANNELS, S_SMP_TIMER_0_REGISTER,
     },
     mml::compile_mml,
     samples::build_sample_and_instrument_data,
@@ -299,8 +299,6 @@ fn song_ticks(song: &SongData) -> TickCounter {
 }
 
 fn test_bc_intrepreter(song: &SongData, common_audio_data: &CommonAudioData) {
-    const STEREO_FLAG: bool = true;
-
     let song_addr = common_audio_data.min_song_data_addr();
 
     // Clamp to ensure 16 bit tick_counter does not overflow
@@ -310,7 +308,7 @@ fn test_bc_intrepreter(song: &SongData, common_audio_data: &CommonAudioData) {
 
     let mut emu = TadEmulator::new();
     emu.fill_apuram(bytecode_interpreter::UNINITIALISED);
-    emu.load_song(common_audio_data, song, None, STEREO_FLAG)
+    emu.load_song(common_audio_data, song, None, AudioMode::Stereo)
         .unwrap();
 
     // Wait for the audio-driver to finish initialization
@@ -342,7 +340,8 @@ fn test_bc_intrepreter(song: &SongData, common_audio_data: &CommonAudioData) {
 
         let tick_count = TickCounter::new(tick_count.into());
 
-        let mut interpreter = SongInterpreter::new(common_audio_data, song, song_addr, STEREO_FLAG);
+        let mut interpreter =
+            SongInterpreter::new(common_audio_data, song, song_addr, AudioMode::Stereo);
         let valid = interpreter.process_ticks(tick_count);
         assert!(valid, "SongIntreperter time out");
         assert_bc_intrepreter_matches_emu(&interpreter, &dummy_emu_init, &emu, tick_count);

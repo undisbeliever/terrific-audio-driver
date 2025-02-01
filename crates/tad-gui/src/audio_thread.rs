@@ -11,6 +11,7 @@ use compiler::bytecode_interpreter::SongInterpreter;
 use compiler::common_audio_data::ArcCadWithSfxBufferInAram;
 use compiler::common_audio_data::CommonAudioData;
 use compiler::common_audio_data::CommonAudioDataWithSfxBuffer;
+use compiler::driver_constants::AudioMode;
 use compiler::driver_constants::{io_commands, AUDIO_RAM_SIZE, N_DSP_VOICES, N_MUSIC_CHANNELS};
 use compiler::mml::MmlPrefixData;
 use compiler::songs::{blank_song, SongData};
@@ -82,7 +83,7 @@ pub struct CommonAudioDataNoSfx(pub CommonAudioData);
 pub enum AudioMessage {
     RingBufferConsumed(PrivateToken),
 
-    SetStereoFlag(StereoFlag),
+    SetAudioMode(AudioMode),
 
     // Stop audio and close the audio device
     StopAndClose,
@@ -112,12 +113,6 @@ pub enum AudioMessage {
     PlaySample(CommonAudioData, Box<SongData>),
 
     PlayBrrSampleAt32Khz(Arc<BrrSample>),
-}
-
-#[derive(Debug, Copy, Clone)]
-pub enum StereoFlag {
-    Mono,
-    Stereo,
 }
 
 /// A private token to ensure `AudioMessage::RingBufferConsumed` is only created by this module.
@@ -417,7 +412,7 @@ fn create_and_process_song_interpreter(
     audio_data: &AudioDataState,
     song_addr: u16,
     song_skip: SongSkip,
-    stereo_flag: bool,
+    audio_mode: AudioMode,
 ) -> Result<Option<SongInterpreter<SiCad, Arc<SongData>>>, ()> {
     let (cad, sd) = match audio_data {
         AudioDataState::NotLoaded => return Ok(None),
@@ -431,9 +426,9 @@ fn create_and_process_song_interpreter(
     };
 
     match song_skip {
-        SongSkip::None => Ok(Some(SongInterpreter::new(cad, sd, song_addr, stereo_flag))),
+        SongSkip::None => Ok(Some(SongInterpreter::new(cad, sd, song_addr, audio_mode))),
         SongSkip::Song(ticks) => {
-            let mut si = SongInterpreter::new(cad, sd, song_addr, stereo_flag);
+            let mut si = SongInterpreter::new(cad, sd, song_addr, audio_mode);
             if si.process_song_skip_ticks(ticks) {
                 Ok(Some(si))
             } else {
@@ -441,8 +436,7 @@ fn create_and_process_song_interpreter(
             }
         }
         SongSkip::Subroutine(prefix, si, ticks) => {
-            match SongInterpreter::new_song_subroutine(cad, sd, song_addr, prefix, si, stereo_flag)
-            {
+            match SongInterpreter::new_song_subroutine(cad, sd, song_addr, prefix, si, audio_mode) {
                 Ok(mut si) => {
                     if si.process_song_skip_ticks(ticks) {
                         Ok(Some(si))
@@ -467,7 +461,7 @@ struct TadState {
 
     blank_song: Arc<SongData>,
 
-    stereo_flag: StereoFlag,
+    audio_mode: AudioMode,
     cad_no_sfx: Option<Arc<CommonAudioDataNoSfx>>,
     cad_with_sfx_buffer: Option<Arc<CommonAudioDataWithSfxBuffer>>,
     cad_with_sfx: Option<Arc<CommonAudioDataWithSfx>>,
@@ -484,7 +478,7 @@ impl TadState {
         Self {
             emu: tad_emu::TadEmulator::new(),
             blank_song: Arc::new(blank_song()),
-            stereo_flag: StereoFlag::Stereo,
+            audio_mode: AudioMode::Stereo,
             cad_no_sfx: None,
             cad_with_sfx_buffer: None,
             cad_with_sfx: None,
@@ -511,8 +505,8 @@ impl TadState {
         self.song_id
     }
 
-    fn set_stereo_flag(&mut self, stereo_flag: StereoFlag) {
-        self.stereo_flag = stereo_flag;
+    fn set_audio_mode(&mut self, mode: AudioMode) {
+        self.audio_mode = mode;
     }
 
     fn load_cad_no_sfx(&mut self, cad: Option<Arc<CommonAudioDataNoSfx>>) {
@@ -677,11 +671,6 @@ impl TadState {
             AudioDataState::SongWithSfxBuffer(cad, sd) => (cad.common_data_ref(), sd.as_ref()),
         };
 
-        let stereo_flag = match self.stereo_flag {
-            StereoFlag::Stereo => true,
-            StereoFlag::Mono => false,
-        };
-
         // Store song data at the end of the audio-RAM
         let song_data_addr = Self::calc_song_addr(song)?;
         if song_data_addr < common_audio_data.min_song_data_addr() {
@@ -692,7 +681,7 @@ impl TadState {
             &data_state,
             song_data_addr,
             song_skip,
-            stereo_flag,
+            self.audio_mode,
         )?;
 
         self.emu
@@ -700,7 +689,7 @@ impl TadState {
                 common_audio_data,
                 song,
                 song_data_addr,
-                stereo_flag,
+                self.audio_mode,
                 &self.bc_interpreter,
                 music_channels_mask.0,
             )
@@ -908,8 +897,8 @@ impl AudioThread {
             AudioMessage::CommandAudioDataWithSfxChanged(d) => {
                 self.tad.load_cad_with_sfx(d);
             }
-            AudioMessage::SetStereoFlag(sf) => {
-                self.tad.set_stereo_flag(sf);
+            AudioMessage::SetAudioMode(mode) => {
+                self.tad.set_audio_mode(mode);
 
                 // Disable unpause
                 self.tad.stop_song();
@@ -1218,7 +1207,7 @@ impl AudioThread {
                 // Cannot process these messages here.
                 // Must reload the song when the stereo flag changes.
                 // Must close `AudioDevice` to change the sample rate.
-                m @ (AudioMessage::SetStereoFlag(_) | AudioMessage::PlayBrrSampleAt32Khz(_)) => {
+                m @ (AudioMessage::SetAudioMode(_) | AudioMessage::PlayBrrSampleAt32Khz(_)) => {
                     return Some(m);
                 }
             }

@@ -183,10 +183,16 @@ pub const MAX_SFX_DATA_ADDR: usize = 0x7fff;
 // -256 for the smallest echo buffer
 pub const MAX_COMMON_DATA_SIZE: usize = AUDIO_RAM_SIZE - (addresses::COMMON_DATA as usize) - 384;
 
+#[derive(Debug, Clone, Copy)]
+pub enum AudioMode {
+    Mono,
+    Stereo,
+}
+
 // Loader constants
 // MUST match `audio-driver/src/io-commands.wiz`
 pub struct LoaderDataType {
-    pub stereo_flag: bool,
+    pub audio_mode: AudioMode,
 
     pub play_song: bool,
 }
@@ -196,9 +202,11 @@ impl LoaderDataType {
         // LoaderDataType.MIN_SONG_VALUE
         let mut o = 2;
 
-        if self.stereo_flag {
-            o |= 1 << 7;
-        }
+        o |= match self.audio_mode {
+            AudioMode::Mono => 0,
+            AudioMode::Stereo => 1 << 7,
+        };
+
         if self.play_song {
             o |= 1 << 6;
         }

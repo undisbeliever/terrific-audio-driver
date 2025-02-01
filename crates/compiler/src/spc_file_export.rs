@@ -7,7 +7,7 @@
 use std::time::Duration;
 
 use crate::common_audio_data::CommonAudioData;
-use crate::driver_constants::LoaderDataType;
+use crate::driver_constants::{AudioMode, LoaderDataType};
 use crate::errors::LoadSongError;
 use crate::mml::MetaData;
 use crate::songs::SongData;
@@ -153,7 +153,7 @@ pub fn export_spc_file(
         common_audio_data.min_song_data_addr(),
         LoaderDataType {
             play_song: true,
-            stereo_flag: true,
+            audio_mode: AudioMode::Stereo,
         },
     )?;
 

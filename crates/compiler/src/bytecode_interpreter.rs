@@ -8,6 +8,7 @@ use crate::bytecode::opcodes;
 use crate::bytecode::InstrumentId;
 use crate::bytecode::Pan;
 use crate::common_audio_data::CommonAudioData;
+use crate::driver_constants::AudioMode;
 use crate::driver_constants::ECHO_VARIABLES_SIZE;
 use crate::driver_constants::{
     addresses, LoaderDataType, BC_CHANNEL_STACK_OFFSET, BC_CHANNEL_STACK_SIZE,
@@ -157,7 +158,7 @@ impl EchoVariables {
 struct InterpreterOutput {
     channels: [Channel; N_MUSIC_CHANNELS],
     song_data_addr: u16,
-    stereo_flag: bool,
+    audio_mode: AudioMode,
     song_tick_counter: u16,
     tick_clock: u8,
 
@@ -1329,7 +1330,7 @@ where
     global: GlobalState,
     channels: [Option<ChannelState>; N_MUSIC_CHANNELS],
     tick_counter: TickCounter,
-    stereo_flag: bool,
+    audio_mode: AudioMode,
 }
 
 impl<CAD, SD> SongInterpreter<CAD, SD>
@@ -1337,7 +1338,12 @@ where
     CAD: Deref<Target = CommonAudioData>,
     SD: Deref<Target = SongData>,
 {
-    pub fn new(common_audio_data: CAD, song_data: SD, song_addr: u16, stereo_flag: bool) -> Self {
+    pub fn new(
+        common_audio_data: CAD,
+        song_data: SD,
+        song_addr: u16,
+        audio_mode: AudioMode,
+    ) -> Self {
         Self {
             channels: std::array::from_fn(|i| {
                 song_data.channels()[i]
@@ -1346,7 +1352,7 @@ where
             }),
             tick_counter: TickCounter::default(),
             global: GlobalState::new(song_data.metadata().tick_clock, &song_data),
-            stereo_flag,
+            audio_mode,
             song_data,
             song_addr,
             common_audio_data,
@@ -1359,13 +1365,13 @@ where
         song_addr: u16,
         prefix: Option<MmlPrefixData>,
         subroutine_index: u8,
-        stereo_flag: bool,
+        audio_mode: AudioMode,
     ) -> Result<Self, SongSubroutineError> {
         let mut out = Self {
             channels: Default::default(),
             tick_counter: TickCounter::default(),
             global: GlobalState::new(song_data.metadata().tick_clock, &song_data),
-            stereo_flag,
+            audio_mode,
             song_data,
             song_addr,
             common_audio_data,
@@ -1538,7 +1544,7 @@ where
 
     pub fn write_to_emulator(&self, emu: &mut impl ApuEmulator) {
         let common =
-            CommonAudioDataSoA::new(&self.common_audio_data, self.song_addr, self.stereo_flag);
+            CommonAudioDataSoA::new(&self.common_audio_data, self.song_addr, self.audio_mode);
 
         let o = InterpreterOutput {
             channels: std::array::from_fn(|i| match &self.channels[i] {
@@ -1555,7 +1561,7 @@ where
             tick_clock: self.global.timer_register,
             song_tick_counter: (self.tick_counter.value() & 0xffff).try_into().unwrap(),
             song_data_addr: self.song_addr,
-            stereo_flag: self.stereo_flag,
+            audio_mode: self.audio_mode,
             echo: self.global.echo.clone(),
         };
 
@@ -1564,7 +1570,7 @@ where
 }
 
 struct CommonAudioDataSoA<'a> {
-    stereo_flag: bool,
+    audio_mode: AudioMode,
 
     song_data_addr: u16,
     n_instruments: u8,
@@ -1579,7 +1585,7 @@ struct CommonAudioDataSoA<'a> {
 }
 
 impl CommonAudioDataSoA<'_> {
-    fn new(c: &CommonAudioData, song_data_addr: u16, stereo_flag: bool) -> CommonAudioDataSoA {
+    fn new(c: &CommonAudioData, song_data_addr: u16, audio_mode: AudioMode) -> CommonAudioDataSoA {
         let inst_soa_data = |i| {
             assert!(i < COMMON_DATA_BYTES_PER_INSTRUMENT);
 
@@ -1595,7 +1601,7 @@ impl CommonAudioDataSoA<'_> {
         let n_instruments = c.n_instruments_and_samples().try_into().unwrap();
 
         CommonAudioDataSoA {
-            stereo_flag,
+            audio_mode,
             song_data_addr,
             n_instruments,
             instruments_scrn: inst_soa_data(0),
@@ -1786,19 +1792,19 @@ fn build_channel(
         },
         bc_stack: c.bc_stack,
         dsp: VirtualChannel {
-            vol_l: match common.stereo_flag {
-                true => vol_invert(
+            vol_l: match common.audio_mode {
+                AudioMode::Stereo => vol_invert(
                     (u16::from(volume) * u16::from(Pan::MAX.as_u8() - pan)).to_le_bytes()[1],
                     invert_flags.left,
                 ),
-                false => vol_invert(volume >> 2, invert_flags.mono),
+                AudioMode::Mono => vol_invert(volume >> 2, invert_flags.mono),
             },
-            vol_r: match common.stereo_flag {
-                true => vol_invert(
+            vol_r: match common.audio_mode {
+                AudioMode::Stereo => vol_invert(
                     (u16::from(volume) * u16::from(pan)).to_le_bytes()[1],
                     invert_flags.right,
                 ),
-                false => vol_invert(volume >> 2, invert_flags.mono),
+                AudioMode::Mono => vol_invert(volume >> 2, invert_flags.mono),
             },
             pitch_l,
             pitch_h,
@@ -1959,7 +1965,7 @@ impl InterpreterOutput {
             apu_write(
                 addresses::LOADER_DATA_TYPE,
                 LoaderDataType {
-                    stereo_flag: self.stereo_flag,
+                    audio_mode: self.audio_mode,
                     play_song: false,
                 }
                 .driver_value(),

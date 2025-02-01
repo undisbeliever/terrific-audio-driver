@@ -12,7 +12,9 @@ use std::sync::OnceLock;
 use compiler::common_audio_data::{build_common_audio_data, CommonAudioData};
 use compiler::data;
 use compiler::data::{validate_sfx_export_order, DefaultSfxFlags, Instrument, Name};
-use compiler::driver_constants::{addresses, io_commands, FIRST_SFX_CHANNEL, N_SFX_CHANNELS};
+use compiler::driver_constants::{
+    addresses, io_commands, AudioMode, FIRST_SFX_CHANNEL, N_SFX_CHANNELS,
+};
 use compiler::envelope::{Envelope, Gain};
 use compiler::notes::Octave;
 use compiler::samples::combine_samples;
@@ -399,12 +401,12 @@ struct Emu {
 }
 
 impl Emu {
-    const STEREO_FLAG: bool = true;
+    const AUDIO_MODE: AudioMode = AudioMode::Stereo;
 
     pub fn new(common_audio_data: &CommonAudioData) -> Emu {
         let mut emu = TadEmulator::new();
 
-        emu.load_cad_and_blank_song(common_audio_data, None, Self::STEREO_FLAG)
+        emu.load_cad_and_blank_song(common_audio_data, None, Self::AUDIO_MODE)
             .unwrap();
 
         let mut sfx_addrs = common_audio_data.sound_effect_addresses();
