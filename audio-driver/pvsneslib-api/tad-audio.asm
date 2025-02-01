@@ -206,7 +206,7 @@ TAD_LoaderDataType__STEREO_FLAG = 1 << TAD_LoaderDataType__STEREO_FLAG_BIT
 ;; If this bit is clear, the audio driver will start in a paused state.
 ;;
 ;; MUST NOT be set when loading code or common-audio-data.
-TAD_LoaderDataType__PLAY_SONG_BIT = 6
+TAD_LoaderDataType__PLAY_SONG_BIT = 5
 TAD_LoaderDataType__PLAY_SONG_FLAG = 1 << TAD_LoaderDataType__PLAY_SONG_BIT
 
 
@@ -1064,9 +1064,10 @@ _tad_loader_gotoNextBank__:
         bcc     @WFL_Return
 
         ; Determine next state
-        .assert TAD_Flags__PLAY_SONG_IMMEDIATELY == $40
+        .assert TAD_Flags__PLAY_SONG_IMMEDIATELY == $20
         .assert TAD_State__LOADING_SONG_DATA_PAUSED + 1 == TAD_State__LOADING_SONG_DATA_PLAY
         lda     tad_flags__
+        asl
         asl
         asl
         lda     #0

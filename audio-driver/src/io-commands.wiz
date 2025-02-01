@@ -63,7 +63,7 @@ namespace LoaderDataType {
     // If this bit is clear, the audio driver will start in a paused state.
     //
     // MUST NOT be set when loading code or common-audio-data.
-    let PLAY_SONG_BIT = 6;
+    let PLAY_SONG_BIT = 5;
 }
 
 

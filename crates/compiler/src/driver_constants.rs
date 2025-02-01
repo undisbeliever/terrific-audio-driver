@@ -208,7 +208,7 @@ impl LoaderDataType {
         };
 
         if self.play_song {
-            o |= 1 << 6;
+            o |= 1 << 5;
         }
 
         o

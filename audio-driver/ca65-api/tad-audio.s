@@ -297,7 +297,7 @@ TAD_CENTER_PAN = TAD_MAX_PAN / 2
     ;; If this bit is clear, the audio driver will start in a paused state.
     ;;
     ;; MUST NOT be set when loading code or common-audio-data.
-    PLAY_SONG_BIT = 6
+    PLAY_SONG_BIT = 5
     PLAY_SONG_FLAG = 1 << PLAY_SONG_BIT
 .endscope
 
@@ -1082,9 +1082,10 @@ ReturnFalse:
         bcc     @Return
 
         ; Determine next state
-        .assert TadFlags::PLAY_SONG_IMMEDIATELY = $40, error
+        .assert TadFlags::PLAY_SONG_IMMEDIATELY = $20, error
         .assert TadState::LOADING_SONG_DATA_PAUSED + 1 = TadState::LOADING_SONG_DATA_PLAY, error
         lda     Tad_flags
+        asl
         asl
         asl
         lda     #0

@@ -181,7 +181,7 @@ TadLoaderDataType .block
     ; If this bit is clear, the audio driver will start in a paused state.
     ;
     ; MUST NOT be set when loading code or common-audio-data.
-    PLAY_SONG_BIT = 6
+    PLAY_SONG_BIT = 5
     PLAY_SONG_FLAG = 1 << PLAY_SONG_BIT
 .endblock
 
@@ -840,9 +840,10 @@ TadPrivate_Process_WaitingForLoader__ .proc ; RTL
         bcc     _Return
 
         ; Determine next state
-        .cerror !(TadFlags.PLAY_SONG_IMMEDIATELY == $40)
+        .cerror !(TadFlags.PLAY_SONG_IMMEDIATELY == $20)
         .cerror !(TadState.LOADING_SONG_DATA_PAUSED + 1 == TadState.LOADING_SONG_DATA_PLAY)
         lda     Tad_flags
+        asl     a
         asl     a
         asl     a
         lda     #0
