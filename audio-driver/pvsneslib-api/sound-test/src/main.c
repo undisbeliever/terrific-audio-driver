@@ -56,7 +56,7 @@ u8 menu_sfxPan;
 u8 menu_mainVolume;
 u8 menu_tempoOverride;
 u8 menu_channelMask;
-bool menu_stereoFlag;
+u8 menu_audioMode;
 bool menu_songStartsFlag;
 
 #define MAX_VOLUME 127
@@ -96,7 +96,7 @@ enum MenuItem {
     MENU__MAIN_VOLUME,
     MENU__OVERRIDE_TEMPO,
     MENU__CHANNEL_MASK,
-    MENU__STEREO_FLAG,
+    MENU__AUDIO_MODE,
     MENU__SONG_STARTS_FLAG,
     MENU__STOP_SOUND_EFFECTS,
     MENU__PAUSE_UNPAUSE_MUSIC,
@@ -111,8 +111,11 @@ const char* const STATE_LABEL__SFX     = "SFX    ";
 const char* const STATE_LABEL__PAUSED  = "PAUSED ";
 const char* const STATE_LABEL__LOADING = "LOADING";
 
-const char* const STEREO_FLAG_SET_LABEL   = "STEREO";
-const char* const STEREO_FLAG_CLEAR_LABEL = "MONO  ";
+const char* const AUDIO_MODE_LABELS[3] = {
+    "MONO    ",
+    "STEREO  ",
+    "SURROUND",
+};
 
 const char* const SONG_STARTS_SET_LABEL   = "SONGS START IMMEDIATELY";
 const char* const SONG_STARTS_CLEAR_LABEL = "SONGS START PAUSED     ";
@@ -136,7 +139,7 @@ const char* const MenuLabels[12] = {
 void menu_init(void);
 void menu_printState(void);
 void menu_printU8(enum MenuItem item, u16 value);
-void menu_setStereoFlag(bool f);
+void menu_setAudioMode(u8 mode);
 void menu_setSongStartsFlag(bool f);
 void menu_setPos(u8 newPos);
 void menu_updateChannelMask(void);
@@ -166,7 +169,7 @@ void menu_init(void) {
     menu_channelMask = 0xff;
 
     menu_setSongStartsFlag(true);
-    menu_setStereoFlag(true);
+    menu_setAudioMode(TAD_SURROUND);
 
     for (i = 0; i < N_MENU_ITEMS; i++) {
         const char* label = MenuLabels[i];
@@ -223,23 +226,23 @@ void menu_printU8(enum MenuItem item, u16 value) {
     consoleSetTextOffset(0);
 }
 
-void menu_setStereoFlag(bool f) {
-    menu_stereoFlag = f;
+void menu_setAudioMode(u8 mode) {
+    if (mode >= 0x80) {
+        mode = 2;
+    }
+    else if (mode >= 3) {
+        mode = 0;
+    }
+    menu_audioMode = mode;
 
-    if (menuPos == MENU__STEREO_FLAG) {
+    tad_audioMode = mode;
+
+    if (menuPos == MENU__AUDIO_MODE) {
         consoleSetTextOffset(PAL_SELECTED << 10);
     }
-    consoleDrawText(MENU_LABEL_XPOS, MENU_TO_YPOS(MENU__STEREO_FLAG), "%s", 
-                    (f ? STEREO_FLAG_SET_LABEL : STEREO_FLAG_CLEAR_LABEL));
+    consoleDrawText(MENU_LABEL_XPOS, MENU_TO_YPOS(MENU__AUDIO_MODE), "%s", AUDIO_MODE_LABELS[mode]);
 
     consoleSetTextOffset(0);
-
-    if (f) {
-        tad_setStereo();
-    }
-    else {
-        tad_setMono();
-    }
 }
 
 void menu_setSongStartsFlag(bool f) {
@@ -379,8 +382,8 @@ void menu_process_action(void) {
         tad_queueCommandOverride_setMusicChannels(menu_channelMask);
         break;
 
-    case MENU__STEREO_FLAG:
-        menu_setStereoFlag(!menu_stereoFlag);
+    case MENU__AUDIO_MODE:
+        menu_setAudioMode(menu_audioMode + 1);
         break;
 
     case MENU__SONG_STARTS_FLAG:
@@ -457,9 +460,12 @@ void menu_process_item(void) {
         }
         break;
 
-    case MENU__STEREO_FLAG:
-        if (keyPressed & (KEY_LEFT | KEY_RIGHT)) {
-            menu_setStereoFlag(!menu_stereoFlag);
+    case MENU__AUDIO_MODE:
+        if (keyPressed & KEY_LEFT) {
+            menu_setAudioMode(menu_audioMode - 1);
+        }
+        else if (keyPressed & KEY_RIGHT) {
+            menu_setAudioMode(menu_audioMode + 1);
         }
         break;
 

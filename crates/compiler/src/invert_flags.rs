@@ -24,7 +24,7 @@ impl InvertFlags {
         (u8::from(self.right) << 7) | (u8::from(self.left) << 6) | (u8::from(self.mono))
     }
 
-    pub fn from_driver_value(e: u8) -> Self {
+    pub(crate) fn from_driver_value(e: u8) -> Self {
         Self {
             right: e & 0x80 != 0,
             left: e & 0x40 != 0,

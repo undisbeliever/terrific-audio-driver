@@ -4,7 +4,7 @@
 //
 // SPDX-License-Identifier: MIT
 
-use crate::audio_thread::AudioMessage;
+use crate::audio_thread::{AudioMessage, DEFAULT_AUDIO_MODE};
 use crate::tabs::FileType;
 use crate::GuiMessage;
 
@@ -39,6 +39,7 @@ const AUDIO_STOP: &str = "&Audio/&Stop Audio";
 
 const AUDIO_MONO: &str = "&Audio/&Mono";
 const AUDIO_STEREO: &str = "&Audio/&Stereo";
+const AUDIO_SURROUND: &str = "&Audio/S&urround";
 
 const SHOW_HELP_SYNTAX: &str = "&Help/&Syntax";
 const SHOW_LICENSES: &str = "&Help/&Licencing Information";
@@ -147,8 +148,16 @@ impl Menu {
         add_audio(
             AUDIO_STEREO,
             Shortcut::None,
-            fltk::menu::MenuFlag::Radio | MenuFlag::Value,
+            fltk::menu::MenuFlag::Radio,
             || AudioMessage::SetAudioMode(AudioMode::Stereo),
+        );
+
+        const _: () = assert!(matches!(DEFAULT_AUDIO_MODE, AudioMode::Surround));
+        add_audio(
+            AUDIO_SURROUND,
+            Shortcut::None,
+            fltk::menu::MenuFlag::Radio | MenuFlag::Value,
+            || AudioMessage::SetAudioMode(AudioMode::Surround),
         );
 
         add(

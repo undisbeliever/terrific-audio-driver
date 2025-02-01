@@ -604,14 +604,6 @@ void test_commandAndSfxQueueEmptyAfterSongLoad(void) {
 // Skipped TestQueueSoundEffectKeepsXY16
 // Skipped TestQueueSoundEffectKeepsXY8
 
-void test_monoStereo(void) {
-    tad_setMono();
-    ASSERT_EQ(tad_getStereoFlag(), false);
-
-    tad_setStereo();
-    ASSERT_EQ(tad_getStereoFlag(), true);
-}
-
 // Does NOT test if the PlaySongImmediately flag is sent to the loader
 void test_songStartsImmediately(void) {
     tad_songsStartImmediately();
@@ -692,7 +684,6 @@ static const VoidFn TAD_TESTS[] = {
     // Skipped TestQueuePannedSoundEffectKeepsXY8
     // Skipped TestQueueSoundEffectKeepsXY16
     // Skipped TestQueueSoundEffectKeepsXY8
-    test_monoStereo,
     test_songStartsImmediately,
     test_songStartPaused,
     test_setTransferSize,

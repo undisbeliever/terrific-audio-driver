@@ -37,11 +37,11 @@
 .export Tad_QueueCommand, Tad_QueueCommandOverride
 .export Tad_QueuePannedSoundEffect, Tad_QueueSoundEffect
 .export Tad_LoadSong, Tad_LoadSongIfChanged, Tad_GetSong, Tad_ReloadCommonAudioData
-.export Tad_SetMono, Tad_SetStereo, Tad_GetStereoFlag
 .export Tad_SongsStartImmediately, Tad_SongsStartPaused, Tad_SetTransferSize
 .export Tad_IsLoaderActive, Tad_IsSongLoaded, Tad_IsSfxPlaying, Tad_IsSongPlaying
 
 .exportzp Tad_sfxQueue_sfx, Tad_sfxQueue_pan
+.export Tad_audioMode
 
 
 ;; =======
@@ -286,17 +286,9 @@ TAD_CENTER_PAN = TAD_MAX_PAN / 2
     ;; Song data MUST be loaded after `TadLoaderDataType.COMMON_DATA`.
     MIN_SONG_VALUE = 2
 
-    ;; If this bit is set, the song will be played in stereo.
-    ;; If this bit is clear, the song will be played in mono.
-    ;;
-    ;; MUST NOT be set when loading code or common-audio-data.
-    STEREO_FLAG_BIT = 7
-    STEREO_FLAG = 1 << STEREO_FLAG_BIT
+    STEREO_FLAG = 1 << 7
+    SURROUND_FLAG = 1 << 6
 
-    ;; If this bit is set, the song will play after the echo buffer has been cleared.
-    ;; If this bit is clear, the audio driver will start in a paused state.
-    ;;
-    ;; MUST NOT be set when loading code or common-audio-data.
     PLAY_SONG_BIT = 5
     PLAY_SONG_FLAG = 1 << PLAY_SONG_BIT
 .endscope
@@ -364,12 +356,6 @@ TAD__FIRST_LOADING_SONG_STATE = TadState::LOADING_SONG_DATA_PAUSED
 
 
 .scope TadFlags
-    ;; The mono/stereo flag
-    ;;  * If set, the next song will be played in stereo.
-    ;;  * If clear, the next song will be played in mono.
-    ;; Default: Mono
-    STEREO                   = TadLoaderDataType::STEREO_FLAG
-
     ;; Determines if the song is played immediately after loading into Audio-RAM
     ;;  * If set, the audio driver will play the song after the next song is loaded into Audio-RAM
     ;;  * If clear, the audio driver will be paused after the next song is loaded into Audio-RAM
@@ -383,7 +369,7 @@ TAD__FIRST_LOADING_SONG_STATE = TadState::LOADING_SONG_DATA_PAUSED
 
 
     ;; A mask for the flags that are sent to the loader
-    _LOADER_MASK = STEREO | PLAY_SONG_IMMEDIATELY
+    _LOADER_MASK = PLAY_SONG_IMMEDIATELY
 .endscope
 
 
@@ -391,6 +377,10 @@ TAD__FIRST_LOADING_SONG_STATE = TadState::LOADING_SONG_DATA_PAUSED
     ;; The current audio driver state
     ;; (`TadState` enum)
     Tad_state: .res 1
+
+    ;; Mono/Stereo/Surround audio mode
+    ;; (`TadAudioMode` enum)
+    Tad_audioMode: .res 1
 
     ;; `TadFlags` bitfield
     ;; (see `TadFlags` namespace)
@@ -846,6 +836,8 @@ ReturnFalse:
 
     __Tad_Loader_TransferLoaderViaIpl
 
+    stz     Tad_audioMode
+
     lda     #TadFlags::RELOAD_COMMON_AUDIO_DATA | TadFlags::PLAY_SONG_IMMEDIATELY
     sta     Tad_flags
 
@@ -1077,6 +1069,20 @@ ReturnFalse:
 
         ; a = Tad_flags
         and     #TadFlags::_LOADER_MASK
+        sta     Tad_flags
+
+        ; Convert `Tad_audioMode` to TadLoaderDataType
+        .assert (((0 + 1) & 3) << 6) = TadLoaderDataType::SURROUND_FLAG, error ; mono
+        .assert (((1 + 1) & 3) << 6) = TadLoaderDataType::STEREO_FLAG, error ; stereo
+        .assert (((2 + 1) & 3) << 6) = TadLoaderDataType::STEREO_FLAG | TadLoaderDataType::SURROUND_FLAG, error ; surround
+        lda     Tad_audioMode
+        inc
+        and     #3
+        lsr
+        ror
+        ror
+
+        ora     Tad_flags
         ora     #TadLoaderDataType::MIN_SONG_VALUE
         jsr     _Tad_Loader_CheckReadyAndSendLoaderDataType
         bcc     @Return
@@ -1334,38 +1340,6 @@ Tad_QueueCommandOverride := Tad_QueueCommand::WriteCommand
 .proc Tad_ReloadCommonAudioData
     lda     #TadFlags::RELOAD_COMMON_AUDIO_DATA
     tsb     Tad_flags
-    rts
-.endproc
-
-
-.a8
-; I unknown
-; DB access lowram
-.proc Tad_SetMono
-    lda     #TadFlags::STEREO
-    trb     Tad_flags
-    rts
-.endproc
-
-
-.a8
-; I unknown
-; DB access lowram
-.proc Tad_SetStereo
-    lda     #TadFlags::STEREO
-    tsb     Tad_flags
-    rts
-.endproc
-
-
-; OUT: carry set if stereo
-.a8
-; I unknown
-; DB access lowram
-.proc Tad_GetStereoFlag
-    .assert TadFlags::STEREO = $80, error
-    lda     Tad_flags
-    cmp     #TadFlags::STEREO
     rts
 .endproc
 

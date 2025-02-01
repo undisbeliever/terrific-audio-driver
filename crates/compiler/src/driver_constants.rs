@@ -187,6 +187,7 @@ pub const MAX_COMMON_DATA_SIZE: usize = AUDIO_RAM_SIZE - (addresses::COMMON_DATA
 pub enum AudioMode {
     Mono,
     Stereo,
+    Surround,
 }
 
 // Loader constants
@@ -203,8 +204,9 @@ impl LoaderDataType {
         let mut o = 2;
 
         o |= match self.audio_mode {
-            AudioMode::Mono => 0,
-            AudioMode::Stereo => 1 << 7,
+            AudioMode::Mono => 1 << 6,
+            AudioMode::Stereo => 2 << 6,
+            AudioMode::Surround => 3 << 6,
         };
 
         if self.play_song {

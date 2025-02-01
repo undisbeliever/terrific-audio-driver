@@ -127,7 +127,7 @@ struct EchoVariables {
 impl EchoVariables {
     // Using raw numbers for array size so I get a compile error
     // when the audio-driver echo variable size changes.
-    fn to_driver_data(&self) -> [u8; 13] {
+    fn to_driver_data(&self, audio_mode: AudioMode) -> [u8; 13] {
         let to_u8 = |i: i8| i.to_le_bytes()[0];
 
         assert!(self.max_edl <= EchoEdl::MAX.as_u8());
@@ -142,7 +142,7 @@ impl EchoVariables {
         out[9] = to_u8(self.feedback);
         out[10] = self.volume_l;
         out[11] = self.volume_r;
-        out[12] = self.invert_flags;
+        out[12] = fix_invert_flags(self.invert_flags, audio_mode);
 
         out
     }
@@ -1636,6 +1636,19 @@ impl CommonAudioDataSoA<'_> {
     }
 }
 
+fn fix_invert_flags(invert_flags: u8, audio_mode: AudioMode) -> u8 {
+    match audio_mode {
+        AudioMode::Mono | AudioMode::Surround => invert_flags,
+        AudioMode::Stereo => {
+            if invert_flags & 0x01 != 0 {
+                0xff
+            } else {
+                0
+            }
+        }
+    }
+}
+
 fn vol_invert(vol: u8, invert_flag: bool) -> i8 {
     debug_assert!(vol < 0x80);
     let vol = i8::from_le_bytes([vol]);
@@ -1751,7 +1764,28 @@ fn build_channel(
 
     let volume = volume_soa.value;
     let pan = pan_soa.value;
-    let invert_flags = InvertFlags::from_driver_value(c.invert_flags);
+    let invert_flags = fix_invert_flags(c.invert_flags, common.audio_mode);
+
+    let (vol_l, vol_r) = {
+        let iflags = InvertFlags::from_driver_value(invert_flags);
+
+        match common.audio_mode {
+            AudioMode::Stereo | AudioMode::Surround => (
+                vol_invert(
+                    (u16::from(volume) * u16::from(Pan::MAX.as_u8() - pan)).to_le_bytes()[1],
+                    iflags.left,
+                ),
+                vol_invert(
+                    (u16::from(volume) * u16::from(pan)).to_le_bytes()[1],
+                    iflags.right,
+                ),
+            ),
+            AudioMode::Mono => {
+                let vol = vol_invert(volume >> 2, iflags.mono);
+                (vol, vol)
+            }
+        }
+    };
 
     let (vibrato_tick_counter_start, vibrato_half_wavelength) =
         match c.vibrato_quarter_wavelength_in_ticks {
@@ -1778,7 +1812,7 @@ fn build_channel(
             inst_pitch_offset,
             volume: volume_soa,
             pan: pan_soa,
-            invert_flags: c.invert_flags,
+            invert_flags,
             vibrato_pitch_offset_per_tick: c.vibrato_pitch_offset_per_tick,
             vibrato_tick_counter: vibrato_tick_counter_start,
             vibrato_tick_counter_start,
@@ -1792,20 +1826,8 @@ fn build_channel(
         },
         bc_stack: c.bc_stack,
         dsp: VirtualChannel {
-            vol_l: match common.audio_mode {
-                AudioMode::Stereo => vol_invert(
-                    (u16::from(volume) * u16::from(Pan::MAX.as_u8() - pan)).to_le_bytes()[1],
-                    invert_flags.left,
-                ),
-                AudioMode::Mono => vol_invert(volume >> 2, invert_flags.mono),
-            },
-            vol_r: match common.audio_mode {
-                AudioMode::Stereo => vol_invert(
-                    (u16::from(volume) * u16::from(pan)).to_le_bytes()[1],
-                    invert_flags.right,
-                ),
-                AudioMode::Mono => vol_invert(volume >> 2, invert_flags.mono),
-            },
+            vol_l,
+            vol_r,
             pitch_l,
             pitch_h,
             scrn,
@@ -2088,7 +2110,8 @@ impl InterpreterOutput {
                 let echo_dirty = usize::from(addresses::ECHO_DIRTY);
                 let max_edl_addr = usize::from(addresses::MAX_EDL);
 
-                let echo_variables: [u8; ECHO_VARIABLES_SIZE] = self.echo.to_driver_data();
+                let echo_variables: [u8; ECHO_VARIABLES_SIZE] =
+                    self.echo.to_driver_data(self.audio_mode);
                 apuram[echo_addr..echo_addr + ECHO_VARIABLES_SIZE].copy_from_slice(&echo_variables);
 
                 apuram[max_edl_addr] = self.echo.max_edl;

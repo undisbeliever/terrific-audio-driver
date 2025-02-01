@@ -48,16 +48,20 @@ namespace LoaderDataType {
     // Song data MUST be loaded after `LoaderDataType.COMMON_DATA`.
     let MIN_SONG_VALUE = 2;
 
-    // The stereo flag is set by the loader when the song is loaded into memory.
-    let MONO_SONG_DATA   = MIN_SONG_VALUE;
-    let STEREO_SONG_DATA = MIN_SONG_VALUE | 0x80;
-
 
     // If this bit is set, the song will be played in stereo.
     // If this bit is clear, the song will be played in mono.
     //
     // MUST NOT be set when loading code or common-audio-data.
     let STEREO_FLAG_BIT = 7;
+
+    // If this bit is set, the left and right channels can be individually inverted.
+    // If this bit is clear, the left and right channels are only inverted if the mono invert flag is set.
+    //
+    // OPTIMISATION: Should be set if in MONO mode (STEREO_FLAG_BIT is clear).
+    //
+    // MUST NOT be set when loading code or common-audio-data.
+    let SURROUND_FLAG_BIT = 6;
 
     // If this bit is set, the song will play after the echo buffer has been cleared.
     // If this bit is clear, the audio driver will start in a paused state.

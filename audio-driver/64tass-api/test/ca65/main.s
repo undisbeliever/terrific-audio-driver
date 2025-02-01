@@ -44,9 +44,6 @@ TadSubroutines:
     .faraddr Tad_LoadSongIfChanged
     .faraddr Tad_GetSong
     .faraddr Tad_ReloadCommonAudioData
-    .faraddr Tad_SetMono
-    .faraddr Tad_SetStereo
-    .faraddr Tad_GetStereoFlag
     .faraddr Tad_SongsStartImmediately
     .faraddr Tad_SongsStartPaused
     .faraddr Tad_SetTransferSize

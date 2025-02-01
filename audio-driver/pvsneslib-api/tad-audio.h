@@ -146,6 +146,29 @@
 /*! Minimum tick clock value for tad_queueCommand_setSongTempo() and tad_queueCommandOverride_setSongTempo() */
 #define TAD_MIN_TICK_CLOCK 64
 
+/*! Mono/Stereo/Surround audio mode */
+typedef enum TadAudioMode {
+    /*!
+     * Channels are not panned
+     *
+     * The default mode is MONO.
+     */
+    TAD_MONO = 0,
+
+    /*!
+     * Channels can be panned
+     *
+     * `set_channel_invert` and `set_echo_invert` instructions will invert both
+     * the left AND right channels if the invert-mono flag is set.
+     */
+    TAD_STEREO = 1,
+
+    /*!
+     * Channels can be panned and the left or right channels can be individually inverted.
+     */
+    TAD_SURROUND = 2,
+} TadAudioMode;
+
 
 /*!
  * Initialises the audio driver:
@@ -154,10 +177,10 @@
  *  * Loads the audio driver into Audio-RAM
  *  * Sets the song to 0 (silence)
  *  * Resets variables
+ *  * Sets the TadAudioMode to MONO
  *  * Sets the flags
  *      * Sets the *Reload Common Audio Data* flag
  *      * Sets the *Play Song Immediately* flag
- *      * Clears the *Stereo* flag (mono output)
  *  * Queues a common audio data transfer
  *
  * This function will require multiple frames of execution time.
@@ -421,24 +444,6 @@ u8 tad_getSong();
 void tad_reloadCommonAudioData(void);
 
 /*!
- * Clears the stereo flag.
- * This will not take effect until the next song is loaded into Audio-RAM.
- */
-void tad_setMono(void);
-
-/*!
- * Set the stereo flag.
- * This will not take effect until the next song is loaded into Audio-RAM.
- */
-void tad_setStereo(void);
-
-/*!
- * Reads the mono/stereo flag.
- * @return true if stereo, false if mono
- */
-bool tad_getStereoFlag(void);
-
-/*!
  * Sets the `PlaySongImmediately` flag
  */
 void tad_songsStartImmediately(void);
@@ -490,6 +495,17 @@ bool tad_isSongPlaying(void);
 /*!
  * @}
  */
+
+
+/*!
+ * Mono/Stereo/Surround audio mode.
+ *
+ * Changes to `tad_audioMode` will not take effect until the next song is loaded into Audio-RAM.
+ *
+ * \see TadAudioMode
+ */
+extern u8 tad_audioMode;
+
 
 /*!
  * @name Sound Effect Queue

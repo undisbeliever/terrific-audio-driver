@@ -12,9 +12,14 @@ Version 0.1.0
  * Changed `LoaderDataType` format
     * Removed `SKIP_ECHO_BUFFER_RESET_BIT`
     * Changed `PLAY_SONG_BIT`
+    * Added `SURROUND_FLAG_BIT`
  * Removed `blank-song.bin` (`Tad_BlankSong_Bin`).
    The blank song is now a single zero byte embedded in the ca65/64tass/pvsneslib API code.
  * The song data format has changed.
+ * API changes:
+    * Removed `Tad_SetMono`, `Tad_SetStereo`, `Tad_GetStereoFlag` functions
+    * Added `TadAudioMode` enum
+    * Added global `tad_audioMode` variable
 
 Audio driver changes:
  * Stereo echo volume
@@ -31,6 +36,9 @@ Audio driver changes:
  * The `:` `skip_last_loop` can now jump more than 256 bytes
  * Added sound effect subroutines
  * Sound effects playing noise will mute music noise.
+ * Added surround audio mode
+    * Surround mode allows for the left or right channels to be individually inverted.
+    * In stereo mode, the left and right channels are both inverted if the mono invert-flag is set.
 
 MML changes:
  * `#EchoVolume` now accepts a stereo input

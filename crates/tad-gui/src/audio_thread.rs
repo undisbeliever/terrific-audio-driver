@@ -32,6 +32,8 @@ use crate::compiler_thread::ItemId;
 use crate::sfx_export_order::SfxId;
 use crate::GuiMessage;
 
+pub const DEFAULT_AUDIO_MODE: AudioMode = AudioMode::Surround;
+
 /// Sample rate to run the audio driver at
 const APU_SAMPLE_RATE: i32 = 32040;
 
@@ -478,7 +480,7 @@ impl TadState {
         Self {
             emu: tad_emu::TadEmulator::new(),
             blank_song: Arc::new(blank_song()),
-            audio_mode: AudioMode::Stereo,
+            audio_mode: DEFAULT_AUDIO_MODE,
             cad_no_sfx: None,
             cad_with_sfx_buffer: None,
             cad_with_sfx: None,

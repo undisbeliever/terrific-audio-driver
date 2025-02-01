@@ -97,9 +97,6 @@ STACK_BOTTOM = $1f80
         .long Tad_LoadSongIfChanged
         .long Tad_GetSong
         .long Tad_ReloadCommonAudioData
-        .long Tad_SetMono
-        .long Tad_SetStereo
-        .long Tad_GetStereoFlag
         .long Tad_SongsStartImmediately
         .long Tad_SongsStartPaused
         .long Tad_SetTransferSize

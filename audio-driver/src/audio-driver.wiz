@@ -353,10 +353,6 @@ in firstpage {
     var sfxMutedChannels : u8;
 
 
-    // The previous IO port command
-    var previousCommand : u8;
-
-
     // Channel variables that do not fit in zeropage
     namespace channelSoA {
         // Portamento PITCH speed
@@ -433,6 +429,10 @@ in firstpage {
         // NOTE: Adding `instPitchOffset` to the note to play is allowed to an can overflow.
         var instPitchOffset : [u8 ; N_CHANNELS];
     }
+
+
+    // The previous IO port command
+    var previousCommand : u8;
 }
 
 
@@ -698,6 +698,18 @@ func main() {
             (&commonData as *u8)[x] = a = (&commonDataHeader.pointers as *u8)[x];
             x--;
         } while !negative;
+    }
+
+
+    // If not in surround mode, set all echo.invertFlags to the mono-flag
+    // (cannot use `bbs` instructions in wiz, using `mov1 c, addr, bit` instead)
+    carry = loaderDataType $ LoaderDataType.SURROUND_FLAG_BIT;
+    if !carry {
+        a = echo.invertFlags & INVERT_FLAGS.MONO;
+        if !zero {
+            a = 0xff;
+        }
+        echo.invertFlags = a;
     }
 
 
@@ -3150,6 +3162,17 @@ func set_volume(channelIndex : u8 in x, volume : u8 in a) {
 
 // KEEP: X
 func set_channel_invert(channelIndex : u8 in x, flags : u8 in a) {
+    // If not in surround mode, set all flags to the mono-flag
+    //
+    // (cannot use `bbs` instructions in wiz, using `mov1 c, addr, bit` instead)
+    carry = loaderDataType $ LoaderDataType.SURROUND_FLAG_BIT;
+    if !carry {
+        a &= INVERT_FLAGS.MONO;
+        if !zero {
+            a = 0xff;
+        }
+    }
+
     channelSoA.invertFlags[x] = a;
 
     mark_vol_shadow_dirty__inline();
@@ -3733,6 +3756,15 @@ func adjust_echo_i8_limit(channelIndex: u8 in x, echo_index : i8 in a) {
 
 // KEEP: X
 func set_echo_invert(channelIndex : u8 in x, flags: u8 in a) {
+    // If not in surround mode, set all flags to the mono-flag
+    // (cannot use `bbs` instructions in wiz, using `mov1 c, addr, bit` instead)
+    carry = loaderDataType $ LoaderDataType.SURROUND_FLAG_BIT;
+    if !carry {
+        a &= INVERT_FLAGS.MONO;
+        if !zero {
+            a = 0xff;
+        }
+    }
     echo.invertFlags = a;
 
     echoDirty $ ECHO_DIRTY__VOLUME_BIT = true;

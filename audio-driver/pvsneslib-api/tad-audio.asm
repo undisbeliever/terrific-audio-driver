@@ -195,12 +195,9 @@ TAD_LoaderDataType__COMMON_DATA = 1
 ;; Song data MUST be loaded after `LoaderDataType.COMMON_DATA`.
 TAD_LoaderDataType__MIN_SONG_VALUE = 2
 
-;; If this bit is set, the song will be played in stereo.
-;; If this bit is clear, the song will be played in mono.
-;;
-;; MUST NOT be set when loading code or common-audio-data.
-TAD_LoaderDataType__STEREO_FLAG_BIT = 7
-TAD_LoaderDataType__STEREO_FLAG = 1 << TAD_LoaderDataType__STEREO_FLAG_BIT
+; Audio mode flags
+TAD_LoaderDataType__STEREO_FLAG = 1 << 7
+TAD_LoaderDataType__SURROUND_FLAG = 1 << 6
 
 ;; If this bit is set, the song will play after the echo buffer has been cleared.
 ;; If this bit is clear, the audio driver will start in a paused state.
@@ -297,13 +294,6 @@ TAD_FIRST_LOADING_SONG_STATE = TAD_State__LOADING_SONG_DATA_PAUSED
 ;; Flags
 ;; -----
 
-
-;; The mono/stereo flag
-;;  * If set, the next song will be played in stereo.
-;;  * If clear, the next song will be played in mono.
-;; Default: Mono
-TAD_Flags__STEREO                   = TAD_LoaderDataType__STEREO_FLAG
-
 ;; Determines if the song is played immediately after loading into Audio-RAM
 ;;  * If set, the audio driver will play the song after the next song is loaded into Audio-RAM
 ;;  * If clear, the audio driver will be paused after the next song is loaded into Audio-RAM
@@ -316,7 +306,7 @@ TAD_Flags__PLAY_SONG_IMMEDIATELY    = TAD_LoaderDataType__PLAY_SONG_FLAG
 TAD_Flags__RELOAD_COMMON_AUDIO_DATA = 1 << 0
 
 ;; A mask for the flags that are sent to the loader
-TAD_Flags__LOADER_MASK = TAD_Flags__STEREO | TAD_Flags__PLAY_SONG_IMMEDIATELY
+TAD_Flags__LOADER_MASK = TAD_Flags__PLAY_SONG_IMMEDIATELY
 
 
 ;; ============
@@ -1059,6 +1049,20 @@ _tad_loader_gotoNextBank__:
 
         ; a = tad_flags
         and     #TAD_Flags__LOADER_MASK
+        sta     tad_flags__
+
+        ; Convert `Tad_audioMode` to TAD_LoaderDataType
+        .assert (((0 + 1) & 3) << 6) == TAD_LoaderDataType__SURROUND_FLAG ; mono
+        .assert (((1 + 1) & 3) << 6) == TAD_LoaderDataType__STEREO_FLAG ; stereo
+        .assert (((2 + 1) & 3) << 6) == TAD_LoaderDataType__STEREO_FLAG | TAD_LoaderDataType__SURROUND_FLAG ; surround
+        lda     tad_audioMode
+        inc     a
+        and     #3
+        lsr     a
+        ror     a
+        ror     a
+
+        ora     tad_flags__
         ora     #TAD_LoaderDataType__MIN_SONG_VALUE
         jsr     _tad_loader_checkReadyAndSendLoaderDataType__
         bcc     @WFL_Return
@@ -1212,7 +1216,8 @@ _tad_process__loading__:
         .assert TAD_FIRST_LOADING_STATE == TAD_State__WAITING_FOR_LOADER + 1
         cmp     #TAD_State__WAITING_FOR_LOADER
         beq     @WaitingForLoader
-        bcc     @Return_I16
+        bcs     @Loading
+        jmp     @Return_I16
             @Loading:
                 jsr     _tad_process__loading__
                 bra     @Return_I16
@@ -1239,6 +1244,8 @@ tad_init:
 // DB = $80
 
     _tad_loader_transferLoaderViaIpl__
+
+    stz     tad_audioMode
 
     lda     #TAD_Flags__RELOAD_COMMON_AUDIO_DATA | TAD_Flags__PLAY_SONG_IMMEDIATELY
     sta     tad_flags__
@@ -1480,8 +1487,6 @@ tad_setTransferSize:
 .endm
 
 __Tad_FlagFunction tad_reloadCommonAudioData RELOAD_COMMON_AUDIO_DATA 1
-__Tad_FlagFunction tad_setStereo             STEREO                   1
-__Tad_FlagFunction tad_setMono               STEREO                   0
 __Tad_FlagFunction tad_songsStartImmediately PLAY_SONG_IMMEDIATELY    1
 __Tad_FlagFunction tad_songsStartPaused      PLAY_SONG_IMMEDIATELY    0
 
@@ -1490,18 +1495,6 @@ __Tad_FlagFunction tad_songsStartPaused      PLAY_SONG_IMMEDIATELY    0
 ;; ------------------------
 ;; State Querying Functions
 ;; ------------------------
-
-
-.section "tad_getStereoFlag" SUPERFREE
-; bool tad_getStereoFlag(void)
-tad_getStereoFlag:
-    __Push__A8_noX_noY
-
-    .assert TAD_Flags__STEREO == $80
-    lda.l   tad_flags__
-
-    __PopReturn_noX_noY__bool_in_negative
-.ends
 
 
 .section "tad_isLoaderActive" SUPERFREE
@@ -1758,6 +1751,10 @@ tad__Command_A__Override_WithParameter__:
     ;; `Flags` bitfield
     ;; (see `Flags` namespace)
     tad_flags__: db
+
+    ;; Mono/Stereo/Surround audio mode
+    ;; (`TadAudioMode` enum)
+    tad_audioMode: db
 
     ;; Number of bytes to transfer per `tad_process` call
     ;;

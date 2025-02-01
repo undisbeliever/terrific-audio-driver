@@ -170,17 +170,9 @@ TadLoaderDataType .block
     ; Song data MUST be loaded after `TadLoaderDataType.COMMON_DATA`.
     MIN_SONG_VALUE = 2
 
-    ; If this bit is set, the song will be played in stereo.
-    ; If this bit is clear, the song will be played in mono.
-    ;
-    ; MUST NOT be set when loading code or common-audio-data.
-    STEREO_FLAG_BIT = 7
-    STEREO_FLAG = 1 << STEREO_FLAG_BIT
+    STEREO_FLAG = 1 << 7
+    SURROUND_FLAG = 1 << 6
 
-    ; If this bit is set, the song will play after the echo buffer has been cleared.
-    ; If this bit is clear, the audio driver will start in a paused state.
-    ;
-    ; MUST NOT be set when loading code or common-audio-data.
     PLAY_SONG_BIT = 5
     PLAY_SONG_FLAG = 1 << PLAY_SONG_BIT
 .endblock
@@ -609,6 +601,8 @@ Tad_Init .proc
 
 .databank TAD_DB_LOWRAM
 
+    stz     Tad_audioMode
+
     lda     #TadFlags.RELOAD_COMMON_AUDIO_DATA | TadFlags.PLAY_SONG_IMMEDIATELY
     sta     Tad_flags
 
@@ -835,6 +829,20 @@ TadPrivate_Process_WaitingForLoader__ .proc ; RTL
 
         ; a = Tad_flags
         and     #TadFlags._LOADER_MASK
+        sta     Tad_flags
+
+        ; Convert `Tad_audioMode` to TadLoaderDataType
+        .cerror !((((0 + 1) & 3) << 6) == TadLoaderDataType.SURROUND_FLAG) ; mono
+        .cerror !((((1 + 1) & 3) << 6) == TadLoaderDataType.STEREO_FLAG)   ; stereo
+        .cerror !((((2 + 1) & 3) << 6) == TadLoaderDataType.STEREO_FLAG | TadLoaderDataType.SURROUND_FLAG) ; surround
+        lda     Tad_audioMode
+        inc     a
+        and     #3
+        lsr     a
+        ror     a
+        ror     a
+
+        ora     Tad_flags
         ora     #TadLoaderDataType.MIN_SONG_VALUE
         jsr     TadPrivate_Loader_CheckReadyAndSendLoaderDataType
         bcc     _Return

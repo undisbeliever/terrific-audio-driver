@@ -449,6 +449,9 @@ namespace INVERT_FLAGS {
     let RIGHT_BIT = 7;
     let LEFT_BIT = 6;
     let MONO_BIT = 0;
+
+
+    let MONO = 1 << MONO_BIT;
 }
 
 

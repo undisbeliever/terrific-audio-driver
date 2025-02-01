@@ -92,7 +92,7 @@ ROM_SPEED   = ROM_SPEED__Slow
         mainVolume:     .res 1
         tempoOverride:  .res 1
         channelMask:    .res 1
-        stereoFlag:     .res 1
+        audioMode:      .res 1
         songStartsFlag: .res 1
     .endscope
 
@@ -119,7 +119,7 @@ SFX_PAN_YPOS        = MENU_YPOS + 2 * 2
 MAIN_VOLUME_YPOS    = MENU_YPOS + 3 * 2
 OVERRIDE_TEMPO_YPOS = MENU_YPOS + 4 * 2
 CHANNEL_MASK_YPOS   = MENU_YPOS + 5 * 2
-STEREO_FLAG_YPOS    = MENU_YPOS + 6 * 2
+AUDIO_MODE_YPOS     = MENU_YPOS + 6 * 2
 SONG_STARTS_YPOS    = MENU_YPOS + 7 * 2
 
 N_MENU_ITEMS        = 12
@@ -179,7 +179,7 @@ MenuProcessFunctions:
     .addr   Menu_MainVolume_Process
     .addr   Menu_OverrideTempo_Process
     .addr   MenuChannelMask_Process
-    .addr   Menu_StereoFlag_Process
+    .addr   Menu_AudioMode_Process
     .addr   Menu_SongStartsFlag_Process
     .addr   Menu_Null_Process
     .addr   Menu_Null_Process
@@ -198,7 +198,7 @@ MenuActionFunctions:
     .addr   Menu_MainVolume_Action
     .addr   Menu_OverrideTempo_Action
     .addr   MenuChannelMask_Action
-    .addr   Menu_StereoFlag_Action
+    .addr   Menu_AudioMode_Action
     .addr   Menu_SongStartsFlag_Action
     .addr   Menu_StopSoundEffects_Action
     .addr   Menu_PauseUnPauseMusic_Action
@@ -238,8 +238,8 @@ MenuActionFunctions:
     lda     #100
     jsr     _SetTempoOverride
 
-    lda     #1
-    jsr     _SetStereoFlag
+    lda     #TadAudioMode::SURROUND
+    jsr     _SetAudioMode
 
     lda     #1
     jsr     _SetSongStartsFlag
@@ -572,11 +572,11 @@ Menu_SfxPan_Action = Menu_PlaySfx_Action
 .a8
 .i16
 ;: DB = $7e
-.proc Menu_StereoFlag_Process
-    lda     Menu::stereoFlag
-    jsr     _AdjustWithDpad_Bool
+.proc Menu_AudioMode_Process
+    lda     Menu::audioMode
+    jsr     _AdjustWithDpad_Slow
     bcc     :+
-        jmp     _SetStereoFlag
+        jmp     _SetAudioMode
     :
     rts
 .endproc
@@ -585,10 +585,10 @@ Menu_SfxPan_Action = Menu_PlaySfx_Action
 .a8
 .i16
 ;: DB = $7e
-.proc Menu_StereoFlag_Action
-    lda     Menu::stereoFlag
+.proc Menu_AudioMode_Action
+    lda     Menu::audioMode
     inc
-    jmp     _SetStereoFlag
+    jmp     _SetAudioMode
 .endproc
 
 
@@ -820,16 +820,35 @@ _SetVarFn_  _SetTempoOverride,  OVERRIDE_TEMPO_YPOS,    tempoOverride,  TAD_MIN_
 .a8
 .i16
 ;; DB = $7e
-.proc _SetStereoFlag
-    and     #1
-    sta     Menu::stereoFlag
+.proc _SetAudioMode
+    MAX = 2
 
-    beq     :+
-        TextBuffer_PrintLiteral MENU_LABEL_XPOS, STEREO_FLAG_YPOS, "STEREO"
-        jmp     Tad_SetStereo
+    cmp     #$80
+    bcc     :+
+       lda     #MAX
     :
-        TextBuffer_PrintLiteral MENU_LABEL_XPOS, STEREO_FLAG_YPOS, "MONO  "
-        jmp     Tad_SetMono
+    cmp     #MAX + 1
+    bcc     :+
+        lda     #0
+    :
+    sta     Menu::audioMode
+
+    sta     Tad_audioMode
+
+
+    cmp     #TadAudioMode::SURROUND
+    bne     :+
+        TextBuffer_PrintLiteral MENU_LABEL_XPOS, AUDIO_MODE_YPOS, "SURROUND"
+        rts
+    :
+    cmp     #TadAudioMode::STEREO
+    bne     :+
+        TextBuffer_PrintLiteral MENU_LABEL_XPOS, AUDIO_MODE_YPOS, "STEREO  "
+        rts
+    :
+
+    TextBuffer_PrintLiteral MENU_LABEL_XPOS, AUDIO_MODE_YPOS, "MONO    "
+    rts
 .endproc
 
 

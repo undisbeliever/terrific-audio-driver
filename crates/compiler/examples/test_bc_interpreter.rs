@@ -168,6 +168,8 @@ fn assert_bc_intrepreter_matches_emu(
 
     test_channel_soa(addresses::CHANNEL_INST_PITCH_OFFSET, "instPitchOffset");
 
+    test_channel_soa(addresses::CHANNEL_INVERT_FLAGS, "invertFlags");
+
     test_channel_soa(addresses::CHANNEL_VOLUME, "volume");
     test_channel_soa(
         addresses::CHANNEL_VOL_EFFECT_DIRECTION,
@@ -299,6 +301,8 @@ fn song_ticks(song: &SongData) -> TickCounter {
 }
 
 fn test_bc_intrepreter(song: &SongData, common_audio_data: &CommonAudioData) {
+    let audio_mode = AudioMode::Surround;
+
     let song_addr = common_audio_data.min_song_data_addr();
 
     // Clamp to ensure 16 bit tick_counter does not overflow
@@ -308,7 +312,7 @@ fn test_bc_intrepreter(song: &SongData, common_audio_data: &CommonAudioData) {
 
     let mut emu = TadEmulator::new();
     emu.fill_apuram(bytecode_interpreter::UNINITIALISED);
-    emu.load_song(common_audio_data, song, None, AudioMode::Stereo)
+    emu.load_song(common_audio_data, song, None, audio_mode)
         .unwrap();
 
     // Wait for the audio-driver to finish initialization
@@ -340,8 +344,7 @@ fn test_bc_intrepreter(song: &SongData, common_audio_data: &CommonAudioData) {
 
         let tick_count = TickCounter::new(tick_count.into());
 
-        let mut interpreter =
-            SongInterpreter::new(common_audio_data, song, song_addr, AudioMode::Stereo);
+        let mut interpreter = SongInterpreter::new(common_audio_data, song, song_addr, audio_mode);
         let valid = interpreter.process_ticks(tick_count);
         assert!(valid, "SongIntreperter time out");
         assert_bc_intrepreter_matches_emu(&interpreter, &dummy_emu_init, &emu, tick_count);

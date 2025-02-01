@@ -74,12 +74,6 @@ TAD__FIRST_LOADING_SONG_STATE = TadState.LOADING_SONG_DATA_PAUSED
 
 
 TadFlags .block 
-    ; The mono/stereo flag
-    ;  * If set, the next song will be played in stereo.
-    ;  * If clear, the next song will be played in mono.
-    ; Default: Mono
-    STEREO                   = TadLoaderDataType.STEREO_FLAG
-
     ; Determines if the song is played immediately after loading into Audio-RAM
     ;  * If set, the audio driver will play the song after the next song is loaded into Audio-RAM
     ;  * If clear, the audio driver will be paused after the next song is loaded into Audio-RAM
@@ -93,14 +87,37 @@ TadFlags .block
 
 
     ; A mask for the flags that are sent to the loader
-    _LOADER_MASK = STEREO | PLAY_SONG_IMMEDIATELY
+    _LOADER_MASK = PLAY_SONG_IMMEDIATELY
 .endblock
 
+
+TadAudioMode .block
+    ;; Channels are not panned
+    ;;
+    ;; The default mode is MONO.
+    MONO = 0
+
+    ;; Channels can be panned
+    ;;
+    ;; `set_channel_invert` and `set_echo_invert` instructions will invert both
+    ;; the left AND right ;; channels if the invert-mono flag is set.
+    STEREO = 1
+
+    ;; Channels can be panned and the left or right channels can be individually inverted.
+    SURROUND = 2
+.endblock
 
 
 ; The current audio driver state
 ; (see `TadState`)
 Tad_state .byte ?
+
+; Mono/Stereo/Surround audio mode.
+;
+; Changes to `Tad_audioMode` will not take effect until the next song is loaded into Audio-RAM
+;
+; (public TadAudioMode enum byte)
+Tad_audioMode .byte ?
 
 ; `TadFlags` bitfield
 ; (see `TadFlags`)

@@ -36,7 +36,8 @@ UnusedInterruptHandler = BreakHandler
 Main .proc
     jsl     Tad_Init
 
-    jsr     Tad_SetStereo
+    lda     TadAudioMode.SURROUND
+    sta     Tad_audioMode
 
     ldx     #700
     jsr     Tad_SetTransferSize

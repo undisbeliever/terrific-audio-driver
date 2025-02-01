@@ -138,7 +138,6 @@ TestTable:
     .addr   TestQueuePannedSoundEffectKeepsXY8
     .addr   TestQueueSoundEffectKeepsXY16
     .addr   TestQueueSoundEffectKeepsXY8
-    .addr   TestMonoStereo
     .addr   TestSongStartsImmediately
     .addr   TestSongStartPaused
     .addr   TestSetTransferSize
@@ -1153,33 +1152,6 @@ TestTable_SIZE = * - TestTable
 
     rep     #$10
 .i16
-    rts
-.endproc
-
-
-;; Does NOT test if the stereo flag was sent to the audio driver.
-.a8
-.i16
-;; DB access lowram
-.proc TestMonoStereo
-    jsr     Tad_SetMono
-    assert_carry Tad_GetStereoFlag, false
-
-    jsr     Tad_SetStereo
-    assert_carry Tad_GetStereoFlag, true
-
-    sep     #$10
-.i8
-
-    jsr     Tad_SetMono
-    assert_carry Tad_GetStereoFlag, false
-
-    jsr     Tad_SetStereo
-    assert_carry Tad_GetStereoFlag, true
-
-    rep     #$10
-.i16
-
     rts
 .endproc
 

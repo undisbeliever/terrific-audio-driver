@@ -99,6 +99,24 @@ TAD_CENTER_PAN = TAD_MAX_PAN / 2
 TAD_MIN_TICK_CLOCK = 64
 
 
+;; Audio Mode
+.enum TadAudioMode
+    ;; Channels are not panned
+    ;;
+    ;; The default mode is MONO.
+    MONO = 0
+
+    ;; Channels can be panned
+    ;;
+    ;; `set_channel_invert` and `set_echo_invert` instructions will invert both
+    ;; the left AND right ;; channels if the invert-mono flag is set.
+    STEREO = 1
+
+    ;; Channels can be panned and the left or right channels can be individually inverted.
+    SURROUND = 2
+.endenum
+
+
 
 ;; Terrific Audio Driver IO commands
 ;;
@@ -156,10 +174,10 @@ TAD_MIN_TICK_CLOCK = 64
 ;;  * Loads the audio driver into Audio-RAM
 ;;  * Sets the song to 0 (silence)
 ;;  * Resets variables
+;;  * Sets the TadAudioMode to MONO
 ;;  * Sets the flags
 ;;      * Sets the *Reload Common Audio Data* flag
 ;;      * Sets the *Play Song Immediately* flag
-;;      * Clears the *Stereo* flag (mono output)
 ;;  * Queues a common audio data transfer
 ;;
 ;; This function will require multiple frames of execution time.
@@ -336,34 +354,6 @@ TAD_MIN_TICK_CLOCK = 64
 .import Tad_ReloadCommonAudioData
 
 
-;; Clears the stereo flag.
-;; This will not take effect until the next song is loaded into Audio-RAM.
-;;
-;; A8
-;; I unknown
-;; DB access lowram
-.import Tad_SetMono
-
-
-;; Set the stereo flag.
-;; This will not take effect until the next song is loaded into Audio-RAM.
-;;
-;; A8
-;; I unknown
-;; DB access lowram
-.import Tad_SetStereo
-
-
-;; Reads the mono/stereo flag
-;;
-;; OUT: Carry set if stereo
-;;
-;; A8
-;; I unknown
-;; DB access lowram
-.import Tad_GetStereoFlag
-
-
 ;; Sets the `PlaySongImmediately` flag
 ;;
 ;; A8
@@ -428,6 +418,15 @@ TAD_MIN_TICK_CLOCK = 64
 ;; =========
 ;; Variables
 ;; =========
+
+
+;; Mono/Stereo/Surround audio mode.
+;;
+;; Changes to `Tad_audioMode` will not take effect until the next song is loaded into Audio-RAM
+;;
+;; (TadAudioMode enum byte)
+.import Tad_audioMode
+
 
 ;; Sound Effect Queue
 ;; ==================

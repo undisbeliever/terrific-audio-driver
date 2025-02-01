@@ -226,39 +226,6 @@ Tad_ReloadCommonAudioData .proc
 .as
 ; I unknown
 .databank TAD_DB_LOWRAM
-Tad_SetMono .proc
-    lda     #TadFlags.STEREO
-    trb     Tad_flags
-    rts
-.endproc
-
-
-.as
-; I unknown
-.databank TAD_DB_LOWRAM
-Tad_SetStereo .proc
-    lda     #TadFlags.STEREO
-    tsb     Tad_flags
-    rts
-.endproc
-
-
-; OUT: carry set if stereo
-.as
-; I unknown
-.databank TAD_DB_LOWRAM
-Tad_GetStereoFlag .proc
-    .cerror !(TadFlags.STEREO == $80)
-    lda     Tad_flags
-    cmp     #TadFlags.STEREO
-    rts
-.endproc
-
-
-
-.as
-; I unknown
-.databank TAD_DB_LOWRAM
 Tad_SongsStartImmediately .proc
     lda     #TadFlags.PLAY_SONG_IMMEDIATELY
     tsb     Tad_flags
