@@ -16,7 +16,12 @@ use regex::Regex;
 const LOADER: &str = "loader";
 const AUDIO_DRIVER: &str = "audio-driver";
 
-const COMMON_SYMBOLS: &[&str] = &["__loader_dataType", "__loader_songPtr"];
+const COMMON_SYMBOLS: &[&str] = &[
+    "__loader_dataType",
+    "__loader_songPtr",
+    "globalVolume_music",
+    "globalVolume_sfx",
+];
 
 const LOADER_SYMBOLS: &[(&str, &str)] = &[("start_loader", "LOADER")];
 
@@ -90,6 +95,9 @@ const AUDIO_DRIVER_SYMBOLS: &[(&str, &str)] = &[
     ("commonData", "COMMON_DATA_POINTERS"),
     ("echoDirty", "ECHO_DIRTY"),
     ("maxEdl", "MAX_EDL"),
+
+    ("globalVolume_music", "GLOBAL_VOLUME_MUSIC"),
+    ("globalVolume_sfx", "GLOBAL_VOLUME_SFX"),
 ];
 
 #[rustfmt::skip]

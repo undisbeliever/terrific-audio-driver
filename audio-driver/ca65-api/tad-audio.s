@@ -192,6 +192,8 @@ TAD_DEFAULT_TRANSFER_PER_FRAME = 256
     SET_MAIN_VOLUME = 10
     SET_MUSIC_CHANNELS = 12
     SET_SONG_TEMPO = 14
+    SET_GLOBAL_MUSIC_VOLUME = 16
+    SET_GLOBAL_SFX_VOLUME = 18
 .endenum
 
 TAD_MAX_PAN = 128
@@ -215,8 +217,7 @@ TAD_CENTER_PAN = TAD_MAX_PAN / 2
     ;;    has been acknowledged.
     COMMAND_PORT = $2140 ; APUIO0
 
-    N_COMMANDS = 8
-    COMMAND_MASK   = %00001110
+    COMMAND_MASK   = %00011110
     COMMAND_I_MASK = %11100001
 
     ;; The first command parameter port

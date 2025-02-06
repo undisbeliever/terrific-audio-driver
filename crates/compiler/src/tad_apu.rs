@@ -101,6 +101,10 @@ fn load_apu(
     // Replace loader with a `STOP` instructions
     spc_ram[usize::from(addresses::LOADER)] = SPC700_STOP_INSTRUCTION;
 
+    // Reset global volume
+    spc_ram[usize::from(addresses::GLOBAL_VOLUME_MUSIC)] = 0;
+    spc_ram[usize::from(addresses::GLOBAL_VOLUME_SFX)] = 0;
+
     // Patch out the echo buffer clear code
     patch_out_code_block_with_jmp(
         spc_ram,

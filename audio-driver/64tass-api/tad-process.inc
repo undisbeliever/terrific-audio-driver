@@ -99,8 +99,7 @@ TadIO_ToDriver .block
     ;    has been acknowledged.
     COMMAND_PORT = $2140 ; APUIO0
 
-    N_COMMANDS = 8
-    COMMAND_MASK   = %00001110
+    COMMAND_MASK   = %00011110
     COMMAND_I_MASK = %11100001
 
     ; The first command parameter port

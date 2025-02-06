@@ -54,10 +54,14 @@ u8 menu_song;
 u8 menu_sfx;
 u8 menu_sfxPan;
 u8 menu_mainVolume;
+u8 menu_musicVolume;
+u8 menu_sfxVolume;
 u8 menu_tempoOverride;
 u8 menu_channelMask;
 u8 menu_audioMode;
 bool menu_songStartsFlag;
+
+#define U8_MAX 255
 
 #define MAX_VOLUME 127
 
@@ -74,10 +78,8 @@ bool menu_songStartsFlag;
 #define MENU_YPOS           3
 
 
-#define MENU_TO_YPOS(m)     ((m) * 2 + MENU_YPOS)
-
 //! outputs an index into scr_txt_font_map[index]
-#define MENU_TO_TXT_ATTR_INDEX(x_, y_) (((((y_) << 1) + MENU_YPOS) << 6) + ((x_) << 1) + 1)
+#define MENU_TO_TXT_ATTR_INDEX(x_, y_) ((MenuItemYPos[y_] << 6) + ((x_) << 1) + 1)
 
 
 #define PAL_NORMAL                        0
@@ -94,6 +96,8 @@ enum MenuItem {
     MENU__PLAY_SFX,
     MENU__SFX_PAN,
     MENU__MAIN_VOLUME,
+    MENU__MUSIC_VOLUME,
+    MENU__SFX_VOLUME,
     MENU__OVERRIDE_TEMPO,
     MENU__CHANNEL_MASK,
     MENU__AUDIO_MODE,
@@ -103,7 +107,7 @@ enum MenuItem {
     MENU__PAUSE_MUSIC_AND_SFX,
     MENU__RELOAD_COMMON_AUDIO_DATA,
 };
-#define N_MENU_ITEMS 12
+#define N_MENU_ITEMS 14
 
 const char* const STATE_LABEL__UNKNOWN = ".......";
 const char* const STATE_LABEL__PLAYING = "PLAYING";
@@ -120,11 +124,13 @@ const char* const AUDIO_MODE_LABELS[3] = {
 const char* const SONG_STARTS_SET_LABEL   = "SONGS START IMMEDIATELY";
 const char* const SONG_STARTS_CLEAR_LABEL = "SONGS START PAUSED     ";
 
-const char* const MenuLabels[12] = {
+const char* const MenuLabels[N_MENU_ITEMS] = {
     "PLAY SONG",
     "PLAY SFX",
     "SFX PAN",
     "MAIN VOLUME",
+    "MUSIC VOLUME",
+    "SFX VOLUME",
     "OVERRIDE TEMPO",
     "MUSIC CHANNELS",
     NULL,
@@ -135,6 +141,22 @@ const char* const MenuLabels[12] = {
     "RELOAD COMMON AUDIO DATA",
 };
 
+const u16 MenuItemYPos[14] = {
+    MENU_YPOS + 0,
+    MENU_YPOS + 2,
+    MENU_YPOS + 3,
+    MENU_YPOS + 5,
+    MENU_YPOS + 7,
+    MENU_YPOS + 8,
+    MENU_YPOS + 10,
+    MENU_YPOS + 11,
+    MENU_YPOS + 13,
+    MENU_YPOS + 14,
+    MENU_YPOS + 16,
+    MENU_YPOS + 18,
+    MENU_YPOS + 20,
+    MENU_YPOS + 22,
+};
 
 void menu_init(void);
 void menu_printState(void);
@@ -165,6 +187,8 @@ void menu_init(void) {
     menu_sfx = 0;
     menu_sfxPan = TAD_CENTER_PAN;
     menu_mainVolume = MAX_VOLUME;
+    menu_musicVolume = U8_MAX;
+    menu_sfxVolume = U8_MAX;
     menu_tempoOverride = 100;
     menu_channelMask = 0xff;
 
@@ -174,16 +198,18 @@ void menu_init(void) {
     for (i = 0; i < N_MENU_ITEMS; i++) {
         const char* label = MenuLabels[i];
         if (label) {
-            consoleDrawText(MENU_LABEL_XPOS, MENU_YPOS + i * 2, "%s", label);
+            consoleDrawText(MENU_LABEL_XPOS, MenuItemYPos[i], "%s", label);
         }
     }
 
-    consoleDrawText(CHANNEL_MASK_XPOS, MENU_TO_YPOS(MENU__CHANNEL_MASK), "01234567");
+    consoleDrawText(CHANNEL_MASK_XPOS, MenuItemYPos[MENU__CHANNEL_MASK], "01234567");
 
     menu_printU8(MENU__PLAY_SONG, menu_song);
     menu_printU8(MENU__PLAY_SFX, menu_sfx);
     menu_printU8(MENU__SFX_PAN, menu_sfxPan);
     menu_printU8(MENU__MAIN_VOLUME, menu_mainVolume);
+    menu_printU8(MENU__MUSIC_VOLUME, menu_musicVolume);
+    menu_printU8(MENU__SFX_VOLUME, menu_sfxVolume);
     menu_printU8(MENU__OVERRIDE_TEMPO, menu_tempoOverride);
 
     menu_setPos(0);
@@ -221,7 +247,7 @@ void menu_printU8(enum MenuItem item, u16 value) {
     if (menuPos == item) {
         consoleSetTextOffset(PAL_SELECTED << 10);
     }
-    consoleDrawText(VAR_XPOS, MENU_TO_YPOS(item), "%3u", value);
+    consoleDrawText(VAR_XPOS, MenuItemYPos[item], "%3u", value);
 
     consoleSetTextOffset(0);
 }
@@ -240,7 +266,7 @@ void menu_setAudioMode(u8 mode) {
     if (menuPos == MENU__AUDIO_MODE) {
         consoleSetTextOffset(PAL_SELECTED << 10);
     }
-    consoleDrawText(MENU_LABEL_XPOS, MENU_TO_YPOS(MENU__AUDIO_MODE), "%s", AUDIO_MODE_LABELS[mode]);
+    consoleDrawText(MENU_LABEL_XPOS, MenuItemYPos[MENU__AUDIO_MODE], "%s", AUDIO_MODE_LABELS[mode]);
 
     consoleSetTextOffset(0);
 }
@@ -251,7 +277,7 @@ void menu_setSongStartsFlag(bool f) {
     if (menuPos == MENU__SONG_STARTS_FLAG) {
         consoleSetTextOffset(PAL_SELECTED << 10);
     }
-    consoleDrawText(MENU_LABEL_XPOS, MENU_TO_YPOS(MENU__SONG_STARTS_FLAG), "%s", 
+    consoleDrawText(MENU_LABEL_XPOS, MenuItemYPos[MENU__SONG_STARTS_FLAG], "%s",
                     (f ? SONG_STARTS_SET_LABEL : SONG_STARTS_CLEAR_LABEL));
 
     consoleSetTextOffset(0);
@@ -278,8 +304,8 @@ void menu_setPos(u8 newPos) {
         menuPos = 0;
     }
 
-    consoleDrawText(CURSOR_XPOS, MENU_TO_YPOS(menuPos), " ");
-    consoleDrawText(CURSOR_XPOS, MENU_TO_YPOS(newPos), ">");
+    consoleDrawText(CURSOR_XPOS, MenuItemYPos[menuPos], " ");
+    consoleDrawText(CURSOR_XPOS, MenuItemYPos[newPos], ">");
 
     highlightLine(menuPos, PAL_NORMAL);
     highlightLine(newPos, PAL_SELECTED);
@@ -370,6 +396,16 @@ void menu_process_action(void) {
         tad_queueCommandOverride_setMainVolume(menu_mainVolume);
         break;
 
+    case MENU__MUSIC_VOLUME:
+        // Tests `tad_queueCommandOverride_*(u8)` (built using a macro)
+        tad_queueCommandOverride_setGlobalMusicVolume(menu_musicVolume);
+        break;
+
+    case MENU__SFX_VOLUME:
+        // Tests `tad_queueCommandOverride_*(u8)` (built using a macro)
+        tad_queueCommandOverride_setGlobalSfxVolume(menu_sfxVolume);
+        break;
+
     case MENU__OVERRIDE_TEMPO:
         // Tests `tad_queueCommandOverride_*(u8)` (built using a macro)
         tad_queueCommandOverride_setSongTempo(menu_tempoOverride);
@@ -434,6 +470,26 @@ void menu_process_item(void) {
 
             // Tests `tad_queueCommand_*(u8)` (built using a macro)
             tad_queueCommand_setMainVolume(menu_mainVolume);
+        }
+        break;
+    }
+
+    case MENU__MUSIC_VOLUME: {
+        const u8 v = menu_adjustValue_fast(menu_musicVolume, MENU__MUSIC_VOLUME, 0, U8_MAX);
+        if (v != menu_musicVolume) {
+            menu_musicVolume = v;
+
+            tad_queueCommand_setGlobalMusicVolume(menu_musicVolume);
+        }
+        break;
+    }
+
+    case MENU__SFX_VOLUME: {
+        const u8 v = menu_adjustValue_fast(menu_sfxVolume, MENU__SFX_VOLUME, 0, U8_MAX);
+        if (v != menu_sfxVolume) {
+            menu_sfxVolume = v;
+
+            tad_queueCommand_setGlobalSfxVolume(menu_sfxVolume);
         }
         break;
     }

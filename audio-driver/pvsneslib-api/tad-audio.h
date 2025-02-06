@@ -315,8 +315,29 @@ bool tad_queueCommand_setMusicChannels(u8 mask);
 bool tad_queueCommand_setSongTempo(u8 tickClock);
 
 /*!
+ * Queues a set-global-music-volume command.
+ *
+ * NOTE: Global volumes persist after a new song or common-audio-data is loaded.
+ *
+ * @param volume The new music volume.  A 255 music-volume will not modify the channel volume.
+ * @return true if the command was added to the command queue.
+ */
+bool tad_queueCommand_setGlobalMusicVolume(u8 volume);
+
+/*!
+ * Queues a set-global-sfx-volume command.
+ *
+ * NOTE: Global volumes persist after a new song or common-audio-data is loaded.
+ *
+ * @param volume The new sound-effect volume.  A 255 sfx-volume will not modify the channel volume.
+ * @return true if the command was added to the command queue.
+ */
+bool tad_queueCommand_setGlobalSfxVolume(u8 volume);
+
+/*!
  * @}
  */
+
 
 /*!
  * @name Queue IO Command Override
@@ -368,6 +389,18 @@ void tad_queueCommandOverride_setMusicChannels(u8 mask);
  * @see tad_queueCommand_setSongTempo()
  */
 void tad_queueCommandOverride_setSongTempo(u8 tickClock);
+
+/*!
+ * Queues a set-global-music-volume command (overriding any unprocessed IO commands)
+ * @see tad_queueCommand_setGlobalMusicVolume()
+ */
+bool tad_queueCommandOverride_setGlobalMusicVolume(u8 volume);
+
+/*!
+ * Queues a set-global-sfx-volume command (overriding any unprocessed IO commands)
+ * @see tad_queueCommand_setGlobalSfxVolume()
+ */
+bool tad_queueCommandOverride_setGlobalSfxVolume(u8 volume);
 
 /*!
  * @}

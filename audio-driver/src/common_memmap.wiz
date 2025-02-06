@@ -24,9 +24,9 @@
 //      3. This notice may not be removed or altered from any source distribution.
 
 
-// LOADER_ADDR must match ca65 `tad-audio.s`
+// LOADER_ADDR must match LOADER_ADDR in the 65816 APIs
 let LOADER_ADDR = 0x200;
-let LOADER_SIZE =  116;     // MUST be even
+let LOADER_SIZE =  118;     // MUST be even
 
 // ::TODO shrink stack::
 let STACK_SIZE = 0x20;
@@ -53,8 +53,8 @@ let CODE_ADDR = 0x200 + LOADER_SIZE;
 let CODE_SIZE = COMMON_DATA_ADDR - CODE_ADDR - LAST_VAR_PAGE_SIZE;
 
 
-bank zeropage        @ 0x0000 : [vardata;     0x00ec];
-bank loader_zeropage @ 0x00ec : [vardata;     0x0003];
+bank zeropage        @ 0x0000 : [vardata;     0x00eb];
+bank loader_zeropage @ 0x00eb : [vardata;     0x0005];
 // addresses 0x00f0 - 0x00ff contains registers
 
 bank firstpage       @ 0x0100 : [vardata; FIRSTPAGE_SIZE];
@@ -63,6 +63,14 @@ bank stack           @ STACK_BOTTOM_ADDR : [vardata; STACK_SIZE];
 
 
 in loader_zeropage {
+    // Global volumes.
+    //
+    // Stored here so they are unchanged when a new song or common-audio-data is loaded.
+    //
+    // If global-volume is 0, the channel volume is unchanged.
+    var globalVolume_music : u8;
+    var globalVolume_sfx : u8;
+
     // The address of the song data
     var __loader_songPtr : *const u8;
 

@@ -75,6 +75,11 @@ func start_loader() {
 
     // Get the address to store the data
     if zero {
+        // Clear global volume
+        // Assumes `&globalVolume_music + 1 == &globalVolume_sfx`
+        a = y;
+        *(&globalVolume_music as *u16) = ya;
+
         a = <:CODE_ADDR;
         y = >:CODE_ADDR;
     }
@@ -159,8 +164,10 @@ EndLoop:
 
     goto start_loader if x < LoaderDataType.MIN_SONG_VALUE;
 
-    // If data type was a song.  Execute audio engine.
-    goto (CODE_ADDR as func);
+    // NOP required for loader to be an even number of bytes in size
+    nop();
+
+// Fallthrough into main() in `audio-engine.wiz`
 }
 
 }

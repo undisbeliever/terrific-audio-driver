@@ -90,6 +90,8 @@ ROM_SPEED   = ROM_SPEED__Slow
         sfx:            .res 1
         sfxPan:         .res 1
         mainVolume:     .res 1
+        musicVolume:    .res 1
+        sfxVolume:      .res 1
         tempoOverride:  .res 1
         channelMask:    .res 1
         audioMode:      .res 1
@@ -113,19 +115,10 @@ STATE_YPOS          = 2
 
 MENU_YPOS           = 3
 
-PLAY_SONG_YPOS      = MENU_YPOS + 0 * 2
-PLAY_SFX_YPOS       = MENU_YPOS + 1 * 2
-SFX_PAN_YPOS        = MENU_YPOS + 2 * 2
-MAIN_VOLUME_YPOS    = MENU_YPOS + 3 * 2
-OVERRIDE_TEMPO_YPOS = MENU_YPOS + 4 * 2
-CHANNEL_MASK_YPOS   = MENU_YPOS + 5 * 2
-AUDIO_MODE_YPOS     = MENU_YPOS + 6 * 2
-SONG_STARTS_YPOS    = MENU_YPOS + 7 * 2
-
-N_MENU_ITEMS        = 12
+N_MENU_ITEMS        = 14
 LAST_MENU_INDEX     = (N_MENU_ITEMS - 1) * 2
 
-CHANNEL_MASK_MENU_POS = 5 * 2
+CHANNEL_MASK_MENU_POS = 7 * 2
 
 
 .rodata
@@ -140,10 +133,27 @@ CursorString:       .byte ">", 0
 ;;
 ;; [u16 ; N_MENU_ITEMS]
 BufferIndexTable:
-    .repeat N_MENU_ITEMS, i
-        .word   TextBuffer_PosToIndex(CURSOR_XPOS, MENU_YPOS + i * 2)
-    .endrepeat
+    .macro _BufferIndexEntry_ name, yPos
+        name = MENU_YPOS + yPos
+        .word TextBuffer_PosToIndex(CURSOR_XPOS, name)
+    .endmacro
 
+    _BufferIndexEntry_ PLAY_SONG_YPOS,           0
+    _BufferIndexEntry_ PLAY_SFX_YPOS,            2
+    _BufferIndexEntry_ SFX_PAN_YPOS,             3
+    _BufferIndexEntry_ MAIN_VOLUME_YPOS,         5
+    _BufferIndexEntry_ MUSIC_VOLUME_YPOS,        7
+    _BufferIndexEntry_ SFX_VOLUME_YPOS,          8
+    _BufferIndexEntry_ OVERRIDE_TEMPO_YPOS,     10
+    _BufferIndexEntry_ CHANNEL_MASK_YPOS,       11
+    _BufferIndexEntry_ AUDIO_MODE_YPOS,         13
+    _BufferIndexEntry_ SONG_STARTS_YPOS,        14
+    _BufferIndexEntry_ STOP_SOUND_EFFECTS_YPOS, 16
+    _BufferIndexEntry_ PAUSE_UNPAUSE_YPOS,      18
+    _BufferIndexEntry_ PAUSE_MUSIC_AND_SFX,     20
+    _BufferIndexEntry_ RELOAD_COMMON_DATA_YPOS, 22
+
+.assert * - BufferIndexTable = N_MENU_ITEMS * 2, error
 
 ;; List of labels
 ;; [*str ; N_MENU_ITEMS]
@@ -156,14 +166,16 @@ MenuLabel_00: .byte "PLAY SONG", 0
 MenuLabel_01: .byte "PLAY SFX", 0
 MenuLabel_02: .byte "SFX PAN", 0
 MenuLabel_03: .byte "MAIN VOLUME", 0
-MenuLabel_04: .byte "OVERRIDE TEMPO", 0
-MenuLabel_05: .byte "MUSIC CHANNELS", 0
-MenuLabel_06: .byte "", 0
-MenuLabel_07: .byte "", 0
-MenuLabel_08: .byte "STOP SOUND EFFECTS (X)", 0
-MenuLabel_09: .byte "PAUSE / UNPAUSE (START)", 0
-MenuLabel_10: .byte "PAUSE MUSIC AND SFX", 0
-MenuLabel_11: .byte "RELOAD COMMON AUDIO DATA", 0
+MenuLabel_04: .byte "MUSIC VOLUME", 0
+MenuLabel_05: .byte "SFX VOLUME", 0
+MenuLabel_06: .byte "OVERRIDE TEMPO", 0
+MenuLabel_07: .byte "MUSIC CHANNELS", 0
+MenuLabel_08: .byte "", 0
+MenuLabel_09: .byte "", 0
+MenuLabel_10: .byte "STOP SOUND EFFECTS (X)", 0
+MenuLabel_11: .byte "PAUSE / UNPAUSE (START)", 0
+MenuLabel_12: .byte "PAUSE MUSIC AND SFX", 0
+MenuLabel_13: .byte "RELOAD COMMON AUDIO DATA", 0
 
 
 .code
@@ -177,6 +189,8 @@ MenuProcessFunctions:
     .addr   Menu_PlaySfx_Process
     .addr   Menu_SfxPan_Process
     .addr   Menu_MainVolume_Process
+    .addr   Menu_MusicVolume_Process
+    .addr   Menu_SfxVolume_Process
     .addr   Menu_OverrideTempo_Process
     .addr   MenuChannelMask_Process
     .addr   Menu_AudioMode_Process
@@ -196,6 +210,8 @@ MenuActionFunctions:
     .addr   Menu_PlaySfx_Action
     .addr   Menu_SfxPan_Action
     .addr   Menu_MainVolume_Action
+    .addr   Menu_MusicVolume_Action
+    .addr   Menu_SfxVolume_Action
     .addr   Menu_OverrideTempo_Action
     .addr   MenuChannelMask_Action
     .addr   Menu_AudioMode_Action
@@ -234,6 +250,12 @@ MenuActionFunctions:
 
     lda     #$7f
     jsr     _SetMainVolume
+
+    lda     #255
+    jsr     _SetMusicVolume
+
+    lda     #255
+    jsr     _SetSfxVolume
 
     lda     #100
     jsr     _SetTempoOverride
@@ -510,6 +532,58 @@ Menu_SfxPan_Action = Menu_PlaySfx_Action
 .proc Menu_MainVolume_Action
     rts
 .endproc
+
+
+.a8
+.i16
+;: DB = $7e
+.proc Menu_MusicVolume_Process
+    lda     Menu::musicVolume
+    jsr     _AdjustWithDpad_Fast
+    bcc     :+
+        jsr     _SetMusicVolume
+
+        lda     #TadCommand::SET_GLOBAL_MUSIC_VOLUME
+        ldx     Menu::musicVolume
+        jmp     Tad_QueueCommandOverride
+    :
+    rts
+.endproc
+
+
+.a8
+.i16
+;: DB = $7e
+.proc Menu_MusicVolume_Action
+    rts
+.endproc
+
+
+.a8
+.i16
+;: DB = $7e
+.proc Menu_SfxVolume_Process
+    lda     Menu::sfxVolume
+    jsr     _AdjustWithDpad_Fast
+    bcc     :+
+        jsr     _SetSfxVolume
+
+        lda     #TadCommand::SET_GLOBAL_SFX_VOLUME
+        ldx     Menu::sfxVolume
+        jmp     Tad_QueueCommandOverride
+    :
+    rts
+.endproc
+
+
+.a8
+.i16
+;: DB = $7e
+.proc Menu_SfxVolume_Action
+    rts
+.endproc
+
+
 .a8
 .i16
 ;: DB = $7e
@@ -813,6 +887,8 @@ _SetVarFn_  _SetSong,           PLAY_SONG_YPOS,         song,           0,      
 _SetVarFn_  _SetSfx,            PLAY_SFX_YPOS,          sfx,            0,                  N_SOUND_EFFECTS - 1
 _SetVarFn_  _SetSfxPan,         SFX_PAN_YPOS,           sfxPan,         0,                  TAD_MAX_PAN
 _SetVarFn_  _SetMainVolume,     MAIN_VOLUME_YPOS,       mainVolume,     0,                  $7f
+_SetVarFn_  _SetMusicVolume,    MUSIC_VOLUME_YPOS,      musicVolume,    0,                  $ff
+_SetVarFn_  _SetSfxVolume,      SFX_VOLUME_YPOS,        sfxVolume,      0,                  $ff
 _SetVarFn_  _SetTempoOverride,  OVERRIDE_TEMPO_YPOS,    tempoOverride,  TAD_MIN_TICK_CLOCK, $ff
 
 

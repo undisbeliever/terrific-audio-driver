@@ -76,6 +76,20 @@ TadCommand .block
     ;
     ; NOTE: The song can still change the tempo.
     SET_SONG_TEMPO = 14
+
+    ; Set the global music volume
+    ;  * parameter0: the music volume.
+    ;    A 255 music-volume will not modify the channel volume.
+    ;
+    ; NOTE: Global volumes persist after a new song or common-audio-data is loaded.
+    SET_GLOBAL_MUSIC_VOLUME = 16
+
+    ; Set the global sound-effect volume
+    ;  * parameter0: the music volume.
+    ;    A 255 sfx-volume will not modify the channel volume.
+    ;
+    ; NOTE: Global volumes persist after a new song or common-audio-data is loaded.
+    SET_GLOBAL_SFX_VOLUME = 18
 .endblock
 
 

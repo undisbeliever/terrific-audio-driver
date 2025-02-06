@@ -177,6 +177,10 @@ in zeropage {
     var voiceChannelsDirty_tmp  : u8;
 
 
+    // Temporary variable holding `globalVolume_music` or `globalVolume_sfx`
+    var globalVolume_tmp : u8;
+
+
     namespace channelSoA {
         // Counter (in ticks) until the event
         var countdownTimer : [u8 ; N_CHANNELS];
@@ -253,6 +257,7 @@ in zeropage {
     var volShadowDirty_tmp : u8;
 
     // Used to determine if all music channels should be updated.
+    // Set in the SET_GLOBAL_MUSIC_VOLUME IO command.
     //
     // Must only contain 0x00 or 0xff.
     //
@@ -260,7 +265,7 @@ in zeropage {
     var volShadowDirty_music : u8;
 
     // The sound effects with invalid vol_l and vol_r shadow variables.
-    // Set in the PLAY_SOUND_EFFECT command.
+    // Set in the PLAY_SOUND_EFFECT and SET_GLOBAL_SFX_VOLUME IO commands.
     // CAUTION: bits 6 & 7 are swapped from other the other *_sfx bitsets
     // (bitfield)
     var volShadowDirty_sfx : u8;
@@ -638,6 +643,15 @@ func main() {
     sfxMutedChannels = a;
 
 
+    // ::TODO add a loader-flag to clear global volumes ::
+    nop();
+    nop();
+    nop();
+    nop();
+    nop();
+    nop();
+
+
     // Assumes N_MUSIC_CHANNELS == 8
     x = N_MUSIC_CHANNELS - 1;
     y = sizeof(SongHeader);
@@ -885,7 +899,7 @@ func process_music_channels() {
     zpTmp = y;
 
     a = voiceChannelsDirty_music & musicSfxChannelMask;
-    __process_channels(a, zpTmp, volShadowDirty_tmp, FIRST_MUSIC_CHANNEL + 1, LAST_MUSIC_CHANNEL + 1);
+    __process_channels(a, zpTmp, volShadowDirty_tmp, globalVolume_music, FIRST_MUSIC_CHANNEL + 1, LAST_MUSIC_CHANNEL + 1);
 
     voiceChannelsDirty_music = voiceChannelsDirty_tmp;
 }
@@ -1025,7 +1039,7 @@ inline func _process_sfx_channels__inline() {
     // DSP voice register writes must be masked
     a = voiceChannelsDirty_sfx & activeSoundEffects;
 
-    __process_channels(a, zpTmp, volShadowDirty_tmp, FIRST_SFX_CHANNEL + 1, LAST_SFX_CHANNEL + 1);
+    __process_channels(a, zpTmp, volShadowDirty_tmp, globalVolume_sfx, FIRST_SFX_CHANNEL + 1, LAST_SFX_CHANNEL + 1);
 
     voiceChannelsDirty_sfx = voiceChannelsDirty_tmp;
 
@@ -1046,6 +1060,7 @@ inline func _process_sfx_channels__inline() {
 func __process_channels(voiceChannelsDirty : u8 in a,
                         mutedChannels : u8 in zpTmp,
                         _volShadowDirty_tmp: u8 in volShadowDirty_tmp,
+                        _globalVolume : u8 in globalVolume_tmp,
                         afterFirstChannel: u8 in y,
                         afterLastChannel: u8 in x) {
 var _mutedChannels : u8 in zpTmp;
@@ -1496,8 +1511,11 @@ inline func process_io_ports__inline() {
 
 // NOTE: Does not acknowledge command
 func __call_command(command : u8 in a, parameter : u8 in y) {
-    x = a = a & IO.ToDriver.COMMAND_MASK;
-    goto CommandFunctionTable[unaligned x];
+    a &= IO.ToDriver.COMMAND_MASK;
+    if a < sizeof(typeof(CommandFunctionTable)) {
+        x = a;
+        goto CommandFunctionTable[unaligned x];
+    }
 }
 
 
@@ -1511,6 +1529,8 @@ const CommandFunctionTable : [func(parameter0: u8 in y) ; IO.ToDriver.N_COMMANDS
     set_main_volume,
     set_music_channels,
     set_song_tempo,
+    set_global_music_volume,
+    set_global_sfx_volume,
 ];
 
 
@@ -1563,6 +1583,24 @@ func set_song_tempo(tempo : u8 in y) {
         y = MIN_TICK_CLOCK;
     }
     smp.timer_0 = y;
+}
+
+
+func set_global_music_volume(volume: u8 in y) {
+    // Increment volume so maximum volume is 0
+    y++;
+    globalVolume_music = y;
+
+    volShadowDirty_music = 0xff;
+}
+
+
+func set_global_sfx_volume(volume: u8 in y) {
+    // Increment volume so maximum volume is 0
+    y++;
+    globalVolume_sfx = y;
+
+    volShadowDirty_sfx = 0b11000000;
 }
 
 
@@ -1953,8 +1991,13 @@ WritePan:
 // KEEP: x
 inline func _update_vol_shadow__inline(channelIndex : u8 in x) {
 
-    // ::TODO add global music/sfx volume::
-    a = channelSoA.volume[x];
+    // If global-volume is 0, the channel volume is unchanged.
+    y = a = channelSoA.volume[x];
+    a = globalVolume_tmp;
+    if !zero {
+        ya = mul(a, y);
+    }
+    // Y = volume
 
     // Reading carry here saves a `SEC` instruction when calculating VOL_R
     carry = loaderDataType $ LoaderDataType.STEREO_FLAG_BIT;
@@ -1963,7 +2006,7 @@ inline func _update_vol_shadow__inline(channelIndex : u8 in x) {
 
         // First shift converts 8-bit volume to 7-bit VOL
         // Second shift ensure mono vol has same combined amplitude as stereo vol
-        y = a = a >>> 2;
+        y = a = y >>> 2;
 
         // Test mono flag
         a = channelSoA.invertFlags[x];
@@ -1982,7 +2025,6 @@ inline func _update_vol_shadow__inline(channelIndex : u8 in x) {
         // Stereo
         // carry set
 
-        y = a;
         zpTmp = y;
 
         // Calculate right volume

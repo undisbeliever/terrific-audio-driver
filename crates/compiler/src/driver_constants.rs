@@ -92,6 +92,8 @@ pub mod addresses {
         MAX_EDL,
         MAIN_CLEAR_ECHO_BUFFER_START,
         MAIN_CLEAR_ECHO_BUFFER_END,
+        GLOBAL_VOLUME_MUSIC,
+        GLOBAL_VOLUME_SFX,
     );
 
     // MUST match `audio-driver/src/common_memmap.wiz`
@@ -100,6 +102,11 @@ pub mod addresses {
     const _: () = assert!(
         _symbols::_LAST_LOADER_SYMBOL < DRIVER_CODE,
         "Loader contains a symbol inside the driver code"
+    );
+
+    const _: () = assert!(
+        LOADER + (crate::audio_driver::LOADER.len() as u16) == DRIVER_CODE,
+        "Audio-driver is not directly after Loader"
     );
 
     const _: () = assert!(

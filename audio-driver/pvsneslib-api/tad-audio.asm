@@ -107,6 +107,8 @@ TAD_Command__STOP_SOUND_EFFECTS = 8
 TAD_Command__SET_MAIN_VOLUME = 10
 TAD_Command__SET_MUSIC_CHANNELS = 12
 TAD_Command__SET_SONG_TEMPO = 14
+TAD_Command__SET_GLOBAL_MUSIC_VOLUME = 16
+TAD_Command__SET_GLOBAL_SFX_VOLUME = 18
 
 TAD_COMMAND_MASK   = %00001110
 TAD_COMMAND_I_MASK = %11100001
@@ -130,8 +132,7 @@ TAD_CENTER_PAN = TAD_MAX_PAN / 2
 ;;    has been acknowledged.
 TAD_IO_ToDriver__COMMAND_PORT = $2140 ; APUIO0
 
-TAD_IO_ToDriver__N_COMMANDS = 8
-TAD_IO_ToDriver__COMMAND_MASK   = %00001110
+TAD_IO_ToDriver__COMMAND_MASK   = %00011110
 TAD_IO_ToDriver__COMMAND_I_MASK = %11100001
 
 ;; The first command parameter port
@@ -1572,21 +1573,25 @@ tad_isSongPlaying:
     .ends
 .endm
 
-_Tad_QueueCommandFunction tad_queueCommand_pause                       Test        NoParameter     PAUSE
-_Tad_QueueCommandFunction tad_queueCommand_pauseMusicPlaySfx           Test        NoParameter     PAUSE_MUSIC_PLAY_SFX
-_Tad_QueueCommandFunction tad_queueCommand_unpause                     Test        NoParameter     UNPAUSE
-_Tad_QueueCommandFunction tad_queueCommand_stopSoundEffects            Test        NoParameter     STOP_SOUND_EFFECTS
-_Tad_QueueCommandFunction tad_queueCommand_setMainVolume               Test        WithParameter   SET_MAIN_VOLUME
-_Tad_QueueCommandFunction tad_queueCommand_setMusicChannels            Test        WithParameter   SET_MUSIC_CHANNELS
-_Tad_QueueCommandFunction tad_queueCommand_setSongTempo                Test        WithParameter   SET_SONG_TEMPO
+_Tad_QueueCommandFunction tad_queueCommand_pause                        Test        NoParameter     PAUSE
+_Tad_QueueCommandFunction tad_queueCommand_pauseMusicPlaySfx            Test        NoParameter     PAUSE_MUSIC_PLAY_SFX
+_Tad_QueueCommandFunction tad_queueCommand_unpause                      Test        NoParameter     UNPAUSE
+_Tad_QueueCommandFunction tad_queueCommand_stopSoundEffects             Test        NoParameter     STOP_SOUND_EFFECTS
+_Tad_QueueCommandFunction tad_queueCommand_setMainVolume                Test        WithParameter   SET_MAIN_VOLUME
+_Tad_QueueCommandFunction tad_queueCommand_setMusicChannels             Test        WithParameter   SET_MUSIC_CHANNELS
+_Tad_QueueCommandFunction tad_queueCommand_setSongTempo                 Test        WithParameter   SET_SONG_TEMPO
+_Tad_QueueCommandFunction tad_queueCommand_setGlobalMusicVolume         Test        WithParameter   SET_GLOBAL_MUSIC_VOLUME
+_Tad_QueueCommandFunction tad_queueCommand_setGlobalSfxVolume           Test        WithParameter   SET_GLOBAL_SFX_VOLUME
 
-_Tad_QueueCommandFunction tad_queueCommandOverride_pause               Override    NoParameter     PAUSE
-_Tad_QueueCommandFunction tad_queueCommandOverride_pauseMusicPlaySfx   Override    NoParameter     PAUSE_MUSIC_PLAY_SFX
-_Tad_QueueCommandFunction tad_queueCommandOverride_unpause             Override    NoParameter     UNPAUSE
-_Tad_QueueCommandFunction tad_queueCommandOverride_stopSoundEffects    Override    NoParameter     STOP_SOUND_EFFECTS
-_Tad_QueueCommandFunction tad_queueCommandOverride_setMainVolume       Override    WithParameter   SET_MAIN_VOLUME
-_Tad_QueueCommandFunction tad_queueCommandOverride_setMusicChannels    Override    WithParameter   SET_MUSIC_CHANNELS
-_Tad_QueueCommandFunction tad_queueCommandOverride_setSongTempo        Override    WithParameter   SET_SONG_TEMPO
+_Tad_QueueCommandFunction tad_queueCommandOverride_pause                Override    NoParameter     PAUSE
+_Tad_QueueCommandFunction tad_queueCommandOverride_pauseMusicPlaySfx    Override    NoParameter     PAUSE_MUSIC_PLAY_SFX
+_Tad_QueueCommandFunction tad_queueCommandOverride_unpause              Override    NoParameter     UNPAUSE
+_Tad_QueueCommandFunction tad_queueCommandOverride_stopSoundEffects     Override    NoParameter     STOP_SOUND_EFFECTS
+_Tad_QueueCommandFunction tad_queueCommandOverride_setMainVolume        Override    WithParameter   SET_MAIN_VOLUME
+_Tad_QueueCommandFunction tad_queueCommandOverride_setMusicChannels     Override    WithParameter   SET_MUSIC_CHANNELS
+_Tad_QueueCommandFunction tad_queueCommandOverride_setSongTempo         Override    WithParameter   SET_SONG_TEMPO
+_Tad_QueueCommandFunction tad_queueCommandOverride_setGlobalMusicVolume Override    WithParameter   SET_GLOBAL_MUSIC_VOLUME
+_Tad_QueueCommandFunction tad_queueCommandOverride_setGlobalSfxVolume   Override    WithParameter   SET_GLOBAL_SFX_VOLUME
 
 
 .section "tad__Command_A__Test_NoParameter__" SUPERFREE
