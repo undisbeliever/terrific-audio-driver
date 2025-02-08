@@ -31,6 +31,8 @@
 
 .export RunTests
 
+.import Tad_nextCommand_id, Tad_nextCommand_parameter0, Tad_nextCommand_parameter1
+
 
 .bss
     testIndex:  .res 2
@@ -118,6 +120,9 @@ TestTable:
     .addr   TestGetSong
     .addr   TestQueueCommand
     .addr   TestQueueCommandOverride
+    .addr   TestQueueCommandIdIsMasked
+    .addr   TestQueueCommandWithTwoParameters_i16
+    .addr   TestQueueCommandWithTwoParameters_i8
     .addr   TestPauseCommand1
     .addr   TestPauseCommand2
     .addr   TestPauseCommand3
@@ -556,6 +561,94 @@ TestTable_SIZE = * - TestTable
     ; Command was STOP_SOUND_EFFECTS
     ; Confirm playing state unchanged
     assert_carry    Tad_IsSongPlaying, true
+
+    rts
+.endproc
+
+
+.a8
+.i16
+;; DB access lowram
+.proc TestQueueCommandIdIsMasked
+    ; Test command id has been masked
+    lda     #$ff
+    assert_carry    Tad_QueueCommand, true
+    assert_u8_var_eq Tad_nextCommand_id, #%11110
+
+    ; Clear command id
+    lda     #0
+    jsr     Tad_QueueCommandOverride
+    assert_u8_var_eq Tad_nextCommand_id, #%0
+
+    ; Test command id has changed and is masked
+    lda     #$ff
+    assert_carry    Tad_QueueCommandOverride, true
+    assert_u8_var_eq Tad_nextCommand_id, #%11110
+
+    ; Test command id is unchanged
+    lda     #0
+    assert_carry    Tad_QueueCommand, false
+    assert_u8_var_eq Tad_nextCommand_id, #%11110
+
+    rts
+.endproc
+
+
+.a8
+.i16
+;; DB access lowram
+.proc   TestQueueCommandWithTwoParameters_i16
+    stz     Tad_nextCommand_parameter0
+    stz     Tad_nextCommand_parameter1
+
+
+    lda     #TadCommand::SET_GLOBAL_VOLUMES
+    ldx     #$ff12
+    ldy     #$ff34
+    assert_carry    Tad_QueueCommand, true
+    assert_u8_var_eq Tad_nextCommand_id, #TadCommand::SET_GLOBAL_VOLUMES
+    assert_u8_var_eq Tad_nextCommand_parameter0, #$12
+    assert_u8_var_eq Tad_nextCommand_parameter1, #$34
+
+
+    lda     #TadCommand::PLAY_SOUND_EFFECT
+    ldx     #$ffaa
+    ldy     #$ffbb
+    assert_carry    Tad_QueueCommandOverride, true
+    assert_u8_var_eq Tad_nextCommand_id, #TadCommand::PLAY_SOUND_EFFECT
+    assert_u8_var_eq Tad_nextCommand_parameter0, #$aa
+    assert_u8_var_eq Tad_nextCommand_parameter1, #$bb
+
+    rts
+.endproc
+
+
+.a8
+.i16
+;; DB access lowram
+.proc   TestQueueCommandWithTwoParameters_i8
+    sep     #$30
+.i8
+    stz     Tad_nextCommand_parameter0
+    stz     Tad_nextCommand_parameter1
+
+
+    lda     #TadCommand::SET_GLOBAL_VOLUMES
+    ldx     #$12
+    ldy     #$34
+    assert_carry    Tad_QueueCommand, true
+    assert_u8_var_eq Tad_nextCommand_id, #TadCommand::SET_GLOBAL_VOLUMES
+    assert_u8_var_eq Tad_nextCommand_parameter0, #$12
+    assert_u8_var_eq Tad_nextCommand_parameter1, #$34
+
+
+    lda     #TadCommand::PLAY_SOUND_EFFECT
+    ldx     #$aa
+    ldy     #$bb
+    assert_carry    Tad_QueueCommandOverride, true
+    assert_u8_var_eq Tad_nextCommand_id, #TadCommand::PLAY_SOUND_EFFECT
+    assert_u8_var_eq Tad_nextCommand_parameter0, #$aa
+    assert_u8_var_eq Tad_nextCommand_parameter1, #$bb
 
     rts
 .endproc

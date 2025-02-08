@@ -33,3 +33,7 @@
 
 .include "../../../tad-audio.s"
 
+
+; Export command queue so tests can read it
+.export Tad_nextCommand_id, Tad_nextCommand_parameter0, Tad_nextCommand_parameter1
+

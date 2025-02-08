@@ -46,6 +46,12 @@ extern u8 DummyCommonAudioData_Part1;
 extern u8 DummySongData_Part1;
 
 
+// from tad-audio.asm
+extern u8 tad_nextCommand_id__;
+extern u8 tad_nextCommand_parameter0__;
+extern u8 tad_nextCommand_parameter1__;
+
+
 // from main.c
 void assert_failure(void);
 
@@ -310,6 +316,31 @@ void test_queueCommandOverride(void) {
     // Command was STOP_SOUND_EFFECTS
     // Confirm playing state unchanged
     ASSERT_EQ(tad_isSongPlaying(), true)
+}
+
+// Skipped TestQueueCommandIdIsMasked (no command_id parameter in queue command functions)
+
+void test_queueCommandWithOneParameter(void) {
+    tad_nextCommand_parameter0__ = 0;
+
+    ASSERT_EQ(tad_queueCommand_setMusicChannels(10), true);
+    ASSERT_EQ(tad_nextCommand_parameter0__, 10);
+
+    tad_queueCommandOverride_setSongTempo(128);
+    ASSERT_EQ(tad_nextCommand_parameter0__, 128);
+}
+
+void test_queueCommandWithTwoParameters(void) {
+    tad_nextCommand_parameter0__ = 0;
+    tad_nextCommand_parameter1__ = 0;
+
+    ASSERT_EQ(tad_queueCommand_setGlobalVolumes(12, 34), true);
+    ASSERT_EQ(tad_nextCommand_parameter0__, 12);
+    ASSERT_EQ(tad_nextCommand_parameter1__, 34);
+
+    tad_queueCommandOverride_setGlobalVolumes(0xaa, 0xbb);
+    ASSERT_EQ(tad_nextCommand_parameter0__, 0xaa);
+    ASSERT_EQ(tad_nextCommand_parameter1__, 0xbb);
 }
 
 void test_pauseCommand_1(void) {
@@ -664,6 +695,8 @@ static const VoidFn TAD_TESTS[] = {
     test_getSong,
     test_queueCommand,
     test_queueCommandOverride,
+    test_queueCommandWithOneParameter,
+    test_queueCommandWithTwoParameters,
     test_pauseCommand_1,
     test_pauseCommand_2,
     test_pauseCommand_3,
