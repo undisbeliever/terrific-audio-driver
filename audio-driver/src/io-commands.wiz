@@ -245,6 +245,9 @@ namespace IO {
         // Play a sound effect
         //  * parameter0: sound effect id
         //  * parameter1: pan (0-128) (not bounds checked)
+        //
+        // The sound-effect might not play if both sound effect channels are active.
+        // See the Sound Effects documentation for more details
         PLAY_SOUND_EFFECT = 6,
 
         // Stop all active sound effects

@@ -52,6 +52,9 @@ GUI changes:
  * Fixed a rust bytecode interpreter desync caused global instructions to be executed in the wrong order.
  * Fixed play-from-cursor not playing the note immediately after the cursor
 
+API changes:
+ * `Tad_QueueCommand` and `Tad_QueueCommandOverride` can now queue IO commands with 2 parameters.
+
 
 Version 0.0.16
 ==============

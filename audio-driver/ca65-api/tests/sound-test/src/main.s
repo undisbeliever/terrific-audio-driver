@@ -163,7 +163,7 @@ TextTable:
     .endrepeat
 
 MenuLabel_00: .byte "PLAY SONG", 0
-MenuLabel_01: .byte "PLAY SFX", 0
+MenuLabel_01: .byte "PLAY SFX (L/R)", 0
 MenuLabel_02: .byte "SFX PAN", 0
 MenuLabel_03: .byte "MAIN VOLUME", 0
 MenuLabel_04: .byte "MUSIC VOLUME", 0
@@ -360,6 +360,12 @@ MenuActionFunctions:
         jmp     Menu_StopSoundEffects_Action
     :
 
+    lda     joypadPressed + 0
+    bit     #JOYPAD_L_L | JOYPAD_L_R
+    beq     :+
+        jmp     PlaySfxUsingCommand
+    :
+
 
     ldx     menuPos
 
@@ -507,6 +513,17 @@ MenuActionFunctions:
 .endproc
 
 Menu_SfxPan_Action = Menu_PlaySfx_Action
+
+
+.a8
+.i16
+;; DB = $7e
+.proc PlaySfxUsingCommand
+    lda     #TadCommand::PLAY_SOUND_EFFECT
+    ldx     Menu::sfx
+    ldy     Menu::sfxPan
+    jmp     Tad_QueueCommandOverride
+.endproc
 
 
 .a8

@@ -79,10 +79,6 @@ TAD_IO_VERSION = 17
 
 
 ; MUST match `audio-driver/src/io-commands.wiz`
-TAD_PLAY_SOUND_EFFECT_COMMAND = 6
-
-
-; MUST match `audio-driver/src/io-commands.wiz`
 TadIO_ToDriver .block
     ; The command to execute.
     ;
@@ -649,8 +645,11 @@ Tad_Init .proc
 .xs
 .databank TAD_DB_LOWRAM
 TadPrivate_Process_SendCommand .macro
-    lda     Tad_nextCommand_parameter
+    lda     Tad_nextCommand_parameter0
     sta     TadIO_ToDriver.PARAMETER0_PORT
+
+    lda     Tad_nextCommand_parameter1
+    sta     TadIO_ToDriver.PARAMETER1_PORT
 
     lda     Tad_previousCommand
     and     #TadIO_ToDriver.COMMAND_I_MASK    ; Clear the non i bits of the command
@@ -706,7 +705,7 @@ TadPrivate_Process_SendSfxCommand .macro
     lda     Tad_previousCommand
     and     #TadIO_ToDriver.COMMAND_I_MASK            ; Clear the non i bits of the command
     eor     #TadIO_ToDriver.COMMAND_I_MASK            ; Flip the i bits
-    ora     #TAD_PLAY_SOUND_EFFECT_COMMAND            ; Set the c bits
+    ora     #TadCommand.PLAY_SOUND_EFFECT             ; Set the c bits
 
     sta     TadIO_ToDriver.COMMAND_PORT
     sta     Tad_previousCommand

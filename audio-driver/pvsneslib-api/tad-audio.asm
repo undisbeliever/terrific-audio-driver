@@ -102,7 +102,7 @@ TAD_LOADER_ARAM_ADDR = $0200
 TAD_Command__PAUSE = 0
 TAD_Command__PAUSE_MUSIC_PLAY_SFX = 2
 TAD_Command__UNPAUSE = 4
-TAD_Command__PLAY_SOUND_EFFECT_COMMAND = 6
+TAD_Command__PLAY_SOUND_EFFECT = 6
 TAD_Command__STOP_SOUND_EFFECTS = 8
 TAD_Command__SET_MAIN_VOLUME = 10
 TAD_Command__SET_MUSIC_CHANNELS = 12
@@ -947,8 +947,10 @@ _tad_loader_gotoNextBank__:
 ;; I8
 ;; DB = $80
 .macro _Tad_Process_SendCommand__
-    lda     tad_nextCommand_parameter__
+    lda     tad_nextCommand_parameter0__
     sta     TAD_IO_ToDriver__PARAMETER0_PORT
+    lda     tad_nextCommand_parameter1__
+    sta     TAD_IO_ToDriver__PARAMETER1_PORT
 
     lda     tad_previousCommand__
     and     #TAD_IO_ToDriver__COMMAND_I_MASK    ; Clear the non i bits of the command
@@ -1005,7 +1007,7 @@ _tad_loader_gotoNextBank__:
     lda     tad_previousCommand__
     and     #TAD_IO_ToDriver__COMMAND_I_MASK            ; Clear the non i bits of the command
     eor     #TAD_IO_ToDriver__COMMAND_I_MASK            ; Flip the i bits
-    ora     #TAD_Command__PLAY_SOUND_EFFECT_COMMAND     ; Set the c bits
+    ora     #TAD_Command__PLAY_SOUND_EFFECT             ; Set the c bits
 
     sta     TAD_IO_ToDriver__COMMAND_PORT
     sta     tad_previousCommand__
@@ -1577,21 +1579,21 @@ _Tad_QueueCommandFunction tad_queueCommand_pause                        Test    
 _Tad_QueueCommandFunction tad_queueCommand_pauseMusicPlaySfx            Test        NoParameter     PAUSE_MUSIC_PLAY_SFX
 _Tad_QueueCommandFunction tad_queueCommand_unpause                      Test        NoParameter     UNPAUSE
 _Tad_QueueCommandFunction tad_queueCommand_stopSoundEffects             Test        NoParameter     STOP_SOUND_EFFECTS
-_Tad_QueueCommandFunction tad_queueCommand_setMainVolume                Test        WithParameter   SET_MAIN_VOLUME
-_Tad_QueueCommandFunction tad_queueCommand_setMusicChannels             Test        WithParameter   SET_MUSIC_CHANNELS
-_Tad_QueueCommandFunction tad_queueCommand_setSongTempo                 Test        WithParameter   SET_SONG_TEMPO
-_Tad_QueueCommandFunction tad_queueCommand_setGlobalMusicVolume         Test        WithParameter   SET_GLOBAL_MUSIC_VOLUME
-_Tad_QueueCommandFunction tad_queueCommand_setGlobalSfxVolume           Test        WithParameter   SET_GLOBAL_SFX_VOLUME
+_Tad_QueueCommandFunction tad_queueCommand_setMainVolume                Test        OneParameter    SET_MAIN_VOLUME
+_Tad_QueueCommandFunction tad_queueCommand_setMusicChannels             Test        OneParameter    SET_MUSIC_CHANNELS
+_Tad_QueueCommandFunction tad_queueCommand_setSongTempo                 Test        OneParameter    SET_SONG_TEMPO
+_Tad_QueueCommandFunction tad_queueCommand_setGlobalMusicVolume         Test        OneParameter    SET_GLOBAL_MUSIC_VOLUME
+_Tad_QueueCommandFunction tad_queueCommand_setGlobalSfxVolume           Test        OneParameter    SET_GLOBAL_SFX_VOLUME
 
 _Tad_QueueCommandFunction tad_queueCommandOverride_pause                Override    NoParameter     PAUSE
 _Tad_QueueCommandFunction tad_queueCommandOverride_pauseMusicPlaySfx    Override    NoParameter     PAUSE_MUSIC_PLAY_SFX
 _Tad_QueueCommandFunction tad_queueCommandOverride_unpause              Override    NoParameter     UNPAUSE
 _Tad_QueueCommandFunction tad_queueCommandOverride_stopSoundEffects     Override    NoParameter     STOP_SOUND_EFFECTS
-_Tad_QueueCommandFunction tad_queueCommandOverride_setMainVolume        Override    WithParameter   SET_MAIN_VOLUME
-_Tad_QueueCommandFunction tad_queueCommandOverride_setMusicChannels     Override    WithParameter   SET_MUSIC_CHANNELS
-_Tad_QueueCommandFunction tad_queueCommandOverride_setSongTempo         Override    WithParameter   SET_SONG_TEMPO
-_Tad_QueueCommandFunction tad_queueCommandOverride_setGlobalMusicVolume Override    WithParameter   SET_GLOBAL_MUSIC_VOLUME
-_Tad_QueueCommandFunction tad_queueCommandOverride_setGlobalSfxVolume   Override    WithParameter   SET_GLOBAL_SFX_VOLUME
+_Tad_QueueCommandFunction tad_queueCommandOverride_setMainVolume        Override    OneParameter    SET_MAIN_VOLUME
+_Tad_QueueCommandFunction tad_queueCommandOverride_setMusicChannels     Override    OneParameter    SET_MUSIC_CHANNELS
+_Tad_QueueCommandFunction tad_queueCommandOverride_setSongTempo         Override    OneParameter    SET_SONG_TEMPO
+_Tad_QueueCommandFunction tad_queueCommandOverride_setGlobalMusicVolume Override    OneParameter    SET_GLOBAL_MUSIC_VOLUME
+_Tad_QueueCommandFunction tad_queueCommandOverride_setGlobalSfxVolume   Override    OneParameter    SET_GLOBAL_SFX_VOLUME
 
 
 .section "tad__Command_A__Test_NoParameter__" SUPERFREE
@@ -1637,7 +1639,7 @@ tad__Command_A__Test_NoParameter__:
 .ends
 
 
-.section "tad__Command_A__Test_WithParameter__" SUPERFREE
+.section "tad__Command_A__Test_OneParameter__" SUPERFREE
 ; MUST NOT be called by tcc
 ;
 ; IN: A = command (bit 8 MUST be clear)
@@ -1648,7 +1650,7 @@ tad__Command_A__Test_NoParameter__:
 ; A unknown
 ; I unknown
 ; DB unknown
-tad__Command_A__Test_WithParameter__:
+tad__Command_A__Test_OneParameter__:
     __Push__A8_noX_noY
 
     sep     #$20
@@ -1664,7 +1666,60 @@ tad__Command_A__Test_WithParameter__:
         sta.l   tad_nextCommand_id__
 
         lda     _stack_arg_offset,s
-        sta.l   tad_nextCommand_parameter__
+        sta.l   tad_nextCommand_parameter0__
+
+        rep     #$20
+    .accu 16
+        lda     #$ff
+        bra     @EndIf
+
+    .accu 8
+    @QueueFull:
+        rep     #$20
+    .accu 16
+        lda     #0
+
+.accu 16
+@EndIf:
+    ; return bool in tcc__r0
+    sta.b   tcc__r0
+
+    __PopReturn_noX_noY
+.ends
+
+
+.section "tad__Command_A__Test_TwoParameters__" SUPERFREE
+; MUST NOT be called by tcc
+;
+; IN: A = command (bit 8 MUST be clear)
+; IN: u8 parameter0 on stack
+; IN: u8 parameter1 on stack
+;
+; OUT: tcc__r0 = bool
+;
+; A unknown
+; I unknown
+; DB unknown
+tad__Command_A__Test_TwoParameters__:
+    __Push__A8_noX_noY
+
+    sep     #$20
+.accu 8
+
+    ; Cannot use `bit tad_nextCommand_id__` here, DB is unknown
+    ; Temporarily Save it in B
+    xba
+
+    lda.l   tad_nextCommand_id__
+    bpl     @QueueFull
+        xba
+        sta.l   tad_nextCommand_id__
+
+        lda     _stack_arg_offset + 0,s
+        sta.l   tad_nextCommand_parameter0__
+
+        lda     _stack_arg_offset + 1,s
+        sta.l   tad_nextCommand_parameter1__
 
         rep     #$20
     .accu 16
@@ -1708,7 +1763,7 @@ tad__Command_A__Override_NoParameter__:
 
 
 
-.section "tad__Command_A__Override_WithParameter__" SUPERFREE
+.section "tad__Command_A__Override_OneParameter__" SUPERFREE
 ; MUST NOT be called by tcc
 ;
 ; IN: A = command (bit 8 MUST be clear)
@@ -1719,13 +1774,41 @@ tad__Command_A__Override_NoParameter__:
 ; A unknown
 ; I unknown
 ; DB unknown
-tad__Command_A__Override_WithParameter__:
+tad__Command_A__Override_OneParameter__:
     __Push__A8_noX_noY
 
     sta.l   tad_nextCommand_id__
 
     lda     _stack_arg_offset,s
-    sta.l   tad_nextCommand_parameter__
+    sta.l   tad_nextCommand_parameter0__
+
+    __PopReturn_noX_noY
+.ends
+
+
+
+.section "tad__Command_A__Override_TwoParameters__" SUPERFREE
+; MUST NOT be called by tcc
+;
+; IN: A = command (bit 8 MUST be clear)
+; IN: u8 parameter0 on stack
+; IN: u8 parameter1 on stack
+;
+; OUT: tcc__r0 = bool
+;
+; A unknown
+; I unknown
+; DB unknown
+tad__Command_A__Override_TwoParameters__:
+    __Push__A8_noX_noY
+
+    sta.l   tad_nextCommand_id__
+
+    lda     _stack_arg_offset + 0,s
+    sta.l   tad_nextCommand_parameter0__
+
+    lda     _stack_arg_offset + 1,s
+    sta.l   tad_nextCommand_parameter1__
 
     __PopReturn_noX_noY
 .ends
@@ -1797,12 +1880,12 @@ tad__Command_A__Override_WithParameter__:
 ;; Queue 3 - The next command to send to the audio driver
 ;; ------------------------------------------------------
     ;; The next `Command` to send to the audio driver.
-    ;; MUST NOT be PLAY_SOUND_EFFECT_COMMAND.
     ;; If this value is negative, the queue is empty.
     tad_nextCommand_id__: db
 
-    ;; The parameter of the next next command (if any)
-    tad_nextCommand_parameter__: db
+    ;; The two parameters of the next command (if any)
+    tad_nextCommand_parameter0__: db
+    tad_nextCommand_parameter1__: db
 
 
 ;; ---------------------------------------

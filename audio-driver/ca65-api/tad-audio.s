@@ -187,7 +187,7 @@ TAD_DEFAULT_TRANSFER_PER_FRAME = 256
     PAUSE = 0
     PAUSE_MUSIC_PLAY_SFX = 2
     UNPAUSE = 4
-    PLAY_SOUND_EFFECT_COMMAND = 6
+    PLAY_SOUND_EFFECT = 6
     STOP_SOUND_EFFECTS = 8
     SET_MAIN_VOLUME = 10
     SET_MUSIC_CHANNELS = 12
@@ -426,12 +426,12 @@ TAD__FIRST_LOADING_SONG_STATE = TadState::LOADING_SONG_DATA_PAUSED
 ;; ------------------------------------------------------
 .bss
     ;; The next `TadCommand` to send to the audio driver.
-    ;; MUST NOT be PLAY_SOUND_EFFECT_COMMAND.
     ;; If this value is negative, the queue is empty.
     Tad_nextCommand_id: .res 1
 
-    ;; The parameter of the next next command (if any)
-    Tad_nextCommand_parameter: .res 1
+    ;; The two parameters of the next command (if any)
+    Tad_nextCommand_parameter0: .res 1
+    Tad_nextCommand_parameter1: .res 1
 
 
 ;; ---------------------------------------
@@ -889,8 +889,11 @@ ReturnFalse:
     .assert .asize = 8, error
     .assert .isize = 8, error
 
-    lda     Tad_nextCommand_parameter
+    lda     Tad_nextCommand_parameter0
     sta     f:TadIO_ToDriver::PARAMETER0_PORT
+
+    lda     Tad_nextCommand_parameter1
+    sta     f:TadIO_ToDriver::PARAMETER1_PORT
 
     lda     Tad_previousCommand
     and     #TadIO_ToDriver::COMMAND_I_MASK    ; Clear the non i bits of the command
@@ -950,7 +953,7 @@ ReturnFalse:
     lda     Tad_previousCommand
     and     #TadIO_ToDriver::COMMAND_I_MASK            ; Clear the non i bits of the command
     eor     #TadIO_ToDriver::COMMAND_I_MASK            ; Flip the i bits
-    ora     #TadCommand::PLAY_SOUND_EFFECT_COMMAND     ; Set the c bits
+    ora     #TadCommand::PLAY_SOUND_EFFECT             ; Set the c bits
 
     sta     f:TadIO_ToDriver::COMMAND_PORT
     sta     Tad_previousCommand
@@ -1207,7 +1210,8 @@ ReturnFalse:
 
 
 ; IN: A = command
-; IN: X = parameter
+; IN: X = first parameter
+; IN: Y = second parameter
 ; OUT: Carry set if command added to queue
 .a8
 ; I unknown
@@ -1221,7 +1225,10 @@ ReturnFalse:
         sta     Tad_nextCommand_id
 
         txa
-        sta     Tad_nextCommand_parameter
+        sta     Tad_nextCommand_parameter0
+
+        tya
+        sta     Tad_nextCommand_parameter1
 
         ; return true
         sec
@@ -1234,7 +1241,8 @@ ReturnFalse:
 
 
 ; IN: A = command
-; IN: X = parameter
+; IN: X = first parameter
+; IN: Y = second parameter
 .a8
 ; I unknown
 ; DB access lowram

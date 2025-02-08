@@ -50,8 +50,15 @@ TadCommand .block
     ; Unpauses the music and sound effect channels.
     UNPAUSE = 4
 
-    ; SHOULD NOT USE PLAY_SOUND_EFFECT in `queue_command`
-    ; (command queue only holds 1 parameter byte and PLAY_SOUND_EFFECT has 2 parameters)
+    ; Play a sound effect
+    ;  * parameter0: sound effect id
+    ;  * parameter1: pan (0-128) (not bounds checked)
+    ;
+    ; The sound-effect might not play if both sound effect channels are active.
+    ; See the Sound Effects documentation for more details
+    ;
+    ; CAUTION: a PLAY_SOUND_EFFECT command has a higher priority than the sound-effect queue.
+    PLAY_SOUND_EFFECT = 6
 
     ; Stop all active sound effects
     STOP_SOUND_EFFECTS = 8
@@ -95,7 +102,8 @@ TadCommand .block
 
 
 ; IN: A = command
-; IN: X = parameter
+; IN: X = first parameter
+; IN: Y = second parameter
 ; OUT: Carry set if command added to queue
 .as
 ; I unknown
@@ -109,7 +117,10 @@ Tad_QueueCommand .proc
         sta     Tad_nextCommand_id
 
         txa
-        sta     Tad_nextCommand_parameter
+        sta     Tad_nextCommand_parameter0
+
+        tya
+        sta     Tad_nextCommand_parameter1
 
         ; return true
         sec
@@ -123,7 +134,8 @@ _ReturnFalse:
 
 
 ; IN: A = command
-; IN: X = parameter
+; IN: X = first parameter
+; IN: Y = second parameter
 .as
 ; I unknown
 .databank TAD_DB_LOWRAM

@@ -134,8 +134,15 @@ TAD_MIN_TICK_CLOCK = 64
     ;; Unpauses the music and sound effect channels.
     UNPAUSE = 4
 
-    ; SHOULD NOT USE PLAY_SOUND_EFFECT in `queue_command`
-    ; (command queue only holds 1 parameter byte and PLAY_SOUND_EFFECT has 2 parameters)
+    ;; Play a sound effect
+    ;;  * parameter0: sound effect id
+    ;;  * parameter1: pan (0-128) (not bounds checked)
+    ;;
+    ;; The sound-effect might not play if both sound effect channels are active.
+    ;; See the Sound Effects documentation for more details
+    ;;
+    ;; CAUTION: a PLAY_SOUND_EFFECT command has a higher priority than the sound-effect queue.
+    PLAY_SOUND_EFFECT = 6
 
     ;; Stop all active sound effects
     STOP_SOUND_EFFECTS = 8
@@ -261,7 +268,8 @@ TAD_MIN_TICK_CLOCK = 64
 ;; MUST NOT be used to send a play-sound-effect command.
 ;;
 ;; IN: A = `TadCommand` value
-;; IN: X = Command parameter (if any). Only the lower 8 bits will be sent to the Audio Driver.
+;; IN: X = First command parameter (if required). Only the lower 8 bits will be sent to the Audio Driver.
+;; IN: Y = Second command parameter (if required). Only the lower 8 bits will be sent to the Audio Driver.
 ;;
 ;; OUT: Carry set if the command was added to the queue
 ;;
@@ -277,7 +285,8 @@ TAD_MIN_TICK_CLOCK = 64
 ;; The command queue can only hold 1 command.
 ;;
 ;; IN: A = `TadCommand` value
-;; IN: X = Command parameter (if any). Only the lower 8 bits will be sent to the Audio Driver.
+;; IN: X = First command parameter (if required). Only the lower 8 bits will be sent to the Audio Driver.
+;; IN: Y = Second command parameter (if required). Only the lower 8 bits will be sent to the Audio Driver.
 ;;
 ;; A8
 ;; I unknown

@@ -159,11 +159,10 @@ Tad_previousCommand .byte ?
 ; Queue 3 - The next command to send to the audio driver
 ; ------------------------------------------------------
     ; The next `Command` to send to the audio driver.
-    ; MUST NOT be PLAY_SOUND_EFFECT_COMMAND.
     ; If this value is negative, the queue is empty.
     Tad_nextCommand_id .byte ?
 
-    ; The parameter of the next next command (if any)
-    Tad_nextCommand_parameter .byte ?
-
+    ; The two parameters of the next command (if any)
+    Tad_nextCommand_parameter0 .byte ?
+    Tad_nextCommand_parameter1 .byte ?
 
