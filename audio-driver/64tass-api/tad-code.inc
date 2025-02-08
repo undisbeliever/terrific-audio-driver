@@ -97,6 +97,13 @@ TadCommand .block
     ;
     ; NOTE: Global volumes persist after a new song or common-audio-data is loaded.
     SET_GLOBAL_SFX_VOLUME = 18
+
+    ; Set the global music and sound-effect volumes
+    ;  * parameter0: the music volume.
+    ;  * parameter1: the sound-effect volume.
+    ;
+    ; NOTE: Global volumes persist after a new song or common-audio-data is loaded.
+    SET_GLOBAL_VOLUMES = 20
 .endblock
 
 

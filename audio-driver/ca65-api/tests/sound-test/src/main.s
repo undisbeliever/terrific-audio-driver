@@ -572,7 +572,18 @@ Menu_SfxPan_Action = Menu_PlaySfx_Action
 .i16
 ;: DB = $7e
 .proc Menu_MusicVolume_Action
-    rts
+    ; Test set-global-volumes IO command
+
+    lda     #128
+    jsr     _SetMusicVolume
+
+    lda     #255
+    jsr     _SetSfxVolume
+
+    lda     #TadCommand::SET_GLOBAL_VOLUMES
+    ldx     Menu::musicVolume
+    ldy     Menu::sfxVolume
+    jmp     Tad_QueueCommandOverride
 .endproc
 
 
@@ -597,7 +608,18 @@ Menu_SfxPan_Action = Menu_PlaySfx_Action
 .i16
 ;: DB = $7e
 .proc Menu_SfxVolume_Action
-    rts
+    ; Test set-global-volumes IO command
+
+    lda     #255
+    jsr     _SetMusicVolume
+
+    lda     #128
+    jsr     _SetSfxVolume
+
+    lda     #TadCommand::SET_GLOBAL_VOLUMES
+    ldx     Menu::musicVolume
+    ldy     Menu::sfxVolume
+    jmp     Tad_QueueCommandOverride
 .endproc
 
 

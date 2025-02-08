@@ -39,6 +39,8 @@ Audio driver changes:
  * Added surround audio mode
     * Surround mode allows for the left or right channels to be individually inverted.
     * In stereo mode, the left and right channels are both inverted if the mono invert-flag is set.
+ * Added global music and sound-effect volumes.
+   (See the `SET_GLOBAL_MUSIC_VOLUME`, `SET_GLOBAL_SFX_VOLUME` and `SET_GLOBAL_VOLUMES` IO commands.)
 
 MML changes:
  * `#EchoVolume` now accepts a stereo input

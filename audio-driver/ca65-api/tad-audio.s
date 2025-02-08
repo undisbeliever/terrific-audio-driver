@@ -179,7 +179,7 @@ TAD_DEFAULT_TRANSFER_PER_FRAME = 256
 ;; Used by `tad-compiler ca65-export` to verify the IO protocol in `tad-audio.s` matches the audio-driver.
 ;;
 ;; This constant MUST be increased if `LOADER_ADDR` or the IO Communication protocol changes.
-.export TAD_IO_VERSION : abs = 17
+.export TAD_IO_VERSION : abs = 18
 
 
 ; MUST match `audio-driver/src/io-commands.wiz`
@@ -194,6 +194,7 @@ TAD_DEFAULT_TRANSFER_PER_FRAME = 256
     SET_SONG_TEMPO = 14
     SET_GLOBAL_MUSIC_VOLUME = 16
     SET_GLOBAL_SFX_VOLUME = 18
+    SET_GLOBAL_VOLUMES = 20
 .endenum
 
 TAD_MAX_PAN = 128

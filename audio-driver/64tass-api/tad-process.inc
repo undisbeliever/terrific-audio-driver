@@ -75,7 +75,7 @@ TAD_LOADER_ARAM_ADDR = $0200
 ; Used by `tad-compiler ca65-export` to verify the IO protocol in `tad-audio.s` matches the audio-driver.
 ;
 ; This constant MUST be increased if `LOADER_ADDR` or the IO Communication protocol changes.
-TAD_IO_VERSION = 17
+TAD_IO_VERSION = 18
 
 
 ; MUST match `audio-driver/src/io-commands.wiz`

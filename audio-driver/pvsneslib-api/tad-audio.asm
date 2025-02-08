@@ -109,6 +109,7 @@ TAD_Command__SET_MUSIC_CHANNELS = 12
 TAD_Command__SET_SONG_TEMPO = 14
 TAD_Command__SET_GLOBAL_MUSIC_VOLUME = 16
 TAD_Command__SET_GLOBAL_SFX_VOLUME = 18
+TAD_Command__SET_GLOBAL_VOLUMES = 20
 
 TAD_COMMAND_MASK   = %00001110
 TAD_COMMAND_I_MASK = %11100001
@@ -1584,6 +1585,7 @@ _Tad_QueueCommandFunction tad_queueCommand_setMusicChannels             Test    
 _Tad_QueueCommandFunction tad_queueCommand_setSongTempo                 Test        OneParameter    SET_SONG_TEMPO
 _Tad_QueueCommandFunction tad_queueCommand_setGlobalMusicVolume         Test        OneParameter    SET_GLOBAL_MUSIC_VOLUME
 _Tad_QueueCommandFunction tad_queueCommand_setGlobalSfxVolume           Test        OneParameter    SET_GLOBAL_SFX_VOLUME
+_Tad_QueueCommandFunction tad_queueCommand_setGlobalVolumes             Test        TwoParameters   SET_GLOBAL_VOLUMES
 
 _Tad_QueueCommandFunction tad_queueCommandOverride_pause                Override    NoParameter     PAUSE
 _Tad_QueueCommandFunction tad_queueCommandOverride_pauseMusicPlaySfx    Override    NoParameter     PAUSE_MUSIC_PLAY_SFX
@@ -1594,6 +1596,7 @@ _Tad_QueueCommandFunction tad_queueCommandOverride_setMusicChannels     Override
 _Tad_QueueCommandFunction tad_queueCommandOverride_setSongTempo         Override    OneParameter    SET_SONG_TEMPO
 _Tad_QueueCommandFunction tad_queueCommandOverride_setGlobalMusicVolume Override    OneParameter    SET_GLOBAL_MUSIC_VOLUME
 _Tad_QueueCommandFunction tad_queueCommandOverride_setGlobalSfxVolume   Override    OneParameter    SET_GLOBAL_SFX_VOLUME
+_Tad_QueueCommandFunction tad_queueCommandOverride_setGlobalVolumes     Override    TwoParameters   SET_GLOBAL_VOLUMES
 
 
 .section "tad__Command_A__Test_NoParameter__" SUPERFREE

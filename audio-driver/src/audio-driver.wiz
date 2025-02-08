@@ -1531,6 +1531,7 @@ const CommandFunctionTable : [func(parameter0: u8 in y) ; IO.ToDriver.N_COMMANDS
     set_song_tempo,
     set_global_music_volume,
     set_global_sfx_volume,
+    set_global_volumes,
 ];
 
 
@@ -1592,6 +1593,15 @@ func set_global_music_volume(volume: u8 in y) {
     globalVolume_music = y;
 
     volShadowDirty_music = 0xff;
+}
+
+
+#[fallthrough]
+func set_global_volumes(musicVolume: u8 in y) {
+    set_global_music_volume(y);
+
+    y = IO.ToDriver.parameter1;
+// Fallthrough into set_global_sfx_volume()
 }
 
 

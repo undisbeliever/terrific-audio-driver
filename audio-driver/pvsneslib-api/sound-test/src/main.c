@@ -397,18 +397,28 @@ void menu_process_action(void) {
         break;
 
     case MENU__MUSIC_VOLUME:
-        // Tests `tad_queueCommandOverride_*(u8)` (built using a macro)
-        tad_queueCommandOverride_setGlobalMusicVolume(menu_musicVolume);
+        // Test set-global-volumes IO command and two-parameter command macro
+        menu_musicVolume = 128;
+        menu_sfxVolume = 255;
+        menu_printU8(MENU__MUSIC_VOLUME, menu_musicVolume);
+        menu_printU8(MENU__SFX_VOLUME, menu_sfxVolume);
+
+        tad_queueCommand_setGlobalVolumes(128, 255);
         break;
 
     case MENU__SFX_VOLUME:
-        // Tests `tad_queueCommandOverride_*(u8)` (built using a macro)
-        tad_queueCommandOverride_setGlobalSfxVolume(menu_sfxVolume);
+        // Test set-global-volumes IO command and two-parameter override command macro
+        menu_musicVolume = 255;
+        menu_sfxVolume = 128;
+        menu_printU8(MENU__MUSIC_VOLUME, menu_musicVolume);
+        menu_printU8(MENU__SFX_VOLUME, menu_sfxVolume);
+
+        tad_queueCommandOverride_setGlobalVolumes(255, 128);
         break;
 
     case MENU__OVERRIDE_TEMPO:
         // Tests `tad_queueCommandOverride_*(u8)` (built using a macro)
-        tad_queueCommandOverride_setSongTempo(menu_tempoOverride);
+        tad_queueCommandOverride_setGlobalVolumes(128, 255);
         break;
 
     case MENU__CHANNEL_MASK:

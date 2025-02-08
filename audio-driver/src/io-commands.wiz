@@ -28,7 +28,7 @@ import "registers";
 
 
 // This constant MUST be increased if `LOADER_ADDR` or the IO Communication protocol changes.
-let TAD_IO_VERSION = 17;
+let TAD_IO_VERSION = 18;
 
 
 // Loader Commands
@@ -177,7 +177,7 @@ namespace IO {
         //    has been acknowledged.
         extern const command @ &smp.io_port_in_0 : u8;
 
-        let N_COMMANDS = 10;
+        let N_COMMANDS = 11;
         let COMMAND_MASK   = 0b00011110;
         let COMMAND_I_MASK = 0b11100001;
 
@@ -282,11 +282,18 @@ namespace IO {
         SET_GLOBAL_MUSIC_VOLUME = 16,
 
         // Set the global sound-effect volume
-        //  * parameter0: the music volume.
+        //  * parameter0: the sound-effect volume.
         //    A 255 sfx-volume will not modify the channel volume.
         //
         // NOTE: Global volumes persist after a new song or common-audio-data is loaded.
         SET_GLOBAL_SFX_VOLUME = 18,
+
+        // Set the global music and sound-effect volumes
+        //  * parameter0: the music volume.
+        //  * parameter1: the sound-effect volume.
+        //
+        // NOTE: Global volumes persist after a new song or common-audio-data is loaded.
+        SET_GLOBAL_VOLUMES = 20,
     };
 }
 
