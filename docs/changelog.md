@@ -20,6 +20,7 @@ Version 0.1.0
     * Removed `Tad_SetMono`, `Tad_SetStereo`, `Tad_GetStereoFlag` functions
     * Added `TadAudioMode` enum
     * Added global `tad_audioMode` variable
+    * The `RELOAD_COMMON_AUDIO_DATA` flag is now checked and cleared in `Tad_LoadSong`
 
 Audio driver changes:
  * Stereo echo volume

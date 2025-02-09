@@ -53,8 +53,10 @@ TAD_DEFAULT_TRANSFER_PER_FRAME = 256
 
 TadState .block
     NULL                                = $00
-    ; Waiting for loader to send the ready signal.
-    WAITING_FOR_LOADER                  = $7c
+    ; Waiting for loader to send the ready signal before loading common-audio-data
+    WAITING_FOR_LOADER_COMMON           = $7b
+    ; Waiting for loader to send the ready signal before loading song data
+    WAITING_FOR_LOADER_SONG             = $7c
     ; Loading common audio data.
     LOADING_COMMON_AUDIO_DATA           = $7d
     ; Loading a song and the TadLoaderDataType.PLAY_SONG_FLAG was clear.
@@ -69,6 +71,7 @@ TadState .block
     ; Song is loaded into Audio-RAM and the audio driver is playing the song.
     PLAYING                             = $82
 .endblock
+TAD__FIRST_WAITING_STATE      = TadState.WAITING_FOR_LOADER_COMMON
 TAD__FIRST_LOADING_STATE      = TadState.LOADING_COMMON_AUDIO_DATA
 TAD__FIRST_LOADING_SONG_STATE = TadState.LOADING_SONG_DATA_PAUSED
 
@@ -80,14 +83,14 @@ TadFlags .block
     ; Default: Set
     PLAY_SONG_IMMEDIATELY    = TadLoaderDataType.PLAY_SONG_FLAG
 
-    ; If set the *common audio data* will be loaded into Audio-RAM the next time a song is requested.
+    ; If set the *common audio data* will be loaded into Audio-RAM on the next `Tad_LoadSong` call.
     ;
-    ; This flag is cleared after the *common audio data* is loaded into Audio-RAM
+    ; This flag will be cleared in `Tad_LoadSong`.
     RELOAD_COMMON_AUDIO_DATA = 1 << 0
 
 
     ; A mask for the flags that are sent to the loader
-    _LOADER_MASK = PLAY_SONG_IMMEDIATELY
+    _ALL_FLAGS = PLAY_SONG_IMMEDIATELY | RELOAD_COMMON_AUDIO_DATA
 .endblock
 
 
@@ -150,7 +153,7 @@ Tad_previousCommand .byte ?
 ; Queue 2 - The next song to load into Audio-RAM
 ; ----------------------------------------------
     ; The next song to load into Audio-RAM
-    ; Used by the `WAITING_FOR_LOADER` state
+    ; Used by the `WAITING_FOR_LOADER_*` states
     ; If this value is 0 or an invalid song, a blank silent song will be loaded instead.
     Tad_nextSong .byte ?
 

@@ -266,8 +266,11 @@ TAD_DEFAULT_TRANSFER_PER_FRAME = 256    ; ::TODO should I decrement this value?:
 
 TAD_State__NULL                         = $00
 
-;; Waiting for loader to send the ready signal.
-TAD_State__WAITING_FOR_LOADER           = $7c
+;; Waiting for loader to send the ready signal before loading common-audio-data
+TAD_State__WAITING_FOR_LOADER_COMMON    = $7b
+
+;; Waiting for loader to send the ready signal before loading song data
+TAD_State__WAITING_FOR_LOADER_SONG      = $7c
 
 ;; Loading common audio data.
 TAD_State__LOADING_COMMON_AUDIO_DATA    = $7d
@@ -288,6 +291,7 @@ TAD_State__PLAYING_SFX                  = $81
 ;; Song is loaded into Audio-RAM and the audio driver is playing the song.
 TAD_State__PLAYING                      = $82
 
+TAD_FIRST_WAITING_STATE      = TAD_State__WAITING_FOR_LOADER_COMMON
 TAD_FIRST_LOADING_STATE      = TAD_State__LOADING_COMMON_AUDIO_DATA
 TAD_FIRST_LOADING_SONG_STATE = TAD_State__LOADING_SONG_DATA_PAUSED
 
@@ -302,13 +306,13 @@ TAD_FIRST_LOADING_SONG_STATE = TAD_State__LOADING_SONG_DATA_PAUSED
 ;; Default: Set
 TAD_Flags__PLAY_SONG_IMMEDIATELY    = TAD_LoaderDataType__PLAY_SONG_FLAG
 
-;; If set the *common audio data* will be loaded into Audio-RAM the next time a song is requested.
+;; If set the *common audio data* will be loaded into Audio-RAM on the next `tad_loadSong()` call.
 ;;
-;; This flag is cleared after the *common audio data* is loaded into Audio-RAM
+;; This flag will be cleared in `tad_loadSong()`.
 TAD_Flags__RELOAD_COMMON_AUDIO_DATA = 1 << 0
 
 ;; A mask for the flags that are sent to the loader
-TAD_Flags__LOADER_MASK = TAD_Flags__PLAY_SONG_IMMEDIATELY
+TAD_Flags__ALL_FLAGS = TAD_Flags__PLAY_SONG_IMMEDIATELY | TAD_Flags__RELOAD_COMMON_AUDIO_DATA
 
 
 ;; ============
@@ -322,7 +326,8 @@ TAD_Flags__LOADER_MASK = TAD_Flags__PLAY_SONG_IMMEDIATELY
 ;; DB unknown
 .macro __Tad_IsLoaderActive__a8_far_carry__
     .assert TAD_State__NULL < TAD_FIRST_LOADING_STATE
-    .assert TAD_State__WAITING_FOR_LOADER < TAD_FIRST_LOADING_STATE
+    .assert TAD_State__WAITING_FOR_LOADER_COMMON < TAD_FIRST_LOADING_STATE
+    .assert TAD_State__WAITING_FOR_LOADER_SONG < TAD_FIRST_LOADING_STATE
     .assert (TAD_State__PAUSED & $7f) < TAD_FIRST_LOADING_STATE
     .assert (TAD_State__PLAYING & $7f) < TAD_FIRST_LOADING_STATE
 
@@ -338,7 +343,8 @@ TAD_Flags__LOADER_MASK = TAD_Flags__PLAY_SONG_IMMEDIATELY
 ;; DB = $80
 .macro __Tad_IsLoaderActive__a8_db80_carry__
     .assert TAD_State__NULL < TAD_FIRST_LOADING_STATE
-    .assert TAD_State__WAITING_FOR_LOADER < TAD_FIRST_LOADING_STATE
+    .assert TAD_State__WAITING_FOR_LOADER_COMMON < TAD_FIRST_LOADING_STATE
+    .assert TAD_State__WAITING_FOR_LOADER_SONG < TAD_FIRST_LOADING_STATE
     .assert (TAD_State__PAUSED & $7f) < TAD_FIRST_LOADING_STATE
     .assert (TAD_State__PLAYING & $7f) < TAD_FIRST_LOADING_STATE
 
@@ -503,6 +509,44 @@ TAD_Flags__LOADER_MASK = TAD_Flags__PLAY_SONG_IMMEDIATELY
         ply
         plx
 
+        plb
+        plp
+
+        rtl
+.endm
+
+
+;; Push P to the stack and set mem register size to 8 bits.
+;;
+;; Functions that invoke this macro MUST NOT MODIFY the index registers.
+;; Functions that invoke this macro MUST use the long addressing mode.
+;;
+.macro __Push__A8_noX_noY_DB_80
+    .redefine __FUNCTION_TYPE 0x00a80080
+    .redefine _stack_arg_offset 6
+
+        php
+        phb
+        sep     #$20
+
+        lda     #$80
+        pha
+        plb
+    .accu 8
+.endm
+
+
+;; Restore the stack and return.
+;;
+;; MUST ONLY be used on functions that invoke `__Push__A8_noX_noY_DB_80`.
+;; MUST ONLY be invoked once per function
+;;
+;; I16
+.macro __PopReturn_A8_noX_noY_DB_80
+    .assert __FUNCTION_TYPE == 0x00a80080
+
+    .redefine __FUNCTION_TYPE == 0
+    .redefine _stack_arg_offset 0xffff
         plb
         plp
 
@@ -1021,26 +1065,20 @@ _tad_loader_gotoNextBank__:
 
 
 
-;; Process the WAITING_FOR_LOADER state
+;; Process the WAITING_FOR_LOADER_* states
+;;
+;; IN: A = tad_state__
 ;;
 ;; A8
 ;; I16
 ;; DB = $80
 .macro _Tad_Process_WaitingForLoader__
-    lda     tad_flags__
-    bit     #TAD_Flags__RELOAD_COMMON_AUDIO_DATA
-    beq     @WFL_SongData
+    cmp     #TAD_State__WAITING_FOR_LOADER_COMMON
+    bne     @WFL_SongData
         ; Common audio data
         lda     #TAD_LoaderDataType__COMMON_DATA
         jsr     _tad_loader_checkReadyAndSendLoaderDataType__
         bcc     @WFL_Return
-
-        ; Clear the RELOAD_COMMON_AUDIO_DATA flag
-        ;
-        ; It is safe to do this before the data is loaded into audio-RAM.
-        ; `tad_loadSong` will not restart the loader if state == LOADING_COMMON_AUDIO_DATA.
-        lda     #TAD_Flags__RELOAD_COMMON_AUDIO_DATA
-        trb     tad_flags__
 
         lda     #TAD_State__LOADING_COMMON_AUDIO_DATA
         pha
@@ -1051,9 +1089,13 @@ _tad_loader_gotoNextBank__:
     @WFL_SongData:
         ; Songs
 
-        ; a = tad_flags
-        and     #TAD_Flags__LOADER_MASK
-        sta     tad_flags__
+        ; Tad_flags MUST NOT have the stereo/surround loader flag set
+        .assert (TAD_Flags__ALL_FLAGS & TAD_LoaderDataType__STEREO_FLAG) == 0
+        .assert (TAD_Flags__ALL_FLAGS & TAD_LoaderDataType__SURROUND_FLAG) == 0
+
+        ; Clear unused TAD flags
+        lda     #$ff ~ TAD_Flags__ALL_FLAGS
+        trb     tad_flags__
 
         ; Convert `Tad_audioMode` to TAD_LoaderDataType
         .assert (((0 + 1) & 3) << 6) == TAD_LoaderDataType__SURROUND_FLAG ; mono
@@ -1130,7 +1172,7 @@ _tad_process__loading__:
         bne     @Song
             ; Common audio data was just transferred
             ; Loader is still active
-            lda     #TAD_State__WAITING_FOR_LOADER
+            lda     #TAD_State__WAITING_FOR_LOADER_SONG
             bra     @EndIf
 
         @Song:
@@ -1216,11 +1258,13 @@ _tad_process__loading__:
     @NotLoaded:
         ; Song is not loaded into Audio-RAM
 
-        ; Test if state is WAITING_FOR_LOADER or LOADING_*
-        .assert TAD_FIRST_LOADING_STATE == TAD_State__WAITING_FOR_LOADER + 1
-        cmp     #TAD_State__WAITING_FOR_LOADER
-        beq     @WaitingForLoader
+        ; Test if state is WAITING_FOR_LOADER_* or LOADING_*
+        .assert TAD_FIRST_LOADING_STATE > TAD_FIRST_WAITING_STATE
+        .assert TAD_FIRST_LOADING_STATE == TAD_State__WAITING_FOR_LOADER_SONG + 1
+        cmp     #TAD_FIRST_LOADING_STATE
         bcs     @Loading
+        cmp     #TAD_FIRST_WAITING_STATE
+        bcs     @WaitingForLoader
         jmp     @Return_I16
             @Loading:
                 jsr     _tad_process__loading__
@@ -1251,7 +1295,7 @@ tad_init:
 
     stz     tad_audioMode
 
-    lda     #TAD_Flags__RELOAD_COMMON_AUDIO_DATA | TAD_Flags__PLAY_SONG_IMMEDIATELY
+    lda     #TAD_Flags__PLAY_SONG_IMMEDIATELY
     sta     tad_flags__
 
     ldx     #TAD_DEFAULT_TRANSFER_PER_FRAME
@@ -1277,7 +1321,7 @@ tad_init:
         jsr     _tad_loader_transferData__
         bcc     @TransferLoop
 
-    lda     #TAD_State__WAITING_FOR_LOADER
+    lda     #TAD_State__WAITING_FOR_LOADER_COMMON
     sta     tad_state__
 
     __PopReturn_X16_Y16_DB_80
@@ -1376,29 +1420,45 @@ tad_queueSoundEffect:
 ; void tad_loadSong(u8 song_id)
 tad_loadSong:
     .assert TAD_FIRST_LOADING_SONG_STATE > TAD_State__NULL
-    .assert TAD_FIRST_LOADING_SONG_STATE > TAD_State__WAITING_FOR_LOADER
+    .assert TAD_FIRST_LOADING_SONG_STATE > TAD_State__WAITING_FOR_LOADER_COMMON
+    .assert TAD_FIRST_LOADING_SONG_STATE > TAD_State__WAITING_FOR_LOADER_SONG
     .assert TAD_FIRST_LOADING_SONG_STATE > TAD_State__LOADING_COMMON_AUDIO_DATA
 
-    __Push__A8_noX_noY
+    __Push__A8_noX_noY_DB_80
 .accu 8
+// DB = $80
 
     lda     _stack_arg_offset,s
-    sta.l   tad_nextSong__
+    sta     tad_nextSong__
 
-    lda.l   tad_state__
+
+    lda     #TAD_Flags__RELOAD_COMMON_AUDIO_DATA
+    trb     tad_flags__
+    beq     @SongRequested
+        ; Common audio data requested
+        lda     #TAD_State__WAITING_FOR_LOADER_COMMON
+        bra     @SetStateAndSwitchToLoader
+
+@SongRequested:
+    lda     tad_state__
     cmp     #TAD_FIRST_LOADING_SONG_STATE
-    bcc     +
-        ; State is not NULL, WAITING_FOR_LOADER or LOADING_COMMON_AUDIO_DATA
+    bcc     @Return
+        ; State is not NULL, WAITING_FOR_LOADER_* or LOADING_COMMON_AUDIO_DATA
+        lda     #TAD_State__WAITING_FOR_LOADER_SONG
+
+    @SetStateAndSwitchToLoader:
+        sta     tad_state__
+
+        ; Assert it is safe to send a switch-to-loader command when the loader is waiting for a READY signal
+        .assert TAD_IO_ToDriver__SWITCH_TO_LOADER != TAD_IO_Loader_Init__LOADER_READY_H
+        .assert TAD_IO_ToDriver__SWITCH_TO_LOADER_PORT == TAD_IO_Loader_Init__READY_PORT_H
 
         ; Send a *switch-to-loader* command to the audio-driver or loader
         lda     #TAD_IO_ToDriver__SWITCH_TO_LOADER
-        sta.l   TAD_IO_ToDriver__SWITCH_TO_LOADER_PORT
+        sta     TAD_IO_ToDriver__SWITCH_TO_LOADER_PORT
 
-        lda     #TAD_State__WAITING_FOR_LOADER
-        sta.l   tad_state__
-    +
-
-    __PopReturn_noX_noY
+@Return:
+    __PopReturn_A8_noX_noY_DB_80
 .ends
 
 
@@ -1874,7 +1934,7 @@ tad__Command_A__Override_TwoParameters__:
 ;; Queue 2 - The next song to load into Audio-RAM
 ;; ----------------------------------------------
     ;; The next song to load into Audio-RAM
-    ;; Used by the `WAITING_FOR_LOADER` state
+    ;; Used by the `WAITING_FOR_LOADER_*` states
     ;; If this value is 0 or an invalid song, a blank silent song will be loaded instead.
     tad_nextSong__: db
 

@@ -446,16 +446,17 @@ void tad_queuePannedSoundEffect(u8 sfx_id, u8 pan);
 void tad_queueSoundEffect(u8 sfx_id);
 
 /*!
- * Disables the audio driver, starts the loader and queues a song transfer.
+ * Disables the audio driver, starts the loader and queues a song or common-audio-data transfer.
  *
- * This function will not restart the loader if the loader is loading common audio data.
- *
- * CAUTION: The audio driver starts in the paused state if the `PlaySongImmediately` flag is false.
+ * This function will clear the RELOAD_COMMON_AUDIO_DATA flag.
  *
  * CAUTION: tad_loadSong() will switch the state to `WAITING_FOR_LOADER`.  loadAudioData() will
  * not be called until tad_process() is called **and** the audio-driver has switched to the loader.
- * While the state remains `WAITING_FOR_LOADER`, no audio data will be transferred and calling
+ * While the state remains `WAITING_FOR_LOADER_*`, no audio data will be transferred and calling
  * tad_finishLoadingData() will not transfer any audio data.
+ *
+ * CAUTION: The audio driver starts in the paused state if the `PlaySongImmediately` flag is false
+ * when `Tad_Process` calls `LoaderDataType`.
  *
  * @param song_id the song id to play (0 = silence, first song starts at 1)
  */

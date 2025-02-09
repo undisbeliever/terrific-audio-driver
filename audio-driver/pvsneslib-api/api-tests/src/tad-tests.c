@@ -135,6 +135,26 @@ void test_loadSongWhileLoaderActive(void) {
     finishLoading();
 }
 
+void test_loadSongWhileLoaderActive2(void) {
+    ASSERT_EQ(tad_isSongLoaded(), true)
+
+    tad_loadSong(1);
+
+    ASSERT_EQ(tad_isSongLoaded(), false)
+
+    wait();
+    tad_loadSong(0);
+
+    wait();
+    tad_loadSong(1);
+
+    ASSERT_EQ(tad_isLoaderActive(), false)
+    ASSERT_EQ(tad_isSongLoaded(), false)
+
+    waitForLoader();
+    finishLoading();
+}
+
 void test_loadSongWhileLoadingCommonAudioData(void) {
     tad_reloadCommonAudioData();
 
@@ -152,6 +172,97 @@ void test_loadSongWhileLoadingCommonAudioData(void) {
 
     // Tests `tad_loadSong()` did not switch to the WAITING_FOR_LOADER state
     ASSERT_EQ(tad_isLoaderActive(), true)
+}
+
+// Tests that `tad_process()` does not clear the RELOAD_COMMON_AUDIO_DATA flag.
+void test_reloadCommonAudioDataImmediatelyAfterLoadSong(void) {
+
+    tad_reloadCommonAudioData();
+
+    tad_loadSong(1);
+    // RELOAD_COMMON_AUDIO_DATA flag is cleared by Tad_LoadSong
+
+    tad_reloadCommonAudioData();
+
+    finishLoading();
+    ASSERT_EQ(tad_isLoaderActive(), false);
+    ASSERT_EQ(tad_isSongLoaded(), true);
+
+
+    // RELOAD_COMMON_AUDIO_DATA flag is set
+    tad_loadSong(1);
+
+    ASSERT_EQ(tad_isLoaderActive(), false);
+    ASSERT_EQ(tad_isSongLoaded(), false);
+
+    waitForLoader();
+    tad_finishLoadingData();
+
+    // Test the loader is waiting for song data
+    ASSERT_EQ(tad_isLoaderActive(), false);
+    ASSERT_EQ(tad_isSongLoaded(), false);
+
+    waitForLoader();
+    tad_finishLoadingData();
+    ASSERT_EQ(tad_isSongLoaded(), true);
+}
+
+void test_loadSongRestartsLoaderIfReloadCommonAudioDataIsSet(void) {
+    ASSERT_EQ(tad_isSongLoaded(), true);
+
+    tad_loadSong(1);
+
+    ASSERT_EQ(tad_isSongLoaded(), false);
+
+    waitForLoader();
+    tad_process();
+    tad_process();
+    tad_process();
+
+    ASSERT_EQ(tad_isLoaderActive(), true);
+
+    // Reload CAD in the middle of loading a song
+    tad_reloadCommonAudioData();
+    tad_loadSong(1);
+
+    ASSERT_EQ(tad_isLoaderActive(), false);
+
+    waitForLoader();
+    tad_process();
+    tad_process();
+    ASSERT_EQ(tad_isLoaderActive(), true);
+
+    // Test loader still active when loading song data while loader is loading CAD
+    tad_loadSong(1);
+    ASSERT_EQ(tad_isLoaderActive(), true);
+
+    // Test that the loader is reset if `RELOAD_COMMON_AUDIO_DATA` is set on a `Tad_LoadSong` call
+    tad_reloadCommonAudioData();
+    tad_loadSong(1);
+    ASSERT_EQ(tad_isLoaderActive(), false);
+
+    // Test `Tad_LoadSong` works when loader is waiting for the ready byte
+    wait();
+    wait();
+    wait();
+    ASSERT_EQ(tad_isLoaderActive(), false);
+
+    tad_reloadCommonAudioData();
+    tad_loadSong(1);
+    ASSERT_EQ(tad_isLoaderActive(), false);
+    ASSERT_EQ(tad_isSongLoaded(), false);
+
+    // Finish loading the CAD
+    waitForLoader();
+    tad_finishLoadingData();
+
+    // Test the loader is waiting for song data
+    ASSERT_EQ(tad_isLoaderActive(), false);
+    ASSERT_EQ(tad_isSongLoaded(), false);
+
+    waitForLoader();
+    tad_finishLoadingData();
+    ASSERT_EQ(tad_isSongLoaded(), true);
 }
 
 void test_loadSongIfChanged(void) {
@@ -690,7 +801,10 @@ static const VoidFn TAD_TESTS[] = {
     test_finishLoadingData2,
     test_loadSong,
     test_loadSongWhileLoaderActive,
+    test_loadSongWhileLoaderActive2,
     test_loadSongWhileLoadingCommonAudioData,
+    test_reloadCommonAudioDataImmediatelyAfterLoadSong,
+    test_loadSongRestartsLoaderIfReloadCommonAudioDataIsSet,
     test_loadSongIfChanged,
     test_getSong,
     test_queueCommand,

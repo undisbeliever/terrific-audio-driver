@@ -194,25 +194,40 @@ _EndIf:
 .databank TAD_DB_LOWRAM
 Tad_LoadSong .proc
     .cerror !(TAD__FIRST_LOADING_SONG_STATE > TadState.NULL)
-    .cerror !(TAD__FIRST_LOADING_SONG_STATE > TadState.WAITING_FOR_LOADER)
+    .cerror !(TAD__FIRST_LOADING_SONG_STATE > TadState.WAITING_FOR_LOADER_COMMON)
+    .cerror !(TAD__FIRST_LOADING_SONG_STATE > TadState.WAITING_FOR_LOADER_SONG)
     .cerror !(TAD__FIRST_LOADING_SONG_STATE > TadState.LOADING_COMMON_AUDIO_DATA)
 
     sta     Tad_nextSong
 
+    lda     #TadFlags.RELOAD_COMMON_AUDIO_DATA
+    trb     Tad_flags
+    beq     _SongRequested
+        ; Common audio data requested
+        lda     #TadState.WAITING_FOR_LOADER_COMMON
+        bra     _SetStateAndSwitchToLoader
+
+_SongRequested:
     lda     Tad_state
     cmp     #TAD__FIRST_LOADING_SONG_STATE
-    bcc     +
-        ; TadState is not NULL, WAITING_FOR_LOADER or LOADING_COMMON_AUDIO_DATA
+    bcc     _Return
+        ; TadState is not NULL, WAITING_FOR_LOADER_* or LOADING_COMMON_AUDIO_DATA
+
+        lda     #TadState.WAITING_FOR_LOADER_SONG
+
+    _SetStateAndSwitchToLoader:
+        sta     Tad_state
+
+        ; Assert it is safe to send a switch-to-loader command when the loader is waiting for a READY signal
+        .cerror !(TadIO_ToDriver.SWITCH_TO_LOADER != TadIO_Loader_Init.LOADER_READY_H)
+        .cerror !(TadIO_ToDriver.SWITCH_TO_LOADER_PORT == TadIO_Loader_Init.READY_PORT_H)
 
         ; Send a *switch-to-loader* command to the audio-driver or loader
         lda     #TadIO_ToDriver.SWITCH_TO_LOADER
     .databank ?
         sta     TadIO_ToDriver.SWITCH_TO_LOADER_PORT
     .databank TAD_DB_LOWRAM
-
-        lda     #TadState.WAITING_FOR_LOADER
-        sta     Tad_state
-    +
+_Return:
     rts
 .endproc
 

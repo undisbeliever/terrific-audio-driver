@@ -564,7 +564,8 @@ TadPrivate_IsLoaderActive .macro
     .xs
 
     .cerror !(TadState.NULL < TAD__FIRST_LOADING_STATE)
-    .cerror !(TadState.WAITING_FOR_LOADER < TAD__FIRST_LOADING_STATE)
+    .cerror !(TadState.WAITING_FOR_LOADER_COMMON < TAD__FIRST_LOADING_STATE)
+    .cerror !(TadState.WAITING_FOR_LOADER_SONG < TAD__FIRST_LOADING_STATE)
     .cerror !((TadState.PAUSED & $7f) < TAD__FIRST_LOADING_STATE)
     .cerror !((TadState.PLAYING & $7f) < TAD__FIRST_LOADING_STATE)
 
@@ -598,7 +599,7 @@ Tad_Init .proc
 
     stz     Tad_audioMode
 
-    lda     #TadFlags.RELOAD_COMMON_AUDIO_DATA | TadFlags.PLAY_SONG_IMMEDIATELY
+    lda     #TadFlags.PLAY_SONG_IMMEDIATELY
     sta     Tad_flags
 
     ldx     #TAD_DEFAULT_TRANSFER_PER_FRAME
@@ -624,7 +625,7 @@ Tad_Init .proc
         jsr     TadPrivate_Loader_TransferData
         bcc     _TransferLoop
 
-    lda     #TadState.WAITING_FOR_LOADER
+    lda     #TadState.WAITING_FOR_LOADER_COMMON
     sta     Tad_state
 
     plb
@@ -771,11 +772,14 @@ Tad_Process .proc
     _NotLoaded:
         ; Song is not loaded into Audio-RAM
 
-        ; Test if state is WAITING_FOR_LOADER or LOADING_*
-        .cerror !(TAD__FIRST_LOADING_STATE == TadState.WAITING_FOR_LOADER + 1)
-        cmp     #TadState.WAITING_FOR_LOADER
-        beq     TadPrivate_Process_WaitingForLoader__
+        ; Test if state is WAITING_FOR_LOADER_* or LOADING_*
+        .cerror !(TAD__FIRST_LOADING_STATE > TAD__FIRST_WAITING_STATE)
+        .cerror !(TAD__FIRST_LOADING_STATE == TadState.WAITING_FOR_LOADER_SONG + 1)
+
+        cmp     #TAD__FIRST_LOADING_STATE
         bcs     TadPrivate_Process_Loading__
+        cmp     #TAD__FIRST_WAITING_STATE
+        bcs     TadPrivate_Process_WaitingForLoader__
 
     ; TadState is null
     rtl
@@ -783,7 +787,7 @@ Tad_Process .proc
 
 
 
-; Process the WAITING_FOR_LOADER state
+; Process the WAITING_FOR_LOADER_* states
 ;
 ; return using RTL
 .as
@@ -801,20 +805,13 @@ TadPrivate_Process_WaitingForLoader__ .proc ; RTL
     plb
 ; DB = $80
 
-    lda     Tad_flags
-    bit     #TadFlags.RELOAD_COMMON_AUDIO_DATA
-    beq     _SongData
+    lda     Tad_state
+    cmp     #TadState.WAITING_FOR_LOADER_COMMON
+    bne     _SongData
         ; Common audio data
         lda     #TadLoaderDataType.COMMON_DATA
         jsr     TadPrivate_Loader_CheckReadyAndSendLoaderDataType
         bcc     _Return
-
-        ; Clear the RELOAD_COMMON_AUDIO_DATA flag
-        ;
-        ; It is safe to do this before the data is loaded into audio-RAM.
-        ; `Tad_LoadSong` will not restart the loader if state == LOADING_COMMON_AUDIO_DATA.
-        lda     #TadFlags.RELOAD_COMMON_AUDIO_DATA
-        trb     Tad_flags
 
         lda     #TadState.LOADING_COMMON_AUDIO_DATA
         pha
@@ -825,9 +822,13 @@ TadPrivate_Process_WaitingForLoader__ .proc ; RTL
     _SongData:
         ; Songs
 
-        ; a = Tad_flags
-        and     #TadFlags._LOADER_MASK
-        sta     Tad_flags
+        ; Tad_flags MUST NOT have the stereo/surround loader flag set
+        .cerror !(TadFlags._ALL_FLAGS & TadLoaderDataType.STEREO_FLAG == 0)
+        .cerror !(TadFlags._ALL_FLAGS & TadLoaderDataType.SURROUND_FLAG == 0)
+
+        ; Clear unused TAD flags
+        lda     #$ff ^ TadFlags._ALL_FLAGS
+        trb     Tad_flags
 
         ; Convert `Tad_audioMode` to TadLoaderDataType
         .cerror !((((0 + 1) & 3) << 6) == TadLoaderDataType.SURROUND_FLAG) ; mono
@@ -905,7 +906,7 @@ TadPrivate_Process_Loading__ .proc ; RTL
         bne     _Song
             ; Common audio data was just transferred
             ; Loader is still active
-            lda     #TadState.WAITING_FOR_LOADER
+            lda     #TadState.WAITING_FOR_LOADER_SONG
             bra     _EndIf
 
         _Song:

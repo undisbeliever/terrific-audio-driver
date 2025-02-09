@@ -115,7 +115,10 @@ TestTable:
     .addr   TestFinishLoadingData2
     .addr   TestLoadSong
     .addr   TestLoadSongWhileLoaderActive
+    .addr   TestLoadSongWhileLoaderActive2
     .addr   TestLoadSongWhileLoadingCommonAudioData
+    .addr   TestReloadCommonAudioDataImmediatelyAfterLoadSong
+    .addr   TestLoadSongRestartsLoaderIfReloadCommonAudioDataIsSet
     .addr   TestLoadSongIfChanged
     .addr   TestGetSong
     .addr   TestQueueCommand
@@ -314,6 +317,35 @@ TestTable_SIZE = * - TestTable
 .endproc
 
 
+.a8
+.i16
+;; DB access lowram
+.proc TestLoadSongWhileLoaderActive2
+    assert_carry  Tad_IsSongLoaded,  true
+
+    lda     #1
+    jsr     Tad_LoadSong
+
+    assert_carry  Tad_IsSongLoaded,  false
+
+    jsr     _Wait
+    lda     #0
+    jsr     Tad_LoadSong
+
+    jsr     _Wait
+    lda     #1
+    jsr     Tad_LoadSong
+
+    assert_carry  Tad_IsLoaderActive, false
+    assert_carry  Tad_IsSongLoaded,  false
+
+    jsr     _WaitForLoader
+    jsr     _FinishLoading
+
+    rts
+.endproc
+
+
 ;; Tests that `Tad_LoadSong` does not restart the loader if the loader is loading common audio data.
 .a8
 .i16
@@ -340,6 +372,123 @@ TestTable_SIZE = * - TestTable
 
     ; Test `Tad_LoadSong` did not switch to `WAITING_FOR_LOADER` state
     assert_carry  Tad_IsLoaderActive, true
+
+    rts
+.endproc
+
+
+;; Tests that `Tad_Process` does not clear the RELOAD_COMMON_AUDIO_DATA flag.
+.a8
+.i16
+;; DB access lowram
+.proc TestReloadCommonAudioDataImmediatelyAfterLoadSong
+
+    jsr     Tad_ReloadCommonAudioData
+
+    lda     #1
+    jsr     Tad_LoadSong
+    ; RELOAD_COMMON_AUDIO_DATA flag is cleared by Tad_LoadSong
+
+    jsr     Tad_ReloadCommonAudioData
+
+
+    jsr     _FinishLoading
+
+    assert_carry  Tad_IsLoaderActive, false
+    assert_carry  Tad_IsSongLoaded, true
+
+
+    ; RELOAD_COMMON_AUDIO_DATA flag is set
+    lda     #1
+    jsr     Tad_LoadSong
+
+    assert_carry  Tad_IsSongLoaded, false
+    assert_carry  Tad_IsLoaderActive, false
+    jsr     _WaitForLoader
+    jsl     Tad_FinishLoadingData
+
+    ; Test the loader is waiting for song data
+    assert_carry  Tad_IsLoaderActive, false
+    assert_carry  Tad_IsSongLoaded, false
+
+    jsr     _WaitForLoader
+    jsl     Tad_FinishLoadingData
+    assert_carry  Tad_IsSongLoaded, true
+
+    rts
+.endproc
+
+
+;; Tests that `Tad_LoadSong` restarts the loader if RELOAD_COMMON_AUDIO_DATA flag is set
+.a8
+.i16
+;; DB access lowram
+.proc TestLoadSongRestartsLoaderIfReloadCommonAudioDataIsSet
+
+    assert_carry  Tad_IsSongLoaded,  true
+
+    lda     #1
+    jsr     Tad_LoadSong
+
+    assert_carry  Tad_IsSongLoaded, false
+
+    jsr     _WaitForLoader
+    jsl     Tad_Process
+    jsl     Tad_Process
+    jsl     Tad_Process
+
+    assert_carry  Tad_IsLoaderActive, true
+
+
+    ; Reload CAD in the middle of loading a song
+    jsr     Tad_ReloadCommonAudioData
+    lda     #1
+    jsr     Tad_LoadSong
+    assert_carry  Tad_IsLoaderActive, false
+
+
+    jsr     _WaitForLoader
+    jsl     Tad_Process
+    jsl     Tad_Process
+
+    assert_carry  Tad_IsLoaderActive, true
+
+    ; Test loader still active when loading song data while loader is loading CAD
+    lda     #1
+    jsr     Tad_LoadSong
+    assert_carry  Tad_IsLoaderActive, true
+
+
+    ; Test that the loader is reset if `RELOAD_COMMON_AUDIO_DATA` is set on a `Tad_LoadSong` call
+    jsr     Tad_ReloadCommonAudioData
+    lda     #1
+    jsr     Tad_LoadSong
+    assert_carry  Tad_IsLoaderActive, false
+
+
+    ; Test `Tad_LoadSong` works when loader is waiting for the ready byte
+    jsr     _Wait
+    jsr     _Wait
+    jsr     _Wait
+    assert_carry  Tad_IsLoaderActive, false
+
+    jsr     Tad_ReloadCommonAudioData
+    lda     #1
+    jsr     Tad_LoadSong
+    assert_carry  Tad_IsSongLoaded, false
+    assert_carry  Tad_IsLoaderActive, false
+
+    ; Finish loading the CAD
+    jsr     _WaitForLoader
+    jsl     Tad_FinishLoadingData
+
+    ; Test the loader is waiting for song data
+    assert_carry  Tad_IsLoaderActive, false
+    assert_carry  Tad_IsSongLoaded, false
+
+    jsr     _WaitForLoader
+    jsl     Tad_FinishLoadingData
+    assert_carry  Tad_IsSongLoaded, true
 
     rts
 .endproc
