@@ -256,6 +256,8 @@ pub const STARTING_VOLUME: u8 = 96;
 // Sound effect constants
 pub const SFX_TICK_CLOCK: u8 = 64;
 
+const _: () = assert!(TAD_IO_VERSION == 18);
+
 // IO Commands
 pub mod io_commands {
     pub const PAUSE: u8 = 0;
@@ -264,5 +266,5 @@ pub mod io_commands {
     pub const STOP_SOUND_EFFECTS: u8 = 8;
 }
 
-pub const IO_COMMAND_MASK: u8 = 0b00001110;
+pub const IO_COMMAND_MASK: u8 = 0b00011110;
 pub const IO_COMMAND_I_MASK: u8 = 0b11100001;
