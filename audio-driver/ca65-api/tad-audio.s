@@ -179,7 +179,7 @@ TAD_DEFAULT_TRANSFER_PER_FRAME = 256
 ;; Used by `tad-compiler ca65-export` to verify the IO protocol in `tad-audio.s` matches the audio-driver.
 ;;
 ;; This constant MUST be increased if `LOADER_ADDR` or the IO Communication protocol changes.
-.export TAD_IO_VERSION : abs = 18
+.export TAD_IO_VERSION : abs = 19
 
 
 ; MUST match `audio-driver/src/io-commands.wiz`
@@ -275,24 +275,13 @@ TAD_CENTER_PAN = TAD_MAX_PAN / 2
 
 ;; MUST match `audio-driver/src/io-commands.wiz`
 .scope TadLoaderDataType
-    ;; The `audio-driver.bin` file.
-    ;; MUST be loaded first.
     CODE        = 0
-
-    ;; Common audio data.
-    ;; Contains samples, pitch table and sound effects.
-    ;; MUST be loaded after `TadLoaderDataType.CODE` and before song data.
     COMMON_DATA = 1
 
-    ;; Any value over `MIN_SONG_VALUE` will load song data
-    ;; Song data MUST be loaded after `TadLoaderDataType.COMMON_DATA`.
-    MIN_SONG_VALUE = 2
-
-    STEREO_FLAG = 1 << 7
-    SURROUND_FLAG = 1 << 6
-
-    PLAY_SONG_BIT = 5
-    PLAY_SONG_FLAG = 1 << PLAY_SONG_BIT
+    SONG_DATA_FLAG          = 1 << 7
+    PLAY_SONG_FLAG          = 1 << 6
+    STEREO_FLAG             = 1 << 1
+    SURROUND_FLAG           = 1 << 0
 .endscope
 
 
@@ -361,16 +350,16 @@ TAD__FIRST_LOADING_SONG_STATE = TadState::LOADING_SONG_DATA_PAUSED
 
 
 .scope TadFlags
+    ;; If set the *common audio data* will be loaded into Audio-RAM on the next `Tad_LoadSong` call.
+    ;;
+    ;; This flag will be cleared in `Tad_LoadSong`.
+    RELOAD_COMMON_AUDIO_DATA = 1 << 7
+
     ;; Determines if the song is played immediately after loading into Audio-RAM
     ;;  * If set, the audio driver will play the song after the next song is loaded into Audio-RAM
     ;;  * If clear, the audio driver will be paused after the next song is loaded into Audio-RAM
     ;; Default: Set
-    PLAY_SONG_IMMEDIATELY    = TadLoaderDataType::PLAY_SONG_FLAG
-
-    ;; If set the *common audio data* will be loaded into Audio-RAM on the next `Tad_LoadSong` call.
-    ;;
-    ;; This flag will be cleared in `Tad_LoadSong`.
-    RELOAD_COMMON_AUDIO_DATA = 1 << 0
+    PLAY_SONG_IMMEDIATELY    = 1 << 6
 
 
     ;; A mask for the flags that are sent to the loader
@@ -1075,31 +1064,32 @@ ReturnFalse:
         .assert TadFlags::_ALL_FLAGS & TadLoaderDataType::STEREO_FLAG = 0, error
         .assert TadFlags::_ALL_FLAGS & TadLoaderDataType::SURROUND_FLAG = 0, error
 
+        ; SONG_DATA_FLAG must always be sent and it also masks the RELOAD_COMMON_AUDIO_DATA flag in TadLoaderDataType
+        .assert TadFlags::RELOAD_COMMON_AUDIO_DATA = TadLoaderDataType::SONG_DATA_FLAG, error, "Cannot hide RELOAD_COMMON_AUDIO_DATA TadFlag with SONG_DATA_FLAG"
+
+        .assert TadFlags::PLAY_SONG_IMMEDIATELY = TadLoaderDataType::PLAY_SONG_FLAG, error
+
         ; Clear unused TAD flags
         lda     #$ff ^ TadFlags::_ALL_FLAGS
         trb     Tad_flags
 
-        ; Convert `Tad_audioMode` to TadLoaderDataType
-        .assert (((0 + 1) & 3) << 6) = TadLoaderDataType::SURROUND_FLAG, error ; mono
-        .assert (((1 + 1) & 3) << 6) = TadLoaderDataType::STEREO_FLAG, error ; stereo
-        .assert (((2 + 1) & 3) << 6) = TadLoaderDataType::STEREO_FLAG | TadLoaderDataType::SURROUND_FLAG, error ; surround
+        ; Convert `Tad_audioMode` to TadLoaderDataType and combine with TadFlags
+        .assert ((0 + 1) & 3) = TadLoaderDataType::SURROUND_FLAG, error ; mono
+        .assert ((1 + 1) & 3) = TadLoaderDataType::STEREO_FLAG, error ; stereo
+        .assert ((2 + 1) & 3) = TadLoaderDataType::STEREO_FLAG | TadLoaderDataType::SURROUND_FLAG, error ; surround
         lda     Tad_audioMode
         inc
         and     #3
-        lsr
-        ror
-        ror
 
         ora     Tad_flags
-        ora     #TadLoaderDataType::MIN_SONG_VALUE
+        ora     #TadLoaderDataType::SONG_DATA_FLAG
         jsr     _Tad_Loader_CheckReadyAndSendLoaderDataType
         bcc     @Return
 
         ; Determine next state
-        .assert TadFlags::PLAY_SONG_IMMEDIATELY = $20, error
+        .assert TadFlags::PLAY_SONG_IMMEDIATELY = $40, error
         .assert TadState::LOADING_SONG_DATA_PAUSED + 1 = TadState::LOADING_SONG_DATA_PLAY, error
         lda     Tad_flags
-        asl
         asl
         asl
         lda     #0

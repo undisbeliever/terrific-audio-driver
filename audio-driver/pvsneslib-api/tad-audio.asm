@@ -184,26 +184,13 @@ TAD_IO_ToScpu__MODE_AUDIO_DRIVER = $61 ; 'a'
 ;; The `audio-driver.bin` file.
 ;; MUST be loaded first.
 TAD_LoaderDataType__CODE        = 0
-
-;; Common audio data.
-;; Contains samples, pitch table and sound effects.
-;; MUST be loaded after `LoaderDataType.CODE` and before song data.
 TAD_LoaderDataType__COMMON_DATA = 1
 
-;; Any value over `MIN_SONG_VALUE` will load song data
-;; Song data MUST be loaded after `LoaderDataType.COMMON_DATA`.
-TAD_LoaderDataType__MIN_SONG_VALUE = 2
-
-; Audio mode flags
-TAD_LoaderDataType__STEREO_FLAG = 1 << 7
-TAD_LoaderDataType__SURROUND_FLAG = 1 << 6
-
-;; If this bit is set, the song will play after the echo buffer has been cleared.
-;; If this bit is clear, the audio driver will start in a paused state.
-;;
-;; MUST NOT be set when loading code or common-audio-data.
-TAD_LoaderDataType__PLAY_SONG_BIT = 5
-TAD_LoaderDataType__PLAY_SONG_FLAG = 1 << TAD_LoaderDataType__PLAY_SONG_BIT
+; song mode flags
+TAD_LoaderDataType__SONG_DATA_FLAG          = 1 << 7
+TAD_LoaderDataType__PLAY_SONG_FLAG          = 1 << 6
+TAD_LoaderDataType__STEREO_FLAG             = 1 << 1
+TAD_LoaderDataType__SURROUND_FLAG           = 1 << 0
 
 
 ;; MUST match `audio-driver/src/io-commands.wiz`
@@ -297,16 +284,16 @@ TAD_FIRST_LOADING_SONG_STATE = TAD_State__LOADING_SONG_DATA_PAUSED
 ;; Flags
 ;; -----
 
+;; If set the *common audio data* will be loaded into Audio-RAM on the next `tad_loadSong()` call.
+;;
+;; This flag will be cleared in `tad_loadSong()`.
+TAD_Flags__RELOAD_COMMON_AUDIO_DATA = 1 << 7
+
 ;; Determines if the song is played immediately after loading into Audio-RAM
 ;;  * If set, the audio driver will play the song after the next song is loaded into Audio-RAM
 ;;  * If clear, the audio driver will be paused after the next song is loaded into Audio-RAM
 ;; Default: Set
-TAD_Flags__PLAY_SONG_IMMEDIATELY    = TAD_LoaderDataType__PLAY_SONG_FLAG
-
-;; If set the *common audio data* will be loaded into Audio-RAM on the next `tad_loadSong()` call.
-;;
-;; This flag will be cleared in `tad_loadSong()`.
-TAD_Flags__RELOAD_COMMON_AUDIO_DATA = 1 << 0
+TAD_Flags__PLAY_SONG_IMMEDIATELY    = 1 << 6
 
 ;; A mask for the flags that are sent to the loader
 TAD_Flags__ALL_FLAGS = TAD_Flags__PLAY_SONG_IMMEDIATELY | TAD_Flags__RELOAD_COMMON_AUDIO_DATA
@@ -1090,31 +1077,32 @@ _tad_loader_gotoNextBank__:
         .assert (TAD_Flags__ALL_FLAGS & TAD_LoaderDataType__STEREO_FLAG) == 0
         .assert (TAD_Flags__ALL_FLAGS & TAD_LoaderDataType__SURROUND_FLAG) == 0
 
+        ; SONG_DATA_FLAG must always be sent and it also masks the RELOAD_COMMON_AUDIO_DATA flag in TadLoaderDataType
+        .assert TAD_Flags__RELOAD_COMMON_AUDIO_DATA == TAD_LoaderDataType__SONG_DATA_FLAG
+
+        .assert TAD_Flags__PLAY_SONG_IMMEDIATELY == TAD_LoaderDataType__PLAY_SONG_FLAG
+
         ; Clear unused TAD flags
         lda     #$ff ~ TAD_Flags__ALL_FLAGS
         trb     tad_flags__
 
-        ; Convert `Tad_audioMode` to TAD_LoaderDataType
-        .assert (((0 + 1) & 3) << 6) == TAD_LoaderDataType__SURROUND_FLAG ; mono
-        .assert (((1 + 1) & 3) << 6) == TAD_LoaderDataType__STEREO_FLAG ; stereo
-        .assert (((2 + 1) & 3) << 6) == TAD_LoaderDataType__STEREO_FLAG | TAD_LoaderDataType__SURROUND_FLAG ; surround
+        ; Convert `tad_audioMode` to TAD_LoaderDataType
+        .assert ((0 + 1) & 3) == TAD_LoaderDataType__SURROUND_FLAG ; mono
+        .assert ((1 + 1) & 3) == TAD_LoaderDataType__STEREO_FLAG ; stereo
+        .assert ((2 + 1) & 3) == TAD_LoaderDataType__STEREO_FLAG | TAD_LoaderDataType__SURROUND_FLAG ; surround
         lda     tad_audioMode
         inc     a
         and     #3
-        lsr     a
-        ror     a
-        ror     a
 
         ora     tad_flags__
-        ora     #TAD_LoaderDataType__MIN_SONG_VALUE
+        ora     #TAD_LoaderDataType__SONG_DATA_FLAG
         jsr     _tad_loader_checkReadyAndSendLoaderDataType__
         bcc     @WFL_Return
 
         ; Determine next state
-        .assert TAD_Flags__PLAY_SONG_IMMEDIATELY == $20
+        .assert TAD_Flags__PLAY_SONG_IMMEDIATELY == $40
         .assert TAD_State__LOADING_SONG_DATA_PAUSED + 1 == TAD_State__LOADING_SONG_DATA_PLAY
         lda     tad_flags__
-        asl
         asl
         asl
         lda     #0

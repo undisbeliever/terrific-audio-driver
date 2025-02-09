@@ -207,17 +207,19 @@ pub struct LoaderDataType {
 
 impl LoaderDataType {
     pub fn driver_value(&self) -> u8 {
-        // LoaderDataType.MIN_SONG_VALUE
-        let mut o = 2;
+        const _: () = assert!(TAD_IO_VERSION == 19);
+
+        // LoaderDataType.SONG_DATA_BIT
+        let mut o = 1 << 7;
 
         o |= match self.audio_mode {
-            AudioMode::Mono => 1 << 6,
-            AudioMode::Stereo => 2 << 6,
-            AudioMode::Surround => 3 << 6,
+            AudioMode::Mono => 1,
+            AudioMode::Stereo => 2,
+            AudioMode::Surround => 3,
         };
 
         if self.play_song {
-            o |= 1 << 5;
+            o |= 1 << 6;
         }
 
         o
@@ -256,7 +258,7 @@ pub const STARTING_VOLUME: u8 = 96;
 // Sound effect constants
 pub const SFX_TICK_CLOCK: u8 = 64;
 
-const _: () = assert!(TAD_IO_VERSION == 18);
+const _: () = assert!(TAD_IO_VERSION == 19);
 
 // IO Commands
 pub mod io_commands {

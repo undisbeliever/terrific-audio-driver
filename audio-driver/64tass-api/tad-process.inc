@@ -75,7 +75,7 @@ TAD_LOADER_ARAM_ADDR = $0200
 ; Used by `tad-compiler ca65-export` to verify the IO protocol in `tad-audio.s` matches the audio-driver.
 ;
 ; This constant MUST be increased if `LOADER_ADDR` or the IO Communication protocol changes.
-TAD_IO_VERSION = 18
+TAD_IO_VERSION = 19
 
 
 ; MUST match `audio-driver/src/io-commands.wiz`
@@ -152,24 +152,13 @@ TadIO_ToScpu .block
 
 ; MUST match `audio-driver/src/io-commands.wiz`
 TadLoaderDataType .block
-    ; The `audio-driver.bin` file.
-    ; MUST be loaded first.
     CODE        = 0
-
-    ; Common audio data.
-    ; Contains samples, pitch table and sound effects.
-    ; MUST be loaded after `TadLoaderDataType.CODE` and before song data.
     COMMON_DATA = 1
 
-    ; Any value over `MIN_SONG_VALUE` will load song data
-    ; Song data MUST be loaded after `TadLoaderDataType.COMMON_DATA`.
-    MIN_SONG_VALUE = 2
-
-    STEREO_FLAG = 1 << 7
-    SURROUND_FLAG = 1 << 6
-
-    PLAY_SONG_BIT = 5
-    PLAY_SONG_FLAG = 1 << PLAY_SONG_BIT
+    SONG_DATA_FLAG          = 1 << 7
+    PLAY_SONG_FLAG          = 1 << 6
+    STEREO_FLAG             = 1 << 1
+    SURROUND_FLAG           = 1 << 0
 .endblock
 
 
@@ -826,31 +815,32 @@ TadPrivate_Process_WaitingForLoader__ .proc ; RTL
         .cerror !(TadFlags._ALL_FLAGS & TadLoaderDataType.STEREO_FLAG == 0)
         .cerror !(TadFlags._ALL_FLAGS & TadLoaderDataType.SURROUND_FLAG == 0)
 
+        ; SONG_DATA_FLAG must always be sent and it also masks the RELOAD_COMMON_AUDIO_DATA flag in TadLoaderDataType
+        .cerror !(TadFlags.RELOAD_COMMON_AUDIO_DATA == TadLoaderDataType.SONG_DATA_FLAG)
+
+        .cerror !(TadFlags.PLAY_SONG_IMMEDIATELY == TadLoaderDataType.PLAY_SONG_FLAG)
+
         ; Clear unused TAD flags
         lda     #$ff ^ TadFlags._ALL_FLAGS
         trb     Tad_flags
 
         ; Convert `Tad_audioMode` to TadLoaderDataType
-        .cerror !((((0 + 1) & 3) << 6) == TadLoaderDataType.SURROUND_FLAG) ; mono
-        .cerror !((((1 + 1) & 3) << 6) == TadLoaderDataType.STEREO_FLAG)   ; stereo
-        .cerror !((((2 + 1) & 3) << 6) == TadLoaderDataType.STEREO_FLAG | TadLoaderDataType.SURROUND_FLAG) ; surround
+        .cerror !(((0 + 1) & 3) == TadLoaderDataType.SURROUND_FLAG) ; mono
+        .cerror !(((1 + 1) & 3) == TadLoaderDataType.STEREO_FLAG)   ; stereo
+        .cerror !(((2 + 1) & 3) == TadLoaderDataType.STEREO_FLAG | TadLoaderDataType.SURROUND_FLAG) ; surround
         lda     Tad_audioMode
         inc     a
         and     #3
-        lsr     a
-        ror     a
-        ror     a
 
         ora     Tad_flags
-        ora     #TadLoaderDataType.MIN_SONG_VALUE
+        ora     #TadLoaderDataType.SONG_DATA_FLAG
         jsr     TadPrivate_Loader_CheckReadyAndSendLoaderDataType
         bcc     _Return
 
         ; Determine next state
-        .cerror !(TadFlags.PLAY_SONG_IMMEDIATELY == $20)
+        .cerror !(TadFlags.PLAY_SONG_IMMEDIATELY == $40)
         .cerror !(TadState.LOADING_SONG_DATA_PAUSED + 1 == TadState.LOADING_SONG_DATA_PLAY)
         lda     Tad_flags
-        asl     a
         asl     a
         asl     a
         lda     #0

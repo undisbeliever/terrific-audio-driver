@@ -74,6 +74,7 @@ func start_loader() {
     _dataType = y = IO.Loader.Init_ToLoader.loader_data_type;
 
     // Get the address to store the data
+    // Assumes LoaderDataType.PLAY_SONG_BIT == 7
     if zero {
         // Clear global volume
         // Assumes `&globalVolume_music + 1 == &globalVolume_sfx`
@@ -83,7 +84,7 @@ func start_loader() {
         a = <:CODE_ADDR;
         y = >:CODE_ADDR;
     }
-    else if --y == 0 {
+    else if !negative {
         a = <:COMMON_DATA_ADDR;
         y = >:COMMON_DATA_ADDR;
     }
@@ -162,10 +163,9 @@ EndLoop:
         _songPtr = ya as *u8;
     }
 
-    goto start_loader if x < LoaderDataType.MIN_SONG_VALUE;
-
-    // NOP required for loader to be an even number of bytes in size
-    nop();
+    // Assumes LoaderDataType.PLAY_SONG_BIT == 7
+    a = x;
+    goto start_loader if !negative;
 
 // Fallthrough into main() in `audio-engine.wiz`
 }

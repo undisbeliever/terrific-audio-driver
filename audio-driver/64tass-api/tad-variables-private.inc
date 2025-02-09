@@ -77,17 +77,16 @@ TAD__FIRST_LOADING_SONG_STATE = TadState.LOADING_SONG_DATA_PAUSED
 
 
 TadFlags .block 
+    ; If set the *common audio data* will be loaded into Audio-RAM on the next `Tad_LoadSong` call.
+    ;
+    ; This flag will be cleared in `Tad_LoadSong`.
+    RELOAD_COMMON_AUDIO_DATA = 1 << 7
+
     ; Determines if the song is played immediately after loading into Audio-RAM
     ;  * If set, the audio driver will play the song after the next song is loaded into Audio-RAM
     ;  * If clear, the audio driver will be paused after the next song is loaded into Audio-RAM
     ; Default: Set
-    PLAY_SONG_IMMEDIATELY    = TadLoaderDataType.PLAY_SONG_FLAG
-
-    ; If set the *common audio data* will be loaded into Audio-RAM on the next `Tad_LoadSong` call.
-    ;
-    ; This flag will be cleared in `Tad_LoadSong`.
-    RELOAD_COMMON_AUDIO_DATA = 1 << 0
-
+    PLAY_SONG_IMMEDIATELY    = 1 << 6
 
     ; A mask for the flags that are sent to the loader
     _ALL_FLAGS = PLAY_SONG_IMMEDIATELY | RELOAD_COMMON_AUDIO_DATA

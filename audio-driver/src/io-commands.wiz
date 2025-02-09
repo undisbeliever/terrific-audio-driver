@@ -28,7 +28,7 @@ import "registers";
 
 
 // This constant MUST be increased if `LOADER_ADDR` or the IO Communication protocol changes.
-let TAD_IO_VERSION = 18;
+let TAD_IO_VERSION = 19;
 
 
 // Loader Commands
@@ -44,16 +44,25 @@ namespace LoaderDataType {
     // MUST be loaded after `LoaderDataType.CODE` and before song data.
     let COMMON_DATA = 1;
 
-    // Any value over `MIN_SONG_VALUE` will load song data
-    // Song data MUST be loaded after `LoaderDataType.COMMON_DATA`.
-    let MIN_SONG_VALUE = 2;
+
+    // If this bit is clear, the LoaderDataType is CODE (zero) or COMMON_DATA (non-zero).
+    // If this bit is set, the LoaderDataType is song-data.
+    //
+    // CAUTION: This is is also used for the RELOAD_COMMON_DATA flag in the 65816 APIs.
+    let SONG_DATA_BIT = 7;
+
+    // If this bit is set, the song will play after the echo buffer has been cleared.
+    // If this bit is clear, the audio driver will start in a paused state.
+    //
+    // MUST NOT be set when loading code or common-audio-data.
+    let PLAY_SONG_BIT = 6;
 
 
     // If this bit is set, the song will be played in stereo.
     // If this bit is clear, the song will be played in mono.
     //
     // MUST NOT be set when loading code or common-audio-data.
-    let STEREO_FLAG_BIT = 7;
+    let STEREO_FLAG_BIT = 1;
 
     // If this bit is set, the left and right channels can be individually inverted.
     // If this bit is clear, the left and right channels are only inverted if the mono invert flag is set.
@@ -61,13 +70,7 @@ namespace LoaderDataType {
     // OPTIMISATION: Should be set if in MONO mode (STEREO_FLAG_BIT is clear).
     //
     // MUST NOT be set when loading code or common-audio-data.
-    let SURROUND_FLAG_BIT = 6;
-
-    // If this bit is set, the song will play after the echo buffer has been cleared.
-    // If this bit is clear, the audio driver will start in a paused state.
-    //
-    // MUST NOT be set when loading code or common-audio-data.
-    let PLAY_SONG_BIT = 5;
+    let SURROUND_FLAG_BIT = 0;
 }
 
 

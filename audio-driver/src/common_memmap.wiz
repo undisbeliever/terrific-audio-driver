@@ -26,7 +26,7 @@
 
 // LOADER_ADDR must match LOADER_ADDR in the 65816 APIs
 let LOADER_ADDR = 0x200;
-let LOADER_SIZE =  118;     // MUST be even
+let LOADER_SIZE =  116;     // MUST be even
 
 // ::TODO shrink stack::
 let STACK_SIZE = 0x20;
