@@ -813,9 +813,11 @@ TadPrivate_Process_WaitingForLoader__ .proc ; RTL
     _SongData:
         ; Songs
 
+        _ALL_FLAGS = TadFlags.RELOAD_COMMON_AUDIO_DATA | TadFlags.PLAY_SONG_IMMEDIATELY | TadFlags.RESET_GLOBAL_VOLUMES_ON_SONG_START
+
         ; Tad_flags MUST NOT have the stereo/surround loader flag set
-        .cerror !(TadFlags._ALL_FLAGS & TadLoaderDataType.STEREO_FLAG == 0)
-        .cerror !(TadFlags._ALL_FLAGS & TadLoaderDataType.SURROUND_FLAG == 0)
+        .cerror !(_ALL_FLAGS & TadLoaderDataType.STEREO_FLAG == 0)
+        .cerror !(_ALL_FLAGS & TadLoaderDataType.SURROUND_FLAG == 0)
 
         ; SONG_DATA_FLAG must always be sent and it also masks the RELOAD_COMMON_AUDIO_DATA flag in TadLoaderDataType
         .cerror !(TadFlags.RELOAD_COMMON_AUDIO_DATA == TadLoaderDataType.SONG_DATA_FLAG)
@@ -824,7 +826,7 @@ TadPrivate_Process_WaitingForLoader__ .proc ; RTL
         .cerror !(TadFlags.RESET_GLOBAL_VOLUMES_ON_SONG_START == TadLoaderDataType.RESET_GLOBAL_VOLUMES_FLAG)
 
         ; Clear unused TAD flags
-        lda     #$ff ^ TadFlags._ALL_FLAGS
+        lda     #$ff ^ _ALL_FLAGS
         trb     Tad_flags
 
         ; Convert `Tad_audioMode` to TadLoaderDataType

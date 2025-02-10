@@ -20,7 +20,8 @@ Version 0.1.0
  * API changes:
     * Removed `Tad_SetMono`, `Tad_SetStereo`, `Tad_GetStereoFlag` functions
     * Added `TadAudioMode` enum
-    * Added global `tad_audioMode` variable
+    * Added public `tad_audioMode` variable
+    * `Tad_flags` is now a public variable
     * The `RELOAD_COMMON_AUDIO_DATA` flag is now checked and cleared in `Tad_LoadSong`
     * Added `RESET_GLOBAL_VOLUMES_ON_SONG_START` flag
         * Useful for when a level or menu lowers the volume and the global volumes are normally at maximum.

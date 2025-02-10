@@ -795,6 +795,29 @@ void test_setTransferSize(void) {
     ASSERT_EQ(countTransfers_song1(), (DUMMY_SONG_DATA_SIZE + MAX_TRANSFER + 1) / MAX_TRANSFER);
 }
 
+void test_flagFunctions(void) {
+    tad_flags = 0;
+    tad_reloadCommonAudioData();
+    ASSERT_EQ(tad_flags, TAD_FLAGS_RELOAD_COMMON_AUDIO_DATA);
+
+    // No function to clear TAD_FLAGS_RELOAD_COMMON_AUDIO_DATA
+
+    tad_flags = 0;
+    tad_songsStartImmediately();
+    ASSERT_EQ(tad_flags, TAD_FLAGS_PLAY_SONG_IMMEDIATELY);
+
+    tad_flags = 0xff;
+    tad_songsStartPaused();
+    ASSERT_EQ(tad_flags, 0xff ^ TAD_FLAGS_PLAY_SONG_IMMEDIATELY);
+
+    tad_flags = 0;
+    tad_globalVolumesResetOnSongStart();
+    ASSERT_EQ(tad_flags, TAD_FLAGS_RESET_GLOBAL_VOLUMES_ON_SONG_START);
+
+    tad_flags = 0xff;
+    tad_globalVolumesPersist();
+    ASSERT_EQ(tad_flags, 0xff ^ TAD_FLAGS_RESET_GLOBAL_VOLUMES_ON_SONG_START);
+}
 
 static const VoidFn TAD_TESTS[] = {
     test_finishLoadingData,
@@ -834,6 +857,7 @@ static const VoidFn TAD_TESTS[] = {
     test_songStartsImmediately,
     test_songStartPaused,
     test_setTransferSize,
+    test_flagFunctions,
 };
 
 void runTests(void) {

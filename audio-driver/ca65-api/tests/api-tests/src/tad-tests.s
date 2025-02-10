@@ -149,6 +149,7 @@ TestTable:
     .addr   TestSongStartsImmediately
     .addr   TestSongStartPaused
     .addr   TestSetTransferSize
+    .addr   TestFlagFunctions
 TestTable_SIZE = * - TestTable
 
 
@@ -1504,6 +1505,34 @@ TestTable_SIZE = * - TestTable
     .endproc
 .endproc
 
+
+.proc TestFlagFunctions
+    stz     Tad_flags
+    jsr     Tad_ReloadCommonAudioData
+    assert_u8_var_eq Tad_flags, #TadFlags::RELOAD_COMMON_AUDIO_DATA
+
+    ; No function to clear TadFlags::RELOAD_COMMON_AUDIO_DATA
+
+    stz     Tad_flags
+    jsr     Tad_SongsStartImmediately
+    assert_u8_var_eq Tad_flags, #TadFlags::PLAY_SONG_IMMEDIATELY
+
+    lda     #$ff
+    sta     Tad_flags
+    jsr     Tad_SongsStartPaused
+    assert_u8_var_eq Tad_flags, #$ff ^ TadFlags::PLAY_SONG_IMMEDIATELY
+
+    stz     Tad_flags
+    jsr     Tad_GlobalVolumesResetOnSongStart
+    assert_u8_var_eq Tad_flags, #TadFlags::RESET_GLOBAL_VOLUMES_ON_SONG_START
+
+    lda     #$ff
+    sta     Tad_flags
+    jsr     Tad_GlobalVolumesPersist
+    assert_u8_var_eq Tad_flags, #$ff ^ TadFlags::RESET_GLOBAL_VOLUMES_ON_SONG_START
+
+    rts
+.endproc
 
 
 ;; Waits for a bit.

@@ -285,19 +285,8 @@ TAD_FIRST_LOADING_SONG_STATE = TAD_State__LOADING_SONG_DATA_PAUSED
 ;; Flags
 ;; -----
 
-;; If set the *common audio data* will be loaded into Audio-RAM on the next `tad_loadSong()` call.
-;;
-;; This flag will be cleared in `tad_loadSong()`.
 TAD_Flags__RELOAD_COMMON_AUDIO_DATA = 1 << 7
-
-;; Determines if the song is played immediately after loading into Audio-RAM
-;;  * If set, the audio driver will play the song after the next song is loaded into Audio-RAM
-;;  * If clear, the audio driver will be paused after the next song is loaded into Audio-RAM
-;; Default: Set
 TAD_Flags__PLAY_SONG_IMMEDIATELY    = 1 << 6
-
-;; If set, the audio driver will reset the global volumes to maximum volume when a song starts.
-;; Default: Clear
 TAD_Flags__RESET_GLOBAL_VOLUMES_ON_SONG_START = 1 << 5
 
 ;; A mask for the flags that are sent to the loader
@@ -1090,7 +1079,7 @@ _tad_loader_gotoNextBank__:
 
         ; Clear unused TAD flags
         lda     #$ff ~ TAD_Flags__ALL_FLAGS
-        trb     tad_flags__
+        trb     tad_flags
 
         ; Convert `tad_audioMode` to TAD_LoaderDataType
         .assert ((0 + 1) & 3) == TAD_LoaderDataType__SURROUND_FLAG ; mono
@@ -1100,7 +1089,7 @@ _tad_loader_gotoNextBank__:
         inc     a
         and     #3
 
-        ora     tad_flags__
+        ora     tad_flags
         ora     #TAD_LoaderDataType__SONG_DATA_FLAG
         jsr     _tad_loader_checkReadyAndSendLoaderDataType__
         bcc     @WFL_Return
@@ -1108,7 +1097,7 @@ _tad_loader_gotoNextBank__:
         ; Determine next state
         .assert TAD_Flags__PLAY_SONG_IMMEDIATELY == $40
         .assert TAD_State__LOADING_SONG_DATA_PAUSED + 1 == TAD_State__LOADING_SONG_DATA_PLAY
-        lda     tad_flags__
+        lda     tad_flags
         asl
         asl
         lda     #0
@@ -1287,7 +1276,7 @@ tad_init:
     stz     tad_audioMode
 
     lda     #TAD_Flags__PLAY_SONG_IMMEDIATELY
-    sta     tad_flags__
+    sta     tad_flags
 
     ldx     #TAD_DEFAULT_TRANSFER_PER_FRAME
     stx     tad_bytesToTransferPerFrame__
@@ -1424,7 +1413,7 @@ tad_loadSong:
 
 
     lda     #TAD_Flags__RELOAD_COMMON_AUDIO_DATA
-    trb     tad_flags__
+    trb     tad_flags
     beq     @SongRequested
         ; Common audio data requested
         lda     #TAD_State__WAITING_FOR_LOADER_COMMON
@@ -1529,13 +1518,13 @@ tad_setTransferSize:
         __Push__A8_noX_noY
     .accu 8
 
-        lda.l   tad_flags__
+        lda.l   tad_flags
         .if \3
             ora     #TAD_Flags__\2
         .else
             and     #~TAD_Flags__\2
         .endif
-        sta.l   tad_flags__
+        sta.l   tad_flags
 
         __PopReturn_noX_noY
     .ends
@@ -1893,11 +1882,11 @@ tad__Command_A__Override_TwoParameters__:
     tad_state__: db
 
     ;; `Flags` bitfield
-    ;; (see `Flags` namespace)
-    tad_flags__: db
+    ;; (public, see `Flags` namespace)
+    tad_flags: db
 
     ;; Mono/Stereo/Surround audio mode
-    ;; (`TadAudioMode` enum)
+    ;; (public, `TadAudioMode` enum)
     tad_audioMode: db
 
     ;; Number of bytes to transfer per `tad_process` call

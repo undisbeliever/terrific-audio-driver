@@ -43,7 +43,7 @@
 .export Tad_IsLoaderActive, Tad_IsSongLoaded, Tad_IsSfxPlaying, Tad_IsSongPlaying
 
 .exportzp Tad_sfxQueue_sfx, Tad_sfxQueue_pan
-.export Tad_audioMode
+.export Tad_flags, Tad_audioMode
 
 
 ;; =======
@@ -354,19 +354,8 @@ TAD__FIRST_LOADING_SONG_STATE = TadState::LOADING_SONG_DATA_PAUSED
 
 
 .scope TadFlags
-    ;; If set the *common audio data* will be loaded into Audio-RAM on the next `Tad_LoadSong` call.
-    ;;
-    ;; This flag will be cleared in `Tad_LoadSong`.
     RELOAD_COMMON_AUDIO_DATA = 1 << 7
-
-    ;; Determines if the song is played immediately after loading into Audio-RAM
-    ;;  * If set, the audio driver will play the song after the next song is loaded into Audio-RAM
-    ;;  * If clear, the audio driver will be paused after the next song is loaded into Audio-RAM
-    ;; Default: Set
-    PLAY_SONG_IMMEDIATELY    = 1 << 6
-
-    ;; If set, the audio driver will reset the global volumes to maximum volume when a song starts.
-    ;; Default: Clear
+    PLAY_SONG_IMMEDIATELY = 1 << 6
     RESET_GLOBAL_VOLUMES_ON_SONG_START = 1 << 5
 
     ;; A mask for the flags that are sent to the loader
@@ -379,13 +368,13 @@ TAD__FIRST_LOADING_SONG_STATE = TadState::LOADING_SONG_DATA_PAUSED
     ;; (`TadState` enum)
     Tad_state: .res 1
 
-    ;; Mono/Stereo/Surround audio mode
-    ;; (`TadAudioMode` enum)
-    Tad_audioMode: .res 1
-
     ;; `TadFlags` bitfield
     ;; (see `TadFlags` namespace)
     Tad_flags: .res 1
+
+    ;; Mono/Stereo/Surround audio mode
+    ;; (`TadAudioMode` enum)
+    Tad_audioMode: .res 1
 
     ;; Number of bytes to transfer per `Tad_Process` call
     ;;

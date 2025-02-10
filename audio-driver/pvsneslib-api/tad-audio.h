@@ -146,6 +146,33 @@
 /*! Minimum tick clock value for tad_queueCommand_setSongTempo() and tad_queueCommandOverride_setSongTempo() */
 #define TAD_MIN_TICK_CLOCK 64
 
+
+/*! `Tad_flags` bits */
+typedef enum TadFlags {
+    /*!
+     * If set the *common audio data* will be loaded into Audio-RAM on the next `Tad_LoadSong` call.
+     *
+     * This flag will be cleared in `Tad_LoadSong`.
+     */
+    TAD_FLAGS_RELOAD_COMMON_AUDIO_DATA = 0x80,
+
+    /*!
+     * Determines if the song is played immediately after loading into Audio-RAM
+     *  * If set, the audio driver will play the song after the next song is loaded into Audio-RAM
+     *  * If clear, the audio driver will be paused after the next song is loaded into Audio-RAM
+     *
+     * Default: Set
+     */
+    TAD_FLAGS_PLAY_SONG_IMMEDIATELY = 0x40,
+
+    /*!
+     * If set, the audio driver will reset the global volumes to maximum volume when a song starts.
+     *
+     * Default: Clear
+     */
+    TAD_FLAGS_RESET_GLOBAL_VOLUMES_ON_SONG_START = 0x20,
+} TadFlags;
+
 /*! Mono/Stereo/Surround audio mode */
 typedef enum TadAudioMode {
     /*!
@@ -565,6 +592,16 @@ bool tad_isSongPlaying(void);
  * @}
  */
 
+/*!
+ * TAD flags bitfield.
+ *
+ * Please refer to the flag bits by their name in the `TadFlags` enum.
+ *
+ * CAUTION: Unused `Tad_flags` will be cleared by `Tad_Process`.
+ *
+ * \see TadFlags
+ */
+extern u8 tad_flags;
 
 /*!
  * Mono/Stereo/Surround audio mode.
