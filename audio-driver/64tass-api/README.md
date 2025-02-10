@@ -23,9 +23,6 @@ Please see [ca65-api/tad-audio.inc](../ca65-api/tad-audio.inc) for the API docum
 Private functions and macros have been prefixed with `TadPrivate_`.
 Do not call them outside of the TAD API.
 
-Private variables are defined in the `tad-variables-private.inc` file.
-Do not modify them outside of the TAD API.
-
 
 Compiling the API
 -----------------
@@ -33,11 +30,11 @@ Compiling the API
 Assign the string `"LOROM"` or `"HIROM"` to the `TAD_MEMORY_MAP` constant, depending on memory map.
 
 Include the four include files into the 64tass assembly file.
- * **tad-variables-private.inc**: private variables.
-    * Must be placed somewhere in the lowram segment ($0000 - $1fff or $7e0000-$7e1ffff).
- * **tad-variables-public.inc**: public variables.
+ * **tad-zeropage.inc**: zeropage variables.
     * Contains the sound effect queue and should be placed if the zeropage section.
-    * Must be placed somewhere in the lowram segment ($0000 - $1fff or $7e0000-$7e1ffff).
+    * Must be placed somewhere in the lowram segment ($0000 - $1fff or $7e0000-$7e1fff).
+ * **tad-lowram.inc**: lowram variables.
+    * Must be placed somewhere in the lowram segment ($0000 - $1fff or $7e0000-$7e1fff).
  * **tad-code.inc**: Subroutines that update or read the queue and quickly return.
     * All public functions in this file are called with `JSR` addressing
  * **tad-process.inc**: Subroutines that communicate with audio-driver and process messages
@@ -50,12 +47,13 @@ Simplified example:
 ``` asm
 TAD_MEMORY_MAP = "LOROM"
 
-.section Lowram
-    .include "{{path to API}}/tad-variables-private.inc"
+.section Zeropage
+    .include "{{path to API}}/tad-zeropage.inc"
 .send
 
-.section Zeropage
-    .include "{{path to API}}/tad-variables-public.inc"
+; Lowram is the mirrored RAM addresses at $0100 - $1fff
+.section Lowram
+    .include "{{path to API}}/tad-lowram.inc"
 .send
 
 .section Bank80

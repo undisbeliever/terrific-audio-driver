@@ -1,6 +1,4 @@
-; TAD 64tass API private variables
-;
-; These variables MUST NOT be modified outside of the TAD API
+; TAD 64tass API lowram variables
 ;
 ; These variables must be placed somewhere in the lowram segment
 ; ($0000 - $1fff or $7e0000-$7e1ffff).
@@ -32,7 +30,7 @@
 ;      3. This notice may not be removed or altered from any source distribution.
 
 
-.cerror (* >= $2000) && ((* < $7e0000) || (* >= $7e2000)), "tad-variables-private.inc is not in lowram"
+.cerror (* >= $2000) && ((* < $7e0000) || (* >= $7e2000)), "tad-lowram.inc is not in lowram"
 
 
 ; Minimum transfer size accepted by `Tad_SetTransferSize`

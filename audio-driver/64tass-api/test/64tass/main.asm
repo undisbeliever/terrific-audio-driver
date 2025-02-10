@@ -66,12 +66,12 @@ STACK_BOTTOM = $1f80
 .dpage 0
 .databank ?
 
-.section Lowram
-    .include "../../tad-variables-private.inc"
+.section Zeropage
+    .include "../../tad-zeropage.inc"
 .send
 
-.section Zeropage
-    .include "../../tad-variables-public.inc"
+.section Lowram
+    .include "../../tad-lowram.inc"
 .send
 
 .section Code

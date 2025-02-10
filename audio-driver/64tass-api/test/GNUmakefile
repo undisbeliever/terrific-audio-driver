@@ -18,7 +18,7 @@ test: 64tass ca65
 
 64tass: out/64tass-lorom.bin out/64tass-hirom.bin
 
-64TASS_API := ../tad-code.inc ../tad-process.inc ../tad-variables-private.inc ../tad-variables-public.inc
+64TASS_API := ../tad-code.inc ../tad-process.inc ../tad-zeropage.inc ../tad-lowram.inc
 
 out/64tass-lorom.bin: 64tass/main.asm $(64TASS_API)
 	$(64TASS) -a -x -X --nostart -Wall -C -DLOROM=1 --verbose-list -L $(basename $@).txt -o $@ 64tass/main.asm

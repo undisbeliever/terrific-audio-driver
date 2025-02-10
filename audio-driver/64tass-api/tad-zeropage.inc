@@ -1,4 +1,4 @@
-; TAD 64tass API public variables
+; TAD 64tass API zeropage variables
 ;
 ; These variables can be modified outside of the TAD API
 ;
@@ -32,7 +32,7 @@
 ;      3. This notice may not be removed or altered from any source distribution.
 
 
-.cerror (* >= $2000) && ((* < $7e0000) || (* >= $7e2000)), "tad-variables-public.inc is not in lowram"
+.cerror (* >= $2000) && ((* < $7e0000) || (* >= $7e2000)), "tad-zeropage.inc is not in lowram"
 
 
 ; Maximum pan value (100% to the right)

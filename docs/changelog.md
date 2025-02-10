@@ -24,6 +24,9 @@ Version 0.1.0
     * The `RELOAD_COMMON_AUDIO_DATA` flag is now checked and cleared in `Tad_LoadSong`
     * Added `RESET_GLOBAL_VOLUMES_ON_SONG_START` flag
         * Useful for when a level or menu lowers the volume and the global volumes are normally at maximum.
+ * 64tass API changes:
+    * `tad-variables-private.inc` has been renamed to `tad-lowram.inc`
+    * `tad-variables-public.inc` has been renamed to `tad-zeropage.inc`
 
 Audio driver changes:
  * Stereo echo volume

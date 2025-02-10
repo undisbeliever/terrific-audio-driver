@@ -60,11 +60,11 @@ CART_TYPE   = CART_TYPE__RomOnly
     joypadCurrent .word ?
     joypadPressed .word ?
 
-    .include "../../tad-variables-public.inc"
+    .include "../../tad-zeropage.inc"
 .send
 
 .section Lowram
-    .include "../../tad-variables-private.inc"
+    .include "../../tad-lowram.inc"
 .send
 
 
