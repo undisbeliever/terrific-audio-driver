@@ -1989,6 +1989,7 @@ impl InterpreterOutput {
                 LoaderDataType {
                     audio_mode: self.audio_mode,
                     play_song: false,
+                    reset_global_volumes: true,
                 }
                 .driver_value(),
             );

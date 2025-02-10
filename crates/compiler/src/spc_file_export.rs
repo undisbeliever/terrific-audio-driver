@@ -154,6 +154,7 @@ pub fn export_spc_file(
         LoaderDataType {
             play_song: true,
             audio_mode: AudioMode::Stereo,
+            reset_global_volumes: true,
         },
     )?;
 

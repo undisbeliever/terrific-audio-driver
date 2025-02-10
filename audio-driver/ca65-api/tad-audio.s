@@ -37,7 +37,9 @@
 .export Tad_QueueCommand, Tad_QueueCommandOverride
 .export Tad_QueuePannedSoundEffect, Tad_QueueSoundEffect
 .export Tad_LoadSong, Tad_LoadSongIfChanged, Tad_GetSong, Tad_ReloadCommonAudioData
-.export Tad_SongsStartImmediately, Tad_SongsStartPaused, Tad_SetTransferSize
+.export Tad_SongsStartImmediately, Tad_SongsStartPaused
+.export Tad_GlobalVolumesResetOnSongStart, Tad_GlobalVolumesPersist
+.export Tad_SetTransferSize
 .export Tad_IsLoaderActive, Tad_IsSongLoaded, Tad_IsSfxPlaying, Tad_IsSongPlaying
 
 .exportzp Tad_sfxQueue_sfx, Tad_sfxQueue_pan
@@ -179,7 +181,7 @@ TAD_DEFAULT_TRANSFER_PER_FRAME = 256
 ;; Used by `tad-compiler ca65-export` to verify the IO protocol in `tad-audio.s` matches the audio-driver.
 ;;
 ;; This constant MUST be increased if `LOADER_ADDR` or the IO Communication protocol changes.
-.export TAD_IO_VERSION : abs = 19
+.export TAD_IO_VERSION : abs = 20
 
 
 ; MUST match `audio-driver/src/io-commands.wiz`
@@ -278,10 +280,12 @@ TAD_CENTER_PAN = TAD_MAX_PAN / 2
     CODE        = 0
     COMMON_DATA = 1
 
-    SONG_DATA_FLAG          = 1 << 7
-    PLAY_SONG_FLAG          = 1 << 6
-    STEREO_FLAG             = 1 << 1
-    SURROUND_FLAG           = 1 << 0
+    SONG_DATA_FLAG            = 1 << 7
+    PLAY_SONG_FLAG            = 1 << 6
+    RESET_GLOBAL_VOLUMES_FLAG = 1 << 5
+
+    STEREO_FLAG               = 1 << 1
+    SURROUND_FLAG             = 1 << 0
 .endscope
 
 
@@ -361,9 +365,12 @@ TAD__FIRST_LOADING_SONG_STATE = TadState::LOADING_SONG_DATA_PAUSED
     ;; Default: Set
     PLAY_SONG_IMMEDIATELY    = 1 << 6
 
+    ;; If set, the audio driver will reset the global volumes to maximum volume when a song starts.
+    ;; Default: Clear
+    RESET_GLOBAL_VOLUMES_ON_SONG_START = 1 << 5
 
     ;; A mask for the flags that are sent to the loader
-    _ALL_FLAGS = PLAY_SONG_IMMEDIATELY | RELOAD_COMMON_AUDIO_DATA
+    _ALL_FLAGS = RELOAD_COMMON_AUDIO_DATA | PLAY_SONG_IMMEDIATELY | RESET_GLOBAL_VOLUMES_ON_SONG_START
 .endscope
 
 
@@ -1068,6 +1075,7 @@ ReturnFalse:
         .assert TadFlags::RELOAD_COMMON_AUDIO_DATA = TadLoaderDataType::SONG_DATA_FLAG, error, "Cannot hide RELOAD_COMMON_AUDIO_DATA TadFlag with SONG_DATA_FLAG"
 
         .assert TadFlags::PLAY_SONG_IMMEDIATELY = TadLoaderDataType::PLAY_SONG_FLAG, error
+        .assert TadFlags::RESET_GLOBAL_VOLUMES_ON_SONG_START = TadLoaderDataType::RESET_GLOBAL_VOLUMES_FLAG, error
 
         ; Clear unused TAD flags
         lda     #$ff ^ TadFlags::_ALL_FLAGS
@@ -1378,6 +1386,26 @@ Tad_QueueCommandOverride := Tad_QueueCommand::WriteCommand
 ; DB access lowram
 .proc Tad_SongsStartPaused
     lda     #TadFlags::PLAY_SONG_IMMEDIATELY
+    trb     Tad_flags
+    rts
+.endproc
+
+
+.a8
+; I unknown
+; DB access lowram
+.proc Tad_GlobalVolumesResetOnSongStart
+    lda     #TadFlags::RESET_GLOBAL_VOLUMES_ON_SONG_START
+    tsb     Tad_flags
+    rts
+.endproc
+
+
+.a8
+; I unknown
+; DB access lowram
+.proc Tad_GlobalVolumesPersist
+    lda     #TadFlags::RESET_GLOBAL_VOLUMES_ON_SONG_START
     trb     Tad_flags
     rts
 .endproc

@@ -75,7 +75,7 @@ TAD_LOADER_ARAM_ADDR = $0200
 ; Used by `tad-compiler ca65-export` to verify the IO protocol in `tad-audio.s` matches the audio-driver.
 ;
 ; This constant MUST be increased if `LOADER_ADDR` or the IO Communication protocol changes.
-TAD_IO_VERSION = 19
+TAD_IO_VERSION = 20
 
 
 ; MUST match `audio-driver/src/io-commands.wiz`
@@ -155,10 +155,12 @@ TadLoaderDataType .block
     CODE        = 0
     COMMON_DATA = 1
 
-    SONG_DATA_FLAG          = 1 << 7
-    PLAY_SONG_FLAG          = 1 << 6
-    STEREO_FLAG             = 1 << 1
-    SURROUND_FLAG           = 1 << 0
+    SONG_DATA_FLAG            = 1 << 7
+    PLAY_SONG_FLAG            = 1 << 6
+    RESET_GLOBAL_VOLUMES_FLAG = 1 << 5
+
+    STEREO_FLAG               = 1 << 1
+    SURROUND_FLAG             = 1 << 0
 .endblock
 
 
@@ -819,6 +821,7 @@ TadPrivate_Process_WaitingForLoader__ .proc ; RTL
         .cerror !(TadFlags.RELOAD_COMMON_AUDIO_DATA == TadLoaderDataType.SONG_DATA_FLAG)
 
         .cerror !(TadFlags.PLAY_SONG_IMMEDIATELY == TadLoaderDataType.PLAY_SONG_FLAG)
+        .cerror !(TadFlags.RESET_GLOBAL_VOLUMES_ON_SONG_START == TadLoaderDataType.RESET_GLOBAL_VOLUMES_FLAG)
 
         ; Clear unused TAD flags
         lda     #$ff ^ TadFlags._ALL_FLAGS

@@ -13,6 +13,7 @@ Version 0.1.0
     * Removed `SKIP_ECHO_BUFFER_RESET_BIT`
     * Changed `PLAY_SONG_BIT`
     * Added `SURROUND_FLAG_BIT`
+    * Added `RESET_GLOBAL_VOLUMES_BIT`
  * Removed `blank-song.bin` (`Tad_BlankSong_Bin`).
    The blank song is now a single zero byte embedded in the ca65/64tass/pvsneslib API code.
  * The song data format has changed.
@@ -21,6 +22,8 @@ Version 0.1.0
     * Added `TadAudioMode` enum
     * Added global `tad_audioMode` variable
     * The `RELOAD_COMMON_AUDIO_DATA` flag is now checked and cleared in `Tad_LoadSong`
+    * Added `RESET_GLOBAL_VOLUMES_ON_SONG_START` flag
+        * Useful for when a level or menu lowers the volume and the global volumes are normally at maximum.
 
 Audio driver changes:
  * Stereo echo volume

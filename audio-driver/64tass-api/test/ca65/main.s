@@ -46,6 +46,8 @@ TadSubroutines:
     .faraddr Tad_ReloadCommonAudioData
     .faraddr Tad_SongsStartImmediately
     .faraddr Tad_SongsStartPaused
+    .faraddr Tad_GlobalVolumesResetOnSongStart
+    .faraddr Tad_GlobalVolumesPersist
     .faraddr Tad_SetTransferSize
     .faraddr Tad_IsLoaderActive
     .faraddr Tad_IsSongLoaded

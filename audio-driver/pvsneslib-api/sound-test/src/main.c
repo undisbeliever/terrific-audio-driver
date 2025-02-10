@@ -60,6 +60,8 @@ u8 menu_tempoOverride;
 u8 menu_channelMask;
 u8 menu_audioMode;
 bool menu_songStartsFlag;
+bool menu_resetVolumesFlag;
+
 
 #define U8_MAX 255
 
@@ -102,12 +104,13 @@ enum MenuItem {
     MENU__CHANNEL_MASK,
     MENU__AUDIO_MODE,
     MENU__SONG_STARTS_FLAG,
+    MENU__RESET_VOLUMES_FLAG,
     MENU__STOP_SOUND_EFFECTS,
     MENU__PAUSE_UNPAUSE_MUSIC,
     MENU__PAUSE_MUSIC_AND_SFX,
     MENU__RELOAD_COMMON_AUDIO_DATA,
 };
-#define N_MENU_ITEMS 14
+#define N_MENU_ITEMS 15
 
 const char* const STATE_LABEL__UNKNOWN = ".......";
 const char* const STATE_LABEL__PLAYING = "PLAYING";
@@ -124,6 +127,9 @@ const char* const AUDIO_MODE_LABELS[3] = {
 const char* const SONG_STARTS_SET_LABEL   = "SONGS START IMMEDIATELY";
 const char* const SONG_STARTS_CLEAR_LABEL = "SONGS START PAUSED     ";
 
+const char* const RESET_VOLUMES_FLAG_SET_LABEL   = "RESET VOLUMES ON SONG LOAD";
+const char* const RESET_VOLUMES_FLAG_CLEAR_LABEL = "GLOBAL VOLUMES PERSIST    ";
+
 const char* const MenuLabels[N_MENU_ITEMS] = {
     "PLAY SONG",
     "PLAY SFX",
@@ -135,13 +141,14 @@ const char* const MenuLabels[N_MENU_ITEMS] = {
     "MUSIC CHANNELS",
     NULL,
     NULL,
+    NULL,
     "STOP SOUND EFFECTS (X)",
     "PAUSE / UNPAUSE (START)",
     "PAUSE MUSIC AND SFX",
     "RELOAD COMMON AUDIO DATA",
 };
 
-const u16 MenuItemYPos[14] = {
+const u16 MenuItemYPos[N_MENU_ITEMS] = {
     MENU_YPOS + 0,
     MENU_YPOS + 2,
     MENU_YPOS + 3,
@@ -152,10 +159,11 @@ const u16 MenuItemYPos[14] = {
     MENU_YPOS + 11,
     MENU_YPOS + 13,
     MENU_YPOS + 14,
-    MENU_YPOS + 16,
-    MENU_YPOS + 18,
-    MENU_YPOS + 20,
-    MENU_YPOS + 22,
+    MENU_YPOS + 15,
+    MENU_YPOS + 17,
+    MENU_YPOS + 19,
+    MENU_YPOS + 21,
+    MENU_YPOS + 23,
 };
 
 void menu_init(void);
@@ -163,6 +171,7 @@ void menu_printState(void);
 void menu_printU8(enum MenuItem item, u16 value);
 void menu_setAudioMode(u8 mode);
 void menu_setSongStartsFlag(bool f);
+void menu_setResetVolumesFlag(bool f);
 void menu_setPos(u8 newPos);
 void menu_updateChannelMask(void);
 void highlightLine(u8 menuItem, u8 palette);
@@ -193,6 +202,7 @@ void menu_init(void) {
     menu_channelMask = 0xff;
 
     menu_setSongStartsFlag(true);
+    menu_setResetVolumesFlag(false);
     menu_setAudioMode(TAD_SURROUND);
 
     for (i = 0; i < N_MENU_ITEMS; i++) {
@@ -290,6 +300,25 @@ void menu_setSongStartsFlag(bool f) {
     }
 }
 
+void menu_setResetVolumesFlag(bool f) {
+    menu_resetVolumesFlag = f;
+
+    if (menuPos == MENU__RESET_VOLUMES_FLAG) {
+        consoleSetTextOffset(PAL_SELECTED << 10);
+    }
+    consoleDrawText(MENU_LABEL_XPOS, MenuItemYPos[MENU__RESET_VOLUMES_FLAG], "%s",
+                    (f ? RESET_VOLUMES_FLAG_SET_LABEL : RESET_VOLUMES_FLAG_CLEAR_LABEL));
+
+    consoleSetTextOffset(0);
+
+    if (f) {
+        tad_globalVolumesResetOnSongStart();
+    }
+    else {
+        tad_globalVolumesPersist();
+    }
+}
+
 void menu_setPos(u8 newPos) {
     if (newPos >= 0x80) {
         // pos underflowed
@@ -384,6 +413,12 @@ void menu_process_action(void) {
     switch (menuPos) {
     case MENU__PLAY_SONG:
         tad_loadSong(menu_song);
+        if (menu_resetVolumesFlag) {
+            menu_musicVolume = U8_MAX;
+            menu_sfxVolume = U8_MAX;
+            menu_printU8(MENU__MUSIC_VOLUME, U8_MAX);
+            menu_printU8(MENU__SFX_VOLUME, U8_MAX);
+        }
         break;
 
     case MENU__PLAY_SFX:
@@ -434,6 +469,10 @@ void menu_process_action(void) {
 
     case MENU__SONG_STARTS_FLAG:
         menu_setSongStartsFlag(!menu_songStartsFlag);
+        break;
+
+    case MENU__RESET_VOLUMES_FLAG:
+        menu_setResetVolumesFlag(!menu_resetVolumesFlag);
         break;
 
     case MENU__STOP_SOUND_EFFECTS:
@@ -538,6 +577,12 @@ void menu_process_item(void) {
     case MENU__SONG_STARTS_FLAG:
         if (keyPressed & (KEY_LEFT | KEY_RIGHT)) {
             menu_setSongStartsFlag(!menu_songStartsFlag);
+        }
+        break;
+
+    case MENU__RESET_VOLUMES_FLAG:
+        if (keyPressed & (KEY_LEFT | KEY_RIGHT)) {
+            menu_setResetVolumesFlag(!menu_resetVolumesFlag);
         }
         break;
 

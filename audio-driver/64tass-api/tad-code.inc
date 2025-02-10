@@ -88,21 +88,27 @@ TadCommand .block
     ;  * parameter0: the music volume.
     ;    A 255 music-volume will not modify the channel volume.
     ;
-    ; NOTE: Global volumes persist after a new song or common-audio-data is loaded.
+    ; NOTE: If the `ResetGlobalVolumesOnSongStart` flag is set, the global volumes will
+    ; be reset when a songs starts.
+    ; By default, global volumes persist after a new song or common-audio-data is loaded.
     SET_GLOBAL_MUSIC_VOLUME = 16
 
     ; Set the global sound-effect volume
     ;  * parameter0: the music volume.
     ;    A 255 sfx-volume will not modify the channel volume.
     ;
-    ; NOTE: Global volumes persist after a new song or common-audio-data is loaded.
+    ; NOTE: If the `ResetGlobalVolumesOnSongStart` flag is set, the global volumes will
+    ; be reset when a songs starts.
+    ; By default, global volumes persist after a new song or common-audio-data is loaded.
     SET_GLOBAL_SFX_VOLUME = 18
 
     ; Set the global music and sound-effect volumes
     ;  * parameter0: the music volume.
     ;  * parameter1: the sound-effect volume.
     ;
-    ; NOTE: Global volumes persist after a new song or common-audio-data is loaded.
+    ; NOTE: If the `ResetGlobalVolumesOnSongStart` flag is set, the global volumes will
+    ; be reset when a songs starts.
+    ; By default, global volumes persist after a new song or common-audio-data is loaded.
     SET_GLOBAL_VOLUMES = 20
 .endblock
 
@@ -287,6 +293,26 @@ rts
 .databank TAD_DB_LOWRAM
 Tad_SongsStartPaused .proc
     lda     #TadFlags.PLAY_SONG_IMMEDIATELY
+    trb     Tad_flags
+    rts
+.endproc
+
+
+.as
+; I unknown
+.databank TAD_DB_LOWRAM
+Tad_GlobalVolumesResetOnSongStart .proc
+    lda     #TadFlags.RESET_GLOBAL_VOLUMES_ON_SONG_START
+    tsb     Tad_flags
+    rts
+.endproc
+
+
+.as
+; I unknown
+.databank TAD_DB_LOWRAM
+Tad_GlobalVolumesPersist .proc
+    lda     #TadFlags.RESET_GLOBAL_VOLUMES_ON_SONG_START
     trb     Tad_flags
     rts
 .endproc

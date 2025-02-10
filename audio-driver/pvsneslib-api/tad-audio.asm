@@ -187,10 +187,11 @@ TAD_LoaderDataType__CODE        = 0
 TAD_LoaderDataType__COMMON_DATA = 1
 
 ; song mode flags
-TAD_LoaderDataType__SONG_DATA_FLAG          = 1 << 7
-TAD_LoaderDataType__PLAY_SONG_FLAG          = 1 << 6
-TAD_LoaderDataType__STEREO_FLAG             = 1 << 1
-TAD_LoaderDataType__SURROUND_FLAG           = 1 << 0
+TAD_LoaderDataType__SONG_DATA_FLAG            = 1 << 7
+TAD_LoaderDataType__PLAY_SONG_FLAG            = 1 << 6
+TAD_LoaderDataType__RESET_GLOBAL_VOLUMES_FLAG = 1 << 5
+TAD_LoaderDataType__STEREO_FLAG               = 1 << 1
+TAD_LoaderDataType__SURROUND_FLAG             = 1 << 0
 
 
 ;; MUST match `audio-driver/src/io-commands.wiz`
@@ -295,8 +296,12 @@ TAD_Flags__RELOAD_COMMON_AUDIO_DATA = 1 << 7
 ;; Default: Set
 TAD_Flags__PLAY_SONG_IMMEDIATELY    = 1 << 6
 
+;; If set, the audio driver will reset the global volumes to maximum volume when a song starts.
+;; Default: Clear
+TAD_Flags__RESET_GLOBAL_VOLUMES_ON_SONG_START = 1 << 5
+
 ;; A mask for the flags that are sent to the loader
-TAD_Flags__ALL_FLAGS = TAD_Flags__PLAY_SONG_IMMEDIATELY | TAD_Flags__RELOAD_COMMON_AUDIO_DATA
+TAD_Flags__ALL_FLAGS = TAD_Flags__RELOAD_COMMON_AUDIO_DATA | TAD_Flags__PLAY_SONG_IMMEDIATELY | TAD_Flags__RESET_GLOBAL_VOLUMES_ON_SONG_START
 
 
 ;; ============
@@ -1081,6 +1086,7 @@ _tad_loader_gotoNextBank__:
         .assert TAD_Flags__RELOAD_COMMON_AUDIO_DATA == TAD_LoaderDataType__SONG_DATA_FLAG
 
         .assert TAD_Flags__PLAY_SONG_IMMEDIATELY == TAD_LoaderDataType__PLAY_SONG_FLAG
+        .assert TAD_Flags__RESET_GLOBAL_VOLUMES_ON_SONG_START == TAD_LoaderDataType__RESET_GLOBAL_VOLUMES_FLAG
 
         ; Clear unused TAD flags
         lda     #$ff ~ TAD_Flags__ALL_FLAGS
@@ -1535,9 +1541,11 @@ tad_setTransferSize:
     .ends
 .endm
 
-__Tad_FlagFunction tad_reloadCommonAudioData RELOAD_COMMON_AUDIO_DATA 1
-__Tad_FlagFunction tad_songsStartImmediately PLAY_SONG_IMMEDIATELY    1
-__Tad_FlagFunction tad_songsStartPaused      PLAY_SONG_IMMEDIATELY    0
+__Tad_FlagFunction tad_reloadCommonAudioData            RELOAD_COMMON_AUDIO_DATA            1
+__Tad_FlagFunction tad_songsStartImmediately            PLAY_SONG_IMMEDIATELY               1
+__Tad_FlagFunction tad_songsStartPaused                 PLAY_SONG_IMMEDIATELY               0
+__Tad_FlagFunction tad_globalVolumesResetOnSongStart    RESET_GLOBAL_VOLUMES_ON_SONG_START  1
+__Tad_FlagFunction tad_globalVolumesPersist             RESET_GLOBAL_VOLUMES_ON_SONG_START  0
 
 
 

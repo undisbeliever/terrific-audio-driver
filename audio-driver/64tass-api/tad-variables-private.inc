@@ -76,7 +76,7 @@ TAD__FIRST_LOADING_STATE      = TadState.LOADING_COMMON_AUDIO_DATA
 TAD__FIRST_LOADING_SONG_STATE = TadState.LOADING_SONG_DATA_PAUSED
 
 
-TadFlags .block 
+TadFlags .block
     ; If set the *common audio data* will be loaded into Audio-RAM on the next `Tad_LoadSong` call.
     ;
     ; This flag will be cleared in `Tad_LoadSong`.
@@ -88,8 +88,12 @@ TadFlags .block
     ; Default: Set
     PLAY_SONG_IMMEDIATELY    = 1 << 6
 
+    ; If set, the audio driver will reset the global volumes to maximum volume when a song starts.
+    ; Default: Clear
+    RESET_GLOBAL_VOLUMES_ON_SONG_START = 1 << 5
+
     ; A mask for the flags that are sent to the loader
-    _ALL_FLAGS = PLAY_SONG_IMMEDIATELY | RELOAD_COMMON_AUDIO_DATA
+    _ALL_FLAGS = RELOAD_COMMON_AUDIO_DATA | PLAY_SONG_IMMEDIATELY | RESET_GLOBAL_VOLUMES_ON_SONG_START
 .endblock
 
 

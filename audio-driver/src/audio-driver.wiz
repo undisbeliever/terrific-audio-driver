@@ -643,13 +643,12 @@ func main() {
     sfxMutedChannels = a;
 
 
-    // ::TODO add a loader-flag to clear global volumes ::
-    nop();
-    nop();
-    nop();
-    nop();
-    nop();
-    nop();
+    carry = loaderDataType $ LoaderDataType.RESET_GLOBAL_VOLUMES_BIT;
+    if carry {
+        // a = 0
+        globalVolume_music = a;
+        globalVolume_sfx = a;
+    }
 
 
     // Assumes N_MUSIC_CHANNELS == 8
@@ -750,6 +749,9 @@ func main() {
     // and replaced with a `JMP ClearEchoBufferEnd ; NOP ...`.
 ClearEchoBufferStart:
     {
+        // ::TODO remove (required to compile compiler crate)::
+        nop();
+
         // Clear the echo buffer
         // X = S-DSP ESA
         __clear_echo_buffer__inline(x);

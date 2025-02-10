@@ -317,7 +317,8 @@ bool tad_queueCommand_setSongTempo(u8 tickClock);
 /*!
  * Queues a set-global-music-volume command.
  *
- * NOTE: Global volumes persist after a new song or common-audio-data is loaded.
+ * NOTE: If the `ResetGlobalVolumesOnSongStart` flag is set, the global volumes will be reset when a songs starts.
+ * By default, global volumes persist after a new song or common-audio-data is loaded.
  *
  * @param volume The new music volume.  A 255 music-volume will not modify the channel volume.
  * @return true if the command was added to the command queue.
@@ -327,7 +328,8 @@ bool tad_queueCommand_setGlobalMusicVolume(u8 volume);
 /*!
  * Queues a set-global-sfx-volume command.
  *
- * NOTE: Global volumes persist after a new song or common-audio-data is loaded.
+ * NOTE: If the `ResetGlobalVolumesOnSongStart` flag is set, the global volumes will be reset when a songs starts.
+ * By default, global volumes persist after a new song or common-audio-data is loaded.
  *
  * @param volume The new sound-effect volume.  A 255 sfx-volume will not modify the channel volume.
  * @return true if the command was added to the command queue.
@@ -337,7 +339,8 @@ bool tad_queueCommand_setGlobalSfxVolume(u8 volume);
 /*!
  * Queues a set-global-volumes command.
  *
- * NOTE: Global volumes persist after a new song or common-audio-data is loaded.
+ * NOTE: If the `ResetGlobalVolumesOnSongStart` flag is set, the global volumes will be reset when a songs starts.
+ * By default, global volumes persist after a new song or common-audio-data is loaded.
  *
  * @param musicVolume The new music volume.  A 255 sfx-volume will not modify the channel volume.
  * @param sfxVolume The new sound-effect volume.  A 255 sfx-volume will not modify the channel volume.
@@ -503,6 +506,21 @@ void tad_songsStartImmediately(void);
  * Clears the `PlaySongImmediately` flag
  */
 void tad_songsStartPaused(void);
+
+/*!
+ * Sets the `ResetGlobalVolumesOnSongStart` flag
+ *
+ * The global music and sound-effect volumes will be reset when a song starts.
+ */
+void tad_globalVolumesResetOnSongStart(void);
+
+/*!
+ * Clears the `ResetGlobalVolumesOnSongStart` flag
+ *
+ * The global music and sound-effect volumes will persist when a song or common-audio-data
+ * is loaded into audio-RAM.
+ */
+void tad_globalVolumesPersist(void);
 
 /*!
  * Sets the number of bytes to transfer to Audio-RAM per `tad_process` call.

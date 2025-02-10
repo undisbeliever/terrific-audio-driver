@@ -28,7 +28,7 @@ import "registers";
 
 
 // This constant MUST be increased if `LOADER_ADDR` or the IO Communication protocol changes.
-let TAD_IO_VERSION = 19;
+let TAD_IO_VERSION = 20;
 
 
 // Loader Commands
@@ -56,6 +56,10 @@ namespace LoaderDataType {
     //
     // MUST NOT be set when loading code or common-audio-data.
     let PLAY_SONG_BIT = 6;
+
+    // If this bit is set, the global music and sound-effects volumes will be
+    // reset to the maximum volume when the song starts.
+    let RESET_GLOBAL_VOLUMES_BIT = 5;
 
 
     // If this bit is set, the song will be played in stereo.

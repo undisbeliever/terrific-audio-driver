@@ -172,21 +172,27 @@ TAD_MIN_TICK_CLOCK = 64
     ;;  * parameter0: the music volume.
     ;;    A 255 music-volume will not modify the channel volume.
     ;;
-    ;; NOTE: Global volumes persist after a new song or common-audio-data is loaded.
+    ;; NOTE: If the `ResetGlobalVolumesOnSongStart` flag is set, the global volumes will
+    ;; be reset when a songs starts.
+    ;; By default, global volumes persist after a new song or common-audio-data is loaded.
     SET_GLOBAL_MUSIC_VOLUME = 16
 
     ;; Set the global sound-effect volume
     ;;  * parameter0: the music volume.
     ;;    A 255 sfx-volume will not modify the channel volume.
     ;;
-    ;; NOTE: Global volumes persist after a new song or common-audio-data is loaded.
+    ;; NOTE: If the `ResetGlobalVolumesOnSongStart` flag is set, the global volumes will
+    ;; be reset when a songs starts.
+    ;; By default, global volumes persist after a new song or common-audio-data is loaded.
     SET_GLOBAL_SFX_VOLUME = 18
 
     ;; Set the global music and sound-effect volumes
     ;;  * parameter0: the music volume.
     ;;  * parameter1: the sound-effect volume.
     ;;
-    ;; NOTE: Global volumes persist after a new song or common-audio-data is loaded.
+    ;; NOTE: If the `ResetGlobalVolumesOnSongStart` flag is set, the global volumes will
+    ;; be reset when a songs starts.
+    ;; By default, global volumes persist after a new song or common-audio-data is loaded.
     SET_GLOBAL_VOLUMES = 20
 .endenum
 
@@ -399,6 +405,27 @@ TAD_MIN_TICK_CLOCK = 64
 ;; I unknown
 ;; DB access lowram
 .import Tad_SongsStartPaused
+
+
+;; Sets the `ResetGlobalVolumesOnSongStart` flag.
+;;
+;; The global music and sound-effect volumes will be reset when a song starts.
+;;
+;; A8
+;; I unknown
+;; DB access lowram
+.import Tad_GlobalVolumesResetOnSongStart
+
+
+;; Clears the `ResetGlobalVolumesOnSongStart` flag.
+;;
+;; The global music and sound-effect volumes will persist when a song or common-audio-data
+;; is loaded into audio-RAM.
+;;
+;; A8
+;; I unknown
+;; DB access lowram
+.import Tad_GlobalVolumesPersist
 
 
 ;; Sets the number of bytes to transfer to Audio-RAM per `Tad_Process` call.

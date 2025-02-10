@@ -86,16 +86,17 @@ ROM_SPEED   = ROM_SPEED__Slow
     selectedChannelMask: .res 1
 
     .scope Menu
-        song:           .res 1
-        sfx:            .res 1
-        sfxPan:         .res 1
-        mainVolume:     .res 1
-        musicVolume:    .res 1
-        sfxVolume:      .res 1
-        tempoOverride:  .res 1
-        channelMask:    .res 1
-        audioMode:      .res 1
-        songStartsFlag: .res 1
+        song:               .res 1
+        sfx:                .res 1
+        sfxPan:             .res 1
+        mainVolume:         .res 1
+        musicVolume:        .res 1
+        sfxVolume:          .res 1
+        tempoOverride:      .res 1
+        channelMask:        .res 1
+        audioMode:          .res 1
+        songStartsFlag:     .res 1
+        resetVolumesFlag:   .res 1
     .endscope
 
 
@@ -115,7 +116,7 @@ STATE_YPOS          = 2
 
 MENU_YPOS           = 3
 
-N_MENU_ITEMS        = 14
+N_MENU_ITEMS        = 15
 LAST_MENU_INDEX     = (N_MENU_ITEMS - 1) * 2
 
 CHANNEL_MASK_MENU_POS = 7 * 2
@@ -148,10 +149,11 @@ BufferIndexTable:
     _BufferIndexEntry_ CHANNEL_MASK_YPOS,       11
     _BufferIndexEntry_ AUDIO_MODE_YPOS,         13
     _BufferIndexEntry_ SONG_STARTS_YPOS,        14
-    _BufferIndexEntry_ STOP_SOUND_EFFECTS_YPOS, 16
-    _BufferIndexEntry_ PAUSE_UNPAUSE_YPOS,      18
-    _BufferIndexEntry_ PAUSE_MUSIC_AND_SFX,     20
-    _BufferIndexEntry_ RELOAD_COMMON_DATA_YPOS, 22
+    _BufferIndexEntry_ RESET_VOLUMES_YPOS,      15
+    _BufferIndexEntry_ STOP_SOUND_EFFECTS_YPOS, 17
+    _BufferIndexEntry_ PAUSE_UNPAUSE_YPOS,      19
+    _BufferIndexEntry_ PAUSE_MUSIC_AND_SFX,     21
+    _BufferIndexEntry_ RELOAD_COMMON_DATA_YPOS, 23
 
 .assert * - BufferIndexTable = N_MENU_ITEMS * 2, error
 
@@ -172,10 +174,11 @@ MenuLabel_06: .byte "OVERRIDE TEMPO", 0
 MenuLabel_07: .byte "MUSIC CHANNELS", 0
 MenuLabel_08: .byte "", 0
 MenuLabel_09: .byte "", 0
-MenuLabel_10: .byte "STOP SOUND EFFECTS (X)", 0
-MenuLabel_11: .byte "PAUSE / UNPAUSE (START)", 0
-MenuLabel_12: .byte "PAUSE MUSIC AND SFX", 0
-MenuLabel_13: .byte "RELOAD COMMON AUDIO DATA", 0
+MenuLabel_10: .byte "", 0
+MenuLabel_11: .byte "STOP SOUND EFFECTS (X)", 0
+MenuLabel_12: .byte "PAUSE / UNPAUSE (START)", 0
+MenuLabel_13: .byte "PAUSE MUSIC AND SFX", 0
+MenuLabel_14: .byte "RELOAD COMMON AUDIO DATA", 0
 
 
 .code
@@ -195,6 +198,7 @@ MenuProcessFunctions:
     .addr   MenuChannelMask_Process
     .addr   Menu_AudioMode_Process
     .addr   Menu_SongStartsFlag_Process
+    .addr   Menu_ResetVolumesFlag_Process
     .addr   Menu_Null_Process
     .addr   Menu_Null_Process
     .addr   Menu_Null_Process
@@ -216,6 +220,7 @@ MenuActionFunctions:
     .addr   MenuChannelMask_Action
     .addr   Menu_AudioMode_Action
     .addr   Menu_SongStartsFlag_Action
+    .addr   Menu_ResetVolumesFlag_Action
     .addr   Menu_StopSoundEffects_Action
     .addr   Menu_PauseUnPauseMusic_Action
     .addr   Menu_PauseMusicAndSfx_Action
@@ -265,6 +270,9 @@ MenuActionFunctions:
 
     lda     #1
     jsr     _SetSongStartsFlag
+
+    lda     #0
+    jsr     _SetResetVolumesFlag
 
     lda     #$ff
     jsr     _SetChannelMask
@@ -479,7 +487,17 @@ MenuActionFunctions:
 ;: DB = $7e
 .proc Menu_PlaySong_Action
     lda     Menu::song
-    jmp     Tad_LoadSong
+    jsr     Tad_LoadSong
+
+    lda     Menu::resetVolumesFlag
+    beq     :+
+        lda     #255
+        jsr     _SetMusicVolume
+
+        lda     #255
+        jsr     _SetSfxVolume
+    :
+    rts
 .endproc
 
 
@@ -728,6 +746,27 @@ Menu_SfxPan_Action = Menu_PlaySfx_Action
 .endproc
 
 
+.a8
+.i16
+;: DB = $7e
+.proc Menu_ResetVolumesFlag_Process
+    lda     Menu::resetVolumesFlag
+    jsr     _AdjustWithDpad_Bool
+    bcc     :+
+        jmp     _SetResetVolumesFlag
+    :
+    rts
+.endproc
+
+
+.a8
+.i16
+;: DB = $7e
+.proc Menu_ResetVolumesFlag_Action
+    lda     Menu::resetVolumesFlag
+    inc
+    jmp     _SetResetVolumesFlag
+.endproc
 
 
 .a8
@@ -981,6 +1020,23 @@ _SetVarFn_  _SetTempoOverride,  OVERRIDE_TEMPO_YPOS,    tempoOverride,  TAD_MIN_
     :
         TextBuffer_PrintLiteral MENU_LABEL_XPOS, SONG_STARTS_YPOS, "SONGS START PAUSED     "
         jmp     Tad_SongsStartPaused
+.endproc
+
+
+;; IN: A = new value
+.a8
+.i16
+;; DB = $7e
+.proc _SetResetVolumesFlag
+    and     #1
+    sta     Menu::resetVolumesFlag
+
+    beq     :+
+        TextBuffer_PrintLiteral MENU_LABEL_XPOS, RESET_VOLUMES_YPOS, "VOLUMES RESET ON SONG LOAD"
+        jmp     Tad_GlobalVolumesResetOnSongStart
+    :
+        TextBuffer_PrintLiteral MENU_LABEL_XPOS, RESET_VOLUMES_YPOS, "GLOBAL VOLUMES PERSIST    "
+        jmp     Tad_GlobalVolumesPersist
 .endproc
 
 

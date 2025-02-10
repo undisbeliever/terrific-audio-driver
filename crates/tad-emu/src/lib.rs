@@ -103,6 +103,7 @@ impl TadEmulator {
             LoaderDataType {
                 audio_mode,
                 play_song: true,
+                reset_global_volumes: true,
             },
         )?;
 
@@ -131,6 +132,7 @@ impl TadEmulator {
             LoaderDataType {
                 audio_mode,
                 play_song: true,
+                reset_global_volumes: true,
             },
         )?;
 
@@ -163,6 +165,7 @@ impl TadEmulator {
             LoaderDataType {
                 audio_mode,
                 play_song: false,
+                reset_global_volumes: true,
             },
         )?;
 
