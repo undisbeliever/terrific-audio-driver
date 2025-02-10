@@ -112,7 +112,7 @@ TadAudioMode .block
 
 ; The current audio driver state
 ; (see `TadState`)
-Tad_state .byte ?
+TadPrivate_state .byte ?
 
 ; TAD flags bitfield.
 ;
@@ -135,24 +135,24 @@ Tad_audioMode .byte ?
 ; Number of bytes to transfer per `Tad_Process` call
 ;
 ; MUST be > 0
-Tad_bytesToTransferPerFrame .word ?
+TadPrivate_bytesToTransferPerFrame .word ?
 
 ; The previous `IO_ToScpu.COMMAND_PORT` sent to the S-SMP audio driver.
-Tad_previousCommand .byte ?
+TadPrivate_previousCommand .byte ?
 
 
 ; ---------------------------------------------------
 ; Queue 1 - remaining data to transfer into Audio-RAM
 ; ---------------------------------------------------
     ; A far pointer to the remaining data to transfer
-    Tad_dataToTransfer_addr .word ?
-    Tad_dataToTransfer_bank .byte ?
+    TadPrivate_dataToTransfer_addr .word ?
+    TadPrivate_dataToTransfer_bank .byte ?
 
     ; The remaining number of bytes to transfer
-    Tad_dataToTransfer_size .word ?
+    TadPrivate_dataToTransfer_size .word ?
 
     ; The previous value written to the loader spinLock
-    Tad_dataToTransfer_prevSpinLock .byte ?
+    TadPrivate_dataToTransfer_prevSpinLock .byte ?
 
 
 ; ----------------------------------------------
@@ -161,7 +161,7 @@ Tad_previousCommand .byte ?
     ; The next song to load into Audio-RAM
     ; Used by the `WAITING_FOR_LOADER_*` states
     ; If this value is 0 or an invalid song, a blank silent song will be loaded instead.
-    Tad_nextSong .byte ?
+    TadPrivate_nextSong .byte ?
 
 
 ; ------------------------------------------------------
@@ -169,9 +169,9 @@ Tad_previousCommand .byte ?
 ; ------------------------------------------------------
     ; The next `Command` to send to the audio driver.
     ; If this value is negative, the queue is empty.
-    Tad_nextCommand_id .byte ?
+    TadPrivate_nextCommand_id .byte ?
 
     ; The two parameters of the next command (if any)
-    Tad_nextCommand_parameter0 .byte ?
-    Tad_nextCommand_parameter1 .byte ?
+    TadPrivate_nextCommand_parameter0 .byte ?
+    TadPrivate_nextCommand_parameter1 .byte ?
 

@@ -122,18 +122,18 @@ TadCommand .block
 ; I unknown
 .databank TAD_DB_LOWRAM
 Tad_QueueCommand .proc
-    bit     Tad_nextCommand_id
+    bit     TadPrivate_nextCommand_id
     bpl     _ReturnFalse
         ; command queue is empty
     _WriteCommand:
         and     #TadIO_ToDriver.COMMAND_MASK
-        sta     Tad_nextCommand_id
+        sta     TadPrivate_nextCommand_id
 
         txa
-        sta     Tad_nextCommand_parameter0
+        sta     TadPrivate_nextCommand_parameter0
 
         tya
-        sta     Tad_nextCommand_parameter1
+        sta     TadPrivate_nextCommand_parameter1
 
         ; return true
         sec
@@ -204,7 +204,7 @@ Tad_LoadSong .proc
     .cerror !(TAD__FIRST_LOADING_SONG_STATE > TadState.WAITING_FOR_LOADER_SONG)
     .cerror !(TAD__FIRST_LOADING_SONG_STATE > TadState.LOADING_COMMON_AUDIO_DATA)
 
-    sta     Tad_nextSong
+    sta     TadPrivate_nextSong
 
     lda     #TadFlags.RELOAD_COMMON_AUDIO_DATA
     trb     Tad_flags
@@ -214,7 +214,7 @@ Tad_LoadSong .proc
         bra     _SetStateAndSwitchToLoader
 
 _SongRequested:
-    lda     Tad_state
+    lda     TadPrivate_state
     cmp     #TAD__FIRST_LOADING_SONG_STATE
     bcc     _Return
         ; TadState is not NULL, WAITING_FOR_LOADER_* or LOADING_COMMON_AUDIO_DATA
@@ -222,7 +222,7 @@ _SongRequested:
         lda     #TadState.WAITING_FOR_LOADER_SONG
 
     _SetStateAndSwitchToLoader:
-        sta     Tad_state
+        sta     TadPrivate_state
 
         ; Assert it is safe to send a switch-to-loader command when the loader is waiting for a READY signal
         .cerror !(TadIO_ToDriver.SWITCH_TO_LOADER != TadIO_Loader_Init.LOADER_READY_H)
@@ -245,7 +245,7 @@ _Return:
 ; I unknown
 .databank TAD_DB_LOWRAM
 Tad_LoadSongIfChanged .proc
-    cmp     Tad_nextSong
+    cmp     TadPrivate_nextSong
     beq     +
         jsr     Tad_LoadSong
         sec
@@ -261,8 +261,8 @@ Tad_LoadSongIfChanged .proc
 ; I unknown
 .databank TAD_DB_LOWRAM
 Tad_GetSong .proc
-    ; `Tad_nextSong` is only written to in `Tad_Init` and `Tad_LoadSong`.
-    lda     Tad_nextSong
+    ; `TadPrivate_nextSong` is only written to in `Tad_Init` and `Tad_LoadSong`.
+    lda     TadPrivate_nextSong
     rts
 .endproc
 
@@ -318,7 +318,7 @@ Tad_GlobalVolumesPersist .proc
 .endproc
 
 
-; IN: X = new `Tad_bytesToTransferPerFrame` value
+; IN: X = new `TadPrivate_bytesToTransferPerFrame` value
 ; A unknown
 .xl
 .databank TAD_DB_LOWRAM
@@ -331,7 +331,7 @@ Tad_SetTransferSize .proc
     bcs     +
         ldx     #TAD_MIN_TRANSFER_PER_FRAME
     +
-    stx     Tad_bytesToTransferPerFrame
+    stx     TadPrivate_bytesToTransferPerFrame
 
     rts
 .endproc
@@ -358,7 +358,7 @@ Tad_IsSongLoaded .proc
     .cerror !(TadState.PLAYING > TadState.PAUSED)
     ; Assumes PLAYING is the last state
 
-    lda     Tad_state
+    lda     TadPrivate_state
     cmp     #TadState.PAUSED
     rts
 .endproc
@@ -373,7 +373,7 @@ Tad_IsSfxPlaying .proc
     .cerror !(TadState.PLAYING > TadState.PLAYING_SFX)
     ; Assumes PLAYING is the last state
 
-    lda     Tad_state
+    lda     TadPrivate_state
     cmp     #TadState.PLAYING_SFX
     rts
 .endproc
@@ -387,7 +387,7 @@ Tad_IsSfxPlaying .proc
 Tad_IsSongPlaying .proc
     ; Assumes PLAYING is the last state
 
-    lda     Tad_state
+    lda     TadPrivate_state
     cmp     #TadState.PLAYING
     rts
 .endproc

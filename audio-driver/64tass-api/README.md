@@ -10,7 +10,7 @@ The Terrific Audio Driver can deadlock if:
  * A `Tad_*` subroutine is called inside an Interrupt Service Routine.
  * A `Tad_*` subroutine is called by multiple threads.
  * A `TadPrivate_*` subroutine or macro is called outside of the API.
- * A private variable is modified outside of the API.
+ * A `TadPrivate_*` private variable is modified outside of the API.
 
 
 
@@ -20,8 +20,8 @@ Using Terrific Audio Driver in a 64tass Project
 The 64tass API is identical to the ca65 API.
 Please see [ca65-api/tad-audio.inc](../ca65-api/tad-audio.inc) for the API documentation.
 
-Private functions and macros have been prefixed with `TadPrivate_`.
-Do not call them outside of the TAD API.
+Private functions, macros and variables have been prefixed with `TadPrivate_`.
+Do not use them outside of the TAD API.
 
 
 Compiling the API

@@ -29,7 +29,7 @@
 .cpu "65816"
 .autsiz
 
-TAD_DB_LOWRAM      = Tad_state >> 16
+TAD_DB_LOWRAM      = TadPrivate_state >> 16
 TAD_DB_REGISTERS   = 0
 
 
@@ -305,7 +305,7 @@ TadPrivate_Loader_CheckReadyAndSendLoaderDataType .proc
 
         ; The S-CPU must wait for the loader to write 0 to the spinlock before transferring data.
     .databank TAD_DB_LOWRAM
-        stz     Tad_dataToTransfer_prevSpinLock
+        stz     TadPrivate_dataToTransfer_prevSpinLock
 
         ; return true
         sec
@@ -325,9 +325,9 @@ _ReturnFalse:
 .databank TAD_DB_REGISTERS
 TadPrivate_Loader_SetDataToTransfer .proc
     .databank TAD_DB_LOWRAM
-    stx     Tad_dataToTransfer_addr
-    sta     Tad_dataToTransfer_bank
-    sty     Tad_dataToTransfer_size
+    stx     TadPrivate_dataToTransfer_addr
+    sta     TadPrivate_dataToTransfer_bank
+    sty     TadPrivate_dataToTransfer_size
 
     rts
 .endproc
@@ -352,7 +352,7 @@ TadPrivate_Loader_TransferData .proc
     ;
     ; This also prevents a freeze in `process()` if the loader has crashed/glitched.
     ; (`finish_loading_data()` will freeze if the loader has crashed/glitched.
-    lda     Tad_dataToTransfer_prevSpinLock
+    lda     TadPrivate_dataToTransfer_prevSpinLock
     cmp     TadIO_Loader.SPINLOCK_PORT
     bne     _ReturnFalse
 
@@ -363,10 +363,10 @@ TadPrivate_Loader_TransferData .proc
 .al
 
     ; Calculate number of words to read
-    lda     Tad_dataToTransfer_size
-    cmp     Tad_bytesToTransferPerFrame
+    lda     TadPrivate_dataToTransfer_size
+    cmp     TadPrivate_bytesToTransferPerFrame
     bcc     +
-        lda     Tad_bytesToTransferPerFrame
+        lda     TadPrivate_bytesToTransferPerFrame
     +
     inc     a       ; required
     lsr     a
@@ -378,15 +378,15 @@ TadPrivate_Loader_TransferData .proc
     ; Store word to read in X
     tax
 
-    ; Reverse subtract Tad_dataToTransfer_size (with clamping)
+    ; Reverse subtract TadPrivate_dataToTransfer_size (with clamping)
     asl     a                       ; convert number of words to number of bytes
     eor     #$ffff
     sec
-    adc     Tad_dataToTransfer_size
+    adc     TadPrivate_dataToTransfer_size
     bcs     +
         lda     #0
     +
-    sta     Tad_dataToTransfer_size
+    sta     TadPrivate_dataToTransfer_size
 
 
     lda     #$2100
@@ -396,12 +396,12 @@ TadPrivate_Loader_TransferData .proc
     sep     #$20
 .as
 
-    lda     Tad_dataToTransfer_bank
-    ldy     Tad_dataToTransfer_addr
+    lda     TadPrivate_dataToTransfer_bank
+    ldy     TadPrivate_dataToTransfer_addr
 
     pha
     plb
-; DB = Tad_dataToTransfer_bank
+; DB = TadPrivate_dataToTransfer_bank
 .databank ?
 ; NOT USING `.dpage`
 ; I do not see a way to restore `.dpage` after `PLD`
@@ -410,13 +410,13 @@ TadPrivate_Loader_TransferData .proc
         ; x = number of words remaining
         ; y = data address (using y to force addr,y addressing mode)
 
-        ; DB = Tad_dataToTransfer_bank (unknown)
+        ; DB = TadPrivate_dataToTransfer_bank (unknown)
         ; DP = $2100
 
         lda     0,b,y
         sta     #(TadIO_Loader.DATA_PORT_L & $ff),d
 
-        ; The bank overflow test must be done here as `Tad_dataToTransfer_addr` might point to an odd memory address.
+        ; The bank overflow test must be done here as `TadPrivate_dataToTransfer_addr` might point to an odd memory address.
         iny
         beq     _BankOverflow_1
     _BankOverflow_1_Resume:
@@ -456,11 +456,11 @@ _EndLoop:
 .databank TAD_DB_LOWRAM
 ; D restored
 
-    sty     Tad_dataToTransfer_addr
-    sta     Tad_dataToTransfer_prevSpinLock
+    sty     TadPrivate_dataToTransfer_addr
+    sta     TadPrivate_dataToTransfer_prevSpinLock
 
 
-    ldy     Tad_dataToTransfer_size
+    ldy     TadPrivate_dataToTransfer_size
     bne     _ReturnFalse
         ; End of data transfer
 
@@ -502,13 +502,13 @@ _BankOverflow_2:
 ; ASSUMES: Y = 0 (Y addr overflowed to 0)
 ;
 ; IN: Y = 0
-; IN: DB = Tad_dataToTransfer_bank
+; IN: DB = TadPrivate_dataToTransfer_bank
 ;
 ; OUT: Y = new address
 ; OUT: DB = new bank
 ;
 ; KEEP: X
-; DB = Tad_dataToTransfer_bank
+; DB = TadPrivate_dataToTransfer_bank
 .as
 .xl
 .databank ?
@@ -517,11 +517,11 @@ TadPrivate_Loader_GotoNextBank__ .proc
     pla
 
     inc     a
-    sta     Tad_dataToTransfer_bank
+    sta     TadPrivate_dataToTransfer_bank
 
     pha
     plb
-; DB = new Tad_dataToTransfer_bank value
+; DB = new TadPrivate_dataToTransfer_bank value
 
     ; MUST NOT CHANGE X
 
@@ -560,7 +560,7 @@ TadPrivate_IsLoaderActive .macro
     .cerror !((TadState.PAUSED & $7f) < TAD__FIRST_LOADING_STATE)
     .cerror !((TadState.PLAYING & $7f) < TAD__FIRST_LOADING_STATE)
 
-    lda     Tad_state
+    lda     TadPrivate_state
     and     #$7f
     cmp     #TAD__FIRST_LOADING_STATE
 .endmacro
@@ -594,7 +594,7 @@ Tad_Init .proc
     sta     Tad_flags
 
     ldx     #TAD_DEFAULT_TRANSFER_PER_FRAME
-    stx     Tad_bytesToTransferPerFrame
+    stx     TadPrivate_bytesToTransferPerFrame
 
     lda     #`Tad_AudioDriver_Bin
     ldx     #<>Tad_AudioDriver_Bin
@@ -602,10 +602,10 @@ Tad_Init .proc
     jsr     TadPrivate_Loader_SetDataToTransfer
 
     lda     #$ff
-    sta     Tad_nextCommand_id
+    sta     TadPrivate_nextCommand_id
     sta     Tad_sfxQueue_sfx
 
-    stz     Tad_nextSong
+    stz     TadPrivate_nextSong
 
     _DataTypeLoop:
         lda     #TadLoaderDataType.CODE
@@ -617,7 +617,7 @@ Tad_Init .proc
         bcc     _TransferLoop
 
     lda     #TadState.WAITING_FOR_LOADER_COMMON
-    sta     Tad_state
+    sta     TadPrivate_state
 
     plb
 .databank ?
@@ -629,26 +629,26 @@ Tad_Init .proc
 ;
 ; REQUIRES: state == PAUSED or state == PLAYING.
 ; REQUIRES: The previous command has been processed by the audio-driver.
-; REQUIRES: `Tad_nextCommand_id` is not a play-sound-effect command.
-; REQUIRES: `Tad_nextCommand_id` is a valid comma.
+; REQUIRES: `TadPrivate_nextCommand_id` is not a play-sound-effect command.
+; REQUIRES: `TadPrivate_nextCommand_id` is a valid comma.
 ;
-; IN: Y = Tad_nextCommand_id
+; IN: Y = TadPrivate_nextCommand_id
 .as
 .xs
 .databank TAD_DB_LOWRAM
 TadPrivate_Process_SendCommand .macro
-    lda     Tad_nextCommand_parameter0
+    lda     TadPrivate_nextCommand_parameter0
     sta     TadIO_ToDriver.PARAMETER0_PORT
 
-    lda     Tad_nextCommand_parameter1
+    lda     TadPrivate_nextCommand_parameter1
     sta     TadIO_ToDriver.PARAMETER1_PORT
 
-    lda     Tad_previousCommand
+    lda     TadPrivate_previousCommand
     and     #TadIO_ToDriver.COMMAND_I_MASK    ; Clear the non i bits of the command
     eor     #TadIO_ToDriver.COMMAND_I_MASK    ; Flip the i bits
-    ora     Tad_nextCommand_id              ; Set the c bits
+    ora     TadPrivate_nextCommand_id         ; Set the c bits
     sta     TadIO_ToDriver.COMMAND_PORT
-    sta     Tad_previousCommand
+    sta     TadPrivate_previousCommand
 
     cpy     #TadCommand.UNPAUSE + 1
     bcs     _NotPauseOrPlay
@@ -662,12 +662,12 @@ TadPrivate_Process_SendCommand .macro
         lsr     a
         and     #3
         ora     #$80
-        sta     Tad_state
+        sta     TadPrivate_state
 _NotPauseOrPlay:
 
     ; Reset command queue
     lda     #$ff
-    sta     Tad_nextCommand_id
+    sta     TadPrivate_nextCommand_id
 .endmacro
 
 
@@ -694,13 +694,13 @@ TadPrivate_Process_SendSfxCommand .macro
     sta     TadIO_ToDriver.PARAMETER1_PORT
 
     ; Send play-sound-effect command
-    lda     Tad_previousCommand
+    lda     TadPrivate_previousCommand
     and     #TadIO_ToDriver.COMMAND_I_MASK            ; Clear the non i bits of the command
     eor     #TadIO_ToDriver.COMMAND_I_MASK            ; Flip the i bits
     ora     #TadCommand.PLAY_SOUND_EFFECT             ; Set the c bits
 
     sta     TadIO_ToDriver.COMMAND_PORT
-    sta     Tad_previousCommand
+    sta     TadPrivate_previousCommand
 
     ; Reset the SFX queue
     ldy     #$ff
@@ -719,23 +719,23 @@ Tad_Process .proc
     .cerror !(TadState.PAUSED == $80)
     .cerror !(TadState.PLAYING > $80)
 
-    lda     Tad_state
+    lda     TadPrivate_state
     bpl     _NotLoaded
         ; Playing or paused state
         sep     #$10
     .xs
         tax
 
-        lda     Tad_previousCommand
+        lda     TadPrivate_previousCommand
         cmp     TadIO_ToScpu.COMMAND_ACK_PORT
         bne     _Return_I8
             ; Previous command has been processed
 
             ; Check command queue
-            ldy     Tad_nextCommand_id
+            ldy     TadPrivate_nextCommand_id
             bpl     _SendCommand
 
-            ; X = Tad_state
+            ; X = TadPrivate_state
             .cerror !(TadState.PAUSED < $81)
             .cerror !(TadState.PLAYING >= $81)
             .cerror !(TadState.PLAYING_SFX >= $81)
@@ -796,7 +796,7 @@ TadPrivate_Process_WaitingForLoader__ .proc ; RTL
     plb
 ; DB = $80
 
-    lda     Tad_state
+    lda     TadPrivate_state
     cmp     #TadState.WAITING_FOR_LOADER_COMMON
     bne     _SongData
         ; Common audio data
@@ -854,7 +854,7 @@ TadPrivate_Process_WaitingForLoader__ .proc ; RTL
         pha
 
         ; Load next song
-        lda     Tad_nextSong
+        lda     TadPrivate_nextSong
         beq     _UseBlankSong
 
 _LoadData:
@@ -876,7 +876,7 @@ _LoadData:
     jsr     TadPrivate_Loader_SetDataToTransfer
 
     pla
-    sta     Tad_state
+    sta     TadPrivate_state
 
 _Return:
     plb
@@ -896,7 +896,7 @@ TadPrivate_Process_Loading__ .proc ; RTL
     jsr     TadPrivate_Loader_TransferData
     bcc     _Return
         ; Data loaded successfully
-        lda     Tad_state
+        lda     TadPrivate_state
         cmp     #TadState.LOADING_COMMON_AUDIO_DATA
         bne     _Song
             ; Common audio data was just transferred
@@ -908,27 +908,27 @@ TadPrivate_Process_Loading__ .proc ; RTL
             ; song data was loaded into Audio-RAM
             ; Loader has finished, audio driver is now active
 
-            stz     Tad_previousCommand
+            stz     TadPrivate_previousCommand
 
             ; Reset command and SFX queues
             lda     #$ff
-            sta     Tad_nextCommand_id
+            sta     TadPrivate_nextCommand_id
             sta     Tad_sfxQueue_sfx
             sta     Tad_sfxQueue_pan
 
-            ; Use `Tad_state` to determine if the song is playing or paused.
+            ; Use `TadPrivate_state` to determine if the song is playing or paused.
             ; Cannot use `Tad_flags` as it may have changed after the `TadLoaderDataType` was sent to
             ; the loader (while the song was loaded).
             .cerror !(((TadState.LOADING_SONG_DATA_PAUSED & 1) << 1) | $80 == TadState.PAUSED)
             .cerror !(((TadState.LOADING_SONG_DATA_PLAY & 1) << 1) | $80 == TadState.PLAYING)
-            lda     Tad_state
+            lda     TadPrivate_state
             and     #1
             asl     a
             ora     #$80
 
         ; A = new state
     _EndIf:
-        sta     Tad_state
+        sta     TadPrivate_state
 
 _Return:
     rtl

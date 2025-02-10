@@ -10,7 +10,7 @@ The Terrific Audio Driver can deadlock or crash if:
  * A `tad_*` function is called inside an Interrupt Service Routine.
  * A `tad_*` function is called by multiple threads.
  * A private tad function (not declared in `tad-audio.h`) is called.
- * A private variable is modified outside of `tad-audio.asm`.
+ * A private variable (prefixed with `tadPrivate_`) is modified outside of `tad-audio.asm`.
  * The APUIO registers are written to outside of `tad-audio.asm`.
 
 Please read the documentation in [tad-audio.h](tad-audio.h) for more details.

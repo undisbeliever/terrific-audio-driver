@@ -53,6 +53,8 @@
 ;;      * bool return values are returned as PVSNESLIB_TRUE ($00ff) or PVSNESLIB_FALSE ($0000)
 ;;        to match TRUE/FALSE in `pvsneslib/include/snes/snestypes.h`.
 ;;
+;; Variables that are prefixed with `tadPrivate_` are private and MUST NOT BE MODIFIED outside this file.
+;;
 ;; Functions and variables that end in a double-underscore are private and MUST NOT BE CALLED
 ;; or MODIFIED outside of this file.
 ;;
@@ -309,7 +311,7 @@ TAD_Flags__ALL_FLAGS = TAD_Flags__RELOAD_COMMON_AUDIO_DATA | TAD_Flags__PLAY_SON
     .assert (TAD_State__PAUSED & $7f) < TAD_FIRST_LOADING_STATE
     .assert (TAD_State__PLAYING & $7f) < TAD_FIRST_LOADING_STATE
 
-    lda.l   tad_state__
+    lda.l   tadPrivate_state
     and     #$7f
     cmp     #TAD_FIRST_LOADING_STATE
 .endm
@@ -326,7 +328,7 @@ TAD_Flags__ALL_FLAGS = TAD_Flags__RELOAD_COMMON_AUDIO_DATA | TAD_Flags__PLAY_SON
     .assert (TAD_State__PAUSED & $7f) < TAD_FIRST_LOADING_STATE
     .assert (TAD_State__PLAYING & $7f) < TAD_FIRST_LOADING_STATE
 
-    lda.w   tad_state__
+    lda.w   tadPrivate_state
     and     #$7f
     cmp     #TAD_FIRST_LOADING_STATE
 .endm
@@ -712,7 +714,7 @@ _tad_loader_checkReadyAndSendLoaderDataType__:
         sta     TAD_IO_Loader_Init__READY_PORT_H
 
         ; The S-CPU must wait for the loader to write 0 to the spinlock before transferring data.
-        stz     tad_dataToTransfer_prevSpinLock__
+        stz     tadPrivate_dataToTransfer_prevSpinLock
 
         ; return true
         sec
@@ -732,9 +734,9 @@ _tad_loader_checkReadyAndSendLoaderDataType__:
 .index 16
 ;; DB = $80
 _tad_loader_setDataToTransfer__:
-    stx     tad_dataToTransfer_addr__
-    sta     tad_dataToTransfer_bank__
-    sty     tad_dataToTransfer_size__
+    stx     tadPrivate_dataToTransfer_addr
+    sta     tadPrivate_dataToTransfer_bank
+    sty     tadPrivate_dataToTransfer_size
 
     rts
 
@@ -763,7 +765,7 @@ _tad_loader_transferData__:
     ;
     ; This also prevents a freeze in `process()` if the loader has crashed/glitched.
     ; (`finish_loading_data()` will freeze if the loader has crashed/glitched.
-    lda     tad_dataToTransfer_prevSpinLock__
+    lda     tadPrivate_dataToTransfer_prevSpinLock
     cmp     TAD_IO_Loader__SPINLOCK_PORT
     bne     @ReturnFalse
 
@@ -774,10 +776,10 @@ _tad_loader_transferData__:
 .accu 16
 
     ; Calculate number of words to read
-    lda     tad_dataToTransfer_size__
-    cmp     tad_bytesToTransferPerFrame__
+    lda     tadPrivate_dataToTransfer_size
+    cmp     tadPrivate_bytesToTransferPerFrame
     bcc     +
-        lda     tad_bytesToTransferPerFrame__
+        lda     tadPrivate_bytesToTransferPerFrame
     +
     ina     ; required
     lsr
@@ -793,11 +795,11 @@ _tad_loader_transferData__:
     asl                             ; convert number of words to number of bytes
     eor     #$ffff
     sec
-    adc     tad_dataToTransfer_size__
+    adc     tadPrivate_dataToTransfer_size
     bcs     +
         lda     #0
     +
-    sta     tad_dataToTransfer_size__
+    sta     tadPrivate_dataToTransfer_size
 
 
     lda     #$2100
@@ -807,12 +809,12 @@ _tad_loader_transferData__:
     sep     #$20
 .accu 8
 
-    lda     tad_dataToTransfer_bank__
-    ldy     tad_dataToTransfer_addr__
+    lda     tadPrivate_dataToTransfer_bank
+    ldy     tadPrivate_dataToTransfer_addr
 
     pha
     plb
-; DB = tad_dataToTransfer_bank__
+; DB = tadPrivate_dataToTransfer_bank
 
     @Loop:
         ; x = number of words remaining
@@ -861,11 +863,11 @@ _tad_loader_transferData__:
 ; DB restored (0x80)
 ; D = 0
 
-    sty     tad_dataToTransfer_addr__
-    sta     tad_dataToTransfer_prevSpinLock__
+    sty     tadPrivate_dataToTransfer_addr
+    sta     tadPrivate_dataToTransfer_prevSpinLock
 
 
-    ldy     tad_dataToTransfer_size__
+    ldy     tadPrivate_dataToTransfer_size
     bne     @ReturnFalse
         ; End of data transfer
 
@@ -921,7 +923,7 @@ _tad_loader_gotoNextBank__:
     pla
 
     ina
-    sta.l   tad_dataToTransfer_bank__
+    sta.l   tadPrivate_dataToTransfer_bank
 
     pha
     plb
@@ -970,17 +972,17 @@ _tad_loader_gotoNextBank__:
 ;; I8
 ;; DB = $80
 .macro _Tad_Process_SendCommand__
-    lda     tad_nextCommand_parameter0__
+    lda     tadPrivate_nextCommand_parameter0
     sta     TAD_IO_ToDriver__PARAMETER0_PORT
-    lda     tad_nextCommand_parameter1__
+    lda     tadPrivate_nextCommand_parameter1
     sta     TAD_IO_ToDriver__PARAMETER1_PORT
 
-    lda     tad_previousCommand__
+    lda     tadPrivate_previousCommand
     and     #TAD_IO_ToDriver__COMMAND_I_MASK    ; Clear the non i bits of the command
     eor     #TAD_IO_ToDriver__COMMAND_I_MASK    ; Flip the i bits
-    ora     tad_nextCommand_id__            ; Set the c bits
+    ora     tadPrivate_nextCommand_id           ; Set the c bits
     sta     TAD_IO_ToDriver__COMMAND_PORT
-    sta     tad_previousCommand__
+    sta     tadPrivate_previousCommand
 
     cpy     #TAD_Command__UNPAUSE + 1
     bcs     @SC_NotPauseOrPlay
@@ -994,12 +996,12 @@ _tad_loader_gotoNextBank__:
         lsr
         and     #3
         ora     #$80
-        sta     tad_state__
+        sta     tadPrivate_state
 @SC_NotPauseOrPlay:
 
     ; Reset command queue
     lda     #$ff
-    sta     tad_nextCommand_id__
+    sta     tadPrivate_nextCommand_id
 .endm
 
 
@@ -1027,13 +1029,13 @@ _tad_loader_gotoNextBank__:
     sta     TAD_IO_ToDriver__PARAMETER1_PORT
 
     ; Send play-sound-effect command
-    lda     tad_previousCommand__
+    lda     tadPrivate_previousCommand
     and     #TAD_IO_ToDriver__COMMAND_I_MASK            ; Clear the non i bits of the command
     eor     #TAD_IO_ToDriver__COMMAND_I_MASK            ; Flip the i bits
     ora     #TAD_Command__PLAY_SOUND_EFFECT             ; Set the c bits
 
     sta     TAD_IO_ToDriver__COMMAND_PORT
-    sta     tad_previousCommand__
+    sta     tadPrivate_previousCommand
 
     ; Reset the SFX queue
     ldy     #$ff
@@ -1045,7 +1047,7 @@ _tad_loader_gotoNextBank__:
 
 ;; Process the WAITING_FOR_LOADER_* states
 ;;
-;; IN: A = tad_state__
+;; IN: A = tadPrivate_state
 ;;
 ;; A8
 ;; I16
@@ -1106,7 +1108,7 @@ _tad_loader_gotoNextBank__:
         pha
 
         ; Load next song
-        lda     tad_nextSong__
+        lda     tadPrivate_nextSong
         beq     @WFL_UseBlankSong
 
 @WFL_LoadData:
@@ -1130,7 +1132,7 @@ _tad_loader_gotoNextBank__:
     jsr     _tad_loader_setDataToTransfer__
 
     pla
-    sta     tad_state__
+    sta     tadPrivate_state
 @WFL_Return:
 .endm
 
@@ -1147,7 +1149,7 @@ _tad_process__loading__:
     jsr     _tad_loader_transferData__
     bcc     @Return
         ; Data loaded successfully
-        lda     tad_state__
+        lda     tadPrivate_state
         cmp     #TAD_State__LOADING_COMMON_AUDIO_DATA
         bne     @Song
             ; Common audio data was just transferred
@@ -1159,11 +1161,11 @@ _tad_process__loading__:
             ; song data was loaded into Audio-RAM
             ; Loader has finished, audio driver is now active
 
-            stz     tad_previousCommand__
+            stz     tadPrivate_previousCommand
 
             ; Reset command and SFX queues
             lda     #$ff
-            sta     tad_nextCommand_id__
+            sta     tadPrivate_nextCommand_id
             sta     tad_sfxQueue_sfx
             sta     tad_sfxQueue_pan
 
@@ -1172,14 +1174,14 @@ _tad_process__loading__:
             ; the loader (while the song was loaded).
             .assert ((TAD_State__LOADING_SONG_DATA_PAUSED & 1) << 1) | $80 == TAD_State__PAUSED
             .assert ((TAD_State__LOADING_SONG_DATA_PLAY & 1) << 1) | $80 == TAD_State__PLAYING
-            lda     tad_state__
+            lda     tadPrivate_state
             and     #1
             asl
             ora     #$80
 
         ; A = new state
     @EndIf:
-        sta     tad_state__
+        sta     tadPrivate_state
 
 @Return:
     rts
@@ -1195,20 +1197,20 @@ _tad_process__loading__:
     .assert TAD_State__PAUSED == $80
     .assert TAD_State__PLAYING > $80
 
-    lda     tad_state__
+    lda     tadPrivate_state
     bpl     @NotLoaded
         ; Playing or paused state
         sep     #$10
     .index 8
         tax
 
-        lda     tad_previousCommand__
+        lda     tadPrivate_previousCommand
         cmp     TAD_IO_ToScpu__COMMAND_ACK_PORT
         bne     @Return_I8
             ; Previous command has been processed
 
             ; Check command queue
-            ldy     tad_nextCommand_id__
+            ldy     tadPrivate_nextCommand_id
             bpl     @SendCommand
 
             ; X = tad_state
@@ -1279,7 +1281,7 @@ tad_init:
     sta     tad_flags
 
     ldx     #TAD_DEFAULT_TRANSFER_PER_FRAME
-    stx     tad_bytesToTransferPerFrame__
+    stx     tadPrivate_bytesToTransferPerFrame
 
     lda     #:Tad_AudioDriver_Bin
     ldx     #Tad_AudioDriver_Bin
@@ -1287,10 +1289,10 @@ tad_init:
     jsr     _tad_loader_setDataToTransfer__
 
     lda     #$ff
-    sta     tad_nextCommand_id__
+    sta     tadPrivate_nextCommand_id
     sta     tad_sfxQueue_sfx
 
-    stz     tad_nextSong__
+    stz     tadPrivate_nextSong
 
     @DataTypeLoop:
         lda     #TAD_LoaderDataType__CODE
@@ -1302,7 +1304,7 @@ tad_init:
         bcc     @TransferLoop
 
     lda     #TAD_State__WAITING_FOR_LOADER_COMMON
-    sta     tad_state__
+    sta     tadPrivate_state
 
     __PopReturn_X16_Y16_DB_80
 
@@ -1409,7 +1411,7 @@ tad_loadSong:
 // DB = $80
 
     lda     _stack_arg_offset,s
-    sta     tad_nextSong__
+    sta     tadPrivate_nextSong
 
 
     lda     #TAD_Flags__RELOAD_COMMON_AUDIO_DATA
@@ -1420,14 +1422,14 @@ tad_loadSong:
         bra     @SetStateAndSwitchToLoader
 
 @SongRequested:
-    lda     tad_state__
+    lda     tadPrivate_state
     cmp     #TAD_FIRST_LOADING_SONG_STATE
     bcc     @Return
         ; State is not NULL, WAITING_FOR_LOADER_* or LOADING_COMMON_AUDIO_DATA
         lda     #TAD_State__WAITING_FOR_LOADER_SONG
 
     @SetStateAndSwitchToLoader:
-        sta     tad_state__
+        sta     tadPrivate_state
 
         ; Assert it is safe to send a switch-to-loader command when the loader is waiting for a READY signal
         .assert TAD_IO_ToDriver__SWITCH_TO_LOADER != TAD_IO_Loader_Init__LOADER_READY_H
@@ -1452,7 +1454,7 @@ tad_loadSongIfChanged:
 .accu 8
 
     lda     _stack_arg_offset,s
-    cmp.l   tad_nextSong__
+    cmp.l   tadPrivate_nextSong
     bne     +
         lda     #PVSNESLIB_FALSE
         bra     ++
@@ -1476,7 +1478,7 @@ tad_getSong:
     __Push__A16_noX_noY
 .accu 16
 
-    lda.l   tad_nextSong__
+    lda.l   tadPrivate_nextSong
     and     #$00ff
 
     __PopReturn_A16_noX_noY__u16_in_a
@@ -1500,7 +1502,7 @@ tad_setTransferSize:
     bcs     +
         lda     #TAD_MIN_TRANSFER_PER_FRAME
     +
-    sta.l   tad_bytesToTransferPerFrame__
+    sta.l   tadPrivate_bytesToTransferPerFrame
 
     __PopReturn_noX_noY
 .ends
@@ -1564,7 +1566,7 @@ tad_isSongLoaded:
 
     .assert TAD_State__PLAYING_SFX > TAD_State__PAUSED
     .assert TAD_State__PLAYING > TAD_State__PAUSED
-    lda.l   tad_state__
+    lda.l   tadPrivate_state
     cmp     #TAD_State__PAUSED
 
     __PopReturn_noX_noY__bool_in_carry
@@ -1579,7 +1581,7 @@ tad_isSfxPlaying:
     __Push__A8_noX_noY
 
     .assert TAD_State__PLAYING > TAD_State__PLAYING_SFX
-    lda.l   tad_state__
+    lda.l   tadPrivate_state
     cmp     #TAD_State__PLAYING_SFX
 
     __PopReturn_noX_noY__bool_in_carry
@@ -1594,7 +1596,7 @@ tad_isSongPlaying:
     __Push__A8_noX_noY
 .accu 8
     ; Assumes PLAYING is the last state
-    lda.l   tad_state__
+    lda.l   tadPrivate_state
     cmp     #TAD_State__PLAYING
 
     __PopReturn_noX_noY__bool_in_carry
@@ -1655,14 +1657,14 @@ tad__Command_A__Test_NoParameter__:
     __Push__A8_noX_noY
 .accu 8
 
-    ; Cannot use `bit tad_nextCommand_id__` here, DB is unknown
+    ; Cannot use `bit tadPrivate_nextCommand_id` here, DB is unknown
     ; Temporarily Save it in B
     xba
 
-    lda.l   tad_nextCommand_id__
+    lda.l   tadPrivate_nextCommand_id
     bpl     @QueueFull
         xba
-        sta.l   tad_nextCommand_id__
+        sta.l   tadPrivate_nextCommand_id
 
         rep     #$20
     .accu 16
@@ -1701,17 +1703,17 @@ tad__Command_A__Test_OneParameter__:
     sep     #$20
 .accu 8
 
-    ; Cannot use `bit tad_nextCommand_id__` here, DB is unknown
+    ; Cannot use `bit tadPrivate_nextCommand_id` here, DB is unknown
     ; Temporarily Save it in B
     xba
 
-    lda.l   tad_nextCommand_id__
+    lda.l   tadPrivate_nextCommand_id
     bpl     @QueueFull
         xba
-        sta.l   tad_nextCommand_id__
+        sta.l   tadPrivate_nextCommand_id
 
         lda     _stack_arg_offset,s
-        sta.l   tad_nextCommand_parameter0__
+        sta.l   tadPrivate_nextCommand_parameter0
 
         rep     #$20
     .accu 16
@@ -1751,20 +1753,20 @@ tad__Command_A__Test_TwoParameters__:
     sep     #$20
 .accu 8
 
-    ; Cannot use `bit tad_nextCommand_id__` here, DB is unknown
+    ; Cannot use `bit tadPrivate_nextCommand_id` here, DB is unknown
     ; Temporarily Save it in B
     xba
 
-    lda.l   tad_nextCommand_id__
+    lda.l   tadPrivate_nextCommand_id
     bpl     @QueueFull
         xba
-        sta.l   tad_nextCommand_id__
+        sta.l   tadPrivate_nextCommand_id
 
         lda     _stack_arg_offset + 0,s
-        sta.l   tad_nextCommand_parameter0__
+        sta.l   tadPrivate_nextCommand_parameter0
 
         lda     _stack_arg_offset + 1,s
-        sta.l   tad_nextCommand_parameter1__
+        sta.l   tadPrivate_nextCommand_parameter1
 
         rep     #$20
     .accu 16
@@ -1801,7 +1803,7 @@ tad__Command_A__Override_NoParameter__:
     __Push__A8_noX_noY
 .accu 8
 
-    sta.l   tad_nextCommand_id__
+    sta.l   tadPrivate_nextCommand_id
 
     __PopReturn_noX_noY
 .ends
@@ -1822,10 +1824,10 @@ tad__Command_A__Override_NoParameter__:
 tad__Command_A__Override_OneParameter__:
     __Push__A8_noX_noY
 
-    sta.l   tad_nextCommand_id__
+    sta.l   tadPrivate_nextCommand_id
 
     lda     _stack_arg_offset,s
-    sta.l   tad_nextCommand_parameter0__
+    sta.l   tadPrivate_nextCommand_parameter0
 
     __PopReturn_noX_noY
 .ends
@@ -1847,13 +1849,13 @@ tad__Command_A__Override_OneParameter__:
 tad__Command_A__Override_TwoParameters__:
     __Push__A8_noX_noY
 
-    sta.l   tad_nextCommand_id__
+    sta.l   tadPrivate_nextCommand_id
 
     lda     _stack_arg_offset + 0,s
-    sta.l   tad_nextCommand_parameter0__
+    sta.l   tadPrivate_nextCommand_parameter0
 
     lda     _stack_arg_offset + 1,s
-    sta.l   tad_nextCommand_parameter1__
+    sta.l   tadPrivate_nextCommand_parameter1
 
     __PopReturn_noX_noY
 .ends
@@ -1879,7 +1881,7 @@ tad__Command_A__Override_TwoParameters__:
 .ramsection "tad_variables" BANK $0 SLOT 1 WINDOW $0100 $1400
     ;; The current audio driver state
     ;; (`State` enum)
-    tad_state__: db
+    tadPrivate_state: db
 
     ;; `Flags` bitfield
     ;; (public, see `Flags` namespace)
@@ -1892,24 +1894,24 @@ tad__Command_A__Override_TwoParameters__:
     ;; Number of bytes to transfer per `tad_process` call
     ;;
     ;; MUST be > 0
-    tad_bytesToTransferPerFrame__: dw
+    tadPrivate_bytesToTransferPerFrame: dw
 
     ;; The previous `IO_ToScpu::COMMAND_PORT` sent to the S-SMP audio driver.
-    tad_previousCommand__: db
+    tadPrivate_previousCommand: db
 
 
 ;; ---------------------------------------------------
 ;; Queue 1 - remaining data to transfer into Audio-RAM
 ;; ---------------------------------------------------
     ;; A far pointer to the remaining data to transfer
-    tad_dataToTransfer_addr__: dw
-    tad_dataToTransfer_bank__: db
+    tadPrivate_dataToTransfer_addr: dw
+    tadPrivate_dataToTransfer_bank: db
 
     ;; The remaining number of bytes to transfer
-    tad_dataToTransfer_size__: dw
+    tadPrivate_dataToTransfer_size: dw
 
     ;; The previous value written to the loader spinLock
-    tad_dataToTransfer_prevSpinLock__: db
+    tadPrivate_dataToTransfer_prevSpinLock: db
 
 
 ;; ----------------------------------------------
@@ -1918,7 +1920,7 @@ tad__Command_A__Override_TwoParameters__:
     ;; The next song to load into Audio-RAM
     ;; Used by the `WAITING_FOR_LOADER_*` states
     ;; If this value is 0 or an invalid song, a blank silent song will be loaded instead.
-    tad_nextSong__: db
+    tadPrivate_nextSong: db
 
 
 ;; ------------------------------------------------------
@@ -1926,11 +1928,11 @@ tad__Command_A__Override_TwoParameters__:
 ;; ------------------------------------------------------
     ;; The next `Command` to send to the audio driver.
     ;; If this value is negative, the queue is empty.
-    tad_nextCommand_id__: db
+    tadPrivate_nextCommand_id: db
 
     ;; The two parameters of the next command (if any)
-    tad_nextCommand_parameter0__: db
-    tad_nextCommand_parameter1__: db
+    tadPrivate_nextCommand_parameter0: db
+    tadPrivate_nextCommand_parameter1: db
 
 
 ;; ---------------------------------------

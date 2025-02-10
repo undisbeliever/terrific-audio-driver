@@ -35,5 +35,5 @@
 
 
 ; Export command queue so tests can read it
-.export Tad_nextCommand_id, Tad_nextCommand_parameter0, Tad_nextCommand_parameter1
+.export TadPrivate_nextCommand_id, TadPrivate_nextCommand_parameter0, TadPrivate_nextCommand_parameter1
 

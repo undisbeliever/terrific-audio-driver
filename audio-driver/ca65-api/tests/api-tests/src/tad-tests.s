@@ -31,7 +31,7 @@
 
 .export RunTests
 
-.import Tad_nextCommand_id, Tad_nextCommand_parameter0, Tad_nextCommand_parameter1
+.import TadPrivate_nextCommand_id, TadPrivate_nextCommand_parameter0, TadPrivate_nextCommand_parameter1
 
 
 .bss
@@ -723,22 +723,22 @@ TestTable_SIZE = * - TestTable
     ; Test command id has been masked
     lda     #$ff
     assert_carry    Tad_QueueCommand, true
-    assert_u8_var_eq Tad_nextCommand_id, #%11110
+    assert_u8_var_eq TadPrivate_nextCommand_id, #%11110
 
     ; Clear command id
     lda     #0
     jsr     Tad_QueueCommandOverride
-    assert_u8_var_eq Tad_nextCommand_id, #%0
+    assert_u8_var_eq TadPrivate_nextCommand_id, #%0
 
     ; Test command id has changed and is masked
     lda     #$ff
     assert_carry    Tad_QueueCommandOverride, true
-    assert_u8_var_eq Tad_nextCommand_id, #%11110
+    assert_u8_var_eq TadPrivate_nextCommand_id, #%11110
 
     ; Test command id is unchanged
     lda     #0
     assert_carry    Tad_QueueCommand, false
-    assert_u8_var_eq Tad_nextCommand_id, #%11110
+    assert_u8_var_eq TadPrivate_nextCommand_id, #%11110
 
     rts
 .endproc
@@ -748,26 +748,26 @@ TestTable_SIZE = * - TestTable
 .i16
 ;; DB access lowram
 .proc   TestQueueCommandWithTwoParameters_i16
-    stz     Tad_nextCommand_parameter0
-    stz     Tad_nextCommand_parameter1
+    stz     TadPrivate_nextCommand_parameter0
+    stz     TadPrivate_nextCommand_parameter1
 
 
     lda     #TadCommand::SET_GLOBAL_VOLUMES
     ldx     #$ff12
     ldy     #$ff34
     assert_carry    Tad_QueueCommand, true
-    assert_u8_var_eq Tad_nextCommand_id, #TadCommand::SET_GLOBAL_VOLUMES
-    assert_u8_var_eq Tad_nextCommand_parameter0, #$12
-    assert_u8_var_eq Tad_nextCommand_parameter1, #$34
+    assert_u8_var_eq TadPrivate_nextCommand_id, #TadCommand::SET_GLOBAL_VOLUMES
+    assert_u8_var_eq TadPrivate_nextCommand_parameter0, #$12
+    assert_u8_var_eq TadPrivate_nextCommand_parameter1, #$34
 
 
     lda     #TadCommand::PLAY_SOUND_EFFECT
     ldx     #$ffaa
     ldy     #$ffbb
     assert_carry    Tad_QueueCommandOverride, true
-    assert_u8_var_eq Tad_nextCommand_id, #TadCommand::PLAY_SOUND_EFFECT
-    assert_u8_var_eq Tad_nextCommand_parameter0, #$aa
-    assert_u8_var_eq Tad_nextCommand_parameter1, #$bb
+    assert_u8_var_eq TadPrivate_nextCommand_id, #TadCommand::PLAY_SOUND_EFFECT
+    assert_u8_var_eq TadPrivate_nextCommand_parameter0, #$aa
+    assert_u8_var_eq TadPrivate_nextCommand_parameter1, #$bb
 
     rts
 .endproc
@@ -779,26 +779,26 @@ TestTable_SIZE = * - TestTable
 .proc   TestQueueCommandWithTwoParameters_i8
     sep     #$30
 .i8
-    stz     Tad_nextCommand_parameter0
-    stz     Tad_nextCommand_parameter1
+    stz     TadPrivate_nextCommand_parameter0
+    stz     TadPrivate_nextCommand_parameter1
 
 
     lda     #TadCommand::SET_GLOBAL_VOLUMES
     ldx     #$12
     ldy     #$34
     assert_carry    Tad_QueueCommand, true
-    assert_u8_var_eq Tad_nextCommand_id, #TadCommand::SET_GLOBAL_VOLUMES
-    assert_u8_var_eq Tad_nextCommand_parameter0, #$12
-    assert_u8_var_eq Tad_nextCommand_parameter1, #$34
+    assert_u8_var_eq TadPrivate_nextCommand_id, #TadCommand::SET_GLOBAL_VOLUMES
+    assert_u8_var_eq TadPrivate_nextCommand_parameter0, #$12
+    assert_u8_var_eq TadPrivate_nextCommand_parameter1, #$34
 
 
     lda     #TadCommand::PLAY_SOUND_EFFECT
     ldx     #$aa
     ldy     #$bb
     assert_carry    Tad_QueueCommandOverride, true
-    assert_u8_var_eq Tad_nextCommand_id, #TadCommand::PLAY_SOUND_EFFECT
-    assert_u8_var_eq Tad_nextCommand_parameter0, #$aa
-    assert_u8_var_eq Tad_nextCommand_parameter1, #$bb
+    assert_u8_var_eq TadPrivate_nextCommand_id, #TadCommand::PLAY_SOUND_EFFECT
+    assert_u8_var_eq TadPrivate_nextCommand_parameter0, #$aa
+    assert_u8_var_eq TadPrivate_nextCommand_parameter1, #$bb
 
     rts
 .endproc

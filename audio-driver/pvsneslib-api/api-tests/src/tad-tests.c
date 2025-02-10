@@ -48,8 +48,8 @@ extern u8 DummySongData_Part1;
 
 // from tad-audio.asm
 extern u8 tad_nextCommand_id__;
-extern u8 tad_nextCommand_parameter0__;
-extern u8 tad_nextCommand_parameter1__;
+extern u8 tadPrivate_nextCommand_parameter0;
+extern u8 tadPrivate_nextCommand_parameter1;
 
 
 // from main.c
@@ -432,26 +432,26 @@ void test_queueCommandOverride(void) {
 // Skipped TestQueueCommandIdIsMasked (no command_id parameter in queue command functions)
 
 void test_queueCommandWithOneParameter(void) {
-    tad_nextCommand_parameter0__ = 0;
+    tadPrivate_nextCommand_parameter0 = 0;
 
     ASSERT_EQ(tad_queueCommand_setMusicChannels(10), true);
-    ASSERT_EQ(tad_nextCommand_parameter0__, 10);
+    ASSERT_EQ(tadPrivate_nextCommand_parameter0, 10);
 
     tad_queueCommandOverride_setSongTempo(128);
-    ASSERT_EQ(tad_nextCommand_parameter0__, 128);
+    ASSERT_EQ(tadPrivate_nextCommand_parameter0, 128);
 }
 
 void test_queueCommandWithTwoParameters(void) {
-    tad_nextCommand_parameter0__ = 0;
-    tad_nextCommand_parameter1__ = 0;
+    tadPrivate_nextCommand_parameter0 = 0;
+    tadPrivate_nextCommand_parameter1 = 0;
 
     ASSERT_EQ(tad_queueCommand_setGlobalVolumes(12, 34), true);
-    ASSERT_EQ(tad_nextCommand_parameter0__, 12);
-    ASSERT_EQ(tad_nextCommand_parameter1__, 34);
+    ASSERT_EQ(tadPrivate_nextCommand_parameter0, 12);
+    ASSERT_EQ(tadPrivate_nextCommand_parameter1, 34);
 
     tad_queueCommandOverride_setGlobalVolumes(0xaa, 0xbb);
-    ASSERT_EQ(tad_nextCommand_parameter0__, 0xaa);
-    ASSERT_EQ(tad_nextCommand_parameter1__, 0xbb);
+    ASSERT_EQ(tadPrivate_nextCommand_parameter0, 0xaa);
+    ASSERT_EQ(tadPrivate_nextCommand_parameter1, 0xbb);
 }
 
 void test_pauseCommand_1(void) {
