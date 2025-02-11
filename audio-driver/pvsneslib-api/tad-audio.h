@@ -42,8 +42,7 @@
  * The audio-data loaded by the loadAudioData() callback have additional lifetime requirements
  * that must be met.  See the loadAudioData() documentation for more details.
  *
- * All functions and variables in `tad-audio.asm` ending in a double-underscore (__)
- * or starting the `tadPrivate_` are private:
+ * All functions and variables in `tad-audio.asm` that are prefixed with `tadPrivate_` are private:
  *  * Calling a private subroutine can cause a crash as they do not honor the PVSnesLib ABI.
  *  * Modifying a private variable can cause a state mismatch or deadlock.
  *

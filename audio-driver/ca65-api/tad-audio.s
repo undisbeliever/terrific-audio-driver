@@ -455,7 +455,7 @@ TAD__FIRST_LOADING_SONG_STATE = TadState::LOADING_SONG_DATA_PAUSED
 ;; A8
 ;; I16
 ;; DB access registers
-.macro __Tad_Loader_TransferLoaderViaIpl
+.macro TadPrivate_Loader_TransferLoaderViaIpl
     .assert .asize = 8, error
     .assert .isize = 16, error
 
@@ -532,7 +532,7 @@ APUIO3 = $2143
 .a8
 .i16
 ;; DB access registers
-.proc _Tad_Loader_CheckReadyAndSendLoaderDataType
+.proc TadPrivate_Loader_CheckReadyAndSendLoaderDataType
     ; Test if the loader is ready
     ldx     #TadIO_Loader_Init::LOADER_READY_HL
     cpx     TadIO_Loader_Init::READY_PORT_HL
@@ -567,7 +567,7 @@ ReturnFalse:
 .a8
 .i16
 ;; DB access registers
-.proc _Tad_Loader_SetDataToTransfer
+.proc TadPrivate_Loader_SetDataToTransfer
     stx     TadPrivate_dataToTransfer_addr
     sta     TadPrivate_dataToTransfer_bank
     sty     TadPrivate_dataToTransfer_size
@@ -588,7 +588,7 @@ ReturnFalse:
 .a8
 .i16
 ;; DB access lowram
-.proc _Tad_Loader_TransferData
+.proc TadPrivate_Loader_TransferData
     ; Early exit if the loader is not ready
     ;
     ; This test doubles as a lock for the previous transfer.
@@ -719,13 +719,13 @@ ReturnFalse:
 
 
 @BankOverflow_1:
-    jsr     __Tad_Loader_GotoNextBank
+    jsr     TadPrivate_Loader_GotoNextBank
     bra     @BankOverflow_1_Resume
 
 @BankOverflow_2:
     ; Must save/restore A, it holds the spinlock
     pha
-        jsr     __Tad_Loader_GotoNextBank
+        jsr     TadPrivate_Loader_GotoNextBank
     pla
     bra     @BankOverflow_2_Resume
 .endproc
@@ -733,7 +733,7 @@ ReturnFalse:
 
 ;; Advance to the next bank
 ;;
-;; MUST only be called to _Tad_Loader_TransferData
+;; MUST only be called to TadPrivate_Loader_TransferData
 ;;
 ;; ASSUMES: Y = 0 (Y addr overflowed to 0)
 ;;
@@ -747,7 +747,7 @@ ReturnFalse:
 .a8
 .i16
 ;; DB = TadPrivate_dataToTransfer_bank
-.proc __Tad_Loader_GotoNextBank
+.proc TadPrivate_Loader_GotoNextBank
     phb
     pla
 
@@ -787,7 +787,7 @@ ReturnFalse:
 
 ;; OUT: carry set if state is LOADING_*
 ;; A8
-.macro __Tad_IsLoaderActive
+.macro TadPrivate_IsLoaderActive
     .assert .asize = 8, error
 
     .assert TadState::NULL < TAD__FIRST_LOADING_STATE, error
@@ -825,7 +825,7 @@ ReturnFalse:
     plb
 ; DB = $80
 
-    __Tad_Loader_TransferLoaderViaIpl
+    TadPrivate_Loader_TransferLoaderViaIpl
 
     stz     Tad_audioMode
 
@@ -838,7 +838,7 @@ ReturnFalse:
     lda     #.bankbyte(Tad_AudioDriver_Bin)
     ldx     #.loword(Tad_AudioDriver_Bin)
     ldy     #Tad_AudioDriver_SIZE
-    jsr     _Tad_Loader_SetDataToTransfer
+    jsr     TadPrivate_Loader_SetDataToTransfer
 
     lda     #$ff
     sta     TadPrivate_nextCommand_id
@@ -848,11 +848,11 @@ ReturnFalse:
 
     @DataTypeLoop:
         lda     #TadLoaderDataType::CODE
-        jsr     _Tad_Loader_CheckReadyAndSendLoaderDataType
+        jsr     TadPrivate_Loader_CheckReadyAndSendLoaderDataType
         bcc     @DataTypeLoop
 
     @TransferLoop:
-        jsr     _Tad_Loader_TransferData
+        jsr     TadPrivate_Loader_TransferData
         bcc     @TransferLoop
 
     lda     #TadState::WAITING_FOR_LOADER_COMMON
@@ -875,7 +875,7 @@ ReturnFalse:
 .a8
 .i8
 ;; DB access lowram
-.macro __Tad_Process_SendCommand
+.macro TadPrivate_Process_SendCommand
     .assert .asize = 8, error
     .assert .isize = 8, error
 
@@ -924,7 +924,7 @@ ReturnFalse:
 ;; A8
 ;; I8
 ;; DB access lowram
-.macro __Tad_Process_SendSfxCommand
+.macro TadPrivate_Process_SendSfxCommand
     .assert .asize = 8, error
     .assert .isize = 8, error
 
@@ -989,7 +989,7 @@ ReturnFalse:
                 lda     Tad_sfxQueue_sfx
                 cmp     #$ff
                 beq     @Return_I8
-                    __Tad_Process_SendSfxCommand
+                    TadPrivate_Process_SendSfxCommand
 
         @Return_I8:
             rep     #$10
@@ -999,7 +999,7 @@ ReturnFalse:
         .a8
         .i8
         @SendCommand:
-            __Tad_Process_SendCommand
+            TadPrivate_Process_SendCommand
             rep     #$10
         .i16
             rtl
@@ -1011,9 +1011,9 @@ ReturnFalse:
         .assert TAD__FIRST_LOADING_STATE > TAD__FIRST_WAITING_STATE, error
         .assert TAD__FIRST_LOADING_STATE = TadState::WAITING_FOR_LOADER_SONG + 1, error
         cmp     #TAD__FIRST_LOADING_STATE
-        bcs     __Tad_Process_Loading
+        bcs     TadPrivate_Process_Loading
         cmp     #TAD__FIRST_WAITING_STATE
-        bcs     __Tad_Process_WaitingForLoader
+        bcs     TadPrivate_Process_WaitingForLoader
 
     ; TadState is null
     rtl
@@ -1027,11 +1027,11 @@ ReturnFalse:
 .a8
 .i16
 ;; DB access lowram
-.proc __Tad_Process_WaitingForLoader ; RTL
+.proc TadPrivate_Process_WaitingForLoader ; RTL
     phb
 
     ; Setting DB to access registers as it:
-    ;  * Simplifies `_Tad_Loader_CheckReadyAndSendLoaderDataType`
+    ;  * Simplifies `TadPrivate_Loader_CheckReadyAndSendLoaderDataType`
     ;  * Ensures `LoadAudioData` is called with a fixed data bank
     ;    (NOTE: `LoadAudioData` is tagged `DB access registers`)
     lda     #$80
@@ -1044,7 +1044,7 @@ ReturnFalse:
     bne     @SongData
         ; Common audio data
         lda     #TadLoaderDataType::COMMON_DATA
-        jsr     _Tad_Loader_CheckReadyAndSendLoaderDataType
+        jsr     TadPrivate_Loader_CheckReadyAndSendLoaderDataType
         bcc     @Return
 
         lda     #TadState::LOADING_COMMON_AUDIO_DATA
@@ -1080,7 +1080,7 @@ ReturnFalse:
 
         ora     Tad_flags
         ora     #TadLoaderDataType::SONG_DATA_FLAG
-        jsr     _Tad_Loader_CheckReadyAndSendLoaderDataType
+        jsr     TadPrivate_Loader_CheckReadyAndSendLoaderDataType
         bcc     @Return
 
         ; Determine next state
@@ -1114,7 +1114,7 @@ ReturnFalse:
     ; STACK holds next state
     ; A:X = data address
     ; Y = data size
-    jsr     _Tad_Loader_SetDataToTransfer
+    jsr     TadPrivate_Loader_SetDataToTransfer
 
     pla
     sta     TadPrivate_state
@@ -1133,8 +1133,8 @@ ReturnFalse:
 .a8
 .i16
 ;; DB access lowram
-.proc __Tad_Process_Loading ; RTL
-    jsr     _Tad_Loader_TransferData
+.proc TadPrivate_Process_Loading ; RTL
+    jsr     TadPrivate_Loader_TransferData
     bcc     @Return
         ; Data loaded successfully
         lda     TadPrivate_state
@@ -1183,9 +1183,9 @@ ReturnFalse:
 ; DB access lowram
 .proc Tad_FinishLoadingData : far
     @Loop:
-        __Tad_IsLoaderActive
+        TadPrivate_IsLoaderActive
         bcc     @EndLoop
-            jsl     __Tad_Process_Loading
+            jsl     TadPrivate_Process_Loading
         bra     @Loop
     @EndLoop:
 
@@ -1425,7 +1425,7 @@ Tad_QueueCommandOverride := Tad_QueueCommand::WriteCommand
 ; I unknown
 ; DB access lowram
 .proc Tad_IsLoaderActive
-    __Tad_IsLoaderActive
+    TadPrivate_IsLoaderActive
     rts
 .endproc
 

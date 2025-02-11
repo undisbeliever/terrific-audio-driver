@@ -55,19 +55,19 @@
 ;;
 ;; Variables that are prefixed with `tadPrivate_` are private and MUST NOT BE MODIFIED outside this file.
 ;;
-;; Functions and variables that end in a double-underscore are private and MUST NOT BE CALLED
-;; or MODIFIED outside of this file.
+;; Functions and variables that start with `tadPrivate_` are private and MUST NOT BE CALLED or MODIFIED
+;; outside of this file.
 ;;
 ;;
-;; To ensure this ABI is met, all public functions (not ending with a double-underscore `__`) MUST:
+;; To ensure this ABI is met, all public functions (not starting with `tadPrivate_`) MUST:
 ;;  * Have a single exit/return point
 ;;  * Never return directly
 ;;  * Invoke a `__Push__*` macro at the start of the function
 ;;  * Invoke a `__PopReturn_*` macro at the end of the function
 ;;
 ;;
-;; All functions and macros that end in a double-underscore `__` are called with a more
-;; assembly-friendly ABI that is documented at the function definition.
+;; All functions and macros that prefixed with `tadPrivate_` are called with a more assembly-friendly
+;; ABI that is documented at the function definition.
 ;;  * Subroutine and macros exit with the same register sizes and stack pointer it started with.
 ;;     * EXCEPTION: `__Push__*` and `__PopReturn_*` macros
 ;;  * A, X, Y are clobbered, unless there is a KEEP tag in the subroutine documentation.
@@ -304,7 +304,7 @@ TAD_Flags__ALL_FLAGS = TAD_Flags__RELOAD_COMMON_AUDIO_DATA | TAD_Flags__PLAY_SON
 ;; A8
 ;; I unknown
 ;; DB unknown
-.macro __Tad_IsLoaderActive__a8_far_carry__
+.macro tadPrivate_IsLoaderActive__a8_far_carry
     .assert TAD_State__NULL < TAD_FIRST_LOADING_STATE
     .assert TAD_State__WAITING_FOR_LOADER_COMMON < TAD_FIRST_LOADING_STATE
     .assert TAD_State__WAITING_FOR_LOADER_SONG < TAD_FIRST_LOADING_STATE
@@ -321,7 +321,7 @@ TAD_Flags__ALL_FLAGS = TAD_Flags__RELOAD_COMMON_AUDIO_DATA | TAD_Flags__PLAY_SON
 ;; A8
 ;; I unknown
 ;; DB = $80
-.macro __Tad_IsLoaderActive__a8_db80_carry__
+.macro tadPrivate_IsLoaderActive__a8_db80_carry
     .assert TAD_State__NULL < TAD_FIRST_LOADING_STATE
     .assert TAD_State__WAITING_FOR_LOADER_COMMON < TAD_FIRST_LOADING_STATE
     .assert TAD_State__WAITING_FOR_LOADER_SONG < TAD_FIRST_LOADING_STATE
@@ -552,7 +552,7 @@ TAD_Flags__ALL_FLAGS = TAD_Flags__RELOAD_COMMON_AUDIO_DATA | TAD_Flags__PLAY_SON
 ;; A8
 ;; I16
 ;; DB = 0x80
-.macro __Call_loadAudioData__return_carry__
+.macro tadPrivate_Call_loadAudioData__return_carry
     ; Push loadAudioData argument to stack
     pha
 
@@ -629,7 +629,7 @@ TAD_Flags__ALL_FLAGS = TAD_Flags__RELOAD_COMMON_AUDIO_DATA | TAD_Flags__PLAY_SON
 ;; A8
 ;; I16
 ;; DB = $80
-.macro _tad_loader_transferLoaderViaIpl__
+.macro tadPrivate_loader_transferLoaderViaIpl
 APUIO0 = $2140
 APUIO1 = $2141
 APUIO2 = $2142
@@ -699,7 +699,7 @@ APUIO3 = $2143
 .accu 8
 .index 16
 ;; DB = $80
-_tad_loader_checkReadyAndSendLoaderDataType__:
+tadPrivate_loader_checkReadyAndSendLoaderDataType:
     ; Test if the loader is ready
     ldx     #TAD_IO_Loader_Init__LOADER_READY_HL
     cpx     TAD_IO_Loader_Init__READY_PORT_HL
@@ -733,7 +733,7 @@ _tad_loader_checkReadyAndSendLoaderDataType__:
 .accu 8
 .index 16
 ;; DB = $80
-_tad_loader_setDataToTransfer__:
+tadPrivate_loader_setDataToTransfer:
     stx     tadPrivate_dataToTransfer_addr
     sta     tadPrivate_dataToTransfer_bank
     sty     tadPrivate_dataToTransfer_size
@@ -753,7 +753,7 @@ _tad_loader_setDataToTransfer__:
 .accu 8
 .index 16
 ;; DB = $80
-_tad_loader_transferData__:
+tadPrivate_loader_transferData:
     ; APUIO registers are accessed with direct-page addressing
     @__dp__DATA_PORT_L      = TAD_IO_Loader__DATA_PORT_L & 0xff
     @__dp__DATA_PORT_H      = TAD_IO_Loader__DATA_PORT_H & 0xff
@@ -889,13 +889,13 @@ _tad_loader_transferData__:
 
 
 @BankOverflow_1:
-    jsr     _tad_loader_gotoNextBank__
+    jsr     tadPrivate_loader_gotoNextBank
     bra     @BankOverflow_1_Resume
 
 @BankOverflow_2:
     ; Must save/restore A, it holds the spinlock
     pha
-        jsr     _tad_loader_gotoNextBank__
+        jsr     tadPrivate_loader_gotoNextBank
     pla
     bra     @BankOverflow_2_Resume
 
@@ -903,7 +903,7 @@ _tad_loader_transferData__:
 
 ;; Advance to the next bank
 ;;
-;; MUST only be called to _tad_loader_transferData
+;; MUST only be called to tadPrivate_loader_transferData
 ;;
 ;; ASSUMES: Y = 0 (Y addr overflowed to 0)
 ;;
@@ -918,7 +918,7 @@ _tad_loader_transferData__:
 .index 16
 ;; DB = tad_dataToTransfer_bank
 ;; D = $2100
-_tad_loader_gotoNextBank__:
+tadPrivate_loader_gotoNextBank:
     phb
     pla
 
@@ -971,7 +971,7 @@ _tad_loader_gotoNextBank__:
 ;; A8
 ;; I8
 ;; DB = $80
-.macro _Tad_Process_SendCommand__
+.macro tadPrivate_Process_SendCommand
     lda     tadPrivate_nextCommand_parameter0
     sta     TAD_IO_ToDriver__PARAMETER0_PORT
     lda     tadPrivate_nextCommand_parameter1
@@ -1016,7 +1016,7 @@ _tad_loader_gotoNextBank__:
 ;; A8
 ;; I8
 ;; DB = $80
-.macro _Tad_Process_SendSfxCommand__
+.macro tadPrivate_Process_SendSfxCommand
     ; parameter 0 = sfx_id
     sta     TAD_IO_ToDriver__PARAMETER0_PORT
 
@@ -1052,12 +1052,12 @@ _tad_loader_gotoNextBank__:
 ;; A8
 ;; I16
 ;; DB = $80
-.macro _Tad_Process_WaitingForLoader__
+.macro tadPrivate_Process_WaitingForLoader
     cmp     #TAD_State__WAITING_FOR_LOADER_COMMON
     bne     @WFL_SongData
         ; Common audio data
         lda     #TAD_LoaderDataType__COMMON_DATA
-        jsr     _tad_loader_checkReadyAndSendLoaderDataType__
+        jsr     tadPrivate_loader_checkReadyAndSendLoaderDataType
         bcc     @WFL_Return
 
         lda     #TAD_State__LOADING_COMMON_AUDIO_DATA
@@ -1093,7 +1093,7 @@ _tad_loader_gotoNextBank__:
 
         ora     tad_flags
         ora     #TAD_LoaderDataType__SONG_DATA_FLAG
-        jsr     _tad_loader_checkReadyAndSendLoaderDataType__
+        jsr     tadPrivate_loader_checkReadyAndSendLoaderDataType
         bcc     @WFL_Return
 
         ; Determine next state
@@ -1114,7 +1114,7 @@ _tad_loader_gotoNextBank__:
 @WFL_LoadData:
     ; STACK holds next state
     @_bytes_on_stack = 1
-    __Call_loadAudioData__return_carry__
+    tadPrivate_Call_loadAudioData__return_carry
     bcs     +
         ; `loadAudioData` returned data with a non-zero size
     @WFL_UseBlankSong:
@@ -1129,7 +1129,7 @@ _tad_loader_gotoNextBank__:
     ; STACK holds next state
     ; A:X = data address
     ; Y = data size
-    jsr     _tad_loader_setDataToTransfer__
+    jsr     tadPrivate_loader_setDataToTransfer
 
     pla
     sta     tadPrivate_state
@@ -1145,8 +1145,8 @@ _tad_loader_gotoNextBank__:
 .accu 8
 .index 16
 ;; DB = 0x80
-_tad_process__loading__:
-    jsr     _tad_loader_transferData__
+tadPrivate_process__loading:
+    jsr     tadPrivate_loader_transferData
     bcc     @Return
         ; Data loaded successfully
         lda     tadPrivate_state
@@ -1193,7 +1193,7 @@ _tad_process__loading__:
 ;; A8
 ;; I16
 ;; DB = 0x80
-.macro __Tad_Process__
+.macro tadPrivate_Process
     .assert TAD_State__PAUSED == $80
     .assert TAD_State__PLAYING > $80
 
@@ -1223,13 +1223,13 @@ _tad_process__loading__:
                 lda     tad_sfxQueue_sfx
                 cmp     #$ff
                 beq     @Return_I8
-                    _Tad_Process_SendSfxCommand__
+                    tadPrivate_Process_SendSfxCommand
                     bra     @Return_I8
 
         .accu 8
         .index 8
         @SendCommand:
-            _Tad_Process_SendCommand__
+            tadPrivate_Process_SendCommand
         @Return_I8:
             rep     #$10
         .index 16
@@ -1249,11 +1249,11 @@ _tad_process__loading__:
         bcs     @WaitingForLoader
         jmp     @Return_I16
             @Loading:
-                jsr     _tad_process__loading__
+                jsr     tadPrivate_process__loading
                 bra     @Return_I16
 
             @WaitingForLoader:
-                _Tad_Process_WaitingForLoader__
+                tadPrivate_Process_WaitingForLoader
 
 // A 8
 // I 16
@@ -1273,7 +1273,7 @@ tad_init:
 .index 16
 // DB = $80
 
-    _tad_loader_transferLoaderViaIpl__
+    tadPrivate_loader_transferLoaderViaIpl
 
     stz     tad_audioMode
 
@@ -1286,7 +1286,7 @@ tad_init:
     lda     #:Tad_AudioDriver_Bin
     ldx     #Tad_AudioDriver_Bin
     ldy     #Tad_AudioDriver_SIZE
-    jsr     _tad_loader_setDataToTransfer__
+    jsr     tadPrivate_loader_setDataToTransfer
 
     lda     #$ff
     sta     tadPrivate_nextCommand_id
@@ -1296,11 +1296,11 @@ tad_init:
 
     @DataTypeLoop:
         lda     #TAD_LoaderDataType__CODE
-        jsr     _tad_loader_checkReadyAndSendLoaderDataType__
+        jsr     tadPrivate_loader_checkReadyAndSendLoaderDataType
         bcc     @DataTypeLoop
 
     @TransferLoop:
-        jsr     _tad_loader_transferData__
+        jsr     tadPrivate_loader_transferData
         bcc     @TransferLoop
 
     lda     #TAD_State__WAITING_FOR_LOADER_COMMON
@@ -1317,7 +1317,7 @@ tad_process:
 .index 16
 // DB = $80
 
-    __Tad_Process__
+    tadPrivate_Process
 
     __PopReturn_X16_Y16_DB_80
 
@@ -1331,9 +1331,9 @@ tad_finishLoadingData:
 // DB = $80
 
     @Loop:
-        __Tad_IsLoaderActive__a8_db80_carry__
+        tadPrivate_IsLoaderActive__a8_db80_carry
         bcc     @EndLoop
-            jsr     _tad_process__loading__
+            jsr     tadPrivate_process__loading
         bra     @Loop
     @EndLoop:
 
@@ -1513,7 +1513,7 @@ tad_setTransferSize:
 ;; Set/Clear Flags functions
 ;; -------------------------
 
-.macro __Tad_FlagFunction args NAME, FLAG, STATE
+.macro _TadPrivate_FlagFunction args NAME, FLAG, STATE
     .section "\1" SUPERFREE
     ; void \1(void)
     \1:
@@ -1532,11 +1532,11 @@ tad_setTransferSize:
     .ends
 .endm
 
-__Tad_FlagFunction tad_reloadCommonAudioData            RELOAD_COMMON_AUDIO_DATA            1
-__Tad_FlagFunction tad_songsStartImmediately            PLAY_SONG_IMMEDIATELY               1
-__Tad_FlagFunction tad_songsStartPaused                 PLAY_SONG_IMMEDIATELY               0
-__Tad_FlagFunction tad_globalVolumesResetOnSongStart    RESET_GLOBAL_VOLUMES_ON_SONG_START  1
-__Tad_FlagFunction tad_globalVolumesPersist             RESET_GLOBAL_VOLUMES_ON_SONG_START  0
+_TadPrivate_FlagFunction tad_reloadCommonAudioData            RELOAD_COMMON_AUDIO_DATA            1
+_TadPrivate_FlagFunction tad_songsStartImmediately            PLAY_SONG_IMMEDIATELY               1
+_TadPrivate_FlagFunction tad_songsStartPaused                 PLAY_SONG_IMMEDIATELY               0
+_TadPrivate_FlagFunction tad_globalVolumesResetOnSongStart    RESET_GLOBAL_VOLUMES_ON_SONG_START  1
+_TadPrivate_FlagFunction tad_globalVolumesPersist             RESET_GLOBAL_VOLUMES_ON_SONG_START  0
 
 
 
@@ -1551,7 +1551,7 @@ __Tad_FlagFunction tad_globalVolumesPersist             RESET_GLOBAL_VOLUMES_ON_
 tad_isLoaderActive:
     __Push__A8_noX_noY
 
-    __Tad_IsLoaderActive__a8_far_carry__
+    tadPrivate_IsLoaderActive__a8_far_carry
 
     __PopReturn_noX_noY__bool_in_carry
 .ends
@@ -1608,42 +1608,42 @@ tad_isSongPlaying:
 ;; Queue IO Command Functions
 ;; --------------------------
 
-.macro _Tad_QueueCommandFunction args NAME TYPE PARAMETER COMMAND_ID
+.macro _TadPrivate_QueueCommandFunction args NAME TYPE PARAMETER COMMAND_ID
     .section "\1" SUPERFREE
         \1:
             ; A size is unknown
             ;   in 8 bit mode, it reads `lda $cc` and `nop`
-            ;   in 16 bit mode, it reads `lda #$eacc`, which is masked in tad__QueueCommand_with_param__
+            ;   in 16 bit mode, it reads `lda #$eacc`, which is masked in `tadPrivate_Command_A__*_Parameter*`
             lda.b   #TAD_Command__\4
             nop
-            jmp.l   tad__Command_A__\2_\3__
+            jmp.l   tadPrivate_Command_A__\2_\3
     .ends
 .endm
 
-_Tad_QueueCommandFunction tad_queueCommand_pause                        Test        NoParameter     PAUSE
-_Tad_QueueCommandFunction tad_queueCommand_pauseMusicPlaySfx            Test        NoParameter     PAUSE_MUSIC_PLAY_SFX
-_Tad_QueueCommandFunction tad_queueCommand_unpause                      Test        NoParameter     UNPAUSE
-_Tad_QueueCommandFunction tad_queueCommand_stopSoundEffects             Test        NoParameter     STOP_SOUND_EFFECTS
-_Tad_QueueCommandFunction tad_queueCommand_setMainVolume                Test        OneParameter    SET_MAIN_VOLUME
-_Tad_QueueCommandFunction tad_queueCommand_setMusicChannels             Test        OneParameter    SET_MUSIC_CHANNELS
-_Tad_QueueCommandFunction tad_queueCommand_setSongTempo                 Test        OneParameter    SET_SONG_TEMPO
-_Tad_QueueCommandFunction tad_queueCommand_setGlobalMusicVolume         Test        OneParameter    SET_GLOBAL_MUSIC_VOLUME
-_Tad_QueueCommandFunction tad_queueCommand_setGlobalSfxVolume           Test        OneParameter    SET_GLOBAL_SFX_VOLUME
-_Tad_QueueCommandFunction tad_queueCommand_setGlobalVolumes             Test        TwoParameters   SET_GLOBAL_VOLUMES
+_TadPrivate_QueueCommandFunction tad_queueCommand_pause                        Test        NoParameter     PAUSE
+_TadPrivate_QueueCommandFunction tad_queueCommand_pauseMusicPlaySfx            Test        NoParameter     PAUSE_MUSIC_PLAY_SFX
+_TadPrivate_QueueCommandFunction tad_queueCommand_unpause                      Test        NoParameter     UNPAUSE
+_TadPrivate_QueueCommandFunction tad_queueCommand_stopSoundEffects             Test        NoParameter     STOP_SOUND_EFFECTS
+_TadPrivate_QueueCommandFunction tad_queueCommand_setMainVolume                Test        OneParameter    SET_MAIN_VOLUME
+_TadPrivate_QueueCommandFunction tad_queueCommand_setMusicChannels             Test        OneParameter    SET_MUSIC_CHANNELS
+_TadPrivate_QueueCommandFunction tad_queueCommand_setSongTempo                 Test        OneParameter    SET_SONG_TEMPO
+_TadPrivate_QueueCommandFunction tad_queueCommand_setGlobalMusicVolume         Test        OneParameter    SET_GLOBAL_MUSIC_VOLUME
+_TadPrivate_QueueCommandFunction tad_queueCommand_setGlobalSfxVolume           Test        OneParameter    SET_GLOBAL_SFX_VOLUME
+_TadPrivate_QueueCommandFunction tad_queueCommand_setGlobalVolumes             Test        TwoParameters   SET_GLOBAL_VOLUMES
 
-_Tad_QueueCommandFunction tad_queueCommandOverride_pause                Override    NoParameter     PAUSE
-_Tad_QueueCommandFunction tad_queueCommandOverride_pauseMusicPlaySfx    Override    NoParameter     PAUSE_MUSIC_PLAY_SFX
-_Tad_QueueCommandFunction tad_queueCommandOverride_unpause              Override    NoParameter     UNPAUSE
-_Tad_QueueCommandFunction tad_queueCommandOverride_stopSoundEffects     Override    NoParameter     STOP_SOUND_EFFECTS
-_Tad_QueueCommandFunction tad_queueCommandOverride_setMainVolume        Override    OneParameter    SET_MAIN_VOLUME
-_Tad_QueueCommandFunction tad_queueCommandOverride_setMusicChannels     Override    OneParameter    SET_MUSIC_CHANNELS
-_Tad_QueueCommandFunction tad_queueCommandOverride_setSongTempo         Override    OneParameter    SET_SONG_TEMPO
-_Tad_QueueCommandFunction tad_queueCommandOverride_setGlobalMusicVolume Override    OneParameter    SET_GLOBAL_MUSIC_VOLUME
-_Tad_QueueCommandFunction tad_queueCommandOverride_setGlobalSfxVolume   Override    OneParameter    SET_GLOBAL_SFX_VOLUME
-_Tad_QueueCommandFunction tad_queueCommandOverride_setGlobalVolumes     Override    TwoParameters   SET_GLOBAL_VOLUMES
+_TadPrivate_QueueCommandFunction tad_queueCommandOverride_pause                Override    NoParameter     PAUSE
+_TadPrivate_QueueCommandFunction tad_queueCommandOverride_pauseMusicPlaySfx    Override    NoParameter     PAUSE_MUSIC_PLAY_SFX
+_TadPrivate_QueueCommandFunction tad_queueCommandOverride_unpause              Override    NoParameter     UNPAUSE
+_TadPrivate_QueueCommandFunction tad_queueCommandOverride_stopSoundEffects     Override    NoParameter     STOP_SOUND_EFFECTS
+_TadPrivate_QueueCommandFunction tad_queueCommandOverride_setMainVolume        Override    OneParameter    SET_MAIN_VOLUME
+_TadPrivate_QueueCommandFunction tad_queueCommandOverride_setMusicChannels     Override    OneParameter    SET_MUSIC_CHANNELS
+_TadPrivate_QueueCommandFunction tad_queueCommandOverride_setSongTempo         Override    OneParameter    SET_SONG_TEMPO
+_TadPrivate_QueueCommandFunction tad_queueCommandOverride_setGlobalMusicVolume Override    OneParameter    SET_GLOBAL_MUSIC_VOLUME
+_TadPrivate_QueueCommandFunction tad_queueCommandOverride_setGlobalSfxVolume   Override    OneParameter    SET_GLOBAL_SFX_VOLUME
+_TadPrivate_QueueCommandFunction tad_queueCommandOverride_setGlobalVolumes     Override    TwoParameters   SET_GLOBAL_VOLUMES
 
 
-.section "tad__Command_A__Test_NoParameter__" SUPERFREE
+.section "tadPrivate_Command_A__Test_NoParameter" SUPERFREE
 ; MUST NOT be called by tcc
 ;
 ; IN: A = command (bit 8 MUST be clear)
@@ -1653,7 +1653,7 @@ _Tad_QueueCommandFunction tad_queueCommandOverride_setGlobalVolumes     Override
 ; A unknown
 ; I unknown
 ; DB unknown
-tad__Command_A__Test_NoParameter__:
+tadPrivate_Command_A__Test_NoParameter:
     __Push__A8_noX_noY
 .accu 8
 
@@ -1686,7 +1686,7 @@ tad__Command_A__Test_NoParameter__:
 .ends
 
 
-.section "tad__Command_A__Test_OneParameter__" SUPERFREE
+.section "tadPrivate_Command_A__Test_OneParameter" SUPERFREE
 ; MUST NOT be called by tcc
 ;
 ; IN: A = command (bit 8 MUST be clear)
@@ -1697,7 +1697,7 @@ tad__Command_A__Test_NoParameter__:
 ; A unknown
 ; I unknown
 ; DB unknown
-tad__Command_A__Test_OneParameter__:
+tadPrivate_Command_A__Test_OneParameter:
     __Push__A8_noX_noY
 
     sep     #$20
@@ -1735,7 +1735,7 @@ tad__Command_A__Test_OneParameter__:
 .ends
 
 
-.section "tad__Command_A__Test_TwoParameters__" SUPERFREE
+.section "tadPrivate_Command_A__Test_TwoParameters" SUPERFREE
 ; MUST NOT be called by tcc
 ;
 ; IN: A = command (bit 8 MUST be clear)
@@ -1747,7 +1747,7 @@ tad__Command_A__Test_OneParameter__:
 ; A unknown
 ; I unknown
 ; DB unknown
-tad__Command_A__Test_TwoParameters__:
+tadPrivate_Command_A__Test_TwoParameters:
     __Push__A8_noX_noY
 
     sep     #$20
@@ -1789,7 +1789,7 @@ tad__Command_A__Test_TwoParameters__:
 
 
 
-.section "tad__Command_A__Override_NoParameter__" SUPERFREE
+.section "tadPrivate_Command_A__Override_NoParameter" SUPERFREE
 ; MUST NOT be called by tcc
 ;
 ; IN: A = command (bit 8 MUST be clear)
@@ -1799,7 +1799,7 @@ tad__Command_A__Test_TwoParameters__:
 ; A unknown
 ; I unknown
 ; DB unknown
-tad__Command_A__Override_NoParameter__:
+tadPrivate_Command_A__Override_NoParameter:
     __Push__A8_noX_noY
 .accu 8
 
@@ -1810,7 +1810,7 @@ tad__Command_A__Override_NoParameter__:
 
 
 
-.section "tad__Command_A__Override_OneParameter__" SUPERFREE
+.section "tadPrivate_Command_A__Override_OneParameter" SUPERFREE
 ; MUST NOT be called by tcc
 ;
 ; IN: A = command (bit 8 MUST be clear)
@@ -1821,7 +1821,7 @@ tad__Command_A__Override_NoParameter__:
 ; A unknown
 ; I unknown
 ; DB unknown
-tad__Command_A__Override_OneParameter__:
+tadPrivate_Command_A__Override_OneParameter:
     __Push__A8_noX_noY
 
     sta.l   tadPrivate_nextCommand_id
@@ -1834,7 +1834,7 @@ tad__Command_A__Override_OneParameter__:
 
 
 
-.section "tad__Command_A__Override_TwoParameters__" SUPERFREE
+.section "tadPrivate_Command_A__Override_TwoParameters" SUPERFREE
 ; MUST NOT be called by tcc
 ;
 ; IN: A = command (bit 8 MUST be clear)
@@ -1846,7 +1846,7 @@ tad__Command_A__Override_OneParameter__:
 ; A unknown
 ; I unknown
 ; DB unknown
-tad__Command_A__Override_TwoParameters__:
+tadPrivate_Command_A__Override_TwoParameters:
     __Push__A8_noX_noY
 
     sta.l   tadPrivate_nextCommand_id
