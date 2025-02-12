@@ -792,13 +792,17 @@ impl InstrumentState {
         }
     }
 
-    fn merge_subroutine(&mut self, subroutine: &Self) {
+    fn merge_subroutine(&mut self, subroutine: &Self, context: &BytecodeContext) {
         match &subroutine {
             Self::Unset => (),
             Self::Known(..) | Self::Unknown => *self = subroutine.clone(),
 
             Self::Hint(..) => match self {
-                InstrumentState::Unset => *self = subroutine.clone(),
+                InstrumentState::Unset => {
+                    if context.is_subroutine() {
+                        *self = subroutine.clone();
+                    }
+                }
 
                 InstrumentState::Hint(..)
                 | InstrumentState::Unknown
@@ -1069,10 +1073,10 @@ impl State {
         // No maybe prev_slurred_note state
     }
 
-    fn merge_subroutine(&mut self, subroutine: &SubroutineId) {
+    fn merge_subroutine(&mut self, subroutine: &SubroutineId, context: &BytecodeContext) {
         let s: &Self = &subroutine.state;
 
-        self.instrument.merge_subroutine(&s.instrument);
+        self.instrument.merge_subroutine(&s.instrument, context);
         self.envelope.merge_subroutine(&s.envelope);
         self.prev_temp_gain.merge_subroutine(&s.prev_temp_gain);
         self.early_release.merge_subroutine(&s.early_release);
@@ -2073,7 +2077,7 @@ impl<'a> Bytecode<'a> {
 
         let old_instrument = self.state.instrument.clone();
 
-        self.state.merge_subroutine(subroutine);
+        self.state.merge_subroutine(subroutine, &self.context);
 
         if let Some(sub_hint_freq) = subroutine.instrument_hint_freq() {
             match old_instrument {

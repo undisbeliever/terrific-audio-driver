@@ -875,3 +875,20 @@ fn nested_loops_and_envelope_4() {
         ],
     );
 }
+
+#[test]
+fn instrument_hint_and_song_loop_panic_bugfix() {
+    // "hint in song-loop" panic in compiler::bytecode::InstrumentState::demote_to_song_loop()
+    // found using rust-fuzz
+    assert_one_error_in_channel_a_mml(
+        r##"
+@0 dummy_instrument
+
+!s ?@0 a
+
+A r !s L r
+"##,
+        5,
+        BytecodeError::SubroutineInstrumentHintNoInstrumentSet.into(),
+    );
+}
