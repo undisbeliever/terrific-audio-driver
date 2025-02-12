@@ -30,7 +30,7 @@ pub(crate) use identifier::{IdentifierBuf, IdentifierStr};
 use line_splitter::split_mml_sfx_subroutines_header_lines;
 use tokenizer::MmlTokens;
 
-use crate::data::{self, TextFile, UniqueNamesList};
+use crate::data::{self, UniqueNamesList};
 use crate::driver_constants::{MAX_SFX_SUBROUTINES, N_MUSIC_CHANNELS};
 use crate::echo::EchoEdl;
 use crate::errors::{
@@ -128,20 +128,21 @@ impl MmlPrefixData {
 }
 
 pub fn compile_mml(
-    mml_file: &TextFile,
+    mml: &str,
+    file_name: &str,
     song_name: Option<data::Name>,
     data_instruments: &UniqueNamesList<data::InstrumentOrSample>,
     pitch_table: &PitchTable,
 ) -> Result<SongData, SongError> {
     let mut errors = MmlCompileErrors {
         song_name,
-        file_name: mml_file.file_name.clone(),
+        file_name: file_name.to_owned(),
         line_errors: Vec::new(),
         subroutine_errors: Vec::new(),
         channel_errors: Vec::new(),
     };
 
-    let lines = match split_mml_song_lines(&mml_file.contents) {
+    let lines = match split_mml_song_lines(mml) {
         Ok(l) => l,
         Err(e) => {
             errors.line_errors.extend(e);
@@ -180,7 +181,7 @@ pub fn compile_mml(
     let mut compiler = MmlSongBytecodeGenerator::new(
         metadata.zenlen,
         pitch_table,
-        &mml_file.contents,
+        mml,
         data_instruments,
         &lines.sections,
         &instruments,

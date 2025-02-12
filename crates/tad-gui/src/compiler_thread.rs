@@ -1005,7 +1005,8 @@ impl SongCompiler {
 
         let name = name.cloned();
         let song_data = match compiler::mml::compile_mml(
-            f,
+            &f.contents,
+            &f.file_name,
             name,
             &dep.inst_map,
             dep.combined_samples.pitch_table(),

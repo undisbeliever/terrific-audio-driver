@@ -28,7 +28,7 @@ mod vibrato;
 mod volume_pan;
 
 use compiler::bytecode_assembler::{BcTerminator, BytecodeContext};
-use compiler::data::{Name, TextFile, UniqueNamesList};
+use compiler::data::{Name, UniqueNamesList};
 use compiler::driver_constants::{
     BC_CHANNEL_STACK_OFFSET, BC_CHANNEL_STACK_SIZE, BC_STACK_BYTES_PER_LOOP,
     BC_STACK_BYTES_PER_SUBROUTINE_CALL, MAX_SUBROUTINES,
@@ -346,11 +346,8 @@ fn assert_one_channel_error_in_mml(
     let dummy_data = dummy_data();
 
     let r = mml::compile_mml(
-        &TextFile {
-            contents: mml.to_string(),
-            path: None,
-            file_name: "".to_owned(),
-        },
+        mml,
+        "",
         None,
         &dummy_data.instruments_and_samples,
         &dummy_data.pitch_table,
@@ -397,11 +394,8 @@ fn assert_one_subroutine_error_in_mml(
         .expect("identifier must start with !");
 
     let r = mml::compile_mml(
-        &TextFile {
-            contents: mml.to_string(),
-            path: None,
-            file_name: "".to_owned(),
-        },
+        mml,
+        "",
         None,
         &dummy_data.instruments_and_samples,
         &dummy_data.pitch_table,
@@ -439,11 +433,8 @@ fn assert_subroutine_errors_in_mml(mml: &str, expected_errors: &[(&str, &[Channe
     let dummy_data = dummy_data();
 
     let r = mml::compile_mml(
-        &TextFile {
-            contents: mml.to_string(),
-            path: None,
-            file_name: "".to_owned(),
-        },
+        mml,
+        "",
         None,
         &dummy_data.instruments_and_samples,
         &dummy_data.pitch_table,
@@ -480,11 +471,8 @@ fn assert_one_header_error_in_mml(mml: &str, line_number: u32, expected_error: M
     let dummy_data = dummy_data();
 
     let r = mml::compile_mml(
-        &TextFile {
-            contents: mml.to_string(),
-            path: None,
-            file_name: "".to_owned(),
-        },
+        mml,
+        "",
         None,
         &dummy_data.instruments_and_samples,
         &dummy_data.pitch_table,
@@ -513,11 +501,8 @@ fn assert_one_header_error_in_mml(mml: &str, line_number: u32, expected_error: M
 
 fn compile_mml(mml: &str, dummy_data: &DummyData) -> SongData {
     mml::compile_mml(
-        &TextFile {
-            contents: mml.to_string(),
-            path: None,
-            file_name: "".to_owned(),
-        },
+        mml,
+        "",
         None,
         &dummy_data.instruments_and_samples,
         &dummy_data.pitch_table,

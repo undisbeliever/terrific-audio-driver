@@ -379,7 +379,8 @@ fn main() {
         let mml_file = load_text_file_with_limit(&song.source, &project.parent_path).unwrap();
 
         let song_data = compile_mml(
-            &mml_file,
+            &mml_file.contents,
+            &mml_file.file_name,
             Some(song.name.clone()),
             &project.instruments_and_samples,
             samples.pitch_table(),

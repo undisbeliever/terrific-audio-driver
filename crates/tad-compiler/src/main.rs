@@ -273,7 +273,8 @@ fn compile_song(
     pitch_table: &PitchTable,
 ) -> SongData {
     let song_data = match compile_mml(
-        &mml_file,
+        &mml_file.contents,
+        &mml_file.file_name,
         song_name,
         &pf.instruments_and_samples,
         pitch_table,
@@ -528,7 +529,8 @@ fn compile_and_check_song(
     };
 
     let song_data = match compile_mml(
-        &mml_file,
+        &mml_file.contents,
+        &mml_file.file_name,
         Some(song.name.clone()),
         &pf.instruments_and_samples,
         pitch_table,
