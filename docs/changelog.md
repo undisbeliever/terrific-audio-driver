@@ -65,6 +65,7 @@ GUI changes:
 
 API changes:
  * `Tad_QueueCommand` and `Tad_QueueCommandOverride` can now queue IO commands with 2 parameters.
+ * Added a way to override the default values (see the API's readme file for more details)
 
 
 Version 0.0.16

@@ -100,6 +100,8 @@ TAD_MIN_TICK_CLOCK = 64
 
 
 ;; `Tad_flags` bits
+;;
+;; Unless overridden by `TAD_CUSTOM_DEFAULTS`, the default flags are `PLAY_SONG_IMMEDIATELY`.
 .scope TadFlags
     ;; If set the *common audio data* will be loaded into Audio-RAM on the next `Tad_LoadSong` call.
     ;;
@@ -109,26 +111,24 @@ TAD_MIN_TICK_CLOCK = 64
     ;; Determines if the song is played immediately after loading into Audio-RAM
     ;;  * If set, the audio driver will play the song after the next song is loaded into Audio-RAM
     ;;  * If clear, the audio driver will be paused after the next song is loaded into Audio-RAM
-    ;; Default: Set
     PLAY_SONG_IMMEDIATELY = 1 << 6
 
     ;; If set, the audio driver will reset the global volumes to maximum volume when a song starts.
-    ;; Default: Clear
     RESET_GLOBAL_VOLUMES_ON_SONG_START = 1 << 5
 .endscope
 
 
 ;; Audio Mode
+;;
+;; Unless overridden by `TAD_CUSTOM_DEFAULTS`, the default audio mode is `MONO`.
 .enum TadAudioMode
     ;; Channels are not panned
-    ;;
-    ;; The default mode is MONO.
     MONO = 0
 
     ;; Channels can be panned
     ;;
-    ;; `set_channel_invert` and `set_echo_invert` instructions will invert both
-    ;; the left AND right ;; channels if the invert-mono flag is set.
+    ;; `set_channel_invert` and `set_echo_invert` instructions will invert both the
+    ;; left AND right channels if the invert-mono flag is set.
     STEREO = 1
 
     ;; Channels can be panned and the left or right channels can be individually inverted.
@@ -193,7 +193,6 @@ TAD_MIN_TICK_CLOCK = 64
     ;;
     ;; NOTE: If the `ResetGlobalVolumesOnSongStart` flag is set, the global volumes will
     ;; be reset when a songs starts.
-    ;; By default, global volumes persist after a new song or common-audio-data is loaded.
     SET_GLOBAL_MUSIC_VOLUME = 16
 
     ;; Set the global sound-effect volume
@@ -202,7 +201,6 @@ TAD_MIN_TICK_CLOCK = 64
     ;;
     ;; NOTE: If the `ResetGlobalVolumesOnSongStart` flag is set, the global volumes will
     ;; be reset when a songs starts.
-    ;; By default, global volumes persist after a new song or common-audio-data is loaded.
     SET_GLOBAL_SFX_VOLUME = 18
 
     ;; Set the global music and sound-effect volumes
@@ -211,7 +209,6 @@ TAD_MIN_TICK_CLOCK = 64
     ;;
     ;; NOTE: If the `ResetGlobalVolumesOnSongStart` flag is set, the global volumes will
     ;; be reset when a songs starts.
-    ;; By default, global volumes persist after a new song or common-audio-data is loaded.
     SET_GLOBAL_VOLUMES = 20
 .endenum
 

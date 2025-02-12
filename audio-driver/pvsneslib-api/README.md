@@ -22,6 +22,15 @@ Using Terrific Audio Driver in a PvSnesLib Project
 Please follow the instructions in the [tad-audio.h](tad-audio.h) documentation.
 
 
+Overriding the Default Configuration
+------------------------------------
+The following constants are compile-time configurable (see [API tests](audio-driver/pvsneslib-api/api-tests/tad-audio.asm) for an example):
+
+ * `TAD_DEFAULT_FLAGS` - the initial TAD flags.
+ * `TAD_DEFAULT_AUDIO_MODE` - the default audio mode.
+ * `TAD_DEFAULT_TRANSFER_PER_FRAME` - The default bytes to transfer every `Tad_Process` call.
+
+
 Build Requirements
 ==================
  * [PVSnesLib](https://github.com/alekmaul/pvsneslib/) version 4.1.0 or later

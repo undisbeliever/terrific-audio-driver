@@ -54,6 +54,12 @@ CART_TYPE   = CART_TYPE__RomOnly
 .endif
 
 
+; Testing custom default values
+TAD_DEFAULT_FLAGS               = TadFlags.PLAY_SONG_IMMEDIATELY | TadFlags.RESET_GLOBAL_VOLUMES_ON_SONG_START
+TAD_DEFAULT_AUDIO_MODE          = TadAudioMode.SURROUND
+TAD_DEFAULT_TRANSFER_PER_FRAME  = 700
+
+
 ; Variables
 
 .section Zeropage

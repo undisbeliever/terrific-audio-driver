@@ -31,6 +31,15 @@
     .define TAD_PROCESS_SEGMENT "CODE1"
 .endif
 
+
+; Manually tested custom defaults
+TAD_CUSTOM_DEFAULTS = 1
+    ; using define allows me to access TadFlags before it is defined
+    .define TAD_DEFAULT_FLAGS               TadFlags::RESET_GLOBAL_VOLUMES_ON_SONG_START
+    .define TAD_DEFAULT_AUDIO_MODE          TadAudioMode::STEREO
+    .define TAD_DEFAULT_TRANSFER_PER_FRAME  500
+
+
 .include "../../../tad-audio.s"
 
 

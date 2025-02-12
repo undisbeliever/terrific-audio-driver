@@ -36,11 +36,7 @@ UnusedInterruptHandler = BreakHandler
 Main .proc
     jsl     Tad_Init
 
-    lda     TadAudioMode.SURROUND
-    sta     Tad_audioMode
-
-    ldx     #700
-    jsr     Tad_SetTransferSize
+    ; Default flags, audio-mode and transfer size set in `_example.asm`.
 
 
     ; Enable white screen

@@ -88,6 +88,28 @@
 .endif
 
 
+;; Configuration
+;; -------------
+
+.ifndef TAD_DEFAULT_FLAGS
+    ;; Default TAD flags
+    ;; MUST NOT set RELOAD_COMMON_AUDIO_DATA
+    TAD_DEFAULT_FLAGS = TAD_Flags__PLAY_SONG_IMMEDIATELY
+.endif
+
+.ifndef TAD_DEFAULT_AUDIO_MODE
+    ;; Starting audio mode
+    TAD_DEFAULT_AUDIO_MODE = TAD_AudioMode__MONO
+.endif
+
+.ifndef TAD_DEFAULT_TRANSFER_PER_FRAME
+    ;; Default number of bytes to transfer to Audio-RAM per `Tad_Process` call.
+    ;;
+    ;; MUST be between the TAD_MIN_TRANSFER_PER_FRAME and TAD_MAX_TRANSFER_PER_FRAME
+    TAD_DEFAULT_TRANSFER_PER_FRAME = 256
+.endif
+
+
 ;; ========
 ;; IO Ports
 ;; ========
@@ -241,11 +263,6 @@ TAD_MIN_TRANSFER_PER_FRAME = 32
 ;; The loader can transfer ~849 bytes per 60Hz frame SlowROM or FastROM
 TAD_MAX_TRANSFER_PER_FRAME = 800
 
-;; Default number of bytes to transfer to Audio-RAM per `tad_process` call.
-;;
-;; MUST BE > 0
-TAD_DEFAULT_TRANSFER_PER_FRAME = 256    ; ::TODO should I decrement this value?::
-
 
 ;; ------
 ;; States
@@ -293,6 +310,17 @@ TAD_Flags__RESET_GLOBAL_VOLUMES_ON_SONG_START = 1 << 5
 
 ;; A mask for the flags that are sent to the loader
 TAD_Flags__ALL_FLAGS = TAD_Flags__RELOAD_COMMON_AUDIO_DATA | TAD_Flags__PLAY_SONG_IMMEDIATELY | TAD_Flags__RESET_GLOBAL_VOLUMES_ON_SONG_START
+
+
+;; -----------
+;; Audio modes
+;; -----------
+
+TAD_AudioMode__MONO     = 0
+TAD_AudioMode__STEREO   = 1
+TAD_AudioMode__SURROUND = 2
+
+TAD_N_AUDIO_MODES = 3
 
 
 ;; ============
@@ -1275,13 +1303,27 @@ tad_init:
 
     tadPrivate_loader_transferLoaderViaIpl
 
-    stz     tad_audioMode
 
-    lda     #TAD_Flags__PLAY_SONG_IMMEDIATELY
-    sta     tad_flags
+    ; Set default settings
+    .if (TAD_DEFAULT_FLAGS) & TAD_Flags__RELOAD_COMMON_AUDIO_DATA
+        .fail "RELOAD_COMMON_AUDIO_DATA flag must not be use in TAD_DEFAULT_FLAGS"
+    .endif
+    .if ((TAD_DEFAULT_FLAGS) & TAD_Flags__ALL_FLAGS) != (TAD_DEFAULT_FLAGS)
+        .fail "Invalid TAD_DEFAULT_FLAGS"
+    .endif
+    .if (TAD_DEFAULT_AUDIO_MODE) < 0 || (TAD_DEFAULT_AUDIO_MODE) >= TAD_N_AUDIO_MODES
+        .fail "Invalid TAD_DEFAULT_AUDIO_MODE"
+    .endif
+    .if (TAD_DEFAULT_TRANSFER_PER_FRAME) < TAD_MIN_TRANSFER_PER_FRAME || (TAD_DEFAULT_TRANSFER_PER_FRAME) > TAD_MAX_TRANSFER_PER_FRAME
+        .fail "Invalid TAD_DEFAULT_TRANSFER_PER_FRAME"
+    .endif
+
+    ldx     #(TAD_DEFAULT_FLAGS) | ((TAD_DEFAULT_AUDIO_MODE) << 8)
+    stx     tad_flags
 
     ldx     #TAD_DEFAULT_TRANSFER_PER_FRAME
     stx     tadPrivate_bytesToTransferPerFrame
+
 
     lda     #:Tad_AudioDriver_Bin
     ldx     #Tad_AudioDriver_Bin

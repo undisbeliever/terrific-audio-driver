@@ -90,7 +90,6 @@ TadCommand .block
     ;
     ; NOTE: If the `ResetGlobalVolumesOnSongStart` flag is set, the global volumes will
     ; be reset when a songs starts.
-    ; By default, global volumes persist after a new song or common-audio-data is loaded.
     SET_GLOBAL_MUSIC_VOLUME = 16
 
     ; Set the global sound-effect volume
@@ -99,7 +98,6 @@ TadCommand .block
     ;
     ; NOTE: If the `ResetGlobalVolumesOnSongStart` flag is set, the global volumes will
     ; be reset when a songs starts.
-    ; By default, global volumes persist after a new song or common-audio-data is loaded.
     SET_GLOBAL_SFX_VOLUME = 18
 
     ; Set the global music and sound-effect volumes
@@ -108,7 +106,6 @@ TadCommand .block
     ;
     ; NOTE: If the `ResetGlobalVolumesOnSongStart` flag is set, the global volumes will
     ; be reset when a songs starts.
-    ; By default, global volumes persist after a new song or common-audio-data is loaded.
     SET_GLOBAL_VOLUMES = 20
 .endblock
 

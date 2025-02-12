@@ -47,6 +47,8 @@ Simplified example:
 ``` asm
 TAD_MEMORY_MAP = "LOROM"
 
+; Optional configuration goes here
+
 .section Zeropage
     .include "{{path to API}}/tad-zeropage.inc"
 .send
@@ -62,6 +64,15 @@ TAD_MEMORY_MAP = "LOROM"
     .include "{{path to API}}/tad-code.inc"
 .send
 ```
+
+
+Overriding the Default Configuration
+------------------------------------
+The following constants are compile-time configurable (see [\_example.asm](example/_example.asm) for an example):
+
+ * `TAD_DEFAULT_FLAGS` - the initial TAD flags.
+ * `TAD_DEFAULT_AUDIO_MODE` - the default audio mode.
+ * `TAD_DEFAULT_TRANSFER_PER_FRAME` - The default bytes to transfer every `Tad_Process` call.
 
 
 Embedding Audio Data

@@ -101,6 +101,17 @@
  *    `tad-compiler pv-enums` command.
  *
  *
+ * Overriding the Default Configuration
+ * ------------------------------------
+ * If `tad-audio.asm` is `.include`d inside an assembly file, the following constants are
+ * compile-time configurable.  
+ * (See the [API tests](audio-driver/pvsneslib-api/api-tests/tad-audio.asm) for an example):
+ *
+ *  * `TAD_DEFAULT_FLAGS` - the initial TAD flags.
+ *  * `TAD_DEFAULT_AUDIO_MODE` - the default audio mode.
+ *  * `TAD_DEFAULT_TRANSFER_PER_FRAME` - The default bytes to transfer every `Tad_Process` call.
+ *
+ *
  * External Resources
  * ==================
  *
@@ -147,7 +158,11 @@
 #define TAD_MIN_TICK_CLOCK 64
 
 
-/*! `Tad_flags` bits */
+/*!
+ * \brief `Tad_flags` bits
+ *
+ * Unless overridden, the default flags are `PLAY_SONG_IMMEDIATELY`.
+ * */
 typedef enum TadFlags {
     /*!
      * If set the *common audio data* will be loaded into Audio-RAM on the next `Tad_LoadSong` call.
@@ -160,20 +175,20 @@ typedef enum TadFlags {
      * Determines if the song is played immediately after loading into Audio-RAM
      *  * If set, the audio driver will play the song after the next song is loaded into Audio-RAM
      *  * If clear, the audio driver will be paused after the next song is loaded into Audio-RAM
-     *
-     * Default: Set
      */
     TAD_FLAGS_PLAY_SONG_IMMEDIATELY = 0x40,
 
     /*!
      * If set, the audio driver will reset the global volumes to maximum volume when a song starts.
-     *
-     * Default: Clear
      */
     TAD_FLAGS_RESET_GLOBAL_VOLUMES_ON_SONG_START = 0x20,
 } TadFlags;
 
-/*! Mono/Stereo/Surround audio mode */
+/*!
+ * \brief Mono/Stereo/Surround audio mode
+ *
+ * Unless overridden, the default audio mono is `MONO`
+ */
 typedef enum TadAudioMode {
     /*!
      * Channels are not panned
@@ -345,7 +360,6 @@ bool tad_queueCommand_setSongTempo(u8 tickClock);
  * Queues a set-global-music-volume command.
  *
  * NOTE: If the `ResetGlobalVolumesOnSongStart` flag is set, the global volumes will be reset when a songs starts.
- * By default, global volumes persist after a new song or common-audio-data is loaded.
  *
  * @param volume The new music volume.  A 255 music-volume will not modify the channel volume.
  * @return true if the command was added to the command queue.
@@ -356,7 +370,6 @@ bool tad_queueCommand_setGlobalMusicVolume(u8 volume);
  * Queues a set-global-sfx-volume command.
  *
  * NOTE: If the `ResetGlobalVolumesOnSongStart` flag is set, the global volumes will be reset when a songs starts.
- * By default, global volumes persist after a new song or common-audio-data is loaded.
  *
  * @param volume The new sound-effect volume.  A 255 sfx-volume will not modify the channel volume.
  * @return true if the command was added to the command queue.
@@ -367,7 +380,6 @@ bool tad_queueCommand_setGlobalSfxVolume(u8 volume);
  * Queues a set-global-volumes command.
  *
  * NOTE: If the `ResetGlobalVolumesOnSongStart` flag is set, the global volumes will be reset when a songs starts.
- * By default, global volumes persist after a new song or common-audio-data is loaded.
  *
  * @param musicVolume The new music volume.  A 255 sfx-volume will not modify the channel volume.
  * @param sfxVolume The new sound-effect volume.  A 255 sfx-volume will not modify the channel volume.

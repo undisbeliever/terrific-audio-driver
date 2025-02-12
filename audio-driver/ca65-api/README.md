@@ -68,6 +68,23 @@ There are two ways to embed audio data into a ROM:
      [tad-tests.s](tests/api-tests/src/tad-tests.s) for an example.
 
 
+Overriding the Default Configuration
+------------------------------------
+
+If a `TAD_CUSTOM_DEFAULTS` symbol is defined, then the default configuration can be overriden.  See [the api-tests](tests/api-tests/src/tad-audio.s) for an example.
+
+If `TAD_CUSTOM_DEFAULTS` is defined, **all** configuration variables must be defined before `tad_audio.s` is assembled.
+
+``` asm
+TAD_CUSTOM_DEFAULTS = 1
+    ; using define allows me to access TadFlags before it is defined
+    .define TAD_DEFAULT_FLAGS               TadFlags::PLAY_SONG_IMMEDIATELY | TadFlags::RESET_GLOBAL_VOLUMES_ON_SONG_START
+    .define TAD_DEFAULT_AUDIO_MODE          TadAudioMode::SURROUND
+    .define TAD_DEFAULT_TRANSFER_PER_FRAME  300
+
+.include "../terrific-audio-driver/audio-driver/ca65-api/tad-audio.s"
+```
+
 
 Build Requirements
 ==================

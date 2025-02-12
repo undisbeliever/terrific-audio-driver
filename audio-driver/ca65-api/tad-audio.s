@@ -62,6 +62,7 @@
     .error "Unknown memory map: Missing LOROM or HIROM define"
 .endif
 
+
 ;; Segments
 ;; --------
 ;;
@@ -164,11 +165,6 @@ TAD_MIN_TRANSFER_PER_FRAME = 32
 ;;
 ;; The loader can transfer ~849 bytes per 60Hz frame SlowROM or FastROM
 TAD_MAX_TRANSFER_PER_FRAME = 800
-
-;; Default number of bytes to transfer to Audio-RAM per `Tad_Process` call.
-;;
-;; MUST BE > 0
-TAD_DEFAULT_TRANSFER_PER_FRAME = 256
 
 
 
@@ -323,11 +319,6 @@ TAD_CENTER_PAN = TAD_MAX_PAN / 2
 .endscope
 
 
-;; =========
-;; Variables
-;; =========
-
-
 .enum TadState
     NULL                                = $00
     ;; Waiting for loader to send the ready signal before loading common-audio-data
@@ -361,6 +352,43 @@ TAD__FIRST_LOADING_SONG_STATE = TadState::LOADING_SONG_DATA_PAUSED
     ;; A mask for the flags that are sent to the loader
     _ALL_FLAGS = RELOAD_COMMON_AUDIO_DATA | PLAY_SONG_IMMEDIATELY | RESET_GLOBAL_VOLUMES_ON_SONG_START
 .endscope
+
+.enum TadAudioMode
+    MONO = 0
+    STEREO = 1
+    SURROUND = 2
+.endenum
+
+TAD_N_AUDIO_MODES = 3
+
+
+;; Default values
+;; ==============
+
+; Using a single symbol to enable custom defaults as I am unable to detect if a `.define`
+; exists using an if statement.
+;
+; I recommend using a `.define` for custom defaults so `TadFlags` and `TadAudioMode` values
+; can be referenced before they are defined.
+.ifndef TAD_CUSTOM_DEFAULTS
+    ;; Default TAD flags
+    ;; MUST NOT set RELOAD_COMMON_AUDIO_DATA
+    TAD_DEFAULT_FLAGS = TadFlags::PLAY_SONG_IMMEDIATELY
+
+    ;; Starting audio mode
+    TAD_DEFAULT_AUDIO_MODE = TadAudioMode::MONO
+
+    ;; Default number of bytes to transfer to Audio-RAM per `Tad_Process` call.
+    ;;
+    ;; MUST be between the TAD_MIN_TRANSFER_PER_FRAME and TAD_MAX_TRANSFER_PER_FRAME
+    TAD_DEFAULT_TRANSFER_PER_FRAME = 256
+.endif
+
+
+
+;; =========
+;; Variables
+;; =========
 
 
 .bss
@@ -827,13 +855,19 @@ ReturnFalse:
 
     TadPrivate_Loader_TransferLoaderViaIpl
 
-    stz     Tad_audioMode
 
-    lda     #TadFlags::PLAY_SONG_IMMEDIATELY
-    sta     Tad_flags
+    ; Set default settings
+    .assert (TAD_DEFAULT_FLAGS) & TadFlags::RELOAD_COMMON_AUDIO_DATA = 0, error, "RELOAD_COMMON_AUDIO_DATA flag must not be use in TAD_DEFAULT_FLAGS"
+    .assert (TAD_DEFAULT_FLAGS) & TadFlags::_ALL_FLAGS = (TAD_DEFAULT_FLAGS), error, "Invalid TAD_DEFAULT_FLAGS"
+    .assert (TAD_DEFAULT_AUDIO_MODE) >= 0 && (TAD_DEFAULT_AUDIO_MODE) < TAD_N_AUDIO_MODES, error, "Invalid TAD_DEFAULT_AUDIO_MODE"
+
+    .assert Tad_flags + 1 = Tad_audioMode, error
+    ldx     #(TAD_DEFAULT_FLAGS) | ((TAD_DEFAULT_AUDIO_MODE) << 8)
+    stx     Tad_flags
 
     ldx     #TAD_DEFAULT_TRANSFER_PER_FRAME
     stx     TadPrivate_bytesToTransferPerFrame
+
 
     lda     #.bankbyte(Tad_AudioDriver_Bin)
     ldx     #.loword(Tad_AudioDriver_Bin)

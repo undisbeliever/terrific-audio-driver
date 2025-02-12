@@ -53,8 +53,21 @@ TAD_DB_REGISTERS   = 0
 ; CONSTANTS
 ; =========
 
+; Default values
 .weak
     TAD_MEMORY_MAP = ""
+
+    ; Default TAD flags
+    ; MUST NOT set RELOAD_COMMON_AUDIO_DATA
+    TAD_DEFAULT_FLAGS = TadFlags.PLAY_SONG_IMMEDIATELY
+
+    ; Starting audio mode
+    TAD_DEFAULT_AUDIO_MODE = TadAudioMode.MONO
+
+    ; Default number of bytes to transfer to Audio-RAM per `Tad_Process` call.
+    ;
+    ; MUST be between the TAD_MIN_TRANSFER_PER_FRAME and TAD_MAX_TRANSFER_PER_FRAME
+    TAD_DEFAULT_TRANSFER_PER_FRAME = 256
 .endweak
 
 .cerror TAD_MEMORY_MAP != "LOROM" && TAD_MEMORY_MAP != "HIROM", "Unknown memory map, set TAD_MEMORY_MAP to the string LOROM or HIROM"
@@ -588,11 +601,18 @@ Tad_Init .proc
 
 .databank TAD_DB_LOWRAM
 
-    stz     Tad_audioMode
 
-    lda     #TadFlags.PLAY_SONG_IMMEDIATELY
-    sta     Tad_flags
+    ; Set default settings
+    .cerror !((TAD_DEFAULT_FLAGS) & TadFlags.RELOAD_COMMON_AUDIO_DATA == 0), "RELOAD_COMMON_AUDIO_DATA flag must not be use in TAD_DEFAULT_FLAGS"
+    .cerror !((TAD_DEFAULT_FLAGS) & TAD_ALL_FLAGS == (TAD_DEFAULT_FLAGS)), "Invalid TAD_DEFAULT_FLAGS"
+    .cerror !((TAD_DEFAULT_AUDIO_MODE) >= 0 && (TAD_DEFAULT_AUDIO_MODE) < TAD_N_AUDIO_MODES), "Invalid TAD_DEFAULT_AUDIO_MODE"
 
+    .cerror !(Tad_flags + 1 == Tad_audioMode)
+    ldx     #(TAD_DEFAULT_FLAGS) | ((TAD_DEFAULT_AUDIO_MODE) << 8)
+    stx     Tad_flags
+
+
+    .cerror !((TAD_DEFAULT_TRANSFER_PER_FRAME) >= TAD_MIN_TRANSFER_PER_FRAME && (TAD_DEFAULT_TRANSFER_PER_FRAME) <= TAD_MAX_TRANSFER_PER_FRAME), "Invalid TAD_DEFAULT_TRANSFER_PER_FRAME"
     ldx     #TAD_DEFAULT_TRANSFER_PER_FRAME
     stx     TadPrivate_bytesToTransferPerFrame
 
@@ -813,11 +833,9 @@ TadPrivate_Process_WaitingForLoader__ .proc ; RTL
     _SongData:
         ; Songs
 
-        _ALL_FLAGS = TadFlags.RELOAD_COMMON_AUDIO_DATA | TadFlags.PLAY_SONG_IMMEDIATELY | TadFlags.RESET_GLOBAL_VOLUMES_ON_SONG_START
-
         ; Tad_flags MUST NOT have the stereo/surround loader flag set
-        .cerror !(_ALL_FLAGS & TadLoaderDataType.STEREO_FLAG == 0)
-        .cerror !(_ALL_FLAGS & TadLoaderDataType.SURROUND_FLAG == 0)
+        .cerror !(TAD_ALL_FLAGS & TadLoaderDataType.STEREO_FLAG == 0)
+        .cerror !(TAD_ALL_FLAGS & TadLoaderDataType.SURROUND_FLAG == 0)
 
         ; SONG_DATA_FLAG must always be sent and it also masks the RELOAD_COMMON_AUDIO_DATA flag in TadLoaderDataType
         .cerror !(TadFlags.RELOAD_COMMON_AUDIO_DATA == TadLoaderDataType.SONG_DATA_FLAG)
@@ -826,7 +844,7 @@ TadPrivate_Process_WaitingForLoader__ .proc ; RTL
         .cerror !(TadFlags.RESET_GLOBAL_VOLUMES_ON_SONG_START == TadLoaderDataType.RESET_GLOBAL_VOLUMES_FLAG)
 
         ; Clear unused TAD flags
-        lda     #$ff ^ _ALL_FLAGS
+        lda     #$ff ^ TAD_ALL_FLAGS
         trb     Tad_flags
 
         ; Convert `Tad_audioMode` to TadLoaderDataType

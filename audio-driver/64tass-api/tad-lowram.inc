@@ -43,11 +43,6 @@ TAD_MIN_TRANSFER_PER_FRAME = 32
 ; The loader can transfer ~849 bytes per 60Hz frame SlowROM or FastROM
 TAD_MAX_TRANSFER_PER_FRAME = 800
 
-; Default number of bytes to transfer to Audio-RAM per `Tad_Process` call.
-;
-; MUST BE > 0
-TAD_DEFAULT_TRANSFER_PER_FRAME = 256
-
 
 TadState .block
     NULL                                = $00
@@ -74,7 +69,9 @@ TAD__FIRST_LOADING_STATE      = TadState.LOADING_COMMON_AUDIO_DATA
 TAD__FIRST_LOADING_SONG_STATE = TadState.LOADING_SONG_DATA_PAUSED
 
 
-;; `Tad_flags` bits
+; `Tad_flags` bits
+;
+; Unless overridden, the default flags are `PLAY_SONG_IMMEDIATELY`.
 TadFlags .block
     ; If set the *common audio data* will be loaded into Audio-RAM on the next `Tad_LoadSong` call.
     ;
@@ -84,19 +81,20 @@ TadFlags .block
     ; Determines if the song is played immediately after loading into Audio-RAM
     ;  * If set, the audio driver will play the song after the next song is loaded into Audio-RAM
     ;  * If clear, the audio driver will be paused after the next song is loaded into Audio-RAM
-    ; Default: Set
     PLAY_SONG_IMMEDIATELY    = 1 << 6
 
     ; If set, the audio driver will reset the global volumes to maximum volume when a song starts.
-    ; Default: Clear
     RESET_GLOBAL_VOLUMES_ON_SONG_START = 1 << 5
 .endblock
 
+TAD_ALL_FLAGS = TadFlags.RELOAD_COMMON_AUDIO_DATA | TadFlags.PLAY_SONG_IMMEDIATELY | TadFlags.RESET_GLOBAL_VOLUMES_ON_SONG_START
 
+
+; Audio Mode
+;
+; Unless overridden, the default audio mode is `MONO`.
 TadAudioMode .block
     ;; Channels are not panned
-    ;;
-    ;; The default mode is MONO.
     MONO = 0
 
     ;; Channels can be panned
@@ -108,6 +106,8 @@ TadAudioMode .block
     ;; Channels can be panned and the left or right channels can be individually inverted.
     SURROUND = 2
 .endblock
+
+TAD_N_AUDIO_MODES = 3
 
 
 ; The current audio driver state
