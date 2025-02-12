@@ -1961,6 +1961,16 @@ impl<'a> Bytecode<'a> {
     }
 
     pub fn end_loop(&mut self, loop_count: Option<LoopCount>) -> Result<(), BytecodeError> {
+        let r = self._end_loop(loop_count);
+
+        // Must always call `state.end_loop()` (especially if _end_loop exits early with an error)
+        // to fix a "song-loop in loop" panic
+        self.state.end_loop(self.loop_stack.len());
+
+        r
+    }
+
+    fn _end_loop(&mut self, loop_count: Option<LoopCount>) -> Result<(), BytecodeError> {
         let loop_state = match self.loop_stack.pop() {
             Some(l) => l,
             None => return Err(BytecodeError::NotInALoop),
@@ -2045,8 +2055,6 @@ impl<'a> Bytecode<'a> {
                 err @ 0x1000.. => return Err(BytecodeError::InvalidSkipLastLoopParameter(err)),
             }
         }
-
-        self.state.end_loop(self.loop_stack.len());
 
         emit_bytecode!(self, opcodes::END_LOOP);
 
