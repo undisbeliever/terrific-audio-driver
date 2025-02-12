@@ -245,3 +245,23 @@ fn quantized_portamento() {
         ],
     );
 }
+
+#[test]
+fn quantize_long_note_is_looped() {
+    assert_line_matches_bytecode(
+        "Q2 c%8000",
+        &[
+            // c %2001
+            "play_note c4 no_keyoff 256",
+            "start_loop 6",
+            "wait 248",
+            "end_loop",
+            "rest 257",
+            // r %7999
+            "start_loop 24",
+            "rest 249",
+            "end_loop",
+            "rest 23",
+        ],
+    );
+}
