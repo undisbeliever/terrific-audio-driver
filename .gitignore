@@ -20,3 +20,7 @@ crates/*/target
 /.vscode
 SDL2.dll
 
+fuzz/target
+fuzz/corpus
+fuzz/artifacts
+

@@ -199,7 +199,7 @@ fn compile_mml_sound_effect(
     }
 }
 
-fn compile_bytecode_sound_effect(
+pub fn compile_bytecode_sound_effect(
     sfx: &str,
     instruments: &UniqueNamesList<InstrumentOrSample>,
     subroutines: &CompiledSfxSubroutines,
