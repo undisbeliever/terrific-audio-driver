@@ -265,3 +265,9 @@ fn quantize_long_note_is_looped() {
         ],
     );
 }
+
+#[test]
+fn quantize_long_note_panic_bugfix() {
+    // "attempt to multiply with overflow" panic found with cargo-fuzz on `Q2b%99406942`
+    assert_line_matches_line("Q2 b%99406942", "Q%64 b%99406942");
+}

@@ -162,8 +162,14 @@ impl FineQuantization {
     pub const UNITS: u32 = 256;
 
     pub fn quantize(&self, l: u32) -> u32 {
-        let q = u32::from(self.0);
-        std::cmp::max((l * q) / Self::UNITS, 1)
+        const UNITS: u64 = FineQuantization::UNITS as u64;
+        const _: () = assert!((u32::MAX as u64 * FineQuantization::MAX.0 as u64) < u64::MAX);
+        const _: () =
+            assert!((u32::MAX as u64 * FineQuantization::MAX.0 as u64) / UNITS < u32::MAX as u64);
+
+        let l = u64::from(l);
+        let q = u64::from(self.0);
+        std::cmp::max((l * q) / UNITS, 1).try_into().unwrap()
     }
 }
 
