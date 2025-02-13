@@ -219,10 +219,7 @@ typedef enum TadAudioMode {
  *  * Loads the audio driver into Audio-RAM
  *  * Sets the song to 0 (silence)
  *  * Resets variables
- *  * Sets the TadAudioMode to MONO
- *  * Sets the flags
- *      * Sets the *Reload Common Audio Data* flag
- *      * Sets the *Play Song Immediately* flag
+ *  * Initialises `Tad_flags` and `Tad_audioMode`
  *  * Queues a common audio data transfer
  *
  * This function will require multiple frames of execution time.
