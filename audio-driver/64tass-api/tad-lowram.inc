@@ -100,7 +100,7 @@ TadAudioMode .block
     ;; Channels can be panned
     ;;
     ;; `set_channel_invert` and `set_echo_invert` instructions will invert both
-    ;; the left AND right ;; channels if the invert-mono flag is set.
+    ;; the left AND right channels if the invert-mono flag is set.
     STEREO = 1
 
     ;; Channels can be panned and the left or right channels can be individually inverted.

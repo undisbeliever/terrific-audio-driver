@@ -191,24 +191,24 @@ TAD_MIN_TICK_CLOCK = 64
     ;;  * parameter0: the music volume.
     ;;    A 255 music-volume will not modify the channel volume.
     ;;
-    ;; NOTE: If the `ResetGlobalVolumesOnSongStart` flag is set, the global volumes will
-    ;; be reset when a songs starts.
+    ;; NOTE: If the `TadFlags::RESET_GLOBAL_VOLUMES_ON_SONG_START` flag is set, the global volumes
+    ;; will be reset when a songs starts.
     SET_GLOBAL_MUSIC_VOLUME = 16
 
     ;; Set the global sound-effect volume
     ;;  * parameter0: the music volume.
     ;;    A 255 sfx-volume will not modify the channel volume.
     ;;
-    ;; NOTE: If the `ResetGlobalVolumesOnSongStart` flag is set, the global volumes will
-    ;; be reset when a songs starts.
+    ;; NOTE: If the `TadFlags::RESET_GLOBAL_VOLUMES_ON_SONG_START` flag is set, the global volumes
+    ;; will be reset when a songs starts.
     SET_GLOBAL_SFX_VOLUME = 18
 
     ;; Set the global music and sound-effect volumes
     ;;  * parameter0: the music volume.
     ;;  * parameter1: the sound-effect volume.
     ;;
-    ;; NOTE: If the `ResetGlobalVolumesOnSongStart` flag is set, the global volumes will
-    ;; be reset when a songs starts.
+    ;; NOTE: If the `TadFlags::RESET_GLOBAL_VOLUMES_ON_SONG_START` flag is set, the global volumes
+    ;; will be reset when a songs starts.
     SET_GLOBAL_VOLUMES = 20
 .endenum
 
@@ -351,15 +351,15 @@ TAD_MIN_TICK_CLOCK = 64
 
 ;; Disables the audio driver, starts the loader and queues a song or common-audio-data transfer.
 ;;
-;; This subroutine will clear the RELOAD_COMMON_AUDIO_DATA flag.
+;; This subroutine will clear the `TadFlags::RELOAD_COMMON_AUDIO_DATA` flag.
 ;;
 ;; CAUTION: `Tad_LoadSong` will switch the state to `WAITING_FOR_LOADER_*`.  `LoadAudioData` will
 ;; not be called until `Tad_Process` is called **and** the audio-driver has switched to the loader.
 ;; While the state remains `WAITING_FOR_LOADER_*`, no audio data will be transferred and calling
 ;; `Tad_FinishLoadingData` will not transfer any audio data.
 ;;
-;; CAUTION: The audio driver starts in the paused state if the `PlaySongImmediately` flag is false
-;; when `Tad_Process` calls `LoaderDataType`.
+;; CAUTION: The audio driver starts in the paused state if the `TadFlags::PLAY_SONG_IMMEDIATELY`
+;; flag is clear when `Tad_Process` calls `LoaderDataType`.
 ;;
 ;; IN: A = 0 - play a blank (silent song)
 ;; IN: A >= 1 - Play song number `A`
@@ -395,6 +395,8 @@ TAD_MIN_TICK_CLOCK = 64
 .import Tad_GetSong
 
 
+;; Sets the `TadFlags::RELOAD_COMMON_AUDIO_DATA` flag
+;;
 ;; If this subroutine is called, the *common audio data* will be reloaded into Audio-RAM.
 ;; This will not take effect until the next song is loaded into Audio-RAM.
 ;;
@@ -404,7 +406,7 @@ TAD_MIN_TICK_CLOCK = 64
 .import Tad_ReloadCommonAudioData
 
 
-;; Sets the `PlaySongImmediately` flag
+;; Sets the `TadFlags::PLAY_SONG_IMMEDIATELY` flag
 ;;
 ;; A8
 ;; I unknown
@@ -412,7 +414,7 @@ TAD_MIN_TICK_CLOCK = 64
 .import Tad_SongsStartImmediately
 
 
-;; Clears the `PlaySongImmediately` flag
+;; Clears the `TadFlags::PLAY_SONG_IMMEDIATELY` flag
 ;;
 ;; A8
 ;; I unknown
@@ -420,7 +422,7 @@ TAD_MIN_TICK_CLOCK = 64
 .import Tad_SongsStartPaused
 
 
-;; Sets the `ResetGlobalVolumesOnSongStart` flag.
+;; Sets the `TadFlags::RESET_GLOBAL_VOLUMES_ON_SONG_START` flag.
 ;;
 ;; The global music and sound-effect volumes will be reset when a song starts.
 ;;
@@ -430,7 +432,7 @@ TAD_MIN_TICK_CLOCK = 64
 .import Tad_GlobalVolumesResetOnSongStart
 
 
-;; Clears the `ResetGlobalVolumesOnSongStart` flag.
+;; Clears the `TadFlags::RESET_GLOBAL_VOLUMES_ON_SONG_START` flag.
 ;;
 ;; The global music and sound-effect volumes will persist when a song or common-audio-data
 ;; is loaded into audio-RAM.

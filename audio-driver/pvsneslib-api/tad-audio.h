@@ -356,7 +356,8 @@ bool tad_queueCommand_setSongTempo(u8 tickClock);
 /*!
  * Queues a set-global-music-volume command.
  *
- * NOTE: If the `ResetGlobalVolumesOnSongStart` flag is set, the global volumes will be reset when a songs starts.
+ * NOTE: If the \ref TAD_FLAGS_RESET_GLOBAL_VOLUMES_ON_SONG_START flag is set, the global volumes
+ * will be reset when a songs starts.
  *
  * @param volume The new music volume.  A 255 music-volume will not modify the channel volume.
  * @return true if the command was added to the command queue.
@@ -366,7 +367,8 @@ bool tad_queueCommand_setGlobalMusicVolume(u8 volume);
 /*!
  * Queues a set-global-sfx-volume command.
  *
- * NOTE: If the `ResetGlobalVolumesOnSongStart` flag is set, the global volumes will be reset when a songs starts.
+ * NOTE: If the \ref TAD_FLAGS_RESET_GLOBAL_VOLUMES_ON_SONG_START flag is set, the global volumes
+ * will be reset when a songs starts.
  *
  * @param volume The new sound-effect volume.  A 255 sfx-volume will not modify the channel volume.
  * @return true if the command was added to the command queue.
@@ -376,7 +378,8 @@ bool tad_queueCommand_setGlobalSfxVolume(u8 volume);
 /*!
  * Queues a set-global-volumes command.
  *
- * NOTE: If the `ResetGlobalVolumesOnSongStart` flag is set, the global volumes will be reset when a songs starts.
+ * NOTE: If the \ref TAD_FLAGS_RESET_GLOBAL_VOLUMES_ON_SONG_START flag is set, the global volumes
+ * will be reset when a songs starts.
  *
  * @param musicVolume The new music volume.  A 255 sfx-volume will not modify the channel volume.
  * @param sfxVolume The new sound-effect volume.  A 255 sfx-volume will not modify the channel volume.
@@ -487,15 +490,15 @@ void tad_queueSoundEffect(u8 sfx_id);
 /*!
  * Disables the audio driver, starts the loader and queues a song or common-audio-data transfer.
  *
- * This function will clear the RELOAD_COMMON_AUDIO_DATA flag.
+ * This function will clear the \ref TAD_FLAGS_RELOAD_COMMON_AUDIO_DATA flag.
  *
  * CAUTION: tad_loadSong() will switch the state to `WAITING_FOR_LOADER`.  loadAudioData() will
  * not be called until tad_process() is called **and** the audio-driver has switched to the loader.
  * While the state remains `WAITING_FOR_LOADER_*`, no audio data will be transferred and calling
  * tad_finishLoadingData() will not transfer any audio data.
  *
- * CAUTION: The audio driver starts in the paused state if the `PlaySongImmediately` flag is false
- * when `Tad_Process` calls `LoaderDataType`.
+ * CAUTION: The audio driver starts in the paused state if the \ref TAD_FLAGS_PLAY_SONG_IMMEDIATELY
+ * flag is clear when `Tad_Process` calls `LoaderDataType`.
  *
  * @param song_id the song id to play (0 = silence, first song starts at 1)
  */
@@ -528,30 +531,32 @@ u8 tad_getSong();
  */
 
 /*!
- * If this subroutine is called, the *common audio data* will be reloaded into Audio-RAM.
+ * \brief Sets the \ref TAD_FLAGS_RELOAD_COMMON_AUDIO_DATA flag
+ *
+ * If this function is called, the *common audio data* will be reloaded into Audio-RAM.
  * This will not take effect until the next song is loaded into Audio-RAM.
  */
 void tad_reloadCommonAudioData(void);
 
 /*!
- * Sets the `PlaySongImmediately` flag
+ * Sets the \ref TAD_FLAGS_PLAY_SONG_IMMEDIATELY flag
  */
 void tad_songsStartImmediately(void);
 
 /*!
- * Clears the `PlaySongImmediately` flag
+ * Clears the \ref TAD_FLAGS_PLAY_SONG_IMMEDIATELY flag
  */
 void tad_songsStartPaused(void);
 
 /*!
- * Sets the `ResetGlobalVolumesOnSongStart` flag
+ * Sets the \ref TAD_FLAGS_RESET_GLOBAL_VOLUMES_ON_SONG_START flag
  *
  * The global music and sound-effect volumes will be reset when a song starts.
  */
 void tad_globalVolumesResetOnSongStart(void);
 
 /*!
- * Clears the `ResetGlobalVolumesOnSongStart` flag
+ * Clears the \ref TAD_FLAGS_RESET_GLOBAL_VOLUMES_ON_SONG_START flag
  *
  * The global music and sound-effect volumes will persist when a song or common-audio-data
  * is loaded into audio-RAM.

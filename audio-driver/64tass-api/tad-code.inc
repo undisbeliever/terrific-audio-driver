@@ -88,24 +88,24 @@ TadCommand .block
     ;  * parameter0: the music volume.
     ;    A 255 music-volume will not modify the channel volume.
     ;
-    ; NOTE: If the `ResetGlobalVolumesOnSongStart` flag is set, the global volumes will
-    ; be reset when a songs starts.
+    ; NOTE: If the `TadFlags.RESET_GLOBAL_VOLUMES_ON_SONG_START` flag is set, the global volumes
+    ; will be reset when a songs starts.
     SET_GLOBAL_MUSIC_VOLUME = 16
 
     ; Set the global sound-effect volume
     ;  * parameter0: the music volume.
     ;    A 255 sfx-volume will not modify the channel volume.
     ;
-    ; NOTE: If the `ResetGlobalVolumesOnSongStart` flag is set, the global volumes will
-    ; be reset when a songs starts.
+    ; NOTE: If the `TadFlags.RESET_GLOBAL_VOLUMES_ON_SONG_START` flag is set, the global volumes
+    ; will be reset when a songs starts.
     SET_GLOBAL_SFX_VOLUME = 18
 
     ; Set the global music and sound-effect volumes
     ;  * parameter0: the music volume.
     ;  * parameter1: the sound-effect volume.
     ;
-    ; NOTE: If the `ResetGlobalVolumesOnSongStart` flag is set, the global volumes will
-    ; be reset when a songs starts.
+    ; NOTE: If the `TadFlags.RESET_GLOBAL_VOLUMES_ON_SONG_START` flag is set, the global volumes
+    ; will be reset when a songs starts.
     SET_GLOBAL_VOLUMES = 20
 .endblock
 
