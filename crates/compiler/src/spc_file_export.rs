@@ -153,7 +153,7 @@ pub fn export_spc_file(
         common_audio_data.min_song_data_addr(),
         LoaderDataType {
             play_song: true,
-            audio_mode: AudioMode::Stereo,
+            audio_mode: AudioMode::Surround,
             reset_global_volumes: true,
         },
     )?;
