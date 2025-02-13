@@ -94,12 +94,12 @@
 .ifndef TAD_DEFAULT_FLAGS
     ;; Default TAD flags
     ;; MUST NOT set RELOAD_COMMON_AUDIO_DATA
-    TAD_DEFAULT_FLAGS = TAD_Flags__PLAY_SONG_IMMEDIATELY
+    TAD_DEFAULT_FLAGS = TAD_FLAGS_PLAY_SONG_IMMEDIATELY
 .endif
 
 .ifndef TAD_DEFAULT_AUDIO_MODE
     ;; Starting audio mode
-    TAD_DEFAULT_AUDIO_MODE = TAD_AudioMode__MONO
+    TAD_DEFAULT_AUDIO_MODE = TAD_MONO
 .endif
 
 .ifndef TAD_DEFAULT_TRANSFER_PER_FRAME
@@ -304,21 +304,21 @@ TAD_FIRST_LOADING_SONG_STATE = TAD_State__LOADING_SONG_DATA_PAUSED
 ;; Flags
 ;; -----
 
-TAD_Flags__RELOAD_COMMON_AUDIO_DATA = 1 << 7
-TAD_Flags__PLAY_SONG_IMMEDIATELY    = 1 << 6
-TAD_Flags__RESET_GLOBAL_VOLUMES_ON_SONG_START = 1 << 5
+TAD_FLAGS_RELOAD_COMMON_AUDIO_DATA = 1 << 7
+TAD_FLAGS_PLAY_SONG_IMMEDIATELY = 1 << 6
+TAD_FLAGS_RESET_GLOBAL_VOLUMES_ON_SONG_START = 1 << 5
 
 ;; A mask for the flags that are sent to the loader
-TAD_Flags__ALL_FLAGS = TAD_Flags__RELOAD_COMMON_AUDIO_DATA | TAD_Flags__PLAY_SONG_IMMEDIATELY | TAD_Flags__RESET_GLOBAL_VOLUMES_ON_SONG_START
+TAD_ALL_FLAGS = TAD_FLAGS_RELOAD_COMMON_AUDIO_DATA | TAD_FLAGS_PLAY_SONG_IMMEDIATELY | TAD_FLAGS_RESET_GLOBAL_VOLUMES_ON_SONG_START
 
 
 ;; -----------
 ;; Audio modes
 ;; -----------
 
-TAD_AudioMode__MONO     = 0
-TAD_AudioMode__STEREO   = 1
-TAD_AudioMode__SURROUND = 2
+TAD_MONO     = 0
+TAD_STEREO   = 1
+TAD_SURROUND = 2
 
 TAD_N_AUDIO_MODES = 3
 
@@ -1098,17 +1098,17 @@ tadPrivate_loader_gotoNextBank:
         ; Songs
 
         ; Tad_flags MUST NOT have the stereo/surround loader flag set
-        .assert (TAD_Flags__ALL_FLAGS & TAD_LoaderDataType__STEREO_FLAG) == 0
-        .assert (TAD_Flags__ALL_FLAGS & TAD_LoaderDataType__SURROUND_FLAG) == 0
+        .assert (TAD_ALL_FLAGS & TAD_LoaderDataType__STEREO_FLAG) == 0
+        .assert (TAD_ALL_FLAGS & TAD_LoaderDataType__SURROUND_FLAG) == 0
 
         ; SONG_DATA_FLAG must always be sent and it also masks the RELOAD_COMMON_AUDIO_DATA flag in TadLoaderDataType
-        .assert TAD_Flags__RELOAD_COMMON_AUDIO_DATA == TAD_LoaderDataType__SONG_DATA_FLAG
+        .assert TAD_FLAGS_RELOAD_COMMON_AUDIO_DATA == TAD_LoaderDataType__SONG_DATA_FLAG
 
-        .assert TAD_Flags__PLAY_SONG_IMMEDIATELY == TAD_LoaderDataType__PLAY_SONG_FLAG
-        .assert TAD_Flags__RESET_GLOBAL_VOLUMES_ON_SONG_START == TAD_LoaderDataType__RESET_GLOBAL_VOLUMES_FLAG
+        .assert TAD_FLAGS_PLAY_SONG_IMMEDIATELY == TAD_LoaderDataType__PLAY_SONG_FLAG
+        .assert TAD_FLAGS_RESET_GLOBAL_VOLUMES_ON_SONG_START == TAD_LoaderDataType__RESET_GLOBAL_VOLUMES_FLAG
 
         ; Clear unused TAD flags
-        lda     #$ff ~ TAD_Flags__ALL_FLAGS
+        lda     #$ff ~ TAD_ALL_FLAGS
         trb     tad_flags
 
         ; Convert `tad_audioMode` to TAD_LoaderDataType
@@ -1125,7 +1125,7 @@ tadPrivate_loader_gotoNextBank:
         bcc     @WFL_Return
 
         ; Determine next state
-        .assert TAD_Flags__PLAY_SONG_IMMEDIATELY == $40
+        .assert TAD_FLAGS_PLAY_SONG_IMMEDIATELY == $40
         .assert TAD_State__LOADING_SONG_DATA_PAUSED + 1 == TAD_State__LOADING_SONG_DATA_PLAY
         lda     tad_flags
         asl
@@ -1305,10 +1305,10 @@ tad_init:
 
 
     ; Set default settings
-    .if (TAD_DEFAULT_FLAGS) & TAD_Flags__RELOAD_COMMON_AUDIO_DATA
+    .if (TAD_DEFAULT_FLAGS) & TAD_FLAGS_RELOAD_COMMON_AUDIO_DATA
         .fail "RELOAD_COMMON_AUDIO_DATA flag must not be use in TAD_DEFAULT_FLAGS"
     .endif
-    .if ((TAD_DEFAULT_FLAGS) & TAD_Flags__ALL_FLAGS) != (TAD_DEFAULT_FLAGS)
+    .if ((TAD_DEFAULT_FLAGS) & TAD_ALL_FLAGS) != (TAD_DEFAULT_FLAGS)
         .fail "Invalid TAD_DEFAULT_FLAGS"
     .endif
     .if (TAD_DEFAULT_AUDIO_MODE) < 0 || (TAD_DEFAULT_AUDIO_MODE) >= TAD_N_AUDIO_MODES
@@ -1456,7 +1456,7 @@ tad_loadSong:
     sta     tadPrivate_nextSong
 
 
-    lda     #TAD_Flags__RELOAD_COMMON_AUDIO_DATA
+    lda     #TAD_FLAGS_RELOAD_COMMON_AUDIO_DATA
     trb     tad_flags
     beq     @SongRequested
         ; Common audio data requested
@@ -1564,9 +1564,9 @@ tad_setTransferSize:
 
         lda.l   tad_flags
         .if \3
-            ora     #TAD_Flags__\2
+            ora     #TAD_FLAGS_\2
         .else
-            and     #~TAD_Flags__\2
+            and     #~TAD_FLAGS_\2
         .endif
         sta.l   tad_flags
 
