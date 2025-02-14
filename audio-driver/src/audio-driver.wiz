@@ -794,6 +794,12 @@ func mainloop() {
         smp.control = smp.CONTROL__ENABLE_TIMER_0 | smp.CONTROL__ENABLE_TIMER_1;
     }
 
+    // Clear smp.copunter_0 and smp.counter_1.
+    // Fixes a single audible song tick/note when LoaderDataType.PLAY_SONG_BIT is clear
+    // and the console has just powered-on.
+    // (The bug does not occur when the console is reset or when a new song is loaded).
+    ya = *(&smp.counter_0 as *u16);
+
     // Process first song tick immediately
     // So echo registers are setup before the first sfx tick
     goto ProcessMusicChannel;
