@@ -21,10 +21,13 @@ use crate::driver_constants::{
 use crate::echo::EchoEdl;
 use crate::envelope::{Envelope, Gain};
 use crate::errors::{ChannelError, SongError, SongTooLargeError};
-use crate::mml::{self, MetaData, Section};
+use crate::mml::{MetaData, Section};
 use crate::notes::{Note, Octave};
 use crate::subroutines::{NoSubroutines, Subroutine};
 use crate::time::{TickClock, TickCounter, TickCounterWithLoopFlag};
+
+#[cfg(feature = "mml_tracking")]
+use crate::mml::note_tracking::CursorTracker;
 
 use std::cmp::min;
 use std::fmt::Debug;
@@ -62,7 +65,7 @@ pub struct BytecodePos {
 #[derive(Clone)]
 pub struct SongBcTracking {
     pub bytecode: Vec<BytecodePos>,
-    pub cursor_tracker: mml::note_tracking::CursorTracker,
+    pub cursor_tracker: CursorTracker,
 
     /// Used to determine if a bytecode offset is in a subroutine or not.
     /// `bc_offset` is in a subroutine if `bc_offset < firt_channel_bc_offset`.
