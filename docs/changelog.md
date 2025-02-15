@@ -1,8 +1,11 @@
 Terrific Audio Driver Changelog
 ===============================
 
-Version 0.1.0
-=============
+Version 0.1.0 (beta)
+====================
+
+**CAUTION**: The loader and 65816 APIs have changed.  If you are using a 65816 API, you will need to update it.
+
 
 **Known bugs**:
  * Sample Analyser spectrum can only analyse the first 32768 samples in a long BRR sample
@@ -65,6 +68,12 @@ GUI changes:
 
 API changes:
  * `Tad_QueueCommand` and `Tad_QueueCommandOverride` can now queue IO commands with 2 parameters.
+ * Added `SET_GLOBAL_MUSIC_VOLUME`, `SET_GLOBAL_SFX_VOLUME` and `SET_GLOBAL_VOLUMES` IO Commands
+ * Added `Tad_audioMode` global variable and `TadAudioMode` enum.
+    * The old subroutines for setting the audio mode have been removed.
+ * `Tad_flags` is now a public variable
+ * The `RELOAD_COMMON_AUDIO_DATA` flag is now checked and cleared in `Tad_LoadSong`
+ * Added `RESET_GLOBAL_VOLUMES_ON_SONG_START` flag
  * Added a way to override the default values (see the API's readme file for more details)
 
 
