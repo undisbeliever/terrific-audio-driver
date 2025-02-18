@@ -1159,6 +1159,8 @@ tadPrivate_loader_gotoNextBank:
     ; Y = data size
     jsr     tadPrivate_loader_setDataToTransfer
 
+    ; Must set state AFTER the `loadAudioData()` call.
+    ; `loadAudioData()` might call `tad_finishLoadingData()`.
     pla
     sta     tadPrivate_state
 @WFL_Return:

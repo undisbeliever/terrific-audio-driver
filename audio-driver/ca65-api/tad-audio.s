@@ -1150,6 +1150,8 @@ ReturnFalse:
     ; Y = data size
     jsr     TadPrivate_Loader_SetDataToTransfer
 
+    ; Must set state AFTER the `LoadAudioData` call.
+    ; `LoadAudioData` might call `Tad_FinishLoadingData`.
     pla
     sta     TadPrivate_state
 
