@@ -368,7 +368,7 @@ TAD_MIN_TICK_CLOCK = 64
 ;; `Tad_FinishLoadingData` will not transfer any audio data.
 ;;
 ;; CAUTION: The audio driver starts in the paused state if the `TadFlags::PLAY_SONG_IMMEDIATELY`
-;; flag is clear when `Tad_Process` calls `LoaderDataType`.
+;; flag is clear when `Tad_Process` receives the ready signal from the loader.
 ;;
 ;; IN: A = 0 - play a blank (silent song)
 ;; IN: A >= 1 - Play song number `A`

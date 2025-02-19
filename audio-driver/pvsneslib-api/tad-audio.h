@@ -507,7 +507,7 @@ void tad_queueSoundEffect(u8 sfx_id);
  * tad_finishLoadingData() will not transfer any audio data.
  *
  * CAUTION: The audio driver starts in the paused state if the \ref TAD_FLAGS_PLAY_SONG_IMMEDIATELY
- * flag is clear when `Tad_Process` calls `LoaderDataType`.
+ * flag is clear when `Tad_Process` receives the ready signal from the loader.
  *
  * @param song_id the song id to play (0 = silence, first song starts at 1)
  */
