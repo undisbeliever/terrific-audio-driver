@@ -69,6 +69,9 @@ TadCommand .block
     ; Disabled channels will be keyed-off.
     ;
     ; NOTE: The main volume is reset whenever a new song is loaded.
+    ;
+    ; CAUTION: This command does not change the echo volume.
+    ; This command is not recommended with songs that contain echo.
     SET_MAIN_VOLUME = 10
 
     ; Enables or disables music channels.
@@ -90,6 +93,8 @@ TadCommand .block
     ;
     ; NOTE: If the `TadFlags.RESET_GLOBAL_VOLUMES_ON_SONG_START` flag is set, the global volumes
     ; will be reset when a songs starts.
+    ;
+    ; CAUTION: This command does not change the echo volume.
     SET_GLOBAL_MUSIC_VOLUME = 16
 
     ; Set the global sound-effect volume
@@ -98,6 +103,8 @@ TadCommand .block
     ;
     ; NOTE: If the `TadFlags.RESET_GLOBAL_VOLUMES_ON_SONG_START` flag is set, the global volumes
     ; will be reset when a songs starts.
+    ;
+    ; CAUTION: This command does not change the echo volume.
     SET_GLOBAL_SFX_VOLUME = 18
 
     ; Set the global music and sound-effect volumes
@@ -106,6 +113,8 @@ TadCommand .block
     ;
     ; NOTE: If the `TadFlags.RESET_GLOBAL_VOLUMES_ON_SONG_START` flag is set, the global volumes
     ; will be reset when a songs starts.
+    ;
+    ; CAUTION: This command does not change the echo volume.
     SET_GLOBAL_VOLUMES = 20
 .endblock
 

@@ -260,7 +260,7 @@ namespace IO {
         // Stop all active sound effects
         STOP_SOUND_EFFECTS = 8,
 
-        // Set the main volume
+        // Set the main volume (`MVOL` register)
         //  * parameter0: signed i8 volume
         //
         // NOTE: The main volume is reset whenever a new song is loaded.
@@ -285,6 +285,8 @@ namespace IO {
         //  * parameter0: the music volume.
         //    A 255 music-volume will not modify the channel volume.
         //
+        // CAUTION: This command does not change the echo volume.
+        //
         // NOTE: Global volumes persist after a new song or common-audio-data is loaded.
         SET_GLOBAL_MUSIC_VOLUME = 16,
 
@@ -292,12 +294,16 @@ namespace IO {
         //  * parameter0: the sound-effect volume.
         //    A 255 sfx-volume will not modify the channel volume.
         //
+        // CAUTION: This command does not change the echo volume.
+        //
         // NOTE: Global volumes persist after a new song or common-audio-data is loaded.
         SET_GLOBAL_SFX_VOLUME = 18,
 
         // Set the global music and sound-effect volumes
         //  * parameter0: the music volume.
         //  * parameter1: the sound-effect volume.
+        //
+        // CAUTION: This command does not change the echo volume.
         //
         // NOTE: Global volumes persist after a new song or common-audio-data is loaded.
         SET_GLOBAL_VOLUMES = 20,
