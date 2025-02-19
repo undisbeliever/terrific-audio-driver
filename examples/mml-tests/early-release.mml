@@ -40,6 +40,12 @@ A q48,24,D8
 A c d d f2.  c d d e2.  r
 
 
+; The tick parameters are MML lengths when prefixed with `l`
+; (`ql8,l32` == `q24,6` with a 192 ZenLen)
+A ql8,l32
+A c d d f2.  c d d e2.  r
+
+
 ; Disable early release
 A q0
 A c d d f2.  c d d e2.  r

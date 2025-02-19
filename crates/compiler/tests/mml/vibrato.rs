@@ -442,3 +442,23 @@ A @1 ~25,10 c !s MP20,4 d
         ],
     );
 }
+
+#[test]
+fn l_in_vibrato() {
+    assert_line_matches_line("~20,l2", "~20,48");
+    assert_line_matches_line("~30,l3", "~30,32");
+
+    assert_line_matches_line("C192 ~40,l2", "~40,96");
+    assert_line_matches_line("C192 ~50,l4", "~50,48");
+    assert_line_matches_line("C192 ~50,l8.", "~50,36");
+}
+
+#[test]
+fn l_in_mp_vibrato() {
+    assert_line_matches_line("MP20,l2 c", "MP20,48 c");
+    assert_line_matches_line("MP30,l3 c", "MP30,32 c");
+
+    assert_line_matches_line("C192 MP40,l2 c", "MP40,96 c%48");
+    assert_line_matches_line("C192 MP50,l4 c", "MP50,48 c%48");
+    assert_line_matches_line("C192 MP60,l8. c", "MP60,36 c%48");
+}

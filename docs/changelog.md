@@ -61,6 +61,10 @@ MML changes:
  * Added global echo commands
  * Added `#MaxEchoLength` header
  * The `\asm` command requires a space after `\asm` (breaking change)
+ * `<ticks>` arguments now can be prefixed with `l` to specify MML lengths instead of tick numbers.
+   For example:
+    * `ql16,18` is equal to `q6,18` with a 96 ZenLen
+    * `Vs+100,l2` is equal to `Vs+100,48` with a 96 ZenLen
 
 GUI changes:
  * Fixed a rust bytecode interpreter desync caused global instructions to be executed in the wrong order.

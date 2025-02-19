@@ -26,3 +26,6 @@ A V128 Vs-200,80 c4 & V32 c4 r4
 ; Test set_pan_and_volume disables volume slide
 A V50 Vs+200,200 c2 \asm { set_pan_and_volume 64 40 } c4 r4
 
+; The ticks argument is an MML length when prefixed with `l`
+A v0 vs+16,l2 c1 & Vs-255,l2 r2
+

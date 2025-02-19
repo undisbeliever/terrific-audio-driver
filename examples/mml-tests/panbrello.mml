@@ -23,3 +23,9 @@ A px0 p~15,10 c2 px+4 c4 r4
 ; Test set_pan_and_volume disables panbrello
 A px0 p~15,2 c2 \asm { set_pan_and_volume 64 64 } c4 r4
 
+
+; The ticks argument is an MML length when prefixed with `l`
+; (these two lines should sound the same)
+A px0 p~32,l16 c1 r4
+A px0 p~32,6   c1 r4
+

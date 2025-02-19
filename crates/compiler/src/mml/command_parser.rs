@@ -505,11 +505,52 @@ impl CommaTicks for PanbrelloQuarterWavelengthInTicks {
 
 fn parse_comma_ticks<T: CommaTicks>(pos: FilePos, p: &mut Parser) -> Option<T> {
     if next_token_matches!(p, Token::Comma) {
-        let pos = p.peek_pos();
-        parse_unsigned_newtype(pos, p)
+        let after_pos = p.peek_pos();
+
+        match_next_token!(
+            p,
+
+            Token::SetDefaultLength => parse_l_ticks_argument(pos, p),
+
+            &Token::Number(n) | &Token::HexNumber(n) => {
+                match n.try_into() {
+                    Ok(o) => Some(o),
+                    Err(e) => {
+                        p.add_error(after_pos, e.into());
+                        None
+                    }
+                }
+            },
+            #_ => {
+                p.add_error(pos, T::MISSING_ERROR.into());
+                None
+            }
+        )
     } else {
         p.add_error(pos, T::NO_COMMA_ERROR.into());
         None
+    }
+}
+
+fn parse_l_ticks_argument<T: UnsignedValueNewType>(pos: FilePos, p: &mut Parser) -> Option<T> {
+    match parse_untracked_optional_mml_length(p) {
+        Some(l) => match l.to_tick_count(p.default_length(), p.state().zenlen) {
+            Ok(tc) => match tc.value().try_into() {
+                Ok(o) => Some(o),
+                Err(e) => {
+                    p.add_error(pos, e.into());
+                    None
+                }
+            },
+            Err(e) => {
+                p.add_error(pos, e.into());
+                None
+            }
+        },
+        None => {
+            p.add_error(pos, T::MISSING_ERROR.into());
+            None
+        }
     }
 }
 
@@ -763,6 +804,17 @@ fn parse_set_early_release_arguments(p: &mut Parser) -> (EarlyReleaseMinTicks, O
                 )
             },
 
+            Token::SetDefaultLength => {
+                let min = parse_l_ticks_argument(pos, p).unwrap_or(min);
+
+                let comma_pos = p.peek_pos();
+                match_next_token!(
+                    p,
+                    Token::Comma => (min, parse_early_release_gain_argument(comma_pos, p)),
+                    #_ => (min, OptionalGain::NONE)
+                )
+            },
+
             #_ => {
                 p.add_error(comma_pos, ValueError::NoEarlyReleaseMinTicksOrGain.into());
                 (min, OptionalGain::NONE)
@@ -774,10 +826,15 @@ fn parse_set_early_release_arguments(p: &mut Parser) -> (EarlyReleaseMinTicks, O
 }
 
 fn parse_set_early_release(pos: FilePos, p: &mut Parser) -> Command {
-    match next_token_number(p) {
-        Some(0) => Command::DisableEarlyRelease,
-        Some(t) => {
-            let ticks = match t.try_into() {
+    match_next_token!(
+        p,
+
+        &Token::Number(0) | &Token::HexNumber(0) => {
+            Command::DisableEarlyRelease
+        },
+
+        &Token::Number(n) | &Token::HexNumber(n) => {
+            let ticks = match n.try_into() {
                 Ok(t) => t,
                 Err(e) => {
                     p.add_error(pos, ChannelError::ValueError(e));
@@ -787,13 +844,20 @@ fn parse_set_early_release(pos: FilePos, p: &mut Parser) -> Command {
             let (min, g) = parse_set_early_release_arguments(p);
 
             Command::SetEarlyRelease(ticks, min, g)
-        }
-        None => {
+        },
+
+        Token::SetDefaultLength => {
+            let ticks = parse_l_ticks_argument(pos, p).unwrap_or(EarlyReleaseTicks::MIN);
+            let (min, g) = parse_set_early_release_arguments(p);
+            Command::SetEarlyRelease(ticks, min, g)
+        },
+        #_ => {
             p.add_error(pos, ValueError::NoEarlyReleaseTicks.into());
+
             parse_set_early_release_arguments(p);
             Command::None
         }
-    }
+    )
 }
 
 fn parse_detune(pos: FilePos, p: &mut Parser) -> Command {

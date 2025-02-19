@@ -139,3 +139,26 @@ fn early_release_comma_f0_gain_is_error() {
     assert_one_error_in_mml_line("q10,F0", 5, ValueError::OptionalGainCannotBeZero.into());
     assert_one_error_in_mml_line("q10,2,F0", 7, ValueError::OptionalGainCannotBeZero.into());
 }
+
+#[test]
+fn l_in_early_release() {
+    // l on first argument
+    assert_line_matches_line("ql24", "q4");
+    assert_line_matches_line("ql16,18", "q6,18");
+    assert_line_matches_line("ql48,12,D12", "q2,12,D12");
+    assert_line_matches_line("ql32,,D12", "q3,,D12");
+    assert_line_matches_line("ql32.,D12", "q4,D12");
+
+    // l on second argument
+    assert_line_matches_line("q 2,l8", "q 2,12");
+    assert_line_matches_line("q 2,l16,E24", "q 2,6,E24");
+    assert_line_matches_line("q 2,,E24", "q 2,,E24");
+    assert_line_matches_line("q 2,E24", "q 2,E24");
+
+    // l on both arguments
+    assert_line_matches_line("C192 q l32,l64", "q 6,3");
+    assert_line_matches_line("C192 q l32.,l48.,D20", "q 9,6,D20");
+
+    // from `early-release.mml` in the examples
+    assert_line_matches_line("C192 ql8,l32", "q24,6");
+}

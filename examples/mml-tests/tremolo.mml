@@ -24,3 +24,10 @@ A v8 v~5,10 c2 \asm { set_pan_and_volume 64 128 } c4 r4
 ; Largest tremolo values
 A V127 V~127,127 [c8 d8]48 r4
 
+; The ticks argument is an MML length when prefixed with `l`
+; (these two lines should sound the same)
+A v8    v~2,l16 c1 r4
+A v8    v~2,6   c1 r4
+
+A V127 V~32,l24 c1 r4
+A V127 V~32,4   c1 r4

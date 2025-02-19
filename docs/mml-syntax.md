@@ -185,6 +185,11 @@ An MML command cannot span multiple lines.  Loops can span multiple lines.
 
 <br/>
 
+A `ticks` argument can be prefixed with an `l` to specify an MML length.
+For example: `ql8` is the same as `q12` with a 96 ZenLen.
+
+<br/>
+
 Required parameters are enclosed in `<>`.<br/>
 Optional parameters are enclosed in `[]`.<br/>
 Numbers can be decimal, or hexadecimal when prefixed with `$` (ie, `$ff`)
@@ -300,6 +305,8 @@ Numbers can be decimal, or hexadecimal when prefixed with `$` (ie, `$ff`)
  * `vs+<1..16>,<ticks>` - Volume slide up (coarse volume)
     * Volume slide is disabled when the volume is set or adjusted.
     * Volume slide is disabled on overflows and underflows.
+    * *ticks* can be prefixed with an `l` to specify an MML length  
+      For example: `vs+4,l2` is the same as `vs+4,48` with a 96 ZenLen.
  * `vs-<1..16>,<ticks>` - Volume slide down (coarse volume)
  * `Vs+<1..255>,<ticks>` - Volume slide up (fine volume)
  * `Vs-<1..255>,<ticks>` - Volume slide down (fine volume)
@@ -307,6 +314,8 @@ Numbers can be decimal, or hexadecimal when prefixed with `$` (ie, `$ff`)
     * Tremolo will amplitude modulate the channel volume in a sawtooth pattern every tick.
     * The first parameter is the center-to-peak depth in volume units.
     * *quarter_wavelength_in_ticks* controls the rate (speed) of the tremolo.
+    * *quarter_wavelength_in_ticks* can be prefixed with `l` to specify MML length.  
+      For example: `v~2,l32` is equal to `v~2,3` with a 96 ZenLen.
     * Tremolo is disabled when the volume is set or adjusted.
     * Tremolo is disabled on overflows and underflows.
  * `V~<1..127>,<quarter_wavelength_in_ticks>` - Tremolo (fine volume)
@@ -319,6 +328,8 @@ Numbers can be decimal, or hexadecimal when prefixed with `$` (ie, `$ff`)
     * Panbrello will amplitude modulate the pan in a sawtooth pattern every tick.
     * The first parameter is the center-to-peak depth in pan units.
     * *quarter_wavelength_in_ticks* controls the rate (speed) of the panbrello.
+    * `quarter_wavelength_in_ticks` can be prefixed with `l` to specify MML length.  
+      For example: `p~15,l32` is equal to `p~15,3` with a 96 ZenLen.
     * Panbrello is disabled when the pan is set or adjusted.
     * Panbrello is disabled on overflows and underflows.
 
@@ -399,6 +410,8 @@ Numbers can be decimal, or hexadecimal when prefixed with `$` (ie, `$ff`)
     * Generates a `set_vibrato` audio instruction bytecode.
     * Vibrato will add or subtract a `pitch_offset_per_tick` value to the S-DSP `PITCH` register in a sawtooth pattern on every tick.
     * `quarter_wavelength_in_ticks` value controls the rate of vibrato.
+    * `quarter_wavelength_in_ticks` can be prefixed with `l` to specify MML length.  
+      For example: `~20,l32` is the same as `~20,3` with a 96 ZenLen.
     * Manual vibrato will disable MP Vibrato.
     * Manual vibrato will persist across subroutine calls.
 
@@ -407,6 +420,8 @@ Numbers can be decimal, or hexadecimal when prefixed with `$` (ie, `$ff`)
  * `MP<depth_in_cents>,<quarter_wavelength_in_ticks>` - MP Vibrato
     * `depth_in_cents` controls the depth of the vibrato, in cents either side of the note (half-extent).
     * `quarter_wavelength_in_ticks` value controls the rate of vibrato.
+    * `quarter_wavelength_in_ticks` can be prefixed with `l` to specify MML length.  
+      For example: `MP50,l32` is the same as `MP50,3` with a 96 ZenLen.
     * When MP Vibrato is activated the MML compiler will calculate a `pitch_offset_per_tick` value for each subsequent note played.  This greatly simplifies and speedups the SPC-700 code, but requires the MML compiler to know which instrument is playing the note.
     * MP Vibrato does not take effect immediately.  The vibrato starts on the next note played.
     * CAUTION: MP Vibrato does not persist across subroutine calls.
@@ -433,7 +448,9 @@ Numbers can be decimal, or hexadecimal when prefixed with `$` (ie, `$ff`)
     * CAUTION: This command changes temporary GAIN on the next note.
  * `q<1-254>[,<1-255>][,<gain>]` - early release (sound cut)
     * First parameter: number of ticks to cut the note earlier then normal.
+       * Can be prefixed with `l` to specify MML length.  (ie, `ql8` == `q12` with a 96 ZenLen)
     * Second parameter: minimum ticks before a note is cut (default 1 tick).
+       * Can be prefixed with `l` to specify MML length.  (ie, `q10,l4` == `q10,24` with a 96 ZenLen)
     * Third parameter: temporally change the envelope to GAIN(*gain*) on early-release.
     * If there is no GAIN parameter, the note will be key-offed on early-release.
     * Examples:

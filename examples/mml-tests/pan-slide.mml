@@ -25,3 +25,5 @@ A px-64 ps+128,100 c4 & p+1 c4 r4
 ; Test set_pan_and_volume disables pan slide
 A px0 ps+100,200 c2 \asm { set_pan_and_volume 32 128 } c4 r4
 
+; The ticks argument is an MML length when prefixed with `l`
+A p0 ps+128,l2 c2 r4

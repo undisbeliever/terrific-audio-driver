@@ -439,3 +439,39 @@ fn panbrello() {
 
     assert_one_error_in_mml_line("p~10", 1, ValueError::NoCommaQuarterWavelength.into());
 }
+
+#[test]
+fn l_in_volume_slide() {
+    assert_line_matches_line("vs+5,l8", "vs+5,12");
+    assert_line_matches_line("vs-6,l2", "vs-6,48");
+
+    assert_line_matches_line("C192 Vs+50,l8", "Vs+50,24");
+    assert_line_matches_line("C192 Vs-60,l4", "Vs-60,48");
+}
+
+#[test]
+fn l_in_tremolo() {
+    assert_line_matches_line("C192 v~3,l24", "v~3,8");
+    assert_line_matches_line("C192 v~4,l32", "v~4,6");
+
+    assert_line_matches_line("V~50,l8", "V~50,12");
+    assert_line_matches_line("V~60,l3", "V~60,32");
+}
+
+#[test]
+fn l_in_pan_slide() {
+    assert_line_matches_line("ps+10,l8", "ps+10,12");
+    assert_line_matches_line("ps-20,l2", "ps-20,48");
+
+    assert_line_matches_line("C160 ps+50,l6", "ps+50,26");
+    assert_line_matches_line("C160 ps-60,l5", "ps-60,32");
+}
+
+#[test]
+fn l_in_panbrello() {
+    assert_line_matches_line("p~60,l8", "p~60,12");
+    assert_line_matches_line("p~50,l3", "p~50,32");
+
+    assert_line_matches_line("C192 p~40,l32", "p~40,6");
+    assert_line_matches_line("C192 p~30,l24", "p~30,8");
+}
