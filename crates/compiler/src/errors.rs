@@ -200,8 +200,8 @@ pub enum ValueError {
     NotEnoughLoops,
     TooManyLoops,
 
-    MissingNoteLengthTickCount,
-    InvalidNoteLength,
+    MissingLengthTickCount,
+    InvalidLength,
     DotsNotAllowedAfterClockValue,
     InvalidDefaultLength,
     MissingDefaultLength,
@@ -1099,8 +1099,8 @@ impl Display for ValueError {
             Self::NotEnoughLoops => write!(f, "not enough loops (min: {})", LoopCount::MIN_LOOPS),
             Self::TooManyLoops => write!(f, "too many loops (max: {})", LoopCount::MAX_LOOPS),
 
-            Self::MissingNoteLengthTickCount => write!(f, "missing tick count in note length"),
-            Self::InvalidNoteLength => write!(f, "invalid note length"),
+            Self::MissingLengthTickCount => write!(f, "missing tick count in length"),
+            Self::InvalidLength => write!(f, "invalid length"),
             Self::DotsNotAllowedAfterClockValue => {
                 write!(f, "dots not allowed after a tick count length")
             }

@@ -157,7 +157,7 @@ impl MmlDefaultLength {
             let zenlen = zenlen.as_u8();
 
             if l == 0 || l > zenlen {
-                return Err(ValueError::InvalidNoteLength);
+                return Err(ValueError::InvalidLength);
             }
 
             let ticks = u32::from(zenlen / l);
@@ -203,7 +203,7 @@ impl MmlLength {
         let ticks = if self.length_in_ticks {
             let ticks = match self.length {
                 Some(l) => l,
-                None => return Err(ValueError::MissingNoteLengthTickCount),
+                None => return Err(ValueError::MissingLengthTickCount),
             };
             if self.number_of_dots != 0 {
                 return Err(ValueError::DotsNotAllowedAfterClockValue);
@@ -216,7 +216,7 @@ impl MmlLength {
                     let zenlen = zenlen.0.into();
 
                     if l == 0 || l > zenlen {
-                        return Err(ValueError::InvalidNoteLength);
+                        return Err(ValueError::InvalidLength);
                     }
                     zenlen / l
                 }
