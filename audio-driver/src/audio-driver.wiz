@@ -1545,23 +1545,32 @@ const CommandFunctionTable : [func(parameter0: u8 in y) ; IO.ToDriver.N_COMMANDS
 
 // Pause music and sound effects
 func pause() {
-    return __write_control_and_keyoff(
-        0,  // Disable timers
-        0xff, // key-off all channels
-    );
+    // Disable timers
+    smp.control = 0;
+
+    // Reset counters to fix a music/sfx channel playing a single tick after a `pause` IO command.
+    // (clears counter_0 and counter_1)
+    ya = *(&smp.counter_0 as *u16);
+
+    // key-off all channels
+    return __keyoff(0xff);
 }
 
 
 #[fallthrough]
 func pause_music_play_sfx() {
-    a = smp.CONTROL__ENABLE_TIMER_1; // Disable music timer, enable sfx timer
+    // Disable music timer, enable sfx timer
+    smp.control = smp.CONTROL__ENABLE_TIMER_1;
+
+    // Reset counter to fix music channel playing a single tick after a `pause_music_play_sfx` IO command.
+    a = smp.counter_0;
+
     y = musicSfxChannelMask; // key-off music channels
 
-// fallthrough
+// fallthrough into __keyoff()
 }
 
-func __write_control_and_keyoff(control : u8 in a, channelsMask: u8 in y) {
-    smp.control = a;
+func __keyoff(channelsMask: u8 in y) {
     write_dsp(GlobalDspAddr.KOFF, y);
 }
 
