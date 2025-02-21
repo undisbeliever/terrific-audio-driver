@@ -69,6 +69,8 @@ MML changes:
 GUI changes:
  * Fixed a rust bytecode interpreter desync caused global instructions to be executed in the wrong order.
  * Fixed play-from-cursor not playing the note immediately after the cursor
+ * Fixed a sound effect containing a new-sound-effect token (`\n===`) not saving and loading correctly.  
+   The new-sound-effect token will be silently transformed into a comment when the sound-effects file is saved to disk.
 
 API changes:
  * `Tad_QueueCommand` and `Tad_QueueCommandOverride` can now queue IO commands with 2 parameters.

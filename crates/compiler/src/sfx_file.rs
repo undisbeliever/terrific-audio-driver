@@ -13,6 +13,8 @@ use std::path::PathBuf;
 
 const NEW_SFX_TOKEN_NO_NEWLINE: &str = "===";
 const NEW_SFX_TOKEN: &str = "\n===";
+const COMMENTED_NEW_SFX_TOKEN: &str = "\n;===";
+
 const OLD_MML_SFX_IDENTIFIER: &str = "MML\n";
 const OLD_MML_SFX_IDENTIFIER_NO_NEWLINE: &str = "MML";
 
@@ -175,6 +177,10 @@ pub fn build_sound_effects_file<'a>(
             SoundEffectText::Mml(s) => (s, true),
         };
 
+        // Silently replace NEW_SFX_TOKEN lines with a comment so the number of sound effects does
+        // not change when loading the sound-effects file.
+        let sfx_lines = sfx_lines.replace(NEW_SFX_TOKEN, COMMENTED_NEW_SFX_TOKEN);
+
         if i == 0 && subroutines.0.is_empty() {
             out.push_str("=== ");
         } else {
@@ -206,7 +212,7 @@ pub fn build_sound_effects_file<'a>(
         }
 
         out.push('\n');
-        out.push_str(sfx_lines);
+        out.push_str(&sfx_lines);
     }
 
     out
@@ -674,6 +680,45 @@ c
                     sfx: SoundEffectText::Mml("MML\n\n".to_owned()),
                 }]
             }
+        );
+    }
+
+    #[test]
+    fn new_sfx_token_in_sound_effect_text() {
+        let subroutines = SfxSubroutinesMml("".to_owned());
+        let sound_effects = vec![
+            SoundEffectInput {
+                name: Name::new_lossy("first".to_owned()),
+                flags: SfxFlags::default(),
+                sfx: SoundEffectText::BytecodeAssembly(
+                    "line\n=== not a header ===\nline".to_owned(),
+                ),
+            },
+            SoundEffectInput {
+                name: Name::new_lossy("second".to_owned()),
+                flags: SfxFlags::default(),
+                sfx: SoundEffectText::Mml("line\n=== not a header\nline".to_owned()),
+            },
+        ];
+
+        let sfx_file = build_sound_effects_file(&subroutines, sound_effects.iter());
+
+        let read_sfx = sfx_file_from_text_file(TextFile {
+            path: Default::default(),
+            file_name: Default::default(),
+            contents: sfx_file,
+        });
+
+        assert_eq!(read_sfx.subroutines, subroutines);
+        assert_eq!(read_sfx.sound_effects.len(), 2);
+
+        assert_eq!(
+            read_sfx.sound_effects[0].sfx,
+            SoundEffectText::BytecodeAssembly("line\n;=== not a header ===\nline".to_owned())
+        );
+        assert_eq!(
+            read_sfx.sound_effects[1].sfx,
+            SoundEffectText::Mml("line\n;=== not a header\nline".to_owned())
         );
     }
 
