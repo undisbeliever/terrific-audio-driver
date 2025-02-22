@@ -53,6 +53,7 @@ Audio driver changes:
     * In stereo mode, the left and right channels are both inverted if the mono invert-flag is set.
  * Added global music and sound-effect volumes.
    (See the `SET_GLOBAL_MUSIC_VOLUME`, `SET_GLOBAL_SFX_VOLUME` and `SET_GLOBAL_VOLUMES` IO commands.)
+ * Fixed an audible glitch after a `PAUSE` or `PAUSE_MUSIC_PLAY_SFX` IO Command.
 
 MML changes:
  * `#EchoVolume` now accepts a stereo input
@@ -71,6 +72,7 @@ GUI changes:
  * Fixed play-from-cursor not playing the note immediately after the cursor
  * Fixed a sound effect containing a new-sound-effect token (`\n===`) not saving and loading correctly.  
    The new-sound-effect token will be silently transformed into a comment when the sound-effects file is saved to disk.
+ * Added audio driver state sub-window (F10).
 
 API changes:
  * `Tad_QueueCommand` and `Tad_QueueCommandOverride` can now queue IO commands with 2 parameters.
