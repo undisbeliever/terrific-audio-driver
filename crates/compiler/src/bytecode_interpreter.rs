@@ -527,7 +527,12 @@ pub struct ChannelState {
 }
 
 impl ChannelState {
-    fn new(channel: Option<&SongChannel>, song_data: &SongData, song_ptr: u16) -> Self {
+    fn new(
+        channel: Option<&SongChannel>,
+        song_data: &SongData,
+        song_ptr: u16,
+        uninitialised: u8,
+    ) -> Self {
         Self {
             ticks: TickCounter::new(0),
             disabled: false,
@@ -547,10 +552,10 @@ impl ChannelState {
             note_time: TickCounter::new(0),
             adsr_or_gain_override: Some((0, 0)),
             temp_gain: 0,
-            prev_temp_gain: UNINITIALISED,
+            prev_temp_gain: uninitialised,
             early_release_cmp: 0,
-            early_release_min_ticks: UNINITIALISED,
-            early_release_gain: UNINITIALISED,
+            early_release_min_ticks: uninitialised,
+            early_release_gain: uninitialised,
             detune: 0,
             volume: PanVolValue::new(STARTING_VOLUME),
             pan: PanVolValue::new(Pan::CENTER.as_u8()),
@@ -1198,7 +1203,7 @@ impl ChannelState {
         sub: &Subroutine,
         global: &mut GlobalState,
     ) -> Option<Self> {
-        let mut c = Self::new(None, song_data, song_ptr);
+        let mut c = Self::new(None, song_data, song_ptr, 0);
 
         c.instrument = Some(instrument_id.as_u8());
         c.adsr_or_gain_override = Some(envelope.engine_value());
@@ -1349,7 +1354,8 @@ where
     CAD: Deref<Target = CommonAudioData>,
     SD: Deref<Target = SongData>,
 {
-    pub fn new(
+    // Uninitialised variables are zeroed
+    pub fn new_zero(
         common_audio_data: CAD,
         song_data: SD,
         song_addr: u16,
@@ -1359,7 +1365,29 @@ where
             channels: std::array::from_fn(|i| {
                 song_data.channels()[i]
                     .as_ref()
-                    .map(|c| ChannelState::new(Some(c), &song_data, song_addr))
+                    .map(|c| ChannelState::new(Some(c), &song_data, song_addr, 0))
+            }),
+            tick_counter: TickCounter::default(),
+            global: GlobalState::new(song_data.metadata().tick_clock, &song_data),
+            audio_mode,
+            song_data,
+            song_addr,
+            common_audio_data,
+        }
+    }
+
+    // Uninitialised variables are set to UNINITIALISED
+    pub fn new_uninitialised(
+        common_audio_data: CAD,
+        song_data: SD,
+        song_addr: u16,
+        audio_mode: AudioMode,
+    ) -> Self {
+        Self {
+            channels: std::array::from_fn(|i| {
+                song_data.channels()[i]
+                    .as_ref()
+                    .map(|c| ChannelState::new(Some(c), &song_data, song_addr, UNINITIALISED))
             }),
             tick_counter: TickCounter::default(),
             global: GlobalState::new(song_data.metadata().tick_clock, &song_data),
@@ -2174,7 +2202,7 @@ mod test {
             bytecode[0] = opcode;
 
             let mut global = blank_global_state();
-            let mut cs = ChannelState::new(None, &song, 0);
+            let mut cs = ChannelState::new(None, &song, 0, 0);
             cs.ticks = TickCounter::new(0);
             cs.instruction_ptr = 0;
             // Set stack counter to force a branch outside `bytecode` for the `end_loop` instruction

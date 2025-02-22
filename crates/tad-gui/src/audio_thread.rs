@@ -450,10 +450,10 @@ fn create_and_process_song_interpreter(
 
     match song_skip {
         SongSkip::None => Ok(Some(SharedSongInterpreter(Arc::new(RwLock::new(
-            SongInterpreter::new(cad, sd, song_addr, audio_mode),
+            SongInterpreter::new_zero(cad, sd, song_addr, audio_mode),
         ))))),
         SongSkip::Song(ticks) => {
-            let mut si = SongInterpreter::new(cad, sd, song_addr, audio_mode);
+            let mut si = SongInterpreter::new_zero(cad, sd, song_addr, audio_mode);
             if si.process_song_skip_ticks(ticks) {
                 Ok(Some(SharedSongInterpreter(Arc::new(RwLock::new(si)))))
             } else {

@@ -344,7 +344,8 @@ fn test_bc_intrepreter(song: &SongData, common_audio_data: &CommonAudioData) {
 
         let tick_count = TickCounter::new(tick_count.into());
 
-        let mut interpreter = SongInterpreter::new(common_audio_data, song, song_addr, audio_mode);
+        let mut interpreter =
+            SongInterpreter::new_uninitialised(common_audio_data, song, song_addr, audio_mode);
         let valid = interpreter.process_ticks(tick_count);
         assert!(valid, "SongIntreperter time out");
         assert_bc_intrepreter_matches_emu(&interpreter, &dummy_emu_init, &emu, tick_count);
