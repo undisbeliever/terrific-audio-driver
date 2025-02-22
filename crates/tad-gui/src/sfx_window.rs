@@ -100,6 +100,7 @@ impl SfxWindow {
         no_sfx_reason.hide();
 
         group.end();
+        window.end();
 
         let mut out = Self {
             window,
