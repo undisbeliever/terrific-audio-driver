@@ -316,7 +316,7 @@ impl MmlEditor {
         s.update_statusbar();
     }
 
-    pub fn update_note_tracking(&mut self, mon: AudioMonitorData) {
+    pub fn update_note_tracking(&mut self, mon: &AudioMonitorData) {
         self.state.borrow_mut().update_note_tracking(mon);
     }
 
@@ -643,7 +643,7 @@ impl MmlEditorState {
         self.playing_song_notes_valid = true;
     }
 
-    fn update_note_tracking(&mut self, mon: AudioMonitorData) {
+    fn update_note_tracking(&mut self, mon: &AudioMonitorData) {
         if !self.playing_song_notes_valid {
             return;
         }

@@ -505,7 +505,7 @@ impl SongTab {
             .audio_thread_started_song(song_data);
     }
 
-    pub fn monitor_timer_elapsed(&mut self, mon: AudioMonitorData) {
+    pub fn monitor_timer_elapsed(&mut self, mon: &AudioMonitorData) {
         self.state.borrow_mut().editor.update_note_tracking(mon);
     }
 

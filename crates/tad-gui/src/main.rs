@@ -609,7 +609,7 @@ impl Project {
             GuiMessage::SongMonitorTimeout => match self.audio_monitor.get() {
                 Some(mon) => match mon.song_id {
                     Some(id) => match self.song_tabs.get_mut(&id) {
-                        Some(tab) => tab.monitor_timer_elapsed(mon),
+                        Some(tab) => tab.monitor_timer_elapsed(&mon),
                         None => self.audio_monitor_timer.stop(),
                     },
                     None => {
