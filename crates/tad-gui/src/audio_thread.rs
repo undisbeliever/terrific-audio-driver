@@ -23,7 +23,10 @@ extern crate sdl2;
 use sdl2::audio::{AudioCallback, AudioDevice, AudioSpecDesired};
 use sdl2::Sdl;
 
-use std::sync::{mpsc, Arc, Mutex};
+use std::sync::LockResult;
+use std::sync::RwLockReadGuard;
+use std::sync::RwLockWriteGuard;
+use std::sync::{mpsc, Arc, Mutex, RwLock};
 use std::thread;
 use std::time::Duration;
 
@@ -129,7 +132,7 @@ impl PrivateToken {
     }
 }
 
-#[derive(Debug, Default, Clone)]
+#[derive(Default, Clone)]
 pub struct AudioMonitorData {
     pub song_id: Option<ItemId>,
     pub voice_instruction_ptrs: [Option<u16>; N_MUSIC_CHANNELS],
@@ -392,7 +395,7 @@ enum AudioDataState {
     SongWithSfxBuffer(ArcCadWithSfxBufferInAram, Arc<SongData>),
 }
 
-enum SiCad {
+pub enum SiCad {
     NoSfx(Arc<CommonAudioDataNoSfx>),
     SfxBuffer(Arc<CommonAudioDataWithSfxBuffer>),
     WithSfx(Arc<CommonAudioDataWithSfx>),
@@ -410,12 +413,30 @@ impl std::ops::Deref for SiCad {
     }
 }
 
+// Holding the SongInterpreter in a Arc<RwLock> so the driver-state window
+// can retrieve the exact CommonAudioData and SongData used by the currently playing song.
+#[derive(Debug, Clone)]
+pub struct SharedSongInterpreter(Arc<RwLock<SongInterpreter<SiCad, Arc<SongData>>>>);
+
+impl SharedSongInterpreter {
+    pub fn try_borrow(&self) -> LockResult<RwLockReadGuard<SongInterpreter<SiCad, Arc<SongData>>>> {
+        self.0.read()
+    }
+
+    // forbid GUI thread from modifying the song-interpreter
+    fn try_borrow_mut(
+        &self,
+    ) -> LockResult<RwLockWriteGuard<SongInterpreter<SiCad, Arc<SongData>>>> {
+        self.0.write()
+    }
+}
+
 fn create_and_process_song_interpreter(
     audio_data: &AudioDataState,
     song_addr: u16,
     song_skip: SongSkip,
     audio_mode: AudioMode,
-) -> Result<Option<SongInterpreter<SiCad, Arc<SongData>>>, ()> {
+) -> Result<Option<SharedSongInterpreter>, ()> {
     let (cad, sd) = match audio_data {
         AudioDataState::NotLoaded => return Ok(None),
         AudioDataState::CommonDataOutOfDate => return Ok(None),
@@ -428,11 +449,13 @@ fn create_and_process_song_interpreter(
     };
 
     match song_skip {
-        SongSkip::None => Ok(Some(SongInterpreter::new(cad, sd, song_addr, audio_mode))),
+        SongSkip::None => Ok(Some(SharedSongInterpreter(Arc::new(RwLock::new(
+            SongInterpreter::new(cad, sd, song_addr, audio_mode),
+        ))))),
         SongSkip::Song(ticks) => {
             let mut si = SongInterpreter::new(cad, sd, song_addr, audio_mode);
             if si.process_song_skip_ticks(ticks) {
-                Ok(Some(si))
+                Ok(Some(SharedSongInterpreter(Arc::new(RwLock::new(si)))))
             } else {
                 Ok(None)
             }
@@ -441,7 +464,7 @@ fn create_and_process_song_interpreter(
             match SongInterpreter::new_song_subroutine(cad, sd, song_addr, prefix, si, audio_mode) {
                 Ok(mut si) => {
                     if si.process_song_skip_ticks(ticks) {
-                        Ok(Some(si))
+                        Ok(Some(SharedSongInterpreter(Arc::new(RwLock::new(si)))))
                     } else {
                         Ok(None)
                     }
@@ -470,7 +493,7 @@ struct TadState {
 
     data_state: AudioDataState,
     song_id: Option<ItemId>,
-    bc_interpreter: Option<SongInterpreter<SiCad, Arc<SongData>>>,
+    bc_interpreter: Option<SharedSongInterpreter>,
 
     sfx_queue: SfxQueue,
 }
@@ -692,7 +715,10 @@ impl TadState {
                 song,
                 song_data_addr,
                 self.audio_mode,
-                &self.bc_interpreter,
+                self.bc_interpreter
+                    .as_ref()
+                    .map(|b| b.try_borrow_mut().unwrap())
+                    .as_deref(),
                 music_channels_mask.0,
             )
             .map_err(|_| ())?;
@@ -778,26 +804,29 @@ impl TadState {
         let s = self.emu.get_music_state()?;
 
         let voice_return_inst_ptrs = match &mut self.bc_interpreter {
-            Some(b) => {
-                // Assumes number of ticks since the last read was < 256;
-                let bc_tick_counter_l = b.tick_counter().value().to_le_bytes()[0];
-                let emu_tick_counter_l = s.song_tick_counter.to_le_bytes()[0];
+            Some(b) => match b.try_borrow_mut() {
+                Ok(mut b) => {
+                    // Assumes number of ticks since the last read was < 256;
+                    let bc_tick_counter_l = b.tick_counter().value().to_le_bytes()[0];
+                    let emu_tick_counter_l = s.song_tick_counter.to_le_bytes()[0];
 
-                let ticks_passed = emu_tick_counter_l.wrapping_sub(bc_tick_counter_l);
-                if ticks_passed > 0 {
-                    let v = b.process_ticks(TickCounter::new(ticks_passed.into()));
-                    debug_assert!(v, "Bytecode interpreter timeout");
+                    let ticks_passed = emu_tick_counter_l.wrapping_sub(bc_tick_counter_l);
+                    if ticks_passed > 0 {
+                        let v = b.process_ticks(TickCounter::new(ticks_passed.into()));
+                        debug_assert!(v, "Bytecode interpreter timeout");
+                    }
+                    debug_assert_eq!(
+                        b.tick_counter().value() as u16,
+                        s.song_tick_counter,
+                        "Bytecode interpreter desync"
+                    );
+
+                    let channels = b.channels();
+
+                    std::array::from_fn(|i| channels[i].as_ref().and_then(|c| c.topmost_return_pos))
                 }
-                debug_assert_eq!(
-                    b.tick_counter().value() as u16,
-                    s.song_tick_counter,
-                    "Bytecode interpreter desync"
-                );
-
-                let channels = b.channels();
-
-                std::array::from_fn(|i| channels[i].as_ref().and_then(|c| c.topmost_return_pos))
-            }
+                Err(_) => Default::default(),
+            },
             None => Default::default(),
         };
 
@@ -871,8 +900,11 @@ impl AudioThread {
         // Must set the monitor data, audio timer stops when monitor data is None
         self.monitor.set(Some(AudioMonitorData::new(Some(id))));
 
-        self.gui_sender
-            .send(GuiMessage::AudioThreadStartedSong(id, song_data));
+        self.gui_sender.send(GuiMessage::AudioThreadStartedSong(
+            id,
+            song_data,
+            self.tad.bc_interpreter.clone(),
+        ));
     }
 
     fn send_resume_song_message(&mut self, id: ItemId) {

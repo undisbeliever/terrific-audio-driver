@@ -10,6 +10,7 @@
 
 mod audio_thread;
 mod compiler_thread;
+mod driver_state_window;
 mod envelope_widget;
 mod files;
 mod help;
@@ -61,7 +62,7 @@ use crate::tabs::{
     Tab, TabManager,
 };
 
-use audio_thread::{AudioMessage, AudioMonitor, MusicChannelsMask};
+use audio_thread::{AudioMessage, AudioMonitor, MusicChannelsMask, SharedSongInterpreter};
 
 use compiler::data;
 use compiler::data::{DefaultSfxFlags, ProjectFile};
@@ -74,6 +75,7 @@ use compiler::Pan;
 
 use compiler::time::TickCounter;
 use compiler_thread::{PlaySampleArgs, SampleOutput, SfxToCompiler, ShortSongError};
+use driver_state_window::DriverStateWindow;
 use files::{
     new_project_dialog, open_instrument_sample_dialog, open_project_dialog,
     open_sample_sample_dialog, song_name_from_path,
@@ -139,6 +141,7 @@ pub enum GuiMessage {
 
     ExportCurrentTabToSpcFile,
     ToggleSfxWindow,
+    ToggleDriverStateWindow,
 
     OpenSfxFileDialog,
     NewSfxFile,
@@ -186,7 +189,7 @@ pub enum GuiMessage {
     PauseResumeAudio(ItemId),
     SetMusicChannels(ItemId, MusicChannelsMask),
 
-    AudioThreadStartedSong(ItemId, Arc<SongData>),
+    AudioThreadStartedSong(ItemId, Arc<SongData>, Option<SharedSongInterpreter>),
     AudioThreadResumedSong(ItemId),
     SongMonitorTimeout,
 
@@ -272,6 +275,7 @@ struct Project {
     closed_song_tabs: Vec<SongTab>,
 
     sfx_window: SfxWindow,
+    driver_state_window: DriverStateWindow,
 }
 
 impl Project {
@@ -339,6 +343,7 @@ impl Project {
             ),
 
             sfx_window: SfxWindow::new(sender.clone()),
+            driver_state_window: DriverStateWindow::new(),
 
             project_tab: ProjectTab::new(&data, sender.clone()),
             samples_tab: SamplesTab::new(&data.instruments_and_samples, sender.clone()),
@@ -589,7 +594,9 @@ impl Project {
                     .send(AudioMessage::SetMusicChannels(id, channel_mask));
             }
 
-            GuiMessage::AudioThreadStartedSong(song_id, song_data) => {
+            GuiMessage::AudioThreadStartedSong(song_id, song_data, si) => {
+                self.driver_state_window.song_started(si);
+
                 if let Some(tab) = self.song_tabs.get_mut(&song_id) {
                     tab.audio_thread_started_song(song_data);
                     self.audio_monitor_timer.start();
@@ -606,25 +613,32 @@ impl Project {
                     self.audio_monitor_timer.start();
                 }
             }
-            GuiMessage::SongMonitorTimeout => match self.audio_monitor.get() {
-                Some(mon) => match mon.song_id {
-                    Some(id) => match self.song_tabs.get_mut(&id) {
-                        Some(tab) => tab.monitor_timer_elapsed(&mon),
-                        None => self.audio_monitor_timer.stop(),
-                    },
-                    None => {
-                        // Playing the blank song or testing a sample
-                        self.audio_monitor_timer.stop();
-                        for tab in self.song_tabs.values_mut() {
-                            tab.clear_note_tracking();
+            GuiMessage::SongMonitorTimeout => {
+                let mon = self.audio_monitor.get();
+                self.driver_state_window.monitor_timer_elapsed();
+
+                match mon {
+                    Some(mon) => {
+                        match mon.song_id {
+                            Some(id) => match self.song_tabs.get_mut(&id) {
+                                Some(tab) => tab.monitor_timer_elapsed(&mon),
+                                None => self.audio_monitor_timer.stop(),
+                            },
+                            None => {
+                                // Playing the blank song or testing a sample
+                                self.audio_monitor_timer.stop();
+                                for tab in self.song_tabs.values_mut() {
+                                    tab.clear_note_tracking();
+                                }
+                            }
                         }
                     }
-                },
-                None => {
-                    // Paused or stopped
-                    self.audio_monitor_timer.stop();
+                    None => {
+                        // Paused or stopped
+                        self.audio_monitor_timer.stop();
+                    }
                 }
-            },
+            }
 
             GuiMessage::RequestCloseSongTab(song_id) => {
                 let ft = FileType::Song(song_id);
@@ -793,6 +807,7 @@ impl Project {
             }
 
             GuiMessage::ToggleSfxWindow => self.sfx_window.show_or_hide(),
+            GuiMessage::ToggleDriverStateWindow => self.driver_state_window.show_or_hide(),
 
             // Ignore these messages, they are handled by MainWindow
             GuiMessage::ShowAboutTab => (),

@@ -114,14 +114,14 @@ struct Channel {
 }
 
 #[derive(Clone)]
-struct EchoVariables {
-    max_edl: u8,
-    edl: u8,
-    fir_filter: [i8; 8],
-    feedback: i8,
-    volume_l: u8,
-    volume_r: u8,
-    invert_flags: u8,
+pub struct EchoVariables {
+    pub max_edl: u8,
+    pub edl: u8,
+    pub fir_filter: [i8; 8],
+    pub feedback: i8,
+    pub volume_l: u8,
+    pub volume_r: u8,
+    pub invert_flags: u8,
 }
 
 impl EchoVariables {
@@ -165,9 +165,10 @@ struct InterpreterOutput {
     echo: EchoVariables,
 }
 
-struct GlobalState {
-    timer_register: u8,
-    echo: EchoVariables,
+#[derive(Clone)]
+pub struct GlobalState {
+    pub timer_register: u8,
+    pub echo: EchoVariables,
 }
 
 impl GlobalState {
@@ -189,8 +190,8 @@ impl GlobalState {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
-enum PanVolEffectDirection {
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum PanVolEffectDirection {
     None = 0,
     SlideUp = 0x80,
     SlideDown = 0x81,
@@ -199,13 +200,13 @@ enum PanVolEffectDirection {
 }
 
 #[derive(Debug, Clone)]
-struct PanVolValue<const MAX: u8> {
+pub struct PanVolValue<const MAX: u8> {
     tc: TickCounter,
 
-    value: u8,
+    pub value: u8,
     sub_value: u8,
     counter: u8,
-    direction: PanVolEffectDirection,
+    pub direction: PanVolEffectDirection,
     half_wavelength: u8,
 
     offset: u32,
@@ -445,7 +446,7 @@ impl<const M: u8> PanVolValue<M> {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 enum ChannelNote {
     None,
     PlayNote {
@@ -467,26 +468,26 @@ enum ChannelNote {
     },
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ChannelState {
-    ticks: TickCounter,
-    disabled: bool,
+    pub ticks: TickCounter,
+    pub disabled: bool,
 
-    song_ptr: u16,
-    subroutine_table_l_addr: usize,
-    subroutine_table_h_addr: usize,
+    pub song_ptr: u16,
+    pub subroutine_table_l_addr: usize,
+    pub subroutine_table_h_addr: usize,
 
     pub instruction_ptr: u16,
 
     /// The return position (with SongData) of the topmost subroutine call.
     pub topmost_return_pos: Option<u16>,
 
-    call_stack_depth: u8,
+    pub call_stack_depth: u8,
 
     // Stack pointer
     // Grows downwards (from CHANNEL_STACK_SIZE to 0)
     // MUST always be <= `CHANNEL_STACK_SIZE`
-    stack_pointer: usize,
+    pub stack_pointer: usize,
 
     // Stack pointer to use in the SKIP_LAST_LOOP and END_LOOP instructions.
     // Used to remove bounds checking when reading/modifying loop counter.
@@ -495,34 +496,34 @@ pub struct ChannelState {
 
     bc_stack: [u8; BC_CHANNEL_STACK_SIZE],
 
-    instrument: Option<u8>,
-    adsr_or_gain_override: Option<(u8, u8)>,
-    temp_gain: u8,
-    prev_temp_gain: u8,
-    early_release_cmp: u8,
-    early_release_min_ticks: u8,
-    early_release_gain: u8,
+    pub instrument: Option<u8>,
+    pub adsr_or_gain_override: Option<(u8, u8)>,
+    pub temp_gain: u8,
+    pub prev_temp_gain: u8,
+    pub early_release_cmp: u8,
+    pub early_release_min_ticks: u8,
+    pub early_release_gain: u8,
 
-    detune: i16,
+    pub detune: i16,
 
     next_event_is_key_off: bool,
     note: ChannelNote,
     note_time: TickCounter,
 
-    volume: PanVolValue<0xff>,
-    pan: PanVolValue<MAX_PAN>,
+    pub volume: PanVolValue<0xff>,
+    pub pan: PanVolValue<MAX_PAN>,
 
-    invert_flags: u8,
+    pub invert_flags: u8,
 
-    echo: bool,
-    pitch_mod: bool,
+    pub echo: bool,
+    pub pitch_mod: bool,
 
     // Not emulating pitch
     // Not emulating portamento
 
     // Partially emulating vibrato
-    vibrato_pitch_offset_per_tick: u8,
-    vibrato_quarter_wavelength_in_ticks: Option<u8>,
+    pub vibrato_pitch_offset_per_tick: u8,
+    pub vibrato_quarter_wavelength_in_ticks: Option<u8>,
 }
 
 impl ChannelState {
@@ -1333,6 +1334,16 @@ where
     audio_mode: AudioMode,
 }
 
+impl<CAD, SD> std::fmt::Debug for SongInterpreter<CAD, SD>
+where
+    CAD: Deref<Target = CommonAudioData>,
+    SD: Deref<Target = SongData>,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Song Interpreter: {} ticks", self.tick_counter.value())
+    }
+}
+
 impl<CAD, SD> SongInterpreter<CAD, SD>
 where
     CAD: Deref<Target = CommonAudioData>,
@@ -1421,6 +1432,10 @@ where
         );
 
         Ok(out)
+    }
+
+    pub fn global_state(&self) -> &GlobalState {
+        &self.global
     }
 
     pub fn channels(&self) -> &[Option<ChannelState>; N_MUSIC_CHANNELS] {

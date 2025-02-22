@@ -14,6 +14,8 @@ pub struct InvertFlags {
 }
 
 impl InvertFlags {
+    pub const MASK: u8 = 0b11000001;
+
     pub const BOTH: Self = Self {
         right: true,
         left: true,
@@ -24,7 +26,7 @@ impl InvertFlags {
         (u8::from(self.right) << 7) | (u8::from(self.left) << 6) | (u8::from(self.mono))
     }
 
-    pub(crate) fn from_driver_value(e: u8) -> Self {
+    pub fn from_driver_value(e: u8) -> Self {
         Self {
             right: e & 0x80 != 0,
             left: e & 0x40 != 0,

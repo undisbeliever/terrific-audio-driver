@@ -35,6 +35,7 @@ const CLEAR_CACHE_AND_REBUILD: &str = "&File/&Clear sample cache and rebuild";
 const EXPORT_SPC: &str = "&File/&Export song to .spc";
 
 const AUDIO_SFX_WINDOW: &str = "&Audio/Sound &Effects";
+const DRIVER_STATE_WINDOW: &str = "&Audio/&Driver State";
 const AUDIO_STOP: &str = "&Audio/&Stop Audio";
 
 const AUDIO_MONO: &str = "&Audio/&Mono";
@@ -131,6 +132,13 @@ impl Menu {
             Shortcut::from_key(Key::F9),
             fltk::menu::MenuFlag::Normal,
             || GuiMessage::ToggleSfxWindow,
+        );
+
+        add(
+            DRIVER_STATE_WINDOW,
+            Shortcut::from_key(Key::F10),
+            fltk::menu::MenuFlag::Normal,
+            || GuiMessage::ToggleDriverStateWindow,
         );
 
         add_audio(

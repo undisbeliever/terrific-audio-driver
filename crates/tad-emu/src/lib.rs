@@ -148,7 +148,7 @@ impl TadEmulator {
         song: &SongData,
         song_addr: u16,
         audio_mode: AudioMode,
-        bc_interpreter: &Option<SongInterpreter<CAD, SD>>,
+        bc_interpreter: Option<&SongInterpreter<CAD, SD>>,
         music_channels_mask: u8,
     ) -> Result<(), LoadSongError>
     where

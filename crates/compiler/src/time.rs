@@ -54,6 +54,10 @@ impl Bpm {
     }
 }
 
+pub fn timer_register_to_bpm(timer: u8) -> f64 {
+    f64::from(TIMER_HZ * 60) / (f64::from(timer) * f64::from(CLOCK_CYCLES_PER_BPM))
+}
+
 /// A tick counter that can only be incremented
 ///
 /// CAUTION: TickCounter uses saturating_add to ensure it never overflows in release mode.

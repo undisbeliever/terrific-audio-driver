@@ -59,25 +59,25 @@ impl Adsr {
         }
     }
 
-    pub fn to_gui_string(self) -> String {
-        let attack = self.adsr1 & 0b1111;
-        let decay = (self.adsr1 >> 4) & 0b111;
-        let sustain_level = self.adsr2 >> 5;
-        let sustain_rate = self.adsr2 & 0b11111;
+    pub fn to_values(self) -> (u8, u8, u8, u8) {
+        (
+            self.adsr1 & 0b1111,
+            (self.adsr1 >> 4) & 0b111,
+            self.adsr2 >> 5,
+            self.adsr2 & 0b11111,
+        )
+    }
 
-        format!("{} {} {} {}", attack, decay, sustain_level, sustain_rate)
+    pub fn to_gui_string(self) -> String {
+        let (a, d, sl, sr) = self.to_values();
+
+        format!("{} {} {} {}", a, d, sl, sr)
     }
 
     pub fn to_envelope_string(self) -> String {
-        let attack = self.adsr1 & 0b1111;
-        let decay = (self.adsr1 >> 4) & 0b111;
-        let sustain_level = self.adsr2 >> 5;
-        let sustain_rate = self.adsr2 & 0b11111;
+        let (a, d, sl, sr) = self.to_values();
 
-        format!(
-            "{} {} {} {} {}",
-            ADSR_STR, attack, decay, sustain_level, sustain_rate
-        )
+        format!("{} {} {} {} {}", ADSR_STR, a, d, sl, sr)
     }
 
     pub fn try_from_strs(
@@ -387,6 +387,32 @@ impl Envelope {
         match self {
             Envelope::Adsr(adsr) => (adsr.adsr1(), adsr.adsr2()),
             Envelope::Gain(gain) => (0, gain.value()),
+        }
+    }
+
+    pub fn from_engine_value(adsr1: u8, adsr2_or_gain: u8) -> Self {
+        if adsr1 & 0x80 != 0 {
+            Self::Adsr(Adsr {
+                adsr1,
+                adsr2: adsr2_or_gain,
+            })
+        } else {
+            Self::Gain(Gain::new(adsr2_or_gain))
+        }
+    }
+}
+
+impl std::fmt::Display for Envelope {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Adsr(a) => {
+                let (a, d, sl, sr) = a.to_values();
+                write!(f, "A{a},{d},{sl},{sr}")
+            }
+            Self::Gain(g) => {
+                let (mode, value) = g.to_mode_and_value();
+                write!(f, "G{}{}", mode.to_prefix_str(), value)
+            }
         }
     }
 }
