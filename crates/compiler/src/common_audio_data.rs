@@ -20,7 +20,7 @@ use crate::sound_effects::{
 };
 
 use std::ops::Range;
-use std::sync::{Arc, OnceLock};
+use std::sync::OnceLock;
 
 #[derive(Clone)]
 pub struct CommonAudioData {
@@ -393,38 +393,38 @@ pub fn build_cad_with_sfx_buffer(
     )?))
 }
 
-pub struct ArcCadWithSfxBufferInAram {
-    cad: Arc<CommonAudioDataWithSfxBuffer>,
-    sfx_bc: Range<u16>,
+pub struct SfxBufferInAram {
+    /// Address of the 3 byte `goto_relative` instruction in common-audio-data
+    cad_sfx_bc: Range<usize>,
+    /// Offset between the GOTO_RELATIVE instruction and the `sfx_bufer`
+    goto_offset: u16,
+    /// Address of the sfx buffer
+    sfx_buffer: Range<u16>,
 }
 
-impl ArcCadWithSfxBufferInAram {
+impl SfxBufferInAram {
     pub fn new(
-        cad: Arc<CommonAudioDataWithSfxBuffer>,
+        cad: &CommonAudioDataWithSfxBuffer,
         song_addr: u16,
     ) -> Result<Self, SfxCannotFitInSfxBuffer> {
-        let end_addr = cad.0.min_song_data_addr();
+        let cad_sfx_bc = cad.0.sfx_bytecode_addr_range();
+        let sfx_buffer_addr = cad.0.min_song_data_addr();
 
-        if end_addr < song_addr {
+        assert_eq!(cad_sfx_bc.len(), 3);
+
+        if sfx_buffer_addr < song_addr {
             Ok(Self {
-                cad,
-                sfx_bc: end_addr..song_addr,
+                cad_sfx_bc: usize::from(cad_sfx_bc.start)..usize::from(cad_sfx_bc.end),
+                goto_offset: sfx_buffer_addr.wrapping_sub(cad_sfx_bc.start + 2),
+                sfx_buffer: sfx_buffer_addr..song_addr,
             })
         } else {
             Err(SfxCannotFitInSfxBuffer())
         }
     }
 
-    pub fn common_data(&self) -> &Arc<CommonAudioDataWithSfxBuffer> {
-        &self.cad
-    }
-
-    pub fn common_data_ref(&self) -> &CommonAudioData {
-        &self.cad.0
-    }
-
     pub fn test_sfx_fits_in_apuram(&self, sfx: &CompiledSoundEffect) -> bool {
-        sfx.bytecode().len() < self.sfx_bc.len()
+        sfx.bytecode().len() < self.sfx_buffer.len()
     }
 
     pub fn load_sfx(
@@ -432,36 +432,28 @@ impl ArcCadWithSfxBufferInAram {
         sfx: &CompiledSoundEffect,
         apuram: &mut [u8; AUDIO_RAM_SIZE],
     ) -> Result<(), SfxCannotFitInSfxBuffer> {
-        // Address of the 3 byte `goto_relative` instruction in common-audio-data
-        let cad_sfx_addr = self.cad.0.sfx_bytecode_addr_range();
-        let cad_sfx_addr_usize = usize::from(cad_sfx_addr.start)..usize::from(cad_sfx_addr.end);
-
         let bc = sfx.bytecode();
 
-        if bc.len() < self.sfx_bc.len() {
+        if bc.len() < self.sfx_buffer.len() {
             // Write `goto_relative` instruction.
             {
-                let goto_addr = cad_sfx_addr.start;
-                let bc_addr = self.sfx_bc.start;
-
-                let offset = bc_addr.wrapping_sub(goto_addr).wrapping_sub(2);
                 let goto_instruction: [u8; GOTO_RELATIVE_INSTRUCTION_SIZE] = [
                     opcodes::GOTO_RELATIVE,
-                    offset.to_le_bytes()[0],
-                    offset.to_le_bytes()[1],
+                    self.goto_offset.to_le_bytes()[0],
+                    self.goto_offset.to_le_bytes()[1],
                 ];
 
-                apuram[cad_sfx_addr_usize].copy_from_slice(&goto_instruction);
+                apuram[self.cad_sfx_bc.clone()].copy_from_slice(&goto_instruction);
             }
 
-            let bc_addr = usize::from(self.sfx_bc.start);
+            let bc_addr = usize::from(self.sfx_buffer.start);
             apuram[bc_addr..bc_addr + bc.len()].copy_from_slice(bc);
 
             Ok(())
         } else {
             // Replace cad sfx bytecode with `disable_channel` instructions,
             // to prevent ensure the old sfx bytecode from playing.
-            apuram[cad_sfx_addr_usize]
+            apuram[self.cad_sfx_bc.clone()]
                 .copy_from_slice(&[opcodes::DISABLE_CHANNEL; GOTO_RELATIVE_INSTRUCTION_SIZE]);
 
             Err(SfxCannotFitInSfxBuffer())

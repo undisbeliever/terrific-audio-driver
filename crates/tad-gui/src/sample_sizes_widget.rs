@@ -4,7 +4,7 @@
 //
 // SPDX-License-Identifier: MIT
 
-use crate::compiler_thread::{CadOutput, InstrumentOutput, SampleOutput};
+use crate::compiler_thread::{CadOutput, InstrumentAndSampleNames, InstrumentOutput, SampleOutput};
 use crate::helpers::ch_units_to_width;
 use crate::list_editor::{LaVec, ListAction};
 use crate::InstrumentsAndSamplesData;
@@ -39,7 +39,7 @@ pub struct SampleSizesWidget {
 
     stat_sizes: [String; N_STAT_ROWS],
     brr_sizes: Vec<String>,
-    brr_sample_names: Arc<Vec<Name>>,
+    brr_sample_names: Arc<InstrumentAndSampleNames>,
 
     // Used when the Common Audio Data cannot be compiled
     no_cad_instruments: LaVec<(Name, String)>,
@@ -206,14 +206,18 @@ impl SampleSizesWidget {
                     self.clear_table();
                 }
             }
-            CadOutput::NoSfx(cad, names) => {
-                self.update_table(&cad.0, names, false);
+            CadOutput::NoSfx(cad) => {
+                self.update_table(&cad.0, &cad.1, false);
             }
-            CadOutput::SfxBuffer(cad, names) => {
-                self.update_table(cad.common_data(), names, false);
+            CadOutput::SfxBuffer(cad) => {
+                self.update_table(cad.0.common_data(), &cad.1, false);
             }
-            CadOutput::WithSfx(cad, names) => {
-                self.update_table(&cad.common_audio_data, names, true);
+            CadOutput::WithSfx(cad) => {
+                self.update_table(
+                    &cad.common_audio_data,
+                    &cad.instrument_and_sample_names,
+                    true,
+                );
             }
         }
     }
@@ -242,7 +246,12 @@ impl SampleSizesWidget {
         self.table.set_rows(n_rows.try_into().unwrap_or(0));
     }
 
-    fn update_table(&mut self, cad: &CommonAudioData, names: &Arc<Vec<Name>>, sfx_valid: bool) {
+    fn update_table(
+        &mut self,
+        cad: &CommonAudioData,
+        names: &Arc<InstrumentAndSampleNames>,
+        sfx_valid: bool,
+    ) {
         self.graph_data = Some(GraphData {
             dir_table_range: cad.dir_addr_range(),
             sfx_range: cad.sfx_data_and_tables_range(),

@@ -425,19 +425,19 @@ impl MemoryStats {
                 self.sfx_out.set_value("ERROR");
                 self.sfx_out.set_text_color(Color::Red);
             }
-            CadOutput::NoSfx(cad, _) => {
+            CadOutput::NoSfx(cad) => {
                 valid_samples(&cad.0);
 
                 self.sfx_data_size = 0;
                 self.show_sfx_error_message();
             }
-            CadOutput::SfxBuffer(cad, _) => {
-                valid_samples(cad.common_data());
+            CadOutput::SfxBuffer(cad) => {
+                valid_samples(cad.0.common_data());
 
                 self.sfx_data_size = 0;
                 self.show_sfx_error_message();
             }
-            CadOutput::WithSfx(cad, _) => {
+            CadOutput::WithSfx(cad) => {
                 valid_samples(&cad.common_audio_data);
 
                 self.sfx_data_size = cad.common_audio_data.sfx_data_and_tables_range().len();

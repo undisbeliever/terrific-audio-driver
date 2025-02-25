@@ -7,7 +7,7 @@
 use std::ops::{Deref, Range};
 
 use compiler::bytecode_interpreter::SongInterpreter;
-use compiler::common_audio_data::{ArcCadWithSfxBufferInAram, CommonAudioData};
+use compiler::common_audio_data::{CommonAudioData, SfxBufferInAram};
 use compiler::driver_constants::{
     addresses, io_commands, AudioMode, LoaderDataType, AUDIO_RAM_SIZE, FIRST_SFX_CHANNEL,
     IO_COMMAND_I_MASK, IO_COMMAND_MASK, N_CHANNELS, N_MUSIC_CHANNELS, N_SFX_CHANNELS,
@@ -234,11 +234,11 @@ impl TadEmulator {
     /// If this function returns false: Multiple `emulate() ; try_load_sfx_buffer_and_play_sfx()`
     /// calls might be needed to load and play the sound effect.
     ///
-    /// Assumes cad is the common-audio-data loaded in memory
+    /// Assumes a `CommonAudioDataWithSfxBuffer` is loaded into Audio-RAM and matches `SfxBufferInAram`.
     #[must_use]
     pub fn try_load_sfx_buffer_and_play_sfx(
         &mut self,
-        cad: &ArcCadWithSfxBufferInAram,
+        sfx_buffer: &SfxBufferInAram,
         sfx: &CompiledSoundEffect,
         pan: Pan,
     ) -> bool {
@@ -260,7 +260,7 @@ impl TadEmulator {
 
             false
         } else {
-            match cad.load_sfx(sfx, apuram) {
+            match sfx_buffer.load_sfx(sfx, apuram) {
                 Ok(()) => self.try_send_io_command(io_commands::PLAY_SOUND_EFFECT, 0, pan.as_u8()),
                 Err(_) => false,
             }

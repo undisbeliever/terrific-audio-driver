@@ -8,9 +8,7 @@
 
 use brr::{BrrSample, SAMPLES_PER_BLOCK};
 use compiler::bytecode_interpreter::SongInterpreter;
-use compiler::common_audio_data::ArcCadWithSfxBufferInAram;
-use compiler::common_audio_data::CommonAudioData;
-use compiler::common_audio_data::CommonAudioDataWithSfxBuffer;
+use compiler::common_audio_data::{CommonAudioData, SfxBufferInAram};
 use compiler::driver_constants::AudioMode;
 use compiler::driver_constants::{io_commands, AUDIO_RAM_SIZE, N_DSP_VOICES, N_MUSIC_CHANNELS};
 use compiler::mml::MmlPrefixData;
@@ -30,8 +28,10 @@ use std::sync::{mpsc, Arc, Mutex, RwLock};
 use std::thread;
 use std::time::Duration;
 
-use crate::compiler_thread::CommonAudioDataWithSfx;
 use crate::compiler_thread::ItemId;
+use crate::compiler_thread::{
+    CommonAudioDataNoSfx, CommonAudioDataWithSfx, CommonAudioDataWithSfxBuffer,
+};
 use crate::sfx_export_order::SfxId;
 use crate::GuiMessage;
 
@@ -81,9 +81,6 @@ enum SongSkip {
     Song(TickCounter),
     Subroutine(Option<MmlPrefixData>, u8, TickCounter),
 }
-
-#[derive(Debug)]
-pub struct CommonAudioDataNoSfx(pub CommonAudioData);
 
 pub enum AudioMessage {
     RingBufferConsumed(PrivateToken),
@@ -392,7 +389,11 @@ enum AudioDataState {
     Sample(CommonAudioData, Box<SongData>),
     SongNoSfx(Arc<CommonAudioDataNoSfx>, Arc<SongData>),
     SongAndSfx(Arc<CommonAudioDataWithSfx>, Arc<SongData>),
-    SongWithSfxBuffer(ArcCadWithSfxBufferInAram, Arc<SongData>),
+    SongWithSfxBuffer(
+        Arc<CommonAudioDataWithSfxBuffer>,
+        SfxBufferInAram,
+        Arc<SongData>,
+    ),
 }
 
 pub enum SiCad {
@@ -408,7 +409,7 @@ impl std::ops::Deref for SiCad {
         match self {
             Self::NoSfx(c) => &c.0,
             Self::WithSfx(c) => &c.common_audio_data,
-            Self::SfxBuffer(c) => c.common_data(),
+            Self::SfxBuffer(c) => c.0.common_data(),
         }
     }
 }
@@ -448,8 +449,8 @@ fn create_and_process_song_interpreter(
         AudioDataState::Sample(..) => return Ok(None),
         AudioDataState::SongNoSfx(cad, sd) => (SiCad::NoSfx(cad.clone()), sd.clone()),
         AudioDataState::SongAndSfx(cad, sd) => (SiCad::WithSfx(cad.clone()), sd.clone()),
-        AudioDataState::SongWithSfxBuffer(cad, sd) => {
-            (SiCad::SfxBuffer(cad.common_data().clone()), sd.clone())
+        AudioDataState::SongWithSfxBuffer(cad, _, sd) => {
+            (SiCad::SfxBuffer(cad.clone()), sd.clone())
         }
     };
 
@@ -587,7 +588,7 @@ impl TadState {
             &self.cad_no_sfx,
         ) {
             (Some(c), _, _) => AudioDataState::SongAndSfx(c.clone(), song),
-            (None, Some(c), _) => Self::audio_state_sfx_buffer(c.clone(), song)?,
+            (None, Some(c), _) => Self::audio_state_sfx_buffer(c, song)?,
             (None, None, Some(c)) => AudioDataState::SongNoSfx(c.clone(), song),
             (None, None, None) => return Err(()),
         };
@@ -609,7 +610,7 @@ impl TadState {
     ) -> Result<(), ()> {
         let data = match (&self.cad_with_sfx, &self.cad_with_sfx_buffer) {
             (Some(c), _) => AudioDataState::SongAndSfx(c.clone(), song),
-            (None, Some(c)) => Self::audio_state_sfx_buffer(c.clone(), song)?,
+            (None, Some(c)) => Self::audio_state_sfx_buffer(c, song)?,
             (None, None) => return Err(()),
         };
         self._load_song_into_memory(
@@ -624,7 +625,7 @@ impl TadState {
         let blank_song = &self.blank_song;
         let data = match (&self.cad_with_sfx, &self.cad_with_sfx_buffer) {
             (Some(c), _) => AudioDataState::SongAndSfx(c.clone(), blank_song.clone()),
-            (None, Some(c)) => Self::audio_state_sfx_buffer(c.clone(), blank_song.clone())?,
+            (None, Some(c)) => Self::audio_state_sfx_buffer(c, blank_song.clone())?,
             (None, None) => return Err(()),
         };
         self._load_song_into_memory(None, data, SongSkip::None, MusicChannelsMask::ALL)
@@ -637,7 +638,7 @@ impl TadState {
         skip: TickCounter,
     ) -> Result<(), ()> {
         let data = match &self.cad_with_sfx_buffer {
-            Some(c) => Self::audio_state_sfx_buffer(c.clone(), song)?,
+            Some(c) => Self::audio_state_sfx_buffer(c, song)?,
             None => return Err(()),
         };
         self._load_song_into_memory(
@@ -650,7 +651,7 @@ impl TadState {
 
     fn load_blank_song_with_sfx_buffer(&mut self) -> Result<(), ()> {
         let data = match &self.cad_with_sfx_buffer {
-            Some(c) => Self::audio_state_sfx_buffer(c.clone(), self.blank_song.clone())?,
+            Some(c) => Self::audio_state_sfx_buffer(c, self.blank_song.clone())?,
             None => return Err(()),
         };
         self._load_song_into_memory(None, data, SongSkip::None, MusicChannelsMask::ALL)
@@ -670,11 +671,11 @@ impl TadState {
     }
 
     fn audio_state_sfx_buffer(
-        cad: Arc<CommonAudioDataWithSfxBuffer>,
+        cad: &Arc<CommonAudioDataWithSfxBuffer>,
         song: Arc<SongData>,
     ) -> Result<AudioDataState, ()> {
-        match ArcCadWithSfxBufferInAram::new(cad, Self::calc_song_addr(&song)?) {
-            Ok(o) => Ok(AudioDataState::SongWithSfxBuffer(o, song)),
+        match SfxBufferInAram::new(&cad.0, Self::calc_song_addr(&song)?) {
+            Ok(o) => Ok(AudioDataState::SongWithSfxBuffer(cad.clone(), o, song)),
             Err(_) => Err(()),
         }
     }
@@ -707,7 +708,7 @@ impl TadState {
             AudioDataState::Sample(cad, sd) => (cad, sd.as_ref()),
             AudioDataState::SongNoSfx(cad, sd) => (&cad.0, sd.as_ref()),
             AudioDataState::SongAndSfx(cad, sd) => (&cad.common_audio_data, sd.as_ref()),
-            AudioDataState::SongWithSfxBuffer(cad, sd) => (cad.common_data_ref(), sd.as_ref()),
+            AudioDataState::SongWithSfxBuffer(cad, _, sd) => (cad.0.common_data(), sd.as_ref()),
         };
 
         // Store song data at the end of the audio-RAM
@@ -784,18 +785,15 @@ impl TadState {
                 }
             }
             SfxQueue::TestSfx(sfx, pan) => {
-                let common_data = match &self.data_state {
-                    AudioDataState::SongWithSfxBuffer(cad, _) => cad,
+                let buffer = match &self.data_state {
+                    AudioDataState::SongWithSfxBuffer(_, b, _) => b,
                     _ => {
                         self.sfx_queue = SfxQueue::None;
                         return;
                     }
                 };
 
-                if self
-                    .emu
-                    .try_load_sfx_buffer_and_play_sfx(common_data, sfx, *pan)
-                {
+                if self.emu.try_load_sfx_buffer_and_play_sfx(buffer, sfx, *pan) {
                     self.sfx_queue = SfxQueue::None;
                 }
             }

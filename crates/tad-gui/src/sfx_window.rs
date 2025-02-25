@@ -277,7 +277,7 @@ impl SfxTable {
 
     fn cad_output_changed(&mut self, cad_output: &CadOutput) {
         match cad_output {
-            CadOutput::WithSfx(c, _) => {
+            CadOutput::WithSfx(c) => {
                 let changed = match &self.export_order {
                     Some(e) => !Arc::ptr_eq(e, &c.sfx_export_order),
                     None => true,

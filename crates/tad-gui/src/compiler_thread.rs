@@ -4,9 +4,7 @@
 //
 // SPDX-License-Identifier: MIT
 
-use crate::audio_thread::{
-    AudioMessage, AudioThreadSongInterpreter, CommonAudioDataNoSfx, MusicChannelsMask, SiCad,
-};
+use crate::audio_thread::{AudioMessage, AudioThreadSongInterpreter, MusicChannelsMask, SiCad};
 use crate::names::NameGetter;
 use crate::sample_analyser::{self, SampleAnalysis};
 use crate::sfx_export_order::{GuiSfxExportOrder, SfxExportOrderAction};
@@ -22,7 +20,6 @@ use std::thread;
 use compiler::bytecode_interpreter::SongInterpreter;
 use compiler::common_audio_data::{
     build_cad_with_sfx_buffer, build_common_audio_data, CommonAudioData,
-    CommonAudioDataWithSfxBuffer,
 };
 use compiler::data::{self, BrrEvaluator};
 use compiler::data::{load_text_file_with_limit, DefaultSfxFlags, LoopSetting, TextFile};
@@ -212,19 +209,38 @@ pub enum CompilerOutput {
     SongCursorDriverState(CursorDriverState),
 }
 
+#[derive(Debug, Default)]
+pub struct InstrumentAndSampleNames(Vec<data::Name>);
+
+impl InstrumentAndSampleNames {
+    pub fn get(&self, index: usize) -> Option<&data::Name> {
+        self.0.get(index)
+    }
+}
+
+#[derive(Debug)]
+pub struct CommonAudioDataNoSfx(pub CommonAudioData, pub Arc<InstrumentAndSampleNames>);
+
+#[derive(Debug)]
+pub struct CommonAudioDataWithSfxBuffer(
+    pub compiler::common_audio_data::CommonAudioDataWithSfxBuffer,
+    pub Arc<InstrumentAndSampleNames>,
+);
+
 #[derive(Debug)]
 pub struct CommonAudioDataWithSfx {
     pub common_audio_data: CommonAudioData,
     pub sfx_export_order: Arc<GuiSfxExportOrder>,
+    pub instrument_and_sample_names: Arc<InstrumentAndSampleNames>,
 }
 
 #[derive(Debug)]
 pub enum CadOutput {
     None,
     Err(CombineSamplesError),
-    NoSfx(Arc<CommonAudioDataNoSfx>, Arc<Vec<data::Name>>),
-    SfxBuffer(Arc<CommonAudioDataWithSfxBuffer>, Arc<Vec<data::Name>>),
-    WithSfx(Arc<CommonAudioDataWithSfx>, Arc<Vec<data::Name>>),
+    NoSfx(Arc<CommonAudioDataNoSfx>),
+    SfxBuffer(Arc<CommonAudioDataWithSfxBuffer>),
+    WithSfx(Arc<CommonAudioDataWithSfx>),
 }
 
 impl CadOutput {
@@ -732,11 +748,11 @@ fn build_play_sample_data(
 fn instrument_and_sample_names(
     instruments: &CList<data::Instrument, Option<InstrumentSampleData>>,
     samples: &CList<data::Sample, Option<SampleSampleData>>,
-) -> Arc<Vec<data::Name>> {
+) -> Arc<InstrumentAndSampleNames> {
     let i_names = instruments.items().iter().map(|inst| inst.name.clone());
     let s_names = samples.items().iter().map(|s| s.name.clone());
 
-    Arc::new(i_names.chain(s_names).collect())
+    Arc::new(InstrumentAndSampleNames(i_names.chain(s_names).collect()))
 }
 
 fn compile_sfx_subroutines(
@@ -877,6 +893,7 @@ impl SongDependencies {
 fn build_cad_no_sfx_and_song_dependencies(
     instruments: &CList<data::Instrument, Option<InstrumentSampleData>>,
     samples: &CList<data::Sample, Option<SampleSampleData>>,
+    instrument_and_sample_names: &Arc<InstrumentAndSampleNames>,
     sfx_export_order: &GuiSfxExportOrder,
     sfx_subroutines: &Option<Arc<CompiledSfxSubroutines>>,
     sound_effects: &CList<SoundEffectInput, Option<Arc<CompiledSoundEffect>>>,
@@ -918,7 +935,13 @@ fn build_cad_no_sfx_and_song_dependencies(
                 common_data_no_sfx_size: cad.data().len(),
                 sfx_data_size: calc_sfx_data_size(sfx_export_order, sfx_subroutines, sound_effects),
             };
-            Ok((Arc::new(CommonAudioDataNoSfx(cad)), sd))
+            Ok((
+                Arc::new(CommonAudioDataNoSfx(
+                    cad,
+                    instrument_and_sample_names.clone(),
+                )),
+                sd,
+            ))
         }
         Err(e) => Err(CombineSamplesError::UniqueNamesError(e)),
     }
@@ -926,6 +949,7 @@ fn build_cad_no_sfx_and_song_dependencies(
 
 fn build_common_data_with_sfx_buffer(
     dep: &Option<SongDependencies>,
+    instrument_and_sample_names: &Arc<InstrumentAndSampleNames>,
     sfx_subroutines: &Option<Arc<CompiledSfxSubroutines>>,
 ) -> Option<Result<Arc<CommonAudioDataWithSfxBuffer>, CombineSamplesError>> {
     let combined_samples = match dep {
@@ -938,7 +962,10 @@ fn build_common_data_with_sfx_buffer(
     };
 
     match build_cad_with_sfx_buffer(combined_samples, sfx_subroutines) {
-        Ok(cad) => Some(Ok(Arc::new(cad))),
+        Ok(cad) => Some(Ok(Arc::new(CommonAudioDataWithSfxBuffer(
+            cad,
+            instrument_and_sample_names.clone(),
+        )))),
         Err(e) => Some(Err(CombineSamplesError::CommonAudioData(e))),
     }
 }
@@ -956,6 +983,7 @@ impl CompiledSfxMap for CList<SoundEffectInput, Option<Arc<CompiledSoundEffect>>
 /// Returns `(CommonAudioDataWithSize, sfx_data_size)`
 fn build_common_audio_data_with_sfx(
     dep: &Option<SongDependencies>,
+    instrument_and_sample_names: &Arc<InstrumentAndSampleNames>,
     sfx_export_order: &Arc<GuiSfxExportOrder>,
     sfx_subroutines: &Option<Arc<CompiledSfxSubroutines>>,
     sound_effects: &CList<SoundEffectInput, Option<Arc<CompiledSoundEffect>>>,
@@ -976,6 +1004,7 @@ fn build_common_audio_data_with_sfx(
                 Ok(cad) => Some(Arc::new(CommonAudioDataWithSfx {
                     common_audio_data: cad,
                     sfx_export_order: sfx_export_order.clone(),
+                    instrument_and_sample_names: instrument_and_sample_names.clone(),
                 })),
                 Err(_) => None,
             }
@@ -1655,6 +1684,7 @@ fn bg_thread(
             match build_cad_no_sfx_and_song_dependencies(
                 &instruments,
                 &samples,
+                &inst_sample_names,
                 &sfx_export_order,
                 &sfx_subroutines,
                 &sound_effects,
@@ -1662,7 +1692,7 @@ fn bg_thread(
                 Ok((cad, sd)) => {
                     cad_no_sfx = Some(cad.clone());
 
-                    pending_cad_output = CadOutput::NoSfx(cad, inst_sample_names.clone());
+                    pending_cad_output = CadOutput::NoSfx(cad);
                     song_dependencies = Some(sd);
                 }
                 Err(e) => {
@@ -1689,9 +1719,13 @@ fn bg_thread(
             let c = create_sfx_compiler(&song_dependencies, &sfx_subroutines, &sender);
             sound_effects.recompile_all(c);
 
-            match build_common_data_with_sfx_buffer(&song_dependencies, &sfx_subroutines) {
+            match build_common_data_with_sfx_buffer(
+                &song_dependencies,
+                &inst_sample_names,
+                &sfx_subroutines,
+            ) {
                 Some(Ok(c)) => {
-                    pending_cad_output = CadOutput::SfxBuffer(c.clone(), inst_sample_names.clone());
+                    pending_cad_output = CadOutput::SfxBuffer(c.clone());
 
                     cad_with_sfx_buffer = Some(c);
                 }
@@ -1716,6 +1750,7 @@ fn bg_thread(
 
             let (cad, sfx_data_size) = build_common_audio_data_with_sfx(
                 &song_dependencies,
+                &inst_sample_names,
                 &sfx_export_order,
                 &sfx_subroutines,
                 &sound_effects,
@@ -1733,12 +1768,12 @@ fn bg_thread(
             }
 
             if let Some(c) = &cad {
-                pending_cad_output = CadOutput::WithSfx(c.clone(), inst_sample_names.clone());
+                pending_cad_output = CadOutput::WithSfx(c.clone());
             } else if let Some(c) = &cad_with_sfx_buffer {
                 // Restores CadOutput to NoSfx if there is an sfx error and the instrument/samples are OK
-                pending_cad_output = CadOutput::SfxBuffer(c.clone(), inst_sample_names.clone());
+                pending_cad_output = CadOutput::SfxBuffer(c.clone());
             } else if let Some(c) = &cad_no_sfx {
-                pending_cad_output = CadOutput::NoSfx(c.clone(), inst_sample_names.clone());
+                pending_cad_output = CadOutput::NoSfx(c.clone());
             }
 
             sender.send_audio(AudioMessage::CommandAudioDataWithSfxChanged(cad));
