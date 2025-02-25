@@ -721,18 +721,26 @@ impl DriverStateWindow {
 
         window.set_size(width * 10 + padding * 2, height * 17 + padding * 3);
 
-        let mut track_audio_cb =
-            CheckButton::new(padding, padding, width * 2, height, "Track audio");
+        let song_name = Frame::new(padding, padding, width * 6, height, None)
+            .with_align(Align::Inside | Align::Left | Align::Clip);
+
+        let mut track_audio_cb = CheckButton::new(
+            padding,
+            padding + height * 2,
+            width * 2,
+            height,
+            "Track audio",
+        );
+        track_audio_cb.set_tooltip(
+            "Show the audio driver state of the playing song (ignore cursor when a song is playing)"
+        );
         track_audio_cb.set_value(true);
         track_audio_cb.set_callback(move |_| {
             sender.send(GuiMessage::DriverStateTrackingCheckboxChanged);
         });
 
-        let status_label = Frame::new(padding + width * 2, padding, width * 2, height, None)
-            .with_align(Align::Inside | Align::Left);
-
-        let song_name = Frame::new(padding + width * 4, padding, width * 6, height, None)
-            .with_align(Align::Inside | Align::Left | Align::Clip);
+        let status_label = Frame::new(padding + width * 8, padding, width * 2, height, None)
+            .with_align(Align::Inside | Align::Right);
 
         let globals = GlobalValues::new(
             padding,
