@@ -729,7 +729,7 @@ impl DriverStateWindow {
             padding + height * 2,
             width * 2,
             height,
-            "Track audio",
+            "&Track audio",
         );
         track_audio_cb.set_tooltip(
             "Show the audio driver state of the playing song (ignore cursor when a song is playing)"
@@ -738,6 +738,7 @@ impl DriverStateWindow {
         track_audio_cb.set_callback(move |_| {
             sender.send(GuiMessage::DriverStateTrackingCheckboxChanged);
         });
+        track_audio_cb.clear_visible_focus();
 
         let status_label = Frame::new(padding + width * 8, padding, width * 2, height, None)
             .with_align(Align::Inside | Align::Right);
