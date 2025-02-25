@@ -1462,6 +1462,10 @@ where
         Ok(out)
     }
 
+    pub fn song_data(&self) -> &SongData {
+        &self.song_data
+    }
+
     pub fn global_state(&self) -> &GlobalState {
         &self.global
     }

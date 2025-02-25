@@ -418,20 +418,25 @@ pub type AudioThreadSongInterpreter = SongInterpreter<SiCad, Arc<SongData>>;
 // Holding the SongInterpreter in a Arc<RwLock> so the driver-state window
 // can retrieve the exact CommonAudioData and SongData used by the currently playing song.
 #[derive(Debug, Clone)]
-pub struct SharedSongInterpreter(Arc<RwLock<AudioThreadSongInterpreter>>);
+pub struct SharedSongInterpreter(Option<ItemId>, Arc<RwLock<AudioThreadSongInterpreter>>);
 
 impl SharedSongInterpreter {
+    pub fn song_id(&self) -> Option<ItemId> {
+        self.0
+    }
+
     pub fn try_borrow(&self) -> LockResult<RwLockReadGuard<AudioThreadSongInterpreter>> {
-        self.0.read()
+        self.1.read()
     }
 
     // forbid GUI thread from modifying the song-interpreter
     fn try_borrow_mut(&self) -> LockResult<RwLockWriteGuard<AudioThreadSongInterpreter>> {
-        self.0.write()
+        self.1.write()
     }
 }
 
 fn create_and_process_song_interpreter(
+    song_id: Option<ItemId>,
     audio_data: &AudioDataState,
     song_addr: u16,
     song_skip: SongSkip,
@@ -449,13 +454,19 @@ fn create_and_process_song_interpreter(
     };
 
     match song_skip {
-        SongSkip::None => Ok(Some(SharedSongInterpreter(Arc::new(RwLock::new(
-            SongInterpreter::new_zero(cad, sd, song_addr, audio_mode),
-        ))))),
+        SongSkip::None => Ok(Some(SharedSongInterpreter(
+            song_id,
+            Arc::new(RwLock::new(SongInterpreter::new_zero(
+                cad, sd, song_addr, audio_mode,
+            ))),
+        ))),
         SongSkip::Song(ticks) => {
             let mut si = SongInterpreter::new_zero(cad, sd, song_addr, audio_mode);
             if si.process_song_skip_ticks(ticks) {
-                Ok(Some(SharedSongInterpreter(Arc::new(RwLock::new(si)))))
+                Ok(Some(SharedSongInterpreter(
+                    song_id,
+                    Arc::new(RwLock::new(si)),
+                )))
             } else {
                 Ok(None)
             }
@@ -464,7 +475,10 @@ fn create_and_process_song_interpreter(
             match SongInterpreter::new_song_subroutine(cad, sd, song_addr, prefix, si, audio_mode) {
                 Ok(mut si) => {
                     if si.process_song_skip_ticks(ticks) {
-                        Ok(Some(SharedSongInterpreter(Arc::new(RwLock::new(si)))))
+                        Ok(Some(SharedSongInterpreter(
+                            song_id,
+                            Arc::new(RwLock::new(si)),
+                        )))
                     } else {
                         Ok(None)
                     }
@@ -703,6 +717,7 @@ impl TadState {
         }
 
         self.bc_interpreter = create_and_process_song_interpreter(
+            song_id,
             &data_state,
             song_data_addr,
             song_skip,

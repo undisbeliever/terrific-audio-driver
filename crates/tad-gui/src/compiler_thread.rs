@@ -177,12 +177,12 @@ pub type SongOutput = Result<Arc<SongData>, SongError>;
 #[derive(Debug)]
 pub enum CursorDriverState {
     None,
-    NoSong,
-    NoCursor,
-    Song(Box<AudioThreadSongInterpreter>),
-    Subroutine(Box<AudioThreadSongInterpreter>),
-    BcError,
-    BcTimeout,
+    NoSong(ItemId),
+    NoCursor(ItemId),
+    Song(ItemId, Box<AudioThreadSongInterpreter>),
+    Subroutine(ItemId, Box<AudioThreadSongInterpreter>),
+    BcError(ItemId),
+    BcTimeout(ItemId),
 }
 
 #[derive(Debug)]
@@ -1296,8 +1296,8 @@ fn calculate_song_driver_state(
                     ));
 
                     match si.process_song_skip_ticks(c.ticks.ticks + TickCounter::new(2)) {
-                        true => CursorDriverState::Song(si),
-                        false => CursorDriverState::BcTimeout,
+                        true => CursorDriverState::Song(id, si),
+                        false => CursorDriverState::BcTimeout(id),
                     }
                 }
                 Some((ChannelId::Subroutine(subroutine_index), c)) => {
@@ -1311,16 +1311,16 @@ fn calculate_song_driver_state(
                     ) {
                         Ok(mut si) => {
                             match si.process_song_skip_ticks(c.ticks.ticks + TickCounter::new(2)) {
-                                true => CursorDriverState::Subroutine(Box::new(si)),
-                                false => CursorDriverState::BcTimeout,
+                                true => CursorDriverState::Subroutine(id, Box::new(si)),
+                                false => CursorDriverState::BcTimeout(id),
                             }
                         }
-                        Err(_) => CursorDriverState::BcError,
+                        Err(_) => CursorDriverState::BcError(id),
                     }
                 }
-                _ => CursorDriverState::NoCursor,
+                _ => CursorDriverState::NoCursor(id),
             },
-            _ => CursorDriverState::NoSong,
+            _ => CursorDriverState::NoSong(id),
         },
     ));
 }

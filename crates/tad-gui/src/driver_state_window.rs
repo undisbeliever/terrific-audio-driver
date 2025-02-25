@@ -5,7 +5,7 @@
 // SPDX-License-Identifier: MIT
 
 use crate::audio_thread::{AudioThreadSongInterpreter, SharedSongInterpreter};
-use crate::compiler_thread::CursorDriverState;
+use crate::compiler_thread::{CursorDriverState, ItemId};
 use crate::helpers::{ch_units_to_width, input_height};
 use crate::GuiMessage;
 
@@ -14,6 +14,7 @@ use compiler::driver_constants::N_MUSIC_CHANNELS;
 use compiler::driver_constants::{ECHO_BUFFER_EDL_MS, FIR_FILTER_SIZE};
 use compiler::envelope::{self, Envelope};
 use compiler::invert_flags::InvertFlags;
+use compiler::songs::SongData;
 use compiler::time::{timer_register_to_bpm, TickCounter};
 
 use fltk::app;
@@ -502,6 +503,9 @@ struct DriverWidgets {
     status: Status,
     status_label: Frame,
 
+    song_id: Option<ItemId>,
+    song_name: Frame,
+
     globals: GlobalValues,
     channels: [ChannelValues; N_MUSIC_CHANNELS],
 }
@@ -521,6 +525,62 @@ impl DriverWidgets {
         }
     }
 
+    pub fn set_song_name_if_id_changed(&mut self, song_id: ItemId, song: &SongData) {
+        if self.song_id != Some(song_id) {
+            self.song_id = Some(song_id);
+
+            self.song_name.set_label(song.name());
+        }
+    }
+
+    pub fn clear_song_name_if_id_changed(&mut self, song_id: ItemId) {
+        if self.song_id != Some(song_id) {
+            self.song_id = Some(song_id);
+
+            self.song_name.set_label("");
+        }
+    }
+
+    pub fn clear_song_name_and_id(&mut self) {
+        if self.song_id.is_some() {
+            self.song_id = None;
+
+            self.song_name.set_label("");
+        }
+    }
+
+    fn set_cursor_song_name(&mut self, cursor_state: &CursorDriverState) {
+        match &cursor_state {
+            CursorDriverState::Song(song_id, si) | CursorDriverState::Subroutine(song_id, si) => {
+                self.set_song_name_if_id_changed(*song_id, si.song_data());
+            }
+            CursorDriverState::NoSong(song_id)
+            | CursorDriverState::NoCursor(song_id)
+            | CursorDriverState::BcError(song_id)
+            | CursorDriverState::BcTimeout(song_id) => {
+                self.clear_song_name_if_id_changed(*song_id);
+            }
+            CursorDriverState::None => {
+                self.clear_song_name_and_id();
+            }
+        }
+    }
+
+    fn set_audio_song_name(&mut self, ssi: &Option<SharedSongInterpreter>) {
+        match ssi {
+            Some(ssi) => {
+                match ssi.try_borrow() {
+                    Ok(si) => self.song_name.set_label(si.song_data().name()),
+                    Err(_) => self.song_name.set_label("ERROR"),
+                }
+                self.song_id = ssi.song_id();
+            }
+            None => {
+                self.clear_song_name_and_id();
+            }
+        }
+    }
+
     fn update(&mut self, si: &AudioThreadSongInterpreter) {
         self.globals.update(si.tick_counter(), si.global_state());
 
@@ -533,6 +593,9 @@ impl DriverWidgets {
     }
 
     fn clear(&mut self) {
+        self.song_id = None;
+        self.song_name.set_label("");
+
         self.globals.clear();
         for c in &mut self.channels {
             c.clear();
@@ -583,7 +646,8 @@ impl DriverStateWindow {
         let status_label = Frame::new(padding + width * 2, padding, width * 2, height, None)
             .with_align(Align::Inside | Align::Left);
 
-        // ::TODO add song name::
+        let song_name = Frame::new(padding + width * 4, padding, width * 6, height, None)
+            .with_align(Align::Inside | Align::Left | Align::Clip);
 
         let globals = GlobalValues::new(
             padding,
@@ -611,6 +675,8 @@ impl DriverStateWindow {
             widgets: DriverWidgets {
                 status: Status::None,
                 status_label,
+                song_id: None,
+                song_name,
                 globals,
                 channels,
             },
@@ -631,7 +697,12 @@ impl DriverStateWindow {
         self.audio_thread_song_interpreter = si;
 
         self.update_follow_cursor();
-        self.monitor_timer_elapsed();
+
+        if !self.follow_cursor && self.window.shown() {
+            self.widgets
+                .set_audio_song_name(&self.audio_thread_song_interpreter);
+            self.update_monitor();
+        }
     }
 
     pub fn song_stopped(&mut self) {
@@ -651,6 +722,7 @@ impl DriverStateWindow {
         self.cursor_state = CursorDriverState::None;
 
         if self.follow_cursor {
+            self.widgets.clear_song_name_and_id();
             self.widgets.set_status(Status::None);
         }
 
@@ -663,6 +735,8 @@ impl DriverStateWindow {
         self.cursor_state = state;
 
         if self.follow_cursor && self.window.shown() {
+            self.widgets.set_cursor_song_name(&self.cursor_state);
+
             self.update_song_cursor_state();
         }
     }
@@ -675,35 +749,38 @@ impl DriverStateWindow {
 
     fn update_all(&mut self) {
         if self.follow_cursor {
+            self.widgets.set_cursor_song_name(&self.cursor_state);
             self.update_song_cursor_state();
         } else {
+            self.widgets
+                .set_audio_song_name(&self.audio_thread_song_interpreter);
             self.update_monitor();
         }
     }
 
     fn update_song_cursor_state(&mut self) {
         match &self.cursor_state {
-            CursorDriverState::Song(si) => {
+            CursorDriverState::Song(_, si) => {
                 self.widgets.set_status(Status::SongCursor);
                 self.widgets.update(si);
             }
-            CursorDriverState::Subroutine(si) => {
+            CursorDriverState::Subroutine(_, si) => {
                 self.widgets.set_status(Status::SubroutineCursor);
                 self.widgets.update(si);
             }
-            CursorDriverState::None | CursorDriverState::NoSong => {
+            CursorDriverState::None | CursorDriverState::NoSong(_) => {
                 self.widgets.set_status(Status::None);
                 self.widgets.clear();
             }
-            CursorDriverState::NoCursor => {
+            CursorDriverState::NoCursor(_) => {
                 self.widgets.set_status(Status::None);
                 self.widgets.clear();
             }
-            CursorDriverState::BcError => {
+            CursorDriverState::BcError(_) => {
                 self.widgets.set_status(Status::SongError);
                 self.widgets.clear();
             }
-            CursorDriverState::BcTimeout => {
+            CursorDriverState::BcTimeout(_) => {
                 self.widgets.set_status(Status::SongError);
                 self.widgets.clear();
             }
@@ -714,8 +791,8 @@ impl DriverStateWindow {
         self.widgets.set_status(Status::Audio);
 
         match &self.audio_thread_song_interpreter {
-            Some(si) => {
-                if let Ok(si) = si.try_borrow() {
+            Some(ssi) => {
+                if let Ok(si) = ssi.try_borrow() {
                     self.widgets.update(&si);
                 }
             }

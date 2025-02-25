@@ -220,6 +220,13 @@ pub fn compile_mml(
     if !errors.channel_errors.is_empty() {
         return Err(SongError::MmlError(errors));
     }
+
+    let name = errors
+        .song_name
+        .as_ref()
+        .map(|n| n.to_string())
+        .unwrap_or_else(|| file_name.to_owned());
+
     drop(errors);
 
     #[cfg(feature = "mml_tracking")]
@@ -230,6 +237,7 @@ pub fn compile_mml(
     let duration = calc_song_duration(&metadata, &channels, &subroutines);
 
     mml_to_song(
+        name,
         metadata,
         song_data,
         duration,

@@ -94,6 +94,8 @@ pub struct Channel {
 
 #[derive(Clone)]
 pub struct SongData {
+    name: String,
+
     metadata: MetaData,
     data: Vec<u8>,
     duration: Option<Duration>,
@@ -116,6 +118,9 @@ impl Debug for SongData {
 }
 
 impl SongData {
+    pub fn name(&self) -> &str {
+        &self.name
+    }
     pub fn metadata(&self) -> &MetaData {
         &self.metadata
     }
@@ -254,6 +259,7 @@ pub fn test_sample_song(
 
 pub fn blank_song() -> SongData {
     SongData {
+        name: String::new(),
         data: vec![0; 1],
         metadata: MetaData::blank_sfx_metadata(),
         duration: None,
@@ -286,6 +292,7 @@ fn sfx_bytecode_to_song(bytecode: &[u8]) -> SongData {
     header[HEADER_SIZE - 2..].copy_from_slice(&SONG_DATA_OFFSET.to_le_bytes());
 
     SongData {
+        name: String::new(),
         data: [header.as_slice(), bytecode].concat(),
         metadata: MetaData::blank_sfx_metadata(),
         duration: None,
@@ -400,6 +407,7 @@ fn write_song_header(
 
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn mml_to_song(
+    name: String,
     metadata: MetaData,
     data: Vec<u8>,
     duration: Option<Duration>,
@@ -413,6 +421,7 @@ pub(crate) fn mml_to_song(
 
     match write_song_header(&mut data, &channels, &subroutines, &metadata) {
         Ok(subroutine_table_l_addr) => Ok(SongData {
+            name,
             metadata,
             data,
             duration,
