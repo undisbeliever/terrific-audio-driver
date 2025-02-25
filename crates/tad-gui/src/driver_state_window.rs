@@ -409,7 +409,7 @@ impl ChannelValues {
         "Invert",
         "Echo",
         "Pitch mod",
-        "Stack pointer",
+        "Stack remaining",
     ];
 
     fn new(index: usize, x_pos: i32, y_pos: i32, width: i32, height: i32) -> Self {
