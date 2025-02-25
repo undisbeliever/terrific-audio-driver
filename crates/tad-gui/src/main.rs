@@ -175,8 +175,20 @@ pub enum GuiMessage {
 
     OpenSongTab(usize),
 
-    SongChanged(ItemId, String),
-    RecompileSong(ItemId, String),
+    SongCursorMoved {
+        id: ItemId,
+        cursor_index: u32,
+    },
+    SongChanged {
+        id: ItemId,
+        mml: String,
+        cursor_index: Option<u32>,
+    },
+    RecompileSong {
+        id: ItemId,
+        mml: String,
+        cursor_index: Option<u32>,
+    },
 
     PlaySong(ItemId, String, TickCounter, MusicChannelsMask),
     PlaySongSubroutine(ItemId, String, Option<String>, u8, TickCounter),
@@ -195,6 +207,8 @@ pub enum GuiMessage {
 
     ClearSampleCacheAndRebuild,
     FromCompiler(compiler_thread::CompilerOutput),
+
+    DriverStateTrackingCheckboxChanged,
 
     ShowAboutTab,
     ShowOrHideHelpSyntax,
@@ -343,7 +357,7 @@ impl Project {
             ),
 
             sfx_window: SfxWindow::new(sender.clone()),
-            driver_state_window: DriverStateWindow::new(),
+            driver_state_window: DriverStateWindow::new(sender.clone()),
 
             project_tab: ProjectTab::new(&data, sender.clone()),
             samples_tab: SamplesTab::new(&data.instruments_and_samples, sender.clone()),
@@ -534,13 +548,34 @@ impl Project {
                 }
             }
 
-            GuiMessage::SongChanged(id, mml) => {
+            GuiMessage::SongChanged {
+                id,
+                mml,
+                cursor_index,
+            } => {
                 self.tab_manager.mark_unsaved(FileType::Song(id));
-                let _ = self.compiler_sender.send(ToCompiler::SongChanged(id, mml));
+                let _ = self.compiler_sender.send(ToCompiler::SongChanged {
+                    id,
+                    mml,
+                    cursor_index,
+                });
             }
-            GuiMessage::RecompileSong(id, mml) => {
+            GuiMessage::RecompileSong {
+                id,
+                mml,
+                cursor_index,
+            } => {
                 // RecompileSong should not mark the song as unsaved
-                let _ = self.compiler_sender.send(ToCompiler::SongChanged(id, mml));
+                let _ = self.compiler_sender.send(ToCompiler::SongChanged {
+                    id,
+                    mml,
+                    cursor_index,
+                });
+            }
+            GuiMessage::SongCursorMoved { id, cursor_index } => {
+                let _ = self
+                    .compiler_sender
+                    .send(ToCompiler::SongCursorMoved { id, cursor_index });
             }
             GuiMessage::PlaySong(id, mml, skip, channels_mask) => {
                 // RecompileSong should not mark the song as unsaved
@@ -636,6 +671,8 @@ impl Project {
                     None => {
                         // Paused or stopped
                         self.audio_monitor_timer.stop();
+
+                        self.driver_state_window.song_stopped();
                     }
                 }
             }
@@ -806,8 +843,15 @@ impl Project {
                     .send(ToCompiler::ClearSampleCacheAndRebuild);
             }
 
+            GuiMessage::DriverStateTrackingCheckboxChanged => {
+                self.driver_state_window.on_tracking_checkbox_changed()
+            }
+
             GuiMessage::ToggleSfxWindow => self.sfx_window.show_or_hide(),
-            GuiMessage::ToggleDriverStateWindow => self.driver_state_window.show_or_hide(),
+            GuiMessage::ToggleDriverStateWindow => {
+                self.driver_state_window.show_or_hide();
+                self.send_calculate_song_cursor_driver_state_message();
+            }
 
             // Ignore these messages, they are handled by MainWindow
             GuiMessage::ShowAboutTab => (),
@@ -875,6 +919,10 @@ impl Project {
                 if let Some(song_tab) = self.song_tabs.get_mut(&id) {
                     song_tab.set_song_prefix_result(r);
                 }
+            }
+
+            CompilerOutput::SongCursorDriverState(r) => {
+                self.driver_state_window.song_cursor_state_changed(r);
             }
 
             CompilerOutput::CommonAudioData(cad) => {
@@ -963,6 +1011,29 @@ impl Project {
             .selected_tab_changed(self.tab_manager.selected_file(), &self.data.project_songs);
         self.sfx_window
             .tab_changed(self.tab_manager.selected_file());
+
+        self.send_calculate_song_cursor_driver_state_message();
+    }
+
+    fn send_calculate_song_cursor_driver_state_message(&mut self) {
+        match self.tab_manager.selected_file() {
+            Some(FileType::Song(id)) => {
+                match self.song_tabs.get(&id).and_then(|t| t.cursor_index()) {
+                    Some(cursor_index) => {
+                        let _ = self
+                            .compiler_sender
+                            .send(ToCompiler::SongCursorMoved { id, cursor_index });
+                    }
+                    None => {
+                        self.driver_state_window
+                            .song_cursor_state_changed(compiler_thread::CursorDriverState::None);
+                    }
+                }
+            }
+            _ => {
+                self.driver_state_window.non_song_tab_selected();
+            }
+        }
     }
 
     fn maybe_set_sfx_file(&mut self, sfx_file: SoundEffectsFile) {
@@ -1064,9 +1135,11 @@ impl Project {
             self.song_tabs.insert(song_id, song_tab);
 
             // Update song in the compiler thread (in case the file changed)
-            let _ = self
-                .compiler_sender
-                .send(ToCompiler::SongChanged(song_id, f.contents));
+            let _ = self.compiler_sender.send(ToCompiler::SongChanged {
+                id: song_id,
+                mml: f.contents,
+                cursor_index: None,
+            });
 
             self.sender.send(GuiMessage::SelectedTabChanged);
         }
@@ -1089,9 +1162,11 @@ impl Project {
             self.song_tabs.insert(song_id, song_tab);
 
             // Update song in the compiler thread (in case the file changed)
-            let _ = self
-                .compiler_sender
-                .send(ToCompiler::SongChanged(song_id, file.contents));
+            let _ = self.compiler_sender.send(ToCompiler::SongChanged {
+                id: song_id,
+                mml: file.contents,
+                cursor_index: None,
+            });
 
             self.sender.send(GuiMessage::SelectedTabChanged);
         }
@@ -1211,9 +1286,11 @@ impl Project {
                         )));
 
                     // Recompile the song to update the song table
-                    let _ = self
-                        .compiler_sender
-                        .send(ToCompiler::SongChanged(id, song_tab.contents()));
+                    let _ = self.compiler_sender.send(ToCompiler::SongChanged {
+                        id,
+                        mml: song_tab.contents(),
+                        cursor_index: song_tab.cursor_index(),
+                    });
                 }
             }
         }

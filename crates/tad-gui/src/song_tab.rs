@@ -396,6 +396,15 @@ impl SongTab {
                 }
             });
 
+            s.editor.set_cursor_changed_callback({
+                let s = state.clone();
+                move |index| {
+                    if let Ok(s) = s.try_borrow() {
+                        s.on_cursor_moved(index);
+                    }
+                }
+            });
+
             for (i, b) in &mut s.channel_buttons.iter_mut().enumerate() {
                 b.set_value(true);
 
@@ -512,17 +521,34 @@ impl SongTab {
     pub fn clear_note_tracking(&mut self) {
         self.state.borrow_mut().editor.clear_note_tracking();
     }
+
+    pub fn cursor_index(&self) -> Option<u32> {
+        self.state.borrow().editor.cursor_index()
+    }
 }
 
 impl State {
+    fn on_cursor_moved(&self, cursor_index: u32) {
+        self.sender.send(GuiMessage::SongCursorMoved {
+            id: self.song_id,
+            cursor_index,
+        });
+    }
+
     fn song_changed(&self, text: String) {
-        self.sender
-            .send(GuiMessage::SongChanged(self.song_id, text));
+        self.sender.send(GuiMessage::SongChanged {
+            id: self.song_id,
+            mml: text,
+            cursor_index: self.editor.cursor_index(),
+        });
     }
 
     fn compile_song(&self) {
-        self.sender
-            .send(GuiMessage::RecompileSong(self.song_id, self.editor.text()));
+        self.sender.send(GuiMessage::RecompileSong {
+            id: self.song_id,
+            mml: self.editor.text(),
+            cursor_index: self.editor.cursor_index(),
+        });
     }
 
     fn set_start_ticks_clicked(&mut self, shift_pressed: bool) {

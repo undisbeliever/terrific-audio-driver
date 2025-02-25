@@ -91,6 +91,7 @@ pub struct MmlEditorState {
     style_vec: Vec<u8>,
 
     changed_callback: Box<dyn Fn(&EditorBuffer) + 'static>,
+    cursor_changed_callback: Box<dyn Fn(u32) + 'static>,
 
     compiled_data: Option<CompiledEditorData>,
     playing_song_notes_valid: bool,
@@ -156,6 +157,7 @@ impl MmlEditor {
             compiled_data: None,
 
             changed_callback: Box::from(Self::blank_callback),
+            cursor_changed_callback: Box::from(Self::blank_cursor_callback),
 
             errors_in_style_buffer: false,
         }));
@@ -170,7 +172,7 @@ impl MmlEditor {
                 // Not updating the status bar when an arrow key is held down is worse then a laggy status bar.
                 Event::KeyDown | Event::KeyUp | Event::Released => {
                     if let Ok(mut state) = s.try_borrow_mut() {
-                        state.update_statusbar_if_cursor_moved();
+                        state.check_if_cursor_moved();
                     }
                     false
                 }
@@ -229,6 +231,10 @@ impl MmlEditor {
         self.state.borrow().buffer.clone()
     }
 
+    pub fn cursor_index(&self) -> Option<u32> {
+        self.widget.insert_position().try_into().ok()
+    }
+
     pub fn text(&self) -> String {
         self.state.borrow().buffer.borrow().text()
     }
@@ -271,6 +277,10 @@ impl MmlEditor {
         self.state.borrow_mut().changed_callback = Box::from(f);
     }
 
+    pub fn set_cursor_changed_callback(&mut self, f: impl Fn(u32) + 'static) {
+        self.state.borrow_mut().cursor_changed_callback = Box::from(f);
+    }
+
     pub fn move_cursor_to_line_end(&mut self, line_no: u32) {
         self.state.borrow_mut().move_cursor_to_line_end(line_no);
     }
@@ -299,6 +309,8 @@ impl MmlEditor {
     }
 
     fn blank_callback(_: &EditorBuffer) {}
+
+    fn blank_cursor_callback(_: u32) {}
 
     pub fn audio_thread_started_song(&mut self, song_data: Arc<SongData>) {
         self.state.borrow_mut().song_started(song_data);
@@ -701,10 +713,14 @@ impl MmlEditorState {
             .map(|(channel_id, c)| (channel_id, c.ticks.ticks))
     }
 
-    fn update_statusbar_if_cursor_moved(&mut self) {
+    fn check_if_cursor_moved(&mut self) {
         let ci = self.cursor_index();
-        if self.prev_cursor_index != ci && ci.is_some() {
-            self._update_statusbar(ci);
+        if self.prev_cursor_index != ci {
+            if let Some(ci) = ci {
+                self._update_statusbar(Some(ci));
+
+                (self.cursor_changed_callback)(ci);
+            }
         }
     }
 

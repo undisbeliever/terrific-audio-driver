@@ -4,7 +4,9 @@
 //
 // SPDX-License-Identifier: MIT
 
-use crate::audio_thread::{AudioMessage, CommonAudioDataNoSfx, MusicChannelsMask};
+use crate::audio_thread::{
+    AudioMessage, AudioThreadSongInterpreter, CommonAudioDataNoSfx, MusicChannelsMask, SiCad,
+};
 use crate::names::NameGetter;
 use crate::sample_analyser::{self, SampleAnalysis};
 use crate::sfx_export_order::{GuiSfxExportOrder, SfxExportOrderAction};
@@ -17,19 +19,20 @@ use std::ops::Deref;
 use std::sync::{mpsc, Arc};
 use std::thread;
 
+use compiler::bytecode_interpreter::SongInterpreter;
 use compiler::common_audio_data::{
     build_cad_with_sfx_buffer, build_common_audio_data, CommonAudioData,
     CommonAudioDataWithSfxBuffer,
 };
 use compiler::data::{self, BrrEvaluator};
 use compiler::data::{load_text_file_with_limit, DefaultSfxFlags, LoopSetting, TextFile};
-use compiler::driver_constants::COMMON_DATA_BYTES_PER_SOUND_EFFECT;
+use compiler::driver_constants::{self, COMMON_DATA_BYTES_PER_SOUND_EFFECT};
 use compiler::envelope::Envelope;
 use compiler::errors::{
     self, BrrError, CommonAudioDataErrors, LoadSongError, MmlPrefixError, ProjectFileErrors,
     SongTooLargeError,
 };
-use compiler::mml::compile_mml_prefix;
+use compiler::mml::{compile_mml_prefix, ChannelId};
 use compiler::notes::Note;
 use compiler::path::{ParentPathBuf, SourcePathBuf};
 use compiler::samples::{
@@ -139,7 +142,15 @@ pub enum ToCompiler {
     PlaySfxUsingSfxBuffer(ItemId, Pan),
 
     SongTabClosed(ItemId),
-    SongChanged(ItemId, String),
+    SongChanged {
+        id: ItemId,
+        mml: String,
+        cursor_index: Option<u32>,
+    },
+    SongCursorMoved {
+        id: ItemId,
+        cursor_index: u32,
+    },
     CompileAndPlaySong(ItemId, String, TickCounter, MusicChannelsMask),
     CompileAndPlaySongSubroutine(ItemId, String, Option<String>, u8, TickCounter),
     PlayInstrument(ItemId, PlaySampleArgs),
@@ -164,6 +175,17 @@ pub type SoundEffectOutput = Result<Arc<CompiledSoundEffect>, SfxError>;
 pub type SongOutput = Result<Arc<SongData>, SongError>;
 
 #[derive(Debug)]
+pub enum CursorDriverState {
+    None,
+    NoSong,
+    NoCursor,
+    Song(Box<AudioThreadSongInterpreter>),
+    Subroutine(Box<AudioThreadSongInterpreter>),
+    BcError,
+    BcTimeout,
+}
+
+#[derive(Debug)]
 pub enum CompilerOutput {
     Panic(String),
 
@@ -186,6 +208,8 @@ pub enum CompilerOutput {
     SpcFileResult(Result<(String, Box<[u8]>), SpcFileError>),
 
     SampleAnalysis(Result<SampleAnalysis, BrrError>),
+
+    SongCursorDriverState(CursorDriverState),
 }
 
 #[derive(Debug)]
@@ -1250,6 +1274,57 @@ impl SongCompiler {
     }
 }
 
+fn calculate_song_driver_state(
+    cad: &Option<Arc<CommonAudioDataNoSfx>>,
+    songs: &SongCompiler,
+    id: ItemId,
+    cursor_index: u32,
+    sender: &Sender,
+) {
+    sender.send(CompilerOutput::SongCursorDriverState(
+        match (cad, songs.get_song_data(&id)) {
+            (Some(cad), Some(song)) => match song
+                .tracking()
+                .and_then(|c| c.cursor_tracker.find(cursor_index))
+            {
+                Some((ChannelId::Channel(_), c)) => {
+                    let mut si = Box::new(SongInterpreter::new_zero(
+                        SiCad::NoSfx(cad.clone()),
+                        song.clone(),
+                        cad.0.min_song_data_addr(),
+                        driver_constants::AudioMode::Surround,
+                    ));
+
+                    match si.process_song_skip_ticks(c.ticks.ticks + TickCounter::new(2)) {
+                        true => CursorDriverState::Song(si),
+                        false => CursorDriverState::BcTimeout,
+                    }
+                }
+                Some((ChannelId::Subroutine(subroutine_index), c)) => {
+                    match SongInterpreter::new_song_subroutine(
+                        SiCad::NoSfx(cad.clone()),
+                        song.clone(),
+                        cad.0.min_song_data_addr(),
+                        None,
+                        subroutine_index,
+                        driver_constants::AudioMode::Surround,
+                    ) {
+                        Ok(mut si) => {
+                            match si.process_song_skip_ticks(c.ticks.ticks + TickCounter::new(2)) {
+                                true => CursorDriverState::Subroutine(Box::new(si)),
+                                false => CursorDriverState::BcTimeout,
+                            }
+                        }
+                        Err(_) => CursorDriverState::BcError,
+                    }
+                }
+                _ => CursorDriverState::NoCursor,
+            },
+            _ => CursorDriverState::NoSong,
+        },
+    ));
+}
+
 fn analyse_sample(
     cache: &mut SampleFileCache,
     source: SourcePathBuf,
@@ -1478,8 +1553,18 @@ fn bg_thread(
             ToCompiler::SongTabClosed(id) => {
                 songs.song_tab_closed(id, &pf_songs, &song_dependencies, &sender);
             }
-            ToCompiler::SongChanged(id, mml) => {
+            ToCompiler::SongChanged {
+                id,
+                mml,
+                cursor_index,
+            } => {
                 songs.edit_and_compile_song(id, mml, &pf_songs, &song_dependencies, &sender);
+                if let Some(cursor_index) = cursor_index {
+                    calculate_song_driver_state(&cad_no_sfx, &songs, id, cursor_index, &sender);
+                }
+            }
+            ToCompiler::SongCursorMoved { id, cursor_index } => {
+                calculate_song_driver_state(&cad_no_sfx, &songs, id, cursor_index, &sender);
             }
             ToCompiler::CompileAndPlaySong(id, mml, skip, channels_mask) => {
                 sender.send_audio(AudioMessage::Pause);

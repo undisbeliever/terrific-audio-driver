@@ -413,20 +413,20 @@ impl std::ops::Deref for SiCad {
     }
 }
 
+pub type AudioThreadSongInterpreter = SongInterpreter<SiCad, Arc<SongData>>;
+
 // Holding the SongInterpreter in a Arc<RwLock> so the driver-state window
 // can retrieve the exact CommonAudioData and SongData used by the currently playing song.
 #[derive(Debug, Clone)]
-pub struct SharedSongInterpreter(Arc<RwLock<SongInterpreter<SiCad, Arc<SongData>>>>);
+pub struct SharedSongInterpreter(Arc<RwLock<AudioThreadSongInterpreter>>);
 
 impl SharedSongInterpreter {
-    pub fn try_borrow(&self) -> LockResult<RwLockReadGuard<SongInterpreter<SiCad, Arc<SongData>>>> {
+    pub fn try_borrow(&self) -> LockResult<RwLockReadGuard<AudioThreadSongInterpreter>> {
         self.0.read()
     }
 
     // forbid GUI thread from modifying the song-interpreter
-    fn try_borrow_mut(
-        &self,
-    ) -> LockResult<RwLockWriteGuard<SongInterpreter<SiCad, Arc<SongData>>>> {
+    fn try_borrow_mut(&self) -> LockResult<RwLockWriteGuard<AudioThreadSongInterpreter>> {
         self.0.write()
     }
 }

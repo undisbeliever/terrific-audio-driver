@@ -4,8 +4,10 @@
 //
 // SPDX-License-Identifier: MIT
 
-use crate::audio_thread::SharedSongInterpreter;
+use crate::audio_thread::{AudioThreadSongInterpreter, SharedSongInterpreter};
+use crate::compiler_thread::CursorDriverState;
 use crate::helpers::{ch_units_to_width, input_height};
+use crate::GuiMessage;
 
 use compiler::bytecode_interpreter::{ChannelState, GlobalState, PanVolEffectDirection};
 use compiler::driver_constants::N_MUSIC_CHANNELS;
@@ -14,6 +16,8 @@ use compiler::envelope::{self, Envelope};
 use compiler::invert_flags::InvertFlags;
 use compiler::time::{timer_register_to_bpm, TickCounter};
 
+use fltk::app;
+use fltk::button::CheckButton;
 use fltk::enums::{Align, FrameType};
 use fltk::frame::Frame;
 use fltk::prelude::*;
@@ -255,7 +259,7 @@ impl GlobalValues {
                 .with_align(Align::Inside | Align::Right);
         };
 
-        label(0, 0, "Ticks");
+        label(0, 0, "Tick");
         let ticks = Value::new(row_x(1), col_y(0), width, height);
         label(2, 0, "Timer");
         let timer = Value::new(row_x(3), col_y(0), width, height);
@@ -301,6 +305,8 @@ impl GlobalValues {
     }
 
     fn update(&mut self, tc: TickCounter, state: &GlobalState) {
+        self.is_clear = false;
+
         self.ticks.update(tc.value());
 
         self.timer.update(state.timer_register);
@@ -492,17 +498,71 @@ impl ChannelValues {
     }
 }
 
-pub struct DriverStateWindow {
-    window: Window,
-
-    audio_thread_song_interpreter: Option<SharedSongInterpreter>,
+struct DriverWidgets {
+    status: Status,
+    status_label: Frame,
 
     globals: GlobalValues,
     channels: [ChannelValues; N_MUSIC_CHANNELS],
 }
 
+impl DriverWidgets {
+    fn set_status(&mut self, status: Status) {
+        if self.status != status {
+            self.status = status;
+
+            self.status_label.set_label(match self.status {
+                Status::None => "",
+                Status::Audio => "AUDIO",
+                Status::SongCursor => "CURSOR",
+                Status::SubroutineCursor => "SUBROUTINE",
+                Status::SongError => "ERROR",
+            });
+        }
+    }
+
+    fn update(&mut self, si: &AudioThreadSongInterpreter) {
+        self.globals.update(si.tick_counter(), si.global_state());
+
+        for (wc, sc) in self.channels.iter_mut().zip(si.channels().iter()) {
+            match sc {
+                Some(sc) => wc.update(sc),
+                None => wc.clear(),
+            }
+        }
+    }
+
+    fn clear(&mut self) {
+        self.globals.clear();
+        for c in &mut self.channels {
+            c.clear();
+        }
+    }
+}
+
+#[derive(PartialEq)]
+enum Status {
+    None,
+    Audio,
+    SongCursor,
+    SubroutineCursor,
+    SongError,
+}
+
+pub struct DriverStateWindow {
+    window: Window,
+
+    follow_cursor: bool,
+    track_audio_cb: CheckButton,
+
+    cursor_state: CursorDriverState,
+    audio_thread_song_interpreter: Option<SharedSongInterpreter>,
+
+    widgets: DriverWidgets,
+}
+
 impl DriverStateWindow {
-    pub fn new() -> Self {
+    pub fn new(sender: app::Sender<GuiMessage>) -> Self {
         let mut window = fltk::window::Window::default().with_label("Audio Driver State");
         window.make_modal(false);
         window.make_resizable(false);
@@ -513,8 +573,17 @@ impl DriverStateWindow {
 
         window.set_size(width * 10 + padding * 2, height * 17 + padding * 3);
 
+        let mut track_audio_cb =
+            CheckButton::new(padding, padding, width * 2, height, "Track audio");
+        track_audio_cb.set_value(true);
+        track_audio_cb.set_callback(move |_| {
+            sender.send(GuiMessage::DriverStateTrackingCheckboxChanged);
+        });
+
+        let status_label = Frame::new(padding + width * 2, padding, width * 2, height, None)
+            .with_align(Align::Inside | Align::Left);
+
         // ::TODO add song name::
-        // ::TODO add tick-box for enabling cursor tracking::
 
         let globals = GlobalValues::new(
             padding,
@@ -535,50 +604,122 @@ impl DriverStateWindow {
 
         Self {
             window,
+            follow_cursor: true,
+            track_audio_cb,
+            cursor_state: CursorDriverState::None,
             audio_thread_song_interpreter: None,
-            globals,
-            channels,
+            widgets: DriverWidgets {
+                status: Status::None,
+                status_label,
+                globals,
+                channels,
+            },
         }
+    }
+
+    fn update_follow_cursor(&mut self) {
+        self.follow_cursor =
+            !self.track_audio_cb.value() || self.audio_thread_song_interpreter.is_none();
+    }
+
+    pub fn on_tracking_checkbox_changed(&mut self) {
+        self.update_follow_cursor();
+        self.update_all();
     }
 
     pub fn song_started(&mut self, si: Option<SharedSongInterpreter>) {
         self.audio_thread_song_interpreter = si;
+
+        self.update_follow_cursor();
         self.monitor_timer_elapsed();
+    }
+
+    pub fn song_stopped(&mut self) {
+        self.follow_cursor = true;
     }
 
     pub fn show_or_hide(&mut self) {
         if self.window.shown() {
             self.window.hide();
         } else {
-            self.monitor_timer_elapsed();
+            self.update_all();
             self.window.show();
         }
     }
 
-    pub fn monitor_timer_elapsed(&mut self) {
-        if self.window.shown() {
-            match &self.audio_thread_song_interpreter {
-                Some(si) => {
-                    if let Ok(si) = si.try_borrow() {
-                        self.globals.update(si.tick_counter(), si.global_state());
+    pub fn non_song_tab_selected(&mut self) {
+        self.cursor_state = CursorDriverState::None;
 
-                        for (wc, sc) in self.channels.iter_mut().zip(si.channels().iter()) {
-                            match sc {
-                                Some(sc) => wc.update(sc),
-                                None => wc.clear(),
-                            }
-                        }
-                    }
-                }
-                None => self.clear(),
+        if self.follow_cursor {
+            self.widgets.set_status(Status::None);
+        }
+
+        if self.follow_cursor && self.window.visible() {
+            self.widgets.clear();
+        }
+    }
+
+    pub fn song_cursor_state_changed(&mut self, state: CursorDriverState) {
+        self.cursor_state = state;
+
+        if self.follow_cursor && self.window.shown() {
+            self.update_song_cursor_state();
+        }
+    }
+
+    pub fn monitor_timer_elapsed(&mut self) {
+        if !self.follow_cursor && self.window.shown() {
+            self.update_monitor();
+        }
+    }
+
+    fn update_all(&mut self) {
+        if self.follow_cursor {
+            self.update_song_cursor_state();
+        } else {
+            self.update_monitor();
+        }
+    }
+
+    fn update_song_cursor_state(&mut self) {
+        match &self.cursor_state {
+            CursorDriverState::Song(si) => {
+                self.widgets.set_status(Status::SongCursor);
+                self.widgets.update(si);
+            }
+            CursorDriverState::Subroutine(si) => {
+                self.widgets.set_status(Status::SubroutineCursor);
+                self.widgets.update(si);
+            }
+            CursorDriverState::None | CursorDriverState::NoSong => {
+                self.widgets.set_status(Status::None);
+                self.widgets.clear();
+            }
+            CursorDriverState::NoCursor => {
+                self.widgets.set_status(Status::None);
+                self.widgets.clear();
+            }
+            CursorDriverState::BcError => {
+                self.widgets.set_status(Status::SongError);
+                self.widgets.clear();
+            }
+            CursorDriverState::BcTimeout => {
+                self.widgets.set_status(Status::SongError);
+                self.widgets.clear();
             }
         }
     }
 
-    fn clear(&mut self) {
-        self.globals.clear();
-        for c in &mut self.channels {
-            c.clear();
+    fn update_monitor(&mut self) {
+        self.widgets.set_status(Status::Audio);
+
+        match &self.audio_thread_song_interpreter {
+            Some(si) => {
+                if let Ok(si) = si.try_borrow() {
+                    self.widgets.update(&si);
+                }
+            }
+            None => self.widgets.clear(),
         }
     }
 }
