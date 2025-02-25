@@ -12,6 +12,7 @@ use crate::driver_constants::{
     MAX_COMMON_DATA_SIZE, MAX_DIR_ITEMS, MAX_INSTRUMENTS_AND_SAMPLES, MAX_N_PITCHES,
     MAX_SFX_DATA_ADDR, MAX_SFX_SUBROUTINES, MAX_SOUND_EFFECTS,
 };
+use crate::envelope::Envelope;
 use crate::errors::{CommonAudioDataError, CommonAudioDataErrors, SfxCannotFitInSfxBuffer};
 use crate::opcodes;
 use crate::samples::SampleAndInstrumentData;
@@ -152,6 +153,21 @@ impl CommonAudioData {
         let mid = (start + end) / 2;
 
         (&self.data[start..mid], &self.data[mid..end])
+    }
+
+    pub fn instrument_envelope(&self, instrument_id: u8) -> Option<Envelope> {
+        let i1 = self.instruments_soa_offset
+            + 2 * self.n_instruments_and_samples
+            + usize::from(instrument_id);
+        let i2 = self.instruments_soa_offset
+            + 3 * self.n_instruments_and_samples
+            + usize::from(instrument_id);
+
+        if i2 < self.data.len() {
+            Some(Envelope::from_engine_value(self.data[i1], self.data[i2]))
+        } else {
+            None
+        }
     }
 }
 

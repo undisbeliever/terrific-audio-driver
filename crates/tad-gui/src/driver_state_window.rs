@@ -6,12 +6,13 @@
 
 use std::sync::Arc;
 
-use crate::audio_thread::{AudioThreadSongInterpreter, SharedSongInterpreter};
+use crate::audio_thread::{AudioThreadSongInterpreter, SharedSongInterpreter, SiCad};
 use crate::compiler_thread::{CursorDriverState, InstrumentAndSampleNames, ItemId};
 use crate::helpers::{ch_units_to_width, input_height};
 use crate::GuiMessage;
 
 use compiler::bytecode_interpreter::{ChannelState, GlobalState, PanVolEffectDirection};
+use compiler::common_audio_data::CommonAudioData;
 use compiler::driver_constants::N_MUSIC_CHANNELS;
 use compiler::driver_constants::{ECHO_BUFFER_EDL_MS, FIR_FILTER_SIZE};
 use compiler::envelope::{self, Envelope};
@@ -188,6 +189,10 @@ where
         Self { frame, value: None }
     }
 
+    fn value(&self) -> &Option<T> {
+        &self.value
+    }
+
     fn clear(&mut self) {
         self.frame.set_label("");
         self.value = None;
@@ -210,10 +215,11 @@ where
         }
     }
 
-    fn update_custom(&mut self, new_value: Option<T>, f: impl Fn(&mut Frame)) {
+    fn set_value_label_and_tooltip(&mut self, new_value: Option<T>, text: &str) {
         if self.value != new_value {
             self.value = new_value;
-            f(&mut self.frame)
+            self.frame.set_label(text);
+            self.frame.set_tooltip(text);
         }
     }
 }
@@ -366,6 +372,8 @@ impl GlobalValues {
 struct ChannelValues {
     is_clear: bool,
 
+    default_envelope: Option<Envelope>,
+
     instrument: Value<u8>,
     adsr_or_gain: Value<Envelope>,
     temp_gain: Value<TempGain>,
@@ -424,6 +432,8 @@ impl ChannelValues {
         Self {
             is_clear: true,
 
+            default_envelope: None,
+
             instrument: Value::new_smaller_left(x_pos, next_y_pos(), width, height),
             adsr_or_gain: Value::new(x_pos, next_y_pos(), width, height),
             temp_gain: Value::new(x_pos, next_y_pos(), width, height),
@@ -456,6 +466,8 @@ impl ChannelValues {
         if !self.is_clear {
             self.is_clear = true;
 
+            self.default_envelope = None;
+
             self.instrument.clear();
             self.adsr_or_gain.clear();
             self.temp_gain.clear();
@@ -475,27 +487,35 @@ impl ChannelValues {
         }
     }
 
-    fn update(&mut self, c: &ChannelState, instrument_names: &InstrumentAndSampleNames) {
+    fn update(
+        &mut self,
+        c: &ChannelState,
+        cad: &CommonAudioData,
+        instrument_names: &InstrumentAndSampleNames,
+    ) {
         self.is_clear = false;
 
-        self.instrument
-            .update_custom(c.instrument, |w| match c.instrument {
-                Some(i) => match instrument_names.get(usize::from(i)) {
-                    Some(name) => {
-                        w.set_label(name.as_str());
-                        w.set_tooltip(name.as_str());
+        if self.instrument.value() != &c.instrument {
+            match c.instrument {
+                Some(i) => {
+                    match instrument_names.get(usize::from(i)) {
+                        Some(name) => self
+                            .instrument
+                            .set_value_label_and_tooltip(c.instrument, name.as_str()),
+                        None => self
+                            .instrument
+                            .set_value_label_and_tooltip(c.instrument, &format!("{i}")),
                     }
-                    None => w.set_label(&format!("{i}")),
-                },
-                None => {
-                    w.set_label("");
+                    self.default_envelope = cad.instrument_envelope(i);
                 }
-            });
+                None => self.instrument.set_value_label_and_tooltip(None, ""),
+            }
+        }
 
-        // ::TODO somehow show default envelope::
         self.adsr_or_gain.update_option(
             c.adsr_or_gain_override
-                .map(|(a1, a2)| Envelope::from_engine_value(a1, a2)),
+                .map(|(a1, a2)| Envelope::from_engine_value(a1, a2))
+                .or(self.default_envelope),
         );
 
         self.temp_gain.update(TempGain(c.temp_gain));
@@ -529,6 +549,7 @@ impl ChannelValues {
 
     fn invalidate_instrument(&mut self) {
         self.instrument.clear();
+        self.default_envelope = None;
     }
 }
 
@@ -640,11 +661,15 @@ impl DriverWidgets {
     fn update(&mut self, si: &AudioThreadSongInterpreter) {
         self.globals.update(si.tick_counter(), si.global_state());
 
-        let instrument_names = si.common_audio_data().instrument_and_sample_names();
+        let (cad, instrument_names) = match si.common_audio_data() {
+            SiCad::NoSfx(c) => (&c.0, &c.1),
+            SiCad::WithSfx(c) => (&c.common_audio_data, &c.instrument_and_sample_names),
+            SiCad::SfxBuffer(c) => (c.0.common_data(), &c.1),
+        };
 
         for (wc, sc) in self.channels.iter_mut().zip(si.channels().iter()) {
             match sc {
-                Some(sc) => wc.update(sc, instrument_names),
+                Some(sc) => wc.update(sc, cad, instrument_names),
                 None => wc.clear(),
             }
         }
