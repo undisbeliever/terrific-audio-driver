@@ -4,8 +4,10 @@
 //
 // SPDX-License-Identifier: MIT
 
+use std::sync::Arc;
+
 use crate::audio_thread::{AudioThreadSongInterpreter, SharedSongInterpreter};
-use crate::compiler_thread::{CursorDriverState, ItemId};
+use crate::compiler_thread::{CursorDriverState, InstrumentAndSampleNames, ItemId};
 use crate::helpers::{ch_units_to_width, input_height};
 use crate::GuiMessage;
 
@@ -171,10 +173,19 @@ where
         Self { frame, value: None }
     }
 
-    fn new_smaller(x: i32, y: i32, width: i32, height: i32) -> Self {
+    fn new_smaller_right(x: i32, y: i32, width: i32, height: i32) -> Self {
         let mut out = Self::new(x, y, width, height);
         out.frame.set_label_size(out.frame.label_size() * 8 / 10);
         out
+    }
+
+    fn new_smaller_left(x: i32, y: i32, width: i32, height: i32) -> Self {
+        let mut frame = Frame::new(x, y, width, height, None);
+        frame.set_align(Align::Inside | Align::Left | Align::Clip);
+        frame.set_frame(FrameType::ThinDownBox);
+        frame.set_label_size(frame.label_size() * 8 / 10);
+
+        Self { frame, value: None }
     }
 
     fn clear(&mut self) {
@@ -196,6 +207,13 @@ where
                 None => self.frame.set_label(""),
             }
             self.value = new_value;
+        }
+    }
+
+    fn update_custom(&mut self, new_value: Option<T>, f: impl Fn(&mut Frame)) {
+        if self.value != new_value {
+            self.value = new_value;
+            f(&mut self.frame)
         }
     }
 }
@@ -406,11 +424,11 @@ impl ChannelValues {
         Self {
             is_clear: true,
 
-            instrument: Value::new(x_pos, next_y_pos(), width, height),
+            instrument: Value::new_smaller_left(x_pos, next_y_pos(), width, height),
             adsr_or_gain: Value::new(x_pos, next_y_pos(), width, height),
             temp_gain: Value::new(x_pos, next_y_pos(), width, height),
             prev_temp_gain: Value::new(x_pos, next_y_pos(), width, height),
-            early_release: Value::new_smaller(x_pos, next_y_pos(), width, height),
+            early_release: Value::new_smaller_right(x_pos, next_y_pos(), width, height),
             detune: Value::new(x_pos, next_y_pos(), width, height),
             vibrato: Value::new(x_pos, next_y_pos(), width, height),
 
@@ -457,11 +475,22 @@ impl ChannelValues {
         }
     }
 
-    fn update(&mut self, c: &ChannelState) {
+    fn update(&mut self, c: &ChannelState, instrument_names: &InstrumentAndSampleNames) {
         self.is_clear = false;
 
-        // ::TODO somehow show instrument name::
-        self.instrument.update_option(c.instrument);
+        self.instrument
+            .update_custom(c.instrument, |w| match c.instrument {
+                Some(i) => match instrument_names.get(usize::from(i)) {
+                    Some(name) => {
+                        w.set_label(name.as_str());
+                        w.set_tooltip(name.as_str());
+                    }
+                    None => w.set_label(&format!("{i}")),
+                },
+                None => {
+                    w.set_label("");
+                }
+            });
 
         // ::TODO somehow show default envelope::
         self.adsr_or_gain.update_option(
@@ -497,6 +526,10 @@ impl ChannelValues {
 
         self.stack_pointer.update(c.stack_pointer);
     }
+
+    fn invalidate_instrument(&mut self) {
+        self.instrument.clear();
+    }
 }
 
 struct DriverWidgets {
@@ -505,6 +538,9 @@ struct DriverWidgets {
 
     song_id: Option<ItemId>,
     song_name: Frame,
+
+    // Used to determine if channels.instrument has been invalidated
+    instrument_names: Option<Arc<InstrumentAndSampleNames>>,
 
     globals: GlobalValues,
     channels: [ChannelValues; N_MUSIC_CHANNELS],
@@ -525,7 +561,23 @@ impl DriverWidgets {
         }
     }
 
-    pub fn set_song_name_if_id_changed(&mut self, song_id: ItemId, song: &SongData) {
+    fn check_if_instrument_names_changed(&mut self, si: &AudioThreadSongInterpreter) {
+        let si_names = si.common_audio_data().instrument_and_sample_names();
+
+        if !self
+            .instrument_names
+            .as_ref()
+            .is_some_and(|n| Arc::ptr_eq(n, si_names))
+        {
+            self.instrument_names = Some(si_names.clone());
+
+            for c in &mut self.channels {
+                c.invalidate_instrument();
+            }
+        }
+    }
+
+    fn set_song_name_if_id_changed(&mut self, song_id: ItemId, song: &SongData) {
         if self.song_id != Some(song_id) {
             self.song_id = Some(song_id);
 
@@ -533,7 +585,7 @@ impl DriverWidgets {
         }
     }
 
-    pub fn clear_song_name_if_id_changed(&mut self, song_id: ItemId) {
+    fn clear_song_name_if_id_changed(&mut self, song_id: ItemId) {
         if self.song_id != Some(song_id) {
             self.song_id = Some(song_id);
 
@@ -541,7 +593,7 @@ impl DriverWidgets {
         }
     }
 
-    pub fn clear_song_name_and_id(&mut self) {
+    fn clear_song_name_and_id(&mut self) {
         if self.song_id.is_some() {
             self.song_id = None;
 
@@ -553,6 +605,7 @@ impl DriverWidgets {
         match &cursor_state {
             CursorDriverState::Song(song_id, si) | CursorDriverState::Subroutine(song_id, si) => {
                 self.set_song_name_if_id_changed(*song_id, si.song_data());
+                self.check_if_instrument_names_changed(si);
             }
             CursorDriverState::NoSong(song_id)
             | CursorDriverState::NoCursor(song_id)
@@ -570,7 +623,10 @@ impl DriverWidgets {
         match ssi {
             Some(ssi) => {
                 match ssi.try_borrow() {
-                    Ok(si) => self.song_name.set_label(si.song_data().name()),
+                    Ok(si) => {
+                        self.song_name.set_label(si.song_data().name());
+                        self.check_if_instrument_names_changed(&si);
+                    }
                     Err(_) => self.song_name.set_label("ERROR"),
                 }
                 self.song_id = ssi.song_id();
@@ -584,9 +640,11 @@ impl DriverWidgets {
     fn update(&mut self, si: &AudioThreadSongInterpreter) {
         self.globals.update(si.tick_counter(), si.global_state());
 
+        let instrument_names = si.common_audio_data().instrument_and_sample_names();
+
         for (wc, sc) in self.channels.iter_mut().zip(si.channels().iter()) {
             match sc {
-                Some(sc) => wc.update(sc),
+                Some(sc) => wc.update(sc, instrument_names),
                 None => wc.clear(),
             }
         }
@@ -595,6 +653,8 @@ impl DriverWidgets {
     fn clear(&mut self) {
         self.song_id = None;
         self.song_name.set_label("");
+
+        self.instrument_names = None;
 
         self.globals.clear();
         for c in &mut self.channels {
@@ -677,6 +737,7 @@ impl DriverStateWindow {
                 status_label,
                 song_id: None,
                 song_name,
+                instrument_names: None,
                 globals,
                 channels,
             },

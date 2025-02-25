@@ -1462,6 +1462,10 @@ where
         Ok(out)
     }
 
+    pub fn common_audio_data(&self) -> &CAD {
+        &self.common_audio_data
+    }
+
     pub fn song_data(&self) -> &SongData {
         &self.song_data
     }

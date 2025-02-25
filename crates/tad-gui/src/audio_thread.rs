@@ -28,10 +28,10 @@ use std::sync::{mpsc, Arc, Mutex, RwLock};
 use std::thread;
 use std::time::Duration;
 
-use crate::compiler_thread::ItemId;
 use crate::compiler_thread::{
     CommonAudioDataNoSfx, CommonAudioDataWithSfx, CommonAudioDataWithSfxBuffer,
 };
+use crate::compiler_thread::{InstrumentAndSampleNames, ItemId};
 use crate::sfx_export_order::SfxId;
 use crate::GuiMessage;
 
@@ -400,6 +400,16 @@ pub enum SiCad {
     NoSfx(Arc<CommonAudioDataNoSfx>),
     SfxBuffer(Arc<CommonAudioDataWithSfxBuffer>),
     WithSfx(Arc<CommonAudioDataWithSfx>),
+}
+
+impl SiCad {
+    pub fn instrument_and_sample_names(&self) -> &Arc<InstrumentAndSampleNames> {
+        match self {
+            Self::NoSfx(c) => &c.1,
+            Self::WithSfx(c) => &c.instrument_and_sample_names,
+            Self::SfxBuffer(c) => &c.1,
+        }
+    }
 }
 
 impl std::ops::Deref for SiCad {
