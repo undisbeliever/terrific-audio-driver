@@ -648,6 +648,8 @@ impl Project {
                 if self.song_tabs.contains_key(&song_id) {
                     self.audio_monitor_timer.start();
                 }
+
+                self.driver_state_window.song_resumed();
             }
             GuiMessage::SongMonitorTimeout => {
                 let mon = self.audio_monitor.get();

@@ -864,6 +864,12 @@ impl DriverStateWindow {
         self.follow_cursor = true;
     }
 
+    pub fn song_resumed(&mut self) {
+        if self.track_audio_cb.value() && self.audio_thread_song_interpreter.is_some() {
+            self.follow_cursor = false;
+        }
+    }
+
     pub fn show_or_hide(&mut self) {
         if self.window.shown() {
             self.window.hide();
