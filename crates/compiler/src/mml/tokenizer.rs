@@ -55,6 +55,8 @@ pub enum Token<'a> {
     DecrementOctave,
     CoarseVolume,
     FineVolume,
+    DecrementVolumeParentheses,
+    IncrementVolumeParentheses,
     Pan,
     PxPan,
     SetChannelInvert(InvertFlags),
@@ -266,7 +268,9 @@ fn is_unknown_u8(c: u8) -> bool {
         b'!' | b'@' | b'+' | b'-' | b'[' | b':' | b']' | b'^' | b'&' | b'C' | b's' | b'n'
         | b'l' | b'r' | b'w' | b'o' | b'>' | b'<' | b'v' | b'V' | b'p' | b'Q' | b'q' | b'~'
         | b'A' | b'G' | b'E' | b't' | b'T' | b'L' | b'%' | b'.' | b',' | b'|' | b'_' | b'{'
-        | b'}' | b'B' | b'D' | b'F' | b'I' | b'M' | b'P' | b'N' | b'i' | b'?' => false,
+        | b'}' | b'B' | b'D' | b'F' | b'I' | b'M' | b'P' | b'N' | b'i' | b'(' | b')' | b'?' => {
+            false
+        }
         b'\\' => false,
         c if c.is_ascii_whitespace() => false,
         _ => true,
@@ -480,6 +484,9 @@ fn next_token<'a>(scanner: &mut Scanner<'a>) -> Option<TokenWithPosition<'a>> {
             Some(b'~') => two_ascii_token!(Token::FineTremolo),
             _ => one_ascii_token!(Token::FineVolume),
         },
+
+        b'(' => one_ascii_token!(Token::DecrementVolumeParentheses),
+        b')' => one_ascii_token!(Token::IncrementVolumeParentheses),
 
         // Gain might use 2 or 3 chacters
         b'G' => {

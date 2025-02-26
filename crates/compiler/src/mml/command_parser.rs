@@ -1287,6 +1287,60 @@ fn parse_coarse_volume_value(pos: FilePos, p: &mut Parser) -> Option<VolumeComma
     )
 }
 
+fn parse_dec_volume_paren(pos: FilePos, p: &mut Parser) -> VolumeCommand {
+    let rv = |v: u32| match i32::try_from(v) {
+        Ok(v) => relative_volume(-v),
+        Err(_) => VolumeCommand::Absolute(Volume::MIN),
+    };
+
+    match_next_token!(
+        p,
+
+        &Token::Number(v) | &Token::HexNumber(v) => {
+            rv(v.saturating_mul(COARSE_VOLUME_MULTIPLIER.into()))
+        },
+        Token::PercentSign => {
+            match next_token_number(p) {
+                Some(v) => rv(v),
+                None => {
+                    p.add_error(pos, ValueError::NoRelativeVolume.into());
+                    relative_volume(-i32::from(COARSE_VOLUME_MULTIPLIER))
+                }
+            }
+        },
+        #_ => {
+            relative_volume(-i32::from(COARSE_VOLUME_MULTIPLIER))
+        }
+    )
+}
+
+fn parse_inc_volume_paren(pos: FilePos, p: &mut Parser) -> VolumeCommand {
+    let rv = |v: u32| match i32::try_from(v) {
+        Ok(v) => relative_volume(v),
+        Err(_) => VolumeCommand::Absolute(Volume::MAX),
+    };
+
+    match_next_token!(
+        p,
+
+        &Token::Number(v) | &Token::HexNumber(v) => {
+            rv(v.saturating_mul(COARSE_VOLUME_MULTIPLIER.into()))
+        },
+        Token::PercentSign => {
+            match next_token_number(p) {
+                Some(v) => rv(v),
+                None => {
+                    p.add_error(pos, ValueError::NoRelativeVolume.into());
+                    relative_volume(COARSE_VOLUME_MULTIPLIER.into())
+                }
+            }
+        },
+        #_ => {
+            relative_volume(COARSE_VOLUME_MULTIPLIER.into())
+        }
+    )
+}
+
 fn merge_pan_or_volume(
     pan: Option<PanCommand>,
     volume: Option<VolumeCommand>,
@@ -1310,6 +1364,14 @@ fn merge_pan_or_volume(
                 if let Some(v) = parse_fine_volume_value(pos, p) {
                     volume = Some(merge_volumes_commands(volume, v));
                 }
+            },
+            Token::DecrementVolumeParentheses => {
+                let v = parse_dec_volume_paren(pos, p);
+                volume = Some(merge_volumes_commands(volume, v));
+            },
+            Token::IncrementVolumeParentheses => {
+                let v = parse_inc_volume_paren(pos, p);
+                volume = Some(merge_volumes_commands(volume, v));
             },
             Token::Pan => {
                 if let Some(new_pan) = parse_pan_value(pos, p) {
@@ -2462,6 +2524,14 @@ fn parse_token(pos: FilePos, token: Token, p: &mut Parser) -> Command {
         Token::FineVolume => {
             let v = parse_fine_volume_value(pos, p);
             merge_pan_or_volume(None, v, p)
+        }
+        Token::DecrementVolumeParentheses => {
+            let v = parse_dec_volume_paren(pos, p);
+            merge_pan_or_volume(None, Some(v), p)
+        }
+        Token::IncrementVolumeParentheses => {
+            let v = parse_inc_volume_paren(pos, p);
+            merge_pan_or_volume(None, Some(v), p)
         }
         Token::Pan => {
             let pan = parse_pan_value(pos, p);

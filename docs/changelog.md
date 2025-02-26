@@ -66,6 +66,8 @@ MML changes:
    For example:
     * `ql16,18` is equal to `q6,18` with a 96 ZenLen
     * `Vs+100,l2` is equal to `Vs+100,48` with a 96 ZenLen
+ * Added `(` decrement volume command
+ * Added `)` increment volume command
 
 GUI changes:
  * Fixed a rust bytecode interpreter desync caused global instructions to be executed in the wrong order.

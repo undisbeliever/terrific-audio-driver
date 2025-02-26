@@ -31,6 +31,92 @@ fn adjust_volume() {
 }
 
 #[test]
+fn decrement_volume_parentheses() {
+    assert_line_matches_line_and_bytecode("(", "v-1", &["adjust_volume -16"]);
+    assert_line_matches_line_and_bytecode("(1", "v-1", &["adjust_volume -16"]);
+    assert_line_matches_line_and_bytecode("(5", "v-5", &["adjust_volume -80"]);
+    assert_line_matches_line_and_bytecode("(7", "v-7", &["adjust_volume -112"]);
+
+    assert_line_matches_line_and_bytecode("(%20", "V-20", &["adjust_volume -20"]);
+
+    assert_one_error_in_mml_line("(%", 1, ValueError::NoRelativeVolume.into());
+
+    // Testing a number > i32::MAX
+    assert!(2222222222 > i32::MAX as u32);
+    assert_line_matches_bytecode("(2222222222", &["set_volume 0"]);
+    assert_line_matches_bytecode("(%2222222222", &["set_volume 0"]);
+}
+
+#[test]
+fn increment_volume_parentheses() {
+    assert_line_matches_line_and_bytecode(")", "v+1", &["adjust_volume +16"]);
+    assert_line_matches_line_and_bytecode(")1", "v+1", &["adjust_volume +16"]);
+    assert_line_matches_line_and_bytecode(")5", "v+5", &["adjust_volume +80"]);
+    assert_line_matches_line_and_bytecode(")7", "v+7", &["adjust_volume +112"]);
+
+    assert_line_matches_line_and_bytecode(")%20", "V+20", &["adjust_volume +20"]);
+
+    assert_one_error_in_mml_line(")%", 1, ValueError::NoRelativeVolume.into());
+
+    // Testing a number > i32::MAX
+    assert!(2222222222 > i32::MAX as u32);
+    assert_line_matches_bytecode(")2222222222", &["set_volume 255"]);
+    assert_line_matches_bytecode(")%2222222222", &["set_volume 255"]);
+}
+
+#[test]
+fn merge_decrement_volume_parentheses() {
+    assert_line_matches_line_and_bytecode("((((", "(4", &["adjust_volume -64"]);
+
+    assert_line_matches_line_and_bytecode(
+        "(10",
+        "v-10",
+        &["adjust_volume -128", "adjust_volume -32"],
+    );
+    assert_line_matches_line_and_bytecode(
+        "(%200",
+        "V-200",
+        &["adjust_volume -128", "adjust_volume -72"],
+    );
+
+    assert_line_matches_line_and_bytecode("(16", "v-16", &["set_volume 0"]);
+    assert_line_matches_line_and_bytecode("(400", "v-400", &["set_volume 0"]);
+    assert_line_matches_line_and_bytecode("(%3000", "V-3000", &["set_volume 0"]);
+
+    assert_line_matches_line_and_bytecode("v8 (", "v8 v-1", &["set_volume 112"]);
+
+    assert_line_matches_line_and_bytecode("V80 (%20", "V80 V-20", &["set_volume 60"]);
+
+    assert_line_matches_line_and_bytecode("((( v5", "v-3 v5", &["set_volume 80"]);
+}
+
+#[test]
+fn merge_increment_volume_parentheses() {
+    assert_line_matches_line_and_bytecode("))))", ")4", &["adjust_volume +64"]);
+
+    assert_line_matches_line_and_bytecode(
+        ")10",
+        "v+10",
+        &["adjust_volume +127", "adjust_volume +33"],
+    );
+    assert_line_matches_line_and_bytecode(
+        ")%200",
+        "V+200",
+        &["adjust_volume +127", "adjust_volume +73"],
+    );
+
+    assert_line_matches_line_and_bytecode(")16", "v+16", &["set_volume 255"]);
+    assert_line_matches_line_and_bytecode(")400", "v+400", &["set_volume 255"]);
+    assert_line_matches_line_and_bytecode(")%3000", "V+3000", &["set_volume 255"]);
+
+    assert_line_matches_line_and_bytecode("v8 )", "v8 v+1", &["set_volume 144"]);
+
+    assert_line_matches_line_and_bytecode("V80 )%20", "V80 V+20", &["set_volume 100"]);
+
+    assert_line_matches_line_and_bytecode("))) v5", "v+3 v5", &["set_volume 80"]);
+}
+
+#[test]
 fn set_pan() {
     assert_line_matches_bytecode("p0", &["set_pan 0"]);
     assert_line_matches_bytecode("p64", &["set_pan 64"]);

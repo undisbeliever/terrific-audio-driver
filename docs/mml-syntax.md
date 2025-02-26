@@ -288,6 +288,13 @@ Numbers can be decimal, or hexadecimal when prefixed with `$` (ie, `$ff`)
  * `v+<1..16>` - Increment volume (coarsely)
  * `V-<1..255>` - Decrement volume (finely)
  * `V+<1..255>` - Increment volume (finely)
+ * `([1..16]` - Decrement volume (coarsely)
+    * The number is optional.
+    * `(` will decrement the volume by 1 coarse unit (`v-1`).
+    * `(((` will decrement the volume by 3 coarse units (`v-3`).
+ * `)[1..16]` - Increment volume (coarsely)
+ * `(%<1..255>` - Decrement volume (finely)
+ * `)%<1..255>` - Increment volume (finely)
  * `p<0..128>` - Set pan
     * A pan of 0 will output to the left speaker only.  A pan of 128 will output to the right speaker only.
     * The default pan is 64 (centered).
