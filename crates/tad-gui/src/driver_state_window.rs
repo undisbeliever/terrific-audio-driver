@@ -17,13 +17,13 @@ use compiler::driver_constants::N_MUSIC_CHANNELS;
 use compiler::driver_constants::{ECHO_BUFFER_EDL_MS, FIR_FILTER_SIZE};
 use compiler::envelope::{self, Envelope};
 use compiler::invert_flags::InvertFlags;
-use compiler::songs::SongData;
 use compiler::time::{timer_register_to_bpm, TickCounter};
 
 use fltk::app;
 use fltk::button::CheckButton;
-use fltk::enums::{Align, FrameType};
+use fltk::enums::{Align, CallbackTrigger, FrameType};
 use fltk::frame::Frame;
+use fltk::input::IntInput;
 use fltk::prelude::*;
 use fltk::window::Window;
 
@@ -259,10 +259,36 @@ impl BoolValue {
     }
 }
 
+struct U32EditableValue {
+    value: Option<u32>,
+    widget: IntInput,
+}
+
+impl U32EditableValue {
+    fn new(x: i32, y: i32, width: i32, height: i32) -> Self {
+        Self {
+            value: None,
+            widget: IntInput::new(x, y, width, height, None),
+        }
+    }
+
+    fn clear(&mut self) {
+        self.value = None;
+        self.widget.set_value("");
+    }
+
+    fn update(&mut self, new_value: u32) {
+        if self.value != Some(new_value) {
+            self.value = Some(new_value);
+            self.widget.set_value(&format!("{new_value}"));
+        }
+    }
+}
+
 struct GlobalValues {
     is_clear: bool,
 
-    ticks: Value<u32>,
+    ticks: U32EditableValue,
     timer: Value<u8>,
     bpm: Value<TimerBpm>,
     echo_delay: Value<Edl>,
@@ -285,7 +311,7 @@ impl GlobalValues {
         };
 
         label(0, 0, "Tick");
-        let ticks = Value::new(row_x(1), col_y(0), width, height);
+        let ticks = U32EditableValue::new(row_x(1), col_y(0), width, height);
         label(2, 0, "Timer");
         let timer = Value::new(row_x(3), col_y(0), width, height);
         label(4, 0, "BPM");
@@ -575,6 +601,7 @@ impl DriverWidgets {
             self.status_label.set_label(match self.status {
                 Status::None => "",
                 Status::Audio => "AUDIO",
+                Status::ManualTicks => "MANUAL",
                 Status::SongCursor => "CURSOR",
                 Status::SubroutineCursor => "SUBROUTINE",
                 Status::SongError => "ERROR",
@@ -598,11 +625,11 @@ impl DriverWidgets {
         }
     }
 
-    fn set_song_name_if_id_changed(&mut self, song_id: ItemId, song: &SongData) {
+    fn set_song_name_if_id_changed(&mut self, song_id: ItemId, name: &str) {
         if self.song_id != Some(song_id) {
             self.song_id = Some(song_id);
 
-            self.song_name.set_label(song.name());
+            self.song_name.set_label(name);
         }
     }
 
@@ -624,8 +651,10 @@ impl DriverWidgets {
 
     fn set_cursor_song_name(&mut self, cursor_state: &CursorDriverState) {
         match &cursor_state {
-            CursorDriverState::Song(song_id, si) | CursorDriverState::Subroutine(song_id, si) => {
-                self.set_song_name_if_id_changed(*song_id, si.song_data());
+            CursorDriverState::CursorSong(song_id, si)
+            | CursorDriverState::Subroutine(song_id, si)
+            | CursorDriverState::ManualTicks(song_id, si) => {
+                self.set_song_name_if_id_changed(*song_id, si.song_data().name());
                 self.check_if_instrument_names_changed(si);
             }
             CursorDriverState::NoSong(song_id)
@@ -676,9 +705,6 @@ impl DriverWidgets {
     }
 
     fn clear(&mut self) {
-        self.song_id = None;
-        self.song_name.set_label("");
-
         self.instrument_names = None;
 
         self.globals.clear();
@@ -692,6 +718,7 @@ impl DriverWidgets {
 enum Status {
     None,
     Audio,
+    ManualTicks,
     SongCursor,
     SubroutineCursor,
     SongError,
@@ -735,15 +762,11 @@ impl DriverStateWindow {
             "Show the audio driver state of the playing song (ignore cursor when a song is playing)"
         );
         track_audio_cb.set_value(true);
-        track_audio_cb.set_callback(move |_| {
-            sender.send(GuiMessage::DriverStateTrackingCheckboxChanged);
-        });
-        track_audio_cb.clear_visible_focus();
 
         let status_label = Frame::new(padding + width * 8, padding, width * 2, height, None)
             .with_align(Align::Inside | Align::Right);
 
-        let globals = GlobalValues::new(
+        let mut globals = GlobalValues::new(
             padding,
             padding + height,
             width,
@@ -759,6 +782,18 @@ impl DriverStateWindow {
         });
 
         window.end();
+
+        track_audio_cb.set_callback({
+            let sender = sender.clone();
+            move |_| sender.send(GuiMessage::DriverStateTrackingCheckboxChanged)
+        });
+
+        globals.ticks.widget.set_trigger(CallbackTrigger::Changed);
+        globals.ticks.widget.set_callback({
+            move |input| sender.send(GuiMessage::DriverStateTickInputChanged(input.value()))
+        });
+
+        let _ = globals.ticks.widget.take_focus();
 
         Self {
             window,
@@ -783,9 +818,34 @@ impl DriverStateWindow {
             !self.track_audio_cb.value() || self.audio_thread_song_interpreter.is_none();
     }
 
+    pub fn on_song_tab_changed(&mut self, id: ItemId, file_name: Option<&str>) {
+        if self.follow_cursor {
+            self.widgets
+                .set_song_name_if_id_changed(id, file_name.unwrap_or_default());
+            self.widgets.clear();
+        }
+    }
+
     pub fn on_tracking_checkbox_changed(&mut self) {
         self.update_follow_cursor();
         self.update_all();
+    }
+
+    pub fn on_tick_input_changed(&mut self, value: String) -> Option<(ItemId, TickCounter)> {
+        self.widgets.globals.ticks.widget.clear_changed();
+
+        if !self.follow_cursor {
+            self.follow_cursor = true;
+            self.track_audio_cb.set_value(false);
+        }
+
+        match (self.widgets.song_id, value.parse()) {
+            (Some(song_id), Ok(tc)) => Some((song_id, TickCounter::new(tc))),
+            _ => {
+                self.widgets.clear();
+                None
+            }
+        }
     }
 
     pub fn song_started(&mut self, si: Option<SharedSongInterpreter>) {
@@ -855,12 +915,16 @@ impl DriverStateWindow {
 
     fn update_song_cursor_state(&mut self) {
         match &self.cursor_state {
-            CursorDriverState::Song(_, si) => {
+            CursorDriverState::CursorSong(_, si) => {
                 self.widgets.set_status(Status::SongCursor);
                 self.widgets.update(si);
             }
             CursorDriverState::Subroutine(_, si) => {
                 self.widgets.set_status(Status::SubroutineCursor);
+                self.widgets.update(si);
+            }
+            CursorDriverState::ManualTicks(_, si) => {
+                self.widgets.set_status(Status::ManualTicks);
                 self.widgets.update(si);
             }
             CursorDriverState::None | CursorDriverState::NoSong(_) => {

@@ -148,6 +148,8 @@ pub enum ToCompiler {
         id: ItemId,
         cursor_index: u32,
     },
+    CalcSongDriverState(ItemId, TickCounter),
+
     CompileAndPlaySong(ItemId, String, TickCounter, MusicChannelsMask),
     CompileAndPlaySongSubroutine(ItemId, String, Option<String>, u8, TickCounter),
     PlayInstrument(ItemId, PlaySampleArgs),
@@ -176,7 +178,8 @@ pub enum CursorDriverState {
     None,
     NoSong(ItemId),
     NoCursor(ItemId),
-    Song(ItemId, Box<AudioThreadSongInterpreter>),
+    ManualTicks(ItemId, Box<AudioThreadSongInterpreter>),
+    CursorSong(ItemId, Box<AudioThreadSongInterpreter>),
     Subroutine(ItemId, Box<AudioThreadSongInterpreter>),
     BcError(ItemId),
     BcTimeout(ItemId),
@@ -1303,7 +1306,7 @@ impl SongCompiler {
     }
 }
 
-fn calculate_song_driver_state(
+fn calculate_cursor_song_driver_state(
     cad: &Option<Arc<CommonAudioDataNoSfx>>,
     songs: &SongCompiler,
     id: ItemId,
@@ -1325,7 +1328,7 @@ fn calculate_song_driver_state(
                     ));
 
                     match si.process_song_skip_ticks(c.ticks.ticks + TickCounter::new(2)) {
-                        true => CursorDriverState::Song(id, si),
+                        true => CursorDriverState::CursorSong(id, si),
                         false => CursorDriverState::BcTimeout(id),
                     }
                 }
@@ -1349,6 +1352,35 @@ fn calculate_song_driver_state(
                 }
                 _ => CursorDriverState::NoCursor(id),
             },
+            _ => CursorDriverState::NoSong(id),
+        },
+    ));
+}
+
+fn calculate_tick_song_driver_state(
+    cad: &Option<Arc<CommonAudioDataNoSfx>>,
+    songs: &SongCompiler,
+    id: ItemId,
+    tick: TickCounter,
+    sender: &Sender,
+) {
+    let tick = tick + TickCounter::new(1);
+
+    sender.send(CompilerOutput::SongCursorDriverState(
+        match (cad, songs.get_song_data(&id)) {
+            (Some(cad), Some(song)) => {
+                let mut si = Box::new(SongInterpreter::new_zero(
+                    SiCad::NoSfx(cad.clone()),
+                    song.clone(),
+                    cad.0.min_song_data_addr(),
+                    driver_constants::AudioMode::Surround,
+                ));
+
+                match si.process_song_skip_ticks(tick) {
+                    true => CursorDriverState::ManualTicks(id, si),
+                    false => CursorDriverState::BcTimeout(id),
+                }
+            }
             _ => CursorDriverState::NoSong(id),
         },
     ));
@@ -1589,12 +1621,22 @@ fn bg_thread(
             } => {
                 songs.edit_and_compile_song(id, mml, &pf_songs, &song_dependencies, &sender);
                 if let Some(cursor_index) = cursor_index {
-                    calculate_song_driver_state(&cad_no_sfx, &songs, id, cursor_index, &sender);
+                    calculate_cursor_song_driver_state(
+                        &cad_no_sfx,
+                        &songs,
+                        id,
+                        cursor_index,
+                        &sender,
+                    );
                 }
             }
             ToCompiler::SongCursorMoved { id, cursor_index } => {
-                calculate_song_driver_state(&cad_no_sfx, &songs, id, cursor_index, &sender);
+                calculate_cursor_song_driver_state(&cad_no_sfx, &songs, id, cursor_index, &sender);
             }
+            ToCompiler::CalcSongDriverState(id, tick) => {
+                calculate_tick_song_driver_state(&cad_no_sfx, &songs, id, tick, &sender);
+            }
+
             ToCompiler::CompileAndPlaySong(id, mml, skip, channels_mask) => {
                 sender.send_audio(AudioMessage::Pause);
                 songs.edit_and_compile_song(id, mml, &pf_songs, &song_dependencies, &sender);

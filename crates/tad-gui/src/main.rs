@@ -209,6 +209,7 @@ pub enum GuiMessage {
     FromCompiler(compiler_thread::CompilerOutput),
 
     DriverStateTrackingCheckboxChanged,
+    DriverStateTickInputChanged(String),
 
     ShowAboutTab,
     ShowOrHideHelpSyntax,
@@ -846,6 +847,13 @@ impl Project {
             GuiMessage::DriverStateTrackingCheckboxChanged => {
                 self.driver_state_window.on_tracking_checkbox_changed()
             }
+            GuiMessage::DriverStateTickInputChanged(value) => {
+                if let Some((id, ticks)) = self.driver_state_window.on_tick_input_changed(value) {
+                    let _ = self
+                        .compiler_sender
+                        .send(ToCompiler::CalcSongDriverState(id, ticks));
+                }
+            }
 
             GuiMessage::ToggleSfxWindow => self.sfx_window.show_or_hide(),
             GuiMessage::ToggleDriverStateWindow => {
@@ -1013,6 +1021,11 @@ impl Project {
             .tab_changed(self.tab_manager.selected_file());
 
         self.send_calculate_song_cursor_driver_state_message();
+
+        if let Some(FileType::Song(id)) = self.tab_manager.selected_file() {
+            self.driver_state_window
+                .on_song_tab_changed(id, self.tab_manager.selected_file_name());
+        }
     }
 
     fn send_calculate_song_cursor_driver_state_message(&mut self) {
