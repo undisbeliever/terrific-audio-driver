@@ -308,6 +308,8 @@ bool tad_queueCommand_pauseMusicPlaySfx(void);
  * * Resets the S-SMP timer counters,
  *   can cause issues if the S-CPU spams unpause commands.
  *
+ * CAUTION: The channels will not output audio until the next key-on event.
+ *
  * @return true if the command was added to the command queue.
  */
 bool tad_queueCommand_unpause(void);
@@ -324,8 +326,9 @@ bool tad_queueCommand_stopSoundEffects(void);
  *
  * NOTE: The main volume is reset whenever a new song is loaded.
  *
- * CAUTION: This command does not change the echo volume.
- * This command is not recommended with songs that contain echo.
+ * CAUTION: Echo volume is separate from main volume.
+ * The echo buffer will be unchanged and audible when main-volume is 0.
+ * This command is not recommended with songs that use echo.
  *
  * @param volume signed i8 main volume
  * @return true if the command was added to the command queue.
@@ -349,7 +352,7 @@ bool tad_queueCommand_setMusicChannels(u8 mask);
 /*!
  * Queues a set-song-tempo command.
  *
- * NOTE: The song can still change the tempo.
+ * CAUTION: The song can still change the tempo.
  *
  * @param tickClock The new S-DSP TIMER_0 register value (MUST be >= TAD_MIN_TICK_CLOCK 64, is bounds checked)
  * @return true if the command was added to the command queue.
@@ -358,6 +361,8 @@ bool tad_queueCommand_setSongTempo(u8 tickClock);
 
 /*!
  * Queues a set-global-music-volume command.
+ *
+ * This command sets the `MVOL` S-DSP registers.
  *
  * NOTE: If the \ref TAD_FLAGS_RESET_GLOBAL_VOLUMES_ON_SONG_START flag is set, the global volumes
  * will be reset when a songs starts.
