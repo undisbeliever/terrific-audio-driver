@@ -68,6 +68,7 @@ MML changes:
     * `Vs+100,l2` is equal to `Vs+100,48` with a 96 ZenLen
  * Added `(` decrement volume command
  * Added `)` increment volume command
+ * `MD` automatic detune range is now +/- 1200 cents
 
 GUI changes:
  * Fixed a rust bytecode interpreter desync caused global instructions to be executed in the wrong order.

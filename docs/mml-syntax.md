@@ -484,7 +484,7 @@ Numbers can be decimal, or hexadecimal when prefixed with `$` (ie, `$ff`)
     * CAUTION: detune is not disabled when the instrument is changed.
     * CAUTION: detune persists across subroutine calls
  * `D0` - disable detune
- * `MD<-600..+600>` - automatic detune by cents
+ * `MD<-1200..+1200>` - automatic detune by cents
     * Detunes play-note and portamento commands by a given number of cents.
     * `MD` automatically calculates the `VxPITCH` detune and adds a `D` detune command before each note.
       For example, `MD+20 c d e` would expand to  `D+25 c D+28 d D+31 e`.

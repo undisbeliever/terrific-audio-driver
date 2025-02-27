@@ -305,10 +305,14 @@ fn detune_cents() {
     );
 
     // Test limits
-    assert_line_matches_bytecode("MD+600", &[]);
-    assert_line_matches_bytecode("MD-600", &[]);
-    assert_one_error_in_mml_line("MD+601", 1, ValueError::DetuneCentsOutOfRange(601).into());
-    assert_one_error_in_mml_line("MD-601", 1, ValueError::DetuneCentsOutOfRange(-601).into());
+    assert_line_matches_bytecode("MD+1200", &[]);
+    assert_line_matches_bytecode("MD-1200", &[]);
+    assert_one_error_in_mml_line("MD+1201", 1, ValueError::DetuneCentsOutOfRange(1201).into());
+    assert_one_error_in_mml_line(
+        "MD-1201",
+        1,
+        ValueError::DetuneCentsOutOfRange(-1201).into(),
+    );
 
     assert_one_error_in_mml_line("MD", 1, ValueError::NoDetuneCents.into());
     assert_one_error_in_mml_line("MD100", 1, ValueError::NoDetuneCentsSign.into());

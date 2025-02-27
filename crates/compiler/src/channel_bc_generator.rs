@@ -188,8 +188,8 @@ i16_value_newtype!(
     DetuneCentsOutOfRange,
     NoDetuneCents,
     NoDetuneCentsSign,
-    -600,
-    600
+    -1200,
+    1200
 );
 
 impl DetuneCents {
