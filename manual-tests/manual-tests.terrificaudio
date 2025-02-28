@@ -82,6 +82,18 @@
       "source": "manual/mml-subroutine-play-at-cursor.mml"
     },
     {
+      "name": "noise_priority_test",
+      "source": "manual/noise-priority-test.mml"
+    },
+    {
+      "name": "noise_timing_test_a",
+      "source": "manual/noise-timing-test-a.mml"
+    },
+    {
+      "name": "noise_volume_restored_test",
+      "source": "manual/noise-volume-restored-test.mml"
+    },
+    {
       "name": "bc_asm_in_mml",
       "source": "mml/bc-asm-in-mml.mml"
     },
@@ -116,18 +128,6 @@
     {
       "name": "loop_stack",
       "source": "mml/loop-stack.mml"
-    },
-    {
-      "name": "noise_timing_test_a",
-      "source": "mml/noise-timing-test-a.mml"
-    },
-    {
-      "name": "noise_priority_test",
-      "source": "mml/noise-priority-test.mml"
-    },
-    {
-      "name": "noise_volume_restored_test",
-      "source": "mml/noise-volume-restored-test.mml"
     },
     {
       "name": "pan",
