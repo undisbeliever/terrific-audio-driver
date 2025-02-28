@@ -31,6 +31,12 @@ fn adjust_volume() {
 }
 
 #[test]
+fn volume_no_parameter_error() {
+    assert_one_error_in_mml_line("v a", 1, ChannelError::NoCoarseVolumeParameter);
+    assert_one_error_in_mml_line("V a", 1, ChannelError::NoFineVolumeParameter);
+}
+
+#[test]
 fn decrement_volume_parentheses() {
     assert_line_matches_line_and_bytecode("(", "v-1", &["adjust_volume -16"]);
     assert_line_matches_line_and_bytecode("(1", "v-1", &["adjust_volume -16"]);
@@ -129,6 +135,12 @@ fn adjust_pan() {
     assert_line_matches_bytecode("p+32", &["adjust_pan +32"]);
     assert_line_matches_bytecode("p-48", &["adjust_pan -48"]);
     assert_line_matches_bytecode("p-64", &["adjust_pan -64"]);
+}
+
+#[test]
+fn no_pan_parameter_error() {
+    assert_one_error_in_mml_line("p a", 1, ChannelError::NoPanParameter);
+    assert_one_error_in_mml_line("px a", 1, ValueError::NoPxPan.into());
 }
 
 #[test]

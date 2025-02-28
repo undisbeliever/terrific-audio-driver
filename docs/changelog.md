@@ -69,6 +69,7 @@ MML changes:
  * Added `(` decrement volume command
  * Added `)` increment volume command
  * `MD` automatic detune range is now +/- 1200 cents
+ * A `v`, `V`, `p` or `px` command without a parameter is now an error
 
 GUI changes:
  * Fixed a rust bytecode interpreter desync caused global instructions to be executed in the wrong order.

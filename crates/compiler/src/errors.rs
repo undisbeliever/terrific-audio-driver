@@ -246,6 +246,7 @@ pub enum ValueError {
     NoNoiseFrequency,
     NoVolume,
     NoPan,
+    NoPxPan,
     NoRelativeVolume,
     NoRelativePan,
     NoVolumeSlideAmount,
@@ -565,6 +566,10 @@ pub enum ChannelError {
     CannotParsePercentSign,
     CannotParseGainMode,
     UnexpectedNumber,
+
+    NoCoarseVolumeParameter,
+    NoFineVolumeParameter,
+    NoPanParameter,
 
     InvalidPitchListSymbol,
     NoEvolValue,
@@ -1204,6 +1209,7 @@ impl Display for ValueError {
             Self::NoNoiseFrequency => write!(f, "no noise frequency"),
             Self::NoVolume => write!(f, "no volume"),
             Self::NoPan => write!(f, "no pan"),
+            Self::NoPxPan => write!(f, "no px pan"),
             Self::NoRelativeVolume => write!(f, "no relative volume"),
             Self::NoRelativePan => write!(f, "no relative pan"),
             Self::NoVolumeSlideAmount => write!(f, "no volume slide amount"),
@@ -1708,6 +1714,10 @@ impl Display for ChannelError {
                 write!(f, "cannot parse GAIN mode (used by Q and q commands)")
             }
             Self::UnexpectedNumber => write!(f, "unexpected number"),
+
+            Self::NoCoarseVolumeParameter => write!(f, "No v coarse volume parameter"),
+            Self::NoFineVolumeParameter => write!(f, "No V fine volume parameter"),
+            Self::NoPanParameter => write!(f, "No p pan pameter"),
 
             Self::InvalidPitchListSymbol => write!(f, "invalid pitch list symbol"),
             Self::NoEvolValue => write!(f, "no echo volume or relative echo volume"),

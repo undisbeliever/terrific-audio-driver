@@ -1215,7 +1215,10 @@ fn parse_pan_value(pos: FilePos, p: &mut Parser) -> Option<PanCommand> {
         &Token::RelativeNumber(n) => {
             Some(relative_pan(n))
         },
-        #_ => None
+        #_ => {
+            p.add_error(pos, ChannelError::NoPanParameter);
+            None
+        }
     )
 }
 
@@ -1240,7 +1243,10 @@ fn parse_px_pan_value(pos: FilePos, p: &mut Parser) -> Option<PanCommand> {
             p.add_error(pos, ValueError::NoPxPanSign.into());
             None
         },
-        #_ => None
+        #_ => {
+            p.add_error(pos, ValueError::NoPxPan.into());
+            None
+        }
     )
 }
 
@@ -1260,7 +1266,10 @@ fn parse_fine_volume_value(pos: FilePos, p: &mut Parser) -> Option<VolumeCommand
         &Token::RelativeNumber(n) => {
             Some(relative_volume(n))
         },
-        #_ => None
+        #_ => {
+            p.add_error(pos, ChannelError::NoFineVolumeParameter);
+            None
+        }
     )
 }
 
@@ -1283,7 +1292,10 @@ fn parse_coarse_volume_value(pos: FilePos, p: &mut Parser) -> Option<VolumeComma
             let v = n.saturating_mul(COARSE_VOLUME_MULTIPLIER.into());
             Some(relative_volume(v))
         },
-        #_ => None
+        #_ => {
+            p.add_error(pos, ChannelError::NoCoarseVolumeParameter);
+            None
+        }
     )
 }
 
