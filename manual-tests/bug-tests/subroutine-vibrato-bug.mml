@@ -6,7 +6,7 @@
 #ZenLen 192
 #Tempo 120
 
-@1 triangle
+@1 square
 
 ; The two notes after the subroutine should be played with manual vibrato
 !s ~250,4

@@ -6,7 +6,7 @@
 
 #FirFilter 32 32 32 16 0 0 0 0
 
-@1 piano
+@1 square
 
 AG l8
 A @1 v16 o4

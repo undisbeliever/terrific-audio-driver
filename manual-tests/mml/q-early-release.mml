@@ -1,0 +1,16 @@
+; q early-release test
+
+; 1 tick = 8ms
+#Timer 64
+#ZenLen 192
+
+@1 square adsr 10 2 4 5
+
+A @1 o4
+
+; These two notes should sound the same (from mml-syntax.md)
+A q4 c%24     r
+A q0 c%20 w%4 r
+
+A q20,8 c%48      | c%24     | r
+A q0    c%28 w%20 | c%9 w%11 | r

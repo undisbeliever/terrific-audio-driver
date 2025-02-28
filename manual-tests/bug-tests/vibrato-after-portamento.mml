@@ -9,7 +9,7 @@
 #Tempo 120
 #ZenLen 192
 
-@1 triangle gain F127
+@1 square gain F127
 
 A @1 v16 l4
 

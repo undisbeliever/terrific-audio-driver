@@ -168,10 +168,6 @@
       "source": "mml-tests/chords-transpose.mml"
     },
     {
-      "name": "test_broken_chord",
-      "source": "mml-tests/test-broken-chord.mml"
-    },
-    {
       "name": "quantize_with_temp_gain",
       "source": "mml-tests/quantize-with-temp-gain.mml"
     },
@@ -180,52 +176,12 @@
       "source": "mml-tests/early-release.mml"
     },
     {
-      "name": "invert",
-      "source": "mml-tests/invert.mml"
-    },
-    {
       "name": "test_echo",
       "source": "mml-tests/test-echo.mml"
     },
     {
-      "name": "test_set_echo_delay",
-      "source": "mml-tests/test-set-echo-delay.mml"
-    },
-    {
-      "name": "test_fir",
-      "source": "mml-tests/test-fir.mml"
-    },
-    {
-      "name": "test_envelope",
-      "source": "mml-tests/test-envelope.mml"
-    },
-    {
-      "name": "test_loop",
-      "source": "mml-tests/test-loop.mml"
-    },
-    {
-      "name": "test_loop_stack",
-      "source": "mml-tests/test-loop-stack.mml"
-    },
-    {
-      "name": "test_pan",
-      "source": "mml-tests/test-pan.mml"
-    },
-    {
-      "name": "test_portamento",
-      "source": "mml-tests/test-portamento.mml"
-    },
-    {
       "name": "test_samples",
       "source": "mml-tests/test-samples.mml"
-    },
-    {
-      "name": "test_song_loop",
-      "source": "mml-tests/test-song-loop.mml"
-    },
-    {
-      "name": "test_subroutine_play_at_cursor",
-      "source": "mml-tests/test-subroutine-play-at-cursor.mml"
     },
     {
       "name": "tremolo",
@@ -234,14 +190,6 @@
     {
       "name": "test_vibrato",
       "source": "mml-tests/test-vibrato.mml"
-    },
-    {
-      "name": "test_echo_invert",
-      "source": "mml-tests/test-echo-invert.mml"
-    },
-    {
-      "name": "test_bc_asm_in_mml",
-      "source": "mml-tests/test-bc-asm-in-mml.mml"
     },
     {
       "name": "pan_slide",
@@ -270,74 +218,6 @@
     {
       "name": "multi_channel_noise",
       "source": "mml-tests/multi-channel-noise.mml"
-    },
-    {
-      "name": "detune",
-      "source": "mml-tests/detune.mml"
-    },
-    {
-      "name": "volume_pop_bug",
-      "source": "bug-tests/volume-pop-bug.mml"
-    },
-    {
-      "name": "keyoff_scrn_bug",
-      "source": "bug-tests/keyoff-scrn-bug.mml"
-    },
-    {
-      "name": "envelope_race_condition",
-      "source": "bug-tests/envelope-race-condition.mml"
-    },
-    {
-      "name": "subroutine_vibrato_bug",
-      "source": "bug-tests/subroutine-vibrato-bug.mml"
-    },
-    {
-      "name": "portamento_first_tick_bugtest",
-      "source": "bug-tests/portamento-first-tick-bugtest.mml"
-    },
-    {
-      "name": "tremolo_underflow_bug",
-      "source": "bug-tests/tremolo-underflow-bug.mml"
-    },
-    {
-      "name": "volume_slide_down_bug",
-      "source": "bug-tests/volume-slide-down-bug.mml"
-    },
-    {
-      "name": "noise_and_sfx_test",
-      "source": "bug-tests/noise-and-sfx-test.mml"
-    },
-    {
-      "name": "two_channels_modify_timer",
-      "source": "bug-tests/two-channels-modify-timer.mml"
-    },
-    {
-      "name": "subroutine_cursor_tick_count_bug",
-      "source": "bug-tests/subroutine-cursor-tick-count-bug.mml"
-    },
-    {
-      "name": "early_release_and_temp_gain",
-      "source": "bc-interpreter-tests/early-release-and-temp-gain.mml"
-    },
-    {
-      "name": "echo_stress_test",
-      "source": "bc-interpreter-tests/echo-stress-test.mml"
-    },
-    {
-      "name": "adjust_echo_i8_limit",
-      "source": "bc-interpreter-tests/adjust-echo-i8-limit.mml"
-    },
-    {
-      "name": "large_skip_last_loop",
-      "source": "bc-interpreter-tests/large-skip-last-loop.mml"
-    },
-    {
-      "name": "unbalanced_vibrato_bug",
-      "source": "bug-tests/unbalanced-vibrato-bug.mml"
-    },
-    {
-      "name": "vibrato_after_portamento",
-      "source": "bug-tests/vibrato-after-portamento.mml"
     }
   ]
 }
