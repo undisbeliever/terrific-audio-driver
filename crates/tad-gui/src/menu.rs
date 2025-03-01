@@ -25,8 +25,8 @@ use fltk::prelude::MenuExt;
 // Unfortunately, changing a menu item's label changes its path, so I cannot include the filename
 // in the Save menu item (ie "Save sound_effects.txt").
 
-const NEW_MML_FILE: &str = "&File/New MML File";
-const OPEN_MML_FILE: &str = "&File/Open MML File";
+const NEW_MML_FILE: &str = "&File/&New MML File";
+const OPEN_MML_FILE: &str = "&File/&Open MML File";
 const SAVE: &str = "&File/&Save";
 const SAVE_AS: &str = "&File/Save As";
 const SAVE_ALL: &str = "&File/Save &All";
@@ -39,7 +39,7 @@ const DRIVER_STATE_WINDOW: &str = "&Audio/&Driver State";
 const AUDIO_STOP: &str = "&Audio/&Stop Audio";
 
 const AUDIO_MONO: &str = "&Audio/&Mono";
-const AUDIO_STEREO: &str = "&Audio/&Stereo";
+const AUDIO_STEREO: &str = "Audio/&S&tereo";
 const AUDIO_SURROUND: &str = "&Audio/S&urround";
 
 const SHOW_HELP_SYNTAX: &str = "&Help/&Syntax";
