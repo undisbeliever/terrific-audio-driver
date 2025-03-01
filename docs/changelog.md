@@ -1,14 +1,18 @@
 Terrific Audio Driver Changelog
 ===============================
 
-Version 0.1.0 (beta)
-====================
+Version 0.1.0
+=============
+
+This release stabilises the MML and bytecode assembly syntax and bahaviour.
+
 
 **CAUTION**: The loader and 65816 APIs have changed.  If you are using a 65816 API, you will need to update it.
 
 
 **Known bugs**:
  * Sample Analyser spectrum can only analyse the first 32768 samples in a long BRR sample
+ * The driver state window does not work if the song contains an error
 
 **Breaking Changes**:
  * Subroutine file header is now MML containing sound effect subroutines
@@ -74,7 +78,7 @@ MML changes:
  * A `v`, `V`, `p` or `px` command without a parameter is now an error
 
 GUI changes:
- * Fixed a rust bytecode interpreter desync caused global instructions to be executed in the wrong order.
+ * Fixed a rust bytecode interpreter desync where global instructions were executed in the wrong order.
  * Fixed play-from-cursor not playing the note immediately after the cursor
  * Fixed a sound effect containing a new-sound-effect token (`\n===`) not saving and loading correctly.  
    The new-sound-effect token will be silently transformed into a comment when the sound-effects file is saved to disk.
