@@ -168,6 +168,10 @@
       "source": "mml-tests/chords-transpose.mml"
     },
     {
+      "name": "broken_chord",
+      "source": "mml-tests/broken-chord.mml"
+    },
+    {
       "name": "quantize_with_temp_gain",
       "source": "mml-tests/quantize-with-temp-gain.mml"
     },
@@ -188,6 +192,10 @@
       "source": "mml-tests/play-pitch.mml"
     },
     {
+      "name": "portamento",
+      "source": "mml-tests/portamento.mml"
+    },
+    {
       "name": "vibrato",
       "source": "mml-tests/vibrato.mml"
     },
@@ -196,12 +204,16 @@
       "source": "mml-tests/tremolo.mml"
     },
     {
-      "name": "panbrello",
-      "source": "mml-tests/panbrello.mml"
-    },
-    {
       "name": "volume_slide",
       "source": "mml-tests/volume-slide.mml"
+    },
+    {
+      "name": "pan",
+      "source": "mml-tests/pan.mml"
+    },
+    {
+      "name": "panbrello",
+      "source": "mml-tests/panbrello.mml"
     },
     {
       "name": "pan_slide",
@@ -216,8 +228,20 @@
       "source": "mml-tests/multi-channel-noise.mml"
     },
     {
+      "name": "detune",
+      "source": "mml-tests/detune.mml"
+    },
+    {
       "name": "pitch_modulation",
       "source": "mml-tests/pitch-modulation.mml"
+    },
+    {
+      "name": "fir",
+      "source": "mml-tests/fir.mml"
+    },
+    {
+      "name": "bc_asm_in_mml",
+      "source": "mml-tests/bc-asm-in-mml.mml"
     }
   ]
 }

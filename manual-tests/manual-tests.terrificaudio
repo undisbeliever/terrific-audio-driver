@@ -98,28 +98,12 @@
       "source": "manual/tempo-and-timer.mml"
     },
     {
-      "name": "bc_asm_in_mml",
-      "source": "mml/bc-asm-in-mml.mml"
-    },
-    {
-      "name": "broken_chord",
-      "source": "mml/broken-chord.mml"
-    },
-    {
-      "name": "detune",
-      "source": "mml/detune.mml"
-    },
-    {
       "name": "echo_invert",
       "source": "mml/echo-invert.mml"
     },
     {
       "name": "envelope",
       "source": "mml/envelope.mml"
-    },
-    {
-      "name": "fir",
-      "source": "mml/fir.mml"
     },
     {
       "name": "invert",
@@ -132,14 +116,6 @@
     {
       "name": "loop_stack",
       "source": "mml/loop-stack.mml"
-    },
-    {
-      "name": "pan",
-      "source": "mml/pan.mml"
-    },
-    {
-      "name": "portamento",
-      "source": "mml/portamento.mml"
     },
     {
       "name": "q_early_release",
