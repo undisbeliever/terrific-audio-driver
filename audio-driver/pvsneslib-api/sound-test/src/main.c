@@ -130,7 +130,7 @@ const char* const RESET_VOLUMES_FLAG_CLEAR_LABEL = "GLOBAL VOLUMES PERSIST    ";
 
 const char* const MenuLabels[N_MENU_ITEMS] = {
     "PLAY SONG",
-    "PLAY SFX",
+    "PLAY SFX (L/R)",
     "SFX PAN",
     "MAIN VOLUME",
     "MUSIC VOLUME",
@@ -660,6 +660,9 @@ void menu_process(void) {
     }
     else if (joyPressed & KEY_X) {
         tad_queueCommandOverride_stopSoundEffects();
+    }
+    else if (joyPressed & (KEY_L | KEY_R)) {
+        tad_queuePannedSoundEffect(menu_sfx, menu_sfxPan);
     }
     else {
         menu_process_item();
