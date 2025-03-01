@@ -16,10 +16,11 @@ Sound effects have the following limitations:
  * Sound effects cannot call subroutines
  * The echo buffer and FIR Filter settings are set by the song.  If a sound effect enables echo,
    it can have an inconsistent sound (depending on the songs echo and FIR settings).
- * The default sound effect queue can only hold 1 sound effect.
-   This means only 1 sound effect can be played per frame.
-   If the game requests two or more sound effects in a single frame, the one with the lowest index
-   (as defined by the *Sound Effect Export Order*) will be prioritised.
+ * The audio driver can only play 2 sound effects at once.
+ * The 65816 API sound effect queue can only hold 1 sound effect at a time.
+   This means only queued 1 sound effect can be played per frame.
+   If the game requests two or more sound effects in a single frame (`Tad_Process` call), the effect
+   with the lower index (as defined by the *Sound Effect Export Order*) will be prioritised.
 
 
 Sound Effect Export Order
