@@ -1,9 +1,6 @@
 MML Syntax
 ==========
 
-The audio-engine and MML syntax is still in development and **subject to change without notice**.
-
-
 Header
 ======
 

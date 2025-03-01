@@ -1,9 +1,6 @@
 Bytecode Assembly Syntax
 ========================
 
-The audio-engine and bytecode syntax is still in development and **subject to change without notice**.
-
-
 Instructions
 ============
 
