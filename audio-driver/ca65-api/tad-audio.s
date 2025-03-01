@@ -203,9 +203,8 @@ TAD_CENTER_PAN = TAD_MAX_PAN / 2
 .scope TadIO_ToDriver
     ;; The command to execute.
     ;;
-    ;;      iii0ccci
-    ;;          ccc = command
-    ;;            0 = reserved for future expansion
+    ;;      iiicccci
+    ;;         cccc = command
     ;;            i = command id, MUST be different on every command.
     ;;                Used to detect when a new command has been sent to the driver.
     ;;

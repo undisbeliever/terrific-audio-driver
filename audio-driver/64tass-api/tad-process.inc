@@ -95,9 +95,8 @@ TAD_IO_VERSION = 20
 TadIO_ToDriver .block
     ; The command to execute.
     ;
-    ;      iii0ccci
-    ;          ccc = command
-    ;            0 = reserved for future expansion
+    ;      iiicccci
+    ;         cccc = command
     ;            i = command id, MUST be different on every command.
     ;                Used to detect when a new command has been sent to the driver.
     ;
