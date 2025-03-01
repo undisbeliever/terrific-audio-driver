@@ -478,7 +478,7 @@ in lastvarpage {
         var prevTempGain : [u8 ; N_CHANNELS];
 
         // Number of ticks since the last play_note or portamento instruction.
-        // ::TODO move to zeropage::
+        // ::MAYDO move to zeropage::
         var ticksAfterNote : [u8 ; N_CHANNELS];
     }
 
@@ -1026,7 +1026,7 @@ inline func _process_sfx_channels__inline() {
             }
         }
 
-        // ::TODO replace with a MOVW write (If I can free 1 byte of zeropage)::
+        // ::MAYDO replace with a MOVW write (If I can free 1 byte of zeropage)::
         noiseLock = y;
         sfxMutedChannels = a;
 

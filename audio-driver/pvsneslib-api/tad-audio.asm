@@ -29,9 +29,6 @@
 .include "hdr.asm"
 
 
-; ::TODO should I use .b .w .l suffixes to the instructions?::
-
-
 ;;
 ;; ===
 ;; ABI

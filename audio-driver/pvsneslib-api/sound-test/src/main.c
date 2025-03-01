@@ -28,8 +28,6 @@
  *      3. This notice may not be removed or altered from any source distribution.
  */
 
-// ::TEST test on a real console (all 3 of them)::
-
 #include <snes.h>
 
 #include "../../tad-audio.h"

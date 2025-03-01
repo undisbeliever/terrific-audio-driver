@@ -28,7 +28,7 @@
 let LOADER_ADDR = 0x200;
 let LOADER_SIZE =  116;     // MUST be even
 
-// ::TODO shrink stack::
+// ::SHOULDDO shrink stack size::
 let STACK_SIZE = 0x20;
 let STACK_BOTTOM_ADDR = 0x200 - STACK_SIZE;
 
