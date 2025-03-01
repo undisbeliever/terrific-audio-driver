@@ -1615,7 +1615,7 @@ where
             }),
             tick_clock: match self.global.timer_register {
                 0 => 0,
-                1..MIN_TICK_TIMER => MIN_TICK_TIMER,
+                1..=63 => MIN_TICK_TIMER,
                 t @ MIN_TICK_TIMER.. => t,
             },
             song_tick_counter: (self.tick_counter.value() & 0xffff).try_into().unwrap(),
