@@ -176,48 +176,48 @@
       "source": "mml-tests/early-release.mml"
     },
     {
-      "name": "test_echo",
-      "source": "mml-tests/test-echo.mml"
+      "name": "echo",
+      "source": "mml-tests/echo.mml"
     },
     {
-      "name": "test_samples",
-      "source": "mml-tests/test-samples.mml"
-    },
-    {
-      "name": "tremolo",
-      "source": "mml-tests/tremolo.mml"
-    },
-    {
-      "name": "test_vibrato",
-      "source": "mml-tests/test-vibrato.mml"
-    },
-    {
-      "name": "pan_slide",
-      "source": "mml-tests/pan-slide.mml"
-    },
-    {
-      "name": "panbrello",
-      "source": "mml-tests/panbrello.mml"
-    },
-    {
-      "name": "pitch_modulation",
-      "source": "mml-tests/pitch-modulation.mml"
-    },
-    {
-      "name": "play_noise",
-      "source": "mml-tests/play-noise.mml"
+      "name": "samples",
+      "source": "mml-tests/samples.mml"
     },
     {
       "name": "play_pitch",
       "source": "mml-tests/play-pitch.mml"
     },
     {
+      "name": "vibrato",
+      "source": "mml-tests/vibrato.mml"
+    },
+    {
+      "name": "tremolo",
+      "source": "mml-tests/tremolo.mml"
+    },
+    {
+      "name": "panbrello",
+      "source": "mml-tests/panbrello.mml"
+    },
+    {
       "name": "volume_slide",
       "source": "mml-tests/volume-slide.mml"
     },
     {
+      "name": "pan_slide",
+      "source": "mml-tests/pan-slide.mml"
+    },
+    {
+      "name": "play_noise",
+      "source": "mml-tests/play-noise.mml"
+    },
+    {
       "name": "multi_channel_noise",
       "source": "mml-tests/multi-channel-noise.mml"
+    },
+    {
+      "name": "pitch_modulation",
+      "source": "mml-tests/pitch-modulation.mml"
     }
   ]
 }
