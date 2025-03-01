@@ -94,6 +94,10 @@
       "source": "manual/noise-volume-restored-test.mml"
     },
     {
+      "name": "tempo_and_timer",
+      "source": "manual/tempo-and-timer.mml"
+    },
+    {
       "name": "bc_asm_in_mml",
       "source": "mml/bc-asm-in-mml.mml"
     },

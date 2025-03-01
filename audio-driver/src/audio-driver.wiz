@@ -1600,9 +1600,12 @@ func set_music_channels(mask : u8 in y) {
 
 
 func set_song_tempo(tempo : u8 in y) {
-    if y < MIN_TICK_CLOCK {
-        y = MIN_TICK_CLOCK;
+    // if (y > 0 && y < MIN_TICK_CLOCK) y = MIN_TICK_CLOCK
+    y--;
+    if y < MIN_TICK_CLOCK - 1 {
+        y = MIN_TICK_CLOCK - 1;
     }
+    y++;
     smp.timer_0 = y;
 }
 
@@ -3554,9 +3557,12 @@ func wait(channelIndex : u8 in x, length: u8 in a) {
 //
 // KEEP: x
 func set_song_tick_clock(channelIndex : u8 in x, timer_clock: u8 in a) {
-    if a < MIN_TICK_CLOCK {
-        a = MIN_TICK_CLOCK;
+    // if (a > 0 && a < MIN_TICK_CLOCK) a = MIN_TICK_CLOCK
+    a--;
+    if a < MIN_TICK_CLOCK - 1 {
+        a = MIN_TICK_CLOCK - 1;
     }
+    a++;
 
     smp.timer_0 = a;
 

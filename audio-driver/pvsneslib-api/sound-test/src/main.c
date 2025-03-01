@@ -453,7 +453,7 @@ void menu_process_action(void) {
 
     case MENU__OVERRIDE_TEMPO:
         // Tests `tad_queueCommandOverride_*(u8)` (built using a macro)
-        tad_queueCommandOverride_setGlobalVolumes(128, 255);
+        tad_queueCommandOverride_setSongTempo(menu_tempoOverride);
         break;
 
     case MENU__CHANNEL_MASK:
@@ -543,9 +543,23 @@ void menu_process_item(void) {
         break;
     }
 
-    case MENU__OVERRIDE_TEMPO:
-        menu_tempoOverride = menu_adjustValue_fast(menu_tempoOverride, MENU__OVERRIDE_TEMPO, TAD_MIN_TICK_CLOCK, 0xff);
+    case MENU__OVERRIDE_TEMPO: {
+        const u16 pad = padsCurrent(0);
+
+        if (pad & KEY_LEFT) {
+            if (menu_tempoOverride == 0 || menu_tempoOverride > TAD_MIN_TICK_CLOCK) {
+                menu_tempoOverride--;
+                menu_printU8(MENU__OVERRIDE_TEMPO, menu_tempoOverride);
+            }
+        }
+        else if (pad & KEY_RIGHT) {
+            if (menu_tempoOverride >= TAD_MIN_TICK_CLOCK) {
+                menu_tempoOverride++;
+                menu_printU8(MENU__OVERRIDE_TEMPO, menu_tempoOverride);
+            }
+        }
         break;
+    }
 
     case MENU__CHANNEL_MASK:
         if (keyPressed & (KEY_LEFT | KEY_RIGHT)) {

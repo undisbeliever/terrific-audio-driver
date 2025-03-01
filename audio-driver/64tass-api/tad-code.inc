@@ -85,7 +85,9 @@ TadCommand .block
 
     ; Set the song tempo.
     ;  * parameter0: The new S-DSP TIMER_0 register value
-    ;    (MUST be >= TAD_MIN_TICK_CLOCK 64, is bounds checked)
+    ;    (MUST be `0 || >= TAD_MIN_TICK_CLOCK 64`, is bounds checked)
+    ;
+    ; A TIMER_0 register value of 0 is 256 (slowest tempo).
     ;
     ; CAUTION: The song can still change the tempo.
     SET_SONG_TEMPO = 14

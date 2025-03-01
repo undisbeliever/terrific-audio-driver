@@ -2,6 +2,8 @@
 //
 // SPDX-License-Identifier: MIT
 
+use compiler::{time::Bpm, UnsignedValueNewType};
+
 use crate::*;
 
 #[test]
@@ -254,11 +256,35 @@ fn set_song_tempo() {
     let bc = format!("set_song_tick_clock {tc}");
 
     assert_line_matches_bytecode("t80", &[&bc]);
+
+    assert_line_matches_bytecode(
+        "t40",
+        &[&format!(
+            "set_song_tick_clock {}",
+            Bpm::MIN.to_tick_clock().unwrap().value()
+        )],
+    );
+    assert_one_error_in_mml_line("t39", 1, ValueError::BpmOutOfRange(39).into());
+
+    assert_line_matches_bytecode(
+        "t157",
+        &[&format!(
+            "set_song_tick_clock {}",
+            Bpm::MAX.to_tick_clock().unwrap().value()
+        )],
+    );
+    assert_one_error_in_mml_line("t158", 1, ValueError::BpmOutOfRange(158).into());
 }
 
 #[test]
 fn set_song_tick_clock() {
-    assert_line_matches_bytecode("T64", &["set_song_tick_clock 64"]);
-    assert_line_matches_bytecode("T255", &["set_song_tick_clock 255"]);
-    assert_line_matches_bytecode("T90", &["set_song_tick_clock 90"]);
+    assert_line_matches_bytecode_bytes("T90", &[opcodes::SET_SONG_TICK_CLOCK, 90]);
+
+    assert_line_matches_bytecode_bytes("T255", &[opcodes::SET_SONG_TICK_CLOCK, 255]);
+
+    assert_line_matches_bytecode_bytes("T256", &[opcodes::SET_SONG_TICK_CLOCK, 0]);
+    assert_one_error_in_mml_line("T257", 1, ValueError::TickClockOutOfRange(257).into());
+
+    assert_line_matches_bytecode_bytes("T64", &[opcodes::SET_SONG_TICK_CLOCK, 64]);
+    assert_one_error_in_mml_line("T63", 1, ValueError::TickClockOutOfRange(63).into());
 }

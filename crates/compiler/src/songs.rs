@@ -367,7 +367,7 @@ fn write_song_header(
     const _: () = assert!(13 == ECHO_VARIABLES_SIZE);
     const _: () = assert!(EBS + ECHO_VARIABLES_SIZE == SONG_HEADER_TICK_TIMER_OFFSET);
 
-    header[SONG_HEADER_TICK_TIMER_OFFSET] = metadata.tick_clock.as_u8();
+    header[SONG_HEADER_TICK_TIMER_OFFSET] = metadata.tick_clock.into_driver_value();
     header[SONG_HEADER_N_SUBROUTINES_OFFSET] = n_subroutines.try_into().unwrap();
 
     // Channel data

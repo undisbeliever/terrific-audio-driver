@@ -11,7 +11,6 @@ use crate::data::{
 };
 use crate::driver_constants::{
     COMMON_DATA_BYTES_PER_SFX_SUBROUTINE, COMMON_DATA_BYTES_PER_SOUND_EFFECT, MAX_COMMON_DATA_SIZE,
-    SFX_TICK_CLOCK,
 };
 use crate::errors::{
     ChannelError, CombineSoundEffectsError, ErrorWithPos, OtherSfxError, SfxSubroutineErrors,
@@ -169,8 +168,7 @@ impl CompiledSoundEffect {
     }
 
     pub fn duration(&self) -> Duration {
-        self.tick_counter()
-            .to_duration(TickClock::try_from(SFX_TICK_CLOCK).unwrap())
+        self.tick_counter().to_duration(TickClock::SFX_TICK_CLOCK)
     }
 
     #[cfg(feature = "mml_tracking")]

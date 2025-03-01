@@ -6,7 +6,6 @@
 
 use std::collections::HashMap;
 
-use crate::driver_constants::SFX_TICK_CLOCK;
 use crate::echo::{
     parse_fir_filter_string, EchoBuffer, EchoEdl, EchoFeedback, EchoLength, EchoVolume,
     IDENTITY_FILTER,
@@ -115,7 +114,7 @@ impl MetaData {
 
     pub fn blank_sfx_metadata() -> Self {
         Self {
-            tick_clock: SFX_TICK_CLOCK.try_into().unwrap(),
+            tick_clock: TickClock::SFX_TICK_CLOCK,
             ..Self::new()
         }
     }

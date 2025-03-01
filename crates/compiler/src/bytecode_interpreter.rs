@@ -26,6 +26,7 @@ use crate::subroutines::Subroutine;
 use crate::tad_apu::ApuEmulator;
 use crate::time::TickClock;
 use crate::time::TickCounter;
+use crate::time::MIN_TICK_TIMER;
 
 use std::cmp::min;
 use std::ops::Deref;
@@ -176,7 +177,7 @@ impl GlobalState {
         let echo = &song_data.metadata().echo_buffer;
 
         Self {
-            timer_register: tick_clock.as_u8(),
+            timer_register: tick_clock.into_driver_value(),
             echo: EchoVariables {
                 max_edl: echo.max_edl.as_u8(),
                 edl: echo.edl_register(),
@@ -1612,7 +1613,11 @@ where
                 }
                 None => unused_channel(i),
             }),
-            tick_clock: self.global.timer_register,
+            tick_clock: match self.global.timer_register {
+                0 => 0,
+                1..MIN_TICK_TIMER => MIN_TICK_TIMER,
+                t @ MIN_TICK_TIMER.. => t,
+            },
             song_tick_counter: (self.tick_counter.value() & 0xffff).try_into().unwrap(),
             song_data_addr: self.song_addr,
             audio_mode: self.audio_mode,

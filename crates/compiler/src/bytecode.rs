@@ -2233,7 +2233,11 @@ impl<'a> Bytecode<'a> {
             .tempo_changes
             .push((self.state.tick_counter, tick_clock));
 
-        emit_bytecode!(self, opcodes::SET_SONG_TICK_CLOCK, tick_clock.as_u8());
+        emit_bytecode!(
+            self,
+            opcodes::SET_SONG_TICK_CLOCK,
+            tick_clock.into_driver_value()
+        );
         Ok(())
     }
 

@@ -646,7 +646,7 @@ Menu_SfxPan_Action = Menu_PlaySfx_Action
 ;: DB = $7e
 .proc Menu_OverrideTempo_Process
     lda     Menu::tempoOverride
-    jsr     _AdjustWithDpad_Fast
+    jsr     _AdjustWithDpad_0Max_Fast
     jmp     _SetTempoOverride
 .endproc
 
@@ -918,6 +918,44 @@ Menu_SfxPan_Action = Menu_PlaySfx_Action
 .a8
 .i16
 ;; DB = $7e
+.proc _AdjustWithDpad_0Max_Fast
+    tay
+
+    lda     joypadCurrent + 1
+    bit     #JOYPAD_H_LEFT
+    beq     :++
+        tya
+        cmp     #1
+        beq     :+
+            dec
+        :
+
+        sec
+        rts
+    :
+    bit     #JOYPAD_H_RIGHT
+    beq     :++
+        tya
+        beq     :+
+            inc
+        :
+
+        sec
+        rts
+    :
+
+    tya
+    clc
+    rts
+.endproc
+
+
+;; IN: A - value
+;; OUT: A - new value
+;; OUT: carry set if value changed
+.a8
+.i16
+;; DB = $7e
 .proc _AdjustWithDpad_Bool
     tay
 
@@ -967,7 +1005,24 @@ _SetVarFn_  _SetSfxPan,         SFX_PAN_YPOS,           sfxPan,         0,      
 _SetVarFn_  _SetMainVolume,     MAIN_VOLUME_YPOS,       mainVolume,     0,                  $7f
 _SetVarFn_  _SetMusicVolume,    MUSIC_VOLUME_YPOS,      musicVolume,    0,                  $ff
 _SetVarFn_  _SetSfxVolume,      SFX_VOLUME_YPOS,        sfxVolume,      0,                  $ff
-_SetVarFn_  _SetTempoOverride,  OVERRIDE_TEMPO_YPOS,    tempoOverride,  TAD_MIN_TICK_CLOCK, $ff
+
+;; IN: A = new value
+.a8
+.i16
+;; DB = $7e
+.proc _SetTempoOverride
+    cmp     #0
+    beq     :+
+        cmp     #TAD_MIN_TICK_CLOCK
+        bcs     :+
+            lda     #TAD_MIN_TICK_CLOCK
+    :
+    sta     Menu::tempoOverride
+
+    ldy     #TextBuffer_PosToIndex(VAR_XPOS, OVERRIDE_TEMPO_YPOS)
+    jmp     TextBuffer_PrintPadded_A8
+.endproc
+
 
 
 ;; IN: A = new value

@@ -54,6 +54,8 @@ Audio driver changes:
  * Added global music and sound-effect volumes.
    (See the `SET_GLOBAL_MUSIC_VOLUME`, `SET_GLOBAL_SFX_VOLUME` and `SET_GLOBAL_VOLUMES` IO commands.)
  * Fixed an audible glitch after a `PAUSE` or `PAUSE_MUSIC_PLAY_SFX` IO Command.
+ * Increased maximum song tick clock to 256.
+    * A `SET_SONG_TEMPO` IO command with a 0 parameter will set the song tick clock to 256.
 
 MML changes:
  * `#EchoVolume` now accepts a stereo input

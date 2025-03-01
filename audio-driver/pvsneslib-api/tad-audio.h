@@ -352,9 +352,11 @@ bool tad_queueCommand_setMusicChannels(u8 mask);
 /*!
  * Queues a set-song-tempo command.
  *
+ * A tickClock of 0 is 256 (slowest tempo).
+ *
  * CAUTION: The song can still change the tempo.
  *
- * @param tickClock The new S-DSP TIMER_0 register value (MUST be >= TAD_MIN_TICK_CLOCK 64, is bounds checked)
+ * @param tickClock The new S-DSP TIMER_0 register value (MUST be `0 || >= TAD_MIN_TICK_CLOCK 64`, is bounds checked)
  * @return true if the command was added to the command queue.
  */
 bool tad_queueCommand_setSongTempo(u8 tickClock);

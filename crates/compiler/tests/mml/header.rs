@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: MIT
 
 use compiler::invert_flags::InvertFlags;
+use compiler::time::TickClock;
 use compiler::UnsignedValueNewType;
 
 use crate::*;
@@ -208,5 +209,50 @@ A r
             max_edl: 2u8.try_into().unwrap(),
         }
         .into(),
+    );
+}
+
+#[test]
+fn timer() {
+    let dummy_data = dummy_data();
+
+    let s = compile_mml(
+        r#"
+#Timer 64
+
+A r
+"#,
+        &dummy_data,
+    );
+    assert_eq!(s.metadata().tick_clock, TickClock::MIN);
+
+    assert_one_header_error_in_mml(
+        r#"
+#Timer 63
+
+A r
+"#,
+        2,
+        ValueError::TickClockOutOfRange(63).into(),
+    );
+
+    let s = compile_mml(
+        r#"
+#Timer 256
+
+A r
+"#,
+        &dummy_data,
+    );
+    assert_eq!(s.metadata().tick_clock, TickClock::MAX);
+
+    assert_one_header_error_in_mml(
+        r#"
+#Timer 257
+
+A r
+"#,
+        2,
+        ValueError::TickClockOutOfRange(257).into(),
     );
 }

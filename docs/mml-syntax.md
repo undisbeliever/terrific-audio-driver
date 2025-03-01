@@ -24,7 +24,7 @@ The song tempo can be set with either `#Tempo` or `#Timer`:
  * `#Tempo number` - Sets the number of times a 48-tick cycle will occur in a minute.
     * With a `#Zenlen` value of 96 (default), specifies the number of half-notes in a minute
     * With a `#Zenlen` value of 192, specifies the number of quarter-notes in a minute
- * `#Timer number` - Sets the tick clock.  Each tick is `Timer * 0.125` milliseconds (or `Timer / 8000Hz` seconds) long.
+ * `#Timer <64..256>` - Sets the tick clock.  Each tick is `Timer * 0.125` milliseconds (or `Timer / 8000Hz` seconds) long.
 
 <br/>
 
@@ -518,7 +518,7 @@ Numbers can be decimal, or hexadecimal when prefixed with `$` (ie, `$ff`)
 
 The Following commands affect **all channels**:
  * `t<bpm>` - Set song tempo (see `#Tempo` for the *bpm* format)
- * `T<64-255>` - Set song tick-clock  (see `#Timer` for the parameter format)
+ * `T<64-256>` - Set song tick-clock  (see `#Timer` for the parameter format)
 
 <br/>
 

@@ -9,11 +9,14 @@
 use std::time::Duration;
 
 use crate::errors::ValueError;
-use crate::value_newtypes::u8_value_newtype;
+use crate::value_newtypes::{u16_value_newtype, u8_value_newtype};
+use crate::{driver_constants, UnsignedValueNewType};
 
 pub const TIMER_HZ: u32 = 8000;
 
 pub const MIN_TICK_TIMER: u8 = 64;
+pub const MAX_TICK_TIMER: u32 = 256;
+
 const STARTING_DEFAULT_NOTE_LENGTH: u8 = 4;
 
 u8_value_newtype!(ZenLen, ZenLenOutOfRange, NoZenLen, 4, u8::MAX);
@@ -32,7 +35,7 @@ impl ZenLen {
 }
 
 const CLOCK_CYCLES_PER_BPM: u32 = 48;
-const MIN_BPM: u8 = ((TIMER_HZ * 60) / (CLOCK_CYCLES_PER_BPM * (u8::MAX as u32)) + 1) as u8;
+const MIN_BPM: u8 = ((TIMER_HZ * 60) / (CLOCK_CYCLES_PER_BPM * (MAX_TICK_TIMER)) + 1) as u8;
 const MAX_BPM: u8 = ((TIMER_HZ * 60) / (CLOCK_CYCLES_PER_BPM * (MIN_TICK_TIMER as u32)) + 1) as u8;
 
 u8_value_newtype!(Bpm, BpmOutOfRange, NoBpm, MIN_BPM, MAX_BPM);
@@ -52,10 +55,6 @@ impl Bpm {
             Err(ValueError::CannotConvertBpmToTickClock)
         }
     }
-}
-
-pub fn timer_register_to_bpm(timer: u8) -> f64 {
-    f64::from(TIMER_HZ * 60) / (f64::from(timer) * f64::from(CLOCK_CYCLES_PER_BPM))
 }
 
 /// A tick counter that can only be incremented
@@ -86,7 +85,7 @@ impl TickCounter {
         const MICRO_MUL: u64 = 1_000_000 / TIMER_HZ as u64;
 
         let ticks = u64::from(self.value());
-        let clock = u64::from(clock.as_u8());
+        let clock = u64::from(clock.value());
 
         Duration::from_micros(ticks * clock * MICRO_MUL)
     }
@@ -114,13 +113,34 @@ pub struct TickCounterWithLoopFlag {
     pub in_loop: bool,
 }
 
-u8_value_newtype!(
+u16_value_newtype!(
     TickClock,
     TickClockOutOfRange,
     NoTickClock,
-    MIN_TICK_TIMER,
-    u8::MAX
+    MIN_TICK_TIMER as u16,
+    MAX_TICK_TIMER as u16
 );
+
+impl TickClock {
+    pub const SFX_TICK_CLOCK: Self = Self(driver_constants::SFX_TICK_CLOCK as u16);
+
+    pub fn into_driver_value(self) -> u8 {
+        match self.0 {
+            256 => 0,
+            v => v.try_into().unwrap(),
+        }
+    }
+}
+
+pub fn timer_register_to_bpm(timer: u8) -> f64 {
+    match timer {
+        1..=MIN_TICK_TIMER => 0.0,
+        0 => {
+            f64::from(TIMER_HZ * 60) / (f64::from(MAX_TICK_TIMER) * f64::from(CLOCK_CYCLES_PER_BPM))
+        }
+        t => f64::from(TIMER_HZ * 60) / (f64::from(t) * f64::from(CLOCK_CYCLES_PER_BPM)),
+    }
+}
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct MmlDefaultLength {

@@ -1,0 +1,23 @@
+; Song tempo test
+;
+; Test Instruction:
+;   * Manually time this song
+;   * Confirm it matches the reported duration.
+;
+; Also tests T256.
+
+#Timer 256
+
+@1 sine
+
+!s @1 c c c r
+
+A !s
+A T64  !s
+A T128 !s
+A T255 !s
+A T256 !s
+
+A t60  !s
+A t90  !s
+A t120 !s

@@ -10,6 +10,7 @@ use crate::driver_constants::N_MUSIC_CHANNELS;
 use crate::songs::Channel;
 use crate::subroutines::Subroutine;
 use crate::time::{TickClock, TickCounter, TIMER_HZ};
+use crate::UnsignedValueNewType;
 
 use std::time::Duration;
 
@@ -47,14 +48,14 @@ pub fn calc_song_duration(
         let ticks = ticks.value();
 
         let section_ticks = ticks - prev_ticks;
-        out += u64::from(section_ticks) * u64::from(prev_clock.as_u8());
+        out += u64::from(section_ticks) * u64::from(prev_clock.value());
 
         prev_ticks = ticks;
         prev_clock = clock;
     }
 
     let remaining_ticks = total_ticks - prev_ticks;
-    out += u64::from(remaining_ticks) * u64::from(prev_clock.as_u8());
+    out += u64::from(remaining_ticks) * u64::from(prev_clock.value());
 
     const _: () = assert!(1_000_000 % TIMER_HZ == 0);
     const MICRO_MUL: u64 = 1_000_000 / TIMER_HZ as u64;
