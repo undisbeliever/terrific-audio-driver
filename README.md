@@ -12,11 +12,32 @@ Features
  * A custom loader to speed-up data loading.
  * A bytecode-based song and sound effect data format and interpreter.
  * Songs written in Music Macro Language (MML). ([mml syntax](docs/mml-syntax.md))
- * Sequenced sound effects, written in either bytecode assembly
-   ([syntax](docs/bytecode-assembly-syntax.md)) or MML.
- * Vibrato.
- * Portamento.
+ * 8 music channels.
+ * [Sound effects](docs/sound-effects.md):
+   * Sequenced sound effects, written in either bytecode assembly
+     ([syntax](docs/bytecode-assembly-syntax.md)) or MML.
+   * 2 sound effect channels, which will duck (temporally mute) song channels `G` and/or `H`.
+   * Elaborate [sound effect dropout behaviour](docs/sound-effects.md#sound-effect-dropout-behaviour):
+      * The *one-channel* flag set limit a sound effect to a single channel, preventing common and
+        frequent sound effects from using both sound effect channels.
+      * The *interruptible* flag controls if a sound effect can be interrupted (useful for short
+        sound effects, like collect coin, collision and splash) or uninterruptable (useful for long
+        or vocal sound effects).
  * Custom ADSR and GAIN envelopes in songs and sound effects.
+ * Mono, stereo and surround audio modes.
+ * Lots of effects:
+    * Vibrato and portamento
+    * Volume slides, tremolo, pan slides and panbrello
+    * Detune
+    * Left/right channel invert (if the audio mode is set to Surround)
+    * Commands for editing the echo buffer parameters in the middle of a song
+ * ca65, 64tass and pvsneslib APIs
+    * The API is asynchronous to minimise impact on the entity/mainloop code.
+    * Audio data can be loaded across multiple frames (`Tad_Process` calls).
+    * Audio data is loaded through a `LoadAudioData` callback, simplifying integration with
+      existing resource subsystems.  Alternativly, the `tad-compiler` binary can create and export
+      the `LoadAudioData` callback.
+    * Audio data can wrap across bank boundaries.
  * A GUI for editing and previewing samples, sound effects and songs.
 
 
