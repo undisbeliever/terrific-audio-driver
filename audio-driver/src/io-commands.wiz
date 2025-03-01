@@ -274,12 +274,13 @@ namespace IO {
         // NOTE: The music channels bitmask is reset whenever a new song is loaded.
         SET_MUSIC_CHANNELS = 12,
 
-        // Set the song tempo.
-        //  * parameter0: The new S-DSP TIMER_0 register value
-        //    (MUST be >= MIN_TICK_CLOCK 64, is bounds checked)
+        // Set the song tick clock.
+        //  * parameter0: The new S-DSP TIMER_0 register value.
+        //    64 is fastest, 256 is slow, 0 is slowest.
+        //    (MUST be `0 || >= MIN_TICK_CLOCK 64`, is bounds checked)
         //
-        // NOTE: The song can still change the tempo.
-        SET_SONG_TEMPO = 14,
+        // NOTE: The song can still change the song timer.
+        SET_SONG_TIMER = 14,
 
         // Set the global music volume
         //  * parameter0: the music volume.

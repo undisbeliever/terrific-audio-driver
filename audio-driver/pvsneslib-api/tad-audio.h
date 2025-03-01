@@ -154,7 +154,7 @@
 /*! Center pan value (default if pan is not specified) */
 #define TAD_CENTER_PAN 64
 
-/*! Minimum tick clock value for tad_queueCommand_setSongTempo() and tad_queueCommandOverride_setSongTempo() */
+/*! Minimum tick clock value for tad_queueCommand_setSongTimer() and tad_queueCommandOverride_setSongTimer() */
 #define TAD_MIN_TICK_CLOCK 64
 
 
@@ -350,16 +350,16 @@ bool tad_queueCommand_setMainVolume(s8 volume);
 bool tad_queueCommand_setMusicChannels(u8 mask);
 
 /*!
- * Queues a set-song-tempo command.
+ * Queues a set-song-timer command.
  *
- * A tickClock of 0 is 256 (slowest tempo).
+ * A tickClock of 0 is 256 (slowest).
  *
- * CAUTION: The song can still change the tempo.
+ * CAUTION: The song can still change the song timer.
  *
- * @param tickClock The new S-DSP TIMER_0 register value (MUST be `0 || >= TAD_MIN_TICK_CLOCK 64`, is bounds checked)
+ * @param tickClock The new S-DSP TIMER_0 register value. 64 is fastest, 255 is slow, 0 is slowest. (MUST be `0 || >= TAD_MIN_TICK_CLOCK 64`, is bounds checked)
  * @return true if the command was added to the command queue.
  */
-bool tad_queueCommand_setSongTempo(u8 tickClock);
+bool tad_queueCommand_setSongTimer(u8 tickClock);
 
 /*!
  * Queues a set-global-music-volume command.
@@ -454,10 +454,10 @@ void tad_queueCommandOverride_setMainVolume(s8 volume);
 void tad_queueCommandOverride_setMusicChannels(u8 mask);
 
 /*!
- * Queue a set-song-tempo command (overriding any unprocessed IO commands)
- * @see tad_queueCommand_setSongTempo()
+ * Queue a set-song-timer command (overriding any unprocessed IO commands)
+ * @see tad_queueCommand_setSongTimer()
  */
-void tad_queueCommandOverride_setSongTempo(u8 tickClock);
+void tad_queueCommandOverride_setSongTimer(u8 tickClock);
 
 /*!
  * Queues a set-global-music-volume command (overriding any unprocessed IO commands)

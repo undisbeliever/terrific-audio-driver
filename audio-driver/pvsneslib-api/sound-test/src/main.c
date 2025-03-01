@@ -56,7 +56,7 @@ u8 menu_sfxPan;
 u8 menu_mainVolume;
 u8 menu_musicVolume;
 u8 menu_sfxVolume;
-u8 menu_tempoOverride;
+u8 menu_timerOverride;
 u8 menu_channelMask;
 u8 menu_audioMode;
 bool menu_songStartsFlag;
@@ -100,7 +100,7 @@ enum MenuItem {
     MENU__MAIN_VOLUME,
     MENU__MUSIC_VOLUME,
     MENU__SFX_VOLUME,
-    MENU__OVERRIDE_TEMPO,
+    MENU__OVERRIDE_TIMER,
     MENU__CHANNEL_MASK,
     MENU__AUDIO_MODE,
     MENU__SONG_STARTS_FLAG,
@@ -137,7 +137,7 @@ const char* const MenuLabels[N_MENU_ITEMS] = {
     "MAIN VOLUME",
     "MUSIC VOLUME",
     "SFX VOLUME",
-    "OVERRIDE TEMPO",
+    "OVERRIDE TIMER",
     "MUSIC CHANNELS",
     NULL,
     NULL,
@@ -198,7 +198,7 @@ void menu_init(void) {
     menu_mainVolume = MAX_VOLUME;
     menu_musicVolume = U8_MAX;
     menu_sfxVolume = U8_MAX;
-    menu_tempoOverride = 100;
+    menu_timerOverride = 100;
     menu_channelMask = 0xff;
 
     menu_setSongStartsFlag(true);
@@ -220,7 +220,7 @@ void menu_init(void) {
     menu_printU8(MENU__MAIN_VOLUME, menu_mainVolume);
     menu_printU8(MENU__MUSIC_VOLUME, menu_musicVolume);
     menu_printU8(MENU__SFX_VOLUME, menu_sfxVolume);
-    menu_printU8(MENU__OVERRIDE_TEMPO, menu_tempoOverride);
+    menu_printU8(MENU__OVERRIDE_TIMER, menu_timerOverride);
 
     menu_setPos(0);
     menu_updateChannelMask();
@@ -451,9 +451,9 @@ void menu_process_action(void) {
         tad_queueCommandOverride_setGlobalVolumes(255, 128);
         break;
 
-    case MENU__OVERRIDE_TEMPO:
+    case MENU__OVERRIDE_TIMER:
         // Tests `tad_queueCommandOverride_*(u8)` (built using a macro)
-        tad_queueCommandOverride_setSongTempo(menu_tempoOverride);
+        tad_queueCommandOverride_setSongTimer(menu_timerOverride);
         break;
 
     case MENU__CHANNEL_MASK:
@@ -543,19 +543,19 @@ void menu_process_item(void) {
         break;
     }
 
-    case MENU__OVERRIDE_TEMPO: {
+    case MENU__OVERRIDE_TIMER: {
         const u16 pad = padsCurrent(0);
 
         if (pad & KEY_LEFT) {
-            if (menu_tempoOverride == 0 || menu_tempoOverride > TAD_MIN_TICK_CLOCK) {
-                menu_tempoOverride--;
-                menu_printU8(MENU__OVERRIDE_TEMPO, menu_tempoOverride);
+            if (menu_timerOverride == 0 || menu_timerOverride > TAD_MIN_TICK_CLOCK) {
+                menu_timerOverride--;
+                menu_printU8(MENU__OVERRIDE_TIMER, menu_timerOverride);
             }
         }
         else if (pad & KEY_RIGHT) {
-            if (menu_tempoOverride >= TAD_MIN_TICK_CLOCK) {
-                menu_tempoOverride++;
-                menu_printU8(MENU__OVERRIDE_TEMPO, menu_tempoOverride);
+            if (menu_timerOverride >= TAD_MIN_TICK_CLOCK) {
+                menu_timerOverride++;
+                menu_printU8(MENU__OVERRIDE_TIMER, menu_timerOverride);
             }
         }
         break;

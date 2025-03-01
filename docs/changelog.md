@@ -54,8 +54,8 @@ Audio driver changes:
  * Added global music and sound-effect volumes.
    (See the `SET_GLOBAL_MUSIC_VOLUME`, `SET_GLOBAL_SFX_VOLUME` and `SET_GLOBAL_VOLUMES` IO commands.)
  * Fixed an audible glitch after a `PAUSE` or `PAUSE_MUSIC_PLAY_SFX` IO Command.
- * Increased maximum song tick clock to 256.
-    * A `SET_SONG_TEMPO` IO command with a 0 parameter will set the song tick clock to 256.
+ * Increased maximum song tick clock to 256 (`#Timer` MML header and `T` MML command).
+    * A `SET_SONG_TIMER` IO command with a 0 parameter will set the song tick clock to 256.
 
 MML changes:
  * `#EchoVolume` now accepts a stereo input
@@ -89,6 +89,7 @@ API changes:
  * The `RELOAD_COMMON_AUDIO_DATA` flag is now checked and cleared in `Tad_LoadSong`
  * Added `RESET_GLOBAL_VOLUMES_ON_SONG_START` flag
  * Added a way to override the default values (see the API's readme file for more details)
+ * Renamed `SET_SONG_TEMPO` IO command to `SET_SONG_TIMER` (to match the `#Timer` MML header)
 
 
 Version 0.0.16

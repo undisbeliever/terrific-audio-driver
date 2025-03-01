@@ -437,7 +437,7 @@ void test_queueCommandWithOneParameter(void) {
     ASSERT_EQ(tad_queueCommand_setMusicChannels(10), true);
     ASSERT_EQ(tadPrivate_nextCommand_parameter0, 10);
 
-    tad_queueCommandOverride_setSongTempo(128);
+    tad_queueCommandOverride_setSongTimer(128);
     ASSERT_EQ(tadPrivate_nextCommand_parameter0, 128);
 }
 

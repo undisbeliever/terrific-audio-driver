@@ -130,7 +130,7 @@ TAD_Command__PLAY_SOUND_EFFECT = 6
 TAD_Command__STOP_SOUND_EFFECTS = 8
 TAD_Command__SET_MAIN_VOLUME = 10
 TAD_Command__SET_MUSIC_CHANNELS = 12
-TAD_Command__SET_SONG_TEMPO = 14
+TAD_Command__SET_SONG_TIMER = 14
 TAD_Command__SET_GLOBAL_MUSIC_VOLUME = 16
 TAD_Command__SET_GLOBAL_SFX_VOLUME = 18
 TAD_Command__SET_GLOBAL_VOLUMES = 20
@@ -1670,7 +1670,7 @@ _TadPrivate_QueueCommandFunction tad_queueCommand_unpause                      T
 _TadPrivate_QueueCommandFunction tad_queueCommand_stopSoundEffects             Test        NoParameter     STOP_SOUND_EFFECTS
 _TadPrivate_QueueCommandFunction tad_queueCommand_setMainVolume                Test        OneParameter    SET_MAIN_VOLUME
 _TadPrivate_QueueCommandFunction tad_queueCommand_setMusicChannels             Test        OneParameter    SET_MUSIC_CHANNELS
-_TadPrivate_QueueCommandFunction tad_queueCommand_setSongTempo                 Test        OneParameter    SET_SONG_TEMPO
+_TadPrivate_QueueCommandFunction tad_queueCommand_setSongTimer                 Test        OneParameter    SET_SONG_TIMER
 _TadPrivate_QueueCommandFunction tad_queueCommand_setGlobalMusicVolume         Test        OneParameter    SET_GLOBAL_MUSIC_VOLUME
 _TadPrivate_QueueCommandFunction tad_queueCommand_setGlobalSfxVolume           Test        OneParameter    SET_GLOBAL_SFX_VOLUME
 _TadPrivate_QueueCommandFunction tad_queueCommand_setGlobalVolumes             Test        TwoParameters   SET_GLOBAL_VOLUMES
@@ -1681,7 +1681,7 @@ _TadPrivate_QueueCommandFunction tad_queueCommandOverride_unpause              O
 _TadPrivate_QueueCommandFunction tad_queueCommandOverride_stopSoundEffects     Override    NoParameter     STOP_SOUND_EFFECTS
 _TadPrivate_QueueCommandFunction tad_queueCommandOverride_setMainVolume        Override    OneParameter    SET_MAIN_VOLUME
 _TadPrivate_QueueCommandFunction tad_queueCommandOverride_setMusicChannels     Override    OneParameter    SET_MUSIC_CHANNELS
-_TadPrivate_QueueCommandFunction tad_queueCommandOverride_setSongTempo         Override    OneParameter    SET_SONG_TEMPO
+_TadPrivate_QueueCommandFunction tad_queueCommandOverride_setSongTimer         Override    OneParameter    SET_SONG_TIMER
 _TadPrivate_QueueCommandFunction tad_queueCommandOverride_setGlobalMusicVolume Override    OneParameter    SET_GLOBAL_MUSIC_VOLUME
 _TadPrivate_QueueCommandFunction tad_queueCommandOverride_setGlobalSfxVolume   Override    OneParameter    SET_GLOBAL_SFX_VOLUME
 _TadPrivate_QueueCommandFunction tad_queueCommandOverride_setGlobalVolumes     Override    TwoParameters   SET_GLOBAL_VOLUMES

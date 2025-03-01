@@ -1539,7 +1539,7 @@ const CommandFunctionTable : [func(parameter0: u8 in y) ; IO.ToDriver.N_COMMANDS
     stop_sound_effects,
     set_main_volume,
     set_music_channels,
-    set_song_tempo,
+    set_song_timer,
     set_global_music_volume,
     set_global_sfx_volume,
     set_global_volumes,
@@ -1599,7 +1599,7 @@ func set_music_channels(mask : u8 in y) {
 }
 
 
-func set_song_tempo(tempo : u8 in y) {
+func set_song_timer(timer : u8 in y) {
     // if (y > 0 && y < MIN_TICK_CLOCK) y = MIN_TICK_CLOCK
     y--;
     if y < MIN_TICK_CLOCK - 1 {

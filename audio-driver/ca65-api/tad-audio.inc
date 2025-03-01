@@ -95,7 +95,7 @@ TAD_MAX_PAN = 128
 ;; Center pan value (default if pan is not specified)
 TAD_CENTER_PAN = TAD_MAX_PAN / 2
 
-;; Minimum tick clock value for the `TadCommand::SET_SONG_TEMPO` command.
+;; Minimum tick clock value for the `TadCommand::SET_SONG_TIMER` command.
 TAD_MIN_TICK_CLOCK = 64
 
 
@@ -186,14 +186,15 @@ TAD_MIN_TICK_CLOCK = 64
     ;; NOTE: The music channels bitmask is reset whenever a new song is loaded.
     SET_MUSIC_CHANNELS = 12
 
-    ;; Set the song tempo.
-    ;;  * parameter0: The new S-DSP TIMER_0 register value
+    ;; Set the song tick clock.
+    ;;  * parameter0: The new S-DSP TIMER_0 register value.
+    ;;    64 is fastest, 255 is slow, 0 is slowest.
     ;;    (MUST be `0 || >= TAD_MIN_TICK_CLOCK 64`, is bounds checked)
     ;;
-    ;; A TIMER_0 register value of 0 is 256 (slowest tempo).
+    ;; A TIMER_0 register value of 0 is 256 (slowest).
     ;;
-    ;; CAUTION: The song can still change the tempo.
-    SET_SONG_TEMPO = 14
+    ;; CAUTION: The song can still change the song timer.
+    SET_SONG_TIMER = 14
 
     ;; Set the global music volume
     ;;  * parameter0: the music volume.

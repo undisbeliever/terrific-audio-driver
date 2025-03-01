@@ -92,7 +92,7 @@ ROM_SPEED   = ROM_SPEED__Slow
         mainVolume:         .res 1
         musicVolume:        .res 1
         sfxVolume:          .res 1
-        tempoOverride:      .res 1
+        timerOverride:      .res 1
         channelMask:        .res 1
         audioMode:          .res 1
         songStartsFlag:     .res 1
@@ -145,7 +145,7 @@ BufferIndexTable:
     _BufferIndexEntry_ MAIN_VOLUME_YPOS,         5
     _BufferIndexEntry_ MUSIC_VOLUME_YPOS,        7
     _BufferIndexEntry_ SFX_VOLUME_YPOS,          8
-    _BufferIndexEntry_ OVERRIDE_TEMPO_YPOS,     10
+    _BufferIndexEntry_ OVERRIDE_TIMER_YPOS,     10
     _BufferIndexEntry_ CHANNEL_MASK_YPOS,       11
     _BufferIndexEntry_ AUDIO_MODE_YPOS,         13
     _BufferIndexEntry_ SONG_STARTS_YPOS,        14
@@ -170,7 +170,7 @@ MenuLabel_02: .byte "SFX PAN", 0
 MenuLabel_03: .byte "MAIN VOLUME", 0
 MenuLabel_04: .byte "MUSIC VOLUME", 0
 MenuLabel_05: .byte "SFX VOLUME", 0
-MenuLabel_06: .byte "OVERRIDE TEMPO", 0
+MenuLabel_06: .byte "OVERRIDE TIMER", 0
 MenuLabel_07: .byte "MUSIC CHANNELS", 0
 MenuLabel_08: .byte "", 0
 MenuLabel_09: .byte "", 0
@@ -194,7 +194,7 @@ MenuProcessFunctions:
     .addr   Menu_MainVolume_Process
     .addr   Menu_MusicVolume_Process
     .addr   Menu_SfxVolume_Process
-    .addr   Menu_OverrideTempo_Process
+    .addr   Menu_OverrideTimer_Process
     .addr   MenuChannelMask_Process
     .addr   Menu_AudioMode_Process
     .addr   Menu_SongStartsFlag_Process
@@ -216,7 +216,7 @@ MenuActionFunctions:
     .addr   Menu_MainVolume_Action
     .addr   Menu_MusicVolume_Action
     .addr   Menu_SfxVolume_Action
-    .addr   Menu_OverrideTempo_Action
+    .addr   Menu_OverrideTimer_Action
     .addr   MenuChannelMask_Action
     .addr   Menu_AudioMode_Action
     .addr   Menu_SongStartsFlag_Action
@@ -263,7 +263,7 @@ MenuActionFunctions:
     jsr     _SetSfxVolume
 
     lda     #100
-    jsr     _SetTempoOverride
+    jsr     _SetTimerOverride
 
     lda     #TadAudioMode::SURROUND
     jsr     _SetAudioMode
@@ -644,19 +644,19 @@ Menu_SfxPan_Action = Menu_PlaySfx_Action
 .a8
 .i16
 ;: DB = $7e
-.proc Menu_OverrideTempo_Process
-    lda     Menu::tempoOverride
+.proc Menu_OverrideTimer_Process
+    lda     Menu::timerOverride
     jsr     _AdjustWithDpad_0Max_Fast
-    jmp     _SetTempoOverride
+    jmp     _SetTimerOverride
 .endproc
 
 
 .a8
 .i16
 ;: DB = $7e
-.proc Menu_OverrideTempo_Action
-    lda     #TadCommand::SET_SONG_TEMPO
-    ldx     Menu::tempoOverride
+.proc Menu_OverrideTimer_Action
+    lda     #TadCommand::SET_SONG_TIMER
+    ldx     Menu::timerOverride
     jmp     Tad_QueueCommandOverride
 .endproc
 
@@ -1010,16 +1010,16 @@ _SetVarFn_  _SetSfxVolume,      SFX_VOLUME_YPOS,        sfxVolume,      0,      
 .a8
 .i16
 ;; DB = $7e
-.proc _SetTempoOverride
+.proc _SetTimerOverride
     cmp     #0
     beq     :+
         cmp     #TAD_MIN_TICK_CLOCK
         bcs     :+
             lda     #TAD_MIN_TICK_CLOCK
     :
-    sta     Menu::tempoOverride
+    sta     Menu::timerOverride
 
-    ldy     #TextBuffer_PosToIndex(VAR_XPOS, OVERRIDE_TEMPO_YPOS)
+    ldy     #TextBuffer_PosToIndex(VAR_XPOS, OVERRIDE_TIMER_YPOS)
     jmp     TextBuffer_PrintPadded_A8
 .endproc
 
