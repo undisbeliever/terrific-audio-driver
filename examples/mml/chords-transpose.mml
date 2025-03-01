@@ -2,6 +2,8 @@
 ;
 ; This example produces identical output to `chords.mml`.
 
+#Title Chords using transpose example
+
 @1 piano
 
 ABC @1

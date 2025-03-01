@@ -1,4 +1,4 @@
-; bc_interpreter echo test
+#Title Echo volume and feedback examples
 
 #EchoLength   240
 #EchoFeedback  80

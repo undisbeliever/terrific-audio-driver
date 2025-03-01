@@ -1,4 +1,4 @@
-; bc_interpreter portamento test
+#Title Portamento examples
 
 @1 square gain 127
 
