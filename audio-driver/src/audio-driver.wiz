@@ -162,7 +162,7 @@ in zeropage {
     //  * If set - the next play note instruction will set `keyOnShadow`.
     //  * If clear - the channel is playing something and the play note instruction will
     //               leave `keyOnShadow` unchanged (slurring the note).
-    // (8x bitfield)
+    // (8x bit array)
     var keyOnMask_music : u8;
     var keyOnMask_sfx : u8;
 
@@ -172,8 +172,6 @@ in zeropage {
 
 
     // Temporary variable for reading and writing `voiceChannelsDirty_*` bits.
-    //
-    // MUST ONLY be written to in `__process_channels()`.
     var voiceChannelsDirty_tmp  : u8;
 
 
@@ -253,7 +251,7 @@ in zeropage {
 
     // Used to determine if vol_l and vol_r need recalculating.
     // In the `__process_channels()` loop, bit 7 is left-shifted out and the volume is updated if set.
-    // (bitfield)
+    // (bit array)
     var volShadowDirty_tmp : u8;
 
     // Used to determine if all music channels should be updated.
@@ -267,7 +265,7 @@ in zeropage {
     // The sound effects with invalid vol_l and vol_r shadow variables.
     // Set in the PLAY_SOUND_EFFECT and SET_GLOBAL_SFX_VOLUME IO commands.
     // CAUTION: bits 6 & 7 are swapped from other the other *_sfx bitsets
-    // (bitfield)
+    // (bit array)
     var volShadowDirty_sfx : u8;
 
 
@@ -360,20 +358,18 @@ in firstpage {
 
     // Channel variables that do not fit in zeropage
     namespace channelSoA {
-        // Used to determine the vibrato pitch shift direction for the current vibrato tick counter.
-        //
-        // This variable is equal to `vibrato_waveLengthInTicks / 2`
+        // Countdown for vibrato direction change
+        // (ticks)
         var vibrato_tickCounter : [u8 ; N_CHANNELS];
 
         // The vibrato tickCounter to reset to when changing direction (`quarterWavelengthInTicks*2`).
-        // If 0, the half-wavelength is 128 ticks.
         var vibrato_halfWavelength : [u8 ; N_CHANNELS];
 
-        // The value to reset the tick counter to when playing a note or starting a vibrato.
+        // The value to reset `vibrato_tickCounter` counter to when playing a note or starting a vibrato.
         //
         // This variable is equal to the `quarterWavelengthInTicks` parameter of the `set_vibrato` instruction
         //
-        // Offsetting the start of the vibrato allows me to save a comparison in `_process_vibrato__inline()`.
+        // Offsetting the start of the vibrato saves a comparison in `_process_vibrato__inline()`.
         var vibrato_tickCounterStart : [u8 ; N_CHANNELS];
 
 
