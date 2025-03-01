@@ -106,6 +106,30 @@ STACK_BOTTOM = $1f80
         .long Tad_IsSongLoaded
         .long Tad_IsSfxPlaying
         .long Tad_IsSongPlaying
+
+    TadConstants:
+        .word TAD_MAX_PAN
+        .word TAD_CENTER_PAN
+        .word TAD_MIN_TICK_CLOCK
+
+        .byte TadCommand.PAUSE
+        .byte TadCommand.PAUSE_MUSIC_PLAY_SFX
+        .byte TadCommand.PLAY_SOUND_EFFECT
+        .byte TadCommand.STOP_SOUND_EFFECTS
+        .byte TadCommand.SET_MAIN_VOLUME
+        .byte TadCommand.SET_MUSIC_CHANNELS
+        .byte TadCommand.SET_SONG_TIMER
+        .byte TadCommand.SET_GLOBAL_MUSIC_VOLUME
+        .byte TadCommand.SET_GLOBAL_SFX_VOLUME
+        .byte TadCommand.SET_GLOBAL_VOLUMES
+
+        .byte TadAudioMode.MONO
+        .byte TadAudioMode.STEREO
+        .byte TadAudioMode.SURROUND
+
+        .byte TadFlags.RELOAD_COMMON_AUDIO_DATA
+        .byte TadFlags.PLAY_SONG_IMMEDIATELY
+        .byte TadFlags.RESET_GLOBAL_VOLUMES_ON_SONG_START
 .send
 
 
