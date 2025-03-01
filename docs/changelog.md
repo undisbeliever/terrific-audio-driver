@@ -82,7 +82,12 @@ GUI changes:
  * Fixed play-from-cursor not playing the note immediately after the cursor
  * Fixed a sound effect containing a new-sound-effect token (`\n===`) not saving and loading correctly.  
    The new-sound-effect token will be silently transformed into a comment when the sound-effects file is saved to disk.
- * Added audio driver state sub-window (F10).
+ * Added audio driver state sub-window (F11).
+ * Fixed F9 keyboard shortcut conflict
+    * F9 copies cursor position to the song start position in the song tab
+    * Shift+F9 copies the cursor position to the song start position and mutes the other channels
+    * F10 opens the sound effects window
+    * F11 opens the audio driver state window
 
 API changes:
  * `Tad_QueueCommand` and `Tad_QueueCommandOverride` can now queue IO commands with 2 parameters.

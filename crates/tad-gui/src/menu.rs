@@ -129,14 +129,14 @@ impl Menu {
 
         add(
             AUDIO_SFX_WINDOW,
-            Shortcut::from_key(Key::F9),
+            Shortcut::from_key(Key::F10),
             fltk::menu::MenuFlag::Normal,
             || GuiMessage::ToggleSfxWindow,
         );
 
         add(
             DRIVER_STATE_WINDOW,
-            Shortcut::from_key(Key::F10),
+            Shortcut::from_key(Key::F11),
             fltk::menu::MenuFlag::Normal,
             || GuiMessage::ToggleDriverStateWindow,
         );
