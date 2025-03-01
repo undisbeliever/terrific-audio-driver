@@ -88,3 +88,21 @@ effect that is dropped is determined by the sound-effect priority and the *inter
     * If both sound effects channels are in use, the `play_sound_effect` command is dropped.
     * If there is a free sound effect channel, the sound effect will be played.
 
+
+Sound Effect File Format
+========================
+
+ * All sound effects are stored in a single text file.
+ * Each sound effect is seperated with a line that starts with `===`
+    * This line is in the format `=== <name> === [flags]`
+    * Flags:
+        * `mml`: the sound effect is MML, otherwise the sound effect is bytecode assembly
+        * `interruptible`: Sets the *interruptible* flag
+        * `uninterruptible`: Clears the *interruptible* flag
+        * `one`: Sets the *one-channel* flag
+        * `both`: Clears the *one-channel* flag
+    * A line starting with `===` is not allowed in a sound effect file and will be silently
+      converted to a comment by `tad-gui` when the sound effects are saved to disk.
+ * The text before the first `===` line is the sound-effect subroutines
+    * The sound-effects subroutines are written in MML and shared across all sound effects.
+
