@@ -161,87 +161,87 @@
     },
     {
       "name": "chords",
-      "source": "mml-tests/chords.mml"
+      "source": "mml/chords.mml"
     },
     {
       "name": "chords_transpose",
-      "source": "mml-tests/chords-transpose.mml"
+      "source": "mml/chords-transpose.mml"
     },
     {
       "name": "broken_chord",
-      "source": "mml-tests/broken-chord.mml"
+      "source": "mml/broken-chord.mml"
     },
     {
       "name": "quantize_with_temp_gain",
-      "source": "mml-tests/quantize-with-temp-gain.mml"
+      "source": "mml/quantize-with-temp-gain.mml"
     },
     {
       "name": "early_release",
-      "source": "mml-tests/early-release.mml"
+      "source": "mml/early-release.mml"
     },
     {
       "name": "echo",
-      "source": "mml-tests/echo.mml"
+      "source": "mml/echo.mml"
     },
     {
       "name": "samples",
-      "source": "mml-tests/samples.mml"
+      "source": "mml/samples.mml"
     },
     {
       "name": "play_pitch",
-      "source": "mml-tests/play-pitch.mml"
+      "source": "mml/play-pitch.mml"
     },
     {
       "name": "portamento",
-      "source": "mml-tests/portamento.mml"
+      "source": "mml/portamento.mml"
     },
     {
       "name": "vibrato",
-      "source": "mml-tests/vibrato.mml"
+      "source": "mml/vibrato.mml"
     },
     {
       "name": "tremolo",
-      "source": "mml-tests/tremolo.mml"
+      "source": "mml/tremolo.mml"
     },
     {
       "name": "volume_slide",
-      "source": "mml-tests/volume-slide.mml"
+      "source": "mml/volume-slide.mml"
     },
     {
       "name": "pan",
-      "source": "mml-tests/pan.mml"
+      "source": "mml/pan.mml"
     },
     {
       "name": "panbrello",
-      "source": "mml-tests/panbrello.mml"
+      "source": "mml/panbrello.mml"
     },
     {
       "name": "pan_slide",
-      "source": "mml-tests/pan-slide.mml"
+      "source": "mml/pan-slide.mml"
     },
     {
       "name": "play_noise",
-      "source": "mml-tests/play-noise.mml"
+      "source": "mml/play-noise.mml"
     },
     {
       "name": "multi_channel_noise",
-      "source": "mml-tests/multi-channel-noise.mml"
+      "source": "mml/multi-channel-noise.mml"
     },
     {
       "name": "detune",
-      "source": "mml-tests/detune.mml"
+      "source": "mml/detune.mml"
     },
     {
       "name": "pitch_modulation",
-      "source": "mml-tests/pitch-modulation.mml"
+      "source": "mml/pitch-modulation.mml"
     },
     {
       "name": "fir",
-      "source": "mml-tests/fir.mml"
+      "source": "mml/fir.mml"
     },
     {
       "name": "bc_asm_in_mml",
-      "source": "mml-tests/bc-asm-in-mml.mml"
+      "source": "mml/bc-asm-in-mml.mml"
     }
   ]
 }
