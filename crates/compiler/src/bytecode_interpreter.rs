@@ -5,6 +5,7 @@
 // SPDX-License-Identifier: MIT
 
 use crate::bytecode::opcodes;
+use crate::bytecode::DisableNoiseOrPmodArgument;
 use crate::bytecode::InstrumentId;
 use crate::bytecode::Pan;
 use crate::common_audio_data::CommonAudioData;
@@ -779,8 +780,6 @@ impl ChannelState {
                 self.increment_tick_count(length, key_off);
             }
 
-            opcodes::DISABLE_NOISE => {}
-
             opcodes::SET_INSTRUMENT => {
                 self.instrument = Some(read_pc());
                 self.adsr_or_gain_override = None;
@@ -1093,8 +1092,15 @@ impl ChannelState {
             opcodes::ENABLE_ECHO => self.echo = true,
             opcodes::DISABLE_ECHO => self.echo = false,
 
-            opcodes::ENABLE_PMOD => self.pitch_mod = true,
-            opcodes::DISABLE_PMOD => self.pitch_mod = false,
+            opcodes::DISABLE_NOISE_OR_SET_PMOD => {
+                let a = read_pc();
+
+                match DisableNoiseOrPmodArgument::from_driver_value(a) {
+                    DisableNoiseOrPmodArgument::DisableNoise => (),
+                    DisableNoiseOrPmodArgument::EnablePmod => self.pitch_mod = true,
+                    DisableNoiseOrPmodArgument::DisablePmod => self.pitch_mod = false,
+                }
+            }
 
             opcodes::SET_ECHO_VOLUME => {
                 let v = read_pc();
@@ -1186,6 +1192,9 @@ impl ChannelState {
             opcodes::RESERVED_FOR_CUSTOM_USE => self.disable_channel(),
 
             opcodes::DISABLE_CHANNEL => self.disable_channel(),
+
+            opcodes::PADDING_1 => self.disable_channel(),
+            opcodes::PADDING_2 => self.disable_channel(),
         }
     }
 
@@ -1248,7 +1257,6 @@ impl ChannelState {
             opcodes::REST => None,
             opcodes::PLAY_PITCH => None,
             opcodes::PLAY_NOISE => None,
-            opcodes::DISABLE_NOISE => Some(1),
             opcodes::SET_INSTRUMENT => Some(2),
             opcodes::SET_INSTRUMENT_AND_ADSR_OR_GAIN => Some(4),
             opcodes::SET_ADSR => Some(3),
@@ -1288,8 +1296,7 @@ impl ChannelState {
             opcodes::RETURN_FROM_SUBROUTINE => None,
             opcodes::ENABLE_ECHO => Some(1),
             opcodes::DISABLE_ECHO => Some(1),
-            opcodes::ENABLE_PMOD => Some(1),
-            opcodes::DISABLE_PMOD => Some(1),
+            opcodes::DISABLE_NOISE_OR_SET_PMOD => Some(2),
 
             opcodes::SET_ECHO_VOLUME => Some(2),
             opcodes::SET_STEREO_ECHO_VOLUME => Some(3),
@@ -1304,6 +1311,9 @@ impl ChannelState {
 
             opcodes::RESERVED_FOR_CUSTOM_USE => None,
             opcodes::DISABLE_CHANNEL => None,
+
+            opcodes::PADDING_1 => None,
+            opcodes::PADDING_2 => None,
         }
     }
 
@@ -1314,8 +1324,14 @@ impl ChannelState {
             let next_instruction = song_data.get(instruction_ptr).copied();
 
             match next_instruction {
-                Some(opcodes::ENABLE_PMOD) => return true,
-                Some(opcodes::DISABLE_PMOD) => return false,
+                Some(opcodes::DISABLE_NOISE_OR_SET_PMOD) => {
+                    return song_data.get(instruction_ptr + 1).is_some_and(|&a| {
+                        matches!(
+                            DisableNoiseOrPmodArgument::from_driver_value(a),
+                            DisableNoiseOrPmodArgument::EnablePmod
+                        )
+                    })
+                }
                 Some(opcode) => match Self::instruction_size_if_not_sleep_nor_branch(opcode) {
                     Some(length) => instruction_ptr += length,
                     None => return self.pitch_mod,

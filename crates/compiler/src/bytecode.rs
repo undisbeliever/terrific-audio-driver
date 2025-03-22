@@ -288,15 +288,15 @@ pub mod opcodes {
         ADJUST_ECHO_I8_LIMIT,
         SET_ECHO_INVERT,
         SET_ECHO_DELAY,
+        DISABLE_NOISE_OR_SET_PMOD,
         END_LOOP,
         RETURN_FROM_SUBROUTINE_AND_DISABLE_VIBRATO,
         RETURN_FROM_SUBROUTINE,
-        DISABLE_NOISE,
-        ENABLE_PMOD,
-        DISABLE_PMOD,
         ENABLE_ECHO,
         DISABLE_ECHO,
         REUSE_TEMP_GAIN,
+        PADDING_1,
+        PADDING_2,
     );
 
     // Last non play-note opcode
@@ -318,6 +318,31 @@ const ECHO_I8_EFB_INDEX: u8 = 8;
 const _: () = assert!(FirTap::MAX.as_u8() < ECHO_I8_EFB_INDEX);
 
 pub(crate) const GOTO_RELATIVE_INSTRUCTION_SIZE: usize = 3;
+
+#[derive(Clone, Copy)]
+pub enum DisableNoiseOrPmodArgument {
+    DisableNoise = 0b01,
+
+    EnablePmod = 0b10,
+    DisablePmod = 0b00,
+}
+
+impl DisableNoiseOrPmodArgument {
+    pub fn driver_value(self) -> u8 {
+        self as u8
+    }
+
+    pub fn from_driver_value(argument: u8) -> Self {
+        if argument & 1 == 1 {
+            Self::DisableNoise
+        } else {
+            match argument & 2 == 2 {
+                true => Self::EnablePmod,
+                false => Self::DisablePmod,
+            }
+        }
+    }
+}
 
 u8_value_newtype!(
     InstrumentId,
@@ -1411,7 +1436,11 @@ impl<'a> Bytecode<'a> {
     }
 
     pub fn disable_noise(&mut self) {
-        emit_bytecode!(self, opcodes::DISABLE_NOISE);
+        emit_bytecode!(
+            self,
+            opcodes::DISABLE_NOISE_OR_SET_PMOD,
+            DisableNoiseOrPmodArgument::DisableNoise.driver_value()
+        );
     }
 
     pub fn play_note(&mut self, note: Note, length: PlayNoteTicks) -> Result<(), BytecodeError> {
@@ -1860,12 +1889,19 @@ impl<'a> Bytecode<'a> {
         self._tremolo_panbrello(opcodes::PANBRELLO, amplitude, quarter_wavelength_ticks);
     }
 
-    fn _pmod_instruction(&mut self, opcode: u8) -> Result<(), BytecodeError> {
+    fn _pmod_instruction(
+        &mut self,
+        parameter: DisableNoiseOrPmodArgument,
+    ) -> Result<(), BytecodeError> {
         match self.context {
             BytecodeContext::SongChannel { index, .. } => match index {
                 0 => Err(BytecodeError::PmodNotAllowedInChannelA),
                 1..=5 => {
-                    emit_bytecode!(self, opcode);
+                    emit_bytecode!(
+                        self,
+                        opcodes::DISABLE_NOISE_OR_SET_PMOD,
+                        parameter.driver_value()
+                    );
                     Ok(())
                 }
                 6 | 7 => Err(BytecodeError::PmodNotAllowedInChannelsGH),
@@ -1874,7 +1910,11 @@ impl<'a> Bytecode<'a> {
                 }
             },
             BytecodeContext::SongSubroutine { .. } | BytecodeContext::MmlPrefix => {
-                emit_bytecode!(self, opcode);
+                emit_bytecode!(
+                    self,
+                    opcodes::DISABLE_NOISE_OR_SET_PMOD,
+                    parameter.driver_value()
+                );
                 Ok(())
             }
             BytecodeContext::SfxSubroutine | BytecodeContext::SoundEffect => {
@@ -1884,11 +1924,11 @@ impl<'a> Bytecode<'a> {
     }
 
     pub fn enable_pmod(&mut self) -> Result<(), BytecodeError> {
-        self._pmod_instruction(opcodes::ENABLE_PMOD)
+        self._pmod_instruction(DisableNoiseOrPmodArgument::EnablePmod)
     }
 
     pub fn disable_pmod(&mut self) -> Result<(), BytecodeError> {
-        self._pmod_instruction(opcodes::DISABLE_PMOD)
+        self._pmod_instruction(DisableNoiseOrPmodArgument::DisablePmod)
     }
 
     pub fn enable_echo(&mut self) {

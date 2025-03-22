@@ -395,6 +395,16 @@ let INSTRUCTIONS_WITH_ARGUMENTS = [
     // parameter = u8 EDL echo delay value
     // If the parameter > maxEdl, maxEdl will be used instead
     set_echo_delay,
+
+
+    // Disables noise or enables/disables pitch modulation
+    //
+    // parameter = ------pd
+    //      d = disable noise flag (`p` is ignored)
+    //      p = pitch modulation flag
+    //
+    // PMOD is only available on channels B - F.
+    disable_noise_or_set_pmod,
 ];
 
 
@@ -413,16 +423,6 @@ let NO_ARGUMENT_INSTRUCTIONS = [
     return_from_subroutine,
 
 
-    // Disable noise on this channel
-    disable_noise,
-
-    // Enable pitch modulation.
-    // Only available on channels B - F.
-    enable_pmod,
-
-    // Disable pitch modulation
-    disable_pmod,
-
     // Enable echo on this channel
     enable_echo,
 
@@ -432,6 +432,11 @@ let NO_ARGUMENT_INSTRUCTIONS = [
 
     // Reuses the temp-GAIN in the last `set_temp_gain*` instruction.
     reuse_temp_gain,
+
+
+    // padding
+    disable_channel,
+    disable_channel,
 
 
     // Disables the channel

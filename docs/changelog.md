@@ -1,6 +1,14 @@
 Terrific Audio Driver Changelog
 ===============================
 
+Version 0.1.1
+=============
+
+Bytecode changes:
+ * `enable_pmod`, `disable_pmod` and `disable_noise` have been combined into a single 2-byte instruction.
+   The bytecode assembly is unchanged.
+
+
 Version 0.1.0
 =============
 

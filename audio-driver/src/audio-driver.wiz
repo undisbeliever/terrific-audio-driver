@@ -2575,7 +2575,27 @@ func play_noise(channelIndex: u8 in x, freq_and_keyoff : u8 in a) {
 
 
 // KEEP: X
-func disable_noise(channelIndex: u8 in x) {
+func disable_noise_or_set_pmod(channelIndex : u8 in x, argument: u8 in a) {
+    a >>>= 1;
+    goto _disable_noise if carry;
+
+    a >>>= 1;
+    // carry = enable pmod bit
+
+    a = ChannelVoiceBit[x] & ENABLE_PMOD_MASK;
+
+    if carry {
+        test_and_set(a, pmonShadow);
+        ^return process_next_bytecode(x);
+    }
+
+    test_and_clear(a, pmonShadow);
+    ^return process_next_bytecode(x);
+}
+
+
+// KEEP: X
+func _disable_noise(channelIndex: u8 in x) {
     a = ChannelVoiceBit[x];
     if x >= FIRST_SFX_CHANNEL {
         test_and_clear(a, pendingNon_sfx);
@@ -2942,26 +2962,6 @@ func return_from_subroutine(channelIndex : u8 in x) {
     y = a;
     <:instructionPtr = a = (&bcStack[-2])[y];
     >:instructionPtr = a = (&bcStack[-1])[y];
-
-    ^return process_next_bytecode(x);
-}
-
-
-
-// KEEP: X
-func enable_pmod(channelIndex : u8 in x) {
-    a = ChannelVoiceBit[x] & ENABLE_PMOD_MASK;
-    test_and_set(a, pmonShadow);
-
-    ^return process_next_bytecode(x);
-}
-
-
-
-// KEEP: X
-func disable_pmod(channelIndex : u8 in x) {
-    a = ChannelVoiceBit[x];
-    test_and_clear(a, pmonShadow);
 
     ^return process_next_bytecode(x);
 }
