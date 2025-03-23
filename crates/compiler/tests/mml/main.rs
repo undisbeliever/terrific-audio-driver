@@ -13,6 +13,7 @@ mod early_release;
 mod echo;
 mod header;
 mod instruments_and_envelope;
+mod keyon_without_keyoff;
 mod loops;
 mod misc_instructions;
 mod notes;

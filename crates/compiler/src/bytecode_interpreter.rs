@@ -1204,9 +1204,9 @@ impl ChannelState {
 
             opcodes::RESERVED_FOR_CUSTOM_USE => self.disable_channel(),
 
-            opcodes::DISABLE_CHANNEL => self.disable_channel(),
+            opcodes::KEYON_NEXT_NOTE => (),
 
-            opcodes::PADDING_1 => self.disable_channel(),
+            opcodes::DISABLE_CHANNEL => self.disable_channel(),
         }
     }
 
@@ -1321,11 +1321,10 @@ impl ChannelState {
             opcodes::ADJUST_ECHO_I8_LIMIT => Some(4),
             opcodes::SET_ECHO_INVERT => Some(2),
             opcodes::SET_ECHO_DELAY => Some(2),
+            opcodes::KEYON_NEXT_NOTE => Some(1),
 
             opcodes::RESERVED_FOR_CUSTOM_USE => None,
             opcodes::DISABLE_CHANNEL => None,
-
-            opcodes::PADDING_1 => None,
         }
     }
 

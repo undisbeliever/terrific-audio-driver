@@ -102,6 +102,10 @@
       "source": "manual/vibrato-with-delay.mml"
     },
     {
+      "name": "disable_keyoff",
+      "source": "mml/disable-keyoff.mml"
+    },
+    {
       "name": "echo_invert",
       "source": "mml/echo-invert.mml"
     },

@@ -129,6 +129,11 @@ Instructions
  * `call_subroutine_and_disable_vibrato <name>` - Disable vibrato and call the subroutine *name*.
     * Disables vibrato before the subroutine call.
 
+ * `keyon_next_note` - Key-on the next note
+    * If the channel is currently playing a note, `keyon_next_note` will cause the next play-note
+      (play-pitch, play-noise, etc) instruction to key-on without key-off.
+    * This instruction has no effect if the previous note is has beed key-offed.
+
 
 Global instructions
 ===================

@@ -1,0 +1,15 @@
+#Title disable key-off
+
+@1 triangle adsr 12 2 5 8
+@2 sawtooth adsr 12 2 5 8
+
+A v12
+
+; triangle pops
+A @1 K0 g d e g r
+
+; No noticeable pops in sawtooth
+A @2 K0 g d e g r
+
+; Normal key-off behaviour
+A @1 K1 g d e g2

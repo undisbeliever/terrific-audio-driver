@@ -8,10 +8,13 @@ Bytecode changes:
  * `enable_pmod`, `disable_pmod` and `disable_noise` have been combined into a single 2-byte instruction.
    The bytecode assembly is unchanged.
  * Added `set_vibrato_with_delay` instruction
+ * Added `keyon_next_note` instruction
 
 MML changes:
- * Added an optional *delay_in_ticks* argument to the `~` and `MP` vibrato commands.
-
+ * Added an optional *delay_in_ticks* argument to the `~` and `MP` vibrato commands
+ * Added the `K0` disable key-off MML command, allowing key-on without key-off
+   (`Q` quantized notes will still key-off)
+ * Added the `K1` and `K` enable key-off MML commands
 
 
 Version 0.1.0

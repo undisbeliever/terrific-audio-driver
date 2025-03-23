@@ -302,7 +302,7 @@ pub mod opcodes {
         ENABLE_ECHO,
         DISABLE_ECHO,
         REUSE_TEMP_GAIN,
-        PADDING_1,
+        KEYON_NEXT_NOTE,
     );
 
     // Last non play-note opcode
@@ -2507,5 +2507,12 @@ impl<'a> Bytecode<'a> {
             }
             BytecodeContext::MmlPrefix => Err(BytecodeError::CannotSetEchoDelayInMmlPrefix),
         }
+    }
+
+    pub fn keyon_next_note(&mut self) {
+        // Force key-on for note1 of an MML portamento
+        self.state.prev_slurred_note = SlurredNoteState::None;
+
+        emit_bytecode!(self, opcodes::KEYON_NEXT_NOTE);
     }
 }

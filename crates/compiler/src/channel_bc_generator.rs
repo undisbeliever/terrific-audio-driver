@@ -333,6 +333,8 @@ pub(crate) enum Command {
     DisablePitchMod,
     SetEcho(bool),
 
+    SetKeyOff(bool),
+
     SetSongTempo(Bpm),
     SetSongTickClock(TickClock),
 
@@ -428,6 +430,10 @@ enum AfterPlayNote {
         wait: TickCounter,
         rest: TickCounter,
     },
+    WaitEnableKeyOn {
+        wait: TickCounter,
+        rest: TickCounter,
+    },
     KeyOff {
         wait: TickCounter,
         ticks_after_keyoff: TickCounter,
@@ -451,6 +457,7 @@ pub(crate) struct ChannelBcGenerator<'a> {
     detune_cents: DetuneCents,
     mp: MpState,
     quantize: Quantize,
+    keyoff_enabled: bool,
 
     loop_point: Option<LoopPoint>,
 }
@@ -476,6 +483,7 @@ impl<'a> ChannelBcGenerator<'a> {
             mp: MpState::Manual,
             detune_cents: DetuneCents::ZERO,
             quantize: Quantize::None,
+            keyoff_enabled: true,
             loop_point: None,
         }
     }
@@ -568,25 +576,52 @@ impl<'a> ChannelBcGenerator<'a> {
         }
     }
 
-    fn play_note_or_pitch_with_detune(
+    fn broken_chord_play_note_or_pitch_with_detune(
         &mut self,
         note: NoteOrPitch,
         length: PlayNoteTicks,
     ) -> Result<(), ChannelError> {
-        match note {
-            NoteOrPitch::Note(n) => {
-                self.emit_detune_output(self.calculate_detune_for_note(n)?);
-                self.bc.play_note(n, length)?;
+        if self.keyoff_enabled || length.is_slur() {
+            match note {
+                NoteOrPitch::Note(n) => {
+                    self.emit_detune_output(self.calculate_detune_for_note(n)?);
+                    self.bc.play_note(n, length)?;
+                }
+                NoteOrPitch::Pitch(p) => {
+                    // Pitch is not detuned
+                    self.bc.play_pitch(p, length);
+                }
+                NoteOrPitch::PitchFrequency(f) => {
+                    // Pitch is not detuned
+                    let p = f.to_vxpitch(self.bc.get_instrument())?;
+                    self.bc.play_pitch(p, length);
+                }
             }
-            NoteOrPitch::Pitch(p) => {
-                // Pitch is not detuned
-                self.bc.play_pitch(p, length);
+        } else {
+            // key-off is disabled
+            let ticks = match length {
+                PlayNoteTicks::KeyOff(l) => l.ticks(),
+                PlayNoteTicks::NoKeyOff(_) => panic!(),
+            };
+            let length = PlayNoteTicks::NoKeyOff(ticks.try_into()?);
+
+            match note {
+                NoteOrPitch::Note(n) => {
+                    self.emit_detune_output(self.calculate_detune_for_note(n)?);
+                    self.bc.play_note(n, length)?;
+                }
+                NoteOrPitch::Pitch(p) => {
+                    // Pitch is not detuned
+                    self.bc.play_pitch(p, length);
+                }
+                NoteOrPitch::PitchFrequency(f) => {
+                    // Pitch is not detuned
+                    let p = f.to_vxpitch(self.bc.get_instrument())?;
+                    self.bc.play_pitch(p, length);
+                }
             }
-            NoteOrPitch::PitchFrequency(f) => {
-                // Pitch is not detuned
-                let p = f.to_vxpitch(self.bc.get_instrument())?;
-                self.bc.play_pitch(p, length);
-            }
+
+            self.bc.keyon_next_note();
         }
 
         Ok(())
@@ -660,7 +695,7 @@ impl<'a> ChannelBcGenerator<'a> {
     ) -> Result<(PlayNoteTicks, AfterPlayNote), ValueError> {
         let rest_after_note = rest_after_note.0;
 
-        let no_quantize_or_slur = || {
+        let no_quantize_or_slur_keyoff = || {
             let (pn_ticks, wait) = Self::split_note_length(length, false)?;
             Ok((
                 pn_ticks,
@@ -682,7 +717,19 @@ impl<'a> ChannelBcGenerator<'a> {
                     },
                 ))
             }
-            (false, Quantize::None) => no_quantize_or_slur(),
+            (false, Quantize::None) => match self.keyoff_enabled {
+                true => no_quantize_or_slur_keyoff(),
+                false => {
+                    let (pn_ticks, wait) = Self::split_note_length(length, true)?;
+                    Ok((
+                        pn_ticks,
+                        AfterPlayNote::WaitEnableKeyOn {
+                            wait,
+                            rest: rest_after_note,
+                        },
+                    ))
+                }
+            },
             (false, &Quantize::Rest(q)) => {
                 let l = length.value();
                 let note_length = q.quantize(l) + KEY_OFF_TICK_DELAY;
@@ -701,7 +748,7 @@ impl<'a> ChannelBcGenerator<'a> {
                     ))
                 } else {
                     // Note is too short to be quantized
-                    no_quantize_or_slur()
+                    no_quantize_or_slur_keyoff()
                 }
             }
             (false, &Quantize::WithTempGain(q, temp_gain)) => {
@@ -723,7 +770,7 @@ impl<'a> ChannelBcGenerator<'a> {
                     ))
                 } else {
                     // Note is too short to be quantized
-                    no_quantize_or_slur()
+                    no_quantize_or_slur_keyoff()
                 }
             }
         }
@@ -736,6 +783,18 @@ impl<'a> ChannelBcGenerator<'a> {
                     self.wait(wait)?;
                 }
                 self.rest_one_keyoff(rest)
+            }
+            AfterPlayNote::WaitEnableKeyOn { wait, rest } => {
+                if !wait.is_zero() {
+                    self.wait(wait)?;
+                }
+
+                if rest.is_zero() {
+                    self.bc.keyon_next_note();
+                    Ok(())
+                } else {
+                    self.rest_one_keyoff(rest)
+                }
             }
             AfterPlayNote::KeyOff {
                 wait,
@@ -1296,7 +1355,7 @@ impl<'a> ChannelBcGenerator<'a> {
                 self.bc.skip_last_loop()?;
             }
 
-            match self.play_note_or_pitch_with_detune(n, note_length) {
+            match self.broken_chord_play_note_or_pitch_with_detune(n, note_length) {
                 Ok(()) => (),
                 Err(e) => {
                     // Hides an unneeded "loop stack not empty" (or end_loop) error
@@ -1310,7 +1369,7 @@ impl<'a> ChannelBcGenerator<'a> {
 
         if last_note_ticks > 0 {
             // The last note to play is always a keyoff note.
-            self.play_note_or_pitch_with_detune(
+            self.broken_chord_play_note_or_pitch_with_detune(
                 notes[break_point],
                 PlayNoteTicks::KeyOff(BcTicksKeyOff::try_from(last_note_ticks)?),
             )?;
@@ -1825,6 +1884,10 @@ impl<'a> ChannelBcGenerator<'a> {
                 } else {
                     self.bc.disable_echo();
                 }
+            }
+
+            &Command::SetKeyOff(k) => {
+                self.keyoff_enabled = k;
             }
 
             &Command::SetSongTempo(bpm) => {

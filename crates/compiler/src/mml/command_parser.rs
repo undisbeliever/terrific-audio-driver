@@ -2110,6 +2110,15 @@ fn parse_echo(pos: FilePos, p: &mut Parser) -> Command {
     )
 }
 
+fn parse_keyoff(pos: FilePos, p: &mut Parser) -> Command {
+    match_next_token!(p,
+        Token::Number(0) | Token::HexNumber(0) => Command::SetKeyOff(false),
+        Token::Number(1) | Token::HexNumber(1) => Command::SetKeyOff(true),
+        Token::Number(_) | Token::HexNumber(_) => invalid_token_error(p, pos, ValueError::InvalidMmlBool.into()),
+        #_ => Command::SetKeyOff(true)
+    )
+}
+
 fn parse_set_instrument(pos: FilePos, id: IdentifierStr, p: &mut Parser) -> Command {
     match p.instruments_map().get(&id) {
         Some(inst) => Command::SetInstrument(*inst),
@@ -2556,6 +2565,7 @@ fn parse_token(pos: FilePos, token: Token, p: &mut Parser) -> Command {
 
         Token::PitchMod => parse_pitch_mod(pos, p),
         Token::Echo => parse_echo(pos, p),
+        Token::Keyoff => parse_keyoff(pos, p),
 
         Token::SetSongTempo => match parse_unsigned_newtype(pos, p) {
             Some(t) => Command::SetSongTempo(t),

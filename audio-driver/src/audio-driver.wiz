@@ -2583,6 +2583,19 @@ func play_noise(channelIndex: u8 in x, freq_and_keyoff : u8 in a) {
 
 
 // KEEP: X
+func keyon_next_note(channelIndex : u8 in x) {
+    a = ChannelVoiceBit[x];
+    if x >= FIRST_SFX_CHANNEL {
+        test_and_set(a, keyOnMask_sfx);
+        ^return process_next_bytecode(x);
+    }
+
+    test_and_set(a, keyOnMask_music);
+    ^return process_next_bytecode(x);
+}
+
+
+// KEEP: X
 func disable_noise_or_set_pmod(channelIndex : u8 in x, argument: u8 in a) {
     a >>>= 1;
     goto _disable_noise if carry;

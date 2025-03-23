@@ -510,6 +510,17 @@ Numbers can be decimal, or hexadecimal when prefixed with `$` (ie, `$ff`)
 
 <br/>
 
+ * `K` - enable key-off
+ * `K1` - enable key-off
+ * `K0` - disable key-off
+    * Notes will key-on without key-off.
+    * CAUTION: Can cause popping.
+    * CAUTION: `K0 c r` will key-off after the rest.
+    * CAUTION: `Q` quantized notes will still key-off.
+
+
+<br/>
+
  * `\asm { <asm_code> }` - bytecode assembly
     * Instructions can be separated by `|` dividers or newlines.
     * Loops inside `\asm` blocks must be self-contained.
@@ -583,6 +594,7 @@ This audio engine was designed to be simple, to that effect the following limita
     * Setting a minimum tick-clock of 8ms.
     * Subtracting a single tick from every non-slurred note and adding a 1-tick rest after a key-off event.
     * The minimum length of a non-slurred note is 2 ticks.
+    * Keyoff can be disabled with the `K0` MML command
  * All songs and sound effects use the same samples (no sample swapping).
  * Loops and subroutines share a stack.
     * The stack is 21 bytes per channel.

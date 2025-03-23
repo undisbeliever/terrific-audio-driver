@@ -444,8 +444,11 @@ let NO_ARGUMENT_INSTRUCTIONS = [
     reuse_temp_gain,
 
 
-    // padding
-    disable_channel,
+    // Sets the keyOnMask bits for the channel, allowing key-on without key-off
+    // if the channel is currently outputting sound.
+    //
+    // CAUTION: This instruction has no effect if the previous note has been key-offed.
+    keyon_next_note,
 
 
     // Disables the channel

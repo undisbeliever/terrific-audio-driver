@@ -82,6 +82,7 @@ pub enum Token<'a> {
     TempGain(GainMode),
     PitchMod,
     Echo,
+    Keyoff,
     SetSongTempo,
     SetSongTickClock,
     SetLoopPoint,
@@ -268,9 +269,8 @@ fn is_unknown_u8(c: u8) -> bool {
         b'!' | b'@' | b'+' | b'-' | b'[' | b':' | b']' | b'^' | b'&' | b'C' | b's' | b'n'
         | b'l' | b'r' | b'w' | b'o' | b'>' | b'<' | b'v' | b'V' | b'p' | b'Q' | b'q' | b'~'
         | b'A' | b'G' | b'E' | b't' | b'T' | b'L' | b'%' | b'.' | b',' | b'|' | b'_' | b'{'
-        | b'}' | b'B' | b'D' | b'F' | b'I' | b'M' | b'P' | b'N' | b'i' | b'(' | b')' | b'?' => {
-            false
-        }
+        | b'}' | b'B' | b'D' | b'F' | b'I' | b'M' | b'P' | b'N' | b'i' | b'K' | b'(' | b')'
+        | b'?' => false,
         b'\\' => false,
         c if c.is_ascii_whitespace() => false,
         _ => true,
@@ -431,6 +431,7 @@ fn next_token<'a>(scanner: &mut Scanner<'a>) -> Option<TokenWithPosition<'a>> {
         b'~' => one_ascii_token!(Token::ManualVibrato),
         b'A' => one_ascii_token!(Token::SetAdsr),
         b'E' => one_ascii_token!(Token::Echo),
+        b'K' => one_ascii_token!(Token::Keyoff),
         b't' => one_ascii_token!(Token::SetSongTempo),
         b'T' => one_ascii_token!(Token::SetSongTickClock),
         b'L' => one_ascii_token!(Token::SetLoopPoint),
