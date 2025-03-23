@@ -95,6 +95,7 @@ struct ChannelSoA {
     vibrato_tick_counter: u8,
 
     vibrato_pitch_offset_per_tick: u8,
+    vibrato_delay: u8,
     vibrato_tick_counter_start: u8,
     vibrato_half_wavelength: u8,
 
@@ -525,6 +526,7 @@ pub struct ChannelState {
 
     // Partially emulating vibrato
     pub vibrato_pitch_offset_per_tick: u8,
+    pub vibrato_delay: u8,
     pub vibrato_quarter_wavelength_in_ticks: Option<u8>,
 }
 
@@ -566,6 +568,7 @@ impl ChannelState {
             echo: false,
             pitch_mod: false,
             vibrato_pitch_offset_per_tick: 0,
+            vibrato_delay: uninitialised,
             vibrato_quarter_wavelength_in_ticks: None,
         }
     }
@@ -732,6 +735,16 @@ impl ChannelState {
                 let wavelength = read_pc();
 
                 self.vibrato_pitch_offset_per_tick = depth;
+                self.vibrato_delay = 0;
+                self.vibrato_quarter_wavelength_in_ticks = Some(wavelength);
+            }
+            opcodes::SET_VIBRATO_WITH_DELAY => {
+                let depth = read_pc();
+                let delay = read_pc();
+                let wavelength = read_pc();
+
+                self.vibrato_pitch_offset_per_tick = depth;
+                self.vibrato_delay = delay;
                 self.vibrato_quarter_wavelength_in_ticks = Some(wavelength);
             }
             opcodes::SET_VIBRATO_DEPTH_AND_PLAY_NOTE => {
@@ -1194,7 +1207,6 @@ impl ChannelState {
             opcodes::DISABLE_CHANNEL => self.disable_channel(),
 
             opcodes::PADDING_1 => self.disable_channel(),
-            opcodes::PADDING_2 => self.disable_channel(),
         }
     }
 
@@ -1252,6 +1264,7 @@ impl ChannelState {
             opcodes::PORTAMENTO_DOWN | opcodes::PORTAMENTO_UP => None,
             opcodes::PORTAMENTO_PITCH_DOWN | opcodes::PORTAMENTO_PITCH_UP => None,
             opcodes::SET_VIBRATO => Some(3),
+            opcodes::SET_VIBRATO_WITH_DELAY => Some(4),
             opcodes::SET_VIBRATO_DEPTH_AND_PLAY_NOTE => None,
             opcodes::WAIT => None,
             opcodes::REST => None,
@@ -1313,7 +1326,6 @@ impl ChannelState {
             opcodes::DISABLE_CHANNEL => None,
 
             opcodes::PADDING_1 => None,
-            opcodes::PADDING_2 => None,
         }
     }
 
@@ -1889,6 +1901,7 @@ fn build_channel(
             pan: pan_soa,
             invert_flags,
             vibrato_pitch_offset_per_tick: c.vibrato_pitch_offset_per_tick,
+            vibrato_delay: c.vibrato_delay,
             vibrato_tick_counter: vibrato_tick_counter_start,
             vibrato_tick_counter_start,
             vibrato_half_wavelength,
@@ -1951,7 +1964,9 @@ fn unused_channel(channel_index: usize) -> Channel {
                 half_wavelength: UNINITIALISED,
             },
             invert_flags: 0,
+
             vibrato_pitch_offset_per_tick: 0,
+            vibrato_delay: UNINITIALISED,
             vibrato_tick_counter: UNINITIALISED,
             vibrato_tick_counter_start: UNINITIALISED,
             vibrato_half_wavelength: UNINITIALISED,
@@ -2139,6 +2154,7 @@ impl InterpreterOutput {
                     addresses::CHANNEL_VIBRATO_PITCH_OFFSET_PER_TICK,
                     c.vibrato_pitch_offset_per_tick,
                 );
+                soa_write_u8(addresses::CHANNEL_VIBRATO_DELAY, c.vibrato_delay);
                 // Fixed vibrato direction
                 soa_write_u8(addresses::CHANNEL_VIBRATO_DIRECTION, 0);
                 soa_write_u8(

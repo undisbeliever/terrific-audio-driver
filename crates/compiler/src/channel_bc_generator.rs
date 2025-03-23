@@ -10,8 +10,9 @@ use crate::bytecode::{
     PanSlideAmount, PanSlideTicks, PanbrelloAmplitude, PanbrelloQuarterWavelengthInTicks,
     PlayNoteTicks, PlayPitchPitch, PortamentoVelocity, RelativeEchoFeedback, RelativeEchoVolume,
     RelativeFirCoefficient, RelativePan, RelativeVolume, SlurredNoteState, TremoloAmplitude,
-    TremoloQuarterWavelengthInTicks, VibratoPitchOffsetPerTick, VibratoQuarterWavelengthInTicks,
-    VibratoState, Volume, VolumeSlideAmount, VolumeSlideTicks, KEY_OFF_TICK_DELAY,
+    TremoloQuarterWavelengthInTicks, VibratoDelayTicks, VibratoPitchOffsetPerTick,
+    VibratoQuarterWavelengthInTicks, VibratoState, Volume, VolumeSlideAmount, VolumeSlideTicks,
+    KEY_OFF_TICK_DELAY,
 };
 use crate::bytecode_assembler::parse_asm_line;
 use crate::data::{self, UniqueNamesList};
@@ -135,12 +136,14 @@ pub fn merge_pan_commands(p1: Option<PanCommand>, p2: PanCommand) -> PanCommand 
 pub struct MpVibrato {
     pub depth_in_cents: u32,
     pub quarter_wavelength_ticks: VibratoQuarterWavelengthInTicks,
+    pub delay: VibratoDelayTicks,
 }
 
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub struct ManualVibrato {
     pub pitch_offset_per_tick: VibratoPitchOffsetPerTick,
     pub quarter_wavelength_ticks: VibratoQuarterWavelengthInTicks,
+    pub delay: VibratoDelayTicks,
 }
 
 u8_value_newtype!(Quantization, QuantizeOutOfRange, NoQuantize, 0, 8);
@@ -516,8 +519,9 @@ impl<'a> ChannelBcGenerator<'a> {
 
         match po_per_tick.try_into() {
             Ok(po) => Ok(ManualVibrato {
-                quarter_wavelength_ticks: mp.quarter_wavelength_ticks,
                 pitch_offset_per_tick: po,
+                quarter_wavelength_ticks: mp.quarter_wavelength_ticks,
+                delay: mp.delay,
             }),
             Err(_) => Err(ChannelError::MpPitchOffsetTooLarge(po_per_tick)),
         }
@@ -780,7 +784,7 @@ impl<'a> ChannelBcGenerator<'a> {
                     VibratoState::Unchanged => true,
                     VibratoState::Unknown => false,
                     VibratoState::Disabled => true,
-                    VibratoState::Set(v_popt, _) => v_popt == POPT,
+                    VibratoState::Set(v_popt, _, _) => v_popt == POPT,
                 };
 
                 if vibrato_disabled {
@@ -805,11 +809,14 @@ impl<'a> ChannelBcGenerator<'a> {
                         == VibratoState::Set(
                             cv.pitch_offset_per_tick,
                             cv.quarter_wavelength_ticks,
+                            cv.delay,
                         ) =>
                     {
                         self.bc.play_note(note, pn_ticks)?;
                     }
-                    VibratoState::Set(_, qwt) if qwt == cv.quarter_wavelength_ticks => {
+                    VibratoState::Set(_, qwt, delay)
+                        if qwt == cv.quarter_wavelength_ticks && delay == cv.delay =>
+                    {
                         self.bc.set_vibrato_depth_and_play_note(
                             cv.pitch_offset_per_tick,
                             note,
@@ -817,8 +824,11 @@ impl<'a> ChannelBcGenerator<'a> {
                         )?;
                     }
                     _ => {
-                        self.bc
-                            .set_vibrato(cv.pitch_offset_per_tick, cv.quarter_wavelength_ticks);
+                        self.bc.set_vibrato_with_delay(
+                            cv.pitch_offset_per_tick,
+                            cv.quarter_wavelength_ticks,
+                            cv.delay,
+                        );
                         self.bc.play_note(note, pn_ticks)?;
                     }
                 }
@@ -1508,8 +1518,11 @@ impl<'a> ChannelBcGenerator<'a> {
         self.mp = MpState::Manual;
         match v {
             Some(v) => {
-                self.bc
-                    .set_vibrato(v.pitch_offset_per_tick, v.quarter_wavelength_ticks);
+                self.bc.set_vibrato_with_delay(
+                    v.pitch_offset_per_tick,
+                    v.quarter_wavelength_ticks,
+                    v.delay,
+                );
             }
             None => {
                 self.bc.disable_vibrato();

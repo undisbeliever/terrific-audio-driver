@@ -410,22 +410,28 @@ Numbers can be decimal, or hexadecimal when prefixed with `$` (ie, `$ff`)
         * `{{ab}}4,16,0` expands to `[a16 b16]2`
 
  * `~0` - Disable manual vibrato
- * `~<pitch_offset_per_tick>,<quarter_wavelength_in_ticks>` - Manual vibrato
+ * `~<pitch_offset_per_tick>, <quarter_wavelength_in_ticks> [, delay_in_ticks]` - Manual vibrato
     * Generates a `set_vibrato` audio instruction bytecode.
     * Vibrato will add or subtract a `pitch_offset_per_tick` value to the S-DSP `PITCH` register in a sawtooth pattern on every tick.
     * `quarter_wavelength_in_ticks` value controls the rate of vibrato.
+    * `delay_in_ticks` will delay the start of the vibrato on every note, pitch or portamento.
     * `quarter_wavelength_in_ticks` can be prefixed with `l` to specify MML length.  
       For example: `~20,l32` is the same as `~20,3` with a 96 ZenLen.
+    * `delay_in_ticks` can be prefixed with `l` to specify MML length.  
+      For example: `~20,3,l16` is the same as `~20,3,6` with a 96 ZenLen.
     * Manual vibrato will disable MP Vibrato.
     * Manual vibrato will persist across subroutine calls.
 
  * `MP0` - Disable MP vibrato
     * MP Vibrato does not take effect immediately.  Vibrato will be disabled on the next note.
- * `MP<depth_in_cents>,<quarter_wavelength_in_ticks>` - MP Vibrato
+ * `MP<depth_in_cents>, <quarter_wavelength_in_ticks> [, delay_in_ticks]` - MP Vibrato
     * `depth_in_cents` controls the depth of the vibrato, in cents either side of the note (half-extent).
     * `quarter_wavelength_in_ticks` value controls the rate of vibrato.
+    * `delay_in_ticks` will delay the start of the vibrato on every note, pitch or portamento.
     * `quarter_wavelength_in_ticks` can be prefixed with `l` to specify MML length.  
       For example: `MP50,l32` is the same as `MP50,3` with a 96 ZenLen.
+    * `delay_in_ticks` can be prefixed with `l` to specify MML length.  
+      For example: `MP50,3,l16` is the same as `MP530,3,6` with a 96 ZenLen.
     * When MP Vibrato is activated the MML compiler will calculate a `pitch_offset_per_tick` value for each subsequent note played.  This greatly simplifies and speedups the SPC-700 code, but requires the MML compiler to know which instrument is playing the note.
     * MP Vibrato does not take effect immediately.  The vibrato starts on the next note played.
     * CAUTION: MP Vibrato does not persist across subroutine calls.

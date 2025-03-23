@@ -98,6 +98,10 @@
       "source": "manual/tempo-and-timer.mml"
     },
     {
+      "name": "vibrato_with_delay",
+      "source": "manual/vibrato-with-delay.mml"
+    },
+    {
       "name": "echo_invert",
       "source": "mml/echo-invert.mml"
     },

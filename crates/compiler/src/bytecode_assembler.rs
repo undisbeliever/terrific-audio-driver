@@ -133,6 +133,17 @@ where
     Ok((parse_uvnt(arg1)?, parse_uvnt(arg2)?))
 }
 
+fn three_uvnt_arguments<T, U, V>(args: &[&str]) -> Result<(T, U, V), ChannelError>
+where
+    T: UnsignedValueNewType,
+    U: UnsignedValueNewType,
+    V: UnsignedValueNewType,
+{
+    let (arg1, arg2, arg3) = three_arguments(args)?;
+
+    Ok((parse_uvnt(arg1)?, parse_uvnt(arg2)?, parse_uvnt(arg3)?))
+}
+
 fn two_svnt_arguments<T, U>(args: &[&str]) -> Result<(T, U), ChannelError>
 where
     T: SignedValueNewType,
@@ -543,6 +554,7 @@ pub fn parse_asm_line(bc: &mut Bytecode, line: &str) -> Result<(), ChannelError>
        set_vibrato_depth_and_play_note 3 vibrato_depth_and_play_note_argument,
 
        set_vibrato 2 two_uvnt_arguments,
+       set_vibrato_with_delay 3 three_uvnt_arguments,
        disable_vibrato 0 no_arguments,
 
        set_instrument 1 one_argument set_instrument_str,

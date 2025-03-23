@@ -65,6 +65,7 @@ const AUDIO_DRIVER_SYMBOLS: &[(&str, &str)] = &[
     ("channelSoA.nextEventIsKeyOff", "CHANNEL_NEXT_EVENT_IS_KEY_OFF"),
     ("channelSoA.portamento_direction", "CHANNEL_DIRECTION"),
     ("channelSoA.vibrato_pitchOffsetPerTick", "CHANNEL_VIBRATO_PITCH_OFFSET_PER_TICK"),
+    ("channelSoA.vibrato_delay", "CHANNEL_VIBRATO_DELAY"),
     ("channelSoA.vibrato_direction", "CHANNEL_VIBRATO_DIRECTION"),
     ("channelSoA.vibrato_tickCounter", "CHANNEL_VIBRATO_TICK_COUNTER"),
     ("channelSoA.vibrato_tickCounterStart", "CHANNEL_VIBRATO_TICK_COUNTER_START"),

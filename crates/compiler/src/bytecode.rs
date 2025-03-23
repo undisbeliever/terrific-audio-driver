@@ -64,6 +64,12 @@ u8_value_newtype!(
     128
 );
 
+u8_value_newtype!(
+    VibratoDelayTicks,
+    VibratoDelayTicksOutOfRange,
+    NoVibratoDelayTicks
+);
+
 i16_non_zero_value_newtype!(
     VolumeSlideAmount,
     VolumeSlideAmountOutOfRange,
@@ -240,6 +246,7 @@ pub mod opcodes {
         PORTAMENTO_PITCH_DOWN,
         PORTAMENTO_PITCH_UP,
         SET_VIBRATO,
+        SET_VIBRATO_WITH_DELAY,
         SET_VIBRATO_DEPTH_AND_PLAY_NOTE,
         PLAY_PITCH,
         PLAY_NOISE,
@@ -296,7 +303,6 @@ pub mod opcodes {
         DISABLE_ECHO,
         REUSE_TEMP_GAIN,
         PADDING_1,
-        PADDING_2,
     );
 
     // Last non play-note opcode
@@ -912,7 +918,11 @@ pub enum VibratoState {
     Unknown,
     // Disabled with an unknown value
     Disabled,
-    Set(VibratoPitchOffsetPerTick, VibratoQuarterWavelengthInTicks),
+    Set(
+        VibratoPitchOffsetPerTick,
+        VibratoQuarterWavelengthInTicks,
+        VibratoDelayTicks,
+    ),
 }
 
 impl VibratoState {
@@ -921,7 +931,7 @@ impl VibratoState {
             Self::Unchanged => false,
             Self::Unknown => false,
             Self::Disabled => false,
-            Self::Set(pitch_offset_per_tick, _) => pitch_offset_per_tick.as_u8() > 0,
+            Self::Set(pitch_offset_per_tick, _, _) => pitch_offset_per_tick.as_u8() > 0,
         }
     }
 
@@ -934,7 +944,7 @@ impl VibratoState {
                     VibratoState::Disabled
                 }
             }
-            VibratoState::Set(_, qwt) => VibratoState::Set(depth, *qwt),
+            VibratoState::Set(_, qwt, delay) => VibratoState::Set(depth, *qwt, *delay),
         }
     }
 
@@ -943,7 +953,9 @@ impl VibratoState {
             VibratoState::Unchanged => VibratoState::Disabled,
             VibratoState::Unknown => VibratoState::Disabled,
             VibratoState::Disabled => VibratoState::Disabled,
-            VibratoState::Set(_, qwt) => VibratoState::Set(VibratoPitchOffsetPerTick::new(0), *qwt),
+            VibratoState::Set(_, qwt, delay) => {
+                VibratoState::Set(VibratoPitchOffsetPerTick::new(0), *qwt, *delay)
+            }
         }
     }
 }
@@ -1542,7 +1554,11 @@ impl<'a> Bytecode<'a> {
         pitch_offset_per_tick: VibratoPitchOffsetPerTick,
         quarter_wavelength_ticks: VibratoQuarterWavelengthInTicks,
     ) {
-        self.state.vibrato = VibratoState::Set(pitch_offset_per_tick, quarter_wavelength_ticks);
+        self.state.vibrato = VibratoState::Set(
+            pitch_offset_per_tick,
+            quarter_wavelength_ticks,
+            VibratoDelayTicks::new(0),
+        );
 
         emit_bytecode!(
             self,
@@ -1550,6 +1566,32 @@ impl<'a> Bytecode<'a> {
             pitch_offset_per_tick.as_u8(),
             quarter_wavelength_ticks.as_u8()
         );
+    }
+
+    pub fn set_vibrato_with_delay(
+        &mut self,
+        pitch_offset_per_tick: VibratoPitchOffsetPerTick,
+        quarter_wavelength_ticks: VibratoQuarterWavelengthInTicks,
+        delay: VibratoDelayTicks,
+    ) {
+        self.state.vibrato =
+            VibratoState::Set(pitch_offset_per_tick, quarter_wavelength_ticks, delay);
+
+        match delay.as_u8() {
+            0 => emit_bytecode!(
+                self,
+                opcodes::SET_VIBRATO,
+                pitch_offset_per_tick.as_u8(),
+                quarter_wavelength_ticks.as_u8()
+            ),
+            delay => emit_bytecode!(
+                self,
+                opcodes::SET_VIBRATO_WITH_DELAY,
+                pitch_offset_per_tick.as_u8(),
+                delay,
+                quarter_wavelength_ticks.as_u8()
+            ),
+        }
     }
 
     pub fn disable_vibrato(&mut self) {

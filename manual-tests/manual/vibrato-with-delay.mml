@@ -1,0 +1,23 @@
+; Vibrato with delay test
+;
+; Test Instruction:
+;   * Record this song with an audio recorder
+;   * Inspect the recording with a spectrogram viewer with a small window size
+;   * Count the number of ticks before the VxPITCH changes
+;   * Confirm they match the numbers below
+
+#Title Vibrato with delay test
+#Timer 256
+
+@1 sine gain F127
+
+A px-64 v10 @1
+A ~180,2    c r%2	; 1 c4 tick before VxPITCH changes
+A ~180,2,1  c r%2	; 2 c4 ticks
+A ~180,2,2  c r%2	; 3 c4 ticks
+A ~180,2,12 c r%2	; 13 c4 ticks
+A ~180,2,50 c r%2	; no vibrato
+
+; The right channel is the tick clock
+B px+64 v4 @1
+B [ c%1& v0 w%1 v4 ]65

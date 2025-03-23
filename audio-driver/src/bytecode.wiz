@@ -106,12 +106,22 @@ let INSTRUCTIONS_WITH_ARGUMENTS = [
     // If pppppppp is 0, vibrato is disabled.
     //
     // NOTES:
+    //  * This instruction will set the vibrato delay to 0 ticks
     //  * The total wavelength of the vibrato is `tttttttt * 4`.
     //  * If `tttttttt` is > 128, the vibrato is unbalanced.
     //  * Vibrato has no range checking and may overflow or underflow the PITCH register.
     //  * Portamento overrides vibrato
     //  * Vibrato is disabled when calling or returning from a subroutine
     set_vibrato,
+
+
+    // parameters: pppppppp dddddddd tttttttt
+    //      pppppppp = pitch offset per tick.
+    //      dddddddd = vibrato delay in ticks (delays vibrato on every note)
+    //      tttttttt = quarter wavelength ticks.  MUST BE >= 1 and <= 128.
+    //
+    // See `set_vibrato`
+    set_vibrato_with_delay,
 
 
     // parameters: pppppppp nnnnnnnO llllllll
@@ -435,7 +445,6 @@ let NO_ARGUMENT_INSTRUCTIONS = [
 
 
     // padding
-    disable_channel,
     disable_channel,
 
 

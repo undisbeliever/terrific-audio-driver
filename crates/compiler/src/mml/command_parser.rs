@@ -14,8 +14,9 @@ use crate::bytecode::{
     DetuneValue, EarlyReleaseMinTicks, EarlyReleaseTicks, LoopCount, NoiseFrequency, Pan,
     PanSlideTicks, PanbrelloQuarterWavelengthInTicks, PlayNoteTicks, PlayPitchPitch,
     RelativeEchoFeedback, RelativeEchoVolume, RelativeFirCoefficient, TremoloAmplitude,
-    TremoloQuarterWavelengthInTicks, VibratoPitchOffsetPerTick, VibratoQuarterWavelengthInTicks,
-    Volume, VolumeSlideAmount, VolumeSlideTicks, KEY_OFF_TICK_DELAY,
+    TremoloQuarterWavelengthInTicks, VibratoDelayTicks, VibratoPitchOffsetPerTick,
+    VibratoQuarterWavelengthInTicks, Volume, VolumeSlideAmount, VolumeSlideTicks,
+    KEY_OFF_TICK_DELAY,
 };
 use crate::channel_bc_generator::{
     merge_pan_commands, merge_volumes_commands, relative_pan, relative_volume, Command,
@@ -528,6 +529,36 @@ fn parse_comma_ticks<T: CommaTicks>(pos: FilePos, p: &mut Parser) -> Option<T> {
         )
     } else {
         p.add_error(pos, T::NO_COMMA_ERROR.into());
+        None
+    }
+}
+
+fn parse_optional_comma_ticks<T: UnsignedValueNewType>(p: &mut Parser) -> Option<T> {
+    let comma_pos = p.peek_pos();
+
+    if next_token_matches!(p, Token::Comma) {
+        let after_pos = p.peek_pos();
+
+        match_next_token!(
+            p,
+
+            Token::SetDefaultLength => parse_l_ticks_argument(comma_pos, p),
+
+            &Token::Number(n) | &Token::HexNumber(n) => {
+                match n.try_into() {
+                    Ok(o) => Some(o),
+                    Err(e) => {
+                        p.add_error(after_pos, e.into());
+                        None
+                    }
+                }
+            },
+            #_ => {
+                p.add_error(comma_pos, T::MISSING_ERROR.into());
+                None
+            }
+        )
+    } else {
         None
     }
 }
@@ -1930,6 +1961,10 @@ fn parse_broken_chord(p: &mut Parser) -> Command {
     }
 }
 
+fn parse_optional_vibrato_delay(p: &mut Parser) -> VibratoDelayTicks {
+    parse_optional_comma_ticks(p).unwrap_or(VibratoDelayTicks::new(0))
+}
+
 fn parse_mp_vibrato(pos: FilePos, p: &mut Parser) -> Option<MpVibrato> {
     match_next_token!(
         p,
@@ -1942,6 +1977,7 @@ fn parse_mp_vibrato(pos: FilePos, p: &mut Parser) -> Option<MpVibrato> {
             parse_comma_ticks(pos, p).map(|qwt| MpVibrato {
                 depth_in_cents,
                 quarter_wavelength_ticks: qwt,
+                delay: parse_optional_vibrato_delay(p),
             })
         },
         #_ => {
@@ -1961,6 +1997,7 @@ fn parse_manual_vibrato(pos: FilePos, p: &mut Parser) -> Option<ManualVibrato> {
         parse_comma_ticks(pos, p).map(|qwt| ManualVibrato {
             pitch_offset_per_tick,
             quarter_wavelength_ticks: qwt,
+            delay: parse_optional_vibrato_delay(p),
         })
     }
 }

@@ -30,3 +30,10 @@ A MP0     c d !s4 g a r
 ; The ticks argument is an MML length when prefixed with `l`
 A MP150,l64 c d !s4 g a r
 A ~80,l32   c d !s4 g a r
+
+; The optional third argument is the note delay in ticks
+; The delay argument is an MML length when prefixed with `l`
+A MP150,2,16  c d e
+A MP150,2,l12 f g a r
+A   ~80,2,16  c d e
+A   ~80,2,l12 f g a r

@@ -30,6 +30,9 @@ Instructions
  * `set_vibrato <pitch_offset_per_tick> <quarter_wavelength>` - Enable vibrato
     * Vibrato will add or subtract *pitch_offset_per_tick* value to the S-DSP PITCH register in a sawtooth pattern on every tick.
     * *quarter_wavelength* controls the rate of the vibrato.
+    * The vibrato delay will be set to 0 ticks.
+ * `set_vibrato_with_delay <pitch_offset_per_tick> <quarter_wavelength> <delay>` - Enable vibrato with delay
+    * The vibrato effect will be delayed on every note until *delay* ticks have passed since the last play note, pitch, noise or portamento instruction.
  * `set_vibrato_depth_and_play_note <pitch_offset_per_tick> <note> <ko> <duration>` - Set vibrato depth and play a note (vibrato rate is unchanged)
 
  * `set_instrument <name>` - Set the channel's instrument to *name*.

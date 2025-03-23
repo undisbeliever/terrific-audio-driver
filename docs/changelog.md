@@ -7,6 +7,11 @@ Version 0.1.1
 Bytecode changes:
  * `enable_pmod`, `disable_pmod` and `disable_noise` have been combined into a single 2-byte instruction.
    The bytecode assembly is unchanged.
+ * Added `set_vibrato_with_delay` instruction
+
+MML changes:
+ * Added an optional *delay_in_ticks* argument to the `~` and `MP` vibrato commands.
+
 
 
 Version 0.1.0

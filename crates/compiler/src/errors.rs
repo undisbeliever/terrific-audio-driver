@@ -11,8 +11,9 @@ use crate::bytecode::{
     InstrumentId, LoopCount, NoiseFrequency, Pan, PanSlideAmount, PanSlideTicks,
     PanbrelloAmplitude, PanbrelloQuarterWavelengthInTicks, PlayPitchPitch, PortamentoVelocity,
     RelativeEchoFeedback, RelativeEchoVolume, RelativeFirCoefficient, RelativePan, RelativeVolume,
-    TremoloAmplitude, TremoloQuarterWavelengthInTicks, VibratoPitchOffsetPerTick,
-    VibratoQuarterWavelengthInTicks, Volume, VolumeSlideAmount, VolumeSlideTicks,
+    TremoloAmplitude, TremoloQuarterWavelengthInTicks, VibratoDelayTicks,
+    VibratoPitchOffsetPerTick, VibratoQuarterWavelengthInTicks, Volume, VolumeSlideAmount,
+    VolumeSlideTicks,
 };
 use crate::channel_bc_generator::{
     DetuneCents, FineQuantization, PortamentoSpeed, Quantization, MAX_BROKEN_CHORD_NOTES,
@@ -165,6 +166,7 @@ pub enum ValueError {
     EarlyReleaseMinTicksOutOfRange(u32),
     VibratoPitchOffsetPerTickOutOfRange(u32),
     VibratoQuarterWavelengthOutOfRange(u32),
+    VibratoDelayTicksOutOfRange(u32),
 
     DetuneValueOutOfRange(i32),
     DetuneCentsOutOfRange(i32),
@@ -271,6 +273,7 @@ pub enum ValueError {
     NoMpDepth,
     NoVibratoPitchOffsetPerTick,
     NoVibratoQuarterWavelength,
+    NoVibratoDelayTicks,
     NoEchoLength,
     NoEchoEdl,
     NoEchoVolume,
@@ -1037,6 +1040,9 @@ impl Display for ValueError {
                     VibratoQuarterWavelengthInTicks
                 )
             }
+            Self::VibratoDelayTicksOutOfRange(v) => {
+                out_of_range!("vibrato delay ticks", v, VibratoDelayTicks)
+            }
             Self::DetuneValueOutOfRange(v) => {
                 out_of_range!("detune", v, DetuneValue)
             }
@@ -1238,6 +1244,7 @@ impl Display for ValueError {
             Self::NoMpDepth => write!(f, "no MP depth"),
             Self::NoVibratoPitchOffsetPerTick => write!(f, "no vibrato pitch-offset-per-tick"),
             Self::NoVibratoQuarterWavelength => write!(f, "no vibrato quarter-wavelength"),
+            Self::NoVibratoDelayTicks => write!(f, "no vibrato delay ticks"),
             Self::NoEchoLength => write!(f, "no echo length"),
             Self::NoEchoEdl => write!(f, "no echo EDL"),
             Self::NoEchoVolume => write!(f, "no echo volume value"),

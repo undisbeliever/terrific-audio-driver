@@ -358,6 +358,10 @@ in firstpage {
 
     // Channel variables that do not fit in zeropage
     namespace channelSoA {
+        // Delay before vibrato is applied to the current note (using `ticksAfterNote`).
+        // (ticks)
+        var vibrato_delay : [u8 ; N_CHANNELS];
+
         // Countdown for vibrato direction change
         // (ticks)
         var vibrato_tickCounter : [u8 ; N_CHANNELS];
@@ -423,12 +427,6 @@ in firstpage {
         var panEffect_offset_h : [u8 ; N_CHANNELS];
         var panEffect_halfWavelength : [u8 ; N_CHANNELS];
 
-
-        // Offset between the note to play and the pitch table.
-        //
-        // NOTE: Adding `instPitchOffset` to the note to play is allowed to an can overflow.
-        var instPitchOffset : [u8 ; N_CHANNELS];
-
         // Early release comparison argument
         // (the other 2 arguments are in lastvarpage)
         var earlyRelease_cmp : [u8 ; N_CHANNELS];
@@ -442,6 +440,12 @@ in firstpage {
 
 in lastvarpage {
     namespace channelSoA {
+        // Offset between the note to play and the pitch table.
+        //
+        // NOTE: Adding `instPitchOffset` to the note to play is allowed to an can overflow.
+        var instPitchOffset : [u8 ; N_CHANNELS];
+
+
         // set_early_release instruction arguments
         var earlyRelease_minTicks : [u8 ; N_CHANNELS];
         var earlyRelease_gain : [u8 ; N_CHANNELS];
@@ -2134,43 +2138,47 @@ inline func _process_vibrato__inline(channelIndex : u8 in x) {
         // Vibrato is disabled if pitch-offset-per-tick is 0
         y = channelSoA.vibrato_pitchOffsetPerTick[x];
         if !zero {
-            a = channelSoA.vibrato_direction[x] as u8;
-            a >>>= 1;
+            a = channelSoA.ticksAfterNote[x];
+            if a >= channelSoA.vibrato_delay[x] {
 
-            if !carry {
-                // Add Y to pitch_l
-                // carry clear
-                a = y +# channelSoA.virtualChannels.pitch_l[x];
-                if carry {
-                    channelSoA.virtualChannels.pitch_h[x]++;
-                }
-            }
-            else {
-                // Subtract pitchOffsetPerTick from pitch_l
-                // (uses 1 less byte than reverse subtract Y, with the same CPU cycle count)
-                // carry set
-                a = channelSoA.virtualChannels.pitch_l[x] -# channelSoA.vibrato_pitchOffsetPerTick[x];
+                a = channelSoA.vibrato_direction[x] as u8;
+                a >>>= 1;
+
                 if !carry {
-                    channelSoA.virtualChannels.pitch_h[x]--;
+                    // Add Y to pitch_l
+                    // carry clear
+                    a = y +# channelSoA.virtualChannels.pitch_l[x];
+                    if carry {
+                        channelSoA.virtualChannels.pitch_h[x]++;
+                    }
                 }
-            }
+                else {
+                    // Subtract pitchOffsetPerTick from pitch_l
+                    // (uses 1 less byte than reverse subtract Y, with the same CPU cycle count)
+                    // carry set
+                    a = channelSoA.virtualChannels.pitch_l[x] -# channelSoA.vibrato_pitchOffsetPerTick[x];
+                    if !carry {
+                        channelSoA.virtualChannels.pitch_h[x]--;
+                    }
+                }
 
-            channelSoA.virtualChannels.pitch_l[x] = a;
+                channelSoA.virtualChannels.pitch_l[x] = a;
 
-            direct_page = true;
+                direct_page = true;
 
-            _dp_csv_tickCounter[x]--;
-            if zero {
-                _dp_csv_tickCounter[x] = a = _dp_csv_halfWavelength[x];
+                _dp_csv_tickCounter[x]--;
+                if zero {
+                    _dp_csv_tickCounter[x] = a = _dp_csv_halfWavelength[x];
 
+                    direct_page = false;
+
+                    channelSoA.vibrato_direction[x]++;
+                }
                 direct_page = false;
 
-                channelSoA.vibrato_direction[x]++;
+                // Set S-DSP voice registers dirty bit
+                voiceChannelsDirty_tmp $ 7 = true;
             }
-            direct_page = false;
-
-            // Set S-DSP voice registers dirty bit
-            voiceChannelsDirty_tmp $ 7 = true;
         }
     }
 }
@@ -2721,6 +2729,33 @@ func __portamento_pitch(channelIndex : u8 in x, targetPitch_l : u8 in a, directi
 func set_vibrato(channelIndex : u8 in x, pitchOffsetPerTick: u8 in a) {
     channelSoA.vibrato_pitchOffsetPerTick[x] = a;
 
+    // Y = 0
+    a = y;
+    return _set_vibrato_delay_and_wavelength(x, a);
+}
+
+
+
+// IN: Y = 0
+// KEEP: X
+#[fallthrough]
+func set_vibrato_with_delay(channelIndex : u8 in x, pitchOffsetPerTick: u8 in a) {
+    channelSoA.vibrato_pitchOffsetPerTick[x] = a;
+
+    // Read vibrato-delay-in-ticks parameter
+    // Y = 0
+    a = instructionPtr[y];
+    instructionPtr++;
+
+// Fallthrough into _set_vibrato_delay_and_wavelength()
+}
+
+
+// IN: Y = 0
+// KEEP: X
+#[fallthrough]
+func _set_vibrato_delay_and_wavelength(channelIndex : u8 in x, vibratoDelay: u8 in a) {
+    channelSoA.vibrato_delay[x] = a;
 
     // Read quarterWavelengthInTicks parameter
     // Y = 0
