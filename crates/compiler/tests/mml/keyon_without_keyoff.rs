@@ -18,8 +18,6 @@ fn note() {
             "keyon_next_note",
         ],
     );
-
-    assert_line_matches_bytecode("K0 c r", &["play_note c4 no_keyoff 24", "rest 24"]);
 }
 
 #[test]
@@ -49,8 +47,6 @@ fn pitch() {
             "keyon_next_note",
         ],
     );
-
-    assert_line_matches_bytecode("K0 P$1000 r", &["play_pitch $1000 no_keyoff 24", "rest 24"]);
 }
 
 #[test]
@@ -80,8 +76,6 @@ fn pitch_frequency() {
             "keyon_next_note",
         ],
     );
-
-    assert_line_matches_bytecode("K0 PF500 r", &["play_pitch $1000 no_keyoff 24", "rest 24"]);
 }
 
 #[test]
@@ -111,8 +105,6 @@ fn sample() {
             "keyon_next_note",
         ],
     );
-
-    assert_line_matches_bytecode("K0 s40 r", &["play_note 40 no_keyoff 24", "rest 24"]);
 }
 
 #[test]
@@ -142,8 +134,6 @@ fn noise() {
             "keyon_next_note",
         ],
     );
-
-    assert_line_matches_bytecode("K0 N7 r", &["play_noise 7 no_keyoff 24", "rest 24"]);
 }
 
 #[test]
@@ -174,15 +164,6 @@ fn portamento() {
             "keyon_next_note",
         ],
     );
-
-    assert_line_matches_bytecode(
-        "K0 {cd} r",
-        &[
-            "play_note c4 no_keyoff 1",
-            "portamento d4 no_keyoff +12 23",
-            "rest 24",
-        ],
-    );
 }
 
 #[test]
@@ -198,15 +179,6 @@ fn portamento_pitch() {
             // &
             "portamento_pitch $1200 no_keyoff +13 40",
             "keyon_next_note",
-        ],
-    );
-
-    assert_line_matches_bytecode(
-        "K0 {P$2000 P$1000} r",
-        &[
-            "play_pitch $2000 no_keyoff 1",
-            "portamento_pitch $1000 no_keyoff -186 23",
-            "rest 24",
         ],
     );
 }
@@ -292,43 +264,57 @@ fn broken_chord_no_tie() {
 }
 
 #[test]
+fn test_one_rest_optimisation() {
+    assert_line_matches_bytecode("K0 c r", &["play_note c4 keyoff 48"]);
+
+    assert_line_matches_bytecode("K0 c%100 r%25", &["play_note c4 keyoff 125"]);
+
+    assert_line_matches_bytecode(
+        "K0 c%100 r%200 ^%300",
+        &["play_note c4 no_keyoff 256", "wait 87", "rest 257"],
+    );
+
+    assert_line_matches_bytecode("K0 P$1000 r", &["play_pitch $1000 keyoff 48"]);
+
+    assert_line_matches_bytecode("K0 PF500 r", &["play_pitch $1000 keyoff 48"]);
+
+    assert_line_matches_bytecode("K0 s40 r", &["play_note 40 keyoff 48"]);
+
+    assert_line_matches_bytecode("K0 N7 r", &["play_noise 7 keyoff 48"]);
+
+    assert_line_matches_bytecode(
+        "K0 {cd} r",
+        &["play_note c4 no_keyoff 1", "portamento d4 keyoff +12 47"],
+    );
+
+    assert_line_matches_bytecode(
+        "K0 {P$2000 P$1000} r",
+        &[
+            "play_pitch $2000 no_keyoff 1",
+            "portamento_pitch $1000 keyoff -186 47",
+        ],
+    );
+}
+
+#[test]
 fn test_two_rests_bugfix() {
-    assert_line_matches_bytecode(
-        "K0 c r r",
-        &["play_note c4 no_keyoff 24", "rest 24", "rest 24"],
-    );
+    assert_line_matches_bytecode("K0 c r r", &["play_note c4 keyoff 48", "rest 24"]);
 
-    assert_line_matches_bytecode(
-        "K0 c r ^ r ^",
-        &["play_note c4 no_keyoff 24", "rest 48", "rest 48"],
-    );
+    assert_line_matches_bytecode("K0 c r ^ r ^", &["play_note c4 keyoff 72", "rest 48"]);
 
-    assert_line_matches_bytecode(
-        "K0 P$1000 r r",
-        &["play_pitch $1000 no_keyoff 24", "rest 24", "rest 24"],
-    );
+    assert_line_matches_bytecode("K0 P$1000 r r", &["play_pitch $1000 keyoff 48", "rest 24"]);
 
-    assert_line_matches_bytecode(
-        "K0 PF500 r r",
-        &["play_pitch $1000 no_keyoff 24", "rest 24", "rest 24"],
-    );
+    assert_line_matches_bytecode("K0 PF500 r r", &["play_pitch $1000 keyoff 48", "rest 24"]);
 
-    assert_line_matches_bytecode(
-        "K0 s40 r r",
-        &["play_note 40 no_keyoff 24", "rest 24", "rest 24"],
-    );
+    assert_line_matches_bytecode("K0 s40 r r", &["play_note 40 keyoff 48", "rest 24"]);
 
-    assert_line_matches_bytecode(
-        "K0 N7 r r",
-        &["play_noise 7 no_keyoff 24", "rest 24", "rest 24"],
-    );
+    assert_line_matches_bytecode("K0 N7 r r", &["play_noise 7 keyoff 48", "rest 24"]);
 
     assert_line_matches_bytecode(
         "K0 {cd} r r",
         &[
             "play_note c4 no_keyoff 1",
-            "portamento d4 no_keyoff +12 23",
-            "rest 24",
+            "portamento d4 keyoff +12 47",
             "rest 24",
         ],
     );
@@ -337,8 +323,7 @@ fn test_two_rests_bugfix() {
         "K0 {P$2000 P$1000} r r",
         &[
             "play_pitch $2000 no_keyoff 1",
-            "portamento_pitch $1000 no_keyoff -186 23",
-            "rest 24",
+            "portamento_pitch $1000 keyoff -186 47",
             "rest 24",
         ],
     );

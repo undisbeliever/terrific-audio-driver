@@ -432,7 +432,6 @@ enum AfterPlayNote {
     },
     WaitEnableKeyOn {
         wait: TickCounter,
-        rest: TickCounter,
     },
     KeyOff {
         wait: TickCounter,
@@ -720,14 +719,23 @@ impl<'a> ChannelBcGenerator<'a> {
             (false, Quantize::None) => match self.keyoff_enabled {
                 true => no_quantize_or_slur_keyoff(),
                 false => {
-                    let (pn_ticks, wait) = Self::split_note_length(length, true)?;
-                    Ok((
-                        pn_ticks,
-                        AfterPlayNote::WaitEnableKeyOn {
-                            wait,
-                            rest: rest_after_note,
-                        },
-                    ))
+                    if rest_after_note.is_zero() {
+                        // No rest, slur note and emit a `keyon_next_note` instruction.
+                        let (pn_ticks, wait) = Self::split_note_length(length, true)?;
+                        Ok((pn_ticks, AfterPlayNote::WaitEnableKeyOn { wait }))
+                    } else {
+                        // Join note + rest and do not emit the `keyon_next_note` instruction.
+                        let (pn_ticks, wait) =
+                            Self::split_note_length(length + rest_after_note, false)?;
+
+                        Ok((
+                            pn_ticks,
+                            AfterPlayNote::KeyOff {
+                                wait,
+                                ticks_after_keyoff: TickCounter::new(0),
+                            },
+                        ))
+                    }
                 }
             },
             (false, &Quantize::Rest(q)) => {
@@ -784,17 +792,13 @@ impl<'a> ChannelBcGenerator<'a> {
                 }
                 self.rest_one_keyoff(rest)
             }
-            AfterPlayNote::WaitEnableKeyOn { wait, rest } => {
+            AfterPlayNote::WaitEnableKeyOn { wait } => {
                 if !wait.is_zero() {
                     self.wait(wait)?;
                 }
 
-                if rest.is_zero() {
-                    self.bc.keyon_next_note();
-                    Ok(())
-                } else {
-                    self.rest_one_keyoff(rest)
-                }
+                self.bc.keyon_next_note();
+                Ok(())
             }
             AfterPlayNote::KeyOff {
                 wait,
