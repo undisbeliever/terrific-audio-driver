@@ -6,10 +6,10 @@
 A v12
 
 ; triangle pops
-A @1 K0 g d e g r
+A @1 K0 g d e g r r8
 
 ; No noticeable pops in sawtooth
-A @2 K0 g d e g r
+A @2 K0 g d e g r r8
 
 ; Normal key-off behaviour
-A @1 K1 g d e g2
+A @1 K1 g d e g2 r8

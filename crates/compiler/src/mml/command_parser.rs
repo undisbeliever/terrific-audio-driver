@@ -95,6 +95,7 @@ mod parser {
         state: State,
 
         default_length: TickCounter,
+        keyoff_enabled: bool,
 
         tick_counter: TickCounterWithLoopFlag,
         sections_tick_counters: Vec<TickCounterWithLoopFlag>,
@@ -143,6 +144,7 @@ mod parser {
                 },
 
                 default_length: zenlen.starting_length(),
+                keyoff_enabled: true,
 
                 tick_counter: TickCounterWithLoopFlag::default(),
                 sections_tick_counters: Vec::with_capacity(n_sections),
@@ -243,6 +245,14 @@ mod parser {
 
         pub(super) fn default_length(&self) -> TickCounter {
             self.default_length
+        }
+
+        pub(super) fn is_keyoff_enabled(&self) -> bool {
+            self.keyoff_enabled
+        }
+
+        pub(super) fn set_keyoff_enabled(&mut self, keyoff: bool) {
+            self.keyoff_enabled = keyoff;
         }
 
         pub(super) fn process_new_line(&mut self, r: LineIndexRange) {
@@ -1595,9 +1605,9 @@ fn parse_rests_after_rest(p: &mut Parser) -> TickCounter {
 }
 
 fn parse_rest_ticks_after_note(is_slur: bool, p: &mut Parser) -> RestTicksAfterNote {
-    match is_slur {
-        false => RestTicksAfterNote(parse_rests_after_rest(p)),
-        true => {
+    match (is_slur, p.is_keyoff_enabled()) {
+        (false, true) => RestTicksAfterNote(parse_rests_after_rest(p)),
+        (true, _) | (false, false) => {
             if next_token_matches!(p, Token::Rest) {
                 RestTicksAfterNote(parse_tracked_length(p) + parse_ties(p))
             } else {
@@ -2111,12 +2121,19 @@ fn parse_echo(pos: FilePos, p: &mut Parser) -> Command {
 }
 
 fn parse_keyoff(pos: FilePos, p: &mut Parser) -> Command {
-    match_next_token!(p,
-        Token::Number(0) | Token::HexNumber(0) => Command::SetKeyOff(false),
-        Token::Number(1) | Token::HexNumber(1) => Command::SetKeyOff(true),
-        Token::Number(_) | Token::HexNumber(_) => invalid_token_error(p, pos, ValueError::InvalidMmlBool.into()),
-        #_ => Command::SetKeyOff(true)
-    )
+    let keyoff = match_next_token!(p,
+        Token::Number(0) | Token::HexNumber(0) => false,
+        Token::Number(1) | Token::HexNumber(1) => true,
+        Token::Number(_) | Token::HexNumber(_) => {
+            p.add_error(pos, ValueError::InvalidMmlBool.into());
+            true
+        },
+        #_ => true
+    );
+
+    p.set_keyoff_enabled(keyoff);
+
+    Command::SetKeyOff(keyoff)
 }
 
 fn parse_set_instrument(pos: FilePos, id: IdentifierStr, p: &mut Parser) -> Command {

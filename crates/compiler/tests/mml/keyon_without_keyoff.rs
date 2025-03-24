@@ -292,6 +292,101 @@ fn broken_chord_no_tie() {
 }
 
 #[test]
+fn test_two_rests_bugfix() {
+    assert_line_matches_bytecode(
+        "K0 c r r",
+        &["play_note c4 no_keyoff 24", "rest 24", "rest 24"],
+    );
+
+    assert_line_matches_bytecode(
+        "K0 c r ^ r ^",
+        &["play_note c4 no_keyoff 24", "rest 48", "rest 48"],
+    );
+
+    assert_line_matches_bytecode(
+        "K0 P$1000 r r",
+        &["play_pitch $1000 no_keyoff 24", "rest 24", "rest 24"],
+    );
+
+    assert_line_matches_bytecode(
+        "K0 PF500 r r",
+        &["play_pitch $1000 no_keyoff 24", "rest 24", "rest 24"],
+    );
+
+    assert_line_matches_bytecode(
+        "K0 s40 r r",
+        &["play_note 40 no_keyoff 24", "rest 24", "rest 24"],
+    );
+
+    assert_line_matches_bytecode(
+        "K0 N7 r r",
+        &["play_noise 7 no_keyoff 24", "rest 24", "rest 24"],
+    );
+
+    assert_line_matches_bytecode(
+        "K0 {cd} r r",
+        &[
+            "play_note c4 no_keyoff 1",
+            "portamento d4 no_keyoff +12 23",
+            "rest 24",
+            "rest 24",
+        ],
+    );
+
+    assert_line_matches_bytecode(
+        "K0 {P$2000 P$1000} r r",
+        &[
+            "play_pitch $2000 no_keyoff 1",
+            "portamento_pitch $1000 no_keyoff -186 23",
+            "rest 24",
+            "rest 24",
+        ],
+    );
+
+    assert_line_matches_bytecode(
+        "K0 {{ceg}} r r",
+        &[
+            "start_loop",
+            "play_note c4 no_keyoff 1",
+            "skip_last_loop",
+            "play_note e4 no_keyoff 1",
+            "play_note g4 no_keyoff 1",
+            "end_loop 8",
+            "play_note e4 no_keyoff 2",
+            "keyon_next_note",
+            "rest 24",
+            "rest 24",
+        ],
+    );
+
+    assert_line_matches_bytecode(
+        "K0 {{ceg}}2,,0 r r",
+        &[
+            "start_loop",
+            "play_note c4 no_keyoff 2",
+            "keyon_next_note",
+            "play_note e4 no_keyoff 2",
+            "keyon_next_note",
+            "play_note g4 no_keyoff 2",
+            "keyon_next_note",
+            "end_loop 8",
+            "rest 24",
+            "rest 24",
+        ],
+    );
+}
+
+#[test]
+fn test_k1_two_rests_unchanged() {
+    assert_line_matches_bytecode("K1 c r r", &["play_note c4 keyoff 24", "rest 48"]);
+
+    assert_line_matches_bytecode(
+        "K1 c & r r",
+        &["play_note c4 no_keyoff 24", "rest 24", "rest 24"],
+    );
+}
+
+#[test]
 fn note_then_wait() {
     assert_line_matches_bytecode(
         "K0 c w",
