@@ -4,23 +4,23 @@ Terrific Audio Driver Changelog
 Version 0.1.1
 =============
 
-Bytecode changes:
- * `enable_pmod`, `disable_pmod` and `disable_noise` have been combined into a single 2-byte instruction.
-   The bytecode assembly is unchanged.
- * Added `set_vibrato_with_delay` instruction
- * Added `keyon_next_note` instruction
-
 MML changes:
  * Added an optional *delay_in_ticks* argument to the `~` and `MP` vibrato commands
  * Added the `K0` disable key-off MML command, allowing key-on without key-off
    (`Q` quantized notes will still key-off)
  * Added the `K1` and `K` enable key-off MML commands
 
+Bytecode changes:
+ * `enable_pmod`, `disable_pmod` and `disable_noise` have been combined into a single 2-byte instruction.
+   The bytecode assembly is unchanged.
+ * Added `set_vibrato_with_delay` instruction
+ * Added `keyon_next_note` instruction
+
 
 Version 0.1.0
 =============
 
-This release stabilises the MML and bytecode assembly syntax and bahaviour.
+This release stabilises the MML and bytecode assembly syntax and behaviour.
 
 
 **CAUTION**: The loader and 65816 APIs have changed.  If you are using a 65816 API, you will need to update it.
