@@ -48,7 +48,7 @@ impl FilePos {
 
     // ASSUMES: `s` is the prefix at this file position
     pub(crate) fn to_range_str_len(self, s: &str) -> FilePosRange {
-        let s_len = s.bytes().len().try_into().unwrap();
+        let s_len = s.len().try_into().unwrap();
         self.to_range(s_len)
     }
 
@@ -109,12 +109,12 @@ pub struct LineIndexRange {
 
 impl Line<'_> {
     pub fn range(&self) -> FilePosRange {
-        let line_length = self.text.bytes().len().try_into().unwrap();
+        let line_length = self.text.len().try_into().unwrap();
         self.position.to_range(line_length)
     }
 
     pub fn index_range(&self) -> LineIndexRange {
-        let line_length: u32 = self.text.bytes().len().try_into().unwrap();
+        let line_length: u32 = self.text.len().try_into().unwrap();
         let start = self.position.char_index;
 
         LineIndexRange {
@@ -144,7 +144,7 @@ impl Line<'_> {
             position: FilePos {
                 line_number: pos.line_number,
                 line_char: pos.line_char + char_count,
-                char_index: pos.char_index + u32::try_from(self.text.bytes().len()).unwrap(),
+                char_index: pos.char_index + u32::try_from(self.text.len()).unwrap(),
             },
         }
     }

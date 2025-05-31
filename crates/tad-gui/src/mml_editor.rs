@@ -503,7 +503,7 @@ impl MmlEditorState {
     }
 
     fn populate_mml_style(style_vec: &mut [u8], text: &str, prev_style: Option<u8>) {
-        assert_eq!(style_vec.len(), text.bytes().len());
+        assert_eq!(style_vec.len(), text.len());
 
         let mut current = prev_style
             .map(Style::from_u8_char)
@@ -516,7 +516,7 @@ impl MmlEditorState {
     }
 
     fn populate_bc_style(style_vec: &mut [u8], text: &str, prev_style: Option<u8>) {
-        assert_eq!(style_vec.len(), text.bytes().len());
+        assert_eq!(style_vec.len(), text.len());
 
         let mut current = prev_style
             .map(Style::from_u8_char)

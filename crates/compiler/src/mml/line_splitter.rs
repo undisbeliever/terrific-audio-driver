@@ -68,7 +68,7 @@ fn split_idstr_and_line(line: Line) -> (&str, Line) {
     };
 
     let line_char: u32 = (id_char_count + ws_char_count + 1).try_into().unwrap();
-    let char_index: u32 = (id.bytes().len() + ws_len).try_into().unwrap();
+    let char_index: u32 = (id.len() + ws_len).try_into().unwrap();
 
     (
         id,
