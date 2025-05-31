@@ -16,6 +16,9 @@ Bytecode changes:
  * Added `set_vibrato_with_delay` instruction
  * Added `keyon_next_note` instruction
 
+GUI changes:
+ * Added FFT offset and size widgets to the sample analyser window
+
 
 Version 0.1.0
 =============

@@ -12,6 +12,7 @@ use crate::{GuiMessage, InstrumentOrSampleId};
 
 use brr::{BrrSample, MonoPcm16WaveFile};
 use compiler::data::{self, BrrEvaluator, LoopSetting};
+use fltk::valuator::HorSlider;
 
 use std::cell::RefCell;
 use std::cmp::{max, min};
@@ -30,7 +31,7 @@ use fltk::group::{Flex, Group, Pack, PackType};
 use fltk::menu::Choice;
 use fltk::misc::Spinner;
 use fltk::output::Output;
-use fltk::prelude::{GroupExt, InputExt, MenuExt, WidgetBase, WidgetExt, WindowExt};
+use fltk::prelude::{GroupExt, InputExt, MenuExt, ValuatorExt, WidgetBase, WidgetExt, WindowExt};
 use fltk::widget::Widget;
 use fltk::window::Window;
 
@@ -48,9 +49,10 @@ const SPECTRUM_INST_FREQ_COLOR: Color = Color::from_rgb(128, 128, 128);
 /// Sample rate to decode BRR samples at (S-DSP sample rate)
 const BRR_SAMPLE_RATE: u32 = 32000;
 /// Minimum number of samples to render when decoding a looping BRR sample
-const MIN_LOOPING_SAMPLES: usize = 4096;
+const MIN_LOOPING_SAMPLES: usize = 8192;
 
 /// spectrum-analyzer crate panics if samples.len() > 32768 samples
+const MIN_SPECTRUM_SAMPLES: usize = 256;
 const MAX_SPECTRUM_SAMPLES: usize = 32768;
 
 /// Minimum number of waveform samples to show in the waveform widget
@@ -78,6 +80,32 @@ fn read_spectrum_range_choice(c: &Choice) -> f64 {
         1 => 2000.0,
         2 => 4000.0,
         _ => MAX_SPECTRUM_FREQ as f64,
+    }
+}
+
+const DEFAULT_FFT_SIZE_VALUE: i32 = 4;
+
+const FFT_SIZE_CHOICES: &str = "256|512|1024|2048|4096|8192|16384|32768";
+const _: () = assert!(MIN_SPECTRUM_SAMPLES == 256);
+const _: () = assert!(MAX_SPECTRUM_SAMPLES == 32768);
+
+#[derive(Debug)]
+struct FftSize {
+    choice: u8,
+}
+
+fn read_fft_choice(c: &Choice) -> FftSize {
+    const MAX_VALUE: i32 =
+        (MAX_SPECTRUM_SAMPLES as i32 / MIN_SPECTRUM_SAMPLES as i32).ilog2() as i32;
+
+    FftSize {
+        choice: c.value().clamp(0, MAX_VALUE).try_into().unwrap(),
+    }
+}
+
+impl FftSize {
+    fn value(&self) -> usize {
+        MIN_SPECTRUM_SAMPLES << self.choice
     }
 }
 
@@ -127,6 +155,9 @@ struct State {
     use_peak: Button,
     use_cursor: Button,
     use_cursor_peak: Button,
+
+    fft_offset: HorSlider,
+    fft_size_choice: Choice,
 
     source_out: Output,
     freq_widget: Spinner,
@@ -199,6 +230,25 @@ impl SampleAnalyserDialog {
         group.fixed(&spectrum_stats_group, line_height);
 
         let waveform = Widget::default();
+
+        let mut fft_group = Flex::default().row();
+        group.fixed(&fft_group, line_height);
+
+        let fft_offset_label = label_packed("FFT offset");
+        fft_group.fixed(&fft_offset_label, fft_offset_label.width());
+
+        let fft_offset = HorSlider::default();
+
+        let fft_size_label = label_packed("Max size");
+        fft_group.fixed(&fft_size_label, fft_size_label.width());
+
+        let mut fft_size_choice = Choice::default().with_size(ch(10), line_height);
+        fft_size_choice.add_choice(FFT_SIZE_CHOICES);
+        fft_size_choice.set_value(DEFAULT_FFT_SIZE_VALUE);
+        fft_size_choice.set_tooltip("Maximum FFT size");
+        fft_group.fixed(&fft_size_choice, ch(10));
+
+        fft_group.end();
 
         let mut bottom_column = Flex::default().row();
 
@@ -277,6 +327,9 @@ impl SampleAnalyserDialog {
             use_cursor,
             use_cursor_peak,
 
+            fft_offset,
+            fft_size_choice,
+
             source_out,
             freq_widget: freq,
             brr_settings_widget,
@@ -339,6 +392,19 @@ impl SampleAnalyserDialog {
                 let state = state.clone();
                 move |_| {
                     state.borrow_mut().freq_changed();
+                }
+            });
+
+            s.fft_offset.set_callback({
+                let state = state.clone();
+                move |_| {
+                    state.borrow().send_analyse_sample_message();
+                }
+            });
+            s.fft_size_choice.set_callback({
+                let state = state.clone();
+                move |_| {
+                    state.borrow().send_analyse_sample_message();
                 }
             });
 
@@ -520,6 +586,10 @@ impl State {
             self.source.clone(),
             self.loop_setting.clone(),
             self.evaluator,
+            FftSettings {
+                offset: self.fft_offset.value() as u32,
+                size: read_fft_choice(&self.fft_size_choice),
+            },
         ));
     }
 
@@ -530,6 +600,20 @@ impl State {
                     Ok(s) => self.set_spectrum_values(s),
                     Err(_) => self.clear_spectrum_values(),
                 }
+
+                {
+                    let decoded_size = a.decoded_samples_f32.len();
+                    let window_size = a.fft_range.len();
+                    let pos = a.fft_range.start;
+                    let max = decoded_size - window_size;
+
+                    self.fft_offset.set_range(0.0, max as f64);
+                    self.fft_offset
+                        .set_slider_size(window_size as f32 / decoded_size as f32);
+
+                    self.fft_offset.set_value(pos as f64);
+                }
+
                 self.analysis = Some(a);
                 self.analysis_error = None;
 
@@ -541,6 +625,8 @@ impl State {
 
                 self.analysis = None;
                 self.analysis_error = Some(e.to_string());
+
+                self.fft_offset.set_range(0.0, 0.0);
 
                 self.play_button.deactivate();
                 self.ok_button.deactivate();
@@ -769,6 +855,7 @@ impl State {
     fn draw_waveform_waveform(&self, analysis: &SampleAnalysis, x: i32, y: i32, w: i32, h: i32) {
         let samples = &analysis.decoded_samples_f32;
         let n_samples = samples.len();
+        let fft_range = &analysis.fft_range;
 
         let samples_default_zoom = Self::waveform_samples_default_zoom(analysis);
         let samples_range = Range {
@@ -784,6 +871,23 @@ impl State {
 
         let x_scale = f64::from(w) / (samples_default_zoom as f64) * self.waveform_x_scale;
         let y_scale = f64::from(-h / 2);
+
+        // Darken unanalysed section
+        if fft_range.start > samples_range.start {
+            let w = (((fft_range.start - samples_range.start) as f64) * x_scale) as i32;
+
+            if w > 0 {
+                draw::draw_rect_fill(x, y, w, h, Color::Light1);
+            }
+        }
+        if fft_range.end < samples_range.end {
+            let lp_x = (((fft_range.end - samples_range.start) as f64) * x_scale) as i32;
+            let w = (((samples_range.end - fft_range.end) as f64) * x_scale) as i32;
+
+            if w > 0 {
+                draw::draw_rect_fill(x + lp_x, y, w, h, Color::Light1);
+            }
+        }
 
         // Draw loop points
         if let Some(lp) = analysis.loop_point_samples {
@@ -885,11 +989,19 @@ impl State {
     }
 }
 
+#[derive(Debug)]
+pub struct FftSettings {
+    size: FftSize,
+    offset: u32,
+}
+
 pub struct SampleAnalysis {
     brr_sample: Arc<BrrSample>,
     n_samples: usize,
     decoded_samples_f32: Vec<f32>,
     loop_point_samples: Option<usize>,
+
+    fft_range: Range<usize>,
     spectrum: Result<FrequencySpectrum, String>,
 }
 
@@ -903,8 +1015,11 @@ impl std::fmt::Debug for SampleAnalysis {
 pub fn analyse_sample(
     brr_sample: Arc<BrrSample>,
     wav_sample: Option<&MonoPcm16WaveFile>,
+    fft: FftSettings,
 ) -> SampleAnalysis {
     const FLOAT_SCALE: f32 = -(i16::MIN as f32);
+
+    let fft_size = fft.size.value();
 
     let n_samples = match wav_sample {
         Some(w) => w.samples.len(),
@@ -916,9 +1031,10 @@ pub fn analyse_sample(
     } else {
         brr_sample.n_samples()
     };
-    let samples_to_decode = match samples_to_decode {
-        ..=MAX_SPECTRUM_SAMPLES => samples_to_decode.next_power_of_two(),
-        n => n,
+    let samples_to_decode = if samples_to_decode < fft_size {
+        samples_to_decode.next_power_of_two()
+    } else {
+        samples_to_decode
     };
 
     let mut decoded_samples = vec![0_i16; samples_to_decode];
@@ -929,10 +1045,11 @@ pub fn analyse_sample(
         .map(|&s| f32::from(s) / FLOAT_SCALE)
         .collect();
 
-    let windowed_samples = hann_window(match decoded_samples_f32.len() {
-        ..=MAX_SPECTRUM_SAMPLES => &decoded_samples_f32,
-        _ => &decoded_samples_f32[..MAX_SPECTRUM_SAMPLES],
-    });
+    let window_len = usize::min(decoded_samples_f32.len(), fft_size);
+    let window_offset = usize::min(fft.offset as usize, decoded_samples_f32.len() - window_len);
+    let fft_range = window_offset..(window_offset + window_len);
+
+    let windowed_samples = hann_window(&decoded_samples_f32[fft_range.clone()]);
 
     // Analyse spectrum
     let spectrum = samples_fft_to_spectrum(
@@ -948,6 +1065,7 @@ pub fn analyse_sample(
         n_samples,
         brr_sample,
         decoded_samples_f32,
+        fft_range,
         spectrum,
     }
 }

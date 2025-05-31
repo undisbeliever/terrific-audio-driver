@@ -6,7 +6,7 @@
 
 use crate::audio_thread::{AudioMessage, AudioThreadSongInterpreter, MusicChannelsMask, SiCad};
 use crate::names::NameGetter;
-use crate::sample_analyser::{self, SampleAnalysis};
+use crate::sample_analyser::{self, FftSettings, SampleAnalysis};
 use crate::sfx_export_order::{GuiSfxExportOrder, SfxExportOrderAction};
 use crate::GuiMessage;
 
@@ -127,7 +127,7 @@ pub enum ToCompiler {
     Instrument(ItemChanged<data::Instrument>),
     Sample(ItemChanged<data::Sample>),
 
-    AnalyseSample(SourcePathBuf, LoopSetting, BrrEvaluator),
+    AnalyseSample(SourcePathBuf, LoopSetting, BrrEvaluator, FftSettings),
 
     // Updates sfx_data_size and rechecks song sizes.
     // (sent when the user deselects the sound effects tab in the GUI)
@@ -1391,6 +1391,7 @@ fn analyse_sample(
     source: SourcePathBuf,
     loop_setting: LoopSetting,
     evaluator: BrrEvaluator,
+    fft_settings: FftSettings,
 ) -> Result<SampleAnalysis, BrrError> {
     let brr_sample = Arc::new(encode_or_load_brr_file(
         &source,
@@ -1407,7 +1408,11 @@ fn analyse_sample(
         _ => None,
     };
 
-    Ok(sample_analyser::analyse_sample(brr_sample, wav_sample))
+    Ok(sample_analyser::analyse_sample(
+        brr_sample,
+        wav_sample,
+        fft_settings,
+    ))
 }
 
 fn compile_all_samples(
@@ -1710,9 +1715,14 @@ fn bg_thread(
                 sample_file_cache.remove_path(&source_path);
             }
 
-            ToCompiler::AnalyseSample(source_path, loop_setting, evaluator) => {
-                let r =
-                    analyse_sample(&mut sample_file_cache, source_path, loop_setting, evaluator);
+            ToCompiler::AnalyseSample(source_path, loop_setting, evaluator, fft_settings) => {
+                let r = analyse_sample(
+                    &mut sample_file_cache,
+                    source_path,
+                    loop_setting,
+                    evaluator,
+                    fft_settings,
+                );
                 sender.send(CompilerOutput::SampleAnalysis(r));
             }
         }
