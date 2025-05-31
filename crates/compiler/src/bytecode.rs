@@ -1228,7 +1228,7 @@ impl<'a> Bytecode<'a> {
                 BytecodeContext::SoundEffect => true,
                 BytecodeContext::SongChannel { .. } => true,
                 BytecodeContext::SongSubroutine { .. } => false,
-                BytecodeContext::SfxSubroutine { .. } => false,
+                BytecodeContext::SfxSubroutine => false,
                 BytecodeContext::MmlPrefix => false,
             },
             context,
@@ -1612,7 +1612,7 @@ impl<'a> Bytecode<'a> {
         }
 
         match self.context {
-            BytecodeContext::SongSubroutine { .. } | BytecodeContext::SfxSubroutine { .. } => (),
+            BytecodeContext::SongSubroutine { .. } | BytecodeContext::SfxSubroutine => (),
             BytecodeContext::MmlPrefix
             | BytecodeContext::SongChannel { .. }
             | BytecodeContext::SoundEffect => {
