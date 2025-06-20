@@ -519,6 +519,7 @@ Numbers can be decimal, or hexadecimal when prefixed with `$` (ie, `$ff`)
     * CAUTION: Can cause popping.
     * CAUTION: `K0 c r` will key-off after the rest.
     * CAUTION: `Q` quantized notes will still key-off.
+    * CAUTION: `q` early release is incompatible with `K0` disabled key-off.
 
 
 <br/>
