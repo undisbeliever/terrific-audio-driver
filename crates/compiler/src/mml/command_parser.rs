@@ -1,4 +1,4 @@
-//! MML tokenizer
+//! MML command parser
 
 // SPDX-FileCopyrightText: © 2023 Marcus Rowe <undisbeliever@gmail.com>
 //
@@ -76,6 +76,7 @@ impl MmlCommandWithPos {
 pub struct State {
     pub zenlen: ZenLen,
     pub default_length: MmlDefaultLength,
+    pub keyoff_enabled: bool,
     pub octave: Octave,
     pub semitone_offset: i8,
     // Used by tad-gui statusbar
@@ -138,6 +139,7 @@ mod parser {
                 state: State {
                     zenlen,
                     default_length: STARTING_MML_LENGTH,
+                    keyoff_enabled: true,
                     octave: STARTING_OCTAVE,
                     semitone_offset: 0,
                     quantize: None,
@@ -2124,7 +2126,7 @@ fn parse_echo(pos: FilePos, p: &mut Parser) -> Command {
 }
 
 fn parse_keyoff(pos: FilePos, p: &mut Parser) -> Command {
-    let keyoff = match_next_token!(p,
+    let keyoff_enabled = match_next_token!(p,
         Token::Number(0) | Token::HexNumber(0) => false,
         Token::Number(1) | Token::HexNumber(1) => true,
         Token::Number(_) | Token::HexNumber(_) => {
@@ -2134,9 +2136,13 @@ fn parse_keyoff(pos: FilePos, p: &mut Parser) -> Command {
         #_ => true
     );
 
-    p.set_keyoff_enabled(keyoff);
+    p.set_keyoff_enabled(keyoff_enabled);
+    p.set_state(State {
+        keyoff_enabled,
+        ..p.state().clone()
+    });
 
-    Command::SetKeyOff(keyoff)
+    Command::SetKeyOff(keyoff_enabled)
 }
 
 fn parse_set_instrument(pos: FilePos, id: IdentifierStr, p: &mut Parser) -> Command {

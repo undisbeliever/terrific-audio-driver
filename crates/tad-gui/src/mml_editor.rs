@@ -801,6 +801,10 @@ impl MmlEditorState {
                     Ordering::Equal => {}
                 }
 
+                if !c.state.keyoff_enabled {
+                    let _ = write!(s, "  K0");
+                }
+
                 if let Some(q) = c.state.quantize {
                     let q = q.as_u8();
                     if q % Quantization::FINE_QUANTIZATION_SCALE == 0 {
