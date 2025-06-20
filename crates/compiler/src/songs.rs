@@ -478,3 +478,8 @@ pub fn validate_song_size(
         })
     }
 }
+
+pub fn override_song_tick_clock(song: &mut SongData, tick_clock: TickClock) {
+    song.data[SONG_HEADER_TICK_TIMER_OFFSET] = tick_clock.into_driver_value();
+    song.metadata.tick_clock = tick_clock;
+}

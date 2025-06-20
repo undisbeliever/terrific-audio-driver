@@ -17,10 +17,10 @@ use compiler::{
     },
     mml::compile_mml,
     samples::build_sample_and_instrument_data,
-    songs::SongData,
+    songs::{override_song_tick_clock, SongData},
     sound_effects::{blank_compiled_sound_effects, CompiledSfxSubroutines},
     tad_apu::ApuEmulator,
-    time::TickCounter,
+    time::{TickClock, TickCounter},
 };
 use tad_emu::TadEmulator;
 
@@ -300,19 +300,24 @@ fn song_ticks(song: &SongData) -> TickCounter {
         .unwrap_or_default()
 }
 
-fn test_bc_intrepreter(song: &SongData, common_audio_data: &CommonAudioData) {
+fn test_bc_intrepreter(song: SongData, common_audio_data: &CommonAudioData) {
+    // Run the song at the fastest tick clock.
+    let mut song = song;
+    override_song_tick_clock(&mut song, TickClock::MIN);
+    let song = song;
+
     let audio_mode = AudioMode::Surround;
 
     let song_addr = common_audio_data.min_song_data_addr();
 
     // Clamp to ensure 16 bit tick_counter does not overflow
     // +30 ticks to test for song looping
-    let ticks_to_test = song_ticks(song).clamp(TickCounter::new(192), TickCounter::new(0x8000))
+    let ticks_to_test = song_ticks(&song).clamp(TickCounter::new(192), TickCounter::new(0x8000))
         + TickCounter::new(30);
 
     let mut emu = TadEmulator::new();
     emu.fill_apuram(bytecode_interpreter::UNINITIALISED);
-    emu.load_song(common_audio_data, song, None, audio_mode)
+    emu.load_song(common_audio_data, &song, None, audio_mode)
         .unwrap();
 
     // Wait for the audio-driver to finish initialization
@@ -326,7 +331,7 @@ fn test_bc_intrepreter(song: &SongData, common_audio_data: &CommonAudioData) {
     // Add a second limit, so it doesn't emulate a very very long (119 minute) song
     for _ in 0..1000 {
         emu.try_send_io_command(io_commands::UNPAUSE, 0, 0);
-        for _ in 0..17 {
+        for _ in 0..10 {
             emu.emulate();
         }
 
@@ -345,7 +350,7 @@ fn test_bc_intrepreter(song: &SongData, common_audio_data: &CommonAudioData) {
         let tick_count = TickCounter::new(tick_count.into());
 
         let mut interpreter =
-            SongInterpreter::new_uninitialised(common_audio_data, song, song_addr, audio_mode);
+            SongInterpreter::new_uninitialised(common_audio_data, &song, song_addr, audio_mode);
         let valid = interpreter.process_ticks(tick_count);
         assert!(valid, "SongIntreperter time out");
         assert_bc_intrepreter_matches_emu(&interpreter, &dummy_emu_init, &emu, tick_count);
@@ -388,6 +393,6 @@ fn main() {
         )
         .unwrap();
 
-        test_bc_intrepreter(&song_data, &common_audio_data);
+        test_bc_intrepreter(song_data, &common_audio_data);
     }
 }
