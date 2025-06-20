@@ -116,7 +116,7 @@ Please see the included [licenses file](licenses.md) for the full third party li
   * [windows_x86_64_gnu 0.52.6](https://github.com/microsoft/windows-rs), MIT License
   * [windows_x86_64_gnullvm 0.52.6](https://github.com/microsoft/windows-rs), MIT License
   * [windows_x86_64_msvc 0.52.6](https://github.com/microsoft/windows-rs), MIT License
-  * [markdown 1.0.0-alpha.23](https://github.com/wooorm/markdown-rs), MIT License
+  * [markdown 1.0.0](https://github.com/wooorm/markdown-rs), MIT License
   * [lazy_static 1.5.0](https://github.com/rust-lang-nursery/lazy-static.rs), MIT License
   * [cc 1.2.17](https://github.com/rust-lang/cc-rs), MIT License
   * [cfg-if 1.0.0](https://github.com/alexcrichton/cfg-if), MIT License
