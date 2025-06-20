@@ -12,5 +12,10 @@ A r1
 A px-64 c2 r px0 c2 r px+64 c2
 A r1
 
-A px0 a & [ w%1 p+1 ]128 w%30 [ w%1 p-1 ]129 r%30
+; Pan can be changed in the middle of a note if the note is slurred into a pan command.
+A px0 c3 & px-40 w3 px+40 r3
+A r1
+
+; Complex mid-note pan change that changes the pan in discrete steps.
+A p0 a & [ w4 p+16 ]8 w4 [ w4 p-16 ]8 r4
 
