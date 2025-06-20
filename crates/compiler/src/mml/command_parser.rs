@@ -1964,10 +1964,13 @@ fn parse_broken_chord(p: &mut Parser) -> Command {
         None => PlayNoteTicks::min_for_is_slur(tie),
     };
 
+    let slur_last_note = next_token_matches!(p, Token::Slur);
+
     Command::BrokenChord {
         notes,
         total_length,
         note_length,
+        slur_last_note,
     }
 }
 

@@ -9,6 +9,7 @@ MML changes:
  * Added the `K0` disable key-off MML command, allowing key-on without key-off
    (`Q` quantized notes will still key-off)
  * Added the `K1` and `K` enable key-off MML commands
+ * A broken chord can now be slurred.  `{{ceg}}&` will slur the last note in the broken chord loop.
 
 Bytecode changes:
  * `enable_pmod`, `disable_pmod` and `disable_noise` have been combined into a single 2-byte instruction.

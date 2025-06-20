@@ -403,11 +403,13 @@ Numbers can be decimal, or hexadecimal when prefixed with `$` (ie, `$ff`)
     * This command consumes a loop.
     * Examples (Whole Note Length is 96, default `l` is 4):
         * `{{ceg}}` expands to `[c%1 & : e%1 & g%1 &]8 e%2`
+        * `{{ceg}} &` expands to `[c%1 & e%1 & g%1 &]8`
         * `{{ce-g}}2,32` expands to `[c32 & e-32 & g32 &]5 c32`
         * `{{c}}4,,0` expands to `[c%2]12`
         * `{{de}}4,,0` expands to `[d%2 e%2]6`
         * `{{fg}}4,%3,0` expands to `[f%3 g%3]4`
         * `{{ab}}4,16,0` expands to `[a16 b16]2`
+        * `{{ceg}},,0 &` expands to `[c%2 e%2 : g%2]4 g%2 &`
 
  * `~0` - Disable manual vibrato
  * `~<pitch_offset_per_tick>, <quarter_wavelength_in_ticks> [, delay_in_ticks]` - Manual vibrato

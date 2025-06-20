@@ -289,6 +289,7 @@ pub(crate) enum Command {
         notes: Vec<NoteOrPitch>,
         total_length: TickCounter,
         note_length: PlayNoteTicks,
+        slur_last_note: bool,
     },
 
     DisableNoise,
@@ -1310,6 +1311,7 @@ impl<'a> ChannelBcGenerator<'a> {
         notes: &[NoteOrPitch],
         total_length: TickCounter,
         note_length: PlayNoteTicks,
+        slur_last_note: bool,
     ) -> Result<(), ChannelError> {
         if notes.is_empty() {
             return Err(ChannelError::NoNotesInBrokenChord);
@@ -1324,17 +1326,23 @@ impl<'a> ChannelBcGenerator<'a> {
         let total_ticks = total_length.value();
 
         // Number of ticks in the last note played outside the loop (if any).
-        let mut last_note_ticks = total_ticks % note_length.ticks();
+        let last_note_ticks = {
+            let mut t = total_ticks % note_length.ticks();
 
-        // If tie is true, a keyoff is required after the loop.
-        if note_length.is_slur() && last_note_ticks == 0 {
-            last_note_ticks += note_length.ticks();
-        }
+            if slur_last_note != note_length.is_slur() {
+                // When slur_last_note is false: A keyoff is required after the loop.
+                // When slur_last_note is true: A slurred note is required after the loop.
+                if t == 0 {
+                    t = note_length.ticks();
+                }
+            }
 
-        if last_note_ticks != 0 && last_note_ticks < BcTicksKeyOff::MIN_TICKS {
-            last_note_ticks = BcTicksKeyOff::MIN_TICKS;
-        }
-        let last_note_ticks = last_note_ticks;
+            if !slur_last_note && t > 0 && t < BcTicksKeyOff::MIN_TICKS {
+                t = BcTicksKeyOff::MIN_TICKS;
+            }
+
+            t
+        };
 
         if total_ticks < last_note_ticks {
             return Err(ChannelError::BrokenChordTotalLengthTooShort);
@@ -1372,11 +1380,11 @@ impl<'a> ChannelBcGenerator<'a> {
         self.bc.end_loop(None)?;
 
         if last_note_ticks > 0 {
-            // The last note to play is always a keyoff note.
-            self.broken_chord_play_note_or_pitch_with_detune(
-                notes[break_point],
-                PlayNoteTicks::KeyOff(BcTicksKeyOff::try_from(last_note_ticks)?),
-            )?;
+            let l = match slur_last_note {
+                false => PlayNoteTicks::KeyOff(BcTicksKeyOff::try_from(last_note_ticks)?),
+                true => PlayNoteTicks::NoKeyOff(BcTicksNoKeyOff::try_from(last_note_ticks)?),
+            };
+            self.broken_chord_play_note_or_pitch_with_detune(notes[break_point], l)?;
         }
 
         if self.bc.get_tick_counter() != expected_tick_counter {
@@ -1797,8 +1805,9 @@ impl<'a> ChannelBcGenerator<'a> {
                 notes,
                 total_length,
                 note_length,
+                slur_last_note,
             } => {
-                self.broken_chord(notes, *total_length, *note_length)?;
+                self.broken_chord(notes, *total_length, *note_length, *slur_last_note)?;
             }
 
             Command::DisableNoise => {

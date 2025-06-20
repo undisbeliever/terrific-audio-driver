@@ -76,3 +76,53 @@ fn pitch_list_errors() {
 }
 
 // ::TODO broken chord argument error tests::
+
+#[test]
+fn slurred_broken_chord_tie1() {
+    // from mml-syntax.md
+    assert_line_matches_line("{{ceg}} &", "[c%1& e%1& g%1&]8");
+    assert_line_matches_line("{{ce-g}}2,32 &", "[c32& : e-32& g32&]6");
+
+    assert_line_matches_line("{{o2c o4c o3c}}%600 &", "[o2c%1& o4c%1& o3c%1&]200");
+    assert_line_matches_line("{{o2c o4c o3c}}%700 &", "[o2c%1& : o4c%1& o3c%1&]234");
+
+    assert_line_matches_line("{{ceg}}2,%5 &", "[c%5& e%5& g%5&]3 c%3&");
+    assert_line_matches_line("{{ceg}}1,%5 &", "[c%5& : e%5& g%5&]7 e%1&");
+
+    assert_line_matches_line(
+        "{{a > c < b g}}%700,%8 &",
+        "[o4a%8& o5c%8& o4b%8& : o4g%8&]22 o4g%4&",
+    );
+
+    assert_line_matches_line("{{PF700 PF1000}}4,16 &", "[PF700,16& PF1000,16&]2");
+}
+
+#[test]
+fn slurred_broken_chord_tie0() {
+    // from mml-syntax.md
+    assert_line_matches_line("{{ceg}},,0 &", "[c%2 e%2 : g%2]4 g%2&");
+
+    assert_line_matches_line("{{ce-g}}2,32,0 &", "[c32 e-32 g32]5 c32&");
+
+    assert_line_matches_line(
+        "{{o2c o4c o3c}}%600,,0 &",
+        "[o2c%2 o4c%2 : o3c%2]100 o3c%2&",
+    );
+    assert_line_matches_line(
+        "{{o2c o4c o3c}}%700,,0 &",
+        "[o2c%2 : o4c%2 o3c%2]117 o4c%2&",
+    );
+
+    assert_line_matches_line("{{ceg}}2,%5,0 &", "[c%5 e%5 g%5]3 c%3&");
+    assert_line_matches_line("{{ceg}}1,%5,0 &", "[c%5 : e%5 g%5]7 e%1&");
+
+    assert_line_matches_line(
+        "{{a > c < b g}}%700,%8,0 &",
+        "[o4a%8 o5c%8 o4b%8 : o4g%8]22 o4g%4&",
+    );
+
+    assert_line_matches_line(
+        "{{PF700 PF1000}}4,16,0 &",
+        "[PF700,16 : PF1000,16]2 PF1000,16 &",
+    );
+}
