@@ -196,6 +196,10 @@
       "source": "mml/portamento.mml"
     },
     {
+      "name": "continuous_portamento",
+      "source": "mml/continuous-portamento.mml"
+    },
+    {
       "name": "vibrato",
       "source": "mml/vibrato.mml"
     },

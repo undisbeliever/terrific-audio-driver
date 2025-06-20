@@ -1,0 +1,18 @@
+#Title Continuous portamento example
+#Tempo 120
+#ZenLen 192
+
+@1 sine gain F127
+
+A @1 o5
+
+; Continuous portamento using portamento delay (hold then pitch-slide)
+A {cb}4,8 & {e}4,8. & {d}4,8. & {c}4,8. &
+A [ {cg}4,8. & {c}4,8. & ]3 r
+
+A r
+
+; Continuous portamento using ties (pitch-slide then hold)
+A c8 & {b}8^8. & {e}16^8. & {d}16^8. & {c}16 &
+A [ c8. & {g}16^8. & {c}16 & ]3 r
+
