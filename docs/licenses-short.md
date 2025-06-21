@@ -116,81 +116,78 @@ Please see the included [licenses file](licenses.md) for the full third party li
   * [windows_x86_64_gnu 0.52.6](https://github.com/microsoft/windows-rs), MIT License
   * [windows_x86_64_gnullvm 0.52.6](https://github.com/microsoft/windows-rs), MIT License
   * [windows_x86_64_msvc 0.52.6](https://github.com/microsoft/windows-rs), MIT License
+  * [sdl2-sys 0.37.0](https://github.com/rust-sdl2/rust-sdl2), MIT License
   * [markdown 1.0.0](https://github.com/wooorm/markdown-rs), MIT License
   * [lazy_static 1.5.0](https://github.com/rust-lang-nursery/lazy-static.rs), MIT License
-  * [cc 1.2.17](https://github.com/rust-lang/cc-rs), MIT License
-  * [cfg-if 1.0.0](https://github.com/alexcrichton/cfg-if), MIT License
+  * [cc 1.2.27](https://github.com/rust-lang/cc-rs), MIT License
+  * [cfg-if 1.0.1](https://github.com/rust-lang/cfg-if), MIT License
   * [cmake 0.1.54](https://github.com/rust-lang/cmake-rs), MIT License
   * [bitflags 1.3.2](https://github.com/bitflags/bitflags), MIT License
-  * [bitflags 2.9.0](https://github.com/bitflags/bitflags), MIT License
+  * [bitflags 2.9.1](https://github.com/bitflags/bitflags), MIT License
   * [num-complex 0.4.6](https://github.com/rust-num/num-complex), MIT License
   * [num-traits 0.2.19](https://github.com/rust-num/num-traits), MIT License
   * [regex-automata 0.4.9](https://github.com/rust-lang/regex/tree/master/regex-automata), MIT License
   * [regex-syntax 0.8.5](https://github.com/rust-lang/regex/tree/master/regex-syntax), MIT License
   * [regex 1.11.1](https://github.com/rust-lang/regex), MIT License
   * [float-cmp 0.10.0](https://github.com/mikedilger/float-cmp), MIT License
-  * [libc 0.2.171](https://github.com/rust-lang/libc), MIT License
-  * [anstyle-wincon 3.0.7](https://github.com/rust-cli/anstyle.git), MIT License
+  * [libc 0.2.174](https://github.com/rust-lang/libc), MIT License
   * [heck 0.5.0](https://github.com/withoutboats/heck), MIT License
   * [unicode-id 0.3.5](https://github.com/Boshen/unicode-id), MIT License
-  * [unicode-width 0.2.0](https://github.com/unicode-rs/unicode-width), MIT License
+  * [unicode-width 0.2.1](https://github.com/unicode-rs/unicode-width), MIT License
   * [utf8parse 0.2.2](https://github.com/alacritty/vte), MIT License
-  * [anstyle-parse 0.2.6](https://github.com/rust-cli/anstyle.git), MIT License
   * [version-compare 0.1.1](https://gitlab.com/timvisee/version-compare), MIT License
-  * [autocfg 1.4.0](https://github.com/cuviper/autocfg), MIT License
+  * [autocfg 1.5.0](https://github.com/cuviper/autocfg), MIT License
   * [ttf-parser 0.25.1](https://github.com/harfbuzz/ttf-parser), MIT License
-  * [anstyle 1.0.10](https://github.com/rust-cli/anstyle.git), MIT License
-  * [anstream 0.6.18](https://github.com/rust-cli/anstyle.git), MIT License
-  * [anstyle-query 1.1.2](https://github.com/rust-cli/anstyle.git), MIT License
-  * [clap 4.5.32](https://github.com/clap-rs/clap), MIT License
-  * [colorchoice 1.0.3](https://github.com/rust-cli/anstyle.git), MIT License
+  * [anstream 0.6.19](https://github.com/rust-cli/anstyle.git), MIT License
+  * [anstyle-parse 0.2.7](https://github.com/rust-cli/anstyle.git), MIT License
+  * [anstyle-query 1.1.3](https://github.com/rust-cli/anstyle.git), MIT License
+  * [anstyle-wincon 3.0.9](https://github.com/rust-cli/anstyle.git), MIT License
+  * [anstyle 1.0.11](https://github.com/rust-cli/anstyle.git), MIT License
+  * [clap 4.5.40](https://github.com/clap-rs/clap), MIT License
+  * [clap_builder 4.5.40](https://github.com/clap-rs/clap), MIT License
+  * [clap_derive 4.5.40](https://github.com/clap-rs/clap), MIT License
+  * [clap_lex 0.7.5](https://github.com/clap-rs/clap), MIT License
+  * [colorchoice 1.0.4](https://github.com/rust-cli/anstyle.git), MIT License
   * [is_terminal_polyfill 1.70.1](https://github.com/polyfill-rs/is_terminal_polyfill), MIT License
-  * [unicode-id 0.3.5](https://github.com/Boshen/unicode-id), MIT License
-  * [unicode-width 0.2.0](https://github.com/unicode-rs/unicode-width), MIT License
+  * [once_cell_polyfill 1.70.1](https://github.com/polyfill-rs/once_cell_polyfill), MIT License
   * [static_assertions 1.1.0](https://github.com/nvzqz/static-assertions-rs), MIT License
   * [microfft 0.6.0](https://gitlab.com/teskje/microfft-rs), MIT License
-  * [spectrum-analyzer 1.6.0](https://github.com/phip1611/spectrum-analyzer), MIT License
+  * [spectrum-analyzer 1.7.0](https://github.com/phip1611/spectrum-analyzer), MIT License
   * [cmk 0.1.2](https://github.com/MoAlyousef/cmk), MIT License
-  * [libm 0.2.11](https://github.com/rust-lang/libm), MIT License
+  * [libm 0.2.15](https://github.com/rust-lang/compiler-builtins), MIT License
   * [relative-path 1.9.3](https://github.com/udoprog/relative-path), MIT License
-  * [sdl2-sys 0.37.0](https://github.com/rust-sdl2/rust-sdl2), MIT License
-  * [fltk 1.5.4](https://github.com/fltk-rs/fltk-rs), MIT License
-  * [fltk-sys 1.5.4](https://github.com/fltk-rs/fltk-rs), MIT License
-  * [cxx-build 1.0.150](https://github.com/dtolnay/cxx), MIT License
-  * [cxx 1.0.150](https://github.com/dtolnay/cxx), MIT License
-  * [cxxbridge-flags 1.0.150](https://github.com/dtolnay/cxx), MIT License
-  * [cxxbridge-macro 1.0.150](https://github.com/dtolnay/cxx), MIT License
+  * [fltk 1.5.9](https://github.com/fltk-rs/fltk-rs), MIT License
+  * [fltk-sys 1.5.9](https://github.com/fltk-rs/fltk-rs), MIT License
+  * [cxx-build 1.0.158](https://github.com/dtolnay/cxx), MIT License
+  * [cxx 1.0.158](https://github.com/dtolnay/cxx), MIT License
+  * [cxxbridge-flags 1.0.158](https://github.com/dtolnay/cxx), MIT License
+  * [cxxbridge-macro 1.0.158](https://github.com/dtolnay/cxx), MIT License
   * [itoa 1.0.15](https://github.com/dtolnay/itoa), MIT License
   * [link-cplusplus 1.0.10](https://github.com/dtolnay/link-cplusplus), MIT License
-  * [once_cell 1.21.1](https://github.com/matklad/once_cell), MIT License
+  * [once_cell 1.21.3](https://github.com/matklad/once_cell), MIT License
   * [paste 1.0.15](https://github.com/dtolnay/paste), MIT License
-  * [proc-macro2 1.0.94](https://github.com/dtolnay/proc-macro2), MIT License
+  * [proc-macro2 1.0.95](https://github.com/dtolnay/proc-macro2), MIT License
   * [quote 1.0.40](https://github.com/dtolnay/quote), MIT License
-  * [rustversion 1.0.20](https://github.com/dtolnay/rustversion), MIT License
+  * [rustversion 1.0.21](https://github.com/dtolnay/rustversion), MIT License
   * [scratch 1.0.8](https://github.com/dtolnay/scratch), MIT License
   * [serde 1.0.219](https://github.com/serde-rs/serde), MIT License
   * [serde_derive 1.0.219](https://github.com/serde-rs/serde), MIT License
   * [serde_json 1.0.140](https://github.com/serde-rs/json), MIT License
-  * [syn 2.0.100](https://github.com/dtolnay/syn), MIT License
+  * [syn 2.0.104](https://github.com/dtolnay/syn), MIT License
   * [unicode-ident 1.0.18](https://github.com/dtolnay/unicode-ident), MIT License
   * [sdl2 0.37.0](https://github.com/Rust-SDL2/rust-sdl2), MIT License
   * [aho-corasick 1.1.3](https://github.com/BurntSushi/aho-corasick), MIT License
-  * [memchr 2.7.4](https://github.com/BurntSushi/memchr), MIT License
+  * [memchr 2.7.5](https://github.com/BurntSushi/memchr), MIT License
   * [termcolor 1.4.1](https://github.com/BurntSushi/termcolor), MIT License
   * [strsim 0.11.1](https://github.com/rapidfuzz/strsim-rs), MIT License
   * [shlex 1.3.0](https://github.com/comex/rust-shlex), MIT License
-  * [clap_builder 4.5.32](https://github.com/clap-rs/clap), MIT License
-  * [clap_derive 4.5.32](https://github.com/clap-rs/clap), MIT License
-  * [clap_lex 0.7.4](https://github.com/clap-rs/clap), MIT License
   * [winapi-util 0.1.9](https://github.com/BurntSushi/winapi-util), MIT License
-  * [crossbeam-channel 0.5.14](https://github.com/crossbeam-rs/crossbeam), MIT License
+  * [crossbeam-channel 0.5.15](https://github.com/crossbeam-rs/crossbeam), MIT License
   * [crossbeam-utils 0.8.21](https://github.com/crossbeam-rs/crossbeam), MIT License
   * [aho-corasick 1.1.3](https://github.com/BurntSushi/aho-corasick), MIT License
-  * [memchr 2.7.4](https://github.com/BurntSushi/memchr), MIT License
-  * [termcolor 1.4.1](https://github.com/BurntSushi/termcolor), MIT License
+  * [memchr 2.7.5](https://github.com/BurntSushi/memchr), MIT License
   * [winapi-util 0.1.9](https://github.com/BurntSushi/winapi-util), MIT License
   * [unicode-ident 1.0.18](https://github.com/dtolnay/unicode-ident), Unicode License v3
-  * [sdl2-sys 0.37.0](https://github.com/rust-sdl2/rust-sdl2), zlib License
   * [sdl2-sys 0.37.0](https://github.com/rust-sdl2/rust-sdl2), zlib License
   * [foldhash 0.1.5](https://github.com/orlp/foldhash), zlib License
   * [FLTK](https://www.fltk.org/), [FLTK license](https://www.fltk.org/doc-1.4/license.html)
