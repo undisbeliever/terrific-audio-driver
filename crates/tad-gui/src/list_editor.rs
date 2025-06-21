@@ -924,7 +924,7 @@ where
             let mut t = table.borrow_mut();
 
             t.set_selection_changed_callback({
-                let s = sender.clone();
+                let s = sender;
                 let list_buttons = list_buttons.clone();
                 move |selected, n_rows, user_selection| {
                     list_buttons.borrow_mut().update_buttons(selected, n_rows);
@@ -940,7 +940,7 @@ where
             if T::CAN_EDIT {
                 t.enable_cell_editing({
                     // Commit edited value
-                    let s = sender.clone();
+                    let s = sender;
                     move |index, col, value| {
                         if let Some(m) = T::commit_edited_value(index, col, value) {
                             s.send(m);
@@ -950,7 +950,7 @@ where
             }
 
             t.set_callback({
-                let s = sender.clone();
+                let s = sender;
                 move |ev, row, col| match T::table_event(ev, row, col) {
                     TableAction::None => false,
                     TableAction::OpenEditor => true,
@@ -1053,7 +1053,7 @@ where
             tooltip,
             Box::new(update_cb),
             {
-                let s = self.sender.clone();
+                let s = self.sender;
                 move |_| s.send(cb())
             },
             t.n_rows(),
@@ -1076,7 +1076,7 @@ where
             tooltip,
             Box::new(update_cb),
             {
-                let s = self.sender.clone();
+                let s = self.sender;
                 let t = self.table.clone();
                 move |_| {
                     if let Some(i) = t.borrow().selected_row() {
@@ -1223,8 +1223,8 @@ where
     let max_size_1 = data.list1.max_size.saturating_sub(data.list2.len());
     let max_size_2 = data.list2.max_size.saturating_sub(data.list1.len());
 
-    let mut table1 = ListEditorTable::new_with_data(parent, data.list1(), sender.clone());
-    let mut table2 = ListEditorTable::new_with_data(parent, data.list2(), sender.clone());
+    let mut table1 = ListEditorTable::new_with_data(parent, data.list1(), sender);
+    let mut table2 = ListEditorTable::new_with_data(parent, data.list2(), sender);
 
     table1.set_max_size(max_size_1);
     table2.set_max_size(max_size_2);

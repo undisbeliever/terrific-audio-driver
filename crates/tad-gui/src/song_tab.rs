@@ -206,7 +206,7 @@ impl SongTab {
         editor.take_focus();
 
         let state = Rc::new(RefCell::from(State {
-            sender: sender.clone(),
+            sender,
             song_id,
             group: group.clone(),
             song_start_ticks,

@@ -98,7 +98,7 @@ impl SamplesTab {
         sidebar.fixed(&sample_sizes_button, ch_units_to_width(&sidebar, 5));
 
         let (inst_table, sample_table) =
-            tables_for_list_pair(&mut sidebar, sender.clone(), instruments_and_samples);
+            tables_for_list_pair(&mut sidebar, sender, instruments_and_samples);
 
         sidebar.end();
 
@@ -115,13 +115,13 @@ impl SamplesTab {
         let mut instrument_group = Flex::default().column().size_of_parent();
         instrument_group.set_margin(margin);
 
-        let (instrument_editor, se_height) = InstrumentEditor::new(sender.clone());
+        let (instrument_editor, se_height) = InstrumentEditor::new(sender);
         instrument_group.fixed(instrument_editor.borrow().widget(), se_height + group.pad());
 
         let test_instrument_widget = {
             let mut ts_flex = Flex::default().row();
             Frame::default();
-            let test_instrument_widget = TestInstrumentWidget::new(sender.clone());
+            let test_instrument_widget = TestInstrumentWidget::new(sender);
             Frame::default();
             ts_flex.end();
 
@@ -140,10 +140,10 @@ impl SamplesTab {
         let mut sample_group = Flex::default().column().size_of_parent();
         sample_group.set_margin(margin);
 
-        let (sample_editor, se_height) = SampleEditor::new(sender.clone());
+        let (sample_editor, se_height) = SampleEditor::new(sender);
         sample_group.fixed(sample_editor.borrow().widget(), se_height + group.pad());
 
-        let test_sample_widget = TestSampleWidget::new(sender.clone());
+        let test_sample_widget = TestSampleWidget::new(sender);
 
         sample_group.end();
 
@@ -160,9 +160,9 @@ impl SamplesTab {
         console.wrap_mode(WrapMode::AtBounds, 0);
 
         sample_sizes_button.set_callback({
-            let sender = sender.clone();
+            let s = sender;
             move |_| {
-                sender.send(GuiMessage::ShowSampleSizes);
+                s.send(GuiMessage::ShowSampleSizes);
             }
         });
 

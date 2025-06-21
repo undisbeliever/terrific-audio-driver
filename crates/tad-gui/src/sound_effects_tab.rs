@@ -214,7 +214,7 @@ impl SoundEffectsTab {
         let show_subroutines = CheckButton::default().with_label("Show subroutines");
         sidebar.fixed(&show_subroutines, input_height(&show_subroutines));
 
-        let sfx_table = ListEditorTable::new(&mut sidebar, sender.clone());
+        let sfx_table = ListEditorTable::new(&mut sidebar, sender);
 
         let mut add_missing_sfx_button = Button::default().with_label("Add missing sound effects");
         sidebar.fixed(
@@ -224,7 +224,7 @@ impl SoundEffectsTab {
 
         sidebar.end();
 
-        let no_sfx_file_group = no_sfx_file_gui(sender.clone());
+        let no_sfx_file_group = no_sfx_file_gui(sender);
 
         let mut main_group = Flex::default().column();
         main_group.hide();
@@ -339,7 +339,7 @@ impl SoundEffectsTab {
 
         add_missing_sfx_button.deactivate();
         add_missing_sfx_button.set_callback({
-            let s = sender.clone();
+            let s = sender;
             move |_| s.send(GuiMessage::AddMissingSoundEffects)
         });
 
@@ -351,7 +351,7 @@ impl SoundEffectsTab {
         });
 
         let state = Rc::new(RefCell::from(State {
-            sender: sender.clone(),
+            sender,
 
             sfx_file_loaded: false,
 
@@ -385,7 +385,6 @@ impl SoundEffectsTab {
         // This is done here so focus is not stolen from the editor.
         group.handle({
             let s = state.clone();
-            let sender = sender.clone();
             move |_widget, ev| match ev {
                 Event::KeyDown => match event_key() {
                     Key::F5 => {
@@ -416,7 +415,7 @@ impl SoundEffectsTab {
         });
 
         stop_button.set_callback({
-            let s = sender.clone();
+            let s = sender;
             move |_| {
                 s.send(GuiMessage::PauseAudio);
             }
@@ -1025,7 +1024,7 @@ fn no_sfx_file_gui(sender: app::Sender<GuiMessage>) -> Flex {
             .with_size(button_width, 0)
             .with_label(label);
         b.set_callback({
-            let s = sender.clone();
+            let s = sender;
             move |_| {
                 s.send(f());
             }

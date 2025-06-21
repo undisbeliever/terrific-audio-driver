@@ -343,7 +343,7 @@ impl Project {
         let compiler_thread = compiler_thread::create_bg_thread(
             data.pf_parent_path.clone(),
             compiler_reciever,
-            sender.clone(),
+            sender,
             audio_sender.clone(),
         );
 
@@ -352,23 +352,23 @@ impl Project {
             sfx_tab_selected: false,
 
             sample_analyser_dialog: SampleAnalyserDialog::new(
-                sender.clone(),
+                sender,
                 compiler_sender.clone(),
                 audio_sender.clone(),
             ),
 
-            sfx_window: SfxWindow::new(sender.clone()),
-            driver_state_window: DriverStateWindow::new(sender.clone()),
+            sfx_window: SfxWindow::new(sender),
+            driver_state_window: DriverStateWindow::new(sender),
 
-            project_tab: ProjectTab::new(&data, sender.clone()),
-            samples_tab: SamplesTab::new(&data.instruments_and_samples, sender.clone()),
-            sound_effects_tab: SoundEffectsTab::new(data.default_sfx_flags, sender.clone()),
+            project_tab: ProjectTab::new(&data, sender),
+            samples_tab: SamplesTab::new(&data.instruments_and_samples, sender),
+            sound_effects_tab: SoundEffectsTab::new(data.default_sfx_flags, sender),
             closed_song_tabs: Vec::new(),
             song_tabs: HashMap::new(),
 
             audio_sender,
             audio_monitor,
-            audio_monitor_timer: MonitorTimer::new(sender.clone()),
+            audio_monitor_timer: MonitorTimer::new(sender),
 
             compiler_thread,
             compiler_sender,
@@ -707,7 +707,7 @@ impl Project {
                 if unsaved.is_empty() {
                     fltk::app::quit();
                 } else {
-                    quit_with_unsaved_files_dialog(unsaved, self.sender.clone());
+                    quit_with_unsaved_files_dialog(unsaved, self.sender);
                 }
             }
 
@@ -1194,7 +1194,7 @@ impl Project {
                 song_tab.reuse_tab(song_id, mml_text);
                 song_tab
             }
-            None => SongTab::new(song_id, mml_text, self.sender.clone()),
+            None => SongTab::new(song_id, mml_text, self.sender),
         }
     }
 
@@ -1399,10 +1399,9 @@ impl MainWindow {
 
         let mut col = fltk::group::Flex::default_fill().column();
 
-        let (audio_thread, audio_sender, audio_monitor) =
-            audio_thread::create_audio_thread(sender.clone());
+        let (audio_thread, audio_sender, audio_monitor) = audio_thread::create_audio_thread(sender);
 
-        let mut menu = Menu::new(sender.clone(), audio_sender.clone());
+        let mut menu = Menu::new(sender, audio_sender.clone());
         menu.deactivate_project_items();
         col.fixed(menu.menu_bar(), input_height(menu.menu_bar()));
 
@@ -1422,14 +1421,14 @@ impl MainWindow {
 
         window.end();
 
-        let mut about_tab = AboutTab::new(tabs.clone(), sender.clone());
+        let mut about_tab = AboutTab::new(tabs.clone(), sender);
         about_tab.show();
         tabs.auto_layout();
 
         window.show();
 
         window.set_callback({
-            let s = sender.clone();
+            let s = sender;
             move |_| {
                 if fltk::app::event() == fltk::enums::Event::Close {
                     s.send(GuiMessage::QuitRequested);
@@ -1450,11 +1449,8 @@ impl MainWindow {
             _ => false,
         });
 
-        tabs.set_callback({
-            let sender = sender.clone();
-            move |_| {
-                sender.send(GuiMessage::SelectedTabChanged);
-            }
+        tabs.set_callback(move |_| {
+            sender.send(GuiMessage::SelectedTabChanged);
         });
 
         Self {
@@ -1484,7 +1480,7 @@ impl MainWindow {
             pf,
             self.tabs.clone(),
             self.menu.clone(),
-            self.sender.clone(),
+            self.sender,
             self.audio_sender.clone(),
             self.audio_monitor.clone(),
         ));

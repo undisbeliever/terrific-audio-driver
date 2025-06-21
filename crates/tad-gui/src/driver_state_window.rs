@@ -784,8 +784,8 @@ impl DriverStateWindow {
         window.end();
 
         track_audio_cb.set_callback({
-            let sender = sender.clone();
-            move |_| sender.send(GuiMessage::DriverStateTrackingCheckboxChanged)
+            let s = sender;
+            move |_| s.send(GuiMessage::DriverStateTrackingCheckboxChanged)
         });
 
         globals.ticks.widget.set_trigger(CallbackTrigger::Changed);

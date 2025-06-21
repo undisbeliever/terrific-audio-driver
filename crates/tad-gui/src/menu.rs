@@ -63,7 +63,7 @@ impl Menu {
 
         let mut add = |label, shortcut, flags, f: fn() -> GuiMessage| -> menu::MenuItem {
             let index = menu_bar.add(label, shortcut, flags, {
-                let s = sender.clone();
+                let s = sender;
                 move |_: &mut fltk::menu::MenuBar| s.send(f())
             });
 

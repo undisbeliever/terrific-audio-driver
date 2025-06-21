@@ -283,19 +283,19 @@ impl SfxExportOrderEditor {
             parent,
             sfx_export_order.high_priority_sfx(),
             max_high,
-            sender.clone(),
+            sender,
         );
         let mut normal_priority = ListEditorTable::new_from_slice(
             parent,
             sfx_export_order.normal_priority_sfx(),
             max_normal,
-            sender.clone(),
+            sender,
         );
         let mut low_priority = ListEditorTable::new_from_slice(
             parent,
             sfx_export_order.low_priority_sfx(),
             max_low,
-            sender.clone(),
+            sender,
         );
 
         high_priority.add_sel_button(

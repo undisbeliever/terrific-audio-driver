@@ -37,7 +37,7 @@ fn no_project_button_group(sender: app::Sender<GuiMessage>) -> Flex {
     let mut button = |label: &str, f: fn() -> GuiMessage| {
         let mut b = Button::default().with_label(label);
         b.set_callback({
-            let s = sender.clone();
+            let s = sender;
             move |_w| s.send(f())
         });
         flex.fixed(&b, button_width);

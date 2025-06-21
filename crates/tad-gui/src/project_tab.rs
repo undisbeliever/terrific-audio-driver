@@ -200,9 +200,9 @@ impl ProjectTab {
         group.fixed(&sfx_sidebar, ch_units_to_width(&sfx_sidebar, 30));
 
         let sfx_export_order =
-            SfxExportOrderEditor::new(&mut sfx_sidebar, &data.sfx_export_order, sender.clone());
+            SfxExportOrderEditor::new(&mut sfx_sidebar, &data.sfx_export_order, sender);
 
-        DefaultSfxFlagsWidget::new(&mut sfx_sidebar, data.default_sfx_flags, sender.clone());
+        DefaultSfxFlagsWidget::new(&mut sfx_sidebar, data.default_sfx_flags, sender);
 
         sfx_sidebar.end();
 

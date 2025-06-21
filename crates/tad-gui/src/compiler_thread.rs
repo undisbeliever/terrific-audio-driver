@@ -1851,7 +1851,7 @@ fn monitor_thread(
     sender: fltk::app::Sender<GuiMessage>,
     audio_sender: mpsc::Sender<AudioMessage>,
 ) {
-    let s = sender.clone();
+    let s = sender;
 
     let handler = thread::Builder::new()
         .name("compiler_thread".into())
