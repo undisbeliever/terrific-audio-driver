@@ -362,31 +362,32 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
 
         let (_, errors) = parser.finalize();
 
-        if errors.is_empty() && bc_state.is_some() {
-            let bc_state = bc_state.unwrap();
+        match (errors.is_empty(), bc_state) {
+            (true, Some(bc_state)) => {
+                let changes_song_tempo = !bc_state.tempo_changes.is_empty();
+                let subroutine_id = SubroutineId::new(song_subroutine_index, bc_state);
 
-            let changes_song_tempo = !bc_state.tempo_changes.is_empty();
-            let subroutine_id = SubroutineId::new(song_subroutine_index, bc_state);
+                self.subroutines
+                    .id_map
+                    .insert(identifier, Some(subroutine_id.clone()));
 
-            self.subroutines
-                .id_map
-                .insert(identifier, Some(subroutine_id.clone()));
+                self.subroutines.vec.push(Subroutine {
+                    identifier: identifier.to_owned(),
+                    bytecode_offset: sd_start_index.try_into().unwrap_or(u16::MAX),
+                    subroutine_id,
+                    changes_song_tempo,
+                });
 
-            self.subroutines.vec.push(Subroutine {
-                identifier: identifier.to_owned(),
-                bytecode_offset: sd_start_index.try_into().unwrap_or(u16::MAX),
-                subroutine_id,
-                changes_song_tempo,
-            });
+                Ok(())
+            }
+            _ => {
+                self.subroutines.id_map.insert(identifier, None);
 
-            Ok(())
-        } else {
-            self.subroutines.id_map.insert(identifier, None);
-
-            Err(MmlChannelError {
-                identifier: identifier.to_owned(),
-                errors,
-            })
+                Err(MmlChannelError {
+                    identifier: identifier.to_owned(),
+                    errors,
+                })
+            }
         }
     }
 
@@ -467,10 +468,8 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
 
         let (section_tick_counters, errors) = parser.finalize();
 
-        if errors.is_empty() && bc_state.is_some() {
-            let bc_state = bc_state.unwrap();
-
-            Ok(Channel {
+        match (errors.is_empty(), bc_state) {
+            (true, Some(bc_state)) => Ok(Channel {
                 name: identifier.as_str().chars().next().unwrap(),
                 bytecode_offset: sd_start_index.try_into().unwrap_or(u16::MAX),
                 loop_point,
@@ -478,12 +477,11 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
                 max_stack_depth: bc_state.max_stack_depth,
                 section_tick_counters,
                 tempo_changes: bc_state.tempo_changes,
-            })
-        } else {
-            Err(MmlChannelError {
+            }),
+            _ => Err(MmlChannelError {
                 identifier: identifier.to_owned(),
                 errors,
-            })
+            }),
         }
     }
 }
