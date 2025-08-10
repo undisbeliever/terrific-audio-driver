@@ -2013,7 +2013,7 @@ impl Display for ProjectFileErrorsIndentedDisplay<'_> {
 }
 
 impl ProjectFileErrors {
-    pub fn multiline_display(&self) -> ProjectFileErrorsIndentedDisplay {
+    pub fn multiline_display(&self) -> ProjectFileErrorsIndentedDisplay<'_> {
         ProjectFileErrorsIndentedDisplay(self)
     }
 }
@@ -2021,7 +2021,7 @@ impl ProjectFileErrors {
 pub struct SoundEffectsFileErrorIndentedDisplay<'a>(&'a SoundEffectsFileError);
 
 impl SoundEffectsFileError {
-    pub fn multiline_display(&self) -> SoundEffectsFileErrorIndentedDisplay {
+    pub fn multiline_display(&self) -> SoundEffectsFileErrorIndentedDisplay<'_> {
         SoundEffectsFileErrorIndentedDisplay(self)
     }
 }
@@ -2215,7 +2215,7 @@ impl Display for SampleAndInstrumentDataErrorIndentedDisplay<'_> {
 }
 
 impl SampleAndInstrumentDataError {
-    pub fn multiline_display(&self) -> SampleAndInstrumentDataErrorIndentedDisplay {
+    pub fn multiline_display(&self) -> SampleAndInstrumentDataErrorIndentedDisplay<'_> {
         SampleAndInstrumentDataErrorIndentedDisplay(self)
     }
 }
@@ -2242,7 +2242,7 @@ impl Display for PitchTableErrorIndentedDisplay<'_> {
 }
 
 impl PitchTableError {
-    pub fn multiline_display(&self) -> PitchTableErrorIndentedDisplay {
+    pub fn multiline_display(&self) -> PitchTableErrorIndentedDisplay<'_> {
         PitchTableErrorIndentedDisplay(self)
     }
 }
@@ -2267,7 +2267,7 @@ impl Display for CommonAudioDataErrorsMultilineDisplay<'_> {
 }
 
 impl CommonAudioDataErrors {
-    pub fn multiline_display(&self) -> CommonAudioDataErrorsMultilineDisplay {
+    pub fn multiline_display(&self) -> CommonAudioDataErrorsMultilineDisplay<'_> {
         CommonAudioDataErrorsMultilineDisplay(self)
     }
 }
@@ -2275,7 +2275,7 @@ impl CommonAudioDataErrors {
 pub struct MmlCompileErrorsIndentedDisplay<'a>(&'a MmlCompileErrors);
 
 impl MmlCompileErrors {
-    pub fn multiline_display(&self) -> MmlCompileErrorsIndentedDisplay {
+    pub fn multiline_display(&self) -> MmlCompileErrorsIndentedDisplay<'_> {
         MmlCompileErrorsIndentedDisplay(self)
     }
 }
@@ -2353,7 +2353,7 @@ impl Display for SongTooLargeErrorIndentedDisplay<'_> {
 pub struct SongErrorIndentedDisplay<'a>(&'a SongError);
 
 impl SongError {
-    pub fn multiline_display(&self) -> SongErrorIndentedDisplay {
+    pub fn multiline_display(&self) -> SongErrorIndentedDisplay<'_> {
         SongErrorIndentedDisplay(self)
     }
 }
@@ -2368,7 +2368,7 @@ impl Display for SongErrorIndentedDisplay<'_> {
 }
 
 impl SongTooLargeError {
-    pub fn multiline_display(&self) -> SongTooLargeErrorIndentedDisplay {
+    pub fn multiline_display(&self) -> SongTooLargeErrorIndentedDisplay<'_> {
         SongTooLargeErrorIndentedDisplay(self)
     }
 }
@@ -2376,7 +2376,7 @@ impl SongTooLargeError {
 pub struct MmlPrefixErrorIndentedDisplay<'a>(&'a MmlPrefixError);
 
 impl MmlPrefixError {
-    pub fn multiline_display(&self) -> MmlPrefixErrorIndentedDisplay {
+    pub fn multiline_display(&self) -> MmlPrefixErrorIndentedDisplay<'_> {
         MmlPrefixErrorIndentedDisplay(self)
     }
 }

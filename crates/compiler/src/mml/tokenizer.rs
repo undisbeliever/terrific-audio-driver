@@ -672,7 +672,7 @@ fn parse_bytecode_asm<'a>(
     }
 }
 
-fn parse_call_subroutine_asm(asm: &str) -> Option<Token> {
+fn parse_call_subroutine_asm(asm: &str) -> Option<Token<'_>> {
     if !asm.starts_with(bytecode_assembler::CALL_SUBROUTINE) {
         return None;
     }

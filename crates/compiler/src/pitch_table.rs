@@ -242,7 +242,7 @@ struct MstIterator<'a> {
     remaining: &'a [(usize, InstrumentPitch)],
 }
 
-fn group_by_mst(pitches: &SortedPitches) -> MstIterator {
+fn group_by_mst(pitches: &SortedPitches) -> MstIterator<'_> {
     MstIterator {
         remaining: pitches.instruments.as_slice(),
     }

@@ -299,7 +299,7 @@ impl SegmentPrefix {
         }
     }
 
-    pub fn index(&self, index: usize) -> Segment {
+    pub fn index(&self, index: usize) -> Segment<'_> {
         Segment {
             segment: self,
             index,

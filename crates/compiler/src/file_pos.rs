@@ -159,7 +159,7 @@ impl Line<'_> {
         }
     }
 
-    pub fn split_once(&self) -> Option<(&str, Line)> {
+    pub fn split_once(&self) -> Option<(&str, Line<'_>)> {
         match self
             .text
             .char_indices()
@@ -197,7 +197,7 @@ pub fn blank_line_splitter() -> LineSplitter<'static> {
     }
 }
 
-pub fn split_lines(s: &str) -> LineSplitter {
+pub fn split_lines(s: &str) -> LineSplitter<'_> {
     assert!(s.len() < i32::MAX as usize);
 
     LineSplitter {

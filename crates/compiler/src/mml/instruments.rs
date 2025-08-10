@@ -98,7 +98,7 @@ pub fn parse_instruments(
 
 pub(crate) fn build_instrument_map(
     instruments: &[MmlInstrument],
-) -> Result<HashMap<IdentifierStr, usize>, Vec<ErrorWithPos<MmlLineError>>> {
+) -> Result<HashMap<IdentifierStr<'_>, usize>, Vec<ErrorWithPos<MmlLineError>>> {
     let mut out = HashMap::with_capacity(instruments.len());
     let mut errors = Vec::new();
 

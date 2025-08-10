@@ -436,12 +436,12 @@ impl SharedSongInterpreter {
         self.0
     }
 
-    pub fn try_borrow(&self) -> LockResult<RwLockReadGuard<AudioThreadSongInterpreter>> {
+    pub fn try_borrow(&self) -> LockResult<RwLockReadGuard<'_, AudioThreadSongInterpreter>> {
         self.1.read()
     }
 
     // forbid GUI thread from modifying the song-interpreter
-    fn try_borrow_mut(&self) -> LockResult<RwLockWriteGuard<AudioThreadSongInterpreter>> {
+    fn try_borrow_mut(&self) -> LockResult<RwLockWriteGuard<'_, AudioThreadSongInterpreter>> {
         self.1.write()
     }
 }

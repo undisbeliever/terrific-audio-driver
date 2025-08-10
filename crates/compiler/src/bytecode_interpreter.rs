@@ -1671,7 +1671,11 @@ struct CommonAudioDataSoA<'a> {
 }
 
 impl CommonAudioDataSoA<'_> {
-    fn new(c: &CommonAudioData, song_data_addr: u16, audio_mode: AudioMode) -> CommonAudioDataSoA {
+    fn new(
+        c: &CommonAudioData,
+        song_data_addr: u16,
+        audio_mode: AudioMode,
+    ) -> CommonAudioDataSoA<'_> {
         let inst_soa_data = |i| {
             assert!(i < COMMON_DATA_BYTES_PER_INSTRUMENT);
 

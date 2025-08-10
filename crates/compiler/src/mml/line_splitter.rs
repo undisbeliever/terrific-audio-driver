@@ -37,7 +37,7 @@ pub(crate) struct MmlSfxLines<'a> {
 
 // Assumes `line` starts with a non-whitespace character
 // Assumes `mml_text` length is < i32::MAX
-fn split_idstr_and_line(line: Line) -> (&str, Line) {
+fn split_idstr_and_line(line: Line<'_>) -> (&str, Line<'_>) {
     let s = line.text;
     let (id, after_id, id_char_count) = match s
         .char_indices()
@@ -128,7 +128,7 @@ fn validate_music_channels<'a>(
 
 pub(super) fn split_mml_song_lines(
     mml_text: &str,
-) -> Result<MmlLines, Vec<ErrorWithPos<MmlLineError>>> {
+) -> Result<MmlLines<'_>, Vec<ErrorWithPos<MmlLineError>>> {
     let mut errors = Vec::new();
 
     if mml_text.len() > MAX_MML_TEXT_LENGTH {
@@ -279,7 +279,7 @@ pub(super) fn split_mml_song_lines(
 
 pub(super) fn split_mml_sfx_subroutines_header_lines(
     mml_text: &str,
-) -> Result<MmlSfxSubroutineHeaderLines, Vec<ErrorWithPos<MmlLineError>>> {
+) -> Result<MmlSfxSubroutineHeaderLines<'_>, Vec<ErrorWithPos<MmlLineError>>> {
     let mut errors = Vec::new();
 
     if mml_text.len() > MAX_MML_TEXT_LENGTH {
@@ -367,7 +367,7 @@ pub(super) fn split_mml_sfx_subroutines_header_lines(
 
 pub(super) fn split_mml_sound_effect_lines(
     mml_text: &str,
-) -> Result<MmlSfxLines, Vec<ErrorWithPos<MmlLineError>>> {
+) -> Result<MmlSfxLines<'_>, Vec<ErrorWithPos<MmlLineError>>> {
     let mut errors = Vec::new();
 
     if mml_text.len() > MAX_MML_TEXT_LENGTH {
