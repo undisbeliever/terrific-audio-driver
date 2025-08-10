@@ -107,7 +107,7 @@ Licenses marked "synthesized" did not have a license file in their crate.
 
 
 Terrific Audio Driver makes use of the following open source projects:
-  * MIT License (84)
+  * MIT License (96)
   * Apache License 2.0 (2)
   * zlib License (2)
   * Unicode License v3 (1)
@@ -515,16 +515,27 @@ END OF TERMS AND CONDITIONS
 ## MIT License
 
 Used by:
+  * [windows-link 0.1.3](https://github.com/microsoft/windows-rs)
   * [windows-sys 0.59.0](https://github.com/microsoft/windows-rs)
+  * [windows-sys 0.60.2](https://github.com/microsoft/windows-rs)
   * [windows-targets 0.52.6](https://github.com/microsoft/windows-rs)
+  * [windows-targets 0.53.3](https://github.com/microsoft/windows-rs)
   * [windows_aarch64_gnullvm 0.52.6](https://github.com/microsoft/windows-rs)
+  * [windows_aarch64_gnullvm 0.53.0](https://github.com/microsoft/windows-rs)
   * [windows_aarch64_msvc 0.52.6](https://github.com/microsoft/windows-rs)
+  * [windows_aarch64_msvc 0.53.0](https://github.com/microsoft/windows-rs)
   * [windows_i686_gnu 0.52.6](https://github.com/microsoft/windows-rs)
+  * [windows_i686_gnu 0.53.0](https://github.com/microsoft/windows-rs)
   * [windows_i686_gnullvm 0.52.6](https://github.com/microsoft/windows-rs)
+  * [windows_i686_gnullvm 0.53.0](https://github.com/microsoft/windows-rs)
   * [windows_i686_msvc 0.52.6](https://github.com/microsoft/windows-rs)
+  * [windows_i686_msvc 0.53.0](https://github.com/microsoft/windows-rs)
   * [windows_x86_64_gnu 0.52.6](https://github.com/microsoft/windows-rs)
+  * [windows_x86_64_gnu 0.53.0](https://github.com/microsoft/windows-rs)
   * [windows_x86_64_gnullvm 0.52.6](https://github.com/microsoft/windows-rs)
+  * [windows_x86_64_gnullvm 0.53.0](https://github.com/microsoft/windows-rs)
   * [windows_x86_64_msvc 0.52.6](https://github.com/microsoft/windows-rs)
+  * [windows_x86_64_msvc 0.53.0](https://github.com/microsoft/windows-rs)
 
 ```
     MIT License
@@ -664,7 +675,7 @@ DEALINGS IN THE SOFTWARE.
 ## MIT License
 
 Used by:
-  * [cc 1.2.27](https://github.com/rust-lang/cc-rs)
+  * [cc 1.2.32](https://github.com/rust-lang/cc-rs)
   * [cfg-if 1.0.1](https://github.com/rust-lang/cfg-if)
   * [cmake 0.1.54](https://github.com/rust-lang/cmake-rs)
 
@@ -844,10 +855,115 @@ DEALINGS IN THE SOFTWARE.
 ## MIT License
 
 Used by:
+  * [hashbrown 0.15.5](https://github.com/rust-lang/hashbrown)
+
+```
+Copyright (c) 2016 Amanieu d'Antras
+
+Permission is hereby granted, free of charge, to any
+person obtaining a copy of this software and associated
+documentation files (the "Software"), to deal in the
+Software without restriction, including without
+limitation the rights to use, copy, modify, merge,
+publish, distribute, sublicense, and/or sell copies of
+the Software, and to permit persons to whom the Software
+is furnished to do so, subject to the following
+conditions:
+
+The above copyright notice and this permission notice
+shall be included in all copies or substantial portions
+of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF
+ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED
+TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT
+SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
+IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+DEALINGS IN THE SOFTWARE.
+
+```
+
+
+## MIT License
+
+Used by:
   * [utf8parse 0.2.2](https://github.com/alacritty/vte)
 
 ```
 Copyright (c) 2016 Joe Wilm
+
+Permission is hereby granted, free of charge, to any
+person obtaining a copy of this software and associated
+documentation files (the "Software"), to deal in the
+Software without restriction, including without
+limitation the rights to use, copy, modify, merge,
+publish, distribute, sublicense, and/or sell copies of
+the Software, and to permit persons to whom the Software
+is furnished to do so, subject to the following
+conditions:
+
+The above copyright notice and this permission notice
+shall be included in all copies or substantial portions
+of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF
+ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED
+TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT
+SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
+IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+DEALINGS IN THE SOFTWARE.
+
+```
+
+
+## MIT License
+
+Used by:
+  * [indexmap 2.10.0](https://github.com/indexmap-rs/indexmap)
+
+```
+Copyright (c) 2016--2017
+
+Permission is hereby granted, free of charge, to any
+person obtaining a copy of this software and associated
+documentation files (the "Software"), to deal in the
+Software without restriction, including without
+limitation the rights to use, copy, modify, merge,
+publish, distribute, sublicense, and/or sell copies of
+the Software, and to permit persons to whom the Software
+is furnished to do so, subject to the following
+conditions:
+
+The above copyright notice and this permission notice
+shall be included in all copies or substantial portions
+of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF
+ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED
+TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT
+SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
+IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+DEALINGS IN THE SOFTWARE.
+
+```
+
+
+## MIT License
+
+Used by:
+  * [equivalent 1.0.2](https://github.com/indexmap-rs/equivalent)
+
+```
+Copyright (c) 2016--2023
 
 Permission is hereby granted, free of charge, to any
 person obtaining a copy of this software and associated
@@ -974,14 +1090,14 @@ THE SOFTWARE.
 ## MIT License
 
 Used by:
-  * [anstream 0.6.19](https://github.com/rust-cli/anstyle.git)
+  * [anstream 0.6.20](https://github.com/rust-cli/anstyle.git)
   * [anstyle-parse 0.2.7](https://github.com/rust-cli/anstyle.git)
-  * [anstyle-query 1.1.3](https://github.com/rust-cli/anstyle.git)
-  * [anstyle-wincon 3.0.9](https://github.com/rust-cli/anstyle.git)
+  * [anstyle-query 1.1.4](https://github.com/rust-cli/anstyle.git)
+  * [anstyle-wincon 3.0.10](https://github.com/rust-cli/anstyle.git)
   * [anstyle 1.0.11](https://github.com/rust-cli/anstyle.git)
-  * [clap 4.5.40](https://github.com/clap-rs/clap)
-  * [clap_builder 4.5.40](https://github.com/clap-rs/clap)
-  * [clap_derive 4.5.40](https://github.com/clap-rs/clap)
+  * [clap 4.5.43](https://github.com/clap-rs/clap)
+  * [clap_builder 4.5.43](https://github.com/clap-rs/clap)
+  * [clap_derive 4.5.41](https://github.com/clap-rs/clap)
   * [clap_lex 0.7.5](https://github.com/clap-rs/clap)
   * [colorchoice 1.0.4](https://github.com/rust-cli/anstyle.git)
   * [is_terminal_polyfill 1.70.1](https://github.com/polyfill-rs/is_terminal_polyfill)
@@ -1185,7 +1301,7 @@ USE OR OTHER DEALINGS IN THE SOFTWARE.
 ## MIT License
 
 Used by:
-  * [fltk 1.5.9](https://github.com/fltk-rs/fltk-rs)
+  * [fltk 1.5.10](https://github.com/fltk-rs/fltk-rs)
 
 ```
 MIT License
@@ -1216,7 +1332,7 @@ SOFTWARE.
 ## MIT License
 
 Used by:
-  * [fltk-sys 1.5.9](https://github.com/fltk-rs/fltk-rs)
+  * [fltk-sys 1.5.10](https://github.com/fltk-rs/fltk-rs)
 
 ```
 MIT License
@@ -1245,21 +1361,21 @@ SOFTWARE.
 ## MIT License
 
 Used by:
-  * [cxx-build 1.0.158](https://github.com/dtolnay/cxx)
-  * [cxx 1.0.158](https://github.com/dtolnay/cxx)
-  * [cxxbridge-flags 1.0.158](https://github.com/dtolnay/cxx)
-  * [cxxbridge-macro 1.0.158](https://github.com/dtolnay/cxx)
+  * [cxx-build 1.0.168](https://github.com/dtolnay/cxx)
+  * [cxx 1.0.168](https://github.com/dtolnay/cxx)
+  * [cxxbridge-flags 1.0.168](https://github.com/dtolnay/cxx)
+  * [cxxbridge-macro 1.0.168](https://github.com/dtolnay/cxx)
   * [itoa 1.0.15](https://github.com/dtolnay/itoa)
   * [link-cplusplus 1.0.10](https://github.com/dtolnay/link-cplusplus)
   * [once_cell 1.21.3](https://github.com/matklad/once_cell)
   * [paste 1.0.15](https://github.com/dtolnay/paste)
   * [proc-macro2 1.0.95](https://github.com/dtolnay/proc-macro2)
   * [quote 1.0.40](https://github.com/dtolnay/quote)
-  * [rustversion 1.0.21](https://github.com/dtolnay/rustversion)
-  * [scratch 1.0.8](https://github.com/dtolnay/scratch)
+  * [rustversion 1.0.22](https://github.com/dtolnay/rustversion)
+  * [scratch 1.0.9](https://github.com/dtolnay/scratch)
   * [serde 1.0.219](https://github.com/serde-rs/serde)
   * [serde_derive 1.0.219](https://github.com/serde-rs/serde)
-  * [serde_json 1.0.140](https://github.com/serde-rs/json)
+  * [serde_json 1.0.142](https://github.com/serde-rs/json)
   * [syn 2.0.104](https://github.com/dtolnay/syn)
   * [unicode-ident 1.0.18](https://github.com/dtolnay/unicode-ident)
 
@@ -1490,8 +1606,6 @@ DEALINGS IN THE SOFTWARE.
 ## MIT License
 
 Used by:
-  * [aho-corasick 1.1.3](https://github.com/BurntSushi/aho-corasick)
-  * [memchr 2.7.5](https://github.com/BurntSushi/memchr)
   * [termcolor 1.4.1](https://github.com/BurntSushi/termcolor)
   * [winapi-util 0.1.9](https://github.com/BurntSushi/winapi-util)
 
