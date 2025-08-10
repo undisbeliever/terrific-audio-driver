@@ -666,6 +666,7 @@ Used by:
   * [regex-automata 0.4.9](https://github.com/rust-lang/regex/tree/master/regex-automata)
   * [regex-syntax 0.8.5](https://github.com/rust-lang/regex/tree/master/regex-syntax)
   * [regex 1.11.1](https://github.com/rust-lang/regex)
+  * [relative-path 2.0.1](https://github.com/udoprog/relative-path)
 
 ```
 Copyright (c) 2014 The Rust Project Developers
@@ -972,6 +973,7 @@ SOFTWARE.
 
 Used by:
   * [unicode-id 0.3.5](https://github.com/Boshen/unicode-id)
+  * [unicode-width 0.2.1](https://github.com/unicode-rs/unicode-width)
 
 ```
 Licensed under the Apache License, Version 2.0
@@ -1114,7 +1116,6 @@ SOFTWARE.
 
 Used by:
   * [libm 0.2.15](https://github.com/rust-lang/compiler-builtins)
-  * [relative-path 1.9.3](https://github.com/udoprog/relative-path)
   * [sdl2-sys 0.37.0](https://github.com/rust-sdl2/rust-sdl2)
 
 ```
@@ -1449,7 +1450,6 @@ DEALINGS IN THE SOFTWARE.
 
 Used by:
   * [aho-corasick 1.1.3](https://github.com/BurntSushi/aho-corasick)
-  * [memchr 2.7.5](https://github.com/BurntSushi/memchr)
   * [termcolor 1.4.1](https://github.com/BurntSushi/termcolor)
   * [winapi-util 0.1.9](https://github.com/BurntSushi/winapi-util)
 
