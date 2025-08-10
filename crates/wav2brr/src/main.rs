@@ -13,6 +13,8 @@ use clap::Parser;
 use std::fs;
 use std::path::PathBuf;
 
+const MAX_WAVE_SAMPLES: usize = 128 * 1024;
+
 #[derive(clap::ValueEnum, Clone)]
 enum BrrEvaluator {
     SquaredError,
@@ -125,7 +127,7 @@ fn main() {
             Ok(file) => file,
         };
 
-        match read_mono_pcm_wave_file(&mut wave_file, u16::MAX.into()) {
+        match read_mono_pcm_wave_file(&mut wave_file, MAX_WAVE_SAMPLES) {
             Err(why) => error!("Error reading {}: {}", args.input.display(), why),
             Ok(wav) => wav,
         }

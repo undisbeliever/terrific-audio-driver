@@ -4,6 +4,7 @@ Terrific Audio Driver Changelog
 Version 0.1.2
 =============
  * Increased the maximum BRR sample size
+ * Increased the maximum `wav2brr` input size
 
 
 Version 0.1.1
