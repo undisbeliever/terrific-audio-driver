@@ -26,7 +26,8 @@ use std::io::Read;
 use std::ops::RangeInclusive;
 use std::sync::Arc;
 
-const MAX_BRR_SAMPLE_LOAD: u64 = 16 * 1024;
+// A blank project has 61211 bytes of free space (2025)
+const MAX_BRR_SAMPLE_LOAD: u64 = 60 * 1024;
 const MAX_WAV_SAMPLES: usize =
     (MAX_BRR_SAMPLE_LOAD as usize) / BYTES_PER_BRR_BLOCK * SAMPLES_PER_BLOCK;
 
