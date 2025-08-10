@@ -116,6 +116,7 @@ Please see the included [licenses file](licenses.md) for the full third party li
   * [windows_x86_64_gnu 0.52.6](https://github.com/microsoft/windows-rs), MIT License
   * [windows_x86_64_gnullvm 0.52.6](https://github.com/microsoft/windows-rs), MIT License
   * [windows_x86_64_msvc 0.52.6](https://github.com/microsoft/windows-rs), MIT License
+  * [sdl2-sys 0.38.0](https://github.com/rust-sdl2/rust-sdl2), MIT License
   * [markdown 1.0.0](https://github.com/wooorm/markdown-rs), MIT License
   * [lazy_static 1.5.0](https://github.com/rust-lang-nursery/lazy-static.rs), MIT License
   * [cc 1.2.27](https://github.com/rust-lang/cc-rs), MIT License
@@ -157,7 +158,6 @@ Please see the included [licenses file](licenses.md) for the full third party li
   * [spectrum-analyzer 1.7.0](https://github.com/phip1611/spectrum-analyzer), MIT License
   * [cmk 0.1.2](https://github.com/MoAlyousef/cmk), MIT License
   * [libm 0.2.15](https://github.com/rust-lang/compiler-builtins), MIT License
-  * [sdl2-sys 0.37.0](https://github.com/rust-sdl2/rust-sdl2), MIT License
   * [fltk 1.5.9](https://github.com/fltk-rs/fltk-rs), MIT License
   * [fltk-sys 1.5.9](https://github.com/fltk-rs/fltk-rs), MIT License
   * [cxx-build 1.0.158](https://github.com/dtolnay/cxx), MIT License
@@ -177,7 +177,7 @@ Please see the included [licenses file](licenses.md) for the full third party li
   * [serde_json 1.0.140](https://github.com/serde-rs/json), MIT License
   * [syn 2.0.104](https://github.com/dtolnay/syn), MIT License
   * [unicode-ident 1.0.18](https://github.com/dtolnay/unicode-ident), MIT License
-  * [sdl2 0.37.0](https://github.com/Rust-SDL2/rust-sdl2), MIT License
+  * [sdl2 0.38.0](https://github.com/Rust-SDL2/rust-sdl2), MIT License
   * [aho-corasick 1.1.3](https://github.com/BurntSushi/aho-corasick), MIT License
   * [memchr 2.7.5](https://github.com/BurntSushi/memchr), MIT License
   * [termcolor 1.4.1](https://github.com/BurntSushi/termcolor), MIT License
@@ -191,8 +191,7 @@ Please see the included [licenses file](licenses.md) for the full third party li
   * [termcolor 1.4.1](https://github.com/BurntSushi/termcolor), MIT License
   * [winapi-util 0.1.9](https://github.com/BurntSushi/winapi-util), MIT License
   * [unicode-ident 1.0.18](https://github.com/dtolnay/unicode-ident), Unicode License v3
-  * [sdl2-sys 0.37.0](https://github.com/rust-sdl2/rust-sdl2), zlib License
-  * [sdl2-sys 0.37.0](https://github.com/rust-sdl2/rust-sdl2), zlib License
+  * [sdl2-sys 0.38.0](https://github.com/rust-sdl2/rust-sdl2), zlib License
   * [foldhash 0.1.5](https://github.com/orlp/foldhash), zlib License
   * [FLTK](https://www.fltk.org/), [FLTK license](https://www.fltk.org/doc-1.4/license.html)
   * [SDL2](https://libsdl.org/), [zlib license](https://www.libsdl.org/license.php)
