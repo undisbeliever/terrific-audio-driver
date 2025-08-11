@@ -20,7 +20,7 @@ pub enum EncodeError {
     NoSamples,
     InvalidNumberOfSamples,
     TooManySamples,
-    InvalidLoopPoint,
+    InvalidLoopPointSamples,
     LoopPointTooLarge(usize, usize),
     DupeBlockHackNotAllowedWithLoopPoint,
     DupeBlockHackNotAllowedWithLoopResetsFilter,
@@ -36,7 +36,7 @@ impl std::fmt::Display for EncodeError {
                 "number of samples is not a multiple of {SAMPLES_PER_BLOCK}"
             ),
             EncodeError::TooManySamples => write!(f, "too many samples"),
-            EncodeError::InvalidLoopPoint => {
+            EncodeError::InvalidLoopPointSamples => {
                 write!(f, "loop_point is not a multiple of {SAMPLES_PER_BLOCK}")
             }
             EncodeError::LoopPointTooLarge(lp, s_len) => write!(
@@ -304,7 +304,7 @@ fn encode_brr_with_scorer<S: Scorer>(
         (None, None) => (false, usize::MAX, None),
         (Some(lp), None) => {
             if lp % SAMPLES_PER_BLOCK != 0 {
-                return Err(EncodeError::InvalidLoopPoint);
+                return Err(EncodeError::InvalidLoopPointSamples);
             }
             if lp >= samples.len() {
                 return Err(EncodeError::LoopPointTooLarge(lp, samples.len()));

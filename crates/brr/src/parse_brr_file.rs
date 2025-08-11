@@ -19,7 +19,8 @@ pub enum ParseError {
     SampleEndsEarly,
     MissingLoopPoint,
     BrrSampleNotLooping,
-    InvalidLoopPoint,
+    InvalidLoopPointHeaderBytes,
+    InvalidLoopPointSamples,
     LoopPointOutOfRange(usize, usize),
 }
 
@@ -35,10 +36,15 @@ impl Display for ParseError {
             ParseError::SampleEndsEarly => write!(f, "Sample ends too early"),
             ParseError::MissingLoopPoint => write!(f, "Missing loop point"),
             ParseError::BrrSampleNotLooping => write!(f, "BRR sample not looping"),
-            ParseError::InvalidLoopPoint => write!(
+            ParseError::InvalidLoopPointHeaderBytes => write!(
+                f,
+                "Invalid loop point offset in BRR file (not a multiple of {})",
+                BYTES_PER_BRR_BLOCK
+            ),
+            ParseError::InvalidLoopPointSamples => write!(
                 f,
                 "Invalid loop point (not a multiple of {})",
-                BYTES_PER_BRR_BLOCK
+                SAMPLES_PER_BLOCK
             ),
             ParseError::LoopPointOutOfRange(lp, max) => {
                 write!(f, "Loop point out of bounds ({lp}, max: {max}")
@@ -143,7 +149,7 @@ pub fn parse_brr_file(input: &[u8]) -> Result<ValidBrrFile, ParseError> {
         (Some(lo), true) => {
             let max_loop_offset = brr_data.len() - BYTES_PER_BRR_BLOCK;
             if lo % BYTES_PER_BRR_BLOCK as u16 != 0 {
-                return Err(ParseError::InvalidLoopPoint);
+                return Err(ParseError::InvalidLoopPointHeaderBytes);
             }
             if usize::from(lo) > max_loop_offset {
                 return Err(ParseError::LoopPointOutOfRange(lo.into(), max_loop_offset));
@@ -164,7 +170,7 @@ pub fn parse_brr_file(input: &[u8]) -> Result<ValidBrrFile, ParseError> {
 
 fn loop_point_to_loop_offset(lp: usize, brr_data_size: usize) -> Result<u16, ParseError> {
     if lp % SAMPLES_PER_BLOCK != 0 {
-        return Err(ParseError::InvalidLoopPoint);
+        return Err(ParseError::InvalidLoopPointSamples);
     }
 
     let max_loop_point = brr_data_size / BYTES_PER_BRR_BLOCK * SAMPLES_PER_BLOCK;
