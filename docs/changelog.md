@@ -9,6 +9,8 @@ Version 0.1.2
 MML changes:
  * Fixed a typo in the MML syntax document
  * The default whole note length can be set with `#ZenLen` or `#Zenlen`
+ * `#` headers can now be lower case or lower camel case
+   (ie, `#title`, `#echolength`, `#echoLength`)
 
 
 Version 0.1.1

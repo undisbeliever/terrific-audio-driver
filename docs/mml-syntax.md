@@ -6,6 +6,9 @@ Header
 
 Lines starting with `#` define metadata.
 
+Headers can be lower case (`#title`) or lower camel case (`#echoLength`).
+
+
 Song metadata:
  * `#Title`
  * `#Game`

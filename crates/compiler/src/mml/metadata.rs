@@ -120,6 +120,57 @@ impl MetaData {
     }
 }
 
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+enum Header {
+    Title,
+    Game,
+    Date,
+    Composer,
+    Author,
+    Copyright,
+    License,
+    ZenLen,
+    MaxEchoLength,
+    EchoLength,
+    FirFilter,
+    DisableFirFilterLimit,
+    EchoFeedback,
+    EchoVolume,
+    EchoInvert,
+    Tempo,
+    Timer,
+    SpcSongLength,
+    SpcFadeout,
+}
+
+fn match_header(header: &str) -> Option<Header> {
+    match header {
+        "#Title" | "#title" => Some(Header::Title),
+        "#Game" | "#game" => Some(Header::Game),
+        "#Date" | "#date" => Some(Header::Date),
+        "#Composer" | "#composer" => Some(Header::Composer),
+        "#Author" | "#author" => Some(Header::Author),
+        "#Copyright" | "#copyright" => Some(Header::Copyright),
+        "#License" | "#license" => Some(Header::License),
+
+        "#ZenLen" | "#Zenlen" | "#zenLen" | "#zenlen" => Some(Header::ZenLen),
+        "#MaxEchoLength" | "#maxEchoLength" | "#maxecholength" => Some(Header::MaxEchoLength),
+        "#EchoLength" | "#echoLength" | "#echolength" => Some(Header::EchoLength),
+        "#FirFilter" | "#firFilter" | "#firfilter" => Some(Header::FirFilter),
+        "#DisableFirFilterLimit" | "#disableFirFilterLimit" | "#disablefirfilterlimit" => {
+            Some(Header::DisableFirFilterLimit)
+        }
+        "#EchoFeedback" | "#echoFeedback" | "#echofeedback" => Some(Header::EchoFeedback),
+        "#EchoVolume" | "#echoVolume" | "#echovolume" => Some(Header::EchoVolume),
+        "#EchoInvert" | "#echoInvert" | "#echoinvert" => Some(Header::EchoInvert),
+        "#Tempo" | "#tempo" => Some(Header::Tempo),
+        "#Timer" | "#timer" => Some(Header::Timer),
+        "#SpcSongLength" | "#spcSongLength" | "#spcsonglength" => Some(Header::SpcSongLength),
+        "#SpcFadeout" | "#spcFadeout" | "#spcfadeout" => Some(Header::SpcFadeout),
+        _ => None,
+    }
+}
+
 struct HeaderState {
     metadata: MetaData,
     tempo_set: bool,
@@ -143,7 +194,7 @@ impl HeaderState {
 
     fn parse_header(
         &mut self,
-        header: &str,
+        header: Header,
         value: &str,
         pos: &FilePosRange,
     ) -> Result<(), MmlLineError> {
@@ -155,53 +206,53 @@ impl HeaderState {
             }
         };
         match header {
-            "#Title" => self.metadata.title = to_option_string()?,
-            "#Game" => self.metadata.game = to_option_string()?,
-            "#Date" => self.metadata.date = to_option_string()?,
-            "#Composer" => self.metadata.composer = to_option_string()?,
-            "#Author" => self.metadata.author = to_option_string()?,
-            "#Copyright" => self.metadata.copyright = to_option_string()?,
-            "#License" => self.metadata.license = to_option_string()?,
+            Header::Title => self.metadata.title = to_option_string()?,
+            Header::Game => self.metadata.game = to_option_string()?,
+            Header::Date => self.metadata.date = to_option_string()?,
+            Header::Composer => self.metadata.composer = to_option_string()?,
+            Header::Author => self.metadata.author = to_option_string()?,
+            Header::Copyright => self.metadata.copyright = to_option_string()?,
+            Header::License => self.metadata.license = to_option_string()?,
 
-            "#ZenLen" | "#Zenlen" => self.metadata.zenlen = parse_u32(value)?.try_into()?,
+            Header::ZenLen => self.metadata.zenlen = parse_u32(value)?.try_into()?,
 
-            "#MaxEchoLength" => {
+            Header::MaxEchoLength => {
                 let echo_length = EchoLength::try_from(parse_u32(value)?)?;
                 self.metadata.echo_buffer.max_edl = echo_length.to_edl();
                 self.max_edl_set = true;
             }
-            "#EchoLength" => {
+            Header::EchoLength => {
                 let echo_length = EchoLength::try_from(parse_u32(value)?)?;
                 self.metadata.echo_buffer.edl = echo_length.to_edl();
                 self.edl_pos = pos.clone();
             }
 
-            "#FirFilter" => {
+            Header::FirFilter => {
                 self.metadata.echo_buffer.fir = parse_fir_filter_string(value)?;
                 self.fir_pos = pos.clone();
             }
-            "#DisableFirFilterLimit" => match value.is_empty() {
+            Header::DisableFirFilterLimit => match value.is_empty() {
                 true => self.disable_fir_filter_limit = true,
                 false => return Err(MmlLineError::UnexpectedHeaderValue),
             },
 
-            "#EchoFeedback" => match parse_i8wh(value) {
+            Header::EchoFeedback => match parse_i8wh(value) {
                 Ok(i) => self.metadata.echo_buffer.feedback = i,
                 Err(_) => return Err(MmlLineError::InvalidEchoFeedback),
             },
 
-            "#EchoVolume" => {
+            Header::EchoVolume => {
                 let (l, r) = parse_echo_volume(value)?;
                 self.metadata.echo_buffer.echo_volume_l = l;
                 self.metadata.echo_buffer.echo_volume_r = r;
             }
 
-            "#EchoInvert" => {
+            Header::EchoInvert => {
                 let args: Vec<_> = value.split_ascii_whitespace().collect();
                 self.metadata.echo_buffer.invert = parse_invert_flag_arguments(&args)?;
             }
 
-            "#Tempo" => {
+            Header::Tempo => {
                 if self.tempo_set {
                     return Err(MmlLineError::CannotSetTempo);
                 }
@@ -210,14 +261,14 @@ impl HeaderState {
                 let bpm = Bpm::try_from(parse_u32(value)?)?;
                 self.metadata.tick_clock = bpm.to_tick_clock()?;
             }
-            "#Timer" => {
+            Header::Timer => {
                 if self.tempo_set {
                     return Err(MmlLineError::CannotSetTimer);
                 }
                 self.tempo_set = true;
                 self.metadata.tick_clock = parse_u32(value)?.try_into()?;
             }
-            "#SpcSongLength" => match value.parse() {
+            Header::SpcSongLength => match value.parse() {
                 Ok(i) => {
                     if i > spc_file_export::MAX_SONG_LENGTH {
                         return Err(MmlLineError::InvalidSpcSongLength);
@@ -226,7 +277,7 @@ impl HeaderState {
                 }
                 Err(_) => return Err(MmlLineError::InvalidSpcSongLength),
             },
-            "#SpcFadeout" => match value.parse() {
+            Header::SpcFadeout => match value.parse() {
                 Ok(i) => {
                     if i > spc_file_export::MAX_FADEOUT_MILLIS {
                         return Err(MmlLineError::InvalidSpcFadeout);
@@ -235,8 +286,6 @@ impl HeaderState {
                 }
                 Err(_) => return Err(MmlLineError::InvalidSpcSongLength),
             },
-
-            h => return Err(MmlLineError::UnknownHeader(h.to_owned())),
         }
 
         Ok(())
@@ -246,27 +295,35 @@ impl HeaderState {
 pub fn parse_headers(lines: Vec<Line>) -> Result<MetaData, Vec<ErrorWithPos<MmlLineError>>> {
     let mut errors = Vec::new();
 
-    let mut map: HashMap<&str, &str> = HashMap::with_capacity(lines.len());
+    let mut map: HashMap<_, &str> = HashMap::with_capacity(lines.len());
 
     let mut header_state = HeaderState::new();
 
     for line in &lines {
         match split_header_line(line) {
-            Ok((header, value, pos)) => {
-                if !map.contains_key(header) {
-                    map.insert(header, value);
+            Ok((header_str, value, pos)) => match match_header(header_str) {
+                Some(header) => {
+                    if let std::collections::hash_map::Entry::Vacant(e) = map.entry(header) {
+                        e.insert(value);
 
-                    match header_state.parse_header(header, value, &pos) {
-                        Ok(()) => (),
-                        Err(e) => errors.push(ErrorWithPos(pos, e)),
+                        match header_state.parse_header(header, value, &pos) {
+                            Ok(()) => (),
+                            Err(e) => errors.push(ErrorWithPos(pos, e)),
+                        }
+                    } else {
+                        errors.push(ErrorWithPos(
+                            line.position.to_range_str_len(header_str),
+                            MmlLineError::DuplicateHeader(header_str.to_string()),
+                        ));
                     }
-                } else {
+                }
+                None => {
                     errors.push(ErrorWithPos(
-                        line.position.to_range_str_len(header),
-                        MmlLineError::DuplicateHeader(header.to_string()),
+                        line.position.to_range_str_len(header_str),
+                        MmlLineError::UnknownHeader(header_str.to_string()),
                     ));
                 }
-            }
+            },
             Err(e) => {
                 errors.push(ErrorWithPos(line.range(), e));
             }

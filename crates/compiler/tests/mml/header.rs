@@ -2,11 +2,260 @@
 //
 // SPDX-License-Identifier: MIT
 
+use compiler::echo::{EchoBuffer, FirCoefficient};
 use compiler::invert_flags::InvertFlags;
-use compiler::time::{TickClock, ZenLen};
+use compiler::mml::MetaData;
+use compiler::time::{Bpm, TickClock, ZenLen};
 use compiler::UnsignedValueNewType;
 
 use crate::*;
+
+#[test]
+fn all_headers() {
+    let dummy_data = dummy_data();
+
+    let s = compile_mml(
+        r#"
+#Title song-title
+#Game song-game
+#Date song-date
+#Composer song-composer
+#Author song-author
+#Copyright song-copyright
+#License song-license
+#ZenLen 192
+#MaxEchoLength 64
+#EchoLength 32
+#FirFilter 1 2 -3 -4 $5 $6 $77 $88
+#DisableFirFilterLimit
+#EchoFeedback 12
+#EchoVolume 34 56
+#EchoInvert R
+#Timer 100
+#SpcSongLength 300
+#SpcFadeout 200
+
+A r
+"#,
+        &dummy_data,
+    );
+
+    assert_eq!(
+        s.metadata(),
+        &MetaData {
+            title: Some("song-title".to_owned()),
+            game: Some("song-game".to_owned()),
+            date: Some("song-date".to_owned()),
+            composer: Some("song-composer".to_owned()),
+            author: Some("song-author".to_owned()),
+            copyright: Some("song-copyright".to_owned()),
+            license: Some("song-license".to_owned()),
+            echo_buffer: EchoBuffer {
+                max_edl: (64u8 / 16).try_into().unwrap(),
+                edl: (32u8 / 16).try_into().unwrap(),
+                fir: [1, 2, -3, -4, 0x5, 0x6, 0x77, -120].map(|i: i8| FirCoefficient::new(i)),
+                feedback: 12.try_into().unwrap(),
+                echo_volume_l: 34u8.try_into().unwrap(),
+                echo_volume_r: 56u8.try_into().unwrap(),
+                invert: InvertFlags {
+                    right: true,
+                    left: false,
+                    mono: false
+                },
+            },
+            tick_clock: 100u16.try_into().unwrap(),
+            zenlen: 192u8.try_into().unwrap(),
+            spc_song_length: Some(300),
+            spc_fadeout_millis: Some(200),
+        }
+    );
+
+    let s = compile_mml(
+        r#"
+#Tempo 144
+
+A r
+"#,
+        &dummy_data,
+    );
+    assert_eq!(
+        s.metadata().tick_clock,
+        Bpm::try_from(144u8).unwrap().to_tick_clock().unwrap()
+    );
+}
+
+#[test]
+fn all_headers_lower_camel_case() {
+    let dummy_data = dummy_data();
+
+    let s = compile_mml(
+        r#"
+#title song-title
+#game song-game
+#date song-date
+#composer song-composer
+#author song-author
+#copyright song-copyright
+#license song-license
+#zenLen 192
+#maxEchoLength 64
+#echoLength 32
+#firFilter 1 2 -3 -4 $5 $6 $77 $88
+#disableFirFilterLimit
+#echoFeedback 12
+#echoVolume 34 56
+#echoInvert right
+#timer 100
+#spcSongLength 300
+#spcFadeout 200
+
+A r
+"#,
+        &dummy_data,
+    );
+
+    assert_eq!(
+        s.metadata(),
+        &MetaData {
+            title: Some("song-title".to_owned()),
+            game: Some("song-game".to_owned()),
+            date: Some("song-date".to_owned()),
+            composer: Some("song-composer".to_owned()),
+            author: Some("song-author".to_owned()),
+            copyright: Some("song-copyright".to_owned()),
+            license: Some("song-license".to_owned()),
+            echo_buffer: EchoBuffer {
+                max_edl: (64u8 / 16).try_into().unwrap(),
+                edl: (32u8 / 16).try_into().unwrap(),
+                fir: [1, 2, -3, -4, 0x5, 0x6, 0x77, -120].map(|i: i8| FirCoefficient::new(i)),
+                feedback: 12.try_into().unwrap(),
+                echo_volume_l: 34u8.try_into().unwrap(),
+                echo_volume_r: 56u8.try_into().unwrap(),
+                invert: InvertFlags {
+                    right: true,
+                    left: false,
+                    mono: false
+                },
+            },
+            tick_clock: 100u16.try_into().unwrap(),
+            zenlen: 192u8.try_into().unwrap(),
+            spc_song_length: Some(300),
+            spc_fadeout_millis: Some(200),
+        }
+    );
+
+    let s = compile_mml(
+        r#"
+#tempo 144
+
+A r
+"#,
+        &dummy_data,
+    );
+    assert_eq!(
+        s.metadata().tick_clock,
+        Bpm::try_from(144u8).unwrap().to_tick_clock().unwrap()
+    );
+}
+
+#[test]
+fn all_headers_lowercase() {
+    let dummy_data = dummy_data();
+
+    let s = compile_mml(
+        r#"
+#title song-title
+#game song-game
+#date song-date
+#composer song-composer
+#author song-author
+#copyright song-copyright
+#license song-license
+#zenlen 192
+#maxecholength 64
+#echolength 32
+#firfilter 1 2 -3 -4 $5 $6 $77 $88
+#disablefirfilterlimit
+#echofeedback 12
+#echovolume 34 56
+#echoinvert right
+#timer 100
+#spcsonglength 300
+#spcfadeout 200
+
+A r
+"#,
+        &dummy_data,
+    );
+
+    assert_eq!(
+        s.metadata(),
+        &MetaData {
+            title: Some("song-title".to_owned()),
+            game: Some("song-game".to_owned()),
+            date: Some("song-date".to_owned()),
+            composer: Some("song-composer".to_owned()),
+            author: Some("song-author".to_owned()),
+            copyright: Some("song-copyright".to_owned()),
+            license: Some("song-license".to_owned()),
+            echo_buffer: EchoBuffer {
+                max_edl: (64u8 / 16).try_into().unwrap(),
+                edl: (32u8 / 16).try_into().unwrap(),
+                fir: [1, 2, -3, -4, 0x5, 0x6, 0x77, -120].map(|i: i8| FirCoefficient::new(i)),
+                feedback: 12.try_into().unwrap(),
+                echo_volume_l: 34u8.try_into().unwrap(),
+                echo_volume_r: 56u8.try_into().unwrap(),
+                invert: InvertFlags {
+                    right: true,
+                    left: false,
+                    mono: false
+                },
+            },
+            tick_clock: 100u16.try_into().unwrap(),
+            zenlen: 192u8.try_into().unwrap(),
+            spc_song_length: Some(300),
+            spc_fadeout_millis: Some(200),
+        }
+    );
+
+    let s = compile_mml(
+        r#"
+#tempo 144
+
+A r
+"#,
+        &dummy_data,
+    );
+    assert_eq!(
+        s.metadata().tick_clock,
+        Bpm::try_from(144u8).unwrap().to_tick_clock().unwrap()
+    );
+}
+
+#[test]
+fn duplicate_header_errors() {
+    assert_one_header_error_in_mml(
+        r#"
+#Title one
+#title two
+
+A r
+"#,
+        3,
+        MmlLineError::DuplicateHeader("#title".to_owned()),
+    );
+
+    assert_one_header_error_in_mml(
+        r#"
+#EchoLength 32
+#echoLength 32
+
+A r
+"#,
+        3,
+        MmlLineError::DuplicateHeader("#echoLength".to_owned()),
+    );
+}
 
 #[test]
 fn mono_echo_volume() {
