@@ -293,30 +293,36 @@ impl HeaderState {
 }
 
 pub fn parse_headers(lines: Vec<Line>) -> Result<MetaData, Vec<ErrorWithPos<MmlLineError>>> {
+    use std::collections::hash_map::Entry;
+
     let mut errors = Vec::new();
 
-    let mut map: HashMap<_, &str> = HashMap::with_capacity(lines.len());
+    let mut map: HashMap<Header, u32> = HashMap::with_capacity(lines.len());
 
     let mut header_state = HeaderState::new();
 
     for line in &lines {
         match split_header_line(line) {
             Ok((header_str, value, pos)) => match match_header(header_str) {
-                Some(header) => {
-                    if let std::collections::hash_map::Entry::Vacant(e) = map.entry(header) {
-                        e.insert(value);
+                Some(header) => match map.entry(header) {
+                    Entry::Vacant(e) => {
+                        e.insert(line.position.line_number);
 
                         match header_state.parse_header(header, value, &pos) {
                             Ok(()) => (),
                             Err(e) => errors.push(ErrorWithPos(pos, e)),
                         }
-                    } else {
+                    }
+                    Entry::Occupied(o) => {
                         errors.push(ErrorWithPos(
                             line.position.to_range_str_len(header_str),
-                            MmlLineError::DuplicateHeader(header_str.to_string()),
+                            MmlLineError::DuplicateHeader {
+                                name: header_str.to_string(),
+                                line: *o.get(),
+                            },
                         ));
                     }
-                }
+                },
                 None => {
                     errors.push(ErrorWithPos(
                         line.position.to_range_str_len(header_str),

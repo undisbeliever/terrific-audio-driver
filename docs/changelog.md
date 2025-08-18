@@ -11,6 +11,7 @@ MML changes:
  * The default whole note length can be set with `#ZenLen` or `#Zenlen`
  * `#` headers can now be lower case or lower camel case
    (ie, `#title`, `#echolength`, `#echoLength`)
+ * Duplicate header error messages show the line of the original header
 
 
 Version 0.1.1

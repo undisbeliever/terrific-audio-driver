@@ -242,18 +242,29 @@ fn duplicate_header_errors() {
 A r
 "#,
         3,
-        MmlLineError::DuplicateHeader("#title".to_owned()),
+        MmlLineError::DuplicateHeader {
+            name: "#title".to_owned(),
+            line: 2,
+        },
     );
 
     assert_one_header_error_in_mml(
         r#"
+#title song-title
+
 #EchoLength 32
+
+#tempo 120
+
 #echoLength 32
 
 A r
 "#,
-        3,
-        MmlLineError::DuplicateHeader("#echoLength".to_owned()),
+        8,
+        MmlLineError::DuplicateHeader {
+            name: "#echoLength".to_owned(),
+            line: 4,
+        },
     );
 }
 
