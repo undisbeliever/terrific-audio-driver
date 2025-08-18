@@ -6,6 +6,10 @@ Version 0.1.2
  * Increased the maximum BRR sample size
  * Increased the maximum `wav2brr` input size
 
+MML changes:
+ * Fixed a typo in the MML syntax document
+ * The default whole note length can be set with `#ZenLen` or `#Zenlen`
+
 
 Version 0.1.1
 =============

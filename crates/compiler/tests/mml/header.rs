@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: MIT
 
 use compiler::invert_flags::InvertFlags;
-use compiler::time::TickClock;
+use compiler::time::{TickClock, ZenLen};
 use compiler::UnsignedValueNewType;
 
 use crate::*;
@@ -255,4 +255,84 @@ A r
         2,
         ValueError::TickClockOutOfRange(257).into(),
     );
+}
+
+#[test]
+fn zenlen() {
+    let dummy_data = dummy_data();
+
+    let s = compile_mml(
+        r#"
+#ZenLen 192
+
+A r
+"#,
+        &dummy_data,
+    );
+    assert_eq!(s.metadata().zenlen, 192u8.try_into().unwrap());
+
+    let s = compile_mml(
+        r#"
+#ZenLen 4
+
+A r1
+"#,
+        &dummy_data,
+    );
+    assert_eq!(s.metadata().zenlen, ZenLen::MIN);
+
+    assert_one_header_error_in_mml(
+        r#"
+#ZenLen 3
+
+A r
+"#,
+        2,
+        ValueError::ZenLenOutOfRange(3).into(),
+    );
+
+    let s = compile_mml(
+        r#"
+#ZenLen 255
+
+A r
+"#,
+        &dummy_data,
+    );
+    assert_eq!(s.metadata().zenlen, ZenLen::MAX);
+
+    assert_one_header_error_in_mml(
+        r#"
+#ZenLen 256
+
+A r
+"#,
+        2,
+        ValueError::ZenLenOutOfRange(256).into(),
+    );
+
+    assert_one_header_error_in_mml(
+        r#"
+#ZenLen not-a-number
+
+A r
+"#,
+        2,
+        ValueError::CannotParseUnsigned("not-a-number".to_owned()).into(),
+    );
+}
+
+#[test]
+fn zenlen_alt_name() {
+    let dummy_data = dummy_data();
+
+    let s = compile_mml(
+        r#"
+#Zenlen 192
+
+A r
+"#,
+        &dummy_data,
+    );
+    assert_eq!(s.metadata().zenlen, 192u8.try_into().unwrap());
 }

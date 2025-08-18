@@ -163,7 +163,7 @@ impl HeaderState {
             "#Copyright" => self.metadata.copyright = to_option_string()?,
             "#License" => self.metadata.license = to_option_string()?,
 
-            "#ZenLen" => self.metadata.zenlen = parse_u32(value)?.try_into()?,
+            "#ZenLen" | "#Zenlen" => self.metadata.zenlen = parse_u32(value)?.try_into()?,
 
             "#MaxEchoLength" => {
                 let echo_length = EchoLength::try_from(parse_u32(value)?)?;
