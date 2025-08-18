@@ -19,14 +19,14 @@ Song metadata:
 
 The song tempo can be set with either `#Tempo` or `#Timer`:
  * `#Tempo number` - Sets the number of times a 48-tick cycle will occur in a minute.
-    * With a `#Zenlen` value of 96 (default), specifies the number of half-notes in a minute
-    * With a `#Zenlen` value of 192, specifies the number of quarter-notes in a minute
+    * With a `#ZenLen` value of 96 (default), specifies the number of half-notes in a minute
+    * With a `#ZenLen` value of 192, specifies the number of quarter-notes in a minute
  * `#Timer <64..256>` - Sets the tick clock.  Each tick is `Timer * 0.125` milliseconds (or `Timer / 8000Hz` seconds) long.
 
 <br/>
 
 The following adjust default values:
- * `#Zenlen number` - Set the default whole-note length (default 96)
+ * `#ZenLen number` - Set the default whole-note length (default 96)
 
 <br/>
 
@@ -145,7 +145,7 @@ Subroutine `!z` will output `d e f g`
 <br/>
 
 This is not a substitution macro, each subroutine/channel has the following independent settings:
- * Whole note length (zenlen)
+ * Whole note length (ZenLen)
  * Octave
  * Transpose (semitone offset)
  * Default length
@@ -275,7 +275,7 @@ Numbers can be decimal, or hexadecimal when prefixed with `$` (ie, `$ff`)
 
  * `l<length>` - Set the default length
  * `C<4..256>` - Set the whole note length (in ticks).
-    * Default is `#Zenlen` or 96 if `#Zenlen` not set.
+    * Default is `#ZenLen` or 96 if `#ZenLen` not set.
 
 <br/>
 
