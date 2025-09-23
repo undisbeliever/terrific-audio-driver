@@ -19,6 +19,7 @@ pub enum ParseError {
     SampleEndsEarly,
     MissingLoopPoint,
     BrrSampleNotLooping,
+    BrrFileLoopOffsetOutOfRange(u16, usize),
     InvalidLoopPointHeaderBytes,
     InvalidLoopPointSamples,
     LoopPointOutOfRange(usize, usize),
@@ -36,6 +37,9 @@ impl Display for ParseError {
             ParseError::SampleEndsEarly => write!(f, "Sample ends too early"),
             ParseError::MissingLoopPoint => write!(f, "Missing loop point"),
             ParseError::BrrSampleNotLooping => write!(f, "BRR sample not looping"),
+            ParseError::BrrFileLoopOffsetOutOfRange(lp, max) => {
+                write!(f, "BRR file loop offset out of bounds ({lp}, max: {max})")
+            }
             ParseError::InvalidLoopPointHeaderBytes => write!(
                 f,
                 "Invalid loop point offset in BRR file (not a multiple of {})",
@@ -152,7 +156,7 @@ pub fn parse_brr_file(input: &[u8]) -> Result<ValidBrrFile, ParseError> {
                 return Err(ParseError::InvalidLoopPointHeaderBytes);
             }
             if usize::from(lo) > max_loop_offset {
-                return Err(ParseError::LoopPointOutOfRange(lo.into(), max_loop_offset));
+                return Err(ParseError::BrrFileLoopOffsetOutOfRange(lo, max_loop_offset));
             }
 
             Some(lo)
