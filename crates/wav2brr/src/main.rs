@@ -6,7 +6,7 @@
 
 #![forbid(unsafe_code)]
 
-use brr::{encode_brr, read_mono_pcm_wave_file, BrrFilter, Evaluator};
+use brr::{encode_brr, read_mono_pcm_wave_file, BlockNumber, BrrFilter, Evaluator, SampleNumber};
 
 use clap::Parser;
 
@@ -55,17 +55,19 @@ struct Args {
         long,
         value_name = "N",
         help = "loop point (sample number)",
-        conflicts_with = "dupe_block_hack"
+        conflicts_with = "dupe_block_hack",
+        value_parser = clap::value_parser!(usize),
     )]
-    loop_point: Option<usize>,
+    loop_point: Option<SampleNumber>,
 
     #[arg(
         long,
         value_name = "N",
         help = "Dupe-block-hack (number of blocks to duplicate)",
-        conflicts_with = "loop_point"
+        conflicts_with = "loop_point",
+        value_parser = clap::value_parser!(usize),
     )]
-    dupe_block_hack: Option<usize>,
+    dupe_block_hack: Option<BlockNumber>,
 
     #[arg(
         short = 'r',

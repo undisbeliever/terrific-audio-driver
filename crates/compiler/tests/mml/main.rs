@@ -29,7 +29,7 @@ mod vibrato;
 mod volume_pan;
 
 use compiler::bytecode_assembler::{BcTerminator, BytecodeContext};
-use compiler::data::{Name, UniqueNamesList};
+use compiler::data::{Name, SampleNumber, UniqueNamesList};
 use compiler::driver_constants::{
     BC_CHANNEL_STACK_OFFSET, BC_CHANNEL_STACK_SIZE, BC_STACK_BYTES_PER_LOOP,
     BC_STACK_BYTES_PER_SUBROUTINE_CALL, MAX_SUBROUTINES,
@@ -606,7 +606,7 @@ fn dummy_instrument(
         name: Name::try_from(name.to_owned()).unwrap(),
         source: Default::default(),
         freq,
-        loop_setting: data::LoopSetting::LoopWithFilter(0),
+        loop_setting: data::LoopSetting::LoopWithFilter(SampleNumber(0)),
         evaluator: Default::default(),
         ignore_gaussian_overflow: false,
         first_octave: Octave::try_new(first_octave).unwrap(),

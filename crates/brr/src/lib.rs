@@ -27,6 +27,24 @@ pub const BRR_HEADER_END_FLAG: u8 = 0x01;
 pub const BRR_HEADER_LOOP_FLAG: u8 = 0x02;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SampleNumber(pub usize);
+
+impl From<usize> for SampleNumber {
+    fn from(value: usize) -> Self {
+        Self(value)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct BlockNumber(pub usize);
+
+impl From<usize> for BlockNumber {
+    fn from(value: usize) -> Self {
+        Self(value)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BrrFilter {
     Filter0 = 0,
     Filter1 = 1,

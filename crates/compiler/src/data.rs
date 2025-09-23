@@ -125,6 +125,26 @@ impl Display for Name {
     }
 }
 
+#[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Debug)]
+#[serde(transparent)]
+pub struct SampleNumber(pub usize);
+
+impl From<SampleNumber> for brr::SampleNumber {
+    fn from(value: SampleNumber) -> Self {
+        brr::SampleNumber(value.0)
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Debug)]
+#[serde(transparent)]
+pub struct BlockNumber(pub usize);
+
+impl From<BlockNumber> for brr::BlockNumber {
+    fn from(value: BlockNumber) -> Self {
+        brr::BlockNumber(value.0)
+    }
+}
+
 // I am including the filter as part of the enum item name for 3 reasons:
 //   1. DupeBlockHack cannot be used with loop_point_filter=BrrFilter::Filter0.
 //   2. Simpler JSON format (only 1 fields in `loop_setting`)
@@ -140,7 +160,7 @@ pub enum LoopSetting {
 
     /// The sample is a looping BRR file
     #[serde(rename = "override_brr_loop_point")]
-    OverrideBrrLoopPoint(usize),
+    OverrideBrrLoopPoint(SampleNumber),
 
     /// Loop point in samples.
     ///
@@ -148,29 +168,29 @@ pub enum LoopSetting {
     /// sample, however most samples will not loop perfectly, which can add low-frequency
     /// oscillation or glitches to the sample.
     #[serde(rename = "loop_with_filter")]
-    LoopWithFilter(usize),
+    LoopWithFilter(SampleNumber),
 
     /// Resets the BRR filter at the loop point.
     ///
     /// The BRR block after the loop point will always use BRR filter 0, which ensures
     /// perfect looping at the cost of reduced quality for the BRR block after the loop point.
     #[serde(rename = "loop_reset_filter")]
-    LoopResetFilter(usize),
+    LoopResetFilter(SampleNumber),
 
     /// Loop the sample and use BRR filter 1 at the loop-point.
     /// Argument is loop point in samples.
     #[serde(rename = "loop_filter_1")]
-    LoopFilter1(usize),
+    LoopFilter1(SampleNumber),
 
     /// Loop the sample and use BRR filter 2 at the loop-point.
     /// Argument is loop point in samples.
     #[serde(rename = "loop_filter_2")]
-    LoopFilter2(usize),
+    LoopFilter2(SampleNumber),
 
     /// Loop the sample and use BRR filter 3 at the loop-point.
     /// Argument is loop point in samples.
     #[serde(rename = "loop_filter_3")]
-    LoopFilter3(usize),
+    LoopFilter3(SampleNumber),
 
     /// Duplicates `N` blocks to the end of the sample in an attempt to improve the sample quality of the first-looping BRR block.
     ///  * Increases the sample size by `N * 9` bytes.
@@ -178,22 +198,22 @@ pub enum LoopSetting {
     ///  * Most samples created by this hack will not loop perfectly, which adds low-frequency oscillation to the sample.
     ///  * dupe_block_hack may create create a glitched sample, hence the name `dupe_block_hack`.
     #[serde(rename = "dupe_block_hack")]
-    DupeBlockHack(usize),
+    DupeBlockHack(BlockNumber),
 
     // DupeBlockHack that uses loop-point BRR filter 1.
     // (See `DupeBlockHack`)
     #[serde(rename = "dupe_block_hack_filter_1")]
-    DupeBlockHackFilter1(usize),
+    DupeBlockHackFilter1(BlockNumber),
 
     // DupeBlockHack that uses loop-point BRR filter 2.
     // (See `DupeBlockHack`)
     #[serde(rename = "dupe_block_hack_filter_2")]
-    DupeBlockHackFilter2(usize),
+    DupeBlockHackFilter2(BlockNumber),
 
     // DupeBlockHack that uses loop-point BRR filter 3.
     // (See `DupeBlockHack`)
     #[serde(rename = "dupe_block_hack_filter_3")]
-    DupeBlockHackFilter3(usize),
+    DupeBlockHackFilter3(BlockNumber),
 }
 
 impl LoopSetting {

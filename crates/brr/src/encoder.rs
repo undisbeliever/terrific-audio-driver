@@ -6,8 +6,8 @@
 
 use crate::decoder::{filter0, filter1, filter2, filter3, I15Sample};
 use crate::{
-    BrrFilter, BrrSample, BRR_HEADER_END_FLAG, BRR_HEADER_LOOP_FLAG, BYTES_PER_BRR_BLOCK,
-    SAMPLES_PER_BLOCK,
+    BlockNumber, BrrFilter, BrrSample, SampleNumber, BRR_HEADER_END_FLAG, BRR_HEADER_LOOP_FLAG,
+    BYTES_PER_BRR_BLOCK, SAMPLES_PER_BLOCK,
 };
 
 const MAX_SHIFT: u8 = 12;
@@ -21,7 +21,7 @@ pub enum EncodeError {
     InvalidNumberOfSamples,
     TooManySamples,
     InvalidLoopPointSamples,
-    LoopPointTooLarge(usize, usize),
+    LoopPointTooLarge(SampleNumber, usize),
     DupeBlockHackNotAllowedWithLoopPoint,
     DupeBlockHackNotAllowedWithLoopResetsFilter,
     DupeBlockHackTooLarge,
@@ -42,7 +42,7 @@ impl std::fmt::Display for EncodeError {
             EncodeError::LoopPointTooLarge(lp, s_len) => write!(
                 f,
                 "loop_point is too large ({}, max {})",
-                lp,
+                lp.0,
                 s_len - SAMPLES_PER_BLOCK
             ),
             EncodeError::DupeBlockHackNotAllowedWithLoopPoint => {
@@ -284,8 +284,8 @@ fn encode_block(block: BrrBlock, end_flag: bool, loop_flag: bool) -> [u8; BYTES_
 
 fn encode_brr_with_scorer<S: Scorer>(
     samples: &[i16],
-    loop_offset: Option<usize>,
-    dupe_block_hack: Option<usize>,
+    loop_offset: Option<SampleNumber>,
+    dupe_block_hack: Option<BlockNumber>,
     loop_filter: Option<BrrFilter>,
 ) -> Result<BrrSample, EncodeError> {
     if samples.is_empty() {
@@ -301,24 +301,24 @@ fn encode_brr_with_scorer<S: Scorer>(
     }
 
     let (loop_flag, loop_block, loop_offset) = match (loop_offset, dupe_block_hack) {
-        (None, None) => (false, usize::MAX, None),
+        (None, None) => (false, BlockNumber(usize::MAX), None),
         (Some(lp), None) => {
-            if lp % SAMPLES_PER_BLOCK != 0 {
+            if lp.0 % SAMPLES_PER_BLOCK != 0 {
                 return Err(EncodeError::InvalidLoopPointSamples);
             }
-            if lp >= samples.len() {
+            if lp.0 >= samples.len() {
                 return Err(EncodeError::LoopPointTooLarge(lp, samples.len()));
             }
 
-            let loop_block = lp / SAMPLES_PER_BLOCK;
+            let loop_block = BlockNumber(lp.0 / SAMPLES_PER_BLOCK);
 
             // safe, `samples.len() is <= u16::MAX`
-            let loop_offset = u16::try_from(loop_block * BYTES_PER_BRR_BLOCK).unwrap();
+            let loop_offset = u16::try_from(loop_block.0 * BYTES_PER_BRR_BLOCK).unwrap();
 
             (true, loop_block, Some(loop_offset))
         }
         (None, Some(dbh)) => {
-            if dbh > 64 {
+            if dbh.0 > 64 {
                 return Err(EncodeError::DupeBlockHackTooLarge);
             }
 
@@ -327,7 +327,7 @@ fn encode_brr_with_scorer<S: Scorer>(
             }
 
             let loop_block = dbh;
-            let loop_offset = u16::try_from(dbh * BYTES_PER_BRR_BLOCK).unwrap();
+            let loop_offset = u16::try_from(dbh.0 * BYTES_PER_BRR_BLOCK).unwrap();
 
             (true, loop_block, Some(loop_offset))
         }
@@ -336,27 +336,28 @@ fn encode_brr_with_scorer<S: Scorer>(
         }
     };
 
-    let n_blocks = samples.len() / SAMPLES_PER_BLOCK + dupe_block_hack.unwrap_or(0);
-    let last_block_index = n_blocks - 1;
+    let n_blocks = samples.len() / SAMPLES_PER_BLOCK + dupe_block_hack.map(|bn| bn.0).unwrap_or(0);
+    let last_block_index = BlockNumber(n_blocks - 1);
 
     let mut brr_data = Vec::with_capacity(n_blocks * BYTES_PER_BRR_BLOCK);
 
     let mut prev1 = I15Sample::default();
     let mut prev2 = I15Sample::default();
 
-    for (i, samples) in samples
+    for (bn, samples) in samples
         .chunks_exact(SAMPLES_PER_BLOCK)
         .cycle()
         .take(n_blocks)
         .enumerate()
+        .map(|(i, s)| (BlockNumber(i), s))
     {
         let samples: [i16; SAMPLES_PER_BLOCK] = samples.try_into().unwrap();
         let samples = samples.map(I15Sample::from_sample);
 
-        let block = if i == 0 {
+        let block = if bn == BlockNumber(0) {
             // The first block always uses filter 0
             find_best_block_filter::<S>(&samples, BrrFilter::Filter0, prev1, prev2)
-        } else if i == loop_block {
+        } else if bn == loop_block {
             match loop_filter {
                 None => find_best_block::<S>(&samples, prev1, prev2),
                 Some(loop_filter) => {
@@ -370,7 +371,7 @@ fn encode_brr_with_scorer<S: Scorer>(
         prev1 = block.decoded_samples[SAMPLES_PER_BLOCK - 1];
         prev2 = block.decoded_samples[SAMPLES_PER_BLOCK - 2];
 
-        brr_data.extend(encode_block(block, i == last_block_index, loop_flag));
+        brr_data.extend(encode_block(block, bn == last_block_index, loop_flag));
     }
 
     if let Some(lo) = loop_offset {
@@ -393,8 +394,8 @@ pub const DEFAULT_EVALUATOR: Evaluator = Evaluator::SquaredErrorAvoidGaussianOve
 pub fn encode_brr(
     samples: &[i16],
     evaluator: Evaluator,
-    loop_offset: Option<usize>,
-    dupe_block_hack: Option<usize>,
+    loop_offset: Option<SampleNumber>,
+    dupe_block_hack: Option<BlockNumber>,
     loop_filter: Option<BrrFilter>,
 ) -> Result<BrrSample, EncodeError> {
     match evaluator {

@@ -7,7 +7,8 @@
 use ::std::fmt::Display;
 
 use crate::{
-    BrrSample, BRR_HEADER_END_FLAG, BRR_HEADER_LOOP_FLAG, BYTES_PER_BRR_BLOCK, SAMPLES_PER_BLOCK,
+    BrrSample, SampleNumber, BRR_HEADER_END_FLAG, BRR_HEADER_LOOP_FLAG, BYTES_PER_BRR_BLOCK,
+    SAMPLES_PER_BLOCK,
 };
 
 #[derive(Debug, Clone)]
@@ -22,7 +23,7 @@ pub enum ParseError {
     BrrFileLoopOffsetOutOfRange(u16, usize),
     InvalidLoopPointHeaderBytes,
     InvalidLoopPointSamples,
-    LoopPointOutOfRange(usize, usize),
+    LoopPointOutOfRange(SampleNumber, usize),
 }
 
 impl Display for ParseError {
@@ -51,7 +52,7 @@ impl Display for ParseError {
                 SAMPLES_PER_BLOCK
             ),
             ParseError::LoopPointOutOfRange(lp, max) => {
-                write!(f, "Loop point out of bounds ({lp}, max: {max}")
+                write!(f, "Loop point out of bounds ({}, max: {})", lp.0, max)
             }
         }
     }
@@ -71,7 +72,10 @@ impl ValidBrrFile {
 
     /// If loop_point is Some and the BRR File contains a loop header, loop_point will override
     /// the BRR loop header.
-    pub fn into_brr_sample(self, loop_point: Option<usize>) -> Result<BrrSample, ParseError> {
+    pub fn into_brr_sample(
+        self,
+        loop_point: Option<SampleNumber>,
+    ) -> Result<BrrSample, ParseError> {
         let loop_offset = match (self.loop_offset, loop_point) {
             (_, Some(lp)) => Some(loop_point_to_loop_offset(lp, self.brr_data.len())?),
             (Some(lo), None) => Some(lo),
@@ -172,16 +176,16 @@ pub fn parse_brr_file(input: &[u8]) -> Result<ValidBrrFile, ParseError> {
     })
 }
 
-fn loop_point_to_loop_offset(lp: usize, brr_data_size: usize) -> Result<u16, ParseError> {
-    if lp % SAMPLES_PER_BLOCK != 0 {
+fn loop_point_to_loop_offset(lp: SampleNumber, brr_data_size: usize) -> Result<u16, ParseError> {
+    if lp.0 % SAMPLES_PER_BLOCK != 0 {
         return Err(ParseError::InvalidLoopPointSamples);
     }
 
     let max_loop_point = brr_data_size / BYTES_PER_BRR_BLOCK * SAMPLES_PER_BLOCK;
-    if lp >= max_loop_point {
+    if lp.0 >= max_loop_point {
         return Err(ParseError::LoopPointOutOfRange(lp, max_loop_point));
     }
 
     assert!(brr_data_size < u16::MAX.into());
-    Ok(u16::try_from(lp / SAMPLES_PER_BLOCK * BYTES_PER_BRR_BLOCK).unwrap())
+    Ok(u16::try_from(lp.0 / SAMPLES_PER_BLOCK * BYTES_PER_BRR_BLOCK).unwrap())
 }

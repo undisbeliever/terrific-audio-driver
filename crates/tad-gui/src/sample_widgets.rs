@@ -6,7 +6,7 @@
 
 use crate::helpers::{is_input_done_event, InputForm, InputHelper};
 
-use compiler::data::{self, BrrEvaluator, LoopSetting};
+use compiler::data::{self, BlockNumber, BrrEvaluator, LoopSetting, SampleNumber};
 use compiler::envelope::{Adsr, Envelope, Gain};
 use compiler::path::SourcePathBuf;
 use compiler::samples::{BRR_EXTENSION, WAV_EXTENSION};
@@ -275,21 +275,35 @@ impl BrrSettingsWidget {
 
         let arg = self.loop_argument.value().parse().ok();
 
-        let loop_setting = match (loop_type, loop_filter) {
-            (LT::None, _) => Some(LoopSetting::None),
-            (LT::OverrideBrrLoopPoint, _) => arg.map(LoopSetting::OverrideBrrLoopPoint),
+        let loop_setting = match (loop_type, loop_filter, arg) {
+            (LT::None, _, _) => Some(LoopSetting::None),
+            (LT::OverrideBrrLoopPoint, _, Some(i)) => {
+                Some(LoopSetting::OverrideBrrLoopPoint(SampleNumber(i)))
+            }
 
-            (LT::Loop, LF::ResetFilter) => arg.map(LoopSetting::LoopResetFilter),
-            (LT::Loop, LF::Auto) => arg.map(LoopSetting::LoopWithFilter),
-            (LT::Loop, LF::Filter1) => arg.map(LoopSetting::LoopFilter1),
-            (LT::Loop, LF::Filter2) => arg.map(LoopSetting::LoopFilter2),
-            (LT::Loop, LF::Filter3) => arg.map(LoopSetting::LoopFilter3),
+            (LT::Loop, LF::ResetFilter, Some(i)) => {
+                Some(LoopSetting::LoopResetFilter(SampleNumber(i)))
+            }
+            (LT::Loop, LF::Auto, Some(i)) => Some(LoopSetting::LoopWithFilter(SampleNumber(i))),
+            (LT::Loop, LF::Filter1, Some(i)) => Some(LoopSetting::LoopFilter1(SampleNumber(i))),
+            (LT::Loop, LF::Filter2, Some(i)) => Some(LoopSetting::LoopFilter2(SampleNumber(i))),
+            (LT::Loop, LF::Filter3, Some(i)) => Some(LoopSetting::LoopFilter3(SampleNumber(i))),
 
-            (LT::DupeBlockHack, LF::ResetFilter) => None,
-            (LT::DupeBlockHack, LF::Auto) => arg.map(LoopSetting::DupeBlockHack),
-            (LT::DupeBlockHack, LF::Filter1) => arg.map(LoopSetting::DupeBlockHackFilter1),
-            (LT::DupeBlockHack, LF::Filter2) => arg.map(LoopSetting::DupeBlockHackFilter2),
-            (LT::DupeBlockHack, LF::Filter3) => arg.map(LoopSetting::DupeBlockHackFilter3),
+            (LT::DupeBlockHack, LF::ResetFilter, _) => None,
+            (LT::DupeBlockHack, LF::Auto, Some(i)) => {
+                Some(LoopSetting::DupeBlockHack(BlockNumber(i)))
+            }
+            (LT::DupeBlockHack, LF::Filter1, Some(i)) => {
+                Some(LoopSetting::DupeBlockHackFilter1(BlockNumber(i)))
+            }
+            (LT::DupeBlockHack, LF::Filter2, Some(i)) => {
+                Some(LoopSetting::DupeBlockHackFilter2(BlockNumber(i)))
+            }
+            (LT::DupeBlockHack, LF::Filter3, Some(i)) => {
+                Some(LoopSetting::DupeBlockHackFilter3(BlockNumber(i)))
+            }
+
+            (_, _, None) => None,
         };
 
         if loop_setting.is_none() {
@@ -376,16 +390,16 @@ impl BrrSettingsWidget {
 
         let (lc, lf, arg) = match ls {
             LS::None => (LT::None, None, None),
-            LS::OverrideBrrLoopPoint(lp) => (LT::OverrideBrrLoopPoint, None, Some(lp)),
-            LS::LoopResetFilter(lp) => (LT::Loop, Some(LF::ResetFilter), Some(lp)),
-            LS::LoopWithFilter(lp) => (LT::Loop, Some(LF::Auto), Some(lp)),
-            LS::LoopFilter1(lp) => (LT::Loop, Some(LF::Filter1), Some(lp)),
-            LS::LoopFilter2(lp) => (LT::Loop, Some(LF::Filter2), Some(lp)),
-            LS::LoopFilter3(lp) => (LT::Loop, Some(LF::Filter3), Some(lp)),
-            LS::DupeBlockHack(dbh) => (LT::DupeBlockHack, Some(LF::Auto), Some(dbh)),
-            LS::DupeBlockHackFilter1(dbh) => (LT::DupeBlockHack, Some(LF::Filter1), Some(dbh)),
-            LS::DupeBlockHackFilter2(dbh) => (LT::DupeBlockHack, Some(LF::Filter2), Some(dbh)),
-            LS::DupeBlockHackFilter3(dbh) => (LT::DupeBlockHack, Some(LF::Filter3), Some(dbh)),
+            LS::OverrideBrrLoopPoint(sn) => (LT::OverrideBrrLoopPoint, None, Some(sn.0)),
+            LS::LoopResetFilter(sn) => (LT::Loop, Some(LF::ResetFilter), Some(sn.0)),
+            LS::LoopWithFilter(sn) => (LT::Loop, Some(LF::Auto), Some(sn.0)),
+            LS::LoopFilter1(sn) => (LT::Loop, Some(LF::Filter1), Some(sn.0)),
+            LS::LoopFilter2(sn) => (LT::Loop, Some(LF::Filter2), Some(sn.0)),
+            LS::LoopFilter3(sn) => (LT::Loop, Some(LF::Filter3), Some(sn.0)),
+            LS::DupeBlockHack(bn) => (LT::DupeBlockHack, Some(LF::Auto), Some(bn.0)),
+            LS::DupeBlockHackFilter1(bn) => (LT::DupeBlockHack, Some(LF::Filter1), Some(bn.0)),
+            LS::DupeBlockHackFilter2(bn) => (LT::DupeBlockHack, Some(LF::Filter2), Some(bn.0)),
+            LS::DupeBlockHackFilter3(bn) => (LT::DupeBlockHack, Some(LF::Filter3), Some(bn.0)),
         };
         self.loop_type.set_value(lc.to_i32());
 

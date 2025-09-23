@@ -131,15 +131,21 @@ fn encode_wave_file(
         LoopSetting::OverrideBrrLoopPoint(_) => {
             return Err(BrrError::InvalidLoopSettingWav(loop_setting.clone()))
         }
-        LoopSetting::LoopWithFilter(lp) => (Some(*lp), None, None),
-        LoopSetting::LoopResetFilter(lp) => (Some(*lp), None, Some(BrrFilter::Filter0)),
-        LoopSetting::LoopFilter1(lp) => (Some(*lp), None, Some(BrrFilter::Filter1)),
-        LoopSetting::LoopFilter2(lp) => (Some(*lp), None, Some(BrrFilter::Filter2)),
-        LoopSetting::LoopFilter3(lp) => (Some(*lp), None, Some(BrrFilter::Filter3)),
-        LoopSetting::DupeBlockHack(dbh) => (None, Some(*dbh), None),
-        LoopSetting::DupeBlockHackFilter1(dbh) => (None, Some(*dbh), Some(BrrFilter::Filter1)),
-        LoopSetting::DupeBlockHackFilter2(dbh) => (None, Some(*dbh), Some(BrrFilter::Filter2)),
-        LoopSetting::DupeBlockHackFilter3(dbh) => (None, Some(*dbh), Some(BrrFilter::Filter3)),
+        &LoopSetting::LoopWithFilter(lp) => (Some(lp.into()), None, None),
+        &LoopSetting::LoopResetFilter(lp) => (Some(lp.into()), None, Some(BrrFilter::Filter0)),
+        &LoopSetting::LoopFilter1(lp) => (Some(lp.into()), None, Some(BrrFilter::Filter1)),
+        &LoopSetting::LoopFilter2(lp) => (Some(lp.into()), None, Some(BrrFilter::Filter2)),
+        &LoopSetting::LoopFilter3(lp) => (Some(lp.into()), None, Some(BrrFilter::Filter3)),
+        &LoopSetting::DupeBlockHack(dbh) => (None, Some(dbh.into()), None),
+        &LoopSetting::DupeBlockHackFilter1(dbh) => {
+            (None, Some(dbh.into()), Some(BrrFilter::Filter1))
+        }
+        &LoopSetting::DupeBlockHackFilter2(dbh) => {
+            (None, Some(dbh.into()), Some(BrrFilter::Filter2))
+        }
+        &LoopSetting::DupeBlockHackFilter3(dbh) => {
+            (None, Some(dbh.into()), Some(BrrFilter::Filter3))
+        }
     };
 
     match encode_brr(
@@ -171,7 +177,7 @@ fn load_brr_file(
         Err(e) => return Err(e.clone()),
     };
 
-    match brr.clone().into_brr_sample(loop_point) {
+    match brr.clone().into_brr_sample(loop_point.map(|l| l.0.into())) {
         Ok(b) => Ok(b),
         Err(e) => Err(BrrError::BrrParseError(source.to_path_string(), e)),
     }
