@@ -590,6 +590,7 @@ pub enum ChannelError {
 
     PortamentoTooShort,
     PortamentoTooLong,
+    PortamentoTooLongWithUnknownVelocity(TickCounter),
     PortamentoRequiresInstrument,
     PortamentoNoteAndPitchWithoutInstrument,
     OneNotePortamentoPreviousNoteIsNotSlurred,
@@ -1083,7 +1084,13 @@ impl Display for ValueError {
 
             Self::PortamentoVelocityZero => write!(f, "portamento velocity cannot be 0"),
             Self::PortamentoVelocityOutOfRange(v) => {
-                out_of_range!("portamento velocity", v, PortamentoVelocity)
+                write!(
+                    f,
+                    "portamento velocity out of bounds ({}, expected {} - +{})",
+                    v,
+                    PortamentoVelocity::MIN,
+                    PortamentoVelocity::MAX
+                )
             }
 
             Self::QuantizeOutOfRange(v) => out_of_range!("quantization", v, Quantization),
@@ -1771,6 +1778,12 @@ impl Display for ChannelError {
 
             Self::PortamentoTooShort => write!(f, "portamento length is too short"),
             Self::PortamentoTooLong => write!(f, "portamento length is too long"),
+            Self::PortamentoTooLongWithUnknownVelocity(t) => write!(
+                f,
+                "unknown velocity portamento slide too long ({} ticks, max: {})",
+                t.value(),
+                PortamentoVelocity::MAX_SLIDE_TICKS
+            ),
             Self::PortamentoRequiresInstrument => {
                 write!(
                     f,

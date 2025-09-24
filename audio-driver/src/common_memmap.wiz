@@ -46,7 +46,7 @@ let LAST_VAR_PAGE_SIZE = (BC_CHANNEL_STACK_SIZE + 10) * 10;
 //   * `addresses::COMMON_DATA` in `crates/compiler/src/driver_constants.rs`
 //   * The Tad_AudioDriver_SIZE assert in `ca65-api/tad-audio.s`
 //   * The Tad_AudioDriver_SIZE assert in `64tass-api/tad-process.inc`
-let COMMON_DATA_ADDR = 0x1000 - 28;
+let COMMON_DATA_ADDR = 0x1100 - 28;
 
 // `CODE_ADDR` MUST be an even address (The loader only works with even addresses)
 let CODE_ADDR = 0x200 + LOADER_SIZE;

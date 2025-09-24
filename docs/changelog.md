@@ -6,12 +6,17 @@ Version 0.1.2
  * Increased the maximum BRR sample size
  * Increased the maximum `wav2brr` input size
 
+Driver changes:
+ * Portamento velocity is calculated by the audio driver if portamento speed is 0.
+   The maximum length of a pitch slide is 256 ticks.
+
 MML changes:
  * Fixed a typo in the MML syntax document
  * The default whole note length can be set with `#ZenLen` or `#Zenlen`
  * `#` headers can now be lower case or lower camel case
    (ie, `#title`, `#echolength`, `#echoLength`)
  * Duplicate header error messages show the line of the original header
+ * Portamentos can now be played in a subroutine with an unknown instrument.
 
 
 Version 0.1.1

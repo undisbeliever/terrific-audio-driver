@@ -31,6 +31,19 @@
       "comment": null
     },
     {
+      "name": "square48",
+      "source": "samples/square48.wav",
+      "freq": 666.66666,
+      "loop": "loop_reset_filter",
+      "loop_setting": 0,
+      "evaluator": "default",
+      "ignore_gaussian_overflow": false,
+      "first_octave": 1,
+      "last_octave": 6,
+      "envelope": "adsr 12 1 1 16",
+      "comment": "An instrument with a different tuning frequency"
+    },
+    {
       "name": "sawtooth",
       "source": "samples/sawtooth.wav",
       "freq": 500.0,
@@ -92,6 +105,10 @@
     {
       "name": "noise_volume_restored_test",
       "source": "manual/noise-volume-restored-test.mml"
+    },
+    {
+      "name": "portamento_without_instrument",
+      "source": "manual/portamento-without-instrument.mml"
     },
     {
       "name": "tempo_and_timer",

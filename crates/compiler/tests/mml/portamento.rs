@@ -2,6 +2,8 @@
 //
 // SPDX-License-Identifier: MIT
 
+use compiler::time::TickCounter;
+
 use crate::*;
 
 #[test]
@@ -243,11 +245,42 @@ A @1 !s
 }
 
 #[test]
+fn portamento_with_instrument_hint() {
+    assert_mml_subroutine_matches_bytecode(
+        r#"
+@1 dummy_instrument
+
+!s ?@1 o4 {c g}
+
+A @1 !s
+"#,
+        0,
+        &["play_note c4 no_keyoff 1", "portamento g4 keyoff +49 23"],
+    );
+
+    assert_mml_subroutine_matches_bytecode(
+        r#"
+@1 dummy_instrument
+
+!s ?@1 o4 {g c}
+
+A @1 !s
+"#,
+        0,
+        &["play_note g4 no_keyoff 1", "portamento c4 keyoff -49 23"],
+    );
+}
+
+#[test]
 fn portamento_errors() {
     assert_one_error_in_mml_line("{c g}4,4", 8, ChannelError::InvalidPortamentoDelay);
     assert_one_error_in_mml_line("l2 {c g},2", 10, ChannelError::InvalidPortamentoDelay);
 
-    assert_one_error_in_mml_line("{c g}4,,0", 1, ValueError::PortamentoVelocityZero.into());
+    assert_one_error_in_mml_line(
+        "{c g}4,,0",
+        9,
+        ValueError::PortamentoSpeedOutOfRange(0).into(),
+    );
     assert_one_error_in_mml_line(
         "{c g}4,,800",
         9,
@@ -1381,5 +1414,243 @@ A @1 c& {d} L c& {d} c& {d}"##,
             "play_note c4 no_keyoff 24",
             "portamento d4 keyoff +11 24",
         ],
+    );
+}
+
+#[test]
+fn portamento_in_subroutine_with_no_instrument() {
+    assert_mml_subroutine_matches_bytecode(
+        r#"
+@1 dummy_instrument
+
+!s o4 {c g}
+
+A @1 !s
+"#,
+        0,
+        &["play_note c4 no_keyoff 1", "portamento g4 keyoff 0 23"],
+    );
+
+    assert_mml_subroutine_matches_bytecode(
+        r#"
+@1 dummy_instrument
+
+!s o4 {g c}
+
+A @1 !s
+"#,
+        0,
+        &["play_note g4 no_keyoff 1", "portamento c4 keyoff 0 23"],
+    );
+}
+
+#[test]
+fn portamento_pitch_pitch_in_subroutine_with_no_instrument() {
+    // Confirm velocity is calculated by the compiler
+
+    assert_mml_subroutine_matches_bytecode(
+        r#"
+@1 dummy_instrument
+
+!s {P$1000 P$1300}
+
+A @1 !s
+"#,
+        0,
+        &[
+            "play_pitch $1000 no_keyoff 1",
+            "portamento_pitch $1300 keyoff +35 23",
+        ],
+    );
+
+    assert_mml_subroutine_matches_bytecode(
+        r#"
+@1 dummy_instrument
+
+!s {P$1300 P$1000}
+
+A @1 !s
+"#,
+        0,
+        &[
+            "play_pitch $1300 no_keyoff 1",
+            "portamento_pitch $1000 keyoff -35 23",
+        ],
+    );
+
+    assert_mml_subroutine_matches_bytecode(
+        r#"
+@1 dummy_instrument
+
+!s P$1000 & {P$1000 P$1200}
+
+A @1 !s
+"#,
+        0,
+        &[
+            "play_pitch $1000 no_keyoff 24",
+            "portamento_pitch $1200 keyoff +22 24",
+        ],
+    );
+
+    assert_mml_subroutine_matches_bytecode(
+        r#"
+@1 dummy_instrument
+
+!s P$1200 & {P$1200 P$1000}
+
+A @1 !s
+"#,
+        0,
+        &[
+            "play_pitch $1200 no_keyoff 24",
+            "portamento_pitch $1000 keyoff -22 24",
+        ],
+    );
+}
+
+#[test]
+fn portamento_note_and_pitch_in_subroutine_with_no_instrument() {
+    // confirm velocity is unknown
+
+    assert_mml_subroutine_matches_bytecode(
+        r#"
+@1 dummy_instrument
+
+!s {c P$1000}
+
+A @1 !s
+"#,
+        0,
+        &[
+            "play_note c4 no_keyoff 1",
+            "portamento_pitch $1000 keyoff 0 23",
+        ],
+    );
+
+    assert_mml_subroutine_matches_bytecode(
+        r#"
+@1 dummy_instrument
+
+!s {P$1000 c}
+
+A @1 !s
+"#,
+        0,
+        &["play_pitch $1000 no_keyoff 1", "portamento c4 keyoff 0 23"],
+    );
+}
+
+#[test]
+fn portamento_in_subroutine_with_no_instrument_slide_length_too_long_test() {
+    // Minimum error ticks
+    const ERROR_TICKS: TickCounter = TickCounter::new(257);
+
+    assert_mml_subroutine_matches_bytecode(
+        r#"
+@1 dummy_instrument
+
+!s o4 {c g}%258
+
+A @1 !s
+"#,
+        0,
+        &["play_note c4 no_keyoff 1", "portamento g4 keyoff 0 257"],
+    );
+
+    assert_one_subroutine_error_in_mml(
+        r#"
+@1 dummy_instrument
+
+!s o4 {c g}%259
+
+A @1 !s
+"#,
+        "!s",
+        7,
+        ChannelError::PortamentoTooLongWithUnknownVelocity(ERROR_TICKS),
+    );
+
+    assert_mml_subroutine_matches_bytecode(
+        r#"
+@1 dummy_instrument
+
+!s o4 {c g}%457,%200
+
+A @1 !s
+"#,
+        0,
+        &["play_note c4 no_keyoff 200", "portamento g4 keyoff 0 257"],
+    );
+
+    assert_one_subroutine_error_in_mml(
+        r#"
+@1 dummy_instrument
+
+!s o4 {c g}%458,%200
+
+A @1 !s
+"#,
+        "!s",
+        7,
+        ChannelError::PortamentoTooLongWithUnknownVelocity(ERROR_TICKS),
+    );
+
+    assert_mml_subroutine_matches_bytecode(
+        r#"
+@1 dummy_instrument
+
+!s o4 {c g}%257 & c
+
+A @1 !s
+"#,
+        0,
+        &[
+            "play_note c4 no_keyoff 1",
+            "portamento g4 no_keyoff 0 256",
+            "play_note c4 24",
+        ],
+    );
+
+    assert_one_subroutine_error_in_mml(
+        r#"
+@1 dummy_instrument
+
+!s o4 {c g}%258 & c
+
+A @1 !s
+"#,
+        "!s",
+        7,
+        ChannelError::PortamentoTooLongWithUnknownVelocity(ERROR_TICKS),
+    );
+
+    assert_mml_subroutine_matches_bytecode(
+        r#"
+@1 dummy_instrument
+
+!s o4 {c g}%456,%200 & c
+
+A @1 !s
+"#,
+        0,
+        &[
+            "play_note c4 no_keyoff 200",
+            "portamento g4 no_keyoff 0 256",
+            "play_note c4 24",
+        ],
+    );
+
+    assert_one_subroutine_error_in_mml(
+        r#"
+@1 dummy_instrument
+
+!s o4 {c g}%457,%200 & c
+
+A @1 !s
+"#,
+        "!s",
+        7,
+        ChannelError::PortamentoTooLongWithUnknownVelocity(ERROR_TICKS),
     );
 }

@@ -383,14 +383,18 @@ Numbers can be decimal, or hexadecimal when prefixed with `$` (ie, `$ff`)
  * `{[pitch1] <pitch2>} [total_length] [, delay_length] [, portamento_speed]` - Portamento
     * Smoothly transition between two pitches.
     * If `delay_length` is set, there will be a delay between `pitch1` key-on and the pitch-shift.  For example: `{df}4,8` will delay the portamento by a eighth note (`d8 & {df}8`).
-        * If `delay_length` is set, it must be less than `total_length`.
-    * The S-DSP `PITCH` register will be incremented/decremented by a fixed value on every tick.  This value is calculated by the MML compiler and can be overridden by setting `portamento_spped`.
-       * The MML compiler needs to know which instrument is playing the pitch.  If you are using portamento in a subroutine, you will need to either set an instrument (`@`) before playing a portamento or manually set `portamento_speed`.
+       * If `delay_length` is set, it must be less than `total_length`.
+    * The S-DSP `PITCH` register will be incremented/decremented by a fixed value on every tick (`portamento_speed`).
+       * If `portamento_speed` is not set it will be calculated.
+       * The MML compiler pre-computes the `portamento_speed` if the instrument is known.
+       * The audio driver can compute the `portamento_speed` if the instrument is not known and the portamento is inside a subroutine.
+       * Subroutines that set an instrument (`@`) or instrument hint (`@?`) will use the faster and more accurate pre-computed `portamento_speed` value.
        * `portamento_speed` can be set without setting `delay_length`, ie: `{df}4,,50`
     * Can be tied (`^`) and slurred (`&`) like a regular note
     * The octave can be changed inside the braces.  For example: `{a > c}2` and `{o3 c o4 c}2`
     * The pitches can be `P`, `PR` or `PF` commands
     * `pitch1` is optional if the previous note is slurred and known (ie, not at the start of a loop)
+    * If the instrument is not known, the maximum duration of the pitch slide is 256 ticks.
 
  * `{{<pitch list>}} [total_length] [, note_length] [, tie]` - Broken Chord
     * Quickly cycle through the pitches for a given duration (`length`).
@@ -616,7 +620,7 @@ To simplify and speedup the SPC-700 code:
     * The pitches are stored in a 256 entry pitch table.
     * There is no overflow or underflow checks when accessing the pitch table.
     * The MML compiler will check for pitch-out-of-range errors, but only if it knows what instrument the note is play in.
- * Pitch effects (portamento and vibrato) are precalculated by the MML compiler.
-    * To calculate the *pitch-offset-per-tick* value, the MML compiler needs to know which instrument is playing which portamento/vibrato note.
-
+ * Pitch effects (portamento and `MP` vibrato) are precalculated by the MML compiler.
+    * To calculate the *pitch-offset-per-tick* value, the MML compiler needs to know which instrument is playing which `MP` vibrato note.
+    * Portamento velocities will be calculated by the MML compiler if the instrument is known.
 

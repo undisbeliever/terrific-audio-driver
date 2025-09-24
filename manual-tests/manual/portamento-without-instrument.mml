@@ -1,0 +1,42 @@
+#Title Portamento in subroutine without instrument
+
+; Test instructions
+;
+; 1. Record tad-gui audio output
+; 2. Use a spectrogram to verify the end of the pitch slide
+;    matches the sixteenth notes atter the portamentos.
+
+#ZenLen 192
+#Timer 64
+
+; Doing the test with two samples with different tuning frequencies
+; (500Hz and 666.66 Hz)
+@1 square   gain I23
+@2 square48 gain I23
+
+
+!s1 {o1 a o5 c}2 c16 r8  {o5 c o3 c}2 c16 r8
+A @1 !s1 @2 !s1 r8
+
+!s2 {P$1000 d}4 d16 r8 {c P$2000}4 P$2000,16 r8
+A @1 !s2 @2 !s2 r8
+
+!s3 {cd}4 & d16  & {e}8 & e16 & {d}4,12 d16 r8
+A @1 !s3 @2 !s3 r8
+
+; Test how driver handles a quotient of 0
+!s4 o3 {c d}1 d16 r8
+A @1 !s4 @2 !s4 r8
+
+; Test maximum slide length
+!s5 o5 {c g}%257 g16 r8
+A @1 !s5 @2 !s5 r8
+
+; Test a small value and maximum slide length
+!s6 o3 {c d}%257 d16 r8
+A @1 !s6 @2 !s6 r8
+
+; Test a portamento slide with a calculated velocity > 255
+; Both portamentos will fail this test and not reach the target note
+!s7 {o1c o6b}%30 o6b16 r8
+A @1 !s7 @2 !s7 r8

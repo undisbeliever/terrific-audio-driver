@@ -235,9 +235,8 @@ fn portamento_argument(
     let (note, key_off, velocity, ticks) = four_arguments(args)?;
 
     let note = Note::parse_bytecode_argument(note)?;
+    let velocity = parse_portamento_velocity(velocity)?;
     let ticks = parse_play_note_ticks(ticks, key_off)?;
-
-    let velocity = parse_svnt(velocity)?;
 
     Ok((note, velocity, ticks))
 }
@@ -248,9 +247,8 @@ fn portamento_pitch_argument(
     let (target, key_off, velocity, ticks) = four_arguments(args)?;
 
     let target = parse_uvnt(target)?;
+    let velocity = parse_portamento_velocity(velocity)?;
     let ticks = parse_play_note_ticks(ticks, key_off)?;
-
-    let velocity = parse_svnt(velocity)?;
 
     Ok((target, velocity, ticks))
 }
@@ -369,6 +367,34 @@ fn fir_filter_argument(args: &[&str]) -> Result<[FirCoefficient; FIR_FILTER_SIZE
         Err(ChannelError::InvalidNumberOfArguments(
             FIR_FILTER_SIZE as u8,
         ))
+    }
+}
+
+fn parse_portamento_velocity(src: &str) -> Result<PortamentoVelocity, ValueError> {
+    match src.bytes().next() {
+        Some(b'+') | Some(b'-') => {
+            let i = if let Some(s) = src.strip_prefix("+$") {
+                i32::from_str_radix(s, 16)
+                    .map_err(|_| ValueError::CannotParseHex(src.to_owned()))?
+            } else if let Some(s) = src.strip_prefix("-$") {
+                -i32::from_str_radix(s, 16)
+                    .map_err(|_| ValueError::CannotParseHex(src.to_owned()))?
+            } else {
+                src.parse()
+                    .map_err(|_| ValueError::CannotParseSigned(src.to_owned()))?
+            };
+
+            PortamentoVelocity::from_calculated_value(i)
+        }
+        _ => {
+            if src.is_empty() {
+                Err(ValueError::NoPortamentoVelocity)
+            } else if parse_u32(src) == Ok(0) {
+                Ok(PortamentoVelocity::Unknown)
+            } else {
+                Err(ValueError::NoDirectionInPortamentoVelocity)
+            }
+        }
     }
 }
 

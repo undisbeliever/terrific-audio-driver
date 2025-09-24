@@ -32,6 +32,7 @@ use crate::value_newtypes::{i16_value_newtype, u8_value_newtype, SignedValueNewT
 use crate::FilePosRange;
 
 use std::cmp::min;
+use std::num::NonZeroU8;
 use std::ops::{Range, RangeInclusive};
 
 pub const MAX_PORTAMENTO_SLIDE_TICKS: u32 = 16 * 1024;
@@ -43,7 +44,9 @@ pub const REST_LOOP_INSTRUCTION_THREASHOLD: u32 = 3;
 u8_value_newtype!(
     PortamentoSpeed,
     PortamentoSpeedOutOfRange,
-    NoPortamentoSpeed
+    NoPortamentoSpeed,
+    1,
+    u8::MAX
 );
 
 #[derive(Debug, Copy, Clone)]
@@ -1257,10 +1260,11 @@ impl<'a> ChannelBcGenerator<'a> {
                     return Err(ChannelError::PortamentoNoteAndPitchWithoutInstrument);
                 };
 
+                const _: () = assert!(PortamentoSpeed::MIN.as_u8() > 0);
                 if direction {
-                    i32::from(speed.as_u8())
+                    PortamentoVelocity::Up(NonZeroU8::new(speed.as_u8()).unwrap())
                 } else {
-                    -i32::from(speed.as_u8())
+                    PortamentoVelocity::Down(NonZeroU8::new(speed.as_u8()).unwrap())
                 }
             }
             None => {
@@ -1272,17 +1276,27 @@ impl<'a> ChannelBcGenerator<'a> {
                         assert!(ticks > 0);
 
                         // division with rounding
-                        if delta > 0 {
+                        let v = if delta > 0 {
                             (delta + (ticks / 2)) / ticks
                         } else {
                             (delta - (ticks / 2)) / ticks
+                        };
+                        PortamentoVelocity::from_calculated_value(v)?
+                    }
+                    _ => {
+                        // Instrument is unknown, audio driver will calculate velocity
+
+                        if slide_length.value() <= PortamentoVelocity::MAX_SLIDE_TICKS {
+                            PortamentoVelocity::Unknown
+                        } else {
+                            return Err(ChannelError::PortamentoTooLongWithUnknownVelocity(
+                                slide_length,
+                            ));
                         }
                     }
-                    _ => return Err(ChannelError::PortamentoRequiresInstrument),
                 }
             }
         };
-        let velocity = PortamentoVelocity::try_from(velocity)?;
 
         // In PMDMML only the portamento slide is quantized, delay_length is not.
         let (p_length, after) =

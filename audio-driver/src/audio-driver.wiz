@@ -2673,13 +2673,9 @@ func __portamento_note(channelIndex : u8 in x, noteAndKeyoffFlag : u8 in a, dire
 // IN: Y = 0
 // KEEP: X
 func __portamento_read_speed_length(channelIndex : u8 in x, target_h : u8 in a) {
-    channelSoA.portamento_target_h[x] = a;
+    var _tmp : u16 in  zpTmpWord;
 
-    // Speed
-    // Y = 0
-    a = instructionPtr[y];
-    instructionPtr++;
-    channelSoA.portamento_speed[x] = a;
+    channelSoA.portamento_target_h[x] = a;
 
     // Wait length
     // Y = 0
@@ -2687,11 +2683,70 @@ func __portamento_read_speed_length(channelIndex : u8 in x, target_h : u8 in a) 
     instructionPtr++;
     channelSoA.countdownTimer[x] = a;
 
-
     // Reset early release min-tick counter.
     // Y = 0
     a = y;
     channelSoA.ticksAfterNote[x] = a;
+
+
+    // Speed
+    // Y = 0
+    a = instructionPtr[y];
+    if zero {
+        // Calculate portamento speed and direction
+        //
+        // Calculating direction when speed == 0 allows the MML compiler mix notes and pitches in portamento.
+
+        push(x);
+
+        // Set up direction
+        // Y = 0
+        y++;
+        channelSoA.portamento_direction[x] = y as i8;
+
+        a = channelSoA.countdownTimer[x];
+        push(a);
+
+        a = channelSoA.virtualChannels.pitch_l[x];
+        y = channelSoA.virtualChannels.pitch_h[x];
+        _tmp = ya;
+
+        y = a = channelSoA.portamento_target_h[x];
+        a = channelSoA.portamento_target_l[x];
+
+        ya -= _tmp;
+        if negative {
+            // set down direction
+            channelSoA.portamento_direction[x] = y as i8;
+
+            // negate ya
+            _tmp = ya;
+            y = a = 0;
+            ya -= _tmp;
+        }
+
+        x = pop();
+        x--;
+
+        divmod(ya, x);
+        if overflow {
+            // ares states overflow set if quotient >= 256 (even if output is invalid)
+            // ::TODO test an other emulators and real hardware::
+            a = 0xff;
+        }
+        else {
+            // Required for long portamentos and low octaves
+            y = a;
+            if zero {
+                a++;
+            }
+        }
+
+        x = pop();
+    }
+    channelSoA.portamento_speed[x] = a;
+
+    instructionPtr++;
 
 
     // return (do not execute the next bytecode and sleep)
