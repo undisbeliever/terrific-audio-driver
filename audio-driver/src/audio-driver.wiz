@@ -383,7 +383,7 @@ in firstpage {
 
 
         // Channel invert flags:
-        //      rl00000m
+        //      rl0000m0
         //      r = invert right channel
         //      l = invert left channel
         //      m = invert both channels in mono mode
@@ -2063,9 +2063,8 @@ inline func _update_vol_shadow__inline(channelIndex : u8 in x) {
         y = a = y >>> 2;
 
         // Test mono flag
-        a = channelSoA.invertFlags[x];
-        a >>>= 1;
-        if carry {
+        a = channelSoA.invertFlags[x] & INVERT_FLAGS.MONO;
+        if !zero {
             // Invert Y
             a = y ^ 0xff;
             a++;
@@ -3356,21 +3355,40 @@ func set_volume(channelIndex : u8 in x, volume : u8 in a) {
 
 
 // KEEP: X
-func set_channel_invert(channelIndex : u8 in x, flags : u8 in a) {
+func set_channel_or_echo_invert(channelIndex : u8 in x, flags : u8 in a) {
     // If not in surround mode, set all flags to the mono-flag
     //
     // (cannot use `bbs` instructions in wiz, using `mov1 c, addr, bit` instead)
     carry = loaderDataType $ LoaderDataType.SURROUND_FLAG_BIT;
     if !carry {
+        // Have to push and pop MSB using carry, the spc700 has no `bit` instruction.
+        a <<<= 1;
+
         a &= INVERT_FLAGS.MONO;
         if !zero {
             a = 0xff;
         }
+
+        a >>>>#= 1;
     }
 
-    channelSoA.invertFlags[x] = a;
+    // Have to bit-shift parameter, the spc700 has no `bit` instruction.
+    a <<<= 1;
+    if carry {
+        // set channel invert
+        channelSoA.invertFlags[x] = a;
 
-    mark_vol_shadow_dirty__inline();
+        mark_vol_shadow_dirty__inline();
+
+        ^return process_next_bytecode(x);
+    }
+    // else
+
+    // set echo invert
+
+    echo.invertFlags = a;
+
+    echoDirty $ ECHO_DIRTY__VOLUME_BIT = true;
 
     ^return process_next_bytecode(x);
 }
@@ -3921,25 +3939,6 @@ func adjust_echo_i8_limit(channelIndex: u8 in x, echo_index : i8 in a) {
     echoDirty $ ECHO_DIRTY__FEEDBACK_BIT = true;
 
     x = pop();
-    ^return process_next_bytecode(x);
-}
-
-
-// KEEP: X
-func set_echo_invert(channelIndex : u8 in x, flags: u8 in a) {
-    // If not in surround mode, set all flags to the mono-flag
-    // (cannot use `bbs` instructions in wiz, using `mov1 c, addr, bit` instead)
-    carry = loaderDataType $ LoaderDataType.SURROUND_FLAG_BIT;
-    if !carry {
-        a &= INVERT_FLAGS.MONO;
-        if !zero {
-            a = 0xff;
-        }
-    }
-    echo.invertFlags = a;
-
-    echoDirty $ ECHO_DIRTY__VOLUME_BIT = true;
-
     ^return process_next_bytecode(x);
 }
 

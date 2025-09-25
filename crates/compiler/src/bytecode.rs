@@ -272,7 +272,7 @@ pub mod opcodes {
         SET_PAN_AND_VOLUME,
         ADJUST_VOLUME,
         SET_VOLUME,
-        SET_CHANNEL_INVERT,
+        SET_CHANNEL_OR_ECHO_INVERT,
         VOLUME_SLIDE_UP,
         VOLUME_SLIDE_DOWN,
         TREMOLO,
@@ -293,7 +293,6 @@ pub mod opcodes {
         SET_FIR_FILTER,
         SET_OR_ADJUST_ECHO_I8,
         ADJUST_ECHO_I8_LIMIT,
-        SET_ECHO_INVERT,
         SET_ECHO_DELAY,
         DISABLE_NOISE_OR_SET_PMOD,
         END_LOOP,
@@ -304,6 +303,7 @@ pub mod opcodes {
         REUSE_TEMP_GAIN,
         KEYON_NEXT_NOTE,
         PADDING_0,
+        PADDING_1,
     );
 
     // Last non play-note opcode
@@ -1853,7 +1853,11 @@ impl<'a> Bytecode<'a> {
     }
 
     pub fn set_channel_invert(&mut self, flags: InvertFlags) {
-        emit_bytecode!(self, opcodes::SET_CHANNEL_INVERT, flags.into_driver_value())
+        emit_bytecode!(
+            self,
+            opcodes::SET_CHANNEL_OR_ECHO_INVERT,
+            flags.into_bytecode_value(true)
+        )
     }
 
     fn _pan_vol_slide_offset_per_tick<A, T>(&mut self, amount: A, ticks: T) -> (u8, u8)
@@ -2521,7 +2525,11 @@ impl<'a> Bytecode<'a> {
     }
 
     pub fn set_echo_invert(&mut self, flags: InvertFlags) {
-        emit_bytecode!(self, opcodes::SET_ECHO_INVERT, flags.into_driver_value())
+        emit_bytecode!(
+            self,
+            opcodes::SET_CHANNEL_OR_ECHO_INVERT,
+            flags.into_bytecode_value(false)
+        )
     }
 
     pub fn set_echo_delay(&mut self, length: EchoLength) -> Result<(), BytecodeError> {

@@ -14,7 +14,8 @@ pub struct InvertFlags {
 }
 
 impl InvertFlags {
-    pub const MASK: u8 = 0b11000001;
+    pub const MASK: u8 = 0b11000010;
+    pub const MONO_MASK: u8 = 0b00000010;
 
     pub const BOTH: Self = Self {
         right: true,
@@ -23,15 +24,22 @@ impl InvertFlags {
     };
 
     pub fn into_driver_value(self) -> u8 {
-        (u8::from(self.right) << 7) | (u8::from(self.left) << 6) | (u8::from(self.mono))
+        (u8::from(self.right) << 7) | (u8::from(self.left) << 6) | (u8::from(self.mono) << 1)
     }
 
     pub fn from_driver_value(e: u8) -> Self {
         Self {
             right: e & 0x80 != 0,
             left: e & 0x40 != 0,
-            mono: e & 0x01 != 0,
+            mono: e & 0x02 != 0,
         }
+    }
+
+    pub fn into_bytecode_value(self, channel_flag: bool) -> u8 {
+        (u8::from(channel_flag) << 7)
+            | (u8::from(self.right) << 6)
+            | (u8::from(self.left) << 5)
+            | (u8::from(self.mono))
     }
 }
 

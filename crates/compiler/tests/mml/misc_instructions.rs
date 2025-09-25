@@ -165,44 +165,44 @@ fn set_channel_invert() {
 fn set_channel_invert_asm() {
     assert_line_matches_bytecode_bytes(
         r"\asm { set_channel_invert none }",
-        &[opcodes::SET_CHANNEL_INVERT, 0x00],
+        &[opcodes::SET_CHANNEL_OR_ECHO_INVERT, 0x80],
     );
     assert_line_matches_bytecode_bytes(
         r"\asm { set_channel_invert right }",
-        &[opcodes::SET_CHANNEL_INVERT, 0x80],
+        &[opcodes::SET_CHANNEL_OR_ECHO_INVERT, 0xc0],
     );
     assert_line_matches_bytecode_bytes(
         r"\asm { set_channel_invert left }",
-        &[opcodes::SET_CHANNEL_INVERT, 0x40],
+        &[opcodes::SET_CHANNEL_OR_ECHO_INVERT, 0xa0],
     );
     assert_line_matches_bytecode_bytes(
         r"\asm { set_channel_invert mono }",
-        &[opcodes::SET_CHANNEL_INVERT, 0x01],
+        &[opcodes::SET_CHANNEL_OR_ECHO_INVERT, 0x81],
     );
     assert_line_matches_bytecode_bytes(
         r"\asm { set_channel_invert left right }",
-        &[opcodes::SET_CHANNEL_INVERT, 0xc0],
+        &[opcodes::SET_CHANNEL_OR_ECHO_INVERT, 0xe0],
     );
     assert_line_matches_bytecode_bytes(
         r"\asm { set_channel_invert right left }",
-        &[opcodes::SET_CHANNEL_INVERT, 0xc0],
+        &[opcodes::SET_CHANNEL_OR_ECHO_INVERT, 0xe0],
     );
     assert_line_matches_bytecode_bytes(
         r"\asm { set_channel_invert left right mono }",
-        &[opcodes::SET_CHANNEL_INVERT, 0xc1],
+        &[opcodes::SET_CHANNEL_OR_ECHO_INVERT, 0xe1],
     );
     assert_line_matches_bytecode_bytes(
         r"\asm { set_channel_invert both }",
-        &[opcodes::SET_CHANNEL_INVERT, 0xc1],
+        &[opcodes::SET_CHANNEL_OR_ECHO_INVERT, 0xe1],
     );
 
     assert_line_matches_bytecode_bytes(
         r"\asm { set_channel_invert 0 }",
-        &[opcodes::SET_CHANNEL_INVERT, 0x00],
+        &[opcodes::SET_CHANNEL_OR_ECHO_INVERT, 0x80],
     );
     assert_line_matches_bytecode_bytes(
         r"\asm { set_channel_invert LR }",
-        &[opcodes::SET_CHANNEL_INVERT, 0xc0],
+        &[opcodes::SET_CHANNEL_OR_ECHO_INVERT, 0xe0],
     );
 
     assert_one_error_in_mml_line(

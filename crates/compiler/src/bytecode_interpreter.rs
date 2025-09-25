@@ -927,8 +927,14 @@ impl ChannelState {
                 self.volume.set_value(volume);
             }
 
-            opcodes::SET_CHANNEL_INVERT => {
-                self.invert_flags = read_pc();
+            opcodes::SET_CHANNEL_OR_ECHO_INVERT => {
+                let flags = read_pc();
+
+                if flags & 0x80 != 0 {
+                    self.invert_flags = flags << 1;
+                } else {
+                    global.echo.invert_flags = flags << 1;
+                }
             }
 
             opcodes::VOLUME_SLIDE_UP => {
@@ -1196,9 +1202,6 @@ impl ChannelState {
                     }
                 }
             }
-            opcodes::SET_ECHO_INVERT => {
-                global.echo.invert_flags = read_pc();
-            }
             opcodes::SET_ECHO_DELAY => {
                 let edl = read_pc();
 
@@ -1211,7 +1214,7 @@ impl ChannelState {
 
             opcodes::DISABLE_CHANNEL => self.disable_channel(),
 
-            opcodes::PADDING_0 => self.disable_channel(),
+            opcodes::PADDING_0 | opcodes::PADDING_1 => self.disable_channel(),
         }
     }
 
@@ -1295,7 +1298,7 @@ impl ChannelState {
             opcodes::SET_PAN_AND_VOLUME => Some(3),
             opcodes::ADJUST_VOLUME => Some(2),
             opcodes::SET_VOLUME => Some(2),
-            opcodes::SET_CHANNEL_INVERT => Some(2),
+            opcodes::SET_CHANNEL_OR_ECHO_INVERT => Some(2),
             opcodes::VOLUME_SLIDE_UP => Some(4),
             opcodes::VOLUME_SLIDE_DOWN => Some(4),
             opcodes::TREMOLO => Some(4),
@@ -1323,14 +1326,13 @@ impl ChannelState {
             opcodes::SET_FIR_FILTER => Some(9),
             opcodes::SET_OR_ADJUST_ECHO_I8 => Some(3),
             opcodes::ADJUST_ECHO_I8_LIMIT => Some(4),
-            opcodes::SET_ECHO_INVERT => Some(2),
             opcodes::SET_ECHO_DELAY => Some(2),
             opcodes::KEYON_NEXT_NOTE => Some(1),
 
             opcodes::RESERVED_FOR_CUSTOM_USE => None,
             opcodes::DISABLE_CHANNEL => None,
 
-            opcodes::PADDING_0 => None,
+            opcodes::PADDING_0 | opcodes::PADDING_1 => None,
         }
     }
 
@@ -1736,8 +1738,8 @@ fn fix_invert_flags(invert_flags: u8, audio_mode: AudioMode) -> u8 {
     match audio_mode {
         AudioMode::Mono | AudioMode::Surround => invert_flags,
         AudioMode::Stereo => {
-            if invert_flags & 0x01 != 0 {
-                0xff
+            if invert_flags & InvertFlags::MONO_MASK != 0 {
+                0xff << 1
             } else {
                 0
             }

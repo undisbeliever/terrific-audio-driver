@@ -290,11 +290,12 @@ let INSTRUCTIONS_WITH_ARGUMENTS = [
     set_volume,
 
 
-    // parameter = rl00000m
+    // parameter = crl0000m
+    //  c = channel invert if set, echo invert if clear
     //  r = invert right channel
     //  l = invert left channel
     //  m = invert both channels in mono mode
-    set_channel_invert,
+    set_channel_or_echo_invert,
 
 
     // parameters: tttttttt oooooooo oooooooo
@@ -403,9 +404,6 @@ let INSTRUCTIONS_WITH_ARGUMENTS = [
     // comparison used will depend on the sign of adjust
     adjust_echo_i8_limit,
 
-    // parameter = rl00000m (same parameter as `set_channel_invert`)
-    set_echo_invert,
-
     // parameter = u8 EDL echo delay value
     // If the parameter > maxEdl, maxEdl will be used instead
     set_echo_delay,
@@ -457,6 +455,7 @@ let NO_ARGUMENT_INSTRUCTIONS = [
 
     // Padding
     disable_channel,
+    disable_channel,
 
 
     // Disables the channel
@@ -471,14 +470,4 @@ let ECHO_I8_EFB_INDEX = 8;
 let MAX_SET_OR_ADJUST_ECHO_I8_PARAM = (ECHO_I8_EFB_INDEX << 1) | 1;
 
 }
-
-namespace INVERT_FLAGS {
-    let RIGHT_BIT = 7;
-    let LEFT_BIT = 6;
-    let MONO_BIT = 0;
-
-
-    let MONO = 1 << MONO_BIT;
-}
-
 

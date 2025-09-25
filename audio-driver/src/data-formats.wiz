@@ -171,8 +171,8 @@ struct EchoBufferSettings {
     echoVolume_l : u8,
     echoVolume_r : u8,
 
-    // Echo invert flags
-    // Uses the data format as the `set_echo_invert` and `set_channel_invert` instructions
+    // Echo invert flags.
+    // See `INVERT_FLAGS` for bit values.
     invertFlags : u8,
 }
 
@@ -212,4 +212,13 @@ struct SongHeader {
     // subroutineTable_l[nSubroutines]
     // subroutineTable_h[nSubroutines]
 };
+
+namespace INVERT_FLAGS {
+    let RIGHT_BIT = 7;
+    let LEFT_BIT = 6;
+    // Cannot be 0, `set_channel_or_echo_invert` has to left-shift the bytecode parameter
+    let MONO_BIT = 1;
+
+    let MONO = 1 << MONO_BIT;
+}
 
