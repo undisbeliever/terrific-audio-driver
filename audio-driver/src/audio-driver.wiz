@@ -3790,65 +3790,38 @@ func set_fir_filter(channelIndex: u8 in x, fir0 : i8 in a) {
 // IN: Y = 0
 // KEEP: X
 #[fallthrough]
-func __set_echo_i8__out_of_bounds(channelIndex: u8 in x) {
-    a = ECHO_I8_EFB_INDEX;
+func __set_or_adjust_echo_i8__out_of_bounds(channelIndex: u8 in x) {
+    a = MAX_SET_OR_ADJUST_ECHO_I8_PARAM;
 
-// Fallthrough into set_echo_i8(x, a)
+// Fallthrough into set_or_adjust_echo_i8(x, a)
 }
 
 // IN: Y = 0
 // KEEP: X
-func set_echo_i8(channelIndex: u8 in x, echo_index : u8 in a) {
-    goto __set_echo_i8__out_of_bounds if a >= ECHO_I8_EFB_INDEX + 1;
+func set_or_adjust_echo_i8(channelIndex: u8 in x, eIndexAndSetFlag : u8 in a) {
+    goto __set_or_adjust_echo_i8__out_of_bounds if a >= MAX_SET_OR_ADJUST_ECHO_I8_PARAM + 1;
 
     push(x);
-    x = a;
+    x = a = a >>> 1;
+
+    // carry = LSB of eIndexAndSetFlag
 
     // Y = 0
     a = instructionPtr[y];
     instructionPtr++;
 
-    return __write_echo_i8__channel_index_on_stack(x, a as i8);
-}
+    if !carry {
+        // Adjust echo i8
 
-
-// IN: Y = 0
-// KEEP: X
-#[fallthrough]
-func __adjust_echo_i8__out_of_bounds(channelIndex: u8 in x) {
-    a = ECHO_I8_EFB_INDEX;
-
-// Fallthrough into adjust_echo_i8(x, a)
-}
-
-// IN: Y = 0
-// KEEP: X
-#[fallthrough]
-func adjust_echo_i8(channelIndex: u8 in x, echo_index : i8 in a) {
-    goto __adjust_echo_i8__out_of_bounds if a >= ECHO_I8_EFB_INDEX + 1;
-
-    push(x);
-    x = a;
-
-    // Y = 0
-    a = instructionPtr[y];
-    instructionPtr++;
-
-    a += echo.firFilter[x] as u8;
-    if overflow {
-        a = I8_MIN as u8;
-        if !carry {
-            a = I8_MAX as u8;
+        a +#= echo.firFilter[x] as u8;
+        if overflow {
+            a = I8_MIN as u8;
+            if !carry {
+                a = I8_MAX as u8;
+            }
         }
     }
 
-// Fallthrough into __write_echo_i8__channel_index_on_stack(x, a)
-}
-
-
-// IN: channelIndex on stack
-// ASSUMES: echo_index < 9
-func __write_echo_i8__channel_index_on_stack(echo_index: u8 in x, value: i8 in a) {
     // assumes echo echoFeedback directly after firFilter
     echo.firFilter[x] = a as i8;
 

@@ -8,6 +8,7 @@ use crate::bytecode::opcodes;
 use crate::bytecode::DisableNoiseOrPmodArgument;
 use crate::bytecode::InstrumentId;
 use crate::bytecode::Pan;
+use crate::bytecode::MAX_SET_OR_ADJUST_ECHO_I8_PARAM;
 use crate::common_audio_data::CommonAudioData;
 use crate::driver_constants::AudioMode;
 use crate::driver_constants::ECHO_VARIABLES_SIZE;
@@ -1162,22 +1163,24 @@ impl ChannelState {
 
                 global.echo.fir_filter = filter;
             }
-            opcodes::SET_ECHO_I8 => {
-                let index = read_pc();
+            opcodes::SET_OR_ADJUST_ECHO_I8 => {
+                let param = min(read_pc(), MAX_SET_OR_ADJUST_ECHO_I8_PARAM);
                 let value = i8::from_le_bytes([read_pc()]);
 
-                match global.echo.fir_filter.get_mut(usize::from(index)) {
-                    Some(e) => *e = value,
-                    None => global.echo.feedback = value,
-                }
-            }
-            opcodes::ADJUST_ECHO_I8 => {
-                let index = read_pc();
-                let adjust = i8::from_le_bytes([read_pc()]);
+                let index = usize::from(param >> 1);
 
-                match global.echo.fir_filter.get_mut(usize::from(index)) {
-                    Some(e) => *e = e.saturating_add(adjust),
-                    None => global.echo.feedback = global.echo.feedback.saturating_add(adjust),
+                if param & 1 == 1 {
+                    // set
+                    match global.echo.fir_filter.get_mut(index) {
+                        Some(e) => *e = value,
+                        None => global.echo.feedback = value,
+                    }
+                } else {
+                    // adjust
+                    match global.echo.fir_filter.get_mut(index) {
+                        Some(e) => *e = e.saturating_add(value),
+                        None => global.echo.feedback = global.echo.feedback.saturating_add(value),
+                    }
                 }
             }
             opcodes::ADJUST_ECHO_I8_LIMIT => {
@@ -1207,6 +1210,8 @@ impl ChannelState {
             opcodes::KEYON_NEXT_NOTE => (),
 
             opcodes::DISABLE_CHANNEL => self.disable_channel(),
+
+            opcodes::PADDING_0 => self.disable_channel(),
         }
     }
 
@@ -1316,8 +1321,7 @@ impl ChannelState {
             opcodes::ADJUST_ECHO_VOLUME => Some(2),
             opcodes::ADJUST_STEREO_ECHO_VOLUME => Some(3),
             opcodes::SET_FIR_FILTER => Some(9),
-            opcodes::SET_ECHO_I8 => Some(3),
-            opcodes::ADJUST_ECHO_I8 => Some(3),
+            opcodes::SET_OR_ADJUST_ECHO_I8 => Some(3),
             opcodes::ADJUST_ECHO_I8_LIMIT => Some(4),
             opcodes::SET_ECHO_INVERT => Some(2),
             opcodes::SET_ECHO_DELAY => Some(2),
@@ -1325,6 +1329,8 @@ impl ChannelState {
 
             opcodes::RESERVED_FOR_CUSTOM_USE => None,
             opcodes::DISABLE_CHANNEL => None,
+
+            opcodes::PADDING_0 => None,
         }
     }
 

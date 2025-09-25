@@ -388,15 +388,14 @@ let INSTRUCTIONS_WITH_ARGUMENTS = [
     // parameter = [i8 ; 8] FIR coefficients
     set_fir_filter,
 
-    // parameter = u8 index, i8 value
-    //   if index < 8: sets FIR filter tap
-    //   if index >= 8: sets echo feedback
-    set_echo_i8,
-
-    // parameter = u8 index, i8 adjust
-    //   if index < 8: sets FIR filter tap
-    //   if index >= 8: sets echo feedback
-    adjust_echo_i8,
+    // parameters: ---iiiis vvvvvvvv
+    //      iiii = index (0-7 = FIR filter tap, 8 = echo feedback)
+    //         s = 0 = adjust value, 1 = set value
+    //  vvvvvvvv = value
+    //
+    // If the first parameter byte is invalid (`> MAX_SET_OR_ADJUST_ECHO_I8_PARAM`),
+    // `set_or_adjust_echo_i8` will set echo feedback.
+    set_or_adjust_echo_i8,
 
     // parameter = u8 index, i8 adjust, i8 limit
     //   if index < 8: sets FIR filter tap
@@ -456,6 +455,10 @@ let NO_ARGUMENT_INSTRUCTIONS = [
     keyon_next_note,
 
 
+    // Padding
+    disable_channel,
+
+
     // Disables the channel
     disable_channel,
 ];
@@ -464,6 +467,8 @@ let NO_ARGUMENT_INSTRUCTIONS = [
 let ENABLE_PMOD_MASK = 0b00111110;
 
 let ECHO_I8_EFB_INDEX = 8;
+
+let MAX_SET_OR_ADJUST_ECHO_I8_PARAM = (ECHO_I8_EFB_INDEX << 1) | 1;
 
 }
 
