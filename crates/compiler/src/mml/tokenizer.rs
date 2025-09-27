@@ -816,7 +816,7 @@ impl<'a> PeekableTokenIterator<'a> {
         Self {
             next: iter
                 .next()
-                .unwrap_or_else(|| (Self::end_token(tokens.end_pos))),
+                .unwrap_or_else(|| Self::end_token(tokens.end_pos)),
             remaining: iter,
             prev_end_pos: blank_pos(),
             end_pos: tokens.end_pos,
