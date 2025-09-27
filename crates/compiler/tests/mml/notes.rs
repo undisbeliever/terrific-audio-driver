@@ -191,33 +191,6 @@ fn lots_of_dots_in_length() {
 }
 
 #[test]
-#[rustfmt::skip]
-fn transpose() {
-    assert_line_matches_line("_+2 d e f", "e f+ g");
-    assert_line_matches_line("_-2 d e f", "c d d+");
-
-    assert_line_matches_line("_+3 c d e", "c+++ d+++ e+++");
-    assert_line_matches_line("_-3 c d e", "c--- d--- e---");
-
-    // Relative transpose
-    assert_line_matches_line("__+2 d e f", "e f+ g");
-    assert_line_matches_line("__-2 d e f", "c d d+");
-
-    assert_line_matches_line("__+2 __+2 def", "_+4 def");
-    assert_line_matches_line("__-2 __-2 def", "_-4 def");
-
-    assert_line_matches_line("__+8 __-2 def", "_+6 def");
-    assert_line_matches_line("__-8 __+2 def", "_-6 def");
-
-    // transpose overrides relative transpose
-    assert_line_matches_line("_-5 _-10 def", "_-10 def");
-    assert_line_matches_line("_-5 _+10 def", "_+10 def");
-
-    assert_line_matches_line("_+5 _-10 def", "_-10 def");
-    assert_line_matches_line("_-5 _+10 def", "_+10 def");
-}
-
-#[test]
 fn slur() {
     assert_line_matches_bytecode(
         "a & b",

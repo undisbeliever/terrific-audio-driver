@@ -17,6 +17,7 @@ mod keyon_without_keyoff;
 mod loops;
 mod misc_instructions;
 mod notes;
+mod old_transpose;
 mod parsing;
 mod pitch;
 mod portamento;
