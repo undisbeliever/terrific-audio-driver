@@ -1654,3 +1654,299 @@ A @1 !s
         ChannelError::PortamentoTooLongWithUnknownVelocity(ERROR_TICKS),
     );
 }
+
+#[test]
+fn slurred_portamento_then_rest_in_subroutine_with_no_instrument() {
+    assert_mml_subroutine_matches_bytecode(
+        r#"
+@1 dummy_instrument
+
+!s o4 {cd}3 & r8
+
+A @1 !s
+"#,
+        0,
+        &[
+            "play_note c4 no_keyoff 1",
+            "portamento d4 no_keyoff 0 31",
+            "rest 12",
+        ],
+    );
+}
+
+#[test]
+fn slurred_portamento_then_wait_in_subroutine_with_no_instrument() {
+    assert_mml_subroutine_matches_bytecode(
+        r#"
+@1 dummy_instrument
+
+!s o4 {cd}3 & w8
+
+A @1 !s
+"#,
+        0,
+        &[
+            "play_note c4 no_keyoff 1",
+            "portamento d4 no_keyoff 0 31",
+            "wait 12",
+        ],
+    );
+}
+
+#[test]
+fn portamento_tie_with_in_subroutine_with_no_instrument() {
+    assert_mml_subroutine_matches_bytecode(
+        r#"
+@1 dummy_instrument
+
+!s o4 {cd} ^
+
+A @1 !s
+"#,
+        0,
+        &[
+            "play_note c4 no_keyoff 1",
+            "portamento d4 no_keyoff 0 23",
+            "rest 24",
+        ],
+    );
+
+    assert_mml_subroutine_matches_bytecode(
+        r#"
+@1 dummy_instrument
+
+!s o4 {cd},8 ^
+
+A @1 !s
+"#,
+        0,
+        &[
+            "play_note c4 no_keyoff 12",
+            "portamento d4 no_keyoff 0 12",
+            "rest 24",
+        ],
+    );
+
+    assert_mml_subroutine_matches_bytecode(
+        r#"
+@1 dummy_instrument
+
+!s o4 {cd}%100,%25 ^
+
+A @1 !s
+"#,
+        0,
+        &[
+            "play_note c4 no_keyoff 25",
+            "portamento d4 no_keyoff 0 75",
+            "rest 24",
+        ],
+    );
+
+    assert_mml_subroutine_matches_bytecode(
+        r#"
+@1 dummy_instrument
+
+!s o4 c%10 & {cd}%100,%25 ^%40
+
+A @1 !s
+"#,
+        0,
+        &[
+            "play_note c4 no_keyoff 10",
+            "wait 25",
+            "portamento d4 no_keyoff 0 75",
+            "rest 40",
+        ],
+    );
+
+    assert_mml_subroutine_matches_bytecode(
+        r#"
+@1 dummy_instrument
+
+!s o4 {cd}8 ^3
+
+A @1 !s
+"#,
+        0,
+        &[
+            "play_note c4 no_keyoff 1",
+            "portamento d4 no_keyoff 0 11",
+            "rest 32",
+        ],
+    );
+
+    assert_mml_subroutine_matches_bytecode(
+        r#"
+@1 dummy_instrument
+
+!s o4 {cd}8 ^3 &
+
+A @1 !s
+"#,
+        0,
+        &[
+            "play_note c4 no_keyoff 1",
+            "portamento d4 no_keyoff 0 11",
+            "wait 32",
+        ],
+    );
+
+    assert_mml_subroutine_matches_bytecode(
+        r#"
+@1 dummy_instrument
+
+!s o4 c & {e} ^
+
+A @1 !s
+"#,
+        0,
+        &[
+            "play_note c4 no_keyoff 24",
+            "portamento e4 no_keyoff 0 24",
+            "rest 24",
+        ],
+    );
+
+    assert_mml_subroutine_matches_bytecode(
+        r#"
+@1 dummy_instrument
+
+!s o4 c3 & {e}3 ^8
+
+A @1 !s
+"#,
+        0,
+        &[
+            "play_note c4 no_keyoff 32",
+            "portamento e4 no_keyoff 0 32",
+            "rest 12",
+        ],
+    );
+
+    assert_mml_subroutine_matches_bytecode(
+        r#"
+@1 dummy_instrument
+
+!s o4 c%1 & {e}%1 ^%2
+
+A @1 !s
+"#,
+        0,
+        &[
+            "play_note c4 no_keyoff 1",
+            "portamento e4 no_keyoff 0 1",
+            "rest 2",
+        ],
+    );
+
+    assert_mml_subroutine_matches_bytecode(
+        r#"
+@1 dummy_instrument
+
+!s o4 c%10 & {e}%10,%3 ^%2
+
+A @1 !s
+"#,
+        0,
+        &[
+            "play_note c4 no_keyoff 10",
+            "wait 3",
+            "portamento e4 no_keyoff 0 7",
+            "rest 2",
+        ],
+    );
+
+    assert_mml_subroutine_matches_bytecode(
+        r#"
+@1 dummy_instrument
+
+!s o4 c%1 & {e}%1 ^%1 &
+
+A @1 !s
+"#,
+        0,
+        &[
+            "play_note c4 no_keyoff 1",
+            "portamento e4 no_keyoff 0 1",
+            "wait 1",
+        ],
+    );
+
+    assert_mml_subroutine_matches_bytecode(
+        r#"
+@1 dummy_instrument
+
+!s o4 c%10 & {e}%10,%3 ^%1 &
+
+A @1 !s
+"#,
+        0,
+        &[
+            "play_note c4 no_keyoff 10",
+            "wait 3",
+            "portamento e4 no_keyoff 0 7",
+            "wait 1",
+        ],
+    );
+
+    assert_mml_subroutine_matches_bytecode(
+        r#"
+@1 dummy_instrument
+
+!s o4 c%10 & {e}%10,%3 ^%300
+
+A @1 !s
+"#,
+        0,
+        &[
+            "play_note c4 no_keyoff 10",
+            "wait 3",
+            "portamento e4 no_keyoff 0 7",
+            "wait 43",
+            "rest 257",
+        ],
+    );
+}
+
+#[test]
+fn no_keyoff_portamento_tie_with_in_subroutine_with_no_instrument() {
+    assert_mml_subroutine_matches_bytecode(
+        r#"
+@1 dummy_instrument
+
+!s K0 o4 {cd} ^
+
+A @1 !s
+"#,
+        0,
+        &[
+            "play_note c4 no_keyoff 1",
+            "portamento d4 no_keyoff 0 23",
+            "wait 24",
+            "keyon_next_note",
+        ],
+    );
+
+    assert_mml_subroutine_matches_bytecode(
+        r#"
+@1 dummy_instrument
+
+!s K0 o4 {cd}3,4 ^%600
+
+A @1 !s
+"#,
+        0,
+        &[
+            "play_note c4 no_keyoff 24",
+            "portamento d4 no_keyoff 0 8",
+            "wait 256",
+            "wait 256",
+            "wait 88",
+            "keyon_next_note",
+        ],
+    );
+}
+
+// ::TODO decide what behaviour to use when mixing unknown velocity portamento with `Q` Quantize::
+// ::TODO add quantise and portamento with no instrument and tie::
