@@ -246,6 +246,30 @@ fn quantized_portamento() {
     );
 }
 
+/// Tests quantizing a portamento does not change the portamento speed and acts like the portamento
+/// is cut off early (instead of speeding up the portamento).
+#[test]
+fn quantizing_portamento_does_not_change_velocity() {
+    const VELOCITY: &str = "+21";
+
+    assert_line_matches_bytecode(
+        "{df}",
+        &[
+            "play_note d4 no_keyoff 1",
+            &format!("portamento f4 keyoff {VELOCITY} 23"),
+        ],
+    );
+
+    assert_line_matches_bytecode(
+        "Q4 {df}",
+        &[
+            "play_note d4 no_keyoff 1",
+            &format!("portamento f4 keyoff {VELOCITY} 12"),
+            "rest 11",
+        ],
+    );
+}
+
 #[test]
 fn quantize_long_note_is_looped() {
     assert_line_matches_bytecode(
