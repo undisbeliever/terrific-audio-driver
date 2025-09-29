@@ -394,7 +394,7 @@ Numbers can be decimal, or hexadecimal when prefixed with `$` (ie, `$ff`)
     * The octave can be changed inside the braces.  For example: `{a > c}2` and `{o3 c o4 c}2`
     * The pitches can be `P`, `PR` or `PF` commands
     * `pitch1` is optional if the previous note is slurred and known (ie, not at the start of a loop)
-    * If the instrument is not known, the maximum duration of the pitch slide is 256 ticks.
+    * If the instrument is not known, the maximum duration of the pitch slide is 255 ticks.
 
  * `{{<pitch list>}} [total_length] [, note_length] [, tie]` - Broken Chord
     * Quickly cycle through the pitches for a given duration (`length`).

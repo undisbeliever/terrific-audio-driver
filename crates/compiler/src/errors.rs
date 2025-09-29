@@ -9,11 +9,11 @@ use relative_path::RelativeToError;
 use crate::bytecode::{
     BcTicks, BcTicksKeyOff, BcTicksNoKeyOff, DetuneValue, EarlyReleaseMinTicks, EarlyReleaseTicks,
     InstrumentId, LoopCount, NoiseFrequency, Pan, PanSlideAmount, PanSlideTicks,
-    PanbrelloAmplitude, PanbrelloQuarterWavelengthInTicks, PlayPitchPitch, PortamentoVelocity,
-    RelativeEchoFeedback, RelativeEchoVolume, RelativeFirCoefficient, RelativePan, RelativeVolume,
-    TremoloAmplitude, TremoloQuarterWavelengthInTicks, VibratoDelayTicks,
-    VibratoPitchOffsetPerTick, VibratoQuarterWavelengthInTicks, Volume, VolumeSlideAmount,
-    VolumeSlideTicks,
+    PanbrelloAmplitude, PanbrelloQuarterWavelengthInTicks, PlayPitchPitch, PortamentoSlideTicks,
+    PortamentoVelocity, RelativeEchoFeedback, RelativeEchoVolume, RelativeFirCoefficient,
+    RelativePan, RelativeVolume, TremoloAmplitude, TremoloQuarterWavelengthInTicks,
+    VibratoDelayTicks, VibratoPitchOffsetPerTick, VibratoQuarterWavelengthInTicks, Volume,
+    VolumeSlideAmount, VolumeSlideTicks,
 };
 use crate::channel_bc_generator::{
     DetuneCents, FineQuantization, PortamentoSpeed, Quantization, MAX_BROKEN_CHORD_NOTES,
@@ -184,6 +184,7 @@ pub enum ValueError {
 
     PortamentoVelocityZero,
     PortamentoVelocityOutOfRange(i32),
+    PortamentoSlideTicksOutOfRange(u32),
 
     QuantizeOutOfRange(u32),
     FineQuantizeOutOfRange(u32),
@@ -270,6 +271,7 @@ pub enum ValueError {
     NoMidiNote,
     NoPortamentoSpeed,
     NoPortamentoVelocity,
+    NoPortamentoSlideTicks,
     NoMpDepth,
     NoVibratoPitchOffsetPerTick,
     NoVibratoQuarterWavelength,
@@ -590,7 +592,6 @@ pub enum ChannelError {
 
     PortamentoTooShort,
     PortamentoTooLong,
-    PortamentoTooLongWithUnknownVelocity(TickCounter),
     PortamentoRequiresInstrument,
     PortamentoNoteAndPitchWithoutInstrument,
     OneNotePortamentoPreviousNoteIsNotSlurred,
@@ -1084,13 +1085,10 @@ impl Display for ValueError {
 
             Self::PortamentoVelocityZero => write!(f, "portamento velocity cannot be 0"),
             Self::PortamentoVelocityOutOfRange(v) => {
-                write!(
-                    f,
-                    "portamento velocity out of bounds ({}, expected {} - +{})",
-                    v,
-                    PortamentoVelocity::MIN,
-                    PortamentoVelocity::MAX
-                )
+                out_of_range!("portamento velocity", v, PortamentoVelocity)
+            }
+            Self::PortamentoSlideTicksOutOfRange(v) => {
+                out_of_range!("portamento slide ticks", v, PortamentoSlideTicks)
             }
 
             Self::QuantizeOutOfRange(v) => out_of_range!("quantization", v, Quantization),
@@ -1248,6 +1246,7 @@ impl Display for ValueError {
             Self::NoMidiNote => write!(f, "no MIDI note number"),
             Self::NoPortamentoSpeed => write!(f, "no portamento speed"),
             Self::NoPortamentoVelocity => write!(f, "no portamento velocity"),
+            Self::NoPortamentoSlideTicks => write!(f, "no portamento slide ticks"),
             Self::NoMpDepth => write!(f, "no MP depth"),
             Self::NoVibratoPitchOffsetPerTick => write!(f, "no vibrato pitch-offset-per-tick"),
             Self::NoVibratoQuarterWavelength => write!(f, "no vibrato quarter-wavelength"),
@@ -1778,12 +1777,6 @@ impl Display for ChannelError {
 
             Self::PortamentoTooShort => write!(f, "portamento length is too short"),
             Self::PortamentoTooLong => write!(f, "portamento length is too long"),
-            Self::PortamentoTooLongWithUnknownVelocity(t) => write!(
-                f,
-                "unknown velocity portamento slide too long ({} ticks, max: {})",
-                t.value(),
-                PortamentoVelocity::MAX_SLIDE_TICKS
-            ),
             Self::PortamentoRequiresInstrument => {
                 write!(
                     f,

@@ -73,8 +73,6 @@ let INSTRUCTIONS_WITH_ARGUMENTS = [
     //            O = key-off after note ends
     //     llllllll = note length
     //     ssssssss = u8 speed (VxPITCH change per tick)
-    //                If speed == 0, speed AND direction is calculated by the audio driver.
-    //                If calculated speed > 255, a 255 speed will be used.
     //
     // NOTE: portamento does not emit a KON event
     portamento_down,
@@ -84,11 +82,20 @@ let INSTRUCTIONS_WITH_ARGUMENTS = [
     //            O = key-off after note ends
     //     llllllll = note length
     //     ssssssss = u8 speed (VxPITCH change per tick)
-    //                If speed == 0, speed AND direction is calculated by the audio driver.
-    //                If calculated speed > 255, a 255 speed will be used.
     //
     // NOTE: portamento does not emit a KON event
     portamento_up,
+
+    // parameters: nnnnnnnO llllllll ssssssss
+    //      nnnnnnn = note to play (same note format as a play-note instruction)
+    //            O = key-off after note ends
+    //     llllllll = note length
+    //     ssssssss = slide length in ticks
+    //
+    // Slide length can be > note length.
+    //
+    // NOTE: portamento does not emit a KON event
+    portamento_calc,
 
 
     // parameters: pppppppp pppppppD llllllll ssssssss
@@ -96,12 +103,21 @@ let INSTRUCTIONS_WITH_ARGUMENTS = [
     //                     O = key-off after note ends
     //              llllllll = note length
     //              ssssssss = u8 speed (VxPITCH change per tick)
-    //                         If speed == 0, speed AND direction is calculated by the audio driver.
-    //                         If calculated speed is > 255, a 255 speed will be used.
     //
     // CAUTION: Detune has no effect on portamento_pitch instructions.
     portamento_pitch_down,
     portamento_pitch_up,
+
+    // parameters: pppppppp pppppppD llllllll ssssssss
+    //     -pppppp- pppppppp = target VxPITCH (lower bit in the high byte is not pitch)
+    //                     O = key-off after note ends
+    //              llllllll = note length
+    //              ssssssss = slide length in ticks
+    //
+    // Slide length can be > note length.
+    //
+    // CAUTION: Detune has no effect on portamento_pitch instructions.
+    portamento_pitch_calc,
 
 
     // parameters: pppppppp tttttttt
@@ -451,11 +467,6 @@ let NO_ARGUMENT_INSTRUCTIONS = [
     //
     // CAUTION: This instruction has no effect if the previous note has been key-offed.
     keyon_next_note,
-
-
-    // Padding
-    disable_channel,
-    disable_channel,
 
 
     // Disables the channel

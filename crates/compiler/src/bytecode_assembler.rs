@@ -6,7 +6,7 @@
 
 use crate::bytecode::{
     BcTicksKeyOff, BcTicksNoKeyOff, Bytecode, EarlyReleaseMinTicks, EarlyReleaseTicks, LoopCount,
-    PlayNoteTicks, PlayPitchPitch, PortamentoVelocity, RelativeEchoFeedback,
+    PlayNoteTicks, PlayPitchPitch, PortamentoSlideTicks, PortamentoVelocity, RelativeEchoFeedback,
     RelativeFirCoefficient, State, VibratoPitchOffsetPerTick,
 };
 use crate::data::{InstrumentOrSample, UniqueNamesList};
@@ -235,10 +235,22 @@ fn portamento_argument(
     let (note, key_off, velocity, ticks) = four_arguments(args)?;
 
     let note = Note::parse_bytecode_argument(note)?;
-    let velocity = parse_portamento_velocity(velocity)?;
+    let velocity = parse_svnt(velocity)?;
     let ticks = parse_play_note_ticks(ticks, key_off)?;
 
     Ok((note, velocity, ticks))
+}
+
+fn portamento_calc_argument(
+    args: &[&str],
+) -> Result<(Note, PortamentoSlideTicks, PlayNoteTicks), ChannelError> {
+    let (note, key_off, slide_ticks, ticks) = four_arguments(args)?;
+
+    let note = Note::parse_bytecode_argument(note)?;
+    let slide_ticks = parse_uvnt(slide_ticks)?;
+    let ticks = parse_play_note_ticks(ticks, key_off)?;
+
+    Ok((note, slide_ticks, ticks))
 }
 
 fn portamento_pitch_argument(
@@ -247,10 +259,22 @@ fn portamento_pitch_argument(
     let (target, key_off, velocity, ticks) = four_arguments(args)?;
 
     let target = parse_uvnt(target)?;
-    let velocity = parse_portamento_velocity(velocity)?;
+    let velocity = parse_svnt(velocity)?;
     let ticks = parse_play_note_ticks(ticks, key_off)?;
 
     Ok((target, velocity, ticks))
+}
+
+fn portamento_pitch_calc_argument(
+    args: &[&str],
+) -> Result<(PlayPitchPitch, PortamentoSlideTicks, PlayNoteTicks), ChannelError> {
+    let (target, key_off, slide_ticks, ticks) = four_arguments(args)?;
+
+    let target = parse_uvnt(target)?;
+    let slide_ticks = parse_uvnt(slide_ticks)?;
+    let ticks = parse_play_note_ticks(ticks, key_off)?;
+
+    Ok((target, slide_ticks, ticks))
 }
 
 fn adsr_argument(args: &[&str]) -> Result<Adsr, ChannelError> {
@@ -367,34 +391,6 @@ fn fir_filter_argument(args: &[&str]) -> Result<[FirCoefficient; FIR_FILTER_SIZE
         Err(ChannelError::InvalidNumberOfArguments(
             FIR_FILTER_SIZE as u8,
         ))
-    }
-}
-
-fn parse_portamento_velocity(src: &str) -> Result<PortamentoVelocity, ValueError> {
-    match src.bytes().next() {
-        Some(b'+') | Some(b'-') => {
-            let i = if let Some(s) = src.strip_prefix("+$") {
-                i32::from_str_radix(s, 16)
-                    .map_err(|_| ValueError::CannotParseHex(src.to_owned()))?
-            } else if let Some(s) = src.strip_prefix("-$") {
-                -i32::from_str_radix(s, 16)
-                    .map_err(|_| ValueError::CannotParseHex(src.to_owned()))?
-            } else {
-                src.parse()
-                    .map_err(|_| ValueError::CannotParseSigned(src.to_owned()))?
-            };
-
-            PortamentoVelocity::from_calculated_value(i)
-        }
-        _ => {
-            if src.is_empty() {
-                Err(ValueError::NoPortamentoVelocity)
-            } else if parse_u32(src) == Ok(0) {
-                Ok(PortamentoVelocity::Unknown)
-            } else {
-                Err(ValueError::NoDirectionInPortamentoVelocity)
-            }
-        }
     }
 }
 
@@ -576,7 +572,9 @@ pub fn parse_asm_line(bc: &mut Bytecode, line: &str) -> Result<(), ChannelError>
        disable_noise 0 no_arguments,
 
        portamento 3 portamento_argument,
+       portamento_calc 3 portamento_calc_argument,
        portamento_pitch 3 portamento_pitch_argument,
+       portamento_pitch_calc 3 portamento_pitch_calc_argument,
        set_vibrato_depth_and_play_note 3 vibrato_depth_and_play_note_argument,
 
        set_vibrato 2 two_uvnt_arguments,

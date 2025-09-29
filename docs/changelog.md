@@ -7,8 +7,9 @@ Version 0.1.2
  * Increased the maximum `wav2brr` input size
 
 Driver changes:
- * Portamento velocity is calculated by the audio driver if portamento speed is 0.
-   The maximum length of a pitch slide is 256 ticks.
+ * Added `portamento_pitch` and `portamento_pitch_calc` instructions that can
+   automatically calculate the portamento velocity if the pitch slide is <= 255
+   ticks long.
 
 MML changes:
  * Fixed a typo in the MML syntax document

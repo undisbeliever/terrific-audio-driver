@@ -715,11 +715,42 @@ impl ChannelState {
                 self.play_note(note_and_key_off_bit, wait_length);
             }
 
+            opcodes::PORTAMENTO_CALC => {
+                let note_and_key_off_bit = read_pc();
+                let length = read_pc();
+                let _slide_ticks = read_pc();
+
+                // Ignoring portamento speed and direction
+                self.note = ChannelNote::Portamento {
+                    target_opcode: note_and_key_off_bit,
+                    instrument: self.instrument,
+                    detune: self.detune,
+                };
+
+                self.play_note(note_and_key_off_bit, length);
+            }
+
             opcodes::PORTAMENTO_PITCH_DOWN | opcodes::PORTAMENTO_PITCH_UP => {
                 let pitch_l = read_pc();
                 let pitch_h_and_keyoff = read_pc();
                 let length = read_pc();
                 let _portamento_speed = read_pc();
+
+                let key_off = (pitch_h_and_keyoff & 1) == 1;
+
+                // Ignoring portamento speed and direction
+                self.note = ChannelNote::PortamentoPitch {
+                    target_pitch: u16::from_le_bytes([pitch_l, pitch_h_and_keyoff >> 1]),
+                };
+
+                self.increment_tick_count(length, key_off);
+            }
+
+            opcodes::PORTAMENTO_PITCH_CALC => {
+                let pitch_l = read_pc();
+                let pitch_h_and_keyoff = read_pc();
+                let length = read_pc();
+                let _slide_ticks = read_pc();
 
                 let key_off = (pitch_h_and_keyoff & 1) == 1;
 
@@ -1213,8 +1244,6 @@ impl ChannelState {
             opcodes::KEYON_NEXT_NOTE => (),
 
             opcodes::DISABLE_CHANNEL => self.disable_channel(),
-
-            opcodes::PADDING_0 | opcodes::PADDING_1 => self.disable_channel(),
         }
     }
 
@@ -1270,7 +1299,9 @@ impl ChannelState {
             opcodes::FIRST_PLAY_NOTE_INSTRUCTION.. => None,
 
             opcodes::PORTAMENTO_DOWN | opcodes::PORTAMENTO_UP => None,
+            opcodes::PORTAMENTO_CALC => None,
             opcodes::PORTAMENTO_PITCH_DOWN | opcodes::PORTAMENTO_PITCH_UP => None,
+            opcodes::PORTAMENTO_PITCH_CALC => None,
             opcodes::SET_VIBRATO => Some(3),
             opcodes::SET_VIBRATO_WITH_DELAY => Some(4),
             opcodes::SET_VIBRATO_DEPTH_AND_PLAY_NOTE => None,
@@ -1331,8 +1362,6 @@ impl ChannelState {
 
             opcodes::RESERVED_FOR_CUSTOM_USE => None,
             opcodes::DISABLE_CHANNEL => None,
-
-            opcodes::PADDING_0 | opcodes::PADDING_1 => None,
         }
     }
 

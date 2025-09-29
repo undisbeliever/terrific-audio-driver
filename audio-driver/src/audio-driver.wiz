@@ -2672,8 +2672,6 @@ func __portamento_note(channelIndex : u8 in x, noteAndKeyoffFlag : u8 in a, dire
 // IN: Y = 0
 // KEEP: X
 func __portamento_read_speed_length(channelIndex : u8 in x, target_h : u8 in a) {
-    var _tmp : u16 in  zpTmpWord;
-
     channelSoA.portamento_target_h[x] = a;
 
     // Wait length
@@ -2691,61 +2689,8 @@ func __portamento_read_speed_length(channelIndex : u8 in x, target_h : u8 in a) 
     // Speed
     // Y = 0
     a = instructionPtr[y];
-    if zero {
-        // Calculate portamento speed and direction
-        //
-        // Calculating direction when speed == 0 allows the MML compiler mix notes and pitches in portamento.
-
-        push(x);
-
-        // Set up direction
-        // Y = 0
-        y++;
-        channelSoA.portamento_direction[x] = y as i8;
-
-        a = channelSoA.countdownTimer[x];
-        push(a);
-
-        a = channelSoA.virtualChannels.pitch_l[x];
-        y = channelSoA.virtualChannels.pitch_h[x];
-        _tmp = ya;
-
-        y = a = channelSoA.portamento_target_h[x];
-        a = channelSoA.portamento_target_l[x];
-
-        ya -= _tmp;
-        if negative {
-            // set down direction
-            channelSoA.portamento_direction[x] = y as i8;
-
-            // negate ya
-            _tmp = ya;
-            y = a = 0;
-            ya -= _tmp;
-        }
-
-        x = pop();
-        x--;
-
-        divmod(ya, x);
-        if overflow {
-            // ares states overflow set if quotient >= 256 (even if output is invalid)
-            // ::TODO test an other emulators and real hardware::
-            a = 0xff;
-        }
-        else {
-            // Required for long portamentos and low octaves
-            y = a;
-            if zero {
-                a++;
-            }
-        }
-
-        x = pop();
-    }
-    channelSoA.portamento_speed[x] = a;
-
     instructionPtr++;
+    channelSoA.portamento_speed[x] = a;
 
 
     // return (do not execute the next bytecode and sleep)
@@ -2787,6 +2732,127 @@ func __portamento_pitch(channelIndex : u8 in x, targetPitch_l : u8 in a, directi
     // y = 0 (required)
 
     return __portamento_read_speed_length(x, a);
+}
+
+
+
+// IN: Y = 0
+// KEEP: X
+func portamento_pitch_calc(channelIndex : u8 in x, targetPitch_l : u8 in a) {
+    var _tmp : u16 in  zpTmpWord;
+
+    channelSoA.portamento_target_l[x] = a;
+    <:_tmp = a;
+
+    // target_h and key-off flag
+    a = instructionPtr[y];
+    instructionPtr++;
+
+    a >>>= 1;
+    // Set MSB of nextEventIsKeyOff from carry
+    channelSoA.nextEventIsKeyOff[x] >>>>#= 1;
+
+    // a = target_h
+    ^return __portamento_calc_read_lengths(x, a);
+}
+
+
+
+// NOTE: Y is non-zero
+// KEEP: X
+#[fallthrough]
+func portamento_calc(channelIndex : u8 in x, noteAndKeyoffFlag : u8 in a) {
+    var _tmp : u16 in  zpTmpWord;
+
+    // carry = key-off after note ends bit
+    a >>>= 1;
+    // Set MSB of nextEventIsKeyOff from carry
+    channelSoA.nextEventIsKeyOff[x] >>>>#= 1;
+
+    // calculate pitch table index
+    y = a = a + channelSoA.instPitchOffset[x];
+
+    a = commonData.pitchTable_l[y] + channelSoA.detune_l[x];
+    channelSoA.portamento_target_l[x] = a;
+    <:_tmp = a;
+
+    a = commonData.pitchTable_h[y] +# channelSoA.detune_h[x];
+
+// fallthrough into __portamento_calc_read_lengths()
+}
+
+
+// IN: <:_tmp = low byte of target
+// Y is non-zero
+// KEEP:X
+func __portamento_calc_read_lengths(channelIndex: u8 in x, target_h: u8 in a) {
+    var _tmp : u16 in  zpTmpWord;
+
+    channelSoA.portamento_target_h[x] = a;
+    >:_tmp = a;
+
+    // length
+    y = 0;
+    a = instructionPtr[y];
+    instructionPtr++;
+    channelSoA.countdownTimer[x] = a;
+
+    // Reset early release min-tick counter.
+    // Y = 0
+    a = y;
+    channelSoA.ticksAfterNote[x] = a;
+
+
+    // slide length in ticks
+    // Y = 0
+    a = instructionPtr[y];
+    instructionPtr++;
+
+    push(x);
+    {
+        push(a);
+        {
+            // Set down direction
+            // Y = 0
+            y--;
+            channelSoA.portamento_direction[x] = y as i8;
+
+            a = channelSoA.virtualChannels.pitch_l[x];
+            y = channelSoA.virtualChannels.pitch_h[x];
+
+            ya -= _tmp;
+            if negative {
+                // switch to up direction
+                channelSoA.portamento_direction[x] >>>= 1;
+
+                // negate ya
+                _tmp = ya;
+                y = a = 0;
+                ya -= _tmp;
+            }
+        }
+        x = pop();
+
+        divmod(ya, x);
+        if overflow {
+            // ares states overflow set if quotient >= 256 (even if output is invalid)
+            // ::TODO test an other emulators and real hardware::
+            a = 0xff;
+        }
+        else {
+            // Required for long portamentos and low octaves
+            y = a;
+            if zero {
+                a++;
+            }
+        }
+    }
+    x = pop();
+
+    channelSoA.portamento_speed[x] = a;
+
+    // return (do not execute the next bytecode and sleep)
+    return;
 }
 
 

@@ -27,7 +27,6 @@ use crate::value_newtypes::{
 };
 
 use std::cmp::{max, min};
-use std::num::NonZeroU8;
 use std::ops::RangeInclusive;
 
 pub const KEY_OFF_TICK_DELAY: u32 = 1;
@@ -244,8 +243,10 @@ pub mod opcodes {
         RESERVED_FOR_CUSTOM_USE,
         PORTAMENTO_DOWN,
         PORTAMENTO_UP,
+        PORTAMENTO_CALC,
         PORTAMENTO_PITCH_DOWN,
         PORTAMENTO_PITCH_UP,
+        PORTAMENTO_PITCH_CALC,
         SET_VIBRATO,
         SET_VIBRATO_WITH_DELAY,
         SET_VIBRATO_DEPTH_AND_PLAY_NOTE,
@@ -302,8 +303,6 @@ pub mod opcodes {
         DISABLE_ECHO,
         REUSE_TEMP_GAIN,
         KEYON_NEXT_NOTE,
-        PADDING_0,
-        PADDING_1,
     );
 
     // Last non play-note opcode
@@ -558,37 +557,29 @@ impl PlayNoteTicks {
     }
 }
 
-#[derive(Debug, Copy, Clone, PartialEq)]
-pub enum PortamentoVelocity {
-    // Unknown speed and direction.
-    // This allows the compiler to combine notes and pitches in an unknown velocity portamento.
-    Unknown,
-    Up(NonZeroU8),
-    Down(NonZeroU8),
-}
+i16_non_zero_value_newtype!(
+    PortamentoVelocity,
+    PortamentoVelocityOutOfRange,
+    NoPortamentoVelocity,
+    NoDirectionInPortamentoVelocity,
+    PortamentoVelocityZero,
+    -(u8::MAX as i16),
+    u8::MAX as i16
+);
 
 impl PortamentoVelocity {
-    pub const MAX: u8 = u8::MAX;
-    pub const MIN: i32 = -(u8::MAX as i32);
-
-    pub const MAX_SLIDE_TICKS: u32 = 256;
-
-    pub fn from_calculated_value(value: i32) -> Result<Self, ValueError> {
-        if value == 0 {
-            Err(ValueError::PortamentoVelocityZero)
-        } else if value > 0 {
-            match value.try_into() {
-                Ok(v) => Ok(Self::Up(NonZeroU8::new(v).unwrap())),
-                Err(_) => Err(ValueError::PortamentoVelocityOutOfRange(value)),
-            }
-        } else {
-            match (-value).try_into() {
-                Ok(v) => Ok(Self::Down(NonZeroU8::new(v).unwrap())),
-                Err(_) => Err(ValueError::PortamentoVelocityOutOfRange(value)),
-            }
-        }
+    pub fn pitch_offset_per_tick(&self) -> u8 {
+        u8::try_from(self.0.unsigned_abs()).unwrap()
     }
 }
+
+u8_value_newtype!(
+    PortamentoSlideTicks,
+    PortamentoSlideTicksOutOfRange,
+    NoPortamentoSlideTicks,
+    1,
+    u8::MAX
+);
 
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub struct LoopCount(u8);
@@ -1499,15 +1490,39 @@ impl<'a> Bytecode<'a> {
         self.state.set_prev_slurred_note(note, length);
 
         let note_param = NoteOpcode::new(note, &length);
+        let speed = velocity.pitch_offset_per_tick();
         let length = length.bc_argument();
 
-        let (opcode, speed) = match velocity {
-            PortamentoVelocity::Unknown => (opcodes::PORTAMENTO_UP, 0),
-            PortamentoVelocity::Up(s) => (opcodes::PORTAMENTO_UP, s.into()),
-            PortamentoVelocity::Down(s) => (opcodes::PORTAMENTO_DOWN, s.into()),
-        };
+        if velocity.is_negative() {
+            emit_bytecode!(self, opcodes::PORTAMENTO_DOWN, note_param, length, speed);
+        } else {
+            emit_bytecode!(self, opcodes::PORTAMENTO_UP, note_param, length, speed);
+        }
 
-        emit_bytecode!(self, opcode, note_param, length, speed);
+        r
+    }
+
+    pub fn portamento_calc(
+        &mut self,
+        note: Note,
+        slide_ticks: PortamentoSlideTicks,
+        length: PlayNoteTicks,
+    ) -> Result<(), BytecodeError> {
+        let r = self._test_note_in_range(note);
+
+        self.state.tick_counter += length.to_tick_count();
+        self.state.set_prev_slurred_note(note, length);
+
+        let note_param = NoteOpcode::new(note, &length);
+        let length = length.bc_argument();
+
+        emit_bytecode!(
+            self,
+            opcodes::PORTAMENTO_CALC,
+            note_param,
+            length,
+            slide_ticks.as_u8()
+        );
 
         r
     }
@@ -1529,19 +1544,53 @@ impl<'a> Bytecode<'a> {
             PlayNoteTicks::KeyOff(_) => 1,
         };
 
+        let opcode = if velocity.is_negative() {
+            opcodes::PORTAMENTO_PITCH_DOWN
+        } else {
+            opcodes::PORTAMENTO_PITCH_UP
+        };
+
+        let target = target.as_u16().to_le_bytes();
+        let arg1 = target[0];
+        let arg2 = (target[1] << 1) | key_off_bit;
+
+        let length = length.bc_argument();
+        let speed = velocity.pitch_offset_per_tick();
+
+        emit_bytecode!(self, opcode, arg1, arg2, length, speed);
+    }
+
+    pub fn portamento_pitch_calc(
+        &mut self,
+        target: PlayPitchPitch,
+        slide_ticks: PortamentoSlideTicks,
+        length: PlayNoteTicks,
+    ) {
+        self.state.tick_counter += length.to_tick_count();
+        self.state.prev_slurred_note = match length {
+            PlayNoteTicks::KeyOff(_) => SlurredNoteState::None,
+            PlayNoteTicks::NoKeyOff(_) => SlurredNoteState::SlurredPitch(target),
+        };
+
+        let key_off_bit = match length {
+            PlayNoteTicks::NoKeyOff(_) => 0,
+            PlayNoteTicks::KeyOff(_) => 1,
+        };
+
         let target = target.as_u16().to_le_bytes();
         let arg1 = target[0];
         let arg2 = (target[1] << 1) | key_off_bit;
 
         let length = length.bc_argument();
 
-        let (opcode, speed) = match velocity {
-            PortamentoVelocity::Unknown => (opcodes::PORTAMENTO_PITCH_UP, 0),
-            PortamentoVelocity::Up(s) => (opcodes::PORTAMENTO_PITCH_UP, s.into()),
-            PortamentoVelocity::Down(s) => (opcodes::PORTAMENTO_PITCH_DOWN, s.into()),
-        };
-
-        emit_bytecode!(self, opcode, arg1, arg2, length, speed);
+        emit_bytecode!(
+            self,
+            opcodes::PORTAMENTO_PITCH_CALC,
+            arg1,
+            arg2,
+            length,
+            slide_ticks.as_u8()
+        );
     }
 
     pub fn set_vibrato_depth_and_play_note(

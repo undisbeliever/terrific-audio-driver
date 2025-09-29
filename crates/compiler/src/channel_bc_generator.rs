@@ -8,7 +8,7 @@ use crate::bytecode::{
     self, BcTicks, BcTicksKeyOff, BcTicksNoKeyOff, Bytecode, BytecodeContext, DetuneValue,
     EarlyReleaseMinTicks, EarlyReleaseTicks, IeState, InstrumentId, LoopCount, NoiseFrequency, Pan,
     PanSlideAmount, PanSlideTicks, PanbrelloAmplitude, PanbrelloQuarterWavelengthInTicks,
-    PlayNoteTicks, PlayPitchPitch, PortamentoVelocity, RelativeEchoFeedback, RelativeEchoVolume,
+    PlayNoteTicks, PlayPitchPitch, RelativeEchoFeedback, RelativeEchoVolume,
     RelativeFirCoefficient, RelativePan, RelativeVolume, SlurredNoteState, TremoloAmplitude,
     TremoloQuarterWavelengthInTicks, VibratoDelayTicks, VibratoPitchOffsetPerTick,
     VibratoQuarterWavelengthInTicks, VibratoState, Volume, VolumeSlideAmount, VolumeSlideTicks,
@@ -32,7 +32,6 @@ use crate::value_newtypes::{i16_value_newtype, u8_value_newtype, SignedValueNewT
 use crate::FilePosRange;
 
 use std::cmp::min;
-use std::num::NonZeroU8;
 use std::ops::{Range, RangeInclusive};
 
 pub const MAX_PORTAMENTO_SLIDE_TICKS: u32 = 16 * 1024;
@@ -1227,8 +1226,8 @@ impl<'a> ChannelBcGenerator<'a> {
         let (note2_pitch, pn2) = self.portamento_note_pitch(note2, instrument)?;
 
         // slide_length: number of ticks in the pitch-slide.  Does NOT include the key-off tick.
-        // after_slide_length: number of ticks after pitch-slide reaches note2, includes the key-off tick (as required).
-        let (slide_length, after_slide_length) = if !is_slur && tie_length.is_zero() {
+        // tie_length: number of ticks after pitch-slide reaches note2, includes the key-off tick (as required).
+        let (slide_length, tie_length) = if !is_slur && tie_length.is_zero() {
             (
                 TickCounter::new(slide_length.value().saturating_sub(1)),
                 TickCounter::new(1),
@@ -1261,11 +1260,12 @@ impl<'a> ChannelBcGenerator<'a> {
                 };
 
                 const _: () = assert!(PortamentoSpeed::MIN.as_u8() > 0);
-                if direction {
-                    PortamentoVelocity::Up(NonZeroU8::new(speed.as_u8()).unwrap())
+                let v = if direction {
+                    i32::from(speed.as_u8())
                 } else {
-                    PortamentoVelocity::Down(NonZeroU8::new(speed.as_u8()).unwrap())
-                }
+                    -i32::from(speed.as_u8())
+                };
+                Some(v.try_into()?)
             }
             None => {
                 match (note1_pitch, note2_pitch) {
@@ -1281,80 +1281,41 @@ impl<'a> ChannelBcGenerator<'a> {
                         } else {
                             (delta - (ticks / 2)) / ticks
                         };
-                        PortamentoVelocity::from_calculated_value(v)?
-                    }
-                    _ => {
-                        // Instrument is unknown, audio driver will calculate velocity
 
-                        if slide_length.value() <= PortamentoVelocity::MAX_SLIDE_TICKS {
-                            PortamentoVelocity::Unknown
-                        } else {
-                            return Err(ChannelError::PortamentoTooLongWithUnknownVelocity(
-                                slide_length,
-                            ));
-                        }
+                        Some(v.try_into()?)
                     }
+                    // Instrument is unknown, audio driver will calculate velocity
+                    _ => None,
                 }
             }
         };
-
-        // ::TODO decide what behaviour to use when mixing unknown velocity portamento with `Q` Quantize::
 
         // In PMDMML only the portamento slide is quantized, delay_length is not.
-        let (p_length, after) = match (velocity, tie_length.value()) {
-            (PortamentoVelocity::Down(_), _)
-            | (PortamentoVelocity::Up(_), _)
-            | (PortamentoVelocity::Unknown, 0) => self.split_play_note_length(
-                slide_length + after_slide_length,
-                is_slur,
-                rest_after_note,
-            )?,
-            (PortamentoVelocity::Unknown, 1..) => {
-                // The portamento instruction length MUST BE slide_length when velocity is unknown.
+        let (p_length, after) =
+            self.split_play_note_length(slide_length + tie_length, is_slur, rest_after_note)?;
 
-                assert!(slide_length.value() <= BcTicksNoKeyOff::MAX_TICKS);
-
-                let (mut p_length, mut after) = self.split_play_note_length(
-                    slide_length + after_slide_length,
-                    is_slur,
-                    rest_after_note,
-                )?;
-
-                if p_length.ticks() > slide_length.value() {
-                    let w = p_length.ticks() - slide_length.value();
-
-                    match &mut after {
-                        AfterPlayNote::Wait { wait, rest: _ }
-                        | AfterPlayNote::WaitEnableKeyOn { wait }
-                        | AfterPlayNote::KeyOff {
-                            wait,
-                            ticks_after_keyoff: _,
-                        }
-                        | AfterPlayNote::TempGain {
-                            wait,
-                            temp_gain: _,
-                            ticks_until_keyoff: _,
-                            ticks_after_keyoff: _,
-                        } => {
-                            *wait += TickCounter::new(w);
-                        }
-                    }
-                    p_length = PlayNoteTicks::NoKeyOff(
-                        BcTicksNoKeyOff::try_from(slide_length.value()).unwrap(),
-                    )
+        match velocity {
+            Some(velocity) => match pn2 {
+                NoteOrPitchOut::Note(dco, n, _) => {
+                    self.emit_detune_output(dco);
+                    self.bc.portamento(n, velocity, p_length)?;
                 }
+                NoteOrPitchOut::Pitch(p) => {
+                    self.bc.portamento_pitch(p, velocity, p_length);
+                }
+            },
+            None => {
+                let slide_length = slide_length.value().try_into()?;
 
-                (p_length, after)
-            }
-        };
-
-        match pn2 {
-            NoteOrPitchOut::Note(dco, n, _) => {
-                self.emit_detune_output(dco);
-                self.bc.portamento(n, velocity, p_length)?;
-            }
-            NoteOrPitchOut::Pitch(p) => {
-                self.bc.portamento_pitch(p, velocity, p_length);
+                match pn2 {
+                    NoteOrPitchOut::Note(dco, n, _) => {
+                        self.emit_detune_output(dco);
+                        self.bc.portamento_calc(n, slide_length, p_length)?;
+                    }
+                    NoteOrPitchOut::Pitch(p) => {
+                        self.bc.portamento_pitch_calc(p, slide_length, p_length);
+                    }
+                }
             }
         }
 

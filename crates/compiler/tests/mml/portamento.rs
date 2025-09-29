@@ -2,8 +2,6 @@
 //
 // SPDX-License-Identifier: MIT
 
-use compiler::time::TickCounter;
-
 use crate::*;
 
 #[test]
@@ -1428,7 +1426,10 @@ fn portamento_in_subroutine_with_no_instrument() {
 A @1 !s
 "#,
         0,
-        &["play_note c4 no_keyoff 1", "portamento g4 keyoff 0 23"],
+        &[
+            "play_note c4 no_keyoff 1",
+            "portamento_calc g4 keyoff 22 23",
+        ],
     );
 
     assert_mml_subroutine_matches_bytecode(
@@ -1440,7 +1441,10 @@ A @1 !s
 A @1 !s
 "#,
         0,
-        &["play_note g4 no_keyoff 1", "portamento c4 keyoff 0 23"],
+        &[
+            "play_note g4 no_keyoff 1",
+            "portamento_calc c4 keyoff 22 23",
+        ],
     );
 }
 
@@ -1524,7 +1528,7 @@ A @1 !s
         0,
         &[
             "play_note c4 no_keyoff 1",
-            "portamento_pitch $1000 keyoff 0 23",
+            "portamento_pitch_calc $1000 keyoff 22 23",
         ],
     );
 
@@ -1537,16 +1541,31 @@ A @1 !s
 A @1 !s
 "#,
         0,
-        &["play_pitch $1000 no_keyoff 1", "portamento c4 keyoff 0 23"],
+        &[
+            "play_pitch $1000 no_keyoff 1",
+            "portamento_calc c4 keyoff 22 23",
+        ],
     );
 }
 
 #[test]
 fn portamento_in_subroutine_with_no_instrument_slide_length_too_long_test() {
-    // Minimum error ticks
-    const ERROR_TICKS: TickCounter = TickCounter::new(257);
-
     assert_mml_subroutine_matches_bytecode(
+        r#"
+@1 dummy_instrument
+
+!s o4 {c g}%257
+
+A @1 !s
+"#,
+        0,
+        &[
+            "play_note c4 no_keyoff 1",
+            "portamento_calc g4 keyoff 255 256",
+        ],
+    );
+
+    assert_one_subroutine_error_in_mml(
         r#"
 @1 dummy_instrument
 
@@ -1554,24 +1573,27 @@ fn portamento_in_subroutine_with_no_instrument_slide_length_too_long_test() {
 
 A @1 !s
 "#,
-        0,
-        &["play_note c4 no_keyoff 1", "portamento g4 keyoff 0 257"],
-    );
-
-    assert_one_subroutine_error_in_mml(
-        r#"
-@1 dummy_instrument
-
-!s o4 {c g}%259
-
-A @1 !s
-"#,
         "!s",
         7,
-        ChannelError::PortamentoTooLongWithUnknownVelocity(ERROR_TICKS),
+        ValueError::PortamentoSlideTicksOutOfRange(256).into(),
     );
 
     assert_mml_subroutine_matches_bytecode(
+        r#"
+@1 dummy_instrument
+
+!s o4 {c g}%456,%200
+
+A @1 !s
+"#,
+        0,
+        &[
+            "play_note c4 no_keyoff 200",
+            "portamento_calc g4 keyoff 255 256",
+        ],
+    );
+
+    assert_one_subroutine_error_in_mml(
         r#"
 @1 dummy_instrument
 
@@ -1579,24 +1601,28 @@ A @1 !s
 
 A @1 !s
 "#,
-        0,
-        &["play_note c4 no_keyoff 200", "portamento g4 keyoff 0 257"],
-    );
-
-    assert_one_subroutine_error_in_mml(
-        r#"
-@1 dummy_instrument
-
-!s o4 {c g}%458,%200
-
-A @1 !s
-"#,
         "!s",
         7,
-        ChannelError::PortamentoTooLongWithUnknownVelocity(ERROR_TICKS),
+        ValueError::PortamentoSlideTicksOutOfRange(256).into(),
     );
 
     assert_mml_subroutine_matches_bytecode(
+        r#"
+@1 dummy_instrument
+
+!s o4 {c g}%256 & c
+
+A @1 !s
+"#,
+        0,
+        &[
+            "play_note c4 no_keyoff 1",
+            "portamento_calc g4 no_keyoff 255 255",
+            "play_note c4 24",
+        ],
+    );
+
+    assert_one_subroutine_error_in_mml(
         r#"
 @1 dummy_instrument
 
@@ -1604,28 +1630,28 @@ A @1 !s
 
 A @1 !s
 "#,
+        "!s",
+        7,
+        ValueError::PortamentoSlideTicksOutOfRange(256).into(),
+    );
+
+    assert_mml_subroutine_matches_bytecode(
+        r#"
+@1 dummy_instrument
+
+!s o4 {c g}%455,%200 & c
+
+A @1 !s
+"#,
         0,
         &[
-            "play_note c4 no_keyoff 1",
-            "portamento g4 no_keyoff 0 256",
+            "play_note c4 no_keyoff 200",
+            "portamento_calc g4 no_keyoff 255 255",
             "play_note c4 24",
         ],
     );
 
     assert_one_subroutine_error_in_mml(
-        r#"
-@1 dummy_instrument
-
-!s o4 {c g}%258 & c
-
-A @1 !s
-"#,
-        "!s",
-        7,
-        ChannelError::PortamentoTooLongWithUnknownVelocity(ERROR_TICKS),
-    );
-
-    assert_mml_subroutine_matches_bytecode(
         r#"
 @1 dummy_instrument
 
@@ -1633,25 +1659,9 @@ A @1 !s
 
 A @1 !s
 "#,
-        0,
-        &[
-            "play_note c4 no_keyoff 200",
-            "portamento g4 no_keyoff 0 256",
-            "play_note c4 24",
-        ],
-    );
-
-    assert_one_subroutine_error_in_mml(
-        r#"
-@1 dummy_instrument
-
-!s o4 {c g}%457,%200 & c
-
-A @1 !s
-"#,
         "!s",
         7,
-        ChannelError::PortamentoTooLongWithUnknownVelocity(ERROR_TICKS),
+        ValueError::PortamentoSlideTicksOutOfRange(256).into(),
     );
 }
 
@@ -1668,7 +1678,7 @@ A @1 !s
         0,
         &[
             "play_note c4 no_keyoff 1",
-            "portamento d4 no_keyoff 0 31",
+            "portamento_calc d4 no_keyoff 31 31",
             "rest 12",
         ],
     );
@@ -1687,7 +1697,7 @@ A @1 !s
         0,
         &[
             "play_note c4 no_keyoff 1",
-            "portamento d4 no_keyoff 0 31",
+            "portamento_calc d4 no_keyoff 31 31",
             "wait 12",
         ],
     );
@@ -1706,8 +1716,7 @@ A @1 !s
         0,
         &[
             "play_note c4 no_keyoff 1",
-            "portamento d4 no_keyoff 0 23",
-            "rest 24",
+            "portamento_calc d4 keyoff 23 47",
         ],
     );
 
@@ -1722,8 +1731,7 @@ A @1 !s
         0,
         &[
             "play_note c4 no_keyoff 12",
-            "portamento d4 no_keyoff 0 12",
-            "rest 24",
+            "portamento_calc d4 keyoff 12 36",
         ],
     );
 
@@ -1738,8 +1746,7 @@ A @1 !s
         0,
         &[
             "play_note c4 no_keyoff 25",
-            "portamento d4 no_keyoff 0 75",
-            "rest 24",
+            "portamento_calc d4 keyoff 75 99",
         ],
     );
 
@@ -1755,8 +1762,7 @@ A @1 !s
         &[
             "play_note c4 no_keyoff 10",
             "wait 25",
-            "portamento d4 no_keyoff 0 75",
-            "rest 40",
+            "portamento_calc d4 keyoff 75 115",
         ],
     );
 
@@ -1771,8 +1777,7 @@ A @1 !s
         0,
         &[
             "play_note c4 no_keyoff 1",
-            "portamento d4 no_keyoff 0 11",
-            "rest 32",
+            "portamento_calc d4 keyoff 11 43",
         ],
     );
 
@@ -1787,8 +1792,7 @@ A @1 !s
         0,
         &[
             "play_note c4 no_keyoff 1",
-            "portamento d4 no_keyoff 0 11",
-            "wait 32",
+            "portamento_calc d4 no_keyoff 11 43",
         ],
     );
 
@@ -1803,8 +1807,7 @@ A @1 !s
         0,
         &[
             "play_note c4 no_keyoff 24",
-            "portamento e4 no_keyoff 0 24",
-            "rest 24",
+            "portamento_calc e4 keyoff 24 48",
         ],
     );
 
@@ -1812,15 +1815,14 @@ A @1 !s
         r#"
 @1 dummy_instrument
 
-!s o4 c3 & {e}3 ^8
+!s o4 c3 & {e}3 ^16 ^16
 
 A @1 !s
 "#,
         0,
         &[
             "play_note c4 no_keyoff 32",
-            "portamento e4 no_keyoff 0 32",
-            "rest 12",
+            "portamento_calc e4 keyoff 32 44",
         ],
     );
 
@@ -1833,11 +1835,7 @@ A @1 !s
 A @1 !s
 "#,
         0,
-        &[
-            "play_note c4 no_keyoff 1",
-            "portamento e4 no_keyoff 0 1",
-            "rest 2",
-        ],
+        &["play_note c4 no_keyoff 1", "portamento_calc e4 keyoff 1 3"],
     );
 
     assert_mml_subroutine_matches_bytecode(
@@ -1852,8 +1850,7 @@ A @1 !s
         &[
             "play_note c4 no_keyoff 10",
             "wait 3",
-            "portamento e4 no_keyoff 0 7",
-            "rest 2",
+            "portamento_calc e4 keyoff 7 9",
         ],
     );
 
@@ -1868,8 +1865,7 @@ A @1 !s
         0,
         &[
             "play_note c4 no_keyoff 1",
-            "portamento e4 no_keyoff 0 1",
-            "wait 1",
+            "portamento_calc e4 no_keyoff 1 2",
         ],
     );
 
@@ -1885,8 +1881,7 @@ A @1 !s
         &[
             "play_note c4 no_keyoff 10",
             "wait 3",
-            "portamento e4 no_keyoff 0 7",
-            "wait 1",
+            "portamento_calc e4 no_keyoff 7 8",
         ],
     );
 
@@ -1902,8 +1897,7 @@ A @1 !s
         &[
             "play_note c4 no_keyoff 10",
             "wait 3",
-            "portamento e4 no_keyoff 0 7",
-            "wait 43",
+            "portamento_calc e4 no_keyoff 7 50",
             "rest 257",
         ],
     );
@@ -1922,8 +1916,7 @@ A @1 !s
         0,
         &[
             "play_note c4 no_keyoff 1",
-            "portamento d4 no_keyoff 0 23",
-            "wait 24",
+            "portamento_calc d4 no_keyoff 23 47",
             "keyon_next_note",
         ],
     );
@@ -1939,14 +1932,78 @@ A @1 !s
         0,
         &[
             "play_note c4 no_keyoff 24",
-            "portamento d4 no_keyoff 0 8",
+            "portamento_calc d4 no_keyoff 8 256",
             "wait 256",
-            "wait 256",
-            "wait 88",
+            "wait 96",
             "keyon_next_note",
         ],
     );
 }
 
-// ::TODO decide what behaviour to use when mixing unknown velocity portamento with `Q` Quantize::
-// ::TODO add quantise and portamento with no instrument and tie::
+#[test]
+fn portamento_note_pitch_and_tie_with_no_instrument() {
+    assert_mml_subroutine_matches_bytecode(
+        r#"
+@1 dummy_instrument
+
+!s o4 {P$800 c},8 ^
+
+A @1 !s
+"#,
+        0,
+        &[
+            "play_pitch $800 no_keyoff 12",
+            "portamento_calc c4 keyoff 12 36",
+        ],
+    );
+
+    assert_mml_subroutine_matches_bytecode(
+        r#"
+@1 dummy_instrument
+
+!s o4 {c P$1000},8 ^
+
+A @1 !s
+"#,
+        0,
+        &[
+            "play_note c4 no_keyoff 12",
+            "portamento_pitch_calc $1000 keyoff 12 36",
+        ],
+    );
+
+    assert_mml_subroutine_matches_bytecode(
+        r#"
+@1 dummy_instrument
+
+!s o4 c%10 & {P$1800}%10,%3 ^%300
+
+A @1 !s
+"#,
+        0,
+        &[
+            "play_note c4 no_keyoff 10",
+            "wait 3",
+            "portamento_pitch_calc $1800 no_keyoff 7 50",
+            "rest 257",
+        ],
+    );
+
+    assert_mml_subroutine_matches_bytecode(
+        r#"
+@1 dummy_instrument
+
+!s K0 o4 {c P$2000}3,4 ^%600
+
+A @1 !s
+"#,
+        0,
+        &[
+            "play_note c4 no_keyoff 24",
+            "portamento_pitch_calc $2000 no_keyoff 8 256",
+            "wait 256",
+            "wait 96",
+            "keyon_next_note",
+        ],
+    );
+}
