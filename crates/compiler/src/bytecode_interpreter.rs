@@ -1838,11 +1838,14 @@ fn build_channel(
         None => inst_adsr_or_gain,
     };
 
+    let note_ticks = target_ticks.value() - c.note_time.value();
+
     let temp_gain = if delay == 0 && c.next_event_is_key_off {
         0
     } else if c.early_release_gain != 0
         && c.next_event_is_key_off
-        && (target_ticks.value() - c.note_time.value()) > u32::from(c.early_release_min_ticks)
+        && note_ticks > 1
+        && note_ticks > u32::from(c.early_release_min_ticks)
         && delay < u32::from(c.early_release_cmp)
     {
         c.early_release_gain
