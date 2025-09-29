@@ -2674,23 +2674,23 @@ func __portamento_note(channelIndex : u8 in x, noteAndKeyoffFlag : u8 in a, dire
 func __portamento_read_speed_length(channelIndex : u8 in x, target_h : u8 in a) {
     channelSoA.portamento_target_h[x] = a;
 
+    // Speed
+    // Y = 0
+    a = instructionPtr[y];
+    instructionPtr++;
+    channelSoA.portamento_speed[x] = a;
+
     // Wait length
     // Y = 0
     a = instructionPtr[y];
     instructionPtr++;
     channelSoA.countdownTimer[x] = a;
 
+
     // Reset early release min-tick counter.
     // Y = 0
     a = y;
     channelSoA.ticksAfterNote[x] = a;
-
-
-    // Speed
-    // Y = 0
-    a = instructionPtr[y];
-    instructionPtr++;
-    channelSoA.portamento_speed[x] = a;
 
 
     // return (do not execute the next bytecode and sleep)

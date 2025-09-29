@@ -702,8 +702,8 @@ impl ChannelState {
 
             opcodes::PORTAMENTO_DOWN | opcodes::PORTAMENTO_UP => {
                 let note_and_key_off_bit = read_pc();
-                let wait_length = read_pc();
                 let _portamento_speed = read_pc();
+                let wait_length = read_pc();
 
                 // Ignoring portamento speed and direction
                 self.note = ChannelNote::Portamento {
@@ -733,8 +733,8 @@ impl ChannelState {
             opcodes::PORTAMENTO_PITCH_DOWN | opcodes::PORTAMENTO_PITCH_UP => {
                 let pitch_l = read_pc();
                 let pitch_h_and_keyoff = read_pc();
-                let length = read_pc();
                 let _portamento_speed = read_pc();
+                let length = read_pc();
 
                 let key_off = (pitch_h_and_keyoff & 1) == 1;
 

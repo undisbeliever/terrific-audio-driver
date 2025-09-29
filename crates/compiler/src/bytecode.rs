@@ -1494,9 +1494,9 @@ impl<'a> Bytecode<'a> {
         let length = length.bc_argument();
 
         if velocity.is_negative() {
-            emit_bytecode!(self, opcodes::PORTAMENTO_DOWN, note_param, length, speed);
+            emit_bytecode!(self, opcodes::PORTAMENTO_DOWN, note_param, speed, length);
         } else {
-            emit_bytecode!(self, opcodes::PORTAMENTO_UP, note_param, length, speed);
+            emit_bytecode!(self, opcodes::PORTAMENTO_UP, note_param, speed, length);
         }
 
         r
@@ -1554,10 +1554,10 @@ impl<'a> Bytecode<'a> {
         let arg1 = target[0];
         let arg2 = (target[1] << 1) | key_off_bit;
 
-        let length = length.bc_argument();
         let speed = velocity.pitch_offset_per_tick();
+        let length = length.bc_argument();
 
-        emit_bytecode!(self, opcode, arg1, arg2, length, speed);
+        emit_bytecode!(self, opcode, arg1, arg2, speed, length);
     }
 
     pub fn portamento_pitch_calc(

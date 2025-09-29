@@ -68,22 +68,14 @@ let INSTRUCTIONS_WITH_ARGUMENTS = [
     // (It currently disables the channel)
     reserved_for_custom_use,
 
-    // parameters: nnnnnnnO llllllll ssssssss
+    // parameters: nnnnnnnO ssssssss llllllll
     //      nnnnnnn = note to play (same note format as a play-note instruction)
     //            O = key-off after note ends
-    //     llllllll = note length
     //     ssssssss = u8 speed (VxPITCH change per tick)
+    //     llllllll = note length
     //
     // NOTE: portamento does not emit a KON event
     portamento_down,
-
-    // parameters: nnnnnnnO llllllll ssssssss
-    //      nnnnnnn = note to play (same note format as a play-note instruction)
-    //            O = key-off after note ends
-    //     llllllll = note length
-    //     ssssssss = u8 speed (VxPITCH change per tick)
-    //
-    // NOTE: portamento does not emit a KON event
     portamento_up,
 
     // parameters: nnnnnnnO llllllll ssssssss
@@ -98,11 +90,11 @@ let INSTRUCTIONS_WITH_ARGUMENTS = [
     portamento_calc,
 
 
-    // parameters: pppppppp pppppppD llllllll ssssssss
+    // parameters: pppppppp pppppppD ssssssss llllllll
     //     -pppppp- pppppppp = target VxPITCH (lower bit in the high byte is not pitch)
     //                     O = key-off after note ends
-    //              llllllll = note length
     //              ssssssss = u8 speed (VxPITCH change per tick)
+    //              llllllll = note length
     //
     // CAUTION: Detune has no effect on portamento_pitch instructions.
     portamento_pitch_down,
