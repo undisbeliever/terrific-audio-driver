@@ -91,6 +91,10 @@
   "sound_effect_file": "sound-effects.txt",
   "songs": [
     {
+      "name": "cut_portamento_unknown_velocity",
+      "source": "manual/cut-portamento-unknown-velocity.mml"
+    },
+    {
       "name": "mml_subroutine_play_at_cursor",
       "source": "manual/mml-subroutine-play-at-cursor.mml"
     },

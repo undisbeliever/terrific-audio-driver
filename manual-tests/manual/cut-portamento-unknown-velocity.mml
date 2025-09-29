@@ -1,0 +1,43 @@
+#Title Cut portamento with unknown velocity
+
+; The left and right channels should look the same in a spectrogram.
+
+#ZenLen 192
+#Timer  64
+
+@1 square gain I26
+
+A @1 px-64
+B @1 px+64 !s
+
+; Cut with `Q` quantize
+A   Q4 {ca}2 Q8 a16 r16
+!s  Q4 {ca}2 Q8 a16 r16
+
+; Tied portamento cut with `Q` quantize
+A   Q2 {ca}4 ^4 Q8 a16 r16
+!s  Q2 {ca}4 ^4 Q8 a16 r16
+
+; Long tied portamento cut with `Q` quantize
+A   Q6 {ca}4 ^%300 Q8 a16 r16
+!s  Q6 {ca}4 ^%300 Q8 a16 r16
+
+; Portamento note-pitch cut with `Q` quantize
+A   Q2 {c P$3000}1,4 Q8 P$3000,16 r16
+!s  Q2 {c P$3000}1,4 Q8 P$3000,16 r16
+
+; Portamento cut with `q` early-release
+A   q48 {ca}2 q0 a16 r16
+!s  q48 {ca}2 q0 a16 r16
+
+; Tied portamento cut with `q` early-release
+A   q64 {ca}3 ^4 q0 a16 r16
+!s  q64 {ca}3 ^4 q0 a16 r16
+
+; Long Tied portamento cut with `q` early-release
+A   q150,D10 {ca}%100,%50 ^%100 q0 a16 r16
+!s  q150,D10 {ca}%100,%50 ^%100 q0 a16 r16
+
+; Long Tied portamento cut with `q` early-release
+A   q254,D10 {ca}%300,%150 ^%100 q0 a16 r16
+!s  q254,D10 {ca}%300,%150 ^%100 q0 a16 r16
