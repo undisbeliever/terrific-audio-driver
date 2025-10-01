@@ -68,6 +68,10 @@ let INSTRUCTIONS_WITH_ARGUMENTS = [
     // (It currently disables the channel)
     reserved_for_custom_use,
 
+    // Miscellaneous instructions with two byte opcodes.
+    // See `MISC_INSTRUCTIONS`.
+    miscellaneous,
+
     // parameters: nnnnnnnO ssssssss llllllll
     //      nnnnnnn = note to play (same note format as a play-note instruction)
     //            O = key-off after note ends
@@ -337,12 +341,6 @@ let INSTRUCTIONS_WITH_ARGUMENTS = [
     panbrello,
 
 
-    // parameter: u8 new timer0 value
-    //
-    // NOTE: Only sets the song timer (tempo).  The timer for the sound-effect channels is unchanged.
-    set_song_tick_clock,
-
-
     // parameter = u8 number of times to loop
     //
     // CAUTION: disables channels if the stack is full
@@ -411,20 +409,6 @@ let INSTRUCTIONS_WITH_ARGUMENTS = [
     //   if index >= 8: sets echo feedback
     // comparison used will depend on the sign of adjust
     adjust_echo_i8_limit,
-
-    // parameter = u8 EDL echo delay value
-    // If the parameter > maxEdl, maxEdl will be used instead
-    set_echo_delay,
-
-
-    // Disables noise or enables/disables pitch modulation
-    //
-    // parameter = ------pd
-    //      d = disable noise flag (`p` is ignored)
-    //      p = pitch modulation flag
-    //
-    // PMOD is only available on channels B - F.
-    disable_noise_or_set_pmod,
 ];
 
 
@@ -461,9 +445,51 @@ let NO_ARGUMENT_INSTRUCTIONS = [
     keyon_next_note,
 
 
+    // Padding
+    disable_channel,
+    disable_channel,
+
     // Disables the channel
     disable_channel,
 ];
+
+
+// The `miscellaneous` bytecode extends the opcode range, similar to the `ED` opcode on the Z80.
+//
+// The `miscellaneous` is implemented by bitshifts.
+// A dash (`-`) in the bitfield is ignored and `xxxxxx` is a non-zero value.
+//
+// Some miscellaneous instructions have arguments.
+namespace MISC_INSTRUCTIONS {
+    // %00000000
+    //
+    // Disable noise on this channel
+    let disable_noise = 0b000000_00;
+
+    // %xxxxxx00
+    //
+    // Disable pitch modulation (xxxxxx is non-zero)
+    let disable_pmod = 0b000001_00;
+
+    // %------10
+    //
+    // Enable pitch modulation
+    //
+    // PMOD is only available on channels B - F.
+    let enable_pmod = 0b000000_10;
+
+    // %------01
+    // parameter: u8 new timer0 value
+    //
+    // NOTE: Only sets the song timer (tempo).  The timer for the sound-effect channels is unchanged.
+    let set_song_tick_clock = 0b000000_01;
+
+    // %------11
+    // parameter: u8 EDL echo delay value
+    //
+    // If the parameter > maxEdl, maxEdl will be used instead
+    let set_echo_delay = 0b000000_11;
+}
 
 // Do not enable PMOD on channels G & H to prevent conflicts with the sound-effect channels.
 let ENABLE_PMOD_MASK = 0b00111110;

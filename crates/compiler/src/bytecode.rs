@@ -26,6 +26,7 @@ use crate::value_newtypes::{
     u8_0_is_256_value_newtype, u8_value_newtype, SignedValueNewType, UnsignedValueNewType,
 };
 
+use core::unreachable;
 use std::cmp::{max, min};
 use std::ops::RangeInclusive;
 
@@ -241,6 +242,7 @@ pub mod opcodes {
     // Order MUST MATCH `audio-driver/src/bytecode.wiz`
     declare_opcodes!(
         RESERVED_FOR_CUSTOM_USE,
+        MISCELLANEOUS,
         PORTAMENTO_DOWN,
         PORTAMENTO_UP,
         PORTAMENTO_CALC,
@@ -280,7 +282,6 @@ pub mod opcodes {
         PAN_SLIDE_UP,
         PAN_SLIDE_DOWN,
         PANBRELLO,
-        SET_SONG_TICK_CLOCK,
         START_LOOP,
         SKIP_LAST_LOOP_U8,
         SKIP_LAST_LOOP_U16BE,
@@ -294,8 +295,6 @@ pub mod opcodes {
         SET_FIR_FILTER,
         SET_OR_ADJUST_ECHO_I8,
         ADJUST_ECHO_I8_LIMIT,
-        SET_ECHO_DELAY,
-        DISABLE_NOISE_OR_SET_PMOD,
         END_LOOP,
         RETURN_FROM_SUBROUTINE_AND_DISABLE_VIBRATO,
         RETURN_FROM_SUBROUTINE,
@@ -303,6 +302,8 @@ pub mod opcodes {
         DISABLE_ECHO,
         REUSE_TEMP_GAIN,
         KEYON_NEXT_NOTE,
+        PADDING_1,
+        PADDING_2,
     );
 
     // Last non play-note opcode
@@ -319,6 +320,36 @@ const _: () = assert!(
 
 const _: () = assert!(opcodes::RESERVED_FOR_CUSTOM_USE == 0);
 
+#[derive(Clone, Copy)]
+#[allow(clippy::unusual_byte_groupings)]
+pub enum MiscInstruction {
+    DisableNoise = 0,
+    DisablePmod = 0b000001_00,
+    EnablePmod = 0b000000_10,
+    SetSongTickClock = 0b000000_01,
+    SetEchoDelay = 0b000000_11,
+}
+
+impl MiscInstruction {
+    fn as_u8(&self) -> u8 {
+        *self as u8
+    }
+
+    pub fn from_opcode(o: u8) -> Self {
+        if o == 0 {
+            Self::DisableNoise
+        } else {
+            match o & 0b11 {
+                0b00 => Self::DisablePmod,
+                0b10 => Self::EnablePmod,
+                0b01 => Self::SetSongTickClock,
+                0b11 => Self::SetEchoDelay,
+                _ => unreachable!("Invalid prefix"),
+            }
+        }
+    }
+}
+
 const ECHO_I8_EFB_INDEX: u8 = 8;
 
 pub const MAX_SET_OR_ADJUST_ECHO_I8_PARAM: u8 = (ECHO_I8_EFB_INDEX << 1) | 1;
@@ -326,31 +357,6 @@ pub const MAX_SET_OR_ADJUST_ECHO_I8_PARAM: u8 = (ECHO_I8_EFB_INDEX << 1) | 1;
 const _: () = assert!(FirTap::MAX.as_u8() < ECHO_I8_EFB_INDEX);
 
 pub(crate) const GOTO_RELATIVE_INSTRUCTION_SIZE: usize = 3;
-
-#[derive(Clone, Copy)]
-pub enum DisableNoiseOrPmodArgument {
-    DisableNoise = 0b01,
-
-    EnablePmod = 0b10,
-    DisablePmod = 0b00,
-}
-
-impl DisableNoiseOrPmodArgument {
-    pub fn driver_value(self) -> u8 {
-        self as u8
-    }
-
-    pub fn from_driver_value(argument: u8) -> Self {
-        if argument & 1 == 1 {
-            Self::DisableNoise
-        } else {
-            match argument & 2 == 2 {
-                true => Self::EnablePmod,
-                false => Self::DisablePmod,
-            }
-        }
-    }
-}
 
 u8_value_newtype!(
     InstrumentId,
@@ -1460,9 +1466,9 @@ impl<'a> Bytecode<'a> {
     pub fn disable_noise(&mut self) {
         emit_bytecode!(
             self,
-            opcodes::DISABLE_NOISE_OR_SET_PMOD,
-            DisableNoiseOrPmodArgument::DisableNoise.driver_value()
-        );
+            opcodes::MISCELLANEOUS,
+            MiscInstruction::DisableNoise.as_u8()
+        )
     }
 
     pub fn play_note(&mut self, note: Note, length: PlayNoteTicks) -> Result<(), BytecodeError> {
@@ -2005,17 +2011,13 @@ impl<'a> Bytecode<'a> {
 
     fn _pmod_instruction(
         &mut self,
-        parameter: DisableNoiseOrPmodArgument,
+        prefixed_instruction: MiscInstruction,
     ) -> Result<(), BytecodeError> {
         match self.context {
             BytecodeContext::SongChannel { index, .. } => match index {
                 0 => Err(BytecodeError::PmodNotAllowedInChannelA),
                 1..=5 => {
-                    emit_bytecode!(
-                        self,
-                        opcodes::DISABLE_NOISE_OR_SET_PMOD,
-                        parameter.driver_value()
-                    );
+                    emit_bytecode!(self, opcodes::MISCELLANEOUS, prefixed_instruction.as_u8());
                     Ok(())
                 }
                 6 | 7 => Err(BytecodeError::PmodNotAllowedInChannelsGH),
@@ -2024,11 +2026,7 @@ impl<'a> Bytecode<'a> {
                 }
             },
             BytecodeContext::SongSubroutine { .. } | BytecodeContext::MmlPrefix => {
-                emit_bytecode!(
-                    self,
-                    opcodes::DISABLE_NOISE_OR_SET_PMOD,
-                    parameter.driver_value()
-                );
+                emit_bytecode!(self, opcodes::MISCELLANEOUS, prefixed_instruction.as_u8());
                 Ok(())
             }
             BytecodeContext::SfxSubroutine | BytecodeContext::SoundEffect => {
@@ -2038,11 +2036,11 @@ impl<'a> Bytecode<'a> {
     }
 
     pub fn enable_pmod(&mut self) -> Result<(), BytecodeError> {
-        self._pmod_instruction(DisableNoiseOrPmodArgument::EnablePmod)
+        self._pmod_instruction(MiscInstruction::EnablePmod)
     }
 
     pub fn disable_pmod(&mut self) -> Result<(), BytecodeError> {
-        self._pmod_instruction(DisableNoiseOrPmodArgument::DisablePmod)
+        self._pmod_instruction(MiscInstruction::DisablePmod)
     }
 
     pub fn enable_echo(&mut self) {
@@ -2389,7 +2387,8 @@ impl<'a> Bytecode<'a> {
 
         emit_bytecode!(
             self,
-            opcodes::SET_SONG_TICK_CLOCK,
+            opcodes::MISCELLANEOUS,
+            MiscInstruction::SetSongTickClock.as_u8(),
             tick_clock.into_driver_value()
         );
         Ok(())
@@ -2587,7 +2586,12 @@ impl<'a> Bytecode<'a> {
             | BytecodeContext::SongChannel { max_edl, .. } => {
                 let edl = length.to_edl();
                 if edl.as_u8() <= max_edl.as_u8() {
-                    emit_bytecode!(self, opcodes::SET_ECHO_DELAY, edl.as_u8());
+                    emit_bytecode!(
+                        self,
+                        opcodes::MISCELLANEOUS,
+                        MiscInstruction::SetEchoDelay.as_u8(),
+                        edl.as_u8()
+                    );
                     Ok(())
                 } else {
                     Err(BytecodeError::EchoLengthLargerThanMaxEdl { edl, max_edl })

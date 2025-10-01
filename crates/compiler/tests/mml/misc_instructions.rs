@@ -278,13 +278,15 @@ fn set_song_tempo() {
 
 #[test]
 fn set_song_tick_clock() {
-    assert_line_matches_bytecode_bytes("T90", &[opcodes::SET_SONG_TICK_CLOCK, 90]);
+    const SET_SONG_TICK_CLOCK: u8 = 1;
 
-    assert_line_matches_bytecode_bytes("T255", &[opcodes::SET_SONG_TICK_CLOCK, 255]);
+    assert_line_matches_bytecode_bytes("T90", &[opcodes::MISCELLANEOUS, SET_SONG_TICK_CLOCK, 90]);
 
-    assert_line_matches_bytecode_bytes("T256", &[opcodes::SET_SONG_TICK_CLOCK, 0]);
+    assert_line_matches_bytecode_bytes("T255", &[opcodes::MISCELLANEOUS, SET_SONG_TICK_CLOCK, 255]);
+
+    assert_line_matches_bytecode_bytes("T256", &[opcodes::MISCELLANEOUS, SET_SONG_TICK_CLOCK, 0]);
     assert_one_error_in_mml_line("T257", 1, ValueError::TickClockOutOfRange(257).into());
 
-    assert_line_matches_bytecode_bytes("T64", &[opcodes::SET_SONG_TICK_CLOCK, 64]);
+    assert_line_matches_bytecode_bytes("T64", &[opcodes::MISCELLANEOUS, SET_SONG_TICK_CLOCK, 64]);
     assert_one_error_in_mml_line("T63", 1, ValueError::TickClockOutOfRange(63).into());
 }

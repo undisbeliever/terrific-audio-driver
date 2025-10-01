@@ -5,10 +5,7 @@
 // SPDX-License-Identifier: MIT
 
 use crate::bytecode::opcodes;
-use crate::bytecode::DisableNoiseOrPmodArgument;
-use crate::bytecode::InstrumentId;
-use crate::bytecode::Pan;
-use crate::bytecode::MAX_SET_OR_ADJUST_ECHO_I8_PARAM;
+use crate::bytecode::{InstrumentId, MiscInstruction, Pan, MAX_SET_OR_ADJUST_ECHO_I8_PARAM};
 use crate::common_audio_data::CommonAudioData;
 use crate::driver_constants::AudioMode;
 use crate::driver_constants::ECHO_VARIABLES_SIZE;
@@ -1019,12 +1016,6 @@ impl ChannelState {
                     .tremolo_panbrello_instruction(qwt, o1, o2, self.ticks);
             }
 
-            opcodes::SET_SONG_TICK_CLOCK => {
-                let timer = read_pc();
-
-                global.timer_register = timer;
-            }
-
             opcodes::GOTO_RELATIVE => {
                 let l = read_pc();
                 let h = read_pc();
@@ -1143,16 +1134,6 @@ impl ChannelState {
             opcodes::ENABLE_ECHO => self.echo = true,
             opcodes::DISABLE_ECHO => self.echo = false,
 
-            opcodes::DISABLE_NOISE_OR_SET_PMOD => {
-                let a = read_pc();
-
-                match DisableNoiseOrPmodArgument::from_driver_value(a) {
-                    DisableNoiseOrPmodArgument::DisableNoise => (),
-                    DisableNoiseOrPmodArgument::EnablePmod => self.pitch_mod = true,
-                    DisableNoiseOrPmodArgument::DisablePmod => self.pitch_mod = false,
-                }
-            }
-
             opcodes::SET_ECHO_VOLUME => {
                 let v = read_pc();
 
@@ -1233,10 +1214,23 @@ impl ChannelState {
                     }
                 }
             }
-            opcodes::SET_ECHO_DELAY => {
-                let edl = read_pc();
 
-                global.echo.edl = min(edl, global.echo.max_edl);
+            opcodes::MISCELLANEOUS => {
+                let o = read_pc();
+
+                match MiscInstruction::from_opcode(o) {
+                    MiscInstruction::DisableNoise => (),
+                    MiscInstruction::DisablePmod => self.pitch_mod = false,
+                    MiscInstruction::EnablePmod => self.pitch_mod = true,
+                    MiscInstruction::SetSongTickClock => {
+                        let timer = read_pc();
+                        global.timer_register = timer;
+                    }
+                    MiscInstruction::SetEchoDelay => {
+                        let edl = read_pc();
+                        global.echo.edl = min(edl, global.echo.max_edl);
+                    }
+                }
             }
 
             opcodes::RESERVED_FOR_CUSTOM_USE => self.disable_channel(),
@@ -1244,6 +1238,8 @@ impl ChannelState {
             opcodes::KEYON_NEXT_NOTE => (),
 
             opcodes::DISABLE_CHANNEL => self.disable_channel(),
+
+            opcodes::PADDING_1 | opcodes::PADDING_2 => self.disable_channel(),
         }
     }
 
@@ -1294,7 +1290,7 @@ impl ChannelState {
     }
 
     /// Returns instruction_size if instruction does not sleep, branch or disable the channel.
-    fn instruction_size_if_not_sleep_nor_branch(opcode: u8) -> Option<usize> {
+    fn instruction_size_if_not_sleep_nor_branch_nor_misc(opcode: u8) -> Option<usize> {
         match opcode {
             opcodes::FIRST_PLAY_NOTE_INSTRUCTION.. => None,
 
@@ -1336,7 +1332,6 @@ impl ChannelState {
             opcodes::PAN_SLIDE_UP => Some(4),
             opcodes::PAN_SLIDE_DOWN => Some(4),
             opcodes::PANBRELLO => Some(4),
-            opcodes::SET_SONG_TICK_CLOCK => Some(2),
             opcodes::GOTO_RELATIVE => None,
             opcodes::START_LOOP => Some(2),
             opcodes::SKIP_LAST_LOOP_U8 => Some(2),
@@ -1348,7 +1343,6 @@ impl ChannelState {
             opcodes::RETURN_FROM_SUBROUTINE => None,
             opcodes::ENABLE_ECHO => Some(1),
             opcodes::DISABLE_ECHO => Some(1),
-            opcodes::DISABLE_NOISE_OR_SET_PMOD => Some(2),
 
             opcodes::SET_ECHO_VOLUME => Some(2),
             opcodes::SET_STEREO_ECHO_VOLUME => Some(3),
@@ -1357,11 +1351,14 @@ impl ChannelState {
             opcodes::SET_FIR_FILTER => Some(9),
             opcodes::SET_OR_ADJUST_ECHO_I8 => Some(3),
             opcodes::ADJUST_ECHO_I8_LIMIT => Some(4),
-            opcodes::SET_ECHO_DELAY => Some(2),
             opcodes::KEYON_NEXT_NOTE => Some(1),
+
+            opcodes::MISCELLANEOUS => None,
 
             opcodes::RESERVED_FOR_CUSTOM_USE => None,
             opcodes::DISABLE_CHANNEL => None,
+
+            opcodes::PADDING_1 | opcodes::PADDING_2 => None,
         }
     }
 
@@ -1372,18 +1369,26 @@ impl ChannelState {
             let next_instruction = song_data.get(instruction_ptr).copied();
 
             match next_instruction {
-                Some(opcodes::DISABLE_NOISE_OR_SET_PMOD) => {
-                    return song_data.get(instruction_ptr + 1).is_some_and(|&a| {
-                        matches!(
-                            DisableNoiseOrPmodArgument::from_driver_value(a),
-                            DisableNoiseOrPmodArgument::EnablePmod
-                        )
-                    })
+                Some(opcodes::MISCELLANEOUS) => {
+                    let length = match song_data
+                        .get(instruction_ptr + 1)
+                        .map(|&o| MiscInstruction::from_opcode(o))
+                    {
+                        None => return self.pitch_mod,
+                        Some(MiscInstruction::DisableNoise) => 2,
+                        Some(MiscInstruction::DisablePmod) => 2,
+                        Some(MiscInstruction::EnablePmod) => return true,
+                        Some(MiscInstruction::SetSongTickClock) => 3,
+                        Some(MiscInstruction::SetEchoDelay) => 3,
+                    };
+                    instruction_ptr += length;
                 }
-                Some(opcode) => match Self::instruction_size_if_not_sleep_nor_branch(opcode) {
-                    Some(length) => instruction_ptr += length,
-                    None => return self.pitch_mod,
-                },
+                Some(opcode) => {
+                    match Self::instruction_size_if_not_sleep_nor_branch_nor_misc(opcode) {
+                        Some(length) => instruction_ptr += length,
+                        None => return self.pitch_mod,
+                    }
+                }
                 None => return self.pitch_mod,
             }
         }
@@ -2264,6 +2269,7 @@ impl InterpreterOutput {
 mod test {
     use super::{ChannelState, EchoVariables, GlobalState};
     use crate::driver_constants::SONG_HEADER_SIZE;
+    use crate::opcodes;
     use crate::songs::blank_song;
     use crate::time::{TickCounter, MIN_TICK_TIMER};
 
@@ -2283,38 +2289,40 @@ mod test {
     }
 
     #[test]
-    fn test_instruction_size_if_not_sleep_nor_branch() {
+    fn test_instruction_size_if_not_sleep_nor_branch_nor_misc() {
         let song = blank_song();
 
         let mut bytecode = [128; 32];
         assert!(bytecode.len() > SONG_HEADER_SIZE);
 
         for opcode in u8::MIN..u8::MAX {
-            bytecode[0] = opcode;
+            if opcode != opcodes::MISCELLANEOUS {
+                bytecode[0] = opcode;
 
-            let mut global = blank_global_state();
-            let mut cs = ChannelState::new(None, &song, 0, 0, None);
-            cs.ticks = TickCounter::new(0);
-            cs.instruction_ptr = 0;
-            // Set stack counter to force a branch outside `bytecode` for the `end_loop` instruction
-            cs.bc_stack.iter_mut().for_each(|s| *s = 10);
+                let mut global = blank_global_state();
+                let mut cs = ChannelState::new(None, &song, 0, 0, None);
+                cs.ticks = TickCounter::new(0);
+                cs.instruction_ptr = 0;
+                // Set stack counter to force a branch outside `bytecode` for the `end_loop` instruction
+                cs.bc_stack.iter_mut().for_each(|s| *s = 10);
 
-            cs.process_next_bytecode(&mut global, &bytecode);
+                cs.process_next_bytecode(&mut global, &bytecode);
 
-            let expected = if cs.ticks.is_zero() && !cs.disabled {
-                let s = usize::from(cs.instruction_ptr);
+                let expected = if cs.ticks.is_zero() && !cs.disabled {
+                    let s = usize::from(cs.instruction_ptr);
 
-                if s < bytecode.len() {
-                    Some(s)
+                    if s < bytecode.len() {
+                        Some(s)
+                    } else {
+                        None
+                    }
                 } else {
                     None
-                }
-            } else {
-                None
-            };
+                };
 
-            let o = ChannelState::instruction_size_if_not_sleep_nor_branch(opcode);
-            assert_eq!(o, expected, "opocde: {opcode}");
+                let o = ChannelState::instruction_size_if_not_sleep_nor_branch_nor_misc(opcode);
+                assert_eq!(o, expected, "opcode: {opcode}");
+            }
         }
     }
 }
