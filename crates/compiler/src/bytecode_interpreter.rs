@@ -103,6 +103,7 @@ struct ChannelSoA {
     early_release_min_ticks: u8,
     early_release_gain: u8,
 
+    transpose: i8,
     detune_l: u8,
     detune_h: u8,
 }
@@ -453,6 +454,7 @@ enum ChannelNote {
     PlayNote {
         note_opcode: u8,
         instrument: Option<u8>,
+        transpose: i8,
         detune: i16,
     },
     PlayPitch(u16),
@@ -462,6 +464,7 @@ enum ChannelNote {
     Portamento {
         target_opcode: u8,
         instrument: Option<u8>,
+        transpose: i8,
         detune: i16,
     },
     PortamentoPitch {
@@ -505,6 +508,7 @@ pub struct ChannelState {
     pub early_release_min_ticks: u8,
     pub early_release_gain: u8,
 
+    pub transpose: i8,
     pub detune: i16,
 
     next_event_is_key_off: bool,
@@ -559,6 +563,7 @@ impl ChannelState {
             early_release_cmp: 0,
             early_release_min_ticks: uninitialised,
             early_release_gain: uninitialised,
+            transpose: 0,
             detune: 0,
             volume: PanVolValue::new(STARTING_VOLUME),
             pan: PanVolValue::new(Pan::CENTER.as_u8()),
@@ -692,6 +697,7 @@ impl ChannelState {
                 self.note = ChannelNote::PlayNote {
                     note_opcode,
                     instrument: self.instrument,
+                    transpose: self.transpose,
                     detune: self.detune,
                 };
                 self.play_note(opcode, length);
@@ -706,6 +712,7 @@ impl ChannelState {
                 self.note = ChannelNote::Portamento {
                     target_opcode: note_and_key_off_bit,
                     instrument: self.instrument,
+                    transpose: self.transpose,
                     detune: self.detune,
                 };
 
@@ -721,6 +728,7 @@ impl ChannelState {
                 self.note = ChannelNote::Portamento {
                     target_opcode: note_and_key_off_bit,
                     instrument: self.instrument,
+                    transpose: self.transpose,
                     detune: self.detune,
                 };
 
@@ -784,6 +792,7 @@ impl ChannelState {
                 self.note = ChannelNote::PlayNote {
                     note_opcode,
                     instrument: self.instrument,
+                    transpose: self.transpose,
                     detune: self.detune,
                 };
 
@@ -908,6 +917,17 @@ impl ChannelState {
                 self.early_release_cmp = cmp;
                 self.early_release_min_ticks = 0;
                 self.early_release_gain = gain;
+            }
+
+            opcodes::SET_TRANSPOSE => {
+                let t = i8::from_le_bytes([read_pc()]);
+
+                self.transpose = t;
+            }
+            opcodes::ADJUST_TRANSPOSE => {
+                let a = i8::from_le_bytes([read_pc()]);
+
+                self.transpose += a;
             }
 
             opcodes::SET_DETUNE_I16 => {
@@ -1238,8 +1258,6 @@ impl ChannelState {
             opcodes::KEYON_NEXT_NOTE => (),
 
             opcodes::DISABLE_CHANNEL => self.disable_channel(),
-
-            opcodes::PADDING_1 | opcodes::PADDING_2 => self.disable_channel(),
         }
     }
 
@@ -1317,6 +1335,8 @@ impl ChannelState {
             opcodes::REUSE_TEMP_GAIN_AND_WAIT => None,
             opcodes::SET_EARLY_RELEASE => Some(4),
             opcodes::SET_EARLY_RELEASE_NO_MINIMUM => Some(3),
+            opcodes::SET_TRANSPOSE => Some(2),
+            opcodes::ADJUST_TRANSPOSE => Some(2),
             opcodes::SET_DETUNE_I16 => Some(3),
             opcodes::SET_DETUNE_P8 => Some(2),
             opcodes::SET_DETUNE_N8 => Some(2),
@@ -1357,8 +1377,6 @@ impl ChannelState {
 
             opcodes::RESERVED_FOR_CUSTOM_USE => None,
             opcodes::DISABLE_CHANNEL => None,
-
-            opcodes::PADDING_1 | opcodes::PADDING_2 => None,
         }
     }
 
@@ -1745,7 +1763,13 @@ impl CommonAudioDataSoA<'_> {
         }
     }
 
-    fn pitch_table_entry(&self, note_opcode: u8, instrument: Option<u8>, detune: i16) -> (u8, u8) {
+    fn pitch_table_entry(
+        &self,
+        note_opcode: u8,
+        instrument: Option<u8>,
+        transpose: i8,
+        detune: i16,
+    ) -> (u8, u8) {
         match instrument {
             Some(i) => {
                 let i: usize = self
@@ -1754,6 +1778,7 @@ impl CommonAudioDataSoA<'_> {
                     .copied()
                     .unwrap_or(0)
                     .wrapping_add(note_opcode >> 1)
+                    .wrapping_add_signed(transpose)
                     .into();
 
                 let pitch = u16::from_le_bytes([
@@ -1838,13 +1863,15 @@ fn build_channel(
         ChannelNote::PlayNote {
             note_opcode,
             instrument,
+            transpose,
             detune,
-        } => common.pitch_table_entry(note_opcode, instrument, detune),
+        } => common.pitch_table_entry(note_opcode, instrument, transpose, detune),
         ChannelNote::Portamento {
             target_opcode,
             instrument,
+            transpose,
             detune,
-        } => common.pitch_table_entry(target_opcode, instrument, detune),
+        } => common.pitch_table_entry(target_opcode, instrument, transpose, detune),
         ChannelNote::PlayPitch(p) => p.to_le_bytes().into(),
         ChannelNote::PortamentoPitch { target_pitch } => target_pitch.to_le_bytes().into(),
     };
@@ -1957,6 +1984,7 @@ fn build_channel(
             early_release_cmp: c.early_release_cmp,
             early_release_min_ticks: c.early_release_min_ticks,
             early_release_gain: c.early_release_gain,
+            transpose: c.transpose,
             detune_l: c.detune.to_le_bytes()[0],
             detune_h: c.detune.to_le_bytes()[1],
         },
@@ -2027,6 +2055,7 @@ fn unused_channel(channel_index: usize) -> Channel {
             early_release_min_ticks: UNINITIALISED,
             early_release_gain: UNINITIALISED,
 
+            transpose: 0,
             detune_l: 0,
             detune_h: 0,
         },
@@ -2225,6 +2254,7 @@ impl InterpreterOutput {
                 );
                 soa_write_u8(addresses::CHANNEL_EARLY_RELEASE_GAIN, c.early_release_gain);
 
+                soa_write_u8(addresses::CHANNEL_TRANSPOSE, c.transpose.to_le_bytes()[0]);
                 soa_write_u8(addresses::CHANNEL_DETUNE_L, c.detune_l);
                 soa_write_u8(addresses::CHANNEL_DETUNE_H, c.detune_h);
 

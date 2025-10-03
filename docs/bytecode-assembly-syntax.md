@@ -73,6 +73,13 @@ Instructions
     * CAUTION: the GAIN rate may need to be changed if the song's tempo changes.
  * `disable_early_release` - disables early-release.
 
+ * `set_transpose <i8>` - Sets the channel's semitone offset
+    * The transpose setting will add the signed semitone offset to all future play-note and portamento-note instructions.
+    * CAUTION: Transpose can cause the channel to play out-of-range notes
+ * `adjust_transpose <i8>` - Adjusts the channel's semitone offset
+    * CAUTION: Transpose can cause the channel to play out-of-range notes
+ * `disable_transpose` - Sets the channel's semitone offset to 0
+
  * `set_detune <i16>` - Adds an offset to the `VxPITCH` register in play-note and portamento instructions.
     * CAUTION: `play_pitch` instructions are unaffected by detune.
     * CAUTION: detune is not disabled when the instrument is changed.

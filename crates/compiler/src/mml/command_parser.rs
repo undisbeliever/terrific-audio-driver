@@ -13,7 +13,7 @@ use super::note_tracking::CursorTracker;
 use crate::bytecode::{
     DetuneValue, EarlyReleaseMinTicks, EarlyReleaseTicks, LoopCount, NoiseFrequency, Pan,
     PanSlideTicks, PanbrelloQuarterWavelengthInTicks, PlayNoteTicks, PlayPitchPitch,
-    RelativeEchoFeedback, RelativeEchoVolume, RelativeFirCoefficient, TremoloAmplitude,
+    RelativeEchoFeedback, RelativeEchoVolume, RelativeFirCoefficient, Transpose, TremoloAmplitude,
     TremoloQuarterWavelengthInTicks, VibratoDelayTicks, VibratoPitchOffsetPerTick,
     VibratoQuarterWavelengthInTicks, Volume, VolumeSlideAmount, VolumeSlideTicks,
     KEY_OFF_TICK_DELAY,
@@ -34,9 +34,7 @@ use crate::subroutines::{FindSubroutineResult, SubroutineStore};
 use crate::time::{
     MmlDefaultLength, MmlLength, TickCounter, TickCounterWithLoopFlag, ZenLen, STARTING_MML_LENGTH,
 };
-use crate::value_newtypes::{
-    i8_value_newtype, I8WithByteHexValueNewType, SignedValueNewType, UnsignedValueNewType,
-};
+use crate::value_newtypes::{I8WithByteHexValueNewType, SignedValueNewType, UnsignedValueNewType};
 
 pub use crate::channel_bc_generator::Quantization;
 
@@ -54,8 +52,6 @@ pub const COARSE_VOLUME_MULTIPLIER: u8 = 16;
 
 pub const PX_PAN_RANGE: std::ops::RangeInclusive<i32> =
     (-(Pan::CENTER.as_u8() as i32))..=(Pan::CENTER.as_u8() as i32);
-
-i8_value_newtype!(Transpose, TransposeOutOfRange, NoTranspose, NoTransposeSign);
 
 pub(crate) struct MmlCommandWithPos {
     command: Command,

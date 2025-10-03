@@ -445,6 +445,9 @@ in lastvarpage {
         // NOTE: Adding `instPitchOffset` to the note to play is allowed to an can overflow.
         var instPitchOffset : [u8 ; N_CHANNELS];
 
+        // Semitone offset for all play-note and portamento-note instructions.
+        var transpose : [u8 ; N_CHANNELS];
+
 
         // set_early_release instruction arguments
         var earlyRelease_minTicks : [u8 ; N_CHANNELS];
@@ -1856,6 +1859,8 @@ func __reset_channel(channelIndex : u8 in x, pan: u8 in a) {
         // Reset detune
         _cs_detune_l[x] = a;
         _cs_detune_h[x] = a;
+
+        channelSoA.transpose[x] = a;
     }
     direct_page = false;
 
@@ -2441,7 +2446,7 @@ func _play_note(channelIndex : u8 in x, noteAndKeyOffBit : u8 in a) {
     channelSoA.nextEventIsKeyOff[x] >>>>#= 1;
 
     // calculate pitch table index
-    y = a = a + channelSoA.instPitchOffset[x];
+    y = a = a + channelSoA.instPitchOffset[x] + channelSoA.transpose[x];
 
     // Set voice pitch
     a = commonData.pitchTable_l[y] + channelSoA.detune_l[x];
@@ -2620,7 +2625,7 @@ func __portamento_note(channelIndex : u8 in x, noteAndKeyoffFlag : u8 in a, dire
     channelSoA.nextEventIsKeyOff[x] >>>>#= 1;
 
     // calculate pitch table index
-    y = a = a + channelSoA.instPitchOffset[x];
+    y = a = a + channelSoA.instPitchOffset[x] + channelSoA.transpose[x];
 
     a = commonData.pitchTable_l[y] + channelSoA.detune_l[x];
     channelSoA.portamento_target_l[x] = a;
@@ -2735,7 +2740,7 @@ func portamento_calc(channelIndex : u8 in x, noteAndKeyoffFlag : u8 in a) {
     channelSoA.nextEventIsKeyOff[x] >>>>#= 1;
 
     // calculate pitch table index
-    y = a = a + channelSoA.instPitchOffset[x];
+    y = a = a + channelSoA.instPitchOffset[x] + channelSoA.transpose[x];
 
     a = commonData.pitchTable_l[y] + channelSoA.detune_l[x];
     channelSoA.portamento_target_l[x] = a;
@@ -3242,6 +3247,25 @@ func __set_early_release_gain(channelIndex: u8 in x) {
     instructionPtr++;
 
     channelSoA.earlyRelease_gain[x] = a;
+
+    ^return process_next_bytecode(x);
+}
+
+
+// Y = 0
+// KEEP: X
+#[fallthrough]
+func adjust_transpose(channelIndex: u8 in x, transpose : i8 in a) {
+    a += channelSoA.transpose[x];
+
+// fallthrough into `set_transpose`
+}
+
+
+// Y = 0
+// KEEP: X
+func set_transpose(channelIndex: u8 in x, transpose : i8 in a) {
+    channelSoA.transpose[x] = a;
 
     ^return process_next_bytecode(x);
 }

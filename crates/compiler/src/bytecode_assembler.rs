@@ -599,6 +599,10 @@ pub fn parse_asm_line(bc: &mut Bytecode, line: &str) -> Result<(), ChannelError>
        disable_early_release 0 no_arguments,
        set_early_release 3 early_release_arguments,
 
+       set_transpose 1 one_svnt_argument_allow_zero,
+       adjust_transpose 1 one_svnt_argument,
+       disable_transpose 0 no_arguments,
+
        set_detune 1 one_svnt_argument_allow_zero,
        disable_detune 0 no_arguments,
 

@@ -11,7 +11,7 @@ use crate::bytecode::{
     InstrumentId, LoopCount, NoiseFrequency, Pan, PanSlideAmount, PanSlideTicks,
     PanbrelloAmplitude, PanbrelloQuarterWavelengthInTicks, PlayPitchPitch, PortamentoSlideTicks,
     PortamentoVelocity, RelativeEchoFeedback, RelativeEchoVolume, RelativeFirCoefficient,
-    RelativePan, RelativeVolume, TremoloAmplitude, TremoloQuarterWavelengthInTicks,
+    RelativePan, RelativeVolume, Transpose, TremoloAmplitude, TremoloQuarterWavelengthInTicks,
     VibratoDelayTicks, VibratoPitchOffsetPerTick, VibratoQuarterWavelengthInTicks, Volume,
     VolumeSlideAmount, VolumeSlideTicks,
 };
@@ -30,8 +30,7 @@ use crate::echo::{
 use crate::envelope::Gain;
 use crate::file_pos::{FilePosRange, MAX_MML_TEXT_LENGTH};
 use crate::mml::command_parser::{
-    Transpose, MAX_COARSE_TREMOLO_AMPLITUDE, MAX_COARSE_VOLUME, MIN_COARSE_TREMOLO_AMPLITUDE,
-    PX_PAN_RANGE,
+    MAX_COARSE_TREMOLO_AMPLITUDE, MAX_COARSE_VOLUME, MIN_COARSE_TREMOLO_AMPLITUDE, PX_PAN_RANGE,
 };
 use crate::mml::{MAX_MML_PREFIX_STR_LENGTH, MAX_MML_PREFIX_TICKS};
 use crate::notes::{MidiNote, Note, Octave};
@@ -168,6 +167,9 @@ pub enum ValueError {
     VibratoQuarterWavelengthOutOfRange(u32),
     VibratoDelayTicksOutOfRange(u32),
 
+    TransposeOutOfRange(i32),
+    RelativeTransposeOutOfRange(i32),
+
     DetuneValueOutOfRange(i32),
     DetuneCentsOutOfRange(i32),
 
@@ -176,6 +178,7 @@ pub enum ValueError {
     NoRelativePanSign,
     NoDirectionInPortamentoVelocity,
     NoTransposeSign,
+    NoRelativeTransposeSign,
     NoDetuneValueSign,
     NoDetuneCentsSign,
     NoRelativeEchoVolumeSign,
@@ -188,7 +191,6 @@ pub enum ValueError {
 
     QuantizeOutOfRange(u32),
     FineQuantizeOutOfRange(u32),
-    TransposeOutOfRange(i32),
     PortamentoSpeedOutOfRange(u32),
 
     ZenLenOutOfRange(u32),
@@ -262,7 +264,6 @@ pub enum ValueError {
     NoPanbrelloQuarterWavelengthTicks,
     NoOctave,
     NoZenLen,
-    NoTranspose,
     NoLoopCount,
     NoQuantize,
     NoFineQuantize,
@@ -292,6 +293,8 @@ pub enum ValueError {
     NoEarlyReleaseTicks,
     NoEarlyReleaseMinTicks,
     NoEarlyReleaseMinTicksOrGain,
+    NoTranspose,
+    NoRelativeTranspose,
     NoDetuneValue,
     NoDetuneCents,
 
@@ -1052,6 +1055,11 @@ impl Display for ValueError {
                 out_of_range!("detune cents", v, DetuneCents)
             }
 
+            Self::TransposeOutOfRange(v) => out_of_range!("transpose", v, Transpose),
+            Self::RelativeTransposeOutOfRange(v) => {
+                out_of_range!("relative transpose", v, Transpose)
+            }
+
             Self::NoPxPanSign => {
                 write!(f, "missing + or - in px pan")
             }
@@ -1066,6 +1074,9 @@ impl Display for ValueError {
             }
             Self::NoTransposeSign => {
                 write!(f, "missing + or - in transpose value")
+            }
+            Self::NoRelativeTransposeSign => {
+                write!(f, "missing + or - in relative transpose value")
             }
             Self::NoDetuneValueSign => {
                 write!(f, "missing + or - in detune value")
@@ -1095,7 +1106,6 @@ impl Display for ValueError {
             Self::FineQuantizeOutOfRange(v) => {
                 out_of_range!("fine quantization", v, FineQuantization)
             }
-            Self::TransposeOutOfRange(v) => out_of_range!("transpose", v, Transpose),
 
             Self::PortamentoSpeedOutOfRange(v) => {
                 out_of_range!("portamento speed", v, PortamentoSpeed)
@@ -1237,7 +1247,6 @@ impl Display for ValueError {
             }
             Self::NoOctave => write!(f, "no octave"),
             Self::NoZenLen => write!(f, "no zenlen value"),
-            Self::NoTranspose => write!(f, "no transpose value"),
             Self::NoLoopCount => write!(f, "no loop count"),
             Self::NoQuantize => write!(f, "no quantization value"),
             Self::NoFineQuantize => write!(f, "no fine quantization value"),
@@ -1269,6 +1278,8 @@ impl Display for ValueError {
             Self::NoEarlyReleaseMinTicksOrGain => {
                 write!(f, "no early-release minimum ticks or GAIN (F, D, E, I, B)")
             }
+            Self::NoTranspose => write!(f, "no transpose value"),
+            Self::NoRelativeTranspose => write!(f, "no relative transpose value"),
             Self::NoDetuneValue => write!(f, "no detune value"),
             Self::NoDetuneCents => write!(f, "no detune cents"),
 

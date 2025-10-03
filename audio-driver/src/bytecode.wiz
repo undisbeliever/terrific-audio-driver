@@ -268,6 +268,13 @@ let INSTRUCTIONS_WITH_ARGUMENTS = [
     set_early_release_no_minimum,
 
 
+    // parameter = i8 transpose
+    set_transpose,
+
+    // parameter = i8 adjust
+    adjust_transpose,
+
+
     // parameter: i16 VxPITCH offset
     set_detune_i16,
 
@@ -444,10 +451,6 @@ let NO_ARGUMENT_INSTRUCTIONS = [
     // CAUTION: This instruction has no effect if the previous note has been key-offed.
     keyon_next_note,
 
-
-    // Padding
-    disable_channel,
-    disable_channel,
 
     // Disables the channel
     disable_channel,

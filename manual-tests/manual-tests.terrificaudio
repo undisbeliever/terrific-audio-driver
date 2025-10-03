@@ -119,6 +119,10 @@
       "source": "manual/tempo-and-timer.mml"
     },
     {
+      "name": "transpose",
+      "source": "manual/transpose.mml"
+    },
+    {
       "name": "vibrato_with_delay",
       "source": "manual/vibrato-with-delay.mml"
     },

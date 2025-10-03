@@ -139,6 +139,15 @@ impl PlayPitchPitch {
     pub const NATIVE: Self = Self(0x1000);
 }
 
+i8_value_newtype!(Transpose, TransposeOutOfRange, NoTranspose, NoTransposeSign);
+
+i8_value_newtype!(
+    RelativeTranspose,
+    RelativeTransposeOutOfRange,
+    NoRelativeTranspose,
+    NoRelativeTransposeSign
+);
+
 i16_value_newtype!(
     DetuneValue,
     DetuneValueOutOfRange,
@@ -267,6 +276,8 @@ pub mod opcodes {
         REUSE_TEMP_GAIN_AND_REST,
         SET_EARLY_RELEASE,
         SET_EARLY_RELEASE_NO_MINIMUM,
+        SET_TRANSPOSE,
+        ADJUST_TRANSPOSE,
         SET_DETUNE_I16,
         SET_DETUNE_P8,
         SET_DETUNE_N8,
@@ -302,8 +313,6 @@ pub mod opcodes {
         DISABLE_ECHO,
         REUSE_TEMP_GAIN,
         KEYON_NEXT_NOTE,
-        PADDING_1,
-        PADDING_2,
     );
 
     // Last non play-note opcode
@@ -1864,6 +1873,20 @@ impl<'a> Bytecode<'a> {
                 gain.as_u8()
             );
         }
+    }
+
+    pub fn set_transpose(&mut self, transpose: Transpose) {
+        emit_bytecode!(self, opcodes::SET_TRANSPOSE, transpose.as_i8());
+    }
+
+    pub fn adjust_transpose(&mut self, adjust: RelativeTranspose) {
+        if adjust.as_i8() != 0 {
+            emit_bytecode!(self, opcodes::ADJUST_TRANSPOSE, adjust.as_i8());
+        }
+    }
+
+    pub fn disable_transpose(&mut self) {
+        emit_bytecode!(self, opcodes::SET_TRANSPOSE, 0i8);
     }
 
     pub fn set_detune(&mut self, v: DetuneValue) {

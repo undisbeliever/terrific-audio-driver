@@ -7,9 +7,11 @@ Version 0.1.2
  * Increased the maximum `wav2brr` input size
 
 Driver changes:
- * Added `portamento_pitch` and `portamento_pitch_calc` instructions that can
+ * Added `portamento_calc` and `portamento_pitch_calc` instructions that can
    automatically calculate the portamento velocity if the pitch slide is <= 255
    ticks long.
+ * Added a transpose semitone offset to all play-note and portamento-note instructions.
+    * The transpose setting can be changed with the `set_transpose` and `adjust_transpose` bytecode instructions.
 
 MML changes:
  * Fixed a typo in the MML syntax document

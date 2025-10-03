@@ -87,6 +87,18 @@ impl std::fmt::Display for EarlyRelease {
 }
 
 #[derive(Clone, Copy, PartialEq)]
+struct Transpose(i8);
+
+impl std::fmt::Display for Transpose {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.0 {
+            0 => write!(f, ""),
+            d => write!(f, "{d:+}"),
+        }
+    }
+}
+
+#[derive(Clone, Copy, PartialEq)]
 struct Detune(i16);
 
 impl std::fmt::Display for Detune {
@@ -405,6 +417,7 @@ struct ChannelValues {
     temp_gain: Value<TempGain>,
     prev_temp_gain: Value<TempGain>,
     early_release: Value<EarlyRelease>,
+    transpose: Value<Transpose>,
     detune: Value<Detune>,
     vibrato: Value<Vibrato>,
 
@@ -422,12 +435,13 @@ impl ChannelValues {
     // Channel names must be `'static` strings
     const CHANNEL_NAMES: [&str; N_MUSIC_CHANNELS] = ["A", "B", "C", "D", "E", "F", "G", "H"];
 
-    const LABELS: [&str; 13] = [
+    const LABELS: [&str; 14] = [
         "Instrument",
         "Envelope",
         "Temp-GAIN",
         "Prev temp-GAIN",
         "Early release",
+        "Transpose",
         "Detune",
         "Vibrato",
         "Volume",
@@ -465,6 +479,7 @@ impl ChannelValues {
             temp_gain: Value::new(x_pos, next_y_pos(), width, height),
             prev_temp_gain: Value::new(x_pos, next_y_pos(), width, height),
             early_release: Value::new_smaller_right(x_pos, next_y_pos(), width, height),
+            transpose: Value::new(x_pos, next_y_pos(), width, height),
             detune: Value::new(x_pos, next_y_pos(), width, height),
             vibrato: Value::new(x_pos, next_y_pos(), width, height),
 
@@ -499,6 +514,7 @@ impl ChannelValues {
             self.temp_gain.clear();
             self.prev_temp_gain.clear();
             self.early_release.clear();
+            self.transpose.clear();
             self.detune.clear();
             self.vibrato.clear();
 
@@ -551,6 +567,7 @@ impl ChannelValues {
             min_ticks: c.early_release_min_ticks,
             gain: c.early_release_gain,
         });
+        self.transpose.update(Transpose(c.transpose));
         self.detune.update(Detune(c.detune));
         self.vibrato
             .update_option(c.vibrato_quarter_wavelength_in_ticks.map(|q| Vibrato {
@@ -746,7 +763,7 @@ impl DriverStateWindow {
         let height = input_height(&window);
         let padding = std::cmp::max(ch_units_to_width(&window, 1), 2);
 
-        window.set_size(width * 10 + padding * 2, height * 17 + padding * 3);
+        window.set_size(width * 10 + padding * 2, height * 18 + padding * 3);
 
         let song_name = Frame::new(padding, padding, width * 6, height, None)
             .with_align(Align::Inside | Align::Left | Align::Clip);
