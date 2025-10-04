@@ -151,6 +151,7 @@ This is not a substitution macro, each subroutine/channel has the following inde
  * Whole note length (ZenLen)
  * Octave
  * Transpose (semitone offset)
+ * `_M` transpose
  * Default length
  * Quantization value
  * MP Vibrato
@@ -273,6 +274,11 @@ Numbers can be decimal, or hexadecimal when prefixed with `$` (ie, `$ff`)
  * `<` - Decrease octave
  * `_<-128..+128>` - Sets transpose.  Changes the pitch of each note played by *param* semitones.  The default is 0.
  * `__<-128..+128>` - Relative transpose.  Adds *param* to the transpose setting.
+ * `_M<-128..+128>` - Sets master transpose
+    * Adds a semitone offset to all future note and portamento-note commands.
+    * CAUTION: `_M` and `__M` transpose does not affect subroutines or loops.
+      `_M0 c [__M+1 c]3` would play `c c+ c+ c+`
+ * `__M<-128..+128>` - Adjusts master transpose
 
 <br/>
 

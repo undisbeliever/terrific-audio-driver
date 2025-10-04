@@ -70,6 +70,8 @@ pub enum Token<'a> {
     EarlyRelease,
     Transpose,
     RelativeTranspose,
+    MasterTranspose,
+    RelativeMasterTranspose,
     StartBrokenChord,
     EndBrokenChord,
     StartPortamento,
@@ -149,6 +151,10 @@ impl<'a> Scanner<'a> {
 
     fn third_byte(&self) -> Option<u8> {
         self.to_process.as_bytes().get(2).copied()
+    }
+
+    fn match_str(&self, s: &str) -> bool {
+        self.to_process.starts_with(s)
     }
 
     fn starts_with(&self, p: impl Fn(char) -> bool) -> bool {
@@ -505,24 +511,30 @@ fn next_token<'a>(scanner: &mut Scanner<'a>) -> Option<TokenWithPosition<'a>> {
             }
         }
 
-        // Possibly multiple character tokens
-        b'_' | b'{' | b'}' | b'M' => {
-            let c2 = scanner.second_byte();
-            match (c1, c2) {
-                (b'_', Some(b'_')) => two_ascii_token!(Token::RelativeTranspose),
-                (b'{', Some(b'{')) => two_ascii_token!(Token::StartBrokenChord),
-                (b'}', Some(b'}')) => two_ascii_token!(Token::EndBrokenChord),
-                (b'M', Some(b'P')) => two_ascii_token!(Token::MpVibrato),
-                (b'M', Some(b'D')) => two_ascii_token!(Token::DetuneCents),
-
-                (b'_', _) => one_ascii_token!(Token::Transpose),
-                (b'{', _) => one_ascii_token!(Token::StartPortamento),
-                (b'}', _) => one_ascii_token!(Token::EndPortamento),
-
-                // This should not happen
-                (_, _) => parse_unknown_chars(scanner),
+        b'_' => {
+            if scanner.match_str("__M") {
+                three_ascii_token!(Token::RelativeMasterTranspose)
+            } else if scanner.match_str("_M") {
+                two_ascii_token!(Token::MasterTranspose)
+            } else if scanner.match_str("__") {
+                two_ascii_token!(Token::RelativeTranspose)
+            } else {
+                one_ascii_token!(Token::Transpose)
             }
         }
+        b'{' => match scanner.second_byte() {
+            Some(b'{') => two_ascii_token!(Token::StartBrokenChord),
+            _ => one_ascii_token!(Token::StartPortamento),
+        },
+        b'}' => match scanner.second_byte() {
+            Some(b'}') => two_ascii_token!(Token::EndBrokenChord),
+            _ => one_ascii_token!(Token::EndPortamento),
+        },
+        b'M' => match scanner.second_byte() {
+            Some(b'P') => two_ascii_token!(Token::MpVibrato),
+            Some(b'D') => two_ascii_token!(Token::DetuneCents),
+            _ => parse_unknown_chars(scanner),
+        },
 
         b'i' => {
             scanner.advance_one_ascii();

@@ -26,6 +26,7 @@ mod rest_wait;
 mod song_loop_point;
 mod subroutines;
 mod temp_gain;
+mod transpose;
 mod vibrato;
 mod volume_pan;
 

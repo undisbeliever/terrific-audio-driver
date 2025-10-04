@@ -720,6 +720,28 @@ fn parse_relative_transpose(pos: FilePos, p: &mut Parser) {
     }
 }
 
+fn parse_master_transpose(pos: FilePos, p: &mut Parser) {
+    if let Some(t) = parse_signed_newtype_allow_zero(pos, p) {
+        let t: Transpose = t;
+        p.set_state(State {
+            semitone_offset: t.as_i8(),
+            ..p.state().clone()
+        });
+    }
+}
+
+fn parse_relative_master_transpose(pos: FilePos, p: &mut Parser) {
+    if let Some(rt) = parse_signed_newtype(pos, p) {
+        let rt: Transpose = rt;
+
+        let state = p.state().clone();
+        p.set_state(State {
+            semitone_offset: state.semitone_offset.saturating_add(rt.as_i8()),
+            ..state
+        });
+    }
+}
+
 fn parse_optional_gain_value(pos: FilePos, p: &mut Parser, mode: GainMode) -> OptionalGain {
     match next_token_number(p) {
         Some(v) => match OptionalGain::try_from_mode_and_value_forbid_none(mode, v) {
@@ -937,6 +959,15 @@ fn merge_state_change(p: &mut Parser) -> bool {
         },
         Token::RelativeTranspose => {
             parse_relative_transpose(pos, p);
+            true
+        },
+
+        Token::MasterTranspose => {
+            parse_master_transpose(pos, p);
+            true
+        },
+        Token::RelativeMasterTranspose => {
+            parse_relative_master_transpose(pos, p);
             true
         },
 
@@ -2663,6 +2694,15 @@ fn parse_token(pos: FilePos, token: Token, p: &mut Parser) -> Command {
             parse_relative_transpose(pos, p);
             Command::None
         }
+        Token::MasterTranspose => {
+            parse_master_transpose(pos, p);
+            Command::None
+        }
+        Token::RelativeMasterTranspose => {
+            parse_relative_master_transpose(pos, p);
+            Command::None
+        }
+
         Token::ChangeWholeNoteLength => {
             parse_change_whole_note_length(pos, p);
             Command::None

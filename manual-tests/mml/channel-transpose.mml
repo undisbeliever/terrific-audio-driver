@@ -1,0 +1,15 @@
+#Title Channel transpose test
+#Tempo 120
+
+@1 square
+
+A @1
+
+A _M0 c [__M+1 c]3 r
+
+A _M+2 c
+A _M-2 c
+A __M+3 c
+A __M-4 c
+
+A r

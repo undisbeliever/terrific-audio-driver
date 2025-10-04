@@ -20,6 +20,7 @@ MML changes:
    (ie, `#title`, `#echolength`, `#echoLength`)
  * Duplicate header error messages show the line of the original header
  * Portamentos can now be played in a subroutine with an unknown instrument.
+ * Added `_M` master transpose and `__M` relative master transpose MML commands
 
 
 Version 0.1.1
