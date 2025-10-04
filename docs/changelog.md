@@ -21,6 +21,8 @@ MML changes:
  * Duplicate header error messages show the line of the original header
  * Portamentos can now be played in a subroutine with an unknown instrument.
  * Added `_M` master transpose and `__M` relative master transpose MML commands
+ * Added `#OldTranspose` header to restore the v0.1.1 and earlier transpose behaviour
+   by silently converting `_` and `__` commands to `_M` and `__M`.
 
 
 Version 0.1.1

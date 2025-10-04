@@ -63,6 +63,11 @@ Echo values:
     * `none` - disable echo invert
     * See `\ei` command for more details
 
+<br/>
+
+Backwards compatibility headers:
+ * `#OldTranspose` - Restores the v0.1.1 and earlier transpose behaviour by silently converting `_` and `__` commands to `_M` and `__M`.
+
 
 <br/>
 

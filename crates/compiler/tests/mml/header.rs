@@ -24,6 +24,7 @@ fn all_headers() {
 #Copyright song-copyright
 #License song-license
 #ZenLen 192
+#OldTranspose
 #MaxEchoLength 64
 #EchoLength 32
 #FirFilter 1 2 -3 -4 $5 $6 $77 $88
@@ -65,6 +66,7 @@ A r
             },
             tick_clock: 100u16.try_into().unwrap(),
             zenlen: 192u8.try_into().unwrap(),
+            old_transpose: true,
             spc_song_length: Some(300),
             spc_fadeout_millis: Some(200),
         }
@@ -98,6 +100,7 @@ fn all_headers_lower_camel_case() {
 #copyright song-copyright
 #license song-license
 #zenLen 192
+#oldTranspose
 #maxEchoLength 64
 #echoLength 32
 #firFilter 1 2 -3 -4 $5 $6 $77 $88
@@ -139,6 +142,7 @@ A r
             },
             tick_clock: 100u16.try_into().unwrap(),
             zenlen: 192u8.try_into().unwrap(),
+            old_transpose: true,
             spc_song_length: Some(300),
             spc_fadeout_millis: Some(200),
         }
@@ -172,6 +176,7 @@ fn all_headers_lowercase() {
 #copyright song-copyright
 #license song-license
 #zenlen 192
+#oldtranspose
 #maxecholength 64
 #echolength 32
 #firfilter 1 2 -3 -4 $5 $6 $77 $88
@@ -213,6 +218,7 @@ A r
             },
             tick_clock: 100u16.try_into().unwrap(),
             zenlen: 192u8.try_into().unwrap(),
+            old_transpose: true,
             spc_song_length: Some(300),
             spc_fadeout_millis: Some(200),
         }

@@ -32,6 +32,7 @@ pub struct MetaData {
     pub tick_clock: TickClock,
 
     pub zenlen: ZenLen,
+    pub old_transpose: bool,
 
     /// SPC export song length in seconds before fading out
     /// (override calculated song duration)
@@ -109,6 +110,7 @@ impl MetaData {
             zenlen: DEFAULT_ZENLEN,
             spc_song_length: None,
             spc_fadeout_millis: None,
+            old_transpose: false,
         }
     }
 
@@ -130,6 +132,7 @@ enum Header {
     Copyright,
     License,
     ZenLen,
+    OldTranspose,
     MaxEchoLength,
     EchoLength,
     FirFilter,
@@ -154,6 +157,8 @@ fn match_header(header: &str) -> Option<Header> {
         "#License" | "#license" => Some(Header::License),
 
         "#ZenLen" | "#Zenlen" | "#zenLen" | "#zenlen" => Some(Header::ZenLen),
+        "#OldTranspose" | "#oldTranspose" | "#oldtranspose" => Some(Header::OldTranspose),
+
         "#MaxEchoLength" | "#maxEchoLength" | "#maxecholength" => Some(Header::MaxEchoLength),
         "#EchoLength" | "#echoLength" | "#echolength" => Some(Header::EchoLength),
         "#FirFilter" | "#firFilter" | "#firfilter" => Some(Header::FirFilter),
@@ -215,6 +220,8 @@ impl HeaderState {
             Header::License => self.metadata.license = to_option_string()?,
 
             Header::ZenLen => self.metadata.zenlen = parse_u32(value)?.try_into()?,
+
+            Header::OldTranspose => self.metadata.old_transpose = true,
 
             Header::MaxEchoLength => {
                 let echo_length = EchoLength::try_from(parse_u32(value)?)?;
