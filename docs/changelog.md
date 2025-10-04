@@ -1,8 +1,16 @@
 Terrific Audio Driver Changelog
 ===============================
 
-Version 0.1.2
-=============
+Version 0.1.2 beta
+==================
+
+**BREAKING CHANGES:**
+ * `MP` vibrato cannot be used in a song that contains a `set_transpose` or `adjust_transpose` instruction
+   (This restriction will be relaxed in the next production release.)
+ * A portamento's slide length has a maximum 255 ticks if the song contains a `set_transpose` or `adjust_transpose` instruction.
+   (This restriction will be relaxed in the next production release.)
+
+BRR changes:
  * Increased the maximum BRR sample size
  * Increased the maximum `wav2brr` input size
 

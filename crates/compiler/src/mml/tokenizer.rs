@@ -117,6 +117,9 @@ pub enum Token<'a> {
     // Must not contain a call subroutine instruction.
     // Using Range to remove lifetime from MmlCommand.
     BytecodeAsm(Range<usize>),
+
+    // Used to detect `set_transpose` and `adjust_transpose` commands when processing subroutines
+    TransposeAsm(Range<usize>),
 }
 
 #[derive(Clone)]
@@ -669,11 +672,21 @@ fn parse_bytecode_asm<'a>(
                 } else {
                     let start = usize::try_from(pos.char_index()).unwrap();
 
-                    tokens.push(TokenWithPosition {
-                        pos,
-                        token: Token::BytecodeAsm(start..(start + asm.len())),
-                        end: scanner.pos(),
-                    });
+                    if asm.starts_with(bytecode_assembler::SET_TRANSPOSE)
+                        | asm.starts_with(bytecode_assembler::ADJUST_TRANSPOSE)
+                    {
+                        tokens.push(TokenWithPosition {
+                            pos,
+                            token: Token::TransposeAsm(start..(start + asm.len())),
+                            end: scanner.pos(),
+                        });
+                    } else {
+                        tokens.push(TokenWithPosition {
+                            pos,
+                            token: Token::BytecodeAsm(start..(start + asm.len())),
+                            end: scanner.pos(),
+                        });
+                    }
 
                     if scanner.first_byte() == Some(b'|') {
                         scanner.advance_one_ascii();

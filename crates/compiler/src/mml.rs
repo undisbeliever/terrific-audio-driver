@@ -38,6 +38,7 @@ use crate::errors::{
 };
 use crate::mml::song_duration::calc_song_duration;
 use crate::mml::subroutines::compile_subroutines;
+use crate::mml::tokenizer::Token;
 use crate::pitch_table::PitchTable;
 use crate::songs::{mml_to_song, song_header_size, SongData};
 use crate::sound_effects::CompiledSfxSubroutines;
@@ -177,6 +178,8 @@ pub fn compile_mml(
 
     let n_active_channels = lines.channels.iter().filter(|t| !t.is_empty()).count();
 
+    let song_uses_driver_transpose = scan_for_driver_transpose(&lines.channels, &lines.subroutines);
+
     assert!(lines.subroutines.len() <= u8::MAX.into());
     let mut compiler = MmlSongBytecodeGenerator::new(
         metadata.zenlen,
@@ -192,8 +195,12 @@ pub fn compile_mml(
         true,
     );
 
-    errors.subroutine_errors =
-        compile_subroutines(&mut compiler, lines.subroutines, &lines.subroutine_name_map);
+    errors.subroutine_errors = compile_subroutines(
+        &mut compiler,
+        lines.subroutines,
+        &lines.subroutine_name_map,
+        song_uses_driver_transpose,
+    );
 
     if !errors.subroutine_errors.is_empty() {
         return Err(SongError::MmlError(errors));
@@ -204,7 +211,11 @@ pub fn compile_mml(
     let channels = std::array::from_fn(|c_index| {
         let tokens = channels_iter.next().unwrap();
         if !tokens.is_empty() {
-            match compiler.parse_and_compile_song_channel(tokens, c_index) {
+            match compiler.parse_and_compile_song_channel(
+                tokens,
+                c_index,
+                song_uses_driver_transpose,
+            ) {
                 Ok(data) => Some(data),
                 Err(e) => {
                     errors.channel_errors.push(e);
@@ -297,7 +308,12 @@ pub(crate) fn compile_sfx_subroutines(
         false,
     );
 
-    let errors = compile_subroutines(&mut compiler, lines.subroutines, &lines.subroutine_name_map);
+    let errors = compile_subroutines(
+        &mut compiler,
+        lines.subroutines,
+        &lines.subroutine_name_map,
+        false,
+    );
 
     if errors.is_empty() {
         Ok(compiler.take_sfx_subroutine_data())
@@ -380,4 +396,20 @@ pub fn compile_mml_prefix(
         Ok(o) => Ok(o),
         Err(e) => Err(MmlPrefixError::MmlErrors(e)),
     }
+}
+
+fn scan_for_driver_transpose(
+    channels: &[MmlTokens<'_>; N_MUSIC_CHANNELS],
+    subroutines: &Vec<(IdentifierStr<'_>, MmlTokens<'_>)>,
+) -> bool {
+    let test_tokens = |tokens: &MmlTokens<'_>| -> bool {
+        for t in tokens.token_iter() {
+            if let Token::TransposeAsm(_) = t {
+                return true;
+            }
+        }
+        false
+    };
+
+    channels.iter().any(test_tokens) | subroutines.iter().any(|(_, t)| test_tokens(t))
 }

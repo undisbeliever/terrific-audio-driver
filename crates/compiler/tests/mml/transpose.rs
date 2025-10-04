@@ -121,3 +121,104 @@ A @0 __M-2 !s1 c
         &["play_note b-3 no_keyoff 1", "portamento c4 keyoff +5 47"],
     );
 }
+
+#[test]
+fn set_transpose_asm_disables_portamento_velocity_calculation() {
+    assert_mml_channel_a_matches_bytecode(
+        r##"
+@0 dummy_instrument
+
+!s1 \asm { set_transpose +1 } {cd}4
+
+A @0 {cd}4 !s1 {cd}4
+"##,
+        &[
+            "set_instrument dummy_instrument",
+            "play_note c4 no_keyoff 1",
+            "portamento_calc d4 keyoff 22 23",
+            "call_subroutine s1",
+            "play_note c4 no_keyoff 1",
+            "portamento_calc d4 keyoff 22 23",
+        ],
+    );
+
+    assert_mml_subroutine_matches_bytecode(
+        r##"
+@0 dummy_instrument
+
+!s1 {cd}4
+
+A @0 {cd}4 !s1 {cd}4 \asm { set_transpose -1 }
+"##,
+        0,
+        &[
+            "play_note c4 no_keyoff 1",
+            "portamento_calc d4 keyoff 22 23",
+        ],
+    );
+}
+
+#[test]
+fn adjust_transpose_asm_disables_portamento_velocity_calculation() {
+    assert_mml_channel_a_matches_bytecode(
+        r##"
+@0 dummy_instrument
+
+!s1 \asm { adjust_transpose +1 } {cd}4
+
+A @0 {cd}4 !s1 {cd}4
+"##,
+        &[
+            "set_instrument dummy_instrument",
+            "play_note c4 no_keyoff 1",
+            "portamento_calc d4 keyoff 22 23",
+            "call_subroutine s1",
+            "play_note c4 no_keyoff 1",
+            "portamento_calc d4 keyoff 22 23",
+        ],
+    );
+
+    assert_mml_subroutine_matches_bytecode(
+        r##"
+@0 dummy_instrument
+
+!s1 {cd}4
+
+A @0 {cd}4 !s1 {cd}4 \asm { adjust_transpose -1 }
+"##,
+        0,
+        &[
+            "play_note c4 no_keyoff 1",
+            "portamento_calc d4 keyoff 22 23",
+        ],
+    );
+}
+
+#[test]
+fn set_transpose_asm_disables_mp_vibraro() {
+    assert_one_error_in_channel_a_mml(
+        r##"
+@0 dummy_instrument
+
+!s1 \asm { set_transpose +1 } c
+
+A @0 MP100,2 c !s1 c
+"##,
+        6,
+        ChannelError::MpVibratoInSongWithTranspose,
+    );
+
+    assert_one_subroutine_error_in_mml(
+        r##"
+@0 dummy_instrument
+
+!s1 MP100,2 c
+
+A @0 \asm { set_transpose +1 } !s1
+
+"##,
+        "!s1",
+        5,
+        ChannelError::MpVibratoInSongWithTranspose,
+    );
+}

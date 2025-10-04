@@ -256,6 +256,7 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
         &mut self,
         identifier: IdentifierStr<'a>,
         tokens: MmlTokens,
+        song_uses_driver_transpose: bool,
     ) -> Result<(), MmlChannelError> {
         // Index in SongData, not mml file
         let song_subroutine_index = self.subroutines.vec.len().try_into().unwrap();
@@ -287,6 +288,7 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
                 },
                 false => BytecodeContext::SfxSubroutine,
             },
+            song_uses_driver_transpose,
         );
 
         let tail_call = Self::parse_and_compile_tail_call(
@@ -395,6 +397,7 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
         &mut self,
         tokens: MmlTokens,
         channel_index: usize,
+        song_uses_driver_transpose: bool,
     ) -> Result<Channel, MmlChannelError> {
         assert!(self.is_song);
 
@@ -433,6 +436,7 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
                 index: channel_index,
                 max_edl: self.max_edl,
             },
+            song_uses_driver_transpose,
         );
 
         Self::parse_and_compile(
@@ -517,6 +521,8 @@ pub fn parse_and_compile_sound_effect(
         mml_instruments,
         sfx_subroutines,
         BytecodeContext::SoundEffect,
+        // ::TODO detect driver transpose in sound effects::
+        false,
     );
 
     while let Some(c) = parser.next() {
@@ -595,6 +601,7 @@ pub fn parse_and_compile_mml_prefix(
         mml_instruments,
         &NoSubroutines(),
         BytecodeContext::MmlPrefix,
+        true,
     );
 
     while let Some(c) = parser.next() {

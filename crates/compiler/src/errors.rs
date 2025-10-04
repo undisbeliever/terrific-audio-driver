@@ -635,6 +635,9 @@ pub enum ChannelError {
     InvalidNumberOfArgumentsRange(u8, u8),
     InvalidKeyoffArgument(String),
     NoTicksInSoundEffect,
+
+    // Temporary errors
+    MpVibratoInSongWithTranspose,
 }
 
 #[derive(Debug)]
@@ -1890,6 +1893,10 @@ impl Display for ChannelError {
             }
             Self::InvalidKeyoffArgument(s) => write!(f, "invalid keyoff argument: {}", s),
             Self::NoTicksInSoundEffect => write!(f, "No notes in sound effect"),
+
+            Self::MpVibratoInSongWithTranspose => {
+                write!(f, "cannot use MP vibrato in a MML file that uses transpose")
+            }
         }
     }
 }

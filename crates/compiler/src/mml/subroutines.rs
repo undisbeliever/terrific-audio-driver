@@ -92,6 +92,7 @@ pub fn compile_subroutines<'a>(
     bc_generator: &mut MmlSongBytecodeGenerator<'a>,
     subroutines: Vec<(IdentifierStr<'a>, MmlTokens<'a>)>,
     subroutine_name_map: &HashMap<IdentifierStr<'a>, usize>,
+    song_uses_driver_transpose: bool,
 ) -> Vec<MmlChannelError> {
     assert!(subroutines.len() <= SubroutineBitArray::N_BITS);
 
@@ -126,7 +127,11 @@ pub fn compile_subroutines<'a>(
                 let mut tokens = Default::default();
                 std::mem::swap(&mut tokens, &mut s.tokens);
 
-                let r = bc_generator.parse_and_compile_subroutione(s.identifier, tokens);
+                let r = bc_generator.parse_and_compile_subroutione(
+                    s.identifier,
+                    tokens,
+                    song_uses_driver_transpose,
+                );
                 if let Err(e) = r {
                     errors.push(e);
                 }
@@ -145,7 +150,11 @@ pub fn compile_subroutines<'a>(
     }
 
     for s in to_process {
-        let r = bc_generator.parse_and_compile_subroutione(s.identifier, s.tokens);
+        let r = bc_generator.parse_and_compile_subroutione(
+            s.identifier,
+            s.tokens,
+            song_uses_driver_transpose,
+        );
         if let Err(e) = r {
             errors.push(e);
         }

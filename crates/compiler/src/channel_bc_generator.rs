@@ -462,9 +462,12 @@ pub(crate) struct ChannelBcGenerator<'a> {
     keyoff_enabled: bool,
 
     loop_point: Option<LoopPoint>,
+
+    song_uses_driver_transpose: bool,
 }
 
 impl<'a> ChannelBcGenerator<'a> {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         bc_data: Vec<u8>,
         pitch_table: &'a PitchTable,
@@ -473,6 +476,7 @@ impl<'a> ChannelBcGenerator<'a> {
         mml_instruments: &'a [MmlInstrument],
         subroutines: &'a dyn SubroutineStore,
         context: BytecodeContext,
+        song_uses_driver_transpose: bool,
     ) -> ChannelBcGenerator<'a> {
         ChannelBcGenerator {
             pitch_table,
@@ -487,6 +491,7 @@ impl<'a> ChannelBcGenerator<'a> {
             quantize: Quantize::None,
             keyoff_enabled: true,
             loop_point: None,
+            song_uses_driver_transpose,
         }
     }
 
@@ -1026,8 +1031,8 @@ impl<'a> ChannelBcGenerator<'a> {
 
                 let detune = detune_output.detune_value(self.bc.get_state());
 
-                match instrument {
-                    Some(instrument) => {
+                match (self.song_uses_driver_transpose, instrument) {
+                    (false, Some(instrument)) => {
                         let pitch = self
                             .pitch_table
                             .pitch_for_note(instrument, note)
@@ -1038,7 +1043,9 @@ impl<'a> ChannelBcGenerator<'a> {
                             NoteOrPitchOut::Note(detune_output, note, detune),
                         ))
                     }
-                    None => Ok((None, NoteOrPitchOut::Note(detune_output, note, detune))),
+                    (false, None) | (true, _) => {
+                        Ok((None, NoteOrPitchOut::Note(detune_output, note, detune)))
+                    }
                 }
             }
             NoteOrPitch::Pitch(p) => Ok((Some(p.as_u16()), NoteOrPitchOut::Pitch(p))),
@@ -1070,17 +1077,19 @@ impl<'a> ChannelBcGenerator<'a> {
         &self,
     ) -> Result<(NoteOrPitch, Option<u16>), ChannelError> {
         match self.bc.get_state().prev_slurred_note {
-            SlurredNoteState::Slurred(prev_note, prev_detune, prev_inst) => match prev_inst {
-                Some(prev_inst) => {
-                    let prev_pitch = self
-                        .pitch_table
-                        .pitch_for_note(prev_inst, prev_note)
-                        .wrapping_add_signed(prev_detune.as_i16());
+            SlurredNoteState::Slurred(prev_note, prev_detune, prev_inst) => {
+                match (self.song_uses_driver_transpose, prev_inst) {
+                    (false, Some(prev_inst)) => {
+                        let prev_pitch = self
+                            .pitch_table
+                            .pitch_for_note(prev_inst, prev_note)
+                            .wrapping_add_signed(prev_detune.as_i16());
 
-                    Ok((NoteOrPitch::Note(prev_note), Some(prev_pitch)))
+                        Ok((NoteOrPitch::Note(prev_note), Some(prev_pitch)))
+                    }
+                    (false, None) | (true, _) => Ok((NoteOrPitch::Note(prev_note), None)),
                 }
-                None => Ok((NoteOrPitch::Note(prev_note), None)),
-            },
+            }
             SlurredNoteState::SlurredPitch(prev) => {
                 Ok((NoteOrPitch::Pitch(prev), Some(prev.as_u16())))
             }
@@ -1674,19 +1683,22 @@ impl<'a> ChannelBcGenerator<'a> {
                 self.set_manual_vibrato(v);
             }
 
-            &Command::SetMpVibrato(mp) => {
-                self.mp = match mp {
-                    Some(mp) => MpState::Mp(mp),
-                    None => match self.mp {
-                        MpState::Mp(_) => MpState::Disabled,
-                        MpState::Disabled => MpState::Disabled,
-                        MpState::Manual => match self.bc.get_state().vibrato.is_active() {
-                            true => MpState::Disabled,
-                            false => MpState::Manual,
+            &Command::SetMpVibrato(mp) => match self.song_uses_driver_transpose {
+                false => {
+                    self.mp = match mp {
+                        Some(mp) => MpState::Mp(mp),
+                        None => match self.mp {
+                            MpState::Mp(_) => MpState::Disabled,
+                            MpState::Disabled => MpState::Disabled,
+                            MpState::Manual => match self.bc.get_state().vibrato.is_active() {
+                                true => MpState::Disabled,
+                                false => MpState::Manual,
+                            },
                         },
-                    },
-                };
-            }
+                    };
+                }
+                true => return Err(ChannelError::MpVibratoInSongWithTranspose),
+            },
 
             &Command::SetQuantize(q) => {
                 self.quantize = q;
