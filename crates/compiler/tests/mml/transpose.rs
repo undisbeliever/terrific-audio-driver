@@ -5,7 +5,7 @@
 use crate::*;
 
 #[test]
-fn master_transpose() {
+fn channel_transpose() {
     assert_line_matches_line("_M+2 d e f", "e f+ g");
     assert_line_matches_line("_M-2 d e f", "c d d+");
 
@@ -35,7 +35,7 @@ fn master_transpose() {
 }
 
 #[test]
-fn master_transpose_in_loops() {
+fn channel_transpose_in_loops() {
     assert_line_matches_line("[ _M+2 d : e ]3 f", "[ e : f+ ]3 g");
     assert_line_matches_line("[ _M-2 d : e ]3 f", "[ c : d ]3 d+");
 
@@ -71,7 +71,7 @@ fn master_transpose_in_loops() {
 }
 
 #[test]
-fn master_transpose_in_subroutine() {
+fn channel_transpose_in_subroutine() {
     let mml = r##"
 @0 dummy_instrument
 
@@ -97,7 +97,7 @@ A @0 _M-1 !s1 c
 }
 
 #[test]
-fn relative_master_transpose_in_subroutine() {
+fn relative_channel_transpose_in_subroutine() {
     let mml = r##"
 @0 dummy_instrument
 

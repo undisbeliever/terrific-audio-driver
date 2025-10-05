@@ -35,7 +35,7 @@ MML changes:
  * `_` and `__` transpose commands now change a semitone offset inside the driver.
     * `_+4 !s` will add +4 semitones to the notes in `!s` (unless the subroutine contains a `_` or `__` command).
     * `_0 c [__+1 c]3` will now play `c c+ d d+`
- * Added `_M` master transpose and `__M` relative master transpose MML commands
+ * Added `_M` channel transpose and `__M` adjust channel transpose MML commands
  * Added `#OldTranspose` header to restore the v0.1.1 and earlier transpose behaviour
    by silently converting `_` and `__` commands to `_M` and `__M`.
 

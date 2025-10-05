@@ -717,7 +717,7 @@ fn parse_transpose(pos: FilePos, p: &mut Parser) -> Command {
             None => Command::None,
         },
         true => {
-            parse_master_transpose(pos, p);
+            parse_channel_transpose(pos, p);
             Command::None
         }
     }
@@ -731,13 +731,13 @@ fn parse_relative_transpose(pos: FilePos, p: &mut Parser) -> Command {
             None => Command::None,
         },
         true => {
-            parse_relative_master_transpose(pos, p);
+            parse_relative_channel_transpose(pos, p);
             Command::None
         }
     }
 }
 
-fn parse_master_transpose(pos: FilePos, p: &mut Parser) {
+fn parse_channel_transpose(pos: FilePos, p: &mut Parser) {
     if let Some(t) = parse_signed_newtype_allow_zero(pos, p) {
         let t: Transpose = t;
         p.set_state(State {
@@ -747,7 +747,7 @@ fn parse_master_transpose(pos: FilePos, p: &mut Parser) {
     }
 }
 
-fn parse_relative_master_transpose(pos: FilePos, p: &mut Parser) {
+fn parse_relative_channel_transpose(pos: FilePos, p: &mut Parser) {
     if let Some(rt) = parse_signed_newtype(pos, p) {
         let rt: Transpose = rt;
 
@@ -971,20 +971,20 @@ fn merge_state_change(p: &mut Parser) -> bool {
             true
         },
         Token::Transpose if p.old_transpose() => {
-            parse_master_transpose(pos, p);
+            parse_channel_transpose(pos, p);
             true
         },
         Token::RelativeTranspose if p.old_transpose() => {
-            parse_relative_master_transpose(pos, p);
+            parse_relative_channel_transpose(pos, p);
             true
         },
 
-        Token::MasterTranspose => {
-            parse_master_transpose(pos, p);
+        Token::ChannelTranspose => {
+            parse_channel_transpose(pos, p);
             true
         },
-        Token::RelativeMasterTranspose => {
-            parse_relative_master_transpose(pos, p);
+        Token::RelativeChannelTranspose => {
+            parse_relative_channel_transpose(pos, p);
             true
         },
 
@@ -1115,10 +1115,10 @@ fn parse_pitch_list_state_change_token(token: Token, pos: FilePos, p: &mut Parse
         Token::SetOctave => parse_set_octave(pos, p),
         Token::IncrementOctave => parse_increment_octave(p),
         Token::DecrementOctave => parse_decrement_octave(p),
-        Token::MasterTranspose => parse_master_transpose(pos, p),
-        Token::RelativeMasterTranspose => parse_relative_master_transpose(pos, p),
-        Token::Transpose if p.old_transpose() => parse_master_transpose(pos, p),
-        Token::RelativeTranspose if p.old_transpose() => parse_relative_master_transpose(pos, p),
+        Token::ChannelTranspose => parse_channel_transpose(pos, p),
+        Token::RelativeChannelTranspose => parse_relative_channel_transpose(pos, p),
+        Token::Transpose if p.old_transpose() => parse_channel_transpose(pos, p),
+        Token::RelativeTranspose if p.old_transpose() => parse_relative_channel_transpose(pos, p),
 
         _ => p.add_error(pos, ChannelError::InvalidPitchListSymbol),
     }
@@ -2709,12 +2709,12 @@ fn parse_token(pos: FilePos, token: Token, p: &mut Parser) -> Command {
             Command::None
         }
 
-        Token::MasterTranspose => {
-            parse_master_transpose(pos, p);
+        Token::ChannelTranspose => {
+            parse_channel_transpose(pos, p);
             Command::None
         }
-        Token::RelativeMasterTranspose => {
-            parse_relative_master_transpose(pos, p);
+        Token::RelativeChannelTranspose => {
+            parse_relative_channel_transpose(pos, p);
             Command::None
         }
 

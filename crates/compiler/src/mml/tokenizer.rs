@@ -70,8 +70,8 @@ pub enum Token<'a> {
     EarlyRelease,
     Transpose,
     RelativeTranspose,
-    MasterTranspose,
-    RelativeMasterTranspose,
+    ChannelTranspose,
+    RelativeChannelTranspose,
     StartBrokenChord,
     EndBrokenChord,
     StartPortamento,
@@ -516,9 +516,9 @@ fn next_token<'a>(scanner: &mut Scanner<'a>) -> Option<TokenWithPosition<'a>> {
 
         b'_' => {
             if scanner.match_str("__M") {
-                three_ascii_token!(Token::RelativeMasterTranspose)
+                three_ascii_token!(Token::RelativeChannelTranspose)
             } else if scanner.match_str("_M") {
-                two_ascii_token!(Token::MasterTranspose)
+                two_ascii_token!(Token::ChannelTranspose)
             } else if scanner.match_str("__") {
                 two_ascii_token!(Token::RelativeTranspose)
             } else {

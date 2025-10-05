@@ -155,7 +155,7 @@ Subroutine `!z` will output `d e f g`
 This is not a substitution macro, each subroutine/channel has the following independent settings:
  * Whole note length (ZenLen)
  * Octave
- * `_M` transpose
+ * Channel transpose (`_M` and `__M` commands)
  * Default length
  * Quantization value
  * MP Vibrato
@@ -288,12 +288,12 @@ Numbers can be decimal, or hexadecimal when prefixed with `$` (ie, `$ff`)
     * `__+4 !s` will play `!s` with a semitone offset (unless the subroutine contains a `_` command).
     * If the `#OldTranspose` header is set, this command will be silently changed to `__M`
  * `_0` - Disable transpose
- * `_M<-128..+128>` - Sets master transpose
+ * `_M<-128..+128>` - Sets channel transpose
     * Adds a semitone offset to all future note and portamento-note commands.
     * CAUTION: `_M` and `__M` transpose does not affect subroutines or loops.
       * `_M0 c [_M+1 c]3` will play `c c+ c+ c+`
       * `_M+4 !s` will not change any of the notes in the subroutine
- * `__M<-128..+128>` - Adjusts master transpose
+ * `__M<-128..+128>` - Adjusts channel transpose
     * CAUTION: `_M` and `__M` transpose does not affect subroutines or loops.
       * `_M0 c [_M+1 c]3` will play `c c+ c+ c+`
       * `_M+4 !s` will not change any of the notes in the subroutine
