@@ -123,6 +123,211 @@ A @0 __M-2 !s1 c
 }
 
 #[test]
+fn set_transpose() {
+    assert_line_matches_bytecode(
+        "c _+2 c",
+        &[
+            "play_note c4 keyoff 24",
+            "set_transpose +2",
+            "play_note c4 keyoff 24",
+        ],
+    );
+    assert_line_matches_bytecode(
+        "c _-3 c",
+        &[
+            "play_note c4 keyoff 24",
+            "set_transpose -3",
+            "play_note c4 keyoff 24",
+        ],
+    );
+
+    assert_line_matches_bytecode(
+        "c _0 c",
+        &[
+            "play_note c4 keyoff 24",
+            "disable_transpose",
+            "play_note c4 keyoff 24",
+        ],
+    );
+
+    assert_one_error_in_mml_line("_ c", 1, ValueError::NoTranspose.into());
+    assert_one_error_in_mml_line("_5", 1, ValueError::NoTransposeSign.into());
+
+    assert_line_matches_bytecode("_-128", &["set_transpose -128"]);
+    assert_one_error_in_mml_line("_-129", 1, ValueError::TransposeOutOfRange(-129).into());
+
+    assert_line_matches_bytecode("_+127", &["set_transpose +127"]);
+    assert_one_error_in_mml_line("_+128", 1, ValueError::TransposeOutOfRange(128).into());
+}
+
+#[test]
+fn adjust_transpose() {
+    assert_line_matches_bytecode(
+        "c __-4 c",
+        &[
+            "play_note c4 keyoff 24",
+            "adjust_transpose -4",
+            "play_note c4 keyoff 24",
+        ],
+    );
+    assert_line_matches_bytecode(
+        "c __-5 c",
+        &[
+            "play_note c4 keyoff 24",
+            "adjust_transpose -5",
+            "play_note c4 keyoff 24",
+        ],
+    );
+
+    assert_one_error_in_mml_line("__ c", 1, ValueError::NoRelativeTranspose.into());
+    assert_one_error_in_mml_line("__5", 1, ValueError::NoRelativeTransposeSign.into());
+
+    assert_line_matches_bytecode("__-128", &["adjust_transpose -128"]);
+    assert_one_error_in_mml_line(
+        "__-129",
+        1,
+        ValueError::RelativeTransposeOutOfRange(-129).into(),
+    );
+
+    assert_line_matches_bytecode("__+127", &["adjust_transpose +127"]);
+    assert_one_error_in_mml_line(
+        "__+128",
+        1,
+        ValueError::RelativeTransposeOutOfRange(128).into(),
+    );
+}
+
+#[test]
+fn set_transpose_mml_disables_portamento_velocity_calculation() {
+    assert_mml_channel_a_matches_bytecode(
+        r##"
+@0 dummy_instrument
+
+!s1 _+1 {cd}4
+
+A @0 {cd}4 !s1 {cd}4
+"##,
+        &[
+            "set_instrument dummy_instrument",
+            "play_note c4 no_keyoff 1",
+            "portamento_calc d4 keyoff 22 23",
+            "call_subroutine s1",
+            "play_note c4 no_keyoff 1",
+            "portamento_calc d4 keyoff 22 23",
+        ],
+    );
+
+    assert_mml_subroutine_matches_bytecode(
+        r##"
+@0 dummy_instrument
+
+!s1 {cd}4
+
+A @0 {cd}4 !s1 {cd}4 _-1
+"##,
+        0,
+        &[
+            "play_note c4 no_keyoff 1",
+            "portamento_calc d4 keyoff 22 23",
+        ],
+    );
+}
+
+#[test]
+fn adjust_transpose_mml_disables_portamento_velocity_calculation() {
+    assert_mml_channel_a_matches_bytecode(
+        r##"
+@0 dummy_instrument
+
+!s1 __+1 {cd}4
+
+A @0 {cd}4 !s1 {cd}4
+"##,
+        &[
+            "set_instrument dummy_instrument",
+            "play_note c4 no_keyoff 1",
+            "portamento_calc d4 keyoff 22 23",
+            "call_subroutine s1",
+            "play_note c4 no_keyoff 1",
+            "portamento_calc d4 keyoff 22 23",
+        ],
+    );
+
+    assert_mml_subroutine_matches_bytecode(
+        r##"
+@0 dummy_instrument
+
+!s1 {cd}4
+
+A @0 {cd}4 !s1 {cd}4 __-1
+"##,
+        0,
+        &[
+            "play_note c4 no_keyoff 1",
+            "portamento_calc d4 keyoff 22 23",
+        ],
+    );
+}
+
+#[test]
+fn set_transpose_mml_disables_mp_vibraro() {
+    assert_one_error_in_channel_a_mml(
+        r##"
+@0 dummy_instrument
+
+!s1 _+1 c
+
+A @0 MP100,2 c !s1 c
+"##,
+        6,
+        ChannelError::MpVibratoInSongWithTranspose,
+    );
+
+    assert_one_subroutine_error_in_mml(
+        r##"
+@0 dummy_instrument
+
+!s1 MP100,2 c
+
+A @0 _-1 !s1
+
+"##,
+        "!s1",
+        5,
+        ChannelError::MpVibratoInSongWithTranspose,
+    );
+}
+
+#[test]
+fn adjust_transpose_mml_disables_mp_vibraro() {
+    assert_one_error_in_channel_a_mml(
+        r##"
+@0 dummy_instrument
+
+!s1 __+1 c
+
+A @0 MP100,2 c !s1 c
+"##,
+        6,
+        ChannelError::MpVibratoInSongWithTranspose,
+    );
+
+    assert_one_subroutine_error_in_mml(
+        r##"
+@0 dummy_instrument
+
+!s1 MP100,2 c
+
+A @0 __-1 !s1
+
+"##,
+        "!s1",
+        5,
+        ChannelError::MpVibratoInSongWithTranspose,
+    );
+}
+
+#[test]
 fn set_transpose_asm_disables_portamento_velocity_calculation() {
     assert_mml_channel_a_matches_bytecode(
         r##"
@@ -215,6 +420,35 @@ A @0 MP100,2 c !s1 c
 !s1 MP100,2 c
 
 A @0 \asm { set_transpose +1 } !s1
+
+"##,
+        "!s1",
+        5,
+        ChannelError::MpVibratoInSongWithTranspose,
+    );
+}
+
+#[test]
+fn adjust_transpose_asm_disables_mp_vibraro() {
+    assert_one_error_in_channel_a_mml(
+        r##"
+@0 dummy_instrument
+
+!s1 \asm { adjust_transpose +1 } c
+
+A @0 MP100,2 c !s1 c
+"##,
+        6,
+        ChannelError::MpVibratoInSongWithTranspose,
+    );
+
+    assert_one_subroutine_error_in_mml(
+        r##"
+@0 dummy_instrument
+
+!s1 MP100,2 c
+
+A @0 \asm { adjust_transpose -1 } !s1
 
 "##,
         "!s1",

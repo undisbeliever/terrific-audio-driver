@@ -155,7 +155,6 @@ Subroutine `!z` will output `d e f g`
 This is not a substitution macro, each subroutine/channel has the following independent settings:
  * Whole note length (ZenLen)
  * Octave
- * Transpose (semitone offset)
  * `_M` transpose
  * Default length
  * Quantization value
@@ -277,13 +276,27 @@ Numbers can be decimal, or hexadecimal when prefixed with `$` (ie, `$ff`)
  * `o<0..7>` - Set octave
  * `>` - Increase octave
  * `<` - Decrease octave
- * `_<-128..+128>` - Sets transpose.  Changes the pitch of each note played by *param* semitones.  The default is 0.
- * `__<-128..+128>` - Relative transpose.  Adds *param* to the transpose setting.
+ * `_<-128..+128>` - Set transpose
+    * This command sets a semitone offset inside the audio driver and it persists across loops and subroutines.
+    * `_0 c [_+1 c]3` will play `c c+ c+ c+`
+    * `_+4 !s` will add +4 semitones to the notes in `!s` (unless the subroutine contains a `_` or `__` command).
+    * Subroutines can change the semitone offset.
+    * If the `#OldTranspose` header is set, this command will be silently changed to `_M`
+ * `__<-128..+128>` - Relative transpose
+    * Adds *param* to the audio driver's semitone offset.
+    * `_0 c [__+1 c]3` will play `c c+ d d+`
+    * `__+4 !s` will play `!s` with a semitone offset (unless the subroutine contains a `_` command).
+    * If the `#OldTranspose` header is set, this command will be silently changed to `__M`
+ * `_0` - Disable transpose
  * `_M<-128..+128>` - Sets master transpose
     * Adds a semitone offset to all future note and portamento-note commands.
     * CAUTION: `_M` and `__M` transpose does not affect subroutines or loops.
-      `_M0 c [__M+1 c]3` would play `c c+ c+ c+`
+      * `_M0 c [_M+1 c]3` will play `c c+ c+ c+`
+      * `_M+4 !s` will not change any of the notes in the subroutine
  * `__M<-128..+128>` - Adjusts master transpose
+    * CAUTION: `_M` and `__M` transpose does not affect subroutines or loops.
+      * `_M0 c [_M+1 c]3` will play `c c+ c+ c+`
+      * `_M+4 !s` will not change any of the notes in the subroutine
 
 <br/>
 

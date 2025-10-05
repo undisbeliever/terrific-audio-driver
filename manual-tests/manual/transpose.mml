@@ -3,31 +3,53 @@
 
 @1 square
 
-A @1
+; MML transpose
+A @1 px-64
 
-;; asm transpose
+A c _+3 c _-3 c r2
+A _0 r
 
-A c \asm { set_transpose +3 } c \asm { set_transpose -3 } c r2
-A \asm {disable_transpose} r
+A [c __+1 ]4 c
+A _0 r
 
-A [c \asm { adjust_transpose +1 }]4 c
-A \asm {disable_transpose} r
-
-A [c \asm { adjust_transpose -2 }]4 c
-A \asm {disable_transpose} r
+A [c __-2 ]4 c
+A _0 r
 
 !s c d c e d. r8
 A !s
-A \asm { set_transpose +4 } !s
-A \asm { set_transpose -4 } !s
-A \asm { disable_transpose } !s
-A \asm { disable_transpose } r
+A _+4 !s
+A _-4 !s
+A _0 !s
+A _0 r
 
-A \asm {
+A [ {cg}4,8 ^8 __+3 ]4
+A _0 r
+
+
+; asm transpose
+
+B @1 px+64
+
+B c \asm { set_transpose +3 } c \asm { set_transpose -3 } c r2
+B \asm {disable_transpose} r
+
+B [c \asm { adjust_transpose +1 }]4 c
+B \asm {disable_transpose} r
+
+B [c \asm { adjust_transpose -2 }]4 c
+B \asm {disable_transpose} r
+
+B !s
+B \asm { set_transpose +4 } !s
+B \asm { set_transpose -4 } !s
+B \asm { disable_transpose } !s
+B \asm { disable_transpose } r
+
+B \asm {
   start_loop
     play_note c4 no_keyoff 12
 	portamento_calc g4 keyoff 11 24
     adjust_transpose +3
   end_loop 4
 }
-A \asm {disable_transpose} r
+B \asm {disable_transpose} r

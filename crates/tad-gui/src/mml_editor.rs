@@ -59,7 +59,7 @@ impl CompiledEditorData {
 
     fn zenlen(&self) -> ZenLen {
         match self {
-            Self::Song(sd) => sd.metadata().zenlen,
+            Self::Song(sd) => sd.metadata().mml_settings.zenlen,
             Self::SfxSubroutines(_) => DEFAULT_ZENLEN,
             Self::SoundEffect(_) => DEFAULT_ZENLEN,
         }

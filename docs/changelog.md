@@ -5,9 +5,13 @@ Version 0.1.2 beta
 ==================
 
 **BREAKING CHANGES:**
- * `MP` vibrato cannot be used in a song that contains a `set_transpose` or `adjust_transpose` instruction
+ * `_` and `__` MML transpose commands now change change a semitone offset inside the audio driver.
+    * `_+4 !s` will add +4 semitones to the notes in `!s` (unless the subroutine contains a `_` or `__` command).
+    * `_0 c [__+1 c]3` will now play `c c+ d d+`
+    * To restore the old transpose behaviour, either add an `#OldTraspose` MML header or replace `_` with `_M` and `__` with `__M`.
+ * `MP` vibrato cannot be used in a song that contains a `set_transpose` or `adjust_transpose` instruction.  
    (This restriction will be relaxed in the next production release.)
- * A portamento's slide length has a maximum 255 ticks if the song contains a `set_transpose` or `adjust_transpose` instruction.
+ * A portamento's slide length has a maximum 255 ticks if the song contains a `set_transpose` or `adjust_transpose` instruction.  
    (This restriction will be relaxed in the next production release.)
 
 BRR changes:
@@ -28,6 +32,9 @@ MML changes:
    (ie, `#title`, `#echolength`, `#echoLength`)
  * Duplicate header error messages show the line of the original header
  * Portamentos can now be played in a subroutine with an unknown instrument.
+ * `_` and `__` transpose commands now change a semitone offset inside the driver.
+    * `_+4 !s` will add +4 semitones to the notes in `!s` (unless the subroutine contains a `_` or `__` command).
+    * `_0 c [__+1 c]3` will now play `c c+ d d+`
  * Added `_M` master transpose and `__M` relative master transpose MML commands
  * Added `#OldTranspose` header to restore the v0.1.1 and earlier transpose behaviour
    by silently converting `_` and `__` commands to `_M` and `__M`.

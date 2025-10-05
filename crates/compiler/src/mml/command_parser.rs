@@ -80,7 +80,10 @@ pub struct State {
 }
 
 mod parser {
-    use crate::{file_pos::LineIndexRange, mml::ChannelId};
+    use crate::{
+        file_pos::LineIndexRange,
+        mml::{metadata::GlobalSettings, ChannelId},
+    };
 
     use super::*;
 
@@ -102,6 +105,8 @@ mod parser {
         instruments_map: &'a HashMap<IdentifierStr<'a>, usize>,
         subroutines: &'a dyn SubroutineStore,
 
+        old_transpose: bool,
+
         #[cfg(feature = "mml_tracking")]
         cursor_tracker: &'a mut CursorTracker,
     }
@@ -112,7 +117,7 @@ mod parser {
             tokens: MmlTokens<'a>,
             instruments_map: &'a HashMap<IdentifierStr, usize>,
             subroutines: &'a dyn SubroutineStore,
-            zenlen: ZenLen,
+            settings: GlobalSettings,
             sections: Option<&'a [Section]>,
 
             #[cfg(feature = "mml_tracking")] cursor_tracking: &'a mut CursorTracker,
@@ -133,7 +138,7 @@ mod parser {
                 tokens: PeekableTokenIterator::new(tokens),
                 errors: Vec::new(),
                 state: State {
-                    zenlen,
+                    zenlen: settings.zenlen,
                     default_length: STARTING_MML_LENGTH,
                     keyoff_enabled: true,
                     octave: STARTING_OCTAVE,
@@ -141,7 +146,7 @@ mod parser {
                     quantize: None,
                 },
 
-                default_length: zenlen.starting_length(),
+                default_length: settings.zenlen.starting_length(),
                 keyoff_enabled: true,
 
                 tick_counter: TickCounterWithLoopFlag::default(),
@@ -150,6 +155,8 @@ mod parser {
 
                 instruments_map,
                 subroutines,
+
+                old_transpose: settings.old_transpose,
 
                 #[cfg(feature = "mml_tracking")]
                 cursor_tracker: cursor_tracking,
@@ -211,6 +218,10 @@ mod parser {
             'a: 'b,
         {
             self.subroutines.find_subroutine(name)
+        }
+
+        pub fn old_transpose(&self) -> bool {
+            self.old_transpose
         }
 
         pub fn set_tick_counter(&mut self, tc: TickCounterWithLoopFlag) {
@@ -327,10 +338,10 @@ pub(crate) use parser::Parser;
 // Will consume the token and advance the tokenizer if there is a match
 macro_rules! match_next_token {
     // Using `#` to separate patterns from the fallthrough no-matches case.
-    ($parser:ident, $($pattern:pat => $expression:expr,)+ #_ => $no_matches:expr) => {
+    ($parser:ident, $($pattern:pat $(if $guard:expr)? => $expression:expr,)+ #_ => $no_matches:expr) => {
         match $parser.__peek() {
         $(
-            $pattern => {
+            $pattern $(if $guard)? => {
                 $parser.__next_token();
                 $expression
             }
@@ -698,25 +709,31 @@ fn parse_decrement_octave(p: &mut Parser) {
     }
 }
 
-fn parse_transpose(pos: FilePos, p: &mut Parser) {
-    if let Some(t) = parse_signed_newtype(pos, p) {
-        let t: Transpose = t;
-        p.set_state(State {
-            semitone_offset: t.as_i8(),
-            ..p.state().clone()
-        });
+#[must_use]
+fn parse_transpose(pos: FilePos, p: &mut Parser) -> Command {
+    match p.old_transpose() {
+        false => match parse_signed_newtype_allow_zero(pos, p) {
+            Some(t) => Command::SetTranspose(t),
+            None => Command::None,
+        },
+        true => {
+            parse_master_transpose(pos, p);
+            Command::None
+        }
     }
 }
 
-fn parse_relative_transpose(pos: FilePos, p: &mut Parser) {
-    if let Some(rt) = parse_signed_newtype(pos, p) {
-        let rt: Transpose = rt;
-
-        let state = p.state().clone();
-        p.set_state(State {
-            semitone_offset: state.semitone_offset.saturating_add(rt.as_i8()),
-            ..state
-        });
+#[must_use]
+fn parse_relative_transpose(pos: FilePos, p: &mut Parser) -> Command {
+    match p.old_transpose() {
+        false => match parse_signed_newtype(pos, p) {
+            Some(r) => Command::AdjustTranspose(r),
+            None => Command::None,
+        },
+        true => {
+            parse_relative_master_transpose(pos, p);
+            Command::None
+        }
     }
 }
 
@@ -953,12 +970,12 @@ fn merge_state_change(p: &mut Parser) -> bool {
             parse_decrement_octave(p);
             true
         },
-        Token::Transpose => {
-            parse_transpose(pos, p);
+        Token::Transpose if p.old_transpose() => {
+            parse_master_transpose(pos, p);
             true
         },
-        Token::RelativeTranspose => {
-            parse_relative_transpose(pos, p);
+        Token::RelativeTranspose if p.old_transpose() => {
+            parse_relative_master_transpose(pos, p);
             true
         },
 
@@ -1098,8 +1115,10 @@ fn parse_pitch_list_state_change_token(token: Token, pos: FilePos, p: &mut Parse
         Token::SetOctave => parse_set_octave(pos, p),
         Token::IncrementOctave => parse_increment_octave(p),
         Token::DecrementOctave => parse_decrement_octave(p),
-        Token::Transpose => parse_transpose(pos, p),
-        Token::RelativeTranspose => parse_relative_transpose(pos, p),
+        Token::MasterTranspose => parse_master_transpose(pos, p),
+        Token::RelativeMasterTranspose => parse_relative_master_transpose(pos, p),
+        Token::Transpose if p.old_transpose() => parse_master_transpose(pos, p),
+        Token::RelativeTranspose if p.old_transpose() => parse_relative_master_transpose(pos, p),
 
         _ => p.add_error(pos, ChannelError::InvalidPitchListSymbol),
     }
@@ -2667,6 +2686,9 @@ fn parse_token(pos: FilePos, token: Token, p: &mut Parser) -> Command {
         Token::Quantize => parse_quantize(pos, p),
         Token::EarlyRelease => parse_set_early_release(pos, p),
 
+        Token::Transpose => parse_transpose(pos, p),
+        Token::RelativeTranspose => parse_relative_transpose(pos, p),
+
         Token::DetuneOrGainModeD => parse_detune(pos, p),
         Token::DetuneCents => parse_detune_cents(pos, p),
 
@@ -2686,14 +2708,7 @@ fn parse_token(pos: FilePos, token: Token, p: &mut Parser) -> Command {
             parse_decrement_octave(p);
             Command::None
         }
-        Token::Transpose => {
-            parse_transpose(pos, p);
-            Command::None
-        }
-        Token::RelativeTranspose => {
-            parse_relative_transpose(pos, p);
-            Command::None
-        }
+
         Token::MasterTranspose => {
             parse_master_transpose(pos, p);
             Command::None

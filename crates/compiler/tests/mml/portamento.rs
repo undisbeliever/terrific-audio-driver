@@ -73,8 +73,11 @@ fn portamento() {
     assert_line_matches_line("{df}4,8", "d8 & {df}8");
     assert_line_matches_line("{df}4,8,15", "d8 & {df}8,,15");
 
-    assert_line_matches_line("{a > c}2", "{a _+12 c}2");
+    assert_old_transpose_line_matches_line("{a > c}2", "{a _+12 c}2");
+    assert_line_matches_line("{a > c}2", "{a _M+12 c}2");
     assert_line_matches_line("{o3 c o4 c}2", "{< c > c}2");
+
+    assert_old_transpose_line_matches_line("{_+5 a __-3 c}2", "{_M+5 a __M-3 c}2");
 }
 
 #[test]

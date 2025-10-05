@@ -42,7 +42,7 @@ use crate::mml::tokenizer::Token;
 use crate::pitch_table::PitchTable;
 use crate::songs::{mml_to_song, song_header_size, SongData};
 use crate::sound_effects::CompiledSfxSubroutines;
-use crate::time::{TickCounter, DEFAULT_ZENLEN};
+use crate::time::TickCounter;
 
 use std::collections::HashMap;
 use std::ops::RangeInclusive;
@@ -66,7 +66,7 @@ pub const MAX_MML_PREFIX_TICKS: TickCounter = TickCounter::new(16);
 
 pub use self::tick_count_table::MmlTickCountTable;
 
-pub use self::metadata::MetaData;
+pub use self::metadata::{GlobalSettings, MetaData};
 
 #[cfg(feature = "mml_tracking")]
 pub use self::note_tracking::CursorTracker;
@@ -178,11 +178,12 @@ pub fn compile_mml(
 
     let n_active_channels = lines.channels.iter().filter(|t| !t.is_empty()).count();
 
-    let song_uses_driver_transpose = scan_for_driver_transpose(&lines.channels, &lines.subroutines);
+    let song_uses_driver_transpose =
+        scan_for_driver_transpose(&lines.channels, &lines.subroutines, &metadata.mml_settings);
 
     assert!(lines.subroutines.len() <= u8::MAX.into());
     let mut compiler = MmlSongBytecodeGenerator::new(
-        metadata.zenlen,
+        metadata.mml_settings,
         pitch_table,
         mml,
         data_instruments,
@@ -295,7 +296,7 @@ pub(crate) fn compile_sfx_subroutines(
 
     assert!(lines.subroutines.len() <= u8::MAX.into());
     let mut compiler = MmlSongBytecodeGenerator::new(
-        DEFAULT_ZENLEN,
+        GlobalSettings::default(),
         pitch_table,
         sfx,
         data_instruments,
@@ -401,11 +402,17 @@ pub fn compile_mml_prefix(
 fn scan_for_driver_transpose(
     channels: &[MmlTokens<'_>; N_MUSIC_CHANNELS],
     subroutines: &Vec<(IdentifierStr<'_>, MmlTokens<'_>)>,
+    settings: &GlobalSettings,
 ) -> bool {
+    let old_transpose = settings.old_transpose;
+
     let test_tokens = |tokens: &MmlTokens<'_>| -> bool {
         for t in tokens.token_iter() {
-            if let Token::TransposeAsm(_) = t {
-                return true;
+            match t {
+                Token::TransposeAsm(_) => return true,
+                Token::Transpose if !old_transpose => return true,
+                Token::RelativeTranspose if !old_transpose => return true,
+                _ => (),
             }
         }
         false

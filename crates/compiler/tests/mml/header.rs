@@ -4,7 +4,7 @@
 
 use compiler::echo::{EchoBuffer, FirCoefficient};
 use compiler::invert_flags::InvertFlags;
-use compiler::mml::MetaData;
+use compiler::mml::{GlobalSettings, MetaData};
 use compiler::time::{Bpm, TickClock, ZenLen};
 use compiler::UnsignedValueNewType;
 
@@ -65,8 +65,10 @@ A r
                 },
             },
             tick_clock: 100u16.try_into().unwrap(),
-            zenlen: 192u8.try_into().unwrap(),
-            old_transpose: true,
+            mml_settings: GlobalSettings {
+                zenlen: 192u8.try_into().unwrap(),
+                old_transpose: true,
+            },
             spc_song_length: Some(300),
             spc_fadeout_millis: Some(200),
         }
@@ -141,8 +143,10 @@ A r
                 },
             },
             tick_clock: 100u16.try_into().unwrap(),
-            zenlen: 192u8.try_into().unwrap(),
-            old_transpose: true,
+            mml_settings: GlobalSettings {
+                zenlen: 192u8.try_into().unwrap(),
+                old_transpose: true,
+            },
             spc_song_length: Some(300),
             spc_fadeout_millis: Some(200),
         }
@@ -217,8 +221,10 @@ A r
                 },
             },
             tick_clock: 100u16.try_into().unwrap(),
-            zenlen: 192u8.try_into().unwrap(),
-            old_transpose: true,
+            mml_settings: GlobalSettings {
+                zenlen: 192u8.try_into().unwrap(),
+                old_transpose: true,
+            },
             spc_song_length: Some(300),
             spc_fadeout_millis: Some(200),
         }
@@ -535,7 +541,7 @@ A r
 "#,
         &dummy_data,
     );
-    assert_eq!(s.metadata().zenlen, 192u8.try_into().unwrap());
+    assert_eq!(s.metadata().mml_settings.zenlen, 192u8.try_into().unwrap());
 
     let s = compile_mml(
         r#"
@@ -545,7 +551,7 @@ A r1
 "#,
         &dummy_data,
     );
-    assert_eq!(s.metadata().zenlen, ZenLen::MIN);
+    assert_eq!(s.metadata().mml_settings.zenlen, ZenLen::MIN);
 
     assert_one_header_error_in_mml(
         r#"
@@ -565,7 +571,7 @@ A r
 "#,
         &dummy_data,
     );
-    assert_eq!(s.metadata().zenlen, ZenLen::MAX);
+    assert_eq!(s.metadata().mml_settings.zenlen, ZenLen::MAX);
 
     assert_one_header_error_in_mml(
         r#"
@@ -600,5 +606,5 @@ A r
 "#,
         &dummy_data,
     );
-    assert_eq!(s.metadata().zenlen, 192u8.try_into().unwrap());
+    assert_eq!(s.metadata().mml_settings.zenlen, 192u8.try_into().unwrap());
 }

@@ -13,6 +13,7 @@ use super::{ChannelId, MmlSoundEffect, Section, CHANNEL_NAMES};
 use super::note_tracking::CursorTracker;
 use crate::data::{self, UniqueNamesList};
 use crate::echo::EchoEdl;
+use crate::mml::metadata::GlobalSettings;
 use crate::mml::{MmlPrefixData, MAX_MML_PREFIX_TICKS};
 #[cfg(feature = "mml_tracking")]
 use crate::songs::{BytecodePos, SongBcTracking};
@@ -26,7 +27,6 @@ use crate::pitch_table::PitchTable;
 use crate::songs::Channel;
 use crate::sound_effects::{CompiledSfxSubroutines, MAX_SFX_TICKS};
 use crate::subroutines::{FindSubroutineResult, NoSubroutines, Subroutine, SubroutineStore};
-use crate::time::{ZenLen, DEFAULT_ZENLEN};
 
 use std::collections::HashMap;
 
@@ -64,7 +64,7 @@ impl SubroutineStore for SongSubroutines<'_> {
 pub struct MmlSongBytecodeGenerator<'a> {
     song_data: Vec<u8>,
 
-    default_zenlen: ZenLen,
+    global_settings: GlobalSettings,
     pitch_table: &'a PitchTable,
     mml_file: &'a str,
     data_instruments: &'a UniqueNamesList<data::InstrumentOrSample>,
@@ -89,7 +89,7 @@ pub struct MmlSongBytecodeGenerator<'a> {
 impl<'a> MmlSongBytecodeGenerator<'a> {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
-        default_zenlen: ZenLen,
+        global_settings: GlobalSettings,
         pitch_table: &'a PitchTable,
         mml_file: &'a str,
         data_instruments: &'a UniqueNamesList<data::InstrumentOrSample>,
@@ -103,7 +103,7 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
     ) -> Self {
         Self {
             song_data: vec![0; header_size],
-            default_zenlen,
+            global_settings,
             pitch_table,
             mml_file,
             data_instruments,
@@ -269,7 +269,7 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
             tokens,
             &self.mml_instrument_map,
             &self.subroutines,
-            self.default_zenlen,
+            self.global_settings,
             None, // No sections in subroutines
             #[cfg(feature = "mml_tracking")]
             &mut self.cursor_tracker,
@@ -419,7 +419,7 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
             tokens,
             &self.mml_instrument_map,
             &self.subroutines,
-            self.default_zenlen,
+            self.global_settings,
             Some(self.sections),
             #[cfg(feature = "mml_tracking")]
             &mut self.cursor_tracker,
@@ -507,7 +507,7 @@ pub fn parse_and_compile_sound_effect(
         tokens,
         instruments_map,
         sfx_subroutines,
-        DEFAULT_ZENLEN,
+        GlobalSettings::default(),
         None, // No sections in sound effect
         #[cfg(feature = "mml_tracking")]
         &mut cursor_tracker,
@@ -586,7 +586,7 @@ pub fn parse_and_compile_mml_prefix(
         tokens,
         instruments_map,
         &NoSubroutines(),
-        DEFAULT_ZENLEN,
+        GlobalSettings::default(),
         None, // No sections in sound effect
         // ::TODO remove cursor tracker here::
         #[cfg(feature = "mml_tracking")]

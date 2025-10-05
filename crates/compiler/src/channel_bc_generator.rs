@@ -9,10 +9,10 @@ use crate::bytecode::{
     EarlyReleaseMinTicks, EarlyReleaseTicks, IeState, InstrumentId, LoopCount, NoiseFrequency, Pan,
     PanSlideAmount, PanSlideTicks, PanbrelloAmplitude, PanbrelloQuarterWavelengthInTicks,
     PlayNoteTicks, PlayPitchPitch, RelativeEchoFeedback, RelativeEchoVolume,
-    RelativeFirCoefficient, RelativePan, RelativeVolume, SlurredNoteState, TremoloAmplitude,
-    TremoloQuarterWavelengthInTicks, VibratoDelayTicks, VibratoPitchOffsetPerTick,
-    VibratoQuarterWavelengthInTicks, VibratoState, Volume, VolumeSlideAmount, VolumeSlideTicks,
-    KEY_OFF_TICK_DELAY,
+    RelativeFirCoefficient, RelativePan, RelativeTranspose, RelativeVolume, SlurredNoteState,
+    Transpose, TremoloAmplitude, TremoloQuarterWavelengthInTicks, VibratoDelayTicks,
+    VibratoPitchOffsetPerTick, VibratoQuarterWavelengthInTicks, VibratoState, Volume,
+    VolumeSlideAmount, VolumeSlideTicks, KEY_OFF_TICK_DELAY,
 };
 use crate::bytecode_assembler::parse_asm_line;
 use crate::data::{self, UniqueNamesList};
@@ -134,7 +134,7 @@ pub fn merge_pan_commands(p1: Option<PanCommand>, p2: PanCommand) -> PanCommand 
     }
 }
 
-#[derive(Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub struct MpVibrato {
     pub depth_in_cents: u32,
     pub quarter_wavelength_ticks: VibratoQuarterWavelengthInTicks,
@@ -178,14 +178,14 @@ impl FineQuantization {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 pub enum Quantize {
     None,
     Rest(FineQuantization),
     WithTempGain(FineQuantization, TempGain),
 }
 
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 pub struct RestTicksAfterNote(pub TickCounter);
 
 i16_value_newtype!(
@@ -229,6 +229,7 @@ pub enum SubroutineCallType {
     AsmDisableVibrato,
 }
 
+#[derive(Debug)]
 pub(crate) enum Command {
     None,
 
@@ -320,6 +321,9 @@ pub(crate) enum Command {
 
     DisableEarlyRelease,
     SetEarlyRelease(EarlyReleaseTicks, EarlyReleaseMinTicks, OptionalGain),
+
+    SetTranspose(Transpose),
+    AdjustTranspose(RelativeTranspose),
 
     SetDetune(DetuneValue),
     SetDetuneCents(DetuneCents),
@@ -1743,6 +1747,13 @@ impl<'a> ChannelBcGenerator<'a> {
                 {
                     self.bc.set_early_release(ticks, min, gain);
                 }
+            }
+
+            &Command::SetTranspose(t) => {
+                self.bc.set_transpose(t);
+            }
+            &Command::AdjustTranspose(t) => {
+                self.bc.adjust_transpose(t);
             }
 
             &Command::SetDetune(detune) => {

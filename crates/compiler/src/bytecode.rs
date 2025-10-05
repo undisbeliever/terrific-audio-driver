@@ -520,7 +520,7 @@ impl TryFrom<u32> for BcTicksNoKeyOff {
     }
 }
 
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub enum PlayNoteTicks {
     KeyOff(BcTicksKeyOff),
     NoKeyOff(BcTicksNoKeyOff),

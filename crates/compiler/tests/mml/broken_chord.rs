@@ -16,8 +16,11 @@ fn broken_chord() {
 
     // Test octave/transpose changes::
     assert_line_matches_line("{{c o3 e > g}}", "[c%1& : o3 e%1& > g%1&]8 o3 e%2");
-    assert_line_matches_line("{{c _+2 e < g}}", "[c%1& : _+2 e%1& < g%1&]8 o4 e%2");
-    assert_line_matches_line("{{c __-2 e g}}", "[c%1& : _-2 e%1& g%1&]8 e%2");
+    assert_line_matches_line("{{c _M+2 e < g}}", "[c%1& : _M+2 e%1& < g%1&]8 o4 e%2");
+    assert_line_matches_line("{{c __M-2 e g}}", "[c%1& : _M-2 e%1& g%1&]8 e%2");
+
+    assert_old_transpose_line_matches_line("{{c _+2 e g}}", "[c%1& : _+2 e%1& g%1&]8 e%2");
+    assert_old_transpose_line_matches_line("{{c __-2 e g}}", "[c%1& : _-2 e%1& g%1&]8 e%2");
 }
 
 #[test]

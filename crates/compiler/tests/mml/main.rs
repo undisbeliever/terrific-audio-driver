@@ -68,12 +68,27 @@ const EXAMPLE_GAIN: Gain = Gain::new(127);
 fn merge_mml_commands_test(mml_line: &str, bc_asm: &[&str]) {
     // The inc/dec octave commands must return to the original octave
     // The transpose commands must return to a transpose of 0
-    const MML_TO_INSERT: [&str; 10] = [
-        "", "l4", "o4", "> <", "> <", "_+2 __-2", "_-4 __+4", "|", "| | | |",
+    const MML_TO_INSERT: [&str; 12] = [
+        "",
+        "l4",
+        "o4",
+        "> <",
+        "> <",
+        "_M+2 __M-2",
+        "_M-4 __M+4",
+        "_+2 __-2",
+        "_-4 __+4",
+        "|",
+        "| | | |",
         // Newline
         "\nA ",
     ];
     const MATCH_SYMBOL: &str = "||";
+
+    assert!(
+        !mml_line.contains("_-") && !mml_line.contains("_+"),
+        "line cannot contain a `_` or `__` transpose command"
+    );
 
     if mml_line.matches(MATCH_SYMBOL).count() != 1 {
         panic!("mml_line requires at ONE {MATCH_SYMBOL}");
@@ -81,7 +96,8 @@ fn merge_mml_commands_test(mml_line: &str, bc_asm: &[&str]) {
 
     for command in MML_TO_INSERT {
         let ml = mml_line.replace(MATCH_SYMBOL, command);
-        assert_line_matches_bytecode(&ml, bc_asm);
+
+        assert_old_transpose_line_matches_bytecode(&ml, bc_asm);
     }
 }
 
@@ -178,6 +194,13 @@ fn assert_line_matches_bytecode(mml_line: &str, bc_asm: &[&str]) {
     );
 }
 
+fn assert_old_transpose_line_matches_bytecode(mml_line: &str, bc_asm: &[&str]) {
+    let mml = ["#OldTranspose\n@1 dummy_instrument\nA @1 o4\nA ", mml_line].concat();
+    let bc_asm = [&["set_instrument dummy_instrument"], bc_asm].concat();
+
+    assert_mml_channel_a_matches_bytecode(&mml, &bc_asm);
+}
+
 fn assert_channel_b_line_matches_bytecode(mml_line: &str, bc_asm: &[&str]) {
     let mml = ["@1 dummy_instrument\nB @1 o4\nB ", mml_line].concat();
     let bc_asm = [&["set_instrument dummy_instrument"], bc_asm].concat();
@@ -222,6 +245,22 @@ fn assert_line_matches_bytecode_bytes(mml_line: &str, bc: &[u8]) {
 fn assert_line_matches_line(mml_line1: &str, mml_line2: &str) {
     let mml1 = ["@1 dummy_instrument\nA @1 o4\nA ", mml_line1].concat();
     let mml2 = ["@1 dummy_instrument\nA @1 o4\nA ", mml_line2].concat();
+
+    let dd = dummy_data();
+
+    let mml_data1 = compile_mml(&mml1, &dd);
+    let mml_data2 = compile_mml(&mml2, &dd);
+
+    assert_eq!(
+        mml_bytecode(&mml_data1),
+        mml_bytecode(&mml_data2),
+        "Testing {mml_line1:?} against MML"
+    );
+}
+
+fn assert_old_transpose_line_matches_line(mml_line1: &str, mml_line2: &str) {
+    let mml1 = ["#OldTranspose\n@1 dummy_instrument\nA @1 o4\nA ", mml_line1].concat();
+    let mml2 = ["#OldTranspose\n@1 dummy_instrument\nA @1 o4\nA ", mml_line2].concat();
 
     let dd = dummy_data();
 

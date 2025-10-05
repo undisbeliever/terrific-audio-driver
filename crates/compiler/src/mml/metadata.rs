@@ -17,6 +17,21 @@ use crate::time::{Bpm, TickClock, ZenLen, DEFAULT_BPM, DEFAULT_ZENLEN};
 use crate::value_newtypes::{parse_i8wh, I8WithByteHexValueNewType};
 use crate::{spc_file_export, FilePosRange};
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct GlobalSettings {
+    pub zenlen: ZenLen,
+    pub old_transpose: bool,
+}
+
+impl Default for GlobalSettings {
+    fn default() -> Self {
+        Self {
+            zenlen: DEFAULT_ZENLEN,
+            old_transpose: false,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct MetaData {
     pub title: Option<String>,
@@ -31,8 +46,7 @@ pub struct MetaData {
 
     pub tick_clock: TickClock,
 
-    pub zenlen: ZenLen,
-    pub old_transpose: bool,
+    pub mml_settings: GlobalSettings,
 
     /// SPC export song length in seconds before fading out
     /// (override calculated song duration)
@@ -107,10 +121,9 @@ impl MetaData {
                 invert: InvertFlags::default(),
             },
             tick_clock: DEFAULT_BPM.to_tick_clock().unwrap(),
-            zenlen: DEFAULT_ZENLEN,
             spc_song_length: None,
             spc_fadeout_millis: None,
-            old_transpose: false,
+            mml_settings: GlobalSettings::default(),
         }
     }
 
@@ -219,9 +232,9 @@ impl HeaderState {
             Header::Copyright => self.metadata.copyright = to_option_string()?,
             Header::License => self.metadata.license = to_option_string()?,
 
-            Header::ZenLen => self.metadata.zenlen = parse_u32(value)?.try_into()?,
+            Header::ZenLen => self.metadata.mml_settings.zenlen = parse_u32(value)?.try_into()?,
 
-            Header::OldTranspose => self.metadata.old_transpose = true,
+            Header::OldTranspose => self.metadata.mml_settings.old_transpose = true,
 
             Header::MaxEchoLength => {
                 let echo_length = EchoLength::try_from(parse_u32(value)?)?;

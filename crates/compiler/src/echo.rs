@@ -83,7 +83,7 @@ impl EchoEdl {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 pub struct EchoLength(u8);
 
 impl EchoLength {

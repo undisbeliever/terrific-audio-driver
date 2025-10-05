@@ -219,8 +219,11 @@ fn quantized_portamento() {
         ],
     );
 
-    assert_line_matches_line("Q4 {a > c}2", "Q4 {a _+12 c}2");
+    assert_old_transpose_line_matches_line("Q4 {a _-5 c}2", "Q4 {a _M-5 c}2");
+    assert_line_matches_line("Q4 {a > c}2", "Q4 {a _M+12 c}2");
     assert_line_matches_line("Q4 {o3 c o4 c}2", "Q4 {< c > c}2");
+
+    assert_old_transpose_line_matches_line("Q4 {_+5 a __-3 c}2", "Q4 {_M+5 a __M-3 c}2");
 
     assert_line_matches_bytecode(
         "Q4 {df},,10 r%90 r%90 ^%90 r%90",
