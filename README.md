@@ -49,13 +49,18 @@ Engine Limitations and Deliberate Design Decisions
       set of songs that contain unique songs (ie, intro and credits), you will need to create a new
       project (with a different set of samples) and manually swap the common audio data in S-CPU
       code.
- * All pitches and pitch offsets are precalculated by the compiler
-    * The pitches are stored in a pitch table in the Common Audio Data.
-    * The pitch table holds a maximum 256 pitches (512 bytes).
-    * All pitch offsets are precalculated by the MML compiler.  To calculate this *pitch-offset per
-      tick* value, the MML compiler needs to know what instrument is playing the portamento/vibrato
-      note.  The MML syntax provides a way to manually set the *pitch-offset per tick* value.
-    * Sound effects written in bytecode must manually the *pitch-offset per tick* value.
+ * All pitches and most pitch offsets are precalculated by the compiler.
+    * The `VxPITCH` values for each note are precalculated by the compiler inside a pitch table.
+      * The pitch table holds a maximum 256 pitches (512 bytes) and is stored in the Common Audio Data.
+      * Limiting an instruments first-last octave will reduce the number of pitch table entries
+        required by the instrument.
+    * Where possible, the portamento *pitch-offset per tick* value is precalculated by the MML
+      compiler.  This requires the MML compiler to know what instrument is playing the portamento.
+       * If the instrument or note of the portamento is unknown, the audio driver will calculate
+         the portamento velocity.
+       * The MML syntax provides a way to manually set the *pitch-offset per tick* value.
+    * `MP` vibrato is precalculated by the MML compiler, the instrument must be known and audio
+      driver transpose must be disabled.
  * There is a fixed 1 tick delay after a key-off event.
     * 1 tick will be subtracted from any instruction that emits a key-off event.
       For example, a `play_note c+4 16` instruction will play the note, sleep for 15 ticks, emit a
@@ -74,11 +79,10 @@ Engine Limitations and Deliberate Design Decisions
     * `tad-compiler check` can be used to check if all songs in a project will fit in audio-RAM.
  * Additional limitations exist for sound effects:
     * Sound effects are played at a fixed tempo (125 ticks per second).
-    * Sound effects cannot call subroutines.
     * The echo buffer and FIR Filter settings are set by the song.  If a sound effect enables echo,
       it can have an inconsistent sound (depending on the songs echo and FIR settings).
-    * The default sound effect queue can only hold 1 sound effect.
-      This means only 1 sound effect can be played per frame.
+    * The default 65816 sound effect queue can only hold 1 sound effect.
+      This typically means a game can only play a single sound effect per frame.
       If the game requests two or more sound effects in a single frame, the one with the lowest
       index (as defined by the *Sound Effect Export Order*) will be prioritised.
 
