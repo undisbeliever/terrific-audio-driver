@@ -19,29 +19,96 @@ pub const LAST_NOTE_ID: u8 = (LAST_OCTAVE + 1) * SEMITONES_PER_OCTAVE - 1;
 
 pub const N_NOTES: u8 = (LAST_OCTAVE + 1) * SEMITONES_PER_OCTAVE;
 
-#[derive(Debug, Clone, Copy)]
-pub struct PitchChar(u8);
+pub const N_PITCHES: usize = 7;
 
-pub fn parse_pitch_char(c: char) -> Result<PitchChar, ValueError> {
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct KeySignature([i8; N_PITCHES]);
+
+impl KeySignature {
+    const DEFAULT: [i8; N_PITCHES] = [0, 2, 4, 5, 7, 9, 11];
+
+    pub fn parse_signature_changes(&self, s: &str) -> Result<Self, ValueError> {
+        let mut it = s.chars();
+
+        let offset = match it.next() {
+            Some('=') => 0,
+            Some('+') => 1,
+            Some('-') => -1,
+            _ => return Err(ValueError::NoKeySignatureSign),
+        };
+
+        let s = it.as_str().trim();
+
+        if s.is_empty() {
+            return Err(ValueError::NoTonesInKeySignature);
+        }
+
+        let mut out = self.clone();
+
+        for c in s.chars() {
+            if !c.is_whitespace() {
+                match parse_pitch_char(c) {
+                    Ok(p) => {
+                        let i = usize::from(p.0);
+                        out.0[i] = Self::DEFAULT[i] + offset;
+                    }
+                    Err(_) => return Err(ValueError::InvalidKeySignatureTone(c)),
+                }
+            }
+        }
+
+        Ok(out)
+    }
+}
+
+impl Default for KeySignature {
+    fn default() -> Self {
+        Self(Self::DEFAULT)
+    }
+}
+
+/// Format is pitch character number (0..=6)
+#[derive(Debug, Clone, Copy)]
+pub struct MmlPitchChar(u8);
+
+pub fn parse_pitch_char(c: char) -> Result<MmlPitchChar, ValueError> {
     match c {
-        'c' => Ok(PitchChar(0)),
-        'd' => Ok(PitchChar(2)),
-        'e' => Ok(PitchChar(4)),
-        'f' => Ok(PitchChar(5)),
-        'g' => Ok(PitchChar(7)),
-        'a' => Ok(PitchChar(9)),
-        'b' => Ok(PitchChar(11)),
+        'c' => Ok(MmlPitchChar(0)),
+        'd' => Ok(MmlPitchChar(1)),
+        'e' => Ok(MmlPitchChar(2)),
+        'f' => Ok(MmlPitchChar(3)),
+        'g' => Ok(MmlPitchChar(4)),
+        'a' => Ok(MmlPitchChar(5)),
+        'b' => Ok(MmlPitchChar(6)),
 
         n => Err(ValueError::UnknownNotePitch(n)),
     }
 }
 
-impl TryFrom<u8> for PitchChar {
+/// Format is semitone offset (0..=11)
+#[derive(Debug, Clone, Copy)]
+pub struct PitchSemitoneIndex(u8);
+
+pub fn parse_bytecode_pitch_char(c: char) -> Result<PitchSemitoneIndex, ValueError> {
+    match c {
+        'c' => Ok(PitchSemitoneIndex(0)),
+        'd' => Ok(PitchSemitoneIndex(2)),
+        'e' => Ok(PitchSemitoneIndex(4)),
+        'f' => Ok(PitchSemitoneIndex(5)),
+        'g' => Ok(PitchSemitoneIndex(7)),
+        'a' => Ok(PitchSemitoneIndex(9)),
+        'b' => Ok(PitchSemitoneIndex(11)),
+
+        n => Err(ValueError::UnknownNotePitch(n)),
+    }
+}
+
+impl TryFrom<u8> for PitchSemitoneIndex {
     type Error = ValueError;
 
     fn try_from(i: u8) -> Result<Self, Self::Error> {
         if i < SEMITONES_PER_OCTAVE {
-            Ok(PitchChar(i))
+            Ok(PitchSemitoneIndex(i))
         } else {
             Err(ValueError::InvalidPitch)
         }
@@ -104,7 +171,7 @@ impl Note {
         }
     }
 
-    pub fn from_pitch_and_octave(p: PitchChar, o: Octave) -> Result<Self, ValueError> {
+    pub fn from_pitch_and_octave(p: PitchSemitoneIndex, o: Octave) -> Result<Self, ValueError> {
         Self::from_note_id(p.0 + o.as_u8() * SEMITONES_PER_OCTAVE)
     }
 
@@ -121,8 +188,8 @@ impl Note {
         Self::from_note_id(note_id).unwrap()
     }
 
-    fn from_pitch_stoffset_octave(
-        pitch: PitchChar,
+    fn from_bc_pitch_stoffset_octave(
+        pitch: PitchSemitoneIndex,
         semitone_offset: i32,
         octave: u32,
     ) -> Result<Self, ValueError> {
@@ -147,17 +214,21 @@ impl Note {
         Self::from_note_id(note_id)
     }
 
-    pub fn from_mml_pitch(p: MmlPitch, o: Octave, semitone_offset: i8) -> Result<Self, ValueError> {
-        let note_id = (p.pitch.0 + o.0 * SEMITONES_PER_OCTAVE)
-            .checked_add_signed(p.semitone_offset)
-            .and_then(|n| n.checked_add_signed(semitone_offset));
+    pub fn from_mml_pitch(
+        p: MmlPitch,
+        o: Octave,
+        signature: &KeySignature,
+        semitone_offset: i8,
+    ) -> Result<Self, ValueError> {
+        let note_id: i32 = i32::from(o.0 * SEMITONES_PER_OCTAVE)
+            + i32::from(signature.0[p.pitch.0 as usize])
+            + i32::from(p.semitone_offset)
+            + i32::from(semitone_offset);
 
-        let note_id = match note_id {
-            Some(n) => n,
-            None => return Err(ValueError::InvalidNote),
-        };
-
-        Self::from_note_id(note_id)
+        match note_id.try_into() {
+            Ok(n) => Self::from_note_id(n),
+            Err(_) => Err(ValueError::InvalidNote),
+        }
     }
 
     pub fn parse_bytecode_argument(arg: &str) -> Result<Note, ValueError> {
@@ -169,7 +240,7 @@ impl Note {
             let mut note_chars = arg.chars();
 
             let pitch = match note_chars.next() {
-                Some(c) => parse_pitch_char(c)?,
+                Some(c) => parse_bytecode_pitch_char(c)?,
                 None => return Err(ValueError::NoNote),
             };
 
@@ -201,7 +272,7 @@ impl Note {
                 None => return Err(ValueError::NoNoteOctave),
             };
 
-            Note::from_pitch_stoffset_octave(pitch, semitone_offset, octave)
+            Note::from_bc_pitch_stoffset_octave(pitch, semitone_offset, octave)
         }
     }
 }
@@ -274,12 +345,12 @@ impl TryFrom<u32> for Octave {
 
 #[derive(Debug, Clone, Copy)]
 pub struct MmlPitch {
-    pitch: PitchChar,
+    pitch: MmlPitchChar,
     semitone_offset: i8,
 }
 
 impl MmlPitch {
-    pub fn new(pitch: PitchChar, semitone_offset: i8) -> Self {
+    pub fn new(pitch: MmlPitchChar, semitone_offset: i8) -> Self {
         Self {
             pitch,
             semitone_offset,

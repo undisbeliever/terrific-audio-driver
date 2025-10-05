@@ -143,6 +143,10 @@
       "source": "mml/invert.mml"
     },
     {
+      "name": "key_signature",
+      "source": "mml/key-signature.mml"
+    },
+    {
       "name": "loop",
       "source": "mml/loop.mml"
     },

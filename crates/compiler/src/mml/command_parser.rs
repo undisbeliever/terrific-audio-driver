@@ -28,7 +28,7 @@ use crate::echo::{EchoVolume, FirCoefficient, FirTap};
 use crate::envelope::{Gain, GainMode, OptionalGain, TempGain};
 use crate::errors::{ChannelError, ErrorWithPos, ValueError};
 use crate::file_pos::{FilePos, FilePosRange};
-use crate::notes::{MidiNote, MmlPitch, Note, Octave, STARTING_OCTAVE};
+use crate::notes::{KeySignature, MidiNote, MmlPitch, Note, Octave, STARTING_OCTAVE};
 use crate::pitch_table::PlayPitchSampleRate;
 use crate::subroutines::{FindSubroutineResult, SubroutineStore};
 use crate::time::{
@@ -75,6 +75,7 @@ pub struct State {
     pub keyoff_enabled: bool,
     pub octave: Octave,
     pub semitone_offset: i8,
+    pub signature: KeySignature,
     // Used by tad-gui statusbar
     pub quantize: Option<FineQuantization>,
 }
@@ -142,6 +143,7 @@ mod parser {
                     default_length: STARTING_MML_LENGTH,
                     keyoff_enabled: true,
                     octave: STARTING_OCTAVE,
+                    signature: KeySignature::default(),
                     semitone_offset: 0,
                     quantize: None,
                 },
@@ -759,6 +761,20 @@ fn parse_relative_channel_transpose(pos: FilePos, p: &mut Parser) {
     }
 }
 
+fn parse_key_signature(pos: FilePos, p: &mut Parser, s: &str) {
+    match p.state().signature.parse_signature_changes(s) {
+        Ok(signature) => {
+            p.set_state(State {
+                signature,
+                ..p.state().clone()
+            });
+        }
+        Err(e) => {
+            p.add_error(pos, e.into());
+        }
+    }
+}
+
 fn parse_optional_gain_value(pos: FilePos, p: &mut Parser, mode: GainMode) -> OptionalGain {
     match next_token_number(p) {
         Some(v) => match OptionalGain::try_from_mode_and_value_forbid_none(mode, v) {
@@ -1145,12 +1161,10 @@ fn parse_broken_chord_pitches(p: &mut Parser) -> Option<(Vec<NoteOrPitch>, FileP
                 return None;
             }
 
-            Token::Pitch(pitch) => {
-                match Note::from_mml_pitch(pitch, p.state().octave, p.state().semitone_offset) {
-                    Ok(note) => out.push(NoteOrPitch::Note(note)),
-                    Err(e) => p.add_error(pos, e.into()),
-                }
-            }
+            Token::Pitch(pitch) => match pitch_to_note(pitch, p) {
+                Ok(note) => out.push(NoteOrPitch::Note(note)),
+                Err(e) => p.add_error(pos, e),
+            },
 
             Token::PlayPitch => {
                 if let Some(p) = parse_unsigned_newtype(pos, p) {
@@ -1201,12 +1215,10 @@ fn parse_portamento_pitch(p: &mut Parser) -> PortamentoPitch {
                 return PortamentoPitch::MissingEnd;
             }
 
-            Token::Pitch(pitch) => {
-                match Note::from_mml_pitch(pitch, p.state().octave, p.state().semitone_offset) {
-                    Ok(n) => return PortamentoPitch::Ok(NoteOrPitch::Note(n)),
-                    Err(e) => p.add_error(pos, e.into()),
-                }
-            }
+            Token::Pitch(pitch) => match pitch_to_note(pitch, p) {
+                Ok(n) => return PortamentoPitch::Ok(NoteOrPitch::Note(n)),
+                Err(e) => p.add_error(pos, e),
+            },
 
             Token::PlayPitch => {
                 if let Some(p) = parse_unsigned_newtype(pos, p) {
@@ -1776,14 +1788,23 @@ fn play_note(pos: FilePos, note: Note, length: TickCounter, p: &mut Parser) -> C
     }
 }
 
+fn pitch_to_note(pitch: MmlPitch, p: &Parser) -> Result<Note, ChannelError> {
+    let s = p.state();
+
+    match Note::from_mml_pitch(pitch, s.octave, &s.signature, s.semitone_offset) {
+        Ok(n) => Ok(n),
+        Err(e) => Err(e.into()),
+    }
+}
+
 fn parse_pitch(pos: FilePos, pitch: MmlPitch, p: &mut Parser) -> Command {
-    match Note::from_mml_pitch(pitch, p.state().octave, p.state().semitone_offset) {
+    match pitch_to_note(pitch, p) {
         Ok(note) => {
             let length = parse_tracked_length(p);
             play_note(pos, note, length, p)
         }
         Err(e) => {
-            p.add_error(pos, e.into());
+            p.add_error(pos, e);
 
             // Output a rest (so tick-counter is correct)
             let length = parse_tracked_length(p);
@@ -2715,6 +2736,10 @@ fn parse_token(pos: FilePos, token: Token, p: &mut Parser) -> Command {
         }
         Token::RelativeChannelTranspose => {
             parse_relative_channel_transpose(pos, p);
+            Command::None
+        }
+        Token::KeySignature(s) => {
+            parse_key_signature(pos, p, s);
             Command::None
         }
 

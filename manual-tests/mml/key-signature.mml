@@ -1,0 +1,28 @@
+#Title Key Signature Test
+#Tempo 120
+
+@1 square
+
+A @1
+
+; A major scale
+A _{+fcg} o4 ab>cdefga r
+A _{=fcg}
+
+; B♭ major scale
+A _{-be} o4 b>cdefgab r
+A _{=be}
+
+; Sharp & Flat signature
+A _{+cfg} _{-be} o4 cdefgab>c r
+A _{=abcdefg}
+
+; Sharps and flats are relative to the key signature
+A _{+c} o4 c-- c- c c+ c++ r
+A _{=c} o4 c-- c- c c+ c++ r
+
+; Subroutines and channels have independent key signatures
+; The following plays `f+bc+ r8 fb-c`
+!s _{+fc} fbc r8
+A _{-be} !s fbc r
+A _{=be}

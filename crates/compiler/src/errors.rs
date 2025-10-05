@@ -242,6 +242,10 @@ pub enum ValueError {
     DuplicateInvertFlag,
     NoInvertFlags,
 
+    NoKeySignatureSign,
+    NoTonesInKeySignature,
+    InvalidKeySignatureTone(char),
+
     NoHexDigits,
     NoBool,
     NoNote,
@@ -563,6 +567,7 @@ pub enum ChannelError {
 
     MissingEndBrokenChord,
     MissingEndPortamento,
+    MissingEndKeySignature,
 
     PortamentoRequiresTwoPitches,
     InvalidPortamentoDelay,
@@ -1224,6 +1229,10 @@ impl Display for ValueError {
             Self::DuplicateInvertFlag => write!(f, "duplicate invert flag"),
             Self::NoInvertFlags => write!(f, "no invert flags"),
 
+            Self::NoKeySignatureSign => write!(f, "no key signature sign (expected +, - or =)"),
+            Self::NoTonesInKeySignature => write!(f, "no tones in key signature"),
+            Self::InvalidKeySignatureTone(c) => write!(f, "invalid tone in key signature ({c})"),
+
             Self::NoHexDigits => write!(f, "no hexadecimal digits"),
             Self::NoBool => write!(f, "no bool"),
             Self::NoNote => write!(f, "no note"),
@@ -1731,6 +1740,7 @@ impl Display for ChannelError {
 
             Self::MissingEndBrokenChord => write!(f, "cannot find broken chord end (no `}}}}`)"),
             Self::MissingEndPortamento => write!(f, "cannot find portamento end (no `}}`)"),
+            Self::MissingEndKeySignature => write!(f, "cannot find key signature end (no `}}`)"),
 
             Self::PortamentoRequiresTwoPitches => write!(f, "portamento requires 2 pitches"),
             Self::InvalidPortamentoDelay => {

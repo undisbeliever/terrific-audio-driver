@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: © 2023 Marcus Rowe <undisbeliever@gmail.com>
+// SPDX-FileCopyrightText: © 2025 Marcus Rowe <undisbeliever@gmail.com>
 //
 // SPDX-License-Identifier: MIT
 

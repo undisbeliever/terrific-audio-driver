@@ -156,6 +156,7 @@ This is not a substitution macro, each subroutine/channel has the following inde
  * Whole note length (ZenLen)
  * Octave
  * Channel transpose (`_M` and `__M` commands)
+ * `_{}` key signature
  * Default length
  * Quantization value
  * MP Vibrato
@@ -297,6 +298,18 @@ Numbers can be decimal, or hexadecimal when prefixed with `$` (ie, `$ff`)
     * CAUTION: `_M` and `__M` transpose does not affect subroutines or loops.
       * `_M0 c [_M+1 c]3` will play `c c+ c+ c+`
       * `_M+4 !s` will not change any of the notes in the subroutine
+ * `_{<+/-/=]><tones>}` change key signature
+    * This command adds a sharp `+`, flat `-` or natural `=` to the specified tones.
+    * Examples:
+       * `_{+fcg}` adds a sharp to `f`, `c` and `g` (A major scale)  
+         `_{+fcg} ab>cdefga` will play `a b > c+ d e f+ g+ a`.
+       * `_{-be}` adds a flat to `b` and `e` (B♭ major scale)  
+         `_{-be} b>cdefgab` will play `b- > c d e- f g a b-`.
+    * CAUTION: `_{}` does not cancel a previously set signature.
+       * `_{+cd}` `_{-de}` will add a sharp to `c` and a flat to `d` and `e`.
+       * To return to the C Major scale the sharps and flats must be reset with `_{=}`
+         ie, `_{+fc} cdef _{=fc} cdef` will play `c+ d e f+ | c d e f`.
+    * `_{}` has the same behaviour as `o` octave and `_M` channel transpose.
 
 <br/>
 

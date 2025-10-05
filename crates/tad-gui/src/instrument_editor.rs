@@ -16,7 +16,7 @@ use crate::GuiMessage;
 
 use compiler::data::{self, Instrument, LoopSetting};
 use compiler::errors::ValueError;
-use compiler::notes::{Note, Octave, PitchChar, STARTING_OCTAVE};
+use compiler::notes::{Note, Octave, PitchSemitoneIndex, STARTING_OCTAVE};
 use compiler::path::SourcePathBuf;
 
 use std::cell::RefCell;
@@ -470,7 +470,7 @@ impl TestInstrumentWidget {
             button.set_callback({
                 let state = out.clone();
                 let i = u8::try_from(i).unwrap();
-                let pitch = PitchChar::try_from(i).unwrap();
+                let pitch = PitchSemitoneIndex::try_from(i).unwrap();
                 move |_w| {
                     if let Ok(s) = state.try_borrow() {
                         let _ = s.on_key_pressed(pitch);
@@ -500,7 +500,7 @@ impl TestInstrumentWidget {
         self.group.set_active(active && self.selected_id.is_some());
     }
 
-    fn on_key_pressed(&self, pitch: PitchChar) -> Result<(), ValueError> {
+    fn on_key_pressed(&self, pitch: PitchSemitoneIndex) -> Result<(), ValueError> {
         if let Some(id) = self.selected_id {
             let envelope = self.envelope.get_envelope()?;
             let octave = Octave::try_from(self.octave.value() as u32)?;

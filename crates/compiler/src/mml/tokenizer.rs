@@ -114,6 +114,8 @@ pub enum Token<'a> {
     StartBytecodeAsm,
     EndBytecodeAsm,
 
+    KeySignature(&'a str),
+
     // Must not contain a call subroutine instruction.
     // Using Range to remove lifetime from MmlCommand.
     BytecodeAsm(Range<usize>),
@@ -521,6 +523,17 @@ fn next_token<'a>(scanner: &mut Scanner<'a>) -> Option<TokenWithPosition<'a>> {
                 two_ascii_token!(Token::ChannelTranspose)
             } else if scanner.match_str("__") {
                 two_ascii_token!(Token::RelativeTranspose)
+            } else if scanner.match_str("_{") {
+                scanner.advance_two_ascii();
+                let signature = scanner.read_while(|b: u8| b != b'}');
+
+                match scanner.first_byte() {
+                    Some(b'}') => {
+                        scanner.advance_one_ascii();
+                        Token::KeySignature(signature.trim())
+                    }
+                    _ => Token::Error(ChannelError::MissingEndKeySignature),
+                }
             } else {
                 one_ascii_token!(Token::Transpose)
             }
