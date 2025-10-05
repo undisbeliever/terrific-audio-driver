@@ -26,3 +26,9 @@ A _{=c} o4 c-- c- c c+ c++ r
 !s _{+fc} fbc r8
 A _{-be} !s fbc r
 A _{=be}
+
+; a `=` on a pitch will ignore the key signature
+; (from mml-syntax.mml)
+A _{+fcg} g= ; plays g natural
+A _{+fcg} g=- g=+ ; plays g- then g+
+A _{=fcg} r

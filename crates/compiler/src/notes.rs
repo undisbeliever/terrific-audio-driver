@@ -220,8 +220,13 @@ impl Note {
         signature: &KeySignature,
         semitone_offset: i8,
     ) -> Result<Self, ValueError> {
-        let note_id: i32 = i32::from(o.0 * SEMITONES_PER_OCTAVE)
-            + i32::from(signature.0[p.pitch.0 as usize])
+        let pitch = match p.natural {
+            false => signature.0[p.pitch.0 as usize],
+            true => KeySignature::default().0[p.pitch.0 as usize],
+        };
+
+        let note_id: i32 = i32::from(pitch)
+            + i32::from(o.0 * SEMITONES_PER_OCTAVE)
             + i32::from(p.semitone_offset)
             + i32::from(semitone_offset);
 
@@ -346,13 +351,15 @@ impl TryFrom<u32> for Octave {
 #[derive(Debug, Clone, Copy)]
 pub struct MmlPitch {
     pitch: MmlPitchChar,
+    natural: bool,
     semitone_offset: i8,
 }
 
 impl MmlPitch {
-    pub fn new(pitch: MmlPitchChar, semitone_offset: i8) -> Self {
+    pub fn new(pitch: MmlPitchChar, natural: bool, semitone_offset: i8) -> Self {
         Self {
             pitch,
+            natural,
             semitone_offset,
         }
     }

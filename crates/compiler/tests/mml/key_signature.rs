@@ -55,6 +55,24 @@ fn key_signature() {
 }
 
 #[test]
+fn natural_ignores_key_signature() {
+    assert_line_matches_line("_{+fcg} c=defgab", "c d e f+ g+ a b");
+    assert_line_matches_line("_{-be} c=d=e=f=g=a=b=", "c d e f g a b");
+
+    assert_line_matches_line("_{+fcg} f=- c=-- g=---", "f- c-- g---");
+    assert_line_matches_line("_{+fcg} f= c=+ g=++", "f c+ g++");
+
+    assert_line_matches_line("_{-bea} b=+ e=++a=+++", "b+ e++ a+++");
+    assert_line_matches_line("_{-bea} b= e=- a=--", "b e- a--");
+
+    assert_line_matches_line("_M-2 _{+c} c c=", "c- c--");
+    assert_line_matches_line("_{+c} _M-2 c c=", "c- c--");
+
+    // from mml-syntax.md
+    assert_line_matches_line("_{+fc} c c= c=- c=+", "c+ c c- c+");
+}
+
+#[test]
 fn key_signature_loops() {
     assert_line_matches_line("[ efc : _{+fc} efc ]4 f", "[ efc : ef+c+ ]4 f+");
     assert_line_matches_line("[ abc : _{-eb} abc ]4 e", "[ abc : ab-c ]4 e-");

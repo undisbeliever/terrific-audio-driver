@@ -360,6 +360,14 @@ fn next_token<'a>(scanner: &mut Scanner<'a>) -> Option<TokenWithPosition<'a>> {
             // skip pitch character
             scanner.advance_one_ascii();
 
+            let natural = match scanner.first_byte() {
+                Some(b'=') => {
+                    scanner.advance_one_ascii();
+                    true
+                }
+                _ => false,
+            };
+
             let mut semitone_offset: i8 = 0;
             let offset_str = scanner.read_while(|c| c == b'-' || c == b'+');
             for o in offset_str.bytes() {
@@ -370,7 +378,7 @@ fn next_token<'a>(scanner: &mut Scanner<'a>) -> Option<TokenWithPosition<'a>> {
                 }
             }
 
-            Token::Pitch(MmlPitch::new(pitch, semitone_offset))
+            Token::Pitch(MmlPitch::new(pitch, natural, semitone_offset))
         }
 
         b'!' => {

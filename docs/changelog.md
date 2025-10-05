@@ -39,6 +39,7 @@ MML changes:
  * Added `#OldTranspose` header to restore the v0.1.1 and earlier transpose behaviour
    by silently converting `_` and `__` commands to `_M` and `__M`.
  * Added `_{}` change key signature command
+ * Added `=` natural to MML notes (ignores the key signature)
 
 
 Version 0.1.1

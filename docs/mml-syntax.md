@@ -203,6 +203,7 @@ Numbers can be decimal, or hexadecimal when prefixed with `$` (ie, `$ff`)
  * `c` `d` `e` `f` `g` `a` `b` - Play note
     * `+` adds a sharp.
     * `-` adds a flat.
+    * `=` will ignore the key signature (see the `_{}` command).
     * Multiple `+` and `-` can be used to increase/decrease the pitch by a semitone.
     * A optional *length* can be added after the note.  If there is no length, the default length (`l`) will be used.
  * `P<pitch>[,length]` - Play pitch
@@ -306,6 +307,8 @@ Numbers can be decimal, or hexadecimal when prefixed with `$` (ie, `$ff`)
          `_{+fcg} ab>cdefga` will play `a b > c+ d e f+ g+ a`.
        * `_{-be}` adds a flat to `b` and `e` (B♭ major scale)  
          `_{-be} b>cdefgab` will play `b- > c d e- f g a b-`.
+    * A `=` after a pitch will ignore the key signature.
+       * `_{+fc} c c= c=- c=+` will play c sharp, natural c, c flat, c sharp (`c+ c c- c+`).
     * CAUTION: `_{}` does not cancel a previously set signature.
        * `_{+cd}` `_{-de}` will add a sharp to `c` and a flat to `d` and `e`.
        * To return to the C Major scale the sharps and flats must be reset with `_{=}`
