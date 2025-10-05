@@ -292,6 +292,7 @@ Numbers can be decimal, or hexadecimal when prefixed with `$` (ie, `$ff`)
  * `_M<-128..+128>` - Sets channel transpose
     * Adds a semitone offset to all future note and portamento-note commands.
     * CAUTION: `_M` and `__M` transpose does not affect subroutines or loops.
+      * Subroutines and channels have independent `_M` and `__M` channel transpose settings.
       * `_M0 c [_M+1 c]3` will play `c c+ c+ c+`
       * `_M+4 !s` will not change any of the notes in the subroutine
  * `__M<-128..+128>` - Adjusts channel transpose
@@ -309,7 +310,8 @@ Numbers can be decimal, or hexadecimal when prefixed with `$` (ie, `$ff`)
        * `_{+cd}` `_{-de}` will add a sharp to `c` and a flat to `d` and `e`.
        * To return to the C Major scale the sharps and flats must be reset with `_{=}`
          ie, `_{+fc} cdef _{=fc} cdef` will play `c+ d e f+ | c d e f`.
-    * `_{}` has the same behaviour as `o` octave and `_M` channel transpose.
+    * `_{}` have the same behaviour as `o` octave and `_M` channel transpose.
+       * Subroutines and channels have independent `_{}` key signatures.
 
 <br/>
 
