@@ -353,6 +353,25 @@ fn assert_mml_channel_a_matches_looping_bytecode(mml: &str, bc_asm: &[&str]) {
     assert_eq!(mml_bytecode(&mml), bc_asm);
 }
 
+fn assert_mml_channel_b_matches_bytecode(mml: &str, bc_asm: &[&str]) {
+    let dummy_data = dummy_data();
+
+    let mml = compile_mml(mml, &dummy_data);
+
+    let bc_asm = assemble_channel_bytecode(
+        bc_asm,
+        &dummy_data.instruments_and_samples,
+        mml.subroutines(),
+        BcTerminator::DisableChannel,
+        BytecodeContext::SongChannel {
+            index: 1,
+            max_edl: mml.metadata().echo_buffer.max_edl,
+        },
+    );
+
+    assert_eq!(mml_channel_b_bytecode(&mml), bc_asm);
+}
+
 fn assert_mml_subroutine_matches_bytecode(mml: &str, subroutine_index: usize, bc_asm: &[&str]) {
     let dummy_data = dummy_data();
 

@@ -127,6 +127,10 @@
       "source": "manual/vibrato-with-delay.mml"
     },
     {
+      "name": "channel_transpose",
+      "source": "mml/channel-transpose.mml"
+    },
+    {
       "name": "disable_keyoff",
       "source": "mml/disable-keyoff.mml"
     },
@@ -229,10 +233,6 @@
     {
       "name": "vibrato_after_portamento",
       "source": "bug-tests/vibrato-after-portamento.mml"
-    },
-    {
-      "name": "channel_transpose",
-      "source": "mml/channel-transpose.mml"
     }
   ]
 }

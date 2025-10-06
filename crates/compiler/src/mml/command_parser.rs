@@ -144,7 +144,7 @@ mod parser {
                     keyoff_enabled: true,
                     octave: STARTING_OCTAVE,
                     signature: KeySignature::default(),
-                    semitone_offset: 0,
+                    semitone_offset: settings.channel_transpose.as_i8(),
                     quantize: None,
                 },
 

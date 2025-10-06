@@ -446,7 +446,10 @@ fn parse_i32(src: &str, missing_sign_err: &ValueError) -> Result<i32, ValueError
     }
 }
 
-fn parse_i32_allow_zero(src: &str, missing_sign_err: &ValueError) -> Result<i32, ValueError> {
+pub(crate) fn parse_i32_allow_zero(
+    src: &str,
+    missing_sign_err: &ValueError,
+) -> Result<i32, ValueError> {
     if let Some(s) = src.strip_prefix("+$") {
         match i32::from_str_radix(s, 16) {
             Ok(i) => Ok(i),

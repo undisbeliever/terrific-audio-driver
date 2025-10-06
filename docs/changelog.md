@@ -40,6 +40,7 @@ MML changes:
    by silently converting `_` and `__` commands to `_M` and `__M`.
  * Added `_{}` change key signature command
  * Added `=` natural to MML notes (ignores the key signature)
+ * Added `#Transpose` header (equivalent to adding `_M` to the start of every channel and subroutine)
 
 
 Version 0.1.1

@@ -1,9 +1,16 @@
 #Title Channel transpose test
 #Tempo 120
 
+; Sets the default channel transpose for all channels and subroutines
+; This is the equivalent to adding `_M +2` to the start of every channel and subroutine.
+#Transpose +2
+
 @1 square
 
 A @1
+
+A c ; plays d (from #Transpose header)
+A _0 r
 
 A _M0 c [__M+1 c]3 r
 
@@ -11,5 +18,17 @@ A _M+2 c
 A _M-2 c
 A __M+3 c
 A __M-4 c
-
 A r
+
+A _M+1
+A !s
+A c ; plays c+ (from _M+1 before the subroutine call)
+A r
+
+
+; Subroutines have independent _M channel transpose
+!s c ; plays d (from #Transpose header)
+!s _0 r
+!s _M0 c [__M+1 c]3 r
+!s __M+2 c __M-6 c r
+

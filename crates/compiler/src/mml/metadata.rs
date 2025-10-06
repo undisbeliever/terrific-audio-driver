@@ -6,6 +6,8 @@
 
 use std::collections::HashMap;
 
+use crate::bytecode::Transpose;
+use crate::bytecode_assembler::parse_i32_allow_zero;
 use crate::echo::{
     parse_fir_filter_string, EchoBuffer, EchoEdl, EchoFeedback, EchoLength, EchoVolume,
     IDENTITY_FILTER,
@@ -15,11 +17,12 @@ use crate::file_pos::{blank_file_range, Line};
 use crate::invert_flags::{parse_invert_flag_arguments, InvertFlags};
 use crate::time::{Bpm, TickClock, ZenLen, DEFAULT_BPM, DEFAULT_ZENLEN};
 use crate::value_newtypes::{parse_i8wh, I8WithByteHexValueNewType};
-use crate::{spc_file_export, FilePosRange};
+use crate::{spc_file_export, FilePosRange, SignedValueNewType};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct GlobalSettings {
     pub zenlen: ZenLen,
+    pub channel_transpose: Transpose,
     pub old_transpose: bool,
 }
 
@@ -27,6 +30,7 @@ impl Default for GlobalSettings {
     fn default() -> Self {
         Self {
             zenlen: DEFAULT_ZENLEN,
+            channel_transpose: Transpose::new(0),
             old_transpose: false,
         }
     }
@@ -145,6 +149,7 @@ enum Header {
     Copyright,
     License,
     ZenLen,
+    Transpose,
     OldTranspose,
     MaxEchoLength,
     EchoLength,
@@ -170,6 +175,7 @@ fn match_header(header: &str) -> Option<Header> {
         "#License" | "#license" => Some(Header::License),
 
         "#ZenLen" | "#Zenlen" | "#zenLen" | "#zenlen" => Some(Header::ZenLen),
+        "#Transpose" | "#transpose" => Some(Header::Transpose),
         "#OldTranspose" | "#oldTranspose" | "#oldtranspose" => Some(Header::OldTranspose),
 
         "#MaxEchoLength" | "#maxEchoLength" | "#maxecholength" => Some(Header::MaxEchoLength),
@@ -233,6 +239,10 @@ impl HeaderState {
             Header::License => self.metadata.license = to_option_string()?,
 
             Header::ZenLen => self.metadata.mml_settings.zenlen = parse_u32(value)?.try_into()?,
+            Header::Transpose => {
+                self.metadata.mml_settings.channel_transpose =
+                    parse_i32_allow_zero(value, &Transpose::MISSING_SIGN_ERROR)?.try_into()?
+            }
 
             Header::OldTranspose => self.metadata.mml_settings.old_transpose = true,
 

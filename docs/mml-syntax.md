@@ -30,6 +30,8 @@ The song tempo can be set with either `#Tempo` or `#Timer`:
 
 The following adjust default values:
  * `#ZenLen number` - Set the default whole-note length (default 96)
+ * `#Transpose -128..+127` - Sets the default channel transpose
+    * This is the equivalent to adding `_M` to the start of every channel and subroutine.
 
 <br/>
 

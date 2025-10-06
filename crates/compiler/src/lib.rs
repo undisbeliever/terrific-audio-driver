@@ -36,7 +36,7 @@ pub mod time;
 
 pub use bytecode::opcodes;
 
-pub use bytecode::Pan;
+pub use bytecode::{Pan, Transpose};
 pub use file_pos::{FilePos, FilePosRange};
 
 pub use value_newtypes::{I8WithByteHexValueNewType, SignedValueNewType, UnsignedValueNewType};

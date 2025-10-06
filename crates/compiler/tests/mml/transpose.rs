@@ -123,6 +123,48 @@ A @0 __M-2 !s1 c
 }
 
 #[test]
+fn transpose_header() {
+    let mml = r##"
+#Transpose +5
+
+@0 dummy_instrument
+
+!s ?@0 c __M-2 c _M0 c
+
+A @0 !s c __M-2 c _M0 c
+B @0 !s c __M+2 c _M0 c
+"##;
+
+    assert_mml_channel_a_matches_bytecode(
+        mml,
+        &[
+            "set_instrument dummy_instrument",
+            "call_subroutine s",
+            "play_note f4 24",
+            "play_note d+4 24",
+            "play_note c4 24",
+        ],
+    );
+
+    assert_mml_channel_b_matches_bytecode(
+        mml,
+        &[
+            "set_instrument dummy_instrument",
+            "call_subroutine s",
+            "play_note f4 24",
+            "play_note g4 24",
+            "play_note c4 24",
+        ],
+    );
+
+    assert_mml_subroutine_matches_bytecode(
+        mml,
+        0,
+        &["play_note f4 24", "play_note d+4 24", "play_note c4 24"],
+    );
+}
+
+#[test]
 fn set_transpose() {
     assert_line_matches_bytecode(
         "c _+2 c",

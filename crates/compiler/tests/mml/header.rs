@@ -6,7 +6,7 @@ use compiler::echo::{EchoBuffer, FirCoefficient};
 use compiler::invert_flags::InvertFlags;
 use compiler::mml::{GlobalSettings, MetaData};
 use compiler::time::{Bpm, TickClock, ZenLen};
-use compiler::UnsignedValueNewType;
+use compiler::{Transpose, UnsignedValueNewType};
 
 use crate::*;
 
@@ -24,6 +24,7 @@ fn all_headers() {
 #Copyright song-copyright
 #License song-license
 #ZenLen 192
+#Transpose +2
 #OldTranspose
 #MaxEchoLength 64
 #EchoLength 32
@@ -67,6 +68,7 @@ A r
             tick_clock: 100u16.try_into().unwrap(),
             mml_settings: GlobalSettings {
                 zenlen: 192u8.try_into().unwrap(),
+                channel_transpose: Transpose::new(2),
                 old_transpose: true,
             },
             spc_song_length: Some(300),
@@ -102,6 +104,7 @@ fn all_headers_lower_camel_case() {
 #copyright song-copyright
 #license song-license
 #zenLen 192
+#transpose +2
 #oldTranspose
 #maxEchoLength 64
 #echoLength 32
@@ -145,6 +148,7 @@ A r
             tick_clock: 100u16.try_into().unwrap(),
             mml_settings: GlobalSettings {
                 zenlen: 192u8.try_into().unwrap(),
+                channel_transpose: Transpose::new(2),
                 old_transpose: true,
             },
             spc_song_length: Some(300),
@@ -180,6 +184,7 @@ fn all_headers_lowercase() {
 #copyright song-copyright
 #license song-license
 #zenlen 192
+#transpose +2
 #oldtranspose
 #maxecholength 64
 #echolength 32
@@ -223,6 +228,7 @@ A r
             tick_clock: 100u16.try_into().unwrap(),
             mml_settings: GlobalSettings {
                 zenlen: 192u8.try_into().unwrap(),
+                channel_transpose: Transpose::new(2),
                 old_transpose: true,
             },
             spc_song_length: Some(300),
@@ -607,4 +613,99 @@ A r
         &dummy_data,
     );
     assert_eq!(s.metadata().mml_settings.zenlen, 192u8.try_into().unwrap());
+}
+
+#[test]
+fn transpose() {
+    let dummy_data = dummy_data();
+
+    let s = compile_mml(
+        r#"
+A r
+"#,
+        &dummy_data,
+    );
+    assert_eq!(
+        s.metadata().mml_settings.channel_transpose,
+        Transpose::new(0)
+    );
+
+    let s = compile_mml(
+        r#"
+#Transpose 0
+
+A r
+"#,
+        &dummy_data,
+    );
+    assert_eq!(
+        s.metadata().mml_settings.channel_transpose,
+        Transpose::new(0)
+    );
+
+    assert_one_header_error_in_mml(
+        r#"
+#Transpose 5
+
+A r
+"#,
+        2,
+        ValueError::NoTransposeSign.into(),
+    );
+
+    let s = compile_mml(
+        r#"
+#Transpose +127
+
+A r
+"#,
+        &dummy_data,
+    );
+    assert_eq!(
+        s.metadata().mml_settings.channel_transpose,
+        Transpose::new(127)
+    );
+
+    assert_one_header_error_in_mml(
+        r#"
+#Transpose +128
+
+A r
+"#,
+        2,
+        ValueError::TransposeOutOfRange(128).into(),
+    );
+
+    let s = compile_mml(
+        r#"
+#Transpose -128
+
+A r
+"#,
+        &dummy_data,
+    );
+    assert_eq!(
+        s.metadata().mml_settings.channel_transpose,
+        Transpose::new(-128)
+    );
+
+    assert_one_header_error_in_mml(
+        r#"
+#Transpose -129
+
+A r
+"#,
+        2,
+        ValueError::TransposeOutOfRange(-129).into(),
+    );
+
+    assert_one_header_error_in_mml(
+        r#"
+#Transpose +not-a-number
+
+A r
+"#,
+        2,
+        ValueError::CannotParseSigned("+not-a-number".to_owned()).into(),
+    );
 }
