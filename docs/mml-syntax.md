@@ -32,7 +32,7 @@ The following adjust default values:
  * `#ZenLen number` - Set the default whole-note length (default 96)
  * `#Transpose <-128..+127>` - Sets the default channel transpose
     * This is the equivalent to adding `_M` to the start of every channel and subroutine.
- * `#KeySignature <signature>[,<signature]*` - Sets the default key signature
+ * `#KeySignature <signature>[, signature]*` - Sets the default key signature
     * This is the equivalent to adding `_{}` key signature commands to the start of every channel and subroutine.
     * Multiple key signatures can be separated by commas
     * Examples:

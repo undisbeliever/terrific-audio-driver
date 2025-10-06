@@ -13,12 +13,12 @@ Instructions
  * `play_pitch <pitch> [ko] <duration>` - Set `VxPITCH` to *pitch* for *duration* ticks
  * `portamento <note> <ko> <pitch_velocity> <duration>` - Extend a slur into a portamento
     * Portamento instructions do not emit a key-on event.  You will need to slur the previous note before a portamento instruction.
- * `portamento_calc <note> <ko> <slide_ticks> <duration>` - Extend a slur into a portamento with audio-driver calculating portamento velocity
+ * `portamento_calc <note> <ko> <slide_ticks> <duration>` - Extend a slur into a portamento with an audio-driver calculated pitch velocity
     * The audio driver will calculate the portamento speed, using `abs(VxPITCH - target_pitch) / slide_ticks`
     * The portamento velocity will be capped to 255.
     * *slide_ticks* can be greater than duration.
  * `portamento_pitch <pitch> <ko> <pitch_velocity> <duration>` - Extend a slur into a portamento with a target `VxPITCH` register value
- * `portamento_pitch_calc <pitch> <ko> <slide_ticks> <duration>` - Extend a slur into a portamento with a target `VxPITCH` register value and audio-driver calculating portamento velocity
+ * `portamento_pitch_calc <pitch> <ko> <slide_ticks> <duration>` - Extend a slur into a portamento with a target `VxPITCH` register value and an audio-driver calculated pitch velocity
 
  * `play_noise <0-31> [ko] <duration>` - play noise
     * Noise is disabled on the next `play_note` or `play_pitch` instruction

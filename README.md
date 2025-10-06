@@ -56,9 +56,11 @@ Engine Limitations and Deliberate Design Decisions
         required by the instrument.
     * Where possible, the portamento *pitch-offset per tick* value is precalculated by the MML
       compiler.  This requires the MML compiler to know what instrument is playing the portamento.
-       * If the instrument or note of the portamento is unknown, the audio driver will calculate
-         the portamento velocity.
+       * If the instrument of the portamento is unknown, the audio driver will calculate the
+         portamento velocity.
        * The MML syntax provides a way to manually set the *pitch-offset per tick* value.
+       * If the song contains a transpose command the compiler will not calculate the portamento
+         *pitch-offset per tick* value.
     * `MP` vibrato is precalculated by the MML compiler, the instrument must be known and audio
       driver transpose must be disabled.
  * There is a fixed 1 tick delay after a key-off event.
