@@ -15,14 +15,16 @@ use crate::echo::{
 use crate::errors::{ErrorWithPos, MmlLineError, ValueError};
 use crate::file_pos::{blank_file_range, Line};
 use crate::invert_flags::{parse_invert_flag_arguments, InvertFlags};
+use crate::notes::KeySignature;
 use crate::time::{Bpm, TickClock, ZenLen, DEFAULT_BPM, DEFAULT_ZENLEN};
 use crate::value_newtypes::{parse_i8wh, I8WithByteHexValueNewType};
 use crate::{spc_file_export, FilePosRange, SignedValueNewType};
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct GlobalSettings {
     pub zenlen: ZenLen,
     pub channel_transpose: Transpose,
+    pub signature: KeySignature,
     pub old_transpose: bool,
 }
 
@@ -31,6 +33,7 @@ impl Default for GlobalSettings {
         Self {
             zenlen: DEFAULT_ZENLEN,
             channel_transpose: Transpose::new(0),
+            signature: KeySignature::default(),
             old_transpose: false,
         }
     }
@@ -150,6 +153,7 @@ enum Header {
     License,
     ZenLen,
     Transpose,
+    KeySignature,
     OldTranspose,
     MaxEchoLength,
     EchoLength,
@@ -176,6 +180,7 @@ fn match_header(header: &str) -> Option<Header> {
 
         "#ZenLen" | "#Zenlen" | "#zenLen" | "#zenlen" => Some(Header::ZenLen),
         "#Transpose" | "#transpose" => Some(Header::Transpose),
+        "#KeySignature" | "#keySignature" | "#keysignature" => Some(Header::KeySignature),
         "#OldTranspose" | "#oldTranspose" | "#oldtranspose" => Some(Header::OldTranspose),
 
         "#MaxEchoLength" | "#maxEchoLength" | "#maxecholength" => Some(Header::MaxEchoLength),
@@ -245,6 +250,15 @@ impl HeaderState {
             }
 
             Header::OldTranspose => self.metadata.mml_settings.old_transpose = true,
+
+            Header::KeySignature => {
+                let mut signature = KeySignature::default();
+
+                for v in value.split(',') {
+                    signature = signature.parse_signature_changes(v.trim())?;
+                }
+                self.metadata.mml_settings.signature = signature;
+            }
 
             Header::MaxEchoLength => {
                 let echo_length = EchoLength::try_from(parse_u32(value)?)?;

@@ -118,7 +118,7 @@ mod parser {
             tokens: MmlTokens<'a>,
             instruments_map: &'a HashMap<IdentifierStr, usize>,
             subroutines: &'a dyn SubroutineStore,
-            settings: GlobalSettings,
+            settings: &GlobalSettings,
             sections: Option<&'a [Section]>,
 
             #[cfg(feature = "mml_tracking")] cursor_tracking: &'a mut CursorTracker,
@@ -143,7 +143,7 @@ mod parser {
                     default_length: STARTING_MML_LENGTH,
                     keyoff_enabled: true,
                     octave: STARTING_OCTAVE,
-                    signature: KeySignature::default(),
+                    signature: settings.signature.clone(),
                     semitone_offset: settings.channel_transpose.as_i8(),
                     quantize: None,
                 },

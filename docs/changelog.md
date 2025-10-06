@@ -41,6 +41,7 @@ MML changes:
  * Added `_{}` change key signature command
  * Added `=` natural to MML notes (ignores the key signature)
  * Added `#Transpose` header (equivalent to adding `_M` to the start of every channel and subroutine)
+ * Added `#KeySignature` header (equivalent to adding `_{}` to the start of every channel and subroutine)
 
 
 Version 0.1.1

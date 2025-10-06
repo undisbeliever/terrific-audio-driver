@@ -183,7 +183,7 @@ pub fn compile_mml(
 
     assert!(lines.subroutines.len() <= u8::MAX.into());
     let mut compiler = MmlSongBytecodeGenerator::new(
-        metadata.mml_settings,
+        &metadata.mml_settings,
         pitch_table,
         mml,
         data_instruments,
@@ -294,9 +294,11 @@ pub(crate) fn compile_sfx_subroutines(
     }
     drop(line_errors);
 
+    let global_settings = GlobalSettings::default();
+
     assert!(lines.subroutines.len() <= u8::MAX.into());
     let mut compiler = MmlSongBytecodeGenerator::new(
-        GlobalSettings::default(),
+        &global_settings,
         pitch_table,
         sfx,
         data_instruments,

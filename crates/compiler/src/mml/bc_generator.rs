@@ -64,7 +64,7 @@ impl SubroutineStore for SongSubroutines<'_> {
 pub struct MmlSongBytecodeGenerator<'a> {
     song_data: Vec<u8>,
 
-    global_settings: GlobalSettings,
+    global_settings: &'a GlobalSettings,
     pitch_table: &'a PitchTable,
     mml_file: &'a str,
     data_instruments: &'a UniqueNamesList<data::InstrumentOrSample>,
@@ -89,7 +89,7 @@ pub struct MmlSongBytecodeGenerator<'a> {
 impl<'a> MmlSongBytecodeGenerator<'a> {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
-        global_settings: GlobalSettings,
+        global_settings: &'a GlobalSettings,
         pitch_table: &'a PitchTable,
         mml_file: &'a str,
         data_instruments: &'a UniqueNamesList<data::InstrumentOrSample>,
@@ -507,7 +507,7 @@ pub fn parse_and_compile_sound_effect(
         tokens,
         instruments_map,
         sfx_subroutines,
-        GlobalSettings::default(),
+        &GlobalSettings::default(),
         None, // No sections in sound effect
         #[cfg(feature = "mml_tracking")]
         &mut cursor_tracker,
@@ -586,7 +586,7 @@ pub fn parse_and_compile_mml_prefix(
         tokens,
         instruments_map,
         &NoSubroutines(),
-        GlobalSettings::default(),
+        &GlobalSettings::default(),
         None, // No sections in sound effect
         // ::TODO remove cursor tracker here::
         #[cfg(feature = "mml_tracking")]

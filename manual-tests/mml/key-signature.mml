@@ -1,9 +1,18 @@
 #Title Key Signature Test
 #Tempo 120
 
+; Sets the default key signature for all channels and subroutines
+; This is the equivalent to adding `_{}` to the start of every channel and subroutine.
+; Multiple key signature commands can be seperated by commas.
+#KeySignature -bea ; E Flat Major
+
 @1 square
 
 A @1
+
+; E Flat Major scale (from #KeySignature header)
+A o4 efgab>cde r
+A _{=abcdefg}
 
 ; A major scale
 A _{+fcg} o4 ab>cdefga r
@@ -21,14 +30,23 @@ A _{=abcdefg}
 A _{+c} o4 c-- c- c c+ c++ r
 A _{=c} o4 c-- c- c c+ c++ r
 
-; Subroutines and channels have independent key signatures
-; The following plays `f+bc+ r8 fb-c`
-!s _{+fc} fbc r8
-A _{-be} !s fbc r
-A _{=be}
-
 ; a `=` on a pitch will ignore the key signature
 ; (from mml-syntax.mml)
 A _{+fcg} g= ; plays g natural
 A _{+fcg} g=- g=+ ; plays g- then g+
 A _{=fcg} r
+
+
+; Subroutines and channels have independent key signatures
+
+; The following plays `fb-c r8 f+bc+`
+!s1 fbc r8 ; f is sharp from #KeySignature value
+A _{+fc} !s1 fbc
+A _{=fc} r
+
+; The following plays `f+bc+ r8 fb-c`
+!s2 _{=abcdefg} ; reset #KeySignature value
+!s2 _{+fc} fbc r8
+A _{-be} !s2 fbc
+A _{=be} r
+

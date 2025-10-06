@@ -5,6 +5,7 @@
 use compiler::echo::{EchoBuffer, FirCoefficient};
 use compiler::invert_flags::InvertFlags;
 use compiler::mml::{GlobalSettings, MetaData};
+use compiler::notes::KeySignature;
 use compiler::time::{Bpm, TickClock, ZenLen};
 use compiler::{Transpose, UnsignedValueNewType};
 
@@ -25,6 +26,7 @@ fn all_headers() {
 #License song-license
 #ZenLen 192
 #Transpose +2
+#KeySignature +fc ; D Major
 #OldTranspose
 #MaxEchoLength 64
 #EchoLength 32
@@ -69,6 +71,9 @@ A r
             mml_settings: GlobalSettings {
                 zenlen: 192u8.try_into().unwrap(),
                 channel_transpose: Transpose::new(2),
+                signature: KeySignature::default()
+                    .parse_signature_changes("+fc")
+                    .unwrap(),
                 old_transpose: true,
             },
             spc_song_length: Some(300),
@@ -105,6 +110,7 @@ fn all_headers_lower_camel_case() {
 #license song-license
 #zenLen 192
 #transpose +2
+#keySignature +fc ; D Major
 #oldTranspose
 #maxEchoLength 64
 #echoLength 32
@@ -149,6 +155,9 @@ A r
             mml_settings: GlobalSettings {
                 zenlen: 192u8.try_into().unwrap(),
                 channel_transpose: Transpose::new(2),
+                signature: KeySignature::default()
+                    .parse_signature_changes("+fc")
+                    .unwrap(),
                 old_transpose: true,
             },
             spc_song_length: Some(300),
@@ -185,6 +194,7 @@ fn all_headers_lowercase() {
 #license song-license
 #zenlen 192
 #transpose +2
+#keysignature +fc ; D Major
 #oldtranspose
 #maxecholength 64
 #echolength 32
@@ -229,6 +239,9 @@ A r
             mml_settings: GlobalSettings {
                 zenlen: 192u8.try_into().unwrap(),
                 channel_transpose: Transpose::new(2),
+                signature: KeySignature::default()
+                    .parse_signature_changes("+fc")
+                    .unwrap(),
                 old_transpose: true,
             },
             spc_song_length: Some(300),
@@ -707,5 +720,105 @@ A r
 "#,
         2,
         ValueError::CannotParseSigned("+not-a-number".to_owned()).into(),
+    );
+}
+
+#[test]
+fn key_signature() {
+    let dummy_data = dummy_data();
+
+    let s = compile_mml(
+        r#"
+A r
+"#,
+        &dummy_data,
+    );
+    assert_eq!(s.metadata().mml_settings.signature, KeySignature::default());
+
+    let s = compile_mml(
+        r#"
+#KeySignature -bea
+
+A r
+"#,
+        &dummy_data,
+    );
+    assert_eq!(
+        s.metadata().mml_settings.signature,
+        KeySignature::default()
+            .parse_signature_changes("-bea")
+            .unwrap()
+    );
+
+    let s = compile_mml(
+        r#"
+#KeySignature -bea, +fc
+
+A r
+"#,
+        &dummy_data,
+    );
+    assert_eq!(
+        s.metadata().mml_settings.signature,
+        KeySignature::default()
+            .parse_signature_changes("-bea")
+            .unwrap()
+            .parse_signature_changes("+fc")
+            .unwrap()
+    );
+
+    let s = compile_mml(
+        r#"
+#KeySignature - b e a, =b
+
+A r
+"#,
+        &dummy_data,
+    );
+    assert_eq!(
+        s.metadata().mml_settings.signature,
+        KeySignature::default()
+            .parse_signature_changes("-ea")
+            .unwrap()
+    );
+
+    assert_one_header_error_in_mml(
+        r#"
+#KeySignature b
+
+A r
+"#,
+        2,
+        ValueError::NoKeySignatureSign.into(),
+    );
+
+    assert_one_header_error_in_mml(
+        r#"
+#KeySignature -be, +, +fc
+
+A r
+"#,
+        2,
+        ValueError::NoTonesInKeySignature.into(),
+    );
+
+    assert_one_header_error_in_mml(
+        r#"
+#KeySignature +abcdefg, +abcdefg, =h
+
+A r
+"#,
+        2,
+        ValueError::InvalidKeySignatureTone('h').into(),
+    );
+
+    assert_one_header_error_in_mml(
+        r#"
+#KeySignature + b   e, + f e, = =
+
+A r
+"#,
+        2,
+        ValueError::InvalidKeySignatureTone('=').into(),
     );
 }

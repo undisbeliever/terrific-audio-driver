@@ -166,3 +166,94 @@ A @1 _{+fc} afc !s _{-ac} afc !s _{=c} afc
         ],
     );
 }
+
+#[test]
+fn key_signature_header_1() {
+    let mml = r##"
+#KeySignature +fe
+
+@0 dummy_instrument
+
+!s ?@0 fec
+
+A @0 !s fec
+B @0 !s fec
+"##;
+
+    assert_mml_channel_a_matches_bytecode(
+        mml,
+        &[
+            "set_instrument dummy_instrument",
+            "call_subroutine s",
+            "play_note f+4 24",
+            "play_note e+4 24",
+            "play_note c4 24",
+        ],
+    );
+
+    assert_mml_channel_b_matches_bytecode(
+        mml,
+        &[
+            "set_instrument dummy_instrument",
+            "call_subroutine s",
+            "play_note f+4 24",
+            "play_note e+4 24",
+            "play_note c4 24",
+        ],
+    );
+
+    assert_mml_subroutine_matches_bytecode(
+        mml,
+        0,
+        &["play_note f+4 24", "play_note e+4 24", "play_note c4 24"],
+    );
+}
+
+#[test]
+fn key_signature_header_2() {
+    let mml = r##"
+#KeySignature +abcdefg, - a b, = b
+
+@0 dummy_instrument
+
+!s ?@0 abc _{-c} c
+
+A @0 !s abc _{-c} c
+B @0 !s abc _{-c} c
+"##;
+
+    assert_mml_channel_a_matches_bytecode(
+        mml,
+        &[
+            "set_instrument dummy_instrument",
+            "call_subroutine s",
+            "play_note a-4 24",
+            "play_note b4 24",
+            "play_note c+4 24",
+            "play_note c-4 24",
+        ],
+    );
+
+    assert_mml_channel_b_matches_bytecode(
+        mml,
+        &[
+            "set_instrument dummy_instrument",
+            "call_subroutine s",
+            "play_note a-4 24",
+            "play_note b4 24",
+            "play_note c+4 24",
+            "play_note c-4 24",
+        ],
+    );
+
+    assert_mml_subroutine_matches_bytecode(
+        mml,
+        0,
+        &[
+            "play_note a-4 24",
+            "play_note b4 24",
+            "play_note c+4 24",
+            "play_note c-4 24",
+        ],
+    );
+}
