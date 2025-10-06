@@ -5,13 +5,15 @@ Version 0.1.2 beta
 ==================
 
 **BREAKING CHANGES:**
- * `_` and `__` MML transpose commands now change change a semitone offset inside the audio driver.
+ * `_` and `__` MML transpose commands now change a semitone offset inside the audio driver.
+    * **`_` and `__` transpose now affect loops and subroutines**.
     * `_+4 !s` will add +4 semitones to the notes in `!s` (unless the subroutine contains a `_` or `__` command).
     * `_0 c [__+1 c]3` will now play `c c+ d d+`
-    * To restore the old transpose behaviour, either add an `#OldTraspose` MML header or replace `_` with `_M` and `__` with `__M`.
- * `MP` vibrato cannot be used in a song that contains a `set_transpose` or `adjust_transpose` instruction.  
+    * To restore the old transpose behaviour, either add an `#OldTraspose` MML header or replace `_` with
+      `_M` and `__` with `__M`.
+ * `MP` vibrato cannot be used in a song that contains a `_`, `__`, `set_transpose` or `adjust_transpose`.  
    (This restriction will be relaxed in the next production release.)
- * A portamento's slide length has a maximum 255 ticks if the song contains a `set_transpose` or `adjust_transpose` instruction.  
+ * A portamento's slide length has a maximum 255 ticks if the song contains a `_`, `__`, `set_transpose` or `adjust_transpose`.  
    (This restriction will be relaxed in the next production release.)
 
 BRR changes:

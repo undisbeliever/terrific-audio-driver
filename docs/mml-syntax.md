@@ -30,7 +30,7 @@ The song tempo can be set with either `#Tempo` or `#Timer`:
 
 The following adjust default values:
  * `#ZenLen number` - Set the default whole-note length (default 96)
- * `#Transpose -128..+127` - Sets the default channel transpose
+ * `#Transpose <-128..+127>` - Sets the default channel transpose
     * This is the equivalent to adding `_M` to the start of every channel and subroutine.
  * `#KeySignature <signature>[,<signature]*` - Sets the default key signature
     * This is the equivalent to adding `_{}` key signature commands to the start of every channel and subroutine.
@@ -293,6 +293,7 @@ Numbers can be decimal, or hexadecimal when prefixed with `$` (ie, `$ff`)
     * `_0 c [_+1 c]3` will play `c c+ c+ c+`
     * `_+4 !s` will add +4 semitones to the notes in `!s` (unless the subroutine contains a `_` or `__` command).
     * Subroutines can change the semitone offset.
+    * CAUTION: Transpose can cause the channel to play out-of-range notes.
     * If the `#OldTranspose` header is set, this command will be silently changed to `_M`
  * `__<-128..+128>` - Relative transpose
     * Adds *param* to the audio driver's semitone offset.
@@ -310,7 +311,7 @@ Numbers can be decimal, or hexadecimal when prefixed with `$` (ie, `$ff`)
     * CAUTION: `_M` and `__M` transpose does not affect subroutines or loops.
       * `_M0 c [_M+1 c]3` will play `c c+ c+ c+`
       * `_M+4 !s` will not change any of the notes in the subroutine
- * `_{<+/-/=]><tones>}` change key signature
+ * `_{<+/-/=><tones>}` change key signature
     * This command adds a sharp `+`, flat `-` or natural `=` to the specified tones.
     * Examples:
        * `_{+fcg}` adds a sharp to `f`, `c` and `g` (A major scale)  
