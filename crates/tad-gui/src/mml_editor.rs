@@ -793,10 +793,10 @@ impl MmlEditorState {
                 let so = c.state.semitone_offset;
                 match so.cmp(&0) {
                     Ordering::Greater => {
-                        let _ = write!(s, "  _+{}", c.state.semitone_offset);
+                        let _ = write!(s, "  _M+{}", c.state.semitone_offset);
                     }
                     Ordering::Less => {
-                        let _ = write!(s, "  _{}", c.state.semitone_offset);
+                        let _ = write!(s, "  _M{}", c.state.semitone_offset);
                     }
                     Ordering::Equal => {}
                 }

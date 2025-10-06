@@ -10,7 +10,7 @@
 A @1
 
 A c ; plays d (from #Transpose header)
-A _0 r
+A _M0 r
 
 A _M0 c [__M+1 c]3 r
 
