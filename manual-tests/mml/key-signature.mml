@@ -36,6 +36,10 @@ A _{+fcg} g= ; plays g natural
 A _{+fcg} g=- g=+ ; plays g- then g+
 A _{=fcg} r
 
+; key signature and channel transpose are independent settings
+; (tests tad-gui statusbar)
+A _{+fc} _M+2 c  __M-3 _{-de} _{=c} d
+A _{=abcdefg} _M0 r
 
 ; Subroutines and channels have independent key signatures
 

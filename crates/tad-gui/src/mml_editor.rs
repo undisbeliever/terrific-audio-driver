@@ -13,6 +13,7 @@ use compiler::errors::{
 };
 use compiler::mml::command_parser::Quantization;
 use compiler::mml::{ChannelId, CursorTracker, FIRST_MUSIC_CHANNEL, LAST_MUSIC_CHANNEL};
+use compiler::notes::KeySignature;
 use compiler::songs::{BytecodePos, SongBcTracking, SongData};
 use compiler::sound_effects::{CompiledSfxSubroutines, CompiledSoundEffect};
 use compiler::time::{TickCounter, ZenLen, DEFAULT_ZENLEN};
@@ -101,6 +102,8 @@ pub struct MmlEditorState {
 
     prev_cursor_index: Option<u32>,
 
+    key_signature_statusbar: (KeySignature, String),
+
     errors_in_style_buffer: bool,
 }
 
@@ -154,6 +157,7 @@ impl MmlEditor {
             subroutine_tracking_state: Default::default(),
 
             prev_cursor_index: None,
+            key_signature_statusbar: (KeySignature::default(), String::new()),
             compiled_data: None,
 
             changed_callback: Box::from(Self::blank_callback),
@@ -789,6 +793,14 @@ impl MmlEditorState {
                         }
                     }
                 }
+
+                if self.key_signature_statusbar.0 != c.state.signature {
+                    self.key_signature_statusbar = (
+                        c.state.signature.clone(),
+                        c.state.signature.space_mml_string_if_not_default(),
+                    );
+                }
+                s.push_str(&self.key_signature_statusbar.1);
 
                 let so = c.state.semitone_offset;
                 match so.cmp(&0) {

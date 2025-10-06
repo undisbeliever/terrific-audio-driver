@@ -21,6 +21,8 @@ pub const N_NOTES: u8 = (LAST_OCTAVE + 1) * SEMITONES_PER_OCTAVE;
 
 pub const N_PITCHES: usize = 7;
 
+const PITCH_LETTERS: [char; N_PITCHES] = ['c', 'd', 'e', 'f', 'g', 'a', 'b'];
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct KeySignature([i8; N_PITCHES]);
 
@@ -58,6 +60,34 @@ impl KeySignature {
         }
 
         Ok(out)
+    }
+
+    pub fn space_mml_string_if_not_default(&self) -> String {
+        let iter = self.0.iter().zip(&Self::DEFAULT);
+
+        let mut out = String::new();
+
+        if iter.clone().any(|(s, d)| s > d) {
+            out.push_str(" _{+");
+            for (i, (s, d)) in iter.clone().enumerate() {
+                if s > d {
+                    out.push(PITCH_LETTERS[i]);
+                }
+            }
+            out.push('}');
+        }
+
+        if iter.clone().any(|(s, d)| s < d) {
+            out.push_str(" _{-");
+            for (i, (s, d)) in iter.enumerate() {
+                if s < d {
+                    out.push(PITCH_LETTERS[i]);
+                }
+            }
+            out.push('}');
+        }
+
+        out
     }
 }
 
