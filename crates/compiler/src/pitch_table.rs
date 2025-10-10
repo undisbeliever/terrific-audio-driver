@@ -34,7 +34,7 @@ const SPC_SAMPLE_RATE: u32 = 32000;
 const MIN_SAMPLE_FREQ: f64 = 27.5; // a0
 const MAX_SAMPLE_FREQ: f64 = (SPC_SAMPLE_RATE / 2) as f64;
 
-const MIN_MIN_OCTAVE_OFFSET: i32 = -6;
+const MIN_MIN_OCTAVE_OFFSET: i32 = -7;
 
 const PITCH_REGISTER_FP_SCALE: u32 = 0x1000;
 pub const PITCH_REGISTER_MAX: u16 = 0x3fff;
