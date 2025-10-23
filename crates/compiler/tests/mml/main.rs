@@ -8,6 +8,7 @@
 
 mod bc_asm;
 mod broken_chord;
+mod cursor_song_tick_mapping;
 mod detune;
 mod early_release;
 mod echo;
