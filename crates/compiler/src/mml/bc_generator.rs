@@ -9,13 +9,10 @@ use super::identifier::IdentifierStr;
 use super::tokenizer::MmlTokens;
 use super::{ChannelId, MmlSoundEffect, Section, CHANNEL_NAMES};
 
-#[cfg(feature = "mml_tracking")]
-use super::note_tracking::CursorTracker;
 use crate::data::{self, UniqueNamesList};
 use crate::echo::EchoEdl;
 use crate::mml::metadata::GlobalSettings;
-use crate::mml::{MmlPrefixData, MAX_MML_PREFIX_TICKS};
-#[cfg(feature = "mml_tracking")]
+use crate::mml::{CursorTracker, MmlPrefixData, MAX_MML_PREFIX_TICKS};
 use crate::songs::{BytecodePos, SongBcTracking};
 
 use crate::bytecode::{BcTerminator, BytecodeContext, SubroutineId};
@@ -78,11 +75,8 @@ pub struct MmlSongBytecodeGenerator<'a> {
 
     is_song: bool,
 
-    #[cfg(feature = "mml_tracking")]
     first_channel_bc_offset: Option<u16>,
-    #[cfg(feature = "mml_tracking")]
     cursor_tracker: CursorTracker,
-    #[cfg(feature = "mml_tracking")]
     bytecode_tracker: Vec<BytecodePos>,
 }
 
@@ -120,11 +114,8 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
                 name_map: subroutine_name_map,
             },
 
-            #[cfg(feature = "mml_tracking")]
             first_channel_bc_offset: None,
-            #[cfg(feature = "mml_tracking")]
             cursor_tracker: CursorTracker::new(),
-            #[cfg(feature = "mml_tracking")]
             bytecode_tracker: Vec::new(),
         }
     }
@@ -132,15 +123,9 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
     pub(crate) fn take_sfx_subroutine_data(self) -> CompiledSfxSubroutines {
         assert!(!self.is_song);
 
-        CompiledSfxSubroutines::new(
-            self.song_data,
-            self.subroutines.vec,
-            #[cfg(feature = "mml_tracking")]
-            self.cursor_tracker,
-        )
+        CompiledSfxSubroutines::new(self.song_data, self.subroutines.vec, self.cursor_tracker)
     }
 
-    #[cfg(feature = "mml_tracking")]
     pub(crate) fn take_data(self) -> (Vec<u8>, Vec<Subroutine>, SongBcTracking) {
         assert!(self.is_song);
 
@@ -155,17 +140,10 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
         )
     }
 
-    #[cfg(not(feature = "mml_tracking"))]
-    pub(crate) fn take_data(self) -> (Vec<u8>, Vec<Subroutine>) {
-        assert!(self.is_song);
-
-        (self.song_data, self.subroutines.vec)
-    }
-
     fn parse_and_compile_tail_call(
         parser: &mut Parser,
         gen: &mut ChannelBcGenerator,
-        #[cfg(feature = "mml_tracking")] bytecode_tracker: &mut Vec<BytecodePos>,
+        bytecode_tracker: &mut Vec<BytecodePos>,
     ) -> Option<MmlCommandWithPos> {
         let mut next = parser.next();
 
@@ -180,24 +158,12 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
                     if after.is_none() {
                         return Some(c);
                     } else {
-                        Self::_compile_command(
-                            c,
-                            parser,
-                            gen,
-                            #[cfg(feature = "mml_tracking")]
-                            bytecode_tracker,
-                        );
+                        Self::_compile_command(c, parser, gen, bytecode_tracker);
                     }
                     next = after;
                 }
                 _ => {
-                    Self::_compile_command(
-                        c,
-                        parser,
-                        gen,
-                        #[cfg(feature = "mml_tracking")]
-                        bytecode_tracker,
-                    );
+                    Self::_compile_command(c, parser, gen, bytecode_tracker);
 
                     next = parser.next();
                 }
@@ -210,16 +176,10 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
     fn parse_and_compile(
         parser: &mut Parser,
         gen: &mut ChannelBcGenerator,
-        #[cfg(feature = "mml_tracking")] bytecode_tracker: &mut Vec<BytecodePos>,
+        bytecode_tracker: &mut Vec<BytecodePos>,
     ) {
         while let Some(c) = parser.next() {
-            Self::_compile_command(
-                c,
-                parser,
-                gen,
-                #[cfg(feature = "mml_tracking")]
-                bytecode_tracker,
-            );
+            Self::_compile_command(c, parser, gen, bytecode_tracker);
         }
     }
 
@@ -227,7 +187,7 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
         c: MmlCommandWithPos,
         parser: &mut Parser,
         gen: &mut ChannelBcGenerator,
-        #[cfg(feature = "mml_tracking")] bytecode_tracker: &mut Vec<BytecodePos>,
+        bytecode_tracker: &mut Vec<BytecodePos>,
     ) {
         match gen.process_command(c.command()) {
             Ok(()) => (),
@@ -241,7 +201,6 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
             _ => (),
         }
 
-        #[cfg(feature = "mml_tracking")]
         bytecode_tracker.push(BytecodePos {
             bc_end_pos: gen
                 .bytecode()
@@ -271,7 +230,6 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
             &self.subroutines,
             self.global_settings,
             None, // No sections in subroutines
-            #[cfg(feature = "mml_tracking")]
             &mut self.cursor_tracker,
         );
 
@@ -291,12 +249,8 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
             song_uses_driver_transpose,
         );
 
-        let tail_call = Self::parse_and_compile_tail_call(
-            &mut parser,
-            &mut gen,
-            #[cfg(feature = "mml_tracking")]
-            &mut self.bytecode_tracker,
-        );
+        let tail_call =
+            Self::parse_and_compile_tail_call(&mut parser, &mut gen, &mut self.bytecode_tracker);
 
         // ::TODO refactor and move into ChannelBcGenerator::
         let terminator = match (
@@ -307,13 +261,7 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
                 // `call_subroutine_and_disable_vibrato` + `return_from_subroutine` uses
                 // less Audio-RAM then `disable_vibraro` + `goto_relative``
                 if let Some(tc) = tail_call {
-                    Self::_compile_command(
-                        tc,
-                        &mut parser,
-                        &mut gen,
-                        #[cfg(feature = "mml_tracking")]
-                        &mut self.bytecode_tracker,
-                    );
+                    Self::_compile_command(tc, &mut parser, &mut gen, &mut self.bytecode_tracker);
                 }
                 BcTerminator::ReturnFromSubroutineAndDisableVibrato
             }
@@ -337,7 +285,6 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
                                 tc,
                                 &mut parser,
                                 &mut gen,
-                                #[cfg(feature = "mml_tracking")]
                                 &mut self.bytecode_tracker,
                             );
                             BcTerminator::ReturnFromSubroutine
@@ -409,7 +356,6 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
         let song_data = std::mem::take(&mut self.song_data);
         let sd_start_index = song_data.len();
 
-        #[cfg(feature = "mml_tracking")]
         if self.first_channel_bc_offset.is_none() {
             self.first_channel_bc_offset = sd_start_index.try_into().ok();
         }
@@ -421,7 +367,6 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
             &self.subroutines,
             self.global_settings,
             Some(self.sections),
-            #[cfg(feature = "mml_tracking")]
             &mut self.cursor_tracker,
         );
 
@@ -439,12 +384,7 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
             song_uses_driver_transpose,
         );
 
-        Self::parse_and_compile(
-            &mut parser,
-            &mut gen,
-            #[cfg(feature = "mml_tracking")]
-            &mut self.bytecode_tracker,
-        );
+        Self::parse_and_compile(&mut parser, &mut gen, &mut self.bytecode_tracker);
 
         let last_pos = parser.peek_pos();
         let loop_point = gen.loop_point();
@@ -499,7 +439,6 @@ pub fn parse_and_compile_sound_effect(
     instruments_map: &HashMap<IdentifierStr, usize>,
     sfx_subroutines: &CompiledSfxSubroutines,
 ) -> Result<MmlSoundEffect, Vec<ErrorWithPos<ChannelError>>> {
-    #[cfg(feature = "mml_tracking")]
     let mut cursor_tracker = CursorTracker::new();
 
     let mut parser = Parser::new(
@@ -509,7 +448,6 @@ pub fn parse_and_compile_sound_effect(
         sfx_subroutines,
         &GlobalSettings::default(),
         None, // No sections in sound effect
-        #[cfg(feature = "mml_tracking")]
         &mut cursor_tracker,
     );
 
@@ -562,7 +500,6 @@ pub fn parse_and_compile_sound_effect(
             bytecode,
             tick_counter,
 
-            #[cfg(feature = "mml_tracking")]
             cursor_tracker,
         })
     } else {
@@ -578,7 +515,6 @@ pub fn parse_and_compile_mml_prefix(
     data_instruments: &UniqueNamesList<data::InstrumentOrSample>,
     instruments_map: &HashMap<IdentifierStr, usize>,
 ) -> Result<MmlPrefixData, Vec<ErrorWithPos<ChannelError>>> {
-    #[cfg(feature = "mml_tracking")]
     let mut cursor_tracker = CursorTracker::new();
 
     let mut parser = Parser::new(
@@ -589,7 +525,6 @@ pub fn parse_and_compile_mml_prefix(
         &GlobalSettings::default(),
         None, // No sections in sound effect
         // ::TODO remove cursor tracker here::
-        #[cfg(feature = "mml_tracking")]
         &mut cursor_tracker,
     );
 

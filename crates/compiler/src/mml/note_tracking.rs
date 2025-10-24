@@ -6,8 +6,6 @@
 
 #![allow(clippy::assertions_on_constants)]
 
-const _: () = assert!(cfg!(feature = "mml_tracking"));
-
 use super::command_parser::State;
 use super::ChannelId;
 

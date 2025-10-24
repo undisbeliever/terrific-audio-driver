@@ -21,13 +21,10 @@ use crate::driver_constants::{
 use crate::echo::EchoEdl;
 use crate::envelope::{Envelope, Gain};
 use crate::errors::{ChannelError, SongError, SongTooLargeError};
-use crate::mml::{MetaData, Section};
+use crate::mml::{CursorTracker, MetaData, Section};
 use crate::notes::{Note, Octave};
 use crate::subroutines::{NoSubroutines, Subroutine};
 use crate::time::{TickClock, TickCounter, TickCounterWithLoopFlag};
-
-#[cfg(feature = "mml_tracking")]
-use crate::mml::note_tracking::CursorTracker;
 
 use std::cmp::min;
 use std::fmt::Debug;
@@ -52,7 +49,6 @@ pub const BLANK_SONG_ARAM_SIZE: SongAramSize = SongAramSize {
     echo_buffer_size: ECHO_BUFFER_MIN_SIZE as u16,
 };
 
-#[cfg(feature = "mml_tracking")]
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub struct BytecodePos {
     // Position (within song data) at the end of the bytecode instruction.
@@ -61,7 +57,6 @@ pub struct BytecodePos {
     pub char_index: u32,
 }
 
-#[cfg(feature = "mml_tracking")]
 #[derive(Clone)]
 pub struct SongBcTracking {
     pub bytecode: Vec<BytecodePos>,
@@ -107,7 +102,6 @@ pub struct SongData {
 
     subroutine_table_l_addr: u16,
 
-    #[cfg(feature = "mml_tracking")]
     tracking: Option<SongBcTracking>,
 }
 
@@ -178,12 +172,10 @@ impl SongData {
         self.subroutine_table_l_addr
     }
 
-    #[cfg(feature = "mml_tracking")]
     pub fn tracking(&self) -> Option<&SongBcTracking> {
         self.tracking.as_ref()
     }
 
-    #[cfg(feature = "mml_tracking")]
     pub fn take_tracking(self) -> Option<SongBcTracking> {
         self.tracking
     }
@@ -270,7 +262,6 @@ pub fn blank_song() -> SongData {
 
         subroutine_table_l_addr: u16::MAX,
 
-        #[cfg(feature = "mml_tracking")]
         tracking: None,
     }
 }
@@ -303,7 +294,6 @@ fn sfx_bytecode_to_song(bytecode: &[u8]) -> SongData {
 
         subroutine_table_l_addr: u16::MAX,
 
-        #[cfg(feature = "mml_tracking")]
         tracking: None,
     }
 }
@@ -415,7 +405,7 @@ pub(crate) fn mml_to_song(
     instruments: Vec<MmlInstrument>,
     channels: [Option<Channel>; N_MUSIC_CHANNELS],
     subroutines: Vec<Subroutine>,
-    #[cfg(feature = "mml_tracking")] tracking: SongBcTracking,
+    tracking: SongBcTracking,
 ) -> Result<SongData, SongError> {
     let mut data = data;
 
@@ -430,7 +420,6 @@ pub(crate) fn mml_to_song(
             channels,
             subroutines,
             subroutine_table_l_addr,
-            #[cfg(feature = "mml_tracking")]
             tracking: Some(tracking),
         }),
         Err(e) => Err(e),

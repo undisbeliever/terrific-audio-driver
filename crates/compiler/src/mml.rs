@@ -18,7 +18,6 @@ mod tokenizer;
 
 pub mod command_parser;
 
-#[cfg(feature = "mml_tracking")]
 pub(crate) mod note_tracking;
 
 use self::bc_generator::{parse_and_compile_sound_effect, MmlSongBytecodeGenerator};
@@ -68,7 +67,6 @@ pub use self::tick_count_table::MmlTickCountTable;
 
 pub use self::metadata::{GlobalSettings, MetaData};
 
-#[cfg(feature = "mml_tracking")]
 pub use self::note_tracking::CursorTracker;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -99,7 +97,6 @@ pub struct MmlSoundEffect {
     bytecode: Vec<u8>,
     tick_counter: TickCounter,
 
-    #[cfg(feature = "mml_tracking")]
     cursor_tracker: note_tracking::CursorTracker,
 }
 
@@ -111,7 +108,6 @@ impl MmlSoundEffect {
         self.tick_counter
     }
 
-    #[cfg(feature = "mml_tracking")]
     pub fn cursor_tracker(&self) -> &note_tracking::CursorTracker {
         &self.cursor_tracker
     }
@@ -241,10 +237,7 @@ pub fn compile_mml(
 
     drop(errors);
 
-    #[cfg(feature = "mml_tracking")]
     let (song_data, subroutines, tracking) = compiler.take_data();
-    #[cfg(not(feature = "mml_tracking"))]
-    let (song_data, subroutines) = compiler.take_data();
 
     let duration = calc_song_duration(&metadata, &channels, &subroutines);
 
@@ -257,7 +250,6 @@ pub fn compile_mml(
         instruments,
         channels,
         subroutines,
-        #[cfg(feature = "mml_tracking")]
         tracking,
     )
 }

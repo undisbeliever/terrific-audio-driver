@@ -4,11 +4,9 @@
 //
 // SPDX-License-Identifier: MIT
 
+use super::note_tracking::CursorTracker;
 use super::tokenizer::{MmlTokens, PeekableTokenIterator, Token};
 use super::{ChannelId, IdentifierStr, Section};
-
-#[cfg(feature = "mml_tracking")]
-use super::note_tracking::CursorTracker;
 
 use crate::bytecode::{
     DetuneValue, EarlyReleaseMinTicks, EarlyReleaseTicks, LoopCount, NoiseFrequency, Pan,
@@ -108,7 +106,6 @@ mod parser {
 
         old_transpose: bool,
 
-        #[cfg(feature = "mml_tracking")]
         cursor_tracker: &'a mut CursorTracker,
     }
 
@@ -120,8 +117,7 @@ mod parser {
             subroutines: &'a dyn SubroutineStore,
             settings: &GlobalSettings,
             sections: Option<&'a [Section]>,
-
-            #[cfg(feature = "mml_tracking")] cursor_tracking: &'a mut CursorTracker,
+            cursor_tracking: &'a mut CursorTracker,
         ) -> Parser<'a> {
             // Remove the first section to prevent an off-by-one error
             let (n_sections, pending_sections) = match sections {
@@ -160,7 +156,6 @@ mod parser {
 
                 old_transpose: settings.old_transpose,
 
-                #[cfg(feature = "mml_tracking")]
                 cursor_tracker: cursor_tracking,
             }
         }
@@ -171,8 +166,6 @@ mod parser {
 
         pub(super) fn set_state(&mut self, new_state: State) {
             self.state = new_state;
-
-            #[cfg(feature = "mml_tracking")]
             self.add_to_cursor_tracker();
         }
 
@@ -228,22 +221,16 @@ mod parser {
 
         pub fn set_tick_counter(&mut self, tc: TickCounterWithLoopFlag) {
             self.tick_counter = tc;
-
-            #[cfg(feature = "mml_tracking")]
             self.add_to_cursor_tracker();
         }
 
         pub(super) fn increment_tick_counter(&mut self, t: TickCounter) {
             self.tick_counter.ticks += t;
-
-            #[cfg(feature = "mml_tracking")]
             self.add_to_cursor_tracker();
         }
 
         pub(super) fn set_loop_flag(&mut self) {
             self.tick_counter.in_loop = true;
-
-            #[cfg(feature = "mml_tracking")]
             self.add_to_cursor_tracker();
         }
 
@@ -279,12 +266,10 @@ mod parser {
                 }
             }
 
-            #[cfg(feature = "mml_tracking")]
             self.cursor_tracker
                 .new_line(self.channel, r, self.tick_counter, self.state.clone());
         }
 
-        #[cfg(feature = "mml_tracking")]
         fn add_to_cursor_tracker(&mut self) {
             self.cursor_tracker.add(
                 self.tokens.prev_end_pos(),
@@ -305,7 +290,6 @@ mod parser {
                 }
             }
 
-            #[cfg(feature = "mml_tracking")]
             self.cursor_tracker.end_channel();
 
             (self.sections_tick_counters, self.errors)

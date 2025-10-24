@@ -18,13 +18,11 @@ use crate::errors::{
 };
 use crate::file_pos::{blank_file_range, split_lines};
 use crate::mml;
+use crate::mml::note_tracking::CursorTracker;
 use crate::pitch_table::PitchTable;
 use crate::sfx_file::SoundEffectsFile;
 use crate::subroutines::{FindSubroutineResult, Subroutine, SubroutineStore};
 use crate::time::{TickClock, TickCounter};
-
-#[cfg(feature = "mml_tracking")]
-use crate::mml::note_tracking::CursorTracker;
 
 use std::collections::HashMap;
 use std::time::Duration;
@@ -47,7 +45,6 @@ pub struct CompiledSfxSubroutines {
     subroutines: Vec<Subroutine>,
     name_map: HashMap<String, usize>,
 
-    #[cfg(feature = "mml_tracking")]
     cursor_tracker: CursorTracker,
 }
 
@@ -55,7 +52,7 @@ impl CompiledSfxSubroutines {
     pub(crate) fn new(
         data: Vec<u8>,
         subroutines: Vec<Subroutine>,
-        #[cfg(feature = "mml_tracking")] cursor_tracker: CursorTracker,
+        cursor_tracker: CursorTracker,
     ) -> Self {
         Self {
             data,
@@ -65,7 +62,6 @@ impl CompiledSfxSubroutines {
                 .map(|(i, s)| (s.identifier.as_str().to_owned(), i))
                 .collect(),
             subroutines,
-            #[cfg(feature = "mml_tracking")]
             cursor_tracker,
         }
     }
@@ -75,7 +71,6 @@ impl CompiledSfxSubroutines {
             data: Vec::new(),
             subroutines: Vec::new(),
             name_map: HashMap::new(),
-            #[cfg(feature = "mml_tracking")]
             cursor_tracker: CursorTracker::new(),
         }
     }
@@ -88,7 +83,6 @@ impl CompiledSfxSubroutines {
         self.data.len() + self.subroutines.len() * COMMON_DATA_BYTES_PER_SFX_SUBROUTINE
     }
 
-    #[cfg(feature = "mml_tracking")]
     pub fn cursor_tracker(&self) -> &CursorTracker {
         &self.cursor_tracker
     }
@@ -171,7 +165,6 @@ impl CompiledSoundEffect {
         self.tick_counter().to_duration(TickClock::SFX_TICK_CLOCK)
     }
 
-    #[cfg(feature = "mml_tracking")]
     pub fn cursor_tracker(&self) -> Option<&mml::CursorTracker> {
         match &self.data {
             SfxData::BytecodeAssembly(_) => None,
