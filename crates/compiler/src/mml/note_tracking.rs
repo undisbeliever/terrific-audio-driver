@@ -105,4 +105,21 @@ impl CursorTracker {
 
         Some((line.channel, first))
     }
+
+    pub fn section_end_ticks(
+        &self,
+        channel: char,
+        char_index: u32,
+    ) -> Option<TickCounterWithLoopFlag> {
+        let channel = ChannelId::Channel(channel);
+
+        let line = self
+            .lines
+            .iter()
+            .find(|l| l.channel == channel && *l.char_indexes.start() >= char_index)?;
+
+        let first = self.data.get(line.data_range.start)?;
+
+        Some(first.ticks)
+    }
 }

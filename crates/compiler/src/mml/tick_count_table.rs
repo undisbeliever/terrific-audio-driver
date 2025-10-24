@@ -22,6 +22,11 @@ impl std::fmt::Display for MmlTickCountTable<'_> {
             .collect();
         let sections = self.0.sections();
 
+        let cursor_tracker = match self.0.tracking() {
+            Some(t) => &t.cursor_tracker,
+            None => return Ok(()),
+        };
+
         assert!(channels.len() <= N_MUSIC_CHANNELS);
 
         let name_width = sections
@@ -52,16 +57,22 @@ impl std::fmt::Display for MmlTickCountTable<'_> {
             writeln!(f)?;
         } else {
             for (i, s) in sections.iter().enumerate() {
+                let target_char_index = sections.get(i + 1).map(|s| s.char_index);
+
                 write!(f, "{:width$} |", s.name, width = name_width)?;
 
                 for c in &channels {
-                    let (lc, ticks) = match c.section_tick_counters.get(i) {
-                        Some(s) => {
-                            let lc = if s.in_loop { '+' } else { ' ' };
-                            (lc, s.ticks)
+                    // ::TODO optimise (this is O(mn) and could be made O(n))::
+                    let (lc, ticks) = match target_char_index
+                        .and_then(|t| cursor_tracker.section_end_ticks(c.name, t))
+                    {
+                        Some(t) => {
+                            let lc = if t.in_loop { '+' } else { ' ' };
+                            (lc, t.ticks)
                         }
                         None => (' ', c.tick_counter),
                     };
+
                     write!(f, " {:>width$}{}|", ticks.value(), lc, width = TC_WIDTH)?;
                 }
                 writeln!(f)?;

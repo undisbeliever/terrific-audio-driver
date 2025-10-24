@@ -6,7 +6,7 @@
 
 use super::note_tracking::CursorTracker;
 use super::tokenizer::{MmlTokens, PeekableTokenIterator, Token};
-use super::{ChannelId, IdentifierStr, Section};
+use super::{ChannelId, IdentifierStr};
 
 use crate::bytecode::{
     DetuneValue, EarlyReleaseMinTicks, EarlyReleaseTicks, LoopCount, NoiseFrequency, Pan,
@@ -97,9 +97,6 @@ mod parser {
         keyoff_enabled: bool,
 
         tick_counter: TickCounterWithLoopFlag,
-        sections_tick_counters: Vec<TickCounterWithLoopFlag>,
-
-        pending_sections: Option<&'a [Section]>,
 
         instruments_map: &'a HashMap<IdentifierStr<'a>, usize>,
         subroutines: &'a dyn SubroutineStore,
@@ -116,18 +113,8 @@ mod parser {
             instruments_map: &'a HashMap<IdentifierStr, usize>,
             subroutines: &'a dyn SubroutineStore,
             settings: &GlobalSettings,
-            sections: Option<&'a [Section]>,
             cursor_tracking: &'a mut CursorTracker,
         ) -> Parser<'a> {
-            // Remove the first section to prevent an off-by-one error
-            let (n_sections, pending_sections) = match sections {
-                Some(sections) => match sections.split_first() {
-                    Some((_, r)) => (r.len(), Some(r)),
-                    None => (0, None),
-                },
-                None => (0, None),
-            };
-
             debug_assert!(matches!(tokens.first_token(), Some(Token::NewLine(_))));
 
             Parser {
@@ -148,8 +135,6 @@ mod parser {
                 keyoff_enabled: true,
 
                 tick_counter: TickCounterWithLoopFlag::default(),
-                sections_tick_counters: Vec::with_capacity(n_sections),
-                pending_sections,
 
                 instruments_map,
                 subroutines,
@@ -254,18 +239,6 @@ mod parser {
         }
 
         pub(super) fn process_new_line(&mut self, r: LineIndexRange) {
-            let _ = r;
-
-            if let Some(pending_sections) = self.pending_sections.as_mut() {
-                while pending_sections
-                    .first()
-                    .is_some_and(|s| self.tokens.peek_pos().line_number >= s.line_number)
-                {
-                    *pending_sections = &pending_sections[1..];
-                    self.sections_tick_counters.push(self.tick_counter);
-                }
-            }
-
             self.cursor_tracker
                 .new_line(self.channel, r, self.tick_counter, self.state.clone());
         }
@@ -278,21 +251,10 @@ mod parser {
             );
         }
 
-        pub fn finalize(
-            mut self,
-        ) -> (
-            Vec<TickCounterWithLoopFlag>,
-            Vec<ErrorWithPos<ChannelError>>,
-        ) {
-            if let Some(pending_sections) = self.pending_sections {
-                for _ in pending_sections {
-                    self.sections_tick_counters.push(self.tick_counter);
-                }
-            }
-
+        pub fn finalize(self) -> Vec<ErrorWithPos<ChannelError>> {
             self.cursor_tracker.end_channel();
 
-            (self.sections_tick_counters, self.errors)
+            self.errors
         }
     }
 

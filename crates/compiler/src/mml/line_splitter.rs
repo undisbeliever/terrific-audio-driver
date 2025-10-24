@@ -158,7 +158,7 @@ pub(super) fn split_mml_song_lines(
                 if !section_name.is_empty() {
                     sections.push(Section {
                         name: section_name.to_owned(),
-                        line_number: entire_line.position.line_number,
+                        char_index: entire_line.position.char_index(),
                     });
                 }
             }

@@ -24,7 +24,7 @@ use crate::errors::{ChannelError, SongError, SongTooLargeError};
 use crate::mml::{CursorTracker, MetaData, Section};
 use crate::notes::{Note, Octave};
 use crate::subroutines::{NoSubroutines, Subroutine};
-use crate::time::{TickClock, TickCounter, TickCounterWithLoopFlag};
+use crate::time::{TickClock, TickCounter};
 
 use std::cmp::min;
 use std::fmt::Debug;
@@ -83,7 +83,6 @@ pub struct Channel {
 
     pub max_stack_depth: StackDepth,
 
-    pub section_tick_counters: Vec<TickCounterWithLoopFlag>,
     pub tempo_changes: Vec<(TickCounter, TickClock)>,
 }
 

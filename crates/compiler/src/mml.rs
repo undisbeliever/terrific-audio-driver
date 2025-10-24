@@ -80,16 +80,7 @@ pub enum ChannelId {
 #[derive(Clone, Debug, PartialEq)]
 pub struct Section {
     name: String,
-    line_number: u32,
-}
-
-impl Section {
-    pub fn name(&self) -> &str {
-        &self.name
-    }
-    pub fn line_number(&self) -> u32 {
-        self.line_number
-    }
+    char_index: u32,
 }
 
 #[derive(Debug)]
@@ -183,7 +174,6 @@ pub fn compile_mml(
         pitch_table,
         mml,
         data_instruments,
-        &lines.sections,
         &instruments,
         instrument_map,
         &lines.subroutine_name_map,
@@ -294,7 +284,6 @@ pub(crate) fn compile_sfx_subroutines(
         pitch_table,
         sfx,
         data_instruments,
-        &[],
         &instruments,
         instrument_map,
         &lines.subroutine_name_map,

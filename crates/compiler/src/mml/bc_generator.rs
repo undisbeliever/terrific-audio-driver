@@ -7,7 +7,7 @@
 use super::command_parser::{MmlCommandWithPos, Parser};
 use super::identifier::IdentifierStr;
 use super::tokenizer::MmlTokens;
-use super::{ChannelId, MmlSoundEffect, Section, CHANNEL_NAMES};
+use super::{ChannelId, MmlSoundEffect, CHANNEL_NAMES};
 
 use crate::data::{self, UniqueNamesList};
 use crate::echo::EchoEdl;
@@ -65,7 +65,6 @@ pub struct MmlSongBytecodeGenerator<'a> {
     pitch_table: &'a PitchTable,
     mml_file: &'a str,
     data_instruments: &'a UniqueNamesList<data::InstrumentOrSample>,
-    sections: &'a [Section],
     mml_instruments: &'a Vec<MmlInstrument>,
     mml_instrument_map: HashMap<IdentifierStr<'a>, usize>,
 
@@ -87,7 +86,6 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
         pitch_table: &'a PitchTable,
         mml_file: &'a str,
         data_instruments: &'a UniqueNamesList<data::InstrumentOrSample>,
-        sections: &'a [Section],
         instruments: &'a Vec<MmlInstrument>,
         instrument_map: HashMap<IdentifierStr<'a>, usize>,
         subroutine_name_map: &'a HashMap<IdentifierStr<'a>, usize>,
@@ -101,7 +99,6 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
             pitch_table,
             mml_file,
             data_instruments,
-            sections,
             mml_instruments: instruments,
             mml_instrument_map: instrument_map,
 
@@ -229,7 +226,6 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
             &self.mml_instrument_map,
             &self.subroutines,
             self.global_settings,
-            None, // No sections in subroutines
             &mut self.cursor_tracker,
         );
 
@@ -309,7 +305,7 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
         };
         self.song_data = bc_data;
 
-        let (_, errors) = parser.finalize();
+        let errors = parser.finalize();
 
         match (errors.is_empty(), bc_state) {
             (true, Some(bc_state)) => {
@@ -366,7 +362,6 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
             &self.mml_instrument_map,
             &self.subroutines,
             self.global_settings,
-            Some(self.sections),
             &mut self.cursor_tracker,
         );
 
@@ -410,7 +405,7 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
         };
         self.song_data = bc_data;
 
-        let (section_tick_counters, errors) = parser.finalize();
+        let errors = parser.finalize();
 
         match (errors.is_empty(), bc_state) {
             (true, Some(bc_state)) => Ok(Channel {
@@ -419,7 +414,6 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
                 loop_point,
                 tick_counter: bc_state.tick_counter,
                 max_stack_depth: bc_state.max_stack_depth,
-                section_tick_counters,
                 tempo_changes: bc_state.tempo_changes,
             }),
             _ => Err(MmlChannelError {
@@ -447,7 +441,6 @@ pub fn parse_and_compile_sound_effect(
         instruments_map,
         sfx_subroutines,
         &GlobalSettings::default(),
-        None, // No sections in sound effect
         &mut cursor_tracker,
     );
 
@@ -486,7 +479,7 @@ pub fn parse_and_compile_sound_effect(
         }
     };
 
-    let (_, mut errors) = parser.finalize();
+    let mut errors = parser.finalize();
 
     if tick_counter > MAX_SFX_TICKS {
         errors.push(ErrorWithPos(
@@ -523,7 +516,6 @@ pub fn parse_and_compile_mml_prefix(
         instruments_map,
         &NoSubroutines(),
         &GlobalSettings::default(),
-        None, // No sections in sound effect
         // ::TODO remove cursor tracker here::
         &mut cursor_tracker,
     );
@@ -562,7 +554,7 @@ pub fn parse_and_compile_mml_prefix(
         }
     };
 
-    let (_, mut errors) = parser.finalize();
+    let mut errors = parser.finalize();
 
     if tick_counter > MAX_MML_PREFIX_TICKS {
         errors.push(ErrorWithPos(
