@@ -21,7 +21,8 @@ use crate::driver_constants::{
 use crate::echo::EchoEdl;
 use crate::envelope::{Envelope, Gain};
 use crate::errors::{ChannelError, SongError, SongTooLargeError};
-use crate::mml::{CursorTracker, MetaData, Section};
+use crate::mml::note_tracking::{CommandTickTracker, CursorTracker, CursorTrackerGetter};
+use crate::mml::{ChannelId, MetaData, Section};
 use crate::notes::{Note, Octave};
 use crate::subroutines::{NoSubroutines, Subroutine};
 use crate::time::{TickClock, TickCounter};
@@ -82,6 +83,8 @@ pub struct Channel {
     pub tick_counter: TickCounter,
 
     pub max_stack_depth: StackDepth,
+
+    pub tick_tracker: CommandTickTracker,
 
     pub tempo_changes: Vec<(TickCounter, TickClock)>,
 }
@@ -171,12 +174,33 @@ impl SongData {
         self.subroutine_table_l_addr
     }
 
-    pub fn tracking(&self) -> Option<&SongBcTracking> {
+    pub fn bc_tracking(&self) -> Option<&SongBcTracking> {
         self.tracking.as_ref()
     }
+}
 
-    pub fn take_tracking(self) -> Option<SongBcTracking> {
-        self.tracking
+impl CursorTrackerGetter for SongData {
+    fn cursor_tracker(&self) -> Option<&CursorTracker> {
+        self.tracking.as_ref().map(|t| &t.cursor_tracker)
+    }
+
+    fn tick_tracker_for_channel(&self, channel: ChannelId) -> Option<&CommandTickTracker> {
+        match channel {
+            ChannelId::Channel(c) => {
+                let i = usize::try_from(u32::from(c).checked_sub(b'A' as u32)?).ok()?;
+                match self.channels.get(i) {
+                    Some(Some(c)) => Some(&c.tick_tracker),
+                    _ => None,
+                }
+            }
+            ChannelId::Subroutine(i) => self
+                .subroutines
+                .get(usize::from(i))
+                .map(|s| &s.tick_tracker),
+
+            ChannelId::MmlPrefix => None,
+            ChannelId::SoundEffect => None,
+        }
     }
 }
 

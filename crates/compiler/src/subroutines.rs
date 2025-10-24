@@ -4,6 +4,7 @@
 //
 // SPDX-License-Identifier: MIT
 
+use crate::mml::note_tracking::CommandTickTracker;
 use crate::mml::IdentifierBuf;
 
 pub use crate::bytecode::SubroutineId;
@@ -14,6 +15,8 @@ pub struct Subroutine {
     pub subroutine_id: SubroutineId,
     pub bytecode_offset: u16,
     pub changes_song_tempo: bool,
+
+    pub tick_tracker: CommandTickTracker,
 }
 
 pub enum FindSubroutineResult<'a> {

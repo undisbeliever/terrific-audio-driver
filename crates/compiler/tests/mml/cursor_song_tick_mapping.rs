@@ -4,7 +4,7 @@
 
 use crate::*;
 
-use compiler::mml::ChannelId;
+use compiler::mml::{find_cursor_state, line_start_ticks, ChannelId};
 
 const CHANNEL_A: ChannelId = ChannelId::Channel('A');
 const CHANNEL_B: ChannelId = ChannelId::Channel('B');
@@ -36,15 +36,12 @@ fn compile(mml: &str) -> SongData {
 }
 
 fn cursor_ticks(sd: &SongData, char_index: u32) -> Option<(ChannelId, u32, bool)> {
-    sd.tracking()
-        .and_then(|t| t.cursor_tracker.find(char_index))
-        .map(|(channel, c)| (channel, c.ticks.ticks.value(), c.ticks.in_loop))
+    find_cursor_state(sd, char_index)
+        .map(|(channel, tc, _)| (channel, tc.ticks.value(), tc.in_loop))
 }
 
 fn line_start(sd: &SongData, char_index: u32) -> Option<(ChannelId, u32, bool)> {
-    sd.tracking()
-        .and_then(|t| t.cursor_tracker.find_line_start(char_index))
-        .map(|(channel, c)| (channel, c.ticks.ticks.value(), c.ticks.in_loop))
+    line_start_ticks(sd, char_index).map(|(channel, tc)| (channel, tc.ticks.value(), tc.in_loop))
 }
 
 #[test]

@@ -67,7 +67,9 @@ pub use self::tick_count_table::MmlTickCountTable;
 
 pub use self::metadata::{GlobalSettings, MetaData};
 
-pub use self::note_tracking::CursorTracker;
+pub use self::note_tracking::{
+    find_cursor_state, line_start_ticks, CommandTickTracker, CursorTracker, CursorTrackerGetter,
+};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum ChannelId {
@@ -88,6 +90,7 @@ pub struct MmlSoundEffect {
     bytecode: Vec<u8>,
     tick_counter: TickCounter,
 
+    tick_tracker: CommandTickTracker,
     cursor_tracker: note_tracking::CursorTracker,
 }
 
@@ -97,6 +100,10 @@ impl MmlSoundEffect {
     }
     pub fn tick_counter(&self) -> TickCounter {
         self.tick_counter
+    }
+
+    pub fn tick_tracker(&self) -> &CommandTickTracker {
+        &self.tick_tracker
     }
 
     pub fn cursor_tracker(&self) -> &note_tracking::CursorTracker {

@@ -18,7 +18,8 @@ use crate::errors::{
 };
 use crate::file_pos::{blank_file_range, split_lines};
 use crate::mml;
-use crate::mml::note_tracking::CursorTracker;
+use crate::mml::note_tracking::{CommandTickTracker, CursorTracker};
+use crate::mml::{ChannelId, CursorTrackerGetter};
 use crate::pitch_table::PitchTable;
 use crate::sfx_file::SoundEffectsFile;
 use crate::subroutines::{FindSubroutineResult, Subroutine, SubroutineStore};
@@ -130,6 +131,25 @@ impl SubroutineStore for CompiledSfxSubroutines {
     }
 }
 
+impl CursorTrackerGetter for CompiledSfxSubroutines {
+    fn cursor_tracker(&self) -> Option<&CursorTracker> {
+        Some(&self.cursor_tracker)
+    }
+
+    fn tick_tracker_for_channel(&self, channel: ChannelId) -> Option<&CommandTickTracker> {
+        match channel {
+            ChannelId::Subroutine(i) => self
+                .subroutines
+                .get(usize::from(i))
+                .map(|s| &s.tick_tracker),
+
+            ChannelId::SoundEffect => None,
+            ChannelId::Channel(_) => None,
+            ChannelId::MmlPrefix => None,
+        }
+    }
+}
+
 #[derive(Debug)]
 enum SfxData {
     Mml(mml::MmlSoundEffect),
@@ -164,11 +184,26 @@ impl CompiledSoundEffect {
     pub fn duration(&self) -> Duration {
         self.tick_counter().to_duration(TickClock::SFX_TICK_CLOCK)
     }
+}
 
-    pub fn cursor_tracker(&self) -> Option<&mml::CursorTracker> {
+impl CursorTrackerGetter for CompiledSoundEffect {
+    fn cursor_tracker(&self) -> Option<&CursorTracker> {
         match &self.data {
             SfxData::BytecodeAssembly(_) => None,
             SfxData::Mml(s) => Some(s.cursor_tracker()),
+        }
+    }
+
+    fn tick_tracker_for_channel(&self, channel: ChannelId) -> Option<&CommandTickTracker> {
+        match channel {
+            ChannelId::SoundEffect => match &self.data {
+                SfxData::BytecodeAssembly(_) => None,
+                SfxData::Mml(s) => Some(s.tick_tracker()),
+            },
+
+            ChannelId::Channel(_) => None,
+            ChannelId::Subroutine(_) => None,
+            ChannelId::MmlPrefix => None,
         }
     }
 }

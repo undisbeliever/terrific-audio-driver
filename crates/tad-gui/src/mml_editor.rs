@@ -12,7 +12,10 @@ use compiler::errors::{
     MmlChannelError, MmlCompileErrors, SfxSubroutineErrors, SoundEffectError, SoundEffectErrorList,
 };
 use compiler::mml::command_parser::Quantization;
-use compiler::mml::{ChannelId, CursorTracker, FIRST_MUSIC_CHANNEL, LAST_MUSIC_CHANNEL};
+use compiler::mml::{
+    find_cursor_state, line_start_ticks, ChannelId, CursorTrackerGetter, FIRST_MUSIC_CHANNEL,
+    LAST_MUSIC_CHANNEL,
+};
 use compiler::notes::KeySignature;
 use compiler::songs::{BytecodePos, SongBcTracking, SongData};
 use compiler::sound_effects::{CompiledSfxSubroutines, CompiledSoundEffect};
@@ -50,11 +53,11 @@ pub enum CompiledEditorData {
 }
 
 impl CompiledEditorData {
-    fn cursor_tracker(&self) -> Option<&CursorTracker> {
+    fn cursor_tracker(&self) -> Option<&dyn CursorTrackerGetter> {
         match self {
-            Self::Song(d) => d.tracking().map(|t| &t.cursor_tracker),
-            Self::SfxSubroutines(d) => Some(d.cursor_tracker()),
-            Self::SoundEffect(d) => d.cursor_tracker(),
+            Self::Song(d) => Some(d.as_ref()),
+            Self::SfxSubroutines(d) => Some(d.as_ref()),
+            Self::SoundEffect(d) => Some(d.as_ref()),
         }
     }
 
@@ -668,7 +671,7 @@ impl MmlEditorState {
 
         let mut changed = false;
         if let Some(CompiledEditorData::Song(song_data)) = &self.compiled_data {
-            if let Some(ntd) = song_data.tracking() {
+            if let Some(ntd) = song_data.bc_tracking() {
                 for (i, nts) in self.note_tracking_state.iter_mut().enumerate() {
                     let voice_pos = mon.voice_instruction_ptrs[i];
 
@@ -702,19 +705,16 @@ impl MmlEditorState {
     }
 
     fn cursor_tick_counter(&self) -> Option<(ChannelId, TickCounter)> {
-        self.compiled_data
-            .as_ref()?
-            .cursor_tracker()?
-            .find(self.cursor_index()?)
-            .map(|(channel_id, c)| (channel_id, c.ticks.ticks))
+        let data = self.compiled_data.as_ref()?.cursor_tracker()?;
+
+        find_cursor_state(data, self.cursor_index()?)
+            .map(|(channel_id, tc, _)| (channel_id, tc.ticks))
     }
 
     fn cursor_tick_counter_line_start(&self) -> Option<(ChannelId, TickCounter)> {
-        self.compiled_data
-            .as_ref()?
-            .cursor_tracker()?
-            .find_line_start(self.cursor_index()?)
-            .map(|(channel_id, c)| (channel_id, c.ticks.ticks))
+        let data = self.compiled_data.as_ref()?.cursor_tracker()?;
+
+        line_start_ticks(data, self.cursor_index()?).map(|(c, tc)| (c, tc.ticks))
     }
 
     fn check_if_cursor_moved(&mut self) {
@@ -746,9 +746,9 @@ impl MmlEditorState {
 
         match compiled_data
             .cursor_tracker()
-            .and_then(|t| t.find(cursor_index))
+            .and_then(|t| find_cursor_state(t, cursor_index))
         {
-            Some((channel_id, c)) => {
+            Some((channel_id, ticks, state)) => {
                 let mut s = String::with_capacity(64);
 
                 match channel_id {
@@ -772,15 +772,18 @@ impl MmlEditorState {
                     ChannelId::MmlPrefix => (),
                 };
 
-                let ticks = c.ticks.ticks.value();
-                let in_loop = if c.ticks.in_loop { "+" } else { "" };
+                let in_loop = if ticks.in_loop { "+" } else { "" };
 
-                let octave = c.state.octave.as_u8();
-
-                let _ = write!(s, "{ticks}{in_loop} ticks  o{octave}");
+                let _ = write!(
+                    s,
+                    "{}{} ticks  o{}",
+                    ticks.ticks.value(),
+                    in_loop,
+                    state.octave.as_u8()
+                );
 
                 {
-                    let dl = &c.state.default_length;
+                    let dl = &state.default_length;
                     if !dl.length_in_ticks() {
                         let _ = write!(s, "  l{}", dl.length());
                         for _ in 0..dl.number_of_dots() {
@@ -794,30 +797,30 @@ impl MmlEditorState {
                     }
                 }
 
-                if self.key_signature_statusbar.0 != c.state.signature {
+                if self.key_signature_statusbar.0 != state.signature {
                     self.key_signature_statusbar = (
-                        c.state.signature.clone(),
-                        c.state.signature.space_mml_string_if_not_default(),
+                        state.signature.clone(),
+                        state.signature.space_mml_string_if_not_default(),
                     );
                 }
                 s.push_str(&self.key_signature_statusbar.1);
 
-                let so = c.state.semitone_offset;
+                let so = state.semitone_offset;
                 match so.cmp(&0) {
                     Ordering::Greater => {
-                        let _ = write!(s, "  _M+{}", c.state.semitone_offset);
+                        let _ = write!(s, "  _M+{}", state.semitone_offset);
                     }
                     Ordering::Less => {
-                        let _ = write!(s, "  _M{}", c.state.semitone_offset);
+                        let _ = write!(s, "  _M{}", state.semitone_offset);
                     }
                     Ordering::Equal => {}
                 }
 
-                if !c.state.keyoff_enabled {
+                if !state.keyoff_enabled {
                     let _ = write!(s, "  K0");
                 }
 
-                if let Some(q) = c.state.quantize {
+                if let Some(q) = state.quantize {
                     let q = q.as_u8();
                     if q % Quantization::FINE_QUANTIZATION_SCALE == 0 {
                         let _ = write!(s, "  Q{}", q / Quantization::FINE_QUANTIZATION_SCALE);
@@ -826,8 +829,8 @@ impl MmlEditorState {
                     }
                 }
 
-                if c.state.zenlen != compiled_data.zenlen() {
-                    let _ = write!(s, "  ZenLen: {}", c.state.zenlen.as_u8());
+                if state.zenlen != compiled_data.zenlen() {
+                    let _ = write!(s, "  ZenLen: {}", state.zenlen.as_u8());
                 }
 
                 self.status_bar.set_label(&s);

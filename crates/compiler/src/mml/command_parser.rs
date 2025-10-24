@@ -29,9 +29,7 @@ use crate::file_pos::{FilePos, FilePosRange};
 use crate::notes::{KeySignature, MidiNote, MmlPitch, Note, Octave, STARTING_OCTAVE};
 use crate::pitch_table::PlayPitchSampleRate;
 use crate::subroutines::{FindSubroutineResult, SubroutineStore};
-use crate::time::{
-    MmlDefaultLength, MmlLength, TickCounter, TickCounterWithLoopFlag, ZenLen, STARTING_MML_LENGTH,
-};
+use crate::time::{MmlDefaultLength, MmlLength, TickCounter, ZenLen, STARTING_MML_LENGTH};
 use crate::value_newtypes::{I8WithByteHexValueNewType, SignedValueNewType, UnsignedValueNewType};
 
 pub use crate::channel_bc_generator::Quantization;
@@ -54,6 +52,7 @@ pub const PX_PAN_RANGE: std::ops::RangeInclusive<i32> =
 pub(crate) struct MmlCommandWithPos {
     command: Command,
     pos: FilePosRange,
+    end_pos: u32,
 }
 
 impl MmlCommandWithPos {
@@ -62,6 +61,9 @@ impl MmlCommandWithPos {
     }
     pub fn pos(&self) -> &FilePosRange {
         &self.pos
+    }
+    pub fn end_pos(&self) -> u32 {
+        self.end_pos
     }
 }
 
@@ -96,13 +98,12 @@ mod parser {
         default_length: TickCounter,
         keyoff_enabled: bool,
 
-        tick_counter: TickCounterWithLoopFlag,
-
         instruments_map: &'a HashMap<IdentifierStr<'a>, usize>,
         subroutines: &'a dyn SubroutineStore,
 
         old_transpose: bool,
 
+        tick_offset: TickCounter,
         cursor_tracker: &'a mut CursorTracker,
     }
 
@@ -134,13 +135,12 @@ mod parser {
                 default_length: settings.zenlen.starting_length(),
                 keyoff_enabled: true,
 
-                tick_counter: TickCounterWithLoopFlag::default(),
-
                 instruments_map,
                 subroutines,
 
                 old_transpose: settings.old_transpose,
 
+                tick_offset: TickCounter::default(),
                 cursor_tracker: cursor_tracking,
             }
         }
@@ -204,19 +204,21 @@ mod parser {
             self.old_transpose
         }
 
-        pub fn set_tick_counter(&mut self, tc: TickCounterWithLoopFlag) {
-            self.tick_counter = tc;
+        pub(super) fn reset_tick_offset(&mut self) {
+            self.tick_offset = TickCounter::new(0);
+        }
+
+        pub(super) fn increment_tick_offset(&mut self, t: TickCounter) {
+            self.tick_offset += t;
             self.add_to_cursor_tracker();
         }
 
-        pub(super) fn increment_tick_counter(&mut self, t: TickCounter) {
-            self.tick_counter.ticks += t;
-            self.add_to_cursor_tracker();
-        }
-
-        pub(super) fn set_loop_flag(&mut self) {
-            self.tick_counter.in_loop = true;
-            self.add_to_cursor_tracker();
+        pub(super) fn command_end_char_index(&self) -> u32 {
+            if self.tick_offset.is_zero() {
+                self.tokens.prev_end_pos().char_index
+            } else {
+                self.tokens.peek_pos().char_index
+            }
         }
 
         pub(super) fn set_default_length(&mut self, ticks: TickCounter) {
@@ -240,13 +242,13 @@ mod parser {
 
         pub(super) fn process_new_line(&mut self, r: LineIndexRange) {
             self.cursor_tracker
-                .new_line(self.channel, r, self.tick_counter, self.state.clone());
+                .new_line(self.channel, r, self.tick_offset, self.state.clone());
         }
 
         fn add_to_cursor_tracker(&mut self) {
             self.cursor_tracker.add(
                 self.tokens.prev_end_pos(),
-                self.tick_counter,
+                self.tick_offset,
                 self.state.clone(),
             );
         }
@@ -269,6 +271,7 @@ mod parser {
                 t => Some(MmlCommandWithPos {
                     command: parse_token(pos, t, self),
                     pos: self.file_pos_range_from(pos),
+                    end_pos: self.command_end_char_index(),
                 }),
             }
         }
@@ -988,7 +991,7 @@ fn parse_tracked_length(p: &mut Parser) -> TickCounter {
         }
     };
 
-    p.increment_tick_counter(length);
+    p.increment_tick_offset(length);
 
     length
 }
@@ -1027,7 +1030,7 @@ fn parse_tracked_comma_length(p: &mut Parser) -> TickCounter {
         }
     };
 
-    p.increment_tick_counter(length);
+    p.increment_tick_offset(length);
 
     length
 }
@@ -1035,7 +1038,7 @@ fn parse_tracked_comma_length(p: &mut Parser) -> TickCounter {
 fn parse_tracked_optional_length(p: &mut Parser) -> Option<TickCounter> {
     let length = parse_untracked_optional_length(p);
     if let Some(tc) = length {
-        p.increment_tick_counter(tc)
+        p.increment_tick_offset(tc)
     }
     length
 }
@@ -1770,7 +1773,7 @@ fn parse_play_sample(pos: FilePos, p: &mut Parser) -> Command {
     let length = if next_token_matches!(p, Token::Comma) {
         parse_tracked_length(p)
     } else {
-        p.increment_tick_counter(p.default_length());
+        p.increment_tick_offset(p.default_length());
         p.default_length()
     };
 
@@ -1860,7 +1863,7 @@ fn parse_play_noise(pos: FilePos, p: &mut Parser) -> Command {
 
 fn parse_play_midi_note_number(pos: FilePos, p: &mut Parser) -> Command {
     let length = p.default_length();
-    p.increment_tick_counter(length);
+    p.increment_tick_offset(length);
 
     let note = match parse_unsigned_newtype::<MidiNote>(pos, p) {
         Some(n) => match n.try_into() {
@@ -2190,7 +2193,6 @@ fn parse_call_subroutine(
         FindSubroutineResult::Found(s) => {
             let index = s.as_usize();
 
-            p.increment_tick_counter(s.tick_counter());
             Command::CallSubroutine(index, d)
         }
         FindSubroutineResult::NotCompiled => {
@@ -2557,6 +2559,8 @@ fn invalid_token_error(p: &mut Parser, pos: FilePos, e: ChannelError) -> Command
 }
 
 fn parse_token(pos: FilePos, token: Token, p: &mut Parser) -> Command {
+    p.reset_tick_offset();
+
     match token {
         Token::End => Command::None,
 
@@ -2590,10 +2594,7 @@ fn parse_token(pos: FilePos, token: Token, p: &mut Parser) -> Command {
         Token::SetSubroutineInstrumentHint(id) => parse_set_instrument_hint(pos, id, p),
         Token::CallSubroutine(id, d) => parse_call_subroutine(pos, id, d, p),
 
-        Token::StartLoop => {
-            p.set_loop_flag();
-            Command::StartLoop
-        }
+        Token::StartLoop => Command::StartLoop,
         Token::SkipLastLoop => Command::SkipLastLoop,
         Token::EndLoop => {
             let lc = parse_unsigned_newtype(pos, p).unwrap_or(LoopCount::MIN);

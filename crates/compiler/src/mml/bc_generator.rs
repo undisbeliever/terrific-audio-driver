@@ -24,6 +24,7 @@ use crate::pitch_table::PitchTable;
 use crate::songs::Channel;
 use crate::sound_effects::{CompiledSfxSubroutines, MAX_SFX_TICKS};
 use crate::subroutines::{FindSubroutineResult, NoSubroutines, Subroutine, SubroutineStore};
+use crate::time::TickCounterWithLoopFlag;
 
 use std::collections::HashMap;
 
@@ -76,6 +77,7 @@ pub struct MmlSongBytecodeGenerator<'a> {
 
     first_channel_bc_offset: Option<u16>,
     cursor_tracker: CursorTracker,
+
     bytecode_tracker: Vec<BytecodePos>,
 }
 
@@ -186,16 +188,9 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
         gen: &mut ChannelBcGenerator,
         bytecode_tracker: &mut Vec<BytecodePos>,
     ) {
-        match gen.process_command(c.command()) {
+        match gen.process_command(&c) {
             Ok(()) => (),
             Err(e) => parser.add_error_range(c.pos().clone(), e),
-        }
-
-        match c.command() {
-            Command::EndLoop(_) | Command::BytecodeAsm(_) => {
-                parser.set_tick_counter(gen.bytecode().get_tick_counter_with_loop_flag());
-            }
-            _ => (),
         }
 
         bytecode_tracker.push(BytecodePos {
@@ -249,7 +244,7 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
             Self::parse_and_compile_tail_call(&mut parser, &mut gen, &mut self.bytecode_tracker);
 
         // ::TODO refactor and move into ChannelBcGenerator::
-        let terminator = match (
+        let (terminator, tail_call_end_pos) = match (
             &gen.mp_state(),
             gen.bytecode().get_state().vibrato.is_active(),
         ) {
@@ -259,7 +254,7 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
                 if let Some(tc) = tail_call {
                     Self::_compile_command(tc, &mut parser, &mut gen, &mut self.bytecode_tracker);
                 }
-                BcTerminator::ReturnFromSubroutineAndDisableVibrato
+                (BcTerminator::ReturnFromSubroutineAndDisableVibrato, None)
             }
             (MpState::Mp(_), false) | (MpState::Disabled, false) | (MpState::Manual, _) => {
                 match tail_call {
@@ -269,9 +264,12 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
                             SubroutineCallType::Mml | SubroutineCallType::Asm,
                         ) => {
                             let sub = self.subroutines.vec.get(*s).unwrap();
-                            BcTerminator::TailSubroutineCall(
-                                sub.bytecode_offset.into(),
-                                &sub.subroutine_id,
+                            (
+                                BcTerminator::TailSubroutineCall(
+                                    sub.bytecode_offset.into(),
+                                    &sub.subroutine_id,
+                                ),
+                                Some(tc.end_pos()),
                             )
                         }
                         Command::CallSubroutine(_, SubroutineCallType::AsmDisableVibrato) => {
@@ -283,11 +281,11 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
                                 &mut gen,
                                 &mut self.bytecode_tracker,
                             );
-                            BcTerminator::ReturnFromSubroutine
+                            (BcTerminator::ReturnFromSubroutine, None)
                         }
                         _ => panic!("tail_call is not a CallSubroutine command"),
                     },
-                    None => BcTerminator::ReturnFromSubroutine,
+                    None => (BcTerminator::ReturnFromSubroutine, None),
                 }
             }
         };
@@ -296,7 +294,9 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
 
         assert!(gen.loop_point().is_none());
 
-        let (bc_data, bc_state) = match gen.take_bytecode().bytecode(terminator) {
+        let (bc, mut tick_tracker) = gen.take_bytecode_and_tick_tracker();
+
+        let (bc_data, bc_state) = match bc.bytecode(terminator) {
             Ok((d, s)) => (d, Some(s)),
             Err((e, d)) => {
                 parser.add_error_range(last_pos.to_range(1), ChannelError::BytecodeError(e));
@@ -306,6 +306,16 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
         self.song_data = bc_data;
 
         let errors = parser.finalize();
+
+        if let (Some(end_pos), Some(bc_state)) = (tail_call_end_pos, &bc_state) {
+            tick_tracker.push(
+                end_pos,
+                TickCounterWithLoopFlag {
+                    ticks: bc_state.tick_counter,
+                    in_loop: false,
+                },
+            );
+        }
 
         match (errors.is_empty(), bc_state) {
             (true, Some(bc_state)) => {
@@ -321,6 +331,7 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
                     bytecode_offset: sd_start_index.try_into().unwrap_or(u16::MAX),
                     subroutine_id,
                     changes_song_tempo,
+                    tick_tracker,
                 });
 
                 Ok(())
@@ -396,7 +407,9 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
             }
         };
 
-        let (bc_data, bc_state) = match gen.take_bytecode().bytecode(terminator) {
+        let (bc, tick_tracker) = gen.take_bytecode_and_tick_tracker();
+
+        let (bc_data, bc_state) = match bc.bytecode(terminator) {
             Ok((b, s)) => (b, Some(s)),
             Err((e, b)) => {
                 parser.add_error_range(last_pos.to_range(1), ChannelError::BytecodeError(e));
@@ -414,6 +427,7 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
                 loop_point,
                 tick_counter: bc_state.tick_counter,
                 max_stack_depth: bc_state.max_stack_depth,
+                tick_tracker,
                 tempo_changes: bc_state.tempo_changes,
             }),
             _ => Err(MmlChannelError {
@@ -457,12 +471,9 @@ pub fn parse_and_compile_sound_effect(
     );
 
     while let Some(c) = parser.next() {
-        match gen.process_command(c.command()) {
+        match gen.process_command(&c) {
             Ok(()) => (),
             Err(e) => parser.add_error_range(c.pos().clone(), e),
-        }
-        if matches!(c.command(), Command::EndLoop(_)) {
-            parser.set_tick_counter(gen.bytecode().get_tick_counter_with_loop_flag());
         }
     }
 
@@ -471,7 +482,9 @@ pub fn parse_and_compile_sound_effect(
 
     assert!(gen.loop_point().is_none());
 
-    let bytecode = match gen.take_bytecode().bytecode(BcTerminator::DisableChannel) {
+    let (bc, tick_tracker) = gen.take_bytecode_and_tick_tracker();
+
+    let bytecode = match bc.bytecode(BcTerminator::DisableChannel) {
         Ok((b, _)) => b,
         Err((e, b)) => {
             parser.add_error_range(last_pos.to_range(1), ChannelError::BytecodeError(e));
@@ -493,6 +506,7 @@ pub fn parse_and_compile_sound_effect(
             bytecode,
             tick_counter,
 
+            tick_tracker,
             cursor_tracker,
         })
     } else {
@@ -532,12 +546,9 @@ pub fn parse_and_compile_mml_prefix(
     );
 
     while let Some(c) = parser.next() {
-        match gen.process_command(c.command()) {
+        match gen.process_command(&c) {
             Ok(()) => (),
             Err(e) => parser.add_error_range(c.pos().clone(), e),
-        }
-        if matches!(c.command(), Command::EndLoop(_)) {
-            parser.set_tick_counter(gen.bytecode().get_tick_counter_with_loop_flag());
         }
     }
 
@@ -546,7 +557,9 @@ pub fn parse_and_compile_mml_prefix(
 
     assert!(gen.loop_point().is_none());
 
-    let bytecode = match gen.take_bytecode().bytecode(BcTerminator::DisableChannel) {
+    let (bc, _) = gen.take_bytecode_and_tick_tracker();
+
+    let bytecode = match bc.bytecode(BcTerminator::DisableChannel) {
         Ok((b, _)) => b,
         Err((e, b)) => {
             parser.add_error_range(last_pos.to_range(1), ChannelError::BytecodeError(e));

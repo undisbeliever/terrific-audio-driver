@@ -5,6 +5,7 @@
 // SPDX-License-Identifier: MIT
 
 use crate::driver_constants::N_MUSIC_CHANNELS;
+use crate::mml::note_tracking::{section_end_ticks, CursorTrackerGetter};
 use crate::songs::{Channel, SongData};
 
 const MIN_NAME_COLUMN_WIDTH: usize = 15;
@@ -22,8 +23,8 @@ impl std::fmt::Display for MmlTickCountTable<'_> {
             .collect();
         let sections = self.0.sections();
 
-        let cursor_tracker = match self.0.tracking() {
-            Some(t) => &t.cursor_tracker,
+        let cursor_tracker = match self.0.cursor_tracker() {
+            Some(t) => t,
             None => return Ok(()),
         };
 
@@ -64,7 +65,7 @@ impl std::fmt::Display for MmlTickCountTable<'_> {
                 for c in &channels {
                     // ::TODO optimise (this is O(mn) and could be made O(n))::
                     let (lc, ticks) = match target_char_index
-                        .and_then(|t| cursor_tracker.section_end_ticks(c.name, t))
+                        .and_then(|t| section_end_ticks(cursor_tracker, c, t))
                     {
                         Some(t) => {
                             let lc = if t.in_loop { '+' } else { ' ' };

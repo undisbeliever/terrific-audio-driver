@@ -21,13 +21,14 @@ use crate::echo::{EchoFeedback, EchoLength, EchoVolume, FirCoefficient, FirTap};
 use crate::envelope::{Adsr, Envelope, Gain, OptionalGain, TempGain};
 use crate::errors::{ChannelError, ValueError};
 use crate::invert_flags::InvertFlags;
-use crate::mml::IdentifierBuf;
+use crate::mml::command_parser::MmlCommandWithPos;
+use crate::mml::{CommandTickTracker, IdentifierBuf};
 use crate::notes::Note;
 use crate::notes::SEMITONES_PER_OCTAVE;
 use crate::pitch_table::{PitchTable, PlayPitchFrequency, PITCH_REGISTER_MAX};
 use crate::songs::LoopPoint;
 use crate::subroutines::{NoSubroutines, SubroutineStore};
-use crate::time::{Bpm, TickClock, TickCounter};
+use crate::time::{Bpm, TickClock, TickCounter, TickCounterWithLoopFlag};
 use crate::value_newtypes::{i16_value_newtype, u8_value_newtype, SignedValueNewType};
 use crate::FilePosRange;
 
@@ -468,6 +469,9 @@ pub(crate) struct ChannelBcGenerator<'a> {
     loop_point: Option<LoopPoint>,
 
     song_uses_driver_transpose: bool,
+
+    prev_ticks: TickCounterWithLoopFlag,
+    tick_tracker: CommandTickTracker,
 }
 
 impl<'a> ChannelBcGenerator<'a> {
@@ -496,6 +500,9 @@ impl<'a> ChannelBcGenerator<'a> {
             keyoff_enabled: true,
             loop_point: None,
             song_uses_driver_transpose,
+
+            prev_ticks: TickCounterWithLoopFlag::default(),
+            tick_tracker: CommandTickTracker::new(),
         }
     }
 
@@ -1640,7 +1647,7 @@ impl<'a> ChannelBcGenerator<'a> {
         Ok(())
     }
 
-    pub fn process_command(&mut self, command: &Command) -> Result<(), ChannelError> {
+    fn _command(&mut self, command: &Command) -> Result<(), ChannelError> {
         match command {
             Command::None => (),
 
@@ -1994,6 +2001,19 @@ impl<'a> ChannelBcGenerator<'a> {
         Ok(())
     }
 
+    pub fn process_command(&mut self, command: &MmlCommandWithPos) -> Result<(), ChannelError> {
+        let r = self._command(command.command());
+
+        let ticks = self.bytecode().get_tick_counter_with_loop_flag();
+        if self.prev_ticks != ticks {
+            self.prev_ticks = ticks;
+
+            self.tick_tracker.push(command.end_pos(), ticks);
+        }
+
+        r
+    }
+
     pub fn loop_point(&self) -> Option<LoopPoint> {
         self.loop_point
     }
@@ -2006,7 +2026,7 @@ impl<'a> ChannelBcGenerator<'a> {
         &self.bc
     }
 
-    pub fn take_bytecode(self) -> Bytecode<'a> {
-        self.bc
+    pub fn take_bytecode_and_tick_tracker(self) -> (Bytecode<'a>, CommandTickTracker) {
+        (self.bc, self.tick_tracker)
     }
 }
