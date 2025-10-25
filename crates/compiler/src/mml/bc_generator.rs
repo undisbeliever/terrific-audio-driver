@@ -4,7 +4,7 @@
 //
 // SPDX-License-Identifier: MIT
 
-use super::command_parser::{MmlCommandWithPos, Parser};
+use super::command_parser::Parser;
 use super::identifier::IdentifierStr;
 use super::tokenizer::MmlTokens;
 use super::{ChannelId, MmlSoundEffect, CHANNEL_NAMES};
@@ -17,7 +17,7 @@ use crate::songs::{BytecodePos, SongBcTracking};
 
 use crate::bytecode::{BcTerminator, BytecodeContext, SubroutineId};
 use crate::channel_bc_generator::{
-    ChannelBcGenerator, Command, MmlInstrument, MpState, SubroutineCallType,
+    ChannelBcGenerator, Command, CommandWithPos, MmlInstrument, MpState, SubroutineCallType,
 };
 use crate::errors::{ChannelError, ErrorWithPos, MmlChannelError};
 use crate::pitch_table::PitchTable;
@@ -143,7 +143,7 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
         parser: &mut Parser,
         gen: &mut ChannelBcGenerator,
         bytecode_tracker: &mut Vec<BytecodePos>,
-    ) -> Option<MmlCommandWithPos> {
+    ) -> Option<CommandWithPos> {
         let mut next = parser.next();
 
         while let Some(c) = next {
@@ -183,7 +183,7 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
     }
 
     fn _compile_command(
-        c: MmlCommandWithPos,
+        c: CommandWithPos,
         parser: &mut Parser,
         gen: &mut ChannelBcGenerator,
         bytecode_tracker: &mut Vec<BytecodePos>,

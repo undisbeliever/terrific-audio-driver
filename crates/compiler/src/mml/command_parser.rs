@@ -49,24 +49,6 @@ pub const COARSE_VOLUME_MULTIPLIER: u8 = 16;
 pub const PX_PAN_RANGE: std::ops::RangeInclusive<i32> =
     (-(Pan::CENTER.as_u8() as i32))..=(Pan::CENTER.as_u8() as i32);
 
-pub(crate) struct MmlCommandWithPos {
-    command: Command,
-    pos: FilePosRange,
-    end_pos: u32,
-}
-
-impl MmlCommandWithPos {
-    pub fn command(&self) -> &Command {
-        &self.command
-    }
-    pub fn pos(&self) -> &FilePosRange {
-        &self.pos
-    }
-    pub fn end_pos(&self) -> u32 {
-        self.end_pos
-    }
-}
-
 // Parser state that is saved in CursorTracker accessed by the GUI
 #[derive(Debug, Clone, PartialEq)]
 pub struct State {
@@ -82,6 +64,7 @@ pub struct State {
 
 mod parser {
     use crate::{
+        channel_bc_generator::CommandWithPos,
         file_pos::LineIndexRange,
         mml::{metadata::GlobalSettings, ChannelId},
     };
@@ -261,18 +244,18 @@ mod parser {
     }
 
     impl Iterator for Parser<'_> {
-        type Item = MmlCommandWithPos;
+        type Item = CommandWithPos;
 
         fn next(&mut self) -> Option<Self::Item> {
             let (pos, token) = self.peek_and_next();
 
             match token {
                 Token::End => None,
-                t => Some(MmlCommandWithPos {
-                    command: parse_token(pos, t, self),
-                    pos: self.file_pos_range_from(pos),
-                    end_pos: self.command_end_char_index(),
-                }),
+                t => Some(CommandWithPos::new(
+                    parse_token(pos, t, self),
+                    self.file_pos_range_from(pos),
+                    self.command_end_char_index(),
+                )),
             }
         }
     }

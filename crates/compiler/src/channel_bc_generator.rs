@@ -21,7 +21,6 @@ use crate::echo::{EchoFeedback, EchoLength, EchoVolume, FirCoefficient, FirTap};
 use crate::envelope::{Adsr, Envelope, Gain, OptionalGain, TempGain};
 use crate::errors::{ChannelError, ValueError};
 use crate::invert_flags::InvertFlags;
-use crate::mml::command_parser::MmlCommandWithPos;
 use crate::mml::{CommandTickTracker, IdentifierBuf};
 use crate::notes::Note;
 use crate::notes::SEMITONES_PER_OCTAVE;
@@ -366,6 +365,32 @@ pub(crate) enum Command {
 
     // Using range so there is no lifetime in MmlCommand
     BytecodeAsm(Range<usize>),
+}
+
+pub(crate) struct CommandWithPos {
+    command: Command,
+    pos: FilePosRange,
+    end_pos: u32,
+}
+
+impl CommandWithPos {
+    pub fn new(command: Command, pos: FilePosRange, end_pos: u32) -> Self {
+        Self {
+            command,
+            pos,
+            end_pos,
+        }
+    }
+
+    pub fn command(&self) -> &Command {
+        &self.command
+    }
+    pub fn pos(&self) -> &FilePosRange {
+        &self.pos
+    }
+    pub fn end_pos(&self) -> u32 {
+        self.end_pos
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -2001,7 +2026,7 @@ impl<'a> ChannelBcGenerator<'a> {
         Ok(())
     }
 
-    pub fn process_command(&mut self, command: &MmlCommandWithPos) -> Result<(), ChannelError> {
+    pub fn process_command(&mut self, command: &CommandWithPos) -> Result<(), ChannelError> {
         let r = self._command(command.command());
 
         let ticks = self.bytecode().get_tick_counter_with_loop_flag();
