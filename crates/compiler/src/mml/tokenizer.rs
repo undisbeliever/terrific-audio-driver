@@ -800,6 +800,10 @@ impl<'a> MmlTokens<'a> {
         self.tokens.is_empty()
     }
 
+    pub fn len(&self) -> usize {
+        self.tokens.len()
+    }
+
     pub fn extend(&mut self, tokens: &MmlTokens<'a>) {
         self.tokens.extend(tokens.tokens.iter().cloned());
         self.end_pos = tokens.end_pos;

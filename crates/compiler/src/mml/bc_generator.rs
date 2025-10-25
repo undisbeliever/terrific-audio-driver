@@ -4,13 +4,13 @@
 //
 // SPDX-License-Identifier: MIT
 
-use super::command_parser::Parser;
 use super::identifier::IdentifierStr;
 use super::tokenizer::MmlTokens;
 use super::{ChannelId, MmlSoundEffect, CHANNEL_NAMES};
 
 use crate::data::{self, UniqueNamesList};
 use crate::echo::EchoEdl;
+use crate::mml::command_parser::parse_mml_tokens;
 use crate::mml::metadata::GlobalSettings;
 use crate::mml::{CursorTracker, MmlPrefixData, MAX_MML_PREFIX_TICKS};
 use crate::songs::{BytecodePos, SongBcTracking};
@@ -139,58 +139,47 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
         )
     }
 
-    fn parse_and_compile_tail_call(
-        parser: &mut Parser,
+    fn parse_and_compile_tail_call<'b>(
+        commands: &'b [CommandWithPos],
         gen: &mut ChannelBcGenerator,
         bytecode_tracker: &mut Vec<BytecodePos>,
-    ) -> Option<CommandWithPos> {
-        let mut next = parser.next();
+        errors: &mut Vec<ErrorWithPos<ChannelError>>,
+    ) -> Option<&'b CommandWithPos> {
+        let (last, remaining) = commands.split_last()?;
 
-        while let Some(c) = next {
-            // Must process the command immediately or else the mml_tracking
-            // after an end-loop or bytecode-asm MmlCommand will be incorrect.
-
-            match &c.command() {
-                Command::CallSubroutine(..) => {
-                    let after = parser.next();
-
-                    if after.is_none() {
-                        return Some(c);
-                    } else {
-                        Self::_compile_command(c, parser, gen, bytecode_tracker);
-                    }
-                    next = after;
-                }
-                _ => {
-                    Self::_compile_command(c, parser, gen, bytecode_tracker);
-
-                    next = parser.next();
-                }
-            }
+        for c in remaining {
+            Self::_compile_command(c, gen, bytecode_tracker, errors);
         }
 
-        None
+        match last.command() {
+            Command::CallSubroutine(..) => Some(last),
+            _ => {
+                Self::_compile_command(last, gen, bytecode_tracker, errors);
+                None
+            }
+        }
     }
 
-    fn parse_and_compile(
-        parser: &mut Parser,
+    fn compile_commands(
+        commands: &[CommandWithPos],
         gen: &mut ChannelBcGenerator,
         bytecode_tracker: &mut Vec<BytecodePos>,
+        errors: &mut Vec<ErrorWithPos<ChannelError>>,
     ) {
-        while let Some(c) = parser.next() {
-            Self::_compile_command(c, parser, gen, bytecode_tracker);
+        for c in commands {
+            Self::_compile_command(c, gen, bytecode_tracker, errors);
         }
     }
 
     fn _compile_command(
-        c: CommandWithPos,
-        parser: &mut Parser,
+        c: &CommandWithPos,
         gen: &mut ChannelBcGenerator,
         bytecode_tracker: &mut Vec<BytecodePos>,
+        errors: &mut Vec<ErrorWithPos<ChannelError>>,
     ) {
-        match gen.process_command(&c) {
+        match gen.process_command(c) {
             Ok(()) => (),
-            Err(e) => parser.add_error_range(c.pos().clone(), e),
+            Err(e) => errors.push(ErrorWithPos(c.pos().clone(), e)),
         }
 
         bytecode_tracker.push(BytecodePos {
@@ -215,7 +204,7 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
         let song_data = std::mem::take(&mut self.song_data);
         let sd_start_index = song_data.len();
 
-        let mut parser = Parser::new(
+        let (commands, mut errors) = parse_mml_tokens(
             ChannelId::Subroutine(song_subroutine_index),
             tokens,
             &self.mml_instrument_map,
@@ -240,8 +229,12 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
             song_uses_driver_transpose,
         );
 
-        let tail_call =
-            Self::parse_and_compile_tail_call(&mut parser, &mut gen, &mut self.bytecode_tracker);
+        let tail_call = Self::parse_and_compile_tail_call(
+            &commands.commands,
+            &mut gen,
+            &mut self.bytecode_tracker,
+            &mut errors,
+        );
 
         // ::TODO refactor and move into ChannelBcGenerator::
         let (terminator, tail_call_end_pos) = match (
@@ -252,7 +245,7 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
                 // `call_subroutine_and_disable_vibrato` + `return_from_subroutine` uses
                 // less Audio-RAM then `disable_vibraro` + `goto_relative``
                 if let Some(tc) = tail_call {
-                    Self::_compile_command(tc, &mut parser, &mut gen, &mut self.bytecode_tracker);
+                    Self::_compile_command(tc, &mut gen, &mut self.bytecode_tracker, &mut errors);
                 }
                 (BcTerminator::ReturnFromSubroutineAndDisableVibrato, None)
             }
@@ -277,9 +270,9 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
                             // less Audio-RAM then `disable_vibraro` + `goto_relative``
                             Self::_compile_command(
                                 tc,
-                                &mut parser,
                                 &mut gen,
                                 &mut self.bytecode_tracker,
+                                &mut errors,
                             );
                             (BcTerminator::ReturnFromSubroutine, None)
                         }
@@ -290,8 +283,6 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
             }
         };
 
-        let last_pos = parser.peek_pos();
-
         assert!(gen.loop_point().is_none());
 
         let (bc, mut tick_tracker) = gen.take_bytecode_and_tick_tracker();
@@ -299,13 +290,14 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
         let (bc_data, bc_state) = match bc.bytecode(terminator) {
             Ok((d, s)) => (d, Some(s)),
             Err((e, d)) => {
-                parser.add_error_range(last_pos.to_range(1), ChannelError::BytecodeError(e));
+                errors.push(ErrorWithPos(
+                    commands.end_pos_range(),
+                    ChannelError::BytecodeError(e),
+                ));
                 (d, None)
             }
         };
         self.song_data = bc_data;
-
-        let errors = parser.finalize();
 
         if let (Some(end_pos), Some(bc_state)) = (tail_call_end_pos, &bc_state) {
             tick_tracker.push(
@@ -367,7 +359,7 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
             self.first_channel_bc_offset = sd_start_index.try_into().ok();
         }
 
-        let mut parser = Parser::new(
+        let (commands, mut errors) = parse_mml_tokens(
             ChannelId::Channel(channel_char),
             tokens,
             &self.mml_instrument_map,
@@ -390,9 +382,13 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
             song_uses_driver_transpose,
         );
 
-        Self::parse_and_compile(&mut parser, &mut gen, &mut self.bytecode_tracker);
+        Self::compile_commands(
+            &commands.commands,
+            &mut gen,
+            &mut self.bytecode_tracker,
+            &mut errors,
+        );
 
-        let last_pos = parser.peek_pos();
         let loop_point = gen.loop_point();
         let tick_counter = gen.bytecode().get_tick_counter();
 
@@ -400,8 +396,10 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
             None => BcTerminator::DisableChannel,
             Some(lp) => {
                 if lp.tick_counter == tick_counter {
-                    parser
-                        .add_error_range(last_pos.to_range(1), ChannelError::NoTicksAfterLoopPoint);
+                    errors.push(ErrorWithPos(
+                        commands.end_pos_range(),
+                        ChannelError::NoTicksAfterLoopPoint,
+                    ));
                 }
                 BcTerminator::Goto(lp.bytecode_offset)
             }
@@ -412,13 +410,14 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
         let (bc_data, bc_state) = match bc.bytecode(terminator) {
             Ok((b, s)) => (b, Some(s)),
             Err((e, b)) => {
-                parser.add_error_range(last_pos.to_range(1), ChannelError::BytecodeError(e));
+                errors.push(ErrorWithPos(
+                    commands.end_pos_range(),
+                    ChannelError::BytecodeError(e),
+                ));
                 (b, None)
             }
         };
         self.song_data = bc_data;
-
-        let errors = parser.finalize();
 
         match (errors.is_empty(), bc_state) {
             (true, Some(bc_state)) => Ok(Channel {
@@ -449,7 +448,7 @@ pub fn parse_and_compile_sound_effect(
 ) -> Result<MmlSoundEffect, Vec<ErrorWithPos<ChannelError>>> {
     let mut cursor_tracker = CursorTracker::new();
 
-    let mut parser = Parser::new(
+    let (commands, mut errors) = parse_mml_tokens(
         ChannelId::SoundEffect,
         tokens,
         instruments_map,
@@ -470,14 +469,13 @@ pub fn parse_and_compile_sound_effect(
         false,
     );
 
-    while let Some(c) = parser.next() {
-        match gen.process_command(&c) {
+    for c in &commands.commands {
+        match gen.process_command(c) {
             Ok(()) => (),
-            Err(e) => parser.add_error_range(c.pos().clone(), e),
+            Err(e) => errors.push(ErrorWithPos(c.pos().clone(), e)),
         }
     }
 
-    let last_pos = parser.peek_pos();
     let tick_counter = gen.bytecode().get_tick_counter();
 
     assert!(gen.loop_point().is_none());
@@ -487,16 +485,17 @@ pub fn parse_and_compile_sound_effect(
     let bytecode = match bc.bytecode(BcTerminator::DisableChannel) {
         Ok((b, _)) => b,
         Err((e, b)) => {
-            parser.add_error_range(last_pos.to_range(1), ChannelError::BytecodeError(e));
+            errors.push(ErrorWithPos(
+                commands.end_pos_range(),
+                ChannelError::BytecodeError(e),
+            ));
             b
         }
     };
 
-    let mut errors = parser.finalize();
-
     if tick_counter > MAX_SFX_TICKS {
         errors.push(ErrorWithPos(
-            last_pos.to_range(1),
+            commands.end_pos_range(),
             ChannelError::TooManySfxTicks(tick_counter),
         ));
     }
@@ -524,7 +523,7 @@ pub fn parse_and_compile_mml_prefix(
 ) -> Result<MmlPrefixData, Vec<ErrorWithPos<ChannelError>>> {
     let mut cursor_tracker = CursorTracker::new();
 
-    let mut parser = Parser::new(
+    let (commands, mut errors) = parse_mml_tokens(
         ChannelId::MmlPrefix,
         tokens,
         instruments_map,
@@ -545,14 +544,13 @@ pub fn parse_and_compile_mml_prefix(
         true,
     );
 
-    while let Some(c) = parser.next() {
-        match gen.process_command(&c) {
+    for c in &commands.commands {
+        match gen.process_command(c) {
             Ok(()) => (),
-            Err(e) => parser.add_error_range(c.pos().clone(), e),
+            Err(e) => errors.push(ErrorWithPos(c.pos().clone(), e)),
         }
     }
 
-    let last_pos = parser.peek_pos();
     let tick_counter = gen.bytecode().get_tick_counter();
 
     assert!(gen.loop_point().is_none());
@@ -562,16 +560,17 @@ pub fn parse_and_compile_mml_prefix(
     let bytecode = match bc.bytecode(BcTerminator::DisableChannel) {
         Ok((b, _)) => b,
         Err((e, b)) => {
-            parser.add_error_range(last_pos.to_range(1), ChannelError::BytecodeError(e));
+            errors.push(ErrorWithPos(
+                commands.end_pos_range(),
+                ChannelError::BytecodeError(e),
+            ));
             b
         }
     };
 
-    let mut errors = parser.finalize();
-
     if tick_counter > MAX_MML_PREFIX_TICKS {
         errors.push(ErrorWithPos(
-            last_pos.to_range(1),
+            commands.end_pos_range(),
             ChannelError::TooManyTicksInMmlPrefix(tick_counter),
         ))
     }

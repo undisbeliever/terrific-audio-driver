@@ -29,7 +29,7 @@ use crate::songs::LoopPoint;
 use crate::subroutines::{NoSubroutines, SubroutineStore};
 use crate::time::{Bpm, TickClock, TickCounter, TickCounterWithLoopFlag};
 use crate::value_newtypes::{i16_value_newtype, u8_value_newtype, SignedValueNewType};
-use crate::FilePosRange;
+use crate::{FilePos, FilePosRange};
 
 use std::cmp::min;
 use std::ops::{Range, RangeInclusive};
@@ -390,6 +390,17 @@ impl CommandWithPos {
     }
     pub fn end_pos(&self) -> u32 {
         self.end_pos
+    }
+}
+
+pub(crate) struct ChannelCommands {
+    pub(crate) commands: Vec<CommandWithPos>,
+    pub(crate) end_pos: FilePos,
+}
+
+impl ChannelCommands {
+    pub fn end_pos_range(&self) -> FilePosRange {
+        self.end_pos.to_range(1)
     }
 }
 

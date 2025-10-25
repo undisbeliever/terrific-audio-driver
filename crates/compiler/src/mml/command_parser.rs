@@ -17,15 +17,16 @@ use crate::bytecode::{
     KEY_OFF_TICK_DELAY,
 };
 use crate::channel_bc_generator::{
-    merge_pan_commands, merge_volumes_commands, relative_pan, relative_volume, Command,
-    DetuneCents, FineQuantization, ManualVibrato, MpVibrato, NoteOrPitch, PanCommand, Quantize,
-    RestTicksAfterNote, SubroutineCallType, VolumeCommand,
+    merge_pan_commands, merge_volumes_commands, relative_pan, relative_volume, ChannelCommands,
+    Command, CommandWithPos, DetuneCents, FineQuantization, ManualVibrato, MpVibrato, NoteOrPitch,
+    PanCommand, Quantize, RestTicksAfterNote, SubroutineCallType, VolumeCommand,
 };
 use crate::driver_constants::FIR_FILTER_SIZE;
 use crate::echo::{EchoVolume, FirCoefficient, FirTap};
 use crate::envelope::{Gain, GainMode, OptionalGain, TempGain};
 use crate::errors::{ChannelError, ErrorWithPos, ValueError};
 use crate::file_pos::{FilePos, FilePosRange};
+use crate::mml::GlobalSettings;
 use crate::notes::{KeySignature, MidiNote, MmlPitch, Note, Octave, STARTING_OCTAVE};
 use crate::pitch_table::PlayPitchSampleRate;
 use crate::subroutines::{FindSubroutineResult, SubroutineStore};
@@ -64,14 +65,13 @@ pub struct State {
 
 mod parser {
     use crate::{
-        channel_bc_generator::CommandWithPos,
         file_pos::LineIndexRange,
         mml::{metadata::GlobalSettings, ChannelId},
     };
 
     use super::*;
 
-    pub(crate) struct Parser<'a> {
+    pub(super) struct Parser<'a> {
         channel: ChannelId,
 
         tokens: PeekableTokenIterator<'a>,
@@ -91,7 +91,7 @@ mod parser {
     }
 
     impl<'a> Parser<'a> {
-        pub fn new(
+        pub(super) fn new(
             channel: ChannelId,
             tokens: MmlTokens<'a>,
             instruments_map: &'a HashMap<IdentifierStr, usize>,
@@ -151,7 +151,7 @@ mod parser {
             self.tokens.next();
         }
 
-        pub fn peek_pos(&self) -> FilePos {
+        pub(super) fn peek_pos(&self) -> FilePos {
             self.tokens.peek_pos()
         }
 
@@ -163,27 +163,23 @@ mod parser {
             self.tokens.peek_and_next()
         }
 
-        pub fn add_error(&mut self, pos: FilePos, e: ChannelError) {
+        pub(super) fn add_error(&mut self, pos: FilePos, e: ChannelError) {
             self.errors
                 .push(ErrorWithPos(self.file_pos_range_from(pos), e))
         }
 
-        pub fn add_error_range(&mut self, pos: FilePosRange, e: ChannelError) {
-            self.errors.push(ErrorWithPos(pos, e))
-        }
-
-        pub fn instruments_map(&self) -> &HashMap<IdentifierStr<'a>, usize> {
+        pub(super) fn instruments_map(&self) -> &HashMap<IdentifierStr<'a>, usize> {
             self.instruments_map
         }
 
-        pub fn find_subroutine<'b>(&self, name: &'b str) -> FindSubroutineResult<'b>
+        pub(super) fn find_subroutine<'b>(&self, name: &'b str) -> FindSubroutineResult<'b>
         where
             'a: 'b,
         {
             self.subroutines.find_subroutine(name)
         }
 
-        pub fn old_transpose(&self) -> bool {
+        pub(super) fn old_transpose(&self) -> bool {
             self.old_transpose
         }
 
@@ -236,31 +232,14 @@ mod parser {
             );
         }
 
-        pub fn finalize(self) -> Vec<ErrorWithPos<ChannelError>> {
+        pub(super) fn finalize(self) -> Vec<ErrorWithPos<ChannelError>> {
             self.cursor_tracker.end_channel();
 
             self.errors
         }
     }
-
-    impl Iterator for Parser<'_> {
-        type Item = CommandWithPos;
-
-        fn next(&mut self) -> Option<Self::Item> {
-            let (pos, token) = self.peek_and_next();
-
-            match token {
-                Token::End => None,
-                t => Some(CommandWithPos::new(
-                    parse_token(pos, t, self),
-                    self.file_pos_range_from(pos),
-                    self.command_end_char_index(),
-                )),
-            }
-        }
-    }
 }
-pub(crate) use parser::Parser;
+use parser::Parser;
 
 // PARSING MACROS
 // ==============
@@ -2714,4 +2693,41 @@ fn parse_token(pos: FilePos, token: Token, p: &mut Parser) -> Command {
 
         Token::Error(e) => invalid_token_error(p, pos, e),
     }
+}
+
+pub(crate) fn parse_mml_tokens(
+    channel: ChannelId,
+    tokens: MmlTokens,
+    instruments_map: &HashMap<IdentifierStr, usize>,
+    subroutines: &dyn SubroutineStore,
+    settings: &GlobalSettings,
+    cursor_tracking: &mut CursorTracker,
+) -> (ChannelCommands, Vec<ErrorWithPos<ChannelError>>) {
+    let mut commands = Vec::with_capacity(tokens.len() / 2);
+
+    let mut p = Parser::new(
+        channel,
+        tokens,
+        instruments_map,
+        subroutines,
+        settings,
+        cursor_tracking,
+    );
+
+    let end_pos = loop {
+        let (pos, token) = p.peek_and_next();
+
+        match token {
+            Token::End => break pos,
+            t => commands.push(CommandWithPos::new(
+                parse_token(pos, t, &mut p),
+                p.file_pos_range_from(pos),
+                p.command_end_char_index(),
+            )),
+        }
+    };
+
+    let errors = p.finalize();
+
+    (ChannelCommands { commands, end_pos }, errors)
 }
