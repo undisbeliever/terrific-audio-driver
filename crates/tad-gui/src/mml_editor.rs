@@ -757,12 +757,12 @@ impl MmlEditorState {
                     }
                     ChannelId::Subroutine(si) => match &compiled_data {
                         CompiledEditorData::Song(sd) => {
-                            if let Some(subroutine) = sd.subroutines().get(usize::from(si)) {
+                            if let Some(subroutine) = sd.get_subroutine(si) {
                                 let _ = write!(s, "!{} ", subroutine.identifier.as_str());
                             }
                         }
                         CompiledEditorData::SfxSubroutines(sfx_data) => {
-                            if let Some(subroutine) = sfx_data.subroutines().get(usize::from(si)) {
+                            if let Some(subroutine) = sfx_data.get_subroutine(si) {
                                 let _ = write!(s, "!{} ", subroutine.identifier.as_str());
                             }
                         }

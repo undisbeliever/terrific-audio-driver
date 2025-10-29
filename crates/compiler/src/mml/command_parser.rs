@@ -29,7 +29,7 @@ use crate::file_pos::{FilePos, FilePosRange};
 use crate::mml::GlobalSettings;
 use crate::notes::{KeySignature, MidiNote, MmlPitch, Note, Octave, STARTING_OCTAVE};
 use crate::pitch_table::PlayPitchSampleRate;
-use crate::subroutines::{FindSubroutineResult, SubroutineStore};
+use crate::subroutines::SubroutineStore;
 use crate::time::{MmlDefaultLength, MmlLength, TickCounter, ZenLen, STARTING_MML_LENGTH};
 use crate::value_newtypes::{I8WithByteHexValueNewType, SignedValueNewType, UnsignedValueNewType};
 
@@ -172,10 +172,7 @@ mod parser {
             self.instruments_map
         }
 
-        pub(super) fn find_subroutine<'b>(&self, name: &'b str) -> FindSubroutineResult<'b>
-        where
-            'a: 'b,
-        {
+        pub(super) fn find_subroutine(&self, name: &str) -> Option<u8> {
             self.subroutines.find_subroutine(name)
         }
 
@@ -2152,36 +2149,17 @@ fn parse_call_subroutine(
     p: &mut Parser,
 ) -> Command {
     match p.find_subroutine(id.as_str()) {
-        FindSubroutineResult::Found(s) => {
-            let index = s.as_usize();
-
-            Command::CallSubroutine(index, d)
-        }
-        FindSubroutineResult::NotCompiled => {
-            // Subroutine has been compiled, but it contains an error
-            Command::None
-        }
-        FindSubroutineResult::Recussion => invalid_token_error(
-            p,
-            pos,
-            ChannelError::CannotCallSubroutineRecursion(id.as_str().to_owned()),
-        ),
-        FindSubroutineResult::NotFound => invalid_token_error(
-            p,
-            pos,
-            ChannelError::CannotFindSubroutine(id.as_str().to_owned()),
-        ),
-        FindSubroutineResult::NotAllowed => match p.channel_id() {
-            ChannelId::Channel(_) | ChannelId::Subroutine(_) => invalid_token_error(
-                p,
-                pos,
-                ChannelError::CannotFindSubroutine(id.as_str().to_owned()),
-            ),
+        Some(index) => Command::CallSubroutine(index, d),
+        None => match p.channel_id() {
+            ChannelId::Channel(_) | ChannelId::Subroutine(_) | ChannelId::SoundEffect => {
+                invalid_token_error(
+                    p,
+                    pos,
+                    ChannelError::CannotFindSubroutine(id.as_str().to_owned()),
+                )
+            }
             ChannelId::MmlPrefix => {
                 invalid_token_error(p, pos, ChannelError::CannotCallSubroutineInAnMmlPrefix)
-            }
-            ChannelId::SoundEffect => {
-                invalid_token_error(p, pos, ChannelError::CannotCallSubroutineInASoundEffect)
             }
         },
     }

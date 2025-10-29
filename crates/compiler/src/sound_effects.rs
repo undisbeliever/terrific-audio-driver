@@ -17,12 +17,12 @@ use crate::errors::{
     SoundEffectError, SoundEffectErrorList, SoundEffectsFileError,
 };
 use crate::file_pos::{blank_file_range, split_lines};
-use crate::mml;
 use crate::mml::note_tracking::{CommandTickTracker, CursorTracker};
+use crate::mml::{self, IdentifierBuf};
 use crate::mml::{ChannelId, CursorTrackerGetter};
 use crate::pitch_table::PitchTable;
 use crate::sfx_file::SoundEffectsFile;
-use crate::subroutines::{FindSubroutineResult, Subroutine, SubroutineStore};
+use crate::subroutines::{GetSubroutineResult, Subroutine, SubroutineState, SubroutineStore};
 use crate::time::{TickClock, TickCounter};
 
 use std::collections::HashMap;
@@ -43,7 +43,8 @@ pub struct SfxSubroutinesMml(pub String);
 pub struct CompiledSfxSubroutines {
     data: Vec<u8>,
 
-    subroutines: Vec<Subroutine>,
+    subroutines: Vec<(IdentifierBuf, SubroutineState)>,
+
     name_map: HashMap<String, usize>,
 
     cursor_tracker: CursorTracker,
@@ -52,7 +53,7 @@ pub struct CompiledSfxSubroutines {
 impl CompiledSfxSubroutines {
     pub(crate) fn new(
         data: Vec<u8>,
-        subroutines: Vec<Subroutine>,
+        subroutines: Vec<(IdentifierBuf, SubroutineState)>,
         cursor_tracker: CursorTracker,
     ) -> Self {
         Self {
@@ -60,7 +61,7 @@ impl CompiledSfxSubroutines {
             name_map: subroutines
                 .iter()
                 .enumerate()
-                .map(|(i, s)| (s.identifier.as_str().to_owned(), i))
+                .map(|(i, (name, _))| (name.as_str().to_owned(), i))
                 .collect(),
             subroutines,
             cursor_tracker,
@@ -76,8 +77,17 @@ impl CompiledSfxSubroutines {
         }
     }
 
-    pub fn subroutines(&self) -> &[Subroutine] {
+    pub fn subroutines(&self) -> &[(IdentifierBuf, SubroutineState)] {
         &self.subroutines
+    }
+
+    pub fn get_subroutine(&self, index: u8) -> Option<&Subroutine> {
+        match self.subroutines.get(usize::from(index)) {
+            Some((_, SubroutineState::Compiled(s))) => Some(s),
+            Some((_, SubroutineState::NotCompiled)) => None,
+            Some((_, SubroutineState::CompileError)) => None,
+            None => None,
+        }
     }
 
     pub fn cad_data_len(&self) -> usize {
@@ -95,9 +105,10 @@ impl CompiledSfxSubroutines {
     fn bytecode_addr_table_iter(&self, addr: u16) -> impl Iterator<Item = u16> + '_ {
         assert!(self.data.len() + usize::from(addr) < MAX_COMMON_DATA_SIZE);
 
-        self.subroutines
-            .iter()
-            .map(move |s| s.bytecode_offset + addr)
+        self.subroutines.iter().map(move |s| match s {
+            (_, SubroutineState::Compiled(s)) => s.bytecode_offset + addr,
+            _ => panic!("subroutine has errors"),
+        })
     }
 
     pub(crate) fn sfx_subroutines_l_iter(&self, addr: u16) -> impl Iterator<Item = u8> + '_ {
@@ -112,22 +123,21 @@ impl CompiledSfxSubroutines {
 }
 
 impl SubroutineStore for CompiledSfxSubroutines {
-    fn get(&self, index: usize) -> Option<&Subroutine> {
-        self.subroutines.get(index)
+    fn get(&self, index: usize) -> GetSubroutineResult<'_> {
+        match self.subroutines.get(index) {
+            Some((_, SubroutineState::Compiled(s))) => GetSubroutineResult::Compiled(s),
+            Some((name, SubroutineState::NotCompiled)) => {
+                GetSubroutineResult::NotCompiled(name.as_ref())
+            }
+            Some((name, SubroutineState::CompileError)) => {
+                GetSubroutineResult::CompileError(name.as_ref())
+            }
+            None => GetSubroutineResult::NotFound,
+        }
     }
 
-    fn find_subroutine<'a, 'b>(&'a self, name: &'b str) -> FindSubroutineResult<'b>
-    where
-        'a: 'b,
-    {
-        match self
-            .name_map
-            .get(name)
-            .and_then(|i| self.subroutines.get(*i))
-        {
-            Some(s) => FindSubroutineResult::Found(&s.subroutine_id),
-            None => FindSubroutineResult::NotFound,
-        }
+    fn find_subroutine(&self, name: &str) -> Option<u8> {
+        self.name_map.get(name).and_then(|&i| i.try_into().ok())
     }
 }
 
@@ -138,11 +148,10 @@ impl CursorTrackerGetter for CompiledSfxSubroutines {
 
     fn tick_tracker_for_channel(&self, channel: ChannelId) -> Option<&CommandTickTracker> {
         match channel {
-            ChannelId::Subroutine(i) => self
-                .subroutines
-                .get(usize::from(i))
-                .map(|s| &s.tick_tracker),
-
+            ChannelId::Subroutine(i) => match self.get_subroutine(i) {
+                Some(s) => Some(&s.tick_tracker),
+                _ => None,
+            },
             ChannelId::SoundEffect => None,
             ChannelId::Channel(_) => None,
             ChannelId::MmlPrefix => None,

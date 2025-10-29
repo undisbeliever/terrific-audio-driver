@@ -1507,13 +1507,9 @@ where
             common_audio_data,
         };
 
-        let sub = match out
-            .song_data
-            .subroutines()
-            .get(usize::from(subroutine_index))
-        {
+        let sub = match out.song_data.get_subroutine(subroutine_index) {
             Some(s) => s,
-            None => return Err(SongSubroutineError),
+            _ => return Err(SongSubroutineError),
         };
 
         let (inst, envelope) = match sub.subroutine_id.instrument_hint() {

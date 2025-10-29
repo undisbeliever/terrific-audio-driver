@@ -20,7 +20,7 @@ use crate::notes::Note;
 use crate::notes::SEMITONES_PER_OCTAVE;
 use crate::pitch_table::{PitchTable, PITCH_REGISTER_MAX};
 use crate::songs::LoopPoint;
-use crate::subroutines::{NoSubroutines, SubroutineStore};
+use crate::subroutines::{GetSubroutineResult, NoSubroutines, SubroutineStore};
 use crate::time::{TickClock, TickCounter, TickCounterWithLoopFlag};
 
 #[derive(Debug, Clone, Copy)]
@@ -1250,14 +1250,18 @@ impl<'a> ChannelBcGenerator<'a> {
 
     fn call_subroutine(
         &mut self,
-        index: usize,
+        index: u8,
         disable_vibrato: SubroutineCallType,
     ) -> Result<(), ChannelError> {
-        // CallSubroutine commands should only be created if the channel can call a subroutine.
-        // `s_id` should always be valid
-        let sub = match self.subroutines.get(index) {
-            Some(s) => s,
-            None => panic!("invalid SubroutineId"),
+        let sub = match self.subroutines.get(index.into()) {
+            GetSubroutineResult::NotFound => panic!("subroutine not found"),
+            GetSubroutineResult::Compiled(sub) => sub,
+            GetSubroutineResult::NotCompiled(name) => {
+                return Err(ChannelError::CannotCallSubroutineRecursion(
+                    name.as_str().to_owned(),
+                ))
+            }
+            GetSubroutineResult::CompileError(_) => return Ok(()),
         };
 
         match (disable_vibrato, &self.mp) {

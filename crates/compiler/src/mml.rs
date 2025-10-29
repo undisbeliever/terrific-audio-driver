@@ -25,7 +25,6 @@ use self::instruments::{build_instrument_map, parse_instruments};
 use self::line_splitter::{split_mml_song_lines, split_mml_sound_effect_lines};
 use self::metadata::parse_headers;
 use bc_generator::parse_and_compile_mml_prefix;
-pub(crate) use identifier::{IdentifierBuf, IdentifierStr};
 use line_splitter::split_mml_sfx_subroutines_header_lines;
 use tokenizer::MmlTokens;
 
@@ -63,6 +62,7 @@ pub const SECTION_PREFIX: &str = ";;";
 pub const MAX_MML_PREFIX_STR_LENGTH: usize = 16 * 1024;
 pub const MAX_MML_PREFIX_TICKS: TickCounter = TickCounter::new(16);
 
+pub use self::identifier::{IdentifierBuf, IdentifierStr};
 pub use self::tick_count_table::MmlTickCountTable;
 
 pub use self::metadata::{GlobalSettings, MetaData};
@@ -183,6 +183,7 @@ pub fn compile_mml(
         data_instruments,
         &instruments,
         instrument_map,
+        &lines.subroutines,
         &lines.subroutine_name_map,
         metadata.echo_buffer.max_edl,
         song_header_size(n_active_channels, lines.subroutines.len()),
@@ -293,6 +294,7 @@ pub(crate) fn compile_sfx_subroutines(
         data_instruments,
         &instruments,
         instrument_map,
+        &lines.subroutines,
         &lines.subroutine_name_map,
         EchoEdl::MIN,
         0,

@@ -5,7 +5,7 @@
 // SPDX-License-Identifier: MIT
 
 use crate::mml::note_tracking::CommandTickTracker;
-use crate::mml::IdentifierBuf;
+use crate::mml::{IdentifierBuf, IdentifierStr};
 
 pub use crate::bytecode::SubroutineId;
 
@@ -14,38 +14,40 @@ pub struct Subroutine {
     pub identifier: IdentifierBuf,
     pub subroutine_id: SubroutineId,
     pub bytecode_offset: u16,
+    pub bytecode_end_offset: u16,
     pub changes_song_tempo: bool,
 
     pub tick_tracker: CommandTickTracker,
 }
 
-pub enum FindSubroutineResult<'a> {
-    Found(&'a SubroutineId),
+#[derive(Debug, Clone)]
+pub enum SubroutineState {
+    Compiled(Subroutine),
     NotCompiled,
-    Recussion,
+    CompileError,
+}
+
+pub enum GetSubroutineResult<'a> {
     NotFound,
-    NotAllowed,
+    Compiled(&'a Subroutine),
+    NotCompiled(IdentifierStr<'a>),
+    CompileError(IdentifierStr<'a>),
 }
 
 pub trait SubroutineStore {
-    fn get(&self, index: usize) -> Option<&Subroutine>;
+    fn get(&self, index: usize) -> GetSubroutineResult<'_>;
 
-    fn find_subroutine<'a, 'b>(&'a self, name: &'b str) -> FindSubroutineResult<'b>
-    where
-        'a: 'b;
+    fn find_subroutine(&self, name: &str) -> Option<u8>;
 }
 
 pub struct NoSubroutines();
 
 impl SubroutineStore for NoSubroutines {
-    fn get(&self, _: usize) -> Option<&Subroutine> {
-        None
+    fn get(&self, _: usize) -> GetSubroutineResult<'_> {
+        GetSubroutineResult::NotFound
     }
 
-    fn find_subroutine<'a, 'b>(&'a self, _: &'b str) -> FindSubroutineResult<'b>
-    where
-        'a: 'b,
-    {
-        FindSubroutineResult::NotAllowed
+    fn find_subroutine(&self, _: &str) -> Option<u8> {
+        None
     }
 }

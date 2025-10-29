@@ -263,7 +263,7 @@ pub(crate) enum Command {
 
     DisableNoise,
 
-    CallSubroutine(usize, SubroutineCallType),
+    CallSubroutine(u8, SubroutineCallType),
     StartLoop,
     SkipLastLoop,
     EndLoop(LoopCount),

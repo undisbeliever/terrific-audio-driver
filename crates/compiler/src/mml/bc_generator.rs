@@ -12,7 +12,7 @@ use crate::data::{self, UniqueNamesList};
 use crate::echo::EchoEdl;
 use crate::mml::command_parser::parse_mml_tokens;
 use crate::mml::metadata::GlobalSettings;
-use crate::mml::{CursorTracker, MmlPrefixData, MAX_MML_PREFIX_TICKS};
+use crate::mml::{CursorTracker, IdentifierBuf, MmlPrefixData, MAX_MML_PREFIX_TICKS};
 use crate::songs::{BytecodePos, SongBcTracking};
 
 use crate::bytecode::{BcTerminator, BytecodeContext, SubroutineId};
@@ -24,39 +24,48 @@ use crate::errors::{ChannelError, ErrorWithPos, MmlChannelError};
 use crate::pitch_table::PitchTable;
 use crate::songs::Channel;
 use crate::sound_effects::{CompiledSfxSubroutines, MAX_SFX_TICKS};
-use crate::subroutines::{FindSubroutineResult, NoSubroutines, Subroutine, SubroutineStore};
+use crate::subroutines::{
+    GetSubroutineResult, NoSubroutines, Subroutine, SubroutineState, SubroutineStore,
+};
 use crate::time::TickCounterWithLoopFlag;
 
 use std::collections::HashMap;
 
 struct SongSubroutines<'a> {
-    vec: Vec<Subroutine>,
-    id_map: HashMap<IdentifierStr<'a>, Option<SubroutineId>>,
+    vec: Vec<(IdentifierBuf, SubroutineState)>,
+
     name_map: &'a HashMap<IdentifierStr<'a>, usize>,
 }
 
+impl SongSubroutines<'_> {
+    fn get_compiled_subroutine(&self, index: u8) -> Option<&Subroutine> {
+        match self.vec.get(usize::from(index)) {
+            Some((_, SubroutineState::Compiled(s))) => Some(s),
+            Some((_, SubroutineState::NotCompiled)) => None,
+            Some((_, SubroutineState::CompileError)) => None,
+            None => None,
+        }
+    }
+}
+
 impl SubroutineStore for SongSubroutines<'_> {
-    fn get(&self, index: usize) -> Option<&Subroutine> {
-        self.vec.get(index)
+    fn get(&self, index: usize) -> GetSubroutineResult<'_> {
+        match self.vec.get(index) {
+            Some((_, SubroutineState::Compiled(s))) => GetSubroutineResult::Compiled(s),
+            Some((name, SubroutineState::NotCompiled)) => {
+                GetSubroutineResult::NotCompiled(name.as_ref())
+            }
+            Some((name, SubroutineState::CompileError)) => {
+                GetSubroutineResult::CompileError(name.as_ref())
+            }
+            None => GetSubroutineResult::NotFound,
+        }
     }
 
-    fn find_subroutine<'a, 'b>(&'a self, name: &'b str) -> FindSubroutineResult<'b>
-    where
-        'a: 'b,
-    {
+    fn find_subroutine(&self, name: &str) -> Option<u8> {
         let name = IdentifierStr::from_str(name);
 
-        match self.id_map.get(&name) {
-            Some(Some(s)) => FindSubroutineResult::Found(s),
-            Some(None) => {
-                // Subroutine has been compiled, but it contains an error
-                FindSubroutineResult::NotCompiled
-            }
-            None => match self.name_map.get(&name) {
-                Some(_) => FindSubroutineResult::Recussion,
-                None => FindSubroutineResult::NotFound,
-            },
-        }
+        self.name_map.get(&name).map(|i| (*i).try_into().unwrap())
     }
 }
 
@@ -91,6 +100,7 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
         data_instruments: &'a UniqueNamesList<data::InstrumentOrSample>,
         instruments: &'a Vec<MmlInstrument>,
         instrument_map: HashMap<IdentifierStr<'a>, usize>,
+        subroutines: &[(IdentifierStr<'a>, MmlTokens<'a>)],
         subroutine_name_map: &'a HashMap<IdentifierStr<'a>, usize>,
         max_edl: EchoEdl,
         header_size: usize,
@@ -109,8 +119,10 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
 
             max_edl,
             subroutines: SongSubroutines {
-                vec: Vec::new(),
-                id_map: HashMap::new(),
+                vec: subroutines
+                    .iter()
+                    .map(|(id, _)| ((*id).to_owned(), SubroutineState::NotCompiled))
+                    .collect(),
                 name_map: subroutine_name_map,
             },
 
@@ -126,7 +138,13 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
         CompiledSfxSubroutines::new(self.song_data, self.subroutines.vec, self.cursor_tracker)
     }
 
-    pub(crate) fn take_data(self) -> (Vec<u8>, Vec<Subroutine>, SongBcTracking) {
+    pub(crate) fn take_data(
+        self,
+    ) -> (
+        Vec<u8>,
+        Vec<(IdentifierBuf, SubroutineState)>,
+        SongBcTracking,
+    ) {
         assert!(self.is_song);
 
         (
@@ -195,18 +213,16 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
 
     pub fn parse_and_compile_subroutione(
         &mut self,
+        subroutine_index: u8,
         identifier: IdentifierStr<'a>,
         tokens: MmlTokens,
         song_uses_driver_transpose: bool,
     ) -> Result<(), MmlChannelError> {
-        // Index in SongData, not mml file
-        let song_subroutine_index = self.subroutines.vec.len().try_into().unwrap();
-
         let song_data = std::mem::take(&mut self.song_data);
         let sd_start_index = song_data.len();
 
         let (commands, mut errors) = parse_mml_tokens(
-            ChannelId::Subroutine(song_subroutine_index),
+            ChannelId::Subroutine(subroutine_index),
             tokens,
             &self.mml_instrument_map,
             &self.subroutines,
@@ -256,16 +272,16 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
                         Command::CallSubroutine(
                             s,
                             SubroutineCallType::Mml | SubroutineCallType::Asm,
-                        ) => {
-                            let sub = self.subroutines.vec.get(*s).unwrap();
-                            (
+                        ) => match self.subroutines.get_compiled_subroutine(*s) {
+                            Some(sub) => (
                                 BcTerminator::TailSubroutineCall(
                                     sub.bytecode_offset.into(),
                                     &sub.subroutine_id,
                                 ),
                                 Some(tc.end_pos()),
-                            )
-                        }
+                            ),
+                            _ => (BcTerminator::ReturnFromSubroutine, None),
+                        },
                         Command::CallSubroutine(_, SubroutineCallType::AsmDisableVibrato) => {
                             // `call_subroutine_and_disable_vibrato` + `return_from_subroutine` uses
                             // less Audio-RAM then `disable_vibraro` + `goto_relative``
@@ -313,15 +329,16 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
         match (errors.is_empty(), bc_state) {
             (true, Some(bc_state)) => {
                 let changes_song_tempo = !bc_state.tempo_changes.is_empty();
-                let subroutine_id = SubroutineId::new(song_subroutine_index, bc_state);
+                let subroutine_id = SubroutineId::new(subroutine_index, bc_state);
 
-                self.subroutines
-                    .id_map
-                    .insert(identifier, Some(subroutine_id.clone()));
+                let sd_end_index = self.song_data.len();
 
-                self.subroutines.vec.push(Subroutine {
+                let s = &mut self.subroutines.vec[usize::from(subroutine_index)].1;
+                assert!(matches!(s, SubroutineState::NotCompiled));
+                *s = SubroutineState::Compiled(Subroutine {
                     identifier: identifier.to_owned(),
                     bytecode_offset: sd_start_index.try_into().unwrap_or(u16::MAX),
+                    bytecode_end_offset: sd_end_index.try_into().unwrap_or(u16::MAX),
                     subroutine_id,
                     changes_song_tempo,
                     tick_tracker,
@@ -330,7 +347,8 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
                 Ok(())
             }
             _ => {
-                self.subroutines.id_map.insert(identifier, None);
+                self.subroutines.vec[usize::from(subroutine_index)].1 =
+                    SubroutineState::CompileError;
 
                 Err(MmlChannelError {
                     identifier: identifier.to_owned(),

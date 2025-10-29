@@ -324,29 +324,29 @@ fn subroutines() {
     let sd = compile(
         r##"
 @1 sine
-!s2 c
-!s1 c8
-!s2 !s1
-A @1 !s1 !s2
+!s1 c
+!s2 c8
+!s1 !s2
+A @1 !s2 !s1
 "##,
     );
 
-    assert_eq!(cursor_ticks(&sd, 13), Some((SUB_2, 0, false)));
-    assert_eq!(cursor_ticks(&sd, 14), Some((SUB_2, 24, false)));
+    assert_eq!(cursor_ticks(&sd, 13), Some((SUB_1, 0, false)));
+    assert_eq!(cursor_ticks(&sd, 14), Some((SUB_1, 24, false)));
 
-    assert_eq!(cursor_ticks(&sd, 20), Some((SUB_1, 0, false)));
-    assert_eq!(cursor_ticks(&sd, 21), Some((SUB_1, 12, false)));
+    assert_eq!(cursor_ticks(&sd, 20), Some((SUB_2, 0, false)));
+    assert_eq!(cursor_ticks(&sd, 21), Some((SUB_2, 12, false)));
 
-    assert_eq!(cursor_ticks(&sd, 28), Some((SUB_2, 24, false)));
-    assert_eq!(cursor_ticks(&sd, 29), Some((SUB_2, 36, false)));
+    assert_eq!(cursor_ticks(&sd, 28), Some((SUB_1, 24, false)));
+    assert_eq!(cursor_ticks(&sd, 29), Some((SUB_1, 36, false)));
 
     assert_eq!(cursor_ticks(&sd, 37), Some((CHANNEL_A, 0, false)));
     assert_eq!(cursor_ticks(&sd, 38), Some((CHANNEL_A, 12, false)));
     assert_eq!(cursor_ticks(&sd, 41), Some((CHANNEL_A, 12, false)));
     assert_eq!(cursor_ticks(&sd, 42), Some((CHANNEL_A, 48, false)));
 
-    assert_eq!(line_start(&sd, 12), Some((SUB_2, 0, false)));
-    assert_eq!(line_start(&sd, 20), Some((SUB_1, 0, false)));
-    assert_eq!(line_start(&sd, 29), Some((SUB_2, 24, false)));
+    assert_eq!(line_start(&sd, 12), Some((SUB_1, 0, false)));
+    assert_eq!(line_start(&sd, 20), Some((SUB_2, 0, false)));
+    assert_eq!(line_start(&sd, 29), Some((SUB_1, 24, false)));
     assert_eq!(line_start(&sd, 38), Some((CHANNEL_A, 0, false)));
 }

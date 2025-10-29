@@ -76,7 +76,7 @@ A !s
         bc,
         &[
             opcodes::CALL_SUBROUTINE,
-            0,
+            1,
             opcodes::REST,
             23,
             opcodes::RETURN_FROM_SUBROUTINE
@@ -108,7 +108,7 @@ A !s
 
     assert_eq!(
         bc,
-        [opcodes::CALL_SUBROUTINE, 0, opcodes::RETURN_FROM_SUBROUTINE]
+        [opcodes::CALL_SUBROUTINE, 1, opcodes::RETURN_FROM_SUBROUTINE]
     );
 }
 
@@ -135,7 +135,7 @@ A !s
         &[
             // Not a tail call
             opcodes::CALL_SUBROUTINE_AND_DISABLE_VIBRATO,
-            0,
+            1,
             opcodes::RETURN_FROM_SUBROUTINE
         ]
     );

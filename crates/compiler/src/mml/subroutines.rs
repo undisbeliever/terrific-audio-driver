@@ -128,6 +128,7 @@ pub fn compile_subroutines<'a>(
                 std::mem::swap(&mut tokens, &mut s.tokens);
 
                 let r = bc_generator.parse_and_compile_subroutione(
+                    s.index,
                     s.identifier,
                     tokens,
                     song_uses_driver_transpose,
@@ -151,6 +152,7 @@ pub fn compile_subroutines<'a>(
 
     for s in to_process {
         let r = bc_generator.parse_and_compile_subroutione(
+            s.index,
             s.identifier,
             s.tokens,
             song_uses_driver_transpose,

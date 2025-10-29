@@ -50,7 +50,7 @@ A [[[ !s ]14]15]16
         &dummy_data(),
     );
 
-    let subroutine = &mml.subroutines()[0];
+    let subroutine = &mml.get_subroutine(0).unwrap();
     let channel_a = mml.channels()[0].as_ref().unwrap();
 
     assert_eq!(
@@ -170,7 +170,13 @@ fn max_subroutines_with_nesting() {
     let channel_a = song.channels()[0].as_ref().unwrap();
 
     assert_eq!(song.subroutines().len(), N_SUBROUTINES as usize);
-    for s in song.subroutines() {
+    for (_name, s) in song.subroutines() {
+        let s = match s {
+            SubroutineState::Compiled(s) => s,
+            SubroutineState::CompileError => panic!(),
+            SubroutineState::NotCompiled => panic!(),
+        };
+
         let i: u32 = s.identifier.as_str().parse().unwrap();
 
         let stack_depth = if i % 3 == 0 {

@@ -19,7 +19,7 @@ use crate::invert_flags::InvertFlags;
 use crate::notes::{Note, LAST_NOTE_ID, N_NOTES};
 use crate::pitch_table::InstrumentHintFreq;
 use crate::samples::note_range;
-use crate::subroutines::{FindSubroutineResult, SubroutineStore};
+use crate::subroutines::{GetSubroutineResult, SubroutineStore};
 use crate::time::{TickClock, TickCounter, TickCounterWithLoopFlag};
 use crate::value_newtypes::{
     i16_non_zero_value_newtype, i16_value_newtype, i8_value_newtype, u16_value_newtype,
@@ -384,6 +384,10 @@ pub struct SubroutineId {
 impl SubroutineId {
     pub fn new(id: u8, state: State) -> Self {
         Self { id, state }
+    }
+
+    pub fn u8_index(&self) -> u8 {
+        self.id
     }
 
     pub fn as_usize(&self) -> usize {
@@ -2419,18 +2423,28 @@ impl<'a> Bytecode<'a> {
 
     fn _find_subroutine(&self, name: &'a str) -> Result<&'a SubroutineId, BytecodeError> {
         match self.subroutines.find_subroutine(name) {
-            FindSubroutineResult::Found(s) => Ok(s),
-            FindSubroutineResult::NotCompiled => {
-                // Subroutine has been compiled, but it contains an error
-                Err(BytecodeError::SubroutineHasError(name.to_owned()))
-            }
-            FindSubroutineResult::Recussion => {
-                Err(BytecodeError::SubroutineRecursion(name.to_owned()))
-            }
-            FindSubroutineResult::NotFound => {
-                Err(BytecodeError::UnknownSubroutine(name.to_owned()))
-            }
-            FindSubroutineResult::NotAllowed => Err(BytecodeError::NotAllowedToCallSubroutine),
+            Some(index) => match self.subroutines.get(index.into()) {
+                GetSubroutineResult::Compiled(s) => Ok(&s.subroutine_id),
+                GetSubroutineResult::NotCompiled(_) => {
+                    Err(BytecodeError::SubroutineRecursion(name.to_owned()))
+                }
+                GetSubroutineResult::CompileError(_) => {
+                    // Subroutine has been compiled, but it contains an error
+                    Err(BytecodeError::SubroutineHasError(name.to_owned()))
+                }
+                GetSubroutineResult::NotFound => {
+                    Err(BytecodeError::UnknownSubroutine(name.to_owned()))
+                }
+            },
+            None => match &self.context {
+                BytecodeContext::SongSubroutine { .. }
+                | BytecodeContext::SongChannel { .. }
+                | BytecodeContext::SfxSubroutine
+                | BytecodeContext::SoundEffect => {
+                    Err(BytecodeError::UnknownSubroutine(name.to_owned()))
+                }
+                BytecodeContext::MmlPrefix => Err(BytecodeError::NotAllowedToCallSubroutine),
+            },
         }
     }
 

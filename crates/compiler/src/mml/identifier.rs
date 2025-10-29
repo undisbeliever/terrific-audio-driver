@@ -59,7 +59,7 @@ impl<'a> IdentifierStr<'a> {
 pub struct IdentifierBuf(String);
 
 impl IdentifierBuf {
-    pub(super) fn as_ref(&self) -> IdentifierStr<'_> {
+    pub(crate) fn as_ref(&self) -> IdentifierStr<'_> {
         IdentifierStr(&self.0)
     }
 
