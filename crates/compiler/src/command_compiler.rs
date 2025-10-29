@@ -1,0 +1,8 @@
+//! Command compiler
+
+// SPDX-FileCopyrightText: © 2025 Marcus Rowe <undisbeliever@gmail.com>
+//
+// SPDX-License-Identifier: MIT
+
+pub(crate) mod channel_bc_generator;
+pub(crate) mod commands;

@@ -6,7 +6,7 @@
 
 #![allow(clippy::assertions_on_constants)]
 
-use crate::channel_bc_generator::MmlInstrument;
+use crate::command_compiler::commands::MmlInstrument;
 use crate::data::{self, InstrumentOrSample, UniqueNamesList};
 use crate::driver_constants::{
     BC_CHANNEL_STACK_SIZE, BC_STACK_BYTES_PER_LOOP, BC_STACK_BYTES_PER_SUBROUTINE_CALL,

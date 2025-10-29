@@ -16,7 +16,7 @@ use crate::bytecode::{
     VibratoQuarterWavelengthInTicks, Volume, VolumeSlideAmount, VolumeSlideTicks,
     KEY_OFF_TICK_DELAY,
 };
-use crate::channel_bc_generator::{
+use crate::command_compiler::commands::{
     merge_pan_commands, merge_volumes_commands, relative_pan, relative_volume, ChannelCommands,
     Command, CommandWithPos, DetuneCents, FineQuantization, ManualVibrato, MpVibrato, NoteOrPitch,
     PanCommand, Quantize, RestTicksAfterNote, SubroutineCallType, VolumeCommand,
@@ -33,7 +33,7 @@ use crate::subroutines::{FindSubroutineResult, SubroutineStore};
 use crate::time::{MmlDefaultLength, MmlLength, TickCounter, ZenLen, STARTING_MML_LENGTH};
 use crate::value_newtypes::{I8WithByteHexValueNewType, SignedValueNewType, UnsignedValueNewType};
 
-pub use crate::channel_bc_generator::Quantization;
+pub use crate::command_compiler::commands::Quantization;
 
 use std::collections::HashMap;
 

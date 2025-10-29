@@ -10,7 +10,7 @@ use crate::bytecode::{
     BcTerminator, BcTicks, BcTicksKeyOff, BcTicksNoKeyOff, Bytecode, BytecodeContext, InstrumentId,
     PlayNoteTicks, StackDepth, Volume,
 };
-use crate::channel_bc_generator::MmlInstrument;
+use crate::command_compiler::commands::MmlInstrument;
 use crate::data::{self, single_item_unique_names_list, InstrumentOrSample, Name, UniqueNamesList};
 use crate::driver_constants::{
     addresses, AUDIO_RAM_SIZE, BLANK_SONG_BIN, ECHO_BUFFER_MIN_SIZE, ECHO_VARIABLES_SIZE,

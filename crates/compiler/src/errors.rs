@@ -15,7 +15,7 @@ use crate::bytecode::{
     VibratoDelayTicks, VibratoPitchOffsetPerTick, VibratoQuarterWavelengthInTicks, Volume,
     VolumeSlideAmount, VolumeSlideTicks,
 };
-use crate::channel_bc_generator::{
+use crate::command_compiler::commands::{
     DetuneCents, FineQuantization, PortamentoSpeed, Quantization, MAX_BROKEN_CHORD_NOTES,
 };
 use crate::data::{LoopSetting, Name};

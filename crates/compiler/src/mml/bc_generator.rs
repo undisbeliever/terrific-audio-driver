@@ -16,8 +16,9 @@ use crate::mml::{CursorTracker, MmlPrefixData, MAX_MML_PREFIX_TICKS};
 use crate::songs::{BytecodePos, SongBcTracking};
 
 use crate::bytecode::{BcTerminator, BytecodeContext, SubroutineId};
-use crate::channel_bc_generator::{
-    ChannelBcGenerator, Command, CommandWithPos, MmlInstrument, MpState, SubroutineCallType,
+use crate::command_compiler::channel_bc_generator::{ChannelBcGenerator, MpState};
+use crate::command_compiler::commands::{
+    Command, CommandWithPos, MmlInstrument, SubroutineCallType,
 };
 use crate::errors::{ChannelError, ErrorWithPos, MmlChannelError};
 use crate::pitch_table::PitchTable;

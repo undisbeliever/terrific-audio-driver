@@ -9,7 +9,7 @@ use std::ops::Range;
 use super::{IdentifierStr, COMMENT_CHAR};
 
 use crate::bytecode_assembler;
-use crate::channel_bc_generator::SubroutineCallType;
+use crate::command_compiler::commands::SubroutineCallType;
 use crate::envelope::GainMode;
 use crate::errors::{ChannelError, ValueError};
 use crate::file_pos::{blank_line_splitter, FilePos, Line, LineIndexRange, LineSplitter};
