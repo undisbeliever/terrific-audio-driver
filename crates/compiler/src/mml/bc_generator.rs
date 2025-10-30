@@ -15,7 +15,7 @@ use crate::mml::metadata::GlobalSettings;
 use crate::mml::{CursorTracker, MmlPrefixData, MAX_MML_PREFIX_TICKS};
 use crate::songs::{BytecodePos, SongBcTracking};
 
-use crate::bytecode::{BcTerminator, BytecodeContext, SubroutineId};
+use crate::bytecode::{BcTerminator, BytecodeContext};
 use crate::command_compiler::channel_bc_generator::{ChannelBcGenerator, MpState};
 use crate::command_compiler::commands::{
     Command, CommandWithPos, MmlInstrument, SubroutineCallType,
@@ -233,13 +233,9 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
                             s,
                             SubroutineCallType::Mml | SubroutineCallType::Asm,
                         ) => match self.subroutines.get_compiled(*s) {
-                            Some(sub) => (
-                                BcTerminator::TailSubroutineCall(
-                                    sub.bytecode_offset.into(),
-                                    &sub.subroutine_id,
-                                ),
-                                Some(tc.end_pos()),
-                            ),
+                            Some(sub) => {
+                                (BcTerminator::TailSubroutineCall(sub), Some(tc.end_pos()))
+                            }
                             _ => (BcTerminator::ReturnFromSubroutine, None),
                         },
                         Command::CallSubroutine(_, SubroutineCallType::AsmDisableVibrato) => {
@@ -289,16 +285,16 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
         match (errors.is_empty(), bc_state) {
             (true, Some(bc_state)) => {
                 let changes_song_tempo = !bc_state.tempo_changes.is_empty();
-                let subroutine_id = SubroutineId::new(subroutine_index, bc_state);
 
                 let sd_end_index = self.song_data.len();
 
                 self.subroutines.store(
                     subroutine_index,
                     SubroutineState::Compiled(Subroutine {
+                        index: subroutine_index,
+                        bc_state,
                         bytecode_offset: sd_start_index.try_into().unwrap_or(u16::MAX),
                         bytecode_end_offset: sd_end_index.try_into().unwrap_or(u16::MAX),
-                        subroutine_id,
                         changes_song_tempo,
                         tick_tracker,
                     }),

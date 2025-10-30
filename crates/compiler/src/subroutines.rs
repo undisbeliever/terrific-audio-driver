@@ -4,14 +4,14 @@
 //
 // SPDX-License-Identifier: MIT
 
+use crate::bytecode;
 use crate::mml::note_tracking::CommandTickTracker;
 use crate::mml::{IdentifierBuf, IdentifierStr};
 
-pub use crate::bytecode::SubroutineId;
-
 #[derive(Debug, Clone, PartialEq)]
 pub struct Subroutine {
-    pub subroutine_id: SubroutineId,
+    pub index: u8,
+    pub bc_state: bytecode::State,
     pub bytecode_offset: u16,
     pub bytecode_end_offset: u16,
     pub changes_song_tempo: bool,

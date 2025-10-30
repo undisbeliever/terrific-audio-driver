@@ -1272,18 +1272,18 @@ impl<'a> ChannelBcGenerator<'a> {
 
         match (disable_vibrato, &self.mp) {
             (SubroutineCallType::Asm, _) => {
-                self.bc.call_subroutine(name.as_str(), &sub.subroutine_id)?;
+                self.bc.call_subroutine(name.as_str(), sub)?;
             }
             (SubroutineCallType::AsmDisableVibrato, _) => {
                 self.bc
-                    .call_subroutine_and_disable_vibrato(name.as_str(), &sub.subroutine_id)?;
+                    .call_subroutine_and_disable_vibrato(name.as_str(), sub)?;
             }
             (SubroutineCallType::Mml, MpState::Mp(_)) => {
                 self.bc
-                    .call_subroutine_and_disable_vibrato(name.as_str(), &sub.subroutine_id)?;
+                    .call_subroutine_and_disable_vibrato(name.as_str(), sub)?;
             }
             (SubroutineCallType::Mml, MpState::Disabled | MpState::Manual) => {
-                self.bc.call_subroutine(name.as_str(), &sub.subroutine_id)?;
+                self.bc.call_subroutine(name.as_str(), sub)?;
             }
         }
 
