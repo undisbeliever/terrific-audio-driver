@@ -19,7 +19,7 @@ use crate::invert_flags::InvertFlags;
 use crate::notes::{Note, LAST_NOTE_ID, N_NOTES};
 use crate::pitch_table::InstrumentHintFreq;
 use crate::samples::note_range;
-use crate::subroutines::{GetSubroutineResult, SubroutineStore};
+use crate::subroutines::{CompiledSubroutines, GetSubroutineResult, SubroutineNameMap};
 use crate::time::{TickClock, TickCounter, TickCounterWithLoopFlag};
 use crate::value_newtypes::{
     i16_non_zero_value_newtype, i16_value_newtype, i8_value_newtype, u16_value_newtype,
@@ -1191,7 +1191,8 @@ pub struct Bytecode<'a> {
     bytecode: Vec<u8>,
 
     instruments: &'a UniqueNamesList<data::InstrumentOrSample>,
-    subroutines: &'a dyn SubroutineStore,
+    subroutines: &'a CompiledSubroutines,
+    subroutin_name_map: &'a dyn SubroutineNameMap,
 
     state: State,
 
@@ -1207,9 +1208,16 @@ impl<'a> Bytecode<'a> {
     pub fn new(
         context: BytecodeContext,
         instruments: &'a UniqueNamesList<data::InstrumentOrSample>,
-        subroutines: &'a dyn SubroutineStore,
+        subroutines: &'a CompiledSubroutines,
+        subroutine_name_map: &'a dyn SubroutineNameMap,
     ) -> Bytecode<'a> {
-        Self::new_append_to_vec(Vec::new(), context, instruments, subroutines)
+        Self::new_append_to_vec(
+            Vec::new(),
+            context,
+            instruments,
+            subroutines,
+            subroutine_name_map,
+        )
     }
 
     // Instead of creating a new `Vec<u8>` to hold the bytecode, write the data to the end of `vec`.
@@ -1219,12 +1227,14 @@ impl<'a> Bytecode<'a> {
         vec: Vec<u8>,
         context: BytecodeContext,
         instruments: &'a UniqueNamesList<data::InstrumentOrSample>,
-        subroutines: &'a dyn SubroutineStore,
+        subroutines: &'a CompiledSubroutines,
+        subroutine_name_map: &'a dyn SubroutineNameMap,
     ) -> Bytecode<'a> {
         Bytecode {
             bytecode: vec,
             instruments,
             subroutines,
+            subroutin_name_map: subroutine_name_map,
             state: State {
                 tick_counter: TickCounter::new(0),
                 max_stack_depth: StackDepth(0),
@@ -2422,9 +2432,9 @@ impl<'a> Bytecode<'a> {
     }
 
     fn _find_subroutine(&self, name: &'a str) -> Result<&'a SubroutineId, BytecodeError> {
-        match self.subroutines.find_subroutine(name) {
+        match self.subroutin_name_map.find_subroutine_index(name) {
             Some(index) => match self.subroutines.get(index.into()) {
-                GetSubroutineResult::Compiled(s) => Ok(&s.subroutine_id),
+                GetSubroutineResult::Compiled(_, s) => Ok(&s.subroutine_id),
                 GetSubroutineResult::NotCompiled(_) => {
                     Err(BytecodeError::SubroutineRecursion(name.to_owned()))
                 }

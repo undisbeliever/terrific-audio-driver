@@ -1507,7 +1507,7 @@ where
             common_audio_data,
         };
 
-        let sub = match out.song_data.get_subroutine(subroutine_index) {
+        let sub = match out.song_data.subroutines().get_compiled(subroutine_index) {
             Some(s) => s,
             _ => return Err(SongSubroutineError),
         };

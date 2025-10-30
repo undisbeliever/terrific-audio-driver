@@ -41,13 +41,13 @@ use compiler::driver_constants::{
 use compiler::echo::EchoEdl;
 use compiler::envelope::{Adsr, Envelope, Gain};
 use compiler::errors::{BytecodeError, ChannelError, MmlLineError, SongError, ValueError};
-use compiler::mml::{self, IdentifierBuf};
+use compiler::mml;
 use compiler::notes::{Note, Octave};
 use compiler::pitch_table::{
     build_pitch_table, InstrumentHintFreq, PitchTable, PlayPitchFrequency,
 };
 use compiler::songs::SongData;
-use compiler::subroutines::{GetSubroutineResult, Subroutine, SubroutineState, SubroutineStore};
+use compiler::subroutines::{CompiledSubroutines, Subroutine, SubroutineNameMap, SubroutineState};
 use compiler::{bytecode_assembler, data, opcodes};
 
 use std::fmt::Write;
@@ -106,9 +106,9 @@ fn get_subroutine_and_bytecode<'a>(
     sd: &'a SongData,
     name: &str,
 ) -> Option<(&'a Subroutine, &'a [u8])> {
-    let s = sd.subroutines().iter().find_map(|(_, s)| match s {
+    let s = sd.subroutines().iter().find_map(|(s_name, s)| match s {
         SubroutineState::Compiled(s) => {
-            if s.identifier.as_str() == name {
+            if s_name.as_str() == name {
                 Some(s)
             } else {
                 None
@@ -152,7 +152,10 @@ fn mml_channel_b_bytecode(mml: &SongData) -> &[u8] {
 fn subroutine_bytecode(mml: &SongData, index: usize) -> &[u8] {
     let song_data = mml.data();
 
-    let s = mml.get_subroutine(index.try_into().unwrap()).unwrap();
+    let s = mml
+        .subroutines()
+        .get_compiled(index.try_into().unwrap())
+        .unwrap();
 
     &song_data[usize::from(s.bytecode_offset)..usize::from(s.bytecode_end_offset)]
 }
@@ -167,7 +170,7 @@ fn assert_line_matches_bytecode(mml_line: &str, bc_asm: &[&str]) {
     let bc_asm = assemble_channel_bytecode(
         &bc_asm,
         &dd.instruments_and_samples,
-        &[],
+        &CompiledSubroutines::new_blank(),
         BcTerminator::DisableChannel,
         BytecodeContext::SongChannel {
             index: 0,
@@ -199,7 +202,7 @@ fn assert_channel_b_line_matches_bytecode(mml_line: &str, bc_asm: &[&str]) {
     let bc_asm = assemble_channel_bytecode(
         &bc_asm,
         &dd.instruments_and_samples,
-        &[],
+        &CompiledSubroutines::new_blank(),
         BcTerminator::DisableChannel,
         BytecodeContext::SongChannel {
             index: 1,
@@ -283,7 +286,7 @@ fn assert_line_matches_line_and_bytecode(mml_line1: &str, mml_line2: &str, bc_as
     let bc_asm = assemble_channel_bytecode(
         &bc_asm,
         &dd.instruments_and_samples,
-        &[],
+        &CompiledSubroutines::new_blank(),
         BcTerminator::DisableChannel,
         BytecodeContext::SongChannel {
             index: 0,
@@ -559,19 +562,10 @@ fn compile_mml(mml: &str, dummy_data: &DummyData) -> SongData {
     .unwrap()
 }
 
-struct SongSubroutineGetter<'a>(&'a [(IdentifierBuf, SubroutineState)]);
+struct SubroutineNameSearcher<'a>(&'a CompiledSubroutines);
 
-impl SubroutineStore for SongSubroutineGetter<'_> {
-    fn get(&self, index: usize) -> GetSubroutineResult<'_> {
-        match self.0.get(index) {
-            Some((_, SubroutineState::Compiled(s))) => GetSubroutineResult::Compiled(s),
-            Some((_, SubroutineState::NotCompiled)) => panic!(),
-            Some((_, SubroutineState::CompileError)) => panic!(),
-            None => GetSubroutineResult::NotFound,
-        }
-    }
-
-    fn find_subroutine(&self, name: &str) -> Option<u8> {
+impl SubroutineNameMap for SubroutineNameSearcher<'_> {
+    fn find_subroutine_index(&self, name: &str) -> Option<u8> {
         self.0
             .iter()
             .enumerate()
@@ -588,13 +582,18 @@ impl SubroutineStore for SongSubroutineGetter<'_> {
 fn assemble_channel_bytecode(
     bc_asm: &[&str],
     inst_map: &UniqueNamesList<data::InstrumentOrSample>,
-    subroutines: &[(IdentifierBuf, SubroutineState)],
+    subroutines: &CompiledSubroutines,
     terminator: BcTerminator,
     context: BytecodeContext,
 ) -> Vec<u8> {
-    let subroutines = SongSubroutineGetter(subroutines);
+    let subroutine_name_map = SubroutineNameSearcher(subroutines);
 
-    let mut bc = bytecode_assembler::BytecodeAssembler::new(inst_map, &subroutines, context);
+    let mut bc = bytecode_assembler::BytecodeAssembler::new(
+        inst_map,
+        subroutines,
+        &subroutine_name_map,
+        context,
+    );
 
     for line in bc_asm {
         bc.parse_line(line).unwrap();

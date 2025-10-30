@@ -22,9 +22,9 @@ use crate::echo::EchoEdl;
 use crate::envelope::{Envelope, Gain};
 use crate::errors::{ChannelError, SongError, SongTooLargeError};
 use crate::mml::note_tracking::{CommandTickTracker, CursorTracker, CursorTrackerGetter};
-use crate::mml::{ChannelId, IdentifierBuf, MetaData, Section};
+use crate::mml::{ChannelId, MetaData, Section};
 use crate::notes::{Note, Octave};
-use crate::subroutines::{NoSubroutines, Subroutine, SubroutineState};
+use crate::subroutines::{BlankSubroutineMap, CompiledSubroutines, SubroutineState};
 use crate::time::{TickClock, TickCounter};
 
 use std::cmp::min;
@@ -100,7 +100,7 @@ pub struct SongData {
     sections: Vec<Section>,
     instruments: Vec<MmlInstrument>,
     channels: [Option<Channel>; N_MUSIC_CHANNELS],
-    subroutines: Vec<(IdentifierBuf, SubroutineState)>,
+    subroutines: CompiledSubroutines,
 
     subroutine_table_l_addr: u16,
 
@@ -155,17 +155,8 @@ impl SongData {
         &self.channels
     }
 
-    pub fn subroutines(&self) -> &[(IdentifierBuf, SubroutineState)] {
+    pub fn subroutines(&self) -> &CompiledSubroutines {
         &self.subroutines
-    }
-
-    pub fn get_subroutine(&self, index: u8) -> Option<&Subroutine> {
-        match self.subroutines.get(usize::from(index)) {
-            Some((_, SubroutineState::Compiled(s))) => Some(s),
-            Some((_, SubroutineState::NotCompiled)) => None,
-            Some((_, SubroutineState::CompileError)) => None,
-            None => None,
-        }
     }
 
     pub fn song_aram_size(&self) -> SongAramSize {
@@ -202,7 +193,7 @@ impl CursorTrackerGetter for SongData {
                     _ => None,
                 }
             }
-            ChannelId::Subroutine(i) => match self.get_subroutine(i) {
+            ChannelId::Subroutine(i) => match self.subroutines.get_compiled(i) {
                 Some(s) => Some(&s.tick_tracker),
                 _ => None,
             },
@@ -245,13 +236,16 @@ pub fn test_sample_song(
     note_length: u32,
     envelope: Option<Envelope>,
 ) -> Result<SongData, ChannelError> {
+    let subroutines = CompiledSubroutines::new_blank();
+
     let mut bc = Bytecode::new(
         BytecodeContext::SongChannel {
             index: 0,
             max_edl: EchoEdl::MIN,
         },
         sample_song_fake_instruments(),
-        &NoSubroutines(),
+        &subroutines,
+        &BlankSubroutineMap,
     );
 
     let inst = InstrumentId::try_from(instrument)?;
@@ -290,7 +284,7 @@ pub fn blank_song() -> SongData {
         sections: Vec::new(),
         instruments: Vec::new(),
         channels: Default::default(),
-        subroutines: Vec::new(),
+        subroutines: CompiledSubroutines::new_blank(),
 
         subroutine_table_l_addr: u16::MAX,
 
@@ -322,7 +316,7 @@ fn sfx_bytecode_to_song(bytecode: &[u8]) -> SongData {
         sections: Vec::new(),
         instruments: Vec::new(),
         channels: Default::default(),
-        subroutines: Vec::new(),
+        subroutines: CompiledSubroutines::new_blank(),
 
         subroutine_table_l_addr: u16::MAX,
 
@@ -333,7 +327,7 @@ fn sfx_bytecode_to_song(bytecode: &[u8]) -> SongData {
 fn write_song_header(
     buf: &mut [u8],
     channels: &[Option<Channel>; N_MUSIC_CHANNELS],
-    subroutines: &[(IdentifierBuf, SubroutineState)],
+    subroutines: &CompiledSubroutines,
     metadata: &MetaData,
 ) -> Result<u16, SongError> {
     if buf.len() > MAX_SONG_DATA_SIZE {
@@ -439,7 +433,7 @@ pub(crate) fn mml_to_song(
     sections: Vec<Section>,
     instruments: Vec<MmlInstrument>,
     channels: [Option<Channel>; N_MUSIC_CHANNELS],
-    subroutines: Vec<(IdentifierBuf, SubroutineState)>,
+    subroutines: CompiledSubroutines,
     tracking: SongBcTracking,
 ) -> Result<SongData, SongError> {
     let mut data = data;

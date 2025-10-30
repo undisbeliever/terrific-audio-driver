@@ -68,7 +68,6 @@ A !s
 
     let (s, bc) = get_subroutine_and_bytecode(&sd, "s").unwrap();
 
-    assert_eq!(s.identifier.as_str(), "s");
     assert_eq!(s.subroutine_id.max_stack_depth().to_u32(), 2);
     assert_eq!(s.subroutine_id.tick_counter().value(), 24 * 2);
 
@@ -102,7 +101,6 @@ A !s
 
     let (s, bc) = get_subroutine_and_bytecode(&sd, "s").unwrap();
 
-    assert_eq!(s.identifier.as_str(), "s");
     assert_eq!(s.subroutine_id.max_stack_depth().to_u32(), 2);
     assert_eq!(s.subroutine_id.tick_counter().value(), 24);
 
@@ -126,7 +124,6 @@ A !s
 
     let (s, bc) = get_subroutine_and_bytecode(&sd, "s").unwrap();
 
-    assert_eq!(s.identifier.as_str(), "s");
     assert_eq!(s.subroutine_id.max_stack_depth().to_u32(), 2);
     assert_eq!(s.subroutine_id.tick_counter().value(), 24);
 

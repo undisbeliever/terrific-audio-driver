@@ -20,7 +20,7 @@ use crate::notes::Note;
 use crate::notes::SEMITONES_PER_OCTAVE;
 use crate::pitch_table::{PitchTable, PITCH_REGISTER_MAX};
 use crate::songs::LoopPoint;
-use crate::subroutines::{GetSubroutineResult, NoSubroutines, SubroutineStore};
+use crate::subroutines::{BlankSubroutineMap, CompiledSubroutines, GetSubroutineResult};
 use crate::time::{TickClock, TickCounter, TickCounterWithLoopFlag};
 
 #[derive(Debug, Clone, Copy)]
@@ -124,7 +124,7 @@ pub(crate) struct ChannelBcGenerator<'a> {
     pitch_table: &'a PitchTable,
     mml_file: &'a str,
     instruments: &'a [MmlInstrument],
-    subroutines: &'a dyn SubroutineStore,
+    subroutines: &'a CompiledSubroutines,
 
     bc: Bytecode<'a>,
 
@@ -149,7 +149,7 @@ impl<'a> ChannelBcGenerator<'a> {
         mml_file: &'a str,
         data_instruments: &'a UniqueNamesList<data::InstrumentOrSample>,
         mml_instruments: &'a [MmlInstrument],
-        subroutines: &'a dyn SubroutineStore,
+        subroutines: &'a CompiledSubroutines,
         context: BytecodeContext,
         song_uses_driver_transpose: bool,
     ) -> ChannelBcGenerator<'a> {
@@ -158,9 +158,15 @@ impl<'a> ChannelBcGenerator<'a> {
             mml_file,
             instruments: mml_instruments,
             subroutines,
-            // Using NoSubroutines here to forbid direct subroutine calls in bytecode assembly
-            // (\asm subroutine calls must go through `Self::call_subroutine()`)
-            bc: Bytecode::new_append_to_vec(bc_data, context, data_instruments, &NoSubroutines()),
+            bc: Bytecode::new_append_to_vec(
+                bc_data,
+                context,
+                data_instruments,
+                subroutines,
+                // Using BlankSubroutineMap here to forbid direct subroutine calls in bytecode assembly
+                // (\asm subroutine calls must go through `Self::call_subroutine()`)
+                &BlankSubroutineMap,
+            ),
             mp: MpState::Manual,
             detune_cents: DetuneCents::ZERO,
             quantize: Quantize::None,
@@ -1253,9 +1259,9 @@ impl<'a> ChannelBcGenerator<'a> {
         index: u8,
         disable_vibrato: SubroutineCallType,
     ) -> Result<(), ChannelError> {
-        let sub = match self.subroutines.get(index.into()) {
+        let (name, sub) = match self.subroutines.get(index.into()) {
             GetSubroutineResult::NotFound => panic!("subroutine not found"),
-            GetSubroutineResult::Compiled(sub) => sub,
+            GetSubroutineResult::Compiled(name, sub) => (name, sub),
             GetSubroutineResult::NotCompiled(name) => {
                 return Err(ChannelError::CannotCallSubroutineRecursion(
                     name.as_str().to_owned(),
@@ -1266,24 +1272,18 @@ impl<'a> ChannelBcGenerator<'a> {
 
         match (disable_vibrato, &self.mp) {
             (SubroutineCallType::Asm, _) => {
-                self.bc
-                    .call_subroutine(sub.identifier.as_str(), &sub.subroutine_id)?;
+                self.bc.call_subroutine(name.as_str(), &sub.subroutine_id)?;
             }
             (SubroutineCallType::AsmDisableVibrato, _) => {
-                self.bc.call_subroutine_and_disable_vibrato(
-                    sub.identifier.as_str(),
-                    &sub.subroutine_id,
-                )?;
+                self.bc
+                    .call_subroutine_and_disable_vibrato(name.as_str(), &sub.subroutine_id)?;
             }
             (SubroutineCallType::Mml, MpState::Mp(_)) => {
-                self.bc.call_subroutine_and_disable_vibrato(
-                    sub.identifier.as_str(),
-                    &sub.subroutine_id,
-                )?;
+                self.bc
+                    .call_subroutine_and_disable_vibrato(name.as_str(), &sub.subroutine_id)?;
             }
             (SubroutineCallType::Mml, MpState::Disabled | MpState::Manual) => {
-                self.bc
-                    .call_subroutine(sub.identifier.as_str(), &sub.subroutine_id)?;
+                self.bc.call_subroutine(name.as_str(), &sub.subroutine_id)?;
             }
         }
 

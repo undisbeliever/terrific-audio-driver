@@ -11,7 +11,6 @@ pub use crate::bytecode::SubroutineId;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Subroutine {
-    pub identifier: IdentifierBuf,
     pub subroutine_id: SubroutineId,
     pub bytecode_offset: u16,
     pub bytecode_end_offset: u16,
@@ -29,25 +28,100 @@ pub enum SubroutineState {
 
 pub enum GetSubroutineResult<'a> {
     NotFound,
-    Compiled(&'a Subroutine),
+    Compiled(IdentifierStr<'a>, &'a Subroutine),
     NotCompiled(IdentifierStr<'a>),
     CompileError(IdentifierStr<'a>),
 }
 
-pub trait SubroutineStore {
-    fn get(&self, index: usize) -> GetSubroutineResult<'_>;
+#[derive(Debug, Clone)]
+pub struct CompiledSubroutines(Vec<(IdentifierBuf, SubroutineState)>);
 
-    fn find_subroutine(&self, name: &str) -> Option<u8>;
-}
-
-pub struct NoSubroutines();
-
-impl SubroutineStore for NoSubroutines {
-    fn get(&self, _: usize) -> GetSubroutineResult<'_> {
-        GetSubroutineResult::NotFound
+impl CompiledSubroutines {
+    pub fn new_blank() -> Self {
+        Self(Vec::new())
     }
 
-    fn find_subroutine(&self, _: &str) -> Option<u8> {
+    #[allow(clippy::new_without_default)]
+    pub(crate) fn new<T: Sized>(subroutines: &[(IdentifierStr, T)]) -> Self {
+        Self(
+            subroutines
+                .iter()
+                .map(|(n, _)| ((*n).to_owned(), SubroutineState::NotCompiled))
+                .collect(),
+        )
+    }
+
+    pub(crate) fn store(&mut self, index: u8, state: SubroutineState) {
+        let s = &mut self.0[usize::from(index)].1;
+        assert!(matches!(s, SubroutineState::NotCompiled));
+
+        *s = state;
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    pub fn get(&self, index: usize) -> GetSubroutineResult<'_> {
+        match self.0.get(index) {
+            Some((name, SubroutineState::Compiled(s))) => {
+                GetSubroutineResult::Compiled(name.as_ref(), s)
+            }
+            Some((name, SubroutineState::NotCompiled)) => {
+                GetSubroutineResult::NotCompiled(name.as_ref())
+            }
+            Some((name, SubroutineState::CompileError)) => {
+                GetSubroutineResult::CompileError(name.as_ref())
+            }
+            None => GetSubroutineResult::NotFound,
+        }
+    }
+
+    pub fn get_name(&self, index: u8) -> Option<&str> {
+        match self.0.get(usize::from(index)) {
+            Some((name, _)) => Some(name.as_str()),
+            None => None,
+        }
+    }
+
+    pub fn get_compiled(&self, index: u8) -> Option<&Subroutine> {
+        match self.0.get(usize::from(index)) {
+            Some((_, SubroutineState::Compiled(s))) => Some(s),
+            Some((_, SubroutineState::NotCompiled)) => None,
+            Some((_, SubroutineState::CompileError)) => None,
+            None => None,
+        }
+    }
+
+    pub fn as_slice(&self) -> &[(IdentifierBuf, SubroutineState)] {
+        &self.0
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = &(IdentifierBuf, SubroutineState)> {
+        self.0.iter()
+    }
+
+    pub fn iter_compiled(&self) -> impl Iterator<Item = &Subroutine> {
+        self.0.iter().filter_map(|(_name, s)| match s {
+            SubroutineState::Compiled(s) => Some(s),
+            SubroutineState::CompileError => None,
+            SubroutineState::NotCompiled => None,
+        })
+    }
+}
+
+pub trait SubroutineNameMap {
+    fn find_subroutine_index(&self, name: &str) -> Option<u8>;
+}
+
+pub struct BlankSubroutineMap;
+
+impl SubroutineNameMap for BlankSubroutineMap {
+    fn find_subroutine_index(&self, _: &str) -> Option<u8> {
         None
     }
 }

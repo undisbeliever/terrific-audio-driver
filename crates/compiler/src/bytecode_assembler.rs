@@ -16,7 +16,7 @@ use crate::envelope::{Adsr, Gain, OptionalGain, TempGain};
 use crate::errors::{BytecodeError, ChannelError, ValueError};
 use crate::invert_flags::parse_invert_flag_arguments;
 use crate::notes::Note;
-use crate::subroutines::SubroutineStore;
+use crate::subroutines::{CompiledSubroutines, SubroutineNameMap};
 use crate::time::TickCounter;
 use crate::value_newtypes::{
     parse_i8wh, I8WithByteHexValueNewType, SignedValueNewType, UnsignedValueNewType,
@@ -668,11 +668,12 @@ pub struct BytecodeAssembler<'a> {
 impl BytecodeAssembler<'_> {
     pub fn new<'a>(
         inst_map: &'a UniqueNamesList<InstrumentOrSample>,
-        subroutines: &'a dyn SubroutineStore,
+        subroutines: &'a CompiledSubroutines,
+        subroutine_name_map: &'a dyn SubroutineNameMap,
         context: BytecodeContext,
     ) -> BytecodeAssembler<'a> {
         BytecodeAssembler {
-            bc: Bytecode::new(context, inst_map, subroutines),
+            bc: Bytecode::new(context, inst_map, subroutines, subroutine_name_map),
         }
     }
 

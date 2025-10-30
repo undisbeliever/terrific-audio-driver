@@ -7,9 +7,8 @@
 use super::MetaData;
 
 use crate::driver_constants::N_MUSIC_CHANNELS;
-use crate::mml::IdentifierBuf;
 use crate::songs::Channel;
-use crate::subroutines::SubroutineState;
+use crate::subroutines::CompiledSubroutines;
 use crate::time::{TickClock, TickCounter, TIMER_HZ};
 use crate::UnsignedValueNewType;
 
@@ -18,12 +17,9 @@ use std::time::Duration;
 pub fn calc_song_duration(
     metadata: &MetaData,
     channels: &[Option<Channel>; N_MUSIC_CHANNELS],
-    subroutines: &[(IdentifierBuf, SubroutineState)],
+    subroutines: &CompiledSubroutines,
 ) -> Option<Duration> {
-    let set_song_tick_in_subroutine = subroutines.iter().any(|(_, s)| match s {
-        SubroutineState::Compiled(s) => s.changes_song_tempo,
-        _ => false,
-    });
+    let set_song_tick_in_subroutine = subroutines.iter_compiled().any(|s| s.changes_song_tempo);
 
     if set_song_tick_in_subroutine {
         return None;

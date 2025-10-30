@@ -29,7 +29,7 @@ use crate::file_pos::{FilePos, FilePosRange};
 use crate::mml::GlobalSettings;
 use crate::notes::{KeySignature, MidiNote, MmlPitch, Note, Octave, STARTING_OCTAVE};
 use crate::pitch_table::PlayPitchSampleRate;
-use crate::subroutines::SubroutineStore;
+use crate::subroutines::SubroutineNameMap;
 use crate::time::{MmlDefaultLength, MmlLength, TickCounter, ZenLen, STARTING_MML_LENGTH};
 use crate::value_newtypes::{I8WithByteHexValueNewType, SignedValueNewType, UnsignedValueNewType};
 
@@ -82,7 +82,7 @@ mod parser {
         keyoff_enabled: bool,
 
         instruments_map: &'a HashMap<IdentifierStr<'a>, usize>,
-        subroutines: &'a dyn SubroutineStore,
+        subroutines: &'a dyn SubroutineNameMap,
 
         old_transpose: bool,
 
@@ -95,7 +95,7 @@ mod parser {
             channel: ChannelId,
             tokens: MmlTokens<'a>,
             instruments_map: &'a HashMap<IdentifierStr, usize>,
-            subroutines: &'a dyn SubroutineStore,
+            subroutines: &'a dyn SubroutineNameMap,
             settings: &GlobalSettings,
             cursor_tracking: &'a mut CursorTracker,
         ) -> Parser<'a> {
@@ -173,7 +173,7 @@ mod parser {
         }
 
         pub(super) fn find_subroutine(&self, name: &str) -> Option<u8> {
-            self.subroutines.find_subroutine(name)
+            self.subroutines.find_subroutine_index(name)
         }
 
         pub(super) fn old_transpose(&self) -> bool {
@@ -2677,7 +2677,7 @@ pub(crate) fn parse_mml_tokens(
     channel: ChannelId,
     tokens: MmlTokens,
     instruments_map: &HashMap<IdentifierStr, usize>,
-    subroutines: &dyn SubroutineStore,
+    subroutines: &dyn SubroutineNameMap,
     settings: &GlobalSettings,
     cursor_tracking: &mut CursorTracker,
 ) -> (ChannelCommands, Vec<ErrorWithPos<ChannelError>>) {
