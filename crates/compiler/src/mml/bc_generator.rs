@@ -18,7 +18,7 @@ use crate::songs::{BytecodePos, SongBcTracking};
 use crate::bytecode::{BcTerminator, BytecodeContext};
 use crate::command_compiler::channel_bc_generator::{ChannelBcGenerator, MpState};
 use crate::command_compiler::commands::{
-    Command, CommandWithPos, MmlInstrument, SubroutineCallType,
+    ChannelCommands, Command, CommandWithPos, MmlInstrument, SubroutineCallType, SubroutineCommands,
 };
 use crate::errors::{ChannelError, ErrorWithPos, MmlChannelError};
 use crate::pitch_table::PitchTable;
@@ -118,6 +118,35 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
         )
     }
 
+    // ::TODO refactor::
+    pub(super) fn parse_tokens(
+        &mut self,
+        channel: ChannelId,
+        identifier: IdentifierStr<'a>,
+        tokens: MmlTokens<'a>,
+    ) -> Result<ChannelCommands, (ChannelCommands, MmlChannelError)> {
+        let (commands, errors) = parse_mml_tokens(
+            channel,
+            tokens,
+            &self.mml_instrument_map,
+            self.subroutine_name_map,
+            self.global_settings,
+            &mut self.cursor_tracker,
+        );
+
+        if errors.is_empty() {
+            Ok(commands)
+        } else {
+            Err((
+                commands,
+                MmlChannelError {
+                    identifier: identifier.to_owned(),
+                    errors,
+                },
+            ))
+        }
+    }
+
     fn parse_and_compile_tail_call<'b>(
         commands: &'b [CommandWithPos],
         gen: &mut ChannelBcGenerator,
@@ -171,24 +200,15 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
         });
     }
 
-    pub fn parse_and_compile_subroutione(
+    pub fn compile_subroutine(
         &mut self,
-        subroutine_index: u8,
-        identifier: IdentifierStr<'a>,
-        tokens: MmlTokens,
+        input: &SubroutineCommands<'a>,
         song_uses_driver_transpose: bool,
     ) -> Result<(), MmlChannelError> {
         let song_data = std::mem::take(&mut self.song_data);
         let sd_start_index = song_data.len();
 
-        let (commands, mut errors) = parse_mml_tokens(
-            ChannelId::Subroutine(subroutine_index),
-            tokens,
-            &self.mml_instrument_map,
-            self.subroutine_name_map,
-            self.global_settings,
-            &mut self.cursor_tracker,
-        );
+        let mut errors = Vec::new();
 
         let mut gen = ChannelBcGenerator::new(
             song_data,
@@ -207,7 +227,7 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
         );
 
         let tail_call = Self::parse_and_compile_tail_call(
-            &commands.commands,
+            &input.commands,
             &mut gen,
             &mut self.bytecode_tracker,
             &mut errors,
@@ -264,7 +284,7 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
             Ok((d, s)) => (d, Some(s)),
             Err((e, d)) => {
                 errors.push(ErrorWithPos(
-                    commands.end_pos_range(),
+                    input.end_pos_range(),
                     ChannelError::BytecodeError(e),
                 ));
                 (d, None)
@@ -289,9 +309,9 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
                 let sd_end_index = self.song_data.len();
 
                 self.subroutines.store(
-                    subroutine_index,
+                    input.index,
                     SubroutineState::Compiled(Subroutine {
-                        index: subroutine_index,
+                        index: input.index,
                         bc_state,
                         bytecode_offset: sd_start_index.try_into().unwrap_or(u16::MAX),
                         bytecode_end_offset: sd_end_index.try_into().unwrap_or(u16::MAX),
@@ -304,10 +324,10 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
             }
             _ => {
                 self.subroutines
-                    .store(subroutine_index, SubroutineState::CompileError);
+                    .store(input.index, SubroutineState::CompileError);
 
                 Err(MmlChannelError {
-                    identifier: identifier.to_owned(),
+                    identifier: input.identifier.to_owned(),
                     errors,
                 })
             }

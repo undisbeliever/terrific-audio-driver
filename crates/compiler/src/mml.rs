@@ -12,7 +12,6 @@ mod instruments;
 mod line_splitter;
 mod metadata;
 mod song_duration;
-mod subroutines;
 mod tick_count_table;
 mod tokenizer;
 
@@ -28,14 +27,16 @@ use bc_generator::parse_and_compile_mml_prefix;
 use line_splitter::split_mml_sfx_subroutines_header_lines;
 use tokenizer::MmlTokens;
 
+use crate::command_compiler::commands::SubroutineCommands;
+use crate::command_compiler::subroutines::subroutine_compile_order;
 use crate::data::{self, UniqueNamesList};
-use crate::driver_constants::{MAX_SFX_SUBROUTINES, N_MUSIC_CHANNELS};
+use crate::driver_constants::{MAX_SFX_SUBROUTINES, MAX_SUBROUTINES, N_MUSIC_CHANNELS};
 use crate::echo::EchoEdl;
 use crate::errors::{
-    MmlCompileErrors, MmlPrefixError, SfxSubroutineErrors, SongError, SoundEffectErrorList,
+    MmlChannelError, MmlCompileErrors, MmlPrefixError, SfxSubroutineErrors, SongError,
+    SoundEffectErrorList,
 };
 use crate::mml::song_duration::calc_song_duration;
-use crate::mml::subroutines::compile_subroutines;
 use crate::mml::tokenizer::Token;
 use crate::pitch_table::PitchTable;
 use crate::songs::{mml_to_song, song_header_size, SongData};
@@ -122,6 +123,49 @@ impl MmlPrefixData {
     }
 }
 
+fn compile_subroutines<'a>(
+    bc_generator: &mut MmlSongBytecodeGenerator<'a>,
+    subroutines: Vec<(IdentifierStr<'a>, MmlTokens<'a>)>,
+    song_uses_driver_transpose: bool,
+) -> Vec<MmlChannelError> {
+    assert!(subroutines.len() <= MAX_SUBROUTINES);
+
+    let mut errors = Vec::new();
+
+    let subroutines = subroutines
+        .into_iter()
+        .enumerate()
+        .map(|(i, (id, tokens))| {
+            let i = i.try_into().unwrap();
+
+            let c = match bc_generator.parse_tokens(ChannelId::Subroutine(i), id, tokens) {
+                Ok(c) => c,
+                Err((c, e)) => {
+                    errors.push(e);
+                    c
+                }
+            };
+
+            SubroutineCommands {
+                index: i,
+                identifier: id,
+                commands: c.commands,
+                end_pos: c.end_pos,
+            }
+        })
+        .collect();
+
+    let subroutines = subroutine_compile_order(subroutines);
+
+    for s in subroutines.compile_iter() {
+        if let Err(e) = bc_generator.compile_subroutine(s, song_uses_driver_transpose) {
+            errors.push(e)
+        }
+    }
+
+    errors
+}
+
 pub fn compile_mml(
     mml: &str,
     file_name: &str,
@@ -190,12 +234,8 @@ pub fn compile_mml(
         true,
     );
 
-    errors.subroutine_errors = compile_subroutines(
-        &mut compiler,
-        lines.subroutines,
-        &lines.subroutine_name_map,
-        song_uses_driver_transpose,
-    );
+    errors.subroutine_errors =
+        compile_subroutines(&mut compiler, lines.subroutines, song_uses_driver_transpose);
 
     if !errors.subroutine_errors.is_empty() {
         return Err(SongError::MmlError(errors));
@@ -301,12 +341,7 @@ pub(crate) fn compile_sfx_subroutines(
         false,
     );
 
-    let errors = compile_subroutines(
-        &mut compiler,
-        lines.subroutines,
-        &lines.subroutine_name_map,
-        false,
-    );
+    let errors = compile_subroutines(&mut compiler, lines.subroutines, false);
 
     if errors.is_empty() {
         Ok(compiler.take_sfx_subroutine_data())

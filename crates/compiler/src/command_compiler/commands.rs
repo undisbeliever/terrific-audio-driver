@@ -17,7 +17,7 @@ use crate::echo::{EchoFeedback, EchoLength, EchoVolume, FirCoefficient, FirTap};
 use crate::envelope::{Adsr, Envelope, Gain, OptionalGain, TempGain};
 use crate::errors::ValueError;
 use crate::invert_flags::InvertFlags;
-use crate::mml::IdentifierBuf;
+use crate::mml::{IdentifierBuf, IdentifierStr};
 use crate::notes::Note;
 use crate::pitch_table::PlayPitchFrequency;
 use crate::time::{Bpm, TickClock, TickCounter};
@@ -365,6 +365,19 @@ pub(crate) struct ChannelCommands {
 }
 
 impl ChannelCommands {
+    pub fn end_pos_range(&self) -> FilePosRange {
+        self.end_pos.to_range(1)
+    }
+}
+
+pub(crate) struct SubroutineCommands<'a> {
+    pub(crate) index: u8,
+    pub(crate) identifier: IdentifierStr<'a>,
+    pub(crate) commands: Vec<CommandWithPos>,
+    pub(crate) end_pos: FilePos,
+}
+
+impl SubroutineCommands<'_> {
     pub fn end_pos_range(&self) -> FilePosRange {
         self.end_pos.to_range(1)
     }
