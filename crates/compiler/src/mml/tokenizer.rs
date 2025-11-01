@@ -4,8 +4,6 @@
 //
 // SPDX-License-Identifier: MIT
 
-use std::ops::Range;
-
 use super::{IdentifierStr, COMMENT_CHAR};
 
 use crate::bytecode_assembler;
@@ -117,11 +115,10 @@ pub enum Token<'a> {
     KeySignature(&'a str),
 
     // Must not contain a call subroutine instruction.
-    // Using Range to remove lifetime from MmlCommand.
-    BytecodeAsm(Range<usize>),
+    BytecodeAsm(&'a str),
 
     // Used to detect `set_transpose` and `adjust_transpose` commands when processing subroutines
-    TransposeAsm(Range<usize>),
+    TransposeAsm(&'a str),
 }
 
 #[derive(Clone)]
@@ -691,20 +688,18 @@ fn parse_bytecode_asm<'a>(
                         end: scanner.pos(),
                     });
                 } else {
-                    let start = usize::try_from(pos.char_index()).unwrap();
-
                     if asm.starts_with(bytecode_assembler::SET_TRANSPOSE)
                         | asm.starts_with(bytecode_assembler::ADJUST_TRANSPOSE)
                     {
                         tokens.push(TokenWithPosition {
                             pos,
-                            token: Token::TransposeAsm(start..(start + asm.len())),
+                            token: Token::TransposeAsm(asm),
                             end: scanner.pos(),
                         });
                     } else {
                         tokens.push(TokenWithPosition {
                             pos,
-                            token: Token::BytecodeAsm(start..(start + asm.len())),
+                            token: Token::BytecodeAsm(asm),
                             end: scanner.pos(),
                         });
                     }

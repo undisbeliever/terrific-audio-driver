@@ -223,7 +223,6 @@ pub fn compile_mml(
     let mut compiler = MmlSongBytecodeGenerator::new(
         &metadata.mml_settings,
         pitch_table,
-        mml,
         data_instruments,
         &instruments,
         instrument_map,
@@ -330,7 +329,6 @@ pub(crate) fn compile_sfx_subroutines(
     let mut compiler = MmlSongBytecodeGenerator::new(
         &global_settings,
         pitch_table,
-        sfx,
         data_instruments,
         &instruments,
         instrument_map,
@@ -378,7 +376,6 @@ pub fn compile_sound_effect(
     drop(line_errors);
 
     match parse_and_compile_sound_effect(
-        sfx,
         lines.tokens,
         pitch_table,
         &instruments,
@@ -414,7 +411,6 @@ pub fn compile_mml_prefix(
     let tokens = MmlTokens::tokenize_one_line(mml_prefix);
 
     match parse_and_compile_mml_prefix(
-        mml_prefix,
         tokens,
         pitch_table,
         mml_instruments,

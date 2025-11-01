@@ -122,7 +122,6 @@ enum AfterPlayNote {
 
 pub(crate) struct ChannelBcGenerator<'a> {
     pitch_table: &'a PitchTable,
-    mml_file: &'a str,
     instruments: &'a [MmlInstrument],
     subroutines: &'a CompiledSubroutines,
 
@@ -146,7 +145,6 @@ impl<'a> ChannelBcGenerator<'a> {
     pub fn new(
         bc_data: Vec<u8>,
         pitch_table: &'a PitchTable,
-        mml_file: &'a str,
         data_instruments: &'a UniqueNamesList<data::InstrumentOrSample>,
         mml_instruments: &'a [MmlInstrument],
         subroutines: &'a CompiledSubroutines,
@@ -155,7 +153,6 @@ impl<'a> ChannelBcGenerator<'a> {
     ) -> ChannelBcGenerator<'a> {
         ChannelBcGenerator {
             pitch_table,
-            mml_file,
             instruments: mml_instruments,
             subroutines,
             bc: Bytecode::new_append_to_vec(
@@ -1662,11 +1659,7 @@ impl<'a> ChannelBcGenerator<'a> {
                 self.bc._end_asm_block()?;
             }
 
-            Command::BytecodeAsm(range) => {
-                let asm = &self.mml_file[range.clone()];
-
-                parse_asm_line(&mut self.bc, asm)?
-            }
+            Command::BytecodeAsm(asm) => parse_asm_line(&mut self.bc, asm)?,
         }
 
         Ok(())

@@ -44,7 +44,6 @@ pub struct MmlSongBytecodeGenerator<'a> {
 
     global_settings: &'a GlobalSettings,
     pitch_table: &'a PitchTable,
-    mml_file: &'a str,
     data_instruments: &'a UniqueNamesList<data::InstrumentOrSample>,
     mml_instruments: &'a Vec<MmlInstrument>,
     mml_instrument_map: HashMap<IdentifierStr<'a>, usize>,
@@ -67,7 +66,6 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
     pub fn new(
         global_settings: &'a GlobalSettings,
         pitch_table: &'a PitchTable,
-        mml_file: &'a str,
         data_instruments: &'a UniqueNamesList<data::InstrumentOrSample>,
         instruments: &'a Vec<MmlInstrument>,
         instrument_map: HashMap<IdentifierStr<'a>, usize>,
@@ -81,7 +79,6 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
             song_data: vec![0; header_size],
             global_settings,
             pitch_table,
-            mml_file,
             data_instruments,
             mml_instruments: instruments,
             mml_instrument_map: instrument_map,
@@ -119,12 +116,12 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
     }
 
     // ::TODO refactor::
-    pub(super) fn parse_tokens(
+    pub(super) fn parse_tokens<'b>(
         &mut self,
         channel: ChannelId,
-        identifier: IdentifierStr<'a>,
-        tokens: MmlTokens<'a>,
-    ) -> Result<ChannelCommands, (ChannelCommands, MmlChannelError)> {
+        identifier: IdentifierStr<'b>,
+        tokens: MmlTokens<'b>,
+    ) -> Result<ChannelCommands<'b>, (ChannelCommands<'b>, MmlChannelError)> {
         let (commands, errors) = parse_mml_tokens(
             channel,
             tokens,
@@ -148,11 +145,11 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
     }
 
     fn parse_and_compile_tail_call<'b>(
-        commands: &'b [CommandWithPos],
+        commands: &'b [CommandWithPos<'b>],
         gen: &mut ChannelBcGenerator,
         bytecode_tracker: &mut Vec<BytecodePos>,
         errors: &mut Vec<ErrorWithPos<ChannelError>>,
-    ) -> Option<&'b CommandWithPos> {
+    ) -> Option<&'b CommandWithPos<'b>> {
         let (last, remaining) = commands.split_last()?;
 
         for c in remaining {
@@ -200,9 +197,9 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
         });
     }
 
-    pub fn compile_subroutine(
+    pub fn compile_subroutine<'b>(
         &mut self,
-        input: &SubroutineCommands<'a>,
+        input: &SubroutineCommands<'b>,
         song_uses_driver_transpose: bool,
     ) -> Result<(), MmlChannelError> {
         let song_data = std::mem::take(&mut self.song_data);
@@ -213,7 +210,6 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
         let mut gen = ChannelBcGenerator::new(
             song_data,
             self.pitch_table,
-            self.mml_file,
             self.data_instruments,
             self.mml_instruments,
             &self.subroutines,
@@ -366,7 +362,6 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
         let mut gen = ChannelBcGenerator::new(
             song_data,
             self.pitch_table,
-            self.mml_file,
             self.data_instruments,
             self.mml_instruments,
             &self.subroutines,
@@ -433,7 +428,6 @@ impl<'a> MmlSongBytecodeGenerator<'a> {
 }
 
 pub fn parse_and_compile_sound_effect(
-    mml_file: &str,
     tokens: MmlTokens,
     pitch_table: &PitchTable,
     mml_instruments: &[MmlInstrument],
@@ -455,7 +449,6 @@ pub fn parse_and_compile_sound_effect(
     let mut gen = ChannelBcGenerator::new(
         Vec::new(),
         pitch_table,
-        mml_file,
         data_instruments,
         mml_instruments,
         sfx_subroutines.subroutines(),
@@ -509,7 +502,6 @@ pub fn parse_and_compile_sound_effect(
 }
 
 pub fn parse_and_compile_mml_prefix(
-    mml_prefix: &str,
     tokens: MmlTokens,
     pitch_table: &PitchTable,
     mml_instruments: &[MmlInstrument],
@@ -533,7 +525,6 @@ pub fn parse_and_compile_mml_prefix(
     let mut gen = ChannelBcGenerator::new(
         Vec::new(),
         pitch_table,
-        mml_prefix,
         data_instruments,
         mml_instruments,
         &subroutines,

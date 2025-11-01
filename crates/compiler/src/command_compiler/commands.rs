@@ -25,7 +25,7 @@ use crate::value_newtypes::{i16_value_newtype, u8_value_newtype, SignedValueNewT
 use crate::{FilePos, FilePosRange};
 
 use std::cmp::min;
-use std::ops::{Range, RangeInclusive};
+use std::ops::RangeInclusive;
 
 pub const MAX_PORTAMENTO_SLIDE_TICKS: u32 = 16 * 1024;
 pub const MAX_BROKEN_CHORD_NOTES: usize = 128;
@@ -196,7 +196,7 @@ pub enum SubroutineCallType {
 }
 
 #[derive(Debug)]
-pub(crate) enum Command {
+pub(crate) enum Command<'a> {
     None,
 
     SetLoopPoint,
@@ -329,18 +329,17 @@ pub(crate) enum Command {
     StartBytecodeAsm,
     EndBytecodeAsm,
 
-    // Using range so there is no lifetime in MmlCommand
-    BytecodeAsm(Range<usize>),
+    BytecodeAsm(&'a str),
 }
 
-pub(crate) struct CommandWithPos {
-    command: Command,
+pub(crate) struct CommandWithPos<'a> {
+    command: Command<'a>,
     pos: FilePosRange,
     end_pos: u32,
 }
 
-impl CommandWithPos {
-    pub fn new(command: Command, pos: FilePosRange, end_pos: u32) -> Self {
+impl<'a> CommandWithPos<'a> {
+    pub fn new(command: Command<'a>, pos: FilePosRange, end_pos: u32) -> Self {
         Self {
             command,
             pos,
@@ -348,7 +347,7 @@ impl CommandWithPos {
         }
     }
 
-    pub fn command(&self) -> &Command {
+    pub fn command(&self) -> &Command<'a> {
         &self.command
     }
     pub fn pos(&self) -> &FilePosRange {
@@ -359,12 +358,12 @@ impl CommandWithPos {
     }
 }
 
-pub(crate) struct ChannelCommands {
-    pub(crate) commands: Vec<CommandWithPos>,
+pub(crate) struct ChannelCommands<'a> {
+    pub(crate) commands: Vec<CommandWithPos<'a>>,
     pub(crate) end_pos: FilePos,
 }
 
-impl ChannelCommands {
+impl ChannelCommands<'_> {
     pub fn end_pos_range(&self) -> FilePosRange {
         self.end_pos.to_range(1)
     }
@@ -373,7 +372,7 @@ impl ChannelCommands {
 pub(crate) struct SubroutineCommands<'a> {
     pub(crate) index: u8,
     pub(crate) identifier: IdentifierStr<'a>,
-    pub(crate) commands: Vec<CommandWithPos>,
+    pub(crate) commands: Vec<CommandWithPos<'a>>,
     pub(crate) end_pos: FilePos,
 }
 
