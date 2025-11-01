@@ -4,7 +4,10 @@
 //
 // SPDX-License-Identifier: MIT
 
+use std::collections::HashMap;
+
 use crate::bytecode;
+use crate::command_compiler::commands::SubroutineCommands;
 use crate::mml::note_tracking::CommandTickTracker;
 use crate::mml::{IdentifierBuf, IdentifierStr};
 
@@ -42,11 +45,11 @@ impl CompiledSubroutines {
     }
 
     #[allow(clippy::new_without_default)]
-    pub(crate) fn new<T: Sized>(subroutines: &[(IdentifierStr, T)]) -> Self {
+    pub(crate) fn new(subroutines: &[SubroutineCommands]) -> Self {
         Self(
             subroutines
                 .iter()
-                .map(|(n, _)| ((*n).to_owned(), SubroutineState::NotCompiled))
+                .map(|s| (s.identifier.to_owned(), SubroutineState::NotCompiled))
                 .collect(),
         )
     }
@@ -116,6 +119,14 @@ impl CompiledSubroutines {
 
 pub trait SubroutineNameMap {
     fn find_subroutine_index(&self, name: &str) -> Option<u8>;
+}
+
+impl<'a> SubroutineNameMap for HashMap<IdentifierStr<'a>, usize> {
+    fn find_subroutine_index(&self, name: &str) -> Option<u8> {
+        let name = IdentifierStr::from_str(name);
+
+        self.get(&name).map(|i| (*i).try_into().unwrap())
+    }
 }
 
 pub struct BlankSubroutineMap;

@@ -16,7 +16,7 @@ pub struct IdentifierStr<'a>(&'a str);
 impl<'a> IdentifierStr<'a> {
     // Must only be called by the tokenizer.
     // Should not be used to get the actual instrument or subroutine name.
-    pub(super) fn from_str(s: &'a str) -> Self {
+    pub(crate) fn from_str(s: &'a str) -> Self {
         Self(s)
     }
 
@@ -28,7 +28,7 @@ impl<'a> IdentifierStr<'a> {
         }
     }
 
-    pub(super) fn try_from_name(s: &'a str) -> Result<Self, IdentifierError> {
+    pub(crate) fn try_from_name(s: &'a str) -> Result<Self, IdentifierError> {
         if Name::is_valid_name(s) {
             Ok(Self(s))
         } else {

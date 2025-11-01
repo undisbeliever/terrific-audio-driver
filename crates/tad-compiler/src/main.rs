@@ -18,11 +18,11 @@ use compiler::{
         bin_include_path, Ca65Exporter, Ca65MemoryMap, Exporter, MemoryMapMode, PvExporter,
         PvMemoryMap, SuffixType, Tass64Exporter, Tass64MemoryMap,
     },
-    mml::{compile_mml, MmlTickCountTable},
+    mml::MmlTickCountTable,
     pitch_table::{build_pitch_table, PitchTable},
     samples::build_sample_and_instrument_data,
     sfx_file,
-    songs::{song_duration_string, validate_song_size, SongData},
+    songs::{compile_mml_song, song_duration_string, validate_song_size, SongData},
     sound_effects::{self, blank_compiled_sound_effects, CompiledSfxSubroutines, SfxExportOrder},
     spc_file_export::export_spc_file,
 };
@@ -272,7 +272,7 @@ fn compile_song(
     pf: &UniqueNamesProjectFile,
     pitch_table: &PitchTable,
 ) -> SongData {
-    let song_data = match compile_mml(
+    let song_data = match compile_mml_song(
         &mml_file.contents,
         &mml_file.file_name,
         song_name,
@@ -528,7 +528,7 @@ fn compile_and_check_song(
         Err(e) => return Err(format!("Error compiling {}: {}", song.name, e)),
     };
 
-    let song_data = match compile_mml(
+    let song_data = match compile_mml_song(
         &mml_file.contents,
         &mml_file.file_name,
         Some(song.name.clone()),

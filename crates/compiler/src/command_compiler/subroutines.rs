@@ -68,6 +68,10 @@ pub struct SubroutineCommandsWithCompileOrder<'a> {
 }
 
 impl<'a> SubroutineCommandsWithCompileOrder<'a> {
+    pub fn original_order(&self) -> &[SubroutineCommands<'a>] {
+        &self.subroutines
+    }
+
     pub fn compile_iter(&self) -> impl Iterator<Item = &SubroutineCommands<'a>> {
         self.compile_order
             .iter()

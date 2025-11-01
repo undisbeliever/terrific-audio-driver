@@ -6,7 +6,6 @@
 
 #![allow(clippy::assertions_on_constants)]
 
-mod bc_generator;
 mod identifier;
 mod instruments;
 mod line_splitter;
@@ -19,28 +18,29 @@ pub mod command_parser;
 
 pub(crate) mod note_tracking;
 
-use self::bc_generator::{parse_and_compile_sound_effect, MmlSongBytecodeGenerator};
 use self::instruments::{build_instrument_map, parse_instruments};
 use self::line_splitter::{split_mml_song_lines, split_mml_sound_effect_lines};
 use self::metadata::parse_headers;
-use bc_generator::parse_and_compile_mml_prefix;
 use line_splitter::split_mml_sfx_subroutines_header_lines;
 use tokenizer::MmlTokens;
 
-use crate::command_compiler::commands::SubroutineCommands;
-use crate::command_compiler::subroutines::subroutine_compile_order;
+use crate::bytecode::BytecodeContext;
+use crate::command_compiler::channel_bc_generator;
+use crate::command_compiler::commands::{
+    ChannelCommands, SfxSubroutineCommands, SongCommands, SoundEffectCommands, SubroutineCommands,
+};
 use crate::data::{self, UniqueNamesList};
 use crate::driver_constants::{MAX_SFX_SUBROUTINES, MAX_SUBROUTINES, N_MUSIC_CHANNELS};
-use crate::echo::EchoEdl;
 use crate::errors::{
     MmlChannelError, MmlCompileErrors, MmlPrefixError, SfxSubroutineErrors, SongError,
     SoundEffectErrorList,
 };
-use crate::mml::song_duration::calc_song_duration;
+use crate::mml::command_parser::parse_mml_tokens;
 use crate::mml::tokenizer::Token;
 use crate::pitch_table::PitchTable;
-use crate::songs::{mml_to_song, song_header_size, SongData};
+use crate::songs::SongData;
 use crate::sound_effects::CompiledSfxSubroutines;
+use crate::subroutines::{BlankSubroutineMap, CompiledSubroutines};
 use crate::time::TickCounter;
 
 use std::collections::HashMap;
@@ -55,7 +55,7 @@ const _: () = assert!(
         == N_MUSIC_CHANNELS
 );
 
-const CHANNEL_NAMES: [&str; N_MUSIC_CHANNELS] = ["A", "B", "C", "D", "E", "F", "G", "H"];
+pub const CHANNEL_NAMES: [&str; N_MUSIC_CHANNELS] = ["A", "B", "C", "D", "E", "F", "G", "H"];
 
 pub const COMMENT_CHAR: char = ';';
 pub const SECTION_PREFIX: &str = ";;";
@@ -67,6 +67,8 @@ pub use self::identifier::{IdentifierBuf, IdentifierStr};
 pub use self::tick_count_table::MmlTickCountTable;
 
 pub use self::metadata::{GlobalSettings, MetaData};
+
+pub use self::song_duration::calc_song_duration;
 
 pub use self::note_tracking::{
     find_cursor_state, line_start_ticks, CommandTickTracker, CursorTracker, CursorTrackerGetter,
@@ -86,13 +88,14 @@ pub struct Section {
     char_index: u32,
 }
 
+// ::TODO move::
 #[derive(Debug)]
 pub struct MmlSoundEffect {
-    bytecode: Vec<u8>,
-    tick_counter: TickCounter,
+    pub(crate) bytecode: Vec<u8>,
+    pub(crate) tick_counter: TickCounter,
 
-    tick_tracker: CommandTickTracker,
-    cursor_tracker: note_tracking::CursorTracker,
+    pub(crate) tick_tracker: CommandTickTracker,
+    pub(crate) cursor_tracker: note_tracking::CursorTracker,
 }
 
 impl MmlSoundEffect {
@@ -123,28 +126,68 @@ impl MmlPrefixData {
     }
 }
 
-fn compile_subroutines<'a>(
-    bc_generator: &mut MmlSongBytecodeGenerator<'a>,
+fn parse_tokens<'a>(
+    channel: ChannelId,
+    identifier: IdentifierStr,
+    tokens: MmlTokens<'a>,
+    mml_instrument_map: &HashMap<IdentifierStr, usize>,
+    subroutine_name_map: &HashMap<IdentifierStr, usize>,
+    global_settings: &GlobalSettings,
+    cursor_tracker: &mut CursorTracker,
+) -> Result<ChannelCommands<'a>, (ChannelCommands<'a>, MmlChannelError)> {
+    let (commands, errors) = parse_mml_tokens(
+        channel,
+        tokens,
+        mml_instrument_map,
+        subroutine_name_map,
+        global_settings,
+        cursor_tracker,
+    );
+
+    if errors.is_empty() {
+        Ok(commands)
+    } else {
+        Err((
+            commands,
+            MmlChannelError {
+                identifier: identifier.to_owned(),
+                errors,
+            },
+        ))
+    }
+}
+
+fn parse_subroutines<'a>(
     subroutines: Vec<(IdentifierStr<'a>, MmlTokens<'a>)>,
-    song_uses_driver_transpose: bool,
-) -> Vec<MmlChannelError> {
+    instrument_map: &HashMap<IdentifierStr, usize>,
+    subroutine_name_map: &HashMap<IdentifierStr, usize>,
+    global_settings: &GlobalSettings,
+    cursor_tracking: &mut CursorTracker,
+    errors: &mut Vec<MmlChannelError>,
+) -> Vec<SubroutineCommands<'a>> {
     assert!(subroutines.len() <= MAX_SUBROUTINES);
 
-    let mut errors = Vec::new();
-
-    let subroutines = subroutines
+    subroutines
         .into_iter()
         .enumerate()
         .map(|(i, (id, tokens))| {
             let i = i.try_into().unwrap();
 
-            let c = match bc_generator.parse_tokens(ChannelId::Subroutine(i), id, tokens) {
-                Ok(c) => c,
-                Err((c, e)) => {
-                    errors.push(e);
-                    c
-                }
-            };
+            let (c, e) = parse_mml_tokens(
+                ChannelId::Subroutine(i),
+                tokens,
+                instrument_map,
+                subroutine_name_map,
+                global_settings,
+                cursor_tracking,
+            );
+
+            if !e.is_empty() {
+                errors.push(MmlChannelError {
+                    identifier: id.to_owned(),
+                    errors: e,
+                })
+            }
 
             SubroutineCommands {
                 index: i,
@@ -153,26 +196,15 @@ fn compile_subroutines<'a>(
                 end_pos: c.end_pos,
             }
         })
-        .collect();
-
-    let subroutines = subroutine_compile_order(subroutines);
-
-    for s in subroutines.compile_iter() {
-        if let Err(e) = bc_generator.compile_subroutine(s, song_uses_driver_transpose) {
-            errors.push(e)
-        }
-    }
-
-    errors
+        .collect()
 }
 
-pub fn compile_mml(
-    mml: &str,
+pub(crate) fn parse_mml_song<'a>(
+    mml: &'a str,
     file_name: &str,
     song_name: Option<data::Name>,
     data_instruments: &UniqueNamesList<data::InstrumentOrSample>,
-    pitch_table: &PitchTable,
-) -> Result<SongData, SongError> {
+) -> Result<(SongCommands<'a>, MmlCompileErrors), SongError> {
     let mut errors = MmlCompileErrors {
         song_name,
         file_name: file_name.to_owned(),
@@ -214,46 +246,42 @@ pub fn compile_mml(
     }
     let metadata = metadata.unwrap();
 
-    let n_active_channels = lines.channels.iter().filter(|t| !t.is_empty()).count();
+    let mut mml_tracking = CursorTracker::new();
 
+    // ::TODO move to command_compiler::
     let song_uses_driver_transpose =
         scan_for_driver_transpose(&lines.channels, &lines.subroutines, &metadata.mml_settings);
 
-    assert!(lines.subroutines.len() <= u8::MAX.into());
-    let mut compiler = MmlSongBytecodeGenerator::new(
-        &metadata.mml_settings,
-        pitch_table,
-        data_instruments,
-        &instruments,
-        instrument_map,
-        &lines.subroutines,
+    let subroutines = parse_subroutines(
+        lines.subroutines,
+        &instrument_map,
         &lines.subroutine_name_map,
-        metadata.echo_buffer.max_edl,
-        song_header_size(n_active_channels, lines.subroutines.len()),
-        true,
+        &metadata.mml_settings,
+        &mut mml_tracking,
+        &mut errors.subroutine_errors,
     );
-
-    errors.subroutine_errors =
-        compile_subroutines(&mut compiler, lines.subroutines, song_uses_driver_transpose);
-
-    if !errors.subroutine_errors.is_empty() {
-        return Err(SongError::MmlError(errors));
-    }
 
     let mut channels_iter = lines.channels.into_iter();
 
     let channels = std::array::from_fn(|c_index| {
         let tokens = channels_iter.next().unwrap();
         if !tokens.is_empty() {
-            match compiler.parse_and_compile_song_channel(
+            let identifier = IdentifierStr::try_from_name(CHANNEL_NAMES[c_index]).unwrap();
+            let channel_char = identifier.as_str().chars().next().unwrap();
+
+            match parse_tokens(
+                ChannelId::Channel(channel_char),
+                identifier,
                 tokens,
-                c_index,
-                song_uses_driver_transpose,
+                &instrument_map,
+                &lines.subroutine_name_map,
+                &metadata.mml_settings,
+                &mut mml_tracking,
             ) {
-                Ok(data) => Some(data),
-                Err(e) => {
+                Ok(c) => Some(c),
+                Err((c, e)) => {
                     errors.channel_errors.push(e);
-                    None
+                    Some(c)
                 }
             }
         } else {
@@ -262,40 +290,32 @@ pub fn compile_mml(
     });
     assert!(channels_iter.next().is_none());
 
-    if !errors.channel_errors.is_empty() {
+    if !errors.line_errors.is_empty() {
         return Err(SongError::MmlError(errors));
     }
 
-    let name = errors
-        .song_name
-        .as_ref()
-        .map(|n| n.to_string())
-        .unwrap_or_else(|| file_name.to_owned());
-
-    drop(errors);
-
-    let (song_data, subroutines, tracking) = compiler.take_data();
-
-    let duration = calc_song_duration(&metadata, &channels, &subroutines);
-
-    mml_to_song(
-        name,
+    let song = SongCommands {
+        name: errors
+            .song_name
+            .as_ref()
+            .map(|n| n.to_string())
+            .unwrap_or_else(|| file_name.to_owned()),
         metadata,
-        song_data,
-        duration,
-        lines.sections,
+        sections: lines.sections,
+        mml_tracking,
         instruments,
-        channels,
         subroutines,
-        tracking,
-    )
+        channels,
+        song_uses_driver_transpose,
+    };
+
+    Ok((song, errors))
 }
 
-pub(crate) fn compile_sfx_subroutines(
-    sfx: &str,
+pub(crate) fn parse_sfx_subroutines<'a>(
+    sfx: &'a str,
     data_instruments: &UniqueNamesList<data::InstrumentOrSample>,
-    pitch_table: &PitchTable,
-) -> Result<CompiledSfxSubroutines, SfxSubroutineErrors> {
+) -> Result<SfxSubroutineCommands<'a>, SfxSubroutineErrors> {
     let lines = match split_mml_sfx_subroutines_header_lines(sfx) {
         Ok(l) => l,
         Err(e) => return Err(SfxSubroutineErrors::LineErrors(e)),
@@ -323,37 +343,31 @@ pub(crate) fn compile_sfx_subroutines(
     }
     drop(line_errors);
 
-    let global_settings = GlobalSettings::default();
+    let mut mml_tracker = CursorTracker::new();
+    let mut errors = Vec::new();
 
-    assert!(lines.subroutines.len() <= u8::MAX.into());
-    let mut compiler = MmlSongBytecodeGenerator::new(
-        &global_settings,
-        pitch_table,
-        data_instruments,
-        &instruments,
-        instrument_map,
-        &lines.subroutines,
+    let subroutines = parse_subroutines(
+        lines.subroutines,
+        &instrument_map,
         &lines.subroutine_name_map,
-        EchoEdl::MIN,
-        0,
-        false,
+        &GlobalSettings::default(),
+        &mut mml_tracker,
+        &mut errors,
     );
 
-    let errors = compile_subroutines(&mut compiler, lines.subroutines, false);
-
-    if errors.is_empty() {
-        Ok(compiler.take_sfx_subroutine_data())
-    } else {
-        Err(SfxSubroutineErrors::SubroutineErrors(errors))
-    }
+    Ok(SfxSubroutineCommands {
+        instruments,
+        subroutines,
+        mml_tracker,
+        errors,
+    })
 }
 
-pub fn compile_sound_effect(
-    sfx: &str,
+pub(crate) fn parse_sound_effect<'a>(
+    sfx: &'a str,
     data_instruments: &UniqueNamesList<data::InstrumentOrSample>,
-    pitch_table: &PitchTable,
-    subroutines: &CompiledSfxSubroutines,
-) -> Result<MmlSoundEffect, SoundEffectErrorList> {
+    sfx_subroutines: &CompiledSfxSubroutines,
+) -> Result<SoundEffectCommands<'a>, SoundEffectErrorList> {
     let lines = match split_mml_sound_effect_lines(sfx) {
         Ok(l) => l,
         Err(e) => return Err(SoundEffectErrorList::MmlLineErrors(e)),
@@ -375,17 +389,23 @@ pub fn compile_sound_effect(
     }
     drop(line_errors);
 
-    match parse_and_compile_sound_effect(
+    let mut mml_tracker = CursorTracker::new();
+
+    let (commands, errors) = parse_mml_tokens(
+        ChannelId::SoundEffect,
         lines.tokens,
-        pitch_table,
-        &instruments,
-        data_instruments,
         &instruments_map,
-        subroutines,
-    ) {
-        Ok(o) => Ok(o),
-        Err(e) => Err(SoundEffectErrorList::MmlErrors(e)),
-    }
+        sfx_subroutines,
+        &GlobalSettings::default(),
+        &mut mml_tracker,
+    );
+
+    Ok(SoundEffectCommands {
+        instruments,
+        commands,
+        errors,
+        mml_tracker,
+    })
 }
 
 pub fn compile_mml_prefix(
@@ -400,6 +420,7 @@ pub fn compile_mml_prefix(
 
     let mml_instruments = song.instruments();
 
+    // ::TODO replace with linear scan `SubroutineNameMap`::
     let instruments_map = match build_instrument_map(mml_instruments) {
         Ok(map) => map,
         Err(_) => {
@@ -410,16 +431,26 @@ pub fn compile_mml_prefix(
 
     let tokens = MmlTokens::tokenize_one_line(mml_prefix);
 
-    match parse_and_compile_mml_prefix(
+    let (commands, errors) = parse_mml_tokens(
+        ChannelId::MmlPrefix,
         tokens,
-        pitch_table,
+        &instruments_map,
+        &BlankSubroutineMap,
+        &GlobalSettings::default(),
+        // ::TODO remove cursor tracker here::
+        &mut CursorTracker::new(),
+    );
+
+    channel_bc_generator::compile_mml_prefix(
+        &commands,
+        BytecodeContext::MmlPrefix,
         mml_instruments,
         data_instruments,
-        &instruments_map,
-    ) {
-        Ok(o) => Ok(o),
-        Err(e) => Err(MmlPrefixError::MmlErrors(e)),
-    }
+        pitch_table,
+        &CompiledSubroutines::new_blank(),
+        errors,
+    )
+    .map(|bytecode| MmlPrefixData { bytecode })
 }
 
 fn scan_for_driver_transpose(

@@ -12,12 +12,12 @@ use crate::bytecode::{
     TremoloQuarterWavelengthInTicks, VibratoDelayTicks, VibratoPitchOffsetPerTick,
     VibratoQuarterWavelengthInTicks, Volume, VolumeSlideAmount, VolumeSlideTicks,
 };
-use crate::driver_constants::FIR_FILTER_SIZE;
+use crate::driver_constants::{FIR_FILTER_SIZE, N_MUSIC_CHANNELS};
 use crate::echo::{EchoFeedback, EchoLength, EchoVolume, FirCoefficient, FirTap};
 use crate::envelope::{Adsr, Envelope, Gain, OptionalGain, TempGain};
-use crate::errors::ValueError;
+use crate::errors::{ChannelError, ErrorWithPos, MmlChannelError, ValueError};
 use crate::invert_flags::InvertFlags;
-use crate::mml::{IdentifierBuf, IdentifierStr};
+use crate::mml::{CursorTracker, IdentifierBuf, IdentifierStr, MetaData, Section};
 use crate::notes::Note;
 use crate::pitch_table::PlayPitchFrequency;
 use crate::time::{Bpm, TickClock, TickCounter};
@@ -395,4 +395,32 @@ pub struct MmlInstrument {
     pub(crate) envelope: Envelope,
 
     pub(crate) note_range: RangeInclusive<Note>,
+}
+
+pub(crate) struct SongCommands<'a> {
+    pub name: String,
+    pub metadata: MetaData,
+    pub sections: Vec<Section>,
+    pub mml_tracking: CursorTracker,
+
+    pub instruments: Vec<MmlInstrument>,
+    pub subroutines: Vec<SubroutineCommands<'a>>,
+    pub channels: [Option<ChannelCommands<'a>>; N_MUSIC_CHANNELS],
+
+    // ::TODO move this check to command_compiler::
+    pub song_uses_driver_transpose: bool,
+}
+
+pub(crate) struct SfxSubroutineCommands<'a> {
+    pub instruments: Vec<MmlInstrument>,
+    pub subroutines: Vec<SubroutineCommands<'a>>,
+    pub mml_tracker: CursorTracker,
+    pub errors: Vec<MmlChannelError>,
+}
+
+pub(crate) struct SoundEffectCommands<'a> {
+    pub instruments: Vec<MmlInstrument>,
+    pub commands: ChannelCommands<'a>,
+    pub errors: Vec<ErrorWithPos<ChannelError>>,
+    pub mml_tracker: CursorTracker,
 }

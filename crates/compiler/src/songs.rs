@@ -10,7 +10,9 @@ use crate::bytecode::{
     BcTerminator, BcTicks, BcTicksKeyOff, BcTicksNoKeyOff, Bytecode, BytecodeContext, InstrumentId,
     PlayNoteTicks, StackDepth, Volume,
 };
+use crate::command_compiler::channel_bc_generator::CommandCompiler;
 use crate::command_compiler::commands::MmlInstrument;
+use crate::command_compiler::subroutines::subroutine_compile_order;
 use crate::data::{self, single_item_unique_names_list, InstrumentOrSample, Name, UniqueNamesList};
 use crate::driver_constants::{
     addresses, AUDIO_RAM_SIZE, BLANK_SONG_BIN, ECHO_BUFFER_MIN_SIZE, ECHO_VARIABLES_SIZE,
@@ -20,10 +22,12 @@ use crate::driver_constants::{
 };
 use crate::echo::EchoEdl;
 use crate::envelope::{Envelope, Gain};
-use crate::errors::{ChannelError, SongError, SongTooLargeError};
+use crate::errors::{ChannelError, MmlCompileErrors, SongError, SongTooLargeError};
+use crate::mml;
 use crate::mml::note_tracking::{CommandTickTracker, CursorTracker, CursorTrackerGetter};
-use crate::mml::{ChannelId, MetaData, Section};
+use crate::mml::{calc_song_duration, ChannelId, MetaData, Section};
 use crate::notes::{Note, Octave};
+use crate::pitch_table::PitchTable;
 use crate::subroutines::{BlankSubroutineMap, CompiledSubroutines, SubroutineState};
 use crate::time::{TickClock, TickCounter};
 
@@ -424,37 +428,6 @@ fn write_song_header(
     Ok(subroutine_table_l_addr)
 }
 
-#[allow(clippy::too_many_arguments)]
-pub(crate) fn mml_to_song(
-    name: String,
-    metadata: MetaData,
-    data: Vec<u8>,
-    duration: Option<Duration>,
-    sections: Vec<Section>,
-    instruments: Vec<MmlInstrument>,
-    channels: [Option<Channel>; N_MUSIC_CHANNELS],
-    subroutines: CompiledSubroutines,
-    tracking: SongBcTracking,
-) -> Result<SongData, SongError> {
-    let mut data = data;
-
-    match write_song_header(&mut data, &channels, &subroutines, &metadata) {
-        Ok(subroutine_table_l_addr) => Ok(SongData {
-            name,
-            metadata,
-            data,
-            duration,
-            sections,
-            instruments,
-            channels,
-            subroutines,
-            subroutine_table_l_addr,
-            tracking: Some(tracking),
-        }),
-        Err(e) => Err(e),
-    }
-}
-
 pub fn song_duration_string(duration: Option<Duration>) -> String {
     match duration {
         Some(d) => {
@@ -500,4 +473,89 @@ pub fn validate_song_size(
 pub fn override_song_tick_clock(song: &mut SongData, tick_clock: TickClock) {
     song.data[SONG_HEADER_TICK_TIMER_OFFSET] = tick_clock.into_driver_value();
     song.metadata.tick_clock = tick_clock;
+}
+
+fn compile_song_commands(
+    song: crate::command_compiler::commands::SongCommands,
+    pitch_table: &PitchTable,
+    data_instruments: &UniqueNamesList<data::InstrumentOrSample>,
+    errors: MmlCompileErrors,
+) -> Result<SongData, SongError> {
+    let mut errors = errors;
+
+    let n_active_channels = song.channels.iter().filter(|&c| !c.is_none()).count();
+
+    let mut compiler = CommandCompiler::new(
+        song_header_size(n_active_channels, song.subroutines.len()),
+        pitch_table,
+        data_instruments,
+        &song.instruments,
+        song.metadata.echo_buffer.max_edl,
+        true,
+        song.song_uses_driver_transpose,
+    );
+
+    let subroutines = subroutine_compile_order(song.subroutines);
+
+    let subroutines = compiler.compile_subroutines(subroutines, &mut errors.subroutine_errors);
+
+    // ::TODO remove::
+    if !errors.subroutine_errors.is_empty() {
+        return Err(SongError::MmlError(errors));
+    }
+
+    let first_channel_bc_offset = compiler.bc_size();
+
+    let channels = std::array::from_fn(|c_index| {
+        song.channels[c_index].as_ref().and_then(|c| {
+            match compiler.compile_song_channel(c_index, c, &subroutines) {
+                Ok(c) => Some(c),
+                Err(e) => {
+                    errors.channel_errors.push(e);
+                    None
+                }
+            }
+        })
+    });
+
+    let duration = calc_song_duration(&song.metadata, &channels, &subroutines);
+
+    if errors.channel_errors.is_empty() && errors.subroutine_errors.is_empty() {
+        let (mut data, bc_pos) = compiler.take_data();
+        let tracking = Some(SongBcTracking {
+            bytecode: bc_pos,
+            cursor_tracker: song.mml_tracking,
+            first_channel_bc_offset: first_channel_bc_offset.try_into().unwrap_or(u16::MAX),
+        });
+
+        match write_song_header(&mut data, &channels, &subroutines, &song.metadata) {
+            Ok(subroutine_table_l_addr) => Ok(SongData {
+                name: song.name,
+                metadata: song.metadata,
+                data,
+                duration,
+                sections: song.sections,
+                instruments: song.instruments,
+                channels,
+                subroutines,
+                subroutine_table_l_addr,
+                tracking,
+            }),
+            Err(e) => Err(e),
+        }
+    } else {
+        Err(SongError::MmlError(errors))
+    }
+}
+
+pub fn compile_mml_song(
+    mml: &str,
+    file_name: &str,
+    song_name: Option<data::Name>,
+    data_instruments: &UniqueNamesList<data::InstrumentOrSample>,
+    pitch_table: &PitchTable,
+) -> Result<SongData, SongError> {
+    let (s, errors) = mml::parse_mml_song(mml, file_name, song_name, data_instruments)?;
+
+    compile_song_commands(s, pitch_table, data_instruments, errors)
 }

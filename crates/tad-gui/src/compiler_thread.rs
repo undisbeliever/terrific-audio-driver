@@ -1060,7 +1060,7 @@ impl SongCompiler {
         };
 
         let name = name.cloned();
-        let song_data = match compiler::mml::compile_mml(
+        let song_data = match compiler::songs::compile_mml_song(
             &f.contents,
             &f.file_name,
             name,

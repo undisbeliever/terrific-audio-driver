@@ -6,12 +6,15 @@
 
 use crate::bytecode::{opcodes, BcTerminator, BytecodeContext};
 use crate::bytecode_assembler::BytecodeAssembler;
+use crate::command_compiler::channel_bc_generator::{self, CommandCompiler};
+use crate::command_compiler::subroutines::subroutine_compile_order;
 use crate::data::{
     DefaultSfxFlags, InstrumentOrSample, Name, UniqueNamesList, UniqueSoundEffectExportOrder,
 };
 use crate::driver_constants::{
     COMMON_DATA_BYTES_PER_SFX_SUBROUTINE, COMMON_DATA_BYTES_PER_SOUND_EFFECT, MAX_COMMON_DATA_SIZE,
 };
+use crate::echo::EchoEdl;
 use crate::errors::{
     ChannelError, CombineSoundEffectsError, ErrorWithPos, OtherSfxError, SfxSubroutineErrors,
     SoundEffectError, SoundEffectErrorList, SoundEffectsFileError,
@@ -50,23 +53,6 @@ pub struct CompiledSfxSubroutines {
 }
 
 impl CompiledSfxSubroutines {
-    pub(crate) fn new(
-        data: Vec<u8>,
-        subroutines: CompiledSubroutines,
-        cursor_tracker: CursorTracker,
-    ) -> Self {
-        Self {
-            data,
-            name_map: subroutines
-                .iter()
-                .enumerate()
-                .map(|(i, (name, _))| (name.as_str().to_owned(), i))
-                .collect(),
-            subroutines,
-            cursor_tracker,
-        }
-    }
-
     pub fn blank() -> Self {
         Self {
             data: Vec::new(),
@@ -196,19 +182,27 @@ impl CursorTrackerGetter for CompiledSoundEffect {
 
 fn compile_mml_sound_effect(
     sfx: &str,
-    inst_map: &UniqueNamesList<InstrumentOrSample>,
+    data_instruments: &UniqueNamesList<InstrumentOrSample>,
     pitch_table: &PitchTable,
-    subroutines: &CompiledSfxSubroutines,
+    sfx_subroutines: &CompiledSfxSubroutines,
     flags: SfxFlags,
 ) -> Result<CompiledSoundEffect, SoundEffectErrorList> {
-    match mml::compile_sound_effect(sfx, inst_map, pitch_table, subroutines) {
-        Ok(o) => Ok(CompiledSoundEffect {
-            tick_counter: o.tick_counter(),
-            flags,
-            data: SfxData::Mml(o),
-        }),
-        Err(errors) => Err(errors),
-    }
+    let s = mml::parse_sound_effect(sfx, data_instruments, sfx_subroutines)?;
+
+    channel_bc_generator::compile_sound_effect(
+        &s.commands,
+        &s.instruments,
+        data_instruments,
+        pitch_table,
+        &sfx_subroutines.subroutines,
+        s.mml_tracker,
+        s.errors,
+    )
+    .map(|d| CompiledSoundEffect {
+        tick_counter: d.tick_counter(),
+        flags,
+        data: SfxData::Mml(d),
+    })
 }
 
 pub fn compile_bytecode_sound_effect(
@@ -280,10 +274,43 @@ pub fn compile_bytecode_sound_effect(
 
 pub fn compile_sfx_subroutines(
     subroutines: &SfxSubroutinesMml,
-    inst_map: &UniqueNamesList<InstrumentOrSample>,
+    data_instruments: &UniqueNamesList<InstrumentOrSample>,
     pitch_table: &PitchTable,
 ) -> Result<CompiledSfxSubroutines, SfxSubroutineErrors> {
-    mml::compile_sfx_subroutines(&subroutines.0, inst_map, pitch_table)
+    let s = mml::parse_sfx_subroutines(&subroutines.0, data_instruments)?;
+
+    let mut compiler = CommandCompiler::new(
+        0,
+        pitch_table,
+        data_instruments,
+        &s.instruments,
+        EchoEdl::MIN,
+        false,
+        // ::TODO detect driver transpose in subroutines::
+        false,
+    );
+    let mut errors = s.errors;
+
+    let subroutines = subroutine_compile_order(s.subroutines);
+
+    let subroutines = compiler.compile_subroutines(subroutines, &mut errors);
+
+    if errors.is_empty() {
+        let (data, _) = compiler.take_data();
+
+        Ok(CompiledSfxSubroutines {
+            data,
+            name_map: subroutines
+                .iter()
+                .enumerate()
+                .map(|(i, (name, _))| (name.as_str().to_owned(), i))
+                .collect(),
+            subroutines,
+            cursor_tracker: s.mml_tracker,
+        })
+    } else {
+        Err(SfxSubroutineErrors::SubroutineErrors(errors))
+    }
 }
 
 pub fn compile_sound_effects_file(

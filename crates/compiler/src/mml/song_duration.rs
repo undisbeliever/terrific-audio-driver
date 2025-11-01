@@ -14,6 +14,7 @@ use crate::UnsignedValueNewType;
 
 use std::time::Duration;
 
+// ::TODO move into Song::
 pub fn calc_song_duration(
     metadata: &MetaData,
     channels: &[Option<Channel>; N_MUSIC_CHANNELS],

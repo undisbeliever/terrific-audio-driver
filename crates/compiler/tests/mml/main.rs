@@ -41,7 +41,6 @@ use compiler::driver_constants::{
 use compiler::echo::EchoEdl;
 use compiler::envelope::{Adsr, Envelope, Gain};
 use compiler::errors::{BytecodeError, ChannelError, MmlLineError, SongError, ValueError};
-use compiler::mml;
 use compiler::notes::{Note, Octave};
 use compiler::pitch_table::{
     build_pitch_table, InstrumentHintFreq, PitchTable, PlayPitchFrequency,
@@ -397,7 +396,7 @@ fn assert_one_channel_error_in_mml(
 ) {
     let dummy_data = dummy_data();
 
-    let r = mml::compile_mml(
+    let r = compiler::songs::compile_mml_song(
         mml,
         "",
         None,
@@ -445,7 +444,7 @@ fn assert_one_subroutine_error_in_mml(
         .strip_prefix("!")
         .expect("identifier must start with !");
 
-    let r = mml::compile_mml(
+    let r = compiler::songs::compile_mml_song(
         mml,
         "",
         None,
@@ -484,7 +483,7 @@ fn assert_one_subroutine_error_in_mml(
 fn assert_subroutine_errors_in_mml(mml: &str, expected_errors: &[(&str, &[ChannelError])]) {
     let dummy_data = dummy_data();
 
-    let r = mml::compile_mml(
+    let r = compiler::songs::compile_mml_song(
         mml,
         "",
         None,
@@ -522,7 +521,7 @@ fn assert_subroutine_errors_in_mml(mml: &str, expected_errors: &[(&str, &[Channe
 fn assert_one_header_error_in_mml(mml: &str, line_number: u32, expected_error: MmlLineError) {
     let dummy_data = dummy_data();
 
-    let r = mml::compile_mml(
+    let r = compiler::songs::compile_mml_song(
         mml,
         "",
         None,
@@ -552,7 +551,7 @@ fn assert_one_header_error_in_mml(mml: &str, line_number: u32, expected_error: M
 }
 
 fn compile_mml(mml: &str, dummy_data: &DummyData) -> SongData {
-    mml::compile_mml(
+    compiler::songs::compile_mml_song(
         mml,
         "",
         None,
