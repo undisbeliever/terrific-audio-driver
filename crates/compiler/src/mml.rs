@@ -10,7 +10,6 @@ mod identifier;
 mod instruments;
 mod line_splitter;
 mod metadata;
-mod song_duration;
 mod tick_count_table;
 mod tokenizer;
 
@@ -67,8 +66,6 @@ pub use self::identifier::{IdentifierBuf, IdentifierStr};
 pub use self::tick_count_table::MmlTickCountTable;
 
 pub use self::metadata::{GlobalSettings, MetaData};
-
-pub use self::song_duration::calc_song_duration;
 
 pub use self::note_tracking::{
     find_cursor_state, line_start_ticks, CommandTickTracker, CursorTracker, CursorTrackerGetter,
