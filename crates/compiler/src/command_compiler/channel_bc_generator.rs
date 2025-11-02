@@ -19,9 +19,7 @@ use crate::envelope::{Adsr, Envelope, Gain, TempGain};
 use crate::errors::{
     ChannelError, ErrorWithPos, MmlChannelError, MmlPrefixError, SoundEffectErrorList, ValueError,
 };
-use crate::mml::{
-    self, CommandTickTracker, IdentifierStr, MmlSoundEffect, CHANNEL_NAMES, MAX_MML_PREFIX_TICKS,
-};
+use crate::mml::{CommandTickTracker, IdentifierStr, CHANNEL_NAMES, MAX_MML_PREFIX_TICKS};
 use crate::notes::Note;
 use crate::notes::SEMITONES_PER_OCTAVE;
 use crate::pitch_table::{PitchTable, PITCH_REGISTER_MAX};
@@ -2037,9 +2035,8 @@ pub(crate) fn compile_sound_effect(
     data_instruments: &UniqueNamesList<data::InstrumentOrSample>,
     pitch_table: &PitchTable,
     subroutines: &CompiledSubroutines,
-    mml_tracker: mml::CursorTracker,
     errors: Vec<ErrorWithPos<ChannelError>>,
-) -> Result<MmlSoundEffect, SoundEffectErrorList> {
+) -> Result<(Vec<u8>, TickCounter, CommandTickTracker), SoundEffectErrorList> {
     let bc_data = Vec::new();
     let mut errors = errors;
 
@@ -2079,13 +2076,7 @@ pub(crate) fn compile_sound_effect(
     }
 
     if errors.is_empty() {
-        Ok(MmlSoundEffect {
-            bytecode,
-            tick_counter,
-
-            tick_tracker,
-            cursor_tracker: mml_tracker,
-        })
+        Ok((bytecode, tick_counter, tick_tracker))
     } else {
         Err(SoundEffectErrorList::MmlErrors(errors))
     }

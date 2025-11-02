@@ -85,33 +85,6 @@ pub struct Section {
     char_index: u32,
 }
 
-// ::TODO move::
-#[derive(Debug)]
-pub struct MmlSoundEffect {
-    pub(crate) bytecode: Vec<u8>,
-    pub(crate) tick_counter: TickCounter,
-
-    pub(crate) tick_tracker: CommandTickTracker,
-    pub(crate) cursor_tracker: note_tracking::CursorTracker,
-}
-
-impl MmlSoundEffect {
-    pub fn bytecode(&self) -> &[u8] {
-        &self.bytecode
-    }
-    pub fn tick_counter(&self) -> TickCounter {
-        self.tick_counter
-    }
-
-    pub fn tick_tracker(&self) -> &CommandTickTracker {
-        &self.tick_tracker
-    }
-
-    pub fn cursor_tracker(&self) -> &note_tracking::CursorTracker {
-        &self.cursor_tracker
-    }
-}
-
 #[derive(Debug)]
 pub struct MmlPrefixData {
     bytecode: Vec<u8>,

@@ -122,12 +122,6 @@ impl CursorTrackerGetter for CompiledSfxSubroutines {
     }
 }
 
-#[derive(Debug)]
-enum SfxData {
-    Mml(mml::MmlSoundEffect),
-    BytecodeAssembly(Vec<u8>),
-}
-
 #[derive(Default, Clone, Debug, PartialEq)]
 pub struct SfxFlags {
     pub one_channel: Option<bool>,
@@ -136,17 +130,16 @@ pub struct SfxFlags {
 
 #[derive(Debug)]
 pub struct CompiledSoundEffect {
-    data: SfxData,
+    data: Vec<u8>,
     flags: SfxFlags,
     tick_counter: TickCounter,
+
+    cursor_tracker: Option<(CursorTracker, CommandTickTracker)>,
 }
 
 impl CompiledSoundEffect {
     pub fn bytecode(&self) -> &[u8] {
-        match &self.data {
-            SfxData::BytecodeAssembly(s) => s,
-            SfxData::Mml(s) => s.bytecode(),
-        }
+        &self.data
     }
 
     pub fn tick_counter(&self) -> TickCounter {
@@ -160,22 +153,13 @@ impl CompiledSoundEffect {
 
 impl CursorTrackerGetter for CompiledSoundEffect {
     fn cursor_tracker(&self) -> Option<&CursorTracker> {
-        match &self.data {
-            SfxData::BytecodeAssembly(_) => None,
-            SfxData::Mml(s) => Some(s.cursor_tracker()),
-        }
+        self.cursor_tracker.as_ref().map(|(c, _)| c)
     }
 
     fn tick_tracker_for_channel(&self, channel: ChannelId) -> Option<&CommandTickTracker> {
         match channel {
-            ChannelId::SoundEffect => match &self.data {
-                SfxData::BytecodeAssembly(_) => None,
-                SfxData::Mml(s) => Some(s.tick_tracker()),
-            },
-
-            ChannelId::Channel(_) => None,
-            ChannelId::Subroutine(_) => None,
-            ChannelId::MmlPrefix => None,
+            ChannelId::SoundEffect => self.cursor_tracker.as_ref().map(|(_, t)| t),
+            ChannelId::Channel(_) | ChannelId::Subroutine(_) | ChannelId::MmlPrefix => None,
         }
     }
 }
@@ -195,13 +179,13 @@ fn compile_mml_sound_effect(
         data_instruments,
         pitch_table,
         &sfx_subroutines.subroutines,
-        s.mml_tracker,
         s.errors,
     )
-    .map(|d| CompiledSoundEffect {
-        tick_counter: d.tick_counter(),
+    .map(|(data, tick_counter, tick_tracker)| CompiledSoundEffect {
+        data,
+        tick_counter,
         flags,
-        data: SfxData::Mml(d),
+        cursor_tracker: Some((s.mml_tracker, tick_tracker)),
     })
 }
 
@@ -263,9 +247,10 @@ pub fn compile_bytecode_sound_effect(
         let (data, bc_state) = out.unwrap();
 
         Ok(CompiledSoundEffect {
-            data: SfxData::BytecodeAssembly(data),
+            data,
             flags,
             tick_counter: bc_state.tick_counter,
+            cursor_tracker: None,
         })
     } else {
         Err(SoundEffectErrorList::BytecodeErrors(errors))
