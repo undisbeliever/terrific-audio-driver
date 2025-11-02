@@ -4,8 +4,9 @@
 
 use compiler::echo::{EchoBuffer, FirCoefficient};
 use compiler::invert_flags::InvertFlags;
-use compiler::mml::{GlobalSettings, MetaData};
+use compiler::mml::GlobalSettings;
 use compiler::notes::KeySignature;
+use compiler::songs::MetaData;
 use compiler::time::{Bpm, TickClock, ZenLen};
 use compiler::{Transpose, UnsignedValueNewType};
 

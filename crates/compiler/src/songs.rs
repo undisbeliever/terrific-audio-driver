@@ -20,11 +20,11 @@ use crate::driver_constants::{
     SONG_HEADER_ACTIVE_MUSIC_CHANNELS, SONG_HEADER_ECHO, SONG_HEADER_ECHO_EDL,
     SONG_HEADER_N_SUBROUTINES_OFFSET, SONG_HEADER_SIZE, SONG_HEADER_TICK_TIMER_OFFSET,
 };
-use crate::echo::EchoEdl;
+use crate::echo::{EchoBuffer, EchoEdl};
 use crate::envelope::{Envelope, Gain};
 use crate::errors::{ChannelError, MmlCompileErrors, SongError, SongTooLargeError};
 use crate::mml::note_tracking::{CommandTickTracker, CursorTracker, CursorTrackerGetter};
-use crate::mml::{ChannelId, MetaData, Section};
+use crate::mml::{ChannelId, GlobalSettings, Section};
 use crate::notes::{Note, Octave};
 use crate::pitch_table::PitchTable;
 use crate::subroutines::{BlankSubroutineMap, CompiledSubroutines, SubroutineState};
@@ -91,6 +91,30 @@ pub struct Channel {
     pub tick_tracker: CommandTickTracker,
 
     pub tempo_changes: Vec<(TickCounter, TickClock)>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct MetaData {
+    pub title: Option<String>,
+    pub game: Option<String>,
+    pub date: Option<String>,
+    pub composer: Option<String>,
+    pub author: Option<String>,
+    pub copyright: Option<String>,
+    pub license: Option<String>,
+
+    pub echo_buffer: EchoBuffer,
+
+    pub tick_clock: TickClock,
+
+    pub mml_settings: GlobalSettings,
+
+    /// SPC export song length in seconds before fading out
+    /// (override calculated song duration)
+    pub spc_song_length: Option<u32>,
+
+    /// SPC export fadeout length in milliseconds
+    pub spc_fadeout_millis: Option<u32>,
 }
 
 #[derive(Clone)]

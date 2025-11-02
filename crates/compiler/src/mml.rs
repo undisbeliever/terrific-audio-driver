@@ -65,7 +65,7 @@ pub const MAX_MML_PREFIX_TICKS: TickCounter = TickCounter::new(16);
 pub use self::identifier::{IdentifierBuf, IdentifierStr};
 pub use self::tick_count_table::MmlTickCountTable;
 
-pub use self::metadata::{GlobalSettings, MetaData};
+pub use self::metadata::GlobalSettings;
 
 pub use self::note_tracking::{
     find_cursor_state, line_start_ticks, CommandTickTracker, CursorTracker, CursorTrackerGetter,

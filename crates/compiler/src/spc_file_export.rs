@@ -9,8 +9,7 @@ use std::time::Duration;
 use crate::common_audio_data::CommonAudioData;
 use crate::driver_constants::{AudioMode, LoaderDataType};
 use crate::errors::LoadSongError;
-use crate::mml::MetaData;
-use crate::songs::SongData;
+use crate::songs::{MetaData, SongData};
 use crate::tad_apu::{load_song_to_apu, ApuEmulator};
 
 const SPC_FILE_SIZE: usize = 0x10200;
