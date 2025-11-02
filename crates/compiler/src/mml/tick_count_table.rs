@@ -63,7 +63,7 @@ impl std::fmt::Display for MmlTickCountTable<'_> {
                 write!(f, "{:width$} |", s.name, width = name_width)?;
 
                 for c in &channels {
-                    // ::TODO optimise (this is O(mn) and could be made O(n))::
+                    // ::MAYDO optimise (this is O(mn) and could be made O(n))::
                     let (lc, ticks) = match target_char_index
                         .and_then(|t| section_end_ticks(cursor_tracker, c, t))
                     {

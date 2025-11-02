@@ -390,7 +390,6 @@ pub fn compile_mml_prefix(
 
     let mml_instruments = song.instruments();
 
-    // ::TODO replace with linear scan `SubroutineNameMap`::
     let instruments_map = match build_instrument_map(mml_instruments) {
         Ok(map) => map,
         Err(_) => {
@@ -407,7 +406,6 @@ pub fn compile_mml_prefix(
         &instruments_map,
         &BlankSubroutineMap,
         &GlobalSettings::default(),
-        // ::TODO remove cursor tracker here::
         &mut CursorTracker::new(),
     );
 

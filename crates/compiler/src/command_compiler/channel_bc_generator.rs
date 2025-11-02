@@ -1757,7 +1757,6 @@ pub(crate) struct CommandCompiler<'a> {
     mml_instruments: &'a [MmlInstrument],
     max_edl: EchoEdl,
 
-    // ::TODO remove::
     is_song: bool,
     song_uses_driver_transpose: bool,
 
@@ -1773,7 +1772,6 @@ impl<'a> CommandCompiler<'a> {
         mml_instruments: &'a [MmlInstrument],
         max_edl: EchoEdl,
 
-        // ::TODO remove::
         is_song: bool,
         song_uses_driver_transpose: bool,
     ) -> Self {
@@ -1822,7 +1820,6 @@ impl<'a> CommandCompiler<'a> {
 
         let mut errors = Vec::new();
 
-        // ::TODO cleanup::
         let tail_call = match input.commands.split_last() {
             Some((last, remaining)) => {
                 gen.process_commands_with_tracker(
