@@ -15,6 +15,7 @@ use crate::driver_constants::{
 use crate::echo::{EchoEdl, EchoFeedback, EchoLength, EchoVolume, FirCoefficient, FirTap};
 use crate::envelope::{Adsr, Envelope, Gain, OptionalGain, TempGain};
 use crate::errors::{BytecodeError, ChannelError, ValueError};
+use crate::identifier::MusicChannelIndex;
 use crate::invert_flags::InvertFlags;
 use crate::notes::{Note, LAST_NOTE_ID, N_NOTES};
 use crate::pitch_table::InstrumentHintFreq;
@@ -209,8 +210,13 @@ impl RelativeFirCoefficient {
 }
 
 pub enum BytecodeContext {
-    SongSubroutine { max_edl: EchoEdl },
-    SongChannel { index: u8, max_edl: EchoEdl },
+    SongSubroutine {
+        max_edl: EchoEdl,
+    },
+    SongChannel {
+        index: MusicChannelIndex,
+        max_edl: EchoEdl,
+    },
     SfxSubroutine,
     SoundEffect,
     MmlPrefix,
@@ -2024,7 +2030,7 @@ impl<'a> Bytecode<'a> {
         prefixed_instruction: MiscInstruction,
     ) -> Result<(), BytecodeError> {
         match self.context {
-            BytecodeContext::SongChannel { index, .. } => match index {
+            BytecodeContext::SongChannel { index, .. } => match u8::from(index) {
                 0 => Err(BytecodeError::PmodNotAllowedInChannelA),
                 1..=5 => {
                     emit_bytecode!(self, opcodes::MISCELLANEOUS, prefixed_instruction.as_u8());

@@ -4,11 +4,11 @@
 
 use crate::*;
 
-use compiler::identifier::ChannelId;
+use compiler::identifier::{ChannelId, MusicChannelIndex};
 use compiler::mml::{find_cursor_state, line_start_ticks};
 
-const CHANNEL_A: ChannelId = ChannelId::Channel('A');
-const CHANNEL_B: ChannelId = ChannelId::Channel('B');
+const CHANNEL_A: ChannelId = ChannelId::Channel(MusicChannelIndex::CHANNEL_A);
+const CHANNEL_B: ChannelId = ChannelId::Channel(MusicChannelIndex::CHANNEL_B);
 const SUB_1: ChannelId = ChannelId::Subroutine(0);
 const SUB_2: ChannelId = ChannelId::Subroutine(1);
 

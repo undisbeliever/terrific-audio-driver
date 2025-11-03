@@ -41,6 +41,7 @@ use compiler::driver_constants::{
 use compiler::echo::EchoEdl;
 use compiler::envelope::{Adsr, Envelope, Gain};
 use compiler::errors::{BytecodeError, ChannelError, MmlLineError, SongError, ValueError};
+use compiler::identifier::MusicChannelIndex;
 use compiler::notes::{Note, Octave};
 use compiler::pitch_table::{
     build_pitch_table, InstrumentHintFreq, PitchTable, PlayPitchFrequency,
@@ -172,7 +173,7 @@ fn assert_line_matches_bytecode(mml_line: &str, bc_asm: &[&str]) {
         &CompiledSubroutines::new_blank(),
         BcTerminator::DisableChannel,
         BytecodeContext::SongChannel {
-            index: 0,
+            index: MusicChannelIndex::CHANNEL_A,
             max_edl: EchoEdl::MIN,
         },
     );
@@ -204,7 +205,7 @@ fn assert_channel_b_line_matches_bytecode(mml_line: &str, bc_asm: &[&str]) {
         &CompiledSubroutines::new_blank(),
         BcTerminator::DisableChannel,
         BytecodeContext::SongChannel {
-            index: 1,
+            index: MusicChannelIndex::CHANNEL_B,
             max_edl: EchoEdl::MIN,
         },
     );
@@ -288,7 +289,7 @@ fn assert_line_matches_line_and_bytecode(mml_line1: &str, mml_line2: &str, bc_as
         &CompiledSubroutines::new_blank(),
         BcTerminator::DisableChannel,
         BytecodeContext::SongChannel {
-            index: 0,
+            index: MusicChannelIndex::CHANNEL_A,
             max_edl: EchoEdl::MIN,
         },
     );
@@ -310,7 +311,10 @@ fn assert_mml_channel_a_matches_bytecode_max_edl(mml: &str, bc_asm: &[&str], max
         &dummy_data.instruments_and_samples,
         mml.subroutines(),
         BcTerminator::DisableChannel,
-        BytecodeContext::SongChannel { index: 0, max_edl },
+        BytecodeContext::SongChannel {
+            index: MusicChannelIndex::CHANNEL_A,
+            max_edl,
+        },
     );
 
     assert_eq!(mml_bytecode(&mml), bc_asm);
@@ -334,7 +338,7 @@ fn assert_mml_channel_a_matches_looping_bytecode(mml: &str, bc_asm: &[&str]) {
         mml.subroutines(),
         BcTerminator::Goto(loop_point),
         BytecodeContext::SongChannel {
-            index: 0,
+            index: MusicChannelIndex::CHANNEL_A,
             max_edl: EchoEdl::MIN,
         },
     );
@@ -353,7 +357,7 @@ fn assert_mml_channel_b_matches_bytecode(mml: &str, bc_asm: &[&str]) {
         mml.subroutines(),
         BcTerminator::DisableChannel,
         BytecodeContext::SongChannel {
-            index: 1,
+            index: MusicChannelIndex::CHANNEL_B,
             max_edl: mml.metadata().echo_buffer.max_edl,
         },
     );

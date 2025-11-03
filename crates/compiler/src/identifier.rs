@@ -19,11 +19,46 @@ const _: () = assert!(
         == N_MUSIC_CHANNELS
 );
 
-pub const CHANNEL_NAMES: [&str; N_MUSIC_CHANNELS] = ["A", "B", "C", "D", "E", "F", "G", "H"];
+const CHANNEL_NAMES: [&str; N_MUSIC_CHANNELS] = ["A", "B", "C", "D", "E", "F", "G", "H"];
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct MusicChannelIndex(u8);
+
+impl MusicChannelIndex {
+    pub const CHANNEL_A: Self = Self(0);
+    pub const CHANNEL_B: Self = Self(1);
+
+    pub(crate) fn try_new(value: usize) -> Result<Self, ()> {
+        match value {
+            0..N_MUSIC_CHANNELS => Ok(MusicChannelIndex(value.try_into().unwrap())),
+            _ => Err(()),
+        }
+    }
+
+    pub fn identifier(&self) -> IdentifierStr<'static> {
+        IdentifierStr::from_str(CHANNEL_NAMES[usize::from(self.0)])
+    }
+
+    pub fn identifier_str(&self) -> &'static str {
+        CHANNEL_NAMES[usize::from(self.0)]
+    }
+}
+
+impl From<MusicChannelIndex> for u8 {
+    fn from(val: MusicChannelIndex) -> Self {
+        val.0
+    }
+}
+
+impl From<MusicChannelIndex> for usize {
+    fn from(val: MusicChannelIndex) -> Self {
+        val.0.into()
+    }
+}
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum ChannelId {
-    Channel(char),
+    Channel(MusicChannelIndex),
     Subroutine(u8),
     SoundEffect,
     MmlPrefix,

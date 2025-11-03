@@ -237,7 +237,7 @@ ADEF \asm { set_instrument dummy_instrument | play_note a4 24 }
         mml.subroutines(),
         BcTerminator::DisableChannel,
         BytecodeContext::SongChannel {
-            index: 0,
+            index: MusicChannelIndex::CHANNEL_A,
             max_edl: EchoEdl::MIN,
         },
     )

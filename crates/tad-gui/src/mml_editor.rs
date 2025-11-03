@@ -752,7 +752,7 @@ impl MmlEditorState {
 
                 match channel_id {
                     ChannelId::Channel(c) => {
-                        let _ = write!(s, "{} ", c);
+                        let _ = write!(s, "{} ", c.identifier_str());
                     }
                     ChannelId::Subroutine(si) => match &compiled_data {
                         CompiledEditorData::Song(sd) => {

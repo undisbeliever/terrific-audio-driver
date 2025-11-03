@@ -23,7 +23,7 @@ use crate::driver_constants::{
 use crate::echo::{EchoBuffer, EchoEdl};
 use crate::envelope::{Envelope, Gain};
 use crate::errors::{ChannelError, MmlCompileErrors, SongError, SongTooLargeError};
-use crate::identifier::ChannelId;
+use crate::identifier::{ChannelId, MusicChannelIndex};
 use crate::mml::{CommandTickTracker, CursorTracker, CursorTrackerGetter, GlobalSettings, Section};
 use crate::notes::{Note, Octave};
 use crate::pitch_table::PitchTable;
@@ -80,7 +80,7 @@ pub struct LoopPoint {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Channel {
-    pub name: char,
+    pub channel_index: MusicChannelIndex,
 
     pub bytecode_offset: u16,
     pub loop_point: Option<LoopPoint>,
@@ -214,13 +214,10 @@ impl CursorTrackerGetter for SongData {
 
     fn tick_tracker_for_channel(&self, channel: ChannelId) -> Option<&CommandTickTracker> {
         match channel {
-            ChannelId::Channel(c) => {
-                let i = usize::try_from(u32::from(c).checked_sub(b'A' as u32)?).ok()?;
-                match self.channels.get(i) {
-                    Some(Some(c)) => Some(&c.tick_tracker),
-                    _ => None,
-                }
-            }
+            ChannelId::Channel(c) => match self.channels.get(usize::from(c)) {
+                Some(Some(c)) => Some(&c.tick_tracker),
+                _ => None,
+            },
             ChannelId::Subroutine(i) => match self.subroutines.get_compiled(i) {
                 Some(s) => Some(&s.tick_tracker),
                 _ => None,
@@ -268,7 +265,7 @@ pub fn test_sample_song(
 
     let mut bc = Bytecode::new(
         BytecodeContext::SongChannel {
-            index: 0,
+            index: MusicChannelIndex::CHANNEL_A,
             max_edl: EchoEdl::MIN,
         },
         sample_song_fake_instruments(),
@@ -532,6 +529,8 @@ fn compile_song_commands(
 
     let channels = std::array::from_fn(|c_index| {
         song.channels[c_index].as_ref().and_then(|c| {
+            let c_index = MusicChannelIndex::try_new(c_index).unwrap();
+
             match compiler.compile_song_channel(c_index, c, &subroutines) {
                 Ok(c) => Some(c),
                 Err(e) => {

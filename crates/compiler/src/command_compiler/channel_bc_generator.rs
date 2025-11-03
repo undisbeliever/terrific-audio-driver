@@ -19,7 +19,7 @@ use crate::envelope::{Adsr, Envelope, Gain, TempGain};
 use crate::errors::{
     ChannelError, ErrorWithPos, MmlChannelError, MmlPrefixError, SoundEffectErrorList, ValueError,
 };
-use crate::identifier::{IdentifierStr, CHANNEL_NAMES};
+use crate::identifier::MusicChannelIndex;
 use crate::mml::{CommandTickTracker, MAX_MML_PREFIX_TICKS};
 use crate::notes::Note;
 use crate::notes::SEMITONES_PER_OCTAVE;
@@ -1952,13 +1952,12 @@ impl<'a> CommandCompiler<'a> {
 
     pub(crate) fn compile_song_channel(
         &mut self,
-        channel_index: usize,
+        channel_index: MusicChannelIndex,
         input: &ChannelCommands,
         subroutines: &CompiledSubroutines,
     ) -> Result<Channel, MmlChannelError> {
-        let identifier = IdentifierStr::try_from_name(CHANNEL_NAMES[channel_index]).unwrap();
+        let identifier = channel_index.identifier();
         assert!(identifier.as_str().len() == 1);
-        let channel_index = channel_index.try_into().unwrap();
 
         let sd_start_index = self.bc_data.len();
 
@@ -2011,7 +2010,7 @@ impl<'a> CommandCompiler<'a> {
 
         match (errors.is_empty(), bc_state) {
             (true, Some(bc_state)) => Ok(Channel {
-                name: identifier.as_str().chars().next().unwrap(),
+                channel_index,
                 bytecode_offset: sd_start_index.try_into().unwrap_or(u16::MAX),
                 loop_point,
                 tick_counter: bc_state.tick_counter,

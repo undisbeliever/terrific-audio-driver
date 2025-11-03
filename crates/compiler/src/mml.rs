@@ -31,7 +31,7 @@ use crate::errors::{
     MmlChannelError, MmlCompileErrors, MmlPrefixError, SfxSubroutineErrors, SongError,
     SoundEffectErrorList,
 };
-use crate::identifier::{ChannelId, IdentifierStr, CHANNEL_NAMES};
+use crate::identifier::{ChannelId, IdentifierStr, MusicChannelIndex};
 use crate::mml::command_parser::parse_mml_tokens;
 use crate::mml::tokenizer::Token;
 use crate::pitch_table::PitchTable;
@@ -217,12 +217,11 @@ pub(crate) fn parse_mml_song<'a>(
     let channels = std::array::from_fn(|c_index| {
         let tokens = channels_iter.next().unwrap();
         if !tokens.is_empty() {
-            let identifier = IdentifierStr::try_from_name(CHANNEL_NAMES[c_index]).unwrap();
-            let channel_char = identifier.as_str().chars().next().unwrap();
+            let c_index = MusicChannelIndex::try_new(c_index).unwrap();
 
             match parse_tokens(
-                ChannelId::Channel(channel_char),
-                identifier,
+                ChannelId::Channel(c_index),
+                c_index.identifier(),
                 tokens,
                 &instrument_map,
                 &lines.subroutine_name_map,

@@ -43,7 +43,7 @@ impl std::fmt::Display for MmlTickCountTable<'_> {
 
         write!(f, "{:width$} |", "", width = name_width)?;
         for c in &channels {
-            let c_name = c.name;
+            let c_name = c.channel_index.identifier_str();
             write!(f, " Channel {:<width$}|", c_name, width = TC_WIDTH - 7)?;
         }
         writeln!(f)?;

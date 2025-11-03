@@ -179,7 +179,7 @@ pub fn section_end_ticks(
     channel: &Channel,
     char_index: u32,
 ) -> Option<TickCounterWithLoopFlag> {
-    let channel_id = ChannelId::Channel(channel.name);
+    let channel_id = ChannelId::Channel(channel.channel_index);
 
     let line = tracker
         .lines
