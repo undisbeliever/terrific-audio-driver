@@ -6,7 +6,6 @@
 
 #![allow(clippy::assertions_on_constants)]
 
-mod identifier;
 mod instruments;
 mod line_splitter;
 mod metadata;
@@ -34,6 +33,7 @@ use crate::errors::{
     MmlChannelError, MmlCompileErrors, MmlPrefixError, SfxSubroutineErrors, SongError,
     SoundEffectErrorList,
 };
+use crate::identifier::{ChannelId, IdentifierStr, CHANNEL_NAMES};
 use crate::mml::command_parser::parse_mml_tokens;
 use crate::mml::tokenizer::Token;
 use crate::pitch_table::PitchTable;
@@ -43,18 +43,6 @@ use crate::subroutines::{BlankSubroutineMap, CompiledSubroutines};
 use crate::time::TickCounter;
 
 use std::collections::HashMap;
-use std::ops::RangeInclusive;
-
-pub const FIRST_MUSIC_CHANNEL: char = 'A';
-pub const LAST_MUSIC_CHANNEL: char = 'H';
-const MUSIC_CHANNEL_RANGE: RangeInclusive<char> = 'A'..='H';
-
-const _: () = assert!(
-    *MUSIC_CHANNEL_RANGE.end() as usize - *MUSIC_CHANNEL_RANGE.start() as usize + 1
-        == N_MUSIC_CHANNELS
-);
-
-pub const CHANNEL_NAMES: [&str; N_MUSIC_CHANNELS] = ["A", "B", "C", "D", "E", "F", "G", "H"];
 
 pub const COMMENT_CHAR: char = ';';
 pub const SECTION_PREFIX: &str = ";;";
@@ -62,7 +50,6 @@ pub const SECTION_PREFIX: &str = ";;";
 pub const MAX_MML_PREFIX_STR_LENGTH: usize = 16 * 1024;
 pub const MAX_MML_PREFIX_TICKS: TickCounter = TickCounter::new(16);
 
-pub use self::identifier::{IdentifierBuf, IdentifierStr};
 pub use self::tick_count_table::MmlTickCountTable;
 
 pub use self::metadata::GlobalSettings;
@@ -70,14 +57,6 @@ pub use self::metadata::GlobalSettings;
 pub use self::note_tracking::{
     find_cursor_state, line_start_ticks, CommandTickTracker, CursorTracker, CursorTrackerGetter,
 };
-
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub enum ChannelId {
-    Channel(char),
-    Subroutine(u8),
-    SoundEffect,
-    MmlPrefix,
-}
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Section {

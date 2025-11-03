@@ -6,7 +6,7 @@
 
 use super::note_tracking::CursorTracker;
 use super::tokenizer::{MmlTokens, PeekableTokenIterator, Token};
-use super::{ChannelId, IdentifierStr};
+use crate::identifier::{ChannelId, IdentifierStr};
 
 use crate::bytecode::{
     DetuneValue, EarlyReleaseMinTicks, EarlyReleaseTicks, LoopCount, NoiseFrequency, Pan,
@@ -64,10 +64,7 @@ pub struct State {
 }
 
 mod parser {
-    use crate::{
-        file_pos::LineIndexRange,
-        mml::{metadata::GlobalSettings, ChannelId},
-    };
+    use crate::{file_pos::LineIndexRange, mml::metadata::GlobalSettings};
 
     use super::*;
 

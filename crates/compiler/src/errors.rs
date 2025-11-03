@@ -29,6 +29,7 @@ use crate::echo::{
 };
 use crate::envelope::Gain;
 use crate::file_pos::{FilePosRange, MAX_MML_TEXT_LENGTH};
+use crate::identifier::IdentifierBuf;
 use crate::mml::command_parser::{
     MAX_COARSE_TREMOLO_AMPLITUDE, MAX_COARSE_VOLUME, MIN_COARSE_TREMOLO_AMPLITUDE, PX_PAN_RANGE,
 };
@@ -39,7 +40,7 @@ use crate::pitch_table::{InstrumentHintFreq, PlayPitchFrequency, PlayPitchSample
 use crate::sound_effects::MAX_SFX_TICKS;
 use crate::time::{Bpm, TickClock, TickCounter, ZenLen};
 use crate::value_newtypes::{I8WithByteHexValueNewType, SignedValueNewType, UnsignedValueNewType};
-use crate::{export, mml, spc_file_export};
+use crate::{export, spc_file_export};
 
 use std::fmt::Display;
 use std::io;
@@ -654,7 +655,7 @@ pub enum MmlPrefixError {
 
 #[derive(Debug)]
 pub struct MmlChannelError {
-    pub identifier: mml::IdentifierBuf,
+    pub identifier: IdentifierBuf,
     pub errors: Vec<ErrorWithPos<ChannelError>>,
 }
 

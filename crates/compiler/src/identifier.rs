@@ -1,11 +1,33 @@
-//! MML identifier
+//! Identifiers
 
 // SPDX-FileCopyrightText: © 2023 Marcus Rowe <undisbeliever@gmail.com>
 //
 // SPDX-License-Identifier: MIT
 
 use crate::data::Name;
+use crate::driver_constants::N_MUSIC_CHANNELS;
 use crate::errors::IdentifierError;
+
+use std::ops::RangeInclusive;
+
+pub const FIRST_MUSIC_CHANNEL: char = 'A';
+pub const LAST_MUSIC_CHANNEL: char = 'H';
+pub(crate) const MUSIC_CHANNEL_RANGE: RangeInclusive<char> = 'A'..='H';
+
+const _: () = assert!(
+    *MUSIC_CHANNEL_RANGE.end() as usize - *MUSIC_CHANNEL_RANGE.start() as usize + 1
+        == N_MUSIC_CHANNELS
+);
+
+pub const CHANNEL_NAMES: [&str; N_MUSIC_CHANNELS] = ["A", "B", "C", "D", "E", "F", "G", "H"];
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum ChannelId {
+    Channel(char),
+    Subroutine(u8),
+    SoundEffect,
+    MmlPrefix,
+}
 
 // An identifier is a name or a number
 // Using `&str` to avoid a string copy.

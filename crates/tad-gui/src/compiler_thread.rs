@@ -29,7 +29,8 @@ use compiler::errors::{
     self, BrrError, CommonAudioDataErrors, LoadSongError, MmlPrefixError, ProjectFileErrors,
     SongTooLargeError,
 };
-use compiler::mml::{compile_mml_prefix, find_cursor_state, ChannelId};
+use compiler::identifier::ChannelId;
+use compiler::mml::{compile_mml_prefix, find_cursor_state};
 use compiler::notes::Note;
 use compiler::path::{ParentPathBuf, SourcePathBuf};
 use compiler::samples::{

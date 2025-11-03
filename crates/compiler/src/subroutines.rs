@@ -8,8 +8,8 @@ use std::collections::HashMap;
 
 use crate::bytecode;
 use crate::command_compiler::commands::SubroutineCommands;
+use crate::identifier::{IdentifierBuf, IdentifierStr};
 use crate::mml::note_tracking::CommandTickTracker;
-use crate::mml::{IdentifierBuf, IdentifierStr};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Subroutine {

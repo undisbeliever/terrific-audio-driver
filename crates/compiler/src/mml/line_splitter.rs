@@ -4,14 +4,14 @@
 //
 // SPDX-License-Identifier: MIT
 
-use super::identifier::IdentifierStr;
 use super::tokenizer::MmlTokens;
-use super::{Section, FIRST_MUSIC_CHANNEL};
-use super::{COMMENT_CHAR, MUSIC_CHANNEL_RANGE, SECTION_PREFIX};
+use super::Section;
+use super::{COMMENT_CHAR, SECTION_PREFIX};
 
 use crate::driver_constants::{MAX_SUBROUTINES, N_MUSIC_CHANNELS};
 use crate::errors::{ErrorWithPos, MmlLineError};
 use crate::file_pos::{blank_file_range, split_lines, FilePos, Line, MAX_MML_TEXT_LENGTH};
+use crate::identifier::{IdentifierStr, FIRST_MUSIC_CHANNEL, MUSIC_CHANNEL_RANGE};
 
 use std::collections::HashMap;
 

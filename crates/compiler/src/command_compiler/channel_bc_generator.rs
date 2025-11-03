@@ -19,7 +19,8 @@ use crate::envelope::{Adsr, Envelope, Gain, TempGain};
 use crate::errors::{
     ChannelError, ErrorWithPos, MmlChannelError, MmlPrefixError, SoundEffectErrorList, ValueError,
 };
-use crate::mml::{CommandTickTracker, IdentifierStr, CHANNEL_NAMES, MAX_MML_PREFIX_TICKS};
+use crate::identifier::{IdentifierStr, CHANNEL_NAMES};
+use crate::mml::{CommandTickTracker, MAX_MML_PREFIX_TICKS};
 use crate::notes::Note;
 use crate::notes::SEMITONES_PER_OCTAVE;
 use crate::pitch_table::{PitchTable, PITCH_REGISTER_MAX};

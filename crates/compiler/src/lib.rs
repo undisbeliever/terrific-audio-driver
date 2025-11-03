@@ -20,6 +20,7 @@ pub mod echo;
 pub mod envelope;
 pub mod errors;
 pub mod export;
+pub mod identifier;
 pub mod invert_flags;
 pub mod mml;
 pub mod notes;

@@ -4,7 +4,8 @@
 
 use crate::*;
 
-use compiler::mml::{find_cursor_state, line_start_ticks, ChannelId};
+use compiler::identifier::ChannelId;
+use compiler::mml::{find_cursor_state, line_start_ticks};
 
 const CHANNEL_A: ChannelId = ChannelId::Channel('A');
 const CHANNEL_B: ChannelId = ChannelId::Channel('B');

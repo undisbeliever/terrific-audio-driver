@@ -11,11 +11,9 @@ use compiler::driver_constants::N_MUSIC_CHANNELS;
 use compiler::errors::{
     MmlChannelError, MmlCompileErrors, SfxSubroutineErrors, SoundEffectError, SoundEffectErrorList,
 };
+use compiler::identifier::{ChannelId, FIRST_MUSIC_CHANNEL, LAST_MUSIC_CHANNEL};
 use compiler::mml::command_parser::Quantization;
-use compiler::mml::{
-    find_cursor_state, line_start_ticks, ChannelId, CursorTrackerGetter, FIRST_MUSIC_CHANNEL,
-    LAST_MUSIC_CHANNEL,
-};
+use compiler::mml::{find_cursor_state, line_start_ticks, CursorTrackerGetter};
 use compiler::notes::KeySignature;
 use compiler::songs::{BytecodePos, SongBcTracking, SongData};
 use compiler::sound_effects::{CompiledSfxSubroutines, CompiledSoundEffect};

@@ -14,10 +14,11 @@ use crate::GuiMessage;
 use compiler::data::TextFile;
 use compiler::driver_constants::N_MUSIC_CHANNELS;
 use compiler::errors::{MmlCompileErrors, MmlPrefixError};
-use compiler::mml::{ChannelId, MmlTickCountTable};
+use compiler::identifier::ChannelId;
+use compiler::mml::MmlTickCountTable;
 use compiler::songs::{song_duration_string, SongData};
-
 use compiler::time::TickCounter;
+
 use fltk::app;
 use fltk::button::{Button, ToggleButton};
 use fltk::enums::{CallbackReason, CallbackTrigger, Color, Event, Font, Key};

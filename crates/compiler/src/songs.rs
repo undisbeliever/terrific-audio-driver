@@ -23,8 +23,9 @@ use crate::driver_constants::{
 use crate::echo::{EchoBuffer, EchoEdl};
 use crate::envelope::{Envelope, Gain};
 use crate::errors::{ChannelError, MmlCompileErrors, SongError, SongTooLargeError};
+use crate::identifier::ChannelId;
 use crate::mml::note_tracking::{CommandTickTracker, CursorTracker, CursorTrackerGetter};
-use crate::mml::{ChannelId, GlobalSettings, Section};
+use crate::mml::{GlobalSettings, Section};
 use crate::notes::{Note, Octave};
 use crate::pitch_table::PitchTable;
 use crate::subroutines::{BlankSubroutineMap, CompiledSubroutines, SubroutineState};
