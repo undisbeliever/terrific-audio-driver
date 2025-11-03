@@ -21,8 +21,7 @@ use crate::errors::{
 };
 use crate::file_pos::{blank_file_range, split_lines};
 use crate::identifier::ChannelId;
-use crate::mml::note_tracking::{CommandTickTracker, CursorTracker};
-use crate::mml::{self, CursorTrackerGetter};
+use crate::mml::{self, CommandTickTracker, CursorTracker, CursorTrackerGetter};
 use crate::pitch_table::PitchTable;
 use crate::sfx_file::SoundEffectsFile;
 use crate::subroutines::{CompiledSubroutines, SubroutineNameMap, SubroutineState};

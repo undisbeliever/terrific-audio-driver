@@ -6,15 +6,13 @@
 
 #![allow(clippy::assertions_on_constants)]
 
+mod command_parser;
 mod instruments;
 mod line_splitter;
 mod metadata;
+mod note_tracking;
 mod tick_count_table;
 mod tokenizer;
-
-pub mod command_parser;
-
-pub(crate) mod note_tracking;
 
 use self::instruments::{build_instrument_map, parse_instruments};
 use self::line_splitter::{split_mml_song_lines, split_mml_sound_effect_lines};
@@ -50,13 +48,17 @@ pub const SECTION_PREFIX: &str = ";;";
 pub const MAX_MML_PREFIX_STR_LENGTH: usize = 16 * 1024;
 pub const MAX_MML_PREFIX_TICKS: TickCounter = TickCounter::new(16);
 
-pub use self::tick_count_table::MmlTickCountTable;
+pub const FINE_QUANTIZATION_SCALE: u8 =
+    crate::command_compiler::commands::Quantization::FINE_QUANTIZATION_SCALE;
 
+pub(crate) use self::command_parser::{
+    MAX_COARSE_TREMOLO_AMPLITUDE, MAX_COARSE_VOLUME, MIN_COARSE_TREMOLO_AMPLITUDE, PX_PAN_RANGE,
+};
 pub use self::metadata::GlobalSettings;
-
 pub use self::note_tracking::{
     find_cursor_state, line_start_ticks, CommandTickTracker, CursorTracker, CursorTrackerGetter,
 };
+pub use self::tick_count_table::MmlTickCountTable;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Section {

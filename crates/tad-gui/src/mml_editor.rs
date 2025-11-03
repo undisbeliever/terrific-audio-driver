@@ -12,8 +12,9 @@ use compiler::errors::{
     MmlChannelError, MmlCompileErrors, SfxSubroutineErrors, SoundEffectError, SoundEffectErrorList,
 };
 use compiler::identifier::{ChannelId, FIRST_MUSIC_CHANNEL, LAST_MUSIC_CHANNEL};
-use compiler::mml::command_parser::Quantization;
-use compiler::mml::{find_cursor_state, line_start_ticks, CursorTrackerGetter};
+use compiler::mml::{
+    find_cursor_state, line_start_ticks, CursorTrackerGetter, FINE_QUANTIZATION_SCALE,
+};
 use compiler::notes::KeySignature;
 use compiler::songs::{BytecodePos, SongBcTracking, SongData};
 use compiler::sound_effects::{CompiledSfxSubroutines, CompiledSoundEffect};
@@ -820,8 +821,8 @@ impl MmlEditorState {
 
                 if let Some(q) = state.quantize {
                     let q = q.as_u8();
-                    if q % Quantization::FINE_QUANTIZATION_SCALE == 0 {
-                        let _ = write!(s, "  Q{}", q / Quantization::FINE_QUANTIZATION_SCALE);
+                    if q % FINE_QUANTIZATION_SCALE == 0 {
+                        let _ = write!(s, "  Q{}", q / FINE_QUANTIZATION_SCALE);
                     } else {
                         let _ = write!(s, "  Q%{}", q);
                     }
