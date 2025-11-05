@@ -6,6 +6,7 @@
 
 use super::note_tracking::CursorTracker;
 use super::tokenizer::{MmlTokens, PeekableTokenIterator, Token};
+use crate::bytecode_assembler;
 use crate::identifier::{ChannelId, IdentifierStr};
 
 use crate::bytecode::{
@@ -2507,6 +2508,30 @@ fn parse_set_echo_delay<'a>(pos: FilePos, p: &mut Parser) -> Command<'a> {
     }
 }
 
+fn parse_transpose_asm<'a>(pos: FilePos, asm: &'a str, p: &mut Parser) -> Command<'a> {
+    match asm.split_once(|c: char| c.is_ascii_whitespace()) {
+        Some((bytecode_assembler::SET_TRANSPOSE, arg)) => {
+            match bytecode_assembler::parse_svnt_allow_zero(arg.trim_start()) {
+                Ok(t) => Command::SetTranspose(t),
+                Err(e) => {
+                    p.add_error(pos, e);
+                    Command::None
+                }
+            }
+        }
+        Some((bytecode_assembler::ADJUST_TRANSPOSE, arg)) => {
+            match bytecode_assembler::parse_svnt(arg.trim_start()) {
+                Ok(t) => Command::AdjustTranspose(t),
+                Err(e) => {
+                    p.add_error(pos, e);
+                    Command::None
+                }
+            }
+        }
+        _ => Command::BytecodeAsm(asm),
+    }
+}
+
 fn invalid_token_error<'a>(p: &mut Parser, pos: FilePos, e: ChannelError) -> Command<'a> {
     p.add_error(pos, e);
     Command::None
@@ -2664,7 +2689,7 @@ fn parse_token<'a>(pos: FilePos, token: Token<'a>, p: &mut Parser<'a, '_>) -> Co
         Token::StartBytecodeAsm => Command::StartBytecodeAsm,
         Token::EndBytecodeAsm => Command::EndBytecodeAsm,
         Token::BytecodeAsm(asm) => Command::BytecodeAsm(asm),
-        Token::TransposeAsm(asm) => Command::BytecodeAsm(asm),
+        Token::TransposeAsm(asm) => parse_transpose_asm(pos, asm, p),
 
         Token::EndPortamento => invalid_token_error(p, pos, ChannelError::NoStartPortamento),
         Token::EndBrokenChord => invalid_token_error(p, pos, ChannelError::NoStartBrokenChord),

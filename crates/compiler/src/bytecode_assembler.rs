@@ -483,7 +483,7 @@ where
 }
 
 /// Parse SignedValueNewType
-fn parse_svnt<T>(s: &str) -> Result<T, ChannelError>
+pub(crate) fn parse_svnt<T>(s: &str) -> Result<T, ChannelError>
 where
     T: SignedValueNewType,
 {
@@ -491,7 +491,7 @@ where
 }
 
 /// Parse SignedValueNewType
-fn parse_svnt_allow_zero<T>(s: &str) -> Result<T, ChannelError>
+pub(crate) fn parse_svnt_allow_zero<T>(s: &str) -> Result<T, ChannelError>
 where
     T: SignedValueNewType,
 {

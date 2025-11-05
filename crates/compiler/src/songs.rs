@@ -29,7 +29,7 @@ use crate::notes::{Note, Octave};
 use crate::pitch_table::PitchTable;
 use crate::subroutines::{BlankSubroutineMap, CompiledSubroutines, SubroutineState};
 use crate::time::{TickClock, TickCounter, TIMER_HZ};
-use crate::{mml, UnsignedValueNewType};
+use crate::{command_compiler, mml, UnsignedValueNewType};
 
 use std::cmp::min;
 use std::fmt::Debug;
@@ -505,20 +505,23 @@ fn compile_song_commands(
     let mut errors = errors;
 
     let n_active_channels = song.channels.iter().filter(|&c| !c.is_none()).count();
+    let header_size = song_header_size(n_active_channels, song.subroutines.len());
+
+    let subroutines = subroutine_compile_order(song.subroutines);
+
+    let a = command_compiler::analysis::analyse(subroutines, Some(&song.channels));
 
     let mut compiler = CommandCompiler::new(
-        song_header_size(n_active_channels, song.subroutines.len()),
+        header_size,
         pitch_table,
         data_instruments,
         &song.instruments,
         song.metadata.echo_buffer.max_edl,
+        &a,
         true,
-        song.song_uses_driver_transpose,
     );
 
-    let subroutines = subroutine_compile_order(song.subroutines);
-
-    let subroutines = compiler.compile_subroutines(subroutines, &mut errors.subroutine_errors);
+    let subroutines = compiler.compile_subroutines(a, &mut errors.subroutine_errors);
 
     // ::TODO remove::
     if !errors.subroutine_errors.is_empty() {

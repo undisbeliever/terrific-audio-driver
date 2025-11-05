@@ -12,7 +12,7 @@ use crate::bytecode::{
     SlurredNoteState, VibratoPitchOffsetPerTick, VibratoState, KEY_OFF_TICK_DELAY,
 };
 use crate::bytecode_assembler::parse_asm_line;
-use crate::command_compiler::subroutines::SubroutineCommandsWithCompileOrder;
+use crate::command_compiler::analysis::AnalysedCommands;
 use crate::data::{self, UniqueNamesList};
 use crate::echo::EchoEdl;
 use crate::envelope::{Adsr, Envelope, Gain, TempGain};
@@ -1772,9 +1772,9 @@ impl<'a> CommandCompiler<'a> {
         data_instruments: &'a data::UniqueNamesList<data::InstrumentOrSample>,
         mml_instruments: &'a [MmlInstrument],
         max_edl: EchoEdl,
+        analysis: &AnalysedCommands,
 
         is_song: bool,
-        song_uses_driver_transpose: bool,
     ) -> Self {
         Self {
             bc_data: vec![0; header_size],
@@ -1785,7 +1785,7 @@ impl<'a> CommandCompiler<'a> {
             mml_instruments,
             max_edl,
             is_song,
-            song_uses_driver_transpose,
+            song_uses_driver_transpose: analysis.uses_driver_transpose,
         }
     }
 
@@ -1932,9 +1932,11 @@ impl<'a> CommandCompiler<'a> {
 
     pub(crate) fn compile_subroutines(
         &mut self,
-        subroutines: SubroutineCommandsWithCompileOrder,
+        analysis: AnalysedCommands,
         errors: &mut Vec<MmlChannelError>,
     ) -> CompiledSubroutines {
+        let subroutines = analysis.subroutines;
+
         let mut out = CompiledSubroutines::new(subroutines.original_order());
 
         for s in subroutines.compile_iter() {

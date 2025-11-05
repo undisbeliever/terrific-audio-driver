@@ -693,7 +693,7 @@ fn parse_bytecode_asm<'a>(
                     {
                         tokens.push(TokenWithPosition {
                             pos,
-                            token: Token::TransposeAsm(asm),
+                            token: Token::TransposeAsm(asm.trim_end()),
                             end: scanner.pos(),
                         });
                     } else {
@@ -835,10 +835,6 @@ impl<'a> MmlTokens<'a> {
         }
 
         self.end_pos = scanner.pos();
-    }
-
-    pub fn token_iter(&self) -> impl Iterator<Item = &Token<'a>> {
-        self.tokens.iter().map(|t| &t.token)
     }
 
     pub fn first_token(&self) -> Option<&Token<'a>> {

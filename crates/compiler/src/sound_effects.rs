@@ -6,6 +6,7 @@
 
 use crate::bytecode::{opcodes, BcTerminator, BytecodeContext};
 use crate::bytecode_assembler::BytecodeAssembler;
+use crate::command_compiler;
 use crate::command_compiler::channel_bc_generator::{self, CommandCompiler};
 use crate::command_compiler::subroutines::subroutine_compile_order;
 use crate::data::{
@@ -264,21 +265,23 @@ pub fn compile_sfx_subroutines(
 ) -> Result<CompiledSfxSubroutines, SfxSubroutineErrors> {
     let s = mml::parse_sfx_subroutines(&subroutines.0, data_instruments)?;
 
+    let subroutines = subroutine_compile_order(s.subroutines);
+
+    let a = command_compiler::analysis::analyse(subroutines, None);
+
     let mut compiler = CommandCompiler::new(
         0,
         pitch_table,
         data_instruments,
         &s.instruments,
         EchoEdl::MIN,
-        false,
+        &a,
         // ::TODO detect driver transpose in subroutines::
         false,
     );
     let mut errors = s.errors;
 
-    let subroutines = subroutine_compile_order(s.subroutines);
-
-    let subroutines = compiler.compile_subroutines(subroutines, &mut errors);
+    let subroutines = compiler.compile_subroutines(a, &mut errors);
 
     if errors.is_empty() {
         let (data, _) = compiler.take_data();

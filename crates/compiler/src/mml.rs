@@ -26,14 +26,13 @@ use crate::command_compiler::commands::{
     ChannelCommands, SfxSubroutineCommands, SongCommands, SoundEffectCommands, SubroutineCommands,
 };
 use crate::data::{self, UniqueNamesList};
-use crate::driver_constants::{MAX_SFX_SUBROUTINES, MAX_SUBROUTINES, N_MUSIC_CHANNELS};
+use crate::driver_constants::{MAX_SFX_SUBROUTINES, MAX_SUBROUTINES};
 use crate::errors::{
     MmlChannelError, MmlCompileErrors, MmlPrefixError, SfxSubroutineErrors, SongError,
     SoundEffectErrorList,
 };
 use crate::identifier::{ChannelId, IdentifierStr, MusicChannelIndex};
 use crate::mml::command_parser::parse_mml_tokens;
-use crate::mml::tokenizer::Token;
 use crate::pitch_table::PitchTable;
 use crate::songs::SongData;
 use crate::sound_effects::CompiledSfxSubroutines;
@@ -199,10 +198,6 @@ pub(crate) fn parse_mml_song<'a>(
 
     let mut mml_tracking = CursorTracker::new();
 
-    // ::TODO move to command_compiler::
-    let song_uses_driver_transpose =
-        scan_for_driver_transpose(&lines.channels, &lines.subroutines, &metadata.mml_settings);
-
     let subroutines = parse_subroutines(
         lines.subroutines,
         &instrument_map,
@@ -256,7 +251,6 @@ pub(crate) fn parse_mml_song<'a>(
         instruments,
         subroutines,
         channels,
-        song_uses_driver_transpose,
     };
 
     Ok((song, errors))
@@ -399,26 +393,4 @@ pub fn compile_mml_prefix(
         errors,
     )
     .map(|bytecode| MmlPrefixData { bytecode })
-}
-
-fn scan_for_driver_transpose(
-    channels: &[MmlTokens<'_>; N_MUSIC_CHANNELS],
-    subroutines: &Vec<(IdentifierStr<'_>, MmlTokens<'_>)>,
-    settings: &GlobalSettings,
-) -> bool {
-    let old_transpose = settings.old_transpose;
-
-    let test_tokens = |tokens: &MmlTokens<'_>| -> bool {
-        for t in tokens.token_iter() {
-            match t {
-                Token::TransposeAsm(_) => return true,
-                Token::Transpose if !old_transpose => return true,
-                Token::RelativeTranspose if !old_transpose => return true,
-                _ => (),
-            }
-        }
-        false
-    };
-
-    channels.iter().any(test_tokens) | subroutines.iter().any(|(_, t)| test_tokens(t))
 }

@@ -331,6 +331,7 @@ pub(crate) enum Command<'a> {
     StartBytecodeAsm,
     EndBytecodeAsm,
 
+    // MUST NOT contain a `transpose` instruction or a subroutine call instruction.
     BytecodeAsm(&'a str),
 }
 
@@ -408,9 +409,6 @@ pub(crate) struct SongCommands<'a> {
     pub instruments: Vec<MmlInstrument>,
     pub subroutines: Vec<SubroutineCommands<'a>>,
     pub channels: [Option<ChannelCommands<'a>>; N_MUSIC_CHANNELS],
-
-    // ::TODO move this check to command_compiler::
-    pub song_uses_driver_transpose: bool,
 }
 
 pub(crate) struct SfxSubroutineCommands<'a> {
