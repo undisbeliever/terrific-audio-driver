@@ -2508,8 +2508,22 @@ fn parse_set_echo_delay<'a>(pos: FilePos, p: &mut Parser) -> Command<'a> {
     }
 }
 
-fn parse_transpose_asm<'a>(pos: FilePos, asm: &'a str, p: &mut Parser) -> Command<'a> {
+fn parse_bytecode_asm<'a>(pos: FilePos, asm: &'a str, p: &mut Parser<'a, '_>) -> Command<'a> {
     match asm.split_once(|c: char| c.is_ascii_whitespace()) {
+        Some((bytecode_assembler::CALL_SUBROUTINE, arg)) => parse_call_subroutine(
+            pos,
+            IdentifierStr::from_str(arg.trim_start()),
+            SubroutineCallType::Asm,
+            p,
+        ),
+        Some((bytecode_assembler::CALL_SUBROUTINE_AND_DISABLE_VIBRATO, arg)) => {
+            parse_call_subroutine(
+                pos,
+                IdentifierStr::from_str(arg.trim_start()),
+                SubroutineCallType::AsmDisableVibrato,
+                p,
+            )
+        }
         Some((bytecode_assembler::SET_TRANSPOSE, arg)) => {
             match bytecode_assembler::parse_svnt_allow_zero(arg.trim_start()) {
                 Ok(t) => Command::SetTranspose(t),
@@ -2571,7 +2585,7 @@ fn parse_token<'a>(pos: FilePos, token: Token<'a>, p: &mut Parser<'a, '_>) -> Co
 
         Token::SetInstrument(id) => parse_set_instrument(pos, id, p),
         Token::SetSubroutineInstrumentHint(id) => parse_set_instrument_hint(pos, id, p),
-        Token::CallSubroutine(id, d) => parse_call_subroutine(pos, id, d, p),
+        Token::CallSubroutine(id) => parse_call_subroutine(pos, id, SubroutineCallType::Mml, p),
 
         Token::StartLoop => Command::StartLoop,
         Token::SkipLastLoop => Command::SkipLastLoop,
@@ -2687,9 +2701,8 @@ fn parse_token<'a>(pos: FilePos, token: Token<'a>, p: &mut Parser<'a, '_>) -> Co
         Token::SetEchoDelay => parse_set_echo_delay(pos, p),
 
         Token::StartBytecodeAsm => Command::StartBytecodeAsm,
+        Token::BytecodeAsm(asm) => parse_bytecode_asm(pos, asm, p),
         Token::EndBytecodeAsm => Command::EndBytecodeAsm,
-        Token::BytecodeAsm(asm) => Command::BytecodeAsm(asm),
-        Token::TransposeAsm(asm) => parse_transpose_asm(pos, asm, p),
 
         Token::EndPortamento => invalid_token_error(p, pos, ChannelError::NoStartPortamento),
         Token::EndBrokenChord => invalid_token_error(p, pos, ChannelError::NoStartBrokenChord),
