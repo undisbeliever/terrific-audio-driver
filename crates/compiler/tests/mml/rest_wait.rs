@@ -603,3 +603,28 @@ A r4
         &["set_instrument dummy_instrument", "rest 24", "rest 72"],
     );
 }
+
+// Found with cargo-fuzz.
+// This line takes 165ms to compile on my PC for a release build
+// and 7.5 seconds for a debug build.
+#[test]
+fn large_noloop_rest_and_waits_slow_to_compile_bugfix() {
+    let dummy_data = dummy_data();
+
+    let start = std::time::Instant::now();
+
+    let _ = compiler::songs::compile_mml_song(
+        "ABCDEFGH [[[[[[[[w%999999999 r%999999999",
+        "",
+        None,
+        &dummy_data.instruments_and_samples,
+        &dummy_data.pitch_table,
+    );
+
+    let duration = start.elapsed();
+
+    assert!(
+        duration.as_millis() < 2,
+        "MML compiler too slow {duration:?}"
+    );
+}

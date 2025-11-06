@@ -565,6 +565,19 @@ fn compile_mml(mml: &str, dummy_data: &DummyData) -> SongData {
     .unwrap()
 }
 
+fn compile_mml_line(mml_line: &str) -> Result<SongData, SongError> {
+    let dummy_data = dummy_data();
+    let mml = ["@1 dummy_instrument\nA @1 o4\nA ", mml_line].concat();
+
+    compiler::songs::compile_mml_song(
+        &mml,
+        "",
+        None,
+        &dummy_data.instruments_and_samples,
+        &dummy_data.pitch_table,
+    )
+}
+
 struct SubroutineNameSearcher<'a>(&'a CompiledSubroutines);
 
 impl SubroutineNameMap for SubroutineNameSearcher<'_> {

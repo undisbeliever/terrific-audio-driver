@@ -44,6 +44,7 @@ MML changes:
  * Added `=` natural to MML notes (ignores the key signature)
  * Added `#Transpose` header (equivalent to adding `_M` to the start of every channel and subroutine)
  * Added `#KeySignature` header (equivalent to adding `_{}` to the start of every channel and subroutine)
+ * Fixed malformed MML taking too long to compile by limiting unlooped waits or rests to 8192 ticks.
 
 
 Version 0.1.1

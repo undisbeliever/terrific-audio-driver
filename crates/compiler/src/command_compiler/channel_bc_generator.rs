@@ -31,6 +31,8 @@ use crate::subroutines::{
 };
 use crate::time::{TickClock, TickCounter, TickCounterWithLoopFlag};
 
+pub const MAX_NO_LOOP_TICKS: TickCounter = TickCounter::new(256 * 32);
+
 #[derive(Debug, Clone, Copy)]
 enum DetuneCentsOutput {
     Manual,
@@ -605,6 +607,10 @@ impl<'a> ChannelBcGenerator<'a> {
         const MIN_REST: u32 = BcTicksKeyOff::MIN_TICKS;
         const _: () = assert!(MIN_REST > 1);
 
+        if length > MAX_NO_LOOP_TICKS {
+            return Err(ChannelError::NoLoopWaitOrRestIsTooLong(length));
+        }
+
         let mut remaining_ticks = length.value();
 
         while remaining_ticks > MAX_REST {
@@ -625,6 +631,10 @@ impl<'a> ChannelBcGenerator<'a> {
 
     // rest with no keyoff
     fn wait_no_loop(&mut self, length: TickCounter) -> Result<(), ChannelError> {
+        if length > MAX_NO_LOOP_TICKS {
+            return Err(ChannelError::NoLoopWaitOrRestIsTooLong(length));
+        }
+
         let mut remaining_ticks = length.value();
 
         let rest_length = BcTicksNoKeyOff::MAX;

@@ -296,5 +296,8 @@ fn quantize_long_note_is_looped() {
 #[test]
 fn quantize_long_note_panic_bugfix() {
     // "attempt to multiply with overflow" panic found with cargo-fuzz on `Q2b%99406942`
-    assert_line_matches_line("Q2 b%99406942", "Q%64 b%99406942");
+
+    // Only testing the panic, not worried about the error or return value.
+    let _ = compile_mml_line("Q2 b%99406942");
+    let _ = compile_mml_line("Q%64 b%99406942");
 }

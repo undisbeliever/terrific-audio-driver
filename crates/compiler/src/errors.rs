@@ -15,6 +15,7 @@ use crate::bytecode::{
     VibratoDelayTicks, VibratoPitchOffsetPerTick, VibratoQuarterWavelengthInTicks, Volume,
     VolumeSlideAmount, VolumeSlideTicks,
 };
+use crate::command_compiler::channel_bc_generator::MAX_NO_LOOP_TICKS;
 use crate::command_compiler::commands::{
     DetuneCents, FineQuantization, PortamentoSpeed, Quantization, MAX_BROKEN_CHORD_NOTES,
 };
@@ -618,6 +619,8 @@ pub enum ChannelError {
     InvalidNumberOfFirCoefficients(usize),
 
     BrokenChordTickCountMismatch(TickCounter, TickCounter),
+
+    NoLoopWaitOrRestIsTooLong(TickCounter),
 
     NoTicksAfterLoopPoint,
 
@@ -1859,6 +1862,14 @@ impl Display for ChannelError {
                     tc2.value()
                 )
             }
+
+            // Using this message as rest_many_keyoffs_no_loop might be used in a play-note command
+            Self::NoLoopWaitOrRestIsTooLong(t) => write!(
+                f,
+                "command is too long (a wait/rest requires {} ticks, max {})",
+                t.value(),
+                MAX_NO_LOOP_TICKS.value()
+            ),
 
             Self::NoTicksAfterLoopPoint => write!(f, "no notes or rests after loop point"),
 
