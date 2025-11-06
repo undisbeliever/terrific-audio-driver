@@ -50,11 +50,11 @@ A [[[ !s ]14]15]16
         &dummy_data(),
     );
 
-    let subroutine = &mml.subroutines()[0];
+    let subroutine = &mml.subroutines().get_compiled(0).unwrap();
     let channel_a = mml.channels()[0].as_ref().unwrap();
 
     assert_eq!(
-        subroutine.subroutine_id.max_stack_depth().to_u32(),
+        subroutine.bc_state.max_stack_depth.to_u32(),
         u32::try_from(subroutine_stack_depth).unwrap()
     );
 
@@ -170,8 +170,14 @@ fn max_subroutines_with_nesting() {
     let channel_a = song.channels()[0].as_ref().unwrap();
 
     assert_eq!(song.subroutines().len(), N_SUBROUTINES as usize);
-    for s in song.subroutines() {
-        let i: u32 = s.identifier.as_str().parse().unwrap();
+    for (s_name, s) in song.subroutines().iter() {
+        let s = match s {
+            SubroutineState::Compiled(s) => s,
+            SubroutineState::CompileError => panic!(),
+            SubroutineState::NotCompiled => panic!(),
+        };
+
+        let i: u32 = s_name.as_str().parse().unwrap();
 
         let stack_depth = if i % 3 == 0 {
             BC_STACK_BYTES_PER_SUBROUTINE_CALL as u32
@@ -182,7 +188,7 @@ fn max_subroutines_with_nesting() {
         };
 
         assert_eq!(
-            s.subroutine_id.max_stack_depth().to_u32(),
+            s.bc_state.max_stack_depth.to_u32(),
             stack_depth,
             "subroutine max_stack_depth mismatch for !{i}"
         );
@@ -210,10 +216,8 @@ A @0 !s
     );
 
     let (s, bc) = get_subroutine_and_bytecode(&sd, "s").unwrap();
-
-    assert_eq!(s.identifier.as_str(), "s");
-    assert_eq!(s.subroutine_id.max_stack_depth().to_u32(), 0);
-    assert_eq!(s.subroutine_id.tick_counter().value(), 24);
+    assert_eq!(s.bc_state.max_stack_depth.to_u32(), 0);
+    assert_eq!(s.bc_state.tick_counter.value(), 24);
 
     assert_eq!(bc[bc.len().checked_sub(3).unwrap()], opcodes::GOTO_RELATIVE);
 }
@@ -236,15 +240,13 @@ A @0 !tco !no_tco
     );
 
     let (s, bc) = get_subroutine_and_bytecode(&sd, "tco").unwrap();
-    assert_eq!(s.identifier.as_str(), "tco");
-    assert_eq!(s.subroutine_id.max_stack_depth().to_u32(), 0);
-    assert_eq!(s.subroutine_id.tick_counter().value(), 48);
+    assert_eq!(s.bc_state.max_stack_depth.to_u32(), 0);
+    assert_eq!(s.bc_state.tick_counter.value(), 48);
     assert_eq!(bc[bc.len().checked_sub(3).unwrap()], opcodes::GOTO_RELATIVE);
 
     let (s, bc) = get_subroutine_and_bytecode(&sd, "no_tco").unwrap();
-    assert_eq!(s.identifier.as_str(), "no_tco");
-    assert_eq!(s.subroutine_id.max_stack_depth().to_u32(), 2);
-    assert_eq!(s.subroutine_id.tick_counter().value(), 48);
+    assert_eq!(s.bc_state.max_stack_depth.to_u32(), 2);
+    assert_eq!(s.bc_state.tick_counter.value(), 48);
     assert_eq!(
         bc[bc.len().checked_sub(1).unwrap()],
         opcodes::RETURN_FROM_SUBROUTINE
@@ -272,9 +274,8 @@ A @0 !s
     );
 
     let (s, bc) = get_subroutine_and_bytecode(&sd, "s").unwrap();
-    assert_eq!(s.identifier.as_str(), "s");
-    assert_eq!(s.subroutine_id.max_stack_depth().to_u32(), 2);
-    assert_eq!(s.subroutine_id.tick_counter().value(), 48);
+    assert_eq!(s.bc_state.max_stack_depth.to_u32(), 2);
+    assert_eq!(s.bc_state.tick_counter.value(), 48);
     assert_eq!(
         bc[bc.len().checked_sub(1).unwrap()],
         opcodes::RETURN_FROM_SUBROUTINE_AND_DISABLE_VIBRATO
@@ -299,10 +300,8 @@ A @0 !s
     );
 
     let (s, bc) = get_subroutine_and_bytecode(&sd, "s").unwrap();
-
-    assert_eq!(s.identifier.as_str(), "s");
-    assert_eq!(s.subroutine_id.max_stack_depth().to_u32(), 0);
-    assert_eq!(s.subroutine_id.tick_counter().value(), 48);
+    assert_eq!(s.bc_state.max_stack_depth.to_u32(), 0);
+    assert_eq!(s.bc_state.tick_counter.value(), 48);
     assert_eq!(bc[bc.len().checked_sub(3).unwrap()], opcodes::GOTO_RELATIVE);
 }
 

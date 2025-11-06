@@ -4,202 +4,32 @@
 //
 // SPDX-License-Identifier: MIT
 
+use super::commands::*;
+
 use crate::bytecode::{
-    self, BcTicks, BcTicksKeyOff, BcTicksNoKeyOff, Bytecode, BytecodeContext, DetuneValue,
-    EarlyReleaseMinTicks, EarlyReleaseTicks, IeState, InstrumentId, LoopCount, NoiseFrequency, Pan,
-    PanSlideAmount, PanSlideTicks, PanbrelloAmplitude, PanbrelloQuarterWavelengthInTicks,
-    PlayNoteTicks, PlayPitchPitch, RelativeEchoFeedback, RelativeEchoVolume,
-    RelativeFirCoefficient, RelativePan, RelativeTranspose, RelativeVolume, SlurredNoteState,
-    Transpose, TremoloAmplitude, TremoloQuarterWavelengthInTicks, VibratoDelayTicks,
-    VibratoPitchOffsetPerTick, VibratoQuarterWavelengthInTicks, VibratoState, Volume,
-    VolumeSlideAmount, VolumeSlideTicks, KEY_OFF_TICK_DELAY,
+    self, BcTerminator, BcTicks, BcTicksKeyOff, BcTicksNoKeyOff, Bytecode, BytecodeContext,
+    DetuneValue, IeState, InstrumentId, LoopCount, PlayNoteTicks, PlayPitchPitch, RelativeVolume,
+    SlurredNoteState, VibratoPitchOffsetPerTick, VibratoState, KEY_OFF_TICK_DELAY,
 };
 use crate::bytecode_assembler::parse_asm_line;
+use crate::command_compiler::analysis::AnalysedCommands;
 use crate::data::{self, UniqueNamesList};
-use crate::driver_constants::FIR_FILTER_SIZE;
-use crate::echo::{EchoFeedback, EchoLength, EchoVolume, FirCoefficient, FirTap};
-use crate::envelope::{Adsr, Envelope, Gain, OptionalGain, TempGain};
-use crate::errors::{ChannelError, ValueError};
-use crate::invert_flags::InvertFlags;
-use crate::mml::IdentifierBuf;
+use crate::echo::EchoEdl;
+use crate::envelope::{Adsr, Envelope, Gain, TempGain};
+use crate::errors::{
+    ChannelError, ErrorWithPos, MmlChannelError, MmlPrefixError, SoundEffectErrorList, ValueError,
+};
+use crate::identifier::MusicChannelIndex;
+use crate::mml::{CommandTickTracker, MAX_MML_PREFIX_TICKS};
 use crate::notes::Note;
 use crate::notes::SEMITONES_PER_OCTAVE;
-use crate::pitch_table::{PitchTable, PlayPitchFrequency, PITCH_REGISTER_MAX};
-use crate::songs::LoopPoint;
-use crate::subroutines::{NoSubroutines, SubroutineStore};
-use crate::time::{Bpm, TickClock, TickCounter};
-use crate::value_newtypes::{i16_value_newtype, u8_value_newtype, SignedValueNewType};
-use crate::FilePosRange;
-
-use std::cmp::min;
-use std::ops::{Range, RangeInclusive};
-
-pub const MAX_PORTAMENTO_SLIDE_TICKS: u32 = 16 * 1024;
-pub const MAX_BROKEN_CHORD_NOTES: usize = 128;
-
-// Number of rest instructions before a loop uses less space
-pub const REST_LOOP_INSTRUCTION_THREASHOLD: u32 = 3;
-
-u8_value_newtype!(
-    PortamentoSpeed,
-    PortamentoSpeedOutOfRange,
-    NoPortamentoSpeed,
-    1,
-    u8::MAX
-);
-
-#[derive(Debug, Copy, Clone)]
-pub enum NoteOrPitch {
-    Note(Note),
-    Pitch(PlayPitchPitch),
-    PitchFrequency(PlayPitchFrequency),
-}
-
-#[derive(Debug)]
-enum NoteOrPitchOut {
-    Note(DetuneCentsOutput, Note, DetuneValue),
-    Pitch(PlayPitchPitch),
-}
-
-#[derive(Debug, Copy, Clone)]
-pub enum VolumeCommand {
-    Absolute(Volume),
-    Relative(i32),
-}
-
-#[derive(Debug, Copy, Clone)]
-pub enum PanCommand {
-    Absolute(Pan),
-    Relative(RelativePan),
-}
-
-pub fn relative_volume(v: i32) -> VolumeCommand {
-    const _: () = assert!(Volume::MIN.as_u8() == 0);
-
-    if v <= -(Volume::MAX.as_u8() as i32) {
-        VolumeCommand::Absolute(Volume::MIN)
-    } else if v >= Volume::MAX.as_u8().into() {
-        VolumeCommand::Absolute(Volume::MAX)
-    } else {
-        VolumeCommand::Relative(v)
-    }
-}
-
-pub fn merge_volumes_commands(v1: Option<VolumeCommand>, v2: VolumeCommand) -> VolumeCommand {
-    match (v1, v2) {
-        (Some(VolumeCommand::Absolute(v1)), VolumeCommand::Relative(v2)) => {
-            let v = u32::from(v1.as_u8()).saturating_add_signed(v2);
-            let v = u8::try_from(v).unwrap_or(u8::MAX);
-            VolumeCommand::Absolute(Volume::new(v))
-        }
-        (Some(VolumeCommand::Relative(v1)), VolumeCommand::Relative(v2)) => {
-            let v = v1.saturating_add(v2);
-            relative_volume(v)
-        }
-        (Some(_), VolumeCommand::Absolute(_)) => v2,
-        (None, v2) => v2,
-    }
-}
-
-pub fn relative_pan(p: i32) -> PanCommand {
-    const _: () = assert!(Pan::MAX.as_u8() as i32 == i8::MAX as i32 + 1);
-    const _: () = assert!(Pan::MAX.as_u8() as i32 == -(i8::MIN as i32));
-    const _: () = assert!(Pan::MIN.as_u8() == 0);
-
-    if p <= -(Pan::MAX.as_u8() as i32) {
-        PanCommand::Absolute(Pan::MIN)
-    } else if p >= Pan::MAX.as_u8().into() {
-        PanCommand::Absolute(Pan::MAX)
-    } else {
-        PanCommand::Relative(p.try_into().unwrap())
-    }
-}
-
-pub fn merge_pan_commands(p1: Option<PanCommand>, p2: PanCommand) -> PanCommand {
-    match (p1, p2) {
-        (Some(PanCommand::Absolute(p1)), PanCommand::Relative(p2)) => {
-            let p = min(
-                p1.as_u8().saturating_add_signed(p2.as_i8()),
-                Pan::MAX.as_u8(),
-            );
-            PanCommand::Absolute(p.try_into().unwrap())
-        }
-        (Some(PanCommand::Relative(p1)), PanCommand::Relative(p2)) => {
-            let p1: i32 = p1.as_i8().into();
-            let p2: i32 = p2.as_i8().into();
-            relative_pan(p1 + p2)
-        }
-        (Some(_), PanCommand::Absolute(_)) => p2,
-        (None, p2) => p2,
-    }
-}
-
-#[derive(Debug, Copy, Clone, PartialEq)]
-pub struct MpVibrato {
-    pub depth_in_cents: u32,
-    pub quarter_wavelength_ticks: VibratoQuarterWavelengthInTicks,
-    pub delay: VibratoDelayTicks,
-}
-
-#[derive(Debug, Copy, Clone, PartialEq)]
-pub struct ManualVibrato {
-    pub pitch_offset_per_tick: VibratoPitchOffsetPerTick,
-    pub quarter_wavelength_ticks: VibratoQuarterWavelengthInTicks,
-    pub delay: VibratoDelayTicks,
-}
-
-u8_value_newtype!(Quantization, QuantizeOutOfRange, NoQuantize, 0, 8);
-u8_value_newtype!(FineQuantization, FineQuantizeOutOfRange, NoFineQuantize);
-
-impl Quantization {
-    pub const FINE_QUANTIZATION_SCALE: u8 = 32;
-
-    pub fn to_fine(self) -> Option<FineQuantization> {
-        if self.0 < 8 {
-            Some(FineQuantization(self.0 * Self::FINE_QUANTIZATION_SCALE))
-        } else {
-            None
-        }
-    }
-}
-
-impl FineQuantization {
-    pub const UNITS: u32 = 256;
-
-    pub fn quantize(&self, l: u32) -> u32 {
-        const UNITS: u64 = FineQuantization::UNITS as u64;
-        const _: () = assert!((u32::MAX as u64 * FineQuantization::MAX.0 as u64) < u64::MAX);
-        const _: () =
-            assert!((u32::MAX as u64 * FineQuantization::MAX.0 as u64) / UNITS < u32::MAX as u64);
-
-        let l = u64::from(l);
-        let q = u64::from(self.0);
-        std::cmp::max((l * q) / UNITS, 1).try_into().unwrap()
-    }
-}
-
-#[derive(Debug, Clone, Copy)]
-pub enum Quantize {
-    None,
-    Rest(FineQuantization),
-    WithTempGain(FineQuantization, TempGain),
-}
-
-#[derive(Debug, Clone, Copy)]
-pub struct RestTicksAfterNote(pub TickCounter);
-
-i16_value_newtype!(
-    DetuneCents,
-    DetuneCentsOutOfRange,
-    NoDetuneCents,
-    NoDetuneCentsSign,
-    -1200,
-    1200
-);
-
-impl DetuneCents {
-    pub const ZERO: Self = Self(0);
-}
+use crate::pitch_table::{PitchTable, PITCH_REGISTER_MAX};
+use crate::songs::{BytecodePos, Channel, LoopPoint};
+use crate::sound_effects::MAX_SFX_TICKS;
+use crate::subroutines::{
+    BlankSubroutineMap, CompiledSubroutines, GetSubroutineResult, Subroutine, SubroutineState,
+};
+use crate::time::{TickClock, TickCounter, TickCounterWithLoopFlag};
 
 #[derive(Debug, Clone, Copy)]
 enum DetuneCentsOutput {
@@ -222,168 +52,14 @@ impl DetuneCentsOutput {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
-pub enum SubroutineCallType {
-    Mml,
-    Asm,
-    AsmDisableVibrato,
-}
-
 #[derive(Debug)]
-pub(crate) enum Command {
-    None,
-
-    SetLoopPoint,
-
-    SetManualVibrato(Option<ManualVibrato>),
-    SetMpVibrato(Option<MpVibrato>),
-    SetQuantize(Quantize),
-
-    Rest {
-        /// Length of the first rest
-        /// (The user expects a keyoff after the first rest command)
-        ticks_until_keyoff: TickCounter,
-        /// Combined length of all rests after the first rest
-        /// (keyoff already sent, it does not matter if these rests keyoff or not)
-        ticks_after_keyoff: TickCounter,
-    },
-
-    // wait with no keyoff
-    Wait(TickCounter),
-
-    PlayNote {
-        note: Note,
-        length: TickCounter,
-        is_slur: bool,
-        rest_after_note: RestTicksAfterNote,
-    },
-    PlayPitch {
-        pitch: PlayPitchPitch,
-        length: TickCounter,
-        is_slur: bool,
-        rest_after_note: RestTicksAfterNote,
-    },
-    PlayPitchFrequency {
-        frequency: PlayPitchFrequency,
-        length: TickCounter,
-        is_slur: bool,
-        rest_after_note: RestTicksAfterNote,
-    },
-    PlayNoise {
-        frequency: NoiseFrequency,
-        length: TickCounter,
-        is_slur: bool,
-        rest_after_note: RestTicksAfterNote,
-    },
-    Portamento {
-        note1: Option<NoteOrPitch>,
-        note2: NoteOrPitch,
-        is_slur: bool,
-        speed_override: Option<PortamentoSpeed>,
-        /// Number of ticks to hold the pitch at note1 before the pitch slide
-        delay_length: TickCounter,
-        /// Length of the pitch slide (portamento_length - delay_length)
-        slide_length: TickCounter,
-        /// Number of ticks to hold the pitch at note2
-        tie_length: TickCounter,
-        rest_after_note: RestTicksAfterNote,
-    },
-    BrokenChord {
-        notes: Vec<NoteOrPitch>,
-        total_length: TickCounter,
-        note_length: PlayNoteTicks,
-        slur_last_note: bool,
-    },
-
-    DisableNoise,
-
-    CallSubroutine(usize, SubroutineCallType),
-    StartLoop,
-    SkipLastLoop,
-    EndLoop(LoopCount),
-
-    // index into Vec<MmlInstrument>.
-    SetSubroutineInstrumentHint(usize),
-
-    // index into Vec<MmlInstrument>.
-    SetInstrument(usize),
-    SetAdsr(Adsr),
-    SetGain(Gain),
-
-    // None reuses previous temp gain
-    TempGain(Option<TempGain>),
-    TempGainAndRest {
-        temp_gain: Option<TempGain>,
-        ticks_until_keyoff: TickCounter,
-        ticks_after_keyoff: TickCounter,
-    },
-    TempGainAndWait(Option<TempGain>, TickCounter),
-
-    DisableEarlyRelease,
-    SetEarlyRelease(EarlyReleaseTicks, EarlyReleaseMinTicks, OptionalGain),
-
-    SetTranspose(Transpose),
-    AdjustTranspose(RelativeTranspose),
-
-    SetDetune(DetuneValue),
-    SetDetuneCents(DetuneCents),
-
-    ChangePanAndOrVolume(Option<PanCommand>, Option<VolumeCommand>),
-    SetChannelInvert(InvertFlags),
-
-    VolumeSlide(VolumeSlideAmount, VolumeSlideTicks),
-    Tremolo(TremoloAmplitude, TremoloQuarterWavelengthInTicks),
-    PanSlide(PanSlideAmount, PanSlideTicks),
-    Panbrello(PanbrelloAmplitude, PanbrelloQuarterWavelengthInTicks),
-
-    EnablePitchMod,
-    DisablePitchMod,
-    SetEcho(bool),
-
-    SetKeyOff(bool),
-
-    SetSongTempo(Bpm),
-    SetSongTickClock(TickClock),
-
-    SetEchoVolume(EchoVolume),
-    SetStereoEchoVolume(EchoVolume, EchoVolume),
-    RelativeEchoVolume(RelativeEchoVolume),
-    RelativeStereoEchoVolume(RelativeEchoVolume, RelativeEchoVolume),
-
-    SetEchoFeedback(EchoFeedback),
-    RelativeEchoFeedback(RelativeEchoFeedback),
-    RelativeEchoFeedbackWithLimit(RelativeEchoFeedback, EchoFeedback),
-    SetFirFilter([FirCoefficient; FIR_FILTER_SIZE]),
-    SetFirTap(FirTap, FirCoefficient),
-    AdjustFirTap(FirTap, RelativeFirCoefficient),
-    AdjustFirTapWithLimit(FirTap, RelativeFirCoefficient, FirCoefficient),
-    SetEchoInvert(InvertFlags),
-    SetEchoDelay(EchoLength),
-
-    StartBytecodeAsm,
-    EndBytecodeAsm,
-
-    // Using range so there is no lifetime in MmlCommand
-    BytecodeAsm(Range<usize>),
-}
-
-#[derive(Debug, Clone)]
-pub struct MmlInstrument {
-    pub(crate) identifier: IdentifierBuf,
-
-    pub(crate) file_range: FilePosRange,
-
-    pub(crate) instrument_id: InstrumentId,
-
-    // No envelope override or envelope override matches instrument
-    pub(crate) envelope_unchanged: bool,
-    pub(crate) envelope: Envelope,
-
-    pub(crate) note_range: RangeInclusive<Note>,
+enum NoteOrPitchOut {
+    Note(DetuneCentsOutput, Note, DetuneValue),
+    Pitch(PlayPitchPitch),
 }
 
 #[derive(Clone, PartialEq)]
-pub enum MpState {
+enum MpState {
     Disabled,
     Manual,
     Mp(MpVibrato),
@@ -452,11 +128,10 @@ enum AfterPlayNote {
     },
 }
 
-pub(crate) struct ChannelBcGenerator<'a> {
+struct ChannelBcGenerator<'a> {
     pitch_table: &'a PitchTable,
-    mml_file: &'a str,
     instruments: &'a [MmlInstrument],
-    subroutines: &'a dyn SubroutineStore,
+    subroutines: &'a CompiledSubroutines,
 
     bc: Bytecode<'a>,
 
@@ -468,34 +143,44 @@ pub(crate) struct ChannelBcGenerator<'a> {
     loop_point: Option<LoopPoint>,
 
     song_uses_driver_transpose: bool,
+
+    prev_ticks: TickCounterWithLoopFlag,
+    tick_tracker: CommandTickTracker,
 }
 
 impl<'a> ChannelBcGenerator<'a> {
     #[allow(clippy::too_many_arguments)]
-    pub fn new(
+    pub(super) fn new(
         bc_data: Vec<u8>,
         pitch_table: &'a PitchTable,
-        mml_file: &'a str,
         data_instruments: &'a UniqueNamesList<data::InstrumentOrSample>,
         mml_instruments: &'a [MmlInstrument],
-        subroutines: &'a dyn SubroutineStore,
+        subroutines: &'a CompiledSubroutines,
         context: BytecodeContext,
         song_uses_driver_transpose: bool,
     ) -> ChannelBcGenerator<'a> {
         ChannelBcGenerator {
             pitch_table,
-            mml_file,
             instruments: mml_instruments,
             subroutines,
-            // Using NoSubroutines here to forbid direct subroutine calls in bytecode assembly
-            // (\asm subroutine calls must go through `Self::call_subroutine()`)
-            bc: Bytecode::new_append_to_vec(bc_data, context, data_instruments, &NoSubroutines()),
+            bc: Bytecode::new_append_to_vec(
+                bc_data,
+                context,
+                data_instruments,
+                subroutines,
+                // Using BlankSubroutineMap here to forbid direct subroutine calls in bytecode assembly
+                // (\asm subroutine calls must go through `Self::call_subroutine()`)
+                &BlankSubroutineMap,
+            ),
             mp: MpState::Manual,
             detune_cents: DetuneCents::ZERO,
             quantize: Quantize::None,
             keyoff_enabled: true,
             loop_point: None,
             song_uses_driver_transpose,
+
+            prev_ticks: TickCounterWithLoopFlag::default(),
+            tick_tracker: CommandTickTracker::new(),
         }
     }
 
@@ -932,7 +617,7 @@ impl<'a> ChannelBcGenerator<'a> {
             remaining_ticks -= l;
         }
 
-        // The channel is in the release state.  The last rest **can** be less than max.
+        // The channel is in the release self.  The last rest **can** be less than max.
         self.bc.rest(BcTicksKeyOff::try_from(remaining_ticks)?);
 
         Ok(())
@@ -991,7 +676,7 @@ impl<'a> ChannelBcGenerator<'a> {
             self.rest_many_keyoffs_no_loop(TickCounter::new(rl.ticks_in_loop))?;
             self.bc.end_loop(None)?;
 
-            // The channel is in the release state.  The last rest **can** be less than max.
+            // The channel is in the release self.  The last rest **can** be less than max.
             if rl.remainder > 0 {
                 self.bc.rest(rl.remainder.try_into()?);
             }
@@ -1576,36 +1261,34 @@ impl<'a> ChannelBcGenerator<'a> {
 
     fn call_subroutine(
         &mut self,
-        index: usize,
+        index: u8,
         disable_vibrato: SubroutineCallType,
     ) -> Result<(), ChannelError> {
-        // CallSubroutine commands should only be created if the channel can call a subroutine.
-        // `s_id` should always be valid
-        let sub = match self.subroutines.get(index) {
-            Some(s) => s,
-            None => panic!("invalid SubroutineId"),
+        let (name, sub) = match self.subroutines.get(index.into()) {
+            GetSubroutineResult::NotFound => panic!("subroutine not found"),
+            GetSubroutineResult::Compiled(name, sub) => (name, sub),
+            GetSubroutineResult::NotCompiled(name) => {
+                return Err(ChannelError::CannotCallSubroutineRecursion(
+                    name.as_str().to_owned(),
+                ))
+            }
+            GetSubroutineResult::CompileError(_) => return Ok(()),
         };
 
         match (disable_vibrato, &self.mp) {
             (SubroutineCallType::Asm, _) => {
-                self.bc
-                    .call_subroutine(sub.identifier.as_str(), &sub.subroutine_id)?;
+                self.bc.call_subroutine(name.as_str(), sub)?;
             }
             (SubroutineCallType::AsmDisableVibrato, _) => {
-                self.bc.call_subroutine_and_disable_vibrato(
-                    sub.identifier.as_str(),
-                    &sub.subroutine_id,
-                )?;
+                self.bc
+                    .call_subroutine_and_disable_vibrato(name.as_str(), sub)?;
             }
             (SubroutineCallType::Mml, MpState::Mp(_)) => {
-                self.bc.call_subroutine_and_disable_vibrato(
-                    sub.identifier.as_str(),
-                    &sub.subroutine_id,
-                )?;
+                self.bc
+                    .call_subroutine_and_disable_vibrato(name.as_str(), sub)?;
             }
             (SubroutineCallType::Mml, MpState::Disabled | MpState::Manual) => {
-                self.bc
-                    .call_subroutine(sub.identifier.as_str(), &sub.subroutine_id)?;
+                self.bc.call_subroutine(name.as_str(), sub)?;
             }
         }
 
@@ -1640,7 +1323,7 @@ impl<'a> ChannelBcGenerator<'a> {
         Ok(())
     }
 
-    pub fn process_command(&mut self, command: &Command) -> Result<(), ChannelError> {
+    fn _command(&mut self, command: &Command) -> Result<(), ChannelError> {
         match command {
             Command::None => (),
 
@@ -1984,14 +1667,68 @@ impl<'a> ChannelBcGenerator<'a> {
                 self.bc._end_asm_block()?;
             }
 
-            Command::BytecodeAsm(range) => {
-                let asm = &self.mml_file[range.clone()];
-
-                parse_asm_line(&mut self.bc, asm)?
-            }
+            Command::BytecodeAsm(asm) => parse_asm_line(&mut self.bc, asm)?,
         }
 
         Ok(())
+    }
+
+    fn process_command(&mut self, command: &CommandWithPos) -> Result<(), ChannelError> {
+        let r = self._command(command.command());
+
+        let ticks = self.bytecode().get_tick_counter_with_loop_flag();
+        if self.prev_ticks != ticks {
+            self.prev_ticks = ticks;
+
+            self.tick_tracker.push(command.end_pos(), ticks);
+        }
+
+        r
+    }
+
+    pub(super) fn process_command_with_tracker(
+        &mut self,
+        command: &CommandWithPos,
+        bytecode_tracker: &mut Vec<BytecodePos>,
+        errors: &mut Vec<ErrorWithPos<ChannelError>>,
+    ) {
+        match self.process_command(command) {
+            Ok(()) => (),
+            Err(e) => errors.push(ErrorWithPos(command.pos().clone(), e)),
+        }
+
+        bytecode_tracker.push(BytecodePos {
+            bc_end_pos: self
+                .bytecode()
+                .get_bytecode_len()
+                .try_into()
+                .unwrap_or(0xffff),
+            char_index: command.pos().index_start,
+        });
+    }
+
+    pub(super) fn process_commands_with_tracker(
+        &mut self,
+        commands: &[CommandWithPos],
+        bytecode_tracker: &mut Vec<BytecodePos>,
+        errors: &mut Vec<ErrorWithPos<ChannelError>>,
+    ) {
+        for c in commands {
+            self.process_command_with_tracker(c, bytecode_tracker, errors);
+        }
+    }
+
+    fn process_commands(
+        &mut self,
+        commands: &[CommandWithPos],
+        errors: &mut Vec<ErrorWithPos<ChannelError>>,
+    ) {
+        for c in commands {
+            match self.process_command(c) {
+                Ok(()) => (),
+                Err(e) => errors.push(ErrorWithPos(c.pos().clone(), e)),
+            }
+        }
     }
 
     pub fn loop_point(&self) -> Option<LoopPoint> {
@@ -2008,5 +1745,392 @@ impl<'a> ChannelBcGenerator<'a> {
 
     pub fn take_bytecode(self) -> Bytecode<'a> {
         self.bc
+    }
+
+    pub fn take_bytecode_and_tick_tracker(self) -> (Bytecode<'a>, CommandTickTracker) {
+        (self.bc, self.tick_tracker)
+    }
+}
+
+pub(crate) struct CommandCompiler<'a> {
+    pitch_table: &'a PitchTable,
+    data_instruments: &'a data::UniqueNamesList<data::InstrumentOrSample>,
+    mml_instruments: &'a [MmlInstrument],
+    max_edl: EchoEdl,
+
+    is_song: bool,
+    song_uses_driver_transpose: bool,
+
+    bc_data: Vec<u8>,
+    bytecode_tracker: Vec<BytecodePos>,
+}
+
+impl<'a> CommandCompiler<'a> {
+    pub fn new(
+        header_size: usize,
+        pitch_table: &'a PitchTable,
+        data_instruments: &'a data::UniqueNamesList<data::InstrumentOrSample>,
+        mml_instruments: &'a [MmlInstrument],
+        max_edl: EchoEdl,
+        analysis: &AnalysedCommands,
+
+        is_song: bool,
+    ) -> Self {
+        Self {
+            bc_data: vec![0; header_size],
+            bytecode_tracker: Vec::new(),
+
+            pitch_table,
+            data_instruments,
+            mml_instruments,
+            max_edl,
+            is_song,
+            song_uses_driver_transpose: analysis.uses_driver_transpose,
+        }
+    }
+
+    pub fn bc_size(&self) -> usize {
+        self.bc_data.len()
+    }
+
+    pub fn take_data(self) -> (Vec<u8>, Vec<BytecodePos>) {
+        (self.bc_data, self.bytecode_tracker)
+    }
+
+    fn compile_subroutine(
+        &mut self,
+        input: &SubroutineCommands,
+        subroutines: &CompiledSubroutines,
+    ) -> Result<Subroutine, MmlChannelError> {
+        let sd_start_index = self.bc_data.len();
+
+        let mut gen = ChannelBcGenerator::new(
+            std::mem::take(&mut self.bc_data),
+            self.pitch_table,
+            self.data_instruments,
+            self.mml_instruments,
+            subroutines,
+            match self.is_song {
+                true => BytecodeContext::SongSubroutine {
+                    max_edl: self.max_edl,
+                },
+                false => BytecodeContext::SfxSubroutine,
+            },
+            self.song_uses_driver_transpose,
+        );
+
+        let mut errors = Vec::new();
+
+        let tail_call = match input.commands.split_last() {
+            Some((last, remaining)) => {
+                gen.process_commands_with_tracker(
+                    remaining,
+                    &mut self.bytecode_tracker,
+                    &mut errors,
+                );
+
+                match last.command() {
+                    Command::CallSubroutine(_, _) => Some(last),
+                    _ => {
+                        gen.process_command_with_tracker(
+                            last,
+                            &mut self.bytecode_tracker,
+                            &mut errors,
+                        );
+                        None
+                    }
+                }
+            }
+            None => None,
+        };
+
+        let (terminator, tail_call_end_pos) = match (
+            &gen.mp_state(),
+            gen.bytecode().get_state().vibrato.is_active(),
+        ) {
+            (MpState::Mp(_), true) | (MpState::Disabled, true) => {
+                // `call_subroutine_and_disable_vibrato` + `return_from_subroutine` uses
+                // less Audio-RAM then `disable_vibraro` + `goto_relative``
+                if let Some(tc) = tail_call {
+                    gen.process_command_with_tracker(tc, &mut self.bytecode_tracker, &mut errors);
+                }
+                (BcTerminator::ReturnFromSubroutineAndDisableVibrato, None)
+            }
+            (MpState::Mp(_), false) | (MpState::Disabled, false) | (MpState::Manual, _) => {
+                match tail_call {
+                    Some(tc) => match tc.command() {
+                        Command::CallSubroutine(
+                            s,
+                            SubroutineCallType::Mml | SubroutineCallType::Asm,
+                        ) => match subroutines.get_compiled(*s) {
+                            Some(sub) => {
+                                (BcTerminator::TailSubroutineCall(sub), Some(tc.end_pos()))
+                            }
+                            _ => (BcTerminator::ReturnFromSubroutine, None),
+                        },
+                        Command::CallSubroutine(_, SubroutineCallType::AsmDisableVibrato) => {
+                            // `call_subroutine_and_disable_vibrato` + `return_from_subroutine` uses
+                            // less Audio-RAM then `disable_vibraro` + `goto_relative``
+                            gen.process_command_with_tracker(
+                                tc,
+                                &mut self.bytecode_tracker,
+                                &mut errors,
+                            );
+                            (BcTerminator::ReturnFromSubroutine, None)
+                        }
+                        _ => panic!("tail_call is not a CallSubroutine command"),
+                    },
+                    None => (BcTerminator::ReturnFromSubroutine, None),
+                }
+            }
+        };
+
+        assert!(gen.loop_point().is_none());
+
+        let (bc, mut tick_tracker) = gen.take_bytecode_and_tick_tracker();
+
+        let (bc_data, bc_state) = match bc.bytecode(terminator) {
+            Ok((d, s)) => (d, Some(s)),
+            Err((e, d)) => {
+                errors.push(ErrorWithPos(input.end_pos_range(), e.into()));
+                (d, None)
+            }
+        };
+        self.bc_data = bc_data;
+
+        if let (Some(end_pos), Some(bc_state)) = (tail_call_end_pos, &bc_state) {
+            tick_tracker.push(
+                end_pos,
+                TickCounterWithLoopFlag {
+                    ticks: bc_state.tick_counter,
+                    in_loop: false,
+                },
+            );
+        }
+
+        match (errors.is_empty(), bc_state) {
+            (true, Some(bc_state)) => {
+                let changes_song_tempo = !bc_state.tempo_changes.is_empty();
+
+                let sd_end_index = self.bc_data.len();
+
+                Ok(Subroutine {
+                    index: input.index,
+                    bc_state,
+                    bytecode_offset: sd_start_index.try_into().unwrap_or(u16::MAX),
+                    bytecode_end_offset: sd_end_index.try_into().unwrap_or(u16::MAX),
+                    changes_song_tempo,
+                    tick_tracker,
+                })
+            }
+            _ => Err(MmlChannelError {
+                identifier: input.identifier.to_owned(),
+                errors,
+            }),
+        }
+    }
+
+    pub(crate) fn compile_subroutines(
+        &mut self,
+        analysis: AnalysedCommands,
+        errors: &mut Vec<MmlChannelError>,
+    ) -> CompiledSubroutines {
+        let subroutines = analysis.subroutines;
+
+        let mut out = CompiledSubroutines::new(subroutines.original_order());
+
+        for s in subroutines.compile_iter() {
+            match self.compile_subroutine(s, &out) {
+                Ok(s) => out.store(s.index, SubroutineState::Compiled(s)),
+                Err(e) => {
+                    errors.push(e);
+                    out.store(s.index, SubroutineState::CompileError);
+                }
+            }
+        }
+
+        out
+    }
+
+    pub(crate) fn compile_song_channel(
+        &mut self,
+        channel_index: MusicChannelIndex,
+        input: &ChannelCommands,
+        subroutines: &CompiledSubroutines,
+    ) -> Result<Channel, MmlChannelError> {
+        let identifier = channel_index.identifier();
+        assert!(identifier.as_str().len() == 1);
+
+        let sd_start_index = self.bc_data.len();
+
+        let mut gen = ChannelBcGenerator::new(
+            std::mem::take(&mut self.bc_data),
+            self.pitch_table,
+            self.data_instruments,
+            self.mml_instruments,
+            subroutines,
+            BytecodeContext::SongChannel {
+                index: channel_index,
+                max_edl: self.max_edl,
+            },
+            self.song_uses_driver_transpose,
+        );
+
+        let mut errors = Vec::new();
+
+        gen.process_commands_with_tracker(&input.commands, &mut self.bytecode_tracker, &mut errors);
+
+        let loop_point = gen.loop_point();
+        let tick_counter = gen.bytecode().get_tick_counter();
+
+        let terminator = match gen.loop_point() {
+            None => BcTerminator::DisableChannel,
+            Some(lp) => {
+                if lp.tick_counter == tick_counter {
+                    errors.push(ErrorWithPos(
+                        input.end_pos_range(),
+                        ChannelError::NoTicksAfterLoopPoint,
+                    ));
+                }
+                BcTerminator::Goto(lp.bytecode_offset)
+            }
+        };
+
+        let (bc, tick_tracker) = gen.take_bytecode_and_tick_tracker();
+
+        let (bc_data, bc_state) = match bc.bytecode(terminator) {
+            Ok((b, s)) => (b, Some(s)),
+            Err((e, b)) => {
+                errors.push(ErrorWithPos(
+                    input.end_pos_range(),
+                    ChannelError::BytecodeError(e),
+                ));
+                (b, None)
+            }
+        };
+        self.bc_data = bc_data;
+
+        match (errors.is_empty(), bc_state) {
+            (true, Some(bc_state)) => Ok(Channel {
+                channel_index,
+                bytecode_offset: sd_start_index.try_into().unwrap_or(u16::MAX),
+                loop_point,
+                tick_counter: bc_state.tick_counter,
+                max_stack_depth: bc_state.max_stack_depth,
+                tick_tracker,
+                tempo_changes: bc_state.tempo_changes,
+            }),
+            _ => Err(MmlChannelError {
+                identifier: identifier.to_owned(),
+                errors,
+            }),
+        }
+    }
+}
+
+pub(crate) fn compile_sound_effect(
+    input: &ChannelCommands,
+    mml_instruments: &[MmlInstrument],
+    data_instruments: &UniqueNamesList<data::InstrumentOrSample>,
+    pitch_table: &PitchTable,
+    subroutines: &CompiledSubroutines,
+    errors: Vec<ErrorWithPos<ChannelError>>,
+) -> Result<(Vec<u8>, TickCounter, CommandTickTracker), SoundEffectErrorList> {
+    let bc_data = Vec::new();
+    let mut errors = errors;
+
+    let mut gen = ChannelBcGenerator::new(
+        bc_data,
+        pitch_table,
+        data_instruments,
+        mml_instruments,
+        subroutines,
+        BytecodeContext::SoundEffect,
+        // ::TODO detect driver transpose in sound effects::
+        false,
+    );
+    gen.process_commands(&input.commands, &mut errors);
+
+    let tick_counter = gen.bytecode().get_tick_counter();
+    assert!(gen.loop_point().is_none());
+
+    let (bc, tick_tracker) = gen.take_bytecode_and_tick_tracker();
+
+    let bytecode = match bc.bytecode(BcTerminator::DisableChannel) {
+        Ok((b, _)) => b,
+        Err((e, b)) => {
+            errors.push(ErrorWithPos(
+                input.end_pos_range(),
+                ChannelError::BytecodeError(e),
+            ));
+            b
+        }
+    };
+
+    if tick_counter > MAX_SFX_TICKS {
+        errors.push(ErrorWithPos(
+            input.end_pos_range(),
+            ChannelError::TooManySfxTicks(tick_counter),
+        ));
+    }
+
+    if errors.is_empty() {
+        Ok((bytecode, tick_counter, tick_tracker))
+    } else {
+        Err(SoundEffectErrorList::MmlErrors(errors))
+    }
+}
+
+pub(crate) fn compile_mml_prefix(
+    input: &ChannelCommands,
+    context: BytecodeContext,
+    mml_instruments: &[MmlInstrument],
+    data_instruments: &UniqueNamesList<data::InstrumentOrSample>,
+    pitch_table: &PitchTable,
+    subroutines: &CompiledSubroutines,
+    errors: Vec<ErrorWithPos<ChannelError>>,
+) -> Result<Vec<u8>, MmlPrefixError> {
+    let bc_data = Vec::new();
+    let mut errors = errors;
+
+    let mut gen = ChannelBcGenerator::new(
+        bc_data,
+        pitch_table,
+        data_instruments,
+        mml_instruments,
+        subroutines,
+        context,
+        // ::TODO detect driver transpose in sound effects::
+        false,
+    );
+    gen.process_commands(&input.commands, &mut errors);
+
+    let tick_counter = gen.bytecode().get_tick_counter();
+    assert!(gen.loop_point().is_none());
+
+    let bc = gen.take_bytecode();
+
+    let bytecode = match bc.bytecode(BcTerminator::DisableChannel) {
+        Ok((b, _)) => b,
+        Err((e, b)) => {
+            errors.push(ErrorWithPos(
+                input.end_pos_range(),
+                ChannelError::BytecodeError(e),
+            ));
+            b
+        }
+    };
+
+    if tick_counter > MAX_MML_PREFIX_TICKS {
+        errors.push(ErrorWithPos(
+            input.end_pos_range(),
+            ChannelError::TooManyTicksInMmlPrefix(tick_counter),
+        ))
+    }
+
+    if errors.is_empty() {
+        Ok(bytecode)
+    } else {
+        Err(MmlPrefixError::MmlErrors(errors))
     }
 }

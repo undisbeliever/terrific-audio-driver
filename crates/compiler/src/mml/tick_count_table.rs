@@ -5,6 +5,7 @@
 // SPDX-License-Identifier: MIT
 
 use crate::driver_constants::N_MUSIC_CHANNELS;
+use crate::mml::note_tracking::{section_end_ticks, CursorTrackerGetter};
 use crate::songs::{Channel, SongData};
 
 const MIN_NAME_COLUMN_WIDTH: usize = 15;
@@ -22,6 +23,11 @@ impl std::fmt::Display for MmlTickCountTable<'_> {
             .collect();
         let sections = self.0.sections();
 
+        let cursor_tracker = match self.0.cursor_tracker() {
+            Some(t) => t,
+            None => return Ok(()),
+        };
+
         assert!(channels.len() <= N_MUSIC_CHANNELS);
 
         let name_width = sections
@@ -37,7 +43,7 @@ impl std::fmt::Display for MmlTickCountTable<'_> {
 
         write!(f, "{:width$} |", "", width = name_width)?;
         for c in &channels {
-            let c_name = c.name;
+            let c_name = c.channel_index.identifier_str();
             write!(f, " Channel {:<width$}|", c_name, width = TC_WIDTH - 7)?;
         }
         writeln!(f)?;
@@ -52,16 +58,22 @@ impl std::fmt::Display for MmlTickCountTable<'_> {
             writeln!(f)?;
         } else {
             for (i, s) in sections.iter().enumerate() {
+                let target_char_index = sections.get(i + 1).map(|s| s.char_index);
+
                 write!(f, "{:width$} |", s.name, width = name_width)?;
 
                 for c in &channels {
-                    let (lc, ticks) = match c.section_tick_counters.get(i) {
-                        Some(s) => {
-                            let lc = if s.in_loop { '+' } else { ' ' };
-                            (lc, s.ticks)
+                    // ::MAYDO optimise (this is O(mn) and could be made O(n))::
+                    let (lc, ticks) = match target_char_index
+                        .and_then(|t| section_end_ticks(cursor_tracker, c, t))
+                    {
+                        Some(t) => {
+                            let lc = if t.in_loop { '+' } else { ' ' };
+                            (lc, t.ticks)
                         }
                         None => (' ', c.tick_counter),
                     };
+
                     write!(f, " {:>width$}{}|", ticks.value(), lc, width = TC_WIDTH)?;
                 }
                 writeln!(f)?;

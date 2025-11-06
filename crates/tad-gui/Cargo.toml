@@ -14,7 +14,7 @@ version.workspace = true
 
 [dependencies]
 # Local crates
-compiler = { workspace = true, features = ["mml_tracking"] }
+compiler = { workspace = true }
 brr.workspace = true
 tad-emu.workspace = true
 

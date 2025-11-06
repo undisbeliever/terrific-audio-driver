@@ -7,7 +7,7 @@
 #![forbid(unsafe_code)]
 
 mod bytecode;
-mod channel_bc_generator;
+mod command_compiler;
 mod file_pos;
 mod value_newtypes;
 
@@ -20,6 +20,7 @@ pub mod echo;
 pub mod envelope;
 pub mod errors;
 pub mod export;
+pub mod identifier;
 pub mod invert_flags;
 pub mod mml;
 pub mod notes;

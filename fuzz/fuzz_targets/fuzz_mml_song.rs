@@ -7,7 +7,7 @@ use compiler::data::{
     Sample, UniqueNamesList,
 };
 use compiler::envelope::{Adsr, Envelope, Gain};
-use compiler::mml::compile_mml;
+use compiler::songs::compile_mml_song;
 use compiler::notes::Octave;
 use compiler::pitch_table::{build_pitch_table, PitchTable};
 
@@ -120,6 +120,6 @@ fuzz_target!(|data: &[u8]| {
     if let Ok(s) = std::str::from_utf8(data) {
         let (instruments_and_samples, pitch_table) = dummy_samples();
 
-        let _ = compile_mml(&s, "mml", None, &instruments_and_samples, &pitch_table);
+        let _ = compile_mml_song(&s, "mml", None, &instruments_and_samples, &pitch_table);
     }
 });

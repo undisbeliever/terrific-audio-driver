@@ -14,10 +14,11 @@ use crate::GuiMessage;
 use compiler::data::TextFile;
 use compiler::driver_constants::N_MUSIC_CHANNELS;
 use compiler::errors::{MmlCompileErrors, MmlPrefixError};
-use compiler::mml::{ChannelId, MmlTickCountTable};
+use compiler::identifier::{ChannelId, MusicChannelIndex};
+use compiler::mml::MmlTickCountTable;
 use compiler::songs::{song_duration_string, SongData};
-
 use compiler::time::TickCounter;
+
 use fltk::app;
 use fltk::button::{Button, ToggleButton};
 use fltk::enums::{CallbackReason, CallbackTrigger, Color, Event, Font, Key};
@@ -664,7 +665,7 @@ impl State {
         }
     }
 
-    fn set_only_one_channel(&mut self, c: char) {
+    fn set_only_one_channel(&mut self, c: MusicChannelIndex) {
         self.prev_channel_mask = MusicChannelsMask::only_one_channel(c);
         self.update_channel_buttons(self.prev_channel_mask);
     }

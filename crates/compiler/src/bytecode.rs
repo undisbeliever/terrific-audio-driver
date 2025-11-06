@@ -6,7 +6,7 @@
 
 #![allow(clippy::assertions_on_constants)]
 
-use crate::channel_bc_generator::MmlInstrument;
+use crate::command_compiler::commands::MmlInstrument;
 use crate::data::{self, InstrumentOrSample, UniqueNamesList};
 use crate::driver_constants::{
     BC_CHANNEL_STACK_SIZE, BC_STACK_BYTES_PER_LOOP, BC_STACK_BYTES_PER_SUBROUTINE_CALL,
@@ -15,11 +15,12 @@ use crate::driver_constants::{
 use crate::echo::{EchoEdl, EchoFeedback, EchoLength, EchoVolume, FirCoefficient, FirTap};
 use crate::envelope::{Adsr, Envelope, Gain, OptionalGain, TempGain};
 use crate::errors::{BytecodeError, ChannelError, ValueError};
+use crate::identifier::MusicChannelIndex;
 use crate::invert_flags::InvertFlags;
 use crate::notes::{Note, LAST_NOTE_ID, N_NOTES};
 use crate::pitch_table::InstrumentHintFreq;
 use crate::samples::note_range;
-use crate::subroutines::{FindSubroutineResult, SubroutineStore};
+use crate::subroutines::{CompiledSubroutines, GetSubroutineResult, Subroutine, SubroutineNameMap};
 use crate::time::{TickClock, TickCounter, TickCounterWithLoopFlag};
 use crate::value_newtypes::{
     i16_non_zero_value_newtype, i16_value_newtype, i8_value_newtype, u16_value_newtype,
@@ -209,8 +210,13 @@ impl RelativeFirCoefficient {
 }
 
 pub enum BytecodeContext {
-    SongSubroutine { max_edl: EchoEdl },
-    SongChannel { index: u8, max_edl: EchoEdl },
+    SongSubroutine {
+        max_edl: EchoEdl,
+    },
+    SongChannel {
+        index: MusicChannelIndex,
+        max_edl: EchoEdl,
+    },
     SfxSubroutine,
     SoundEffect,
     MmlPrefix,
@@ -374,42 +380,6 @@ u8_value_newtype!(
     0,
     (MAX_INSTRUMENTS_AND_SAMPLES - 1) as u8
 );
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct SubroutineId {
-    id: u8,
-    state: State,
-}
-
-impl SubroutineId {
-    pub fn new(id: u8, state: State) -> Self {
-        Self { id, state }
-    }
-
-    pub fn as_usize(&self) -> usize {
-        self.id.into()
-    }
-
-    pub fn tick_counter(&self) -> TickCounter {
-        self.state.tick_counter
-    }
-
-    pub fn max_stack_depth(&self) -> StackDepth {
-        self.state.max_stack_depth
-    }
-
-    pub fn no_instrument_notes(&self) -> &RangeInclusive<Note> {
-        &self.state.no_instrument_notes
-    }
-
-    pub fn instrument_hint(&self) -> Option<(InstrumentId, Envelope)> {
-        self.state.instrument_hint.map(|(i, e, _)| (i, e))
-    }
-
-    pub fn instrument_hint_freq(&self) -> Option<InstrumentHintFreq> {
-        self.state.instrument_hint.map(|(_, _, f)| f)
-    }
-}
 
 impl StackDepth {
     pub fn to_u32(self) -> u32 {
@@ -697,7 +667,7 @@ pub enum BcTerminator<'a> {
     Goto(usize),
     ReturnFromSubroutine,
     ReturnFromSubroutineAndDisableVibrato,
-    TailSubroutineCall(usize, &'a SubroutineId),
+    TailSubroutineCall(&'a Subroutine),
 }
 
 impl BcTerminator<'_> {
@@ -1051,8 +1021,8 @@ pub struct State {
     pub(crate) vibrato: VibratoState,
     pub(crate) prev_slurred_note: SlurredNoteState,
 
-    instrument_hint: Option<(InstrumentId, Envelope, InstrumentHintFreq)>,
-    no_instrument_notes: RangeInclusive<Note>,
+    pub(crate) instrument_hint: Option<(InstrumentId, Envelope, InstrumentHintFreq)>,
+    pub(crate) no_instrument_notes: RangeInclusive<Note>,
 }
 
 impl State {
@@ -1135,9 +1105,7 @@ impl State {
         // No maybe prev_slurred_note state
     }
 
-    fn merge_subroutine(&mut self, subroutine: &SubroutineId, context: &BytecodeContext) {
-        let s: &Self = &subroutine.state;
-
+    fn merge_subroutine(&mut self, s: &State, context: &BytecodeContext) {
         self.instrument.merge_subroutine(&s.instrument, context);
         self.envelope.merge_subroutine(&s.envelope);
         self.prev_temp_gain.merge_subroutine(&s.prev_temp_gain);
@@ -1156,6 +1124,10 @@ impl State {
             &s.instrument,
             &self.instrument,
         );
+    }
+
+    pub fn instrument_hint_freq(&self) -> Option<InstrumentHintFreq> {
+        self.instrument_hint.map(|(_, _, f)| f)
     }
 }
 
@@ -1187,7 +1159,8 @@ pub struct Bytecode<'a> {
     bytecode: Vec<u8>,
 
     instruments: &'a UniqueNamesList<data::InstrumentOrSample>,
-    subroutines: &'a dyn SubroutineStore,
+    subroutines: &'a CompiledSubroutines,
+    subroutin_name_map: &'a dyn SubroutineNameMap,
 
     state: State,
 
@@ -1203,9 +1176,16 @@ impl<'a> Bytecode<'a> {
     pub fn new(
         context: BytecodeContext,
         instruments: &'a UniqueNamesList<data::InstrumentOrSample>,
-        subroutines: &'a dyn SubroutineStore,
+        subroutines: &'a CompiledSubroutines,
+        subroutine_name_map: &'a dyn SubroutineNameMap,
     ) -> Bytecode<'a> {
-        Self::new_append_to_vec(Vec::new(), context, instruments, subroutines)
+        Self::new_append_to_vec(
+            Vec::new(),
+            context,
+            instruments,
+            subroutines,
+            subroutine_name_map,
+        )
     }
 
     // Instead of creating a new `Vec<u8>` to hold the bytecode, write the data to the end of `vec`.
@@ -1215,12 +1195,14 @@ impl<'a> Bytecode<'a> {
         vec: Vec<u8>,
         context: BytecodeContext,
         instruments: &'a UniqueNamesList<data::InstrumentOrSample>,
-        subroutines: &'a dyn SubroutineStore,
+        subroutines: &'a CompiledSubroutines,
+        subroutine_name_map: &'a dyn SubroutineNameMap,
     ) -> Bytecode<'a> {
         Bytecode {
             bytecode: vec,
             instruments,
             subroutines,
+            subroutin_name_map: subroutine_name_map,
             state: State {
                 tick_counter: TickCounter::new(0),
                 max_stack_depth: StackDepth(0),
@@ -1347,7 +1329,7 @@ impl<'a> Bytecode<'a> {
             return Err((BytecodeError::ReturnInNonSubroutine, self.bytecode));
         }
 
-        if let BcTerminator::TailSubroutineCall(_, s) = &terminator {
+        if let BcTerminator::TailSubroutineCall(s) = &terminator {
             if let Err(e) = self._update_subtroutine_state_excluding_stack_depth(s) {
                 return Err((e, self.bytecode));
             }
@@ -1367,7 +1349,7 @@ impl<'a> Bytecode<'a> {
 
                 emit_bytecode!(self, opcodes::RETURN_FROM_SUBROUTINE_AND_DISABLE_VIBRATO);
             }
-            BcTerminator::Goto(pos) | BcTerminator::TailSubroutineCall(pos, _) => {
+            BcTerminator::Goto(pos) => {
                 match (u16::try_from(self.bytecode.len()), u16::try_from(pos)) {
                     (Ok(inst_ptr), Ok(pos)) => {
                         let o = pos.wrapping_sub(inst_ptr).wrapping_sub(2).to_le_bytes();
@@ -1379,6 +1361,17 @@ impl<'a> Bytecode<'a> {
                     }
                 }
             }
+            BcTerminator::TailSubroutineCall(s) => match u16::try_from(self.bytecode.len()) {
+                Ok(inst_ptr) => {
+                    let pos = s.bytecode_offset;
+                    let o = pos.wrapping_sub(inst_ptr).wrapping_sub(2).to_le_bytes();
+                    emit_bytecode!(self, opcodes::GOTO_RELATIVE, o[0], o[1]);
+                }
+                Err(_) => {
+                    emit_bytecode!(self, opcodes::DISABLE_CHANNEL);
+                    return Err((BytecodeError::GotoRelativeOutOfBounds, self.bytecode));
+                }
+            },
         }
 
         Ok((self.bytecode, self.state))
@@ -2037,7 +2030,7 @@ impl<'a> Bytecode<'a> {
         prefixed_instruction: MiscInstruction,
     ) -> Result<(), BytecodeError> {
         match self.context {
-            BytecodeContext::SongChannel { index, .. } => match index {
+            BytecodeContext::SongChannel { index, .. } => match u8::from(index) {
                 0 => Err(BytecodeError::PmodNotAllowedInChannelA),
                 1..=5 => {
                     emit_bytecode!(self, opcodes::MISCELLANEOUS, prefixed_instruction.as_u8());
@@ -2246,15 +2239,17 @@ impl<'a> Bytecode<'a> {
 
     fn _update_subtroutine_state_excluding_stack_depth(
         &mut self,
-        subroutine: &SubroutineId,
+        subroutine: &Subroutine,
     ) -> Result<(), BytecodeError> {
-        self.state.tick_counter += subroutine.state.tick_counter;
+        let s = &subroutine.bc_state;
+
+        self.state.tick_counter += s.tick_counter;
 
         let old_instrument = self.state.instrument.clone();
 
-        self.state.merge_subroutine(subroutine, &self.context);
+        self.state.merge_subroutine(s, &self.context);
 
-        if let Some(sub_hint_freq) = subroutine.instrument_hint_freq() {
+        if let Some(sub_hint_freq) = s.instrument_hint_freq() {
             match old_instrument {
                 InstrumentState::Known(id, _)
                 | InstrumentState::Hint(id, _)
@@ -2281,7 +2276,7 @@ impl<'a> Bytecode<'a> {
 
                 InstrumentState::Unknown | InstrumentState::Unset => match self.context {
                     BytecodeContext::SongSubroutine { .. } | BytecodeContext::SfxSubroutine => {
-                        self.state.instrument_hint = subroutine.state.instrument_hint;
+                        self.state.instrument_hint = s.instrument_hint;
                     }
 
                     BytecodeContext::SongChannel { .. }
@@ -2293,11 +2288,11 @@ impl<'a> Bytecode<'a> {
             }
         }
 
-        if !subroutine.state.no_instrument_notes.is_empty() {
+        if !s.no_instrument_notes.is_empty() {
             // Subroutine plays a note without an instrument
 
             let self_notes = &self.state.no_instrument_notes;
-            let sub_notes = &subroutine.state.no_instrument_notes;
+            let sub_notes = &s.no_instrument_notes;
 
             match old_instrument {
                 InstrumentState::Unknown | InstrumentState::Unset => match self.context {
@@ -2339,7 +2334,7 @@ impl<'a> Bytecode<'a> {
     fn _call_subroutine(
         &mut self,
         name: &str,
-        subroutine: &SubroutineId,
+        subroutine: &Subroutine,
         disable_vibraro: bool,
     ) -> Result<(), BytecodeError> {
         match self.context {
@@ -2355,7 +2350,7 @@ impl<'a> Bytecode<'a> {
         let stack_depth = StackDepth(
             self.get_stack_depth().0
                 + BC_STACK_BYTES_PER_SUBROUTINE_CALL as u32
-                + subroutine.state.max_stack_depth.0,
+                + subroutine.bc_state.max_stack_depth.0,
         );
 
         self.state.max_stack_depth = max(self.state.max_stack_depth, stack_depth);
@@ -2372,14 +2367,14 @@ impl<'a> Bytecode<'a> {
             false => opcodes::CALL_SUBROUTINE,
         };
 
-        emit_bytecode!(self, opcode, subroutine.id);
+        emit_bytecode!(self, opcode, subroutine.index);
         Ok(())
     }
 
     pub fn call_subroutine_and_disable_vibrato(
         &mut self,
         name: &str,
-        subroutine: &SubroutineId,
+        subroutine: &Subroutine,
     ) -> Result<(), BytecodeError> {
         self.state.vibrato.disable();
 
@@ -2389,7 +2384,7 @@ impl<'a> Bytecode<'a> {
     pub fn call_subroutine(
         &mut self,
         name: &str,
-        subroutine: &SubroutineId,
+        subroutine: &Subroutine,
     ) -> Result<(), BytecodeError> {
         self._call_subroutine(name, subroutine, false)
     }
@@ -2417,20 +2412,30 @@ impl<'a> Bytecode<'a> {
         Ok(())
     }
 
-    fn _find_subroutine(&self, name: &'a str) -> Result<&'a SubroutineId, BytecodeError> {
-        match self.subroutines.find_subroutine(name) {
-            FindSubroutineResult::Found(s) => Ok(s),
-            FindSubroutineResult::NotCompiled => {
-                // Subroutine has been compiled, but it contains an error
-                Err(BytecodeError::SubroutineHasError(name.to_owned()))
-            }
-            FindSubroutineResult::Recussion => {
-                Err(BytecodeError::SubroutineRecursion(name.to_owned()))
-            }
-            FindSubroutineResult::NotFound => {
-                Err(BytecodeError::UnknownSubroutine(name.to_owned()))
-            }
-            FindSubroutineResult::NotAllowed => Err(BytecodeError::NotAllowedToCallSubroutine),
+    fn _find_subroutine(&self, name: &'a str) -> Result<&'a Subroutine, BytecodeError> {
+        match self.subroutin_name_map.find_subroutine_index(name) {
+            Some(index) => match self.subroutines.get(index.into()) {
+                GetSubroutineResult::Compiled(_, s) => Ok(s),
+                GetSubroutineResult::NotCompiled(_) => {
+                    Err(BytecodeError::SubroutineRecursion(name.to_owned()))
+                }
+                GetSubroutineResult::CompileError(_) => {
+                    // Subroutine has been compiled, but it contains an error
+                    Err(BytecodeError::SubroutineHasError(name.to_owned()))
+                }
+                GetSubroutineResult::NotFound => {
+                    Err(BytecodeError::UnknownSubroutine(name.to_owned()))
+                }
+            },
+            None => match &self.context {
+                BytecodeContext::SongSubroutine { .. }
+                | BytecodeContext::SongChannel { .. }
+                | BytecodeContext::SfxSubroutine
+                | BytecodeContext::SoundEffect => {
+                    Err(BytecodeError::UnknownSubroutine(name.to_owned()))
+                }
+                BytecodeContext::MmlPrefix => Err(BytecodeError::NotAllowedToCallSubroutine),
+            },
         }
     }
 

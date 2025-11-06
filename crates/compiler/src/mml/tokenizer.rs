@@ -4,12 +4,8 @@
 //
 // SPDX-License-Identifier: MIT
 
-use std::ops::Range;
-
 use super::{IdentifierStr, COMMENT_CHAR};
 
-use crate::bytecode_assembler;
-use crate::channel_bc_generator::SubroutineCallType;
 use crate::envelope::GainMode;
 use crate::errors::{ChannelError, ValueError};
 use crate::file_pos::{blank_line_splitter, FilePos, Line, LineIndexRange, LineSplitter};
@@ -26,7 +22,7 @@ pub enum Token<'a> {
 
     Pitch(MmlPitch),
 
-    CallSubroutine(IdentifierStr<'a>, SubroutineCallType),
+    CallSubroutine(IdentifierStr<'a>),
     SetInstrument(IdentifierStr<'a>),
     SetSubroutineInstrumentHint(IdentifierStr<'a>),
 
@@ -117,11 +113,7 @@ pub enum Token<'a> {
     KeySignature(&'a str),
 
     // Must not contain a call subroutine instruction.
-    // Using Range to remove lifetime from MmlCommand.
-    BytecodeAsm(Range<usize>),
-
-    // Used to detect `set_transpose` and `adjust_transpose` commands when processing subroutines
-    TransposeAsm(Range<usize>),
+    BytecodeAsm(&'a str),
 }
 
 #[derive(Clone)]
@@ -384,7 +376,7 @@ fn next_token<'a>(scanner: &mut Scanner<'a>) -> Option<TokenWithPosition<'a>> {
         b'!' => {
             scanner.advance_one_ascii();
             match scanner.identifier_token() {
-                Some(id) => Token::CallSubroutine(id, SubroutineCallType::Mml),
+                Some(id) => Token::CallSubroutine(id),
                 None => Token::Error(ChannelError::NoSubroutine),
             }
         }
@@ -684,62 +676,17 @@ fn parse_bytecode_asm<'a>(
                 // This assert ensures no infinite loops
                 assert!(!asm.is_empty());
 
-                if let Some(token) = parse_call_subroutine_asm(asm) {
-                    tokens.push(TokenWithPosition {
-                        pos,
-                        token,
-                        end: scanner.pos(),
-                    });
-                } else {
-                    let start = usize::try_from(pos.char_index()).unwrap();
+                tokens.push(TokenWithPosition {
+                    pos,
+                    token: Token::BytecodeAsm(asm.trim_end()),
+                    end: scanner.pos(),
+                });
 
-                    if asm.starts_with(bytecode_assembler::SET_TRANSPOSE)
-                        | asm.starts_with(bytecode_assembler::ADJUST_TRANSPOSE)
-                    {
-                        tokens.push(TokenWithPosition {
-                            pos,
-                            token: Token::TransposeAsm(start..(start + asm.len())),
-                            end: scanner.pos(),
-                        });
-                    } else {
-                        tokens.push(TokenWithPosition {
-                            pos,
-                            token: Token::BytecodeAsm(start..(start + asm.len())),
-                            end: scanner.pos(),
-                        });
-                    }
-
-                    if scanner.first_byte() == Some(b'|') {
-                        scanner.advance_one_ascii();
-                    }
+                if scanner.first_byte() == Some(b'|') {
+                    scanner.advance_one_ascii();
                 }
             }
         }
-    }
-}
-
-fn parse_call_subroutine_asm(asm: &str) -> Option<Token<'_>> {
-    if !asm.starts_with(bytecode_assembler::CALL_SUBROUTINE) {
-        return None;
-    }
-
-    let (instruction, argument) = asm.split_once(|c: char| c.is_ascii_whitespace())?;
-    let argument = argument.trim();
-
-    if argument.bytes().any(|c| c.is_ascii_whitespace()) {
-        return None;
-    }
-
-    match instruction {
-        bytecode_assembler::CALL_SUBROUTINE => Some(Token::CallSubroutine(
-            IdentifierStr::from_str(argument),
-            SubroutineCallType::Asm,
-        )),
-        bytecode_assembler::CALL_SUBROUTINE_AND_DISABLE_VIBRATO => Some(Token::CallSubroutine(
-            IdentifierStr::from_str(argument),
-            SubroutineCallType::AsmDisableVibrato,
-        )),
-        _ => None,
     }
 }
 
@@ -800,6 +747,10 @@ impl<'a> MmlTokens<'a> {
         self.tokens.is_empty()
     }
 
+    pub fn len(&self) -> usize {
+        self.tokens.len()
+    }
+
     pub fn extend(&mut self, tokens: &MmlTokens<'a>) {
         self.tokens.extend(tokens.tokens.iter().cloned());
         self.end_pos = tokens.end_pos;
@@ -836,10 +787,6 @@ impl<'a> MmlTokens<'a> {
         }
 
         self.end_pos = scanner.pos();
-    }
-
-    pub fn token_iter(&self) -> impl Iterator<Item = &Token<'a>> {
-        self.tokens.iter().map(|t| &t.token)
     }
 
     pub fn first_token(&self) -> Option<&Token<'a>> {

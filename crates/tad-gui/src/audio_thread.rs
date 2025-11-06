@@ -10,7 +10,8 @@ use brr::{BrrSample, SAMPLES_PER_BLOCK};
 use compiler::bytecode_interpreter::SongInterpreter;
 use compiler::common_audio_data::{CommonAudioData, SfxBufferInAram};
 use compiler::driver_constants::AudioMode;
-use compiler::driver_constants::{io_commands, AUDIO_RAM_SIZE, N_DSP_VOICES, N_MUSIC_CHANNELS};
+use compiler::driver_constants::{io_commands, AUDIO_RAM_SIZE, N_MUSIC_CHANNELS};
+use compiler::identifier::MusicChannelIndex;
 use compiler::mml::MmlPrefixData;
 use compiler::songs::{blank_song, SongData};
 use compiler::sound_effects::CompiledSoundEffect;
@@ -52,18 +53,8 @@ pub struct MusicChannelsMask(pub u8);
 impl MusicChannelsMask {
     pub const ALL: MusicChannelsMask = MusicChannelsMask(0xff);
 
-    pub fn only_one_channel(channel_name: char) -> Self {
-        const FIRST: u32 = 'A' as u32;
-        const LAST: u32 = 'A' as u32 + N_DSP_VOICES as u32 - 1;
-
-        let c = u32::from(channel_name);
-        match c {
-            FIRST..=LAST => {
-                let shift = c - FIRST;
-                MusicChannelsMask(1 << shift)
-            }
-            _ => MusicChannelsMask(0),
-        }
+    pub fn only_one_channel(c: MusicChannelIndex) -> Self {
+        MusicChannelsMask(1 << u8::from(c))
     }
 
     pub fn only_one_channel_index(index: usize) -> Self {

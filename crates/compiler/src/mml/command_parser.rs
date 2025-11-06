@@ -4,11 +4,10 @@
 //
 // SPDX-License-Identifier: MIT
 
-use super::tokenizer::{MmlTokens, PeekableTokenIterator, Token};
-use super::{ChannelId, IdentifierStr, Section};
-
-#[cfg(feature = "mml_tracking")]
 use super::note_tracking::CursorTracker;
+use super::tokenizer::{MmlTokens, PeekableTokenIterator, Token};
+use crate::bytecode_assembler;
+use crate::identifier::{ChannelId, IdentifierStr};
 
 use crate::bytecode::{
     DetuneValue, EarlyReleaseMinTicks, EarlyReleaseTicks, LoopCount, NoiseFrequency, Pan,
@@ -18,25 +17,24 @@ use crate::bytecode::{
     VibratoQuarterWavelengthInTicks, Volume, VolumeSlideAmount, VolumeSlideTicks,
     KEY_OFF_TICK_DELAY,
 };
-use crate::channel_bc_generator::{
-    merge_pan_commands, merge_volumes_commands, relative_pan, relative_volume, Command,
-    DetuneCents, FineQuantization, ManualVibrato, MpVibrato, NoteOrPitch, PanCommand, Quantize,
-    RestTicksAfterNote, SubroutineCallType, VolumeCommand,
+use crate::command_compiler::commands::{
+    merge_pan_commands, merge_volumes_commands, relative_pan, relative_volume, ChannelCommands,
+    Command, CommandWithPos, DetuneCents, FineQuantization, ManualVibrato, MpVibrato, NoteOrPitch,
+    PanCommand, Quantize, RestTicksAfterNote, SubroutineCallType, VolumeCommand,
 };
 use crate::driver_constants::FIR_FILTER_SIZE;
 use crate::echo::{EchoVolume, FirCoefficient, FirTap};
 use crate::envelope::{Gain, GainMode, OptionalGain, TempGain};
 use crate::errors::{ChannelError, ErrorWithPos, ValueError};
 use crate::file_pos::{FilePos, FilePosRange};
+use crate::mml::GlobalSettings;
 use crate::notes::{KeySignature, MidiNote, MmlPitch, Note, Octave, STARTING_OCTAVE};
 use crate::pitch_table::PlayPitchSampleRate;
-use crate::subroutines::{FindSubroutineResult, SubroutineStore};
-use crate::time::{
-    MmlDefaultLength, MmlLength, TickCounter, TickCounterWithLoopFlag, ZenLen, STARTING_MML_LENGTH,
-};
+use crate::subroutines::SubroutineNameMap;
+use crate::time::{MmlDefaultLength, MmlLength, TickCounter, ZenLen, STARTING_MML_LENGTH};
 use crate::value_newtypes::{I8WithByteHexValueNewType, SignedValueNewType, UnsignedValueNewType};
 
-pub use crate::channel_bc_generator::Quantization;
+pub use crate::command_compiler::commands::Quantization;
 
 use std::collections::HashMap;
 
@@ -53,20 +51,6 @@ pub const COARSE_VOLUME_MULTIPLIER: u8 = 16;
 pub const PX_PAN_RANGE: std::ops::RangeInclusive<i32> =
     (-(Pan::CENTER.as_u8() as i32))..=(Pan::CENTER.as_u8() as i32);
 
-pub(crate) struct MmlCommandWithPos {
-    command: Command,
-    pos: FilePosRange,
-}
-
-impl MmlCommandWithPos {
-    pub fn command(&self) -> &Command {
-        &self.command
-    }
-    pub fn pos(&self) -> &FilePosRange {
-        &self.pos
-    }
-}
-
 // Parser state that is saved in CursorTracker accessed by the GUI
 #[derive(Debug, Clone, PartialEq)]
 pub struct State {
@@ -81,14 +65,11 @@ pub struct State {
 }
 
 mod parser {
-    use crate::{
-        file_pos::LineIndexRange,
-        mml::{metadata::GlobalSettings, ChannelId},
-    };
+    use crate::{file_pos::LineIndexRange, mml::metadata::GlobalSettings};
 
     use super::*;
 
-    pub(crate) struct Parser<'a> {
+    pub(super) struct Parser<'a, 'b> {
         channel: ChannelId,
 
         tokens: PeekableTokenIterator<'a>,
@@ -98,40 +79,24 @@ mod parser {
         default_length: TickCounter,
         keyoff_enabled: bool,
 
-        tick_counter: TickCounterWithLoopFlag,
-        sections_tick_counters: Vec<TickCounterWithLoopFlag>,
-
-        pending_sections: Option<&'a [Section]>,
-
-        instruments_map: &'a HashMap<IdentifierStr<'a>, usize>,
-        subroutines: &'a dyn SubroutineStore,
+        instruments_map: &'b HashMap<IdentifierStr<'b>, usize>,
+        subroutines: &'b dyn SubroutineNameMap,
 
         old_transpose: bool,
 
-        #[cfg(feature = "mml_tracking")]
-        cursor_tracker: &'a mut CursorTracker,
+        tick_offset: TickCounter,
+        cursor_tracker: &'b mut CursorTracker,
     }
 
-    impl<'a> Parser<'a> {
-        pub fn new(
+    impl<'a, 'b> Parser<'a, 'b> {
+        pub(super) fn new(
             channel: ChannelId,
             tokens: MmlTokens<'a>,
-            instruments_map: &'a HashMap<IdentifierStr, usize>,
-            subroutines: &'a dyn SubroutineStore,
-            settings: &GlobalSettings,
-            sections: Option<&'a [Section]>,
-
-            #[cfg(feature = "mml_tracking")] cursor_tracking: &'a mut CursorTracker,
-        ) -> Parser<'a> {
-            // Remove the first section to prevent an off-by-one error
-            let (n_sections, pending_sections) = match sections {
-                Some(sections) => match sections.split_first() {
-                    Some((_, r)) => (r.len(), Some(r)),
-                    None => (0, None),
-                },
-                None => (0, None),
-            };
-
+            instruments_map: &'b HashMap<IdentifierStr<'b>, usize>,
+            subroutines: &'b dyn SubroutineNameMap,
+            settings: &'b GlobalSettings,
+            cursor_tracking: &'b mut CursorTracker,
+        ) -> Parser<'a, 'b> {
             debug_assert!(matches!(tokens.first_token(), Some(Token::NewLine(_))));
 
             Parser {
@@ -151,16 +116,12 @@ mod parser {
                 default_length: settings.zenlen.starting_length(),
                 keyoff_enabled: true,
 
-                tick_counter: TickCounterWithLoopFlag::default(),
-                sections_tick_counters: Vec::with_capacity(n_sections),
-                pending_sections,
-
                 instruments_map,
                 subroutines,
 
                 old_transpose: settings.old_transpose,
 
-                #[cfg(feature = "mml_tracking")]
+                tick_offset: TickCounter::default(),
                 cursor_tracker: cursor_tracking,
             }
         }
@@ -171,8 +132,6 @@ mod parser {
 
         pub(super) fn set_state(&mut self, new_state: State) {
             self.state = new_state;
-
-            #[cfg(feature = "mml_tracking")]
             self.add_to_cursor_tracker();
         }
 
@@ -190,7 +149,7 @@ mod parser {
             self.tokens.next();
         }
 
-        pub fn peek_pos(&self) -> FilePos {
+        pub(super) fn peek_pos(&self) -> FilePos {
             self.tokens.peek_pos()
         }
 
@@ -202,49 +161,38 @@ mod parser {
             self.tokens.peek_and_next()
         }
 
-        pub fn add_error(&mut self, pos: FilePos, e: ChannelError) {
+        pub(super) fn add_error(&mut self, pos: FilePos, e: ChannelError) {
             self.errors
                 .push(ErrorWithPos(self.file_pos_range_from(pos), e))
         }
 
-        pub fn add_error_range(&mut self, pos: FilePosRange, e: ChannelError) {
-            self.errors.push(ErrorWithPos(pos, e))
-        }
-
-        pub fn instruments_map(&self) -> &HashMap<IdentifierStr<'a>, usize> {
+        pub(super) fn instruments_map(&self) -> &HashMap<IdentifierStr<'b>, usize> {
             self.instruments_map
         }
 
-        pub fn find_subroutine<'b>(&self, name: &'b str) -> FindSubroutineResult<'b>
-        where
-            'a: 'b,
-        {
-            self.subroutines.find_subroutine(name)
+        pub(super) fn find_subroutine(&self, name: &str) -> Option<u8> {
+            self.subroutines.find_subroutine_index(name)
         }
 
-        pub fn old_transpose(&self) -> bool {
+        pub(super) fn old_transpose(&self) -> bool {
             self.old_transpose
         }
 
-        pub fn set_tick_counter(&mut self, tc: TickCounterWithLoopFlag) {
-            self.tick_counter = tc;
+        pub(super) fn reset_tick_offset(&mut self) {
+            self.tick_offset = TickCounter::new(0);
+        }
 
-            #[cfg(feature = "mml_tracking")]
+        pub(super) fn increment_tick_offset(&mut self, t: TickCounter) {
+            self.tick_offset += t;
             self.add_to_cursor_tracker();
         }
 
-        pub(super) fn increment_tick_counter(&mut self, t: TickCounter) {
-            self.tick_counter.ticks += t;
-
-            #[cfg(feature = "mml_tracking")]
-            self.add_to_cursor_tracker();
-        }
-
-        pub(super) fn set_loop_flag(&mut self) {
-            self.tick_counter.in_loop = true;
-
-            #[cfg(feature = "mml_tracking")]
-            self.add_to_cursor_tracker();
+        pub(super) fn command_end_char_index(&self) -> u32 {
+            if self.tick_offset.is_zero() {
+                self.tokens.prev_end_pos().char_index
+            } else {
+                self.tokens.peek_pos().char_index
+            }
         }
 
         pub(super) fn set_default_length(&mut self, ticks: TickCounter) {
@@ -267,68 +215,26 @@ mod parser {
         }
 
         pub(super) fn process_new_line(&mut self, r: LineIndexRange) {
-            let _ = r;
-
-            if let Some(pending_sections) = self.pending_sections.as_mut() {
-                while pending_sections
-                    .first()
-                    .is_some_and(|s| self.tokens.peek_pos().line_number >= s.line_number)
-                {
-                    *pending_sections = &pending_sections[1..];
-                    self.sections_tick_counters.push(self.tick_counter);
-                }
-            }
-
-            #[cfg(feature = "mml_tracking")]
             self.cursor_tracker
-                .new_line(self.channel, r, self.tick_counter, self.state.clone());
+                .new_line(self.channel, r, self.tick_offset, self.state.clone());
         }
 
-        #[cfg(feature = "mml_tracking")]
         fn add_to_cursor_tracker(&mut self) {
             self.cursor_tracker.add(
                 self.tokens.prev_end_pos(),
-                self.tick_counter,
+                self.tick_offset,
                 self.state.clone(),
             );
         }
 
-        pub fn finalize(
-            mut self,
-        ) -> (
-            Vec<TickCounterWithLoopFlag>,
-            Vec<ErrorWithPos<ChannelError>>,
-        ) {
-            if let Some(pending_sections) = self.pending_sections {
-                for _ in pending_sections {
-                    self.sections_tick_counters.push(self.tick_counter);
-                }
-            }
-
-            #[cfg(feature = "mml_tracking")]
+        pub(super) fn finalize(self) -> Vec<ErrorWithPos<ChannelError>> {
             self.cursor_tracker.end_channel();
 
-            (self.sections_tick_counters, self.errors)
-        }
-    }
-
-    impl Iterator for Parser<'_> {
-        type Item = MmlCommandWithPos;
-
-        fn next(&mut self) -> Option<Self::Item> {
-            let (pos, token) = self.peek_and_next();
-
-            match token {
-                Token::End => None,
-                t => Some(MmlCommandWithPos {
-                    command: parse_token(pos, t, self),
-                    pos: self.file_pos_range_from(pos),
-                }),
-            }
+            self.errors
         }
     }
 }
-pub(crate) use parser::Parser;
+use parser::Parser;
 
 // PARSING MACROS
 // ==============
@@ -712,7 +618,7 @@ fn parse_decrement_octave(p: &mut Parser) {
 }
 
 #[must_use]
-fn parse_transpose(pos: FilePos, p: &mut Parser) -> Command {
+fn parse_transpose<'a>(pos: FilePos, p: &mut Parser<'a, '_>) -> Command<'a> {
     match p.old_transpose() {
         false => match parse_signed_newtype_allow_zero(pos, p) {
             Some(t) => Command::SetTranspose(t),
@@ -726,7 +632,7 @@ fn parse_transpose(pos: FilePos, p: &mut Parser) -> Command {
 }
 
 #[must_use]
-fn parse_relative_transpose(pos: FilePos, p: &mut Parser) -> Command {
+fn parse_relative_transpose<'a>(pos: FilePos, p: &mut Parser<'a, '_>) -> Command<'a> {
     match p.old_transpose() {
         false => match parse_signed_newtype(pos, p) {
             Some(r) => Command::AdjustTranspose(r),
@@ -813,7 +719,7 @@ fn parse_quantize_optional_comma_optional_gain(p: &mut Parser) -> OptionalGain {
     }
 }
 
-fn parse_quantize(pos: FilePos, p: &mut Parser) -> Command {
+fn parse_quantize<'a>(pos: FilePos, p: &mut Parser<'a, '_>) -> Command<'a> {
     let (q, g) = match_next_token!(
         p,
 
@@ -919,7 +825,7 @@ fn parse_set_early_release_arguments(p: &mut Parser) -> (EarlyReleaseMinTicks, O
     }
 }
 
-fn parse_set_early_release(pos: FilePos, p: &mut Parser) -> Command {
+fn parse_set_early_release<'a>(pos: FilePos, p: &mut Parser<'a, '_>) -> Command<'a> {
     match_next_token!(
         p,
 
@@ -954,11 +860,11 @@ fn parse_set_early_release(pos: FilePos, p: &mut Parser) -> Command {
     )
 }
 
-fn parse_detune(pos: FilePos, p: &mut Parser) -> Command {
+fn parse_detune<'a>(pos: FilePos, p: &mut Parser<'a, '_>) -> Command<'a> {
     Command::SetDetune(parse_signed_newtype_allow_zero(pos, p).unwrap_or(DetuneValue::ZERO))
 }
 
-fn parse_detune_cents(pos: FilePos, p: &mut Parser) -> Command {
+fn parse_detune_cents<'a>(pos: FilePos, p: &mut Parser<'a, '_>) -> Command<'a> {
     Command::SetDetuneCents(parse_signed_newtype_allow_zero(pos, p).unwrap_or(DetuneCents::ZERO))
 }
 
@@ -1042,7 +948,7 @@ fn parse_tracked_length(p: &mut Parser) -> TickCounter {
         }
     };
 
-    p.increment_tick_counter(length);
+    p.increment_tick_offset(length);
 
     length
 }
@@ -1081,7 +987,7 @@ fn parse_tracked_comma_length(p: &mut Parser) -> TickCounter {
         }
     };
 
-    p.increment_tick_counter(length);
+    p.increment_tick_offset(length);
 
     length
 }
@@ -1089,7 +995,7 @@ fn parse_tracked_comma_length(p: &mut Parser) -> TickCounter {
 fn parse_tracked_optional_length(p: &mut Parser) -> Option<TickCounter> {
     let length = parse_untracked_optional_length(p);
     if let Some(tc) = length {
-        p.increment_tick_counter(tc)
+        p.increment_tick_offset(tc)
     }
     length
 }
@@ -1454,11 +1360,11 @@ fn parse_inc_volume_paren(pos: FilePos, p: &mut Parser) -> VolumeCommand {
     )
 }
 
-fn merge_pan_or_volume(
+fn merge_pan_or_volume<'a>(
     pan: Option<PanCommand>,
     volume: Option<VolumeCommand>,
-    p: &mut Parser,
-) -> Command {
+    p: &mut Parser<'a, '_>,
+) -> Command<'a> {
     let mut pan = pan;
     let mut volume = volume;
 
@@ -1545,7 +1451,11 @@ fn parse_coarse_volume_slide_amount(pos: FilePos, p: &mut Parser) -> Option<Volu
     )
 }
 
-fn _parse_volume_slide(pos: FilePos, p: &mut Parser, amount: Option<VolumeSlideAmount>) -> Command {
+fn _parse_volume_slide<'a>(
+    pos: FilePos,
+    p: &mut Parser<'a, '_>,
+    amount: Option<VolumeSlideAmount>,
+) -> Command<'a> {
     let ticks = parse_comma_ticks(pos, p);
 
     match (amount, ticks) {
@@ -1554,12 +1464,12 @@ fn _parse_volume_slide(pos: FilePos, p: &mut Parser, amount: Option<VolumeSlideA
     }
 }
 
-fn parse_coarse_volume_slide(pos: FilePos, p: &mut Parser) -> Command {
+fn parse_coarse_volume_slide<'a>(pos: FilePos, p: &mut Parser<'a, '_>) -> Command<'a> {
     let amount = parse_coarse_volume_slide_amount(pos, p);
     _parse_volume_slide(pos, p, amount)
 }
 
-fn parse_fine_volume_slide(pos: FilePos, p: &mut Parser) -> Command {
+fn parse_fine_volume_slide<'a>(pos: FilePos, p: &mut Parser<'a, '_>) -> Command<'a> {
     let amount = parse_signed_newtype::<VolumeSlideAmount>(pos, p);
     _parse_volume_slide(pos, p, amount)
 }
@@ -1595,7 +1505,11 @@ fn parse_coarse_tremolo_amplitude(pos: FilePos, p: &mut Parser) -> Option<Tremol
     )
 }
 
-fn _parse_tremolo(pos: FilePos, p: &mut Parser, amount: Option<TremoloAmplitude>) -> Command {
+fn _parse_tremolo<'a>(
+    pos: FilePos,
+    p: &mut Parser<'a, '_>,
+    amount: Option<TremoloAmplitude>,
+) -> Command<'a> {
     let ticks = parse_comma_ticks(pos, p);
 
     match (amount, ticks) {
@@ -1604,17 +1518,17 @@ fn _parse_tremolo(pos: FilePos, p: &mut Parser, amount: Option<TremoloAmplitude>
     }
 }
 
-fn parse_fine_tremolo(pos: FilePos, p: &mut Parser) -> Command {
+fn parse_fine_tremolo<'a>(pos: FilePos, p: &mut Parser<'a, '_>) -> Command<'a> {
     let amplitude = parse_unsigned_newtype(pos, p);
     _parse_tremolo(pos, p, amplitude)
 }
 
-fn parse_coarse_tremolo(pos: FilePos, p: &mut Parser) -> Command {
+fn parse_coarse_tremolo<'a>(pos: FilePos, p: &mut Parser<'a, '_>) -> Command<'a> {
     let amount = parse_coarse_tremolo_amplitude(pos, p);
     _parse_tremolo(pos, p, amount)
 }
 
-fn parse_pan_slide(pos: FilePos, p: &mut Parser) -> Command {
+fn parse_pan_slide<'a>(pos: FilePos, p: &mut Parser<'a, '_>) -> Command<'a> {
     let amount = parse_signed_newtype(pos, p);
     let ticks = parse_comma_ticks(pos, p);
 
@@ -1624,7 +1538,7 @@ fn parse_pan_slide(pos: FilePos, p: &mut Parser) -> Command {
     }
 }
 
-fn parse_panbrello(pos: FilePos, p: &mut Parser) -> Command {
+fn parse_panbrello<'a>(pos: FilePos, p: &mut Parser<'a, '_>) -> Command<'a> {
     let amplitude = parse_unsigned_newtype(pos, p);
     let qwt = parse_comma_ticks(pos, p);
 
@@ -1748,7 +1662,7 @@ fn parse_wait_length_and_ties(p: &mut Parser) -> TickCounter {
     }
 }
 
-fn parse_wait(p: &mut Parser) -> Command {
+fn parse_wait<'a>(p: &mut Parser) -> Command<'a> {
     Command::Wait(parse_wait_length_and_ties(p))
 }
 
@@ -1761,7 +1675,7 @@ fn parse_rest_lengths(p: &mut Parser) -> (TickCounter, TickCounter) {
     (ticks_until_keyoff, ticks_after_keyoff)
 }
 
-fn parse_rest(p: &mut Parser) -> Command {
+fn parse_rest<'a>(p: &mut Parser<'a, '_>) -> Command<'a> {
     let (ticks_until_keyoff, ticks_after_keyoff) = parse_rest_lengths(p);
 
     Command::Rest {
@@ -1770,7 +1684,12 @@ fn parse_rest(p: &mut Parser) -> Command {
     }
 }
 
-fn play_note(pos: FilePos, note: Note, length: TickCounter, p: &mut Parser) -> Command {
+fn play_note<'a>(
+    pos: FilePos,
+    note: Note,
+    length: TickCounter,
+    p: &mut Parser<'a, '_>,
+) -> Command<'a> {
     let (tie_length, is_slur) = parse_ties_and_slur(p);
     let length = length + tie_length;
 
@@ -1797,7 +1716,7 @@ fn pitch_to_note(pitch: MmlPitch, p: &Parser) -> Result<Note, ChannelError> {
     }
 }
 
-fn parse_pitch(pos: FilePos, pitch: MmlPitch, p: &mut Parser) -> Command {
+fn parse_pitch<'a>(pos: FilePos, pitch: MmlPitch, p: &mut Parser<'a, '_>) -> Command<'a> {
     match pitch_to_note(pitch, p) {
         Ok(note) => {
             let length = parse_tracked_length(p);
@@ -1818,13 +1737,13 @@ fn parse_pitch(pos: FilePos, pitch: MmlPitch, p: &mut Parser) -> Command {
     }
 }
 
-fn parse_play_sample(pos: FilePos, p: &mut Parser) -> Command {
+fn parse_play_sample<'a>(pos: FilePos, p: &mut Parser<'a, '_>) -> Command<'a> {
     let index = next_token_number(p).unwrap_or(0);
 
     let length = if next_token_matches!(p, Token::Comma) {
         parse_tracked_length(p)
     } else {
-        p.increment_tick_counter(p.default_length());
+        p.increment_tick_offset(p.default_length());
         p.default_length()
     };
 
@@ -1843,7 +1762,7 @@ fn parse_play_sample(pos: FilePos, p: &mut Parser) -> Command {
     }
 }
 
-fn parse_after_play_pitch(pitch: PlayPitchPitch, p: &mut Parser) -> Command {
+fn parse_after_play_pitch<'a>(pitch: PlayPitchPitch, p: &mut Parser) -> Command<'a> {
     let p_length = parse_tracked_comma_length(p);
 
     let (tie_length, is_slur) = parse_ties_and_slur(p);
@@ -1859,17 +1778,17 @@ fn parse_after_play_pitch(pitch: PlayPitchPitch, p: &mut Parser) -> Command {
     }
 }
 
-fn parse_play_pitch(pos: FilePos, p: &mut Parser) -> Command {
+fn parse_play_pitch<'a>(pos: FilePos, p: &mut Parser) -> Command<'a> {
     let pitch = parse_unsigned_newtype(pos, p).unwrap_or(PlayPitchPitch::NATIVE);
     parse_after_play_pitch(pitch, p)
 }
 
-fn parse_play_pitch_sample_rate(pos: FilePos, p: &mut Parser) -> Command {
+fn parse_play_pitch_sample_rate<'a>(pos: FilePos, p: &mut Parser<'a, '_>) -> Command<'a> {
     let pitch = parse_play_pitch_sample_rate_value(pos, p);
     parse_after_play_pitch(pitch, p)
 }
 
-fn parse_play_pitch_frequency(pos: FilePos, p: &mut Parser) -> Command {
+fn parse_play_pitch_frequency<'a>(pos: FilePos, p: &mut Parser<'a, '_>) -> Command<'a> {
     let frequency = parse_unsigned_newtype(pos, p);
     let p_length = parse_tracked_comma_length(p);
 
@@ -1895,7 +1814,7 @@ fn parse_play_pitch_frequency(pos: FilePos, p: &mut Parser) -> Command {
     }
 }
 
-fn parse_play_noise(pos: FilePos, p: &mut Parser) -> Command {
+fn parse_play_noise<'a>(pos: FilePos, p: &mut Parser<'a, '_>) -> Command<'a> {
     let frequency = parse_unsigned_newtype(pos, p).unwrap_or(NoiseFrequency::MIN);
     let p_length = parse_tracked_comma_length(p);
 
@@ -1912,9 +1831,9 @@ fn parse_play_noise(pos: FilePos, p: &mut Parser) -> Command {
     }
 }
 
-fn parse_play_midi_note_number(pos: FilePos, p: &mut Parser) -> Command {
+fn parse_play_midi_note_number<'a>(pos: FilePos, p: &mut Parser<'a, '_>) -> Command<'a> {
     let length = p.default_length();
-    p.increment_tick_counter(length);
+    p.increment_tick_offset(length);
 
     let note = match parse_unsigned_newtype::<MidiNote>(pos, p) {
         Some(n) => match n.try_into() {
@@ -1941,7 +1860,7 @@ fn parse_play_midi_note_number(pos: FilePos, p: &mut Parser) -> Command {
     }
 }
 
-fn parse_portamento(pos: FilePos, p: &mut Parser) -> Command {
+fn parse_portamento<'a>(pos: FilePos, p: &mut Parser<'a, '_>) -> Command<'a> {
     let notes = parse_portamento_pitches(pos, p);
 
     if matches!(notes, Err(PortamentoPitchError::MissingEnd)) {
@@ -1994,7 +1913,7 @@ fn parse_portamento(pos: FilePos, p: &mut Parser) -> Command {
     }
 }
 
-fn parse_broken_chord(p: &mut Parser) -> Command {
+fn parse_broken_chord<'a>(p: &mut Parser<'a, '_>) -> Command<'a> {
     let (notes, end_pos) = match parse_broken_chord_pitches(p) {
         Some(s) => s,
         None => return Command::None,
@@ -2084,7 +2003,7 @@ fn parse_manual_vibrato(pos: FilePos, p: &mut Parser) -> Option<ManualVibrato> {
     }
 }
 
-fn parse_set_adsr(pos: FilePos, p: &mut Parser) -> Command {
+fn parse_set_adsr<'a>(pos: FilePos, p: &mut Parser<'a, '_>) -> Command<'a> {
     let mut values = [0; 4];
 
     values[0] = match next_token_number(p) {
@@ -2119,7 +2038,7 @@ fn parse_set_adsr(pos: FilePos, p: &mut Parser) -> Command {
     }
 }
 
-fn parse_set_gain(pos: FilePos, mode: GainMode, p: &mut Parser) -> Command {
+fn parse_set_gain<'a>(pos: FilePos, mode: GainMode, p: &mut Parser<'a, '_>) -> Command<'a> {
     match next_token_number(p) {
         Some(v) => match Gain::from_mode_and_value(mode, v) {
             Ok(gain) => Command::SetGain(gain),
@@ -2129,7 +2048,7 @@ fn parse_set_gain(pos: FilePos, mode: GainMode, p: &mut Parser) -> Command {
     }
 }
 
-fn parse_temp_gain(pos: FilePos, mode: GainMode, p: &mut Parser) -> Command {
+fn parse_temp_gain<'a>(pos: FilePos, mode: GainMode, p: &mut Parser<'a, '_>) -> Command<'a> {
     let mut temp_gain = match next_token_number(p) {
         Some(v) => match TempGain::try_from_mode_and_value(mode, v) {
             Ok(g) => Some(g),
@@ -2174,7 +2093,7 @@ fn parse_temp_gain(pos: FilePos, mode: GainMode, p: &mut Parser) -> Command {
     }
 }
 
-fn parse_pitch_mod(pos: FilePos, p: &mut Parser) -> Command {
+fn parse_pitch_mod<'a>(pos: FilePos, p: &mut Parser) -> Command<'a> {
     match_next_token!(p,
         Token::Number(0) | Token::HexNumber(0) => Command::DisablePitchMod,
         Token::Number(1) | Token::HexNumber(1) => Command::EnablePitchMod,
@@ -2183,7 +2102,7 @@ fn parse_pitch_mod(pos: FilePos, p: &mut Parser) -> Command {
     )
 }
 
-fn parse_echo(pos: FilePos, p: &mut Parser) -> Command {
+fn parse_echo<'a>(pos: FilePos, p: &mut Parser) -> Command<'a> {
     match_next_token!(p,
         Token::Number(0) | Token::HexNumber(0) => Command::SetEcho(false),
         Token::Number(1) | Token::HexNumber(1) => Command::SetEcho(true),
@@ -2192,7 +2111,7 @@ fn parse_echo(pos: FilePos, p: &mut Parser) -> Command {
     )
 }
 
-fn parse_keyoff(pos: FilePos, p: &mut Parser) -> Command {
+fn parse_keyoff<'a>(pos: FilePos, p: &mut Parser) -> Command<'a> {
     let keyoff_enabled = match_next_token!(p,
         Token::Number(0) | Token::HexNumber(0) => false,
         Token::Number(1) | Token::HexNumber(1) => true,
@@ -2212,7 +2131,7 @@ fn parse_keyoff(pos: FilePos, p: &mut Parser) -> Command {
     Command::SetKeyOff(keyoff_enabled)
 }
 
-fn parse_set_instrument(pos: FilePos, id: IdentifierStr, p: &mut Parser) -> Command {
+fn parse_set_instrument<'a>(pos: FilePos, id: IdentifierStr, p: &mut Parser) -> Command<'a> {
     match p.instruments_map().get(&id) {
         Some(inst) => Command::SetInstrument(*inst),
         None => invalid_token_error(
@@ -2223,7 +2142,11 @@ fn parse_set_instrument(pos: FilePos, id: IdentifierStr, p: &mut Parser) -> Comm
     }
 }
 
-fn parse_set_instrument_hint(pos: FilePos, id: IdentifierStr, p: &mut Parser) -> Command {
+fn parse_set_instrument_hint<'a>(
+    pos: FilePos,
+    id: IdentifierStr,
+    p: &mut Parser<'a, '_>,
+) -> Command<'a> {
     match p.instruments_map().get(&id) {
         Some(inst) => Command::SetSubroutineInstrumentHint(*inst),
         None => invalid_token_error(
@@ -2234,44 +2157,24 @@ fn parse_set_instrument_hint(pos: FilePos, id: IdentifierStr, p: &mut Parser) ->
     }
 }
 
-fn parse_call_subroutine(
+fn parse_call_subroutine<'a>(
     pos: FilePos,
     id: IdentifierStr,
     d: SubroutineCallType,
-    p: &mut Parser,
-) -> Command {
+    p: &mut Parser<'a, '_>,
+) -> Command<'a> {
     match p.find_subroutine(id.as_str()) {
-        FindSubroutineResult::Found(s) => {
-            let index = s.as_usize();
-
-            p.increment_tick_counter(s.tick_counter());
-            Command::CallSubroutine(index, d)
-        }
-        FindSubroutineResult::NotCompiled => {
-            // Subroutine has been compiled, but it contains an error
-            Command::None
-        }
-        FindSubroutineResult::Recussion => invalid_token_error(
-            p,
-            pos,
-            ChannelError::CannotCallSubroutineRecursion(id.as_str().to_owned()),
-        ),
-        FindSubroutineResult::NotFound => invalid_token_error(
-            p,
-            pos,
-            ChannelError::CannotFindSubroutine(id.as_str().to_owned()),
-        ),
-        FindSubroutineResult::NotAllowed => match p.channel_id() {
-            ChannelId::Channel(_) | ChannelId::Subroutine(_) => invalid_token_error(
-                p,
-                pos,
-                ChannelError::CannotFindSubroutine(id.as_str().to_owned()),
-            ),
+        Some(index) => Command::CallSubroutine(index, d),
+        None => match p.channel_id() {
+            ChannelId::Channel(_) | ChannelId::Subroutine(_) | ChannelId::SoundEffect => {
+                invalid_token_error(
+                    p,
+                    pos,
+                    ChannelError::CannotFindSubroutine(id.as_str().to_owned()),
+                )
+            }
             ChannelId::MmlPrefix => {
                 invalid_token_error(p, pos, ChannelError::CannotCallSubroutineInAnMmlPrefix)
-            }
-            ChannelId::SoundEffect => {
-                invalid_token_error(p, pos, ChannelError::CannotCallSubroutineInASoundEffect)
             }
         },
     }
@@ -2297,7 +2200,7 @@ fn relative_echo_volume_or_min(n: i32, pos: FilePos, p: &mut Parser) -> Relative
     }
 }
 
-fn parse_evol(pos: FilePos, p: &mut Parser) -> Command {
+fn parse_evol<'a>(pos: FilePos, p: &mut Parser) -> Command<'a> {
     let first_pos = p.peek_pos();
 
     match_next_token!(p,
@@ -2347,11 +2250,11 @@ fn parse_evol(pos: FilePos, p: &mut Parser) -> Command {
     )
 }
 
-fn parse_efb(pos: FilePos, p: &mut Parser) -> Command {
+fn parse_efb<'a>(pos: FilePos, p: &mut Parser) -> Command<'a> {
     Command::SetEchoFeedback(parse_i8wh_newtype(pos, p))
 }
 
-fn parse_efb_plus(pos: FilePos, p: &mut Parser) -> Command {
+fn parse_efb_plus<'a>(pos: FilePos, p: &mut Parser) -> Command<'a> {
     let value_pos = p.peek_pos();
 
     let rel: RelativeEchoFeedback = match_next_token!(p,
@@ -2386,7 +2289,7 @@ fn parse_efb_plus(pos: FilePos, p: &mut Parser) -> Command {
     }
 }
 
-fn parse_efb_minus(pos: FilePos, p: &mut Parser) -> Command {
+fn parse_efb_minus<'a>(pos: FilePos, p: &mut Parser) -> Command<'a> {
     let value_pos = p.peek_pos();
 
     let rel: RelativeEchoFeedback = match_next_token!(p,
@@ -2422,7 +2325,7 @@ fn parse_efb_minus(pos: FilePos, p: &mut Parser) -> Command {
     }
 }
 
-fn parse_ftap(pos: FilePos, p: &mut Parser) -> Command {
+fn parse_ftap<'a>(pos: FilePos, p: &mut Parser) -> Command<'a> {
     let tap = parse_unsigned_newtype(pos, p).unwrap_or(FirTap::MIN);
 
     if next_token_matches!(p, Token::Comma) {
@@ -2433,7 +2336,7 @@ fn parse_ftap(pos: FilePos, p: &mut Parser) -> Command {
     }
 }
 
-fn parse_ftap_plus(pos: FilePos, p: &mut Parser) -> Command {
+fn parse_ftap_plus<'a>(pos: FilePos, p: &mut Parser) -> Command<'a> {
     let tap = parse_unsigned_newtype(pos, p).unwrap_or(FirTap::MIN);
 
     if next_token_matches!(p, Token::Comma) {
@@ -2478,7 +2381,7 @@ fn parse_ftap_plus(pos: FilePos, p: &mut Parser) -> Command {
     }
 }
 
-fn parse_ftap_minus(pos: FilePos, p: &mut Parser) -> Command {
+fn parse_ftap_minus<'a>(pos: FilePos, p: &mut Parser) -> Command<'a> {
     let tap = parse_unsigned_newtype(pos, p).unwrap_or(FirTap::MIN);
 
     if next_token_matches!(p, Token::Comma) {
@@ -2524,7 +2427,7 @@ fn parse_ftap_minus(pos: FilePos, p: &mut Parser) -> Command {
     }
 }
 
-fn parse_fir_filter(fir_pos: FilePos, p: &mut Parser) -> Command {
+fn parse_fir_filter<'a>(fir_pos: FilePos, p: &mut Parser) -> Command<'a> {
     if !next_token_matches!(p, Token::StartPortamento) {
         return invalid_token_error(p, fir_pos, ChannelError::NoBraceAfterFirFilter);
     }
@@ -2598,19 +2501,59 @@ fn parse_fir_filter(fir_pos: FilePos, p: &mut Parser) -> Command {
     }
 }
 
-fn parse_set_echo_delay(pos: FilePos, p: &mut Parser) -> Command {
+fn parse_set_echo_delay<'a>(pos: FilePos, p: &mut Parser) -> Command<'a> {
     match parse_unsigned_newtype(pos, p) {
         Some(l) => Command::SetEchoDelay(l),
         None => Command::None,
     }
 }
 
-fn invalid_token_error(p: &mut Parser, pos: FilePos, e: ChannelError) -> Command {
+fn parse_bytecode_asm<'a>(pos: FilePos, asm: &'a str, p: &mut Parser<'a, '_>) -> Command<'a> {
+    match asm.split_once(|c: char| c.is_ascii_whitespace()) {
+        Some((bytecode_assembler::CALL_SUBROUTINE, arg)) => parse_call_subroutine(
+            pos,
+            IdentifierStr::from_str(arg.trim_start()),
+            SubroutineCallType::Asm,
+            p,
+        ),
+        Some((bytecode_assembler::CALL_SUBROUTINE_AND_DISABLE_VIBRATO, arg)) => {
+            parse_call_subroutine(
+                pos,
+                IdentifierStr::from_str(arg.trim_start()),
+                SubroutineCallType::AsmDisableVibrato,
+                p,
+            )
+        }
+        Some((bytecode_assembler::SET_TRANSPOSE, arg)) => {
+            match bytecode_assembler::parse_svnt_allow_zero(arg.trim_start()) {
+                Ok(t) => Command::SetTranspose(t),
+                Err(e) => {
+                    p.add_error(pos, e);
+                    Command::None
+                }
+            }
+        }
+        Some((bytecode_assembler::ADJUST_TRANSPOSE, arg)) => {
+            match bytecode_assembler::parse_svnt(arg.trim_start()) {
+                Ok(t) => Command::AdjustTranspose(t),
+                Err(e) => {
+                    p.add_error(pos, e);
+                    Command::None
+                }
+            }
+        }
+        _ => Command::BytecodeAsm(asm),
+    }
+}
+
+fn invalid_token_error<'a>(p: &mut Parser, pos: FilePos, e: ChannelError) -> Command<'a> {
     p.add_error(pos, e);
     Command::None
 }
 
-fn parse_token(pos: FilePos, token: Token, p: &mut Parser) -> Command {
+fn parse_token<'a>(pos: FilePos, token: Token<'a>, p: &mut Parser<'a, '_>) -> Command<'a> {
+    p.reset_tick_offset();
+
     match token {
         Token::End => Command::None,
 
@@ -2642,12 +2585,9 @@ fn parse_token(pos: FilePos, token: Token, p: &mut Parser) -> Command {
 
         Token::SetInstrument(id) => parse_set_instrument(pos, id, p),
         Token::SetSubroutineInstrumentHint(id) => parse_set_instrument_hint(pos, id, p),
-        Token::CallSubroutine(id, d) => parse_call_subroutine(pos, id, d, p),
+        Token::CallSubroutine(id) => parse_call_subroutine(pos, id, SubroutineCallType::Mml, p),
 
-        Token::StartLoop => {
-            p.set_loop_flag();
-            Command::StartLoop
-        }
+        Token::StartLoop => Command::StartLoop,
         Token::SkipLastLoop => Command::SkipLastLoop,
         Token::EndLoop => {
             let lc = parse_unsigned_newtype(pos, p).unwrap_or(LoopCount::MIN);
@@ -2761,9 +2701,8 @@ fn parse_token(pos: FilePos, token: Token, p: &mut Parser) -> Command {
         Token::SetEchoDelay => parse_set_echo_delay(pos, p),
 
         Token::StartBytecodeAsm => Command::StartBytecodeAsm,
+        Token::BytecodeAsm(asm) => parse_bytecode_asm(pos, asm, p),
         Token::EndBytecodeAsm => Command::EndBytecodeAsm,
-        Token::BytecodeAsm(range) => Command::BytecodeAsm(range),
-        Token::TransposeAsm(range) => Command::BytecodeAsm(range),
 
         Token::EndPortamento => invalid_token_error(p, pos, ChannelError::NoStartPortamento),
         Token::EndBrokenChord => invalid_token_error(p, pos, ChannelError::NoStartBrokenChord),
@@ -2784,4 +2723,41 @@ fn parse_token(pos: FilePos, token: Token, p: &mut Parser) -> Command {
 
         Token::Error(e) => invalid_token_error(p, pos, e),
     }
+}
+
+pub(crate) fn parse_mml_tokens<'a>(
+    channel: ChannelId,
+    tokens: MmlTokens<'a>,
+    instruments_map: &HashMap<IdentifierStr, usize>,
+    subroutines: &dyn SubroutineNameMap,
+    settings: &GlobalSettings,
+    cursor_tracking: &mut CursorTracker,
+) -> (ChannelCommands<'a>, Vec<ErrorWithPos<ChannelError>>) {
+    let mut commands = Vec::with_capacity(tokens.len() / 2);
+
+    let mut p = Parser::new(
+        channel,
+        tokens,
+        instruments_map,
+        subroutines,
+        settings,
+        cursor_tracking,
+    );
+
+    let end_pos = loop {
+        let (pos, token) = p.peek_and_next();
+
+        match token {
+            Token::End => break pos,
+            t => commands.push(CommandWithPos::new(
+                parse_token(pos, t, &mut p),
+                p.file_pos_range_from(pos),
+                p.command_end_char_index(),
+            )),
+        }
+    };
+
+    let errors = p.finalize();
+
+    (ChannelCommands { commands, end_pos }, errors)
 }

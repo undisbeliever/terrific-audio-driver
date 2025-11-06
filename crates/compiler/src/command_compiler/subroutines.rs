@@ -1,23 +1,18 @@
-//! MML subroutine compiler manager
+//! Subroutine compiler manager
 
 // SPDX-FileCopyrightText: © 2024 Marcus Rowe <undisbeliever@gmail.com>
 //
 // SPDX-License-Identifier: MIT
 
-use std::collections::HashMap;
+use super::commands::{Command, CommandWithPos, SubroutineCommands};
 
 use crate::driver_constants::MAX_SUBROUTINES;
-use crate::errors::MmlChannelError;
-
-use super::bc_generator::MmlSongBytecodeGenerator;
-use super::tokenizer::{MmlTokens, Token};
-use super::IdentifierStr;
 
 const MISSING_SUBROUTINE_BIT: u8 = u8::MAX;
 
 const _: () = assert!(MAX_SUBROUTINES <= MISSING_SUBROUTINE_BIT as usize);
 
-pub struct SubroutineBitArray {
+struct SubroutineBitArray {
     bits: [u128; Self::N_BITS / Self::BITS_PER_ENTRY],
 }
 
@@ -53,57 +48,58 @@ impl SubroutineBitArray {
     }
 }
 
-fn subroutine_call_bitset(
-    tokens: &MmlTokens,
-    subroutine_name_map: &HashMap<IdentifierStr, usize>,
-) -> SubroutineBitArray {
+fn subroutine_call_bitset(commands: &[CommandWithPos]) -> SubroutineBitArray {
     let mut o = SubroutineBitArray::new_all_clear();
 
-    for t in tokens.token_iter() {
-        if let Token::CallSubroutine(id, _) = t {
-            match subroutine_name_map.get(id) {
-                Some(&i) => {
-                    let bit = i.try_into().unwrap();
-                    debug_assert!(bit < MISSING_SUBROUTINE_BIT);
-                    o.set_bit(bit);
-                }
-                None => {
-                    o.set_bit(MISSING_SUBROUTINE_BIT);
-                }
-            }
+    for c in commands {
+        if let Command::CallSubroutine(i, _) = c.command() {
+            let bit = *i;
+            debug_assert!(bit < MISSING_SUBROUTINE_BIT);
+            o.set_bit(bit);
         }
     }
 
     o
 }
 
-struct ToProcess<'a> {
+pub struct SubroutineCommandsWithCompileOrder<'a> {
+    subroutines: Vec<SubroutineCommands<'a>>,
+    compile_order: Vec<u8>,
+}
+
+impl<'a> SubroutineCommandsWithCompileOrder<'a> {
+    pub fn original_order(&self) -> &[SubroutineCommands<'a>] {
+        &self.subroutines
+    }
+
+    pub fn compile_iter(&self) -> impl Iterator<Item = &SubroutineCommands<'a>> {
+        self.compile_order
+            .iter()
+            .map(|&i| &self.subroutines[usize::from(i)])
+    }
+}
+
+struct ToProcess {
     index: u8,
-    identifier: IdentifierStr<'a>,
-    tokens: MmlTokens<'a>,
     function_calls: SubroutineBitArray,
 }
 
-/// Compiles MML song subroutines
+/// Determine the subroutine compile order
 ///
 /// Uses a bit-array to ensure the subroutines are compiled bottom-up order to detect recursion
 /// and ensure note_tracking is correct.
-pub fn compile_subroutines<'a>(
-    bc_generator: &mut MmlSongBytecodeGenerator<'a>,
-    subroutines: Vec<(IdentifierStr<'a>, MmlTokens<'a>)>,
-    subroutine_name_map: &HashMap<IdentifierStr<'a>, usize>,
-    song_uses_driver_transpose: bool,
-) -> Vec<MmlChannelError> {
+pub fn subroutine_compile_order<'a>(
+    subroutines: Vec<SubroutineCommands<'a>>,
+) -> SubroutineCommandsWithCompileOrder<'a> {
     assert!(subroutines.len() <= SubroutineBitArray::N_BITS);
 
+    let mut compile_order = Vec::with_capacity(subroutines.len());
+
     let mut to_process: Vec<_> = subroutines
-        .into_iter()
-        .enumerate()
-        .map(|(i, (id, tokens))| ToProcess {
-            function_calls: subroutine_call_bitset(&tokens, subroutine_name_map),
-            index: i.try_into().unwrap(),
-            identifier: id,
-            tokens,
+        .iter()
+        .map(|s| ToProcess {
+            index: s.index,
+            function_calls: subroutine_call_bitset(&s.commands),
         })
         .collect();
 
@@ -112,8 +108,6 @@ pub fn compile_subroutines<'a>(
     let mut remaining_subroutines = SubroutineBitArray::new_all_set();
 
     remaining_subroutines.clear_bit(MISSING_SUBROUTINE_BIT);
-
-    let mut errors = Vec::with_capacity(to_process.len());
 
     while !to_process.is_empty() {
         let old_len = to_process.len();
@@ -124,17 +118,7 @@ pub fn compile_subroutines<'a>(
             {
                 remaining_subroutines.clear_bit(s.index);
 
-                let mut tokens = Default::default();
-                std::mem::swap(&mut tokens, &mut s.tokens);
-
-                let r = bc_generator.parse_and_compile_subroutione(
-                    s.identifier,
-                    tokens,
-                    song_uses_driver_transpose,
-                );
-                if let Err(e) = r {
-                    errors.push(e);
-                }
+                compile_order.push(s.index);
 
                 false
             } else {
@@ -149,16 +133,10 @@ pub fn compile_subroutines<'a>(
         }
     }
 
-    for s in to_process {
-        let r = bc_generator.parse_and_compile_subroutione(
-            s.identifier,
-            s.tokens,
-            song_uses_driver_transpose,
-        );
-        if let Err(e) = r {
-            errors.push(e);
-        }
-    }
+    compile_order.extend(to_process.into_iter().map(|s| s.index));
 
-    errors
+    SubroutineCommandsWithCompileOrder {
+        subroutines,
+        compile_order,
+    }
 }

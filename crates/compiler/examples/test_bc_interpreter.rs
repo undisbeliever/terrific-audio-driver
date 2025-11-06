@@ -15,9 +15,8 @@ use compiler::{
         addresses, io_commands, AudioMode, BC_TOTAL_STACK_SIZE, ECHO_VARIABLES_SIZE,
         N_MUSIC_CHANNELS, S_SMP_TIMER_0_REGISTER,
     },
-    mml::compile_mml,
     samples::build_sample_and_instrument_data,
-    songs::{override_song_tick_clock, SongData},
+    songs::{compile_mml_song, override_song_tick_clock, SongData},
     sound_effects::{blank_compiled_sound_effects, CompiledSfxSubroutines},
     tad_apu::ApuEmulator,
     time::{TickClock, TickCounter},
@@ -384,7 +383,7 @@ fn main() {
 
         let mml_file = load_text_file_with_limit(&song.source, &project.parent_path).unwrap();
 
-        let song_data = compile_mml(
+        let song_data = compile_mml_song(
             &mml_file.contents,
             &mml_file.file_name,
             Some(song.name.clone()),

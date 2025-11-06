@@ -6,25 +6,27 @@
 
 use crate::bytecode::{opcodes, BcTerminator, BytecodeContext};
 use crate::bytecode_assembler::BytecodeAssembler;
+use crate::command_compiler;
+use crate::command_compiler::channel_bc_generator::{self, CommandCompiler};
+use crate::command_compiler::subroutines::subroutine_compile_order;
 use crate::data::{
     DefaultSfxFlags, InstrumentOrSample, Name, UniqueNamesList, UniqueSoundEffectExportOrder,
 };
 use crate::driver_constants::{
     COMMON_DATA_BYTES_PER_SFX_SUBROUTINE, COMMON_DATA_BYTES_PER_SOUND_EFFECT, MAX_COMMON_DATA_SIZE,
 };
+use crate::echo::EchoEdl;
 use crate::errors::{
     ChannelError, CombineSoundEffectsError, ErrorWithPos, OtherSfxError, SfxSubroutineErrors,
     SoundEffectError, SoundEffectErrorList, SoundEffectsFileError,
 };
 use crate::file_pos::{blank_file_range, split_lines};
-use crate::mml;
+use crate::identifier::ChannelId;
+use crate::mml::{self, CommandTickTracker, CursorTracker, CursorTrackerGetter};
 use crate::pitch_table::PitchTable;
 use crate::sfx_file::SoundEffectsFile;
-use crate::subroutines::{FindSubroutineResult, Subroutine, SubroutineStore};
+use crate::subroutines::{CompiledSubroutines, SubroutineNameMap, SubroutineState};
 use crate::time::{TickClock, TickCounter};
-
-#[cfg(feature = "mml_tracking")]
-use crate::mml::note_tracking::CursorTracker;
 
 use std::collections::HashMap;
 use std::time::Duration;
@@ -44,43 +46,24 @@ pub struct SfxSubroutinesMml(pub String);
 pub struct CompiledSfxSubroutines {
     data: Vec<u8>,
 
-    subroutines: Vec<Subroutine>,
+    subroutines: CompiledSubroutines,
+
     name_map: HashMap<String, usize>,
 
-    #[cfg(feature = "mml_tracking")]
     cursor_tracker: CursorTracker,
 }
 
 impl CompiledSfxSubroutines {
-    pub(crate) fn new(
-        data: Vec<u8>,
-        subroutines: Vec<Subroutine>,
-        #[cfg(feature = "mml_tracking")] cursor_tracker: CursorTracker,
-    ) -> Self {
-        Self {
-            data,
-            name_map: subroutines
-                .iter()
-                .enumerate()
-                .map(|(i, s)| (s.identifier.as_str().to_owned(), i))
-                .collect(),
-            subroutines,
-            #[cfg(feature = "mml_tracking")]
-            cursor_tracker,
-        }
-    }
-
     pub fn blank() -> Self {
         Self {
             data: Vec::new(),
-            subroutines: Vec::new(),
+            subroutines: CompiledSubroutines::new_blank(),
             name_map: HashMap::new(),
-            #[cfg(feature = "mml_tracking")]
             cursor_tracker: CursorTracker::new(),
         }
     }
 
-    pub fn subroutines(&self) -> &[Subroutine] {
+    pub fn subroutines(&self) -> &CompiledSubroutines {
         &self.subroutines
     }
 
@@ -88,7 +71,6 @@ impl CompiledSfxSubroutines {
         self.data.len() + self.subroutines.len() * COMMON_DATA_BYTES_PER_SFX_SUBROUTINE
     }
 
-    #[cfg(feature = "mml_tracking")]
     pub fn cursor_tracker(&self) -> &CursorTracker {
         &self.cursor_tracker
     }
@@ -100,9 +82,10 @@ impl CompiledSfxSubroutines {
     fn bytecode_addr_table_iter(&self, addr: u16) -> impl Iterator<Item = u16> + '_ {
         assert!(self.data.len() + usize::from(addr) < MAX_COMMON_DATA_SIZE);
 
-        self.subroutines
-            .iter()
-            .map(move |s| s.bytecode_offset + addr)
+        self.subroutines.iter().map(move |s| match s {
+            (_, SubroutineState::Compiled(s)) => s.bytecode_offset + addr,
+            _ => panic!("subroutine has errors"),
+        })
     }
 
     pub(crate) fn sfx_subroutines_l_iter(&self, addr: u16) -> impl Iterator<Item = u8> + '_ {
@@ -116,30 +99,28 @@ impl CompiledSfxSubroutines {
     }
 }
 
-impl SubroutineStore for CompiledSfxSubroutines {
-    fn get(&self, index: usize) -> Option<&Subroutine> {
-        self.subroutines.get(index)
-    }
-
-    fn find_subroutine<'a, 'b>(&'a self, name: &'b str) -> FindSubroutineResult<'b>
-    where
-        'a: 'b,
-    {
-        match self
-            .name_map
-            .get(name)
-            .and_then(|i| self.subroutines.get(*i))
-        {
-            Some(s) => FindSubroutineResult::Found(&s.subroutine_id),
-            None => FindSubroutineResult::NotFound,
-        }
+impl SubroutineNameMap for CompiledSfxSubroutines {
+    fn find_subroutine_index(&self, name: &str) -> Option<u8> {
+        self.name_map.get(name).and_then(|&i| i.try_into().ok())
     }
 }
 
-#[derive(Debug)]
-enum SfxData {
-    Mml(mml::MmlSoundEffect),
-    BytecodeAssembly(Vec<u8>),
+impl CursorTrackerGetter for CompiledSfxSubroutines {
+    fn cursor_tracker(&self) -> Option<&CursorTracker> {
+        Some(&self.cursor_tracker)
+    }
+
+    fn tick_tracker_for_channel(&self, channel: ChannelId) -> Option<&CommandTickTracker> {
+        match channel {
+            ChannelId::Subroutine(i) => match self.subroutines.get_compiled(i) {
+                Some(s) => Some(&s.tick_tracker),
+                _ => None,
+            },
+            ChannelId::SoundEffect => None,
+            ChannelId::Channel(_) => None,
+            ChannelId::MmlPrefix => None,
+        }
+    }
 }
 
 #[derive(Default, Clone, Debug, PartialEq)]
@@ -150,17 +131,16 @@ pub struct SfxFlags {
 
 #[derive(Debug)]
 pub struct CompiledSoundEffect {
-    data: SfxData,
+    data: Vec<u8>,
     flags: SfxFlags,
     tick_counter: TickCounter,
+
+    cursor_tracker: Option<(CursorTracker, CommandTickTracker)>,
 }
 
 impl CompiledSoundEffect {
     pub fn bytecode(&self) -> &[u8] {
-        match &self.data {
-            SfxData::BytecodeAssembly(s) => s,
-            SfxData::Mml(s) => s.bytecode(),
-        }
+        &self.data
     }
 
     pub fn tick_counter(&self) -> TickCounter {
@@ -170,31 +150,44 @@ impl CompiledSoundEffect {
     pub fn duration(&self) -> Duration {
         self.tick_counter().to_duration(TickClock::SFX_TICK_CLOCK)
     }
+}
 
-    #[cfg(feature = "mml_tracking")]
-    pub fn cursor_tracker(&self) -> Option<&mml::CursorTracker> {
-        match &self.data {
-            SfxData::BytecodeAssembly(_) => None,
-            SfxData::Mml(s) => Some(s.cursor_tracker()),
+impl CursorTrackerGetter for CompiledSoundEffect {
+    fn cursor_tracker(&self) -> Option<&CursorTracker> {
+        self.cursor_tracker.as_ref().map(|(c, _)| c)
+    }
+
+    fn tick_tracker_for_channel(&self, channel: ChannelId) -> Option<&CommandTickTracker> {
+        match channel {
+            ChannelId::SoundEffect => self.cursor_tracker.as_ref().map(|(_, t)| t),
+            ChannelId::Channel(_) | ChannelId::Subroutine(_) | ChannelId::MmlPrefix => None,
         }
     }
 }
 
 fn compile_mml_sound_effect(
     sfx: &str,
-    inst_map: &UniqueNamesList<InstrumentOrSample>,
+    data_instruments: &UniqueNamesList<InstrumentOrSample>,
     pitch_table: &PitchTable,
-    subroutines: &CompiledSfxSubroutines,
+    sfx_subroutines: &CompiledSfxSubroutines,
     flags: SfxFlags,
 ) -> Result<CompiledSoundEffect, SoundEffectErrorList> {
-    match mml::compile_sound_effect(sfx, inst_map, pitch_table, subroutines) {
-        Ok(o) => Ok(CompiledSoundEffect {
-            tick_counter: o.tick_counter(),
-            flags,
-            data: SfxData::Mml(o),
-        }),
-        Err(errors) => Err(errors),
-    }
+    let s = mml::parse_sound_effect(sfx, data_instruments, sfx_subroutines)?;
+
+    channel_bc_generator::compile_sound_effect(
+        &s.commands,
+        &s.instruments,
+        data_instruments,
+        pitch_table,
+        &sfx_subroutines.subroutines,
+        s.errors,
+    )
+    .map(|(data, tick_counter, tick_tracker)| CompiledSoundEffect {
+        data,
+        tick_counter,
+        flags,
+        cursor_tracker: Some((s.mml_tracker, tick_tracker)),
+    })
 }
 
 pub fn compile_bytecode_sound_effect(
@@ -205,7 +198,12 @@ pub fn compile_bytecode_sound_effect(
 ) -> Result<CompiledSoundEffect, SoundEffectErrorList> {
     let mut errors = Vec::new();
 
-    let mut bc = BytecodeAssembler::new(instruments, subroutines, BytecodeContext::SoundEffect);
+    let mut bc = BytecodeAssembler::new(
+        instruments,
+        subroutines.subroutines(),
+        subroutines,
+        BytecodeContext::SoundEffect,
+    );
 
     let mut last_line_range = blank_file_range();
 
@@ -250,9 +248,10 @@ pub fn compile_bytecode_sound_effect(
         let (data, bc_state) = out.unwrap();
 
         Ok(CompiledSoundEffect {
-            data: SfxData::BytecodeAssembly(data),
+            data,
             flags,
             tick_counter: bc_state.tick_counter,
+            cursor_tracker: None,
         })
     } else {
         Err(SoundEffectErrorList::BytecodeErrors(errors))
@@ -261,10 +260,45 @@ pub fn compile_bytecode_sound_effect(
 
 pub fn compile_sfx_subroutines(
     subroutines: &SfxSubroutinesMml,
-    inst_map: &UniqueNamesList<InstrumentOrSample>,
+    data_instruments: &UniqueNamesList<InstrumentOrSample>,
     pitch_table: &PitchTable,
 ) -> Result<CompiledSfxSubroutines, SfxSubroutineErrors> {
-    mml::compile_sfx_subroutines(&subroutines.0, inst_map, pitch_table)
+    let s = mml::parse_sfx_subroutines(&subroutines.0, data_instruments)?;
+
+    let subroutines = subroutine_compile_order(s.subroutines);
+
+    let a = command_compiler::analysis::analyse(subroutines, None);
+
+    let mut compiler = CommandCompiler::new(
+        0,
+        pitch_table,
+        data_instruments,
+        &s.instruments,
+        EchoEdl::MIN,
+        &a,
+        // ::TODO detect driver transpose in subroutines::
+        false,
+    );
+    let mut errors = s.errors;
+
+    let subroutines = compiler.compile_subroutines(a, &mut errors);
+
+    if errors.is_empty() {
+        let (data, _) = compiler.take_data();
+
+        Ok(CompiledSfxSubroutines {
+            data,
+            name_map: subroutines
+                .iter()
+                .enumerate()
+                .map(|(i, (name, _))| (name.as_str().to_owned(), i))
+                .collect(),
+            subroutines,
+            cursor_tracker: s.mml_tracker,
+        })
+    } else {
+        Err(SfxSubroutineErrors::SubroutineErrors(errors))
+    }
 }
 
 pub fn compile_sound_effects_file(

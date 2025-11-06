@@ -16,6 +16,7 @@ use crate::errors::{ErrorWithPos, MmlLineError, ValueError};
 use crate::file_pos::{blank_file_range, Line};
 use crate::invert_flags::{parse_invert_flag_arguments, InvertFlags};
 use crate::notes::KeySignature;
+use crate::songs::MetaData;
 use crate::time::{Bpm, TickClock, ZenLen, DEFAULT_BPM, DEFAULT_ZENLEN};
 use crate::value_newtypes::{parse_i8wh, I8WithByteHexValueNewType};
 use crate::{spc_file_export, FilePosRange, SignedValueNewType};
@@ -37,30 +38,6 @@ impl Default for GlobalSettings {
             old_transpose: false,
         }
     }
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct MetaData {
-    pub title: Option<String>,
-    pub game: Option<String>,
-    pub date: Option<String>,
-    pub composer: Option<String>,
-    pub author: Option<String>,
-    pub copyright: Option<String>,
-    pub license: Option<String>,
-
-    pub echo_buffer: EchoBuffer,
-
-    pub tick_clock: TickClock,
-
-    pub mml_settings: GlobalSettings,
-
-    /// SPC export song length in seconds before fading out
-    /// (override calculated song duration)
-    pub spc_song_length: Option<u32>,
-
-    /// SPC export fadeout length in milliseconds
-    pub spc_fadeout_millis: Option<u32>,
 }
 
 //

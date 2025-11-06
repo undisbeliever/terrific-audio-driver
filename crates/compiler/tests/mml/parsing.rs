@@ -2,6 +2,8 @@
 //
 // SPDX-License-Identifier: MIT
 
+use compiler::identifier::MusicChannelIndex;
+
 use crate::*;
 
 #[test]
@@ -59,7 +61,7 @@ ADEF @0 a
         mml.subroutines(),
         BcTerminator::DisableChannel,
         BytecodeContext::SongChannel {
-            index: 0,
+            index: MusicChannelIndex::CHANNEL_A,
             max_edl: EchoEdl::MIN,
         },
     )

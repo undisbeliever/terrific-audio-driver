@@ -1507,24 +1507,20 @@ where
             common_audio_data,
         };
 
-        let sub = match out
-            .song_data
-            .subroutines()
-            .get(usize::from(subroutine_index))
-        {
+        let sub = match out.song_data.subroutines().get_compiled(subroutine_index) {
             Some(s) => s,
-            None => return Err(SongSubroutineError),
+            _ => return Err(SongSubroutineError),
         };
 
-        let (inst, envelope) = match sub.subroutine_id.instrument_hint() {
-            Some((i, e)) => (i, e),
+        let (inst, envelope) = match sub.bc_state.instrument_hint {
+            Some((i, e, _)) => (i, e),
             None => {
                 // Subroutine might not set an instrument before the play_note instructions.
                 //
                 // Find the first instrument that can play all notes in the subroutine.
                 // If no instrument can be found, use the first instrument in the MML file.
                 let instruments = out.song_data.instruments();
-                let notes = sub.subroutine_id.no_instrument_notes();
+                let notes = &sub.bc_state.no_instrument_notes;
 
                 let i = match notes.is_empty() {
                     true => instruments.first(),

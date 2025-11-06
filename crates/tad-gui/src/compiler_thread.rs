@@ -29,7 +29,8 @@ use compiler::errors::{
     self, BrrError, CommonAudioDataErrors, LoadSongError, MmlPrefixError, ProjectFileErrors,
     SongTooLargeError,
 };
-use compiler::mml::{compile_mml_prefix, ChannelId};
+use compiler::identifier::ChannelId;
+use compiler::mml::{compile_mml_prefix, find_cursor_state};
 use compiler::notes::Note;
 use compiler::path::{ParentPathBuf, SourcePathBuf};
 use compiler::samples::{
@@ -1060,7 +1061,7 @@ impl SongCompiler {
         };
 
         let name = name.cloned();
-        let song_data = match compiler::mml::compile_mml(
+        let song_data = match compiler::songs::compile_mml_song(
             &f.contents,
             &f.file_name,
             name,
@@ -1315,11 +1316,8 @@ fn calculate_cursor_song_driver_state(
 ) {
     sender.send(CompilerOutput::SongCursorDriverState(
         match (cad, songs.get_song_data(&id)) {
-            (Some(cad), Some(song)) => match song
-                .tracking()
-                .and_then(|c| c.cursor_tracker.find(cursor_index))
-            {
-                Some((ChannelId::Channel(_), c)) => {
+            (Some(cad), Some(song)) => match find_cursor_state(song.as_ref(), cursor_index) {
+                Some((ChannelId::Channel(_), tc, _)) => {
                     let mut si = Box::new(SongInterpreter::new_zero(
                         SiCad::NoSfx(cad.clone()),
                         song.clone(),
@@ -1327,12 +1325,12 @@ fn calculate_cursor_song_driver_state(
                         driver_constants::AudioMode::Surround,
                     ));
 
-                    match si.process_song_skip_ticks(c.ticks.ticks + TickCounter::new(2)) {
+                    match si.process_song_skip_ticks(tc.ticks + TickCounter::new(2)) {
                         true => CursorDriverState::CursorSong(id, si),
                         false => CursorDriverState::BcTimeout(id),
                     }
                 }
-                Some((ChannelId::Subroutine(subroutine_index), c)) => {
+                Some((ChannelId::Subroutine(subroutine_index), tc, _)) => {
                     match SongInterpreter::new_song_subroutine(
                         SiCad::NoSfx(cad.clone()),
                         song.clone(),
@@ -1342,7 +1340,7 @@ fn calculate_cursor_song_driver_state(
                         driver_constants::AudioMode::Surround,
                     ) {
                         Ok(mut si) => {
-                            match si.process_song_skip_ticks(c.ticks.ticks + TickCounter::new(2)) {
+                            match si.process_song_skip_ticks(tc.ticks + TickCounter::new(2)) {
                                 true => CursorDriverState::Subroutine(id, Box::new(si)),
                                 false => CursorDriverState::BcTimeout(id),
                             }

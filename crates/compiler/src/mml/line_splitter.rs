@@ -4,14 +4,14 @@
 //
 // SPDX-License-Identifier: MIT
 
-use super::identifier::IdentifierStr;
 use super::tokenizer::MmlTokens;
-use super::{Section, FIRST_MUSIC_CHANNEL};
-use super::{COMMENT_CHAR, MUSIC_CHANNEL_RANGE, SECTION_PREFIX};
+use super::Section;
+use super::{COMMENT_CHAR, SECTION_PREFIX};
 
 use crate::driver_constants::{MAX_SUBROUTINES, N_MUSIC_CHANNELS};
 use crate::errors::{ErrorWithPos, MmlLineError};
 use crate::file_pos::{blank_file_range, split_lines, FilePos, Line, MAX_MML_TEXT_LENGTH};
+use crate::identifier::{IdentifierStr, FIRST_MUSIC_CHANNEL, MUSIC_CHANNEL_RANGE};
 
 use std::collections::HashMap;
 
@@ -158,7 +158,7 @@ pub(super) fn split_mml_song_lines(
                 if !section_name.is_empty() {
                     sections.push(Section {
                         name: section_name.to_owned(),
-                        line_number: entire_line.position.line_number,
+                        char_index: entire_line.position.char_index(),
                     });
                 }
             }

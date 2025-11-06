@@ -15,7 +15,7 @@ use crate::bytecode::{
     VibratoDelayTicks, VibratoPitchOffsetPerTick, VibratoQuarterWavelengthInTicks, Volume,
     VolumeSlideAmount, VolumeSlideTicks,
 };
-use crate::channel_bc_generator::{
+use crate::command_compiler::commands::{
     DetuneCents, FineQuantization, PortamentoSpeed, Quantization, MAX_BROKEN_CHORD_NOTES,
 };
 use crate::data::{LoopSetting, Name};
@@ -29,7 +29,8 @@ use crate::echo::{
 };
 use crate::envelope::Gain;
 use crate::file_pos::{FilePosRange, MAX_MML_TEXT_LENGTH};
-use crate::mml::command_parser::{
+use crate::identifier::IdentifierBuf;
+use crate::mml::{
     MAX_COARSE_TREMOLO_AMPLITUDE, MAX_COARSE_VOLUME, MIN_COARSE_TREMOLO_AMPLITUDE, PX_PAN_RANGE,
 };
 use crate::mml::{MAX_MML_PREFIX_STR_LENGTH, MAX_MML_PREFIX_TICKS};
@@ -39,7 +40,7 @@ use crate::pitch_table::{InstrumentHintFreq, PlayPitchFrequency, PlayPitchSample
 use crate::sound_effects::MAX_SFX_TICKS;
 use crate::time::{Bpm, TickClock, TickCounter, ZenLen};
 use crate::value_newtypes::{I8WithByteHexValueNewType, SignedValueNewType, UnsignedValueNewType};
-use crate::{export, mml, spc_file_export};
+use crate::{export, spc_file_export};
 
 use std::fmt::Display;
 use std::io;
@@ -654,7 +655,7 @@ pub enum MmlPrefixError {
 
 #[derive(Debug)]
 pub struct MmlChannelError {
-    pub identifier: mml::IdentifierBuf,
+    pub identifier: IdentifierBuf,
     pub errors: Vec<ErrorWithPos<ChannelError>>,
 }
 

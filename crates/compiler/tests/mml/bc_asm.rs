@@ -67,16 +67,14 @@ A !s
     );
 
     let (s, bc) = get_subroutine_and_bytecode(&sd, "s").unwrap();
-
-    assert_eq!(s.identifier.as_str(), "s");
-    assert_eq!(s.subroutine_id.max_stack_depth().to_u32(), 2);
-    assert_eq!(s.subroutine_id.tick_counter().value(), 24 * 2);
+    assert_eq!(s.bc_state.max_stack_depth.to_u32(), 2);
+    assert_eq!(s.bc_state.tick_counter.value(), 24 * 2);
 
     assert_eq!(
         bc,
         &[
             opcodes::CALL_SUBROUTINE,
-            0,
+            1,
             opcodes::REST,
             23,
             opcodes::RETURN_FROM_SUBROUTINE
@@ -101,14 +99,12 @@ A !s
     );
 
     let (s, bc) = get_subroutine_and_bytecode(&sd, "s").unwrap();
-
-    assert_eq!(s.identifier.as_str(), "s");
-    assert_eq!(s.subroutine_id.max_stack_depth().to_u32(), 2);
-    assert_eq!(s.subroutine_id.tick_counter().value(), 24);
+    assert_eq!(s.bc_state.max_stack_depth.to_u32(), 2);
+    assert_eq!(s.bc_state.tick_counter.value(), 24);
 
     assert_eq!(
         bc,
-        [opcodes::CALL_SUBROUTINE, 0, opcodes::RETURN_FROM_SUBROUTINE]
+        [opcodes::CALL_SUBROUTINE, 1, opcodes::RETURN_FROM_SUBROUTINE]
     );
 }
 
@@ -125,17 +121,15 @@ A !s
     );
 
     let (s, bc) = get_subroutine_and_bytecode(&sd, "s").unwrap();
-
-    assert_eq!(s.identifier.as_str(), "s");
-    assert_eq!(s.subroutine_id.max_stack_depth().to_u32(), 2);
-    assert_eq!(s.subroutine_id.tick_counter().value(), 24);
+    assert_eq!(s.bc_state.max_stack_depth.to_u32(), 2);
+    assert_eq!(s.bc_state.tick_counter.value(), 24);
 
     assert_eq!(
         bc,
         &[
             // Not a tail call
             opcodes::CALL_SUBROUTINE_AND_DISABLE_VIBRATO,
-            0,
+            1,
             opcodes::RETURN_FROM_SUBROUTINE
         ]
     );
@@ -243,7 +237,7 @@ ADEF \asm { set_instrument dummy_instrument | play_note a4 24 }
         mml.subroutines(),
         BcTerminator::DisableChannel,
         BytecodeContext::SongChannel {
-            index: 0,
+            index: MusicChannelIndex::CHANNEL_A,
             max_edl: EchoEdl::MIN,
         },
     )

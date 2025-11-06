@@ -7,7 +7,7 @@
 use super::IdentifierStr;
 
 use crate::bytecode::InstrumentId;
-use crate::channel_bc_generator::MmlInstrument;
+use crate::command_compiler::commands::MmlInstrument;
 use crate::data::UniqueNamesList;
 use crate::data::{self, InstrumentOrSample};
 use crate::envelope::Envelope;
