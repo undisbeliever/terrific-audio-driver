@@ -1,8 +1,8 @@
 Terrific Audio Driver Changelog
 ===============================
 
-Version 0.2.0 beta
-==================
+Version 0.2.0
+=============
 
 **BREAKING CHANGES:**
  * `_` and `__` MML transpose commands now change a semitone offset inside the audio driver.
@@ -11,7 +11,7 @@ Version 0.2.0 beta
     * `_0 c [__+1 c]3` will now play `c c+ d d+`
     * To restore the old transpose behaviour, either add an `#OldTraspose` MML header or replace `_` with
       `_M` and `__` with `__M`.
- * `MP` vibrato cannot be when driver transpose is active.
+ * `MP` vibrato cannot be used when driver transpose is active.
  * A portamento's slide length has a maximum 255 ticks when driver transpose is active.
 
 BRR changes:
