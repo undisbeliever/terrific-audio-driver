@@ -164,6 +164,9 @@ B @0 !s c __M+2 c _M0 c
     );
 }
 
+// Driver Transpose
+// ================
+
 #[test]
 fn set_transpose() {
     assert_line_matches_bytecode(
@@ -239,77 +242,8 @@ fn adjust_transpose() {
     );
 }
 
-#[test]
-fn set_transpose_mml_disables_portamento_velocity_calculation() {
-    assert_mml_channel_a_matches_bytecode(
-        r##"
-@0 dummy_instrument
-
-!s1 _+1 {cd}4
-
-A @0 {cd}4 !s1 {cd}4
-"##,
-        &[
-            "set_instrument dummy_instrument",
-            "play_note c4 no_keyoff 1",
-            "portamento_calc d4 keyoff 22 23",
-            "call_subroutine s1",
-            "play_note c4 no_keyoff 1",
-            "portamento_calc d4 keyoff 22 23",
-        ],
-    );
-
-    assert_mml_subroutine_matches_bytecode(
-        r##"
-@0 dummy_instrument
-
-!s1 {cd}4
-
-A @0 {cd}4 !s1 {cd}4 _-1
-"##,
-        0,
-        &[
-            "play_note c4 no_keyoff 1",
-            "portamento_calc d4 keyoff 22 23",
-        ],
-    );
-}
-
-#[test]
-fn adjust_transpose_mml_disables_portamento_velocity_calculation() {
-    assert_mml_channel_a_matches_bytecode(
-        r##"
-@0 dummy_instrument
-
-!s1 __+1 {cd}4
-
-A @0 {cd}4 !s1 {cd}4
-"##,
-        &[
-            "set_instrument dummy_instrument",
-            "play_note c4 no_keyoff 1",
-            "portamento_calc d4 keyoff 22 23",
-            "call_subroutine s1",
-            "play_note c4 no_keyoff 1",
-            "portamento_calc d4 keyoff 22 23",
-        ],
-    );
-
-    assert_mml_subroutine_matches_bytecode(
-        r##"
-@0 dummy_instrument
-
-!s1 {cd}4
-
-A @0 {cd}4 !s1 {cd}4 __-1
-"##,
-        0,
-        &[
-            "play_note c4 no_keyoff 1",
-            "portamento_calc d4 keyoff 22 23",
-        ],
-    );
-}
+// MP Vibrato
+// ----------
 
 #[test]
 fn set_transpose_mml_disables_mp_vibraro() {
@@ -321,7 +255,7 @@ fn set_transpose_mml_disables_mp_vibraro() {
 
 A @0 MP100,2 c !s1 c
 "##,
-        6,
+        20,
         ChannelError::MpVibratoInSongWithTranspose,
     );
 
@@ -335,7 +269,7 @@ A @0 _-1 !s1
 
 "##,
         "!s1",
-        5,
+        13,
         ChannelError::MpVibratoInSongWithTranspose,
     );
 }
@@ -350,7 +284,7 @@ fn adjust_transpose_mml_disables_mp_vibraro() {
 
 A @0 MP100,2 c !s1 c
 "##,
-        6,
+        20,
         ChannelError::MpVibratoInSongWithTranspose,
     );
 
@@ -364,80 +298,8 @@ A @0 __-1 !s1
 
 "##,
         "!s1",
-        5,
+        13,
         ChannelError::MpVibratoInSongWithTranspose,
-    );
-}
-
-#[test]
-fn set_transpose_asm_disables_portamento_velocity_calculation() {
-    assert_mml_channel_a_matches_bytecode(
-        r##"
-@0 dummy_instrument
-
-!s1 \asm { set_transpose +1 } {cd}4
-
-A @0 {cd}4 !s1 {cd}4
-"##,
-        &[
-            "set_instrument dummy_instrument",
-            "play_note c4 no_keyoff 1",
-            "portamento_calc d4 keyoff 22 23",
-            "call_subroutine s1",
-            "play_note c4 no_keyoff 1",
-            "portamento_calc d4 keyoff 22 23",
-        ],
-    );
-
-    assert_mml_subroutine_matches_bytecode(
-        r##"
-@0 dummy_instrument
-
-!s1 {cd}4
-
-A @0 {cd}4 !s1 {cd}4 \asm { set_transpose -1 }
-"##,
-        0,
-        &[
-            "play_note c4 no_keyoff 1",
-            "portamento_calc d4 keyoff 22 23",
-        ],
-    );
-}
-
-#[test]
-fn adjust_transpose_asm_disables_portamento_velocity_calculation() {
-    assert_mml_channel_a_matches_bytecode(
-        r##"
-@0 dummy_instrument
-
-!s1 \asm { adjust_transpose +1 } {cd}4
-
-A @0 {cd}4 !s1 {cd}4
-"##,
-        &[
-            "set_instrument dummy_instrument",
-            "play_note c4 no_keyoff 1",
-            "portamento_calc d4 keyoff 22 23",
-            "call_subroutine s1",
-            "play_note c4 no_keyoff 1",
-            "portamento_calc d4 keyoff 22 23",
-        ],
-    );
-
-    assert_mml_subroutine_matches_bytecode(
-        r##"
-@0 dummy_instrument
-
-!s1 {cd}4
-
-A @0 {cd}4 !s1 {cd}4 \asm { adjust_transpose -1 }
-"##,
-        0,
-        &[
-            "play_note c4 no_keyoff 1",
-            "portamento_calc d4 keyoff 22 23",
-        ],
     );
 }
 
@@ -451,7 +313,7 @@ fn set_transpose_asm_disables_mp_vibraro() {
 
 A @0 MP100,2 c !s1 c
 "##,
-        6,
+        20,
         ChannelError::MpVibratoInSongWithTranspose,
     );
 
@@ -465,7 +327,7 @@ A @0 \asm { set_transpose +1 } !s1
 
 "##,
         "!s1",
-        5,
+        13,
         ChannelError::MpVibratoInSongWithTranspose,
     );
 }
@@ -480,7 +342,7 @@ fn adjust_transpose_asm_disables_mp_vibraro() {
 
 A @0 MP100,2 c !s1 c
 "##,
-        6,
+        20,
         ChannelError::MpVibratoInSongWithTranspose,
     );
 
@@ -494,7 +356,482 @@ A @0 \asm { adjust_transpose -1 } !s1
 
 "##,
         "!s1",
-        5,
+        13,
         ChannelError::MpVibratoInSongWithTranspose,
     );
+}
+
+// Portamento
+// ----------
+
+const PORTAMENTO: &str = "portamento d4 keyoff +12 23";
+const PORTAMENTO_CALC: &str = "portamento_calc d4 keyoff 22 23";
+
+struct TransposeMmlCommand {
+    mml: &'static str,
+    asm: &'static str,
+}
+
+#[rustfmt::skip]
+const ALL_TRANSPOSE_MML_COMMANDS: &[TransposeMmlCommand] = &[
+    TransposeMmlCommand { mml: "_+1", asm: "set_transpose +1" },
+    TransposeMmlCommand { mml: "_-1", asm: "set_transpose -1" },
+    TransposeMmlCommand { mml: "__+2", asm: "adjust_transpose +2" },
+    TransposeMmlCommand { mml: "__-2", asm: "adjust_transpose -2" },
+    TransposeMmlCommand { mml: "\\asm { set_transpose +3 }", asm: "set_transpose +3" },
+    TransposeMmlCommand { mml: "\\asm { set_transpose -3 }", asm: "set_transpose -3" },
+    TransposeMmlCommand { mml: "\\asm { adjust_transpose +4 }", asm: "adjust_transpose +4" },
+    TransposeMmlCommand { mml: "\\asm { adjust_transpose -4 }", asm: "adjust_transpose -4" },
+];
+
+#[test]
+fn driver_transpose_in_subroutine_disables_portamento_velocity_calculation() {
+    for transpose in ALL_TRANSPOSE_MML_COMMANDS {
+        let mml = r##"
+@0 dummy_instrument
+
+!s1 ___ c
+
+A @0 {cd} !s1 {cd}
+"##
+        .replace("___", transpose.mml);
+
+        assert_mml_channel_a_matches_bytecode(
+            &mml,
+            &[
+                "set_instrument dummy_instrument",
+                "play_note c4 no_keyoff 1",
+                PORTAMENTO,
+                "call_subroutine s1",
+                "play_note c4 no_keyoff 1",
+                PORTAMENTO_CALC,
+            ],
+        );
+    }
+}
+
+#[test]
+fn driver_transpose_disabled_in_subroutine() {
+    for transpose in ALL_TRANSPOSE_MML_COMMANDS {
+        let mml = r##"
+@0 dummy_instrument
+
+!s1 _0 c
+
+A @0 ___ {cd} !s1 {cd}
+"##
+        .replace("___", transpose.mml);
+
+        assert_mml_channel_a_matches_bytecode(
+            &mml,
+            &[
+                "set_instrument dummy_instrument",
+                transpose.asm,
+                "play_note c4 no_keyoff 1",
+                PORTAMENTO_CALC,
+                "call_subroutine s1",
+                "play_note c4 no_keyoff 1",
+                PORTAMENTO,
+            ],
+        );
+    }
+}
+
+#[test]
+fn subroutine_called_with_driver_transpose() {
+    for transpose in ALL_TRANSPOSE_MML_COMMANDS {
+        let mml = r##"
+@0 dummy_instrument
+
+!s1 @0 {cd}4
+!s2 @0 {cd}4
+
+A !s1 ___ !s2
+"##
+        .replace("___", transpose.mml);
+
+        // Called without transpose
+        assert_mml_subroutine_matches_bytecode(
+            &mml,
+            0,
+            &[
+                "set_instrument dummy_instrument",
+                "play_note c4 no_keyoff 1",
+                PORTAMENTO,
+            ],
+        );
+
+        // Called with transpose
+        assert_mml_subroutine_matches_bytecode(
+            &mml,
+            1,
+            &[
+                "set_instrument dummy_instrument",
+                "play_note c4 no_keyoff 1",
+                PORTAMENTO_CALC,
+            ],
+        );
+    }
+}
+
+#[test]
+fn nested_subroutines_and_driver_transpose() {
+    for transpose in ALL_TRANSPOSE_MML_COMMANDS {
+        let mml = r##"
+@0 dummy_instrument
+
+!s0 @0 {cd}
+!s1 @0 {cd} !s0 r
+!s2 @0 \asm {call_subroutine s1} r
+
+!s3 @0 {cd}
+!s4 @0 {cd} !s3 r
+
+A !s1 ___ !s2 _0 !s4
+"##
+        .replace("___", transpose.mml);
+
+        // Called with transpose
+        assert_mml_subroutine_matches_bytecode(
+            &mml,
+            0,
+            &[
+                "set_instrument dummy_instrument",
+                "play_note c4 no_keyoff 1",
+                PORTAMENTO_CALC,
+            ],
+        );
+        assert_mml_subroutine_matches_bytecode(
+            &mml,
+            1,
+            &[
+                "set_instrument dummy_instrument",
+                "play_note c4 no_keyoff 1",
+                PORTAMENTO_CALC,
+                "call_subroutine s0",
+                "rest 24",
+            ],
+        );
+        assert_mml_subroutine_matches_bytecode(
+            &mml,
+            2,
+            &[
+                "set_instrument dummy_instrument",
+                "call_subroutine s1",
+                "rest 24",
+            ],
+        );
+
+        // called without transpose
+        assert_mml_subroutine_matches_bytecode(
+            &mml,
+            3,
+            &[
+                "set_instrument dummy_instrument",
+                "play_note c4 no_keyoff 1",
+                PORTAMENTO,
+            ],
+        );
+        assert_mml_subroutine_matches_bytecode(
+            &mml,
+            4,
+            &[
+                "set_instrument dummy_instrument",
+                "play_note c4 no_keyoff 1",
+                PORTAMENTO,
+                "call_subroutine s3",
+                "rest 24",
+            ],
+        );
+    }
+}
+
+#[test]
+fn driver_transpose_in_loop() {
+    for transpose in ALL_TRANSPOSE_MML_COMMANDS {
+        assert_line_matches_bytecode(
+            &"{cd} [{cd} ___]2 {cd}".replace("___", transpose.mml),
+            &[
+                "play_note c4 no_keyoff 1",
+                PORTAMENTO,
+                "start_loop",
+                "play_note c4 no_keyoff 1",
+                PORTAMENTO_CALC,
+                transpose.asm,
+                "end_loop 2",
+                "play_note c4 no_keyoff 1",
+                PORTAMENTO_CALC,
+            ],
+        );
+
+        assert_line_matches_bytecode(
+            &"___ {cd} [{cd} _0]2 {cd}".replace("___", transpose.mml),
+            &[
+                transpose.asm,
+                "play_note c4 no_keyoff 1",
+                PORTAMENTO_CALC,
+                "start_loop",
+                "play_note c4 no_keyoff 1",
+                PORTAMENTO_CALC,
+                "disable_transpose",
+                "end_loop 2",
+                "play_note c4 no_keyoff 1",
+                PORTAMENTO,
+            ],
+        );
+    }
+}
+
+#[test]
+fn disable_driver_transpose_in_loop() {
+    assert_line_matches_bytecode(
+        "{cd} [{cd} _0]2",
+        &[
+            "play_note c4 no_keyoff 1",
+            PORTAMENTO,
+            "start_loop",
+            "play_note c4 no_keyoff 1",
+            PORTAMENTO,
+            // ::TODO detect and deduplicate `_0` commands::
+            "disable_transpose",
+            "end_loop 2",
+        ],
+    );
+
+    assert_line_matches_bytecode(
+        "_+1 {cd} [{cd} _0]2 {cd}",
+        &[
+            "set_transpose +1",
+            "play_note c4 no_keyoff 1",
+            PORTAMENTO_CALC,
+            "start_loop",
+            "play_note c4 no_keyoff 1",
+            PORTAMENTO_CALC,
+            "disable_transpose",
+            "end_loop 2",
+            "play_note c4 no_keyoff 1",
+            PORTAMENTO,
+        ],
+    );
+}
+
+#[test]
+fn skip_last_loop_and_driver_transpose_in_loop() {
+    for transpose in ALL_TRANSPOSE_MML_COMMANDS {
+        assert_line_matches_bytecode(
+            &"[{cd} : ___]2 {cd}".replace("___", transpose.mml),
+            &[
+                "start_loop",
+                "play_note c4 no_keyoff 1",
+                PORTAMENTO_CALC,
+                "skip_last_loop",
+                transpose.asm,
+                "end_loop 2",
+                "play_note c4 no_keyoff 1",
+                PORTAMENTO_CALC,
+            ],
+        );
+
+        assert_line_matches_bytecode(
+            &"[{cd} _0 : ___]2 {cd}".replace("___", transpose.mml),
+            &[
+                "start_loop",
+                "play_note c4 no_keyoff 1",
+                PORTAMENTO_CALC,
+                "disable_transpose",
+                "skip_last_loop",
+                transpose.asm,
+                "end_loop 2",
+                "play_note c4 no_keyoff 1",
+                PORTAMENTO,
+            ],
+        );
+    }
+}
+
+#[test]
+fn loop_contains_driver_transpose_subroutine() {
+    for transpose in ALL_TRANSPOSE_MML_COMMANDS {
+        let mml = r##"
+@0 dummy_instrument
+
+!s1 ___ c
+
+A @0 [ {cd} !s1 ]2
+"##
+        .replace("___", transpose.mml);
+
+        assert_mml_channel_a_matches_bytecode(
+            &mml,
+            &[
+                "set_instrument dummy_instrument",
+                "start_loop",
+                "play_note c4 no_keyoff 1",
+                PORTAMENTO_CALC,
+                "call_subroutine s1",
+                "end_loop 2",
+            ],
+        );
+    }
+}
+
+#[test]
+fn driver_transpose_in_nested_loop() {
+    assert_line_matches_bytecode(
+        "[{cd} [{cd} __-1]2 _0]3",
+        &[
+            "start_loop",
+            "play_note c4 no_keyoff 1",
+            PORTAMENTO,
+            "start_loop",
+            "play_note c4 no_keyoff 1",
+            PORTAMENTO_CALC,
+            "adjust_transpose -1",
+            "end_loop 2",
+            "disable_transpose",
+            "end_loop 3",
+        ],
+    );
+
+    assert_line_matches_bytecode(
+        "[[{cd} : _0]2 {cd} __+2]3",
+        &[
+            "start_loop",
+            "start_loop",
+            "play_note c4 no_keyoff 1",
+            PORTAMENTO_CALC,
+            "skip_last_loop",
+            "disable_transpose",
+            "end_loop 2",
+            "play_note c4 no_keyoff 1",
+            PORTAMENTO,
+            "adjust_transpose +2",
+            "end_loop 3",
+        ],
+    );
+
+    assert_line_matches_bytecode(
+        "[[{cd} _+1 : _0 {cd}]2 {cd} _-1]3",
+        &[
+            "start_loop",
+            "start_loop",
+            "play_note c4 no_keyoff 1",
+            PORTAMENTO_CALC,
+            "set_transpose +1",
+            "skip_last_loop",
+            "disable_transpose",
+            "play_note c4 no_keyoff 1",
+            PORTAMENTO,
+            "end_loop 2",
+            "play_note c4 no_keyoff 1",
+            PORTAMENTO_CALC,
+            "set_transpose -1",
+            "end_loop 3",
+        ],
+    );
+
+    assert_line_matches_bytecode(
+        "[[{cd} _+1 : _0 {cd}]2 {cd} _0]3",
+        &[
+            "start_loop",
+            "start_loop",
+            "play_note c4 no_keyoff 1",
+            PORTAMENTO,
+            "set_transpose +1",
+            "skip_last_loop",
+            "disable_transpose",
+            "play_note c4 no_keyoff 1",
+            PORTAMENTO,
+            "end_loop 2",
+            "play_note c4 no_keyoff 1",
+            PORTAMENTO_CALC,
+            "disable_transpose",
+            "end_loop 3",
+        ],
+    );
+
+    assert_line_matches_bytecode(
+        "_+1 [[{cd} _+1 : _0 {cd}]2 {cd} _0]3",
+        &[
+            "set_transpose +1",
+            "start_loop",
+            "start_loop",
+            "play_note c4 no_keyoff 1",
+            PORTAMENTO_CALC,
+            "set_transpose +1",
+            "skip_last_loop",
+            "disable_transpose",
+            "play_note c4 no_keyoff 1",
+            PORTAMENTO,
+            "end_loop 2",
+            "play_note c4 no_keyoff 1",
+            PORTAMENTO_CALC,
+            "disable_transpose",
+            "end_loop 3",
+        ],
+    );
+
+    assert_line_matches_bytecode(
+        "[[{cd} _0 : _+1 {cd}]2 {cd}]3",
+        &[
+            "start_loop",
+            "start_loop",
+            "play_note c4 no_keyoff 1",
+            PORTAMENTO_CALC,
+            "disable_transpose",
+            "skip_last_loop",
+            "set_transpose +1",
+            "play_note c4 no_keyoff 1",
+            PORTAMENTO_CALC,
+            "end_loop 2",
+            "play_note c4 no_keyoff 1",
+            PORTAMENTO,
+            "end_loop 3",
+        ],
+    );
+
+    assert_line_matches_bytecode(
+        "_+1 [[{cd} _0 : {cd}]2 {cd}]3",
+        &[
+            "set_transpose +1",
+            "start_loop",
+            "start_loop",
+            "play_note c4 no_keyoff 1",
+            PORTAMENTO_CALC,
+            "disable_transpose",
+            "skip_last_loop",
+            "play_note c4 no_keyoff 1",
+            PORTAMENTO,
+            "end_loop 2",
+            "play_note c4 no_keyoff 1",
+            PORTAMENTO,
+            "end_loop 3",
+        ],
+    );
+}
+
+#[test]
+fn transpose_and_song_loop() {
+    for transpose in ALL_TRANSPOSE_MML_COMMANDS {
+        let mml = r##"
+@0 dummy_instrument
+
+A @0 {cd} L {cd} ___ r
+"##
+        .replace("___", transpose.mml);
+
+        assert_mml_channel_a_matches_looping_bytecode(
+            &mml,
+            &[
+                "set_instrument dummy_instrument",
+                "play_note c4 no_keyoff 1",
+                PORTAMENTO,
+                // Loop point
+                "play_note c4 no_keyoff 1",
+                PORTAMENTO_CALC,
+                transpose.asm,
+                "rest 24",
+            ],
+        );
+    }
 }

@@ -142,6 +142,10 @@ impl PlayPitchPitch {
 
 i8_value_newtype!(Transpose, TransposeOutOfRange, NoTranspose, NoTransposeSign);
 
+impl Transpose {
+    pub const ZERO: Self = Self(0);
+}
+
 i8_value_newtype!(
     RelativeTranspose,
     RelativeTransposeOutOfRange,

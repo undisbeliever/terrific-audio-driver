@@ -144,6 +144,7 @@ fn parse_subroutines<'a>(
                 identifier: id,
                 commands: c.commands,
                 end_pos: c.end_pos,
+                analysis: Default::default(),
             }
         })
         .collect()

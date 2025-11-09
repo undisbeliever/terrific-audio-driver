@@ -2587,14 +2587,14 @@ fn parse_token<'a>(pos: FilePos, token: Token<'a>, p: &mut Parser<'a, '_>) -> Co
         Token::SetSubroutineInstrumentHint(id) => parse_set_instrument_hint(pos, id, p),
         Token::CallSubroutine(id) => parse_call_subroutine(pos, id, SubroutineCallType::Mml, p),
 
-        Token::StartLoop => Command::StartLoop,
+        Token::StartLoop => Command::StartLoop(Default::default()),
         Token::SkipLastLoop => Command::SkipLastLoop,
         Token::EndLoop => {
             let lc = parse_unsigned_newtype(pos, p).unwrap_or(LoopCount::MIN);
-            Command::EndLoop(lc)
+            Command::EndLoop(lc, Default::default())
         }
 
-        Token::SetLoopPoint => Command::SetLoopPoint,
+        Token::SetLoopPoint => Command::SetLoopPoint(Default::default()),
 
         Token::PitchMod => parse_pitch_mod(pos, p),
         Token::Echo => parse_echo(pos, p),

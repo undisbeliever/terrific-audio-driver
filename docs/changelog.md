@@ -11,10 +11,8 @@ Version 0.2.0 beta
     * `_0 c [__+1 c]3` will now play `c c+ d d+`
     * To restore the old transpose behaviour, either add an `#OldTraspose` MML header or replace `_` with
       `_M` and `__` with `__M`.
- * `MP` vibrato cannot be used in a song that contains a `_`, `__`, `set_transpose` or `adjust_transpose`.  
-   (This restriction will be relaxed in the next production release.)
- * A portamento's slide length has a maximum 255 ticks if the song contains a `_`, `__`, `set_transpose` or `adjust_transpose`.  
-   (This restriction will be relaxed in the next production release.)
+ * `MP` vibrato cannot be when driver transpose is active.
+ * A portamento's slide length has a maximum 255 ticks when driver transpose is active.
 
 BRR changes:
  * Increased the maximum BRR sample size

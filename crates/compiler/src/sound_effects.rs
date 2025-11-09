@@ -275,13 +275,12 @@ pub fn compile_sfx_subroutines(
         data_instruments,
         &s.instruments,
         EchoEdl::MIN,
-        &a,
         // ::TODO detect driver transpose in subroutines::
         false,
     );
     let mut errors = s.errors;
 
-    let subroutines = compiler.compile_subroutines(a, &mut errors);
+    let subroutines = compiler.compile_subroutines(&a, &mut errors);
 
     if errors.is_empty() {
         let (data, _) = compiler.take_data();

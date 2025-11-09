@@ -190,6 +190,11 @@ impl DetuneCents {
     pub const ZERO: Self = Self(0);
 }
 
+#[derive(Debug, Default, Clone, PartialEq)]
+pub struct LoopAnalysis {
+    pub(super) driver_transpose: Option<bool>,
+}
+
 #[derive(Debug, Clone, Copy)]
 pub enum SubroutineCallType {
     Mml,
@@ -201,7 +206,7 @@ pub enum SubroutineCallType {
 pub(crate) enum Command<'a> {
     None,
 
-    SetLoopPoint,
+    SetLoopPoint(LoopAnalysis),
 
     SetManualVibrato(Option<ManualVibrato>),
     SetMpVibrato(Option<MpVibrato>),
@@ -266,9 +271,9 @@ pub(crate) enum Command<'a> {
     DisableNoise,
 
     CallSubroutine(u8, SubroutineCallType),
-    StartLoop,
+    StartLoop(LoopAnalysis),
     SkipLastLoop,
-    EndLoop(LoopCount),
+    EndLoop(LoopCount, LoopAnalysis),
 
     // index into Vec<MmlInstrument>.
     SetSubroutineInstrumentHint(usize),
@@ -350,6 +355,10 @@ impl<'a> CommandWithPos<'a> {
         }
     }
 
+    pub(super) fn command_mut(&mut self) -> &mut Command<'a> {
+        &mut self.command
+    }
+
     pub fn command(&self) -> &Command<'a> {
         &self.command
     }
@@ -377,6 +386,8 @@ pub(crate) struct SubroutineCommands<'a> {
     pub(crate) identifier: IdentifierStr<'a>,
     pub(crate) commands: Vec<CommandWithPos<'a>>,
     pub(crate) end_pos: FilePos,
+
+    pub(crate) analysis: LoopAnalysis,
 }
 
 impl SubroutineCommands<'_> {

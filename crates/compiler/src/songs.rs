@@ -508,8 +508,7 @@ fn compile_song_commands(
     let header_size = song_header_size(n_active_channels, song.subroutines.len());
 
     let subroutines = subroutine_compile_order(song.subroutines);
-
-    let a = command_compiler::analysis::analyse(subroutines, Some(&song.channels));
+    let a = command_compiler::analysis::analyse(subroutines, Some(song.channels));
 
     let mut compiler = CommandCompiler::new(
         header_size,
@@ -517,11 +516,10 @@ fn compile_song_commands(
         data_instruments,
         &song.instruments,
         song.metadata.echo_buffer.max_edl,
-        &a,
         true,
     );
 
-    let subroutines = compiler.compile_subroutines(a, &mut errors.subroutine_errors);
+    let subroutines = compiler.compile_subroutines(&a, &mut errors.subroutine_errors);
 
     // ::TODO remove::
     if !errors.subroutine_errors.is_empty() {
@@ -530,8 +528,9 @@ fn compile_song_commands(
 
     let first_channel_bc_offset = compiler.bc_size();
 
+    let channels = a.channels().unwrap();
     let channels = std::array::from_fn(|c_index| {
-        song.channels[c_index].as_ref().and_then(|c| {
+        channels[c_index].as_ref().and_then(|c| {
             let c_index = MusicChannelIndex::try_new(c_index).unwrap();
 
             match compiler.compile_song_channel(c_index, c, &subroutines) {
