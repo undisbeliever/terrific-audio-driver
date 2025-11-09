@@ -528,20 +528,7 @@ fn compile_song_commands(
 
     let first_channel_bc_offset = compiler.bc_size();
 
-    let channels = a.channels().unwrap();
-    let channels = std::array::from_fn(|c_index| {
-        channels[c_index].as_ref().and_then(|c| {
-            let c_index = MusicChannelIndex::try_new(c_index).unwrap();
-
-            match compiler.compile_song_channel(c_index, c, &subroutines) {
-                Ok(c) => Some(c),
-                Err(e) => {
-                    errors.channel_errors.push(e);
-                    None
-                }
-            }
-        })
-    });
+    let channels = compiler.compile_song_channels(&a, &subroutines, &mut errors);
 
     let duration = calc_song_duration(&song.metadata, &channels, &subroutines);
 

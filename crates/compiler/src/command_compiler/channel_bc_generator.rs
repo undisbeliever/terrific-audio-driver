@@ -14,10 +14,12 @@ use crate::bytecode::{
 use crate::bytecode_assembler::parse_asm_line;
 use crate::command_compiler::analysis::AnalysedCommands;
 use crate::data::{self, UniqueNamesList};
+use crate::driver_constants::N_MUSIC_CHANNELS;
 use crate::echo::EchoEdl;
 use crate::envelope::{Adsr, Envelope, Gain, TempGain};
 use crate::errors::{
-    ChannelError, ErrorWithPos, MmlChannelError, MmlPrefixError, SoundEffectErrorList, ValueError,
+    ChannelError, ErrorWithPos, MmlChannelError, MmlCompileErrors, MmlPrefixError,
+    SoundEffectErrorList, ValueError,
 };
 use crate::identifier::MusicChannelIndex;
 use crate::mml::{CommandTickTracker, MAX_MML_PREFIX_TICKS};
@@ -1983,7 +1985,7 @@ impl<'a> CommandCompiler<'a> {
         out
     }
 
-    pub(crate) fn compile_song_channel(
+    fn compile_song_channel(
         &mut self,
         channel_index: MusicChannelIndex,
         input: &ChannelCommands,
@@ -2056,6 +2058,30 @@ impl<'a> CommandCompiler<'a> {
                 errors,
             }),
         }
+    }
+
+    // Panics if `AnalysedCommands` has no song channels
+    pub fn compile_song_channels(
+        &mut self,
+        a: &AnalysedCommands,
+        subroutines: &CompiledSubroutines,
+        errors: &mut MmlCompileErrors,
+    ) -> [Option<Channel>; N_MUSIC_CHANNELS] {
+        let channels = a.channels.as_ref().unwrap();
+
+        std::array::from_fn(|c_index| {
+            channels[c_index].as_ref().and_then(|c| {
+                let c_index = MusicChannelIndex::try_new(c_index).unwrap();
+
+                match self.compile_song_channel(c_index, c, subroutines) {
+                    Ok(c) => Some(c),
+                    Err(e) => {
+                        errors.channel_errors.push(e);
+                        None
+                    }
+                }
+            })
+        })
     }
 }
 

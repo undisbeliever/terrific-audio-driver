@@ -20,13 +20,6 @@ pub struct AnalysedCommands<'a> {
     pub(super) subroutines_called_with_transpose: SubroutineBitArray,
 }
 
-impl<'a> AnalysedCommands<'a> {
-    // ::TODO refactor to remove this method::
-    pub fn channels(&self) -> Option<&[Option<ChannelCommands<'a>>; 8]> {
-        self.channels.as_ref()
-    }
-}
-
 const MAX_STACK_LOOPS: usize = BC_CHANNEL_STACK_SIZE / BC_STACK_BYTES_PER_LOOP;
 
 struct AnalysisStackItem<'a> {
