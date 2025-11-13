@@ -660,6 +660,7 @@ pub(crate) const CALL_SUBROUTINE_AND_DISABLE_VIBRATO: &str = "call_subroutine_an
 
 pub(crate) const SET_TRANSPOSE: &str = "set_transpose";
 pub(crate) const ADJUST_TRANSPOSE: &str = "adjust_transpose";
+pub(crate) const DISABLE_TRANSPOSE: &str = "disable_transpose";
 
 pub struct BytecodeAssembler<'a> {
     bc: Bytecode<'a>,

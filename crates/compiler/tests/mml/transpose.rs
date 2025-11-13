@@ -616,6 +616,54 @@ fn disable_driver_transpose_in_loop() {
 }
 
 #[test]
+fn disable_driver_transpose_asm_in_loop() {
+    assert_line_matches_bytecode(
+        "{cd} [{cd} \\asm {disable_transpose} ]2",
+        &[
+            "play_note c4 no_keyoff 1",
+            PORTAMENTO,
+            "start_loop",
+            "play_note c4 no_keyoff 1",
+            PORTAMENTO,
+            "disable_transpose",
+            "end_loop 2",
+        ],
+    );
+
+    assert_line_matches_bytecode(
+        "_+1 {cd} [{cd} \\asm {disable_transpose} ]2 {cd}",
+        &[
+            "set_transpose +1",
+            "play_note c4 no_keyoff 1",
+            PORTAMENTO_CALC,
+            "start_loop",
+            "play_note c4 no_keyoff 1",
+            PORTAMENTO_CALC,
+            "disable_transpose",
+            "end_loop 2",
+            "play_note c4 no_keyoff 1",
+            PORTAMENTO,
+        ],
+    );
+
+    assert_line_matches_bytecode(
+        "_+1 {cd} [{cd} \\asm { set_transpose 0 } ]2 {cd}",
+        &[
+            "set_transpose +1",
+            "play_note c4 no_keyoff 1",
+            PORTAMENTO_CALC,
+            "start_loop",
+            "play_note c4 no_keyoff 1",
+            PORTAMENTO_CALC,
+            "disable_transpose",
+            "end_loop 2",
+            "play_note c4 no_keyoff 1",
+            PORTAMENTO,
+        ],
+    );
+}
+
+#[test]
 fn skip_last_loop_and_driver_transpose_in_loop() {
     for transpose in ALL_TRANSPOSE_MML_COMMANDS {
         assert_line_matches_bytecode(

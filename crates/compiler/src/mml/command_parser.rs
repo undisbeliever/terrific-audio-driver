@@ -2542,7 +2542,13 @@ fn parse_bytecode_asm<'a>(pos: FilePos, asm: &'a str, p: &mut Parser<'a, '_>) ->
                 }
             }
         }
-        _ => Command::BytecodeAsm(asm),
+        Some(_) => Command::BytecodeAsm(asm),
+
+        // Instructions with no arguments
+        None => match asm {
+            bytecode_assembler::DISABLE_TRANSPOSE => Command::SetTranspose(Transpose::ZERO),
+            _ => Command::BytecodeAsm(asm),
+        },
     }
 }
 
