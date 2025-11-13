@@ -883,3 +883,73 @@ A @0 {cd} L {cd} ___ r
         );
     }
 }
+
+#[test]
+fn driver_transpose_asm_in_asm_loop() {
+    assert_line_matches_bytecode(
+        "_+1 \\asm { start_loop | disable_transpose | wait 24 | end_loop 2 } {cd}",
+        &[
+            "set_transpose +1",
+            "start_loop",
+            "disable_transpose",
+            "wait 24",
+            "end_loop 2",
+            "play_note c4 no_keyoff 1",
+            PORTAMENTO,
+        ],
+    );
+
+    assert_line_matches_bytecode(
+        "\\asm { start_loop | set_transpose +1 | wait 24 | end_loop 2 } {cd}",
+        &[
+            "start_loop",
+            "set_transpose +1",
+            "wait 24",
+            "end_loop 2",
+            "play_note c4 no_keyoff 1",
+            PORTAMENTO_CALC,
+        ],
+    );
+
+    assert_line_matches_bytecode(
+        "\\asm { start_loop | adjust_transpose -1 | wait 24 | end_loop 2 } {cd}",
+        &[
+            "start_loop",
+            "adjust_transpose -1",
+            "wait 24",
+            "end_loop 2",
+            "play_note c4 no_keyoff 1",
+            PORTAMENTO_CALC,
+        ],
+    );
+
+    assert_line_matches_bytecode(
+        "\\asm { start_loop | adjust_transpose +1 | wait 24 | skip_last_loop | disable_transpose | rest 24 | end_loop 2 } {cd}",
+        &[
+            "start_loop",
+            "adjust_transpose +1",
+            "wait 24",
+            "skip_last_loop",
+            "disable_transpose",
+            "rest 24",
+            "end_loop 2",
+            "play_note c4 no_keyoff 1",
+            PORTAMENTO_CALC,
+        ],
+    );
+
+    assert_line_matches_bytecode(
+        "\\asm { start_loop | disable_transpose | wait 24 | skip_last_loop | adjust_transpose +1 | rest 24 | end_loop 2 } {cd}",
+        &[
+            "start_loop",
+            "disable_transpose",
+            "wait 24",
+            "skip_last_loop",
+            "adjust_transpose +1",
+            "rest 24",
+            "end_loop 2",
+            "play_note c4 no_keyoff 1",
+            PORTAMENTO,
+        ],
+    );
+}

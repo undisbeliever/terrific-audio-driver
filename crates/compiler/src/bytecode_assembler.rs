@@ -475,7 +475,7 @@ pub(crate) fn parse_i32_allow_zero(
 }
 
 /// Parse UnsignedValueNewType
-fn parse_uvnt<T>(s: &str) -> Result<T, ChannelError>
+pub(crate) fn parse_uvnt<T>(s: &str) -> Result<T, ChannelError>
 where
     T: UnsignedValueNewType,
 {
@@ -657,6 +657,10 @@ pub fn parse_asm_line(bc: &mut Bytecode, line: &str) -> Result<(), ChannelError>
 
 pub(crate) const CALL_SUBROUTINE: &str = "call_subroutine";
 pub(crate) const CALL_SUBROUTINE_AND_DISABLE_VIBRATO: &str = "call_subroutine_and_disable_vibrato";
+
+pub(crate) const START_LOOP: &str = "start_loop";
+pub(crate) const SKIP_LAST_LOOP: &str = "skip_last_loop";
+pub(crate) const END_LOOP: &str = "end_loop";
 
 pub(crate) const SET_TRANSPOSE: &str = "set_transpose";
 pub(crate) const ADJUST_TRANSPOSE: &str = "adjust_transpose";

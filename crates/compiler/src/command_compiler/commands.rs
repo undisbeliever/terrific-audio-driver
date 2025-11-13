@@ -271,9 +271,9 @@ pub(crate) enum Command<'a> {
     DisableNoise,
 
     CallSubroutine(u8, SubroutineCallType),
-    StartLoop(LoopAnalysis),
+    StartLoop(Option<LoopCount>, LoopAnalysis),
     SkipLastLoop,
-    EndLoop(LoopCount, LoopAnalysis),
+    EndLoop(Option<LoopCount>, LoopAnalysis),
 
     // index into Vec<MmlInstrument>.
     SetSubroutineInstrumentHint(usize),
@@ -336,7 +336,7 @@ pub(crate) enum Command<'a> {
     StartBytecodeAsm,
     EndBytecodeAsm,
 
-    // MUST NOT contain a `transpose` instruction or a subroutine call instruction.
+    // MUST NOT contain a transpose, loop or subroutine call instruction.
     BytecodeAsm(&'a str),
 }
 

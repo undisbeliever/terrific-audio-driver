@@ -42,7 +42,7 @@ fn analyse_loop_commands<'a>(
 
     for c in commands {
         match c.command_mut() {
-            Command::StartLoop(a) => {
+            Command::StartLoop(_, a) => {
                 stack.push(AnalysisStackItem {
                     start_loop_analysis: a,
                     start_loop_transpose: driver_transpose,
@@ -107,7 +107,7 @@ fn analyse_subroutine_calls(
 
     for c in commands {
         match c.command() {
-            Command::StartLoop(a) | Command::EndLoop(_, a) | Command::SetLoopPoint(a) => {
+            Command::StartLoop(_, a) | Command::EndLoop(_, a) | Command::SetLoopPoint(a) => {
                 if let Some(t) = a.driver_transpose {
                     driver_transpose = t;
                 }

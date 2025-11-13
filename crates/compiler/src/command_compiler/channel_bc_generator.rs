@@ -1571,9 +1571,9 @@ impl<'a> ChannelBcGenerator<'a> {
                 self.bc.disable_noise();
             }
 
-            Command::StartLoop(analysis) => {
+            Command::StartLoop(loop_count, analysis) => {
                 self.process_loop_analysis(analysis);
-                self.bc.start_loop(None)?;
+                self.bc.start_loop(*loop_count)?;
             }
 
             Command::SkipLastLoop => {
@@ -1582,7 +1582,7 @@ impl<'a> ChannelBcGenerator<'a> {
 
             Command::EndLoop(loop_count, analysis) => {
                 self.process_loop_analysis(analysis);
-                self.bc.end_loop(Some(*loop_count))?;
+                self.bc.end_loop(*loop_count)?;
             }
 
             &Command::ChangePanAndOrVolume(pan, volume) => match (pan, volume) {

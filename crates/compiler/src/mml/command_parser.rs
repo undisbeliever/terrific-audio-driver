@@ -2524,6 +2524,24 @@ fn parse_bytecode_asm<'a>(pos: FilePos, asm: &'a str, p: &mut Parser<'a, '_>) ->
                 p,
             )
         }
+        Some((bytecode_assembler::START_LOOP, arg)) => {
+            match bytecode_assembler::parse_uvnt(arg.trim_start()) {
+                Ok(a) => Command::StartLoop(Some(a), Default::default()),
+                Err(e) => {
+                    p.add_error(pos, e);
+                    Command::None
+                }
+            }
+        }
+        Some((bytecode_assembler::END_LOOP, arg)) => {
+            match bytecode_assembler::parse_uvnt(arg.trim_start()) {
+                Ok(a) => Command::EndLoop(Some(a), Default::default()),
+                Err(e) => {
+                    p.add_error(pos, e);
+                    Command::None
+                }
+            }
+        }
         Some((bytecode_assembler::SET_TRANSPOSE, arg)) => {
             match bytecode_assembler::parse_svnt_allow_zero(arg.trim_start()) {
                 Ok(t) => Command::SetTranspose(t),
@@ -2546,6 +2564,9 @@ fn parse_bytecode_asm<'a>(pos: FilePos, asm: &'a str, p: &mut Parser<'a, '_>) ->
 
         // Instructions with no arguments
         None => match asm {
+            bytecode_assembler::START_LOOP => Command::StartLoop(None, Default::default()),
+            bytecode_assembler::SKIP_LAST_LOOP => Command::SkipLastLoop,
+            bytecode_assembler::END_LOOP => Command::EndLoop(None, Default::default()),
             bytecode_assembler::DISABLE_TRANSPOSE => Command::SetTranspose(Transpose::ZERO),
             _ => Command::BytecodeAsm(asm),
         },
@@ -2593,11 +2614,11 @@ fn parse_token<'a>(pos: FilePos, token: Token<'a>, p: &mut Parser<'a, '_>) -> Co
         Token::SetSubroutineInstrumentHint(id) => parse_set_instrument_hint(pos, id, p),
         Token::CallSubroutine(id) => parse_call_subroutine(pos, id, SubroutineCallType::Mml, p),
 
-        Token::StartLoop => Command::StartLoop(Default::default()),
+        Token::StartLoop => Command::StartLoop(None, Default::default()),
         Token::SkipLastLoop => Command::SkipLastLoop,
         Token::EndLoop => {
             let lc = parse_unsigned_newtype(pos, p).unwrap_or(LoopCount::MIN);
-            Command::EndLoop(lc, Default::default())
+            Command::EndLoop(Some(lc), Default::default())
         }
 
         Token::SetLoopPoint => Command::SetLoopPoint(Default::default()),
