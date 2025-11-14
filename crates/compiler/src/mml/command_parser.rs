@@ -2180,26 +2180,26 @@ fn parse_set_instrument_hint<'a>(
     }
 }
 
-fn parse_call_subroutine<'a>(
-    pos: FilePos,
-    id: IdentifierStr,
-    d: SubroutineCallType,
-    p: &mut Parser<'a, '_>,
-) -> Command<'a> {
-    match p.find_subroutine(id.as_str()) {
-        Some(index) => Command::CallSubroutine(index, d),
+fn find_subroutine_index(id: &str, p: &Parser<'_, '_>) -> Result<u8, ChannelError> {
+    match p.find_subroutine(id) {
+        Some(index) => Ok(index),
         None => match p.channel_id() {
             ChannelId::Channel(_) | ChannelId::Subroutine(_) | ChannelId::SoundEffect => {
-                invalid_token_error(
-                    p,
-                    pos,
-                    ChannelError::CannotFindSubroutine(id.as_str().to_owned()),
-                )
+                Err(ChannelError::CannotFindSubroutine(id.to_owned()))
             }
-            ChannelId::MmlPrefix => {
-                invalid_token_error(p, pos, ChannelError::CannotCallSubroutineInAnMmlPrefix)
-            }
+            ChannelId::MmlPrefix => Err(ChannelError::CannotCallSubroutineInAnMmlPrefix),
         },
+    }
+}
+
+fn parse_call_subroutine_mml<'a>(
+    pos: FilePos,
+    id: IdentifierStr,
+    p: &mut Parser<'a, '_>,
+) -> Command<'a> {
+    match find_subroutine_index(id.as_str(), p) {
+        Ok(index) => Command::CallSubroutine(index, SubroutineCallType::Mml),
+        Err(e) => invalid_token_error(p, pos, e),
     }
 }
 
@@ -2531,107 +2531,74 @@ fn parse_set_echo_delay<'a>(pos: FilePos, p: &mut Parser) -> Command<'a> {
     }
 }
 
-fn parse_bytecode_asm<'a>(pos: FilePos, asm: &'a str, p: &mut Parser<'a, '_>) -> Command<'a> {
+fn parse_bytecode_asm_instruction<'a>(
+    asm: &'a str,
+    p: &Parser<'a, '_>,
+) -> Result<Command<'a>, ChannelError> {
     use bytecode_assembler::split_asm_args;
 
     match asm.split_once(|c: char| c.is_ascii_whitespace()) {
-        Some((bytecode_assembler::CALL_SUBROUTINE, arg)) => parse_call_subroutine(
-            pos,
-            IdentifierStr::from_str(arg.trim_start()),
-            SubroutineCallType::Asm,
-            p,
-        ),
+        Some((bytecode_assembler::CALL_SUBROUTINE, arg)) => {
+            let s = find_subroutine_index(arg.trim_start(), p)?;
+            Ok(Command::CallSubroutine(s, SubroutineCallType::Asm))
+        }
         Some((bytecode_assembler::CALL_SUBROUTINE_AND_DISABLE_VIBRATO, arg)) => {
-            parse_call_subroutine(
-                pos,
-                IdentifierStr::from_str(arg.trim_start()),
+            let s = find_subroutine_index(arg.trim_start(), p)?;
+            Ok(Command::CallSubroutine(
+                s,
                 SubroutineCallType::AsmDisableVibrato,
-                p,
-            )
+            ))
         }
         Some((bytecode_assembler::START_LOOP, arg)) => {
-            match bytecode_assembler::parse_uvnt(arg.trim_start()) {
-                Ok(a) => Command::StartLoop(Some(a), Default::default()),
-                Err(e) => {
-                    p.add_error(pos, e);
-                    Command::None
-                }
-            }
+            let a = bytecode_assembler::parse_uvnt(arg.trim_start())?;
+            Ok(Command::StartLoop(Some(a), Default::default()))
         }
         Some((bytecode_assembler::END_LOOP, arg)) => {
-            match bytecode_assembler::parse_uvnt(arg.trim_start()) {
-                Ok(a) => Command::EndLoop(Some(a), Default::default()),
-                Err(e) => {
-                    p.add_error(pos, e);
-                    Command::None
-                }
-            }
+            let a = bytecode_assembler::parse_uvnt(arg.trim_start())?;
+            Ok(Command::EndLoop(Some(a), Default::default()))
         }
-        Some((bytecode_assembler::SET_INSTRUMENT, arg)) => match p.find_asm_instrument_id(arg) {
-            Ok(i) => Command::SetInstrumentAsm(i, None),
-            Err(e) => {
-                p.add_error(pos, e);
-                Command::None
-            }
-        },
+        Some((bytecode_assembler::SET_INSTRUMENT, arg)) => {
+            let i = p.find_asm_instrument_id(arg)?;
+            Ok(Command::SetInstrumentAsm(i, None))
+        }
         Some((bytecode_assembler::SET_INSTRUMENT_AND_ADSR, arg)) => {
-            match bytecode_assembler::instrument_and_adsr_argument(&split_asm_args(arg)) {
-                Ok((name, a)) => match p.find_asm_instrument_id(name) {
-                    Ok(i) => Command::SetInstrumentAsm(i, Some(Envelope::Adsr(a))),
-                    Err(e) => {
-                        p.add_error(pos, e);
-                        Command::None
-                    }
-                },
-                Err(e) => {
-                    p.add_error(pos, e);
-                    Command::None
-                }
-            }
+            let (name, a) = bytecode_assembler::instrument_and_adsr_argument(&split_asm_args(arg))?;
+            let i = p.find_asm_instrument_id(name)?;
+            Ok(Command::SetInstrumentAsm(i, Some(Envelope::Adsr(a))))
         }
         Some((bytecode_assembler::SET_INSTRUMENT_AND_GAIN, arg)) => {
-            match bytecode_assembler::instrument_and_gain_argument(&split_asm_args(arg)) {
-                Ok((name, g)) => match p.find_asm_instrument_id(name) {
-                    Ok(i) => Command::SetInstrumentAsm(i, Some(Envelope::Gain(g))),
-                    Err(e) => {
-                        p.add_error(pos, e);
-                        Command::None
-                    }
-                },
-                Err(e) => {
-                    p.add_error(pos, e);
-                    Command::None
-                }
-            }
+            let (name, g) = bytecode_assembler::instrument_and_gain_argument(&split_asm_args(arg))?;
+            let i = p.find_asm_instrument_id(name)?;
+            Ok(Command::SetInstrumentAsm(i, Some(Envelope::Gain(g))))
         }
         Some((bytecode_assembler::SET_TRANSPOSE, arg)) => {
-            match bytecode_assembler::parse_svnt_allow_zero(arg.trim_start()) {
-                Ok(t) => Command::SetTranspose(t),
-                Err(e) => {
-                    p.add_error(pos, e);
-                    Command::None
-                }
-            }
+            let t = bytecode_assembler::parse_svnt_allow_zero(arg.trim_start())?;
+            Ok(Command::SetTranspose(t))
         }
         Some((bytecode_assembler::ADJUST_TRANSPOSE, arg)) => {
-            match bytecode_assembler::parse_svnt(arg.trim_start()) {
-                Ok(t) => Command::AdjustTranspose(t),
-                Err(e) => {
-                    p.add_error(pos, e);
-                    Command::None
-                }
-            }
+            let t = bytecode_assembler::parse_svnt(arg.trim_start())?;
+            Ok(Command::AdjustTranspose(t))
         }
-        Some(_) => Command::BytecodeAsm(asm),
+        Some(_) => Ok(Command::BytecodeAsm(asm)),
 
         // Instructions with no arguments
         None => match asm {
-            bytecode_assembler::START_LOOP => Command::StartLoop(None, Default::default()),
-            bytecode_assembler::SKIP_LAST_LOOP => Command::SkipLastLoop,
-            bytecode_assembler::END_LOOP => Command::EndLoop(None, Default::default()),
-            bytecode_assembler::DISABLE_TRANSPOSE => Command::SetTranspose(Transpose::ZERO),
-            _ => Command::BytecodeAsm(asm),
+            bytecode_assembler::START_LOOP => Ok(Command::StartLoop(None, Default::default())),
+            bytecode_assembler::SKIP_LAST_LOOP => Ok(Command::SkipLastLoop),
+            bytecode_assembler::END_LOOP => Ok(Command::EndLoop(None, Default::default())),
+            bytecode_assembler::DISABLE_TRANSPOSE => Ok(Command::SetTranspose(Transpose::ZERO)),
+            _ => Ok(Command::BytecodeAsm(asm)),
         },
+    }
+}
+
+fn parse_bytecode_asm<'a>(pos: FilePos, asm: &'a str, p: &mut Parser<'a, '_>) -> Command<'a> {
+    match parse_bytecode_asm_instruction(asm, p) {
+        Ok(c) => c,
+        Err(e) => {
+            p.add_error(pos, e);
+            Command::None
+        }
     }
 }
 
@@ -2674,7 +2641,7 @@ fn parse_token<'a>(pos: FilePos, token: Token<'a>, p: &mut Parser<'a, '_>) -> Co
 
         Token::SetInstrument(id) => parse_set_instrument(pos, id, p),
         Token::SetSubroutineInstrumentHint(id) => parse_set_instrument_hint(pos, id, p),
-        Token::CallSubroutine(id) => parse_call_subroutine(pos, id, SubroutineCallType::Mml, p),
+        Token::CallSubroutine(id) => parse_call_subroutine_mml(pos, id, p),
 
         Token::StartLoop => Command::StartLoop(None, Default::default()),
         Token::SkipLastLoop => Command::SkipLastLoop,
