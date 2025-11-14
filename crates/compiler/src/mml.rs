@@ -77,10 +77,12 @@ impl MmlPrefixData {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn parse_tokens<'a>(
     channel: ChannelId,
     identifier: IdentifierStr,
     tokens: MmlTokens<'a>,
+    data_instruments: &UniqueNamesList<data::InstrumentOrSample>,
     mml_instrument_map: &HashMap<IdentifierStr, &MmlInstrument>,
     subroutine_name_map: &HashMap<IdentifierStr, usize>,
     global_settings: &GlobalSettings,
@@ -89,6 +91,7 @@ fn parse_tokens<'a>(
     let (commands, errors) = parse_mml_tokens(
         channel,
         tokens,
+        data_instruments,
         mml_instrument_map,
         subroutine_name_map,
         global_settings,
@@ -110,6 +113,7 @@ fn parse_tokens<'a>(
 
 fn parse_subroutines<'a>(
     subroutines: Vec<(IdentifierStr<'a>, MmlTokens<'a>)>,
+    data_instruments: &UniqueNamesList<data::InstrumentOrSample>,
     instrument_map: &HashMap<IdentifierStr, &MmlInstrument>,
     subroutine_name_map: &HashMap<IdentifierStr, usize>,
     global_settings: &GlobalSettings,
@@ -127,6 +131,7 @@ fn parse_subroutines<'a>(
             let (c, e) = parse_mml_tokens(
                 ChannelId::Subroutine(i),
                 tokens,
+                data_instruments,
                 instrument_map,
                 subroutine_name_map,
                 global_settings,
@@ -202,6 +207,7 @@ pub(crate) fn parse_mml_song<'a>(
 
     let subroutines = parse_subroutines(
         lines.subroutines,
+        data_instruments,
         &instrument_map,
         &lines.subroutine_name_map,
         &metadata.mml_settings,
@@ -220,6 +226,7 @@ pub(crate) fn parse_mml_song<'a>(
                 ChannelId::Channel(c_index),
                 c_index.identifier(),
                 tokens,
+                data_instruments,
                 &instrument_map,
                 &lines.subroutine_name_map,
                 &metadata.mml_settings,
@@ -294,6 +301,7 @@ pub(crate) fn parse_sfx_subroutines<'a>(
 
     let subroutines = parse_subroutines(
         lines.subroutines,
+        data_instruments,
         &instrument_map,
         &lines.subroutine_name_map,
         &GlobalSettings::default(),
@@ -339,6 +347,7 @@ pub(crate) fn parse_sound_effect<'a>(
     let (commands, errors) = parse_mml_tokens(
         ChannelId::SoundEffect,
         lines.tokens,
+        data_instruments,
         &instruments_map,
         sfx_subroutines,
         &GlobalSettings::default(),
@@ -377,6 +386,7 @@ pub fn compile_mml_prefix(
     let (commands, errors) = parse_mml_tokens(
         ChannelId::MmlPrefix,
         tokens,
+        data_instruments,
         &instruments_map,
         &BlankSubroutineMap,
         &GlobalSettings::default(),

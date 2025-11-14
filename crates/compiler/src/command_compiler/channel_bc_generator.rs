@@ -1138,6 +1138,15 @@ impl<'a> ChannelBcGenerator<'a> {
         Ok(())
     }
 
+    // Will not be optimised away
+    fn set_instrument_asm(&mut self, inst_id: InstrumentId, envelope: Option<Envelope>) {
+        match envelope {
+            None => self.bc.set_instrument(inst_id),
+            Some(Envelope::Adsr(adsr)) => self.bc.set_instrument_and_adsr(inst_id, adsr),
+            Some(Envelope::Gain(gain)) => self.bc.set_instrument_and_gain(inst_id, gain),
+        }
+    }
+
     fn set_instrument(
         &mut self,
         inst_id: InstrumentId,
@@ -1381,6 +1390,9 @@ impl<'a> ChannelBcGenerator<'a> {
                 self.bc.set_subroutine_instrument_hint(inst_id, envelope)?;
             }
 
+            &Command::SetInstrumentAsm(inst_id, envelope) => {
+                self.set_instrument_asm(inst_id, envelope);
+            }
             &Command::SetInstrument(inst_id, envelope) => {
                 self.set_instrument(inst_id, envelope)?;
             }

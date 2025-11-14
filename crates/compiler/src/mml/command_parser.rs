@@ -6,12 +6,13 @@
 
 use super::note_tracking::CursorTracker;
 use super::tokenizer::{MmlTokens, PeekableTokenIterator, Token};
-use crate::bytecode_assembler;
+use crate::data::UniqueNamesList;
 use crate::identifier::{ChannelId, IdentifierStr};
+use crate::{bytecode_assembler, data};
 
 use crate::bytecode::{
-    DetuneValue, EarlyReleaseMinTicks, EarlyReleaseTicks, LoopCount, NoiseFrequency, Pan,
-    PanSlideTicks, PanbrelloQuarterWavelengthInTicks, PlayNoteTicks, PlayPitchPitch,
+    DetuneValue, EarlyReleaseMinTicks, EarlyReleaseTicks, InstrumentId, LoopCount, NoiseFrequency,
+    Pan, PanSlideTicks, PanbrelloQuarterWavelengthInTicks, PlayNoteTicks, PlayPitchPitch,
     RelativeEchoFeedback, RelativeEchoVolume, RelativeFirCoefficient, Transpose, TremoloAmplitude,
     TremoloQuarterWavelengthInTicks, VibratoDelayTicks, VibratoPitchOffsetPerTick,
     VibratoQuarterWavelengthInTicks, Volume, VolumeSlideAmount, VolumeSlideTicks,
@@ -25,8 +26,8 @@ use crate::command_compiler::commands::{
 };
 use crate::driver_constants::FIR_FILTER_SIZE;
 use crate::echo::{EchoVolume, FirCoefficient, FirTap};
-use crate::envelope::{Gain, GainMode, OptionalGain, TempGain};
-use crate::errors::{ChannelError, ErrorWithPos, ValueError};
+use crate::envelope::{Envelope, Gain, GainMode, OptionalGain, TempGain};
+use crate::errors::{BytecodeError, ChannelError, ErrorWithPos, ValueError};
 use crate::file_pos::{FilePos, FilePosRange};
 use crate::mml::GlobalSettings;
 use crate::notes::{KeySignature, MidiNote, MmlPitch, Note, Octave, STARTING_OCTAVE};
@@ -67,7 +68,9 @@ pub struct State {
 
 mod parser {
     use crate::{
-        command_compiler::commands::MmlInstrument, file_pos::LineIndexRange,
+        command_compiler::commands::MmlInstrument,
+        data::{self, UniqueNamesList},
+        file_pos::LineIndexRange,
         mml::metadata::GlobalSettings,
     };
 
@@ -83,6 +86,7 @@ mod parser {
         default_length: TickCounter,
         keyoff_enabled: bool,
 
+        data_instruments: &'b UniqueNamesList<data::InstrumentOrSample>,
         instruments_map: &'b HashMap<IdentifierStr<'b>, &'b MmlInstrument>,
         subroutines: &'b dyn SubroutineNameMap,
 
@@ -96,6 +100,7 @@ mod parser {
         pub(super) fn new(
             channel: ChannelId,
             tokens: MmlTokens<'a>,
+            data_instruments: &'b UniqueNamesList<data::InstrumentOrSample>,
             instruments_map: &'b HashMap<IdentifierStr<'b>, &'b MmlInstrument>,
             subroutines: &'b dyn SubroutineNameMap,
             settings: &'b GlobalSettings,
@@ -120,6 +125,7 @@ mod parser {
                 default_length: settings.zenlen.starting_length(),
                 keyoff_enabled: true,
 
+                data_instruments,
                 instruments_map,
                 subroutines,
 
@@ -168,6 +174,19 @@ mod parser {
         pub(super) fn add_error(&mut self, pos: FilePos, e: ChannelError) {
             self.errors
                 .push(ErrorWithPos(self.file_pos_range_from(pos), e))
+        }
+
+        pub(super) fn find_asm_instrument_id(
+            &self,
+            name: &str,
+        ) -> Result<InstrumentId, ChannelError> {
+            match self.data_instruments.get_with_index(name) {
+                Some((i, _inst)) => match InstrumentId::try_from(i) {
+                    Ok(inst) => Ok(inst),
+                    Err(_) => Err(BytecodeError::InvalidInstrumentId.into()),
+                },
+                None => Err(BytecodeError::UnknownInstrument(name.to_owned()).into()),
+            }
         }
 
         pub(super) fn instruments_map(&self) -> &HashMap<IdentifierStr<'b>, &MmlInstrument> {
@@ -2513,6 +2532,8 @@ fn parse_set_echo_delay<'a>(pos: FilePos, p: &mut Parser) -> Command<'a> {
 }
 
 fn parse_bytecode_asm<'a>(pos: FilePos, asm: &'a str, p: &mut Parser<'a, '_>) -> Command<'a> {
+    use bytecode_assembler::split_asm_args;
+
     match asm.split_once(|c: char| c.is_ascii_whitespace()) {
         Some((bytecode_assembler::CALL_SUBROUTINE, arg)) => parse_call_subroutine(
             pos,
@@ -2540,6 +2561,43 @@ fn parse_bytecode_asm<'a>(pos: FilePos, asm: &'a str, p: &mut Parser<'a, '_>) ->
         Some((bytecode_assembler::END_LOOP, arg)) => {
             match bytecode_assembler::parse_uvnt(arg.trim_start()) {
                 Ok(a) => Command::EndLoop(Some(a), Default::default()),
+                Err(e) => {
+                    p.add_error(pos, e);
+                    Command::None
+                }
+            }
+        }
+        Some((bytecode_assembler::SET_INSTRUMENT, arg)) => match p.find_asm_instrument_id(arg) {
+            Ok(i) => Command::SetInstrumentAsm(i, None),
+            Err(e) => {
+                p.add_error(pos, e);
+                Command::None
+            }
+        },
+        Some((bytecode_assembler::SET_INSTRUMENT_AND_ADSR, arg)) => {
+            match bytecode_assembler::instrument_and_adsr_argument(&split_asm_args(arg)) {
+                Ok((name, a)) => match p.find_asm_instrument_id(name) {
+                    Ok(i) => Command::SetInstrumentAsm(i, Some(Envelope::Adsr(a))),
+                    Err(e) => {
+                        p.add_error(pos, e);
+                        Command::None
+                    }
+                },
+                Err(e) => {
+                    p.add_error(pos, e);
+                    Command::None
+                }
+            }
+        }
+        Some((bytecode_assembler::SET_INSTRUMENT_AND_GAIN, arg)) => {
+            match bytecode_assembler::instrument_and_gain_argument(&split_asm_args(arg)) {
+                Ok((name, g)) => match p.find_asm_instrument_id(name) {
+                    Ok(i) => Command::SetInstrumentAsm(i, Some(Envelope::Gain(g))),
+                    Err(e) => {
+                        p.add_error(pos, e);
+                        Command::None
+                    }
+                },
                 Err(e) => {
                     p.add_error(pos, e);
                     Command::None
@@ -2759,6 +2817,7 @@ fn parse_token<'a>(pos: FilePos, token: Token<'a>, p: &mut Parser<'a, '_>) -> Co
 pub(crate) fn parse_mml_tokens<'a>(
     channel: ChannelId,
     tokens: MmlTokens<'a>,
+    data_instruments: &UniqueNamesList<data::InstrumentOrSample>,
     instruments_map: &HashMap<IdentifierStr, &MmlInstrument>,
     subroutines: &dyn SubroutineNameMap,
     settings: &GlobalSettings,
@@ -2769,6 +2828,7 @@ pub(crate) fn parse_mml_tokens<'a>(
     let mut p = Parser::new(
         channel,
         tokens,
+        data_instruments,
         instruments_map,
         subroutines,
         settings,

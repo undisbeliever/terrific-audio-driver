@@ -312,7 +312,9 @@ fn temp_gain_and_rest_arguments(args: &[&str]) -> Result<(TempGain, BcTicksKeyOf
     Ok((gain.parse()?, BcTicksKeyOff::try_from(parse_u32(length)?)?))
 }
 
-fn instrument_and_adsr_argument<'a>(args: &[&'a str]) -> Result<(&'a str, Adsr), ChannelError> {
+pub(crate) fn instrument_and_adsr_argument<'a>(
+    args: &[&'a str],
+) -> Result<(&'a str, Adsr), ChannelError> {
     let (inst, a1, a2, a3, a4) = five_arguments(args)?;
 
     let adsr = Adsr::try_from_strs(a1, a2, a3, a4)?;
@@ -320,7 +322,9 @@ fn instrument_and_adsr_argument<'a>(args: &[&'a str]) -> Result<(&'a str, Adsr),
     Ok((inst, adsr))
 }
 
-fn instrument_and_gain_argument<'a>(args: &[&'a str]) -> Result<(&'a str, Gain), ChannelError> {
+pub(crate) fn instrument_and_gain_argument<'a>(
+    args: &[&'a str],
+) -> Result<(&'a str, Gain), ChannelError> {
     let (inst, gain) = two_arguments(args)?;
     let gain = gain.parse()?;
 
@@ -498,6 +502,14 @@ where
     Ok(parse_i32_allow_zero(s, &T::MISSING_SIGN_ERROR)?.try_into()?)
 }
 
+pub(crate) fn split_asm_args(arguments: &str) -> Vec<&str> {
+    if arguments.contains(',') {
+        arguments.split(',').map(|s| s.trim()).collect()
+    } else {
+        arguments.split_ascii_whitespace().collect()
+    }
+}
+
 pub fn parse_asm_line(bc: &mut Bytecode, line: &str) -> Result<(), ChannelError> {
     // Strip comments
     let line = match line.split_once(';') {
@@ -514,11 +526,7 @@ pub fn parse_asm_line(bc: &mut Bytecode, line: &str) -> Result<(), ChannelError>
         .split_once(|c: char| c.is_ascii_whitespace())
         .unwrap_or((line, ""));
 
-    let arguments: Vec<&str> = if arguments.contains(',') {
-        arguments.split(',').map(|s| s.trim()).collect()
-    } else {
-        arguments.split_ascii_whitespace().collect()
-    };
+    let arguments = split_asm_args(arguments);
 
     macro_rules! parse_args_and_execute {
         ($name:ident, $n_args:tt, $arg_parser:ident, $method:ident) => {{
@@ -661,6 +669,10 @@ pub(crate) const CALL_SUBROUTINE_AND_DISABLE_VIBRATO: &str = "call_subroutine_an
 pub(crate) const START_LOOP: &str = "start_loop";
 pub(crate) const SKIP_LAST_LOOP: &str = "skip_last_loop";
 pub(crate) const END_LOOP: &str = "end_loop";
+
+pub(crate) const SET_INSTRUMENT: &str = "set_instrument";
+pub(crate) const SET_INSTRUMENT_AND_ADSR: &str = "set_instrument_and_adsr";
+pub(crate) const SET_INSTRUMENT_AND_GAIN: &str = "set_instrument_and_gain";
 
 pub(crate) const SET_TRANSPOSE: &str = "set_transpose";
 pub(crate) const ADJUST_TRANSPOSE: &str = "adjust_transpose";

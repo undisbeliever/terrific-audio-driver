@@ -277,6 +277,9 @@ pub(crate) enum Command<'a> {
 
     SetSubroutineInstrumentHint(InstrumentId, Option<Envelope>),
 
+    // Will not be optimised away
+    SetInstrumentAsm(InstrumentId, Option<Envelope>),
+
     SetInstrument(InstrumentId, Option<Envelope>),
     SetAdsr(Adsr),
     SetGain(Gain),
