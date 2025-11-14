@@ -275,11 +275,9 @@ pub(crate) enum Command<'a> {
     SkipLastLoop,
     EndLoop(Option<LoopCount>, LoopAnalysis),
 
-    // index into Vec<MmlInstrument>.
-    SetSubroutineInstrumentHint(usize),
+    SetSubroutineInstrumentHint(InstrumentId, Option<Envelope>),
 
-    // index into Vec<MmlInstrument>.
-    SetInstrument(usize),
+    SetInstrument(InstrumentId, Option<Envelope>),
     SetAdsr(Adsr),
     SetGain(Gain),
 
@@ -403,11 +401,10 @@ pub struct MmlInstrument {
     pub(crate) file_range: FilePosRange,
 
     pub(crate) instrument_id: InstrumentId,
+    pub(crate) envelope: Option<Envelope>,
 
-    // No envelope override or envelope override matches instrument
-    pub(crate) envelope_unchanged: bool,
-    pub(crate) envelope: Envelope,
-
+    // Used by bytecode_interpreter to select the instrument to use when playing a subroutine
+    // ::TODO remove::
     pub(crate) note_range: RangeInclusive<Note>,
 }
 
@@ -423,14 +420,12 @@ pub(crate) struct SongCommands<'a> {
 }
 
 pub(crate) struct SfxSubroutineCommands<'a> {
-    pub instruments: Vec<MmlInstrument>,
     pub subroutines: Vec<SubroutineCommands<'a>>,
     pub mml_tracker: CursorTracker,
     pub errors: Vec<MmlChannelError>,
 }
 
 pub(crate) struct SoundEffectCommands<'a> {
-    pub instruments: Vec<MmlInstrument>,
     pub commands: ChannelCommands<'a>,
     pub errors: Vec<ErrorWithPos<ChannelError>>,
     pub mml_tracker: CursorTracker,

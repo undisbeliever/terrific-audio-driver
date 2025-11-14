@@ -23,7 +23,8 @@ use tokenizer::MmlTokens;
 use crate::bytecode::BytecodeContext;
 use crate::command_compiler::channel_bc_generator;
 use crate::command_compiler::commands::{
-    ChannelCommands, SfxSubroutineCommands, SongCommands, SoundEffectCommands, SubroutineCommands,
+    ChannelCommands, MmlInstrument, SfxSubroutineCommands, SongCommands, SoundEffectCommands,
+    SubroutineCommands,
 };
 use crate::data::{self, UniqueNamesList};
 use crate::driver_constants::{MAX_SFX_SUBROUTINES, MAX_SUBROUTINES};
@@ -80,7 +81,7 @@ fn parse_tokens<'a>(
     channel: ChannelId,
     identifier: IdentifierStr,
     tokens: MmlTokens<'a>,
-    mml_instrument_map: &HashMap<IdentifierStr, usize>,
+    mml_instrument_map: &HashMap<IdentifierStr, &MmlInstrument>,
     subroutine_name_map: &HashMap<IdentifierStr, usize>,
     global_settings: &GlobalSettings,
     cursor_tracker: &mut CursorTracker,
@@ -109,7 +110,7 @@ fn parse_tokens<'a>(
 
 fn parse_subroutines<'a>(
     subroutines: Vec<(IdentifierStr<'a>, MmlTokens<'a>)>,
-    instrument_map: &HashMap<IdentifierStr, usize>,
+    instrument_map: &HashMap<IdentifierStr, &MmlInstrument>,
     subroutine_name_map: &HashMap<IdentifierStr, usize>,
     global_settings: &GlobalSettings,
     cursor_tracking: &mut CursorTracker,
@@ -301,7 +302,6 @@ pub(crate) fn parse_sfx_subroutines<'a>(
     );
 
     Ok(SfxSubroutineCommands {
-        instruments,
         subroutines,
         mml_tracker,
         errors,
@@ -346,7 +346,6 @@ pub(crate) fn parse_sound_effect<'a>(
     );
 
     Ok(SoundEffectCommands {
-        instruments,
         commands,
         errors,
         mml_tracker,
@@ -387,7 +386,6 @@ pub fn compile_mml_prefix(
     channel_bc_generator::compile_mml_prefix(
         &commands,
         BytecodeContext::MmlPrefix,
-        mml_instruments,
         data_instruments,
         pitch_table,
         &CompiledSubroutines::new_blank(),

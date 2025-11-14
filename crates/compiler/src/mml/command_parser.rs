@@ -19,8 +19,9 @@ use crate::bytecode::{
 };
 use crate::command_compiler::commands::{
     merge_pan_commands, merge_volumes_commands, relative_pan, relative_volume, ChannelCommands,
-    Command, CommandWithPos, DetuneCents, FineQuantization, ManualVibrato, MpVibrato, NoteOrPitch,
-    PanCommand, Quantize, RestTicksAfterNote, SubroutineCallType, VolumeCommand,
+    Command, CommandWithPos, DetuneCents, FineQuantization, ManualVibrato, MmlInstrument,
+    MpVibrato, NoteOrPitch, PanCommand, Quantize, RestTicksAfterNote, SubroutineCallType,
+    VolumeCommand,
 };
 use crate::driver_constants::FIR_FILTER_SIZE;
 use crate::echo::{EchoVolume, FirCoefficient, FirTap};
@@ -65,7 +66,10 @@ pub struct State {
 }
 
 mod parser {
-    use crate::{file_pos::LineIndexRange, mml::metadata::GlobalSettings};
+    use crate::{
+        command_compiler::commands::MmlInstrument, file_pos::LineIndexRange,
+        mml::metadata::GlobalSettings,
+    };
 
     use super::*;
 
@@ -79,7 +83,7 @@ mod parser {
         default_length: TickCounter,
         keyoff_enabled: bool,
 
-        instruments_map: &'b HashMap<IdentifierStr<'b>, usize>,
+        instruments_map: &'b HashMap<IdentifierStr<'b>, &'b MmlInstrument>,
         subroutines: &'b dyn SubroutineNameMap,
 
         old_transpose: bool,
@@ -92,7 +96,7 @@ mod parser {
         pub(super) fn new(
             channel: ChannelId,
             tokens: MmlTokens<'a>,
-            instruments_map: &'b HashMap<IdentifierStr<'b>, usize>,
+            instruments_map: &'b HashMap<IdentifierStr<'b>, &'b MmlInstrument>,
             subroutines: &'b dyn SubroutineNameMap,
             settings: &'b GlobalSettings,
             cursor_tracking: &'b mut CursorTracker,
@@ -166,7 +170,7 @@ mod parser {
                 .push(ErrorWithPos(self.file_pos_range_from(pos), e))
         }
 
-        pub(super) fn instruments_map(&self) -> &HashMap<IdentifierStr<'b>, usize> {
+        pub(super) fn instruments_map(&self) -> &HashMap<IdentifierStr<'b>, &MmlInstrument> {
             self.instruments_map
         }
 
@@ -2133,7 +2137,7 @@ fn parse_keyoff<'a>(pos: FilePos, p: &mut Parser) -> Command<'a> {
 
 fn parse_set_instrument<'a>(pos: FilePos, id: IdentifierStr, p: &mut Parser) -> Command<'a> {
     match p.instruments_map().get(&id) {
-        Some(inst) => Command::SetInstrument(*inst),
+        Some(inst) => Command::SetInstrument(inst.instrument_id, inst.envelope),
         None => invalid_token_error(
             p,
             pos,
@@ -2148,7 +2152,7 @@ fn parse_set_instrument_hint<'a>(
     p: &mut Parser<'a, '_>,
 ) -> Command<'a> {
     match p.instruments_map().get(&id) {
-        Some(inst) => Command::SetSubroutineInstrumentHint(*inst),
+        Some(inst) => Command::SetSubroutineInstrumentHint(inst.instrument_id, inst.envelope),
         None => invalid_token_error(
             p,
             pos,
@@ -2755,7 +2759,7 @@ fn parse_token<'a>(pos: FilePos, token: Token<'a>, p: &mut Parser<'a, '_>) -> Co
 pub(crate) fn parse_mml_tokens<'a>(
     channel: ChannelId,
     tokens: MmlTokens<'a>,
-    instruments_map: &HashMap<IdentifierStr, usize>,
+    instruments_map: &HashMap<IdentifierStr, &MmlInstrument>,
     subroutines: &dyn SubroutineNameMap,
     settings: &GlobalSettings,
     cursor_tracking: &mut CursorTracker,

@@ -8,8 +8,8 @@ use super::IdentifierStr;
 
 use crate::bytecode::InstrumentId;
 use crate::command_compiler::commands::MmlInstrument;
+use crate::data;
 use crate::data::UniqueNamesList;
-use crate::data::{self, InstrumentOrSample};
 use crate::envelope::Envelope;
 use crate::errors::{ErrorWithPos, MmlLineError};
 use crate::file_pos::Line;
@@ -45,12 +45,7 @@ fn parse_instrument(
         Err(e) => return inst_name_err(e.into()),
     };
 
-    let source_envelope = match inst {
-        InstrumentOrSample::Instrument(inst) => &inst.envelope,
-        InstrumentOrSample::Sample(sample) => &sample.envelope,
-    };
-    let mut envelope = *source_envelope;
-
+    let mut envelope = None;
     if let Some(args) = args {
         let arg = args.text;
         let arg_range = args.range();
@@ -58,10 +53,10 @@ fn parse_instrument(
 
         match Envelope::try_from_envelope_str(arg) {
             Ok(Envelope::Adsr(a)) => {
-                envelope = Envelope::Adsr(a);
+                envelope = Some(Envelope::Adsr(a));
             }
             Ok(Envelope::Gain(g)) => {
-                envelope = Envelope::Gain(g);
+                envelope = Some(Envelope::Gain(g));
             }
             Err(e) => {
                 return arg_err(MmlLineError::ValueError(e));
@@ -73,7 +68,6 @@ fn parse_instrument(
         identifier: id.to_owned(),
         file_range: line.range(),
         instrument_id,
-        envelope_unchanged: &envelope == source_envelope,
         envelope,
         note_range: note_range(inst),
     })
@@ -98,12 +92,12 @@ pub fn parse_instruments(
 
 pub(crate) fn build_instrument_map(
     instruments: &[MmlInstrument],
-) -> Result<HashMap<IdentifierStr<'_>, usize>, Vec<ErrorWithPos<MmlLineError>>> {
+) -> Result<HashMap<IdentifierStr<'_>, &MmlInstrument>, Vec<ErrorWithPos<MmlLineError>>> {
     let mut out = HashMap::with_capacity(instruments.len());
     let mut errors = Vec::new();
 
-    for (i, inst) in instruments.iter().enumerate() {
-        if out.insert(inst.identifier.as_ref(), i).is_some() {
+    for inst in instruments.iter() {
+        if out.insert(inst.identifier.as_ref(), inst).is_some() {
             errors.push(ErrorWithPos(
                 inst.file_range.clone(),
                 MmlLineError::DuplicateInstrumentName(inst.identifier.as_str().to_owned()),

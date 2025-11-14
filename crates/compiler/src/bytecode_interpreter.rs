@@ -1536,6 +1536,14 @@ where
             }
         };
 
+        let envelope = match envelope {
+            Some(e) => e,
+            None => match out.common_audio_data.instrument_envelope(inst.as_u8()) {
+                Some(e) => e,
+                None => return Err(SongSubroutineError),
+            },
+        };
+
         out.channels[0] = ChannelState::subroutine_prefix(
             song_addr,
             inst,

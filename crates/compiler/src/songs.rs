@@ -514,7 +514,6 @@ fn compile_song_commands(
         header_size,
         pitch_table,
         data_instruments,
-        &song.instruments,
         song.metadata.echo_buffer.max_edl,
         true,
     );

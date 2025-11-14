@@ -32,7 +32,7 @@ use crate::subroutines::{
     BlankSubroutineMap, CompiledSubroutines, GetSubroutineResult, Subroutine, SubroutineState,
 };
 use crate::time::{TickClock, TickCounter, TickCounterWithLoopFlag};
-use crate::Transpose;
+use crate::{Transpose, UnsignedValueNewType};
 
 pub const MAX_NO_LOOP_TICKS: TickCounter = TickCounter::new(256 * 32);
 
@@ -135,7 +135,7 @@ enum AfterPlayNote {
 
 struct ChannelBcGenerator<'a> {
     pitch_table: &'a PitchTable,
-    instruments: &'a [MmlInstrument],
+    instruments: &'a UniqueNamesList<data::InstrumentOrSample>,
     subroutines: &'a CompiledSubroutines,
 
     bc: Bytecode<'a>,
@@ -158,20 +158,19 @@ impl<'a> ChannelBcGenerator<'a> {
     pub(super) fn new(
         bc_data: Vec<u8>,
         pitch_table: &'a PitchTable,
-        data_instruments: &'a UniqueNamesList<data::InstrumentOrSample>,
-        mml_instruments: &'a [MmlInstrument],
+        instruments: &'a UniqueNamesList<data::InstrumentOrSample>,
         subroutines: &'a CompiledSubroutines,
         context: BytecodeContext,
         called_with_transpose: bool,
     ) -> ChannelBcGenerator<'a> {
         ChannelBcGenerator {
             pitch_table,
-            instruments: mml_instruments,
+            instruments,
             subroutines,
             bc: Bytecode::new_append_to_vec(
                 bc_data,
                 context,
-                data_instruments,
+                instruments,
                 subroutines,
                 // Using BlankSubroutineMap here to forbid direct subroutine calls in bytecode assembly
                 // (\asm subroutine calls must go through `Self::call_subroutine()`)
@@ -1139,24 +1138,29 @@ impl<'a> ChannelBcGenerator<'a> {
         Ok(())
     }
 
-    fn set_instrument(&mut self, inst: usize) -> Result<(), ChannelError> {
-        let inst = match self.instruments.get(inst) {
-            Some(inst) => inst,
-            None => panic!("invalid instrument index"),
+    fn set_instrument(
+        &mut self,
+        inst_id: InstrumentId,
+        envelope: Option<Envelope>,
+    ) -> Result<(), ChannelError> {
+        // ::TODO optimise when adding sample swapping::
+        let inst_envelope = match self.instruments.get_index(inst_id.value().into()) {
+            Some(data::InstrumentOrSample::Instrument(i)) => i.envelope,
+            Some(data::InstrumentOrSample::Sample(s)) => s.envelope,
+            None => return Err(ChannelError::NoInstrument),
         };
 
         let old_inst = &self.bc.get_state().instrument;
         let old_envelope = &self.bc.get_state().envelope;
 
-        let i_id = inst.instrument_id;
-        let envelope = inst.envelope;
+        if old_inst.is_known_and_eq(&inst_id) {
+            let envelope = envelope.unwrap_or(inst_envelope);
 
-        if old_inst.is_known_and_eq(&i_id) {
             // InstrumentId unchanged, check envelope
             if !old_envelope.is_known_and_eq(&envelope) {
-                if inst.envelope_unchanged {
+                if envelope == inst_envelope {
                     // Outputs fewer bytes then a `set_adsr` instruction.
-                    self.bc.set_instrument(i_id);
+                    self.bc.set_instrument(inst_id);
                 } else {
                     match envelope {
                         Envelope::Adsr(adsr) => self.bc.set_adsr(adsr),
@@ -1164,12 +1168,12 @@ impl<'a> ChannelBcGenerator<'a> {
                     }
                 }
             }
-        } else if inst.envelope_unchanged {
-            self.bc.set_instrument(i_id);
         } else {
             match envelope {
-                Envelope::Adsr(adsr) => self.bc.set_instrument_and_adsr(i_id, adsr),
-                Envelope::Gain(gain) => self.bc.set_instrument_and_gain(i_id, gain),
+                None => self.bc.set_instrument(inst_id),
+                Some(e) if e == inst_envelope => self.bc.set_instrument(inst_id),
+                Some(Envelope::Adsr(adsr)) => self.bc.set_instrument_and_adsr(inst_id, adsr),
+                Some(Envelope::Gain(gain)) => self.bc.set_instrument_and_gain(inst_id, gain),
             }
         }
 
@@ -1373,16 +1377,12 @@ impl<'a> ChannelBcGenerator<'a> {
                 | BytecodeContext::MmlPrefix => return Err(ChannelError::CannotSetLoopPoint),
             },
 
-            &Command::SetSubroutineInstrumentHint(inst_index) => {
-                let inst = self
-                    .instruments
-                    .get(inst_index)
-                    .expect("invalid instrument index");
-                self.bc.set_subroutine_instrument_hint(inst)?;
+            &Command::SetSubroutineInstrumentHint(inst_id, envelope) => {
+                self.bc.set_subroutine_instrument_hint(inst_id, envelope)?;
             }
 
-            &Command::SetInstrument(inst_index) => {
-                self.set_instrument(inst_index)?;
+            &Command::SetInstrument(inst_id, envelope) => {
+                self.set_instrument(inst_id, envelope)?;
             }
             &Command::SetAdsr(adsr) => self.set_adsr(adsr),
             &Command::SetGain(gain) => self.set_gain(gain),
@@ -1787,7 +1787,6 @@ impl<'a> ChannelBcGenerator<'a> {
 pub(crate) struct CommandCompiler<'a> {
     pitch_table: &'a PitchTable,
     data_instruments: &'a data::UniqueNamesList<data::InstrumentOrSample>,
-    mml_instruments: &'a [MmlInstrument],
     max_edl: EchoEdl,
 
     is_song: bool,
@@ -1801,7 +1800,6 @@ impl<'a> CommandCompiler<'a> {
         header_size: usize,
         pitch_table: &'a PitchTable,
         data_instruments: &'a data::UniqueNamesList<data::InstrumentOrSample>,
-        mml_instruments: &'a [MmlInstrument],
         max_edl: EchoEdl,
 
         is_song: bool,
@@ -1812,7 +1810,6 @@ impl<'a> CommandCompiler<'a> {
 
             pitch_table,
             data_instruments,
-            mml_instruments,
             max_edl,
             is_song,
         }
@@ -1838,7 +1835,6 @@ impl<'a> CommandCompiler<'a> {
             std::mem::take(&mut self.bc_data),
             self.pitch_table,
             self.data_instruments,
-            self.mml_instruments,
             subroutines,
             match self.is_song {
                 true => BytecodeContext::SongSubroutine {
@@ -2000,7 +1996,6 @@ impl<'a> CommandCompiler<'a> {
             std::mem::take(&mut self.bc_data),
             self.pitch_table,
             self.data_instruments,
-            self.mml_instruments,
             subroutines,
             BytecodeContext::SongChannel {
                 index: channel_index,
@@ -2087,7 +2082,6 @@ impl<'a> CommandCompiler<'a> {
 
 pub(crate) fn compile_sound_effect(
     input: &ChannelCommands,
-    mml_instruments: &[MmlInstrument],
     data_instruments: &UniqueNamesList<data::InstrumentOrSample>,
     pitch_table: &PitchTable,
     subroutines: &CompiledSubroutines,
@@ -2100,7 +2094,6 @@ pub(crate) fn compile_sound_effect(
         bc_data,
         pitch_table,
         data_instruments,
-        mml_instruments,
         subroutines,
         BytecodeContext::SoundEffect,
         false,
@@ -2140,7 +2133,6 @@ pub(crate) fn compile_sound_effect(
 pub(crate) fn compile_mml_prefix(
     input: &ChannelCommands,
     context: BytecodeContext,
-    mml_instruments: &[MmlInstrument],
     data_instruments: &UniqueNamesList<data::InstrumentOrSample>,
     pitch_table: &PitchTable,
     subroutines: &CompiledSubroutines,
@@ -2153,7 +2145,6 @@ pub(crate) fn compile_mml_prefix(
         bc_data,
         pitch_table,
         data_instruments,
-        mml_instruments,
         subroutines,
         context,
         false,

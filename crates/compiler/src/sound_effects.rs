@@ -176,7 +176,6 @@ fn compile_mml_sound_effect(
 
     channel_bc_generator::compile_sound_effect(
         &s.commands,
-        &s.instruments,
         data_instruments,
         pitch_table,
         &sfx_subroutines.subroutines,
@@ -273,7 +272,6 @@ pub fn compile_sfx_subroutines(
         0,
         pitch_table,
         data_instruments,
-        &s.instruments,
         EchoEdl::MIN,
         // ::TODO detect driver transpose in subroutines::
         false,

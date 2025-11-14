@@ -6,7 +6,6 @@
 
 #![allow(clippy::assertions_on_constants)]
 
-use crate::command_compiler::commands::MmlInstrument;
 use crate::data::{self, InstrumentOrSample, UniqueNamesList};
 use crate::driver_constants::{
     BC_CHANNEL_STACK_SIZE, BC_STACK_BYTES_PER_LOOP, BC_STACK_BYTES_PER_SUBROUTINE_CALL,
@@ -19,7 +18,7 @@ use crate::identifier::MusicChannelIndex;
 use crate::invert_flags::InvertFlags;
 use crate::notes::{Note, LAST_NOTE_ID, N_NOTES};
 use crate::pitch_table::InstrumentHintFreq;
-use crate::samples::note_range;
+use crate::samples::{instrument_note_range, note_range};
 use crate::subroutines::{CompiledSubroutines, GetSubroutineResult, Subroutine, SubroutineNameMap};
 use crate::time::{TickClock, TickCounter, TickCounterWithLoopFlag};
 use crate::value_newtypes::{
@@ -1025,7 +1024,7 @@ pub struct State {
     pub(crate) vibrato: VibratoState,
     pub(crate) prev_slurred_note: SlurredNoteState,
 
-    pub(crate) instrument_hint: Option<(InstrumentId, Envelope, InstrumentHintFreq)>,
+    pub(crate) instrument_hint: Option<(InstrumentId, Option<Envelope>, InstrumentHintFreq)>,
     pub(crate) no_instrument_notes: RangeInclusive<Note>,
 }
 
@@ -1683,10 +1682,9 @@ impl<'a> Bytecode<'a> {
     // Not a bytecode instruction
     pub(crate) fn set_subroutine_instrument_hint(
         &mut self,
-        instrument: &MmlInstrument,
+        id: InstrumentId,
+        envelope: Option<Envelope>,
     ) -> Result<(), ChannelError> {
-        let id = instrument.instrument_id;
-
         if self.state.instrument_hint.is_some() {
             return Err(ChannelError::InstrumentHintAlreadySet);
         }
@@ -1714,12 +1712,9 @@ impl<'a> Bytecode<'a> {
 
         match self.instruments.get_index(id.as_u8().into()) {
             Some(InstrumentOrSample::Instrument(i)) => {
-                self.state.instrument = InstrumentState::Hint(id, instrument.note_range.clone());
-                self.state.instrument_hint = Some((
-                    id,
-                    instrument.envelope,
-                    InstrumentHintFreq::from_instrument(i),
-                ));
+                self.state.instrument = InstrumentState::Hint(id, instrument_note_range(i));
+                self.state.instrument_hint =
+                    Some((id, envelope, InstrumentHintFreq::from_instrument(i)));
                 Ok(())
             }
             Some(InstrumentOrSample::Sample(_)) => {
