@@ -638,6 +638,7 @@ fn dummy_data() -> DummyData {
         dummy_instrument("f2000_o4", 2000.0, 4, 4, Envelope::Gain(Gain::new(0))),
         dummy_instrument("f1000_o3_o5", 1000.0, 3, 5, Envelope::Gain(Gain::new(0))),
         dummy_instrument("f2000_o3_o5", 2000.0, 3, 5, Envelope::Gain(Gain::new(0))),
+        dummy_instrument("f3000_o4", 3000.0, 4, 4, Envelope::Gain(Gain::new(0))),
     ].iter(),
         [
             data::Sample{

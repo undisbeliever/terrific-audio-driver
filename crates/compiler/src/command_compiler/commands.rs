@@ -190,10 +190,27 @@ impl DetuneCents {
     pub const ZERO: Self = Self(0);
 }
 
-#[derive(Debug, Default, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub(super) enum InstrumentAnalysis {
+    Set(InstrumentId),
+    Hint(InstrumentId),
+}
+
+impl InstrumentAnalysis {
+    pub fn instrument_id(self) -> InstrumentId {
+        match self {
+            Self::Set(i) | Self::Hint(i) => i,
+        }
+    }
+}
+
+#[derive(Debug, Default, Copy, Clone, PartialEq)]
 pub struct LoopAnalysis {
+    pub(super) instrument: Option<InstrumentAnalysis>,
     pub(super) driver_transpose: Option<bool>,
 }
+
+impl LoopAnalysis {}
 
 #[derive(Debug, Clone, Copy)]
 pub enum SubroutineCallType {

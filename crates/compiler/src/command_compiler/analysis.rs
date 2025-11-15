@@ -7,7 +7,7 @@
 use super::commands::{ChannelCommands, Command};
 use super::subroutines::SubroutineCommandsWithCompileOrder;
 
-use crate::command_compiler::commands::{CommandWithPos, LoopAnalysis};
+use crate::command_compiler::commands::{CommandWithPos, InstrumentAnalysis, LoopAnalysis};
 use crate::command_compiler::subroutines::SubroutineBitArray;
 use crate::driver_constants::{
     BC_CHANNEL_STACK_SIZE, BC_STACK_BYTES_PER_LOOP, MAX_SUBROUTINES, N_MUSIC_CHANNELS,
@@ -25,17 +25,22 @@ const MAX_STACK_LOOPS: usize = BC_CHANNEL_STACK_SIZE / BC_STACK_BYTES_PER_LOOP;
 struct AnalysisStackItem<'a> {
     start_loop_analysis: &'a mut LoopAnalysis,
 
+    start_loop_instrument: Option<InstrumentAnalysis>,
+    skip_last_loop_instrument: Option<InstrumentAnalysis>,
+
     start_loop_transpose: Option<bool>,
     skip_last_loop_transpose: Option<bool>,
 }
 
 fn analyse_loop_commands<'a>(
     commands: &mut [CommandWithPos<'a>],
-    subroutine_transpose_state: &[Option<bool>; MAX_SUBROUTINES],
+    subroutine_analysis: &[LoopAnalysis; MAX_SUBROUTINES],
 ) -> LoopAnalysis {
     // ::SHOULD find a way to avoid this allocation::
     let mut stack = Vec::with_capacity(MAX_STACK_LOOPS);
 
+    let mut instrument_set = false;
+    let mut instrument = None;
     let mut driver_transpose = None;
 
     let mut song_loop_analysis = None;
@@ -45,22 +50,29 @@ fn analyse_loop_commands<'a>(
             Command::StartLoop(_, a) => {
                 stack.push(AnalysisStackItem {
                     start_loop_analysis: a,
+                    start_loop_instrument: instrument,
+                    skip_last_loop_instrument: None,
                     start_loop_transpose: driver_transpose,
                     skip_last_loop_transpose: None,
                 });
+                instrument = None;
                 driver_transpose = None;
             }
             Command::SkipLastLoop => {
                 if let Some(s) = stack.last_mut() {
+                    s.skip_last_loop_instrument = instrument;
                     s.skip_last_loop_transpose = driver_transpose;
                 }
             }
             Command::EndLoop(_, end_loop_analysis) => {
                 if let Some(s) = stack.pop() {
                     *end_loop_analysis = LoopAnalysis {
+                        instrument: s.skip_last_loop_instrument,
                         driver_transpose: s.skip_last_loop_transpose,
                     };
                     *s.start_loop_analysis = LoopAnalysis {
+                        instrument,
+
                         // Do not disable transpose at the start of a loop
                         driver_transpose: match driver_transpose {
                             Some(true) => Some(true),
@@ -68,6 +80,11 @@ fn analyse_loop_commands<'a>(
                             None => None,
                         },
                     };
+
+                    instrument = s
+                        .skip_last_loop_instrument
+                        .or(instrument)
+                        .or(s.start_loop_instrument);
 
                     driver_transpose = s
                         .skip_last_loop_transpose
@@ -78,11 +95,41 @@ fn analyse_loop_commands<'a>(
             Command::SetLoopPoint(a) => {
                 song_loop_analysis = Some(a);
             }
+
+            Command::SetSubroutineInstrumentHint(i, _) => {
+                if !instrument_set {
+                    debug_assert!(instrument.is_none());
+                    instrument = Some(InstrumentAnalysis::Hint(*i));
+                }
+                instrument_set = true;
+            }
+            Command::SetInstrument(i, _) | Command::SetInstrumentAsm(i, _) => {
+                instrument = Some(InstrumentAnalysis::Set(*i));
+                instrument_set = true;
+            }
+
             Command::SetTranspose(Transpose::ZERO) => driver_transpose = Some(false),
             Command::SetTranspose(_) => driver_transpose = Some(true),
             Command::AdjustTranspose(_) => driver_transpose = Some(true),
+
             Command::CallSubroutine(i, _) => {
-                if let Some(t) = subroutine_transpose_state[usize::from(*i)] {
+                let s = subroutine_analysis[usize::from(*i)];
+
+                match s.instrument {
+                    Some(InstrumentAnalysis::Set(i)) => {
+                        instrument = Some(InstrumentAnalysis::Set(i));
+                        instrument_set = true;
+                    }
+                    Some(InstrumentAnalysis::Hint(i)) => {
+                        if !instrument_set {
+                            debug_assert!(instrument.is_none());
+                            instrument = Some(InstrumentAnalysis::Hint(i));
+                        }
+                        instrument_set = true;
+                    }
+                    None => (),
+                }
+                if let Some(t) = s.driver_transpose {
                     driver_transpose = Some(t);
                 }
             }
@@ -91,16 +138,22 @@ fn analyse_loop_commands<'a>(
     }
 
     if let Some(a) = song_loop_analysis {
-        *a = LoopAnalysis { driver_transpose };
+        *a = LoopAnalysis {
+            instrument,
+            driver_transpose,
+        };
     }
 
-    LoopAnalysis { driver_transpose }
+    LoopAnalysis {
+        instrument,
+        driver_transpose,
+    }
 }
 
 fn analyse_subroutine_calls(
     called_with_transpose: bool,
     commands: &[CommandWithPos<'_>],
-    subroutine_transpose_state: &[Option<bool>; MAX_SUBROUTINES],
+    subroutine_analysis: &[LoopAnalysis; MAX_SUBROUTINES],
     subroutines_called_with_transpose: &mut SubroutineBitArray,
 ) {
     let mut driver_transpose = called_with_transpose;
@@ -120,7 +173,7 @@ fn analyse_subroutine_calls(
                     subroutines_called_with_transpose.set_bit(*i);
                 }
 
-                if let Some(t) = subroutine_transpose_state[usize::from(*i)] {
+                if let Some(t) = subroutine_analysis[usize::from(*i)].driver_transpose {
                     driver_transpose = t;
                 }
             }
@@ -132,7 +185,7 @@ fn analyse_subroutine_calls(
 fn analyse_song_subroutine_calls(
     subroutines: &SubroutineCommandsWithCompileOrder<'_>,
     channels: Option<&[Option<ChannelCommands<'_>>; N_MUSIC_CHANNELS]>,
-    subroutine_transpose_state: &[Option<bool>; MAX_SUBROUTINES],
+    subroutine_analysis: &[LoopAnalysis; MAX_SUBROUTINES],
 ) -> SubroutineBitArray {
     let mut subroutines_called_with_transpose = SubroutineBitArray::new_all_clear();
 
@@ -143,7 +196,7 @@ fn analyse_song_subroutine_calls(
             analyse_subroutine_calls(
                 false,
                 &c.commands,
-                subroutine_transpose_state,
+                subroutine_analysis,
                 &mut subroutines_called_with_transpose,
             );
         }
@@ -153,7 +206,7 @@ fn analyse_song_subroutine_calls(
         analyse_subroutine_calls(
             subroutines_called_with_transpose.get_bit(s.index),
             &s.commands,
-            subroutine_transpose_state,
+            subroutine_analysis,
             &mut subroutines_called_with_transpose,
         );
     }
@@ -165,15 +218,20 @@ pub fn analyse<'a>(
     subroutines: SubroutineCommandsWithCompileOrder<'a>,
     channels: Option<[Option<ChannelCommands<'a>>; N_MUSIC_CHANNELS]>,
 ) -> AnalysedCommands<'a> {
-    let mut subroutine_transpose_state = [None; MAX_SUBROUTINES];
+    let mut subroutine_analysis = [LoopAnalysis {
+        instrument: None,
+        driver_transpose: None,
+    }; MAX_SUBROUTINES];
 
     let subroutines = {
         let mut subroutines = subroutines;
 
         for i in 0..subroutines.len() {
             let s = subroutines.get_compile_order(i);
-            s.analysis = analyse_loop_commands(&mut s.commands, &subroutine_transpose_state);
-            subroutine_transpose_state[usize::from(s.index)] = s.analysis.driver_transpose;
+            let a = analyse_loop_commands(&mut s.commands, &subroutine_analysis);
+
+            subroutine_analysis[usize::from(s.index)] = a;
+            s.analysis = a;
         }
         subroutines
     };
@@ -182,14 +240,14 @@ pub fn analyse<'a>(
         let mut channels = channels;
         if let Some(channels) = &mut channels {
             for c in channels.iter_mut().flatten() {
-                analyse_loop_commands(&mut c.commands, &subroutine_transpose_state);
+                analyse_loop_commands(&mut c.commands, &subroutine_analysis);
             }
         }
         channels
     };
 
     let subroutines_called_with_transpose =
-        analyse_song_subroutine_calls(&subroutines, channels.as_ref(), &subroutine_transpose_state);
+        analyse_song_subroutine_calls(&subroutines, channels.as_ref(), &subroutine_analysis);
 
     AnalysedCommands {
         subroutines,

@@ -11,7 +11,7 @@ Version 0.2.0
     * `_0 c [__+1 c]3` will now play `c c+ d d+`
     * To restore the old transpose behaviour, either add an `#OldTraspose` MML header or replace `_` with
       `_M` and `__` with `__M`.
- * `MP` vibrato cannot be used when driver transpose is active.
+ * `MP` vibrato and `MD` detune cents cannot be used when driver transpose is active.
  * A portamento's slide length has a maximum 255 ticks when driver transpose is active.
 
 BRR changes:
@@ -43,6 +43,10 @@ MML changes:
  * Added `#Transpose` header (equivalent to adding `_M` to the start of every channel and subroutine)
  * Added `#KeySignature` header (equivalent to adding `_{}` to the start of every channel and subroutine)
  * Fixed malformed MML taking too long to compile by limiting unlooped waits or rests to 8192 ticks.
+ * Added a driver-transpose and instrument-tuning loop analysis step to the compiler.  
+   If a loop changes the instrument tuning or enables driver transpose:
+    * Portamento velocity will be calculated by the audio driver and the portamento's slide length will have a maximum 255 ticks
+    * `MP` and `MD` will output an error
 
 
 Version 0.1.1

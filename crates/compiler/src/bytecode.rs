@@ -17,7 +17,7 @@ use crate::errors::{BytecodeError, ChannelError, ValueError};
 use crate::identifier::MusicChannelIndex;
 use crate::invert_flags::InvertFlags;
 use crate::notes::{Note, LAST_NOTE_ID, N_NOTES};
-use crate::pitch_table::InstrumentHintFreq;
+use crate::pitch_table::{InstrumentHintFreq, PitchTableOffset};
 use crate::samples::{instrument_note_range, note_range};
 use crate::subroutines::{CompiledSubroutines, GetSubroutineResult, Subroutine, SubroutineNameMap};
 use crate::time::{TickClock, TickCounter, TickCounterWithLoopFlag};
@@ -905,7 +905,7 @@ where
         match &subroutine {
             Self::Unset => (),
             Self::Known(..) | Self::Unknown => *self = *subroutine,
-            Self::MaybeInLoop(..) => panic!("unexpected maybe instrument"),
+            Self::MaybeInLoop(..) => panic!("unexpected maybe state"),
         }
     }
 }
@@ -963,8 +963,7 @@ pub enum SlurredNoteState {
     Unchanged,
     Unknown,
     None,
-    // CAUTION: includes Maybe detune and Maybe/Hint instrument
-    Slurred(Note, DetuneValue, Option<InstrumentId>),
+    Slurred(Note, DetuneValue, Option<PitchTableOffset>),
     SlurredPitch(PlayPitchPitch),
     SlurredNoise,
 }
@@ -984,8 +983,8 @@ impl SlurredNoteState {
     fn merge_subroutine(
         &mut self,
         o: &Self,
-        sub_inst: &InstrumentState,
-        caller_inst: &InstrumentState,
+        sub_inst_tuning: Option<PitchTableOffset>,
+        caller_inst_tuning: Option<PitchTableOffset>,
     ) {
         match o {
             SlurredNoteState::Unchanged => (),
@@ -994,10 +993,10 @@ impl SlurredNoteState {
             SlurredNoteState::Slurred(n, d, i) => match i {
                 Some(i) => *self = SlurredNoteState::Slurred(*n, *d, Some(*i)),
                 None => {
-                    // Test why it is None (sub_inst could be unset or it could be unknown)
-                    match sub_inst {
-                        InstrumentState::Unset => {
-                            *self = SlurredNoteState::Slurred(*n, *d, caller_inst.instrument_id());
+                    // Test why it is None (subroutine might not set an instrument or the instrument could be unknown)
+                    match sub_inst_tuning {
+                        None => {
+                            *self = SlurredNoteState::Slurred(*n, *d, caller_inst_tuning);
                         }
                         _ => *self = SlurredNoteState::None,
                     }
@@ -1014,6 +1013,10 @@ pub struct State {
     pub tick_counter: TickCounter,
     pub max_stack_depth: StackDepth,
     pub tempo_changes: Vec<(TickCounter, TickClock)>,
+
+    // Tuning set by `ChannelBcGenerator`.
+    // Have to store this here so `prev_slurred_note` can contain instrument tuning
+    pub(crate) instrument_tuning: Option<PitchTableOffset>,
 
     pub(crate) instrument: InstrumentState,
     pub(crate) envelope: IeState<Envelope>,
@@ -1035,13 +1038,13 @@ impl State {
 
             PlayNoteTicks::NoKeyOff(_) => {
                 // ::TODO emit a warning if this instrument was used in a loop and was changed with a different source frequency::
-                let inst_id = self.instrument.instrument_id();
+                let o = self.instrument_tuning;
 
                 match self.detune {
-                    IeState::Unset => SlurredNoteState::Slurred(note, DetuneValue::ZERO, inst_id),
-                    IeState::Known(d) => SlurredNoteState::Slurred(note, d, inst_id),
+                    IeState::Unset => SlurredNoteState::Slurred(note, DetuneValue::ZERO, o),
+                    IeState::Known(d) => SlurredNoteState::Slurred(note, d, o),
                     // ::TODO emit a warning if detune was changed in a loop and this value is used::
-                    IeState::MaybeInLoop(d, _) => SlurredNoteState::Slurred(note, d, inst_id),
+                    IeState::MaybeInLoop(d, _) => SlurredNoteState::Slurred(note, d, o),
                     IeState::Unknown => SlurredNoteState::None,
                 }
             }
@@ -1124,8 +1127,8 @@ impl State {
 
         self.prev_slurred_note.merge_subroutine(
             &s.prev_slurred_note,
-            &s.instrument,
-            &self.instrument,
+            s.instrument_tuning,
+            self.instrument_tuning,
         );
     }
 
@@ -1210,6 +1213,7 @@ impl<'a> Bytecode<'a> {
                 tick_counter: TickCounter::new(0),
                 max_stack_depth: StackDepth(0),
                 tempo_changes: Vec::new(),
+                instrument_tuning: None,
                 instrument: InstrumentState::Unset,
                 envelope: IeState::Unset,
                 prev_temp_gain: IeState::Unset,
@@ -1251,6 +1255,10 @@ impl<'a> Bytecode<'a> {
 
     pub fn get_state(&self) -> &State {
         &self.state
+    }
+
+    pub fn set_instrument_tuning_state(&mut self, offset: Option<PitchTableOffset>) {
+        self.state.instrument_tuning = offset;
     }
 
     pub fn get_instrument(&self) -> Option<&InstrumentOrSample> {

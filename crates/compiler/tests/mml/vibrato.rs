@@ -547,3 +547,73 @@ fn l_in_mp_vibrato() {
     assert_line_matches_line("C192 MP60,l12,l24 c", "MP60,16,8 c%48");
     assert_line_matches_line("C192 MP60,l12,l24.. c", "MP60,16,14 c%48");
 }
+
+#[test]
+fn instrument_tuning_loop_analysis() {
+    assert_mml_channel_a_matches_bytecode(
+        r##"
+@14 f1000_o4
+@13 f1000_o3_o5
+
+A MP20,2 @14 [c @13 d]2 e
+"##,
+        &[
+            "set_instrument f1000_o4",
+            "start_loop",
+            "set_vibrato 6, 2",
+            "play_note c4 24",
+            "set_instrument f1000_o3_o5",
+            "set_vibrato_depth_and_play_note 7 d4 24",
+            "end_loop 2",
+            "set_vibrato_depth_and_play_note 8 e4 24",
+        ],
+    );
+
+    assert_one_error_in_channel_a_mml(
+        r##"
+@14 f1000_o4
+@24 f2000_o4
+
+A MP20,2 @14 [c @24 d]2 e
+"##,
+        15,
+        ChannelError::CannotUseMpWithUnknownInstrumentTuning,
+    );
+
+    assert_mml_channel_a_matches_bytecode(
+        r##"
+@14 f1000_o4
+@13 f1000_o3_o5
+@24 f2000_o4
+
+A MP20,2 @14 [c @24 d : @13 e]2 f
+"##,
+        &[
+            "set_instrument f1000_o4",
+            "start_loop",
+            "set_vibrato 6, 2",
+            "play_note c4 24",
+            "set_instrument f2000_o4",
+            "set_vibrato_depth_and_play_note 3 d4 24",
+            "skip_last_loop",
+            "set_instrument f1000_o3_o5",
+            "set_vibrato_depth_and_play_note 8 e4 24",
+            "end_loop 2",
+            "set_vibrato_depth_and_play_note 4 f4 24",
+        ],
+    );
+
+    assert_one_error_in_channel_a_mml(
+        r##"
+@14 f1000_o4
+@13 f1000_o3_o5
+@24 f2000_o4
+
+A MP20,2 @14 [c @13 d : @24 e]2 f
+"##,
+        15,
+        ChannelError::CannotUseMpWithUnknownInstrumentTuning,
+    );
+
+    // Nested loop instrument tuning analysis is tested in portamento module
+}

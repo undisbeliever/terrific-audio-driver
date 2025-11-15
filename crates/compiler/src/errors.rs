@@ -594,10 +594,10 @@ pub enum ChannelError {
     LoopPointAlreadySet,
     CannotSetLoopPoint,
     CannotSetLoopPointInALoop,
-    CannotUseMpWithoutInstrument,
+    CannotUseMpWithUnknownInstrumentTuning,
     MpPitchOffsetTooLarge(u32),
     MpDepthZero,
-    CannotUseDetuneCentsWithoutInstrument,
+    CannotUseDetuneCentsWithUnknownInstrumentTuning,
     DetuneCentsTooLargeForNote(i32),
 
     PortamentoTooShort,
@@ -1777,8 +1777,8 @@ impl Display for ChannelError {
             Self::LoopPointAlreadySet => write!(f, "loop point already set"),
             Self::CannotSetLoopPoint => write!(f, "cannot set loop point"),
             Self::CannotSetLoopPointInALoop => write!(f, "cannot set loop point in a loop"),
-            Self::CannotUseMpWithoutInstrument => {
-                write!(f, "cannot use MP vibrato without setting an instrument")
+            Self::CannotUseMpWithUnknownInstrumentTuning => {
+                write!(f, "cannot use MP vibrato without unknown instrument tuning")
             }
             Self::MpPitchOffsetTooLarge(po) => {
                 write!(
@@ -1789,8 +1789,8 @@ impl Display for ChannelError {
                 )
             }
 
-            Self::CannotUseDetuneCentsWithoutInstrument => {
-                write!(f, "cannot use MD without setting an instrument")
+            Self::CannotUseDetuneCentsWithUnknownInstrumentTuning => {
+                write!(f, "cannot use MD with an unknown instrument tuning")
             }
             Self::DetuneCentsTooLargeForNote(d) => {
                 write!(

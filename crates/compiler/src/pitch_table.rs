@@ -385,6 +385,9 @@ pub(crate) fn merge_pitch_vec(
     Ok(out)
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct PitchTableOffset(u8);
+
 pub fn build_pitch_table(
     instruments_and_samples: &UniqueNamesList<InstrumentOrSample>,
 ) -> Result<PitchTable, PitchTableError> {
@@ -394,9 +397,13 @@ pub fn build_pitch_table(
 }
 
 impl PitchTable {
-    pub fn pitch_for_note(&self, inst_id: InstrumentId, note: Note) -> u16 {
-        let offset: u8 = self.instruments_pitch_offset[usize::from(inst_id.as_u8())];
+    pub(crate) fn pitch_table_offset(&self, inst_id: InstrumentId) -> PitchTableOffset {
+        PitchTableOffset(self.instruments_pitch_offset[usize::from(inst_id.as_u8())])
+    }
+
+    pub(crate) fn get_pitch(&self, offset: PitchTableOffset, note: Note) -> u16 {
         let index: u8 = offset
+            .0
             .wrapping_add(PITCH_TABLE_OFFSET)
             .wrapping_add(note.note_id());
 
