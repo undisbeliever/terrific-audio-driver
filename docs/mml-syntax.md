@@ -554,6 +554,7 @@ Numbers can be decimal, or hexadecimal when prefixed with `$` (ie, `$ff`)
     * Detunes play-note and portamento commands by a given number of cents.
     * `MD` automatically calculates the `VxPITCH` detune and adds a `D` detune command before each note.
       For example, `MD+20 c d e` would expand to  `D+25 c D+28 d D+31 e`.
+    * `MD` cannot used be when driver transpose is active.
     * CAUTION: `MD` increases the song data by 2 or 3 bytes per note.
       If you have a lot of notes with a fixed `MD` cents, you could clone and detune the instrument instead.
  * `MD0` - disable automatic detune

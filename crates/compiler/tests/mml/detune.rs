@@ -436,3 +436,51 @@ A MD+20 @14 [c @13 d : @24 e]2 f
 
     // Nested loop instrument tuning analysis is tested in portamento module
 }
+
+#[test]
+fn md_and_transpose_active_error_test() {
+    assert_one_error_in_mml_line(
+        "MD+20 _+1 c",
+        11,
+        ChannelError::DetuneCentsWithDriverTransposeActive,
+    );
+
+    assert_one_error_in_mml_line(
+        "MD+20 __+1 c",
+        12,
+        ChannelError::DetuneCentsWithDriverTransposeActive,
+    );
+
+    assert_one_error_in_mml_line(
+        "MD+20 \\asm { set_transpose -1 } c",
+        33,
+        ChannelError::DetuneCentsWithDriverTransposeActive,
+    );
+
+    assert_one_error_in_mml_line(
+        "MD+20 \\asm { adjust_transpose -1 } c",
+        36,
+        ChannelError::DetuneCentsWithDriverTransposeActive,
+    );
+
+    // Test disabling transpose allows MD transpose (one error)
+    assert_one_error_in_mml_line(
+        "MD+20 _+1 c _0 c",
+        11,
+        ChannelError::DetuneCentsWithDriverTransposeActive,
+    );
+
+    assert_one_error_in_mml_line(
+        "MD+20 [c __+1 r]2",
+        8,
+        ChannelError::DetuneCentsWithDriverTransposeActive,
+    );
+
+    assert_one_error_in_mml_line(
+        "MD+20 [_0 c r : _+1 c r]2 c",
+        21,
+        ChannelError::DetuneCentsWithDriverTransposeActive,
+    );
+
+    // Nested loop transpose analysis is tested in transpose module
+}

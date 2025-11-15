@@ -276,6 +276,10 @@ impl<'a> ChannelBcGenerator<'a> {
         match self.detune_cents.as_i16() {
             0 => Ok(DetuneCentsOutput::Manual),
             cents => {
+                if self.driver_transpose_active {
+                    return Err(ChannelError::DetuneCentsWithDriverTransposeActive);
+                }
+
                 let instrument_tuning = match self.bc.get_state().instrument_tuning {
                     Some(i) => i,
                     None => {

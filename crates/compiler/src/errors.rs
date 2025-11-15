@@ -597,6 +597,7 @@ pub enum ChannelError {
     CannotUseMpWithUnknownInstrumentTuning,
     MpPitchOffsetTooLarge(u32),
     MpDepthZero,
+    DetuneCentsWithDriverTransposeActive,
     CannotUseDetuneCentsWithUnknownInstrumentTuning,
     DetuneCentsTooLargeForNote(i32),
 
@@ -1789,6 +1790,9 @@ impl Display for ChannelError {
                 )
             }
 
+            Self::DetuneCentsWithDriverTransposeActive => {
+                write!(f, "cannot use MD when driver transpose is active")
+            }
             Self::CannotUseDetuneCentsWithUnknownInstrumentTuning => {
                 write!(f, "cannot use MD with an unknown instrument tuning")
             }
