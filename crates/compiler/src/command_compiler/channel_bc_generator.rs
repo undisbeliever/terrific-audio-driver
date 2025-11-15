@@ -1647,13 +1647,6 @@ impl<'a> ChannelBcGenerator<'a> {
             Command::EndLoop(loop_count, analysis) => {
                 self.process_loop_analysis_end_loop(analysis);
                 self.bc.end_loop(*loop_count)?;
-
-                if let Some(i) = analysis.instrument {
-                    debug_assert_eq!(
-                        self.bc.get_state().instrument.instrument_id(),
-                        Some(i.instrument_id())
-                    );
-                }
             }
 
             &Command::ChangePanAndOrVolume(pan, volume) => match (pan, volume) {

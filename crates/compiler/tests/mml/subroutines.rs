@@ -1313,3 +1313,22 @@ A !s1
     );
     assert!(r.is_err());
 }
+
+#[test]
+fn self_recursion_loop_analysis_panic_bugfix() {
+    // Found using rust-fuzz (manually minimised)
+    // Panics on the `:` skip last loop command in !s2
+    assert_one_subroutine_error_in_mml(
+        r##"
+@1 dummy_instrument
+
+!s1 !s1 @1
+!s2 [ !s1 w : w ]2
+
+A !s2
+"##,
+        "!s1",
+        5,
+        ChannelError::CannotCallSubroutineRecursion("s1".to_owned()),
+    )
+}
