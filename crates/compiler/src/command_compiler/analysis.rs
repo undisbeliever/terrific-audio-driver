@@ -28,8 +28,8 @@ struct AnalysisStackItem<'a> {
     start_loop_instrument: Option<InstrumentAnalysis>,
     skip_last_loop_instrument: Option<InstrumentAnalysis>,
 
-    start_loop_transpose: Option<bool>,
-    skip_last_loop_transpose: Option<bool>,
+    start_loop_transpose_active: Option<bool>,
+    skip_last_loop_transpose_active: Option<bool>,
 }
 
 fn analyse_loop_commands<'a>(
@@ -41,7 +41,7 @@ fn analyse_loop_commands<'a>(
 
     let mut instrument_set = false;
     let mut instrument = None;
-    let mut driver_transpose = None;
+    let mut driver_transpose_active = None;
 
     let mut song_loop_analysis = None;
 
@@ -52,29 +52,29 @@ fn analyse_loop_commands<'a>(
                     start_loop_analysis: a,
                     start_loop_instrument: instrument,
                     skip_last_loop_instrument: None,
-                    start_loop_transpose: driver_transpose,
-                    skip_last_loop_transpose: None,
+                    start_loop_transpose_active: driver_transpose_active,
+                    skip_last_loop_transpose_active: None,
                 });
                 instrument = None;
-                driver_transpose = None;
+                driver_transpose_active = None;
             }
             Command::SkipLastLoop => {
                 if let Some(s) = stack.last_mut() {
                     s.skip_last_loop_instrument = instrument;
-                    s.skip_last_loop_transpose = driver_transpose;
+                    s.skip_last_loop_transpose_active = driver_transpose_active;
                 }
             }
             Command::EndLoop(_, end_loop_analysis) => {
                 if let Some(s) = stack.pop() {
                     *end_loop_analysis = LoopAnalysis {
                         instrument: s.skip_last_loop_instrument,
-                        driver_transpose: s.skip_last_loop_transpose,
+                        driver_transpose_active: s.skip_last_loop_transpose_active,
                     };
                     *s.start_loop_analysis = LoopAnalysis {
                         instrument,
 
                         // Do not disable transpose at the start of a loop
-                        driver_transpose: match driver_transpose {
+                        driver_transpose_active: match driver_transpose_active {
                             Some(true) => Some(true),
                             Some(false) => None,
                             None => None,
@@ -86,10 +86,10 @@ fn analyse_loop_commands<'a>(
                         .or(instrument)
                         .or(s.start_loop_instrument);
 
-                    driver_transpose = s
-                        .skip_last_loop_transpose
-                        .or(driver_transpose)
-                        .or(s.start_loop_transpose);
+                    driver_transpose_active = s
+                        .skip_last_loop_transpose_active
+                        .or(driver_transpose_active)
+                        .or(s.start_loop_transpose_active);
                 }
             }
             Command::SetLoopPoint(a) => {
@@ -108,9 +108,9 @@ fn analyse_loop_commands<'a>(
                 instrument_set = true;
             }
 
-            Command::SetTranspose(Transpose::ZERO) => driver_transpose = Some(false),
-            Command::SetTranspose(_) => driver_transpose = Some(true),
-            Command::AdjustTranspose(_) => driver_transpose = Some(true),
+            Command::SetTranspose(Transpose::ZERO) => driver_transpose_active = Some(false),
+            Command::SetTranspose(_) => driver_transpose_active = Some(true),
+            Command::AdjustTranspose(_) => driver_transpose_active = Some(true),
 
             Command::CallSubroutine(i, _) => {
                 let s = subroutine_analysis[usize::from(*i)];
@@ -129,8 +129,8 @@ fn analyse_loop_commands<'a>(
                     }
                     None => (),
                 }
-                if let Some(t) = s.driver_transpose {
-                    driver_transpose = Some(t);
+                if let Some(t) = s.driver_transpose_active {
+                    driver_transpose_active = Some(t);
                 }
             }
             _ => (),
@@ -140,13 +140,13 @@ fn analyse_loop_commands<'a>(
     if let Some(a) = song_loop_analysis {
         *a = LoopAnalysis {
             instrument,
-            driver_transpose,
+            driver_transpose_active,
         };
     }
 
     LoopAnalysis {
         instrument,
-        driver_transpose,
+        driver_transpose_active,
     }
 }
 
@@ -156,25 +156,25 @@ fn analyse_subroutine_calls(
     subroutine_analysis: &[LoopAnalysis; MAX_SUBROUTINES],
     subroutines_called_with_transpose: &mut SubroutineBitArray,
 ) {
-    let mut driver_transpose = called_with_transpose;
+    let mut driver_transpose_active = called_with_transpose;
 
     for c in commands {
         match c.command() {
             Command::StartLoop(_, a) | Command::EndLoop(_, a) | Command::SetLoopPoint(a) => {
-                if let Some(t) = a.driver_transpose {
-                    driver_transpose = t;
+                if let Some(t) = a.driver_transpose_active {
+                    driver_transpose_active = t;
                 }
             }
-            Command::SetTranspose(Transpose::ZERO) => driver_transpose = false,
-            Command::SetTranspose(_) => driver_transpose = true,
-            Command::AdjustTranspose(_) => driver_transpose = true,
+            Command::SetTranspose(Transpose::ZERO) => driver_transpose_active = false,
+            Command::SetTranspose(_) => driver_transpose_active = true,
+            Command::AdjustTranspose(_) => driver_transpose_active = true,
             Command::CallSubroutine(i, _) => {
-                if driver_transpose {
+                if driver_transpose_active {
                     subroutines_called_with_transpose.set_bit(*i);
                 }
 
-                if let Some(t) = subroutine_analysis[usize::from(*i)].driver_transpose {
-                    driver_transpose = t;
+                if let Some(t) = subroutine_analysis[usize::from(*i)].driver_transpose_active {
+                    driver_transpose_active = t;
                 }
             }
             _ => (),
@@ -220,7 +220,7 @@ pub fn analyse<'a>(
 ) -> AnalysedCommands<'a> {
     let mut subroutine_analysis = [LoopAnalysis {
         instrument: None,
-        driver_transpose: None,
+        driver_transpose_active: None,
     }; MAX_SUBROUTINES];
 
     let subroutines = {

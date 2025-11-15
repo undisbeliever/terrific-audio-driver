@@ -207,7 +207,7 @@ impl InstrumentAnalysis {
 #[derive(Debug, Default, Copy, Clone, PartialEq)]
 pub struct LoopAnalysis {
     pub(super) instrument: Option<InstrumentAnalysis>,
-    pub(super) driver_transpose: Option<bool>,
+    pub(super) driver_transpose_active: Option<bool>,
 }
 
 impl LoopAnalysis {}

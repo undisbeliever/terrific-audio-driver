@@ -201,7 +201,7 @@ impl<'a> ChannelBcGenerator<'a> {
             // ::TODO update note range::
         }
 
-        if let Some(t) = analysis.driver_transpose {
+        if let Some(t) = analysis.driver_transpose_active {
             self.driver_transpose_active = t;
         }
     }
@@ -216,7 +216,7 @@ impl<'a> ChannelBcGenerator<'a> {
             // ::TODO update note range::
         }
 
-        if let Some(t) = analysis.driver_transpose {
+        if let Some(t) = analysis.driver_transpose_active {
             self.driver_transpose_active = t;
         }
     }
