@@ -256,7 +256,7 @@ fn set_transpose_mml_disables_mp_vibraro() {
 A @0 MP100,2 c !s1 c
 "##,
         20,
-        ChannelError::MpVibratoInSongWithTranspose,
+        ChannelError::MpVibratoWithDriverTransposeActive,
     );
 
     assert_one_subroutine_error_in_mml(
@@ -270,7 +270,7 @@ A @0 _-1 !s1
 "##,
         "!s1",
         13,
-        ChannelError::MpVibratoInSongWithTranspose,
+        ChannelError::MpVibratoWithDriverTransposeActive,
     );
 }
 
@@ -285,7 +285,7 @@ fn adjust_transpose_mml_disables_mp_vibraro() {
 A @0 MP100,2 c !s1 c
 "##,
         20,
-        ChannelError::MpVibratoInSongWithTranspose,
+        ChannelError::MpVibratoWithDriverTransposeActive,
     );
 
     assert_one_subroutine_error_in_mml(
@@ -299,7 +299,7 @@ A @0 __-1 !s1
 "##,
         "!s1",
         13,
-        ChannelError::MpVibratoInSongWithTranspose,
+        ChannelError::MpVibratoWithDriverTransposeActive,
     );
 }
 
@@ -314,7 +314,7 @@ fn set_transpose_asm_disables_mp_vibraro() {
 A @0 MP100,2 c !s1 c
 "##,
         20,
-        ChannelError::MpVibratoInSongWithTranspose,
+        ChannelError::MpVibratoWithDriverTransposeActive,
     );
 
     assert_one_subroutine_error_in_mml(
@@ -328,7 +328,7 @@ A @0 \asm { set_transpose +1 } !s1
 "##,
         "!s1",
         13,
-        ChannelError::MpVibratoInSongWithTranspose,
+        ChannelError::MpVibratoWithDriverTransposeActive,
     );
 }
 
@@ -343,7 +343,7 @@ fn adjust_transpose_asm_disables_mp_vibraro() {
 A @0 MP100,2 c !s1 c
 "##,
         20,
-        ChannelError::MpVibratoInSongWithTranspose,
+        ChannelError::MpVibratoWithDriverTransposeActive,
     );
 
     assert_one_subroutine_error_in_mml(
@@ -357,7 +357,7 @@ A @0 \asm { adjust_transpose -1 } !s1
 "##,
         "!s1",
         13,
-        ChannelError::MpVibratoInSongWithTranspose,
+        ChannelError::MpVibratoWithDriverTransposeActive,
     );
 }
 

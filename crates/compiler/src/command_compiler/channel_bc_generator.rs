@@ -228,7 +228,7 @@ impl<'a> ChannelBcGenerator<'a> {
         detune: DetuneCentsOutput,
     ) -> Result<ManualVibrato, ChannelError> {
         if self.driver_transpose_active {
-            return Err(ChannelError::MpVibratoInSongWithTranspose);
+            return Err(ChannelError::MpVibratoWithDriverTransposeActive);
         }
 
         if mp.depth_in_cents == 0 {
