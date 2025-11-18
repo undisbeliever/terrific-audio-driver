@@ -190,7 +190,7 @@ impl<'a> ChannelBcGenerator<'a> {
 
     fn process_loop_analysis_start_loop(&mut self, analysis: &LoopAnalysis) {
         if let Some(i) = analysis.instrument {
-            // There can be 2 different instrument values at the start of the loop
+            // There can be 2 or more different instrument values at the start of the loop
 
             // Clear instrument tuning if the loop is played with a different pitch table offset
             let o = self.pitch_table.pitch_table_offset(i.instrument_id());
@@ -198,7 +198,10 @@ impl<'a> ChannelBcGenerator<'a> {
                 self.bc.set_instrument_tuning_state(None);
             }
 
-            // ::TODO update note range::
+            match i {
+                InstrumentAnalysis::Set(i) => self.bc.set_loop_analysis_start_instrument(i),
+                InstrumentAnalysis::Hint(_) => (),
+            }
         }
 
         if let Some(t) = analysis.driver_transpose_active {
@@ -212,8 +215,6 @@ impl<'a> ChannelBcGenerator<'a> {
             self.bc.set_instrument_tuning_state(Some(
                 self.pitch_table.pitch_table_offset(i.instrument_id()),
             ));
-
-            // ::TODO update note range::
         }
 
         if let Some(t) = analysis.driver_transpose_active {

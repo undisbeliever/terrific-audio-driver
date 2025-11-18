@@ -18,6 +18,7 @@ mod key_signature;
 mod keyon_without_keyoff;
 mod loops;
 mod misc_instructions;
+mod note_range_tracking;
 mod notes;
 mod old_transpose;
 mod parsing;
@@ -633,6 +634,7 @@ fn dummy_data() -> DummyData {
         dummy_instrument("inst_with_adsr",   SF, 2, 6, Envelope::Adsr(EXAMPLE_ADSR)),
         dummy_instrument("inst_with_gain",   SF, 2, 6, Envelope::Gain(EXAMPLE_GAIN)),
         dummy_instrument("only_octave_four", SF, 4, 4, Envelope::Gain(Gain::new(0))),
+        dummy_instrument("f1000_o2", 3000.0, 2, 2, Envelope::Gain(Gain::new(0))),
         dummy_instrument("f1000_o4", 1000.0, 4, 4, Envelope::Gain(Gain::new(0))),
         dummy_instrument("f1000_o5", 1000.0, 5, 5, Envelope::Gain(Gain::new(0))),
         dummy_instrument("f2000_o4", 2000.0, 4, 4, Envelope::Gain(Gain::new(0))),

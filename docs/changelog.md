@@ -47,6 +47,7 @@ MML changes:
    If a loop changes the instrument tuning or enables driver transpose:
     * Portamento velocity will be calculated by the audio driver and the portamento's slide length will have a maximum 255 ticks
     * `MP` and `MD` will output an error
+ * Improved out-of-range note testing
 
 
 Version 0.1.1

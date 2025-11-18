@@ -341,6 +341,7 @@ pub enum BytecodeError {
     GotoRelativeOutOfBounds,
 
     NoteOutOfRange(Note, RangeInclusive<Note>),
+    NoteOutOfRangeEmptyNoteRange(Note),
     CannotPlayNoteBeforeSettingInstrument,
 
     SubroutinePlaysNotesWithNoInstrument,
@@ -1395,6 +1396,9 @@ impl Display for BytecodeError {
                     range.start().note_id(),
                     range.end().note_id(),
                 )
+            }
+            Self::NoteOutOfRangeEmptyNoteRange(n) => {
+                write!(f, "note out of range ({}, no notes)", n.note_id())
             }
             Self::CannotPlayNoteBeforeSettingInstrument => {
                 write!(f, "cannot play note before setting an instrument")
