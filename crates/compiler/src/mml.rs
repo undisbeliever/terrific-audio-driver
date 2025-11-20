@@ -357,7 +357,7 @@ pub(crate) fn parse_sound_effect<'a>(
     Ok(SoundEffectCommands {
         commands,
         errors,
-        mml_tracker,
+        mml_tracker: Some(mml_tracker),
     })
 }
 

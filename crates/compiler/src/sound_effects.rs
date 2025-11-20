@@ -4,10 +4,11 @@
 //
 // SPDX-License-Identifier: MIT
 
-use crate::bytecode::{opcodes, BcTerminator, BytecodeContext};
-use crate::bytecode_assembler::BytecodeAssembler;
+use crate::bytecode::opcodes;
 use crate::command_compiler;
 use crate::command_compiler::channel_bc_generator::{self, CommandCompiler};
+use crate::command_compiler::commands::{ChannelCommands, CommandWithPos, SoundEffectCommands};
+use crate::command_compiler::parsers::parse_bytecode_asm_instruction;
 use crate::command_compiler::subroutines::subroutine_compile_order;
 use crate::data::{
     DefaultSfxFlags, InstrumentOrSample, Name, UniqueNamesList, UniqueSoundEffectExportOrder,
@@ -17,10 +18,10 @@ use crate::driver_constants::{
 };
 use crate::echo::EchoEdl;
 use crate::errors::{
-    ChannelError, CombineSoundEffectsError, ErrorWithPos, OtherSfxError, SfxSubroutineErrors,
-    SoundEffectError, SoundEffectErrorList, SoundEffectsFileError,
+    CombineSoundEffectsError, ErrorWithPos, OtherSfxError, SfxSubroutineErrors, SoundEffectError,
+    SoundEffectErrorList, SoundEffectsFileError,
 };
-use crate::file_pos::{blank_file_range, split_lines};
+use crate::file_pos::{blank_file_pos, split_lines};
 use crate::identifier::ChannelId;
 use crate::mml::{self, CommandTickTracker, CursorTracker, CursorTrackerGetter};
 use crate::pitch_table::PitchTable;
@@ -135,7 +136,8 @@ pub struct CompiledSoundEffect {
     flags: SfxFlags,
     tick_counter: TickCounter,
 
-    cursor_tracker: Option<(CursorTracker, CommandTickTracker)>,
+    cursor_tracker: Option<CursorTracker>,
+    tick_tracker: CommandTickTracker,
 }
 
 impl CompiledSoundEffect {
@@ -154,107 +156,89 @@ impl CompiledSoundEffect {
 
 impl CursorTrackerGetter for CompiledSoundEffect {
     fn cursor_tracker(&self) -> Option<&CursorTracker> {
-        self.cursor_tracker.as_ref().map(|(c, _)| c)
+        self.cursor_tracker.as_ref()
     }
 
     fn tick_tracker_for_channel(&self, channel: ChannelId) -> Option<&CommandTickTracker> {
         match channel {
-            ChannelId::SoundEffect => self.cursor_tracker.as_ref().map(|(_, t)| t),
+            ChannelId::SoundEffect => Some(&self.tick_tracker),
             ChannelId::Channel(_) | ChannelId::Subroutine(_) | ChannelId::MmlPrefix => None,
         }
     }
 }
 
-fn compile_mml_sound_effect(
-    sfx: &str,
+fn parse_bytecode_asm_sound_effect<'a>(
+    sfx: &'a str,
     data_instruments: &UniqueNamesList<InstrumentOrSample>,
-    pitch_table: &PitchTable,
     sfx_subroutines: &CompiledSfxSubroutines,
-    flags: SfxFlags,
-) -> Result<CompiledSoundEffect, SoundEffectErrorList> {
-    let s = mml::parse_sound_effect(sfx, data_instruments, sfx_subroutines)?;
-
-    channel_bc_generator::compile_sound_effect(
-        &s.commands,
-        data_instruments,
-        pitch_table,
-        &sfx_subroutines.subroutines,
-        s.errors,
-    )
-    .map(|(data, tick_counter, tick_tracker)| CompiledSoundEffect {
-        data,
-        tick_counter,
-        flags,
-        cursor_tracker: Some((s.mml_tracker, tick_tracker)),
-    })
-}
-
-pub fn compile_bytecode_sound_effect(
-    sfx: &str,
-    instruments: &UniqueNamesList<InstrumentOrSample>,
-    subroutines: &CompiledSfxSubroutines,
-    flags: SfxFlags,
-) -> Result<CompiledSoundEffect, SoundEffectErrorList> {
+) -> Result<SoundEffectCommands<'a>, SoundEffectErrorList> {
     let mut errors = Vec::new();
+    let mut commands = Vec::new();
 
-    let mut bc = BytecodeAssembler::new(
-        instruments,
-        subroutines.subroutines(),
-        subroutines,
-        BytecodeContext::SoundEffect,
-    );
-
-    let mut last_line_range = blank_file_range();
+    let mut last_line_pos = blank_file_pos();
 
     for line in split_lines(sfx) {
+        last_line_pos = line.position;
+
         let line = line.trim_start().trim_comments(COMMENT_CHAR);
 
         if !line.text.is_empty() {
-            last_line_range = line.range();
-
-            match bc.parse_line(line.text) {
-                Ok(()) => (),
+            match parse_bytecode_asm_instruction(
+                line.text,
+                data_instruments,
+                sfx_subroutines,
+                ChannelId::SoundEffect,
+            ) {
+                Ok(c) => commands.push(CommandWithPos::new(c, line.range(), line.end_pos())),
                 Err(e) => errors.push(ErrorWithPos(line.range(), e)),
             }
         }
     }
 
-    let tick_counter = bc.get_tick_counter();
+    Ok(SoundEffectCommands {
+        commands: ChannelCommands {
+            commands,
+            end_pos: last_line_pos,
+        },
+        errors,
+        mml_tracker: None,
+    })
+}
 
-    let out = match bc.bytecode(BcTerminator::DisableChannel) {
-        Ok(out) => Some(out),
-        Err(e) => {
-            errors.push(ErrorWithPos(last_line_range.clone(), e));
-            None
+pub fn compile_sound_effect(
+    sfx: &SoundEffectText,
+    data_instruments: &UniqueNamesList<InstrumentOrSample>,
+    pitch_table: &PitchTable,
+    sfx_subroutines: &CompiledSfxSubroutines,
+    flags: SfxFlags,
+) -> Result<CompiledSoundEffect, SoundEffectErrorList> {
+    let sfx_commands = match sfx {
+        SoundEffectText::BytecodeAssembly(text) => {
+            parse_bytecode_asm_sound_effect(text, data_instruments, sfx_subroutines)
         }
-    };
+        SoundEffectText::Mml(text) => {
+            mml::parse_sound_effect(text, data_instruments, sfx_subroutines)
+        }
+    }?;
 
-    if tick_counter.is_zero() {
-        errors.push(ErrorWithPos(
-            last_line_range.clone(),
-            ChannelError::NoTicksInSoundEffect,
-        ));
-    }
-
-    if tick_counter > MAX_SFX_TICKS {
-        errors.push(ErrorWithPos(
-            last_line_range,
-            ChannelError::TooManySfxTicks(tick_counter),
-        ));
-    }
-
-    if errors.is_empty() {
-        let (data, bc_state) = out.unwrap();
-
-        Ok(CompiledSoundEffect {
-            data,
-            flags,
-            tick_counter: bc_state.tick_counter,
-            cursor_tracker: None,
-        })
-    } else {
-        Err(SoundEffectErrorList::BytecodeErrors(errors))
-    }
+    channel_bc_generator::compile_sound_effect(
+        &sfx_commands.commands,
+        data_instruments,
+        pitch_table,
+        &sfx_subroutines.subroutines,
+        sfx_commands.errors,
+        match sfx {
+            SoundEffectText::BytecodeAssembly(_) => true,
+            SoundEffectText::Mml(_) => false,
+        },
+    )
+    .map(|(data, tick_counter, tick_tracker)| CompiledSoundEffect {
+        data,
+        tick_counter,
+        flags,
+        cursor_tracker: sfx_commands.mml_tracker,
+        tick_tracker,
+    })
 }
 
 pub fn compile_sfx_subroutines(
@@ -335,19 +319,13 @@ pub fn compile_sound_effects_file(
             }
         };
 
-        let r = match &sfx.sfx {
-            SoundEffectText::BytecodeAssembly(text) => {
-                compile_bytecode_sound_effect(text, inst_map, &subroutines, sfx.flags.clone())
-            }
-            SoundEffectText::Mml(text) => compile_mml_sound_effect(
-                text,
-                inst_map,
-                pitch_table,
-                &subroutines,
-                sfx.flags.clone(),
-            ),
-        };
-        match r {
+        match compile_sound_effect(
+            &sfx.sfx,
+            inst_map,
+            pitch_table,
+            &subroutines,
+            sfx.flags.clone(),
+        ) {
             Ok(s) => {
                 sound_effects.insert(name, s);
             }
@@ -599,19 +577,13 @@ pub fn compile_sound_effect_input(
     pitch_table: &PitchTable,
     subroutines: &CompiledSfxSubroutines,
 ) -> Result<CompiledSoundEffect, SoundEffectError> {
-    let r = match &input.sfx {
-        SoundEffectText::BytecodeAssembly(text) => {
-            compile_bytecode_sound_effect(text, inst_map, subroutines, input.flags.clone())
-        }
-        SoundEffectText::Mml(text) => compile_mml_sound_effect(
-            text,
-            inst_map,
-            pitch_table,
-            subroutines,
-            input.flags.clone(),
-        ),
-    };
-    match r {
+    match compile_sound_effect(
+        &input.sfx,
+        inst_map,
+        pitch_table,
+        subroutines,
+        input.flags.clone(),
+    ) {
         Ok(o) => Ok(o),
         Err(e) => Err(SoundEffectError {
             sfx_name: input.name.as_str().to_owned(),

@@ -2189,6 +2189,7 @@ pub(crate) fn compile_sound_effect(
     pitch_table: &PitchTable,
     subroutines: &CompiledSubroutines,
     errors: Vec<ErrorWithPos<ChannelError>>,
+    use_line_errors: bool,
 ) -> Result<(Vec<u8>, TickCounter, CommandTickTracker), SoundEffectErrorList> {
     let bc_data = Vec::new();
     let mut errors = errors;
@@ -2235,6 +2236,8 @@ pub(crate) fn compile_sound_effect(
 
     if errors.is_empty() {
         Ok((bytecode, tick_counter, tick_tracker))
+    } else if use_line_errors {
+        Err(SoundEffectErrorList::BytecodeErrors(errors))
     } else {
         Err(SoundEffectErrorList::MmlErrors(errors))
     }

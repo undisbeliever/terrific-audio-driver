@@ -93,6 +93,14 @@ pub fn blank_file_range() -> FilePosRange {
     }
 }
 
+pub fn blank_file_pos() -> FilePos {
+    FilePos {
+        line_number: 0,
+        line_char: 0,
+        char_index: 0,
+    }
+}
+
 #[derive(Clone)]
 pub struct Line<'a> {
     pub text: &'a str,
@@ -111,6 +119,11 @@ impl Line<'_> {
     pub fn range(&self) -> FilePosRange {
         let line_length = self.text.len().try_into().unwrap();
         self.position.to_range(line_length)
+    }
+
+    pub fn end_pos(&self) -> u32 {
+        let line_length: u32 = self.text.len().try_into().unwrap();
+        self.position.char_index() + line_length
     }
 
     pub fn index_range(&self) -> LineIndexRange {
