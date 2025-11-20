@@ -12,7 +12,7 @@ use crate::bytecode::{
     SlurredNoteState, VibratoPitchOffsetPerTick, VibratoState, KEY_OFF_TICK_DELAY,
 };
 use crate::bytecode_assembler::parse_asm_line;
-use crate::command_compiler::analysis::AnalysedCommands;
+use crate::command_compiler::analysis::{AnalysedCommands, AnalysedSoundEffectCommands};
 use crate::data::{self, UniqueNamesList};
 use crate::driver_constants::N_MUSIC_CHANNELS;
 use crate::echo::EchoEdl;
@@ -22,7 +22,7 @@ use crate::errors::{
     SoundEffectErrorList, ValueError,
 };
 use crate::identifier::MusicChannelIndex;
-use crate::mml::{CommandTickTracker, MAX_MML_PREFIX_TICKS};
+use crate::mml::{CommandTickTracker, CursorTracker, MAX_MML_PREFIX_TICKS};
 use crate::notes::Note;
 use crate::notes::SEMITONES_PER_OCTAVE;
 use crate::pitch_table::{PitchTable, PitchTableOffset, PITCH_REGISTER_MAX};
@@ -2184,15 +2184,24 @@ impl<'a> CommandCompiler<'a> {
 }
 
 pub(crate) fn compile_sound_effect(
-    input: &ChannelCommands,
+    input: AnalysedSoundEffectCommands,
     data_instruments: &UniqueNamesList<data::InstrumentOrSample>,
     pitch_table: &PitchTable,
     subroutines: &CompiledSubroutines,
-    errors: Vec<ErrorWithPos<ChannelError>>,
     use_line_errors: bool,
-) -> Result<(Vec<u8>, TickCounter, CommandTickTracker), SoundEffectErrorList> {
+) -> Result<
+    (
+        Vec<u8>,
+        TickCounter,
+        Option<CursorTracker>,
+        CommandTickTracker,
+    ),
+    SoundEffectErrorList,
+> {
+    let input = input.0;
+
     let bc_data = Vec::new();
-    let mut errors = errors;
+    let mut errors = input.errors;
 
     let mut gen = ChannelBcGenerator::new(
         bc_data,
@@ -2202,7 +2211,7 @@ pub(crate) fn compile_sound_effect(
         BytecodeContext::SoundEffect,
         false,
     );
-    gen.process_commands(&input.commands, &mut errors);
+    gen.process_commands(&input.commands.commands, &mut errors);
 
     let tick_counter = gen.bytecode().get_tick_counter();
     assert!(gen.loop_point().is_none());
@@ -2213,7 +2222,7 @@ pub(crate) fn compile_sound_effect(
         Ok((b, _)) => b,
         Err((e, b)) => {
             errors.push(ErrorWithPos(
-                input.end_pos_range(),
+                input.commands.end_pos_range(),
                 ChannelError::BytecodeError(e),
             ));
             b
@@ -2222,20 +2231,20 @@ pub(crate) fn compile_sound_effect(
 
     if tick_counter.is_zero() {
         errors.push(ErrorWithPos(
-            input.end_pos_range(),
+            input.commands.end_pos_range(),
             ChannelError::NoTicksInSoundEffect,
         ));
     }
 
     if tick_counter > MAX_SFX_TICKS {
         errors.push(ErrorWithPos(
-            input.end_pos_range(),
+            input.commands.end_pos_range(),
             ChannelError::TooManySfxTicks(tick_counter),
         ));
     }
 
     if errors.is_empty() {
-        Ok((bytecode, tick_counter, tick_tracker))
+        Ok((bytecode, tick_counter, input.mml_tracker, tick_tracker))
     } else if use_line_errors {
         Err(SoundEffectErrorList::BytecodeErrors(errors))
     } else {

@@ -6,8 +6,13 @@
 
 use crate::bytecode::opcodes;
 use crate::command_compiler;
+use crate::command_compiler::analysis::{
+    analyse_sound_effect_commands, blank_subroutine_analysis_array,
+};
 use crate::command_compiler::channel_bc_generator::{self, CommandCompiler};
-use crate::command_compiler::commands::{ChannelCommands, CommandWithPos, SoundEffectCommands};
+use crate::command_compiler::commands::{
+    ChannelCommands, CommandWithPos, LoopAnalysis, SoundEffectCommands,
+};
 use crate::command_compiler::parsers::parse_bytecode_asm_instruction;
 use crate::command_compiler::subroutines::subroutine_compile_order;
 use crate::data::{
@@ -15,6 +20,7 @@ use crate::data::{
 };
 use crate::driver_constants::{
     COMMON_DATA_BYTES_PER_SFX_SUBROUTINE, COMMON_DATA_BYTES_PER_SOUND_EFFECT, MAX_COMMON_DATA_SIZE,
+    MAX_SUBROUTINES,
 };
 use crate::echo::EchoEdl;
 use crate::errors::{
@@ -48,6 +54,7 @@ pub struct CompiledSfxSubroutines {
     data: Vec<u8>,
 
     subroutines: CompiledSubroutines,
+    subroutine_analysis: [LoopAnalysis; MAX_SUBROUTINES],
 
     name_map: HashMap<String, usize>,
 
@@ -59,6 +66,7 @@ impl CompiledSfxSubroutines {
         Self {
             data: Vec::new(),
             subroutines: CompiledSubroutines::new_blank(),
+            subroutine_analysis: blank_subroutine_analysis_array(),
             name_map: HashMap::new(),
             cursor_tracker: CursorTracker::new(),
         }
@@ -66,6 +74,10 @@ impl CompiledSfxSubroutines {
 
     pub fn subroutines(&self) -> &CompiledSubroutines {
         &self.subroutines
+    }
+
+    pub(crate) fn subroutine_analysis_array(&self) -> &[LoopAnalysis; 255] {
+        &self.subroutine_analysis
     }
 
     pub fn cad_data_len(&self) -> usize {
@@ -221,24 +233,27 @@ pub fn compile_sound_effect(
         }
     }?;
 
+    let sfx_commands = analyse_sound_effect_commands(sfx_commands, sfx_subroutines);
+
     channel_bc_generator::compile_sound_effect(
-        &sfx_commands.commands,
+        sfx_commands,
         data_instruments,
         pitch_table,
         &sfx_subroutines.subroutines,
-        sfx_commands.errors,
         match sfx {
             SoundEffectText::BytecodeAssembly(_) => true,
             SoundEffectText::Mml(_) => false,
         },
     )
-    .map(|(data, tick_counter, tick_tracker)| CompiledSoundEffect {
-        data,
-        tick_counter,
-        flags,
-        cursor_tracker: sfx_commands.mml_tracker,
-        tick_tracker,
-    })
+    .map(
+        |(data, tick_counter, cursor_tracker, tick_tracker)| CompiledSoundEffect {
+            data,
+            tick_counter,
+            flags,
+            cursor_tracker,
+            tick_tracker,
+        },
+    )
 }
 
 pub fn compile_sfx_subroutines(
@@ -275,6 +290,7 @@ pub fn compile_sfx_subroutines(
                 .map(|(i, (name, _))| (name.as_str().to_owned(), i))
                 .collect(),
             subroutines,
+            subroutine_analysis: a.subroutine_analysis,
             cursor_tracker: s.mml_tracker,
         })
     } else {

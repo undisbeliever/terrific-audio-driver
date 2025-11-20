@@ -7,18 +7,25 @@
 use super::commands::{ChannelCommands, Command};
 use super::subroutines::SubroutineCommandsWithCompileOrder;
 
-use crate::command_compiler::commands::{CommandWithPos, InstrumentAnalysis, LoopAnalysis};
+use crate::command_compiler::commands::{
+    CommandWithPos, InstrumentAnalysis, LoopAnalysis, SoundEffectCommands,
+};
 use crate::command_compiler::subroutines::SubroutineBitArray;
 use crate::driver_constants::{
     BC_CHANNEL_STACK_SIZE, BC_STACK_BYTES_PER_LOOP, MAX_SUBROUTINES, N_MUSIC_CHANNELS,
 };
+use crate::sound_effects::CompiledSfxSubroutines;
 use crate::Transpose;
 
 pub struct AnalysedCommands<'a> {
     pub(super) subroutines: SubroutineCommandsWithCompileOrder<'a>,
     pub(super) channels: Option<[Option<ChannelCommands<'a>>; N_MUSIC_CHANNELS]>,
     pub(super) subroutines_called_with_transpose: SubroutineBitArray,
+
+    pub(crate) subroutine_analysis: [LoopAnalysis; MAX_SUBROUTINES],
 }
+
+pub struct AnalysedSoundEffectCommands<'a>(pub(super) SoundEffectCommands<'a>);
 
 const MAX_STACK_LOOPS: usize = BC_CHANNEL_STACK_SIZE / BC_STACK_BYTES_PER_LOOP;
 
@@ -214,6 +221,27 @@ fn analyse_song_subroutine_calls(
     subroutines_called_with_transpose
 }
 
+pub fn analyse_sound_effect_commands<'a>(
+    sfx: SoundEffectCommands<'a>,
+    sfx_subroutines: &CompiledSfxSubroutines,
+) -> AnalysedSoundEffectCommands<'a> {
+    let mut sfx = sfx;
+
+    analyse_loop_commands(
+        &mut sfx.commands.commands,
+        sfx_subroutines.subroutine_analysis_array(),
+    );
+
+    AnalysedSoundEffectCommands(sfx)
+}
+
+pub(crate) fn blank_subroutine_analysis_array() -> [LoopAnalysis; 255] {
+    [LoopAnalysis {
+        instrument: None,
+        driver_transpose_active: None,
+    }; MAX_SUBROUTINES]
+}
+
 pub fn analyse<'a>(
     subroutines: SubroutineCommandsWithCompileOrder<'a>,
     channels: Option<[Option<ChannelCommands<'a>>; N_MUSIC_CHANNELS]>,
@@ -253,5 +281,6 @@ pub fn analyse<'a>(
         subroutines,
         channels,
         subroutines_called_with_transpose,
+        subroutine_analysis,
     }
 }
