@@ -6,13 +6,16 @@
 
 use super::note_tracking::CursorTracker;
 use super::tokenizer::{MmlTokens, PeekableTokenIterator, Token};
+use crate::command_compiler::parsers::{
+    parse_bytecode_asm_instruction, parse_call_subroutine_command,
+};
+use crate::data;
 use crate::data::UniqueNamesList;
 use crate::identifier::{ChannelId, IdentifierStr};
-use crate::{bytecode_assembler, data};
 
 use crate::bytecode::{
-    DetuneValue, EarlyReleaseMinTicks, EarlyReleaseTicks, InstrumentId, LoopCount, NoiseFrequency,
-    Pan, PanSlideTicks, PanbrelloQuarterWavelengthInTicks, PlayNoteTicks, PlayPitchPitch,
+    DetuneValue, EarlyReleaseMinTicks, EarlyReleaseTicks, LoopCount, NoiseFrequency, Pan,
+    PanSlideTicks, PanbrelloQuarterWavelengthInTicks, PlayNoteTicks, PlayPitchPitch,
     RelativeEchoFeedback, RelativeEchoVolume, RelativeFirCoefficient, Transpose, TremoloAmplitude,
     TremoloQuarterWavelengthInTicks, VibratoDelayTicks, VibratoPitchOffsetPerTick,
     VibratoQuarterWavelengthInTicks, Volume, VolumeSlideAmount, VolumeSlideTicks,
@@ -26,8 +29,8 @@ use crate::command_compiler::commands::{
 };
 use crate::driver_constants::FIR_FILTER_SIZE;
 use crate::echo::{EchoVolume, FirCoefficient, FirTap};
-use crate::envelope::{Envelope, Gain, GainMode, OptionalGain, TempGain};
-use crate::errors::{BytecodeError, ChannelError, ErrorWithPos, ValueError};
+use crate::envelope::{Gain, GainMode, OptionalGain, TempGain};
+use crate::errors::{ChannelError, ErrorWithPos, ValueError};
 use crate::file_pos::{FilePos, FilePosRange};
 use crate::mml::GlobalSettings;
 use crate::notes::{KeySignature, MidiNote, MmlPitch, Note, Octave, STARTING_OCTAVE};
@@ -145,10 +148,6 @@ mod parser {
             self.add_to_cursor_tracker();
         }
 
-        pub(super) fn channel_id(&self) -> &ChannelId {
-            &self.channel
-        }
-
         // Must ONLY be called by the parsing macros in this module.
         pub(super) fn __peek(&self) -> &Token<'a> {
             self.tokens.peek()
@@ -176,25 +175,20 @@ mod parser {
                 .push(ErrorWithPos(self.file_pos_range_from(pos), e))
         }
 
-        pub(super) fn find_asm_instrument_id(
-            &self,
-            name: &str,
-        ) -> Result<InstrumentId, ChannelError> {
-            match self.data_instruments.get_with_index(name) {
-                Some((i, _inst)) => match InstrumentId::try_from(i) {
-                    Ok(inst) => Ok(inst),
-                    Err(_) => Err(BytecodeError::InvalidInstrumentId.into()),
-                },
-                None => Err(BytecodeError::UnknownInstrument(name.to_owned()).into()),
-            }
+        pub(super) fn data_instruments(&self) -> &'b UniqueNamesList<data::InstrumentOrSample> {
+            self.data_instruments
         }
 
         pub(super) fn instruments_map(&self) -> &HashMap<IdentifierStr<'b>, &MmlInstrument> {
             self.instruments_map
         }
 
-        pub(super) fn find_subroutine(&self, name: &str) -> Option<u8> {
-            self.subroutines.find_subroutine_index(name)
+        pub(super) fn subroutines(&self) -> &'b dyn SubroutineNameMap {
+            self.subroutines
+        }
+
+        pub(super) fn channel_id(&self) -> ChannelId {
+            self.channel
         }
 
         pub(super) fn old_transpose(&self) -> bool {
@@ -2180,25 +2174,18 @@ fn parse_set_instrument_hint<'a>(
     }
 }
 
-fn find_subroutine_index(id: &str, p: &Parser<'_, '_>) -> Result<u8, ChannelError> {
-    match p.find_subroutine(id) {
-        Some(index) => Ok(index),
-        None => match p.channel_id() {
-            ChannelId::Channel(_) | ChannelId::Subroutine(_) | ChannelId::SoundEffect => {
-                Err(ChannelError::CannotFindSubroutine(id.to_owned()))
-            }
-            ChannelId::MmlPrefix => Err(ChannelError::CannotCallSubroutineInAnMmlPrefix),
-        },
-    }
-}
-
 fn parse_call_subroutine_mml<'a>(
     pos: FilePos,
     id: IdentifierStr,
     p: &mut Parser<'a, '_>,
 ) -> Command<'a> {
-    match find_subroutine_index(id.as_str(), p) {
-        Ok(index) => Command::CallSubroutine(index, SubroutineCallType::Mml),
+    match parse_call_subroutine_command(
+        id.as_str(),
+        SubroutineCallType::Mml,
+        p.subroutines(),
+        p.channel_id(),
+    ) {
+        Ok(c) => c,
         Err(e) => invalid_token_error(p, pos, e),
     }
 }
@@ -2531,69 +2518,9 @@ fn parse_set_echo_delay<'a>(pos: FilePos, p: &mut Parser) -> Command<'a> {
     }
 }
 
-fn parse_bytecode_asm_instruction<'a>(
-    asm: &'a str,
-    p: &Parser<'a, '_>,
-) -> Result<Command<'a>, ChannelError> {
-    use bytecode_assembler::split_asm_args;
-
-    match asm.split_once(|c: char| c.is_ascii_whitespace()) {
-        Some((bytecode_assembler::CALL_SUBROUTINE, arg)) => {
-            let s = find_subroutine_index(arg.trim_start(), p)?;
-            Ok(Command::CallSubroutine(s, SubroutineCallType::Asm))
-        }
-        Some((bytecode_assembler::CALL_SUBROUTINE_AND_DISABLE_VIBRATO, arg)) => {
-            let s = find_subroutine_index(arg.trim_start(), p)?;
-            Ok(Command::CallSubroutine(
-                s,
-                SubroutineCallType::AsmDisableVibrato,
-            ))
-        }
-        Some((bytecode_assembler::START_LOOP, arg)) => {
-            let a = bytecode_assembler::parse_uvnt(arg.trim_start())?;
-            Ok(Command::StartLoop(Some(a), Default::default()))
-        }
-        Some((bytecode_assembler::END_LOOP, arg)) => {
-            let a = bytecode_assembler::parse_uvnt(arg.trim_start())?;
-            Ok(Command::EndLoop(Some(a), Default::default()))
-        }
-        Some((bytecode_assembler::SET_INSTRUMENT, arg)) => {
-            let i = p.find_asm_instrument_id(arg)?;
-            Ok(Command::SetInstrumentAsm(i, None))
-        }
-        Some((bytecode_assembler::SET_INSTRUMENT_AND_ADSR, arg)) => {
-            let (name, a) = bytecode_assembler::instrument_and_adsr_argument(&split_asm_args(arg))?;
-            let i = p.find_asm_instrument_id(name)?;
-            Ok(Command::SetInstrumentAsm(i, Some(Envelope::Adsr(a))))
-        }
-        Some((bytecode_assembler::SET_INSTRUMENT_AND_GAIN, arg)) => {
-            let (name, g) = bytecode_assembler::instrument_and_gain_argument(&split_asm_args(arg))?;
-            let i = p.find_asm_instrument_id(name)?;
-            Ok(Command::SetInstrumentAsm(i, Some(Envelope::Gain(g))))
-        }
-        Some((bytecode_assembler::SET_TRANSPOSE, arg)) => {
-            let t = bytecode_assembler::parse_svnt_allow_zero(arg.trim_start())?;
-            Ok(Command::SetTranspose(t))
-        }
-        Some((bytecode_assembler::ADJUST_TRANSPOSE, arg)) => {
-            let t = bytecode_assembler::parse_svnt(arg.trim_start())?;
-            Ok(Command::AdjustTranspose(t))
-        }
-        Some(_) => Ok(Command::BytecodeAsm(asm)),
-
-        // Instructions with no arguments
-        None => match asm {
-            bytecode_assembler::START_LOOP => Ok(Command::StartLoop(None, Default::default())),
-            bytecode_assembler::SKIP_LAST_LOOP => Ok(Command::SkipLastLoop),
-            bytecode_assembler::END_LOOP => Ok(Command::EndLoop(None, Default::default())),
-            bytecode_assembler::DISABLE_TRANSPOSE => Ok(Command::SetTranspose(Transpose::ZERO)),
-            _ => Ok(Command::BytecodeAsm(asm)),
-        },
-    }
-}
-
 fn parse_bytecode_asm<'a>(pos: FilePos, asm: &'a str, p: &mut Parser<'a, '_>) -> Command<'a> {
-    match parse_bytecode_asm_instruction(asm, p) {
+    match parse_bytecode_asm_instruction(asm, p.data_instruments(), p.subroutines(), p.channel_id())
+    {
         Ok(c) => c,
         Err(e) => {
             p.add_error(pos, e);
