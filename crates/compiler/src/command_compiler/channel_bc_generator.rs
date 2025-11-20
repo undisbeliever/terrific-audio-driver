@@ -2219,6 +2219,13 @@ pub(crate) fn compile_sound_effect(
         }
     };
 
+    if tick_counter.is_zero() {
+        errors.push(ErrorWithPos(
+            input.end_pos_range(),
+            ChannelError::NoTicksInSoundEffect,
+        ));
+    }
+
     if tick_counter > MAX_SFX_TICKS {
         errors.push(ErrorWithPos(
             input.end_pos_range(),
