@@ -446,7 +446,8 @@ pub(crate) struct SfxSubroutineCommands<'a> {
 }
 
 pub(crate) struct SoundEffectCommands<'a> {
-    pub commands: ChannelCommands<'a>,
+    pub commands: Vec<CommandWithPos<'a>>,
+    pub end_pos: FilePos,
     pub errors: Vec<ErrorWithPos<ChannelError>>,
     pub mml_tracker: Option<CursorTracker>,
 }

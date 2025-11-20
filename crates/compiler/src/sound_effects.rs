@@ -10,9 +10,7 @@ use crate::command_compiler::analysis::{
     analyse_sound_effect_commands, blank_subroutine_analysis_array,
 };
 use crate::command_compiler::channel_bc_generator::{self, CommandCompiler};
-use crate::command_compiler::commands::{
-    ChannelCommands, CommandWithPos, LoopAnalysis, SoundEffectCommands,
-};
+use crate::command_compiler::commands::{CommandWithPos, LoopAnalysis, SoundEffectCommands};
 use crate::command_compiler::parsers::parse_bytecode_asm_instruction;
 use crate::command_compiler::subroutines::subroutine_compile_order;
 use crate::data::{
@@ -208,10 +206,8 @@ fn parse_bytecode_asm_sound_effect<'a>(
     }
 
     Ok(SoundEffectCommands {
-        commands: ChannelCommands {
-            commands,
-            end_pos: last_line_pos,
-        },
+        commands,
+        end_pos: last_line_pos,
         errors,
         mml_tracker: None,
     })

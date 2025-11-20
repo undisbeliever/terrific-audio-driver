@@ -2211,7 +2211,7 @@ pub(crate) fn compile_sound_effect(
         BytecodeContext::SoundEffect,
         false,
     );
-    gen.process_commands(&input.commands.commands, &mut errors);
+    gen.process_commands(&input.commands, &mut errors);
 
     let tick_counter = gen.bytecode().get_tick_counter();
     assert!(gen.loop_point().is_none());
@@ -2222,7 +2222,7 @@ pub(crate) fn compile_sound_effect(
         Ok((b, _)) => b,
         Err((e, b)) => {
             errors.push(ErrorWithPos(
-                input.commands.end_pos_range(),
+                input.end_pos.to_range(1),
                 ChannelError::BytecodeError(e),
             ));
             b
@@ -2231,14 +2231,14 @@ pub(crate) fn compile_sound_effect(
 
     if tick_counter.is_zero() {
         errors.push(ErrorWithPos(
-            input.commands.end_pos_range(),
+            input.end_pos.to_range(1),
             ChannelError::NoTicksInSoundEffect,
         ));
     }
 
     if tick_counter > MAX_SFX_TICKS {
         errors.push(ErrorWithPos(
-            input.commands.end_pos_range(),
+            input.end_pos.to_range(1),
             ChannelError::TooManySfxTicks(tick_counter),
         ));
     }

@@ -228,7 +228,7 @@ pub fn analyse_sound_effect_commands<'a>(
     let mut sfx = sfx;
 
     analyse_loop_commands(
-        &mut sfx.commands.commands,
+        &mut sfx.commands,
         sfx_subroutines.subroutine_analysis_array(),
     );
 
