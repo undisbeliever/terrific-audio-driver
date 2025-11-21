@@ -251,6 +251,15 @@ impl TransposeRange {
         }
     }
 
+    pub fn song_loop(&mut self, analysis: TransposeAnalysis) {
+        match analysis.0 {
+            TransposeState::Unset => (),
+            TransposeState::Set(t) => *self = self.loop_set(t),
+            TransposeState::Adjust(_) => *self = TransposeRange::Overflow,
+            TransposeState::Overflow => *self = TransposeRange::Overflow,
+        }
+    }
+
     fn merge(&mut self, tr: Self) {
         *self = match (*self, tr) {
             (
@@ -478,7 +487,7 @@ fn analyse_subroutine_calls(
             }
 
             Command::SetLoopPoint(a) => {
-                transpose_range.start_loop(a.transpose);
+                transpose_range.song_loop(a.transpose);
             }
             _ => (),
         }

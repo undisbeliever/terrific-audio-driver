@@ -373,6 +373,14 @@ struct TransposeMmlCommand {
 }
 
 #[rustfmt::skip]
+const SET_TRANSPOSE_MML_COMMANDS: &[TransposeMmlCommand] = &[
+    TransposeMmlCommand { mml: "_+1", asm: "set_transpose +1" },
+    TransposeMmlCommand { mml: "_-1", asm: "set_transpose -1" },
+    TransposeMmlCommand { mml: "\\asm { set_transpose +3 }", asm: "set_transpose +3" },
+    TransposeMmlCommand { mml: "\\asm { set_transpose -3 }", asm: "set_transpose -3" },
+];
+
+#[rustfmt::skip]
 const ALL_TRANSPOSE_MML_COMMANDS: &[TransposeMmlCommand] = &[
     TransposeMmlCommand { mml: "_+1", asm: "set_transpose +1" },
     TransposeMmlCommand { mml: "_-1", asm: "set_transpose -1" },
@@ -860,7 +868,7 @@ fn driver_transpose_in_nested_loop() {
 
 #[test]
 fn transpose_and_song_loop() {
-    for transpose in ALL_TRANSPOSE_MML_COMMANDS {
+    for transpose in SET_TRANSPOSE_MML_COMMANDS {
         let mml = r##"
 @0 dummy_instrument
 
@@ -1219,5 +1227,53 @@ fn transpose_overflow_in_loop_errors() {
         "[[__-10 r]10 _-29]2",
         3,
         BytecodeError::DriverTransposeOverflowsInLoop.into(),
+    );
+}
+
+#[test]
+fn transpose_overflow_errors_in_song_loop() {
+    assert_one_error_in_mml_line(
+        "r L __+1 r",
+        5,
+        BytecodeError::DriverTransposeOverflows.into(),
+    );
+    assert_one_error_in_mml_line(
+        "r L __-1 r",
+        5,
+        BytecodeError::DriverTransposeOverflows.into(),
+    );
+
+    // Transpose after `L` is known
+    assert_one_error_in_mml_line(
+        "__+127 __+1 r L _+1 r __+1",
+        8,
+        BytecodeError::DriverTransposeOverflows.into(),
+    );
+    assert_one_error_in_mml_line(
+        "__-128 __-1 r L _-1 r __-1",
+        8,
+        BytecodeError::DriverTransposeOverflows.into(),
+    );
+
+    // Transpose does not overflow
+    assert_looping_line_matches_bytecode(
+        "r L __+1 r _+1",
+        &[
+            "rest 24",
+            "adjust_transpose +1",
+            "rest 24",
+            "set_transpose +1",
+        ],
+    );
+
+    // Transpose does not overflow
+    assert_looping_line_matches_bytecode(
+        "r L __-1 r _-1",
+        &[
+            "rest 24",
+            "adjust_transpose -1",
+            "rest 24",
+            "set_transpose -1",
+        ],
     );
 }

@@ -1082,8 +1082,7 @@ impl State {
         };
     }
 
-    // The analysis is processed at the start of a bytecode loop or song-loop
-    fn start_loop_analysis(
+    fn start_loop_or_song_loop_instrument_analysis(
         &mut self,
         analysis: &LoopAnalysis,
         pitch_table: &PitchTable,
@@ -1100,12 +1099,9 @@ impl State {
                 self.instrument_tuning = None;
             }
         }
-
-        self.transpose_range.start_loop(analysis.transpose);
     }
 
-    // The analysis contains the known value at the end of the loop or subroutine
-    fn end_loop_analysis(
+    fn end_loop_or_song_loop_instrument_analysis(
         &mut self,
         analysis: &LoopAnalysis,
         pitch_table: &PitchTable,
@@ -1125,7 +1121,8 @@ impl State {
         pitch_table: &PitchTable,
         instruments: &UniqueNamesList<data::InstrumentOrSample>,
     ) {
-        self.start_loop_analysis(analysis, pitch_table, instruments);
+        self.start_loop_or_song_loop_instrument_analysis(analysis, pitch_table, instruments);
+        self.transpose_range.song_loop(analysis.transpose);
 
         self.envelope = IeState::Unknown;
         self.prev_temp_gain = IeState::Unknown;
@@ -1149,7 +1146,8 @@ impl State {
         pitch_table: &PitchTable,
         instruments: &UniqueNamesList<data::InstrumentOrSample>,
     ) {
-        self.start_loop_analysis(analysis, pitch_table, instruments);
+        self.start_loop_or_song_loop_instrument_analysis(analysis, pitch_table, instruments);
+        self.transpose_range.start_loop(analysis.transpose);
 
         let stack_depth = u8::try_from(stack_depth).unwrap_or(u8::MAX);
 
@@ -1194,7 +1192,7 @@ impl State {
         pitch_table: &PitchTable,
         instruments: &UniqueNamesList<data::InstrumentOrSample>,
     ) {
-        self.end_loop_analysis(analysis, pitch_table, instruments);
+        self.end_loop_or_song_loop_instrument_analysis(analysis, pitch_table, instruments);
         self.transpose_range
             .end_loop(analysis.transpose, start_loop_transpose_range);
 
@@ -1216,7 +1214,7 @@ impl State {
         pitch_table: &PitchTable,
         instruments: &UniqueNamesList<data::InstrumentOrSample>,
     ) {
-        self.end_loop_analysis(analysis, pitch_table, instruments);
+        self.end_loop_or_song_loop_instrument_analysis(analysis, pitch_table, instruments);
         self.transpose_range.subroutine_call(analysis.transpose);
 
         self.envelope.merge_subroutine(&s.envelope);

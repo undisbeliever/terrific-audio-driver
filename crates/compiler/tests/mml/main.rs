@@ -308,6 +308,13 @@ fn assert_mml_channel_a_matches_bytecode(mml: &str, bc_asm: &[&str]) {
     assert_eq!(mml_bytecode(&mml), bc_asm);
 }
 
+fn assert_looping_line_matches_bytecode(mml_line: &str, bc_asm: &[&str]) {
+    let mml = ["@1 dummy_instrument\nA @1 o4\nA ", mml_line].concat();
+    let bc_asm = [&["set_instrument dummy_instrument"], bc_asm].concat();
+
+    assert_mml_channel_a_matches_looping_bytecode(&mml, &bc_asm);
+}
+
 fn assert_mml_channel_a_matches_looping_bytecode(mml: &str, bc_asm: &[&str]) {
     let dummy_data = dummy_data();
 
