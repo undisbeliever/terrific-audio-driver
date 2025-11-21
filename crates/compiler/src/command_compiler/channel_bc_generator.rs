@@ -1484,7 +1484,7 @@ impl<'a> ChannelBcGenerator<'a> {
                 self.bc.set_transpose(t);
             }
             &Command::AdjustTranspose(t) => {
-                self.bc.adjust_transpose(t);
+                self.bc.adjust_transpose(t)?;
             }
 
             &Command::SetDetune(detune) => {

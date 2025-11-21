@@ -2016,11 +2016,22 @@ impl<'a> Bytecode<'a> {
         emit_bytecode!(self, opcodes::SET_TRANSPOSE, transpose.as_i8());
     }
 
-    pub fn adjust_transpose(&mut self, adjust: RelativeTranspose) {
+    pub fn adjust_transpose(&mut self, adjust: RelativeTranspose) -> Result<(), BytecodeError> {
         self.state.transpose_range.adjust(adjust);
 
         if adjust.as_i8() != 0 {
             emit_bytecode!(self, opcodes::ADJUST_TRANSPOSE, adjust.as_i8());
+        }
+
+        match self.state.transpose_range {
+            TransposeRange::Set { .. } => Ok(()),
+            TransposeRange::Overflow => {
+                if !self.is_in_loop() {
+                    Err(BytecodeError::DriverTransposeOverflows)
+                } else {
+                    Err(BytecodeError::DriverTransposeOverflowsInLoop)
+                }
+            }
         }
     }
 

@@ -1131,3 +1131,93 @@ fn adjust_driver_transpose_in_loop_zero_test() {
         ],
     );
 }
+
+#[test]
+fn transpose_overflow_errors() {
+    assert_one_error_in_mml_line(
+        "_+127 __+1 r",
+        7,
+        BytecodeError::DriverTransposeOverflows.into(),
+    );
+    assert_one_error_in_mml_line(
+        "_-128 __-1 r",
+        7,
+        BytecodeError::DriverTransposeOverflows.into(),
+    );
+
+    assert_one_error_in_mml_line(
+        "_+127 __-64 r __-64 r __-64 r __-64",
+        31,
+        BytecodeError::DriverTransposeOverflows.into(),
+    );
+
+    assert_one_error_in_mml_line(
+        "_-127 __+64 r __+64 r __+64 r __+64",
+        31,
+        BytecodeError::DriverTransposeOverflows.into(),
+    );
+}
+
+#[test]
+fn transpose_overflow_in_loop_errors() {
+    assert_one_error_in_mml_line(
+        "_+127 [__-4 r]64",
+        8,
+        BytecodeError::DriverTransposeOverflowsInLoop.into(),
+    );
+
+    assert_one_error_in_mml_line(
+        "_-127 [__+4 r]64",
+        8,
+        BytecodeError::DriverTransposeOverflowsInLoop.into(),
+    );
+
+    assert_one_error_in_mml_line(
+        "[__+100 : _+27 r]2 __+1 r",
+        20,
+        BytecodeError::DriverTransposeOverflows.into(),
+    );
+    assert_one_error_in_mml_line(
+        "[__-100 : _-28 r]2 __-1 r",
+        20,
+        BytecodeError::DriverTransposeOverflows.into(),
+    );
+
+    assert_line_matches_bytecode(
+        "[[__+10 r]10 _+27]2",
+        &[
+            "start_loop",
+            "start_loop",
+            "adjust_transpose +10",
+            "rest 24",
+            "end_loop 10",
+            "set_transpose +27",
+            "end_loop 2",
+            // Transpose is +127
+        ],
+    );
+    assert_one_error_in_mml_line(
+        "[[__+10 r]10 _+28]2",
+        3,
+        BytecodeError::DriverTransposeOverflowsInLoop.into(),
+    );
+
+    assert_line_matches_bytecode(
+        "[[__-10 r]10 _-28]2",
+        &[
+            "start_loop",
+            "start_loop",
+            "adjust_transpose -10",
+            "rest 24",
+            "end_loop 10",
+            "set_transpose -28",
+            "end_loop 2",
+            // Transpose is -128
+        ],
+    );
+    assert_one_error_in_mml_line(
+        "[[__-10 r]10 _-29]2",
+        3,
+        BytecodeError::DriverTransposeOverflowsInLoop.into(),
+    );
+}

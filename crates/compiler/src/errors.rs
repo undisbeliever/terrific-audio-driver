@@ -370,6 +370,9 @@ pub enum BytecodeError {
         edl: EchoEdl,
         max_edl: EchoEdl,
     },
+
+    DriverTransposeOverflows,
+    DriverTransposeOverflowsInLoop,
 }
 
 #[derive(Debug)]
@@ -1484,6 +1487,13 @@ impl Display for BytecodeError {
                     edl.to_length().value(),
                     max_edl.to_length().value()
                 )
+            }
+
+            Self::DriverTransposeOverflows => {
+                write!(f, "driver transpose overflow")
+            }
+            Self::DriverTransposeOverflowsInLoop => {
+                write!(f, "driver transpose overflow in loop")
             }
         }
     }
