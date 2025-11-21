@@ -6,7 +6,8 @@
 
 #![allow(clippy::assertions_on_constants)]
 
-use crate::command_compiler::commands::{InstrumentAnalysis, LoopAnalysis};
+use crate::command_compiler::analysis::{TransposeRange, TransposeStartRange};
+use crate::command_compiler::commands::{InstrumentAnalysis, LoopAnalysis, SkipLastLoopAnalysis};
 use crate::data::{self, InstrumentOrSample, UniqueNamesList};
 use crate::driver_constants::{
     BC_CHANNEL_STACK_SIZE, BC_STACK_BYTES_PER_LOOP, BC_STACK_BYTES_PER_SUBROUTINE_CALL,
@@ -604,6 +605,14 @@ impl LoopCount {
     pub const MIN: Self = Self(Self::MIN_LOOPS as u8);
     pub const MAX: Self = Self(0);
 
+    pub fn to_i16(self) -> i16 {
+        if self.0 == 0 {
+            0x100
+        } else {
+            self.0.into()
+        }
+    }
+
     pub fn to_u32(self) -> u32 {
         if self.0 == 0 {
             0x100
@@ -1037,7 +1046,7 @@ pub struct State {
 
     // State tracked by the command analyser
     pub(crate) instrument_tuning: Option<PitchTableOffset>,
-    pub(crate) driver_transpose_active: bool,
+    pub(crate) transpose_range: TransposeRange,
     pub(crate) instrument: InstrumentState,
 
     // State set to unknown on loop start
@@ -1092,9 +1101,7 @@ impl State {
             }
         }
 
-        if let Some(t) = analysis.driver_transpose_active {
-            self.driver_transpose_active = t;
-        }
+        self.transpose_range.start_loop(analysis.transpose);
     }
 
     // The analysis contains the known value at the end of the loop or subroutine
@@ -1109,10 +1116,6 @@ impl State {
 
             // The instrument is known at the end of the loop
             self.instrument_tuning = Some(pitch_table.pitch_table_offset(i.instrument_id()));
-        }
-
-        if let Some(t) = analysis.driver_transpose_active {
-            self.driver_transpose_active = t;
         }
     }
 
@@ -1161,6 +1164,15 @@ impl State {
         self.prev_slurred_note = SlurredNoteState::Unknown;
     }
 
+    fn skip_last_loop(
+        &mut self,
+        analysis: &SkipLastLoopAnalysis,
+        start_loop_transpose_range: TransposeRange,
+    ) {
+        self.transpose_range
+            .skip_last_loop(analysis.transpose, start_loop_transpose_range);
+    }
+
     fn merge_skip_last_loop(&mut self, s: SkipLastLoop) {
         self.envelope.merge_skip_last_loop(s.envelope);
         self.prev_temp_gain.merge_skip_last_loop(s.prev_temp_gain);
@@ -1178,10 +1190,13 @@ impl State {
         &mut self,
         stack_depth: usize,
         analysis: &LoopAnalysis,
+        start_loop_transpose_range: TransposeRange,
         pitch_table: &PitchTable,
         instruments: &UniqueNamesList<data::InstrumentOrSample>,
     ) {
         self.end_loop_analysis(analysis, pitch_table, instruments);
+        self.transpose_range
+            .end_loop(analysis.transpose, start_loop_transpose_range);
 
         let stack_depth = u8::try_from(stack_depth).unwrap_or(u8::MAX);
 
@@ -1202,6 +1217,7 @@ impl State {
         instruments: &UniqueNamesList<data::InstrumentOrSample>,
     ) {
         self.end_loop_analysis(analysis, pitch_table, instruments);
+        self.transpose_range.subroutine_call(analysis.transpose);
 
         self.envelope.merge_subroutine(&s.envelope);
         self.prev_temp_gain.merge_subroutine(&s.prev_temp_gain);
@@ -1245,6 +1261,8 @@ struct LoopState {
     // Location of the `start_loop` instruction inside `Bytecode::bytecode`.
     start_loop_pos: usize,
 
+    start_loop_transpose_range: TransposeRange,
+
     tick_counter_at_start_of_loop: TickCounter,
     skip_last_loop: Option<SkipLastLoop>,
 }
@@ -1275,7 +1293,7 @@ impl<'a> Bytecode<'a> {
         pitch_table: &'a PitchTable,
         subroutines: &'a CompiledSubroutines,
         subroutine_name_map: &'a dyn SubroutineNameMap,
-        called_with_transpose: bool,
+        driver_transpose: TransposeStartRange,
     ) -> Bytecode<'a> {
         Self::new_append_to_vec(
             Vec::new(),
@@ -1284,7 +1302,7 @@ impl<'a> Bytecode<'a> {
             pitch_table,
             subroutines,
             subroutine_name_map,
-            called_with_transpose,
+            driver_transpose,
         )
     }
 
@@ -1298,7 +1316,7 @@ impl<'a> Bytecode<'a> {
         pitch_table: &'a PitchTable,
         subroutines: &'a CompiledSubroutines,
         subroutine_name_map: &'a dyn SubroutineNameMap,
-        called_with_transpose: bool,
+        driver_transpose: TransposeStartRange,
     ) -> Bytecode<'a> {
         Bytecode {
             bytecode: vec,
@@ -1313,7 +1331,7 @@ impl<'a> Bytecode<'a> {
 
                 instrument_tuning: None,
                 instrument: InstrumentState::Unset,
-                driver_transpose_active: called_with_transpose,
+                transpose_range: TransposeRange::new(driver_transpose),
 
                 envelope: IeState::Unset,
                 prev_temp_gain: IeState::Unset,
@@ -1389,7 +1407,7 @@ impl<'a> Bytecode<'a> {
     }
 
     pub fn is_driver_transpose_active(&self) -> bool {
-        self.state.driver_transpose_active
+        self.state.transpose_range.is_active()
     }
 
     pub fn is_in_loop(&self) -> bool {
@@ -1508,6 +1526,8 @@ impl<'a> Bytecode<'a> {
         if self.context.is_unit_test_assembly() {
             return Ok(());
         }
+
+        // ::TODO process transpose range::
 
         match self.state.instrument {
             InstrumentState::Hint(..) | InstrumentState::Unknown | InstrumentState::Unset => {
@@ -1991,13 +2011,13 @@ impl<'a> Bytecode<'a> {
     }
 
     pub fn set_transpose(&mut self, transpose: Transpose) {
-        self.state.driver_transpose_active = transpose != Transpose::ZERO;
+        self.state.transpose_range.set(transpose);
 
         emit_bytecode!(self, opcodes::SET_TRANSPOSE, transpose.as_i8());
     }
 
     pub fn adjust_transpose(&mut self, adjust: RelativeTranspose) {
-        self.state.driver_transpose_active = true;
+        self.state.transpose_range.adjust(adjust);
 
         if adjust.as_i8() != 0 {
             emit_bytecode!(self, opcodes::ADJUST_TRANSPOSE, adjust.as_i8());
@@ -2205,19 +2225,20 @@ impl<'a> Bytecode<'a> {
         loop_count: Option<LoopCount>,
         analysis: &LoopAnalysis,
     ) -> Result<(), BytecodeError> {
+        self.loop_stack.push(LoopState {
+            start_loop_count: loop_count,
+            start_loop_pos: self.bytecode.len(),
+            start_loop_transpose_range: self.state.transpose_range,
+            tick_counter_at_start_of_loop: self.state.tick_counter,
+            skip_last_loop: None,
+        });
+
         self.state.start_loop(
-            self.loop_stack.len(),
+            self.loop_stack.len() - 1,
             analysis,
             self.pitch_table,
             self.instruments,
         );
-
-        self.loop_stack.push(LoopState {
-            start_loop_count: loop_count,
-            start_loop_pos: self.bytecode.len(),
-            tick_counter_at_start_of_loop: self.state.tick_counter,
-            skip_last_loop: None,
-        });
 
         let loop_count = match loop_count {
             Some(lc) => lc.0,
@@ -2239,7 +2260,7 @@ impl<'a> Bytecode<'a> {
     const START_LOOP_INST_SIZE: usize = 2;
     const SKIP_LAST_LOOP_INST_SIZE: usize = 2;
 
-    pub fn skip_last_loop(&mut self) -> Result<(), BytecodeError> {
+    pub fn skip_last_loop(&mut self, analysis: &SkipLastLoopAnalysis) -> Result<(), BytecodeError> {
         let loop_state = match self.loop_stack.last_mut() {
             Some(l) => l,
             None => return Err(BytecodeError::NotInALoop),
@@ -2264,6 +2285,9 @@ impl<'a> Bytecode<'a> {
             prev_slurred_note: self.state.prev_slurred_note.clone(),
         });
 
+        self.state
+            .skip_last_loop(analysis, loop_state.start_loop_transpose_range);
+
         emit_bytecode!(self, opcodes::SKIP_LAST_LOOP_U8, 0u8);
 
         if self.loop_stack.len() > self.asm_block_stack_len {
@@ -2278,6 +2302,12 @@ impl<'a> Bytecode<'a> {
         loop_count: Option<LoopCount>,
         analysis: &LoopAnalysis,
     ) -> Result<(), BytecodeError> {
+        let start_loop_transpose_range = self
+            .loop_stack
+            .last()
+            .map(|ls| ls.start_loop_transpose_range)
+            .unwrap_or(TransposeRange::DISABLED);
+
         let r = self._end_loop(loop_count);
 
         // Must always call `state.end_loop()` (especially if _end_loop exits early with an error)
@@ -2285,6 +2315,7 @@ impl<'a> Bytecode<'a> {
         self.state.end_loop(
             self.loop_stack.len(),
             analysis,
+            start_loop_transpose_range,
             self.pitch_table,
             self.instruments,
         );

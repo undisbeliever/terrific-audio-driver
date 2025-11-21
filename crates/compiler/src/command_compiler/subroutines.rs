@@ -42,11 +42,6 @@ impl SubroutineBitArray {
         self.bits[bit / Self::BITS_PER_ENTRY] &= !(1 << (bit % Self::BITS_PER_ENTRY));
     }
 
-    pub fn get_bit(&self, bit: u8) -> bool {
-        let bit = usize::from(bit);
-        self.bits[bit / Self::BITS_PER_ENTRY] & 1 << (bit % Self::BITS_PER_ENTRY) != 0
-    }
-
     /// Returns (self & o) == zero
     pub fn bitand_and_zero_test(&self, o: &SubroutineBitArray) -> bool {
         self.bits.iter().zip(o.bits.iter()).all(|(a, b)| a & b == 0)

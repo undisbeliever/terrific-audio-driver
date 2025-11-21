@@ -10,6 +10,7 @@ use crate::bytecode::{
     BcTerminator, BcTicks, BcTicksKeyOff, BcTicksNoKeyOff, Bytecode, BytecodeContext, InstrumentId,
     PlayNoteTicks, StackDepth, Volume,
 };
+use crate::command_compiler::analysis::TransposeStartRange;
 use crate::command_compiler::channel_bc_generator::CommandCompiler;
 use crate::command_compiler::commands::MmlInstrument;
 use crate::command_compiler::subroutines::subroutine_compile_order;
@@ -276,7 +277,7 @@ pub fn test_sample_song(
         sample_data.pitch_table(),
         &subroutines,
         &BlankSubroutineMap,
-        false,
+        TransposeStartRange::DISABLED,
     );
 
     let inst = InstrumentId::try_from(instrument)?;

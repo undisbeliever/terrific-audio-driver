@@ -102,7 +102,7 @@ pub fn parse_bytecode_asm_instruction<'a>(
         // Instructions with no arguments
         None => match asm {
             bytecode_assembler::START_LOOP => Ok(Command::StartLoop(None, Default::default())),
-            bytecode_assembler::SKIP_LAST_LOOP => Ok(Command::SkipLastLoop),
+            bytecode_assembler::SKIP_LAST_LOOP => Ok(Command::SkipLastLoop(Default::default())),
             bytecode_assembler::END_LOOP => Ok(Command::EndLoop(None, Default::default())),
             bytecode_assembler::DISABLE_TRANSPOSE => Ok(Command::SetTranspose(Transpose::ZERO)),
             _ => Ok(Command::BytecodeAsm(asm)),

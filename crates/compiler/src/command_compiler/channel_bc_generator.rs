@@ -12,7 +12,9 @@ use crate::bytecode::{
     SlurredNoteState, VibratoPitchOffsetPerTick, VibratoState, KEY_OFF_TICK_DELAY,
 };
 use crate::bytecode_assembler::parse_asm_line;
-use crate::command_compiler::analysis::{AnalysedCommands, AnalysedSoundEffectCommands};
+use crate::command_compiler::analysis::{
+    AnalysedCommands, AnalysedSoundEffectCommands, TransposeStartRange,
+};
 use crate::data::{self, UniqueNamesList};
 use crate::driver_constants::N_MUSIC_CHANNELS;
 use crate::echo::EchoEdl;
@@ -159,7 +161,7 @@ impl<'a> ChannelBcGenerator<'a> {
         instruments: &'a UniqueNamesList<data::InstrumentOrSample>,
         subroutines: &'a CompiledSubroutines,
         context: BytecodeContext,
-        called_with_transpose: bool,
+        driver_transpose: TransposeStartRange,
     ) -> ChannelBcGenerator<'a> {
         ChannelBcGenerator {
             pitch_table,
@@ -174,7 +176,7 @@ impl<'a> ChannelBcGenerator<'a> {
                 // Using BlankSubroutineMap here to forbid direct subroutine calls in bytecode assembly
                 // (\asm subroutine calls must go through `Self::call_subroutine()`)
                 &BlankSubroutineMap,
-                called_with_transpose,
+                driver_transpose,
             ),
             mp: MpState::Manual,
             detune_cents: DetuneCents::ZERO,
@@ -1106,7 +1108,7 @@ impl<'a> ChannelBcGenerator<'a> {
 
         for (i, &n) in notes.iter().enumerate() {
             if i == break_point && i != 0 {
-                self.bc.skip_last_loop()?;
+                self.bc.skip_last_loop(SkipLastLoopAnalysis::BLANK)?;
             }
 
             match self.broken_chord_play_note_or_pitch_with_detune(n, note_length) {
@@ -1591,8 +1593,8 @@ impl<'a> ChannelBcGenerator<'a> {
                 self.bc.start_loop(*loop_count, analysis)?;
             }
 
-            Command::SkipLastLoop => {
-                self.bc.skip_last_loop()?;
+            Command::SkipLastLoop(analysis) => {
+                self.bc.skip_last_loop(analysis)?;
             }
 
             Command::EndLoop(loop_count, analysis) => {
@@ -1856,9 +1858,7 @@ impl<'a> CommandCompiler<'a> {
                 },
                 false => BytecodeContext::SfxSubroutine,
             },
-            analysis
-                .subroutines_called_with_transpose
-                .get_bit(input.index),
+            analysis.transpose_at_subroutine_start[usize::from(input.index)],
         );
 
         let mut errors = Vec::new();
@@ -2040,7 +2040,7 @@ impl<'a> CommandCompiler<'a> {
                 index: channel_index,
                 max_edl: self.max_edl,
             },
-            false,
+            TransposeStartRange::DISABLED,
         );
 
         let mut errors = Vec::new();
@@ -2158,7 +2158,7 @@ pub(crate) fn compile_sound_effect(
         data_instruments,
         subroutines,
         BytecodeContext::SoundEffect,
-        false,
+        TransposeStartRange::DISABLED,
     );
     gen.process_commands(&input.commands, &mut errors);
 
@@ -2218,7 +2218,7 @@ pub(crate) fn compile_mml_prefix(
         data_instruments,
         subroutines,
         context,
-        false,
+        TransposeStartRange::DISABLED,
     );
     gen.process_commands(&input.commands, &mut errors);
 

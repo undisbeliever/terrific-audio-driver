@@ -9,7 +9,7 @@ use crate::bytecode::{
     PlayNoteTicks, PlayPitchPitch, PortamentoSlideTicks, PortamentoVelocity, RelativeEchoFeedback,
     RelativeFirCoefficient, VibratoPitchOffsetPerTick,
 };
-use crate::command_compiler::commands::LoopAnalysis;
+use crate::command_compiler::commands::{LoopAnalysis, SkipLastLoopAnalysis};
 use crate::driver_constants::FIR_FILTER_SIZE;
 use crate::echo::{EchoFeedback, FirCoefficient, FirTap};
 use crate::envelope::{Adsr, Gain, OptionalGain, TempGain};
@@ -23,6 +23,7 @@ use crate::value_newtypes::{
 #[cfg(feature = "test")]
 use crate::{
     bytecode::State,
+    command_compiler::analysis::TransposeStartRange,
     data::{InstrumentOrSample, UniqueNamesList},
     pitch_table::PitchTable,
     subroutines::{CompiledSubroutines, SubroutineNameMap},
@@ -366,6 +367,11 @@ fn optional_loop_count_argument(
     }
 }
 
+fn skip_last_loop_argument(args: &[&str]) -> Result<&'static SkipLastLoopAnalysis, ChannelError> {
+    no_arguments(args)?;
+    Ok(SkipLastLoopAnalysis::BLANK)
+}
+
 fn echo_feedback_argument(args: &[&str]) -> Result<EchoFeedback, ChannelError> {
     let feedback = one_argument(args)?;
 
@@ -646,7 +652,7 @@ pub fn parse_asm_line(bc: &mut Bytecode, line: &str) -> Result<(), ChannelError>
        disable_echo 0 no_arguments,
 
        start_loop 2 optional_loop_count_argument,
-       skip_last_loop 0 no_arguments,
+       skip_last_loop 1 skip_last_loop_argument,
        end_loop 2 optional_loop_count_argument,
 
        call_subroutine_and_disable_vibrato 1 one_argument call_subroutine_and_disable_vibrato_str,
@@ -710,7 +716,7 @@ impl BytecodeAssembler<'_> {
                 pitch_table,
                 subroutines,
                 subroutine_name_map,
-                false,
+                TransposeStartRange::DISABLED,
             ),
         }
     }

@@ -4,6 +4,8 @@
 //
 // SPDX-License-Identifier: MIT
 
+use super::analysis::{SkipLastLoopTransposeAnalysis, TransposeAnalysis};
+
 use crate::bytecode::{
     DetuneValue, EarlyReleaseMinTicks, EarlyReleaseTicks, InstrumentId, LoopCount, NoiseFrequency,
     Pan, PanSlideAmount, PanSlideTicks, PanbrelloAmplitude, PanbrelloQuarterWavelengthInTicks,
@@ -207,13 +209,24 @@ impl InstrumentAnalysis {
 #[derive(Debug, Default, Copy, Clone, PartialEq)]
 pub struct LoopAnalysis {
     pub(crate) instrument: Option<InstrumentAnalysis>,
-    pub(crate) driver_transpose_active: Option<bool>,
+    pub(crate) transpose: TransposeAnalysis,
 }
 
 impl LoopAnalysis {
     pub const BLANK: &'static Self = &Self {
         instrument: None,
-        driver_transpose_active: None,
+        transpose: TransposeAnalysis::BLANK,
+    };
+}
+
+#[derive(Debug, Default, Clone, PartialEq)]
+pub struct SkipLastLoopAnalysis {
+    pub(crate) transpose: SkipLastLoopTransposeAnalysis,
+}
+
+impl SkipLastLoopAnalysis {
+    pub const BLANK: &'static Self = &Self {
+        transpose: SkipLastLoopTransposeAnalysis::BLANK,
     };
 }
 
@@ -294,7 +307,7 @@ pub(crate) enum Command<'a> {
 
     CallSubroutine(u8, SubroutineCallType),
     StartLoop(Option<LoopCount>, LoopAnalysis),
-    SkipLastLoop,
+    SkipLastLoop(SkipLastLoopAnalysis),
     EndLoop(Option<LoopCount>, LoopAnalysis),
 
     SetSubroutineInstrumentHint(InstrumentId, Option<Envelope>),

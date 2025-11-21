@@ -953,3 +953,181 @@ fn driver_transpose_asm_in_asm_loop() {
         ],
     );
 }
+
+#[test]
+fn adjust_driver_transpose_to_zero_test() {
+    // Use portamento instructions to detect if the analyser can track relative transpose command
+
+    assert_line_matches_bytecode(
+        "_+5 {cd} __-5 {cd}",
+        &[
+            "set_transpose +5",
+            "play_note c4 no_keyoff 1",
+            PORTAMENTO_CALC,
+            "adjust_transpose -5",
+            "play_note c4 no_keyoff 1",
+            PORTAMENTO,
+        ],
+    );
+
+    assert_line_matches_bytecode(
+        "_-5 {cd} __+5 {cd}",
+        &[
+            "set_transpose -5",
+            "play_note c4 no_keyoff 1",
+            PORTAMENTO_CALC,
+            "adjust_transpose +5",
+            "play_note c4 no_keyoff 1",
+            PORTAMENTO,
+        ],
+    );
+}
+
+#[test]
+fn adjust_driver_transpose_in_loop_zero_test() {
+    assert_line_matches_bytecode(
+        "[__+3 {cd}]10 __-30 {cd}",
+        &[
+            "start_loop",
+            "adjust_transpose +3",
+            "play_note c4 no_keyoff 1",
+            PORTAMENTO_CALC,
+            "end_loop 10",
+            // transpose is -30
+            "adjust_transpose -30",
+            // transpose is 0
+            "play_note c4 no_keyoff 1",
+            PORTAMENTO,
+        ],
+    );
+
+    assert_line_matches_bytecode(
+        "_+5 [__-5 {cd} : __+5]10 {cd}",
+        &[
+            "set_transpose +5",
+            "start_loop",
+            "adjust_transpose -5",
+            // transpose is 0
+            "play_note c4 no_keyoff 1",
+            PORTAMENTO,
+            "skip_last_loop",
+            "adjust_transpose +5",
+            "end_loop 10",
+            // transpose is 0
+            "play_note c4 no_keyoff 1",
+            PORTAMENTO,
+        ],
+    );
+
+    assert_line_matches_bytecode(
+        "__-10 [{cd} __+2]5 {cd}",
+        &[
+            "adjust_transpose -10",
+            "start_loop",
+            "play_note c4 no_keyoff 1",
+            PORTAMENTO_CALC,
+            "adjust_transpose +2",
+            "end_loop 5",
+            // transpose is 0
+            "play_note c4 no_keyoff 1",
+            PORTAMENTO,
+        ],
+    );
+
+    assert_line_matches_bytecode(
+        "_+100 [{cd} __-15]2 [{cd} __-1]70 {cd}",
+        &[
+            "set_transpose +100",
+            "start_loop",
+            "play_note c4 no_keyoff 1",
+            PORTAMENTO_CALC,
+            "adjust_transpose -15",
+            "end_loop 2",
+            // transpose is +70
+            "start_loop",
+            "play_note c4 no_keyoff 1",
+            PORTAMENTO_CALC,
+            "adjust_transpose -1",
+            "end_loop 70",
+            // transpose is 0
+            "play_note c4 no_keyoff 1",
+            PORTAMENTO,
+        ],
+    );
+
+    assert_line_matches_bytecode(
+        "[{cd} __+10 {cd} _-5]10 __+5 {cd}",
+        &[
+            "start_loop",
+            // transpose is 0 or 5
+            "play_note c4 no_keyoff 1",
+            PORTAMENTO_CALC,
+            "adjust_transpose +10",
+            "play_note c4 no_keyoff 1",
+            PORTAMENTO_CALC,
+            "set_transpose -5",
+            "end_loop 10",
+            // transpose is -5
+            "adjust_transpose +5",
+            // transpose is 0
+            "play_note c4 no_keyoff 1",
+            PORTAMENTO,
+        ],
+    );
+
+    assert_line_matches_bytecode(
+        "[{cd} __+10 {cd} : _-5]10 __-5 {cd}",
+        &[
+            "start_loop",
+            // transpose is 0 or 5
+            "play_note c4 no_keyoff 1",
+            PORTAMENTO_CALC,
+            "adjust_transpose +10",
+            "play_note c4 no_keyoff 1",
+            PORTAMENTO_CALC,
+            "skip_last_loop",
+            "set_transpose -5",
+            "end_loop 10",
+            // transpose is +5
+            "adjust_transpose -5",
+            // transpose is 0
+            "play_note c4 no_keyoff 1",
+            PORTAMENTO,
+        ],
+    );
+
+    assert_line_matches_bytecode(
+        "[ {cd} [[__+3 r : __+5]7]2 : [ __-6 {cd} ]17 {cd} ]50 {cd} __-102 {cd}",
+        &[
+            "start_loop",
+            // transpose is 0
+            "play_note c4 no_keyoff 1",
+            PORTAMENTO,
+            "start_loop",
+            "start_loop",
+            "adjust_transpose +3",
+            "rest 24",
+            "skip_last_loop",
+            "adjust_transpose +5",
+            "end_loop 7",
+            "end_loop 2",
+            // transpose is 102
+            "skip_last_loop",
+            "start_loop",
+            "adjust_transpose -6",
+            "play_note c4 no_keyoff 1",
+            PORTAMENTO_CALC,
+            "end_loop 17",
+            // transpose is 0
+            "play_note c4 no_keyoff 1",
+            PORTAMENTO,
+            "end_loop 50",
+            // transpose is 102
+            "play_note c4 no_keyoff 1",
+            PORTAMENTO_CALC,
+            "adjust_transpose -102",
+            "play_note c4 no_keyoff 1",
+            PORTAMENTO,
+        ],
+    );
+}

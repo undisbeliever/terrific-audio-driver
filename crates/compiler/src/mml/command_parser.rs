@@ -2571,7 +2571,7 @@ fn parse_token<'a>(pos: FilePos, token: Token<'a>, p: &mut Parser<'a, '_>) -> Co
         Token::CallSubroutine(id) => parse_call_subroutine_mml(pos, id, p),
 
         Token::StartLoop => Command::StartLoop(None, Default::default()),
-        Token::SkipLastLoop => Command::SkipLastLoop,
+        Token::SkipLastLoop => Command::SkipLastLoop(Default::default()),
         Token::EndLoop => {
             let lc = parse_unsigned_newtype(pos, p).unwrap_or(LoopCount::MIN);
             Command::EndLoop(Some(lc), Default::default())
