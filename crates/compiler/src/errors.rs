@@ -373,6 +373,7 @@ pub enum BytecodeError {
 
     DriverTransposeOverflows,
     DriverTransposeOverflowsInLoop,
+    CannotCallSfxSubroutineWithDriverTranspose,
 }
 
 #[derive(Debug)]
@@ -1494,6 +1495,12 @@ impl Display for BytecodeError {
             }
             Self::DriverTransposeOverflowsInLoop => {
                 write!(f, "driver transpose overflow in loop")
+            }
+            Self::CannotCallSfxSubroutineWithDriverTranspose => {
+                write!(
+                    f,
+                    "cannot call sound effect subroutine with driver transpose active"
+                )
             }
         }
     }

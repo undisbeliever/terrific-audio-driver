@@ -2542,10 +2542,25 @@ impl<'a> Bytecode<'a> {
         disable_vibraro: bool,
     ) -> Result<(), BytecodeError> {
         match self.context {
-            BytecodeContext::SongSubroutine { .. }
-            | BytecodeContext::SongChannel { .. }
-            | BytecodeContext::SoundEffect
-            | BytecodeContext::SfxSubroutine => (),
+            BytecodeContext::SongSubroutine { .. } | BytecodeContext::SongChannel { .. } => (),
+
+            // Can call a SfxSubroutine inside a SfxSubroutine with driver transpose active.
+            BytecodeContext::SfxSubroutine => (),
+
+            BytecodeContext::SoundEffect => {
+                // Cannot call a SfxSubroutine when driver transpose is active.
+                //
+                // The sfx-subroutine command analyser is executed *before* sound effects are
+                // converted to commands.  This prevents sfx-subroutines from knowing the
+                // `transpose_at_subroutine_start` transpose range and thus the sfx-subroutine
+                // cannot track the transpose state when a sfx-subroutine is called with transpose
+                // active.
+                //
+                // A sfx-subroutine can enable driver transpose without issue.
+                if self.state.transpose_range.is_active() {
+                    return Err(BytecodeError::CannotCallSfxSubroutineWithDriverTranspose);
+                }
+            }
 
             BytecodeContext::MmlPrefix => return Err(BytecodeError::SubroutineCallInMmlPrefix),
 
