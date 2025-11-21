@@ -1441,6 +1441,11 @@ impl<'a> ChannelBcGenerator<'a> {
                 | BytecodeContext::SfxSubroutine
                 | BytecodeContext::SoundEffect
                 | BytecodeContext::MmlPrefix => return Err(ChannelError::CannotSetLoopPoint),
+
+                #[cfg(feature = "test")]
+                BytecodeContext::UnitTestAssembly | BytecodeContext::UnitTestAssemblySubroutine => {
+                    return Err(ChannelError::CannotSetLoopPoint)
+                }
             },
 
             &Command::SetSubroutineInstrumentHint(inst_id, envelope) => {

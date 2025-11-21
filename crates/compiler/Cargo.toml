@@ -16,6 +16,10 @@ version = "0.0.0"
 [features]
 default = []
 
+# Adds a UnitTest options to BytecodeContext that disables note-range tests
+# allowing raw assembly compilation without an analysis step
+test = []
+
 
 [dependencies]
 # Local crates
@@ -32,5 +36,7 @@ regex.workspace = true
 
 
 [dev-dependencies]
+compiler = { workspace = true, features = ["test"] }
+
 tad-emu.workspace = true
 

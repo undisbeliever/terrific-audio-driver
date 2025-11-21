@@ -7,19 +7,24 @@
 use crate::bytecode::{
     BcTicksKeyOff, BcTicksNoKeyOff, Bytecode, EarlyReleaseMinTicks, EarlyReleaseTicks, LoopCount,
     PlayNoteTicks, PlayPitchPitch, PortamentoSlideTicks, PortamentoVelocity, RelativeEchoFeedback,
-    RelativeFirCoefficient, State, VibratoPitchOffsetPerTick,
+    RelativeFirCoefficient, VibratoPitchOffsetPerTick,
 };
-use crate::data::{InstrumentOrSample, UniqueNamesList};
 use crate::driver_constants::FIR_FILTER_SIZE;
 use crate::echo::{EchoFeedback, FirCoefficient, FirTap};
 use crate::envelope::{Adsr, Gain, OptionalGain, TempGain};
 use crate::errors::{BytecodeError, ChannelError, ValueError};
 use crate::invert_flags::parse_invert_flag_arguments;
 use crate::notes::Note;
-use crate::subroutines::{CompiledSubroutines, SubroutineNameMap};
-use crate::time::TickCounter;
 use crate::value_newtypes::{
     parse_i8wh, I8WithByteHexValueNewType, SignedValueNewType, UnsignedValueNewType,
+};
+
+#[cfg(feature = "test")]
+use crate::{
+    bytecode::State,
+    data::{InstrumentOrSample, UniqueNamesList},
+    subroutines::{CompiledSubroutines, SubroutineNameMap},
+    time::TickCounter,
 };
 
 pub use crate::bytecode::{BcTerminator, BytecodeContext};
@@ -678,10 +683,12 @@ pub(crate) const SET_TRANSPOSE: &str = "set_transpose";
 pub(crate) const ADJUST_TRANSPOSE: &str = "adjust_transpose";
 pub(crate) const DISABLE_TRANSPOSE: &str = "disable_transpose";
 
+#[cfg(feature = "test")]
 pub struct BytecodeAssembler<'a> {
     bc: Bytecode<'a>,
 }
 
+#[cfg(feature = "test")]
 impl BytecodeAssembler<'_> {
     pub fn new<'a>(
         inst_map: &'a UniqueNamesList<InstrumentOrSample>,
@@ -689,6 +696,8 @@ impl BytecodeAssembler<'_> {
         subroutine_name_map: &'a dyn SubroutineNameMap,
         context: BytecodeContext,
     ) -> BytecodeAssembler<'a> {
+        assert!(context.is_unit_test_assembly());
+
         BytecodeAssembler {
             bc: Bytecode::new(context, inst_map, subroutines, subroutine_name_map),
         }

@@ -223,16 +223,40 @@ pub enum BytecodeContext {
     SfxSubroutine,
     SoundEffect,
     MmlPrefix,
+
+    // UnitTestAssembly* disables note range checking and max_edl tests
+    // (note range checks requires loop analysis and I do not want any pre-processing in unit test assembly)
+    #[cfg(feature = "test")]
+    UnitTestAssembly,
+    #[cfg(feature = "test")]
+    UnitTestAssemblySubroutine,
 }
 
 impl BytecodeContext {
     fn is_subroutine(&self) -> bool {
         match self {
-            Self::SongSubroutine { .. } => true,
-            Self::SfxSubroutine => true,
-            Self::SongChannel { .. } => false,
-            Self::SoundEffect => false,
-            Self::MmlPrefix => false,
+            Self::SongSubroutine { .. } | Self::SfxSubroutine => true,
+
+            Self::SongChannel { .. } | Self::SoundEffect | Self::MmlPrefix => false,
+
+            #[cfg(feature = "test")]
+            Self::UnitTestAssemblySubroutine => true,
+            #[cfg(feature = "test")]
+            Self::UnitTestAssembly => false,
+        }
+    }
+
+    #[cfg(feature = "test")]
+    pub(crate) fn is_unit_test_assembly(&self) -> bool {
+        match self {
+            Self::SongSubroutine { .. }
+            | Self::SfxSubroutine
+            | Self::SongChannel { .. }
+            | Self::SoundEffect
+            | Self::MmlPrefix => false,
+
+            #[cfg(feature = "test")]
+            Self::UnitTestAssembly | Self::UnitTestAssemblySubroutine => true,
         }
     }
 }
@@ -1255,6 +1279,10 @@ impl<'a> Bytecode<'a> {
                     BytecodeContext::SongSubroutine { .. } => IeState::Unset,
                     BytecodeContext::SfxSubroutine => IeState::Unset,
                     BytecodeContext::MmlPrefix => IeState::Unset,
+
+                    #[cfg(feature = "test")]
+                    BytecodeContext::UnitTestAssembly
+                    | BytecodeContext::UnitTestAssemblySubroutine => IeState::Unset,
                 },
                 vibrato: match &context {
                     BytecodeContext::SoundEffect => VibratoState::Disabled,
@@ -1262,6 +1290,10 @@ impl<'a> Bytecode<'a> {
                     BytecodeContext::SongSubroutine { .. } => VibratoState::Unchanged,
                     BytecodeContext::SfxSubroutine => VibratoState::Unchanged,
                     BytecodeContext::MmlPrefix => VibratoState::Disabled,
+
+                    #[cfg(feature = "test")]
+                    BytecodeContext::UnitTestAssembly
+                    | BytecodeContext::UnitTestAssemblySubroutine => VibratoState::Disabled,
                 },
                 prev_slurred_note: SlurredNoteState::Unchanged,
                 instrument_hint: None,
@@ -1275,6 +1307,11 @@ impl<'a> Bytecode<'a> {
                 BytecodeContext::SongSubroutine { .. } => false,
                 BytecodeContext::SfxSubroutine => false,
                 BytecodeContext::MmlPrefix => false,
+
+                #[cfg(feature = "test")]
+                BytecodeContext::UnitTestAssembly | BytecodeContext::UnitTestAssemblySubroutine => {
+                    false
+                }
             },
             context,
         }
@@ -1426,6 +1463,12 @@ impl<'a> Bytecode<'a> {
     }
 
     fn _test_note_in_range(&mut self, note: Note) -> Result<(), BytecodeError> {
+        // Disable note range checks for bytecode assembly in the MML tests
+        #[cfg(feature = "test")]
+        if self.context.is_unit_test_assembly() {
+            return Ok(());
+        }
+
         match self.state.instrument {
             InstrumentState::Hint(..) | InstrumentState::Unknown | InstrumentState::Unset => {
                 let s = &mut self.state;
@@ -1736,13 +1779,8 @@ impl<'a> Bytecode<'a> {
             return Err(ChannelError::InstrumentHintAlreadySet);
         }
 
-        match self.context {
-            BytecodeContext::SongSubroutine { .. } | BytecodeContext::SfxSubroutine => (),
-            BytecodeContext::MmlPrefix
-            | BytecodeContext::SongChannel { .. }
-            | BytecodeContext::SoundEffect => {
-                return Err(ChannelError::InstrumentHintOnlyAllowedInSubroutines)
-            }
+        if !self.context.is_subroutine() {
+            return Err(ChannelError::InstrumentHintOnlyAllowedInSubroutines);
         }
 
         match &self.state.instrument {
@@ -2094,6 +2132,13 @@ impl<'a> Bytecode<'a> {
             BytecodeContext::SfxSubroutine | BytecodeContext::SoundEffect => {
                 Err(BytecodeError::PmodNotAllowedInSoundEffect)
             }
+
+            #[cfg(feature = "test")]
+            BytecodeContext::UnitTestAssembly | BytecodeContext::UnitTestAssemblySubroutine => {
+                // Always emit the instruction in a unit test bytecode
+                emit_bytecode!(self, opcodes::MISCELLANEOUS, prefixed_instruction.as_u8());
+                Ok(())
+            }
         }
     }
 
@@ -2295,6 +2340,12 @@ impl<'a> Bytecode<'a> {
 
         self.state.merge_subroutine(s, &self.context);
 
+        // Disable note range checks for bytecode assembly in the MML tests
+        #[cfg(feature = "test")]
+        if self.context.is_unit_test_assembly() {
+            return Ok(());
+        }
+
         if let Some(sub_hint_freq) = s.instrument_hint_freq() {
             match old_instrument {
                 InstrumentState::Known(id, _)
@@ -2331,6 +2382,10 @@ impl<'a> Bytecode<'a> {
                     | BytecodeContext::MmlPrefix => {
                         return Err(BytecodeError::SubroutineInstrumentHintNoInstrumentSet)
                     }
+
+                    #[cfg(feature = "test")]
+                    BytecodeContext::UnitTestAssembly
+                    | BytecodeContext::UnitTestAssemblySubroutine => (),
                 },
             }
         }
@@ -2357,6 +2412,10 @@ impl<'a> Bytecode<'a> {
                     BytecodeContext::MmlPrefix => {
                         return Err(BytecodeError::SubroutineCallInMmlPrefix)
                     }
+
+                    #[cfg(feature = "test")]
+                    BytecodeContext::UnitTestAssembly
+                    | BytecodeContext::UnitTestAssemblySubroutine => (),
                 },
 
                 InstrumentState::Multiple(old_note_range)
@@ -2385,11 +2444,15 @@ impl<'a> Bytecode<'a> {
         disable_vibraro: bool,
     ) -> Result<(), BytecodeError> {
         match self.context {
-            BytecodeContext::SongSubroutine { .. } => (),
-            BytecodeContext::SongChannel { .. } => (),
-            BytecodeContext::SoundEffect => (),
-            BytecodeContext::SfxSubroutine => (),
+            BytecodeContext::SongSubroutine { .. }
+            | BytecodeContext::SongChannel { .. }
+            | BytecodeContext::SoundEffect
+            | BytecodeContext::SfxSubroutine => (),
+
             BytecodeContext::MmlPrefix => return Err(BytecodeError::SubroutineCallInMmlPrefix),
+
+            #[cfg(feature = "test")]
+            BytecodeContext::UnitTestAssembly | BytecodeContext::UnitTestAssemblySubroutine => (),
         }
 
         self._update_subtroutine_state_excluding_stack_depth(subroutine)?;
@@ -2444,6 +2507,9 @@ impl<'a> Bytecode<'a> {
             BytecodeContext::SongChannel { .. }
             | BytecodeContext::SongSubroutine { .. }
             | BytecodeContext::MmlPrefix => (),
+
+            #[cfg(feature = "test")]
+            BytecodeContext::UnitTestAssembly | BytecodeContext::UnitTestAssemblySubroutine => (),
         }
 
         self.state
@@ -2481,7 +2547,13 @@ impl<'a> Bytecode<'a> {
                 | BytecodeContext::SoundEffect => {
                     Err(BytecodeError::UnknownSubroutine(name.to_owned()))
                 }
+
                 BytecodeContext::MmlPrefix => Err(BytecodeError::NotAllowedToCallSubroutine),
+
+                #[cfg(feature = "test")]
+                BytecodeContext::UnitTestAssembly | BytecodeContext::UnitTestAssemblySubroutine => {
+                    Err(BytecodeError::UnknownSubroutine(name.to_owned()))
+                }
             },
         }
     }
@@ -2676,6 +2748,18 @@ impl<'a> Bytecode<'a> {
                 Err(BytecodeError::CannotSetEchoDelayInSoundEffect)
             }
             BytecodeContext::MmlPrefix => Err(BytecodeError::CannotSetEchoDelayInMmlPrefix),
+
+            // Always emit bytecode in unit test assembly
+            #[cfg(feature = "test")]
+            BytecodeContext::UnitTestAssembly | BytecodeContext::UnitTestAssemblySubroutine => {
+                emit_bytecode!(
+                    self,
+                    opcodes::MISCELLANEOUS,
+                    MiscInstruction::SetEchoDelay.as_u8(),
+                    length.to_edl().as_u8()
+                );
+                Ok(())
+            }
         }
     }
 

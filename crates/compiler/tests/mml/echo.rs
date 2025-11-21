@@ -676,24 +676,22 @@ fn set_echo_invert() {
 fn set_echo_delay() {
     assert_line_matches_bytecode(r"\edl 0", &["set_echo_delay 0"]);
 
-    assert_mml_channel_a_matches_bytecode_max_edl(
+    assert_mml_channel_a_matches_bytecode(
         r#"
 #MaxEchoLength 48
 
 A \edl 48
 "#,
         &["set_echo_delay 48"],
-        EchoEdl::try_from(3u8).unwrap(),
     );
 
-    assert_mml_channel_a_matches_bytecode_max_edl(
+    assert_mml_channel_a_matches_bytecode(
         r#"
 #MaxEchoLength 240
 
 A \edl 240
 "#,
         &["set_echo_delay 240"],
-        EchoEdl::try_from(15u8).unwrap(),
     );
 
     assert_one_error_in_channel_a_mml(
