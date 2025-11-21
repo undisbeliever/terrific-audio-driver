@@ -6,6 +6,7 @@
 
 #![allow(clippy::assertions_on_constants)]
 
+use crate::command_compiler::commands::{InstrumentAnalysis, LoopAnalysis};
 use crate::data::{self, InstrumentOrSample, UniqueNamesList};
 use crate::driver_constants::{
     BC_CHANNEL_STACK_SIZE, BC_STACK_BYTES_PER_LOOP, BC_STACK_BYTES_PER_SUBROUTINE_CALL,
@@ -17,7 +18,7 @@ use crate::errors::{BytecodeError, ChannelError, ValueError};
 use crate::identifier::MusicChannelIndex;
 use crate::invert_flags::InvertFlags;
 use crate::notes::{Note, LAST_NOTE_ID, N_NOTES};
-use crate::pitch_table::{InstrumentHintFreq, PitchTableOffset};
+use crate::pitch_table::{InstrumentHintFreq, PitchTable, PitchTableOffset};
 use crate::samples::{instrument_note_range, note_range};
 use crate::subroutines::{CompiledSubroutines, GetSubroutineResult, Subroutine, SubroutineNameMap};
 use crate::time::{TickClock, TickCounter, TickCounterWithLoopFlag};
@@ -773,9 +774,6 @@ pub(crate) enum InstrumentState {
     // Set at the start of a loop if the loop changes the instrument
     Multiple(RangeInclusive<Note>),
 
-    // u8 is stack depth
-    // (used in bytecode SFX and tests)
-    MaybeInLoop(InstrumentId, RangeInclusive<Note>, u8),
     Hint(InstrumentId, RangeInclusive<Note>),
 
     Unknown,
@@ -786,7 +784,6 @@ impl InstrumentState {
     pub fn instrument_id(&self) -> Option<InstrumentId> {
         match self {
             Self::Known(i, _) => Some(*i),
-            Self::MaybeInLoop(i, _, _) => Some(*i),
             Self::Hint(i, _) => Some(*i),
             Self::Multiple(_) => None,
             Self::Unset => None,
@@ -799,106 +796,73 @@ impl InstrumentState {
             Self::Unset => false,
             Self::Known(i, _) => o == i,
             Self::Multiple(..) => false,
-            Self::MaybeInLoop(..) => false,
             Self::Hint(..) => false,
             Self::Unknown => false,
         }
     }
 
-    fn start_loop(&mut self, stack_depth: u8) {
-        match self {
-            Self::Unset => (),
-            Self::Known(i, r) => *self = Self::MaybeInLoop(*i, r.clone(), stack_depth),
-            Self::Multiple(..) => (),
-            Self::MaybeInLoop(..) => (),
-            Self::Hint(..) => (),
-            Self::Unknown => (),
-        }
-    }
-
-    fn set_loop_analysis_start_instrument(
+    fn start_loop_analysis(
         &mut self,
-        loop_inst_id: InstrumentId,
+        analysis: InstrumentAnalysis,
         instruments: &UniqueNamesList<data::InstrumentOrSample>,
     ) {
-        match instruments.get_index(loop_inst_id.as_u8().into()) {
-            Some(loop_inst) => {
-                let loop_range = note_range(loop_inst);
-                match &self {
-                    Self::Known(si, s_range)
-                    | Self::MaybeInLoop(si, s_range, _)
-                    | Self::Hint(si, s_range) => {
-                        if *si != loop_inst_id {
-                            *self = InstrumentState::Multiple(
-                                max(*s_range.start(), *loop_range.start())
-                                    ..=min(*s_range.end(), *loop_range.end()),
-                            );
+        match analysis {
+            InstrumentAnalysis::Set(loop_inst_id) => {
+                match instruments.get_index(loop_inst_id.as_u8().into()) {
+                    Some(loop_inst) => {
+                        let loop_range = note_range(loop_inst);
+                        match &self {
+                            Self::Known(si, s_range) | Self::Hint(si, s_range) => {
+                                if *si != loop_inst_id {
+                                    *self = InstrumentState::Multiple(
+                                        max(*s_range.start(), *loop_range.start())
+                                            ..=min(*s_range.end(), *loop_range.end()),
+                                    );
+                                }
+                            }
+
+                            Self::Multiple(s_range) => {
+                                *self = InstrumentState::Multiple(
+                                    max(*s_range.start(), *loop_range.start())
+                                        ..=min(*s_range.end(), *loop_range.end()),
+                                );
+                            }
+
+                            Self::Unset | Self::Unknown => {
+                                *self = InstrumentState::Multiple(loop_range);
+                            }
                         }
                     }
-
-                    Self::Multiple(s_range) => {
-                        *self = InstrumentState::Multiple(
-                            max(*s_range.start(), *loop_range.start())
-                                ..=min(*s_range.end(), *loop_range.end()),
-                        );
-                    }
-
-                    Self::Unset | Self::Unknown => {
-                        *self = InstrumentState::Multiple(loop_range);
+                    None => {
+                        *self = InstrumentState::Unset;
                     }
                 }
             }
-            None => {
-                *self = InstrumentState::Unset;
-            }
+            InstrumentAnalysis::Hint(_) => (),
         }
     }
 
-    fn merge_skip_last_loop(&mut self, skip_last_loop: Self) {
-        match &skip_last_loop {
-            Self::Unset | Self::Multiple(..) | Self::Hint(..) | Self::MaybeInLoop(..) => (),
-
-            Self::Known(..) | Self::Unknown => *self = skip_last_loop,
-        }
-    }
-
-    fn end_loop(&mut self, stack_depth: u8) {
-        match self {
-            Self::Unset => (),
-            Self::Known(..) => (),
-            Self::Multiple(..) => (),
-            Self::MaybeInLoop(i, r, d) => {
-                if *d == stack_depth {
-                    *self = Self::Known(*i, r.clone())
-                }
-            }
-            Self::Hint(..) => (),
-            Self::Unknown => (),
-        }
-    }
-
-    fn merge_subroutine(&mut self, subroutine: &Self, context: &BytecodeContext) {
-        match &subroutine {
-            Self::Unset => (),
-            Self::Known(..) | Self::Unknown => *self = subroutine.clone(),
-
-            Self::Hint(..) => match self {
-                InstrumentState::Unset => {
-                    if context.is_subroutine() {
-                        *self = subroutine.clone();
+    // The instrument is known at the end of a loop or subroutine
+    fn end_loop_analysis(
+        &mut self,
+        analysis: InstrumentAnalysis,
+        instruments: &UniqueNamesList<data::InstrumentOrSample>,
+    ) {
+        let id = analysis.instrument_id();
+        match instruments.get_index(id.as_u8().into()) {
+            Some(inst) => {
+                let range = note_range(inst);
+                match analysis {
+                    InstrumentAnalysis::Set(i) => *self = InstrumentState::Known(i, range),
+                    InstrumentAnalysis::Hint(i) => {
+                        if *self == InstrumentState::Unset {
+                            *self = InstrumentState::Hint(i, range)
+                        }
                     }
                 }
-
-                InstrumentState::Multiple(..)
-                | InstrumentState::Hint(..)
-                | InstrumentState::Unknown
-                | InstrumentState::Known(..)
-                | InstrumentState::MaybeInLoop(..) => (),
-            },
-            // ::DBEUG rewrite text::
-            Self::Multiple(..) => panic!("unexpected many instrument"),
-            Self::MaybeInLoop(..) => panic!("unexpected maybe instrument"),
-        }
+            }
+            None => *self = InstrumentState::Unknown,
+        };
     }
 }
 
@@ -1071,11 +1035,12 @@ pub struct State {
     pub max_stack_depth: StackDepth,
     pub tempo_changes: Vec<(TickCounter, TickClock)>,
 
-    // Tuning set by `ChannelBcGenerator`.
-    // Have to store this here so `prev_slurred_note` can contain instrument tuning
+    // State tracked by the command analyser
     pub(crate) instrument_tuning: Option<PitchTableOffset>,
-
+    pub(crate) driver_transpose_active: bool,
     pub(crate) instrument: InstrumentState,
+
+    // State set to unknown on loop start
     pub(crate) envelope: IeState<Envelope>,
     pub(crate) prev_temp_gain: IeState<TempGain>,
     pub(crate) early_release:
@@ -1108,7 +1073,57 @@ impl State {
         };
     }
 
-    fn song_loop(&mut self) {
+    // The analysis is processed at the start of a bytecode loop or song-loop
+    fn start_loop_analysis(
+        &mut self,
+        analysis: &LoopAnalysis,
+        pitch_table: &PitchTable,
+        instruments: &UniqueNamesList<data::InstrumentOrSample>,
+    ) {
+        if let Some(i) = analysis.instrument {
+            // There can be 2 or more different instrument values at the start of the loop
+
+            self.instrument.start_loop_analysis(i, instruments);
+
+            // Clear instrument tuning if the loop is played with a different pitch table offset
+            let o = pitch_table.pitch_table_offset(i.instrument_id());
+            if self.instrument_tuning != Some(o) {
+                self.instrument_tuning = None;
+            }
+        }
+
+        if let Some(t) = analysis.driver_transpose_active {
+            self.driver_transpose_active = t;
+        }
+    }
+
+    // The analysis contains the known value at the end of the loop or subroutine
+    fn end_loop_analysis(
+        &mut self,
+        analysis: &LoopAnalysis,
+        pitch_table: &PitchTable,
+        instruments: &UniqueNamesList<data::InstrumentOrSample>,
+    ) {
+        if let Some(i) = analysis.instrument {
+            self.instrument.end_loop_analysis(i, instruments);
+
+            // The instrument is known at the end of the loop
+            self.instrument_tuning = Some(pitch_table.pitch_table_offset(i.instrument_id()));
+        }
+
+        if let Some(t) = analysis.driver_transpose_active {
+            self.driver_transpose_active = t;
+        }
+    }
+
+    fn song_loop(
+        &mut self,
+        analysis: &LoopAnalysis,
+        pitch_table: &PitchTable,
+        instruments: &UniqueNamesList<data::InstrumentOrSample>,
+    ) {
+        self.start_loop_analysis(analysis, pitch_table, instruments);
+
         self.envelope = IeState::Unknown;
         self.prev_temp_gain = IeState::Unknown;
         self.early_release = IeState::Unknown;
@@ -1124,10 +1139,17 @@ impl State {
 
     // The loop might change the instrument and evelope.
     // When the loop loops, the instrument/envelope might have changed.
-    fn start_loop(&mut self, stack_depth: usize) {
+    fn start_loop(
+        &mut self,
+        stack_depth: usize,
+        analysis: &LoopAnalysis,
+        pitch_table: &PitchTable,
+        instruments: &UniqueNamesList<data::InstrumentOrSample>,
+    ) {
+        self.start_loop_analysis(analysis, pitch_table, instruments);
+
         let stack_depth = u8::try_from(stack_depth).unwrap_or(u8::MAX);
 
-        self.instrument.start_loop(stack_depth);
         self.envelope.start_loop(stack_depth);
         self.prev_temp_gain.start_loop(stack_depth);
         self.early_release.start_loop(stack_depth);
@@ -1140,7 +1162,6 @@ impl State {
     }
 
     fn merge_skip_last_loop(&mut self, s: SkipLastLoop) {
-        self.instrument.merge_skip_last_loop(s.instrument);
         self.envelope.merge_skip_last_loop(s.envelope);
         self.prev_temp_gain.merge_skip_last_loop(s.prev_temp_gain);
         self.early_release.merge_skip_last_loop(s.early_release);
@@ -1153,10 +1174,17 @@ impl State {
             .merge_skip_last_loop(&s.prev_slurred_note);
     }
 
-    fn end_loop(&mut self, stack_depth: usize) {
+    fn end_loop(
+        &mut self,
+        stack_depth: usize,
+        analysis: &LoopAnalysis,
+        pitch_table: &PitchTable,
+        instruments: &UniqueNamesList<data::InstrumentOrSample>,
+    ) {
+        self.end_loop_analysis(analysis, pitch_table, instruments);
+
         let stack_depth = u8::try_from(stack_depth).unwrap_or(u8::MAX);
 
-        self.instrument.end_loop(stack_depth);
         self.envelope.end_loop(stack_depth);
         self.prev_temp_gain.end_loop(stack_depth);
         self.early_release.end_loop(stack_depth);
@@ -1166,8 +1194,15 @@ impl State {
         // No maybe prev_slurred_note state
     }
 
-    fn merge_subroutine(&mut self, s: &State, context: &BytecodeContext) {
-        self.instrument.merge_subroutine(&s.instrument, context);
+    fn merge_subroutine(
+        &mut self,
+        s: &State,
+        analysis: &LoopAnalysis,
+        pitch_table: &PitchTable,
+        instruments: &UniqueNamesList<data::InstrumentOrSample>,
+    ) {
+        self.end_loop_analysis(analysis, pitch_table, instruments);
+
         self.envelope.merge_subroutine(&s.envelope);
         self.prev_temp_gain.merge_subroutine(&s.prev_temp_gain);
         self.early_release.merge_subroutine(&s.early_release);
@@ -1197,7 +1232,6 @@ struct SkipLastLoop {
     // Location of the parameter of the `skip_last_loop` instruction inside `Bytecode::bytecode`.
     bc_parameter_position: usize,
 
-    instrument: InstrumentState,
     envelope: IeState<Envelope>,
     prev_temp_gain: IeState<TempGain>,
     early_release: IeState<Option<(EarlyReleaseTicks, EarlyReleaseMinTicks, OptionalGain)>>,
@@ -1220,6 +1254,7 @@ pub struct Bytecode<'a> {
     bytecode: Vec<u8>,
 
     instruments: &'a UniqueNamesList<data::InstrumentOrSample>,
+    pitch_table: &'a PitchTable,
     subroutines: &'a CompiledSubroutines,
     subroutin_name_map: &'a dyn SubroutineNameMap,
 
@@ -1237,15 +1272,19 @@ impl<'a> Bytecode<'a> {
     pub fn new(
         context: BytecodeContext,
         instruments: &'a UniqueNamesList<data::InstrumentOrSample>,
+        pitch_table: &'a PitchTable,
         subroutines: &'a CompiledSubroutines,
         subroutine_name_map: &'a dyn SubroutineNameMap,
+        called_with_transpose: bool,
     ) -> Bytecode<'a> {
         Self::new_append_to_vec(
             Vec::new(),
             context,
             instruments,
+            pitch_table,
             subroutines,
             subroutine_name_map,
+            called_with_transpose,
         )
     }
 
@@ -1256,20 +1295,26 @@ impl<'a> Bytecode<'a> {
         vec: Vec<u8>,
         context: BytecodeContext,
         instruments: &'a UniqueNamesList<data::InstrumentOrSample>,
+        pitch_table: &'a PitchTable,
         subroutines: &'a CompiledSubroutines,
         subroutine_name_map: &'a dyn SubroutineNameMap,
+        called_with_transpose: bool,
     ) -> Bytecode<'a> {
         Bytecode {
             bytecode: vec,
             instruments,
+            pitch_table,
             subroutines,
             subroutin_name_map: subroutine_name_map,
             state: State {
                 tick_counter: TickCounter::new(0),
                 max_stack_depth: StackDepth(0),
                 tempo_changes: Vec::new(),
+
                 instrument_tuning: None,
                 instrument: InstrumentState::Unset,
+                driver_transpose_active: called_with_transpose,
+
                 envelope: IeState::Unset,
                 prev_temp_gain: IeState::Unset,
                 early_release: IeState::Unset,
@@ -1325,16 +1370,6 @@ impl<'a> Bytecode<'a> {
         &self.state
     }
 
-    pub fn set_instrument_tuning_state(&mut self, offset: Option<PitchTableOffset>) {
-        self.state.instrument_tuning = offset;
-    }
-
-    pub fn set_loop_analysis_start_instrument(&mut self, inst_id: InstrumentId) {
-        self.state
-            .instrument
-            .set_loop_analysis_start_instrument(inst_id, self.instruments);
-    }
-
     pub fn get_instrument(&self) -> Option<&InstrumentOrSample> {
         self.state
             .instrument
@@ -1351,6 +1386,10 @@ impl<'a> Bytecode<'a> {
             ticks: self.state.tick_counter,
             in_loop: self.is_in_loop(),
         }
+    }
+
+    pub fn is_driver_transpose_active(&self) -> bool {
+        self.state.driver_transpose_active
     }
 
     pub fn is_in_loop(&self) -> bool {
@@ -1374,11 +1413,12 @@ impl<'a> Bytecode<'a> {
     }
 
     /// CAUTION: Does not emit bytecode
-    pub fn _song_loop_point(&mut self) {
+    pub fn _song_loop_point(&mut self, analysis: &LoopAnalysis) {
         assert!(matches!(self.context, BytecodeContext::SongChannel { .. }));
         assert_eq!(self.get_stack_depth(), StackDepth(0));
 
-        self.state.song_loop();
+        self.state
+            .song_loop(analysis, self.pitch_table, self.instruments);
     }
 
     pub fn _start_asm_block(&mut self) {
@@ -1480,15 +1520,12 @@ impl<'a> Bytecode<'a> {
                     s.no_instrument_notes = *(s.no_instrument_notes.start())..=note;
                 }
             }
-            InstrumentState::Known(..)
-            | InstrumentState::Multiple(..)
-            | InstrumentState::MaybeInLoop(..) => (),
+            InstrumentState::Known(..) | InstrumentState::Multiple(..) => (),
         }
 
         match &self.state.instrument {
             InstrumentState::Known(_, note_range)
             | InstrumentState::Multiple(note_range)
-            | InstrumentState::MaybeInLoop(_, note_range, _)
             | InstrumentState::Hint(_, note_range) => {
                 if note_range.contains(&note) {
                     Ok(())
@@ -1788,9 +1825,7 @@ impl<'a> Bytecode<'a> {
 
             InstrumentState::Unknown | InstrumentState::Hint(..) => (),
 
-            InstrumentState::Known(..)
-            | InstrumentState::Multiple(..)
-            | InstrumentState::MaybeInLoop(..) => {
+            InstrumentState::Known(..) | InstrumentState::Multiple(..) => {
                 return Err(ChannelError::InstrumentHintInstrumentAlreadySet)
             }
         }
@@ -1798,6 +1833,7 @@ impl<'a> Bytecode<'a> {
         match self.instruments.get_index(id.as_u8().into()) {
             Some(InstrumentOrSample::Instrument(i)) => {
                 self.state.instrument = InstrumentState::Hint(id, instrument_note_range(i));
+                self.state.instrument_tuning = Some(self.pitch_table.pitch_table_offset(id));
                 self.state.instrument_hint =
                     Some((id, envelope, InstrumentHintFreq::from_instrument(i)));
                 Ok(())
@@ -1814,6 +1850,8 @@ impl<'a> Bytecode<'a> {
             Some(i) => InstrumentState::Known(instrument, note_range(i)),
             None => InstrumentState::Unknown,
         };
+
+        self.state.instrument_tuning = Some(self.pitch_table.pitch_table_offset(instrument));
     }
 
     pub fn set_instrument(&mut self, instrument: InstrumentId) {
@@ -1953,10 +1991,14 @@ impl<'a> Bytecode<'a> {
     }
 
     pub fn set_transpose(&mut self, transpose: Transpose) {
+        self.state.driver_transpose_active = transpose != Transpose::ZERO;
+
         emit_bytecode!(self, opcodes::SET_TRANSPOSE, transpose.as_i8());
     }
 
     pub fn adjust_transpose(&mut self, adjust: RelativeTranspose) {
+        self.state.driver_transpose_active = true;
+
         if adjust.as_i8() != 0 {
             emit_bytecode!(self, opcodes::ADJUST_TRANSPOSE, adjust.as_i8());
         }
@@ -2158,8 +2200,17 @@ impl<'a> Bytecode<'a> {
         emit_bytecode!(self, opcodes::DISABLE_ECHO);
     }
 
-    pub fn start_loop(&mut self, loop_count: Option<LoopCount>) -> Result<(), BytecodeError> {
-        self.state.start_loop(self.loop_stack.len());
+    pub fn start_loop(
+        &mut self,
+        loop_count: Option<LoopCount>,
+        analysis: &LoopAnalysis,
+    ) -> Result<(), BytecodeError> {
+        self.state.start_loop(
+            self.loop_stack.len(),
+            analysis,
+            self.pitch_table,
+            self.instruments,
+        );
 
         self.loop_stack.push(LoopState {
             start_loop_count: loop_count,
@@ -2205,7 +2256,6 @@ impl<'a> Bytecode<'a> {
         loop_state.skip_last_loop = Some(SkipLastLoop {
             tick_counter: self.state.tick_counter,
             bc_parameter_position: self.bytecode.len() + 1,
-            instrument: self.state.instrument.clone(),
             envelope: self.state.envelope,
             prev_temp_gain: self.state.prev_temp_gain,
             early_release: self.state.early_release,
@@ -2223,12 +2273,21 @@ impl<'a> Bytecode<'a> {
         }
     }
 
-    pub fn end_loop(&mut self, loop_count: Option<LoopCount>) -> Result<(), BytecodeError> {
+    pub fn end_loop(
+        &mut self,
+        loop_count: Option<LoopCount>,
+        analysis: &LoopAnalysis,
+    ) -> Result<(), BytecodeError> {
         let r = self._end_loop(loop_count);
 
         // Must always call `state.end_loop()` (especially if _end_loop exits early with an error)
         // to fix a "song-loop in loop" panic
-        self.state.end_loop(self.loop_stack.len());
+        self.state.end_loop(
+            self.loop_stack.len(),
+            analysis,
+            self.pitch_table,
+            self.instruments,
+        );
 
         r
     }
@@ -2338,7 +2397,8 @@ impl<'a> Bytecode<'a> {
 
         let old_instrument = self.state.instrument.clone();
 
-        self.state.merge_subroutine(s, &self.context);
+        self.state
+            .merge_subroutine(s, &subroutine.analysis, self.pitch_table, self.instruments);
 
         // Disable note range checks for bytecode assembly in the MML tests
         #[cfg(feature = "test")]
@@ -2348,9 +2408,7 @@ impl<'a> Bytecode<'a> {
 
         if let Some(sub_hint_freq) = s.instrument_hint_freq() {
             match old_instrument {
-                InstrumentState::Known(id, _)
-                | InstrumentState::Hint(id, _)
-                | InstrumentState::MaybeInLoop(id, _, _) => {
+                InstrumentState::Known(id, _) | InstrumentState::Hint(id, _) => {
                     match self.instruments.get_index(id.as_u8().into()) {
                         Some(InstrumentOrSample::Instrument(i)) => {
                             let inst_freq = InstrumentHintFreq::from_instrument(i);
@@ -2413,6 +2471,7 @@ impl<'a> Bytecode<'a> {
                         return Err(BytecodeError::SubroutineCallInMmlPrefix)
                     }
 
+                    // Do not show error
                     #[cfg(feature = "test")]
                     BytecodeContext::UnitTestAssembly
                     | BytecodeContext::UnitTestAssemblySubroutine => (),
@@ -2420,8 +2479,7 @@ impl<'a> Bytecode<'a> {
 
                 InstrumentState::Multiple(old_note_range)
                 | InstrumentState::Known(_, old_note_range)
-                | InstrumentState::Hint(_, old_note_range)
-                | InstrumentState::MaybeInLoop(_, old_note_range, _) => {
+                | InstrumentState::Hint(_, old_note_range) => {
                     if !old_note_range.contains(sub_notes.start())
                         || !old_note_range.contains(sub_notes.end())
                     {

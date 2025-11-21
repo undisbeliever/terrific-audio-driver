@@ -191,7 +191,7 @@ impl DetuneCents {
 }
 
 #[derive(Debug, Copy, Clone, PartialEq)]
-pub(super) enum InstrumentAnalysis {
+pub(crate) enum InstrumentAnalysis {
     Set(InstrumentId),
     Hint(InstrumentId),
 }
@@ -206,11 +206,16 @@ impl InstrumentAnalysis {
 
 #[derive(Debug, Default, Copy, Clone, PartialEq)]
 pub struct LoopAnalysis {
-    pub(super) instrument: Option<InstrumentAnalysis>,
-    pub(super) driver_transpose_active: Option<bool>,
+    pub(crate) instrument: Option<InstrumentAnalysis>,
+    pub(crate) driver_transpose_active: Option<bool>,
 }
 
-impl LoopAnalysis {}
+impl LoopAnalysis {
+    pub const BLANK: &'static Self = &Self {
+        instrument: None,
+        driver_transpose_active: None,
+    };
+}
 
 #[derive(Debug, Clone, Copy)]
 pub enum SubroutineCallType {

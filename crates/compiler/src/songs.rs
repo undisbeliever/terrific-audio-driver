@@ -27,6 +27,7 @@ use crate::identifier::{ChannelId, MusicChannelIndex};
 use crate::mml::{CommandTickTracker, CursorTracker, CursorTrackerGetter, GlobalSettings, Section};
 use crate::notes::{Note, Octave};
 use crate::pitch_table::PitchTable;
+use crate::samples::SampleAndInstrumentData;
 use crate::subroutines::{BlankSubroutineMap, CompiledSubroutines, SubroutineState};
 use crate::time::{TickClock, TickCounter, TIMER_HZ};
 use crate::{command_compiler, mml, UnsignedValueNewType};
@@ -260,17 +261,22 @@ pub fn test_sample_song(
     note: Note,
     note_length: u32,
     envelope: Option<Envelope>,
+    sample_data: &SampleAndInstrumentData,
 ) -> Result<SongData, ChannelError> {
     let subroutines = CompiledSubroutines::new_blank();
+
+    let instruments = sample_song_fake_instruments();
 
     let mut bc = Bytecode::new(
         BytecodeContext::SongChannel {
             index: MusicChannelIndex::CHANNEL_A,
             max_edl: EchoEdl::MIN,
         },
-        sample_song_fake_instruments(),
+        instruments,
+        sample_data.pitch_table(),
         &subroutines,
         &BlankSubroutineMap,
+        false,
     );
 
     let inst = InstrumentId::try_from(instrument)?;

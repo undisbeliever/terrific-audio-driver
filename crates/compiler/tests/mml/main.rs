@@ -173,7 +173,7 @@ fn assert_line_matches_bytecode(mml_line: &str, bc_asm: &[&str]) {
     let mml = compile_mml(&mml, &dd);
     let bc_asm = assemble_channel_bytecode(
         &bc_asm,
-        &dd.instruments_and_samples,
+        &dd,
         &CompiledSubroutines::new_blank(),
         BcTerminator::DisableChannel,
         BytecodeContext::UnitTestAssembly,
@@ -202,7 +202,7 @@ fn assert_channel_b_line_matches_bytecode(mml_line: &str, bc_asm: &[&str]) {
     let mml = compile_mml(&mml, &dd);
     let bc_asm = assemble_channel_bytecode(
         &bc_asm,
-        &dd.instruments_and_samples,
+        &dd,
         &CompiledSubroutines::new_blank(),
         BcTerminator::DisableChannel,
         BytecodeContext::UnitTestAssembly,
@@ -283,7 +283,7 @@ fn assert_line_matches_line_and_bytecode(mml_line1: &str, mml_line2: &str, bc_as
 
     let bc_asm = assemble_channel_bytecode(
         &bc_asm,
-        &dd.instruments_and_samples,
+        &dd,
         &CompiledSubroutines::new_blank(),
         BcTerminator::DisableChannel,
         BytecodeContext::UnitTestAssembly,
@@ -299,7 +299,7 @@ fn assert_mml_channel_a_matches_bytecode(mml: &str, bc_asm: &[&str]) {
 
     let bc_asm = assemble_channel_bytecode(
         bc_asm,
-        &dummy_data.instruments_and_samples,
+        &dummy_data,
         mml.subroutines(),
         BcTerminator::DisableChannel,
         BytecodeContext::UnitTestAssembly,
@@ -322,7 +322,7 @@ fn assert_mml_channel_a_matches_looping_bytecode(mml: &str, bc_asm: &[&str]) {
 
     let bc_asm = assemble_channel_bytecode(
         bc_asm,
-        &dummy_data.instruments_and_samples,
+        &dummy_data,
         mml.subroutines(),
         BcTerminator::Goto(loop_point),
         BytecodeContext::UnitTestAssembly,
@@ -338,7 +338,7 @@ fn assert_mml_channel_b_matches_bytecode(mml: &str, bc_asm: &[&str]) {
 
     let bc_asm = assemble_channel_bytecode(
         bc_asm,
-        &dummy_data.instruments_and_samples,
+        &dummy_data,
         mml.subroutines(),
         BcTerminator::DisableChannel,
         BytecodeContext::UnitTestAssembly,
@@ -354,7 +354,7 @@ fn assert_mml_subroutine_matches_bytecode(mml: &str, subroutine_index: usize, bc
 
     let bc_asm = assemble_channel_bytecode(
         bc_asm,
-        &dummy_data.instruments_and_samples,
+        &dummy_data,
         mml.subroutines(),
         BcTerminator::ReturnFromSubroutine,
         BytecodeContext::UnitTestAssemblySubroutine,
@@ -577,7 +577,7 @@ impl SubroutineNameMap for SubroutineNameSearcher<'_> {
 
 fn assemble_channel_bytecode(
     bc_asm: &[&str],
-    inst_map: &UniqueNamesList<data::InstrumentOrSample>,
+    dummy_data: &DummyData,
     subroutines: &CompiledSubroutines,
     terminator: BcTerminator,
     context: BytecodeContext,
@@ -585,7 +585,8 @@ fn assemble_channel_bytecode(
     let subroutine_name_map = SubroutineNameSearcher(subroutines);
 
     let mut bc = bytecode_assembler::BytecodeAssembler::new(
-        inst_map,
+        &dummy_data.instruments_and_samples,
+        &dummy_data.pitch_table,
         subroutines,
         &subroutine_name_map,
         context,

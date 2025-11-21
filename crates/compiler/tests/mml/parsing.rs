@@ -55,7 +55,7 @@ ADEF @0 a
 
     let bc_asm = assemble_channel_bytecode(
         bc_asm,
-        &dummy_data.instruments_and_samples,
+        &dummy_data,
         mml.subroutines(),
         BcTerminator::DisableChannel,
         BytecodeContext::UnitTestAssembly,

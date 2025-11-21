@@ -32,7 +32,7 @@ use crate::subroutines::{
     BlankSubroutineMap, CompiledSubroutines, GetSubroutineResult, Subroutine, SubroutineState,
 };
 use crate::time::{TickClock, TickCounter, TickCounterWithLoopFlag};
-use crate::{Transpose, UnsignedValueNewType};
+use crate::UnsignedValueNewType;
 
 pub const MAX_NO_LOOP_TICKS: TickCounter = TickCounter::new(256 * 32);
 
@@ -140,8 +140,6 @@ struct ChannelBcGenerator<'a> {
 
     bc: Bytecode<'a>,
 
-    driver_transpose_active: bool,
-
     detune_cents: DetuneCents,
     mp: MpState,
     quantize: Quantize,
@@ -171,12 +169,13 @@ impl<'a> ChannelBcGenerator<'a> {
                 bc_data,
                 context,
                 instruments,
+                pitch_table,
                 subroutines,
                 // Using BlankSubroutineMap here to forbid direct subroutine calls in bytecode assembly
                 // (\asm subroutine calls must go through `Self::call_subroutine()`)
                 &BlankSubroutineMap,
+                called_with_transpose,
             ),
-            driver_transpose_active: called_with_transpose,
             mp: MpState::Manual,
             detune_cents: DetuneCents::ZERO,
             quantize: Quantize::None,
@@ -188,47 +187,13 @@ impl<'a> ChannelBcGenerator<'a> {
         }
     }
 
-    fn process_loop_analysis_start_loop(&mut self, analysis: &LoopAnalysis) {
-        if let Some(i) = analysis.instrument {
-            // There can be 2 or more different instrument values at the start of the loop
-
-            // Clear instrument tuning if the loop is played with a different pitch table offset
-            let o = self.pitch_table.pitch_table_offset(i.instrument_id());
-            if self.bc.get_state().instrument_tuning != Some(o) {
-                self.bc.set_instrument_tuning_state(None);
-            }
-
-            match i {
-                InstrumentAnalysis::Set(i) => self.bc.set_loop_analysis_start_instrument(i),
-                InstrumentAnalysis::Hint(_) => (),
-            }
-        }
-
-        if let Some(t) = analysis.driver_transpose_active {
-            self.driver_transpose_active = t;
-        }
-    }
-
-    fn process_loop_analysis_end_loop(&mut self, analysis: &LoopAnalysis) {
-        if let Some(i) = analysis.instrument {
-            // The instrument is known at the end of the loop
-            self.bc.set_instrument_tuning_state(Some(
-                self.pitch_table.pitch_table_offset(i.instrument_id()),
-            ));
-        }
-
-        if let Some(t) = analysis.driver_transpose_active {
-            self.driver_transpose_active = t;
-        }
-    }
-
     fn calculate_vibrato_for_note(
         &self,
         mp: &MpVibrato,
         note: Note,
         detune: DetuneCentsOutput,
     ) -> Result<ManualVibrato, ChannelError> {
-        if self.driver_transpose_active {
+        if self.bc.is_driver_transpose_active() {
             return Err(ChannelError::MpVibratoWithDriverTransposeActive);
         }
 
@@ -277,7 +242,7 @@ impl<'a> ChannelBcGenerator<'a> {
         match self.detune_cents.as_i16() {
             0 => Ok(DetuneCentsOutput::Manual),
             cents => {
-                if self.driver_transpose_active {
+                if self.bc.is_driver_transpose_active() {
                     return Err(ChannelError::DetuneCentsWithDriverTransposeActive);
                 }
 
@@ -728,9 +693,10 @@ impl<'a> ChannelBcGenerator<'a> {
 
             let rl = build_rest_loop::<BcTicksKeyOff, BcTicksKeyOff, true>(length);
 
-            self.bc.start_loop(Some(LoopCount::try_from(rl.n_loops)?))?;
+            self.bc
+                .start_loop(Some(LoopCount::try_from(rl.n_loops)?), LoopAnalysis::BLANK)?;
             self.rest_many_keyoffs_no_loop(TickCounter::new(rl.ticks_in_loop))?;
-            self.bc.end_loop(None)?;
+            self.bc.end_loop(None, LoopAnalysis::BLANK)?;
 
             // The channel is in the release self.  The last rest **can** be less than max.
             if rl.remainder > 0 {
@@ -753,9 +719,10 @@ impl<'a> ChannelBcGenerator<'a> {
 
             let rl = build_rest_loop::<BcTicksNoKeyOff, BcTicksNoKeyOff, true>(length);
 
-            self.bc.start_loop(Some(LoopCount::try_from(rl.n_loops)?))?;
+            self.bc
+                .start_loop(Some(LoopCount::try_from(rl.n_loops)?), LoopAnalysis::BLANK)?;
             self.wait_no_loop(TickCounter::new(rl.ticks_in_loop))?;
-            self.bc.end_loop(None)?;
+            self.bc.end_loop(None, LoopAnalysis::BLANK)?;
 
             if rl.remainder > 0 {
                 self.bc.wait(rl.remainder.try_into()?);
@@ -776,7 +743,7 @@ impl<'a> ChannelBcGenerator<'a> {
 
                 let detune = detune_output.detune_value(self.bc.get_state());
 
-                match (self.driver_transpose_active, instrument_tuning) {
+                match (self.bc.is_driver_transpose_active(), instrument_tuning) {
                     (false, Some(instrument_tuning)) => {
                         let pitch = self
                             .pitch_table
@@ -823,7 +790,7 @@ impl<'a> ChannelBcGenerator<'a> {
     ) -> Result<(NoteOrPitch, Option<u16>), ChannelError> {
         match self.bc.get_state().prev_slurred_note {
             SlurredNoteState::Slurred(prev_note, prev_detune, prev_tuning) => {
-                match (self.driver_transpose_active, prev_tuning) {
+                match (self.bc.is_driver_transpose_active(), prev_tuning) {
                     (false, Some(prev_tuning)) => {
                         let prev_pitch = self
                             .pitch_table
@@ -1135,7 +1102,7 @@ impl<'a> ChannelBcGenerator<'a> {
 
         let n_loops = LoopCount::try_from(n_loops)?;
 
-        self.bc.start_loop(Some(n_loops))?;
+        self.bc.start_loop(Some(n_loops), LoopAnalysis::BLANK)?;
 
         for (i, &n) in notes.iter().enumerate() {
             if i == break_point && i != 0 {
@@ -1146,13 +1113,13 @@ impl<'a> ChannelBcGenerator<'a> {
                 Ok(()) => (),
                 Err(e) => {
                     // Hides an unneeded "loop stack not empty" (or end_loop) error
-                    let _ = self.bc.end_loop(None);
+                    let _ = self.bc.end_loop(None, LoopAnalysis::BLANK);
                     return Err(e);
                 }
             }
         }
 
-        self.bc.end_loop(None)?;
+        self.bc.end_loop(None, LoopAnalysis::BLANK)?;
 
         if last_note_ticks > 0 {
             let l = match slur_last_note {
@@ -1172,19 +1139,12 @@ impl<'a> ChannelBcGenerator<'a> {
         Ok(())
     }
 
-    fn update_instrument_state(&mut self, inst_id: InstrumentId) {
-        self.bc
-            .set_instrument_tuning_state(Some(self.pitch_table.pitch_table_offset(inst_id)));
-    }
-
     fn set_instrument_hint(
         &mut self,
         inst_id: InstrumentId,
         envelope: Option<Envelope>,
     ) -> Result<(), ChannelError> {
-        self.bc.set_subroutine_instrument_hint(inst_id, envelope)?;
-        self.update_instrument_state(inst_id);
-        Ok(())
+        self.bc.set_subroutine_instrument_hint(inst_id, envelope)
     }
 
     // Will not be optimised away
@@ -1194,8 +1154,6 @@ impl<'a> ChannelBcGenerator<'a> {
             Some(Envelope::Adsr(adsr)) => self.bc.set_instrument_and_adsr(inst_id, adsr),
             Some(Envelope::Gain(gain)) => self.bc.set_instrument_and_gain(inst_id, gain),
         }
-
-        self.update_instrument_state(inst_id);
     }
 
     fn set_instrument(
@@ -1236,8 +1194,6 @@ impl<'a> ChannelBcGenerator<'a> {
                 Some(Envelope::Gain(gain)) => self.bc.set_instrument_and_gain(inst_id, gain),
             }
         }
-
-        self.update_instrument_state(inst_id);
 
         Ok(())
     }
@@ -1353,10 +1309,6 @@ impl<'a> ChannelBcGenerator<'a> {
         index: u8,
         disable_vibrato: SubroutineCallType,
     ) -> Result<(), ChannelError> {
-        if let Some(s) = self.subroutines.get_compiled(index) {
-            self.process_loop_analysis_end_loop(&s.analysis);
-        }
-
         let (name, sub) = match self.subroutines.get(index.into()) {
             GetSubroutineResult::NotFound => panic!("subroutine not found"),
             GetSubroutineResult::Compiled(name, sub) => (name, sub),
@@ -1433,9 +1385,7 @@ impl<'a> ChannelBcGenerator<'a> {
                         tick_counter: self.bc.get_tick_counter(),
                     });
 
-                    self.bc._song_loop_point();
-
-                    self.process_loop_analysis_start_loop(analysis);
+                    self.bc._song_loop_point(analysis);
                 }
                 BytecodeContext::SongSubroutine { .. }
                 | BytecodeContext::SfxSubroutine
@@ -1529,13 +1479,9 @@ impl<'a> ChannelBcGenerator<'a> {
             }
 
             &Command::SetTranspose(t) => {
-                self.driver_transpose_active = t != Transpose::ZERO;
-
                 self.bc.set_transpose(t);
             }
             &Command::AdjustTranspose(t) => {
-                self.driver_transpose_active = true;
-
                 self.bc.adjust_transpose(t);
             }
 
@@ -1642,8 +1588,7 @@ impl<'a> ChannelBcGenerator<'a> {
             }
 
             Command::StartLoop(loop_count, analysis) => {
-                self.process_loop_analysis_start_loop(analysis);
-                self.bc.start_loop(*loop_count)?;
+                self.bc.start_loop(*loop_count, analysis)?;
             }
 
             Command::SkipLastLoop => {
@@ -1651,8 +1596,7 @@ impl<'a> ChannelBcGenerator<'a> {
             }
 
             Command::EndLoop(loop_count, analysis) => {
-                self.process_loop_analysis_end_loop(analysis);
-                self.bc.end_loop(*loop_count)?;
+                self.bc.end_loop(*loop_count, analysis)?;
             }
 
             &Command::ChangePanAndOrVolume(pan, volume) => match (pan, volume) {

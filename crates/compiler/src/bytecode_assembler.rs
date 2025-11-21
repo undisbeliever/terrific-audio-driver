@@ -9,6 +9,7 @@ use crate::bytecode::{
     PlayNoteTicks, PlayPitchPitch, PortamentoSlideTicks, PortamentoVelocity, RelativeEchoFeedback,
     RelativeFirCoefficient, VibratoPitchOffsetPerTick,
 };
+use crate::command_compiler::commands::LoopAnalysis;
 use crate::driver_constants::FIR_FILTER_SIZE;
 use crate::echo::{EchoFeedback, FirCoefficient, FirTap};
 use crate::envelope::{Adsr, Gain, OptionalGain, TempGain};
@@ -23,6 +24,7 @@ use crate::value_newtypes::{
 use crate::{
     bytecode::State,
     data::{InstrumentOrSample, UniqueNamesList},
+    pitch_table::PitchTable,
     subroutines::{CompiledSubroutines, SubroutineNameMap},
     time::TickCounter,
 };
@@ -354,10 +356,12 @@ fn early_release_arguments(
     }
 }
 
-fn optional_loop_count_argument(args: &[&str]) -> Result<Option<LoopCount>, ChannelError> {
+fn optional_loop_count_argument(
+    args: &[&str],
+) -> Result<(Option<LoopCount>, &'static LoopAnalysis), ChannelError> {
     match args.len() {
-        0 => Ok(None),
-        1 => Ok(Some(parse_uvnt(args[0])?)),
+        0 => Ok((None, LoopAnalysis::BLANK)),
+        1 => Ok((Some(parse_uvnt(args[0])?), LoopAnalysis::BLANK)),
         _ => Err(ChannelError::InvalidNumberOfArgumentsRange(0, 1)),
     }
 }
@@ -641,9 +645,9 @@ pub fn parse_asm_line(bc: &mut Bytecode, line: &str) -> Result<(), ChannelError>
        enable_echo 0 no_arguments,
        disable_echo 0 no_arguments,
 
-       start_loop 1 optional_loop_count_argument,
+       start_loop 2 optional_loop_count_argument,
        skip_last_loop 0 no_arguments,
-       end_loop 1 optional_loop_count_argument,
+       end_loop 2 optional_loop_count_argument,
 
        call_subroutine_and_disable_vibrato 1 one_argument call_subroutine_and_disable_vibrato_str,
        call_subroutine 1 one_argument call_subroutine_str,
@@ -692,6 +696,7 @@ pub struct BytecodeAssembler<'a> {
 impl BytecodeAssembler<'_> {
     pub fn new<'a>(
         inst_map: &'a UniqueNamesList<InstrumentOrSample>,
+        pitch_table: &'a PitchTable,
         subroutines: &'a CompiledSubroutines,
         subroutine_name_map: &'a dyn SubroutineNameMap,
         context: BytecodeContext,
@@ -699,7 +704,14 @@ impl BytecodeAssembler<'_> {
         assert!(context.is_unit_test_assembly());
 
         BytecodeAssembler {
-            bc: Bytecode::new(context, inst_map, subroutines, subroutine_name_map),
+            bc: Bytecode::new(
+                context,
+                inst_map,
+                pitch_table,
+                subroutines,
+                subroutine_name_map,
+                false,
+            ),
         }
     }
 
