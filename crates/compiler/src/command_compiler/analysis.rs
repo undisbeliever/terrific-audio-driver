@@ -20,9 +20,16 @@ use crate::Transpose;
 pub struct AnalysedCommands<'a> {
     pub(super) subroutines: SubroutineCommandsWithCompileOrder<'a>,
     pub(super) channels: Option<[Option<ChannelCommands<'a>>; N_MUSIC_CHANNELS]>,
-    pub(super) transpose_at_subroutine_start: [TransposeStartRange; MAX_SUBROUTINES],
+    transpose_at_subroutine_start: [Option<TransposeStartRange>; MAX_SUBROUTINES],
 
     pub(crate) subroutine_analysis: [LoopAnalysis; MAX_SUBROUTINES],
+}
+
+impl AnalysedCommands<'_> {
+    pub fn transpose_at_subroutine_start(&self, index: u8) -> TransposeStartRange {
+        self.transpose_at_subroutine_start[usize::from(index)]
+            .unwrap_or(TransposeStartRange::DISABLED)
+    }
 }
 
 pub struct AnalysedSoundEffectCommands<'a>(pub(super) SoundEffectCommands<'a>);
@@ -447,12 +454,12 @@ fn analyse_loop_commands<'a>(
 }
 
 fn analyse_subroutine_calls(
-    transpose_range: TransposeStartRange,
+    transpose_range: Option<TransposeStartRange>,
     commands: &[CommandWithPos<'_>],
     subroutine_analysis: &[LoopAnalysis; MAX_SUBROUTINES],
-    transpose_at_suboutine_call: &mut [TransposeStartRange; MAX_SUBROUTINES],
+    transpose_at_suboutine_call: &mut [Option<TransposeStartRange>; MAX_SUBROUTINES],
 ) {
-    let mut transpose_range = transpose_range.0;
+    let mut transpose_range = transpose_range.unwrap_or(TransposeStartRange::DISABLED).0;
     let mut stack = Vec::new();
 
     for c in commands {
@@ -479,9 +486,10 @@ fn analyse_subroutine_calls(
             Command::AdjustTranspose(a) => transpose_range.adjust(*a),
 
             Command::CallSubroutine(i, _) => {
-                transpose_at_suboutine_call[usize::from(*i)]
-                    .0
-                    .merge(transpose_range);
+                match &mut transpose_at_suboutine_call[usize::from(*i)] {
+                    Some(TransposeStartRange(t)) => t.merge(transpose_range),
+                    t @ None => *t = Some(TransposeStartRange(transpose_range)),
+                }
 
                 transpose_range.subroutine_call(subroutine_analysis[usize::from(*i)].transpose);
             }
@@ -506,16 +514,15 @@ fn analyse_song_subroutine_calls(
     subroutines: &SubroutineCommandsWithCompileOrder<'_>,
     channels: Option<&[Option<ChannelCommands<'_>>; N_MUSIC_CHANNELS]>,
     subroutine_analysis: &[LoopAnalysis; MAX_SUBROUTINES],
-) -> [TransposeStartRange; MAX_SUBROUTINES] {
-    let mut subroutine_call_transpose_range =
-        [const { TransposeStartRange(TransposeRange::DISABLED) }; MAX_SUBROUTINES];
+) -> [Option<TransposeStartRange>; MAX_SUBROUTINES] {
+    let mut subroutine_call_transpose_range = [None; MAX_SUBROUTINES];
 
     // Processed in reverse compile order
 
     if let Some(channels) = channels {
         for c in channels.iter().rev().flatten() {
             analyse_subroutine_calls(
-                TransposeStartRange::DISABLED,
+                None,
                 &c.commands,
                 subroutine_analysis,
                 &mut subroutine_call_transpose_range,

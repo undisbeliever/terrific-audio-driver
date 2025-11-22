@@ -1858,7 +1858,7 @@ impl<'a> CommandCompiler<'a> {
                 },
                 false => BytecodeContext::SfxSubroutine,
             },
-            analysis.transpose_at_subroutine_start[usize::from(input.index)],
+            analysis.transpose_at_subroutine_start(input.index),
         );
 
         let mut errors = Vec::new();
