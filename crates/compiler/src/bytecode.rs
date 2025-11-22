@@ -18,7 +18,7 @@ use crate::envelope::{Adsr, Envelope, Gain, OptionalGain, TempGain};
 use crate::errors::{BytecodeError, ChannelError, ValueError};
 use crate::identifier::MusicChannelIndex;
 use crate::invert_flags::InvertFlags;
-use crate::notes::{Note, LAST_NOTE_ID, N_NOTES};
+use crate::notes::{add_transpose_range_to_note_range, Note, NoteRange, LAST_NOTE_ID, N_NOTES};
 use crate::pitch_table::{InstrumentHintFreq, PitchTable, PitchTableOffset};
 use crate::samples::{instrument_note_range, note_range};
 use crate::subroutines::{CompiledSubroutines, GetSubroutineResult, Subroutine, SubroutineNameMap};
@@ -1049,6 +1049,20 @@ pub struct State {
     pub(crate) transpose_range: TransposeRange,
     pub(crate) instrument: InstrumentState,
 
+    // `subroutine_transpose_range` is used to determine if a subroutine's transpose state is known
+    // (ie, a `set_transpose` has been invoked in the subroutine or nested subroutine calls) or if
+    // it is unknown (ie, unset or only encountered `adjust_transpose` instructions).
+    //
+    // `subroutine_transpose_range` is set to DISABLED at the start of a subroutine and if
+    // `subroutine_transpose_range == transpose_range` the transpose range is known (ie, the
+    // subroutine is called with the same starting transpose range or overridden with
+    // `set_transpose). (see `State::is_transpose_known()`)
+    //
+    // This field is used to populate `unknown_transpose_no_instrument_notes` in
+    // `Bytecode::_test_note_in_range()`, which is later processed in
+    // `Bytecode::_update_subtroutine_state_excluding_stack_depth()`.
+    subroutine_transpose_range: Option<TransposeRange>,
+
     // State set to unknown on loop start
     pub(crate) envelope: IeState<Envelope>,
     pub(crate) prev_temp_gain: IeState<TempGain>,
@@ -1059,7 +1073,9 @@ pub struct State {
     pub(crate) prev_slurred_note: SlurredNoteState,
 
     pub(crate) instrument_hint: Option<(InstrumentId, Option<Envelope>, InstrumentHintFreq)>,
+
     pub(crate) no_instrument_notes: RangeInclusive<Note>,
+    pub(crate) unknown_transpose_no_instrument_notes: RangeInclusive<Note>,
 }
 
 impl State {
@@ -1123,6 +1139,9 @@ impl State {
     ) {
         self.start_loop_or_song_loop_instrument_analysis(analysis, pitch_table, instruments);
         self.transpose_range.song_loop(analysis.transpose);
+        if let Some(t) = &mut self.subroutine_transpose_range {
+            t.song_loop(analysis.transpose);
+        }
 
         self.envelope = IeState::Unknown;
         self.prev_temp_gain = IeState::Unknown;
@@ -1147,7 +1166,11 @@ impl State {
         instruments: &UniqueNamesList<data::InstrumentOrSample>,
     ) {
         self.start_loop_or_song_loop_instrument_analysis(analysis, pitch_table, instruments);
+
         self.transpose_range.start_loop(analysis.transpose);
+        if let Some(t) = &mut self.subroutine_transpose_range {
+            t.start_loop(analysis.transpose);
+        }
 
         let stack_depth = u8::try_from(stack_depth).unwrap_or(u8::MAX);
 
@@ -1166,9 +1189,16 @@ impl State {
         &mut self,
         analysis: &SkipLastLoopAnalysis,
         start_loop_transpose_range: TransposeRange,
+        start_loop_subroutine_transpose_range: Option<TransposeRange>,
     ) {
         self.transpose_range
             .skip_last_loop(analysis.transpose, start_loop_transpose_range);
+        if let Some(t) = &mut self.subroutine_transpose_range {
+            t.skip_last_loop(
+                analysis.transpose,
+                start_loop_subroutine_transpose_range.unwrap(),
+            );
+        }
     }
 
     fn merge_skip_last_loop(&mut self, s: SkipLastLoop) {
@@ -1189,12 +1219,20 @@ impl State {
         stack_depth: usize,
         analysis: &LoopAnalysis,
         start_loop_transpose_range: TransposeRange,
+        start_loop_subroutine_transpose_range: Option<TransposeRange>,
         pitch_table: &PitchTable,
         instruments: &UniqueNamesList<data::InstrumentOrSample>,
     ) {
         self.end_loop_or_song_loop_instrument_analysis(analysis, pitch_table, instruments);
+
         self.transpose_range
             .end_loop(analysis.transpose, start_loop_transpose_range);
+        if let Some(t) = &mut self.subroutine_transpose_range {
+            t.end_loop(
+                analysis.transpose,
+                start_loop_subroutine_transpose_range.unwrap(),
+            );
+        }
 
         let stack_depth = u8::try_from(stack_depth).unwrap_or(u8::MAX);
 
@@ -1215,7 +1253,11 @@ impl State {
         instruments: &UniqueNamesList<data::InstrumentOrSample>,
     ) {
         self.end_loop_or_song_loop_instrument_analysis(analysis, pitch_table, instruments);
+
         self.transpose_range.subroutine_call(analysis.transpose);
+        if let Some(t) = &mut self.subroutine_transpose_range {
+            t.subroutine_call(analysis.transpose);
+        }
 
         self.envelope.merge_subroutine(&s.envelope);
         self.prev_temp_gain.merge_subroutine(&s.prev_temp_gain);
@@ -1239,6 +1281,46 @@ impl State {
     pub fn instrument_hint_freq(&self) -> Option<InstrumentHintFreq> {
         self.instrument_hint.map(|(_, _, f)| f)
     }
+
+    fn set_transpose(&mut self, transpose: Transpose) {
+        self.transpose_range.set(transpose);
+        if let Some(t) = &mut self.subroutine_transpose_range {
+            t.set(transpose);
+        }
+    }
+
+    fn adjust_transpose(&mut self, adjust: RelativeTranspose) {
+        self.transpose_range.adjust(adjust);
+        if let Some(t) = &mut self.subroutine_transpose_range {
+            t.adjust(adjust);
+        }
+    }
+
+    fn is_transpose_known(&self) -> TransposeKnownResult {
+        match (self.subroutine_transpose_range, self.transpose_range) {
+            (None, TransposeRange::Set { min, max }) => TransposeKnownResult::Known { min, max },
+
+            (Some(st @ TransposeRange::Set { min, max }), t @ TransposeRange::Set { .. })
+                if st == t =>
+            {
+                TransposeKnownResult::Known { min, max }
+            }
+
+            (Some(TransposeRange::Set { min, max }), TransposeRange::Set { .. }) => {
+                TransposeKnownResult::Unknown { min, max }
+            }
+
+            (Some(TransposeRange::Overflow), _) | (_, TransposeRange::Overflow) => {
+                TransposeKnownResult::Overflow
+            }
+        }
+    }
+}
+
+enum TransposeKnownResult {
+    Known { min: i8, max: i8 },
+    Unknown { min: i8, max: i8 },
+    Overflow,
 }
 
 struct SkipLastLoop {
@@ -1260,6 +1342,7 @@ struct LoopState {
     start_loop_pos: usize,
 
     start_loop_transpose_range: TransposeRange,
+    start_loop_subroutine_transpose_range: Option<TransposeRange>,
 
     tick_counter_at_start_of_loop: TickCounter,
     skip_last_loop: Option<SkipLastLoop>,
@@ -1330,6 +1413,17 @@ impl<'a> Bytecode<'a> {
                 instrument_tuning: None,
                 instrument: InstrumentState::Unset,
                 transpose_range: TransposeRange::new(driver_transpose),
+                subroutine_transpose_range: match &context {
+                    BytecodeContext::SoundEffect => None,
+                    BytecodeContext::SongChannel { .. } => None,
+                    BytecodeContext::SongSubroutine { .. } => Some(TransposeRange::DISABLED),
+                    BytecodeContext::SfxSubroutine => Some(TransposeRange::DISABLED),
+                    BytecodeContext::MmlPrefix => None,
+
+                    #[cfg(feature = "test")]
+                    BytecodeContext::UnitTestAssembly
+                    | BytecodeContext::UnitTestAssemblySubroutine => None,
+                },
 
                 envelope: IeState::Unset,
                 prev_temp_gain: IeState::Unset,
@@ -1359,6 +1453,7 @@ impl<'a> Bytecode<'a> {
                 prev_slurred_note: SlurredNoteState::Unchanged,
                 instrument_hint: None,
                 no_instrument_notes: Note::MAX..=Note::MIN,
+                unknown_transpose_no_instrument_notes: Note::MAX..=Note::MIN,
             },
             loop_stack: Vec::new(),
             asm_block_stack_len: 0,
@@ -1525,34 +1620,70 @@ impl<'a> Bytecode<'a> {
             return Ok(());
         }
 
-        // ::TODO process transpose range::
-
         match self.state.instrument {
             InstrumentState::Hint(..) | InstrumentState::Unknown | InstrumentState::Unset => {
-                let s = &mut self.state;
-                if s.no_instrument_notes.is_empty() {
-                    s.no_instrument_notes = note..=note;
-                } else if note < *s.no_instrument_notes.start() {
-                    s.no_instrument_notes = note..=*(s.no_instrument_notes.end());
-                } else if note > *s.no_instrument_notes.end() {
-                    s.no_instrument_notes = *(s.no_instrument_notes.start())..=note;
+                let s = &self.state;
+
+                match s.is_transpose_known() {
+                    TransposeKnownResult::Known { min, max } => {
+                        // Transpose range is known
+                        // (In a channel or in a subroutine with a set transpose)
+                        if let Ok((min, max)) = note.add_transpose_range(min, max) {
+                            self.state.no_instrument_notes.extend_note(min);
+                            self.state.no_instrument_notes.extend_note(max);
+                        }
+                    }
+                    TransposeKnownResult::Unknown { min, max } => {
+                        // Transpose range is unknown
+                        // (in a subroutine and the transpose state is adjust)
+                        if let Ok((min, max)) = note.add_transpose_range(min, max) {
+                            self.state
+                                .unknown_transpose_no_instrument_notes
+                                .extend_note(min);
+                            self.state
+                                .unknown_transpose_no_instrument_notes
+                                .extend_note(max);
+                        }
+                    }
+                    TransposeKnownResult::Overflow => (),
                 }
             }
             InstrumentState::Known(..) | InstrumentState::Multiple(..) => (),
         }
 
         match &self.state.instrument {
-            InstrumentState::Known(_, note_range)
-            | InstrumentState::Multiple(note_range)
-            | InstrumentState::Hint(_, note_range) => {
-                if note_range.contains(&note) {
-                    Ok(())
-                } else if !note_range.is_empty() {
-                    Err(BytecodeError::NoteOutOfRange(note, note_range.clone()))
-                } else {
-                    Err(BytecodeError::NoteOutOfRangeEmptyNoteRange(note))
+            InstrumentState::Known(_, inst_range)
+            | InstrumentState::Multiple(inst_range)
+            | InstrumentState::Hint(_, inst_range) => match self.state.transpose_range {
+                TransposeRange::Set { min: 0, max: 0 } => {
+                    if inst_range.contains(&note) {
+                        Ok(())
+                    } else if !inst_range.is_empty() {
+                        Err(BytecodeError::NoteOutOfRange(note, inst_range.clone()))
+                    } else {
+                        Err(BytecodeError::NoteOutOfRangeEmptyNoteRange(note))
+                    }
                 }
-            }
+                TransposeRange::Set {
+                    min: tmin,
+                    max: tmax,
+                } => {
+                    let (min, max) = note.add_transpose_range(tmin, tmax)?;
+
+                    if inst_range.contains(&min) && inst_range.contains(&max) {
+                        Ok(())
+                    } else if !inst_range.is_empty() {
+                        Err(BytecodeError::TransposedNoteOutOfRange {
+                            note,
+                            transpose: tmin..=tmax,
+                            inst_range: inst_range.clone(),
+                        })
+                    } else {
+                        Err(BytecodeError::NoteOutOfRangeEmptyNoteRange(note))
+                    }
+                }
+                TransposeRange::Overflow => Ok(()),
+            },
             InstrumentState::Unknown | InstrumentState::Unset => {
                 if self.show_missing_set_instrument_error {
                     self.show_missing_set_instrument_error = false;
@@ -2009,15 +2140,15 @@ impl<'a> Bytecode<'a> {
     }
 
     pub fn set_transpose(&mut self, transpose: Transpose) {
-        self.state.transpose_range.set(transpose);
+        self.state.set_transpose(transpose);
 
         emit_bytecode!(self, opcodes::SET_TRANSPOSE, transpose.as_i8());
     }
 
     pub fn adjust_transpose(&mut self, adjust: RelativeTranspose) -> Result<(), BytecodeError> {
-        self.state.transpose_range.adjust(adjust);
-
         if adjust.as_i8() != 0 {
+            self.state.adjust_transpose(adjust);
+
             emit_bytecode!(self, opcodes::ADJUST_TRANSPOSE, adjust.as_i8());
         }
 
@@ -2238,6 +2369,7 @@ impl<'a> Bytecode<'a> {
             start_loop_count: loop_count,
             start_loop_pos: self.bytecode.len(),
             start_loop_transpose_range: self.state.transpose_range,
+            start_loop_subroutine_transpose_range: self.state.subroutine_transpose_range,
             tick_counter_at_start_of_loop: self.state.tick_counter,
             skip_last_loop: None,
         });
@@ -2294,8 +2426,11 @@ impl<'a> Bytecode<'a> {
             prev_slurred_note: self.state.prev_slurred_note.clone(),
         });
 
-        self.state
-            .skip_last_loop(analysis, loop_state.start_loop_transpose_range);
+        self.state.skip_last_loop(
+            analysis,
+            loop_state.start_loop_transpose_range,
+            loop_state.start_loop_subroutine_transpose_range,
+        );
 
         emit_bytecode!(self, opcodes::SKIP_LAST_LOOP_U8, 0u8);
 
@@ -2311,11 +2446,16 @@ impl<'a> Bytecode<'a> {
         loop_count: Option<LoopCount>,
         analysis: &LoopAnalysis,
     ) -> Result<(), BytecodeError> {
-        let start_loop_transpose_range = self
+        let (start_loop_transpose_range, start_loop_subroutine_transpose_range) = self
             .loop_stack
             .last()
-            .map(|ls| ls.start_loop_transpose_range)
-            .unwrap_or(TransposeRange::DISABLED);
+            .map(|ls| {
+                (
+                    ls.start_loop_transpose_range,
+                    ls.start_loop_subroutine_transpose_range,
+                )
+            })
+            .unwrap_or((TransposeRange::DISABLED, None));
 
         let r = self._end_loop(loop_count);
 
@@ -2325,6 +2465,7 @@ impl<'a> Bytecode<'a> {
             self.loop_stack.len(),
             analysis,
             start_loop_transpose_range,
+            start_loop_subroutine_transpose_range,
             self.pitch_table,
             self.instruments,
         );
@@ -2436,6 +2577,8 @@ impl<'a> Bytecode<'a> {
         self.state.tick_counter += s.tick_counter;
 
         let old_instrument = self.state.instrument.clone();
+        let old_transpose = self.state.transpose_range;
+        let old_transpose_known = self.state.is_transpose_known();
 
         self.state
             .merge_subroutine(s, &subroutine.analysis, self.pitch_table, self.instruments);
@@ -2490,22 +2633,15 @@ impl<'a> Bytecode<'a> {
 
         if !s.no_instrument_notes.is_empty() {
             // Subroutine plays a note without an instrument
-
-            let self_notes = &self.state.no_instrument_notes;
             let sub_notes = &s.no_instrument_notes;
 
-            match old_instrument {
+            match &old_instrument {
                 InstrumentState::Unknown | InstrumentState::Unset => match self.context {
                     BytecodeContext::SongChannel { .. } | BytecodeContext::SoundEffect => {
                         return Err(BytecodeError::SubroutinePlaysNotesWithNoInstrument)
                     }
                     BytecodeContext::SongSubroutine { .. } | BytecodeContext::SfxSubroutine => {
-                        self.state.no_instrument_notes = if self_notes.is_empty() {
-                            sub_notes.clone()
-                        } else {
-                            min(*sub_notes.start(), *self_notes.start())
-                                ..=max(*sub_notes.end(), *self_notes.end())
-                        };
+                        self.state.no_instrument_notes.merge(sub_notes);
                     }
                     BytecodeContext::MmlPrefix => {
                         return Err(BytecodeError::SubroutineCallInMmlPrefix)
@@ -2525,10 +2661,66 @@ impl<'a> Bytecode<'a> {
                     {
                         return Err(BytecodeError::SubroutineNotesOutOfRange {
                             subroutine_range: sub_notes.clone(),
-                            inst_range: old_note_range,
+                            inst_range: old_note_range.clone(),
                         });
                     }
                 }
+            }
+        }
+
+        if !s.unknown_transpose_no_instrument_notes.is_empty() {
+            // Subroutine plays a note without an instrument and unknown transpose
+            let sub_notes = &s.unknown_transpose_no_instrument_notes;
+
+            match old_instrument {
+                InstrumentState::Unknown | InstrumentState::Unset => match self.context {
+                    BytecodeContext::SongChannel { .. } | BytecodeContext::SoundEffect => {
+                        return Err(BytecodeError::SubroutinePlaysNotesWithNoInstrument)
+                    }
+                    BytecodeContext::SongSubroutine { .. } | BytecodeContext::SfxSubroutine => {
+                        match old_transpose_known {
+                            TransposeKnownResult::Known { min, max } => {
+                                let sub_notes =
+                                    add_transpose_range_to_note_range(sub_notes, min, max)?;
+                                self.state.no_instrument_notes.merge(&sub_notes);
+                            }
+                            TransposeKnownResult::Unknown { min, max } => {
+                                let sub_notes =
+                                    add_transpose_range_to_note_range(sub_notes, min, max)?;
+                                self.state
+                                    .unknown_transpose_no_instrument_notes
+                                    .merge(&sub_notes);
+                            }
+                            TransposeKnownResult::Overflow => (),
+                        }
+                    }
+                    BytecodeContext::MmlPrefix => {
+                        return Err(BytecodeError::SubroutineCallInMmlPrefix)
+                    }
+
+                    // Do not show error
+                    #[cfg(feature = "test")]
+                    BytecodeContext::UnitTestAssembly
+                    | BytecodeContext::UnitTestAssemblySubroutine => (),
+                },
+
+                InstrumentState::Multiple(old_inst_range)
+                | InstrumentState::Known(_, old_inst_range)
+                | InstrumentState::Hint(_, old_inst_range) => match old_transpose {
+                    TransposeRange::Set { min, max } => {
+                        let notes = add_transpose_range_to_note_range(sub_notes, min, max)?;
+                        if !old_inst_range.contains(notes.start())
+                            || !old_inst_range.contains(notes.end())
+                        {
+                            return Err(BytecodeError::TransposedSubroutineNotesOutOfRange {
+                                notes: s.unknown_transpose_no_instrument_notes.clone(),
+                                transpose: min..=max,
+                                inst_range: old_inst_range,
+                            });
+                        }
+                    }
+                    TransposeRange::Overflow => (),
+                },
             }
         }
 

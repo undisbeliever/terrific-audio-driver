@@ -6,7 +6,9 @@
 
 #![allow(clippy::assertions_on_constants)]
 
-use crate::errors::ValueError;
+use std::ops::RangeInclusive;
+
+use crate::errors::{BytecodeError, ValueError};
 use crate::value_newtypes::{u8_value_newtype, UnsignedValueNewType};
 
 use serde::{Deserialize, Serialize, Serializer};
@@ -309,6 +311,73 @@ impl Note {
 
             Note::from_bc_pitch_stoffset_octave(pitch, semitone_offset, octave)
         }
+    }
+
+    pub fn add_transpose(self, t: i8) -> Result<Self, BytecodeError> {
+        const MIN: u8 = Note::MIN.note_id;
+        const MAX: u8 = Note::MAX.note_id;
+
+        match self.note_id.checked_add_signed(t) {
+            Some(note_id @ MIN..=MAX) => Ok(Note { note_id }),
+            _ => Err(BytecodeError::TransposedNoteOverflow(self, t..=t)),
+        }
+    }
+
+    pub fn add_transpose_range(self, tmin: i8, tmax: i8) -> Result<(Self, Self), BytecodeError> {
+        const MIN: u8 = Note::MIN.note_id;
+        const MAX: u8 = Note::MAX.note_id;
+
+        debug_assert!(tmin <= tmax);
+
+        match (
+            self.note_id.checked_add_signed(tmin),
+            self.note_id.checked_add_signed(tmax),
+        ) {
+            (Some(min @ MIN..=MAX), Some(max @ MIN..=MAX)) => {
+                Ok((Note { note_id: min }, Note { note_id: max }))
+            }
+            _ => Err(BytecodeError::TransposedNoteOverflow(self, tmin..=tmax)),
+        }
+    }
+}
+
+pub(crate) trait NoteRange {
+    fn extend_note(&mut self, n: Note);
+
+    fn merge(&mut self, r: &RangeInclusive<Note>);
+}
+
+impl NoteRange for RangeInclusive<Note> {
+    fn extend_note(&mut self, note: Note) {
+        if self.is_empty() {
+            *self = note..=note;
+        } else if note < *self.start() {
+            *self = note..=*(self.end());
+        } else if note > *self.end() {
+            *self = *(self.start())..=note;
+        }
+    }
+
+    fn merge(&mut self, r: &RangeInclusive<Note>) {
+        if self.is_empty() {
+            *self = r.clone()
+        } else {
+            *self = std::cmp::min(*self.start(), *r.start())..=std::cmp::max(*self.end(), *r.end())
+        }
+    }
+}
+
+pub(crate) fn add_transpose_range_to_note_range(
+    note_range: &RangeInclusive<Note>,
+    tmin: i8,
+    tmax: i8,
+) -> Result<RangeInclusive<Note>, BytecodeError> {
+    if !note_range.is_empty() {
+        let start = note_range.start().add_transpose(tmin)?;
+        let end = note_range.end().add_transpose(tmax)?;
+        Ok(start..=end)
+    } else {
+        Ok(note_range.clone())
     }
 }
 

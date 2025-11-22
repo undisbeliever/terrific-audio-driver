@@ -340,18 +340,30 @@ pub enum BytecodeError {
 
     GotoRelativeOutOfBounds,
 
+    TransposedNoteOverflow(Note, RangeInclusive<i8>),
+
     NoteOutOfRange(Note, RangeInclusive<Note>),
+    TransposedNoteOutOfRange {
+        note: Note,
+        transpose: RangeInclusive<i8>,
+        inst_range: RangeInclusive<Note>,
+    },
     NoteOutOfRangeEmptyNoteRange(Note),
     CannotPlayNoteBeforeSettingInstrument,
 
     SubroutinePlaysNotesWithNoInstrument,
+    SubroutineInstrumentHintFrequencyMismatch {
+        subroutine: InstrumentHintFreq,
+        instrument: InstrumentHintFreq,
+    },
     SubroutineNotesOutOfRange {
         subroutine_range: RangeInclusive<Note>,
         inst_range: RangeInclusive<Note>,
     },
-    SubroutineInstrumentHintFrequencyMismatch {
-        subroutine: InstrumentHintFreq,
-        instrument: InstrumentHintFreq,
+    TransposedSubroutineNotesOutOfRange {
+        notes: RangeInclusive<Note>,
+        transpose: RangeInclusive<i8>,
+        inst_range: RangeInclusive<Note>,
     },
     SubroutineInstrumentHintSampleMismatch,
     SubroutineInstrumentHintNoInstrumentSet,
@@ -1392,6 +1404,24 @@ impl Display for BytecodeError {
                 )
             }
 
+            Self::TransposedNoteOverflow(n, transpose) => {
+                if transpose.start() == transpose.end() {
+                    write!(
+                        f,
+                        "driver transposed note overflows ({}, transpose {:+})",
+                        n.note_id(),
+                        transpose.start(),
+                    )
+                } else {
+                    write!(
+                        f,
+                        "driver transposed note overflows ({}, transpose: {:+} to {:+})",
+                        n.note_id(),
+                        transpose.start(),
+                        transpose.end()
+                    )
+                }
+            }
             Self::NoteOutOfRange(n, range) => {
                 write!(
                     f,
@@ -1399,6 +1429,29 @@ impl Display for BytecodeError {
                     n.note_id(),
                     range.start().note_id(),
                     range.end().note_id(),
+                )
+            }
+            Self::TransposedNoteOutOfRange {
+                note,
+                transpose,
+                inst_range,
+            } => {
+                write!(f, "driver transposed note out of range ({}", note.note_id(),)?;
+                if transpose.start() == transpose.end() {
+                    write!(f, ", transpose {:+}", transpose.start())?;
+                } else {
+                    write!(
+                        f,
+                        ", transpose {:+} - {:+}",
+                        transpose.start(),
+                        transpose.end()
+                    )?;
+                }
+                write!(
+                    f,
+                    ", instrument range: {} - {})",
+                    inst_range.start().note_id(),
+                    inst_range.end().note_id(),
                 )
             }
             Self::NoteOutOfRangeEmptyNoteRange(n) => {
@@ -1433,6 +1486,42 @@ impl Display for BytecodeError {
                         inst_range.end().note_id(),
                     )
                 }
+            }
+            Self::TransposedSubroutineNotesOutOfRange {
+                notes,
+                transpose,
+                inst_range,
+            } => {
+                if notes.start() == notes.end() {
+                    write!(
+                        f,
+                        "transposed subroutine call plays an out of range note ({}",
+                        notes.start().note_id(),
+                    )?
+                } else {
+                    write!(
+                        f,
+                        "transposed subroutine call plays out of range notes ({} - {}",
+                        notes.start().note_id(),
+                        notes.end().note_id(),
+                    )?
+                }
+                if transpose.start() == transpose.end() {
+                    write!(f, ", transpose {:+}", transpose.start())?
+                } else {
+                    write!(
+                        f,
+                        ", transpose {:+} - {:+}",
+                        transpose.start(),
+                        transpose.end()
+                    )?
+                }
+                write!(
+                    f,
+                    ", instrument range: {} - {})",
+                    inst_range.start().note_id(),
+                    inst_range.end().note_id(),
+                )
             }
             Self::SubroutineInstrumentHintFrequencyMismatch {
                 subroutine: sub_freq,

@@ -1275,3 +1275,553 @@ fn transpose_overflow_errors_in_song_loop() {
         ],
     );
 }
+
+#[test]
+fn transposed_note_out_of_range_error_tests() {
+    assert_one_error_in_mml_line(
+        "_+1 o6 b",
+        8,
+        BytecodeError::TransposedNoteOutOfRange {
+            note: note("b6"),
+            transpose: 1..=1,
+            inst_range: note("c2")..=note("b6"),
+        }
+        .into(),
+    );
+
+    assert_one_error_in_mml_line(
+        "_-1 o2 c",
+        8,
+        BytecodeError::TransposedNoteOutOfRange {
+            note: note("c2"),
+            transpose: -1..=-1,
+            inst_range: note("c2")..=note("b6"),
+        }
+        .into(),
+    );
+
+    assert_one_error_in_mml_line(
+        "[__+7 o3 c]8",
+        10,
+        BytecodeError::TransposedNoteOutOfRange {
+            note: note("c3"),
+            transpose: 7..=56,
+            inst_range: note("c2")..=note("b6"),
+        }
+        .into(),
+    );
+
+    assert_one_error_in_mml_line(
+        "[__-3 c : __-5]5",
+        7,
+        BytecodeError::TransposedNoteOutOfRange {
+            note: note("c4"),
+            transpose: -35..=-3,
+            inst_range: note("c2")..=note("b6"),
+        }
+        .into(),
+    );
+}
+
+#[test]
+fn transposed_note_out_of_range_in_subroutine_with_known_instrument() {
+    // Instrument is known, transpose is known
+    assert_one_subroutine_error_in_mml(
+        r##"
+@1 dummy_instrument
+
+!s @1 o3 _-21 c
+
+A !s
+"##,
+        "!s",
+        15,
+        BytecodeError::TransposedNoteOutOfRange {
+            note: note("c3"),
+            transpose: -21..=-21,
+            inst_range: note("c2")..=note("b6"),
+        }
+        .into(),
+    );
+
+    // Called with transpose disabled
+    assert_one_subroutine_error_in_mml(
+        r##"
+@1 dummy_instrument
+
+!s @1 [__+7 o3 c]8
+
+A !s
+"##,
+        "!s",
+        16,
+        BytecodeError::TransposedNoteOutOfRange {
+            note: note("c3"),
+            transpose: 7..=56,
+            inst_range: note("c2")..=note("b6"),
+        }
+        .into(),
+    );
+}
+
+#[test]
+fn transposed_note_out_of_range_in_subroutine_call_with_known_instrument() {
+    // Instrument is known, transpose is not known
+    assert_one_subroutine_error_in_mml(
+        r##"
+@1 dummy_instrument
+
+!s @1 c
+
+A _+4 !s _+36 !s _-12 !s __-12 !s
+"##,
+        "!s",
+        7,
+        BytecodeError::TransposedNoteOutOfRange {
+            note: note("c4"),
+            transpose: -24..=36,
+            inst_range: note("c2")..=note("b6"),
+        }
+        .into(),
+    );
+
+    // Instrument is known, subroutine adjusts transpose
+    assert_one_subroutine_error_in_mml(
+        r##"
+@1 dummy_instrument
+
+!s @1 o5 c __-12
+
+A _+4 [ !s ]5
+"##,
+        "!s",
+        10,
+        BytecodeError::TransposedNoteOutOfRange {
+            note: note("c5"),
+            transpose: -44..=4,
+            inst_range: note("c2")..=note("b6"),
+        }
+        .into(),
+    );
+}
+
+#[test]
+fn transposed_note_out_of_range_in_subroutine_call_with_unknown_instrument() {
+    assert_one_error_in_channel_a_mml(
+        r##"
+@1 dummy_instrument
+
+!s o3c o4c o5c
+
+A @1 _+26 !s
+"##,
+        11,
+        BytecodeError::TransposedSubroutineNotesOutOfRange {
+            notes: note("c3")..=note("c5"),
+            transpose: 26..=26,
+            inst_range: note("c2")..=note("b6"),
+        }
+        .into(),
+    );
+
+    assert_one_error_in_channel_a_mml(
+        r##"
+@1 dummy_instrument
+
+!s o3c o4c o5c
+
+A @1 _-17 !s
+"##,
+        11,
+        BytecodeError::TransposedSubroutineNotesOutOfRange {
+            notes: note("c3")..=note("c5"),
+            transpose: -17..=-17,
+            inst_range: note("c2")..=note("b6"),
+        }
+        .into(),
+    );
+
+    // transpose inst_range
+    assert_one_error_in_channel_a_mml(
+        r##"
+@1 dummy_instrument
+
+!s o3c o4c o5c
+
+A @1 _+10 [ __-7 !s ]5
+"##,
+        18,
+        BytecodeError::TransposedSubroutineNotesOutOfRange {
+            notes: note("c3")..=note("c5"),
+            transpose: -25..=3,
+            inst_range: note("c2")..=note("b6"),
+        }
+        .into(),
+    );
+
+    // subroutine modifies transpose
+    assert_one_error_in_channel_a_mml(
+        r##"
+@1 dummy_instrument
+
+!s o5 c __-12
+
+A @1 _+4 [ !s ]5
+"##,
+        12,
+        BytecodeError::TransposedSubroutineNotesOutOfRange {
+            notes: note("c5")..=note("c5"),
+            transpose: -44..=4,
+            inst_range: note("c2")..=note("b6"),
+        }
+        .into(),
+    );
+}
+
+#[test]
+fn transposed_note_out_of_inst_range_in_subroutine_call_with_known_and_unknown_instruments() {
+    // Tests:
+    //  * Subroutine with known and unknown instrument notes
+    //  * Test only unknown notes are in the error message
+    //  * Test instrument after subroutine call is correct
+    //  * Only the middle call is out-of-inst_range
+
+    assert_one_error_in_channel_a_mml(
+        r##"
+@14  f1000_o4
+@135 f1000_o3_o5
+
+!s o4cd @135 o4c o5c
+
+A @14 _+2 !s @14 _-3 !s !s @135 _-3 !s
+"##,
+        22,
+        BytecodeError::TransposedSubroutineNotesOutOfRange {
+            notes: note("c4")..=note("d4"),
+            transpose: -3..=-3,
+            inst_range: note("c4")..=note("b4"),
+        }
+        .into(),
+    );
+
+    assert_one_error_in_channel_a_mml(
+        r##"
+@14  f1000_o4
+@135 f1000_o3_o5
+
+!s o4cd @135 o4c o5c
+
+A @14 _+2 [@14 !s __-3]2 @135 !s !s _-0 [@135 !s __-3]2
+"##,
+        16,
+        BytecodeError::TransposedSubroutineNotesOutOfRange {
+            notes: note("c4")..=note("d4"),
+            transpose: -1..=2,
+            inst_range: note("c4")..=note("b4"),
+        }
+        .into(),
+    );
+
+    // unknown instrument notes OK, known instrument notes out of range
+    assert_one_subroutine_error_in_mml(
+        r##"
+@14  f1000_o4
+@135 f1000_o3_o5
+
+!s o5cd @14 o4 c
+
+A [@135 __-1 !s ]6
+"##,
+        "!s",
+        16,
+        BytecodeError::TransposedNoteOutOfRange {
+            note: note("c4"),
+            transpose: -6..=-1,
+            inst_range: note("c4")..=note("b4"),
+        }
+        .into(),
+    );
+
+    // unknown instrument notes OK, known instrument notes out of range
+    assert_one_subroutine_error_in_mml(
+        r##"
+@14  f1000_o4
+@135 f1000_o3_o5
+
+!s o4cd @14 o4 c
+
+A [@135 __+1 !s ]18
+"##,
+        "!s",
+        16,
+        BytecodeError::TransposedNoteOutOfRange {
+            note: note("c4"),
+            transpose: 1..=18,
+            inst_range: note("c4")..=note("b4"),
+        }
+        .into(),
+    );
+}
+
+#[test]
+fn transposed_note_out_of_range_in_subroutine_sets_instrument_in_loop() {
+    assert_mml_subroutine_matches_bytecode(
+        r##"
+@14  f1000_o4
+@135 f1000_o3_o5
+
+!s [c @14]2
+
+A [@135 __+1 !s ]11
+"##,
+        0,
+        &[
+            "start_loop",
+            "play_note c4 24",
+            "set_instrument f1000_o4",
+            "end_loop 2",
+        ],
+    );
+
+    assert_one_subroutine_error_in_mml(
+        r##"
+@14  f1000_o4
+@135 f1000_o3_o5
+
+!s [c @14]2
+
+A [@135 __+1 !s ]12
+"##,
+        "!s",
+        5,
+        BytecodeError::TransposedNoteOutOfRange {
+            note: note("c4"),
+            transpose: 1..=12,
+            inst_range: note("c4")..=note("b4"),
+        }
+        .into(),
+    );
+}
+
+#[test]
+fn transposed_note_out_of_inst_range_in_nested_subroutine_call_with_known_and_unknown_instruments()
+{
+    assert_one_error_in_channel_a_mml(
+        r##"
+@14  f1000_o4
+@135 f1000_o3_o5
+
+!s0 o4d @135 o4c o5c
+!s1 o4c !s0 __+1 !s0
+
+A @14 _+2 !s1 @14 _-3 !s1 !s1 @135 _-3 !s1
+"##,
+        23,
+        BytecodeError::TransposedSubroutineNotesOutOfRange {
+            // Only the first `o4c` and `o4d` is played with an unknown instrument
+            notes: note("c4")..=note("d4"),
+            transpose: -3..=-3,
+            inst_range: note("c4")..=note("b4"),
+        }
+        .into(),
+    );
+
+    assert_one_error_in_channel_a_mml(
+        r##"
+@14  f1000_o4
+@135 f1000_o3_o5
+
+!s0 o4c @135 o4c o5c
+!s1 o4d !s0 __-1 !s0
+
+A @14 _+2 [@14 !s1 __-3]2 @135 !s1 !s1 _-0 [@135 !s1 __-3]2
+"##,
+        16,
+        BytecodeError::TransposedSubroutineNotesOutOfRange {
+            // Only the first `c4` and `d4` is played with an unknown instrument
+            notes: note("c4")..=note("d4"),
+            transpose: -2..=2,
+            inst_range: note("c4")..=note("b4"),
+        }
+        .into(),
+    );
+
+    // unknown instrument notes OK, known instrument notes out of range
+    assert_one_subroutine_error_in_mml(
+        r##"
+@14  f1000_o4
+@135 f1000_o3_o5
+
+!s0 o5c @14 o4 c
+!s1 __-1 !s0
+
+A [@135 !s1 ]6
+"##,
+        "!s0",
+        16,
+        BytecodeError::TransposedNoteOutOfRange {
+            note: note("c4"),
+            transpose: -6..=-1,
+            inst_range: note("c4")..=note("b4"),
+        }
+        .into(),
+    );
+
+    // unknown instrument notes OK, known instrument notes out of range
+    assert_one_subroutine_error_in_mml(
+        r##"
+@14  f1000_o4
+@135 f1000_o3_o5
+
+!s0 o4c @14 o4 c
+!s1 !s0 __+2
+
+A [@135 !s1 ]18
+"##,
+        "!s0",
+        16,
+        BytecodeError::TransposedNoteOutOfRange {
+            note: note("c4"),
+            transpose: 0..=34,
+            inst_range: note("c4")..=note("b4"),
+        }
+        .into(),
+    );
+
+    // unknown instrument notes OK, known instrument notes out of range
+    assert_one_subroutine_error_in_mml(
+        r##"
+@14  f1000_o4
+@135 f1000_o3_o5
+
+!s0 o4c @14 o4 c
+!s1 __+1 !s0
+
+A [@135 !s1 ]18
+"##,
+        "!s0",
+        16,
+        BytecodeError::TransposedNoteOutOfRange {
+            note: note("c4"),
+            transpose: 1..=18,
+            inst_range: note("c4")..=note("b4"),
+        }
+        .into(),
+    );
+
+    assert_one_error_in_channel_a_mml(
+        r##"
+@14  f1000_o4
+@135 f1000_o3_o5
+
+!s0 o4d o5d
+!s1 o4c @135 !s0 !s0 r
+
+A @14 _+2 !s1 @14 _-3 !s1 !s1 @135 _-3 !s1
+"##,
+        23,
+        BytecodeError::TransposedSubroutineNotesOutOfRange {
+            // Only the first `o4c` in `s1` is invoked with an unknown instrument
+            notes: note("c4")..=note("c4"),
+            transpose: -3..=-3,
+            inst_range: note("c4")..=note("b4"),
+        }
+        .into(),
+    );
+}
+
+#[test]
+fn transposed_note_overflow_error_tests() {
+    assert_one_error_in_mml_line(
+        "_+47 c",
+        6,
+        BytecodeError::TransposedNoteOutOfRange {
+            note: note("c4"),
+            transpose: 47..=47,
+            inst_range: note("c2")..=note("b6"),
+        }
+        .into(),
+    );
+    assert_one_error_in_mml_line(
+        "_+48 c",
+        6,
+        BytecodeError::TransposedNoteOverflow(note("c4"), 48..=48).into(),
+    );
+
+    assert_one_error_in_mml_line(
+        "_-48 c",
+        6,
+        BytecodeError::TransposedNoteOutOfRange {
+            note: note("c4"),
+            transpose: -48..=-48,
+            inst_range: note("c2")..=note("b6"),
+        }
+        .into(),
+    );
+    assert_one_error_in_mml_line(
+        "_-49 c",
+        6,
+        BytecodeError::TransposedNoteOverflow(note("c4"), -49..=-49).into(),
+    );
+
+    assert_one_error_in_mml_line(
+        "[__+10 c]10",
+        8,
+        BytecodeError::TransposedNoteOverflow(note("c4"), 10..=100).into(),
+    );
+
+    assert_one_error_in_mml_line(
+        "_+12 [__-8 c]12",
+        12,
+        BytecodeError::TransposedNoteOverflow(note("c4"), -84..=4).into(),
+    );
+
+    assert_one_error_in_mml_line(
+        "[ c [[__+3 c : __+5]7]2 : [ __-6 r ]17 r ]50 r __-102 c",
+        12,
+        BytecodeError::TransposedNoteOverflow(note("c4"), 3..=102).into(),
+    );
+    assert_one_error_in_mml_line(
+        "[ c [[__+3 r : __+5]7]2 : [ __-6 c ]17 r ]50 r __-102 c",
+        34,
+        BytecodeError::TransposedNoteOverflow(note("c4"), 0..=96).into(),
+    );
+    assert_one_error_in_mml_line(
+        "[ c [[__+3 r : __+5]7]2 : [ __-6 r ]17 r ]50 c __-102 c",
+        46,
+        BytecodeError::TransposedNoteOverflow(note("c4"), 102..=102).into(),
+    );
+}
+
+#[test]
+fn transposed_note_overflow_error_in_subroutine() {
+    // Instrument is known, transpose is not known
+    assert_one_subroutine_error_in_mml(
+        r##"
+@1 dummy_instrument
+
+!s @1 c
+
+A _+6 !s _+80 !s _-60 !s
+"##,
+        "!s",
+        7,
+        BytecodeError::TransposedNoteOverflow(note("c4"), -60..=80).into(),
+    );
+
+    // Instrument is known, transpose is not known
+    assert_one_subroutine_error_in_mml(
+        r##"
+@1 dummy_instrument
+@2 dummy_instrument_2
+
+!s0 @1 c
+!s1 @2 !s0 r
+
+A _+6 !s1 _+80 !s1 _-60 !s1
+"##,
+        "!s0",
+        8,
+        BytecodeError::TransposedNoteOverflow(note("c4"), -60..=80).into(),
+    );
+}
