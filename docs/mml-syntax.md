@@ -447,7 +447,7 @@ Numbers can be decimal, or hexadecimal when prefixed with `$` (ie, `$ff`)
     * The octave can be changed inside the braces.  For example: `{a > c}2` and `{o3 c o4 c}2`
     * The pitches can be `P`, `PR` or `PF` commands
     * `pitch1` is optional if the previous note is slurred and known (ie, not at the start of a loop)
-    * If the instrument is not known, the maximum duration of the pitch slide is 255 ticks.
+    * If the instrument is not known or driver transpose is active, the maximum duration of the pitch slide is 255 ticks.
 
  * `{{<pitch list>}} [total_length] [, note_length] [, tie]` - Broken Chord
     * Quickly cycle through the pitches for a given duration (`length`).
@@ -498,6 +498,7 @@ Numbers can be decimal, or hexadecimal when prefixed with `$` (ie, `$ff`)
     * MP Vibrato does not take effect immediately.  The vibrato starts on the next note played.
     * CAUTION: MP Vibrato does not persist across subroutine calls.
       When calling a `!` subroutine, MP vibrato is temporally disabled and MP vibrato resumes after the `!` mml subroutine returns.
+    * MP vibrato cannot used be when driver transpose is active.
 
 <br/>
 
@@ -553,6 +554,7 @@ Numbers can be decimal, or hexadecimal when prefixed with `$` (ie, `$ff`)
     * Detunes play-note and portamento commands by a given number of cents.
     * `MD` automatically calculates the `VxPITCH` detune and adds a `D` detune command before each note.
       For example, `MD+20 c d e` would expand to  `D+25 c D+28 d D+31 e`.
+    * `MD` cannot used be when driver transpose is active.
     * CAUTION: `MD` increases the song data by 2 or 3 bytes per note.
       If you have a lot of notes with a fixed `MD` cents, you could clone and detune the instrument instead.
  * `MD0` - disable automatic detune

@@ -2010,3 +2010,586 @@ A @1 !s
         ],
     );
 }
+
+// Loop Analysis
+// =============
+
+mod loop_analysis {
+    use crate::*;
+
+    const PORTAMENTO_1: &str = "portamento d4 keyoff  +6 23";
+    const PORTAMENTO_2: &str = "portamento d4 keyoff  +3 23";
+    const PORTAMENTO_3: &str = "portamento d4 keyoff  +2 23";
+    const PORTAMENTO_CALC: &str = "portamento_calc d4 keyoff 22 23";
+
+    #[test]
+    fn mml_loops() {
+        assert_mml_channel_a_matches_bytecode(
+            r##"
+@14 f1000_o4
+@13 f1000_o3_o5
+
+A @14 {cd} [ {cd} @13 ]2
+"##,
+            &[
+                "set_instrument f1000_o4",
+                "play_note c4 no_keyoff 1",
+                PORTAMENTO_1,
+                // Same instrument tuning in loop
+                "start_loop",
+                "play_note c4 no_keyoff 1",
+                PORTAMENTO_1,
+                "set_instrument f1000_o3_o5",
+                "end_loop 2",
+            ],
+        );
+
+        assert_mml_channel_a_matches_bytecode(
+            r##"
+@14 f1000_o4
+
+A @14 {cd} [ {cd} ]2 {cd}
+"##,
+            &[
+                "set_instrument f1000_o4",
+                "play_note c4 no_keyoff 1",
+                PORTAMENTO_1,
+                // No instrument change in loop
+                "start_loop",
+                "play_note c4 no_keyoff 1",
+                PORTAMENTO_1,
+                "end_loop 2",
+                "play_note c4 no_keyoff 1",
+                PORTAMENTO_1,
+            ],
+        );
+
+        assert_mml_channel_a_matches_bytecode(
+            r##"
+@14 f1000_o4
+@24 f2000_o4
+
+A @14 {cd} [ {cd} @24 ]2
+"##,
+            &[
+                "set_instrument f1000_o4",
+                "play_note c4 no_keyoff 1",
+                PORTAMENTO_1,
+                // Different instrument tuning in loop
+                "start_loop",
+                "play_note c4 no_keyoff 1",
+                PORTAMENTO_CALC,
+                "set_instrument f2000_o4",
+                "end_loop 2",
+            ],
+        );
+    }
+
+    #[test]
+    fn skip_last_loop() {
+        assert_mml_channel_a_matches_bytecode(
+            r##"
+@14 f1000_o4
+@13 f1000_o3_o5
+
+A @14 {cd} [ {cd} @14 {cd} : @13 {cd} ]2 {cd}
+"##,
+            &[
+                "set_instrument f1000_o4",
+                "play_note c4 no_keyoff 1",
+                PORTAMENTO_1,
+                // Same instrument tuning at start of loop
+                "start_loop",
+                "play_note c4 no_keyoff 1",
+                PORTAMENTO_1,
+                "set_instrument f1000_o4",
+                "play_note c4 no_keyoff 1",
+                PORTAMENTO_1,
+                "skip_last_loop",
+                "set_instrument f1000_o3_o5",
+                "play_note c4 no_keyoff 1",
+                PORTAMENTO_1,
+                "end_loop 2",
+                "play_note c4 no_keyoff 1",
+                PORTAMENTO_1,
+            ],
+        );
+
+        assert_mml_channel_a_matches_bytecode(
+            r##"
+@14 f1000_o4
+@24 f2000_o4
+
+A @14 {cd} [ {cd} @14 {cd} : @24 {cd} ]2 {cd}
+"##,
+            &[
+                "set_instrument f1000_o4",
+                "play_note c4 no_keyoff 1",
+                PORTAMENTO_1,
+                // Different instrument tuning at start of loop
+                "start_loop",
+                "play_note c4 no_keyoff 1",
+                PORTAMENTO_CALC,
+                "set_instrument f1000_o4",
+                "play_note c4 no_keyoff 1",
+                PORTAMENTO_1,
+                "skip_last_loop",
+                "set_instrument f2000_o4",
+                "play_note c4 no_keyoff 1",
+                PORTAMENTO_2,
+                "end_loop 2",
+                "play_note c4 no_keyoff 1",
+                PORTAMENTO_1,
+            ],
+        );
+
+        assert_mml_channel_a_matches_bytecode(
+            r##"
+@14 f1000_o4
+@24 f2000_o4
+
+A @14 {cd} [ {cd} @24 {cd} : @14 {cd} ]2 {cd}
+"##,
+            &[
+                "set_instrument f1000_o4",
+                "play_note c4 no_keyoff 1",
+                PORTAMENTO_1,
+                // Same instrument tuning at start of loop
+                "start_loop",
+                "play_note c4 no_keyoff 1",
+                PORTAMENTO_1,
+                "set_instrument f2000_o4",
+                "play_note c4 no_keyoff 1",
+                PORTAMENTO_2,
+                "skip_last_loop",
+                "set_instrument f1000_o4",
+                "play_note c4 no_keyoff 1",
+                PORTAMENTO_1,
+                "end_loop 2",
+                "play_note c4 no_keyoff 1",
+                PORTAMENTO_2,
+            ],
+        );
+    }
+
+    #[test]
+    fn loop_and_subroutine() {
+        assert_mml_channel_a_matches_bytecode(
+            r##"
+@14 f1000_o4
+@13 f1000_o3_o5
+@24 f2000_o4
+
+!s1 @13 {cd}
+
+A @14 {cd} [ {cd} @24 {cd} : !s1 {cd} ]2 {cd}
+"##,
+            &[
+                "set_instrument f1000_o4",
+                "play_note c4 no_keyoff 1",
+                PORTAMENTO_1,
+                // Instrument tuning unchanged at loop start
+                "start_loop",
+                "play_note c4 no_keyoff 1",
+                PORTAMENTO_1,
+                "set_instrument f2000_o4",
+                "play_note c4 no_keyoff 1",
+                PORTAMENTO_2,
+                "skip_last_loop",
+                "call_subroutine s1",
+                "play_note c4 no_keyoff 1",
+                PORTAMENTO_1,
+                "end_loop 2",
+                "play_note c4 no_keyoff 1",
+                PORTAMENTO_2,
+            ],
+        );
+
+        assert_mml_channel_a_matches_bytecode(
+            r##"
+@14 f1000_o4
+@24 f2000_o4
+
+!s1 @14 {cd}
+!s2 @24 {cd}
+
+A @14 {cd} [ {cd} !s1 {cd} : !s2 {cd} ]2 {cd}
+"##,
+            &[
+                "set_instrument f1000_o4",
+                "play_note c4 no_keyoff 1",
+                PORTAMENTO_1,
+                // Different instrument tuning at start of loop
+                "start_loop",
+                "play_note c4 no_keyoff 1",
+                PORTAMENTO_CALC,
+                "call_subroutine s1",
+                "play_note c4 no_keyoff 1",
+                PORTAMENTO_1,
+                "skip_last_loop",
+                "call_subroutine s2",
+                "play_note c4 no_keyoff 1",
+                PORTAMENTO_2,
+                "end_loop 2",
+                "play_note c4 no_keyoff 1",
+                PORTAMENTO_1,
+            ],
+        );
+
+        assert_mml_channel_a_matches_bytecode(
+            r##"
+@14 f1000_o4
+@24 f2000_o4
+
+!s1 @14 {cd}
+!s2 @24 {cd}
+
+A @14 {cd} [ {cd} !s1 {cd} : !s2 {cd} ]2 {cd}
+"##,
+            &[
+                "set_instrument f1000_o4",
+                "play_note c4 no_keyoff 1",
+                PORTAMENTO_1,
+                // Different instrument tuning at start of loop
+                "start_loop",
+                "play_note c4 no_keyoff 1",
+                PORTAMENTO_CALC,
+                "call_subroutine s1",
+                "play_note c4 no_keyoff 1",
+                PORTAMENTO_1,
+                "skip_last_loop",
+                "call_subroutine s2",
+                "play_note c4 no_keyoff 1",
+                PORTAMENTO_2,
+                "end_loop 2",
+                "play_note c4 no_keyoff 1",
+                PORTAMENTO_1,
+            ],
+        );
+
+        assert_mml_channel_a_matches_bytecode(
+            r##"
+@14 f1000_o4
+@24 f2000_o4
+
+!s1 @14 {cd}
+!s2 @24 {cd}
+
+A @14 {cd} [ {cd} !s2 {cd} : !s1 {cd} ]2 {cd}
+"##,
+            &[
+                "set_instrument f1000_o4",
+                "play_note c4 no_keyoff 1",
+                PORTAMENTO_1,
+                // Same instrument tuning at start of loop
+                "start_loop",
+                "play_note c4 no_keyoff 1",
+                PORTAMENTO_1,
+                "call_subroutine s2",
+                "play_note c4 no_keyoff 1",
+                PORTAMENTO_2,
+                "skip_last_loop",
+                "call_subroutine s1",
+                "play_note c4 no_keyoff 1",
+                PORTAMENTO_1,
+                "end_loop 2",
+                "play_note c4 no_keyoff 1",
+                PORTAMENTO_2,
+            ],
+        );
+    }
+
+    #[test]
+    fn loop_and_instrument_asm() {
+        assert_mml_channel_a_matches_bytecode(
+            r##"
+A \asm { set_instrument f1000_o4 }
+A [ {cd} \asm { set_instrument_and_adsr f1000_o4 1 2 3 4 } {cd} : \asm { set_instrument_and_gain f2000_o4 F127 } {cd} ]2 {cd}
+"##,
+            &[
+                "set_instrument f1000_o4",
+                // Different instrument tuning at start of loop
+                "start_loop",
+                "play_note c4 no_keyoff 1",
+                PORTAMENTO_CALC,
+                "set_instrument_and_adsr f1000_o4 1 2 3 4",
+                "play_note c4 no_keyoff 1",
+                PORTAMENTO_1,
+                "skip_last_loop",
+                "set_instrument_and_gain f2000_o4 F127",
+                "play_note c4 no_keyoff 1",
+                PORTAMENTO_2,
+                "end_loop 2",
+                "play_note c4 no_keyoff 1",
+                PORTAMENTO_1,
+            ],
+        );
+
+        assert_mml_channel_a_matches_bytecode(
+            r##"
+A \asm {
+    set_instrument f1000_o4
+    start_loop
+        set_instrument_and_adsr f2000_o4 1 2 3 4
+        rest 24
+        set_instrument_and_gain f1000_o4 F127
+        rest 24
+    end_loop 2
+}
+A {cd}
+"##,
+            &[
+                "set_instrument f1000_o4",
+                "start_loop",
+                "set_instrument_and_adsr f2000_o4 1 2 3 4",
+                "rest 24",
+                "set_instrument_and_gain f1000_o4 F127",
+                "rest 24",
+                "end_loop 2",
+                // Instrument is f1000_o4
+                "play_note c4 no_keyoff 1",
+                PORTAMENTO_1,
+            ],
+        );
+
+        assert_mml_channel_a_matches_bytecode(
+            r##"
+A \asm {
+    set_instrument f1000_o4
+    start_loop
+        set_instrument_and_adsr f2000_o4 1 2 3 4
+        rest 24
+        skip_last_loop
+        set_instrument_and_gain f1000_o4 F127
+        rest 24
+    end_loop 2
+}
+A {cd}
+"##,
+            &[
+                "set_instrument f1000_o4",
+                "start_loop",
+                "set_instrument_and_adsr f2000_o4 1 2 3 4",
+                "rest 24",
+                "skip_last_loop",
+                "set_instrument_and_gain f1000_o4 F127",
+                "rest 24",
+                "end_loop 2",
+                // Instrument is f2000_o4
+                "play_note c4 no_keyoff 1",
+                PORTAMENTO_2,
+            ],
+        );
+    }
+
+    #[test]
+    fn nested_loops() {
+        assert_mml_channel_a_matches_bytecode(
+            r##"
+@14 f1000_o4
+@13 f1000_o3_o5
+
+A @14 [ [ {cd} @13 {cd} ]2 @14 ]3 {cd}
+"##,
+            &[
+                "set_instrument f1000_o4",
+                // Same instrument tuning at start of loop
+                "start_loop",
+                "start_loop",
+                "play_note c4 no_keyoff 1",
+                PORTAMENTO_1,
+                "set_instrument f1000_o3_o5",
+                "play_note c4 no_keyoff 1",
+                PORTAMENTO_1,
+                "end_loop 2",
+                "set_instrument f1000_o4",
+                "end_loop 3",
+                "play_note c4 no_keyoff 1",
+                PORTAMENTO_1,
+            ],
+        );
+
+        assert_mml_channel_a_matches_bytecode(
+            r##"
+@14 f1000_o4
+@13 f1000_o3_o5
+@24 f2000_o4
+
+A @14 [ [ {cd} @14 {cd} @13 {cd} ]2 : @24 {cd} ]3 {cd}
+"##,
+            &[
+                "set_instrument f1000_o4",
+                // Different instrument tuning at start of loop
+                "start_loop",
+                "start_loop",
+                "play_note c4 no_keyoff 1",
+                PORTAMENTO_CALC,
+                "set_instrument f1000_o4",
+                "play_note c4 no_keyoff 1",
+                PORTAMENTO_1,
+                "set_instrument f1000_o3_o5",
+                "play_note c4 no_keyoff 1",
+                PORTAMENTO_1,
+                "end_loop 2",
+                "skip_last_loop",
+                "set_instrument f2000_o4",
+                "play_note c4 no_keyoff 1",
+                PORTAMENTO_2,
+                "end_loop 3",
+                // loop ends with @13
+                "play_note c4 no_keyoff 1",
+                PORTAMENTO_1,
+            ],
+        );
+
+        assert_mml_channel_a_matches_bytecode(
+            r##"
+@14 f1000_o4
+@24 f2000_o4
+
+A @14 [ [ {cd} @14 {cd} : @24 {cd} ]2 {cd} ]3 {cd}
+"##,
+            &[
+                "set_instrument f1000_o4",
+                // Same instrument tuning at start of loop
+                "start_loop",
+                // Different instrument tuning at start of loop
+                "start_loop",
+                "play_note c4 no_keyoff 1",
+                PORTAMENTO_CALC,
+                "set_instrument f1000_o4",
+                "play_note c4 no_keyoff 1",
+                PORTAMENTO_1,
+                "skip_last_loop",
+                "set_instrument f2000_o4",
+                "play_note c4 no_keyoff 1",
+                PORTAMENTO_2,
+                "end_loop 2",
+                // instrument @14 here
+                "play_note c4 no_keyoff 1",
+                PORTAMENTO_1,
+                "end_loop 3",
+                // loop ends with @14
+                "play_note c4 no_keyoff 1",
+                PORTAMENTO_1,
+            ],
+        );
+
+        assert_mml_channel_a_matches_bytecode(
+            r##"
+@14 f1000_o4
+@24 f2000_o4
+@34 f3000_o4
+
+A @14 [ {cd} @24 [ {cd} @14 {cd} @24 {cd} ]2 {cd} : @34 {cd} ]3 {cd}
+"##,
+            &[
+                "set_instrument f1000_o4",
+                // @14, @34 tuning at start of loop
+                "start_loop",
+                "play_note c4 no_keyoff 1",
+                PORTAMENTO_CALC,
+                "set_instrument f2000_o4",
+                // Same tuning at start of loop
+                "start_loop",
+                "play_note c4 no_keyoff 1",
+                PORTAMENTO_2,
+                "set_instrument f1000_o4",
+                "play_note c4 no_keyoff 1",
+                PORTAMENTO_1,
+                "set_instrument f2000_o4",
+                "play_note c4 no_keyoff 1",
+                PORTAMENTO_2,
+                "end_loop 2",
+                // instrument @24 here
+                "play_note c4 no_keyoff 1",
+                PORTAMENTO_2,
+                "skip_last_loop",
+                "set_instrument f3000_o4",
+                "play_note c4 no_keyoff 1",
+                PORTAMENTO_3,
+                "end_loop 3",
+                // loop ends with @24
+                "play_note c4 no_keyoff 1",
+                PORTAMENTO_2,
+            ],
+        );
+
+        assert_mml_channel_a_matches_bytecode(
+            r##"
+@14 f1000_o4
+@13 f1000_o3_o5
+
+A @14 [ {cd} [ {cd} @13 {cd} ]2 @13 {cd} : {cd} ]3 @13 {cd}
+"##,
+            &[
+                "set_instrument f1000_o4",
+                // @14, @13 at start of loop
+                "start_loop",
+                "play_note c4 no_keyoff 1",
+                PORTAMENTO_1,
+                // @14, @13 at start of loop
+                "start_loop",
+                "play_note c4 no_keyoff 1",
+                PORTAMENTO_1,
+                "set_instrument f1000_o3_o5",
+                "play_note c4 no_keyoff 1",
+                PORTAMENTO_1,
+                "end_loop 2",
+                // instrument @13 here
+                // @13 optimised out
+                "play_note c4 no_keyoff 1",
+                PORTAMENTO_1,
+                "skip_last_loop",
+                "play_note c4 no_keyoff 1",
+                PORTAMENTO_1,
+                "end_loop 3",
+                // loop ends with @13
+                // @13 optimised out
+                "play_note c4 no_keyoff 1",
+                PORTAMENTO_1,
+            ],
+        );
+    }
+
+    #[test]
+    fn song_loop() {
+        assert_mml_channel_a_matches_looping_bytecode(
+            r##"
+@14 f1000_o4
+@13 f1000_o3_o5
+
+A @14 {cd} L {cd} @13 r
+"##,
+            &[
+                "set_instrument f1000_o4",
+                "play_note c4 no_keyoff 1",
+                PORTAMENTO_1,
+                // Loop point - same instrument tuning
+                "play_note c4 no_keyoff 1",
+                PORTAMENTO_1,
+                "set_instrument f1000_o3_o5",
+                "rest 24",
+            ],
+        );
+
+        assert_mml_channel_a_matches_looping_bytecode(
+            r##"
+@14 f1000_o4
+@24 f2000_o4
+
+A @14 {cd} L {cd} @24 r
+"##,
+            &[
+                "set_instrument f1000_o4",
+                "play_note c4 no_keyoff 1",
+                PORTAMENTO_1,
+                // Loop point - unknown instrument tuning
+                "play_note c4 no_keyoff 1",
+                PORTAMENTO_CALC,
+                "set_instrument f2000_o4",
+                "rest 24",
+            ],
+        );
+    }
+}

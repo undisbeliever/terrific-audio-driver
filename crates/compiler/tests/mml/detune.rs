@@ -361,3 +361,126 @@ fn detune_cents_with_mp() {
         &["set_detune -628", "set_vibrato 29 6", "play_note c4 24"],
     );
 }
+
+#[test]
+fn instrument_tuning_loop_analysis() {
+    assert_mml_channel_a_matches_bytecode(
+        r##"
+@14 f1000_o4
+@13 f1000_o3_o5
+
+A MD+20 @14 [c @13 d]2 e
+"##,
+        &[
+            "set_instrument f1000_o4",
+            "start_loop",
+            "set_detune +12",
+            "play_note c4 24",
+            "set_instrument f1000_o3_o5",
+            "set_detune +14",
+            "play_note d4 24",
+            "end_loop 2",
+            "set_detune +16",
+            "play_note e4 24",
+        ],
+    );
+
+    assert_one_error_in_channel_a_mml(
+        r##"
+@14 f1000_o4
+@24 f2000_o4
+
+A MD+20 @14 [c @24 d]2 e
+"##,
+        14,
+        ChannelError::CannotUseDetuneCentsWithUnknownInstrumentTuning,
+    );
+
+    assert_mml_channel_a_matches_bytecode(
+        r##"
+@14 f1000_o4
+@13 f1000_o3_o5
+@24 f2000_o4
+
+A MD+20 @14 [c @24 d : @13 e]2 f
+"##,
+        &[
+            "set_instrument f1000_o4",
+            "start_loop",
+            "set_detune +12",
+            "play_note c4 24",
+            "set_instrument f2000_o4",
+            "set_detune +7",
+            "play_note d4 24",
+            "skip_last_loop",
+            "set_instrument f1000_o3_o5",
+            "set_detune +16",
+            "play_note e4 24",
+            "end_loop 2",
+            "set_detune +8",
+            "play_note f4 24",
+        ],
+    );
+
+    assert_one_error_in_channel_a_mml(
+        r##"
+@14 f1000_o4
+@13 f1000_o3_o5
+@24 f2000_o4
+
+A MD+20 @14 [c @13 d : @24 e]2 f
+"##,
+        14,
+        ChannelError::CannotUseDetuneCentsWithUnknownInstrumentTuning,
+    );
+
+    // Nested loop instrument tuning analysis is tested in portamento module
+}
+
+#[test]
+fn md_and_transpose_active_error_test() {
+    assert_one_error_in_mml_line(
+        "MD+20 _+1 c",
+        11,
+        ChannelError::DetuneCentsWithDriverTransposeActive,
+    );
+
+    assert_one_error_in_mml_line(
+        "MD+20 __+1 c",
+        12,
+        ChannelError::DetuneCentsWithDriverTransposeActive,
+    );
+
+    assert_one_error_in_mml_line(
+        "MD+20 \\asm { set_transpose -1 } c",
+        33,
+        ChannelError::DetuneCentsWithDriverTransposeActive,
+    );
+
+    assert_one_error_in_mml_line(
+        "MD+20 \\asm { adjust_transpose -1 } c",
+        36,
+        ChannelError::DetuneCentsWithDriverTransposeActive,
+    );
+
+    // Test disabling transpose allows MD transpose (one error)
+    assert_one_error_in_mml_line(
+        "MD+20 _+1 c _0 c",
+        11,
+        ChannelError::DetuneCentsWithDriverTransposeActive,
+    );
+
+    assert_one_error_in_mml_line(
+        "MD+20 [c __+1 r]2",
+        8,
+        ChannelError::DetuneCentsWithDriverTransposeActive,
+    );
+
+    assert_one_error_in_mml_line(
+        "MD+20 [_0 c r : _+1 c r]2 c",
+        21,
+        ChannelError::DetuneCentsWithDriverTransposeActive,
+    );
+
+    // Nested loop transpose analysis is tested in transpose module
+}

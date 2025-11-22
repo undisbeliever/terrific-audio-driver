@@ -1,5 +1,6 @@
 #![no_main]
 
+use compiler::pitch_table::{build_pitch_table, PitchTable};
 use libfuzzer_sys::fuzz_target;
 
 use compiler::data::{
@@ -8,15 +9,13 @@ use compiler::data::{
 };
 use compiler::envelope::{Adsr, Envelope, Gain};
 use compiler::notes::Octave;
-use compiler::sound_effects::{
-    compile_bytecode_sound_effect, CompiledSfxSubroutines
-};
+use compiler::sound_effects::{compile_sound_effect, CompiledSfxSubroutines, SoundEffectText};
 
 use std::str::FromStr;
 use std::sync::OnceLock;
 
-fn dummy_samples() -> &'static UniqueNamesList<InstrumentOrSample> {
-    static LOCK: OnceLock<UniqueNamesList<InstrumentOrSample>> = OnceLock::new();
+fn dummy_samples() -> &'static (UniqueNamesList<InstrumentOrSample>, PitchTable) {
+    static LOCK: OnceLock<(UniqueNamesList<InstrumentOrSample>, PitchTable)> = OnceLock::new();
 
     // Names from `example-project.terrificaudio`
     LOCK.get_or_init(|| {
@@ -83,20 +82,24 @@ fn dummy_samples() -> &'static UniqueNamesList<InstrumentOrSample> {
             comment: None,
         }];
 
-        validate_instrument_and_sample_names(dummy_instruments.iter(), dummy_samples.iter())
-                .unwrap()
+        let instruments_and_samples =
+            validate_instrument_and_sample_names(dummy_instruments.iter(), dummy_samples.iter())
+                .unwrap();
+
+        let pitch_table = build_pitch_table(&instruments_and_samples).unwrap();
+
+        (instruments_and_samples, pitch_table)
     })
 }
 
-fuzz_target!(|data: &[u8]| {
-    if let Ok(s) = std::str::from_utf8(data) {
-        let instruments_and_samples = dummy_samples();
+fuzz_target!(|s: String| {
+    let (instruments_and_samples, pitch_table) = dummy_samples();
 
-        let _ = compile_bytecode_sound_effect(
-            &s,
-            &instruments_and_samples,
-            &CompiledSfxSubroutines::blank(),
-            Default::default(),
-        );
-    }
+    let _ = compile_sound_effect(
+        &SoundEffectText::BytecodeAssembly(s),
+        &instruments_and_samples,
+        pitch_table,
+        &CompiledSfxSubroutines::blank(),
+        Default::default(),
+    );
 });

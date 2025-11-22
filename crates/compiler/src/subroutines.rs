@@ -7,7 +7,7 @@
 use std::collections::HashMap;
 
 use crate::bytecode;
-use crate::command_compiler::commands::SubroutineCommands;
+use crate::command_compiler::commands::{LoopAnalysis, SubroutineCommands};
 use crate::identifier::{IdentifierBuf, IdentifierStr};
 use crate::mml::CommandTickTracker;
 
@@ -18,6 +18,8 @@ pub struct Subroutine {
     pub bytecode_offset: u16,
     pub bytecode_end_offset: u16,
     pub changes_song_tempo: bool,
+
+    pub(crate) analysis: LoopAnalysis,
 
     pub tick_tracker: CommandTickTracker,
 }

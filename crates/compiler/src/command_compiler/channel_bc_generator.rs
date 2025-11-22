@@ -12,24 +12,29 @@ use crate::bytecode::{
     SlurredNoteState, VibratoPitchOffsetPerTick, VibratoState, KEY_OFF_TICK_DELAY,
 };
 use crate::bytecode_assembler::parse_asm_line;
-use crate::command_compiler::analysis::AnalysedCommands;
+use crate::command_compiler::analysis::{
+    AnalysedCommands, AnalysedSoundEffectCommands, TransposeStartRange,
+};
 use crate::data::{self, UniqueNamesList};
+use crate::driver_constants::N_MUSIC_CHANNELS;
 use crate::echo::EchoEdl;
 use crate::envelope::{Adsr, Envelope, Gain, TempGain};
 use crate::errors::{
-    ChannelError, ErrorWithPos, MmlChannelError, MmlPrefixError, SoundEffectErrorList, ValueError,
+    ChannelError, ErrorWithPos, MmlChannelError, MmlCompileErrors, MmlPrefixError,
+    SoundEffectErrorList, ValueError,
 };
 use crate::identifier::MusicChannelIndex;
-use crate::mml::{CommandTickTracker, MAX_MML_PREFIX_TICKS};
+use crate::mml::{CommandTickTracker, CursorTracker, MAX_MML_PREFIX_TICKS};
 use crate::notes::Note;
 use crate::notes::SEMITONES_PER_OCTAVE;
-use crate::pitch_table::{PitchTable, PITCH_REGISTER_MAX};
+use crate::pitch_table::{PitchTable, PitchTableOffset, PITCH_REGISTER_MAX};
 use crate::songs::{BytecodePos, Channel, LoopPoint};
 use crate::sound_effects::MAX_SFX_TICKS;
 use crate::subroutines::{
     BlankSubroutineMap, CompiledSubroutines, GetSubroutineResult, Subroutine, SubroutineState,
 };
 use crate::time::{TickClock, TickCounter, TickCounterWithLoopFlag};
+use crate::UnsignedValueNewType;
 
 pub const MAX_NO_LOOP_TICKS: TickCounter = TickCounter::new(256 * 32);
 
@@ -132,7 +137,7 @@ enum AfterPlayNote {
 
 struct ChannelBcGenerator<'a> {
     pitch_table: &'a PitchTable,
-    instruments: &'a [MmlInstrument],
+    instruments: &'a UniqueNamesList<data::InstrumentOrSample>,
     subroutines: &'a CompiledSubroutines,
 
     bc: Bytecode<'a>,
@@ -144,8 +149,6 @@ struct ChannelBcGenerator<'a> {
 
     loop_point: Option<LoopPoint>,
 
-    song_uses_driver_transpose: bool,
-
     prev_ticks: TickCounterWithLoopFlag,
     tick_tracker: CommandTickTracker,
 }
@@ -155,31 +158,31 @@ impl<'a> ChannelBcGenerator<'a> {
     pub(super) fn new(
         bc_data: Vec<u8>,
         pitch_table: &'a PitchTable,
-        data_instruments: &'a UniqueNamesList<data::InstrumentOrSample>,
-        mml_instruments: &'a [MmlInstrument],
+        instruments: &'a UniqueNamesList<data::InstrumentOrSample>,
         subroutines: &'a CompiledSubroutines,
         context: BytecodeContext,
-        song_uses_driver_transpose: bool,
+        driver_transpose: TransposeStartRange,
     ) -> ChannelBcGenerator<'a> {
         ChannelBcGenerator {
             pitch_table,
-            instruments: mml_instruments,
+            instruments,
             subroutines,
             bc: Bytecode::new_append_to_vec(
                 bc_data,
                 context,
-                data_instruments,
+                instruments,
+                pitch_table,
                 subroutines,
                 // Using BlankSubroutineMap here to forbid direct subroutine calls in bytecode assembly
                 // (\asm subroutine calls must go through `Self::call_subroutine()`)
                 &BlankSubroutineMap,
+                driver_transpose,
             ),
             mp: MpState::Manual,
             detune_cents: DetuneCents::ZERO,
             quantize: Quantize::None,
             keyoff_enabled: true,
             loop_point: None,
-            song_uses_driver_transpose,
 
             prev_ticks: TickCounterWithLoopFlag::default(),
             tick_tracker: CommandTickTracker::new(),
@@ -192,19 +195,23 @@ impl<'a> ChannelBcGenerator<'a> {
         note: Note,
         detune: DetuneCentsOutput,
     ) -> Result<ManualVibrato, ChannelError> {
+        if self.bc.is_driver_transpose_active() {
+            return Err(ChannelError::MpVibratoWithDriverTransposeActive);
+        }
+
         if mp.depth_in_cents == 0 {
             return Err(ChannelError::MpDepthZero);
         }
-        let instrument_id = match self.bc.get_state().instrument.instrument_id() {
-            Some(i) => i,
-            None => return Err(ChannelError::CannotUseMpWithoutInstrument),
+        let instrument_tuning = match self.bc.get_state().instrument_tuning {
+            Some(t) => t,
+            None => return Err(ChannelError::CannotUseMpWithUnknownInstrumentTuning),
         };
 
         let detune = detune.detune_value(self.bc.get_state());
 
         let pitch = self
             .pitch_table
-            .pitch_for_note(instrument_id, note)
+            .get_pitch(instrument_tuning, note)
             .wrapping_add_signed(detune.as_i16());
 
         // Calculate the minimum and maximum pitches of the vibrato.
@@ -237,11 +244,17 @@ impl<'a> ChannelBcGenerator<'a> {
         match self.detune_cents.as_i16() {
             0 => Ok(DetuneCentsOutput::Manual),
             cents => {
-                let instrument_id = match self.bc.get_state().instrument.instrument_id() {
+                if self.bc.is_driver_transpose_active() {
+                    return Err(ChannelError::DetuneCentsWithDriverTransposeActive);
+                }
+
+                let instrument_tuning = match self.bc.get_state().instrument_tuning {
                     Some(i) => i,
-                    None => return Err(ChannelError::CannotUseDetuneCentsWithoutInstrument),
+                    None => {
+                        return Err(ChannelError::CannotUseDetuneCentsWithUnknownInstrumentTuning)
+                    }
                 };
-                let pitch = self.pitch_table.pitch_for_note(instrument_id, note);
+                let pitch = self.pitch_table.get_pitch(instrument_tuning, note);
                 let pow = f64::from(cents) / f64::from(SEMITONES_PER_OCTAVE as u32 * 100);
                 let d = f64::round(f64::from(pitch) * 2.0_f64.powf(pow) - f64::from(pitch));
 
@@ -682,9 +695,10 @@ impl<'a> ChannelBcGenerator<'a> {
 
             let rl = build_rest_loop::<BcTicksKeyOff, BcTicksKeyOff, true>(length);
 
-            self.bc.start_loop(Some(LoopCount::try_from(rl.n_loops)?))?;
+            self.bc
+                .start_loop(Some(LoopCount::try_from(rl.n_loops)?), LoopAnalysis::BLANK)?;
             self.rest_many_keyoffs_no_loop(TickCounter::new(rl.ticks_in_loop))?;
-            self.bc.end_loop(None)?;
+            self.bc.end_loop(None, LoopAnalysis::BLANK)?;
 
             // The channel is in the release self.  The last rest **can** be less than max.
             if rl.remainder > 0 {
@@ -707,9 +721,10 @@ impl<'a> ChannelBcGenerator<'a> {
 
             let rl = build_rest_loop::<BcTicksNoKeyOff, BcTicksNoKeyOff, true>(length);
 
-            self.bc.start_loop(Some(LoopCount::try_from(rl.n_loops)?))?;
+            self.bc
+                .start_loop(Some(LoopCount::try_from(rl.n_loops)?), LoopAnalysis::BLANK)?;
             self.wait_no_loop(TickCounter::new(rl.ticks_in_loop))?;
-            self.bc.end_loop(None)?;
+            self.bc.end_loop(None, LoopAnalysis::BLANK)?;
 
             if rl.remainder > 0 {
                 self.bc.wait(rl.remainder.try_into()?);
@@ -722,7 +737,7 @@ impl<'a> ChannelBcGenerator<'a> {
     fn portamento_note_pitch(
         &self,
         note: NoteOrPitch,
-        instrument: Option<InstrumentId>,
+        instrument_tuning: Option<PitchTableOffset>,
     ) -> Result<(Option<u16>, NoteOrPitchOut), ChannelError> {
         match note {
             NoteOrPitch::Note(note) => {
@@ -730,11 +745,11 @@ impl<'a> ChannelBcGenerator<'a> {
 
                 let detune = detune_output.detune_value(self.bc.get_state());
 
-                match (self.song_uses_driver_transpose, instrument) {
-                    (false, Some(instrument)) => {
+                match (self.bc.is_driver_transpose_active(), instrument_tuning) {
+                    (false, Some(instrument_tuning)) => {
                         let pitch = self
                             .pitch_table
-                            .pitch_for_note(instrument, note)
+                            .get_pitch(instrument_tuning, note)
                             .wrapping_add_signed(detune.as_i16());
 
                         Ok((
@@ -776,12 +791,12 @@ impl<'a> ChannelBcGenerator<'a> {
         &self,
     ) -> Result<(NoteOrPitch, Option<u16>), ChannelError> {
         match self.bc.get_state().prev_slurred_note {
-            SlurredNoteState::Slurred(prev_note, prev_detune, prev_inst) => {
-                match (self.song_uses_driver_transpose, prev_inst) {
-                    (false, Some(prev_inst)) => {
+            SlurredNoteState::Slurred(prev_note, prev_detune, prev_tuning) => {
+                match (self.bc.is_driver_transpose_active(), prev_tuning) {
+                    (false, Some(prev_tuning)) => {
                         let prev_pitch = self
                             .pitch_table
-                            .pitch_for_note(prev_inst, prev_note)
+                            .get_pitch(prev_tuning, prev_note)
                             .wrapping_add_signed(prev_detune.as_i16());
 
                         Ok((NoteOrPitch::Note(prev_note), Some(prev_pitch)))
@@ -808,13 +823,13 @@ impl<'a> ChannelBcGenerator<'a> {
         note1: &NoteOrPitchOut,
     ) -> bool {
         match self.bc.get_state().prev_slurred_note {
-            SlurredNoteState::Slurred(prev_note, prev_detune, prev_inst) => {
-                match (prev_inst, note1_pitch) {
+            SlurredNoteState::Slurred(prev_note, prev_detune, prev_tuning) => {
+                match (prev_tuning, note1_pitch) {
                     // Previous and current VxPITCH is known
-                    (Some(prev_inst), Some(note1_pitch)) => {
+                    (Some(prev_tuning), Some(note1_pitch)) => {
                         let prev_pitch = self
                             .pitch_table
-                            .pitch_for_note(prev_inst, prev_note)
+                            .get_pitch(prev_tuning, prev_note)
                             .wrapping_add_signed(prev_detune.as_i16());
 
                         note1_pitch == prev_pitch
@@ -846,11 +861,11 @@ impl<'a> ChannelBcGenerator<'a> {
     fn portamento_play_note1_delay_if_required(
         &mut self,
         note1: NoteOrPitch,
-        instrument: Option<InstrumentId>,
+        instrument_tuning: Option<PitchTableOffset>,
         delay_length: TickCounter,
         slide_length: TickCounter,
     ) -> Result<(Option<u16>, TickCounter), ChannelError> {
-        let (note1_pitch, pn1) = self.portamento_note_pitch(note1, instrument)?;
+        let (note1_pitch, pn1) = self.portamento_note_pitch(note1, instrument_tuning)?;
 
         let play_note1 = !self.portamento_prev_note_matches(note1_pitch, &pn1);
 
@@ -910,7 +925,7 @@ impl<'a> ChannelBcGenerator<'a> {
             + tie_length
             + rest_after_note.0;
 
-        let instrument = self.bc.get_state().instrument.instrument_id();
+        let instrument_tuning = self.bc.get_state().instrument_tuning;
 
         let (note1, note1_pitch, slide_length) = match note1 {
             None => {
@@ -923,7 +938,7 @@ impl<'a> ChannelBcGenerator<'a> {
             Some(note1) => {
                 let (p, s) = self.portamento_play_note1_delay_if_required(
                     note1,
-                    instrument,
+                    instrument_tuning,
                     delay_length,
                     slide_length,
                 )?;
@@ -931,7 +946,7 @@ impl<'a> ChannelBcGenerator<'a> {
             }
         };
 
-        let (note2_pitch, pn2) = self.portamento_note_pitch(note2, instrument)?;
+        let (note2_pitch, pn2) = self.portamento_note_pitch(note2, instrument_tuning)?;
 
         // slide_length: number of ticks in the pitch-slide.  Does NOT include the key-off tick.
         // tie_length: number of ticks after pitch-slide reaches note2, includes the key-off tick (as required).
@@ -1089,24 +1104,24 @@ impl<'a> ChannelBcGenerator<'a> {
 
         let n_loops = LoopCount::try_from(n_loops)?;
 
-        self.bc.start_loop(Some(n_loops))?;
+        self.bc.start_loop(Some(n_loops), LoopAnalysis::BLANK)?;
 
         for (i, &n) in notes.iter().enumerate() {
             if i == break_point && i != 0 {
-                self.bc.skip_last_loop()?;
+                self.bc.skip_last_loop(SkipLastLoopAnalysis::BLANK)?;
             }
 
             match self.broken_chord_play_note_or_pitch_with_detune(n, note_length) {
                 Ok(()) => (),
                 Err(e) => {
                     // Hides an unneeded "loop stack not empty" (or end_loop) error
-                    let _ = self.bc.end_loop(None);
+                    let _ = self.bc.end_loop(None, LoopAnalysis::BLANK);
                     return Err(e);
                 }
             }
         }
 
-        self.bc.end_loop(None)?;
+        self.bc.end_loop(None, LoopAnalysis::BLANK)?;
 
         if last_note_ticks > 0 {
             let l = match slur_last_note {
@@ -1126,24 +1141,46 @@ impl<'a> ChannelBcGenerator<'a> {
         Ok(())
     }
 
-    fn set_instrument(&mut self, inst: usize) -> Result<(), ChannelError> {
-        let inst = match self.instruments.get(inst) {
-            Some(inst) => inst,
-            None => panic!("invalid instrument index"),
+    fn set_instrument_hint(
+        &mut self,
+        inst_id: InstrumentId,
+        envelope: Option<Envelope>,
+    ) -> Result<(), ChannelError> {
+        self.bc.set_subroutine_instrument_hint(inst_id, envelope)
+    }
+
+    // Will not be optimised away
+    fn set_instrument_asm(&mut self, inst_id: InstrumentId, envelope: Option<Envelope>) {
+        match envelope {
+            None => self.bc.set_instrument(inst_id),
+            Some(Envelope::Adsr(adsr)) => self.bc.set_instrument_and_adsr(inst_id, adsr),
+            Some(Envelope::Gain(gain)) => self.bc.set_instrument_and_gain(inst_id, gain),
+        }
+    }
+
+    fn set_instrument(
+        &mut self,
+        inst_id: InstrumentId,
+        envelope: Option<Envelope>,
+    ) -> Result<(), ChannelError> {
+        // ::TODO optimise when adding sample swapping::
+        let inst_envelope = match self.instruments.get_index(inst_id.value().into()) {
+            Some(data::InstrumentOrSample::Instrument(i)) => i.envelope,
+            Some(data::InstrumentOrSample::Sample(s)) => s.envelope,
+            None => return Err(ChannelError::NoInstrument),
         };
 
         let old_inst = &self.bc.get_state().instrument;
         let old_envelope = &self.bc.get_state().envelope;
 
-        let i_id = inst.instrument_id;
-        let envelope = inst.envelope;
+        if old_inst.is_known_and_eq(&inst_id) {
+            let envelope = envelope.unwrap_or(inst_envelope);
 
-        if old_inst.is_known_and_eq(&i_id) {
             // InstrumentId unchanged, check envelope
             if !old_envelope.is_known_and_eq(&envelope) {
-                if inst.envelope_unchanged {
+                if envelope == inst_envelope {
                     // Outputs fewer bytes then a `set_adsr` instruction.
-                    self.bc.set_instrument(i_id);
+                    self.bc.set_instrument(inst_id);
                 } else {
                     match envelope {
                         Envelope::Adsr(adsr) => self.bc.set_adsr(adsr),
@@ -1151,12 +1188,12 @@ impl<'a> ChannelBcGenerator<'a> {
                     }
                 }
             }
-        } else if inst.envelope_unchanged {
-            self.bc.set_instrument(i_id);
         } else {
             match envelope {
-                Envelope::Adsr(adsr) => self.bc.set_instrument_and_adsr(i_id, adsr),
-                Envelope::Gain(gain) => self.bc.set_instrument_and_gain(i_id, gain),
+                None => self.bc.set_instrument(inst_id),
+                Some(e) if e == inst_envelope => self.bc.set_instrument(inst_id),
+                Some(Envelope::Adsr(adsr)) => self.bc.set_instrument_and_adsr(inst_id, adsr),
+                Some(Envelope::Gain(gain)) => self.bc.set_instrument_and_gain(inst_id, gain),
             }
         }
 
@@ -1337,7 +1374,7 @@ impl<'a> ChannelBcGenerator<'a> {
         match command {
             Command::None => (),
 
-            &Command::SetLoopPoint => match self.bc.get_context() {
+            Command::SetLoopPoint(analysis) => match self.bc.get_context() {
                 BytecodeContext::SongChannel { .. } => {
                     if self.loop_point.is_some() {
                         return Err(ChannelError::LoopPointAlreadySet);
@@ -1350,25 +1387,29 @@ impl<'a> ChannelBcGenerator<'a> {
                         tick_counter: self.bc.get_tick_counter(),
                     });
 
-                    self.bc._song_loop_point();
+                    self.bc._song_loop_point(analysis);
                 }
                 BytecodeContext::SongSubroutine { .. }
                 | BytecodeContext::SfxSubroutine
                 | BytecodeContext::SoundEffect
                 | BytecodeContext::MmlPrefix => return Err(ChannelError::CannotSetLoopPoint),
+
+                #[cfg(feature = "test")]
+                BytecodeContext::UnitTestAssembly | BytecodeContext::UnitTestAssemblySubroutine => {
+                    return Err(ChannelError::CannotSetLoopPoint)
+                }
             },
 
-            &Command::SetSubroutineInstrumentHint(inst_index) => {
-                let inst = self
-                    .instruments
-                    .get(inst_index)
-                    .expect("invalid instrument index");
-                self.bc.set_subroutine_instrument_hint(inst)?;
+            &Command::SetSubroutineInstrumentHint(inst_id, envelope) => {
+                self.set_instrument_hint(inst_id, envelope)?;
+            }
+            &Command::SetInstrumentAsm(inst_id, envelope) => {
+                self.set_instrument_asm(inst_id, envelope);
+            }
+            &Command::SetInstrument(inst_id, envelope) => {
+                self.set_instrument(inst_id, envelope)?;
             }
 
-            &Command::SetInstrument(inst_index) => {
-                self.set_instrument(inst_index)?;
-            }
             &Command::SetAdsr(adsr) => self.set_adsr(adsr),
             &Command::SetGain(gain) => self.set_gain(gain),
 
@@ -1380,22 +1421,19 @@ impl<'a> ChannelBcGenerator<'a> {
                 self.set_manual_vibrato(v);
             }
 
-            &Command::SetMpVibrato(mp) => match self.song_uses_driver_transpose {
-                false => {
-                    self.mp = match mp {
-                        Some(mp) => MpState::Mp(mp),
-                        None => match self.mp {
-                            MpState::Mp(_) => MpState::Disabled,
-                            MpState::Disabled => MpState::Disabled,
-                            MpState::Manual => match self.bc.get_state().vibrato.is_active() {
-                                true => MpState::Disabled,
-                                false => MpState::Manual,
-                            },
+            &Command::SetMpVibrato(mp) => {
+                self.mp = match mp {
+                    Some(mp) => MpState::Mp(mp),
+                    None => match self.mp {
+                        MpState::Mp(_) => MpState::Disabled,
+                        MpState::Disabled => MpState::Disabled,
+                        MpState::Manual => match self.bc.get_state().vibrato.is_active() {
+                            true => MpState::Disabled,
+                            false => MpState::Manual,
                         },
-                    };
-                }
-                true => return Err(ChannelError::MpVibratoInSongWithTranspose),
-            },
+                    },
+                };
+            }
 
             &Command::SetQuantize(q) => {
                 self.quantize = q;
@@ -1446,7 +1484,7 @@ impl<'a> ChannelBcGenerator<'a> {
                 self.bc.set_transpose(t);
             }
             &Command::AdjustTranspose(t) => {
-                self.bc.adjust_transpose(t);
+                self.bc.adjust_transpose(t)?;
             }
 
             &Command::SetDetune(detune) => {
@@ -1551,16 +1589,16 @@ impl<'a> ChannelBcGenerator<'a> {
                 self.bc.disable_noise();
             }
 
-            Command::StartLoop => {
-                self.bc.start_loop(None)?;
+            Command::StartLoop(loop_count, analysis) => {
+                self.bc.start_loop(*loop_count, analysis)?;
             }
 
-            Command::SkipLastLoop => {
-                self.bc.skip_last_loop()?;
+            Command::SkipLastLoop(analysis) => {
+                self.bc.skip_last_loop(analysis)?;
             }
 
-            &Command::EndLoop(loop_count) => {
-                self.bc.end_loop(Some(loop_count))?;
+            Command::EndLoop(loop_count, analysis) => {
+                self.bc.end_loop(*loop_count, analysis)?;
             }
 
             &Command::ChangePanAndOrVolume(pan, volume) => match (pan, volume) {
@@ -1765,11 +1803,9 @@ impl<'a> ChannelBcGenerator<'a> {
 pub(crate) struct CommandCompiler<'a> {
     pitch_table: &'a PitchTable,
     data_instruments: &'a data::UniqueNamesList<data::InstrumentOrSample>,
-    mml_instruments: &'a [MmlInstrument],
     max_edl: EchoEdl,
 
     is_song: bool,
-    song_uses_driver_transpose: bool,
 
     bc_data: Vec<u8>,
     bytecode_tracker: Vec<BytecodePos>,
@@ -1780,9 +1816,7 @@ impl<'a> CommandCompiler<'a> {
         header_size: usize,
         pitch_table: &'a PitchTable,
         data_instruments: &'a data::UniqueNamesList<data::InstrumentOrSample>,
-        mml_instruments: &'a [MmlInstrument],
         max_edl: EchoEdl,
-        analysis: &AnalysedCommands,
 
         is_song: bool,
     ) -> Self {
@@ -1792,10 +1826,8 @@ impl<'a> CommandCompiler<'a> {
 
             pitch_table,
             data_instruments,
-            mml_instruments,
             max_edl,
             is_song,
-            song_uses_driver_transpose: analysis.uses_driver_transpose,
         }
     }
 
@@ -1811,6 +1843,7 @@ impl<'a> CommandCompiler<'a> {
         &mut self,
         input: &SubroutineCommands,
         subroutines: &CompiledSubroutines,
+        analysis: &AnalysedCommands,
     ) -> Result<Subroutine, MmlChannelError> {
         let sd_start_index = self.bc_data.len();
 
@@ -1818,7 +1851,6 @@ impl<'a> CommandCompiler<'a> {
             std::mem::take(&mut self.bc_data),
             self.pitch_table,
             self.data_instruments,
-            self.mml_instruments,
             subroutines,
             match self.is_song {
                 true => BytecodeContext::SongSubroutine {
@@ -1826,7 +1858,7 @@ impl<'a> CommandCompiler<'a> {
                 },
                 false => BytecodeContext::SfxSubroutine,
             },
-            self.song_uses_driver_transpose,
+            analysis.transpose_at_subroutine_start(input.index),
         );
 
         let mut errors = Vec::new();
@@ -1920,6 +1952,18 @@ impl<'a> CommandCompiler<'a> {
 
         match (errors.is_empty(), bc_state) {
             (true, Some(bc_state)) => {
+                if let (Some(bc_instrument), Some(inst_tuning)) = (
+                    bc_state.instrument.instrument_id(),
+                    bc_state.instrument_tuning,
+                ) {
+                    assert_eq!(
+                        inst_tuning,
+                        self.pitch_table.pitch_table_offset(bc_instrument),
+                        "instrument_tuning does not match bytecode instrument tracking (sub {})",
+                        input.identifier.as_str()
+                    );
+                }
+
                 let changes_song_tempo = !bc_state.tempo_changes.is_empty();
 
                 let sd_end_index = self.bc_data.len();
@@ -1931,6 +1975,7 @@ impl<'a> CommandCompiler<'a> {
                     bytecode_end_offset: sd_end_index.try_into().unwrap_or(u16::MAX),
                     changes_song_tempo,
                     tick_tracker,
+                    analysis: input.analysis,
                 })
             }
             _ => Err(MmlChannelError {
@@ -1942,15 +1987,15 @@ impl<'a> CommandCompiler<'a> {
 
     pub(crate) fn compile_subroutines(
         &mut self,
-        analysis: AnalysedCommands,
+        analysis: &AnalysedCommands,
         errors: &mut Vec<MmlChannelError>,
     ) -> CompiledSubroutines {
-        let subroutines = analysis.subroutines;
+        let subroutines = &analysis.subroutines;
 
         let mut out = CompiledSubroutines::new(subroutines.original_order());
 
         for s in subroutines.compile_iter() {
-            match self.compile_subroutine(s, &out) {
+            match self.compile_subroutine(s, &out, analysis) {
                 Ok(s) => out.store(s.index, SubroutineState::Compiled(s)),
                 Err(e) => {
                     errors.push(e);
@@ -1959,10 +2004,23 @@ impl<'a> CommandCompiler<'a> {
             }
         }
 
+        if errors.is_empty() {
+            // This test is done after all subroutines have been compiled to avoid a panic when a
+            // subroutine calls a subroutine with an error.
+            for s in out.iter_compiled() {
+                assert_eq!(
+                    s.analysis.instrument.map(|i| i.instrument_id()),
+                    s.bc_state.instrument.instrument_id(),
+                    "instrument analysis does not match bytecode instrument tracking (sub #{})",
+                    s.index,
+                );
+            }
+        }
+
         out
     }
 
-    pub(crate) fn compile_song_channel(
+    fn compile_song_channel(
         &mut self,
         channel_index: MusicChannelIndex,
         input: &ChannelCommands,
@@ -1977,13 +2035,12 @@ impl<'a> CommandCompiler<'a> {
             std::mem::take(&mut self.bc_data),
             self.pitch_table,
             self.data_instruments,
-            self.mml_instruments,
             subroutines,
             BytecodeContext::SongChannel {
                 index: channel_index,
                 max_edl: self.max_edl,
             },
-            self.song_uses_driver_transpose,
+            TransposeStartRange::DISABLED,
         );
 
         let mut errors = Vec::new();
@@ -2021,43 +2078,87 @@ impl<'a> CommandCompiler<'a> {
         self.bc_data = bc_data;
 
         match (errors.is_empty(), bc_state) {
-            (true, Some(bc_state)) => Ok(Channel {
-                channel_index,
-                bytecode_offset: sd_start_index.try_into().unwrap_or(u16::MAX),
-                loop_point,
-                tick_counter: bc_state.tick_counter,
-                max_stack_depth: bc_state.max_stack_depth,
-                tick_tracker,
-                tempo_changes: bc_state.tempo_changes,
-            }),
+            (true, Some(bc_state)) => {
+                if let (Some(bc_instrument), Some(inst_tuning)) = (
+                    bc_state.instrument.instrument_id(),
+                    bc_state.instrument_tuning,
+                ) {
+                    assert_eq!(
+                        inst_tuning,
+                        self.pitch_table.pitch_table_offset(bc_instrument),
+                        "instrument_tuning does not match bytecode instrument tracking (channel {})", identifier.as_str()
+                    );
+                }
+
+                Ok(Channel {
+                    channel_index,
+                    bytecode_offset: sd_start_index.try_into().unwrap_or(u16::MAX),
+                    loop_point,
+                    tick_counter: bc_state.tick_counter,
+                    max_stack_depth: bc_state.max_stack_depth,
+                    tick_tracker,
+                    tempo_changes: bc_state.tempo_changes,
+                })
+            }
             _ => Err(MmlChannelError {
                 identifier: identifier.to_owned(),
                 errors,
             }),
         }
     }
+
+    // Panics if `AnalysedCommands` has no song channels
+    pub fn compile_song_channels(
+        &mut self,
+        a: &AnalysedCommands,
+        subroutines: &CompiledSubroutines,
+        errors: &mut MmlCompileErrors,
+    ) -> [Option<Channel>; N_MUSIC_CHANNELS] {
+        let channels = a.channels.as_ref().unwrap();
+
+        std::array::from_fn(|c_index| {
+            channels[c_index].as_ref().and_then(|c| {
+                let c_index = MusicChannelIndex::try_new(c_index).unwrap();
+
+                match self.compile_song_channel(c_index, c, subroutines) {
+                    Ok(c) => Some(c),
+                    Err(e) => {
+                        errors.channel_errors.push(e);
+                        None
+                    }
+                }
+            })
+        })
+    }
 }
 
 pub(crate) fn compile_sound_effect(
-    input: &ChannelCommands,
-    mml_instruments: &[MmlInstrument],
+    input: AnalysedSoundEffectCommands,
     data_instruments: &UniqueNamesList<data::InstrumentOrSample>,
     pitch_table: &PitchTable,
     subroutines: &CompiledSubroutines,
-    errors: Vec<ErrorWithPos<ChannelError>>,
-) -> Result<(Vec<u8>, TickCounter, CommandTickTracker), SoundEffectErrorList> {
+    use_line_errors: bool,
+) -> Result<
+    (
+        Vec<u8>,
+        TickCounter,
+        Option<CursorTracker>,
+        CommandTickTracker,
+    ),
+    SoundEffectErrorList,
+> {
+    let input = input.0;
+
     let bc_data = Vec::new();
-    let mut errors = errors;
+    let mut errors = input.errors;
 
     let mut gen = ChannelBcGenerator::new(
         bc_data,
         pitch_table,
         data_instruments,
-        mml_instruments,
         subroutines,
         BytecodeContext::SoundEffect,
-        // ::TODO detect driver transpose in sound effects::
-        false,
+        TransposeStartRange::DISABLED,
     );
     gen.process_commands(&input.commands, &mut errors);
 
@@ -2070,22 +2171,31 @@ pub(crate) fn compile_sound_effect(
         Ok((b, _)) => b,
         Err((e, b)) => {
             errors.push(ErrorWithPos(
-                input.end_pos_range(),
+                input.end_pos.to_range(1),
                 ChannelError::BytecodeError(e),
             ));
             b
         }
     };
 
+    if tick_counter.is_zero() {
+        errors.push(ErrorWithPos(
+            input.end_pos.to_range(1),
+            ChannelError::NoTicksInSoundEffect,
+        ));
+    }
+
     if tick_counter > MAX_SFX_TICKS {
         errors.push(ErrorWithPos(
-            input.end_pos_range(),
+            input.end_pos.to_range(1),
             ChannelError::TooManySfxTicks(tick_counter),
         ));
     }
 
     if errors.is_empty() {
-        Ok((bytecode, tick_counter, tick_tracker))
+        Ok((bytecode, tick_counter, input.mml_tracker, tick_tracker))
+    } else if use_line_errors {
+        Err(SoundEffectErrorList::BytecodeErrors(errors))
     } else {
         Err(SoundEffectErrorList::MmlErrors(errors))
     }
@@ -2094,7 +2204,6 @@ pub(crate) fn compile_sound_effect(
 pub(crate) fn compile_mml_prefix(
     input: &ChannelCommands,
     context: BytecodeContext,
-    mml_instruments: &[MmlInstrument],
     data_instruments: &UniqueNamesList<data::InstrumentOrSample>,
     pitch_table: &PitchTable,
     subroutines: &CompiledSubroutines,
@@ -2107,11 +2216,9 @@ pub(crate) fn compile_mml_prefix(
         bc_data,
         pitch_table,
         data_instruments,
-        mml_instruments,
         subroutines,
         context,
-        // ::TODO detect driver transpose in sound effects::
-        false,
+        TransposeStartRange::DISABLED,
     );
     gen.process_commands(&input.commands, &mut errors);
 

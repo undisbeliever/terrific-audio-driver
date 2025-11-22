@@ -2,8 +2,6 @@
 //
 // SPDX-License-Identifier: MIT
 
-use compiler::echo::EchoEdl;
-
 use crate::*;
 
 #[test]
@@ -233,13 +231,10 @@ ADEF \asm { set_instrument dummy_instrument | play_note a4 24 }
 
     let bc_asm = assemble_channel_bytecode(
         bc_asm,
-        &dummy_data.instruments_and_samples,
+        &dummy_data,
         mml.subroutines(),
         BcTerminator::DisableChannel,
-        BytecodeContext::SongChannel {
-            index: MusicChannelIndex::CHANNEL_A,
-            max_edl: EchoEdl::MIN,
-        },
+        BytecodeContext::UnitTestAssembly,
     )
     .repeat(4);
 

@@ -6,7 +6,11 @@
 
 use super::note_tracking::CursorTracker;
 use super::tokenizer::{MmlTokens, PeekableTokenIterator, Token};
-use crate::bytecode_assembler;
+use crate::command_compiler::parsers::{
+    parse_bytecode_asm_instruction, parse_call_subroutine_command,
+};
+use crate::data;
+use crate::data::UniqueNamesList;
 use crate::identifier::{ChannelId, IdentifierStr};
 
 use crate::bytecode::{
@@ -19,8 +23,9 @@ use crate::bytecode::{
 };
 use crate::command_compiler::commands::{
     merge_pan_commands, merge_volumes_commands, relative_pan, relative_volume, ChannelCommands,
-    Command, CommandWithPos, DetuneCents, FineQuantization, ManualVibrato, MpVibrato, NoteOrPitch,
-    PanCommand, Quantize, RestTicksAfterNote, SubroutineCallType, VolumeCommand,
+    Command, CommandWithPos, DetuneCents, FineQuantization, ManualVibrato, MmlInstrument,
+    MpVibrato, NoteOrPitch, PanCommand, Quantize, RestTicksAfterNote, SubroutineCallType,
+    VolumeCommand,
 };
 use crate::driver_constants::FIR_FILTER_SIZE;
 use crate::echo::{EchoVolume, FirCoefficient, FirTap};
@@ -65,7 +70,12 @@ pub struct State {
 }
 
 mod parser {
-    use crate::{file_pos::LineIndexRange, mml::metadata::GlobalSettings};
+    use crate::{
+        command_compiler::commands::MmlInstrument,
+        data::{self, UniqueNamesList},
+        file_pos::LineIndexRange,
+        mml::metadata::GlobalSettings,
+    };
 
     use super::*;
 
@@ -79,7 +89,8 @@ mod parser {
         default_length: TickCounter,
         keyoff_enabled: bool,
 
-        instruments_map: &'b HashMap<IdentifierStr<'b>, usize>,
+        data_instruments: &'b UniqueNamesList<data::InstrumentOrSample>,
+        instruments_map: &'b HashMap<IdentifierStr<'b>, &'b MmlInstrument>,
         subroutines: &'b dyn SubroutineNameMap,
 
         old_transpose: bool,
@@ -92,7 +103,8 @@ mod parser {
         pub(super) fn new(
             channel: ChannelId,
             tokens: MmlTokens<'a>,
-            instruments_map: &'b HashMap<IdentifierStr<'b>, usize>,
+            data_instruments: &'b UniqueNamesList<data::InstrumentOrSample>,
+            instruments_map: &'b HashMap<IdentifierStr<'b>, &'b MmlInstrument>,
             subroutines: &'b dyn SubroutineNameMap,
             settings: &'b GlobalSettings,
             cursor_tracking: &'b mut CursorTracker,
@@ -116,6 +128,7 @@ mod parser {
                 default_length: settings.zenlen.starting_length(),
                 keyoff_enabled: true,
 
+                data_instruments,
                 instruments_map,
                 subroutines,
 
@@ -133,10 +146,6 @@ mod parser {
         pub(super) fn set_state(&mut self, new_state: State) {
             self.state = new_state;
             self.add_to_cursor_tracker();
-        }
-
-        pub(super) fn channel_id(&self) -> &ChannelId {
-            &self.channel
         }
 
         // Must ONLY be called by the parsing macros in this module.
@@ -166,12 +175,20 @@ mod parser {
                 .push(ErrorWithPos(self.file_pos_range_from(pos), e))
         }
 
-        pub(super) fn instruments_map(&self) -> &HashMap<IdentifierStr<'b>, usize> {
+        pub(super) fn data_instruments(&self) -> &'b UniqueNamesList<data::InstrumentOrSample> {
+            self.data_instruments
+        }
+
+        pub(super) fn instruments_map(&self) -> &HashMap<IdentifierStr<'b>, &MmlInstrument> {
             self.instruments_map
         }
 
-        pub(super) fn find_subroutine(&self, name: &str) -> Option<u8> {
-            self.subroutines.find_subroutine_index(name)
+        pub(super) fn subroutines(&self) -> &'b dyn SubroutineNameMap {
+            self.subroutines
+        }
+
+        pub(super) fn channel_id(&self) -> ChannelId {
+            self.channel
         }
 
         pub(super) fn old_transpose(&self) -> bool {
@@ -2133,7 +2150,7 @@ fn parse_keyoff<'a>(pos: FilePos, p: &mut Parser) -> Command<'a> {
 
 fn parse_set_instrument<'a>(pos: FilePos, id: IdentifierStr, p: &mut Parser) -> Command<'a> {
     match p.instruments_map().get(&id) {
-        Some(inst) => Command::SetInstrument(*inst),
+        Some(inst) => Command::SetInstrument(inst.instrument_id, inst.envelope),
         None => invalid_token_error(
             p,
             pos,
@@ -2148,7 +2165,7 @@ fn parse_set_instrument_hint<'a>(
     p: &mut Parser<'a, '_>,
 ) -> Command<'a> {
     match p.instruments_map().get(&id) {
-        Some(inst) => Command::SetSubroutineInstrumentHint(*inst),
+        Some(inst) => Command::SetSubroutineInstrumentHint(inst.instrument_id, inst.envelope),
         None => invalid_token_error(
             p,
             pos,
@@ -2157,26 +2174,19 @@ fn parse_set_instrument_hint<'a>(
     }
 }
 
-fn parse_call_subroutine<'a>(
+fn parse_call_subroutine_mml<'a>(
     pos: FilePos,
     id: IdentifierStr,
-    d: SubroutineCallType,
     p: &mut Parser<'a, '_>,
 ) -> Command<'a> {
-    match p.find_subroutine(id.as_str()) {
-        Some(index) => Command::CallSubroutine(index, d),
-        None => match p.channel_id() {
-            ChannelId::Channel(_) | ChannelId::Subroutine(_) | ChannelId::SoundEffect => {
-                invalid_token_error(
-                    p,
-                    pos,
-                    ChannelError::CannotFindSubroutine(id.as_str().to_owned()),
-                )
-            }
-            ChannelId::MmlPrefix => {
-                invalid_token_error(p, pos, ChannelError::CannotCallSubroutineInAnMmlPrefix)
-            }
-        },
+    match parse_call_subroutine_command(
+        id.as_str(),
+        SubroutineCallType::Mml,
+        p.subroutines(),
+        p.channel_id(),
+    ) {
+        Ok(c) => c,
+        Err(e) => invalid_token_error(p, pos, e),
     }
 }
 
@@ -2509,40 +2519,13 @@ fn parse_set_echo_delay<'a>(pos: FilePos, p: &mut Parser) -> Command<'a> {
 }
 
 fn parse_bytecode_asm<'a>(pos: FilePos, asm: &'a str, p: &mut Parser<'a, '_>) -> Command<'a> {
-    match asm.split_once(|c: char| c.is_ascii_whitespace()) {
-        Some((bytecode_assembler::CALL_SUBROUTINE, arg)) => parse_call_subroutine(
-            pos,
-            IdentifierStr::from_str(arg.trim_start()),
-            SubroutineCallType::Asm,
-            p,
-        ),
-        Some((bytecode_assembler::CALL_SUBROUTINE_AND_DISABLE_VIBRATO, arg)) => {
-            parse_call_subroutine(
-                pos,
-                IdentifierStr::from_str(arg.trim_start()),
-                SubroutineCallType::AsmDisableVibrato,
-                p,
-            )
+    match parse_bytecode_asm_instruction(asm, p.data_instruments(), p.subroutines(), p.channel_id())
+    {
+        Ok(c) => c,
+        Err(e) => {
+            p.add_error(pos, e);
+            Command::None
         }
-        Some((bytecode_assembler::SET_TRANSPOSE, arg)) => {
-            match bytecode_assembler::parse_svnt_allow_zero(arg.trim_start()) {
-                Ok(t) => Command::SetTranspose(t),
-                Err(e) => {
-                    p.add_error(pos, e);
-                    Command::None
-                }
-            }
-        }
-        Some((bytecode_assembler::ADJUST_TRANSPOSE, arg)) => {
-            match bytecode_assembler::parse_svnt(arg.trim_start()) {
-                Ok(t) => Command::AdjustTranspose(t),
-                Err(e) => {
-                    p.add_error(pos, e);
-                    Command::None
-                }
-            }
-        }
-        _ => Command::BytecodeAsm(asm),
     }
 }
 
@@ -2585,16 +2568,16 @@ fn parse_token<'a>(pos: FilePos, token: Token<'a>, p: &mut Parser<'a, '_>) -> Co
 
         Token::SetInstrument(id) => parse_set_instrument(pos, id, p),
         Token::SetSubroutineInstrumentHint(id) => parse_set_instrument_hint(pos, id, p),
-        Token::CallSubroutine(id) => parse_call_subroutine(pos, id, SubroutineCallType::Mml, p),
+        Token::CallSubroutine(id) => parse_call_subroutine_mml(pos, id, p),
 
-        Token::StartLoop => Command::StartLoop,
-        Token::SkipLastLoop => Command::SkipLastLoop,
+        Token::StartLoop => Command::StartLoop(None, Default::default()),
+        Token::SkipLastLoop => Command::SkipLastLoop(Default::default()),
         Token::EndLoop => {
             let lc = parse_unsigned_newtype(pos, p).unwrap_or(LoopCount::MIN);
-            Command::EndLoop(lc)
+            Command::EndLoop(Some(lc), Default::default())
         }
 
-        Token::SetLoopPoint => Command::SetLoopPoint,
+        Token::SetLoopPoint => Command::SetLoopPoint(Default::default()),
 
         Token::PitchMod => parse_pitch_mod(pos, p),
         Token::Echo => parse_echo(pos, p),
@@ -2728,7 +2711,8 @@ fn parse_token<'a>(pos: FilePos, token: Token<'a>, p: &mut Parser<'a, '_>) -> Co
 pub(crate) fn parse_mml_tokens<'a>(
     channel: ChannelId,
     tokens: MmlTokens<'a>,
-    instruments_map: &HashMap<IdentifierStr, usize>,
+    data_instruments: &UniqueNamesList<data::InstrumentOrSample>,
+    instruments_map: &HashMap<IdentifierStr, &MmlInstrument>,
     subroutines: &dyn SubroutineNameMap,
     settings: &GlobalSettings,
     cursor_tracking: &mut CursorTracker,
@@ -2738,6 +2722,7 @@ pub(crate) fn parse_mml_tokens<'a>(
     let mut p = Parser::new(
         channel,
         tokens,
+        data_instruments,
         instruments_map,
         subroutines,
         settings,

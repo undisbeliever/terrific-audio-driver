@@ -7,19 +7,27 @@
 use crate::bytecode::{
     BcTicksKeyOff, BcTicksNoKeyOff, Bytecode, EarlyReleaseMinTicks, EarlyReleaseTicks, LoopCount,
     PlayNoteTicks, PlayPitchPitch, PortamentoSlideTicks, PortamentoVelocity, RelativeEchoFeedback,
-    RelativeFirCoefficient, State, VibratoPitchOffsetPerTick,
+    RelativeFirCoefficient, VibratoPitchOffsetPerTick,
 };
-use crate::data::{InstrumentOrSample, UniqueNamesList};
+use crate::command_compiler::commands::{LoopAnalysis, SkipLastLoopAnalysis};
 use crate::driver_constants::FIR_FILTER_SIZE;
 use crate::echo::{EchoFeedback, FirCoefficient, FirTap};
 use crate::envelope::{Adsr, Gain, OptionalGain, TempGain};
 use crate::errors::{BytecodeError, ChannelError, ValueError};
 use crate::invert_flags::parse_invert_flag_arguments;
 use crate::notes::Note;
-use crate::subroutines::{CompiledSubroutines, SubroutineNameMap};
-use crate::time::TickCounter;
 use crate::value_newtypes::{
     parse_i8wh, I8WithByteHexValueNewType, SignedValueNewType, UnsignedValueNewType,
+};
+
+#[cfg(feature = "test")]
+use crate::{
+    bytecode::State,
+    command_compiler::analysis::TransposeStartRange,
+    data::{InstrumentOrSample, UniqueNamesList},
+    pitch_table::PitchTable,
+    subroutines::{CompiledSubroutines, SubroutineNameMap},
+    time::TickCounter,
 };
 
 pub use crate::bytecode::{BcTerminator, BytecodeContext};
@@ -312,7 +320,9 @@ fn temp_gain_and_rest_arguments(args: &[&str]) -> Result<(TempGain, BcTicksKeyOf
     Ok((gain.parse()?, BcTicksKeyOff::try_from(parse_u32(length)?)?))
 }
 
-fn instrument_and_adsr_argument<'a>(args: &[&'a str]) -> Result<(&'a str, Adsr), ChannelError> {
+pub(crate) fn instrument_and_adsr_argument<'a>(
+    args: &[&'a str],
+) -> Result<(&'a str, Adsr), ChannelError> {
     let (inst, a1, a2, a3, a4) = five_arguments(args)?;
 
     let adsr = Adsr::try_from_strs(a1, a2, a3, a4)?;
@@ -320,7 +330,9 @@ fn instrument_and_adsr_argument<'a>(args: &[&'a str]) -> Result<(&'a str, Adsr),
     Ok((inst, adsr))
 }
 
-fn instrument_and_gain_argument<'a>(args: &[&'a str]) -> Result<(&'a str, Gain), ChannelError> {
+pub(crate) fn instrument_and_gain_argument<'a>(
+    args: &[&'a str],
+) -> Result<(&'a str, Gain), ChannelError> {
     let (inst, gain) = two_arguments(args)?;
     let gain = gain.parse()?;
 
@@ -345,12 +357,19 @@ fn early_release_arguments(
     }
 }
 
-fn optional_loop_count_argument(args: &[&str]) -> Result<Option<LoopCount>, ChannelError> {
+fn optional_loop_count_argument(
+    args: &[&str],
+) -> Result<(Option<LoopCount>, &'static LoopAnalysis), ChannelError> {
     match args.len() {
-        0 => Ok(None),
-        1 => Ok(Some(parse_uvnt(args[0])?)),
+        0 => Ok((None, LoopAnalysis::BLANK)),
+        1 => Ok((Some(parse_uvnt(args[0])?), LoopAnalysis::BLANK)),
         _ => Err(ChannelError::InvalidNumberOfArgumentsRange(0, 1)),
     }
+}
+
+fn skip_last_loop_argument(args: &[&str]) -> Result<&'static SkipLastLoopAnalysis, ChannelError> {
+    no_arguments(args)?;
+    Ok(SkipLastLoopAnalysis::BLANK)
 }
 
 fn echo_feedback_argument(args: &[&str]) -> Result<EchoFeedback, ChannelError> {
@@ -475,7 +494,7 @@ pub(crate) fn parse_i32_allow_zero(
 }
 
 /// Parse UnsignedValueNewType
-fn parse_uvnt<T>(s: &str) -> Result<T, ChannelError>
+pub(crate) fn parse_uvnt<T>(s: &str) -> Result<T, ChannelError>
 where
     T: UnsignedValueNewType,
 {
@@ -498,6 +517,14 @@ where
     Ok(parse_i32_allow_zero(s, &T::MISSING_SIGN_ERROR)?.try_into()?)
 }
 
+pub(crate) fn split_asm_args(arguments: &str) -> Vec<&str> {
+    if arguments.contains(',') {
+        arguments.split(',').map(|s| s.trim()).collect()
+    } else {
+        arguments.split_ascii_whitespace().collect()
+    }
+}
+
 pub fn parse_asm_line(bc: &mut Bytecode, line: &str) -> Result<(), ChannelError> {
     // Strip comments
     let line = match line.split_once(';') {
@@ -514,11 +541,7 @@ pub fn parse_asm_line(bc: &mut Bytecode, line: &str) -> Result<(), ChannelError>
         .split_once(|c: char| c.is_ascii_whitespace())
         .unwrap_or((line, ""));
 
-    let arguments: Vec<&str> = if arguments.contains(',') {
-        arguments.split(',').map(|s| s.trim()).collect()
-    } else {
-        arguments.split_ascii_whitespace().collect()
-    };
+    let arguments = split_asm_args(arguments);
 
     macro_rules! parse_args_and_execute {
         ($name:ident, $n_args:tt, $arg_parser:ident, $method:ident) => {{
@@ -628,9 +651,9 @@ pub fn parse_asm_line(bc: &mut Bytecode, line: &str) -> Result<(), ChannelError>
        enable_echo 0 no_arguments,
        disable_echo 0 no_arguments,
 
-       start_loop 1 optional_loop_count_argument,
-       skip_last_loop 0 no_arguments,
-       end_loop 1 optional_loop_count_argument,
+       start_loop 2 optional_loop_count_argument,
+       skip_last_loop 1 skip_last_loop_argument,
+       end_loop 2 optional_loop_count_argument,
 
        call_subroutine_and_disable_vibrato 1 one_argument call_subroutine_and_disable_vibrato_str,
        call_subroutine 1 one_argument call_subroutine_str,
@@ -658,22 +681,43 @@ pub fn parse_asm_line(bc: &mut Bytecode, line: &str) -> Result<(), ChannelError>
 pub(crate) const CALL_SUBROUTINE: &str = "call_subroutine";
 pub(crate) const CALL_SUBROUTINE_AND_DISABLE_VIBRATO: &str = "call_subroutine_and_disable_vibrato";
 
+pub(crate) const START_LOOP: &str = "start_loop";
+pub(crate) const SKIP_LAST_LOOP: &str = "skip_last_loop";
+pub(crate) const END_LOOP: &str = "end_loop";
+
+pub(crate) const SET_INSTRUMENT: &str = "set_instrument";
+pub(crate) const SET_INSTRUMENT_AND_ADSR: &str = "set_instrument_and_adsr";
+pub(crate) const SET_INSTRUMENT_AND_GAIN: &str = "set_instrument_and_gain";
+
 pub(crate) const SET_TRANSPOSE: &str = "set_transpose";
 pub(crate) const ADJUST_TRANSPOSE: &str = "adjust_transpose";
+pub(crate) const DISABLE_TRANSPOSE: &str = "disable_transpose";
 
+#[cfg(feature = "test")]
 pub struct BytecodeAssembler<'a> {
     bc: Bytecode<'a>,
 }
 
+#[cfg(feature = "test")]
 impl BytecodeAssembler<'_> {
     pub fn new<'a>(
         inst_map: &'a UniqueNamesList<InstrumentOrSample>,
+        pitch_table: &'a PitchTable,
         subroutines: &'a CompiledSubroutines,
         subroutine_name_map: &'a dyn SubroutineNameMap,
         context: BytecodeContext,
     ) -> BytecodeAssembler<'a> {
+        assert!(context.is_unit_test_assembly());
+
         BytecodeAssembler {
-            bc: Bytecode::new(context, inst_map, subroutines, subroutine_name_map),
+            bc: Bytecode::new(
+                context,
+                inst_map,
+                pitch_table,
+                subroutines,
+                subroutine_name_map,
+                TransposeStartRange::DISABLED,
+            ),
         }
     }
 

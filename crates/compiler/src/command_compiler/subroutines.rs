@@ -12,7 +12,7 @@ const MISSING_SUBROUTINE_BIT: u8 = u8::MAX;
 
 const _: () = assert!(MAX_SUBROUTINES <= MISSING_SUBROUTINE_BIT as usize);
 
-struct SubroutineBitArray {
+pub(super) struct SubroutineBitArray {
     bits: [u128; Self::N_BITS / Self::BITS_PER_ENTRY],
 }
 
@@ -76,6 +76,22 @@ impl<'a> SubroutineCommandsWithCompileOrder<'a> {
         self.compile_order
             .iter()
             .map(|&i| &self.subroutines[usize::from(i)])
+    }
+
+    pub fn rev_compile_iter(&self) -> impl Iterator<Item = &SubroutineCommands<'a>> {
+        self.compile_order
+            .iter()
+            .rev()
+            .map(|&i| &self.subroutines[usize::from(i)])
+    }
+
+    pub(super) fn len(&self) -> usize {
+        self.subroutines.len()
+    }
+
+    // ::TODO optimise::
+    pub(super) fn get_compile_order(&mut self, i: usize) -> &mut SubroutineCommands<'a> {
+        &mut self.subroutines[usize::from(self.compile_order[i])]
     }
 }
 

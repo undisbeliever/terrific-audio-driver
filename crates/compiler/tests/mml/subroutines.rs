@@ -1254,3 +1254,81 @@ A @d o6c !s o4c o6d o4e
         BytecodeError::NoteOutOfRange(note("d6"), note("c4")..=note("b4")).into(),
     );
 }
+
+#[test]
+fn song_loop_point_in_nested_subroutine_panic_bugfix() {
+    // found using rust-fuzz
+    assert_one_subroutine_error_in_mml(
+        r##"
+@0 dummy_instrument
+
+!s1 @0 r L r
+!s2 !s1 r
+
+A !s2
+"##,
+        "!s1",
+        10,
+        ChannelError::CannotSetLoopPoint,
+    );
+}
+
+#[test]
+fn tail_call_subroutine_with_compile_error_panic_bugfix() {
+    let dummy_data = dummy_data();
+
+    // found using rust-fuzz
+    let r = compiler::songs::compile_mml_song(
+        r##"
+@0 dummy_instrument
+
+!s1 !s2
+!s2 {cP} @0
+
+A !s2
+"##,
+        "",
+        None,
+        &dummy_data.instruments_and_samples,
+        &dummy_data.pitch_table,
+    );
+    assert!(r.is_err());
+
+    let r = compiler::songs::compile_mml_song(
+        r##"
+@0 dummy_instrument
+
+!s1 !s2
+!s2 !s3
+!s3 !s4
+!s4 !error
+!error {cP} @0
+
+A !s1
+"##,
+        "",
+        None,
+        &dummy_data.instruments_and_samples,
+        &dummy_data.pitch_table,
+    );
+    assert!(r.is_err());
+}
+
+#[test]
+fn self_recursion_loop_analysis_panic_bugfix() {
+    // Found using rust-fuzz (manually minimised)
+    // Panics on the `:` skip last loop command in !s2
+    assert_one_subroutine_error_in_mml(
+        r##"
+@1 dummy_instrument
+
+!s1 !s1 @1
+!s2 [ !s1 w : w ]2
+
+A !s2
+"##,
+        "!s1",
+        5,
+        ChannelError::CannotCallSubroutineRecursion("s1".to_owned()),
+    )
+}

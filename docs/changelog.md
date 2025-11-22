@@ -1,8 +1,8 @@
 Terrific Audio Driver Changelog
 ===============================
 
-Version 0.2.0 beta
-==================
+Version 0.2.0
+=============
 
 **BREAKING CHANGES:**
  * `_` and `__` MML transpose commands now change a semitone offset inside the audio driver.
@@ -11,10 +11,8 @@ Version 0.2.0 beta
     * `_0 c [__+1 c]3` will now play `c c+ d d+`
     * To restore the old transpose behaviour, either add an `#OldTraspose` MML header or replace `_` with
       `_M` and `__` with `__M`.
- * `MP` vibrato cannot be used in a song that contains a `_`, `__`, `set_transpose` or `adjust_transpose`.  
-   (This restriction will be relaxed in the next production release.)
- * A portamento's slide length has a maximum 255 ticks if the song contains a `_`, `__`, `set_transpose` or `adjust_transpose`.  
-   (This restriction will be relaxed in the next production release.)
+ * `MP` vibrato and `MD` detune cents cannot be used when driver transpose is active.
+ * A portamento's slide length has a maximum 255 ticks when driver transpose is active.
 
 BRR changes:
  * Increased the maximum BRR sample size
@@ -45,6 +43,14 @@ MML changes:
  * Added `#Transpose` header (equivalent to adding `_M` to the start of every channel and subroutine)
  * Added `#KeySignature` header (equivalent to adding `_{}` to the start of every channel and subroutine)
  * Fixed malformed MML taking too long to compile by limiting unlooped waits or rests to 8192 ticks.
+ * Added a driver-transpose and instrument-tuning loop analysis step to the compiler.  
+   If a loop changes the instrument tuning or enables driver transpose:
+    * Portamento velocity will be calculated by the audio driver and the portamento's slide length will have a maximum 255 ticks
+    * `MP` and `MD` will output an error
+ * Improved out-of-range note testing
+
+Sound effect changes:
+ * Improved out-of-range note testing in bytecode assembly sound effect
 
 
 Version 0.1.1

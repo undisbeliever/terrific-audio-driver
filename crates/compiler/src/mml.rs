@@ -23,7 +23,8 @@ use tokenizer::MmlTokens;
 use crate::bytecode::BytecodeContext;
 use crate::command_compiler::channel_bc_generator;
 use crate::command_compiler::commands::{
-    ChannelCommands, SfxSubroutineCommands, SongCommands, SoundEffectCommands, SubroutineCommands,
+    ChannelCommands, MmlInstrument, SfxSubroutineCommands, SongCommands, SoundEffectCommands,
+    SubroutineCommands,
 };
 use crate::data::{self, UniqueNamesList};
 use crate::driver_constants::{MAX_SFX_SUBROUTINES, MAX_SUBROUTINES};
@@ -76,11 +77,13 @@ impl MmlPrefixData {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn parse_tokens<'a>(
     channel: ChannelId,
     identifier: IdentifierStr,
     tokens: MmlTokens<'a>,
-    mml_instrument_map: &HashMap<IdentifierStr, usize>,
+    data_instruments: &UniqueNamesList<data::InstrumentOrSample>,
+    mml_instrument_map: &HashMap<IdentifierStr, &MmlInstrument>,
     subroutine_name_map: &HashMap<IdentifierStr, usize>,
     global_settings: &GlobalSettings,
     cursor_tracker: &mut CursorTracker,
@@ -88,6 +91,7 @@ fn parse_tokens<'a>(
     let (commands, errors) = parse_mml_tokens(
         channel,
         tokens,
+        data_instruments,
         mml_instrument_map,
         subroutine_name_map,
         global_settings,
@@ -109,7 +113,8 @@ fn parse_tokens<'a>(
 
 fn parse_subroutines<'a>(
     subroutines: Vec<(IdentifierStr<'a>, MmlTokens<'a>)>,
-    instrument_map: &HashMap<IdentifierStr, usize>,
+    data_instruments: &UniqueNamesList<data::InstrumentOrSample>,
+    instrument_map: &HashMap<IdentifierStr, &MmlInstrument>,
     subroutine_name_map: &HashMap<IdentifierStr, usize>,
     global_settings: &GlobalSettings,
     cursor_tracking: &mut CursorTracker,
@@ -126,6 +131,7 @@ fn parse_subroutines<'a>(
             let (c, e) = parse_mml_tokens(
                 ChannelId::Subroutine(i),
                 tokens,
+                data_instruments,
                 instrument_map,
                 subroutine_name_map,
                 global_settings,
@@ -144,6 +150,7 @@ fn parse_subroutines<'a>(
                 identifier: id,
                 commands: c.commands,
                 end_pos: c.end_pos,
+                analysis: Default::default(),
             }
         })
         .collect()
@@ -200,6 +207,7 @@ pub(crate) fn parse_mml_song<'a>(
 
     let subroutines = parse_subroutines(
         lines.subroutines,
+        data_instruments,
         &instrument_map,
         &lines.subroutine_name_map,
         &metadata.mml_settings,
@@ -218,6 +226,7 @@ pub(crate) fn parse_mml_song<'a>(
                 ChannelId::Channel(c_index),
                 c_index.identifier(),
                 tokens,
+                data_instruments,
                 &instrument_map,
                 &lines.subroutine_name_map,
                 &metadata.mml_settings,
@@ -292,6 +301,7 @@ pub(crate) fn parse_sfx_subroutines<'a>(
 
     let subroutines = parse_subroutines(
         lines.subroutines,
+        data_instruments,
         &instrument_map,
         &lines.subroutine_name_map,
         &GlobalSettings::default(),
@@ -300,7 +310,6 @@ pub(crate) fn parse_sfx_subroutines<'a>(
     );
 
     Ok(SfxSubroutineCommands {
-        instruments,
         subroutines,
         mml_tracker,
         errors,
@@ -338,6 +347,7 @@ pub(crate) fn parse_sound_effect<'a>(
     let (commands, errors) = parse_mml_tokens(
         ChannelId::SoundEffect,
         lines.tokens,
+        data_instruments,
         &instruments_map,
         sfx_subroutines,
         &GlobalSettings::default(),
@@ -345,10 +355,10 @@ pub(crate) fn parse_sound_effect<'a>(
     );
 
     Ok(SoundEffectCommands {
-        instruments,
-        commands,
+        commands: commands.commands,
+        end_pos: commands.end_pos,
         errors,
-        mml_tracker,
+        mml_tracker: Some(mml_tracker),
     })
 }
 
@@ -377,6 +387,7 @@ pub fn compile_mml_prefix(
     let (commands, errors) = parse_mml_tokens(
         ChannelId::MmlPrefix,
         tokens,
+        data_instruments,
         &instruments_map,
         &BlankSubroutineMap,
         &GlobalSettings::default(),
@@ -386,7 +397,6 @@ pub fn compile_mml_prefix(
     channel_bc_generator::compile_mml_prefix(
         &commands,
         BytecodeContext::MmlPrefix,
-        mml_instruments,
         data_instruments,
         pitch_table,
         &CompiledSubroutines::new_blank(),

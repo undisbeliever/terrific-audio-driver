@@ -877,6 +877,38 @@ fn nested_loops_and_envelope_4() {
 }
 
 #[test]
+fn instrument_asm_instructions() {
+    assert_eq!(EXAMPLE_ADSR_STR, "12 1 1 16");
+    assert_eq!(EXAMPLE_GAIN_STR, "127");
+
+    assert_mml_channel_a_matches_bytecode(
+        r##"
+A \asm {
+    set_instrument dummy_instrument
+    set_instrument_and_adsr dummy_instrument 1 2 3 4
+    set_instrument_and_gain dummy_instrument I5
+
+    set_instrument dummy_instrument
+    set_instrument_and_adsr inst_with_adsr 12 1 1 16
+    set_instrument_and_gain inst_with_gain 127
+    play_note c4 24
+}
+"##,
+        &[
+            "set_instrument dummy_instrument",
+            "set_instrument_and_adsr dummy_instrument 1 2 3 4",
+            "set_instrument_and_gain dummy_instrument I5",
+            // Test instrument and envelope is not optimised away
+            "set_instrument dummy_instrument",
+            "set_instrument_and_adsr inst_with_adsr 12 1 1 16",
+            "set_instrument_and_gain inst_with_gain F127",
+            // Add ticks to song
+            "play_note c4 24",
+        ],
+    );
+}
+
+#[test]
 fn instrument_hint_and_song_loop_panic_bugfix() {
     // "hint in song-loop" panic in compiler::bytecode::InstrumentState::demote_to_song_loop()
     // found using rust-fuzz

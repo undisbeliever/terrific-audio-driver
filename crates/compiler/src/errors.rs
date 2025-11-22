@@ -340,17 +340,30 @@ pub enum BytecodeError {
 
     GotoRelativeOutOfBounds,
 
+    TransposedNoteOverflow(Note, RangeInclusive<i8>),
+
     NoteOutOfRange(Note, RangeInclusive<Note>),
+    TransposedNoteOutOfRange {
+        note: Note,
+        transpose: RangeInclusive<i8>,
+        inst_range: RangeInclusive<Note>,
+    },
+    NoteOutOfRangeEmptyNoteRange(Note),
     CannotPlayNoteBeforeSettingInstrument,
 
     SubroutinePlaysNotesWithNoInstrument,
+    SubroutineInstrumentHintFrequencyMismatch {
+        subroutine: InstrumentHintFreq,
+        instrument: InstrumentHintFreq,
+    },
     SubroutineNotesOutOfRange {
         subroutine_range: RangeInclusive<Note>,
         inst_range: RangeInclusive<Note>,
     },
-    SubroutineInstrumentHintFrequencyMismatch {
-        subroutine: InstrumentHintFreq,
-        instrument: InstrumentHintFreq,
+    TransposedSubroutineNotesOutOfRange {
+        notes: RangeInclusive<Note>,
+        transpose: RangeInclusive<i8>,
+        inst_range: RangeInclusive<Note>,
     },
     SubroutineInstrumentHintSampleMismatch,
     SubroutineInstrumentHintNoInstrumentSet,
@@ -369,6 +382,10 @@ pub enum BytecodeError {
         edl: EchoEdl,
         max_edl: EchoEdl,
     },
+
+    DriverTransposeOverflows,
+    DriverTransposeOverflowsInLoop,
+    CannotCallSfxSubroutineWithDriverTranspose,
 }
 
 #[derive(Debug)]
@@ -594,10 +611,12 @@ pub enum ChannelError {
     LoopPointAlreadySet,
     CannotSetLoopPoint,
     CannotSetLoopPointInALoop,
-    CannotUseMpWithoutInstrument,
+    MpVibratoWithDriverTransposeActive,
+    CannotUseMpWithUnknownInstrumentTuning,
     MpPitchOffsetTooLarge(u32),
     MpDepthZero,
-    CannotUseDetuneCentsWithoutInstrument,
+    DetuneCentsWithDriverTransposeActive,
+    CannotUseDetuneCentsWithUnknownInstrumentTuning,
     DetuneCentsTooLargeForNote(i32),
 
     PortamentoTooShort,
@@ -644,9 +663,6 @@ pub enum ChannelError {
     InvalidNumberOfArgumentsRange(u8, u8),
     InvalidKeyoffArgument(String),
     NoTicksInSoundEffect,
-
-    // Temporary errors
-    MpVibratoInSongWithTranspose,
 }
 
 #[derive(Debug)]
@@ -1388,6 +1404,24 @@ impl Display for BytecodeError {
                 )
             }
 
+            Self::TransposedNoteOverflow(n, transpose) => {
+                if transpose.start() == transpose.end() {
+                    write!(
+                        f,
+                        "driver transposed note overflows ({}, transpose {:+})",
+                        n.note_id(),
+                        transpose.start(),
+                    )
+                } else {
+                    write!(
+                        f,
+                        "driver transposed note overflows ({}, transpose: {:+} to {:+})",
+                        n.note_id(),
+                        transpose.start(),
+                        transpose.end()
+                    )
+                }
+            }
             Self::NoteOutOfRange(n, range) => {
                 write!(
                     f,
@@ -1396,6 +1430,32 @@ impl Display for BytecodeError {
                     range.start().note_id(),
                     range.end().note_id(),
                 )
+            }
+            Self::TransposedNoteOutOfRange {
+                note,
+                transpose,
+                inst_range,
+            } => {
+                write!(f, "driver transposed note out of range ({}", note.note_id(),)?;
+                if transpose.start() == transpose.end() {
+                    write!(f, ", transpose {:+}", transpose.start())?;
+                } else {
+                    write!(
+                        f,
+                        ", transpose {:+} - {:+}",
+                        transpose.start(),
+                        transpose.end()
+                    )?;
+                }
+                write!(
+                    f,
+                    ", instrument range: {} - {})",
+                    inst_range.start().note_id(),
+                    inst_range.end().note_id(),
+                )
+            }
+            Self::NoteOutOfRangeEmptyNoteRange(n) => {
+                write!(f, "note out of range ({}, no notes)", n.note_id())
             }
             Self::CannotPlayNoteBeforeSettingInstrument => {
                 write!(f, "cannot play note before setting an instrument")
@@ -1426,6 +1486,42 @@ impl Display for BytecodeError {
                         inst_range.end().note_id(),
                     )
                 }
+            }
+            Self::TransposedSubroutineNotesOutOfRange {
+                notes,
+                transpose,
+                inst_range,
+            } => {
+                if notes.start() == notes.end() {
+                    write!(
+                        f,
+                        "transposed subroutine call plays an out of range note ({}",
+                        notes.start().note_id(),
+                    )?
+                } else {
+                    write!(
+                        f,
+                        "transposed subroutine call plays out of range notes ({} - {}",
+                        notes.start().note_id(),
+                        notes.end().note_id(),
+                    )?
+                }
+                if transpose.start() == transpose.end() {
+                    write!(f, ", transpose {:+}", transpose.start())?
+                } else {
+                    write!(
+                        f,
+                        ", transpose {:+} - {:+}",
+                        transpose.start(),
+                        transpose.end()
+                    )?
+                }
+                write!(
+                    f,
+                    ", instrument range: {} - {})",
+                    inst_range.start().note_id(),
+                    inst_range.end().note_id(),
+                )
             }
             Self::SubroutineInstrumentHintFrequencyMismatch {
                 subroutine: sub_freq,
@@ -1480,6 +1576,19 @@ impl Display for BytecodeError {
                     "echo length is larger than max echo length ({}, max: {})",
                     edl.to_length().value(),
                     max_edl.to_length().value()
+                )
+            }
+
+            Self::DriverTransposeOverflows => {
+                write!(f, "driver transpose overflow")
+            }
+            Self::DriverTransposeOverflowsInLoop => {
+                write!(f, "driver transpose overflow in loop")
+            }
+            Self::CannotCallSfxSubroutineWithDriverTranspose => {
+                write!(
+                    f,
+                    "cannot call sound effect subroutine with driver transpose active"
                 )
             }
         }
@@ -1777,8 +1886,11 @@ impl Display for ChannelError {
             Self::LoopPointAlreadySet => write!(f, "loop point already set"),
             Self::CannotSetLoopPoint => write!(f, "cannot set loop point"),
             Self::CannotSetLoopPointInALoop => write!(f, "cannot set loop point in a loop"),
-            Self::CannotUseMpWithoutInstrument => {
-                write!(f, "cannot use MP vibrato without setting an instrument")
+            Self::MpVibratoWithDriverTransposeActive => {
+                write!(f, "cannot use MP vibrato when driver transpose is active")
+            }
+            Self::CannotUseMpWithUnknownInstrumentTuning => {
+                write!(f, "cannot use MP vibrato without unknown instrument tuning")
             }
             Self::MpPitchOffsetTooLarge(po) => {
                 write!(
@@ -1789,8 +1901,11 @@ impl Display for ChannelError {
                 )
             }
 
-            Self::CannotUseDetuneCentsWithoutInstrument => {
-                write!(f, "cannot use MD without setting an instrument")
+            Self::DetuneCentsWithDriverTransposeActive => {
+                write!(f, "cannot use MD when driver transpose is active")
+            }
+            Self::CannotUseDetuneCentsWithUnknownInstrumentTuning => {
+                write!(f, "cannot use MD with an unknown instrument tuning")
             }
             Self::DetuneCentsTooLargeForNote(d) => {
                 write!(
@@ -1915,10 +2030,6 @@ impl Display for ChannelError {
             }
             Self::InvalidKeyoffArgument(s) => write!(f, "invalid keyoff argument: {}", s),
             Self::NoTicksInSoundEffect => write!(f, "No notes in sound effect"),
-
-            Self::MpVibratoInSongWithTranspose => {
-                write!(f, "cannot use MP vibrato in a MML file that uses transpose")
-            }
         }
     }
 }

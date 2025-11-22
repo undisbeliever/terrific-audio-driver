@@ -18,6 +18,7 @@ mod key_signature;
 mod keyon_without_keyoff;
 mod loops;
 mod misc_instructions;
+mod note_range_tracking;
 mod notes;
 mod old_transpose;
 mod parsing;
@@ -38,10 +39,8 @@ use compiler::driver_constants::{
     BC_CHANNEL_STACK_OFFSET, BC_CHANNEL_STACK_SIZE, BC_STACK_BYTES_PER_LOOP,
     BC_STACK_BYTES_PER_SUBROUTINE_CALL, MAX_SUBROUTINES,
 };
-use compiler::echo::EchoEdl;
 use compiler::envelope::{Adsr, Envelope, Gain};
 use compiler::errors::{BytecodeError, ChannelError, MmlLineError, SongError, ValueError};
-use compiler::identifier::MusicChannelIndex;
 use compiler::notes::{Note, Octave};
 use compiler::pitch_table::{
     build_pitch_table, InstrumentHintFreq, PitchTable, PlayPitchFrequency,
@@ -51,6 +50,11 @@ use compiler::subroutines::{CompiledSubroutines, Subroutine, SubroutineNameMap, 
 use compiler::{bytecode_assembler, data, opcodes};
 
 use std::fmt::Write;
+
+const _: () = assert!(
+    cfg!(feature = "test"),
+    "The MML tests require the \"test\" feature in the compiler crate"
+);
 
 const SAMPLE_FREQ: f64 = 500.0;
 
@@ -169,13 +173,10 @@ fn assert_line_matches_bytecode(mml_line: &str, bc_asm: &[&str]) {
     let mml = compile_mml(&mml, &dd);
     let bc_asm = assemble_channel_bytecode(
         &bc_asm,
-        &dd.instruments_and_samples,
+        &dd,
         &CompiledSubroutines::new_blank(),
         BcTerminator::DisableChannel,
-        BytecodeContext::SongChannel {
-            index: MusicChannelIndex::CHANNEL_A,
-            max_edl: EchoEdl::MIN,
-        },
+        BytecodeContext::UnitTestAssembly,
     );
 
     assert_eq!(
@@ -201,13 +202,10 @@ fn assert_channel_b_line_matches_bytecode(mml_line: &str, bc_asm: &[&str]) {
     let mml = compile_mml(&mml, &dd);
     let bc_asm = assemble_channel_bytecode(
         &bc_asm,
-        &dd.instruments_and_samples,
+        &dd,
         &CompiledSubroutines::new_blank(),
         BcTerminator::DisableChannel,
-        BytecodeContext::SongChannel {
-            index: MusicChannelIndex::CHANNEL_B,
-            max_edl: EchoEdl::MIN,
-        },
+        BytecodeContext::UnitTestAssembly,
     );
 
     assert_eq!(
@@ -285,39 +283,36 @@ fn assert_line_matches_line_and_bytecode(mml_line1: &str, mml_line2: &str, bc_as
 
     let bc_asm = assemble_channel_bytecode(
         &bc_asm,
-        &dd.instruments_and_samples,
+        &dd,
         &CompiledSubroutines::new_blank(),
         BcTerminator::DisableChannel,
-        BytecodeContext::SongChannel {
-            index: MusicChannelIndex::CHANNEL_A,
-            max_edl: EchoEdl::MIN,
-        },
+        BytecodeContext::UnitTestAssembly,
     );
 
     assert_eq!(mml1_bc, bc_asm, "Testing {mml_line1:?} against bytecode");
 }
 
 fn assert_mml_channel_a_matches_bytecode(mml: &str, bc_asm: &[&str]) {
-    assert_mml_channel_a_matches_bytecode_max_edl(mml, bc_asm, EchoEdl::MIN)
-}
-
-fn assert_mml_channel_a_matches_bytecode_max_edl(mml: &str, bc_asm: &[&str], max_edl: EchoEdl) {
     let dummy_data = dummy_data();
 
     let mml = compile_mml(mml, &dummy_data);
 
     let bc_asm = assemble_channel_bytecode(
         bc_asm,
-        &dummy_data.instruments_and_samples,
+        &dummy_data,
         mml.subroutines(),
         BcTerminator::DisableChannel,
-        BytecodeContext::SongChannel {
-            index: MusicChannelIndex::CHANNEL_A,
-            max_edl,
-        },
+        BytecodeContext::UnitTestAssembly,
     );
 
     assert_eq!(mml_bytecode(&mml), bc_asm);
+}
+
+fn assert_looping_line_matches_bytecode(mml_line: &str, bc_asm: &[&str]) {
+    let mml = ["@1 dummy_instrument\nA @1 o4\nA ", mml_line].concat();
+    let bc_asm = [&["set_instrument dummy_instrument"], bc_asm].concat();
+
+    assert_mml_channel_a_matches_looping_bytecode(&mml, &bc_asm);
 }
 
 fn assert_mml_channel_a_matches_looping_bytecode(mml: &str, bc_asm: &[&str]) {
@@ -334,13 +329,10 @@ fn assert_mml_channel_a_matches_looping_bytecode(mml: &str, bc_asm: &[&str]) {
 
     let bc_asm = assemble_channel_bytecode(
         bc_asm,
-        &dummy_data.instruments_and_samples,
+        &dummy_data,
         mml.subroutines(),
         BcTerminator::Goto(loop_point),
-        BytecodeContext::SongChannel {
-            index: MusicChannelIndex::CHANNEL_A,
-            max_edl: EchoEdl::MIN,
-        },
+        BytecodeContext::UnitTestAssembly,
     );
 
     assert_eq!(mml_bytecode(&mml), bc_asm);
@@ -353,13 +345,10 @@ fn assert_mml_channel_b_matches_bytecode(mml: &str, bc_asm: &[&str]) {
 
     let bc_asm = assemble_channel_bytecode(
         bc_asm,
-        &dummy_data.instruments_and_samples,
+        &dummy_data,
         mml.subroutines(),
         BcTerminator::DisableChannel,
-        BytecodeContext::SongChannel {
-            index: MusicChannelIndex::CHANNEL_B,
-            max_edl: mml.metadata().echo_buffer.max_edl,
-        },
+        BytecodeContext::UnitTestAssembly,
     );
 
     assert_eq!(mml_channel_b_bytecode(&mml), bc_asm);
@@ -372,12 +361,10 @@ fn assert_mml_subroutine_matches_bytecode(mml: &str, subroutine_index: usize, bc
 
     let bc_asm = assemble_channel_bytecode(
         bc_asm,
-        &dummy_data.instruments_and_samples,
+        &dummy_data,
         mml.subroutines(),
         BcTerminator::ReturnFromSubroutine,
-        BytecodeContext::SongSubroutine {
-            max_edl: EchoEdl::MIN,
-        },
+        BytecodeContext::UnitTestAssemblySubroutine,
     );
 
     assert_eq!(subroutine_bytecode(&mml, subroutine_index), bc_asm);
@@ -597,7 +584,7 @@ impl SubroutineNameMap for SubroutineNameSearcher<'_> {
 
 fn assemble_channel_bytecode(
     bc_asm: &[&str],
-    inst_map: &UniqueNamesList<data::InstrumentOrSample>,
+    dummy_data: &DummyData,
     subroutines: &CompiledSubroutines,
     terminator: BcTerminator,
     context: BytecodeContext,
@@ -605,7 +592,8 @@ fn assemble_channel_bytecode(
     let subroutine_name_map = SubroutineNameSearcher(subroutines);
 
     let mut bc = bytecode_assembler::BytecodeAssembler::new(
-        inst_map,
+        &dummy_data.instruments_and_samples,
+        &dummy_data.pitch_table,
         subroutines,
         &subroutine_name_map,
         context,
@@ -633,11 +621,13 @@ fn dummy_data() -> DummyData {
         dummy_instrument("inst_with_adsr",   SF, 2, 6, Envelope::Adsr(EXAMPLE_ADSR)),
         dummy_instrument("inst_with_gain",   SF, 2, 6, Envelope::Gain(EXAMPLE_GAIN)),
         dummy_instrument("only_octave_four", SF, 4, 4, Envelope::Gain(Gain::new(0))),
+        dummy_instrument("f1000_o2", 3000.0, 2, 2, Envelope::Gain(Gain::new(0))),
         dummy_instrument("f1000_o4", 1000.0, 4, 4, Envelope::Gain(Gain::new(0))),
         dummy_instrument("f1000_o5", 1000.0, 5, 5, Envelope::Gain(Gain::new(0))),
         dummy_instrument("f2000_o4", 2000.0, 4, 4, Envelope::Gain(Gain::new(0))),
         dummy_instrument("f1000_o3_o5", 1000.0, 3, 5, Envelope::Gain(Gain::new(0))),
         dummy_instrument("f2000_o3_o5", 2000.0, 3, 5, Envelope::Gain(Gain::new(0))),
+        dummy_instrument("f3000_o4", 3000.0, 4, 4, Envelope::Gain(Gain::new(0))),
     ].iter(),
         [
             data::Sample{

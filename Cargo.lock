@@ -176,6 +176,7 @@ name = "compiler"
 version = "0.0.0"
 dependencies = [
  "brr",
+ "compiler",
  "regex",
  "relative-path",
  "serde",

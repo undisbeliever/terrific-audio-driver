@@ -38,14 +38,14 @@ publish = false
 
 [workspace.dependencies]
 # Local library crates
-brr = { path = "./crates/brr", version = "0.0.0" }
-compiler = { path = "./crates/compiler", version = "0.0.0", features = [] }
-shvc-sound-emu = { path = "./crates/shvc-sound-emu", version = "0.0.0" }
-tad-emu = { path = "./crates/tad-emu", version = "0.0.0" }
+brr = { path = "./crates/brr", version = "=0.0.0" }
+compiler = { path = "./crates/compiler", version = "=0.0.0", features = [] }
+shvc-sound-emu = { path = "./crates/shvc-sound-emu", version = "=0.0.0" }
+tad-emu = { path = "./crates/tad-emu", version = "=0.0.0" }
 
 # Local binary crates
-tad-compiler = { path = "./crates/tad-compiler", version = "0.0.0" }
-wav2brr = { path = "./crates/wav2brr", version = "0.0.0" }
+tad-compiler = { path = "./crates/tad-compiler", version = "=0.0.0" }
+wav2brr = { path = "./crates/wav2brr", version = "=0.0.0" }
 
 # External crates
 clap = { version="4.5.16", features=[ "derive" ] }

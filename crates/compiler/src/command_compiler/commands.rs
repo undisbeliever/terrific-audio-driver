@@ -4,6 +4,8 @@
 //
 // SPDX-License-Identifier: MIT
 
+use super::analysis::{SkipLastLoopTransposeAnalysis, TransposeAnalysis};
+
 use crate::bytecode::{
     DetuneValue, EarlyReleaseMinTicks, EarlyReleaseTicks, InstrumentId, LoopCount, NoiseFrequency,
     Pan, PanSlideAmount, PanSlideTicks, PanbrelloAmplitude, PanbrelloQuarterWavelengthInTicks,
@@ -190,6 +192,44 @@ impl DetuneCents {
     pub const ZERO: Self = Self(0);
 }
 
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub(crate) enum InstrumentAnalysis {
+    Set(InstrumentId),
+    Hint(InstrumentId),
+}
+
+impl InstrumentAnalysis {
+    pub fn instrument_id(self) -> InstrumentId {
+        match self {
+            Self::Set(i) | Self::Hint(i) => i,
+        }
+    }
+}
+
+#[derive(Debug, Default, Copy, Clone, PartialEq)]
+pub struct LoopAnalysis {
+    pub(crate) instrument: Option<InstrumentAnalysis>,
+    pub(crate) transpose: TransposeAnalysis,
+}
+
+impl LoopAnalysis {
+    pub const BLANK: &'static Self = &Self {
+        instrument: None,
+        transpose: TransposeAnalysis::BLANK,
+    };
+}
+
+#[derive(Debug, Default, Clone, PartialEq)]
+pub struct SkipLastLoopAnalysis {
+    pub(crate) transpose: SkipLastLoopTransposeAnalysis,
+}
+
+impl SkipLastLoopAnalysis {
+    pub const BLANK: &'static Self = &Self {
+        transpose: SkipLastLoopTransposeAnalysis::BLANK,
+    };
+}
+
 #[derive(Debug, Clone, Copy)]
 pub enum SubroutineCallType {
     Mml,
@@ -201,7 +241,7 @@ pub enum SubroutineCallType {
 pub(crate) enum Command<'a> {
     None,
 
-    SetLoopPoint,
+    SetLoopPoint(LoopAnalysis),
 
     SetManualVibrato(Option<ManualVibrato>),
     SetMpVibrato(Option<MpVibrato>),
@@ -266,15 +306,16 @@ pub(crate) enum Command<'a> {
     DisableNoise,
 
     CallSubroutine(u8, SubroutineCallType),
-    StartLoop,
-    SkipLastLoop,
-    EndLoop(LoopCount),
+    StartLoop(Option<LoopCount>, LoopAnalysis),
+    SkipLastLoop(SkipLastLoopAnalysis),
+    EndLoop(Option<LoopCount>, LoopAnalysis),
 
-    // index into Vec<MmlInstrument>.
-    SetSubroutineInstrumentHint(usize),
+    SetSubroutineInstrumentHint(InstrumentId, Option<Envelope>),
 
-    // index into Vec<MmlInstrument>.
-    SetInstrument(usize),
+    // Will not be optimised away
+    SetInstrumentAsm(InstrumentId, Option<Envelope>),
+
+    SetInstrument(InstrumentId, Option<Envelope>),
     SetAdsr(Adsr),
     SetGain(Gain),
 
@@ -331,7 +372,7 @@ pub(crate) enum Command<'a> {
     StartBytecodeAsm,
     EndBytecodeAsm,
 
-    // MUST NOT contain a `transpose` instruction or a subroutine call instruction.
+    // MUST NOT contain a transpose, loop or subroutine call instruction.
     BytecodeAsm(&'a str),
 }
 
@@ -348,6 +389,10 @@ impl<'a> CommandWithPos<'a> {
             pos,
             end_pos,
         }
+    }
+
+    pub(super) fn command_mut(&mut self) -> &mut Command<'a> {
+        &mut self.command
     }
 
     pub fn command(&self) -> &Command<'a> {
@@ -377,6 +422,8 @@ pub(crate) struct SubroutineCommands<'a> {
     pub(crate) identifier: IdentifierStr<'a>,
     pub(crate) commands: Vec<CommandWithPos<'a>>,
     pub(crate) end_pos: FilePos,
+
+    pub(crate) analysis: LoopAnalysis,
 }
 
 impl SubroutineCommands<'_> {
@@ -392,11 +439,10 @@ pub struct MmlInstrument {
     pub(crate) file_range: FilePosRange,
 
     pub(crate) instrument_id: InstrumentId,
+    pub(crate) envelope: Option<Envelope>,
 
-    // No envelope override or envelope override matches instrument
-    pub(crate) envelope_unchanged: bool,
-    pub(crate) envelope: Envelope,
-
+    // Used by bytecode_interpreter to select the instrument to use when playing a subroutine
+    // ::TODO remove::
     pub(crate) note_range: RangeInclusive<Note>,
 }
 
@@ -412,15 +458,14 @@ pub(crate) struct SongCommands<'a> {
 }
 
 pub(crate) struct SfxSubroutineCommands<'a> {
-    pub instruments: Vec<MmlInstrument>,
     pub subroutines: Vec<SubroutineCommands<'a>>,
     pub mml_tracker: CursorTracker,
     pub errors: Vec<MmlChannelError>,
 }
 
 pub(crate) struct SoundEffectCommands<'a> {
-    pub instruments: Vec<MmlInstrument>,
-    pub commands: ChannelCommands<'a>,
+    pub commands: Vec<CommandWithPos<'a>>,
+    pub end_pos: FilePos,
     pub errors: Vec<ErrorWithPos<ChannelError>>,
-    pub mml_tracker: CursorTracker,
+    pub mml_tracker: Option<CursorTracker>,
 }

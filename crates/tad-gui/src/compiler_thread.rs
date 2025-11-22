@@ -723,7 +723,8 @@ fn build_play_instrument_data(
     let blank_sfx_subroutines = CompiledSfxSubroutines::blank();
     let common_audio_data =
         build_common_audio_data(&sample_data, &blank_sfx_subroutines, &blank_sfx).ok()?;
-    let song_data = test_sample_song(0, args.note, args.note_length, args.envelope).ok()?;
+    let song_data =
+        test_sample_song(0, args.note, args.note_length, args.envelope, &sample_data).ok()?;
 
     Some((common_audio_data, song_data))
 }
@@ -744,7 +745,8 @@ fn build_play_sample_data(
     let blank_sfx_subroutines = CompiledSfxSubroutines::blank();
     let common_audio_data =
         build_common_audio_data(&sample_data, &blank_sfx_subroutines, &blank_sfx).ok()?;
-    let song_data = test_sample_song(0, args.note, args.note_length, args.envelope).ok()?;
+    let song_data =
+        test_sample_song(0, args.note, args.note_length, args.envelope, &sample_data).ok()?;
 
     Some((common_audio_data, song_data))
 }
