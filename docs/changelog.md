@@ -49,6 +49,9 @@ MML changes:
     * `MP` and `MD` will output an error
  * Improved out-of-range note testing
 
+Sound effect changes:
+ * Improved out-of-range note testing in bytecode assembly sound effect
+
 
 Version 0.1.1
 =============
