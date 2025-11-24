@@ -1028,7 +1028,17 @@ impl<'a> ChannelBcGenerator<'a> {
                 }
             },
             None => {
-                let slide_length = slide_length.value().try_into()?;
+                let slide_length = match slide_length.value().try_into() {
+                    Ok(s) => s,
+                    Err(ValueError::PortamentoSlideTicksOutOfRange(v)) => {
+                        return Err(ChannelError::PortamentoCalcSlideTicksOutOfRange {
+                            ticks: v,
+                            tuning_unknown: instrument_tuning.is_none(),
+                            transpose_active: self.bc.is_driver_transpose_active(),
+                        });
+                    }
+                    Err(e) => return Err(e.into()),
+                };
 
                 match pn2 {
                     NoteOrPitchOut::Note(dco, n, _) => {

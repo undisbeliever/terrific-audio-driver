@@ -621,6 +621,11 @@ pub enum ChannelError {
 
     PortamentoTooShort,
     PortamentoTooLong,
+    PortamentoCalcSlideTicksOutOfRange {
+        ticks: u32,
+        tuning_unknown: bool,
+        transpose_active: bool,
+    },
     PortamentoRequiresInstrument,
     PortamentoNoteAndPitchWithoutInstrument,
     OneNotePortamentoPreviousNoteIsNotSlurred,
@@ -1127,7 +1132,7 @@ impl Display for ValueError {
                 out_of_range!("portamento velocity", v, PortamentoVelocity)
             }
             Self::PortamentoSlideTicksOutOfRange(v) => {
-                out_of_range!("portamento slide ticks", v, PortamentoSlideTicks)
+                out_of_range!("portamento slide length", v, PortamentoSlideTicks)
             }
 
             Self::QuantizeOutOfRange(v) => out_of_range!("quantization", v, Quantization),
@@ -1920,6 +1925,27 @@ impl Display for ChannelError {
 
             Self::PortamentoTooShort => write!(f, "portamento length is too short"),
             Self::PortamentoTooLong => write!(f, "portamento length is too long"),
+            Self::PortamentoCalcSlideTicksOutOfRange {
+                ticks,
+                tuning_unknown,
+                transpose_active,
+            } => {
+                write!(
+                    f,
+                    "portamento slide length out of range ({ticks}, expected {} - {})",
+                    PortamentoSlideTicks::MIN.as_u8(),
+                    PortamentoSlideTicks::MAX.as_u8()
+                )?;
+                match (tuning_unknown, transpose_active) {
+                    (true, true) => write!(
+                        f,
+                        ", unknown instrument is unknown and driver transpose active"
+                    ),
+                    (true, false) => write!(f, ", instrument tuning is unknown"),
+                    (false, true) => write!(f, ", driver transpose active"),
+                    (false, false) => Ok(()),
+                }
+            }
             Self::PortamentoRequiresInstrument => {
                 write!(
                     f,

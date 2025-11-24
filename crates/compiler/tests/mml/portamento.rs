@@ -1578,7 +1578,11 @@ A @1 !s
 "#,
         "!s",
         7,
-        ValueError::PortamentoSlideTicksOutOfRange(256).into(),
+        ChannelError::PortamentoCalcSlideTicksOutOfRange {
+            ticks: 256,
+            tuning_unknown: true,
+            transpose_active: false,
+        },
     );
 
     assert_mml_subroutine_matches_bytecode(
@@ -1606,7 +1610,11 @@ A @1 !s
 "#,
         "!s",
         7,
-        ValueError::PortamentoSlideTicksOutOfRange(256).into(),
+        ChannelError::PortamentoCalcSlideTicksOutOfRange {
+            ticks: 256,
+            tuning_unknown: true,
+            transpose_active: false,
+        },
     );
 
     assert_mml_subroutine_matches_bytecode(
@@ -1635,7 +1643,11 @@ A @1 !s
 "#,
         "!s",
         7,
-        ValueError::PortamentoSlideTicksOutOfRange(256).into(),
+        ChannelError::PortamentoCalcSlideTicksOutOfRange {
+            ticks: 256,
+            tuning_unknown: true,
+            transpose_active: false,
+        },
     );
 
     assert_mml_subroutine_matches_bytecode(
@@ -1664,7 +1676,80 @@ A @1 !s
 "#,
         "!s",
         7,
-        ValueError::PortamentoSlideTicksOutOfRange(256).into(),
+        ChannelError::PortamentoCalcSlideTicksOutOfRange {
+            ticks: 256,
+            tuning_unknown: true,
+            transpose_active: false,
+        },
+    );
+}
+
+#[test]
+fn portamento_calc_error_with_transpose_active() {
+    assert_line_matches_bytecode(
+        "_+1 {c g}%257",
+        &[
+            "set_transpose +1",
+            "play_note c4 no_keyoff 1",
+            "portamento_calc g4 keyoff 255 256",
+        ],
+    );
+
+    assert_one_error_in_mml_line(
+        "_+1 {c g}%258",
+        5,
+        ChannelError::PortamentoCalcSlideTicksOutOfRange {
+            ticks: 256,
+            tuning_unknown: false,
+            transpose_active: true,
+        },
+    );
+
+    assert_one_subroutine_error_in_mml(
+        r#"
+@1 dummy_instrument
+
+!s o4 @1 {c g}%1000 r
+
+A @1 _+1 !s
+"#,
+        "!s",
+        10,
+        ChannelError::PortamentoCalcSlideTicksOutOfRange {
+            ticks: 998,
+            tuning_unknown: false,
+            transpose_active: true,
+        },
+    );
+}
+
+#[test]
+fn portamento_calc_error_with_unknown_instrument_and_transpose_active() {
+    assert_one_error_in_mml_line(
+        "_+1 [ {c g}%1000 \\asm { set_instrument f1000_o4 } ]4",
+        7,
+        ChannelError::PortamentoCalcSlideTicksOutOfRange {
+            ticks: 998,
+            tuning_unknown: true,
+            transpose_active: true,
+        },
+    );
+
+    assert_one_subroutine_error_in_mml(
+        r#"
+@1 dummy_instrument
+
+!s o4 {c g}%1000 r
+
+A @1 _+1 !s
+"#,
+        "!s",
+        7,
+        ChannelError::PortamentoCalcSlideTicksOutOfRange {
+            ticks: 998,
+            tuning_unknown: true,
+            transpose_active: true,
+        },
     );
 }
 
