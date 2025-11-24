@@ -32,12 +32,12 @@ fn _assert_ot_line_matches_line(transpose_line: &str, no_transpose_line: &str) {
     );
 
     let mml1 = [
-        "#OldTranspose\n@1 dummy_instrument\nA !s\n!s @1 o4\nA ",
+        "#OldTranspose\n@1 dummy_instrument\nA !s\n!s @1 o4 ",
         transpose_line,
     ]
     .concat();
 
-    let mml2 = ["@1 dummy_instrument\nA !s\n!s @1 o4\nA ", no_transpose_line].concat();
+    let mml2 = ["@1 dummy_instrument\nA !s\n!s @1 o4 ", no_transpose_line].concat();
 
     let dd = dummy_data();
 
