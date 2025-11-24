@@ -602,7 +602,8 @@ TAD_MIN_TICK_CLOCK = 64
 ;; IN: A >= 1 - load *song data*
 ;;
 ;; OUT: Carry set if input (`A`) was valid
-;; OUT: A:X = far address (only read if carry set)
+;; OUT: A:X = far address - bank byte in A, loword in X.
+;;            (only read if carry set)
 ;; OUT:   Y = data size (only read if carry set)
 ;;
 ;; LIFETIME:
