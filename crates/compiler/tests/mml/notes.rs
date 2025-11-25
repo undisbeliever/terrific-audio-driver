@@ -289,3 +289,39 @@ fn long_slurred_note() {
         &["play_note a4 no_keyoff 256", "wait 256", "wait 88"],
     );
 }
+
+#[test]
+fn note_too_long_errors() {
+    assert_one_error_in_mml_line(
+        "c%65536",
+        2,
+        ValueError::CommandTicksOutOfRange(65536).into(),
+    );
+
+    assert_one_error_in_mml_line(
+        "c%65536 &",
+        2,
+        ValueError::CommandTicksOutOfRange(65536).into(),
+    );
+}
+
+#[test]
+fn tied_note_command_ticks_overflow_error() {
+    assert_one_error_in_mml_line(
+        "c ^%65536",
+        4,
+        ValueError::CommandTicksOutOfRange(65536).into(),
+    );
+
+    assert_one_error_in_mml_line(
+        "c ^%60000 ^%60000",
+        12,
+        ValueError::CommandTicksOverflow.into(),
+    );
+
+    assert_one_error_in_mml_line(
+        "c &%60000 &%60000",
+        12,
+        ValueError::CommandTicksOverflow.into(),
+    );
+}

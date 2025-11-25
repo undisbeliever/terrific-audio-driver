@@ -125,17 +125,11 @@ fn large_wait_is_looped() {
         &["start_loop 100", "wait 256", "end_loop", "wait 1"],
     );
 
-    assert!(512 * 195 + 159 == 99999);
+    assert!(257 * 255 == 0xffff);
     assert_line_matches_line_and_bytecode(
-        "w%99999",
-        "[w%512]195 w%159",
-        &[
-            "start_loop 195",
-            "wait 256",
-            "wait 256",
-            "end_loop",
-            "wait 159",
-        ],
+        "w%$ffff",
+        "[w%257]255",
+        &["start_loop 255", "wait 256", "wait 1", "end_loop"],
     );
 
     // A random prime number
@@ -238,14 +232,14 @@ fn large_rest_is_looped() {
         ],
     );
 
-    assert!(512 * 195 + 257 == 100097);
+    assert!(257 * 254 + 257 == 0xffff);
     assert_line_matches_line_and_bytecode(
-        "r%100097",
-        "[w%512]195 r%257",
+        "r%$ffff",
+        "[w%257]254 r%257",
         &[
-            "start_loop 195",
+            "start_loop 254",
             "wait 256",
-            "wait 256",
+            "wait 1",
             "end_loop",
             "rest 257",
         ],
@@ -358,18 +352,11 @@ fn merged_rests_are_looped() {
         &["rest 2", "start_loop 142", "rest 181", "end_loop"],
     );
 
-    assert!(512 * 195 + 159 == 99999);
+    assert!(257 * 255 == 65535);
     assert_line_matches_line_and_bytecode(
-        "r%2 r%99999",
-        "r%2 [r%257 r%255]195 r%159",
-        &[
-            "rest 2",
-            "start_loop 195",
-            "rest 257",
-            "rest 255",
-            "end_loop",
-            "rest 159",
-        ],
+        "r%2 r%$ffff",
+        "r%2 [r%257]255",
+        &["rest 2", "start_loop 255", "rest 257", "end_loop"],
     );
 
     // A random prime number for wait part of the first rest
@@ -626,5 +613,59 @@ fn large_noloop_rest_and_waits_slow_to_compile_bugfix() {
     assert!(
         duration.as_millis() < 2,
         "MML compiler too slow {duration:?}"
+    );
+}
+
+#[test]
+fn wait_too_long_errors() {
+    assert_one_error_in_mml_line(
+        "w%65536",
+        2,
+        ValueError::CommandTicksOutOfRange(65536).into(),
+    );
+
+    assert_one_error_in_mml_line(
+        "w%65536",
+        2,
+        ValueError::CommandTicksOutOfRange(65536).into(),
+    );
+
+    assert_one_error_in_mml_line(
+        "w ^%65536",
+        4,
+        ValueError::CommandTicksOutOfRange(65536).into(),
+    );
+
+    assert_one_error_in_mml_line(
+        "w%60000 ^%60000",
+        10,
+        ValueError::CommandTicksOverflow.into(),
+    );
+}
+
+#[test]
+fn rest_too_long_errors() {
+    assert_one_error_in_mml_line(
+        "r%65536",
+        2,
+        ValueError::CommandTicksOutOfRange(65536).into(),
+    );
+
+    assert_one_error_in_mml_line(
+        "r%65536",
+        2,
+        ValueError::CommandTicksOutOfRange(65536).into(),
+    );
+
+    assert_one_error_in_mml_line(
+        "r ^%65536",
+        4,
+        ValueError::CommandTicksOutOfRange(65536).into(),
+    );
+
+    assert_one_error_in_mml_line(
+        "r r%60000 ^%60000",
+        12,
+        ValueError::CommandTicksOverflow.into(),
     );
 }

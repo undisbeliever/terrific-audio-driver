@@ -24,18 +24,18 @@ use crate::mml::{CursorTracker, Section};
 use crate::notes::Note;
 use crate::pitch_table::PlayPitchFrequency;
 use crate::songs::MetaData;
-use crate::time::{Bpm, TickClock, TickCounter};
+use crate::time::{Bpm, CommandTicks, TickClock};
 use crate::value_newtypes::{i16_value_newtype, u8_value_newtype, SignedValueNewType};
 use crate::{FilePos, FilePosRange};
 
 use std::cmp::min;
 use std::ops::RangeInclusive;
 
-pub const MAX_PORTAMENTO_SLIDE_TICKS: u32 = 16 * 1024;
+pub const MAX_PORTAMENTO_SLIDE_TICKS: u16 = 16 * 1024;
 pub const MAX_BROKEN_CHORD_NOTES: usize = 128;
 
 // Number of rest instructions before a loop uses less space
-pub const REST_LOOP_INSTRUCTION_THREASHOLD: u32 = 3;
+pub const REST_LOOP_INSTRUCTION_THREASHOLD: u16 = 3;
 
 u8_value_newtype!(
     PortamentoSpeed,
@@ -157,12 +157,13 @@ impl Quantization {
 impl FineQuantization {
     pub const UNITS: u32 = 256;
 
-    pub fn quantize(&self, l: u32) -> u32 {
+    pub fn quantize(&self, l: u16) -> u16 {
         const UNITS: u64 = FineQuantization::UNITS as u64;
-        const _: () = assert!((u32::MAX as u64 * FineQuantization::MAX.0 as u64) < u64::MAX);
+        const _: () = assert!((u16::MAX as u64 * FineQuantization::MAX.0 as u64) < u64::MAX);
         const _: () =
-            assert!((u32::MAX as u64 * FineQuantization::MAX.0 as u64) / UNITS < u32::MAX as u64);
+            assert!((u16::MAX as u64 * FineQuantization::MAX.0 as u64) / UNITS < u16::MAX as u64);
 
+        // ::TODO can this be changed to u32?::
         let l = u64::from(l);
         let q = u64::from(self.0);
         std::cmp::max((l * q) / UNITS, 1).try_into().unwrap()
@@ -177,7 +178,7 @@ pub enum Quantize {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct RestTicksAfterNote(pub TickCounter);
+pub struct RestTicksAfterNote(pub CommandTicks);
 
 i16_value_newtype!(
     DetuneCents,
@@ -250,36 +251,36 @@ pub(crate) enum Command<'a> {
     Rest {
         /// Length of the first rest
         /// (The user expects a keyoff after the first rest command)
-        ticks_until_keyoff: TickCounter,
+        ticks_until_keyoff: CommandTicks,
         /// Combined length of all rests after the first rest
         /// (keyoff already sent, it does not matter if these rests keyoff or not)
-        ticks_after_keyoff: TickCounter,
+        ticks_after_keyoff: CommandTicks,
     },
 
     // wait with no keyoff
-    Wait(TickCounter),
+    Wait(CommandTicks),
 
     PlayNote {
         note: Note,
-        length: TickCounter,
+        length: CommandTicks,
         is_slur: bool,
         rest_after_note: RestTicksAfterNote,
     },
     PlayPitch {
         pitch: PlayPitchPitch,
-        length: TickCounter,
+        length: CommandTicks,
         is_slur: bool,
         rest_after_note: RestTicksAfterNote,
     },
     PlayPitchFrequency {
         frequency: PlayPitchFrequency,
-        length: TickCounter,
+        length: CommandTicks,
         is_slur: bool,
         rest_after_note: RestTicksAfterNote,
     },
     PlayNoise {
         frequency: NoiseFrequency,
-        length: TickCounter,
+        length: CommandTicks,
         is_slur: bool,
         rest_after_note: RestTicksAfterNote,
     },
@@ -289,16 +290,16 @@ pub(crate) enum Command<'a> {
         is_slur: bool,
         speed_override: Option<PortamentoSpeed>,
         /// Number of ticks to hold the pitch at note1 before the pitch slide
-        delay_length: TickCounter,
+        delay_length: CommandTicks,
         /// Length of the pitch slide (portamento_length - delay_length)
-        slide_length: TickCounter,
+        slide_length: CommandTicks,
         /// Number of ticks to hold the pitch at note2
-        tie_length: TickCounter,
+        tie_length: CommandTicks,
         rest_after_note: RestTicksAfterNote,
     },
     BrokenChord {
         notes: Vec<NoteOrPitch>,
-        total_length: TickCounter,
+        total_length: CommandTicks,
         note_length: PlayNoteTicks,
         slur_last_note: bool,
     },
@@ -323,10 +324,10 @@ pub(crate) enum Command<'a> {
     TempGain(Option<TempGain>),
     TempGainAndRest {
         temp_gain: Option<TempGain>,
-        ticks_until_keyoff: TickCounter,
-        ticks_after_keyoff: TickCounter,
+        ticks_until_keyoff: CommandTicks,
+        ticks_after_keyoff: CommandTicks,
     },
-    TempGainAndWait(Option<TempGain>, TickCounter),
+    TempGainAndWait(Option<TempGain>, CommandTicks),
 
     DisableEarlyRelease,
     SetEarlyRelease(EarlyReleaseTicks, EarlyReleaseMinTicks, OptionalGain),

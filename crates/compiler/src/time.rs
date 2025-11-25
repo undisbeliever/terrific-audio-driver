@@ -29,8 +29,8 @@ pub const STARTING_MML_LENGTH: MmlDefaultLength = MmlDefaultLength {
 };
 
 impl ZenLen {
-    pub fn starting_length(&self) -> TickCounter {
-        TickCounter::new((self.as_u8() / STARTING_DEFAULT_NOTE_LENGTH).into())
+    pub fn starting_length(&self) -> CommandTicks {
+        CommandTicks::new((self.as_u8() / STARTING_DEFAULT_NOTE_LENGTH).into())
     }
 }
 
@@ -142,6 +142,58 @@ pub fn timer_register_to_bpm(timer: u8) -> f64 {
     }
 }
 
+#[derive(Debug, Default, Copy, Clone, Eq, PartialEq, Ord, PartialOrd)]
+pub struct CommandTicks(u16);
+
+impl CommandTicks {
+    pub const MIN: Self = Self(u16::MIN);
+    pub const MAX: Self = Self(u16::MAX);
+
+    pub const ZERO: Self = Self(0);
+
+    pub const fn new(ticks: u16) -> Self {
+        Self(ticks)
+    }
+
+    pub const fn value(self) -> u16 {
+        self.0
+    }
+
+    pub const fn as_u16(self) -> u16 {
+        self.0
+    }
+
+    pub const fn is_zero(self) -> bool {
+        self.0 == 0
+    }
+
+    pub fn checked_add(self, rhs: Self) -> Result<Self, ValueError> {
+        match self.0.checked_add(rhs.0) {
+            Some(t) => Ok(Self(t)),
+            None => Err(ValueError::CommandTicksOverflow),
+        }
+    }
+}
+
+impl TryFrom<u32> for CommandTicks {
+    type Error = ValueError;
+
+    fn try_from(value: u32) -> Result<Self, ValueError> {
+        match value.try_into() {
+            Ok(v) => Ok(Self(v)),
+            Err(_) => Err(ValueError::CommandTicksOutOfRange(value)),
+        }
+    }
+}
+
+impl From<CommandTicks> for TickCounter {
+    fn from(value: CommandTicks) -> Self {
+        Self {
+            value: value.0.into(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct MmlDefaultLength {
     length: u8,
@@ -170,12 +222,12 @@ impl MmlDefaultLength {
         self.number_of_dots
     }
 
-    pub fn to_tick_count(&self, zenlen: ZenLen) -> Result<TickCounter, ValueError> {
+    pub fn to_command_ticks(&self, zenlen: ZenLen) -> Result<CommandTicks, ValueError> {
         if self.length_in_ticks {
             if self.number_of_dots != 0 {
                 return Err(ValueError::DotsNotAllowedAfterClockValue);
             }
-            Ok(TickCounter::new(self.length.into()))
+            Ok(CommandTicks::new(self.length.into()))
         } else {
             let l = self.length;
             let zenlen = zenlen.as_u8();
@@ -184,9 +236,9 @@ impl MmlDefaultLength {
                 return Err(ValueError::InvalidLength);
             }
 
-            let ticks = u32::from(zenlen / l);
+            let ticks = u16::from(zenlen / l);
             let ticks = add_dots_to_length(ticks, self.number_of_dots);
-            Ok(TickCounter::new(ticks))
+            Ok(CommandTicks::new(ticks))
         }
     }
 }
@@ -219,14 +271,17 @@ impl MmlLength {
         self.number_of_dots
     }
 
-    pub fn to_tick_count(
+    pub fn to_command_ticks(
         &self,
-        default_len: TickCounter,
+        default_len: CommandTicks,
         zenlen: ZenLen,
-    ) -> Result<TickCounter, ValueError> {
+    ) -> Result<CommandTicks, ValueError> {
         let ticks = if self.length_in_ticks {
             let ticks = match self.length {
-                Some(l) => l,
+                Some(l) => match l.try_into() {
+                    Ok(l) => l,
+                    Err(_) => return Err(ValueError::CommandTicksOutOfRange(l)),
+                },
                 None => return Err(ValueError::MissingLengthTickCount),
             };
             if self.number_of_dots != 0 {
@@ -237,22 +292,22 @@ impl MmlLength {
             // Whole note length divisor
             let ticks = match self.length {
                 Some(l) => {
-                    let zenlen = zenlen.0.into();
+                    let zenlen = zenlen.0;
 
-                    if l == 0 || l > zenlen {
+                    if l == 0 || l > zenlen.into() {
                         return Err(ValueError::InvalidLength);
                     }
-                    zenlen / l
+                    (zenlen / u8::try_from(l).unwrap()).into()
                 }
                 None => default_len.value(),
             };
             add_dots_to_length(ticks, self.number_of_dots)
         };
-        Ok(TickCounter::new(ticks))
+        Ok(CommandTicks::new(ticks))
     }
 }
 
-fn add_dots_to_length(ticks: u32, n_dots: u8) -> u32 {
+fn add_dots_to_length(ticks: u16, n_dots: u8) -> u16 {
     let mut ticks = ticks;
 
     if n_dots > 0 {

@@ -510,7 +510,7 @@ impl TestInstrumentWidget {
                 id,
                 PlaySampleArgs {
                     note,
-                    note_length: self.note_length.value() as u32,
+                    note_length: self.note_length.value() as u16,
                     envelope,
                 },
             ));

@@ -299,8 +299,9 @@ fn portamento_errors() {
         ValueError::PortamentoVelocityOutOfRange(536).into(),
     );
 
+    assert_one_error_in_mml_line("{c g}%$ffff", 1, ChannelError::PortamentoTooLong);
+
     // Tests if the TryFromIntError panic in ChannelBcGenerator::portamento() has been fixed
-    assert_one_error_in_mml_line("{c g}%$ffffffff", 1, ChannelError::PortamentoTooLong);
     assert_one_error_in_mml_line("{c g}%16387", 1, ChannelError::PortamentoTooLong);
     assert_one_error_in_mml_line("c & {c g}%16385 & a", 5, ChannelError::PortamentoTooLong);
 }

@@ -260,7 +260,7 @@ fn sample_song_fake_instruments() -> &'static UniqueNamesList<InstrumentOrSample
 pub fn test_sample_song(
     instrument: u8,
     note: Note,
-    note_length: u32,
+    note_length: u16,
     envelope: Option<Envelope>,
     sample_data: &SampleAndInstrumentData,
 ) -> Result<SongData, ChannelError> {

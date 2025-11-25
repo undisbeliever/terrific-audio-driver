@@ -39,7 +39,7 @@ use crate::notes::{MidiNote, Note, Octave};
 use crate::path::PathString;
 use crate::pitch_table::{InstrumentHintFreq, PlayPitchFrequency, PlayPitchSampleRate};
 use crate::sound_effects::MAX_SFX_TICKS;
-use crate::time::{Bpm, TickClock, TickCounter, ZenLen};
+use crate::time::{Bpm, CommandTicks, TickClock, TickCounter, ZenLen};
 use crate::value_newtypes::{I8WithByteHexValueNewType, SignedValueNewType, UnsignedValueNewType};
 use crate::{export, spc_file_export};
 
@@ -123,6 +123,9 @@ pub enum ValueError {
     InstrumentIdOutOfRange(u32),
 
     OctaveOutOfRange(u32),
+
+    CommandTicksOutOfRange(u32),
+    CommandTicksOverflow,
 
     // bytecode tick-count arguments out of range
     BcTicksKeyOffOutOfRange(u32),
@@ -646,7 +649,8 @@ pub enum ChannelError {
 
     BrokenChordTickCountMismatch(TickCounter, TickCounter),
 
-    NoLoopWaitOrRestIsTooLong(TickCounter),
+    // ::TODO remove::
+    NoLoopWaitOrRestIsTooLong(CommandTicks),
 
     NoTicksAfterLoopPoint,
 
@@ -933,6 +937,25 @@ impl Display for ValueError {
             Self::InstrumentIdOutOfRange(v) => out_of_range!("instrument id", v, InstrumentId),
 
             Self::OctaveOutOfRange(v) => out_of_range!("octave", v, Octave),
+
+            Self::CommandTicksOutOfRange(v) => {
+                // only show the max, the minimum is can be 1 or 2 depending on keyoff state
+                const _: () = assert!(CommandTicks::MIN.as_u16() == 0);
+                write!(
+                    f,
+                    "invalid command ticks ({}, max {})",
+                    v,
+                    CommandTicks::MAX.as_u16()
+                )
+            }
+            Self::CommandTicksOverflow => {
+                const _: () = assert!(CommandTicks::MIN.as_u16() == 0);
+                write!(
+                    f,
+                    "command tick overflow (max {} ticks)",
+                    CommandTicks::MAX.as_u16()
+                )
+            }
 
             Self::BcTicksKeyOffOutOfRange(v) => write!(
                 f,

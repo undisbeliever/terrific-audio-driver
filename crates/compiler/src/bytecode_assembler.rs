@@ -427,7 +427,7 @@ fn parse_play_note_ticks(ticks: &str, key_off: &str) -> Result<PlayNoteTicks, Ch
     };
 
     let ticks = parse_u32(ticks)?;
-    Ok(PlayNoteTicks::try_from_is_slur(ticks, is_slur)?)
+    Ok(PlayNoteTicks::try_from_is_slur_u32(ticks, is_slur)?)
 }
 
 fn parse_u32(s: &str) -> Result<u32, ValueError> {

@@ -32,7 +32,7 @@ use core::unreachable;
 use std::cmp::{max, min};
 use std::ops::RangeInclusive;
 
-pub const KEY_OFF_TICK_DELAY: u32 = 1;
+pub const KEY_OFF_TICK_DELAY: u16 = 1;
 
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord)]
 pub struct StackDepth(u32);
@@ -418,15 +418,15 @@ impl StackDepth {
 
 pub trait BcTicks
 where
-    Self: TryFrom<u32>,
+    Self: TryFrom<u32> + TryFrom<u16>,
 {
     const MIN: Self;
     const MAX: Self;
 
-    const MIN_TICKS: u32;
-    const MAX_TICKS: u32;
+    const MIN_TICKS: u16;
+    const MAX_TICKS: u16;
 
-    fn ticks(self) -> u32;
+    fn ticks(self) -> u16;
     fn to_tick_count(self) -> TickCounter;
 }
 
@@ -436,21 +436,26 @@ pub struct BcTicksKeyOff {
     bc_argument: u8,
 }
 
+impl BcTicksKeyOff {
+    const MIN_TICKS_U32: u32 = Self::MIN_TICKS as u32;
+    const MAX_TICKS_U32: u32 = Self::MAX_TICKS as u32;
+}
+
 impl BcTicks for BcTicksKeyOff {
-    const MIN_TICKS: u32 = 1 + KEY_OFF_TICK_DELAY;
-    const MAX_TICKS: u32 = 0x100 + KEY_OFF_TICK_DELAY;
+    const MIN_TICKS: u16 = 1 + KEY_OFF_TICK_DELAY;
+    const MAX_TICKS: u16 = 0x100 + KEY_OFF_TICK_DELAY;
 
     const MIN: Self = Self {
-        ticks: Self::MIN_TICKS as u16,
+        ticks: Self::MIN_TICKS,
         bc_argument: 1,
     };
     const MAX: Self = Self {
-        ticks: Self::MAX_TICKS as u16,
+        ticks: Self::MAX_TICKS,
         bc_argument: 0,
     };
 
-    fn ticks(self) -> u32 {
-        self.ticks.into()
+    fn ticks(self) -> u16 {
+        self.ticks
     }
 
     fn to_tick_count(self) -> TickCounter {
@@ -458,14 +463,31 @@ impl BcTicks for BcTicksKeyOff {
     }
 }
 
+impl TryFrom<u16> for BcTicksKeyOff {
+    type Error = ValueError;
+
+    fn try_from(ticks: u16) -> Result<Self, ValueError> {
+        if matches!(ticks, Self::MIN_TICKS..=Self::MAX_TICKS) {
+            Ok(Self {
+                ticks,
+                bc_argument: ((ticks - KEY_OFF_TICK_DELAY) & 0xff).try_into().unwrap(),
+            })
+        } else {
+            Err(ValueError::BcTicksKeyOffOutOfRange(ticks.into()))
+        }
+    }
+}
+
 impl TryFrom<u32> for BcTicksKeyOff {
     type Error = ValueError;
 
     fn try_from(ticks: u32) -> Result<Self, ValueError> {
-        if matches!(ticks, Self::MIN_TICKS..=Self::MAX_TICKS) {
+        if matches!(ticks, Self::MIN_TICKS_U32..=Self::MAX_TICKS_U32) {
             Ok(Self {
                 ticks: ticks.try_into().unwrap(),
-                bc_argument: ((ticks - KEY_OFF_TICK_DELAY) & 0xff).try_into().unwrap(),
+                bc_argument: ((ticks - u32::from(KEY_OFF_TICK_DELAY)) & 0xff)
+                    .try_into()
+                    .unwrap(),
             })
         } else {
             Err(ValueError::BcTicksKeyOffOutOfRange(ticks))
@@ -479,22 +501,27 @@ pub struct BcTicksNoKeyOff {
     bc_argument: u8,
 }
 
+impl BcTicksNoKeyOff {
+    const MIN_TICKS_U32: u32 = Self::MIN_TICKS as u32;
+    const MAX_TICKS_U32: u32 = Self::MAX_TICKS as u32;
+}
+
 impl BcTicks for BcTicksNoKeyOff {
-    const MIN_TICKS: u32 = 1;
-    const MAX_TICKS: u32 = 0x100;
+    const MIN_TICKS: u16 = 1;
+    const MAX_TICKS: u16 = 0x100;
 
     const MIN: Self = Self {
-        ticks: Self::MIN_TICKS as u16,
+        ticks: Self::MIN_TICKS,
         bc_argument: 1,
     };
     const MAX: Self = Self {
-        ticks: Self::MAX_TICKS as u16,
+        ticks: Self::MAX_TICKS,
         bc_argument: 0,
     };
 
     #[allow(dead_code)]
-    fn ticks(self) -> u32 {
-        self.ticks.into()
+    fn ticks(self) -> u16 {
+        self.ticks
     }
 
     fn to_tick_count(self) -> TickCounter {
@@ -502,11 +529,25 @@ impl BcTicks for BcTicksNoKeyOff {
     }
 }
 
+impl TryFrom<u16> for BcTicksNoKeyOff {
+    type Error = ValueError;
+
+    fn try_from(ticks: u16) -> Result<Self, ValueError> {
+        if matches!(ticks, Self::MIN_TICKS..=Self::MAX_TICKS) {
+            // A note length of 0 will wait for 256 ticks.
+            let bc_argument = (ticks & 0xff).try_into().unwrap();
+            Ok(Self { ticks, bc_argument })
+        } else {
+            Err(ValueError::BcTicksNoKeyOffOutOfRange(ticks.into()))
+        }
+    }
+}
+
 impl TryFrom<u32> for BcTicksNoKeyOff {
     type Error = ValueError;
 
     fn try_from(ticks: u32) -> Result<Self, ValueError> {
-        if matches!(ticks, Self::MIN_TICKS..=Self::MAX_TICKS) {
+        if matches!(ticks, Self::MIN_TICKS_U32..=Self::MAX_TICKS_U32) {
             // A note length of 0 will wait for 256 ticks.
             let bc_argument = (ticks & 0xff).try_into().unwrap();
             Ok(Self {
@@ -526,7 +567,16 @@ pub enum PlayNoteTicks {
 }
 
 impl PlayNoteTicks {
-    pub fn try_from_is_slur(ticks: u32, is_slur: bool) -> Result<Self, ValueError> {
+    // ::TODO change to CommandTicks::
+    pub fn try_from_is_slur(ticks: u16, is_slur: bool) -> Result<Self, ValueError> {
+        if is_slur {
+            Ok(PlayNoteTicks::NoKeyOff(BcTicksNoKeyOff::try_from(ticks)?))
+        } else {
+            Ok(PlayNoteTicks::KeyOff(BcTicksKeyOff::try_from(ticks)?))
+        }
+    }
+
+    pub fn try_from_is_slur_u32(ticks: u32, is_slur: bool) -> Result<Self, ValueError> {
         if is_slur {
             Ok(PlayNoteTicks::NoKeyOff(BcTicksNoKeyOff::try_from(ticks)?))
         } else {
@@ -542,10 +592,10 @@ impl PlayNoteTicks {
         }
     }
 
-    pub fn ticks(&self) -> u32 {
+    pub fn ticks(&self) -> u16 {
         match self {
-            Self::KeyOff(l) => l.ticks.into(),
-            Self::NoKeyOff(l) => l.ticks.into(),
+            Self::KeyOff(l) => l.ticks,
+            Self::NoKeyOff(l) => l.ticks,
         }
     }
 
