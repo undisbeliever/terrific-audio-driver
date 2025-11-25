@@ -76,6 +76,48 @@ fn disable_noise() {
 }
 
 #[test]
+fn noise_without_instrument_error() {
+    // also tests the error is only shown once
+    assert_one_error_in_channel_a_mml(
+        r##"
+@1 dummy_instrument
+
+A N1 N2,4 c @1 N3
+"##,
+        3,
+        BytecodeError::CannotPlayNoiseBeforeSettingInstrument.into(),
+    );
+}
+
+#[test]
+fn noise_without_instrument_in_subroutine_error() {
+    assert_one_error_in_channel_a_mml(
+        r##"
+@1 dummy_instrument
+
+!s N20
+
+A !s @1 !s
+"##,
+        3,
+        BytecodeError::SubroutinePlaysNotesWithNoInstrument.into(),
+    );
+
+    assert_one_error_in_channel_a_mml(
+        r##"
+@1 dummy_instrument
+
+!s1 N30
+!s2 !s1 @1 !s1
+
+A !s2 @1 !s2
+"##,
+        3,
+        BytecodeError::SubroutinePlaysNotesWithNoInstrument.into(),
+    );
+}
+
+#[test]
 fn enable_pitch_mod() {
     assert_channel_b_line_matches_bytecode("PM", &["enable_pmod"]);
 

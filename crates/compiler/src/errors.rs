@@ -350,6 +350,8 @@ pub enum BytecodeError {
     },
     NoteOutOfRangeEmptyNoteRange(Note),
     CannotPlayNoteBeforeSettingInstrument,
+    CannotPlayPitchBeforeSettingInstrument,
+    CannotPlayNoiseBeforeSettingInstrument,
 
     SubroutinePlaysNotesWithNoInstrument,
     SubroutineInstrumentHintFrequencyMismatch {
@@ -1464,6 +1466,12 @@ impl Display for BytecodeError {
             }
             Self::CannotPlayNoteBeforeSettingInstrument => {
                 write!(f, "cannot play note before setting an instrument")
+            }
+            Self::CannotPlayPitchBeforeSettingInstrument => {
+                write!(f, "cannot play pitch before setting an instrument")
+            }
+            Self::CannotPlayNoiseBeforeSettingInstrument => {
+                write!(f, "cannot play noise before setting an instrument")
             }
 
             Self::SubroutinePlaysNotesWithNoInstrument => {

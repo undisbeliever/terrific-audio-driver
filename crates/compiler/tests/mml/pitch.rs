@@ -183,3 +183,177 @@ A @1 !s
         ValueError::CannotConvertPitchFrequencyUnknownInstrument.into(),
     );
 }
+
+#[test]
+fn pitch_without_instrument_error() {
+    // also tests the error is only shown once
+    assert_one_error_in_channel_a_mml(
+        r##"
+@1 dummy_instrument
+
+A P$1000 P$1000 c @1 P$1000
+"##,
+        3,
+        BytecodeError::CannotPlayPitchBeforeSettingInstrument.into(),
+    );
+
+    assert_one_error_in_channel_a_mml(
+        r##"
+@1 dummy_instrument
+
+A PR32000 PR32000 c @1 PR32000
+"##,
+        3,
+        BytecodeError::CannotPlayPitchBeforeSettingInstrument.into(),
+    );
+}
+
+#[test]
+fn pitch_without_instrument_in_subroutine_error() {
+    assert_one_error_in_channel_a_mml(
+        r##"
+@1 dummy_instrument
+
+!s P$1000
+
+A !s @1 !s
+"##,
+        3,
+        BytecodeError::SubroutinePlaysNotesWithNoInstrument.into(),
+    );
+
+    assert_one_error_in_channel_a_mml(
+        r##"
+@1 dummy_instrument
+
+!s PR32000
+
+A !s @1 !s
+"##,
+        3,
+        BytecodeError::SubroutinePlaysNotesWithNoInstrument.into(),
+    );
+
+    assert_one_error_in_channel_a_mml(
+        r##"
+@1 dummy_instrument
+
+!s1 P$1000
+!s2 !s1 @1 !s1
+
+A !s2 @1 !s2
+"##,
+        3,
+        BytecodeError::SubroutinePlaysNotesWithNoInstrument.into(),
+    );
+}
+
+#[test]
+fn portamento_pitch_without_instrument_error() {
+    // also tests the error is only shown once
+    assert_one_error_in_channel_a_mml(
+        r##"
+@1 dummy_instrument
+
+A {P$1000 P$1200} {P$1200 P$1000} @1 {P1200 P1250}
+"##,
+        3,
+        BytecodeError::CannotPlayPitchBeforeSettingInstrument.into(),
+    );
+
+    assert_one_error_in_channel_a_mml(
+        r##"
+@1 dummy_instrument
+
+A {P$1000 c} {P$1200 c} @1 {P1200 c}
+"##,
+        3,
+        BytecodeError::CannotPlayPitchBeforeSettingInstrument.into(),
+    );
+
+    assert_one_error_in_channel_a_mml(
+        r##"
+@1 dummy_instrument
+
+A {c P$1000} {c P$1200} @1 {c P1200}
+"##,
+        3,
+        BytecodeError::CannotPlayNoteBeforeSettingInstrument.into(),
+    );
+
+    // Using assembly as MML portamento outputs an error on the slurred note
+    assert_one_error_in_channel_a_mml(
+        r##"
+@1 dummy_instrument
+
+A \asm { portamento_pitch $1000 no_keyoff +20 20 | portamento_pitch $1000 no_keyoff +20 20 }
+A @1 \asm { portamento_pitch $1000 no_keyoff +20 20 }
+"##,
+        10,
+        BytecodeError::CannotPlayPitchBeforeSettingInstrument.into(),
+    );
+
+    assert_one_error_in_channel_a_mml(
+        r##"
+@1 dummy_instrument
+
+A \asm { portamento_pitch_calc $1000 no_keyoff 10 11 | portamento_pitch_calc $1000 no_keyoff 10 11 }
+A @1 \asm { portamento_pitch_calc $1000 no_keyoff 10 11 }
+"##,
+        10,
+        BytecodeError::CannotPlayPitchBeforeSettingInstrument.into(),
+    );
+}
+
+#[test]
+fn portamento_pitch_without_instrument_in_subroutine_error() {
+    assert_one_error_in_channel_a_mml(
+        r##"
+@1 dummy_instrument
+
+!s \asm { portamento_pitch $1000 keyoff -20 30 }
+
+A !s @1 !s
+"##,
+        3,
+        BytecodeError::SubroutinePlaysNotesWithNoInstrument.into(),
+    );
+
+    assert_one_error_in_channel_a_mml(
+        r##"
+@1 dummy_instrument
+
+!s \asm { portamento_pitch_calc $1000 keyoff 29 30 }
+
+A !s @1 !s
+"##,
+        3,
+        BytecodeError::SubroutinePlaysNotesWithNoInstrument.into(),
+    );
+
+    assert_one_error_in_channel_a_mml(
+        r##"
+@1 dummy_instrument
+
+!s1 \asm { portamento_pitch $1000 keyoff -20 30 }
+!s2 !s1 @1 !s1
+
+A !s2 @1 !s2
+"##,
+        3,
+        BytecodeError::SubroutinePlaysNotesWithNoInstrument.into(),
+    );
+
+    assert_one_error_in_channel_a_mml(
+        r##"
+@1 dummy_instrument
+
+!s1 \asm { portamento_pitch_calc $1000 keyoff 29 30 }
+!s2 !s1 @1 !s1
+
+A !s2 @1 !s2
+"##,
+        3,
+        BytecodeError::SubroutinePlaysNotesWithNoInstrument.into(),
+    );
+}

@@ -1076,6 +1076,7 @@ pub struct State {
 
     pub(crate) no_instrument_notes: RangeInclusive<Note>,
     pub(crate) unknown_transpose_no_instrument_notes: RangeInclusive<Note>,
+    pub(crate) no_instrument_pitch_or_noise: bool,
 }
 
 impl State {
@@ -1454,6 +1455,7 @@ impl<'a> Bytecode<'a> {
                 instrument_hint: None,
                 no_instrument_notes: Note::MAX..=Note::MIN,
                 unknown_transpose_no_instrument_notes: Note::MAX..=Note::MIN,
+                no_instrument_pitch_or_noise: false,
             },
             loop_stack: Vec::new(),
             asm_block_stack_len: 0,
@@ -1695,6 +1697,31 @@ impl<'a> Bytecode<'a> {
         }
     }
 
+    fn _test_instrument_set(&mut self) -> Result<(), ()> {
+        // Disable instrument check for bytecode assembly in the MML tests
+        #[cfg(feature = "test")]
+        if self.context.is_unit_test_assembly() {
+            return Ok(());
+        }
+
+        match &self.state.instrument {
+            InstrumentState::Known(_, _)
+            | InstrumentState::Multiple(_)
+            | InstrumentState::Hint(_, _) => Ok(()),
+
+            InstrumentState::Unknown | InstrumentState::Unset => {
+                self.state.no_instrument_pitch_or_noise = true;
+
+                if self.show_missing_set_instrument_error {
+                    self.show_missing_set_instrument_error = false;
+                    Err(())
+                } else {
+                    Ok(())
+                }
+            }
+        }
+    }
+
     pub fn wait(&mut self, length: BcTicksNoKeyOff) {
         self.state.tick_counter += length.to_tick_count();
 
@@ -1708,7 +1735,14 @@ impl<'a> Bytecode<'a> {
         emit_bytecode!(self, opcodes::REST, length.bc_argument);
     }
 
-    pub fn play_pitch(&mut self, pitch: PlayPitchPitch, length: PlayNoteTicks) {
+    pub fn play_pitch(
+        &mut self,
+        pitch: PlayPitchPitch,
+        length: PlayNoteTicks,
+    ) -> Result<(), BytecodeError> {
+        self._test_instrument_set()
+            .map_err(|_| BytecodeError::CannotPlayPitchBeforeSettingInstrument)?;
+
         self.state.tick_counter += length.to_tick_count();
         self.state.prev_slurred_note = match length {
             PlayNoteTicks::KeyOff(_) => SlurredNoteState::None,
@@ -1725,9 +1759,18 @@ impl<'a> Bytecode<'a> {
         let arg2 = (pitch[1] << 1) | key_off_bit;
 
         emit_bytecode!(self, opcodes::PLAY_PITCH, arg1, arg2, length.bc_argument());
+
+        Ok(())
     }
 
-    pub fn play_noise(&mut self, frequency: NoiseFrequency, length: PlayNoteTicks) {
+    pub fn play_noise(
+        &mut self,
+        frequency: NoiseFrequency,
+        length: PlayNoteTicks,
+    ) -> Result<(), BytecodeError> {
+        self._test_instrument_set()
+            .map_err(|_| BytecodeError::CannotPlayNoiseBeforeSettingInstrument)?;
+
         self.state.tick_counter += length.to_tick_count();
         self.state.prev_slurred_note = match length {
             PlayNoteTicks::KeyOff(_) => SlurredNoteState::None,
@@ -1742,6 +1785,8 @@ impl<'a> Bytecode<'a> {
         let arg = (frequency.as_u8() << 1) | key_off_bit;
 
         emit_bytecode!(self, opcodes::PLAY_NOISE, arg, length.bc_argument());
+
+        Ok(())
     }
 
     pub fn disable_noise(&mut self) {
@@ -1819,7 +1864,10 @@ impl<'a> Bytecode<'a> {
         target: PlayPitchPitch,
         velocity: PortamentoVelocity,
         length: PlayNoteTicks,
-    ) {
+    ) -> Result<(), BytecodeError> {
+        self._test_instrument_set()
+            .map_err(|_| BytecodeError::CannotPlayPitchBeforeSettingInstrument)?;
+
         self.state.tick_counter += length.to_tick_count();
         self.state.prev_slurred_note = match length {
             PlayNoteTicks::KeyOff(_) => SlurredNoteState::None,
@@ -1845,6 +1893,8 @@ impl<'a> Bytecode<'a> {
         let length = length.bc_argument();
 
         emit_bytecode!(self, opcode, arg1, arg2, speed, length);
+
+        Ok(())
     }
 
     pub fn portamento_pitch_calc(
@@ -1852,7 +1902,10 @@ impl<'a> Bytecode<'a> {
         target: PlayPitchPitch,
         slide_ticks: PortamentoSlideTicks,
         length: PlayNoteTicks,
-    ) {
+    ) -> Result<(), BytecodeError> {
+        self._test_instrument_set()
+            .map_err(|_| BytecodeError::CannotPlayPitchBeforeSettingInstrument)?;
+
         self.state.tick_counter += length.to_tick_count();
         self.state.prev_slurred_note = match length {
             PlayNoteTicks::KeyOff(_) => SlurredNoteState::None,
@@ -1878,6 +1931,8 @@ impl<'a> Bytecode<'a> {
             length,
             slide_ticks.as_u8()
         );
+
+        Ok(())
     }
 
     pub fn set_vibrato_depth_and_play_note(
@@ -2631,7 +2686,7 @@ impl<'a> Bytecode<'a> {
             }
         }
 
-        if !s.no_instrument_notes.is_empty() {
+        if !s.no_instrument_notes.is_empty() || s.no_instrument_pitch_or_noise {
             // Subroutine plays a note without an instrument
             let sub_notes = &s.no_instrument_notes;
 
@@ -2641,6 +2696,7 @@ impl<'a> Bytecode<'a> {
                         return Err(BytecodeError::SubroutinePlaysNotesWithNoInstrument)
                     }
                     BytecodeContext::SongSubroutine { .. } | BytecodeContext::SfxSubroutine => {
+                        self.state.no_instrument_pitch_or_noise |= s.no_instrument_pitch_or_noise;
                         self.state.no_instrument_notes.merge(sub_notes);
                     }
                     BytecodeContext::MmlPrefix => {
@@ -2656,8 +2712,9 @@ impl<'a> Bytecode<'a> {
                 InstrumentState::Multiple(old_note_range)
                 | InstrumentState::Known(_, old_note_range)
                 | InstrumentState::Hint(_, old_note_range) => {
-                    if !old_note_range.contains(sub_notes.start())
-                        || !old_note_range.contains(sub_notes.end())
+                    if !sub_notes.is_empty()
+                        && (!old_note_range.contains(sub_notes.start())
+                            || !old_note_range.contains(sub_notes.end()))
                     {
                         return Err(BytecodeError::SubroutineNotesOutOfRange {
                             subroutine_range: sub_notes.clone(),

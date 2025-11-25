@@ -300,12 +300,12 @@ impl<'a> ChannelBcGenerator<'a> {
                 }
                 NoteOrPitch::Pitch(p) => {
                     // Pitch is not detuned
-                    self.bc.play_pitch(p, length);
+                    self.bc.play_pitch(p, length)?;
                 }
                 NoteOrPitch::PitchFrequency(f) => {
                     // Pitch is not detuned
                     let p = f.to_vxpitch(self.bc.get_instrument())?;
-                    self.bc.play_pitch(p, length);
+                    self.bc.play_pitch(p, length)?;
                 }
             }
         } else {
@@ -323,12 +323,12 @@ impl<'a> ChannelBcGenerator<'a> {
                 }
                 NoteOrPitch::Pitch(p) => {
                     // Pitch is not detuned
-                    self.bc.play_pitch(p, length);
+                    self.bc.play_pitch(p, length)?;
                 }
                 NoteOrPitch::PitchFrequency(f) => {
                     // Pitch is not detuned
                     let p = f.to_vxpitch(self.bc.get_instrument())?;
-                    self.bc.play_pitch(p, length);
+                    self.bc.play_pitch(p, length)?;
                 }
             }
 
@@ -781,7 +781,7 @@ impl<'a> ChannelBcGenerator<'a> {
                 self.bc.play_note(n, t)?;
             }
             NoteOrPitchOut::Pitch(p) => {
-                self.bc.play_pitch(p, t);
+                self.bc.play_pitch(p, t)?;
             }
         }
         Ok(())
@@ -1024,7 +1024,7 @@ impl<'a> ChannelBcGenerator<'a> {
                     self.bc.portamento(n, velocity, p_length)?;
                 }
                 NoteOrPitchOut::Pitch(p) => {
-                    self.bc.portamento_pitch(p, velocity, p_length);
+                    self.bc.portamento_pitch(p, velocity, p_length)?;
                 }
             },
             None => {
@@ -1046,7 +1046,7 @@ impl<'a> ChannelBcGenerator<'a> {
                         self.bc.portamento_calc(n, slide_length, p_length)?;
                     }
                     NoteOrPitchOut::Pitch(p) => {
-                        self.bc.portamento_pitch_calc(p, slide_length, p_length);
+                        self.bc.portamento_pitch_calc(p, slide_length, p_length)?;
                     }
                 }
             }
@@ -1532,7 +1532,7 @@ impl<'a> ChannelBcGenerator<'a> {
                 let (pp_length, after) =
                     self.split_play_note_length(length, is_slur, rest_after_note)?;
 
-                self.bc.play_pitch(pitch, pp_length);
+                self.bc.play_pitch(pitch, pp_length)?;
                 self.after_note(after)?;
             }
 
@@ -1547,7 +1547,7 @@ impl<'a> ChannelBcGenerator<'a> {
                 let (pp_length, after) =
                     self.split_play_note_length(length, is_slur, rest_after_note)?;
 
-                self.bc.play_pitch(pitch, pp_length);
+                self.bc.play_pitch(pitch, pp_length)?;
                 self.after_note(after)?;
             }
 
@@ -1560,7 +1560,7 @@ impl<'a> ChannelBcGenerator<'a> {
                 let (pp_length, after) =
                     self.split_play_note_length(length, is_slur, rest_after_note)?;
 
-                self.bc.play_noise(frequency, pp_length);
+                self.bc.play_noise(frequency, pp_length)?;
                 self.after_note(after)?;
             }
 

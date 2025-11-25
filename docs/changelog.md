@@ -48,9 +48,11 @@ MML changes:
     * Portamento velocity will be calculated by the audio driver and the portamento's slide length will have a maximum 255 ticks
     * `MP` and `MD` will output an error
  * Improved out-of-range note testing
+ * Fixed missing no-instrument error in `P` pitch or `N` noise commands
 
-Sound effect changes:
+Bytecode assembly changes:
  * Improved out-of-range note testing in bytecode assembly sound effect
+ * Fixed missing no-instrument error in `play_pitch`, `portamento_pitch`, `portamento_pitch_calc` and `play_noise`.
 
 
 Version 0.1.1
