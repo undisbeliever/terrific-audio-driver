@@ -64,6 +64,8 @@ impl RelativeTransposeState {
     const MIN: i16 = -255;
     const MAX: i16 = 255;
 
+    const ZERO: Self = Self(0);
+
     fn new(a: i8) -> Self {
         Self(a.into())
     }
@@ -262,6 +264,7 @@ impl TransposeRange {
         match analysis.0 {
             TransposeState::Unset => (),
             TransposeState::Set(t) => *self = self.loop_set(t),
+            TransposeState::Adjust(RelativeTransposeState::ZERO) => (),
             TransposeState::Adjust(_) => *self = TransposeRange::Overflow,
             TransposeState::Overflow => *self = TransposeRange::Overflow,
         }

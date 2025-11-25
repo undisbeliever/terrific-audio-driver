@@ -1825,3 +1825,36 @@ A _+6 !s1 _+80 !s1 _-60 !s1
         BytecodeError::TransposedNoteOverflow(note("c4"), -60..=80).into(),
     );
 }
+
+#[test]
+fn looping_song_ends_with_transpose_state_adjust0_bugfix() {
+    // Bug: A looping song channel that ends with Adjust(0) transpose state will erroneously
+    // output a transpose error.
+
+    assert_looping_line_matches_bytecode(
+        "c L __-12 c __+12 c",
+        &[
+            "play_note c4 24",
+            "adjust_transpose -12",
+            "play_note c4 24",
+            "adjust_transpose +12",
+            "play_note c4 24",
+        ],
+    );
+
+    assert_looping_line_matches_bytecode(
+        "c L [__-12 c]2 [__+6 c]4 c",
+        &[
+            "play_note c4 24",
+            "start_loop",
+            "adjust_transpose -12",
+            "play_note c4 24",
+            "end_loop 2",
+            "start_loop",
+            "adjust_transpose +6",
+            "play_note c4 24",
+            "end_loop 4",
+            "play_note c4 24",
+        ],
+    );
+}
