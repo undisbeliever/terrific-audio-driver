@@ -24,12 +24,7 @@ fn note() {
 fn long_note() {
     assert_line_matches_bytecode(
         "K0 c%600",
-        &[
-            "play_note c4 no_keyoff 256",
-            "wait 256",
-            "wait 88",
-            "keyon_next_note",
-        ],
+        &["play_note c4 no_keyoff 600", "keyon_next_note"],
     );
 }
 
@@ -53,12 +48,7 @@ fn pitch() {
 fn long_pitch() {
     assert_line_matches_bytecode(
         "K0 P$1000,%600",
-        &[
-            "play_pitch $1000 no_keyoff 256",
-            "wait 256",
-            "wait 88",
-            "keyon_next_note",
-        ],
+        &["play_pitch $1000 no_keyoff 600", "keyon_next_note"],
     );
 }
 
@@ -82,12 +72,7 @@ fn pitch_frequency() {
 fn long_pitch_frequency() {
     assert_line_matches_bytecode(
         "K0 PF500,%600",
-        &[
-            "play_pitch $1000 no_keyoff 256",
-            "wait 256",
-            "wait 88",
-            "keyon_next_note",
-        ],
+        &["play_pitch $1000 no_keyoff 600", "keyon_next_note"],
     );
 }
 
@@ -111,12 +96,7 @@ fn sample() {
 fn long_sample() {
     assert_line_matches_bytecode(
         "K0 s40,%600",
-        &[
-            "play_note 40 no_keyoff 256",
-            "wait 256",
-            "wait 88",
-            "keyon_next_note",
-        ],
+        &["play_note 40 no_keyoff 600", "keyon_next_note"],
     );
 }
 
@@ -140,12 +120,7 @@ fn noise() {
 fn long_noise() {
     assert_line_matches_bytecode(
         "K0 N20,%600",
-        &[
-            "play_noise 20 no_keyoff 256",
-            "wait 256",
-            "wait 88",
-            "keyon_next_note",
-        ],
+        &["play_noise 20 no_keyoff 600", "keyon_next_note"],
     );
 }
 
@@ -189,9 +164,7 @@ fn long_portamento() {
         "K0 {o3 c o5 c}%600",
         &[
             "play_note c3 no_keyoff 1",
-            "portamento c5 no_keyoff +5 256",
-            "wait 256",
-            "wait 87",
+            "portamento c5 no_keyoff +5 599",
             "keyon_next_note",
         ],
     );
@@ -269,10 +242,7 @@ fn test_one_rest_optimisation() {
 
     assert_line_matches_bytecode("K0 c%100 r%25", &["play_note c4 keyoff 125"]);
 
-    assert_line_matches_bytecode(
-        "K0 c%100 r%200 ^%300",
-        &["play_note c4 no_keyoff 256", "wait 87", "rest 257"],
-    );
+    assert_line_matches_bytecode("K0 c%100 r%200 ^%300", &["play_note c4 keyoff 600"]);
 
     assert_line_matches_bytecode("K0 P$1000 r", &["play_pitch $1000 keyoff 48"]);
 

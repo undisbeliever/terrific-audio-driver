@@ -21,14 +21,8 @@ fn play_noise() {
     assert_line_matches_bytecode("N$0c", &["play_noise 12 keyoff 24"]);
     assert_line_matches_bytecode("N$1f,2", &["play_noise 31 keyoff 48"]);
 
-    assert_line_matches_bytecode(
-        "N1,%600",
-        &["play_noise 1 no_keyoff 256", "wait 87", "rest 257"],
-    );
-    assert_line_matches_bytecode(
-        "N2,%600 &",
-        &["play_noise 2 no_keyoff 256", "wait 256", "wait 88"],
-    );
+    assert_line_matches_bytecode("N1,%600", &["play_noise 1 keyoff 600"]);
+    assert_line_matches_bytecode("N2,%600 &", &["play_noise 2 no_keyoff 600"]);
 
     assert_line_matches_bytecode("N30 r r r", &["play_noise 30 keyoff 24", "rest 72"]);
     assert_line_matches_bytecode(

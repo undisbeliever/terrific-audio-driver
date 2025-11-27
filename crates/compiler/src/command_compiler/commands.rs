@@ -34,9 +34,6 @@ use std::ops::RangeInclusive;
 pub const MAX_PORTAMENTO_SLIDE_TICKS: u16 = 16 * 1024;
 pub const MAX_BROKEN_CHORD_NOTES: usize = 128;
 
-// Number of rest instructions before a loop uses less space
-pub const REST_LOOP_INSTRUCTION_THREASHOLD: u16 = 3;
-
 u8_value_newtype!(
     PortamentoSpeed,
     PortamentoSpeedOutOfRange,

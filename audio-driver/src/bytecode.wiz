@@ -44,23 +44,24 @@ let FIRST_NO_ARGUMENT_INSTRUCTION_OPCODE = bytecode.INSTRUCTIONS_WITH_ARGUMENTS.
 let DISABLE_CHANNEL_BYTECODE = FIRST_PLAY_NOTE_INSTRUCTION - 1;
 
 
-
 // Opcodes >= FIRST_PLAY_NOTE_INSTRUCTION are a two-byte play note instruction.
 //
-//  nnnnnnnO llllllll
+//  nnnnnnnO <length>
 //      nnnnnnn = note to play (number of semitones above c0 + FIRST_PLAY_NOTE_INSTRUCTION / 2)
 //            O = key-off after note ends
-//     llllllll = note length
 //
 //  NOTE: This instruction will wait an extra tick if the `key-off` bit is set.
 //
 //  CAUTION: play-note instructions are offset by `FIRST_PLAY_NOTE_INSTRUCTION`.
 
 
-// Notes about rest/note length:
-//   * A rest/note length of 0 will pause for 256 ticks
-//   * A rest/note instruction will wait for an extra tick if the key-off bit is set.
-//   * A wait-rest chain should end with `rest 257` to prevent conflict with early-release.
+// The <length> format is 1 or 3 bytes long.
+//  * [ 1..=255 ] - 1 byte read  - 8 bit length (1-255 ticks)
+//  * [ 0, h, l ] - 3 bytes read - 16 bit length, big-endian (1-65535 ticks)
+//
+// A rest/note instruction will wait for an extra tick if the key-off bit is set.
+// The instruction will sleep for `<length>` ticks, then key-off, then sleep for 1 more tick.
+
 
 // These bytecodes do have parameters
 let INSTRUCTIONS_WITH_ARGUMENTS = [
@@ -72,20 +73,18 @@ let INSTRUCTIONS_WITH_ARGUMENTS = [
     // See `MISC_INSTRUCTIONS`.
     miscellaneous,
 
-    // parameters: nnnnnnnO ssssssss llllllll
+    // parameters: nnnnnnnO ssssssss <length>
     //      nnnnnnn = note to play (same note format as a play-note instruction)
     //            O = key-off after note ends
     //     ssssssss = u8 speed (VxPITCH change per tick)
-    //     llllllll = note length
     //
     // NOTE: portamento does not emit a KON event
     portamento_down,
     portamento_up,
 
-    // parameters: nnnnnnnO llllllll ssssssss
+    // parameters: nnnnnnnO ssssssss <length>
     //      nnnnnnn = note to play (same note format as a play-note instruction)
     //            O = key-off after note ends
-    //     llllllll = note length
     //     ssssssss = slide length in ticks
     //
     // Slide length can be > note length.
@@ -94,20 +93,18 @@ let INSTRUCTIONS_WITH_ARGUMENTS = [
     portamento_calc,
 
 
-    // parameters: pppppppp pppppppD ssssssss llllllll
+    // parameters: pppppppp pppppppD ssssssss <length>
     //     -pppppp- pppppppp = target VxPITCH (lower bit in the high byte is not pitch)
     //                     O = key-off after note ends
     //              ssssssss = u8 speed (VxPITCH change per tick)
-    //              llllllll = note length
     //
     // CAUTION: Detune has no effect on portamento_pitch instructions.
     portamento_pitch_down,
     portamento_pitch_up,
 
-    // parameters: pppppppp pppppppD llllllll ssssssss
+    // parameters: pppppppp pppppppD ssssssss <length>
     //     -pppppp- pppppppp = target VxPITCH (lower bit in the high byte is not pitch)
     //                     O = key-off after note ends
-    //              llllllll = note length
     //              ssssssss = slide length in ticks
     //
     // Slide length can be > note length.
@@ -141,9 +138,9 @@ let INSTRUCTIONS_WITH_ARGUMENTS = [
     set_vibrato_with_delay,
 
 
-    // parameters: pppppppp nnnnnnnO llllllll
+    // parameters: pppppppp nnnnnnnO <length>
     //               pppppppp = pitch offset per tick.
-    //      nnnnnnnO llllllll = note to play (same format as play_note)
+    //      nnnnnnnO <length> = note to play (same format as play_note)
     //
     // If pppppppp is 0, vibrato is disabled.
     //
@@ -155,30 +152,27 @@ let INSTRUCTIONS_WITH_ARGUMENTS = [
     set_vibrato_depth_and_play_note,
 
 
-    // parameters: pppppppp pppppppO llllllll
+    // parameters: pppppppp pppppppO <length>
     //      ppppppp- pppppppp = VxPITCH register value (be aware of the key-off bit in the high byte)
     //                      O = key-off after note ends
-    //               llllllll = note length
     //
     // CAUTION: Detune has no effect on play_pitch instructions.
     play_pitch,
 
 
-    // parameters: --fffffO llllllll
+    // parameters: --fffffO <length>
     //         fffff = noise frequency
     //             O = key-off after note ends
-    //      llllllll = note length
     play_noise,
 
 
-    // parameter = number of ticks to wait.
+    // parameter = <length>
     // NOTE: Does not key-off the channel.
     wait,
 
-    // parameter = number of ticks to sleep before key-off
+    // parameter = <length>
     // Sends a key-off after sleeping and sleeps for 1 extra tick after key-off.
-    // (This instruction sleeps for `parameter + 1` ticks)
-    // CAUTION: A wait-rest chain should end with `rest 257` to prevent conflict with early-release.
+    // (This instruction sleeps for `length + 1` ticks)
     rest,
 
 
@@ -226,14 +220,14 @@ let INSTRUCTIONS_WITH_ARGUMENTS = [
     // See `set_temp_gain` and `rest`
     set_temp_gain_and_rest,
 
-    // parameter: u8 number of ticks to wait.
+    // parameter: <length>
     //
     // Reuses the temp-GAIN in the last `set_temp_gain*` instruction.
     //
     // See `wait`
     reuse_temp_gain_and_wait,
 
-    // parameter: u8 number of ticks to sleep before key-off
+    // parameter: <length>
     //
     // Reuses the temp-GAIN in the last `set_temp_gain*` instruction.
     //
@@ -254,9 +248,6 @@ let INSTRUCTIONS_WITH_ARGUMENTS = [
     // Early release is disabled if `cmp` is 0.
     //
     // CAUTION: If a note has a length less-than `cmp`, it will only be played for a single tick.
-    //
-    // CAUTION: The rest instruction in a `play-note rest` or `play-note wait rest` chain should be
-    //          257 ticks to ensure long notes are cut at the correct time.
     set_early_release,
 
 

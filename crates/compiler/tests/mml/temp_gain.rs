@@ -58,44 +58,19 @@ fn set_temp_gain_and_rest() {
 
     assert_line_matches_bytecode("GDT12 r%256", &["set_temp_gain_and_rest D12 256"]);
     assert_line_matches_bytecode("GDT12 r%257", &["set_temp_gain_and_rest D12 257"]);
-    assert_line_matches_bytecode("GDT12 r%258", &["set_temp_gain_and_wait D12 1", "rest 257"]);
-    assert_line_matches_bytecode("GDT12 r%259", &["set_temp_gain_and_wait D12 2", "rest 257"]);
+    assert_line_matches_bytecode("GDT12 r%258", &["set_temp_gain_and_rest D12 258"]);
+    assert_line_matches_bytecode("GDT12 r%259", &["set_temp_gain_and_rest D12 259"]);
 
-    assert_line_matches_bytecode(
-        "GDT12 r%1000",
-        &[
-            "set_temp_gain_and_wait D12 256",
-            "wait 256",
-            "wait 231",
-            "rest 257",
-        ],
-    );
+    assert_line_matches_bytecode("GDT12 r%1000", &["set_temp_gain_and_rest D12 1000"]);
 
     merge_mml_commands_test(
         "GDT12 r%700 r%200 || r%500",
-        &[
-            "set_temp_gain_and_wait D12 256",
-            "wait 187",
-            "rest 257",
-            "rest 257",
-            "rest 257",
-            "rest 186",
-        ],
+        &["set_temp_gain_and_rest D12 700", "rest 700"],
     );
 
     assert_line_matches_bytecode(
         "GDT12 r%10000 r%2000",
-        &[
-            "set_temp_gain_and_wait D12 256",
-            "start_loop 53",
-            "wait 179",
-            "end_loop",
-            "rest 257",
-            // second rest
-            "start_loop 8",
-            "rest 250",
-            "end_loop",
-        ],
+        &["set_temp_gain_and_rest D12 10000", "rest 2000"],
     );
 
     assert_line_matches_bytecode(
@@ -123,26 +98,10 @@ fn set_temp_gain_and_wait() {
     merge_mml_commands_test("GDT12 w || ^1", &["set_temp_gain_and_wait D12 120"]);
 
     assert_line_matches_bytecode("GDT12 w%256", &["set_temp_gain_and_wait D12 256"]);
-    assert_line_matches_bytecode("GDT12 w%257", &["set_temp_gain_and_wait D12 256", "wait 1"]);
-    assert_line_matches_bytecode(
-        "GDT12 w%1000",
-        &[
-            "set_temp_gain_and_wait D12 256",
-            "wait 256",
-            "wait 256",
-            "wait 232",
-        ],
-    );
+    assert_line_matches_bytecode("GDT12 w%257", &["set_temp_gain_and_wait D12 257"]);
 
-    assert_line_matches_bytecode(
-        "GDT12 w%8000",
-        &[
-            "set_temp_gain_and_wait D12 256",
-            "start_loop 32",
-            "wait 242",
-            "end_loop",
-        ],
-    );
+    assert_line_matches_bytecode("GDT12 w%1000", &["set_temp_gain_and_wait D12 1000"]);
+    assert_line_matches_bytecode("GDT12 w%8000", &["set_temp_gain_and_wait D12 8000"]);
 
     assert_line_matches_bytecode(
         "GIT1 c4 & GDT2 w4 GBT3 d4 & GET4 w4",

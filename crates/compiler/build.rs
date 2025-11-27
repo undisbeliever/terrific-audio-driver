@@ -56,7 +56,8 @@ const AUDIO_DRIVER_SYMBOLS: &[(&str, &str)] = &[
     ("channelSoA.virtualChannels.adsr2OrGain", "CHANNEL_VC_ADSR2_OR_GAIN"),
     ("channelSoA.virtualChannels.tempGain", "CHANNEL_VC_TEMP_GAIN"),
 
-    ("channelSoA.countdownTimer", "CHANNEL_COUNTDOWN_TIMER"),
+    ("channelSoA.countdownTimer_l", "CHANNEL_COUNTDOWN_TIMER_L"),
+    ("channelSoA.countdownTimer_h", "CHANNEL_COUNTDOWN_TIMER_H"),
     ("channelSoA.instPitchOffset", "CHANNEL_INST_PITCH_OFFSET"),
     ("channelSoA.instructionPtr_l", "CHANNEL_INSTRUCTION_PTR_L"),
     ("channelSoA.instructionPtr_h", "CHANNEL_INSTRUCTION_PTR_H"),

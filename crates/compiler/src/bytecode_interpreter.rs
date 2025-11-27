@@ -72,7 +72,7 @@ struct ChannelSoAPanVol {
 
 #[derive(Clone)]
 struct ChannelSoA {
-    countdown_timer: u8,
+    countdown_timer: u16,
     next_event_is_key_off: u8,
 
     instruction_ptr: u16,
@@ -586,16 +586,6 @@ impl ChannelState {
         u16::from_le_bytes([l, h])
     }
 
-    fn increment_tick_count(&mut self, length: u8, key_off: bool) {
-        self.next_event_is_key_off = key_off;
-
-        if length > 0 {
-            self.ticks += TickCounter::new(u32::from(length) + u32::from(key_off));
-        } else {
-            self.ticks += TickCounter::new(0x100 + u32::from(key_off));
-        }
-    }
-
     fn disable_channel(&mut self) {
         self.disabled = true;
         self.instruction_ptr = u16::MAX;
@@ -604,11 +594,37 @@ impl ChannelState {
         self.vibrato_pitch_offset_per_tick = 0;
     }
 
-    fn play_note(&mut self, note_and_key_off_bit: u8, length: u8) {
+    fn read_length_and_increment_tick_count(&mut self, key_off: bool, song_data: &[u8]) {
+        self.next_event_is_key_off = key_off;
+
+        let i = usize::from(self.instruction_ptr);
+
+        let length: u16 = match song_data.get(i) {
+            // byte length
+            Some(l @ 1..) => {
+                self.instruction_ptr += 1;
+                (*l).into()
+            }
+
+            // u16 length
+            Some(0) => match song_data.get(i + 1..i + 3) {
+                Some(l) => {
+                    self.instruction_ptr += 3;
+                    u16::from_be_bytes(l.try_into().unwrap())
+                }
+                _ => 0,
+            },
+            None => 0,
+        };
+
+        self.ticks += TickCounter::new(u32::from(length) + u32::from(key_off));
+    }
+
+    fn read_length_and_play_note(&mut self, note_and_key_off_bit: u8, song_data: &[u8]) {
         let key_off = note_and_key_off_bit & 1 == 1;
 
         self.note_time = self.ticks;
-        self.increment_tick_count(length, key_off);
+        self.read_length_and_increment_tick_count(key_off, song_data);
     }
 
     fn call_subroutine(&mut self, s_id: u8, song_data: &[u8]) {
@@ -693,20 +709,18 @@ impl ChannelState {
 
         match opcode {
             note_opcode @ opcodes::FIRST_PLAY_NOTE_INSTRUCTION.. => {
-                let length = read_pc();
                 self.note = ChannelNote::PlayNote {
                     note_opcode,
                     instrument: self.instrument,
                     transpose: self.transpose,
                     detune: self.detune,
                 };
-                self.play_note(opcode, length);
+                self.read_length_and_play_note(opcode, song_data);
             }
 
             opcodes::PORTAMENTO_DOWN | opcodes::PORTAMENTO_UP => {
                 let note_and_key_off_bit = read_pc();
                 let _portamento_speed = read_pc();
-                let wait_length = read_pc();
 
                 // Ignoring portamento speed and direction
                 self.note = ChannelNote::Portamento {
@@ -715,13 +729,11 @@ impl ChannelState {
                     transpose: self.transpose,
                     detune: self.detune,
                 };
-
-                self.play_note(note_and_key_off_bit, wait_length);
+                self.read_length_and_play_note(note_and_key_off_bit, song_data);
             }
 
             opcodes::PORTAMENTO_CALC => {
                 let note_and_key_off_bit = read_pc();
-                let length = read_pc();
                 let _slide_ticks = read_pc();
 
                 // Ignoring portamento speed and direction
@@ -731,15 +743,13 @@ impl ChannelState {
                     transpose: self.transpose,
                     detune: self.detune,
                 };
-
-                self.play_note(note_and_key_off_bit, length);
+                self.read_length_and_play_note(note_and_key_off_bit, song_data);
             }
 
             opcodes::PORTAMENTO_PITCH_DOWN | opcodes::PORTAMENTO_PITCH_UP => {
                 let pitch_l = read_pc();
                 let pitch_h_and_keyoff = read_pc();
                 let _portamento_speed = read_pc();
-                let length = read_pc();
 
                 let key_off = (pitch_h_and_keyoff & 1) == 1;
 
@@ -747,14 +757,12 @@ impl ChannelState {
                 self.note = ChannelNote::PortamentoPitch {
                     target_pitch: u16::from_le_bytes([pitch_l, pitch_h_and_keyoff >> 1]),
                 };
-
-                self.increment_tick_count(length, key_off);
+                self.read_length_and_increment_tick_count(key_off, song_data);
             }
 
             opcodes::PORTAMENTO_PITCH_CALC => {
                 let pitch_l = read_pc();
                 let pitch_h_and_keyoff = read_pc();
-                let length = read_pc();
                 let _slide_ticks = read_pc();
 
                 let key_off = (pitch_h_and_keyoff & 1) == 1;
@@ -763,8 +771,7 @@ impl ChannelState {
                 self.note = ChannelNote::PortamentoPitch {
                     target_pitch: u16::from_le_bytes([pitch_l, pitch_h_and_keyoff >> 1]),
                 };
-
-                self.increment_tick_count(length, key_off);
+                self.read_length_and_increment_tick_count(key_off, song_data);
             }
 
             opcodes::SET_VIBRATO => {
@@ -787,48 +794,42 @@ impl ChannelState {
             opcodes::SET_VIBRATO_DEPTH_AND_PLAY_NOTE => {
                 let depth = read_pc();
                 let note_opcode = read_pc();
-                let length = read_pc();
 
+                self.vibrato_pitch_offset_per_tick = depth;
                 self.note = ChannelNote::PlayNote {
                     note_opcode,
                     instrument: self.instrument,
                     transpose: self.transpose,
                     detune: self.detune,
                 };
-
-                self.vibrato_pitch_offset_per_tick = depth;
-                self.play_note(note_opcode, length);
+                self.read_length_and_play_note(note_opcode, song_data);
             }
 
             opcodes::WAIT => {
-                let to_rest = read_pc();
-                self.increment_tick_count(to_rest, false);
+                self.read_length_and_increment_tick_count(false, song_data);
             }
             opcodes::REST => {
-                let to_rest = read_pc();
-                self.increment_tick_count(to_rest, true);
+                self.read_length_and_increment_tick_count(true, song_data);
             }
 
             opcodes::PLAY_PITCH => {
                 let pitch_l = read_pc();
                 let pitch_h_and_keyoff = read_pc();
-                let length = read_pc();
 
                 let key_off = (pitch_h_and_keyoff & 1) == 1;
 
                 self.note =
                     ChannelNote::PlayPitch(u16::from_le_bytes([pitch_l, pitch_h_and_keyoff >> 1]));
 
-                self.increment_tick_count(length, key_off);
+                self.read_length_and_increment_tick_count(key_off, song_data);
             }
 
             opcodes::PLAY_NOISE => {
                 let freq_and_keyoff = read_pc();
-                let length = read_pc();
 
                 let key_off = (freq_and_keyoff & 1) == 1;
 
-                self.increment_tick_count(length, key_off);
+                self.read_length_and_increment_tick_count(key_off, song_data);
             }
 
             opcodes::SET_INSTRUMENT => {
@@ -868,36 +869,30 @@ impl ChannelState {
 
             opcodes::SET_TEMP_GAIN_AND_REST => {
                 let temp_gain = read_pc();
-                let to_rest = read_pc();
 
                 self.temp_gain = temp_gain;
                 self.prev_temp_gain = temp_gain;
-                self.increment_tick_count(to_rest, true);
+                self.read_length_and_increment_tick_count(true, song_data);
             }
 
             opcodes::SET_TEMP_GAIN_AND_WAIT => {
                 let temp_gain = read_pc();
-                let to_rest = read_pc();
 
                 self.temp_gain = temp_gain;
                 self.prev_temp_gain = temp_gain;
-                self.increment_tick_count(to_rest, false);
+                self.read_length_and_increment_tick_count(false, song_data);
             }
 
             opcodes::REUSE_TEMP_GAIN => {
                 self.temp_gain = self.prev_temp_gain;
             }
             opcodes::REUSE_TEMP_GAIN_AND_REST => {
-                let to_rest = read_pc();
-
                 self.temp_gain = self.prev_temp_gain;
-                self.increment_tick_count(to_rest, true);
+                self.read_length_and_increment_tick_count(true, song_data);
             }
             opcodes::REUSE_TEMP_GAIN_AND_WAIT => {
-                let to_rest = read_pc();
-
                 self.temp_gain = self.prev_temp_gain;
-                self.increment_tick_count(to_rest, false);
+                self.read_length_and_increment_tick_count(false, song_data);
             }
 
             opcodes::SET_EARLY_RELEASE => {
@@ -1837,10 +1832,9 @@ fn build_channel(
 
     let (countdown_timer, next_event_is_key_off) = match (c.next_event_is_key_off, delay) {
         (_, 0) => (1, 0),
-        (false, 1..=0xfe) => (u8::try_from(delay + 1).unwrap(), 0),
-        (false, 0xff) => (0, 0),
-        (true, 1..=0xff) => (u8::try_from(delay).unwrap(), 0xff),
-        (true, 0x100) => (0, 0xff),
+        (false, 1..=0xfffe) => (u16::try_from(delay + 1).unwrap(), 0),
+        (false, 0xffff) => (0, 0),
+        (true, 1..=0xffff) => (u16::try_from(delay).unwrap(), 0xff),
         _ => panic!("Invalid ChannelState.ticks value (delay: {})", delay),
     };
 
@@ -2192,12 +2186,15 @@ impl InterpreterOutput {
                     addresses::CHANNEL_INSTRUCTION_PTR_H,
                     c.instruction_ptr,
                 );
+                soa_write_u16(
+                    addresses::CHANNEL_COUNTDOWN_TIMER_L,
+                    addresses::CHANNEL_COUNTDOWN_TIMER_H,
+                    c.countdown_timer,
+                );
 
                 soa_write_u8(addresses::CHANNEL_STACK_POINTER, c.stack_pointer);
-
                 soa_write_u8(addresses::CHANNEL_LOOP_STACK_POINTER, c.loop_stack_pointer);
 
-                soa_write_u8(addresses::CHANNEL_COUNTDOWN_TIMER, c.countdown_timer);
                 soa_write_u8(
                     addresses::CHANNEL_NEXT_EVENT_IS_KEY_OFF,
                     c.next_event_is_key_off,
