@@ -77,6 +77,9 @@ fn wait() {
     merge_mml_commands_test("w || w8", &["wait 36"]);
     merge_mml_commands_test("w%30||w%20", &["wait 50"]);
 
+    merge_mml_commands_test("w%300 || w%400 w%500", &["wait 1200"]);
+    merge_mml_commands_test("w%300 w%400 || w%500", &["wait 1200"]);
+
     // From `mml-syntax.md`
     assert_line_matches_line("w4 w8 w8", "w2");
 }
@@ -193,6 +196,9 @@ fn merged_large_rests() {
     // A random prime number
     assert_line_matches_bytecode("r%2 r%6553", &["rest 2", "rest 6553"]);
 
+    merge_mml_commands_test("r%300 || r%400 r%500", &["rest 300", "rest 900"]);
+    merge_mml_commands_test("r%300 r%400 || r%500", &["rest 300", "rest 900"]);
+
     assert_line_matches_bytecode(
         "[[[[[[[ r%2 r%1028 ]2]3]4]5]6]7]8",
         &[
@@ -266,6 +272,9 @@ fn rest_after_keyoff_note() {
     assert_line_matches_bytecode("a%50 r%500", &["play_note a4 50", "rest 500"]);
     assert_line_matches_bytecode("a%600 r%600", &["play_note a4 keyoff 600", "rest 600"]);
 
+    merge_mml_commands_test("a%300 || r%400 r%500", &["play_note a4 300", "rest 900"]);
+    merge_mml_commands_test("a%300 r%400 || r%500", &["play_note a4 300", "rest 900"]);
+
     assert_line_matches_bytecode("a%2561 r%2570", &["play_note a4 keyoff 2561", "rest 2570"]);
 }
 
@@ -296,6 +305,15 @@ fn rest_after_surred_note() {
     assert_line_matches_bytecode(
         "a%2560 & r%2561 r%2561",
         &["play_note a4 no_keyoff 2560", "rest 2561", "rest 2561"],
+    );
+
+    merge_mml_commands_test(
+        "a%300 & || r%400 r%500",
+        &["play_note a4 no_keyoff 300", "rest 400", "rest 500"],
+    );
+    merge_mml_commands_test(
+        "a%300 & r%400 || r%500",
+        &["play_note a4 no_keyoff 300", "rest 400", "rest 500"],
     );
 }
 
