@@ -4,10 +4,10 @@ Bytecode Assembly Syntax
 Instructions
 ============
 
- * `rest <duration>` - Sleep for *duration-1* ticks then key-off for 1 tick.
+ * `rest <duration>` - Sleep for *duration* ticks (with key-off).
  * `wait <duration>` - Sleep for *duration* ticks (no key-off).
 
- * `play_note <note> <duration>` - Play *note* for *duration* ticks then key-off the note
+ * `play_note <note> <duration>` - Play *note* for *duration* ticks and key-off the note
  * `play_note <note> <ko> <duration>` - Play *note* for *duration* ticks
  * `play_pitch <pitch> [ko] <duration>` - Set `VxPITCH` to *pitch* for *duration* ticks
  * `portamento <note> <ko> <pitch_velocity> <duration>` - Extend a slur into a portamento
@@ -197,11 +197,10 @@ Parameters
  * `<duration>` - duration of the instruction in ticks
 
  * `<ko>` - key-off flag
-    * `keyoff` - send a key-off event after the instruction has finished
-        * One tick will be subtracted from the *duration* and used for the key-off event.
+    * `keyoff` - send a key-off event while the instruction is sleeping
     * `slur_next`, `sn` or `no_keyoff` - do not send a key-off event at the end of the instruction.
-        * Used to extend the length of a note beyond the limits of an instruction
         * Used to slur the current note with the next note.
+        * Used to change a setting in the middle of a note.
 
  * `<volume>` - Channel volume (0 to 255)
 

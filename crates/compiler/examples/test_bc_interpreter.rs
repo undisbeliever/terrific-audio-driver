@@ -283,9 +283,7 @@ fn read_ticks_until_next_bytecode(apuram: &[u8; 0x10000], v: usize) -> u32 {
             read(addresses::CHANNEL_COUNTDOWN_TIMER_H),
         ]);
 
-        let next_event_is_key_off: bool = read(addresses::CHANNEL_NEXT_EVENT_IS_KEY_OFF) != 0;
-
-        u32::from(countdown_timer) + u32::from(next_event_is_key_off)
+        u32::from(countdown_timer)
     } else {
         u32::MAX
     }

@@ -655,8 +655,8 @@ This audio engine was designed to be simple, to that effect the following limita
     * The sound effects window (SFX button or Menu > Audio > Sound Effects) can be used to test how channel ducking affects the song.
  * To prevent popping, there needs to be a 8 millisecond delay between key-off and key-on events.  This is accomplished by:
     * Setting a minimum tick-clock of 8ms.
-    * Subtracting a single tick from every non-slurred note and adding a 1-tick rest after a key-off event.
-    * The minimum length of a non-slurred note is 2 ticks.
+    * Enforcing a minimum length of 2 ticks for non-slurred notes.
+    * Sending a key-off event on the last tick of an key-off instruction (unless early-release key-offs the note early).
     * Keyoff can be disabled with the `K0` MML command
  * All songs and sound effects use the same samples (no sample swapping).
  * Loops and subroutines share a stack.

@@ -27,6 +27,7 @@ Driver changes:
    ticks long.
  * Added a transpose semitone offset to all play-note and portamento-note instructions.
     * The transpose setting can be changed with the `set_transpose` and `adjust_transpose` bytecode instructions.
+ * The key-off logic has been rewritten
 
 MML changes:
  * Fixed a typo in the MML syntax document

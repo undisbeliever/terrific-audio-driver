@@ -74,7 +74,7 @@ A !s
             opcodes::CALL_SUBROUTINE,
             1,
             opcodes::REST,
-            23,
+            24,
             opcodes::RETURN_FROM_SUBROUTINE
         ]
     );

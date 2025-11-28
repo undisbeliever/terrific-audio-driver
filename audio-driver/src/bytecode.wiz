@@ -48,7 +48,7 @@ let DISABLE_CHANNEL_BYTECODE = FIRST_PLAY_NOTE_INSTRUCTION - 1;
 //
 //  nnnnnnnO <length>
 //      nnnnnnn = note to play (number of semitones above c0 + FIRST_PLAY_NOTE_INSTRUCTION / 2)
-//            O = key-off after note ends
+//            O = key-off note
 //
 //  NOTE: This instruction will wait an extra tick if the `key-off` bit is set.
 //
@@ -59,8 +59,11 @@ let DISABLE_CHANNEL_BYTECODE = FIRST_PLAY_NOTE_INSTRUCTION - 1;
 //  * [ 1..=255 ] - 1 byte read  - 8 bit length (1-255 ticks)
 //  * [ 0, h, l ] - 3 bytes read - 16 bit length, big-endian (1-65535 ticks)
 //
-// A rest/note instruction will wait for an extra tick if the key-off bit is set.
-// The instruction will sleep for `<length>` ticks, then key-off, then sleep for 1 more tick.
+// v0.2.0 BREAKING CHANGE: A instruction that will key-off no-longer sleeps for an extra tick.
+//
+// A length of 1 is invalid if the instruction has the keyOff flag set.
+//
+// [0, 0, 0] is an invalid length.
 
 
 // These bytecodes do have parameters
@@ -75,7 +78,7 @@ let INSTRUCTIONS_WITH_ARGUMENTS = [
 
     // parameters: nnnnnnnO ssssssss <length>
     //      nnnnnnn = note to play (same note format as a play-note instruction)
-    //            O = key-off after note ends
+    //            O = key-off note
     //     ssssssss = u8 speed (VxPITCH change per tick)
     //
     // NOTE: portamento does not emit a KON event
@@ -84,7 +87,7 @@ let INSTRUCTIONS_WITH_ARGUMENTS = [
 
     // parameters: nnnnnnnO ssssssss <length>
     //      nnnnnnn = note to play (same note format as a play-note instruction)
-    //            O = key-off after note ends
+    //            O = key-off note
     //     ssssssss = slide length in ticks
     //
     // Slide length can be > note length.
@@ -95,7 +98,7 @@ let INSTRUCTIONS_WITH_ARGUMENTS = [
 
     // parameters: pppppppp pppppppD ssssssss <length>
     //     -pppppp- pppppppp = target VxPITCH (lower bit in the high byte is not pitch)
-    //                     O = key-off after note ends
+    //                     O = key-off note
     //              ssssssss = u8 speed (VxPITCH change per tick)
     //
     // CAUTION: Detune has no effect on portamento_pitch instructions.
@@ -104,7 +107,7 @@ let INSTRUCTIONS_WITH_ARGUMENTS = [
 
     // parameters: pppppppp pppppppD ssssssss <length>
     //     -pppppp- pppppppp = target VxPITCH (lower bit in the high byte is not pitch)
-    //                     O = key-off after note ends
+    //                     O = key-off note
     //              ssssssss = slide length in ticks
     //
     // Slide length can be > note length.
@@ -154,7 +157,7 @@ let INSTRUCTIONS_WITH_ARGUMENTS = [
 
     // parameters: pppppppp pppppppO <length>
     //      ppppppp- pppppppp = VxPITCH register value (be aware of the key-off bit in the high byte)
-    //                      O = key-off after note ends
+    //                      O = key-off note
     //
     // CAUTION: Detune has no effect on play_pitch instructions.
     play_pitch,
@@ -162,17 +165,18 @@ let INSTRUCTIONS_WITH_ARGUMENTS = [
 
     // parameters: --fffffO <length>
     //         fffff = noise frequency
-    //             O = key-off after note ends
+    //             O = key-off note
     play_noise,
 
 
     // parameter = <length>
-    // NOTE: Does not key-off the channel.
+    //
+    // Does not key-off the channel.
     wait,
 
     // parameter = <length>
-    // Sends a key-off after sleeping and sleeps for 1 extra tick after key-off.
-    // (This instruction sleeps for `length + 1` ticks)
+    //
+    // Will key-off the channel
     rest,
 
 

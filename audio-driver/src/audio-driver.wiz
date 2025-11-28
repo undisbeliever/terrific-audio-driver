@@ -184,9 +184,11 @@ in zeropage {
         // (high byte in lastvarpage)
         var countdownTimer_l : [u8 ; N_CHANNELS];
 
-        // If non-zero, the next event is a key-off event
-        // If zero, the next event will process bytecode
-        var nextEventIsKeyOff : [u8 ; N_CHANNELS];
+        // When non-zero they channel will key-off when early-release is activated
+        // or countdownTimer == 1.
+        //
+        // This flag is reset on KeyOff.
+        var keyoffFlag : [u8 ; N_CHANNELS];
 
 
         // S-DSP voice register shadows (AKA Virtual Channels)
@@ -1260,83 +1262,72 @@ var _mutedChannels : u8 in zpTmp;
             channelSoA.countdownTimer_l[x]--;
         }
         else if { channelSoA.countdownTimer_l[x]--; } && !zero {
-            // Check for early-release
-            y = channelSoA.nextEventIsKeyOff[x];
-            if !zero {
-                // Do not early-release if the note has been playing for min-ticks
-                a = channelSoA.ticksAfterNote[x];
-                if a >= channelSoA.earlyRelease_minTicks[x] {
-                    // Must be a `<` comparison (not a `==`)
-                    // Ensures notes shorter than early-release are cut at the correct time.
-                    a = channelSoA.countdownTimer_l[x];
-                    if a < channelSoA.earlyRelease_cmp[x] {
-                        a = channelSoA.earlyRelease_gain[x];
-                        if !zero {
-                            channelSoA.virtualChannels.tempGain[x] = a;
+            // Skip if wait or no_keyoff
+            y = channelSoA.keyoffFlag[x];
+            goto EndTimer if zero;
 
-                            voiceChannelsDirty_tmp $ 7 = true;
-                        }
-                        else {
-                            // ::TODO deduplicate::
-                            a = ChannelVoiceBit[x];
-                            if x >= FIRST_SFX_CHANNEL {
-                                test_and_set(a, keyOffShadow_sfx);
-                                test_and_set(a, keyOnMask_sfx);
-                            }
-                            else {
-                                test_and_set(a, keyOffShadow_music);
-                                test_and_set(a, keyOnMask_music);
-                            }
-                        }
-                    }
-                }
+            // Always key-off on the last sleep tick
+            a = channelSoA.countdownTimer_l[x];
+            a--;
+            goto KeyOff if zero;
+
+            // Early release
+            goto EndTimer if a >= channelSoA.earlyRelease_cmp[x];
+
+            a = channelSoA.ticksAfterNote[x];
+            goto EndTimer if a < channelSoA.earlyRelease_minTicks[x];
+
+        EarlyRelease:
+            a = channelSoA.earlyRelease_gain[x];
+            if !zero {
+                channelSoA.virtualChannels.tempGain[x] = a;
+
+                voiceChannelsDirty_tmp $ 7 = true;
+                goto EndTimer;
             }
+
+        KeyOff:
+            a = 0;
+            // Do not test for keyoff or early-release on the next tick
+            channelSoA.keyoffFlag[x] = a;
+            // Disable temp gain
+            channelSoA.virtualChannels.tempGain[x] = a;
+
+            // Keyoff note
+            a = ChannelVoiceBit[x];
+            if x >= FIRST_SFX_CHANNEL {
+                test_and_set(a, keyOffShadow_sfx);
+                test_and_set(a, keyOnMask_sfx);
+                goto EndTimer;
+            }
+            test_and_set(a, keyOffShadow_music);
+            test_and_set(a, keyOnMask_music);
         }
         else {
             // countdown timer is 0
 
-            // Check if a KEY_OFF is required
-            a = channelSoA.nextEventIsKeyOff[x];
+            y = channelSoA.instructionPtr_h[x];
             if !zero {
-                a = ChannelVoiceBit[x];
-                if x >= FIRST_SFX_CHANNEL {
-                    test_and_set(a, keyOffShadow_sfx);
-                    test_and_set(a, keyOnMask_sfx);
-                }
-                else {
-                    test_and_set(a, keyOffShadow_music);
-                    test_and_set(a, keyOnMask_music);
-                }
+                // Clear Key-Off flag for safety
+                channelSoA.keyoffFlag[x] = a = 0;
 
-                a = 0;
-                // schedule a bytecode event
-                channelSoA.nextEventIsKeyOff[x] = a;
-                // Disable temp gain
-                channelSoA.virtualChannels.tempGain[x] = a;
+                a = channelSoA.instructionPtr_l[x];
+                process_bytecode(x, ya);
 
-                // Previous countdownTimer value was 0
-                channelSoA.countdownTimer_l[x]++;
-            }
-            else {
-                y = channelSoA.instructionPtr_h[x];
-                if !zero {
-                    a = channelSoA.instructionPtr_l[x];
-                    process_bytecode(x, ya);
+                ya = instructionPtr as u16;
+                channelSoA.instructionPtr_l[x] = a;
+                channelSoA.instructionPtr_h[x] = y;
 
-                    ya = instructionPtr as u16;
-                    channelSoA.instructionPtr_l[x] = a;
-                    channelSoA.instructionPtr_h[x] = y;
-
-                    // Request S-DSP voice register update (set dirty bit).
-                    // The bytecode most likely changed the virtual channel.
-                    //
-                    // The flag is set here (and once) instead of every instruction that changes
-                    // `channelSoA.virtualChannels` to save a lot of code space.
-                    //
-                    voiceChannelsDirty_tmp $ 7 = true;
-                }
+                // Request S-DSP voice register update (set dirty bit).
+                // The bytecode most likely changed the virtual channel.
+                //
+                // The flag is set here (and once) instead of every instruction that changes
+                // `channelSoA.virtualChannels` to save a lot of code space.
+                //
+                voiceChannelsDirty_tmp $ 7 = true;
             }
         }
+    EndTimer:
 
         a = channelSoA.volEffect_direction[x];
         if !zero {
@@ -1893,7 +1884,6 @@ func __reset_channel(channelIndex : u8 in x, pan: u8 in a) {
 
     // Immediately process bytecode on the next tick
     // a = 0
-    channelSoA.nextEventIsKeyOff[x] = a;
     channelSoA.countdownTimer_h[x] = a;
     a++;
     // a = 1
@@ -2461,8 +2451,8 @@ func _play_note(channelIndex : u8 in x, noteAndKeyOffBit : u8 in a) {
     // carry = key-off after note ends bit
     a >>>= 1;
 
-    // Set MSB of nextEventIsKeyOff from carry
-    channelSoA.nextEventIsKeyOff[x] >>>>#= 1;
+    // Set MSB of keyoffFlag from carry
+    channelSoA.keyoffFlag[x] >>>>#= 1;
 
     // calculate pitch table index
     y = a = a + channelSoA.instPitchOffset[x] + channelSoA.transpose[x];
@@ -2557,8 +2547,8 @@ func play_pitch(channelIndex: u8 in x, pitch_l : u8 in a) {
     instructionPtr++;
 
     a >>>= 1;
-    // Set MSB of nextEventIsKeyOff from carry
-    channelSoA.nextEventIsKeyOff[x] >>>>#= 1;
+    // Set MSB of keyoffFlag from carry
+    channelSoA.keyoffFlag[x] >>>>#= 1;
 
     return __play_note_set_pitch_h_and_read_length(x, a);
 }
@@ -2568,8 +2558,8 @@ func play_pitch(channelIndex: u8 in x, pitch_l : u8 in a) {
 // KEEP: X
 func play_noise(channelIndex: u8 in x, freq_and_keyoff : u8 in a) {
     a >>>= 1;
-    // Set MSB of nextEventIsKeyOff from carry
-    channelSoA.nextEventIsKeyOff[x] >>>>#= 1;
+    // Set MSB of keyoffFlag from carry
+    channelSoA.keyoffFlag[x] >>>>#= 1;
 
     a &= dsp.FLG__NOISE_FREQ_MASK;
     y = a;
@@ -2649,8 +2639,8 @@ func __portamento_note(channelIndex : u8 in x, noteAndKeyoffFlag : u8 in a, dire
 
     // carry = key-off after note ends bit
     a >>>= 1;
-    // Set MSB of nextEventIsKeyOff from carry
-    channelSoA.nextEventIsKeyOff[x] >>>>#= 1;
+    // Set MSB of keyoffFlag from carry
+    channelSoA.keyoffFlag[x] >>>>#= 1;
 
     // calculate pitch table index
     y = a = a + channelSoA.instPitchOffset[x] + channelSoA.transpose[x];
@@ -2714,8 +2704,8 @@ func __portamento_pitch(channelIndex : u8 in x, targetPitch_l : u8 in a, directi
     instructionPtr++;
 
     a >>>= 1;
-    // Set MSB of nextEventIsKeyOff from carry
-    channelSoA.nextEventIsKeyOff[x] >>>>#= 1;
+    // Set MSB of keyoffFlag from carry
+    channelSoA.keyoffFlag[x] >>>>#= 1;
 
     // a = target_h
     // y = 0 (required)
@@ -2738,8 +2728,8 @@ func portamento_pitch_calc(channelIndex : u8 in x, targetPitch_l : u8 in a) {
     instructionPtr++;
 
     a >>>= 1;
-    // Set MSB of nextEventIsKeyOff from carry
-    channelSoA.nextEventIsKeyOff[x] >>>>#= 1;
+    // Set MSB of keyoffFlag from carry
+    channelSoA.keyoffFlag[x] >>>>#= 1;
 
     // a = target_h
     ^return __portamento_calc_read_lengths(x, a);
@@ -2755,8 +2745,8 @@ func portamento_calc(channelIndex : u8 in x, noteAndKeyoffFlag : u8 in a) {
 
     // carry = key-off after note ends bit
     a >>>= 1;
-    // Set MSB of nextEventIsKeyOff from carry
-    channelSoA.nextEventIsKeyOff[x] >>>>#= 1;
+    // Set MSB of keyoffFlag from carry
+    channelSoA.keyoffFlag[x] >>>>#= 1;
 
     // calculate pitch table index
     y = a = a + channelSoA.instPitchOffset[x] + channelSoA.transpose[x];
@@ -3761,7 +3751,7 @@ func set_temp_gain_and_rest(channelIndex : u8 in x, tempGain: u8 in a) {
 func rest(channelIndex : u8 in x, length: u8 in a) {
     // Y is not 0
 
-    channelSoA.nextEventIsKeyOff[x] = y = 1;
+    channelSoA.keyoffFlag[x] = y = 1;
 // Fallthrough
 }
 

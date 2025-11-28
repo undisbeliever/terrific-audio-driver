@@ -463,7 +463,7 @@ impl BcTicks for BcTicksKeyOff {
 
 impl ToBcLength for BcTicksKeyOff {
     fn to_bc_length(self) -> BcLength {
-        BcLength(self.0 - KEY_OFF_TICK_DELAY)
+        BcLength(self.0)
     }
 }
 

@@ -73,7 +73,6 @@ struct ChannelSoAPanVol {
 #[derive(Clone)]
 struct ChannelSoA {
     countdown_timer: u16,
-    next_event_is_key_off: u8,
 
     instruction_ptr: u16,
 
@@ -617,7 +616,7 @@ impl ChannelState {
             None => 0,
         };
 
-        self.ticks += TickCounter::new(u32::from(length) + u32::from(key_off));
+        self.ticks += TickCounter::new(u32::from(length));
     }
 
     fn read_length_and_play_note(&mut self, note_and_key_off_bit: u8, song_data: &[u8]) {
@@ -1830,12 +1829,9 @@ fn build_channel(
         false => c.ticks.value() - target_ticks.value(),
     };
 
-    let (countdown_timer, next_event_is_key_off) = match (c.next_event_is_key_off, delay) {
-        (_, 0) => (1, 0),
-        (false, 1..=0xfffe) => (u16::try_from(delay + 1).unwrap(), 0),
-        (false, 0xffff) => (0, 0),
-        (true, 1..=0xffff) => (u16::try_from(delay).unwrap(), 0xff),
-        _ => panic!("Invalid ChannelState.ticks value (delay: {})", delay),
+    let countdown_timer = match (delay + 1).try_into() {
+        Ok(t) => t,
+        Err(_) => panic!("Invalid ChannelState.ticks value (delay: {})", delay),
     };
 
     let (inst_pitch_offset, scrn, inst_adsr_or_gain) = match c.instrument {
@@ -1899,13 +1895,16 @@ fn build_channel(
 
     let note_ticks = target_ticks.value() - c.note_time.value();
 
-    let temp_gain = if delay == 0 && c.next_event_is_key_off {
+    let temp_gain = if c.next_event_is_key_off
+        && ((countdown_timer == 1)
+            || (c.early_release_gain == 0 && countdown_timer <= u16::from(c.early_release_cmp)))
+    {
         0
-    } else if c.early_release_gain != 0
-        && c.next_event_is_key_off
+    } else if c.next_event_is_key_off
+        && c.early_release_gain != 0
+        && countdown_timer <= u16::from(c.early_release_cmp)
         && note_ticks > 1
         && note_ticks > u32::from(c.early_release_min_ticks)
-        && delay < u32::from(c.early_release_cmp)
     {
         c.early_release_gain
     } else {
@@ -1958,7 +1957,6 @@ fn build_channel(
     Channel {
         soa: ChannelSoA {
             countdown_timer,
-            next_event_is_key_off,
 
             instruction_ptr: match c.disabled {
                 true => 0,
@@ -2010,8 +2008,7 @@ fn unused_channel(channel_index: usize) -> Channel {
 
     Channel {
         soa: ChannelSoA {
-            countdown_timer: 0,
-            next_event_is_key_off: 0,
+            countdown_timer: u16::MAX,
 
             instruction_ptr: 0,
             stack_pointer,
@@ -2195,10 +2192,7 @@ impl InterpreterOutput {
                 soa_write_u8(addresses::CHANNEL_STACK_POINTER, c.stack_pointer);
                 soa_write_u8(addresses::CHANNEL_LOOP_STACK_POINTER, c.loop_stack_pointer);
 
-                soa_write_u8(
-                    addresses::CHANNEL_NEXT_EVENT_IS_KEY_OFF,
-                    c.next_event_is_key_off,
-                );
+                soa_write_u8(addresses::CHANNEL_KEY_OFF_FLAG, 0);
 
                 soa_write_u8(addresses::CHANNEL_INST_PITCH_OFFSET, c.inst_pitch_offset);
 
