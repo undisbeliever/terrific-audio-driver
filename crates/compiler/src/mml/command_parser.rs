@@ -1996,7 +1996,7 @@ fn parse_broken_chord<'a>(p: &mut Parser<'a, '_>) -> Command<'a> {
     }
 
     let note_length = match note_length {
-        Some(nl) => match PlayNoteTicks::try_from_is_slur(nl.value(), tie) {
+        Some(nl) => match PlayNoteTicks::try_from_is_slur(nl, tie) {
             Ok(t) => t,
             Err(e) => {
                 p.add_error(note_length_pos, e.into());

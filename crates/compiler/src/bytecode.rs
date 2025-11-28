@@ -22,7 +22,7 @@ use crate::notes::{add_transpose_range_to_note_range, Note, NoteRange, LAST_NOTE
 use crate::pitch_table::{InstrumentHintFreq, PitchTable, PitchTableOffset};
 use crate::samples::{instrument_note_range, note_range};
 use crate::subroutines::{CompiledSubroutines, GetSubroutineResult, Subroutine, SubroutineNameMap};
-use crate::time::{TickClock, TickCounter, TickCounterWithLoopFlag};
+use crate::time::{CommandTicks, TickClock, TickCounter, TickCounterWithLoopFlag};
 use crate::value_newtypes::{
     i16_non_zero_value_newtype, i16_value_newtype, i8_value_newtype, u16_value_newtype,
     u8_0_is_256_value_newtype, u8_value_newtype, SignedValueNewType, UnsignedValueNewType,
@@ -553,12 +553,15 @@ pub enum PlayNoteTicks {
 }
 
 impl PlayNoteTicks {
-    // ::TODO change to CommandTicks::
-    pub fn try_from_is_slur(ticks: u16, is_slur: bool) -> Result<Self, ValueError> {
+    pub fn try_from_is_slur(ticks: CommandTicks, is_slur: bool) -> Result<Self, ValueError> {
         if is_slur {
-            Ok(PlayNoteTicks::NoKeyOff(BcTicksNoKeyOff::try_from(ticks)?))
+            Ok(PlayNoteTicks::NoKeyOff(BcTicksNoKeyOff::try_from(
+                ticks.value(),
+            )?))
         } else {
-            Ok(PlayNoteTicks::KeyOff(BcTicksKeyOff::try_from(ticks)?))
+            Ok(PlayNoteTicks::KeyOff(BcTicksKeyOff::try_from(
+                ticks.value(),
+            )?))
         }
     }
 

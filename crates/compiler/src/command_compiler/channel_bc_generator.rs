@@ -75,18 +75,13 @@ enum MpState {
 /// Waits and rests after a play-note/portamento/etc instructions
 enum AfterPlayNote {
     Wait {
-        wait: CommandTicks,
         rest: CommandTicks,
     },
-    WaitEnableKeyOn {
-        wait: CommandTicks,
-    },
+    EnableKeyOn,
     KeyOff {
-        wait: CommandTicks,
         ticks_after_keyoff: CommandTicks,
     },
     TempGain {
-        wait: CommandTicks,
         temp_gain: TempGain,
         ticks_until_keyoff: CommandTicks,
         ticks_after_keyoff: CommandTicks,
@@ -296,17 +291,6 @@ impl<'a> ChannelBcGenerator<'a> {
         Ok(())
     }
 
-    // ::TODO refactor and remove::
-    fn split_note_length(
-        length: CommandTicks,
-        is_slur: bool,
-    ) -> Result<(PlayNoteTicks, CommandTicks), ValueError> {
-        Ok((
-            PlayNoteTicks::try_from_is_slur(length.value(), is_slur)?,
-            CommandTicks::new(0),
-        ))
-    }
-
     fn split_play_note_length(
         &self,
         length: CommandTicks,
@@ -316,11 +300,10 @@ impl<'a> ChannelBcGenerator<'a> {
         let rest_after_note = rest_after_note.0;
 
         let no_quantize_or_slur_keyoff = || {
-            let (pn_ticks, wait) = Self::split_note_length(length, false)?;
+            let pn_ticks = PlayNoteTicks::try_from_is_slur(length, false)?;
             Ok((
                 pn_ticks,
                 AfterPlayNote::KeyOff {
-                    wait,
                     ticks_after_keyoff: rest_after_note,
                 },
             ))
@@ -328,11 +311,10 @@ impl<'a> ChannelBcGenerator<'a> {
 
         match (is_slur, &self.quantize) {
             (true, _) => {
-                let (pn_ticks, wait) = Self::split_note_length(length, true)?;
+                let pn_ticks = PlayNoteTicks::try_from_is_slur(length, true)?;
                 Ok((
                     pn_ticks,
                     AfterPlayNote::Wait {
-                        wait,
                         rest: rest_after_note,
                     },
                 ))
@@ -342,18 +324,19 @@ impl<'a> ChannelBcGenerator<'a> {
                 false => {
                     if rest_after_note.is_zero() {
                         // No rest, slur note and emit a `keyon_next_note` instruction.
-                        let (pn_ticks, wait) = Self::split_note_length(length, true)?;
-                        Ok((pn_ticks, AfterPlayNote::WaitEnableKeyOn { wait }))
+                        let pn_ticks = PlayNoteTicks::try_from_is_slur(length, true)?;
+                        Ok((pn_ticks, AfterPlayNote::EnableKeyOn))
                     } else {
                         // Join note + rest and do not emit the `keyon_next_note` instruction.
                         // ::TODO remove return Err on checked_add overflow::
-                        let (pn_ticks, wait) =
-                            Self::split_note_length(length.checked_add(rest_after_note)?, false)?;
+                        let pn_ticks = PlayNoteTicks::try_from_is_slur(
+                            length.checked_add(rest_after_note)?,
+                            false,
+                        )?;
 
                         Ok((
                             pn_ticks,
                             AfterPlayNote::KeyOff {
-                                wait,
                                 ticks_after_keyoff: CommandTicks::new(0),
                             },
                         ))
@@ -369,14 +352,8 @@ impl<'a> ChannelBcGenerator<'a> {
                     // ::TODO remove return Err on checked_add overflow::
                     let ticks_after_keyoff =
                         CommandTicks::new(l - note_length.value()).checked_add(rest_after_note)?;
-                    let (pn_ticks, wait) = Self::split_note_length(note_length, false)?;
-                    Ok((
-                        pn_ticks,
-                        AfterPlayNote::KeyOff {
-                            wait,
-                            ticks_after_keyoff,
-                        },
-                    ))
+                    let pn_ticks = PlayNoteTicks::try_from_is_slur(note_length, false)?;
+                    Ok((pn_ticks, AfterPlayNote::KeyOff { ticks_after_keyoff }))
                 } else {
                     // Note is too short to be quantized
                     no_quantize_or_slur_keyoff()
@@ -389,11 +366,10 @@ impl<'a> ChannelBcGenerator<'a> {
                 if pn_length + KEY_OFF_TICK_DELAY < l {
                     let note_length = CommandTicks::new(pn_length);
                     let ticks_until_keyoff = CommandTicks::new(l - note_length.value());
-                    let (pn_ticks, wait) = Self::split_note_length(note_length, true)?;
+                    let pn_ticks = PlayNoteTicks::try_from_is_slur(note_length, true)?;
                     Ok((
                         pn_ticks,
                         AfterPlayNote::TempGain {
-                            wait,
                             temp_gain,
                             ticks_until_keyoff,
                             ticks_after_keyoff: rest_after_note,
@@ -409,43 +385,20 @@ impl<'a> ChannelBcGenerator<'a> {
 
     fn after_note(&mut self, after: AfterPlayNote) -> Result<(), ChannelError> {
         match after {
-            AfterPlayNote::Wait { wait, rest } => {
-                if !wait.is_zero() {
-                    self.wait(wait)?;
-                }
-                self.maybe_rest(rest)
-            }
-            AfterPlayNote::WaitEnableKeyOn { wait } => {
-                if !wait.is_zero() {
-                    self.wait(wait)?;
-                }
-
+            AfterPlayNote::Wait { rest } => self.maybe_rest(rest),
+            AfterPlayNote::EnableKeyOn => {
                 self.bc.keyon_next_note();
                 Ok(())
             }
-            AfterPlayNote::KeyOff {
-                wait,
-                ticks_after_keyoff,
-            } => {
-                if !wait.is_zero() {
-                    self.rest(wait)?;
-                }
-                match ticks_after_keyoff.value() {
-                    1 => self.wait(ticks_after_keyoff),
-                    _ => self.maybe_rest(ticks_after_keyoff),
-                }
-            }
+            AfterPlayNote::KeyOff { ticks_after_keyoff } => match ticks_after_keyoff.value() {
+                1 => self.wait(ticks_after_keyoff),
+                _ => self.maybe_rest(ticks_after_keyoff),
+            },
             AfterPlayNote::TempGain {
-                wait,
                 temp_gain,
                 ticks_until_keyoff,
                 ticks_after_keyoff,
-            } => {
-                if !wait.is_zero() {
-                    self.wait(wait)?;
-                }
-                self.temp_gain_and_rest(Some(temp_gain), ticks_until_keyoff, ticks_after_keyoff)
-            }
+            } => self.temp_gain_and_rest(Some(temp_gain), ticks_until_keyoff, ticks_after_keyoff),
         }
     }
 
@@ -690,14 +643,9 @@ impl<'a> ChannelBcGenerator<'a> {
                 CommandTicks::new(slide_length.value().saturating_sub(1))
             }
             (true, _) => {
-                let (pn_length, wait) = Self::split_note_length(delay_length, true)?;
+                let pn_length = PlayNoteTicks::try_from_is_slur(delay_length, true)?;
 
                 self.portamento_play_pn_note_out(pn1, pn_length)?;
-
-                if !wait.is_zero() {
-                    // no keyoff event
-                    self.wait(wait)?;
-                }
 
                 slide_length
             }
