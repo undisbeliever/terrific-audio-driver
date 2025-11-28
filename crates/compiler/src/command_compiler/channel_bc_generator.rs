@@ -33,10 +33,10 @@ use crate::sound_effects::MAX_SFX_TICKS;
 use crate::subroutines::{
     BlankSubroutineMap, CompiledSubroutines, GetSubroutineResult, Subroutine, SubroutineState,
 };
-use crate::time::{TickClock, TickCounter, TickCounterWithLoopFlag};
+use crate::time::{CommandTicks, TickClock, TickCounter, TickCounterWithLoopFlag};
 use crate::UnsignedValueNewType;
 
-pub const MAX_NO_LOOP_TICKS: TickCounter = TickCounter::new(256 * 32);
+pub const MAX_NO_LOOP_TICKS: CommandTicks = CommandTicks::new(256 * 32);
 
 #[derive(Debug, Clone, Copy)]
 enum DetuneCentsOutput {
@@ -72,66 +72,19 @@ enum MpState {
     Mp(MpVibrato),
 }
 
-struct RestLoop {
-    ticks_in_loop: u32,
-    n_loops: u32,
-
-    // May be 0
-    remainder: u32,
-
-    n_rest_instructions: u32,
-}
-
-#[inline]
-fn build_rest_loop<Loop, Rem, const ALLOW_ZERO_REM: bool>(ticks: TickCounter) -> RestLoop
-where
-    Loop: BcTicks,
-    Rem: BcTicks,
-{
-    let ticks = ticks.value();
-
-    assert!(ticks > Loop::MAX_TICKS * 3);
-
-    (LoopCount::MIN_LOOPS..=LoopCount::MAX_LOOPS)
-        .filter_map(|l| {
-            let div = ticks / l;
-            let rem = ticks % l;
-
-            if div >= Loop::MIN_TICKS && ((ALLOW_ZERO_REM && rem == 0) || rem >= Rem::MIN_TICKS) {
-                Some(RestLoop {
-                    ticks_in_loop: div,
-                    n_loops: l,
-                    remainder: rem,
-
-                    n_rest_instructions: div.div_ceil(Loop::MAX_TICKS)
-                        + rem.div_ceil(Rem::MAX_TICKS),
-                })
-            } else {
-                None
-            }
-        })
-        .min_by_key(|rl| rl.n_rest_instructions)
-        .unwrap()
-}
-
 /// Waits and rests after a play-note/portamento/etc instructions
 enum AfterPlayNote {
     Wait {
-        wait: TickCounter,
-        rest: TickCounter,
+        rest: CommandTicks,
     },
-    WaitEnableKeyOn {
-        wait: TickCounter,
-    },
+    EnableKeyOn,
     KeyOff {
-        wait: TickCounter,
-        ticks_after_keyoff: TickCounter,
+        ticks_after_keyoff: CommandTicks,
     },
     TempGain {
-        wait: TickCounter,
         temp_gain: TempGain,
-        ticks_until_keyoff: TickCounter,
-        ticks_after_keyoff: TickCounter,
+        ticks_until_keyoff: CommandTicks,
+        ticks_after_keyoff: CommandTicks,
     },
 }
 
@@ -338,80 +291,19 @@ impl<'a> ChannelBcGenerator<'a> {
         Ok(())
     }
 
-    fn split_wait_length(
-        length: TickCounter,
-    ) -> Result<(BcTicksNoKeyOff, TickCounter), ChannelError> {
-        let l = length.value();
-
-        let bc = u32::min(l, BcTicksNoKeyOff::MAX_TICKS);
-        let bc = BcTicksNoKeyOff::try_from(bc)?;
-
-        Ok((bc, TickCounter::new(l - bc.ticks())))
-    }
-
-    fn split_note_length(
-        length: TickCounter,
-        is_slur: bool,
-    ) -> Result<(PlayNoteTicks, TickCounter), ValueError> {
-        let l = length.value();
-
-        if !is_slur {
-            // Add rest
-            const MIN_THREE_INSTRUCTIONS: u32 =
-                BcTicksNoKeyOff::MAX_TICKS + BcTicksKeyOff::MAX_TICKS + 1;
-            const MIN_TWO_INSTRUCTIONS: u32 = BcTicksKeyOff::MAX_TICKS + 1;
-            const MAX_TWO_INSTRUCTIONS: u32 = MIN_THREE_INSTRUCTIONS - 1;
-
-            match l {
-                0..=BcTicksKeyOff::MAX_TICKS => Ok((
-                    PlayNoteTicks::KeyOff(BcTicksKeyOff::try_from(l)?),
-                    TickCounter::new(0),
-                )),
-                MIN_TWO_INSTRUCTIONS..=MAX_TWO_INSTRUCTIONS => {
-                    let w = BcTicksNoKeyOff::try_from(l - BcTicksKeyOff::MAX_TICKS)?;
-                    let r = l - w.ticks();
-                    debug_assert_eq!(w.ticks() + r, l);
-
-                    Ok((PlayNoteTicks::NoKeyOff(w), TickCounter::new(r)))
-                }
-                MIN_THREE_INSTRUCTIONS.. => {
-                    let w = BcTicksNoKeyOff::try_from(BcTicksNoKeyOff::MAX_TICKS).unwrap();
-                    let r = l - w.ticks();
-                    debug_assert_eq!(w.ticks() + r, l);
-
-                    Ok((PlayNoteTicks::NoKeyOff(w), TickCounter::new(r)))
-                }
-            }
-        } else {
-            match l {
-                0..=BcTicksNoKeyOff::MAX_TICKS => Ok((
-                    PlayNoteTicks::NoKeyOff(BcTicksNoKeyOff::try_from(l)?),
-                    TickCounter::new(0),
-                )),
-                _ => {
-                    let w1 = BcTicksNoKeyOff::MAX;
-                    let w2 = l - w1.ticks();
-
-                    Ok((PlayNoteTicks::NoKeyOff(w1), TickCounter::new(w2)))
-                }
-            }
-        }
-    }
-
     fn split_play_note_length(
         &self,
-        length: TickCounter,
+        length: CommandTicks,
         is_slur: bool,
         rest_after_note: RestTicksAfterNote,
     ) -> Result<(PlayNoteTicks, AfterPlayNote), ValueError> {
         let rest_after_note = rest_after_note.0;
 
         let no_quantize_or_slur_keyoff = || {
-            let (pn_ticks, wait) = Self::split_note_length(length, false)?;
+            let pn_ticks = PlayNoteTicks::try_from_is_slur(length, false)?;
             Ok((
                 pn_ticks,
                 AfterPlayNote::KeyOff {
-                    wait,
                     ticks_after_keyoff: rest_after_note,
                 },
             ))
@@ -419,11 +311,10 @@ impl<'a> ChannelBcGenerator<'a> {
 
         match (is_slur, &self.quantize) {
             (true, _) => {
-                let (pn_ticks, wait) = Self::split_note_length(length, true)?;
+                let pn_ticks = PlayNoteTicks::try_from_is_slur(length, true)?;
                 Ok((
                     pn_ticks,
                     AfterPlayNote::Wait {
-                        wait,
                         rest: rest_after_note,
                     },
                 ))
@@ -433,18 +324,20 @@ impl<'a> ChannelBcGenerator<'a> {
                 false => {
                     if rest_after_note.is_zero() {
                         // No rest, slur note and emit a `keyon_next_note` instruction.
-                        let (pn_ticks, wait) = Self::split_note_length(length, true)?;
-                        Ok((pn_ticks, AfterPlayNote::WaitEnableKeyOn { wait }))
+                        let pn_ticks = PlayNoteTicks::try_from_is_slur(length, true)?;
+                        Ok((pn_ticks, AfterPlayNote::EnableKeyOn))
                     } else {
                         // Join note + rest and do not emit the `keyon_next_note` instruction.
-                        let (pn_ticks, wait) =
-                            Self::split_note_length(length + rest_after_note, false)?;
+                        // ::TODO remove return Err on checked_add overflow::
+                        let pn_ticks = PlayNoteTicks::try_from_is_slur(
+                            length.checked_add(rest_after_note)?,
+                            false,
+                        )?;
 
                         Ok((
                             pn_ticks,
                             AfterPlayNote::KeyOff {
-                                wait,
-                                ticks_after_keyoff: TickCounter::new(0),
+                                ticks_after_keyoff: CommandTicks::new(0),
                             },
                         ))
                     }
@@ -455,17 +348,12 @@ impl<'a> ChannelBcGenerator<'a> {
                 let note_length = q.quantize(l) + KEY_OFF_TICK_DELAY;
 
                 if note_length < l {
-                    let note_length = TickCounter::new(note_length);
+                    let note_length = CommandTicks::new(note_length);
+                    // ::TODO remove return Err on checked_add overflow::
                     let ticks_after_keyoff =
-                        TickCounter::new(l - note_length.value()) + rest_after_note;
-                    let (pn_ticks, wait) = Self::split_note_length(note_length, false)?;
-                    Ok((
-                        pn_ticks,
-                        AfterPlayNote::KeyOff {
-                            wait,
-                            ticks_after_keyoff,
-                        },
-                    ))
+                        CommandTicks::new(l - note_length.value()).checked_add(rest_after_note)?;
+                    let pn_ticks = PlayNoteTicks::try_from_is_slur(note_length, false)?;
+                    Ok((pn_ticks, AfterPlayNote::KeyOff { ticks_after_keyoff }))
                 } else {
                     // Note is too short to be quantized
                     no_quantize_or_slur_keyoff()
@@ -476,13 +364,12 @@ impl<'a> ChannelBcGenerator<'a> {
                 let pn_length = q.quantize(l);
 
                 if pn_length + KEY_OFF_TICK_DELAY < l {
-                    let note_length = TickCounter::new(pn_length);
-                    let ticks_until_keyoff = TickCounter::new(l - note_length.value());
-                    let (pn_ticks, wait) = Self::split_note_length(note_length, true)?;
+                    let note_length = CommandTicks::new(pn_length);
+                    let ticks_until_keyoff = CommandTicks::new(l - note_length.value());
+                    let pn_ticks = PlayNoteTicks::try_from_is_slur(note_length, true)?;
                     Ok((
                         pn_ticks,
                         AfterPlayNote::TempGain {
-                            wait,
                             temp_gain,
                             ticks_until_keyoff,
                             ticks_after_keyoff: rest_after_note,
@@ -498,43 +385,20 @@ impl<'a> ChannelBcGenerator<'a> {
 
     fn after_note(&mut self, after: AfterPlayNote) -> Result<(), ChannelError> {
         match after {
-            AfterPlayNote::Wait { wait, rest } => {
-                if !wait.is_zero() {
-                    self.wait(wait)?;
-                }
-                self.rest_one_keyoff(rest)
-            }
-            AfterPlayNote::WaitEnableKeyOn { wait } => {
-                if !wait.is_zero() {
-                    self.wait(wait)?;
-                }
-
+            AfterPlayNote::Wait { rest } => self.maybe_rest(rest),
+            AfterPlayNote::EnableKeyOn => {
                 self.bc.keyon_next_note();
                 Ok(())
             }
-            AfterPlayNote::KeyOff {
-                wait,
-                ticks_after_keyoff,
-            } => {
-                if !wait.is_zero() {
-                    self.rest_one_keyoff(wait)?;
-                }
-                match ticks_after_keyoff.value() {
-                    1 => self.wait(ticks_after_keyoff),
-                    _ => self.rest_many_keyoffs(ticks_after_keyoff),
-                }
-            }
+            AfterPlayNote::KeyOff { ticks_after_keyoff } => match ticks_after_keyoff.value() {
+                1 => self.wait(ticks_after_keyoff),
+                _ => self.maybe_rest(ticks_after_keyoff),
+            },
             AfterPlayNote::TempGain {
-                wait,
                 temp_gain,
                 ticks_until_keyoff,
                 ticks_after_keyoff,
-            } => {
-                if !wait.is_zero() {
-                    self.wait(wait)?;
-                }
-                self.temp_gain_and_rest(Some(temp_gain), ticks_until_keyoff, ticks_after_keyoff)
-            }
+            } => self.temp_gain_and_rest(Some(temp_gain), ticks_until_keyoff, ticks_after_keyoff),
         }
     }
 
@@ -612,126 +476,24 @@ impl<'a> ChannelBcGenerator<'a> {
         Ok(())
     }
 
-    // Rest that can send multiple `rest_keyoff` instructions
-    // The `rest_keyoff` instruction can wait for more ticks than the `rest` instruction.
-    fn rest_many_keyoffs_no_loop(&mut self, length: TickCounter) -> Result<(), ChannelError> {
-        const _: () = assert!(BcTicksKeyOff::MAX_TICKS > BcTicksNoKeyOff::MAX_TICKS);
-        const MAX_REST: u32 = BcTicksKeyOff::MAX_TICKS;
-        const MIN_REST: u32 = BcTicksKeyOff::MIN_TICKS;
-        const _: () = assert!(MIN_REST > 1);
-
-        if length > MAX_NO_LOOP_TICKS {
-            return Err(ChannelError::NoLoopWaitOrRestIsTooLong(length));
-        }
-
-        let mut remaining_ticks = length.value();
-
-        while remaining_ticks > MAX_REST {
-            let l = if remaining_ticks >= MAX_REST + MIN_REST {
-                MAX_REST
-            } else {
-                MAX_REST - 1
-            };
-            self.bc.rest(BcTicksKeyOff::try_from(l).unwrap());
-            remaining_ticks -= l;
-        }
-
-        // The channel is in the release self.  The last rest **can** be less than max.
-        self.bc.rest(BcTicksKeyOff::try_from(remaining_ticks)?);
-
-        Ok(())
-    }
-
-    // rest with no keyoff
-    fn wait_no_loop(&mut self, length: TickCounter) -> Result<(), ChannelError> {
-        if length > MAX_NO_LOOP_TICKS {
-            return Err(ChannelError::NoLoopWaitOrRestIsTooLong(length));
-        }
-
-        let mut remaining_ticks = length.value();
-
-        let rest_length = BcTicksNoKeyOff::MAX;
-        const _: () = assert!(BcTicksNoKeyOff::MIN_TICKS == 1);
-
-        while remaining_ticks > rest_length.ticks() {
-            self.bc.wait(rest_length);
-            remaining_ticks -= rest_length.ticks();
-        }
-
-        self.bc.wait(BcTicksNoKeyOff::try_from(remaining_ticks)?);
-
-        Ok(())
-    }
-
-    // A rest that sends a single keyoff event
-    fn rest_one_keyoff(&mut self, length: TickCounter) -> Result<(), ChannelError> {
-        const REST_TICKS: u32 = BcTicksKeyOff::MAX_TICKS;
-        const MIN_TWO_INSTRUCTIONS: u32 = REST_TICKS + 1;
-
-        match length.value() {
-            0 => (),
-            l @ 1..=BcTicksKeyOff::MAX_TICKS => self.bc.rest(BcTicksKeyOff::try_from(l)?),
-            l @ MIN_TWO_INSTRUCTIONS.. => {
-                self.wait(TickCounter::new(l - REST_TICKS))?;
-                self.bc.rest(BcTicksKeyOff::try_from(REST_TICKS).unwrap());
-            }
+    fn maybe_rest(&mut self, length: CommandTicks) -> Result<(), ChannelError> {
+        if !length.is_zero() {
+            self.bc.rest(BcTicksKeyOff::try_from(length.value())?);
         }
         Ok(())
     }
 
-    // Rest that can send multiple `rest_keyoff` instructions
-    // The `rest_keyoff` instruction can wait for more ticks than the `rest` instruction.
-    fn rest_many_keyoffs(&mut self, length: TickCounter) -> Result<(), ChannelError> {
-        const MIN_LOOP_REST: u32 = BcTicksKeyOff::MAX_TICKS * REST_LOOP_INSTRUCTION_THREASHOLD + 1;
+    fn rest(&mut self, length: CommandTicks) -> Result<(), ChannelError> {
+        self.bc.rest(BcTicksKeyOff::try_from(length.value())?);
 
-        if length.is_zero() {
-            return Ok(());
-        }
-
-        if length.value() < MIN_LOOP_REST || !self.bc.can_loop() {
-            self.rest_many_keyoffs_no_loop(length)
-        } else {
-            // Convert a long rest to a rest loop.
-
-            let rl = build_rest_loop::<BcTicksKeyOff, BcTicksKeyOff, true>(length);
-
-            self.bc
-                .start_loop(Some(LoopCount::try_from(rl.n_loops)?), LoopAnalysis::BLANK)?;
-            self.rest_many_keyoffs_no_loop(TickCounter::new(rl.ticks_in_loop))?;
-            self.bc.end_loop(None, LoopAnalysis::BLANK)?;
-
-            // The channel is in the release self.  The last rest **can** be less than max.
-            if rl.remainder > 0 {
-                self.bc.rest(rl.remainder.try_into()?);
-            }
-
-            Ok(())
-        }
+        Ok(())
     }
 
-    // rest with no keyoff
-    fn wait(&mut self, length: TickCounter) -> Result<(), ChannelError> {
-        const MIN_LOOP_REST: u32 =
-            BcTicksNoKeyOff::MAX_TICKS * REST_LOOP_INSTRUCTION_THREASHOLD + 1;
+    // sleep with no keyoff
+    fn wait(&mut self, length: CommandTicks) -> Result<(), ChannelError> {
+        self.bc.wait(BcTicksNoKeyOff::try_from(length.value())?);
 
-        if length.value() < MIN_LOOP_REST || !self.bc.can_loop() {
-            self.wait_no_loop(length)
-        } else {
-            // Convert a long rest to a rest loop.
-
-            let rl = build_rest_loop::<BcTicksNoKeyOff, BcTicksNoKeyOff, true>(length);
-
-            self.bc
-                .start_loop(Some(LoopCount::try_from(rl.n_loops)?), LoopAnalysis::BLANK)?;
-            self.wait_no_loop(TickCounter::new(rl.ticks_in_loop))?;
-            self.bc.end_loop(None, LoopAnalysis::BLANK)?;
-
-            if rl.remainder > 0 {
-                self.bc.wait(rl.remainder.try_into()?);
-            }
-
-            Ok(())
-        }
+        Ok(())
     }
 
     fn portamento_note_pitch(
@@ -862,9 +624,9 @@ impl<'a> ChannelBcGenerator<'a> {
         &mut self,
         note1: NoteOrPitch,
         instrument_tuning: Option<PitchTableOffset>,
-        delay_length: TickCounter,
-        slide_length: TickCounter,
-    ) -> Result<(Option<u16>, TickCounter), ChannelError> {
+        delay_length: CommandTicks,
+        slide_length: CommandTicks,
+    ) -> Result<(Option<u16>, CommandTicks), ChannelError> {
         let (note1_pitch, pn1) = self.portamento_note_pitch(note1, instrument_tuning)?;
 
         let play_note1 = !self.portamento_prev_note_matches(note1_pitch, &pn1);
@@ -873,22 +635,17 @@ impl<'a> ChannelBcGenerator<'a> {
         let slide_length = match (play_note1, delay_length.value()) {
             (true, 0) => {
                 // Play note1 for a single tick
-                let t = PlayNoteTicks::NoKeyOff(BcTicksNoKeyOff::try_from(1).unwrap());
+                let t = PlayNoteTicks::NoKeyOff(BcTicksNoKeyOff::try_from(1u16).unwrap());
 
                 self.portamento_play_pn_note_out(pn1, t)?;
 
                 // subtract 1 tick from slide_length
-                TickCounter::new(slide_length.value().saturating_sub(1))
+                CommandTicks::new(slide_length.value().saturating_sub(1))
             }
             (true, _) => {
-                let (pn_length, wait) = Self::split_note_length(delay_length, true)?;
+                let pn_length = PlayNoteTicks::try_from_is_slur(delay_length, true)?;
 
                 self.portamento_play_pn_note_out(pn1, pn_length)?;
-
-                if !wait.is_zero() {
-                    // no keyoff event
-                    self.wait(wait)?;
-                }
 
                 slide_length
             }
@@ -913,17 +670,17 @@ impl<'a> ChannelBcGenerator<'a> {
         note2: NoteOrPitch,
         is_slur: bool,
         speed_override: Option<PortamentoSpeed>,
-        delay_length: TickCounter,
-        slide_length: TickCounter,
-        tie_length: TickCounter,
+        delay_length: CommandTicks,
+        slide_length: CommandTicks,
+        tie_length: CommandTicks,
         rest_after_note: RestTicksAfterNote,
     ) -> Result<(), ChannelError> {
         #[cfg(debug_assertions)]
         let expected_tick_counter = self.bc.get_tick_counter()
-            + delay_length
-            + slide_length
-            + tie_length
-            + rest_after_note.0;
+            + delay_length.into()
+            + slide_length.into()
+            + tie_length.into()
+            + rest_after_note.0.into();
 
         let instrument_tuning = self.bc.get_state().instrument_tuning;
 
@@ -952,8 +709,8 @@ impl<'a> ChannelBcGenerator<'a> {
         // tie_length: number of ticks after pitch-slide reaches note2, includes the key-off tick (as required).
         let (slide_length, tie_length) = if !is_slur && tie_length.is_zero() {
             (
-                TickCounter::new(slide_length.value().saturating_sub(1)),
-                TickCounter::new(1),
+                CommandTicks::new(slide_length.value().saturating_sub(1)),
+                CommandTicks::new(1),
             )
         } else {
             (slide_length, tie_length)
@@ -995,7 +752,7 @@ impl<'a> ChannelBcGenerator<'a> {
                     (Some(note1_pitch), Some(note2_pitch)) => {
                         let delta = i32::from(note2_pitch) - i32::from(note1_pitch);
 
-                        let ticks = i32::try_from(slide_length.value()).unwrap();
+                        let ticks = i32::from(slide_length.value());
                         assert!(ticks > 0);
 
                         // division with rounding
@@ -1014,8 +771,12 @@ impl<'a> ChannelBcGenerator<'a> {
         };
 
         // In PMDMML only the portamento slide is quantized, delay_length is not.
-        let (p_length, after) =
-            self.split_play_note_length(slide_length + tie_length, is_slur, rest_after_note)?;
+        let (p_length, after) = self.split_play_note_length(
+            // ::TODO remove checked_add in portamento::
+            slide_length.checked_add(tie_length)?,
+            is_slur,
+            rest_after_note,
+        )?;
 
         match velocity {
             Some(velocity) => match pn2 {
@@ -1028,7 +789,7 @@ impl<'a> ChannelBcGenerator<'a> {
                 }
             },
             None => {
-                let slide_length = match slide_length.value().try_into() {
+                let slide_length = match u32::from(slide_length.value()).try_into() {
                     Ok(s) => s,
                     Err(ValueError::PortamentoSlideTicksOutOfRange(v)) => {
                         return Err(ChannelError::PortamentoCalcSlideTicksOutOfRange {
@@ -1063,7 +824,7 @@ impl<'a> ChannelBcGenerator<'a> {
     fn broken_chord(
         &mut self,
         notes: &[NoteOrPitch],
-        total_length: TickCounter,
+        total_length: CommandTicks,
         note_length: PlayNoteTicks,
         slur_last_note: bool,
     ) -> Result<(), ChannelError> {
@@ -1073,9 +834,9 @@ impl<'a> ChannelBcGenerator<'a> {
         if notes.len() > MAX_BROKEN_CHORD_NOTES {
             return Err(ChannelError::TooManyNotesInBrokenChord(notes.len()));
         }
-        let n_notes: u32 = notes.len().try_into().unwrap();
+        let n_notes: u16 = notes.len().try_into().unwrap();
 
-        let expected_tick_counter = self.bc.get_tick_counter() + total_length;
+        let expected_tick_counter = self.bc.get_tick_counter() + total_length.into();
 
         let total_ticks = total_length.value();
 
@@ -1103,10 +864,10 @@ impl<'a> ChannelBcGenerator<'a> {
         }
         let notes_in_loop = (total_ticks - last_note_ticks) / note_length.ticks();
 
-        let break_point = usize::try_from(notes_in_loop % n_notes).unwrap();
+        let break_point = usize::from(notes_in_loop % n_notes);
         let has_break_point: bool = break_point != 0;
 
-        let n_loops = (notes_in_loop / n_notes) + u32::from(has_break_point);
+        let n_loops = u32::from(notes_in_loop / n_notes) + u32::from(has_break_point);
 
         if n_loops < 2 {
             return Err(ChannelError::BrokenChordTotalLengthTooShort);
@@ -1243,53 +1004,21 @@ impl<'a> ChannelBcGenerator<'a> {
     fn temp_gain_and_rest(
         &mut self,
         temp_gain: Option<TempGain>,
-        ticks_until_keyoff: TickCounter,
-        ticks_after_keyoff: TickCounter,
+        ticks_until_keyoff: CommandTicks,
+        ticks_after_keyoff: CommandTicks,
     ) -> Result<(), ChannelError> {
+        let l = BcTicksKeyOff::try_from(ticks_until_keyoff.value())?;
+
         if temp_gain.is_some_and(|t| !self.bc.get_state().prev_temp_gain.is_known_and_eq(&t)) {
             let temp_gain = temp_gain.unwrap();
 
-            match ticks_until_keyoff.value() {
-                l @ ..=BcTicksKeyOff::MAX_TICKS => {
-                    self.bc
-                        .set_temp_gain_and_rest(temp_gain, BcTicksKeyOff::try_from(l)?);
-                }
-                l => {
-                    let (wait1, wait2) =
-                        Self::split_wait_length(TickCounter::new(l - BcTicksKeyOff::MAX_TICKS))?;
-                    let rest = BcTicksKeyOff::MAX;
-                    debug_assert_eq!(wait1.ticks() + wait2.value() + rest.ticks(), l);
-
-                    self.bc.set_temp_gain_and_wait(temp_gain, wait1);
-                    if !wait2.is_zero() {
-                        self.wait(wait2)?;
-                    }
-                    self.bc.rest(rest);
-                }
-            }
+            self.bc.set_temp_gain_and_rest(temp_gain, l);
         } else {
             // Reuse temp GAIN
-            match ticks_until_keyoff.value() {
-                l @ ..=BcTicksKeyOff::MAX_TICKS => {
-                    self.bc
-                        .reuse_temp_gain_and_rest(BcTicksKeyOff::try_from(l)?);
-                }
-                l => {
-                    let (wait1, wait2) =
-                        Self::split_wait_length(TickCounter::new(l - BcTicksKeyOff::MAX_TICKS))?;
-                    let rest = BcTicksKeyOff::MAX;
-                    debug_assert_eq!(wait1.ticks() + wait2.value() + rest.ticks(), l);
-
-                    self.bc.reuse_temp_gain_and_wait(wait1);
-                    if !wait2.is_zero() {
-                        self.wait(wait2)?;
-                    }
-                    self.bc.rest(rest);
-                }
-            }
+            self.bc.reuse_temp_gain_and_rest(l);
         }
 
-        self.rest_many_keyoffs(ticks_after_keyoff)?;
+        self.maybe_rest(ticks_after_keyoff)?;
 
         Ok(())
     }
@@ -1297,20 +1026,16 @@ impl<'a> ChannelBcGenerator<'a> {
     fn temp_gain_and_wait(
         &mut self,
         temp_gain: Option<TempGain>,
-        ticks: TickCounter,
+        ticks: CommandTicks,
     ) -> Result<(), ChannelError> {
-        let (wait1, wait2) = Self::split_wait_length(ticks)?;
+        let wait = ticks.value().try_into()?;
 
         if temp_gain.is_some_and(|t| !self.bc.get_state().prev_temp_gain.is_known_and_eq(&t)) {
             let temp_gain = temp_gain.unwrap();
 
-            self.bc.set_temp_gain_and_wait(temp_gain, wait1);
+            self.bc.set_temp_gain_and_wait(temp_gain, wait);
         } else {
-            self.bc.reuse_temp_gain_and_wait(wait1);
-        }
-
-        if !wait2.is_zero() {
-            self.wait(wait2)?;
+            self.bc.reuse_temp_gain_and_wait(wait);
         }
 
         Ok(())
@@ -1453,8 +1178,8 @@ impl<'a> ChannelBcGenerator<'a> {
                 ticks_until_keyoff,
                 ticks_after_keyoff,
             } => {
-                self.rest_one_keyoff(ticks_until_keyoff)?;
-                self.rest_many_keyoffs(ticks_after_keyoff)?;
+                self.rest(ticks_until_keyoff)?;
+                self.maybe_rest(ticks_after_keyoff)?;
             }
 
             &Command::Wait(length) => {

@@ -244,48 +244,63 @@ fn tie() {
 
 #[test]
 fn long_note() {
-    // `wait` can rest for 1 to 256 ticks.
-    // `rest` can rest for 2 to 257 tick.
-    // The last rest in a wait-rest chain must be 257 ticks to prevent interference with early-release
-
     assert_line_matches_bytecode("a%256", &["play_note a4 keyoff 256"]);
     assert_line_matches_bytecode("a%257", &["play_note a4 keyoff 257"]);
 
-    assert_line_matches_bytecode("a%258", &["play_note a4 no_keyoff 1", "rest 257"]);
+    assert_line_matches_bytecode("a%258", &["play_note a4 keyoff 258"]);
 
-    assert_line_matches_bytecode("a%512", &["play_note a4 no_keyoff 255", "rest 257"]);
-    assert_line_matches_bytecode("a%513", &["play_note a4 no_keyoff 256", "rest 257"]);
-    assert_line_matches_bytecode(
-        "a%514",
-        &["play_note a4 no_keyoff 256", "wait 1", "rest 257"],
-    );
+    assert_line_matches_bytecode("a%512", &["play_note a4 keyoff 512"]);
+    assert_line_matches_bytecode("a%513", &["play_note a4 keyoff 513"]);
+    assert_line_matches_bytecode("a%514", &["play_note a4 keyoff 514"]);
 
-    assert_line_matches_bytecode(
-        "a%600",
-        &["play_note a4 no_keyoff 256", "wait 87", "rest 257"],
-    );
+    assert_line_matches_bytecode("a%600", &["play_note a4 keyoff 600"]);
 }
 
 #[test]
 fn long_slurred_note() {
-    // `wait` can rest for 1 to 256 ticks.
-
     assert_line_matches_bytecode("a%256 &", &["play_note a4 no_keyoff 256"]);
-    assert_line_matches_bytecode("a%257 &", &["play_note a4 no_keyoff 256", "wait 1"]);
-    assert_line_matches_bytecode("a%258 &", &["play_note a4 no_keyoff 256", "wait 2"]);
+    assert_line_matches_bytecode("a%257 &", &["play_note a4 no_keyoff 257"]);
+    assert_line_matches_bytecode("a%258 &", &["play_note a4 no_keyoff 258"]);
 
-    assert_line_matches_bytecode("a%512 &", &["play_note a4 no_keyoff 256", "wait 256"]);
-    assert_line_matches_bytecode(
-        "a%513 &",
-        &["play_note a4 no_keyoff 256", "wait 256", "wait 1"],
-    );
-    assert_line_matches_bytecode(
-        "a%514 &",
-        &["play_note a4 no_keyoff 256", "wait 256", "wait 2"],
+    assert_line_matches_bytecode("a%512 &", &["play_note a4 no_keyoff 512"]);
+    assert_line_matches_bytecode("a%513 &", &["play_note a4 no_keyoff 513"]);
+    assert_line_matches_bytecode("a%514 &", &["play_note a4 no_keyoff 514"]);
+
+    assert_line_matches_bytecode("a%600 &", &["play_note a4 no_keyoff 600"]);
+}
+
+#[test]
+fn note_too_long_errors() {
+    assert_one_error_in_mml_line(
+        "c%65536",
+        2,
+        ValueError::CommandTicksOutOfRange(65536).into(),
     );
 
-    assert_line_matches_bytecode(
-        "a%600 &",
-        &["play_note a4 no_keyoff 256", "wait 256", "wait 88"],
+    assert_one_error_in_mml_line(
+        "c%65536 &",
+        2,
+        ValueError::CommandTicksOutOfRange(65536).into(),
+    );
+}
+
+#[test]
+fn tied_note_command_ticks_overflow_error() {
+    assert_one_error_in_mml_line(
+        "c ^%65536",
+        4,
+        ValueError::CommandTicksOutOfRange(65536).into(),
+    );
+
+    assert_one_error_in_mml_line(
+        "c ^%60000 ^%60000",
+        12,
+        ValueError::CommandTicksOverflow.into(),
+    );
+
+    assert_one_error_in_mml_line(
+        "c &%60000 &%60000",
+        12,
+        ValueError::CommandTicksOverflow.into(),
     );
 }

@@ -22,7 +22,7 @@ use crate::notes::{add_transpose_range_to_note_range, Note, NoteRange, LAST_NOTE
 use crate::pitch_table::{InstrumentHintFreq, PitchTable, PitchTableOffset};
 use crate::samples::{instrument_note_range, note_range};
 use crate::subroutines::{CompiledSubroutines, GetSubroutineResult, Subroutine, SubroutineNameMap};
-use crate::time::{TickClock, TickCounter, TickCounterWithLoopFlag};
+use crate::time::{CommandTicks, TickClock, TickCounter, TickCounterWithLoopFlag};
 use crate::value_newtypes::{
     i16_non_zero_value_newtype, i16_value_newtype, i8_value_newtype, u16_value_newtype,
     u8_0_is_256_value_newtype, u8_value_newtype, SignedValueNewType, UnsignedValueNewType,
@@ -32,7 +32,7 @@ use core::unreachable;
 use std::cmp::{max, min};
 use std::ops::RangeInclusive;
 
-pub const KEY_OFF_TICK_DELAY: u32 = 1;
+pub const KEY_OFF_TICK_DELAY: u16 = 1;
 
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord)]
 pub struct StackDepth(u32);
@@ -416,45 +416,66 @@ impl StackDepth {
     }
 }
 
+struct BcLength(u16);
+
+trait ToBcLength {
+    fn to_bc_length(self) -> BcLength;
+}
+
 pub trait BcTicks
 where
-    Self: TryFrom<u32>,
+    Self: TryFrom<u32> + TryFrom<u16>,
 {
     const MIN: Self;
+    #[allow(dead_code)]
     const MAX: Self;
 
-    const MIN_TICKS: u32;
-    const MAX_TICKS: u32;
+    const MIN_TICKS: u16;
+    const MAX_TICKS: u16;
 
-    fn ticks(self) -> u32;
+    fn ticks(self) -> u16;
     fn to_tick_count(self) -> TickCounter;
 }
 
 #[derive(Debug, Copy, Clone, PartialEq)]
-pub struct BcTicksKeyOff {
-    ticks: u16,
-    bc_argument: u8,
+pub struct BcTicksKeyOff(u16);
+
+impl BcTicksKeyOff {
+    const MIN_TICKS_U32: u32 = Self::MIN_TICKS as u32;
+    const MAX_TICKS_U32: u32 = Self::MAX_TICKS as u32;
 }
 
 impl BcTicks for BcTicksKeyOff {
-    const MIN_TICKS: u32 = 1 + KEY_OFF_TICK_DELAY;
-    const MAX_TICKS: u32 = 0x100 + KEY_OFF_TICK_DELAY;
+    const MIN_TICKS: u16 = 1 + KEY_OFF_TICK_DELAY;
+    const MAX_TICKS: u16 = u16::MAX;
 
-    const MIN: Self = Self {
-        ticks: Self::MIN_TICKS as u16,
-        bc_argument: 1,
-    };
-    const MAX: Self = Self {
-        ticks: Self::MAX_TICKS as u16,
-        bc_argument: 0,
-    };
+    const MIN: Self = Self(Self::MIN_TICKS);
+    const MAX: Self = Self(Self::MAX_TICKS);
 
-    fn ticks(self) -> u32 {
-        self.ticks.into()
+    fn ticks(self) -> u16 {
+        self.0
     }
 
     fn to_tick_count(self) -> TickCounter {
-        TickCounter::new(self.ticks.into())
+        TickCounter::new(self.0.into())
+    }
+}
+
+impl ToBcLength for BcTicksKeyOff {
+    fn to_bc_length(self) -> BcLength {
+        BcLength(self.0 - KEY_OFF_TICK_DELAY)
+    }
+}
+
+impl TryFrom<u16> for BcTicksKeyOff {
+    type Error = ValueError;
+
+    fn try_from(ticks: u16) -> Result<Self, ValueError> {
+        if matches!(ticks, Self::MIN_TICKS..=Self::MAX_TICKS) {
+            Ok(Self(ticks))
+        } else {
+            Err(ValueError::BcTicksKeyOffOutOfRange(ticks.into()))
+        }
     }
 }
 
@@ -462,11 +483,8 @@ impl TryFrom<u32> for BcTicksKeyOff {
     type Error = ValueError;
 
     fn try_from(ticks: u32) -> Result<Self, ValueError> {
-        if matches!(ticks, Self::MIN_TICKS..=Self::MAX_TICKS) {
-            Ok(Self {
-                ticks: ticks.try_into().unwrap(),
-                bc_argument: ((ticks - KEY_OFF_TICK_DELAY) & 0xff).try_into().unwrap(),
-            })
+        if matches!(ticks, Self::MIN_TICKS_U32..=Self::MAX_TICKS_U32) {
+            Ok(Self(ticks.try_into().unwrap()))
         } else {
             Err(ValueError::BcTicksKeyOffOutOfRange(ticks))
         }
@@ -474,31 +492,45 @@ impl TryFrom<u32> for BcTicksKeyOff {
 }
 
 #[derive(Debug, Copy, Clone, PartialEq)]
-pub struct BcTicksNoKeyOff {
-    ticks: u16,
-    bc_argument: u8,
+pub struct BcTicksNoKeyOff(u16);
+
+impl BcTicksNoKeyOff {
+    const MIN_TICKS_U32: u32 = Self::MIN_TICKS as u32;
+    const MAX_TICKS_U32: u32 = Self::MAX_TICKS as u32;
 }
 
 impl BcTicks for BcTicksNoKeyOff {
-    const MIN_TICKS: u32 = 1;
-    const MAX_TICKS: u32 = 0x100;
+    const MIN_TICKS: u16 = 1;
+    const MAX_TICKS: u16 = u16::MAX;
 
-    const MIN: Self = Self {
-        ticks: Self::MIN_TICKS as u16,
-        bc_argument: 1,
-    };
-    const MAX: Self = Self {
-        ticks: Self::MAX_TICKS as u16,
-        bc_argument: 0,
-    };
+    const MIN: Self = Self(Self::MIN_TICKS);
+    const MAX: Self = Self(Self::MAX_TICKS);
 
     #[allow(dead_code)]
-    fn ticks(self) -> u32 {
-        self.ticks.into()
+    fn ticks(self) -> u16 {
+        self.0
     }
 
     fn to_tick_count(self) -> TickCounter {
-        TickCounter::new(self.ticks.into())
+        TickCounter::new(self.0.into())
+    }
+}
+
+impl ToBcLength for BcTicksNoKeyOff {
+    fn to_bc_length(self) -> BcLength {
+        BcLength(self.0)
+    }
+}
+
+impl TryFrom<u16> for BcTicksNoKeyOff {
+    type Error = ValueError;
+
+    fn try_from(ticks: u16) -> Result<Self, ValueError> {
+        if matches!(ticks, Self::MIN_TICKS..=Self::MAX_TICKS) {
+            Ok(Self(ticks))
+        } else {
+            Err(ValueError::BcTicksNoKeyOffOutOfRange(ticks.into()))
+        }
     }
 }
 
@@ -506,13 +538,8 @@ impl TryFrom<u32> for BcTicksNoKeyOff {
     type Error = ValueError;
 
     fn try_from(ticks: u32) -> Result<Self, ValueError> {
-        if matches!(ticks, Self::MIN_TICKS..=Self::MAX_TICKS) {
-            // A note length of 0 will wait for 256 ticks.
-            let bc_argument = (ticks & 0xff).try_into().unwrap();
-            Ok(Self {
-                ticks: ticks.try_into().unwrap(),
-                bc_argument,
-            })
+        if matches!(ticks, Self::MIN_TICKS_U32..=Self::MAX_TICKS_U32) {
+            Ok(Self(ticks.try_into().unwrap()))
         } else {
             Err(ValueError::BcTicksNoKeyOffOutOfRange(ticks))
         }
@@ -526,7 +553,19 @@ pub enum PlayNoteTicks {
 }
 
 impl PlayNoteTicks {
-    pub fn try_from_is_slur(ticks: u32, is_slur: bool) -> Result<Self, ValueError> {
+    pub fn try_from_is_slur(ticks: CommandTicks, is_slur: bool) -> Result<Self, ValueError> {
+        if is_slur {
+            Ok(PlayNoteTicks::NoKeyOff(BcTicksNoKeyOff::try_from(
+                ticks.value(),
+            )?))
+        } else {
+            Ok(PlayNoteTicks::KeyOff(BcTicksKeyOff::try_from(
+                ticks.value(),
+            )?))
+        }
+    }
+
+    pub fn try_from_is_slur_u32(ticks: u32, is_slur: bool) -> Result<Self, ValueError> {
         if is_slur {
             Ok(PlayNoteTicks::NoKeyOff(BcTicksNoKeyOff::try_from(ticks)?))
         } else {
@@ -542,10 +581,10 @@ impl PlayNoteTicks {
         }
     }
 
-    pub fn ticks(&self) -> u32 {
+    pub fn ticks(&self) -> u16 {
         match self {
-            Self::KeyOff(l) => l.ticks.into(),
-            Self::NoKeyOff(l) => l.ticks.into(),
+            Self::KeyOff(l) => l.ticks(),
+            Self::NoKeyOff(l) => l.ticks(),
         }
     }
 
@@ -556,17 +595,19 @@ impl PlayNoteTicks {
         }
     }
 
-    fn bc_argument(&self) -> u8 {
-        match self {
-            Self::KeyOff(l) => l.bc_argument,
-            Self::NoKeyOff(l) => l.bc_argument,
-        }
-    }
-
     fn to_tick_count(self) -> TickCounter {
         match self {
-            Self::KeyOff(l) => TickCounter::new(l.ticks.into()),
-            Self::NoKeyOff(l) => TickCounter::new(l.ticks.into()),
+            Self::KeyOff(l) => TickCounter::new(l.ticks().into()),
+            Self::NoKeyOff(l) => TickCounter::new(l.ticks().into()),
+        }
+    }
+}
+
+impl ToBcLength for PlayNoteTicks {
+    fn to_bc_length(self) -> BcLength {
+        match self {
+            Self::KeyOff(l) => l.to_bc_length(),
+            Self::NoKeyOff(l) => l.to_bc_length(),
         }
     }
 }
@@ -725,7 +766,7 @@ macro_rules! emit_bytecode {
         $self.bytecode.push($opcode);
     };
 
-    ($self:expr, $opcode:expr $(, $param:expr)+) => {
+    ($self:expr, $opcode:expr $(, $param:expr)+ $(,)?) => {
         $self.bytecode.extend([$opcode, $(emit_bytecode::Parameter::cast($param)),*])
     }
 }
@@ -1552,6 +1593,17 @@ impl<'a> Bytecode<'a> {
         }
     }
 
+    fn emit_length_bytecode(&mut self, length: impl ToBcLength) {
+        match length.to_bc_length().0 {
+            l @ 1..=0xff => self.bytecode.push(l.try_into().unwrap()),
+            l @ 0x100..=0xffff => {
+                let [h, l] = l.to_be_bytes();
+                self.bytecode.extend_from_slice(&[0, h, l]);
+            }
+            0 => unreachable!(),
+        }
+    }
+
     pub fn bytecode(
         mut self,
         terminator: BcTerminator,
@@ -1725,14 +1777,16 @@ impl<'a> Bytecode<'a> {
     pub fn wait(&mut self, length: BcTicksNoKeyOff) {
         self.state.tick_counter += length.to_tick_count();
 
-        emit_bytecode!(self, opcodes::WAIT, length.bc_argument);
+        emit_bytecode!(self, opcodes::WAIT);
+        self.emit_length_bytecode(length);
     }
 
     pub fn rest(&mut self, length: BcTicksKeyOff) {
         self.state.tick_counter += length.to_tick_count();
         self.state.prev_slurred_note = SlurredNoteState::None;
 
-        emit_bytecode!(self, opcodes::REST, length.bc_argument);
+        emit_bytecode!(self, opcodes::REST);
+        self.emit_length_bytecode(length);
     }
 
     pub fn play_pitch(
@@ -1758,7 +1812,8 @@ impl<'a> Bytecode<'a> {
         let arg1 = pitch[0];
         let arg2 = (pitch[1] << 1) | key_off_bit;
 
-        emit_bytecode!(self, opcodes::PLAY_PITCH, arg1, arg2, length.bc_argument());
+        emit_bytecode!(self, opcodes::PLAY_PITCH, arg1, arg2);
+        self.emit_length_bytecode(length);
 
         Ok(())
     }
@@ -1784,7 +1839,8 @@ impl<'a> Bytecode<'a> {
 
         let arg = (frequency.as_u8() << 1) | key_off_bit;
 
-        emit_bytecode!(self, opcodes::PLAY_NOISE, arg, length.bc_argument());
+        emit_bytecode!(self, opcodes::PLAY_NOISE, arg);
+        self.emit_length_bytecode(length);
 
         Ok(())
     }
@@ -1805,7 +1861,8 @@ impl<'a> Bytecode<'a> {
 
         let opcode = NoteOpcode::new(note, &length);
 
-        emit_bytecode!(self, opcode.opcode, length.bc_argument());
+        emit_bytecode!(self, opcode.opcode);
+        self.emit_length_bytecode(length);
 
         r
     }
@@ -1823,13 +1880,13 @@ impl<'a> Bytecode<'a> {
 
         let note_param = NoteOpcode::new(note, &length);
         let speed = velocity.pitch_offset_per_tick();
-        let length = length.bc_argument();
 
         if velocity.is_negative() {
-            emit_bytecode!(self, opcodes::PORTAMENTO_DOWN, note_param, speed, length);
+            emit_bytecode!(self, opcodes::PORTAMENTO_DOWN, note_param, speed);
         } else {
-            emit_bytecode!(self, opcodes::PORTAMENTO_UP, note_param, speed, length);
+            emit_bytecode!(self, opcodes::PORTAMENTO_UP, note_param, speed);
         }
+        self.emit_length_bytecode(length);
 
         r
     }
@@ -1846,15 +1903,14 @@ impl<'a> Bytecode<'a> {
         self.state.set_prev_slurred_note(note, length);
 
         let note_param = NoteOpcode::new(note, &length);
-        let length = length.bc_argument();
 
         emit_bytecode!(
             self,
             opcodes::PORTAMENTO_CALC,
             note_param,
-            length,
-            slide_ticks.as_u8()
+            slide_ticks.as_u8(),
         );
+        self.emit_length_bytecode(length);
 
         r
     }
@@ -1890,9 +1946,9 @@ impl<'a> Bytecode<'a> {
         let arg2 = (target[1] << 1) | key_off_bit;
 
         let speed = velocity.pitch_offset_per_tick();
-        let length = length.bc_argument();
 
-        emit_bytecode!(self, opcode, arg1, arg2, speed, length);
+        emit_bytecode!(self, opcode, arg1, arg2, speed);
+        self.emit_length_bytecode(length);
 
         Ok(())
     }
@@ -1921,16 +1977,14 @@ impl<'a> Bytecode<'a> {
         let arg1 = target[0];
         let arg2 = (target[1] << 1) | key_off_bit;
 
-        let length = length.bc_argument();
-
         emit_bytecode!(
             self,
             opcodes::PORTAMENTO_PITCH_CALC,
             arg1,
             arg2,
-            length,
-            slide_ticks.as_u8()
+            slide_ticks.as_u8(),
         );
+        self.emit_length_bytecode(length);
 
         Ok(())
     }
@@ -1953,8 +2007,8 @@ impl<'a> Bytecode<'a> {
             opcodes::SET_VIBRATO_DEPTH_AND_PLAY_NOTE,
             pitch_offset_per_tick.as_u8(),
             play_note_opcode,
-            length.bc_argument()
         );
+        self.emit_length_bytecode(length);
 
         r
     }
@@ -2119,24 +2173,16 @@ impl<'a> Bytecode<'a> {
         self.state.prev_temp_gain = IeState::Known(gain);
         self.state.tick_counter += length.to_tick_count();
 
-        emit_bytecode!(
-            self,
-            opcodes::SET_TEMP_GAIN_AND_WAIT,
-            gain.as_u8(),
-            length.bc_argument
-        );
+        emit_bytecode!(self, opcodes::SET_TEMP_GAIN_AND_WAIT, gain.as_u8(),);
+        self.emit_length_bytecode(length);
     }
 
     pub fn set_temp_gain_and_rest(&mut self, gain: TempGain, length: BcTicksKeyOff) {
         self.state.prev_temp_gain = IeState::Known(gain);
         self.state.tick_counter += length.to_tick_count();
 
-        emit_bytecode!(
-            self,
-            opcodes::SET_TEMP_GAIN_AND_REST,
-            gain.as_u8(),
-            length.bc_argument
-        );
+        emit_bytecode!(self, opcodes::SET_TEMP_GAIN_AND_REST, gain.as_u8(),);
+        self.emit_length_bytecode(length);
     }
 
     pub fn reuse_temp_gain(&mut self) {
@@ -2146,13 +2192,15 @@ impl<'a> Bytecode<'a> {
     pub fn reuse_temp_gain_and_wait(&mut self, length: BcTicksNoKeyOff) {
         self.state.tick_counter += length.to_tick_count();
 
-        emit_bytecode!(self, opcodes::REUSE_TEMP_GAIN_AND_WAIT, length.bc_argument);
+        emit_bytecode!(self, opcodes::REUSE_TEMP_GAIN_AND_WAIT);
+        self.emit_length_bytecode(length);
     }
 
     pub fn reuse_temp_gain_and_rest(&mut self, length: BcTicksKeyOff) {
         self.state.tick_counter += length.to_tick_count();
 
-        emit_bytecode!(self, opcodes::REUSE_TEMP_GAIN_AND_REST, length.bc_argument);
+        emit_bytecode!(self, opcodes::REUSE_TEMP_GAIN_AND_REST);
+        self.emit_length_bytecode(length);
     }
 
     pub fn disable_early_release(&mut self) {

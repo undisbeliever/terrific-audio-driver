@@ -13,6 +13,9 @@ Version 0.2.0
       `_M` and `__` with `__M`.
  * `MP` vibrato and `MD` detune cents cannot be used when driver transpose is active.
  * A portamento's slide length has a maximum 255 ticks when driver transpose is active.
+ * The audio driver sleep countdownTimer is now a 16-bit value
+    * Bytecode instructions that sleep are variable sized and can hold an 8-bit or 16-bit duration/length argument
+    * The maximum length of an MML command is 65535 ticks (after commands have been merged)
 
 BRR changes:
  * Increased the maximum BRR sample size
@@ -49,8 +52,11 @@ MML changes:
     * `MP` and `MD` will output an error
  * Improved out-of-range note testing
  * Fixed missing no-instrument error in `P` pitch or `N` noise commands
+ * The maximum length of an MML command is 65535 ticks (after commands have been merged)
+ * Long MML commands and no-longer converted into loops
 
 Bytecode assembly changes:
+ * The maximum length of a `<duration>` argument is 65535 ticks
  * Improved out-of-range note testing in bytecode assembly sound effect
  * Fixed missing no-instrument error in `play_pitch`, `portamento_pitch`, `portamento_pitch_calc` and `play_noise`.
 

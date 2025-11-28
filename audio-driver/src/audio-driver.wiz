@@ -181,7 +181,8 @@ in zeropage {
 
     namespace channelSoA {
         // Counter (in ticks) until the event
-        var countdownTimer : [u8 ; N_CHANNELS];
+        // (high byte in lastvarpage)
+        var countdownTimer_l : [u8 ; N_CHANNELS];
 
         // If non-zero, the next event is a key-off event
         // If zero, the next event will process bytecode
@@ -440,6 +441,10 @@ in firstpage {
 
 in lastvarpage {
     namespace channelSoA {
+        // Counter (in ticks) until the event
+        // (The low-byte is in zeropage)
+        var countdownTimer_h : [u8 ; N_CHANNELS];
+
         // Offset between the note to play and the pitch table.
         //
         // NOTE: Adding `instPitchOffset` to the note to play is allowed to an can overflow.
@@ -1245,16 +1250,25 @@ var _mutedChannels : u8 in zpTmp;
         }
         channelSoA.ticksAfterNote[x] = a;
 
-        channelSoA.countdownTimer[x]--;
+        a = channelSoA.countdownTimer_h[x];
         if !zero {
+            y = channelSoA.countdownTimer_l[x];
+            if zero {
+                a--;
+                channelSoA.countdownTimer_h[x] = a;
+            }
+            channelSoA.countdownTimer_l[x]--;
+        }
+        else if { channelSoA.countdownTimer_l[x]--; } && !zero {
             // Check for early-release
             y = channelSoA.nextEventIsKeyOff[x];
             if !zero {
                 // Do not early-release if the note has been playing for min-ticks
+                a = channelSoA.ticksAfterNote[x];
                 if a >= channelSoA.earlyRelease_minTicks[x] {
                     // Must be a `<` comparison (not a `==`)
                     // Ensures notes shorter than early-release are cut at the correct time.
-                    a = channelSoA.countdownTimer[x];
+                    a = channelSoA.countdownTimer_l[x];
                     if a < channelSoA.earlyRelease_cmp[x] {
                         a = channelSoA.earlyRelease_gain[x];
                         if !zero {
@@ -1279,6 +1293,8 @@ var _mutedChannels : u8 in zpTmp;
             }
         }
         else {
+            // countdown timer is 0
+
             // Check if a KEY_OFF is required
             a = channelSoA.nextEventIsKeyOff[x];
             if !zero {
@@ -1299,7 +1315,7 @@ var _mutedChannels : u8 in zpTmp;
                 channelSoA.virtualChannels.tempGain[x] = a;
 
                 // Previous countdownTimer value was 0
-                channelSoA.countdownTimer[x]++;
+                channelSoA.countdownTimer_l[x]++;
             }
             else {
                 y = channelSoA.instructionPtr_h[x];
@@ -1876,9 +1892,12 @@ func __reset_channel(channelIndex : u8 in x, pan: u8 in a) {
 
 
     // Immediately process bytecode on the next tick
-    channelSoA.nextEventIsKeyOff[x] = a; // a = 0
+    // a = 0
+    channelSoA.nextEventIsKeyOff[x] = a;
+    channelSoA.countdownTimer_h[x] = a;
     a++;
-    channelSoA.countdownTimer[x] = a;    // a = 1
+    // a = 1
+    channelSoA.countdownTimer_l[x] = a;
 
 
     channelSoA.stackPointer[x] = a = BcStackIndexesStart[x];
@@ -2431,7 +2450,7 @@ func set_vibrato_depth_and_play_note(channelIndex : u8 in x, pitchOffsetPerTick:
     a = instructionPtr[y];
     instructionPtr++;
 
-// Fallthrough
+// Fallthrough into _play_note
 }
 
 
@@ -2453,21 +2472,32 @@ func _play_note(channelIndex : u8 in x, noteAndKeyOffBit : u8 in a) {
     channelSoA.virtualChannels.pitch_l[x] = a;
     a = commonData.pitchTable_h[y] +# channelSoA.detune_h[x];
 
-// Fallthough into __play_note_set_pitch_h();
+// Fallthough into __play_note_set_pitch_h_and_read_length();
 }
 
 
 // Y unknown
 // KEEP: X
-func __play_note_set_pitch_h(channelIndex: u8 in x, pitch_h: u8 in a) {
+func __play_note_set_pitch_h_and_read_length(channelIndex: u8 in x, pitch_h: u8 in a) {
     channelSoA.virtualChannels.pitch_h[x] = a;
 
     // Get note length from the next byte in the instructionPtr
     y = 0;
     a = instructionPtr[y];
+    if zero {
+        // u16be, 3 byte length
+        instructionPtr++;
+
+        a = instructionPtr[y];
+        channelSoA.countdownTimer_h[x] = a;
+        instructionPtr++;
+
+        a = instructionPtr[y];
+    }
     instructionPtr++;
 
-    channelSoA.countdownTimer[x] = a;
+    channelSoA.countdownTimer_l[x] = a;
+
 
     // Y = 0
     // disable portamento
@@ -2507,6 +2537,10 @@ func __play_note_set_pitch_h(channelIndex: u8 in x, pitch_h: u8 in a) {
 
     // Disable KON the next time the note is played (slur the note)
     test_and_clear(a, keyOnMask_music);
+
+
+    // return (do not execute the next bytecode and sleep)
+    return;
 }
 
 
@@ -2526,7 +2560,7 @@ func play_pitch(channelIndex: u8 in x, pitch_l : u8 in a) {
     // Set MSB of nextEventIsKeyOff from carry
     channelSoA.nextEventIsKeyOff[x] >>>>#= 1;
 
-    return __play_note_set_pitch_h(x, a);
+    return __play_note_set_pitch_h_and_read_length(x, a);
 }
 
 
@@ -2538,23 +2572,15 @@ func play_noise(channelIndex: u8 in x, freq_and_keyoff : u8 in a) {
     channelSoA.nextEventIsKeyOff[x] >>>>#= 1;
 
     a &= dsp.FLG__NOISE_FREQ_MASK;
-    push(a);
-
-    // Wait length
-    // Y = 0
-    a = instructionPtr[y];
-    instructionPtr++;
-
-    channelSoA.countdownTimer[x] = a;
+    y = a;
 
     // Reset early release min-tick counter.
-    // Y = 0
-    a = y;
+    a = 0;
     channelSoA.ticksAfterNote[x] = a;
 
-    y = pop();
 
     // queue KON if the previous note has been KOFFed
+    // y = noiseFreq
     a = ChannelVoiceBit[x];
     if x >= FIRST_SFX_CHANNEL {
         a = ChannelVoiceBit[x];
@@ -2570,7 +2596,7 @@ func play_noise(channelIndex: u8 in x, freq_and_keyoff : u8 in a) {
         // Disable KON the next time the note is played (slur the note)
         test_and_clear(a, keyOnMask_sfx);
 
-        return;
+        ^return __read_length(x);
     }
 
     noiseFreq_music = y;
@@ -2583,6 +2609,8 @@ func play_noise(channelIndex: u8 in x, freq_and_keyoff : u8 in a) {
 
     // Disable KON the next time the note is played (slur the note)
     test_and_clear(a, keyOnMask_music);
+
+    ^return __read_length(x);
 }
 
 
@@ -2650,21 +2678,12 @@ func __portamento_read_speed_length(channelIndex : u8 in x, target_h : u8 in a) 
     instructionPtr++;
     channelSoA.portamento_speed[x] = a;
 
-    // Wait length
-    // Y = 0
-    a = instructionPtr[y];
-    instructionPtr++;
-    channelSoA.countdownTimer[x] = a;
-
-
     // Reset early release min-tick counter.
     // Y = 0
     a = y;
     channelSoA.ticksAfterNote[x] = a;
 
-
-    // return (do not execute the next bytecode and sleep)
-    return;
+    ^return __read_length__y0(x);
 }
 
 
@@ -2755,25 +2774,21 @@ func portamento_calc(channelIndex : u8 in x, noteAndKeyoffFlag : u8 in a) {
 // IN: <:_tmp = low byte of target
 // Y is non-zero
 // KEEP:X
+#[fallthrough]
 func __portamento_calc_read_lengths(channelIndex: u8 in x, target_h: u8 in a) {
     var _tmp : u16 in  zpTmpWord;
 
     channelSoA.portamento_target_h[x] = a;
     >:_tmp = a;
 
-    // length
-    y = 0;
-    a = instructionPtr[y];
-    instructionPtr++;
-    channelSoA.countdownTimer[x] = a;
 
     // Reset early release min-tick counter.
-    // Y = 0
-    a = y;
+    a = 0;
     channelSoA.ticksAfterNote[x] = a;
 
 
     // slide length in ticks
+    y = a;
     // Y = 0
     a = instructionPtr[y];
     instructionPtr++;
@@ -2820,6 +2835,36 @@ func __portamento_calc_read_lengths(channelIndex: u8 in x, target_h: u8 in a) {
     x = pop();
 
     channelSoA.portamento_speed[x] = a;
+
+// Fallthrough into __read_length
+}
+
+
+// KEEP: X
+#[fallthrough]
+func __read_length(channelIndex : u8 in x) {
+    y = 0;
+
+// Fallthrough into __read_length__y0
+}
+
+// IN X = 0
+// KEEP: X
+func __read_length__y0(channelIndex : u8 in x) {
+    // Y = 0
+    a = instructionPtr[y];
+    if zero {
+        // u16be, 3 byte length
+        instructionPtr++;
+
+        a = instructionPtr[y];
+        channelSoA.countdownTimer_h[x] = a;
+        instructionPtr++;
+
+        a = instructionPtr[y];
+    }
+    instructionPtr++;
+    channelSoA.countdownTimer_l[x] = a;
 
     // return (do not execute the next bytecode and sleep)
     return;
@@ -2958,9 +3003,11 @@ func end_loop(channelIndex : u8 in x) {
 func disable_channel(channelIndex : u8 in x) {
     // Y may not be 0
 
-    // countdownTimer value of 0 means wait 256 ticks
-    a = 0;
-    channelSoA.countdownTimer[x] = a;
+    a = 0xff;
+    channelSoA.countdownTimer_h[x] = a;
+
+    a++;
+    //a = 0;
 
     // No bytecode is processed if instructionPtr_h is 0
     >:instructionPtr = a;
@@ -3723,7 +3770,18 @@ func rest(channelIndex : u8 in x, length: u8 in a) {
 func wait(channelIndex : u8 in x, length: u8 in a) {
     // Y is not 0
 
-    channelSoA.countdownTimer[x] = a;
+    y = a;
+    if zero {
+        // u16be length
+        // y = 0
+        a = instructionPtr[y];
+        instructionPtr++;
+        channelSoA.countdownTimer_h[x] = a;
+
+        a = instructionPtr[y];
+        instructionPtr++;
+    }
+    channelSoA.countdownTimer_l[x] = a;
 
     // return (do not execute the next bytecode and sleep)
     return;

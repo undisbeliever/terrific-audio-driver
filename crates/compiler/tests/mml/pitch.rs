@@ -18,14 +18,8 @@ fn play_pitch() {
     assert_line_matches_bytecode("P20,4...", &["play_pitch 20 45"]);
     assert_line_matches_bytecode("P20...", &["play_pitch 20 45"]);
 
-    assert_line_matches_bytecode(
-        "P$1000,%600",
-        &["play_pitch $1000 no_keyoff 256", "wait 87", "rest 257"],
-    );
-    assert_line_matches_bytecode(
-        "P$1000,%600 &",
-        &["play_pitch $1000 no_keyoff 256", "wait 256", "wait 88"],
-    );
+    assert_line_matches_bytecode("P$1000,%600", &["play_pitch $1000 keyoff 600"]);
+    assert_line_matches_bytecode("P$1000,%600 &", &["play_pitch $1000 no_keyoff 600"]);
 
     assert_line_matches_bytecode("P$1000 r r r", &["play_pitch $1000 keyoff 24", "rest 72"]);
     assert_line_matches_bytecode(

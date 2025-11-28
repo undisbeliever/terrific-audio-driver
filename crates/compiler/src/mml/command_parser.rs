@@ -36,7 +36,7 @@ use crate::mml::GlobalSettings;
 use crate::notes::{KeySignature, MidiNote, MmlPitch, Note, Octave, STARTING_OCTAVE};
 use crate::pitch_table::PlayPitchSampleRate;
 use crate::subroutines::SubroutineNameMap;
-use crate::time::{MmlDefaultLength, MmlLength, TickCounter, ZenLen, STARTING_MML_LENGTH};
+use crate::time::{CommandTicks, MmlDefaultLength, MmlLength, ZenLen, STARTING_MML_LENGTH};
 use crate::value_newtypes::{I8WithByteHexValueNewType, SignedValueNewType, UnsignedValueNewType};
 
 pub use crate::command_compiler::commands::Quantization;
@@ -75,6 +75,7 @@ mod parser {
         data::{self, UniqueNamesList},
         file_pos::LineIndexRange,
         mml::metadata::GlobalSettings,
+        time::TickCounter,
     };
 
     use super::*;
@@ -86,7 +87,7 @@ mod parser {
         errors: Vec<ErrorWithPos<ChannelError>>,
         state: State,
 
-        default_length: TickCounter,
+        default_length: CommandTicks,
         keyoff_enabled: bool,
 
         data_instruments: &'b UniqueNamesList<data::InstrumentOrSample>,
@@ -199,8 +200,8 @@ mod parser {
             self.tick_offset = TickCounter::new(0);
         }
 
-        pub(super) fn increment_tick_offset(&mut self, t: TickCounter) {
-            self.tick_offset += t;
+        pub(super) fn increment_tick_offset(&mut self, t: CommandTicks) {
+            self.tick_offset += t.into();
             self.add_to_cursor_tracker();
         }
 
@@ -212,14 +213,14 @@ mod parser {
             }
         }
 
-        pub(super) fn set_default_length(&mut self, ticks: TickCounter) {
+        pub(super) fn set_default_length(&mut self, ticks: CommandTicks) {
             debug_assert!(ticks.value() <= 502);
-            debug_assert!(ticks.value() < (1u32 << (MAX_N_DOTS + 1)));
+            debug_assert!(ticks.value() < (1u16 << (MAX_N_DOTS + 1)));
 
             self.default_length = ticks;
         }
 
-        pub(super) fn default_length(&self) -> TickCounter {
+        pub(super) fn default_length(&self) -> CommandTicks {
             self.default_length
         }
 
@@ -509,8 +510,8 @@ fn parse_optional_comma_ticks<T: UnsignedValueNewType>(p: &mut Parser) -> Option
 
 fn parse_l_ticks_argument<T: UnsignedValueNewType>(pos: FilePos, p: &mut Parser) -> Option<T> {
     match parse_untracked_optional_mml_length(p) {
-        Some(l) => match l.to_tick_count(p.default_length(), p.state().zenlen) {
-            Ok(tc) => match tc.value().try_into() {
+        Some(l) => match l.to_command_ticks(p.default_length(), p.state().zenlen) {
+            Ok(tc) => match u32::from(tc.value()).try_into() {
                 Ok(o) => Some(o),
                 Err(e) => {
                     p.add_error(pos, e.into());
@@ -568,7 +569,7 @@ fn parse_set_default_length(pos: FilePos, p: &mut Parser) {
 
     let default_length = MmlDefaultLength::new(length, length_in_ticks, number_of_dots);
 
-    match default_length.to_tick_count(p.state().zenlen) {
+    match default_length.to_command_ticks(p.state().zenlen) {
         Ok(tc) => {
             p.set_default_length(tc);
             p.set_state(State {
@@ -586,7 +587,7 @@ fn parse_change_whole_note_length(pos: FilePos, p: &mut Parser) {
     if let Some(new_zenlen) = parse_unsigned_newtype(pos, p) {
         let state = p.state().clone();
 
-        let tc = match state.default_length.to_tick_count(new_zenlen) {
+        let tc = match state.default_length.to_command_ticks(new_zenlen) {
             Ok(tc) => tc,
             Err(e) => {
                 p.add_error(pos, e.into());
@@ -942,9 +943,7 @@ fn merge_state_change(p: &mut Parser) -> bool {
     )
 }
 
-fn parse_tracked_length(p: &mut Parser) -> TickCounter {
-    let pos = p.peek_pos();
-
+fn parse_mml_length(p: &mut Parser) -> MmlLength {
     let length_in_ticks = next_token_matches!(p, Token::PercentSign);
 
     let length = match_next_token!(
@@ -955,9 +954,65 @@ fn parse_tracked_length(p: &mut Parser) -> TickCounter {
 
     let number_of_dots = parse_dots_after_length(p);
 
-    let note_length = MmlLength::new(length, length_in_ticks, number_of_dots);
+    MmlLength::new(length, length_in_ticks, number_of_dots)
+}
 
-    let length = match note_length.to_tick_count(p.default_length(), p.state().zenlen) {
+fn parse_and_add_tracked_length(ticks: CommandTicks, p: &mut Parser) -> CommandTicks {
+    let pos = p.peek_pos();
+
+    let note_length = parse_mml_length(p);
+
+    let length = match note_length.to_command_ticks(p.default_length(), p.state().zenlen) {
+        Ok(tc) => tc,
+        Err(e) => {
+            p.add_error(pos, e.into());
+            p.default_length()
+        }
+    };
+
+    match ticks.checked_add(length) {
+        Ok(t) => {
+            p.increment_tick_offset(length);
+            t
+        }
+        Err(e) => {
+            p.add_error(pos, e.into());
+            p.increment_tick_offset(CommandTicks::new(CommandTicks::MAX.value() - ticks.value()));
+            CommandTicks::MAX
+        }
+    }
+}
+
+fn parse_and_add_tracked_optional_length(
+    ticks: CommandTicks,
+    p: &mut Parser,
+) -> Option<CommandTicks> {
+    let pos = p.peek_pos();
+
+    match parse_untracked_optional_length(p) {
+        Some(t) => match ticks.checked_add(t) {
+            Ok(out) => {
+                p.increment_tick_offset(t);
+                Some(out)
+            }
+            Err(e) => {
+                p.add_error(pos, e.into());
+                p.increment_tick_offset(CommandTicks::new(
+                    CommandTicks::MAX.value() - ticks.value(),
+                ));
+                Some(CommandTicks::MAX)
+            }
+        },
+        None => None,
+    }
+}
+
+fn parse_tracked_length(p: &mut Parser) -> CommandTicks {
+    let pos = p.peek_pos();
+
+    let note_length = parse_mml_length(p);
+
+    let length = match note_length.to_command_ticks(p.default_length(), p.state().zenlen) {
         Ok(tc) => tc,
         Err(e) => {
             p.add_error(pos, e.into());
@@ -971,7 +1026,7 @@ fn parse_tracked_length(p: &mut Parser) -> TickCounter {
 }
 
 // Assumes comman-length is at the end of the command
-fn parse_tracked_comma_length(p: &mut Parser) -> TickCounter {
+fn parse_tracked_comma_length(p: &mut Parser) -> CommandTicks {
     let pos = p.peek_pos();
 
     let (length_in_ticks, length) = match_next_token!(p,
@@ -996,7 +1051,7 @@ fn parse_tracked_comma_length(p: &mut Parser) -> TickCounter {
 
     let note_length = MmlLength::new(length, length_in_ticks, number_of_dots);
 
-    let length = match note_length.to_tick_count(p.default_length(), p.state().zenlen) {
+    let length = match note_length.to_command_ticks(p.default_length(), p.state().zenlen) {
         Ok(tc) => tc,
         Err(e) => {
             p.add_error(pos, e.into());
@@ -1006,14 +1061,6 @@ fn parse_tracked_comma_length(p: &mut Parser) -> TickCounter {
 
     p.increment_tick_offset(length);
 
-    length
-}
-
-fn parse_tracked_optional_length(p: &mut Parser) -> Option<TickCounter> {
-    let length = parse_untracked_optional_length(p);
-    if let Some(tc) = length {
-        p.increment_tick_offset(tc)
-    }
     length
 }
 
@@ -1035,11 +1082,11 @@ fn parse_untracked_optional_mml_length(p: &mut Parser) -> Option<MmlLength> {
     }
 }
 
-fn parse_untracked_optional_length(p: &mut Parser) -> Option<TickCounter> {
+fn parse_untracked_optional_length(p: &mut Parser) -> Option<CommandTicks> {
     let pos = p.peek_pos();
 
     let note_length = parse_untracked_optional_mml_length(p)?;
-    let tc = match note_length.to_tick_count(p.default_length(), p.state().zenlen) {
+    let tc = match note_length.to_command_ticks(p.default_length(), p.state().zenlen) {
         Ok(tc) => tc,
         Err(e) => {
             p.add_error(pos, e.into());
@@ -1567,22 +1614,19 @@ fn parse_panbrello<'a>(pos: FilePos, p: &mut Parser<'a, '_>) -> Command<'a> {
 
 // Assumes all ties have already been parsed.
 // Requires the previously parsed token send a key-off event.
-fn parse_rests_after_rest(p: &mut Parser) -> TickCounter {
-    let mut ticks = TickCounter::default();
+fn parse_rests_after_rest(p: &mut Parser) -> CommandTicks {
+    let mut ticks = CommandTicks::ZERO;
 
     if next_token_matches!(p, Token::Rest) {
-        ticks += parse_tracked_length(p);
+        ticks = parse_tracked_length(p);
 
         loop {
             match_next_token!(
                 p,
 
-                Token::Rest => {
-                    ticks += parse_tracked_length(p);
-                },
-                Token::Tie => {
-                    ticks += parse_tracked_length(p);
-                },
+                // ::TODO rollback tokens on overflow::
+                Token::Rest => ticks = parse_and_add_tracked_length(ticks, p),
+                Token::Tie => ticks = parse_and_add_tracked_length(ticks, p),
                 #_ => {
                     if !merge_state_change(p) {
                         break;
@@ -1600,24 +1644,24 @@ fn parse_rest_ticks_after_note(is_slur: bool, p: &mut Parser) -> RestTicksAfterN
         (false, true) => RestTicksAfterNote(parse_rests_after_rest(p)),
         (true, _) | (false, false) => {
             if next_token_matches!(p, Token::Rest) {
-                RestTicksAfterNote(parse_tracked_length(p) + parse_ties(p))
+                let t = parse_tracked_length(p);
+                let t = parse_ties(t, p);
+                RestTicksAfterNote(t)
             } else {
-                RestTicksAfterNote(TickCounter::new(0))
+                RestTicksAfterNote(CommandTicks::new(0))
             }
         }
     }
 }
 
-fn parse_ties(p: &mut Parser) -> TickCounter {
-    let mut ticks = TickCounter::default();
+fn parse_ties(ticks: CommandTicks, p: &mut Parser) -> CommandTicks {
+    let mut ticks = ticks;
 
     loop {
         match_next_token!(
             p,
 
-            Token::Tie => {
-                ticks += parse_tracked_length(p);
-            },
+            Token::Tie => ticks = parse_and_add_tracked_length(ticks, p),
             #_ => {
                 if !merge_state_change(p) {
                     return ticks;
@@ -1627,36 +1671,35 @@ fn parse_ties(p: &mut Parser) -> TickCounter {
     }
 }
 
-fn parse_ties_and_slur(p: &mut Parser) -> (TickCounter, bool) {
-    let mut tie_length = TickCounter::new(0);
+fn parse_ties_and_slur(start: CommandTicks, p: &mut Parser) -> (CommandTicks, bool) {
+    let mut ticks = start;
 
     loop {
         match_next_token!(
             p,
 
-            Token::Tie => {
-                tie_length += parse_tracked_length(p);
-            },
+            Token::Tie => ticks = parse_and_add_tracked_length(ticks, p),
+
             Token::Slur => {
                 // Slur or tie
-                if let Some(tc) = parse_tracked_optional_length(p) {
-                    tie_length += tc;
+                if let Some(t) = parse_and_add_tracked_optional_length(ticks, p) {
+                    ticks = t;
                 } else {
                     // slur
-                    return (tie_length, true);
+                    return (ticks, true);
                 }
             },
 
             #_ => {
                 if !merge_state_change(p) {
-                    return (tie_length, false);
+                    return (ticks, false);
                 }
             }
         )
     }
 }
 
-fn parse_wait_length_and_ties(p: &mut Parser) -> TickCounter {
+fn parse_wait_length_and_ties(p: &mut Parser) -> CommandTicks {
     let mut ticks = parse_tracked_length(p);
 
     // Merge `w` wait and `^` tie commands
@@ -1664,12 +1707,11 @@ fn parse_wait_length_and_ties(p: &mut Parser) -> TickCounter {
         match_next_token!(
             p,
 
-            Token::Wait => {
-                ticks += parse_tracked_length(p);
-            },
-            Token::Tie => {
-                ticks += parse_tracked_length(p);
-            },
+            // ::TODO add rollback on overflow::
+            Token::Wait => ticks = parse_and_add_tracked_length(ticks, p),
+
+            Token::Tie => ticks = parse_and_add_tracked_length(ticks, p),
+
             #_ => {
                 if !merge_state_change(p) {
                     return ticks;
@@ -1683,9 +1725,9 @@ fn parse_wait<'a>(p: &mut Parser) -> Command<'a> {
     Command::Wait(parse_wait_length_and_ties(p))
 }
 
-fn parse_rest_lengths(p: &mut Parser) -> (TickCounter, TickCounter) {
+fn parse_rest_lengths(p: &mut Parser) -> (CommandTicks, CommandTicks) {
     let ticks_until_keyoff = parse_tracked_length(p);
-    let ticks_until_keyoff = ticks_until_keyoff + parse_ties(p);
+    let ticks_until_keyoff = parse_ties(ticks_until_keyoff, p);
 
     let ticks_after_keyoff = parse_rests_after_rest(p);
 
@@ -1704,11 +1746,10 @@ fn parse_rest<'a>(p: &mut Parser<'a, '_>) -> Command<'a> {
 fn play_note<'a>(
     pos: FilePos,
     note: Note,
-    length: TickCounter,
+    length: CommandTicks,
     p: &mut Parser<'a, '_>,
 ) -> Command<'a> {
-    let (tie_length, is_slur) = parse_ties_and_slur(p);
-    let length = length + tie_length;
+    let (length, is_slur) = parse_ties_and_slur(length, p);
 
     if !is_slur && length.value() <= KEY_OFF_TICK_DELAY {
         return invalid_token_error(p, pos, ChannelError::NoteIsTooShort);
@@ -1744,11 +1785,10 @@ fn parse_pitch<'a>(pos: FilePos, pitch: MmlPitch, p: &mut Parser<'a, '_>) -> Com
 
             // Output a rest (so tick-counter is correct)
             let length = parse_tracked_length(p);
-            let (tie_length, _) = parse_ties_and_slur(p);
-            let length = length + tie_length;
+            let (length, _) = parse_ties_and_slur(length, p);
             Command::Rest {
                 ticks_until_keyoff: length,
-                ticks_after_keyoff: TickCounter::default(),
+                ticks_after_keyoff: CommandTicks::ZERO,
             }
         }
     }
@@ -1770,10 +1810,10 @@ fn parse_play_sample<'a>(pos: FilePos, p: &mut Parser<'a, '_>) -> Command<'a> {
             p.add_error(pos, e.into());
 
             // Output a rest (so tick-counter is correct)
-            let (tie_length, _) = parse_ties_and_slur(p);
+            let (length, _) = parse_ties_and_slur(length, p);
             Command::Rest {
-                ticks_until_keyoff: length + tie_length,
-                ticks_after_keyoff: TickCounter::new(0),
+                ticks_until_keyoff: length,
+                ticks_after_keyoff: CommandTicks::new(0),
             }
         }
     }
@@ -1782,8 +1822,7 @@ fn parse_play_sample<'a>(pos: FilePos, p: &mut Parser<'a, '_>) -> Command<'a> {
 fn parse_after_play_pitch<'a>(pitch: PlayPitchPitch, p: &mut Parser) -> Command<'a> {
     let p_length = parse_tracked_comma_length(p);
 
-    let (tie_length, is_slur) = parse_ties_and_slur(p);
-    let length = p_length + tie_length;
+    let (length, is_slur) = parse_ties_and_slur(p_length, p);
 
     let rest_after_note = parse_rest_ticks_after_note(is_slur, p);
 
@@ -1809,8 +1848,7 @@ fn parse_play_pitch_frequency<'a>(pos: FilePos, p: &mut Parser<'a, '_>) -> Comma
     let frequency = parse_unsigned_newtype(pos, p);
     let p_length = parse_tracked_comma_length(p);
 
-    let (tie_length, is_slur) = parse_ties_and_slur(p);
-    let length = p_length + tie_length;
+    let (length, is_slur) = parse_ties_and_slur(p_length, p);
 
     let rest_after_note = parse_rest_ticks_after_note(is_slur, p);
 
@@ -1835,8 +1873,7 @@ fn parse_play_noise<'a>(pos: FilePos, p: &mut Parser<'a, '_>) -> Command<'a> {
     let frequency = parse_unsigned_newtype(pos, p).unwrap_or(NoiseFrequency::MIN);
     let p_length = parse_tracked_comma_length(p);
 
-    let (tie_length, is_slur) = parse_ties_and_slur(p);
-    let length = p_length + tie_length;
+    let (length, is_slur) = parse_ties_and_slur(p_length, p);
 
     let rest_after_note = parse_rest_ticks_after_note(is_slur, p);
 
@@ -1868,10 +1905,10 @@ fn parse_play_midi_note_number<'a>(pos: FilePos, p: &mut Parser<'a, '_>) -> Comm
         Some(note) => play_note(pos, note, length, p),
         None => {
             // Output a rest (so tick-counter is correct)
-            let (tie_length, _) = parse_ties_and_slur(p);
+            let (tie_length, _) = parse_ties_and_slur(CommandTicks::ZERO, p);
             Command::Rest {
-                ticks_until_keyoff: length + tie_length,
-                ticks_after_keyoff: TickCounter::new(0),
+                ticks_until_keyoff: length,
+                ticks_after_keyoff: tie_length,
             }
         }
     }
@@ -1887,14 +1924,14 @@ fn parse_portamento<'a>(pos: FilePos, p: &mut Parser<'a, '_>) -> Command<'a> {
     let portamento_length = parse_tracked_length(p);
 
     let mut slide_length = portamento_length;
-    let mut delay_length = TickCounter::new(0);
+    let mut delay_length = CommandTicks::new(0);
     let mut speed_override = None;
 
     if next_token_matches!(p, Token::Comma) {
         let dt_pos = p.peek_pos();
         if let Some(dt) = parse_untracked_optional_length(p) {
             if dt < slide_length {
-                slide_length = TickCounter::new(slide_length.value() - dt.value());
+                slide_length = CommandTicks::new(slide_length.value() - dt.value());
                 delay_length = dt
             } else {
                 p.add_error(dt_pos, ChannelError::InvalidPortamentoDelay);
@@ -1905,7 +1942,7 @@ fn parse_portamento<'a>(pos: FilePos, p: &mut Parser<'a, '_>) -> Command<'a> {
         }
     }
 
-    let (tie_length, is_slur) = parse_ties_and_slur(p);
+    let (tie_length, is_slur) = parse_ties_and_slur(CommandTicks::ZERO, p);
 
     let rest_after_note = parse_rest_ticks_after_note(is_slur, p);
 
@@ -1959,7 +1996,7 @@ fn parse_broken_chord<'a>(p: &mut Parser<'a, '_>) -> Command<'a> {
     }
 
     let note_length = match note_length {
-        Some(nl) => match PlayNoteTicks::try_from_is_slur(nl.value(), tie) {
+        Some(nl) => match PlayNoteTicks::try_from_is_slur(nl, tie) {
             Ok(t) => t,
             Err(e) => {
                 p.add_error(note_length_pos, e.into());

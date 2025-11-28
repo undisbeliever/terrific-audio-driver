@@ -236,12 +236,10 @@ Numbers can be decimal, or hexadecimal when prefixed with `$` (ie, `$ff`)
     * `r` rest commands send a key-off event.
     * `r` rest commands can be tied, ie `r2 ^8`.
     * Three or more consecutive `r` rest commands will be merged by the MML parser.  For example, `r4 r8 r8` will be merged into a two `r4 r4` commands.
-    * Very long `r` rests will be optimised into a loop.  For example, when Whole Note Length is 96, `r1 r1 r1 r1 r1 r1 r1 r1 r1 r1` will be converted to `r1 [r%216]4`.
  * `w[length]` - Wait
     * A `w` wait will not send a key-off event.  Useful for changing pan or volume in the middle of a slurred note.
     * `w` wait commands can be tied, ie `w2 ^8`.
     * Multiple `w` wait commands will be merged by the MML parser. For example, `w4 w8 w8` will be merged into a single `w2` command.
-    * Very long `w` waits will be optimised into a loop.  For example, when Whole Note Length is 96, `w1 w1 w1 w1 w1 w1 w1 w1 w1 w1` will be converted to `[w%240]4`.
 
  * `N<0-31>[,length]` - play noise
     * Noise is disabled on the next note or `P` play-pitch command

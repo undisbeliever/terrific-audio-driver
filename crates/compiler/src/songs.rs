@@ -7,8 +7,7 @@
 #![allow(clippy::assertions_on_constants)]
 
 use crate::bytecode::{
-    BcTerminator, BcTicks, BcTicksKeyOff, BcTicksNoKeyOff, Bytecode, BytecodeContext, InstrumentId,
-    PlayNoteTicks, StackDepth, Volume,
+    BcTerminator, Bytecode, BytecodeContext, InstrumentId, PlayNoteTicks, StackDepth, Volume,
 };
 use crate::command_compiler::analysis::TransposeStartRange;
 use crate::command_compiler::channel_bc_generator::CommandCompiler;
@@ -33,7 +32,6 @@ use crate::subroutines::{BlankSubroutineMap, CompiledSubroutines, SubroutineStat
 use crate::time::{TickClock, TickCounter, TIMER_HZ};
 use crate::{command_compiler, mml, UnsignedValueNewType};
 
-use std::cmp::min;
 use std::fmt::Debug;
 use std::ops::Range;
 use std::sync::OnceLock;
@@ -260,7 +258,7 @@ fn sample_song_fake_instruments() -> &'static UniqueNamesList<InstrumentOrSample
 pub fn test_sample_song(
     instrument: u8,
     note: Note,
-    note_length: u32,
+    note_length: u16,
     envelope: Option<Envelope>,
     sample_data: &SampleAndInstrumentData,
 ) -> Result<SongData, ChannelError> {
@@ -290,17 +288,7 @@ pub fn test_sample_song(
         Some(Envelope::Gain(gain)) => bc.set_instrument_and_gain(inst, gain),
     };
 
-    let mut remaining_length = min(2000, note_length);
-    while remaining_length > BcTicksKeyOff::MAX_TICKS {
-        let nl = min(remaining_length, BcTicksNoKeyOff::MAX_TICKS);
-        remaining_length -= nl;
-
-        let nl = BcTicksNoKeyOff::try_from(nl)?;
-        bc.play_note(note, PlayNoteTicks::NoKeyOff(nl))?;
-    }
-
-    let nl = BcTicksKeyOff::try_from(remaining_length)?;
-    bc.play_note(note, PlayNoteTicks::KeyOff(nl))?;
+    bc.play_note(note, PlayNoteTicks::KeyOff(note_length.try_into()?))?;
 
     let bytecode = bc.bytecode(BcTerminator::DisableChannel).unwrap().0;
 

@@ -78,7 +78,7 @@ pub use item_id::ItemId;
 #[derive(Debug)]
 pub struct PlaySampleArgs {
     pub note: Note,
-    pub note_length: u32,
+    pub note_length: u16,
     pub envelope: Option<Envelope>,
 }
 

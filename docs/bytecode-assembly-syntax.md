@@ -5,7 +5,6 @@ Instructions
 ============
 
  * `rest <duration>` - Sleep for *duration-1* ticks then key-off for 1 tick.
-    * CAUTION: A wait-rest chain should end with `rest 257` to prevent conflict with early-release.
  * `wait <duration>` - Sleep for *duration* ticks (no key-off).
 
  * `play_note <note> <duration>` - Play *note* for *duration* ticks then key-off the note
@@ -64,7 +63,6 @@ Instructions
  * `set_early_release <t> <min>` - When playing notes, key-off the channel *t* ticks before the note normally ends.
     * The note will play for a minimum *min* ticks, unless the note is shorter than *min*.
     * This instruction uses less audio-RAM if *min* is 1.
-    * CAUTION: The rest instruction in a `play-note rest` or `play-note wait rest` chain should be 257 ticks to ensure long notes are cut at the correct time.
  * `set_early_release <t> <min> <gain>` - early release with custom GAIN envelope
     * When playing notes, the envelope is temporarily changed to GAIN(*gain*) *t* ticks before key-off.
     * The envelope is changed a minimum *min* ticks after the start of the last note.

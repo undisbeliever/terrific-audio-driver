@@ -299,8 +299,9 @@ fn portamento_errors() {
         ValueError::PortamentoVelocityOutOfRange(536).into(),
     );
 
+    assert_one_error_in_mml_line("{c g}%$ffff", 1, ChannelError::PortamentoTooLong);
+
     // Tests if the TryFromIntError panic in ChannelBcGenerator::portamento() has been fixed
-    assert_one_error_in_mml_line("{c g}%$ffffffff", 1, ChannelError::PortamentoTooLong);
     assert_one_error_in_mml_line("{c g}%16387", 1, ChannelError::PortamentoTooLong);
     assert_one_error_in_mml_line("c & {c g}%16385 & a", 5, ChannelError::PortamentoTooLong);
 }
@@ -1792,7 +1793,7 @@ A @1 !s
 }
 
 #[test]
-fn portamento_tie_with_in_subroutine_with_no_instrument() {
+fn portamento_tie_within_subroutine_with_no_instrument() {
     assert_mml_subroutine_matches_bytecode(
         r#"
 @1 dummy_instrument
@@ -1985,14 +1986,13 @@ A @1 !s
         &[
             "play_note c4 no_keyoff 10",
             "wait 3",
-            "portamento_calc e4 no_keyoff 7 50",
-            "rest 257",
+            "portamento_calc e4 keyoff 7 307",
         ],
     );
 }
 
 #[test]
-fn no_keyoff_portamento_tie_with_in_subroutine_with_no_instrument() {
+fn no_keyoff_portamento_tie_within_subroutine_with_no_instrument() {
     assert_mml_subroutine_matches_bytecode(
         r#"
 @1 dummy_instrument
@@ -2020,9 +2020,7 @@ A @1 !s
         0,
         &[
             "play_note c4 no_keyoff 24",
-            "portamento_calc d4 no_keyoff 8 256",
-            "wait 256",
-            "wait 96",
+            "portamento_calc d4 no_keyoff 8 608",
             "keyon_next_note",
         ],
     );
@@ -2072,8 +2070,7 @@ A @1 !s
         &[
             "play_note c4 no_keyoff 10",
             "wait 3",
-            "portamento_pitch_calc $1800 no_keyoff 7 50",
-            "rest 257",
+            "portamento_pitch_calc $1800 keyoff 7 307",
         ],
     );
 
@@ -2088,9 +2085,7 @@ A @1 !s
         0,
         &[
             "play_note c4 no_keyoff 24",
-            "portamento_pitch_calc $2000 no_keyoff 8 256",
-            "wait 256",
-            "wait 96",
+            "portamento_pitch_calc $2000 no_keyoff 8 608",
             "keyon_next_note",
         ],
     );

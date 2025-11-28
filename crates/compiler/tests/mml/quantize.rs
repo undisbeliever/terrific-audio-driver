@@ -37,13 +37,10 @@ fn coarse_quantization() {
     );
     merge_mml_commands_test(
         "Q6 c%70 & %30 || r%50 r%50 r%257",
-        &["play_note c4 76", "rest 257", "rest 124"],
+        &["play_note c4 76", "rest 381"],
     );
 
-    assert_line_matches_bytecode(
-        "Q4 c%70 r%600",
-        &["play_note c4 36", "rest 257", "rest 257", "rest 120"],
-    );
+    assert_line_matches_bytecode("Q4 c%70 r%600", &["play_note c4 36", "rest 634"]);
 
     assert_line_matches_bytecode(
         "Q4 c Q8 d Q6 e",
@@ -231,8 +228,7 @@ fn quantized_portamento() {
             "play_note d4 no_keyoff 1",
             "portamento f4 keyoff +10 12",
             // 360 + 11 ticks of rest
-            "rest 257",
-            "rest 114",
+            "rest 371",
         ],
     );
 
@@ -243,8 +239,7 @@ fn quantized_portamento() {
             "portamento f4 no_keyoff +10 11",
             "set_temp_gain_and_rest E15 12",
             // 360 ticks of rest
-            "rest 257",
-            "rest 103",
+            "rest 360",
         ],
     );
 }
@@ -274,23 +269,8 @@ fn quantizing_portamento_does_not_change_velocity() {
 }
 
 #[test]
-fn quantize_long_note_is_looped() {
-    assert_line_matches_bytecode(
-        "Q2 c%8000",
-        &[
-            // c %2001
-            "play_note c4 no_keyoff 256",
-            "start_loop 6",
-            "wait 248",
-            "end_loop",
-            "rest 257",
-            // r %7999
-            "start_loop 24",
-            "rest 249",
-            "end_loop",
-            "rest 23",
-        ],
-    );
+fn quantize_long_note() {
+    assert_line_matches_bytecode("Q2 c%8000", &["play_note c4 keyoff 2001", "rest 5999"]);
 }
 
 #[test]
