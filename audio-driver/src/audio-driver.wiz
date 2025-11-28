@@ -184,11 +184,13 @@ in zeropage {
         // (high byte in lastvarpage)
         var countdownTimer_l : [u8 ; N_CHANNELS];
 
-        // When non-zero they channel will key-off when early-release is activated
+        // When negative the channel will key-off when early-release is activated
         // or countdownTimer == 1.
         //
         // This flag is reset on KeyOff.
-        var keyoffFlag : [u8 ; N_CHANNELS];
+        //
+        // NOTE: Only the MSB of this variable is tested
+        var keyoffMsbFlag : [u8 ; N_CHANNELS];
 
 
         // S-DSP voice register shadows (AKA Virtual Channels)
@@ -1262,9 +1264,9 @@ var _mutedChannels : u8 in zpTmp;
             channelSoA.countdownTimer_l[x]--;
         }
         else if { channelSoA.countdownTimer_l[x]--; } && !zero {
-            // Skip if wait or no_keyoff
-            y = channelSoA.keyoffFlag[x];
-            goto EndTimer if zero;
+            // Skip if keyoff flag is clear
+            y = channelSoA.keyoffMsbFlag[x];
+            goto EndTimer if !negative;
 
             // Always key-off on the last sleep tick
             a = channelSoA.countdownTimer_l[x];
@@ -1288,8 +1290,8 @@ var _mutedChannels : u8 in zpTmp;
 
         KeyOff:
             a = 0;
-            // Do not test for keyoff or early-release on the next tick
-            channelSoA.keyoffFlag[x] = a;
+            // Do not test countdownTimer or early-release on the next tick
+            channelSoA.keyoffMsbFlag[x] = a;
             // Disable temp gain
             channelSoA.virtualChannels.tempGain[x] = a;
 
@@ -1308,8 +1310,8 @@ var _mutedChannels : u8 in zpTmp;
 
             y = channelSoA.instructionPtr_h[x];
             if !zero {
-                // Clear Key-Off flag for safety
-                channelSoA.keyoffFlag[x] = a = 0;
+                // Clear key-off flag for safety
+                channelSoA.keyoffMsbFlag[x] >>>= 1;
 
                 a = channelSoA.instructionPtr_l[x];
                 process_bytecode(x, ya);
@@ -2448,11 +2450,10 @@ func set_vibrato_depth_and_play_note(channelIndex : u8 in x, pitchOffsetPerTick:
 // KEEP: x
 #[fallthrough]
 func _play_note(channelIndex : u8 in x, noteAndKeyOffBit : u8 in a) {
-    // carry = key-off after note ends bit
     a >>>= 1;
-
-    // Set MSB of keyoffFlag from carry
-    channelSoA.keyoffFlag[x] >>>>#= 1;
+    // carry = key-off note bit
+    // write carry to the key-off flag
+    channelSoA.keyoffMsbFlag[x] >>>>#= 1;
 
     // calculate pitch table index
     y = a = a + channelSoA.instPitchOffset[x] + channelSoA.transpose[x];
@@ -2547,8 +2548,9 @@ func play_pitch(channelIndex: u8 in x, pitch_l : u8 in a) {
     instructionPtr++;
 
     a >>>= 1;
-    // Set MSB of keyoffFlag from carry
-    channelSoA.keyoffFlag[x] >>>>#= 1;
+    // carry = key-off note bit
+    // write carry to the key-off flag
+    channelSoA.keyoffMsbFlag[x] >>>>#= 1;
 
     return __play_note_set_pitch_h_and_read_length(x, a);
 }
@@ -2558,8 +2560,9 @@ func play_pitch(channelIndex: u8 in x, pitch_l : u8 in a) {
 // KEEP: X
 func play_noise(channelIndex: u8 in x, freq_and_keyoff : u8 in a) {
     a >>>= 1;
-    // Set MSB of keyoffFlag from carry
-    channelSoA.keyoffFlag[x] >>>>#= 1;
+    // carry = key-off note bit
+    // write carry to the key-off flag
+    channelSoA.keyoffMsbFlag[x] >>>>#= 1;
 
     a &= dsp.FLG__NOISE_FREQ_MASK;
     y = a;
@@ -2637,10 +2640,10 @@ func __portamento_note(channelIndex : u8 in x, noteAndKeyoffFlag : u8 in a, dire
     // Y = 1 or -1
     channelSoA.portamento_direction[x] = y as i8;
 
-    // carry = key-off after note ends bit
     a >>>= 1;
-    // Set MSB of keyoffFlag from carry
-    channelSoA.keyoffFlag[x] >>>>#= 1;
+    // carry = key-off note bit
+    // write carry to the key-off flag
+    channelSoA.keyoffMsbFlag[x] >>>>#= 1;
 
     // calculate pitch table index
     y = a = a + channelSoA.instPitchOffset[x] + channelSoA.transpose[x];
@@ -2704,8 +2707,9 @@ func __portamento_pitch(channelIndex : u8 in x, targetPitch_l : u8 in a, directi
     instructionPtr++;
 
     a >>>= 1;
-    // Set MSB of keyoffFlag from carry
-    channelSoA.keyoffFlag[x] >>>>#= 1;
+    // carry = key-off note bit
+    // write carry to the key-off flag
+    channelSoA.keyoffMsbFlag[x] >>>>#= 1;
 
     // a = target_h
     // y = 0 (required)
@@ -2728,8 +2732,9 @@ func portamento_pitch_calc(channelIndex : u8 in x, targetPitch_l : u8 in a) {
     instructionPtr++;
 
     a >>>= 1;
-    // Set MSB of keyoffFlag from carry
-    channelSoA.keyoffFlag[x] >>>>#= 1;
+    // carry = key-off note bit
+    // write carry to the key-off flag
+    channelSoA.keyoffMsbFlag[x] >>>>#= 1;
 
     // a = target_h
     ^return __portamento_calc_read_lengths(x, a);
@@ -2743,10 +2748,10 @@ func portamento_pitch_calc(channelIndex : u8 in x, targetPitch_l : u8 in a) {
 func portamento_calc(channelIndex : u8 in x, noteAndKeyoffFlag : u8 in a) {
     var _tmp : u16 in  zpTmpWord;
 
-    // carry = key-off after note ends bit
     a >>>= 1;
-    // Set MSB of keyoffFlag from carry
-    channelSoA.keyoffFlag[x] >>>>#= 1;
+    // carry = key-off note bit
+    // write carry to the key-off flag
+    channelSoA.keyoffMsbFlag[x] >>>>#= 1;
 
     // calculate pitch table index
     y = a = a + channelSoA.instPitchOffset[x] + channelSoA.transpose[x];
@@ -3751,8 +3756,10 @@ func set_temp_gain_and_rest(channelIndex : u8 in x, tempGain: u8 in a) {
 func rest(channelIndex : u8 in x, length: u8 in a) {
     // Y is not 0
 
-    channelSoA.keyoffFlag[x] = y = 1;
-// Fallthrough
+    // Set key-off flag
+    channelSoA.keyoffMsbFlag[x] = y = 0x80;
+
+// Fallthrough into wait()
 }
 
 

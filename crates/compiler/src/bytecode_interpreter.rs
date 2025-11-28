@@ -2192,7 +2192,7 @@ impl InterpreterOutput {
                 soa_write_u8(addresses::CHANNEL_STACK_POINTER, c.stack_pointer);
                 soa_write_u8(addresses::CHANNEL_LOOP_STACK_POINTER, c.loop_stack_pointer);
 
-                soa_write_u8(addresses::CHANNEL_KEY_OFF_FLAG, 0);
+                soa_write_u8(addresses::CHANNEL_KEY_OFF_MSB_FLAG, 0);
 
                 soa_write_u8(addresses::CHANNEL_INST_PITCH_OFFSET, c.inst_pitch_offset);
 

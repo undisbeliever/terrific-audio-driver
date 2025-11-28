@@ -63,7 +63,7 @@ const AUDIO_DRIVER_SYMBOLS: &[(&str, &str)] = &[
     ("channelSoA.instructionPtr_h", "CHANNEL_INSTRUCTION_PTR_H"),
     ("channelSoA.stackPointer", "CHANNEL_STACK_POINTER"),
     ("channelSoA.loopStackPointer", "CHANNEL_LOOP_STACK_POINTER"),
-    ("channelSoA.keyoffFlag", "CHANNEL_KEY_OFF_FLAG"),
+    ("channelSoA.keyoffMsbFlag", "CHANNEL_KEY_OFF_MSB_FLAG"),
     ("channelSoA.portamento_direction", "CHANNEL_DIRECTION"),
     ("channelSoA.vibrato_pitchOffsetPerTick", "CHANNEL_VIBRATO_PITCH_OFFSET_PER_TICK"),
     ("channelSoA.vibrato_delay", "CHANNEL_VIBRATO_DELAY"),
