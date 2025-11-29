@@ -310,7 +310,7 @@ fn test_two_rests_bugfix() {
             "play_note e4 no_keyoff 2",
             "keyon_next_note",
             "rest 24",
-            "rest 24",
+            "wait 24",
         ],
     );
 
@@ -326,7 +326,7 @@ fn test_two_rests_bugfix() {
             "keyon_next_note",
             "end_loop 8",
             "rest 24",
-            "rest 24",
+            "wait 24",
         ],
     );
 }

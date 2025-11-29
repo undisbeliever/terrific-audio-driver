@@ -84,7 +84,7 @@ enum AfterPlayNote {
     TempGain {
         temp_gain: TempGain,
         ticks_until_keyoff: CommandTicks,
-        ticks_after_keyoff: CommandTicks,
+        ticks_after_keyoff: TicksAfterKeyoff,
     },
 }
 
@@ -372,7 +372,7 @@ impl<'a> ChannelBcGenerator<'a> {
                         AfterPlayNote::TempGain {
                             temp_gain,
                             ticks_until_keyoff,
-                            ticks_after_keyoff: rest_after_note,
+                            ticks_after_keyoff: TicksAfterKeyoff(rest_after_note),
                         },
                     ))
                 } else {
@@ -479,6 +479,13 @@ impl<'a> ChannelBcGenerator<'a> {
     fn maybe_rest(&mut self, length: CommandTicks) -> Result<(), ChannelError> {
         if !length.is_zero() {
             self.bc.rest(BcTicksKeyOff::try_from(length.value())?);
+        }
+        Ok(())
+    }
+
+    fn wait_after_keyoff(&mut self, length: TicksAfterKeyoff) -> Result<(), ChannelError> {
+        if !length.0.is_zero() {
+            self.bc.wait(BcTicksNoKeyOff::try_from(length.0.value())?);
         }
         Ok(())
     }
@@ -1005,7 +1012,7 @@ impl<'a> ChannelBcGenerator<'a> {
         &mut self,
         temp_gain: Option<TempGain>,
         ticks_until_keyoff: CommandTicks,
-        ticks_after_keyoff: CommandTicks,
+        ticks_after_keyoff: TicksAfterKeyoff,
     ) -> Result<(), ChannelError> {
         let l = BcTicksKeyOff::try_from(ticks_until_keyoff.value())?;
 
@@ -1018,7 +1025,7 @@ impl<'a> ChannelBcGenerator<'a> {
             self.bc.reuse_temp_gain_and_rest(l);
         }
 
-        self.maybe_rest(ticks_after_keyoff)?;
+        self.wait_after_keyoff(ticks_after_keyoff)?;
 
         Ok(())
     }
@@ -1179,7 +1186,7 @@ impl<'a> ChannelBcGenerator<'a> {
                 ticks_after_keyoff,
             } => {
                 self.rest(ticks_until_keyoff)?;
-                self.maybe_rest(ticks_after_keyoff)?;
+                self.wait_after_keyoff(ticks_after_keyoff)?;
             }
 
             &Command::Wait(length) => {

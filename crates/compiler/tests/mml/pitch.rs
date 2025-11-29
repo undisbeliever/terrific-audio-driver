@@ -39,7 +39,7 @@ fn play_pitch() {
         &[
             "play_pitch $1000 no_keyoff 30",
             "set_temp_gain_and_rest D8 50",
-            "rest 30",
+            "wait 30",
         ],
     );
 

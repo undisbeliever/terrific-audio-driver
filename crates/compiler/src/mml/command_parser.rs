@@ -25,7 +25,7 @@ use crate::command_compiler::commands::{
     merge_pan_commands, merge_volumes_commands, relative_pan, relative_volume, ChannelCommands,
     Command, CommandWithPos, DetuneCents, FineQuantization, ManualVibrato, MmlInstrument,
     MpVibrato, NoteOrPitch, PanCommand, Quantize, RestTicksAfterNote, SubroutineCallType,
-    VolumeCommand,
+    TicksAfterKeyoff, VolumeCommand,
 };
 use crate::driver_constants::FIR_FILTER_SIZE;
 use crate::echo::{EchoVolume, FirCoefficient, FirTap};
@@ -1618,7 +1618,7 @@ fn parse_panbrello<'a>(pos: FilePos, p: &mut Parser<'a, '_>) -> Command<'a> {
 
 // Assumes all ties and state changes have already been parsed.
 // Requires the previously parsed token send a key-off event.
-fn parse_rests_after_rest(p: &mut Parser) -> CommandTicks {
+fn parse_rests_after_rest(p: &mut Parser) -> TicksAfterKeyoff {
     let mut ticks = CommandTicks::ZERO;
 
     if next_token_matches!(p, Token::Rest) {
@@ -1640,13 +1640,40 @@ fn parse_rests_after_rest(p: &mut Parser) -> CommandTicks {
         }
     }
 
-    ticks
+    TicksAfterKeyoff(ticks)
+}
+
+// Assumes all ties and state changes have already been parsed.
+fn parse_rests_after_note(p: &mut Parser) -> RestTicksAfterNote {
+    let mut ticks = CommandTicks::ZERO;
+
+    if next_token_matches!(p, Token::Rest) {
+        ticks = parse_tracked_length(p);
+
+        loop {
+            match_next_token!(
+                p,
+
+                // ::TODO rollback tokens on overflow::
+                Token::Rest => ticks = parse_and_add_tracked_length(ticks, p),
+                Token::Tie => ticks = parse_and_add_tracked_length(ticks, p),
+                #_ => {
+                    if !merge_state_change(p) {
+                        break;
+                    }
+                }
+            )
+        }
+    }
+
+    RestTicksAfterNote(ticks)
 }
 
 fn parse_rest_ticks_after_note(is_slur: bool, p: &mut Parser) -> RestTicksAfterNote {
     match (is_slur, p.is_keyoff_enabled()) {
-        (false, true) => RestTicksAfterNote(parse_rests_after_rest(p)),
+        (false, true) => parse_rests_after_note(p),
         (true, _) | (false, false) => {
+            merge_all_state_changes(p);
             if next_token_matches!(p, Token::Rest) {
                 let t = parse_tracked_length(p);
                 let t = parse_ties(t, p);
@@ -1732,7 +1759,7 @@ fn parse_wait<'a>(p: &mut Parser) -> Command<'a> {
     Command::Wait(parse_wait_length_and_ties(p))
 }
 
-fn parse_rest_lengths(p: &mut Parser) -> (CommandTicks, CommandTicks) {
+fn parse_rest_lengths(p: &mut Parser) -> (CommandTicks, TicksAfterKeyoff) {
     let ticks_until_keyoff = parse_tracked_length(p);
     let ticks_until_keyoff = parse_ties(ticks_until_keyoff, p);
 
@@ -1795,7 +1822,7 @@ fn parse_pitch<'a>(pos: FilePos, pitch: MmlPitch, p: &mut Parser<'a, '_>) -> Com
             let (length, _) = parse_ties_and_slur(length, p);
             Command::Rest {
                 ticks_until_keyoff: length,
-                ticks_after_keyoff: CommandTicks::ZERO,
+                ticks_after_keyoff: TicksAfterKeyoff(CommandTicks::ZERO),
             }
         }
     }
@@ -1820,7 +1847,7 @@ fn parse_play_sample<'a>(pos: FilePos, p: &mut Parser<'a, '_>) -> Command<'a> {
             let (length, _) = parse_ties_and_slur(length, p);
             Command::Rest {
                 ticks_until_keyoff: length,
-                ticks_after_keyoff: CommandTicks::new(0),
+                ticks_after_keyoff: TicksAfterKeyoff(CommandTicks::ZERO),
             }
         }
     }
@@ -1870,7 +1897,7 @@ fn parse_play_pitch_frequency<'a>(pos: FilePos, p: &mut Parser<'a, '_>) -> Comma
             // Output a rest (so tick-counter is correct)
             Command::Rest {
                 ticks_until_keyoff: p_length,
-                ticks_after_keyoff: rest_after_note.0,
+                ticks_after_keyoff: TicksAfterKeyoff(rest_after_note.0),
             }
         }
     }
@@ -1915,7 +1942,7 @@ fn parse_play_midi_note_number<'a>(pos: FilePos, p: &mut Parser<'a, '_>) -> Comm
             let (tie_length, _) = parse_ties_and_slur(CommandTicks::ZERO, p);
             Command::Rest {
                 ticks_until_keyoff: length,
-                ticks_after_keyoff: tie_length,
+                ticks_after_keyoff: TicksAfterKeyoff(tie_length),
             }
         }
     }
@@ -1968,7 +1995,7 @@ fn parse_portamento<'a>(pos: FilePos, p: &mut Parser<'a, '_>) -> Command<'a> {
             // Output a rest (so tick-counter is correct)
             Command::Rest {
                 ticks_until_keyoff: portamento_length,
-                ticks_after_keyoff: rest_after_note.0,
+                ticks_after_keyoff: TicksAfterKeyoff(rest_after_note.0),
             }
         }
     }

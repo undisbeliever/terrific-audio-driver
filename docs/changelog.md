@@ -55,6 +55,7 @@ MML changes:
  * Fixed missing no-instrument error in `P` pitch or `N` noise commands
  * The maximum length of an MML command is 65535 ticks (after commands have been merged)
  * Long MML commands and no-longer converted into loops
+ * Multiple `r` rest commands now merge into a rest then wait.  (The `wait` bytecode is uses less spc700 CPU time than `rest` bytecode)
 
 Bytecode assembly changes:
  * The maximum length of a `<duration>` argument is 65535 ticks

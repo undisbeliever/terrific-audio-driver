@@ -46,14 +46,14 @@ fn set_temp_gain_and_rest() {
     merge_mml_commands_test("GDT12 r || ^1", &["set_temp_gain_and_rest D12 120"]);
     merge_mml_commands_test(
         "GDT12 r || r",
-        &["set_temp_gain_and_rest D12 24", "rest 24"],
+        &["set_temp_gain_and_rest D12 24", "wait 24"],
     );
 
-    assert_line_matches_bytecode("GDT12 r r2.", &["set_temp_gain_and_rest D12 24", "rest 72"]);
+    assert_line_matches_bytecode("GDT12 r r2.", &["set_temp_gain_and_rest D12 24", "wait 72"]);
 
     merge_mml_commands_test(
         "GDT12 r r || r r",
-        &["set_temp_gain_and_rest D12 24", "rest 72"],
+        &["set_temp_gain_and_rest D12 24", "wait 72"],
     );
 
     assert_line_matches_bytecode("GDT12 r%256", &["set_temp_gain_and_rest D12 256"]);
@@ -65,12 +65,12 @@ fn set_temp_gain_and_rest() {
 
     merge_mml_commands_test(
         "GDT12 r%700 r%200 || r%500",
-        &["set_temp_gain_and_rest D12 700", "rest 700"],
+        &["set_temp_gain_and_rest D12 700", "wait 700"],
     );
 
     assert_line_matches_bytecode(
         "GDT12 r%10000 r%2000",
-        &["set_temp_gain_and_rest D12 10000", "rest 2000"],
+        &["set_temp_gain_and_rest D12 10000", "wait 2000"],
     );
 
     assert_line_matches_bytecode(

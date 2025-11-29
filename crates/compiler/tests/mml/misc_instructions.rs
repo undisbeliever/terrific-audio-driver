@@ -42,7 +42,7 @@ fn play_noise() {
         &[
             "play_noise 10 no_keyoff 30",
             "set_temp_gain_and_rest D8 50",
-            "rest 30",
+            "wait 30",
         ],
     );
 

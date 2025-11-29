@@ -22,24 +22,26 @@ fn rest() {
     assert_line_matches_bytecode("r%513", &["rest 513"]);
     assert_line_matches_bytecode("r%514", &["rest 514"]);
     assert_line_matches_bytecode("r%600", &["rest 600"]);
+}
 
+#[test]
+fn merged_rests() {
     // User expects a keyoff after the first rest command
-    merge_mml_commands_test("r || r", &["rest 24", "rest 24"]);
-    merge_mml_commands_test("r || r8", &["rest 24", "rest 12"]);
-    merge_mml_commands_test("r%30||r%20", &["rest 30", "rest 20"]);
+    merge_mml_commands_test("r || r", &["rest 24", "wait 24"]);
+    merge_mml_commands_test("r || r8", &["rest 24", "wait 12"]);
+    merge_mml_commands_test("r%30||r%20", &["rest 30", "wait 20"]);
 
-    merge_mml_commands_test("r r || r", &["rest 24", "rest 48"]);
-    merge_mml_commands_test("r r || r8", &["rest 24", "rest 36"]);
-    merge_mml_commands_test("r%30 r%30||r%20", &["rest 30", "rest 50"]);
+    merge_mml_commands_test("r r || r", &["rest 24", "wait 48"]);
+    merge_mml_commands_test("r r || r8", &["rest 24", "wait 36"]);
+    merge_mml_commands_test("r%30 r%30||r%20", &["rest 30", "wait 50"]);
 
-    assert_line_matches_bytecode("r%300 r%256", &["rest 300", "rest 256"]);
+    assert_line_matches_bytecode("r%300 r%256", &["rest 300", "wait 256"]);
 
-    // It does not matter if subsequent rests send keyoff events or not, no note is playing
-    merge_mml_commands_test("r%300 || r%300", &["rest 300", "rest 300"]);
-    assert_line_matches_bytecode("r%300 r%100 r%100 r%100", &["rest 300", "rest 300"]);
+    merge_mml_commands_test("r%300 || r%300", &["rest 300", "wait 300"]);
+    assert_line_matches_bytecode("r%300 r%100 r%100 r%100", &["rest 300", "wait 300"]);
 
     // From `mml-syntax.md`
-    assert_line_matches_line("r4 r8 r8", "r4 r4");
+    assert_line_matches_line("r4 r8 r8", "r4 w4");
 }
 
 #[test]
@@ -72,7 +74,10 @@ fn wait() {
     assert_line_matches_bytecode("w%257", &["wait 257"]);
     assert_line_matches_bytecode("w%512", &["wait 512"]);
     assert_line_matches_bytecode("w%600", &["wait 600"]);
+}
 
+#[test]
+fn merged_wait() {
     merge_mml_commands_test("w || w", &["wait 48"]);
     merge_mml_commands_test("w || w8", &["wait 36"]);
     merge_mml_commands_test("w%30||w%20", &["wait 50"]);
@@ -180,24 +185,24 @@ fn large_rest() {
 
 #[test]
 fn merged_large_rests() {
-    // Test rest tick-counter threashold
-    assert_line_matches_bytecode("r%2 r%771", &["rest 2", "rest 771"]);
-    assert_line_matches_bytecode("r%2 r%772", &["rest 2", "rest 772"]);
+    // Test rest tick-counter threshold
+    assert_line_matches_bytecode("r%2 r%771", &["rest 2", "wait 771"]);
+    assert_line_matches_bytecode("r%2 r%772", &["rest 2", "wait 772"]);
 
-    assert_line_matches_bytecode("r%2 r%1028", &["rest 2", "rest 1028"]);
-    assert_line_matches_bytecode("r%2 r%1286", &["rest 2", "rest 1286"]);
+    assert_line_matches_bytecode("r%2 r%1028", &["rest 2", "wait 1028"]);
+    assert_line_matches_bytecode("r%2 r%1286", &["rest 2", "wait 1286"]);
 
-    assert_line_matches_bytecode("r%2 r%25700", &["rest 2", "rest 25700"]);
-    assert_line_matches_bytecode("r%2 r%25701", &["rest 2", "rest 25701"]);
-    assert_line_matches_bytecode("r%2 r%25702", &["rest 2", "rest 25702"]);
+    assert_line_matches_bytecode("r%2 r%25700", &["rest 2", "wait 25700"]);
+    assert_line_matches_bytecode("r%2 r%25701", &["rest 2", "wait 25701"]);
+    assert_line_matches_bytecode("r%2 r%25702", &["rest 2", "wait 25702"]);
 
-    assert_line_matches_bytecode("r%2 r%$ffff", &["rest 2", "rest 65535"]);
+    assert_line_matches_bytecode("r%2 r%$ffff", &["rest 2", "wait 65535"]);
 
     // A random prime number
-    assert_line_matches_bytecode("r%2 r%6553", &["rest 2", "rest 6553"]);
+    assert_line_matches_bytecode("r%2 r%6553", &["rest 2", "wait 6553"]);
 
-    merge_mml_commands_test("r%300 || r%400 r%500", &["rest 300", "rest 900"]);
-    merge_mml_commands_test("r%300 r%400 || r%500", &["rest 300", "rest 900"]);
+    merge_mml_commands_test("r%300 || r%400 r%500", &["rest 300", "wait 900"]);
+    merge_mml_commands_test("r%300 r%400 || r%500", &["rest 300", "wait 900"]);
 
     assert_line_matches_bytecode(
         "[[[[[[[ r%2 r%1028 ]2]3]4]5]6]7]8",
@@ -210,7 +215,7 @@ fn merged_large_rests() {
             "start_loop",
             "start_loop",
             "rest 2",
-            "rest 1028",
+            "wait 1028",
             "end_loop 2",
             "end_loop 3",
             "end_loop 4",
@@ -232,7 +237,7 @@ fn merged_large_rests() {
             "start_loop",
             "start_loop",
             "rest 1537",
-            "rest 1028",
+            "wait 1028",
             "end_loop 2",
             "end_loop 3",
             "end_loop 4",
@@ -243,9 +248,9 @@ fn merged_large_rests() {
         ],
     );
 
-    assert_line_matches_bytecode("r%2000 r%1000", &["rest 2000", "rest 1000"]);
+    assert_line_matches_bytecode("r%2000 r%1000", &["rest 2000", "wait 1000"]);
 
-    assert_line_matches_line("r1 r1 r1 r1 r1 r1 r1 r1 r1 r1", "r1 r%864")
+    assert_line_matches_line("r1 r1 r1 r1 r1 r1 r1 r1 r1 r1", "r1 w%864")
 }
 
 #[test]
@@ -331,14 +336,14 @@ A r4
 
     assert_mml_channel_a_matches_bytecode(
         &mml,
-        &["set_instrument dummy_instrument", "rest 24", "rest 72"],
+        &["set_instrument dummy_instrument", "rest 24", "wait 72"],
     );
 }
 
 #[test]
 fn merge_rests_mutliple_state_tokens_is_merged() {
-    merge_mml_commands_test("r || r <> r <> r <> r <> o4 <> r", &["rest 24", "rest 120"]);
-    merge_mml_commands_test("r <> r <> r <> r <> r <> || <> r", &["rest 24", "rest 120"]);
+    merge_mml_commands_test("r || r <> r <> r <> r <> o4 <> r", &["rest 24", "wait 120"]);
+    merge_mml_commands_test("r <> r <> r <> r <> r <> || <> r", &["rest 24", "wait 120"]);
 }
 
 #[test]
@@ -370,21 +375,21 @@ fn slurred_note_then_mutliple_state_tokens_then_rest_is_merged() {
     // ::TODO merge remaining rests::
     merge_mml_commands_test(
         "c & || r <> r <> r <> r <> o4 <> r",
-        &["play_note c4 no_keyoff 24", "rest 24", "rest 24", "rest 72"],
+        &["play_note c4 no_keyoff 24", "rest 24", "rest 24", "wait 72"],
     );
     merge_mml_commands_test(
         "c & <> r <> r <> r <> r <> || <> r",
-        &["play_note c4 no_keyoff 24", "rest 24", "rest 24", "rest 72"],
+        &["play_note c4 no_keyoff 24", "rest 24", "rest 24", "wait 72"],
     );
 
     // ::TODO merge remaining rests::
     merge_mml_commands_test(
         "c || & r <> r <> r <> r <> o4 <> r",
-        &["play_note c4 no_keyoff 24", "rest 24", "rest 24", "rest 72"],
+        &["play_note c4 no_keyoff 24", "rest 24", "rest 24", "wait 72"],
     );
     merge_mml_commands_test(
         "c <> & r <> r <> r <> r <> || <> r",
-        &["play_note c4 no_keyoff 24", "rest 24", "rest 24", "rest 72"],
+        &["play_note c4 no_keyoff 24", "rest 24", "rest 24", "wait 72"],
     );
 }
 

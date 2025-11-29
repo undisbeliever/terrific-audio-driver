@@ -177,6 +177,9 @@ pub enum Quantize {
 #[derive(Debug, Clone, Copy)]
 pub struct RestTicksAfterNote(pub CommandTicks);
 
+#[derive(Debug, Clone, Copy)]
+pub struct TicksAfterKeyoff(pub CommandTicks);
+
 i16_value_newtype!(
     DetuneCents,
     DetuneCentsOutOfRange,
@@ -251,7 +254,7 @@ pub(crate) enum Command<'a> {
         ticks_until_keyoff: CommandTicks,
         /// Combined length of all rests after the first rest
         /// (keyoff already sent, it does not matter if these rests keyoff or not)
-        ticks_after_keyoff: CommandTicks,
+        ticks_after_keyoff: TicksAfterKeyoff,
     },
 
     // wait with no keyoff
@@ -322,7 +325,7 @@ pub(crate) enum Command<'a> {
     TempGainAndRest {
         temp_gain: Option<TempGain>,
         ticks_until_keyoff: CommandTicks,
-        ticks_after_keyoff: CommandTicks,
+        ticks_after_keyoff: TicksAfterKeyoff,
     },
     TempGainAndWait(Option<TempGain>, CommandTicks),
 

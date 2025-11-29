@@ -239,7 +239,7 @@ fn quantized_portamento() {
             "portamento f4 no_keyoff +10 11",
             "set_temp_gain_and_rest E15 12",
             // 360 ticks of rest
-            "rest 360",
+            "wait 360",
         ],
     );
 }
