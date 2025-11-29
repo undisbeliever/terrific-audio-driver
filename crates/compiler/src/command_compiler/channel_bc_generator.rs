@@ -478,27 +478,27 @@ impl<'a> ChannelBcGenerator<'a> {
 
     fn maybe_rest(&mut self, length: CommandTicks) -> Result<(), ChannelError> {
         if !length.is_zero() {
-            self.bc.rest(BcTicksKeyOff::try_from(length.value())?);
+            self.bc.rest(length.try_into()?);
         }
         Ok(())
     }
 
     fn wait_after_keyoff(&mut self, length: TicksAfterKeyoff) -> Result<(), ChannelError> {
         if !length.0.is_zero() {
-            self.bc.wait(BcTicksNoKeyOff::try_from(length.0.value())?);
+            self.bc.wait(length.0.try_into()?);
         }
         Ok(())
     }
 
     fn rest(&mut self, length: CommandTicks) -> Result<(), ChannelError> {
-        self.bc.rest(BcTicksKeyOff::try_from(length.value())?);
+        self.bc.rest(length.try_into()?);
 
         Ok(())
     }
 
     // sleep with no keyoff
     fn wait(&mut self, length: CommandTicks) -> Result<(), ChannelError> {
-        self.bc.wait(BcTicksNoKeyOff::try_from(length.value())?);
+        self.bc.wait(length.try_into()?);
 
         Ok(())
     }
@@ -642,7 +642,8 @@ impl<'a> ChannelBcGenerator<'a> {
         let slide_length = match (play_note1, delay_length.value()) {
             (true, 0) => {
                 // Play note1 for a single tick
-                let t = PlayNoteTicks::NoKeyOff(BcTicksNoKeyOff::try_from(1u16).unwrap());
+                debug_assert_eq!(BcTicksNoKeyOff::MIN.ticks(), 1);
+                let t = PlayNoteTicks::NoKeyOff(BcTicksNoKeyOff::MIN);
 
                 self.portamento_play_pn_note_out(pn1, t)?;
 
@@ -903,8 +904,8 @@ impl<'a> ChannelBcGenerator<'a> {
 
         if last_note_ticks > 0 {
             let l = match slur_last_note {
-                false => PlayNoteTicks::KeyOff(BcTicksKeyOff::try_from(last_note_ticks)?),
-                true => PlayNoteTicks::NoKeyOff(BcTicksNoKeyOff::try_from(last_note_ticks)?),
+                false => PlayNoteTicks::KeyOff(last_note_ticks.try_into()?),
+                true => PlayNoteTicks::NoKeyOff(last_note_ticks.try_into()?),
             };
             self.broken_chord_play_note_or_pitch_with_detune(notes[break_point], l)?;
         }
@@ -1014,7 +1015,7 @@ impl<'a> ChannelBcGenerator<'a> {
         ticks_until_keyoff: CommandTicks,
         ticks_after_keyoff: TicksAfterKeyoff,
     ) -> Result<(), ChannelError> {
-        let l = BcTicksKeyOff::try_from(ticks_until_keyoff.value())?;
+        let l = ticks_until_keyoff.try_into()?;
 
         if temp_gain.is_some_and(|t| !self.bc.get_state().prev_temp_gain.is_known_and_eq(&t)) {
             let temp_gain = temp_gain.unwrap();

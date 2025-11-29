@@ -491,6 +491,14 @@ impl TryFrom<u32> for BcTicksKeyOff {
     }
 }
 
+impl TryFrom<CommandTicks> for BcTicksKeyOff {
+    type Error = ValueError;
+
+    fn try_from(ticks: CommandTicks) -> Result<Self, ValueError> {
+        Self::try_from(ticks.value())
+    }
+}
+
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub struct BcTicksNoKeyOff(u16);
 
@@ -543,6 +551,14 @@ impl TryFrom<u32> for BcTicksNoKeyOff {
         } else {
             Err(ValueError::BcTicksNoKeyOffOutOfRange(ticks))
         }
+    }
+}
+
+impl TryFrom<CommandTicks> for BcTicksNoKeyOff {
+    type Error = ValueError;
+
+    fn try_from(ticks: CommandTicks) -> Result<Self, ValueError> {
+        Self::try_from(ticks.value())
     }
 }
 
