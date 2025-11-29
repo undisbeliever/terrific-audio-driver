@@ -335,6 +335,59 @@ A r4
     );
 }
 
+#[test]
+fn merge_rests_mutliple_state_tokens_is_merged() {
+    merge_mml_commands_test("r || r <> r <> r <> r <> o4 <> r", &["rest 24", "rest 120"]);
+    merge_mml_commands_test("r <> r <> r <> r <> r <> || <> r", &["rest 24", "rest 120"]);
+}
+
+#[test]
+fn note_then_mutliple_state_tokens_then_rest_is_merged() {
+    merge_mml_commands_test("c ||   r <> r", &["play_note c4 24", "rest 48"]);
+    merge_mml_commands_test("c <>   r || r", &["play_note c4 24", "rest 48"]);
+
+    merge_mml_commands_test(
+        "c || r <> r <> r <> r <> o4 <> r",
+        &["play_note c4 24", "rest 120"],
+    );
+    merge_mml_commands_test(
+        "c <> r <> r <> r <> r <> || <> r",
+        &["play_note c4 24", "rest 120"],
+    );
+}
+
+#[test]
+fn slurred_note_then_mutliple_state_tokens_then_rest_is_merged() {
+    merge_mml_commands_test(
+        "c <> & r || r",
+        &["play_note c4 no_keyoff 24", "rest 24", "rest 24"],
+    );
+    merge_mml_commands_test(
+        "c || & r <> r",
+        &["play_note c4 no_keyoff 24", "rest 24", "rest 24"],
+    );
+
+    // ::TODO merge remaining rests::
+    merge_mml_commands_test(
+        "c & || r <> r <> r <> r <> o4 <> r",
+        &["play_note c4 no_keyoff 24", "rest 24", "rest 24", "rest 72"],
+    );
+    merge_mml_commands_test(
+        "c & <> r <> r <> r <> r <> || <> r",
+        &["play_note c4 no_keyoff 24", "rest 24", "rest 24", "rest 72"],
+    );
+
+    // ::TODO merge remaining rests::
+    merge_mml_commands_test(
+        "c || & r <> r <> r <> r <> o4 <> r",
+        &["play_note c4 no_keyoff 24", "rest 24", "rest 24", "rest 72"],
+    );
+    merge_mml_commands_test(
+        "c <> & r <> r <> r <> r <> || <> r",
+        &["play_note c4 no_keyoff 24", "rest 24", "rest 24", "rest 72"],
+    );
+}
+
 // Found with cargo-fuzz.
 // This line takes 165ms to compile on my PC for a release build
 // and 7.5 seconds for a debug build.

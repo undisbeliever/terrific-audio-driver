@@ -943,6 +943,10 @@ fn merge_state_change(p: &mut Parser) -> bool {
     )
 }
 
+fn merge_all_state_changes(p: &mut Parser) {
+    while merge_state_change(p) {}
+}
+
 fn parse_mml_length(p: &mut Parser) -> MmlLength {
     let length_in_ticks = next_token_matches!(p, Token::PercentSign);
 
@@ -1612,7 +1616,7 @@ fn parse_panbrello<'a>(pos: FilePos, p: &mut Parser<'a, '_>) -> Command<'a> {
     }
 }
 
-// Assumes all ties have already been parsed.
+// Assumes all ties and state changes have already been parsed.
 // Requires the previously parsed token send a key-off event.
 fn parse_rests_after_rest(p: &mut Parser) -> CommandTicks {
     let mut ticks = CommandTicks::ZERO;
@@ -1685,6 +1689,9 @@ fn parse_ties_and_slur(start: CommandTicks, p: &mut Parser) -> (CommandTicks, bo
                 if let Some(t) = parse_and_add_tracked_optional_length(ticks, p) {
                     ticks = t;
                 } else {
+                    // Merge all state changes so next token is rest in `c & < > r`
+                    merge_all_state_changes(p);
+
                     // slur
                     return (ticks, true);
                 }
