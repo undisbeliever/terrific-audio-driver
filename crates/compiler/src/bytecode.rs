@@ -1260,10 +1260,9 @@ impl State {
         self.transpose_range
             .end_loop(analysis.transpose, start_loop_transpose_range);
         if let Some(t) = &mut self.subroutine_transpose_range {
-            t.end_loop(
-                analysis.transpose,
-                start_loop_subroutine_transpose_range.unwrap(),
-            );
+            if let Some(slstr) = start_loop_subroutine_transpose_range {
+                t.end_loop(analysis.transpose, slstr);
+            }
         }
 
         let stack_depth = u8::try_from(stack_depth).unwrap_or(u8::MAX);

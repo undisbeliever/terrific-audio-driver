@@ -1332,3 +1332,20 @@ A !s2
         ChannelError::CannotCallSubroutineRecursion("s1".to_owned()),
     )
 }
+
+#[test]
+fn subroutine_no_loop_end_loop_panic_bugfix() {
+    // Found using cargo-fuzz
+    assert_one_subroutine_error_in_mml(
+        r##"
+@1 dummy_instrument
+
+!s ]2
+
+A !s
+"##,
+        "!s",
+        4,
+        BytecodeError::NotInALoop.into(),
+    )
+}
