@@ -1618,10 +1618,10 @@ fn parse_panbrello<'a>(pos: FilePos, p: &mut Parser<'a, '_>) -> Command<'a> {
 
 // Assumes all ties and state changes have already been parsed.
 // Requires the previously parsed token send a key-off event.
-fn parse_rests_after_rest(p: &mut Parser) -> TicksAfterKeyoff {
+fn parse_rests_and_waits_after_rest(p: &mut Parser) -> TicksAfterKeyoff {
     let mut ticks = CommandTicks::ZERO;
 
-    if next_token_matches!(p, Token::Rest) {
+    if next_token_matches!(p, Token::Rest | Token::Wait) {
         ticks = parse_tracked_length(p);
 
         loop {
@@ -1630,6 +1630,7 @@ fn parse_rests_after_rest(p: &mut Parser) -> TicksAfterKeyoff {
 
                 // ::TODO rollback tokens on overflow::
                 Token::Rest => ticks = parse_and_add_tracked_length(ticks, p),
+                Token::Wait => ticks = parse_and_add_tracked_length(ticks, p),
                 Token::Tie => ticks = parse_and_add_tracked_length(ticks, p),
                 #_ => {
                     if !merge_state_change(p) {
@@ -1763,7 +1764,7 @@ fn parse_rest_lengths(p: &mut Parser) -> (CommandTicks, TicksAfterKeyoff) {
     let ticks_until_keyoff = parse_tracked_length(p);
     let ticks_until_keyoff = parse_ties(ticks_until_keyoff, p);
 
-    let ticks_after_keyoff = parse_rests_after_rest(p);
+    let ticks_after_keyoff = parse_rests_and_waits_after_rest(p);
 
     (ticks_until_keyoff, ticks_after_keyoff)
 }

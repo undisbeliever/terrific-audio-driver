@@ -56,6 +56,7 @@ MML changes:
  * The maximum length of an MML command is 65535 ticks (after commands have been merged)
  * Long MML commands and no-longer converted into loops
  * Multiple `r` rest commands now merge into a rest then wait.  (The `wait` bytecode is uses less spc700 CPU time than `rest` bytecode)
+ * `w` waits after `r` rest are now merged by the MML parser.  For example `r w r w r` will be merged into `r w1`.
 
 Bytecode assembly changes:
  * The maximum length of a `<duration>` argument is 65535 ticks

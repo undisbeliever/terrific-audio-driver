@@ -254,6 +254,60 @@ fn merged_large_rests() {
 }
 
 #[test]
+fn merge_wait_and_rest_after_rest() {
+    // User expects a keyoff after the first rest command
+    merge_mml_commands_test("r || w", &["rest 24", "wait 24"]);
+    merge_mml_commands_test("r || w8", &["rest 24", "wait 12"]);
+    merge_mml_commands_test("r%30||w%20", &["rest 30", "wait 20"]);
+
+    merge_mml_commands_test("r r || w", &["rest 24", "wait 48"]);
+    merge_mml_commands_test("r r || w8", &["rest 24", "wait 36"]);
+    merge_mml_commands_test("r%30 r%30||w%20", &["rest 30", "wait 50"]);
+
+    assert_line_matches_bytecode("r%300 w%256", &["rest 300", "wait 256"]);
+
+    merge_mml_commands_test("r%300 || w%300", &["rest 300", "wait 300"]);
+
+    merge_mml_commands_test("r%300 || r%300 w%300", &["rest 300", "wait 600"]);
+    merge_mml_commands_test("r%300 || w%300 r%300", &["rest 300", "wait 600"]);
+
+    merge_mml_commands_test("r%300 r%300 || w%300", &["rest 300", "wait 600"]);
+    merge_mml_commands_test("r%300 w%300 || r%300", &["rest 300", "wait 600"]);
+    merge_mml_commands_test("r%300 w%300 || w%300", &["rest 300", "wait 600"]);
+    merge_mml_commands_test("r%300 w%300 || r%300", &["rest 300", "wait 600"]);
+
+    merge_mml_commands_test(
+        "r%10 || w%20 r%30^%40 w%50^%60 r%70",
+        &["rest 10", "wait 270"],
+    );
+    merge_mml_commands_test(
+        "r%10 w%20 r%30^%40 || w%50^%60 r%70",
+        &["rest 10", "wait 270"],
+    );
+    merge_mml_commands_test(
+        "r%10 w%20 r%30^%40 w%50 || ^%60 r%70",
+        &["rest 10", "wait 270"],
+    );
+
+    merge_mml_commands_test(
+        "r%10 || r%20 w%30^%40 r%50^%60 w%70",
+        &["rest 10", "wait 270"],
+    );
+    merge_mml_commands_test(
+        "r%10 r%20 w%30^%40 || r%50^%60 w%70",
+        &["rest 10", "wait 270"],
+    );
+    merge_mml_commands_test(
+        "r%10 r%20 w%30^%40 r%50 || ^%60 w%70",
+        &["rest 10", "wait 270"],
+    );
+
+    // From `mml-syntax.md`
+    assert_line_matches_line_and_bytecode("r w r w r", "r w1", &["rest 24", "wait 96"]);
+    assert_line_matches_line_and_bytecode("r r w r r", "r w1", &["rest 24", "wait 96"]);
+}
+
+#[test]
 fn rest_after_keyoff_note() {
     assert_line_matches_bytecode("a r", &["play_note a4 24", "rest 24"]);
     assert_line_matches_bytecode("a r r", &["play_note a4 24", "rest 48"]);
