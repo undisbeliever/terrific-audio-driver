@@ -7,7 +7,7 @@
 use relative_path::RelativeToError;
 
 use crate::bytecode::{
-    BcTicks, BcTicksKeyOff, BcTicksNoKeyOff, DetuneValue, EarlyReleaseMinTicks, EarlyReleaseTicks,
+    BcTicksKeyOff, BcTicksNoKeyOff, DetuneValue, EarlyReleaseMinTicks, EarlyReleaseTicks,
     InstrumentId, LoopCount, NoiseFrequency, Pan, PanSlideAmount, PanSlideTicks,
     PanbrelloAmplitude, PanbrelloQuarterWavelengthInTicks, PlayPitchPitch, PortamentoSlideTicks,
     PortamentoVelocity, RelativeEchoFeedback, RelativeEchoVolume, RelativeFirCoefficient,
@@ -961,15 +961,15 @@ impl Display for ValueError {
                 f,
                 "invalid tick count ({}, expected {} - {})",
                 v,
-                BcTicksKeyOff::MIN_TICKS,
-                BcTicksKeyOff::MAX_TICKS
+                BcTicksKeyOff::MIN.ticks(),
+                BcTicksKeyOff::MAX.ticks(),
             ),
             Self::BcTicksNoKeyOffOutOfRange(v) => write!(
                 f,
                 "invalid tick count ({}, expected {} - {})",
                 v,
-                BcTicksNoKeyOff::MIN_TICKS,
-                BcTicksNoKeyOff::MAX_TICKS
+                BcTicksNoKeyOff::MIN.ticks(),
+                BcTicksNoKeyOff::MAX.ticks()
             ),
 
             Self::PlayPitchPitchOutOfRange(v) => {

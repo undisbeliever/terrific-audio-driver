@@ -7,8 +7,8 @@
 use super::commands::*;
 
 use crate::bytecode::{
-    self, BcTerminator, BcTicks, BcTicksKeyOff, BcTicksNoKeyOff, Bytecode, BytecodeContext,
-    DetuneValue, IeState, InstrumentId, LoopCount, PlayNoteTicks, PlayPitchPitch, RelativeVolume,
+    self, BcTerminator, BcTicksKeyOff, BcTicksNoKeyOff, Bytecode, BytecodeContext, DetuneValue,
+    IeState, InstrumentId, LoopCount, PlayNoteTicks, PlayPitchPitch, RelativeVolume,
     SlurredNoteState, VibratoPitchOffsetPerTick, VibratoState, KEY_OFF_TICK_DELAY,
 };
 use crate::bytecode_assembler::parse_asm_line;
@@ -860,8 +860,8 @@ impl<'a> ChannelBcGenerator<'a> {
                 }
             }
 
-            if !slur_last_note && t > 0 && t < BcTicksKeyOff::MIN_TICKS {
-                t = BcTicksKeyOff::MIN_TICKS;
+            if !slur_last_note && t > 0 && t < BcTicksKeyOff::MIN.ticks() {
+                t = BcTicksKeyOff::MIN.ticks();
             }
 
             t
