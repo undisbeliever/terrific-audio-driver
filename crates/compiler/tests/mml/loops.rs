@@ -189,7 +189,7 @@ fn only_one_error_for_out_of_range_note_in_loop() {
 
 #[test]
 fn loop_with_no_ticks_and_song_loop_panic_bugfix() {
-    // rust-fuzz discovered `A @1[]L` causes a "song-loop in loop" panic.
+    // cargo-fuzz discovered `A @1[]L` causes a "song-loop in loop" panic.
     // Investigating revealed the panic is caused by the loop without any ticks.
     assert_one_error_in_mml_line("[]2 L d", 2, BytecodeError::NoTicksInLoop.into())
 }

@@ -1257,7 +1257,7 @@ A @d o6c !s o4c o6d o4e
 
 #[test]
 fn song_loop_point_in_nested_subroutine_panic_bugfix() {
-    // found using rust-fuzz
+    // found using cargo-fuzz
     assert_one_subroutine_error_in_mml(
         r##"
 @0 dummy_instrument
@@ -1277,7 +1277,7 @@ A !s2
 fn tail_call_subroutine_with_compile_error_panic_bugfix() {
     let dummy_data = dummy_data();
 
-    // found using rust-fuzz
+    // found using cargo-fuzz
     let r = compiler::songs::compile_mml_song(
         r##"
 @0 dummy_instrument
@@ -1316,7 +1316,7 @@ A !s1
 
 #[test]
 fn self_recursion_loop_analysis_panic_bugfix() {
-    // Found using rust-fuzz (manually minimised)
+    // Found using cargo-fuzz (manually minimised)
     // Panics on the `:` skip last loop command in !s2
     assert_one_subroutine_error_in_mml(
         r##"

@@ -911,7 +911,7 @@ A \asm {
 #[test]
 fn instrument_hint_and_song_loop_panic_bugfix() {
     // "hint in song-loop" panic in compiler::bytecode::InstrumentState::demote_to_song_loop()
-    // found using rust-fuzz
+    // found using cargo-fuzz
     assert_one_error_in_channel_a_mml(
         r##"
 @0 dummy_instrument
