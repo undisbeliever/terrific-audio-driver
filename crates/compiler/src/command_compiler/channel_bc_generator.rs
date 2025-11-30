@@ -484,6 +484,7 @@ impl<'a> ChannelBcGenerator<'a> {
     }
 
     fn wait_after_keyoff(&mut self, length: TicksAfterKeyoff) -> Result<(), ChannelError> {
+        debug_assert!(self.bc.get_state().prev_slurred_note.is_not_slurred());
         if !length.0.is_zero() {
             self.bc.wait(length.0.try_into()?);
         }

@@ -1030,6 +1030,14 @@ pub enum SlurredNoteState {
 }
 
 impl SlurredNoteState {
+    pub fn is_not_slurred(&self) -> bool {
+        match self {
+            Self::Unchanged | Self::Unknown | Self::None => true,
+
+            Self::Slurred(..) | Self::SlurredPitch(_) | Self::SlurredNoise => false,
+        }
+    }
+
     fn merge_skip_last_loop(&mut self, o: &Self) {
         match o {
             SlurredNoteState::Unchanged => (),
@@ -2169,6 +2177,7 @@ impl<'a> Bytecode<'a> {
     pub fn set_temp_gain_and_rest(&mut self, gain: TempGain, length: BcTicksKeyOff) {
         self.state.prev_temp_gain = IeState::Known(gain);
         self.state.tick_counter += length.to_tick_count();
+        self.state.prev_slurred_note = SlurredNoteState::None;
 
         emit_bytecode!(self, opcodes::SET_TEMP_GAIN_AND_REST, gain.as_u8(),);
         self.emit_length_bytecode(length);
@@ -2187,6 +2196,7 @@ impl<'a> Bytecode<'a> {
 
     pub fn reuse_temp_gain_and_rest(&mut self, length: BcTicksKeyOff) {
         self.state.tick_counter += length.to_tick_count();
+        self.state.prev_slurred_note = SlurredNoteState::None;
 
         emit_bytecode!(self, opcodes::REUSE_TEMP_GAIN_AND_REST);
         self.emit_length_bytecode(length);
