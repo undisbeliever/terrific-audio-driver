@@ -63,10 +63,11 @@ Engine Limitations and Deliberate Design Decisions
          *pitch-offset per tick* value.
     * `MP` vibrato is precalculated by the MML compiler, the instrument must be known and audio
       driver transpose must be disabled.
- * There is a fixed 1 tick delay after a key-off event.
-    * 1 tick will be subtracted from any instruction that emits a key-off event.
+ * There is a minimum 1 tick delay between a key-off and key-on event.
+    * Instructions that emit a key-off event will key-off at least 1 tick before the instruction ends.
       For example, a `play_note c+4 16` instruction will play the note, sleep for 15 ticks, emit a
       key-off event, and sleep for 1 final tick.
+    * The key-off timing is controlled by the `q` early-release command.
     * This delay is required to prevent popping.
  * MML subroutines and loops share a bytecode stack.  The compiler will refuse to compile songs and
    sound effects that would cause a stack-overflow.
