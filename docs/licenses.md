@@ -107,7 +107,7 @@ Licenses marked "synthesized" did not have a license file in their crate.
 
 
 Terrific Audio Driver makes use of the following open source projects:
-  * MIT License (85)
+  * MIT License (75)
   * Apache License 2.0 (2)
   * zlib License (2)
   * Unicode License v3 (1)
@@ -118,7 +118,7 @@ Terrific Audio Driver makes use of the following open source projects:
 ## Apache License 2.0
 
 Used by:
-  * [codespan-reporting 0.12.0](https://github.com/brendanzab/codespan)
+  * [codespan-reporting 0.13.1](https://github.com/brendanzab/codespan)
 
 ```
                                  Apache License
@@ -414,16 +414,7 @@ limitations under the License.
 ## MIT License
 
 Used by:
-  * [windows-sys 0.60.2](https://github.com/microsoft/windows-rs)
-  * [windows-sys 0.61.1](https://github.com/microsoft/windows-rs)
-  * [windows-targets 0.53.4](https://github.com/microsoft/windows-rs)
-  * [windows_aarch64_gnullvm 0.53.0](https://github.com/microsoft/windows-rs)
-  * [windows_aarch64_msvc 0.53.0](https://github.com/microsoft/windows-rs)
-  * [windows_i686_gnu 0.53.0](https://github.com/microsoft/windows-rs)
-  * [windows_i686_msvc 0.53.0](https://github.com/microsoft/windows-rs)
-  * [windows_x86_64_gnu 0.53.0](https://github.com/microsoft/windows-rs)
-  * [windows_x86_64_gnullvm 0.53.0](https://github.com/microsoft/windows-rs)
-  * [windows_x86_64_msvc 0.53.0](https://github.com/microsoft/windows-rs)
+  * [windows-sys 0.61.2](https://github.com/microsoft/windows-rs)
 
 ```
     MIT License
@@ -563,10 +554,10 @@ DEALINGS IN THE SOFTWARE.
 ## MIT License
 
 Used by:
-  * [cc 1.2.40](https://github.com/rust-lang/cc-rs)
-  * [cfg-if 1.0.3](https://github.com/rust-lang/cfg-if)
+  * [cc 1.2.48](https://github.com/rust-lang/cc-rs)
+  * [cfg-if 1.0.4](https://github.com/rust-lang/cfg-if)
   * [cmake 0.1.54](https://github.com/rust-lang/cmake-rs)
-  * [find-msvc-tools 0.1.3](https://github.com/rust-lang/cc-rs)
+  * [find-msvc-tools 0.1.5](https://github.com/rust-lang/cc-rs)
 
 ```
 Copyright (c) 2014 Alex Crichton
@@ -602,12 +593,12 @@ DEALINGS IN THE SOFTWARE.
 
 Used by:
   * [bitflags 1.3.2](https://github.com/bitflags/bitflags)
-  * [bitflags 2.9.4](https://github.com/bitflags/bitflags)
+  * [bitflags 2.10.0](https://github.com/bitflags/bitflags)
   * [num-complex 0.4.6](https://github.com/rust-num/num-complex)
   * [num-traits 0.2.19](https://github.com/rust-num/num-traits)
-  * [regex-automata 0.4.11](https://github.com/rust-lang/regex)
-  * [regex-syntax 0.8.6](https://github.com/rust-lang/regex)
-  * [regex 1.11.3](https://github.com/rust-lang/regex)
+  * [regex-automata 0.4.13](https://github.com/rust-lang/regex)
+  * [regex-syntax 0.8.8](https://github.com/rust-lang/regex)
+  * [regex 1.12.2](https://github.com/rust-lang/regex)
   * [relative-path 2.0.1](https://github.com/udoprog/relative-path)
 
 ```
@@ -672,7 +663,7 @@ IN THE SOFTWARE.
 ## MIT License
 
 Used by:
-  * [libc 0.2.176](https://github.com/rust-lang/libc)
+  * [libc 0.2.177](https://github.com/rust-lang/libc)
 
 ```
 Copyright (c) 2014-2020 The Rust Project Developers
@@ -709,7 +700,7 @@ DEALINGS IN THE SOFTWARE.
 Used by:
   * [heck 0.5.0](https://github.com/withoutboats/heck)
   * [unicode-id 0.3.6](https://github.com/Boshen/unicode-id)
-  * [unicode-width 0.2.1](https://github.com/unicode-rs/unicode-width)
+  * [unicode-width 0.2.2](https://github.com/unicode-rs/unicode-width)
 
 ```
 Copyright (c) 2015 The Rust Project Developers
@@ -744,7 +735,7 @@ DEALINGS IN THE SOFTWARE.
 ## MIT License
 
 Used by:
-  * [hashbrown 0.16.0](https://github.com/rust-lang/hashbrown)
+  * [hashbrown 0.16.1](https://github.com/rust-lang/hashbrown)
 
 ```
 Copyright (c) 2016 Amanieu d'Antras
@@ -814,7 +805,7 @@ DEALINGS IN THE SOFTWARE.
 ## MIT License
 
 Used by:
-  * [indexmap 2.11.4](https://github.com/indexmap-rs/indexmap)
+  * [indexmap 2.12.1](https://github.com/indexmap-rs/indexmap)
 
 ```
 Copyright (c) 2016--2017
@@ -981,16 +972,16 @@ THE SOFTWARE.
 Used by:
   * [anstream 0.6.21](https://github.com/rust-cli/anstyle.git)
   * [anstyle-parse 0.2.7](https://github.com/rust-cli/anstyle.git)
-  * [anstyle-query 1.1.4](https://github.com/rust-cli/anstyle.git)
-  * [anstyle-wincon 3.0.10](https://github.com/rust-cli/anstyle.git)
+  * [anstyle-query 1.1.5](https://github.com/rust-cli/anstyle.git)
+  * [anstyle-wincon 3.0.11](https://github.com/rust-cli/anstyle.git)
   * [anstyle 1.0.13](https://github.com/rust-cli/anstyle.git)
-  * [clap 4.5.48](https://github.com/clap-rs/clap)
-  * [clap_builder 4.5.48](https://github.com/clap-rs/clap)
-  * [clap_derive 4.5.47](https://github.com/clap-rs/clap)
-  * [clap_lex 0.7.5](https://github.com/clap-rs/clap)
+  * [clap 4.5.53](https://github.com/clap-rs/clap)
+  * [clap_builder 4.5.53](https://github.com/clap-rs/clap)
+  * [clap_derive 4.5.49](https://github.com/clap-rs/clap)
+  * [clap_lex 0.7.6](https://github.com/clap-rs/clap)
   * [colorchoice 1.0.4](https://github.com/rust-cli/anstyle.git)
-  * [is_terminal_polyfill 1.70.1](https://github.com/polyfill-rs/is_terminal_polyfill)
-  * [once_cell_polyfill 1.70.1](https://github.com/polyfill-rs/once_cell_polyfill)
+  * [is_terminal_polyfill 1.70.2](https://github.com/polyfill-rs/is_terminal_polyfill)
+  * [once_cell_polyfill 1.70.2](https://github.com/polyfill-rs/once_cell_polyfill)
 
 ```
 Copyright (c) Individual contributors
@@ -1145,8 +1136,7 @@ SOFTWARE.
 
 Used by:
   * [libm 0.2.15](https://github.com/rust-lang/compiler-builtins)
-  * [windows-link 0.2.0](https://github.com/microsoft/windows-rs)
-  * [windows_i686_gnullvm 0.53.0](https://github.com/microsoft/windows-rs)
+  * [windows-link 0.2.1](https://github.com/microsoft/windows-rs)
 
 ```
 MIT License
@@ -1174,8 +1164,8 @@ USE OR OTHER DEALINGS IN THE SOFTWARE.
 ## MIT License
 
 Used by:
-  * [fltk-sys 1.5.15](https://github.com/fltk-rs/fltk-rs)
-  * [fltk 1.5.17](https://github.com/fltk-rs/fltk-rs)
+  * [fltk-sys 1.5.22](https://github.com/fltk-rs/fltk-rs)
+  * [fltk 1.5.22](https://github.com/fltk-rs/fltk-rs)
 
 ```
 MIT License
@@ -1206,24 +1196,51 @@ SOFTWARE.
 ## MIT License
 
 Used by:
-  * [cxx-build 1.0.186](https://github.com/dtolnay/cxx)
-  * [cxx 1.0.186](https://github.com/dtolnay/cxx)
-  * [cxxbridge-flags 1.0.186](https://github.com/dtolnay/cxx)
-  * [cxxbridge-macro 1.0.186](https://github.com/dtolnay/cxx)
+  * [minipaste 0.1.0](https://github.com/MoAlyousef/minipaste)
+
+```
+MIT License
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
+
+## MIT License
+
+Used by:
+  * [cxx-build 1.0.190](https://github.com/dtolnay/cxx)
+  * [cxx 1.0.190](https://github.com/dtolnay/cxx)
+  * [cxxbridge-flags 1.0.190](https://github.com/dtolnay/cxx)
+  * [cxxbridge-macro 1.0.190](https://github.com/dtolnay/cxx)
   * [itoa 1.0.15](https://github.com/dtolnay/itoa)
   * [link-cplusplus 1.0.12](https://github.com/dtolnay/link-cplusplus)
   * [once_cell 1.21.3](https://github.com/matklad/once_cell)
   * [paste 1.0.15](https://github.com/dtolnay/paste)
-  * [proc-macro2 1.0.101](https://github.com/dtolnay/proc-macro2)
-  * [quote 1.0.41](https://github.com/dtolnay/quote)
-  * [rustversion 1.0.22](https://github.com/dtolnay/rustversion)
+  * [proc-macro2 1.0.103](https://github.com/dtolnay/proc-macro2)
+  * [quote 1.0.42](https://github.com/dtolnay/quote)
   * [scratch 1.0.9](https://github.com/dtolnay/scratch)
   * [serde 1.0.228](https://github.com/serde-rs/serde)
   * [serde_core 1.0.228](https://github.com/serde-rs/serde)
   * [serde_derive 1.0.228](https://github.com/serde-rs/serde)
   * [serde_json 1.0.145](https://github.com/serde-rs/json)
-  * [syn 2.0.106](https://github.com/dtolnay/syn)
-  * [unicode-ident 1.0.19](https://github.com/dtolnay/unicode-ident)
+  * [syn 2.0.111](https://github.com/dtolnay/syn)
+  * [unicode-ident 1.0.22](https://github.com/dtolnay/unicode-ident)
 
 ```
 Permission is hereby granted, free of charge, to any
@@ -1286,7 +1303,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ## MIT License
 
 Used by:
-  * [aho-corasick 1.1.3](https://github.com/BurntSushi/aho-corasick)
+  * [aho-corasick 1.1.4](https://github.com/BurntSushi/aho-corasick)
   * [memchr 2.7.6](https://github.com/BurntSushi/memchr)
   * [termcolor 1.4.1](https://github.com/BurntSushi/termcolor)
 
@@ -1452,7 +1469,7 @@ DEALINGS IN THE SOFTWARE.
 ## Unicode License v3
 
 Used by:
-  * [unicode-ident 1.0.19](https://github.com/dtolnay/unicode-ident)
+  * [unicode-ident 1.0.22](https://github.com/dtolnay/unicode-ident)
 
 ```
 UNICODE LICENSE V3
