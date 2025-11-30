@@ -617,3 +617,28 @@ A MP20,2 @14 [c @13 d : @24 e]2 f
 
     // Nested loop instrument tuning analysis is tested in portamento module
 }
+
+#[test]
+fn mp_vibrato_prev_slurred_note_assert_panic_bugfix() {
+    // Found with cargo-fuzz
+    assert_line_matches_bytecode(
+        "e & ~1,7 MP0 a",
+        &[
+            "play_note e4 no_keyoff 24",
+            "set_vibrato 1 7",
+            "set_vibrato_depth_and_play_note 0 a4 24",
+        ],
+    );
+
+    assert_line_matches_bytecode(
+        "MP20,3 c d MP 40,3 e f & MP0 g",
+        &[
+            "set_vibrato 8 3",
+            "play_note c4 keyoff 24",
+            "set_vibrato_depth_and_play_note 9  d4 24",
+            "set_vibrato_depth_and_play_note 21 e4 24",
+            "set_vibrato_depth_and_play_note 22 f4 no_keyoff 24",
+            "set_vibrato_depth_and_play_note 0  g4 24",
+        ],
+    );
+}

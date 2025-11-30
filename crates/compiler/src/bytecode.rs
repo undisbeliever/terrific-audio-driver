@@ -1995,6 +1995,7 @@ impl<'a> Bytecode<'a> {
         let r = self._test_note_in_range(note);
 
         self.state.tick_counter += length.to_tick_count();
+        self.state.set_prev_slurred_note(note, length);
         self.state.vibrato.set_depth(pitch_offset_per_tick);
 
         let play_note_opcode = NoteOpcode::new(note, &length);
