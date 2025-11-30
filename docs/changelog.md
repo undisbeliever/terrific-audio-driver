@@ -1,8 +1,8 @@
 Terrific Audio Driver Changelog
 ===============================
 
-Version 0.2.0
-=============
+Version 0.2.0 beta 2
+====================
 
 **BREAKING CHANGES:**
  * `_` and `__` MML transpose commands now change a semitone offset inside the audio driver.
@@ -25,8 +25,10 @@ Driver changes:
  * Added `portamento_calc` and `portamento_pitch_calc` instructions that can
    automatically calculate the portamento velocity if the pitch slide is <= 255
    ticks long.
- * Added a transpose semitone offset to all play-note and portamento-note instructions.
+ * Added a transpose semitone offset to all play-note and portamento-note instructions
     * The transpose setting can be changed with the `set_transpose` and `adjust_transpose` bytecode instructions.
+ * The audio driver sleep countdownTimer is now a 16-bit value
+ * Bytecode instructions that sleep are now variable sized and can hold an 8-bit or 16-bit duration/length argument
  * The key-off logic has been rewritten
 
 MML changes:
@@ -55,13 +57,13 @@ MML changes:
  * Fixed missing no-instrument error in `P` pitch or `N` noise commands
  * The maximum length of an MML command is 65535 ticks (after commands have been merged)
  * Long MML commands and no-longer converted into loops
- * Multiple `r` rest commands now merge into a rest then wait.  (The `wait` bytecode is uses less spc700 CPU time than `rest` bytecode)
+ * Multiple `r` rest commands now merge into a rest then wait.  (The `wait` bytecode instruction uses less spc700 CPU time than `rest` instruction)
  * `w` waits after `r` rest are now merged by the MML parser.  For example `r w r w r` will be merged into `r w1`.
  * A rest immediately after an unslurred note is silently converted into a wait
 
 Bytecode assembly changes:
  * The maximum length of a `<duration>` argument is 65535 ticks
- * Improved out-of-range note testing in bytecode assembly sound effect
+ * Improved out-of-range note testing in bytecode assembly sound effects
  * Fixed missing no-instrument error in `play_pitch`, `portamento_pitch`, `portamento_pitch_calc` and `play_noise`.
 
 
