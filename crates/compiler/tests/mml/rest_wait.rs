@@ -309,32 +309,45 @@ fn merge_wait_and_rest_after_rest() {
 
 #[test]
 fn rest_after_keyoff_note() {
-    assert_line_matches_bytecode("a r", &["play_note a4 24", "rest 24"]);
-    assert_line_matches_bytecode("a r r", &["play_note a4 24", "rest 48"]);
+    assert_line_matches_bytecode("a r", &["play_note a4 24", "wait 24"]);
+    assert_line_matches_bytecode("a r r", &["play_note a4 24", "wait 48"]);
     assert_line_matches_bytecode("a w r", &["play_note a4 24", "wait 24", "rest 24"]);
 
-    merge_mml_commands_test("a r8 || ^8^8", &["play_note a4 24", "rest 36"]);
+    merge_mml_commands_test("a r8 || ^8^8", &["play_note a4 24", "wait 36"]);
 
     assert_line_matches_bytecode(
         "a2 b3 r8 r16 c32",
         &[
             "play_note a4 48",
             "play_note b4 32",
-            "rest 18",
+            "wait 18",
             "play_note c4 3",
         ],
     );
 
     assert_line_matches_bytecode("a r%1", &["play_note a4 24", "wait 1"]);
-    assert_line_matches_bytecode("a r%2", &["play_note a4 24", "rest 2"]);
+    assert_line_matches_bytecode("a r%2", &["play_note a4 24", "wait 2"]);
 
-    assert_line_matches_bytecode("a%50 r%500", &["play_note a4 50", "rest 500"]);
-    assert_line_matches_bytecode("a%600 r%600", &["play_note a4 keyoff 600", "rest 600"]);
+    assert_line_matches_bytecode("a%50 r%500", &["play_note a4 50", "wait 500"]);
+    assert_line_matches_bytecode("a%600 r%600", &["play_note a4 keyoff 600", "wait 600"]);
 
-    merge_mml_commands_test("a%300 || r%400 r%500", &["play_note a4 300", "rest 900"]);
-    merge_mml_commands_test("a%300 r%400 || r%500", &["play_note a4 300", "rest 900"]);
+    merge_mml_commands_test("a%300 || r%400 r%500", &["play_note a4 300", "wait 900"]);
+    merge_mml_commands_test("a%300 r%400 || r%500", &["play_note a4 300", "wait 900"]);
 
-    assert_line_matches_bytecode("a%2561 r%2570", &["play_note a4 keyoff 2561", "rest 2570"]);
+    assert_line_matches_bytecode("a%2561 r%2570", &["play_note a4 keyoff 2561", "wait 2570"]);
+}
+
+#[test]
+fn rest_at_end_of_slur_chain_is_rest() {
+    assert_line_matches_bytecode(
+        "a & V-50 w4 r8",
+        &[
+            "play_note a4 no_keyoff 24",
+            "adjust_volume -50",
+            "wait 24",
+            "rest 12",
+        ],
+    );
 }
 
 // The rest after a slurred note must not be merged with successive rests
@@ -402,16 +415,16 @@ fn merge_rests_mutliple_state_tokens_is_merged() {
 
 #[test]
 fn note_then_mutliple_state_tokens_then_rest_is_merged() {
-    merge_mml_commands_test("c ||   r <> r", &["play_note c4 24", "rest 48"]);
-    merge_mml_commands_test("c <>   r || r", &["play_note c4 24", "rest 48"]);
+    merge_mml_commands_test("c ||   r <> r", &["play_note c4 24", "wait 48"]);
+    merge_mml_commands_test("c <>   r || r", &["play_note c4 24", "wait 48"]);
 
     merge_mml_commands_test(
         "c || r <> r <> r <> r <> o4 <> r",
-        &["play_note c4 24", "rest 120"],
+        &["play_note c4 24", "wait 120"],
     );
     merge_mml_commands_test(
         "c <> r <> r <> r <> r <> || <> r",
-        &["play_note c4 24", "rest 120"],
+        &["play_note c4 24", "wait 120"],
     );
 }
 

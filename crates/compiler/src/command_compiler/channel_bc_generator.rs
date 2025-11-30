@@ -74,11 +74,10 @@ enum MpState {
 
 /// Waits and rests after a play-note/portamento/etc instructions
 enum AfterPlayNote {
-    Wait {
-        rest: CommandTicks,
+    Rest {
+        ticks: CommandTicks,
     },
-    EnableKeyOn,
-    KeyOff {
+    WaitAfterKeyoff {
         ticks_after_keyoff: CommandTicks,
     },
     TempGain {
@@ -86,6 +85,7 @@ enum AfterPlayNote {
         ticks_until_keyoff: CommandTicks,
         ticks_after_keyoff: TicksAfterKeyoff,
     },
+    EnableKeyOn,
 }
 
 struct ChannelBcGenerator<'a> {
@@ -303,7 +303,7 @@ impl<'a> ChannelBcGenerator<'a> {
             let pn_ticks = PlayNoteTicks::try_from_is_slur(length, false)?;
             Ok((
                 pn_ticks,
-                AfterPlayNote::KeyOff {
+                AfterPlayNote::WaitAfterKeyoff {
                     ticks_after_keyoff: rest_after_note,
                 },
             ))
@@ -314,8 +314,8 @@ impl<'a> ChannelBcGenerator<'a> {
                 let pn_ticks = PlayNoteTicks::try_from_is_slur(length, true)?;
                 Ok((
                     pn_ticks,
-                    AfterPlayNote::Wait {
-                        rest: rest_after_note,
+                    AfterPlayNote::Rest {
+                        ticks: rest_after_note,
                     },
                 ))
             }
@@ -336,7 +336,7 @@ impl<'a> ChannelBcGenerator<'a> {
 
                         Ok((
                             pn_ticks,
-                            AfterPlayNote::KeyOff {
+                            AfterPlayNote::WaitAfterKeyoff {
                                 ticks_after_keyoff: CommandTicks::new(0),
                             },
                         ))
@@ -353,7 +353,10 @@ impl<'a> ChannelBcGenerator<'a> {
                     let ticks_after_keyoff =
                         CommandTicks::new(l - note_length.value()).checked_add(rest_after_note)?;
                     let pn_ticks = PlayNoteTicks::try_from_is_slur(note_length, false)?;
-                    Ok((pn_ticks, AfterPlayNote::KeyOff { ticks_after_keyoff }))
+                    Ok((
+                        pn_ticks,
+                        AfterPlayNote::WaitAfterKeyoff { ticks_after_keyoff },
+                    ))
                 } else {
                     // Note is too short to be quantized
                     no_quantize_or_slur_keyoff()
@@ -385,20 +388,24 @@ impl<'a> ChannelBcGenerator<'a> {
 
     fn after_note(&mut self, after: AfterPlayNote) -> Result<(), ChannelError> {
         match after {
-            AfterPlayNote::Wait { rest } => self.maybe_rest(rest),
-            AfterPlayNote::EnableKeyOn => {
-                self.bc.keyon_next_note();
-                Ok(())
+            AfterPlayNote::Rest { ticks } => self.maybe_rest(ticks),
+            AfterPlayNote::WaitAfterKeyoff { ticks_after_keyoff } => {
+                debug_assert!(self.bc.get_state().prev_slurred_note.is_not_slurred());
+                if !ticks_after_keyoff.is_zero() {
+                    self.wait(ticks_after_keyoff)
+                } else {
+                    Ok(())
+                }
             }
-            AfterPlayNote::KeyOff { ticks_after_keyoff } => match ticks_after_keyoff.value() {
-                1 => self.wait(ticks_after_keyoff),
-                _ => self.maybe_rest(ticks_after_keyoff),
-            },
             AfterPlayNote::TempGain {
                 temp_gain,
                 ticks_until_keyoff,
                 ticks_after_keyoff,
             } => self.temp_gain_and_rest(Some(temp_gain), ticks_until_keyoff, ticks_after_keyoff),
+            AfterPlayNote::EnableKeyOn => {
+                self.bc.keyon_next_note();
+                Ok(())
+            }
         }
     }
 

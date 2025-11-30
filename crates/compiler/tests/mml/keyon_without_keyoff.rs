@@ -333,7 +333,7 @@ fn test_two_rests_bugfix() {
 
 #[test]
 fn test_k1_two_rests_unchanged() {
-    assert_line_matches_bytecode("K1 c r r", &["play_note c4 keyoff 24", "rest 48"]);
+    assert_line_matches_bytecode("K1 c r r", &["play_note c4 keyoff 24", "wait 48"]);
 
     assert_line_matches_bytecode(
         "K1 c & r r",
@@ -357,7 +357,7 @@ fn coarse_quantization() {
         "Q1 K0 c%80 Q8 d",
         &[
             "play_note c4 keyoff 11",
-            "rest 69",
+            "wait 69",
             // Q8
             "play_note d4 no_keyoff 24",
             "keyon_next_note",
@@ -389,7 +389,7 @@ fn fine_quantization() {
         "Q%1 K0 c%80 Q8 d",
         &[
             "play_note c4 keyoff 2",
-            "rest 78",
+            "wait 78",
             // Q8
             "play_note d4 no_keyoff 24",
             "keyon_next_note",

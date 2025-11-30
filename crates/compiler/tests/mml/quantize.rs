@@ -8,79 +8,84 @@ use crate::*;
 fn coarse_quantization() {
     // Cannot use `assert_mml_matches_mml`.
     // There is a single rest tick at the end of a play_note instruction
-    assert_line_matches_bytecode("Q1 c%80", &["play_note c4 11", "rest 69"]);
-    assert_line_matches_bytecode("Q2 c%80", &["play_note c4 21", "rest 59"]);
-    assert_line_matches_bytecode("Q3 c%80", &["play_note c4 31", "rest 49"]);
-    assert_line_matches_bytecode("Q4 c%80", &["play_note c4 41", "rest 39"]);
-    assert_line_matches_bytecode("Q5 c%80", &["play_note c4 51", "rest 29"]);
-    assert_line_matches_bytecode("Q6 c%80", &["play_note c4 61", "rest 19"]);
-    assert_line_matches_bytecode("Q7 c%80", &["play_note c4 71", "rest  9"]);
+    assert_line_matches_bytecode("Q1 c%80", &["play_note c4 11", "wait 69"]);
+    assert_line_matches_bytecode("Q2 c%80", &["play_note c4 21", "wait 59"]);
+    assert_line_matches_bytecode("Q3 c%80", &["play_note c4 31", "wait 49"]);
+    assert_line_matches_bytecode("Q4 c%80", &["play_note c4 41", "wait 39"]);
+    assert_line_matches_bytecode("Q5 c%80", &["play_note c4 51", "wait 29"]);
+    assert_line_matches_bytecode("Q6 c%80", &["play_note c4 61", "wait 19"]);
+    assert_line_matches_bytecode("Q7 c%80", &["play_note c4 71", "wait  9"]);
     assert_line_matches_bytecode("Q8 c%80", &["play_note c4 80"]);
 
-    assert_line_matches_bytecode("Q4 c", &["play_note c4 13", "rest 11"]);
+    assert_line_matches_bytecode("Q4 c", &["play_note c4 13", "wait 11"]);
 
-    merge_mml_commands_test("Q4 || c%100 r%100", &["play_note c4 51", "rest 149"]);
-    merge_mml_commands_test("Q4 c%100 || r%100", &["play_note c4 51", "rest 149"]);
+    merge_mml_commands_test("Q4 || c%100 r%100", &["play_note c4 51", "wait 149"]);
+    merge_mml_commands_test("Q4 c%100 || r%100", &["play_note c4 51", "wait 149"]);
 
     // Test with tie
-    merge_mml_commands_test("Q4 c%100 || ^ %100", &["play_note c4 101", "rest 99"]);
-    merge_mml_commands_test("Q4 c%100 || & %100", &["play_note c4 101", "rest 99"]);
+    merge_mml_commands_test("Q4 c%100 || ^ %100", &["play_note c4 101", "wait 99"]);
+    merge_mml_commands_test("Q4 c%100 || & %100", &["play_note c4 101", "wait 99"]);
 
     // Test with tie and rest
     merge_mml_commands_test(
         "Q2 c%50 ^%50 || r%50 r%50",
-        &["play_note c4 26", "rest 174"],
+        &["play_note c4 26", "wait 174"],
     );
     merge_mml_commands_test(
         "Q6 c%70 & %30 || r%50 r%50",
-        &["play_note c4 76", "rest 124"],
+        &["play_note c4 76", "wait 124"],
     );
     merge_mml_commands_test(
         "Q6 c%70 & %30 || r%50 r%50 r%257",
-        &["play_note c4 76", "rest 381"],
+        &["play_note c4 76", "wait 381"],
     );
 
-    assert_line_matches_bytecode("Q4 c%70 r%600", &["play_note c4 36", "rest 634"]);
+    assert_line_matches_bytecode("Q4 c%70 r%600", &["play_note c4 36", "wait 634"]);
 
     assert_line_matches_bytecode(
         "Q4 c Q8 d Q6 e",
         &[
             "play_note c4 13",
-            "rest 11",
+            "wait 11",
             "play_note d4 24",
             "play_note e4 19",
-            "rest 5",
+            "wait 5",
         ],
     );
 }
 
 #[test]
 fn fine_quantisation() {
-    // Cannot use `assert_mml_matches_mml`.
-    // There is a single rest tick at the end of a play_note instruction
+    assert_line_matches_line_and_bytecode("Q%1  c%80", "c%2 w%78", &["play_note c4 2", "wait 78"]);
 
-    assert_line_matches_bytecode("Q%1  c%80", &["play_note c4 2", "rest 78"]);
+    assert_line_matches_line_and_bytecode("Q%10 c%80", "c%4 w%76", &["play_note c4 4", "wait 76"]);
+    assert_line_matches_line_and_bytecode(
+        "Q%128 c%80",
+        "c%41 w%39",
+        &["play_note c4 41", "wait 39"],
+    );
+    assert_line_matches_line_and_bytecode(
+        "Q%$c0 c%80",
+        "c%61 w%19",
+        &["play_note c4 61", "wait 19"],
+    );
 
-    assert_line_matches_bytecode("Q%10 c%80", &["play_note c4 4", "rest 76"]);
-    assert_line_matches_bytecode("Q%128 c%80", &["play_note c4 41", "rest 39"]);
-    assert_line_matches_bytecode("Q%$c0 c%80", &["play_note c4 61", "rest 19"]);
+    assert_line_matches_line_and_bytecode("Q%249 c%80", "c%78 w%2", &["play_note c4 78", "wait 2"]);
+    assert_line_matches_line_and_bytecode("Q%250 c%80", "c%79 w%1", &["play_note c4 79", "wait 1"]);
 
-    assert_line_matches_bytecode("Q%249  c%80", &["play_note c4 78", "rest 2"]);
-    assert_line_matches_bytecode("Q%250  c%80", &["play_note c4 79", "wait 1"]);
+    assert_line_matches_line_and_bytecode("Q%252 c%80", "c%79 w%1", &["play_note c4 79", "wait 1"]);
+    assert_line_matches_line_and_bytecode("Q%253  c%80", "c%80", &["play_note c4 80"]);
 
-    assert_line_matches_bytecode("Q%252  c%80", &["play_note c4 79", "wait 1"]);
-    assert_line_matches_bytecode("Q%253  c%80", &["play_note c4 80"]);
-
-    assert_line_matches_bytecode("Q%255  c%80", &["play_note c4 80"]);
+    assert_line_matches_line_and_bytecode("Q%255  c%80", "c%80", &["play_note c4 80"]);
 }
 
 #[test]
 fn quantization_of_short_note_then_rest_bugfix() {
     // The rest notes were erroniously dropped and ignored
 
-    assert_line_matches_bytecode("Q8 c%6 r%6", &["play_note c4 6", "rest 6"]);
+    assert_line_matches_bytecode("Q8 c%6 r%6", &["play_note c4 6", "wait 6"]);
 
-    assert_line_matches_bytecode("Q%255  c%100 r%100", &["play_note c4 100", "rest 100"]);
+    assert_line_matches_bytecode("Q%255  c%100 r%100", &["play_note c4 100", "wait 100"]);
 }
 
 #[test]
@@ -140,7 +145,7 @@ fn quantized_portamento() {
         &[
             "play_note d4 no_keyoff 1",
             "portamento f4 keyoff +10 12",
-            "rest 11",
+            "wait 11",
         ],
     );
 
@@ -149,7 +154,7 @@ fn quantized_portamento() {
         &[
             "play_note d4 no_keyoff 1",
             "portamento f4 keyoff +10 24",
-            "rest 23",
+            "wait 23",
         ],
     );
 
@@ -158,7 +163,7 @@ fn quantized_portamento() {
         &[
             "play_note d4 no_keyoff 24",
             "portamento f4 keyoff +10 13",
-            "rest 11",
+            "wait 11",
         ],
     );
 
@@ -167,7 +172,7 @@ fn quantized_portamento() {
         &[
             "play_note d4 no_keyoff 1",
             "portamento f4 keyoff +10 24",
-            "rest 23",
+            "wait 23",
         ],
     );
 
@@ -199,7 +204,7 @@ fn quantized_portamento() {
             "portamento f4 no_keyoff +10 23",
             // play note is quantized
             "play_note b4 13",
-            "rest 11",
+            "wait 11",
         ],
     );
 
@@ -212,7 +217,7 @@ fn quantized_portamento() {
         &[
             "play_note d4 no_keyoff 12",
             "portamento f4 keyoff +15 7",
-            "rest 5",
+            "wait 5",
         ],
     );
 
@@ -228,7 +233,7 @@ fn quantized_portamento() {
             "play_note d4 no_keyoff 1",
             "portamento f4 keyoff +10 12",
             // 360 + 11 ticks of rest
-            "rest 371",
+            "wait 371",
         ],
     );
 
@@ -263,14 +268,14 @@ fn quantizing_portamento_does_not_change_velocity() {
         &[
             "play_note d4 no_keyoff 1",
             &format!("portamento f4 keyoff {VELOCITY} 12"),
-            "rest 11",
+            "wait 11",
         ],
     );
 }
 
 #[test]
 fn quantize_long_note() {
-    assert_line_matches_bytecode("Q2 c%8000", &["play_note c4 keyoff 2001", "rest 5999"]);
+    assert_line_matches_bytecode("Q2 c%8000", &["play_note c4 keyoff 2001", "wait 5999"]);
 }
 
 #[test]
