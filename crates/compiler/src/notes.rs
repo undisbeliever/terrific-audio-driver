@@ -176,8 +176,12 @@ impl Note {
 
     /// audio-driver note_id.
     /// NOT MIDI-note-number and NOT Piano-key-number
-    pub fn note_id(&self) -> u8 {
+    pub const fn note_id(&self) -> u8 {
         self.note_id
+    }
+
+    pub fn i32_note_id(&self) -> i32 {
+        self.note_id.into()
     }
 
     fn from_note_id(note_id: u8) -> Result<Self, ValueError> {
@@ -187,6 +191,19 @@ impl Note {
         assert!(LAST_NOTE_ID < u8::MAX);
 
         Ok(Note { note_id })
+    }
+
+    pub fn from_i32_clamp(note_id: i32) -> Self {
+        const MIN: i32 = Note::MIN.note_id as i32;
+        const MAX: i32 = Note::MAX.note_id as i32;
+
+        match note_id {
+            MIN..=MAX => Self {
+                note_id: note_id.try_into().unwrap(),
+            },
+            ..MIN => Self::MIN,
+            _ => Self::MAX,
+        }
     }
 
     pub fn from_note_id_u32(note_id: u32) -> Result<Self, ValueError> {

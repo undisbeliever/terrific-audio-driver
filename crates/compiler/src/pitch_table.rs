@@ -11,18 +11,22 @@ use crate::data::{Instrument, InstrumentOrSample, Sample, UniqueNamesList};
 use crate::driver_constants::{MAX_INSTRUMENTS_AND_SAMPLES, MAX_N_PITCHES};
 use crate::errors::ValueError;
 use crate::errors::{PitchError, PitchTableError};
-use crate::notes::{self, Note, Octave};
+use crate::notes::{self, Note};
 use crate::value_newtypes::u16_value_newtype;
 use crate::value_newtypes::u32_value_newtype;
 
-const SEMITONES_PER_OCTAVE: i32 = notes::SEMITONES_PER_OCTAVE as i32;
 const PITCH_TABLE_OFFSET: u8 = opcodes::FIRST_PLAY_NOTE_INSTRUCTION / 2;
 
-// Using micro-semitones to remove floating point equality comparisons.
-const SEMITONE_SCALE: i32 = 1_000_000;
-const MICROSEMITONES_PER_OCTAVE: i32 = SEMITONE_SCALE * SEMITONES_PER_OCTAVE;
+const SEMITONES_PER_OCTAVE: i32 = notes::SEMITONES_PER_OCTAVE as i32;
 
-const A4_C0_MICROSEMITONE_OFFSET: i32 = 57 * SEMITONE_SCALE;
+// Using micro-semitones to remove floating point equality comparisons.
+const MICROSEMITONE_SCALE: i32 = 1_000_000;
+const MICROSEMITONES_PER_OCTAVE: i32 = MICROSEMITONE_SCALE * SEMITONES_PER_OCTAVE;
+
+const FIRST_SEMITONE: i32 = Note::MIN.note_id() as i32;
+const LAST_SEMITONE: i32 = Note::MAX.note_id() as i32;
+
+const A4_C0_MICROSEMITONE_OFFSET: i32 = 57 * MICROSEMITONE_SCALE;
 const A4_FREQ: u32 = 440;
 
 const F64_A4_FREQ: f64 = A4_FREQ as f64;
@@ -34,7 +38,7 @@ const SPC_SAMPLE_RATE: u32 = 32000;
 const MIN_SAMPLE_FREQ: f64 = 27.5; // a0
 const MAX_SAMPLE_FREQ: f64 = (SPC_SAMPLE_RATE / 2) as f64;
 
-const MIN_MIN_OCTAVE_OFFSET: i32 = -7;
+const MIN_MIN_SEMITONE_OFFSET: i32 = -(8 * SEMITONES_PER_OCTAVE - 1);
 
 const PITCH_REGISTER_FP_SCALE: u32 = 0x1000;
 pub const PITCH_REGISTER_MAX: u16 = 0x3fff;
@@ -42,10 +46,17 @@ const PITCH_REGISTER_FLOAT_LIMIT: f64 = 4.0;
 
 #[derive(Clone)]
 pub struct InstrumentPitch {
-    microsemitones_above_c: i32,
-    octaves_above_c0: i32,
-    min_octave_offset: i32,
-    max_octave_offset: i32,
+    /// Fractional micro-semitones for the tuning frequency.
+    /// Fractional component only.
+    microsemitones: i32,
+    /// Number of semitones between tuning frequency and c0
+    semitones_above_c0: i32,
+
+    /// Minimum offset between note-range and tuning frequency, in semitones.
+    min_semitone_offset: i32,
+
+    /// Maximum offset between note-range and tuning frequency, in semitones.
+    max_semitone_offset: i32,
 }
 
 #[derive(Clone)]
@@ -53,18 +64,18 @@ pub struct SamplePitches {
     pitches: Vec<u16>,
 }
 
-// Calculates the maximum number of octaves a sample can be incremented by.
+// Calculates the maximum number of semitones a sample can be incremented by.
 //
 // Samples whose frequency is > b and < c can be increased by two octaves.
 // All other sample frequencies can only be increased a single octave.
-fn maximum_octave_increment(microsemitones_above_c: i32) -> i32 {
-    assert!((0..MICROSEMITONES_PER_OCTAVE).contains(&microsemitones_above_c));
+fn maximum_semitone_increment(microsemitones: i32) -> i32 {
+    assert!((0..MICROSEMITONE_SCALE).contains(&microsemitones));
 
-    if microsemitones_above_c <= (SEMITONES_PER_OCTAVE - 1) * SEMITONE_SCALE {
-        1
-    } else {
-        2
-    }
+    let max_microsemitones_playback =
+        (f64::log2((PITCH_REGISTER_MAX as f64) / (PITCH_REGISTER_FP_SCALE as f64))
+            * MICROSEMITONES_PER_OCTAVE as f64) as i32;
+
+    (max_microsemitones_playback + microsemitones) / MICROSEMITONE_SCALE
 }
 
 pub fn instrument_pitch(inst: &Instrument) -> Result<InstrumentPitch, PitchError> {
@@ -80,6 +91,9 @@ pub fn instrument_pitch(inst: &Instrument) -> Result<InstrumentPitch, PitchError
         return Err(PitchError::FirstOctaveGreaterThanLastOctave);
     }
 
+    let first_semitone = Note::first_note_for_octave(inst.first_octave).i32_note_id();
+    let last_semitone = Note::last_note_for_octave(inst.last_octave).i32_note_id();
+
     let mst_above_c0 =
         f64::log2(inst.freq / F64_A4_FREQ) * F64_MST_PER_OCTAVE + F64_A4_C0_MST_OFFSET;
 
@@ -91,38 +105,39 @@ pub fn instrument_pitch(inst: &Instrument) -> Result<InstrumentPitch, PitchError
     assert!(mst_above_c0 > 0.0);
     let mst_above_c0 = mst_above_c0.round() as i32;
 
-    let octaves_above_c0: i32 = mst_above_c0 / MICROSEMITONES_PER_OCTAVE;
-    let microsemitones_above_c: i32 = mst_above_c0 % MICROSEMITONES_PER_OCTAVE;
+    let semitones_above_c0: i32 = mst_above_c0 / MICROSEMITONE_SCALE;
+    let microsemitones: i32 = mst_above_c0 % MICROSEMITONE_SCALE;
 
-    let maximum_octave_increment = maximum_octave_increment(microsemitones_above_c);
+    let maximum_semitone_increment = maximum_semitone_increment(microsemitones);
 
-    let min_octave_offset = inst.first_octave.as_i32() - octaves_above_c0;
-    let max_octave_offset = inst.last_octave.as_i32() - octaves_above_c0;
+    let min_semitone_offset = first_semitone - semitones_above_c0;
+    let max_semitone_offset = last_semitone - semitones_above_c0;
 
-    let first_octave_valid = min_octave_offset >= MIN_MIN_OCTAVE_OFFSET;
-    let last_octave_valid = max_octave_offset <= maximum_octave_increment;
+    let first_semitone_valid = min_semitone_offset >= MIN_MIN_SEMITONE_OFFSET;
+    let last_semitone_valid = max_semitone_offset <= maximum_semitone_increment;
 
-    if first_octave_valid && last_octave_valid {
+    if first_semitone_valid && last_semitone_valid {
         Ok(InstrumentPitch {
-            microsemitones_above_c,
-            octaves_above_c0,
-            min_octave_offset,
-            max_octave_offset,
+            microsemitones,
+            semitones_above_c0,
+            min_semitone_offset,
+            max_semitone_offset,
         })
     } else {
-        let octave_range = (octaves_above_c0 + MIN_MIN_OCTAVE_OFFSET)
-            .clamp(0, Octave::MAX.as_i32())
-            .try_into()
-            .unwrap()
-            ..=(octaves_above_c0 + maximum_octave_increment)
-                .clamp(0, Octave::MAX.as_i32())
-                .try_into()
-                .unwrap();
+        const SEMITONES_PER_OCTAVE: u8 = notes::SEMITONES_PER_OCTAVE;
 
-        match (first_octave_valid, last_octave_valid) {
-            (false, true) => Err(PitchError::FirstOctaveTooLow(octave_range)),
-            (true, false) => Err(PitchError::LastOctaveTooHigh(octave_range)),
-            (_, _) => Err(PitchError::FirstOctaveTooLowLastOctaveTooHigh(octave_range)),
+        let min_semitone = Note::from_i32_clamp(semitones_above_c0 + MIN_MIN_SEMITONE_OFFSET);
+        let max_semitone = Note::from_i32_clamp(semitones_above_c0 + maximum_semitone_increment);
+
+        let valid_octaves = min_semitone.note_id().div_ceil(SEMITONES_PER_OCTAVE)
+            ..=((max_semitone.note_id() - notes::SEMITONES_PER_OCTAVE + 1) / SEMITONES_PER_OCTAVE);
+
+        match (first_semitone_valid, last_semitone_valid) {
+            (false, true) => Err(PitchError::FirstOctaveTooLow(valid_octaves)),
+            (true, false) => Err(PitchError::LastOctaveTooHigh(valid_octaves)),
+            (_, _) => Err(PitchError::FirstOctaveTooLowLastOctaveTooHigh(
+                valid_octaves,
+            )),
         }
     }
 }
@@ -131,25 +146,27 @@ pub fn instrument_pitch(inst: &Instrument) -> Result<InstrumentPitch, PitchError
 ///
 /// Used by the play-sample feature of the GUI.
 ///
-/// Returns: a new `InstrumentPitch` and the maximum octave used by the pitch.
-pub(crate) fn maximize_pitch_range(pitch: &InstrumentPitch) -> (InstrumentPitch, Octave) {
-    let maximum_octave_increment = maximum_octave_increment(pitch.microsemitones_above_c);
+/// Returns: a new `InstrumentPitch` and the largest note that can be played with `pitch`.
+pub(crate) fn maximize_pitch_range(pitch: &InstrumentPitch) -> (InstrumentPitch, Note) {
+    let maximum_semitone_increment = maximum_semitone_increment(pitch.microsemitones);
 
-    let max_octave = (pitch.octaves_above_c0 + maximum_octave_increment)
-        .clamp(Octave::MIN.as_i32(), Octave::MAX.as_i32());
-    let max_octave = Octave::try_new(max_octave.try_into().unwrap()).unwrap();
+    let max_semitone = (pitch.semitones_above_c0 + maximum_semitone_increment)
+        .clamp(FIRST_SEMITONE, LAST_SEMITONE);
 
-    let min_octave_offset = Octave::MIN.as_i32() - pitch.octaves_above_c0;
-    let max_octave_offset = max_octave.as_i32() - pitch.octaves_above_c0;
+    let max_note = Note::from_note_id_u32(max_semitone.try_into().unwrap()).unwrap();
+
+    let min_semitone_offset = FIRST_SEMITONE - pitch.semitones_above_c0;
+    let max_semitone_offset = max_semitone - pitch.semitones_above_c0;
 
     let new_pitch = InstrumentPitch {
-        microsemitones_above_c: pitch.microsemitones_above_c,
-        octaves_above_c0: pitch.octaves_above_c0,
-        min_octave_offset,
-        max_octave_offset,
+        microsemitones: pitch.microsemitones,
+        semitones_above_c0: pitch.semitones_above_c0,
+
+        min_semitone_offset,
+        max_semitone_offset,
     };
 
-    (new_pitch, max_octave)
+    (new_pitch, max_note)
 }
 
 // Using sorted vector instead of Map as I need a reproducible pitch table.
@@ -178,7 +195,7 @@ fn sort_pitches_vec(
     samples: Vec<(usize, SamplePitches)>,
 ) -> SortedPitches {
     // Using stable sort instead of a hashmap to ensure pitch_table is deterministic
-    instruments.sort_by_key(|(_, p)| p.microsemitones_above_c);
+    instruments.sort_by_key(|(_, p)| p.microsemitones);
     SortedPitches {
         instruments,
         samples,
@@ -242,7 +259,7 @@ fn inst_pitch_vec(
 }
 
 struct MstIterator<'a> {
-    // assumes `remaining` is sorted by `microsemitones_above_c.
+    // assumes `remaining` is sorted by `microsemitones`.
     remaining: &'a [(usize, InstrumentPitch)],
 }
 
@@ -258,9 +275,9 @@ impl<'a> Iterator for MstIterator<'a> {
     fn next(&mut self) -> Option<Self::Item> {
         let r = self.remaining;
 
-        let mst = r.first()?.1.microsemitones_above_c;
+        let mst = r.first()?.1.microsemitones;
 
-        let p = r.partition_point(|(_, ip)| ip.microsemitones_above_c == mst);
+        let p = r.partition_point(|(_, ip)| ip.microsemitones == mst);
 
         let (out, r) = r.split_at(p);
         self.remaining = r;
@@ -280,18 +297,18 @@ fn process_pitch_vecs(sorted_pitches: SortedPitches, n_instruments_and_samples: 
 
     // Instruments
     for (mst, slice) in group_by_mst(&sorted_pitches) {
-        // mst = microsemitones_above_c
+        // mst = microsemitones
         assert!(mst >= 0);
         assert!(!slice.is_empty());
 
-        let min_octave_offset = slice
+        let min_semitone_offset = slice
             .iter()
-            .map(|(_, ip)| ip.min_octave_offset)
+            .map(|(_, ip)| ip.min_semitone_offset)
             .min()
             .unwrap();
-        let max_octave_offset = slice
+        let max_semitone_offset = slice
             .iter()
-            .map(|(_, ip)| ip.max_octave_offset)
+            .map(|(_, ip)| ip.max_semitone_offset)
             .max()
             .unwrap();
 
@@ -301,25 +318,22 @@ fn process_pitch_vecs(sorted_pitches: SortedPitches, n_instruments_and_samples: 
 
         for (instrument_id, pitch) in slice {
             let o = pt_offset
-                - (pitch.octaves_above_c0 + min_octave_offset) * SEMITONES_PER_OCTAVE
+                - (pitch.semitones_above_c0 + min_semitone_offset)
                 - PITCH_TABLE_OFFSET as i32;
             instruments_pitch_offset[*instrument_id] = o.to_le_bytes()[0];
         }
 
-        for octave_shift in min_octave_offset..=max_octave_offset {
-            for note in 0..SEMITONES_PER_OCTAVE {
-                let mst_to_shift =
-                    octave_shift * MICROSEMITONES_PER_OCTAVE + note * SEMITONE_SCALE - mst;
+        for semitone_shift in min_semitone_offset..=max_semitone_offset {
+            let mst_to_shift = semitone_shift * MICROSEMITONE_SCALE - mst;
 
-                let pitch = 2.0_f64.powf(f64::from(mst_to_shift) / F64_MST_PER_OCTAVE);
+            let pitch = 2.0_f64.powf(f64::from(mst_to_shift) / F64_MST_PER_OCTAVE);
 
-                // ::TODO write a test to confirm all valid instrument pitches are in bounds::
-                assert!(pitch >= 0.0);
-                assert!(pitch < PITCH_REGISTER_FLOAT_LIMIT);
-                let pitch_fp = (pitch * f64::from(0x1000)).round() as u16;
+            // ::TODO write a test to confirm all valid instrument pitches are in bounds::
+            assert!(pitch >= 0.0);
+            assert!(pitch < PITCH_REGISTER_FLOAT_LIMIT);
+            let pitch_fp = (pitch * f64::from(0x1000)).round() as u16;
 
-                pitches.push(pitch_fp);
-            }
+            pitches.push(pitch_fp);
         }
     }
 

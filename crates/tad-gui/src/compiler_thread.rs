@@ -713,9 +713,9 @@ fn build_play_instrument_data(
         _ => return None,
     };
 
-    let (sample_data, max_octave) = create_test_instrument_data(sample)?;
+    let (sample_data, max_note) = create_test_instrument_data(sample)?;
 
-    if args.note > Note::last_note_for_octave(max_octave) {
+    if args.note > max_note {
         return None;
     }
 
