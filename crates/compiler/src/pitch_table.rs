@@ -110,15 +110,19 @@ pub fn instrument_pitch(inst: &Instrument) -> Result<InstrumentPitch, PitchError
             max_octave_offset,
         })
     } else {
-        let min_off_by = MIN_MIN_OCTAVE_OFFSET - min_octave_offset;
-        let max_off_by = max_octave_offset - maximum_octave_increment;
+        let octave_range = (octaves_above_c0 + MIN_MIN_OCTAVE_OFFSET)
+            .clamp(0, Octave::MAX.as_i32())
+            .try_into()
+            .unwrap()
+            ..=(octaves_above_c0 + maximum_octave_increment)
+                .clamp(0, Octave::MAX.as_i32())
+                .try_into()
+                .unwrap();
 
         match (first_octave_valid, last_octave_valid) {
-            (false, true) => Err(PitchError::FirstOctaveTooLow(min_off_by)),
-            (true, false) => Err(PitchError::LastOctaveTooHigh(max_off_by)),
-            (_, _) => Err(PitchError::FirstOctaveTooLowLastOctaveTooHigh(
-                min_off_by, max_off_by,
-            )),
+            (false, true) => Err(PitchError::FirstOctaveTooLow(octave_range)),
+            (true, false) => Err(PitchError::LastOctaveTooHigh(octave_range)),
+            (_, _) => Err(PitchError::FirstOctaveTooLowLastOctaveTooHigh(octave_range)),
         }
     }
 }

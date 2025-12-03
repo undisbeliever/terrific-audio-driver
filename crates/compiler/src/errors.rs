@@ -499,9 +499,9 @@ pub enum PitchError {
     SampleRateTooHigh,
     SampleRateTooLow,
     FirstOctaveGreaterThanLastOctave,
-    FirstOctaveTooLow(i32),
-    LastOctaveTooHigh(i32),
-    FirstOctaveTooLowLastOctaveTooHigh(i32, i32),
+    FirstOctaveTooLow(RangeInclusive<u8>),
+    LastOctaveTooHigh(RangeInclusive<u8>),
+    FirstOctaveTooLowLastOctaveTooHigh(RangeInclusive<u8>),
 
     NoSampleRatesInSample,
     InvalidSampleRates(Vec<u32>),
@@ -1755,12 +1755,23 @@ impl Display for PitchError {
             Self::FirstOctaveGreaterThanLastOctave => {
                 write!(f, "first octave must be <= last octave")
             }
-            Self::FirstOctaveTooLow(by) => write!(f, "first octave too low (by {} octaves)", by),
-            Self::LastOctaveTooHigh(by) => write!(f, "last octave too high (by {} octaves)", by),
-            Self::FirstOctaveTooLowLastOctaveTooHigh(fo_by, lo_by) => write!(
+            Self::FirstOctaveTooLow(r) => write!(
                 f,
-                "first octave too low (by {}) and last octave too high (by {} octaves)",
-                fo_by, lo_by
+                "first octave too low (instrument tuning can play octaves {} - {})",
+                r.start(),
+                r.end()
+            ),
+            Self::LastOctaveTooHigh(r) => write!(
+                f,
+                "last octave too high (instrument tuning can play octaves {} - {})",
+                r.start(),
+                r.end()
+            ),
+            Self::FirstOctaveTooLowLastOctaveTooHigh(r) => write!(
+                f,
+                "first and last octave out of bounds (instrument tuning can play octaves {} - {})",
+                r.start(),
+                r.end()
             ),
             Self::NoSampleRatesInSample => write!(f, "no sample rates in sample"),
             Self::InvalidSampleRates(e) => write!(f, "invalid sample rates: {:?}", &e),
