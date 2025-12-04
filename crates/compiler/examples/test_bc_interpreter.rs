@@ -174,7 +174,7 @@ fn assert_bc_intrepreter_matches_emu(
     );
 
     test_channel_soa_msb(
-        addresses::CHANNEL_KEY_OFF_MSB_FLAG,
+        addresses::CHANNEL_KEYOFF_MSB_FLAG,
         "channelSoA.keyoffMsbFlag",
     );
 

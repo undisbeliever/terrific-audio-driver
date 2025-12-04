@@ -511,7 +511,7 @@ pub struct ChannelState {
     pub transpose: i8,
     pub detune: i16,
 
-    next_event_is_key_off: bool,
+    keyoff_flag: bool,
     note: ChannelNote,
     note_time: TickCounter,
 
@@ -554,7 +554,7 @@ impl ChannelState {
             loop_stack_pointer: BC_CHANNEL_STACK_SIZE - BC_STACK_BYTES_PER_LOOP,
             bc_stack: [UNINITIALISED; BC_CHANNEL_STACK_SIZE],
             instrument: None,
-            next_event_is_key_off: false,
+            keyoff_flag: false,
             note: ChannelNote::None,
             note_time: TickCounter::new(0),
             adsr_or_gain_override: uninitialised_envelope,
@@ -595,7 +595,7 @@ impl ChannelState {
     }
 
     fn read_length_and_increment_tick_count(&mut self, key_off: bool, song_data: &[u8]) {
-        self.next_event_is_key_off = key_off;
+        self.keyoff_flag = key_off;
 
         let i = usize::from(self.instruction_ptr);
 
@@ -685,13 +685,13 @@ impl ChannelState {
     }
 
     fn process_next_bytecode(&mut self, global: &mut GlobalState, song_data: &[u8]) {
-        if self.next_event_is_key_off {
+        if self.keyoff_flag {
             self.note = ChannelNote::None;
 
             // Temp gain is reset on key-off
             self.temp_gain = 0;
 
-            self.next_event_is_key_off = false;
+            self.keyoff_flag = false;
         }
 
         let mut read_pc = || match song_data.get(usize::from(self.instruction_ptr)) {
@@ -1878,7 +1878,7 @@ fn build_channel(
             | ChannelNote::PlayPitch(..)
             | ChannelNote::Portamento { .. }
             | ChannelNote::PortamentoPitch { .. } => {
-                if c.next_event_is_key_off {
+                if c.keyoff_flag {
                     delay > 1
                 } else {
                     true
@@ -1896,9 +1896,9 @@ fn build_channel(
 
     let note_ticks = target_ticks.value() - c.note_time.value();
 
-    let (temp_gain, keyoff_msb_flag) = if c.next_event_is_key_off && countdown_timer == 1 {
+    let (temp_gain, keyoff_msb_flag) = if c.keyoff_flag && countdown_timer == 1 {
         (0, 0)
-    } else if c.next_event_is_key_off
+    } else if c.keyoff_flag
         && countdown_timer <= u16::from(c.early_release_cmp)
         && note_ticks > 1
         && note_ticks > u32::from(c.early_release_min_ticks)
@@ -1911,7 +1911,7 @@ fn build_channel(
     } else {
         (
             c.temp_gain,
-            match c.next_event_is_key_off {
+            match c.keyoff_flag {
                 true => 0x80,
                 false => 0,
             },
@@ -2201,7 +2201,7 @@ impl InterpreterOutput {
                 soa_write_u8(addresses::CHANNEL_STACK_POINTER, c.stack_pointer);
                 soa_write_u8(addresses::CHANNEL_LOOP_STACK_POINTER, c.loop_stack_pointer);
 
-                soa_write_u8(addresses::CHANNEL_KEY_OFF_MSB_FLAG, c.keyoff_msb_flag);
+                soa_write_u8(addresses::CHANNEL_KEYOFF_MSB_FLAG, c.keyoff_msb_flag);
 
                 soa_write_u8(addresses::CHANNEL_INST_PITCH_OFFSET, c.inst_pitch_offset);
 
