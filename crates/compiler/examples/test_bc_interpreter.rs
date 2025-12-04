@@ -64,6 +64,13 @@ fn mask_channel_soa(
     })
 }
 
+fn channel_soa_msb_flag(apuram: &[u8; 0x10000], addr: u16) -> [bool; N_MUSIC_CHANNELS] {
+    let d: [u8; N_MUSIC_CHANNELS] = apuram[usize::from(addr)..usize::from(addr) + N_MUSIC_CHANNELS]
+        .try_into()
+        .unwrap();
+    d.map(|v| v & 0x80 == 0x80)
+}
+
 fn assert_bc_intrepreter_matches_emu(
     to_test: &SongInterpreter<&CommonAudioData, &SongData>,
     dummy: &DummyEmu,
@@ -127,6 +134,13 @@ fn assert_bc_intrepreter_matches_emu(
             "channelsSoA.{name} mismatch (tick_count: {tick_count})"
         );
     };
+    let test_channel_soa_msb = |addr: u16, name: &'static str| {
+        assert_eq!(
+            channel_soa_msb_flag(int_apuram, addr),
+            channel_soa_msb_flag(emu_apuram, addr),
+            "channelsSoA.{name} mismatch (tick_count: {tick_count})"
+        );
+    };
     let test_masked_channel_soa = |addr: u16, name: &'static str, mask: u16| {
         assert_eq!(
             mask_channel_soa(int_apuram, addr, mask),
@@ -157,6 +171,11 @@ fn assert_bc_intrepreter_matches_emu(
         addresses::CHANNEL_INSTRUCTION_PTR_L,
         addresses::CHANNEL_INSTRUCTION_PTR_H,
         "instructionPtr",
+    );
+
+    test_channel_soa_msb(
+        addresses::CHANNEL_KEY_OFF_MSB_FLAG,
+        "channelSoA.keyoffMsbFlag",
     );
 
     test_channel_soa(addresses::CHANNEL_STACK_POINTER, "channel_stackPointer");

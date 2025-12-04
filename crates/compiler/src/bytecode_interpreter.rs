@@ -73,6 +73,7 @@ struct ChannelSoAPanVol {
 #[derive(Clone)]
 struct ChannelSoA {
     countdown_timer: u16,
+    keyoff_msb_flag: u8,
 
     instruction_ptr: u16,
 
@@ -1895,20 +1896,26 @@ fn build_channel(
 
     let note_ticks = target_ticks.value() - c.note_time.value();
 
-    let temp_gain = if c.next_event_is_key_off
-        && ((countdown_timer == 1)
-            || (c.early_release_gain == 0 && countdown_timer <= u16::from(c.early_release_cmp)))
-    {
-        0
+    let (temp_gain, keyoff_msb_flag) = if c.next_event_is_key_off && countdown_timer == 1 {
+        (0, 0)
     } else if c.next_event_is_key_off
-        && c.early_release_gain != 0
         && countdown_timer <= u16::from(c.early_release_cmp)
         && note_ticks > 1
         && note_ticks > u32::from(c.early_release_min_ticks)
     {
-        c.early_release_gain
+        if c.early_release_gain == 0 {
+            (0, 0)
+        } else {
+            (c.early_release_gain, 0x80)
+        }
     } else {
-        c.temp_gain
+        (
+            c.temp_gain,
+            match c.next_event_is_key_off {
+                true => 0x80,
+                false => 0,
+            },
+        )
     };
 
     let volume_soa = c.volume.as_soa();
@@ -1957,6 +1964,7 @@ fn build_channel(
     Channel {
         soa: ChannelSoA {
             countdown_timer,
+            keyoff_msb_flag,
 
             instruction_ptr: match c.disabled {
                 true => 0,
@@ -2009,6 +2017,7 @@ fn unused_channel(channel_index: usize) -> Channel {
     Channel {
         soa: ChannelSoA {
             countdown_timer: u16::MAX,
+            keyoff_msb_flag: 0,
 
             instruction_ptr: 0,
             stack_pointer,
@@ -2192,7 +2201,7 @@ impl InterpreterOutput {
                 soa_write_u8(addresses::CHANNEL_STACK_POINTER, c.stack_pointer);
                 soa_write_u8(addresses::CHANNEL_LOOP_STACK_POINTER, c.loop_stack_pointer);
 
-                soa_write_u8(addresses::CHANNEL_KEY_OFF_MSB_FLAG, 0);
+                soa_write_u8(addresses::CHANNEL_KEY_OFF_MSB_FLAG, c.keyoff_msb_flag);
 
                 soa_write_u8(addresses::CHANNEL_INST_PITCH_OFFSET, c.inst_pitch_offset);
 
