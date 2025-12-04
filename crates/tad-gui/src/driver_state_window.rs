@@ -72,15 +72,15 @@ impl std::fmt::Display for EarlyRelease {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match (self.cmp, self.min_ticks, self.gain) {
             (0, _, _) => Ok(()),
-            (c, 0, 0) => write!(f, "p{}", c - 1),
+            (c, 0, 0) => write!(f, "q{}", c - 1),
             (c, 0, g) => {
                 let (g_mode, g_value) = envelope::Gain::new(g).to_mode_and_value();
-                write!(f, "p{},{}{}", c - 1, g_mode.to_prefix_str(), g_value)
+                write!(f, "q{},{}{}", c - 1, g_mode.to_prefix_str(), g_value)
             }
-            (c, m, 0) => write!(f, "p{},{}", c - 1, m),
+            (c, m, 0) => write!(f, "q{},{}", c - 1, m),
             (c, m, g) => {
                 let (g_mode, g_value) = envelope::Gain::new(g).to_mode_and_value();
-                write!(f, "p{},{},{}{}", c - 1, m, g_mode.to_prefix_str(), g_value)
+                write!(f, "q{},{},{}{}", c - 1, m, g_mode.to_prefix_str(), g_value)
             }
         }
     }
