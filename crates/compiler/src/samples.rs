@@ -5,7 +5,8 @@
 // SPDX-License-Identifier: MIT
 
 use crate::data::{
-    BrrEvaluator, Instrument, InstrumentOrSample, LoopSetting, Sample, UniqueNamesProjectFile,
+    BrrEvaluator, Instrument, InstrumentNoteRange, InstrumentOrSample, LoopSetting, Sample,
+    UniqueNamesProjectFile,
 };
 use crate::errors::{BrrError, SampleAndInstrumentDataError, SampleError, TaggedSampleError};
 use crate::notes::{Note, LAST_NOTE_ID};
@@ -511,7 +512,12 @@ pub fn build_sample_and_instrument_data(
 }
 
 pub fn instrument_note_range(inst: &Instrument) -> RangeInclusive<Note> {
-    Note::first_note_for_octave(inst.first_octave)..=Note::last_note_for_octave(inst.last_octave)
+    match inst.note_range {
+        InstrumentNoteRange::Octave { first, last } => {
+            Note::first_note_for_octave(first)..=Note::last_note_for_octave(last)
+        }
+        InstrumentNoteRange::Note { first, last } => first..=last,
+    }
 }
 
 pub fn sample_note_range(sample: &Sample) -> RangeInclusive<Note> {

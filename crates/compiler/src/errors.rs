@@ -499,9 +499,11 @@ pub enum PitchError {
     SampleRateTooHigh,
     SampleRateTooLow,
     FirstOctaveGreaterThanLastOctave,
+    FirstNoteGreaterThanLastNote,
     FirstOctaveTooLow(RangeInclusive<u8>),
     LastOctaveTooHigh(RangeInclusive<u8>),
     FirstOctaveTooLowLastOctaveTooHigh(RangeInclusive<u8>),
+    InvalidNoteRange(RangeInclusive<Note>),
 
     NoSampleRatesInSample,
     InvalidSampleRates(Vec<u32>),
@@ -1755,6 +1757,9 @@ impl Display for PitchError {
             Self::FirstOctaveGreaterThanLastOctave => {
                 write!(f, "first octave must be <= last octave")
             }
+            Self::FirstNoteGreaterThanLastNote => {
+                write!(f, "first note must be <= last note")
+            }
             Self::FirstOctaveTooLow(r) => write!(
                 f,
                 "first octave too low (instrument tuning can play octaves {} - {})",
@@ -1772,6 +1777,12 @@ impl Display for PitchError {
                 "first and last octave out of bounds (instrument tuning can play octaves {} - {})",
                 r.start(),
                 r.end()
+            ),
+            Self::InvalidNoteRange(r) => write!(
+                f,
+                "invalid note range (instrument tuning can only play notes {} - {})",
+                r.start().bytecode_argument_display(),
+                r.end().bytecode_argument_display()
             ),
             Self::NoSampleRatesInSample => write!(f, "no sample rates in sample"),
             Self::InvalidSampleRates(e) => write!(f, "invalid sample rates: {:?}", &e),

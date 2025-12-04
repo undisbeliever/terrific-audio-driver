@@ -7,6 +7,7 @@
 use crate::bytecode::opcodes;
 use crate::bytecode::InstrumentId;
 use crate::bytecode::PlayPitchPitch;
+use crate::data::InstrumentNoteRange;
 use crate::data::{Instrument, InstrumentOrSample, Sample, UniqueNamesList};
 use crate::driver_constants::{MAX_INSTRUMENTS_AND_SAMPLES, MAX_N_PITCHES};
 use crate::errors::ValueError;
@@ -87,12 +88,23 @@ pub fn instrument_pitch(inst: &Instrument) -> Result<InstrumentPitch, PitchError
         return Err(PitchError::SampleRateTooHigh);
     }
 
-    if inst.first_octave > inst.last_octave {
-        return Err(PitchError::FirstOctaveGreaterThanLastOctave);
-    }
-
-    let first_semitone = Note::first_note_for_octave(inst.first_octave).i32_note_id();
-    let last_semitone = Note::last_note_for_octave(inst.last_octave).i32_note_id();
+    let (first_semitone, last_semitone) = match inst.note_range {
+        InstrumentNoteRange::Octave { first, last } => {
+            if first > last {
+                return Err(PitchError::FirstOctaveGreaterThanLastOctave);
+            }
+            (
+                Note::first_note_for_octave(first).i32_note_id(),
+                Note::last_note_for_octave(last).i32_note_id(),
+            )
+        }
+        InstrumentNoteRange::Note { first, last } => {
+            if first > last {
+                return Err(PitchError::FirstNoteGreaterThanLastNote);
+            }
+            (first.i32_note_id(), last.i32_note_id())
+        }
+    };
 
     let mst_above_c0 =
         f64::log2(inst.freq / F64_A4_FREQ) * F64_MST_PER_OCTAVE + F64_A4_C0_MST_OFFSET;
@@ -126,18 +138,24 @@ pub fn instrument_pitch(inst: &Instrument) -> Result<InstrumentPitch, PitchError
     } else {
         const SEMITONES_PER_OCTAVE: u8 = notes::SEMITONES_PER_OCTAVE;
 
-        let min_semitone = Note::from_i32_clamp(semitones_above_c0 + MIN_MIN_SEMITONE_OFFSET);
-        let max_semitone = Note::from_i32_clamp(semitones_above_c0 + maximum_semitone_increment);
+        let valid_notes = Note::from_i32_clamp(semitones_above_c0 + MIN_MIN_SEMITONE_OFFSET)
+            ..=Note::from_i32_clamp(semitones_above_c0 + maximum_semitone_increment);
 
-        let valid_octaves = min_semitone.note_id().div_ceil(SEMITONES_PER_OCTAVE)
-            ..=((max_semitone.note_id() - notes::SEMITONES_PER_OCTAVE + 1) / SEMITONES_PER_OCTAVE);
+        match inst.note_range {
+            InstrumentNoteRange::Octave { .. } => {
+                let valid_octaves = valid_notes.start().note_id().div_ceil(SEMITONES_PER_OCTAVE)
+                    ..=((valid_notes.end().note_id() - notes::SEMITONES_PER_OCTAVE + 1)
+                        / SEMITONES_PER_OCTAVE);
 
-        match (first_semitone_valid, last_semitone_valid) {
-            (false, true) => Err(PitchError::FirstOctaveTooLow(valid_octaves)),
-            (true, false) => Err(PitchError::LastOctaveTooHigh(valid_octaves)),
-            (_, _) => Err(PitchError::FirstOctaveTooLowLastOctaveTooHigh(
-                valid_octaves,
-            )),
+                match (first_semitone_valid, last_semitone_valid) {
+                    (false, true) => Err(PitchError::FirstOctaveTooLow(valid_octaves)),
+                    (true, false) => Err(PitchError::LastOctaveTooHigh(valid_octaves)),
+                    (_, _) => Err(PitchError::FirstOctaveTooLowLastOctaveTooHigh(
+                        valid_octaves,
+                    )),
+                }
+            }
+            InstrumentNoteRange::Note { .. } => Err(PitchError::InvalidNoteRange(valid_notes)),
         }
     }
 }

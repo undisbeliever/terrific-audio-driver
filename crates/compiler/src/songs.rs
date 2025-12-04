@@ -25,7 +25,7 @@ use crate::envelope::{Envelope, Gain};
 use crate::errors::{ChannelError, MmlCompileErrors, SongError, SongTooLargeError};
 use crate::identifier::{ChannelId, MusicChannelIndex};
 use crate::mml::{CommandTickTracker, CursorTracker, CursorTrackerGetter, GlobalSettings, Section};
-use crate::notes::{Note, Octave};
+use crate::notes::Note;
 use crate::pitch_table::PitchTable;
 use crate::samples::SampleAndInstrumentData;
 use crate::subroutines::{BlankSubroutineMap, CompiledSubroutines, SubroutineState};
@@ -246,8 +246,10 @@ fn sample_song_fake_instruments() -> &'static UniqueNamesList<InstrumentOrSample
             loop_setting: data::LoopSetting::None,
             evaluator: Default::default(),
             ignore_gaussian_overflow: false,
-            first_octave: Octave::try_new(Octave::MIN.as_u8().into()).unwrap(),
-            last_octave: Octave::try_new(Octave::MAX.as_u8().into()).unwrap(),
+            note_range: data::InstrumentNoteRange::Note {
+                first: Note::MIN,
+                last: Note::MAX,
+            },
             envelope: Envelope::Gain(Gain::new(0)),
             comment: Default::default(),
         });

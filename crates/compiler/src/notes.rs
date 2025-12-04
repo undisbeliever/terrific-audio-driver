@@ -11,6 +11,7 @@ use std::ops::RangeInclusive;
 use crate::errors::{BytecodeError, ValueError};
 use crate::value_newtypes::{u8_value_newtype, UnsignedValueNewType};
 
+use serde::de::Error;
 use serde::{Deserialize, Serialize, Serializer};
 
 u8_value_newtype!(MidiNote, MidiNoteNumberOutOfRange, NoMidiNote, 0, 127);
@@ -24,6 +25,10 @@ pub const N_NOTES: u8 = (LAST_OCTAVE + 1) * SEMITONES_PER_OCTAVE;
 pub const N_PITCHES: usize = 7;
 
 const PITCH_LETTERS: [char; N_PITCHES] = ['c', 'd', 'e', 'f', 'g', 'a', 'b'];
+
+const NOTE_STRS: [&str; SEMITONES_PER_OCTAVE as usize] = [
+    "c", "c+", "d", "d+", "e", "f", "f+", "g", "g+", "a", "a+", "b",
+];
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct KeySignature([i8; N_PITCHES]);
@@ -330,6 +335,14 @@ impl Note {
         }
     }
 
+    pub fn to_bytecode_argument(self) -> String {
+        NoteBcArgDisplay(self).to_string()
+    }
+
+    pub fn bytecode_argument_display(self) -> NoteBcArgDisplay {
+        NoteBcArgDisplay(self)
+    }
+
     pub fn add_transpose(self, t: i8) -> Result<Self, BytecodeError> {
         const MIN: u8 = Note::MIN.note_id;
         const MAX: u8 = Note::MAX.note_id;
@@ -355,6 +368,47 @@ impl Note {
             }
             _ => Err(BytecodeError::TransposedNoteOverflow(self, tmin..=tmax)),
         }
+    }
+
+    fn to_note_str_and_octave(self) -> (&'static str, u8) {
+        (
+            NOTE_STRS[usize::from(self.note_id % SEMITONES_PER_OCTAVE)],
+            self.note_id / SEMITONES_PER_OCTAVE,
+        )
+    }
+
+    pub fn octave(self) -> Octave {
+        Octave(self.note_id / SEMITONES_PER_OCTAVE)
+    }
+}
+
+impl<'de> Deserialize<'de> for Note {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let note = <&str>::deserialize(deserializer)?;
+
+        Note::parse_bytecode_argument(note).map_err(D::Error::custom)
+    }
+}
+
+impl Serialize for Note {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(&self.to_bytecode_argument())
+    }
+}
+
+pub struct NoteBcArgDisplay(Note);
+
+impl std::fmt::Display for NoteBcArgDisplay {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let (note, octave) = self.0.to_note_str_and_octave();
+
+        write!(f, "{note}{octave}")
     }
 }
 
@@ -477,6 +531,22 @@ impl MmlPitch {
             pitch,
             natural,
             semitone_offset,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn note_to_bytecode_argument() {
+        for n in Note::MIN.note_id()..=Note::MAX.note_id() {
+            let n = Note::from_note_id(n).unwrap();
+            assert_eq!(
+                Note::parse_bytecode_argument(&n.to_bytecode_argument()),
+                Ok(n)
+            );
         }
     }
 }

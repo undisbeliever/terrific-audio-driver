@@ -51,10 +51,10 @@
       "loop_setting": 2,
       "evaluator": "default",
       "ignore_gaussian_overflow": false,
-      "first_octave": 1,
-      "last_octave": 6,
+      "first_note": "d4",
+      "last_note": "g4",
       "envelope": "adsr 12 1 1 16",
-      "comment": null
+      "comment": "This instrument also tests InstrumentNoteRange::Note"
     },
     {
       "name": "triangle",

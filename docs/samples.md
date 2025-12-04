@@ -3,8 +3,7 @@ Instruments
  * **Source**: A `.wav` or `.brr` file
  * **Frequency**: The frequency of the sample when played at a sample-rate of 32000 Hz
  * **Loop**: Determines how the sample is looped (see *Loop Options* below)
- * **First octave**: The first octave (0-7) that can be played with the instrument
- * **Last octave**: The last octave (0-7) that can be played with the instrument
+ * **Note range**: The range of notes that can be played with the instrument
  * **Envelope**: The default envelope for the sample (see *Envelopes* section below)
  * **Comment**: A small comment you can add to the instrument
 
@@ -100,15 +99,15 @@ The pitch table is limited a maximum 256 entries.  To reduce the size of the pit
 reduce the number of unique *Sample Frequencies* used in a project.
 
 
-Octaves
-=======
+Note range
+==========
 
-These fields will place limits on the octaves an instrument can be played at.
+These fields will place limits on the notes an instrument can be played at.
 
-Instruments played at an excessively high octave can have aliasing effects, while instruments played
-at an excessively low octave can loose detail and precision.
+Instruments played with excessively high note can have aliasing effects, while instruments played
+at an excessively low note can loose detail and precision.
 
-Limiting an instrument's octave range can also reduce the size of the pitch table.
+Limiting an instrument's note range can also reduce the size of the pitch table.
 
 
 Envelopes

@@ -21,6 +21,9 @@ BRR changes:
  * Increased the maximum BRR sample size
  * Increased the maximum `wav2brr` input size
 
+Instrument changes:
+ * Added a way to set the first and last note for an instrument in the samples tab
+
 Driver changes:
  * Added `portamento_calc` and `portamento_pitch_calc` instructions that can
    automatically calculate the portamento velocity if the pitch slide is <= 255

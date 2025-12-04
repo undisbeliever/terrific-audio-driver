@@ -4,12 +4,13 @@
 //
 // SPDX-License-Identifier: MIT
 
+use compiler::notes::Note;
 use compiler::{data::Name, envelope::Adsr, envelope::Gain, notes::Octave};
 
 use fltk::button::CheckButton;
 use fltk::enums::{Align, Event, Key};
 use fltk::frame::Frame;
-use fltk::group::Flex;
+use fltk::group::{Flex, Group};
 use fltk::input::{FloatInput, Input, IntInput};
 use fltk::prelude::{GroupExt, InputExt, WidgetExt};
 
@@ -164,6 +165,18 @@ impl InputHelper for Octave {
 
     fn set_widget_value(w: &mut Self::Widget, value: &Self) {
         w.set_value(&value.as_u8().to_string());
+    }
+}
+
+impl InputHelper for Note {
+    type Widget = Input;
+
+    fn parse(s: String) -> Option<Self> {
+        Note::parse_bytecode_argument(&s).ok()
+    }
+
+    fn set_widget_value(w: &mut Self::Widget, value: &Self) {
+        w.set_value(&value.to_bytecode_argument());
     }
 }
 
@@ -409,5 +422,51 @@ impl InputForm {
         self.n_rows += 1;
 
         (w1, w2)
+    }
+
+    pub fn add_group(&mut self, text: &str, n_rows: i32) -> InputFormGroup<'_> {
+        let h = self.row_height * n_rows + self.group.pad() * (n_rows - 1);
+
+        let mut group = Group::default().with_size(0, h);
+        group.make_resizable(false);
+
+        self.group.fixed(&group, h);
+
+        label(text)
+            .with_pos(0, 0)
+            .with_size(self.left_column_width, self.row_height);
+
+        self.n_rows += n_rows;
+
+        InputFormGroup { form: self, group }
+    }
+}
+
+pub struct InputFormGroup<'a> {
+    form: &'a mut InputForm,
+    group: Group,
+}
+
+impl InputFormGroup<'_> {
+    pub fn end(self) -> Group {
+        self.group.end();
+
+        self.group
+    }
+
+    pub fn pad(&self) -> i32 {
+        self.form.group.pad()
+    }
+
+    pub fn left_column_width(&self) -> i32 {
+        self.form.left_column_width
+    }
+
+    pub fn row_height(&self) -> i32 {
+        self.form.row_height
+    }
+
+    pub fn ch_width(&self, ch: i32) -> i32 {
+        ch_units_to_width(&self.group, ch)
     }
 }

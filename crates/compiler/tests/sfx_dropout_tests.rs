@@ -510,8 +510,10 @@ fn _build_test_common_audio_data() -> CommonAudioData {
         loop_setting: data::LoopSetting::None,
         evaluator: Default::default(),
         ignore_gaussian_overflow: false,
-        first_octave: Octave::try_new(2).unwrap(),
-        last_octave: Octave::try_new(5).unwrap(),
+        note_range: data::InstrumentNoteRange::Octave {
+            first: Octave::try_new(2).unwrap(),
+            last: Octave::try_new(5).unwrap(),
+        },
         envelope: Envelope::Gain(Gain::new(127)),
         comment: None,
     };

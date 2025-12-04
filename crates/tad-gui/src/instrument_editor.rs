@@ -14,7 +14,7 @@ use crate::sample_widgets::{
 use crate::tables::{RowWithStatus, SimpleRow};
 use crate::GuiMessage;
 
-use compiler::data::{self, Instrument, LoopSetting};
+use compiler::data::{self, Instrument, InstrumentNoteRange, LoopSetting};
 use compiler::errors::ValueError;
 use compiler::notes::{Note, Octave, PitchSemitoneIndex, STARTING_OCTAVE};
 use compiler::path::SourcePathBuf;
@@ -23,7 +23,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use fltk::app;
-use fltk::button::{Button, CheckButton};
+use fltk::button::{Button, CheckButton, RadioRoundButton};
 use fltk::enums::{Align, Color, Event};
 use fltk::group::{Flex, Group};
 use fltk::input::{FloatInput, Input, IntInput};
@@ -39,8 +39,10 @@ fn blank_instrument() -> Instrument {
         loop_setting: LoopSetting::None,
         evaluator: Default::default(),
         ignore_gaussian_overflow: false,
-        first_octave: STARTING_OCTAVE,
-        last_octave: STARTING_OCTAVE,
+        note_range: data::InstrumentNoteRange::Octave {
+            first: STARTING_OCTAVE,
+            last: STARTING_OCTAVE,
+        },
         envelope: DEFAULT_ENVELOPE,
         comment: None,
     }
@@ -105,8 +107,12 @@ pub struct InstrumentEditor {
     freq: FloatInput,
     brr_settings: BrrSettingsWidget,
     ignore_gaussian_overflow: CheckButton,
+    octave_range: RadioRoundButton,
     first_octave: IntInput,
     last_octave: IntInput,
+    note_range: RadioRoundButton,
+    first_note: Input,
+    last_note: Input,
     envelope: SampleEnvelopeWidget,
     comment: Input,
 }
@@ -120,8 +126,26 @@ impl InstrumentEditor {
         let freq = form.add_two_inputs_right::<FloatInput, Button>("Frequency:", 5);
         let brr_settings = BrrSettingsWidget::new(&mut form);
         let ignore_gaussian_overflow = form.add_checkbox_right("Ignore Gaussian overflow");
-        let first_octave = form.add_input::<IntInput>("First octave:");
-        let last_octave = form.add_input::<IntInput>("Last octave:");
+
+        let nrg = form.add_group("Note range:", 2);
+        let pad = nrg.pad();
+        let w = nrg.ch_width(12);
+        let h = nrg.row_height();
+        let x1 = nrg.left_column_width() + pad;
+        let x2 = x1 + pad + w;
+        let x3 = x2 + pad + w + nrg.ch_width(2);
+
+        let octave_range = RadioRoundButton::new(x1, 0, w, h, Some("Octaves"));
+        let first_octave = IntInput::new(x2, 0, w, h, None);
+        let last_octave = IntInput::new(x3, 0, w, h, Some("- "));
+
+        let y = h + pad;
+        let note_range = RadioRoundButton::new(x1, y, w, h, Some("Notes"));
+        let first_note = Input::new(x2, y, w, h, None);
+        let last_note = Input::new(x3, y, w, h, Some("- "));
+
+        nrg.end();
+
         let envelope = SampleEnvelopeWidget::new(&mut form);
         let comment = form.add_input::<Input>("Comment:");
 
@@ -140,8 +164,12 @@ impl InstrumentEditor {
             freq,
             brr_settings,
             ignore_gaussian_overflow,
+            octave_range,
             first_octave,
             last_octave,
+            note_range,
+            first_note,
+            last_note,
             envelope,
             comment,
         }));
@@ -165,6 +193,8 @@ impl InstrumentEditor {
             add_callbacks!(freq);
             add_callbacks!(first_octave);
             add_callbacks!(last_octave);
+            add_callbacks!(first_note);
+            add_callbacks!(last_note);
             add_callbacks!(comment);
 
             editor.brr_settings.set_editor(out.clone());
@@ -174,6 +204,19 @@ impl InstrumentEditor {
                 let s = out.clone();
                 move |_widget| s.borrow_mut().on_finished_editing()
             });
+
+            let set_note_range_callback = |w: &mut RadioRoundButton| {
+                w.set_callback({
+                    let editor = out.clone();
+                    move |_w| {
+                        if let Ok(mut e) = editor.try_borrow_mut() {
+                            e.on_finished_editing();
+                        }
+                    }
+                })
+            };
+            set_note_range_callback(&mut editor.octave_range);
+            set_note_range_callback(&mut editor.note_range);
 
             source_button.set_label("...");
             source_button.set_callback({
@@ -186,7 +229,7 @@ impl InstrumentEditor {
             analyse_button.set_callback({
                 let s = out.clone();
                 move |_widget| s.borrow_mut().analyse_button_clicked()
-            })
+            });
         }
         (out, form_height)
     }
@@ -242,9 +285,42 @@ impl InstrumentEditor {
         }
         read_or_reset!(name);
         read_or_reset!(freq);
-        read_or_reset!(first_octave);
-        read_or_reset!(last_octave);
         read_or_reset!(comment);
+
+        let note_range = if self.octave_range.is_toggled() {
+            let (first, last) = match old.note_range {
+                InstrumentNoteRange::Octave { first, last } => (first, last),
+                InstrumentNoteRange::Note { first, last } => (first.octave(), last.octave()),
+            };
+
+            let new_first = InputHelper::read_or_reset(&mut self.first_octave, &first);
+            let new_last = InputHelper::read_or_reset(&mut self.last_octave, &last);
+
+            match (new_first, new_last) {
+                (Some(first), Some(last)) => {
+                    Some(data::InstrumentNoteRange::Octave { first, last })
+                }
+                _ => None,
+            }
+        } else if self.note_range.is_toggled() {
+            let (first, last) = match old.note_range {
+                InstrumentNoteRange::Note { first, last } => (first, last),
+                InstrumentNoteRange::Octave { first, last } => (
+                    Note::first_note_for_octave(first),
+                    Note::last_note_for_octave(last),
+                ),
+            };
+
+            let new_first = InputHelper::read_or_reset(&mut self.first_note, &first);
+            let new_last = InputHelper::read_or_reset(&mut self.last_note, &last);
+
+            match (new_first, new_last) {
+                (Some(first), Some(last)) => Some(data::InstrumentNoteRange::Note { first, last }),
+                _ => None,
+            }
+        } else {
+            None
+        };
 
         let (loop_setting, evaluator) = self.brr_settings.read_or_reset(&self.data.loop_setting);
         let ignore_gaussian_overflow = self.ignore_gaussian_overflow.value();
@@ -256,8 +332,7 @@ impl InstrumentEditor {
             loop_setting: loop_setting?,
             evaluator,
             ignore_gaussian_overflow,
-            first_octave: first_octave?,
-            last_octave: last_octave?,
+            note_range: note_range?,
             envelope: envelope?,
             comment: comment?,
 
@@ -273,8 +348,12 @@ impl InstrumentEditor {
         self.source.set_value("");
         self.freq.set_value("");
         self.ignore_gaussian_overflow.clear();
+        self.octave_range.set_value(false);
         self.first_octave.set_value("");
         self.last_octave.set_value("");
+        self.note_range.set_value(false);
+        self.first_note.set_value("");
+        self.last_note.set_value("");
         self.brr_settings.clear_value();
         self.envelope.clear_value();
 
@@ -290,8 +369,42 @@ impl InstrumentEditor {
 
         set_widget!(name);
         set_widget!(freq);
-        set_widget!(first_octave);
-        set_widget!(last_octave);
+        match data.note_range {
+            data::InstrumentNoteRange::Octave { first, last } => {
+                self.octave_range.set_value(true);
+                self.note_range.set_value(false);
+
+                self.first_octave.activate();
+                InputHelper::set_widget_value(&mut self.first_octave, &first);
+                self.last_octave.activate();
+                InputHelper::set_widget_value(&mut self.last_octave, &last);
+
+                self.first_note.deactivate();
+                InputHelper::set_widget_value(
+                    &mut self.first_note,
+                    &Note::first_note_for_octave(first),
+                );
+                self.last_note.deactivate();
+                InputHelper::set_widget_value(
+                    &mut self.last_note,
+                    &Note::last_note_for_octave(last),
+                );
+            }
+            data::InstrumentNoteRange::Note { first, last } => {
+                self.note_range.set_value(true);
+                self.octave_range.set_value(false);
+
+                self.first_note.activate();
+                InputHelper::set_widget_value(&mut self.first_note, &first);
+                self.last_note.activate();
+                InputHelper::set_widget_value(&mut self.last_note, &last);
+
+                self.first_octave.deactivate();
+                InputHelper::set_widget_value(&mut self.first_octave, &first.octave());
+                self.last_octave.deactivate();
+                InputHelper::set_widget_value(&mut self.last_octave, &last.octave());
+            }
+        }
         set_widget!(comment);
         self.source.set_value(data.source.as_str());
         self.brr_settings

@@ -12,6 +12,7 @@ const INSTRUMENT_DEFINITIONS: &str = r##"
 @24  f1000_o4
 @235 f2000_o3_o5
 @34  f3000_o4
+@dg5 f1000_d5_g5
 "##;
 
 fn assert_nr_line_matches_bytecode(mml_line: &str, bc_asm: &[&str]) {
@@ -269,5 +270,30 @@ A @135 o3c o4c o5c [o5c o4c !s o5c]2 o5c
         "A",
         27,
         BytecodeError::NoteOutOfRange(note("c4"), note("c5")..=note("b5")).into(),
+    );
+}
+
+#[test]
+fn instrument_with_note_range() {
+    assert_one_error_in_nr_line(
+        "@dg5 o4c",
+        8,
+        BytecodeError::NoteOutOfRange(note("c4"), note("d5")..=note("g5")).into(),
+    );
+    assert_one_error_in_nr_line(
+        "@dg5 o6c",
+        8,
+        BytecodeError::NoteOutOfRange(note("c6"), note("d5")..=note("g5")).into(),
+    );
+
+    assert_one_error_in_nr_line(
+        "@dg5 o5c+",
+        8,
+        BytecodeError::NoteOutOfRange(note("c+5"), note("d5")..=note("g5")).into(),
+    );
+    assert_one_error_in_nr_line(
+        "@dg5 o5d e f g g+",
+        16,
+        BytecodeError::NoteOutOfRange(note("g+5"), note("d5")..=note("g5")).into(),
     );
 }

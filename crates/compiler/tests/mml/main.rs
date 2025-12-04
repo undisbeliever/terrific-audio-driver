@@ -628,6 +628,7 @@ fn dummy_data() -> DummyData {
         dummy_instrument("f1000_o3_o5", 1000.0, 3, 5, Envelope::Gain(Gain::new(0))),
         dummy_instrument("f2000_o3_o5", 2000.0, 3, 5, Envelope::Gain(Gain::new(0))),
         dummy_instrument("f3000_o4", 3000.0, 4, 4, Envelope::Gain(Gain::new(0))),
+        dummy_note_instrument("f1000_d5_g5", 3000.0, "d5", "g5", Envelope::Gain(Gain::new(0))),
     ].iter(),
         [
             data::Sample{
@@ -665,8 +666,33 @@ fn dummy_instrument(
         loop_setting: data::LoopSetting::LoopWithFilter(SampleNumber(0)),
         evaluator: Default::default(),
         ignore_gaussian_overflow: false,
-        first_octave: Octave::try_new(first_octave).unwrap(),
-        last_octave: Octave::try_new(last_octave).unwrap(),
+        note_range: data::InstrumentNoteRange::Octave {
+            first: Octave::try_new(first_octave).unwrap(),
+            last: Octave::try_new(last_octave).unwrap(),
+        },
+        envelope,
+        comment: None,
+    }
+}
+
+fn dummy_note_instrument(
+    name: &str,
+    freq: f64,
+    first_note: &str,
+    last_note: &str,
+    envelope: Envelope,
+) -> data::Instrument {
+    data::Instrument {
+        name: Name::try_from(name.to_owned()).unwrap(),
+        source: Default::default(),
+        freq,
+        loop_setting: data::LoopSetting::LoopWithFilter(SampleNumber(0)),
+        evaluator: Default::default(),
+        ignore_gaussian_overflow: false,
+        note_range: data::InstrumentNoteRange::Note {
+            first: Note::parse_bytecode_argument(first_note).unwrap(),
+            last: Note::parse_bytecode_argument(last_note).unwrap(),
+        },
         envelope,
         comment: None,
     }

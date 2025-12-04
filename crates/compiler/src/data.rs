@@ -11,7 +11,7 @@ use crate::errors::{
     DeserializeError, FileError, ProjectFileError, ProjectFileErrors, UniqueNameListError,
     ValueError,
 };
-use crate::notes::Octave;
+use crate::notes::{Note, Octave};
 use crate::path::{ParentPathBuf, SourcePathBuf};
 
 use std::collections::HashMap;
@@ -310,6 +310,57 @@ impl BrrEvaluator {
     }
 }
 
+#[derive(Serialize, Clone, PartialEq, Debug)]
+#[serde(untagged)]
+pub enum InstrumentNoteRange {
+    Octave {
+        #[serde(rename = "first_octave")]
+        first: Octave,
+        #[serde(rename = "last_octave")]
+        last: Octave,
+    },
+    Note {
+        #[serde(rename = "first_note")]
+        first: Note,
+        #[serde(rename = "last_note")]
+        last: Note,
+    },
+}
+
+// Custom deserializer for better error handling
+impl<'de> Deserialize<'de> for InstrumentNoteRange {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        struct T {
+            first_octave: Option<Octave>,
+            last_octave: Option<Octave>,
+            first_note: Option<Note>,
+            last_note: Option<Note>,
+        }
+
+        let tmp = T::deserialize(deserializer)?;
+
+        match (
+            tmp.first_octave,
+            tmp.last_octave,
+            tmp.first_note,
+            tmp.last_note,
+        ) {
+            (Some(first), Some(last), None, None) => Ok(Self::Octave { first, last }),
+            (None, None, Some(first), Some(last)) => Ok(Self::Note { first, last }),
+            (None, None, None, None) => Err(serde::de::Error::custom(
+                "missing `first_octave` & `last_octave` or `first_note` & `last_note` fields",
+            )),
+            _ => Err(serde::de::Error::custom(
+                "invalid instrument note range, cannot combine notes and octaves",
+            )),
+        }
+    }
+}
+
 #[derive(Deserialize, Serialize, Clone, PartialEq, Debug)]
 pub struct Instrument {
     pub name: Name,
@@ -326,8 +377,8 @@ pub struct Instrument {
     #[serde(default)]
     pub ignore_gaussian_overflow: bool,
 
-    pub first_octave: Octave,
-    pub last_octave: Octave,
+    #[serde(flatten)]
+    pub note_range: InstrumentNoteRange,
 
     pub envelope: Envelope,
 
