@@ -1,0 +1,4 @@
+# test binaries and object files go here
+*.bin
+*.sym
+
