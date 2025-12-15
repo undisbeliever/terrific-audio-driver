@@ -332,7 +332,15 @@ Tad_SetTransferSize: {
 ; I unknown
 ; DB access lowram
 Tad_IsLoaderActive: {
-    %TadPrivate_IsLoaderActive()
+    assert !TadState_NULL < !TAD__FIRST_LOADING_STATE
+    assert !TadState_WAITING_FOR_LOADER_COMMON < !TAD__FIRST_LOADING_STATE
+    assert !TadState_WAITING_FOR_LOADER_SONG < !TAD__FIRST_LOADING_STATE
+    assert (!TadState_PAUSED&$7f) < !TAD__FIRST_LOADING_STATE
+    assert (!TadState_PLAYING&$7f) < !TAD__FIRST_LOADING_STATE
+
+    lda.w   TadPrivate.state
+    and.b   #$7f
+    cmp.b   #!TAD__FIRST_LOADING_STATE
     rts
 }
 
