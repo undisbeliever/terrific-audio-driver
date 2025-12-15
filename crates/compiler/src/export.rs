@@ -4,10 +4,12 @@
 //
 // SPDX-License-Identifier: MIT
 
+pub mod asar;
 pub mod ca65;
 pub mod pvsneslib;
 pub mod tass64;
 
+pub use self::asar::{AsarExporter, AsarMemoryMap};
 pub use self::ca65::{Ca65Exporter, Ca65MemoryMap};
 pub use self::pvsneslib::{PvExporter, PvMemoryMap};
 pub use self::tass64::{Tass64Exporter, Tass64MemoryMap};

@@ -69,6 +69,10 @@ Bytecode assembly changes:
  * Improved out-of-range note testing in bytecode assembly sound effects
  * Fixed missing no-instrument error in `play_pitch`, `portamento_pitch`, `portamento_pitch_calc` and `play_noise`.
 
+tad-compiler:
+ * Added `asar-enums` command
+ * Added `asar-export` command
+
 
 Version 0.1.1
 =============

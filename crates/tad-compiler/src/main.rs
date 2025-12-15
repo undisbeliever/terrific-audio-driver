@@ -15,8 +15,8 @@ use compiler::{
         TextFile, UniqueNamesProjectFile,
     },
     export::{
-        bin_include_path, Ca65Exporter, Ca65MemoryMap, Exporter, MemoryMapMode, PvExporter,
-        PvMemoryMap, SuffixType, Tass64Exporter, Tass64MemoryMap,
+        bin_include_path, AsarExporter, AsarMemoryMap, Ca65Exporter, Ca65MemoryMap, Exporter,
+        MemoryMapMode, PvExporter, PvMemoryMap, SuffixType, Tass64Exporter, Tass64MemoryMap,
     },
     mml::MmlTickCountTable,
     pitch_table::{build_pitch_table, PitchTable},
@@ -59,6 +59,12 @@ enum Command {
 
     /// Check the project will compile successfully and all songs fit in audio-RAM
     Check(CheckProjectArgs),
+
+    /// Generate an asar include file containing song and sound effect constants
+    AsarEnums(EnumArgs),
+
+    /// Compile the project and output an asar inc file containing LoadSongData and incbin statements
+    AsarExport(AsarExportArgs),
 
     /// Generate an ca65 include file containing songs and sound effect enums
     Ca65Enums(EnumArgs),
@@ -598,6 +604,22 @@ fn compile_project(pf: &UniqueNamesProjectFile) -> (CommonAudioData, Vec<SongDat
 }
 
 //
+// asar-export
+// ===========
+#[derive(Args)]
+struct AsarExportArgs {
+    #[command(flatten)]
+    base: ExportWithAsmArgs,
+
+    #[command(flatten)]
+    memory_map: MemoryMapModeArgument,
+}
+
+fn parse_asar_memory_map(args: &AsarExportArgs) -> AsarMemoryMap {
+    AsarMemoryMap::new(args.memory_map.mode())
+}
+
+//
 // ca65-export
 // ===========
 
@@ -740,6 +762,10 @@ fn main() {
         Command::Song(args) => compile_song_data(args),
         Command::Song2spc(args) => export_song_to_spc_file(args),
         Command::Check(args) => check_project_command(args),
+        Command::AsarEnums(args) => generate_enums_command::<AsarExporter>(args),
+        Command::AsarExport(args) => {
+            export_with_asm_command::<AsarExporter>(&parse_asar_memory_map(&args), args.base);
+        }
         Command::Ca65Enums(args) => generate_enums_command::<Ca65Exporter>(args),
         Command::Ca65Export(args) => {
             export_with_asm_command::<Ca65Exporter>(&parse_ca65_memory_map(&args), args.base)
