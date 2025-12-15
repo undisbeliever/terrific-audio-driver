@@ -63,7 +63,7 @@ enum Command {
     /// Generate an asar include file containing song and sound effect constants
     AsarEnums(EnumArgs),
 
-    /// Compile the project and output an asar inc file containing LoadSongData and incbin statements
+    /// Compile the project and output an asar assembly file containing LoadSongData and incbin statements
     AsarExport(AsarExportArgs),
 
     /// Generate an ca65 include file containing songs and sound effect enums
@@ -453,7 +453,7 @@ struct ExportWithAsmArgs {
         long,
         short = 'a',
         value_name = "ASM_FILE",
-        help = "Assembly file output\n(contains LoadAudioData callback, .incbin statement and .assert statements)"
+        help = "Assembly file output\n(contains LoadAudioData callback, incbin statements and assert statements)"
     )]
     output_asm: PathBuf,
 
