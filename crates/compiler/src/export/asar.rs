@@ -131,6 +131,8 @@ assert filesize("{incbin_path}") == {incbin_size}, "{incbin_path} file size does
 
 check bankcross off
 
+Tad_AudioData:
+
 Tad_Loader_Bin:
     incbin "{incbin_path}":0..{}
 Tad_Loader_SIZE = {}
@@ -143,6 +145,8 @@ Tad_AudioDriver_SIZE = {}
 ;; u16 footer - 16 bit clipped `bin_data_offset + bin_file.len()` (used to determine the size of the last item)
 Tad_DataTable:
     incbin "{incbin_path}":{}..{incbin_size}
+
+Tad_AudioData_End:
 
 check bankcross full
 "##,
