@@ -166,7 +166,7 @@ Tad_LoadSong: {
     sta.w   TadPrivate.nextSong
 
     lda.b   #!TadFlags_RELOAD_COMMON_AUDIO_DATA
-    trb.w   Tad_flags
+    trb.w   Tad.flags
     beq     .SongRequested
         ; Common audio data requested
         lda.b   #!TadState_WAITING_FOR_LOADER_COMMON
@@ -243,7 +243,7 @@ Tad_GetSong: {
 ; DB access lowram
 Tad_ReloadCommonAudioData: {
     lda.b   #!TadFlags_RELOAD_COMMON_AUDIO_DATA
-    tsb.w   Tad_flags
+    tsb.w   Tad.flags
     rts
 }
 
@@ -255,7 +255,7 @@ Tad_ReloadCommonAudioData: {
 ; DB access lowram
 Tad_SongsStartImmediately: {
     lda.b   #!TadFlags_PLAY_SONG_IMMEDIATELY
-    tsb.w   Tad_flags
+    tsb.w   Tad.flags
     rts
 }
 
@@ -267,7 +267,7 @@ Tad_SongsStartImmediately: {
 ; DB access lowram
 Tad_SongsStartPaused: {
     lda.b   #!TadFlags_PLAY_SONG_IMMEDIATELY
-    trb.w   Tad_flags
+    trb.w   Tad.flags
     rts
 }
 
@@ -281,7 +281,7 @@ Tad_SongsStartPaused: {
 ; DB access lowram
 Tad_GlobalVolumesResetOnSongStart: {
     lda.b   #!TadFlags_RESET_GLOBAL_VOLUMES_ON_SONG_START
-    tsb.w   Tad_flags
+    tsb.w   Tad.flags
     rts
 }
 
@@ -296,7 +296,7 @@ Tad_GlobalVolumesResetOnSongStart: {
 ; DB access lowram
 Tad_GlobalVolumesPersist: {
     lda.b   #!TadFlags_RESET_GLOBAL_VOLUMES_ON_SONG_START
-    trb.w   Tad_flags
+    trb.w   Tad.flags
     rts
 }
 

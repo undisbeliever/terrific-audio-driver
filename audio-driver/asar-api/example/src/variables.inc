@@ -36,11 +36,11 @@ org $00
 org $7e0100
     ; `TadFlags` bitfield
     ; (see `TadFlags`)
-    Tad_flags: skip 1
+    Tad.flags: skip 1
 
     ; Mono/Stereo/Surround audio mode
     ; (`TadAudioMode` enum)
-    Tad_audioMode: skip 1
+    Tad.audioMode: skip 1
 
 
     TadPrivate.state: skip 1

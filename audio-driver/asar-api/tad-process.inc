@@ -446,9 +446,9 @@ Tad_Init: {
     assert (!TAD_DEFAULT_FLAGS)&!TadFlags__ALL_FLAGS == (!TAD_DEFAULT_FLAGS)
     assert (!TAD_DEFAULT_AUDIO_MODE) >= 0 && (!TAD_DEFAULT_AUDIO_MODE) < !TAD_N_AUDIO_MODES
 
-    assert Tad_flags+1 == Tad_audioMode
+    assert Tad.flags+1 == Tad.audioMode
     ldx.w   #(!TAD_DEFAULT_FLAGS)|((!TAD_DEFAULT_AUDIO_MODE)<<8)
-    stx.w   Tad_flags
+    stx.w   Tad.flags
 
     ldx.w   #!TAD_DEFAULT_TRANSFER_PER_FRAME
     stx.w   TadPrivate.bytesToTransferPerFrame
@@ -698,17 +698,17 @@ TadPrivate_Process_WaitingForLoader: { ; RTL
 
         ; Clear unused TAD flags
         lda.b   #$ff^!TadFlags__ALL_FLAGS
-        trb.w   Tad_flags
+        trb.w   Tad.flags
 
         ; Convert `audioMode` to TadLoaderDataType and combine with TadFlags
         assert ((0+1)&3) == !TadLoaderDataType_SURROUND_FLAG
         assert ((1+1)&3) == !TadLoaderDataType_STEREO_FLAG
         assert ((2+1)&3) == !TadLoaderDataType_STEREO_FLAG|!TadLoaderDataType_SURROUND_FLAG
-        lda.w   Tad_audioMode
+        lda.w   Tad.audioMode
         inc
         and.b   #3
 
-        ora.w   Tad_flags
+        ora.w   Tad.flags
         ora.b   #!TadLoaderDataType_SONG_DATA_FLAG
         jsr     TadPrivate_Loader_CheckReadyAndSendLoaderDataType
         bcc     .Return
@@ -716,7 +716,7 @@ TadPrivate_Process_WaitingForLoader: { ; RTL
         ; Determine next state
         assert !TadFlags_PLAY_SONG_IMMEDIATELY == $40
         assert !TadState_LOADING_SONG_DATA_PAUSED+1 == !TadState_LOADING_SONG_DATA_PLAY
-        lda.w   Tad_flags
+        lda.w   Tad.flags
         asl
         asl
         lda.b   #0

@@ -110,9 +110,8 @@ TadAudioMode .block
 TAD_N_AUDIO_MODES = 3
 
 
-; The current audio driver state
-; (see `TadState`)
-TadPrivate_state .byte ?
+; Public variables
+; ================
 
 ; TAD flags bitfield.
 ;
@@ -131,6 +130,14 @@ Tad_flags .byte ?
 ;
 ; (public TadAudioMode enum byte)
 Tad_audioMode .byte ?
+
+
+; Private variables
+; =================
+
+; The current audio driver state
+; (see `TadState`)
+TadPrivate_state .byte ?
 
 ; Number of bytes to transfer per `Tad_Process` call
 ;

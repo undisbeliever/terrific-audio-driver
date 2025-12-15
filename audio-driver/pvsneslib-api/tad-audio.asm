@@ -1919,10 +1919,6 @@ tadPrivate_Command_A__Override_TwoParameters:
 ;
 ; Using WINDOW to ensure the variables are not allocated to zeropage or stack addresses.
 .ramsection "tad_variables" BANK $0 SLOT 1 WINDOW $0100 $1400
-    ;; The current audio driver state
-    ;; (`State` enum)
-    tadPrivate_state: db
-
     ;; `Flags` bitfield
     ;; (public, see `Flags` namespace)
     tad_flags: db
@@ -1930,6 +1926,11 @@ tadPrivate_Command_A__Override_TwoParameters:
     ;; Mono/Stereo/Surround audio mode
     ;; (public, `TadAudioMode` enum)
     tad_audioMode: db
+
+
+    ;; The current audio driver state
+    ;; (`State` enum)
+    tadPrivate_state: db
 
     ;; Number of bytes to transfer per `tad_process` call
     ;;

@@ -30,12 +30,12 @@
 ;      3. This notice may not be removed or altered from any source distribution.
 
 
-; Must be in lowram
-struct TadPrivate $7e0200
-    ; The current audio driver state
-    ; (`TadState` enum)
-    .state: skip 1
+; ================
+; Public variables
+; ================
 
+; Must be in lowram
+struct Tad $7e0200
     ; `TadFlags` bitfield
     ; (see `TadFlags`)
     .flags: skip 1
@@ -43,6 +43,30 @@ struct TadPrivate $7e0200
     ; Mono/Stereo/Surround audio mode
     ; (`TadAudioMode` enum)
     .audioMode: skip 1
+endstruct
+
+
+; ---------------------------------------
+; Queue 4 - The next sound effect to play
+; ---------------------------------------
+
+; should be zeropage, must be in lowram
+struct TadSfxQueue $00
+    .sfx: skip 1
+    .pan: skip 1
+endstruct
+
+
+
+; =================
+; Private Variables
+; =================
+
+; Must be in lowram
+struct TadPrivate $7e0202
+    ; The current audio driver state
+    ; (`TadState` enum)
+    .state: skip 1
 
     ; Number of bytes to transfer per `Process` call
     ;
@@ -87,23 +111,4 @@ struct TadPrivate $7e0200
     .nextCommand_parameter0: skip 1
     .nextCommand_parameter1: skip 1
 endstruct
-
-
-; ---------------------------------------
-; Queue 4 - The next sound effect to play
-; ---------------------------------------
-
-; should be zeropage, must be in lowram
-struct TadSfxQueue $00
-    .sfx: skip 1
-    .pan: skip 1
-endstruct
-
-
-; ----------------------
-; Alias public variables
-; ----------------------
-
-Tad_flags = TadPrivate.flags
-Tad_audioMode = TadPrivate.audioMode
 

@@ -391,10 +391,10 @@ TAD_N_AUDIO_MODES = 3
 
 
 .bss
-    ;; The current audio driver state
-    ;; (`TadState` enum)
-    TadPrivate_state: .res 1
 
+; ----------------
+; Public variables
+; ----------------
     ;; `TadFlags` bitfield
     ;; (see `TadFlags` namespace)
     Tad_flags: .res 1
@@ -402,6 +402,13 @@ TAD_N_AUDIO_MODES = 3
     ;; Mono/Stereo/Surround audio mode
     ;; (`TadAudioMode` enum)
     Tad_audioMode: .res 1
+
+; -----------------
+; Private variables
+; -----------------
+    ;; The current audio driver state
+    ;; (`TadState` enum)
+    TadPrivate_state: .res 1
 
     ;; Number of bytes to transfer per `Tad_Process` call
     ;;

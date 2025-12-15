@@ -69,6 +69,10 @@ Bytecode assembly changes:
  * Improved out-of-range note testing in bytecode assembly sound effects
  * Fixed missing no-instrument error in `play_pitch`, `portamento_pitch`, `portamento_pitch_calc` and `play_noise`.
 
+65816 APIs:
+ * Added asar API
+ * Moved public lowram variables so they are before the `TadPrivate` variables
+
 tad-compiler:
  * Added `asar-enums` command
  * Added `asar-export` command
