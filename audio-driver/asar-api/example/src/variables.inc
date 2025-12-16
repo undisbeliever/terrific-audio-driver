@@ -29,6 +29,10 @@ org $00
     joypadCurrent: skip 2
     joypadPressed: skip 2
 
+    ; TadSfxQueue can be in zeropage
+    TadSfxQueue.sfx: skip 1
+    TadSfxQueue.pan: skip 1
+
     assert pc() < $100
 
 
@@ -57,11 +61,6 @@ org $7e0100
     TadPrivate.nextCommand_id: skip 1
     TadPrivate.nextCommand_parameter0: skip 1
     TadPrivate.nextCommand_parameter1: skip 1
-
-
-    ; Testing TadSfxQueue in lowram
-    TadSfxQueue.sfx: skip 1
-    TadSfxQueue.pan: skip 1
 
     assert pc() < $7ef180
 
