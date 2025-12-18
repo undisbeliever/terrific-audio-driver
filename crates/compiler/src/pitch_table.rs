@@ -379,8 +379,7 @@ fn process_pitch_vecs(sorted_pitches: SortedPitches, n_instruments_and_samples: 
 }
 
 pub struct PitchTable {
-    pub(crate) table_data_l: [u8; MAX_N_PITCHES],
-    pub(crate) table_data_h: [u8; MAX_N_PITCHES],
+    pub(crate) table_data: [u16; MAX_N_PITCHES],
 
     pub(crate) n_pitches: usize,
 
@@ -400,23 +399,13 @@ pub(crate) fn merge_pitch_vec(
         return Err(PitchTableError::TooManyInstruments);
     }
 
-    // By default play at 1.0 pitch
-    const DEFAULT_L: u8 = PITCH_REGISTER_FP_SCALE.to_le_bytes()[0];
-    const DEFAULT_H: u8 = PITCH_REGISTER_FP_SCALE.to_le_bytes()[1];
-
     let mut out = PitchTable {
-        table_data_l: [DEFAULT_L; MAX_N_PITCHES],
-        table_data_h: [DEFAULT_H; MAX_N_PITCHES],
+        table_data: [PITCH_REGISTER_FP_SCALE as u16; MAX_N_PITCHES],
         instruments_pitch_offset: pt.instruments_pitch_offset,
         n_pitches: pt.pitches.len(),
     };
 
-    for (i, p) in pt.pitches.iter().enumerate() {
-        let p = p.to_le_bytes();
-
-        out.table_data_l[i] = p[0];
-        out.table_data_h[i] = p[1];
-    }
+    out.table_data[..pt.pitches.len()].copy_from_slice(&pt.pitches);
 
     Ok(out)
 }
@@ -443,17 +432,19 @@ impl PitchTable {
             .wrapping_add(PITCH_TABLE_OFFSET)
             .wrapping_add(note.note_id());
 
-        let i = usize::from(index);
-
-        u16::from_le_bytes([self.table_data_l[i], self.table_data_h[i]])
+        self.table_data[usize::from(index)]
     }
 
-    pub(crate) fn pitch_table_l(&self) -> &[u8] {
-        &self.table_data_l[..self.n_pitches]
+    pub(crate) fn pitch_table_l(&self) -> impl ExactSizeIterator<Item = u8> + use<'_> {
+        self.table_data[..self.n_pitches]
+            .iter()
+            .map(|p| p.to_le_bytes()[0])
     }
 
-    pub(crate) fn pitch_table_h(&self) -> &[u8] {
-        &self.table_data_h[..self.n_pitches]
+    pub(crate) fn pitch_table_h(&self) -> impl ExactSizeIterator<Item = u8> + use<'_> {
+        self.table_data[..self.n_pitches]
+            .iter()
+            .map(|p| p.to_le_bytes()[1])
     }
 }
 
