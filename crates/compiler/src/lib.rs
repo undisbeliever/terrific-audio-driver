@@ -9,6 +9,7 @@
 mod bytecode;
 mod command_compiler;
 mod file_pos;
+mod number_parsing;
 mod value_newtypes;
 
 pub mod bytecode_assembler;

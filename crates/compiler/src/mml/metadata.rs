@@ -7,7 +7,6 @@
 use std::collections::HashMap;
 
 use crate::bytecode::Transpose;
-use crate::bytecode_assembler::parse_i32_allow_zero;
 use crate::echo::{
     parse_fir_filter_string, EchoBuffer, EchoEdl, EchoFeedback, EchoLength, EchoVolume,
     IDENTITY_FILTER,
@@ -16,6 +15,7 @@ use crate::errors::{ErrorWithPos, MmlLineError, ValueError};
 use crate::file_pos::{blank_file_range, Line};
 use crate::invert_flags::{parse_invert_flag_arguments, InvertFlags};
 use crate::notes::KeySignature;
+use crate::number_parsing::parse_i32_allow_zero;
 use crate::songs::MetaData;
 use crate::time::{Bpm, TickClock, ZenLen, DEFAULT_BPM, DEFAULT_ZENLEN};
 use crate::value_newtypes::{parse_i8wh, I8WithByteHexValueNewType};

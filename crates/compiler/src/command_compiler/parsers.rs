@@ -12,6 +12,7 @@ use crate::data::{self, UniqueNamesList};
 use crate::envelope::Envelope;
 use crate::errors::{BytecodeError, ChannelError};
 use crate::identifier::ChannelId;
+use crate::number_parsing;
 use crate::subroutines::SubroutineNameMap;
 use crate::{bytecode_assembler, Transpose};
 
@@ -71,11 +72,11 @@ pub fn parse_bytecode_asm_instruction<'a>(
             )
         }
         Some((bytecode_assembler::START_LOOP, arg)) => {
-            let a = bytecode_assembler::parse_uvnt(arg.trim_start())?;
+            let a = number_parsing::parse_uvnt(arg.trim_start())?;
             Ok(Command::StartLoop(Some(a), Default::default()))
         }
         Some((bytecode_assembler::END_LOOP, arg)) => {
-            let a = bytecode_assembler::parse_uvnt(arg.trim_start())?;
+            let a = number_parsing::parse_uvnt(arg.trim_start())?;
             Ok(Command::EndLoop(Some(a), Default::default()))
         }
         Some((bytecode_assembler::SET_INSTRUMENT, arg)) => {
@@ -90,11 +91,11 @@ pub fn parse_bytecode_asm_instruction<'a>(
             parse_set_instrument_asm(name, Some(Envelope::Gain(g)), data_instruments)
         }
         Some((bytecode_assembler::SET_TRANSPOSE, arg)) => {
-            let t = bytecode_assembler::parse_svnt_allow_zero(arg.trim_start())?;
+            let t = number_parsing::parse_svnt_allow_zero(arg.trim_start())?;
             Ok(Command::SetTranspose(t))
         }
         Some((bytecode_assembler::ADJUST_TRANSPOSE, arg)) => {
-            let t = bytecode_assembler::parse_svnt(arg.trim_start())?;
+            let t = number_parsing::parse_svnt(arg.trim_start())?;
             Ok(Command::AdjustTranspose(t))
         }
         Some(_) => Ok(Command::BytecodeAsm(asm)),

@@ -13,9 +13,10 @@ use crate::command_compiler::commands::{LoopAnalysis, SkipLastLoopAnalysis};
 use crate::driver_constants::FIR_FILTER_SIZE;
 use crate::echo::{EchoFeedback, FirCoefficient, FirTap};
 use crate::envelope::{Adsr, Gain, OptionalGain, TempGain};
-use crate::errors::{BytecodeError, ChannelError, ValueError};
+use crate::errors::{BytecodeError, ChannelError};
 use crate::invert_flags::parse_invert_flag_arguments;
 use crate::notes::Note;
+use crate::number_parsing::{parse_svnt, parse_svnt_allow_zero, parse_u32, parse_uvnt};
 use crate::value_newtypes::{
     parse_i8wh, I8WithByteHexValueNewType, SignedValueNewType, UnsignedValueNewType,
 };
@@ -428,93 +429,6 @@ fn parse_play_note_ticks(ticks: &str, key_off: &str) -> Result<PlayNoteTicks, Ch
 
     let ticks = parse_u32(ticks)?;
     Ok(PlayNoteTicks::try_from_is_slur_u32(ticks, is_slur)?)
-}
-
-fn parse_u32(s: &str) -> Result<u32, ValueError> {
-    match s.bytes().next() {
-        Some(b'$') => match u32::from_str_radix(&s[1..], 16) {
-            Ok(i) => Ok(i),
-            Err(_) => Err(ValueError::CannotParseHex(s.to_owned())),
-        },
-        _ => match s.parse() {
-            Ok(i) => Ok(i),
-            Err(_) => Err(ValueError::CannotParseUnsigned(s.to_owned())),
-        },
-    }
-}
-
-fn parse_i32(src: &str, missing_sign_err: &ValueError) -> Result<i32, ValueError> {
-    if let Some(s) = src.strip_prefix("+$") {
-        match i32::from_str_radix(s, 16) {
-            Ok(i) => Ok(i),
-            Err(_) => Err(ValueError::CannotParseHex(src.to_owned())),
-        }
-    } else if let Some(s) = src.strip_prefix("-$") {
-        match i32::from_str_radix(s, 16) {
-            Ok(i) => Ok(-i),
-            Err(_) => Err(ValueError::CannotParseHex(src.to_owned())),
-        }
-    } else {
-        match src.bytes().next() {
-            Some(b'-') | Some(b'+') => match src.parse() {
-                Ok(i) => Ok(i),
-                Err(_) => Err(ValueError::CannotParseSigned(src.to_owned())),
-            },
-            _ => Err(missing_sign_err.clone()),
-        }
-    }
-}
-
-pub(crate) fn parse_i32_allow_zero(
-    src: &str,
-    missing_sign_err: &ValueError,
-) -> Result<i32, ValueError> {
-    if let Some(s) = src.strip_prefix("+$") {
-        match i32::from_str_radix(s, 16) {
-            Ok(i) => Ok(i),
-            Err(_) => Err(ValueError::CannotParseHex(src.to_owned())),
-        }
-    } else if let Some(s) = src.strip_prefix("-$") {
-        match i32::from_str_radix(s, 16) {
-            Ok(i) => Ok(-i),
-            Err(_) => Err(ValueError::CannotParseHex(src.to_owned())),
-        }
-    } else {
-        match src.bytes().next() {
-            Some(b'-') | Some(b'+') => match src.parse() {
-                Ok(i) => Ok(i),
-                Err(_) => Err(ValueError::CannotParseSigned(src.to_owned())),
-            },
-            _ => match src.parse::<i32>() {
-                Ok(0) => Ok(0),
-                _ => Err(missing_sign_err.clone()),
-            },
-        }
-    }
-}
-
-/// Parse UnsignedValueNewType
-pub(crate) fn parse_uvnt<T>(s: &str) -> Result<T, ChannelError>
-where
-    T: UnsignedValueNewType,
-{
-    Ok(parse_u32(s)?.try_into()?)
-}
-
-/// Parse SignedValueNewType
-pub(crate) fn parse_svnt<T>(s: &str) -> Result<T, ChannelError>
-where
-    T: SignedValueNewType,
-{
-    Ok(parse_i32(s, &T::MISSING_SIGN_ERROR)?.try_into()?)
-}
-
-/// Parse SignedValueNewType
-pub(crate) fn parse_svnt_allow_zero<T>(s: &str) -> Result<T, ChannelError>
-where
-    T: SignedValueNewType,
-{
-    Ok(parse_i32_allow_zero(s, &T::MISSING_SIGN_ERROR)?.try_into()?)
 }
 
 pub(crate) fn split_asm_args(arguments: &str) -> Vec<&str> {
