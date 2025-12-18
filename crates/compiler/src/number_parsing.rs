@@ -4,10 +4,8 @@
 //
 // SPDX-License-Identifier: MIT
 
-use crate::{
-    errors::{ChannelError, ValueError},
-    SignedValueNewType, UnsignedValueNewType,
-};
+use crate::errors::ValueError;
+use crate::value_newtypes::{SignedValueNewType, UnsignedValueNewType};
 
 pub fn parse_u32(s: &str) -> Result<u32, ValueError> {
     match s.bytes().next() {
@@ -22,7 +20,7 @@ pub fn parse_u32(s: &str) -> Result<u32, ValueError> {
     }
 }
 
-pub fn parse_i32(src: &str, missing_sign_err: &ValueError) -> Result<i32, ValueError> {
+fn parse_i32(src: &str, missing_sign_err: &ValueError) -> Result<i32, ValueError> {
     if let Some(s) = src.strip_prefix("+$") {
         match i32::from_str_radix(s, 16) {
             Ok(i) => Ok(i),
@@ -44,7 +42,7 @@ pub fn parse_i32(src: &str, missing_sign_err: &ValueError) -> Result<i32, ValueE
     }
 }
 
-pub fn parse_i32_allow_zero(src: &str, missing_sign_err: &ValueError) -> Result<i32, ValueError> {
+fn parse_i32_allow_zero(src: &str, missing_sign_err: &ValueError) -> Result<i32, ValueError> {
     if let Some(s) = src.strip_prefix("+$") {
         match i32::from_str_radix(s, 16) {
             Ok(i) => Ok(i),
@@ -70,25 +68,25 @@ pub fn parse_i32_allow_zero(src: &str, missing_sign_err: &ValueError) -> Result<
 }
 
 /// Parse UnsignedValueNewType
-pub fn parse_uvnt<T>(s: &str) -> Result<T, ChannelError>
+pub fn parse_uvnt<T>(s: &str) -> Result<T, ValueError>
 where
     T: UnsignedValueNewType,
 {
-    Ok(parse_u32(s)?.try_into()?)
+    parse_u32(s)?.try_into()
 }
 
 /// Parse SignedValueNewType
-pub fn parse_svnt<T>(s: &str) -> Result<T, ChannelError>
+pub fn parse_svnt<T>(s: &str) -> Result<T, ValueError>
 where
     T: SignedValueNewType,
 {
-    Ok(parse_i32(s, &T::MISSING_SIGN_ERROR)?.try_into()?)
+    parse_i32(s, &T::MISSING_SIGN_ERROR)?.try_into()
 }
 
 /// Parse SignedValueNewType
-pub fn parse_svnt_allow_zero<T>(s: &str) -> Result<T, ChannelError>
+pub fn parse_svnt_allow_zero<T>(s: &str) -> Result<T, ValueError>
 where
     T: SignedValueNewType,
 {
-    Ok(parse_i32_allow_zero(s, &T::MISSING_SIGN_ERROR)?.try_into()?)
+    parse_i32_allow_zero(s, &T::MISSING_SIGN_ERROR)?.try_into()
 }

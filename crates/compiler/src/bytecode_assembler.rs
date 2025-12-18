@@ -113,7 +113,7 @@ where
     T: SignedValueNewType,
 {
     let arg = one_argument(args)?;
-    parse_svnt(arg)
+    Ok(parse_svnt(arg)?)
 }
 
 fn one_svnt_argument_allow_zero<T>(args: &[&str]) -> Result<T, ChannelError>
@@ -121,7 +121,7 @@ where
     T: SignedValueNewType,
 {
     let arg = one_argument(args)?;
-    parse_svnt_allow_zero(arg)
+    Ok(parse_svnt_allow_zero(arg)?)
 }
 
 fn one_uvnt_argument<T>(args: &[&str]) -> Result<T, ChannelError>
@@ -129,7 +129,7 @@ where
     T: UnsignedValueNewType,
 {
     let arg = one_argument(args)?;
-    parse_uvnt(arg)
+    Ok(parse_uvnt(arg)?)
 }
 
 fn two_uvnt_arguments<T, U>(args: &[&str]) -> Result<(T, U), ChannelError>

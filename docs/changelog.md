@@ -39,6 +39,7 @@ MML changes:
  * The default whole note length can be set with `#ZenLen` or `#Zenlen`
  * `#` headers can now be lower case or lower camel case
    (ie, `#title`, `#echolength`, `#echoLength`)
+ * `#` headers can now contain hexadecimal numbers
  * Duplicate header error messages show the line of the original header
  * Portamentos can now be played in a subroutine with an unknown instrument.
  * `_` and `__` transpose commands now change a semitone offset inside the driver.

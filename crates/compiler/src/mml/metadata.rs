@@ -15,11 +15,11 @@ use crate::errors::{ErrorWithPos, MmlLineError, ValueError};
 use crate::file_pos::{blank_file_range, Line};
 use crate::invert_flags::{parse_invert_flag_arguments, InvertFlags};
 use crate::notes::KeySignature;
-use crate::number_parsing::parse_i32_allow_zero;
+use crate::number_parsing::{parse_svnt_allow_zero, parse_uvnt};
 use crate::songs::MetaData;
 use crate::time::{Bpm, TickClock, ZenLen, DEFAULT_BPM, DEFAULT_ZENLEN};
 use crate::value_newtypes::{parse_i8wh, I8WithByteHexValueNewType};
-use crate::{spc_file_export, FilePosRange, SignedValueNewType};
+use crate::{spc_file_export, FilePosRange};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct GlobalSettings {
@@ -61,26 +61,15 @@ fn split_header_line<'a>(
     }
 }
 
-fn parse_u32(s: &str) -> Result<u32, ValueError> {
-    match s.parse() {
-        Ok(o) => Ok(o),
-        Err(_) => Err(ValueError::CannotParseUnsigned(s.to_owned())),
-    }
-}
-
 fn parse_echo_volume(s: &str) -> Result<(EchoVolume, EchoVolume), MmlLineError> {
     let arguments: Vec<&str> = s.split_ascii_whitespace().collect();
 
     match arguments.len() {
         1 => {
-            let v = parse_u32(arguments[0])?.try_into()?;
+            let v = parse_uvnt(arguments[0])?;
             Ok((v, v))
         }
-        2 => {
-            let l = parse_u32(arguments[0])?.try_into()?;
-            let r = parse_u32(arguments[1])?.try_into()?;
-            Ok((l, r))
-        }
+        2 => Ok((parse_uvnt(arguments[0])?, parse_uvnt(arguments[1])?)),
         _ => Err(MmlLineError::InvalidNumberOfEchoVolumeArguments),
     }
 }
@@ -220,10 +209,9 @@ impl HeaderState {
             Header::Copyright => self.metadata.copyright = to_option_string()?,
             Header::License => self.metadata.license = to_option_string()?,
 
-            Header::ZenLen => self.metadata.mml_settings.zenlen = parse_u32(value)?.try_into()?,
+            Header::ZenLen => self.metadata.mml_settings.zenlen = parse_uvnt(value)?,
             Header::Transpose => {
-                self.metadata.mml_settings.channel_transpose =
-                    parse_i32_allow_zero(value, &Transpose::MISSING_SIGN_ERROR)?.try_into()?
+                self.metadata.mml_settings.channel_transpose = parse_svnt_allow_zero(value)?;
             }
 
             Header::OldTranspose => self.metadata.mml_settings.old_transpose = true,
@@ -238,12 +226,12 @@ impl HeaderState {
             }
 
             Header::MaxEchoLength => {
-                let echo_length = EchoLength::try_from(parse_u32(value)?)?;
+                let echo_length: EchoLength = parse_uvnt(value)?;
                 self.metadata.echo_buffer.max_edl = echo_length.to_edl();
                 self.max_edl_set = true;
             }
             Header::EchoLength => {
-                let echo_length = EchoLength::try_from(parse_u32(value)?)?;
+                let echo_length: EchoLength = parse_uvnt(value)?;
                 self.metadata.echo_buffer.edl = echo_length.to_edl();
                 self.edl_pos = pos.clone();
             }
@@ -279,7 +267,7 @@ impl HeaderState {
                 }
                 self.tempo_set = true;
 
-                let bpm = Bpm::try_from(parse_u32(value)?)?;
+                let bpm: Bpm = parse_uvnt(value)?;
                 self.metadata.tick_clock = bpm.to_tick_clock()?;
             }
             Header::Timer => {
@@ -287,7 +275,7 @@ impl HeaderState {
                     return Err(MmlLineError::CannotSetTimer);
                 }
                 self.tempo_set = true;
-                self.metadata.tick_clock = parse_u32(value)?.try_into()?;
+                self.metadata.tick_clock = parse_uvnt(value)?;
             }
             Header::SpcSongLength => match value.parse() {
                 Ok(i) => {

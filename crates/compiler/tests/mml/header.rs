@@ -265,6 +265,92 @@ A r
 }
 
 #[test]
+fn all_headers_hex() {
+    let dummy_data = dummy_data();
+
+    let s = compile_mml(
+        r#"
+#Title song-title
+#Game song-game
+#Date song-date
+#Composer song-composer
+#Author song-author
+#Copyright song-copyright
+#License song-license
+#ZenLen $a0
+#Transpose -$c
+#KeySignature +fc ; D Major
+#OldTranspose
+#MaxEchoLength $30
+#EchoLength $10
+; Cannot use negative hex numbers in FirFilter
+#FirFilter 1 2 -3 -4 $5 $6 $77 $88
+#DisableFirFilterLimit
+; Cannot use negative hex numbers in EchoFeedback
+#EchoFeedback $ee
+#EchoVolume $21 $1b
+#EchoInvert R
+#Timer $bb
+#SpcSongLength 300
+#SpcFadeout 200
+
+A r
+"#,
+        &dummy_data,
+    );
+
+    assert_eq!(
+        s.metadata(),
+        &MetaData {
+            title: Some("song-title".to_owned()),
+            game: Some("song-game".to_owned()),
+            date: Some("song-date".to_owned()),
+            composer: Some("song-composer".to_owned()),
+            author: Some("song-author".to_owned()),
+            copyright: Some("song-copyright".to_owned()),
+            license: Some("song-license".to_owned()),
+            echo_buffer: EchoBuffer {
+                max_edl: (0x30u8 / 16).try_into().unwrap(),
+                edl: (0x10u8 / 16).try_into().unwrap(),
+                fir: [1, 2, -3, -4, 0x5, 0x6, 0x77, -120].map(|i: i8| FirCoefficient::new(i)),
+                feedback: (-18).try_into().unwrap(),
+                echo_volume_l: 0x21u8.try_into().unwrap(),
+                echo_volume_r: 0x1bu8.try_into().unwrap(),
+                invert: InvertFlags {
+                    right: true,
+                    left: false,
+                    mono: false
+                },
+            },
+            tick_clock: 0xbbu16.try_into().unwrap(),
+            mml_settings: GlobalSettings {
+                zenlen: 0xa0u8.try_into().unwrap(),
+                channel_transpose: Transpose::new(-0xc),
+                signature: KeySignature::default()
+                    .parse_signature_changes("+fc")
+                    .unwrap(),
+                old_transpose: true,
+            },
+            spc_song_length: Some(300),
+            spc_fadeout_millis: Some(200),
+        }
+    );
+
+    let s = compile_mml(
+        r#"
+#Tempo $78
+
+A r
+"#,
+        &dummy_data,
+    );
+    assert_eq!(
+        s.metadata().tick_clock,
+        Bpm::try_from(0x78u8).unwrap().to_tick_clock().unwrap()
+    );
+}
+
+#[test]
 fn duplicate_header_errors() {
     assert_one_header_error_in_mml(
         r#"
