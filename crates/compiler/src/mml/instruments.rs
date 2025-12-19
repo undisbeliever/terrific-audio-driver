@@ -26,7 +26,14 @@ fn parse_instrument(
     }
 
     let (inst_name, args) = match line.split_once() {
-        Some((n, a)) => (n, Some(a)),
+        Some((n, a)) => {
+            let a = a.trim_start();
+            if !a.text.is_empty() {
+                (n, Some(a))
+            } else {
+                (n, None)
+            }
+        }
         None => (line.text, None),
     };
 

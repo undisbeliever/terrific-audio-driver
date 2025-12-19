@@ -924,3 +924,42 @@ A r !s L r
         BytecodeError::SubroutineInstrumentHintNoInstrumentSet.into(),
     );
 }
+
+#[test]
+fn space_after_instrument_bugfix() {
+    assert_mml_channel_a_matches_bytecode(
+        r##"
+@0 dummy_instrument  ; comment
+
+A @0
+"##,
+        &["set_instrument dummy_instrument"],
+    );
+
+    assert_mml_channel_a_matches_bytecode(
+        r##"
+@0 dummy_instrument  
+
+A @0
+"##,
+        &["set_instrument dummy_instrument"],
+    );
+
+    assert_mml_channel_a_matches_bytecode(
+        r##"
+@0 dummy_instrument gain F127  
+
+A @0
+"##,
+        &["set_instrument_and_gain dummy_instrument F127"],
+    );
+
+    assert_mml_channel_a_matches_bytecode(
+        r##"
+@0 dummy_instrument adsr 1 2 3 4  
+
+A @0
+"##,
+        &["set_instrument_and_adsr dummy_instrument 1 2 3 4"],
+    );
+}
