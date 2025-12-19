@@ -814,9 +814,6 @@ pub(crate) enum InstrumentState {
     Multiple(RangeInclusive<Note>),
 
     Hint(InstrumentId, RangeInclusive<Note>),
-
-    #[allow(dead_code)]
-    Unknown,
 }
 
 impl InstrumentState {
@@ -827,7 +824,6 @@ impl InstrumentState {
             Self::Hint(i, _) => Some(*i),
             Self::Multiple(_) => None,
             Self::Unset => None,
-            Self::Unknown => None,
         }
     }
 
@@ -837,7 +833,6 @@ impl InstrumentState {
             Self::Known(i, _) => o == i,
             Self::Multiple(..) => false,
             Self::Hint(..) => false,
-            Self::Unknown => false,
         }
     }
 
@@ -868,7 +863,7 @@ impl InstrumentState {
                         );
                     }
 
-                    Self::Unset | Self::Unknown => {
+                    Self::Unset => {
                         *self = InstrumentState::Multiple(loop_range);
                     }
                 }
@@ -1652,7 +1647,7 @@ impl<'a> Bytecode<'a> {
         }
 
         match self.state.instrument {
-            InstrumentState::Hint(..) | InstrumentState::Unknown | InstrumentState::Unset => {
+            InstrumentState::Hint(..) | InstrumentState::Unset => {
                 let s = &self.state;
 
                 match s.is_transpose_known() {
@@ -1715,7 +1710,7 @@ impl<'a> Bytecode<'a> {
                 }
                 TransposeRange::Overflow => Ok(()),
             },
-            InstrumentState::Unknown | InstrumentState::Unset => {
+            InstrumentState::Unset => {
                 if self.show_missing_set_instrument_error {
                     self.show_missing_set_instrument_error = false;
                     Err(BytecodeError::CannotPlayNoteBeforeSettingInstrument)
@@ -1738,7 +1733,7 @@ impl<'a> Bytecode<'a> {
             | InstrumentState::Multiple(_)
             | InstrumentState::Hint(_, _) => Ok(()),
 
-            InstrumentState::Unknown | InstrumentState::Unset => {
+            InstrumentState::Unset => {
                 self.state.no_instrument_pitch_or_noise = true;
 
                 if self.show_missing_set_instrument_error {
@@ -2058,8 +2053,7 @@ impl<'a> Bytecode<'a> {
 
         match &self.state.instrument {
             InstrumentState::Unset => (),
-
-            InstrumentState::Unknown | InstrumentState::Hint(..) => (),
+            InstrumentState::Hint(..) => (),
 
             InstrumentState::Known(..) | InstrumentState::Multiple(..) => {
                 return Err(ChannelError::InstrumentHintInstrumentAlreadySet)
@@ -2689,9 +2683,7 @@ impl<'a> Bytecode<'a> {
                     }
                 }
 
-                InstrumentState::Multiple(..)
-                | InstrumentState::Unknown
-                | InstrumentState::Unset => match self.context {
+                InstrumentState::Multiple(..) | InstrumentState::Unset => match self.context {
                     BytecodeContext::SongSubroutine { .. } | BytecodeContext::SfxSubroutine => {
                         self.state.instrument_hint = s.instrument_hint;
                     }
@@ -2714,7 +2706,7 @@ impl<'a> Bytecode<'a> {
             let sub_notes = &s.no_instrument_notes;
 
             match &old_instrument {
-                InstrumentState::Unknown | InstrumentState::Unset => match self.context {
+                InstrumentState::Unset => match self.context {
                     BytecodeContext::SongChannel { .. } | BytecodeContext::SoundEffect => {
                         return Err(BytecodeError::SubroutinePlaysNotesWithNoInstrument)
                     }
@@ -2753,7 +2745,7 @@ impl<'a> Bytecode<'a> {
             let sub_notes = &s.unknown_transpose_no_instrument_notes;
 
             match old_instrument {
-                InstrumentState::Unknown | InstrumentState::Unset => match self.context {
+                InstrumentState::Unset => match self.context {
                     BytecodeContext::SongChannel { .. } | BytecodeContext::SoundEffect => {
                         return Err(BytecodeError::SubroutinePlaysNotesWithNoInstrument)
                     }

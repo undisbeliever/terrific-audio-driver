@@ -312,9 +312,11 @@ pub(crate) enum Command<'a> {
 
     SetSubroutineInstrumentHint(InstrumentId, Option<Envelope>),
 
+    // InstrumentId must be valid
     // Will not be optimised away
     SetInstrumentAsm(InstrumentId, Option<Envelope>),
 
+    // InstrumentId must be valid
     SetInstrument(InstrumentId, Option<Envelope>),
     SetAdsr(Adsr),
     SetGain(Gain),
