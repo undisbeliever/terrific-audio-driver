@@ -707,7 +707,7 @@ fn build_play_instrument_data(
     instruments: &CList<data::Instrument, Option<InstrumentSampleData>>,
     id: ItemId,
     args: PlaySampleArgs,
-) -> Option<(CommonAudioData, SongData)> {
+) -> Option<(Box<CommonAudioData>, SongData)> {
     let sample = match instruments.get_output_for_id(&id) {
         Some(Some(s)) => s,
         _ => return None,
@@ -722,7 +722,7 @@ fn build_play_instrument_data(
     let blank_sfx = blank_compiled_sound_effects();
     let blank_sfx_subroutines = CompiledSfxSubroutines::blank();
     let common_audio_data =
-        build_common_audio_data(&sample_data, &blank_sfx_subroutines, &blank_sfx).ok()?;
+        Box::new(build_common_audio_data(&sample_data, &blank_sfx_subroutines, &blank_sfx).ok()?);
     let song_data =
         test_sample_song(0, args.note, args.note_length, args.envelope, &sample_data).ok()?;
 
@@ -733,7 +733,7 @@ fn build_play_sample_data(
     samples: &CList<data::Sample, Option<SampleSampleData>>,
     id: ItemId,
     args: PlaySampleArgs,
-) -> Option<(CommonAudioData, SongData)> {
+) -> Option<(Box<CommonAudioData>, SongData)> {
     let sample = match samples.get_output_for_id(&id) {
         Some(Some(s)) => s.clone(),
         _ => return None,
@@ -744,7 +744,7 @@ fn build_play_sample_data(
     let blank_sfx = blank_compiled_sound_effects();
     let blank_sfx_subroutines = CompiledSfxSubroutines::blank();
     let common_audio_data =
-        build_common_audio_data(&sample_data, &blank_sfx_subroutines, &blank_sfx).ok()?;
+        Box::new(build_common_audio_data(&sample_data, &blank_sfx_subroutines, &blank_sfx).ok()?);
     let song_data =
         test_sample_song(0, args.note, args.note_length, args.envelope, &sample_data).ok()?;
 

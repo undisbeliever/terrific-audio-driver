@@ -22,6 +22,7 @@ extern crate sdl2;
 use sdl2::audio::{AudioCallback, AudioDevice, AudioSpecDesired};
 use sdl2::Sdl;
 
+use std::ops::Deref;
 use std::sync::LockResult;
 use std::sync::RwLockReadGuard;
 use std::sync::RwLockWriteGuard;
@@ -103,7 +104,7 @@ pub enum AudioMessage {
     PlaySoundEffectCommand(SfxId, Pan),
     PlaySongWithSfxBuffer(ItemId, Arc<SongData>, TickCounter),
     PlaySfxUsingSfxBuffer(Arc<CompiledSoundEffect>, Pan),
-    PlaySample(CommonAudioData, Box<SongData>),
+    PlaySample(Box<CommonAudioData>, Box<SongData>),
 
     PlayBrrSampleAt32Khz(Arc<BrrSample>),
 }
@@ -377,7 +378,7 @@ impl<'a> BrrSampleDecoder<'a> {
 enum AudioDataState {
     NotLoaded,
     CommonDataOutOfDate, // Audio is still platying
-    Sample(CommonAudioData, Box<SongData>),
+    Sample(Box<CommonAudioData>, Box<SongData>),
     SongNoSfx(Arc<CommonAudioDataNoSfx>, Arc<SongData>),
     SongAndSfx(Arc<CommonAudioDataWithSfx>, Arc<SongData>),
     SongWithSfxBuffer(
@@ -660,7 +661,7 @@ impl TadState {
 
     fn play_sample(
         &mut self,
-        common_audio_data: CommonAudioData,
+        common_audio_data: Box<CommonAudioData>,
         song_data: Box<SongData>,
     ) -> Result<(), ()> {
         self._load_song_into_memory(
@@ -706,7 +707,7 @@ impl TadState {
         let (common_audio_data, song) = match &data_state {
             AudioDataState::NotLoaded => return Err(()),
             AudioDataState::CommonDataOutOfDate => return Err(()),
-            AudioDataState::Sample(cad, sd) => (cad, sd.as_ref()),
+            AudioDataState::Sample(cad, sd) => (cad.deref(), sd.as_ref()),
             AudioDataState::SongNoSfx(cad, sd) => (&cad.0, sd.as_ref()),
             AudioDataState::SongAndSfx(cad, sd) => (&cad.common_audio_data, sd.as_ref()),
             AudioDataState::SongWithSfxBuffer(cad, _, sd) => (cad.0.common_data(), sd.as_ref()),

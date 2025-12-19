@@ -415,10 +415,6 @@ impl SampleAndInstrumentData {
     pub fn pitch_table(&self) -> &PitchTable {
         &self.pitch_table
     }
-
-    pub fn take_pitch_table(self) -> PitchTable {
-        self.pitch_table
-    }
 }
 
 /// Creates SampleAndInstrumentData without the first/last octave limits.

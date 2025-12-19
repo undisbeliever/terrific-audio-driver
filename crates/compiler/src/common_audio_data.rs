@@ -15,6 +15,7 @@ use crate::driver_constants::{
 use crate::envelope::Envelope;
 use crate::errors::{CommonAudioDataError, CommonAudioDataErrors, SfxCannotFitInSfxBuffer};
 use crate::opcodes;
+use crate::pitch_table::PitchTable;
 use crate::samples::SampleAndInstrumentData;
 use crate::sound_effects::{
     tad_gui_sfx_buffer, CombinedSoundEffectsData, CompiledSfxSubroutines, CompiledSoundEffect,
@@ -38,6 +39,8 @@ pub struct CommonAudioData {
     instruments_soa_addr: u16,
     brr_data_addr: u16,
     min_song_data_addr: u16,
+
+    pitch_table: PitchTable,
 }
 
 impl std::fmt::Debug for CommonAudioData {
@@ -146,15 +149,6 @@ impl CommonAudioData {
         .collect()
     }
 
-    pub fn pitch_table_data(&self) -> (&[u8], &[u8]) {
-        let r = self.pitch_table_addr_range();
-        let start: usize = (r.start - addresses::COMMON_DATA).into();
-        let end: usize = (r.end - addresses::COMMON_DATA).into();
-        let mid = (start + end) / 2;
-
-        (&self.data[start..mid], &self.data[mid..end])
-    }
-
     pub fn instrument_envelope(&self, instrument_id: u8) -> Option<Envelope> {
         let i1 = self.instruments_soa_offset
             + 2 * self.n_instruments_and_samples
@@ -168,6 +162,10 @@ impl CommonAudioData {
         } else {
             None
         }
+    }
+
+    pub fn pitch_table(&self) -> &PitchTable {
+        &self.pitch_table
     }
 }
 
@@ -374,6 +372,9 @@ pub fn build_common_audio_data(
         instruments_soa_addr,
         brr_data_addr,
         min_song_data_addr: song_data_addr,
+
+        // ::TODO remove clone::
+        pitch_table: samples_and_instruments.pitch_table.clone(),
     })
 }
 

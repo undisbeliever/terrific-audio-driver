@@ -19,6 +19,7 @@ use crate::echo::EchoVolume;
 use crate::envelope::Envelope;
 use crate::invert_flags::InvertFlags;
 use crate::mml::MmlPrefixData;
+use crate::pitch_table::PitchTable;
 use crate::songs::Channel as SongChannel;
 use crate::songs::SongData;
 use crate::subroutines::Subroutine;
@@ -1725,8 +1726,7 @@ struct CommonAudioDataSoA<'a> {
     instruments_adsr1: &'a [u8],
     instruments_adsr2_or_gain: &'a [u8],
 
-    pitch_table_l: &'a [u8],
-    pitch_table_h: &'a [u8],
+    pitch_table: &'a PitchTable,
 }
 
 impl CommonAudioDataSoA<'_> {
@@ -1745,8 +1745,6 @@ impl CommonAudioDataSoA<'_> {
             &c.instruments_soa_data()[start..end]
         };
 
-        let pitch_table = c.pitch_table_data();
-
         let n_instruments = c.n_instruments_and_samples().try_into().unwrap();
 
         CommonAudioDataSoA {
@@ -1757,8 +1755,7 @@ impl CommonAudioDataSoA<'_> {
             instruments_pitch_offset: inst_soa_data(1),
             instruments_adsr1: inst_soa_data(2),
             instruments_adsr2_or_gain: inst_soa_data(3),
-            pitch_table_l: pitch_table.0,
-            pitch_table_h: pitch_table.1,
+            pitch_table: c.pitch_table(),
         }
     }
 
@@ -1771,19 +1768,15 @@ impl CommonAudioDataSoA<'_> {
     ) -> (u8, u8) {
         match instrument {
             Some(i) => {
-                let i: usize = self
+                let i = self
                     .instruments_pitch_offset
                     .get(usize::from(i))
                     .copied()
                     .unwrap_or(0)
                     .wrapping_add(note_opcode >> 1)
-                    .wrapping_add_signed(transpose)
-                    .into();
+                    .wrapping_add_signed(transpose);
 
-                let pitch = u16::from_le_bytes([
-                    self.pitch_table_l.get(i).copied().unwrap_or(0),
-                    self.pitch_table_h.get(i).copied().unwrap_or(0),
-                ]);
+                let pitch = self.pitch_table.get_pitch_u8(i);
 
                 pitch.wrapping_add_signed(detune).to_le_bytes().into()
             }

@@ -397,6 +397,7 @@ fn process_pitch_vecs(sorted_pitches: SortedPitches, n_instruments_and_samples: 
     }
 }
 
+#[derive(Clone)]
 pub struct PitchTable {
     table_data: [u16; MAX_N_PITCHES],
 
@@ -458,6 +459,10 @@ impl PitchTable {
             .wrapping_add(PITCH_TABLE_OFFSET)
             .wrapping_add(note.note_id());
 
+        self.table_data[usize::from(index)]
+    }
+
+    pub(crate) fn get_pitch_u8(&self, index: u8) -> u16 {
         self.table_data[usize::from(index)]
     }
 
