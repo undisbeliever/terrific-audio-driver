@@ -29,7 +29,6 @@ use crate::value_newtypes::{i16_value_newtype, u8_value_newtype, SignedValueNewT
 use crate::{FilePos, FilePosRange};
 
 use std::cmp::min;
-use std::ops::RangeInclusive;
 
 pub const MAX_PORTAMENTO_SLIDE_TICKS: u16 = 16 * 1024;
 pub const MAX_BROKEN_CHORD_NOTES: usize = 128;
@@ -441,10 +440,6 @@ pub struct MmlInstrument {
 
     pub(crate) instrument_id: InstrumentId,
     pub(crate) envelope: Option<Envelope>,
-
-    // Used by bytecode_interpreter to select the instrument to use when playing a subroutine
-    // ::TODO remove::
-    pub(crate) note_range: RangeInclusive<Note>,
 }
 
 pub(crate) struct SongCommands<'a> {

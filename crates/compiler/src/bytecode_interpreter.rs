@@ -1508,6 +1508,8 @@ where
             _ => return Err(SongSubroutineError),
         };
 
+        let pitch_table = out.common_audio_data.pitch_table();
+
         let (inst, envelope) = match sub.bc_state.instrument_hint {
             Some((i, e, _)) => (i, e),
             None => {
@@ -1521,7 +1523,8 @@ where
                 let i = match notes.is_empty() {
                     true => instruments.first(),
                     false => instruments.iter().find(|i| {
-                        i.note_range.contains(notes.start()) && i.note_range.contains(notes.end())
+                        let note_range = pitch_table.instrument_note_range(i.instrument_id);
+                        note_range.contains(notes.start()) && note_range.contains(notes.end())
                     }),
                 };
 

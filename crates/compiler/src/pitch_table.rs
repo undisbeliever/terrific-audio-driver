@@ -446,6 +446,10 @@ impl PitchTable {
         self.instrument_pto_and_note_range[usize::from(inst_id.as_u8())].0
     }
 
+    pub(crate) fn instrument_note_range(&self, inst_id: InstrumentId) -> &RangeInclusive<Note> {
+        &self.instrument_pto_and_note_range[usize::from(inst_id.as_u8())].1
+    }
+
     pub(crate) fn instrument_pto_and_note_range(
         &self,
         inst_id: InstrumentId,

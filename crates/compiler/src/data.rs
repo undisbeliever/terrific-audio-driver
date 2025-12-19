@@ -571,6 +571,9 @@ impl<T> UniqueNamesList<T> {
             .and_then(|&i| usize::try_from(i).ok())
             .map(|i| &self.list[i])
     }
+    pub fn get_name_index(&self, name: &str) -> Option<u32> {
+        self.map.get(name).copied()
+    }
     pub fn get_with_index(&self, name: &str) -> Option<(u32, &T)> {
         match self.map.get(name) {
             None => None,

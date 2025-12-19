@@ -13,7 +13,6 @@ use crate::data::UniqueNamesList;
 use crate::envelope::Envelope;
 use crate::errors::{ErrorWithPos, MmlLineError};
 use crate::file_pos::Line;
-use crate::samples::note_range;
 
 use std::collections::HashMap;
 
@@ -33,8 +32,8 @@ fn parse_instrument(
 
     let inst_name_err = |e| Err(ErrorWithPos(line.position.to_range_str_len(inst_name), e));
 
-    let (instrument_id, inst) = match inst_map.get_with_index(inst_name) {
-        Some((inst_id, inst)) => (inst_id, inst),
+    let instrument_id = match inst_map.get_name_index(inst_name) {
+        Some(i) => i,
         None => {
             return inst_name_err(MmlLineError::CannotFindInstrument(inst_name.to_owned()));
         }
@@ -69,7 +68,6 @@ fn parse_instrument(
         file_range: line.range(),
         instrument_id,
         envelope,
-        note_range: note_range(inst),
     })
 }
 
