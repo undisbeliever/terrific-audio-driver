@@ -38,6 +38,9 @@ pub struct CommonAudioData {
     pitch_table_addr: u16,
     instruments_soa_addr: u16,
     brr_data_addr: u16,
+    cad_end_addr: u16,
+
+    // Next even number after the end of the cad
     min_song_data_addr: u16,
 
     pitch_table: PitchTable,
@@ -77,9 +80,8 @@ impl CommonAudioData {
         self.instruments_soa_addr..self.brr_data_addr
     }
 
-    /// Caution: Includes padding byte
     pub fn brr_addr_range(&self) -> Range<u16> {
-        self.brr_data_addr..self.min_song_data_addr
+        self.brr_data_addr..self.cad_end_addr
     }
 
     pub fn min_song_data_addr(&self) -> u16 {
@@ -231,11 +233,9 @@ pub fn build_common_audio_data(
     let instruments_soa_addr = pitch_table_addr + n_pitches * COMMON_DATA_BYTES_PER_PITCH;
     let brr_data_addr =
         instruments_soa_addr + n_instruments_and_samples * COMMON_DATA_BYTES_PER_INSTRUMENT;
+    let cad_end_addr = brr_data_addr + samples_and_instruments.brr_data.len();
 
-    assert_eq!(
-        brr_data_addr + samples_and_instruments.brr_data.len(),
-        common_data_size + CAD_ADDR
-    );
+    assert_eq!(cad_end_addr, common_data_size + CAD_ADDR);
 
     if let Some(last_offset) = sound_effects.last_offset() {
         let last_sfx_addr = sfx_bc_addr + usize::from(last_offset);
@@ -293,6 +293,7 @@ pub fn build_common_audio_data(
     out.push(sound_effects.low_priority_index);
 
     let brr_data_addr = u16::try_from(brr_data_addr).unwrap();
+    let cad_end_addr = u16::try_from(cad_end_addr).unwrap();
 
     // sfx table
     let sfx_bc_addr = u16::try_from(sfx_bc_addr).unwrap();
@@ -353,8 +354,7 @@ pub fn build_common_audio_data(
     assert_eq!(out.len(), common_data_size);
 
     // Loader can only load a multiple of 2 bytes
-    let song_data_addr =
-        u16::try_from(CAD_ADDR + common_data_size + (common_data_size % 2)).unwrap();
+    let song_data_addr = cad_end_addr + (cad_end_addr % 2);
 
     assert!(song_data_addr % 2 == 0);
 
@@ -371,6 +371,7 @@ pub fn build_common_audio_data(
         pitch_table_addr,
         instruments_soa_addr,
         brr_data_addr,
+        cad_end_addr,
         min_song_data_addr: song_data_addr,
 
         // ::TODO remove clone::
