@@ -506,6 +506,7 @@ pub enum PitchError {
     InvalidNoteRange(RangeInclusive<Note>),
 
     NoSampleRatesInSample,
+    TooManySampleRatesInSample,
     InvalidSampleRates(Vec<u32>),
 }
 
@@ -1785,6 +1786,7 @@ impl Display for PitchError {
                 r.end().bytecode_argument_display()
             ),
             Self::NoSampleRatesInSample => write!(f, "no sample rates in sample"),
+            Self::TooManySampleRatesInSample => write!(f, "too many sample rates in sample"),
             Self::InvalidSampleRates(e) => write!(f, "invalid sample rates: {:?}", &e),
         }
     }

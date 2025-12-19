@@ -230,6 +230,9 @@ pub fn sample_pitch(sample: &Sample) -> Result<SamplePitches, PitchError> {
     if sample.sample_rates.is_empty() {
         return Err(PitchError::NoSampleRatesInSample);
     }
+    if sample.sample_rates.len() > Note::MAX.note_id().into() {
+        return Err(PitchError::TooManySampleRatesInSample);
+    }
 
     let mut invalid_sample_rates = Vec::new();
     let mut pitches = Vec::with_capacity(sample.sample_rates.len());
