@@ -260,8 +260,7 @@ pub fn build_common_audio_data(
     assert!(
         samples_and_instruments
             .pitch_table
-            .instruments_pitch_offset
-            .len()
+            .instruments_pitch_offset_len()
             == n_instruments_and_samples
     );
     assert!(samples_and_instruments.instruments_adsr1.len() == n_instruments_and_samples);
@@ -343,7 +342,11 @@ pub fn build_common_audio_data(
     let instruments_soa_addr = u16::try_from(instruments_soa_addr).unwrap();
     let instruments_soa_offset = out.len();
     out.extend(&samples_and_instruments.instruments_scrn);
-    out.extend(&samples_and_instruments.pitch_table.instruments_pitch_offset);
+    out.extend(
+        samples_and_instruments
+            .pitch_table
+            .instruments_pitch_offset(),
+    );
     out.extend(&samples_and_instruments.instruments_adsr1);
     out.extend(&samples_and_instruments.instruments_adsr2_or_gain);
 

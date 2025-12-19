@@ -20,7 +20,6 @@ use crate::identifier::MusicChannelIndex;
 use crate::invert_flags::InvertFlags;
 use crate::notes::{add_transpose_range_to_note_range, Note, NoteRange, LAST_NOTE_ID, N_NOTES};
 use crate::pitch_table::{InstrumentHintFreq, PitchTable, PitchTableOffset};
-use crate::samples::{instrument_note_range, note_range};
 use crate::subroutines::{CompiledSubroutines, GetSubroutineResult, Subroutine, SubroutineNameMap};
 use crate::time::{CommandTicks, TickClock, TickCounter, TickCounterWithLoopFlag};
 use crate::value_newtypes::{
@@ -816,6 +815,7 @@ pub(crate) enum InstrumentState {
 
     Hint(InstrumentId, RangeInclusive<Note>),
 
+    #[allow(dead_code)]
     Unknown,
 }
 
@@ -841,68 +841,65 @@ impl InstrumentState {
         }
     }
 
+    #[must_use]
     fn start_loop_analysis(
         &mut self,
         analysis: InstrumentAnalysis,
-        instruments: &UniqueNamesList<data::InstrumentOrSample>,
-    ) {
+        pitch_table: &PitchTable,
+    ) -> PitchTableOffset {
         match analysis {
             InstrumentAnalysis::Set(loop_inst_id) => {
-                match instruments.get_index(loop_inst_id.as_u8().into()) {
-                    Some(loop_inst) => {
-                        let loop_range = note_range(loop_inst);
-                        match &self {
-                            Self::Known(si, s_range) | Self::Hint(si, s_range) => {
-                                if *si != loop_inst_id {
-                                    *self = InstrumentState::Multiple(
-                                        max(*s_range.start(), *loop_range.start())
-                                            ..=min(*s_range.end(), *loop_range.end()),
-                                    );
-                                }
-                            }
+                let (pto, loop_range) = pitch_table.instrument_pto_and_note_range(loop_inst_id);
 
-                            Self::Multiple(s_range) => {
-                                *self = InstrumentState::Multiple(
-                                    max(*s_range.start(), *loop_range.start())
-                                        ..=min(*s_range.end(), *loop_range.end()),
-                                );
-                            }
-
-                            Self::Unset | Self::Unknown => {
-                                *self = InstrumentState::Multiple(loop_range);
-                            }
+                match &self {
+                    Self::Known(si, s_range) | Self::Hint(si, s_range) => {
+                        if *si != loop_inst_id {
+                            *self = InstrumentState::Multiple(
+                                max(*s_range.start(), *loop_range.start())
+                                    ..=min(*s_range.end(), *loop_range.end()),
+                            );
                         }
                     }
-                    None => {
-                        *self = InstrumentState::Unset;
+
+                    Self::Multiple(s_range) => {
+                        *self = InstrumentState::Multiple(
+                            max(*s_range.start(), *loop_range.start())
+                                ..=min(*s_range.end(), *loop_range.end()),
+                        );
+                    }
+
+                    Self::Unset | Self::Unknown => {
+                        *self = InstrumentState::Multiple(loop_range);
                     }
                 }
+                pto
             }
-            InstrumentAnalysis::Hint(_) => (),
+            InstrumentAnalysis::Hint(inst_id) => {
+                // Do not change state
+                pitch_table.pitch_table_offset(inst_id)
+            }
         }
     }
 
     // The instrument is known at the end of a loop or subroutine
+    #[must_use]
     fn end_loop_analysis(
         &mut self,
         analysis: InstrumentAnalysis,
-        instruments: &UniqueNamesList<data::InstrumentOrSample>,
-    ) {
+        pitch_table: &PitchTable,
+    ) -> PitchTableOffset {
         let id = analysis.instrument_id();
-        match instruments.get_index(id.as_u8().into()) {
-            Some(inst) => {
-                let range = note_range(inst);
-                match analysis {
-                    InstrumentAnalysis::Set(i) => *self = InstrumentState::Known(i, range),
-                    InstrumentAnalysis::Hint(i) => {
-                        if *self == InstrumentState::Unset {
-                            *self = InstrumentState::Hint(i, range)
-                        }
-                    }
+        let (pto, range) = pitch_table.instrument_pto_and_note_range(id);
+
+        match analysis {
+            InstrumentAnalysis::Set(i) => *self = InstrumentState::Known(i, range),
+            InstrumentAnalysis::Hint(i) => {
+                if *self == InstrumentState::Unset {
+                    *self = InstrumentState::Hint(i, range)
                 }
             }
-            None => *self = InstrumentState::Unknown,
-        };
+        }
+        pto
     }
 }
 
@@ -1142,16 +1139,14 @@ impl State {
         &mut self,
         analysis: &LoopAnalysis,
         pitch_table: &PitchTable,
-        instruments: &UniqueNamesList<data::InstrumentOrSample>,
     ) {
         if let Some(i) = analysis.instrument {
             // There can be 2 or more different instrument values at the start of the loop
 
-            self.instrument.start_loop_analysis(i, instruments);
+            let tuning = self.instrument.start_loop_analysis(i, pitch_table);
 
             // Clear instrument tuning if the loop is played with a different pitch table offset
-            let o = pitch_table.pitch_table_offset(i.instrument_id());
-            if self.instrument_tuning != Some(o) {
+            if self.instrument_tuning != Some(tuning) {
                 self.instrument_tuning = None;
             }
         }
@@ -1161,23 +1156,17 @@ impl State {
         &mut self,
         analysis: &LoopAnalysis,
         pitch_table: &PitchTable,
-        instruments: &UniqueNamesList<data::InstrumentOrSample>,
     ) {
         if let Some(i) = analysis.instrument {
-            self.instrument.end_loop_analysis(i, instruments);
+            let tuning = self.instrument.end_loop_analysis(i, pitch_table);
 
             // The instrument is known at the end of the loop
-            self.instrument_tuning = Some(pitch_table.pitch_table_offset(i.instrument_id()));
+            self.instrument_tuning = Some(tuning);
         }
     }
 
-    fn song_loop(
-        &mut self,
-        analysis: &LoopAnalysis,
-        pitch_table: &PitchTable,
-        instruments: &UniqueNamesList<data::InstrumentOrSample>,
-    ) {
-        self.start_loop_or_song_loop_instrument_analysis(analysis, pitch_table, instruments);
+    fn song_loop(&mut self, analysis: &LoopAnalysis, pitch_table: &PitchTable) {
+        self.start_loop_or_song_loop_instrument_analysis(analysis, pitch_table);
         self.transpose_range.song_loop(analysis.transpose);
         if let Some(t) = &mut self.subroutine_transpose_range {
             t.song_loop(analysis.transpose);
@@ -1203,9 +1192,8 @@ impl State {
         stack_depth: usize,
         analysis: &LoopAnalysis,
         pitch_table: &PitchTable,
-        instruments: &UniqueNamesList<data::InstrumentOrSample>,
     ) {
-        self.start_loop_or_song_loop_instrument_analysis(analysis, pitch_table, instruments);
+        self.start_loop_or_song_loop_instrument_analysis(analysis, pitch_table);
 
         self.transpose_range.start_loop(analysis.transpose);
         if let Some(t) = &mut self.subroutine_transpose_range {
@@ -1261,9 +1249,8 @@ impl State {
         start_loop_transpose_range: TransposeRange,
         start_loop_subroutine_transpose_range: Option<TransposeRange>,
         pitch_table: &PitchTable,
-        instruments: &UniqueNamesList<data::InstrumentOrSample>,
     ) {
-        self.end_loop_or_song_loop_instrument_analysis(analysis, pitch_table, instruments);
+        self.end_loop_or_song_loop_instrument_analysis(analysis, pitch_table);
 
         self.transpose_range
             .end_loop(analysis.transpose, start_loop_transpose_range);
@@ -1284,14 +1271,8 @@ impl State {
         // No maybe prev_slurred_note state
     }
 
-    fn merge_subroutine(
-        &mut self,
-        s: &State,
-        analysis: &LoopAnalysis,
-        pitch_table: &PitchTable,
-        instruments: &UniqueNamesList<data::InstrumentOrSample>,
-    ) {
-        self.end_loop_or_song_loop_instrument_analysis(analysis, pitch_table, instruments);
+    fn merge_subroutine(&mut self, s: &State, analysis: &LoopAnalysis, pitch_table: &PitchTable) {
+        self.end_loop_or_song_loop_instrument_analysis(analysis, pitch_table);
 
         self.transpose_range.subroutine_call(analysis.transpose);
         if let Some(t) = &mut self.subroutine_transpose_range {
@@ -1568,8 +1549,7 @@ impl<'a> Bytecode<'a> {
         assert!(matches!(self.context, BytecodeContext::SongChannel { .. }));
         assert_eq!(self.get_stack_depth(), StackDepth(0));
 
-        self.state
-            .song_loop(analysis, self.pitch_table, self.instruments);
+        self.state.song_loop(analysis, self.pitch_table);
     }
 
     pub fn _start_asm_block(&mut self) {
@@ -2088,8 +2068,10 @@ impl<'a> Bytecode<'a> {
 
         match self.instruments.get_index(id.as_u8().into()) {
             Some(InstrumentOrSample::Instrument(i)) => {
-                self.state.instrument = InstrumentState::Hint(id, instrument_note_range(i));
-                self.state.instrument_tuning = Some(self.pitch_table.pitch_table_offset(id));
+                let (pto, range) = self.pitch_table.instrument_pto_and_note_range(id);
+
+                self.state.instrument = InstrumentState::Hint(id, range);
+                self.state.instrument_tuning = Some(pto);
                 self.state.instrument_hint =
                     Some((id, envelope, InstrumentHintFreq::from_instrument(i)));
                 Ok(())
@@ -2102,12 +2084,10 @@ impl<'a> Bytecode<'a> {
     }
 
     fn _set_state_instrument_and_note_range(&mut self, instrument: InstrumentId) {
-        self.state.instrument = match self.instruments.get_index(instrument.as_u8().into()) {
-            Some(i) => InstrumentState::Known(instrument, note_range(i)),
-            None => InstrumentState::Unknown,
-        };
+        let (pto, note_range) = self.pitch_table.instrument_pto_and_note_range(instrument);
 
-        self.state.instrument_tuning = Some(self.pitch_table.pitch_table_offset(instrument));
+        self.state.instrument = InstrumentState::Known(instrument, note_range);
+        self.state.instrument_tuning = Some(pto);
     }
 
     pub fn set_instrument(&mut self, instrument: InstrumentId) {
@@ -2477,12 +2457,8 @@ impl<'a> Bytecode<'a> {
             skip_last_loop: None,
         });
 
-        self.state.start_loop(
-            self.loop_stack.len() - 1,
-            analysis,
-            self.pitch_table,
-            self.instruments,
-        );
+        self.state
+            .start_loop(self.loop_stack.len() - 1, analysis, self.pitch_table);
 
         let loop_count = match loop_count {
             Some(lc) => lc.0,
@@ -2570,7 +2546,6 @@ impl<'a> Bytecode<'a> {
             start_loop_transpose_range,
             start_loop_subroutine_transpose_range,
             self.pitch_table,
-            self.instruments,
         );
 
         r
@@ -2684,7 +2659,7 @@ impl<'a> Bytecode<'a> {
         let old_transpose_known = self.state.is_transpose_known();
 
         self.state
-            .merge_subroutine(s, &subroutine.analysis, self.pitch_table, self.instruments);
+            .merge_subroutine(s, &subroutine.analysis, self.pitch_table);
 
         // Disable note range checks for bytecode assembly in the MML tests
         #[cfg(feature = "test")]

@@ -4,6 +4,8 @@
 //
 // SPDX-License-Identifier: MIT
 
+use std::ops::RangeInclusive;
+
 use crate::bytecode::opcodes;
 use crate::bytecode::InstrumentId;
 use crate::bytecode::PlayPitchPitch;
@@ -58,11 +60,14 @@ pub struct InstrumentPitch {
 
     /// Maximum offset between note-range and tuning frequency, in semitones.
     max_semitone_offset: i32,
+
+    note_range: RangeInclusive<Note>,
 }
 
 #[derive(Clone)]
 pub struct SamplePitches {
     pitches: Vec<u16>,
+    note_range: RangeInclusive<Note>,
 }
 
 // Calculates the maximum number of semitones a sample can be incremented by.
@@ -88,23 +93,22 @@ pub fn instrument_pitch(inst: &Instrument) -> Result<InstrumentPitch, PitchError
         return Err(PitchError::SampleRateTooHigh);
     }
 
-    let (first_semitone, last_semitone) = match inst.note_range {
+    let note_range = match inst.note_range {
         InstrumentNoteRange::Octave { first, last } => {
             if first > last {
                 return Err(PitchError::FirstOctaveGreaterThanLastOctave);
             }
-            (
-                Note::first_note_for_octave(first).i32_note_id(),
-                Note::last_note_for_octave(last).i32_note_id(),
-            )
+            Note::first_note_for_octave(first)..=Note::last_note_for_octave(last)
         }
         InstrumentNoteRange::Note { first, last } => {
             if first > last {
                 return Err(PitchError::FirstNoteGreaterThanLastNote);
             }
-            (first.i32_note_id(), last.i32_note_id())
+            first..=last
         }
     };
+    let first_semitone = note_range.start().i32_note_id();
+    let last_semitone = note_range.end().i32_note_id();
 
     let mst_above_c0 =
         f64::log2(inst.freq / F64_A4_FREQ) * F64_MST_PER_OCTAVE + F64_A4_C0_MST_OFFSET;
@@ -134,6 +138,7 @@ pub fn instrument_pitch(inst: &Instrument) -> Result<InstrumentPitch, PitchError
             semitones_above_c0,
             min_semitone_offset,
             max_semitone_offset,
+            note_range,
         })
     } else {
         const SEMITONES_PER_OCTAVE: u8 = notes::SEMITONES_PER_OCTAVE;
@@ -179,6 +184,7 @@ pub(crate) fn maximize_pitch_range(pitch: &InstrumentPitch) -> (InstrumentPitch,
     let new_pitch = InstrumentPitch {
         microsemitones: pitch.microsemitones,
         semitones_above_c0: pitch.semitones_above_c0,
+        note_range: pitch.note_range.clone(),
 
         min_semitone_offset,
         max_semitone_offset,
@@ -242,7 +248,10 @@ pub fn sample_pitch(sample: &Sample) -> Result<SamplePitches, PitchError> {
     }
 
     if invalid_sample_rates.is_empty() {
-        Ok(SamplePitches { pitches })
+        Ok(SamplePitches {
+            note_range: Note::MIN..=Note::from_note_id_usize(pitches.len() - 1).unwrap(),
+            pitches,
+        })
     } else {
         Err(PitchError::InvalidSampleRates(invalid_sample_rates))
     }
@@ -306,12 +315,13 @@ impl<'a> Iterator for MstIterator<'a> {
 
 struct Pt {
     pitches: Vec<u16>,
-    instruments_pitch_offset: Vec<u8>,
+    instrument_pto_and_note_range: Vec<(PitchTableOffset, RangeInclusive<Note>)>,
 }
 
 fn process_pitch_vecs(sorted_pitches: SortedPitches, n_instruments_and_samples: usize) -> Pt {
     let mut pitches = Vec::with_capacity(256);
-    let mut instruments_pitch_offset = vec![0; n_instruments_and_samples];
+    let mut instrument_pto_and_note_range =
+        vec![(PitchTableOffset(0), Note::MIN..=Note::MIN); n_instruments_and_samples];
 
     // Instruments
     for (mst, slice) in group_by_mst(&sorted_pitches) {
@@ -338,7 +348,10 @@ fn process_pitch_vecs(sorted_pitches: SortedPitches, n_instruments_and_samples: 
             let o = pt_offset
                 - (pitch.semitones_above_c0 + min_semitone_offset)
                 - PITCH_TABLE_OFFSET as i32;
-            instruments_pitch_offset[*instrument_id] = o.to_le_bytes()[0];
+            instrument_pto_and_note_range[*instrument_id] = (
+                PitchTableOffset(o.to_le_bytes()[0]),
+                pitch.note_range.clone(),
+            );
         }
 
         for semitone_shift in min_semitone_offset..=max_semitone_offset {
@@ -369,21 +382,24 @@ fn process_pitch_vecs(sorted_pitches: SortedPitches, n_instruments_and_samples: 
             }
         };
 
-        instruments_pitch_offset[*inst_id] = o.wrapping_sub(PITCH_TABLE_OFFSET);
+        instrument_pto_and_note_range[*inst_id] = (
+            PitchTableOffset(o.wrapping_sub(PITCH_TABLE_OFFSET)),
+            sp.note_range.clone(),
+        );
     }
 
     Pt {
         pitches,
-        instruments_pitch_offset,
+        instrument_pto_and_note_range,
     }
 }
 
 pub struct PitchTable {
-    pub(crate) table_data: [u16; MAX_N_PITCHES],
+    table_data: [u16; MAX_N_PITCHES],
 
     pub(crate) n_pitches: usize,
 
-    pub(crate) instruments_pitch_offset: Vec<u8>,
+    instrument_pto_and_note_range: Vec<(PitchTableOffset, RangeInclusive<Note>)>,
 }
 
 pub(crate) fn merge_pitch_vec(
@@ -395,13 +411,13 @@ pub(crate) fn merge_pitch_vec(
     if pt.pitches.len() > MAX_N_PITCHES {
         return Err(PitchTableError::TooManyPitches(pt.pitches.len()));
     }
-    if pt.instruments_pitch_offset.len() > MAX_INSTRUMENTS_AND_SAMPLES {
+    if pt.instrument_pto_and_note_range.len() > MAX_INSTRUMENTS_AND_SAMPLES {
         return Err(PitchTableError::TooManyInstruments);
     }
 
     let mut out = PitchTable {
         table_data: [PITCH_REGISTER_FP_SCALE as u16; MAX_N_PITCHES],
-        instruments_pitch_offset: pt.instruments_pitch_offset,
+        instrument_pto_and_note_range: pt.instrument_pto_and_note_range,
         n_pitches: pt.pitches.len(),
     };
 
@@ -423,7 +439,14 @@ pub fn build_pitch_table(
 
 impl PitchTable {
     pub(crate) fn pitch_table_offset(&self, inst_id: InstrumentId) -> PitchTableOffset {
-        PitchTableOffset(self.instruments_pitch_offset[usize::from(inst_id.as_u8())])
+        self.instrument_pto_and_note_range[usize::from(inst_id.as_u8())].0
+    }
+
+    pub(crate) fn instrument_pto_and_note_range(
+        &self,
+        inst_id: InstrumentId,
+    ) -> (PitchTableOffset, RangeInclusive<Note>) {
+        self.instrument_pto_and_note_range[usize::from(inst_id.as_u8())].clone()
     }
 
     pub(crate) fn get_pitch(&self, offset: PitchTableOffset, note: Note) -> u16 {
@@ -433,6 +456,14 @@ impl PitchTable {
             .wrapping_add(note.note_id());
 
         self.table_data[usize::from(index)]
+    }
+
+    pub(crate) fn instruments_pitch_offset_len(&self) -> usize {
+        self.instrument_pto_and_note_range.len()
+    }
+
+    pub(crate) fn instruments_pitch_offset(&self) -> impl ExactSizeIterator<Item = u8> + use<'_> {
+        self.instrument_pto_and_note_range.iter().map(|(o, _)| o.0)
     }
 
     pub(crate) fn pitch_table_l(&self) -> impl ExactSizeIterator<Item = u8> + use<'_> {

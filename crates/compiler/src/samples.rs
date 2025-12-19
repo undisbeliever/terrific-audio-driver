@@ -472,7 +472,7 @@ pub fn combine_samples(
 
     assert_eq!(instruments_adsr1.len(), total_len);
     assert_eq!(instruments_adsr2_or_gain.len(), total_len);
-    assert_eq!(pitch_table.instruments_pitch_offset.len(), total_len);
+    assert_eq!(pitch_table.instruments_pitch_offset_len(), total_len);
 
     Ok(SampleAndInstrumentData {
         n_instruments: total_len,
