@@ -162,6 +162,13 @@ impl Line<'_> {
         }
     }
 
+    pub fn trim_end(self) -> Self {
+        Line {
+            text: self.text.trim_end(),
+            position: self.position,
+        }
+    }
+
     pub fn trim_comments(self, comment_char: char) -> Self {
         match self.text.split_once(comment_char) {
             Some((text, _comment)) => Self {

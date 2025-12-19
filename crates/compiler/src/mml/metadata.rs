@@ -49,6 +49,8 @@ fn split_header_line<'a>(
 ) -> Result<(&'a str, &'a str, FilePosRange), MmlLineError> {
     match line.split_once() {
         Some((header, value)) => {
+            let value = value.trim_end();
+
             if header.is_empty() {
                 Err(MmlLineError::NoHeader)
             } else if value.text.is_empty() {
