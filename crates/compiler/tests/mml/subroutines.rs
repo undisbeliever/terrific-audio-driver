@@ -1349,3 +1349,28 @@ A !s
         BytecodeError::NotInALoop.into(),
     )
 }
+
+#[test]
+fn tail_call_recursion_error() {
+    assert_one_subroutine_error_in_mml(
+        r##"
+!s r !s
+A !s
+"##,
+        "!s",
+        6,
+        ChannelError::CannotCallSubroutineRecursion("s".to_owned()),
+    );
+
+    assert_one_subroutine_error_in_mml(
+        r##"
+!s1 r !s2
+!s2 r !s1
+
+A !s1
+"##,
+        "!s1",
+        7,
+        ChannelError::CannotCallSubroutineRecursion("s2".to_owned()),
+    );
+}

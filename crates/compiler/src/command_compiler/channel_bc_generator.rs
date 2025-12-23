@@ -1659,7 +1659,15 @@ impl<'a> CommandCompiler<'a> {
                             Some(sub) => {
                                 (BcTerminator::TailSubroutineCall(sub), Some(tc.end_pos()))
                             }
-                            _ => (BcTerminator::ReturnFromSubroutine, None),
+                            None => {
+                                // Process CallSubroutine command to generate an error
+                                gen.process_command_with_tracker(
+                                    tc,
+                                    &mut self.bytecode_tracker,
+                                    &mut errors,
+                                );
+                                (BcTerminator::ReturnFromSubroutine, None)
+                            }
                         },
                         Command::CallSubroutine(_, SubroutineCallType::AsmDisableVibrato) => {
                             // `call_subroutine_and_disable_vibrato` + `return_from_subroutine` uses
