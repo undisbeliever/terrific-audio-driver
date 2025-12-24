@@ -78,6 +78,9 @@ tad-compiler:
  * Added `asar-enums` command
  * Added `asar-export` command
 
+GUI changes:
+ * Improved the unsaved changes dialogs
+
 
 Version 0.1.1
 =============

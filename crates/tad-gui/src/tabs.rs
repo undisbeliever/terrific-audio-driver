@@ -7,7 +7,7 @@
 use crate::compiler_thread::ItemId;
 use crate::files;
 use crate::menu::Menu;
-use crate::{GuiMessage, ProjectData};
+use crate::ProjectData;
 
 use compiler::path::SourcePathBuf;
 
@@ -15,7 +15,6 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 extern crate fltk;
-use fltk::dialog;
 use fltk::enums::Color;
 use fltk::group::Flex;
 use fltk::prelude::{GroupExt, WidgetExt};
@@ -62,7 +61,7 @@ mod file_state {
         is_unsaved: bool,
     }
 
-    fn new_tab_label(ft: &FileType) -> &'static str {
+    pub fn new_tab_label(ft: &FileType) -> &'static str {
         match ft {
             FileType::Project => "New Project",
             FileType::SoundEffects => "New Sound Effect",
@@ -152,7 +151,7 @@ mod file_state {
         }
     }
 }
-use file_state::TabFileState;
+use file_state::{new_tab_label, TabFileState};
 
 pub enum SaveType {
     Save,
@@ -317,6 +316,13 @@ impl TabManager {
         self.file_states.get(ft).and_then(|s| s.file_name())
     }
 
+    pub fn get_file_name_or_new_type<'a>(&'a self, ft: &FileType) -> &'a str {
+        self.file_states
+            .get(ft)
+            .and_then(|s| s.file_name())
+            .unwrap_or_else(|| new_tab_label(ft))
+    }
+
     pub fn selected_file_name(&self) -> Option<&str> {
         self.selected_file
             .as_ref()
@@ -411,54 +417,5 @@ impl TabManager {
                 }
             }
         }
-    }
-}
-
-pub fn close_unsaved_song_tab_dialog(
-    song_id: ItemId,
-    file_name: Option<&str>,
-    sender: &fltk::app::Sender<GuiMessage>,
-) {
-    const OPTION_0: &str = "Cancel";
-    const OPTION_1: &str = "Save";
-    const OPTION_2: &str = "Close tab without saving";
-
-    dialog::message_title("Unsaved changes");
-    let choice = match file_name {
-        Some(f) => dialog::choice2_default(
-            &format!("Save changes to {} before closing?", f),
-            OPTION_0,
-            OPTION_1,
-            OPTION_2,
-        ),
-        None => {
-            dialog::choice2_default("Save changes before closing?", OPTION_0, OPTION_1, OPTION_2)
-        }
-    };
-    match choice {
-        Some(1) => sender.send(GuiMessage::SaveAndCloseSongTab(song_id)),
-        Some(2) => sender.send(GuiMessage::ForceCloseSongTab(song_id)),
-        _ => (),
-    }
-}
-
-pub fn quit_with_unsaved_files_dialog(
-    unsaved: Vec<FileType>,
-    sender: fltk::app::Sender<GuiMessage>,
-) {
-    dialog::message_title("Unsaved changes");
-    let choice = dialog::choice2_default(
-        &format!(
-            "Save changes to {} unsaved files before closing?",
-            unsaved.len()
-        ),
-        "Cancel",
-        "Save",
-        "Quit without saving",
-    );
-    match choice {
-        Some(1) => sender.send(GuiMessage::SaveAllAndQuit(unsaved)),
-        Some(2) => sender.send(GuiMessage::ForceQuit),
-        _ => (),
     }
 }

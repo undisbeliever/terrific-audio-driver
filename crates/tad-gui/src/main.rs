@@ -10,6 +10,7 @@
 
 mod audio_thread;
 mod compiler_thread;
+mod dialogs;
 mod driver_state_window;
 mod envelope_widget;
 mod files;
@@ -42,6 +43,7 @@ use crate::about_tab::AboutTab;
 use crate::compiler_thread::{
     CompilerOutput, InstrumentOutput, ItemId, SoundEffectOutput, ToCompiler,
 };
+use crate::dialogs::Dialogs;
 use crate::files::{
     add_song_to_pf_dialog, load_mml_file, load_pf_sfx_file,
     load_project_file_or_show_error_message, open_mml_file_dialog, open_sfx_file_dialog,
@@ -57,10 +59,7 @@ use crate::samples_tab::SamplesTab;
 use crate::sfx_export_order::SfxId;
 use crate::song_tab::{blank_mml_file, SongTab};
 use crate::sound_effects_tab::{blank_sfx_file, SoundEffectsTab};
-use crate::tabs::{
-    close_unsaved_song_tab_dialog, quit_with_unsaved_files_dialog, FileType, SaveResult, SaveType,
-    Tab, TabManager,
-};
+use crate::tabs::{FileType, SaveResult, SaveType, Tab, TabManager};
 
 use audio_thread::{AudioMessage, AudioMonitor, MusicChannelsMask, SharedSongInterpreter};
 
@@ -280,6 +279,8 @@ struct Project {
 
     song_tabs: HashMap<ItemId, SongTab>,
 
+    dialogs: Dialogs,
+
     /// Stores closed song tabs so they can be reused when opening a new song tab.
     ///
     /// This minimises the impact of a memory leak when closing a song tab.
@@ -298,6 +299,7 @@ impl Project {
         pf: ProjectFile,
         tabs: fltk::group::Tabs,
         menu: Menu,
+        dialogs: Dialogs,
         sender: fltk::app::Sender<GuiMessage>,
         audio_sender: mpsc::Sender<AudioMessage>,
         audio_monitor: AudioMonitor,
@@ -365,6 +367,7 @@ impl Project {
             sound_effects_tab: SoundEffectsTab::new(data.default_sfx_flags, sender),
             closed_song_tabs: Vec::new(),
             song_tabs: HashMap::new(),
+            dialogs,
 
             audio_sender,
             audio_monitor,
@@ -684,7 +687,7 @@ impl Project {
                 let ft = FileType::Song(song_id);
                 if self.tab_manager.is_unsaved(&ft) {
                     let file_name = self.tab_manager.get_file_name(&ft);
-                    close_unsaved_song_tab_dialog(song_id, file_name, &self.sender);
+                    self.dialogs.close_unsaved_tab(song_id, file_name);
                 } else {
                     self.close_song_tab(song_id);
                 }
@@ -707,7 +710,8 @@ impl Project {
                 if unsaved.is_empty() {
                     fltk::app::quit();
                 } else {
-                    quit_with_unsaved_files_dialog(unsaved, self.sender);
+                    self.dialogs
+                        .quit_with_unsaved_changes(unsaved, &self.tab_manager);
                 }
             }
 
@@ -1369,6 +1373,7 @@ struct MainWindow {
 
     window: fltk::window::Window,
     menu: Menu,
+    dialogs: Dialogs,
 
     row: fltk::group::Flex,
     tabs: fltk::group::Tabs,
@@ -1421,6 +1426,8 @@ impl MainWindow {
 
         window.end();
 
+        let dialogs = Dialogs::new(sender);
+
         let mut about_tab = AboutTab::new(tabs.clone(), sender);
         about_tab.show();
         tabs.auto_layout();
@@ -1461,6 +1468,7 @@ impl MainWindow {
             audio_monitor,
             window,
             menu,
+            dialogs,
             row,
             tabs,
             about_tab,
@@ -1480,6 +1488,7 @@ impl MainWindow {
             pf,
             self.tabs.clone(),
             self.menu.clone(),
+            self.dialogs.clone(),
             self.sender,
             self.audio_sender.clone(),
             self.audio_monitor.clone(),
