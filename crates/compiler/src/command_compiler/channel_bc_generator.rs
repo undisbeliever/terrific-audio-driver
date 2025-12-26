@@ -330,7 +330,7 @@ impl<'a> ChannelBcGenerator<'a> {
                         // Join note + rest and do not emit the `keyon_next_note` instruction.
                         // ::TODO remove return Err on checked_add overflow::
                         let pn_ticks = PlayNoteTicks::try_from_is_slur(
-                            length.checked_add(rest_after_note)?,
+                            length.try_add(rest_after_note)?,
                             false,
                         )?;
 
@@ -351,7 +351,7 @@ impl<'a> ChannelBcGenerator<'a> {
                     let note_length = CommandTicks::new(note_length);
                     // ::TODO remove return Err on checked_add overflow::
                     let ticks_after_keyoff =
-                        CommandTicks::new(l - note_length.value()).checked_add(rest_after_note)?;
+                        CommandTicks::new(l - note_length.value()).try_add(rest_after_note)?;
                     let pn_ticks = PlayNoteTicks::try_from_is_slur(note_length, false)?;
                     Ok((
                         pn_ticks,
@@ -789,7 +789,7 @@ impl<'a> ChannelBcGenerator<'a> {
         // In PMDMML only the portamento slide is quantized, delay_length is not.
         let (p_length, after) = self.split_play_note_length(
             // ::TODO remove checked_add in portamento::
-            slide_length.checked_add(tie_length)?,
+            slide_length.try_add(tie_length)?,
             is_slur,
             rest_after_note,
         )?;

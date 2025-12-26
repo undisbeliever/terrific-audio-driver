@@ -167,7 +167,8 @@ impl CommandTicks {
         self.0 == 0
     }
 
-    pub fn checked_add(self, rhs: Self) -> Result<Self, ValueError> {
+    /// Outputs an error if adding `rhs` overflows
+    pub fn try_add(self, rhs: Self) -> Result<Self, ValueError> {
         match self.0.checked_add(rhs.0) {
             Some(t) => Ok(Self(t)),
             None => Err(ValueError::CommandTicksOverflow),

@@ -974,7 +974,7 @@ fn parse_and_add_tracked_length(ticks: CommandTicks, p: &mut Parser) -> CommandT
         }
     };
 
-    match ticks.checked_add(length) {
+    match ticks.try_add(length) {
         Ok(t) => {
             p.increment_tick_offset(length);
             t
@@ -994,7 +994,7 @@ fn parse_and_add_tracked_optional_length(
     let pos = p.peek_pos();
 
     match parse_untracked_optional_length(p) {
-        Some(t) => match ticks.checked_add(t) {
+        Some(t) => match ticks.try_add(t) {
             Ok(out) => {
                 p.increment_tick_offset(t);
                 Some(out)
