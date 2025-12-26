@@ -271,9 +271,9 @@ pub fn compile_sfx_subroutines(
         // ::TODO detect driver transpose in subroutines::
         false,
     );
-    let mut errors = s.errors;
+    let mut errors = Vec::new();
 
-    let subroutines = compiler.compile_subroutines(&subroutines, &a, &mut errors);
+    let subroutines = compiler.compile_subroutines(subroutines, &a, &mut errors);
 
     if errors.is_empty() {
         let (data, _) = compiler.take_data();

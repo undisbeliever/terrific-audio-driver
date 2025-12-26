@@ -2788,7 +2788,7 @@ pub(crate) fn parse_mml_tokens<'a>(
     subroutines: &dyn SubroutineNameMap,
     settings: &GlobalSettings,
     cursor_tracking: &mut CursorTracker,
-) -> (ChannelCommands<'a>, Vec<ErrorWithPos<ChannelError>>) {
+) -> ChannelCommands<'a> {
     let mut commands = Vec::with_capacity(tokens.len() / 2);
 
     let mut p = Parser::new(
@@ -2816,5 +2816,9 @@ pub(crate) fn parse_mml_tokens<'a>(
 
     let errors = p.finalize();
 
-    (ChannelCommands { commands, end_pos }, errors)
+    ChannelCommands {
+        commands,
+        errors,
+        end_pos,
+    }
 }

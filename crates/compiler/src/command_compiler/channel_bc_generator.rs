@@ -1591,12 +1591,15 @@ impl<'a> CommandCompiler<'a> {
         (self.bc_data, self.bytecode_tracker)
     }
 
+    // Takes `SubroutineCommands::errors` out of `input`
     fn compile_subroutine(
         &mut self,
-        input: &SubroutineCommands,
+        input: &mut SubroutineCommands,
         subroutines: &CompiledSubroutines,
         analysis: &SubroutineAnalysis,
     ) -> Result<Subroutine, MmlChannelError> {
+        let mut errors = std::mem::take(&mut input.errors);
+
         let sd_start_index = self.bc_data.len();
 
         let mut gen = ChannelBcGenerator::new(
@@ -1612,8 +1615,6 @@ impl<'a> CommandCompiler<'a> {
             },
             analysis.transpose_at_subroutine_start(input.index),
         );
-
-        let mut errors = Vec::new();
 
         let tail_call = match input.commands.split_last() {
             Some((last, remaining)) => {
@@ -1747,13 +1748,15 @@ impl<'a> CommandCompiler<'a> {
 
     pub(crate) fn compile_subroutines(
         &mut self,
-        subroutines: &SubroutineCommandsWithCompileOrder,
+        subroutines: SubroutineCommandsWithCompileOrder,
         analysis: &SubroutineAnalysis,
         errors: &mut Vec<MmlChannelError>,
     ) -> CompiledSubroutines {
         let mut out = CompiledSubroutines::new(subroutines.original_order());
 
-        for s in subroutines.compile_iter() {
+        let mut subroutines = subroutines;
+        for si in 0..subroutines.len() {
+            let s = subroutines.get_compile_order(si);
             match self.compile_subroutine(s, &out, analysis) {
                 Ok(s) => out.store(s.index, SubroutineState::Compiled(s)),
                 Err(e) => {
@@ -1779,14 +1782,17 @@ impl<'a> CommandCompiler<'a> {
         out
     }
 
+    // Takes `ChannelCommands::errors` out of `input`
     fn compile_song_channel(
         &mut self,
         channel_index: MusicChannelIndex,
-        input: &ChannelCommands,
+        input: &mut ChannelCommands,
         subroutines: &CompiledSubroutines,
     ) -> Result<Channel, MmlChannelError> {
         let identifier = channel_index.identifier();
         assert!(identifier.as_str().len() == 1);
+
+        let mut errors = std::mem::take(&mut input.errors);
 
         let sd_start_index = self.bc_data.len();
 
@@ -1802,8 +1808,6 @@ impl<'a> CommandCompiler<'a> {
             TransposeStartRange::DISABLED,
         );
 
-        let mut errors = Vec::new();
-
         gen.process_commands_with_tracker(&input.commands, &mut self.bytecode_tracker, &mut errors);
 
         let loop_point = gen.loop_point();
@@ -1814,7 +1818,7 @@ impl<'a> CommandCompiler<'a> {
             Some(lp) => {
                 if lp.tick_counter == tick_counter {
                     errors.push(ErrorWithPos(
-                        input.end_pos_range(),
+                        input.end_pos.to_range(1),
                         ChannelError::NoTicksAfterLoopPoint,
                     ));
                 }
@@ -1828,7 +1832,7 @@ impl<'a> CommandCompiler<'a> {
             Ok((b, s)) => (b, Some(s)),
             Err((e, b)) => {
                 errors.push(ErrorWithPos(
-                    input.end_pos_range(),
+                    input.end_pos.to_range(1),
                     ChannelError::BytecodeError(e),
                 ));
                 (b, None)
@@ -1868,12 +1872,14 @@ impl<'a> CommandCompiler<'a> {
 
     pub fn compile_song_channels(
         &mut self,
-        channels: &[Option<ChannelCommands>; N_MUSIC_CHANNELS],
+        channels: [Option<ChannelCommands>; N_MUSIC_CHANNELS],
         subroutines: &CompiledSubroutines,
         errors: &mut MmlCompileErrors,
     ) -> [Option<Channel>; N_MUSIC_CHANNELS] {
+        let mut channels = channels;
+
         std::array::from_fn(|c_index| {
-            channels[c_index].as_ref().and_then(|c| {
+            channels[c_index].as_mut().and_then(|c| {
                 let c_index = MusicChannelIndex::try_new(c_index).unwrap();
 
                 match self.compile_song_channel(c_index, c, subroutines) {
@@ -1958,15 +1964,14 @@ pub(crate) fn compile_sound_effect(
 }
 
 pub(crate) fn compile_mml_prefix(
-    input: &ChannelCommands,
+    input: ChannelCommands,
     context: BytecodeContext,
     data_instruments: &UniqueNamesList<data::InstrumentOrSample>,
     pitch_table: &PitchTable,
     subroutines: &CompiledSubroutines,
-    errors: Vec<ErrorWithPos<ChannelError>>,
 ) -> Result<Vec<u8>, MmlPrefixError> {
     let bc_data = Vec::new();
-    let mut errors = errors;
+    let mut errors = input.errors;
 
     let mut gen = ChannelBcGenerator::new(
         bc_data,
@@ -1987,7 +1992,7 @@ pub(crate) fn compile_mml_prefix(
         Ok((b, _)) => b,
         Err((e, b)) => {
             errors.push(ErrorWithPos(
-                input.end_pos_range(),
+                input.end_pos.to_range(1),
                 ChannelError::BytecodeError(e),
             ));
             b
@@ -1996,7 +2001,7 @@ pub(crate) fn compile_mml_prefix(
 
     if tick_counter > MAX_MML_PREFIX_TICKS {
         errors.push(ErrorWithPos(
-            input.end_pos_range(),
+            input.end_pos.to_range(1),
             ChannelError::TooManyTicksInMmlPrefix(tick_counter),
         ))
     }

@@ -72,12 +72,6 @@ impl<'a> SubroutineCommandsWithCompileOrder<'a> {
         &self.subroutines
     }
 
-    pub fn compile_iter(&self) -> impl Iterator<Item = &SubroutineCommands<'a>> {
-        self.compile_order
-            .iter()
-            .map(|&i| &self.subroutines[usize::from(i)])
-    }
-
     pub fn rev_compile_iter(&self) -> impl Iterator<Item = &SubroutineCommands<'a>> {
         self.compile_order
             .iter()
@@ -89,7 +83,8 @@ impl<'a> SubroutineCommandsWithCompileOrder<'a> {
         self.subroutines.len()
     }
 
-    // ::TODO optimise::
+    // ::TODO optimise - can't build an `compile_iter_mut::
+    // iterator::
     pub(super) fn get_compile_order(&mut self, i: usize) -> &mut SubroutineCommands<'a> {
         &mut self.subroutines[usize::from(self.compile_order[i])]
     }

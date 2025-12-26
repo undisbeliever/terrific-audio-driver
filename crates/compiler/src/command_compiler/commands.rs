@@ -17,7 +17,7 @@ use crate::bytecode::{
 use crate::driver_constants::{FIR_FILTER_SIZE, N_MUSIC_CHANNELS};
 use crate::echo::{EchoFeedback, EchoLength, EchoVolume, FirCoefficient, FirTap};
 use crate::envelope::{Adsr, Envelope, Gain, OptionalGain, TempGain};
-use crate::errors::{ChannelError, ErrorWithPos, MmlChannelError, ValueError};
+use crate::errors::{ChannelError, ErrorWithPos, ValueError};
 use crate::identifier::{IdentifierBuf, IdentifierStr};
 use crate::invert_flags::InvertFlags;
 use crate::mml::{CursorTracker, Section};
@@ -410,21 +410,16 @@ impl<'a> CommandWithPos<'a> {
 
 pub(crate) struct ChannelCommands<'a> {
     pub(crate) commands: Vec<CommandWithPos<'a>>,
+    pub(crate) errors: Vec<ErrorWithPos<ChannelError>>,
     pub(crate) end_pos: FilePos,
-}
-
-impl ChannelCommands<'_> {
-    pub fn end_pos_range(&self) -> FilePosRange {
-        self.end_pos.to_range(1)
-    }
 }
 
 pub(crate) struct SubroutineCommands<'a> {
     pub(crate) index: u8,
     pub(crate) identifier: IdentifierStr<'a>,
     pub(crate) commands: Vec<CommandWithPos<'a>>,
+    pub(crate) errors: Vec<ErrorWithPos<ChannelError>>,
     pub(crate) end_pos: FilePos,
-
     pub(crate) analysis: LoopAnalysis,
 }
 
@@ -458,7 +453,6 @@ pub(crate) struct SongCommands<'a> {
 pub(crate) struct SfxSubroutineCommands<'a> {
     pub subroutines: Vec<SubroutineCommands<'a>>,
     pub mml_tracker: CursorTracker,
-    pub errors: Vec<MmlChannelError>,
 }
 
 pub(crate) struct SoundEffectCommands<'a> {
