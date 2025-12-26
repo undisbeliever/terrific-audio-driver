@@ -519,11 +519,6 @@ fn compile_song_commands(
 
     let subroutines = compiler.compile_subroutines(subroutines, &a, &mut errors.subroutine_errors);
 
-    // ::TODO remove::
-    if !errors.subroutine_errors.is_empty() {
-        return Err(SongError::MmlError(errors));
-    }
-
     let first_channel_bc_offset = compiler.bc_size();
 
     let channels = compiler.compile_song_channels(channels, &subroutines, &mut errors);

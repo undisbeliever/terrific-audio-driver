@@ -64,6 +64,7 @@ MML changes:
  * Multiple `r` rest commands now merge into a rest then wait.  (The `wait` bytecode instruction uses less spc700 CPU time than `rest` instruction)
  * `w` waits after `r` rest are now merged by the MML parser.  For example `r w r w r` will be merged into `r w1`.
  * A rest immediately after an unslurred note is silently converted into a wait
+ * Continue compiling songs after subroutine errors
 
 Bytecode assembly changes:
  * The maximum length of a `<duration>` argument is 65535 ticks
