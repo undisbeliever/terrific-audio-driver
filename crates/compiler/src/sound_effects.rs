@@ -259,9 +259,9 @@ pub fn compile_sfx_subroutines(
 ) -> Result<CompiledSfxSubroutines, SfxSubroutineErrors> {
     let s = mml::parse_sfx_subroutines(&subroutines.0, data_instruments)?;
 
-    let subroutines = subroutine_compile_order(s.subroutines);
+    let mut subroutines = subroutine_compile_order(s.subroutines);
 
-    let a = command_compiler::analysis::analyse(subroutines, None);
+    let a = command_compiler::analysis::analyse(&mut subroutines, None);
 
     let mut compiler = CommandCompiler::new(
         0,
@@ -273,7 +273,7 @@ pub fn compile_sfx_subroutines(
     );
     let mut errors = s.errors;
 
-    let subroutines = compiler.compile_subroutines(&a, &mut errors);
+    let subroutines = compiler.compile_subroutines(&subroutines, &a, &mut errors);
 
     if errors.is_empty() {
         let (data, _) = compiler.take_data();

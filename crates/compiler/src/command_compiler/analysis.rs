@@ -17,15 +17,12 @@ use crate::driver_constants::{
 use crate::sound_effects::CompiledSfxSubroutines;
 use crate::Transpose;
 
-pub struct AnalysedCommands<'a> {
-    pub(super) subroutines: SubroutineCommandsWithCompileOrder<'a>,
-    pub(super) channels: Option<[Option<ChannelCommands<'a>>; N_MUSIC_CHANNELS]>,
+pub struct SubroutineAnalysis {
     transpose_at_subroutine_start: [Option<TransposeStartRange>; MAX_SUBROUTINES],
-
     pub(crate) subroutine_analysis: [LoopAnalysis; MAX_SUBROUTINES],
 }
 
-impl AnalysedCommands<'_> {
+impl SubroutineAnalysis {
     pub fn transpose_at_subroutine_start(&self, index: u8) -> TransposeStartRange {
         self.transpose_at_subroutine_start[usize::from(index)]
             .unwrap_or(TransposeStartRange::DISABLED)
@@ -566,18 +563,17 @@ pub(crate) fn blank_subroutine_analysis_array() -> [LoopAnalysis; 255] {
     }; MAX_SUBROUTINES]
 }
 
-pub fn analyse<'a>(
-    subroutines: SubroutineCommandsWithCompileOrder<'a>,
-    channels: Option<[Option<ChannelCommands<'a>>; N_MUSIC_CHANNELS]>,
-) -> AnalysedCommands<'a> {
+// Modifies `channels` and `subroutines` in place
+pub(crate) fn analyse(
+    subroutines: &mut SubroutineCommandsWithCompileOrder,
+    channels: Option<&mut [Option<ChannelCommands>; N_MUSIC_CHANNELS]>,
+) -> SubroutineAnalysis {
     let mut subroutine_analysis = [LoopAnalysis {
         instrument: None,
         transpose: TransposeAnalysis::BLANK,
     }; MAX_SUBROUTINES];
 
     let subroutines = {
-        let mut subroutines = subroutines;
-
         for i in 0..subroutines.len() {
             let s = subroutines.get_compile_order(i);
             let a = analyse_loop_commands(&mut s.commands, &subroutine_analysis);
@@ -599,11 +595,9 @@ pub fn analyse<'a>(
     };
 
     let transpose_at_subroutine_start =
-        analyse_song_subroutine_calls(&subroutines, channels.as_ref(), &subroutine_analysis);
+        analyse_song_subroutine_calls(subroutines, channels.as_deref(), &subroutine_analysis);
 
-    AnalysedCommands {
-        subroutines,
-        channels,
+    SubroutineAnalysis {
         transpose_at_subroutine_start,
         subroutine_analysis,
     }

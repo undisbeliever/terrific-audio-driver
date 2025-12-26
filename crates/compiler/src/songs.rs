@@ -504,8 +504,10 @@ fn compile_song_commands(
     let n_active_channels = song.channels.iter().filter(|&c| !c.is_none()).count();
     let header_size = song_header_size(n_active_channels, song.subroutines.len());
 
-    let subroutines = subroutine_compile_order(song.subroutines);
-    let a = command_compiler::analysis::analyse(subroutines, Some(song.channels));
+    let mut subroutines = subroutine_compile_order(song.subroutines);
+
+    let mut channels = song.channels;
+    let a = command_compiler::analysis::analyse(&mut subroutines, Some(&mut channels));
 
     let mut compiler = CommandCompiler::new(
         header_size,
@@ -515,7 +517,7 @@ fn compile_song_commands(
         true,
     );
 
-    let subroutines = compiler.compile_subroutines(&a, &mut errors.subroutine_errors);
+    let subroutines = compiler.compile_subroutines(&subroutines, &a, &mut errors.subroutine_errors);
 
     // ::TODO remove::
     if !errors.subroutine_errors.is_empty() {
@@ -524,7 +526,7 @@ fn compile_song_commands(
 
     let first_channel_bc_offset = compiler.bc_size();
 
-    let channels = compiler.compile_song_channels(&a, &subroutines, &mut errors);
+    let channels = compiler.compile_song_channels(&channels, &subroutines, &mut errors);
 
     let duration = calc_song_duration(&song.metadata, &channels, &subroutines);
 

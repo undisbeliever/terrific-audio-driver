@@ -13,8 +13,9 @@ use crate::bytecode::{
 };
 use crate::bytecode_assembler::parse_asm_line;
 use crate::command_compiler::analysis::{
-    AnalysedCommands, AnalysedSoundEffectCommands, TransposeStartRange,
+    AnalysedSoundEffectCommands, SubroutineAnalysis, TransposeStartRange,
 };
+use crate::command_compiler::subroutines::SubroutineCommandsWithCompileOrder;
 use crate::data::{self, UniqueNamesList};
 use crate::driver_constants::N_MUSIC_CHANNELS;
 use crate::echo::EchoEdl;
@@ -1594,7 +1595,7 @@ impl<'a> CommandCompiler<'a> {
         &mut self,
         input: &SubroutineCommands,
         subroutines: &CompiledSubroutines,
-        analysis: &AnalysedCommands,
+        analysis: &SubroutineAnalysis,
     ) -> Result<Subroutine, MmlChannelError> {
         let sd_start_index = self.bc_data.len();
 
@@ -1746,11 +1747,10 @@ impl<'a> CommandCompiler<'a> {
 
     pub(crate) fn compile_subroutines(
         &mut self,
-        analysis: &AnalysedCommands,
+        subroutines: &SubroutineCommandsWithCompileOrder,
+        analysis: &SubroutineAnalysis,
         errors: &mut Vec<MmlChannelError>,
     ) -> CompiledSubroutines {
-        let subroutines = &analysis.subroutines;
-
         let mut out = CompiledSubroutines::new(subroutines.original_order());
 
         for s in subroutines.compile_iter() {
@@ -1866,15 +1866,12 @@ impl<'a> CommandCompiler<'a> {
         }
     }
 
-    // Panics if `AnalysedCommands` has no song channels
     pub fn compile_song_channels(
         &mut self,
-        a: &AnalysedCommands,
+        channels: &[Option<ChannelCommands>; N_MUSIC_CHANNELS],
         subroutines: &CompiledSubroutines,
         errors: &mut MmlCompileErrors,
     ) -> [Option<Channel>; N_MUSIC_CHANNELS] {
-        let channels = a.channels.as_ref().unwrap();
-
         std::array::from_fn(|c_index| {
             channels[c_index].as_ref().and_then(|c| {
                 let c_index = MusicChannelIndex::try_new(c_index).unwrap();
