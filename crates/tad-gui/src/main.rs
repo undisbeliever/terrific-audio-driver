@@ -655,6 +655,8 @@ impl Project {
                 self.driver_state_window.song_resumed();
             }
             GuiMessage::SongMonitorTimeout => {
+                self.audio_monitor_timer.ack();
+
                 let mon = self.audio_monitor.get();
                 self.driver_state_window.monitor_timer_elapsed();
 

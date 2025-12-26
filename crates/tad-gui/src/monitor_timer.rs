@@ -23,6 +23,7 @@ pub struct TimerState {
     sender: app::Sender<GuiMessage>,
     timeout: f64,
     active: bool,
+    last_timout_acknowloged: bool,
 }
 
 impl MonitorTimer {
@@ -32,6 +33,7 @@ impl MonitorTimer {
                 sender,
                 timeout: DEFAULT_TIMEOUT,
                 active: false,
+                last_timout_acknowloged: false,
             })),
         }
     }
@@ -41,21 +43,34 @@ impl MonitorTimer {
 
         if !state.active {
             state.active = true;
+            state.last_timout_acknowloged = false;
 
             app::add_timeout3(state.timeout, {
                 let cloned_state = self.state.clone();
                 move |handle| {
-                    if let Ok(s) = cloned_state.try_borrow() {
+                    if let Ok(mut s) = cloned_state.try_borrow_mut() {
                         match s.active {
                             true => app::repeat_timeout3(s.timeout, handle),
                             false => app::remove_timeout3(handle),
                         }
 
-                        s.sender.send(GuiMessage::SongMonitorTimeout);
+                        // Only send a SongMonitorTimeout message after the previous one has been
+                        // acknowledged.
+                        // This prevents a large backlog of GUI messages when the main-thread has
+                        // been stalled by a message box, open dialog or save dialog.
+                        if s.last_timout_acknowloged {
+                            s.last_timout_acknowloged = false;
+                            s.sender.send(GuiMessage::SongMonitorTimeout);
+                        }
                     }
                 }
             });
         }
+    }
+
+    // Acknowledge `SongMonitorTimeout`
+    pub fn ack(&mut self) {
+        self.state.borrow_mut().last_timout_acknowloged = true;
     }
 
     pub fn stop(&mut self) {
