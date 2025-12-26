@@ -553,7 +553,7 @@ impl State {
     }
 
     fn set_start_ticks_clicked(&mut self, shift_pressed: bool) {
-        if let Some((c, t)) = self.editor.cursor_tick_counter_line_start() {
+        if let Some((c, t)) = self.editor.cursor_tick_counter() {
             match c {
                 ChannelId::Channel(c) => {
                     if shift_pressed {

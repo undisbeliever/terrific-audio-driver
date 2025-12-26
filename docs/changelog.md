@@ -80,6 +80,7 @@ tad-compiler:
 
 GUI changes:
  * Improved the unsaved changes dialogs
+ * Fixed set start ticks to cursor button (F9)
 
 
 Version 0.1.1
