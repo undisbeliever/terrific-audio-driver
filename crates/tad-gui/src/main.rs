@@ -1236,7 +1236,7 @@ impl Project {
                         .tab_manager
                         .save_tab(ft, save_type, sfx_data, &self.data)
                     {
-                        SaveResult::None => false,
+                        SaveResult::Cancelled => false,
                         SaveResult::Saved => true,
                         SaveResult::Renamed(source_path) => {
                             self.set_sound_effects_file(source_path);
@@ -1253,7 +1253,7 @@ impl Project {
                         .tab_manager
                         .save_tab(ft, save_type, song_tab, &self.data)
                     {
-                        SaveResult::None => false,
+                        SaveResult::Cancelled => false,
                         SaveResult::Saved => true,
                         SaveResult::Renamed(source_path) => {
                             self.edit_pf_song_source(id, source_path);

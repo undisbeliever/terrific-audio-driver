@@ -78,7 +78,7 @@ fn save_file_dialog(title: &str, filter: &str, default_extension: &str) -> Optio
 }
 
 enum PfFileDialogState {
-    None,
+    Cancelled,
     Error(String),
     InsideProject(PathBuf, SourcePathBuf),
     OutsideProject(PathBuf, SourcePathBuf),
@@ -92,7 +92,7 @@ fn show_and_validate_pf_file_dialog_output(
 ) -> PfFileDialogState {
     let mut path = match try_show_native_dialog(dialog) {
         Some(p) => p,
-        None => return PfFileDialogState::None,
+        None => return PfFileDialogState::Cancelled,
     };
 
     if let Some(e) = add_missing_extension {
@@ -171,7 +171,7 @@ fn pf_open_file_dialog(
     };
 
     match show_and_validate_pf_file_dialog_output(dialog, pd, None) {
-        PfFileDialogState::None => None,
+        PfFileDialogState::Cancelled => None,
         PfFileDialogState::Error(msg) => {
             dialog::message_title("Error");
             dialog::alert_default(&msg);
@@ -272,7 +272,7 @@ fn copy_file_to_project_dialog(
     }
 
     match show_and_validate_pf_file_dialog_output(dialog, pd, extension.as_deref()) {
-        PfFileDialogState::None => None,
+        PfFileDialogState::Cancelled => None,
         PfFileDialogState::Error(msg) | PfFileDialogState::RelativePathErr(_, msg) => {
             dialog::message_title("Error");
             dialog::alert_default(&msg);
@@ -321,7 +321,7 @@ fn pf_save_file_dialog(
     let _ = dialog.set_directory(&path.unwrap_or(pd.pf_parent_path.as_path()));
 
     match show_and_validate_pf_file_dialog_output(dialog, pd, Some(default_extension)) {
-        PfFileDialogState::None => None,
+        PfFileDialogState::Cancelled => None,
         PfFileDialogState::Error(msg) => {
             dialog::message_title("Error");
             dialog::alert_default(&msg);

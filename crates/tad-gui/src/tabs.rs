@@ -159,7 +159,7 @@ pub enum SaveType {
 }
 
 pub enum SaveResult {
-    None,
+    Cancelled,
     Saved,
     Renamed(SourcePathBuf),
 }
@@ -167,7 +167,7 @@ pub enum SaveResult {
 impl SaveResult {
     pub fn is_saved(&self) -> bool {
         match self {
-            Self::None => false,
+            Self::Cancelled => false,
             Self::Saved => true,
             Self::Renamed(_) => true,
         }
@@ -377,7 +377,7 @@ impl TabManager {
     ) -> SaveResult {
         let state = match self.file_states.get_mut(&ft) {
             Some(s) => s,
-            None => return SaveResult::None,
+            None => return SaveResult::Cancelled,
         };
 
         match (save_type, state.path()) {
@@ -392,7 +392,7 @@ impl TabManager {
 
                     SaveResult::Saved
                 } else {
-                    SaveResult::None
+                    SaveResult::Cancelled
                 }
             }
             (SaveType::SaveAs, _) | (SaveType::Save, None) => {
@@ -413,7 +413,7 @@ impl TabManager {
 
                         SaveResult::Renamed(p.source_path)
                     }
-                    None => SaveResult::None,
+                    None => SaveResult::Cancelled,
                 }
             }
         }
