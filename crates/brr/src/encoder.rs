@@ -10,6 +10,8 @@ use crate::{
     BYTES_PER_BRR_BLOCK, SAMPLES_PER_BLOCK,
 };
 
+const MAX_SAMPLES: usize = u16::MAX as usize;
+
 const MAX_SHIFT: u8 = 12;
 
 const I4_MIN: i32 = -8;
@@ -18,9 +20,9 @@ const I4_MAX: i32 = 7;
 #[derive(Debug, Clone)]
 pub enum EncodeError {
     NoSamples,
-    InvalidNumberOfSamples,
-    TooManySamples,
-    InvalidLoopPointSamples,
+    InvalidNumberOfSamples(usize),
+    TooManySamples(usize),
+    InvalidLoopPointSamples(SampleNumber),
     LoopPointTooLarge(SampleNumber, usize),
     DupeBlockHackNotAllowedWithLoopPoint,
     DupeBlockHackNotAllowedWithLoopResetsFilter,
@@ -31,13 +33,19 @@ impl std::fmt::Display for EncodeError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             EncodeError::NoSamples => write!(f, "no samples"),
-            EncodeError::InvalidNumberOfSamples => write!(
+            EncodeError::InvalidNumberOfSamples(s) => write!(
                 f,
-                "number of samples is not a multiple of {SAMPLES_PER_BLOCK}"
+                "number of samples ({s}) is not a multiple of {SAMPLES_PER_BLOCK}"
             ),
-            EncodeError::TooManySamples => write!(f, "too many samples"),
-            EncodeError::InvalidLoopPointSamples => {
-                write!(f, "loop_point is not a multiple of {SAMPLES_PER_BLOCK}")
+            EncodeError::TooManySamples(s) => {
+                write!(f, "too many samples ({s} samples, max {MAX_SAMPLES}))")
+            }
+            EncodeError::InvalidLoopPointSamples(lp) => {
+                write!(
+                    f,
+                    "loop_point ({}) is not a multiple of {SAMPLES_PER_BLOCK}",
+                    lp.0
+                )
             }
             EncodeError::LoopPointTooLarge(lp, s_len) => write!(
                 f,
@@ -293,18 +301,18 @@ fn encode_brr_with_scorer<S: Scorer>(
     }
 
     if samples.len() % SAMPLES_PER_BLOCK != 0 {
-        return Err(EncodeError::InvalidNumberOfSamples);
+        return Err(EncodeError::InvalidNumberOfSamples(samples.len()));
     }
 
-    if samples.len() > u16::MAX.into() {
-        return Err(EncodeError::TooManySamples);
+    if samples.len() > MAX_SAMPLES {
+        return Err(EncodeError::TooManySamples(samples.len()));
     }
 
     let (loop_flag, loop_block, loop_offset) = match (loop_offset, dupe_block_hack) {
         (None, None) => (false, BlockNumber(usize::MAX), None),
         (Some(lp), None) => {
             if lp.0 % SAMPLES_PER_BLOCK != 0 {
-                return Err(EncodeError::InvalidLoopPointSamples);
+                return Err(EncodeError::InvalidLoopPointSamples(lp));
             }
             if lp.0 >= samples.len() {
                 return Err(EncodeError::LoopPointTooLarge(lp, samples.len()));
