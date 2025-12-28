@@ -188,7 +188,7 @@ impl SongTab {
 
         sub_prefix_flex.end();
 
-        let mut editor = MmlEditor::new(&mml_file.contents, TextFormat::Mml);
+        let mut editor = MmlEditor::new(&mml_file.contents, TextFormat::Mml, &mut group);
 
         editor.set_text_size(editor.widget().text_size() * 12 / 10);
 

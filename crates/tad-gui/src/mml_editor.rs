@@ -5,7 +5,7 @@
 // SPDX-License-Identifier: MIT
 
 use crate::audio_thread::AudioMonitorData;
-use crate::helpers::ch_units_to_width;
+use crate::helpers::{ch_units_to_width, input_height};
 use crate::menu::EditAction;
 
 use compiler::driver_constants::N_MUSIC_CHANNELS;
@@ -21,6 +21,9 @@ use compiler::songs::{BytecodePos, SongBcTracking, SongData};
 use compiler::sound_effects::{CompiledSfxSubroutines, CompiledSoundEffect};
 use compiler::time::{TickCounter, ZenLen, DEFAULT_ZENLEN};
 use compiler::FilePosRange;
+use fltk::button::Button;
+use fltk::group::{Flex, Pack, PackType};
+use fltk::input::Input;
 
 use std::cell::RefCell;
 use std::cmp::{min, Ordering};
@@ -29,9 +32,9 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 extern crate fltk;
-use fltk::enums::{Align, Color, Event, Font, FrameType};
+use fltk::enums::{Align, Color, Event, Font, FrameType, Key};
 use fltk::frame::Frame;
-use fltk::prelude::{DisplayExt, WidgetBase, WidgetExt};
+use fltk::prelude::{DisplayExt, GroupExt, InputExt, WidgetBase, WidgetExt};
 use fltk::text::{StyleTableEntryExt, TextAttr, TextBuffer, TextEditor, WrapMode};
 
 pub enum TextErrorRef<'a> {
@@ -111,14 +114,17 @@ pub struct MmlEditorState {
 }
 
 pub struct MmlEditor {
+    parent_group: Flex,
     widget: TextEditor,
+    find_group: Pack,
+    find_widget: Input,
     status_bar: Frame,
 
     state: Rc<RefCell<MmlEditorState>>,
 }
 
 impl MmlEditor {
-    pub fn new(text: &str, format: TextFormat) -> Self {
+    pub fn new(text: &str, format: TextFormat, parent: &mut Flex) -> Self {
         let mut text_buffer = TextBuffer::default();
         text_buffer.set_text(text);
         text_buffer.set_tab_distance(4);
@@ -138,6 +144,23 @@ impl MmlEditor {
             style_buffer.clone(),
             highlight_data(&MML_COLORS, widget.text_size()),
         );
+
+        let mut find_group = Pack::default().with_type(PackType::Horizontal);
+        let h = input_height(&find_group);
+        let w = ch_units_to_width(&find_group, 1);
+        let p = 3;
+        find_group.set_spacing(p);
+
+        let _spacer = Frame::new(0, 0, 10 * w, h, "");
+        let mut find_widget = Input::new(0, 0, 50 * w, h, "Find: ");
+        let mut find_next_button = Button::new(0, 0, 10 * w, h, "@2>  Next");
+        let mut find_prev_button = Button::new(0, 0, 10 * w, h, "@8>  Prev");
+
+        find_group.end();
+
+        parent.add(&find_group);
+        parent.fixed(&find_group, h);
+        find_group.hide();
 
         let mut status_bar = Frame::default();
         status_bar.set_frame(FrameType::DownBox);
@@ -194,10 +217,44 @@ impl MmlEditor {
             }
         });
 
+        find_widget.handle({
+            // Cannot borrow state in this callback
+            let mut editor = widget.clone();
+            move |find, ev| {
+                if ev == Event::KeyDown && fltk::app::event_key() == Key::Enter {
+                    if !fltk::app::is_event_shift() {
+                        find_next(&mut editor, find);
+                    } else {
+                        find_prev(&mut editor, find);
+                    }
+                    true
+                } else {
+                    false
+                }
+            }
+        });
+
+        find_prev_button.set_callback({
+            // Cannot borrow state in this callback
+            let mut editor = widget.clone();
+            let find = find_widget.clone();
+            move |_| find_prev(&mut editor, &find)
+        });
+
+        find_next_button.set_callback({
+            // Cannot borrow state in this callback
+            let mut editor = widget.clone();
+            let find = find_widget.clone();
+            move |_| find_next(&mut editor, &find)
+        });
+
         Self {
-            state,
+            parent_group: parent.clone(),
             widget,
+            find_group,
+            find_widget,
             status_bar,
+            state,
         }
     }
 
@@ -354,6 +411,51 @@ impl MmlEditor {
             EditAction::Cut => self.widget.cut(),
             EditAction::Copy => self.widget.copy(),
             EditAction::Paste => self.widget.paste(),
+            EditAction::Find => {
+                self.find_group.show();
+                let _ = self.find_widget.take_focus();
+                self.parent_group.layout();
+            }
+        }
+    }
+}
+
+fn find_next(editor: &mut TextEditor, find: &Input) {
+    let needle = find.value();
+    if let Ok(needle_len) = i32::try_from(needle.len()) {
+        if let Some(mut buffer) = editor.buffer() {
+            let old_pos = editor.insert_position();
+            if let Some(p) = buffer
+                .search_forward(old_pos, &needle, true)
+                .or_else(|| buffer.search_forward(0, &needle, true))
+            {
+                buffer.select(p, p + needle_len);
+                editor.set_insert_position(p + needle_len);
+                editor.show_insert_position();
+            }
+        }
+    }
+}
+
+fn find_prev(editor: &mut TextEditor, find: &Input) {
+    let needle = find.value();
+    if let Ok(needle_len) = i32::try_from(needle.len()) {
+        if let Some(mut buffer) = editor.buffer() {
+            let old_pos = match buffer.selection_position() {
+                Some((start, _end)) => start,
+                None => editor.insert_position(),
+            };
+
+            if let Some(p) = buffer
+                .search_backward(old_pos.saturating_sub(1), &needle, true)
+                .or_else(|| {
+                    buffer.search_backward(buffer.length().saturating_sub(1), &needle, true)
+                })
+            {
+                buffer.select(p, p + needle_len);
+                editor.set_insert_position(p + needle_len);
+                editor.show_insert_position();
+            }
         }
     }
 }

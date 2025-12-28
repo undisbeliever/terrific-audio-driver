@@ -55,6 +55,7 @@ pub enum EditAction {
     Cut,
     Copy,
     Paste,
+    Find,
 }
 
 #[derive(Clone)]
@@ -163,8 +164,14 @@ impl Menu {
         add(
             "&Edit/&Paste",
             Shortcut::Ctrl | 'v',
-            fltk::menu::MenuFlag::Normal,
+            fltk::menu::MenuFlag::MenuDivider,
             || GuiMessage::EditAction(EditAction::Paste),
+        );
+        add(
+            "&Edit/&Find",
+            Shortcut::Ctrl | 'f',
+            fltk::menu::MenuFlag::Normal,
+            || GuiMessage::EditAction(EditAction::Find),
         );
 
         add(

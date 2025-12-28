@@ -236,7 +236,7 @@ impl SoundEffectsTab {
         let l = label_packed("SFX Subroutines:");
         subroutines_group.fixed(&l, l.height());
 
-        let mut subroutines_editor = MmlEditor::new("", TextFormat::Mml);
+        let mut subroutines_editor = MmlEditor::new("", TextFormat::Mml, &mut subroutines_group);
         let text_size = subroutines_editor.widget().text_size() * 12 / 10;
         subroutines_editor.set_text_size(text_size);
         subroutines_group.fixed(
@@ -318,7 +318,7 @@ impl SoundEffectsTab {
 
         sfx_group.end();
 
-        let mut editor = MmlEditor::new("", TextFormat::Bytecode);
+        let mut editor = MmlEditor::new("", TextFormat::Bytecode, &mut main_group);
         editor.set_text_size(text_size);
 
         let mut console = TextDisplay::default();
