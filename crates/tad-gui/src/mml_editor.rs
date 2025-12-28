@@ -451,6 +451,19 @@ impl MmlEditor {
         self.widget.has_focus()
     }
 
+    fn populate_find_widget_with_selection(&mut self) {
+        #[allow(clippy::bool_comparison)]
+        const _: () = assert!(' '.is_ascii_control() == false);
+        const _: () = assert!('\t'.is_ascii_control());
+
+        let selected_text = self.buffer().borrow().text_buffer.selection_text();
+        if selected_text.len() < 1024
+            && !selected_text.contains(|c: char| c.is_ascii_control() && c != '\t')
+        {
+            self.find_widget.set_value(&selected_text);
+        }
+    }
+
     pub fn edit_action(&mut self, action: EditAction) {
         match action {
             EditAction::Undo => self.widget.undo(),
@@ -459,6 +472,8 @@ impl MmlEditor {
             EditAction::Copy => self.widget.copy(),
             EditAction::Paste => self.widget.paste(),
             EditAction::Find => {
+                self.populate_find_widget_with_selection();
+
                 self.find_group.show();
                 select_all_and_take_focus(&mut self.find_widget);
                 self.parent_group.layout();
@@ -471,6 +486,7 @@ impl MmlEditor {
                     self.find_group.show();
                     self.replace_group.show();
                     if !self.find_widget.has_focus() {
+                        self.populate_find_widget_with_selection();
                         select_all_and_take_focus(&mut self.find_widget);
                     } else {
                         select_all_and_take_focus(&mut self.replace_widget);
