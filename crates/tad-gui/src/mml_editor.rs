@@ -118,6 +118,8 @@ pub struct MmlEditor {
     widget: TextEditor,
     find_group: Pack,
     find_widget: Input,
+    replace_group: Pack,
+    replace_widget: Input,
     status_bar: Frame,
 
     state: Rc<RefCell<MmlEditorState>>,
@@ -153,14 +155,27 @@ impl MmlEditor {
 
         let _spacer = Frame::new(0, 0, 10 * w, h, "");
         let mut find_widget = Input::new(0, 0, 50 * w, h, "Find: ");
-        let mut find_next_button = Button::new(0, 0, 10 * w, h, "@2>  Next");
-        let mut find_prev_button = Button::new(0, 0, 10 * w, h, "@8>  Prev");
+        let mut find_next_button = Button::new(0, 0, 12 * w, h, "@2>  Next");
+        let mut find_prev_button = Button::new(0, 0, 12 * w, h, "@8>  Prev");
 
         find_group.end();
 
         parent.add(&find_group);
         parent.fixed(&find_group, h);
         find_group.hide();
+
+        let mut replace_group = Pack::default().with_type(PackType::Horizontal);
+        replace_group.set_spacing(p);
+        let _spacer = Frame::new(0, 0, 10 * w, h, "");
+        let mut replace_widget = Input::new(0, 0, 50 * w, h, "Replace: ");
+        let mut replace_button = Button::new(0, 0, 12 * w, h, "Replace");
+        let mut replace_all_button = Button::new(0, 0, 12 * w, h, "Replace All");
+
+        replace_group.end();
+
+        parent.add(&replace_group);
+        parent.fixed(&replace_group, h);
+        replace_group.hide();
 
         let mut status_bar = Frame::default();
         status_bar.set_frame(FrameType::DownBox);
@@ -248,11 +263,43 @@ impl MmlEditor {
             move |_| find_next(&mut editor, &find)
         });
 
+        replace_widget.handle({
+            // Cannot borrow state in this callback
+            let mut editor = widget.clone();
+            let find = find_widget.clone();
+            move |replace, ev| {
+                if ev == Event::KeyDown && fltk::app::event_key() == Key::Enter {
+                    replace_next(&mut editor, &find, replace);
+                    true
+                } else {
+                    false
+                }
+            }
+        });
+
+        replace_button.set_callback({
+            // Cannot borrow state in this callback
+            let mut editor = widget.clone();
+            let find = find_widget.clone();
+            let replace = replace_widget.clone();
+            move |_| replace_next(&mut editor, &find, &replace)
+        });
+
+        replace_all_button.set_callback({
+            // Cannot borrow state in this callback
+            let mut editor = widget.clone();
+            let find = find_widget.clone();
+            let replace = replace_widget.clone();
+            move |_| replace_all(&mut editor, &find, &replace)
+        });
+
         Self {
             parent_group: parent.clone(),
             widget,
             find_group,
             find_widget,
+            replace_group,
+            replace_widget,
             status_bar,
             state,
         }
@@ -416,6 +463,23 @@ impl MmlEditor {
                 let _ = self.find_widget.take_focus();
                 self.parent_group.layout();
             }
+            EditAction::Replace => {
+                if !self.replace_group.visible()
+                    || self.widget.has_focus()
+                    || self.find_widget.has_focus()
+                {
+                    self.find_group.show();
+                    self.replace_group.show();
+                    if !self.find_widget.has_focus() {
+                        let _ = self.find_widget.take_focus();
+                    } else {
+                        let _ = self.replace_widget.take_focus();
+                    }
+                } else {
+                    self.replace_group.hide();
+                }
+                self.parent_group.layout();
+            }
         }
     }
 }
@@ -457,6 +521,47 @@ fn find_prev(editor: &mut TextEditor, find: &Input) {
                 editor.show_insert_position();
             }
         }
+    }
+}
+
+fn replace_next(editor: &mut TextEditor, find: &Input, replace: &Input) {
+    let needle = find.value();
+    let replace = replace.value();
+
+    if let (Ok(needle_len), Ok(replace_len)) =
+        (i32::try_from(needle.len()), i32::try_from(replace.len()))
+    {
+        if let Some(mut buffer) = editor.buffer() {
+            let mut old_pos = match buffer.selection_position() {
+                Some((start, _end)) => start,
+                None => editor.insert_position(),
+            };
+
+            if buffer.selection_text() == needle {
+                buffer.replace_selection(&replace);
+                old_pos += replace_len;
+            };
+
+            if let Some(p) = buffer
+                .search_forward(old_pos, &needle, true)
+                .or_else(|| buffer.search_forward(0, &needle, true))
+            {
+                buffer.select(p, p + needle_len);
+                editor.set_insert_position(p + needle_len);
+                editor.show_insert_position();
+            }
+        }
+    }
+}
+
+fn replace_all(editor: &mut TextEditor, find: &Input, replace: &Input) {
+    if let Some(mut buffer) = editor.buffer() {
+        let len = buffer.length();
+
+        let text = buffer.text().replace(&find.value(), &replace.value());
+
+        // Replacing all text ensures the replace_all action can be undone.
+        buffer.replace(0, len, &text);
     }
 }
 

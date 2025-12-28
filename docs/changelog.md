@@ -83,6 +83,7 @@ GUI changes:
  * Improved the unsaved changes dialogs
  * Fixed set start ticks to cursor button (F9)
  * Added a search bar to the editors (Ctrl+F)
+ * Added find & replace to the editors (Ctrl+R)
 
 
 Version 0.1.1
