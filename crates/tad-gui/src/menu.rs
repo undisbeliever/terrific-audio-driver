@@ -48,6 +48,15 @@ const SHOW_ABOUT_TAB: &str = "&Help/&About";
 
 const QUIT: &str = "&File/&Quit";
 
+#[derive(Debug)]
+pub enum EditAction {
+    Undo,
+    Redo,
+    Cut,
+    Copy,
+    Paste,
+}
+
 #[derive(Clone)]
 pub struct Menu {
     menu_bar: fltk::menu::MenuBar,
@@ -126,6 +135,37 @@ impl Menu {
         add(QUIT, Shortcut::None, fltk::menu::MenuFlag::Normal, || {
             GuiMessage::QuitRequested
         });
+
+        add(
+            "&Edit/&Undo",
+            Shortcut::Ctrl | 'z',
+            fltk::menu::MenuFlag::Normal,
+            || GuiMessage::EditAction(EditAction::Undo),
+        );
+        add(
+            "&Edit/&Redo",
+            Shortcut::Ctrl | 'Z',
+            fltk::menu::MenuFlag::MenuDivider,
+            || GuiMessage::EditAction(EditAction::Redo),
+        );
+        add(
+            "&Edit/Cu&t",
+            Shortcut::Ctrl | 'x',
+            fltk::menu::MenuFlag::Normal,
+            || GuiMessage::EditAction(EditAction::Cut),
+        );
+        add(
+            "&Edit/&Copy",
+            Shortcut::Ctrl | 'c',
+            fltk::menu::MenuFlag::Normal,
+            || GuiMessage::EditAction(EditAction::Copy),
+        );
+        add(
+            "&Edit/&Paste",
+            Shortcut::Ctrl | 'v',
+            fltk::menu::MenuFlag::Normal,
+            || GuiMessage::EditAction(EditAction::Paste),
+        );
 
         add(
             AUDIO_SFX_WINDOW,

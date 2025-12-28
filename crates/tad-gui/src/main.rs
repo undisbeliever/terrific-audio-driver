@@ -52,7 +52,7 @@ use crate::files::{
 use crate::help::HelpWidget;
 use crate::helpers::input_height;
 use crate::list_editor::{ListMessage, ListWithCompilerOutput};
-use crate::menu::Menu;
+use crate::menu::{EditAction, Menu};
 use crate::names::deduplicate_names;
 use crate::project_tab::ProjectTab;
 use crate::samples_tab::SamplesTab;
@@ -121,6 +121,8 @@ pub enum GuiMessage {
     QuitRequested,
     ForceQuit,
     SaveAllAndQuit(Vec<FileType>),
+
+    EditAction(EditAction),
 
     DefaultSfxFlagChanged(DefaultSfxFlags),
     EditSfxExportOrder(SfxExportOrderMessage),
@@ -742,6 +744,17 @@ impl Project {
             GuiMessage::SaveAllUnsaved => {
                 self.save_all(self.tab_manager.unsaved_tabs());
             }
+
+            GuiMessage::EditAction(a) => match self.tab_manager.selected_file() {
+                Some(FileType::Song(song_id)) => {
+                    if let Some(t) = self.song_tabs.get_mut(&song_id) {
+                        t.edit_action(a);
+                    }
+                }
+                Some(FileType::SoundEffects) => self.sound_effects_tab.edit_action(a),
+                Some(FileType::Project) => (),
+                None => (),
+            },
 
             GuiMessage::OpenSfxFileDialog => {
                 if self.sfx_data.is_none() {

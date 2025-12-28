@@ -7,6 +7,7 @@
 use crate::audio_thread::{AudioMonitorData, MusicChannelsMask};
 use crate::compiler_thread::{ItemId, SongError, SongOutput};
 use crate::helpers::*;
+use crate::menu::EditAction;
 use crate::mml_editor::{CompiledEditorData, MmlEditor, TextErrorRef, TextFormat};
 use crate::tabs::{FileType, Tab};
 use crate::GuiMessage;
@@ -525,6 +526,10 @@ impl SongTab {
 
     pub fn cursor_index(&self) -> Option<u32> {
         self.state.borrow().editor.cursor_index()
+    }
+
+    pub fn edit_action(&mut self, action: EditAction) {
+        self.state.borrow_mut().editor.edit_action(action)
     }
 }
 

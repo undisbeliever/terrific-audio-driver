@@ -11,6 +11,7 @@ use crate::list_editor::{
     ListAction, ListEditorTable, ListMessage, ListWithCompilerOutput, ListWithCompilerOutputEditor,
     TableCompilerOutput, TableMapping,
 };
+use crate::menu::EditAction;
 use crate::mml_editor::{CompiledEditorData, EditorBuffer, MmlEditor, TextErrorRef, TextFormat};
 use crate::tables::{RowWithStatus, SimpleRow};
 use crate::tabs::{FileType, Tab};
@@ -673,6 +674,16 @@ impl SoundEffectsTab {
 
     pub fn set_sfx_subroutine_compiler_output(&mut self, co: SfxSubroutineOutput) {
         self.state.borrow_mut().set_subroutine_compiler_output(co);
+    }
+
+    pub fn edit_action(&mut self, action: EditAction) {
+        let mut s = self.state.borrow_mut();
+
+        if s.subroutines_editor.has_focus() {
+            s.subroutines_editor.edit_action(action)
+        } else {
+            s.editor.edit_action(action)
+        }
     }
 }
 

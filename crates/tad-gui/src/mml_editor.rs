@@ -6,6 +6,7 @@
 
 use crate::audio_thread::AudioMonitorData;
 use crate::helpers::ch_units_to_width;
+use crate::menu::EditAction;
 
 use compiler::driver_constants::N_MUSIC_CHANNELS;
 use compiler::errors::{
@@ -340,6 +341,20 @@ impl MmlEditor {
 
     pub fn clear_note_tracking(&mut self) {
         self.state.borrow_mut().clear_note_tracking();
+    }
+
+    pub fn has_focus(&self) -> bool {
+        self.widget.has_focus()
+    }
+
+    pub fn edit_action(&mut self, action: EditAction) {
+        match action {
+            EditAction::Undo => self.widget.undo(),
+            EditAction::Redo => self.widget.redo(),
+            EditAction::Cut => self.widget.cut(),
+            EditAction::Copy => self.widget.copy(),
+            EditAction::Paste => self.widget.paste(),
+        }
     }
 }
 
