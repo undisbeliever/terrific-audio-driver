@@ -61,6 +61,12 @@ pub fn is_input_done_event(e: Event) -> bool {
     }
 }
 
+pub fn select_all_and_take_focus(input: &mut Input) {
+    let _ = input.set_position(0);
+    let _ = input.set_mark(input.value().len().try_into().unwrap_or(i32::MAX));
+    let _ = input.take_focus();
+}
+
 pub trait SetActive {
     fn set_active(&mut self, active: bool);
 }

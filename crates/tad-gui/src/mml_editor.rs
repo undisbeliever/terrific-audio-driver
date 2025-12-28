@@ -5,7 +5,7 @@
 // SPDX-License-Identifier: MIT
 
 use crate::audio_thread::AudioMonitorData;
-use crate::helpers::{ch_units_to_width, input_height};
+use crate::helpers::{ch_units_to_width, input_height, select_all_and_take_focus};
 use crate::menu::EditAction;
 
 use compiler::driver_constants::N_MUSIC_CHANNELS;
@@ -460,7 +460,7 @@ impl MmlEditor {
             EditAction::Paste => self.widget.paste(),
             EditAction::Find => {
                 self.find_group.show();
-                let _ = self.find_widget.take_focus();
+                select_all_and_take_focus(&mut self.find_widget);
                 self.parent_group.layout();
             }
             EditAction::Replace => {
@@ -471,9 +471,9 @@ impl MmlEditor {
                     self.find_group.show();
                     self.replace_group.show();
                     if !self.find_widget.has_focus() {
-                        let _ = self.find_widget.take_focus();
+                        select_all_and_take_focus(&mut self.find_widget);
                     } else {
-                        let _ = self.replace_widget.take_focus();
+                        select_all_and_take_focus(&mut self.replace_widget);
                     }
                 } else {
                     self.replace_group.hide();
