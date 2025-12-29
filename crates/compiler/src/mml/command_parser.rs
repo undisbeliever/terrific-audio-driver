@@ -686,7 +686,7 @@ fn parse_relative_channel_transpose(pos: FilePos, p: &mut Parser) {
 }
 
 fn parse_key_signature(pos: FilePos, p: &mut Parser, s: &str) {
-    match p.state().signature.parse_signature_changes(s) {
+    match p.state().signature.parse_scale_or_signature_change(s) {
         Ok(signature) => {
             p.set_state(State {
                 signature,

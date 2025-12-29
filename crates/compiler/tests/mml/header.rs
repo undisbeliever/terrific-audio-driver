@@ -871,7 +871,17 @@ A r
 
     assert_one_header_error_in_mml(
         r#"
-#KeySignature b
+#KeySignature bad
+
+A r
+"#,
+        2,
+        ValueError::UnknownKeySignature.into(),
+    );
+
+    assert_one_header_error_in_mml(
+        r#"
+#KeySignature C, D
 
 A r
 "#,

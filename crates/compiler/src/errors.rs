@@ -247,6 +247,7 @@ pub enum ValueError {
     DuplicateInvertFlag,
     NoInvertFlags,
 
+    UnknownKeySignature,
     NoKeySignatureSign,
     NoTonesInKeySignature,
     InvalidKeySignatureTone(char),
@@ -1282,6 +1283,9 @@ impl Display for ValueError {
             Self::DuplicateInvertFlag => write!(f, "duplicate invert flag"),
             Self::NoInvertFlags => write!(f, "no invert flags"),
 
+            Self::UnknownKeySignature => {
+                write!(f, "unknown key signature (expected scale, +, - or =)")
+            }
             Self::NoKeySignatureSign => write!(f, "no key signature sign (expected +, - or =)"),
             Self::NoTonesInKeySignature => write!(f, "no tones in key signature"),
             Self::InvalidKeySignatureTone(c) => write!(f, "invalid tone in key signature ({c})"),

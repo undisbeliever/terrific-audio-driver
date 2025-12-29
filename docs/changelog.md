@@ -49,6 +49,7 @@ MML changes:
  * Added `#OldTranspose` header to restore the v0.1.1 and earlier transpose behaviour
    by silently converting `_` and `__` commands to `_M` and `__M`.
  * Added `_{}` change key signature command
+ * Added major and minor scales to the `_{}` key signature command
  * Added `=` natural to MML notes (ignores the key signature)
  * Added `#Transpose` header (equivalent to adding `_M` to the start of every channel and subroutine)
  * Added `#KeySignature` header (equivalent to adding `_{}` to the start of every channel and subroutine)

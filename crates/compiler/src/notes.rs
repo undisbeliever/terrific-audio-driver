@@ -36,6 +36,37 @@ pub struct KeySignature([i8; N_PITCHES]);
 impl KeySignature {
     const DEFAULT: [i8; N_PITCHES] = [0, 2, 4, 5, 7, 9, 11];
 
+    fn parse_named_signature(s: &str) -> Option<Self> {
+        match s {
+            "A" | "f+" => Some(Self([1, 2, 4, 6, 8, 9, 11])),
+            "A-" | "f" => Some(Self([0, 1, 3, 5, 7, 8, 10])),
+            "B" | "g+" => Some(Self([1, 3, 4, 6, 8, 10, 11])),
+            "B-" | "g" => Some(Self([0, 2, 3, 5, 7, 9, 10])),
+            "C" | "a" => Some(Self([0, 2, 4, 5, 7, 9, 11])),
+            "C+" | "a+" => Some(Self([1, 3, 5, 6, 8, 10, 12])),
+            "C-" | "a-" => Some(Self([-1, 1, 3, 4, 6, 8, 10])),
+            "D" | "b" => Some(Self([1, 2, 4, 6, 7, 9, 11])),
+            "D-" | "b-" => Some(Self([0, 1, 3, 5, 6, 8, 10])),
+            "E" | "c+" => Some(Self([1, 3, 4, 6, 8, 9, 11])),
+            "E-" | "c" => Some(Self([0, 2, 3, 5, 7, 8, 10])),
+            "F" | "d" => Some(Self([0, 2, 4, 5, 7, 9, 10])),
+            "F+" | "d+" => Some(Self([1, 3, 5, 6, 8, 10, 11])),
+            "G" | "e" => Some(Self([0, 2, 4, 6, 7, 9, 11])),
+            "G-" | "e-" => Some(Self([-1, 1, 3, 5, 6, 8, 10])),
+            _ => None,
+        }
+    }
+
+    pub fn parse_scale_or_signature_change(&self, s: &str) -> Result<Self, ValueError> {
+        match Self::parse_named_signature(s) {
+            Some(k) => Ok(k),
+            None => match self.parse_signature_changes(s) {
+                Err(ValueError::NoKeySignatureSign) => Err(ValueError::UnknownKeySignature),
+                r => r,
+            },
+        }
+    }
+
     pub fn parse_signature_changes(&self, s: &str) -> Result<Self, ValueError> {
         let mut it = s.chars();
 

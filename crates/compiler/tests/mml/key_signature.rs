@@ -14,7 +14,7 @@ fn key_signature_errors() {
     assert_one_error_in_mml_line("_{--}", 1, ValueError::InvalidKeySignatureTone('-').into());
     assert_one_error_in_mml_line("_{=!}", 1, ValueError::InvalidKeySignatureTone('!').into());
 
-    assert_one_error_in_mml_line("_{fc}", 1, ValueError::NoKeySignatureSign.into());
+    assert_one_error_in_mml_line("_{fc}", 1, ValueError::UnknownKeySignature.into());
 
     assert_one_error_in_mml_line("_{+fc", 1, ChannelError::MissingEndKeySignature);
 }
@@ -70,6 +70,86 @@ fn natural_ignores_key_signature() {
 
     // from mml-syntax.md
     assert_line_matches_line("_{+fc} c c= c=- c=+", "c+ c c- c+");
+}
+
+#[test]
+fn key_signature_major_scale() {
+    // SOURCE: https://piano-music-theory.com/2016/05/31/major-scales/
+
+    assert_line_matches_line("_{C}  cdefgab", "c d e f g a b ");
+    assert_line_matches_line("_{F}  fgabcde", "f g a b-c d e ");
+    assert_line_matches_line("_{B-} bcdefga", "b-c d e-f g a ");
+    assert_line_matches_line("_{E-} efgabcd", "e-f g a-b-c d ");
+    assert_line_matches_line("_{A-} abcdefg", "a-b-c d-e-f g ");
+    assert_line_matches_line("_{C-} cdefgab", "c-d-e-f-g-a-b-");
+    assert_line_matches_line("_{G-} gabcdef", "g-a-b-c-d-e-f ");
+    assert_line_matches_line("_{D-} defgabc", "d-e-f g-a-b-c ");
+    assert_line_matches_line("_{G}  gabcdef", "g a b c d e f+");
+    assert_line_matches_line("_{D}  defgabc", "d e f+g a b c+");
+    assert_line_matches_line("_{A}  abcdefg", "a b c+d e f+g+");
+    assert_line_matches_line("_{E}  efgabcd", "e f+g+a b c+d+");
+    assert_line_matches_line("_{B}  bcdefga", "b c+d+e f+g+a+");
+    assert_line_matches_line("_{F+} fgabcde", "f+g+a+b c+d+e+");
+    assert_line_matches_line("_{C+} cdefgab", "c+d+e+f+g+a+b+");
+
+    // ::TODO should I add `F-` and `G+`? (has a double-sharp and double-flat)::
+    //assert_line_matches_line("_{F-} fgabcde", "f-g-a-b--c-d-e-");
+    //assert_line_matches_line("_{G+} gabcdef", "g+a+b+c+d+e+f++");
+
+    // from mml-syntax.md
+    assert_line_matches_line("_{A}  ab>cdefg", "a b > c+ d e f+ g+");
+    assert_line_matches_line("_{B-}  b>cdefga", "b- > c d e- f g a");
+}
+
+#[test]
+fn key_signature_minor_scale() {
+    // SOURCE: https://en.wikipedia.org/wiki/File:Natural_Minors.svg
+    assert_line_matches_line("_{a}  abcdefg", "a b c d e f g ");
+    assert_line_matches_line("_{e}  efgabcd", "e f+g a b c d ");
+    assert_line_matches_line("_{b}  bcdefga", "b c+d e f+g a ");
+    assert_line_matches_line("_{f+} fgabcde", "f+g+a b c+d e ");
+    assert_line_matches_line("_{c+} cdefgab", "c+d+e f+g+a b ");
+    assert_line_matches_line("_{g+} gabcdef", "g+a+b c+d+e f+");
+    assert_line_matches_line("_{a-} abcdefg", "a-b-c-d-e-f-g-");
+    assert_line_matches_line("_{e-} efgabcd", "e-f g-a-b-c-d-");
+    assert_line_matches_line("_{d+} defgabc", "d+e+f+g+a+b c+");
+    assert_line_matches_line("_{b-} bcdefga", "b-c d-e-f g-a-");
+    assert_line_matches_line("_{a+} abcdefg", "a+b+c+d+e+f+g+");
+    assert_line_matches_line("_{f}  fgabcde", "f g a-b-c d-e-");
+    assert_line_matches_line("_{c}  cdefgab", "c d e-f g a-b-");
+    assert_line_matches_line("_{g}  gabcdef", "g a b-c d e-f ");
+    assert_line_matches_line("_{d}  defgabc", "d e f g a b-c ");
+
+    // ::TODO should I add `d-` and `e+`? (has a double-sharp and double-flat)::
+    //assert_line_matches_line("_{d-} defgabc", "d-e-f-g-a-b--c-");
+    //assert_line_matches_line("_{e+} efgabcd", "e+f++g+a+b+c+d+");
+
+    // from mml-syntax.md
+    assert_line_matches_line("_{f+} fgab>cde", "f+ g+ a b > c+ d e");
+}
+
+#[test]
+fn named_scale_resets_key_signature() {
+    assert_line_matches_line("_{+f} cdefgab _{C} cdefgab", "cdef+gab cdefgab");
+    assert_line_matches_line("_{-f} cdefgab _{C} cdefgab", "cdef-gab cdefgab");
+
+    assert_line_matches_line("_{+efg} cdefgab _{B-} cdefgab", "cde+f+g+ab cde-fgab-");
+    assert_line_matches_line("_{-efg} cdefgab _{b} cdefgab", "cde-f-g-ab c+def+gab");
+}
+
+#[test]
+fn named_scale_then_key_signature() {
+    assert_line_matches_line("_{D} cdefgab", "c+def+gab");
+    // From ctrmml manual
+    assert_line_matches_line("_{D} _{=f} cdefgab", "c+defgab");
+
+    assert_line_matches_line("_{B-} cdefgab", "cde-fgab-");
+    assert_line_matches_line("_{B-} _{+c} cdefgab", "c+de-fgab-");
+    assert_line_matches_line("_{B-} _{+ce} cdefgab", "c+de+fgab-");
+
+    assert_line_matches_line("_{b} cdefgab", "c+def+gab");
+    assert_line_matches_line("_{b} _{-a} cdefgab", "c+def+ga-b");
+    assert_line_matches_line("_{b} _{-af} cdefgab", "c+def-ga-b");
 }
 
 #[test]
@@ -255,5 +335,89 @@ B @0 !s abc _{-c} c
             "play_note c+4 24",
             "play_note c-4 24",
         ],
+    );
+}
+
+#[test]
+fn key_signature_header_3() {
+    let mml = r##"
+#KeySignature D
+
+@0 dummy_instrument
+
+!s ?@0 fec
+
+A @0 !s fec
+B @0 !s fec
+"##;
+
+    assert_mml_channel_a_matches_bytecode(
+        mml,
+        &[
+            "set_instrument dummy_instrument",
+            "call_subroutine s",
+            "play_note f+4 24",
+            "play_note e4 24",
+            "play_note c+4 24",
+        ],
+    );
+
+    assert_mml_channel_b_matches_bytecode(
+        mml,
+        &[
+            "set_instrument dummy_instrument",
+            "call_subroutine s",
+            "play_note f+4 24",
+            "play_note e4 24",
+            "play_note c+4 24",
+        ],
+    );
+
+    assert_mml_subroutine_matches_bytecode(
+        mml,
+        0,
+        &["play_note f+4 24", "play_note e4 24", "play_note c+4 24"],
+    );
+}
+
+#[test]
+fn key_signature_header_4() {
+    let mml = r##"
+#KeySignature D, -e, =f
+
+@0 dummy_instrument
+
+!s ?@0 fec
+
+A @0 !s fec
+B @0 !s fec
+"##;
+
+    assert_mml_channel_a_matches_bytecode(
+        mml,
+        &[
+            "set_instrument dummy_instrument",
+            "call_subroutine s",
+            "play_note f4 24",
+            "play_note e-4 24",
+            "play_note c+4 24",
+        ],
+    );
+
+    assert_mml_channel_b_matches_bytecode(
+        mml,
+        &[
+            "set_instrument dummy_instrument",
+            "call_subroutine s",
+            "play_note f4 24",
+            "play_note e-4 24",
+            "play_note c+4 24",
+        ],
+    );
+
+    assert_mml_subroutine_matches_bytecode(
+        mml,
+        0,
+        &["play_note f4 24", "play_note e-4 24", "play_note c+4 24"],
     );
 }

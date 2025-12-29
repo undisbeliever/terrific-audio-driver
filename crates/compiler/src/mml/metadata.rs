@@ -221,8 +221,12 @@ impl HeaderState {
             Header::KeySignature => {
                 let mut signature = KeySignature::default();
 
-                for v in value.split(',') {
-                    signature = signature.parse_signature_changes(v.trim())?;
+                let mut it = value.split(',').map(|s| s.trim());
+                if let Some(v) = it.next() {
+                    signature = signature.parse_scale_or_signature_change(v)?;
+                }
+                for v in it {
+                    signature = signature.parse_signature_changes(v)?;
                 }
                 self.metadata.mml_settings.signature = signature;
             }

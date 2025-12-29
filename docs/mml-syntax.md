@@ -35,11 +35,13 @@ The following adjust default values:
  * `#KeySignature <signature>[, signature]*` - Sets the default key signature
     * This is the equivalent to adding `_{}` key signature commands to the start of every channel and subroutine.
     * Multiple key signatures can be separated by commas
+    * Only the first element can be a scale
     * Examples:
+        * `KeySignature A` - A Major
+        * `KeySignature f` - F Minor
         * `#KeySignature +fc` - D Major
         * `#KeySignature -bea` - E Flat Major
         * `KeySignature +cd, -ba` - adds a sharp to `c` & `d` and a flat to `b` & `a`
-
 
 <br/>
 
@@ -310,6 +312,14 @@ Numbers can be decimal, or hexadecimal when prefixed with `$` (ie, `$ff`)
     * CAUTION: `_M` and `__M` transpose does not affect subroutines or loops.
       * `_M0 c [_M+1 c]3` will play `c c+ c+ c+`
       * `_M+4 !s` will not change any of the notes in the subroutine
+ * `_{<scale>}` set key signature
+    * Sets the key signature to desired major (upper case) or minor (lower case) scale
+    * Major scales: `C`, `F`, `B-`, `E-`, `A-`, `C-`, `G-`, `D-`, `G`, `D`, `A`, `E`, `B`, `F+`, `C+`
+    * Minor scales: `a`, `e`, `b`, `f+`, `c+`, `g+`, `a-`, `e-`, `d+`, `b-`, `a+`, `f`, `c`, `g`, `d`
+    * Examples:
+        * `_{A}  ab>cdefg` will play `a b > c+ d e f+ g+`
+        * `_{B-}  b>cdefga`, will play `b- > c d e- f g a`
+        * `_{f+} fgab>cde` will play `f+ g+ a b > c+ d e`
  * `_{<+/-/=><tones>}` change key signature
     * This command adds a sharp `+`, flat `-` or natural `=` to the specified tones.
     * Examples:
@@ -319,7 +329,11 @@ Numbers can be decimal, or hexadecimal when prefixed with `$` (ie, `$ff`)
          `_{-be} b>cdefgab` will play `b- > c d e- f g a b-`.
     * A `=` after a pitch will ignore the key signature.
        * `_{+fc} c c= c=- c=+` will play c sharp, natural c, c flat, c sharp (`c+ c c- c+`).
-    * CAUTION: `_{}` does not cancel a previously set signature.
+    * CAUTION: When a scale is specified, the key signature is reset
+       * `_{C}` will reset the key signature to all neutrals
+       * `_{+f} _{C} cdefgab` will play `c d e f g a b`
+       * `_{+efg} _{B-} cdefgab` will play `c d e- f g a b-`
+    * CAUTION: `_{+/-/=}` does not cancel a previously set signature.
        * `_{+cd}` `_{-de}` will add a sharp to `c` and a flat to `d` and `e`.
        * To return to the C Major scale the sharps and flats must be reset with `_{=}`
          ie, `_{+fc} cdef _{=fc} cdef` will play `c+ d e f+ | c d e f`.
