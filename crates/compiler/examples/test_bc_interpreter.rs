@@ -358,6 +358,7 @@ fn test_bc_intrepreter(song: SongData, common_audio_data: &CommonAudioData) {
         emu.try_send_io_command(io_commands::PAUSE, 0, 0);
         emu.emulate();
         emu.emulate();
+        emu.emulate();
 
         assert!(emu.is_io_command_acknowledged(), "audio driver not paused");
 
