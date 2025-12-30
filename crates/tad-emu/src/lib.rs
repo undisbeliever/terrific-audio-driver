@@ -10,7 +10,8 @@ use compiler::bytecode_interpreter::SongInterpreter;
 use compiler::common_audio_data::{CommonAudioData, SfxBufferInAram};
 use compiler::driver_constants::{
     addresses, io_commands, AudioMode, LoaderDataType, AUDIO_RAM_SIZE, FIRST_SFX_CHANNEL,
-    IO_COMMAND_I_MASK, IO_COMMAND_MASK, N_CHANNELS, N_MUSIC_CHANNELS, N_SFX_CHANNELS,
+    IO_COMMAND_I_MASK, IO_COMMAND_MASK, LAG_DETECTOR_MUSIC_LAG_MASK, LAG_DETECTOR_SFX_LAG_MASK,
+    N_CHANNELS, N_MUSIC_CHANNELS, N_SFX_CHANNELS,
 };
 use compiler::errors::LoadSongError;
 use compiler::songs::SongData;
@@ -55,10 +56,18 @@ impl tad_apu::ApuEmulator for EmuWrapper {
     }
 }
 
+#[derive(Default, Clone)]
+pub struct LagCounters {
+    pub music: u32,
+    pub sfx: u32,
+}
+
 pub struct TadEmulator {
     emu: EmuWrapper,
     song_addr: Option<u16>,
     previous_command: u8,
+
+    lag_counters: LagCounters,
 }
 
 impl TadEmulator {
@@ -74,12 +83,14 @@ impl TadEmulator {
             emu: EmuWrapper(shvc_sound_emu::ShvcSoundEmu::new(&iplrom)),
             song_addr: None,
             previous_command: 0,
+            lag_counters: LagCounters::default(),
         }
     }
 
     pub fn fill_apuram(&mut self, byte: u8) {
         self.emu.0.apuram_mut().fill(byte);
         self.song_addr = None;
+        self.clear_lag_counters();
     }
 
     pub fn unload_song(&mut self) {
@@ -95,6 +106,7 @@ impl TadEmulator {
         let song_addr = song_addr.unwrap_or_else(|| cad.min_song_data_addr());
 
         self.unload_song();
+        self.clear_lag_counters();
 
         tad_apu::load_cad_and_blank_song_to_apu(
             &mut self.emu,
@@ -123,6 +135,7 @@ impl TadEmulator {
         let song_addr = song_addr.unwrap_or_else(|| cad.min_song_data_addr());
 
         self.unload_song();
+        self.clear_lag_counters();
 
         tad_apu::load_song_to_apu(
             &mut self.emu,
@@ -156,6 +169,7 @@ impl TadEmulator {
         SD: Deref<Target = SongData>,
     {
         self.unload_song();
+        self.clear_lag_counters();
 
         tad_apu::load_song_to_apu(
             &mut self.emu,
@@ -190,6 +204,22 @@ impl TadEmulator {
         Ok(())
     }
 
+    pub fn lag_counters(&self) -> LagCounters {
+        self.lag_counters.clone()
+    }
+
+    fn clear_lag_counters(&mut self) {
+        self.lag_counters = Default::default();
+    }
+
+    pub fn clear_music_lag_counter(&mut self) {
+        self.lag_counters.music = 0;
+    }
+
+    pub fn clear_sfx_lag_counter(&mut self) {
+        self.lag_counters.sfx = 0;
+    }
+
     pub fn set_music_channels_mask(&mut self, mask: u8) {
         let apuram = self.emu.apuram_mut();
 
@@ -208,7 +238,18 @@ impl TadEmulator {
 
     /// Panics if no song or CommonAudioData is loaded
     pub fn emulate(&mut self) -> &[i16; Self::AUDIO_BUFFER_SIZE] {
+        const LAG_DETECTOR_ADDR: usize = addresses::LAG_DETECTOR as usize;
+
         assert!(self.is_song_loaded());
+
+        let lag_detector = &mut self.emu.apuram_mut()[LAG_DETECTOR_ADDR];
+        if *lag_detector & LAG_DETECTOR_MUSIC_LAG_MASK != 0 {
+            self.lag_counters.music = self.lag_counters.music.saturating_add(1);
+        }
+        if *lag_detector & LAG_DETECTOR_SFX_LAG_MASK != 0 {
+            self.lag_counters.sfx = self.lag_counters.sfx.saturating_add(1);
+        }
+        *lag_detector &= !(LAG_DETECTOR_MUSIC_LAG_MASK | LAG_DETECTOR_SFX_LAG_MASK);
 
         self.emu.0.emulate()
     }

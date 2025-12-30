@@ -36,6 +36,7 @@ const AUDIO_DRIVER_SYMBOLS: &[(&str, &str)] = &[
     ("process_music_channels", "PROCESS_MUSIC_CHANNELS_CODE"),
     ("__loader_songPtr", "SONG_PTR"),
     ("__loader_dataType", "LOADER_DATA_TYPE"),
+    ("lagDetector", "LAG_DETECTOR"),
     ("songTickCounter", "SONG_TICK_COUNTER"),
     ("keyOnShadow_music", "KEYON_SHADOW_MUSIC"),
     ("keyOffShadow_music", "KEYOFF_SHADOW_MUSIC"),

@@ -96,8 +96,20 @@ in zeropage {
     var subroutineTable_l : *const u8;
     var subroutineTable_h : *const u8;
 
-    // Maximum value of the timer counter_0 or counter_1 register.
-    var maxTimerCounter : u8;
+
+    // Lag detector
+    //
+    // The lag bit is set if the timer is non-zero on first timer counter read after processing.
+    //
+    // It's not a good lag detector, but it is better than the previous one.
+    //
+    // tad-gui will clear the LAG bits and turn it into a counter.
+    var lagDetector : u8;
+        let LD_MUSIC_LAG_BIT = 0;
+        let LD_SFX_LAG_BIT = 1;
+
+        let LD_MUSIC_TEST_BIT = 6;
+        let LD_SFX_TEST_BIT = 7;
 
 
     // bitmask - Set if S-DSP voice channel is music, clear if sfx.
@@ -828,24 +840,40 @@ func mainloop() {
 
         // Song tick timer
         a = smp.counter_0;
-        goto SkipMusicTick if zero;
-            if a >= maxTimerCounter {
-                maxTimerCounter = a;
-            }
+        goto ProcessMusicChannel if !zero;
+            lagDetector $ LD_MUSIC_TEST_BIT = false;
+            goto SkipMusicTick;
 
+        // else
         ProcessMusicChannel:
             process_music_channels();
+
+            // Set lag bit if `counter_0` was not 0 in the last loop.
+            // (cannot use `bbs` in wiz)
+            carry = lagDetector $ LD_MUSIC_TEST_BIT;
+            if carry {
+                lagDetector $ LD_MUSIC_LAG_BIT = true;
+            }
+            lagDetector $ LD_MUSIC_TEST_BIT = true;
     SkipMusicTick:
 
         // SFX tick timer
         a = smp.counter_1;
-        goto Loop if zero;
+        if zero {
+            lagDetector $ LD_SFX_TEST_BIT = false;
+            goto Loop;
+        }
 
-            if a >= maxTimerCounter {
-                maxTimerCounter = a;
-            }
-
+        // else
             _process_sfx_channels__inline();
+
+            // Set lag bit if `counter_1` was not 0 in the last loop.
+            // (cannot use `bbs` in wiz)
+            carry = lagDetector $ LD_SFX_TEST_BIT;
+            if carry {
+                lagDetector $ LD_SFX_LAG_BIT = true;
+            }
+            lagDetector $ LD_SFX_TEST_BIT = true;
 
             // Loop forever
             ^goto Loop;

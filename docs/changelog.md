@@ -85,6 +85,7 @@ GUI changes:
  * Fixed set start ticks to cursor button (F9)
  * Added a search bar to the editors (Ctrl+F)
  * Added find & replace to the editors (Ctrl+R)
+ * Added a lag counter to the Audio Driver State window (F11)
 
 
 Version 0.1.1

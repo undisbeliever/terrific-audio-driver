@@ -1,0 +1,10 @@
+#Title SFX lag tester
+
+; Slow the tempo to 90 to create SFX lag without music lag
+#Tempo 120
+
+@1 sine
+
+!s [ c8 c8 : r ]2
+
+ABCDEFGH L @1 V30 V~10,2 p~10,3 ~80,3 g8 !s

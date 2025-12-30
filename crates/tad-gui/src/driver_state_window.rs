@@ -6,7 +6,7 @@
 
 use std::sync::Arc;
 
-use crate::audio_thread::{AudioThreadSongInterpreter, SharedSongInterpreter, SiCad};
+use crate::audio_thread::{AudioMonitor, AudioThreadSongInterpreter, SharedSongInterpreter, SiCad};
 use crate::compiler_thread::{CursorDriverState, InstrumentAndSampleNames, ItemId};
 use crate::helpers::{ch_units_to_width, input_height};
 use crate::GuiMessage;
@@ -21,11 +21,12 @@ use compiler::time::{timer_register_to_bpm, TickCounter};
 
 use fltk::app;
 use fltk::button::CheckButton;
-use fltk::enums::{Align, CallbackTrigger, FrameType};
+use fltk::enums::{Align, CallbackTrigger, Color, FrameType};
 use fltk::frame::Frame;
 use fltk::input::IntInput;
 use fltk::prelude::*;
 use fltk::window::Window;
+use tad_emu::LagCounters;
 
 #[derive(Clone, Copy, PartialEq)]
 struct TimerBpm(u8);
@@ -293,6 +294,44 @@ impl U32EditableValue {
         if self.value != Some(new_value) {
             self.value = Some(new_value);
             self.widget.set_value(&format!("{new_value}"));
+        }
+    }
+}
+
+struct LagCounterWidget {
+    frame: Frame,
+    value: Option<u32>,
+}
+
+impl LagCounterWidget {
+    fn new(x: i32, y: i32, width: i32, height: i32) -> Self {
+        let mut frame = Frame::new(x, y, width, height, None);
+        frame.set_align(Align::Inside | Align::Right);
+        frame.set_frame(FrameType::ThinDownBox);
+
+        Self { frame, value: None }
+    }
+
+    fn clear(&mut self) {
+        self.value = None;
+        self.frame.set_label("");
+    }
+
+    fn update(&mut self, new_value: u32) {
+        if self.value != Some(new_value) {
+            self.value = Some(new_value);
+            match new_value {
+                0 => {
+                    self.frame.set_label("None");
+                    self.frame.set_color(Color::Background);
+                    self.frame.set_label_color(Color::Foreground);
+                }
+                n => {
+                    self.frame.set_label(&n.to_string());
+                    self.frame.set_color(Color::DarkRed);
+                    self.frame.set_label_color(Color::White);
+                }
+            }
         }
     }
 }
@@ -606,6 +645,8 @@ struct DriverWidgets {
     // Used to determine if channels.instrument has been invalidated
     instrument_names: Option<Arc<InstrumentAndSampleNames>>,
 
+    music_lag_counter: LagCounterWidget,
+    sfx_lag_counter: LagCounterWidget,
     globals: GlobalValues,
     channels: [ChannelValues; N_MUSIC_CHANNELS],
 }
@@ -721,7 +762,15 @@ impl DriverWidgets {
         }
     }
 
+    fn update_lag_counters(&mut self, lc: LagCounters) {
+        self.music_lag_counter.update(lc.music);
+        self.sfx_lag_counter.update(lc.sfx);
+    }
+
     fn clear(&mut self) {
+        self.music_lag_counter.clear();
+        self.sfx_lag_counter.clear();
+
         self.instrument_names = None;
 
         self.globals.clear();
@@ -749,12 +798,13 @@ pub struct DriverStateWindow {
 
     cursor_state: CursorDriverState,
     audio_thread_song_interpreter: Option<SharedSongInterpreter>,
+    audio_monitor: AudioMonitor,
 
     widgets: DriverWidgets,
 }
 
 impl DriverStateWindow {
-    pub fn new(sender: app::Sender<GuiMessage>) -> Self {
+    pub fn new(sender: app::Sender<GuiMessage>, audio_monitor: AudioMonitor) -> Self {
         let mut window = fltk::window::Window::default().with_label("Audio Driver State");
         window.make_modal(false);
         window.make_resizable(false);
@@ -765,7 +815,7 @@ impl DriverStateWindow {
 
         window.set_size(width * 10 + padding * 2, height * 18 + padding * 3);
 
-        let song_name = Frame::new(padding, padding, width * 6, height, None)
+        let song_name = Frame::new(padding, padding, width * 3, height, None)
             .with_align(Align::Inside | Align::Left | Align::Clip);
 
         let mut track_audio_cb = CheckButton::new(
@@ -782,6 +832,14 @@ impl DriverStateWindow {
 
         let status_label = Frame::new(padding + width * 8, padding, width * 2, height, None)
             .with_align(Align::Inside | Align::Right);
+
+        Frame::new(padding + width * 4, padding, width, height, "Music Lag:")
+            .with_align(Align::Inside | Align::Right);
+        let music_lag_counter = LagCounterWidget::new(padding + width * 5, padding, width, height);
+
+        Frame::new(padding + width * 6, padding, width, height, "Sfx Lag:")
+            .with_align(Align::Inside | Align::Right);
+        let sfx_lag_counter = LagCounterWidget::new(padding + width * 7, padding, width, height);
 
         let mut globals = GlobalValues::new(
             padding,
@@ -818,12 +876,15 @@ impl DriverStateWindow {
             track_audio_cb,
             cursor_state: CursorDriverState::None,
             audio_thread_song_interpreter: None,
+            audio_monitor,
             widgets: DriverWidgets {
                 status: Status::None,
                 status_label,
                 song_id: None,
                 song_name,
                 instrument_names: None,
+                music_lag_counter,
+                sfx_lag_counter,
                 globals,
                 channels,
             },
@@ -920,8 +981,12 @@ impl DriverStateWindow {
     }
 
     pub fn monitor_timer_elapsed(&mut self) {
-        if !self.follow_cursor && self.window.shown() {
-            self.update_monitor();
+        if self.window.shown() {
+            self.update_lag_counters();
+
+            if !self.follow_cursor {
+                self.update_monitor();
+            }
         }
     }
 
@@ -934,6 +999,7 @@ impl DriverStateWindow {
                 .set_audio_song_name(&self.audio_thread_song_interpreter);
             self.update_monitor();
         }
+        self.update_lag_counters();
     }
 
     fn update_song_cursor_state(&mut self) {
@@ -979,6 +1045,12 @@ impl DriverStateWindow {
                 }
             }
             None => self.widgets.clear(),
+        }
+    }
+
+    fn update_lag_counters(&mut self) {
+        if let Some(lc) = self.audio_monitor.get_lag_counters() {
+            self.widgets.update_lag_counters(lc);
         }
     }
 }

@@ -362,7 +362,7 @@ impl Project {
             ),
 
             sfx_window: SfxWindow::new(sender),
-            driver_state_window: DriverStateWindow::new(sender),
+            driver_state_window: DriverStateWindow::new(sender, audio_monitor.clone()),
 
             project_tab: ProjectTab::new(&data, sender),
             samples_tab: SamplesTab::new(&data.instruments_and_samples, sender),

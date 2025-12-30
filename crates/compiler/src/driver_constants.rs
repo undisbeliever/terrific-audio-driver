@@ -40,6 +40,7 @@ pub mod addresses {
         PMON_SHADOW,
         EON_SHADOW_MUSIC,
         EON_SHADOW_SFX,
+        LAG_DETECTOR,
         SONG_TICK_COUNTER,
         IO_MUSIC_CHANNELS_MASK,
         BYTECODE_STACK,
@@ -277,3 +278,6 @@ pub mod io_commands {
 
 pub const IO_COMMAND_MASK: u8 = 0b00011110;
 pub const IO_COMMAND_I_MASK: u8 = 0b11100001;
+
+pub const LAG_DETECTOR_MUSIC_LAG_MASK: u8 = 1 << 0;
+pub const LAG_DETECTOR_SFX_LAG_MASK: u8 = 1 << 1;

@@ -95,6 +95,10 @@
       "source": "manual/cut-portamento-unknown-velocity.mml"
     },
     {
+      "name": "lag_tester",
+      "source": "manual/lag-tester.mml"
+    },
+    {
       "name": "mml_subroutine_play_at_cursor",
       "source": "manual/mml-subroutine-play-at-cursor.mml"
     },

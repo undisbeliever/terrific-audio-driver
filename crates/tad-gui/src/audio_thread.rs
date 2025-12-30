@@ -21,6 +21,7 @@ use compiler::Pan;
 extern crate sdl2;
 use sdl2::audio::{AudioCallback, AudioDevice, AudioSpecDesired};
 use sdl2::Sdl;
+use tad_emu::LagCounters;
 
 use std::ops::Deref;
 use std::sync::LockResult;
@@ -127,6 +128,8 @@ pub struct AudioMonitorData {
     pub voice_instruction_ptrs: [Option<u16>; N_MUSIC_CHANNELS],
     /// May not be valid.
     pub voice_return_inst_ptrs: [Option<u16>; N_MUSIC_CHANNELS],
+
+    pub lag_counters: LagCounters,
 }
 
 impl AudioMonitorData {
@@ -135,6 +138,7 @@ impl AudioMonitorData {
             song_id,
             voice_instruction_ptrs: Default::default(),
             voice_return_inst_ptrs: Default::default(),
+            lag_counters: Default::default(),
         }
     }
 }
@@ -158,6 +162,13 @@ impl AudioMonitor {
     pub fn get(&self) -> Option<AudioMonitorData> {
         match self.data.lock() {
             Ok(d) => d.clone(),
+            Err(_) => None,
+        }
+    }
+
+    pub fn get_lag_counters(&self) -> Option<LagCounters> {
+        match self.data.lock() {
+            Ok(d) => d.as_ref().map(|d| d.lag_counters.clone()),
             Err(_) => None,
         }
     }
@@ -849,6 +860,7 @@ impl TadState {
             song_id: self.song_id,
             voice_instruction_ptrs: s.voice_instruction_ptrs,
             voice_return_inst_ptrs,
+            lag_counters: self.emu.lag_counters(),
         })
     }
 }
