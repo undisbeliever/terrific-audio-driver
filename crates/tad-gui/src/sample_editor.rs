@@ -236,7 +236,7 @@ impl SampleEditor {
             evaluator,
             ignore_gaussian_overflow,
             sample_rates: sample_rates?,
-            envelope: envelope?,
+            envelope,
             comment: comment?,
 
             // must be last (after the ?'s)
@@ -301,7 +301,7 @@ impl SampleEditor {
         self.source.set_value(data.source.as_str());
         self.brr_settings
             .set_value(&data.loop_setting, data.evaluator);
-        self.envelope.set_value(&data.envelope);
+        self.envelope.set_value(data.envelope);
 
         self.sample_rates
             .set_value(&Self::sample_rates_string(&data.sample_rates));

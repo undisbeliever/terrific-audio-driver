@@ -345,31 +345,6 @@ impl InputForm {
         w
     }
 
-    pub fn add_two_inputs<T, U>(&mut self, text: &str, ch_units: i32) -> (T, U)
-    where
-        T: WidgetExt + Default,
-        U: WidgetExt + Default,
-    {
-        let w1_width = ch_units_to_width(&self.group, ch_units);
-
-        let mut r = Flex::default().row();
-        self.group.fixed(&r, self.row_height);
-
-        let l = label(text);
-        r.fixed(&l, self.left_column_width);
-
-        let w1 = T::default();
-        r.fixed(&w1, w1_width);
-
-        let w2 = U::default();
-
-        r.end();
-
-        self.n_rows += 1;
-
-        (w1, w2)
-    }
-
     pub fn add_three_inputs<T, U, V>(
         &mut self,
         text: &str,

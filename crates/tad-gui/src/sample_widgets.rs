@@ -4,12 +4,13 @@
 //
 // SPDX-License-Identifier: MIT
 
-use crate::helpers::{is_input_done_event, InputForm, InputHelper};
+use crate::helpers::{is_input_done_event, InputForm};
 
 use compiler::data::{self, BlockNumber, BrrEvaluator, LoopSetting, SampleNumber};
 use compiler::envelope::{Adsr, Envelope, Gain};
 use compiler::path::SourcePathBuf;
 use compiler::samples::{BRR_EXTENSION, WAV_EXTENSION};
+use fltk::button::RadioRoundButton;
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -105,27 +106,6 @@ impl LoopFilterChoice {
     }
 
     pub const fn to_i32(self) -> i32 {
-        self as i32
-    }
-}
-
-#[derive(Clone, Copy)]
-enum EnvelopeChoice {
-    Adsr = 0,
-    Gain = 1,
-}
-impl EnvelopeChoice {
-    pub const CHOICES: &'static str = "ADSR|GAIN";
-
-    pub fn read_widget(c: &Choice) -> Option<EnvelopeChoice> {
-        match c.value() {
-            0 => Some(EnvelopeChoice::Adsr),
-            1 => Some(EnvelopeChoice::Gain),
-            _ => None,
-        }
-    }
-
-    pub fn to_i32(self) -> i32 {
         self as i32
     }
 }
@@ -466,46 +446,88 @@ impl BrrSettingsWidget {
     }
 }
 
-struct SampleEnvelopeWidgetState {
-    prev_adsr: String,
-    prev_gain: String,
-}
 pub struct SampleEnvelopeWidget {
-    choice: Choice,
-    argument: Input,
+    adsr_button: RadioRoundButton,
+    adsr_input: Input,
+    prev_adsr_value: String,
+    prev_adsr: Adsr,
 
-    state: Rc<RefCell<SampleEnvelopeWidgetState>>,
+    gain_button: RadioRoundButton,
+    gain_input: Input,
+    prev_gain_value: String,
+    prev_gain: Gain,
 }
 
 impl SampleEnvelopeWidget {
     pub fn new(form: &mut InputForm) -> Self {
-        let (mut choice, argument) = form.add_two_inputs::<Choice, Input>("Envelope:", 12);
+        let nrg = form.add_group("Envelope:", 1);
 
-        choice.add_choice(EnvelopeChoice::CHOICES);
+        let pad = nrg.pad();
+        let w = nrg.ch_width(12);
+        let w2 = nrg.ch_width(2);
+        let h = nrg.row_height();
+
+        let x = nrg.left_column_width() + pad;
+
+        let adsr_button = RadioRoundButton::new(x, 0, w, h, Some("ADSR"));
+        let x = x + pad + w;
+        let adsr_input = Input::new(x, 0, w, h, None);
+        let x = x + pad + w + w2;
+
+        let gain_button = RadioRoundButton::new(x, 0, w, h, Some("GAIN"));
+        let x = x + pad + w;
+        let gain_input = Input::new(x, 0, w, h, None);
+
+        nrg.end();
 
         Self {
-            choice,
-            argument,
-            state: Rc::new(RefCell::new(SampleEnvelopeWidgetState {
-                prev_adsr: DEFAULT_ADSR.to_gui_string(),
-                prev_gain: DEFAULT_GAIN.to_gui_string(),
-            })),
+            adsr_button,
+            adsr_input,
+            prev_adsr: DEFAULT_ADSR,
+            prev_adsr_value: DEFAULT_ADSR.to_gui_string(),
+
+            gain_button,
+            gain_input,
+            prev_gain: DEFAULT_GAIN,
+            prev_gain_value: DEFAULT_GAIN.to_gui_string(),
         }
     }
 
     pub fn set_editor<E: SampleWidgetEditor + 'static>(&mut self, editor: Rc<RefCell<E>>) {
-        self.choice.set_callback({
-            let mut argument = self.argument.clone();
-            let state = self.state.clone();
+        self.adsr_button.set_callback({
+            let mut adsr_input = self.adsr_input.clone();
+            let mut gain_input = self.gain_input.clone();
             let editor = editor.clone();
-            move |choice| {
-                let mut e = editor.borrow_mut();
-                Self::on_choice_changed(choice, &mut argument, &state.borrow());
-                e.on_finished_editing();
+            move |_| {
+                gain_input.deactivate();
+                adsr_input.activate();
+                editor.borrow_mut().on_finished_editing();
             }
         });
 
-        self.argument.handle({
+        self.gain_button.set_callback({
+            let mut adsr_input = self.adsr_input.clone();
+            let mut gain_input = self.gain_input.clone();
+            let editor = editor.clone();
+            move |_| {
+                adsr_input.deactivate();
+                gain_input.activate();
+                editor.borrow_mut().on_finished_editing();
+            }
+        });
+
+        self.adsr_input.handle({
+            let editor = editor.clone();
+            move |_, ev| {
+                if is_input_done_event(ev) {
+                    editor.borrow_mut().on_finished_editing();
+                }
+                false
+            }
+        });
+
+        self.gain_input.handle({
+            let editor = editor;
             move |_, ev| {
                 if is_input_done_event(ev) {
                     editor.borrow_mut().on_finished_editing();
@@ -515,69 +537,69 @@ impl SampleEnvelopeWidget {
         });
     }
 
-    pub fn read_or_reset(&mut self) -> Option<Envelope> {
-        let value = self.argument.value();
-
-        match EnvelopeChoice::read_widget(&self.choice) {
-            Some(EnvelopeChoice::Adsr) => match InputHelper::parse(value.clone()) {
-                Some(adsr) => {
-                    self.state.borrow_mut().prev_adsr = value;
-                    Some(Envelope::Adsr(adsr))
+    // Always returns an Envelope.
+    // I need to set the envelope if the envelope type changes.
+    pub fn read_or_reset(&mut self) -> Envelope {
+        if self.adsr_button.is_toggled() {
+            let value = self.adsr_input.value();
+            match value.parse() {
+                Ok(adsr) => {
+                    self.prev_adsr = adsr;
+                    self.prev_adsr_value = value;
+                    Envelope::Adsr(adsr)
                 }
-                None => {
-                    self.argument.set_value(&self.state.borrow().prev_adsr);
-                    None
+                Err(_) => {
+                    self.adsr_input.set_value(&self.prev_adsr_value);
+                    Envelope::Adsr(self.prev_adsr)
                 }
-            },
-            Some(EnvelopeChoice::Gain) => match InputHelper::parse(value.clone()) {
-                Some(gain) => {
-                    self.state.borrow_mut().prev_gain = value;
-                    Some(Envelope::Gain(gain))
+            }
+        } else {
+            let value = self.gain_input.value();
+            match value.parse() {
+                Ok(gain) => {
+                    self.prev_gain = gain;
+                    self.prev_gain_value = value;
+                    Envelope::Gain(gain)
                 }
-                None => {
-                    self.argument.set_value(&self.state.borrow().prev_gain);
-                    None
+                Err(_) => {
+                    self.gain_input.set_value(&self.prev_gain_value);
+                    Envelope::Gain(self.prev_gain)
                 }
-            },
-            None => None,
+            }
         }
     }
 
     pub fn clear_value(&mut self) {
-        self.choice.set_value(-1);
-        self.argument.set_value("");
+        self.adsr_input.set_value("");
+        self.gain_input.set_value("");
     }
 
-    pub fn set_value(&mut self, envelope: &Envelope) {
+    pub fn set_value(&mut self, envelope: Envelope) {
         match envelope {
             Envelope::Adsr(adsr) => {
-                self.choice.set_value(EnvelopeChoice::Adsr.to_i32());
-                InputHelper::set_widget_value(&mut self.argument, adsr);
+                self.prev_adsr = adsr;
+                self.prev_adsr_value = adsr.to_gui_string();
 
-                self.state.borrow_mut().prev_adsr = self.argument.value();
+                self.adsr_button.toggle(true);
+                self.adsr_input.set_value(&self.prev_adsr_value);
+                self.adsr_input.activate();
+
+                self.gain_button.toggle(false);
+                self.gain_input.set_value("");
+                self.gain_input.deactivate();
             }
             Envelope::Gain(gain) => {
-                self.choice.set_value(EnvelopeChoice::Gain.to_i32());
-                InputHelper::set_widget_value(&mut self.argument, gain);
+                self.prev_gain = gain;
+                self.prev_gain_value = gain.to_gui_string();
 
-                self.state.borrow_mut().prev_gain = self.argument.value();
+                self.gain_button.toggle(true);
+                self.gain_input.set_value(&self.prev_gain_value);
+                self.gain_input.activate();
+
+                self.adsr_button.toggle(false);
+                self.adsr_input.set_value("");
+                self.adsr_input.deactivate();
             }
         }
-    }
-
-    fn on_choice_changed(choice: &Choice, argument: &mut Input, state: &SampleEnvelopeWidgetState) {
-        let new_value = match EnvelopeChoice::read_widget(choice) {
-            Some(EnvelopeChoice::Adsr) => &state.prev_adsr,
-            Some(EnvelopeChoice::Gain) => &state.prev_adsr,
-            None => "",
-        };
-
-        argument.set_value(new_value);
-
-        // Select all
-        let _ = argument.set_position(0);
-        let _ = argument.set_mark(i32::MAX);
-
-        let _ = argument.take_focus();
     }
 }

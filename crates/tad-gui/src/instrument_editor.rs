@@ -361,7 +361,7 @@ impl InstrumentEditor {
             evaluator,
             ignore_gaussian_overflow,
             note_range: note_range?,
-            envelope: envelope?,
+            envelope,
             comment: comment?,
 
             // must be last (after the ?'s)
@@ -449,7 +449,7 @@ impl InstrumentEditor {
             .set_value(&data.loop_setting, data.evaluator);
         self.ignore_gaussian_overflow
             .set_value(data.ignore_gaussian_overflow);
-        self.envelope.set_value(&data.envelope);
+        self.envelope.set_value(data.envelope);
 
         self.brr_settings
             .update_loop_type_choice(SourceFileType::from_source(&data.source));
