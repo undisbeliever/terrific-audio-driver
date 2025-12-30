@@ -43,7 +43,7 @@ impl MonitorTimer {
 
         if !state.active {
             state.active = true;
-            state.last_timout_acknowloged = false;
+            state.last_timout_acknowloged = true;
 
             app::add_timeout3(state.timeout, {
                 let cloned_state = self.state.clone();
