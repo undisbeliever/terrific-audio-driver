@@ -19,7 +19,7 @@ const AUDIO_RAM_SIZE: usize = 1 << 16;
 pub const MAX_SONG_LENGTH: u32 = 999;
 pub const MAX_FADEOUT_MILLIS: u32 = 99999;
 
-pub const DEFAULT_FADEOUT: u32 = 0;
+const DEFAULT_LOOP_FADEOUT: u32 = 8000;
 
 pub const S_DSP_FLG_REGISTER: usize = 0x6C;
 pub const S_DSP_ESA_REGISTER: usize = 0x6D;
@@ -140,7 +140,10 @@ pub fn export_spc_file(
         // Fadeout length in milliseconds
         let fadeout_length = metadata
             .spc_fadeout_millis
-            .unwrap_or(DEFAULT_FADEOUT)
+            .unwrap_or_else(|| match song_data.is_looping() {
+                true => DEFAULT_LOOP_FADEOUT,
+                false => 0,
+            })
             .into();
         write_id666_number_safe(header, 0xac, 5, fadeout_length);
     }

@@ -88,6 +88,9 @@ GUI changes:
  * Added a lag counter to the Audio Driver State window (F11)
  * Added wavelength input to the instrument editor
 
+SPC export changes:
+ * The default fadeout is now 8 seconds if the song loops
+
 
 Version 0.1.1
 =============

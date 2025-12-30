@@ -88,7 +88,7 @@ The following will only affect exported .spc files:
     * The maximum value is 999 seconds
  * `#SpcFadeout` - The fadeout length in milliseconds
     * The maximum value is 99999 milliseconds
-    * The default fadeout is 0 (no fadeout)
+    * The default fadeout is 8000 (8 seconds) if the song loops, otherwise 0 if the song does not loop
 
 
 Instruments
