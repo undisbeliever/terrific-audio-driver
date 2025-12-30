@@ -24,7 +24,7 @@ use std::rc::Rc;
 
 use fltk::app;
 use fltk::button::{Button, CheckButton, RadioRoundButton};
-use fltk::enums::{Align, Color, Event};
+use fltk::enums::{Align, CallbackTrigger, Color, Event};
 use fltk::group::{Flex, Group};
 use fltk::input::{FloatInput, Input, IntInput};
 use fltk::misc::Spinner;
@@ -105,6 +105,7 @@ pub struct InstrumentEditor {
     name: Input,
     source: Output,
     freq: FloatInput,
+    wavelength: FloatInput,
     brr_settings: BrrSettingsWidget,
     ignore_gaussian_overflow: CheckButton,
     octave_range: RadioRoundButton,
@@ -123,7 +124,16 @@ impl InstrumentEditor {
 
         let name = form.add_input::<Input>("Name:");
         let source = form.add_two_inputs_right::<Output, Button>("Source:", 5);
-        let freq = form.add_two_inputs_right::<FloatInput, Button>("Frequency:", 5);
+
+        let mut freq_flex = form.flex_row("Frequency:");
+        let freq = FloatInput::default();
+        let w_label = label_packed("Hz   Wavelength: ");
+        freq_flex.fixed(&w_label, w_label.w());
+        let wavelength = FloatInput::default();
+        let mut analyse_button = Button::default();
+        freq_flex.fixed(&analyse_button, ch_units_to_width(&freq_flex, 5));
+        freq_flex.end();
+
         let brr_settings = BrrSettingsWidget::new(&mut form);
         let ignore_gaussian_overflow = form.add_checkbox_right("Ignore Gaussian overflow");
 
@@ -152,7 +162,6 @@ impl InstrumentEditor {
         let (group, form_height) = form.end();
 
         let (source, mut source_button) = source;
-        let (freq, mut analyse_button) = freq;
 
         let out = Rc::from(RefCell::new(Self {
             group,
@@ -162,6 +171,7 @@ impl InstrumentEditor {
             name,
             source,
             freq,
+            wavelength,
             brr_settings,
             ignore_gaussian_overflow,
             octave_range,
@@ -191,11 +201,20 @@ impl InstrumentEditor {
             add_callbacks!(name);
             add_callbacks!(source);
             add_callbacks!(freq);
+            add_callbacks!(wavelength);
             add_callbacks!(first_octave);
             add_callbacks!(last_octave);
             add_callbacks!(first_note);
             add_callbacks!(last_note);
             add_callbacks!(comment);
+
+            editor.wavelength.set_trigger(CallbackTrigger::Changed);
+            editor.wavelength.set_callback({
+                let s = out.clone();
+                move |_widget| {
+                    s.borrow_mut().on_wavelength_changed();
+                }
+            });
 
             editor.brr_settings.set_editor(out.clone());
             editor.envelope.set_editor(out.clone());
@@ -243,6 +262,15 @@ impl InstrumentEditor {
             s.borrow_mut().on_finished_editing();
         }
         false
+    }
+
+    fn on_wavelength_changed(&mut self) {
+        if self.selected_id.is_some() {
+            if let Ok(w) = self.wavelength.value().parse() {
+                self.data.set_wavelength(w);
+                InputHelper::set_widget_value(&mut self.freq, &self.data.freq);
+            }
+        }
     }
 
     fn source_button_clicked(&mut self) {
@@ -347,6 +375,7 @@ impl InstrumentEditor {
         self.name.set_value("");
         self.source.set_value("");
         self.freq.set_value("");
+        self.wavelength.set_value("");
         self.ignore_gaussian_overflow.clear();
         self.octave_range.set_value(false);
         self.first_octave.set_value("");
@@ -369,6 +398,15 @@ impl InstrumentEditor {
 
         set_widget!(name);
         set_widget!(freq);
+
+        // Silly hack to only show f64 precision if required
+        let w = data.wavelength();
+        if w.fract().abs() < 0.00001 {
+            self.wavelength.set_value(&format!("{}", w as i64));
+        } else {
+            self.wavelength.set_value(&format!("{:.2}", w));
+        }
+
         match data.note_range {
             data::InstrumentNoteRange::Octave { first, last } => {
                 self.octave_range.set_value(true);

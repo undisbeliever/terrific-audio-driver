@@ -385,6 +385,16 @@ pub struct Instrument {
     pub comment: Option<String>,
 }
 
+impl Instrument {
+    pub fn wavelength(&self) -> f64 {
+        crate::pitch_table::SPC_SAMPLE_RATE as f64 / self.freq
+    }
+
+    pub fn set_wavelength(&mut self, w: f64) {
+        self.freq = crate::pitch_table::SPC_SAMPLE_RATE as f64 / w;
+    }
+}
+
 #[derive(Deserialize, Serialize, Clone, PartialEq, Debug)]
 pub struct Sample {
     pub name: Name,

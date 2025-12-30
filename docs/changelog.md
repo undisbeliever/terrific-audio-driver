@@ -86,6 +86,7 @@ GUI changes:
  * Added a search bar to the editors (Ctrl+F)
  * Added find & replace to the editors (Ctrl+R)
  * Added a lag counter to the Audio Driver State window (F11)
+ * Added wavelength input to the instrument editor
 
 
 Version 0.1.1

@@ -430,6 +430,18 @@ impl InputForm {
         (w1, w2)
     }
 
+    pub fn flex_row(&mut self, text: &str) -> Flex {
+        let mut r = Flex::default().row();
+        self.group.fixed(&r, self.row_height);
+
+        let l = label(text);
+        r.fixed(&l, self.left_column_width);
+
+        self.n_rows += 1;
+
+        r
+    }
+
     pub fn add_group(&mut self, text: &str, n_rows: i32) -> InputFormGroup<'_> {
         let h = self.row_height * n_rows + self.group.pad() * (n_rows - 1);
 
