@@ -80,7 +80,7 @@ Embedding Audio Data
 
 There are two ways to embed audio data into a ROM:
 
-1. Automatically using `tad-compiler ca65-export`.
+1. Automatically using `tad-compiler tass-export`.
    `tad-compiler tass-export` will output:
     * a binary file that contains the audio-driver, common-audio data and song data.
     * an assembly file containing `.incbin` statements and a `LoadAudioData` subroutine.
