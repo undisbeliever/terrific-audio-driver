@@ -1,8 +1,8 @@
 Terrific Audio Driver Changelog
 ===============================
 
-Version 0.2.0 beta 2
-====================
+Version 0.2.0
+=============
 
 **BREAKING CHANGES:**
  * `_` and `__` MML transpose commands now change a semitone offset inside the audio driver.
