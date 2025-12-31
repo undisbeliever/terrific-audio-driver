@@ -676,8 +676,14 @@ int main(void) {
 
     consoleInit();
 
+#if _PVSNESLIB_MAJOR_ == 4 && _PVSNESLIB_MINOR_ >= 4
+    consoleSetTextMapPtr(VRAM_BG3_MAP_WADDR);
+    consoleSetTextGfxPtr(VRAM_BG3_TILE_WADDR);
+#else
     consoleSetTextVramBGAdr(VRAM_BG3_MAP_WADDR);
     consoleSetTextVramAdr(VRAM_BG3_TILE_WADDR);
+#endif
+
     consoleSetTextOffset(0x0000);
     consoleInitText(0, N_2BPP_PALETTES * 8, &Font_Tiles, &Font_Palette);
 

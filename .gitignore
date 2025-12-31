@@ -24,3 +24,6 @@ fuzz/target
 fuzz/corpus
 fuzz/artifacts
 
+/audio-driver/pvsneslib-api/sound-test/tiles/*.inc
+/audio-driver/pvsneslib-api/sound-test/tiles/*.as
+
