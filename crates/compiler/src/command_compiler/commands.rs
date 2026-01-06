@@ -14,6 +14,8 @@ use crate::bytecode::{
     TremoloQuarterWavelengthInTicks, VibratoDelayTicks, VibratoPitchOffsetPerTick,
     VibratoQuarterWavelengthInTicks, Volume, VolumeSlideAmount, VolumeSlideTicks,
 };
+use crate::command_compiler::analysis::SubroutineAnalysis;
+use crate::command_compiler::subroutines::SubroutineCommandsWithCompileOrder;
 use crate::driver_constants::{FIR_FILTER_SIZE, N_MUSIC_CHANNELS};
 use crate::echo::{EchoFeedback, EchoLength, EchoVolume, FirCoefficient, FirTap};
 use crate::envelope::{Adsr, Envelope, Gain, OptionalGain, TempGain};
@@ -29,6 +31,7 @@ use crate::value_newtypes::{i16_value_newtype, u8_value_newtype, SignedValueNewT
 use crate::{FilePos, FilePosRange};
 
 use std::cmp::min;
+use std::io::Write;
 
 pub const MAX_PORTAMENTO_SLIDE_TICKS: u16 = 16 * 1024;
 pub const MAX_BROKEN_CHORD_NOTES: usize = 128;
@@ -460,4 +463,54 @@ pub(crate) struct SoundEffectCommands<'a> {
     pub end_pos: FilePos,
     pub errors: Vec<ErrorWithPos<ChannelError>>,
     pub mml_tracker: Option<CursorTracker>,
+}
+
+// Prints the song commands and analysis to stderr.
+//
+// Panics if writing to io::stderr() fails.
+#[allow(dead_code)]
+pub(crate) fn debug_print_song_commands(
+    subroutines: &SubroutineCommandsWithCompileOrder,
+    channels: &[Option<ChannelCommands>; N_MUSIC_CHANNELS],
+    analysis: &SubroutineAnalysis,
+) {
+    let mut f = std::io::stderr().lock();
+
+    for s in subroutines.original_order() {
+        writeln!(f, "SUBROUTINE {} !{}", s.index, s.identifier.as_str()).unwrap();
+        writeln!(
+            f,
+            "  transpose_at_subroutine_start: {:?}",
+            analysis.transpose_at_subroutine_start(s.index)
+        )
+        .unwrap();
+        writeln!(
+            f,
+            "  subroutine_analysis: {:?}",
+            &analysis.subroutine_analysis[usize::from(s.index)]
+        )
+        .unwrap();
+
+        writeln!(f, "  {:?}", s.analysis).unwrap();
+        for e in &s.errors {
+            writeln!(f, "  {e:?}").unwrap();
+        }
+        for c in &s.commands {
+            writeln!(f, "  {:?}", c.command).unwrap();
+        }
+        writeln!(f).unwrap();
+    }
+
+    for (i, c) in channels.iter().enumerate() {
+        if let Some(c) = c {
+            writeln!(f, "CHANNEL {}", i).unwrap();
+            for e in &c.errors {
+                writeln!(f, "  {e:?}").unwrap();
+            }
+            for c in &c.commands {
+                writeln!(f, "  {:?}", c.command).unwrap();
+            }
+            writeln!(f).unwrap();
+        }
+    }
 }

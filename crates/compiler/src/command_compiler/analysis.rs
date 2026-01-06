@@ -503,7 +503,7 @@ fn analyse_subroutine_calls(
 }
 
 /// The driver transpose range at the start of the subroutine or channel
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct TransposeStartRange(TransposeRange);
 
 impl TransposeStartRange {

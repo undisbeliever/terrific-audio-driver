@@ -509,6 +509,8 @@ fn compile_song_commands(
     let mut channels = song.channels;
     let a = command_compiler::analysis::analyse(&mut subroutines, Some(&mut channels));
 
+    //command_compiler::commands::debug_print_song_commands(&subroutines, &channels, &a);
+
     let mut compiler = CommandCompiler::new(
         header_size,
         pitch_table,
