@@ -18,7 +18,7 @@ use crate::envelope::{Adsr, Envelope, Gain, OptionalGain, TempGain};
 use crate::errors::{BytecodeError, ChannelError, ValueError};
 use crate::identifier::MusicChannelIndex;
 use crate::invert_flags::InvertFlags;
-use crate::notes::{add_transpose_range_to_note_range, Note, NoteRange, LAST_NOTE_ID, N_NOTES};
+use crate::notes::{Note, NoteRange, LAST_NOTE_ID, N_NOTES};
 use crate::pitch_table::{InstrumentHintFreq, PitchTable, PitchTableOffset};
 use crate::subroutines::{CompiledSubroutines, GetSubroutineResult, Subroutine, SubroutineNameMap};
 use crate::time::{CommandTicks, TickClock, TickCounter, TickCounterWithLoopFlag};
@@ -1070,6 +1070,90 @@ impl SlurredNoteState {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+struct UnknownTransposeNoInstrumentNotes(RangeInclusive<i32>);
+
+impl UnknownTransposeNoInstrumentNotes {
+    fn new() -> Self {
+        #[allow(clippy::reversed_empty_ranges)]
+        Self(i32::MAX..=i32::MIN)
+    }
+
+    fn _extend_i32(&mut self, note: i32) {
+        let s = &mut self.0;
+
+        if s.is_empty() {
+            *s = note..=note;
+        } else if note < *s.start() {
+            *s = note..=*(s.end());
+        } else if note > *s.end() {
+            *s = *(s.start())..=note;
+        }
+    }
+
+    fn extend_note(&mut self, note: Note, min_transpose: i8, max_transpose: i8) {
+        assert!(min_transpose <= max_transpose);
+
+        self._extend_i32(note.i32_note_id() + i32::from(min_transpose));
+        self._extend_i32(note.i32_note_id() + i32::from(max_transpose));
+    }
+
+    fn unknown_instrument_subroutine_call(&mut self, sub: &Self, transpose: TransposeKnownResult) {
+        match transpose {
+            TransposeKnownResult::Known { min, max }
+            | TransposeKnownResult::Unknown { min, max } => {
+                assert!(min <= max);
+
+                let min_note = sub.0.start().saturating_add(min.into());
+                let max_note = sub.0.end().saturating_add(max.into());
+
+                debug_assert!(min_note <= sub.0.end().saturating_add(max.into()));
+                debug_assert!(max_note >= sub.0.end().saturating_add(min.into()));
+
+                self._extend_i32(min_note);
+                self._extend_i32(max_note);
+            }
+            TransposeKnownResult::Overflow => (),
+        }
+    }
+
+    fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
+    fn test_instrument_can_play_notes(
+        &self,
+        transpose: TransposeRange,
+        inst_note_range: RangeInclusive<Note>,
+    ) -> Result<(), BytecodeError> {
+        match transpose {
+            TransposeRange::Set { min, max } => {
+                let s = &self.0;
+                if !s.is_empty() {
+                    let i32_note_range =
+                        inst_note_range.start().i32_note_id()..=inst_note_range.end().i32_note_id();
+
+                    let start = s.start().saturating_add(min.into());
+                    let end = s.end().saturating_add(max.into());
+
+                    if i32_note_range.contains(&start) && i32_note_range.contains(&end) {
+                        Ok(())
+                    } else {
+                        Err(BytecodeError::TransposedSubroutineNotesOutOfRange {
+                            notes: s.clone(),
+                            transpose: min..=max,
+                            inst_range: inst_note_range,
+                        })
+                    }
+                } else {
+                    Ok(())
+                }
+            }
+            TransposeRange::Overflow => Ok(()),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct State {
     pub tick_counter: TickCounter,
     pub max_stack_depth: StackDepth,
@@ -1106,7 +1190,7 @@ pub struct State {
     pub(crate) instrument_hint: Option<(InstrumentId, Option<Envelope>, InstrumentHintFreq)>,
 
     pub(crate) no_instrument_notes: RangeInclusive<Note>,
-    pub(crate) unknown_transpose_no_instrument_notes: RangeInclusive<Note>,
+    unknown_transpose_no_instrument_notes: UnknownTransposeNoInstrumentNotes,
     pub(crate) no_instrument_pitch_or_noise: bool,
 }
 
@@ -1468,7 +1552,7 @@ impl<'a> Bytecode<'a> {
                 prev_slurred_note: SlurredNoteState::Unchanged,
                 instrument_hint: None,
                 no_instrument_notes: Note::MAX..=Note::MIN,
-                unknown_transpose_no_instrument_notes: Note::MAX..=Note::MIN,
+                unknown_transpose_no_instrument_notes: UnknownTransposeNoInstrumentNotes::new(),
                 no_instrument_pitch_or_noise: false,
             },
             loop_stack: Vec::new(),
@@ -1662,14 +1746,9 @@ impl<'a> Bytecode<'a> {
                     TransposeKnownResult::Unknown { min, max } => {
                         // Transpose range is unknown
                         // (in a subroutine and the transpose state is adjust)
-                        if let Ok((min, max)) = note.add_transpose_range(min, max) {
-                            self.state
-                                .unknown_transpose_no_instrument_notes
-                                .extend_note(min);
-                            self.state
-                                .unknown_transpose_no_instrument_notes
-                                .extend_note(max);
-                        }
+                        self.state
+                            .unknown_transpose_no_instrument_notes
+                            .extend_note(note, min, max);
                     }
                     TransposeKnownResult::Overflow => (),
                 }
@@ -2742,29 +2821,18 @@ impl<'a> Bytecode<'a> {
 
         if !s.unknown_transpose_no_instrument_notes.is_empty() {
             // Subroutine plays a note without an instrument and unknown transpose
-            let sub_notes = &s.unknown_transpose_no_instrument_notes;
-
             match old_instrument {
                 InstrumentState::Unset => match self.context {
                     BytecodeContext::SongChannel { .. } | BytecodeContext::SoundEffect => {
                         return Err(BytecodeError::SubroutinePlaysNotesWithNoInstrument)
                     }
                     BytecodeContext::SongSubroutine { .. } | BytecodeContext::SfxSubroutine => {
-                        match old_transpose_known {
-                            TransposeKnownResult::Known { min, max } => {
-                                let sub_notes =
-                                    add_transpose_range_to_note_range(sub_notes, min, max)?;
-                                self.state.no_instrument_notes.merge(&sub_notes);
-                            }
-                            TransposeKnownResult::Unknown { min, max } => {
-                                let sub_notes =
-                                    add_transpose_range_to_note_range(sub_notes, min, max)?;
-                                self.state
-                                    .unknown_transpose_no_instrument_notes
-                                    .merge(&sub_notes);
-                            }
-                            TransposeKnownResult::Overflow => (),
-                        }
+                        self.state
+                            .unknown_transpose_no_instrument_notes
+                            .unknown_instrument_subroutine_call(
+                                &s.unknown_transpose_no_instrument_notes,
+                                old_transpose_known,
+                            );
                     }
                     BytecodeContext::MmlPrefix => {
                         return Err(BytecodeError::SubroutineCallInMmlPrefix)
@@ -2778,21 +2846,10 @@ impl<'a> Bytecode<'a> {
 
                 InstrumentState::Multiple(old_inst_range)
                 | InstrumentState::Known(_, old_inst_range)
-                | InstrumentState::Hint(_, old_inst_range) => match old_transpose {
-                    TransposeRange::Set { min, max } => {
-                        let notes = add_transpose_range_to_note_range(sub_notes, min, max)?;
-                        if !old_inst_range.contains(notes.start())
-                            || !old_inst_range.contains(notes.end())
-                        {
-                            return Err(BytecodeError::TransposedSubroutineNotesOutOfRange {
-                                notes: s.unknown_transpose_no_instrument_notes.clone(),
-                                transpose: min..=max,
-                                inst_range: old_inst_range,
-                            });
-                        }
-                    }
-                    TransposeRange::Overflow => (),
-                },
+                | InstrumentState::Hint(_, old_inst_range) => {
+                    s.unknown_transpose_no_instrument_notes
+                        .test_instrument_can_play_notes(old_transpose, old_inst_range)?;
+                }
             }
         }
 

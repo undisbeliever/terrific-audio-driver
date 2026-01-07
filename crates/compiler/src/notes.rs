@@ -469,20 +469,6 @@ impl NoteRange for RangeInclusive<Note> {
     }
 }
 
-pub(crate) fn add_transpose_range_to_note_range(
-    note_range: &RangeInclusive<Note>,
-    tmin: i8,
-    tmax: i8,
-) -> Result<RangeInclusive<Note>, BytecodeError> {
-    if !note_range.is_empty() {
-        let start = note_range.start().add_transpose(tmin)?;
-        let end = note_range.end().add_transpose(tmax)?;
-        Ok(start..=end)
-    } else {
-        Ok(note_range.clone())
-    }
-}
-
 #[derive(Deserialize, Copy, Clone, Eq, PartialEq, PartialOrd, Ord, Debug)]
 #[serde(try_from = "u32")]
 pub struct Octave(u8);

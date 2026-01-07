@@ -367,7 +367,7 @@ pub enum BytecodeError {
         inst_range: RangeInclusive<Note>,
     },
     TransposedSubroutineNotesOutOfRange {
-        notes: RangeInclusive<Note>,
+        notes: RangeInclusive<i32>,
         transpose: RangeInclusive<i8>,
         inst_range: RangeInclusive<Note>,
     },
@@ -1539,14 +1539,14 @@ impl Display for BytecodeError {
                     write!(
                         f,
                         "transposed subroutine call plays an out of range note ({}",
-                        notes.start().note_id(),
+                        notes.start(),
                     )?
                 } else {
                     write!(
                         f,
                         "transposed subroutine call plays out of range notes ({} - {}",
-                        notes.start().note_id(),
-                        notes.end().note_id(),
+                        notes.start(),
+                        notes.end(),
                     )?
                 }
                 if transpose.start() == transpose.end() {

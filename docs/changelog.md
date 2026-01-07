@@ -1,6 +1,12 @@
 Terrific Audio Driver Changelog
 ===============================
 
+
+Version 0.2.1
+=============
+ * Fixed transposition analysis in the compiler
+
+
 Version 0.2.0
 =============
 

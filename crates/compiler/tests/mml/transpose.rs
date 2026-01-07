@@ -1417,7 +1417,7 @@ A @1 _+26 !s
 "##,
         11,
         BytecodeError::TransposedSubroutineNotesOutOfRange {
-            notes: note("c3")..=note("c5"),
+            notes: note_i32("c3")..=note_i32("c5"),
             transpose: 26..=26,
             inst_range: note("c2")..=note("b6"),
         }
@@ -1434,7 +1434,7 @@ A @1 _-17 !s
 "##,
         11,
         BytecodeError::TransposedSubroutineNotesOutOfRange {
-            notes: note("c3")..=note("c5"),
+            notes: note_i32("c3")..=note_i32("c5"),
             transpose: -17..=-17,
             inst_range: note("c2")..=note("b6"),
         }
@@ -1452,7 +1452,7 @@ A @1 _+10 [ __-7 !s ]5
 "##,
         18,
         BytecodeError::TransposedSubroutineNotesOutOfRange {
-            notes: note("c3")..=note("c5"),
+            notes: note_i32("c3")..=note_i32("c5"),
             transpose: -25..=3,
             inst_range: note("c2")..=note("b6"),
         }
@@ -1470,7 +1470,7 @@ A @1 _+4 [ !s ]5
 "##,
         12,
         BytecodeError::TransposedSubroutineNotesOutOfRange {
-            notes: note("c5")..=note("c5"),
+            notes: note_i32("c5")..=note_i32("c5"),
             transpose: -44..=4,
             inst_range: note("c2")..=note("b6"),
         }
@@ -1497,7 +1497,7 @@ A @14 _+2 !s @14 _-3 !s !s @135 _-3 !s
 "##,
         22,
         BytecodeError::TransposedSubroutineNotesOutOfRange {
-            notes: note("c4")..=note("d4"),
+            notes: note_i32("c4")..=note_i32("d4"),
             transpose: -3..=-3,
             inst_range: note("c4")..=note("b4"),
         }
@@ -1515,7 +1515,7 @@ A @14 _+2 [@14 !s __-3]2 @135 !s !s _-0 [@135 !s __-3]2
 "##,
         16,
         BytecodeError::TransposedSubroutineNotesOutOfRange {
-            notes: note("c4")..=note("d4"),
+            notes: note_i32("c4")..=note_i32("d4"),
             transpose: -1..=2,
             inst_range: note("c4")..=note("b4"),
         }
@@ -1619,7 +1619,7 @@ A @14 _+2 !s1 @14 _-3 !s1 !s1 @135 _-3 !s1
         23,
         BytecodeError::TransposedSubroutineNotesOutOfRange {
             // Only the first `o4c` and `o4d` is played with an unknown instrument
-            notes: note("c4")..=note("d4"),
+            notes: note_i32("c4")..=note_i32("d4"),
             transpose: -3..=-3,
             inst_range: note("c4")..=note("b4"),
         }
@@ -1639,7 +1639,7 @@ A @14 _+2 [@14 !s1 __-3]2 @135 !s1 !s1 _-0 [@135 !s1 __-3]2
         16,
         BytecodeError::TransposedSubroutineNotesOutOfRange {
             // Only the first `c4` and `d4` is played with an unknown instrument
-            notes: note("c4")..=note("d4"),
+            notes: note_i32("c4")..=note_i32("d4"),
             transpose: -2..=2,
             inst_range: note("c4")..=note("b4"),
         }
@@ -1722,7 +1722,7 @@ A @14 _+2 !s1 @14 _-3 !s1 !s1 @135 _-3 !s1
         23,
         BytecodeError::TransposedSubroutineNotesOutOfRange {
             // Only the first `o4c` in `s1` is invoked with an unknown instrument
-            notes: note("c4")..=note("c4"),
+            notes: note_i32("c4")..=note_i32("c4"),
             transpose: -3..=-3,
             inst_range: note("c4")..=note("b4"),
         }
@@ -1856,5 +1856,225 @@ fn looping_song_ends_with_transpose_state_adjust0_bugfix() {
             "end_loop 4",
             "play_note c4 24",
         ],
+    );
+}
+
+#[test]
+fn nested_transpose_bugfix() {
+    let dummy_data = dummy_data();
+
+    compile_mml(
+        r##"
+@1 dummy_instrument
+
+!plus o2 c d e __+6
+!minus o2 c d e __-6
+
+!1 [ !plus !plus ]4
+!2 [ !minus !minus ]4
+!3 !1 !2
+
+!4 [ !plus !plus ]4 [ !minus !minus ]4
+
+A @1 !3 !4
+"##,
+        &dummy_data,
+    );
+
+    // Test if `!3` can compile with unknown transpose
+    compile_mml(
+        r##"
+@1 dummy_instrument
+
+!plus o2 c d e __+6
+!minus o2 c d e __-6
+
+!1 [ !plus !plus ]4
+!2 [ !minus !minus ]4
+!3 !1 !2
+
+A @1 _+1 !3 _+2 !3
+"##,
+        &dummy_data,
+    );
+
+    // Test transpose before notes
+    // Also maximize transpose in A
+    assert_eq!(7, 11 - note_i32("e0"), "Channel A outer loop");
+    compile_mml(
+        r##"
+@1 dummy_instrument
+
+!plus __+6 o2 c d e
+!minus __-6 o2 c d e
+
+!1 [ !plus !plus ]4
+!2 [ !minus !minus ]4
+!3 !1 !2
+
+!4 [ !plus !plus ]4 [ !minus !minus ]4
+
+A @1 [ __+1 !3 !4 ]7
+"##,
+        &dummy_data,
+    );
+
+    // Test transpose loop inside `!minus` and `!plus`
+    assert_eq!(7, 11 - note_i32("e0"), "Channel A outer loop");
+    compile_mml(
+        r##"
+@1 dummy_instrument
+
+!plus [ o2 c d e __+2 ]3
+!minus [ o2 c d e __-2 ]3
+
+!1 [ !plus !plus ]4
+!2 [ !minus !minus ]4
+!3 !1 !2
+
+!4 [ !plus !plus ]4 [ !minus !minus ]4
+
+A @1 [ __+1 !3 !4 ]7
+"##,
+        &dummy_data,
+    );
+
+    // Test transpose loop inside `!minus` and `!plus`
+    assert_eq!(7, 11 - note_i32("e0"), "Channel A outer loop");
+    compile_mml(
+        r##"
+@1 dummy_instrument
+
+!plus [ __+1 o2 c d e ]6
+!minus [ __-1 o2 c d e ]6
+
+!1 [ !plus !plus ]4
+!2 [ !minus !minus ]4
+!3 !1 !2
+
+!4 [ !plus !plus ]4 [ !minus !minus ]4
+
+A @1 [ __+1 !3 !4 ]7
+"##,
+        &dummy_data,
+    );
+}
+
+#[test]
+fn nested_transpose_error_test() {
+    assert_one_channel_error_in_mml(
+        r##"
+@1 dummy_instrument
+
+!plus o2 c d e __+7
+!minus o2 c d e __-7
+
+!1 [ !plus !plus ]4
+!2 [ !minus !minus ]4
+!3 !1 !2
+
+A @1 !3
+"##,
+        "A",
+        6,
+        BytecodeError::TransposedSubroutineNotesOutOfRange {
+            notes: note_i32("c2")..=note_i32("e2") + 56,
+            transpose: 0..=0,
+            inst_range: note("c2")..=note("b6"),
+        }
+        .into(),
+    );
+
+    assert_one_channel_error_in_mml(
+        r##"
+@1 dummy_instrument
+
+!minus __-6 o2 c d e
+!plus __+8 o2 c d e
+
+!1 [ !minus ]6
+!2 [ !plus ]8
+!3 !1 !2
+
+A @1 !3
+"##,
+        "A",
+        6,
+        BytecodeError::TransposedSubroutineNotesOutOfRange {
+            notes: (note_i32("c2") - 36)..=(note_i32("e2") - 36 + 64),
+            transpose: 0..=0,
+            inst_range: note("c2")..=note("b6"),
+        }
+        .into(),
+    );
+
+    assert_one_channel_error_in_mml(
+        r##"
+@1 dummy_instrument
+
+!minus o2 [ c d e __-1 ]6
+!plus o2 [ c d e __+1 ]8
+
+!1 [ !minus ]6
+!2 [ !plus ]8
+!3 !1 !2
+
+A @1 !3
+"##,
+        "A",
+        6,
+        BytecodeError::TransposedSubroutineNotesOutOfRange {
+            notes: (note_i32("c2") - 36)..=(note_i32("e2") - 36 + 63),
+            transpose: 0..=0,
+            inst_range: note("c2")..=note("b6"),
+        }
+        .into(),
+    );
+
+    assert_one_channel_error_in_mml(
+        r##"
+@1 dummy_instrument
+
+!plus o2 c d e __+6
+!minus o2 c d e __-6
+
+!1 [ !plus ]5
+!2 [ !minus ]6
+!3 !1 !2
+
+A @1 !3 !3
+"##,
+        "A",
+        9,
+        BytecodeError::TransposedSubroutineNotesOutOfRange {
+            notes: note_i32("c2")..=note_i32("e2") + 30,
+            transpose: -6..=-6,
+            inst_range: note("c2")..=note("b6"),
+        }
+        .into(),
+    );
+
+    assert_one_channel_error_in_mml(
+        r##"
+@1 dummy_instrument
+
+!plus o2 c d e __+6
+!minus o2 c d e __-6
+
+!1 [ !plus ]6
+!2 [ !minus ]5
+!3 !1 !2 __+1
+
+; !3 adds +7 to transpose every loop
+A @1 _-10 [ !3 ]6
+"##,
+        "A",
+        13,
+        BytecodeError::TransposedSubroutineNotesOutOfRange {
+            notes: note_i32("c2")..=note_i32("e2") + 36,
+            transpose: -10..=25,
+            inst_range: note("c2")..=note("b6"),
+        }
+        .into(),
     );
 }

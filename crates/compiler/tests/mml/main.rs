@@ -701,3 +701,7 @@ fn dummy_note_instrument(
 fn note(note: &str) -> Note {
     Note::parse_bytecode_argument(note).unwrap()
 }
+
+fn note_i32(n: &str) -> i32 {
+    note(n).i32_note_id()
+}
