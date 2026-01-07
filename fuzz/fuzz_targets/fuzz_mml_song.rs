@@ -3,13 +3,13 @@
 use libfuzzer_sys::fuzz_target;
 
 use compiler::data::{
-    validate_instrument_and_sample_names, Instrument, InstrumentOrSample, LoopSetting, Name,
-    Sample, UniqueNamesList,
+    validate_instrument_and_sample_names, Instrument, InstrumentNoteRange, InstrumentOrSample,
+    LoopSetting, Name, Sample, UniqueNamesList,
 };
 use compiler::envelope::{Adsr, Envelope, Gain};
-use compiler::songs::compile_mml_song;
 use compiler::notes::Octave;
 use compiler::pitch_table::{build_pitch_table, PitchTable};
+use compiler::songs::compile_mml_song;
 
 use std::str::FromStr;
 use std::sync::OnceLock;
@@ -27,8 +27,10 @@ fn dummy_samples() -> &'static (UniqueNamesList<InstrumentOrSample>, PitchTable)
                 loop_setting: LoopSetting::None,
                 evaluator: Default::default(),
                 ignore_gaussian_overflow: false,
-                first_octave: Octave::MIN,
-                last_octave: Octave::try_new(5).unwrap(),
+                note_range: InstrumentNoteRange::Octave {
+                    first: Octave::MIN,
+                    last: Octave::try_new(5).unwrap(),
+                },
                 envelope: Envelope::Adsr(Adsr::try_new(7, 2, 3, 28).unwrap()),
                 comment: None,
             },
@@ -39,8 +41,10 @@ fn dummy_samples() -> &'static (UniqueNamesList<InstrumentOrSample>, PitchTable)
                 loop_setting: LoopSetting::None,
                 evaluator: Default::default(),
                 ignore_gaussian_overflow: false,
-                first_octave: Octave::try_new(2).unwrap(),
-                last_octave: Octave::try_new(6).unwrap(),
+                note_range: InstrumentNoteRange::Octave {
+                    first: Octave::try_new(2).unwrap(),
+                    last: Octave::try_new(6).unwrap(),
+                },
                 envelope: Envelope::Gain(Gain::new(127)),
                 comment: None,
             },
@@ -51,8 +55,10 @@ fn dummy_samples() -> &'static (UniqueNamesList<InstrumentOrSample>, PitchTable)
                 loop_setting: LoopSetting::None,
                 evaluator: Default::default(),
                 ignore_gaussian_overflow: false,
-                first_octave: Octave::try_new(3).unwrap(),
-                last_octave: Octave::MAX,
+                note_range: InstrumentNoteRange::Octave {
+                    first: Octave::try_new(3).unwrap(),
+                    last: Octave::MAX,
+                },
                 // Linear increase gain
                 envelope: Envelope::Gain(Gain::new(0b110_10000)),
                 comment: None,
@@ -64,8 +70,10 @@ fn dummy_samples() -> &'static (UniqueNamesList<InstrumentOrSample>, PitchTable)
                 loop_setting: LoopSetting::None,
                 evaluator: Default::default(),
                 ignore_gaussian_overflow: false,
-                first_octave: Octave::try_new(2).unwrap(),
-                last_octave: Octave::try_new(6).unwrap(),
+                note_range: InstrumentNoteRange::Octave {
+                    first: Octave::try_new(2).unwrap(),
+                    last: Octave::try_new(6).unwrap(),
+                },
                 // Bent-increase gain
                 envelope: Envelope::Gain(Gain::new(0b111_11000)),
                 comment: None,
@@ -77,8 +85,10 @@ fn dummy_samples() -> &'static (UniqueNamesList<InstrumentOrSample>, PitchTable)
                 loop_setting: LoopSetting::None,
                 evaluator: Default::default(),
                 ignore_gaussian_overflow: false,
-                first_octave: Octave::try_new(1).unwrap(),
-                last_octave: Octave::try_new(6).unwrap(),
+                note_range: InstrumentNoteRange::Octave {
+                    first: Octave::try_new(1).unwrap(),
+                    last: Octave::try_new(6).unwrap(),
+                },
                 envelope: Envelope::Adsr(Adsr::try_new(12, 2, 2, 16).unwrap()),
                 comment: None,
             },
