@@ -2078,3 +2078,54 @@ A @1 _-10 [ !3 ]6
         .into(),
     );
 }
+
+#[test]
+fn missing_subroutine_transpose_error_bugfix() {
+    assert_one_subroutine_error_in_mml(
+        r##"
+@1 dummy_instrument
+
+!s [__-7 o3c __-7]4
+A @1 !s
+"##,
+        "!s",
+        12,
+        BytecodeError::TransposedNoteOverflow(note("c3"), -49..=-7).into(),
+    );
+
+    // Test with transpose
+    assert_one_channel_error_in_mml(
+        r##"
+@1 dummy_instrument
+
+!s [__-7 o3c __-7]4
+A @1 _+1 !s
+"##,
+        "A",
+        10,
+        BytecodeError::TransposedSubroutineNotesOutOfRange {
+            notes: (note_i32("c3") - 49)..=(note_i32("c3") - 7),
+            transpose: 1..=1,
+            inst_range: note("c2")..=note("b6"),
+        }
+        .into(),
+    );
+
+    // Test with transpose range
+    assert_one_channel_error_in_mml(
+        r##"
+@1 dummy_instrument
+
+!s [__-7 o3c __-7]4
+A @1 [ __+1 !s __+56 ]4
+"##,
+        "A",
+        13,
+        BytecodeError::TransposedSubroutineNotesOutOfRange {
+            notes: (note_i32("c3") - 49)..=(note_i32("c3") - 7),
+            transpose: 1..=4,
+            inst_range: note("c2")..=note("b6"),
+        }
+        .into(),
+    );
+}

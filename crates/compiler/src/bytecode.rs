@@ -1738,10 +1738,9 @@ impl<'a> Bytecode<'a> {
                     TransposeKnownResult::Known { min, max } => {
                         // Transpose range is known
                         // (In a channel or in a subroutine with a set transpose)
-                        if let Ok((min, max)) = note.add_transpose_range(min, max) {
-                            self.state.no_instrument_notes.extend_note(min);
-                            self.state.no_instrument_notes.extend_note(max);
-                        }
+                        let (min, max) = note.add_transpose_range(min, max)?;
+                        self.state.no_instrument_notes.extend_note(min);
+                        self.state.no_instrument_notes.extend_note(max);
                     }
                     TransposeKnownResult::Unknown { min, max } => {
                         // Transpose range is unknown
