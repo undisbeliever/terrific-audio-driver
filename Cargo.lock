@@ -587,6 +587,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "spc700asm"
+version = "0.0.0"
+dependencies = [
+ "bitflags 2.10.0",
+]
+
+[[package]]
 name = "spectrum-analyzer"
 version = "1.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
