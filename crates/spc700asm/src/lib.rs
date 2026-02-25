@@ -7,3 +7,4 @@
 #![forbid(unsafe_code)]
 
 mod evaluator;
+mod instructions;
