@@ -31,6 +31,8 @@
 
 use bitflags::bitflags;
 
+use crate::state::{is_symbol_character, State};
+
 bitflags! {
     #[derive(Debug, PartialEq)]
     pub struct ExpressionError: u32 {
@@ -60,18 +62,17 @@ pub enum ExpressionResult {
     Error(ExpressionError),
 }
 
-// ::TODO move::
-pub fn is_symbol_character(c: u8) -> bool {
-    c.is_ascii_alphanumeric() || c == b'_'
-}
-
-struct Matcher<'a> {
+struct Matcher<'a, 'b> {
     s: &'a str,
+    state: &'b State,
 }
 
-impl<'a> Matcher<'a> {
-    fn new(s: &'a str) -> Self {
-        Self { s: s.trim_start() }
+impl<'a> Matcher<'a, '_> {
+    fn new<'b>(s: &'a str, state: &'b State) -> Matcher<'a, 'b> {
+        Matcher {
+            s: s.trim_start(),
+            state,
+        }
     }
 
     #[must_use]
@@ -231,8 +232,8 @@ fn comparison_operation(
 }
 
 #[allow(dead_code)] // ::TODO remove allow::
-pub fn evaluate(s: &str) -> ExpressionResult {
-    let mut m = Matcher::new(s);
+pub fn evaluate(s: &str, state: &State) -> ExpressionResult {
+    let mut m = Matcher::new(s, state);
 
     expression(&mut m)
 }
@@ -421,15 +422,15 @@ fn value(m: &mut Matcher) -> ExpressionResult {
             parse_binary(m.take_symbol_name())
         }
 
-        b'a'..=b'z' | b'A'..=b'Z' | b'_' => {
-            match m.take_symbol_name() {
-                "true" => ExpressionResult::Boolean(true),
-                "false" => ExpressionResult::Boolean(false),
+        b'a'..=b'z' | b'A'..=b'Z' | b'_' => match m.take_symbol_name() {
+            "true" => ExpressionResult::Boolean(true),
+            "false" => ExpressionResult::Boolean(false),
 
-                // ::TODO retrieve symbol value::
-                _ => ExpressionResult::Unknown,
-            }
-        }
+            sym => match m.state.get_symbol(sym) {
+                Some(v) => ExpressionResult::Value(v),
+                None => ExpressionResult::Unknown,
+            },
+        },
 
         b'(' => {
             m.consume("(");
@@ -513,13 +514,15 @@ fn parse_binary(s: &str) -> ExpressionResult {
 
 #[cfg(test)]
 mod tests {
+    use crate::state::State;
+
     use super::{evaluate, ExpressionError, ExpressionResult};
 
     macro_rules! test_integer_expression {
         ($expr:expr) => {
             let s = stringify![$expr];
             assert_eq!(
-                evaluate(s),
+                evaluate(s, &State::default()),
                 ExpressionResult::Value($expr),
                 "Expression mismatch {s}"
             );
@@ -527,7 +530,7 @@ mod tests {
         ($expr:literal, $value:expr) => {
             let s: &'static str = $expr;
             assert_eq!(
-                evaluate(s),
+                evaluate(s, &State::default()),
                 ExpressionResult::Value($value),
                 "Expression mismatch \"{s}\""
             );
@@ -538,7 +541,7 @@ mod tests {
         ($expr:expr) => {
             let s = stringify![$expr];
             assert_eq!(
-                evaluate(s),
+                evaluate(s, &State::default()),
                 ExpressionResult::Boolean($expr),
                 "Expression mismatch {s}"
             );
@@ -546,7 +549,7 @@ mod tests {
         ($expr:literal, $value:expr) => {
             let s: &'static str = $expr;
             assert_eq!(
-                evaluate(s),
+                evaluate(s, &State::default()),
                 ExpressionResult::Boolean($value),
                 "Expression mismatch {s}"
             );
@@ -710,110 +713,194 @@ mod tests {
 
     #[test]
     fn test_literal_overflow() {
+        let state = State::default();
+
         assert_eq!(
-            evaluate("00009223372036854775807"),
+            evaluate("00009223372036854775807", &state),
             ExpressionResult::Value(i64::MAX)
         );
         assert_eq!(
-            evaluate("9223372036854775807"),
+            evaluate("9223372036854775807", &state),
             ExpressionResult::Value(i64::MAX)
         );
         assert_eq!(
-            evaluate("9223372036854775808"),
+            evaluate("9223372036854775808", &state),
             ExpressionResult::Error(ExpressionError::InvalidDecimalLiteral)
         );
 
         assert_eq!(
-            evaluate("9_223_372_036_854_775_807"),
+            evaluate("9_223_372_036_854_775_807", &state),
             ExpressionResult::Value(i64::MAX)
         );
         assert_eq!(
-            evaluate("9_223_372_036_854_775_808"),
+            evaluate("9_223_372_036_854_775_808", &state),
             ExpressionResult::Error(ExpressionError::InvalidDecimalLiteral)
         );
 
         assert_eq!(
-            evaluate("-9223372036854775807"),
+            evaluate("-9223372036854775807", &state),
             ExpressionResult::Value(-i64::MAX)
         );
         assert_eq!(
-            evaluate("-9223372036854775808"),
+            evaluate("-9223372036854775808", &state),
             ExpressionResult::Error(ExpressionError::InvalidDecimalLiteral)
         );
 
         assert_eq!(
-            evaluate("10000000000000000000"),
+            evaluate("10000000000000000000", &state),
             ExpressionResult::Error(ExpressionError::InvalidDecimalLiteral)
         );
         assert_eq!(
-            evaluate("-10000000000000000000"),
+            evaluate("-10000000000000000000", &state),
             ExpressionResult::Error(ExpressionError::InvalidDecimalLiteral)
         );
 
         assert_eq!(
-            evaluate("$7fffffffffffffff"),
+            evaluate("$7fffffffffffffff", &state),
             ExpressionResult::Value(i64::MAX)
         );
         assert_eq!(
-            evaluate("$8000000000000000"),
+            evaluate("$8000000000000000", &state),
             ExpressionResult::Error(ExpressionError::InvalidHexadecimalLiteral)
         );
         assert_eq!(
-            evaluate("$ffffffffffffffff"),
-            ExpressionResult::Error(ExpressionError::InvalidHexadecimalLiteral)
-        );
-
-        assert_eq!(
-            evaluate("$0000_7fffffff_ffffffff"),
-            ExpressionResult::Value(i64::MAX)
-        );
-        assert_eq!(
-            evaluate("$7fffffff_ffffffff"),
-            ExpressionResult::Value(i64::MAX)
-        );
-        assert_eq!(
-            evaluate("$80000000_00000000"),
-            ExpressionResult::Error(ExpressionError::InvalidHexadecimalLiteral)
-        );
-        assert_eq!(
-            evaluate("$ffffffff_ffffffff_"),
+            evaluate("$ffffffffffffffff", &state),
             ExpressionResult::Error(ExpressionError::InvalidHexadecimalLiteral)
         );
 
         assert_eq!(
-            evaluate("%00000000111111111111111111111111111111111111111111111111111111111111111"),
+            evaluate("$0000_7fffffff_ffffffff", &state),
             ExpressionResult::Value(i64::MAX)
         );
         assert_eq!(
-            evaluate("%111111111111111111111111111111111111111111111111111111111111111"),
+            evaluate("$7fffffff_ffffffff", &state),
             ExpressionResult::Value(i64::MAX)
         );
         assert_eq!(
-            evaluate("%1000000000000000000000000000000000000000000000000000000000000000"),
+            evaluate("$80000000_00000000", &state),
+            ExpressionResult::Error(ExpressionError::InvalidHexadecimalLiteral)
+        );
+        assert_eq!(
+            evaluate("$ffffffff_ffffffff_", &state),
+            ExpressionResult::Error(ExpressionError::InvalidHexadecimalLiteral)
+        );
+
+        assert_eq!(
+            evaluate(
+                "%00000000111111111111111111111111111111111111111111111111111111111111111",
+                &state
+            ),
+            ExpressionResult::Value(i64::MAX)
+        );
+        assert_eq!(
+            evaluate(
+                "%111111111111111111111111111111111111111111111111111111111111111",
+                &state
+            ),
+            ExpressionResult::Value(i64::MAX)
+        );
+        assert_eq!(
+            evaluate(
+                "%1000000000000000000000000000000000000000000000000000000000000000",
+                &state
+            ),
             ExpressionResult::Error(ExpressionError::InvalidBinaryLiteral)
         );
         assert_eq!(
-            evaluate("%11111111111111111111111111111111111111111111111111111111111111111"),
+            evaluate(
+                "%11111111111111111111111111111111111111111111111111111111111111111",
+                &state
+            ),
             ExpressionResult::Error(ExpressionError::InvalidBinaryLiteral)
         );
     }
 
     #[test]
     fn unknown_value() {
+        let state = State::default();
+
         assert_eq!(
-            evaluate("(unknown + 1) * 2 / 3)"),
+            evaluate("(unknown + 1) * 2 / 3)", &state),
             ExpressionResult::Unknown
         );
-        assert_eq!(evaluate("(0 + 1) * 2 / u"), ExpressionResult::Unknown);
+        assert_eq!(
+            evaluate("(0 + 1) * 2 / u", &state),
+            ExpressionResult::Unknown
+        );
 
-        assert_eq!(evaluate("unknown && false"), ExpressionResult::Unknown);
-        assert_eq!(evaluate("true || unknown"), ExpressionResult::Unknown);
-        assert_eq!(evaluate("true ^ unknown"), ExpressionResult::Unknown);
+        assert_eq!(
+            evaluate("unknown && false", &state),
+            ExpressionResult::Unknown
+        );
+        assert_eq!(
+            evaluate("true || unknown", &state),
+            ExpressionResult::Unknown
+        );
+        assert_eq!(
+            evaluate("true ^ unknown", &state),
+            ExpressionResult::Unknown
+        );
 
-        assert_eq!(evaluate("unknown == unknown"), ExpressionResult::Unknown);
-        assert_eq!(evaluate("1 == unknown"), ExpressionResult::Unknown);
-        assert_eq!(evaluate("unknown != 2"), ExpressionResult::Unknown);
-        assert_eq!(evaluate("true == unknown"), ExpressionResult::Unknown);
-        assert_eq!(evaluate("unknown == false"), ExpressionResult::Unknown);
+        assert_eq!(
+            evaluate("unknown == unknown", &state),
+            ExpressionResult::Unknown
+        );
+        assert_eq!(evaluate("1 == unknown", &state), ExpressionResult::Unknown);
+        assert_eq!(evaluate("unknown != 2", &state), ExpressionResult::Unknown);
+        assert_eq!(
+            evaluate("true == unknown", &state),
+            ExpressionResult::Unknown
+        );
+        assert_eq!(
+            evaluate("unknown == false", &state),
+            ExpressionResult::Unknown
+        );
+    }
+
+    #[test]
+    fn known_symbols() {
+        let state = {
+            let mut s = State::default();
+            s.add_symbol("one", 1).unwrap();
+            s.add_symbol("two", 2).unwrap();
+            s.add_symbol("three", 3).unwrap();
+            s.add_symbol("minus_seven", -7).unwrap();
+            s
+        };
+
+        assert_eq!(evaluate("one", &state), ExpressionResult::Value(1));
+        assert_eq!(evaluate("two", &state), ExpressionResult::Value(2));
+        assert_eq!(evaluate("minus_seven", &state), ExpressionResult::Value(-7));
+
+        assert_eq!(
+            evaluate("one + two * minus_seven / three)", &state),
+            ExpressionResult::Value(1 + 2 * -7 / 3)
+        );
+
+        assert_eq!(
+            evaluate("(unknown + one) * two / three)", &state),
+            ExpressionResult::Unknown
+        );
+        assert_eq!(
+            evaluate("(5 + one) * two / three)", &state),
+            ExpressionResult::Value((5 + 1) * 2 / 3)
+        );
+
+        assert_eq!(
+            evaluate("1 == one", &state),
+            ExpressionResult::Boolean(true)
+        );
+        assert_eq!(
+            evaluate("two == 2", &state),
+            ExpressionResult::Boolean(true)
+        );
+        assert_eq!(
+            evaluate("1 == three", &state),
+            ExpressionResult::Boolean(false)
+        );
+        assert_eq!(
+            evaluate("three < 2", &state),
+            ExpressionResult::Boolean(false)
+        );
     }
 }

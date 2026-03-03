@@ -4,7 +4,10 @@
 //
 // SPDX-License-Identifier: MIT
 
-use crate::evaluator::{evaluate, ExpressionError, ExpressionResult};
+use crate::{
+    evaluator::{evaluate, ExpressionError, ExpressionResult},
+    state::{DirectPageFlag, State},
+};
 
 #[derive(Debug, PartialEq)]
 pub enum AddressingModeError<'a> {
@@ -85,25 +88,11 @@ impl AddressingMode {
     }
 }
 
-#[derive(Default, Debug, Clone, Copy, PartialEq)]
-pub enum DirectPageFlag {
-    #[default]
-    Zero,
-    One,
-}
-
-// ::TODO proper symbol management::
-#[derive(Default)]
-struct Dummy {
-    direct_page: DirectPageFlag,
-}
-
-#[allow(unused_variables)] // ::TODO remove::
 fn parse_immediate_value<'a>(
     s: &'a str,
-    symbols: &Dummy,
+    symbols: &State,
 ) -> Result<U8Value, AddressingModeError<'a>> {
-    match evaluate(s) {
+    match evaluate(s, symbols) {
         ExpressionResult::Value(value) => match value.try_into() {
             Ok(v) => Ok(U8Value::Known(v)),
             Err(_) => Err(AddressingModeError::DpAddressOutOfBounds(s, value)),
@@ -114,9 +103,8 @@ fn parse_immediate_value<'a>(
     }
 }
 
-#[allow(unused_variables)] // ::TODO remove::
-fn parse_abs_address<'a>(s: &'a str, symbols: &Dummy) -> Result<U16Value, AddressingModeError<'a>> {
-    match evaluate(s) {
+fn parse_abs_address<'a>(s: &'a str, symbols: &State) -> Result<U16Value, AddressingModeError<'a>> {
+    match evaluate(s, symbols) {
         ExpressionResult::Value(value) => match value.try_into() {
             Ok(v) => Ok(U16Value::Known(v)),
             Err(_) => Err(AddressingModeError::AbsoluteAddressOutOfBounds(s, value)),
@@ -133,12 +121,11 @@ enum DpOrAbs {
     Abs(U16Value),
 }
 
-#[allow(unused_variables)] // ::TODO remove::
 fn parse_dp_or_abs_address<'a>(
     s: &'a str,
-    symbols: &Dummy,
+    symbols: &State,
 ) -> Result<DpOrAbs, AddressingModeError<'a>> {
-    match evaluate(s) {
+    match evaluate(s, symbols) {
         ExpressionResult::Value(value) => match u16::try_from(value) {
             Ok(addr) => {
                 if symbols.direct_page == DirectPageFlag::Zero && addr < 0x100 {
@@ -159,9 +146,8 @@ fn parse_dp_or_abs_address<'a>(
     }
 }
 
-#[allow(unused_variables)] // ::TODO remove::
-fn parse_dp_address<'a>(s: &'a str, symbols: &Dummy) -> Result<u8, AddressingModeError<'a>> {
-    match evaluate(s) {
+fn parse_dp_address<'a>(s: &'a str, symbols: &State) -> Result<u8, AddressingModeError<'a>> {
+    match evaluate(s, symbols) {
         ExpressionResult::Value(value) => match u16::try_from(value) {
             Ok(addr) => {
                 if symbols.direct_page == DirectPageFlag::Zero && addr < 0x100 {
@@ -227,7 +213,7 @@ fn strip_plus_index_suffix<'a>(s: &'a str, register: &'static str) -> Option<&'a
 #[allow(dead_code)] // ::TODO remove::
 fn parse_addressing_mode<'a>(
     input: &'a str,
-    symbols: &Dummy,
+    symbols: &State,
 ) -> Result<AddressingMode, AddressingModeError<'a>> {
     match input {
         "A" => Ok(AddressingMode::A),
@@ -258,8 +244,7 @@ fn parse_addressing_mode<'a>(
                     )?)),
                     _ => Err(AddressingModeError::UnknownAddressingMode(input)),
                 }
-            }
-            else if let Some(s) = s.strip_prefix("/") {
+            } else if let Some(s) = s.strip_prefix("/") {
                 Ok(AddressingMode::NotAbs(parse_abs_address(s, symbols)?))
             } else if let Some(s) = strip_plus_index_suffix(s, "X") {
                 match parse_dp_or_abs_address(s, symbols)? {
@@ -281,18 +266,18 @@ fn parse_addressing_mode<'a>(
 #[cfg(test)]
 mod addressing_mode_tests {
     use super::{
-        parse_addressing_mode, AddressingMode, AddressingModeError, DirectPageFlag, Dummy,
+        parse_addressing_mode, AddressingMode, AddressingModeError, DirectPageFlag, State,
         U16Value, U8Value,
     };
 
     macro_rules! test_ok {
         ($s:literal, $v:expr) => {
-            assert_eq!(parse_addressing_mode($s, &Dummy::default()), Ok($v))
+            assert_eq!(parse_addressing_mode($s, &State::default()), Ok($v))
         };
     }
     macro_rules! test_err {
         ($s:literal, Err($v:expr)) => {
-            assert_eq!(parse_addressing_mode($s, &Dummy::default()), Err($v))
+            assert_eq!(parse_addressing_mode($s, &State::default()), Err($v))
         };
     }
 
@@ -450,17 +435,15 @@ mod addressing_mode_tests {
 
     #[test]
     fn direct_page_set() {
+        let state = {
+            let mut s = State::default();
+            s.direct_page = DirectPageFlag::One;
+            s
+        };
+
         macro_rules! test {
             ($s:literal, $v:expr) => {
-                assert_eq!(
-                    parse_addressing_mode(
-                        $s,
-                        &Dummy {
-                            direct_page: DirectPageFlag::One
-                        }
-                    ),
-                    $v
-                )
+                assert_eq!(parse_addressing_mode($s, &state), $v)
             };
         }
 
