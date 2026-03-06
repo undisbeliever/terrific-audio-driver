@@ -59,6 +59,11 @@ enum AddressingMode {
 
     NotAbs(U16Value),
 
+    // jmp
+    AbsIndirectX(U16Value),
+    // For completeness
+    AbsIndirectY(U16Value),
+
     Immediate(U8Value),
 }
 
@@ -85,6 +90,8 @@ impl AddressingMode {
             Self::AbsX(_) => "abs+X",
             Self::AbsY(_) => "abs+Y",
             Self::NotAbs(_) => "/abs",
+            Self::AbsIndirectX(_) => "[abs+X]",
+            Self::AbsIndirectY(_) => "[abs]+Y",
             Self::Immediate(_) => "#imm",
         }
     }
@@ -268,11 +275,58 @@ fn parse_addressing_mode<'a>(
     }
 }
 
+#[allow(dead_code)] // ::TODO remove::
+fn parse_no_dp_addressing_mode<'a>(
+    input: &'a str,
+    symbols: &State,
+) -> Result<AddressingMode, AddressingModeError<'a>> {
+    match input {
+        "A" => Ok(AddressingMode::A),
+        "X" => Ok(AddressingMode::X),
+        "Y" => Ok(AddressingMode::Y),
+        "YA" => Ok(AddressingMode::Ya),
+        "SP" => Ok(AddressingMode::Sp),
+        "PSW" => Ok(AddressingMode::Psw),
+        "C" => Ok(AddressingMode::C),
+
+        "(X)" => Ok(AddressingMode::XIndirect),
+        "(X)+" => Ok(AddressingMode::XIndirectIncrement),
+        "(Y)" => Ok(AddressingMode::YIndirect),
+
+        s => {
+            if let Some(s) = s.strip_prefix("#") {
+                Ok(AddressingMode::Immediate(parse_immediate_value(
+                    s, symbols,
+                )?))
+            } else if let Some(s) = s.strip_prefix("[") {
+                let (suffix, expr) = strip_final_three_chars(s);
+                match suffix {
+                    [b'+', b'X', b']'] => Ok(AddressingMode::AbsIndirectX(parse_abs_address(
+                        expr, symbols,
+                    )?)),
+                    [b']', b'+', b'Y'] => Ok(AddressingMode::AbsIndirectY(parse_abs_address(
+                        expr, symbols,
+                    )?)),
+                    _ => Err(AddressingModeError::UnknownAddressingMode(input)),
+                }
+            } else if let Some(s) = s.strip_prefix("/") {
+                Ok(AddressingMode::NotAbs(parse_abs_address(s, symbols)?))
+            } else if let Some(s) = strip_plus_index_suffix(s, "X") {
+                Ok(AddressingMode::AbsX(parse_abs_address(s, symbols)?))
+            } else if let Some(s) = strip_plus_index_suffix(s, "Y") {
+                Ok(AddressingMode::AbsY(parse_abs_address(s, symbols)?))
+            } else {
+                Ok(AddressingMode::Abs(parse_abs_address(s, symbols)?))
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod addressing_mode_tests {
     use super::{
-        parse_addressing_mode, AddressingMode, AddressingModeError, DirectPageFlag, State,
-        U16Value, U8Value,
+        parse_addressing_mode, parse_no_dp_addressing_mode, AddressingMode, AddressingModeError,
+        DirectPageFlag, State, U16Value, U8Value,
     };
 
     macro_rules! test_ok {
@@ -332,6 +386,43 @@ mod addressing_mode_tests {
 
         test_ok!("[80+5]+Y", AddressingMode::DpIndirectY(85));
         test_ok!("[  80 + 5 ] + Y ", AddressingMode::DpIndirectY(85));
+    }
+
+    #[test]
+    fn abs_indirect_is_err() {
+        test_err!(
+            "[$500+X]",
+            Err(AddressingModeError::DpOutOfBounds(
+                "$500",
+                DirectPageFlag::Zero,
+                0x500
+            ))
+        );
+        test_err!(
+            "[ $500 ] + Y",
+            Err(AddressingModeError::DpOutOfBounds(
+                "$500",
+                DirectPageFlag::Zero,
+                0x500
+            ))
+        );
+
+        test_err!(
+            "[$500+2+X]",
+            Err(AddressingModeError::DpOutOfBounds(
+                "$500+2",
+                DirectPageFlag::Zero,
+                0x502
+            ))
+        );
+        test_err!(
+            "[ $500 + 1 ] + Y",
+            Err(AddressingModeError::DpOutOfBounds(
+                "$500 + 1",
+                DirectPageFlag::Zero,
+                0x501
+            ))
+        );
     }
 
     #[test]
@@ -516,6 +607,230 @@ mod addressing_mode_tests {
                 DirectPageFlag::One,
                 750
             ))
+        );
+    }
+
+    #[test]
+    fn test_no_dp_addressing_modes() {
+        let state0 = State::default();
+
+        let state1 = {
+            let mut s = State::default();
+            s.direct_page = DirectPageFlag::One;
+            s
+        };
+
+        macro_rules! test {
+            ($s:literal, $v:expr) => {
+                assert_eq!(parse_no_dp_addressing_mode($s, &state0), $v);
+                assert_eq!(parse_no_dp_addressing_mode($s, &state1), $v);
+            };
+        }
+
+        test!("A", Ok(AddressingMode::A));
+        test!("X", Ok(AddressingMode::X));
+        test!("Y", Ok(AddressingMode::Y));
+        test!("YA", Ok(AddressingMode::Ya));
+        test!("SP", Ok(AddressingMode::Sp));
+        test!("PSW", Ok(AddressingMode::Psw));
+        test!("C", Ok(AddressingMode::C));
+
+        test!("(X)", Ok(AddressingMode::XIndirect));
+        test!("(X)+", Ok(AddressingMode::XIndirectIncrement));
+        test!("(Y)", Ok(AddressingMode::YIndirect));
+
+        test!("#123", Ok(AddressingMode::Immediate(U8Value::Known(123))));
+
+        test!("$00", Ok(AddressingMode::Abs(U16Value::Known(0))));
+        test!("$ff", Ok(AddressingMode::Abs(U16Value::Known(0xff))));
+        test!("$100", Ok(AddressingMode::Abs(U16Value::Known(0x100))));
+        test!("$200", Ok(AddressingMode::Abs(U16Value::Known(0x200))));
+
+        test!("128+X", Ok(AddressingMode::AbsX(U16Value::Known(128))));
+        test!("$ff+X", Ok(AddressingMode::AbsX(U16Value::Known(0xff))));
+        test!("$100+X", Ok(AddressingMode::AbsX(U16Value::Known(0x100))));
+        test!("$200+X", Ok(AddressingMode::AbsX(U16Value::Known(0x200))));
+        test!("$100+50+X", Ok(AddressingMode::AbsX(U16Value::Known(306))));
+
+        test!("128+Y", Ok(AddressingMode::AbsY(U16Value::Known(128))));
+        test!("$ff+Y", Ok(AddressingMode::AbsY(U16Value::Known(0xff))));
+        test!("$100+Y", Ok(AddressingMode::AbsY(U16Value::Known(0x100))));
+        test!("$200+Y", Ok(AddressingMode::AbsY(U16Value::Known(0x200))));
+        test!("$100+50+Y", Ok(AddressingMode::AbsY(U16Value::Known(306))));
+
+        test!(
+            "[$00 + X]",
+            Ok(AddressingMode::AbsIndirectX(U16Value::Known(0)))
+        );
+        test!(
+            "[$ff + X]",
+            Ok(AddressingMode::AbsIndirectX(U16Value::Known(0xff)))
+        );
+        test!(
+            "[$1ff + X]",
+            Ok(AddressingMode::AbsIndirectX(U16Value::Known(0x1ff)))
+        );
+        test!(
+            "[$200 + X]",
+            Ok(AddressingMode::AbsIndirectX(U16Value::Known(0x200)))
+        );
+
+        test!(
+            "[$00]+Y",
+            Ok(AddressingMode::AbsIndirectY(U16Value::Known(0)))
+        );
+        test!(
+            "[$ff]+Y",
+            Ok(AddressingMode::AbsIndirectY(U16Value::Known(0xff)))
+        );
+        test!(
+            "[$1ff]+Y",
+            Ok(AddressingMode::AbsIndirectY(U16Value::Known(0x1ff)))
+        );
+        test!(
+            "[$200]+Y",
+            Ok(AddressingMode::AbsIndirectY(U16Value::Known(0x200)))
+        );
+    }
+
+    #[test]
+    fn test_no_dp_addressing_modes_known_symbols() {
+        let state0 = {
+            let mut s = State::default();
+            s.direct_page = DirectPageFlag::Zero;
+            s.add_symbol("s1", 0x80).unwrap();
+            s.add_symbol("s2", 0x180).unwrap();
+            s
+        };
+
+        let state1 = {
+            let mut s = State::default();
+            s.direct_page = DirectPageFlag::One;
+            s.add_symbol("s1", 0x80).unwrap();
+            s.add_symbol("s2", 0x180).unwrap();
+            s
+        };
+
+        macro_rules! test {
+            ($s:literal, $v:expr) => {
+                assert_eq!(parse_no_dp_addressing_mode($s, &state0), $v);
+                assert_eq!(parse_no_dp_addressing_mode($s, &state1), $v);
+            };
+        }
+
+        test!("#s1", Ok(AddressingMode::Immediate(U8Value::Known(0x80))));
+
+        test!("s1", Ok(AddressingMode::Abs(U16Value::Known(0x0080))));
+        test!("s2", Ok(AddressingMode::Abs(U16Value::Known(0x0180))));
+
+        test!("s1+X", Ok(AddressingMode::AbsX(U16Value::Known(0x0080))));
+        test!("s2+X", Ok(AddressingMode::AbsX(U16Value::Known(0x0180))));
+        test!("s2+1+X", Ok(AddressingMode::AbsX(U16Value::Known(0x0181))));
+
+        test!("s1+Y", Ok(AddressingMode::AbsY(U16Value::Known(0x0080))));
+        test!("s2+Y", Ok(AddressingMode::AbsY(U16Value::Known(0x0180))));
+        test!("s2+1+Y", Ok(AddressingMode::AbsY(U16Value::Known(0x0181))));
+
+        test!(
+            "[s1 + X]",
+            Ok(AddressingMode::AbsIndirectX(U16Value::Known(0x0080)))
+        );
+        test!(
+            "[s2 + X]",
+            Ok(AddressingMode::AbsIndirectX(U16Value::Known(0x0180)))
+        );
+        test!(
+            "[s1 + 1 + X]",
+            Ok(AddressingMode::AbsIndirectX(U16Value::Known(0x0081)))
+        );
+
+        test!(
+            "[s1]+Y",
+            Ok(AddressingMode::AbsIndirectY(U16Value::Known(0x0080)))
+        );
+        test!(
+            "[s2]+Y",
+            Ok(AddressingMode::AbsIndirectY(U16Value::Known(0x0180)))
+        );
+        test!(
+            "[s1+1]+Y",
+            Ok(AddressingMode::AbsIndirectY(U16Value::Known(0x0081)))
+        );
+    }
+
+    #[test]
+    fn test_no_dp_addressing_modes_unknown_symbols() {
+        let state0 = {
+            let mut s = State::default();
+            s.direct_page = DirectPageFlag::Zero;
+            s
+        };
+
+        let state1 = {
+            let mut s = State::default();
+            s.direct_page = DirectPageFlag::One;
+            s
+        };
+
+        macro_rules! test {
+            ($s:literal, $v:expr) => {
+                assert_eq!(parse_no_dp_addressing_mode($s, &state0), $v);
+                assert_eq!(parse_no_dp_addressing_mode($s, &state1), $v);
+            };
+        }
+
+        test!(
+            "#u",
+            Ok(AddressingMode::Immediate(U8Value::Unknown("u".to_owned())))
+        );
+
+        test!(
+            "u",
+            Ok(AddressingMode::Abs(U16Value::Unknown("u".to_owned())))
+        );
+
+        test!(
+            "u+X",
+            Ok(AddressingMode::AbsX(U16Value::Unknown("u".to_owned())))
+        );
+        test!(
+            "u+1+X",
+            Ok(AddressingMode::AbsX(U16Value::Unknown("u+1".to_owned())))
+        );
+
+        test!(
+            "u +Y",
+            Ok(AddressingMode::AbsY(U16Value::Unknown("u".to_owned())))
+        );
+        test!(
+            "u + 1 + Y",
+            Ok(AddressingMode::AbsY(U16Value::Unknown("u + 1".to_owned())))
+        );
+
+        test!(
+            "[u + X]",
+            Ok(AddressingMode::AbsIndirectX(U16Value::Unknown(
+                "u".to_owned()
+            )))
+        );
+        test!(
+            "[u + 1 + X]",
+            Ok(AddressingMode::AbsIndirectX(U16Value::Unknown(
+                "u + 1".to_owned()
+            )))
+        );
+
+        test!(
+            "[u]+Y",
+            Ok(AddressingMode::AbsIndirectY(U16Value::Unknown(
+                "u".to_owned()
+            )))
+        );
+        test!(
+            "[u+1]+Y",
+            Ok(AddressingMode::AbsIndirectY(U16Value::Unknown(
+                "u+1".to_owned()
+            )))
         );
     }
 }
