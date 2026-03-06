@@ -48,6 +48,7 @@ enum AddressingMode {
 
     Dp(u8),
     DpX(u8),
+    DpY(u8),
 
     DpIndirectX(u8),
     DpIndirectY(u8),
@@ -77,6 +78,7 @@ impl AddressingMode {
             Self::YIndirect => "(Y)",
             Self::Dp(_) => "dp",
             Self::DpX(_) => "dp+X",
+            Self::DpY(_) => "dp+Y",
             Self::DpIndirectX(_) => "[dp+X]",
             Self::DpIndirectY(_) => "[dp]+Y",
             Self::Abs(_) => "abs",
@@ -252,7 +254,10 @@ fn parse_addressing_mode<'a>(
                     DpOrAbs::Abs(a) => Ok(AddressingMode::AbsX(a)),
                 }
             } else if let Some(s) = strip_plus_index_suffix(s, "Y") {
-                Ok(AddressingMode::AbsY(parse_abs_address(s, symbols)?))
+                match parse_dp_or_abs_address(s, symbols)? {
+                    DpOrAbs::Dp(a) => Ok(AddressingMode::DpY(a)),
+                    DpOrAbs::Abs(a) => Ok(AddressingMode::AbsY(a)),
+                }
             } else {
                 match parse_dp_or_abs_address(s, symbols)? {
                     DpOrAbs::Dp(a) => Ok(AddressingMode::Dp(a)),
@@ -405,15 +410,13 @@ mod addressing_mode_tests {
 
     #[test]
     fn y_indexed() {
-        test_ok!("128+Y", AddressingMode::AbsY(U16Value::Known(128)));
-        test_ok!("$ff+Y", AddressingMode::AbsY(U16Value::Known(0xff)));
+        test_ok!("128+Y", AddressingMode::DpY(128));
+        test_ok!("$ff+Y", AddressingMode::DpY(0xff));
+
         test_ok!("$100 + Y", AddressingMode::AbsY(U16Value::Known(0x100)));
         test_ok!("$ffff +Y", AddressingMode::AbsY(U16Value::Known(0xffff)));
 
-        test_ok!(
-            "25 + 35 + 12 + Y",
-            AddressingMode::AbsY(U16Value::Known(25 + 35 + 12))
-        );
+        test_ok!("25 + 35 + 12 + Y", AddressingMode::DpY(25 + 35 + 12));
         test_ok!(
             "100 + 100 + 100 + Y",
             AddressingMode::AbsY(U16Value::Known(300))
