@@ -9,3 +9,4 @@
 mod evaluator;
 mod instructions;
 mod state;
+mod string;
