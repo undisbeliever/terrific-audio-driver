@@ -1,5 +1,7 @@
 //! Assembler state
 
+use crate::evaluator::{evaluate, ExpressionError, ExpressionResult};
+
 use std::collections::{hash_map::Entry, HashMap};
 
 #[derive(Debug)]
@@ -13,7 +15,16 @@ pub const MAX_ABS_BIT_ADDR: u16 = u16::MAX >> 3;
 
 #[derive(Debug, PartialEq)]
 #[allow(dead_code)] // ::TODO remove::
-pub struct AbsBitOutOfRangeError(pub u16);
+pub enum OutputError {
+    AbsBitOutOfRange(u16),
+    ExpressionError(String, ExpressionError),
+    NotANumber(String),
+    ExpressionHasUnknownValue(String),
+
+    OutOfRange { value: i64, min: i32, max: i32 },
+    BranchOutOfRange(i64),
+    InvalidPcall(i64),
+}
 
 #[derive(Default, Debug, Clone, Copy, PartialEq)]
 pub enum DirectPageFlag {
@@ -44,7 +55,7 @@ pub enum U16Value {
     Unknown(String),
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct BitArgument(u8);
 
 impl TryFrom<u16> for BitArgument {
@@ -77,15 +88,38 @@ impl BitArgument {
     }
 }
 
-#[derive(Default)]
+#[derive(Clone)]
+enum PendingOutput {
+    U8,
+    U16,
+    AbsBit(BitArgument),
+    RelativeBranch,
+    Pcall,
+}
+
 pub struct State {
     pub direct_page: DirectPageFlag,
 
     symbols: HashMap<String, i64>,
     output: Vec<u8>,
+
+    pc_base: u16,
+
+    pending_output: Vec<(usize, String, PendingOutput)>,
 }
 
 impl State {
+    #[allow(dead_code)] // ::TODO remove::
+    pub fn new(pc_base: u16) -> Self {
+        Self {
+            direct_page: DirectPageFlag::Zero,
+            symbols: HashMap::new(),
+            output: Vec::new(),
+            pc_base,
+            pending_output: Vec::new(),
+        }
+    }
+
     #[allow(dead_code)] // ::TODO remove::
     pub fn add_symbol(&mut self, name: impl Into<String>, value: i64) -> Result<(), SymbolError> {
         let name = name.into();
@@ -118,6 +152,10 @@ impl State {
         }
     }
 
+    fn push_pending_output(&mut self, expression: String, p: PendingOutput) {
+        self.pending_output.push((self.output.len(), expression, p))
+    }
+
     pub fn write_u8(&mut self, value: u8) {
         self.output.push(value);
     }
@@ -131,8 +169,8 @@ impl State {
             U8Value::Known(v) => {
                 self.output.push(v);
             }
-            U8Value::Unknown(_expression) => {
-                // ::TODO store `expression`::
+            U8Value::Unknown(expression) => {
+                self.push_pending_output(expression, PendingOutput::U8);
                 self.output.push(0);
             }
         }
@@ -145,8 +183,8 @@ impl State {
 
                 self.output.extend(&[l, h]);
             }
-            U16Value::Unknown(_expression) => {
-                // ::TODO store `expression`::
+            U16Value::Unknown(expression) => {
+                self.push_pending_output(expression, PendingOutput::U16);
                 self.output.extend(&[0, 0]);
             }
         }
@@ -172,7 +210,7 @@ impl State {
         opcode: u8,
         value: U16Value,
         bit: BitArgument,
-    ) -> Result<(), AbsBitOutOfRangeError> {
+    ) -> Result<(), OutputError> {
         self.output.push(opcode);
 
         match value {
@@ -186,12 +224,11 @@ impl State {
                     // Populate dummy value so instruction length is correct
                     self.output.extend(&[0, 0]);
 
-                    Err(AbsBitOutOfRangeError(addr))
+                    Err(OutputError::AbsBitOutOfRange(addr))
                 }
             }
-            U16Value::Unknown(_expression) => {
-                // ::TODO store `expression` and `bit`::
-
+            U16Value::Unknown(expression) => {
+                self.push_pending_output(expression, PendingOutput::AbsBit(bit));
                 self.output.extend(&[0, 0]);
                 Ok(())
             }
@@ -199,17 +236,85 @@ impl State {
     }
 
     pub fn write_relative_goto(&mut self, expression: &str) {
-        // ::TODO store `expression`::
-        let _ = expression;
+        self.push_pending_output(expression.to_owned(), PendingOutput::RelativeBranch);
 
         self.output.push(0);
     }
 
     pub fn write_pcall_address(&mut self, expression: &str) {
-        // ::TODO store `expression`::
-        let _ = expression;
+        self.push_pending_output(expression.to_owned(), PendingOutput::Pcall);
 
         self.output.push(0xff);
+    }
+}
+
+#[allow(dead_code)] // ::TODO remove::
+pub fn process_pending_output_expressions(s: &mut State) -> Result<(), Vec<OutputError>> {
+    let mut errors = Vec::new();
+
+    for (pos, expr, p) in std::mem::take(&mut s.pending_output) {
+        match evaluate(&expr, s) {
+            ExpressionResult::Value(value) => match p {
+                PendingOutput::U8 => match u8::try_from(value) {
+                    Ok(v) => s.output[pos] = v,
+                    Err(_) => errors.push(OutputError::OutOfRange {
+                        value,
+                        min: u8::MIN.into(),
+                        max: u8::MAX.into(),
+                    }),
+                },
+                PendingOutput::U16 => match u16::try_from(value) {
+                    Ok(v) => {
+                        s.output[pos..pos + 2].copy_from_slice(&v.to_le_bytes());
+                    }
+                    Err(_) => errors.push(OutputError::OutOfRange {
+                        value,
+                        min: u16::MIN.into(),
+                        max: u16::MAX.into(),
+                    }),
+                },
+                PendingOutput::AbsBit(bit) => match u16::try_from(value) {
+                    Ok(v) if v <= MAX_ABS_BIT_ADDR => {
+                        let v = v | (u16::from(bit.0) << 13);
+                        s.output[pos..pos + 2].copy_from_slice(&v.to_le_bytes());
+                    }
+                    _ => errors.push(OutputError::OutOfRange {
+                        value,
+                        min: 0,
+                        max: MAX_ABS_BIT_ADDR.into(),
+                    }),
+                },
+                PendingOutput::RelativeBranch => {
+                    let pc =
+                        i64::try_from(pos + usize::from(s.pc_base) + 1).expect("output too big");
+
+                    let value = value - pc;
+                    match i8::try_from(value) {
+                        Ok(v) => s.output[pos] = v.to_le_bytes()[0],
+                        Err(_) => errors.push(OutputError::BranchOutOfRange(value)),
+                    }
+                }
+                PendingOutput::Pcall => match u16::try_from(value) {
+                    Ok(v) if v & 0xff00 == 0xff00 => {
+                        s.output[pos] = v.to_le_bytes()[0];
+                    }
+                    _ => errors.push(OutputError::InvalidPcall(value)),
+                },
+            },
+            crate::evaluator::ExpressionResult::Boolean(_) => {
+                errors.push(OutputError::NotANumber(expr))
+            }
+            crate::evaluator::ExpressionResult::Unknown => {
+                errors.push(OutputError::ExpressionHasUnknownValue(expr))
+            }
+            ExpressionResult::Error(e) => errors.push(OutputError::ExpressionError(expr, e)),
+        }
+    }
+
+    if errors.is_empty() {
+        Ok(())
+    } else {
+        Err(errors)
     }
 }
 
@@ -220,7 +325,9 @@ impl Clone for State {
         Self {
             direct_page: self.direct_page.clone(),
             symbols: self.symbols.clone(),
+            pc_base: self.pc_base,
             output: self.output.clone(),
+            pending_output: self.pending_output.clone(),
         }
     }
 }

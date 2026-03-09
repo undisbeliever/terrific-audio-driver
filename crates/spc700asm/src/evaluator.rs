@@ -522,7 +522,7 @@ mod tests {
         ($expr:expr) => {
             let s = stringify![$expr];
             assert_eq!(
-                evaluate(s, &State::default()),
+                evaluate(s, &State::new(0x200)),
                 ExpressionResult::Value($expr),
                 "Expression mismatch {s}"
             );
@@ -530,7 +530,7 @@ mod tests {
         ($expr:literal, $value:expr) => {
             let s: &'static str = $expr;
             assert_eq!(
-                evaluate(s, &State::default()),
+                evaluate(s, &State::new(0x200)),
                 ExpressionResult::Value($value),
                 "Expression mismatch \"{s}\""
             );
@@ -541,7 +541,7 @@ mod tests {
         ($expr:expr) => {
             let s = stringify![$expr];
             assert_eq!(
-                evaluate(s, &State::default()),
+                evaluate(s, &State::new(0x200)),
                 ExpressionResult::Boolean($expr),
                 "Expression mismatch {s}"
             );
@@ -549,7 +549,7 @@ mod tests {
         ($expr:literal, $value:expr) => {
             let s: &'static str = $expr;
             assert_eq!(
-                evaluate(s, &State::default()),
+                evaluate(s, &State::new(0x200)),
                 ExpressionResult::Boolean($value),
                 "Expression mismatch {s}"
             );
@@ -713,7 +713,7 @@ mod tests {
 
     #[test]
     fn test_literal_overflow() {
-        let state = State::default();
+        let state = State::new(0x200);
 
         assert_eq!(
             evaluate("00009223372036854775807", &state),
@@ -817,7 +817,7 @@ mod tests {
 
     #[test]
     fn unknown_value() {
-        let state = State::default();
+        let state = State::new(0x200);
 
         assert_eq!(
             evaluate("(unknown + 1) * 2 / 3)", &state),
@@ -860,7 +860,7 @@ mod tests {
     #[test]
     fn known_symbols() {
         let state = {
-            let mut s = State::default();
+            let mut s = State::new(0x200);
             s.add_symbol("one", 1).unwrap();
             s.add_symbol("two", 2).unwrap();
             s.add_symbol("three", 3).unwrap();

@@ -6,7 +6,7 @@
 
 use crate::{
     evaluator::{evaluate, ExpressionError, ExpressionResult},
-    state::{AbsBitOutOfRangeError, BitArgument, DirectPageFlag, State, U16Value, U8Value},
+    state::{BitArgument, DirectPageFlag, OutputError, State, U16Value, U8Value},
     string::{comma_iter, split_first_word},
 };
 
@@ -25,6 +25,7 @@ pub enum AddressingModeError<'a> {
 pub enum InstructionError<'a> {
     AddressingModeError(AddressingModeError<'a>),
     ExpressionError(&'a str, ExpressionError),
+    OutputError(OutputError),
 
     UnknownInstruction(&'a str),
     UnknownInstructionArguments(&'a str, String),
@@ -32,19 +33,17 @@ pub enum InstructionError<'a> {
     // bit must be known and `0..=7`
     InvalidBitInstructionBit,
     InvalidTcallArgument,
-
-    AbsBitError(AbsBitOutOfRangeError),
-}
-
-impl<'a> From<AbsBitOutOfRangeError> for InstructionError<'a> {
-    fn from(v: AbsBitOutOfRangeError) -> Self {
-        Self::AbsBitError(v)
-    }
 }
 
 impl<'a> From<AddressingModeError<'a>> for InstructionError<'a> {
     fn from(v: AddressingModeError<'a>) -> Self {
         Self::AddressingModeError(v)
+    }
+}
+
+impl From<OutputError> for InstructionError<'_> {
+    fn from(v: OutputError) -> Self {
+        Self::OutputError(v)
     }
 }
 
@@ -1116,12 +1115,12 @@ mod addressing_mode_tests {
 
     macro_rules! test_ok {
         ($s:literal, $v:expr) => {
-            assert_eq!(parse_addressing_mode($s, &State::default()), Ok($v))
+            assert_eq!(parse_addressing_mode($s, &State::new(0x200)), Ok($v))
         };
     }
     macro_rules! test_err {
         ($s:literal, Err($v:expr)) => {
-            assert_eq!(parse_addressing_mode($s, &State::default()), Err($v))
+            assert_eq!(parse_addressing_mode($s, &State::new(0x200)), Err($v))
         };
     }
 
@@ -1315,7 +1314,7 @@ mod addressing_mode_tests {
     #[test]
     fn direct_page_set() {
         let state = {
-            let mut s = State::default();
+            let mut s = State::new(0x200);
             s.direct_page = DirectPageFlag::One;
             s
         };
@@ -1397,10 +1396,10 @@ mod addressing_mode_tests {
 
     #[test]
     fn test_no_dp_addressing_modes() {
-        let state0 = State::default();
+        let state0 = State::new(0x200);
 
         let state1 = {
-            let mut s = State::default();
+            let mut s = State::new(0x200);
             s.direct_page = DirectPageFlag::One;
             s
         };
@@ -1481,7 +1480,7 @@ mod addressing_mode_tests {
     #[test]
     fn test_no_dp_addressing_modes_known_symbols() {
         let state0 = {
-            let mut s = State::default();
+            let mut s = State::new(0x200);
             s.direct_page = DirectPageFlag::Zero;
             s.add_symbol("s1", 0x80).unwrap();
             s.add_symbol("s2", 0x180).unwrap();
@@ -1489,7 +1488,7 @@ mod addressing_mode_tests {
         };
 
         let state1 = {
-            let mut s = State::default();
+            let mut s = State::new(0x200);
             s.direct_page = DirectPageFlag::One;
             s.add_symbol("s1", 0x80).unwrap();
             s.add_symbol("s2", 0x180).unwrap();
@@ -1546,13 +1545,13 @@ mod addressing_mode_tests {
     #[test]
     fn test_no_dp_addressing_modes_unknown_symbols() {
         let state0 = {
-            let mut s = State::default();
+            let mut s = State::new(0x200);
             s.direct_page = DirectPageFlag::Zero;
             s
         };
 
         let state1 = {
-            let mut s = State::default();
+            let mut s = State::new(0x200);
             s.direct_page = DirectPageFlag::One;
             s
         };
@@ -1625,11 +1624,10 @@ mod addressing_mode_tests {
 // https://snes.nesdev.org/wiki/SPC-700_instruction_set
 #[cfg(test)]
 mod instruction_tests {
-    use std::panic::Location;
+    use super::{process_instruction, DirectPageFlag, InstructionError, OutputError, State};
 
-    use super::{
-        process_instruction, AbsBitOutOfRangeError, DirectPageFlag, InstructionError, State,
-    };
+    use crate::state::process_pending_output_expressions;
+    use std::panic::Location;
 
     #[track_caller]
     fn test_sym(line: &str, state: &State, expected: &[u8]) {
@@ -1647,7 +1645,7 @@ mod instruction_tests {
 
     #[track_caller]
     fn test(line: &str, expected: &[u8]) {
-        let mut state = State::default();
+        let mut state = State::new(0x200);
 
         process_instruction(line, &mut state).unwrap();
 
@@ -1661,7 +1659,7 @@ mod instruction_tests {
 
     #[track_caller]
     fn test_result(line: &str, expected: Result<(), InstructionError>) {
-        let mut state = State::default();
+        let mut state = State::new(0x200);
 
         assert_eq!(process_instruction(line, &mut state), expected);
     }
@@ -1886,7 +1884,7 @@ mod instruction_tests {
     #[test]
     fn instructions_with_known_symbols() {
         let s = {
-            let mut s = State::default();
+            let mut s = State::new(0x200);
             s.add_symbol("imm", 0x80).unwrap();
             s.add_symbol("dp", 0x10).unwrap();
             s.add_symbol("abs", 0x3ff).unwrap();
@@ -2126,7 +2124,7 @@ mod instruction_tests {
     fn bit_instructions_known_symbols() {
         for b in 0..=7 {
             let s = {
-                let mut s = State::default();
+                let mut s = State::new(0x200);
                 s.add_symbol("dp", 0xff).unwrap();
                 s.add_symbol("bit", b.into()).unwrap();
                 s
@@ -2175,7 +2173,7 @@ mod instruction_tests {
     fn memory_bit_instruction_known_symbols() {
         for b in 0..=7 {
             let s = {
-                let mut s = State::default();
+                let mut s = State::new(0x200);
                 s.add_symbol("abs", 0x3ff).unwrap();
                 s.add_symbol("bit", b.into()).unwrap();
                 s
@@ -2290,7 +2288,7 @@ mod instruction_tests {
     #[test]
     fn mov_dp_y_direct_page_clear() {
         let s = {
-            let mut s = State::default();
+            let mut s = State::new(0x200);
             s.direct_page = DirectPageFlag::Zero;
             s.add_symbol("dp", 0x080).unwrap();
             s
@@ -2305,7 +2303,7 @@ mod instruction_tests {
     #[test]
     fn mov_dp_y_direct_page_set() {
         let s = {
-            let mut s = State::default();
+            let mut s = State::new(0x200);
             s.direct_page = DirectPageFlag::One;
             s.add_symbol("dp", 0x180).unwrap();
             s
@@ -2396,13 +2394,189 @@ mod instruction_tests {
         test_result("mov1 $1fff, 3, C", Ok(()));
         test_result(
             "mov1 $2000, 3, C",
-            Err(AbsBitOutOfRangeError(0x2000).into()),
+            Err(OutputError::AbsBitOutOfRange(0x2000).into()),
         );
 
         test_result("mov1 C, $1fff, 3", Ok(()));
         test_result(
             "mov1 C, $2000, 3",
-            Err(AbsBitOutOfRangeError(0x2000).into()),
+            Err(OutputError::AbsBitOutOfRange(0x2000).into()),
+        );
+    }
+
+    #[test]
+    fn forward_references() {
+        fn t(line: &str, expected: &[u8]) {
+            let mut s = State::new(0x200);
+            assert_eq!(process_instruction(line, &mut s), Ok(()));
+
+            assert_ne!(s.output(), expected, "asm: {line:?}");
+
+            s.add_symbol("imm".to_owned(), 10).unwrap();
+            s.add_symbol("abs".to_owned(), 0xfff).unwrap();
+
+            process_pending_output_expressions(&mut s).unwrap();
+
+            assert_eq!(s.output(), expected, "asm: {line:?}");
+        }
+
+        t("mov A, #imm", &[0xE8, 10]);
+        t("mov A, abs", &[0xE5, 0xff, 0x0f]);
+        t("mov A, abs+X", &[0xF5, 0xff, 0x0f]);
+        t("mov A, abs+Y", &[0xF6, 0xff, 0x0f]);
+        t("mov X, #imm", &[0xCD, 10]);
+        t("mov X, abs", &[0xE9, 0xff, 0x0f]);
+        t("mov Y, #imm", &[0x8D, 10]);
+        t("mov Y, abs", &[0xEC, 0xff, 0x0f]);
+        t("mov abs, A", &[0xC5, 0xff, 0x0f]);
+        t("mov abs+X, A", &[0xD5, 0xff, 0x0f]);
+        t("mov abs+Y, A", &[0xD6, 0xff, 0x0f]);
+        t("mov abs, X", &[0xC9, 0xff, 0x0f]);
+        t("mov abs, Y", &[0xCC, 0xff, 0x0f]);
+        t("adc A, #imm", &[0x88, 10]);
+        t("adc A, abs", &[0x85, 0xff, 0x0f]);
+        t("adc A, abs+X", &[0x95, 0xff, 0x0f]);
+        t("adc A, abs+Y", &[0x96, 0xff, 0x0f]);
+        t("sbc A, #imm", &[0xA8, 10]);
+        t("sbc A, abs", &[0xA5, 0xff, 0x0f]);
+        t("sbc A, abs+X", &[0xB5, 0xff, 0x0f]);
+        t("sbc A, abs+Y", &[0xB6, 0xff, 0x0f]);
+        t("cmp A, #imm", &[0x68, 10]);
+        t("cmp A, abs", &[0x65, 0xff, 0x0f]);
+        t("cmp A, abs+X", &[0x75, 0xff, 0x0f]);
+        t("cmp A, abs+Y", &[0x76, 0xff, 0x0f]);
+        t("cmp X, #imm", &[0xC8, 10]);
+        t("cmp X, abs", &[0x1E, 0xff, 0x0f]);
+        t("cmp Y, #imm", &[0xAD, 10]);
+        t("cmp Y, abs", &[0x5E, 0xff, 0x0f]);
+        t("and A, #imm", &[0x28, 10]);
+        t("and A, abs", &[0x25, 0xff, 0x0f]);
+        t("and A, abs+X", &[0x35, 0xff, 0x0f]);
+        t("and A, abs+Y", &[0x36, 0xff, 0x0f]);
+        t("or A, #imm", &[0x08, 10]);
+        t("or A, abs", &[0x05, 0xff, 0x0f]);
+        t("or A, abs+X", &[0x15, 0xff, 0x0f]);
+        t("or A, abs+Y", &[0x16, 0xff, 0x0f]);
+        t("eor A, #imm", &[0x48, 10]);
+        t("eor A, abs", &[0x45, 0xff, 0x0f]);
+        t("eor A, abs+X", &[0x55, 0xff, 0x0f]);
+        t("eor A, abs+Y", &[0x56, 0xff, 0x0f]);
+        t("inc abs", &[0xAC, 0xff, 0x0f]);
+        t("dec abs", &[0x8C, 0xff, 0x0f]);
+        t("asl abs", &[0x0C, 0xff, 0x0f]);
+        t("lsr abs", &[0x4C, 0xff, 0x0f]);
+        t("rol abs", &[0x2C, 0xff, 0x0f]);
+        t("ror abs", &[0x6C, 0xff, 0x0f]);
+        t("jmp abs", &[0x5F, 0xff, 0x0f]);
+        t("jmp [abs+X]", &[0x1F, 0xff, 0x0f]);
+        t("call abs", &[0x3F, 0xff, 0x0f]);
+        t("tset1 abs", &[0x0E, 0xff, 0x0f]);
+        t("tclr1 abs", &[0x4E, 0xff, 0x0f]);
+
+        t("tset1 abs", &[0x0E, 0xff, 0x0f]);
+        t("tclr1 abs", &[0x4E, 0xff, 0x0f]);
+
+        t("and1 C, abs, 0", &[0x4A, 0xff, 0x0f]);
+        t("and1 C, /abs, 0", &[0x6A, 0xff, 0x0f]);
+        t("or1 C, abs, 0", &[0x0A, 0xff, 0x0f]);
+        t("or1 C, /abs, 0", &[0x2A, 0xff, 0x0f]);
+        t("eor1 C, abs, 0", &[0x8A, 0xff, 0x0f]);
+        t("not1 abs, 0", &[0xEA, 0xff, 0x0f]);
+        t("mov1 C, abs, 0", &[0xAA, 0xff, 0x0f]);
+        t("mov1 abs, 0, C", &[0xCA, 0xff, 0x0f]);
+
+        t("and1 C, abs, 3", &[0x4A, 0xff, 0x6f]);
+        t("and1 C, /abs, 3", &[0x6A, 0xff, 0x6f]);
+        t("or1 C, abs, 3", &[0x0A, 0xff, 0x6f]);
+        t("or1 C, /abs, 3", &[0x2A, 0xff, 0x6f]);
+        t("eor1 C, abs, 3", &[0x8A, 0xff, 0x6f]);
+        t("not1 abs, 3", &[0xEA, 0xff, 0x6f]);
+        t("mov1 C, abs, 3", &[0xAA, 0xff, 0x6f]);
+        t("mov1 abs, 3, C", &[0xCA, 0xff, 0x6f]);
+    }
+
+    #[test]
+    fn forward_reference_branches() {
+        fn t(line: &str, expected: &[u8]) {
+            let mut s = State::new(0x200);
+            assert_eq!(process_instruction(line, &mut s), Ok(()));
+
+            assert_ne!(s.output(), expected, "asm: {line:?}");
+
+            s.add_symbol("rel".to_owned(), 0x200).unwrap();
+
+            process_pending_output_expressions(&mut s).unwrap();
+
+            assert_eq!(s.output(), expected, "asm: {line:?}");
+        }
+
+        assert_eq!(0u8.wrapping_sub(2), 0xfe);
+        t("bra rel", &[0x2F, 0xfe]);
+        t("beq rel", &[0xF0, 0xfe]);
+        t("bne rel", &[0xD0, 0xfe]);
+        t("bcs rel", &[0xB0, 0xfe]);
+        t("bcc rel", &[0x90, 0xfe]);
+        t("bvs rel", &[0x70, 0xfe]);
+        t("bvc rel", &[0x50, 0xfe]);
+        t("bmi rel", &[0x30, 0xfe]);
+        t("bpl rel", &[0x10, 0xfe]);
+        t("dbnz Y, rel", &[0xFE, 0xfe]);
+
+        assert_eq!(0u8.wrapping_sub(3), 0xfd);
+        t("bbs $10, 0, rel", &[0x03, 0x10, 0xfd]);
+        t("bbc $10, 0, rel", &[0x13, 0x10, 0xfd]);
+
+        t("bbs $10, 3, rel", &[0x63, 0x10, 0xfd]);
+        t("bbc $10, 3, rel", &[0x73, 0x10, 0xfd]);
+    }
+
+    #[test]
+    fn forward_reference_pcall() {
+        fn t(line: &str, value: u16, expected: &[u8]) {
+            let mut s = State::new(0x200);
+            assert_eq!(process_instruction(line, &mut s), Ok(()));
+
+            assert_ne!(s.output(), expected, "asm: {line:?}");
+
+            s.add_symbol("up".to_owned(), value.into()).unwrap();
+
+            process_pending_output_expressions(&mut s).unwrap();
+
+            assert_eq!(s.output(), expected, "asm: {line:?}");
+        }
+
+        t("pcall $ff00", 0xff00, &[0x4f, 0x00]);
+        t("pcall up", 0xff00, &[0x4f, 0x00]);
+        t("pcall up", 0xff70, &[0x4f, 0x70]);
+    }
+
+    #[test]
+    fn invalid_abs_bit_forward_reference() {
+        let mut s = State::new(0x200);
+        assert_eq!(process_instruction("mov1 C, abs, 0", &mut s), Ok(()));
+
+        s.add_symbol("abs".to_owned(), 0x2000.into()).unwrap();
+
+        assert_eq!(
+            process_pending_output_expressions(&mut s),
+            Err(vec![OutputError::OutOfRange {
+                value: 0x2000,
+                min: 0,
+                max: 0x1fff
+            }])
+        );
+    }
+
+    #[test]
+    fn invalid_pcall_forward_reference() {
+        let mut s = State::new(0x200);
+        assert_eq!(process_instruction("pcall up", &mut s), Ok(()));
+
+        s.add_symbol("up".to_owned(), 0xfe00.into()).unwrap();
+
+        assert_eq!(
+            process_pending_output_expressions(&mut s),
+            Err(vec![OutputError::InvalidPcall(0xfe00)])
         );
     }
 }
