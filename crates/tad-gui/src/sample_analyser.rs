@@ -854,8 +854,13 @@ impl State {
 
     fn draw_waveform_waveform(&self, analysis: &SampleAnalysis, x: i32, y: i32, w: i32, h: i32) {
         let samples = &analysis.decoded_samples_f32;
-        let n_samples = samples.len();
         let fft_range = &analysis.fft_range;
+
+        // Do not show the padding if the sample does not loop
+        let n_samples = match analysis.loop_point_samples {
+            Some(_) => samples.len(),
+            None => analysis.n_samples,
+        };
 
         let samples_default_zoom = Self::waveform_samples_default_zoom(analysis);
         let samples_range = Range {
@@ -863,7 +868,7 @@ impl State {
             end: min(
                 self.waveform_x_offset
                     + ((samples_default_zoom as f64) / self.waveform_x_scale) as usize,
-                samples.len(),
+                n_samples,
             ),
         };
 
@@ -925,10 +930,13 @@ impl State {
     }
 
     fn waveform_samples_default_zoom(analysis: &SampleAnalysis) -> usize {
-        min(
-            analysis.decoded_samples_f32.len(),
-            max(analysis.n_samples * 2, MIN_WAVEFORM_WIDTH),
-        )
+        match analysis.loop_point_samples {
+            Some(_) => min(
+                analysis.decoded_samples_f32.len(),
+                max(analysis.n_samples * 2, MIN_WAVEFORM_WIDTH),
+            ),
+            None => analysis.n_samples,
+        }
     }
 
     fn waveform_move(&mut self, m: WaveformMoveEvent) {
@@ -1029,10 +1037,10 @@ pub fn analyse_sample(
     let samples_to_decode = if brr_sample.is_looping() {
         usize::max(brr_sample.n_samples(), MIN_LOOPING_SAMPLES)
     } else {
-        brr_sample.n_samples()
+        usize::max(brr_sample.n_samples(), MIN_SPECTRUM_SAMPLES)
     };
     let samples_to_decode = if samples_to_decode < fft_size {
-        samples_to_decode.next_power_of_two()
+        fft_size
     } else {
         samples_to_decode
     };

@@ -5,6 +5,7 @@ Terrific Audio Driver Changelog
 Version 0.2.1
 =============
  * Fixed transposition analysis in the compiler
+ * Fixed a panic in the sample analyser window when analysing a small non-looping sample.
 
 
 Version 0.2.0
