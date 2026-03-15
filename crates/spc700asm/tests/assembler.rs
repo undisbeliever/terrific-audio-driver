@@ -143,7 +143,7 @@ fn invalid_var_lines_test() -> Result<(), Box<dyn std::error::Error>> {
             (l(7), AssemblerError::InvalidArraySyntax.into()),
             (
                 l(8),
-                ConstexprError::InvalidU16("", ExpressionError::SymtaxError).into()
+                ConstexprError::InvalidU16("", ExpressionError::SyntaxError).into()
             ),
             (l(9), ConstexprError::UnknownValue("UNKNOWN").into()),
             (l(10), ConstexprError::U16OutOfRange("$10000").into()),

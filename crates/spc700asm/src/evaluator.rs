@@ -36,7 +36,7 @@ use crate::state::{is_symbol_character, State};
 bitflags! {
     #[derive(Debug, PartialEq)]
     pub struct ExpressionError: u32 {
-        const SymtaxError = 1 << 0;
+        const SyntaxError = 1 << 0;
         const UnmatchedParenthesis = 1 << 1;
         const InvalidDecimalLiteral = 1 << 2;
         const InvalidHexadecimalLiteral = 1 << 3;
@@ -478,7 +478,7 @@ fn value(m: &mut Matcher) -> ExpressionResult {
 
         b')' => ExpressionResult::Error(ExpressionError::UnmatchedParenthesis),
 
-        _ => ExpressionResult::Error(ExpressionError::SymtaxError),
+        _ => ExpressionResult::Error(ExpressionError::SyntaxError),
     }
 }
 
