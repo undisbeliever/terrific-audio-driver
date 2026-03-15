@@ -4,8 +4,7 @@ use crate::evaluator::{evaluate, ExpressionError, ExpressionResult};
 
 use std::collections::{hash_map::Entry, HashMap};
 
-#[derive(Debug)]
-#[allow(dead_code)] // ::TODO remove::
+#[derive(Debug, PartialEq)]
 pub enum SymbolError {
     InvalidSymbol(String),
     DuplicateSymbol,
@@ -14,7 +13,6 @@ pub enum SymbolError {
 pub const MAX_ABS_BIT_ADDR: u16 = u16::MAX >> 3;
 
 #[derive(Debug, PartialEq)]
-#[allow(dead_code)] // ::TODO remove::
 pub enum OutputError {
     AbsBitOutOfRange(u16),
     ExpressionError(String, ExpressionError),
@@ -120,6 +118,30 @@ impl State {
         }
     }
 
+    pub(crate) fn take_output_and_symbols(self) -> (Vec<u8>, HashMap<String, i64>) {
+        (self.output, self.symbols)
+    }
+
+    pub fn add_scoped_symbol(
+        &mut self,
+        parent: &str,
+        child_name: &str,
+        value: i64,
+    ) -> Result<(), SymbolError> {
+        let full_name = [parent, ".", child_name].concat();
+
+        match is_symbol_name_valid(child_name) {
+            true => match self.symbols.entry(full_name) {
+                Entry::Vacant(v) => {
+                    v.insert(value);
+                    Ok(())
+                }
+                Entry::Occupied(_) => Err(SymbolError::DuplicateSymbol),
+            },
+            false => Err(SymbolError::InvalidSymbol(full_name)),
+        }
+    }
+
     #[allow(dead_code)] // ::TODO remove::
     pub fn add_symbol(&mut self, name: impl Into<String>, value: i64) -> Result<(), SymbolError> {
         let name = name.into();
@@ -140,7 +162,7 @@ impl State {
         self.symbols.get(name).copied()
     }
 
-    #[allow(dead_code)] // ::TODO remove::
+    #[cfg(test)]
     pub fn output(&self) -> &[u8] {
         &self.output
     }

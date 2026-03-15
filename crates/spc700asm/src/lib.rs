@@ -6,7 +6,12 @@
 
 #![forbid(unsafe_code)]
 
+mod assembler;
 mod evaluator;
+mod file_parser;
 mod instructions;
 mod state;
 mod string;
+
+pub mod errors;
+pub use assembler::{assemble, CompiledAsm};

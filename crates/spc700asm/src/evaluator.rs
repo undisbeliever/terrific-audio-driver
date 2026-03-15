@@ -231,7 +231,42 @@ fn comparison_operation(
     }
 }
 
-#[allow(dead_code)] // ::TODO remove allow::
+#[derive(Debug, PartialEq)]
+pub enum ConstexprError<'a> {
+    UnknownValue(&'a str),
+    InvalidAddress(&'a str, ExpressionError),
+    AddressOutOfRange(&'a str),
+    AddressNotANumber(&'a str),
+    InvalidU16(&'a str, ExpressionError),
+    U16OutOfRange(&'a str),
+    U16NotANumber(&'a str),
+}
+
+pub fn evaluate_constexpr_address<'a>(
+    expr: &'a str,
+    state: &State,
+) -> Result<u16, ConstexprError<'a>> {
+    match evaluate(expr, state) {
+        ExpressionResult::Value(v) => v
+            .try_into()
+            .map_err(|_| ConstexprError::AddressOutOfRange(expr)),
+        ExpressionResult::Boolean(_) => Err(ConstexprError::AddressNotANumber(expr)),
+        ExpressionResult::Unknown => Err(ConstexprError::UnknownValue(expr)),
+        ExpressionResult::Error(e) => Err(ConstexprError::InvalidAddress(expr, e)),
+    }
+}
+
+pub fn evaluate_constexpr_u16<'a>(expr: &'a str, state: &State) -> Result<u16, ConstexprError<'a>> {
+    match evaluate(expr, state) {
+        ExpressionResult::Value(v) => v
+            .try_into()
+            .map_err(|_| ConstexprError::U16OutOfRange(expr)),
+        ExpressionResult::Boolean(_) => Err(ConstexprError::U16NotANumber(expr)),
+        ExpressionResult::Unknown => Err(ConstexprError::UnknownValue(expr)),
+        ExpressionResult::Error(e) => Err(ConstexprError::InvalidU16(expr, e)),
+    }
+}
+
 pub fn evaluate(s: &str, state: &State) -> ExpressionResult {
     let mut m = Matcher::new(s, state);
 
