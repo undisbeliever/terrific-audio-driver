@@ -7,7 +7,7 @@
 use crate::{
     evaluator::{evaluate, ExpressionError, ExpressionResult},
     state::{BitArgument, DirectPageFlag, OutputError, State, U16Value, U8Value},
-    string::{comma_iter, split_first_word},
+    string::comma_iter,
 };
 
 #[derive(Debug, PartialEq)]
@@ -863,11 +863,10 @@ fn carry_abs_bit_instruction<'a>(
 
 #[allow(dead_code)] // ::TODO remove::
 pub fn process_instruction<'a>(
-    line: &'a str,
+    instruction: &'a str,
+    arguments: &'a str,
     state: &mut State,
 ) -> Result<(), InstructionError<'a>> {
-    let (instruction, arguments) = split_first_word(line);
-
     match instruction {
         "or" => arithmatic_instruction(instruction, arguments, 0x00, state),
         "and" => arithmatic_instruction(instruction, arguments, 0x20, state),
@@ -1624,16 +1623,21 @@ mod addressing_mode_tests {
 // https://snes.nesdev.org/wiki/SPC-700_instruction_set
 #[cfg(test)]
 mod instruction_tests {
-    use super::{process_instruction, DirectPageFlag, InstructionError, OutputError, State};
+    use super::{DirectPageFlag, InstructionError, OutputError, State};
 
-    use crate::state::process_pending_output_expressions;
+    use crate::{state::process_pending_output_expressions, string::split_first_word};
     use std::panic::Location;
+
+    pub fn process_line<'a>(line: &'a str, state: &mut State) -> Result<(), InstructionError<'a>> {
+        let (instruction, arguments) = split_first_word(line);
+        super::process_instruction(instruction, arguments, state)
+    }
 
     #[track_caller]
     fn test_sym(line: &str, state: &State, expected: &[u8]) {
         let mut state = state.clone();
 
-        process_instruction(line, &mut state).unwrap();
+        process_line(line, &mut state).unwrap();
 
         assert_eq!(
             state.output(),
@@ -1647,7 +1651,7 @@ mod instruction_tests {
     fn test(line: &str, expected: &[u8]) {
         let mut state = State::new(0x200);
 
-        process_instruction(line, &mut state).unwrap();
+        process_line(line, &mut state).unwrap();
 
         assert_eq!(
             state.output(),
@@ -1661,7 +1665,7 @@ mod instruction_tests {
     fn test_result(line: &str, expected: Result<(), InstructionError>) {
         let mut state = State::new(0x200);
 
-        assert_eq!(process_instruction(line, &mut state), expected);
+        assert_eq!(process_line(line, &mut state), expected);
     }
 
     #[test]
@@ -2408,7 +2412,7 @@ mod instruction_tests {
     fn forward_references() {
         fn t(line: &str, expected: &[u8]) {
             let mut s = State::new(0x200);
-            assert_eq!(process_instruction(line, &mut s), Ok(()));
+            assert_eq!(process_line(line, &mut s), Ok(()));
 
             assert_ne!(s.output(), expected, "asm: {line:?}");
 
@@ -2499,7 +2503,7 @@ mod instruction_tests {
     fn forward_reference_branches() {
         fn t(line: &str, expected: &[u8]) {
             let mut s = State::new(0x200);
-            assert_eq!(process_instruction(line, &mut s), Ok(()));
+            assert_eq!(process_line(line, &mut s), Ok(()));
 
             assert_ne!(s.output(), expected, "asm: {line:?}");
 
@@ -2534,7 +2538,7 @@ mod instruction_tests {
     fn forward_reference_pcall() {
         fn t(line: &str, value: u16, expected: &[u8]) {
             let mut s = State::new(0x200);
-            assert_eq!(process_instruction(line, &mut s), Ok(()));
+            assert_eq!(process_line(line, &mut s), Ok(()));
 
             assert_ne!(s.output(), expected, "asm: {line:?}");
 
@@ -2553,7 +2557,7 @@ mod instruction_tests {
     #[test]
     fn invalid_abs_bit_forward_reference() {
         let mut s = State::new(0x200);
-        assert_eq!(process_instruction("mov1 C, abs, 0", &mut s), Ok(()));
+        assert_eq!(process_line("mov1 C, abs, 0", &mut s), Ok(()));
 
         s.add_symbol("abs".to_owned(), 0x2000.into()).unwrap();
 
@@ -2570,7 +2574,7 @@ mod instruction_tests {
     #[test]
     fn invalid_pcall_forward_reference() {
         let mut s = State::new(0x200);
-        assert_eq!(process_instruction("pcall up", &mut s), Ok(()));
+        assert_eq!(process_line("pcall up", &mut s), Ok(()));
 
         s.add_symbol("up".to_owned(), 0xfe00.into()).unwrap();
 
