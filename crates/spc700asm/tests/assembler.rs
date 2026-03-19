@@ -6,7 +6,9 @@
 
 use spc700asm::{
     assemble,
-    errors::{AssemblerError, ConstexprError, ExpressionError, FileParserError, LineNo},
+    errors::{
+        AssemblerError, ConstexprError, ExpressionError, FileParserError, LineNo, OutputError,
+    },
 };
 
 fn l(line: u32) -> LineNo {
@@ -17,6 +19,8 @@ fn l(line: u32) -> LineNo {
 fn variables() -> Result<(), Box<dyn std::error::Error>> {
     let c = assemble(
         r##"
+.codebank $200..$300
+
 .varbank zeropage  $0000..100+28
 .varbank firstpage FP_START..FP_END
 
@@ -86,6 +90,8 @@ N_CHANNELS = 10
 fn invalid_varbank_test() -> Result<(), Box<dyn std::error::Error>> {
     let e = assemble(
         r##"
+.codebank $200..$300
+
 .varbank bad1
 .varbank bad2  $200..
 .varbank bad3  $200..$200
@@ -98,14 +104,14 @@ fn invalid_varbank_test() -> Result<(), Box<dyn std::error::Error>> {
     assert_eq!(
         e.errors(),
         &[
-            (l(2), FileParserError::InvalidBankSyntax.into()),
-            (l(3), FileParserError::InvalidBankSyntax.into()),
+            (l(4), FileParserError::InvalidBankSyntax.into()),
+            (l(5), FileParserError::InvalidBankSyntax.into()),
             (
-                l(4),
+                l(6),
                 AssemblerError::InvalidVarBankRange(0x200, 0x200).into()
             ),
-            (l(5), ConstexprError::UnknownValue("unknown").into()),
-            (l(5), ConstexprError::UnknownValue("unknown+1").into()),
+            (l(7), ConstexprError::UnknownValue("unknown").into()),
+            (l(7), ConstexprError::UnknownValue("unknown+1").into()),
         ]
     );
 
@@ -116,6 +122,8 @@ fn invalid_varbank_test() -> Result<(), Box<dyn std::error::Error>> {
 fn invalid_var_lines_test() -> Result<(), Box<dyn std::error::Error>> {
     let e = assemble(
         r##"
+.codebank $200..$300
+
 .varbank zeropage $00..$f0
 
 .vars zeropage
@@ -138,20 +146,20 @@ fn invalid_var_lines_test() -> Result<(), Box<dyn std::error::Error>> {
     assert_eq!(
         e.errors(),
         &[
-            (l(5), AssemblerError::UnknownType("unknown_type").into()),
-            (l(6), AssemblerError::InvalidArraySyntax.into()),
-            (l(7), AssemblerError::InvalidArraySyntax.into()),
+            (l(7), AssemblerError::UnknownType("unknown_type").into()),
+            (l(8), AssemblerError::InvalidArraySyntax.into()),
+            (l(9), AssemblerError::InvalidArraySyntax.into()),
             (
-                l(8),
+                l(10),
                 ConstexprError::InvalidU16("", ExpressionError::SyntaxError).into()
             ),
-            (l(9), ConstexprError::UnknownValue("UNKNOWN").into()),
-            (l(10), ConstexprError::U16OutOfRange("$10000").into()),
-            (l(11), AssemblerError::ArrayTooLarge.into()),
-            (l(12), AssemblerError::UnknownType("ut").into()),
-            (l(12), ConstexprError::UnknownValue("UNKNOWN").into()),
-            (l(13), AssemblerError::CannotNestArrays.into()),
-            (l(14), AssemblerError::CannotNestArrays.into()),
+            (l(11), ConstexprError::UnknownValue("UNKNOWN").into()),
+            (l(12), ConstexprError::U16OutOfRange("$10000").into()),
+            (l(13), AssemblerError::ArrayTooLarge.into()),
+            (l(14), AssemblerError::UnknownType("ut").into()),
+            (l(14), ConstexprError::UnknownValue("UNKNOWN").into()),
+            (l(15), AssemblerError::CannotNestArrays.into()),
+            (l(16), AssemblerError::CannotNestArrays.into()),
         ]
     );
 
@@ -162,6 +170,7 @@ fn invalid_var_lines_test() -> Result<(), Box<dyn std::error::Error>> {
 fn overflow_vars_test() -> Result<(), Box<dyn std::error::Error>> {
     let e = assemble(
         r##"
+.codebank $200..$300
 .varbank small_bank  $200..$202
 
 .vars small_bank
@@ -176,7 +185,104 @@ fn overflow_vars_test() -> Result<(), Box<dyn std::error::Error>> {
 
     assert_eq!(
         e.errors(),
-        &[(l(7), AssemblerError::VarBankOverflows.into())]
+        &[(l(8), AssemblerError::VarBankOverflows.into())]
+    );
+
+    Ok(())
+}
+
+#[test]
+fn global_asm_test() -> Result<(), Box<dyn std::error::Error>> {
+    let c = assemble(
+        r##"
+.codebank $200..$300
+
+FORWARD_REFERENCED_CONSTANT = End + 2
+
+Label:
+    bra Label
+
+Label2: inc A
+
+    mov A, #FORWARD_REFERENCED_CONSTANT & $ff
+
+    bra End
+End:
+"##,
+    )?;
+
+    assert_eq!(c.symbols["Label"], 0x200);
+    assert_eq!(c.symbols["Label2"], 0x202);
+    assert_eq!(c.symbols["End"], 0x207);
+    assert_eq!(c.symbols["FORWARD_REFERENCED_CONSTANT"], 0x209);
+
+    assert_eq!(&c.output, &[0x2f, -2i8 as u8, 0xbc, 0xe8, 9, 0x2f, 0]);
+
+    Ok(())
+}
+
+#[test]
+fn unknown_symbol_asm_test() -> Result<(), Box<dyn std::error::Error>> {
+    let e = assemble(
+        r##"
+.codebank $200..$300
+
+    mov A, #UNKNOWN + 1
+    mov missing_var, A
+"##,
+    )
+    .err()
+    .unwrap();
+
+    assert_eq!(
+        e.errors(),
+        &[
+            (
+                LineNo(4),
+                OutputError::ExpressionHasUnknownValue("UNKNOWN + 1".to_string()).into()
+            ),
+            (
+                LineNo(5),
+                OutputError::ExpressionHasUnknownValue("missing_var".to_string()).into()
+            ),
+        ]
+    );
+
+    Ok(())
+}
+
+#[test]
+fn code_too_large_error() -> Result<(), Box<dyn std::error::Error>> {
+    let c = assemble(
+        r##"
+.codebank $1000..$1004
+
+    inc A
+    inc A
+    inc A
+"##,
+    )?;
+    assert_eq!(c.output, vec![0xbc; 3]);
+
+    let e = assemble(
+        r##"
+.codebank $1000..$1004
+
+    inc A
+    inc A
+    inc A
+    inc A
+"##,
+    )
+    .err()
+    .unwrap();
+
+    assert_eq!(
+        e.errors(),
+        &[(
+            l(0),
+            AssemblerError::CodeTooLarge(0x1000..0x1004, 0x1004).into()
+        )]
     );
 
     Ok(())

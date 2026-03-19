@@ -861,7 +861,6 @@ fn carry_abs_bit_instruction<'a>(
     }
 }
 
-#[allow(dead_code)] // ::TODO remove::
 pub fn process_instruction<'a>(
     instruction: &'a str,
     arguments: &'a str,

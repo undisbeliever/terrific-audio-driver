@@ -4,6 +4,7 @@
 //
 // SPDX-License-Identifier: MIT
 
+use crate::instructions::InstructionError;
 pub use crate::{
     assembler::AssemblerError,
     evaluator::{ConstexprError, ExpressionError},
@@ -13,16 +14,17 @@ pub use crate::{
 
 #[derive(Debug, PartialEq)]
 pub enum FileError<'s> {
-    FileParser(FileParserError),
+    FileParser(FileParserError<'s>),
     Expression(ExpressionError),
     Constexpr(ConstexprError<'s>),
     Assember(AssemblerError<'s>),
+    Instruction(InstructionError<'s>),
     Symbol(SymbolError),
     Output(OutputError),
 }
 
-impl From<FileParserError> for FileError<'_> {
-    fn from(v: FileParserError) -> Self {
+impl<'s> From<FileParserError<'s>> for FileError<'s> {
+    fn from(v: FileParserError<'s>) -> Self {
         Self::FileParser(v)
     }
 }
@@ -42,6 +44,12 @@ impl<'s> From<ConstexprError<'s>> for FileError<'s> {
 impl<'s> From<AssemblerError<'s>> for FileError<'s> {
     fn from(v: AssemblerError<'s>) -> Self {
         Self::Assember(v)
+    }
+}
+
+impl<'s> From<InstructionError<'s>> for FileError<'s> {
+    fn from(v: InstructionError<'s>) -> Self {
+        Self::Instruction(v)
     }
 }
 

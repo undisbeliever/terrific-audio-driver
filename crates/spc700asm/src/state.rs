@@ -127,6 +127,23 @@ impl State {
         (self.output, self.symbols)
     }
 
+    pub fn program_counter(&self) -> i64 {
+        i64::try_from(self.output.len())
+            .unwrap_or(i64::MAX)
+            .saturating_add(self.pc_base.into())
+    }
+
+    /// Panics if pc_base has already been set
+    pub fn set_pc_base(&mut self, pc_base: u16) {
+        assert_ne!(pc_base, 0, "pc_base cannot be 0");
+        assert_eq!(self.output.len(), 0, "Cannot set pc_base after assembly");
+
+        if self.pc_base != 0 {
+            panic!("Can only set pc_base once");
+        }
+        self.pc_base = pc_base;
+    }
+
     pub fn add_scoped_symbol(
         &mut self,
         parent: &str,
@@ -172,7 +189,6 @@ impl State {
         &self.output
     }
 
-    #[allow(dead_code)] // ::TODO remove::
     pub fn set_line_no(&mut self, line_no: LineNo) {
         self.line_no = line_no;
     }
@@ -281,7 +297,6 @@ impl State {
     }
 }
 
-#[allow(dead_code)] // ::TODO remove::
 pub fn process_pending_output_expressions(s: &mut State, errors: &mut FileErrors) {
     for (line_no, pos, expr, p) in std::mem::take(&mut s.pending_output) {
         match evaluate(&expr, s) {

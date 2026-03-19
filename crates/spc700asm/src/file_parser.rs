@@ -9,6 +9,12 @@ use crate::{
     string::{split_first_word, strip_comment},
 };
 
+pub struct CodeBankStatement<'a> {
+    pub line_no: LineNo,
+    pub start_expr: &'a str,
+    pub end_expr: &'a str,
+}
+
 pub struct VarBankStatement<'a> {
     pub line_no: LineNo,
     pub name: &'a str,
@@ -34,25 +40,52 @@ pub struct VarsSection<'a> {
     pub variables: Vec<Var<'a>>,
 }
 
+pub enum AsmLine<'a> {
+    Label(&'a str),
+    Instruction(&'a str, &'a str),
+}
+
 pub struct AsmFile<'a> {
     pub global_constants: Vec<Constant<'a>>,
 
+    pub code_bank: Option<CodeBankStatement<'a>>,
     pub var_banks: Vec<VarBankStatement<'a>>,
 
     pub vars: Vec<VarsSection<'a>>,
+
+    pub assembly: Vec<(LineNo, AsmLine<'a>)>,
 }
 
 #[derive(Debug, PartialEq)]
-pub enum FileParserError {
+pub enum FileParserError<'a> {
+    InvalidCodeBankSyntax,
+    MultipleCodeBankStatements,
     InvalidBankSyntax,
     InvalidVarLine,
     NoEndVars,
+    InvalidCommand(&'a str),
+}
+
+fn parse_code_bank<'a>(
+    line_no: LineNo,
+    args: &'a str,
+) -> Result<CodeBankStatement<'a>, FileParserError<'a>> {
+    match args.split_once("..") {
+        Some((start_expr, end_expr)) if !start_expr.is_empty() && !end_expr.is_empty() => {
+            Ok(CodeBankStatement {
+                line_no,
+                start_expr,
+                end_expr,
+            })
+        }
+        _ => Err(FileParserError::InvalidCodeBankSyntax),
+    }
 }
 
 fn parse_var_bank<'a>(
     line_no: LineNo,
     args: &'a str,
-) -> Result<VarBankStatement<'a>, FileParserError> {
+) -> Result<VarBankStatement<'a>, FileParserError<'a>> {
     let (name, range) = split_first_word(args);
 
     match range.split_once("..") {
@@ -68,7 +101,7 @@ fn parse_var_bank<'a>(
     }
 }
 
-fn parse_var_line<'a>(line_no: LineNo, line: &'a str) -> Result<Var<'a>, FileParserError> {
+fn parse_var_line<'a>(line_no: LineNo, line: &'a str) -> Result<Var<'a>, FileParserError<'a>> {
     match line.split_once(':') {
         Some((name, var_type)) => Ok(Var {
             line_no,
@@ -83,7 +116,7 @@ fn parse_vars<'a>(
     var_line_no: LineNo,
     var_bank: &'a str,
     it: &mut impl Iterator<Item = (LineNo, &'a str)>,
-    errors: &mut FileErrors,
+    errors: &mut FileErrors<'a>,
 ) -> VarsSection<'a> {
     let mut out = VarsSection {
         line_no: var_line_no,
@@ -108,11 +141,47 @@ fn parse_vars<'a>(
     out
 }
 
-pub fn parse_file<'a>(file: &'a str, errors: &mut FileErrors) -> AsmFile<'a> {
+pub fn parse_asm_line_after_label<'a>(
+    line_no: LineNo,
+    first_word: &'a str,
+    arguments: &'a str,
+    errors: &mut FileErrors<'a>,
+    f: &mut dyn FnMut(LineNo, AsmLine<'a>),
+) {
+    match first_word {
+        fw if first_word.starts_with(".") => {
+            errors.push(line_no, FileParserError::InvalidCommand(first_word))
+        }
+        _ => f(line_no, AsmLine::Instruction(first_word, arguments)),
+    }
+}
+
+pub fn parse_asm_line<'a>(
+    line_no: LineNo,
+    first_word: &'a str,
+    arguments: &'a str,
+    errors: &mut FileErrors<'a>,
+    f: &mut dyn FnMut(LineNo, AsmLine<'a>),
+) {
+    if let Some(label) = first_word.strip_suffix(":") {
+        f(line_no, AsmLine::Label(label));
+
+        if !arguments.is_empty() {
+            let (first_word, arguments) = split_first_word(arguments);
+            parse_asm_line_after_label(line_no, first_word, arguments, errors, f);
+        }
+    } else {
+        parse_asm_line_after_label(line_no, first_word, arguments, errors, f);
+    }
+}
+
+pub fn parse_file<'a>(file: &'a str, errors: &mut FileErrors<'a>) -> AsmFile<'a> {
     let mut out = AsmFile {
         global_constants: Vec::new(),
+        code_bank: None,
         var_banks: Vec::new(),
         vars: Vec::new(),
+        assembly: Vec::new(),
     };
     let mut it = file.lines().enumerate().filter_map(|(i, s)| {
         let s = strip_comment(s);
@@ -127,6 +196,16 @@ pub fn parse_file<'a>(file: &'a str, errors: &mut FileErrors) -> AsmFile<'a> {
         let (command, args) = split_first_word(line);
 
         match command {
+            ".codebank" => {
+                if out.code_bank.is_none() {
+                    match parse_code_bank(line_no, args) {
+                        Ok(b) => out.code_bank = Some(b),
+                        Err(e) => errors.push(line_no, e),
+                    }
+                } else {
+                    errors.push(line_no, FileParserError::MultipleCodeBankStatements)
+                }
+            }
             ".varbank" => match parse_var_bank(line_no, args) {
                 Ok(b) => out.var_banks.push(b),
                 Err(e) => errors.push(line_no, e),
@@ -140,7 +219,9 @@ pub fn parse_file<'a>(file: &'a str, errors: &mut FileErrors) -> AsmFile<'a> {
                         expr: expr.trim_start(),
                     });
                 } else {
-                    // ::TODO asm line::
+                    parse_asm_line(line_no, command, args, errors, &mut |n, l| {
+                        out.assembly.push((n, l))
+                    });
                 }
             }
         }

@@ -10,14 +10,21 @@ use crate::{
         evaluate, evaluate_constexpr_address, evaluate_constexpr_u16, ExpressionError,
         ExpressionResult,
     },
-    file_parser::{parse_file, Constant, Var, VarBankStatement, VarsSection},
-    state::State,
+    file_parser::{
+        parse_file, AsmLine, CodeBankStatement, Constant, Var, VarBankStatement, VarsSection,
+    },
+    instructions::process_instruction,
+    state::{process_pending_output_expressions, State},
 };
 
 use std::{collections::HashMap, ops::Range};
 
 #[derive(Debug, PartialEq)]
 pub enum AssemblerError<'s> {
+    NoCodeBankStatement,
+    InvalidCodeBankRange(u16, u16),
+    CodeTooLarge(Range<u16>, i64),
+
     DuplicateVarBankName(&'s str),
     InvalidVarBankRange(u16, u16),
 
@@ -125,6 +132,42 @@ fn process_global_constants<'s>(
     });
 
     constants
+}
+
+fn process_code_bank<'s>(
+    cb: Option<CodeBankStatement<'s>>,
+    state: &State,
+    errors: &mut FileErrors<'s>,
+) -> Range<u16> {
+    const ERROR_CODE_BANK: Range<u16> = 0x0200..0xffff;
+
+    match cb {
+        Some(cb) => {
+            match (
+                evaluate_constexpr_address(cb.start_expr, state),
+                evaluate_constexpr_address(cb.end_expr, state),
+            ) {
+                (Ok(start), Ok(end)) if start < end => start..end,
+                (Ok(start), Ok(end)) => {
+                    errors.push(cb.line_no, AssemblerError::InvalidVarBankRange(start, end));
+                    ERROR_CODE_BANK
+                }
+                (e1, e2) => {
+                    if let Err(e) = e1 {
+                        errors.push(cb.line_no, e);
+                    }
+                    if let Err(e) = e2 {
+                        errors.push(cb.line_no, e);
+                    }
+                    ERROR_CODE_BANK
+                }
+            }
+        }
+        None => {
+            errors.push(LineNo(0), AssemblerError::NoCodeBankStatement);
+            ERROR_CODE_BANK
+        }
+    }
 }
 
 fn process_var_bank<'s>(
@@ -315,6 +358,38 @@ fn process_var_section<'s>(
     }
 }
 
+fn process_asm_line<'s>(
+    line_no: LineNo,
+    line: AsmLine<'s>,
+    state: &mut State,
+    errors: &mut FileErrors<'s>,
+) {
+    state.set_line_no(line_no);
+
+    match line {
+        AsmLine::Label(label) => match state.add_symbol(label, state.program_counter()) {
+            Ok(()) => (),
+            Err(e) => errors.push(line_no, e),
+        },
+        AsmLine::Instruction(instruction, arguments) => {
+            match process_instruction(instruction, arguments, state) {
+                Ok(()) => (),
+                Err(e) => errors.push(line_no, e),
+            }
+        }
+    }
+}
+
+fn process_assembly<'s>(
+    assembly: Vec<(LineNo, AsmLine<'s>)>,
+    state: &mut State,
+    errors: &mut FileErrors<'s>,
+) {
+    for (line_no, line) in assembly {
+        process_asm_line(line_no, line, state, errors);
+    }
+}
+
 pub fn assemble<'s>(input: &'s str) -> Result<CompiledAsm, FileErrors<'s>> {
     let mut errors = FileErrors::new();
 
@@ -322,14 +397,12 @@ pub fn assemble<'s>(input: &'s str) -> Result<CompiledAsm, FileErrors<'s>> {
 
     let file = parse_file(input, &mut errors);
 
-    // ::TODO get from assembly file::
-    let pc_base = 0x200;
-
-    let mut state = State::new(pc_base);
+    let mut state = State::new(0);
 
     let pending_constants =
         process_global_constants(file.global_constants, &mut state, &mut errors);
 
+    let code_bank = process_code_bank(file.code_bank, &state, &mut errors);
     let mut banks = process_var_banks(file.var_banks, &state, &mut errors);
 
     for v in file.vars {
@@ -338,8 +411,24 @@ pub fn assemble<'s>(input: &'s str) -> Result<CompiledAsm, FileErrors<'s>> {
 
     let pending_constants = process_global_constants(pending_constants, &mut state, &mut errors);
 
+    state.set_pc_base(code_bank.start);
+
+    process_assembly(file.assembly, &mut state, &mut errors);
+
+    let pending_constants = process_global_constants(pending_constants, &mut state, &mut errors);
+
     for c in pending_constants {
         errors.push(c.line_no, AssemblerError::ConstantWithUnknownValue(c.expr))
+    }
+
+    process_pending_output_expressions(&mut state, &mut errors);
+
+    let i64_code_bank = i64::from(code_bank.start)..i64::from(code_bank.end);
+    if !i64_code_bank.contains(&state.program_counter()) {
+        errors.push(
+            LineNo(0),
+            AssemblerError::CodeTooLarge(code_bank, state.program_counter()),
+        );
     }
 
     if !errors.is_empty() {
