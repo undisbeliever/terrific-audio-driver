@@ -1,6 +1,9 @@
 //! Assembler state
 
-use crate::evaluator::{evaluate, ExpressionError, ExpressionResult};
+use crate::{
+    errors::{FileErrors, LineNo},
+    evaluator::{evaluate, ExpressionError, ExpressionResult},
+};
 
 use std::collections::{hash_map::Entry, HashMap};
 
@@ -103,7 +106,8 @@ pub struct State {
 
     pc_base: u16,
 
-    pending_output: Vec<(usize, String, PendingOutput)>,
+    line_no: LineNo,
+    pending_output: Vec<(LineNo, usize, String, PendingOutput)>,
 }
 
 impl State {
@@ -114,6 +118,7 @@ impl State {
             symbols: HashMap::new(),
             output: Vec::new(),
             pc_base,
+            line_no: LineNo(0),
             pending_output: Vec::new(),
         }
     }
@@ -167,6 +172,11 @@ impl State {
         &self.output
     }
 
+    #[allow(dead_code)] // ::TODO remove::
+    pub fn set_line_no(&mut self, line_no: LineNo) {
+        self.line_no = line_no;
+    }
+
     pub fn dp_addr_to_addr(&self, dp: u8) -> u16 {
         match self.direct_page {
             DirectPageFlag::Zero => u16::from_le_bytes([dp, 0]),
@@ -175,7 +185,8 @@ impl State {
     }
 
     fn push_pending_output(&mut self, expression: String, p: PendingOutput) {
-        self.pending_output.push((self.output.len(), expression, p))
+        self.pending_output
+            .push((self.line_no, self.output.len(), expression, p))
     }
 
     pub fn write_u8(&mut self, value: u8) {
@@ -271,40 +282,47 @@ impl State {
 }
 
 #[allow(dead_code)] // ::TODO remove::
-pub fn process_pending_output_expressions(s: &mut State) -> Result<(), Vec<OutputError>> {
-    let mut errors = Vec::new();
-
-    for (pos, expr, p) in std::mem::take(&mut s.pending_output) {
+pub fn process_pending_output_expressions(s: &mut State, errors: &mut FileErrors) {
+    for (line_no, pos, expr, p) in std::mem::take(&mut s.pending_output) {
         match evaluate(&expr, s) {
             ExpressionResult::Value(value) => match p {
                 PendingOutput::U8 => match u8::try_from(value) {
                     Ok(v) => s.output[pos] = v,
-                    Err(_) => errors.push(OutputError::OutOfRange {
-                        value,
-                        min: u8::MIN.into(),
-                        max: u8::MAX.into(),
-                    }),
+                    Err(_) => errors.push(
+                        line_no,
+                        OutputError::OutOfRange {
+                            value,
+                            min: u8::MIN.into(),
+                            max: u8::MAX.into(),
+                        },
+                    ),
                 },
                 PendingOutput::U16 => match u16::try_from(value) {
                     Ok(v) => {
                         s.output[pos..pos + 2].copy_from_slice(&v.to_le_bytes());
                     }
-                    Err(_) => errors.push(OutputError::OutOfRange {
-                        value,
-                        min: u16::MIN.into(),
-                        max: u16::MAX.into(),
-                    }),
+                    Err(_) => errors.push(
+                        line_no,
+                        OutputError::OutOfRange {
+                            value,
+                            min: u16::MIN.into(),
+                            max: u16::MAX.into(),
+                        },
+                    ),
                 },
                 PendingOutput::AbsBit(bit) => match u16::try_from(value) {
                     Ok(v) if v <= MAX_ABS_BIT_ADDR => {
                         let v = v | (u16::from(bit.0) << 13);
                         s.output[pos..pos + 2].copy_from_slice(&v.to_le_bytes());
                     }
-                    _ => errors.push(OutputError::OutOfRange {
-                        value,
-                        min: 0,
-                        max: MAX_ABS_BIT_ADDR.into(),
-                    }),
+                    _ => errors.push(
+                        line_no,
+                        OutputError::OutOfRange {
+                            value,
+                            min: 0,
+                            max: MAX_ABS_BIT_ADDR.into(),
+                        },
+                    ),
                 },
                 PendingOutput::RelativeBranch => {
                     let pc =
@@ -313,30 +331,26 @@ pub fn process_pending_output_expressions(s: &mut State) -> Result<(), Vec<Outpu
                     let value = value - pc;
                     match i8::try_from(value) {
                         Ok(v) => s.output[pos] = v.to_le_bytes()[0],
-                        Err(_) => errors.push(OutputError::BranchOutOfRange(value)),
+                        Err(_) => errors.push(line_no, OutputError::BranchOutOfRange(value)),
                     }
                 }
                 PendingOutput::Pcall => match u16::try_from(value) {
                     Ok(v) if v & 0xff00 == 0xff00 => {
                         s.output[pos] = v.to_le_bytes()[0];
                     }
-                    _ => errors.push(OutputError::InvalidPcall(value)),
+                    _ => errors.push(line_no, OutputError::InvalidPcall(value)),
                 },
             },
             crate::evaluator::ExpressionResult::Boolean(_) => {
-                errors.push(OutputError::NotANumber(expr))
+                errors.push(line_no, OutputError::NotANumber(expr))
             }
             crate::evaluator::ExpressionResult::Unknown => {
-                errors.push(OutputError::ExpressionHasUnknownValue(expr))
+                errors.push(line_no, OutputError::ExpressionHasUnknownValue(expr))
             }
-            ExpressionResult::Error(e) => errors.push(OutputError::ExpressionError(expr, e)),
+            ExpressionResult::Error(e) => {
+                errors.push(line_no, OutputError::ExpressionError(expr, e))
+            }
         }
-    }
-
-    if errors.is_empty() {
-        Ok(())
-    } else {
-        Err(errors)
     }
 }
 
@@ -349,6 +363,7 @@ impl Clone for State {
             symbols: self.symbols.clone(),
             pc_base: self.pc_base,
             output: self.output.clone(),
+            line_no: self.line_no,
             pending_output: self.pending_output.clone(),
         }
     }

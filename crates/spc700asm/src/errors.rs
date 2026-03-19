@@ -8,7 +8,7 @@ pub use crate::{
     assembler::AssemblerError,
     evaluator::{ConstexprError, ExpressionError},
     file_parser::FileParserError,
-    state::SymbolError,
+    state::{OutputError, SymbolError},
 };
 
 #[derive(Debug, PartialEq)]
@@ -18,6 +18,7 @@ pub enum FileError<'s> {
     Constexpr(ConstexprError<'s>),
     Assember(AssemblerError<'s>),
     Symbol(SymbolError),
+    Output(OutputError),
 }
 
 impl From<FileParserError> for FileError<'_> {
@@ -47,6 +48,12 @@ impl<'s> From<AssemblerError<'s>> for FileError<'s> {
 impl<'s> From<SymbolError> for FileError<'s> {
     fn from(v: SymbolError) -> Self {
         Self::Symbol(v)
+    }
+}
+
+impl<'s> From<OutputError> for FileError<'s> {
+    fn from(v: OutputError) -> Self {
+        Self::Output(v)
     }
 }
 

@@ -1625,7 +1625,11 @@ mod addressing_mode_tests {
 mod instruction_tests {
     use super::{DirectPageFlag, InstructionError, OutputError, State};
 
-    use crate::{state::process_pending_output_expressions, string::split_first_word};
+    use crate::{
+        errors::{FileErrors, LineNo},
+        state::process_pending_output_expressions,
+        string::split_first_word,
+    };
     use std::panic::Location;
 
     pub fn process_line<'a>(line: &'a str, state: &mut State) -> Result<(), InstructionError<'a>> {
@@ -2419,8 +2423,10 @@ mod instruction_tests {
             s.add_symbol("imm".to_owned(), 10).unwrap();
             s.add_symbol("abs".to_owned(), 0xfff).unwrap();
 
-            process_pending_output_expressions(&mut s).unwrap();
+            let mut errors = FileErrors::new();
+            process_pending_output_expressions(&mut s, &mut errors);
 
+            assert!(errors.is_empty());
             assert_eq!(s.output(), expected, "asm: {line:?}");
         }
 
@@ -2509,8 +2515,10 @@ mod instruction_tests {
 
             s.add_symbol("rel".to_owned(), 0x200).unwrap();
 
-            process_pending_output_expressions(&mut s).unwrap();
+            let mut errors = FileErrors::new();
+            process_pending_output_expressions(&mut s, &mut errors);
 
+            assert!(errors.is_empty());
             assert_eq!(s.output(), expected, "asm: {line:?}");
         }
 
@@ -2544,8 +2552,10 @@ mod instruction_tests {
 
             s.add_symbol("up".to_owned(), value.into()).unwrap();
 
-            process_pending_output_expressions(&mut s).unwrap();
+            let mut errors = FileErrors::new();
+            process_pending_output_expressions(&mut s, &mut errors);
 
+            assert!(errors.is_empty());
             assert_eq!(s.output(), expected, "asm: {line:?}");
         }
 
@@ -2561,13 +2571,20 @@ mod instruction_tests {
 
         s.add_symbol("abs".to_owned(), 0x2000.into()).unwrap();
 
+        let mut errors = FileErrors::new();
+        process_pending_output_expressions(&mut s, &mut errors);
+
         assert_eq!(
-            process_pending_output_expressions(&mut s),
-            Err(vec![OutputError::OutOfRange {
-                value: 0x2000,
-                min: 0,
-                max: 0x1fff
-            }])
+            errors.errors(),
+            &[(
+                LineNo(0),
+                OutputError::OutOfRange {
+                    value: 0x2000,
+                    min: 0,
+                    max: 0x1fff
+                }
+                .into()
+            )]
         );
     }
 
@@ -2578,9 +2595,12 @@ mod instruction_tests {
 
         s.add_symbol("up".to_owned(), 0xfe00.into()).unwrap();
 
+        let mut errors = FileErrors::new();
+        process_pending_output_expressions(&mut s, &mut errors);
+
         assert_eq!(
-            process_pending_output_expressions(&mut s),
-            Err(vec![OutputError::InvalidPcall(0xfe00)])
+            errors.errors(),
+            &[(LineNo(0), OutputError::InvalidPcall(0xfe00).into())]
         );
     }
 }
