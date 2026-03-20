@@ -34,14 +34,18 @@ pub enum DirectPageFlag {
     One,
 }
 
+pub fn is_symbol_start_character(c: u8) -> bool {
+    c.is_ascii_alphabetic() || c == b'_'
+}
+
 pub fn is_symbol_character(c: u8) -> bool {
     c.is_ascii_alphanumeric() || c == b'_'
 }
 
 pub fn is_symbol_name_valid(s: &str) -> bool {
     let mut it = s.bytes();
-
-    it.next().unwrap_or(0).is_ascii_alphabetic() && it.all(is_symbol_character)
+    let first = it.next().unwrap_or(0);
+    is_symbol_start_character(first) && it.all(is_symbol_character)
 }
 
 #[derive(Debug, PartialEq)]
