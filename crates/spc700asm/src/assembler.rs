@@ -441,7 +441,7 @@ fn process_inline<'s>(
     caller_line_no: LineNo,
     inline: InlineProc<'s>,
     inline_procs: &mut InlineProcs<'s>,
-    state: &mut State,
+    state: &mut State<'s>,
     errors: &mut FileErrors<'s>,
 ) {
     let caller_scope = state.take_scope();
@@ -462,7 +462,7 @@ fn process_asm_line<'s>(
     line_no: LineNo,
     line: AsmLine<'s>,
     inline_procs: &mut InlineProcs<'s>,
-    state: &mut State,
+    state: &mut State<'s>,
     errors: &mut FileErrors<'s>,
 ) {
     state.set_line_no(line_no);
@@ -498,7 +498,7 @@ fn process_proc_or_inline<'s>(
     proc: Procedure<'s>,
     code_type: ProcType,
     inline_procs: &mut InlineProcs<'s>,
-    state: &mut State,
+    state: &mut State<'s>,
     errors: &mut FileErrors<'s>,
 ) {
     let labels: Vec<&'s str> = proc
@@ -544,7 +544,7 @@ fn process_proc_or_inline<'s>(
 fn process_proc<'s>(
     proc: Procedure<'s>,
     inline_procs: &mut InlineProcs<'s>,
-    state: &mut State,
+    state: &mut State<'s>,
     errors: &mut FileErrors<'s>,
 ) {
     process_proc_or_inline(proc, ProcType::Procedure, inline_procs, state, errors);
@@ -553,7 +553,7 @@ fn process_proc<'s>(
 fn process_assembly<'s>(
     assembly: Vec<AsmOrProc<'s>>,
     inline_procs: &mut InlineProcs<'s>,
-    state: &mut State,
+    state: &mut State<'s>,
     errors: &mut FileErrors<'s>,
 ) {
     for a in assembly {

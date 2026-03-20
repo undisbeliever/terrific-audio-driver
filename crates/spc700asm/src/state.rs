@@ -104,22 +104,20 @@ enum PendingOutput {
 }
 
 #[derive(Clone)]
-struct Pending {
+struct Pending<'s> {
     line_no: LineNo,
     offset: usize,
-    // ::TODO change to Option<&'s str>::
-    scope: Option<String>,
+    scope: Option<&'s str>,
     expression: String,
     output_type: PendingOutput,
 }
 
-pub struct OldScope(Option<String>);
+pub struct OldScope<'s>(Option<&'s str>);
 
-pub struct State {
+pub struct State<'s> {
     pub direct_page: DirectPageFlag,
 
-    // ::TODO change to Option<&'s str>::
-    scope: Option<String>,
+    scope: Option<&'s str>,
 
     symbols: HashMap<String, Option<i64>>,
     output: Vec<u8>,
@@ -127,10 +125,10 @@ pub struct State {
     pc_base: u16,
 
     line_no: LineNo,
-    pending_output: Vec<Pending>,
+    pending_output: Vec<Pending<'s>>,
 }
 
-impl State {
+impl<'s> State<'s> {
     #[allow(dead_code)] // ::TODO remove::
     pub fn new(pc_base: u16) -> Self {
         Self {
@@ -165,24 +163,22 @@ impl State {
         self.pc_base = pc_base;
     }
 
-    fn override_scope(&mut self, scope: Option<String>) {
+    fn override_scope(&mut self, scope: Option<&'s str>) {
         self.scope = scope;
     }
 
-    pub fn take_scope(&mut self) -> OldScope {
+    pub fn take_scope(&mut self) -> OldScope<'s> {
         OldScope(std::mem::take(&mut self.scope))
     }
 
-    pub fn restore_scope(&mut self, old: OldScope) {
+    pub fn restore_scope(&mut self, old: OldScope<'s>) {
         self.scope = old.0
     }
 
     // CAUTION: Does not add proc to the symbol file
-    pub fn open_scope(&mut self, name: impl Into<String>, labels: Vec<&str>) {
-        let name = name.into();
-
+    pub fn open_scope(&mut self, name: &'s str, labels: Vec<&str>) {
         for label in labels {
-            let full_name = [&name, ".", label].concat();
+            let full_name = [name, ".", label].concat();
             self.symbols.entry(full_name).or_insert(None);
         }
 
@@ -271,7 +267,7 @@ impl State {
         self.pending_output.push(Pending {
             line_no: self.line_no,
             offset: self.output.len(),
-            scope: self.scope.clone(),
+            scope: self.scope,
             expression,
             output_type,
         });
@@ -447,7 +443,7 @@ pub fn process_pending_output_expressions(s: &mut State, errors: &mut FileErrors
 
 // Only allow state cloning in unit tests
 #[cfg(test)]
-impl Clone for State {
+impl Clone for State<'_> {
     fn clone(&self) -> Self {
         Self {
             direct_page: self.direct_page.clone(),

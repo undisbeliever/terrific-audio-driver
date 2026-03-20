@@ -64,7 +64,7 @@ pub enum ExpressionResult {
 
 struct Matcher<'a, 'b> {
     s: &'a str,
-    state: &'b State,
+    state: &'b State<'b>,
 }
 
 impl<'a> Matcher<'a, '_> {
