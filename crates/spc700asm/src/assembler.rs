@@ -18,7 +18,10 @@ use crate::{
     state::{process_pending_output_expressions, State, SymbolError},
 };
 
-use std::{collections::HashMap, ops::Range};
+use std::{
+    collections::{hash_map::Entry, HashMap},
+    ops::Range,
+};
 
 #[derive(Debug, PartialEq)]
 pub enum AssemblerError<'s> {
@@ -41,6 +44,12 @@ pub enum AssemblerError<'s> {
 
     CannotOpenProc(&'s str, SymbolError),
     EmptyProc,
+
+    DuplicateInline(&'s str),
+    UnusedInline(&'s str),
+    EmptyInline,
+    CannotUseArgumentsInInlineCall,
+    CanOnlyUseInlineOnce,
 
     VarBankOverflows,
 }
@@ -362,9 +371,80 @@ fn process_var_section<'s>(
     }
 }
 
+enum InlineProc<'s> {
+    Inline(Procedure<'s>),
+    Taken,
+}
+
+struct InlineProcs<'s> {
+    map: HashMap<&'s str, usize>,
+    inlines: Vec<InlineProc<'s>>,
+}
+
+impl<'s> InlineProcs<'s> {
+    fn find_and_take(&mut self, name: &str) -> Option<InlineProc<'s>> {
+        match self.map.get(name) {
+            Some(&i) => Some(std::mem::replace(&mut self.inlines[i], InlineProc::Taken)),
+            None => None,
+        }
+    }
+}
+
+fn prepare_inlines<'s>(input: Vec<Procedure<'s>>, errors: &mut FileErrors<'s>) -> InlineProcs<'s> {
+    let mut map = HashMap::new();
+    let mut inlines = Vec::with_capacity(input.len());
+
+    for i in input {
+        match map.entry(i.name) {
+            Entry::Vacant(v) => {
+                v.insert(inlines.len());
+                inlines.push(InlineProc::Inline(i));
+            }
+            Entry::Occupied(m) => {
+                errors.push(i.line_no, AssemblerError::DuplicateInline(m.key()));
+            }
+        }
+    }
+
+    InlineProcs { map, inlines }
+}
+
+fn generate_unused_inline_errors<'s>(inlines: InlineProcs<'s>, errors: &mut FileErrors<'s>) {
+    for i in inlines.inlines {
+        match i {
+            InlineProc::Taken => (),
+            InlineProc::Inline(unused) => {
+                errors.push(unused.line_no, AssemblerError::UnusedInline(unused.name));
+            }
+        }
+    }
+}
+
+fn process_inline<'s>(
+    caller_line_no: LineNo,
+    inline: InlineProc<'s>,
+    inline_procs: &mut InlineProcs<'s>,
+    state: &mut State,
+    errors: &mut FileErrors<'s>,
+) {
+    let caller_scope = state.take_scope();
+
+    match inline {
+        InlineProc::Inline(code) => {
+            process_proc_or_inline(code, ProcType::Inline, inline_procs, state, errors);
+        }
+        InlineProc::Taken => {
+            errors.push(caller_line_no, AssemblerError::CanOnlyUseInlineOnce);
+        }
+    }
+
+    state.restore_scope(caller_scope);
+}
+
 fn process_asm_line<'s>(
     line_no: LineNo,
     line: AsmLine<'s>,
+    inline_procs: &mut InlineProcs<'s>,
     state: &mut State,
     errors: &mut FileErrors<'s>,
 ) {
@@ -376,15 +456,34 @@ fn process_asm_line<'s>(
             Err(e) => errors.push(line_no, e),
         },
         AsmLine::Instruction(instruction, arguments) => {
-            match process_instruction(instruction, arguments, state) {
-                Ok(()) => (),
-                Err(e) => errors.push(line_no, e),
+            match inline_procs.find_and_take(instruction) {
+                None => match process_instruction(instruction, arguments, state) {
+                    Ok(()) => (),
+                    Err(e) => errors.push(line_no, e),
+                },
+                Some(inline) => {
+                    if !arguments.is_empty() {
+                        errors.push(line_no, AssemblerError::CannotUseArgumentsInInlineCall)
+                    }
+                    process_inline(line_no, inline, inline_procs, state, errors);
+                }
             }
         }
     }
 }
 
-fn process_proc<'s>(proc: Procedure<'s>, state: &mut State, errors: &mut FileErrors<'s>) {
+enum ProcType {
+    Procedure,
+    Inline,
+}
+
+fn process_proc_or_inline<'s>(
+    proc: Procedure<'s>,
+    code_type: ProcType,
+    inline_procs: &mut InlineProcs<'s>,
+    state: &mut State,
+    errors: &mut FileErrors<'s>,
+) {
     let labels: Vec<&'s str> = proc
         .lines
         .iter()
@@ -409,25 +508,43 @@ fn process_proc<'s>(proc: Procedure<'s>, state: &mut State, errors: &mut FileErr
     }
 
     for (line_no, asm) in proc.lines {
-        process_asm_line(line_no, asm, state, errors);
+        process_asm_line(line_no, asm, inline_procs, state, errors);
     }
 
     if state.program_counter() == proc_addr {
-        errors.push(proc.end_line_no, AssemblerError::EmptyProc);
+        errors.push(
+            proc.end_line_no,
+            match code_type {
+                ProcType::Procedure => AssemblerError::EmptyProc,
+                ProcType::Inline => AssemblerError::EmptyInline,
+            },
+        );
     }
 
     state.close_scope();
 }
 
+fn process_proc<'s>(
+    proc: Procedure<'s>,
+    inline_procs: &mut InlineProcs<'s>,
+    state: &mut State,
+    errors: &mut FileErrors<'s>,
+) {
+    process_proc_or_inline(proc, ProcType::Procedure, inline_procs, state, errors);
+}
+
 fn process_assembly<'s>(
     assembly: Vec<AsmOrProc<'s>>,
+    inline_procs: &mut InlineProcs<'s>,
     state: &mut State,
     errors: &mut FileErrors<'s>,
 ) {
     for a in assembly {
         match a {
-            AsmOrProc::AsmLine(line_no, line) => process_asm_line(line_no, line, state, errors),
-            AsmOrProc::Procedure(proc) => process_proc(proc, state, errors),
+            AsmOrProc::AsmLine(line_no, line) => {
+                process_asm_line(line_no, line, inline_procs, state, errors)
+            }
+            AsmOrProc::Procedure(proc) => process_proc(proc, inline_procs, state, errors),
         }
     }
 }
@@ -438,6 +555,8 @@ pub fn assemble<'s>(input: &'s str) -> Result<CompiledAsm, FileErrors<'s>> {
     let types = default_types();
 
     let file = parse_file(input, &mut errors);
+
+    let mut inline_procs = prepare_inlines(file.inlines, &mut errors);
 
     let mut state = State::new(0);
 
@@ -454,7 +573,7 @@ pub fn assemble<'s>(input: &'s str) -> Result<CompiledAsm, FileErrors<'s>> {
 
     state.set_pc_base(code_bank.start);
 
-    process_assembly(file.assembly, &mut state, &mut errors);
+    process_assembly(file.assembly, &mut inline_procs, &mut state, &mut errors);
 
     let pending_constants = process_constants(pending_constants, &mut state, &mut errors);
 
@@ -471,6 +590,8 @@ pub fn assemble<'s>(input: &'s str) -> Result<CompiledAsm, FileErrors<'s>> {
             AssemblerError::CodeTooLarge(code_bank, state.program_counter()),
         );
     }
+
+    generate_unused_inline_errors(inline_procs, &mut errors);
 
     if !errors.is_empty() {
         return Err(errors);

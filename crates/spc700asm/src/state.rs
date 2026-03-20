@@ -113,6 +113,8 @@ struct Pending {
     output_type: PendingOutput,
 }
 
+pub struct OldScope(Option<String>);
+
 pub struct State {
     pub direct_page: DirectPageFlag,
 
@@ -165,6 +167,14 @@ impl State {
 
     fn override_scope(&mut self, scope: Option<String>) {
         self.scope = scope;
+    }
+
+    pub fn take_scope(&mut self) -> OldScope {
+        OldScope(std::mem::take(&mut self.scope))
+    }
+
+    pub fn restore_scope(&mut self, old: OldScope) {
+        self.scope = old.0
     }
 
     // CAUTION: Does not add proc to the symbol file

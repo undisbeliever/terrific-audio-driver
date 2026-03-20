@@ -65,6 +65,7 @@ pub struct AsmFile<'a> {
     pub var_banks: Vec<VarBankStatement<'a>>,
 
     pub vars: Vec<VarsSection<'a>>,
+    pub inlines: Vec<Procedure<'a>>,
 
     pub assembly: Vec<AsmOrProc<'a>>,
 }
@@ -78,6 +79,10 @@ pub enum FileParserError<'a> {
     NoEndVars,
     InvalidCommand(&'a str),
     NoEndProc,
+    NoEndInline,
+    EndInlineInProc,
+    EndProcInInline,
+    CannotNestInlinesOrProcs,
 }
 
 fn parse_code_bank<'a>(
@@ -189,9 +194,15 @@ pub fn parse_asm_line<'a>(
     }
 }
 
-fn parse_proc<'a>(
+enum ProcType {
+    Proc,
+    Inline,
+}
+
+fn parse_proc_or_inline<'a>(
     line_no: LineNo,
     name: &'a str,
+    proc_type: ProcType,
     it: &mut impl Iterator<Item = (LineNo, &'a str)>,
     errors: &mut FileErrors<'a>,
 ) -> Procedure<'a> {
@@ -207,10 +218,21 @@ fn parse_proc<'a>(
         let (first_word, arguments) = split_first_word(line);
 
         match first_word {
-            ".endproc" => {
-                out.end_line_no = line_no;
-                return out;
-            }
+            ".endproc" => match proc_type {
+                ProcType::Proc => {
+                    out.end_line_no = line_no;
+                    return out;
+                }
+                ProcType::Inline => errors.push(line_no, FileParserError::EndProcInInline),
+            },
+            ".endinline" => match proc_type {
+                ProcType::Inline => {
+                    out.end_line_no = line_no;
+                    return out;
+                }
+                ProcType::Proc => errors.push(line_no, FileParserError::EndInlineInProc),
+            },
+            ".proc" | ".inline" => errors.push(line_no, FileParserError::CannotNestInlinesOrProcs),
             _ => {
                 if let Some(expr) = arguments.strip_prefix("=") {
                     out.constants.push(Constant {
@@ -227,8 +249,13 @@ fn parse_proc<'a>(
         }
     }
 
-    errors.push(line_no, FileParserError::NoEndProc);
-
+    errors.push(
+        line_no,
+        match proc_type {
+            ProcType::Proc => FileParserError::NoEndProc,
+            ProcType::Inline => FileParserError::NoEndInline,
+        },
+    );
     out
 }
 
@@ -238,6 +265,7 @@ pub fn parse_file<'a>(file: &'a str, errors: &mut FileErrors<'a>) -> AsmFile<'a>
         code_bank: None,
         var_banks: Vec::new(),
         vars: Vec::new(),
+        inlines: Vec::new(),
         assembly: Vec::new(),
     };
     let mut it = file.lines().enumerate().filter_map(|(i, s)| {
@@ -268,9 +296,20 @@ pub fn parse_file<'a>(file: &'a str, errors: &mut FileErrors<'a>) -> AsmFile<'a>
                 Err(e) => errors.push(line_no, e),
             },
             ".vars" => out.vars.push(parse_vars(line_no, args, &mut it, errors)),
-            ".proc" => out.assembly.push(AsmOrProc::Procedure(parse_proc(
-                line_no, args, &mut it, errors,
+            ".proc" => out.assembly.push(AsmOrProc::Procedure(parse_proc_or_inline(
+                line_no,
+                args,
+                ProcType::Proc,
+                &mut it,
+                errors,
             ))),
+            ".inline" => out.inlines.push(parse_proc_or_inline(
+                line_no,
+                args,
+                ProcType::Inline,
+                &mut it,
+                errors,
+            )),
             _ => {
                 if let Some(expr) = args.strip_prefix("=") {
                     out.global_constants.push(Constant {

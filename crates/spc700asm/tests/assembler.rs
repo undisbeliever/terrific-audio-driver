@@ -414,3 +414,378 @@ fn empty_proc_is_error() {
 
     assert_eq!(e.errors(), &[(l(5), AssemblerError::EmptyProc.into(),)]);
 }
+
+#[test]
+fn inline() -> Result<(), Box<dyn std::error::Error>> {
+    let c = assemble(
+        r##"
+.codebank $0200..$0300
+
+zpTmp1 = 0
+zpTmp2 = 1
+
+.inline first_inline
+_tmp1 = zpTmp1
+_tmp2 = zpTmp2
+
+    mov A, _tmp1
+    mov _tmp2, A
+.endinline
+
+Global:
+    inc A
+    first_inline
+    ret
+
+.proc InProc
+    inc X
+    second_inline
+    inc X
+    ret
+.endproc
+
+; Forward referenced inline proc
+.inline second_inline
+    inc Y
+.endinline
+
+"##,
+    )?;
+
+    assert_eq!(c.symbols["first_inline"], 0x201);
+    assert_eq!(c.symbols["InProc"], 0x206);
+    assert_eq!(c.symbols["second_inline"], 0x207);
+
+    assert_eq!(c.symbols["first_inline._tmp1"], c.symbols["zpTmp1"]);
+    assert_eq!(c.symbols["first_inline._tmp2"], c.symbols["zpTmp2"]);
+
+    assert_eq!(
+        c.output,
+        &[
+            0xbc, // Global
+            0xe4, 0, 0xc4, 1,    // first_inline
+            0x6f, // Global
+            0x3d, // InProc
+            0xfc, // second_inline
+            0x3d, 0x6f // InProc
+        ]
+    );
+
+    Ok(())
+}
+
+#[test]
+fn nested_inline_calls() -> Result<(), Box<dyn std::error::Error>> {
+    let c = assemble(
+        r##"
+.codebank $0200..$0300
+
+.inline inner
+    constant = 0
+
+    mov A, #constant
+.endinline
+
+.inline outer
+    constant = 1
+
+    mov A, #constant * 10
+    inner
+    mov A, #constant
+.endinline
+
+.inline outer_outer
+    mov A, #constant * 10
+    outer
+    mov A, #constant
+
+    constant = 2
+.endinline
+
+    outer_outer
+    stop
+"##,
+    )?;
+
+    assert_eq!(c.symbols["outer_outer"], 0x200);
+    assert_eq!(c.symbols["outer"], 0x202);
+    assert_eq!(c.symbols["inner"], 0x204);
+
+    assert_eq!(c.symbols["outer_outer.constant"], 2);
+    assert_eq!(c.symbols["outer.constant"], 1);
+    assert_eq!(c.symbols["inner.constant"], 0);
+
+    assert_eq!(
+        c.output,
+        &[
+            0xe8, 20, // outer_outer
+            0xe8, 10, // outer
+            0xe8, 0, // inner
+            0xe8, 1, // outer
+            0xe8, 2, // outer_outer
+            0xff
+        ]
+    );
+
+    Ok(())
+}
+
+#[test]
+fn inline_scoping_test() -> Result<(), Box<dyn std::error::Error>> {
+    let c = assemble(
+        r##"
+.codebank $0200..$0300
+
+name = 1
+
+    mov A, #name
+    inline1
+    stop
+
+.inline inline1
+    name = 2
+
+    mov A, #name
+    inline2
+.endinline
+
+; Forward referenced inline and inner constant
+.inline inline2
+    mov A, #name
+
+    name = 3
+.endinline
+"##,
+    )?;
+
+    assert_eq!(
+        c.output,
+        &[
+            0xe8, 1, // global
+            0xe8, 2, // inline1
+            0xe8, 3,    // inline2
+            0xff, // stop
+        ]
+    );
+
+    Ok(())
+}
+
+#[test]
+fn duplicate_inline_name_is_error() {
+    let e = assemble(
+        r##"
+.codebank $0200..$0300
+
+.inline inline
+    inc A
+.endinline
+
+.inline inline
+    inc A
+.endinline
+
+inline
+"##,
+    )
+    .err()
+    .unwrap();
+
+    assert_eq!(
+        e.errors(),
+        &[(l(8), AssemblerError::DuplicateInline("inline").into())]
+    );
+}
+
+#[test]
+fn empty_inline_is_error() {
+    let e = assemble(
+        r##"
+.codebank $0200..$0300
+
+.inline inline_subroutine
+.endinline
+
+.proc subroutine
+    inline_subroutine
+    ret
+.endproc
+"##,
+    )
+    .err()
+    .unwrap();
+
+    assert_eq!(e.errors(), &[(l(5), AssemblerError::EmptyInline.into())]);
+}
+
+#[test]
+fn args_in_inline_call_is_error() {
+    let e = assemble(
+        r##"
+.codebank $0200..$0300
+
+.inline inline1
+    inc A
+.endinline
+
+    inline1 invalid
+"##,
+    )
+    .err()
+    .unwrap();
+
+    assert_eq!(
+        e.errors(),
+        &[(l(8), AssemblerError::CannotUseArgumentsInInlineCall.into())]
+    );
+}
+
+#[test]
+fn confirm_inline_only_used_once() {
+    let e = assemble(
+        r##"
+.codebank $0200..$0300
+
+.inline inline1
+    inc A
+.endinline
+
+.inline inline2
+    inc X
+.endinline
+
+inline1
+inline1
+
+.proc sub
+    inline2
+    inline2
+.endproc
+"##,
+    )
+    .err()
+    .unwrap();
+
+    assert_eq!(
+        e.errors(),
+        &[
+            (l(13), AssemblerError::CanOnlyUseInlineOnce.into()),
+            (l(17), AssemblerError::CanOnlyUseInlineOnce.into()),
+        ]
+    );
+}
+
+#[test]
+fn unused_inline_is_error() {
+    let e = assemble(
+        r##"
+.codebank $0200..$0300
+
+.inline inline1
+    inc A
+.endinline
+
+.inline inline2
+    inc X
+.endinline
+
+.inline inline3
+    inc Y
+.endinline
+
+inline1
+inline3
+"##,
+    )
+    .err()
+    .unwrap();
+
+    assert_eq!(
+        e.errors(),
+        &[(l(8), AssemblerError::UnusedInline("inline2").into())]
+    );
+}
+
+#[test]
+fn nesting_inline_and_proc_is_error() {
+    let e = assemble(
+        r##".codebank $0200..$0300
+.inline inline
+    .proc inner
+        inc A
+    .endproc
+    inc A
+.endinline
+
+inline
+"##,
+    )
+    .err()
+    .unwrap();
+    assert_eq!(
+        e.errors(),
+        [
+            (l(3), FileParserError::CannotNestInlinesOrProcs.into()),
+            (l(5), FileParserError::EndProcInInline.into()),
+        ]
+    );
+
+    let e = assemble(
+        r##".codebank $0200..$0300
+.proc proc
+    .inline inner
+        inc A
+    .endinline
+    inc A
+.endproc
+"##,
+    )
+    .err()
+    .unwrap();
+    assert_eq!(
+        e.errors(),
+        [
+            (l(3), FileParserError::CannotNestInlinesOrProcs.into()),
+            (l(5), FileParserError::EndInlineInProc.into()),
+        ]
+    );
+}
+
+#[test]
+fn incorrect_proc_and_inline_end_err() {
+    let e = assemble(
+        r##".codebank $0200..$0300
+inline
+
+.inline inline
+    inc A
+.endproc
+"##,
+    )
+    .err()
+    .unwrap();
+    assert_eq!(
+        e.errors(),
+        [
+            (l(6), FileParserError::EndProcInInline.into()),
+            (l(4), FileParserError::NoEndInline.into()),
+        ]
+    );
+
+    let e = assemble(
+        r##".codebank $0200..$0300
+.proc proc
+    inc A
+.endinline
+"##,
+    )
+    .err()
+    .unwrap();
+    assert_eq!(
+        e.errors(),
+        [
+            (l(4), FileParserError::EndInlineInProc.into()),
+            (l(2), FileParserError::NoEndProc.into()),
+        ]
+    );
+}
