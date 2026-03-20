@@ -56,8 +56,25 @@ pub enum AssemblerError<'s> {
 
 pub struct CompiledAsm {
     pub banks: Vec<VariableBank>,
-    pub symbols: HashMap<String, i64>,
+    pub symbols: HashMap<String, Option<i64>>,
     pub output: Vec<u8>,
+}
+
+impl CompiledAsm {
+    /// Gets the symbol's value
+    ///
+    /// Panics if `name` is not a symbol
+    pub fn sym(&self, name: &str) -> i64 {
+        match self.symbols.get(name) {
+            Some(Some(v)) => *v,
+            _ => panic!("Symbol {name:?} not found"),
+        }
+    }
+
+    /// Gets the symbol's value without panicing
+    pub fn get(&self, name: &str) -> Option<i64> {
+        self.symbols.get(name).copied().flatten()
+    }
 }
 
 pub struct VariableBank {
@@ -604,9 +621,6 @@ pub fn assemble<'s>(input: &'s str) -> Result<CompiledAsm, FileErrors<'s>> {
 
     if errors.is_empty() {
         let (output, symbols) = state.take_output_and_symbols();
-
-        // ::TODO remove this step::
-        let symbols = symbols.into_iter().map(|(k, v)| (k, v.unwrap())).collect();
 
         Ok(CompiledAsm {
             banks,

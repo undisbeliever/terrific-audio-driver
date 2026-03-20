@@ -57,30 +57,30 @@ N_CHANNELS = 10
     assert_eq!(c.banks[1].range, 0x0100..0x0200);
     assert_eq!(c.banks[1].pos, 0x100 + 2 + 10 + 2 * 2 * 4);
 
-    assert_eq!(c.symbols["unsigned_byte"], 0x00);
-    assert_eq!(c.symbols["signed_byte"], 0x01);
+    assert_eq!(c.sym("unsigned_byte"), 0x00);
+    assert_eq!(c.sym("signed_byte"), 0x01);
 
-    assert_eq!(c.symbols["unsigned_word"], 0x02);
-    assert_eq!(c.symbols["unsigned_word.l"], 0x02);
-    assert_eq!(c.symbols["unsigned_word.h"], 0x03);
+    assert_eq!(c.sym("unsigned_word"), 0x02);
+    assert_eq!(c.sym("unsigned_word.l"), 0x02);
+    assert_eq!(c.sym("unsigned_word.h"), 0x03);
 
-    assert_eq!(c.symbols["signed_word"], 0x04);
-    assert_eq!(c.symbols["signed_word.l"], 0x04);
-    assert_eq!(c.symbols["signed_word.h"], 0x05);
+    assert_eq!(c.sym("signed_word"), 0x04);
+    assert_eq!(c.sym("signed_word.l"), 0x04);
+    assert_eq!(c.sym("signed_word.h"), 0x05);
 
-    assert_eq!(c.symbols["pointer"], 0x100);
-    assert_eq!(c.symbols["pointer.l"], 0x100);
-    assert_eq!(c.symbols["pointer.h"], 0x101);
+    assert_eq!(c.sym("pointer"), 0x100);
+    assert_eq!(c.sym("pointer.l"), 0x100);
+    assert_eq!(c.sym("pointer.h"), 0x101);
 
-    assert_eq!(c.symbols["byte_array"], 0x102);
+    assert_eq!(c.sym("byte_array"), 0x102);
 
-    assert_eq!(c.symbols["word_array"], 0x10c);
-    assert_eq!(c.symbols["word_array.l"], 0x10c);
-    assert_eq!(c.symbols["word_array.h"], 0x10d);
+    assert_eq!(c.sym("word_array"), 0x10c);
+    assert_eq!(c.sym("word_array.l"), 0x10c);
+    assert_eq!(c.sym("word_array.h"), 0x10d);
 
-    assert_eq!(c.symbols["word_array2"], 0x114);
-    assert_eq!(c.symbols["word_array2.l"], 0x114);
-    assert_eq!(c.symbols["word_array2.h"], 0x115);
+    assert_eq!(c.sym("word_array2"), 0x114);
+    assert_eq!(c.sym("word_array2.l"), 0x114);
+    assert_eq!(c.sym("word_array2.h"), 0x115);
 
     assert_eq!(c.output, &[]);
 
@@ -212,10 +212,10 @@ End:
 "##,
     )?;
 
-    assert_eq!(c.symbols["Label"], 0x200);
-    assert_eq!(c.symbols["Label2"], 0x202);
-    assert_eq!(c.symbols["End"], 0x207);
-    assert_eq!(c.symbols["FORWARD_REFERENCED_CONSTANT"], 0x209);
+    assert_eq!(c.sym("Label"), 0x200);
+    assert_eq!(c.sym("Label2"), 0x202);
+    assert_eq!(c.sym("End"), 0x207);
+    assert_eq!(c.sym("FORWARD_REFERENCED_CONSTANT"), 0x209);
 
     assert_eq!(&c.output, &[0x2f, -2i8 as u8, 0xbc, 0xe8, 9, 0x2f, 0]);
 
@@ -316,11 +316,11 @@ _tmp2 = zpTmp2
 "##,
     )?;
 
-    assert_eq!(c.symbols["subroutine"], 0x200);
-    assert_eq!(c.symbols["subroutine2"], 0x208);
+    assert_eq!(c.sym("subroutine"), 0x200);
+    assert_eq!(c.sym("subroutine2"), 0x208);
 
-    assert_eq!(c.symbols["subroutine._tmp1"], c.symbols["zpTmp1"]);
-    assert_eq!(c.symbols["subroutine._tmp2"], c.symbols["zpTmp2"]);
+    assert_eq!(c.sym("subroutine._tmp1"), c.sym("zpTmp1"));
+    assert_eq!(c.sym("subroutine._tmp2"), c.sym("zpTmp2"));
 
     assert_eq!(
         c.output,
@@ -452,12 +452,12 @@ Global:
 "##,
     )?;
 
-    assert_eq!(c.symbols["first_inline"], 0x201);
-    assert_eq!(c.symbols["InProc"], 0x206);
-    assert_eq!(c.symbols["second_inline"], 0x207);
+    assert_eq!(c.sym("first_inline"), 0x201);
+    assert_eq!(c.sym("InProc"), 0x206);
+    assert_eq!(c.sym("second_inline"), 0x207);
 
-    assert_eq!(c.symbols["first_inline._tmp1"], c.symbols["zpTmp1"]);
-    assert_eq!(c.symbols["first_inline._tmp2"], c.symbols["zpTmp2"]);
+    assert_eq!(c.sym("first_inline._tmp1"), c.sym("zpTmp1"));
+    assert_eq!(c.sym("first_inline._tmp2"), c.sym("zpTmp2"));
 
     assert_eq!(
         c.output,
@@ -507,13 +507,13 @@ fn nested_inline_calls() -> Result<(), Box<dyn std::error::Error>> {
 "##,
     )?;
 
-    assert_eq!(c.symbols["outer_outer"], 0x200);
-    assert_eq!(c.symbols["outer"], 0x202);
-    assert_eq!(c.symbols["inner"], 0x204);
+    assert_eq!(c.sym("outer_outer"), 0x200);
+    assert_eq!(c.sym("outer"), 0x202);
+    assert_eq!(c.sym("inner"), 0x204);
 
-    assert_eq!(c.symbols["outer_outer.constant"], 2);
-    assert_eq!(c.symbols["outer.constant"], 1);
-    assert_eq!(c.symbols["inner.constant"], 0);
+    assert_eq!(c.sym("outer_outer.constant"), 2);
+    assert_eq!(c.sym("outer.constant"), 1);
+    assert_eq!(c.sym("inner.constant"), 0);
 
     assert_eq!(
         c.output,
