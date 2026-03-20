@@ -45,6 +45,19 @@ pub enum AsmLine<'a> {
     Instruction(&'a str, &'a str),
 }
 
+pub struct Procedure<'a> {
+    pub line_no: LineNo,
+    pub end_line_no: LineNo,
+    pub name: &'a str,
+    pub constants: Vec<Constant<'a>>,
+    pub lines: Vec<(LineNo, AsmLine<'a>)>,
+}
+
+pub enum AsmOrProc<'a> {
+    AsmLine(LineNo, AsmLine<'a>),
+    Procedure(Procedure<'a>),
+}
+
 pub struct AsmFile<'a> {
     pub global_constants: Vec<Constant<'a>>,
 
@@ -53,7 +66,7 @@ pub struct AsmFile<'a> {
 
     pub vars: Vec<VarsSection<'a>>,
 
-    pub assembly: Vec<(LineNo, AsmLine<'a>)>,
+    pub assembly: Vec<AsmOrProc<'a>>,
 }
 
 #[derive(Debug, PartialEq)]
@@ -64,6 +77,7 @@ pub enum FileParserError<'a> {
     InvalidVarLine,
     NoEndVars,
     InvalidCommand(&'a str),
+    NoEndProc,
 }
 
 fn parse_code_bank<'a>(
@@ -175,6 +189,49 @@ pub fn parse_asm_line<'a>(
     }
 }
 
+fn parse_proc<'a>(
+    line_no: LineNo,
+    name: &'a str,
+    it: &mut impl Iterator<Item = (LineNo, &'a str)>,
+    errors: &mut FileErrors<'a>,
+) -> Procedure<'a> {
+    let mut out = Procedure {
+        line_no,
+        end_line_no: LineNo(0),
+        name,
+        constants: Vec::new(),
+        lines: Vec::new(),
+    };
+
+    for (line_no, line) in it {
+        let (first_word, arguments) = split_first_word(line);
+
+        match first_word {
+            ".endproc" => {
+                out.end_line_no = line_no;
+                return out;
+            }
+            _ => {
+                if let Some(expr) = arguments.strip_prefix("=") {
+                    out.constants.push(Constant {
+                        line_no,
+                        name: first_word,
+                        expr: expr.trim_start(),
+                    });
+                } else {
+                    parse_asm_line(line_no, first_word, arguments, errors, &mut |ln, l| {
+                        out.lines.push((ln, l))
+                    });
+                }
+            }
+        }
+    }
+
+    errors.push(line_no, FileParserError::NoEndProc);
+
+    out
+}
+
 pub fn parse_file<'a>(file: &'a str, errors: &mut FileErrors<'a>) -> AsmFile<'a> {
     let mut out = AsmFile {
         global_constants: Vec::new(),
@@ -211,6 +268,9 @@ pub fn parse_file<'a>(file: &'a str, errors: &mut FileErrors<'a>) -> AsmFile<'a>
                 Err(e) => errors.push(line_no, e),
             },
             ".vars" => out.vars.push(parse_vars(line_no, args, &mut it, errors)),
+            ".proc" => out.assembly.push(AsmOrProc::Procedure(parse_proc(
+                line_no, args, &mut it, errors,
+            ))),
             _ => {
                 if let Some(expr) = args.strip_prefix("=") {
                     out.global_constants.push(Constant {
@@ -220,7 +280,7 @@ pub fn parse_file<'a>(file: &'a str, errors: &mut FileErrors<'a>) -> AsmFile<'a>
                     });
                 } else {
                     parse_asm_line(line_no, command, args, errors, &mut |n, l| {
-                        out.assembly.push((n, l))
+                        out.assembly.push(AsmOrProc::AsmLine(n, l))
                     });
                 }
             }

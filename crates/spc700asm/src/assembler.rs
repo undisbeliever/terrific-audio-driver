@@ -11,10 +11,11 @@ use crate::{
         ExpressionResult,
     },
     file_parser::{
-        parse_file, AsmLine, CodeBankStatement, Constant, Var, VarBankStatement, VarsSection,
+        parse_file, AsmLine, AsmOrProc, CodeBankStatement, Constant, Procedure, Var,
+        VarBankStatement, VarsSection,
     },
     instructions::process_instruction,
-    state::{process_pending_output_expressions, State},
+    state::{process_pending_output_expressions, State, SymbolError},
 };
 
 use std::{collections::HashMap, ops::Range};
@@ -37,6 +38,9 @@ pub enum AssemblerError<'s> {
     InvalidArraySyntax,
     CannotNestArrays,
     ArrayTooLarge,
+
+    CannotOpenProc(&'s str, SymbolError),
+    EmptyProc,
 
     VarBankOverflows,
 }
@@ -103,7 +107,7 @@ fn default_types<'s>() -> HashMap<&'s str, Type<'s>> {
     out
 }
 
-fn process_global_constants<'s>(
+fn process_constants<'s>(
     constants: Vec<Constant<'s>>,
     state: &mut State,
     errors: &mut FileErrors<'s>,
@@ -380,13 +384,51 @@ fn process_asm_line<'s>(
     }
 }
 
+fn process_proc<'s>(proc: Procedure<'s>, state: &mut State, errors: &mut FileErrors<'s>) {
+    let labels: Vec<&'s str> = proc
+        .lines
+        .iter()
+        .filter_map(|(_, l)| match l {
+            AsmLine::Label(l) => Some(*l),
+            _ => None,
+        })
+        .collect();
+
+    let proc_addr = state.program_counter();
+
+    match state.add_symbol(proc.name, proc_addr) {
+        Ok(()) => (),
+        Err(e) => errors.push(proc.line_no, AssemblerError::CannotOpenProc(proc.name, e)),
+    }
+
+    state.open_scope(proc.name, labels);
+
+    let unknown = process_constants(proc.constants, state, errors);
+    for c in unknown {
+        errors.push(c.line_no, AssemblerError::ConstantWithUnknownValue(c.expr))
+    }
+
+    for (line_no, asm) in proc.lines {
+        process_asm_line(line_no, asm, state, errors);
+    }
+
+    if state.program_counter() == proc_addr {
+        errors.push(proc.end_line_no, AssemblerError::EmptyProc);
+    }
+
+    state.close_scope();
+}
+
 fn process_assembly<'s>(
-    assembly: Vec<(LineNo, AsmLine<'s>)>,
+    assembly: Vec<AsmOrProc<'s>>,
     state: &mut State,
     errors: &mut FileErrors<'s>,
 ) {
-    for (line_no, line) in assembly {
-        process_asm_line(line_no, line, state, errors);
+    for a in assembly {
+        match a {
+            AsmOrProc::AsmLine(line_no, line) => process_asm_line(line_no, line, state, errors),
+            AsmOrProc::Procedure(proc) => process_proc(proc, state, errors),
+        }
     }
 }
 
@@ -399,8 +441,7 @@ pub fn assemble<'s>(input: &'s str) -> Result<CompiledAsm, FileErrors<'s>> {
 
     let mut state = State::new(0);
 
-    let pending_constants =
-        process_global_constants(file.global_constants, &mut state, &mut errors);
+    let pending_constants = process_constants(file.global_constants, &mut state, &mut errors);
 
     let code_bank = process_code_bank(file.code_bank, &state, &mut errors);
     let mut banks = process_var_banks(file.var_banks, &state, &mut errors);
@@ -409,13 +450,13 @@ pub fn assemble<'s>(input: &'s str) -> Result<CompiledAsm, FileErrors<'s>> {
         process_var_section(v, &types, &mut banks, &mut state, &mut errors);
     }
 
-    let pending_constants = process_global_constants(pending_constants, &mut state, &mut errors);
+    let pending_constants = process_constants(pending_constants, &mut state, &mut errors);
 
     state.set_pc_base(code_bank.start);
 
     process_assembly(file.assembly, &mut state, &mut errors);
 
-    let pending_constants = process_global_constants(pending_constants, &mut state, &mut errors);
+    let pending_constants = process_constants(pending_constants, &mut state, &mut errors);
 
     for c in pending_constants {
         errors.push(c.line_no, AssemblerError::ConstantWithUnknownValue(c.expr))
@@ -442,6 +483,10 @@ pub fn assemble<'s>(input: &'s str) -> Result<CompiledAsm, FileErrors<'s>> {
 
     if errors.is_empty() {
         let (output, symbols) = state.take_output_and_symbols();
+
+        // ::TODO remove this step::
+        let symbols = symbols.into_iter().map(|(k, v)| (k, v.unwrap())).collect();
+
         Ok(CompiledAsm {
             banks,
             output,

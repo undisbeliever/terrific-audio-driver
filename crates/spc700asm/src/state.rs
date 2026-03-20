@@ -10,6 +10,7 @@ use std::collections::{hash_map::Entry, HashMap};
 #[derive(Debug, PartialEq)]
 pub enum SymbolError {
     InvalidSymbol(String),
+    InvalidLabel(String),
     DuplicateSymbol,
 }
 
@@ -102,16 +103,29 @@ enum PendingOutput {
     Pcall,
 }
 
+#[derive(Clone)]
+struct Pending {
+    line_no: LineNo,
+    offset: usize,
+    // ::TODO change to Option<&'s str>::
+    scope: Option<String>,
+    expression: String,
+    output_type: PendingOutput,
+}
+
 pub struct State {
     pub direct_page: DirectPageFlag,
 
-    symbols: HashMap<String, i64>,
+    // ::TODO change to Option<&'s str>::
+    scope: Option<String>,
+
+    symbols: HashMap<String, Option<i64>>,
     output: Vec<u8>,
 
     pc_base: u16,
 
     line_no: LineNo,
-    pending_output: Vec<(LineNo, usize, String, PendingOutput)>,
+    pending_output: Vec<Pending>,
 }
 
 impl State {
@@ -119,6 +133,7 @@ impl State {
     pub fn new(pc_base: u16) -> Self {
         Self {
             direct_page: DirectPageFlag::Zero,
+            scope: None,
             symbols: HashMap::new(),
             output: Vec::new(),
             pc_base,
@@ -127,7 +142,7 @@ impl State {
         }
     }
 
-    pub(crate) fn take_output_and_symbols(self) -> (Vec<u8>, HashMap<String, i64>) {
+    pub(crate) fn take_output_and_symbols(self) -> (Vec<u8>, HashMap<String, Option<i64>>) {
         (self.output, self.symbols)
     }
 
@@ -148,6 +163,43 @@ impl State {
         self.pc_base = pc_base;
     }
 
+    fn override_scope(&mut self, scope: Option<String>) {
+        self.scope = scope;
+    }
+
+    // CAUTION: Does not add proc to the symbol file
+    pub fn open_scope(&mut self, name: impl Into<String>, labels: Vec<&str>) {
+        let name = name.into();
+
+        for label in labels {
+            let full_name = [&name, ".", label].concat();
+            self.symbols.entry(full_name).or_insert(None);
+        }
+
+        self.scope = Some(name);
+    }
+
+    pub fn close_scope(&mut self) {
+        self.scope = None;
+    }
+
+    fn add_unchecked_symbol(&mut self, full_name: String, value: i64) -> Result<(), SymbolError> {
+        match self.symbols.entry(full_name) {
+            Entry::Vacant(v) => {
+                v.insert(Some(value));
+                Ok(())
+            }
+            Entry::Occupied(mut v) => {
+                if v.get().is_none() {
+                    v.insert(Some(value));
+                    Ok(())
+                } else {
+                    Err(SymbolError::DuplicateSymbol)
+                }
+            }
+        }
+    }
+
     pub fn add_scoped_symbol(
         &mut self,
         parent: &str,
@@ -157,35 +209,36 @@ impl State {
         let full_name = [parent, ".", child_name].concat();
 
         match is_symbol_name_valid(child_name) {
-            true => match self.symbols.entry(full_name) {
-                Entry::Vacant(v) => {
-                    v.insert(value);
-                    Ok(())
-                }
-                Entry::Occupied(_) => Err(SymbolError::DuplicateSymbol),
-            },
+            true => self.add_unchecked_symbol(full_name, value),
             false => Err(SymbolError::InvalidSymbol(full_name)),
         }
     }
 
-    #[allow(dead_code)] // ::TODO remove::
-    pub fn add_symbol(&mut self, name: impl Into<String>, value: i64) -> Result<(), SymbolError> {
-        let name = name.into();
-
-        match is_symbol_name_valid(&name) {
-            true => match self.symbols.entry(name) {
-                Entry::Vacant(v) => {
-                    v.insert(value);
-                    Ok(())
+    pub fn add_symbol(&mut self, name: &str, value: i64) -> Result<(), SymbolError> {
+        match is_symbol_name_valid(name) {
+            true => match &self.scope {
+                Some(scope) => {
+                    let full_name = [scope, ".", name].concat();
+                    self.add_unchecked_symbol(full_name, value)
                 }
-                Entry::Occupied(_) => Err(SymbolError::DuplicateSymbol),
+                None => self.add_unchecked_symbol(name.to_owned(), value),
             },
-            false => Err(SymbolError::InvalidSymbol(name)),
+            false => Err(SymbolError::InvalidLabel(name.into())),
         }
     }
 
     pub fn get_symbol(&self, name: &str) -> Option<i64> {
-        self.symbols.get(name).copied()
+        match &self.scope {
+            Some(scope) => {
+                let full_name = [scope, ".", name].concat();
+                match self.symbols.get(&full_name) {
+                    Some(Some(v)) => Some(*v),
+                    Some(None) => None,
+                    None => self.symbols.get(name).copied().flatten(),
+                }
+            }
+            None => self.symbols.get(name).copied().flatten(),
+        }
     }
 
     #[cfg(test)]
@@ -204,9 +257,14 @@ impl State {
         }
     }
 
-    fn push_pending_output(&mut self, expression: String, p: PendingOutput) {
-        self.pending_output
-            .push((self.line_no, self.output.len(), expression, p))
+    fn push_pending_output(&mut self, expression: String, output_type: PendingOutput) {
+        self.pending_output.push(Pending {
+            line_no: self.line_no,
+            offset: self.output.len(),
+            scope: self.scope.clone(),
+            expression,
+            output_type,
+        });
     }
 
     pub fn write_u8(&mut self, value: u8) {
@@ -302,13 +360,16 @@ impl State {
 }
 
 pub fn process_pending_output_expressions(s: &mut State, errors: &mut FileErrors) {
-    for (line_no, pos, expr, p) in std::mem::take(&mut s.pending_output) {
-        match evaluate(&expr, s) {
-            ExpressionResult::Value(value) => match p {
+    for p in std::mem::take(&mut s.pending_output) {
+        let pos = p.offset;
+
+        s.override_scope(p.scope);
+        match evaluate(&p.expression, s) {
+            ExpressionResult::Value(value) => match p.output_type {
                 PendingOutput::U8 => match u8::try_from(value) {
                     Ok(v) => s.output[pos] = v,
                     Err(_) => errors.push(
-                        line_no,
+                        p.line_no,
                         OutputError::OutOfRange {
                             value,
                             min: u8::MIN.into(),
@@ -321,7 +382,7 @@ pub fn process_pending_output_expressions(s: &mut State, errors: &mut FileErrors
                         s.output[pos..pos + 2].copy_from_slice(&v.to_le_bytes());
                     }
                     Err(_) => errors.push(
-                        line_no,
+                        p.line_no,
                         OutputError::OutOfRange {
                             value,
                             min: u16::MIN.into(),
@@ -335,7 +396,7 @@ pub fn process_pending_output_expressions(s: &mut State, errors: &mut FileErrors
                         s.output[pos..pos + 2].copy_from_slice(&v.to_le_bytes());
                     }
                     _ => errors.push(
-                        line_no,
+                        p.line_no,
                         OutputError::OutOfRange {
                             value,
                             min: 0,
@@ -350,24 +411,25 @@ pub fn process_pending_output_expressions(s: &mut State, errors: &mut FileErrors
                     let value = value - pc;
                     match i8::try_from(value) {
                         Ok(v) => s.output[pos] = v.to_le_bytes()[0],
-                        Err(_) => errors.push(line_no, OutputError::BranchOutOfRange(value)),
+                        Err(_) => errors.push(p.line_no, OutputError::BranchOutOfRange(value)),
                     }
                 }
                 PendingOutput::Pcall => match u16::try_from(value) {
                     Ok(v) if v & 0xff00 == 0xff00 => {
                         s.output[pos] = v.to_le_bytes()[0];
                     }
-                    _ => errors.push(line_no, OutputError::InvalidPcall(value)),
+                    _ => errors.push(p.line_no, OutputError::InvalidPcall(value)),
                 },
             },
             crate::evaluator::ExpressionResult::Boolean(_) => {
-                errors.push(line_no, OutputError::NotANumber(expr))
+                errors.push(p.line_no, OutputError::NotANumber(p.expression))
             }
-            crate::evaluator::ExpressionResult::Unknown => {
-                errors.push(line_no, OutputError::ExpressionHasUnknownValue(expr))
-            }
+            crate::evaluator::ExpressionResult::Unknown => errors.push(
+                p.line_no,
+                OutputError::ExpressionHasUnknownValue(p.expression),
+            ),
             ExpressionResult::Error(e) => {
-                errors.push(line_no, OutputError::ExpressionError(expr, e))
+                errors.push(p.line_no, OutputError::ExpressionError(p.expression, e))
             }
         }
     }
@@ -379,6 +441,7 @@ impl Clone for State {
     fn clone(&self) -> Self {
         Self {
             direct_page: self.direct_page.clone(),
+            scope: self.scope.clone(),
             symbols: self.symbols.clone(),
             pc_base: self.pc_base,
             output: self.output.clone(),

@@ -8,6 +8,7 @@ use spc700asm::{
     assemble,
     errors::{
         AssemblerError, ConstexprError, ExpressionError, FileParserError, LineNo, OutputError,
+        SymbolError,
     },
 };
 
@@ -286,4 +287,130 @@ fn code_too_large_error() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     Ok(())
+}
+
+#[test]
+fn proc() -> Result<(), Box<dyn std::error::Error>> {
+    let c = assemble(
+        r##"
+.codebank $0200..$0300
+
+zpTmp1 = 0
+zpTmp2 = 1
+
+.proc subroutine
+_tmp1 = zpTmp1
+_tmp2 = zpTmp2
+
+    mov A, _tmp1
+    mov _tmp2, A
+
+    call subroutine2
+
+    ret
+.endproc
+
+.proc subroutine2
+    ret
+.endproc
+"##,
+    )?;
+
+    assert_eq!(c.symbols["subroutine"], 0x200);
+    assert_eq!(c.symbols["subroutine2"], 0x208);
+
+    assert_eq!(c.symbols["subroutine._tmp1"], c.symbols["zpTmp1"]);
+    assert_eq!(c.symbols["subroutine._tmp2"], c.symbols["zpTmp2"]);
+
+    assert_eq!(
+        c.output,
+        &[
+            0xe4, 0, 0xc4, 1, 0x3f, 0x08, 0x02, 0x6f, // subroutine
+            0x6f, // subroutine2
+        ]
+    );
+
+    Ok(())
+}
+
+#[test]
+fn proc_scoping_test() -> Result<(), Box<dyn std::error::Error>> {
+    let c = assemble(
+        r##"
+.codebank $0200..$0300
+
+name = 1
+
+.proc proc1
+    name = 2
+
+    mov A, #name
+    ret
+.endproc
+
+.proc proc2
+    mov A, #name
+    ret
+
+    name = 3
+.endproc
+
+    mov A, #name
+    stop
+"##,
+    )?;
+
+    assert_eq!(
+        c.output,
+        &[
+            0xe8, 2, 0x6f, // proc1
+            0xe8, 3, 0x6f, // proc2
+            0xe8, 1, 0xff, // global
+        ]
+    );
+
+    Ok(())
+}
+
+#[test]
+fn duplicate_proc_name_is_error() {
+    let e = assemble(
+        r##"
+.codebank $0200..$0300
+
+.proc subroutine
+    ret
+.endproc
+
+.proc subroutine
+    ret
+.endproc
+"##,
+    )
+    .err()
+    .unwrap();
+
+    assert_eq!(
+        e.errors(),
+        &[(
+            l(8),
+            AssemblerError::CannotOpenProc("subroutine", SymbolError::DuplicateSymbol).into()
+        )]
+    );
+}
+
+#[test]
+fn empty_proc_is_error() {
+    let e = assemble(
+        r##"
+.codebank $0200..$0300
+
+.proc subroutine
+.endproc
+"##,
+    )
+    .err()
+    .unwrap();
+
+    assert_eq!(e.errors(), &[(l(5), AssemblerError::EmptyProc.into(),)]);
 }

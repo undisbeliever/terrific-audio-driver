@@ -2419,8 +2419,8 @@ mod instruction_tests {
 
             assert_ne!(s.output(), expected, "asm: {line:?}");
 
-            s.add_symbol("imm".to_owned(), 10).unwrap();
-            s.add_symbol("abs".to_owned(), 0xfff).unwrap();
+            s.add_symbol("imm", 10).unwrap();
+            s.add_symbol("abs", 0xfff).unwrap();
 
             let mut errors = FileErrors::new();
             process_pending_output_expressions(&mut s, &mut errors);
@@ -2512,7 +2512,7 @@ mod instruction_tests {
 
             assert_ne!(s.output(), expected, "asm: {line:?}");
 
-            s.add_symbol("rel".to_owned(), 0x200).unwrap();
+            s.add_symbol("rel", 0x200).unwrap();
 
             let mut errors = FileErrors::new();
             process_pending_output_expressions(&mut s, &mut errors);
@@ -2549,7 +2549,7 @@ mod instruction_tests {
 
             assert_ne!(s.output(), expected, "asm: {line:?}");
 
-            s.add_symbol("up".to_owned(), value.into()).unwrap();
+            s.add_symbol("up", value.into()).unwrap();
 
             let mut errors = FileErrors::new();
             process_pending_output_expressions(&mut s, &mut errors);
@@ -2568,7 +2568,7 @@ mod instruction_tests {
         let mut s = State::new(0x200);
         assert_eq!(process_line("mov1 C, abs, 0", &mut s), Ok(()));
 
-        s.add_symbol("abs".to_owned(), 0x2000.into()).unwrap();
+        s.add_symbol("abs", 0x2000.into()).unwrap();
 
         let mut errors = FileErrors::new();
         process_pending_output_expressions(&mut s, &mut errors);
@@ -2592,7 +2592,7 @@ mod instruction_tests {
         let mut s = State::new(0x200);
         assert_eq!(process_line("pcall up", &mut s), Ok(()));
 
-        s.add_symbol("up".to_owned(), 0xfe00.into()).unwrap();
+        s.add_symbol("up", 0xfe00.into()).unwrap();
 
         let mut errors = FileErrors::new();
         process_pending_output_expressions(&mut s, &mut errors);
