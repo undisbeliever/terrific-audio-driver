@@ -43,6 +43,10 @@ pub fn is_symbol_character(c: u8) -> bool {
     c.is_ascii_alphanumeric() || c == b'_'
 }
 
+pub fn is_identifier_character(c: u8) -> bool {
+    c.is_ascii_alphanumeric() || c == b'_' || c == b'.'
+}
+
 pub fn is_symbol_name_valid(s: &str) -> bool {
     let mut it = s.bytes();
     let first = it.next().unwrap_or(0);
@@ -234,16 +238,17 @@ impl<'s> State<'s> {
     }
 
     pub fn get_symbol(&self, name: &str) -> Option<i64> {
-        match &self.scope {
-            Some(scope) => {
+        match (self.scope, name.contains(".")) {
+            (Some(scope), false) => {
                 let full_name = [scope, ".", name].concat();
+
                 match self.symbols.get(&full_name) {
                     Some(Some(v)) => Some(*v),
                     Some(None) => None,
                     None => self.symbols.get(name).copied().flatten(),
                 }
             }
-            None => self.symbols.get(name).copied().flatten(),
+            (Some(_), true) | (None, _) => self.symbols.get(name).copied().flatten(),
         }
     }
 

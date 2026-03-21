@@ -31,7 +31,7 @@
 
 use bitflags::bitflags;
 
-use crate::state::{is_symbol_character, State};
+use crate::state::{is_identifier_character, State};
 
 bitflags! {
     #[derive(Debug, PartialEq)]
@@ -114,7 +114,7 @@ impl<'a> Matcher<'a, '_> {
 
     #[must_use]
     fn take_symbol_name(&mut self) -> &'a str {
-        match self.s.bytes().position(|c| !is_symbol_character(c)) {
+        match self.s.bytes().position(|c| !is_identifier_character(c)) {
             Some(i) => {
                 let (p, s) = self.s.split_at(i);
                 self.s = s.trim_start();
@@ -937,5 +937,24 @@ mod tests {
             evaluate("three < 2", &state),
             ExpressionResult::Boolean(false)
         );
+    }
+
+    #[test]
+    fn scoped_lookup() {
+        let state = {
+            let mut s = State::new(0x200);
+            s.add_scoped_symbol("scope", "const", 2).unwrap();
+            s.add_scoped_symbol("scope.const", "const", 9999).unwrap();
+            s.add_symbol("const", 9999).unwrap();
+            s.open_scope("scope", vec![]);
+            s
+        };
+
+        assert_eq!(
+            evaluate("(scope.const + const) * 10", &state),
+            ExpressionResult::Value((2 + 2) * 10)
+        );
+
+        assert_eq!(state.get_symbol("scope.const.const"), Some(9999));
     }
 }
