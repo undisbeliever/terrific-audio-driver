@@ -76,6 +76,11 @@ impl<'a> Matcher<'a, '_> {
     }
 
     #[must_use]
+    fn is_empty(&self) -> bool {
+        self.s.is_empty()
+    }
+
+    #[must_use]
     fn next_byte(&self) -> u8 {
         self.s.bytes().next().unwrap_or(0)
     }
@@ -270,7 +275,19 @@ pub fn evaluate_constexpr_u16<'a>(expr: &'a str, state: &State) -> Result<u16, C
 pub fn evaluate(s: &str, state: &State) -> ExpressionResult {
     let mut m = Matcher::new(s, state);
 
-    expression(&mut m)
+    match (expression(&mut m), m.is_empty()) {
+        (r, true) => r,
+
+        (ExpressionResult::Value(_), false)
+        | (ExpressionResult::Boolean(_), false)
+        | (ExpressionResult::Unknown, false) => {
+            ExpressionResult::Error(ExpressionError::SyntaxError)
+        }
+
+        (ExpressionResult::Error(e), false) => {
+            ExpressionResult::Error(e | ExpressionError::SyntaxError)
+        }
+    }
 }
 
 fn expression(m: &mut Matcher) -> ExpressionResult {
@@ -855,7 +872,7 @@ mod tests {
         let state = State::new(0x200);
 
         assert_eq!(
-            evaluate("(unknown + 1) * 2 / 3)", &state),
+            evaluate("(unknown + 1) * 2 / 3", &state),
             ExpressionResult::Unknown
         );
         assert_eq!(
@@ -908,16 +925,16 @@ mod tests {
         assert_eq!(evaluate("minus_seven", &state), ExpressionResult::Value(-7));
 
         assert_eq!(
-            evaluate("one + two * minus_seven / three)", &state),
+            evaluate("one + two * minus_seven / three", &state),
             ExpressionResult::Value(1 + 2 * -7 / 3)
         );
 
         assert_eq!(
-            evaluate("(unknown + one) * two / three)", &state),
+            evaluate("(unknown + one) * two / three", &state),
             ExpressionResult::Unknown
         );
         assert_eq!(
-            evaluate("(5 + one) * two / three)", &state),
+            evaluate("(5 + one) * two / three", &state),
             ExpressionResult::Value((5 + 1) * 2 / 3)
         );
 
@@ -956,5 +973,43 @@ mod tests {
         );
 
         assert_eq!(state.get_symbol("scope.const.const"), Some(9999));
+    }
+
+    #[test]
+    fn characters_after_expression_is_syntax_error() {
+        let state = {
+            let mut s = State::new(0x200);
+            s.add_symbol("const", 10).unwrap();
+            s
+        };
+
+        assert_eq!(
+            evaluate("1 2", &state),
+            ExpressionResult::Error(ExpressionError::SyntaxError)
+        );
+
+        assert_eq!(
+            evaluate("unknown + 2 unknown", &state),
+            ExpressionResult::Error(ExpressionError::SyntaxError)
+        );
+
+        assert_eq!(
+            evaluate("( 10000000000 * 200000000000 garbage)", &state),
+            ExpressionResult::Error(
+                ExpressionError::UnmatchedParenthesis | ExpressionError::SyntaxError
+            )
+        );
+
+        assert_eq!(
+            evaluate("10000000000 * 200000000000 garbage", &state),
+            ExpressionResult::Error(ExpressionError::Overflow | ExpressionError::SyntaxError)
+        );
+
+        assert_eq!(
+            evaluate("$uuu unknown", &state),
+            ExpressionResult::Error(
+                ExpressionError::InvalidHexadecimalLiteral | ExpressionError::SyntaxError
+            )
+        );
     }
 }
