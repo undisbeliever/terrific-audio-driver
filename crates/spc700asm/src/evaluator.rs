@@ -31,7 +31,7 @@
 
 use bitflags::bitflags;
 
-use crate::state::{is_identifier_character, State};
+use crate::state::{is_identifier_character, State, U16Value, U8Value};
 
 bitflags! {
     #[derive(Debug, PartialEq)]
@@ -269,6 +269,39 @@ pub fn evaluate_constexpr_u16<'a>(expr: &'a str, state: &State) -> Result<u16, C
         ExpressionResult::Boolean(_) => Err(ConstexprError::U16NotANumber(expr)),
         ExpressionResult::Unknown => Err(ConstexprError::UnknownValue(expr)),
         ExpressionResult::Error(e) => Err(ConstexprError::InvalidU16(expr, e)),
+    }
+}
+
+#[derive(Debug, PartialEq)]
+pub enum ValueError<'a> {
+    U8OutOfRange(&'a str, i64),
+    U8NotANumber(&'a str),
+    U16OutOfRange(&'a str, i64),
+    U16NotANumber(&'a str),
+    Error(&'a str, ExpressionError),
+}
+
+pub fn evaluate_u8v<'a>(expr: &'a str, state: &State) -> Result<U8Value, ValueError<'a>> {
+    match evaluate(expr, state) {
+        ExpressionResult::Value(v) => match v.try_into() {
+            Ok(v) => Ok(U8Value::Known(v)),
+            Err(_) => Err(ValueError::U8OutOfRange(expr, v)),
+        },
+        ExpressionResult::Unknown => Ok(U8Value::Unknown(expr.to_owned())),
+        ExpressionResult::Boolean(_) => Err(ValueError::U8NotANumber(expr)),
+        ExpressionResult::Error(e) => Err(ValueError::Error(expr, e)),
+    }
+}
+
+pub fn evaluate_u16v<'a>(expr: &'a str, state: &State) -> Result<U16Value, ValueError<'a>> {
+    match evaluate(expr, state) {
+        ExpressionResult::Value(v) => match v.try_into() {
+            Ok(v) => Ok(U16Value::Known(v)),
+            Err(_) => Err(ValueError::U16OutOfRange(expr, v)),
+        },
+        ExpressionResult::Unknown => Ok(U16Value::Unknown(expr.to_owned())),
+        ExpressionResult::Boolean(_) => Err(ValueError::U16NotANumber(expr)),
+        ExpressionResult::Error(e) => Err(ValueError::Error(expr, e)),
     }
 }
 

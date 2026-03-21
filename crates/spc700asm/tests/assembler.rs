@@ -789,3 +789,69 @@ inline
         ]
     );
 }
+
+#[test]
+fn db_statements() -> Result<(), Box<dyn std::error::Error>> {
+    let c = assemble(
+        r##"
+.codebank $0200..$0300
+
+    .db 0, 1, 2, %011
+
+    .proc Inner
+        .db (Inner.Label * 2) & $ff, Label & $ff, 6, 7
+    Label:
+    .endproc
+
+        .db Label & $ff
+    Label:
+"##,
+    )?;
+
+    assert_eq!(c.sym("Inner.Label"), 0x0208);
+    assert_eq!(c.sym("Label"), 0x0209);
+
+    assert_eq!(
+        c.output,
+        &[
+            0, 1, 2, 3, // first line
+            16, 8, 6, 7, // Inner.Label
+            9, // global Label
+        ]
+    );
+
+    Ok(())
+}
+
+#[test]
+fn dw_statements() -> Result<(), Box<dyn std::error::Error>> {
+    let c = assemble(
+        r##"
+.codebank $0200..$0300
+
+    .dw 0, $1234
+
+    .proc Inner
+        .dw Inner.Label * 2, Label
+    Label:
+    .endproc
+
+        .dw Label
+    Label:
+"##,
+    )?;
+
+    assert_eq!(c.sym("Inner.Label"), 0x0208);
+    assert_eq!(c.sym("Label"), 0x020a);
+
+    assert_eq!(
+        c.output,
+        &[
+            0x00, 0x00, 0x34, 0x12, // first line
+            0x10, 0x04, 0x08, 0x02, // Inner
+            0x0a, 0x02, // global Label
+        ]
+    );
+
+    Ok(())
+}

@@ -7,8 +7,8 @@
 use crate::{
     errors::{FileErrors, LineNo},
     evaluator::{
-        evaluate, evaluate_constexpr_address, evaluate_constexpr_u16, ExpressionError,
-        ExpressionResult,
+        evaluate, evaluate_constexpr_address, evaluate_constexpr_u16, evaluate_u16v, evaluate_u8v,
+        ExpressionError, ExpressionResult, ValueError,
     },
     file_parser::{
         parse_file, AsmLine, AsmOrProc, CodeBankStatement, Constant, Procedure, Var,
@@ -16,6 +16,7 @@ use crate::{
     },
     instructions::process_instruction,
     state::{process_pending_output_expressions, State, SymbolError},
+    string::comma_iter,
 };
 
 use std::{
@@ -35,6 +36,9 @@ pub enum AssemblerError<'s> {
     ConstantError(&'s str, ExpressionError),
     ConstantCannotBeBoolean(&'s str),
     ConstantWithUnknownValue(&'s str),
+
+    DbError(ValueError<'s>),
+    DwError(ValueError<'s>),
 
     CannotFindVarBank(&'s str),
     UnknownType(&'s str),
@@ -458,6 +462,34 @@ fn process_inline<'s>(
     state.restore_scope(caller_scope);
 }
 
+fn process_db<'s>(
+    line_no: LineNo,
+    arguments: &'s str,
+    state: &mut State<'s>,
+    errors: &mut FileErrors<'s>,
+) {
+    for a in comma_iter(arguments) {
+        match evaluate_u8v(a, state) {
+            Ok(v) => state.write_u8v(v),
+            Err(e) => errors.push(line_no, AssemblerError::DbError(e)),
+        }
+    }
+}
+
+fn process_dw<'s>(
+    line_no: LineNo,
+    arguments: &'s str,
+    state: &mut State<'s>,
+    errors: &mut FileErrors<'s>,
+) {
+    for a in comma_iter(arguments) {
+        match evaluate_u16v(a, state) {
+            Ok(v) => state.write_u16v(v),
+            Err(e) => errors.push(line_no, AssemblerError::DwError(e)),
+        }
+    }
+}
+
 fn process_asm_line<'s>(
     line_no: LineNo,
     line: AsmLine<'s>,
@@ -486,6 +518,8 @@ fn process_asm_line<'s>(
                 }
             }
         }
+        AsmLine::Db(arguments) => process_db(line_no, arguments, state, errors),
+        AsmLine::Dw(arguments) => process_dw(line_no, arguments, state, errors),
     }
 }
 

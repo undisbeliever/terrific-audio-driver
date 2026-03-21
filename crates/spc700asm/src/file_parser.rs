@@ -43,6 +43,8 @@ pub struct VarsSection<'a> {
 pub enum AsmLine<'a> {
     Label(&'a str),
     Instruction(&'a str, &'a str),
+    Db(&'a str),
+    Dw(&'a str),
 }
 
 pub struct Procedure<'a> {
@@ -168,6 +170,8 @@ pub fn parse_asm_line_after_label<'a>(
     f: &mut dyn FnMut(LineNo, AsmLine<'a>),
 ) {
     match first_word {
+        ".db" => f(line_no, AsmLine::Db(arguments)),
+        ".dw" => f(line_no, AsmLine::Dw(arguments)),
         fw if first_word.starts_with(".") => {
             errors.push(line_no, FileParserError::InvalidCommand(first_word))
         }
