@@ -11,11 +11,11 @@ use crate::{
         ExpressionError, ExpressionResult, ValueError,
     },
     file_parser::{
-        parse_file, AsmLine, AsmOrProc, CodeBankStatement, Constant, Procedure, Var,
+        parse_file, AsmLine, AsmOrProc, CodeBankStatement, Constant, Procedure, StructSection, Var,
         VarBankStatement, VarsSection,
     },
     instructions::process_instruction,
-    state::{process_pending_output_expressions, State, SymbolError},
+    state::{is_symbol_name_valid, process_pending_output_expressions, State, SymbolError},
     string::comma_iter,
 };
 
@@ -39,6 +39,14 @@ pub enum AssemblerError<'s> {
 
     DbError(ValueError<'s>),
     DwError(ValueError<'s>),
+
+    InvalidStructName(&'s str),
+    DuplicateStruct(&'s str),
+
+    InvalidFieldName(&'s str),
+    DuplicateField(&'s str),
+
+    EmptyStruct,
 
     CannotFindVarBank(&'s str),
     UnknownType(&'s str),
@@ -87,17 +95,18 @@ pub struct VariableBank {
     pub pos: u16,
 }
 
-struct ChildType<'s> {
-    name: &'s str,
+#[derive(Debug)]
+struct ChildType {
+    name: String,
     offset: u16,
 }
 
-struct Type<'s> {
+struct Type {
     size: u16,
-    children: Vec<ChildType<'s>>,
+    children: Vec<ChildType>,
 }
 
-fn default_types<'s>() -> HashMap<&'s str, Type<'s>> {
+fn default_types<'s>() -> HashMap<&'s str, Type> {
     let mut out = HashMap::new();
 
     out.insert(
@@ -122,11 +131,11 @@ fn default_types<'s>() -> HashMap<&'s str, Type<'s>> {
                 size: 2,
                 children: vec![
                     ChildType {
-                        name: "l",
+                        name: "l".to_owned(),
                         offset: 0,
                     },
                     ChildType {
-                        name: "h",
+                        name: "h".to_owned(),
                         offset: 1,
                     },
                 ],
@@ -272,7 +281,7 @@ fn add_var_symbols(
         Ok(()) => {
             for c in &var_type.children {
                 if let Err(e) =
-                    state.add_scoped_symbol(var.name, c.name, addr + i64::from(c.offset))
+                    state.add_unchecked_scoped_symbol(var.name, &c.name, addr + i64::from(c.offset))
                 {
                     errors.push(var.line_no, e);
                 }
@@ -287,10 +296,10 @@ fn add_var_symbols(
 fn read_var_type<'s, 'a>(
     line_no: LineNo,
     var_type: &'s str,
-    types: &'a HashMap<&'s str, Type<'s>>,
+    types: &'a HashMap<&'s str, Type>,
     state: &State,
     errors: &mut FileErrors<'s>,
-) -> Option<(&'a Type<'s>, u16)> {
+) -> Option<(&'a Type, u16)> {
     if !var_type.starts_with("[") {
         match types.get(var_type) {
             Some(var_type) => Some((var_type, var_type.size)),
@@ -344,9 +353,63 @@ fn read_var_type<'s, 'a>(
     }
 }
 
+fn process_struct<'s>(
+    s: StructSection<'s>,
+    state: &State,
+    types: &mut HashMap<&'s str, Type>,
+    errors: &mut FileErrors<'s>,
+) {
+    if !is_symbol_name_valid(s.name) {
+        errors.push(s.line_no, AssemblerError::InvalidStructName(s.name));
+    } else if types.get(s.name).is_some() {
+        errors.push(s.line_no, AssemblerError::DuplicateStruct(s.name));
+    }
+
+    let mut offset = 0u16;
+    let mut fields = Vec::new();
+
+    for f in s.fields {
+        if !is_symbol_name_valid(f.name) {
+            errors.push(f.line_no, AssemblerError::InvalidFieldName(f.name));
+        }
+
+        if let Some((f_type, f_size)) = read_var_type(f.line_no, f.var_type, types, state, errors) {
+            if fields.iter().any(|c: &ChildType| c.name == f.name) {
+                errors.push(f.line_no, AssemblerError::DuplicateField(f.name));
+            }
+
+            fields.push(ChildType {
+                name: f.name.to_owned(),
+                offset,
+            });
+
+            for child in &f_type.children {
+                fields.push(ChildType {
+                    name: [f.name, ".", &child.name].concat(),
+                    offset: offset + child.offset,
+                });
+            }
+
+            offset = offset.saturating_add(f_size);
+        }
+    }
+
+    if fields.is_empty() {
+        errors.push(s.line_no, AssemblerError::EmptyStruct)
+    }
+
+    types.insert(
+        s.name,
+        Type {
+            size: offset,
+            children: fields,
+        },
+    );
+}
+
 fn process_variable<'s>(
     input: &Var<'s>,
-    types: &HashMap<&'s str, Type<'s>>,
+    types: &HashMap<&'s str, Type>,
     bank: &mut VariableBank,
     state: &mut State,
     errors: &mut FileErrors<'s>,
@@ -366,7 +429,7 @@ fn process_variable<'s>(
 
 fn process_var_section<'s>(
     input: VarsSection<'s>,
-    types: &HashMap<&'s str, Type<'s>>,
+    types: &HashMap<&'s str, Type>,
     banks: &mut [VariableBank],
     state: &mut State,
     errors: &mut FileErrors<'s>,
@@ -603,7 +666,7 @@ fn process_assembly<'s>(
 pub fn assemble<'s>(input: &'s str) -> Result<CompiledAsm, FileErrors<'s>> {
     let mut errors = FileErrors::new();
 
-    let types = default_types();
+    let mut types = default_types();
 
     let file = parse_file(input, &mut errors);
 
@@ -615,6 +678,10 @@ pub fn assemble<'s>(input: &'s str) -> Result<CompiledAsm, FileErrors<'s>> {
 
     let code_bank = process_code_bank(file.code_bank, &state, &mut errors);
     let mut banks = process_var_banks(file.var_banks, &state, &mut errors);
+
+    for s in file.structs {
+        process_struct(s, &state, &mut types, &mut errors);
+    }
 
     for v in file.vars {
         process_var_section(v, &types, &mut banks, &mut state, &mut errors);

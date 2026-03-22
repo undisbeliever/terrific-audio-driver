@@ -34,6 +34,12 @@ pub struct Var<'a> {
     pub var_type: &'a str,
 }
 
+pub struct StructSection<'a> {
+    pub line_no: LineNo,
+    pub name: &'a str,
+    pub fields: Vec<Var<'a>>,
+}
+
 pub struct VarsSection<'a> {
     pub line_no: LineNo,
     pub bank: &'a str,
@@ -66,6 +72,7 @@ pub struct AsmFile<'a> {
     pub code_bank: Option<CodeBankStatement<'a>>,
     pub var_banks: Vec<VarBankStatement<'a>>,
 
+    pub structs: Vec<StructSection<'a>>,
     pub vars: Vec<VarsSection<'a>>,
     pub inlines: Vec<Procedure<'a>>,
 
@@ -77,6 +84,8 @@ pub enum FileParserError<'a> {
     InvalidCodeBankSyntax,
     MultipleCodeBankStatements,
     InvalidBankSyntax,
+    InvalidStructLine,
+    NoEndStruct,
     InvalidVarLine,
     NoEndVars,
     InvalidCommand(&'a str),
@@ -120,6 +129,39 @@ fn parse_var_bank<'a>(
         }
         _ => Err(FileParserError::InvalidBankSyntax),
     }
+}
+
+fn parse_struct<'a>(
+    var_line_no: LineNo,
+    var_bank: &'a str,
+    it: &mut impl Iterator<Item = (LineNo, &'a str)>,
+    errors: &mut FileErrors<'a>,
+) -> StructSection<'a> {
+    let mut out = StructSection {
+        line_no: var_line_no,
+        name: var_bank,
+        fields: Vec::new(),
+    };
+
+    for (line_no, line) in it {
+        if !line.starts_with(".") {
+            match line.split_once(':') {
+                Some((name, var_type)) => out.fields.push(Var {
+                    line_no,
+                    name: name.trim(),
+                    var_type: var_type.trim(),
+                }),
+                None => errors.push(line_no, FileParserError::InvalidStructLine),
+            }
+        } else if line == ".endstruct" {
+            return out;
+        } else {
+            errors.push(line_no, FileParserError::InvalidStructLine)
+        }
+    }
+
+    errors.push(var_line_no, FileParserError::NoEndStruct);
+    out
 }
 
 fn parse_var_line<'a>(line_no: LineNo, line: &'a str) -> Result<Var<'a>, FileParserError<'a>> {
@@ -268,6 +310,7 @@ pub fn parse_file<'a>(file: &'a str, errors: &mut FileErrors<'a>) -> AsmFile<'a>
         global_constants: Vec::new(),
         code_bank: None,
         var_banks: Vec::new(),
+        structs: Vec::new(),
         vars: Vec::new(),
         inlines: Vec::new(),
         assembly: Vec::new(),
@@ -299,6 +342,9 @@ pub fn parse_file<'a>(file: &'a str, errors: &mut FileErrors<'a>) -> AsmFile<'a>
                 Ok(b) => out.var_banks.push(b),
                 Err(e) => errors.push(line_no, e),
             },
+            ".struct" => out
+                .structs
+                .push(parse_struct(line_no, args, &mut it, errors)),
             ".vars" => out.vars.push(parse_vars(line_no, args, &mut it, errors)),
             ".proc" => out.assembly.push(AsmOrProc::Procedure(parse_proc_or_inline(
                 line_no,

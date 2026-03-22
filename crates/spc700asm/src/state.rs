@@ -210,18 +210,17 @@ impl<'s> State<'s> {
         }
     }
 
-    pub fn add_scoped_symbol(
+    /// Adds a scoped name to the symbols.
+    ///
+    /// **CAUTION**: Does not check if `parent` or `child_name` is valid
+    pub fn add_unchecked_scoped_symbol(
         &mut self,
         parent: &str,
         child_name: &str,
         value: i64,
     ) -> Result<(), SymbolError> {
         let full_name = [parent, ".", child_name].concat();
-
-        match is_symbol_name_valid(child_name) {
-            true => self.add_unchecked_symbol(full_name, value),
-            false => Err(SymbolError::InvalidSymbol(full_name)),
-        }
+        self.add_unchecked_symbol(full_name, value)
     }
 
     pub fn add_symbol(&mut self, name: &str, value: i64) -> Result<(), SymbolError> {

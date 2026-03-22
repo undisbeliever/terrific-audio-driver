@@ -993,8 +993,9 @@ mod tests {
     fn scoped_lookup() {
         let state = {
             let mut s = State::new(0x200);
-            s.add_scoped_symbol("scope", "const", 2).unwrap();
-            s.add_scoped_symbol("scope.const", "const", 9999).unwrap();
+            s.add_unchecked_scoped_symbol("scope", "const", 2).unwrap();
+            s.add_unchecked_scoped_symbol("scope.const", "const", 9999)
+                .unwrap();
             s.add_symbol("const", 9999).unwrap();
             s.open_scope("scope", vec![]);
             s

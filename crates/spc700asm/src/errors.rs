@@ -84,6 +84,10 @@ impl<'s> FileErrors<'s> {
         self.0.is_empty()
     }
 
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+
     pub fn errors(&self) -> &[(LineNo, FileError<'s>)] {
         &self.0
     }

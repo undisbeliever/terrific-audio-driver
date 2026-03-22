@@ -193,6 +193,127 @@ fn overflow_vars_test() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[test]
+fn structs() -> Result<(), Box<dyn std::error::Error>> {
+    let c = assemble(
+        r##"
+.codebank $200..$300
+.varbank zeropage  $0000..$0100
+
+N = 8
+
+.struct Inner
+    byte    : u8
+    pointer : ptr
+    array   : [u16 : N]
+    byte2   : u8
+.endstruct
+
+.struct Outer
+    b : u8
+    i : Inner
+    a : [Inner : 2]
+    end: u8
+.endstruct
+
+.vars zeropage
+    inner : Inner
+    outer_array : [Outer : 2]
+    end: u8
+.endvars
+"##,
+    )?;
+
+    assert_eq!(c.sym("inner"), 0);
+    assert_eq!(c.sym("inner.byte"), 0);
+    assert_eq!(c.sym("inner.pointer"), 1);
+    assert_eq!(c.sym("inner.pointer.l"), 1);
+    assert_eq!(c.sym("inner.pointer.h"), 2);
+    assert_eq!(c.sym("inner.array"), 3);
+    assert_eq!(c.sym("inner.array.l"), 3);
+    assert_eq!(c.sym("inner.array.h"), 4);
+    assert_eq!(c.sym("inner.byte2"), 19);
+
+    assert_eq!(c.sym("outer_array"), 20);
+    assert_eq!(c.sym("outer_array.b"), 20);
+    assert_eq!(c.sym("outer_array.i"), 21);
+    assert_eq!(c.sym("outer_array.i.byte"), 21);
+    assert_eq!(c.sym("outer_array.i.pointer"), 22);
+    assert_eq!(c.sym("outer_array.i.pointer.l"), 22);
+    assert_eq!(c.sym("outer_array.i.pointer.h"), 23);
+    assert_eq!(c.sym("outer_array.i.array"), 24);
+    assert_eq!(c.sym("outer_array.i.array.l"), 24);
+    assert_eq!(c.sym("outer_array.i.array.h"), 25);
+    assert_eq!(c.sym("outer_array.i.byte2"), 40);
+    assert_eq!(c.sym("outer_array.a"), 41);
+    assert_eq!(c.sym("outer_array.a.byte"), 41);
+    assert_eq!(c.sym("outer_array.a.pointer"), 42);
+    assert_eq!(c.sym("outer_array.a.pointer.l"), 42);
+    assert_eq!(c.sym("outer_array.a.pointer.h"), 43);
+    assert_eq!(c.sym("outer_array.a.array"), 44);
+    assert_eq!(c.sym("outer_array.a.array.l"), 44);
+    assert_eq!(c.sym("outer_array.a.array.h"), 45);
+    assert_eq!(c.sym("outer_array.a.byte2"), 60);
+    assert_eq!(c.sym("outer_array.end"), 81);
+
+    assert_eq!(c.sym("end"), 20 + 62 * 2);
+
+    Ok(())
+}
+
+#[test]
+fn struct_errors() {
+    let e = assemble(
+        r##"
+.codebank $200..$300
+
+.struct s
+    field : u8
+    field : u16
+    invalid name : u16
+    l8   : [u8 : UNKNOWN]
+    l9  : [unknown : 2]
+    l10  : [u8 : $10000]
+    l11  : [u16 : $9000]
+    l12  : [u8 : 2
+    l13  : u8 : 2]
+.endstruct
+
+.struct s
+.endstruct
+
+.struct invalid struct name
+.endstruct
+"##,
+    )
+    .err()
+    .unwrap();
+
+    assert_eq!(
+        e.errors(),
+        &[
+            (l(6), AssemblerError::DuplicateField("field").into()),
+            (
+                l(7),
+                AssemblerError::InvalidFieldName("invalid name").into()
+            ),
+            (l(8), ConstexprError::UnknownValue("UNKNOWN").into()),
+            (l(9), AssemblerError::UnknownType("unknown").into()),
+            (l(10), ConstexprError::U16OutOfRange("$10000").into()),
+            (l(11), AssemblerError::ArrayTooLarge.into()),
+            (l(12), AssemblerError::InvalidArraySyntax.into()),
+            (l(13), AssemblerError::UnknownType("u8 : 2]").into()),
+            (l(16), AssemblerError::DuplicateStruct("s").into()),
+            (l(16), AssemblerError::EmptyStruct.into()),
+            (
+                l(19),
+                AssemblerError::InvalidStructName("invalid struct name").into()
+            ),
+            (l(19), AssemblerError::EmptyStruct.into()),
+        ]
+    );
+}
+
+#[test]
 fn global_asm_test() -> Result<(), Box<dyn std::error::Error>> {
     let c = assemble(
         r##"
