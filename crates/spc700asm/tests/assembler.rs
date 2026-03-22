@@ -976,3 +976,126 @@ fn dw_statements() -> Result<(), Box<dyn std::error::Error>> {
 
     Ok(())
 }
+
+#[test]
+fn function_tables() -> Result<(), Box<dyn std::error::Error>> {
+    let c = assemble(
+        r##"
+.codebank $0200..$0300
+
+.ftdef bytecode
+    bc_one
+    bc_two
+    bc_three
+.endftdef
+
+.proc bc_one
+    .db 0, 1
+.endproc
+
+FunctionTable:
+    .functiontable bytecode
+
+.proc bc_two
+    .db 2
+.endproc
+
+bc_three:
+    .db 3, 4
+"##,
+    )?;
+
+    assert_eq!(c.sym("bc_one"), 0x200);
+    assert_eq!(c.sym("FunctionTable"), 0x202);
+    assert_eq!(c.sym("bc_two"), 0x208);
+    assert_eq!(c.sym("bc_three"), 0x209);
+
+    assert_eq!(
+        c.output,
+        &[
+            0, 1, // bc_one
+            0x00, 0x02, // bc_one addr
+            0x08, 0x02, // bc_two addr
+            0x09, 0x02, // bc_three addr
+            2,    // bc_two
+            3, 4, // bc_three
+        ]
+    );
+
+    Ok(())
+}
+
+#[test]
+fn function_table_errors() {
+    let e = assemble(
+        r##"
+.codebank $0200..$0300
+
+.ftdef invalid name
+.endftdef
+
+.ftdef bytecode
+    invalid function
+.endftdef
+
+.ftdef bytecode
+    valid_name
+.endftdef
+
+.ftdef bytecode
+    valid_name
+.endftdef
+
+    .functiontable unused
+    .functiontable bytecode
+"##,
+    )
+    .err()
+    .unwrap();
+
+    assert_eq!(
+        e.errors(),
+        [
+            (l(4), AssemblerError::InvalidFtName("invalid name").into()),
+            (
+                l(8),
+                AssemblerError::InvalidFtFunction("invalid function").into()
+            ),
+            (l(15), AssemblerError::DuplicateFtdef("bytecode").into()),
+            (l(19), AssemblerError::FtdefNotFound("unused").into()),
+            (
+                l(20),
+                OutputError::ExpressionHasUnknownValue("valid_name".to_owned()).into()
+            ),
+        ]
+    );
+}
+
+#[test]
+fn function_table_not_allowed_in_proc_or_inline() {
+    let e = assemble(
+        r##"
+.codebank $0200..$0300
+
+.proc name
+    .functiontable bytecode
+    inline_proc
+.endproc
+
+.inline inline_proc
+    .functiontable bytecode
+    .db 0
+.endinline
+"##,
+    )
+    .err()
+    .unwrap();
+
+    assert_eq!(
+        e.errors(),
+        [
+            (l(5), FileParserError::FunctionTableInProc.into()),
+            (l(10), FileParserError::FunctionTableInProc.into()),
+        ]
+    );
+}

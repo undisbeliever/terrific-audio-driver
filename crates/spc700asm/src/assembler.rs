@@ -11,8 +11,8 @@ use crate::{
         ExpressionError, ExpressionResult, ValueError,
     },
     file_parser::{
-        parse_file, AsmLine, AsmOrProc, CodeBankStatement, Constant, Procedure, StructSection, Var,
-        VarBankStatement, VarsSection,
+        parse_file, AsmLine, CodeBankStatement, Constant, FunctionTableDef, GlobalAsm, Procedure,
+        StructSection, Var, VarBankStatement, VarsSection,
     },
     instructions::process_instruction,
     state::{is_symbol_name_valid, process_pending_output_expressions, State, SymbolError},
@@ -47,6 +47,11 @@ pub enum AssemblerError<'s> {
     DuplicateField(&'s str),
 
     EmptyStruct,
+
+    InvalidFtName(&'s str),
+    DuplicateFtdef(&'s str),
+    InvalidFtFunction(&'s str),
+    FtdefNotFound(&'s str),
 
     CannotFindVarBank(&'s str),
     UnknownType(&'s str),
@@ -455,6 +460,64 @@ fn process_var_section<'s>(
     }
 }
 
+fn validate_function_tables<'s>(
+    input: Vec<FunctionTableDef<'s>>,
+    errors: &mut FileErrors<'s>,
+) -> HashMap<&'s str, FunctionTableDef<'s>> {
+    let mut out = HashMap::with_capacity(input.len());
+
+    for ft in input {
+        let mut valid = true;
+
+        if is_symbol_name_valid(ft.name) {
+            if out.contains_key(ft.name) {
+                errors.push(ft.line_no, AssemblerError::DuplicateFtdef(ft.name));
+                valid = false;
+            }
+        } else {
+            errors.push(ft.line_no, AssemblerError::InvalidFtName(ft.name));
+            valid = false;
+        }
+
+        for (f_line, f_name) in &ft.functions {
+            if !is_symbol_name_valid(f_name) {
+                errors.push(*f_line, AssemblerError::InvalidFtFunction(f_name));
+                valid = false;
+            }
+        }
+
+        if valid {
+            out.insert(ft.name, ft);
+        }
+    }
+
+    out
+}
+
+fn process_function_table<'s>(
+    line_no: LineNo,
+    name: &'s str,
+    ft_defs: &HashMap<&'s str, FunctionTableDef<'s>>,
+    state: &mut State<'s>,
+    errors: &mut FileErrors<'s>,
+) {
+    state.set_line_no(line_no);
+
+    match ft_defs.get(name) {
+        Some(ft) => {
+            for (_, f) in &ft.functions {
+                match evaluate_u16v(f, state) {
+                    Ok(v) => state.write_u16v(v),
+                    Err(e) => errors.push(line_no, AssemblerError::DwError(e)),
+                }
+            }
+        }
+        None => {
+            errors.push(line_no, AssemblerError::FtdefNotFound(name));
+        }
+    }
+}
+
 enum InlineProc<'s> {
     Inline(Procedure<'s>),
     Taken,
@@ -648,17 +711,21 @@ fn process_proc<'s>(
 }
 
 fn process_assembly<'s>(
-    assembly: Vec<AsmOrProc<'s>>,
+    assembly: Vec<GlobalAsm<'s>>,
+    ft_defs: &HashMap<&'s str, FunctionTableDef<'s>>,
     inline_procs: &mut InlineProcs<'s>,
     state: &mut State<'s>,
     errors: &mut FileErrors<'s>,
 ) {
     for a in assembly {
         match a {
-            AsmOrProc::AsmLine(line_no, line) => {
+            GlobalAsm::AsmLine(line_no, line) => {
                 process_asm_line(line_no, line, inline_procs, state, errors)
             }
-            AsmOrProc::Procedure(proc) => process_proc(proc, inline_procs, state, errors),
+            GlobalAsm::Procedure(proc) => process_proc(proc, inline_procs, state, errors),
+            GlobalAsm::FunctionTable(line_no, name) => {
+                process_function_table(line_no, name, ft_defs, state, errors)
+            }
         }
     }
 }
@@ -687,11 +754,19 @@ pub fn assemble<'s>(input: &'s str) -> Result<CompiledAsm, FileErrors<'s>> {
         process_var_section(v, &types, &mut banks, &mut state, &mut errors);
     }
 
+    let ft_defs = validate_function_tables(file.function_table_defs, &mut errors);
+
     let pending_constants = process_constants(pending_constants, &mut state, &mut errors);
 
     state.set_pc_base(code_bank.start);
 
-    process_assembly(file.assembly, &mut inline_procs, &mut state, &mut errors);
+    process_assembly(
+        file.assembly,
+        &ft_defs,
+        &mut inline_procs,
+        &mut state,
+        &mut errors,
+    );
 
     let pending_constants = process_constants(pending_constants, &mut state, &mut errors);
 

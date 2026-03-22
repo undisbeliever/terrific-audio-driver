@@ -61,9 +61,16 @@ pub struct Procedure<'a> {
     pub lines: Vec<(LineNo, AsmLine<'a>)>,
 }
 
-pub enum AsmOrProc<'a> {
+pub enum GlobalAsm<'a> {
     AsmLine(LineNo, AsmLine<'a>),
     Procedure(Procedure<'a>),
+    FunctionTable(LineNo, &'a str),
+}
+
+pub struct FunctionTableDef<'a> {
+    pub line_no: LineNo,
+    pub name: &'a str,
+    pub functions: Vec<(LineNo, &'a str)>,
 }
 
 pub struct AsmFile<'a> {
@@ -74,9 +81,10 @@ pub struct AsmFile<'a> {
 
     pub structs: Vec<StructSection<'a>>,
     pub vars: Vec<VarsSection<'a>>,
+    pub function_table_defs: Vec<FunctionTableDef<'a>>,
     pub inlines: Vec<Procedure<'a>>,
 
-    pub assembly: Vec<AsmOrProc<'a>>,
+    pub assembly: Vec<GlobalAsm<'a>>,
 }
 
 #[derive(Debug, PartialEq)]
@@ -94,6 +102,9 @@ pub enum FileParserError<'a> {
     EndInlineInProc,
     EndProcInInline,
     CannotNestInlinesOrProcs,
+    InvalidFunctionTableDefLine,
+    NoEndftdef,
+    FunctionTableInProc,
 }
 
 fn parse_code_bank<'a>(
@@ -204,7 +215,33 @@ fn parse_vars<'a>(
     out
 }
 
-pub fn parse_asm_line_after_label<'a>(
+fn parse_ftdef<'a>(
+    line_no: LineNo,
+    name: &'a str,
+    it: &mut impl Iterator<Item = (LineNo, &'a str)>,
+    errors: &mut FileErrors<'a>,
+) -> FunctionTableDef<'a> {
+    let mut out = FunctionTableDef {
+        line_no,
+        name,
+        functions: Vec::new(),
+    };
+
+    for (line_no, line) in it {
+        if !line.starts_with(".") {
+            out.functions.push((line_no, line));
+        } else if line == ".endftdef" {
+            return out;
+        } else {
+            errors.push(line_no, FileParserError::InvalidFunctionTableDefLine)
+        }
+    }
+
+    errors.push(line_no, FileParserError::NoEndftdef);
+    out
+}
+
+fn parse_asm_line_after_label<'a>(
     line_no: LineNo,
     first_word: &'a str,
     arguments: &'a str,
@@ -279,6 +316,7 @@ fn parse_proc_or_inline<'a>(
                 ProcType::Proc => errors.push(line_no, FileParserError::EndInlineInProc),
             },
             ".proc" | ".inline" => errors.push(line_no, FileParserError::CannotNestInlinesOrProcs),
+            ".functiontable" => errors.push(line_no, FileParserError::FunctionTableInProc),
             _ => {
                 if let Some(expr) = arguments.strip_prefix("=") {
                     out.constants.push(Constant {
@@ -312,6 +350,7 @@ pub fn parse_file<'a>(file: &'a str, errors: &mut FileErrors<'a>) -> AsmFile<'a>
         var_banks: Vec::new(),
         structs: Vec::new(),
         vars: Vec::new(),
+        function_table_defs: Vec::new(),
         inlines: Vec::new(),
         assembly: Vec::new(),
     };
@@ -346,7 +385,10 @@ pub fn parse_file<'a>(file: &'a str, errors: &mut FileErrors<'a>) -> AsmFile<'a>
                 .structs
                 .push(parse_struct(line_no, args, &mut it, errors)),
             ".vars" => out.vars.push(parse_vars(line_no, args, &mut it, errors)),
-            ".proc" => out.assembly.push(AsmOrProc::Procedure(parse_proc_or_inline(
+            ".ftdef" => out
+                .function_table_defs
+                .push(parse_ftdef(line_no, args, &mut it, errors)),
+            ".proc" => out.assembly.push(GlobalAsm::Procedure(parse_proc_or_inline(
                 line_no,
                 args,
                 ProcType::Proc,
@@ -360,6 +402,7 @@ pub fn parse_file<'a>(file: &'a str, errors: &mut FileErrors<'a>) -> AsmFile<'a>
                 &mut it,
                 errors,
             )),
+            ".functiontable" => out.assembly.push(GlobalAsm::FunctionTable(line_no, args)),
             _ => {
                 if let Some(expr) = args.strip_prefix("=") {
                     out.global_constants.push(Constant {
@@ -369,7 +412,7 @@ pub fn parse_file<'a>(file: &'a str, errors: &mut FileErrors<'a>) -> AsmFile<'a>
                     });
                 } else {
                     parse_asm_line(line_no, command, args, errors, &mut |n, l| {
-                        out.assembly.push(AsmOrProc::AsmLine(n, l))
+                        out.assembly.push(GlobalAsm::AsmLine(n, l))
                     });
                 }
             }
