@@ -361,11 +361,11 @@ fn unknown_symbol_asm_test() -> Result<(), Box<dyn std::error::Error>> {
         &[
             (
                 LineNo(4),
-                OutputError::ExpressionHasUnknownValue("UNKNOWN + 1".to_string()).into()
+                OutputError::ExpressionHasUnknownValue("UNKNOWN + 1").into()
             ),
             (
                 LineNo(5),
-                OutputError::ExpressionHasUnknownValue("missing_var".to_string()).into()
+                OutputError::ExpressionHasUnknownValue("missing_var").into()
             ),
         ]
     );
@@ -1065,7 +1065,7 @@ fn function_table_errors() {
             (l(19), AssemblerError::FtdefNotFound("unused").into()),
             (
                 l(20),
-                OutputError::ExpressionHasUnknownValue("valid_name".to_owned()).into()
+                OutputError::ExpressionHasUnknownValue("valid_name").into()
             ),
         ]
     );
@@ -1232,30 +1232,12 @@ fn cannot_access_pc_outside_asserts() {
     assert_eq!(
         e.errors(),
         &[
-            (
-                l(4),
-                OutputError::ExpressionHasUnknownValue("PC".to_string()).into()
-            ),
-            (
-                l(5),
-                OutputError::ExpressionHasUnknownValue("PC+1".to_string()).into()
-            ),
-            (
-                l(14),
-                OutputError::ExpressionHasUnknownValue("PC+4".to_string()).into()
-            ),
-            (
-                l(15),
-                OutputError::ExpressionHasUnknownValue("PC+5".to_string()).into()
-            ),
-            (
-                l(9),
-                OutputError::ExpressionHasUnknownValue("PC+2".to_string()).into()
-            ),
-            (
-                l(10),
-                OutputError::ExpressionHasUnknownValue("PC+3".to_string()).into()
-            ),
+            (l(4), OutputError::ExpressionHasUnknownValue("PC").into()),
+            (l(5), OutputError::ExpressionHasUnknownValue("PC+1").into()),
+            (l(14), OutputError::ExpressionHasUnknownValue("PC+4").into()),
+            (l(15), OutputError::ExpressionHasUnknownValue("PC+5").into()),
+            (l(9), OutputError::ExpressionHasUnknownValue("PC+2").into()),
+            (l(10), OutputError::ExpressionHasUnknownValue("PC+3").into()),
         ]
     );
 }

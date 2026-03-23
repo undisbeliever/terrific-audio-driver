@@ -281,25 +281,25 @@ pub enum ValueError<'a> {
     Error(&'a str, ExpressionError),
 }
 
-pub fn evaluate_u8v<'a>(expr: &'a str, state: &State) -> Result<U8Value, ValueError<'a>> {
+pub fn evaluate_u8v<'s>(expr: &'s str, state: &State<'s>) -> Result<U8Value<'s>, ValueError<'s>> {
     match evaluate(expr, state) {
         ExpressionResult::Value(v) => match v.try_into() {
             Ok(v) => Ok(U8Value::Known(v)),
             Err(_) => Err(ValueError::U8OutOfRange(expr, v)),
         },
-        ExpressionResult::Unknown => Ok(U8Value::Unknown(expr.to_owned())),
+        ExpressionResult::Unknown => Ok(U8Value::Unknown(expr)),
         ExpressionResult::Boolean(_) => Err(ValueError::U8NotANumber(expr)),
         ExpressionResult::Error(e) => Err(ValueError::Error(expr, e)),
     }
 }
 
-pub fn evaluate_u16v<'a>(expr: &'a str, state: &State) -> Result<U16Value, ValueError<'a>> {
+pub fn evaluate_u16v<'s>(expr: &'s str, state: &State) -> Result<U16Value<'s>, ValueError<'s>> {
     match evaluate(expr, state) {
         ExpressionResult::Value(v) => match v.try_into() {
             Ok(v) => Ok(U16Value::Known(v)),
             Err(_) => Err(ValueError::U16OutOfRange(expr, v)),
         },
-        ExpressionResult::Unknown => Ok(U16Value::Unknown(expr.to_owned())),
+        ExpressionResult::Unknown => Ok(U16Value::Unknown(expr)),
         ExpressionResult::Boolean(_) => Err(ValueError::U16NotANumber(expr)),
         ExpressionResult::Error(e) => Err(ValueError::Error(expr, e)),
     }

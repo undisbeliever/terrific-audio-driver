@@ -8,20 +8,20 @@ use crate::{
 use std::collections::{hash_map::Entry, HashMap};
 
 #[derive(Debug, PartialEq)]
-pub enum SymbolError {
-    InvalidSymbol(String),
-    InvalidLabel(String),
+pub enum SymbolError<'s> {
+    InvalidSymbol(&'s str),
+    InvalidLabel(&'s str),
     DuplicateSymbol,
 }
 
 pub const MAX_ABS_BIT_ADDR: u16 = u16::MAX >> 3;
 
 #[derive(Debug, PartialEq)]
-pub enum OutputError {
+pub enum OutputError<'s> {
     AbsBitOutOfRange(u16),
-    ExpressionError(String, ExpressionError),
-    NotANumber(String),
-    ExpressionHasUnknownValue(String),
+    ExpressionError(&'s str, ExpressionError),
+    NotANumber(&'s str),
+    ExpressionHasUnknownValue(&'s str),
 
     OutOfRange { value: i64, min: i32, max: i32 },
     BranchOutOfRange(i64),
@@ -54,15 +54,15 @@ pub fn is_symbol_name_valid(s: &str) -> bool {
 }
 
 #[derive(Debug, PartialEq)]
-pub enum U8Value {
+pub enum U8Value<'s> {
     Known(u8),
-    Unknown(String),
+    Unknown(&'s str),
 }
 
 #[derive(Debug, PartialEq)]
-pub enum U16Value {
+pub enum U16Value<'s> {
     Known(u16),
-    Unknown(String),
+    Unknown(&'s str),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -112,7 +112,7 @@ struct Pending<'s> {
     line_no: LineNo,
     offset: usize,
     scope: Option<&'s str>,
-    expression: String,
+    expression: &'s str,
     output_type: PendingOutput,
 }
 
@@ -207,7 +207,11 @@ impl<'s> State<'s> {
         self.scope = None;
     }
 
-    fn add_unchecked_symbol(&mut self, full_name: String, value: i64) -> Result<(), SymbolError> {
+    fn add_unchecked_symbol(
+        &mut self,
+        full_name: String,
+        value: i64,
+    ) -> Result<(), SymbolError<'s>> {
         match self.symbols.entry(full_name) {
             Entry::Vacant(v) => {
                 v.insert(Some(value));
@@ -232,21 +236,21 @@ impl<'s> State<'s> {
         parent: &str,
         child_name: &str,
         value: i64,
-    ) -> Result<(), SymbolError> {
+    ) -> Result<(), SymbolError<'s>> {
         let full_name = [parent, ".", child_name].concat();
         self.add_unchecked_symbol(full_name, value)
     }
 
-    pub fn add_symbol(&mut self, name: &str, value: i64) -> Result<(), SymbolError> {
+    pub fn add_symbol(&mut self, name: &'s str, value: i64) -> Result<(), SymbolError<'s>> {
         match is_symbol_name_valid(name) {
             true => match &self.scope {
                 Some(scope) => {
                     let full_name = [scope, ".", name].concat();
                     self.add_unchecked_symbol(full_name, value)
                 }
-                None => self.add_unchecked_symbol(name.to_owned(), value),
+                None => self.add_unchecked_symbol(name.into(), value),
             },
-            false => Err(SymbolError::InvalidLabel(name.into())),
+            false => Err(SymbolError::InvalidLabel(name)),
         }
     }
 
@@ -285,7 +289,7 @@ impl<'s> State<'s> {
         }
     }
 
-    fn push_pending_output(&mut self, expression: String, output_type: PendingOutput) {
+    fn push_pending_output(&mut self, expression: &'s str, output_type: PendingOutput) {
         self.pending_output.push(Pending {
             line_no: self.line_no,
             offset: self.output.len(),
@@ -303,7 +307,7 @@ impl<'s> State<'s> {
         self.output.extend(value.to_le_bytes());
     }
 
-    pub fn write_u8v(&mut self, value: U8Value) {
+    pub fn write_u8v(&mut self, value: U8Value<'s>) {
         match value {
             U8Value::Known(v) => {
                 self.output.push(v);
@@ -315,7 +319,7 @@ impl<'s> State<'s> {
         }
     }
 
-    pub fn write_u16v(&mut self, value: U16Value) {
+    pub fn write_u16v(&mut self, value: U16Value<'s>) {
         match value {
             U16Value::Known(v) => {
                 let [l, h] = v.to_le_bytes();
@@ -334,12 +338,12 @@ impl<'s> State<'s> {
         self.output.push(value);
     }
 
-    pub fn write_op_u8v(&mut self, opcode: u8, value: U8Value) {
+    pub fn write_op_u8v(&mut self, opcode: u8, value: U8Value<'s>) {
         self.output.push(opcode);
         self.write_u8v(value);
     }
 
-    pub fn write_op_u16v(&mut self, opcode: u8, value: U16Value) {
+    pub fn write_op_u16v(&mut self, opcode: u8, value: U16Value<'s>) {
         self.output.push(opcode);
         self.write_u16v(value);
     }
@@ -347,9 +351,9 @@ impl<'s> State<'s> {
     pub fn write_op_abs_bit(
         &mut self,
         opcode: u8,
-        value: U16Value,
+        value: U16Value<'s>,
         bit: BitArgument,
-    ) -> Result<(), OutputError> {
+    ) -> Result<(), OutputError<'s>> {
         self.output.push(opcode);
 
         match value {
@@ -374,14 +378,14 @@ impl<'s> State<'s> {
         }
     }
 
-    pub fn write_relative_goto(&mut self, expression: &str) {
-        self.push_pending_output(expression.to_owned(), PendingOutput::RelativeBranch);
+    pub fn write_relative_goto(&mut self, expression: &'s str) {
+        self.push_pending_output(expression, PendingOutput::RelativeBranch);
 
         self.output.push(0);
     }
 
-    pub fn write_pcall_address(&mut self, expression: &str) {
-        self.push_pending_output(expression.to_owned(), PendingOutput::Pcall);
+    pub fn write_pcall_address(&mut self, expression: &'s str) {
+        self.push_pending_output(expression, PendingOutput::Pcall);
 
         self.output.push(0xff);
     }
@@ -396,7 +400,7 @@ impl<'s> State<'s> {
     }
 }
 
-pub fn process_pending_output_expressions(s: &mut State, errors: &mut FileErrors) {
+pub fn process_pending_output_expressions<'s>(s: &mut State<'s>, errors: &mut FileErrors<'s>) {
     assert_eq!(s.assert_pc, None);
     assert_eq!(s.scope, None);
 
@@ -404,7 +408,7 @@ pub fn process_pending_output_expressions(s: &mut State, errors: &mut FileErrors
         let pos = p.offset;
 
         s.override_scope(p.scope);
-        match evaluate(&p.expression, s) {
+        match evaluate(p.expression, s) {
             ExpressionResult::Value(value) => match p.output_type {
                 PendingOutput::U8 => match u8::try_from(value) {
                     Ok(v) => s.output[pos] = v,

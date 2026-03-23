@@ -25,7 +25,7 @@ pub enum AddressingModeError<'a> {
 pub enum InstructionError<'a> {
     AddressingModeError(AddressingModeError<'a>),
     ExpressionError(&'a str, ExpressionError),
-    OutputError(OutputError),
+    OutputError(OutputError<'a>),
 
     UnknownInstruction(&'a str),
     UnknownInstructionArguments(&'a str, String),
@@ -41,8 +41,8 @@ impl<'a> From<AddressingModeError<'a>> for InstructionError<'a> {
     }
 }
 
-impl From<OutputError> for InstructionError<'_> {
-    fn from(v: OutputError) -> Self {
+impl<'a> From<OutputError<'a>> for InstructionError<'a> {
+    fn from(v: OutputError<'a>) -> Self {
         Self::OutputError(v)
     }
 }
@@ -61,37 +61,37 @@ trait AddressingModeString {
     fn stringify(modes: Self) -> String;
 }
 
-impl AddressingModeString for AddressingMode {
+impl AddressingModeString for AddressingMode<'_> {
     fn stringify(modes: AddressingMode) -> String {
         modes.shorthand().to_owned()
     }
 }
 
-impl AddressingModeString for (AddressingMode, &str) {
+impl AddressingModeString for (AddressingMode<'_>, &str) {
     fn stringify(modes: (AddressingMode, &str)) -> String {
         format!("{}, rel", modes.0.shorthand())
     }
 }
 
-impl AddressingModeString for (AddressingMode, BitArgument, &str) {
+impl AddressingModeString for (AddressingMode<'_>, BitArgument, &str) {
     fn stringify(modes: (AddressingMode, BitArgument, &str)) -> String {
         format!("{}, bit, rel", modes.0.shorthand())
     }
 }
 
-impl AddressingModeString for (AddressingMode, BitArgument) {
+impl AddressingModeString for (AddressingMode<'_>, BitArgument) {
     fn stringify(modes: (AddressingMode, BitArgument)) -> String {
         format!("{}, bit", modes.0.shorthand())
     }
 }
 
-impl AddressingModeString for [AddressingMode; 2] {
+impl AddressingModeString for [AddressingMode<'_>; 2] {
     fn stringify(modes: [AddressingMode; 2]) -> String {
         format!("{}, {}", modes[0].shorthand(), modes[1].shorthand())
     }
 }
 
-impl AddressingModeString for [AddressingMode; 3] {
+impl AddressingModeString for [AddressingMode<'_>; 3] {
     fn stringify(modes: [AddressingMode; 3]) -> String {
         format!(
             "{}, {}, {}",
@@ -110,7 +110,7 @@ fn invalid_n_argments_err(expected: u8, s: &str) -> InstructionError<'static> {
 }
 
 #[derive(Debug, PartialEq)]
-pub enum AddressingMode {
+pub enum AddressingMode<'a> {
     A,
     X,
     Y,
@@ -130,21 +130,21 @@ pub enum AddressingMode {
     DpIndirectX(u8),
     DpIndirectY(u8),
 
-    Abs(U16Value),
-    AbsX(U16Value),
-    AbsY(U16Value),
+    Abs(U16Value<'a>),
+    AbsX(U16Value<'a>),
+    AbsY(U16Value<'a>),
 
-    NotAbs(U16Value),
+    NotAbs(U16Value<'a>),
 
     // jmp
-    AbsIndirectX(U16Value),
+    AbsIndirectX(U16Value<'a>),
     // For completeness
-    AbsIndirectY(U16Value),
+    AbsIndirectY(U16Value<'a>),
 
-    Immediate(U8Value),
+    Immediate(U8Value<'a>),
 }
 
-impl AddressingMode {
+impl AddressingMode<'_> {
     #[allow(dead_code)] // ::TODO remove::
     pub fn shorthand(&self) -> &'static str {
         match self {
@@ -186,40 +186,43 @@ impl AddressingMode {
 fn parse_immediate_value<'a>(
     s: &'a str,
     symbols: &State,
-) -> Result<U8Value, AddressingModeError<'a>> {
+) -> Result<U8Value<'a>, AddressingModeError<'a>> {
     match evaluate(s, symbols) {
         ExpressionResult::Value(value) => match value.try_into() {
             Ok(v) => Ok(U8Value::Known(v)),
             Err(_) => Err(AddressingModeError::DpAddressOutOfBounds(s, value)),
         },
-        ExpressionResult::Unknown => Ok(U8Value::Unknown(s.to_owned())),
+        ExpressionResult::Unknown => Ok(U8Value::Unknown(s)),
         ExpressionResult::Boolean(_) => Err(AddressingModeError::NotANumber(s)),
         ExpressionResult::Error(e) => Err(AddressingModeError::ExpressionError(s, e)),
     }
 }
 
-fn parse_abs_address<'a>(s: &'a str, symbols: &State) -> Result<U16Value, AddressingModeError<'a>> {
+fn parse_abs_address<'a>(
+    s: &'a str,
+    symbols: &State,
+) -> Result<U16Value<'a>, AddressingModeError<'a>> {
     match evaluate(s, symbols) {
         ExpressionResult::Value(value) => match value.try_into() {
             Ok(v) => Ok(U16Value::Known(v)),
             Err(_) => Err(AddressingModeError::AbsoluteAddressOutOfBounds(s, value)),
         },
-        ExpressionResult::Unknown => Ok(U16Value::Unknown(s.to_owned())),
+        ExpressionResult::Unknown => Ok(U16Value::Unknown(s)),
         ExpressionResult::Boolean(_) => Err(AddressingModeError::NotANumber(s)),
         ExpressionResult::Error(e) => Err(AddressingModeError::ExpressionError(s, e)),
     }
 }
 
 #[derive(Debug, PartialEq)]
-enum DpOrAbs {
+enum DpOrAbs<'a> {
     Dp(u8),
-    Abs(U16Value),
+    Abs(U16Value<'a>),
 }
 
 fn parse_dp_or_abs_address<'a>(
     s: &'a str,
     symbols: &State,
-) -> Result<DpOrAbs, AddressingModeError<'a>> {
+) -> Result<DpOrAbs<'a>, AddressingModeError<'a>> {
     match evaluate(s, symbols) {
         ExpressionResult::Value(value) => match u16::try_from(value) {
             Ok(addr) => {
@@ -235,7 +238,7 @@ fn parse_dp_or_abs_address<'a>(
             }
             Err(_) => Err(AddressingModeError::AbsoluteAddressOutOfBounds(s, value)),
         },
-        ExpressionResult::Unknown => Ok(DpOrAbs::Abs(U16Value::Unknown(s.to_string()))),
+        ExpressionResult::Unknown => Ok(DpOrAbs::Abs(U16Value::Unknown(s))),
         ExpressionResult::Boolean(_) => Err(AddressingModeError::NotANumber(s)),
         ExpressionResult::Error(e) => Err(AddressingModeError::ExpressionError(s, e)),
     }
@@ -308,7 +311,7 @@ fn strip_plus_index_suffix<'a>(s: &'a str, register: &'static str) -> Option<&'a
 fn parse_addressing_mode<'a>(
     input: &'a str,
     symbols: &State,
-) -> Result<AddressingMode, AddressingModeError<'a>> {
+) -> Result<AddressingMode<'a>, AddressingModeError<'a>> {
     match input {
         "A" => Ok(AddressingMode::A),
         "X" => Ok(AddressingMode::X),
@@ -364,7 +367,7 @@ fn parse_addressing_mode<'a>(
 fn parse_no_dp_addressing_mode<'a>(
     input: &'a str,
     symbols: &State,
-) -> Result<AddressingMode, AddressingModeError<'a>> {
+) -> Result<AddressingMode<'a>, AddressingModeError<'a>> {
     match input {
         "A" => Ok(AddressingMode::A),
         "X" => Ok(AddressingMode::X),
@@ -447,7 +450,7 @@ fn split_three_arguments<'a>(s: &'a str) -> Result<[&'a str; 3], InstructionErro
 fn parse_one_argument<'a>(
     s: &'a str,
     state: &State,
-) -> Result<AddressingMode, InstructionError<'a>> {
+) -> Result<AddressingMode<'a>, InstructionError<'a>> {
     let arg = split_one_argument(s)?;
 
     Ok(parse_addressing_mode(arg, state)?)
@@ -456,7 +459,7 @@ fn parse_one_argument<'a>(
 fn parse_one_no_dp_argument<'a>(
     s: &'a str,
     state: &State,
-) -> Result<AddressingMode, InstructionError<'a>> {
+) -> Result<AddressingMode<'a>, InstructionError<'a>> {
     let arg = split_one_argument(s)?;
 
     Ok(parse_no_dp_addressing_mode(arg, state)?)
@@ -465,7 +468,7 @@ fn parse_one_no_dp_argument<'a>(
 fn parse_two_arguments<'a>(
     s: &'a str,
     state: &State,
-) -> Result<[AddressingMode; 2], InstructionError<'a>> {
+) -> Result<[AddressingMode<'a>; 2], InstructionError<'a>> {
     let [a1, a2] = split_two_arguments(s)?;
     Ok([
         parse_addressing_mode(a1, state)?,
@@ -476,7 +479,7 @@ fn parse_two_arguments<'a>(
 fn parse_two_no_dp_arguments<'a>(
     s: &'a str,
     state: &State,
-) -> Result<[AddressingMode; 2], InstructionError<'a>> {
+) -> Result<[AddressingMode<'a>; 2], InstructionError<'a>> {
     let [a1, a2] = split_two_arguments(s)?;
     Ok([
         parse_no_dp_addressing_mode(a1, state)?,
@@ -487,7 +490,7 @@ fn parse_two_no_dp_arguments<'a>(
 fn parse_three_no_dp_arguments<'a>(
     s: &'a str,
     state: &State,
-) -> Result<[AddressingMode; 3], InstructionError<'a>> {
+) -> Result<[AddressingMode<'a>; 3], InstructionError<'a>> {
     let [a1, a2, a3] = split_three_arguments(s)?;
     Ok([
         parse_no_dp_addressing_mode(a1, state)?,
@@ -499,7 +502,7 @@ fn parse_three_no_dp_arguments<'a>(
 fn parse_argument_and_rel<'a>(
     s: &'a str,
     state: &State,
-) -> Result<(AddressingMode, &'a str), InstructionError<'a>> {
+) -> Result<(AddressingMode<'a>, &'a str), InstructionError<'a>> {
     let [a1, a2] = split_two_arguments(s)?;
 
     Ok((parse_addressing_mode(a1, state)?, a2))
@@ -507,9 +510,9 @@ fn parse_argument_and_rel<'a>(
 
 fn arithmatic_instruction_impl<'a>(
     instruction: &'a str,
-    arguments: [AddressingMode; 2],
+    arguments: [AddressingMode<'a>; 2],
     opcode_base: u8,
-    state: &mut State,
+    state: &mut State<'a>,
 ) -> Result<(), InstructionError<'a>> {
     match arguments {
         [AddressingMode::A, AddressingMode::Immediate(i)] => {
@@ -616,7 +619,7 @@ fn only_abs_instruction<'a>(
     instruction: &'a str,
     arguments: &'a str,
     opcode: u8,
-    state: &mut State,
+    state: &mut State<'a>,
 ) -> Result<(), InstructionError<'a>> {
     match parse_one_no_dp_argument(arguments, state)? {
         AddressingMode::Abs(abs) => {
@@ -646,7 +649,7 @@ fn arithmatic_instruction<'a>(
     instruction: &'a str,
     arguments: &'a str,
     opcode_base: u8,
-    state: &mut State,
+    state: &mut State<'a>,
 ) -> Result<(), InstructionError<'a>> {
     arithmatic_instruction_impl(
         instruction,
@@ -660,7 +663,7 @@ fn inc_dec_instruction<'a>(
     instruction: &'a str,
     arguments: &'a str,
     opcode_base: u8,
-    state: &mut State,
+    state: &mut State<'a>,
 ) -> Result<(), InstructionError<'a>> {
     match parse_one_argument(arguments, state)? {
         AddressingMode::A => state.write_u8(opcode_base + 0x9c),
@@ -680,7 +683,7 @@ fn rmw_instruction<'a>(
     instruction: &'a str,
     arguments: &'a str,
     opcode_base: u8,
-    state: &mut State,
+    state: &mut State<'a>,
 ) -> Result<(), InstructionError<'a>> {
     match parse_one_argument(arguments, state)? {
         AddressingMode::A => state.write_u8(opcode_base | 0x1c),
@@ -697,7 +700,7 @@ fn rmw_instruction<'a>(
 fn branch_instruction<'a>(
     arguments: &'a str,
     opcode: u8,
-    state: &mut State,
+    state: &mut State<'a>,
 ) -> Result<(), InstructionError<'a>> {
     let rel = split_one_argument(arguments)?;
     state.write_u8(opcode);
@@ -709,7 +712,7 @@ fn branch_bit_instruction<'a>(
     instruction: &'a str,
     arguments: &'a str,
     opcode_base: u8,
-    state: &mut State,
+    state: &mut State<'a>,
 ) -> Result<(), InstructionError<'a>> {
     let [addr, bit, rel] = split_three_arguments(arguments)?;
 
@@ -730,7 +733,7 @@ fn branch_bit_instruction<'a>(
 
 fn pcall_instruction<'a>(
     arguments: &'a str,
-    state: &mut State,
+    state: &mut State<'a>,
 ) -> Result<(), InstructionError<'a>> {
     let addr = split_one_argument(arguments)?;
 
@@ -808,7 +811,7 @@ fn abs_bit_instruction<'a>(
     instruction: &'a str,
     arguments: &'a str,
     opcode: u8,
-    state: &mut State,
+    state: &mut State<'a>,
 ) -> Result<(), InstructionError<'a>> {
     match parse_two_no_dp_arguments(arguments, state)? {
         [AddressingMode::Abs(abs), bit] => {
@@ -825,7 +828,7 @@ fn abs_or_not_abs_bit_instruction<'a>(
     instruction: &'a str,
     arguments: &'a str,
     opcode_base: u8,
-    state: &mut State,
+    state: &mut State<'a>,
 ) -> Result<(), InstructionError<'a>> {
     match parse_three_no_dp_arguments(arguments, state)? {
         [AddressingMode::C, AddressingMode::Abs(abs), bit] => {
@@ -848,7 +851,7 @@ fn carry_abs_bit_instruction<'a>(
     instruction: &'a str,
     arguments: &'a str,
     opcode: u8,
-    state: &mut State,
+    state: &mut State<'a>,
 ) -> Result<(), InstructionError<'a>> {
     match parse_three_no_dp_arguments(arguments, state)? {
         [AddressingMode::C, AddressingMode::Abs(abs), bit] => {
@@ -864,7 +867,7 @@ fn carry_abs_bit_instruction<'a>(
 pub fn process_instruction<'a>(
     instruction: &'a str,
     arguments: &'a str,
-    state: &mut State,
+    state: &mut State<'a>,
 ) -> Result<(), InstructionError<'a>> {
     match instruction {
         "or" => arithmatic_instruction(instruction, arguments, 0x00, state),
@@ -1145,7 +1148,7 @@ mod addressing_mode_tests {
         test_ok!("#123", AddressingMode::Immediate(U8Value::Known(123)));
         test_ok!(
             "#unknown + 123 / 2",
-            AddressingMode::Immediate(U8Value::Unknown("unknown + 123 / 2".to_string()))
+            AddressingMode::Immediate(U8Value::Unknown("unknown + 123 / 2"))
         );
     }
 
@@ -1238,13 +1241,10 @@ mod addressing_mode_tests {
         test_ok!("25 + 35 + 12", AddressingMode::Dp(25 + 35 + 12));
         test_ok!("100 + 100 + 100", AddressingMode::Abs(U16Value::Known(300)));
 
-        test_ok!(
-            "unknown",
-            AddressingMode::Abs(U16Value::Unknown("unknown".to_string()))
-        );
+        test_ok!("unknown", AddressingMode::Abs(U16Value::Unknown("unknown")));
         test_ok!(
             "unknown + 2",
-            AddressingMode::Abs(U16Value::Unknown("unknown + 2".to_string()))
+            AddressingMode::Abs(U16Value::Unknown("unknown + 2"))
         );
     }
 
@@ -1269,15 +1269,15 @@ mod addressing_mode_tests {
 
         test_ok!(
             "unknown+X",
-            AddressingMode::AbsX(U16Value::Unknown("unknown".to_string()))
+            AddressingMode::AbsX(U16Value::Unknown("unknown"))
         );
         test_ok!(
             "unknown + 2+X",
-            AddressingMode::AbsX(U16Value::Unknown("unknown + 2".to_string()))
+            AddressingMode::AbsX(U16Value::Unknown("unknown + 2"))
         );
         test_ok!(
             "unknown + 3 + X",
-            AddressingMode::AbsX(U16Value::Unknown("unknown + 3".to_string()))
+            AddressingMode::AbsX(U16Value::Unknown("unknown + 3"))
         );
     }
 
@@ -1297,15 +1297,15 @@ mod addressing_mode_tests {
 
         test_ok!(
             "unknown+Y",
-            AddressingMode::AbsY(U16Value::Unknown("unknown".to_string()))
+            AddressingMode::AbsY(U16Value::Unknown("unknown"))
         );
         test_ok!(
             "unknown + 2+Y",
-            AddressingMode::AbsY(U16Value::Unknown("unknown + 2".to_string()))
+            AddressingMode::AbsY(U16Value::Unknown("unknown + 2"))
         );
         test_ok!(
             "unknown + 3 + Y",
-            AddressingMode::AbsY(U16Value::Unknown("unknown + 3".to_string()))
+            AddressingMode::AbsY(U16Value::Unknown("unknown + 3"))
         );
     }
 
@@ -1561,58 +1561,35 @@ mod addressing_mode_tests {
             };
         }
 
-        test!(
-            "#u",
-            Ok(AddressingMode::Immediate(U8Value::Unknown("u".to_owned())))
-        );
+        test!("#u", Ok(AddressingMode::Immediate(U8Value::Unknown("u"))));
 
-        test!(
-            "u",
-            Ok(AddressingMode::Abs(U16Value::Unknown("u".to_owned())))
-        );
+        test!("u", Ok(AddressingMode::Abs(U16Value::Unknown("u"))));
 
-        test!(
-            "u+X",
-            Ok(AddressingMode::AbsX(U16Value::Unknown("u".to_owned())))
-        );
-        test!(
-            "u+1+X",
-            Ok(AddressingMode::AbsX(U16Value::Unknown("u+1".to_owned())))
-        );
+        test!("u+X", Ok(AddressingMode::AbsX(U16Value::Unknown("u"))));
+        test!("u+1+X", Ok(AddressingMode::AbsX(U16Value::Unknown("u+1"))));
 
-        test!(
-            "u +Y",
-            Ok(AddressingMode::AbsY(U16Value::Unknown("u".to_owned())))
-        );
+        test!("u +Y", Ok(AddressingMode::AbsY(U16Value::Unknown("u"))));
         test!(
             "u + 1 + Y",
-            Ok(AddressingMode::AbsY(U16Value::Unknown("u + 1".to_owned())))
+            Ok(AddressingMode::AbsY(U16Value::Unknown("u + 1")))
         );
 
         test!(
             "[u + X]",
-            Ok(AddressingMode::AbsIndirectX(U16Value::Unknown(
-                "u".to_owned()
-            )))
+            Ok(AddressingMode::AbsIndirectX(U16Value::Unknown("u")))
         );
         test!(
             "[u + 1 + X]",
-            Ok(AddressingMode::AbsIndirectX(U16Value::Unknown(
-                "u + 1".to_owned()
-            )))
+            Ok(AddressingMode::AbsIndirectX(U16Value::Unknown("u + 1")))
         );
 
         test!(
             "[u]+Y",
-            Ok(AddressingMode::AbsIndirectY(U16Value::Unknown(
-                "u".to_owned()
-            )))
+            Ok(AddressingMode::AbsIndirectY(U16Value::Unknown("u")))
         );
         test!(
             "[u+1]+Y",
-            Ok(AddressingMode::AbsIndirectY(U16Value::Unknown(
-                "u+1".to_owned()
-            )))
+            Ok(AddressingMode::AbsIndirectY(U16Value::Unknown("u+1")))
         );
     }
 }
@@ -1631,7 +1608,10 @@ mod instruction_tests {
     };
     use std::panic::Location;
 
-    pub fn process_line<'a>(line: &'a str, state: &mut State) -> Result<(), InstructionError<'a>> {
+    pub fn process_line<'a>(
+        line: &'a str,
+        state: &mut State<'a>,
+    ) -> Result<(), InstructionError<'a>> {
         let (instruction, arguments) = split_first_word(line);
         super::process_instruction(instruction, arguments, state)
     }

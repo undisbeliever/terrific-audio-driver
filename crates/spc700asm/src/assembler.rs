@@ -62,7 +62,7 @@ pub enum AssemblerError<'s> {
     CannotNestArrays,
     ArrayTooLarge,
 
-    CannotOpenProc(&'s str, SymbolError),
+    CannotOpenProc(&'s str, SymbolError<'s>),
     EmptyProc,
 
     DuplicateInline(&'s str),
@@ -156,7 +156,7 @@ fn default_types<'s>() -> HashMap<&'s str, Type> {
 
 fn process_constants<'s>(
     constants: Vec<Constant<'s>>,
-    state: &mut State,
+    state: &mut State<'s>,
     errors: &mut FileErrors<'s>,
 ) -> Vec<Constant<'s>> {
     let mut constants = constants;
@@ -276,12 +276,12 @@ fn process_var_banks<'s>(
     out
 }
 
-fn add_var_symbols(
-    var: &Var,
+fn add_var_symbols<'s>(
+    var: &Var<'s>,
     addr: u16,
     var_type: &Type,
-    state: &mut State,
-    errors: &mut FileErrors,
+    state: &mut State<'s>,
+    errors: &mut FileErrors<'s>,
 ) {
     let addr = i64::from(addr);
 
@@ -305,7 +305,7 @@ fn read_var_type<'s, 'a>(
     line_no: LineNo,
     var_type: &'s str,
     types: &'a HashMap<&'s str, Type>,
-    state: &State,
+    state: &State<'s>,
     errors: &mut FileErrors<'s>,
 ) -> Option<(&'a Type, u16)> {
     if !var_type.starts_with("[") {
@@ -363,7 +363,7 @@ fn read_var_type<'s, 'a>(
 
 fn process_struct<'s>(
     s: StructSection<'s>,
-    state: &State,
+    state: &State<'s>,
     types: &mut HashMap<&'s str, Type>,
     errors: &mut FileErrors<'s>,
 ) {
@@ -419,7 +419,7 @@ fn process_variable<'s>(
     input: &Var<'s>,
     types: &HashMap<&'s str, Type>,
     bank: &mut VariableBank,
-    state: &mut State,
+    state: &mut State<'s>,
     errors: &mut FileErrors<'s>,
 ) {
     if let Some((var_type, size)) =
@@ -439,7 +439,7 @@ fn process_var_section<'s>(
     input: VarsSection<'s>,
     types: &HashMap<&'s str, Type>,
     banks: &mut [VariableBank],
-    state: &mut State,
+    state: &mut State<'s>,
     errors: &mut FileErrors<'s>,
 ) {
     match banks.iter_mut().find(|b| b.name == input.bank) {

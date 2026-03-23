@@ -19,8 +19,8 @@ pub enum FileError<'s> {
     Constexpr(ConstexprError<'s>),
     Assember(AssemblerError<'s>),
     Instruction(InstructionError<'s>),
-    Symbol(SymbolError),
-    Output(OutputError),
+    Symbol(SymbolError<'s>),
+    Output(OutputError<'s>),
     Assert(AssertError<'s>),
 }
 
@@ -54,14 +54,14 @@ impl<'s> From<InstructionError<'s>> for FileError<'s> {
     }
 }
 
-impl<'s> From<SymbolError> for FileError<'s> {
-    fn from(v: SymbolError) -> Self {
+impl<'s> From<SymbolError<'s>> for FileError<'s> {
+    fn from(v: SymbolError<'s>) -> Self {
         Self::Symbol(v)
     }
 }
 
-impl<'s> From<OutputError> for FileError<'s> {
-    fn from(v: OutputError) -> Self {
+impl<'s> From<OutputError<'s>> for FileError<'s> {
+    fn from(v: OutputError<'s>) -> Self {
         Self::Output(v)
     }
 }
