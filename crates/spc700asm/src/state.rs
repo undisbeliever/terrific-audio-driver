@@ -116,6 +116,14 @@ struct Pending<'s> {
     output_type: PendingOutput,
 }
 
+#[derive(Clone)]
+struct Assert<'s> {
+    line_no: LineNo,
+    pc: i64,
+    scope: Option<&'s str>,
+    expression: &'s str,
+}
+
 pub struct OldScope<'s>(Option<&'s str>);
 
 pub struct State<'s> {
@@ -130,6 +138,10 @@ pub struct State<'s> {
 
     line_no: LineNo,
     pending_output: Vec<Pending<'s>>,
+
+    // only used in assert statements in `process_aserts()`
+    assert_pc: Option<i64>,
+    asserts: Vec<Assert<'s>>,
 }
 
 impl<'s> State<'s> {
@@ -143,6 +155,8 @@ impl<'s> State<'s> {
             pc_base,
             line_no: LineNo(0),
             pending_output: Vec::new(),
+            assert_pc: None,
+            asserts: Vec::new(),
         }
     }
 
@@ -237,6 +251,10 @@ impl<'s> State<'s> {
     }
 
     pub fn get_symbol(&self, name: &str) -> Option<i64> {
+        if name == "PC" {
+            return self.assert_pc;
+        }
+
         match (self.scope, name.contains(".")) {
             (Some(scope), false) => {
                 let full_name = [scope, ".", name].concat();
@@ -367,9 +385,21 @@ impl<'s> State<'s> {
 
         self.output.push(0xff);
     }
+
+    pub fn add_assert(&mut self, line_no: LineNo, expression: &'s str) {
+        self.asserts.push(Assert {
+            line_no,
+            pc: self.program_counter(),
+            scope: self.scope,
+            expression,
+        });
+    }
 }
 
 pub fn process_pending_output_expressions(s: &mut State, errors: &mut FileErrors) {
+    assert_eq!(s.assert_pc, None);
+    assert_eq!(s.scope, None);
+
     for p in std::mem::take(&mut s.pending_output) {
         let pos = p.offset;
 
@@ -443,6 +473,49 @@ pub fn process_pending_output_expressions(s: &mut State, errors: &mut FileErrors
             }
         }
     }
+
+    s.scope = None;
+}
+
+#[derive(Debug, PartialEq)]
+pub enum AssertError<'s> {
+    AssertFailure(&'s str),
+    NoConditional(&'s str),
+    UnknownSymbol(&'s str),
+    ExpressionError(&'s str, ExpressionError),
+}
+
+pub fn process_asserts<'s>(s: &mut State<'s>, errors: &mut FileErrors<'s>) {
+    assert_eq!(s.assert_pc, None);
+    assert_eq!(s.scope, None);
+
+    for assert in std::mem::take(&mut s.asserts) {
+        s.assert_pc = Some(assert.pc);
+        s.override_scope(assert.scope);
+
+        match evaluate(assert.expression, s) {
+            ExpressionResult::Boolean(true) => (),
+            ExpressionResult::Boolean(false) => errors.push(
+                assert.line_no,
+                AssertError::AssertFailure(assert.expression),
+            ),
+            ExpressionResult::Value(_) => errors.push(
+                assert.line_no,
+                AssertError::NoConditional(assert.expression),
+            ),
+            ExpressionResult::Unknown => errors.push(
+                assert.line_no,
+                AssertError::UnknownSymbol(assert.expression),
+            ),
+            ExpressionResult::Error(e) => errors.push(
+                assert.line_no,
+                AssertError::ExpressionError(assert.expression, e),
+            ),
+        }
+    }
+
+    s.override_scope(None);
+    s.assert_pc = None;
 }
 
 // Only allow state cloning in unit tests
@@ -457,6 +530,8 @@ impl Clone for State<'_> {
             output: self.output.clone(),
             line_no: self.line_no,
             pending_output: self.pending_output.clone(),
+            assert_pc: self.assert_pc,
+            asserts: self.asserts.clone(),
         }
     }
 }

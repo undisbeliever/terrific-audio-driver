@@ -51,6 +51,7 @@ pub enum AsmLine<'a> {
     Instruction(&'a str, &'a str),
     Db(&'a str),
     Dw(&'a str),
+    Assert(&'a str),
 }
 
 pub struct Procedure<'a> {
@@ -251,6 +252,7 @@ fn parse_asm_line_after_label<'a>(
     match first_word {
         ".db" => f(line_no, AsmLine::Db(arguments)),
         ".dw" => f(line_no, AsmLine::Dw(arguments)),
+        ".assert" => f(line_no, AsmLine::Assert(arguments)),
         fw if first_word.starts_with(".") => {
             errors.push(line_no, FileParserError::InvalidCommand(first_word))
         }

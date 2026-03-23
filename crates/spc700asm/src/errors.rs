@@ -9,7 +9,7 @@ pub use crate::{
     assembler::AssemblerError,
     evaluator::{ConstexprError, ExpressionError},
     file_parser::FileParserError,
-    state::{OutputError, SymbolError},
+    state::{AssertError, OutputError, SymbolError},
 };
 
 #[derive(Debug, PartialEq)]
@@ -21,6 +21,7 @@ pub enum FileError<'s> {
     Instruction(InstructionError<'s>),
     Symbol(SymbolError),
     Output(OutputError),
+    Assert(AssertError<'s>),
 }
 
 impl<'s> From<FileParserError<'s>> for FileError<'s> {
@@ -62,6 +63,12 @@ impl<'s> From<SymbolError> for FileError<'s> {
 impl<'s> From<OutputError> for FileError<'s> {
     fn from(v: OutputError) -> Self {
         Self::Output(v)
+    }
+}
+
+impl<'s> From<AssertError<'s>> for FileError<'s> {
+    fn from(v: AssertError<'s>) -> Self {
+        Self::Assert(v)
     }
 }
 

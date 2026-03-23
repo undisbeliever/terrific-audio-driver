@@ -7,8 +7,8 @@
 use spc700asm::{
     assemble,
     errors::{
-        AssemblerError, ConstexprError, ExpressionError, FileParserError, LineNo, OutputError,
-        SymbolError,
+        AssemblerError, AssertError, ConstexprError, ExpressionError, FileParserError, LineNo,
+        OutputError, SymbolError,
     },
 };
 
@@ -1096,6 +1096,166 @@ fn function_table_not_allowed_in_proc_or_inline() {
         [
             (l(5), FileParserError::FunctionTableInProc.into()),
             (l(10), FileParserError::FunctionTableInProc.into()),
+        ]
+    );
+}
+
+#[test]
+fn asserts() -> Result<(), Box<dyn std::error::Error>> {
+    let c = assemble(
+        r##"
+.codebank $0200..$0300
+
+CONST = 100
+
+.assert CONST % 10 == 0
+.assert CONST > 99
+.assert CONST < 101
+
+.assert proc.INNER_CONST == -50
+.assert proc + 1 == next_proc
+.assert proc == next_proc - 1
+
+.proc proc
+    INNER_CONST = -50
+
+    .assert INNER_CONST != 0
+    .db 0
+
+    .assert PC == next_proc
+.endproc
+
+.proc next_proc
+    .assert proc.INNER_CONST == -50
+    .db 1
+.endproc
+
+.assert proc + 1 == next_proc
+.assert proc == next_proc - 1
+
+.assert PC == next_proc + 1
+.assert PC == $202
+"##,
+    )?;
+
+    assert_eq!(c.sym("proc"), 0x200);
+    assert_eq!(c.sym("next_proc"), 0x201);
+    assert_eq!(c.output, &[0, 1]);
+
+    Ok(())
+}
+
+#[test]
+fn assert_failures() {
+    let e = assemble(
+        r##"
+.codebank $0200..$0300
+
+CONST = 100
+
+.assert CONST == 101
+.assert CONST == 100
+.assert CONST < 100
+
+.proc proc
+    INNER_CONST = 2
+
+    .assert INNER_CONST != 2
+    .db 0
+
+    .assert PC == next_proc
+.endproc
+
+    .db 0
+
+.proc next_proc
+    .db 0
+.endproc
+
+.assert PC == $203 ; passes
+.assert PC < $200  ; fails
+
+.assert 1 + 2 + 3 ; fails (not a conditional)
+.assert UNKNOWN == UNKNOWN ; fails
+.assert 1 + (2 ; fails (expression error)
+"##,
+    )
+    .err()
+    .unwrap();
+
+    assert_eq!(
+        e.errors(),
+        &[
+            (l(6), AssertError::AssertFailure("CONST == 101").into()),
+            (l(8), AssertError::AssertFailure("CONST < 100").into()),
+            (l(13), AssertError::AssertFailure("INNER_CONST != 2").into()),
+            (l(16), AssertError::AssertFailure("PC == next_proc").into()),
+            (l(26), AssertError::AssertFailure("PC < $200").into()),
+            (l(28), AssertError::NoConditional("1 + 2 + 3").into()),
+            (
+                l(29),
+                AssertError::UnknownSymbol("UNKNOWN == UNKNOWN").into()
+            ),
+            (
+                l(30),
+                AssertError::ExpressionError("1 + (2", ExpressionError::UnmatchedParenthesis)
+                    .into()
+            ),
+        ]
+    );
+}
+
+#[test]
+fn cannot_access_pc_outside_asserts() {
+    let e = assemble(
+        r##"
+.codebank $0200..$0300
+
+    .dw PC
+    mov A, PC+1
+    inline_proc
+
+.proc proc
+    .dw PC+2
+    mov A, PC+3
+.endproc
+
+.inline inline_proc
+    .dw PC+4
+    mov A, PC+5
+.endinline
+"##,
+    )
+    .err()
+    .unwrap();
+
+    assert_eq!(
+        e.errors(),
+        &[
+            (
+                l(4),
+                OutputError::ExpressionHasUnknownValue("PC".to_string()).into()
+            ),
+            (
+                l(5),
+                OutputError::ExpressionHasUnknownValue("PC+1".to_string()).into()
+            ),
+            (
+                l(14),
+                OutputError::ExpressionHasUnknownValue("PC+4".to_string()).into()
+            ),
+            (
+                l(15),
+                OutputError::ExpressionHasUnknownValue("PC+5".to_string()).into()
+            ),
+            (
+                l(9),
+                OutputError::ExpressionHasUnknownValue("PC+2".to_string()).into()
+            ),
+            (
+                l(10),
+                OutputError::ExpressionHasUnknownValue("PC+3".to_string()).into()
+            ),
         ]
     );
 }

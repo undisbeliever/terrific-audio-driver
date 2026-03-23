@@ -15,7 +15,10 @@ use crate::{
         StructSection, Var, VarBankStatement, VarsSection,
     },
     instructions::process_instruction,
-    state::{is_symbol_name_valid, process_pending_output_expressions, State, SymbolError},
+    state::{
+        is_symbol_name_valid, process_asserts, process_pending_output_expressions, State,
+        SymbolError,
+    },
     string::comma_iter,
 };
 
@@ -646,6 +649,7 @@ fn process_asm_line<'s>(
         }
         AsmLine::Db(arguments) => process_db(line_no, arguments, state, errors),
         AsmLine::Dw(arguments) => process_dw(line_no, arguments, state, errors),
+        AsmLine::Assert(expr) => state.add_assert(line_no, expr),
     }
 }
 
@@ -785,6 +789,8 @@ pub fn assemble<'s>(input: &'s str) -> Result<CompiledAsm, FileErrors<'s>> {
     }
 
     generate_unused_inline_errors(inline_procs, &mut errors);
+
+    process_asserts(&mut state, &mut errors);
 
     if !errors.is_empty() {
         return Err(errors);
