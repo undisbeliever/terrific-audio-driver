@@ -15,7 +15,6 @@ pub use crate::{
 #[derive(Debug, PartialEq)]
 pub enum FileError<'s> {
     FileParser(FileParserError<'s>),
-    Expression(ExpressionError),
     Constexpr(ConstexprError<'s>),
     Assember(AssemblerError<'s>),
     Instruction(InstructionError<'s>),
@@ -27,12 +26,6 @@ pub enum FileError<'s> {
 impl<'s> From<FileParserError<'s>> for FileError<'s> {
     fn from(v: FileParserError<'s>) -> Self {
         Self::FileParser(v)
-    }
-}
-
-impl From<ExpressionError> for FileError<'_> {
-    fn from(v: ExpressionError) -> Self {
-        Self::Expression(v)
     }
 }
 
