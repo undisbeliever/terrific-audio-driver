@@ -733,6 +733,7 @@ pub enum LoadSongError {
         echo: usize,
     },
     InvalidSongAddress,
+    Timeout,
 }
 
 #[derive(Debug, PartialEq)]
@@ -2170,6 +2171,7 @@ impl Display for LoadSongError {
                 write!(f, "cannot fit data in audio-ram (driver: {} bytes, common_audio_data: {} bytes, song data: {} bytes, echo buffer: {} bytes", addresses::COMMON_DATA, common, song, echo)
             }
             Self::InvalidSongAddress => write!(f, "cannot load song: invalid song address"),
+            Self::Timeout => write!(f, "audio driver timeout"),
         }
     }
 }

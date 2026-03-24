@@ -183,9 +183,17 @@ impl TadEmulator {
             },
         )?;
 
-        // Wait for the audio-driver to finish initialization
-        while !addresses::MAIN_LOOP_CODE_RANGE.contains(&self.emu.program_counter()) {
-            self.emu.0.emulate();
+        // Wait for the audio-driver to finish initialization with timeout
+        {
+            let mut timeout_counter = 10u32;
+            while !addresses::MAIN_LOOP_CODE_RANGE.contains(&self.emu.program_counter()) {
+                timeout_counter -= 1;
+                if timeout_counter == 0 {
+                    return Err(LoadSongError::Timeout);
+                }
+
+                self.emu.0.emulate();
+            }
         }
 
         if let Some(bci) = &bc_interpreter {
