@@ -49,13 +49,13 @@ N_CHANNELS = 10
 "##,
     )?;
 
-    assert_eq!(c.banks[0].name, "zeropage");
-    assert_eq!(c.banks[0].range, 0x0000..0x0080);
-    assert_eq!(c.banks[0].pos, 0x06);
+    assert_eq!(c.var_banks[0].name, "zeropage");
+    assert_eq!(c.var_banks[0].range, 0x0000..0x0080);
+    assert_eq!(c.var_banks[0].pos, 0x06);
 
-    assert_eq!(c.banks[1].name, "firstpage");
-    assert_eq!(c.banks[1].range, 0x0100..0x0200);
-    assert_eq!(c.banks[1].pos, 0x100 + 2 + 10 + 2 * 2 * 4);
+    assert_eq!(c.var_banks[1].name, "firstpage");
+    assert_eq!(c.var_banks[1].range, 0x0100..0x0200);
+    assert_eq!(c.var_banks[1].pos, 0x100 + 2 + 10 + 2 * 2 * 4);
 
     assert_eq!(c.sym("unsigned_byte"), 0x00);
     assert_eq!(c.sym("signed_byte"), 0x01);

@@ -76,7 +76,7 @@ pub enum AssemblerError<'s> {
 }
 
 pub struct CompiledAsm {
-    pub banks: Vec<VariableBank>,
+    pub var_banks: Vec<VariableBank>,
     pub symbols: HashMap<String, Option<i64>>,
     pub output: Vec<u8>,
 }
@@ -673,6 +673,18 @@ fn process_proc<'s>(
     process_proc_or_inline(proc, ProcType::Procedure, inline_procs, state, errors);
 }
 
+fn check_code_size(code_bank: Option<Range<u16>>, state: &State, errors: &mut FileErrors) {
+    if let Some(code_bank) = code_bank {
+        let i64_code_bank = i64::from(code_bank.start)..i64::from(code_bank.end);
+        if !i64_code_bank.contains(&state.program_counter()) {
+            errors.push(
+                LineNo(0),
+                AssemblerError::CodeTooLarge(code_bank, state.program_counter()),
+            );
+        }
+    }
+}
+
 struct CodeBankSetTest(bool);
 
 impl CodeBankSetTest {
@@ -696,6 +708,7 @@ pub fn assemble<'s>(input: &'s str) -> Result<CompiledAsm, FileErrors<'s>> {
     let mut errors = FileErrors::new();
 
     let file = parse_file(input, &mut errors);
+
     let mut inline_procs = prepare_inlines(file.inlines, &mut errors);
 
     let mut state = State::new(0);
@@ -746,37 +759,23 @@ pub fn assemble<'s>(input: &'s str) -> Result<CompiledAsm, FileErrors<'s>> {
     }
 
     process_pending_output_expressions(&mut state, &mut errors);
-
-    if let Some(code_bank) = &code_bank {
-        let i64_code_bank = i64::from(code_bank.start)..i64::from(code_bank.end);
-        if !i64_code_bank.contains(&state.program_counter()) {
-            errors.push(
-                LineNo(0),
-                AssemblerError::CodeTooLarge(code_bank.clone(), state.program_counter()),
-            );
-        }
-    }
-
     generate_unused_inline_errors(inline_procs, &mut errors);
-
     process_asserts(&mut state, &mut errors);
-
-    if !errors.is_empty() {
-        return Err(errors);
-    }
-
-    // Make sure there are no variable overruns
-    for b in &var_banks {
-        assert!(b.pos >= b.range.start && b.pos <= b.range.end);
-    }
+    check_code_size(code_bank.clone(), &state, &mut errors);
 
     if errors.is_empty() {
         let (output, symbols) = state.take_output_and_symbols();
 
+        // Make sure there are no variable overruns
+        for b in &var_banks {
+            assert!(b.pos >= b.range.start && b.pos <= b.range.end);
+        }
+
+        // Make sure there is a `.codebank` statement if there is any output
         assert!(code_bank.is_some() || output.is_empty());
 
         Ok(CompiledAsm {
-            banks: var_banks,
+            var_banks,
             output,
             symbols,
         })
