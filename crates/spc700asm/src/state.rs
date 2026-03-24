@@ -194,8 +194,8 @@ impl<'s> State<'s> {
     }
 
     // CAUTION: Does not add proc to the symbol file
-    pub fn open_scope(&mut self, name: &'s str, labels: Vec<&str>) {
-        for label in labels {
+    pub fn open_scope(&mut self, name: &'s str, child_symbols: Vec<&'s str>) {
+        for label in child_symbols {
             let full_name = [name, ".", label].concat();
             self.symbols.entry(full_name).or_insert(None);
         }

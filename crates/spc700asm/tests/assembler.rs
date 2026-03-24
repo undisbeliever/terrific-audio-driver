@@ -22,11 +22,11 @@ fn variables() -> Result<(), Box<dyn std::error::Error>> {
         r##"
 .codebank $200..$300
 
-.varbank zeropage  $0000..100+28
-.varbank firstpage FP_START..FP_END
-
 FP_START = $0100
 FP_END   = $0200
+
+.varbank zeropage  $0000..100+28
+.varbank firstpage FP_START..FP_END
 
 N_CHANNELS = 10
 
@@ -319,8 +319,6 @@ fn global_asm_test() -> Result<(), Box<dyn std::error::Error>> {
         r##"
 .codebank $200..$300
 
-FORWARD_REFERENCED_CONSTANT = End + 2
-
 Label:
     bra Label
 
@@ -330,6 +328,8 @@ Label2: inc A
 
     bra End
 End:
+
+FORWARD_REFERENCED_CONSTANT = End + 2
 "##,
     )?;
 
@@ -341,6 +341,29 @@ End:
     assert_eq!(&c.output, &[0x2f, -2i8 as u8, 0xbc, 0xe8, 9, 0x2f, 0]);
 
     Ok(())
+}
+
+#[test]
+fn forward_referenced_constant_is_err() {
+    let e = assemble(
+        r##"
+.codebank $200..$300
+
+FORWARD_REFERENCED_CONSTANT = End + 2
+    .db 0
+End:
+"##,
+    )
+    .err()
+    .unwrap();
+
+    assert_eq!(
+        e.errors(),
+        &[(
+            l(4),
+            AssemblerError::ConstantHasUnknownValue("End + 2").into()
+        )]
+    );
 }
 
 #[test]
@@ -455,7 +478,7 @@ _tmp2 = zpTmp2
 }
 
 #[test]
-fn proc_scoping_test() -> Result<(), Box<dyn std::error::Error>> {
+fn proc_const_scoping_test() -> Result<(), Box<dyn std::error::Error>> {
     let c = assemble(
         r##"
 .codebank $0200..$0300
@@ -487,6 +510,54 @@ name = 1
             0xe8, 2, 0x6f, // proc1
             0xe8, 3, 0x6f, // proc2
             0xe8, 1, 0xff, // global
+        ]
+    );
+
+    Ok(())
+}
+
+#[test]
+fn proc_label_scoping_test() -> Result<(), Box<dyn std::error::Error>> {
+    let c = assemble(
+        r##"
+.codebank $0200..$0300
+
+Label:
+
+.proc proc1
+    .dw Label
+Label:
+    ret
+.endproc
+
+.proc proc2
+Label:
+    .dw Label
+    ret
+.endproc
+
+.proc proc3
+    .dw Label
+    ret
+.endproc
+
+Global:
+    .dw Label * 2
+    ret
+"##,
+    )?;
+
+    assert_eq!(c.sym("Label"), 0x0200);
+    assert_eq!(c.sym("proc1.Label"), 0x0202);
+    assert_eq!(c.sym("proc2.Label"), 0x0203);
+
+    assert_eq!(
+        c.output,
+        &[
+            0x02, 0x02, 0x6f, // proc1
+            0x03, 0x02, 0x6f, // proc2
+            0x00, 0x02, 0x6f, // proc3
+            0x00, 0x04, 0x6f, // global
         ]
     );
 

@@ -22,12 +22,6 @@ pub struct VarBankStatement<'a> {
     pub end_expr: &'a str,
 }
 
-pub struct Constant<'a> {
-    pub line_no: LineNo,
-    pub name: &'a str,
-    pub expr: &'a str,
-}
-
 pub struct Var<'a> {
     pub line_no: LineNo,
     pub name: &'a str,
@@ -47,6 +41,7 @@ pub struct VarsSection<'a> {
 }
 
 pub enum AsmLine<'a> {
+    Constant { name: &'a str, expr: &'a str },
     Label(&'a str),
     Instruction(&'a str, &'a str),
     Db(&'a str),
@@ -58,7 +53,6 @@ pub struct Procedure<'a> {
     pub line_no: LineNo,
     pub end_line_no: LineNo,
     pub name: &'a str,
-    pub constants: Vec<Constant<'a>>,
     pub lines: Vec<(LineNo, AsmLine<'a>)>,
 }
 
@@ -80,7 +74,6 @@ pub enum GlobalAsm<'a> {
 }
 
 pub struct AsmFile<'a> {
-    pub global_constants: Vec<Constant<'a>>,
     pub inlines: Vec<Procedure<'a>>,
     pub assembly: Vec<GlobalAsm<'a>>,
 }
@@ -252,7 +245,19 @@ fn parse_asm_line_after_label<'a>(
         fw if first_word.starts_with(".") => {
             errors.push(line_no, FileParserError::InvalidCommand(first_word))
         }
-        _ => f(line_no, AsmLine::Instruction(first_word, arguments)),
+        _ => {
+            if let Some(expr) = arguments.strip_prefix("=") {
+                f(
+                    line_no,
+                    AsmLine::Constant {
+                        name: first_word,
+                        expr: expr.trim_start(),
+                    },
+                )
+            } else {
+                f(line_no, AsmLine::Instruction(first_word, arguments))
+            }
+        }
     }
 }
 
@@ -291,7 +296,6 @@ fn parse_proc_or_inline<'a>(
         line_no,
         end_line_no: LineNo(0),
         name,
-        constants: Vec::new(),
         lines: Vec::new(),
     };
 
@@ -315,19 +319,9 @@ fn parse_proc_or_inline<'a>(
             },
             ".proc" | ".inline" => errors.push(line_no, FileParserError::CannotNestInlinesOrProcs),
             ".functiontable" => errors.push(line_no, FileParserError::FunctionTableInProc),
-            _ => {
-                if let Some(expr) = arguments.strip_prefix("=") {
-                    out.constants.push(Constant {
-                        line_no,
-                        name: first_word,
-                        expr: expr.trim_start(),
-                    });
-                } else {
-                    parse_asm_line(line_no, first_word, arguments, errors, &mut |ln, l| {
-                        out.lines.push((ln, l))
-                    });
-                }
-            }
+            _ => parse_asm_line(line_no, first_word, arguments, errors, &mut |ln, l| {
+                out.lines.push((ln, l))
+            }),
         }
     }
 
@@ -343,7 +337,6 @@ fn parse_proc_or_inline<'a>(
 
 pub fn parse_file<'a>(file: &'a str, errors: &mut FileErrors<'a>) -> AsmFile<'a> {
     let mut out = AsmFile {
-        global_constants: Vec::new(),
         inlines: Vec::new(),
         assembly: Vec::new(),
     };
@@ -392,19 +385,9 @@ pub fn parse_file<'a>(file: &'a str, errors: &mut FileErrors<'a>) -> AsmFile<'a>
                 errors,
             )),
             ".functiontable" => out.assembly.push(GlobalAsm::FunctionTable(line_no, args)),
-            _ => {
-                if let Some(expr) = args.strip_prefix("=") {
-                    out.global_constants.push(Constant {
-                        line_no,
-                        name: command,
-                        expr: expr.trim_start(),
-                    });
-                } else {
-                    parse_asm_line(line_no, command, args, errors, &mut |n, l| {
-                        out.assembly.push(GlobalAsm::AsmLine(n, l))
-                    });
-                }
-            }
+            _ => parse_asm_line(line_no, command, args, errors, &mut |n, l| {
+                out.assembly.push(GlobalAsm::AsmLine(n, l))
+            }),
         }
     }
 

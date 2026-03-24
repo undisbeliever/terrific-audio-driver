@@ -11,7 +11,7 @@ use crate::{
         ExpressionError, ExpressionResult, ValueError,
     },
     file_parser::{
-        parse_file, AsmLine, CodeBankStatement, Constant, FunctionTableDef, GlobalAsm, Procedure,
+        parse_file, AsmLine, CodeBankStatement, FunctionTableDef, GlobalAsm, Procedure,
         StructSection, Var, VarBankStatement, VarsSection,
     },
     instructions::process_instruction,
@@ -39,7 +39,7 @@ pub enum AssemblerError<'s> {
 
     ConstantError(&'s str, ExpressionError),
     ConstantCannotBeBoolean(&'s str),
-    ConstantWithUnknownValue(&'s str),
+    ConstantHasUnknownValue(&'s str),
 
     DbError(ValueError<'s>),
     DwError(ValueError<'s>),
@@ -155,35 +155,28 @@ fn default_types<'s>() -> HashMap<&'s str, Type> {
     out
 }
 
-fn process_constants<'s>(
-    constants: Vec<Constant<'s>>,
+fn process_constant<'s>(
+    line_no: LineNo,
+    name: &'s str,
+    expr: &'s str,
     state: &mut State<'s>,
     errors: &mut FileErrors<'s>,
-) -> Vec<Constant<'s>> {
-    let mut constants = constants;
-
-    constants.retain(|c| match evaluate(c.expr, state) {
-        ExpressionResult::Value(value) => {
-            match state.add_symbol(c.name, value) {
-                Ok(()) => (),
-                Err(e) => {
-                    errors.push(c.line_no, e);
-                }
-            }
-            false
-        }
+) {
+    match evaluate(expr, state) {
+        ExpressionResult::Value(value) => match state.add_symbol(name, value) {
+            Ok(()) => (),
+            Err(e) => errors.push(line_no, e),
+        },
         ExpressionResult::Boolean(_) => {
-            errors.push(c.line_no, AssemblerError::ConstantCannotBeBoolean(c.expr));
-            false
+            errors.push(line_no, AssemblerError::ConstantCannotBeBoolean(expr));
         }
         ExpressionResult::Error(e) => {
-            errors.push(c.line_no, AssemblerError::ConstantError(c.expr, e));
-            false
+            errors.push(line_no, AssemblerError::ConstantError(expr, e));
         }
-        ExpressionResult::Unknown => true,
-    });
-
-    constants
+        ExpressionResult::Unknown => {
+            errors.push(line_no, AssemblerError::ConstantHasUnknownValue(expr));
+        }
+    }
 }
 
 fn process_code_bank<'s>(
@@ -602,6 +595,7 @@ fn process_asm_line<'s>(
             Ok(()) => (),
             Err(e) => errors.push(line_no, e),
         },
+        AsmLine::Constant { name, expr } => process_constant(line_no, name, expr, state, errors),
         AsmLine::Instruction(instruction, arguments) => {
             match inline_procs.find_and_take(instruction) {
                 None => match process_instruction(instruction, arguments, state) {
@@ -634,10 +628,11 @@ fn process_proc_or_inline<'s>(
     state: &mut State<'s>,
     errors: &mut FileErrors<'s>,
 ) {
-    let labels: Vec<&'s str> = proc
+    let child_symbols: Vec<&'s str> = proc
         .lines
         .iter()
         .filter_map(|(_, l)| match l {
+            AsmLine::Constant { name, .. } => Some(*name),
             AsmLine::Label(l) => Some(*l),
             _ => None,
         })
@@ -650,12 +645,7 @@ fn process_proc_or_inline<'s>(
         Err(e) => errors.push(proc.line_no, AssemblerError::CannotOpenProc(proc.name, e)),
     }
 
-    state.open_scope(proc.name, labels);
-
-    let unknown = process_constants(proc.constants, state, errors);
-    for c in unknown {
-        errors.push(c.line_no, AssemblerError::ConstantWithUnknownValue(c.expr))
-    }
+    state.open_scope(proc.name, child_symbols);
 
     for (line_no, asm) in proc.lines {
         process_asm_line(line_no, asm, inline_procs, state, errors);
@@ -715,8 +705,6 @@ pub fn assemble<'s>(input: &'s str) -> Result<CompiledAsm, FileErrors<'s>> {
     let mut types = default_types();
     let mut ft_defs = HashMap::new();
 
-    let pending_constants = process_constants(file.global_constants, &mut state, &mut errors);
-
     for a in file.assembly {
         match a {
             GlobalAsm::CodeBank(cb) => {
@@ -749,16 +737,12 @@ pub fn assemble<'s>(input: &'s str) -> Result<CompiledAsm, FileErrors<'s>> {
                 process_proc(proc, &mut inline_procs, &mut state, &mut errors)
             }
             GlobalAsm::AsmLine(line_no, line) => {
-                cbst.check_codebank_set(line_no, &mut errors);
+                if !matches!(line, AsmLine::Constant { .. }) {
+                    cbst.check_codebank_set(line_no, &mut errors);
+                }
                 process_asm_line(line_no, line, &mut inline_procs, &mut state, &mut errors)
             }
         }
-    }
-
-    let pending_constants = process_constants(pending_constants, &mut state, &mut errors);
-
-    for c in pending_constants {
-        errors.push(c.line_no, AssemblerError::ConstantWithUnknownValue(c.expr))
     }
 
     process_pending_output_expressions(&mut state, &mut errors);
