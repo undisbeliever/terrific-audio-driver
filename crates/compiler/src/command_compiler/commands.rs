@@ -417,6 +417,20 @@ pub(crate) struct ChannelCommands<'a> {
     pub(crate) end_pos: FilePos,
 }
 
+impl ChannelCommands<'_> {
+    pub fn blank_commands() -> Self {
+        Self {
+            commands: Vec::new(),
+            errors: Vec::new(),
+            end_pos: FilePos {
+                line_number: 0,
+                line_char: 0,
+                char_index: 0,
+            },
+        }
+    }
+}
+
 pub(crate) struct SubroutineCommands<'a> {
     pub(crate) index: u8,
     pub(crate) identifier: IdentifierStr<'a>,

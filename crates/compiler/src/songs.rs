@@ -11,7 +11,7 @@ use crate::bytecode::{
 };
 use crate::command_compiler::analysis::TransposeStartRange;
 use crate::command_compiler::channel_bc_generator::CommandCompiler;
-use crate::command_compiler::commands::MmlInstrument;
+use crate::command_compiler::commands::{ChannelCommands, MmlInstrument};
 use crate::command_compiler::subroutines::subroutine_compile_order;
 use crate::data::{self, single_item_unique_names_list, InstrumentOrSample, Name, UniqueNamesList};
 use crate::driver_constants::{
@@ -505,12 +505,16 @@ fn compile_song_commands(
 ) -> Result<SongData, SongError> {
     let mut errors = errors;
 
-    let n_active_channels = song.channels.iter().filter(|&c| !c.is_none()).count();
+    let mut channels = song.channels;
+    if channels.iter().all(|c| c.is_none()) {
+        channels[0] = Some(ChannelCommands::blank_commands());
+    }
+
+    let n_active_channels = channels.iter().filter(|&c| !c.is_none()).count();
     let header_size = song_header_size(n_active_channels, song.subroutines.len());
 
     let mut subroutines = subroutine_compile_order(song.subroutines);
 
-    let mut channels = song.channels;
     let a = command_compiler::analysis::analyse(&mut subroutines, Some(&mut channels));
 
     //command_compiler::commands::debug_print_song_commands(&subroutines, &channels, &a);
