@@ -29,7 +29,8 @@ use std::{
 
 #[derive(Debug, PartialEq)]
 pub enum AssemblerError<'s> {
-    NoCodeBankStatement,
+    CodeBankNotSet,
+    MultipleCodeBankStatements,
     InvalidCodeBankRange(u16, u16),
     CodeTooLarge(Range<u16>, i64),
 
@@ -186,47 +187,42 @@ fn process_constants<'s>(
 }
 
 fn process_code_bank<'s>(
-    cb: Option<CodeBankStatement<'s>>,
+    cb: CodeBankStatement<'s>,
     state: &State,
     errors: &mut FileErrors<'s>,
 ) -> Range<u16> {
     const ERROR_CODE_BANK: Range<u16> = 0x0200..0xffff;
 
-    match cb {
-        Some(cb) => {
-            match (
-                evaluate_constexpr_address(cb.start_expr, state),
-                evaluate_constexpr_address(cb.end_expr, state),
-            ) {
-                (Ok(start), Ok(end)) if start < end => start..end,
-                (Ok(start), Ok(end)) => {
-                    errors.push(cb.line_no, AssemblerError::InvalidVarBankRange(start, end));
-                    ERROR_CODE_BANK
-                }
-                (e1, e2) => {
-                    if let Err(e) = e1 {
-                        errors.push(cb.line_no, e);
-                    }
-                    if let Err(e) = e2 {
-                        errors.push(cb.line_no, e);
-                    }
-                    ERROR_CODE_BANK
-                }
-            }
+    match (
+        evaluate_constexpr_address(cb.start_expr, state),
+        evaluate_constexpr_address(cb.end_expr, state),
+    ) {
+        (Ok(start), Ok(end)) if start < end => start..end,
+        (Ok(start), Ok(end)) => {
+            errors.push(cb.line_no, AssemblerError::InvalidVarBankRange(start, end));
+            ERROR_CODE_BANK
         }
-        None => {
-            errors.push(LineNo(0), AssemblerError::NoCodeBankStatement);
+        (e1, e2) => {
+            if let Err(e) = e1 {
+                errors.push(cb.line_no, e);
+            }
+            if let Err(e) = e2 {
+                errors.push(cb.line_no, e);
+            }
             ERROR_CODE_BANK
         }
     }
 }
 
 fn process_var_bank<'s>(
-    b: &VarBankStatement<'s>,
+    b: VarBankStatement<'s>,
     state: &State,
+    var_banks: &mut Vec<VariableBank>,
     errors: &mut FileErrors<'s>,
-) -> Option<VariableBank> {
-    let mut add_error = |e| errors.push(b.line_no, e);
+) {
+    if var_banks.iter().any(|o| o.name == b.name) {
+        errors.push(b.line_no, AssemblerError::DuplicateVarBankName(b.name));
+    }
 
     match (
         evaluate_constexpr_address(b.start_expr, state),
@@ -234,46 +230,24 @@ fn process_var_bank<'s>(
     ) {
         (Ok(start), Ok(end)) => {
             if end > start {
-                Some(VariableBank {
+                var_banks.push(VariableBank {
                     name: b.name.to_owned(),
                     range: start..end,
                     pos: start,
                 })
             } else {
                 errors.push(b.line_no, AssemblerError::InvalidVarBankRange(start, end));
-                None
             }
         }
         (e1, e2) => {
             if let Err(e) = e1 {
-                add_error(e)
+                errors.push(b.line_no, e);
             }
             if let Err(e) = e2 {
-                add_error(e)
+                errors.push(b.line_no, e);
             }
-            None
         }
     }
-}
-
-fn process_var_banks<'s>(
-    input: Vec<VarBankStatement<'s>>,
-    state: &State,
-    errors: &mut FileErrors<'s>,
-) -> Vec<VariableBank> {
-    let mut out = Vec::<VariableBank>::with_capacity(input.len());
-
-    for b in &input {
-        if out.iter().any(|o| o.name == b.name) {
-            errors.push(b.line_no, AssemblerError::DuplicateVarBankName(b.name))
-        }
-
-        if let Some(b) = process_var_bank(b, state, errors) {
-            out.push(b)
-        }
-    }
-
-    out
 }
 
 fn add_var_symbols<'s>(
@@ -463,38 +437,33 @@ fn process_var_section<'s>(
     }
 }
 
-fn validate_function_tables<'s>(
-    input: Vec<FunctionTableDef<'s>>,
+fn process_function_table_def<'s>(
+    ft: FunctionTableDef<'s>,
+    ft_map: &mut HashMap<&'s str, FunctionTableDef<'s>>,
     errors: &mut FileErrors<'s>,
-) -> HashMap<&'s str, FunctionTableDef<'s>> {
-    let mut out = HashMap::with_capacity(input.len());
+) {
+    let mut valid = true;
 
-    for ft in input {
-        let mut valid = true;
-
-        if is_symbol_name_valid(ft.name) {
-            if out.contains_key(ft.name) {
-                errors.push(ft.line_no, AssemblerError::DuplicateFtdef(ft.name));
-                valid = false;
-            }
-        } else {
-            errors.push(ft.line_no, AssemblerError::InvalidFtName(ft.name));
+    if is_symbol_name_valid(ft.name) {
+        if ft_map.contains_key(ft.name) {
+            errors.push(ft.line_no, AssemblerError::DuplicateFtdef(ft.name));
             valid = false;
         }
+    } else {
+        errors.push(ft.line_no, AssemblerError::InvalidFtName(ft.name));
+        valid = false;
+    }
 
-        for (f_line, f_name) in &ft.functions {
-            if !is_symbol_name_valid(f_name) {
-                errors.push(*f_line, AssemblerError::InvalidFtFunction(f_name));
-                valid = false;
-            }
-        }
-
-        if valid {
-            out.insert(ft.name, ft);
+    for (f_line, f_name) in &ft.functions {
+        if !is_symbol_name_valid(f_name) {
+            errors.push(*f_line, AssemblerError::InvalidFtFunction(f_name));
+            valid = false;
         }
     }
 
-    out
+    if valid {
+        ft_map.insert(ft.name, ft);
+    }
 }
 
 fn process_function_table<'s>(
@@ -714,22 +683,21 @@ fn process_proc<'s>(
     process_proc_or_inline(proc, ProcType::Procedure, inline_procs, state, errors);
 }
 
-fn process_assembly<'s>(
-    assembly: Vec<GlobalAsm<'s>>,
-    ft_defs: &HashMap<&'s str, FunctionTableDef<'s>>,
-    inline_procs: &mut InlineProcs<'s>,
-    state: &mut State<'s>,
-    errors: &mut FileErrors<'s>,
-) {
-    for a in assembly {
-        match a {
-            GlobalAsm::AsmLine(line_no, line) => {
-                process_asm_line(line_no, line, inline_procs, state, errors)
-            }
-            GlobalAsm::Procedure(proc) => process_proc(proc, inline_procs, state, errors),
-            GlobalAsm::FunctionTable(line_no, name) => {
-                process_function_table(line_no, name, ft_defs, state, errors)
-            }
+struct CodeBankSetTest(bool);
+
+impl CodeBankSetTest {
+    fn new() -> Self {
+        Self(false)
+    }
+
+    fn set(&mut self) {
+        self.0 = true;
+    }
+
+    fn check_codebank_set(&mut self, line_no: LineNo, errors: &mut FileErrors) {
+        if !self.0 {
+            errors.push(line_no, AssemblerError::CodeBankNotSet);
+            self.0 = true;
         }
     }
 }
@@ -737,40 +705,55 @@ fn process_assembly<'s>(
 pub fn assemble<'s>(input: &'s str) -> Result<CompiledAsm, FileErrors<'s>> {
     let mut errors = FileErrors::new();
 
-    let mut types = default_types();
-
     let file = parse_file(input, &mut errors);
-
     let mut inline_procs = prepare_inlines(file.inlines, &mut errors);
 
     let mut state = State::new(0);
+    let mut code_bank = None;
+    let mut cbst = CodeBankSetTest::new();
+    let mut var_banks = Vec::new();
+    let mut types = default_types();
+    let mut ft_defs = HashMap::new();
 
     let pending_constants = process_constants(file.global_constants, &mut state, &mut errors);
 
-    let code_bank = process_code_bank(file.code_bank, &state, &mut errors);
-    let mut banks = process_var_banks(file.var_banks, &state, &mut errors);
+    for a in file.assembly {
+        match a {
+            GlobalAsm::CodeBank(cb) => {
+                if code_bank.is_none() {
+                    let cb = process_code_bank(cb, &state, &mut errors);
+                    state.set_pc_base(cb.start);
+                    code_bank = Some(cb);
+                    cbst.set();
+                } else {
+                    errors.push(cb.line_no, AssemblerError::MultipleCodeBankStatements);
+                }
+            }
+            GlobalAsm::VarBank(v) => {
+                process_var_bank(v, &state, &mut var_banks, &mut errors);
+            }
+            GlobalAsm::Struct(s) => process_struct(s, &state, &mut types, &mut errors),
+            GlobalAsm::Vars(v) => {
+                process_var_section(v, &types, &mut var_banks, &mut state, &mut errors)
+            }
+            GlobalAsm::FunctionTableDef(f) => {
+                process_function_table_def(f, &mut ft_defs, &mut errors)
+            }
 
-    for s in file.structs {
-        process_struct(s, &state, &mut types, &mut errors);
+            GlobalAsm::FunctionTable(line_no, name) => {
+                cbst.check_codebank_set(line_no, &mut errors);
+                process_function_table(line_no, name, &ft_defs, &mut state, &mut errors)
+            }
+            GlobalAsm::Procedure(proc) => {
+                cbst.check_codebank_set(proc.line_no, &mut errors);
+                process_proc(proc, &mut inline_procs, &mut state, &mut errors)
+            }
+            GlobalAsm::AsmLine(line_no, line) => {
+                cbst.check_codebank_set(line_no, &mut errors);
+                process_asm_line(line_no, line, &mut inline_procs, &mut state, &mut errors)
+            }
+        }
     }
-
-    for v in file.vars {
-        process_var_section(v, &types, &mut banks, &mut state, &mut errors);
-    }
-
-    let ft_defs = validate_function_tables(file.function_table_defs, &mut errors);
-
-    let pending_constants = process_constants(pending_constants, &mut state, &mut errors);
-
-    state.set_pc_base(code_bank.start);
-
-    process_assembly(
-        file.assembly,
-        &ft_defs,
-        &mut inline_procs,
-        &mut state,
-        &mut errors,
-    );
 
     let pending_constants = process_constants(pending_constants, &mut state, &mut errors);
 
@@ -780,12 +763,14 @@ pub fn assemble<'s>(input: &'s str) -> Result<CompiledAsm, FileErrors<'s>> {
 
     process_pending_output_expressions(&mut state, &mut errors);
 
-    let i64_code_bank = i64::from(code_bank.start)..i64::from(code_bank.end);
-    if !i64_code_bank.contains(&state.program_counter()) {
-        errors.push(
-            LineNo(0),
-            AssemblerError::CodeTooLarge(code_bank, state.program_counter()),
-        );
+    if let Some(code_bank) = &code_bank {
+        let i64_code_bank = i64::from(code_bank.start)..i64::from(code_bank.end);
+        if !i64_code_bank.contains(&state.program_counter()) {
+            errors.push(
+                LineNo(0),
+                AssemblerError::CodeTooLarge(code_bank.clone(), state.program_counter()),
+            );
+        }
     }
 
     generate_unused_inline_errors(inline_procs, &mut errors);
@@ -797,15 +782,17 @@ pub fn assemble<'s>(input: &'s str) -> Result<CompiledAsm, FileErrors<'s>> {
     }
 
     // Make sure there are no variable overruns
-    for b in &banks {
+    for b in &var_banks {
         assert!(b.pos >= b.range.start && b.pos <= b.range.end);
     }
 
     if errors.is_empty() {
         let (output, symbols) = state.take_output_and_symbols();
 
+        assert!(code_bank.is_some() || output.is_empty());
+
         Ok(CompiledAsm {
-            banks,
+            banks: var_banks,
             output,
             symbols,
         })

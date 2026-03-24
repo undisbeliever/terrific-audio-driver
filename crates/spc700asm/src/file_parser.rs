@@ -62,36 +62,32 @@ pub struct Procedure<'a> {
     pub lines: Vec<(LineNo, AsmLine<'a>)>,
 }
 
-pub enum GlobalAsm<'a> {
-    AsmLine(LineNo, AsmLine<'a>),
-    Procedure(Procedure<'a>),
-    FunctionTable(LineNo, &'a str),
-}
-
 pub struct FunctionTableDef<'a> {
     pub line_no: LineNo,
     pub name: &'a str,
     pub functions: Vec<(LineNo, &'a str)>,
 }
 
+pub enum GlobalAsm<'a> {
+    CodeBank(CodeBankStatement<'a>),
+    VarBank(VarBankStatement<'a>),
+    Struct(StructSection<'a>),
+    Vars(VarsSection<'a>),
+    FunctionTableDef(FunctionTableDef<'a>),
+    FunctionTable(LineNo, &'a str),
+    Procedure(Procedure<'a>),
+    AsmLine(LineNo, AsmLine<'a>),
+}
+
 pub struct AsmFile<'a> {
     pub global_constants: Vec<Constant<'a>>,
-
-    pub code_bank: Option<CodeBankStatement<'a>>,
-    pub var_banks: Vec<VarBankStatement<'a>>,
-
-    pub structs: Vec<StructSection<'a>>,
-    pub vars: Vec<VarsSection<'a>>,
-    pub function_table_defs: Vec<FunctionTableDef<'a>>,
     pub inlines: Vec<Procedure<'a>>,
-
     pub assembly: Vec<GlobalAsm<'a>>,
 }
 
 #[derive(Debug, PartialEq)]
 pub enum FileParserError<'a> {
     InvalidCodeBankSyntax,
-    MultipleCodeBankStatements,
     InvalidBankSyntax,
     InvalidStructLine,
     NoEndStruct,
@@ -348,11 +344,6 @@ fn parse_proc_or_inline<'a>(
 pub fn parse_file<'a>(file: &'a str, errors: &mut FileErrors<'a>) -> AsmFile<'a> {
     let mut out = AsmFile {
         global_constants: Vec::new(),
-        code_bank: None,
-        var_banks: Vec::new(),
-        structs: Vec::new(),
-        vars: Vec::new(),
-        function_table_defs: Vec::new(),
         inlines: Vec::new(),
         assembly: Vec::new(),
     };
@@ -369,27 +360,23 @@ pub fn parse_file<'a>(file: &'a str, errors: &mut FileErrors<'a>) -> AsmFile<'a>
         let (command, args) = split_first_word(line);
 
         match command {
-            ".codebank" => {
-                if out.code_bank.is_none() {
-                    match parse_code_bank(line_no, args) {
-                        Ok(b) => out.code_bank = Some(b),
-                        Err(e) => errors.push(line_no, e),
-                    }
-                } else {
-                    errors.push(line_no, FileParserError::MultipleCodeBankStatements)
-                }
-            }
-            ".varbank" => match parse_var_bank(line_no, args) {
-                Ok(b) => out.var_banks.push(b),
+            ".codebank" => match parse_code_bank(line_no, args) {
+                Ok(b) => out.assembly.push(GlobalAsm::CodeBank(b)),
                 Err(e) => errors.push(line_no, e),
             },
-            ".struct" => out
-                .structs
-                .push(parse_struct(line_no, args, &mut it, errors)),
-            ".vars" => out.vars.push(parse_vars(line_no, args, &mut it, errors)),
-            ".ftdef" => out
-                .function_table_defs
-                .push(parse_ftdef(line_no, args, &mut it, errors)),
+            ".varbank" => match parse_var_bank(line_no, args) {
+                Ok(b) => out.assembly.push(GlobalAsm::VarBank(b)),
+                Err(e) => errors.push(line_no, e),
+            },
+            ".struct" => out.assembly.push(GlobalAsm::Struct(parse_struct(
+                line_no, args, &mut it, errors,
+            ))),
+            ".vars" => out
+                .assembly
+                .push(GlobalAsm::Vars(parse_vars(line_no, args, &mut it, errors))),
+            ".ftdef" => out.assembly.push(GlobalAsm::FunctionTableDef(parse_ftdef(
+                line_no, args, &mut it, errors,
+            ))),
             ".proc" => out.assembly.push(GlobalAsm::Procedure(parse_proc_or_inline(
                 line_no,
                 args,

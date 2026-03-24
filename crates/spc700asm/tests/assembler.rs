@@ -1241,3 +1241,107 @@ fn cannot_access_pc_outside_asserts() {
         ]
     );
 }
+
+#[test]
+fn multiple_code_banks_is_error() {
+    let e = assemble(
+        r##"
+.codebank $200..$300
+.codebank $300..$400
+"##,
+    )
+    .err()
+    .unwrap();
+
+    assert_eq!(
+        e.errors(),
+        &[(l(3), AssemblerError::MultipleCodeBankStatements.into())]
+    );
+}
+
+#[test]
+fn no_code_bank_set_before_proc_error() {
+    let e = assemble(
+        r##"
+.proc p1
+    ret
+.endproc
+
+    ; Test only a single CodeBankNotSet error
+    .proc p2
+        ret
+    .endproc
+
+    mov A, #0
+    .db 0
+
+    .ftdef ft
+        p1
+    .endftdef
+    .functiontable ft
+"##,
+    )
+    .err()
+    .unwrap();
+
+    assert_eq!(e.errors(), &[(l(2), AssemblerError::CodeBankNotSet.into())]);
+}
+
+#[test]
+fn no_code_bank_set_before_asm_error() {
+    let e = assemble(
+        r##"
+    mov A, #0
+
+    ; Test only a single CodeBankNotSet error
+    mov A, #0
+"##,
+    )
+    .err()
+    .unwrap();
+
+    assert_eq!(e.errors(), &[(l(2), AssemblerError::CodeBankNotSet.into())]);
+}
+
+#[test]
+fn no_code_bank_set_before_functiontable_error() {
+    let e = assemble(
+        r##"
+    .ftdef ft
+        label
+    .endftdef
+    .functiontable ft
+
+    ; Test only a single CodeBankNotSet error
+    .functiontable ft
+label:
+    ret
+"##,
+    )
+    .err()
+    .unwrap();
+
+    assert_eq!(e.errors(), &[(l(5), AssemblerError::CodeBankNotSet.into())]);
+}
+
+#[test]
+fn no_code_bank_set_before_inline_error() {
+    let e = assemble(
+        r##"
+    .inline i1
+        mov A, #0
+    .endinline
+    i1
+
+    ; Test only 1 CodeBankNoSetError
+    .inline i2
+        mov A, #0
+    .endinline
+    i2
+"##,
+    )
+    .err()
+    .unwrap();
+
+    assert_eq!(e.errors(), &[(l(5), AssemblerError::CodeBankNotSet.into())]);
+}
