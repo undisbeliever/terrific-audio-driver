@@ -71,6 +71,21 @@ fn load_apu(
             <= (addresses::COMMON_DATA as usize)
     );
 
+    if song_data[0] == 0 {
+        // When the song starts with `0`, the audio driver uses an `EDL` value of 0.
+        //
+        // If `ESA` and `EDL` do not match the values used by the driver, the echo buffer
+        // will be incorrectly set-up and it will clobber firstpage, the stack and some
+        // of the driver code.
+        //
+        // This bug only exists in tad_apu as the echo buffer delay has been patched out.
+        assert_eq!(
+            (esa, edl),
+            (0xff, 0x00),
+            "Wrong ESA and EDL for a song with 0 channels"
+        );
+    }
+
     let song_end_addr = usize::from(song_addr) + song_data.len();
     let echo_addr = usize::from(esa) * 0x100;
 

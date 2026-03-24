@@ -356,6 +356,10 @@ fn write_song_header(
         return Err(SongError::SongIsTooLarge(buf.len()));
     }
 
+    if channels.iter().all(|c| c.is_none()) {
+        return Err(SongError::NoMusicChannels);
+    }
+
     assert!(channels.len() <= N_MUSIC_CHANNELS);
     assert!(subroutines.len() <= MAX_SUBROUTINES);
 
