@@ -590,7 +590,10 @@ dependencies = [
 name = "spc700asm"
 version = "0.0.0"
 dependencies = [
+ "anstream",
+ "anstyle",
  "bitflags 2.10.0",
+ "clap",
 ]
 
 [[package]]

@@ -12,7 +12,11 @@ publish = false
 # Using version "0.0.0" as I do not care about breaking changes.
 version = "0.0.0"
 
+
 [dependencies]
 # External crates
 bitflags.workspace = true
+clap.workspace = true
+anstyle.workspace = true
+anstream.workspace = true
 

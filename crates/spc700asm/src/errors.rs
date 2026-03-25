@@ -4,6 +4,9 @@
 //
 // SPDX-License-Identifier: MIT
 
+use anstyle::{AnsiColor, Color, Style};
+use std::path::Path;
+
 use crate::instructions::InstructionError;
 pub use crate::{
     assembler::AssemblerError,
@@ -91,16 +94,40 @@ impl<'s> FileErrors<'s> {
     pub fn errors(&self) -> &[(LineNo, FileError<'s>)] {
         &self.0
     }
+
+    pub fn color_display<'a>(&'a self, source: &'a Path) -> ColoredFileErrorDisplay<'a> {
+        ColoredFileErrorDisplay(self, source)
+    }
 }
 
 impl std::fmt::Display for FileErrors<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         for e in &self.0 {
-            // ::TODO use display instead of format::
-            write!(f, "line {}: {:?}", e.0 .0, e.1)?;
+            writeln!(f, "line {}: {:?}", e.0 .0, e.1)?;
         }
         Ok(())
     }
 }
 
 impl std::error::Error for FileErrors<'_> {}
+
+pub struct ColoredFileErrorDisplay<'a>(&'a FileErrors<'a>, &'a Path);
+
+impl std::fmt::Display for ColoredFileErrorDisplay<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        const RESET: anstyle::Reset = anstyle::Reset;
+        const ERROR: Style = Style::new()
+            .bold()
+            .fg_color(Some(Color::Ansi(AnsiColor::Red)));
+        const FILE: Style = Style::new().fg_color(Some(Color::Ansi(AnsiColor::Yellow)));
+
+        let errors = &self.0 .0;
+        let file_name = &self.1.display();
+
+        writeln!(f, "{RESET}{ERROR}Error assembling {file_name}{RESET}")?;
+        for e in errors {
+            writeln!(f, "    {FILE}{file_name}:{}{RESET}: {:?}", e.0 .0, e.1)?;
+        }
+        Ok(())
+    }
+}
