@@ -54,6 +54,39 @@ bitflags! {
     }
 }
 
+impl std::fmt::Display for ExpressionError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        fn bit_to_str(b: ExpressionError) -> &'static str {
+            match b {
+                ExpressionError::SyntaxError => "syntax error",
+                ExpressionError::UnmatchedParenthesis => "unmatched parenthesis",
+                ExpressionError::InvalidDecimalLiteral => "invalid decimal literal",
+                ExpressionError::InvalidHexadecimalLiteral => "invalid hexadecimal literal",
+                ExpressionError::InvalidBinaryLiteral => "invalid binary literal",
+                ExpressionError::Overflow => "overflow",
+                ExpressionError::DivisionByZero => "division by zero",
+                ExpressionError::BooleanInIntegerOperation => "boolean in integer operation",
+                ExpressionError::IntegerInBooleanOperation => "integer in boolean operation",
+                ExpressionError::BooleanInRelativeComparison => "boolean in relative comparison",
+                ExpressionError::BooleanAndIntegerComparison => "boolean/integer comparison",
+                ExpressionError::InvalidShift => "invalid shift",
+                ExpressionError::BooleanNegation => "cannot negate a boolean",
+                _ => "UNKNOWN",
+            }
+        }
+
+        let mut it = self.iter();
+        if let Some(b) = it.next() {
+            write!(f, "{}", bit_to_str(b))?;
+            for b in it {
+                write!(f, ", {}", bit_to_str(b))?;
+            }
+        }
+
+        Ok(())
+    }
+}
+
 #[derive(Debug, PartialEq)]
 pub enum ExpressionResult {
     Value(i64),
@@ -247,6 +280,20 @@ pub enum ConstexprError<'a> {
     U16NotANumber(&'a str),
 }
 
+impl std::fmt::Display for ConstexprError<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ConstexprError::UnknownValue(e) => write!(f, "unknown value: {e}"),
+            ConstexprError::InvalidAddress(expr, e) => write!(f, "invalid address: {expr}: {e}"),
+            ConstexprError::AddressOutOfRange(expr) => write!(f, "address out of range: {expr}"),
+            ConstexprError::AddressNotANumber(expr) => write!(f, "address is not a number: {expr}"),
+            ConstexprError::InvalidU16(expr, e) => write!(f, "invalid u16: {expr}: {e}"),
+            ConstexprError::U16OutOfRange(expr) => write!(f, "u16 out of range: {expr}"),
+            ConstexprError::U16NotANumber(expr) => write!(f, "u16 not a number: {expr}"),
+        }
+    }
+}
+
 pub fn evaluate_constexpr_address<'a>(
     expr: &'a str,
     state: &State,
@@ -279,6 +326,17 @@ pub enum ValueError<'a> {
     U16OutOfRange(&'a str, i64),
     U16NotANumber(&'a str),
     Error(&'a str, ExpressionError),
+}
+impl std::fmt::Display for ValueError<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ValueError::U8OutOfRange(expr, _) => write!(f, "u8 out of range: {expr}"),
+            ValueError::U8NotANumber(expr) => write!(f, "u8 not a number: {expr}"),
+            ValueError::U16OutOfRange(expr, _) => write!(f, "u16 out of range: {expr}"),
+            ValueError::U16NotANumber(expr) => write!(f, "u16 not a number: {expr}"),
+            ValueError::Error(expr, e) => write!(f, "expression error: {expr}: {e}"),
+        }
+    }
 }
 
 pub fn evaluate_u8v<'s>(expr: &'s str, state: &State<'s>) -> Result<U8Value<'s>, ValueError<'s>> {

@@ -562,7 +562,7 @@ fn duplicate_proc_name_is_error() {
         e.errors(),
         &[el(
             8,
-            AssemblerError::CannotOpenProc("subroutine", SymbolError::DuplicateSymbol)
+            AssemblerError::CannotOpenProc(SymbolError::DuplicateSymbol("subroutine".to_owned()))
         )]
     );
 }

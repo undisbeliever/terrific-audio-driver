@@ -21,6 +21,34 @@ pub enum AddressingModeError<'a> {
     UnknownDpValue(&'a str),
 }
 
+impl std::fmt::Display for AddressingModeError<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            AddressingModeError::UnknownAddressingMode(arg) => {
+                write!(f, "unknown addressing mode: {arg}")
+            }
+            AddressingModeError::ExpressionError(expr, e) => {
+                write!(f, "expression error: {expr}: {e}")
+            }
+            AddressingModeError::NotANumber(expr) => write!(f, "not a number: {expr}"),
+            AddressingModeError::DpAddressOutOfBounds(expr, value) => {
+                write!(f, "dp address out of bounds : {expr} = ${value:4x}")
+            }
+            AddressingModeError::AbsoluteAddressOutOfBounds(expr, value) => {
+                write!(f, "abs address out of bounds: {expr} = ${value:4x}")
+            }
+            AddressingModeError::DpOutOfBounds(expr, dp, value) => {
+                let p = match dp {
+                    DirectPageFlag::Zero => "(P = 0)",
+                    DirectPageFlag::One => "(P = 1)",
+                };
+                write!(f, "dp address out of bounds: {expr} = ${value:4x} {p}")
+            }
+            AddressingModeError::UnknownDpValue(expr) => write!(f, "unknown dp value: {expr}"),
+        }
+    }
+}
+
 #[derive(Debug, PartialEq)]
 pub enum InstructionError<'a> {
     AddressingModeError(AddressingModeError<'a>),
@@ -33,6 +61,28 @@ pub enum InstructionError<'a> {
     // bit must be known and `0..=7`
     InvalidBitInstructionBit,
     InvalidTcallArgument,
+}
+
+impl std::fmt::Display for InstructionError<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            InstructionError::AddressingModeError(e) => write!(f, "{e}"),
+            InstructionError::ExpressionError(expr, e) => {
+                write!(f, "expression error: {expr}: {e}")
+            }
+            InstructionError::OutputError(e) => write!(f, "{e}"),
+            InstructionError::UnknownInstruction(inst) => write!(f, "unknown instruction: {inst}"),
+            InstructionError::UnknownInstructionArguments(inst, args) => {
+                write!(f, "unknown instruction: {inst} {args}")
+            }
+            InstructionError::InvalidNumberOfArguments { expected, got } => write!(
+                f,
+                "invalid number of arguments (expected {expected}, got {got})"
+            ),
+            InstructionError::InvalidBitInstructionBit => write!(f, "invalid bit instruction bit"),
+            InstructionError::InvalidTcallArgument => write!(f, "invalid tcall argument"),
+        }
+    }
 }
 
 impl<'a> From<AddressingModeError<'a>> for InstructionError<'a> {

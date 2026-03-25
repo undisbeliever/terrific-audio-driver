@@ -70,6 +70,20 @@ impl<'s> From<AssertError<'s>> for FileError<'s> {
     }
 }
 
+impl std::fmt::Display for FileError<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            FileError::FileParser(e) => write!(f, "{e}"),
+            FileError::Constexpr(e) => write!(f, "{e}"),
+            FileError::Assember(e) => write!(f, "{e}"),
+            FileError::Instruction(e) => write!(f, "{e}"),
+            FileError::Symbol(e) => write!(f, "{e}"),
+            FileError::Output(e) => write!(f, "{e}"),
+            FileError::Assert(e) => write!(f, "{e}"),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct LineNo(pub u16, pub u32);
 
@@ -108,7 +122,7 @@ impl<'s> FileErrors<'s> {
 impl std::fmt::Display for FileErrors<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         for (line_no, e) in &self.0 {
-            writeln!(f, "file{} line {}: {:?}", line_no.0, line_no.1, e)?;
+            writeln!(f, "file{} line {}: {}", line_no.0, line_no.1, e)?;
         }
         Ok(())
     }
@@ -135,7 +149,7 @@ impl std::fmt::Display for ColoredFileErrorDisplay<'_> {
             af.asm_filename()
         )?;
         for (l, e) in errors {
-            writeln!(f, "    {FILE}{}:{}{RESET}: {:?}", af.filename(l.0), l.1, e)?;
+            writeln!(f, "    {FILE}{}:{}{RESET}: {}", af.filename(l.0), l.1, e)?;
         }
         Ok(())
     }
@@ -155,9 +169,8 @@ impl std::fmt::Display for ColoredLoadAssemblyErrorDisplay<'_> {
             LoadAssemblyError::CannotLoadFile(path, e) => {
                 writeln!(
                     f,
-                    "{RESET}{ERROR}Error loading {}{RESET}: {:?}",
-                    path.display(),
-                    e
+                    "{RESET}{ERROR}Error loading {}{RESET}: {e}",
+                    path.display()
                 )
             }
             LoadAssemblyError::TooManyIncludes(path) => {
@@ -169,7 +182,7 @@ impl std::fmt::Display for ColoredLoadAssemblyErrorDisplay<'_> {
             LoadAssemblyError::IncludeErrors(path, items) => {
                 writeln!(f, "{RESET}{ERROR}Error loading {path}{RESET}:")?;
                 for (l, e) in items {
-                    writeln!(f, "    {FILE}{}:{}{RESET}: {:?}", path, l.1, e)?;
+                    writeln!(f, "    {FILE}{}:{}{RESET}: {e}", path, l.1)?;
                 }
                 Ok(())
             }

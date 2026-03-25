@@ -9,9 +9,17 @@ use std::collections::{hash_map::Entry, HashMap};
 
 #[derive(Debug, PartialEq)]
 pub enum SymbolError<'s> {
-    InvalidSymbol(&'s str),
-    InvalidLabel(&'s str),
-    DuplicateSymbol,
+    InvalidName(&'s str),
+    DuplicateSymbol(String),
+}
+
+impl std::fmt::Display for SymbolError<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            SymbolError::InvalidName(name) => write!(f, "invalid name: {name}"),
+            SymbolError::DuplicateSymbol(name) => write!(f, "duplicate symbol: {name}"),
+        }
+    }
 }
 
 pub const MAX_ABS_BIT_ADDR: u16 = u16::MAX >> 3;
@@ -26,6 +34,24 @@ pub enum OutputError<'s> {
     OutOfRange { value: i64, min: i32, max: i32 },
     BranchOutOfRange(i64),
     InvalidPcall(i64),
+}
+
+impl std::fmt::Display for OutputError<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            OutputError::AbsBitOutOfRange(b) => write!(f, "abs bit address out of range: ${b:04x}"),
+            OutputError::ExpressionError(expr, e) => write!(f, "expression error: {expr} {e}"),
+            OutputError::NotANumber(expr) => write!(f, "not a number: {expr}"),
+            OutputError::ExpressionHasUnknownValue(expr) => {
+                write!(f, "expression has unknown value: {expr}")
+            }
+            OutputError::OutOfRange { value, min, max } => {
+                write!(f, "value out of range: {value} (expected {min}..={max})")
+            }
+            OutputError::BranchOutOfRange(v) => write!(f, "branch of out range: {v:+}"),
+            OutputError::InvalidPcall(v) => write!(f, "invalid pcall: ${v:04x}"),
+        }
+    }
 }
 
 #[derive(Default, Debug, Clone, Copy, PartialEq)]
@@ -222,7 +248,7 @@ impl<'s> State<'s> {
                     v.insert(Some(value));
                     Ok(())
                 } else {
-                    Err(SymbolError::DuplicateSymbol)
+                    Err(SymbolError::DuplicateSymbol(v.key().clone()))
                 }
             }
         }
@@ -250,7 +276,7 @@ impl<'s> State<'s> {
                 }
                 None => self.add_unchecked_symbol(name.into(), value),
             },
-            false => Err(SymbolError::InvalidLabel(name)),
+            false => Err(SymbolError::InvalidName(name)),
         }
     }
 
@@ -487,6 +513,19 @@ pub enum AssertError<'s> {
     NoConditional(&'s str),
     UnknownSymbol(&'s str),
     ExpressionError(&'s str, ExpressionError),
+}
+
+impl std::fmt::Display for AssertError<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            AssertError::AssertFailure(expr) => write!(f, "assert failure: {expr}"),
+            AssertError::NoConditional(expr) => {
+                write!(f, "assert failure: no conditional: {expr}")
+            }
+            AssertError::UnknownSymbol(expr) => write!(f, "assert failure: unknown symbol: {expr}"),
+            AssertError::ExpressionError(expr, e) => write!(f, "expression error: {expr}: {e}"),
+        }
+    }
 }
 
 pub fn process_asserts<'s>(s: &mut State<'s>, errors: &mut FileErrors<'s>) {

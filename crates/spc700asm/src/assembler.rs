@@ -42,8 +42,9 @@ pub enum AssemblerError<'s> {
     ConstantCannotBeBoolean(&'s str),
     ConstantHasUnknownValue(&'s str),
 
-    DbError(ValueError<'s>),
-    DwError(ValueError<'s>),
+    DbError(usize, ValueError<'s>),
+    DwError(usize, ValueError<'s>),
+    FunctionTableError(ValueError<'s>),
 
     InvalidStructName(&'s str),
     DuplicateStruct(&'s str),
@@ -64,7 +65,8 @@ pub enum AssemblerError<'s> {
     CannotNestArrays,
     ArrayTooLarge,
 
-    CannotOpenProc(&'s str, SymbolError<'s>),
+    CannotOpenProc(SymbolError<'s>),
+    CannotOpenInline(SymbolError<'s>),
     EmptyProc,
 
     DuplicateInline(&'s str),
@@ -74,6 +76,71 @@ pub enum AssemblerError<'s> {
     CanOnlyUseInlineOnce,
 
     VarBankOverflows,
+}
+
+impl std::fmt::Display for AssemblerError<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            AssemblerError::CodeBankNotSet => {
+                write!(f, ".codebank must be set before writing code or data")
+            }
+            AssemblerError::MultipleCodeBankStatements => {
+                write!(f, "multiple .codebank statements")
+            }
+            AssemblerError::InvalidCodeBankRange(from, to) => {
+                write!(f, "invalid .codebank range: {from} - {to}")
+            }
+            AssemblerError::CodeTooLarge(code_bank, code_size) => write!(
+                f,
+                "code is too large: {} bytes, max: {}",
+                code_size,
+                code_bank.len()
+            ),
+            AssemblerError::DuplicateVarBankName(name) => {
+                write!(f, "duplicate .varbank name: {name}")
+            }
+            AssemblerError::InvalidVarBankRange(from, to) => {
+                write!(f, "invalid var bank range: {from}..{to}")
+            }
+            AssemblerError::ConstantError(expr, e) => write!(f, "constant error: {expr}: {e}"),
+            AssemblerError::ConstantCannotBeBoolean(name) => {
+                write!(f, "constant cannot be boolean: {name}")
+            }
+            AssemblerError::ConstantHasUnknownValue(name) => {
+                write!(f, "constant has unknown value: {name}")
+            }
+            AssemblerError::DbError(i, e) => write!(f, ".db {i}: {e}"),
+            AssemblerError::DwError(i, e) => write!(f, ".dw {i}: {e}"),
+            AssemblerError::FunctionTableError(e) => write!(f, "{e}"),
+            AssemblerError::InvalidStructName(name) => write!(f, "invalid struct name: {name}"),
+            AssemblerError::DuplicateStruct(name) => write!(f, "duplicate .struct: {name}"),
+            AssemblerError::InvalidFieldName(name) => write!(f, "invalid field name: {name}"),
+            AssemblerError::DuplicateField(name) => write!(f, "duplicate struct field: {name}"),
+            AssemblerError::EmptyStruct => write!(f, "empty struct"),
+            AssemblerError::InvalidFtName(name) => write!(f, "invalid .ftdef name: {name}"),
+            AssemblerError::DuplicateFtdef(name) => write!(f, "duplicate .ftdef: {name}"),
+            AssemblerError::InvalidFtFunction(name) => {
+                write!(f, "invalid function table function: {name}")
+            }
+            AssemblerError::FtdefNotFound(name) => write!(f, "cannot find .ftdef {name}"),
+            AssemblerError::CannotFindVarBank(name) => write!(f, "cannot find .varbank {name}"),
+            AssemblerError::UnknownType(name) => write!(f, "unknown type: {name}"),
+            AssemblerError::InvalidArraySyntax => write!(f, "invalid array syntax"),
+            AssemblerError::CannotNestArrays => write!(f, "cannot nest arrays"),
+            AssemblerError::ArrayTooLarge => write!(f, "array too large"),
+            AssemblerError::CannotOpenProc(e) => write!(f, "cannot open .proc: {e}"),
+            AssemblerError::CannotOpenInline(e) => write!(f, "cannot open .inline: {e}"),
+            AssemblerError::EmptyProc => write!(f, "empty .proc"),
+            AssemblerError::DuplicateInline(name) => write!(f, "duplicate .inline: {name}"),
+            AssemblerError::UnusedInline(name) => write!(f, ".inline {name} is unused"),
+            AssemblerError::EmptyInline => write!(f, "empty .inline"),
+            AssemblerError::CannotUseArgumentsInInlineCall => {
+                write!(f, "cannot use arguments in an inline call")
+            }
+            AssemblerError::CanOnlyUseInlineOnce => write!(f, "can only use an .inline once"),
+            AssemblerError::VarBankOverflows => write!(f, "var bank overflows"),
+        }
+    }
 }
 
 pub struct CompiledAsm {
@@ -474,7 +541,7 @@ fn process_function_table<'s>(
             for (_, f) in &ft.functions {
                 match evaluate_u16v(f, state) {
                     Ok(v) => state.write_u16v(v),
-                    Err(e) => errors.push(line_no, AssemblerError::DwError(e)),
+                    Err(e) => errors.push(line_no, AssemblerError::FunctionTableError(e)),
                 }
             }
         }
@@ -560,10 +627,10 @@ fn process_db<'s>(
     state: &mut State<'s>,
     errors: &mut FileErrors<'s>,
 ) {
-    for a in comma_iter(arguments) {
+    for (i, a) in comma_iter(arguments).enumerate() {
         match evaluate_u8v(a, state) {
             Ok(v) => state.write_u8v(v),
-            Err(e) => errors.push(line_no, AssemblerError::DbError(e)),
+            Err(e) => errors.push(line_no, AssemblerError::DbError(i, e)),
         }
     }
 }
@@ -574,10 +641,10 @@ fn process_dw<'s>(
     state: &mut State<'s>,
     errors: &mut FileErrors<'s>,
 ) {
-    for a in comma_iter(arguments) {
+    for (i, a) in comma_iter(arguments).enumerate() {
         match evaluate_u16v(a, state) {
             Ok(v) => state.write_u16v(v),
-            Err(e) => errors.push(line_no, AssemblerError::DwError(e)),
+            Err(e) => errors.push(line_no, AssemblerError::DwError(i, e)),
         }
     }
 }
@@ -643,7 +710,10 @@ fn process_proc_or_inline<'s>(
 
     match state.add_symbol(proc.name, proc_addr) {
         Ok(()) => (),
-        Err(e) => errors.push(proc.line_no, AssemblerError::CannotOpenProc(proc.name, e)),
+        Err(e) => match code_type {
+            ProcType::Procedure => errors.push(proc.line_no, AssemblerError::CannotOpenProc(e)),
+            ProcType::Inline => errors.push(proc.line_no, AssemblerError::CannotOpenInline(e)),
+        },
     }
 
     state.open_scope(proc.name, child_symbols);

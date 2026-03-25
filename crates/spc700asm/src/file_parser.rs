@@ -83,7 +83,7 @@ pub struct AsmFile<'a> {
 pub enum FileParserError<'a> {
     InvalidCodeBankSyntax,
     InvalidBankSyntax,
-    InvalidStructLine,
+    InvalidStructField,
     NoEndStruct,
     InvalidVarLine,
     NoEndVars,
@@ -93,10 +93,35 @@ pub enum FileParserError<'a> {
     EndInlineInProc,
     EndProcInInline,
     CannotNestInlinesOrProcs,
-    InvalidFunctionTableDefLine,
+    InvalidFtDefLine,
     NoEndftdef,
     FunctionTableInProc,
     CannotNestIncludes,
+}
+
+impl std::fmt::Display for FileParserError<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            FileParserError::InvalidCodeBankSyntax => write!(f, "invalid .codebank syntax"),
+            FileParserError::InvalidBankSyntax => write!(f, "invalid .varbank syntax"),
+            FileParserError::InvalidStructField => write!(f, "invalid .struct field"),
+            FileParserError::NoEndStruct => write!(f, "no .endstruct"),
+            FileParserError::InvalidVarLine => write!(f, "invalid variable syntax"),
+            FileParserError::NoEndVars => write!(f, "no .endvars"),
+            FileParserError::InvalidCommand(c) => write!(f, "invalid command: {c}"),
+            FileParserError::NoEndProc => write!(f, "no .endproc"),
+            FileParserError::NoEndInline => write!(f, "no .endinline"),
+            FileParserError::EndInlineInProc => write!(f, ".endinline in a .proc"),
+            FileParserError::EndProcInInline => write!(f, ".endproc in a .inline"),
+            FileParserError::CannotNestInlinesOrProcs => write!(f, "cannot nest .inline or .proc"),
+            FileParserError::InvalidFtDefLine => write!(f, "invalid .ftdef function"),
+            FileParserError::NoEndftdef => write!(f, "no .endftdef"),
+            FileParserError::FunctionTableInProc => {
+                write!(f, "cannot use function table in .proc or .inline")
+            }
+            FileParserError::CannotNestIncludes => write!(f, "cannot nest includes"),
+        }
+    }
 }
 
 fn parse_code_bank<'a>(
@@ -154,12 +179,12 @@ fn parse_struct<'a>(
                     name: name.trim(),
                     var_type: var_type.trim(),
                 }),
-                None => errors.push(line_no, FileParserError::InvalidStructLine),
+                None => errors.push(line_no, FileParserError::InvalidStructField),
             }
         } else if line == ".endstruct" {
             return out;
         } else {
-            errors.push(line_no, FileParserError::InvalidStructLine)
+            errors.push(line_no, FileParserError::InvalidStructField)
         }
     }
 
@@ -225,7 +250,7 @@ fn parse_ftdef<'a>(
         } else if line == ".endftdef" {
             return out;
         } else {
-            errors.push(line_no, FileParserError::InvalidFunctionTableDefLine)
+            errors.push(line_no, FileParserError::InvalidFtDefLine)
         }
     }
 

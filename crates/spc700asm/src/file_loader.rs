@@ -27,11 +27,35 @@ pub enum LoadFileError {
     InvalidAsciiControlCharacter,
 }
 
+impl std::fmt::Display for LoadFileError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            LoadFileError::OpenError(e) => write!(f, "error opening file: {e}"),
+            LoadFileError::ReadError(e) => write!(f, "error reading file: {e}"),
+            LoadFileError::FileTooLarge => write!(f, "file is too large"),
+            LoadFileError::Utf8Error => write!(f, "not a valid UTF-8 file"),
+            LoadFileError::InvalidAsciiControlCharacter => {
+                write!(f, "file contains an invalid ASCII control character")
+            }
+        }
+    }
+}
+
 #[derive(Debug)]
 pub enum IncludeError {
     InvalidSyntax,
     DuplicateInclude(String),
     LoadError(String, LoadFileError),
+}
+
+impl std::fmt::Display for IncludeError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            IncludeError::InvalidSyntax => write!(f, "invalid syntax"),
+            IncludeError::DuplicateInclude(n) => write!(f, "duplicate include file: {n}"),
+            IncludeError::LoadError(n, e) => write!(f, "cannot load {n}: {e}"),
+        }
+    }
 }
 
 #[derive(Debug)]
