@@ -7,13 +7,13 @@
 use spc700asm::{
     assemble,
     errors::{
-        AssemblerError, AssertError, ConstexprError, ExpressionError, FileParserError, LineNo,
-        OutputError, SymbolError,
+        AssemblerError, AssertError, ConstexprError, ExpressionError, FileError, FileParserError,
+        LineNo, OutputError, SymbolError,
     },
 };
 
-fn l(line: u32) -> LineNo {
-    LineNo(line)
+fn el<'s>(line: u32, e: impl Into<FileError<'s>>) -> (LineNo, FileError<'s>) {
+    (LineNo(line), e.into())
 }
 
 #[test]
@@ -105,14 +105,11 @@ fn invalid_varbank_test() -> Result<(), Box<dyn std::error::Error>> {
     assert_eq!(
         e.errors(),
         &[
-            (l(4), FileParserError::InvalidBankSyntax.into()),
-            (l(5), FileParserError::InvalidBankSyntax.into()),
-            (
-                l(6),
-                AssemblerError::InvalidVarBankRange(0x200, 0x200).into()
-            ),
-            (l(7), ConstexprError::UnknownValue("unknown").into()),
-            (l(7), ConstexprError::UnknownValue("unknown+1").into()),
+            el(4, FileParserError::InvalidBankSyntax),
+            el(5, FileParserError::InvalidBankSyntax),
+            el(6, AssemblerError::InvalidVarBankRange(0x200, 0x200)),
+            el(7, ConstexprError::UnknownValue("unknown")),
+            el(7, ConstexprError::UnknownValue("unknown+1")),
         ]
     );
 
@@ -147,20 +144,20 @@ fn invalid_var_lines_test() -> Result<(), Box<dyn std::error::Error>> {
     assert_eq!(
         e.errors(),
         &[
-            (l(7), AssemblerError::UnknownType("unknown_type").into()),
-            (l(8), AssemblerError::InvalidArraySyntax.into()),
-            (l(9), AssemblerError::InvalidArraySyntax.into()),
-            (
-                l(10),
-                ConstexprError::InvalidU16("", ExpressionError::SyntaxError).into()
+            el(7, AssemblerError::UnknownType("unknown_type")),
+            el(8, AssemblerError::InvalidArraySyntax),
+            el(9, AssemblerError::InvalidArraySyntax),
+            el(
+                10,
+                ConstexprError::InvalidU16("", ExpressionError::SyntaxError)
             ),
-            (l(11), ConstexprError::UnknownValue("UNKNOWN").into()),
-            (l(12), ConstexprError::U16OutOfRange("$10000").into()),
-            (l(13), AssemblerError::ArrayTooLarge.into()),
-            (l(14), AssemblerError::UnknownType("ut").into()),
-            (l(14), ConstexprError::UnknownValue("UNKNOWN").into()),
-            (l(15), AssemblerError::CannotNestArrays.into()),
-            (l(16), AssemblerError::CannotNestArrays.into()),
+            el(11, ConstexprError::UnknownValue("UNKNOWN")),
+            el(12, ConstexprError::U16OutOfRange("$10000")),
+            el(13, AssemblerError::ArrayTooLarge),
+            el(14, AssemblerError::UnknownType("ut")),
+            el(14, ConstexprError::UnknownValue("UNKNOWN")),
+            el(15, AssemblerError::CannotNestArrays),
+            el(16, AssemblerError::CannotNestArrays),
         ]
     );
 
@@ -184,10 +181,7 @@ fn overflow_vars_test() -> Result<(), Box<dyn std::error::Error>> {
     .err()
     .unwrap();
 
-    assert_eq!(
-        e.errors(),
-        &[(l(8), AssemblerError::VarBankOverflows.into())]
-    );
+    assert_eq!(e.errors(), &[el(8, AssemblerError::VarBankOverflows)]);
 
     Ok(())
 }
@@ -291,24 +285,18 @@ fn struct_errors() {
     assert_eq!(
         e.errors(),
         &[
-            (l(6), AssemblerError::DuplicateField("field").into()),
-            (
-                l(7),
-                AssemblerError::InvalidFieldName("invalid name").into()
-            ),
-            (l(8), ConstexprError::UnknownValue("UNKNOWN").into()),
-            (l(9), AssemblerError::UnknownType("unknown").into()),
-            (l(10), ConstexprError::U16OutOfRange("$10000").into()),
-            (l(11), AssemblerError::ArrayTooLarge.into()),
-            (l(12), AssemblerError::InvalidArraySyntax.into()),
-            (l(13), AssemblerError::UnknownType("u8 : 2]").into()),
-            (l(16), AssemblerError::DuplicateStruct("s").into()),
-            (l(16), AssemblerError::EmptyStruct.into()),
-            (
-                l(19),
-                AssemblerError::InvalidStructName("invalid struct name").into()
-            ),
-            (l(19), AssemblerError::EmptyStruct.into()),
+            el(6, AssemblerError::DuplicateField("field")),
+            el(7, AssemblerError::InvalidFieldName("invalid name")),
+            el(8, ConstexprError::UnknownValue("UNKNOWN")),
+            el(9, AssemblerError::UnknownType("unknown")),
+            el(10, ConstexprError::U16OutOfRange("$10000")),
+            el(11, AssemblerError::ArrayTooLarge),
+            el(12, AssemblerError::InvalidArraySyntax),
+            el(13, AssemblerError::UnknownType("u8 : 2]")),
+            el(16, AssemblerError::DuplicateStruct("s")),
+            el(16, AssemblerError::EmptyStruct),
+            el(19, AssemblerError::InvalidStructName("invalid struct name")),
+            el(19, AssemblerError::EmptyStruct),
         ]
     );
 }
@@ -359,10 +347,7 @@ End:
 
     assert_eq!(
         e.errors(),
-        &[(
-            l(4),
-            AssemblerError::ConstantHasUnknownValue("End + 2").into()
-        )]
+        &[el(4, AssemblerError::ConstantHasUnknownValue("End + 2"))]
     );
 }
 
@@ -382,14 +367,8 @@ fn unknown_symbol_asm_test() -> Result<(), Box<dyn std::error::Error>> {
     assert_eq!(
         e.errors(),
         &[
-            (
-                LineNo(4),
-                OutputError::ExpressionHasUnknownValue("UNKNOWN + 1").into()
-            ),
-            (
-                LineNo(5),
-                OutputError::ExpressionHasUnknownValue("missing_var").into()
-            ),
+            el(4, OutputError::ExpressionHasUnknownValue("UNKNOWN + 1")),
+            el(5, OutputError::ExpressionHasUnknownValue("missing_var")),
         ]
     );
 
@@ -424,10 +403,7 @@ fn code_too_large_error() -> Result<(), Box<dyn std::error::Error>> {
 
     assert_eq!(
         e.errors(),
-        &[(
-            l(0),
-            AssemblerError::CodeTooLarge(0x1000..0x1004, 0x1004).into()
-        )]
+        &[el(0, AssemblerError::CodeTooLarge(0x1000..0x1004, 0x1004))]
     );
 
     Ok(())
@@ -584,9 +560,9 @@ fn duplicate_proc_name_is_error() {
 
     assert_eq!(
         e.errors(),
-        &[(
-            l(8),
-            AssemblerError::CannotOpenProc("subroutine", SymbolError::DuplicateSymbol).into()
+        &[el(
+            8,
+            AssemblerError::CannotOpenProc("subroutine", SymbolError::DuplicateSymbol)
         )]
     );
 }
@@ -604,7 +580,7 @@ fn empty_proc_is_error() {
     .err()
     .unwrap();
 
-    assert_eq!(e.errors(), &[(l(5), AssemblerError::EmptyProc.into(),)]);
+    assert_eq!(e.errors(), &[el(5, AssemblerError::EmptyProc,)]);
 }
 
 #[test]
@@ -785,7 +761,7 @@ inline
 
     assert_eq!(
         e.errors(),
-        &[(l(8), AssemblerError::DuplicateInline("inline").into())]
+        &[el(8, AssemblerError::DuplicateInline("inline"))]
     );
 }
 
@@ -807,7 +783,7 @@ fn empty_inline_is_error() {
     .err()
     .unwrap();
 
-    assert_eq!(e.errors(), &[(l(5), AssemblerError::EmptyInline.into())]);
+    assert_eq!(e.errors(), &[el(5, AssemblerError::EmptyInline)]);
 }
 
 #[test]
@@ -828,7 +804,7 @@ fn args_in_inline_call_is_error() {
 
     assert_eq!(
         e.errors(),
-        &[(l(8), AssemblerError::CannotUseArgumentsInInlineCall.into())]
+        &[el(8, AssemblerError::CannotUseArgumentsInInlineCall)]
     );
 }
 
@@ -861,8 +837,8 @@ inline1
     assert_eq!(
         e.errors(),
         &[
-            (l(13), AssemblerError::CanOnlyUseInlineOnce.into()),
-            (l(17), AssemblerError::CanOnlyUseInlineOnce.into()),
+            el(13, AssemblerError::CanOnlyUseInlineOnce),
+            el(17, AssemblerError::CanOnlyUseInlineOnce),
         ]
     );
 }
@@ -894,7 +870,7 @@ inline3
 
     assert_eq!(
         e.errors(),
-        &[(l(8), AssemblerError::UnusedInline("inline2").into())]
+        &[el(8, AssemblerError::UnusedInline("inline2"))]
     );
 }
 
@@ -917,8 +893,8 @@ inline
     assert_eq!(
         e.errors(),
         [
-            (l(3), FileParserError::CannotNestInlinesOrProcs.into()),
-            (l(5), FileParserError::EndProcInInline.into()),
+            el(3, FileParserError::CannotNestInlinesOrProcs),
+            el(5, FileParserError::EndProcInInline),
         ]
     );
 
@@ -937,8 +913,8 @@ inline
     assert_eq!(
         e.errors(),
         [
-            (l(3), FileParserError::CannotNestInlinesOrProcs.into()),
-            (l(5), FileParserError::EndInlineInProc.into()),
+            el(3, FileParserError::CannotNestInlinesOrProcs),
+            el(5, FileParserError::EndInlineInProc),
         ]
     );
 }
@@ -959,8 +935,8 @@ inline
     assert_eq!(
         e.errors(),
         [
-            (l(6), FileParserError::EndProcInInline.into()),
-            (l(4), FileParserError::NoEndInline.into()),
+            el(6, FileParserError::EndProcInInline),
+            el(4, FileParserError::NoEndInline),
         ]
     );
 
@@ -976,8 +952,8 @@ inline
     assert_eq!(
         e.errors(),
         [
-            (l(4), FileParserError::EndInlineInProc.into()),
-            (l(2), FileParserError::NoEndProc.into()),
+            el(4, FileParserError::EndInlineInProc),
+            el(2, FileParserError::NoEndProc),
         ]
     );
 }
@@ -1127,17 +1103,11 @@ fn function_table_errors() {
     assert_eq!(
         e.errors(),
         [
-            (l(4), AssemblerError::InvalidFtName("invalid name").into()),
-            (
-                l(8),
-                AssemblerError::InvalidFtFunction("invalid function").into()
-            ),
-            (l(15), AssemblerError::DuplicateFtdef("bytecode").into()),
-            (l(19), AssemblerError::FtdefNotFound("unused").into()),
-            (
-                l(20),
-                OutputError::ExpressionHasUnknownValue("valid_name").into()
-            ),
+            el(4, AssemblerError::InvalidFtName("invalid name")),
+            el(8, AssemblerError::InvalidFtFunction("invalid function")),
+            el(15, AssemblerError::DuplicateFtdef("bytecode")),
+            el(19, AssemblerError::FtdefNotFound("unused")),
+            el(20, OutputError::ExpressionHasUnknownValue("valid_name")),
         ]
     );
 }
@@ -1165,8 +1135,8 @@ fn function_table_not_allowed_in_proc_or_inline() {
     assert_eq!(
         e.errors(),
         [
-            (l(5), FileParserError::FunctionTableInProc.into()),
-            (l(10), FileParserError::FunctionTableInProc.into()),
+            el(5, FileParserError::FunctionTableInProc),
+            el(10, FileParserError::FunctionTableInProc),
         ]
     );
 }
@@ -1257,20 +1227,16 @@ CONST = 100
     assert_eq!(
         e.errors(),
         &[
-            (l(6), AssertError::AssertFailure("CONST == 101").into()),
-            (l(8), AssertError::AssertFailure("CONST < 100").into()),
-            (l(13), AssertError::AssertFailure("INNER_CONST != 2").into()),
-            (l(16), AssertError::AssertFailure("PC == next_proc").into()),
-            (l(26), AssertError::AssertFailure("PC < $200").into()),
-            (l(28), AssertError::NoConditional("1 + 2 + 3").into()),
-            (
-                l(29),
-                AssertError::UnknownSymbol("UNKNOWN == UNKNOWN").into()
-            ),
-            (
-                l(30),
+            el(6, AssertError::AssertFailure("CONST == 101")),
+            el(8, AssertError::AssertFailure("CONST < 100")),
+            el(13, AssertError::AssertFailure("INNER_CONST != 2")),
+            el(16, AssertError::AssertFailure("PC == next_proc")),
+            el(26, AssertError::AssertFailure("PC < $200")),
+            el(28, AssertError::NoConditional("1 + 2 + 3")),
+            el(29, AssertError::UnknownSymbol("UNKNOWN == UNKNOWN")),
+            el(
+                30,
                 AssertError::ExpressionError("1 + (2", ExpressionError::UnmatchedParenthesis)
-                    .into()
             ),
         ]
     );
@@ -1303,12 +1269,12 @@ fn cannot_access_pc_outside_asserts() {
     assert_eq!(
         e.errors(),
         &[
-            (l(4), OutputError::ExpressionHasUnknownValue("PC").into()),
-            (l(5), OutputError::ExpressionHasUnknownValue("PC+1").into()),
-            (l(14), OutputError::ExpressionHasUnknownValue("PC+4").into()),
-            (l(15), OutputError::ExpressionHasUnknownValue("PC+5").into()),
-            (l(9), OutputError::ExpressionHasUnknownValue("PC+2").into()),
-            (l(10), OutputError::ExpressionHasUnknownValue("PC+3").into()),
+            el(4, OutputError::ExpressionHasUnknownValue("PC")),
+            el(5, OutputError::ExpressionHasUnknownValue("PC+1")),
+            el(14, OutputError::ExpressionHasUnknownValue("PC+4")),
+            el(15, OutputError::ExpressionHasUnknownValue("PC+5")),
+            el(9, OutputError::ExpressionHasUnknownValue("PC+2")),
+            el(10, OutputError::ExpressionHasUnknownValue("PC+3")),
         ]
     );
 }
@@ -1326,7 +1292,7 @@ fn multiple_code_banks_is_error() {
 
     assert_eq!(
         e.errors(),
-        &[(l(3), AssemblerError::MultipleCodeBankStatements.into())]
+        &[el(3, AssemblerError::MultipleCodeBankStatements)]
     );
 }
 
@@ -1355,7 +1321,7 @@ fn no_code_bank_set_before_proc_error() {
     .err()
     .unwrap();
 
-    assert_eq!(e.errors(), &[(l(2), AssemblerError::CodeBankNotSet.into())]);
+    assert_eq!(e.errors(), &[el(2, AssemblerError::CodeBankNotSet)]);
 }
 
 #[test]
@@ -1371,7 +1337,7 @@ fn no_code_bank_set_before_asm_error() {
     .err()
     .unwrap();
 
-    assert_eq!(e.errors(), &[(l(2), AssemblerError::CodeBankNotSet.into())]);
+    assert_eq!(e.errors(), &[el(2, AssemblerError::CodeBankNotSet)]);
 }
 
 #[test]
@@ -1392,7 +1358,7 @@ label:
     .err()
     .unwrap();
 
-    assert_eq!(e.errors(), &[(l(5), AssemblerError::CodeBankNotSet.into())]);
+    assert_eq!(e.errors(), &[el(5, AssemblerError::CodeBankNotSet)]);
 }
 
 #[test]
@@ -1414,5 +1380,5 @@ fn no_code_bank_set_before_inline_error() {
     .err()
     .unwrap();
 
-    assert_eq!(e.errors(), &[(l(5), AssemblerError::CodeBankNotSet.into())]);
+    assert_eq!(e.errors(), &[el(5, AssemblerError::CodeBankNotSet)]);
 }
