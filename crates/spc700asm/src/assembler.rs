@@ -789,6 +789,8 @@ pub fn assemble<'s>(input: &'s str) -> Result<CompiledAsm, FileErrors<'s>> {
     assemble_lines(split_str_lines(input))
 }
 
-pub fn assemble_loaded_file<'s>(input: &'s AsmFileWithIncludes) -> Result<CompiledAsm, FileErrors<'s>> {
+pub fn assemble_loaded_file<'s>(
+    input: &'s AsmFileWithIncludes,
+) -> Result<CompiledAsm, FileErrors<'s>> {
     assemble_lines(split_file_lines(input))
 }

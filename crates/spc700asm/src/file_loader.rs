@@ -4,7 +4,10 @@
 //
 // SPDX-License-Identifier: MIT
 
-use crate::{errors::LineNo, string::strip_comment};
+use crate::{
+    errors::{ColoredLoadAssemblyErrorDisplay, LineNo},
+    string::strip_comment,
+};
 
 use std::{
     fs::File,
@@ -34,8 +37,14 @@ pub enum IncludeError {
 #[derive(Debug)]
 pub enum LoadAssemblyError {
     CannotLoadFile(PathBuf, LoadFileError),
-    TooManyIncludes,
+    TooManyIncludes(String),
     IncludeErrors(String, Vec<(LineNo, IncludeError)>),
+}
+
+impl LoadAssemblyError {
+    pub fn color_display(&self) -> ColoredLoadAssemblyErrorDisplay<'_> {
+        ColoredLoadAssemblyErrorDisplay(self)
+    }
 }
 
 pub struct IncludeFile {
@@ -87,7 +96,7 @@ pub fn load_asm_file_and_includes(path: &Path) -> Result<AsmFileWithIncludes, Lo
                 let inc_path = parent.join(&inc_src);
 
                 if includes.len() > MAX_INCLUDES {
-                    return Err(LoadAssemblyError::TooManyIncludes);
+                    return Err(LoadAssemblyError::TooManyIncludes(file_name));
                 }
 
                 if !includes.iter().any(|i: &IncludeFile| i.inc_src == inc_path) {

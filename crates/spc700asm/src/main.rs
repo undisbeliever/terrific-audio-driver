@@ -18,13 +18,6 @@ const ERROR: Style = Style::new()
     .bold()
     .fg_color(Some(Color::Ansi(AnsiColor::Red)));
 
-macro_rules! error {
-    ($($arg:tt)*) => {{
-        eprintln!($($arg)*);
-        std::process::exit(1);
-    }};
-}
-
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
 #[command(after_help = "A basic spc700 assembler")]
@@ -42,11 +35,10 @@ fn main() {
 
     let asm_file = match load_asm_file_and_includes(&args.asm_file) {
         Ok(f) => f,
-        Err(e) => error!(
-            "{RESET}{ERROR}Cannot load {}{RESET}: {:?}",
-            args.asm_file.display(),
-            e
-        ),
+        Err(e) => {
+            eprint!("{}", e.color_display());
+            std::process::exit(1);
+        }
     };
 
     let c = match assemble_loaded_file(&asm_file) {
@@ -59,10 +51,13 @@ fn main() {
 
     match std::fs::write(&args.output, &c.output) {
         Ok(()) => (),
-        Err(why) => error!(
-            "{RESET}{ERROR}Error writing {}{RESET}: {}",
-            args.output.display(),
-            why
-        ),
+        Err(e) => {
+            eprintln!(
+                "{RESET}{ERROR}Error writing {}{RESET}: {}",
+                args.output.display(),
+                e
+            );
+            std::process::exit(1);
+        }
     }
 }

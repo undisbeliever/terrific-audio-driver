@@ -10,7 +10,10 @@ pub use crate::{
     file_parser::FileParserError,
     state::{AssertError, OutputError, SymbolError},
 };
-use crate::{file_loader::AsmFileWithIncludes, instructions::InstructionError};
+use crate::{
+    file_loader::{AsmFileWithIncludes, LoadAssemblyError},
+    instructions::InstructionError,
+};
 
 use anstyle::{AnsiColor, Color, Style};
 
@@ -135,5 +138,41 @@ impl std::fmt::Display for ColoredFileErrorDisplay<'_> {
             writeln!(f, "    {FILE}{}:{}{RESET}: {:?}", af.filename(l.0), l.1, e)?;
         }
         Ok(())
+    }
+}
+
+pub struct ColoredLoadAssemblyErrorDisplay<'a>(pub(crate) &'a LoadAssemblyError);
+
+impl std::fmt::Display for ColoredLoadAssemblyErrorDisplay<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        const RESET: anstyle::Reset = anstyle::Reset;
+        const ERROR: Style = Style::new()
+            .bold()
+            .fg_color(Some(Color::Ansi(AnsiColor::Red)));
+        const FILE: Style = Style::new().fg_color(Some(Color::Ansi(AnsiColor::Yellow)));
+
+        match self.0 {
+            LoadAssemblyError::CannotLoadFile(path, e) => {
+                writeln!(
+                    f,
+                    "{RESET}{ERROR}Error loading {}{RESET}: {:?}",
+                    path.display(),
+                    e
+                )
+            }
+            LoadAssemblyError::TooManyIncludes(path) => {
+                writeln!(
+                    f,
+                    "{RESET}{ERROR}Error loading {path}{RESET}: Too many .includes",
+                )
+            }
+            LoadAssemblyError::IncludeErrors(path, items) => {
+                writeln!(f, "{RESET}{ERROR}Error loading {path}{RESET}:")?;
+                for (l, e) in items {
+                    writeln!(f, "    {FILE}{}:{}{RESET}: {:?}", path, l.1, e)?;
+                }
+                Ok(())
+            }
+        }
     }
 }
