@@ -6,7 +6,8 @@
 
 use crate::{
     errors::{FileErrors, LineNo},
-    string::{split_first_word, strip_comment},
+    file_loader::SplitLines,
+    string::split_first_word,
 };
 
 pub struct CodeBankStatement<'a> {
@@ -95,6 +96,7 @@ pub enum FileParserError<'a> {
     InvalidFunctionTableDefLine,
     NoEndftdef,
     FunctionTableInProc,
+    CannotNestIncludes,
 }
 
 fn parse_code_bank<'a>(
@@ -242,6 +244,7 @@ fn parse_asm_line_after_label<'a>(
         ".db" => f(line_no, AsmLine::Db(arguments)),
         ".dw" => f(line_no, AsmLine::Dw(arguments)),
         ".assert" => f(line_no, AsmLine::Assert(arguments)),
+        ".include" => errors.push(line_no, FileParserError::CannotNestIncludes),
         fw if first_word.starts_with(".") => {
             errors.push(line_no, FileParserError::InvalidCommand(first_word))
         }
@@ -294,7 +297,7 @@ fn parse_proc_or_inline<'a>(
 ) -> Procedure<'a> {
     let mut out = Procedure {
         line_no,
-        end_line_no: LineNo(0),
+        end_line_no: LineNo(0, 0),
         name,
         lines: Vec::new(),
     };
@@ -335,19 +338,16 @@ fn parse_proc_or_inline<'a>(
     out
 }
 
-pub fn parse_file<'a>(file: &'a str, errors: &mut FileErrors<'a>) -> AsmFile<'a> {
+pub fn parse_file<'a, 's>(lines: SplitLines<'s>, errors: &mut FileErrors<'s>) -> AsmFile<'s>
+where
+    'a: 's,
+{
     let mut out = AsmFile {
         inlines: Vec::new(),
         assembly: Vec::new(),
     };
-    let mut it = file.lines().enumerate().filter_map(|(i, s)| {
-        let s = strip_comment(s);
-        if !s.is_empty() {
-            Some((LineNo(u32::try_from(i + 1).unwrap_or(u32::MAX)), s))
-        } else {
-            None
-        }
-    });
+
+    let mut it = lines.into_iter();
 
     while let Some((line_no, line)) = it.next() {
         let (command, args) = split_first_word(line);

@@ -4,16 +4,15 @@
 //
 // SPDX-License-Identifier: MIT
 
-use anstyle::{AnsiColor, Color, Style};
-use std::path::Path;
-
-use crate::instructions::InstructionError;
 pub use crate::{
     assembler::AssemblerError,
     evaluator::{ConstexprError, ExpressionError},
     file_parser::FileParserError,
     state::{AssertError, OutputError, SymbolError},
 };
+use crate::{file_loader::AsmFileWithIncludes, instructions::InstructionError};
+
+use anstyle::{AnsiColor, Color, Style};
 
 #[derive(Debug, PartialEq)]
 pub enum FileError<'s> {
@@ -69,7 +68,7 @@ impl<'s> From<AssertError<'s>> for FileError<'s> {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub struct LineNo(pub u32);
+pub struct LineNo(pub u16, pub u32);
 
 #[derive(Debug)]
 pub struct FileErrors<'s>(Vec<(LineNo, FileError<'s>)>);
@@ -95,15 +94,18 @@ impl<'s> FileErrors<'s> {
         &self.0
     }
 
-    pub fn color_display<'a>(&'a self, source: &'a Path) -> ColoredFileErrorDisplay<'a> {
-        ColoredFileErrorDisplay(self, source)
+    pub fn color_display<'a>(
+        &'a self,
+        file: &'a AsmFileWithIncludes,
+    ) -> ColoredFileErrorDisplay<'a> {
+        ColoredFileErrorDisplay(self, file)
     }
 }
 
 impl std::fmt::Display for FileErrors<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        for e in &self.0 {
-            writeln!(f, "line {}: {:?}", e.0 .0, e.1)?;
+        for (line_no, e) in &self.0 {
+            writeln!(f, "file{} line {}: {:?}", line_no.0, line_no.1, e)?;
         }
         Ok(())
     }
@@ -111,7 +113,7 @@ impl std::fmt::Display for FileErrors<'_> {
 
 impl std::error::Error for FileErrors<'_> {}
 
-pub struct ColoredFileErrorDisplay<'a>(&'a FileErrors<'a>, &'a Path);
+pub struct ColoredFileErrorDisplay<'a>(&'a FileErrors<'a>, &'a AsmFileWithIncludes);
 
 impl std::fmt::Display for ColoredFileErrorDisplay<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -122,11 +124,15 @@ impl std::fmt::Display for ColoredFileErrorDisplay<'_> {
         const FILE: Style = Style::new().fg_color(Some(Color::Ansi(AnsiColor::Yellow)));
 
         let errors = &self.0 .0;
-        let file_name = &self.1.display();
+        let af = &self.1;
 
-        writeln!(f, "{RESET}{ERROR}Error assembling {file_name}{RESET}")?;
-        for e in errors {
-            writeln!(f, "    {FILE}{file_name}:{}{RESET}: {:?}", e.0 .0, e.1)?;
+        writeln!(
+            f,
+            "{RESET}{ERROR}Error assembling {}{RESET}",
+            af.asm_filename()
+        )?;
+        for (l, e) in errors {
+            writeln!(f, "    {FILE}{}:{}{RESET}: {:?}", af.filename(l.0), l.1, e)?;
         }
         Ok(())
     }

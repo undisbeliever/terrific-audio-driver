@@ -153,7 +153,7 @@ impl<'s> State<'s> {
             symbols: HashMap::new(),
             output: Vec::new(),
             pc_base,
-            line_no: LineNo(0),
+            line_no: LineNo(0, 0),
             pending_output: Vec::new(),
             assert_pc: None,
             asserts: Vec::new(),

@@ -8,10 +8,12 @@
 
 mod assembler;
 mod evaluator;
+mod file_loader;
 mod file_parser;
 mod instructions;
 mod state;
 mod string;
 
 pub mod errors;
-pub use assembler::{assemble, CompiledAsm};
+pub use assembler::{assemble, assemble_loaded_file, CompiledAsm};
+pub use file_loader::load_asm_file_and_includes;

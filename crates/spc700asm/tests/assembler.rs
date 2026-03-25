@@ -13,7 +13,7 @@ use spc700asm::{
 };
 
 fn el<'s>(line: u32, e: impl Into<FileError<'s>>) -> (LineNo, FileError<'s>) {
-    (LineNo(line), e.into())
+    (LineNo(0, line), e.into())
 }
 
 #[test]

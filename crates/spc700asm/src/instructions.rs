@@ -2556,7 +2556,7 @@ mod instruction_tests {
         assert_eq!(
             errors.errors(),
             &[(
-                LineNo(0),
+                LineNo(0, 0),
                 OutputError::OutOfRange {
                     value: 0x2000,
                     min: 0,
@@ -2579,7 +2579,7 @@ mod instruction_tests {
 
         assert_eq!(
             errors.errors(),
-            &[(LineNo(0), OutputError::InvalidPcall(0xfe00).into())]
+            &[(LineNo(0, 0), OutputError::InvalidPcall(0xfe00).into())]
         );
     }
 }

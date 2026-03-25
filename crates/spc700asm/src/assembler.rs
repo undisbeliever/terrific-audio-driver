@@ -10,6 +10,7 @@ use crate::{
         evaluate, evaluate_constexpr_address, evaluate_constexpr_u16, evaluate_u16v, evaluate_u8v,
         ExpressionError, ExpressionResult, ValueError,
     },
+    file_loader::{split_file_lines, split_str_lines, AsmFileWithIncludes, SplitLines},
     file_parser::{
         parse_file, AsmLine, CodeBankStatement, FunctionTableDef, GlobalAsm, Procedure,
         StructSection, Var, VarBankStatement, VarsSection,
@@ -678,7 +679,7 @@ fn check_code_size(code_bank: Option<Range<u16>>, state: &State, errors: &mut Fi
         let i64_code_bank = i64::from(code_bank.start)..i64::from(code_bank.end);
         if !i64_code_bank.contains(&state.program_counter()) {
             errors.push(
-                LineNo(0),
+                LineNo(0, 0),
                 AssemblerError::CodeTooLarge(code_bank, state.program_counter()),
             );
         }
@@ -704,10 +705,10 @@ impl CodeBankSetTest {
     }
 }
 
-pub fn assemble<'s>(input: &'s str) -> Result<CompiledAsm, FileErrors<'s>> {
+fn assemble_lines<'s>(lines: SplitLines<'s>) -> Result<CompiledAsm, FileErrors<'s>> {
     let mut errors = FileErrors::new();
 
-    let file = parse_file(input, &mut errors);
+    let file = parse_file(lines, &mut errors);
 
     let mut inline_procs = prepare_inlines(file.inlines, &mut errors);
 
@@ -782,4 +783,12 @@ pub fn assemble<'s>(input: &'s str) -> Result<CompiledAsm, FileErrors<'s>> {
     } else {
         Err(errors)
     }
+}
+
+pub fn assemble<'s>(input: &'s str) -> Result<CompiledAsm, FileErrors<'s>> {
+    assemble_lines(split_str_lines(input))
+}
+
+pub fn assemble_loaded_file<'s>(input: &'s AsmFileWithIncludes) -> Result<CompiledAsm, FileErrors<'s>> {
+    assemble_lines(split_file_lines(input))
 }

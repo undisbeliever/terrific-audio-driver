@@ -6,7 +6,7 @@
 
 #![forbid(unsafe_code)]
 
-use spc700asm::assemble;
+use spc700asm::{assemble_loaded_file, load_asm_file_and_includes};
 
 use anstream::{eprint, eprintln};
 use anstyle::{AnsiColor, Color, Style};
@@ -40,19 +40,19 @@ struct Args {
 fn main() {
     let args = Args::parse();
 
-    let asm_file = match std::fs::read_to_string(&args.asm_file) {
+    let asm_file = match load_asm_file_and_includes(&args.asm_file) {
         Ok(f) => f,
         Err(e) => error!(
-            "{RESET}{ERROR}Cannot load {}{RESET}: {}",
+            "{RESET}{ERROR}Cannot load {}{RESET}: {:?}",
             args.asm_file.display(),
             e
         ),
     };
 
-    let c = match assemble(&asm_file) {
+    let c = match assemble_loaded_file(&asm_file) {
         Ok(c) => c,
         Err(e) => {
-            eprint!("{}", e.color_display(&args.asm_file));
+            eprint!("{}", e.color_display(&asm_file));
             std::process::exit(1);
         }
     };
