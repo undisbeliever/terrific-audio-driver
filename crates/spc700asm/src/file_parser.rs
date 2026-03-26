@@ -7,6 +7,7 @@
 use crate::{
     errors::{FileErrors, LineNo},
     file_loader::SplitLines,
+    state::DirectPageFlag,
     string::split_first_word,
 };
 
@@ -47,6 +48,7 @@ pub enum AsmLine<'a> {
     Instruction(&'a str, &'a str),
     Db(&'a str),
     Dw(&'a str),
+    SetDirectPage(DirectPageFlag),
     Assert(&'a str),
 }
 
@@ -268,6 +270,8 @@ fn parse_asm_line_after_label<'a>(
     match first_word {
         ".db" => f(line_no, AsmLine::Db(arguments)),
         ".dw" => f(line_no, AsmLine::Dw(arguments)),
+        ".p0" => f(line_no, AsmLine::SetDirectPage(DirectPageFlag::Zero)),
+        ".p1" => f(line_no, AsmLine::SetDirectPage(DirectPageFlag::One)),
         ".assert" => f(line_no, AsmLine::Assert(arguments)),
         ".include" => errors.push(line_no, FileParserError::CannotNestIncludes),
         fw if first_word.starts_with(".") => {

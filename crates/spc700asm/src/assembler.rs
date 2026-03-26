@@ -680,6 +680,7 @@ fn process_asm_line<'s>(
         }
         AsmLine::Db(arguments) => process_db(line_no, arguments, state, errors),
         AsmLine::Dw(arguments) => process_dw(line_no, arguments, state, errors),
+        AsmLine::SetDirectPage(p) => state.direct_page = p,
         AsmLine::Assert(expr) => state.add_assert(line_no, expr),
     }
 }

@@ -1382,3 +1382,35 @@ fn no_code_bank_set_before_inline_error() {
 
     assert_eq!(e.errors(), &[el(5, AssemblerError::CodeBankNotSet)]);
 }
+
+#[test]
+fn p0_and_p1_commands() -> Result<(), Box<dyn std::error::Error>> {
+    let c = assemble(
+        r##"
+.codebank $200..$300
+
+zeropage_var  = $0010;
+firstpage_var = $0180;
+
+.p0
+    mov A, zeropage_var
+    mov A, firstpage_var
+
+.p1
+    mov A, zeropage_var
+    mov A, firstpage_var
+"##,
+    )?;
+
+    assert_eq!(
+        c.output,
+        &[
+            0xe4, 0x10, // mov A, $10
+            0xe5, 0x80, 0x01, // mov A, !180
+            0xe5, 0x10, 0x00, // mov A, !010
+            0xe4, 0x80, // mov A, $80
+        ]
+    );
+
+    Ok(())
+}
