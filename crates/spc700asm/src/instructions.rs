@@ -1055,13 +1055,13 @@ pub fn process_instruction<'a>(
 
                 [AddressingMode::Dp(ad), AddressingMode::Dp(ds)] => {
                     state.write_u8(0xfa);
-                    state.write_u8(ad);
                     state.write_u8(ds);
+                    state.write_u8(ad);
                 }
                 [AddressingMode::Dp(a), AddressingMode::Immediate(i)] => {
                     state.write_u8(0x8f);
-                    state.write_u8(a);
                     state.write_u8v(i);
+                    state.write_u8(a);
                 }
 
                 am => return unknown_instruction_args_err(instruction, am),
@@ -1742,8 +1742,8 @@ mod instruction_tests {
         test("mov Y, A", &[0xFD]);
         test("mov X, SP", &[0x9D]);
         test("mov SP, X", &[0xBD]);
-        test("mov $20, $30", &[0xFA, 0x20, 0x30]);
-        test("mov $40, #$50", &[0x8F, 0x40, 0x50]);
+        test("mov $20, $30", &[0xFA, 0x30, 0x20]);
+        test("mov $40, #$50", &[0x8F, 0x50, 0x40]);
         test("adc A, #$ff", &[0x88, 0xff]);
         test("adc A, (X)", &[0x86]);
         test("adc A, $10", &[0x84, 0x10]);
@@ -1971,7 +1971,7 @@ mod instruction_tests {
         test_sym("mov X, SP", &s, &[0x9D]);
         test_sym("mov SP, X", &s, &[0xBD]);
         test_sym("mov dp, dp", &s, &[0xFA, 0x10, 0x10]);
-        test_sym("mov dp, #imm", &s, &[0x8F, 0x10, 0x80]);
+        test_sym("mov dp, #imm", &s, &[0x8F, 0x80, 0x10]);
         test_sym("adc A, #imm", &s, &[0x88, 0x80]);
         test_sym("adc A, (X)", &s, &[0x86]);
         test_sym("adc A, dp", &s, &[0x84, 0x10]);
