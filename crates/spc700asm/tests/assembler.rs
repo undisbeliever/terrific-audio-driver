@@ -379,7 +379,7 @@ fn unknown_symbol_asm_test() -> Result<(), Box<dyn std::error::Error>> {
 fn code_too_large_error() -> Result<(), Box<dyn std::error::Error>> {
     let c = assemble(
         r##"
-.codebank $1000..$1004
+.codebank $1000..$1003
 
     inc A
     inc A
@@ -390,7 +390,7 @@ fn code_too_large_error() -> Result<(), Box<dyn std::error::Error>> {
 
     let e = assemble(
         r##"
-.codebank $1000..$1004
+.codebank $1000..$1003
 
     inc A
     inc A
@@ -403,7 +403,13 @@ fn code_too_large_error() -> Result<(), Box<dyn std::error::Error>> {
 
     assert_eq!(
         e.errors(),
-        &[el(0, AssemblerError::CodeTooLarge(0x1000..0x1004, 0x1004))]
+        &[el(
+            0,
+            AssemblerError::CodeTooLarge {
+                code_size: 4,
+                max_size: (0x1000..0x1003).len()
+            }
+        )]
     );
 
     Ok(())

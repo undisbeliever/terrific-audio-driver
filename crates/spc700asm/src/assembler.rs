@@ -33,7 +33,7 @@ pub enum AssemblerError<'s> {
     CodeBankNotSet,
     MultipleCodeBankStatements,
     InvalidCodeBankRange(u16, u16),
-    CodeTooLarge(Range<u16>, i64),
+    CodeTooLarge { code_size: usize, max_size: usize },
 
     DuplicateVarBankName(&'s str),
     InvalidVarBankRange(u16, u16),
@@ -90,12 +90,10 @@ impl std::fmt::Display for AssemblerError<'_> {
             AssemblerError::InvalidCodeBankRange(from, to) => {
                 write!(f, "invalid .codebank range: {from} - {to}")
             }
-            AssemblerError::CodeTooLarge(code_bank, code_size) => write!(
-                f,
-                "code is too large: {} bytes, max: {}",
+            AssemblerError::CodeTooLarge {
                 code_size,
-                code_bank.len()
-            ),
+                max_size,
+            } => write!(f, "code is too large: {code_size} bytes, max: {max_size}"),
             AssemblerError::DuplicateVarBankName(name) => {
                 write!(f, "duplicate .varbank name: {name}")
             }
@@ -746,12 +744,17 @@ fn process_proc<'s>(
 }
 
 fn check_code_size(code_bank: Option<Range<u16>>, state: &State, errors: &mut FileErrors) {
-    if let Some(code_bank) = code_bank {
-        let i64_code_bank = i64::from(code_bank.start)..i64::from(code_bank.end);
-        if !i64_code_bank.contains(&state.program_counter()) {
+    if let Some(cb) = code_bank {
+        let code_size = state.output_len();
+        let max_size = cb.len();
+
+        if code_size > max_size {
             errors.push(
                 LineNo(0, 0),
-                AssemblerError::CodeTooLarge(code_bank, state.program_counter()),
+                AssemblerError::CodeTooLarge {
+                    code_size,
+                    max_size,
+                },
             );
         }
     }

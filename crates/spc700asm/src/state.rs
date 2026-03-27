@@ -190,6 +190,10 @@ impl<'s> State<'s> {
         (self.output, self.symbols)
     }
 
+    pub fn output_len(&self) -> usize {
+        self.output.len()
+    }
+
     pub fn program_counter(&self) -> i64 {
         i64::try_from(self.output.len())
             .unwrap_or(i64::MAX)
