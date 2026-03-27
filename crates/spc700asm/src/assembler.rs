@@ -192,14 +192,14 @@ fn default_types<'s>() -> HashMap<&'s str, Type> {
         },
     );
     out.insert(
-        "s8",
+        "i8",
         Type {
             size: 1,
             children: Vec::new(),
         },
     );
 
-    for name in ["u16", "s16", "ptr"] {
+    for name in ["u16", "i16", "ptr"] {
         out.insert(
             name,
             Type {

@@ -32,7 +32,7 @@ N_CHANNELS = 10
 
 .vars zeropage
     unsigned_byte : u8
-    signed_byte : s8
+    signed_byte : i8
 .endvars
 
 .vars firstpage
@@ -44,7 +44,7 @@ N_CHANNELS = 10
 
 .vars zeropage
     unsigned_word : u16
-    signed_word : s16
+    signed_word : i16
 .endvars
 "##,
     )?;
