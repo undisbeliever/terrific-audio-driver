@@ -36,10 +36,19 @@ pub struct StructSection<'a> {
     pub fields: Vec<Var<'a>>,
 }
 
+pub enum VarLine<'a> {
+    Variable(Var<'a>),
+    Constant {
+        line_no: LineNo,
+        name: &'a str,
+        expr: &'a str,
+    },
+}
+
 pub struct VarsSection<'a> {
     pub line_no: LineNo,
     pub bank: &'a str,
-    pub variables: Vec<Var<'a>>,
+    pub lines: Vec<VarLine<'a>>,
 }
 
 pub enum AsmLine<'a> {
@@ -194,14 +203,21 @@ fn parse_struct<'a>(
     out
 }
 
-fn parse_var_line<'a>(line_no: LineNo, line: &'a str) -> Result<Var<'a>, FileParserError<'a>> {
-    match line.split_once(':') {
-        Some((name, var_type)) => Ok(Var {
+fn parse_var_line<'a>(line_no: LineNo, line: &'a str) -> Result<VarLine<'a>, FileParserError<'a>> {
+    if let Some((name, var_type)) = line.split_once(':') {
+        Ok(VarLine::Variable(Var {
             line_no,
             name: name.trim(),
             var_type: var_type.trim(),
-        }),
-        None => Err(FileParserError::InvalidVarLine),
+        }))
+    } else if let Some((name, expr)) = line.split_once("=") {
+        Ok(VarLine::Constant {
+            line_no,
+            name: name.trim(),
+            expr: expr.trim(),
+        })
+    } else {
+        Err(FileParserError::InvalidVarLine)
     }
 }
 
@@ -214,13 +230,13 @@ fn parse_vars<'a>(
     let mut out = VarsSection {
         line_no: var_line_no,
         bank: var_bank,
-        variables: Vec::new(),
+        lines: Vec::new(),
     };
 
     for (line_no, line) in it {
         if !line.starts_with(".") {
             match parse_var_line(line_no, line) {
-                Ok(v) => out.variables.push(v),
+                Ok(v) => out.lines.push(v),
                 Err(e) => errors.push(line_no, e),
             }
         } else if line == ".endvars" {

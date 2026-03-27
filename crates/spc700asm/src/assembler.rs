@@ -13,7 +13,7 @@ use crate::{
     file_loader::{split_file_lines, split_str_lines, AsmFileWithIncludes, SplitLines},
     file_parser::{
         parse_file, AsmLine, CodeBankStatement, FunctionTableDef, GlobalAsm, Procedure,
-        StructSection, Var, VarBankStatement, VarsSection,
+        StructSection, Var, VarBankStatement, VarLine, VarsSection,
     },
     instructions::process_instruction,
     state::{
@@ -468,6 +468,25 @@ fn process_variable<'s>(
     }
 }
 
+fn process_var_lines<'s>(
+    input: Vec<VarLine<'s>>,
+    types: &HashMap<&'s str, Type>,
+    bank: &mut VariableBank,
+    state: &mut State<'s>,
+    errors: &mut FileErrors<'s>,
+) {
+    for line in input {
+        match line {
+            VarLine::Variable(v) => process_variable(&v, types, bank, state, errors),
+            VarLine::Constant {
+                line_no,
+                name,
+                expr,
+            } => process_constant(line_no, name, expr, state, errors),
+        }
+    }
+}
+
 fn process_var_section<'s>(
     input: VarsSection<'s>,
     types: &HashMap<&'s str, Type>,
@@ -476,11 +495,7 @@ fn process_var_section<'s>(
     errors: &mut FileErrors<'s>,
 ) {
     match banks.iter_mut().find(|b| b.name == input.bank) {
-        Some(b) => {
-            for v in &input.variables {
-                process_variable(v, types, b, state, errors);
-            }
-        }
+        Some(b) => process_var_lines(input.lines, types, b, state, errors),
         None => {
             errors.push(input.line_no, AssemblerError::CannotFindVarBank(input.bank));
 
@@ -489,9 +504,7 @@ fn process_var_section<'s>(
                 range: 0..0xff,
                 pos: 0,
             };
-            for v in &input.variables {
-                process_variable(v, types, &mut dummy, state, errors);
-            }
+            process_var_lines(input.lines, types, &mut dummy, state, errors)
         }
     }
 }

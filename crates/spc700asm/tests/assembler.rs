@@ -88,6 +88,48 @@ N_CHANNELS = 10
 }
 
 #[test]
+fn constants_in_vars_section() -> Result<(), Box<dyn std::error::Error>> {
+    let c = assemble(
+        r##"
+.codebank $200..$300
+
+.varbank zeropage  $00..$100
+
+; from audio-driver.asm
+.vars zeropage
+    zpTmpWord : u16
+        zpTmp = zpTmpWord
+        zpTmp2 = zpTmpWord + 1
+
+    echoDirty : u8
+        ECHO_DIRTY__FIR_FILTER_BIT = 7
+        ECHO_DIRTY__CLEAR_FIR_BIT = 0
+        ECHO_DIRTY__FEEDBACK_BIT = 5
+        ECHO_DIRTY__EDL_BIT = 4
+.endvars
+"##,
+    )?;
+
+    assert_eq!(c.var_banks[0].name, "zeropage");
+    assert_eq!(c.var_banks[0].range, 0x00..0x100);
+    assert_eq!(c.var_banks[0].pos, 3);
+
+    assert_eq!(c.sym("zpTmpWord"), 0x00);
+    assert_eq!(c.sym("zpTmp"), 0x00);
+    assert_eq!(c.sym("zpTmp2"), 0x01);
+
+    assert_eq!(c.sym("echoDirty"), 0x02);
+    assert_eq!(c.sym("ECHO_DIRTY__FIR_FILTER_BIT"), 7);
+    assert_eq!(c.sym("ECHO_DIRTY__CLEAR_FIR_BIT"), 0);
+    assert_eq!(c.sym("ECHO_DIRTY__FEEDBACK_BIT"), 5);
+    assert_eq!(c.sym("ECHO_DIRTY__EDL_BIT"), 4);
+
+    assert_eq!(c.output, &[]);
+
+    Ok(())
+}
+
+#[test]
 fn invalid_varbank_test() -> Result<(), Box<dyn std::error::Error>> {
     let e = assemble(
         r##"
