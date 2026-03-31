@@ -583,7 +583,7 @@ fn arithmatic_instruction_impl<'a>(
 
         [AddressingMode::A, AddressingMode::DpY(a)] => {
             // promote to `addr+Y`
-            state.write_u8(opcode_base | 0x15);
+            state.write_u8(opcode_base | 0x16);
             state.write_u16(state.dp_addr_to_addr(a));
         }
 
@@ -2350,6 +2350,44 @@ mod instruction_tests {
 
         test_sym("mov A, dp+Y", &s, &[0xF6, 0x80, 0x01]);
         test_sym("mov dp+Y, A", &s, &[0xD6, 0x80, 0x01]);
+    }
+
+    #[test]
+    fn alu_dp_y_direct_page_clear() {
+        let s = {
+            let mut s = State::new(0x200);
+            s.direct_page = DirectPageFlag::Zero;
+            s.add_symbol("dp", 0x080).unwrap();
+            s
+        };
+
+        test_sym("adc A, dp+X", &s, &[0x94, 0x80]);
+
+        test_sym("adc A, dp+Y", &s, &[0x96, 0x80, 0x00]);
+        test_sym("sbc A, dp+Y", &s, &[0xb6, 0x80, 0x00]);
+        test_sym("cmp A, dp+Y", &s, &[0x76, 0x80, 0x00]);
+        test_sym("and A, dp+Y", &s, &[0x36, 0x80, 0x00]);
+        test_sym("or  A, dp+Y", &s, &[0x16, 0x80, 0x00]);
+        test_sym("eor A, dp+Y", &s, &[0x56, 0x80, 0x00]);
+    }
+
+    #[test]
+    fn alu_dp_y_direct_page_set() {
+        let s = {
+            let mut s = State::new(0x200);
+            s.direct_page = DirectPageFlag::One;
+            s.add_symbol("dp", 0x180).unwrap();
+            s
+        };
+
+        test_sym("adc A, dp+X", &s, &[0x94, 0x80]);
+
+        test_sym("adc A, dp+Y", &s, &[0x96, 0x80, 0x01]);
+        test_sym("sbc A, dp+Y", &s, &[0xb6, 0x80, 0x01]);
+        test_sym("cmp A, dp+Y", &s, &[0x76, 0x80, 0x01]);
+        test_sym("and A, dp+Y", &s, &[0x36, 0x80, 0x01]);
+        test_sym("or  A, dp+Y", &s, &[0x16, 0x80, 0x01]);
+        test_sym("eor A, dp+Y", &s, &[0x56, 0x80, 0x01]);
     }
 
     #[test]
