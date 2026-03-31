@@ -22,17 +22,17 @@ endif
 .PHONY: all clean
 
 
-all: loader.bin audio-driver.bin $(WIZ_BIN_OUT)
+all: loader.bin loader.mlb audio-driver.bin $(WIZ_BIN_OUT)
 	diff --report-identical-files loader.bin loader.wiz.bin
 
-loader.bin: src/loader.asm src/common-memmap.inc src/registers.inc src/io-commands.inc
-	cargo run --release --bin spc700asm -- -o loader.bin src/loader.asm
+loader.bin loader.mlb &: src/loader.asm src/common-memmap.inc src/registers.inc src/io-commands.inc
+	cargo run --release --bin spc700asm -- --mlb loader.mlb -o loader.bin src/loader.asm
 
 audio-driver.bin: audio-driver.wiz.bin
 	cp audio-driver.wiz.bin audio-driver.bin
 
 clean:
-	$(RM) loader.bin audio-driver.bin
+	$(RM) loader.bin loader.mlb audio-driver.bin
 	$(RM) $(WIZ_BIN_OUT) $(WIZ_SYM_OUT)
 
 

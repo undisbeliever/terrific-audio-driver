@@ -271,14 +271,21 @@ impl<'s> State<'s> {
         self.add_unchecked_symbol(full_name, value)
     }
 
-    pub fn add_symbol(&mut self, name: &'s str, value: i64) -> Result<(), SymbolError<'s>> {
+    pub fn add_symbol(
+        &mut self,
+        name: &'s str,
+        value: i64,
+    ) -> Result<(String, i64), SymbolError<'s>> {
         match is_symbol_name_valid(name) {
             true => match &self.scope {
                 Some(scope) => {
                     let full_name = [scope, ".", name].concat();
-                    self.add_unchecked_symbol(full_name, value)
+                    self.add_unchecked_symbol(full_name.clone(), value)
+                        .map(|()| (full_name, value))
                 }
-                None => self.add_unchecked_symbol(name.into(), value),
+                None => self
+                    .add_unchecked_symbol(name.into(), value)
+                    .map(|()| (name.into(), value)),
             },
             false => Err(SymbolError::InvalidName(name)),
         }

@@ -21,6 +21,7 @@ use crate::{
         SymbolError,
     },
     string::comma_iter,
+    symbol_file::SymbolFile,
 };
 
 use std::{
@@ -144,6 +145,7 @@ impl std::fmt::Display for AssemblerError<'_> {
 pub struct CompiledAsm {
     pub var_banks: Vec<VariableBank>,
     pub symbols: HashMap<String, Option<i64>>,
+    pub sym_file: SymbolFile,
     pub output: Vec<u8>,
 }
 
@@ -230,7 +232,7 @@ fn process_constant<'s>(
 ) {
     match evaluate(expr, state) {
         ExpressionResult::Value(value) => match state.add_symbol(name, value) {
-            Ok(()) => (),
+            Ok(_) => (),
             Err(e) => errors.push(line_no, e),
         },
         ExpressionResult::Boolean(_) => {
@@ -319,7 +321,9 @@ fn add_var_symbols<'s>(
     let addr = i64::from(addr);
 
     match state.add_symbol(var.name, addr) {
-        Ok(()) => {
+        Ok((full_name, _)) => {
+            assert_eq!(full_name, var.name);
+
             for c in &var_type.children {
                 if let Err(e) =
                     state.add_unchecked_scoped_symbol(var.name, &c.name, addr + i64::from(c.offset))
@@ -453,11 +457,14 @@ fn process_variable<'s>(
     types: &HashMap<&'s str, Type>,
     bank: &mut VariableBank,
     state: &mut State<'s>,
+    sym_file: &mut SymbolFile,
     errors: &mut FileErrors<'s>,
 ) {
     if let Some((var_type, size)) =
         read_var_type(input.line_no, input.var_type, types, state, errors)
     {
+        sym_file.add_var(input.name, bank.pos, size);
+
         add_var_symbols(input, bank.pos, var_type, state, errors);
 
         let new_pos = bank.pos.saturating_add(size);
@@ -473,11 +480,12 @@ fn process_var_lines<'s>(
     types: &HashMap<&'s str, Type>,
     bank: &mut VariableBank,
     state: &mut State<'s>,
+    sym_file: &mut SymbolFile,
     errors: &mut FileErrors<'s>,
 ) {
     for line in input {
         match line {
-            VarLine::Variable(v) => process_variable(&v, types, bank, state, errors),
+            VarLine::Variable(v) => process_variable(&v, types, bank, state, sym_file, errors),
             VarLine::Constant {
                 line_no,
                 name,
@@ -492,10 +500,11 @@ fn process_var_section<'s>(
     types: &HashMap<&'s str, Type>,
     banks: &mut [VariableBank],
     state: &mut State<'s>,
+    sym_file: &mut SymbolFile,
     errors: &mut FileErrors<'s>,
 ) {
     match banks.iter_mut().find(|b| b.name == input.bank) {
-        Some(b) => process_var_lines(input.lines, types, b, state, errors),
+        Some(b) => process_var_lines(input.lines, types, b, state, sym_file, errors),
         None => {
             errors.push(input.line_no, AssemblerError::CannotFindVarBank(input.bank));
 
@@ -504,7 +513,7 @@ fn process_var_section<'s>(
                 range: 0..0xff,
                 pos: 0,
             };
-            process_var_lines(input.lines, types, &mut dummy, state, errors)
+            process_var_lines(input.lines, types, &mut dummy, state, sym_file, errors)
         }
     }
 }
@@ -616,13 +625,21 @@ fn process_inline<'s>(
     inline: InlineProc<'s>,
     inline_procs: &mut InlineProcs<'s>,
     state: &mut State<'s>,
+    sym_file: &mut SymbolFile,
     errors: &mut FileErrors<'s>,
 ) {
     let caller_scope = state.take_scope();
 
     match inline {
         InlineProc::Inline(code) => {
-            process_proc_or_inline(code, ProcType::Inline, inline_procs, state, errors);
+            process_proc_or_inline(
+                code,
+                ProcType::Inline,
+                inline_procs,
+                state,
+                sym_file,
+                errors,
+            );
         }
         InlineProc::Taken => {
             errors.push(caller_line_no, AssemblerError::CanOnlyUseInlineOnce);
@@ -665,13 +682,16 @@ fn process_asm_line<'s>(
     line: AsmLine<'s>,
     inline_procs: &mut InlineProcs<'s>,
     state: &mut State<'s>,
+    sym_file: &mut SymbolFile,
     errors: &mut FileErrors<'s>,
 ) {
     state.set_line_no(line_no);
 
     match line {
         AsmLine::Label(label) => match state.add_symbol(label, state.program_counter()) {
-            Ok(()) => (),
+            Ok((label, value)) => {
+                sym_file.add_label(label, value);
+            }
             Err(e) => errors.push(line_no, e),
         },
         AsmLine::Constant { name, expr } => process_constant(line_no, name, expr, state, errors),
@@ -685,7 +705,7 @@ fn process_asm_line<'s>(
                     if !arguments.is_empty() {
                         errors.push(line_no, AssemblerError::CannotUseArgumentsInInlineCall)
                     }
-                    process_inline(line_no, inline, inline_procs, state, errors);
+                    process_inline(line_no, inline, inline_procs, state, sym_file, errors);
                 }
             }
         }
@@ -706,6 +726,7 @@ fn process_proc_or_inline<'s>(
     code_type: ProcType,
     inline_procs: &mut InlineProcs<'s>,
     state: &mut State<'s>,
+    sym_file: &mut SymbolFile,
     errors: &mut FileErrors<'s>,
 ) {
     let child_symbols: Vec<&'s str> = proc
@@ -721,17 +742,24 @@ fn process_proc_or_inline<'s>(
     let proc_addr = state.program_counter();
 
     match state.add_symbol(proc.name, proc_addr) {
-        Ok(()) => (),
-        Err(e) => match code_type {
-            ProcType::Procedure => errors.push(proc.line_no, AssemblerError::CannotOpenProc(e)),
-            ProcType::Inline => errors.push(proc.line_no, AssemblerError::CannotOpenInline(e)),
-        },
-    }
+        Ok((full_name, _)) => {
+            // Cannot write the start and end address of the proc to the symbol file.
+            // Mesen does not support overlapping labels.  It will silently drop the proc label.
+            sym_file.add_label(full_name, proc_addr);
+        }
+        Err(e) => errors.push(
+            proc.line_no,
+            match code_type {
+                ProcType::Procedure => AssemblerError::CannotOpenProc(e),
+                ProcType::Inline => AssemblerError::CannotOpenInline(e),
+            },
+        ),
+    };
 
     state.open_scope(proc.name, child_symbols);
 
     for (line_no, asm) in proc.lines {
-        process_asm_line(line_no, asm, inline_procs, state, errors);
+        process_asm_line(line_no, asm, inline_procs, state, sym_file, errors);
     }
 
     if state.program_counter() == proc_addr {
@@ -751,9 +779,17 @@ fn process_proc<'s>(
     proc: Procedure<'s>,
     inline_procs: &mut InlineProcs<'s>,
     state: &mut State<'s>,
+    sym_file: &mut SymbolFile,
     errors: &mut FileErrors<'s>,
 ) {
-    process_proc_or_inline(proc, ProcType::Procedure, inline_procs, state, errors);
+    process_proc_or_inline(
+        proc,
+        ProcType::Procedure,
+        inline_procs,
+        state,
+        sym_file,
+        errors,
+    );
 }
 
 fn check_code_size(code_bank: Option<Range<u16>>, state: &State, errors: &mut FileErrors) {
@@ -800,6 +836,7 @@ fn assemble_lines<'s>(lines: SplitLines<'s>) -> Result<CompiledAsm, FileErrors<'
     let mut inline_procs = prepare_inlines(file.inlines, &mut errors);
 
     let mut state = State::new(0);
+    let mut sym_file = SymbolFile::new();
     let mut code_bank = None;
     let mut cbst = CodeBankSetTest::new();
     let mut var_banks = Vec::new();
@@ -822,9 +859,14 @@ fn assemble_lines<'s>(lines: SplitLines<'s>) -> Result<CompiledAsm, FileErrors<'
                 process_var_bank(v, &state, &mut var_banks, &mut errors);
             }
             GlobalAsm::Struct(s) => process_struct(s, &state, &mut types, &mut errors),
-            GlobalAsm::Vars(v) => {
-                process_var_section(v, &types, &mut var_banks, &mut state, &mut errors)
-            }
+            GlobalAsm::Vars(v) => process_var_section(
+                v,
+                &types,
+                &mut var_banks,
+                &mut state,
+                &mut sym_file,
+                &mut errors,
+            ),
             GlobalAsm::FunctionTableDef(f) => {
                 process_function_table_def(f, &mut ft_defs, &mut errors)
             }
@@ -835,13 +877,26 @@ fn assemble_lines<'s>(lines: SplitLines<'s>) -> Result<CompiledAsm, FileErrors<'
             }
             GlobalAsm::Procedure(proc) => {
                 cbst.check_codebank_set(proc.line_no, &mut errors);
-                process_proc(proc, &mut inline_procs, &mut state, &mut errors)
+                process_proc(
+                    proc,
+                    &mut inline_procs,
+                    &mut state,
+                    &mut sym_file,
+                    &mut errors,
+                )
             }
             GlobalAsm::AsmLine(line_no, line) => {
                 if !matches!(line, AsmLine::Constant { .. }) {
                     cbst.check_codebank_set(line_no, &mut errors);
                 }
-                process_asm_line(line_no, line, &mut inline_procs, &mut state, &mut errors)
+                process_asm_line(
+                    line_no,
+                    line,
+                    &mut inline_procs,
+                    &mut state,
+                    &mut sym_file,
+                    &mut errors,
+                )
             }
         }
     }
@@ -865,6 +920,7 @@ fn assemble_lines<'s>(lines: SplitLines<'s>) -> Result<CompiledAsm, FileErrors<'
         Ok(CompiledAsm {
             var_banks,
             output,
+            sym_file,
             symbols,
         })
     } else {

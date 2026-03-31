@@ -13,6 +13,7 @@ mod file_parser;
 mod instructions;
 mod state;
 mod string;
+mod symbol_file;
 
 pub mod errors;
 pub use assembler::{assemble, assemble_loaded_file, CompiledAsm};
