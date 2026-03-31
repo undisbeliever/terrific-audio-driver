@@ -220,19 +220,21 @@ TAD_IO_VERSION = 20
 ; IO Commands
 ; ===========
 
+IoCommands__PAUSE = 0
+
 ; MUST match IoCommands in API and rust
 .ftdef IoCommands
     ; Pause the song and sound effect channels.
     ; * Commands will still be executed when the audio-driver is paused.
     ; * The audio driver starts paused unless the `LoaderDataType__PLAY_SONG_BIT` is set.
-    cmd_Pause ; CMD 0
+    cmd__pause ; CMD 0
 
     ; Pauses the music channels, sound effects will continue to play.
     ; Unpauses the sound effects channels.
-    cmd_PauseMusicPlaySfx ; CMD 2
+    cmd__pause_music_play_sfx ; CMD 2
 
     ; Unpauses the music and sound effect channels.
-    cmd_Unpause ; CMD 4
+    cmd__unpause ; CMD 4
 
     ; Play a sound effect
     ;  * parameter0: sound effect id
@@ -240,16 +242,16 @@ TAD_IO_VERSION = 20
     ;
     ; The sound-effect might not play if both sound effect channels are active.
     ; See the Sound Effects documentation for more details
-    cmd_PlaySoundEffect ; CMD 6
+    cmd__play_sound_effect ; CMD 6
 
     ; Stop all active sound effects
-    cmd_StopSoundEffect ; CMD 8
+    cmd__stop_sound_effects ; CMD 8
 
     ; Set the main volume (`MVOL` register)
     ;  * parameter0: signed i8 volume
     ;
     ; NOTE: The main volume is reset whenever a new song is loaded.
-    cmd_SetMainVolume ; CMD 10
+    cmd__set_main_volume ; CMD 10
 
     ; Enables or disable music channels.
     ;  * parameter0: A bitmask of the 8 music channels that can send key-on events
@@ -257,7 +259,7 @@ TAD_IO_VERSION = 20
     ; Disabled channels will be keyed-off.
     ;
     ; NOTE: The music channels bitmask is reset whenever a new song is loaded.
-    cmd_SetMusicChannels ; CMD 12
+    cmd__set_music_channels ; CMD 12
 
     ; Set the song tick clock.
     ;  * parameter0: The new S-DSP TIMER_0 register value.
@@ -265,7 +267,7 @@ TAD_IO_VERSION = 20
     ;    (MUST be `0 || >= MIN_TICK_CLOCK 64`, is bounds checked)
     ;
     ; NOTE: The song can still change the song timer.
-    cmd_SetSongTimer ; CMD 14
+    cmd__set_song_timer ; CMD 14
 
     ; Set the global music volume
     ;  * parameter0: the music volume.
@@ -274,7 +276,7 @@ TAD_IO_VERSION = 20
     ; CAUTION: This command does not change the echo volume.
     ;
     ; NOTE: Global volumes persist after a new song or common-audio-data is loaded.
-    cmd_SetGlobalMusicVolume ; CMD 16
+    cmd__set_global_music_volume ; CMD 16
 
     ; Set the global sound-effect volume
     ;  * parameter0: the sound-effect volume.
@@ -283,7 +285,7 @@ TAD_IO_VERSION = 20
     ; CAUTION: This command does not change the echo volume.
     ;
     ; NOTE: Global volumes persist after a new song or common-audio-data is loaded.
-    cmd_SetGlobalSfxVolume ; CMD 18
+    cmd__set_sfx_volume ; CMD 18
 
     ; Set the global music and sound-effect volumes
     ;  * parameter0: the music volume.
@@ -292,6 +294,6 @@ TAD_IO_VERSION = 20
     ; CAUTION: This command does not change the echo volume.
     ;
     ; NOTE: Global volumes persist after a new song or common-audio-data is loaded.
-    cmd_SetGlobalVolumes ; CMD 20
+    cmd__set_global_volumes ; CMD 20
 .endftdef
 

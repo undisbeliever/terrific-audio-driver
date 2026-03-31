@@ -22,19 +22,19 @@ endif
 .PHONY: all clean
 
 
-all: loader.bin loader.mlb audio-driver.bin $(WIZ_BIN_OUT)
+all: loader.bin loader.mlb audio-driver.bin audio-driver.mlb $(WIZ_BIN_OUT)
 	diff --report-identical-files loader.bin loader.wiz.bin
+	diff --report-identical-files audio-driver.bin audio-driver.wiz.bin
 
 loader.bin loader.mlb &: src/loader.asm src/common-memmap.inc src/registers.inc src/io-commands.inc
 	cargo run --release --bin spc700asm -- --mlb loader.mlb -o loader.bin src/loader.asm
 
-audio-driver.bin: audio-driver.wiz.bin
-	cp audio-driver.wiz.bin audio-driver.bin
+audio-driver.bin audio-driver.mlb &: src/audio-driver.asm src/bytecode.inc src/common-memmap.inc src/data-formats.inc src/io-commands.inc src/registers.inc
+	cargo run --release --bin spc700asm -- --mlb audio-driver.mlb -o audio-driver.bin src/audio-driver.asm
 
 clean:
-	$(RM) loader.bin loader.mlb audio-driver.bin
+	$(RM) loader.bin loader.mlb audio-driver.bin audio-driver.mlb
 	$(RM) $(WIZ_BIN_OUT) $(WIZ_SYM_OUT)
-
 
 %.wiz.bin %.wiz.sym &: src/%.wiz $(WIZ_INCLUDE_FILES)
 	$(WIZ) --system=spc700 -s wla -o $@ $<

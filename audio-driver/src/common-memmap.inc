@@ -28,6 +28,8 @@
 LOADER_ADDR = $200
 LOADER_SIZE =  116 ; MUST be even
 
+SHARED_ZEROPAGE_ADDR = $00eb
+
 ; ::SHOULDDO shrink stack size::
 STACK_SIZE = $20
 STACK_BOTTOM_ADDR = $200 - STACK_SIZE
@@ -51,11 +53,11 @@ CODE_ADDR = $200 + LOADER_SIZE
 CODE_END_ADDR = COMMON_DATA_ADDR - LAST_VAR_PAGE_SIZE
 
 
-.varbank zeropage           $0000..$00eb
-.varbank loader_zeropage    $00eb..$00f0
+.varbank zeropage           $0000..SHARED_ZEROPAGE_ADDR
+.varbank loader_zeropage    SHARED_ZEROPAGE_ADDR..$00f0
 .varbank firstpage          $0100..STACK_BOTTOM_ADDR
 .varbank stack              STACK_BOTTOM_ADDR..$0200
-.varbank lastpage           CODE_END_ADDR..COMMON_DATA_ADDR
+.varbank lastvarpage        CODE_END_ADDR..COMMON_DATA_ADDR
 
 
 ; Variables used by loader or used across song loads
