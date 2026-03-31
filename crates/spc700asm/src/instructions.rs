@@ -589,13 +589,13 @@ fn arithmatic_instruction_impl<'a>(
 
         [AddressingMode::Dp(d), AddressingMode::Dp(s)] => {
             state.write_u8(opcode_base | 0x09);
-            state.write_u8(d);
             state.write_u8(s);
+            state.write_u8(d);
         }
         [AddressingMode::Dp(d), AddressingMode::Immediate(i)] => {
             state.write_u8(opcode_base | 0x18);
-            state.write_u8(d);
             state.write_u8v(i);
+            state.write_u8(d);
         }
         [AddressingMode::XIndirect, AddressingMode::YIndirect] => {
             state.write_u8(opcode_base | 0x19)
@@ -1754,8 +1754,8 @@ mod instruction_tests {
         test("adc A, [$10+X]", &[0x87, 0x10]);
         test("adc A, [$10]+Y", &[0x97, 0x10]);
         test("adc (X), (Y)", &[0x99]);
-        test("adc $20, $30", &[0x89, 0x20, 0x30]);
-        test("adc $40, #$50", &[0x98, 0x40, 0x50]);
+        test("adc $20, $30", &[0x89, 0x30, 0x20]);
+        test("adc $40, #$50", &[0x98, 0x50, 0x40]);
         test("sbc A, #$ff", &[0xA8, 0xff]);
         test("sbc A, (X)", &[0xA6]);
         test("sbc A, $10", &[0xA4, 0x10]);
@@ -1766,8 +1766,8 @@ mod instruction_tests {
         test("sbc A, [$10+X]", &[0xA7, 0x10]);
         test("sbc A, [$10]+Y", &[0xB7, 0x10]);
         test("sbc (X), (Y)", &[0xB9]);
-        test("sbc $20, $30", &[0xA9, 0x20, 0x30]);
-        test("sbc $40, #$50", &[0xB8, 0x40, 0x50]);
+        test("sbc $20, $30", &[0xA9, 0x30, 0x20]);
+        test("sbc $40, #$50", &[0xB8, 0x50, 0x40]);
         test("cmp A, #$ff", &[0x68, 0xff]);
         test("cmp A, (X)", &[0x66]);
         test("cmp A, $10", &[0x64, 0x10]);
@@ -1778,8 +1778,8 @@ mod instruction_tests {
         test("cmp A, [$10+X]", &[0x67, 0x10]);
         test("cmp A, [$10]+Y", &[0x77, 0x10]);
         test("cmp (X), (Y)", &[0x79]);
-        test("cmp $20, $30", &[0x69, 0x20, 0x30]);
-        test("cmp $40, #$50", &[0x78, 0x40, 0x50]);
+        test("cmp $20, $30", &[0x69, 0x30, 0x20]);
+        test("cmp $40, #$50", &[0x78, 0x50, 0x40]);
         test("cmp X, #$ff", &[0xC8, 0xff]);
         test("cmp X, $10", &[0x3E, 0x10]);
         test("cmp X, $3ff", &[0x1E, 0xff, 0x3]);
@@ -1796,8 +1796,8 @@ mod instruction_tests {
         test("and A, [$10+X]", &[0x27, 0x10]);
         test("and A, [$10]+Y", &[0x37, 0x10]);
         test("and (X), (Y)", &[0x39]);
-        test("and $20, $30", &[0x29, 0x20, 0x30]);
-        test("and $40, #$50", &[0x38, 0x40, 0x50]);
+        test("and $20, $30", &[0x29, 0x30, 0x20]);
+        test("and $40, #$50", &[0x38, 0x50, 0x40]);
         test("or A, #$ff", &[0x08, 0xff]);
         test("or A, (X)", &[0x06]);
         test("or A, $10", &[0x04, 0x10]);
@@ -1808,8 +1808,8 @@ mod instruction_tests {
         test("or A, [$10+X]", &[0x07, 0x10]);
         test("or A, [$10]+Y", &[0x17, 0x10]);
         test("or (X), (Y)", &[0x19]);
-        test("or $20, $30", &[0x09, 0x20, 0x30]);
-        test("or $40, #$50", &[0x18, 0x40, 0x50]);
+        test("or $20, $30", &[0x09, 0x30, 0x20]);
+        test("or $40, #$50", &[0x18, 0x50, 0x40]);
         test("eor A, #$ff", &[0x48, 0xff]);
         test("eor A, (X)", &[0x46]);
         test("eor A, $10", &[0x44, 0x10]);
@@ -1820,8 +1820,8 @@ mod instruction_tests {
         test("eor A, [$10+X]", &[0x47, 0x10]);
         test("eor A, [$10]+Y", &[0x57, 0x10]);
         test("eor (X), (Y)", &[0x59]);
-        test("eor $20, $30", &[0x49, 0x20, 0x30]);
-        test("eor $40, #$50", &[0x58, 0x40, 0x50]);
+        test("eor $20, $30", &[0x49, 0x30, 0x20]);
+        test("eor $40, #$50", &[0x58, 0x50, 0x40]);
         test("inc A", &[0xBC]);
         test("inc $10", &[0xAB, 0x10]);
         test("inc $10+X", &[0xBB, 0x10]);
@@ -1983,7 +1983,7 @@ mod instruction_tests {
         test_sym("adc A, [dp]+Y", &s, &[0x97, 0x10]);
         test_sym("adc (X), (Y)", &s, &[0x99]);
         test_sym("adc dp, dp", &s, &[0x89, 0x10, 0x10]);
-        test_sym("adc dp, #imm", &s, &[0x98, 0x10, 0x80]);
+        test_sym("adc dp, #imm", &s, &[0x98, 0x80, 0x10]);
         test_sym("sbc A, #imm", &s, &[0xA8, 0x80]);
         test_sym("sbc A, (X)", &s, &[0xA6]);
         test_sym("sbc A, dp", &s, &[0xA4, 0x10]);
@@ -1995,7 +1995,7 @@ mod instruction_tests {
         test_sym("sbc A, [dp]+Y", &s, &[0xB7, 0x10]);
         test_sym("sbc (X), (Y)", &s, &[0xB9]);
         test_sym("sbc dp, dp", &s, &[0xA9, 0x10, 0x10]);
-        test_sym("sbc dp, #imm", &s, &[0xB8, 0x10, 0x80]);
+        test_sym("sbc dp, #imm", &s, &[0xB8, 0x80, 0x10]);
         test_sym("cmp A, #imm", &s, &[0x68, 0x80]);
         test_sym("cmp A, (X)", &s, &[0x66]);
         test_sym("cmp A, dp", &s, &[0x64, 0x10]);
@@ -2007,7 +2007,7 @@ mod instruction_tests {
         test_sym("cmp A, [dp]+Y", &s, &[0x77, 0x10]);
         test_sym("cmp (X), (Y)", &s, &[0x79]);
         test_sym("cmp dp, dp", &s, &[0x69, 0x10, 0x10]);
-        test_sym("cmp dp, #imm", &s, &[0x78, 0x10, 0x80]);
+        test_sym("cmp dp, #imm", &s, &[0x78, 0x80, 0x10]);
         test_sym("cmp X, #imm", &s, &[0xC8, 0x80]);
         test_sym("cmp X, dp", &s, &[0x3E, 0x10]);
         test_sym("cmp X, abs", &s, &[0x1E, 0xff, 0x3]);
@@ -2025,7 +2025,7 @@ mod instruction_tests {
         test_sym("and A, [dp]+Y", &s, &[0x37, 0x10]);
         test_sym("and (X), (Y)", &s, &[0x39]);
         test_sym("and dp, dp", &s, &[0x29, 0x10, 0x10]);
-        test_sym("and dp, #imm", &s, &[0x38, 0x10, 0x80]);
+        test_sym("and dp, #imm", &s, &[0x38, 0x80, 0x10]);
         test_sym("or A, #imm", &s, &[0x08, 0x80]);
         test_sym("or A, (X)", &s, &[0x06]);
         test_sym("or A, dp", &s, &[0x04, 0x10]);
@@ -2037,7 +2037,7 @@ mod instruction_tests {
         test_sym("or A, [dp]+Y", &s, &[0x17, 0x10]);
         test_sym("or (X), (Y)", &s, &[0x19]);
         test_sym("or dp, dp", &s, &[0x09, 0x10, 0x10]);
-        test_sym("or dp, #imm", &s, &[0x18, 0x10, 0x80]);
+        test_sym("or dp, #imm", &s, &[0x18, 0x80, 0x10]);
         test_sym("eor A, #imm", &s, &[0x48, 0x80]);
         test_sym("eor A, (X)", &s, &[0x46]);
         test_sym("eor A, dp", &s, &[0x44, 0x10]);
@@ -2049,7 +2049,7 @@ mod instruction_tests {
         test_sym("eor A, [dp]+Y", &s, &[0x57, 0x10]);
         test_sym("eor (X), (Y)", &s, &[0x59]);
         test_sym("eor dp, dp", &s, &[0x49, 0x10, 0x10]);
-        test_sym("eor dp, #imm", &s, &[0x58, 0x10, 0x80]);
+        test_sym("eor dp, #imm", &s, &[0x58, 0x80, 0x10]);
         test_sym("inc A", &s, &[0xBC]);
         test_sym("inc dp", &s, &[0xAB, 0x10]);
         test_sym("inc dp+X", &s, &[0xBB, 0x10]);
