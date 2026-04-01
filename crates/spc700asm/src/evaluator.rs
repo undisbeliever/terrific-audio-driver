@@ -23,9 +23,12 @@
 //
 //   <value>                     ::= <decimal> | "$"<hexadecimal> | "%"<binary>
 //                                 | "true" | "false"
-//                                 | <symbol> |
-//                                 | <unary_value_function> "(" <expression> ")"
+//                                 | <symbol>
+//                                 | <unary_value_function> | <offsetof>
 //                                 | "(" <expression> ")"
+//
+//  <unary_value_function>       ::= <function_name> "(" <expression> ")"
+//  <offsetof>                   ::= "offsetof" "(" <struct_name> "," <field_name> ")"
 // ```
 //
 // Resources:
@@ -46,6 +49,7 @@ bitflags! {
         const InvalidHexadecimalLiteral = 1 << 3;
         const InvalidBinaryLiteral= 1 << 4;
         const NoParenthesisAfterFunction = 1 << 5;
+        const CannotFindOffsetofField = 1 << 6;
 
         const Overflow = 1 << 10;
         const DivisionByZero = 1 << 11;
@@ -69,6 +73,7 @@ impl std::fmt::Display for ExpressionError {
                 ExpressionError::InvalidHexadecimalLiteral => "invalid hexadecimal literal",
                 ExpressionError::InvalidBinaryLiteral => "invalid binary literal",
                 ExpressionError::NoParenthesisAfterFunction => "no ( after function name",
+                ExpressionError::CannotFindOffsetofField => "cannot find offsetof() field",
                 ExpressionError::Overflow => "overflow",
                 ExpressionError::DivisionByZero => "division by zero",
                 ExpressionError::BooleanInIntegerOperation => "boolean in integer operation",
@@ -594,6 +599,8 @@ fn value(m: &mut Matcher) -> ExpressionResult {
             "true" => ExpressionResult::Boolean(true),
             "false" => ExpressionResult::Boolean(false),
 
+            "offsetof" => offsetof(m),
+
             "lobyte" => {
                 unary_value_function(m, |v| ExpressionResult::Value(v.to_le_bytes()[0].into()))
             }
@@ -627,6 +634,25 @@ fn value(m: &mut Matcher) -> ExpressionResult {
         b')' => ExpressionResult::Error(ExpressionError::UnmatchedParenthesis),
 
         _ => ExpressionResult::Error(ExpressionError::SyntaxError),
+    }
+}
+
+fn offsetof(m: &mut Matcher) -> ExpressionResult {
+    if !m.matches("(") {
+        return ExpressionResult::Error(ExpressionError::NoParenthesisAfterFunction);
+    }
+    let struct_name = m.take_symbol_name();
+    if !m.matches(",") {
+        return ExpressionResult::Error(ExpressionError::SyntaxError);
+    }
+    let field_name = m.take_symbol_name();
+    if !m.matches(")") {
+        return ExpressionResult::Error(ExpressionError::UnmatchedParenthesis);
+    }
+
+    match m.state.get_struct_offset(struct_name, field_name) {
+        Some(v) => ExpressionResult::Value(v),
+        None => ExpressionResult::Error(ExpressionError::CannotFindOffsetofField),
     }
 }
 

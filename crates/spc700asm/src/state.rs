@@ -158,6 +158,8 @@ pub struct State<'s> {
     scope: Option<&'s str>,
 
     symbols: HashMap<String, Option<i64>>,
+    struct_offsets: HashMap<(&'s str, &'s str), u16>,
+
     output: Vec<u8>,
 
     pc_base: u16,
@@ -180,6 +182,7 @@ impl<'s> State<'s> {
             direct_page: DirectPageFlag::Zero,
             scope: None,
             symbols: HashMap::new(),
+            struct_offsets: HashMap::new(),
             output: Vec::new(),
             pc_base,
             line_no: LineNo(0, 0),
@@ -326,6 +329,16 @@ impl<'s> State<'s> {
             }
             (Some(_), true) | (None, _) => self.symbols.get(name).copied().flatten(),
         }
+    }
+
+    pub fn add_struct_offset(&mut self, struct_name: &'s str, field_name: &'s str, value: u16) {
+        self.struct_offsets.insert((struct_name, field_name), value);
+    }
+
+    pub fn get_struct_offset(&self, struct_name: &'s str, field_name: &'s str) -> Option<i64> {
+        self.struct_offsets
+            .get(&(struct_name, field_name))
+            .map(|v| i64::from(*v))
     }
 
     #[cfg(test)]
@@ -598,6 +611,7 @@ impl Clone for State<'_> {
             direct_page: self.direct_page.clone(),
             scope: self.scope.clone(),
             symbols: self.symbols.clone(),
+            struct_offsets: self.struct_offsets.clone(),
             pc_base: self.pc_base,
             output: self.output.clone(),
             line_no: self.line_no,

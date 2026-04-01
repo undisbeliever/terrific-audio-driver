@@ -414,8 +414,8 @@ fn read_var_type<'s, 'a>(
 
 fn process_struct<'s>(
     s: StructSection<'s>,
-    state: &State<'s>,
     types: &mut HashMap<&'s str, Type>,
+    state: &mut State<'s>,
     errors: &mut FileErrors<'s>,
 ) {
     if !is_symbol_name_valid(s.name) {
@@ -441,6 +441,8 @@ fn process_struct<'s>(
                 name: f.name.to_owned(),
                 offset,
             });
+
+            state.add_struct_offset(s.name, f.name, offset);
 
             for child in &f_type.children {
                 fields.push(ChildType {
@@ -917,7 +919,7 @@ fn assemble_lines<'s>(lines: SplitLines<'s>) -> Result<CompiledAsm, FileErrors<'
             GlobalAsm::VarBank(v) => {
                 process_var_bank(v, &state, &mut var_banks, &mut errors);
             }
-            GlobalAsm::Struct(s) => process_struct(s, &state, &mut types, &mut errors),
+            GlobalAsm::Struct(s) => process_struct(s, &mut types, &mut state, &mut errors),
             GlobalAsm::Vars(v) => process_var_section(
                 v,
                 &types,

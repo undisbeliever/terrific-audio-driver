@@ -8,7 +8,7 @@ use spc700asm::{
     assemble,
     errors::{
         AssemblerError, AssertError, ConstexprError, ExpressionError, FileError, FileParserError,
-        LineNo, OutputError, SymbolError,
+        LineNo, OutputError, SymbolError, ValueError,
     },
 };
 
@@ -1578,6 +1578,98 @@ fn dbrepeat_var_cleared_after_use() {
                 AssemblerError::DbRepeatError("i", 3, ConstexprError::U8OutOfRange("i*100"))
             ),
             el(6, OutputError::ExpressionHasUnknownValue("i")),
+        ]
+    );
+}
+
+#[test]
+fn offsetof() -> Result<(), Box<dyn std::error::Error>> {
+    let c = assemble(
+        r##"
+.codebank $200..$300
+
+.struct Inner
+    byte    : u8
+    byte2   : u8
+    byte3   : u8
+.endstruct
+
+.struct Outer
+    w  : u16
+    i  : Inner
+    wa : [u16 : 3]
+    b  : u8
+.endstruct
+
+    .db offsetof(Inner, byte)
+    .db offsetof(Inner, byte2)
+    .db offsetof(Inner, byte3)
+
+    .db offsetof(Outer, w)
+    .db offsetof(Outer, i)
+    .db offsetof(Outer, wa)
+    .db offsetof(Outer, b)
+"##,
+    )?;
+
+    assert_eq!(
+        &c.output,
+        &[
+            0, 1, 2, // Inner
+            0, 2, 5, 11, // Outer
+        ]
+    );
+
+    Ok(())
+}
+
+#[test]
+fn offsetof_erorrs() {
+    let e = assemble(
+        r##"
+.codebank $200..$300
+
+.struct S
+    f : u8
+.endstruct
+
+    .db offsetof(S, f)
+
+    .db offsetof(S, u)
+    .db offsetof(U, f)
+    .db offsetof(S, f
+    .db offsetof(S,
+    .db offsetof(S)
+    .db offsetof(
+"##,
+    )
+    .err()
+    .unwrap();
+
+    let dbee = |line_no, expr, e| {
+        el(
+            line_no,
+            AssemblerError::DbError(0, ValueError::Error(expr, e)),
+        )
+    };
+
+    assert_eq!(
+        &e.errors(),
+        &[
+            dbee(
+                10,
+                "offsetof(S, u)",
+                ExpressionError::CannotFindOffsetofField
+            ),
+            dbee(
+                11,
+                "offsetof(U, f)",
+                ExpressionError::CannotFindOffsetofField
+            ),
+            dbee(12, "offsetof(S, f", ExpressionError::UnmatchedParenthesis),
+            dbee(13, "offsetof(S,", ExpressionError::UnmatchedParenthesis),
+            dbee(14, "offsetof(S)", ExpressionError::SyntaxError),
+            dbee(15, "offsetof(", ExpressionError::SyntaxError),
         ]
     );
 }

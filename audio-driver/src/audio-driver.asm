@@ -551,24 +551,25 @@ __EndZeropageClearAddr = nonShadow_sfx + 1
     ; Load song header into RAM.
     ; NOTE: If the song starts with a 0 byte, the song is blank and the header will be zeroed.
 
-    ; ::TODO add `offsetof` to spc700asm::
-
     ; Confirm `songHeader` will not be overridden by the zeropage clear
-    .assert __EndZeropageClearAddr <= _songHeader
+    .assert _songHeader > __EndZeropageClearAddr
+    .assert _activeMusicChannels > __EndZeropageClearAddr
     .assert _songHeader + SONG_HEADER_SIZE < SHARED_ZEROPAGE_ADDR
-    ; Assumes offsetof(SongHeader, echo) == 1
-    _songHeader = echo - 1 ; ::TODO replace with `offsetof(SongHeader, echo)::
-    _activeMusicChannels = _songHeader + 0 ; ::TODO replace with `offsetof(SongHeader, tickTimer)::
-    _songHeader_tickTimer = _songHeader + 14 ; ::TODO replace with `offsetof(SongHeader, tickTimer)::
-    _songHeader_nSubroutines = _songHeader + 15 ; ::TODO replace with `offsetof(SongHeader, nSubroutines)`::
 
-    mov Y, #0 ; ::TODO replace with `#offsetof(SongHeader, offset)`::
+    _songHeader = echo - offsetof(SongHeader, echo)
+    _activeMusicChannels = _songHeader + offsetof(SongHeader, activeMusicChannels)
+    _songHeader_tickTimer = _songHeader + offsetof(SongHeader, tickTimer)
+    _songHeader_nSubroutines = _songHeader + offsetof(SongHeader, nSubroutines)
+
+    .assert offsetof(SongHeader, activeMusicChannels) == 0
+    mov Y, #offsetof(SongHeader, activeMusicChannels)
     mov A, [songPtr] + Y
     mov _activeMusicChannels, A
 
     ; Copy SongHeader data to `_songHeader` if `_activeMusicChannels` is non-zero
     ; Otherwise, fill `_songHeader` with zeros.
-    mov Y, #1 ; ::TODO replace with `#offsetof(SongHeader, echo)`::
+    .assert offsetof(SongHeader, echo) == 1
+    mov Y, #offsetof(SongHeader, echo)
     EchoCopyLoop:
         mov A, _activeMusicChannels
         beq SkipHeaderByte
