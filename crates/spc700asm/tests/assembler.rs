@@ -1462,3 +1462,122 @@ firstpage_var = $0180;
 
     Ok(())
 }
+
+#[test]
+fn dbrepeat() -> Result<(), Box<dyn std::error::Error>> {
+    let c = assemble(
+        r##"
+.codebank $200..$300
+
+    .dbrepeat i in 0..10, i
+"##,
+    )?;
+    assert_eq!(c.output, &[0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
+
+    let c = assemble(
+        r##"
+.codebank $200..$300
+
+START = 0
+END = 5
+
+    .dbrepeat i in START..END, (i + 10) * 3
+"##,
+    )?;
+    assert_eq!(c.output, &[30, 33, 36, 39, 42]);
+
+    Ok(())
+}
+
+#[test]
+fn dbrepeat_error() {
+    let e = assemble(
+        r##"
+.codebank $200..$300
+
+    .dbrepeat
+    .dbrepeat i, i
+    .dbrepeat i in, i
+    .dbrepeat i in 1.., i
+    .dbrepeat i in ..10, i
+    .dbrepeat i in 0..10,
+    .dbrepeat B!A!D in 1..10, i
+    .dbrepeat i in UNKNOWN..UNKNOWN+1, i
+    .dbrepeat i in 10..1, i
+    .dbrepeat i in 0..10, UNKNOWN + i
+    .dbrepeat j in 0..10, 250 + j
+"##,
+    )
+    .err()
+    .unwrap();
+
+    assert_eq!(
+        e.errors(),
+        &[
+            el(4, FileParserError::InvalidDbrepeat),
+            el(5, FileParserError::InvalidDbrepeat),
+            el(6, FileParserError::InvalidDbrepeat),
+            el(7, FileParserError::InvalidDbrepeat),
+            el(8, FileParserError::InvalidDbrepeat),
+            el(9, FileParserError::InvalidDbrepeat),
+            el(10, AssemblerError::InvalidDbrepeatName("B!A!D")),
+            el(11, ConstexprError::UnknownValue("UNKNOWN")),
+            el(11, ConstexprError::UnknownValue("UNKNOWN+1")),
+            el(
+                12,
+                AssemblerError::InvalidDbrepeatRange { start: 10, end: 1 }
+            ),
+            el(
+                13,
+                AssemblerError::DbRepeatError("i", 0, ConstexprError::UnknownValue("UNKNOWN + i"))
+            ),
+            el(
+                14,
+                AssemblerError::DbRepeatError("j", 6, ConstexprError::U8OutOfRange("250 + j"))
+            ),
+        ]
+    );
+}
+
+#[test]
+fn dbrepeat_var_cleared_after_use() {
+    let e = assemble(
+        r##"
+.codebank $200..$300
+
+    .dbrepeat i in 1..10, i
+
+    .db i
+"##,
+    )
+    .err()
+    .unwrap();
+
+    assert_eq!(
+        e.errors(),
+        &[el(6, OutputError::ExpressionHasUnknownValue("i"))]
+    );
+
+    let e = assemble(
+        r##"
+.codebank $200..$300
+
+    .dbrepeat i in 0..100, i*100
+
+    .db i
+"##,
+    )
+    .err()
+    .unwrap();
+
+    assert_eq!(
+        e.errors(),
+        &[
+            el(
+                4,
+                AssemblerError::DbRepeatError("i", 3, ConstexprError::U8OutOfRange("i*100"))
+            ),
+            el(6, OutputError::ExpressionHasUnknownValue("i")),
+        ]
+    );
+}

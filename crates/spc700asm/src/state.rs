@@ -165,6 +165,9 @@ pub struct State<'s> {
     line_no: LineNo,
     pending_output: Vec<Pending<'s>>,
 
+    // only used in repeat statements
+    repeat_value: Option<(&'s str, i64)>,
+
     // only used in assert statements in `process_aserts()`
     assert_pc: Option<i64>,
     asserts: Vec<Assert<'s>>,
@@ -181,6 +184,7 @@ impl<'s> State<'s> {
             pc_base,
             line_no: LineNo(0, 0),
             pending_output: Vec::new(),
+            repeat_value: None,
             assert_pc: None,
             asserts: Vec::new(),
         }
@@ -213,6 +217,14 @@ impl<'s> State<'s> {
 
     fn override_scope(&mut self, scope: Option<&'s str>) {
         self.scope = scope;
+    }
+
+    pub fn set_repeat_value(&mut self, name: &'s str, value: i64) {
+        self.repeat_value = Some((name, value));
+    }
+
+    pub fn clear_repeat_value(&mut self) {
+        self.repeat_value = None;
     }
 
     pub fn take_scope(&mut self) -> OldScope<'s> {
@@ -294,6 +306,12 @@ impl<'s> State<'s> {
     pub fn get_symbol(&self, name: &str) -> Option<i64> {
         if name == "PC" {
             return self.assert_pc;
+        }
+
+        if let Some((r_name, r_value)) = self.repeat_value {
+            if name == r_name {
+                return Some(r_value);
+            }
         }
 
         match (self.scope, name.contains(".")) {
@@ -584,6 +602,7 @@ impl Clone for State<'_> {
             output: self.output.clone(),
             line_no: self.line_no,
             pending_output: self.pending_output.clone(),
+            repeat_value: self.repeat_value.clone(),
             assert_pc: self.assert_pc,
             asserts: self.asserts.clone(),
         }

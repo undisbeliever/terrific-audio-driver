@@ -284,6 +284,9 @@ pub enum ConstexprError<'a> {
     InvalidU16(&'a str, ExpressionError),
     U16OutOfRange(&'a str),
     U16NotANumber(&'a str),
+    InvalidU8(&'a str, ExpressionError),
+    U8OutOfRange(&'a str),
+    U8NotANumber(&'a str),
 }
 
 impl std::fmt::Display for ConstexprError<'_> {
@@ -296,6 +299,9 @@ impl std::fmt::Display for ConstexprError<'_> {
             ConstexprError::InvalidU16(expr, e) => write!(f, "invalid u16: {expr}: {e}"),
             ConstexprError::U16OutOfRange(expr) => write!(f, "u16 out of range: {expr}"),
             ConstexprError::U16NotANumber(expr) => write!(f, "u16 not a number: {expr}"),
+            ConstexprError::InvalidU8(expr, e) => write!(f, "invalid u8: {expr}: {e}"),
+            ConstexprError::U8OutOfRange(expr) => write!(f, "u8 out of range: {expr}"),
+            ConstexprError::U8NotANumber(expr) => write!(f, "u8 not a number: {expr}"),
         }
     }
 }
@@ -322,6 +328,15 @@ pub fn evaluate_constexpr_u16<'a>(expr: &'a str, state: &State) -> Result<u16, C
         ExpressionResult::Boolean(_) => Err(ConstexprError::U16NotANumber(expr)),
         ExpressionResult::Unknown => Err(ConstexprError::UnknownValue(expr)),
         ExpressionResult::Error(e) => Err(ConstexprError::InvalidU16(expr, e)),
+    }
+}
+
+pub fn evaluate_constexpr_u8<'a>(expr: &'a str, state: &State) -> Result<u8, ConstexprError<'a>> {
+    match evaluate(expr, state) {
+        ExpressionResult::Value(v) => v.try_into().map_err(|_| ConstexprError::U8OutOfRange(expr)),
+        ExpressionResult::Boolean(_) => Err(ConstexprError::U8NotANumber(expr)),
+        ExpressionResult::Unknown => Err(ConstexprError::UnknownValue(expr)),
+        ExpressionResult::Error(e) => Err(ConstexprError::InvalidU8(expr, e)),
     }
 }
 

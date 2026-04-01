@@ -5,14 +5,14 @@
 // SPDX-License-Identifier: MIT
 
 use crate::{
-    errors::{FileErrors, LineNo},
+    errors::{ConstexprError, FileErrors, LineNo},
     evaluator::{
-        evaluate, evaluate_constexpr_address, evaluate_constexpr_u16, evaluate_u16v, evaluate_u8v,
-        ExpressionError, ExpressionResult, ValueError,
+        evaluate, evaluate_constexpr_address, evaluate_constexpr_u16, evaluate_constexpr_u8,
+        evaluate_u16v, evaluate_u8v, ExpressionError, ExpressionResult, ValueError,
     },
     file_loader::{split_file_lines, split_str_lines, AsmFileWithIncludes, SplitLines},
     file_parser::{
-        parse_file, AsmLine, CodeBankStatement, FunctionTableDef, GlobalAsm, Procedure,
+        parse_file, AsmLine, CodeBankStatement, DbRepeat, FunctionTableDef, GlobalAsm, Procedure,
         StructSection, Var, VarBankStatement, VarLine, VarsSection,
     },
     instructions::process_instruction,
@@ -46,6 +46,10 @@ pub enum AssemblerError<'s> {
     DbError(usize, ValueError<'s>),
     DwError(usize, ValueError<'s>),
     FunctionTableError(ValueError<'s>),
+
+    InvalidDbrepeatName(&'s str),
+    InvalidDbrepeatRange { start: u16, end: u16 },
+    DbRepeatError(&'s str, u16, ConstexprError<'s>),
 
     InvalidStructName(&'s str),
     DuplicateStruct(&'s str),
@@ -111,6 +115,16 @@ impl std::fmt::Display for AssemblerError<'_> {
             AssemblerError::DbError(i, e) => write!(f, ".db {i}: {e}"),
             AssemblerError::DwError(i, e) => write!(f, ".dw {i}: {e}"),
             AssemblerError::FunctionTableError(e) => write!(f, "{e}"),
+            AssemblerError::InvalidDbrepeatName(n) => write!(f, "invalid .dbrepeat name: {n}"),
+            AssemblerError::InvalidDbrepeatRange {
+                start: from,
+                end: to,
+            } => {
+                write!(f, "invalid .dbrepeat range {from}..{to}")
+            }
+            AssemblerError::DbRepeatError(var, value, e) => {
+                write!(f, "{e} (.dbrepeat {var} == {value})")
+            }
             AssemblerError::InvalidStructName(name) => write!(f, "invalid struct name: {name}"),
             AssemblerError::DuplicateStruct(name) => write!(f, "duplicate .struct: {name}"),
             AssemblerError::InvalidFieldName(name) => write!(f, "invalid field name: {name}"),
@@ -649,6 +663,50 @@ fn process_inline<'s>(
     state.restore_scope(caller_scope);
 }
 
+fn process_db_repeat<'s>(
+    line_no: LineNo,
+    dbr: DbRepeat<'s>,
+    state: &mut State<'s>,
+    errors: &mut FileErrors<'s>,
+) {
+    let name_valid = is_symbol_name_valid(dbr.name);
+    let start = evaluate_constexpr_u16(dbr.start, state);
+    let end = evaluate_constexpr_u16(dbr.end, state);
+
+    match (name_valid, start, end) {
+        (true, Ok(start), Ok(end)) if start < end => {
+            for i in start..end {
+                state.set_repeat_value(dbr.name, i.into());
+
+                match evaluate_constexpr_u8(dbr.expr, state) {
+                    Ok(v) => state.write_u8(v),
+                    Err(e) => {
+                        errors.push(line_no, AssemblerError::DbRepeatError(dbr.name, i, e));
+                        break;
+                    }
+                }
+            }
+            state.clear_repeat_value();
+        }
+
+        (true, Ok(start), Ok(end)) => {
+            errors.push(line_no, AssemblerError::InvalidDbrepeatRange { start, end })
+        }
+
+        (name_valid, start, end) => {
+            if !name_valid {
+                errors.push(line_no, AssemblerError::InvalidDbrepeatName(dbr.name));
+            }
+            if let Err(e) = start {
+                errors.push(line_no, e);
+            }
+            if let Err(e) = end {
+                errors.push(line_no, e);
+            }
+        }
+    }
+}
+
 fn process_db<'s>(
     line_no: LineNo,
     arguments: &'s str,
@@ -711,6 +769,7 @@ fn process_asm_line<'s>(
         }
         AsmLine::Db(arguments) => process_db(line_no, arguments, state, errors),
         AsmLine::Dw(arguments) => process_dw(line_no, arguments, state, errors),
+        AsmLine::DbRepeat(dbr) => process_db_repeat(line_no, dbr, state, errors),
         AsmLine::SetDirectPage(p) => state.direct_page = p,
         AsmLine::Assert(expr) => state.add_assert(line_no, expr),
     }

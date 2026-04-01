@@ -8,7 +8,7 @@ use crate::{
     errors::{FileErrors, LineNo},
     file_loader::SplitLines,
     state::DirectPageFlag,
-    string::split_first_word,
+    string::{comma_iter, split_first_word},
 };
 
 pub struct CodeBankStatement<'a> {
@@ -51,12 +51,20 @@ pub struct VarsSection<'a> {
     pub lines: Vec<VarLine<'a>>,
 }
 
+pub struct DbRepeat<'a> {
+    pub name: &'a str,
+    pub start: &'a str,
+    pub end: &'a str,
+    pub expr: &'a str,
+}
+
 pub enum AsmLine<'a> {
     Constant { name: &'a str, expr: &'a str },
     Label(&'a str),
     Instruction(&'a str, &'a str),
     Db(&'a str),
     Dw(&'a str),
+    DbRepeat(DbRepeat<'a>),
     SetDirectPage(DirectPageFlag),
     Assert(&'a str),
 }
@@ -98,6 +106,7 @@ pub enum FileParserError<'a> {
     NoEndStruct,
     InvalidVarLine,
     NoEndVars,
+    InvalidDbrepeat,
     InvalidCommand(&'a str),
     NoEndProc,
     NoEndInline,
@@ -119,6 +128,10 @@ impl std::fmt::Display for FileParserError<'_> {
             FileParserError::NoEndStruct => write!(f, "no .endstruct"),
             FileParserError::InvalidVarLine => write!(f, "invalid variable syntax"),
             FileParserError::NoEndVars => write!(f, "no .endvars"),
+            FileParserError::InvalidDbrepeat => write!(
+                f,
+                "invalid .dbrepeat syntax (expected .dbrepeat <VAR> in <START>..<END>, <EXPRESSION>)"
+            ),
             FileParserError::InvalidCommand(c) => write!(f, "invalid command: {c}"),
             FileParserError::NoEndProc => write!(f, "no .endproc"),
             FileParserError::NoEndInline => write!(f, "no .endinline"),
@@ -276,6 +289,29 @@ fn parse_ftdef<'a>(
     out
 }
 
+fn parse_dbrepeat<'a>(line: &'a str) -> Result<DbRepeat<'a>, FileParserError<'static>> {
+    let mut it = comma_iter(line);
+    match (it.next(), it.next(), it.next()) {
+        (Some(var), Some(expr), None) => {
+            let (name, rem) = split_first_word(var);
+            let (in_word, range) = split_first_word(rem);
+            let (start, end) = range.split_once("..").unwrap_or_default();
+
+            if !name.is_empty() && in_word == "in" && !start.is_empty() && !end.is_empty() {
+                Ok(DbRepeat {
+                    name,
+                    start,
+                    end,
+                    expr,
+                })
+            } else {
+                Err(FileParserError::InvalidDbrepeat)
+            }
+        }
+        _ => Err(FileParserError::InvalidDbrepeat),
+    }
+}
+
 fn parse_asm_line_after_label<'a>(
     line_no: LineNo,
     first_word: &'a str,
@@ -286,6 +322,10 @@ fn parse_asm_line_after_label<'a>(
     match first_word {
         ".db" => f(line_no, AsmLine::Db(arguments)),
         ".dw" => f(line_no, AsmLine::Dw(arguments)),
+        ".dbrepeat" => match parse_dbrepeat(arguments) {
+            Ok(dbr) => f(line_no, AsmLine::DbRepeat(dbr)),
+            Err(e) => errors.push(line_no, e),
+        },
         ".p0" => f(line_no, AsmLine::SetDirectPage(DirectPageFlag::Zero)),
         ".p1" => f(line_no, AsmLine::SetDirectPage(DirectPageFlag::One)),
         ".assert" => f(line_no, AsmLine::Assert(arguments)),

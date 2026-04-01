@@ -4800,35 +4800,16 @@ LastVoiceRegister:
 
 ; Channel Stack Pointer Offsets
 BcStackIndexesEnd:
-    .db  0 * BC_CHANNEL_STACK_SIZE + BC_CHANNEL_STACK_OFFSET
+    .db  BC_CHANNEL_STACK_OFFSET
 BcStackIndexesStart:
-    ; ::TODO replace with `.repeatdb` statement::
-    .db  1 * BC_CHANNEL_STACK_SIZE + BC_CHANNEL_STACK_OFFSET
-    .db  2 * BC_CHANNEL_STACK_SIZE + BC_CHANNEL_STACK_OFFSET
-    .db  3 * BC_CHANNEL_STACK_SIZE + BC_CHANNEL_STACK_OFFSET
-    .db  4 * BC_CHANNEL_STACK_SIZE + BC_CHANNEL_STACK_OFFSET
-    .db  5 * BC_CHANNEL_STACK_SIZE + BC_CHANNEL_STACK_OFFSET
-    .db  6 * BC_CHANNEL_STACK_SIZE + BC_CHANNEL_STACK_OFFSET
-    .db  7 * BC_CHANNEL_STACK_SIZE + BC_CHANNEL_STACK_OFFSET
-    .db  8 * BC_CHANNEL_STACK_SIZE + BC_CHANNEL_STACK_OFFSET
-    .db  9 * BC_CHANNEL_STACK_SIZE + BC_CHANNEL_STACK_OFFSET
-    .db 10 * BC_CHANNEL_STACK_SIZE + BC_CHANNEL_STACK_OFFSET
+    .dbrepeat i in 0..N_CHANNELS, (i + 1) * BC_CHANNEL_STACK_SIZE + BC_CHANNEL_STACK_OFFSET
 .assert PC - BcStackIndexesStart == N_CHANNELS
+.assert BcStackIndexesEnd + 1 == BcStackIndexesStart
 
 
 ; Used to determine if `loopStackPointer` is valid.
 ; Equal to `BcStackIndexesStart[x] - 3 + 1` (+1 for < comparison)
 ValidLoopStackPointerTable:
-    ; ::TODO replace with .repeatdb statement::
-    .db (0 + 1) * BC_CHANNEL_STACK_SIZE + BC_CHANNEL_STACK_OFFSET - 3 + 1
-    .db (1 + 1) * BC_CHANNEL_STACK_SIZE + BC_CHANNEL_STACK_OFFSET - 3 + 1
-    .db (2 + 1) * BC_CHANNEL_STACK_SIZE + BC_CHANNEL_STACK_OFFSET - 3 + 1
-    .db (3 + 1) * BC_CHANNEL_STACK_SIZE + BC_CHANNEL_STACK_OFFSET - 3 + 1
-    .db (4 + 1) * BC_CHANNEL_STACK_SIZE + BC_CHANNEL_STACK_OFFSET - 3 + 1
-    .db (5 + 1) * BC_CHANNEL_STACK_SIZE + BC_CHANNEL_STACK_OFFSET - 3 + 1
-    .db (6 + 1) * BC_CHANNEL_STACK_SIZE + BC_CHANNEL_STACK_OFFSET - 3 + 1
-    .db (7 + 1) * BC_CHANNEL_STACK_SIZE + BC_CHANNEL_STACK_OFFSET - 3 + 1
-    .db (8 + 1) * BC_CHANNEL_STACK_SIZE + BC_CHANNEL_STACK_OFFSET - 3 + 1
-    .db (9 + 1) * BC_CHANNEL_STACK_SIZE + BC_CHANNEL_STACK_OFFSET - 3 + 1
+    .dbrepeat i in 0..N_CHANNELS, (i + 1) * BC_CHANNEL_STACK_SIZE + BC_CHANNEL_STACK_OFFSET - 3 + 1
 .assert PC - ValidLoopStackPointerTable == N_CHANNELS
 
