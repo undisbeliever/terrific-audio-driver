@@ -671,9 +671,9 @@ __EndZeropageClearAddr = nonShadow_sfx + 1
     movw DSPADDR, YA
 
     ; Set DSP directory table
-    .assert brrDirectory & $ff == 0
+    .assert lobyte(brrDirectory) == 0
     mov A, #DSP_DIR
-    mov Y, #brrDirectory >> 8
+    mov Y, #hibyte(brrDirectory)
     movw DSPADDR, YA
 
 
@@ -969,7 +969,7 @@ ClearEchoBufferEnd:
 .proc process_music_channels
     incw songTickCounter
 
-    .assert pendingNon_music >= $100
+    .assert page(pendingNon_music) != 0
     mov A, pendingNon_music
     mov nonShadow_music, A
 
@@ -1158,7 +1158,7 @@ ClearEchoBufferEnd:
     mov keyOffShadow_sfx, A
     mov volShadowDirty_sfx, A
 
-    .assert sfxMutedChannels >= $100
+    .assert page(sfxMutedChannels) != 0
     .assert zpTmp == process_channels._mutedChannels
     mov A, sfxMutedChannels
     mov zpTmp, A
@@ -1412,7 +1412,7 @@ _mutedChannels = zpTmp
             mov Y, channelSoA_countdownTimer_l + X
             bne NoCtHDec
                 ; A = countdownTimer_h
-                .assert channelSoA_countdownTimer_h >= $100
+                .assert page(channelSoA_countdownTimer_h) != 0
                 dec A
                 mov channelSoA_countdownTimer_h + X, A
             NoCtHDec:
@@ -2111,10 +2111,10 @@ _PlaySfx_Return = sfx__both_channels_active.Return
     setp
 .p1
     ; MUST NOT access zeropage variables until direct_page is false.
-    .assert channelSoA_pan >> 8 == 1
+    .assert inFirstpage(channelSoA_pan)
     mov channelSoA_pan + X, A
 
-    .assert channelSoA_volume >> 8 == 1
+    .assert inFirstpage(channelSoA_volume)
     mov A, #STARTING_VOLUME
     mov channelSoA_volume + X, A
 
@@ -2122,46 +2122,46 @@ _PlaySfx_Return = sfx__both_channels_active.Return
     mov A, #0
 
     ; Disable pan effects
-    .assert channelSoA_panEffect_direction >> 8 == 1
+    .assert inFirstpage(channelSoA_panEffect_direction)
     mov channelSoA_panEffect_direction + X, A
 
     ; Disable volume effects
-    .assert channelSoA_volEffect_direction >> 8 == 1
+    .assert inFirstpage(channelSoA_volEffect_direction)
     mov channelSoA_volEffect_direction + X, A
 
     ; Disable channel invert
-    .assert channelSoA_invertFlags >> 8 == 1
+    .assert inFirstpage(channelSoA_invertFlags)
     mov channelSoA_invertFlags + X, A
 
     ; Disable early-release
-    .assert channelSoA_earlyRelease_cmp >> 8 == 1
+    .assert inFirstpage(channelSoA_earlyRelease_cmp)
     mov channelSoA_earlyRelease_cmp + X, A
         ; No need to reset `earlyRelease_minTicks`,
         ; (Early release is not active if `earlyRelease_cmp == 0`)
 
     ; Reset detune
-    .assert channelSoA_detune_l >> 8 == 1
-    .assert channelSoA_detune_h >> 8 == 1
+    .assert inFirstpage(channelSoA_detune_l)
+    .assert inFirstpage(channelSoA_detune_h)
     mov channelSoA_detune_l + X, A
     mov channelSoA_detune_h + X, A
 
 
-    .assert channelSoA_transpose >= $100
+    .assert page(channelSoA_transpose) != 0
     mov channelSoA_transpose + X, A
 
     clrp
 .p0
 
     ; Disable temp-gain
-    .assert channelSoA_virtualChannels_tempGain >> 8 == 0
+    .assert inZeropage(channelSoA_virtualChannels_tempGain)
     mov channelSoA_virtualChannels_tempGain + X, A
 
     ; Disable portamento
-    .assert channelSoA_portamento_direction >> 8 == 0
+    .assert inZeropage(channelSoA_portamento_direction)
     mov channelSoA_portamento_direction + X, A
 
     ; Disable vibrato
-    .assert channelSoA_vibrato_pitchOffsetPerTick >> 8 == 0
+    .assert inZeropage(channelSoA_vibrato_pitchOffsetPerTick)
     mov channelSoA_vibrato_pitchOffsetPerTick + X, A
 
 
@@ -2346,7 +2346,7 @@ _PlaySfx_Return = sfx__both_channels_active.Return
 ;
 ; KEEP: X
 .inline update_vol_shadow
-    .assert channelSoA_volume >= $100
+    .assert page(channelSoA_volume) != 0
     mov A, channelSoA_volume + X
     mov Y, A
 
@@ -2823,7 +2823,7 @@ _target_h = zpTmp
 
     ; Reset early release min-tick counter.
     ; Y = 0
-    .assert channelSoA_ticksAfterNote >= $100
+    .assert page(channelSoA_ticksAfterNote) != 0
     mov A, Y
     mov channelSoA_ticksAfterNote + X, A
 
@@ -3901,7 +3901,7 @@ _subroutineId = zpTmp
     mov channelSoA_pan + X, A
 
     ; Disable pan effects
-    .assert channelSoA_panEffect_direction >= $100
+    .assert page(channelSoA_panEffect_direction) != 0
     ; Y = 0
     mov A, Y
     mov channelSoA_panEffect_direction + X, A
@@ -4005,7 +4005,7 @@ _subroutineId = zpTmp
 ; IN: Y = 0
 ; KEEP: X
 .proc bc__volume_slide_up
-    .assert channelSoA_volEffect_counter >> 8 == 1
+    .assert inFirstpage(channelSoA_volEffect_counter)
 
     setp
 .p1
@@ -4023,7 +4023,7 @@ _subroutineId = zpTmp
 ; KEEP: X
 .p0
 .proc bc__volume_slide_down
-    .assert channelSoA_volEffect_counter >> 8 == 1
+    .assert inFirstpage(channelSoA_volEffect_counter)
 
     setp
 .p1
@@ -4045,7 +4045,7 @@ _subroutineId = zpTmp
 ; KEEP: X
 .p1
 .proc __bc__volume_slide__dp_true__
-    .assert channelSoA_volEffect_direction >> 8 == 1
+    .assert inFirstpage(channelSoA_volEffect_direction)
 
     mov channelSoA_volEffect_direction + X, A
 
@@ -4065,8 +4065,8 @@ _subroutineId = zpTmp
 ; OUT: direct_page = false
 .p1
 .proc __bc__read_vol_effect_offset__dp_true__
-    .assert channelSoA_volEffect_halfWavelength >> 8 == 1
-    .assert channelSoA_subVolume >> 8 == 1
+    .assert inFirstpage(channelSoA_volEffect_halfWavelength)
+    .assert inFirstpage(channelSoA_subVolume)
 
     mov channelSoA_volEffect_halfWavelength + X, A
     mov channelSoA_subVolume + X, Y
@@ -4093,8 +4093,8 @@ _subroutineId = zpTmp
 ; IN: Y = 0
 ; KEEP: X
 .proc bc__tremolo
-    .assert channelSoA_volEffect_counter >> 8 == 1
-    .assert channelSoA_volEffect_direction >> 8 == 1
+    .assert inFirstpage(channelSoA_volEffect_counter)
+    .assert inFirstpage(channelSoA_volEffect_direction)
 
     setp
 .p1
@@ -4120,7 +4120,7 @@ _subroutineId = zpTmp
 ; IN: Y = 0
 ; KEEP: X
 .proc bc__pan_slide_up
-    .assert channelSoA_panEffect_counter >> 8 == 1
+    .assert inFirstpage(channelSoA_panEffect_counter)
 
     setp
 .p1
@@ -4139,7 +4139,7 @@ _subroutineId = zpTmp
 ; IN: Y = 0
 ; KEEP: X
 .proc bc__pan_slide_down
-    .assert channelSoA_panEffect_counter >> 8 == 1
+    .assert inFirstpage(channelSoA_panEffect_counter)
 
     setp
 .p1
@@ -4163,7 +4163,7 @@ _subroutineId = zpTmp
 ; KEEP: X
 .p1
 .proc __bc__pan_slide__dp_true__
-    .assert channelSoA_panEffect_direction >> 8 == 1
+    .assert inFirstpage(channelSoA_panEffect_direction)
 
     mov channelSoA_panEffect_direction + X, A
 
@@ -4184,8 +4184,8 @@ _subroutineId = zpTmp
 ; OUT: direct_page = false
 .p1
 .proc __bc__read_pan_effect_offset__dp_true__
-    .assert channelSoA_panEffect_halfWavelength >> 8 == 1
-    .assert channelSoA_subPan >> 8 == 1
+    .assert inFirstpage(channelSoA_panEffect_halfWavelength)
+    .assert inFirstpage(channelSoA_subPan)
 
     mov channelSoA_panEffect_halfWavelength + X, A
     mov channelSoA_subPan + X, Y
@@ -4212,8 +4212,8 @@ _subroutineId = zpTmp
 ; IN: Y = 0
 ; KEEP: X
 .proc bc__panbrello
-    .assert channelSoA_panEffect_counter >> 8 == 1
-    .assert channelSoA_panEffect_direction >> 8 == 1
+    .assert inFirstpage(channelSoA_panEffect_counter)
+    .assert inFirstpage(channelSoA_panEffect_direction)
 
     setp
 .p1

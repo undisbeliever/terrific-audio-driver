@@ -21,7 +21,11 @@
 //   <divmul-expression>         ::= <unary> [ ("*" | "/" | "%") <unary> ]*
 //   <unary>                     ::= ["+" | "-"] <value>
 //
-//   <value>                     ::= <decimal> | "$"<hexadecimal> | "%"<binary> | "true" | "false" | <symbol> | "(" <expression> ")"
+//   <value>                     ::= <decimal> | "$"<hexadecimal> | "%"<binary>
+//                                 | "true" | "false"
+//                                 | <symbol> |
+//                                 | <unary_value_function> "(" <expression> ")"
+//                                 | "(" <expression> ")"
 // ```
 //
 // Resources:
@@ -41,6 +45,7 @@ bitflags! {
         const InvalidDecimalLiteral = 1 << 2;
         const InvalidHexadecimalLiteral = 1 << 3;
         const InvalidBinaryLiteral= 1 << 4;
+        const NoParenthesisAfterFunction = 1 << 5;
 
         const Overflow = 1 << 10;
         const DivisionByZero = 1 << 11;
@@ -63,6 +68,7 @@ impl std::fmt::Display for ExpressionError {
                 ExpressionError::InvalidDecimalLiteral => "invalid decimal literal",
                 ExpressionError::InvalidHexadecimalLiteral => "invalid hexadecimal literal",
                 ExpressionError::InvalidBinaryLiteral => "invalid binary literal",
+                ExpressionError::NoParenthesisAfterFunction => "no ( after function name",
                 ExpressionError::Overflow => "overflow",
                 ExpressionError::DivisionByZero => "division by zero",
                 ExpressionError::BooleanInIntegerOperation => "boolean in integer operation",
@@ -553,6 +559,10 @@ fn unary(m: &mut Matcher) -> ExpressionResult {
     }
 }
 
+#[cfg(test)]
+pub const EVALUATOR_FUNCTIONS: [&'static str; 5] =
+    ["lobyte", "hibyte", "page", "inZeropage", "inFirstpage"];
+
 fn value(m: &mut Matcher) -> ExpressionResult {
     match m.next_byte() {
         b'0'..=b'9' => parse_decimal(m.take_symbol_name()),
@@ -569,6 +579,21 @@ fn value(m: &mut Matcher) -> ExpressionResult {
             "true" => ExpressionResult::Boolean(true),
             "false" => ExpressionResult::Boolean(false),
 
+            "lobyte" => {
+                unary_value_function(m, |v| ExpressionResult::Value(v.to_le_bytes()[0].into()))
+            }
+            "hibyte" => {
+                unary_value_function(m, |v| ExpressionResult::Value(v.to_le_bytes()[1].into()))
+            }
+            "page" => unary_value_function(m, |v| ExpressionResult::Value(v >> 8)),
+            "inZeropage" => unary_value_function(m, |v| {
+                ExpressionResult::Boolean((0x000..0x100).contains(&v))
+            }),
+            "inFirstpage" => unary_value_function(m, |v| {
+                ExpressionResult::Boolean((0x100..0x200).contains(&v))
+            }),
+            // `EXPRESSION_FUNCTIONS` list MUST BE updated when adding a new function
+            //
             sym => match m.state.get_symbol(sym) {
                 Some(v) => ExpressionResult::Value(v),
                 None => ExpressionResult::Unknown,
@@ -587,6 +612,26 @@ fn value(m: &mut Matcher) -> ExpressionResult {
         b')' => ExpressionResult::Error(ExpressionError::UnmatchedParenthesis),
 
         _ => ExpressionResult::Error(ExpressionError::SyntaxError),
+    }
+}
+
+fn unary_value_function(m: &mut Matcher, f: impl Fn(i64) -> ExpressionResult) -> ExpressionResult {
+    match m.matches("(") {
+        true => (),
+        false => return ExpressionResult::Error(ExpressionError::NoParenthesisAfterFunction),
+    }
+
+    let r = match expression(m) {
+        ExpressionResult::Value(v) => f(v),
+        ExpressionResult::Boolean(_) => {
+            ExpressionResult::Error(ExpressionError::BooleanInIntegerOperation)
+        }
+        r @ ExpressionResult::Unknown | r @ ExpressionResult::Error(_) => r,
+    };
+
+    match m.matches(")") {
+        true => r,
+        false => ExpressionResult::Error(ExpressionError::UnmatchedParenthesis),
     }
 }
 
@@ -657,7 +702,7 @@ fn parse_binary(s: &str) -> ExpressionResult {
 
 #[cfg(test)]
 mod tests {
-    use crate::state::State;
+    use crate::{evaluator::EVALUATOR_FUNCTIONS, state::State};
 
     use super::{evaluate, ExpressionError, ExpressionResult};
 
@@ -1103,5 +1148,114 @@ mod tests {
                 ExpressionError::InvalidHexadecimalLiteral | ExpressionError::SyntaxError
             )
         );
+    }
+
+    #[test]
+    fn lobyte() {
+        test_integer_expression!("lobyte($1234)", 0x34);
+        test_integer_expression!("lobyte($1200)", 0x00);
+
+        test_integer_expression!("lobyte(-1)", 0xff);
+        test_integer_expression!("lobyte(-128)", 0x80);
+
+        test_integer_expression!("lobyte(70 + 80 * 90)", (70 + 80 * 90) & 0xff);
+        test_integer_expression!("lobyte((70 + 80) * 90)", ((70 + 80) * 90) & 0xff);
+    }
+
+    #[test]
+    fn hibyte() {
+        test_integer_expression!("hibyte($1234)", 0x12);
+        test_integer_expression!("hibyte($1200)", 0x12);
+
+        test_integer_expression!("hibyte(-1)", 0xff);
+        test_integer_expression!("hibyte(-128)", 0xff);
+        test_integer_expression!("hibyte(-32768)", 0x80);
+
+        test_integer_expression!("hibyte($aabbcc)", 0xbb);
+        test_integer_expression!("hibyte($aabbccdd)", 0xcc);
+
+        test_integer_expression!("hibyte(99 + 8 * 700)", ((99 + 8 * 700) >> 8) & 0xff);
+        test_integer_expression!("hibyte((99 + 8) * 700)", (((99 + 8) * 700) >> 8) & 0xff);
+    }
+
+    #[test]
+    fn page() {
+        test_integer_expression!("page($1234)", 0x12);
+        test_integer_expression!("page($1200)", 0x12);
+
+        test_integer_expression!("page($aabbcc)", 0xaabb);
+        test_integer_expression!("page($aabbccdd)", 0xaabbcc);
+
+        test_integer_expression!("page(70 + 80 * 90)", (70 + 80 * 90) >> 8);
+        test_integer_expression!("page((70 + 80) * 90)", ((70 + 80) * 90) >> 8);
+    }
+
+    #[test]
+    fn in_zeropage() {
+        test_boolean_expression!("inZeropage(-1)", false);
+        test_boolean_expression!("inZeropage(0)", true);
+        test_boolean_expression!("inZeropage(255)", true);
+        test_boolean_expression!("inZeropage(256)", false);
+
+        test_boolean_expression!("inZeropage(1 + 2 + 3 + 4)", true);
+
+        test_boolean_expression!("inZeropage($1234)", false);
+        test_boolean_expression!("inZeropage($1200)", false);
+        test_boolean_expression!("inZeropage(4 * 200)", false);
+
+        test_boolean_expression!("inZeropage($aabbcc)", false);
+        test_boolean_expression!("inZeropage($aabbccdd)", false);
+
+        test_boolean_expression!("inZeropage($1200 + 100)", false);
+
+        test_boolean_expression!("inZeropage(11 + 12 * 13)", true);
+        test_boolean_expression!("inZeropage((11 + 12) * 13)", false);
+    }
+
+    #[test]
+    fn in_firstpage() {
+        test_boolean_expression!("inFirstpage(-1)", false);
+        test_boolean_expression!("inFirstpage(0)", false);
+        test_boolean_expression!("inFirstpage($ff)", false);
+        test_boolean_expression!("inFirstpage($100)", true);
+        test_boolean_expression!("inFirstpage($1ff)", true);
+        test_boolean_expression!("inFirstpage($200)", false);
+
+        test_boolean_expression!("inFirstpage(300 + 20 + 1)", true);
+        test_boolean_expression!("inFirstpage(1 + 2 + 3 + 4)", false);
+
+        test_boolean_expression!("inFirstpage($1234)", false);
+        test_boolean_expression!("inFirstpage($1200)", false);
+        test_boolean_expression!("inFirstpage(4 * 200)", false);
+
+        test_boolean_expression!("inFirstpage($aabbcc)", false);
+        test_boolean_expression!("inFirstpage($aabbccdd)", false);
+
+        test_boolean_expression!("inFirstpage(11 + 12 * 13)", false);
+        test_boolean_expression!("inFirstpage((11 + 12) * 13)", true);
+    }
+
+    #[test]
+    fn function_err() {
+        let state = State::new(0x200);
+
+        for f in EVALUATOR_FUNCTIONS {
+            assert_eq!(
+                evaluate(&format!("{f} 2"), &state),
+                ExpressionResult::Error(
+                    ExpressionError::SyntaxError | ExpressionError::NoParenthesisAfterFunction
+                )
+            );
+
+            assert_eq!(
+                evaluate(&format!("{f}(2"), &state),
+                ExpressionResult::Error(ExpressionError::UnmatchedParenthesis)
+            );
+
+            assert_eq!(
+                evaluate(&format!("{f}(true)"), &state),
+                ExpressionResult::Error(ExpressionError::BooleanInIntegerOperation)
+            );
+        }
     }
 }

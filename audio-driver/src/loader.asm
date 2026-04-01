@@ -90,16 +90,16 @@
         mov A, Y
         movw globalVolume_music, YA
 
-        mov A, #CODE_ADDR & $ff
-        mov Y, #CODE_ADDR >> 8
+        mov A, #lobyte(CODE_ADDR)
+        mov Y, #hibyte(CODE_ADDR)
 
         bra DtEndIf
 
     DtNotZero:
         bmi DtNegative
 
-        mov A, #COMMON_DATA_ADDR & $ff
-        mov Y, #COMMON_DATA_ADDR >> 8
+        mov A, #lobyte(COMMON_DATA_ADDR)
+        mov Y, #hibyte(COMMON_DATA_ADDR)
 
         bra DtEndIf
 
