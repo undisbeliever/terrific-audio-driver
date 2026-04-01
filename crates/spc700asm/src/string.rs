@@ -22,15 +22,18 @@ impl<'a> Iterator for CommaIter<'a> {
         if !s.is_empty() {
             let mut in_quote = false;
             let mut in_str = false;
+            let mut n_parenthesis = 0;
 
             for (i, c) in s.bytes().enumerate() {
                 match c {
-                    b',' if !in_quote && !in_str => {
+                    b',' if !in_quote && !in_str && n_parenthesis == 0 => {
                         self.0 = &s[i + 1..];
                         return Some(s[..i].trim_end());
                     }
                     b'\'' if !in_str => in_quote = !in_quote,
                     b'\"' if !in_quote => in_str = !in_str,
+                    b'(' if !in_str && !in_quote => n_parenthesis += 1,
+                    b')' if !in_str && !in_quote => n_parenthesis -= 1,
                     _ => (),
                 }
             }
@@ -92,6 +95,24 @@ mod tests {
         assert_eq!(it.next(), Some(r##"", two, three""##));
         assert_eq!(it.next(), Some("four"));
         assert_eq!(it.next(), Some("five"));
+        assert_eq!(it.next(), None);
+
+        let mut it = super::comma_iter(r##"1, func(2, 2), 3"##);
+        assert_eq!(it.next(), Some("1"));
+        assert_eq!(it.next(), Some("func(2, 2)"));
+        assert_eq!(it.next(), Some("3"));
+        assert_eq!(it.next(), None);
+
+        let mut it = super::comma_iter(r##"one, func(two, and, more"##);
+        assert_eq!(it.next(), Some("one"));
+        assert_eq!(it.next(), Some("func(two, and, more"));
+        assert_eq!(it.next(), None);
+
+        let mut it = super::comma_iter(r##"one, ", two, (", (three, and), four"##);
+        assert_eq!(it.next(), Some("one"));
+        assert_eq!(it.next(), Some(r##"", two, (""##));
+        assert_eq!(it.next(), Some("(three, and)"));
+        assert_eq!(it.next(), Some("four"));
         assert_eq!(it.next(), None);
     }
 
