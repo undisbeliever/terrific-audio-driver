@@ -555,6 +555,8 @@ __EndZeropageClearAddr = nonShadow_sfx + 1
     .assert _songHeader > __EndZeropageClearAddr
     .assert _activeMusicChannels > __EndZeropageClearAddr
     .assert _songHeader + SONG_HEADER_SIZE < SHARED_ZEROPAGE_ADDR
+    ; Confirm nSubroutines is the last field in the songHeader
+    .assert offsetof(SongHeader, nSubroutines) + 1 == SONG_HEADER_SIZE
 
     _songHeader = echo - offsetof(SongHeader, echo)
     _activeMusicChannels = _songHeader + offsetof(SongHeader, activeMusicChannels)
