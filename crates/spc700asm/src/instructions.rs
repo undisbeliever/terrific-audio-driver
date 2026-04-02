@@ -277,11 +277,10 @@ fn parse_dp_or_abs_address<'a>(
     match evaluate(s, symbols) {
         ExpressionResult::Value(value) => match u16::try_from(value) {
             Ok(addr) => {
-                if symbols.direct_page == DirectPageFlag::Zero && addr < 0x100 {
+                let dp = symbols.direct_page();
+                if dp == DirectPageFlag::Zero && addr < 0x100 {
                     Ok(DpOrAbs::Dp(u8::try_from(addr).unwrap()))
-                } else if symbols.direct_page == DirectPageFlag::One
-                    && (0x100..0x200).contains(&addr)
-                {
+                } else if dp == DirectPageFlag::One && (0x100..0x200).contains(&addr) {
                     Ok(DpOrAbs::Dp(u8::try_from(addr - 0x100).unwrap()))
                 } else {
                     Ok(DpOrAbs::Abs(U16Value::Known(addr)))
@@ -299,23 +298,18 @@ fn parse_dp_address<'a>(s: &'a str, symbols: &Symbols) -> Result<u8, AddressingM
     match evaluate(s, symbols) {
         ExpressionResult::Value(value) => match u16::try_from(value) {
             Ok(addr) => {
-                if symbols.direct_page == DirectPageFlag::Zero && addr < 0x100 {
+                let dp = symbols.direct_page();
+                if dp == DirectPageFlag::Zero && addr < 0x100 {
                     Ok(u8::try_from(addr).unwrap())
-                } else if symbols.direct_page == DirectPageFlag::One
-                    && (0x100..0x200).contains(&addr)
-                {
+                } else if dp == DirectPageFlag::One && (0x100..0x200).contains(&addr) {
                     Ok(u8::try_from(addr - 0x100).unwrap())
                 } else {
-                    Err(AddressingModeError::DpOutOfBounds(
-                        s,
-                        symbols.direct_page,
-                        value,
-                    ))
+                    Err(AddressingModeError::DpOutOfBounds(s, dp, value))
                 }
             }
             Err(_) => Err(AddressingModeError::DpOutOfBounds(
                 s,
-                symbols.direct_page,
+                symbols.direct_page(),
                 value,
             )),
         },
@@ -1393,7 +1387,7 @@ mod addressing_mode_tests {
     fn direct_page_set() {
         let symbols = {
             let mut s = Symbols::new();
-            s.direct_page = DirectPageFlag::One;
+            s.set_direct_page(DirectPageFlag::One);
             s
         };
 
@@ -1478,7 +1472,7 @@ mod addressing_mode_tests {
 
         let state1 = {
             let mut s = Symbols::new();
-            s.direct_page = DirectPageFlag::One;
+            s.set_direct_page(DirectPageFlag::One);
             s
         };
 
@@ -1559,7 +1553,7 @@ mod addressing_mode_tests {
     fn test_no_dp_addressing_modes_known_symbols() {
         let state0 = {
             let mut s = Symbols::new();
-            s.direct_page = DirectPageFlag::Zero;
+            s.set_direct_page(DirectPageFlag::Zero);
             s.add_symbol("s1", 0x80).unwrap();
             s.add_symbol("s2", 0x180).unwrap();
             s
@@ -1567,7 +1561,7 @@ mod addressing_mode_tests {
 
         let state1 = {
             let mut s = Symbols::new();
-            s.direct_page = DirectPageFlag::One;
+            s.set_direct_page(DirectPageFlag::One);
             s.add_symbol("s1", 0x80).unwrap();
             s.add_symbol("s2", 0x180).unwrap();
             s
@@ -1624,13 +1618,13 @@ mod addressing_mode_tests {
     fn test_no_dp_addressing_modes_unknown_symbols() {
         let state0 = {
             let mut s = Symbols::new();
-            s.direct_page = DirectPageFlag::Zero;
+            s.set_direct_page(DirectPageFlag::Zero);
             s
         };
 
         let state1 = {
             let mut s = Symbols::new();
-            s.direct_page = DirectPageFlag::One;
+            s.set_direct_page(DirectPageFlag::One);
             s
         };
 
@@ -2353,7 +2347,7 @@ mod instruction_tests {
     fn mov_dp_y_direct_page_clear() {
         let s = {
             let mut s = Symbols::new();
-            s.direct_page = DirectPageFlag::Zero;
+            s.set_direct_page(DirectPageFlag::Zero);
             s.add_symbol("dp", 0x080).unwrap();
             s
         };
@@ -2368,7 +2362,7 @@ mod instruction_tests {
     fn mov_dp_y_direct_page_set() {
         let s = {
             let mut s = Symbols::new();
-            s.direct_page = DirectPageFlag::One;
+            s.set_direct_page(DirectPageFlag::One);
             s.add_symbol("dp", 0x180).unwrap();
             s
         };
@@ -2383,7 +2377,7 @@ mod instruction_tests {
     fn alu_dp_y_direct_page_clear() {
         let s = {
             let mut s = Symbols::new();
-            s.direct_page = DirectPageFlag::Zero;
+            s.set_direct_page(DirectPageFlag::Zero);
             s.add_symbol("dp", 0x080).unwrap();
             s
         };
@@ -2402,7 +2396,7 @@ mod instruction_tests {
     fn alu_dp_y_direct_page_set() {
         let s = {
             let mut s = Symbols::new();
-            s.direct_page = DirectPageFlag::One;
+            s.set_direct_page(DirectPageFlag::One);
             s.add_symbol("dp", 0x180).unwrap();
             s
         };

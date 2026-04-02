@@ -788,7 +788,7 @@ fn process_asm_line<'s>(
         AsmLine::Db(arguments) => process_db(line_no, arguments, symbols, output, errors),
         AsmLine::Dw(arguments) => process_dw(line_no, arguments, symbols, output, errors),
         AsmLine::DbRepeat(dbr) => process_db_repeat(line_no, dbr, symbols, output, errors),
-        AsmLine::SetDirectPage(p) => symbols.direct_page = p,
+        AsmLine::SetDirectPage(p) => symbols.set_direct_page(p),
         AsmLine::Assert(expr) => output.add_assert(line_no, expr, symbols),
     }
 }

@@ -54,7 +54,7 @@ impl OldScope<'_> {
 }
 
 pub(crate) struct Symbols<'s> {
-    pub direct_page: DirectPageFlag,
+    direct_page: DirectPageFlag,
 
     scope: Option<&'s str>,
 
@@ -82,6 +82,14 @@ impl<'s> Symbols<'s> {
 
     pub fn take_symbols(self) -> HashMap<String, Option<i64>> {
         self.symbols
+    }
+
+    pub fn direct_page(&self) -> DirectPageFlag {
+        self.direct_page
+    }
+
+    pub fn set_direct_page(&mut self, flag: DirectPageFlag) {
+        self.direct_page = flag
     }
 
     pub fn set_repeat_value(&mut self, name: &'s str, value: i64) {
