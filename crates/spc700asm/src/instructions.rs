@@ -196,7 +196,6 @@ pub enum AddressingMode<'s> {
 }
 
 impl AddressingMode<'_> {
-    #[allow(dead_code)] // ::TODO remove::
     pub fn shorthand(&self) -> &'static str {
         match self {
             Self::A => "A",
@@ -399,7 +398,6 @@ fn parse_addressing_mode<'s>(
     }
 }
 
-#[allow(dead_code)] // ::TODO remove::
 fn parse_no_dp_addressing_mode<'s>(
     input: &'s str,
     symbols: &Symbols<'s>,
