@@ -261,7 +261,7 @@ fn process_constant<'s>(
 
 fn process_code_bank<'s>(
     cb: CodeBankStatement<'s>,
-    symbols: &Symbols,
+    symbols: &Symbols<'s>,
     errors: &mut FileErrors<'s>,
 ) -> Range<u16> {
     const ERROR_CODE_BANK: Range<u16> = 0x0200..0xffff;
@@ -289,7 +289,7 @@ fn process_code_bank<'s>(
 
 fn process_var_bank<'s>(
     b: VarBankStatement<'s>,
-    symbols: &Symbols,
+    symbols: &Symbols<'s>,
     var_banks: &mut Vec<VariableBank>,
     errors: &mut FileErrors<'s>,
 ) {
@@ -352,7 +352,7 @@ fn add_var_symbols<'s>(
     }
 }
 
-fn read_var_type<'s, 'a>(
+fn read_var_type<'a, 's>(
     line_no: LineNo,
     var_type: &'s str,
     types: &'a HashMap<&'s str, Type>,

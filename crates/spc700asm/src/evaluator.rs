@@ -109,14 +109,14 @@ pub enum ExpressionResult {
     Error(ExpressionError),
 }
 
-struct Matcher<'a, 'b> {
-    s: &'a str,
-    symbols: &'b Symbols<'b>,
+struct Matcher<'a, 's> {
+    s: &'s str,
+    symbols: &'a Symbols<'s>,
 }
 
-impl<'a> Matcher<'a, '_> {
-    fn new<'b>(s: &'a str, symbols: &'b Symbols) -> Matcher<'a, 'b> {
-        Matcher {
+impl<'a, 's> Matcher<'a, 's> {
+    fn new(s: &'s str, symbols: &'a Symbols<'s>) -> Self {
+        Self {
             s: s.trim_start(),
             symbols,
         }
@@ -165,7 +165,7 @@ impl<'a> Matcher<'a, '_> {
     }
 
     #[must_use]
-    fn take_symbol_name(&mut self) -> &'a str {
+    fn take_symbol_name(&mut self) -> &'s str {
         match self.s.bytes().position(|c| !is_identifier_character(c)) {
             Some(i) => {
                 let (p, s) = self.s.split_at(i);
@@ -284,17 +284,17 @@ fn comparison_operation(
 }
 
 #[derive(Debug, PartialEq)]
-pub enum ConstexprError<'a> {
-    UnknownValue(&'a str),
-    InvalidAddress(&'a str, ExpressionError),
-    AddressOutOfRange(&'a str),
-    AddressNotANumber(&'a str),
-    InvalidU16(&'a str, ExpressionError),
-    U16OutOfRange(&'a str),
-    U16NotANumber(&'a str),
-    InvalidU8(&'a str, ExpressionError),
-    U8OutOfRange(&'a str),
-    U8NotANumber(&'a str),
+pub enum ConstexprError<'s> {
+    UnknownValue(&'s str),
+    InvalidAddress(&'s str, ExpressionError),
+    AddressOutOfRange(&'s str),
+    AddressNotANumber(&'s str),
+    InvalidU16(&'s str, ExpressionError),
+    U16OutOfRange(&'s str),
+    U16NotANumber(&'s str),
+    InvalidU8(&'s str, ExpressionError),
+    U8OutOfRange(&'s str),
+    U8NotANumber(&'s str),
 }
 
 impl std::fmt::Display for ConstexprError<'_> {
@@ -314,10 +314,10 @@ impl std::fmt::Display for ConstexprError<'_> {
     }
 }
 
-pub fn evaluate_constexpr_address<'a>(
-    expr: &'a str,
-    symbols: &Symbols,
-) -> Result<u16, ConstexprError<'a>> {
+pub fn evaluate_constexpr_address<'s>(
+    expr: &'s str,
+    symbols: &Symbols<'s>,
+) -> Result<u16, ConstexprError<'s>> {
     match evaluate(expr, symbols) {
         ExpressionResult::Value(v) => v
             .try_into()
@@ -328,10 +328,10 @@ pub fn evaluate_constexpr_address<'a>(
     }
 }
 
-pub fn evaluate_constexpr_u16<'a>(
-    expr: &'a str,
-    symbols: &Symbols,
-) -> Result<u16, ConstexprError<'a>> {
+pub fn evaluate_constexpr_u16<'s>(
+    expr: &'s str,
+    symbols: &Symbols<'s>,
+) -> Result<u16, ConstexprError<'s>> {
     match evaluate(expr, symbols) {
         ExpressionResult::Value(v) => v
             .try_into()
@@ -342,10 +342,10 @@ pub fn evaluate_constexpr_u16<'a>(
     }
 }
 
-pub fn evaluate_constexpr_u8<'a>(
-    expr: &'a str,
-    symbols: &Symbols,
-) -> Result<u8, ConstexprError<'a>> {
+pub fn evaluate_constexpr_u8<'s>(
+    expr: &'s str,
+    symbols: &Symbols<'s>,
+) -> Result<u8, ConstexprError<'s>> {
     match evaluate(expr, symbols) {
         ExpressionResult::Value(v) => v.try_into().map_err(|_| ConstexprError::U8OutOfRange(expr)),
         ExpressionResult::Boolean(_) => Err(ConstexprError::U8NotANumber(expr)),
@@ -355,13 +355,14 @@ pub fn evaluate_constexpr_u8<'a>(
 }
 
 #[derive(Debug, PartialEq)]
-pub enum ValueError<'a> {
-    U8OutOfRange(&'a str, i64),
-    U8NotANumber(&'a str),
-    U16OutOfRange(&'a str, i64),
-    U16NotANumber(&'a str),
-    Error(&'a str, ExpressionError),
+pub enum ValueError<'s> {
+    U8OutOfRange(&'s str, i64),
+    U8NotANumber(&'s str),
+    U16OutOfRange(&'s str, i64),
+    U16NotANumber(&'s str),
+    Error(&'s str, ExpressionError),
 }
+
 impl std::fmt::Display for ValueError<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {

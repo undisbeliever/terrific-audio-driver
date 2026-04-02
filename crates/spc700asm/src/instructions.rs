@@ -12,14 +12,14 @@ use crate::{
 };
 
 #[derive(Debug, PartialEq)]
-pub enum AddressingModeError<'a> {
-    UnknownAddressingMode(&'a str),
-    ExpressionError(&'a str, ExpressionError),
-    NotANumber(&'a str),
-    DpAddressOutOfBounds(&'a str, i64),
-    AbsoluteAddressOutOfBounds(&'a str, i64),
-    DpOutOfBounds(&'a str, DirectPageFlag, i64),
-    UnknownDpValue(&'a str),
+pub enum AddressingModeError<'s> {
+    UnknownAddressingMode(&'s str),
+    ExpressionError(&'s str, ExpressionError),
+    NotANumber(&'s str),
+    DpAddressOutOfBounds(&'s str, i64),
+    AbsoluteAddressOutOfBounds(&'s str, i64),
+    DpOutOfBounds(&'s str, DirectPageFlag, i64),
+    UnknownDpValue(&'s str),
 }
 
 impl std::fmt::Display for AddressingModeError<'_> {
@@ -51,13 +51,13 @@ impl std::fmt::Display for AddressingModeError<'_> {
 }
 
 #[derive(Debug, PartialEq)]
-pub enum InstructionError<'a> {
-    AddressingModeError(AddressingModeError<'a>),
-    ExpressionError(&'a str, ExpressionError),
-    OutputError(OutputError<'a>),
+pub enum InstructionError<'s> {
+    AddressingModeError(AddressingModeError<'s>),
+    ExpressionError(&'s str, ExpressionError),
+    OutputError(OutputError<'s>),
 
-    UnknownInstruction(&'a str),
-    UnknownInstructionArguments(&'a str, String),
+    UnknownInstruction(&'s str),
+    UnknownInstructionArguments(&'s str, String),
     InvalidNumberOfArguments { expected: u8, got: usize },
     // bit must be known and `0..=7`
     InvalidBitInstructionBit,
@@ -86,22 +86,22 @@ impl std::fmt::Display for InstructionError<'_> {
     }
 }
 
-impl<'a> From<AddressingModeError<'a>> for InstructionError<'a> {
-    fn from(v: AddressingModeError<'a>) -> Self {
+impl<'s> From<AddressingModeError<'s>> for InstructionError<'s> {
+    fn from(v: AddressingModeError<'s>) -> Self {
         Self::AddressingModeError(v)
     }
 }
 
-impl<'a> From<OutputError<'a>> for InstructionError<'a> {
-    fn from(v: OutputError<'a>) -> Self {
+impl<'s> From<OutputError<'s>> for InstructionError<'s> {
+    fn from(v: OutputError<'s>) -> Self {
         Self::OutputError(v)
     }
 }
 
-fn unknown_instruction_args_err<'a>(
-    instruction: &'a str,
+fn unknown_instruction_args_err<'s>(
+    instruction: &'s str,
     modes: impl AddressingModeString,
-) -> Result<(), InstructionError<'a>> {
+) -> Result<(), InstructionError<'s>> {
     Err(InstructionError::UnknownInstructionArguments(
         instruction,
         AddressingModeString::stringify(modes),
@@ -161,7 +161,7 @@ fn invalid_n_argments_err(expected: u8, s: &str) -> InstructionError<'static> {
 }
 
 #[derive(Debug, PartialEq)]
-pub enum AddressingMode<'a> {
+pub enum AddressingMode<'s> {
     A,
     X,
     Y,
@@ -181,18 +181,18 @@ pub enum AddressingMode<'a> {
     DpIndirectX(u8),
     DpIndirectY(u8),
 
-    Abs(U16Value<'a>),
-    AbsX(U16Value<'a>),
-    AbsY(U16Value<'a>),
+    Abs(U16Value<'s>),
+    AbsX(U16Value<'s>),
+    AbsY(U16Value<'s>),
 
-    NotAbs(U16Value<'a>),
+    NotAbs(U16Value<'s>),
 
     // jmp
-    AbsIndirectX(U16Value<'a>),
+    AbsIndirectX(U16Value<'s>),
     // For completeness
-    AbsIndirectY(U16Value<'a>),
+    AbsIndirectY(U16Value<'s>),
 
-    Immediate(U8Value<'a>),
+    Immediate(U8Value<'s>),
 }
 
 impl AddressingMode<'_> {
@@ -234,10 +234,10 @@ impl AddressingMode<'_> {
     }
 }
 
-fn parse_immediate_value<'a>(
-    s: &'a str,
-    symbols: &Symbols<'a>,
-) -> Result<U8Value<'a>, AddressingModeError<'a>> {
+fn parse_immediate_value<'s>(
+    s: &'s str,
+    symbols: &Symbols<'s>,
+) -> Result<U8Value<'s>, AddressingModeError<'s>> {
     match evaluate(s, symbols) {
         ExpressionResult::Value(value) => match value.try_into() {
             Ok(v) => Ok(U8Value::Known(v)),
@@ -249,10 +249,10 @@ fn parse_immediate_value<'a>(
     }
 }
 
-fn parse_abs_address<'a>(
-    s: &'a str,
-    symbols: &Symbols<'a>,
-) -> Result<U16Value<'a>, AddressingModeError<'a>> {
+fn parse_abs_address<'s>(
+    s: &'s str,
+    symbols: &Symbols<'s>,
+) -> Result<U16Value<'s>, AddressingModeError<'s>> {
     match evaluate(s, symbols) {
         ExpressionResult::Value(value) => match value.try_into() {
             Ok(v) => Ok(U16Value::Known(v)),
@@ -265,15 +265,15 @@ fn parse_abs_address<'a>(
 }
 
 #[derive(Debug, PartialEq)]
-enum DpOrAbs<'a> {
+enum DpOrAbs<'s> {
     Dp(u8),
-    Abs(U16Value<'a>),
+    Abs(U16Value<'s>),
 }
 
-fn parse_dp_or_abs_address<'a>(
-    s: &'a str,
-    symbols: &Symbols<'a>,
-) -> Result<DpOrAbs<'a>, AddressingModeError<'a>> {
+fn parse_dp_or_abs_address<'s>(
+    s: &'s str,
+    symbols: &Symbols<'s>,
+) -> Result<DpOrAbs<'s>, AddressingModeError<'s>> {
     match evaluate(s, symbols) {
         ExpressionResult::Value(value) => match u16::try_from(value) {
             Ok(addr) => match (symbols.direct_page(), addr) {
@@ -295,7 +295,7 @@ fn parse_dp_or_abs_address<'a>(
     }
 }
 
-fn parse_dp_address<'a>(s: &'a str, symbols: &Symbols) -> Result<u8, AddressingModeError<'a>> {
+fn parse_dp_address<'s>(s: &'s str, symbols: &Symbols) -> Result<u8, AddressingModeError<'s>> {
     match evaluate(s, symbols) {
         ExpressionResult::Value(value) => match (symbols.direct_page(), value) {
             (DirectPageFlag::Zero, addr @ 0..0x100) => Ok(u8::try_from(addr).unwrap()),
@@ -325,7 +325,7 @@ fn strip_final_three_chars(s: &str) -> ([u8; 3], &str) {
     }
 }
 
-fn strip_plus_index_suffix<'a>(s: &'a str, register: &'static str) -> Option<&'a str> {
+fn strip_plus_index_suffix<'s>(s: &'s str, register: &'static str) -> Option<&'s str> {
     if s.ends_with(register) {
         let mut it = s
             .bytes()
@@ -344,10 +344,10 @@ fn strip_plus_index_suffix<'a>(s: &'a str, register: &'static str) -> Option<&'a
     }
 }
 
-fn parse_addressing_mode<'a>(
-    input: &'a str,
-    symbols: &Symbols<'a>,
-) -> Result<AddressingMode<'a>, AddressingModeError<'a>> {
+fn parse_addressing_mode<'s>(
+    input: &'s str,
+    symbols: &Symbols<'s>,
+) -> Result<AddressingMode<'s>, AddressingModeError<'s>> {
     match input {
         "A" => Ok(AddressingMode::A),
         "X" => Ok(AddressingMode::X),
@@ -400,10 +400,10 @@ fn parse_addressing_mode<'a>(
 }
 
 #[allow(dead_code)] // ::TODO remove::
-fn parse_no_dp_addressing_mode<'a>(
-    input: &'a str,
-    symbols: &Symbols<'a>,
-) -> Result<AddressingMode<'a>, AddressingModeError<'a>> {
+fn parse_no_dp_addressing_mode<'s>(
+    input: &'s str,
+    symbols: &Symbols<'s>,
+) -> Result<AddressingMode<'s>, AddressingModeError<'s>> {
     match input {
         "A" => Ok(AddressingMode::A),
         "X" => Ok(AddressingMode::X),
@@ -446,10 +446,10 @@ fn parse_no_dp_addressing_mode<'a>(
     }
 }
 
-fn parse_bit_argument<'a>(
-    s: &'a str,
+fn parse_bit_argument<'s>(
+    s: &'s str,
     symbols: &Symbols,
-) -> Result<BitArgument, InstructionError<'a>> {
+) -> Result<BitArgument, InstructionError<'s>> {
     match evaluate(s, symbols) {
         ExpressionResult::Value(bit) => {
             BitArgument::try_from(bit).map_err(|_| InstructionError::InvalidBitInstructionBit)
@@ -459,7 +459,7 @@ fn parse_bit_argument<'a>(
     }
 }
 
-fn split_one_argument<'a>(s: &'a str) -> Result<&'a str, InstructionError<'a>> {
+fn split_one_argument<'s>(s: &'s str) -> Result<&'s str, InstructionError<'s>> {
     let mut it = comma_iter(s);
 
     match (it.next(), it.next()) {
@@ -468,7 +468,7 @@ fn split_one_argument<'a>(s: &'a str) -> Result<&'a str, InstructionError<'a>> {
     }
 }
 
-fn split_two_arguments<'a>(s: &'a str) -> Result<[&'a str; 2], InstructionError<'a>> {
+fn split_two_arguments<'s>(s: &'s str) -> Result<[&'s str; 2], InstructionError<'s>> {
     let mut it = comma_iter(s);
 
     match (it.next(), it.next(), it.next()) {
@@ -477,7 +477,7 @@ fn split_two_arguments<'a>(s: &'a str) -> Result<[&'a str; 2], InstructionError<
     }
 }
 
-fn split_three_arguments<'a>(s: &'a str) -> Result<[&'a str; 3], InstructionError<'a>> {
+fn split_three_arguments<'s>(s: &'s str) -> Result<[&'s str; 3], InstructionError<'s>> {
     let mut it = comma_iter(s);
 
     match (it.next(), it.next(), it.next(), it.next()) {
@@ -486,28 +486,28 @@ fn split_three_arguments<'a>(s: &'a str) -> Result<[&'a str; 3], InstructionErro
     }
 }
 
-fn parse_one_argument<'a>(
-    s: &'a str,
-    symbols: &Symbols<'a>,
-) -> Result<AddressingMode<'a>, InstructionError<'a>> {
+fn parse_one_argument<'s>(
+    s: &'s str,
+    symbols: &Symbols<'s>,
+) -> Result<AddressingMode<'s>, InstructionError<'s>> {
     let arg = split_one_argument(s)?;
 
     Ok(parse_addressing_mode(arg, symbols)?)
 }
 
-fn parse_one_no_dp_argument<'a>(
-    s: &'a str,
-    symbols: &Symbols<'a>,
-) -> Result<AddressingMode<'a>, InstructionError<'a>> {
+fn parse_one_no_dp_argument<'s>(
+    s: &'s str,
+    symbols: &Symbols<'s>,
+) -> Result<AddressingMode<'s>, InstructionError<'s>> {
     let arg = split_one_argument(s)?;
 
     Ok(parse_no_dp_addressing_mode(arg, symbols)?)
 }
 
-fn parse_two_arguments<'a>(
-    s: &'a str,
-    symbols: &Symbols<'a>,
-) -> Result<[AddressingMode<'a>; 2], InstructionError<'a>> {
+fn parse_two_arguments<'s>(
+    s: &'s str,
+    symbols: &Symbols<'s>,
+) -> Result<[AddressingMode<'s>; 2], InstructionError<'s>> {
     let [a1, a2] = split_two_arguments(s)?;
     Ok([
         parse_addressing_mode(a1, symbols)?,
@@ -515,10 +515,10 @@ fn parse_two_arguments<'a>(
     ])
 }
 
-fn parse_two_no_dp_arguments<'a>(
-    s: &'a str,
-    symbols: &Symbols<'a>,
-) -> Result<[AddressingMode<'a>; 2], InstructionError<'a>> {
+fn parse_two_no_dp_arguments<'s>(
+    s: &'s str,
+    symbols: &Symbols<'s>,
+) -> Result<[AddressingMode<'s>; 2], InstructionError<'s>> {
     let [a1, a2] = split_two_arguments(s)?;
     Ok([
         parse_no_dp_addressing_mode(a1, symbols)?,
@@ -526,10 +526,10 @@ fn parse_two_no_dp_arguments<'a>(
     ])
 }
 
-fn parse_three_no_dp_arguments<'a>(
-    s: &'a str,
-    symbols: &Symbols<'a>,
-) -> Result<[AddressingMode<'a>; 3], InstructionError<'a>> {
+fn parse_three_no_dp_arguments<'s>(
+    s: &'s str,
+    symbols: &Symbols<'s>,
+) -> Result<[AddressingMode<'s>; 3], InstructionError<'s>> {
     let [a1, a2, a3] = split_three_arguments(s)?;
     Ok([
         parse_no_dp_addressing_mode(a1, symbols)?,
@@ -538,22 +538,22 @@ fn parse_three_no_dp_arguments<'a>(
     ])
 }
 
-fn parse_argument_and_rel<'a>(
-    s: &'a str,
-    symbols: &Symbols<'a>,
-) -> Result<(AddressingMode<'a>, &'a str), InstructionError<'a>> {
+fn parse_argument_and_rel<'s>(
+    s: &'s str,
+    symbols: &Symbols<'s>,
+) -> Result<(AddressingMode<'s>, &'s str), InstructionError<'s>> {
     let [a1, a2] = split_two_arguments(s)?;
 
     Ok((parse_addressing_mode(a1, symbols)?, a2))
 }
 
-fn arithmatic_instruction_impl<'a>(
-    instruction: &'a str,
-    arguments: [AddressingMode<'a>; 2],
+fn arithmatic_instruction_impl<'s>(
+    instruction: &'s str,
+    arguments: [AddressingMode<'s>; 2],
     opcode_base: u8,
-    symbols: &Symbols<'a>,
-    output: &mut Output<'a>,
-) -> Result<(), InstructionError<'a>> {
+    symbols: &Symbols<'s>,
+    output: &mut Output<'s>,
+) -> Result<(), InstructionError<'s>> {
     match arguments {
         [AddressingMode::A, AddressingMode::Immediate(i)] => {
             output.write_op_u8v(opcode_base | 0x08, i)
@@ -597,11 +597,11 @@ fn arithmatic_instruction_impl<'a>(
     Ok(())
 }
 
-fn no_argument_instruction<'a>(
-    arguments: &'a str,
+fn no_argument_instruction<'s>(
+    arguments: &'s str,
     opcode: u8,
-    output: &mut Output<'a>,
-) -> Result<(), InstructionError<'a>> {
+    output: &mut Output<'s>,
+) -> Result<(), InstructionError<'s>> {
     if arguments.is_empty() {
         output.write_u8(opcode);
         Ok(())
@@ -610,13 +610,13 @@ fn no_argument_instruction<'a>(
     }
 }
 
-fn only_a_instruction<'a>(
-    instruction: &'a str,
-    arguments: &'a str,
+fn only_a_instruction<'s>(
+    instruction: &'s str,
+    arguments: &'s str,
     opcode: u8,
-    symbols: &Symbols<'a>,
-    output: &mut Output<'a>,
-) -> Result<(), InstructionError<'a>> {
+    symbols: &Symbols<'s>,
+    output: &mut Output<'s>,
+) -> Result<(), InstructionError<'s>> {
     match parse_one_argument(arguments, symbols)? {
         AddressingMode::A => {
             output.write_u8(opcode);
@@ -626,13 +626,13 @@ fn only_a_instruction<'a>(
     }
 }
 
-fn only_ya_instruction<'a>(
-    instruction: &'a str,
-    arguments: &'a str,
+fn only_ya_instruction<'s>(
+    instruction: &'s str,
+    arguments: &'s str,
     opcode: u8,
-    symbols: &Symbols<'a>,
-    output: &mut Output<'a>,
-) -> Result<(), InstructionError<'a>> {
+    symbols: &Symbols<'s>,
+    output: &mut Output<'s>,
+) -> Result<(), InstructionError<'s>> {
     match parse_one_argument(arguments, symbols)? {
         AddressingMode::Ya => {
             output.write_u8(opcode);
@@ -642,13 +642,13 @@ fn only_ya_instruction<'a>(
     }
 }
 
-fn only_dp_instruction<'a>(
-    instruction: &'a str,
-    arguments: &'a str,
+fn only_dp_instruction<'s>(
+    instruction: &'s str,
+    arguments: &'s str,
     opcode: u8,
-    symbols: &Symbols<'a>,
-    output: &mut Output<'a>,
-) -> Result<(), InstructionError<'a>> {
+    symbols: &Symbols<'s>,
+    output: &mut Output<'s>,
+) -> Result<(), InstructionError<'s>> {
     match parse_one_argument(arguments, symbols)? {
         AddressingMode::Dp(dp) => {
             output.write_op_u8(opcode, dp);
@@ -658,13 +658,13 @@ fn only_dp_instruction<'a>(
     }
 }
 
-fn only_abs_instruction<'a>(
-    instruction: &'a str,
-    arguments: &'a str,
+fn only_abs_instruction<'s>(
+    instruction: &'s str,
+    arguments: &'s str,
     opcode: u8,
-    symbols: &Symbols<'a>,
-    output: &mut Output<'a>,
-) -> Result<(), InstructionError<'a>> {
+    symbols: &Symbols<'s>,
+    output: &mut Output<'s>,
+) -> Result<(), InstructionError<'s>> {
     match parse_one_no_dp_argument(arguments, symbols)? {
         AddressingMode::Abs(abs) => {
             output.write_op_u16v(opcode, abs);
@@ -674,13 +674,13 @@ fn only_abs_instruction<'a>(
     }
 }
 
-fn ya_dp_instruction<'a>(
-    instruction: &'a str,
-    arguments: &'a str,
+fn ya_dp_instruction<'s>(
+    instruction: &'s str,
+    arguments: &'s str,
     opcode: u8,
-    symbols: &Symbols<'a>,
-    output: &mut Output<'a>,
-) -> Result<(), InstructionError<'a>> {
+    symbols: &Symbols<'s>,
+    output: &mut Output<'s>,
+) -> Result<(), InstructionError<'s>> {
     match parse_two_arguments(arguments, symbols)? {
         [AddressingMode::Ya, AddressingMode::Dp(a)] => {
             output.write_op_u8(opcode, a);
@@ -690,13 +690,13 @@ fn ya_dp_instruction<'a>(
     }
 }
 
-fn arithmatic_instruction<'a>(
-    instruction: &'a str,
-    arguments: &'a str,
+fn arithmatic_instruction<'s>(
+    instruction: &'s str,
+    arguments: &'s str,
     opcode_base: u8,
-    symbols: &Symbols<'a>,
-    output: &mut Output<'a>,
-) -> Result<(), InstructionError<'a>> {
+    symbols: &Symbols<'s>,
+    output: &mut Output<'s>,
+) -> Result<(), InstructionError<'s>> {
     arithmatic_instruction_impl(
         instruction,
         parse_two_arguments(arguments, symbols)?,
@@ -706,13 +706,13 @@ fn arithmatic_instruction<'a>(
     )
 }
 
-fn inc_dec_instruction<'a>(
-    instruction: &'a str,
-    arguments: &'a str,
+fn inc_dec_instruction<'s>(
+    instruction: &'s str,
+    arguments: &'s str,
     opcode_base: u8,
-    symbols: &Symbols<'a>,
-    output: &mut Output<'a>,
-) -> Result<(), InstructionError<'a>> {
+    symbols: &Symbols<'s>,
+    output: &mut Output<'s>,
+) -> Result<(), InstructionError<'s>> {
     match parse_one_argument(arguments, symbols)? {
         AddressingMode::A => output.write_u8(opcode_base + 0x9c),
         AddressingMode::Dp(a) => output.write_op_u8(opcode_base + 0x8b, a),
@@ -727,13 +727,13 @@ fn inc_dec_instruction<'a>(
     Ok(())
 }
 
-fn rmw_instruction<'a>(
-    instruction: &'a str,
-    arguments: &'a str,
+fn rmw_instruction<'s>(
+    instruction: &'s str,
+    arguments: &'s str,
     opcode_base: u8,
-    symbols: &Symbols<'a>,
-    output: &mut Output<'a>,
-) -> Result<(), InstructionError<'a>> {
+    symbols: &Symbols<'s>,
+    output: &mut Output<'s>,
+) -> Result<(), InstructionError<'s>> {
     match parse_one_argument(arguments, symbols)? {
         AddressingMode::A => output.write_u8(opcode_base | 0x1c),
         AddressingMode::Dp(a) => output.write_op_u8(opcode_base | 0x0b, a),
@@ -746,25 +746,25 @@ fn rmw_instruction<'a>(
     Ok(())
 }
 
-fn branch_instruction<'a>(
-    arguments: &'a str,
+fn branch_instruction<'s>(
+    arguments: &'s str,
     opcode: u8,
-    symbols: &Symbols<'a>,
-    output: &mut Output<'a>,
-) -> Result<(), InstructionError<'a>> {
+    symbols: &Symbols<'s>,
+    output: &mut Output<'s>,
+) -> Result<(), InstructionError<'s>> {
     let rel = split_one_argument(arguments)?;
     output.write_u8(opcode);
     output.write_relative_goto(rel, symbols);
     Ok(())
 }
 
-fn branch_bit_instruction<'a>(
-    instruction: &'a str,
-    arguments: &'a str,
+fn branch_bit_instruction<'s>(
+    instruction: &'s str,
+    arguments: &'s str,
     opcode_base: u8,
-    symbols: &Symbols<'a>,
-    output: &mut Output<'a>,
-) -> Result<(), InstructionError<'a>> {
+    symbols: &Symbols<'s>,
+    output: &mut Output<'s>,
+) -> Result<(), InstructionError<'s>> {
     let [addr, bit, rel] = split_three_arguments(arguments)?;
 
     let am = parse_addressing_mode(addr, symbols)?;
@@ -782,11 +782,11 @@ fn branch_bit_instruction<'a>(
     }
 }
 
-fn pcall_instruction<'a>(
-    arguments: &'a str,
-    symbols: &Symbols<'a>,
-    output: &mut Output<'a>,
-) -> Result<(), InstructionError<'a>> {
+fn pcall_instruction<'s>(
+    arguments: &'s str,
+    symbols: &Symbols<'s>,
+    output: &mut Output<'s>,
+) -> Result<(), InstructionError<'s>> {
     let addr = split_one_argument(arguments)?;
 
     output.write_u8(0x4f);
@@ -794,11 +794,11 @@ fn pcall_instruction<'a>(
     Ok(())
 }
 
-fn tcall_instruction<'a>(
-    arguments: &'a str,
-    symbols: &Symbols<'a>,
-    output: &mut Output<'a>,
-) -> Result<(), InstructionError<'a>> {
+fn tcall_instruction<'s>(
+    arguments: &'s str,
+    symbols: &Symbols<'s>,
+    output: &mut Output<'s>,
+) -> Result<(), InstructionError<'s>> {
     let addr = split_one_argument(arguments)?;
 
     match evaluate(addr, symbols) {
@@ -811,13 +811,13 @@ fn tcall_instruction<'a>(
     }
 }
 
-fn stack_instruction<'a>(
-    instruction: &'a str,
-    arguments: &'a str,
+fn stack_instruction<'s>(
+    instruction: &'s str,
+    arguments: &'s str,
     opcode_base: u8,
-    symbols: &Symbols<'a>,
-    output: &mut Output<'a>,
-) -> Result<(), InstructionError<'a>> {
+    symbols: &Symbols<'s>,
+    output: &mut Output<'s>,
+) -> Result<(), InstructionError<'s>> {
     match parse_one_argument(arguments, symbols)? {
         AddressingMode::A => {
             output.write_u8(opcode_base + 0x20);
@@ -839,13 +839,13 @@ fn stack_instruction<'a>(
     }
 }
 
-fn dp_bit_instruction<'a>(
-    instruction: &'a str,
-    arguments: &'a str,
+fn dp_bit_instruction<'s>(
+    instruction: &'s str,
+    arguments: &'s str,
     opcode_base: u8,
-    symbols: &Symbols<'a>,
-    output: &mut Output<'a>,
-) -> Result<(), InstructionError<'a>> {
+    symbols: &Symbols<'s>,
+    output: &mut Output<'s>,
+) -> Result<(), InstructionError<'s>> {
     let [addr, bit] = split_two_arguments(arguments)?;
 
     let am = parse_addressing_mode(addr, symbols)?;
@@ -862,13 +862,13 @@ fn dp_bit_instruction<'a>(
     }
 }
 
-fn abs_bit_instruction<'a>(
-    instruction: &'a str,
-    arguments: &'a str,
+fn abs_bit_instruction<'s>(
+    instruction: &'s str,
+    arguments: &'s str,
     opcode: u8,
-    symbols: &Symbols<'a>,
-    output: &mut Output<'a>,
-) -> Result<(), InstructionError<'a>> {
+    symbols: &Symbols<'s>,
+    output: &mut Output<'s>,
+) -> Result<(), InstructionError<'s>> {
     match parse_two_no_dp_arguments(arguments, symbols)? {
         [AddressingMode::Abs(abs), bit] => {
             let bit = bit.try_into_bit_argument()?;
@@ -880,13 +880,13 @@ fn abs_bit_instruction<'a>(
     }
 }
 
-fn abs_or_not_abs_bit_instruction<'a>(
-    instruction: &'a str,
-    arguments: &'a str,
+fn abs_or_not_abs_bit_instruction<'s>(
+    instruction: &'s str,
+    arguments: &'s str,
     opcode_base: u8,
-    symbols: &Symbols<'a>,
-    output: &mut Output<'a>,
-) -> Result<(), InstructionError<'a>> {
+    symbols: &Symbols<'s>,
+    output: &mut Output<'s>,
+) -> Result<(), InstructionError<'s>> {
     match parse_three_no_dp_arguments(arguments, symbols)? {
         [AddressingMode::C, AddressingMode::Abs(abs), bit] => {
             let bit = bit.try_into_bit_argument()?;
@@ -904,13 +904,13 @@ fn abs_or_not_abs_bit_instruction<'a>(
     }
 }
 
-fn carry_abs_bit_instruction<'a>(
-    instruction: &'a str,
-    arguments: &'a str,
+fn carry_abs_bit_instruction<'s>(
+    instruction: &'s str,
+    arguments: &'s str,
     opcode: u8,
-    symbols: &Symbols<'a>,
-    output: &mut Output<'a>,
-) -> Result<(), InstructionError<'a>> {
+    symbols: &Symbols<'s>,
+    output: &mut Output<'s>,
+) -> Result<(), InstructionError<'s>> {
     match parse_three_no_dp_arguments(arguments, symbols)? {
         [AddressingMode::C, AddressingMode::Abs(abs), bit] => {
             let bit = bit.try_into_bit_argument()?;
@@ -922,12 +922,12 @@ fn carry_abs_bit_instruction<'a>(
     }
 }
 
-pub fn process_instruction<'a>(
-    instruction: &'a str,
-    arguments: &'a str,
-    symbols: &Symbols<'a>,
-    output: &mut Output<'a>,
-) -> Result<(), InstructionError<'a>> {
+pub fn process_instruction<'s>(
+    instruction: &'s str,
+    arguments: &'s str,
+    symbols: &Symbols<'s>,
+    output: &mut Output<'s>,
+) -> Result<(), InstructionError<'s>> {
     match instruction {
         "or" => arithmatic_instruction(instruction, arguments, 0x00, symbols, output),
         "and" => arithmatic_instruction(instruction, arguments, 0x20, symbols, output),
@@ -1679,11 +1679,11 @@ mod instruction_tests {
     };
     use std::panic::Location;
 
-    pub fn process_line<'a>(
-        line: &'a str,
-        symbols: &Symbols<'a>,
-        output: &mut Output<'a>,
-    ) -> Result<(), InstructionError<'a>> {
+    pub fn process_line<'s>(
+        line: &'s str,
+        symbols: &Symbols<'s>,
+        output: &mut Output<'s>,
+    ) -> Result<(), InstructionError<'s>> {
         let (instruction, arguments) = split_first_word(line);
         super::process_instruction(instruction, arguments, symbols, output)
     }

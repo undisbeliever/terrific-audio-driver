@@ -11,95 +11,95 @@ use crate::{
     symbols::DirectPageFlag,
 };
 
-pub struct CodeBankStatement<'a> {
+pub struct CodeBankStatement<'s> {
     pub line_no: LineNo,
-    pub start_expr: &'a str,
-    pub end_expr: &'a str,
+    pub start_expr: &'s str,
+    pub end_expr: &'s str,
 }
 
-pub struct VarBankStatement<'a> {
+pub struct VarBankStatement<'s> {
     pub line_no: LineNo,
-    pub name: &'a str,
-    pub start_expr: &'a str,
-    pub end_expr: &'a str,
+    pub name: &'s str,
+    pub start_expr: &'s str,
+    pub end_expr: &'s str,
 }
 
-pub struct Var<'a> {
+pub struct Var<'s> {
     pub line_no: LineNo,
-    pub name: &'a str,
-    pub var_type: &'a str,
+    pub name: &'s str,
+    pub var_type: &'s str,
 }
 
-pub struct StructSection<'a> {
+pub struct StructSection<'s> {
     pub line_no: LineNo,
-    pub name: &'a str,
-    pub fields: Vec<Var<'a>>,
+    pub name: &'s str,
+    pub fields: Vec<Var<'s>>,
 }
 
-pub enum VarLine<'a> {
-    Variable(Var<'a>),
+pub enum VarLine<'s> {
+    Variable(Var<'s>),
     Constant {
         line_no: LineNo,
-        name: &'a str,
-        expr: &'a str,
+        name: &'s str,
+        expr: &'s str,
     },
 }
 
-pub struct VarsSection<'a> {
+pub struct VarsSection<'s> {
     pub line_no: LineNo,
-    pub bank: &'a str,
-    pub lines: Vec<VarLine<'a>>,
+    pub bank: &'s str,
+    pub lines: Vec<VarLine<'s>>,
 }
 
-pub struct DbRepeat<'a> {
-    pub name: &'a str,
-    pub start: &'a str,
-    pub end: &'a str,
-    pub expr: &'a str,
+pub struct DbRepeat<'s> {
+    pub name: &'s str,
+    pub start: &'s str,
+    pub end: &'s str,
+    pub expr: &'s str,
 }
 
-pub enum AsmLine<'a> {
-    Constant { name: &'a str, expr: &'a str },
-    Label(&'a str),
-    Instruction(&'a str, &'a str),
-    Db(&'a str),
-    Dw(&'a str),
-    DbRepeat(DbRepeat<'a>),
+pub enum AsmLine<'s> {
+    Constant { name: &'s str, expr: &'s str },
+    Label(&'s str),
+    Instruction(&'s str, &'s str),
+    Db(&'s str),
+    Dw(&'s str),
+    DbRepeat(DbRepeat<'s>),
     SetDirectPage(DirectPageFlag),
-    Assert(&'a str),
+    Assert(&'s str),
 }
 
-pub struct Procedure<'a> {
+pub struct Procedure<'s> {
     pub line_no: LineNo,
     pub end_line_no: LineNo,
-    pub name: &'a str,
-    pub lines: Vec<(LineNo, AsmLine<'a>)>,
+    pub name: &'s str,
+    pub lines: Vec<(LineNo, AsmLine<'s>)>,
 }
 
-pub struct FunctionTableDef<'a> {
+pub struct FunctionTableDef<'s> {
     pub line_no: LineNo,
-    pub name: &'a str,
-    pub functions: Vec<(LineNo, &'a str)>,
+    pub name: &'s str,
+    pub functions: Vec<(LineNo, &'s str)>,
 }
 
-pub enum GlobalAsm<'a> {
-    CodeBank(CodeBankStatement<'a>),
-    VarBank(VarBankStatement<'a>),
-    Struct(StructSection<'a>),
-    Vars(VarsSection<'a>),
-    FunctionTableDef(FunctionTableDef<'a>),
-    FunctionTable(LineNo, &'a str),
-    Procedure(Procedure<'a>),
-    AsmLine(LineNo, AsmLine<'a>),
+pub enum GlobalAsm<'s> {
+    CodeBank(CodeBankStatement<'s>),
+    VarBank(VarBankStatement<'s>),
+    Struct(StructSection<'s>),
+    Vars(VarsSection<'s>),
+    FunctionTableDef(FunctionTableDef<'s>),
+    FunctionTable(LineNo, &'s str),
+    Procedure(Procedure<'s>),
+    AsmLine(LineNo, AsmLine<'s>),
 }
 
-pub struct AsmFile<'a> {
-    pub inlines: Vec<Procedure<'a>>,
-    pub assembly: Vec<GlobalAsm<'a>>,
+pub struct AsmFile<'s> {
+    pub inlines: Vec<Procedure<'s>>,
+    pub assembly: Vec<GlobalAsm<'s>>,
 }
 
 #[derive(Debug, PartialEq)]
-pub enum FileParserError<'a> {
+pub enum FileParserError<'s> {
     InvalidCodeBankSyntax,
     InvalidBankSyntax,
     InvalidStructField,
@@ -107,7 +107,7 @@ pub enum FileParserError<'a> {
     InvalidVarLine,
     NoEndVars,
     InvalidDbrepeat,
-    InvalidCommand(&'a str),
+    InvalidCommand(&'s str),
     NoEndProc,
     NoEndInline,
     EndInlineInProc,
@@ -148,10 +148,10 @@ impl std::fmt::Display for FileParserError<'_> {
     }
 }
 
-fn parse_code_bank<'a>(
+fn parse_code_bank<'s>(
     line_no: LineNo,
-    args: &'a str,
-) -> Result<CodeBankStatement<'a>, FileParserError<'a>> {
+    args: &'s str,
+) -> Result<CodeBankStatement<'s>, FileParserError<'s>> {
     match args.split_once("..") {
         Some((start_expr, end_expr)) if !start_expr.is_empty() && !end_expr.is_empty() => {
             Ok(CodeBankStatement {
@@ -164,10 +164,10 @@ fn parse_code_bank<'a>(
     }
 }
 
-fn parse_var_bank<'a>(
+fn parse_var_bank<'s>(
     line_no: LineNo,
-    args: &'a str,
-) -> Result<VarBankStatement<'a>, FileParserError<'a>> {
+    args: &'s str,
+) -> Result<VarBankStatement<'s>, FileParserError<'s>> {
     let (name, range) = split_first_word(args);
 
     match range.split_once("..") {
@@ -183,12 +183,12 @@ fn parse_var_bank<'a>(
     }
 }
 
-fn parse_struct<'a>(
+fn parse_struct<'s>(
     var_line_no: LineNo,
-    var_bank: &'a str,
-    it: &mut impl Iterator<Item = (LineNo, &'a str)>,
-    errors: &mut FileErrors<'a>,
-) -> StructSection<'a> {
+    var_bank: &'s str,
+    it: &mut impl Iterator<Item = (LineNo, &'s str)>,
+    errors: &mut FileErrors<'s>,
+) -> StructSection<'s> {
     let mut out = StructSection {
         line_no: var_line_no,
         name: var_bank,
@@ -216,7 +216,7 @@ fn parse_struct<'a>(
     out
 }
 
-fn parse_var_line<'a>(line_no: LineNo, line: &'a str) -> Result<VarLine<'a>, FileParserError<'a>> {
+fn parse_var_line<'s>(line_no: LineNo, line: &'s str) -> Result<VarLine<'s>, FileParserError<'s>> {
     if let Some((name, var_type)) = line.split_once(':') {
         Ok(VarLine::Variable(Var {
             line_no,
@@ -234,12 +234,12 @@ fn parse_var_line<'a>(line_no: LineNo, line: &'a str) -> Result<VarLine<'a>, Fil
     }
 }
 
-fn parse_vars<'a>(
+fn parse_vars<'s>(
     var_line_no: LineNo,
-    var_bank: &'a str,
-    it: &mut impl Iterator<Item = (LineNo, &'a str)>,
-    errors: &mut FileErrors<'a>,
-) -> VarsSection<'a> {
+    var_bank: &'s str,
+    it: &mut impl Iterator<Item = (LineNo, &'s str)>,
+    errors: &mut FileErrors<'s>,
+) -> VarsSection<'s> {
     let mut out = VarsSection {
         line_no: var_line_no,
         bank: var_bank,
@@ -263,12 +263,12 @@ fn parse_vars<'a>(
     out
 }
 
-fn parse_ftdef<'a>(
+fn parse_ftdef<'s>(
     line_no: LineNo,
-    name: &'a str,
-    it: &mut impl Iterator<Item = (LineNo, &'a str)>,
-    errors: &mut FileErrors<'a>,
-) -> FunctionTableDef<'a> {
+    name: &'s str,
+    it: &mut impl Iterator<Item = (LineNo, &'s str)>,
+    errors: &mut FileErrors<'s>,
+) -> FunctionTableDef<'s> {
     let mut out = FunctionTableDef {
         line_no,
         name,
@@ -289,7 +289,7 @@ fn parse_ftdef<'a>(
     out
 }
 
-fn parse_dbrepeat<'a>(line: &'a str) -> Result<DbRepeat<'a>, FileParserError<'static>> {
+fn parse_dbrepeat<'s>(line: &'s str) -> Result<DbRepeat<'s>, FileParserError<'static>> {
     let mut it = comma_iter(line);
     match (it.next(), it.next(), it.next()) {
         (Some(var), Some(expr), None) => {
@@ -312,12 +312,12 @@ fn parse_dbrepeat<'a>(line: &'a str) -> Result<DbRepeat<'a>, FileParserError<'st
     }
 }
 
-fn parse_asm_line_after_label<'a>(
+fn parse_asm_line_after_label<'s>(
     line_no: LineNo,
-    first_word: &'a str,
-    arguments: &'a str,
-    errors: &mut FileErrors<'a>,
-    f: &mut dyn FnMut(LineNo, AsmLine<'a>),
+    first_word: &'s str,
+    arguments: &'s str,
+    errors: &mut FileErrors<'s>,
+    f: &mut dyn FnMut(LineNo, AsmLine<'s>),
 ) {
     match first_word {
         ".db" => f(line_no, AsmLine::Db(arguments)),
@@ -349,12 +349,12 @@ fn parse_asm_line_after_label<'a>(
     }
 }
 
-pub fn parse_asm_line<'a>(
+pub fn parse_asm_line<'s>(
     line_no: LineNo,
-    first_word: &'a str,
-    arguments: &'a str,
-    errors: &mut FileErrors<'a>,
-    f: &mut dyn FnMut(LineNo, AsmLine<'a>),
+    first_word: &'s str,
+    arguments: &'s str,
+    errors: &mut FileErrors<'s>,
+    f: &mut dyn FnMut(LineNo, AsmLine<'s>),
 ) {
     if let Some(label) = first_word.strip_suffix(":") {
         f(line_no, AsmLine::Label(label));
@@ -373,13 +373,13 @@ enum ProcType {
     Inline,
 }
 
-fn parse_proc_or_inline<'a>(
+fn parse_proc_or_inline<'s>(
     line_no: LineNo,
-    name: &'a str,
+    name: &'s str,
     proc_type: ProcType,
-    it: &mut impl Iterator<Item = (LineNo, &'a str)>,
-    errors: &mut FileErrors<'a>,
-) -> Procedure<'a> {
+    it: &mut impl Iterator<Item = (LineNo, &'s str)>,
+    errors: &mut FileErrors<'s>,
+) -> Procedure<'s> {
     let mut out = Procedure {
         line_no,
         end_line_no: LineNo(0, 0),
@@ -423,10 +423,7 @@ fn parse_proc_or_inline<'a>(
     out
 }
 
-pub fn parse_file<'a, 's>(lines: SplitLines<'s>, errors: &mut FileErrors<'s>) -> AsmFile<'s>
-where
-    'a: 's,
-{
+pub fn parse_file<'s>(lines: SplitLines<'s>, errors: &mut FileErrors<'s>) -> AsmFile<'s> {
     let mut out = AsmFile {
         inlines: Vec::new(),
         assembly: Vec::new(),
