@@ -133,7 +133,8 @@ impl<'s> Symbols<'s> {
         self.scope = old.0
     }
 
-    // CAUTION: Does not add proc to the symbol file
+    // CAUTION: Does not add proc to the symbol file.
+    // CAUTION: Does not check if the scope has already been opened.
     pub fn open_scope(&mut self, name: &'s str, child_symbols: Vec<&'s str>) {
         for label in child_symbols {
             let full_name = [name, ".", label].concat();

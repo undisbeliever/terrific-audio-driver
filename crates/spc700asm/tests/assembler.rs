@@ -611,7 +611,7 @@ fn duplicate_proc_name_is_error() {
         &[el(
             8,
             AssemblerError::CannotOpenProc(SymbolError::DuplicateSymbol("subroutine".to_owned()))
-        )]
+        ),]
     );
 }
 
@@ -827,6 +827,44 @@ inline
     assert_eq!(
         e.errors(),
         &[el(8, AssemblerError::DuplicateInline("inline"))]
+    );
+}
+
+#[test]
+fn inline_and_proc_with_same_name_is_error() {
+    let e = assemble(
+        r##"
+.codebank $0200..$0300
+
+.inline name1
+    inc A
+.endinline
+
+.proc name1
+    ret
+.endproc
+
+    name1
+
+.proc name2
+    name2
+    ret
+.endproc
+
+.inline name2
+    inc A
+.endinline
+"##,
+    )
+    .err()
+    .unwrap();
+
+    assert_eq!(
+        e.errors(),
+        &[
+            el(8, AssemblerError::ProcHasNameOfInline("name1")),
+            el(14, AssemblerError::ProcHasNameOfInline("name2")),
+        ]
     );
 }
 

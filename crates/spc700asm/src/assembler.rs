@@ -68,6 +68,7 @@ pub enum AssemblerError<'s> {
     CannotNestArrays,
     ArrayTooLarge,
 
+    ProcHasNameOfInline(&'s str),
     CannotOpenProc(SymbolError<'s>),
     EmptyProc,
 
@@ -138,6 +139,9 @@ impl std::fmt::Display for AssemblerError<'_> {
             AssemblerError::InvalidArraySyntax => write!(f, "invalid array syntax"),
             AssemblerError::CannotNestArrays => write!(f, "cannot nest arrays"),
             AssemblerError::ArrayTooLarge => write!(f, "array too large"),
+            AssemblerError::ProcHasNameOfInline(name) => {
+                write!(f, "duplicate .proc and .inline name: {name}")
+            }
             AssemblerError::CannotOpenProc(e) => write!(f, "cannot open .proc: {e}"),
             AssemblerError::EmptyProc => write!(f, "empty .proc"),
             AssemblerError::DuplicateInline(name) => write!(f, "duplicate .inline: {name}"),
@@ -598,6 +602,10 @@ struct InlineProcs<'s> {
 }
 
 impl<'s> InlineProcs<'s> {
+    fn contains_name(&self, name: &str) -> bool {
+        self.map.contains_key(name)
+    }
+
     fn find_and_take(&mut self, name: &str) -> Option<InlineProc<'s>> {
         match self.map.get(name) {
             Some(&i) => Some(std::mem::replace(&mut self.inlines[i], InlineProc::Taken)),
@@ -838,6 +846,10 @@ fn process_proc<'s>(
     output: &mut Output<'s>,
     errors: &mut FileErrors<'s>,
 ) {
+    if inline_procs.contains_name(proc.name) {
+        errors.push(proc.line_no, AssemblerError::ProcHasNameOfInline(proc.name));
+    }
+
     let proc_addr = output.program_counter();
     let end_line_no = proc.end_line_no;
 
