@@ -8,7 +8,8 @@ pub use crate::{
     assembler::AssemblerError,
     evaluator::{ConstexprError, ExpressionError, ValueError},
     file_parser::FileParserError,
-    state::{AssertError, OutputError, SymbolError},
+    output::{AssertError, OutputError},
+    symbols::SymbolError,
 };
 use crate::{
     file_loader::{AsmFileWithIncludes, LoadAssemblyError},

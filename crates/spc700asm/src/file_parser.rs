@@ -7,8 +7,8 @@
 use crate::{
     errors::{FileErrors, LineNo},
     file_loader::SplitLines,
-    state::DirectPageFlag,
     string::{comma_iter, split_first_word},
+    symbols::DirectPageFlag,
 };
 
 pub struct CodeBankStatement<'a> {

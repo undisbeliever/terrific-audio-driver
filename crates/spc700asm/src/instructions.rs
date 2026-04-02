@@ -6,8 +6,9 @@
 
 use crate::{
     evaluator::{evaluate, ExpressionError, ExpressionResult},
-    state::{BitArgument, DirectPageFlag, Output, OutputError, Symbols, U16Value, U8Value},
+    output::{BitArgument, Output, OutputError, U16Value, U8Value},
     string::comma_iter,
+    symbols::{DirectPageFlag, Symbols},
 };
 
 #[derive(Debug, PartialEq)]
@@ -1186,7 +1187,7 @@ mod addressing_mode_tests {
         parse_addressing_mode, parse_no_dp_addressing_mode, AddressingMode, AddressingModeError,
         DirectPageFlag, Symbols, U16Value, U8Value,
     };
-    use crate::state::OldScope;
+    use crate::symbols::OldScope;
 
     const S: OldScope = OldScope::NONE;
 
@@ -1688,7 +1689,7 @@ mod instruction_tests {
 
     use crate::{
         errors::{FileErrors, LineNo},
-        state::process_pending_output_expressions,
+        output::process_pending_output_expressions,
         string::split_first_word,
     };
     use std::panic::Location;

@@ -16,12 +16,10 @@ use crate::{
         StructSection, Var, VarBankStatement, VarLine, VarsSection,
     },
     instructions::process_instruction,
-    state::{
-        is_symbol_name_valid, process_asserts, process_pending_output_expressions, Output,
-        SymbolError, Symbols,
-    },
+    output::{process_asserts, process_pending_output_expressions, Output},
     string::comma_iter,
     symbol_file::SymbolFile,
+    symbols::{is_symbol_name_valid, SymbolError, Symbols},
 };
 
 use std::{

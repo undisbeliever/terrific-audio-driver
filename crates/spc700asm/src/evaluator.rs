@@ -38,7 +38,10 @@
 
 use bitflags::bitflags;
 
-use crate::state::{is_identifier_character, Symbols, U16Value, U8Value};
+use crate::{
+    output::{U16Value, U8Value},
+    symbols::{is_identifier_character, Symbols},
+};
 
 bitflags! {
     #[derive(Debug, PartialEq)]
@@ -755,7 +758,7 @@ fn parse_binary(s: &str) -> ExpressionResult {
 
 #[cfg(test)]
 mod tests {
-    use crate::{evaluator::EVALUATOR_FUNCTIONS, state::Symbols};
+    use crate::{evaluator::EVALUATOR_FUNCTIONS, symbols::Symbols};
 
     use super::{evaluate, ExpressionError, ExpressionResult};
 
