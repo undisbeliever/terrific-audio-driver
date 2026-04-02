@@ -29,7 +29,7 @@
 .include "common-memmap.inc"
 
 
-.codebank LOADER_ADDR..(LOADER_ADDR+LOADER_SIZE)
+.codebank LOADER_ADDR..(LOADER_ADDR + LOADER_SIZE)
 
 
 ; Loader can only write to even addresses
@@ -41,7 +41,7 @@
 .assert DriverIO__SWITCH_TO_LOADER_BIT == LoaderIO_TransferToLoader__SPINLOCK_SWITCH_TO_LOADER_BIT
 
 
-.proc Loader
+.proc loader
     ; MUST be the first thing in the loader_code bank
     .assert PC == LOADER_ADDR
 
@@ -96,14 +96,14 @@
         bra DtEndIf
 
     DtNotZero:
-        bmi DtNegative
+        bmi DtIsSong
 
         mov A, #lobyte(COMMON_DATA_ADDR)
         mov Y, #hibyte(COMMON_DATA_ADDR)
 
         bra DtEndIf
 
-    DtNegative:
+    DtIsSong:
         ; Assumes `_songPtr` is even
         movw YA, songPtr
     DtEndIf:
@@ -139,7 +139,7 @@
         ; Read data from the IO ports and store to memory
         mov A, LoaderIO_TransferToLoader__DATA_PORT_L
     STA_1:
-        mov $ff00+Y, A
+        mov $ff00 + Y, A
 
         mov A, LoaderIO_TransferToLoader__DATA_PORT_H
 
@@ -149,7 +149,7 @@
         ; This code is executed while the S-CPU loads the next data into ports 0 & 1
         inc Y
     STA_2:
-        mov $ff00+Y, A
+        mov $ff00 + Y, A
         inc Y
 
         ; Increment high byte of stores when Y wraps
@@ -168,7 +168,7 @@
     ; Restart loader if the SWITCH_TO_LOADER_BIT is set
     mov A, X
     and A, #(1 << LoaderIO_TransferToLoader__SPINLOCK_SWITCH_TO_LOADER_BIT)
-    bne Loader
+    bne loader
 
 
     ; Set songPtr if dataType is CAD
@@ -181,14 +181,14 @@
         movw songPtr, YA
     NotCommonData:
 
-    ; Restart loader if loaderDataType LoaderDataType__SONG_DATA_BIT is set
+    ; Restart loader if LoaderDataType__SONG_DATA_BIT is set
     .assert LoaderDataType__SONG_DATA_BIT == 7
     ; X = loaderDataType
     mov A, X
-    bpl Loader
+    bpl loader
 
 
-    ; Fallthrough into main() in `audio-driver.asm`
+    ; Fallthrough into `main` in `audio-driver.asm`
     .assert PC == CODE_ADDR
 .endproc
 
