@@ -69,7 +69,6 @@ pub enum AssemblerError<'s> {
     ArrayTooLarge,
 
     CannotOpenProc(SymbolError<'s>),
-    CannotOpenInline(SymbolError<'s>),
     EmptyProc,
 
     DuplicateInline(&'s str),
@@ -140,7 +139,6 @@ impl std::fmt::Display for AssemblerError<'_> {
             AssemblerError::CannotNestArrays => write!(f, "cannot nest arrays"),
             AssemblerError::ArrayTooLarge => write!(f, "array too large"),
             AssemblerError::CannotOpenProc(e) => write!(f, "cannot open .proc: {e}"),
-            AssemblerError::CannotOpenInline(e) => write!(f, "cannot open .inline: {e}"),
             AssemblerError::EmptyProc => write!(f, "empty .proc"),
             AssemblerError::DuplicateInline(name) => write!(f, "duplicate .inline: {name}"),
             AssemblerError::UnusedInline(name) => write!(f, ".inline {name} is unused"),
@@ -651,19 +649,19 @@ fn process_inline<'s>(
 
     match inline {
         InlineProc::Inline(inline) => {
+            let start_addr = output.program_counter();
             let name = inline.name;
+            let end_line_no = inline.end_line_no;
 
-            process_proc_or_inline(
-                inline,
-                ProcType::Inline,
-                inline_procs,
-                symbols,
-                sym_file,
-                output,
-                errors,
-            );
+            sym_file.add_label(name.to_owned(), start_addr);
+
+            process_procedure_lines(inline, inline_procs, symbols, sym_file, output, errors);
 
             sym_file.add_label([name, ".__END__"].concat(), output.program_counter());
+
+            if output.program_counter() == start_addr {
+                errors.push(end_line_no, AssemblerError::EmptyInline);
+            }
         }
         InlineProc::Taken => {
             errors.push(caller_line_no, AssemblerError::CanOnlyUseInlineOnce);
@@ -797,14 +795,8 @@ fn process_asm_line<'s>(
     }
 }
 
-enum ProcType {
-    Procedure,
-    Inline,
-}
-
-fn process_proc_or_inline<'s>(
+fn process_procedure_lines<'s>(
     proc: Procedure<'s>,
-    code_type: ProcType,
     inline_procs: &mut InlineProcs<'s>,
     symbols: &mut Symbols<'s>,
     sym_file: &mut SymbolFile,
@@ -821,23 +813,6 @@ fn process_proc_or_inline<'s>(
         })
         .collect();
 
-    let proc_addr = output.program_counter();
-
-    match symbols.add_symbol(proc.name, proc_addr) {
-        Ok((full_name, _)) => {
-            // Cannot write the start and end address of the proc to the symbol file.
-            // Mesen does not support overlapping labels.  It will silently drop the proc label.
-            sym_file.add_label(full_name, proc_addr);
-        }
-        Err(e) => errors.push(
-            proc.line_no,
-            match code_type {
-                ProcType::Procedure => AssemblerError::CannotOpenProc(e),
-                ProcType::Inline => AssemblerError::CannotOpenInline(e),
-            },
-        ),
-    };
-
     symbols.open_scope(proc.name, child_symbols);
 
     for (line_no, asm) in proc.lines {
@@ -852,16 +827,6 @@ fn process_proc_or_inline<'s>(
         );
     }
 
-    if output.program_counter() == proc_addr {
-        errors.push(
-            proc.end_line_no,
-            match code_type {
-                ProcType::Procedure => AssemblerError::EmptyProc,
-                ProcType::Inline => AssemblerError::EmptyInline,
-            },
-        );
-    }
-
     symbols.close_scope();
 }
 
@@ -873,15 +838,24 @@ fn process_proc<'s>(
     output: &mut Output<'s>,
     errors: &mut FileErrors<'s>,
 ) {
-    process_proc_or_inline(
-        proc,
-        ProcType::Procedure,
-        inline_procs,
-        symbols,
-        sym_file,
-        output,
-        errors,
-    );
+    let proc_addr = output.program_counter();
+    let end_line_no = proc.end_line_no;
+
+    match symbols.add_symbol(proc.name, proc_addr) {
+        Ok((full_name, _)) => {
+            assert_eq!(full_name, proc.name);
+            // Cannot write the start and end address of the proc to the symbol file.
+            // Mesen does not support overlapping labels.  It will silently drop the proc label.
+            sym_file.add_label(full_name, proc_addr);
+        }
+        Err(e) => errors.push(proc.line_no, AssemblerError::CannotOpenProc(e)),
+    }
+
+    process_procedure_lines(proc, inline_procs, symbols, sym_file, output, errors);
+
+    if output.program_counter() == proc_addr {
+        errors.push(end_line_no, AssemblerError::EmptyProc);
+    }
 }
 
 fn check_code_size(code_bank: Option<Range<u16>>, output: &Output, errors: &mut FileErrors) {

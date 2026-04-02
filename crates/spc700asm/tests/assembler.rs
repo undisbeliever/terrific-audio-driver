@@ -668,11 +668,17 @@ Global:
 "##,
     )?;
 
-    assert_eq!(c.sym("first_inline"), 0x201);
+    // Confirm there is no symbol with the name of the `.inline`
+    assert_eq!(c.symbols.get("first_inline"), None);
+    assert_eq!(c.symbols.get("second_inline"), None);
+
+    // Confirm start and end address is added to the symbol file
+    assert_eq!(c.sym_file.find("first_inline"), Some(0x201));
     assert_eq!(c.sym_file.find("first_inline.__END__"), Some(0x205));
-    assert_eq!(c.sym("InProc"), 0x206);
-    assert_eq!(c.sym("second_inline"), 0x207);
+    assert_eq!(c.sym_file.find("second_inline"), Some(0x207));
     assert_eq!(c.sym_file.find("second_inline.__END__"), Some(0x208));
+
+    assert_eq!(c.sym("InProc"), 0x206);
 
     assert_eq!(c.sym("first_inline._tmp1"), c.sym("zpTmp1"));
     assert_eq!(c.sym("first_inline._tmp2"), c.sym("zpTmp2"));
@@ -725,11 +731,17 @@ fn nested_inline_calls() -> Result<(), Box<dyn std::error::Error>> {
 "##,
     )?;
 
-    assert_eq!(c.sym("outer_outer"), 0x200);
+    // Confirm there is no symbol with the name of the `.inline`
+    assert_eq!(c.symbols.get("outer_outer"), None);
+    assert_eq!(c.symbols.get("outer"), None);
+    assert_eq!(c.symbols.get("inner"), None);
+
+    // Confirm start and end address is added to the symbol file
+    assert_eq!(c.sym_file.find("outer_outer"), Some(0x200));
     assert_eq!(c.sym_file.find("outer_outer.__END__"), Some(0x20a));
-    assert_eq!(c.sym("outer"), 0x202);
+    assert_eq!(c.sym_file.find("outer"), Some(0x202));
     assert_eq!(c.sym_file.find("outer.__END__"), Some(0x208));
-    assert_eq!(c.sym("inner"), 0x204);
+    assert_eq!(c.sym_file.find("inner"), Some(0x204));
     assert_eq!(c.sym_file.find("inner.__END__"), Some(0x206));
 
     assert_eq!(c.sym("outer_outer.constant"), 2);
