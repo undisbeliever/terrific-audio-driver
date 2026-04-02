@@ -158,7 +158,7 @@ impl OldScope<'_> {
     pub const NONE: Self = Self(None);
 }
 
-pub(crate) struct State<'s> {
+pub(crate) struct Symbols<'s> {
     pub direct_page: DirectPageFlag,
 
     scope: Option<&'s str>,
@@ -173,7 +173,7 @@ pub(crate) struct State<'s> {
     assert_pc: Option<i64>,
 }
 
-impl<'s> State<'s> {
+impl<'s> Symbols<'s> {
     pub fn new() -> Self {
         Self {
             direct_page: DirectPageFlag::Zero,
@@ -471,19 +471,19 @@ impl<'s> Output<'s> {
         }
     }
 
-    pub fn write_relative_goto(&mut self, expression: &'s str, state: &State<'s>) {
+    pub fn write_relative_goto(&mut self, expression: &'s str, state: &Symbols<'s>) {
         self.push_pending_output(expression, state.scope(), PendingOutput::RelativeBranch);
 
         self.output.push(0);
     }
 
-    pub fn write_pcall_address(&mut self, expression: &'s str, state: &State<'s>) {
+    pub fn write_pcall_address(&mut self, expression: &'s str, state: &Symbols<'s>) {
         self.push_pending_output(expression, state.scope(), PendingOutput::Pcall);
 
         self.output.push(0xff);
     }
 
-    pub fn add_assert(&mut self, line_no: LineNo, expression: &'s str, state: &State<'s>) {
+    pub fn add_assert(&mut self, line_no: LineNo, expression: &'s str, state: &Symbols<'s>) {
         self.asserts.push(Assert {
             line_no,
             pc: self.program_counter(),
@@ -495,7 +495,7 @@ impl<'s> Output<'s> {
 
 pub fn process_pending_output_expressions<'s>(
     o: &mut Output<'s>,
-    s: &mut State<'s>,
+    s: &mut Symbols<'s>,
     errors: &mut FileErrors<'s>,
 ) {
     assert_eq!(s.assert_pc, None);
@@ -599,7 +599,7 @@ impl std::fmt::Display for AssertError<'_> {
     }
 }
 
-pub fn process_asserts<'s>(o: &mut Output<'s>, s: &mut State<'s>, errors: &mut FileErrors<'s>) {
+pub fn process_asserts<'s>(o: &mut Output<'s>, s: &mut Symbols<'s>, errors: &mut FileErrors<'s>) {
     assert_eq!(s.assert_pc, None);
     assert_eq!(s.scope, None);
 

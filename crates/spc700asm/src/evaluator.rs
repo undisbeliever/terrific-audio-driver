@@ -38,7 +38,7 @@
 
 use bitflags::bitflags;
 
-use crate::state::{is_identifier_character, State, U16Value, U8Value};
+use crate::state::{is_identifier_character, Symbols, U16Value, U8Value};
 
 bitflags! {
     #[derive(Debug, PartialEq)]
@@ -108,14 +108,14 @@ pub enum ExpressionResult {
 
 struct Matcher<'a, 'b> {
     s: &'a str,
-    state: &'b State<'b>,
+    symbols: &'b Symbols<'b>,
 }
 
 impl<'a> Matcher<'a, '_> {
-    fn new<'b>(s: &'a str, state: &'b State) -> Matcher<'a, 'b> {
+    fn new<'b>(s: &'a str, symbols: &'b Symbols) -> Matcher<'a, 'b> {
         Matcher {
             s: s.trim_start(),
-            state,
+            symbols,
         }
     }
 
@@ -313,9 +313,9 @@ impl std::fmt::Display for ConstexprError<'_> {
 
 pub fn evaluate_constexpr_address<'a>(
     expr: &'a str,
-    state: &State,
+    symbols: &Symbols,
 ) -> Result<u16, ConstexprError<'a>> {
-    match evaluate(expr, state) {
+    match evaluate(expr, symbols) {
         ExpressionResult::Value(v) => v
             .try_into()
             .map_err(|_| ConstexprError::AddressOutOfRange(expr)),
@@ -325,8 +325,11 @@ pub fn evaluate_constexpr_address<'a>(
     }
 }
 
-pub fn evaluate_constexpr_u16<'a>(expr: &'a str, state: &State) -> Result<u16, ConstexprError<'a>> {
-    match evaluate(expr, state) {
+pub fn evaluate_constexpr_u16<'a>(
+    expr: &'a str,
+    symbols: &Symbols,
+) -> Result<u16, ConstexprError<'a>> {
+    match evaluate(expr, symbols) {
         ExpressionResult::Value(v) => v
             .try_into()
             .map_err(|_| ConstexprError::U16OutOfRange(expr)),
@@ -336,8 +339,11 @@ pub fn evaluate_constexpr_u16<'a>(expr: &'a str, state: &State) -> Result<u16, C
     }
 }
 
-pub fn evaluate_constexpr_u8<'a>(expr: &'a str, state: &State) -> Result<u8, ConstexprError<'a>> {
-    match evaluate(expr, state) {
+pub fn evaluate_constexpr_u8<'a>(
+    expr: &'a str,
+    symbols: &Symbols,
+) -> Result<u8, ConstexprError<'a>> {
+    match evaluate(expr, symbols) {
         ExpressionResult::Value(v) => v.try_into().map_err(|_| ConstexprError::U8OutOfRange(expr)),
         ExpressionResult::Boolean(_) => Err(ConstexprError::U8NotANumber(expr)),
         ExpressionResult::Unknown => Err(ConstexprError::UnknownValue(expr)),
@@ -365,32 +371,38 @@ impl std::fmt::Display for ValueError<'_> {
     }
 }
 
-pub fn evaluate_u8v<'s>(expr: &'s str, state: &State<'s>) -> Result<U8Value<'s>, ValueError<'s>> {
-    match evaluate(expr, state) {
+pub fn evaluate_u8v<'s>(
+    expr: &'s str,
+    symbols: &Symbols<'s>,
+) -> Result<U8Value<'s>, ValueError<'s>> {
+    match evaluate(expr, symbols) {
         ExpressionResult::Value(v) => match v.try_into() {
             Ok(v) => Ok(U8Value::Known(v)),
             Err(_) => Err(ValueError::U8OutOfRange(expr, v)),
         },
-        ExpressionResult::Unknown => Ok(U8Value::Unknown(expr, state.scope())),
+        ExpressionResult::Unknown => Ok(U8Value::Unknown(expr, symbols.scope())),
         ExpressionResult::Boolean(_) => Err(ValueError::U8NotANumber(expr)),
         ExpressionResult::Error(e) => Err(ValueError::Error(expr, e)),
     }
 }
 
-pub fn evaluate_u16v<'s>(expr: &'s str, state: &State<'s>) -> Result<U16Value<'s>, ValueError<'s>> {
-    match evaluate(expr, state) {
+pub fn evaluate_u16v<'s>(
+    expr: &'s str,
+    symbols: &Symbols<'s>,
+) -> Result<U16Value<'s>, ValueError<'s>> {
+    match evaluate(expr, symbols) {
         ExpressionResult::Value(v) => match v.try_into() {
             Ok(v) => Ok(U16Value::Known(v)),
             Err(_) => Err(ValueError::U16OutOfRange(expr, v)),
         },
-        ExpressionResult::Unknown => Ok(U16Value::Unknown(expr, state.scope())),
+        ExpressionResult::Unknown => Ok(U16Value::Unknown(expr, symbols.scope())),
         ExpressionResult::Boolean(_) => Err(ValueError::U16NotANumber(expr)),
         ExpressionResult::Error(e) => Err(ValueError::Error(expr, e)),
     }
 }
 
-pub fn evaluate(s: &str, state: &State) -> ExpressionResult {
-    let mut m = Matcher::new(s, state);
+pub fn evaluate(s: &str, symbols: &Symbols) -> ExpressionResult {
+    let mut m = Matcher::new(s, symbols);
 
     match (expression(&mut m), m.is_empty()) {
         (r, true) => r,
@@ -616,7 +628,7 @@ fn value(m: &mut Matcher) -> ExpressionResult {
             }),
             // `EXPRESSION_FUNCTIONS` list MUST BE updated when adding a new function
             //
-            sym => match m.state.get_symbol(sym) {
+            sym => match m.symbols.get_symbol(sym) {
                 Some(v) => ExpressionResult::Value(v),
                 None => ExpressionResult::Unknown,
             },
@@ -650,7 +662,7 @@ fn offsetof(m: &mut Matcher) -> ExpressionResult {
         return ExpressionResult::Error(ExpressionError::UnmatchedParenthesis);
     }
 
-    match m.state.get_struct_offset(struct_name, field_name) {
+    match m.symbols.get_struct_offset(struct_name, field_name) {
         Some(v) => ExpressionResult::Value(v),
         None => ExpressionResult::Error(ExpressionError::CannotFindOffsetofField),
     }
@@ -743,7 +755,7 @@ fn parse_binary(s: &str) -> ExpressionResult {
 
 #[cfg(test)]
 mod tests {
-    use crate::{evaluator::EVALUATOR_FUNCTIONS, state::State};
+    use crate::{evaluator::EVALUATOR_FUNCTIONS, state::Symbols};
 
     use super::{evaluate, ExpressionError, ExpressionResult};
 
@@ -751,7 +763,7 @@ mod tests {
         ($expr:expr) => {
             let s = stringify![$expr];
             assert_eq!(
-                evaluate(s, &State::new()),
+                evaluate(s, &Symbols::new()),
                 ExpressionResult::Value($expr),
                 "Expression mismatch {s}"
             );
@@ -759,7 +771,7 @@ mod tests {
         ($expr:literal, $value:expr) => {
             let s: &'static str = $expr;
             assert_eq!(
-                evaluate(s, &State::new()),
+                evaluate(s, &Symbols::new()),
                 ExpressionResult::Value($value),
                 "Expression mismatch \"{s}\""
             );
@@ -770,7 +782,7 @@ mod tests {
         ($expr:expr) => {
             let s = stringify![$expr];
             assert_eq!(
-                evaluate(s, &State::new()),
+                evaluate(s, &Symbols::new()),
                 ExpressionResult::Boolean($expr),
                 "Expression mismatch {s}"
             );
@@ -778,7 +790,7 @@ mod tests {
         ($expr:literal, $value:expr) => {
             let s: &'static str = $expr;
             assert_eq!(
-                evaluate(s, &State::new()),
+                evaluate(s, &Symbols::new()),
                 ExpressionResult::Boolean($value),
                 "Expression mismatch {s}"
             );
@@ -942,103 +954,103 @@ mod tests {
 
     #[test]
     fn test_literal_overflow() {
-        let state = State::new();
+        let symbols = Symbols::new();
 
         assert_eq!(
-            evaluate("00009223372036854775807", &state),
+            evaluate("00009223372036854775807", &symbols),
             ExpressionResult::Value(i64::MAX)
         );
         assert_eq!(
-            evaluate("9223372036854775807", &state),
+            evaluate("9223372036854775807", &symbols),
             ExpressionResult::Value(i64::MAX)
         );
         assert_eq!(
-            evaluate("9223372036854775808", &state),
+            evaluate("9223372036854775808", &symbols),
             ExpressionResult::Error(ExpressionError::InvalidDecimalLiteral)
         );
 
         assert_eq!(
-            evaluate("9_223_372_036_854_775_807", &state),
+            evaluate("9_223_372_036_854_775_807", &symbols),
             ExpressionResult::Value(i64::MAX)
         );
         assert_eq!(
-            evaluate("9_223_372_036_854_775_808", &state),
+            evaluate("9_223_372_036_854_775_808", &symbols),
             ExpressionResult::Error(ExpressionError::InvalidDecimalLiteral)
         );
 
         assert_eq!(
-            evaluate("-9223372036854775807", &state),
+            evaluate("-9223372036854775807", &symbols),
             ExpressionResult::Value(-i64::MAX)
         );
         assert_eq!(
-            evaluate("-9223372036854775808", &state),
+            evaluate("-9223372036854775808", &symbols),
             ExpressionResult::Error(ExpressionError::InvalidDecimalLiteral)
         );
 
         assert_eq!(
-            evaluate("10000000000000000000", &state),
+            evaluate("10000000000000000000", &symbols),
             ExpressionResult::Error(ExpressionError::InvalidDecimalLiteral)
         );
         assert_eq!(
-            evaluate("-10000000000000000000", &state),
+            evaluate("-10000000000000000000", &symbols),
             ExpressionResult::Error(ExpressionError::InvalidDecimalLiteral)
         );
 
         assert_eq!(
-            evaluate("$7fffffffffffffff", &state),
+            evaluate("$7fffffffffffffff", &symbols),
             ExpressionResult::Value(i64::MAX)
         );
         assert_eq!(
-            evaluate("$8000000000000000", &state),
+            evaluate("$8000000000000000", &symbols),
             ExpressionResult::Error(ExpressionError::InvalidHexadecimalLiteral)
         );
         assert_eq!(
-            evaluate("$ffffffffffffffff", &state),
+            evaluate("$ffffffffffffffff", &symbols),
             ExpressionResult::Error(ExpressionError::InvalidHexadecimalLiteral)
         );
 
         assert_eq!(
-            evaluate("$0000_7fffffff_ffffffff", &state),
+            evaluate("$0000_7fffffff_ffffffff", &symbols),
             ExpressionResult::Value(i64::MAX)
         );
         assert_eq!(
-            evaluate("$7fffffff_ffffffff", &state),
+            evaluate("$7fffffff_ffffffff", &symbols),
             ExpressionResult::Value(i64::MAX)
         );
         assert_eq!(
-            evaluate("$80000000_00000000", &state),
+            evaluate("$80000000_00000000", &symbols),
             ExpressionResult::Error(ExpressionError::InvalidHexadecimalLiteral)
         );
         assert_eq!(
-            evaluate("$ffffffff_ffffffff_", &state),
+            evaluate("$ffffffff_ffffffff_", &symbols),
             ExpressionResult::Error(ExpressionError::InvalidHexadecimalLiteral)
         );
 
         assert_eq!(
             evaluate(
                 "%00000000111111111111111111111111111111111111111111111111111111111111111",
-                &state
+                &symbols
             ),
             ExpressionResult::Value(i64::MAX)
         );
         assert_eq!(
             evaluate(
                 "%111111111111111111111111111111111111111111111111111111111111111",
-                &state
+                &symbols
             ),
             ExpressionResult::Value(i64::MAX)
         );
         assert_eq!(
             evaluate(
                 "%1000000000000000000000000000000000000000000000000000000000000000",
-                &state
+                &symbols
             ),
             ExpressionResult::Error(ExpressionError::InvalidBinaryLiteral)
         );
         assert_eq!(
             evaluate(
                 "%11111111111111111111111111111111111111111111111111111111111111111",
-                &state
+                &symbols
             ),
             ExpressionResult::Error(ExpressionError::InvalidBinaryLiteral)
         );
@@ -1046,50 +1058,56 @@ mod tests {
 
     #[test]
     fn unknown_value() {
-        let state = State::new();
+        let symbols = Symbols::new();
 
         assert_eq!(
-            evaluate("(unknown + 1) * 2 / 3", &state),
+            evaluate("(unknown + 1) * 2 / 3", &symbols),
             ExpressionResult::Unknown
         );
         assert_eq!(
-            evaluate("(0 + 1) * 2 / u", &state),
-            ExpressionResult::Unknown
-        );
-
-        assert_eq!(
-            evaluate("unknown && false", &state),
-            ExpressionResult::Unknown
-        );
-        assert_eq!(
-            evaluate("true || unknown", &state),
-            ExpressionResult::Unknown
-        );
-        assert_eq!(
-            evaluate("true ^ unknown", &state),
+            evaluate("(0 + 1) * 2 / u", &symbols),
             ExpressionResult::Unknown
         );
 
         assert_eq!(
-            evaluate("unknown == unknown", &state),
-            ExpressionResult::Unknown
-        );
-        assert_eq!(evaluate("1 == unknown", &state), ExpressionResult::Unknown);
-        assert_eq!(evaluate("unknown != 2", &state), ExpressionResult::Unknown);
-        assert_eq!(
-            evaluate("true == unknown", &state),
+            evaluate("unknown && false", &symbols),
             ExpressionResult::Unknown
         );
         assert_eq!(
-            evaluate("unknown == false", &state),
+            evaluate("true || unknown", &symbols),
+            ExpressionResult::Unknown
+        );
+        assert_eq!(
+            evaluate("true ^ unknown", &symbols),
+            ExpressionResult::Unknown
+        );
+
+        assert_eq!(
+            evaluate("unknown == unknown", &symbols),
+            ExpressionResult::Unknown
+        );
+        assert_eq!(
+            evaluate("1 == unknown", &symbols),
+            ExpressionResult::Unknown
+        );
+        assert_eq!(
+            evaluate("unknown != 2", &symbols),
+            ExpressionResult::Unknown
+        );
+        assert_eq!(
+            evaluate("true == unknown", &symbols),
+            ExpressionResult::Unknown
+        );
+        assert_eq!(
+            evaluate("unknown == false", &symbols),
             ExpressionResult::Unknown
         );
     }
 
     #[test]
     fn known_symbols() {
-        let state = {
-            let mut s = State::new();
+        let symbols = {
+            let mut s = Symbols::new();
             s.add_symbol("one", 1).unwrap();
             s.add_symbol("two", 2).unwrap();
             s.add_symbol("three", 3).unwrap();
@@ -1097,46 +1115,49 @@ mod tests {
             s
         };
 
-        assert_eq!(evaluate("one", &state), ExpressionResult::Value(1));
-        assert_eq!(evaluate("two", &state), ExpressionResult::Value(2));
-        assert_eq!(evaluate("minus_seven", &state), ExpressionResult::Value(-7));
+        assert_eq!(evaluate("one", &symbols), ExpressionResult::Value(1));
+        assert_eq!(evaluate("two", &symbols), ExpressionResult::Value(2));
+        assert_eq!(
+            evaluate("minus_seven", &symbols),
+            ExpressionResult::Value(-7)
+        );
 
         assert_eq!(
-            evaluate("one + two * minus_seven / three", &state),
+            evaluate("one + two * minus_seven / three", &symbols),
             ExpressionResult::Value(1 + 2 * -7 / 3)
         );
 
         assert_eq!(
-            evaluate("(unknown + one) * two / three", &state),
+            evaluate("(unknown + one) * two / three", &symbols),
             ExpressionResult::Unknown
         );
         assert_eq!(
-            evaluate("(5 + one) * two / three", &state),
+            evaluate("(5 + one) * two / three", &symbols),
             ExpressionResult::Value((5 + 1) * 2 / 3)
         );
 
         assert_eq!(
-            evaluate("1 == one", &state),
+            evaluate("1 == one", &symbols),
             ExpressionResult::Boolean(true)
         );
         assert_eq!(
-            evaluate("two == 2", &state),
+            evaluate("two == 2", &symbols),
             ExpressionResult::Boolean(true)
         );
         assert_eq!(
-            evaluate("1 == three", &state),
+            evaluate("1 == three", &symbols),
             ExpressionResult::Boolean(false)
         );
         assert_eq!(
-            evaluate("three < 2", &state),
+            evaluate("three < 2", &symbols),
             ExpressionResult::Boolean(false)
         );
     }
 
     #[test]
     fn scoped_lookup() {
-        let state = {
-            let mut s = State::new();
+        let symbols = {
+            let mut s = Symbols::new();
             s.add_unchecked_scoped_symbol("scope", "const", 2).unwrap();
             s.add_unchecked_scoped_symbol("scope.const", "const", 9999)
                 .unwrap();
@@ -1146,45 +1167,45 @@ mod tests {
         };
 
         assert_eq!(
-            evaluate("(scope.const + const) * 10", &state),
+            evaluate("(scope.const + const) * 10", &symbols),
             ExpressionResult::Value((2 + 2) * 10)
         );
 
-        assert_eq!(state.get_symbol("scope.const.const"), Some(9999));
+        assert_eq!(symbols.get_symbol("scope.const.const"), Some(9999));
     }
 
     #[test]
     fn characters_after_expression_is_syntax_error() {
-        let state = {
-            let mut s = State::new();
+        let symbols = {
+            let mut s = Symbols::new();
             s.add_symbol("const", 10).unwrap();
             s
         };
 
         assert_eq!(
-            evaluate("1 2", &state),
+            evaluate("1 2", &symbols),
             ExpressionResult::Error(ExpressionError::SyntaxError)
         );
 
         assert_eq!(
-            evaluate("unknown + 2 unknown", &state),
+            evaluate("unknown + 2 unknown", &symbols),
             ExpressionResult::Error(ExpressionError::SyntaxError)
         );
 
         assert_eq!(
-            evaluate("( 10000000000 * 200000000000 garbage)", &state),
+            evaluate("( 10000000000 * 200000000000 garbage)", &symbols),
             ExpressionResult::Error(
                 ExpressionError::UnmatchedParenthesis | ExpressionError::SyntaxError
             )
         );
 
         assert_eq!(
-            evaluate("10000000000 * 200000000000 garbage", &state),
+            evaluate("10000000000 * 200000000000 garbage", &symbols),
             ExpressionResult::Error(ExpressionError::Overflow | ExpressionError::SyntaxError)
         );
 
         assert_eq!(
-            evaluate("$uuu unknown", &state),
+            evaluate("$uuu unknown", &symbols),
             ExpressionResult::Error(
                 ExpressionError::InvalidHexadecimalLiteral | ExpressionError::SyntaxError
             )
@@ -1278,23 +1299,23 @@ mod tests {
 
     #[test]
     fn function_err() {
-        let state = State::new();
+        let symbols = Symbols::new();
 
         for f in EVALUATOR_FUNCTIONS {
             assert_eq!(
-                evaluate(&format!("{f} 2"), &state),
+                evaluate(&format!("{f} 2"), &symbols),
                 ExpressionResult::Error(
                     ExpressionError::SyntaxError | ExpressionError::NoParenthesisAfterFunction
                 )
             );
 
             assert_eq!(
-                evaluate(&format!("{f}(2"), &state),
+                evaluate(&format!("{f}(2"), &symbols),
                 ExpressionResult::Error(ExpressionError::UnmatchedParenthesis)
             );
 
             assert_eq!(
-                evaluate(&format!("{f}(true)"), &state),
+                evaluate(&format!("{f}(true)"), &symbols),
                 ExpressionResult::Error(ExpressionError::BooleanInIntegerOperation)
             );
         }

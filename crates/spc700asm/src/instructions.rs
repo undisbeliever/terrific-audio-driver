@@ -6,7 +6,7 @@
 
 use crate::{
     evaluator::{evaluate, ExpressionError, ExpressionResult},
-    state::{BitArgument, DirectPageFlag, Output, OutputError, State, U16Value, U8Value},
+    state::{BitArgument, DirectPageFlag, Output, OutputError, Symbols, U16Value, U8Value},
     string::comma_iter,
 };
 
@@ -235,7 +235,7 @@ impl AddressingMode<'_> {
 
 fn parse_immediate_value<'a>(
     s: &'a str,
-    symbols: &State<'a>,
+    symbols: &Symbols<'a>,
 ) -> Result<U8Value<'a>, AddressingModeError<'a>> {
     match evaluate(s, symbols) {
         ExpressionResult::Value(value) => match value.try_into() {
@@ -250,7 +250,7 @@ fn parse_immediate_value<'a>(
 
 fn parse_abs_address<'a>(
     s: &'a str,
-    symbols: &State<'a>,
+    symbols: &Symbols<'a>,
 ) -> Result<U16Value<'a>, AddressingModeError<'a>> {
     match evaluate(s, symbols) {
         ExpressionResult::Value(value) => match value.try_into() {
@@ -271,7 +271,7 @@ enum DpOrAbs<'a> {
 
 fn parse_dp_or_abs_address<'a>(
     s: &'a str,
-    symbols: &State<'a>,
+    symbols: &Symbols<'a>,
 ) -> Result<DpOrAbs<'a>, AddressingModeError<'a>> {
     match evaluate(s, symbols) {
         ExpressionResult::Value(value) => match u16::try_from(value) {
@@ -294,7 +294,7 @@ fn parse_dp_or_abs_address<'a>(
     }
 }
 
-fn parse_dp_address<'a>(s: &'a str, symbols: &State) -> Result<u8, AddressingModeError<'a>> {
+fn parse_dp_address<'a>(s: &'a str, symbols: &Symbols) -> Result<u8, AddressingModeError<'a>> {
     match evaluate(s, symbols) {
         ExpressionResult::Value(value) => match u16::try_from(value) {
             Ok(addr) => {
@@ -360,7 +360,7 @@ fn strip_plus_index_suffix<'a>(s: &'a str, register: &'static str) -> Option<&'a
 
 fn parse_addressing_mode<'a>(
     input: &'a str,
-    symbols: &State<'a>,
+    symbols: &Symbols<'a>,
 ) -> Result<AddressingMode<'a>, AddressingModeError<'a>> {
     match input {
         "A" => Ok(AddressingMode::A),
@@ -416,7 +416,7 @@ fn parse_addressing_mode<'a>(
 #[allow(dead_code)] // ::TODO remove::
 fn parse_no_dp_addressing_mode<'a>(
     input: &'a str,
-    symbols: &State<'a>,
+    symbols: &Symbols<'a>,
 ) -> Result<AddressingMode<'a>, AddressingModeError<'a>> {
     match input {
         "A" => Ok(AddressingMode::A),
@@ -460,8 +460,11 @@ fn parse_no_dp_addressing_mode<'a>(
     }
 }
 
-fn parse_bit_argument<'a>(s: &'a str, state: &State) -> Result<BitArgument, InstructionError<'a>> {
-    match evaluate(s, state) {
+fn parse_bit_argument<'a>(
+    s: &'a str,
+    symbols: &Symbols,
+) -> Result<BitArgument, InstructionError<'a>> {
+    match evaluate(s, symbols) {
         ExpressionResult::Value(bit) => {
             BitArgument::try_from(bit).map_err(|_| InstructionError::InvalidBitInstructionBit)
         }
@@ -499,70 +502,70 @@ fn split_three_arguments<'a>(s: &'a str) -> Result<[&'a str; 3], InstructionErro
 
 fn parse_one_argument<'a>(
     s: &'a str,
-    state: &State<'a>,
+    symbols: &Symbols<'a>,
 ) -> Result<AddressingMode<'a>, InstructionError<'a>> {
     let arg = split_one_argument(s)?;
 
-    Ok(parse_addressing_mode(arg, state)?)
+    Ok(parse_addressing_mode(arg, symbols)?)
 }
 
 fn parse_one_no_dp_argument<'a>(
     s: &'a str,
-    state: &State<'a>,
+    symbols: &Symbols<'a>,
 ) -> Result<AddressingMode<'a>, InstructionError<'a>> {
     let arg = split_one_argument(s)?;
 
-    Ok(parse_no_dp_addressing_mode(arg, state)?)
+    Ok(parse_no_dp_addressing_mode(arg, symbols)?)
 }
 
 fn parse_two_arguments<'a>(
     s: &'a str,
-    state: &State<'a>,
+    symbols: &Symbols<'a>,
 ) -> Result<[AddressingMode<'a>; 2], InstructionError<'a>> {
     let [a1, a2] = split_two_arguments(s)?;
     Ok([
-        parse_addressing_mode(a1, state)?,
-        parse_addressing_mode(a2, state)?,
+        parse_addressing_mode(a1, symbols)?,
+        parse_addressing_mode(a2, symbols)?,
     ])
 }
 
 fn parse_two_no_dp_arguments<'a>(
     s: &'a str,
-    state: &State<'a>,
+    symbols: &Symbols<'a>,
 ) -> Result<[AddressingMode<'a>; 2], InstructionError<'a>> {
     let [a1, a2] = split_two_arguments(s)?;
     Ok([
-        parse_no_dp_addressing_mode(a1, state)?,
-        parse_no_dp_addressing_mode(a2, state)?,
+        parse_no_dp_addressing_mode(a1, symbols)?,
+        parse_no_dp_addressing_mode(a2, symbols)?,
     ])
 }
 
 fn parse_three_no_dp_arguments<'a>(
     s: &'a str,
-    state: &State<'a>,
+    symbols: &Symbols<'a>,
 ) -> Result<[AddressingMode<'a>; 3], InstructionError<'a>> {
     let [a1, a2, a3] = split_three_arguments(s)?;
     Ok([
-        parse_no_dp_addressing_mode(a1, state)?,
-        parse_no_dp_addressing_mode(a2, state)?,
-        parse_no_dp_addressing_mode(a3, state)?,
+        parse_no_dp_addressing_mode(a1, symbols)?,
+        parse_no_dp_addressing_mode(a2, symbols)?,
+        parse_no_dp_addressing_mode(a3, symbols)?,
     ])
 }
 
 fn parse_argument_and_rel<'a>(
     s: &'a str,
-    state: &State<'a>,
+    symbols: &Symbols<'a>,
 ) -> Result<(AddressingMode<'a>, &'a str), InstructionError<'a>> {
     let [a1, a2] = split_two_arguments(s)?;
 
-    Ok((parse_addressing_mode(a1, state)?, a2))
+    Ok((parse_addressing_mode(a1, symbols)?, a2))
 }
 
 fn arithmatic_instruction_impl<'a>(
     instruction: &'a str,
     arguments: [AddressingMode<'a>; 2],
     opcode_base: u8,
-    state: &State<'a>,
+    symbols: &Symbols<'a>,
     output: &mut Output<'a>,
 ) -> Result<(), InstructionError<'a>> {
     match arguments {
@@ -585,7 +588,7 @@ fn arithmatic_instruction_impl<'a>(
         [AddressingMode::A, AddressingMode::DpY(a)] => {
             // promote to `addr+Y`
             output.write_u8(opcode_base | 0x16);
-            output.write_u16(state.dp_addr_to_addr(a));
+            output.write_u16(symbols.dp_addr_to_addr(a));
         }
 
         [AddressingMode::Dp(d), AddressingMode::Dp(s)] => {
@@ -625,10 +628,10 @@ fn only_a_instruction<'a>(
     instruction: &'a str,
     arguments: &'a str,
     opcode: u8,
-    state: &State<'a>,
+    symbols: &Symbols<'a>,
     output: &mut Output<'a>,
 ) -> Result<(), InstructionError<'a>> {
-    match parse_one_argument(arguments, state)? {
+    match parse_one_argument(arguments, symbols)? {
         AddressingMode::A => {
             output.write_u8(opcode);
             Ok(())
@@ -641,10 +644,10 @@ fn only_ya_instruction<'a>(
     instruction: &'a str,
     arguments: &'a str,
     opcode: u8,
-    state: &State<'a>,
+    symbols: &Symbols<'a>,
     output: &mut Output<'a>,
 ) -> Result<(), InstructionError<'a>> {
-    match parse_one_argument(arguments, state)? {
+    match parse_one_argument(arguments, symbols)? {
         AddressingMode::Ya => {
             output.write_u8(opcode);
             Ok(())
@@ -657,10 +660,10 @@ fn only_dp_instruction<'a>(
     instruction: &'a str,
     arguments: &'a str,
     opcode: u8,
-    state: &State<'a>,
+    symbols: &Symbols<'a>,
     output: &mut Output<'a>,
 ) -> Result<(), InstructionError<'a>> {
-    match parse_one_argument(arguments, state)? {
+    match parse_one_argument(arguments, symbols)? {
         AddressingMode::Dp(dp) => {
             output.write_op_u8(opcode, dp);
             Ok(())
@@ -673,10 +676,10 @@ fn only_abs_instruction<'a>(
     instruction: &'a str,
     arguments: &'a str,
     opcode: u8,
-    state: &State<'a>,
+    symbols: &Symbols<'a>,
     output: &mut Output<'a>,
 ) -> Result<(), InstructionError<'a>> {
-    match parse_one_no_dp_argument(arguments, state)? {
+    match parse_one_no_dp_argument(arguments, symbols)? {
         AddressingMode::Abs(abs) => {
             output.write_op_u16v(opcode, abs);
             Ok(())
@@ -689,10 +692,10 @@ fn ya_dp_instruction<'a>(
     instruction: &'a str,
     arguments: &'a str,
     opcode: u8,
-    state: &State<'a>,
+    symbols: &Symbols<'a>,
     output: &mut Output<'a>,
 ) -> Result<(), InstructionError<'a>> {
-    match parse_two_arguments(arguments, state)? {
+    match parse_two_arguments(arguments, symbols)? {
         [AddressingMode::Ya, AddressingMode::Dp(a)] => {
             output.write_op_u8(opcode, a);
             Ok(())
@@ -705,14 +708,14 @@ fn arithmatic_instruction<'a>(
     instruction: &'a str,
     arguments: &'a str,
     opcode_base: u8,
-    state: &State<'a>,
+    symbols: &Symbols<'a>,
     output: &mut Output<'a>,
 ) -> Result<(), InstructionError<'a>> {
     arithmatic_instruction_impl(
         instruction,
-        parse_two_arguments(arguments, state)?,
+        parse_two_arguments(arguments, symbols)?,
         opcode_base,
-        state,
+        symbols,
         output,
     )
 }
@@ -721,10 +724,10 @@ fn inc_dec_instruction<'a>(
     instruction: &'a str,
     arguments: &'a str,
     opcode_base: u8,
-    state: &State<'a>,
+    symbols: &Symbols<'a>,
     output: &mut Output<'a>,
 ) -> Result<(), InstructionError<'a>> {
-    match parse_one_argument(arguments, state)? {
+    match parse_one_argument(arguments, symbols)? {
         AddressingMode::A => output.write_u8(opcode_base + 0x9c),
         AddressingMode::Dp(a) => output.write_op_u8(opcode_base + 0x8b, a),
         AddressingMode::DpX(a) => output.write_op_u8(opcode_base + 0x9b, a),
@@ -742,10 +745,10 @@ fn rmw_instruction<'a>(
     instruction: &'a str,
     arguments: &'a str,
     opcode_base: u8,
-    state: &State<'a>,
+    symbols: &Symbols<'a>,
     output: &mut Output<'a>,
 ) -> Result<(), InstructionError<'a>> {
-    match parse_one_argument(arguments, state)? {
+    match parse_one_argument(arguments, symbols)? {
         AddressingMode::A => output.write_u8(opcode_base | 0x1c),
         AddressingMode::Dp(a) => output.write_op_u8(opcode_base | 0x0b, a),
         AddressingMode::DpX(a) => output.write_op_u8(opcode_base | 0x1b, a),
@@ -760,12 +763,12 @@ fn rmw_instruction<'a>(
 fn branch_instruction<'a>(
     arguments: &'a str,
     opcode: u8,
-    state: &State<'a>,
+    symbols: &Symbols<'a>,
     output: &mut Output<'a>,
 ) -> Result<(), InstructionError<'a>> {
     let rel = split_one_argument(arguments)?;
     output.write_u8(opcode);
-    output.write_relative_goto(rel, state);
+    output.write_relative_goto(rel, symbols);
     Ok(())
 }
 
@@ -773,20 +776,20 @@ fn branch_bit_instruction<'a>(
     instruction: &'a str,
     arguments: &'a str,
     opcode_base: u8,
-    state: &State<'a>,
+    symbols: &Symbols<'a>,
     output: &mut Output<'a>,
 ) -> Result<(), InstructionError<'a>> {
     let [addr, bit, rel] = split_three_arguments(arguments)?;
 
-    let am = parse_addressing_mode(addr, state)?;
-    let bit = parse_bit_argument(bit, state)?;
+    let am = parse_addressing_mode(addr, symbols)?;
+    let bit = parse_bit_argument(bit, symbols)?;
 
     let opcode = bit.to_opcode(opcode_base);
 
     match am {
         AddressingMode::Dp(dp) => {
             output.write_op_u8(opcode, dp);
-            output.write_relative_goto(rel, state);
+            output.write_relative_goto(rel, symbols);
             Ok(())
         }
         am => unknown_instruction_args_err(instruction, (am, bit, rel)),
@@ -795,24 +798,24 @@ fn branch_bit_instruction<'a>(
 
 fn pcall_instruction<'a>(
     arguments: &'a str,
-    state: &State<'a>,
+    symbols: &Symbols<'a>,
     output: &mut Output<'a>,
 ) -> Result<(), InstructionError<'a>> {
     let addr = split_one_argument(arguments)?;
 
     output.write_u8(0x4f);
-    output.write_pcall_address(addr, state);
+    output.write_pcall_address(addr, symbols);
     Ok(())
 }
 
 fn tcall_instruction<'a>(
     arguments: &'a str,
-    state: &State<'a>,
+    symbols: &Symbols<'a>,
     output: &mut Output<'a>,
 ) -> Result<(), InstructionError<'a>> {
     let addr = split_one_argument(arguments)?;
 
-    match evaluate(addr, state) {
+    match evaluate(addr, symbols) {
         ExpressionResult::Value(i) if (0..=16).contains(&i) => {
             output.write_u8(0x01 | u8::try_from(i << 4).unwrap());
             Ok(())
@@ -826,10 +829,10 @@ fn stack_instruction<'a>(
     instruction: &'a str,
     arguments: &'a str,
     opcode_base: u8,
-    state: &State<'a>,
+    symbols: &Symbols<'a>,
     output: &mut Output<'a>,
 ) -> Result<(), InstructionError<'a>> {
-    match parse_one_argument(arguments, state)? {
+    match parse_one_argument(arguments, symbols)? {
         AddressingMode::A => {
             output.write_u8(opcode_base + 0x20);
             Ok(())
@@ -854,13 +857,13 @@ fn dp_bit_instruction<'a>(
     instruction: &'a str,
     arguments: &'a str,
     opcode_base: u8,
-    state: &State<'a>,
+    symbols: &Symbols<'a>,
     output: &mut Output<'a>,
 ) -> Result<(), InstructionError<'a>> {
     let [addr, bit] = split_two_arguments(arguments)?;
 
-    let am = parse_addressing_mode(addr, state)?;
-    let bit = parse_bit_argument(bit, state)?;
+    let am = parse_addressing_mode(addr, symbols)?;
+    let bit = parse_bit_argument(bit, symbols)?;
 
     let opcode = bit.to_opcode(opcode_base);
 
@@ -877,10 +880,10 @@ fn abs_bit_instruction<'a>(
     instruction: &'a str,
     arguments: &'a str,
     opcode: u8,
-    state: &State<'a>,
+    symbols: &Symbols<'a>,
     output: &mut Output<'a>,
 ) -> Result<(), InstructionError<'a>> {
-    match parse_two_no_dp_arguments(arguments, state)? {
+    match parse_two_no_dp_arguments(arguments, symbols)? {
         [AddressingMode::Abs(abs), bit] => {
             let bit = bit.try_into_bit_argument()?;
 
@@ -895,10 +898,10 @@ fn abs_or_not_abs_bit_instruction<'a>(
     instruction: &'a str,
     arguments: &'a str,
     opcode_base: u8,
-    state: &State<'a>,
+    symbols: &Symbols<'a>,
     output: &mut Output<'a>,
 ) -> Result<(), InstructionError<'a>> {
-    match parse_three_no_dp_arguments(arguments, state)? {
+    match parse_three_no_dp_arguments(arguments, symbols)? {
         [AddressingMode::C, AddressingMode::Abs(abs), bit] => {
             let bit = bit.try_into_bit_argument()?;
 
@@ -919,10 +922,10 @@ fn carry_abs_bit_instruction<'a>(
     instruction: &'a str,
     arguments: &'a str,
     opcode: u8,
-    state: &State<'a>,
+    symbols: &Symbols<'a>,
     output: &mut Output<'a>,
 ) -> Result<(), InstructionError<'a>> {
-    match parse_three_no_dp_arguments(arguments, state)? {
+    match parse_three_no_dp_arguments(arguments, symbols)? {
         [AddressingMode::C, AddressingMode::Abs(abs), bit] => {
             let bit = bit.try_into_bit_argument()?;
 
@@ -936,71 +939,71 @@ fn carry_abs_bit_instruction<'a>(
 pub fn process_instruction<'a>(
     instruction: &'a str,
     arguments: &'a str,
-    state: &State<'a>,
+    symbols: &Symbols<'a>,
     output: &mut Output<'a>,
 ) -> Result<(), InstructionError<'a>> {
     match instruction {
-        "or" => arithmatic_instruction(instruction, arguments, 0x00, state, output),
-        "and" => arithmatic_instruction(instruction, arguments, 0x20, state, output),
-        "eor" => arithmatic_instruction(instruction, arguments, 0x40, state, output),
-        "adc" => arithmatic_instruction(instruction, arguments, 0x80, state, output),
-        "sbc" => arithmatic_instruction(instruction, arguments, 0xa0, state, output),
+        "or" => arithmatic_instruction(instruction, arguments, 0x00, symbols, output),
+        "and" => arithmatic_instruction(instruction, arguments, 0x20, symbols, output),
+        "eor" => arithmatic_instruction(instruction, arguments, 0x40, symbols, output),
+        "adc" => arithmatic_instruction(instruction, arguments, 0x80, symbols, output),
+        "sbc" => arithmatic_instruction(instruction, arguments, 0xa0, symbols, output),
 
-        "dec" => inc_dec_instruction(instruction, arguments, 0x00, state, output),
-        "inc" => inc_dec_instruction(instruction, arguments, 0x20, state, output),
+        "dec" => inc_dec_instruction(instruction, arguments, 0x00, symbols, output),
+        "inc" => inc_dec_instruction(instruction, arguments, 0x20, symbols, output),
 
-        "asl" => rmw_instruction(instruction, arguments, 0x00, state, output),
-        "rol" => rmw_instruction(instruction, arguments, 0x20, state, output),
-        "lsr" => rmw_instruction(instruction, arguments, 0x40, state, output),
-        "ror" => rmw_instruction(instruction, arguments, 0x60, state, output),
+        "asl" => rmw_instruction(instruction, arguments, 0x00, symbols, output),
+        "rol" => rmw_instruction(instruction, arguments, 0x20, symbols, output),
+        "lsr" => rmw_instruction(instruction, arguments, 0x40, symbols, output),
+        "ror" => rmw_instruction(instruction, arguments, 0x60, symbols, output),
 
-        "xcn" => only_a_instruction(instruction, arguments, 0x9f, state, output),
+        "xcn" => only_a_instruction(instruction, arguments, 0x9f, symbols, output),
 
-        "incw" => only_dp_instruction(instruction, arguments, 0x3a, state, output),
-        "decw" => only_dp_instruction(instruction, arguments, 0x1a, state, output),
-        "addw" => ya_dp_instruction(instruction, arguments, 0x7a, state, output),
-        "subw" => ya_dp_instruction(instruction, arguments, 0x9a, state, output),
-        "cmpw" => ya_dp_instruction(instruction, arguments, 0x5a, state, output),
+        "incw" => only_dp_instruction(instruction, arguments, 0x3a, symbols, output),
+        "decw" => only_dp_instruction(instruction, arguments, 0x1a, symbols, output),
+        "addw" => ya_dp_instruction(instruction, arguments, 0x7a, symbols, output),
+        "subw" => ya_dp_instruction(instruction, arguments, 0x9a, symbols, output),
+        "cmpw" => ya_dp_instruction(instruction, arguments, 0x5a, symbols, output),
 
-        "mul" => only_ya_instruction(instruction, arguments, 0xcf, state, output),
+        "mul" => only_ya_instruction(instruction, arguments, 0xcf, symbols, output),
 
-        "daa" => only_a_instruction(instruction, arguments, 0xdf, state, output),
-        "das" => only_a_instruction(instruction, arguments, 0xbe, state, output),
+        "daa" => only_a_instruction(instruction, arguments, 0xdf, symbols, output),
+        "das" => only_a_instruction(instruction, arguments, 0xbe, symbols, output),
 
-        "bra" => branch_instruction(arguments, 0x2f, state, output),
-        "beq" => branch_instruction(arguments, 0xf0, state, output),
-        "bne" => branch_instruction(arguments, 0xd0, state, output),
-        "bcs" => branch_instruction(arguments, 0xb0, state, output),
-        "bcc" => branch_instruction(arguments, 0x90, state, output),
-        "bvs" => branch_instruction(arguments, 0x70, state, output),
-        "bvc" => branch_instruction(arguments, 0x50, state, output),
-        "bmi" => branch_instruction(arguments, 0x30, state, output),
-        "bpl" => branch_instruction(arguments, 0x10, state, output),
+        "bra" => branch_instruction(arguments, 0x2f, symbols, output),
+        "beq" => branch_instruction(arguments, 0xf0, symbols, output),
+        "bne" => branch_instruction(arguments, 0xd0, symbols, output),
+        "bcs" => branch_instruction(arguments, 0xb0, symbols, output),
+        "bcc" => branch_instruction(arguments, 0x90, symbols, output),
+        "bvs" => branch_instruction(arguments, 0x70, symbols, output),
+        "bvc" => branch_instruction(arguments, 0x50, symbols, output),
+        "bmi" => branch_instruction(arguments, 0x30, symbols, output),
+        "bpl" => branch_instruction(arguments, 0x10, symbols, output),
 
-        "bbs" => branch_bit_instruction(instruction, arguments, 0x03, state, output),
-        "bbc" => branch_bit_instruction(instruction, arguments, 0x13, state, output),
+        "bbs" => branch_bit_instruction(instruction, arguments, 0x03, symbols, output),
+        "bbc" => branch_bit_instruction(instruction, arguments, 0x13, symbols, output),
 
-        "call" => only_abs_instruction(instruction, arguments, 0x3f, state, output),
-        "pcall" => pcall_instruction(arguments, state, output),
-        "tcall" => tcall_instruction(arguments, state, output),
+        "call" => only_abs_instruction(instruction, arguments, 0x3f, symbols, output),
+        "pcall" => pcall_instruction(arguments, symbols, output),
+        "tcall" => tcall_instruction(arguments, symbols, output),
 
         "brk" => no_argument_instruction(arguments, 0x0f, output),
         "ret" => no_argument_instruction(arguments, 0x6f, output),
         "reti" => no_argument_instruction(arguments, 0x7f, output),
 
-        "push" => stack_instruction(instruction, arguments, 0x0d, state, output),
-        "pop" => stack_instruction(instruction, arguments, 0x8e, state, output),
+        "push" => stack_instruction(instruction, arguments, 0x0d, symbols, output),
+        "pop" => stack_instruction(instruction, arguments, 0x8e, symbols, output),
 
-        "set1" => dp_bit_instruction(instruction, arguments, 0x02, state, output),
-        "clr1" => dp_bit_instruction(instruction, arguments, 0x12, state, output),
+        "set1" => dp_bit_instruction(instruction, arguments, 0x02, symbols, output),
+        "clr1" => dp_bit_instruction(instruction, arguments, 0x12, symbols, output),
 
-        "tset1" => only_abs_instruction(instruction, arguments, 0x0e, state, output),
-        "tclr1" => only_abs_instruction(instruction, arguments, 0x4e, state, output),
+        "tset1" => only_abs_instruction(instruction, arguments, 0x0e, symbols, output),
+        "tclr1" => only_abs_instruction(instruction, arguments, 0x4e, symbols, output),
 
-        "and1" => abs_or_not_abs_bit_instruction(instruction, arguments, 0x4a, state, output),
-        "or1" => abs_or_not_abs_bit_instruction(instruction, arguments, 0x0a, state, output),
-        "eor1" => carry_abs_bit_instruction(instruction, arguments, 0x8a, state, output),
-        "not1" => abs_bit_instruction(instruction, arguments, 0xea, state, output),
+        "and1" => abs_or_not_abs_bit_instruction(instruction, arguments, 0x4a, symbols, output),
+        "or1" => abs_or_not_abs_bit_instruction(instruction, arguments, 0x0a, symbols, output),
+        "eor1" => carry_abs_bit_instruction(instruction, arguments, 0x8a, symbols, output),
+        "not1" => abs_bit_instruction(instruction, arguments, 0xea, symbols, output),
 
         "clrc" => no_argument_instruction(arguments, 0x60, output),
         "setc" => no_argument_instruction(arguments, 0x80, output),
@@ -1015,7 +1018,7 @@ pub fn process_instruction<'a>(
         "stop" => no_argument_instruction(arguments, 0xFF, output),
 
         "mov" => {
-            match parse_two_arguments(arguments, state)? {
+            match parse_two_arguments(arguments, symbols)? {
                 [AddressingMode::A, AddressingMode::Immediate(i)] => output.write_op_u8v(0xe8, i),
                 [AddressingMode::A, AddressingMode::XIndirect] => output.write_u8(0xe6),
                 [AddressingMode::A, AddressingMode::XIndirectIncrement] => output.write_u8(0xbf),
@@ -1030,7 +1033,7 @@ pub fn process_instruction<'a>(
                 [AddressingMode::A, AddressingMode::DpY(a)] => {
                     // promote to `addr+Y`
                     output.write_u8(0xf6);
-                    output.write_u16(state.dp_addr_to_addr(a));
+                    output.write_u16(symbols.dp_addr_to_addr(a));
                 }
 
                 [AddressingMode::X, AddressingMode::Immediate(v)] => output.write_op_u8v(0xcd, v),
@@ -1056,7 +1059,7 @@ pub fn process_instruction<'a>(
                 [AddressingMode::DpY(a), AddressingMode::A] => {
                     // promote to `addr+Y`
                     output.write_u8(0xd6);
-                    output.write_u16(state.dp_addr_to_addr(a));
+                    output.write_u16(symbols.dp_addr_to_addr(a));
                 }
 
                 [AddressingMode::Dp(a), AddressingMode::X] => output.write_op_u8(0xd8, a),
@@ -1090,14 +1093,14 @@ pub fn process_instruction<'a>(
         }
 
         "movw" => {
-            match parse_two_arguments(arguments, state)? {
+            match parse_two_arguments(arguments, symbols)? {
                 [AddressingMode::Ya, AddressingMode::Dp(a)] => output.write_op_u8(0xba, a),
                 [AddressingMode::Dp(a), AddressingMode::Ya] => output.write_op_u8(0xda, a),
-                am => arithmatic_instruction_impl(instruction, am, 0x60, state, output)?,
+                am => arithmatic_instruction_impl(instruction, am, 0x60, symbols, output)?,
             }
             Ok(())
         }
-        "mov1" => match parse_three_no_dp_arguments(arguments, state)? {
+        "mov1" => match parse_three_no_dp_arguments(arguments, symbols)? {
             [AddressingMode::C, AddressingMode::Abs(abs), bit] => {
                 let bit = bit.try_into_bit_argument()?;
 
@@ -1113,7 +1116,7 @@ pub fn process_instruction<'a>(
             am => unknown_instruction_args_err(instruction, am),
         },
         "cmp" => {
-            match parse_two_arguments(arguments, state)? {
+            match parse_two_arguments(arguments, symbols)? {
                 [AddressingMode::X, AddressingMode::Immediate(v)] => output.write_op_u8v(0xc8, v),
                 [AddressingMode::X, AddressingMode::Dp(a)] => output.write_op_u8(0x3e, a),
                 [AddressingMode::X, AddressingMode::Abs(a)] => output.write_op_u16v(0x1e, a),
@@ -1122,46 +1125,46 @@ pub fn process_instruction<'a>(
                 [AddressingMode::Y, AddressingMode::Dp(a)] => output.write_op_u8(0x7e, a),
                 [AddressingMode::Y, AddressingMode::Abs(a)] => output.write_op_u16v(0x5e, a),
 
-                am => arithmatic_instruction_impl(instruction, am, 0x60, state, output)?,
+                am => arithmatic_instruction_impl(instruction, am, 0x60, symbols, output)?,
             }
             Ok(())
         }
-        "div" => match parse_two_arguments(arguments, state)? {
+        "div" => match parse_two_arguments(arguments, symbols)? {
             [AddressingMode::Ya, AddressingMode::X] => {
                 output.write_u8(0x9e);
                 Ok(())
             }
             am => unknown_instruction_args_err(instruction, am),
         },
-        "cbne" => match parse_argument_and_rel(arguments, state)? {
+        "cbne" => match parse_argument_and_rel(arguments, symbols)? {
             (AddressingMode::Dp(dp), rel) => {
                 output.write_op_u8(0x2e, dp);
-                output.write_relative_goto(rel, state);
+                output.write_relative_goto(rel, symbols);
                 Ok(())
             }
             (AddressingMode::DpX(dp), rel) => {
                 output.write_op_u8(0xde, dp);
-                output.write_relative_goto(rel, state);
+                output.write_relative_goto(rel, symbols);
                 Ok(())
             }
             am => unknown_instruction_args_err(instruction, am),
         },
 
-        "dbnz" => match parse_argument_and_rel(arguments, state)? {
+        "dbnz" => match parse_argument_and_rel(arguments, symbols)? {
             (AddressingMode::Dp(dp), rel) => {
                 output.write_op_u8(0x6e, dp);
-                output.write_relative_goto(rel, state);
+                output.write_relative_goto(rel, symbols);
                 Ok(())
             }
             (AddressingMode::Y, rel) => {
                 output.write_u8(0xfe);
-                output.write_relative_goto(rel, state);
+                output.write_relative_goto(rel, symbols);
                 Ok(())
             }
             am => unknown_instruction_args_err(instruction, am),
         },
 
-        "jmp" => match parse_one_no_dp_argument(arguments, state)? {
+        "jmp" => match parse_one_no_dp_argument(arguments, symbols)? {
             AddressingMode::Abs(abs) => {
                 output.write_op_u16v(0x5f, abs);
                 Ok(())
@@ -1181,21 +1184,20 @@ pub fn process_instruction<'a>(
 mod addressing_mode_tests {
     use super::{
         parse_addressing_mode, parse_no_dp_addressing_mode, AddressingMode, AddressingModeError,
-        DirectPageFlag, State, U16Value, U8Value,
+        DirectPageFlag, Symbols, U16Value, U8Value,
     };
-
     use crate::state::OldScope;
 
     const S: OldScope = OldScope::NONE;
 
     macro_rules! test_ok {
         ($s:literal, $v:expr) => {
-            assert_eq!(parse_addressing_mode($s, &State::new()), Ok($v))
+            assert_eq!(parse_addressing_mode($s, &Symbols::new()), Ok($v))
         };
     }
     macro_rules! test_err {
         ($s:literal, Err($v:expr)) => {
-            assert_eq!(parse_addressing_mode($s, &State::new()), Err($v))
+            assert_eq!(parse_addressing_mode($s, &Symbols::new()), Err($v))
         };
     }
 
@@ -1388,15 +1390,15 @@ mod addressing_mode_tests {
 
     #[test]
     fn direct_page_set() {
-        let state = {
-            let mut s = State::new();
+        let symbols = {
+            let mut s = Symbols::new();
             s.direct_page = DirectPageFlag::One;
             s
         };
 
         macro_rules! test {
             ($s:literal, $v:expr) => {
-                assert_eq!(parse_addressing_mode($s, &state), $v)
+                assert_eq!(parse_addressing_mode($s, &symbols), $v)
             };
         }
 
@@ -1471,10 +1473,10 @@ mod addressing_mode_tests {
 
     #[test]
     fn test_no_dp_addressing_modes() {
-        let state0 = State::new();
+        let state0 = Symbols::new();
 
         let state1 = {
-            let mut s = State::new();
+            let mut s = Symbols::new();
             s.direct_page = DirectPageFlag::One;
             s
         };
@@ -1555,7 +1557,7 @@ mod addressing_mode_tests {
     #[test]
     fn test_no_dp_addressing_modes_known_symbols() {
         let state0 = {
-            let mut s = State::new();
+            let mut s = Symbols::new();
             s.direct_page = DirectPageFlag::Zero;
             s.add_symbol("s1", 0x80).unwrap();
             s.add_symbol("s2", 0x180).unwrap();
@@ -1563,7 +1565,7 @@ mod addressing_mode_tests {
         };
 
         let state1 = {
-            let mut s = State::new();
+            let mut s = Symbols::new();
             s.direct_page = DirectPageFlag::One;
             s.add_symbol("s1", 0x80).unwrap();
             s.add_symbol("s2", 0x180).unwrap();
@@ -1620,13 +1622,13 @@ mod addressing_mode_tests {
     #[test]
     fn test_no_dp_addressing_modes_unknown_symbols() {
         let state0 = {
-            let mut s = State::new();
+            let mut s = Symbols::new();
             s.direct_page = DirectPageFlag::Zero;
             s
         };
 
         let state1 = {
-            let mut s = State::new();
+            let mut s = Symbols::new();
             s.direct_page = DirectPageFlag::One;
             s
         };
@@ -1682,7 +1684,7 @@ mod addressing_mode_tests {
 // https://snes.nesdev.org/wiki/SPC-700_instruction_set
 #[cfg(test)]
 mod instruction_tests {
-    use super::{DirectPageFlag, InstructionError, Output, OutputError, State};
+    use super::{DirectPageFlag, InstructionError, Output, OutputError, Symbols};
 
     use crate::{
         errors::{FileErrors, LineNo},
@@ -1693,18 +1695,18 @@ mod instruction_tests {
 
     pub fn process_line<'a>(
         line: &'a str,
-        state: &State<'a>,
+        symbols: &Symbols<'a>,
         output: &mut Output<'a>,
     ) -> Result<(), InstructionError<'a>> {
         let (instruction, arguments) = split_first_word(line);
-        super::process_instruction(instruction, arguments, state, output)
+        super::process_instruction(instruction, arguments, symbols, output)
     }
 
     #[track_caller]
-    fn test_sym(line: &str, state: &State, expected: &[u8]) {
+    fn test_sym(line: &str, symbols: &Symbols, expected: &[u8]) {
         let mut o = Output::new(0x200);
 
-        process_line(line, &state, &mut o).unwrap();
+        process_line(line, &symbols, &mut o).unwrap();
 
         assert_eq!(o.output(), expected, "{line:?} @ {}", Location::caller());
     }
@@ -1713,7 +1715,7 @@ mod instruction_tests {
     fn test(line: &str, expected: &[u8]) {
         let mut o = Output::new(0x200);
 
-        process_line(line, &State::new(), &mut o).unwrap();
+        process_line(line, &Symbols::new(), &mut o).unwrap();
 
         assert_eq!(o.output(), expected, "{line:?} @ {}", Location::caller());
     }
@@ -1722,7 +1724,7 @@ mod instruction_tests {
     fn test_result(line: &str, expected: Result<(), InstructionError>) {
         let mut o = Output::new(0x200);
 
-        assert_eq!(process_line(line, &State::new(), &mut o), expected);
+        assert_eq!(process_line(line, &Symbols::new(), &mut o), expected);
     }
 
     #[test]
@@ -1945,7 +1947,7 @@ mod instruction_tests {
     #[test]
     fn instructions_with_known_symbols() {
         let s = {
-            let mut s = State::new();
+            let mut s = Symbols::new();
             s.add_symbol("imm", 0x80).unwrap();
             s.add_symbol("dp", 0x10).unwrap();
             s.add_symbol("abs", 0x3ff).unwrap();
@@ -2185,7 +2187,7 @@ mod instruction_tests {
     fn bit_instructions_known_symbols() {
         for b in 0..=7 {
             let s = {
-                let mut s = State::new();
+                let mut s = Symbols::new();
                 s.add_symbol("dp", 0xff).unwrap();
                 s.add_symbol("bit", b.into()).unwrap();
                 s
@@ -2234,7 +2236,7 @@ mod instruction_tests {
     fn memory_bit_instruction_known_symbols() {
         for b in 0..=7 {
             let s = {
-                let mut s = State::new();
+                let mut s = Symbols::new();
                 s.add_symbol("abs", 0x3ff).unwrap();
                 s.add_symbol("bit", b.into()).unwrap();
                 s
@@ -2349,7 +2351,7 @@ mod instruction_tests {
     #[test]
     fn mov_dp_y_direct_page_clear() {
         let s = {
-            let mut s = State::new();
+            let mut s = Symbols::new();
             s.direct_page = DirectPageFlag::Zero;
             s.add_symbol("dp", 0x080).unwrap();
             s
@@ -2364,7 +2366,7 @@ mod instruction_tests {
     #[test]
     fn mov_dp_y_direct_page_set() {
         let s = {
-            let mut s = State::new();
+            let mut s = Symbols::new();
             s.direct_page = DirectPageFlag::One;
             s.add_symbol("dp", 0x180).unwrap();
             s
@@ -2379,7 +2381,7 @@ mod instruction_tests {
     #[test]
     fn alu_dp_y_direct_page_clear() {
         let s = {
-            let mut s = State::new();
+            let mut s = Symbols::new();
             s.direct_page = DirectPageFlag::Zero;
             s.add_symbol("dp", 0x080).unwrap();
             s
@@ -2398,7 +2400,7 @@ mod instruction_tests {
     #[test]
     fn alu_dp_y_direct_page_set() {
         let s = {
-            let mut s = State::new();
+            let mut s = Symbols::new();
             s.direct_page = DirectPageFlag::One;
             s.add_symbol("dp", 0x180).unwrap();
             s
@@ -2506,7 +2508,7 @@ mod instruction_tests {
     #[test]
     fn forward_references() {
         fn t(line: &str, expected: &[u8]) {
-            let mut s = State::new();
+            let mut s = Symbols::new();
             let mut o = Output::new(0x200);
             assert_eq!(process_line(line, &s, &mut o), Ok(()));
 
@@ -2600,7 +2602,7 @@ mod instruction_tests {
     #[test]
     fn forward_reference_branches() {
         fn t(line: &str, expected: &[u8]) {
-            let mut s = State::new();
+            let mut s = Symbols::new();
             let mut o = Output::new(0x200);
             assert_eq!(process_line(line, &s, &mut o), Ok(()));
 
@@ -2638,7 +2640,7 @@ mod instruction_tests {
     #[test]
     fn forward_reference_pcall() {
         fn t(line: &str, value: u16, expected: &[u8]) {
-            let mut s = State::new();
+            let mut s = Symbols::new();
             let mut o = Output::new(0x200);
             assert_eq!(process_line(line, &s, &mut o), Ok(()));
 
@@ -2660,7 +2662,7 @@ mod instruction_tests {
 
     #[test]
     fn invalid_abs_bit_forward_reference() {
-        let mut s = State::new();
+        let mut s = Symbols::new();
         let mut o = Output::new(0x200);
         assert_eq!(process_line("mov1 C, abs, 0", &s, &mut o), Ok(()));
 
@@ -2685,7 +2687,7 @@ mod instruction_tests {
 
     #[test]
     fn invalid_pcall_forward_reference() {
-        let mut s = State::new();
+        let mut s = Symbols::new();
         let mut o = Output::new(0x200);
         assert_eq!(process_line("pcall up", &s, &mut o), Ok(()));
 
