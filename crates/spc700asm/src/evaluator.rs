@@ -371,19 +371,19 @@ pub fn evaluate_u8v<'s>(expr: &'s str, state: &State<'s>) -> Result<U8Value<'s>,
             Ok(v) => Ok(U8Value::Known(v)),
             Err(_) => Err(ValueError::U8OutOfRange(expr, v)),
         },
-        ExpressionResult::Unknown => Ok(U8Value::Unknown(expr)),
+        ExpressionResult::Unknown => Ok(U8Value::Unknown(expr, state.scope())),
         ExpressionResult::Boolean(_) => Err(ValueError::U8NotANumber(expr)),
         ExpressionResult::Error(e) => Err(ValueError::Error(expr, e)),
     }
 }
 
-pub fn evaluate_u16v<'s>(expr: &'s str, state: &State) -> Result<U16Value<'s>, ValueError<'s>> {
+pub fn evaluate_u16v<'s>(expr: &'s str, state: &State<'s>) -> Result<U16Value<'s>, ValueError<'s>> {
     match evaluate(expr, state) {
         ExpressionResult::Value(v) => match v.try_into() {
             Ok(v) => Ok(U16Value::Known(v)),
             Err(_) => Err(ValueError::U16OutOfRange(expr, v)),
         },
-        ExpressionResult::Unknown => Ok(U16Value::Unknown(expr)),
+        ExpressionResult::Unknown => Ok(U16Value::Unknown(expr, state.scope())),
         ExpressionResult::Boolean(_) => Err(ValueError::U16NotANumber(expr)),
         ExpressionResult::Error(e) => Err(ValueError::Error(expr, e)),
     }
@@ -751,7 +751,7 @@ mod tests {
         ($expr:expr) => {
             let s = stringify![$expr];
             assert_eq!(
-                evaluate(s, &State::new(0x200)),
+                evaluate(s, &State::new()),
                 ExpressionResult::Value($expr),
                 "Expression mismatch {s}"
             );
@@ -759,7 +759,7 @@ mod tests {
         ($expr:literal, $value:expr) => {
             let s: &'static str = $expr;
             assert_eq!(
-                evaluate(s, &State::new(0x200)),
+                evaluate(s, &State::new()),
                 ExpressionResult::Value($value),
                 "Expression mismatch \"{s}\""
             );
@@ -770,7 +770,7 @@ mod tests {
         ($expr:expr) => {
             let s = stringify![$expr];
             assert_eq!(
-                evaluate(s, &State::new(0x200)),
+                evaluate(s, &State::new()),
                 ExpressionResult::Boolean($expr),
                 "Expression mismatch {s}"
             );
@@ -778,7 +778,7 @@ mod tests {
         ($expr:literal, $value:expr) => {
             let s: &'static str = $expr;
             assert_eq!(
-                evaluate(s, &State::new(0x200)),
+                evaluate(s, &State::new()),
                 ExpressionResult::Boolean($value),
                 "Expression mismatch {s}"
             );
@@ -942,7 +942,7 @@ mod tests {
 
     #[test]
     fn test_literal_overflow() {
-        let state = State::new(0x200);
+        let state = State::new();
 
         assert_eq!(
             evaluate("00009223372036854775807", &state),
@@ -1046,7 +1046,7 @@ mod tests {
 
     #[test]
     fn unknown_value() {
-        let state = State::new(0x200);
+        let state = State::new();
 
         assert_eq!(
             evaluate("(unknown + 1) * 2 / 3", &state),
@@ -1089,7 +1089,7 @@ mod tests {
     #[test]
     fn known_symbols() {
         let state = {
-            let mut s = State::new(0x200);
+            let mut s = State::new();
             s.add_symbol("one", 1).unwrap();
             s.add_symbol("two", 2).unwrap();
             s.add_symbol("three", 3).unwrap();
@@ -1136,7 +1136,7 @@ mod tests {
     #[test]
     fn scoped_lookup() {
         let state = {
-            let mut s = State::new(0x200);
+            let mut s = State::new();
             s.add_unchecked_scoped_symbol("scope", "const", 2).unwrap();
             s.add_unchecked_scoped_symbol("scope.const", "const", 9999)
                 .unwrap();
@@ -1156,7 +1156,7 @@ mod tests {
     #[test]
     fn characters_after_expression_is_syntax_error() {
         let state = {
-            let mut s = State::new(0x200);
+            let mut s = State::new();
             s.add_symbol("const", 10).unwrap();
             s
         };
@@ -1278,7 +1278,7 @@ mod tests {
 
     #[test]
     fn function_err() {
-        let state = State::new(0x200);
+        let state = State::new();
 
         for f in EVALUATOR_FUNCTIONS {
             assert_eq!(

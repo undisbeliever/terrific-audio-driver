@@ -17,7 +17,7 @@ use crate::{
     },
     instructions::process_instruction,
     state::{
-        is_symbol_name_valid, process_asserts, process_pending_output_expressions, State,
+        is_symbol_name_valid, process_asserts, process_pending_output_expressions, Output, State,
         SymbolError,
     },
     string::comma_iter,
@@ -567,16 +567,17 @@ fn process_function_table<'s>(
     line_no: LineNo,
     name: &'s str,
     ft_defs: &HashMap<&'s str, FunctionTableDef<'s>>,
-    state: &mut State<'s>,
+    state: &State<'s>,
+    output: &mut Output<'s>,
     errors: &mut FileErrors<'s>,
 ) {
-    state.set_line_no(line_no);
+    output.set_line_no(line_no);
 
     match ft_defs.get(name) {
         Some(ft) => {
             for (_, f) in &ft.functions {
                 match evaluate_u16v(f, state) {
-                    Ok(v) => state.write_u16v(v),
+                    Ok(v) => output.write_u16v(v),
                     Err(e) => errors.push(line_no, AssemblerError::FunctionTableError(e)),
                 }
             }
@@ -642,6 +643,7 @@ fn process_inline<'s>(
     inline_procs: &mut InlineProcs<'s>,
     state: &mut State<'s>,
     sym_file: &mut SymbolFile,
+    output: &mut Output<'s>,
     errors: &mut FileErrors<'s>,
 ) {
     let caller_scope = state.take_scope();
@@ -654,6 +656,7 @@ fn process_inline<'s>(
                 inline_procs,
                 state,
                 sym_file,
+                output,
                 errors,
             );
         }
@@ -669,6 +672,7 @@ fn process_db_repeat<'s>(
     line_no: LineNo,
     dbr: DbRepeat<'s>,
     state: &mut State<'s>,
+    output: &mut Output,
     errors: &mut FileErrors<'s>,
 ) {
     let name_valid = is_symbol_name_valid(dbr.name);
@@ -681,7 +685,7 @@ fn process_db_repeat<'s>(
                 state.set_repeat_value(dbr.name, i.into());
 
                 match evaluate_constexpr_u8(dbr.expr, state) {
-                    Ok(v) => state.write_u8(v),
+                    Ok(v) => output.write_u8(v),
                     Err(e) => {
                         errors.push(line_no, AssemblerError::DbRepeatError(dbr.name, i, e));
                         break;
@@ -712,12 +716,13 @@ fn process_db_repeat<'s>(
 fn process_db<'s>(
     line_no: LineNo,
     arguments: &'s str,
-    state: &mut State<'s>,
+    state: &State<'s>,
+    output: &mut Output<'s>,
     errors: &mut FileErrors<'s>,
 ) {
     for (i, a) in comma_iter(arguments).enumerate() {
         match evaluate_u8v(a, state) {
-            Ok(v) => state.write_u8v(v),
+            Ok(v) => output.write_u8v(v),
             Err(e) => errors.push(line_no, AssemblerError::DbError(i, e)),
         }
     }
@@ -726,12 +731,13 @@ fn process_db<'s>(
 fn process_dw<'s>(
     line_no: LineNo,
     arguments: &'s str,
-    state: &mut State<'s>,
+    state: &State<'s>,
+    output: &mut Output<'s>,
     errors: &mut FileErrors<'s>,
 ) {
     for (i, a) in comma_iter(arguments).enumerate() {
         match evaluate_u16v(a, state) {
-            Ok(v) => state.write_u16v(v),
+            Ok(v) => output.write_u16v(v),
             Err(e) => errors.push(line_no, AssemblerError::DwError(i, e)),
         }
     }
@@ -743,12 +749,13 @@ fn process_asm_line<'s>(
     inline_procs: &mut InlineProcs<'s>,
     state: &mut State<'s>,
     sym_file: &mut SymbolFile,
+    output: &mut Output<'s>,
     errors: &mut FileErrors<'s>,
 ) {
-    state.set_line_no(line_no);
+    output.set_line_no(line_no);
 
     match line {
-        AsmLine::Label(label) => match state.add_symbol(label, state.program_counter()) {
+        AsmLine::Label(label) => match state.add_symbol(label, output.program_counter()) {
             Ok((label, value)) => {
                 sym_file.add_label(label, value);
             }
@@ -757,7 +764,7 @@ fn process_asm_line<'s>(
         AsmLine::Constant { name, expr } => process_constant(line_no, name, expr, state, errors),
         AsmLine::Instruction(instruction, arguments) => {
             match inline_procs.find_and_take(instruction) {
-                None => match process_instruction(instruction, arguments, state) {
+                None => match process_instruction(instruction, arguments, state, output) {
                     Ok(()) => (),
                     Err(e) => errors.push(line_no, e),
                 },
@@ -765,15 +772,23 @@ fn process_asm_line<'s>(
                     if !arguments.is_empty() {
                         errors.push(line_no, AssemblerError::CannotUseArgumentsInInlineCall)
                     }
-                    process_inline(line_no, inline, inline_procs, state, sym_file, errors);
+                    process_inline(
+                        line_no,
+                        inline,
+                        inline_procs,
+                        state,
+                        sym_file,
+                        output,
+                        errors,
+                    );
                 }
             }
         }
-        AsmLine::Db(arguments) => process_db(line_no, arguments, state, errors),
-        AsmLine::Dw(arguments) => process_dw(line_no, arguments, state, errors),
-        AsmLine::DbRepeat(dbr) => process_db_repeat(line_no, dbr, state, errors),
+        AsmLine::Db(arguments) => process_db(line_no, arguments, state, output, errors),
+        AsmLine::Dw(arguments) => process_dw(line_no, arguments, state, output, errors),
+        AsmLine::DbRepeat(dbr) => process_db_repeat(line_no, dbr, state, output, errors),
         AsmLine::SetDirectPage(p) => state.direct_page = p,
-        AsmLine::Assert(expr) => state.add_assert(line_no, expr),
+        AsmLine::Assert(expr) => output.add_assert(line_no, expr, state),
     }
 }
 
@@ -788,6 +803,7 @@ fn process_proc_or_inline<'s>(
     inline_procs: &mut InlineProcs<'s>,
     state: &mut State<'s>,
     sym_file: &mut SymbolFile,
+    output: &mut Output<'s>,
     errors: &mut FileErrors<'s>,
 ) {
     let child_symbols: Vec<&'s str> = proc
@@ -800,7 +816,7 @@ fn process_proc_or_inline<'s>(
         })
         .collect();
 
-    let proc_addr = state.program_counter();
+    let proc_addr = output.program_counter();
 
     match state.add_symbol(proc.name, proc_addr) {
         Ok((full_name, _)) => {
@@ -820,10 +836,10 @@ fn process_proc_or_inline<'s>(
     state.open_scope(proc.name, child_symbols);
 
     for (line_no, asm) in proc.lines {
-        process_asm_line(line_no, asm, inline_procs, state, sym_file, errors);
+        process_asm_line(line_no, asm, inline_procs, state, sym_file, output, errors);
     }
 
-    if state.program_counter() == proc_addr {
+    if output.program_counter() == proc_addr {
         errors.push(
             proc.end_line_no,
             match code_type {
@@ -841,6 +857,7 @@ fn process_proc<'s>(
     inline_procs: &mut InlineProcs<'s>,
     state: &mut State<'s>,
     sym_file: &mut SymbolFile,
+    output: &mut Output<'s>,
     errors: &mut FileErrors<'s>,
 ) {
     process_proc_or_inline(
@@ -849,13 +866,14 @@ fn process_proc<'s>(
         inline_procs,
         state,
         sym_file,
+        output,
         errors,
     );
 }
 
-fn check_code_size(code_bank: Option<Range<u16>>, state: &State, errors: &mut FileErrors) {
+fn check_code_size(code_bank: Option<Range<u16>>, output: &Output, errors: &mut FileErrors) {
     if let Some(cb) = code_bank {
-        let code_size = state.output_len();
+        let code_size = output.output_len();
         let max_size = cb.len();
 
         if code_size > max_size {
@@ -896,7 +914,8 @@ fn assemble_lines<'s>(lines: SplitLines<'s>) -> Result<CompiledAsm, FileErrors<'
 
     let mut inline_procs = prepare_inlines(file.inlines, &mut errors);
 
-    let mut state = State::new(0);
+    let mut state = State::new();
+    let mut output = Output::new(0);
     let mut sym_file = SymbolFile::new();
     let mut code_bank = None;
     let mut cbst = CodeBankSetTest::new();
@@ -909,7 +928,7 @@ fn assemble_lines<'s>(lines: SplitLines<'s>) -> Result<CompiledAsm, FileErrors<'
             GlobalAsm::CodeBank(cb) => {
                 if code_bank.is_none() {
                     let cb = process_code_bank(cb, &state, &mut errors);
-                    state.set_pc_base(cb.start);
+                    output.set_pc_base(cb.start);
                     code_bank = Some(cb);
                     cbst.set();
                 } else {
@@ -934,7 +953,7 @@ fn assemble_lines<'s>(lines: SplitLines<'s>) -> Result<CompiledAsm, FileErrors<'
 
             GlobalAsm::FunctionTable(line_no, name) => {
                 cbst.check_codebank_set(line_no, &mut errors);
-                process_function_table(line_no, name, &ft_defs, &mut state, &mut errors)
+                process_function_table(line_no, name, &ft_defs, &state, &mut output, &mut errors)
             }
             GlobalAsm::Procedure(proc) => {
                 cbst.check_codebank_set(proc.line_no, &mut errors);
@@ -943,6 +962,7 @@ fn assemble_lines<'s>(lines: SplitLines<'s>) -> Result<CompiledAsm, FileErrors<'
                     &mut inline_procs,
                     &mut state,
                     &mut sym_file,
+                    &mut output,
                     &mut errors,
                 )
             }
@@ -956,19 +976,21 @@ fn assemble_lines<'s>(lines: SplitLines<'s>) -> Result<CompiledAsm, FileErrors<'
                     &mut inline_procs,
                     &mut state,
                     &mut sym_file,
+                    &mut output,
                     &mut errors,
                 )
             }
         }
     }
 
-    process_pending_output_expressions(&mut state, &mut errors);
+    process_pending_output_expressions(&mut output, &mut state, &mut errors);
     generate_unused_inline_errors(inline_procs, &mut errors);
-    process_asserts(&mut state, &mut errors);
-    check_code_size(code_bank.clone(), &state, &mut errors);
+    process_asserts(&mut output, &mut state, &mut errors);
+    check_code_size(code_bank.clone(), &output, &mut errors);
 
     if errors.is_empty() {
-        let (output, symbols) = state.take_output_and_symbols();
+        let output = output.take_output();
+        let symbols = state.take_symbols();
 
         // Make sure there are no variable overruns
         for b in &var_banks {

@@ -82,13 +82,13 @@ pub fn is_symbol_name_valid(s: &str) -> bool {
 #[derive(Debug, PartialEq)]
 pub enum U8Value<'s> {
     Known(u8),
-    Unknown(&'s str),
+    Unknown(&'s str, OldScope<'s>),
 }
 
 #[derive(Debug, PartialEq)]
 pub enum U16Value<'s> {
     Known(u16),
-    Unknown(&'s str),
+    Unknown(&'s str, OldScope<'s>),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -150,9 +150,15 @@ struct Assert<'s> {
     expression: &'s str,
 }
 
+#[derive(Debug, PartialEq)]
 pub struct OldScope<'s>(Option<&'s str>);
 
-pub struct State<'s> {
+impl OldScope<'_> {
+    #[cfg(test)]
+    pub const NONE: Self = Self(None);
+}
+
+pub(crate) struct State<'s> {
     pub direct_page: DirectPageFlag,
 
     scope: Option<&'s str>,
@@ -160,62 +166,27 @@ pub struct State<'s> {
     symbols: HashMap<String, Option<i64>>,
     struct_offsets: HashMap<(&'s str, &'s str), u16>,
 
-    output: Vec<u8>,
-
-    pc_base: u16,
-
-    line_no: LineNo,
-    pending_output: Vec<Pending<'s>>,
-
     // only used in repeat statements
     repeat_value: Option<(&'s str, i64)>,
 
     // only used in assert statements in `process_aserts()`
     assert_pc: Option<i64>,
-    asserts: Vec<Assert<'s>>,
 }
 
 impl<'s> State<'s> {
-    #[allow(dead_code)] // ::TODO remove::
-    pub fn new(pc_base: u16) -> Self {
+    pub fn new() -> Self {
         Self {
             direct_page: DirectPageFlag::Zero,
             scope: None,
             symbols: HashMap::new(),
             struct_offsets: HashMap::new(),
-            output: Vec::new(),
-            pc_base,
-            line_no: LineNo(0, 0),
-            pending_output: Vec::new(),
             repeat_value: None,
             assert_pc: None,
-            asserts: Vec::new(),
         }
     }
 
-    pub(crate) fn take_output_and_symbols(self) -> (Vec<u8>, HashMap<String, Option<i64>>) {
-        (self.output, self.symbols)
-    }
-
-    pub fn output_len(&self) -> usize {
-        self.output.len()
-    }
-
-    pub fn program_counter(&self) -> i64 {
-        i64::try_from(self.output.len())
-            .unwrap_or(i64::MAX)
-            .saturating_add(self.pc_base.into())
-    }
-
-    /// Panics if pc_base has already been set
-    pub fn set_pc_base(&mut self, pc_base: u16) {
-        assert_ne!(pc_base, 0, "pc_base cannot be 0");
-        assert_eq!(self.output.len(), 0, "Cannot set pc_base after assembly");
-
-        if self.pc_base != 0 {
-            panic!("Can only set pc_base once");
-        }
-        self.pc_base = pc_base;
+    pub fn take_symbols(self) -> HashMap<String, Option<i64>> {
+        self.symbols
     }
 
     fn override_scope(&mut self, scope: Option<&'s str>) {
@@ -228,6 +199,10 @@ impl<'s> State<'s> {
 
     pub fn clear_repeat_value(&mut self) {
         self.repeat_value = None;
+    }
+
+    pub fn scope(&self) -> OldScope<'s> {
+        OldScope(self.scope)
     }
 
     pub fn take_scope(&mut self) -> OldScope<'s> {
@@ -341,27 +316,77 @@ impl<'s> State<'s> {
             .map(|v| i64::from(*v))
     }
 
-    #[cfg(test)]
-    pub fn output(&self) -> &[u8] {
-        &self.output
-    }
-
-    pub fn set_line_no(&mut self, line_no: LineNo) {
-        self.line_no = line_no;
-    }
-
     pub fn dp_addr_to_addr(&self, dp: u8) -> u16 {
         match self.direct_page {
             DirectPageFlag::Zero => u16::from_le_bytes([dp, 0]),
             DirectPageFlag::One => u16::from_le_bytes([dp, 1]),
         }
     }
+}
 
-    fn push_pending_output(&mut self, expression: &'s str, output_type: PendingOutput) {
+pub(crate) struct Output<'s> {
+    output: Vec<u8>,
+    pc_base: u16,
+    line_no: LineNo,
+    pending_output: Vec<Pending<'s>>,
+    asserts: Vec<Assert<'s>>,
+}
+
+impl<'s> Output<'s> {
+    pub fn new(pc_base: u16) -> Self {
+        Self {
+            output: Vec::new(),
+            pc_base,
+            line_no: LineNo(0, 0),
+            pending_output: Vec::new(),
+            asserts: Vec::new(),
+        }
+    }
+
+    #[cfg(test)]
+    pub fn output(&self) -> &[u8] {
+        &self.output
+    }
+
+    pub fn take_output(self) -> Vec<u8> {
+        self.output
+    }
+
+    pub fn output_len(&self) -> usize {
+        self.output.len()
+    }
+
+    /// Panics if pc_base has already been set
+    pub fn set_pc_base(&mut self, pc_base: u16) {
+        assert_ne!(pc_base, 0, "pc_base cannot be 0");
+        assert_eq!(self.output.len(), 0, "Cannot set pc_base after assembly");
+
+        if self.pc_base != 0 {
+            panic!("Can only set pc_base once");
+        }
+        self.pc_base = pc_base;
+    }
+
+    pub fn program_counter(&self) -> i64 {
+        i64::try_from(self.output.len())
+            .unwrap_or(i64::MAX)
+            .saturating_add(self.pc_base.into())
+    }
+
+    pub fn set_line_no(&mut self, line_no: LineNo) {
+        self.line_no = line_no;
+    }
+
+    fn push_pending_output(
+        &mut self,
+        expression: &'s str,
+        scope: OldScope<'s>,
+        output_type: PendingOutput,
+    ) {
         self.pending_output.push(Pending {
             line_no: self.line_no,
             offset: self.output.len(),
-            scope: self.scope,
+            scope: scope.0,
             expression,
             output_type,
         });
@@ -380,8 +405,8 @@ impl<'s> State<'s> {
             U8Value::Known(v) => {
                 self.output.push(v);
             }
-            U8Value::Unknown(expression) => {
-                self.push_pending_output(expression, PendingOutput::U8);
+            U8Value::Unknown(expression, scope) => {
+                self.push_pending_output(expression, scope, PendingOutput::U8);
                 self.output.push(0);
             }
         }
@@ -394,8 +419,8 @@ impl<'s> State<'s> {
 
                 self.output.extend(&[l, h]);
             }
-            U16Value::Unknown(expression) => {
-                self.push_pending_output(expression, PendingOutput::U16);
+            U16Value::Unknown(expression, scope) => {
+                self.push_pending_output(expression, scope, PendingOutput::U16);
                 self.output.extend(&[0, 0]);
             }
         }
@@ -438,48 +463,52 @@ impl<'s> State<'s> {
                     Err(OutputError::AbsBitOutOfRange(addr))
                 }
             }
-            U16Value::Unknown(expression) => {
-                self.push_pending_output(expression, PendingOutput::AbsBit(bit));
+            U16Value::Unknown(expression, scope) => {
+                self.push_pending_output(expression, scope, PendingOutput::AbsBit(bit));
                 self.output.extend(&[0, 0]);
                 Ok(())
             }
         }
     }
 
-    pub fn write_relative_goto(&mut self, expression: &'s str) {
-        self.push_pending_output(expression, PendingOutput::RelativeBranch);
+    pub fn write_relative_goto(&mut self, expression: &'s str, state: &State<'s>) {
+        self.push_pending_output(expression, state.scope(), PendingOutput::RelativeBranch);
 
         self.output.push(0);
     }
 
-    pub fn write_pcall_address(&mut self, expression: &'s str) {
-        self.push_pending_output(expression, PendingOutput::Pcall);
+    pub fn write_pcall_address(&mut self, expression: &'s str, state: &State<'s>) {
+        self.push_pending_output(expression, state.scope(), PendingOutput::Pcall);
 
         self.output.push(0xff);
     }
 
-    pub fn add_assert(&mut self, line_no: LineNo, expression: &'s str) {
+    pub fn add_assert(&mut self, line_no: LineNo, expression: &'s str, state: &State<'s>) {
         self.asserts.push(Assert {
             line_no,
             pc: self.program_counter(),
-            scope: self.scope,
+            scope: state.scope,
             expression,
         });
     }
 }
 
-pub fn process_pending_output_expressions<'s>(s: &mut State<'s>, errors: &mut FileErrors<'s>) {
+pub fn process_pending_output_expressions<'s>(
+    o: &mut Output<'s>,
+    s: &mut State<'s>,
+    errors: &mut FileErrors<'s>,
+) {
     assert_eq!(s.assert_pc, None);
     assert_eq!(s.scope, None);
 
-    for p in std::mem::take(&mut s.pending_output) {
+    for p in std::mem::take(&mut o.pending_output) {
         let pos = p.offset;
 
         s.override_scope(p.scope);
         match evaluate(p.expression, s) {
             ExpressionResult::Value(value) => match p.output_type {
                 PendingOutput::U8 => match u8::try_from(value) {
-                    Ok(v) => s.output[pos] = v,
+                    Ok(v) => o.output[pos] = v,
                     Err(_) => errors.push(
                         p.line_no,
                         OutputError::OutOfRange {
@@ -491,7 +520,7 @@ pub fn process_pending_output_expressions<'s>(s: &mut State<'s>, errors: &mut Fi
                 },
                 PendingOutput::U16 => match u16::try_from(value) {
                     Ok(v) => {
-                        s.output[pos..pos + 2].copy_from_slice(&v.to_le_bytes());
+                        o.output[pos..pos + 2].copy_from_slice(&v.to_le_bytes());
                     }
                     Err(_) => errors.push(
                         p.line_no,
@@ -505,7 +534,7 @@ pub fn process_pending_output_expressions<'s>(s: &mut State<'s>, errors: &mut Fi
                 PendingOutput::AbsBit(bit) => match u16::try_from(value) {
                     Ok(v) if v <= MAX_ABS_BIT_ADDR => {
                         let v = v | (u16::from(bit.0) << 13);
-                        s.output[pos..pos + 2].copy_from_slice(&v.to_le_bytes());
+                        o.output[pos..pos + 2].copy_from_slice(&v.to_le_bytes());
                     }
                     _ => errors.push(
                         p.line_no,
@@ -518,17 +547,17 @@ pub fn process_pending_output_expressions<'s>(s: &mut State<'s>, errors: &mut Fi
                 },
                 PendingOutput::RelativeBranch => {
                     let pc =
-                        i64::try_from(pos + usize::from(s.pc_base) + 1).expect("output too big");
+                        i64::try_from(pos + usize::from(o.pc_base) + 1).expect("output too big");
 
                     let value = value - pc;
                     match i8::try_from(value) {
-                        Ok(v) => s.output[pos] = v.to_le_bytes()[0],
+                        Ok(v) => o.output[pos] = v.to_le_bytes()[0],
                         Err(_) => errors.push(p.line_no, OutputError::BranchOutOfRange(value)),
                     }
                 }
                 PendingOutput::Pcall => match u16::try_from(value) {
                     Ok(v) if v & 0xff00 == 0xff00 => {
-                        s.output[pos] = v.to_le_bytes()[0];
+                        o.output[pos] = v.to_le_bytes()[0];
                     }
                     _ => errors.push(p.line_no, OutputError::InvalidPcall(value)),
                 },
@@ -570,11 +599,11 @@ impl std::fmt::Display for AssertError<'_> {
     }
 }
 
-pub fn process_asserts<'s>(s: &mut State<'s>, errors: &mut FileErrors<'s>) {
+pub fn process_asserts<'s>(o: &mut Output<'s>, s: &mut State<'s>, errors: &mut FileErrors<'s>) {
     assert_eq!(s.assert_pc, None);
     assert_eq!(s.scope, None);
 
-    for assert in std::mem::take(&mut s.asserts) {
+    for assert in std::mem::take(&mut o.asserts) {
         s.assert_pc = Some(assert.pc);
         s.override_scope(assert.scope);
 
@@ -601,24 +630,4 @@ pub fn process_asserts<'s>(s: &mut State<'s>, errors: &mut FileErrors<'s>) {
 
     s.override_scope(None);
     s.assert_pc = None;
-}
-
-// Only allow state cloning in unit tests
-#[cfg(test)]
-impl Clone for State<'_> {
-    fn clone(&self) -> Self {
-        Self {
-            direct_page: self.direct_page.clone(),
-            scope: self.scope.clone(),
-            symbols: self.symbols.clone(),
-            struct_offsets: self.struct_offsets.clone(),
-            pc_base: self.pc_base,
-            output: self.output.clone(),
-            line_no: self.line_no,
-            pending_output: self.pending_output.clone(),
-            repeat_value: self.repeat_value.clone(),
-            assert_pc: self.assert_pc,
-            asserts: self.asserts.clone(),
-        }
-    }
 }
