@@ -39,7 +39,7 @@ TAD_IO_VERSION = 20
 
     ; Common audio data.
     ; Contains samples, pitch table and sound effects.
-    ; MUST be loaded after `LoaderDataType.CODE` and before song data.
+    ; MUST be loaded after `LoaderDataType__CODE` and before song data.
     LoaderDataType__COMMON_DATA = 1
 
 
@@ -80,21 +80,21 @@ TAD_IO_VERSION = 20
 ; ==================
 
     ; Port 0 is MUST be unused.
-    ; MUST only be used for `ToDriver.command` and `ToScpu.command_ack`.
+    ; MUST only be used for `DriverIO__COMMAND_PORT` and `DriverIO__COMMAND_ACK_PORT`.
 
     ; The loader ready signal.
     ;
-    ; To prevent conflicts with `Transfer_ToLoader.spinlock` or `ToDriver.switch_to_loader`:
+    ; To prevent conflicts with `LoaderIO_TransferToLoader__SPINLOCK_PORT` or `DriverIO__SWITCH_TO_LOADER_PORT`:
     ;   * bit 7 must be clear (end of transfer bit)
-    ;   * bit 6 should be set (so `Transfer_ToLoader.spinlock is never LOADER_READY if the counter MASK is used)
-    ;   * bit 5 must be clear (`ToDriver.SWITCH_TO_LOADER_BIT`)
+    ;   * bit 6 should be set (so `LoaderIO_TransferToLoader__SPINLOCK_PORT is never LOADE_READY if the counter MASK is used)
+    ;   * bit 5 must be clear (`DriverIO__SWITCH_TO_LOADER_BIT`)
     LoaderIO__LOADER_READY_L = %01001100 ; 'L'
     LoaderIO__LOADER_READY_H = %01000100 ; 'D'
 
 
     ; Step 1: S-CPU waits until ready signal is set by the loader
         ; Signal to the S-CPU that the loader is ready to receive data.
-        ; MUST wait until `ready` matches `LOADER_READY` before writing `InitToDriver` data.
+        ; MUST wait until `ready` ports match `LOADER_READY` before writing `LoaderIO_InitToDriver_*` ports.
         LoaderIO_InitToScpu__READY_PORT_L = CPUIO2
         LoaderIO_InitToScpu__READY_PORT_H = CPUIO3
 
@@ -108,8 +108,8 @@ TAD_IO_VERSION = 20
         LoaderIO_InitToLoader__READY_PORT_H = CPUIO3
 
 
-    ; Step 3: S-CPU waits until `Init_ToDriver` data is acknowledged
-    ;         by waiting until `data_type_ack` is zero.
+    ; Step 3: S-CPU waits until `LoaderIO_InitToLoader_*` data is acknowledged
+    ;         by waiting until `LoaderIO_InitAckToScpu__ACK_PORT` is zero.
         LoaderIO_InitAckToScpu__ACK_VALUE = 0
         LoaderIO_InitAckToScpu__ACK_PORT = CPUIO3
 
@@ -138,15 +138,17 @@ TAD_IO_VERSION = 20
         LoaderIO_TransferToLoader__SPINLOCK_SWITCH_TO_LOADER_BIT = 5
 
 
-    ; Step 5: S-CPU waits until `Transfer_ToLoader` is acknowledged
-    ;         by waiting until `spinlock_ack` == `spinlock`.
+    ; Step 5: S-CPU waits until the transfer is acknowledged
+    ;         by waiting until `LoaderIO_TransferToScpu__SPINLOCK_ACK_PORT == spinlock`.
         LoaderIO_TransferToScpu__SPINLOCK_ACK_PORT = CPUIO3
 
     ; Step 6: If there is more data to transfer, goto step 4
 
-    ; Step 7: The S-CPU writes `Transfer_ToLoader.SPINLOCK_COMPLETE` to `Transfer_ToLoader.spinlock`.
+    ; Step 7: The S-CPU writes
+    ;         `LoaderIO_TransferToLoader__SPINLOCK_COMPLETE` to `LoaderIO_TransferToLoader__SPINLOCK_PORT`
 
-    ; Step 8: The S-CPU waits until `Transfer_ToScpu.spinlock_ack == Transfer_ToScpu.SPINLOCK_COMPLETE`
+    ; Step 8: The S-CPU waits until
+    ;         `LoaderIO_TransferToScpu__SPINLOCK_ACK_PORT == LoaderIO_TransferToLoader__SPINLOCK_COMPLETE`
 
     ; Step 9: If `LoaderDataType` is not song goto Step 1.
     ;         If `LoaderDataType` is a song, the audio driver is executed..
@@ -191,9 +193,9 @@ TAD_IO_VERSION = 20
 
     ; Audio driver command acknowledgment.
     ;
-    ; Acknowledgment of the `ToDriver.command` byte.  Not used in the loader.
+    ; Acknowledgment of the `DriverIO__COMMAND_PORT` byte.  Not used in the loader.
     ;
-    ; After the command has been processed, the `IO.ToDriver.command` value will be written to this port.
+    ; After the command has been processed, the `DriverIO__COMMAND_PORT` value will be written to this port.
     DriverIO__COMMAND_ACK_PORT = CPUIO0
 
 
@@ -211,7 +213,7 @@ TAD_IO_VERSION = 20
     DriverIO__MODE_IPL = $bb
 
     ; The S-SMP is running the loader.
-    DriverIO__MODE_LOADER = $4c;         ; 'L', Loader.LOADER_READY_L
+    DriverIO__MODE_LOADER = $4c;         ; 'L', LoaderIO__LOADER_READY_L
 
     ; The S-SMP is running the audio-driver.
     DriverIO__MODE_AUDIO_DRIVER = $61 ;  ; 'a'

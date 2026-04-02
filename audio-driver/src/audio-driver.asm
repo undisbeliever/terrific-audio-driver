@@ -119,13 +119,13 @@ VOL_PAN_EFFECT_TRIANGLE_DOWN = $41
     ; bitmask - Set if S-DSP voice channel is music, clear if sfx.
     ; Used to disable music channel S-DSP writes that are used by sound effects.
     ; Bits 0-5 MUST be set.
-    ; MUST ONLY be modified by `_process_sfx_channels__inline()`.
+    ; MUST ONLY be modified by `process_sfx_channels`.
     musicSfxChannelMask : u8
 
     ; bitmask - Set if S-DSP voice channel is sfx, clear if music
     ;           (opposite to `musicSfxChannelMask`).
     ; Used to enabled/disable noise and echo when sound effects channels are active.
-    ; MUST ONLY be modified by `_process_sfx_channels__inline()`.
+    ; MUST ONLY be modified by `process_sfx_channels`.
     sfxMusicEchoNoiseMask : u8
 
     ; bitmask - Set if S-DSP voice channel is sfx.
@@ -271,7 +271,7 @@ VOL_PAN_EFFECT_TRIANGLE_DOWN = $41
 
 
     ; Used to determine if vol_l and vol_r need recalculating.
-    ; In the `__process_channels()` loop, bit 7 is left-shifted out and the volume is updated if set.
+    ; In the `process_channels` loop, bit 7 is left-shifted out and the volume is updated if set.
     ; (bit array)
     volShadowDirty_tmp : u8
 
@@ -299,7 +299,7 @@ VOL_PAN_EFFECT_TRIANGLE_DOWN = $41
     ;
     ; This variable MUST not have bits 6 & 7 set at the same time
     ;
-    ; To simplify timing, this variable is set at the start of `_process_sfx_channels__inline()`.
+    ; To simplify timing, this variable is set at the start of `process_sfx_channels`.
     noiseLock : u8
 
     ; The last SFX voice-bit that encountered a `play_noise` instruction.
@@ -313,20 +313,20 @@ VOL_PAN_EFFECT_TRIANGLE_DOWN = $41
 
     ; noise frequency register shadow variables
     ;
-    ; These variables MUST ALWAYS be `<= dsp.FLG__NOISE_FREQ_MASK`.
+    ; These variables MUST ALWAYS be `<= DSP_FLG__NOISE_FREQ_MASK`.
     noiseFreq_music : u8
     noiseFreq_sfx : [u8: N_SFX_CHANNELS]
 
 
     ; NON DSP register shadow variables.
     ;
-    ; Must only be edited by `_process_*_channels()`.
+    ; Must only be edited by `process_*_channels`.
     ; Edit `pendingNon_*` instead.
     nonShadow_music : u8
     nonShadow_sfx : u8
 
 
-; --- All zeropage variables after this point are not cleared in main() ---
+; --- All zeropage variables after this point are not cleared in `main` ---
 __EndZeropageClearAddr = nonShadow_sfx + 1
 
 
@@ -345,7 +345,7 @@ __EndZeropageClearAddr = nonShadow_sfx + 1
         ECHO_DIRTY__CLEAR_FIR_BIT = 0   ; Clear FIR filter before writing FIR filter
         ECHO_DIRTY__VOLUME_BIT = 6
 
-        ; Not tested in `_process_echo_registers__inline()`
+        ; Not tested in `process_echo_registers`
         ; Instead they will be written whenever echoDirty is non-zero
         ECHO_DIRTY__FEEDBACK_BIT = 5
         ECHO_DIRTY__EDL_BIT = 4
@@ -374,7 +374,7 @@ __EndZeropageClearAddr = nonShadow_sfx + 1
     pendingNon_music : u8
     pendingNon_sfx : u8
 
-    ; Cached SFX mutedChannels parameter for `__process_channels()`.
+    ; Cached SFX mutedChannels parameter for `process_channels`.
     sfxMutedChannels : u8
 
 
@@ -395,7 +395,7 @@ __EndZeropageClearAddr = nonShadow_sfx + 1
     ;
     ; This variable is equal to the `quarterWavelengthInTicks` parameter of the `set_vibrato` instruction
     ;
-    ; Offsetting the start of the vibrato saves a comparison in `_process_vibrato__inline()`.
+    ; Offsetting the start of the vibrato saves a comparison in `process_vibrato`.
     channelSoA_vibrato_tickCounterStart : [u8 : N_CHANNELS]
 
 
@@ -863,8 +863,8 @@ ClearEchoBufferEnd:
         mov CONTROL, #CONTROL__ENABLE_TIMER_0 | CONTROL__ENABLE_TIMER_1
     NoStartSong:
 
-    ; Clear smp.copunter_0 and smp.counter_1.
-    ; Fixes a single audible song tick/note when LoaderDataType.PLAY_SONG_BIT is clear
+    ; Clear SMP `T0OUT` and `T1OUT` counters.
+    ; Fixes a single audible song tick/note when LoaderDataType__PLAY_SONG_BIT is clear
     ; and the console has just powered-on.
     ; (The bug does not occur when the console is reset or when a new song is loaded).
     .assert T0OUT + 1 == T1OUT
@@ -1072,7 +1072,7 @@ ClearEchoBufferEnd:
             ; have their VxVOL zeroed.
             ;
             ; This is done in two places:
-            ;   1. At the start of `_process_sfx_channels__inline()` when a sound-effect
+            ;   1. At the start of `process_sfx_channels` when a sound-effect
             ;      wants to play noise, muting music noise before SFX noise starts.
             ;      As an optimisation, this is only done if the previous SFX tick was not
             ;      playing noise.
@@ -1328,7 +1328,7 @@ _mutedChannels = zpTmp
     ; Setting noise frequency after voice registers are written
     ; so SFX noise frequency is set after SFX VxVOL is zeroed or restored.
     ;
-    ; Comparing X with 0 is faster then splitting `__process_channels()` into two separate functions
+    ; Comparing X with 0 is faster then splitting `process_channels` into two separate functions
     mov A, X
     bne SfxChannels
         ; processing music channels
@@ -1341,7 +1341,7 @@ _mutedChannels = zpTmp
         mov A, noiseLock
         bne NoMusicNoise
             ; Write noiseFreq_music to the DSP
-            ; Assumes noiseFreq_music is <= dsp.FLG__NOISE_FREQ_MASK.
+            ; Assumes noiseFreq_music is <= DSP_FLG__NOISE_FREQ_MASK.
             mov A, #DSP_FLG
             mov Y, noiseFreq_music
             movw DSPADDR, YA
@@ -1371,7 +1371,7 @@ _mutedChannels = zpTmp
         EndSfxNoise:
 
             ; Write noise frequency to the DSP
-            ; Assumes noiseFreq_sfx is <= dsp.FLG__NOISE_FREQ_MASK.
+            ; Assumes noiseFreq_sfx is <= DSP_FLG__NOISE_FREQ_MASK.
             mov A, #DSP_FLG
             movw DSPADDR, YA
         NoSfxNoise:
@@ -1523,7 +1523,7 @@ _mutedChannels = zpTmp
         NoPanEffect:
 
 
-        ; Cannot do this after process_bytecode() for 2 reasons:
+        ; Cannot do this after `process_bytecode` for 2 reasons:
         ;  1. Volume must be calculated on the first instruction of a sound-effect
         ;  2. Volume/pan slide/vibrato
         asl volShadowDirty_tmp
