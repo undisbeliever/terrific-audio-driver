@@ -276,16 +276,17 @@ fn parse_dp_or_abs_address<'a>(
 ) -> Result<DpOrAbs<'a>, AddressingModeError<'a>> {
     match evaluate(s, symbols) {
         ExpressionResult::Value(value) => match u16::try_from(value) {
-            Ok(addr) => {
-                let dp = symbols.direct_page();
-                if dp == DirectPageFlag::Zero && addr < 0x100 {
+            Ok(addr) => match (symbols.direct_page(), addr) {
+                (DirectPageFlag::Zero, addr @ 0..0x100) => {
                     Ok(DpOrAbs::Dp(u8::try_from(addr).unwrap()))
-                } else if dp == DirectPageFlag::One && (0x100..0x200).contains(&addr) {
+                }
+                (DirectPageFlag::One, addr @ 0x100..0x200) => {
                     Ok(DpOrAbs::Dp(u8::try_from(addr - 0x100).unwrap()))
-                } else {
+                }
+                (DirectPageFlag::One | DirectPageFlag::Zero, addr) => {
                     Ok(DpOrAbs::Abs(U16Value::Known(addr)))
                 }
-            }
+            },
             Err(_) => Err(AddressingModeError::AbsoluteAddressOutOfBounds(s, value)),
         },
         ExpressionResult::Unknown => Ok(DpOrAbs::Abs(U16Value::Unknown(s, symbols.scope()))),
@@ -296,22 +297,12 @@ fn parse_dp_or_abs_address<'a>(
 
 fn parse_dp_address<'a>(s: &'a str, symbols: &Symbols) -> Result<u8, AddressingModeError<'a>> {
     match evaluate(s, symbols) {
-        ExpressionResult::Value(value) => match u16::try_from(value) {
-            Ok(addr) => {
-                let dp = symbols.direct_page();
-                if dp == DirectPageFlag::Zero && addr < 0x100 {
-                    Ok(u8::try_from(addr).unwrap())
-                } else if dp == DirectPageFlag::One && (0x100..0x200).contains(&addr) {
-                    Ok(u8::try_from(addr - 0x100).unwrap())
-                } else {
-                    Err(AddressingModeError::DpOutOfBounds(s, dp, value))
-                }
+        ExpressionResult::Value(value) => match (symbols.direct_page(), value) {
+            (DirectPageFlag::Zero, addr @ 0..0x100) => Ok(u8::try_from(addr).unwrap()),
+            (DirectPageFlag::One, addr @ 0x100..0x200) => Ok(u8::try_from(addr - 0x100).unwrap()),
+            (dp @ DirectPageFlag::One, value) | (dp @ DirectPageFlag::Zero, value) => {
+                Err(AddressingModeError::DpOutOfBounds(s, dp, value))
             }
-            Err(_) => Err(AddressingModeError::DpOutOfBounds(
-                s,
-                symbols.direct_page(),
-                value,
-            )),
         },
         ExpressionResult::Unknown => Err(AddressingModeError::UnknownDpValue(s)),
         ExpressionResult::Boolean(_) => Err(AddressingModeError::NotANumber(s)),
