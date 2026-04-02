@@ -650,9 +650,11 @@ fn process_inline<'s>(
     let caller_scope = symbols.take_scope();
 
     match inline {
-        InlineProc::Inline(code) => {
+        InlineProc::Inline(inline) => {
+            let name = inline.name;
+
             process_proc_or_inline(
-                code,
+                inline,
                 ProcType::Inline,
                 inline_procs,
                 symbols,
@@ -660,6 +662,8 @@ fn process_inline<'s>(
                 output,
                 errors,
             );
+
+            sym_file.add_label([name, ".__END__"].concat(), output.program_counter());
         }
         InlineProc::Taken => {
             errors.push(caller_line_no, AssemblerError::CanOnlyUseInlineOnce);

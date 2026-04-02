@@ -42,6 +42,13 @@ impl SymbolFile {
         })
     }
 
+    pub fn find(&self, name: &str) -> Option<i64> {
+        self.symbols
+            .iter()
+            .find(|s| s.full_name == name)
+            .map(|s| *s.addr.start())
+    }
+
     pub fn to_mlb_label_file(&self) -> Result<String, std::fmt::Error> {
         let mut out = String::with_capacity(32 * 1024);
 
