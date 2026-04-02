@@ -121,7 +121,7 @@ impl std::fmt::Display for AssemblerError<'_> {
                 write!(f, "invalid .dbrepeat range {from}..{to}")
             }
             AssemblerError::DbRepeatError(var, value, e) => {
-                write!(f, "{e} (.dbrepeat {var} == {value})")
+                write!(f, ".dbrepeat {var} = {value}: {e}")
             }
             AssemblerError::InvalidStructName(name) => write!(f, "invalid struct name: {name}"),
             AssemblerError::DuplicateStruct(name) => write!(f, "duplicate .struct: {name}"),
