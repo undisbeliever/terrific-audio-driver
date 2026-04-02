@@ -245,9 +245,9 @@ N = 8
 .endstruct
 
 .struct Outer
-    b : u8
-    i : Inner
-    a : [Inner : 2]
+    byte : u8
+    inner : Inner
+    arr : [Inner : 2]
     end: u8
 .endstruct
 
@@ -270,25 +270,25 @@ N = 8
     assert_eq!(c.sym("inner.byte2"), 19);
 
     assert_eq!(c.sym("outer_array"), 20);
-    assert_eq!(c.sym("outer_array.b"), 20);
-    assert_eq!(c.sym("outer_array.i"), 21);
-    assert_eq!(c.sym("outer_array.i.byte"), 21);
-    assert_eq!(c.sym("outer_array.i.pointer"), 22);
-    assert_eq!(c.sym("outer_array.i.pointer.l"), 22);
-    assert_eq!(c.sym("outer_array.i.pointer.h"), 23);
-    assert_eq!(c.sym("outer_array.i.array"), 24);
-    assert_eq!(c.sym("outer_array.i.array.l"), 24);
-    assert_eq!(c.sym("outer_array.i.array.h"), 25);
-    assert_eq!(c.sym("outer_array.i.byte2"), 40);
-    assert_eq!(c.sym("outer_array.a"), 41);
-    assert_eq!(c.sym("outer_array.a.byte"), 41);
-    assert_eq!(c.sym("outer_array.a.pointer"), 42);
-    assert_eq!(c.sym("outer_array.a.pointer.l"), 42);
-    assert_eq!(c.sym("outer_array.a.pointer.h"), 43);
-    assert_eq!(c.sym("outer_array.a.array"), 44);
-    assert_eq!(c.sym("outer_array.a.array.l"), 44);
-    assert_eq!(c.sym("outer_array.a.array.h"), 45);
-    assert_eq!(c.sym("outer_array.a.byte2"), 60);
+    assert_eq!(c.sym("outer_array.byte"), 20);
+    assert_eq!(c.sym("outer_array.inner"), 21);
+    assert_eq!(c.sym("outer_array.inner.byte"), 21);
+    assert_eq!(c.sym("outer_array.inner.pointer"), 22);
+    assert_eq!(c.sym("outer_array.inner.pointer.l"), 22);
+    assert_eq!(c.sym("outer_array.inner.pointer.h"), 23);
+    assert_eq!(c.sym("outer_array.inner.array"), 24);
+    assert_eq!(c.sym("outer_array.inner.array.l"), 24);
+    assert_eq!(c.sym("outer_array.inner.array.h"), 25);
+    assert_eq!(c.sym("outer_array.inner.byte2"), 40);
+    assert_eq!(c.sym("outer_array.arr"), 41);
+    assert_eq!(c.sym("outer_array.arr.byte"), 41);
+    assert_eq!(c.sym("outer_array.arr.pointer"), 42);
+    assert_eq!(c.sym("outer_array.arr.pointer.l"), 42);
+    assert_eq!(c.sym("outer_array.arr.pointer.h"), 43);
+    assert_eq!(c.sym("outer_array.arr.array"), 44);
+    assert_eq!(c.sym("outer_array.arr.array.l"), 44);
+    assert_eq!(c.sym("outer_array.arr.array.h"), 45);
+    assert_eq!(c.sym("outer_array.arr.byte2"), 60);
     assert_eq!(c.sym("outer_array.end"), 81);
 
     assert_eq!(c.sym("end"), 20 + 62 * 2);
@@ -1672,4 +1672,60 @@ fn offsetof_erorrs() {
             dbee(15, "offsetof(", ExpressionError::SyntaxError),
         ]
     );
+}
+
+#[test]
+fn invalid_symbol_name_test() {
+    #[rustfmt::skip]
+    const TO_TEST: &[&str] = &[
+        "!BAD!", "1_is_not_valid", "scoped.name", "i+2",
+        "A", "a", "X", "x", "Y", "y", "YA", "ya", "SP", "sp", "PSW", "psw", "C", "c", "PC", "pc",
+    ];
+
+    for symbol in TO_TEST {
+        let asm = format!(
+            r##"
+.codebank $200..$300
+.varbank zeropage $0000..$0100
+
+{symbol}:
+{symbol} = 0
+
+.struct {symbol}
+  {symbol}: u8
+.endstruct
+
+.vars zeropage
+  {symbol}: u8
+  {symbol}: {symbol}
+.endvars
+
+.proc {symbol}
+{symbol}:
+{symbol} = 0
+    .db 0
+.endproc
+"##
+        );
+
+        let e = assemble(&asm).err().unwrap();
+
+        assert_eq!(
+            &e.errors(),
+            &[
+                el(5, SymbolError::InvalidName(symbol)),
+                el(6, SymbolError::InvalidName(symbol)),
+                el(8, AssemblerError::InvalidStructName(symbol)),
+                el(9, AssemblerError::InvalidFieldName(symbol)),
+                el(13, SymbolError::InvalidName(symbol)),
+                el(14, SymbolError::InvalidName(symbol)),
+                el(
+                    17,
+                    AssemblerError::CannotOpenProc(SymbolError::InvalidName(symbol))
+                ),
+                el(18, SymbolError::InvalidName(symbol)),
+                el(19, SymbolError::InvalidName(symbol)),
+            ]
+        );
+    }
 }

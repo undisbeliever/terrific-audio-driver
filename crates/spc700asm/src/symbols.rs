@@ -40,10 +40,19 @@ pub fn is_identifier_character(c: u8) -> bool {
     c.is_ascii_alphanumeric() || c == b'_' || c == b'.'
 }
 
+const INVALID_SYMBOL_NAMES: [&str; 16] = [
+    "A", "X", "Y", "YA", "SP", "PSW", "C", "PC", "a", "x", "y", "ya", "sp", "psw", "c", "pc",
+];
+
+#[must_use]
 pub fn is_symbol_name_valid(s: &str) -> bool {
-    let mut it = s.bytes();
-    let first = it.next().unwrap_or(0);
-    is_symbol_start_character(first) && it.all(is_symbol_character)
+    if !INVALID_SYMBOL_NAMES.contains(&s) {
+        let mut it = s.bytes();
+        let first = it.next().unwrap_or(0);
+        is_symbol_start_character(first) && it.all(is_symbol_character)
+    } else {
+        false
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
