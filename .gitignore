@@ -1,4 +1,5 @@
 *.bin
+*.mlb
 *.sym
 *.dbg
 *.label

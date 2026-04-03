@@ -112,9 +112,9 @@ Build Requirements
 Build Scripts
 =============
 
-This project uses two build scripts:
- * [crates/compiler/build.rs](crates/compiler/build.rs): Compiles the audio driver using wiz and
-   extracts audio-driver addresses from a symbol file.
+This project uses three build scripts:
+ * [crates/compiler/build.rs](crates/compiler/build.rs): Assembles the audio driver
+   and generates a `symbols.rs` file containing audio-driver addresses and constants.
  * [crates/shvc-sound-emu/build.rs](crates/shvc-sound-emu/build.rs): Compiles c++ code using the `cxx_build` crate.
  * [crates/tad-gui/build.rs](crates/tad-gui/build.rs): Converts markdown files to HTML files so they
    can be embedded into the GUI application.
@@ -123,12 +123,11 @@ This project uses two build scripts:
 Build Instructions
 ==================
 
+ * run `cargo build --release`
  * Import the `wiz` git submodule.
  * Compile `wiz`.
     * See [Wiz - Building Source](https://github.com/wiz-lang/wiz#building-source) for more details.
-    * The [compiler build script](crates/compiler/build.rs) expects a binary called `wiz` or
-      `wiz.exe` in the `wiz/bin/` directory.
- * run `cargo build --release`
+ * run `make` in the `audio-driver` directory to assemble the audio driver binaries
 
 
 <!-- END RELEASE CUT -->
@@ -139,6 +138,7 @@ The terrific audio driver is copyright (c) 2023, Marcus Rowe.
 See [docs/licenses.md](docs/licenses.md) for full license text.
 
  * The audio driver (S-SMP and `.spc` code) is licensed under the [zlib License](audio-driver/LICENSE).
+ * The spc700asm assembler is licensed under the [MIT License](crates/spc700asm/LICENSE).
  * The compiler and GUI are licensed under the [MIT License](crates/tad-compiler/LICENSE).
  * The audio emulator used by the GUI is licensed under the [ISC License](crates/shvc-sound-emu/LICENSE).
 

@@ -2,6 +2,8 @@
 resolver = "2"
 
 members = [
+    "crates/spc700asm",
+
     "crates/brr",
     "crates/compiler",
     "crates/shvc-sound-emu",
@@ -44,14 +46,18 @@ shvc-sound-emu = { path = "./crates/shvc-sound-emu", version = "=0.0.0" }
 tad-emu = { path = "./crates/tad-emu", version = "=0.0.0" }
 
 # Local binary crates
+spc700asm = { path = "./crates/spc700asm/", version = "=0.0.0" }
 tad-compiler = { path = "./crates/tad-compiler", version = "=0.0.0" }
 wav2brr = { path = "./crates/wav2brr", version = "=0.0.0" }
 
 # External crates
 clap = { version="4.5.16", features=[ "derive" ] }
+anstyle = { version="1.0.13" }
+anstream = { version="0.6.21" }
 serde = { version="1.0.164", features=[ "derive" ] }
 serde_json = { version="1.0.97" }
 relative-path = { version="2.0.1", features=[ "serde" ] }
+bitflags = { version="2.10.0" }
 
 sdl2 = { version="0.38.0", features=[] }
 spectrum-analyzer = { version="1.6.0" }

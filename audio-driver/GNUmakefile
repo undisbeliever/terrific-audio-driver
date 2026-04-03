@@ -3,11 +3,11 @@ MAKEFLAGS += --no-builtin-rules --warn-undefined-variables
 .SUFFIXES:
 
 
-MAIN_FILES    := src/loader.wiz src/audio-driver.wiz
-INCLUDE_FILES := $(filter-out $(MAIN_FILES), $(wildcard src/*.wiz))
+WIZ_MAIN_FILES    := src/loader.wiz src/audio-driver.wiz
+WIZ_INCLUDE_FILES := $(filter-out $(WIZ_MAIN_FILES), $(wildcard src/*.wiz))
 
-BIN_OUT       := $(patsubst src/%.wiz,%.bin,$(MAIN_FILES))
-SYM_OUT       := $(patsubst src/%.wiz,%.sym,$(MAIN_FILES))
+WIZ_BIN_OUT       := $(patsubst src/%.wiz,%.wiz.bin,$(WIZ_MAIN_FILES))
+WIZ_SYM_OUT       := $(patsubst src/%.wiz,%.sym,$(WIZ_MAIN_FILES))
 
 
 ifndef WIZ
@@ -22,13 +22,20 @@ endif
 .PHONY: all clean
 
 
-all: $(BIN_OUT) $(SYM_OUT)
+all: loader.bin loader.mlb audio-driver.bin audio-driver.mlb $(WIZ_BIN_OUT)
+	diff --report-identical-files loader.bin loader.wiz.bin
+	diff --report-identical-files audio-driver.bin audio-driver.wiz.bin
 
+loader.bin loader.mlb &: src/loader.asm src/common-memmap.inc src/registers.inc src/io-commands.inc
+	cargo run --release --bin spc700asm -- --mlb loader.mlb -o loader.bin src/loader.asm
+
+audio-driver.bin audio-driver.mlb &: src/audio-driver.asm src/bytecode.inc src/common-memmap.inc src/data-formats.inc src/io-commands.inc src/registers.inc
+	cargo run --release --bin spc700asm -- --mlb audio-driver.mlb -o audio-driver.bin src/audio-driver.asm
 
 clean:
-	$(RM) $(BIN_OUT) $(SYM_OUT)
+	$(RM) loader.bin loader.mlb audio-driver.bin audio-driver.mlb
+	$(RM) $(WIZ_BIN_OUT) $(WIZ_SYM_OUT)
 
-
-%.bin %.sym &: src/%.wiz $(INCLUDE_FILES)
+%.wiz.bin %.wiz.sym &: src/%.wiz $(WIZ_INCLUDE_FILES)
 	$(WIZ) --system=spc700 -s wla -o $@ $<
 

@@ -1,0 +1,232 @@
+; Data formats used by the audio driver
+;
+; SPDX-FileCopyrightText: © 2023 Marcus Rowe <undisbeliever@gmail.com>
+; SPDX-License-Identifier: Zlib
+;
+; Copyright © 2023 Marcus Rowe <undisbeliever@gmail.com>
+;
+; This software is provided 'as-is', without any express or implied warranty.  In
+; no event will the authors be held liable for any damages arising from the use of
+; this software.
+;
+; Permission is granted to anyone to use this software for any purpose, including
+; commercial applications, and to alter it and redistribute it freely, subject to
+; the following restrictions:
+;
+;      1. The origin of this software must not be misrepresented; you must not
+;         claim that you wrote the original software. If you use this software in
+;         a product, an acknowledgment in the product documentation would be
+;         appreciated but is not required.
+;
+;      2. Altered source versions must be plainly marked as such, and must not be
+;         misrepresented as being the original software.
+;
+;      3. This notice may not be removed or altered from any source distribution.
+
+
+; The minimum timer value required to ensure Key-Off event completely silences the sample before
+; the next note plays.
+MIN_TICK_CLOCK = 64
+
+
+; The tempo (timer register value) for the sound effects
+; MUST BE >= MIN_TICK_CLOCK
+SFX_TICK_CLOCK = 64
+
+
+N_MUSIC_CHANNELS = 8
+N_SFX_CHANNELS = 2
+N_CHANNELS = N_MUSIC_CHANNELS + N_SFX_CHANNELS
+
+STARTING_VOLUME = 96
+
+MAX_DIR_ITEMS = $100
+MAX_INSTRUMENTS = $100
+
+; Must be < $ff.
+; In S-CPU code, `$ff` is NULL (no sound effect in queue).
+MAX_SOUND_EFFECTS = 254
+
+
+
+; Common Data
+; ===========
+
+COMMON_DATA_HEADER_SIZE = 28
+COMMON_DATA_POINTERS_SIZE = 12 * 2
+
+
+.struct DirItem
+    start : ptr
+    loop  : ptr
+.endstruct
+
+
+.struct CommonDataPointers
+    ; Pitch Table SoA
+    ; The pitch table must contain a maximum 256 pitches.
+    ;
+    ; CAUTION: This table is indexed by `play_note_opcode / 2 + instruments_pitchOffset`
+    pitchTable_l : ptr
+    pitchTable_h : ptr
+
+
+    ; Instruments SoA
+
+    ; The DIR table index for the instrument/sample
+    instruments_scrn : ptr
+
+    ; offset between note c0, `FIRST_PLAY_NOTE_INSTRUCTION/2` and  `CommonDataHeader.pitchTable[0]`
+    ; The pitch that will be played for each note-opcode is `pitchTable[note_opcode/2 + pitchOffset]`.
+    ; (`pitchOffset + note_opcode / 2` is allowed to overflow and underflow)
+    instruments_pitchOffset : ptr
+
+    ; The ADSR1 register value for the instrument/sample default envelope
+    instruments_adsr1 : ptr
+
+    ; This variable is either:
+    ;  * ADSR2 if bit 7 of `adsr1` is set
+    ;  * GAIN if bit 7 of `adsr1` is clear
+    instruments_adsr2OrGain : ptr
+
+
+    ; sfx subroutines
+
+    ; u16 address for sound effect subroutines
+    sfxSubroutines_l : ptr
+    sfxSubroutines_h : ptr
+
+
+    ; Sound Effects SoA
+
+    ; oaaaaaaa aaaaaaaa
+    ;      o = if set sound effect will play on at most 1 channel
+    ;      a = address of the sound effect bytecode
+    soundEffects_addrAndOneChannelFlag_l : ptr
+    soundEffects_addrAndOneChannelFlag_h : ptr
+
+    ; iddddddd ddddddd
+    ;      i = sfx interruptible flag
+    ;      d = duration in ticks
+    soundEffects_durationAndInterruptFlag_l : ptr
+    soundEffects_durationAndInterruptFlag_h : ptr
+.endstruct
+
+
+; Assumes `sizeof(CommonDataHeader) + COMMON_DATA_ADDR` is page aligned.
+.struct CommonDataHeader
+    pointers       : CommonDataPointers
+
+    _padding1      : u8
+
+    ; MUST BE <= MAX_SOUND_EFFECTS
+    nSoundEffects  : u8
+
+    ; The number of high-priority sound effects.
+    ; High priority sound effects ignore the interruptible flag if both sound effect channels are active and uninterruptible.
+    nHighPrioritySfx: u8
+
+    ; The sfx_id of the first low-priority sound effect.
+    ; If both sound effects channels are active and sfx_id >= firstLowPrioritySfx, sfx_id will be dropped.
+    firstLowPrioritySfx: u8
+
+    ; Immediately after the header is the BRR Directory:
+    ;      BRR Directory:  [DirItem : nDirItems]
+.endstruct
+
+
+
+; Song Data
+; =========
+
+.struct EchoBufferSettings
+    ; Echo buffer size AND maximum echo buffer size.
+    ;
+    ;      mmmmeeee
+    ;      mmmm = maximum EDL
+    ;      eeee = Starting EDL
+    ;
+    ; The maximum EDL determines the location of the echo-buffer in Audio-RAM
+    ; (`ESA` S-DSP register)
+    ;
+    ; The echo buffer is `2048 * EDL` bytes in size and `16ms * EDL` in length.
+    ;
+    ; NOTE: An edl value of 0 allocates 2048 bytes of RAM to the echo buffer.
+    ;
+    ; NOTE: There is no echo buffer overflow checking.
+    ;       The echo buffer may clobber song/sample/sfx data if `edl` is too large.
+    ;
+    ; CAUTION: This field does not contain the maximum EDL when in zeropage.
+    ;
+    ; MUST be first
+    edl : u8
+
+    ; FIR filter.  Written to the `C0`-`C7` S-DSP registers.
+    firFilter : [i8 : 8]
+
+    ; Echo feedback.  Written to the `EFB` S-DSP register.
+    ; MUST be directly after `firFilter`.
+    echoFeedback : i8
+
+    ; Echo volume.
+    ; Must be in the range 0-127.
+    ; If in mono mode, the average of the left and right channels will be used.
+    echoVolume_l : u8
+    echoVolume_r : u8
+
+    ; Echo invert flags.
+    ; See `INVERT_FLAGS` for bit values.
+    invertFlags : u8
+.endstruct
+
+
+; Size MUST match `SONG_HEADER_SIZE` in `crates/compiler/src/driver_constants.rs`
+.struct SongHeader
+    ; Active music channels.
+    ;
+    ; If this value is 0, all fields in SongHeader will be zeroed.
+    ;
+    ; bit-array
+    activeMusicChannels : u8
+
+
+    echo: EchoBufferSettings
+
+
+    ; Length of a tick in 1/8000 cycles (song tempo).
+    ;
+    ; MUST BE >= MIN_TICK_CLOCK
+    tickTimer : u8
+
+    ; Number of subroutines
+    nSubroutines : u8
+
+
+    ; The starting offset of the channel bytecode (relative to the start of the song data).
+    ;
+    ; Repeated `popcount(activeMusicChannels)` times in REVERSE ORDER (channel 7 is first and channel 0 is last).
+    ;
+    ; If `offset+songPtr` overflows (ie, offset >= $ff00), then the channel is disabled.
+    ;
+    ; songChannel : [ u16 : popcount(activeMusicChannels)]
+
+    ; Immediately after this header is split-word-array containing the location of each subroutine
+    ; (relative to the start of the song data).
+    ;
+    ; subroutineTable_l[nSubroutines]
+    ; subroutineTable_h[nSubroutines]
+.endstruct
+
+SONG_HEADER_SIZE = 16
+
+
+; Invert flags
+; ============
+    INVERT_FLAGS__RIGHT_BIT = 7
+    INVERT_FLAGS__LEFT_BIT = 6
+    ; Cannot be 0, `set_channel_or_echo_invert` has to left-shift the bytecode parameter
+    INVERT_FLAGS__MONO_BIT = 1
+
+    INVERT_FLAGS__MONO = 1 << INVERT_FLAGS__MONO_BIT
+
+
