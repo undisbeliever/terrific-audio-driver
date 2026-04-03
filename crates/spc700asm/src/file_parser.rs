@@ -330,9 +330,9 @@ fn parse_asm_line_after_label<'s>(
         ".p1" => f(line_no, AsmLine::SetDirectPage(DirectPageFlag::One)),
         ".assert" => f(line_no, AsmLine::Assert(arguments)),
         ".include" => errors.push(line_no, FileParserError::CannotNestIncludes),
-        fw if first_word.starts_with(".") => {
-            errors.push(line_no, FileParserError::InvalidCommand(first_word))
-        }
+
+        c if c.starts_with(".") => errors.push(line_no, FileParserError::InvalidCommand(c)),
+
         _ => {
             if let Some(expr) = arguments.strip_prefix("=") {
                 f(
