@@ -41,7 +41,7 @@
 .assert DriverIO__SWITCH_TO_LOADER_BIT == LoaderIO_TransferToLoader__SPINLOCK_SWITCH_TO_LOADER_BIT
 
 
-.proc loader
+.proc start_loader
     ; MUST be the first thing in the loader_code bank
     .assert PC == LOADER_ADDR
 
@@ -168,7 +168,7 @@
     ; Restart loader if the SWITCH_TO_LOADER_BIT is set
     mov A, X
     and A, #(1 << LoaderIO_TransferToLoader__SPINLOCK_SWITCH_TO_LOADER_BIT)
-    bne loader
+    bne start_loader
 
 
     ; Set songPtr if dataType is CAD
@@ -185,7 +185,7 @@
     .assert LoaderDataType__SONG_DATA_BIT == 7
     ; X = loaderDataType
     mov A, X
-    bpl loader
+    bpl start_loader
 
 
     ; Fallthrough into `main` in `audio-driver.asm`
