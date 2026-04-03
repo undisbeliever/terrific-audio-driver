@@ -469,10 +469,10 @@ DEALINGS IN THE SOFTWARE.
 ## MIT License
 
 Used by:
-  * [cc 1.2.51](https://github.com/rust-lang/cc-rs)
+  * [cc 1.2.58](https://github.com/rust-lang/cc-rs)
   * [cfg-if 1.0.4](https://github.com/rust-lang/cfg-if)
-  * [cmake 0.1.57](https://github.com/rust-lang/cmake-rs)
-  * [find-msvc-tools 0.1.6](https://github.com/rust-lang/cc-rs)
+  * [cmake 0.1.58](https://github.com/rust-lang/cmake-rs)
+  * [find-msvc-tools 0.1.9](https://github.com/rust-lang/cc-rs)
 
 ```
 Copyright (c) 2014 Alex Crichton
@@ -508,12 +508,12 @@ DEALINGS IN THE SOFTWARE.
 
 Used by:
   * [bitflags 1.3.2](https://github.com/bitflags/bitflags)
-  * [bitflags 2.10.0](https://github.com/bitflags/bitflags)
+  * [bitflags 2.11.0](https://github.com/bitflags/bitflags)
   * [num-complex 0.4.6](https://github.com/rust-num/num-complex)
   * [num-traits 0.2.19](https://github.com/rust-num/num-traits)
-  * [regex-automata 0.4.13](https://github.com/rust-lang/regex)
-  * [regex-syntax 0.8.8](https://github.com/rust-lang/regex)
-  * [regex 1.12.2](https://github.com/rust-lang/regex)
+  * [regex-automata 0.4.14](https://github.com/rust-lang/regex)
+  * [regex-syntax 0.8.10](https://github.com/rust-lang/regex)
+  * [regex 1.12.3](https://github.com/rust-lang/regex)
   * [relative-path 2.0.1](https://github.com/udoprog/relative-path)
 
 ```
@@ -571,41 +571,6 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
 FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
 IN THE SOFTWARE.
-
-```
-
-
-## MIT License
-
-Used by:
-  * [libc 0.2.178](https://github.com/rust-lang/libc)
-
-```
-Copyright (c) 2014-2020 The Rust Project Developers
-
-Permission is hereby granted, free of charge, to any
-person obtaining a copy of this software and associated
-documentation files (the "Software"), to deal in the
-Software without restriction, including without
-limitation the rights to use, copy, modify, merge,
-publish, distribute, sublicense, and/or sell copies of
-the Software, and to permit persons to whom the Software
-is furnished to do so, subject to the following
-conditions:
-
-The above copyright notice and this permission notice
-shall be included in all copies or substantial portions
-of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF
-ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED
-TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
-PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT
-SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
-CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
-OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
-IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
-DEALINGS IN THE SOFTWARE.
 
 ```
 
@@ -720,7 +685,7 @@ DEALINGS IN THE SOFTWARE.
 ## MIT License
 
 Used by:
-  * [indexmap 2.12.1](https://github.com/indexmap-rs/indexmap)
+  * [indexmap 2.13.1](https://github.com/indexmap-rs/indexmap)
 
 ```
 Copyright (c) 2016--2017
@@ -885,16 +850,16 @@ THE SOFTWARE.
 ## MIT License
 
 Used by:
-  * [anstream 0.6.21](https://github.com/rust-cli/anstyle.git)
-  * [anstyle-parse 0.2.7](https://github.com/rust-cli/anstyle.git)
+  * [anstream 1.0.0](https://github.com/rust-cli/anstyle.git)
+  * [anstyle-parse 1.0.0](https://github.com/rust-cli/anstyle.git)
   * [anstyle-query 1.1.5](https://github.com/rust-cli/anstyle.git)
   * [anstyle-wincon 3.0.11](https://github.com/rust-cli/anstyle.git)
-  * [anstyle 1.0.13](https://github.com/rust-cli/anstyle.git)
-  * [clap 4.5.53](https://github.com/clap-rs/clap)
-  * [clap_builder 4.5.53](https://github.com/clap-rs/clap)
-  * [clap_derive 4.5.49](https://github.com/clap-rs/clap)
-  * [clap_lex 0.7.6](https://github.com/clap-rs/clap)
-  * [colorchoice 1.0.4](https://github.com/rust-cli/anstyle.git)
+  * [anstyle 1.0.14](https://github.com/rust-cli/anstyle.git)
+  * [clap 4.6.0](https://github.com/clap-rs/clap)
+  * [clap_builder 4.6.0](https://github.com/clap-rs/clap)
+  * [clap_derive 4.6.0](https://github.com/clap-rs/clap)
+  * [clap_lex 1.1.0](https://github.com/clap-rs/clap)
+  * [colorchoice 1.0.5](https://github.com/rust-cli/anstyle.git)
   * [is_terminal_polyfill 1.70.2](https://github.com/polyfill-rs/is_terminal_polyfill)
   * [once_cell_polyfill 1.70.2](https://github.com/polyfill-rs/once_cell_polyfill)
 
@@ -918,6 +883,41 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+```
+
+
+## MIT License
+
+Used by:
+  * [libc 0.2.184](https://github.com/rust-lang/libc)
+
+```
+Copyright (c) The Rust Project Developers
+
+Permission is hereby granted, free of charge, to any
+person obtaining a copy of this software and associated
+documentation files (the "Software"), to deal in the
+Software without restriction, including without
+limitation the rights to use, copy, modify, merge,
+publish, distribute, sublicense, and/or sell copies of
+the Software, and to permit persons to whom the Software
+is furnished to do so, subject to the following
+conditions:
+
+The above copyright notice and this permission notice
+shall be included in all copies or substantial portions
+of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF
+ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED
+TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT
+SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
+IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+DEALINGS IN THE SOFTWARE.
 
 ```
 
@@ -1050,7 +1050,7 @@ SOFTWARE.
   (synthesized by cargo-about)
 
 Used by:
-  * [libm 0.2.15](https://github.com/rust-lang/compiler-builtins)
+  * [libm 0.2.16](https://github.com/rust-lang/compiler-builtins)
   * [windows-link 0.2.1](https://github.com/microsoft/windows-rs)
 
 ```
@@ -1139,24 +1139,24 @@ SOFTWARE.
 ## MIT License
 
 Used by:
-  * [cxx-build 1.0.192](https://github.com/dtolnay/cxx)
-  * [cxx 1.0.192](https://github.com/dtolnay/cxx)
-  * [cxxbridge-flags 1.0.192](https://github.com/dtolnay/cxx)
-  * [cxxbridge-macro 1.0.192](https://github.com/dtolnay/cxx)
-  * [itoa 1.0.17](https://github.com/dtolnay/itoa)
+  * [cxx-build 1.0.194](https://github.com/dtolnay/cxx)
+  * [cxx 1.0.194](https://github.com/dtolnay/cxx)
+  * [cxxbridge-flags 1.0.194](https://github.com/dtolnay/cxx)
+  * [cxxbridge-macro 1.0.194](https://github.com/dtolnay/cxx)
+  * [itoa 1.0.18](https://github.com/dtolnay/itoa)
   * [link-cplusplus 1.0.12](https://github.com/dtolnay/link-cplusplus)
-  * [once_cell 1.21.3](https://github.com/matklad/once_cell)
+  * [once_cell 1.21.4](https://github.com/matklad/once_cell)
   * [paste 1.0.15](https://github.com/dtolnay/paste)
-  * [proc-macro2 1.0.104](https://github.com/dtolnay/proc-macro2)
-  * [quote 1.0.42](https://github.com/dtolnay/quote)
+  * [proc-macro2 1.0.106](https://github.com/dtolnay/proc-macro2)
+  * [quote 1.0.45](https://github.com/dtolnay/quote)
   * [scratch 1.0.9](https://github.com/dtolnay/scratch)
   * [serde 1.0.228](https://github.com/serde-rs/serde)
   * [serde_core 1.0.228](https://github.com/serde-rs/serde)
   * [serde_derive 1.0.228](https://github.com/serde-rs/serde)
-  * [serde_json 1.0.148](https://github.com/serde-rs/json)
-  * [syn 2.0.112](https://github.com/dtolnay/syn)
-  * [unicode-ident 1.0.22](https://github.com/dtolnay/unicode-ident)
-  * [zmij 1.0.5](https://github.com/dtolnay/zmij)
+  * [serde_json 1.0.149](https://github.com/serde-rs/json)
+  * [syn 2.0.117](https://github.com/dtolnay/syn)
+  * [unicode-ident 1.0.24](https://github.com/dtolnay/unicode-ident)
+  * [zmij 1.0.21](https://github.com/dtolnay/zmij)
 
 ```
 Permission is hereby granted, free of charge, to any
@@ -1220,7 +1220,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 Used by:
   * [aho-corasick 1.1.4](https://github.com/BurntSushi/aho-corasick)
-  * [memchr 2.7.6](https://github.com/BurntSushi/memchr)
+  * [memchr 2.8.0](https://github.com/BurntSushi/memchr)
   * [termcolor 1.4.1](https://github.com/BurntSushi/termcolor)
 
 ```
@@ -1385,7 +1385,7 @@ DEALINGS IN THE SOFTWARE.
 ## Unicode License v3
 
 Used by:
-  * [unicode-ident 1.0.22](https://github.com/dtolnay/unicode-ident)
+  * [unicode-ident 1.0.24](https://github.com/dtolnay/unicode-ident)
 
 ```
 UNICODE LICENSE V3
