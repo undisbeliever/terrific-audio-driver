@@ -104,8 +104,8 @@ pub mod addresses {
     pub const COMMON_DATA: u16 = 0x1100 - 28;
 
     const _: () = assert!(
-        _symbols::_LAST_LOADER_SYMBOL < DRIVER_CODE,
-        "Loader contains a symbol inside the driver code"
+        _symbols::_LOADER_END_ADDR == DRIVER_CODE,
+        "Loader is not direct before driver code"
     );
 
     const _: () = assert!(
@@ -114,7 +114,7 @@ pub mod addresses {
     );
 
     const _: () = assert!(
-        COMMON_DATA > _symbols::_LAST_DRIVER_SYMBOL && COMMON_DATA > _symbols::_LAST_LOADER_SYMBOL,
+        COMMON_DATA > _symbols::_DRIVER_END_ADDR && COMMON_DATA > _symbols::_LOADER_END_ADDR,
         "Invalid COMMON_DATA address"
     );
 
@@ -145,7 +145,7 @@ pub mod addresses {
 pub const ECHO_VARIABLES_SIZE: usize =
     (addresses::COMMON_DATA_POINTERS - addresses::ECHO_VARIABLES) as usize;
 
-pub const TAD_IO_VERSION: usize = _symbols::TAD_IO_VERSION;
+pub const TAD_IO_VERSION: u16 = _symbols::TAD_IO_VERSION;
 
 pub const N_MUSIC_CHANNELS: usize = 8;
 pub const N_SFX_CHANNELS: usize = 2;

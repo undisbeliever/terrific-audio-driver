@@ -32,7 +32,7 @@ relative-path.workspace = true
 
 
 [build-dependencies]
-regex.workspace = true
+spc700asm.workspace = true
 
 
 [dev-dependencies]

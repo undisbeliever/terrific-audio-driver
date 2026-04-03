@@ -177,10 +177,10 @@ version = "0.0.0"
 dependencies = [
  "brr",
  "compiler",
- "regex",
  "relative-path",
  "serde",
  "serde_json",
+ "spc700asm",
  "tad-emu",
 ]
 
