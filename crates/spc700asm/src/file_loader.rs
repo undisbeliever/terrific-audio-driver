@@ -5,7 +5,7 @@
 // SPDX-License-Identifier: MIT
 
 use crate::{
-    errors::{ColoredLoadAssemblyErrorDisplay, LineNo},
+    errors::{ColoredLoadAssemblyErrorDisplay, LineNo, LoadAssemblyErrorDisplay},
     string::strip_comment,
 };
 
@@ -66,6 +66,10 @@ pub enum LoadAssemblyError {
 }
 
 impl LoadAssemblyError {
+    pub fn display(&self) -> LoadAssemblyErrorDisplay<'_> {
+        LoadAssemblyErrorDisplay(self)
+    }
+
     pub fn color_display(&self) -> ColoredLoadAssemblyErrorDisplay<'_> {
         ColoredLoadAssemblyErrorDisplay(self)
     }

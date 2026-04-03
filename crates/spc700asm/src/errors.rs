@@ -112,6 +112,10 @@ impl<'s> FileErrors<'s> {
         &self.0
     }
 
+    pub fn display<'a>(&'a self, file: &'a AsmFileWithIncludes) -> FileErrorDisplay<'a> {
+        FileErrorDisplay(self, file)
+    }
+
     pub fn color_display<'a>(
         &'a self,
         file: &'a AsmFileWithIncludes,
@@ -130,6 +134,21 @@ impl std::fmt::Display for FileErrors<'_> {
 }
 
 impl std::error::Error for FileErrors<'_> {}
+
+pub struct FileErrorDisplay<'a>(&'a FileErrors<'a>, &'a AsmFileWithIncludes);
+
+impl std::fmt::Display for FileErrorDisplay<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let errors = &self.0 .0;
+        let af = &self.1;
+
+        writeln!(f, "Error assembling {}", af.asm_filename())?;
+        for (l, e) in errors {
+            writeln!(f, "    {}:{}: {}", af.filename(l.0), l.1, e)?;
+        }
+        Ok(())
+    }
+}
 
 pub struct ColoredFileErrorDisplay<'a>(&'a FileErrors<'a>, &'a AsmFileWithIncludes);
 
@@ -153,6 +172,28 @@ impl std::fmt::Display for ColoredFileErrorDisplay<'_> {
             writeln!(f, "    {FILE}{}:{}{RESET}: {}", af.filename(l.0), l.1, e)?;
         }
         Ok(())
+    }
+}
+
+pub struct LoadAssemblyErrorDisplay<'a>(pub(crate) &'a LoadAssemblyError);
+
+impl std::fmt::Display for LoadAssemblyErrorDisplay<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.0 {
+            LoadAssemblyError::CannotLoadFile(path, e) => {
+                writeln!(f, "Error loading {}: {e}", path.display())
+            }
+            LoadAssemblyError::TooManyIncludes(path) => {
+                writeln!(f, "Error loading {path}: Too many .includes",)
+            }
+            LoadAssemblyError::IncludeErrors(path, items) => {
+                writeln!(f, "Error loading {path}:")?;
+                for (l, e) in items {
+                    writeln!(f, "    {}:{}: {e}", path, l.1)?;
+                }
+                Ok(())
+            }
+        }
     }
 }
 
