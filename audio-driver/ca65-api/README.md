@@ -91,7 +91,6 @@ Build Requirements
  * [ca65](https://github.com/cc65/cc65/)
 
 To compile the tests, you also need:
- * wiz (included a git submodule, see the parent README for more details)
  * GNU Make
  * Python 3.9+
 

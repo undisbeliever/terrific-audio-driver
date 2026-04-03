@@ -96,7 +96,6 @@ Build Requirements
 
  * Rust
  * Cargo
- * Git
  * GNU Make
  * A C++17 compiler, compatible with the [cxx](https://cxx.rs/) crate.
  * CMake
@@ -124,11 +123,7 @@ Build Instructions
 ==================
 
  * run `cargo build --release`
- * Import the `wiz` git submodule.
- * Compile `wiz`.
-    * See [Wiz - Building Source](https://github.com/wiz-lang/wiz#building-source) for more details.
- * run `make` in the `audio-driver` directory to assemble the audio driver binaries
-
+ * (optionally) run `make` in the `audio-driver` directory to assemble the audio driver binaries
 
 <!-- END RELEASE CUT -->
 Licensing
