@@ -4,6 +4,7 @@ Terrific Audio Driver Changelog
 
 Version 0.2.1
 =============
+ * Ported the audio driver to assembly using a custom made spc700 assembler
  * Fixed transposition analysis in the compiler
 
 
