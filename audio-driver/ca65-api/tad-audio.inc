@@ -139,7 +139,7 @@ TAD_MIN_TICK_CLOCK = 64
 
 ;; Terrific Audio Driver IO commands
 ;;
-; MUST match `audio-driver/src/io-commands.wiz`
+; MUST match `audio-driver/src/io-commands.inc`
 .enum TadCommand
     ;; Pause the song and sound effect channels.
     ;; * IO commands will still be executed when the audio-driver is paused.

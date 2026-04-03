@@ -152,7 +152,7 @@
 
 ;; Address to store the loader (in Audio-RAM).
 ;; Address (in Audio-RAM) to execute after loading the Loader.
-;; MUST match LOADER_ADDR in `audio-driver/src/common_memmap.wiz`.
+;; MUST match LOADER_ADDR in `audio-driver/src/common-memmap.inc`
 TAD_LOADER_ARAM_ADDR = $0200
 
 
@@ -180,7 +180,7 @@ TAD_MAX_TRANSFER_PER_FRAME = 800
 .export TAD_IO_VERSION : abs = 20
 
 
-; MUST match `audio-driver/src/io-commands.wiz`
+; MUST match `audio-driver/src/io-commands.inc`
 .enum TadCommand
     PAUSE = 0
     PAUSE_MUSIC_PLAY_SFX = 2
@@ -199,7 +199,7 @@ TAD_MAX_PAN = 128
 TAD_CENTER_PAN = TAD_MAX_PAN / 2
 
 
-;; MUST match `audio-driver/src/io-commands.wiz`
+;; MUST match `audio-driver/src/io-commands.inc`
 .scope TadIO_ToDriver
     ;; The command to execute.
     ;;
@@ -239,7 +239,7 @@ TAD_CENTER_PAN = TAD_MAX_PAN / 2
 .endscope
 
 
-;; MUST match `audio-driver/src/io-commands.wiz`
+;; MUST match `audio-driver/src/io-commands.inc`
 .scope TadIO_ToScpu
     ;; Audio driver command acknowledgment.
     ;;
@@ -270,7 +270,7 @@ TAD_CENTER_PAN = TAD_MAX_PAN / 2
 .endscope
 
 
-;; MUST match `audio-driver/src/io-commands.wiz`
+;; MUST match `audio-driver/src/io-commands.inc`
 .scope TadLoaderDataType
     CODE        = 0
     COMMON_DATA = 1
@@ -284,7 +284,7 @@ TAD_CENTER_PAN = TAD_MAX_PAN / 2
 .endscope
 
 
-;; MUST match `audio-driver/src/io-commands.wiz`
+;; MUST match `audio-driver/src/io-commands.inc`
 .scope TadIO_Loader_Init
     LOADER_DATA_TYPE_PORT = $2141 ; APUIO1
     READY_PORT_L          = $2142 ; APUIO2
@@ -298,7 +298,7 @@ TAD_CENTER_PAN = TAD_MAX_PAN / 2
 .endscope
 
 
-;; MUST match `audio-driver/src/io-commands.wiz`
+;; MUST match `audio-driver/src/io-commands.inc`
 .scope TadIO_Loader
     DATA_PORT_L   = $2141 ; APUIO1
     DATA_PORT_H   = $2142 ; APUIO2
@@ -699,7 +699,7 @@ ReturnFalse:
         ;
         ; The upper 4 bits of the spinlock must be clear'
         ; Cannot be 0.  Zero is used to spinlock the loader init before this loop starts
-        ;               (see Loader Step 3 in `terrific-audio-driver/audio-driver/src/io-commands.wiz`)
+        ;               (see Loader Step 3 in `audio-driver/src/io-commands.inc`)
 
         .assert ($ffff & 7) + 1 < TadIO_Loader::SPINLOCK_MASK, error
         tya             ; y = address of data, it should always increment by 2

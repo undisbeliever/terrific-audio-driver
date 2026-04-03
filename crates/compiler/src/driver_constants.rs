@@ -100,7 +100,7 @@ pub mod addresses {
         GLOBAL_VOLUME_SFX,
     );
 
-    // MUST match `audio-driver/src/common_memmap.wiz`
+    // MUST match `audio-driver/src/common-memmap.inc`
     pub const COMMON_DATA: u16 = 0x1100 - 28;
 
     const _: () = assert!(
@@ -202,7 +202,7 @@ pub enum AudioMode {
 }
 
 // Loader constants
-// MUST match `audio-driver/src/io-commands.wiz`
+// MUST match `audio-driver/src/io-commands.inc`
 pub struct LoaderDataType {
     pub audio_mode: AudioMode,
 

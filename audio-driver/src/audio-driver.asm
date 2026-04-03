@@ -358,7 +358,7 @@ __EndZeropageClearAddr = nonShadow_sfx + 1
 
 
     ; Common audio data pointers.
-    ; See `data-formats.wiz` for more details about these variables.
+    ; See `audio-driver/src/data-formats.inc` for more details about these variables.
     ;
     ; Also used to temporally store SongHeader fields after `SongHeader.echo` in the start of `Main`
     commonData : CommonDataPointers

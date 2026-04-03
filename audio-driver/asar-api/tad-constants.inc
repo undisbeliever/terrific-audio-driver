@@ -34,7 +34,7 @@
 ; Public Constants
 ; ================
 
-; MUST match `audio-driver/src/io-commands.wiz`
+; MUST match `audio-driver/src/io-commands.inc`
 ; enum TadCommand
     !TadCommand_PAUSE = 0
     !TadCommand_PAUSE_MUSIC_PLAY_SFX = 2
@@ -106,7 +106,7 @@ endif
 
 ; Address to store the loader (in Audio-RAM).
 ; Address (in Audio-RAM) to execute after loading the Loader.
-; MUST match LOADER_ADDR in `audio-driver/src/common_memmap.wiz`.
+; MUST match LOADER_ADDR in `audio-driver/src/common-memmap.inc`.
 !TAD_LOADER_ARAM_ADDR = $0200
 
 
@@ -141,7 +141,7 @@ TAD_APUIO3 = $2143
 
 
 
-; MUST match `audio-driver/src/io-commands.wiz`
+; MUST match `audio-driver/src/io-commands.inc`
 ; enum TadIO_ToDriver
     ; The command to execute.
     ;
@@ -180,7 +180,7 @@ TAD_APUIO3 = $2143
     !TadIO_ToDriver_SWITCH_TO_LOADER = $a0
 
 
-; MUST match `audio-driver/src/io-commands.wiz`
+; MUST match `audio-driver/src/io-commands.inc`
 ; enum TadIO_ToScpu
     ; Audio driver command acknowledgment.
     ;
@@ -211,7 +211,7 @@ TAD_APUIO3 = $2143
 
 
 
-; MUST match `audio-driver/src/io-commands.wiz`
+; MUST match `audio-driver/src/io-commands.inc`
 ; enum TadLoaderDataType
     !TadLoaderDataType_CODE        = 0
     !TadLoaderDataType_COMMON_DATA = 1
@@ -225,7 +225,7 @@ TAD_APUIO3 = $2143
 
 
 
-; MUST match `audio-driver/src/io-commands.wiz`
+; MUST match `audio-driver/src/io-commands.inc`
 ; enum TadIO_Loader_Init
     !TadIO_Loader_Init_LOADER_DATA_TYPE_PORT = $2141 ; APUIO1
     !TadIO_Loader_Init_READY_PORT_L          = $2142 ; APUIO2
@@ -238,7 +238,7 @@ TAD_APUIO3 = $2143
     !TadIO_Loader_Init_LOADER_READY_HL = $444c     ; 'LD'
 
 
-; MUST match `audio-driver/src/io-commands.wiz`
+; MUST match `audio-driver/src/io-commands.inc`
 ; enum TadIO_Loader
     !TadIO_Loader_DATA_PORT_L   = $2141 ; APUIO1
     !TadIO_Loader_DATA_PORT_H   = $2142 ; APUIO2

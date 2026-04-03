@@ -259,7 +259,7 @@ TadPrivate_Loader_TransferData: {
         ;
         ; The upper 4 bits of the spinlock must be clear'
         ; Cannot be 0.  Zero is used to spinlock the loader init before this loop starts
-        ;               (see Loader Step 3 in `terrific-audio-driver/audio-driver/src/io-commands.wiz`)
+        ;               (see Loader Step 3 in `audio-driver/src/io-commands.inc`)
 
         assert ($ffff&7)+1 < !TadIO_Loader_SPINLOCK_MASK
         tya             ; y = address of data, it should always increment by 2

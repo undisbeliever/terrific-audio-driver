@@ -111,12 +111,12 @@
 ;; IO Ports
 ;; ========
 ;;
-;; MUST match `audio-driver/src/io-commands.wiz`
+;; MUST match `audio-driver/src/io-commands.inc`
 
 
 ;; Address to store the loader (in Audio-RAM).
 ;; Address (in Audio-RAM) to execute after loading the Loader.
-;; MUST match LOADER_ADDR in `audio-driver/src/common_memmap.wiz`.
+;; MUST match LOADER_ADDR in `audio-driver/src/common-memmap.inc`
 TAD_LOADER_ARAM_ADDR = $0200
 
 
@@ -214,7 +214,7 @@ TAD_LoaderDataType__STEREO_FLAG               = 1 << 1
 TAD_LoaderDataType__SURROUND_FLAG             = 1 << 0
 
 
-;; MUST match `audio-driver/src/io-commands.wiz`
+;; MUST match `audio-driver/src/io-commands.inc`
 TAD_IO_Loader_Init__LOADER_DATA_TYPE_PORT = $2141 ; APUIO1
 TAD_IO_Loader_Init__READY_PORT_L          = $2142 ; APUIO2
 TAD_IO_Loader_Init__READY_PORT_H          = $2143 ; APUIO3
@@ -226,7 +226,7 @@ TAD_IO_Loader_Init__LOADER_READY_H = %01000100  ; 'D'
 TAD_IO_Loader_Init__LOADER_READY_HL = %0100010001001100 ; "LD"
 
 
-;; MUST match `audio-driver/src/io-commands.wiz`
+;; MUST match `audio-driver/src/io-commands.inc`
 TAD_IO_Loader__DATA_PORT_L   = $2141 ; APUIO1
 TAD_IO_Loader__DATA_PORT_H   = $2142 ; APUIO2
 TAD_IO_Loader__SPINLOCK_PORT = $2143 ; APUIO3
@@ -859,7 +859,7 @@ tadPrivate_loader_transferData:
         ;
         ; The upper 4 bits of the spinlock must be clear'
         ; Cannot be 0.  Zero is used to spinlock the loader init before this loop starts
-        ;               (see Loader Step 3 in `terrific-audio-driver/audio-driver/src/io-commands.wiz`)
+        ;               (see Loader Step 3 in `audio-driver/src/io-commands.inc`)
 
         .assert ($ffff & 7) + 1 < TAD_IO_Loader__SPINLOCK_MASK
         tya             ; y = address of data, it should always increment by 2

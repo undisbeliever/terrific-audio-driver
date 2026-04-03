@@ -229,6 +229,6 @@ Parameters
 Opcodes and data formats
 ========================
 
-The bytecode opcodes and parameter data formats can be found in `audio-driver/src/bytecode.wiz`
+The bytecode opcodes and parameter data formats can be found in `audio-driver/src/bytecode.inc`
 
 

@@ -282,7 +282,7 @@ pub mod opcodes {
         };
     }
 
-    // Order MUST MATCH `audio-driver/src/bytecode.wiz`
+    // Order MUST MATCH `audio-driver/src/bytecode.inc`
     declare_opcodes!(
         RESERVED_FOR_CUSTOM_USE,
         MISCELLANEOUS,

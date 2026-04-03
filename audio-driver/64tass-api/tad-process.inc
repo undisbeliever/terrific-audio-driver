@@ -75,7 +75,7 @@ TAD_DB_REGISTERS   = 0
 
 ; Address to store the loader (in Audio-RAM).
 ; Address (in Audio-RAM) to execute after loading the Loader.
-; MUST match LOADER_ADDR in `audio-driver/src/common_memmap.wiz`.
+; MUST match LOADER_ADDR in `audio-driver/src/common-memmap.inc`.
 TAD_LOADER_ARAM_ADDR = $0200
 
 
@@ -91,7 +91,7 @@ TAD_LOADER_ARAM_ADDR = $0200
 TAD_IO_VERSION = 20
 
 
-; MUST match `audio-driver/src/io-commands.wiz`
+; MUST match `audio-driver/src/io-commands.inc`
 TadIO_ToDriver .block
     ; The command to execute.
     ;
@@ -131,7 +131,7 @@ TadIO_ToDriver .block
 .endblock
 
 
-; MUST match `audio-driver/src/io-commands.wiz`
+; MUST match `audio-driver/src/io-commands.inc`
 TadIO_ToScpu .block
     ; Audio driver command acknowledgment.
     ;
@@ -162,7 +162,7 @@ TadIO_ToScpu .block
 .endblock
 
 
-; MUST match `audio-driver/src/io-commands.wiz`
+; MUST match `audio-driver/src/io-commands.inc`
 TadLoaderDataType .block
     CODE        = 0
     COMMON_DATA = 1
@@ -176,7 +176,7 @@ TadLoaderDataType .block
 .endblock
 
 
-; MUST match `audio-driver/src/io-commands.wiz`
+; MUST match `audio-driver/src/io-commands.inc`
 TadIO_Loader_Init .block
     LOADER_DATA_TYPE_PORT = $2141 ; APUIO1
     READY_PORT_L          = $2142 ; APUIO2
@@ -190,7 +190,7 @@ TadIO_Loader_Init .block
 .endblock
 
 
-; MUST match `audio-driver/src/io-commands.wiz`
+; MUST match `audio-driver/src/io-commands.inc`
 TadIO_Loader .block
     DATA_PORT_L   = $2141 ; APUIO1
     DATA_PORT_H   = $2142 ; APUIO2
@@ -440,7 +440,7 @@ TadPrivate_Loader_TransferData .proc
         ;
         ; The upper 4 bits of the spinlock must be clear'
         ; Cannot be 0.  Zero is used to spinlock the loader init before this loop starts
-        ;               (see Loader Step 3 in `terrific-audio-driver/audio-driver/src/io-commands.wiz`)
+        ;               (see Loader Step 3 in `audio-driver/src/io-commands.inc`)
 
         .cerror !(($ffff & 7) + 1 < TadIO_Loader.SPINLOCK_MASK)
         tya             ; y = address of data, it should always increment by 2
