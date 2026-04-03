@@ -161,6 +161,7 @@ pub struct CompiledAsm {
     pub symbols: HashMap<String, Option<i64>>,
     pub sym_file: SymbolFile,
     pub output: Vec<u8>,
+    pub end_addr: i64,
 }
 
 impl CompiledAsm {
@@ -988,6 +989,7 @@ fn assemble_lines<'s>(lines: SplitLines<'s>) -> Result<CompiledAsm, FileErrors<'
     check_code_size(code_bank.clone(), &output, &mut errors);
 
     if errors.is_empty() {
+        let end_addr = output.program_counter();
         let output = output.take_output();
         let symbols = symbols.take_symbols();
 
@@ -1004,6 +1006,7 @@ fn assemble_lines<'s>(lines: SplitLines<'s>) -> Result<CompiledAsm, FileErrors<'
             output,
             sym_file,
             symbols,
+            end_addr,
         })
     } else {
         Err(errors)

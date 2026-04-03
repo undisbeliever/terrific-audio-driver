@@ -1784,3 +1784,34 @@ fn invalid_symbol_name_test() {
         );
     }
 }
+
+#[test]
+fn end_addr() {
+    let c = assemble(
+        r##"
+.codebank $200..$300
+"##,
+    )
+    .unwrap();
+    assert_eq!(c.end_addr, 0x0200);
+
+    let c = assemble(
+        r##"
+.codebank $200..$300
+
+    .db 1, 2, 3, 4
+"##,
+    )
+    .unwrap();
+    assert_eq!(c.end_addr, 0x0204);
+
+    // Assembly without a `.codebank` has an end_addr of 0
+    let c = assemble(
+        r##"
+ONE = 1
+TWO = 2
+"##,
+    )
+    .unwrap();
+    assert_eq!(c.end_addr, 0);
+}
