@@ -7,6 +7,7 @@ Version 0.2.1
  * Ported the audio driver to assembly using a custom made spc700 assembler
  * Fixed transposition analysis in the compiler
  * Fixed a panic in the sample analyser window when analysing a small non-looping sample.
+ - Fixed wav2brr unable to parse `--loop-point` or `--dupe-block-hack` arguments.
 
 
 Version 0.2.0

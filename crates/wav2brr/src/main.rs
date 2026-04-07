@@ -6,7 +6,7 @@
 
 #![forbid(unsafe_code)]
 
-use brr::{encode_brr, read_mono_pcm_wave_file, BlockNumber, BrrFilter, Evaluator, SampleNumber};
+use brr::{encode_brr, read_mono_pcm_wave_file, BrrFilter, Evaluator};
 
 use clap::Parser;
 
@@ -55,19 +55,17 @@ struct Args {
         long,
         value_name = "N",
         help = "loop point (sample number)",
-        conflicts_with = "dupe_block_hack",
-        value_parser = clap::value_parser!(usize),
+        conflicts_with = "dupe_block_hack"
     )]
-    loop_point: Option<SampleNumber>,
+    loop_point: Option<usize>,
 
     #[arg(
         long,
         value_name = "N",
         help = "Dupe-block-hack (number of blocks to duplicate)",
-        conflicts_with = "loop_point",
-        value_parser = clap::value_parser!(usize),
+        conflicts_with = "loop_point"
     )]
-    dupe_block_hack: Option<BlockNumber>,
+    dupe_block_hack: Option<usize>,
 
     #[arg(
         short = 'r',
@@ -138,8 +136,8 @@ fn main() {
     let brr = match encode_brr(
         &wav.samples,
         args.evaluator.to_evaluator(),
-        args.loop_point,
-        args.dupe_block_hack,
+        args.loop_point.map(|lp| lp.into()),
+        args.dupe_block_hack.map(|dbh| dbh.into()),
         loop_filter,
     ) {
         Err(why) => error!("Cannot encode BRR: {}", why),
