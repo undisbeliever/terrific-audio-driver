@@ -136,6 +136,33 @@ impl ResamplingRingBufProducer {
         self.ringbuf.commit();
     }
 
+    // MUST call `Self::can_process()` before `process_mono()`
+    pub fn process_mono(&mut self, samples: &[i16; Self::INPUT_CHUNK_SIZE / 2]) {
+        assert!(self.ringbuf.vacant_len() >= self.min_vacant_samples);
+
+        debug_assert!(self.input_sample_rate < self.output_sample_rate);
+        for &s in samples {
+            self.left.push(s.into());
+            self.right.push(s.into());
+
+            while self.mu < 1.0 {
+                self.ringbuf.push_slice(&[
+                    // Rust 1.45 and later do saturating casts when converting float to int
+                    self.left.interpolate(self.mu) as i16,
+                    self.right.interpolate(self.mu) as i16,
+                ]);
+
+                self.mu += self.ratio;
+            }
+
+            self.mu -= 1.0;
+        }
+
+        debug_assert!(self.mu >= 0.0 && self.mu < 1.0);
+
+        self.ringbuf.commit();
+    }
+
     pub fn fill_with_silence(&mut self) {
         self.left = HermiteInterpolator::new();
         self.right = HermiteInterpolator::new();

@@ -262,7 +262,7 @@ impl<'a> BrrSampleDecoder<'a> {
     }
 
     fn fill_ring_buffer(&mut self, rb: &mut ResamplingRingBufProducer) {
-        const BUF_LEN: usize = ResamplingRingBufProducer::INPUT_CHUNK_SIZE;
+        const BUF_LEN: usize = ResamplingRingBufProducer::INPUT_CHUNK_SIZE / 2;
 
         let mut buf = [0; BUF_LEN];
         let mut is_done = self.is_finished();
@@ -287,7 +287,7 @@ impl<'a> BrrSampleDecoder<'a> {
                     });
                     is_done = true;
                 }
-                rb.process(&buf);
+                rb.process_mono(&buf);
             } else {
                 rb.fill_with_silence();
                 break;
@@ -1200,7 +1200,7 @@ impl AudioThread {
         let audio_subsystem = self.sdl_context.audio().unwrap();
         let desired_spec = AudioSpecDesired {
             freq: Some(AUDIO_SAMPLE_RATE as i32),
-            channels: Some(1),
+            channels: Some(2),
             samples: Some(AUDIO_BUFFER_SAMPLES),
         };
 
