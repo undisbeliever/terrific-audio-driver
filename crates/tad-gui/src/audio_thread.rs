@@ -24,11 +24,12 @@ use compiler::time::TickCounter;
 use compiler::Pan;
 
 extern crate sdl2;
-use sdl2::audio::{AudioCallback, AudioSpecDesired};
+use sdl2::audio::{AudioCallback, AudioDevice, AudioSpecDesired};
 use sdl2::Sdl;
 use tad_emu::LagCounters;
 
 use std::ops::Deref;
+use std::sync::mpsc::RecvTimeoutError;
 use std::sync::LockResult;
 use std::sync::RwLockReadGuard;
 use std::sync::RwLockWriteGuard;
@@ -231,8 +232,8 @@ fn fill_ring_buffer_emu(emu: &mut TadState, rb: &mut ResamplingRingBufProducer) 
     !silence
 }
 
-struct BrrSampleDecoder<'a> {
-    sample: &'a BrrSample,
+struct BrrSampleDecoder {
+    sample: Arc<BrrSample>,
     sample_pos: usize,
     blocks_decoded: usize,
     blocks_to_decode: usize,
@@ -240,8 +241,8 @@ struct BrrSampleDecoder<'a> {
     prev2: i16,
 }
 
-impl<'a> BrrSampleDecoder<'a> {
-    fn new(sample: &'a BrrSample) -> Self {
+impl BrrSampleDecoder {
+    fn new(sample: Arc<BrrSample>) -> Self {
         let blocks_to_decode = match sample.is_looping() {
             true => LOOPING_BRR_SAMPLE_SAMPLES / SAMPLES_PER_BLOCK,
             false => sample.n_brr_blocks(),
@@ -777,467 +778,386 @@ impl TadState {
     }
 }
 
+#[derive(Clone, Copy, PartialEq)]
 enum PlayState {
-    Paused,
+    Closed,
+    Starting,
     Running,
     PauseRequested,
-    Pausing,
-    SongFinished,
+    Paused,
+    StopRequested,
+    Stopped,
 }
 
 impl PlayState {
     fn timeout_until_close(&self) -> Duration {
         match self {
-            Self::Paused => Duration::from_secs(2 * 60),
+            Self::Closed => Duration::MAX,
+            Self::Paused | Self::Stopped => Duration::from_secs(2 * 60),
             _ => Duration::from_secs(5),
         }
     }
 }
 
-struct AudioThread {
-    sender: mpsc::Sender<AudioMessage>,
-    rx: mpsc::Receiver<AudioMessage>,
-
-    gui_sender: fltk::app::Sender<GuiMessage>,
-    monitor: AudioMonitor,
-
-    sdl_context: Sdl,
-
-    tad: TadState,
+struct OpenAudioDevice {
+    ringbuf: ResamplingRingBufProducer,
+    playback: AudioDevice<SdlAudioCallback>,
 }
 
-impl AudioThread {
-    fn new(
-        sender: mpsc::Sender<AudioMessage>,
-        rx: mpsc::Receiver<AudioMessage>,
-        gui_sender: fltk::app::Sender<GuiMessage>,
-        monitor: AudioMonitor,
-    ) -> Self {
-        Self {
-            sender,
-            rx,
-            gui_sender,
-            monitor,
-            sdl_context: sdl2::init().unwrap(),
+struct GuiAudioDevice {
+    sdl_context: Sdl,
+    sender: mpsc::Sender<AudioMessage>,
+    device: Option<OpenAudioDevice>,
+    state: PlayState,
+}
 
-            tad: TadState::new(),
+impl GuiAudioDevice {
+    pub fn new(sdl_context: Sdl, sender: mpsc::Sender<AudioMessage>) -> Self {
+        Self {
+            sdl_context,
+            sender,
+            device: None,
+            state: PlayState::Closed,
         }
     }
 
-    fn run(&mut self) {
-        self.monitor.set(None);
+    fn state(&self) -> PlayState {
+        self.state
+    }
 
-        while let Ok(msg) = self.rx.recv() {
-            let mut msg = Some(msg);
-            while let Some(m) = msg {
-                msg = self.process_message_no_audio(m);
+    fn is_playing(&self) -> bool {
+        match self.state {
+            PlayState::Starting | PlayState::Running => true,
+
+            PlayState::Closed
+            | PlayState::PauseRequested
+            | PlayState::Paused
+            | PlayState::StopRequested
+            | PlayState::Stopped => false,
+        }
+    }
+
+    fn open_or_restart(&mut self) {
+        match &mut self.device {
+            Some(d) => {
+                // Reset ring buffer to the beginning
+                d.playback.pause();
+                d.playback.lock().reset();
+            }
+            None => {
+                let audio_subsystem = self.sdl_context.audio().unwrap();
+                let desired_spec = AudioSpecDesired {
+                    freq: Some(AUDIO_SAMPLE_RATE as i32),
+                    channels: Some(2),
+                    samples: Some(AUDIO_BUFFER_SAMPLES),
+                };
+
+                let (ringbuf, rb_consumer) =
+                    resampling_ring_buffer(RING_BUFFER_SIZE, APU_SAMPLE_RATE, AUDIO_SAMPLE_RATE);
+
+                let playback = audio_subsystem
+                    .open_playback(None, &desired_spec, |_spec| {
+                        SdlAudioCallback::new(rb_consumer, self.sender.clone())
+                    })
+                    .unwrap();
+
+                self.device = Some(OpenAudioDevice { ringbuf, playback });
+            }
+        }
+
+        self.state = PlayState::Starting;
+
+        let _ = self
+            .sender
+            .send(AudioMessage::RingBufferConsumed(PrivateToken::new()));
+    }
+
+    fn resume(&mut self) {
+        match &mut self.device {
+            Some(d) => {
+                self.state = PlayState::Starting;
+                d.playback.resume();
+                let _ = self
+                    .sender
+                    .send(AudioMessage::RingBufferConsumed(PrivateToken::new()));
+            }
+            None => self.open_or_restart(),
+        }
+    }
+
+    fn close_device(&mut self) {
+        self.device = None;
+        self.state = PlayState::Closed;
+    }
+
+    fn process(
+        &mut self,
+        _t: PrivateToken,
+        mut f: impl FnMut(&mut ResamplingRingBufProducer) -> bool,
+    ) {
+        match &mut self.device {
+            Some(d) => match self.state {
+                PlayState::Closed => (),
+                PlayState::Starting => {
+                    f(&mut d.ringbuf);
+                    d.playback.resume();
+                    self.state = PlayState::Running;
+                }
+                PlayState::Running => {
+                    let ended = f(&mut d.ringbuf);
+                    if ended {
+                        self.state = PlayState::StopRequested;
+                    }
+                }
+                PlayState::PauseRequested => {
+                    d.ringbuf.fill_with_silence();
+                    d.playback.pause();
+                    self.state = PlayState::Paused;
+                }
+                PlayState::Paused => {
+                    d.ringbuf.fill_with_silence();
+                }
+                PlayState::StopRequested => {
+                    d.ringbuf.fill_with_silence();
+                    d.playback.pause();
+                    self.state = PlayState::Stopped;
+                }
+                PlayState::Stopped => {
+                    d.ringbuf.fill_with_silence();
+                }
+            },
+            None => {
+                self.state = PlayState::Closed;
             }
         }
     }
 
-    fn send_started_song_message(&mut self, id: ItemId, song_data: Arc<SongData>) {
-        // Must set the monitor data, audio timer stops when monitor data is None
-        self.monitor.set(Some(AudioMonitorData::new(Some(id))));
-
-        self.gui_sender.send(GuiMessage::AudioThreadStartedSong(
-            id,
-            song_data,
-            self.tad.bc_interpreter.clone(),
-        ));
+    fn pause_if_running(&mut self) {
+        match self.state {
+            PlayState::Starting | PlayState::Running => {
+                self.state = PlayState::PauseRequested;
+            }
+            PlayState::Closed
+            | PlayState::PauseRequested
+            | PlayState::Paused
+            | PlayState::StopRequested
+            | PlayState::Stopped => (),
+        }
     }
 
-    fn send_resume_song_message(&mut self, id: ItemId) {
-        // Must set the monitor data, audio timer stops when monitor data is None
-        self.monitor.set(Some(AudioMonitorData::new(Some(id))));
-
-        self.gui_sender.send(GuiMessage::AudioThreadResumedSong(id));
+    // NOTE: Does not close the device
+    fn stop(&mut self) {
+        if self.device.is_some() {
+            self.state = PlayState::StopRequested;
+        }
     }
+}
 
-    // Process message while audio is not playing
-    //
-    // Returns Some if an AudioMessage could not be processed when playing a song or brr sample.
-    #[must_use]
-    fn process_message_no_audio(&mut self, msg: AudioMessage) -> Option<AudioMessage> {
-        self.monitor.set(None);
+fn send_started_song_message(
+    id: ItemId,
+    song_data: Arc<SongData>,
+    tad: &TadState,
+    monitor: &mut AudioMonitor,
+    gui_sender: &fltk::app::Sender<GuiMessage>,
+) {
+    // Must set the monitor data, audio timer stops when monitor data is None
+    monitor.set(Some(AudioMonitorData::new(Some(id))));
+
+    gui_sender.send(GuiMessage::AudioThreadStartedSong(
+        id,
+        song_data,
+        tad.bc_interpreter.clone(),
+    ));
+}
+
+fn send_resume_song_message(
+    id: ItemId,
+    monitor: &mut AudioMonitor,
+    gui_sender: &fltk::app::Sender<GuiMessage>,
+) {
+    // Must set the monitor data, audio timer stops when monitor data is None
+    monitor.set(Some(AudioMonitorData::new(Some(id))));
+    gui_sender.send(GuiMessage::AudioThreadResumedSong(id));
+}
+
+fn audio_thread(
+    sender: mpsc::Sender<AudioMessage>,
+    rx: mpsc::Receiver<AudioMessage>,
+    gui_sender: fltk::app::Sender<GuiMessage>,
+    monitor: AudioMonitor,
+) {
+    let mut device = GuiAudioDevice::new(sdl2::init().unwrap(), sender.clone());
+    let mut monitor = monitor;
+    let mut tad = TadState::new();
+
+    let mut brr_sample: Option<BrrSampleDecoder> = None;
+
+    loop {
+        let msg = match rx.recv_timeout(device.state().timeout_until_close()) {
+            Ok(m) => m,
+            Err(RecvTimeoutError::Timeout) => AudioMessage::StopAndCloseDevice,
+            Err(RecvTimeoutError::Disconnected) => break,
+        };
 
         match msg {
+            AudioMessage::RingBufferConsumed(t) => {
+                device.process(t, |rb| match &mut brr_sample {
+                    None => {
+                        rb.set_input_sample_rate(APU_SAMPLE_RATE);
+
+                        let sound = fill_ring_buffer_emu(&mut tad, rb);
+
+                        // Detect when the song has finished playing.
+                        //
+                        // Must test if the emulator is outputting audio as the echo buffer
+                        // feedback can output sound long after the song has finished.
+                        let voices = tad.read_voice_positions();
+                        if voices.is_some() {
+                            monitor.set(voices);
+                            false
+                        } else if sound {
+                            monitor.set(Some(AudioMonitorData::new(tad.song_id())));
+                            false
+                        } else {
+                            // The song has finished
+                            tad.stop_song();
+                            monitor.set(None);
+                            true
+                        }
+                    }
+                    Some(b) => {
+                        rb.set_input_sample_rate(BRR_SAMPLE_RATE);
+                        b.fill_ring_buffer(rb);
+
+                        let is_finished = b.is_finished();
+                        if is_finished {
+                            brr_sample = None;
+                        }
+                        is_finished
+                    }
+                });
+            }
+
+            AudioMessage::PlayBrrSampleAt32Khz(sample) => {
+                brr_sample = Some(BrrSampleDecoder::new(sample));
+                device.open_or_restart();
+            }
+
             AudioMessage::CommonAudioDataChanged(data) => {
-                self.tad.load_cad_no_sfx(data);
+                tad.load_cad_no_sfx(data);
             }
             AudioMessage::CommonAudioDataSfxBufferChanged(data) => {
-                self.tad.load_cad_with_sfx_buffer(data);
+                tad.load_cad_with_sfx_buffer(data);
             }
-            AudioMessage::CommandAudioDataWithSfxChanged(d) => {
-                self.tad.load_cad_with_sfx(d);
+            AudioMessage::CommandAudioDataWithSfxChanged(data) => {
+                tad.load_cad_with_sfx(data);
+            }
+
+            AudioMessage::PlaySong(id, song, song_skip, channels_mask) => {
+                // Pause playback to prevent buffer overrun when tick_to_skip is large.
+                device.pause_if_running();
+
+                match tad.load_song(id, song.clone(), song_skip, channels_mask) {
+                    Ok(()) => {
+                        send_started_song_message(id, song, &tad, &mut monitor, &gui_sender);
+                        device.open_or_restart();
+                    }
+                    Err(()) => device.stop(),
+                }
+            }
+            AudioMessage::PlaySongSubroutine(id, song, prefix, si, skip) => {
+                // Pause playback to prevent buffer overrun when tick_to_skip is large.
+                device.pause_if_running();
+
+                match tad.load_song_subroutine(id, song.clone(), prefix, si, skip) {
+                    Ok(()) => {
+                        send_started_song_message(id, song, &tad, &mut monitor, &gui_sender);
+                        device.open_or_restart();
+                    }
+                    Err(()) => device.stop(),
+                }
+            }
+            AudioMessage::PlaySoundEffectCommand(id, pan) => match device.is_playing() {
+                true => tad.queue_sound_effect(id, pan),
+                false => {
+                    if tad.load_blank_song().is_ok() {
+                        tad.queue_sound_effect(id, pan);
+                        device.open_or_restart();
+                    }
+                }
+            },
+            AudioMessage::PlaySongWithSfxBuffer(id, song, song_skip) => {
+                // Pause playback to prevent buffer overrun when tick_to_skip is large.
+                device.pause_if_running();
+
+                match tad.load_song_with_sfx_buffer(id, song.clone(), song_skip) {
+                    Ok(()) => {
+                        send_started_song_message(id, song, &tad, &mut monitor, &gui_sender);
+                        device.open_or_restart();
+                    }
+                    Err(()) => device.stop(),
+                }
+            }
+            AudioMessage::PlaySfxUsingSfxBuffer(sfx_data, pan) => match device.is_playing() {
+                true => tad.queue_test_sfx(sfx_data, pan),
+                false => {
+                    if tad.load_blank_song_with_sfx_buffer().is_ok() {
+                        tad.queue_test_sfx(sfx_data, pan);
+                        device.open_or_restart();
+                    }
+                }
+            },
+            AudioMessage::PlaySample(common_data, song_data) => {
+                device.pause_if_running();
+
+                match tad.play_sample(common_data, song_data) {
+                    Ok(()) => device.open_or_restart(),
+                    Err(()) => device.stop(),
+                }
+            }
+
+            AudioMessage::Pause => {
+                device.pause_if_running();
+            }
+            AudioMessage::PauseResume(id) => {
+                match device.state() {
+                    PlayState::Starting | PlayState::Running => device.pause_if_running(),
+                    PlayState::Closed | PlayState::PauseRequested | PlayState::Paused => {
+                        // Resume playback if item_id is unchanged
+                        if tad.song_id() == Some(id) {
+                            device.resume();
+                            send_resume_song_message(id, &mut monitor, &gui_sender);
+                        }
+                    }
+                    PlayState::StopRequested | PlayState::Stopped => {
+                        // Do not do anything
+                    }
+                }
+            }
+            AudioMessage::StopIfSongIdEquals(id) => {
+                if tad.song_id() == Some(id) {
+                    tad.stop_song();
+                    device.stop();
+                    monitor.set(None);
+                }
+            }
+            AudioMessage::StopAndCloseDevice => {
+                device.close_device();
+            }
+
+            AudioMessage::SetMusicChannels(id, mask) => {
+                if Some(id) == tad.song_id() {
+                    tad.set_music_channels_mask(mask);
+                }
             }
             AudioMessage::SetAudioMode(mode) => {
-                self.tad.set_audio_mode(mode);
+                tad.set_audio_mode(mode);
 
                 // Disable unpause
-                self.tad.stop_song();
-            }
-
-            AudioMessage::PlaySong(song_id, song, song_skip, channels_mask) => {
-                if self
-                    .tad
-                    .load_song(song_id, song.clone(), song_skip, channels_mask)
-                    .is_ok()
-                {
-                    self.send_started_song_message(song_id, song);
-                    return self.play_song();
-                }
-            }
-            AudioMessage::PlaySongSubroutine(song_id, song, prefix, si, skip) => {
-                if self
-                    .tad
-                    .load_song_subroutine(song_id, song.clone(), prefix, si, skip)
-                    .is_ok()
-                {
-                    self.send_started_song_message(song_id, song);
-                    return self.play_song();
-                }
-            }
-            AudioMessage::PlaySoundEffectCommand(id, pan) => {
-                if self.tad.load_blank_song().is_ok() {
-                    self.tad.queue_sound_effect(id, pan);
-                    return self.play_song();
-                }
-            }
-            AudioMessage::PlaySongWithSfxBuffer(song_id, song, song_skip) => {
-                if self
-                    .tad
-                    .load_song_with_sfx_buffer(song_id, song.clone(), song_skip)
-                    .is_ok()
-                {
-                    self.send_started_song_message(song_id, song);
-                    return self.play_song();
-                }
-            }
-            AudioMessage::PlaySfxUsingSfxBuffer(sfx_data, pan) => {
-                if self.tad.load_blank_song_with_sfx_buffer().is_ok() {
-                    self.tad.queue_test_sfx(sfx_data, pan);
-                    return self.play_song();
-                }
-            }
-            AudioMessage::PlaySample(common_data, song_data) => {
-                if self.tad.play_sample(common_data, song_data).is_ok() {
-                    return self.play_song();
-                }
-            }
-
-            AudioMessage::PlayBrrSampleAt32Khz(brr_sample) => {
-                return self.play_brr_sample(&brr_sample);
-            }
-
-            AudioMessage::PauseResume(id) => {
-                if Some(id) == self.tad.song_id() {
-                    return self.play_song();
-                }
-            }
-            AudioMessage::SetMusicChannels(id, mask) => {
-                if Some(id) == self.tad.song_id() {
-                    self.tad.set_music_channels_mask(mask);
-                }
-            }
-
-            AudioMessage::StopAndCloseDevice
-            | AudioMessage::StopIfSongIdEquals(_)
-            | AudioMessage::Pause
-            | AudioMessage::RingBufferConsumed(_) => (),
-        }
-
-        None
-    }
-
-    // Returns Some if the AudioMessage could not be processed
-    #[must_use]
-    fn play_song(&mut self) -> Option<AudioMessage> {
-        if !self.tad.song_loaded() {
-            return None;
-        }
-
-        let audio_subsystem = self.sdl_context.audio().unwrap();
-        let desired_spec = AudioSpecDesired {
-            freq: Some(AUDIO_SAMPLE_RATE as i32),
-            channels: Some(2),
-            samples: Some(AUDIO_BUFFER_SAMPLES),
-        };
-
-        let (mut rb, rb_consumer) =
-            resampling_ring_buffer(RING_BUFFER_SIZE, APU_SAMPLE_RATE, AUDIO_SAMPLE_RATE);
-
-        let mut playback = audio_subsystem
-            .open_playback(None, &desired_spec, |_spec| {
-                SdlAudioCallback::new(rb_consumer, self.sender.clone())
-            })
-            .unwrap();
-
-        fill_ring_buffer_emu(&mut self.tad, &mut rb);
-
-        let mut state = PlayState::Running;
-        playback.resume();
-
-        // Will exit the loop and close the audio device on timeout or channel disconnect.
-        while let Ok(msg) = self.rx.recv_timeout(state.timeout_until_close()) {
-            match msg {
-                AudioMessage::StopAndCloseDevice => break,
-
-                AudioMessage::StopIfSongIdEquals(id) => {
-                    if self.tad.song_id() == Some(id) {
-                        break;
-                    }
-                }
-
-                AudioMessage::RingBufferConsumed(_) => {
-                    match state {
-                        PlayState::Paused | PlayState::SongFinished => (),
-                        PlayState::Running => {
-                            let sound = fill_ring_buffer_emu(&mut self.tad, &mut rb);
-
-                            // Detect when the song has finished playing.
-                            //
-                            // Must test if the emulator is outputting audio as the echo buffer
-                            // feedback can output sound long after the song has finished.
-                            let voices = self.tad.read_voice_positions();
-                            if voices.is_some() {
-                                self.monitor.set(voices);
-                            } else if sound {
-                                self.monitor
-                                    .set(Some(AudioMonitorData::new(self.tad.song_id())));
-                            } else {
-                                // The song has finished
-                                self.tad.stop_song();
-                                state = PlayState::SongFinished;
-                                playback.pause();
-
-                                self.monitor.set(None);
-                            }
-                        }
-                        PlayState::PauseRequested => {
-                            rb.fill_with_silence();
-                            state = PlayState::Pausing;
-                        }
-                        PlayState::Pausing => {
-                            state = PlayState::Paused;
-                            playback.pause();
-
-                            // Reset ring buffer to the beginning when playback is resumed.
-                            playback.lock().reset();
-
-                            self.monitor.set(None);
-                        }
-                    }
-                }
-
-                AudioMessage::CommonAudioDataChanged(data) => self.tad.load_cad_no_sfx(data),
-                AudioMessage::CommonAudioDataSfxBufferChanged(data) => {
-                    self.tad.load_cad_with_sfx_buffer(data)
-                }
-                AudioMessage::CommandAudioDataWithSfxChanged(data) => {
-                    self.tad.load_cad_with_sfx(data)
-                }
-
-                AudioMessage::PlaySong(id, song, song_skip, channels_mask) => {
-                    // Pause playback to prevent buffer overrun when tick_to_skip is large.
-                    playback.pause();
-                    playback.lock().reset();
-                    match self
-                        .tad
-                        .load_song(id, song.clone(), song_skip, channels_mask)
-                    {
-                        Ok(()) => {
-                            self.send_started_song_message(id, song);
-
-                            state = PlayState::Running;
-                            playback.resume();
-                        }
-                        Err(()) => {
-                            // Stop playback
-                            state = PlayState::PauseRequested;
-                        }
-                    }
-                }
-
-                AudioMessage::PlaySongSubroutine(id, song, prefix, si, skip) => {
-                    // Pause playback to prevent buffer overrun when tick_to_skip is large.
-                    playback.pause();
-                    playback.lock().reset();
-                    match self
-                        .tad
-                        .load_song_subroutine(id, song.clone(), prefix, si, skip)
-                    {
-                        Ok(()) => {
-                            self.send_started_song_message(id, song);
-
-                            state = PlayState::Running;
-                            playback.resume();
-                        }
-                        Err(()) => {
-                            // Stop playback
-                            state = PlayState::PauseRequested;
-                        }
-                    }
-                }
-
-                AudioMessage::PlaySoundEffectCommand(id, pan) => match state {
-                    PlayState::Running => {
-                        self.tad.queue_sound_effect(id, pan);
-                    }
-                    PlayState::Paused
-                    | PlayState::PauseRequested
-                    | PlayState::Pausing
-                    | PlayState::SongFinished => {
-                        if self.tad.load_blank_song().is_ok() {
-                            self.tad.queue_sound_effect(id, pan);
-                            state = PlayState::Running;
-                            playback.resume();
-                        }
-                    }
-                },
-
-                AudioMessage::PlaySongWithSfxBuffer(id, song, song_skip) => {
-                    // Pause playback to prevent buffer overrun when tick_to_skip is large.
-                    playback.pause();
-                    playback.lock().reset();
-                    match self
-                        .tad
-                        .load_song_with_sfx_buffer(id, song.clone(), song_skip)
-                    {
-                        Ok(()) => {
-                            self.send_started_song_message(id, song);
-
-                            state = PlayState::Running;
-                            playback.resume();
-                        }
-                        Err(()) => {
-                            // Stop playback
-                            state = PlayState::PauseRequested;
-                        }
-                    }
-                }
-
-                AudioMessage::PlaySfxUsingSfxBuffer(sfx_data, pan) => match state {
-                    PlayState::Running => {
-                        self.tad.queue_test_sfx(sfx_data, pan);
-                    }
-                    PlayState::Paused
-                    | PlayState::PauseRequested
-                    | PlayState::Pausing
-                    | PlayState::SongFinished => {
-                        if self.tad.load_blank_song_with_sfx_buffer().is_ok() {
-                            self.tad.queue_test_sfx(sfx_data, pan);
-                            state = PlayState::Running;
-                            playback.resume();
-                        }
-                    }
-                },
-
-                AudioMessage::PlaySample(common_data, song_data) => {
-                    playback.pause();
-                    playback.lock().reset();
-
-                    match self.tad.play_sample(common_data, song_data) {
-                        Ok(()) => {
-                            state = PlayState::Running;
-                            playback.resume();
-                        }
-                        Err(()) => {
-                            // Stop playback
-                            state = PlayState::PauseRequested;
-                        }
-                    }
-                }
-
-                AudioMessage::Pause => {
-                    state = PlayState::PauseRequested;
-                }
-
-                AudioMessage::PauseResume(id) => {
-                    match state {
-                        PlayState::Running => {
-                            state = PlayState::PauseRequested;
-                        }
-                        PlayState::Paused => {
-                            // Resume playback if item_id is unchanged
-                            if self.tad.song_id() == Some(id) {
-                                state = PlayState::Running;
-                                playback.resume();
-
-                                self.send_resume_song_message(id);
-                            }
-                        }
-                        PlayState::PauseRequested
-                        | PlayState::Pausing
-                        | PlayState::SongFinished => {
-                            // Do not do anything
-                        }
-                    }
-                }
-
-                AudioMessage::SetMusicChannels(id, mask) => {
-                    if Some(id) == self.tad.song_id() {
-                        self.tad.set_music_channels_mask(mask);
-                    }
-                }
-
-                // Cannot process these messages here.
-                // Must reload the song when the stereo flag changes.
-                // Must close `AudioDevice` to change the sample rate.
-                m @ (AudioMessage::SetAudioMode(_) | AudioMessage::PlayBrrSampleAt32Khz(_)) => {
-                    return Some(m);
-                }
+                tad.stop_song();
+                device.stop();
             }
         }
-
-        None
-    }
-
-    // Returns Some if the AudioMessage could not be processed
-    #[must_use]
-    fn play_brr_sample(&self, sample: &BrrSample) -> Option<AudioMessage> {
-        const TIMEOUT: Duration = Duration::from_secs(1);
-
-        let audio_subsystem = self.sdl_context.audio().unwrap();
-        let desired_spec = AudioSpecDesired {
-            freq: Some(AUDIO_SAMPLE_RATE as i32),
-            channels: Some(2),
-            samples: Some(AUDIO_BUFFER_SAMPLES),
-        };
-
-        let (mut rb, rb_consumer) =
-            resampling_ring_buffer(RING_BUFFER_SIZE, BRR_SAMPLE_RATE, AUDIO_SAMPLE_RATE);
-
-        let playback = audio_subsystem
-            .open_playback(None, &desired_spec, |_spec| {
-                SdlAudioCallback::new(rb_consumer, self.sender.clone())
-            })
-            .unwrap();
-
-        let mut decoder = BrrSampleDecoder::new(sample);
-        let mut remaining_after_finished: i32 = 1;
-
-        decoder.fill_ring_buffer(&mut rb);
-
-        playback.resume();
-
-        while let Ok(msg) = self.rx.recv_timeout(TIMEOUT) {
-            match msg {
-                AudioMessage::RingBufferConsumed(_) => {
-                    if decoder.is_finished() {
-                        // Must wait one more `RingBufferConsumed` message
-                        remaining_after_finished -= 1;
-                        if remaining_after_finished < 0 {
-                            return None;
-                        }
-                    }
-                    decoder.fill_ring_buffer(&mut rb);
-                }
-                m => {
-                    return Some(m);
-                }
-            }
-        }
-        None
     }
 }
 
@@ -1256,7 +1176,7 @@ pub fn create_audio_thread(
         .spawn({
             let s = sender.clone();
             let m = monitor.clone();
-            move || AudioThread::new(s, rx, gui_sender, m).run()
+            move || audio_thread(s, rx, gui_sender, m)
         })
         .unwrap();
 

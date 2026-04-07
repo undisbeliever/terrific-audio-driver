@@ -84,6 +84,13 @@ impl ResamplingRingBufProducer {
         }
     }
 
+    pub fn set_input_sample_rate(&mut self, input_sample_rate: u32) {
+        self.input_sample_rate = input_sample_rate;
+        self.ratio = f64::from(input_sample_rate) / f64::from(self.output_sample_rate);
+        self.min_vacant_samples =
+            Self::calc_min_vacant_samples(input_sample_rate, self.output_sample_rate);
+    }
+
     fn calc_min_vacant_samples(input_sample_rate: u32, output_sample_rate: u32) -> usize {
         assert!(input_sample_rate < output_sample_rate);
         assert!((8000..=256000).contains(&input_sample_rate));
