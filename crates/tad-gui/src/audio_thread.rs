@@ -90,10 +90,10 @@ pub enum AudioMessage {
     SetAudioMode(AudioMode),
 
     // Stop audio and close the audio device
-    StopAndClose,
+    StopAndCloseDevice,
 
     // Stops the audio if playing ItemId with
-    CloseIfSongIdEquals(ItemId),
+    StopIfSongIdEquals(ItemId),
 
     Pause,
     PauseResume(ItemId),
@@ -940,8 +940,8 @@ impl AudioThread {
                 }
             }
 
-            AudioMessage::StopAndClose
-            | AudioMessage::CloseIfSongIdEquals(_)
+            AudioMessage::StopAndCloseDevice
+            | AudioMessage::StopIfSongIdEquals(_)
             | AudioMessage::Pause
             | AudioMessage::RingBufferConsumed(_) => (),
         }
@@ -980,9 +980,9 @@ impl AudioThread {
         // Will exit the loop and close the audio device on timeout or channel disconnect.
         while let Ok(msg) = self.rx.recv_timeout(state.timeout_until_close()) {
             match msg {
-                AudioMessage::StopAndClose => break,
+                AudioMessage::StopAndCloseDevice => break,
 
-                AudioMessage::CloseIfSongIdEquals(id) => {
+                AudioMessage::StopIfSongIdEquals(id) => {
                     if self.tad.song_id() == Some(id) {
                         break;
                     }

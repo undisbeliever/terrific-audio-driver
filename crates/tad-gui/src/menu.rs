@@ -199,7 +199,7 @@ impl Menu {
             AUDIO_STOP,
             Shortcut::None,
             fltk::menu::MenuFlag::Normal,
-            || AudioMessage::StopAndClose,
+            || AudioMessage::StopAndCloseDevice,
         );
         add_audio(
             AUDIO_MONO,

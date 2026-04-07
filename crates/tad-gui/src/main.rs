@@ -1227,7 +1227,7 @@ impl Project {
 
             let _ = self
                 .audio_sender
-                .send(AudioMessage::CloseIfSongIdEquals(song_id));
+                .send(AudioMessage::StopIfSongIdEquals(song_id));
 
             self.closed_song_tabs.push(song_tab);
 
