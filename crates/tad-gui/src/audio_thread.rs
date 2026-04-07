@@ -6,6 +6,11 @@
 
 #![allow(clippy::assertions_on_constants)]
 
+mod resampling_ring_buffer;
+use self::resampling_ring_buffer::{
+    resampling_ring_buffer, ResamplingRingBufConsumer, ResamplingRingBufProducer,
+};
+
 use brr::{BrrSample, SAMPLES_PER_BLOCK};
 use compiler::bytecode_interpreter::SongInterpreter;
 use compiler::common_audio_data::{CommonAudioData, SfxBufferInAram};
@@ -19,7 +24,7 @@ use compiler::time::TickCounter;
 use compiler::Pan;
 
 extern crate sdl2;
-use sdl2::audio::{AudioCallback, AudioDevice, AudioSpecDesired};
+use sdl2::audio::{AudioCallback, AudioSpecDesired};
 use sdl2::Sdl;
 use tad_emu::LagCounters;
 
@@ -41,10 +46,14 @@ use crate::GuiMessage;
 pub const DEFAULT_AUDIO_MODE: AudioMode = AudioMode::Surround;
 
 /// Sample rate to run the audio driver at
-const APU_SAMPLE_RATE: i32 = 32040;
+const APU_SAMPLE_RATE: u32 = 32040;
 
 /// Sample rate to run BRR samples at
-const BRR_SAMPLE_RATE: i32 = 32000;
+const BRR_SAMPLE_RATE: u32 = 32000;
+
+const AUDIO_SAMPLE_RATE: u32 = 48000;
+const AUDIO_BUFFER_SAMPLES: u16 = 1024;
+const RING_BUFFER_SIZE: usize = 3072;
 
 /// Approximate number of samples to play a looping BRR sample for
 const LOOPING_BRR_SAMPLE_SAMPLES: usize = 24000;
@@ -174,113 +183,26 @@ impl AudioMonitor {
     }
 }
 
-struct RingBuffer {
+pub struct SdlAudioCallback {
+    ringbuf: ResamplingRingBufConsumer,
     sender: mpsc::Sender<AudioMessage>,
-
-    buffer: [i16; Self::BUFFER_SIZE],
-    read_cursor: usize,
-    write_cursor: usize,
 }
 
-impl RingBuffer {
-    const SDL_BUFFER_SAMPLES: usize = 2048;
-    const EMU_BUFFER_SAMPLES: usize = tad_emu::TadEmulator::AUDIO_BUFFER_SAMPLES;
-    const BUFFER_SAMPLES: usize = Self::SDL_BUFFER_SAMPLES + Self::EMU_BUFFER_SAMPLES * 2;
-
-    const BUFFER_SIZE: usize = Self::BUFFER_SAMPLES * 2;
-    const EMU_BUFFER_SIZE: usize = Self::EMU_BUFFER_SAMPLES * 2;
-
-    fn new(sender: mpsc::Sender<AudioMessage>) -> Self {
-        const _: () = assert!(RingBuffer::SDL_BUFFER_SAMPLES % RingBuffer::EMU_BUFFER_SAMPLES == 0);
-        const _: () = assert!(
-            RingBuffer::SDL_BUFFER_SAMPLES + RingBuffer::EMU_BUFFER_SAMPLES
-                < RingBuffer::BUFFER_SAMPLES
-        );
-
-        Self {
-            sender,
-            buffer: [0; Self::BUFFER_SIZE],
-            read_cursor: 0,
-            write_cursor: Self::EMU_BUFFER_SIZE,
-        }
+impl SdlAudioCallback {
+    fn new(ringbuf: ResamplingRingBufConsumer, sender: mpsc::Sender<AudioMessage>) -> Self {
+        Self { ringbuf, sender }
     }
 
-    /// Clears the buffer and reset the cursors.
-    fn reset(&mut self) {
-        self.buffer.fill(0);
-
-        self.read_cursor = 0;
-        self.write_cursor = Self::EMU_BUFFER_SIZE;
-    }
-
-    fn is_buffer_full(&self) -> bool {
-        self.write_cursor / RingBuffer::EMU_BUFFER_SIZE
-            == self.read_cursor / RingBuffer::EMU_BUFFER_SIZE
-    }
-
-    /// Returns true if the buffer is full
-    fn add_chunk(&mut self, samples: &[i16; Self::EMU_BUFFER_SIZE]) -> bool {
-        const _: () = assert!(RingBuffer::BUFFER_SIZE % RingBuffer::EMU_BUFFER_SIZE == 0);
-
-        assert!(self.write_cursor % RingBuffer::EMU_BUFFER_SIZE == 0);
-
-        let wc = self.write_cursor;
-        let wc_end = wc + Self::EMU_BUFFER_SIZE;
-
-        self.buffer[wc..wc_end].copy_from_slice(samples);
-
-        self.write_cursor = if wc_end < self.buffer.len() {
-            wc_end
-        } else {
-            0
-        };
-
-        self.is_buffer_full()
-    }
-
-    fn fill_remaining_with_silence(&mut self) {
-        while !self.is_buffer_full() {
-            assert!(self.write_cursor % RingBuffer::EMU_BUFFER_SIZE == 0);
-
-            let wc = self.write_cursor;
-            let wc_end = wc + Self::EMU_BUFFER_SIZE;
-
-            self.buffer[wc..wc_end].fill(0);
-
-            self.write_cursor = if wc_end < self.buffer.len() {
-                wc_end
-            } else {
-                0
-            };
-        }
+    pub fn reset(&mut self) {
+        self.ringbuf.clear();
     }
 }
 
-impl AudioCallback for RingBuffer {
+impl AudioCallback for SdlAudioCallback {
     type Channel = i16;
 
     fn callback(&mut self, out: &mut [i16]) {
-        let rc = self.read_cursor;
-
-        if rc + out.len() <= self.buffer.len() {
-            let rc_end = rc + out.len();
-            out.copy_from_slice(&self.buffer[rc..rc_end]);
-
-            self.read_cursor = if rc_end < self.buffer.len() {
-                rc_end
-            } else {
-                0
-            }
-        } else {
-            let buffer1 = &self.buffer[rc..];
-            let (out1, out2) = out.split_at_mut(buffer1.len());
-            let buffer2 = &self.buffer[..out2.len()];
-
-            out1.copy_from_slice(buffer1);
-            out2.copy_from_slice(buffer2);
-
-            self.read_cursor = buffer2.len();
-        }
+        self.ringbuf.pop_slice(out);
 
         let _ = self
             .sender
@@ -289,26 +211,21 @@ impl AudioCallback for RingBuffer {
 }
 
 // Returns true if any sound is output by the emulator
-fn fill_ring_buffer_emu(emu: &mut TadState, playback: &mut AudioDevice<RingBuffer>) -> bool {
+fn fill_ring_buffer_emu(emu: &mut TadState, rb: &mut ResamplingRingBufProducer) -> bool {
     // Do not emulate the next audio chunk if the ring buffer is full,
     // which can happen if an SDL audio callback occurs in the middle of the last `fill_ring_buffer()` call.
     //
     // In my opinion, the stuttering caused by this early return sounds better then skipping audio.
-    if playback.lock().is_buffer_full() {
-        return true;
-    }
 
     let mut silence = true;
 
-    loop {
+    while rb.can_process() {
         let emu_buffer = emu.emulate();
+
         if silence {
             silence &= emu_buffer.iter().all(|&b| b == 0);
         }
-        let full = playback.lock().add_chunk(emu_buffer);
-        if full {
-            break;
-        }
+        rb.process(emu_buffer);
     }
 
     !silence
@@ -344,17 +261,13 @@ impl<'a> BrrSampleDecoder<'a> {
         self.blocks_decoded > self.blocks_to_decode
     }
 
-    fn fill_ring_buffer(&mut self, playback: &mut AudioDevice<RingBuffer>) {
-        const BUF_LEN: usize = RingBuffer::EMU_BUFFER_SIZE;
-
-        if playback.lock().is_buffer_full() {
-            return;
-        }
+    fn fill_ring_buffer(&mut self, rb: &mut ResamplingRingBufProducer) {
+        const BUF_LEN: usize = ResamplingRingBufProducer::INPUT_CHUNK_SIZE;
 
         let mut buf = [0; BUF_LEN];
         let mut is_done = self.is_finished();
 
-        loop {
+        while rb.can_process() {
             if !is_done {
                 self.sample_pos = self.sample.decode_into_buffer(
                     &mut buf,
@@ -374,12 +287,9 @@ impl<'a> BrrSampleDecoder<'a> {
                     });
                     is_done = true;
                 }
-                let full = playback.lock().add_chunk(&buf);
-                if full {
-                    break;
-                }
+                rb.process(&buf);
             } else {
-                playback.lock().fill_remaining_with_silence();
+                rb.fill_with_silence();
                 break;
             }
         }
@@ -527,6 +437,8 @@ struct TadState {
 }
 
 impl TadState {
+    const EMU_BUFFER_SIZE: usize = tad_emu::TadEmulator::AUDIO_BUFFER_SIZE;
+
     fn new() -> Self {
         Self {
             emu: tad_emu::TadEmulator::new(),
@@ -813,8 +725,8 @@ impl TadState {
         };
     }
 
-    fn emulate(&mut self) -> &[i16; RingBuffer::EMU_BUFFER_SIZE] {
-        const EMPTY_BUFFER: [i16; RingBuffer::EMU_BUFFER_SIZE] = [0; RingBuffer::EMU_BUFFER_SIZE];
+    fn emulate(&mut self) -> &[i16; Self::EMU_BUFFER_SIZE] {
+        const EMPTY_BUFFER: [i16; TadState::EMU_BUFFER_SIZE] = [0; TadState::EMU_BUFFER_SIZE];
 
         if !self.song_loaded() {
             return &EMPTY_BUFFER;
@@ -1046,18 +958,21 @@ impl AudioThread {
 
         let audio_subsystem = self.sdl_context.audio().unwrap();
         let desired_spec = AudioSpecDesired {
-            freq: Some(APU_SAMPLE_RATE),
+            freq: Some(AUDIO_SAMPLE_RATE as i32),
             channels: Some(2),
-            samples: Some(RingBuffer::SDL_BUFFER_SAMPLES.try_into().unwrap()),
+            samples: Some(AUDIO_BUFFER_SAMPLES),
         };
 
+        let (mut rb, rb_consumer) =
+            resampling_ring_buffer(RING_BUFFER_SIZE, APU_SAMPLE_RATE, AUDIO_SAMPLE_RATE);
+
         let mut playback = audio_subsystem
-            .open_playback(None, &desired_spec, {
-                |_spec| RingBuffer::new(self.sender.clone())
+            .open_playback(None, &desired_spec, |_spec| {
+                SdlAudioCallback::new(rb_consumer, self.sender.clone())
             })
             .unwrap();
 
-        fill_ring_buffer_emu(&mut self.tad, &mut playback);
+        fill_ring_buffer_emu(&mut self.tad, &mut rb);
 
         let mut state = PlayState::Running;
         playback.resume();
@@ -1077,7 +992,7 @@ impl AudioThread {
                     match state {
                         PlayState::Paused | PlayState::SongFinished => (),
                         PlayState::Running => {
-                            let sound = fill_ring_buffer_emu(&mut self.tad, &mut playback);
+                            let sound = fill_ring_buffer_emu(&mut self.tad, &mut rb);
 
                             // Detect when the song has finished playing.
                             //
@@ -1099,7 +1014,7 @@ impl AudioThread {
                             }
                         }
                         PlayState::PauseRequested => {
-                            playback.lock().fill_remaining_with_silence();
+                            rb.fill_with_silence();
                             state = PlayState::Pausing;
                         }
                         PlayState::Pausing => {
@@ -1284,21 +1199,24 @@ impl AudioThread {
 
         let audio_subsystem = self.sdl_context.audio().unwrap();
         let desired_spec = AudioSpecDesired {
-            freq: Some(BRR_SAMPLE_RATE),
+            freq: Some(AUDIO_SAMPLE_RATE as i32),
             channels: Some(1),
-            samples: Some((RingBuffer::SDL_BUFFER_SAMPLES * 2).try_into().unwrap()),
+            samples: Some(AUDIO_BUFFER_SAMPLES),
         };
 
-        let mut playback = audio_subsystem
-            .open_playback(None, &desired_spec, {
-                |_spec| RingBuffer::new(self.sender.clone())
+        let (mut rb, rb_consumer) =
+            resampling_ring_buffer(RING_BUFFER_SIZE, BRR_SAMPLE_RATE, AUDIO_SAMPLE_RATE);
+
+        let playback = audio_subsystem
+            .open_playback(None, &desired_spec, |_spec| {
+                SdlAudioCallback::new(rb_consumer, self.sender.clone())
             })
             .unwrap();
 
         let mut decoder = BrrSampleDecoder::new(sample);
         let mut remaining_after_finished: i32 = 1;
 
-        decoder.fill_ring_buffer(&mut playback);
+        decoder.fill_ring_buffer(&mut rb);
 
         playback.resume();
 
@@ -1312,7 +1230,7 @@ impl AudioThread {
                             return None;
                         }
                     }
-                    decoder.fill_ring_buffer(&mut playback);
+                    decoder.fill_ring_buffer(&mut rb);
                 }
                 m => {
                     return Some(m);

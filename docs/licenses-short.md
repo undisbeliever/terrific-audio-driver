@@ -132,6 +132,7 @@ Please see the included [licenses file](licenses.md) for the full third party li
   * [version-compare 0.1.1](https://gitlab.com/timvisee/version-compare), MIT License
   * [autocfg 1.5.0](https://github.com/cuviper/autocfg), MIT License
   * [ttf-parser 0.25.1](https://github.com/harfbuzz/ttf-parser), MIT License
+  * [ringbuf 0.4.8](https://github.com/agerasev/ringbuf.git), MIT License
   * [anstream 1.0.0](https://github.com/rust-cli/anstyle.git), MIT License
   * [anstyle-parse 1.0.0](https://github.com/rust-cli/anstyle.git), MIT License
   * [anstyle-query 1.1.5](https://github.com/rust-cli/anstyle.git), MIT License
