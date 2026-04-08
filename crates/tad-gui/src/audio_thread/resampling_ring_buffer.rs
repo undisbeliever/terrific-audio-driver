@@ -119,18 +119,19 @@ impl ResamplingRingBufProducer {
     pub fn process(&mut self, samples: &[i16; Self::INPUT_CHUNK_SIZE]) {
         assert!(self.ringbuf.vacant_len() >= self.min_vacant_samples);
 
-        debug_assert!(self.input_sample_rate < self.output_sample_rate);
+        debug_assert!(self.ratio > 0.0 && self.ratio < 1.0);
         let mut it = samples.iter();
         while let (Some(&left), Some(&right)) = (it.next(), it.next()) {
             self.left.push(left.into());
             self.right.push(right.into());
 
             while self.mu < 1.0 {
-                self.ringbuf.push_slice(&[
+                let c = self.ringbuf.push_slice(&[
                     // Rust 1.45 and later do saturating casts when converting float to int
                     self.left.interpolate(self.mu) as i16,
                     self.right.interpolate(self.mu) as i16,
                 ]);
+                debug_assert!(c == 2, "Ring buffer overflow test");
 
                 self.mu += self.ratio;
             }
@@ -147,17 +148,18 @@ impl ResamplingRingBufProducer {
     pub fn process_mono(&mut self, samples: &[i16; Self::INPUT_CHUNK_SIZE / 2]) {
         assert!(self.ringbuf.vacant_len() >= self.min_vacant_samples);
 
-        debug_assert!(self.input_sample_rate < self.output_sample_rate);
+        debug_assert!(self.ratio > 0.0 && self.ratio < 1.0);
         for &s in samples {
             self.left.push(s.into());
             self.right.push(s.into());
 
             while self.mu < 1.0 {
-                self.ringbuf.push_slice(&[
+                let c = self.ringbuf.push_slice(&[
                     // Rust 1.45 and later do saturating casts when converting float to int
                     self.left.interpolate(self.mu) as i16,
                     self.right.interpolate(self.mu) as i16,
                 ]);
+                debug_assert!(c == 2, "Ring buffer overflow test");
 
                 self.mu += self.ratio;
             }
