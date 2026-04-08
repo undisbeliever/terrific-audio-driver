@@ -20,7 +20,6 @@ tad-emu.workspace = true
 
 # External crates
 fltk.workspace = true
-sdl2.workspace = true
 spectrum-analyzer.workspace = true
 cpal.workspace = true
 ringbuf.workspace = true

@@ -19,7 +19,6 @@ linkfile
 crates/*/target
 /.cargo
 /.vscode
-SDL2.dll
 
 fuzz/target
 fuzz/corpus

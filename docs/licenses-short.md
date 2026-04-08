@@ -116,9 +116,7 @@ Please see the included [licenses file](licenses.md) for the full third party li
   * [windows_x86_64_gnu 0.42.2](https://github.com/microsoft/windows-rs), MIT License
   * [windows_x86_64_gnullvm 0.42.2](https://github.com/microsoft/windows-rs), MIT License
   * [windows_x86_64_msvc 0.42.2](https://github.com/microsoft/windows-rs), MIT License
-  * [sdl2-sys 0.38.0](https://github.com/rust-sdl2/rust-sdl2), MIT License
   * [markdown 1.0.0](https://github.com/wooorm/markdown-rs), MIT License
-  * [lazy_static 1.5.0](https://github.com/rust-lang-nursery/lazy-static.rs), MIT License
   * [cc 1.2.58](https://github.com/rust-lang/cc-rs), MIT License
   * [cfg-if 1.0.4](https://github.com/rust-lang/cfg-if), MIT License
   * [cmake 0.1.58](https://github.com/rust-lang/cmake-rs), MIT License
@@ -131,7 +129,6 @@ Please see the included [licenses file](licenses.md) for the full third party li
   * [wasm-bindgen-shared 0.2.117](https://github.com/wasm-bindgen/wasm-bindgen/tree/master/crates/shared), MIT License
   * [wasm-bindgen 0.2.117](https://github.com/wasm-bindgen/wasm-bindgen), MIT License
   * [web-sys 0.3.94](https://github.com/wasm-bindgen/wasm-bindgen/tree/master/crates/web-sys), MIT License
-  * [bitflags 1.3.2](https://github.com/bitflags/bitflags), MIT License
   * [bitflags 2.11.0](https://github.com/bitflags/bitflags), MIT License
   * [log 0.4.29](https://github.com/rust-lang/log), MIT License
   * [num-complex 0.4.6](https://github.com/rust-num/num-complex), MIT License
@@ -155,7 +152,6 @@ Please see the included [licenses file](licenses.md) for the full third party li
   * [utf8parse 0.2.2](https://github.com/alacritty/vte), MIT License
   * [indexmap 2.13.1](https://github.com/indexmap-rs/indexmap), MIT License
   * [equivalent 1.0.2](https://github.com/indexmap-rs/equivalent), MIT License
-  * [version-compare 0.1.1](https://gitlab.com/timvisee/version-compare), MIT License
   * [bytes 1.11.1](https://github.com/tokio-rs/bytes), MIT License
   * [autocfg 1.5.0](https://github.com/cuviper/autocfg), MIT License
   * [ttf-parser 0.25.1](https://github.com/harfbuzz/ttf-parser), MIT License
@@ -242,7 +238,6 @@ Please see the included [licenses file](licenses.md) for the full third party li
   * [unicode-ident 1.0.24](https://github.com/dtolnay/unicode-ident), MIT License
   * [zmij 1.0.21](https://github.com/dtolnay/zmij), MIT License
   * [winnow 1.0.1](https://github.com/winnow-rs/winnow), MIT License
-  * [sdl2 0.38.0](https://github.com/Rust-SDL2/rust-sdl2), MIT License
   * [aho-corasick 1.1.4](https://github.com/BurntSushi/aho-corasick), MIT License
   * [memchr 2.8.0](https://github.com/BurntSushi/memchr), MIT License
   * [termcolor 1.4.1](https://github.com/BurntSushi/termcolor), MIT License
@@ -256,9 +251,7 @@ Please see the included [licenses file](licenses.md) for the full third party li
   * [crossbeam-channel 0.5.15](https://github.com/crossbeam-rs/crossbeam), MIT License
   * [crossbeam-utils 0.8.21](https://github.com/crossbeam-rs/crossbeam), MIT License
   * [unicode-ident 1.0.24](https://github.com/dtolnay/unicode-ident), Unicode License v3
-  * [sdl2-sys 0.38.0](https://github.com/rust-sdl2/rust-sdl2), zlib License
   * [foldhash 0.2.0](https://github.com/orlp/foldhash), zlib License
   * [FLTK](https://www.fltk.org/), [FLTK license](https://www.fltk.org/doc-1.4/license.html)
-  * [SDL2](https://libsdl.org/), [zlib license](https://www.libsdl.org/license.php)
 
 

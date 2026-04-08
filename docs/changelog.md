@@ -7,6 +7,7 @@ Version 0.2.1
  * Ported the audio driver to assembly using a custom made spc700 assembler
  * The audio thread now resamples TAD output to a 48000Hz sample rate
  * tad-gui now uses the `cpal` crate to play audio
+ * Removed the SDL dependency from tad-gui
 
  * Fixed transposition analysis in the compiler
  * Fixed a panic in the sample analyser window when analysing a small non-looping sample.
