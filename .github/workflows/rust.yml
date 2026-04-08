@@ -43,7 +43,7 @@ jobs:
         if [[ ${RUNNER_OS} == "Linux" ]]; then
             log 'info' 'Download dep'
             sudo apt-get update
-            sudo apt-get install -y ninja-build lib{x11,xext,xft,xinerama,xcursor,xrender,xfixes,pango1.0,gl1-mesa,glu1-mesa}-dev
+            sudo apt-get install -y ninja-build libx11-dev libxext-dev libxft-dev libxinerama-dev libxcursor-dev libxrender-dev libxfixes-dev libpango1.0-dev libgl1-mesa-dev libglu1-mesa-dev libasound2-dev
             log 'info' 'Cargo Fmt'
             cargo fmt --check --all
             log 'info' 'Cargo Clippy'
