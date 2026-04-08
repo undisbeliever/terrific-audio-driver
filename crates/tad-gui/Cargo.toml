@@ -22,6 +22,7 @@ tad-emu.workspace = true
 fltk.workspace = true
 sdl2.workspace = true
 spectrum-analyzer.workspace = true
+cpal.workspace = true
 ringbuf.workspace = true
 
 [build-dependencies]

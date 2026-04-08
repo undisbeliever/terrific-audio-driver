@@ -61,6 +61,7 @@ bitflags = { version="2.10.0" }
 ringbuf = { version="0.4.8" }
 
 sdl2 = { version="0.38.0", features=[] }
+cpal = { version="0.17.3", features=[] }
 spectrum-analyzer = { version="1.6.0" }
 
 fltk = { version="1.5.0", features = ["use-ninja"] }
