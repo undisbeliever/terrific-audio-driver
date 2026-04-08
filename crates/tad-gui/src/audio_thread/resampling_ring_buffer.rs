@@ -170,23 +170,26 @@ impl ResamplingRingBufProducer {
         self.ringbuf.commit();
     }
 
-    pub fn fill_with_silence(&mut self) {
+    // Returns the number of elements written
+    pub fn fill_with_silence(&mut self) -> usize {
         self.left = HermiteInterpolator::new();
         self.right = HermiteInterpolator::new();
 
         self.ringbuf.fetch();
-        self.ringbuf.push_iter(std::iter::repeat(0));
+        let written = self.ringbuf.push_iter(std::iter::repeat(0));
         self.ringbuf.commit();
+
+        written
+    }
+
+    pub fn capacity(&self) -> usize {
+        self.ringbuf.capacity().into()
     }
 }
 
 pub struct ResamplingRingBufConsumer(CachingCons<Arc<HeapRb<i16>>>);
 
 impl ResamplingRingBufConsumer {
-    pub fn clear(&mut self) {
-        self.0.clear();
-    }
-
     pub fn pop_slice(&mut self, out: &mut [i16]) {
         let read = self.0.pop_slice(out);
 
