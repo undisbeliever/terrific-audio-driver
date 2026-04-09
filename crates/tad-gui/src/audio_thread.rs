@@ -714,41 +714,50 @@ impl TadState {
 
     /// Returns None if the song and sound effects have finished
     fn read_voice_positions(&mut self) -> Option<AudioMonitorData> {
-        let s = self.emu.get_music_state()?;
+        match self.emu.get_music_state() {
+            Some(s) => {
+                let voice_return_inst_ptrs = match &mut self.bc_interpreter {
+                    Some(b) => match b.try_borrow_mut() {
+                        Ok(mut b) => {
+                            // Assumes number of ticks since the last read was < 256;
+                            let bc_tick_counter_l = b.tick_counter().value().to_le_bytes()[0];
+                            let emu_tick_counter_l = s.song_tick_counter.to_le_bytes()[0];
 
-        let voice_return_inst_ptrs = match &mut self.bc_interpreter {
-            Some(b) => match b.try_borrow_mut() {
-                Ok(mut b) => {
-                    // Assumes number of ticks since the last read was < 256;
-                    let bc_tick_counter_l = b.tick_counter().value().to_le_bytes()[0];
-                    let emu_tick_counter_l = s.song_tick_counter.to_le_bytes()[0];
+                            let ticks_passed = emu_tick_counter_l.wrapping_sub(bc_tick_counter_l);
+                            if ticks_passed > 0 {
+                                let v = b.process_ticks(TickCounter::new(ticks_passed.into()));
+                                debug_assert!(v, "Bytecode interpreter timeout");
+                            }
+                            debug_assert_eq!(
+                                b.tick_counter().value() as u16,
+                                s.song_tick_counter,
+                                "Bytecode interpreter desync"
+                            );
 
-                    let ticks_passed = emu_tick_counter_l.wrapping_sub(bc_tick_counter_l);
-                    if ticks_passed > 0 {
-                        let v = b.process_ticks(TickCounter::new(ticks_passed.into()));
-                        debug_assert!(v, "Bytecode interpreter timeout");
-                    }
-                    debug_assert_eq!(
-                        b.tick_counter().value() as u16,
-                        s.song_tick_counter,
-                        "Bytecode interpreter desync"
-                    );
+                            let channels = b.channels();
 
-                    let channels = b.channels();
+                            std::array::from_fn(|i| {
+                                channels[i].as_ref().and_then(|c| c.topmost_return_pos)
+                            })
+                        }
+                        Err(_) => Default::default(),
+                    },
+                    None => Default::default(),
+                };
 
-                    std::array::from_fn(|i| channels[i].as_ref().and_then(|c| c.topmost_return_pos))
-                }
-                Err(_) => Default::default(),
+                Some(AudioMonitorData {
+                    song_id: self.song_id,
+                    voice_instruction_ptrs: s.voice_instruction_ptrs,
+                    voice_return_inst_ptrs,
+                    lag_counters: self.emu.lag_counters(),
+                })
+            }
+            // Sfx queue might not be processed yet
+            None => match &self.sfx_queue {
+                SfxQueue::TestSfx(..) | SfxQueue::PlaySfx(..) => Some(AudioMonitorData::default()),
+                SfxQueue::None => None,
             },
-            None => Default::default(),
-        };
-
-        Some(AudioMonitorData {
-            song_id: self.song_id,
-            voice_instruction_ptrs: s.voice_instruction_ptrs,
-            voice_return_inst_ptrs,
-            lag_counters: self.emu.lag_counters(),
-        })
+        }
     }
 }
 
