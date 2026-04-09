@@ -20,6 +20,23 @@ wildcards = "deny"
 
 deny = []
 
+skip = [
+    # Ignore duplicate entries for crate errors
+    { name="bitflags", version = "1.3", reason = "used by cpal v0.16" },
+
+    # Ignore duplicate entries for crate errors
+    #
+    # From the JNI crate used for cpal android support
+    { name="windows-sys", version = "0.45.0", reason = "from cpal jni dependency" },
+    { name="windows-targets", version = "0.42.2", reason = "from cpal jni dependency" },
+    { name="windows_aarch64_gnullvm", version = "0.42.2", reason = "from cpal jni dependency" },
+    { name="windows_aarch64_msvc", version = "0.42.2", reason = "from cpal jni dependency" },
+    { name="windows_i686_gnu", version = "0.42.2", reason = "from cpal jni dependency" },
+    { name="windows_i686_msvc", version = "0.42.2", reason = "from cpal jni dependency" },
+    { name="windows_x86_64_gnu", version = "0.42.2", reason = "from cpal jni dependency" },
+    { name="windows_x86_64_gnullvm", version = "0.42.2", reason = "from cpal jni dependency" },
+    { name="windows_x86_64_msvc", version = "0.42.2", reason = "from cpal jni dependency" },
+]
 
 [advisories]
 version = 2

@@ -119,7 +119,7 @@ Terrific Audio Driver makes use of the following open source projects:
 
 Used by:
   * [codespan-reporting 0.13.1](https://github.com/brendanzab/codespan)
-  * [cpal 0.17.3](https://github.com/RustAudio/cpal)
+  * [cpal 0.16.0](https://github.com/rustaudio/cpal)
 
 ```
                                  Apache License
@@ -333,13 +333,21 @@ Used by:
   * [windows-sys 0.45.0](https://github.com/microsoft/windows-rs)
   * [windows-sys 0.61.2](https://github.com/microsoft/windows-rs)
   * [windows-targets 0.42.2](https://github.com/microsoft/windows-rs)
+  * [windows-targets 0.52.6](https://github.com/microsoft/windows-rs)
   * [windows_aarch64_gnullvm 0.42.2](https://github.com/microsoft/windows-rs)
+  * [windows_aarch64_gnullvm 0.52.6](https://github.com/microsoft/windows-rs)
   * [windows_aarch64_msvc 0.42.2](https://github.com/microsoft/windows-rs)
+  * [windows_aarch64_msvc 0.52.6](https://github.com/microsoft/windows-rs)
   * [windows_i686_gnu 0.42.2](https://github.com/microsoft/windows-rs)
+  * [windows_i686_gnu 0.52.6](https://github.com/microsoft/windows-rs)
   * [windows_i686_msvc 0.42.2](https://github.com/microsoft/windows-rs)
+  * [windows_i686_msvc 0.52.6](https://github.com/microsoft/windows-rs)
   * [windows_x86_64_gnu 0.42.2](https://github.com/microsoft/windows-rs)
+  * [windows_x86_64_gnu 0.52.6](https://github.com/microsoft/windows-rs)
   * [windows_x86_64_gnullvm 0.42.2](https://github.com/microsoft/windows-rs)
+  * [windows_x86_64_gnullvm 0.52.6](https://github.com/microsoft/windows-rs)
   * [windows_x86_64_msvc 0.42.2](https://github.com/microsoft/windows-rs)
+  * [windows_x86_64_msvc 0.52.6](https://github.com/microsoft/windows-rs)
 
 ```
     MIT License
@@ -448,6 +456,7 @@ DEALINGS IN THE SOFTWARE.
 ## MIT License
 
 Used by:
+  * [bitflags 1.3.2](https://github.com/bitflags/bitflags)
   * [bitflags 2.11.0](https://github.com/bitflags/bitflags)
   * [log 0.4.29](https://github.com/rust-lang/log)
   * [num-complex 0.4.6](https://github.com/rust-num/num-complex)
@@ -520,7 +529,7 @@ IN THE SOFTWARE.
 ## MIT License
 
 Used by:
-  * [coreaudio-rs 0.14.1](https://github.com/RustAudio/coreaudio-rs.git)
+  * [coreaudio-rs 0.13.0](https://github.com/RustAudio/coreaudio-rs.git)
 
 ```
 Copyright (c) 2015
@@ -1005,7 +1014,7 @@ DEALINGS IN THE SOFTWARE.
 ## MIT License
 
 Used by:
-  * [mach2 0.5.0](https://github.com/JohnTitor/mach2)
+  * [mach2 0.4.3](https://github.com/JohnTitor/mach2)
 
 ```
 Copyright (c) 2019 Nick Fitzgerald, 2021 Yuki Okushi
@@ -1118,7 +1127,7 @@ DEALINGS IN THE SOFTWARE.
 ## MIT License
 
 Used by:
-  * [alsa 0.11.0](https://github.com/diwic/alsa-rs)
+  * [alsa 0.9.1](https://github.com/diwic/alsa-rs)
 
 ```
 MIT License
@@ -1180,7 +1189,7 @@ SOFTWARE.
 ## MIT License
 
 Used by:
-  * [alsa-sys 0.4.0](https://github.com/diwic/alsa-sys)
+  * [alsa-sys 0.3.1](https://github.com/diwic/alsa-sys)
 
 ```
 MIT License
@@ -1305,34 +1314,25 @@ SOFTWARE.
   (synthesized by cargo-about)
 
 Used by:
-  * [block2 0.6.2](https://github.com/madsmtm/objc2)
   * [cesu8 1.1.0](https://github.com/emk/cesu8-rs)
   * [dasp_sample 0.11.0](https://github.com/rustaudio/sample.git)
-  * [dispatch2 0.3.1](https://github.com/madsmtm/objc2)
   * [jni-sys-macros 0.4.1](https://github.com/jni-rs/jni-sys)
   * [libm 0.2.16](https://github.com/rust-lang/compiler-builtins)
   * [ndk-context 0.1.1](https://github.com/rust-windowing/android-ndk-rs)
   * [ndk-sys 0.6.0+11769913](https://github.com/rust-mobile/ndk)
   * [ndk 0.9.0](https://github.com/rust-mobile/ndk)
   * [objc2-audio-toolbox 0.3.2](https://github.com/madsmtm/objc2)
-  * [objc2-avf-audio 0.3.2](https://github.com/madsmtm/objc2)
   * [objc2-core-audio-types 0.3.2](https://github.com/madsmtm/objc2)
   * [objc2-core-audio 0.3.2](https://github.com/madsmtm/objc2)
   * [objc2-core-foundation 0.3.2](https://github.com/madsmtm/objc2)
   * [objc2-encode 4.1.0](https://github.com/madsmtm/objc2)
   * [objc2-foundation 0.3.2](https://github.com/madsmtm/objc2)
   * [objc2 0.6.4](https://github.com/madsmtm/objc2)
-  * [windows-collections 0.3.2](https://github.com/microsoft/windows-rs)
-  * [windows-core 0.62.2](https://github.com/microsoft/windows-rs)
-  * [windows-future 0.3.2](https://github.com/microsoft/windows-rs)
-  * [windows-implement 0.60.2](https://github.com/microsoft/windows-rs)
-  * [windows-interface 0.59.3](https://github.com/microsoft/windows-rs)
+  * [windows-core 0.54.0](https://github.com/microsoft/windows-rs)
   * [windows-link 0.2.1](https://github.com/microsoft/windows-rs)
-  * [windows-numerics 0.3.1](https://github.com/microsoft/windows-rs)
-  * [windows-result 0.4.1](https://github.com/microsoft/windows-rs)
-  * [windows-strings 0.5.1](https://github.com/microsoft/windows-rs)
-  * [windows-threading 0.2.1](https://github.com/microsoft/windows-rs)
-  * [windows 0.62.2](https://github.com/microsoft/windows-rs)
+  * [windows-result 0.1.2](https://github.com/microsoft/windows-rs)
+  * [windows 0.54.0](https://github.com/microsoft/windows-rs)
+  * [windows_i686_gnullvm 0.52.6](https://github.com/microsoft/windows-rs)
 
 ```
 MIT License

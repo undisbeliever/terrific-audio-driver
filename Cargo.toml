@@ -60,7 +60,7 @@ relative-path = { version="2.0.1", features=[ "serde" ] }
 bitflags = { version="2.10.0" }
 ringbuf = { version="0.4.8" }
 
-cpal = { version="0.17.3", features=[] }
+cpal = { version="0.16.0", features=[] }
 spectrum-analyzer = { version="1.6.0" }
 
 fltk = { version="1.5.0", features = ["use-ninja"] }

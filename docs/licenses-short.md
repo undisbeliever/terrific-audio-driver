@@ -105,17 +105,25 @@ It is generated using [cargo-about](https://embarkstudios.github.io/cargo-about/
 Please see the included [licenses file](licenses.md) for the full third party license text.
 
   * [codespan-reporting 0.13.1](https://github.com/brendanzab/codespan), Apache License 2.0
-  * [cpal 0.17.3](https://github.com/RustAudio/cpal), Apache License 2.0
+  * [cpal 0.16.0](https://github.com/rustaudio/cpal), Apache License 2.0
   * [windows-sys 0.45.0](https://github.com/microsoft/windows-rs), MIT License
   * [windows-sys 0.61.2](https://github.com/microsoft/windows-rs), MIT License
   * [windows-targets 0.42.2](https://github.com/microsoft/windows-rs), MIT License
+  * [windows-targets 0.52.6](https://github.com/microsoft/windows-rs), MIT License
   * [windows_aarch64_gnullvm 0.42.2](https://github.com/microsoft/windows-rs), MIT License
+  * [windows_aarch64_gnullvm 0.52.6](https://github.com/microsoft/windows-rs), MIT License
   * [windows_aarch64_msvc 0.42.2](https://github.com/microsoft/windows-rs), MIT License
+  * [windows_aarch64_msvc 0.52.6](https://github.com/microsoft/windows-rs), MIT License
   * [windows_i686_gnu 0.42.2](https://github.com/microsoft/windows-rs), MIT License
+  * [windows_i686_gnu 0.52.6](https://github.com/microsoft/windows-rs), MIT License
   * [windows_i686_msvc 0.42.2](https://github.com/microsoft/windows-rs), MIT License
+  * [windows_i686_msvc 0.52.6](https://github.com/microsoft/windows-rs), MIT License
   * [windows_x86_64_gnu 0.42.2](https://github.com/microsoft/windows-rs), MIT License
+  * [windows_x86_64_gnu 0.52.6](https://github.com/microsoft/windows-rs), MIT License
   * [windows_x86_64_gnullvm 0.42.2](https://github.com/microsoft/windows-rs), MIT License
+  * [windows_x86_64_gnullvm 0.52.6](https://github.com/microsoft/windows-rs), MIT License
   * [windows_x86_64_msvc 0.42.2](https://github.com/microsoft/windows-rs), MIT License
+  * [windows_x86_64_msvc 0.52.6](https://github.com/microsoft/windows-rs), MIT License
   * [markdown 1.0.0](https://github.com/wooorm/markdown-rs), MIT License
   * [cc 1.2.58](https://github.com/rust-lang/cc-rs), MIT License
   * [cfg-if 1.0.4](https://github.com/rust-lang/cfg-if), MIT License
@@ -129,6 +137,7 @@ Please see the included [licenses file](licenses.md) for the full third party li
   * [wasm-bindgen-shared 0.2.117](https://github.com/wasm-bindgen/wasm-bindgen/tree/master/crates/shared), MIT License
   * [wasm-bindgen 0.2.117](https://github.com/wasm-bindgen/wasm-bindgen), MIT License
   * [web-sys 0.3.94](https://github.com/wasm-bindgen/wasm-bindgen/tree/master/crates/web-sys), MIT License
+  * [bitflags 1.3.2](https://github.com/bitflags/bitflags), MIT License
   * [bitflags 2.11.0](https://github.com/bitflags/bitflags), MIT License
   * [log 0.4.29](https://github.com/rust-lang/log), MIT License
   * [num-complex 0.4.6](https://github.com/rust-num/num-complex), MIT License
@@ -139,7 +148,7 @@ Please see the included [licenses file](licenses.md) for the full third party li
   * [regex 1.12.3](https://github.com/rust-lang/regex), MIT License
   * [relative-path 2.0.1](https://github.com/udoprog/relative-path), MIT License
   * [float-cmp 0.10.0](https://github.com/mikedilger/float-cmp), MIT License
-  * [coreaudio-rs 0.14.1](https://github.com/RustAudio/coreaudio-rs.git), MIT License
+  * [coreaudio-rs 0.13.0](https://github.com/RustAudio/coreaudio-rs.git), MIT License
   * [heck 0.5.0](https://github.com/withoutboats/heck), MIT License
   * [unicode-id 0.3.6](https://github.com/Boshen/unicode-id), MIT License
   * [unicode-width 0.2.2](https://github.com/unicode-rs/unicode-width), MIT License
@@ -158,7 +167,7 @@ Please see the included [licenses file](licenses.md) for the full third party li
   * [ringbuf 0.4.8](https://github.com/agerasev/ringbuf.git), MIT License
   * [slab 0.4.12](https://github.com/tokio-rs/slab), MIT License
   * [bumpalo 3.20.2](https://github.com/fitzgen/bumpalo), MIT License
-  * [mach2 0.5.0](https://github.com/JohnTitor/mach2), MIT License
+  * [mach2 0.4.3](https://github.com/JohnTitor/mach2), MIT License
   * [anstream 1.0.0](https://github.com/rust-cli/anstyle.git), MIT License
   * [anstyle-parse 1.0.0](https://github.com/rust-cli/anstyle.git), MIT License
   * [anstyle-query 1.1.5](https://github.com/rust-cli/anstyle.git), MIT License
@@ -175,40 +184,31 @@ Please see the included [licenses file](licenses.md) for the full third party li
   * [toml_edit 0.25.11+spec-1.1.0](https://github.com/toml-rs/toml), MIT License
   * [toml_parser 1.1.2+spec-1.1.0](https://github.com/toml-rs/toml), MIT License
   * [libc 0.2.184](https://github.com/rust-lang/libc), MIT License
-  * [alsa 0.11.0](https://github.com/diwic/alsa-rs), MIT License
+  * [alsa 0.9.1](https://github.com/diwic/alsa-rs), MIT License
   * [static_assertions 1.1.0](https://github.com/nvzqz/static-assertions-rs), MIT License
-  * [alsa-sys 0.4.0](https://github.com/diwic/alsa-sys), MIT License
+  * [alsa-sys 0.3.1](https://github.com/diwic/alsa-sys), MIT License
   * [microfft 0.6.0](https://gitlab.com/teskje/microfft-rs), MIT License
   * [spectrum-analyzer 1.7.0](https://github.com/phip1611/spectrum-analyzer), MIT License
   * [cmk 0.1.2](https://github.com/MoAlyousef/cmk), MIT License
-  * [block2 0.6.2](https://github.com/madsmtm/objc2), MIT License
   * [cesu8 1.1.0](https://github.com/emk/cesu8-rs), MIT License
   * [dasp_sample 0.11.0](https://github.com/rustaudio/sample.git), MIT License
-  * [dispatch2 0.3.1](https://github.com/madsmtm/objc2), MIT License
   * [jni-sys-macros 0.4.1](https://github.com/jni-rs/jni-sys), MIT License
   * [libm 0.2.16](https://github.com/rust-lang/compiler-builtins), MIT License
   * [ndk-context 0.1.1](https://github.com/rust-windowing/android-ndk-rs), MIT License
   * [ndk-sys 0.6.0+11769913](https://github.com/rust-mobile/ndk), MIT License
   * [ndk 0.9.0](https://github.com/rust-mobile/ndk), MIT License
   * [objc2-audio-toolbox 0.3.2](https://github.com/madsmtm/objc2), MIT License
-  * [objc2-avf-audio 0.3.2](https://github.com/madsmtm/objc2), MIT License
   * [objc2-core-audio-types 0.3.2](https://github.com/madsmtm/objc2), MIT License
   * [objc2-core-audio 0.3.2](https://github.com/madsmtm/objc2), MIT License
   * [objc2-core-foundation 0.3.2](https://github.com/madsmtm/objc2), MIT License
   * [objc2-encode 4.1.0](https://github.com/madsmtm/objc2), MIT License
   * [objc2-foundation 0.3.2](https://github.com/madsmtm/objc2), MIT License
   * [objc2 0.6.4](https://github.com/madsmtm/objc2), MIT License
-  * [windows-collections 0.3.2](https://github.com/microsoft/windows-rs), MIT License
-  * [windows-core 0.62.2](https://github.com/microsoft/windows-rs), MIT License
-  * [windows-future 0.3.2](https://github.com/microsoft/windows-rs), MIT License
-  * [windows-implement 0.60.2](https://github.com/microsoft/windows-rs), MIT License
-  * [windows-interface 0.59.3](https://github.com/microsoft/windows-rs), MIT License
+  * [windows-core 0.54.0](https://github.com/microsoft/windows-rs), MIT License
   * [windows-link 0.2.1](https://github.com/microsoft/windows-rs), MIT License
-  * [windows-numerics 0.3.1](https://github.com/microsoft/windows-rs), MIT License
-  * [windows-result 0.4.1](https://github.com/microsoft/windows-rs), MIT License
-  * [windows-strings 0.5.1](https://github.com/microsoft/windows-rs), MIT License
-  * [windows-threading 0.2.1](https://github.com/microsoft/windows-rs), MIT License
-  * [windows 0.62.2](https://github.com/microsoft/windows-rs), MIT License
+  * [windows-result 0.1.2](https://github.com/microsoft/windows-rs), MIT License
+  * [windows 0.54.0](https://github.com/microsoft/windows-rs), MIT License
+  * [windows_i686_gnullvm 0.52.6](https://github.com/microsoft/windows-rs), MIT License
   * [fltk-sys 1.5.22](https://github.com/fltk-rs/fltk-rs), MIT License
   * [fltk 1.5.22](https://github.com/fltk-rs/fltk-rs), MIT License
   * [minipaste 0.1.0](https://github.com/MoAlyousef/minipaste), MIT License

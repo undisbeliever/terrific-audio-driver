@@ -796,7 +796,7 @@ fn open_audio_stream(host: &Host, sender: mpsc::Sender<AudioMessage>) -> Option<
 
     let config = StreamConfig {
         channels: 2,
-        sample_rate: AUDIO_SAMPLE_RATE,
+        sample_rate: cpal::SampleRate(AUDIO_SAMPLE_RATE),
         buffer_size: cpal::BufferSize::Fixed(AUDIO_BUFFER_SAMPLES),
     };
 
