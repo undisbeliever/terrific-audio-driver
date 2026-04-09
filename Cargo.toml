@@ -60,6 +60,7 @@ relative-path = { version="2.0.1", features=[ "serde" ] }
 bitflags = { version="2.10.0" }
 ringbuf = { version="0.4.8" }
 
+# Using cpal v0.16.0 so tad-gui works on older versions of macOS
 cpal = { version="0.16.0", features=[] }
 spectrum-analyzer = { version="1.6.0" }
 
