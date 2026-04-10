@@ -2,14 +2,24 @@ Terrific Audio Driver Changelog
 ===============================
 
 
-Version 0.2.1
+Version 0.3.0
 =============
- * Ported the audio driver to assembly using a custom made spc700 assembler
- * The audio thread now resamples TAD output to a 48000Hz sample rate
- * tad-gui now uses the `cpal` crate to play audio
- * Removed the SDL dependency from tad-gui
 
- * Fixed transposition analysis in the compiler
+**BREAKING CHANGES:**:
+ * TAD now requires rust 1.85 or higher.
+ * The `wiz` dependency and git submodule has been removed.
+ * The `libsdl2` dependency has been removed.
+ * Linux/BSD: ALSA development libraries are now required to compile TAD on Linux/BSD.
+   (`libasound2-dev` on Debian/Ubuntu/Mint or `alsa-lib-devel` on Fedora)
+
+Changelog:
+ * The audio driver has been ported to spc-700 assembly using a custom made spc-700 assembler.
+    * The new audio driver is byte identical to the wiz audio driver.
+ * The audio thread now resamples the emulated TAD output to a 48000Hz sample rate.
+ * tad-gui now uses the `cpal` crate to play audio.
+
+Bugfixes:
+ * Fixed transposition analysis in the compiler.
  * Fixed a panic in the sample analyser window when analysing a small non-looping sample.
  - Fixed wav2brr unable to parse `--loop-point` or `--dupe-block-hack` arguments.
 
