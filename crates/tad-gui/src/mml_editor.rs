@@ -708,7 +708,7 @@ impl MmlEditorState {
             assert!(to_insert > 0);
             self.style_vec.splice(
                 pos..pos,
-                std::iter::repeat(Style::Unknown.to_u8_char()).take(to_insert),
+                std::iter::repeat_n(Style::Unknown.to_u8_char(), to_insert),
             );
         }
         if n_deleted > n_inserted {
