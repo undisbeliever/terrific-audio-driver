@@ -1182,7 +1182,8 @@ impl NoteTrackingState {
     }
 
     fn highlight_note(style_buffer: &mut TextBuffer, buffer_pos: i32) {
-        if buffer_pos >= 0 && buffer_pos < style_buffer.length() {
+        // A `buffer_pos` of 0 is invalid
+        if buffer_pos > 0 && buffer_pos < style_buffer.length() {
             style_buffer.replace(buffer_pos, buffer_pos + 1, Style::NOTE_TRACKER_STR);
         }
     }
