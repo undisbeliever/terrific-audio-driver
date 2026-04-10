@@ -125,7 +125,7 @@ Please see the included [licenses file](licenses.md) for the full third party li
   * [windows_x86_64_msvc 0.42.2](https://github.com/microsoft/windows-rs), MIT License
   * [windows_x86_64_msvc 0.52.6](https://github.com/microsoft/windows-rs), MIT License
   * [markdown 1.0.0](https://github.com/wooorm/markdown-rs), MIT License
-  * [cc 1.2.58](https://github.com/rust-lang/cc-rs), MIT License
+  * [cc 1.2.60](https://github.com/rust-lang/cc-rs), MIT License
   * [cfg-if 1.0.4](https://github.com/rust-lang/cfg-if), MIT License
   * [cmake 0.1.58](https://github.com/rust-lang/cmake-rs), MIT License
   * [find-msvc-tools 0.1.9](https://github.com/rust-lang/cc-rs), MIT License
@@ -157,9 +157,9 @@ Please see the included [licenses file](licenses.md) for the full third party li
   * [futures-core 0.3.32](https://github.com/rust-lang/futures-rs), MIT License
   * [futures-task 0.3.32](https://github.com/rust-lang/futures-rs), MIT License
   * [futures-util 0.3.32](https://github.com/rust-lang/futures-rs), MIT License
-  * [hashbrown 0.16.1](https://github.com/rust-lang/hashbrown), MIT License
+  * [hashbrown 0.17.0](https://github.com/rust-lang/hashbrown), MIT License
   * [utf8parse 0.2.2](https://github.com/alacritty/vte), MIT License
-  * [indexmap 2.13.1](https://github.com/indexmap-rs/indexmap), MIT License
+  * [indexmap 2.14.0](https://github.com/indexmap-rs/indexmap), MIT License
   * [equivalent 1.0.2](https://github.com/indexmap-rs/equivalent), MIT License
   * [bytes 1.11.1](https://github.com/tokio-rs/bytes), MIT License
   * [autocfg 1.5.0](https://github.com/cuviper/autocfg), MIT License

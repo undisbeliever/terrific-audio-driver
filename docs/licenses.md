@@ -410,7 +410,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ## MIT License
 
 Used by:
-  * [cc 1.2.58](https://github.com/rust-lang/cc-rs)
+  * [cc 1.2.60](https://github.com/rust-lang/cc-rs)
   * [cfg-if 1.0.4](https://github.com/rust-lang/cfg-if)
   * [cmake 0.1.58](https://github.com/rust-lang/cmake-rs)
   * [find-msvc-tools 0.1.9](https://github.com/rust-lang/cc-rs)
@@ -669,7 +669,7 @@ DEALINGS IN THE SOFTWARE.
 ## MIT License
 
 Used by:
-  * [hashbrown 0.16.1](https://github.com/rust-lang/hashbrown)
+  * [hashbrown 0.17.0](https://github.com/rust-lang/hashbrown)
 
 ```
 Copyright (c) 2016 Amanieu d'Antras
@@ -739,7 +739,7 @@ DEALINGS IN THE SOFTWARE.
 ## MIT License
 
 Used by:
-  * [indexmap 2.13.1](https://github.com/indexmap-rs/indexmap)
+  * [indexmap 2.14.0](https://github.com/indexmap-rs/indexmap)
 
 ```
 Copyright (c) 2016--2017
