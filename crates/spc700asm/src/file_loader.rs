@@ -127,7 +127,7 @@ pub fn load_asm_file_and_includes(path: &Path) -> Result<AsmFileWithIncludes, Lo
                     return Err(LoadAssemblyError::TooManyIncludes(file_name));
                 }
 
-                if !includes.iter().any(|i: &IncludeFile| i.inc_src == inc_path) {
+                if !includes.iter().any(|i: &IncludeFile| i.inc_src == inc_src) {
                     match load_file(&inc_path) {
                         Ok(contents) => includes.push(IncludeFile {
                             inc_src,
