@@ -1007,7 +1007,7 @@ dependencies = [
 
 [[package]]
 name = "tad-compiler"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "clap",
  "compiler",
@@ -1023,7 +1023,7 @@ dependencies = [
 
 [[package]]
 name = "tad-gui"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "brr",
  "compiler",
@@ -1192,7 +1192,7 @@ dependencies = [
 
 [[package]]
 name = "wav2brr"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "brr",
  "clap",
