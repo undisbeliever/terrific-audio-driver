@@ -28,7 +28,7 @@ Features
     * Detune
     * Left/right channel invert (if the audio mode is set to Surround)
     * Commands for editing the echo buffer parameters in the middle of a song
- * ca65, 64tass and pvsneslib APIs
+ * ca65, pvsneslib, 64tass and asar APIs
     * The API is asynchronous to minimise impact on the entity/mainloop code.
     * Audio data can be loaded across multiple frames (`Tad_Process` calls).
     * Audio data is loaded through a `LoadAudioData` callback, simplifying integration with
@@ -94,15 +94,32 @@ Engine Limitations and Deliberate Design Decisions
 Build Requirements
 ==================
 
- * Rust
+ * Rust 1.85 or later
  * Cargo
- * GNU Make
- * A C++17 compiler, compatible with the [cxx](https://cxx.rs/) crate.
+ * A C++17 compiler, compatible with the [cxx](https://cxx.rs/) and
+   [fltk-rs](https://crates.io/crates/fltk#user-content-build-dependencies) crates.
  * CMake
- * Rust (version > 1.55), CMake (version > 3.11), Git and a C++17 compiler to compile fltk-rs.
-   (See [fltk-rs build dependencies](https://github.com/fltk-rs/fltk-rs/blob/master/README.md#build-dependencies) for more details.)
+ * [fltk-rs build dependencies](https://github.com/fltk-rs/fltk-rs/blob/master/README.md#build-dependencies):
     * MSVC: Windows SDK
-    * Linux/BSD: X11 and OpenGL development headers
+    * MacOS: MacOS SDK
+    * Linux/BSD: X11, libpango and OpenGL development headers
+ * Linux/BSD: ALSA development files
+
+
+For Debian/Ubuntu/Mint distributions, the following dev packages are required:
+```
+    cmake libx11-dev libxext-dev libxft-dev libxinerama-dev libxcursor-dev libxrender-dev libxfixes-dev libpango1.0-dev libgl1-mesa-dev libglu1-mesa-dev libasound2-dev
+```
+
+
+To build the audio driver and examples, the following is also required and available in your `PATH`:
+
+ * GNU Make
+ * python 3.10 or higher
+ * [ca65](https://cc65.github.io/)
+ * [PVSnesLib](https://github.com/alekmaul/pvsneslib/)
+ * [tass64](https://tass64.sourceforge.net/)
+ * [asar](https://github.com/RPGHacker/asar)
 
 
 Build Scripts
