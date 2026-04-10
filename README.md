@@ -46,7 +46,7 @@ Engine Limitations and Deliberate Design Decisions
     * Samples and sound effect data are combined to form the *common audio data* and transferred to
       audio-RAM in a single block.
     * The loader has the ability to override the common audio data.  If you want to have a special
-      set of songs that contain unique songs (ie, intro and credits), you will need to create a new
+      set of songs that contain unique samples (ie, intro and credits), you will need to create a new
       project (with a different set of samples) and manually swap the common audio data in S-CPU
       code.
  * All pitches and most pitch offsets are precalculated by the compiler.
