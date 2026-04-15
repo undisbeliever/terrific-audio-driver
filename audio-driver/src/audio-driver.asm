@@ -810,9 +810,6 @@ __EndZeropageClearAddr = nonShadow_sfx + 1
     ; In the GUI, spc-export and unit-tests this block of code is patched out
     ; and will be replaced with a `JMP ClearEchoBufferEnd : NOP ...`.
 ClearEchoBufferStart:
-        ; ::TODO remove (required in the `wiz` version to compile compiler crate)::
-        nop
-
         ; Clear the echo buffer
         ; X = S-DSP ESA
         __clear_echo_buffer
