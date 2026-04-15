@@ -2874,8 +2874,6 @@ _target_h = zpTmp
     bcc MusicChannel
         ; X is SFX channel
 
-        mov A, ChannelVoiceBit + X
-
         ; Set noise frequency
         mov noiseFreq_sfx - FIRST_SFX_CHANNEL + X, Y
 
