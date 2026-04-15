@@ -4498,17 +4498,16 @@ SetI8:
 
 
     cmp X, #ECHO_I8_EFB_INDEX
+
+    pop X
+
     bcs FeedbackDirty
         set1 echoDirty, ECHO_DIRTY__FIR_FILTER_BIT
-
-        pop X
         jmp process_next_bytecode
 
 
     FeedbackDirty:
         set1 echoDirty, ECHO_DIRTY__FEEDBACK_BIT
-
-        pop X
         jmp process_next_bytecode
 .endproc
 
