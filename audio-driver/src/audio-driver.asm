@@ -2434,11 +2434,9 @@ _PlaySfx_Return = sfx__both_channels_active.Return
             mov A, Y
             ; carry clear
             adc A, channelSoA_virtualChannels_pitch_l + X
-            bcc NoCarry
+            bcc WritePitchL
                 inc channelSoA_virtualChannels_pitch_h + X
-            NoCarry:
-            bra WritePitchL
-
+                bra WritePitchL
 
         Subtract:
             ; Subtract pitchOffsetPerTick from pitch_l
