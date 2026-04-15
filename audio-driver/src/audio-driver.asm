@@ -3806,10 +3806,9 @@ _subroutineId = zpTmp
     bpl Positive
         ; carry clear, A is negative
         adc A, channelSoA_pan + X
-        bcs InRange
+        bcs EndIf
             mov A, #0
-        InRange:
-        bra EndIf
+            bra EndIf
 
 
     Positive:
@@ -3879,10 +3878,9 @@ _subroutineId = zpTmp
     bpl Positive
         ; carry clear, A is negative
         adc A, channelSoA_volume + X
-        bcs InRange
+        bcs EndIf
             mov A, #0
-        InRange:
-        bra EndIf
+            bra EndIf
 
 
     Positive:
@@ -3890,7 +3888,7 @@ _subroutineId = zpTmp
         adc A, channelSoA_volume + X
         bcc EndIf
             mov A, #$ff
-        EndIf:
+    EndIf:
 
     ; fallthrough
     .assert PC == bc__set_volume
