@@ -1544,7 +1544,9 @@ Return:
     beq End
         .assert ECHO_DIRTY__FIR_FILTER_BIT == 7
         bpl FirUnchanged
-            mov Y, #0
+            .assert DSP_C1 - DSP_C0 == $10
+            .assert DSP_C7 < $80
+            .assert DSP_C7 + $10 >= $80
 
             .assert ECHO_DIRTY__CLEAR_FIR_BIT == 0
             lsr A
@@ -1552,30 +1554,25 @@ Return:
                 ; Clear FIR filter
                 clrc
                 mov A, #DSP_C0
+                mov Y, #0
 
                 ClearFirLoop:
                     ; Y = 0
                     movw DSPADDR, YA
 
-                    .assert DSP_C1 - DSP_C0 == $10
-                    .assert DSP_C7 + $10 >= $80
                     adc A, #$10
                     bpl ClearFirLoop
             NoClear:
 
-            mov DSPADDR, #DSP_C0
+            mov X, #0
+            mov A, #DSP_C0
             ; carry clear
-            ; Y = 0
             FirLoop:
-                ; EchoBufferSettings.firFilter
-                mov A, echo.firFilter + Y
-                mov DSPDATA, A
-                inc Y
+                mov Y, echo.firFilter + X
+                movw DSPADDR, YA
+                inc X
 
-                .assert DSP_C1 - DSP_C0 == $10
-                .assert DSP_C7 + $10 >= $80
-                clrc
-                adc DSPADDR, #$10
+                adc A, #$10
                 bpl FirLoop
 
             mov A, echoDirty
