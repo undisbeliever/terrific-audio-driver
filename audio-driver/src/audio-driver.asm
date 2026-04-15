@@ -2171,10 +2171,10 @@ _PlaySfx_Return = sfx__both_channels_active.Return
 .inline process_volume_effects
     ; Warning spaghetti code: Optimised for code-size.
 
-    lsr A
-
     setp
 .p1
+
+    lsr A
 
     mov A, channelSoA_subVolume + X
     mov Y, channelSoA_volume + X
