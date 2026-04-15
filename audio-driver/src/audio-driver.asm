@@ -2177,7 +2177,6 @@ _PlaySfx_Return = sfx__both_channels_active.Return
     lsr A
 
     mov A, channelSoA_subVolume + X
-    mov Y, channelSoA_volume + X
 
     bcc Up
         ; down
@@ -2185,17 +2184,18 @@ _PlaySfx_Return = sfx__both_channels_active.Return
         sbc A, channelSoA_volEffect_offset_l + X
         mov channelSoA_subVolume + X, A
 
-        mov A, Y
+        mov A, channelSoA_volume + X
         sbc A, channelSoA_volEffect_offset_h + X
 
         bcs EndIf
-            mov Y, #0
+            mov A, #0
             bra DisableEffect
 
         UpOverflow:
-            mov Y, #$ff
+            mov A, #$ff
 
         DisableEffect:
+            mov channelSoA_volume + X, A
             mov A, #0
             bra WriteDirection
 
@@ -2205,14 +2205,14 @@ _PlaySfx_Return = sfx__both_channels_active.Return
         adc A, channelSoA_volEffect_offset_l + X
         mov channelSoA_subVolume + X, A
 
-        mov A, Y
+        mov A, channelSoA_volume + X
         adc A, channelSoA_volEffect_offset_h + X
 
         bcs UpOverflow
     EndIf:
 
+    mov channelSoA_volume + X, A
 
-    mov Y, A
 
     dec channelSoA_volEffect_counter + X
     bne EndCounterIf
@@ -2228,7 +2228,6 @@ _PlaySfx_Return = sfx__both_channels_active.Return
         mov channelSoA_volEffect_direction + X, A
     EndCounterIf:
 
-    mov channelSoA_volume + X, Y
 
     clrp
 .p0
@@ -2252,7 +2251,6 @@ _PlaySfx_Return = sfx__both_channels_active.Return
 
     lsr A
 
-    mov Y, channelSoA_pan + X
     mov A, channelSoA_subPan + X
 
     bcc Up
@@ -2261,17 +2259,18 @@ _PlaySfx_Return = sfx__both_channels_active.Return
         sbc A, channelSoA_panEffect_offset_l + X
         mov channelSoA_subPan + X, A
 
-        mov A, Y
+        mov A, channelSoA_pan + X
         sbc A, channelSoA_panEffect_offset_h + X
 
         bcs EndIf
-            mov Y, #0
+            mov A, #0
             bra DisableEffect
 
         UpOverflow:
-            mov Y, #MAX_PAN
+            mov A, #MAX_PAN
 
         DisableEffect:
+            mov channelSoA_pan + X, A
             mov A, #0
             bra WriteDirection
 
@@ -2281,7 +2280,7 @@ _PlaySfx_Return = sfx__both_channels_active.Return
         adc A, channelSoA_panEffect_offset_l + X
         mov channelSoA_subPan + X, A
 
-        mov A, Y
+        mov A, channelSoA_pan + X
         adc A, channelSoA_panEffect_offset_h + X
 
         bcs UpOverflow
@@ -2289,8 +2288,8 @@ _PlaySfx_Return = sfx__both_channels_active.Return
         bcs UpOverflow
     EndIf:
 
+    mov channelSoA_pan + X, A
 
-    mov Y, A
 
     dec channelSoA_panEffect_counter + X
     bne EndCounterIf
@@ -2305,7 +2304,6 @@ _PlaySfx_Return = sfx__both_channels_active.Return
         mov channelSoA_panEffect_direction + X, A
     EndCounterIf:
 
-    mov channelSoA_pan + X, Y
 
     clrp
 .p0
