@@ -1181,7 +1181,7 @@ Valid:
     BOTH_SFX_ACTIVE = (1 << 7) | (1 << 6)
 
     cmp Y, commonDataHeader.nSoundEffects
-    bcs Return
+    bcs _PlaySfx_Return
         cmp Y, sfx_oneChannelSfxId+0
         beq sfx__maybe_restart_sfx_0
 
@@ -1196,9 +1196,6 @@ Valid:
         asl A
         bcc sfx__play_1
         bra sfx__play_sfx_0
-
-Return:
-    ret
 .endproc
 
 
