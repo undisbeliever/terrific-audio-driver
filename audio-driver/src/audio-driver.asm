@@ -696,9 +696,7 @@ __EndZeropageClearAddr = nonShadow_sfx + 1
     mov sfxMutedChannels, A
 
     ; Reset global volume if RESET_GLOBAL_VOLUMES_BIT flag is set
-    ; ::TODO replace with `bbc`::
-    mov1 C, loaderDataType, LoaderDataType__RESET_GLOBAL_VOLUMES_BIT
-    bcc NoResetGlobalVolume
+    bbc loaderDataType, LoaderDataType__RESET_GLOBAL_VOLUMES_BIT, NoResetGlobalVolume
         ; A = 0
         mov globalVolume_music, A
         mov globalVolume_sfx, A
@@ -779,9 +777,7 @@ __EndZeropageClearAddr = nonShadow_sfx + 1
 
 
     ; If not in surround mode, set all `echo.invertFlags` bits to the mono-flag
-    ; (cannot use `bbs` instructions in wiz, using `mov1 c, addr, bit` instead)
-    mov1 C, loaderDataType, LoaderDataType__SURROUND_FLAG_BIT
-    bcs IsSurround
+    bbs loaderDataType, LoaderDataType__SURROUND_FLAG_BIT, IsSurround
         .assert INVERT_FLAGS__MONO & %1100_0001 == 0 ; Confirm masking is more efficient than bpl or shifts
         mov A, echo.invertFlags
         and A, #INVERT_FLAGS__MONO
@@ -857,9 +853,7 @@ ClearEchoBufferEnd:
     ; Timers and counters reset when the timer control bits transition from 0 to 1
     mov CONTROL, #0
 
-    ; ::TODO replace with `bbs`::
-    mov1 C, loaderDataType, LoaderDataType__PLAY_SONG_BIT
-    bcc NoStartSong
+    bbc loaderDataType, LoaderDataType__PLAY_SONG_BIT, NoStartSong
         mov CONTROL, #CONTROL__ENABLE_TIMER_0 | CONTROL__ENABLE_TIMER_1
     NoStartSong:
 
@@ -887,9 +881,7 @@ ClearEchoBufferEnd:
             call process_music_channels
 
             ; Set lag bit if `counter_0` was not 0 in the last loop.
-            ; ::TODO switch to `bbc`::
-            mov1 C, lagDetector, LD_MUSIC_TEST_BIT
-            bcc NoMusicLag
+            bbc lagDetector, LD_MUSIC_TEST_BIT, NoMusicLag
                 set1 lagDetector, LD_MUSIC_LAG_BIT
             NoMusicLag:
             set1 lagDetector, LD_MUSIC_TEST_BIT
@@ -905,10 +897,7 @@ ClearEchoBufferEnd:
             process_sfx_channels
 
             ; Set lag bit if `counter_1` was not 0 in the last loop.
-            ;
-            ; ::TODO switch to `bbc`
-            mov1 C, lagDetector, LD_SFX_TEST_BIT
-            bcc NoSfxLag
+            bbc lagDetector, LD_SFX_TEST_BIT, NoSfxLag
                 set1 lagDetector, LD_SFX_LAG_BIT
             NoSfxLag:
             set1 lagDetector, LD_SFX_TEST_BIT
@@ -1610,9 +1599,7 @@ Return:
                 adc A, echo.echoVolume_r
                 lsr A
 
-                ; ::TODO change to `bbc`::
-                mov1 C, echo.invertFlags, INVERT_FLAGS__MONO_BIT
-                bcc NoMonoInvert
+                bbc echo.invertFlags, INVERT_FLAGS__MONO_BIT, NoMonoInvert
                     eor A, #$ff
                     inc A
                 NoMonoInvert:
@@ -1622,18 +1609,14 @@ Return:
 
 
             Stereo:
-                ; ::TODO change to `bbc`::
-                mov1 C, echo.invertFlags, INVERT_FLAGS__LEFT_BIT
-                bcc NoLeftInvert
+                bbc echo.invertFlags, INVERT_FLAGS__LEFT_BIT, NoLeftInvert
                     eor A, #$ff
                     inc A
                 NoLeftInvert:
                 mov DSPDATA, A
 
                 mov A, echo.echoVolume_r
-                ; ::TODO change to `bbc`::
-                mov1 C, echo.invertFlags, INVERT_FLAGS__RIGHT_BIT
-                bcc NoRightInvert
+                bbc echo.invertFlags, INVERT_FLAGS__RIGHT_BIT, NoRightInvert
                     eor A, #$ff
                     inc A
                 NoRightInvert:
@@ -1707,15 +1690,9 @@ Return:
 
 
     ; Execute the loader if the _SWITCH_TO_LOADER_BIT is set.
-    ;
-    ; ::TODO change to `bbc`::
-    mov1 C, DriverIO__SWITCH_TO_LOADER_PORT, DriverIO__SWITCH_TO_LOADER_BIT
-    bcc NoStl
+    bbc DriverIO__SWITCH_TO_LOADER_PORT, DriverIO__SWITCH_TO_LOADER_BIT, NoStl
         ; Read the IO port a second time just in case it was a glitch
-        ;
-        ; ::TODO change to `bbc`::
-        mov1 C, DriverIO__SWITCH_TO_LOADER_PORT, DriverIO__SWITCH_TO_LOADER_BIT
-        bcc NoStl
+        bbc DriverIO__SWITCH_TO_LOADER_PORT, DriverIO__SWITCH_TO_LOADER_BIT, NoStl
             jmp LOADER_ADDR
     NoStl:
 .endinline
@@ -2611,11 +2588,7 @@ _target_h = zpTmp
 ; See `process_bytecode_with_loader_test`
 .proc process_bytecode_with_loader_test__SecondBitTest
     ; Test the SWITCH_TO_LOADER_BIT a second time (just to be safe) before switching to the loader
-
-    ; ::TODO change to a bbc instruction::
-    mov1 C, DriverIO__SWITCH_TO_LOADER_PORT, DriverIO__SWITCH_TO_LOADER_BIT
-    bcc process_bytecode
-
+    bbc DriverIO__SWITCH_TO_LOADER_PORT, DriverIO__SWITCH_TO_LOADER_BIT, process_bytecode
     jmp LOADER_ADDR
 .endproc
 
@@ -3969,9 +3942,7 @@ _subroutineId = zpTmp
 ; KEEP: X
 .proc bc__set_channel_or_echo_invert
     ; If not in surround mode, set all flags to the mono-flag
-    ; ::TODO use `bbs`::
-    mov1 C, loaderDataType, LoaderDataType__SURROUND_FLAG_BIT
-    bcs Surround
+    bbs loaderDataType, LoaderDataType__SURROUND_FLAG_BIT, Surround
         ; Have to push and pop MSB using carry, the spc700 has no `bit` instruction.
         asl A
 
