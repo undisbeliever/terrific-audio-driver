@@ -778,7 +778,7 @@ __EndZeropageClearAddr = nonShadow_sfx + 1
 
     ; If not in surround mode, set all `echo.invertFlags` bits to the mono-flag
     bbs loaderDataType, LoaderDataType__SURROUND_FLAG_BIT, IsSurround
-        .assert INVERT_FLAGS__MONO & %1100_0001 == 0 ; Confirm masking is more efficient than bpl or shifts
+        .assert INVERT_FLAGS__MONO & %1100_0001 == 0 ; Assert masking is more efficient than bpl or shifts
         mov A, echo.invertFlags
         and A, #INVERT_FLAGS__MONO
         beq NoMonoInvert
@@ -921,7 +921,7 @@ ClearEchoBufferEnd:
     ; X = page address of the start of the echo buffer
     ; Echo buffer ends at the end of memory.
 
-    ; Confirm the two `mov addr+Y, A` instructions are 3 bytes
+    ; Assert the two `mov addr+Y, A` instructions are 3 bytes
     .assert STA_2 - STA_1 == 3
     .assert After_STA_2 - STA_2 == 3
 
@@ -2350,7 +2350,7 @@ _PlaySfx_Return = sfx__both_channels_active.Return
         mov Y, A
 
         ; Test mono flag
-        .assert INVERT_FLAGS__MONO & %1100_0001 == 0 ; Confirm masking is more efficient than bpl or shifts
+        .assert INVERT_FLAGS__MONO & %1100_0001 == 0 ; Assert masking is more efficient than bpl or shifts
         mov A, channelSoA_invertFlags + X
         and A, #INVERT_FLAGS__MONO
         beq NoMonoInvert
