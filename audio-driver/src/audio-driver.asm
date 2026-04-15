@@ -1169,7 +1169,8 @@ Valid:
     mov X, #FIRST_SFX_CHANNEL
     call bc__disable_channel
 
-    mov X, #LAST_SFX_CHANNEL
+    .assert FIRST_SFX_CHANNEL + 1 == LAST_SFX_CHANNEL
+    inc X
     jmp bc__disable_channel
 .endproc
 
