@@ -4638,8 +4638,7 @@ SetI8:
     Bit0Clear:
         .assert DISABLE_NOISE_OPCODE == 0
         bne PMod
-            mbc__disable_noise__inline
-            jmp process_next_bytecode
+            mbc__disable_noise__jmp_process_next_bytecode
 
         PMod:
             .assert DISABLE_PMOD_OPCODE & 1 == 0
@@ -4706,7 +4705,8 @@ SetI8:
 ; IN: X = channelIndex
 ; IN: Y = 0
 ; KEEP: X
-.inline mbc__disable_noise__inline
+; CAUTION: JUMPS TO process_next_bytecode
+.inline mbc__disable_noise__jmp_process_next_bytecode
     mov A, ChannelVoiceBit + X
     cmp X, #FIRST_SFX_CHANNEL
     bcc MusicChannel
