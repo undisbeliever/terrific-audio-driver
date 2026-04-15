@@ -3941,22 +3941,21 @@ _subroutineId = zpTmp
 ; IN: Y = 0
 ; KEEP: X
 .proc bc__set_channel_or_echo_invert
-    ; If not in surround mode, set all flags to the mono-flag
-    bbs loaderDataType, LoaderDataType__SURROUND_FLAG_BIT, Surround
-        ; Have to push and pop MSB using carry, the spc700 has no `bit` instruction.
-        asl A
-
-        and A, #INVERT_FLAGS__MONO
-        beq NoMonoInvert
-            mov A, #$ff
-        NoMonoInvert:
-
-        ror A
-    Surround:
-
+    .assert INVERT_FLAGS__MONO_BIT != 0
 
     ; Have to bit-shift parameter, the spc700 has no `bit` instruction.
     asl A
+
+    ; If not in surround mode, set all flags to the mono-flag
+    bbs loaderDataType, LoaderDataType__SURROUND_FLAG_BIT, Surround
+        ; MUST NOT modify carry
+
+        and A, #INVERT_FLAGS__MONO
+        beq NoMonoInvert
+            mov A, #$7f << 1
+        NoMonoInvert:
+    Surround:
+
     bcc SetEchoInvert
         ; set channel invert
         mov channelSoA_invertFlags + X, A
