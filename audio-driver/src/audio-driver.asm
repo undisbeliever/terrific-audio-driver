@@ -3814,7 +3814,6 @@ _subroutineId = zpTmp
 
     Positive:
         ; carry clear, A is positive
-        clrc
         adc A, channelSoA_pan + X
 
         bcs SetMax
