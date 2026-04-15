@@ -2586,7 +2586,7 @@ _target_h = zpTmp
 
 
 ; See `process_bytecode_with_loader_test`
-.proc process_bytecode_with_loader_test__SecondBitTest
+.proc _process_bytecode_with_loader_test__SecondBitTest
     ; Test the SWITCH_TO_LOADER_BIT a second time (just to be safe) before switching to the loader
     bbc DriverIO__SWITCH_TO_LOADER_PORT, DriverIO__SWITCH_TO_LOADER_BIT, process_bytecode
     jmp LOADER_ADDR
@@ -2604,7 +2604,7 @@ _target_h = zpTmp
 ; IN: X = channelIndex
 ; KEEP: X
 .proc process_bytecode_with_loader_test
-    bbs DriverIO__SWITCH_TO_LOADER_PORT, DriverIO__SWITCH_TO_LOADER_BIT, process_bytecode_with_loader_test__SecondBitTest
+    bbs DriverIO__SWITCH_TO_LOADER_PORT, DriverIO__SWITCH_TO_LOADER_BIT, _process_bytecode_with_loader_test__SecondBitTest
 
     ; fallthrough
     .assert PC == process_bytecode
