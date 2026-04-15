@@ -2481,18 +2481,20 @@ _target_h = zpTmp
 
     mov A, channelSoA_portamento_direction + X
     beq NoPortamento
-        bpl Up
+        asl A
+
+        ; Save target_h for later (no `cmp Y, dp+X` instruction)
+        mov A, channelSoA_portamento_target_h + X
+        mov _target_h, A
+
+        mov A, channelSoA_virtualChannels_pitch_l + X
+        mov Y, channelSoA_virtualChannels_pitch_h + X
+
+        bcc Up
             ; portamento down
 
-            ; Save target_h for later (no `cpy dp,x` instruction)
-            mov A, channelSoA_portamento_target_h + X
-            mov _target_h, A
-
-            mov A, channelSoA_virtualChannels_pitch_l + X
-            mov Y, channelSoA_virtualChannels_pitch_h + X
-
             ; Subtract speed from pitch
-            setc
+            ; carry set
             sbc A, channelSoA_portamento_speed + X
             bcs Down_CarryClear
                 dec Y
@@ -2512,15 +2514,8 @@ _target_h = zpTmp
         Up:
             ; portamento up
 
-            ; Save target_h for later (no `cpy dp,x` instruction)
-            mov A, channelSoA_portamento_target_h + X
-            mov _target_h, A
-
-            mov A, channelSoA_virtualChannels_pitch_l + X
-            mov Y, channelSoA_virtualChannels_pitch_h + X
-
             ; Add speed to pitch
-            clrc
+            ; carry clear
             adc A, channelSoA_portamento_speed + X
             bcc Up_NoCarry
                 inc Y
