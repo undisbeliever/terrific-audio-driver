@@ -1493,20 +1493,12 @@ _mutedChannels = zpTmp
         beq NoVolEffect
             process_volume_effects
 
-            ; ::TODO optimise::
-            ; Set S-DSP voice registers dirty bit
-            set1 voiceChannelsDirty_tmp, 7
-
             set1 volShadowDirty_tmp, 7
         NoVolEffect:
 
         mov A, channelSoA_panEffect_direction + X
         beq NoPanEffect
             process_pan_effects
-
-            ; ::TODO optimise::
-            ; Set S-DSP voice registers dirty bit
-            set1 voiceChannelsDirty_tmp, 7
 
             set1 volShadowDirty_tmp, 7
         NoPanEffect:
@@ -1518,6 +1510,8 @@ _mutedChannels = zpTmp
         asl volShadowDirty_tmp
         bcc VolumeUnchanged
             update_vol_shadow
+
+            set1 voiceChannelsDirty_tmp, 7
         VolumeUnchanged:
 
         ; Portamento is processed after bytecode to ensure pitch slide occurs
