@@ -2728,9 +2728,9 @@ _target_h = zpTmp
 
     ; calculate pitch table index
     clrc
-    adc A, channelSoA_instPitchOffset + X
-    clrc
     adc A, channelSoA_transpose + X
+    clrc
+    adc A, channelSoA_instPitchOffset + X
     mov Y, A
 
     ; Calculate voice pitch
@@ -2947,9 +2947,9 @@ _target_h = zpTmp
 
     ; calculate pitch table index
     clrc
-    adc A, channelSoA_instPitchOffset + X
-    clrc
     adc A, channelSoA_transpose + X
+    clrc
+    adc A, channelSoA_instPitchOffset + X
     mov Y, A
 
     ; Calculate target pitch
@@ -3072,9 +3072,9 @@ _tmp_l = zpTmpWord.l
 
     ; calculate pitch table index
     clrc
-    adc A, channelSoA_instPitchOffset + X
-    clrc
     adc A, channelSoA_transpose + X
+    clrc
+    adc A, channelSoA_instPitchOffset + X
     mov Y, A
 
     mov A, [commonData.pitchTable_l] + Y
